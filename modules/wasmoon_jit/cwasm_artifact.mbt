@@ -156,7 +156,7 @@ fn collect_call_veneers(
 }
 
 ///|
-fn cwasm_func_idx_for_reloc_target(target : @machv_emit.RelocTarget) -> Int {
+fn cwasm_func_idx_for_reloc_target(target : @instr.RelocTarget) -> Int {
   match machv_reloc_target_to_cwasm_func_idx(target) {
     Some(func_idx) => func_idx
     None => abort("cannot encode external reloc target in cwasm: \{target}")

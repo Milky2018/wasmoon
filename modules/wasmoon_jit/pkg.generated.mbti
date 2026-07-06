@@ -334,7 +334,7 @@ pub fn lower_milkir_for_target(@milkir.Function, @machv_emit.EmitTarget) -> @mac
 
 pub fn lower_wasm_body_milkir_for_target(@milkir.Function, @machv_emit.EmitTarget) -> @machv.Function
 
-pub fn machv_reloc_target_to_cwasm_func_idx(@machv_emit.RelocTarget) -> Int?
+pub fn machv_reloc_target_to_cwasm_func_idx(@instr.RelocTarget) -> Int?
 
 pub fn make_cstring(String) -> FixedArray[Byte]
 
@@ -401,6 +401,8 @@ pub fn resolve_import_function(Map[String, Map[String, Int64]], String, String) 
 pub fn resolve_import_function_ptr(Map[String, Map[String, Int64]], String, String) -> Int64?
 
 pub fn resolve_runtime_func_fixup_idx(Int) -> Int64?
+
+pub fn resolve_wasm_func_code_symbol(@instr.CodeSymbol) -> Int?
 
 pub fn resolve_wasm_func_symbol(String) -> Int?
 

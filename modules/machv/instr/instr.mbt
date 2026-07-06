@@ -24,6 +24,24 @@ pub(all) struct ExternalName {
 } derive(Eq, Debug, Hash)
 
 ///|
+/// Symbolic name for code owned by the embedding.
+///
+/// MachV treats this as an opaque relocation key. Frontends may use the
+/// scope and ordinal to map their own function identifiers to this generic
+/// code target without exposing those identifiers in MachV opcodes.
+pub(all) struct CodeSymbol {
+  scope : String
+  ordinal : Int
+} derive(Eq, Debug, Hash)
+
+///|
+/// Target for a relocatable code address or direct call.
+pub(all) enum RelocTarget {
+  Code(CodeSymbol)
+  External(ExternalName)
+} derive(Eq, Debug)
+
+///|
 pub impl Show for CallClobberClass with fn output(self, logger) {
   match self {
     Internal => logger.write_string("Internal")
@@ -37,8 +55,38 @@ pub fn ExternalName::new(name : String) -> ExternalName {
 }
 
 ///|
+pub fn CodeSymbol::new(scope : String, ordinal : Int) -> CodeSymbol {
+  { scope, ordinal }
+}
+
+///|
 pub impl Show for ExternalName with fn output(self, logger) {
   logger.write_string(self.name)
+}
+
+///|
+pub impl Show for CodeSymbol with fn output(self, logger) {
+  if self.scope == "" {
+    logger.write_string("code.\{self.ordinal}")
+  } else {
+    logger.write_string("\{self.scope}.\{self.ordinal}")
+  }
+}
+
+///|
+pub impl Show for RelocTarget with fn output(self, logger) {
+  match self {
+    Code(symbol) => logger.write_string(symbol.to_string())
+    External(symbol) => logger.write_string(symbol.name)
+  }
+}
+
+///|
+pub fn RelocTarget::key(self : RelocTarget) -> String {
+  match self {
+    Code(symbol) => "code:\{symbol.scope}:\{symbol.ordinal}"
+    External(symbol) => "external:\{symbol.name}"
+  }
 }
 
 ///|
@@ -401,10 +449,10 @@ pub(all) enum VCodeOpcode {
   // Uses: [], Defs: [result (function pointer)]
   LoadExternalFuncAddr(ExternalName)
 
-  // Load direct function address (resolved at JIT module load time)
-  // LoadFuncAddr(func_idx): Load function pointer for func_idx
+  // Load code address (resolved by embedding relocation/fixup metadata)
+  // LoadCodeAddr(symbol): Load function/code pointer for symbol
   // Uses: [], Defs: [result (function pointer)]
-  LoadFuncAddr(Int)
+  LoadCodeAddr(CodeSymbol)
 
   // CallPtr: call through a function pointer
   // Uses are already constrained by the lowering-selected ABI.
@@ -412,11 +460,11 @@ pub(all) enum VCodeOpcode {
   // Parameters: num_args, num_results, clobber class
   CallPtr(Int, Int, CallClobberClass)
 
-  // CallDirect: direct call to a known function index
+  // CallDirect: direct call to a known code symbol
   // Uses are already constrained by the lowering-selected ABI.
   // Defs: [result0, result1, ...]
-  // Parameters: func_idx, num_args, num_results, clobber class
-  CallDirect(Int, Int, Int, CallClobberClass)
+  // Parameters: target, num_args, num_results, clobber class
+  CallDirect(CodeSymbol, Int, Int, CallClobberClass)
 
   // CallExternal: direct call to an external helper symbol.
   // Uses are already constrained by the lowering-selected ABI.
@@ -1060,11 +1108,11 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     }
     StorePtrNarrow(bits, offset) => "store_ptr\{bits} +\{offset}"
     LoadExternalFuncAddr(symbol) => "load_external_func_addr.\{symbol}"
-    LoadFuncAddr(func_idx) => "load_func_addr.\{func_idx}"
+    LoadCodeAddr(symbol) => "load_code_addr.\{symbol}"
     CallPtr(num_args, num_results, call_conv) =>
       "call_ptr[\{call_conv}](\{num_args}) -> \{num_results} results"
-    CallDirect(func_idx, num_args, num_results, call_conv) =>
-      "call_direct[\{call_conv}].\{func_idx}(\{num_args}) -> \{num_results} results"
+    CallDirect(target, num_args, num_results, call_conv) =>
+      "call_direct[\{call_conv}].\{target}(\{num_args}) -> \{num_results} results"
     CallExternal(symbol, num_args, num_results, call_conv) =>
       "call_external[\{call_conv}].\{symbol}(\{num_args}) -> \{num_results} results"
     AdjustSP(delta) =>

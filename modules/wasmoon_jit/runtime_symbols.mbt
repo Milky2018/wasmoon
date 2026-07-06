@@ -375,6 +375,15 @@ pub fn resolve_wasm_func_symbol(name : String) -> Int? {
 }
 
 ///|
+pub fn resolve_wasm_func_code_symbol(symbol : @instr.CodeSymbol) -> Int? {
+  if symbol.scope == "wasm.func" {
+    Some(symbol.ordinal)
+  } else {
+    None
+  }
+}
+
+///|
 /// Resolve the negative cwasm runtime-helper function index used by Wasmoon
 /// JIT call fixups. MachV emission uses named external-symbol relocations, and
 /// the cwasm artifact stores those runtime helper targets as negative function
@@ -434,10 +443,10 @@ pub fn resolve_runtime_func_fixup_idx(idx : Int) -> Int64? {
 
 ///|
 pub fn machv_reloc_target_to_cwasm_func_idx(
-  target : @machv_emit.RelocTarget,
+  target : @instr.RelocTarget,
 ) -> Int? {
   match target {
-    Func(func_idx) => Some(func_idx)
+    Code(symbol) => resolve_wasm_func_code_symbol(symbol)
     External(symbol) => {
       let resolver = RuntimeSymbolResolver::with_wasmoon_runtime_symbols()
       match resolver.resolve_symbol(symbol.name) {
@@ -450,17 +459,21 @@ pub fn machv_reloc_target_to_cwasm_func_idx(
 
 ///|
 fn resolve_machv_reloc_target(
-  target : @machv_emit.RelocTarget,
+  target : @instr.RelocTarget,
   resolver : RuntimeSymbolResolver,
 ) -> ResolvedRuntimeRelocation? {
   match target {
-    Func(func_idx) =>
-      Some({
-        offset: 0,
-        symbol: "wasm.func.\{func_idx}",
-        address: 0L,
-        fixup_idx: Some(func_idx),
-      })
+    Code(symbol) =>
+      match resolve_wasm_func_code_symbol(symbol) {
+        Some(func_idx) =>
+          Some({
+            offset: 0,
+            symbol: symbol.to_string(),
+            address: 0L,
+            fixup_idx: Some(func_idx),
+          })
+        None => None
+      }
     External(symbol) =>
       match resolver.resolve_symbol(symbol.name) {
         Some(runtime_symbol) =>
@@ -511,7 +524,7 @@ fn runtime_relocations_from_machine_code(
         })
       None => {
         let name = match fixup.target {
-          Func(func_idx) => "wasm.func.\{func_idx}"
+          Code(symbol) => symbol.to_string()
           External(symbol) => symbol.name
         }
         raise UnknownRuntimeSymbol(name)

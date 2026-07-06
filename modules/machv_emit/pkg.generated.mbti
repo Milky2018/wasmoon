@@ -47,7 +47,7 @@ type Amd64ConstEntry
 
 pub(all) struct CallFixup {
   offset : Int
-  target : RelocTarget
+  target : @instr.RelocTarget
   veneer_offset : Int
 } derive(Eq, @debug.Debug)
 
@@ -124,7 +124,7 @@ pub(all) enum FixupKind {
 
 pub(all) struct FuncAddrFixup {
   offset : Int
-  target : RelocTarget
+  target : @instr.RelocTarget
   reg : Int
 } derive(Eq, @debug.Debug)
 
@@ -194,13 +194,13 @@ pub struct MachineCode {
   record_disasm : Bool
   mut debug_prev_func_idx_spill_offset : Int
 }
-pub fn MachineCode::add_call_fixup(Self, Int, Int, veneer_offset? : Int) -> Unit
-pub fn MachineCode::add_call_target_fixup(Self, Int, RelocTarget, veneer_offset? : Int) -> Unit
+pub fn MachineCode::add_call_fixup(Self, Int, @instr.CodeSymbol, veneer_offset? : Int) -> Unit
+pub fn MachineCode::add_call_target_fixup(Self, Int, @instr.RelocTarget, veneer_offset? : Int) -> Unit
+pub fn MachineCode::add_code_addr_fixup(Self, Int, @instr.CodeSymbol, Int) -> Unit
 pub fn MachineCode::add_external_call_fixup(Self, Int, @instr.ExternalName, veneer_offset? : Int) -> Unit
 pub fn MachineCode::add_external_func_addr_fixup(Self, Int, @instr.ExternalName, Int) -> Unit
 pub fn MachineCode::add_fixup(Self, Int, FixupKind) -> Unit
-pub fn MachineCode::add_func_addr_fixup(Self, Int, Int, Int) -> Unit
-pub fn MachineCode::add_func_addr_target_fixup(Self, Int, RelocTarget, Int) -> Unit
+pub fn MachineCode::add_func_addr_target_fixup(Self, Int, @instr.RelocTarget, Int) -> Unit
 pub fn MachineCode::add_x86_rel32_fixup(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::align(Self, Int) -> Unit
 pub fn MachineCode::align_block(Self) -> Unit
@@ -237,9 +237,9 @@ pub fn MachineCode::emit_b_cond(Self, Int, Int) -> Unit
 pub fn MachineCode::emit_bic_reg(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_bic_reg32(Self, Int, Int, Int) -> Unit
 pub fn MachineCode::emit_bl(Self, Int) -> Unit
+pub fn MachineCode::emit_bl_code(Self, @instr.CodeSymbol) -> Unit
 pub fn MachineCode::emit_bl_external(Self, @instr.ExternalName) -> Unit
-pub fn MachineCode::emit_bl_func(Self, Int) -> Unit
-pub fn MachineCode::emit_bl_target(Self, RelocTarget) -> Unit
+pub fn MachineCode::emit_bl_target(Self, @instr.RelocTarget) -> Unit
 pub fn MachineCode::emit_blr(Self, Int) -> Unit
 pub fn MachineCode::emit_br(Self, Int) -> Unit
 pub fn MachineCode::emit_byte(Self, Int) -> Unit
@@ -724,12 +724,6 @@ pub fn MemoryManager::total_allocated(Self) -> Int
 pub fn MemoryManager::total_used(Self) -> Int
 pub fn MemoryManager::write_code(Self, MachineCode) -> Result[(ExecutableRegion, Int), String]
 pub impl Show for MemoryManager
-
-pub(all) enum RelocTarget {
-  Func(Int)
-  External(@instr.ExternalName)
-} derive(Eq, @debug.Debug)
-pub impl Show for RelocTarget
 
 pub(all) struct StackAdjustStep {
   amount : Int

@@ -9,6 +9,11 @@ priv enum CallConstArg {
 }
 
 ///|
+fn wasm_func_symbol(func_idx : Int) -> @instr.CodeSymbol {
+  @instr.CodeSymbol::new("wasm.func", func_idx)
+}
+
+///|
 /// Emit a constant load for a call argument, optionally constrained to a register.
 fn emit_call_const(
   block : @block.VCodeBlock,
@@ -269,7 +274,7 @@ fn lower_wasm_call_direct(
   let num_args = args.length()
   let num_results = results.length()
   let call_inst = @instr.VCodeInst::new(
-    CallDirect(func_idx, num_args, num_results, Internal),
+    CallDirect(wasm_func_symbol(func_idx), num_args, num_results, Internal),
   )
   lower_wasm_call_common(ctx, block, call_inst, args, results, const_args)
 }
@@ -290,7 +295,9 @@ fn lower_return_call(
 ) -> Unit {
   // Load function address (patched at JIT module load time)
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_inst = @instr.VCodeInst::new(LoadFuncAddr(func_idx))
+  let load_inst = @instr.VCodeInst::new(
+    LoadCodeAddr(wasm_func_symbol(func_idx)),
+  )
   load_inst.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_inst)
 

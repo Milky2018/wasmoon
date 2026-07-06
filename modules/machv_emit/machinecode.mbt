@@ -74,38 +74,12 @@ struct X86Rel32Fixup {
 }
 
 ///|
-/// Target for a relocatable function address or direct call.
-///
-/// `Func` is a module-local function index. `External` is an opaque symbol name
-/// that the embedding runtime resolves after code emission.
-pub(all) enum RelocTarget {
-  Func(Int)
-  External(@instr.ExternalName)
-} derive(Eq, Debug)
-
-///|
-pub impl Show for RelocTarget with fn output(self, logger) {
-  match self {
-    Func(func_idx) => logger.write_string("func_\{func_idx}")
-    External(symbol) => logger.write_string(symbol.name)
-  }
-}
-
-///|
-fn RelocTarget::key(self : RelocTarget) -> String {
-  match self {
-    Func(func_idx) => "func:\{func_idx}"
-    External(symbol) => "external:\{symbol.name}"
-  }
-}
-
-///|
 /// Fixup for direct function address loads
 pub(all) struct FuncAddrFixup {
   // Offset in the code buffer where the load starts
   offset : Int
   // Target function or external symbol
-  target : RelocTarget
+  target : @instr.RelocTarget
   // Destination register (physical)
   reg : Int
 } derive(Eq, Debug)
@@ -116,7 +90,7 @@ pub(all) struct CallFixup {
   // Offset in the code buffer where the call instruction starts
   offset : Int
   // Target function or external symbol
-  target : RelocTarget
+  target : @instr.RelocTarget
   // Offset of a local call veneer (load-absolute + br), -1 when absent
   veneer_offset : Int
 } derive(Eq, Debug)
@@ -191,7 +165,7 @@ pub fn MachineCode::emit_inst(
 /// Emit a direct BL with a relocation fixup.
 pub fn MachineCode::emit_bl_target(
   self : MachineCode,
-  target : RelocTarget,
+  target : @instr.RelocTarget,
 ) -> Unit {
   let offset = self.current_pos()
   self.annotate("bl \{target}")
@@ -201,9 +175,12 @@ pub fn MachineCode::emit_bl_target(
 }
 
 ///|
-/// Emit a direct BL with a relocation fixup to a module-local function index.
-pub fn MachineCode::emit_bl_func(self : MachineCode, func_idx : Int) -> Unit {
-  self.emit_bl_target(Func(func_idx))
+/// Emit a direct BL with a relocation fixup to an embedding-owned code symbol.
+pub fn MachineCode::emit_bl_code(
+  self : MachineCode,
+  symbol : @instr.CodeSymbol,
+) -> Unit {
+  self.emit_bl_target(Code(symbol))
 }
 
 ///|
@@ -328,14 +305,14 @@ pub fn MachineCode::add_x86_rel32_fixup(
 }
 
 ///|
-/// Add a fixup for a direct function address load
-pub fn MachineCode::add_func_addr_fixup(
+/// Add a fixup for an embedding-owned code address load.
+pub fn MachineCode::add_code_addr_fixup(
   self : MachineCode,
   offset : Int,
-  func_idx : Int,
+  symbol : @instr.CodeSymbol,
   reg : Int,
 ) -> Unit {
-  self.add_func_addr_target_fixup(offset, Func(func_idx), reg)
+  self.add_func_addr_target_fixup(offset, Code(symbol), reg)
 }
 
 ///|
@@ -343,7 +320,7 @@ pub fn MachineCode::add_func_addr_fixup(
 pub fn MachineCode::add_func_addr_target_fixup(
   self : MachineCode,
   offset : Int,
-  target : RelocTarget,
+  target : @instr.RelocTarget,
   reg : Int,
 ) -> Unit {
   self.func_addr_fixups.push({ offset, target, reg })
@@ -361,14 +338,14 @@ pub fn MachineCode::add_external_func_addr_fixup(
 }
 
 ///|
-/// Add a fixup for a direct function call
+/// Add a fixup for a direct call to an embedding-owned code symbol.
 pub fn MachineCode::add_call_fixup(
   self : MachineCode,
   offset : Int,
-  func_idx : Int,
+  symbol : @instr.CodeSymbol,
   veneer_offset? : Int = -1,
 ) -> Unit {
-  self.add_call_target_fixup(offset, Func(func_idx), veneer_offset~)
+  self.add_call_target_fixup(offset, Code(symbol), veneer_offset~)
 }
 
 ///|
@@ -376,7 +353,7 @@ pub fn MachineCode::add_call_fixup(
 pub fn MachineCode::add_call_target_fixup(
   self : MachineCode,
   offset : Int,
-  target : RelocTarget,
+  target : @instr.RelocTarget,
   veneer_offset? : Int = -1,
 ) -> Unit {
   self.call_fixups.push({ offset, target, veneer_offset })
@@ -432,7 +409,7 @@ pub fn MachineCode::record_gc_safepoint(
 /// to the original callsite.
 fn MachineCode::emit_call_veneer(
   self : MachineCode,
-  target : RelocTarget,
+  target : @instr.RelocTarget,
 ) -> Int {
   let veneer_offset = self.current_pos()
   self.annotate("call_veneer.\{target}")

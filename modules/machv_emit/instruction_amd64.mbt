@@ -3154,23 +3154,23 @@ fn MachineCode::emit_instruction_x86_64(
       let rn = reg_num(inst.uses[0])
       self.x86_emit_mov_r32_m32(rt, rn, offset)
     }
-    LoadFuncAddr(func_idx) => {
-      // Load function pointer from vmctx->func_table[func_idx].
+    LoadCodeAddr(symbol) => {
+      // Load function pointer from the embedding function table.
       let rd = wreg_num(inst.defs[0])
       let vmctx = @isaregs.vmctx_index()
       let table = isa.scratch_reg_1_index()
       let layout = stack_frame.require_runtime_layout()
       self.x86_emit_mov_r64_m64(table, vmctx, layout.function_table_offset)
-      self.x86_emit_mov_r64_m64(rd, table, func_idx * 8)
+      self.x86_emit_mov_r64_m64(rd, table, symbol.ordinal * 8)
     }
-    CallDirect(func_idx, _num_args, _num_results, _call_conv) => {
-      // Call via vmctx->func_table[func_idx] to avoid rel32 patching.
+    CallDirect(symbol, _num_args, _num_results, _call_conv) => {
+      // Call via embedding function table to avoid rel32 patching.
       let vmctx = @isaregs.vmctx_index()
       let table = isa.scratch_reg_1_index()
       let callee = isa.scratch_reg_2_index()
       let layout = stack_frame.require_runtime_layout()
       self.x86_emit_mov_r64_m64(table, vmctx, layout.function_table_offset)
-      self.x86_emit_mov_r64_m64(callee, table, func_idx * 8)
+      self.x86_emit_mov_r64_m64(callee, table, symbol.ordinal * 8)
       self.x86_emit_call_r64(callee)
     }
     CallExternal(symbol, _num_args, _num_results, _call_conv) => {

@@ -1444,17 +1444,17 @@ fn MachineCode::emit_instruction(
       self.emit_load_imm64_fixed(result_reg, 0L)
       self.add_external_func_addr_fixup(fixup_offset, symbol, result_reg)
     }
-    LoadFuncAddr(func_idx) => {
+    LoadCodeAddr(symbol) => {
       // Load function address (patched at JIT load time)
       let result_reg = wreg_num(inst.defs[0])
       let fixup_offset = self.current_pos()
       self.emit_load_imm64_fixed(result_reg, 0L)
-      self.add_func_addr_fixup(fixup_offset, func_idx, result_reg)
+      self.add_code_addr_fixup(fixup_offset, symbol, result_reg)
     }
     // Emit BL with runtime fixup. A local veneer fallback is appended later
     // (during function finalization) for out-of-range targets.
-    CallDirect(func_idx, _num_args, _num_results, _call_conv) => {
-      self.emit_bl_func(func_idx)
+    CallDirect(target, _num_args, _num_results, _call_conv) => {
+      self.emit_bl_code(target)
       if stack_frame.cache_mem0_desc {
         let layout = stack_frame.require_runtime_layout()
         self.emit_ldr_imm(

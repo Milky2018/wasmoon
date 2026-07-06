@@ -571,7 +571,7 @@ fn is_trivially_dead_opcode(op : @instr.VCodeOpcode) -> Bool {
     | LoadConstF32(_)
     | LoadConstF64(_)
     | LoadConstV128(_)
-    | LoadFuncAddr(_)
+    | LoadCodeAddr(_)
     | Nop => true
     _ => false
   }

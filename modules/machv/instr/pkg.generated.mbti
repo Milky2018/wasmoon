@@ -38,6 +38,13 @@ pub(all) enum CmpKind {
 }
 pub impl Show for CmpKind
 
+pub(all) struct CodeSymbol {
+  scope : String
+  ordinal : Int
+} derive(Eq, Hash, @debug.Debug)
+pub fn CodeSymbol::new(String, Int) -> Self
+pub impl Show for CodeSymbol
+
 pub(all) enum Cond {
   Eq
   Ne
@@ -146,6 +153,13 @@ pub(all) enum MemType {
   V128
 }
 pub impl Show for MemType
+
+pub(all) enum RelocTarget {
+  Code(CodeSymbol)
+  External(ExternalName)
+} derive(Eq, @debug.Debug)
+pub fn RelocTarget::key(Self) -> String
+pub impl Show for RelocTarget
 
 pub(all) enum SIMDCmpKind {
   Eq
@@ -300,9 +314,9 @@ pub(all) enum VCodeOpcode {
   LoadPtrNarrow(Int, Bool, Int)
   StorePtrNarrow(Int, Int)
   LoadExternalFuncAddr(ExternalName)
-  LoadFuncAddr(Int)
+  LoadCodeAddr(CodeSymbol)
   CallPtr(Int, Int, CallClobberClass)
-  CallDirect(Int, Int, Int, CallClobberClass)
+  CallDirect(CodeSymbol, Int, Int, CallClobberClass)
   CallExternal(ExternalName, Int, Int, CallClobberClass)
   AdjustSP(Int)
   StoreToStack(Int)

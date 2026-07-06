@@ -1,9 +1,25 @@
 ///|
+fn test_wasm_func_symbol(func_idx : Int) -> @instr.CodeSymbol {
+  @instr.CodeSymbol::new("wasm.func", func_idx)
+}
+
+///|
+fn test_runtime_target(name : String) -> @instr.RelocTarget {
+  External(@instr.ExternalName::new(name))
+}
+
+///|
 test "resolve runtime helper relocations into linked code" {
   let object = @machv_emit.MachineCode::new()
   object.emit_byte(0)
-  object.add_call_fixup(0, jit_runtime_fixup_idx(0))
-  let linked = try! link_code_object(object, RuntimeSymbolResolver::new())
+  object.add_call_target_fixup(
+    0,
+    test_runtime_target("wasmoon.runtime.memory_grow"),
+  )
+  let linked = try! link_code_object(
+    object,
+    RuntimeSymbolResolver::with_wasmoon_runtime_symbols(),
+  )
   inspect(linked.code.length(), content="1")
   inspect(linked.runtime_relocations.length(), content="1")
   inspect(linked.call_fixups.length(), content="1")
@@ -16,7 +32,7 @@ test "resolve wasm function symbols into cwasm call fixups" {
   debug_inspect(resolve_wasm_func_symbol("runtime.func.12"), content="None")
   let object = @machv_emit.MachineCode::new()
   object.emit_byte(0)
-  object.add_call_fixup(0, 3)
+  object.add_call_fixup(0, test_wasm_func_symbol(3))
   let linked = try! link_code_object(object, RuntimeSymbolResolver::new())
   inspect(linked.runtime_relocations.length(), content="1")
   debug_inspect(linked.runtime_relocations[0].fixup_idx, content="Some(3)")
@@ -48,7 +64,10 @@ test "resolve cwasm runtime helper fixup ids in wasmoon_jit" {
 test "default wasmoon runtime resolver maps memory.grow fixup" {
   let object = @machv_emit.MachineCode::new()
   object.emit_byte(0)
-  object.add_call_fixup(0, jit_runtime_fixup_idx(0))
+  object.add_call_target_fixup(
+    0,
+    test_runtime_target("wasmoon.runtime.memory_grow"),
+  )
   let linked = try! link_code_object(
     object,
     RuntimeSymbolResolver::with_wasmoon_runtime_symbols(),
@@ -194,8 +213,11 @@ test "cwasm artifact preserves reusable stack map offsets" {
 test "cwasm artifact preserves runtime call fixup metadata" {
   let object = @machv_emit.MachineCode::new()
   object.emit_byte(0)
-  object.add_call_fixup(0, jit_runtime_fixup_idx(13))
-  let resolver = RuntimeSymbolResolver::new()
+  object.add_call_target_fixup(
+    0,
+    test_runtime_target("wasmoon.runtime.hostcall"),
+  )
+  let resolver = RuntimeSymbolResolver::with_wasmoon_runtime_symbols()
   let linked = try! link_code_object(object, resolver)
   let artifact = CwasmArtifact::from_linked_code_for_target(
     linked,
@@ -216,8 +238,12 @@ test "aarch64 cwasm artifact materializes runtime call veneers" {
   for _ in 0..<40 {
     object.emit_byte(0)
   }
-  object.add_call_fixup(8, jit_runtime_fixup_idx(13), veneer_offset=24)
-  let resolver = RuntimeSymbolResolver::new()
+  object.add_call_target_fixup(
+    8,
+    test_runtime_target("wasmoon.runtime.hostcall"),
+    veneer_offset=24,
+  )
+  let resolver = RuntimeSymbolResolver::with_wasmoon_runtime_symbols()
   let linked = try! link_code_object(object, resolver)
   let artifact = CwasmArtifact::from_linked_code_for_target(
     linked,

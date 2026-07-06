@@ -11,7 +11,7 @@
 // Current remat candidates (kept conservative, Cranelift-style):
 // - integer/float constants (LoadConst*)
 // - external function pointers and direct function addresses
-//   (LoadExternalFuncAddr/LoadFuncAddr)
+//   (LoadExternalFuncAddr/LoadCodeAddr)
 
 ///|
 priv struct RematDef {
@@ -30,7 +30,7 @@ fn is_long_distance_remat_candidate(opcode : @instr.VCodeOpcode) -> Bool {
     | LoadConstF32(_)
     | LoadConstF64(_)
     | LoadExternalFuncAddr(_)
-    | LoadFuncAddr(_) => true
+    | LoadCodeAddr(_) => true
     _ => false
   }
 }
@@ -42,7 +42,7 @@ fn is_cross_block_remat_candidate(opcode : @instr.VCodeOpcode) -> Bool {
     | LoadConstF32(_)
     | LoadConstF64(_)
     | LoadExternalFuncAddr(_)
-    | LoadFuncAddr(_) => true
+    | LoadCodeAddr(_) => true
     _ => false
   }
 }
