@@ -14,11 +14,9 @@ import {
 }
 
 // Values
-pub fn allocate_and_apply(@machv.Function, Array[@machv.PReg]) -> ApplyResult raise @regalloc.VerifyError
+pub fn allocate_and_apply_linear_scan(@machv.Function, Array[@machv.PReg]) -> ApplyResult raise @regalloc.VerifyError
 
-pub fn allocate_backtracking(VCodeFunction, LivenessResult, Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg], param_precolor_strict? : Bool, algorithm? : @regalloc.RegallocAlgorithm) -> RegAllocResult
-
-pub fn allocate_function(@machv.Function, Array[@machv.PReg]) -> @regalloc.Allocation raise @regalloc.VerifyError
+pub fn allocate_function_linear_scan(@machv.Function, Array[@machv.PReg]) -> @regalloc.Allocation raise @regalloc.VerifyError
 
 pub fn allocate_registers_backtracking(VCodeFunction, settings? : @abi.ABISettings) -> VCodeFunction
 

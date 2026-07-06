@@ -310,11 +310,11 @@ fn build_reg_pools(
 }
 
 ///|
-/// Allocate registers using the Ion-style backtracking allocator
-/// This allocator supports:
-/// - Bundle merging for copy coalescing
-/// - Priority-based allocation with eviction
-/// - Bundle splitting instead of immediate spilling
+/// Allocate VCode registers through the production backtracking path.
+///
+/// `machv_regalloc` builds MachV liveness, register pools, and output edits;
+/// reusable allocation-loop, probe, eviction, split, and spill policies live in
+/// `regalloc`.
 pub fn allocate_registers_backtracking(
   func : VCodeFunction,
   settings? : @abi.ABISettings = @abi.ABISettings::default(),
@@ -348,7 +348,7 @@ pub fn allocate_registers_backtracking_with_isa(
   let liveness = compute_liveness_for_regalloc(func)
   let algorithm = selected_regalloc_algorithm()
 
-  // Use backtracking allocator (Phases 2-4)
+  // Delegate allocator-core decisions to regalloc through the MachV adapter.
   let alloc_result = allocate_backtracking(
     func,
     liveness,
@@ -370,7 +370,7 @@ pub fn allocate_registers_backtracking_with_isa(
 }
 
 ///|
-/// Allocate registers and return a Cranelift-style regalloc `Output`.
+/// Allocate VCode registers and return a Cranelift-style regalloc `Output`.
 ///
 /// The returned `VCodeFunction` is *not* rewritten to physical registers; the
 /// emitter consumes the returned `Output` to materialize edits and operand
@@ -387,7 +387,8 @@ pub fn allocate_registers_backtracking_output(
 }
 
 ///|
-/// Allocate registers and return `Output` using a specific ISA policy implementation.
+/// Allocate VCode registers and return `Output` using a specific ISA policy
+/// implementation.
 pub fn allocate_registers_backtracking_output_with_isa(
   func : VCodeFunction,
   isa : @isa.ISA,
@@ -420,7 +421,7 @@ pub fn allocate_registers_backtracking_output_with_isa(
     )
   }
 
-  // Use backtracking allocator (Phases 2-4).
+  // Delegate allocator-core decisions to regalloc through the MachV adapter.
   let alloc_result = allocate_backtracking(
     func,
     liveness,

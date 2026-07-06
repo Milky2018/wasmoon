@@ -10,7 +10,7 @@ test "project and allocate MachV function" {
   entry.append(mov)
   let p0 : @machv.PReg = { index: 0, class: Int }
   let p1 : @machv.PReg = { index: 1, class: Int }
-  let allocation = allocate_function(func, [p0, p1])
+  let allocation = allocate_function_linear_scan(func, [p0, p1])
   inspect(allocation.spill_count, content="0")
   inspect(allocation.assignments.length(), content="2")
 }
@@ -26,7 +26,7 @@ test "apply materializes MachV spill slots" {
   inst.add_operand(@machv.Operand::def(Virtual(v1)))
   entry.append(inst)
   let p0 : @machv.PReg = { index: 0, class: Int }
-  let result = allocate_and_apply(func, [p0])
+  let result = allocate_and_apply_linear_scan(func, [p0])
   inspect(result.allocation.spill_count, content="1")
   inspect(result.spill_slots.length(), content="1")
   inspect(func.stack_slots.length(), content="1")
@@ -43,7 +43,7 @@ test "apply materializes aligned vector spill slots" {
   inst.add_operand(@machv.Operand::def(Virtual(v1)))
   entry.append(inst)
   let p0 : @machv.PReg = { index: 0, class: Vector }
-  let result = allocate_and_apply(func, [p0])
+  let result = allocate_and_apply_linear_scan(func, [p0])
   inspect(result.allocation.spill_count, content="1")
   inspect(result.spill_slots[0].size, content="16")
   inspect(result.spill_slots[0].align, content="16")
@@ -61,7 +61,7 @@ test "apply rewrites allocated virtual operands to physical registers" {
   entry.append(inst)
   let p0 : @machv.PReg = { index: 0, class: Int }
   let p1 : @machv.PReg = { index: 1, class: Int }
-  allocate_and_apply(func, [p0, p1]) |> ignore
+  allocate_and_apply_linear_scan(func, [p0, p1]) |> ignore
   inspect(entry.instructions[0].operands[0].reg is Physical(_), content="true")
   inspect(entry.instructions[0].operands[1].reg is Physical(_), content="true")
 }
@@ -80,7 +80,7 @@ test "apply preserves MachV float width classes when rewriting operands" {
   let f0_64 : @machv.PReg = { index: 0, class: Float64 }
   let f1_32 : @machv.PReg = { index: 1, class: Float32 }
   let f1_64 : @machv.PReg = { index: 1, class: Float64 }
-  allocate_and_apply(func, [f0_32, f0_64, f1_32, f1_64]) |> ignore
+  allocate_and_apply_linear_scan(func, [f0_32, f0_64, f1_32, f1_64]) |> ignore
   inspect(
     entry.instructions[0].operands[0].reg is Physical({ class: Float32, .. }),
     content="true",
@@ -102,7 +102,7 @@ test "projected MachV constraints guide fixed register allocation" {
   let p1 : @machv.PReg = { index: 1, class: Int }
   inst.add_constraint({ operand_index: 0, allowed_regs: [p1] })
   entry.append(inst)
-  let allocation = allocate_function(func, [p0, p1])
+  let allocation = allocate_function_linear_scan(func, [p0, p1])
   inspect(
     allocation.location_of({ id: v0.id, class: Int }) ==
     Some(Reg({ id: 1, class: Int })),
@@ -129,7 +129,7 @@ test "apply materializes call fixed constraints as moves" {
   call1.add_operand(@machv.Operand::use_reg(Virtual(value)))
   call1.add_constraint({ operand_index: 0, allowed_regs: [p1] })
   entry.append(call1)
-  allocate_and_apply(func, [p0, p1]) |> ignore
+  allocate_and_apply_linear_scan(func, [p0, p1]) |> ignore
   inspect(entry.instructions.length(), content="4")
   inspect(entry.instructions[1].operands[0].reg, content="x0")
   inspect(entry.instructions[2].opcode is Move, content="true")
@@ -172,7 +172,7 @@ test "apply materializes overlapping call fixed constraints in reverse order" {
   call.add_constraint({ operand_index: 1, allowed_regs: [p2] })
   call.add_constraint({ operand_index: 2, allowed_regs: [p3] })
   entry.append(call)
-  allocate_and_apply(func, [p0, p1, p2, p3]) |> ignore
+  allocate_and_apply_linear_scan(func, [p0, p1, p2, p3]) |> ignore
   inspect(entry.instructions.length(), content="5")
   inspect(entry.instructions[1].opcode is Move, content="true")
   inspect(entry.instructions[2].opcode is Move, content="true")
@@ -242,7 +242,7 @@ test "apply keeps fixed call inputs out of cycle scratch registers" {
   call.add_constraint({ operand_index: 3, allowed_regs: [p3] })
   call.add_constraint({ operand_index: 4, allowed_regs: [p0] })
   entry.append(call)
-  allocate_and_apply(func, [p0, p1, p2, p3, p4]) |> ignore
+  allocate_and_apply_linear_scan(func, [p0, p1, p2, p3, p4]) |> ignore
   let mut call_index = -1
   for i, inst in entry.instructions {
     if inst.opcode is Call(_) {
@@ -279,19 +279,19 @@ test "projected MachV ties co-locate use-def operands" {
   entry.append(use_inst)
   let p0 : @machv.PReg = { index: 0, class: Int }
   let p1 : @machv.PReg = { index: 1, class: Int }
-  let allocation = allocate_function(func, [p0, p1])
+  let allocation = allocate_function_linear_scan(func, [p0, p1])
   inspect(
     allocation.location_of({ id: v0.id, class: Int }) ==
     allocation.location_of({ id: v1.id, class: Int }),
     content="true",
   )
-  allocate_and_apply(func, [p0, p1]) |> ignore
+  allocate_and_apply_linear_scan(func, [p0, p1]) |> ignore
   inspect(entry.instructions[1].operands[0].reg, content="x0")
   inspect(entry.instructions[1].operands[1].reg, content="x0")
 }
 
 ///|
-test "allocate_function accepts fixed registers outside the allocatable pool" {
+test "allocate_function_linear_scan accepts fixed registers outside the allocatable pool" {
   let func = @machv.Function::new("fixed_outside_pool")
   let entry = func.new_block()
   let v0 = func.new_vreg(Int)
@@ -303,7 +303,7 @@ test "allocate_function accepts fixed registers outside the allocatable pool" {
   })
   entry.append(inst)
   let p0 : @machv.PReg = { index: 0, class: Int }
-  let allocation = allocate_function(func, [p0])
+  let allocation = allocate_function_linear_scan(func, [p0])
   inspect(
     allocation.location_of({ id: v0.id, class: Int }) ==
     Some(Reg({ id: 1, class: Int })),
@@ -312,7 +312,7 @@ test "allocate_function accepts fixed registers outside the allocatable pool" {
 }
 
 ///|
-test "allocate_function avoids projected clobbered registers" {
+test "allocate_function_linear_scan avoids projected clobbered registers" {
   let func = @machv.Function::new("clobber")
   let entry = func.new_block()
   let v0 = func.new_vreg(Int)
@@ -327,7 +327,7 @@ test "allocate_function avoids projected clobbered registers" {
   let use_inst = func.new_inst(Target("use"))
   use_inst.add_operand(@machv.Operand::use_reg(Virtual(v0)))
   entry.append(use_inst)
-  let allocation = allocate_function(func, [p0, p1])
+  let allocation = allocate_function_linear_scan(func, [p0, p1])
   inspect(
     allocation.location_of({ id: v0.id, class: Int }) ==
     Some(Reg({ id: 1, class: Int })),
@@ -351,7 +351,7 @@ test "projected MachV terminator return keeps result live" {
   entry.set_terminator(TermReturn([Virtual(v0)]))
   let p0 : @machv.PReg = { index: 0, class: Int }
   let p1 : @machv.PReg = { index: 1, class: Int }
-  let allocation = allocate_function(func, [p0, p1])
+  let allocation = allocate_function_linear_scan(func, [p0, p1])
   inspect(
     allocation.location_of({ id: v0.id, class: Int }) !=
     allocation.location_of({ id: v1.id, class: Int }),
@@ -379,7 +379,7 @@ test "projected MachV successors extend live ranges across empty blocks" {
   exit.set_terminator(TermReturn([Virtual(v0)]))
   let p0 : @machv.PReg = { index: 0, class: Int }
   let p1 : @machv.PReg = { index: 1, class: Int }
-  let allocation = allocate_function(func, [p0, p1])
+  let allocation = allocate_function_linear_scan(func, [p0, p1])
   inspect(
     allocation.location_of({ id: v0.id, class: Int }) !=
     allocation.location_of({ id: v1.id, class: Int }),
@@ -397,7 +397,7 @@ test "apply rewrites terminator virtual registers" {
   entry.append(def_v0)
   entry.set_terminator(TermReturn([Virtual(v0)]))
   let p0 : @machv.PReg = { index: 0, class: Int }
-  allocate_and_apply(func, [p0]) |> ignore
+  allocate_and_apply_linear_scan(func, [p0]) |> ignore
   debug_inspect(
     entry.terminator,
     content="Some(TermReturn([Physical({ index: 0, class: Int })]))",
@@ -424,7 +424,7 @@ test "apply materializes jump edge args for block params" {
   use_param.add_constraint({ operand_index: 0, allowed_regs: [p1] })
   target.append(use_param)
   target.set_terminator(TermReturn([]))
-  allocate_and_apply(func, [p0, p1]) |> ignore
+  allocate_and_apply_linear_scan(func, [p0, p1]) |> ignore
   inspect(entry.terminator == Some(TermJump(target.id, [])), content="true")
   inspect(
     entry.instructions[entry.instructions.length() - 1].opcode is Move,
@@ -461,7 +461,7 @@ test "apply preserves float32 class in edge transfers" {
   use_param.add_constraint({ operand_index: 0, allowed_regs: [f1] })
   target.append(use_param)
   target.set_terminator(TermReturn([]))
-  allocate_and_apply(func, [f0, f1]) |> ignore
+  allocate_and_apply_linear_scan(func, [f0, f1]) |> ignore
   debug_inspect(
     entry.instructions[entry.instructions.length() - 1].operands,
     content=(
@@ -493,7 +493,7 @@ test "apply preserves vector class in edge transfers" {
   use_param.add_constraint({ operand_index: 0, allowed_regs: [v1] })
   target.append(use_param)
   target.set_terminator(TermReturn([]))
-  allocate_and_apply(func, [v0, v1]) |> ignore
+  allocate_and_apply_linear_scan(func, [v0, v1]) |> ignore
   debug_inspect(
     entry.instructions[entry.instructions.length() - 1].operands,
     content=(
@@ -538,7 +538,7 @@ test "apply splits conditional branch edge args through copy blocks" {
   then_block.append(use_param)
   then_block.set_terminator(TermReturn([]))
   else_block.set_terminator(TermReturn([]))
-  allocate_and_apply(func, [p0, p1]) |> ignore
+  allocate_and_apply_linear_scan(func, [p0, p1]) |> ignore
   inspect(func.blocks.length(), content="4")
   guard entry.terminator
     is Some(
@@ -590,7 +590,7 @@ test "apply reloads spilled terminator operands before terminator" {
   entry.set_terminator(TermReturn([Virtual(v0), Virtual(v1), Virtual(v2)]))
   let p0 : @machv.PReg = { index: 0, class: Int }
   let p1 : @machv.PReg = { index: 1, class: Int }
-  let result = allocate_and_apply(func, [p0, p1])
+  let result = allocate_and_apply_linear_scan(func, [p0, p1])
   inspect(result.allocation.spill_count > 0, content="true")
   inspect(
     entry.instructions[entry.instructions.length() - 1].opcode is Load(_),
@@ -624,7 +624,7 @@ test "apply inserts reloads and spills for stack allocated operands" {
   entry.append(use_spilled)
   let p0 : @machv.PReg = { index: 0, class: Int }
   let p1 : @machv.PReg = { index: 1, class: Int }
-  let result = allocate_and_apply(func, [p0, p1])
+  let result = allocate_and_apply_linear_scan(func, [p0, p1])
   let mut loads = 0
   let mut stores = 0
   let mut virtual_operands = 0

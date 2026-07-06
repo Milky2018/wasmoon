@@ -1,11 +1,9 @@
-// Register Allocation
-// Maps virtual registers to physical registers using linear scan algorithm
+// Register-allocation analysis for MachV VCode.
 //
 // This module provides:
 // 1. Liveness analysis (live intervals, use-def chains)
-// 2. Linear scan register allocation
-// 3. Spilling to memory when registers are exhausted
-// 4. Register coalescing for move elimination
+// 2. Program-point ordering for non-linear CFGs
+// 3. Spill-weight and call-crossing facts consumed by allocation adapters
 
 // ============ Live Interval ============
 

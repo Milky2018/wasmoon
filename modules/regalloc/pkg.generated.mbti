@@ -6,7 +6,7 @@ import {
 }
 
 // Values
-pub fn allocate(Program) -> Allocation
+pub fn allocate_linear_scan(Program) -> Allocation
 
 pub fn allocation_iteration_limit(Int) -> Int
 

@@ -120,7 +120,7 @@ type BacktrackingFixedConstraintInst = @regalloc.BacktrackingFixedConstraintInst
 type BacktrackingMoveLoc = @regalloc.BacktrackingMoveLoc[@abi.PReg]
 
 ///|
-/// The backtracking register allocator
+/// MachV adapter state for the reusable backtracking allocator core.
 priv struct BacktrackingAllocator {
   // Core data
   ranges : LiveRangeSet
@@ -2103,8 +2103,9 @@ fn BacktrackingAllocator::preassign_params(
 }
 
 ///|
-/// Main entry point for backtracking allocation
-pub fn allocate_backtracking(
+/// Project MachV liveness/bundles into `regalloc` backtracking APIs and
+/// materialize the generic allocation decisions as a MachV `RegAllocResult`.
+fn allocate_backtracking(
   func : VCodeFunction,
   liveness : LivenessResult,
   int_regs : Array[@abi.PReg],

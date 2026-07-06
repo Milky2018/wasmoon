@@ -224,23 +224,25 @@ fn project_function_impl(
 }
 
 ///|
-pub fn allocate_function(
+/// Project a small MachV function into `regalloc.Program` and run the simple
+/// linear-scan allocator. This is not the production VCode backtracking path.
+pub fn allocate_function_linear_scan(
   func : @machv.Function,
   physical_regs : Array[@machv.PReg],
 ) -> @regalloc.Allocation raise @regalloc.VerifyError {
   let program = project_function(func, physical_regs)
-  let allocation = @regalloc.allocate(program)
+  let allocation = @regalloc.allocate_linear_scan(program)
   @regalloc.verify_allocation(program, allocation)
   allocation
 }
 
 ///|
-fn allocate_function_for_apply(
+fn allocate_function_linear_scan_for_apply(
   func : @machv.Function,
   physical_regs : Array[@machv.PReg],
 ) -> @regalloc.Allocation raise @regalloc.VerifyError {
   let program = project_function_impl(func, physical_regs, true)
-  let allocation = @regalloc.allocate(program)
+  let allocation = @regalloc.allocate_linear_scan(program)
   @regalloc.verify_allocation(program, allocation)
   allocation
 }
@@ -402,11 +404,11 @@ fn allocate_with_optional_scratch(
   func : @machv.Function,
   physical_regs : Array[@machv.PReg],
 ) -> @regalloc.Allocation raise @regalloc.VerifyError {
-  let first = allocate_function_for_apply(func, physical_regs)
+  let first = allocate_function_linear_scan_for_apply(func, physical_regs)
   if has_spills(first) {
     let allocatable = allocatable_regs_for_spills(physical_regs)
     if allocatable.length() != physical_regs.length() {
-      return allocate_function_for_apply(func, allocatable)
+      return allocate_function_linear_scan_for_apply(func, allocatable)
     }
   }
   first
@@ -1460,7 +1462,10 @@ fn materialize_entry_param_transfers(
 }
 
 ///|
-pub fn allocate_and_apply(
+/// Run the simple linear-scan adapter and materialize its result into the small
+/// MachV function model. Production VCode allocation uses
+/// `allocate_registers_backtracking_output`.
+pub fn allocate_and_apply_linear_scan(
   func : @machv.Function,
   physical_regs : Array[@machv.PReg],
 ) -> ApplyResult raise @regalloc.VerifyError {

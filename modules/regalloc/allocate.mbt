@@ -202,12 +202,16 @@ fn choose_spill_candidate(
 }
 
 ///|
-/// Allocate virtual registers over an abstract program model using a small
+/// Allocate virtual registers over the small abstract `Program` model using a
 /// linear-scan allocator.
+///
+/// This is the simple allocator for examples and model-level tests. The
+/// production Wasmoon JIT path uses the `backtracking_*` APIs in this package
+/// through `machv_regalloc`.
 ///
 /// TODO(regalloc): add interval splitting, bundle coalescing, rematerialization,
 /// and target-provided spill-cost modeling.
-pub fn allocate(program : Program) -> Allocation {
+pub fn allocate_linear_scan(program : Program) -> Allocation {
   let allocation = Allocation::new()
   let ranges = build_live_ranges(program)
   let active : Array[(LiveRange, PhysicalReg)] = []
