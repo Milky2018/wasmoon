@@ -1,7 +1,7 @@
 // ============ Reload Coalescing ============
 //
-// This logic is shared by the legacy "apply allocation" path and the
-// Cranelift-style regalloc-output path.
+// This logic is shared by both regalloc result application paths: the in-place
+// VCode rewrite path and the Cranelift-style regalloc-output path.
 //
 // Goal: when the same spill slot is used multiple times within a block, keep it
 // live in a chosen register for the duration of the block interval to avoid
