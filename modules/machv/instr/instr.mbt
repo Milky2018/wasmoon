@@ -17,8 +17,8 @@ pub(all) enum CallClobberClass {
 ///|
 /// Symbolic name for a runtime or external helper address.
 ///
-/// MachV treats this as an opaque relocation key. Product-specific packages,
-/// such as `wasmoon_jit`, own the mapping from names to native addresses.
+/// MachV treats this as an opaque relocation key. Embedding packages own the
+/// mapping from names to native addresses.
 pub(all) struct ExternalName {
   name : String
 } derive(Eq, Debug, Hash)
@@ -210,13 +210,13 @@ pub(all) enum VCodeOpcode {
   Xor(Bool)
   XorImm(Int64, Bool) // EOR (immediate logical), value is the immediate pattern
   Shl(Bool) // LSL with size
-  ShlImm(Int, Bool) // LSL with immediate shift amount (masked per Wasm semantics)
+  ShlImm(Int, Bool) // LSL with immediate shift amount masked to operand width
   AShr(Bool) // Arithmetic shift right with size
-  AShrImm(Int, Bool) // ASR with immediate shift amount (masked per Wasm semantics)
+  AShrImm(Int, Bool) // ASR with immediate shift amount masked to operand width
   LShr(Bool) // Logical shift right with size
-  LShrImm(Int, Bool) // LSR with immediate shift amount (masked per Wasm semantics)
+  LShrImm(Int, Bool) // LSR with immediate shift amount masked to operand width
   Rotr(Bool) // Rotate right with size
-  RotrImm(Int, Bool) // ROR with immediate shift amount (masked per Wasm semantics)
+  RotrImm(Int, Bool) // ROR with immediate shift amount masked to operand width
   // AArch64 EXTR immediate forms:
   //   extr rd, rn, rm, #shift  (64-bit)
   //   extr wD, wN, wM, #shift  (32-bit)
@@ -497,18 +497,18 @@ pub(all) enum VCodeOpcode {
   // emitter-local labels.
   //
   // BumpAllocRecordFromStackInline(type_tag, field_count):
-  //   Uses: [vmctx], Defs: [result_ref]
+  //   Uses: [embedding_context], Defs: [result_ref]
   //   - Fast path: inline bump allocation + header/field stores.
   //   - Fields source is fixed to caller stack pointer (SP outgoing args area).
-  //   - Slow path: calls slow helper(vmctx, type_tag, SP, field_count, safepoint_id).
+  //   - Slow path: calls slow helper(context, type_tag, SP, field_count, safepoint_id).
   //   - Always registers allocated object via register helper.
   BumpAllocRecordFromStackInline(Int, Int, ExternalName, ExternalName)
 
   // BumpAllocArrayFromStackInline(type_tag, len):
-  //   Uses: [vmctx], Defs: [result_ref]
+  //   Uses: [embedding_context], Defs: [result_ref]
   //   - Fast path: inline bump allocation + header/len/element stores.
   //   - Values source is fixed to caller stack pointer (SP outgoing args area).
-  //   - Slow path: calls slow helper(vmctx, type_tag, SP, len, safepoint_id).
+  //   - Slow path: calls slow helper(context, type_tag, SP, len, safepoint_id).
   //   - Always registers allocated object via register helper.
   BumpAllocArrayFromStackInline(Int, Int, ExternalName, ExternalName)
 
