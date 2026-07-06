@@ -65,7 +65,7 @@ pub fn eliminate_redundant_mem_base_loads(func : Function) -> OptResult {
     let seen_vmctx_loads : @hashmap.HashMap[String, Value] = HashMap([])
     for inst in block.instructions {
       match inst.opcode {
-        LoadMemBase(memidx) =>
+        Wasm(LoadMemBase(memidx)) =>
           if inst.first_result() is Some(r) && inst.operands.length() == 1 {
             let vmctx = inst.operands[0]
             let key = (memidx.to_int64() << 32) |
@@ -117,15 +117,15 @@ pub fn eliminate_redundant_mem_base_loads(func : Function) -> OptResult {
             }
           }
         // Conservatively invalidate on operations that can mutate memory base.
-        MemoryGrow(_, _)
-        | WasmCall(_)
-        | WasmCallIndirect(_, _)
-        | CallRef(_)
-        | ReturnCall(_)
-        | ReturnCallIndirect(_, _)
-        | ReturnCallRef(_)
+        Wasm(MemoryGrow(_, _))
+        | Wasm(WasmCall(_))
+        | Wasm(WasmCallIndirect(_, _))
+        | Wasm(CallRef(_))
+        | Wasm(ReturnCall(_))
+        | Wasm(ReturnCallIndirect(_, _))
+        | Wasm(ReturnCallRef(_))
         | CallPtr(_, _)
-        | TableGrow(_) => {
+        | Wasm(TableGrow(_)) => {
           seen.clear()
           seen_vmctx_loads.clear()
         }
@@ -180,15 +180,15 @@ pub fn eliminate_redundant_mem_base_loads_global(func : Function) -> OptResult {
     ptr_base_infos : @hashmap.HashMap[Int, PtrBaseInfo],
   ) -> Bool {
     match inst.opcode {
-      MemoryGrow(_, _)
-      | WasmCall(_)
-      | WasmCallIndirect(_, _)
-      | CallRef(_)
-      | ReturnCall(_)
-      | ReturnCallIndirect(_, _)
-      | ReturnCallRef(_)
+      Wasm(MemoryGrow(_, _))
+      | Wasm(WasmCall(_))
+      | Wasm(WasmCallIndirect(_, _))
+      | Wasm(CallRef(_))
+      | Wasm(ReturnCall(_))
+      | Wasm(ReturnCallIndirect(_, _))
+      | Wasm(ReturnCallRef(_))
       | CallPtr(_, _)
-      | TableGrow(_) => true
+      | Wasm(TableGrow(_)) => true
       StorePtr(_) | StorePtrNarrow(_) =>
         if ptr_access_from_inst(inst, ptr_base_infos) is Some(access) {
           access.region is Vmctx
@@ -210,7 +210,7 @@ pub fn eliminate_redundant_mem_base_loads_global(func : Function) -> OptResult {
         out_state.clear()
         continue
       }
-      if inst.opcode is LoadMemBase(memidx) &&
+      if inst.opcode is Wasm(LoadMemBase(memidx)) &&
         inst.first_result() is Some(r) &&
         inst.operands.length() == 1 {
         let vmctx = inst.operands[0]
@@ -317,7 +317,7 @@ pub fn eliminate_redundant_mem_base_loads_global(func : Function) -> OptResult {
         state.clear()
         continue
       }
-      if inst.opcode is LoadMemBase(memidx) &&
+      if inst.opcode is Wasm(LoadMemBase(memidx)) &&
         inst.first_result() is Some(r) &&
         inst.operands.length() == 1 {
         let vmctx = inst.operands[0]
@@ -467,7 +467,7 @@ pub fn reassociate_wasm_addresses(func : Function) -> OptResult {
       visited.add(current.id) |> ignore
       if def_inst.get(current.id) is Some(inst) {
         match inst.opcode {
-          LoadMemBase(_) => {
+          Wasm(LoadMemBase(_)) => {
             cache.set(value.id, true)
             return true
           }
@@ -607,10 +607,15 @@ fn reads_memory(opcode : Opcode) -> Bool {
   match opcode {
     LoadPtr(_) | LoadPtrNarrow(_, _, _) => true
     // MemorySize reads the current memory size (invalidated by MemoryGrow)
-    MemorySize(_) => true
+    Wasm(MemorySize(_)) => true
     // GC struct/array gets read from memory
-    StructGet(_, _) | StructGetS(_, _, _) | StructGetU(_, _, _) => true
-    ArrayGet(_) | ArrayGetS(_, _) | ArrayGetU(_, _) | ArrayLen => true
+    Wasm(StructGet(_, _))
+    | Wasm(StructGetS(_, _, _))
+    | Wasm(StructGetU(_, _, _)) => true
+    Wasm(ArrayGet(_))
+    | Wasm(ArrayGetS(_, _))
+    | Wasm(ArrayGetU(_, _))
+    | Wasm(ArrayLen) => true
     _ => false
   }
 }
@@ -623,25 +628,30 @@ fn may_write_memory(opcode : Opcode) -> Bool {
     // Direct memory writes
     StorePtr(_) | StorePtrNarrow(_) => true
     // Memory operations
-    MemoryGrow(_, _) | MemoryFill(_) | MemoryCopy(_, _) => true
+    Wasm(MemoryGrow(_, _)) | Wasm(MemoryFill(_)) | Wasm(MemoryCopy(_, _)) =>
+      true
     // Calls may write memory
-    WasmCall(_)
-    | WasmCallIndirect(_, _)
-    | CallRef(_)
-    | ReturnCall(_)
-    | ReturnCallIndirect(_, _)
-    | ReturnCallRef(_)
+    Wasm(WasmCall(_))
+    | Wasm(WasmCallIndirect(_, _))
+    | Wasm(CallRef(_))
+    | Wasm(ReturnCall(_))
+    | Wasm(ReturnCallIndirect(_, _))
+    | Wasm(ReturnCallRef(_))
     | CallPtr(_, _) => true
     // GC operations that modify memory
-    StructSet(_, _) | ArraySet(_) | ArrayFill(_) | ArrayCopy(_, _) => true
+    Wasm(StructSet(_, _))
+    | Wasm(ArraySet(_))
+    | Wasm(ArrayFill(_))
+    | Wasm(ArrayCopy(_, _)) => true
     // GC allocations modify memory (the GC heap)
-    StructNew(_) | StructNewDefault(_) => true
-    ArrayNew(_) | ArrayNewDefault(_) | ArrayNewFixed(_, _) => true
+    Wasm(StructNew(_)) | Wasm(StructNewDefault(_)) => true
+    Wasm(ArrayNew(_)) | Wasm(ArrayNewDefault(_)) | Wasm(ArrayNewFixed(_, _)) =>
+      true
     // Table operations may involve memory
-    TableGrow(_) => true
+    Wasm(TableGrow(_)) => true
     // Exception handling can modify state
-    Throw(_) | ThrowRef => true
-    SpillLocalsForThrow(_) => true
+    Wasm(Throw(_)) | Wasm(ThrowRef) => true
+    Wasm(SpillLocalsForThrow(_)) => true
     _ => false
   }
 }
@@ -977,7 +987,7 @@ fn collect_ptr_base_infos(
       for inst in block.instructions {
         if inst.first_result() is Some(v) && result.get(v.id) is None {
           let inferred : PtrBaseInfo? = match inst.opcode {
-            LoadMemBase(memidx) => Some({ region: Heap(memidx) })
+            Wasm(LoadMemBase(memidx)) => Some({ region: Heap(memidx) })
             Copy | Bitcast | Uextend | Sextend | Ireduce =>
               if inst.operands.length() > 0 {
                 result.get(inst.operands[0].id)

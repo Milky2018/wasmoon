@@ -1886,43 +1886,44 @@ fn lower_inst(
     Select => lower_select(ctx, inst, block)
 
     // Memory management (with memidx for multi-memory support)
-    LoadMemBase(memidx) => lower_load_mem_base(ctx, inst, block, memidx)
-    MemoryGrow(memidx, max_pages) =>
+    Wasm(LoadMemBase(memidx)) => lower_load_mem_base(ctx, inst, block, memidx)
+    Wasm(MemoryGrow(memidx, max_pages)) =>
       lower_memory_grow(ctx, inst, block, memidx, max_pages)
-    MemorySize(memidx) => lower_memory_size(ctx, inst, block, memidx)
-    MemoryFill(memidx) => lower_memory_fill(ctx, inst, block, memidx)
-    MemoryCopy(dst_memidx, src_memidx) =>
+    Wasm(MemorySize(memidx)) => lower_memory_size(ctx, inst, block, memidx)
+    Wasm(MemoryFill(memidx)) => lower_memory_fill(ctx, inst, block, memidx)
+    Wasm(MemoryCopy(dst_memidx, src_memidx)) =>
       lower_memory_copy(ctx, inst, block, dst_memidx, src_memidx)
-    MemoryInit(memidx, data_idx) =>
+    Wasm(MemoryInit(memidx, data_idx)) =>
       lower_memory_init(ctx, inst, block, memidx, data_idx)
-    DataDrop(data_idx) => lower_data_drop(ctx, inst, block, data_idx)
+    Wasm(DataDrop(data_idx)) => lower_data_drop(ctx, inst, block, data_idx)
 
     // Table operations
     // NOTE: TableGet, TableSet, TableSize are desugared via FuncEnvironment at IR level
-    TableGrow(table_idx) => lower_table_grow(ctx, inst, block, table_idx)
-    TableFill(table_idx) => lower_table_fill(ctx, inst, block, table_idx)
-    TableCopy(dst_table_idx, src_table_idx) =>
+    Wasm(TableGrow(table_idx)) => lower_table_grow(ctx, inst, block, table_idx)
+    Wasm(TableFill(table_idx)) => lower_table_fill(ctx, inst, block, table_idx)
+    Wasm(TableCopy(dst_table_idx, src_table_idx)) =>
       lower_table_copy(ctx, inst, block, dst_table_idx, src_table_idx)
-    TableInit(table_idx, elem_idx) =>
+    Wasm(TableInit(table_idx, elem_idx)) =>
       lower_table_init(ctx, inst, block, table_idx, elem_idx)
-    ElemDrop(elem_idx) => lower_elem_drop(ctx, inst, block, elem_idx)
+    Wasm(ElemDrop(elem_idx)) => lower_elem_drop(ctx, inst, block, elem_idx)
 
     // NOTE: GlobalGet, GlobalSet are desugared via FuncEnvironment at IR level
 
     // Function calls
     Call(_) | CallIndirect(_) => lower_unsupported_generic_opcode(inst, block)
-    WasmCall(func_idx) => lower_call(ctx, inst, block, func_idx)
-    WasmCallIndirect(type_idx, table_idx) =>
+    Wasm(WasmCall(func_idx)) => lower_call(ctx, inst, block, func_idx)
+    Wasm(WasmCallIndirect(type_idx, table_idx)) =>
       lower_call_indirect(ctx, inst, block, type_idx, table_idx)
-    CallRef(type_idx) => lower_call_ref(ctx, inst, block, type_idx)
+    Wasm(CallRef(type_idx)) => lower_call_ref(ctx, inst, block, type_idx)
     // Tail calls - use dedicated lowering functions with Standard parameter handling
-    ReturnCall(func_idx) => lower_return_call(ctx, inst, block, func_idx)
-    ReturnCallIndirect(type_idx, table_idx) =>
+    Wasm(ReturnCall(func_idx)) => lower_return_call(ctx, inst, block, func_idx)
+    Wasm(ReturnCallIndirect(type_idx, table_idx)) =>
       lower_return_call_indirect(ctx, inst, block, type_idx, table_idx)
-    ReturnCallRef(type_idx) => lower_return_call_ref(ctx, inst, block, type_idx)
+    Wasm(ReturnCallRef(type_idx)) =>
+      lower_return_call_ref(ctx, inst, block, type_idx)
 
     // Function reference
-    GetFuncRef(func_idx) => lower_get_func_ref(ctx, inst, block, func_idx)
+    Wasm(GetFuncRef(func_idx)) => lower_get_func_ref(ctx, inst, block, func_idx)
 
     // Raw pointer operations (for trampolines)
     LoadPtr(ty) => lower_load_ptr(ctx, inst, block, ty)
@@ -1935,67 +1936,71 @@ fn lower_inst(
     Trap(_) | Custom(_) => lower_unsupported_generic_opcode(inst, block)
 
     // GC operations - i31 (simple bit manipulation, implemented inline)
-    I31New => lower_i31_new(ctx, inst, block)
-    I31GetS => lower_i31_get_s(ctx, inst, block)
-    I31GetU => lower_i31_get_u(ctx, inst, block)
+    Wasm(I31New) => lower_i31_new(ctx, inst, block)
+    Wasm(I31GetS) => lower_i31_get_s(ctx, inst, block)
+    Wasm(I31GetU) => lower_i31_get_u(ctx, inst, block)
 
     // GC operations - type conversions (no-ops for JIT, just pass through)
-    AnyConvertExtern | ExternConvertAny => lower_gc_convert(ctx, inst, block)
+    Wasm(AnyConvertExtern) | Wasm(ExternConvertAny) =>
+      lower_gc_convert(ctx, inst, block)
 
     // GC operations - struct/array (use runtime libcalls)
-    StructNew(type_idx) => lower_struct_new(ctx, inst, block, type_idx)
-    StructNewDefault(type_idx) =>
+    Wasm(StructNew(type_idx)) => lower_struct_new(ctx, inst, block, type_idx)
+    Wasm(StructNewDefault(type_idx)) =>
       lower_struct_new_default(ctx, inst, block, type_idx)
-    StructGet(type_idx, field_idx) =>
+    Wasm(StructGet(type_idx, field_idx)) =>
       lower_struct_get(ctx, inst, block, type_idx, field_idx)
-    StructGetS(type_idx, field_idx, byte_width) =>
+    Wasm(StructGetS(type_idx, field_idx, byte_width)) =>
       lower_struct_get_s(ctx, inst, block, type_idx, field_idx, byte_width)
-    StructGetU(type_idx, field_idx, byte_width) =>
+    Wasm(StructGetU(type_idx, field_idx, byte_width)) =>
       lower_struct_get_u(ctx, inst, block, type_idx, field_idx, byte_width)
-    StructSet(type_idx, field_idx) =>
+    Wasm(StructSet(type_idx, field_idx)) =>
       lower_struct_set(ctx, inst, block, type_idx, field_idx)
-    ArrayNew(type_idx) => lower_array_new(ctx, inst, block, type_idx)
-    ArrayNewDefault(type_idx) =>
+    Wasm(ArrayNew(type_idx)) => lower_array_new(ctx, inst, block, type_idx)
+    Wasm(ArrayNewDefault(type_idx)) =>
       lower_array_new_default(ctx, inst, block, type_idx)
-    ArrayNewFixed(type_idx, len) =>
+    Wasm(ArrayNewFixed(type_idx, len)) =>
       lower_array_new_fixed(ctx, inst, block, type_idx, len)
-    ArrayGet(type_idx) => lower_array_get(ctx, inst, block, type_idx)
-    ArrayGetS(type_idx, byte_width) =>
+    Wasm(ArrayGet(type_idx)) => lower_array_get(ctx, inst, block, type_idx)
+    Wasm(ArrayGetS(type_idx, byte_width)) =>
       lower_array_get_s(ctx, inst, block, type_idx, byte_width)
-    ArrayGetU(type_idx, byte_width) =>
+    Wasm(ArrayGetU(type_idx, byte_width)) =>
       lower_array_get_u(ctx, inst, block, type_idx, byte_width)
-    ArraySet(type_idx) => lower_array_set(ctx, inst, block, type_idx)
-    ArrayLen => lower_array_len(ctx, inst, block)
-    ArrayFill(type_idx) => lower_array_fill(ctx, inst, block, type_idx)
-    ArrayCopy(dst_type, src_type) =>
+    Wasm(ArraySet(type_idx)) => lower_array_set(ctx, inst, block, type_idx)
+    Wasm(ArrayLen) => lower_array_len(ctx, inst, block)
+    Wasm(ArrayFill(type_idx)) => lower_array_fill(ctx, inst, block, type_idx)
+    Wasm(ArrayCopy(dst_type, src_type)) =>
       lower_array_copy(ctx, inst, block, dst_type, src_type)
-    ArrayNewData(type_idx, data_idx) =>
+    Wasm(ArrayNewData(type_idx, data_idx)) =>
       lower_array_new_data(ctx, inst, block, type_idx, data_idx)
-    ArrayNewElem(type_idx, elem_idx) =>
+    Wasm(ArrayNewElem(type_idx, elem_idx)) =>
       lower_array_new_elem(ctx, inst, block, type_idx, elem_idx)
-    ArrayInitData(type_idx, data_idx) =>
+    Wasm(ArrayInitData(type_idx, data_idx)) =>
       lower_array_init_data(ctx, inst, block, type_idx, data_idx)
-    ArrayInitElem(type_idx, elem_idx) =>
+    Wasm(ArrayInitElem(type_idx, elem_idx)) =>
       lower_array_init_elem(ctx, inst, block, type_idx, elem_idx)
-    RefTest(type_idx, nullable) =>
+    Wasm(RefTest(type_idx, nullable)) =>
       lower_ref_test(ctx, inst, block, type_idx, nullable)
-    RefCast(type_idx, nullable) =>
+    Wasm(RefCast(type_idx, nullable)) =>
       lower_ref_cast(ctx, inst, block, type_idx, nullable)
-    RefEq => lower_ref_eq(ctx, inst, block)
+    Wasm(RefEq) => lower_ref_eq(ctx, inst, block)
 
     // Exception handling operations
-    Throw(tag_idx) => lower_throw(ctx, inst, block, tag_idx)
-    ThrowRef => lower_throw_ref(ctx, inst, block)
-    TryTableBegin(handler_id) =>
+    Wasm(Throw(tag_idx)) => lower_throw(ctx, inst, block, tag_idx)
+    Wasm(ThrowRef) => lower_throw_ref(ctx, inst, block)
+    Wasm(TryTableBegin(handler_id)) =>
       lower_try_table_begin(ctx, inst, block, handler_id)
-    TryTableEnd(handler_id) => lower_try_table_end(ctx, inst, block, handler_id)
-    GetExceptionTag => lower_get_exception_tag(ctx, inst, block)
-    GetExceptionValue(idx) => lower_get_exception_value(ctx, inst, block, idx)
-    GetExceptionValueCount => lower_get_exception_value_count(ctx, inst, block)
-    Delegate(depth) => lower_delegate(ctx, inst, block, depth)
-    SpillLocalsForThrow(count) =>
+    Wasm(TryTableEnd(handler_id)) =>
+      lower_try_table_end(ctx, inst, block, handler_id)
+    Wasm(GetExceptionTag) => lower_get_exception_tag(ctx, inst, block)
+    Wasm(GetExceptionValue(idx)) =>
+      lower_get_exception_value(ctx, inst, block, idx)
+    Wasm(GetExceptionValueCount) =>
+      lower_get_exception_value_count(ctx, inst, block)
+    Wasm(Delegate(depth)) => lower_delegate(ctx, inst, block, depth)
+    Wasm(SpillLocalsForThrow(count)) =>
       lower_spill_locals_for_throw(ctx, inst, block, count)
-    GetSpilledLocal(idx) => lower_get_spilled_local(ctx, inst, block, idx)
+    Wasm(GetSpilledLocal(idx)) => lower_get_spilled_local(ctx, inst, block, idx)
 
     // SIMD operations
     V128Const(bytes) => lower_v128_const(ctx, inst, block, bytes)

@@ -93,6 +93,25 @@ fn IRBuilder::emit_void_inst(
   }
 }
 
+///|
+fn IRBuilder::emit_wasm_inst(
+  self : IRBuilder,
+  ty : Type,
+  opcode : WasmOpcode,
+  operands : Array[Value],
+) -> Value {
+  self.emit_inst(ty, Wasm(opcode), operands)
+}
+
+///|
+fn IRBuilder::emit_void_wasm_inst(
+  self : IRBuilder,
+  opcode : WasmOpcode,
+  operands : Array[Value],
+) -> Unit {
+  self.emit_void_inst(Wasm(opcode), operands)
+}
+
 // ============ Constants ============
 
 ///|
@@ -568,7 +587,7 @@ pub fn IRBuilder::load_mem_base(
   vmctx : Value,
   memidx : Int,
 ) -> Value {
-  self.emit_inst(I64, LoadMemBase(memidx), [vmctx])
+  self.emit_wasm_inst(I64, LoadMemBase(memidx), [vmctx])
 }
 
 ///|
@@ -584,7 +603,7 @@ pub fn IRBuilder::memory_grow(
   is_memory64? : Bool = false,
 ) -> Value {
   let result_type = if is_memory64 { Type::I64 } else { I32 }
-  self.emit_inst(result_type, MemoryGrow(memidx, max_pages), [delta])
+  self.emit_wasm_inst(result_type, MemoryGrow(memidx, max_pages), [delta])
 }
 
 ///|
@@ -596,7 +615,7 @@ pub fn IRBuilder::memory_size(
   is_memory64? : Bool = false,
 ) -> Value {
   let result_type = if is_memory64 { Type::I64 } else { I32 }
-  self.emit_inst(result_type, MemorySize(memidx), [])
+  self.emit_wasm_inst(result_type, MemorySize(memidx), [])
 }
 
 ///|
@@ -610,7 +629,7 @@ pub fn IRBuilder::memory_fill(
   val : Value,
   size : Value,
 ) -> Unit {
-  self.emit_void_inst(MemoryFill(memidx), [dst, val, size])
+  self.emit_void_wasm_inst(MemoryFill(memidx), [dst, val, size])
 }
 
 ///|
@@ -626,7 +645,7 @@ pub fn IRBuilder::memory_copy(
   src : Value,
   size : Value,
 ) -> Unit {
-  self.emit_void_inst(MemoryCopy(dst_memidx, src_memidx), [dst, src, size])
+  self.emit_void_wasm_inst(MemoryCopy(dst_memidx, src_memidx), [dst, src, size])
 }
 
 ///|
@@ -642,7 +661,7 @@ pub fn IRBuilder::memory_init(
   src : Value,
   size : Value,
 ) -> Unit {
-  self.emit_void_inst(MemoryInit(memidx, data_idx), [dst, src, size])
+  self.emit_void_wasm_inst(MemoryInit(memidx, data_idx), [dst, src, size])
 }
 
 ///|
@@ -650,7 +669,7 @@ pub fn IRBuilder::memory_init(
 /// data_idx: data segment index
 /// No operands, no return value
 pub fn IRBuilder::data_drop(self : IRBuilder, data_idx : Int) -> Unit {
-  self.emit_void_inst(DataDrop(data_idx), [])
+  self.emit_void_wasm_inst(DataDrop(data_idx), [])
 }
 
 // ============ Table Operations ============
@@ -666,7 +685,7 @@ pub fn IRBuilder::table_grow(
   delta : Value,
   init_value : Value,
 ) -> Value {
-  self.emit_inst(I32, TableGrow(table_idx), [delta, init_value])
+  self.emit_wasm_inst(I32, TableGrow(table_idx), [delta, init_value])
 }
 
 ///|
@@ -681,7 +700,7 @@ pub fn IRBuilder::table_fill(
   val : Value,
   size : Value,
 ) -> Unit {
-  self.emit_void_inst(TableFill(table_idx), [dst, val, size])
+  self.emit_void_wasm_inst(TableFill(table_idx), [dst, val, size])
 }
 
 ///|
@@ -697,7 +716,9 @@ pub fn IRBuilder::table_copy(
   src : Value,
   size : Value,
 ) -> Unit {
-  self.emit_void_inst(TableCopy(dst_table_idx, src_table_idx), [dst, src, size])
+  self.emit_void_wasm_inst(TableCopy(dst_table_idx, src_table_idx), [
+    dst, src, size,
+  ])
 }
 
 ///|
@@ -713,7 +734,7 @@ pub fn IRBuilder::table_init(
   src : Value,
   size : Value,
 ) -> Unit {
-  self.emit_void_inst(TableInit(table_idx, elem_idx), [dst, src, size])
+  self.emit_void_wasm_inst(TableInit(table_idx, elem_idx), [dst, src, size])
 }
 
 ///|
@@ -721,14 +742,14 @@ pub fn IRBuilder::table_init(
 /// elem_idx: element segment index
 /// No operands, no return value
 pub fn IRBuilder::elem_drop(self : IRBuilder, elem_idx : Int) -> Unit {
-  self.emit_void_inst(ElemDrop(elem_idx), [])
+  self.emit_void_wasm_inst(ElemDrop(elem_idx), [])
 }
 
 ///|
 /// Get function reference (tagged function pointer) for storing in tables
 /// The pointer is tagged with FUNCREF_TAG (bit 61) for ref.test detection
 pub fn IRBuilder::get_func_ref(self : IRBuilder, func_idx : Int) -> Value {
-  self.emit_inst(FuncRef, GetFuncRef(func_idx), [])
+  self.emit_wasm_inst(FuncRef, GetFuncRef(func_idx), [])
 }
 
 // NOTE: global_get, global_set are desugared at IR translation phase via FuncEnvironment
@@ -764,9 +785,9 @@ pub fn IRBuilder::call(
   args : Array[Value],
 ) -> Value? {
   match result_ty {
-    Some(ty) => Some(self.emit_inst(ty, WasmCall(func_idx), args))
+    Some(ty) => Some(self.emit_wasm_inst(ty, WasmCall(func_idx), args))
     None => {
-      self.emit_void_inst(WasmCall(func_idx), args)
+      self.emit_void_wasm_inst(WasmCall(func_idx), args)
       None
     }
   }
@@ -819,7 +840,7 @@ pub fn IRBuilder::call_multi(
   args : Array[Value],
 ) -> Array[Value] {
   if result_types.length() == 0 {
-    self.emit_void_inst(WasmCall(func_idx), args)
+    self.emit_void_wasm_inst(WasmCall(func_idx), args)
     return []
   }
   // Create result values for each return type
@@ -828,7 +849,7 @@ pub fn IRBuilder::call_multi(
     results.push(self.func.new_value(ty))
   }
   // Create instruction with multiple results
-  let inst = Inst::new_multi(results, WasmCall(func_idx), args)
+  let inst = Inst::new_multi(results, Wasm(WasmCall(func_idx)), args)
   if self.current_block is Some(block) {
     block.add_inst(inst)
   }
@@ -843,7 +864,7 @@ pub fn IRBuilder::return_call_multi(
   func_idx : Int,
   args : Array[Value],
 ) -> Unit {
-  self.emit_void_inst(ReturnCall(func_idx), args)
+  self.emit_void_wasm_inst(ReturnCall(func_idx), args)
 }
 
 ///|
@@ -860,7 +881,7 @@ pub fn IRBuilder::return_call_indirect_multi(
   for arg in args {
     all_args.push(arg)
   }
-  self.emit_void_inst(ReturnCallIndirect(type_idx, table_idx), all_args)
+  self.emit_void_wasm_inst(ReturnCallIndirect(type_idx, table_idx), all_args)
 }
 
 ///|
@@ -876,7 +897,7 @@ pub fn IRBuilder::return_call_ref_multi(
   for arg in args {
     all_args.push(arg)
   }
-  self.emit_void_inst(ReturnCallRef(type_idx), all_args)
+  self.emit_void_wasm_inst(ReturnCallRef(type_idx), all_args)
 }
 
 ///|
@@ -895,9 +916,11 @@ pub fn IRBuilder::call_indirect(
   }
   match result_ty {
     Some(ty) =>
-      Some(self.emit_inst(ty, WasmCallIndirect(type_idx, table_idx), all_args))
+      Some(
+        self.emit_wasm_inst(ty, WasmCallIndirect(type_idx, table_idx), all_args),
+      )
     None => {
-      self.emit_void_inst(WasmCallIndirect(type_idx, table_idx), all_args)
+      self.emit_void_wasm_inst(WasmCallIndirect(type_idx, table_idx), all_args)
       None
     }
   }
@@ -918,7 +941,7 @@ pub fn IRBuilder::call_indirect_multi(
     all_args.push(arg)
   }
   if result_types.length() == 0 {
-    self.emit_void_inst(WasmCallIndirect(type_idx, table_idx), all_args)
+    self.emit_void_wasm_inst(WasmCallIndirect(type_idx, table_idx), all_args)
     return []
   }
   // Create result values for each return type
@@ -929,7 +952,7 @@ pub fn IRBuilder::call_indirect_multi(
   // Create instruction with multiple results
   let inst = Inst::new_multi(
     results,
-    WasmCallIndirect(type_idx, table_idx),
+    Wasm(WasmCallIndirect(type_idx, table_idx)),
     all_args,
   )
   if self.current_block is Some(block) {
@@ -952,7 +975,7 @@ pub fn IRBuilder::call_ref_multi(
     all_args.push(arg)
   }
   if result_types.length() == 0 {
-    self.emit_void_inst(CallRef(type_idx), all_args)
+    self.emit_void_wasm_inst(CallRef(type_idx), all_args)
     return []
   }
   // Create result values for each return type
@@ -961,7 +984,7 @@ pub fn IRBuilder::call_ref_multi(
     results.push(self.func.new_value(ty))
   }
   // Create instruction with multiple results
-  let inst = Inst::new_multi(results, CallRef(type_idx), all_args)
+  let inst = Inst::new_multi(results, Wasm(CallRef(type_idx)), all_args)
   if self.current_block is Some(block) {
     block.add_inst(inst)
   }
@@ -1140,13 +1163,13 @@ pub fn IRBuilder::struct_new(
   type_idx : Int,
   fields : Array[Value],
 ) -> Value {
-  self.emit_inst(I64, StructNew(type_idx), fields)
+  self.emit_wasm_inst(I64, StructNew(type_idx), fields)
 }
 
 ///|
 /// Allocate a new struct with default values
 pub fn IRBuilder::struct_new_default(self : IRBuilder, type_idx : Int) -> Value {
-  self.emit_inst(I64, StructNewDefault(type_idx), [])
+  self.emit_wasm_inst(I64, StructNewDefault(type_idx), [])
 }
 
 ///|
@@ -1158,7 +1181,7 @@ pub fn IRBuilder::struct_get(
   struct_ref : Value,
   field_type : Type,
 ) -> Value {
-  self.emit_inst(field_type, StructGet(type_idx, field_idx), [struct_ref])
+  self.emit_wasm_inst(field_type, StructGet(type_idx, field_idx), [struct_ref])
 }
 
 ///|
@@ -1172,7 +1195,7 @@ pub fn IRBuilder::struct_get_s(
   field_type : Type,
   byte_width : Int,
 ) -> Value {
-  self.emit_inst(field_type, StructGetS(type_idx, field_idx, byte_width), [
+  self.emit_wasm_inst(field_type, StructGetS(type_idx, field_idx, byte_width), [
     struct_ref,
   ])
 }
@@ -1188,7 +1211,7 @@ pub fn IRBuilder::struct_get_u(
   field_type : Type,
   byte_width : Int,
 ) -> Value {
-  self.emit_inst(field_type, StructGetU(type_idx, field_idx, byte_width), [
+  self.emit_wasm_inst(field_type, StructGetU(type_idx, field_idx, byte_width), [
     struct_ref,
   ])
 }
@@ -1202,7 +1225,7 @@ pub fn IRBuilder::struct_set(
   struct_ref : Value,
   value : Value,
 ) -> Unit {
-  self.emit_void_inst(StructSet(type_idx, field_idx), [struct_ref, value])
+  self.emit_void_wasm_inst(StructSet(type_idx, field_idx), [struct_ref, value])
 }
 
 ///|
@@ -1213,7 +1236,7 @@ pub fn IRBuilder::array_new(
   init_value : Value,
   length : Value,
 ) -> Value {
-  self.emit_inst(I64, ArrayNew(type_idx), [init_value, length])
+  self.emit_wasm_inst(I64, ArrayNew(type_idx), [init_value, length])
 }
 
 ///|
@@ -1223,7 +1246,7 @@ pub fn IRBuilder::array_new_default(
   type_idx : Int,
   length : Value,
 ) -> Value {
-  self.emit_inst(I64, ArrayNewDefault(type_idx), [length])
+  self.emit_wasm_inst(I64, ArrayNewDefault(type_idx), [length])
 }
 
 ///|
@@ -1234,7 +1257,7 @@ pub fn IRBuilder::array_new_fixed(
   count : Int,
   elements : Array[Value],
 ) -> Value {
-  self.emit_inst(I64, ArrayNewFixed(type_idx, count), elements)
+  self.emit_wasm_inst(I64, ArrayNewFixed(type_idx, count), elements)
 }
 
 ///|
@@ -1246,7 +1269,7 @@ pub fn IRBuilder::array_get(
   index : Value,
   element_type : Type,
 ) -> Value {
-  self.emit_inst(element_type, ArrayGet(type_idx), [array_ref, index])
+  self.emit_wasm_inst(element_type, ArrayGet(type_idx), [array_ref, index])
 }
 
 ///|
@@ -1260,7 +1283,7 @@ pub fn IRBuilder::array_get_s(
   element_type : Type,
   byte_width : Int,
 ) -> Value {
-  self.emit_inst(element_type, ArrayGetS(type_idx, byte_width), [
+  self.emit_wasm_inst(element_type, ArrayGetS(type_idx, byte_width), [
     array_ref, index,
   ])
 }
@@ -1276,7 +1299,7 @@ pub fn IRBuilder::array_get_u(
   element_type : Type,
   byte_width : Int,
 ) -> Value {
-  self.emit_inst(element_type, ArrayGetU(type_idx, byte_width), [
+  self.emit_wasm_inst(element_type, ArrayGetU(type_idx, byte_width), [
     array_ref, index,
   ])
 }
@@ -1290,13 +1313,13 @@ pub fn IRBuilder::array_set(
   index : Value,
   value : Value,
 ) -> Unit {
-  self.emit_void_inst(ArraySet(type_idx), [array_ref, index, value])
+  self.emit_void_wasm_inst(ArraySet(type_idx), [array_ref, index, value])
 }
 
 ///|
 /// Get array length
 pub fn IRBuilder::array_len(self : IRBuilder, array_ref : Value) -> Value {
-  self.emit_inst(I32, ArrayLen, [array_ref])
+  self.emit_wasm_inst(I32, ArrayLen, [array_ref])
 }
 
 ///|
@@ -1309,7 +1332,9 @@ pub fn IRBuilder::array_fill(
   value : Value,
   count : Value,
 ) -> Unit {
-  self.emit_void_inst(ArrayFill(type_idx), [array_ref, offset, value, count])
+  self.emit_void_wasm_inst(ArrayFill(type_idx), [
+    array_ref, offset, value, count,
+  ])
 }
 
 ///|
@@ -1324,7 +1349,7 @@ pub fn IRBuilder::array_copy(
   src_offset : Value,
   count : Value,
 ) -> Unit {
-  self.emit_void_inst(ArrayCopy(dst_type_idx, src_type_idx), [
+  self.emit_void_wasm_inst(ArrayCopy(dst_type_idx, src_type_idx), [
     dst, dst_offset, src, src_offset, count,
   ])
 }
@@ -1341,7 +1366,9 @@ pub fn IRBuilder::array_new_data(
   data_offset : Value,
   length : Value,
 ) -> Value {
-  self.emit_inst(I64, ArrayNewData(type_idx, data_idx), [data_offset, length])
+  self.emit_wasm_inst(I64, ArrayNewData(type_idx, data_idx), [
+    data_offset, length,
+  ])
 }
 
 ///|
@@ -1356,7 +1383,9 @@ pub fn IRBuilder::array_new_elem(
   elem_offset : Value,
   length : Value,
 ) -> Value {
-  self.emit_inst(I64, ArrayNewElem(type_idx, elem_idx), [elem_offset, length])
+  self.emit_wasm_inst(I64, ArrayNewElem(type_idx, elem_idx), [
+    elem_offset, length,
+  ])
 }
 
 ///|
@@ -1373,7 +1402,7 @@ pub fn IRBuilder::array_init_data(
   data_offset : Value,
   length : Value,
 ) -> Unit {
-  self.emit_void_inst(ArrayInitData(type_idx, data_idx), [
+  self.emit_void_wasm_inst(ArrayInitData(type_idx, data_idx), [
     array_ref, arr_offset, data_offset, length,
   ])
 }
@@ -1392,7 +1421,7 @@ pub fn IRBuilder::array_init_elem(
   elem_offset : Value,
   length : Value,
 ) -> Unit {
-  self.emit_void_inst(ArrayInitElem(type_idx, elem_idx), [
+  self.emit_void_wasm_inst(ArrayInitElem(type_idx, elem_idx), [
     array_ref, arr_offset, elem_offset, length,
   ])
 }
@@ -1400,19 +1429,19 @@ pub fn IRBuilder::array_init_elem(
 ///|
 /// Create i31 reference from i32
 pub fn IRBuilder::i31_new(self : IRBuilder, value : Value) -> Value {
-  self.emit_inst(I64, I31New, [value])
+  self.emit_wasm_inst(I64, I31New, [value])
 }
 
 ///|
 /// Get signed i32 from i31 reference
 pub fn IRBuilder::i31_get_s(self : IRBuilder, i31_ref : Value) -> Value {
-  self.emit_inst(I32, I31GetS, [i31_ref])
+  self.emit_wasm_inst(I32, I31GetS, [i31_ref])
 }
 
 ///|
 /// Get unsigned i32 from i31 reference
 pub fn IRBuilder::i31_get_u(self : IRBuilder, i31_ref : Value) -> Value {
-  self.emit_inst(I32, I31GetU, [i31_ref])
+  self.emit_wasm_inst(I32, I31GetU, [i31_ref])
 }
 
 ///|
@@ -1423,7 +1452,7 @@ pub fn IRBuilder::ref_test(
   nullable : Bool,
   ref_val : Value,
 ) -> Value {
-  self.emit_inst(I32, RefTest(type_idx, nullable), [ref_val])
+  self.emit_wasm_inst(I32, RefTest(type_idx, nullable), [ref_val])
 }
 
 ///|
@@ -1434,7 +1463,7 @@ pub fn IRBuilder::ref_cast(
   nullable : Bool,
   ref_val : Value,
 ) -> Value {
-  self.emit_inst(I64, RefCast(type_idx, nullable), [ref_val])
+  self.emit_wasm_inst(I64, RefCast(type_idx, nullable), [ref_val])
 }
 
 ///|
@@ -1443,7 +1472,7 @@ pub fn IRBuilder::any_convert_extern(
   self : IRBuilder,
   extern_ref : Value,
 ) -> Value {
-  self.emit_inst(I64, AnyConvertExtern, [extern_ref])
+  self.emit_wasm_inst(I64, AnyConvertExtern, [extern_ref])
 }
 
 ///|
@@ -1452,13 +1481,13 @@ pub fn IRBuilder::extern_convert_any(
   self : IRBuilder,
   any_ref : Value,
 ) -> Value {
-  self.emit_inst(I64, ExternConvertAny, [any_ref])
+  self.emit_wasm_inst(I64, ExternConvertAny, [any_ref])
 }
 
 ///|
 /// ref.eq - compare two references for equality
 pub fn IRBuilder::ref_eq(self : IRBuilder, ref1 : Value, ref2 : Value) -> Value {
-  self.emit_inst(I32, RefEq, [ref1, ref2])
+  self.emit_wasm_inst(I32, RefEq, [ref1, ref2])
 }
 
 // ============ Exception Handling ============
@@ -1470,50 +1499,50 @@ pub fn IRBuilder::emit_throw(
   tag_idx : Int,
   values : Array[Value],
 ) -> Unit {
-  self.emit_void_inst(Throw(tag_idx), values)
+  self.emit_void_wasm_inst(Throw(tag_idx), values)
 }
 
 ///|
 /// emit_throw_ref - re-throw an exception from an exnref
 pub fn IRBuilder::emit_throw_ref(self : IRBuilder, exnref : Value) -> Unit {
-  self.emit_void_inst(ThrowRef, [exnref])
+  self.emit_void_wasm_inst(ThrowRef, [exnref])
 }
 
 ///|
 /// try_table_begin - setup exception handler, returns setjmp result
 /// Returns 0 on normal entry, handler_id on exception catch
 pub fn IRBuilder::try_table_begin(self : IRBuilder, handler_id : Int) -> Value {
-  self.emit_inst(I32, TryTableBegin(handler_id), [])
+  self.emit_wasm_inst(I32, TryTableBegin(handler_id), [])
 }
 
 ///|
 /// try_table_end - pop exception handler
 pub fn IRBuilder::try_table_end(self : IRBuilder, handler_id : Int) -> Unit {
-  self.emit_void_inst(TryTableEnd(handler_id), [])
+  self.emit_void_wasm_inst(TryTableEnd(handler_id), [])
 }
 
 ///|
 /// get_exception_tag - get tag of caught exception
 pub fn IRBuilder::get_exception_tag(self : IRBuilder) -> Value {
-  self.emit_inst(I32, GetExceptionTag, [])
+  self.emit_wasm_inst(I32, GetExceptionTag, [])
 }
 
 ///|
 /// get_exception_value - get exception value at index
 pub fn IRBuilder::get_exception_value(self : IRBuilder, idx : Int) -> Value {
-  self.emit_inst(I64, GetExceptionValue(idx), [])
+  self.emit_wasm_inst(I64, GetExceptionValue(idx), [])
 }
 
 ///|
 /// get_exception_value_count - get number of exception values
 pub fn IRBuilder::get_exception_value_count(self : IRBuilder) -> Value {
-  self.emit_inst(I32, GetExceptionValueCount, [])
+  self.emit_wasm_inst(I32, GetExceptionValueCount, [])
 }
 
 ///|
 /// delegate - delegate exception to outer handler at depth
 pub fn IRBuilder::delegate(self : IRBuilder, depth : Int) -> Unit {
-  self.emit_void_inst(Delegate(depth), [])
+  self.emit_void_wasm_inst(Delegate(depth), [])
 }
 
 ///|
@@ -1522,13 +1551,13 @@ pub fn IRBuilder::spill_locals_for_throw(
   self : IRBuilder,
   locals : Array[Value],
 ) -> Unit {
-  self.emit_void_inst(SpillLocalsForThrow(locals.length()), locals)
+  self.emit_void_wasm_inst(SpillLocalsForThrow(locals.length()), locals)
 }
 
 ///|
 /// get_spilled_local - load a spilled local value at index (for catch handlers)
 pub fn IRBuilder::get_spilled_local(self : IRBuilder, idx : Int) -> Value {
-  self.emit_inst(I64, GetSpilledLocal(idx), [])
+  self.emit_wasm_inst(I64, GetSpilledLocal(idx), [])
 }
 
 // ============ SIMD Operations ============

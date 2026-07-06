@@ -243,43 +243,43 @@ fn validate_instruction(
       }
 
     // Memory management (with memidx for multi-memory support)
-    LoadMemBase(_) =>
+    Wasm(LoadMemBase(_)) =>
       if inst.operands.length() != 1 {
         result.add_error(
           "LoadMemBase expects 1 operand (vmctx), got \{inst.operands.length()}",
         )
       }
-    MemoryGrow(_, _) =>
+    Wasm(MemoryGrow(_, _)) =>
       if inst.operands.length() != 1 {
         result.add_error(
           "MemoryGrow expects 1 operand (delta), got \{inst.operands.length()}",
         )
       }
-    MemorySize(_) =>
+    Wasm(MemorySize(_)) =>
       if inst.operands.length() != 0 {
         result.add_error(
           "MemorySize expects 0 operands, got \{inst.operands.length()}",
         )
       }
-    MemoryFill(_) =>
+    Wasm(MemoryFill(_)) =>
       if inst.operands.length() != 3 {
         result.add_error(
           "MemoryFill expects 3 operands (dst, val, size), got \{inst.operands.length()}",
         )
       }
-    MemoryCopy(_, _) =>
+    Wasm(MemoryCopy(_, _)) =>
       if inst.operands.length() != 3 {
         result.add_error(
           "MemoryCopy expects 3 operands (dst, src, size), got \{inst.operands.length()}",
         )
       }
-    MemoryInit(_, _) =>
+    Wasm(MemoryInit(_, _)) =>
       if inst.operands.length() != 3 {
         result.add_error(
           "MemoryInit expects 3 operands (dst, src, size), got \{inst.operands.length()}",
         )
       }
-    DataDrop(_) =>
+    Wasm(DataDrop(_)) =>
       if inst.operands.length() != 0 {
         result.add_error(
           "DataDrop expects 0 operands, got \{inst.operands.length()}",
@@ -288,31 +288,31 @@ fn validate_instruction(
 
     // Table operations
     // NOTE: TableGet, TableSet, TableSize are desugared via FuncEnvironment at IR level
-    TableGrow(_) =>
+    Wasm(TableGrow(_)) =>
       if inst.operands.length() != 2 {
         result.add_error(
           "TableGrow expects 2 operands (delta, init_value), got \{inst.operands.length()}",
         )
       }
-    TableFill(_) =>
+    Wasm(TableFill(_)) =>
       if inst.operands.length() != 3 {
         result.add_error(
           "TableFill expects 3 operands (dst, val, size), got \{inst.operands.length()}",
         )
       }
-    TableCopy(_, _) =>
+    Wasm(TableCopy(_, _)) =>
       if inst.operands.length() != 3 {
         result.add_error(
           "TableCopy expects 3 operands (dst, src, size), got \{inst.operands.length()}",
         )
       }
-    TableInit(_, _) =>
+    Wasm(TableInit(_, _)) =>
       if inst.operands.length() != 3 {
         result.add_error(
           "TableInit expects 3 operands (dst, src, size), got \{inst.operands.length()}",
         )
       }
-    ElemDrop(_) =>
+    Wasm(ElemDrop(_)) =>
       if inst.operands.length() != 0 {
         result.add_error(
           "ElemDrop expects 0 operands, got \{inst.operands.length()}",
@@ -322,16 +322,16 @@ fn validate_instruction(
     // NOTE: GlobalGet, GlobalSet are desugared via FuncEnvironment at IR level
 
     // Calls can have any number of operands
-    WasmCall(_)
-    | WasmCallIndirect(_)
-    | CallRef(_)
-    | ReturnCall(_)
-    | ReturnCallIndirect(_, _)
-    | ReturnCallRef(_)
+    Wasm(WasmCall(_))
+    | Wasm(WasmCallIndirect(_))
+    | Wasm(CallRef(_))
+    | Wasm(ReturnCall(_))
+    | Wasm(ReturnCallIndirect(_, _))
+    | Wasm(ReturnCallRef(_))
     | CallPtr(_, _) => ()
 
     // GetFuncRef has no operands
-    GetFuncRef(_) => ()
+    Wasm(GetFuncRef(_)) => ()
 
     // Raw pointer operations (for trampolines)
     LoadPtr(_) =>
@@ -360,20 +360,22 @@ fn validate_instruction(
       }
 
     // GC operations - struct
-    StructNew(_) => () // Can have any number of operands (field values)
-    StructNewDefault(_) =>
+    Wasm(StructNew(_)) => () // Can have any number of operands (field values)
+    Wasm(StructNewDefault(_)) =>
       if inst.operands.length() != 0 {
         result.add_error(
           "StructNewDefault expects 0 operands, got \{inst.operands.length()}",
         )
       }
-    StructGet(_, _) | StructGetS(_, _, _) | StructGetU(_, _, _) =>
+    Wasm(StructGet(_, _))
+    | Wasm(StructGetS(_, _, _))
+    | Wasm(StructGetU(_, _, _)) =>
       if inst.operands.length() != 1 {
         result.add_error(
           "StructGet expects 1 operand (structref), got \{inst.operands.length()}",
         )
       }
-    StructSet(_, _) =>
+    Wasm(StructSet(_, _)) =>
       if inst.operands.length() != 2 {
         result.add_error(
           "StructSet expects 2 operands (structref, value), got \{inst.operands.length()}",
@@ -381,68 +383,68 @@ fn validate_instruction(
       }
 
     // GC operations - array
-    ArrayNew(_) =>
+    Wasm(ArrayNew(_)) =>
       if inst.operands.length() != 2 {
         result.add_error(
           "ArrayNew expects 2 operands (init_value, length), got \{inst.operands.length()}",
         )
       }
-    ArrayNewDefault(_) =>
+    Wasm(ArrayNewDefault(_)) =>
       if inst.operands.length() != 1 {
         result.add_error(
           "ArrayNewDefault expects 1 operand (length), got \{inst.operands.length()}",
         )
       }
-    ArrayNewFixed(_, _) => () // Can have any number of operands (element values)
-    ArrayGet(_) | ArrayGetS(_, _) | ArrayGetU(_, _) =>
+    Wasm(ArrayNewFixed(_, _)) => () // Can have any number of operands (element values)
+    Wasm(ArrayGet(_)) | Wasm(ArrayGetS(_, _)) | Wasm(ArrayGetU(_, _)) =>
       if inst.operands.length() != 2 {
         result.add_error(
           "ArrayGet expects 2 operands (arrayref, index), got \{inst.operands.length()}",
         )
       }
-    ArraySet(_) =>
+    Wasm(ArraySet(_)) =>
       if inst.operands.length() != 3 {
         result.add_error(
           "ArraySet expects 3 operands (arrayref, index, value), got \{inst.operands.length()}",
         )
       }
-    ArrayLen =>
+    Wasm(ArrayLen) =>
       if inst.operands.length() != 1 {
         result.add_error(
           "ArrayLen expects 1 operand (arrayref), got \{inst.operands.length()}",
         )
       }
-    ArrayFill(_) =>
+    Wasm(ArrayFill(_)) =>
       if inst.operands.length() != 4 {
         result.add_error(
           "ArrayFill expects 4 operands (arrayref, offset, value, count), got \{inst.operands.length()}",
         )
       }
-    ArrayCopy(_, _) =>
+    Wasm(ArrayCopy(_, _)) =>
       if inst.operands.length() != 5 {
         result.add_error(
           "ArrayCopy expects 5 operands (dst, dst_offset, src, src_offset, count), got \{inst.operands.length()}",
         )
       }
-    ArrayNewData(_, _) =>
+    Wasm(ArrayNewData(_, _)) =>
       if inst.operands.length() != 2 {
         result.add_error(
           "ArrayNewData expects 2 operands (data_offset, length), got \{inst.operands.length()}",
         )
       }
-    ArrayNewElem(_, _) =>
+    Wasm(ArrayNewElem(_, _)) =>
       if inst.operands.length() != 2 {
         result.add_error(
           "ArrayNewElem expects 2 operands (elem_offset, length), got \{inst.operands.length()}",
         )
       }
-    ArrayInitData(_, _) =>
+    Wasm(ArrayInitData(_, _)) =>
       if inst.operands.length() != 4 {
         result.add_error(
           "ArrayInitData expects 4 operands (arrayref, arr_offset, data_offset, length), got \{inst.operands.length()}",
         )
       }
-    ArrayInitElem(_, _) =>
+    Wasm(ArrayInitElem(_, _)) =>
       if inst.operands.length() != 4 {
         result.add_error(
           "ArrayInitElem expects 4 operands (arrayref, arr_offset, elem_offset, length), got \{inst.operands.length()}",
@@ -450,13 +452,13 @@ fn validate_instruction(
       }
 
     // GC operations - i31
-    I31New =>
+    Wasm(I31New) =>
       if inst.operands.length() != 1 {
         result.add_error(
           "I31New expects 1 operand (i32 value), got \{inst.operands.length()}",
         )
       }
-    I31GetS | I31GetU =>
+    Wasm(I31GetS) | Wasm(I31GetU) =>
       if inst.operands.length() != 1 {
         result.add_error(
           "I31Get expects 1 operand (i31ref), got \{inst.operands.length()}",
@@ -464,7 +466,7 @@ fn validate_instruction(
       }
 
     // GC operations - type checking/casting
-    RefTest(_, _) | RefCast(_, _) =>
+    Wasm(RefTest(_, _)) | Wasm(RefCast(_, _)) =>
       if inst.operands.length() != 1 {
         result.add_error(
           "RefTest/RefCast expects 1 operand (ref), got \{inst.operands.length()}",
@@ -472,7 +474,7 @@ fn validate_instruction(
       }
 
     // GC operations - type conversions
-    AnyConvertExtern | ExternConvertAny =>
+    Wasm(AnyConvertExtern) | Wasm(ExternConvertAny) =>
       if inst.operands.length() != 1 {
         result.add_error(
           "Type conversion expects 1 operand, got \{inst.operands.length()}",
@@ -480,7 +482,7 @@ fn validate_instruction(
       }
 
     // GC operations - reference equality
-    RefEq =>
+    Wasm(RefEq) =>
       if inst.operands.length() != 2 {
         result.add_error(
           "RefEq expects 2 operands (refs), got \{inst.operands.length()}",
@@ -488,35 +490,35 @@ fn validate_instruction(
       }
 
     // Exception handling operations
-    Throw(_tag_idx) => ()
-    ThrowRef =>
+    Wasm(Throw(_tag_idx)) => ()
+    Wasm(ThrowRef) =>
       if inst.operands.length() != 1 {
         result.add_error(
           "ThrowRef expects 1 operand (exnref), got \{inst.operands.length()}",
         )
       }
-    TryTableBegin(_handler_id) =>
+    Wasm(TryTableBegin(_handler_id)) =>
       if inst.first_result() is None {
         result.add_error(
           "TryTableBegin must have a result (setjmp return value)",
         )
       }
-    TryTableEnd(_handler_id) => ()
-    GetExceptionTag =>
+    Wasm(TryTableEnd(_handler_id)) => ()
+    Wasm(GetExceptionTag) =>
       if inst.first_result() is None {
         result.add_error("GetExceptionTag must have a result")
       }
-    GetExceptionValue(_idx) =>
+    Wasm(GetExceptionValue(_idx)) =>
       if inst.first_result() is None {
         result.add_error("GetExceptionValue must have a result")
       }
-    GetExceptionValueCount =>
+    Wasm(GetExceptionValueCount) =>
       if inst.first_result() is None {
         result.add_error("GetExceptionValueCount must have a result")
       }
-    Delegate(_depth) => ()
-    SpillLocalsForThrow(_count) => () // Void instruction, no result
-    GetSpilledLocal(_idx) =>
+    Wasm(Delegate(_depth)) => ()
+    Wasm(SpillLocalsForThrow(_count)) => () // Void instruction, no result
+    Wasm(GetSpilledLocal(_idx)) =>
       if inst.first_result() is None {
         result.add_error("GetSpilledLocal must have a result")
       }

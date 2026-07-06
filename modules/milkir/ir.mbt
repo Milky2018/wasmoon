@@ -1,4 +1,4 @@
-// Intermediate Representation (IR) for WebAssembly
+// MilkIR intermediate representation.
 // Based on SSA (Static Single Assignment) form
 
 ///|
@@ -15,7 +15,7 @@ fn Value::new(id : Int, ty : Type) -> Value {
 }
 
 ///|
-/// IR Type system - corresponds to WASM value types
+/// IR type system for scalar, vector, pointer, and reference-typed values.
 pub(all) enum Type {
   I32
   I64
@@ -24,6 +24,8 @@ pub(all) enum Type {
   V128 // SIMD 128-bit vector
   Ptr
   Ref
+  // TODO(ISS-065): Replace Wasm-shaped reference names with a generic reference
+  // taxonomy once the Wasm frontend owns all reference-type interpretation.
   FuncRef
   ExternRef
 } derive(Debug, Eq, Hash)
@@ -295,16 +297,6 @@ pub(all) enum Opcode {
   Sextend16 // Sign extend from 16 bits (i32 or i64)
   Sextend32 // Sign extend from 32 bits (i64 only)
 
-  // Memory management (desugared via FuncEnvironment at IR translation time)
-  // Note: Load/Store opcodes removed - now use LoadPtr/StorePtr with explicit bounds checks
-  LoadMemBase(Int) // Load linear memory base pointer (memidx) - operands: vmctx
-  MemoryGrow(Int, Int?) // Grow memory by delta pages (memidx, max_pages). Returns previous size or -1.
-  MemorySize(Int) // Get current memory size in pages (memidx)
-  MemoryFill(Int) // Fill memory region with a byte value (memidx) - operands: dst, val, size
-  MemoryCopy(Int, Int) // Copy memory region (dst_memidx, src_memidx) - operands: dst, src, size
-  MemoryInit(Int, Int) // Initialize memory from data segment (memidx, data_idx) - operands: dst, src, size
-  DataDrop(Int) // Drop data segment (data_idx) - no operands
-
   // Misc
   Select // Conditional select (cond ? a : b)
   Copy // Copy value (for register allocation)
@@ -312,28 +304,9 @@ pub(all) enum Opcode {
   Store
   StackAddr(StackSlot)
 
-  // Table operations (for reference types)
-  // NOTE: TableGet, TableSet, TableSize are desugared at IR translation phase via FuncEnvironment
-  TableGrow(Int) // Grow table, returns previous size or -1 (table index)
-  TableFill(Int) // Fill table region with value (table_idx) - operands: dst, val, size
-  TableCopy(Int, Int) // Copy table region (dst_table_idx, src_table_idx) - operands: dst, src, size
-  TableInit(Int, Int) // Initialize table from elem segment (table_idx, elem_idx) - operands: dst, src, size
-  ElemDrop(Int) // Drop element segment (elem_idx) - no operands
-
-  // NOTE: GlobalGet, GlobalSet are desugared at IR translation phase via FuncEnvironment
-
   // Function calls
   Call(ExternalSymbol)
   CallIndirect(Signature)
-  WasmCall(Int) // Direct Wasm call (function index)
-  WasmCallIndirect(Int, Int) // Indirect Wasm call (type index, table index)
-  CallRef(Int) // Call through function reference (type index)
-  ReturnCall(Int) // Tail call (function index)
-  ReturnCallIndirect(Int, Int) // Tail call indirect (type index, table index)
-  ReturnCallRef(Int) // Tail call through function reference (type index)
-
-  // Function reference - returns tagged function pointer for storing in tables
-  GetFuncRef(Int) // Get function reference (function index) - returns tagged func_ptr
 
   // Raw pointer operations (for trampolines, no bounds checking)
   // Used for host code generation
@@ -350,68 +323,10 @@ pub(all) enum Opcode {
   Trap(String)
   Custom(String)
 
-  // GC operations - struct
-  StructNew(Int) // Allocate struct (type index) - operands are field values
-  StructNewDefault(Int) // Allocate struct with default values (type index)
-  StructGet(Int, Int) // Get struct field (type index, field index) - operand is structref
-  StructGetS(Int, Int, Int) // Get struct field signed-extended (type index, field index, byte_width: 1=i8, 2=i16)
-  StructGetU(Int, Int, Int) // Get struct field zero-extended (type index, field index, byte_width: 1=i8, 2=i16)
-  StructSet(Int, Int) // Set struct field (type index, field index) - operands: structref, value
-
-  // GC operations - array
-  ArrayNew(Int) // Allocate array (type index) - operands: init_value, length
-  ArrayNewDefault(Int) // Allocate array with default values (type index) - operand: length
-  ArrayNewFixed(Int, Int) // Allocate fixed-size array (type index, length) - operands are element values
-  ArrayGet(Int) // Get array element (type index) - operands: arrayref, index
-  ArrayGetS(Int, Int) // Get array element signed-extended (type index, byte_width: 1=i8, 2=i16)
-  ArrayGetU(Int, Int) // Get array element zero-extended (type index, byte_width: 1=i8, 2=i16)
-  ArraySet(Int) // Set array element (type index) - operands: arrayref, index, value
-  ArrayLen // Get array length - operand: arrayref
-  ArrayFill(Int) // Fill array (type index) - operands: arrayref, offset, value, count
-  ArrayCopy(Int, Int) // Copy array (dst_type_idx, src_type_idx) - operands: dst, dst_offset, src, src_offset, count
-  ArrayNewData(Int, Int) // Create array from data segment (type_idx, data_idx) - operands: data_offset, length
-  ArrayNewElem(Int, Int) // Create array from elem segment (type_idx, elem_idx) - operands: elem_offset, length
-  ArrayInitData(Int, Int) // Initialize array from data segment (type_idx, data_idx) - operands: arrayref, arr_offset, data_offset, length
-  ArrayInitElem(Int, Int) // Initialize array from elem segment (type_idx, elem_idx) - operands: arrayref, arr_offset, elem_offset, length
-
-  // GC operations - i31
-  I31New // Create i31 reference - operand: i32 value
-  I31GetS // Get i31 value sign-extended - operand: i31ref
-  I31GetU // Get i31 value zero-extended - operand: i31ref
-
-  // GC operations - type checking/casting
-  RefTest(Int, Bool) // Test if reference is of type (type index, nullable) - operand: ref
-  RefCast(Int, Bool) // Cast reference to type (type index, nullable) - operand: ref
-
-  // GC operations - type conversions
-  AnyConvertExtern // Convert externref to anyref - operand: externref
-  ExternConvertAny // Convert anyref to externref - operand: anyref
-
-  // GC operations - reference equality
-  RefEq // ref.eq - compare two references for equality - operands: ref1, ref2
-
-  // Exception handling operations
-  // Throw exception with tag - operands are exception values
-  Throw(Int) // tag_idx
-  // Re-throw exception from exnref - operand is exnref
-  ThrowRef
-  // Try-table control flow (lowered to setjmp/longjmp pattern)
-  // TryTableBegin(handler_id) - setup exception handler, returns 0 normally or handler_id on exception
-  TryTableBegin(Int)
-  // TryTableEnd(handler_id) - pop exception handler
-  TryTableEnd(Int)
-  // Get tag of caught exception
-  GetExceptionTag
-  // Get exception value at index - operand is index (immediate)
-  GetExceptionValue(Int)
-  // Get count of exception values
-  GetExceptionValueCount
-  // Delegate exception to outer handler at relative depth
-  Delegate(Int) // depth
-  // Spill all locals before throw - operands are local values, Int is count
-  SpillLocalsForThrow(Int)
-  // Get spilled local at index (for catch handlers)
-  GetSpilledLocal(Int)
+  // Wasm semantic extension operations. These are kept out of the generic core
+  // opcode list while existing frontends finish lowering them to generic calls,
+  // pointer operations, or Wasm-owned extension handling.
+  Wasm(WasmOpcode)
 
   // ============================================
   // SIMD operations (V128)

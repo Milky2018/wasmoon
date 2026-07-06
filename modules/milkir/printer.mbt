@@ -147,19 +147,19 @@ fn format_opcode(
 
     // Memory management (with memidx for multi-memory support)
     // Note: Load/Store opcodes removed - now use LoadPtr/StorePtr
-    LoadMemBase(memidx) => "load_mem_base mem=\{memidx} \{ops}"
-    MemoryGrow(memidx, max_pages) =>
+    Wasm(LoadMemBase(memidx)) => "load_mem_base mem=\{memidx} \{ops}"
+    Wasm(MemoryGrow(memidx, max_pages)) =>
       match max_pages {
         Some(max) => "memory_grow mem=\{memidx} \{ops} max=\{max}"
         None => "memory_grow mem=\{memidx} \{ops}"
       }
-    MemorySize(memidx) => "memory_size mem=\{memidx}"
-    MemoryFill(memidx) => "memory_fill mem=\{memidx} \{ops}"
-    MemoryCopy(dst_memidx, src_memidx) =>
+    Wasm(MemorySize(memidx)) => "memory_size mem=\{memidx}"
+    Wasm(MemoryFill(memidx)) => "memory_fill mem=\{memidx} \{ops}"
+    Wasm(MemoryCopy(dst_memidx, src_memidx)) =>
       "memory_copy dst=\{dst_memidx} src=\{src_memidx} \{ops}"
-    MemoryInit(memidx, data_idx) =>
+    Wasm(MemoryInit(memidx, data_idx)) =>
       "memory_init mem=\{memidx} data=\{data_idx} \{ops}"
-    DataDrop(data_idx) => "data_drop data=\{data_idx}"
+    Wasm(DataDrop(data_idx)) => "data_drop data=\{data_idx}"
 
     // Misc
     Select => "select \{ops}"
@@ -170,28 +170,28 @@ fn format_opcode(
 
     // Table operations
     // NOTE: TableGet, TableSet, TableSize are desugared via FuncEnvironment
-    TableGrow(idx) => "table_grow \{idx} \{ops}"
-    TableFill(idx) => "table_fill \{idx} \{ops}"
-    TableCopy(dst_idx, src_idx) =>
+    Wasm(TableGrow(idx)) => "table_grow \{idx} \{ops}"
+    Wasm(TableFill(idx)) => "table_fill \{idx} \{ops}"
+    Wasm(TableCopy(dst_idx, src_idx)) =>
       "table_copy dst=\{dst_idx} src=\{src_idx} \{ops}"
-    TableInit(table_idx, elem_idx) =>
+    Wasm(TableInit(table_idx, elem_idx)) =>
       "table_init table=\{table_idx} elem=\{elem_idx} \{ops}"
-    ElemDrop(elem_idx) => "elem_drop elem=\{elem_idx}"
+    Wasm(ElemDrop(elem_idx)) => "elem_drop elem=\{elem_idx}"
 
     // NOTE: GlobalGet, GlobalSet are desugared via FuncEnvironment
 
     // Function calls
     Call(symbol) => "call \{symbol.name}(\{ops})"
     CallIndirect(signature) => "call_indirect sig=\{to_repr(signature)}(\{ops})"
-    WasmCall(idx) => "call \{idx}(\{ops})"
-    WasmCallIndirect(type_idx, table_idx) =>
+    Wasm(WasmCall(idx)) => "call \{idx}(\{ops})"
+    Wasm(WasmCallIndirect(type_idx, table_idx)) =>
       "call_indirect type=\{type_idx} table=\{table_idx}(\{ops})"
-    CallRef(type_idx) => "call_ref type=\{type_idx}(\{ops})"
-    ReturnCall(idx) => "return_call \{idx}(\{ops})"
-    ReturnCallIndirect(type_idx, table_idx) =>
+    Wasm(CallRef(type_idx)) => "call_ref type=\{type_idx}(\{ops})"
+    Wasm(ReturnCall(idx)) => "return_call \{idx}(\{ops})"
+    Wasm(ReturnCallIndirect(type_idx, table_idx)) =>
       "return_call_indirect type=\{type_idx} table=\{table_idx}(\{ops})"
-    ReturnCallRef(type_idx) => "return_call_ref type=\{type_idx}(\{ops})"
-    GetFuncRef(func_idx) => "get_func_ref \{func_idx}"
+    Wasm(ReturnCallRef(type_idx)) => "return_call_ref type=\{type_idx}(\{ops})"
+    Wasm(GetFuncRef(func_idx)) => "get_func_ref \{func_idx}"
 
     // Raw pointer operations (for trampolines)
     LoadPtr(ty) => "load_ptr.\{ty} \{ops}"
@@ -207,53 +207,54 @@ fn format_opcode(
     Custom(name) => "custom \{name} \{ops}"
 
     // GC operations - struct
-    StructNew(type_idx) => "struct.new \{type_idx}(\{ops})"
-    StructNewDefault(type_idx) => "struct.new_default \{type_idx}"
-    StructGet(type_idx, field_idx) =>
+    Wasm(StructNew(type_idx)) => "struct.new \{type_idx}(\{ops})"
+    Wasm(StructNewDefault(type_idx)) => "struct.new_default \{type_idx}"
+    Wasm(StructGet(type_idx, field_idx)) =>
       "struct.get \{type_idx} \{field_idx} \{ops}"
-    StructGetS(type_idx, field_idx, byte_width) =>
+    Wasm(StructGetS(type_idx, field_idx, byte_width)) =>
       "struct.get_s \{type_idx} \{field_idx} bw=\{byte_width} \{ops}"
-    StructGetU(type_idx, field_idx, byte_width) =>
+    Wasm(StructGetU(type_idx, field_idx, byte_width)) =>
       "struct.get_u \{type_idx} \{field_idx} bw=\{byte_width} \{ops}"
-    StructSet(type_idx, field_idx) =>
+    Wasm(StructSet(type_idx, field_idx)) =>
       "struct.set \{type_idx} \{field_idx} \{ops}"
 
     // GC operations - array
-    ArrayNew(type_idx) => "array.new \{type_idx}(\{ops})"
-    ArrayNewDefault(type_idx) => "array.new_default \{type_idx}(\{ops})"
-    ArrayNewFixed(type_idx, len) => "array.new_fixed \{type_idx} \{len}(\{ops})"
-    ArrayGet(type_idx) => "array.get \{type_idx} \{ops}"
-    ArrayGetS(type_idx, byte_width) =>
+    Wasm(ArrayNew(type_idx)) => "array.new \{type_idx}(\{ops})"
+    Wasm(ArrayNewDefault(type_idx)) => "array.new_default \{type_idx}(\{ops})"
+    Wasm(ArrayNewFixed(type_idx, len)) =>
+      "array.new_fixed \{type_idx} \{len}(\{ops})"
+    Wasm(ArrayGet(type_idx)) => "array.get \{type_idx} \{ops}"
+    Wasm(ArrayGetS(type_idx, byte_width)) =>
       "array.get_s \{type_idx} bw=\{byte_width} \{ops}"
-    ArrayGetU(type_idx, byte_width) =>
+    Wasm(ArrayGetU(type_idx, byte_width)) =>
       "array.get_u \{type_idx} bw=\{byte_width} \{ops}"
-    ArraySet(type_idx) => "array.set \{type_idx} \{ops}"
-    ArrayLen => "array.len \{ops}"
-    ArrayFill(type_idx) => "array.fill \{type_idx} \{ops}"
-    ArrayCopy(dst_type_idx, src_type_idx) =>
+    Wasm(ArraySet(type_idx)) => "array.set \{type_idx} \{ops}"
+    Wasm(ArrayLen) => "array.len \{ops}"
+    Wasm(ArrayFill(type_idx)) => "array.fill \{type_idx} \{ops}"
+    Wasm(ArrayCopy(dst_type_idx, src_type_idx)) =>
       "array.copy \{dst_type_idx} \{src_type_idx} \{ops}"
-    ArrayNewData(type_idx, data_idx) =>
+    Wasm(ArrayNewData(type_idx, data_idx)) =>
       "array.new_data \{type_idx} \{data_idx} \{ops}"
-    ArrayNewElem(type_idx, elem_idx) =>
+    Wasm(ArrayNewElem(type_idx, elem_idx)) =>
       "array.new_elem \{type_idx} \{elem_idx} \{ops}"
-    ArrayInitData(type_idx, data_idx) =>
+    Wasm(ArrayInitData(type_idx, data_idx)) =>
       "array.init_data \{type_idx} \{data_idx} \{ops}"
-    ArrayInitElem(type_idx, elem_idx) =>
+    Wasm(ArrayInitElem(type_idx, elem_idx)) =>
       "array.init_elem \{type_idx} \{elem_idx} \{ops}"
 
     // GC operations - i31
-    I31New => "ref.i31 \{ops}"
-    I31GetS => "i31.get_s \{ops}"
-    I31GetU => "i31.get_u \{ops}"
+    Wasm(I31New) => "ref.i31 \{ops}"
+    Wasm(I31GetS) => "i31.get_s \{ops}"
+    Wasm(I31GetU) => "i31.get_u \{ops}"
 
     // GC operations - type checking/casting
-    RefTest(type_idx, nullable) =>
+    Wasm(RefTest(type_idx, nullable)) =>
       if nullable {
         "ref.test_null \{type_idx} \{ops}"
       } else {
         "ref.test \{type_idx} \{ops}"
       }
-    RefCast(type_idx, nullable) =>
+    Wasm(RefCast(type_idx, nullable)) =>
       if nullable {
         "ref.cast_null \{type_idx} \{ops}"
       } else {
@@ -261,23 +262,23 @@ fn format_opcode(
       }
 
     // GC operations - type conversions
-    AnyConvertExtern => "any.convert_extern \{ops}"
-    ExternConvertAny => "extern.convert_any \{ops}"
+    Wasm(AnyConvertExtern) => "any.convert_extern \{ops}"
+    Wasm(ExternConvertAny) => "extern.convert_any \{ops}"
 
     // GC operations - reference equality
-    RefEq => "ref.eq \{ops}"
+    Wasm(RefEq) => "ref.eq \{ops}"
 
     // Exception handling
-    Throw(tag_idx) => "throw \{tag_idx} \{ops}"
-    ThrowRef => "throw_ref \{ops}"
-    TryTableBegin(handler_id) => "try_table_begin \{handler_id}"
-    TryTableEnd(handler_id) => "try_table_end \{handler_id}"
-    GetExceptionTag => "get_exception_tag"
-    GetExceptionValue(idx) => "get_exception_value \{idx}"
-    GetExceptionValueCount => "get_exception_value_count"
-    Delegate(depth) => "delegate \{depth}"
-    SpillLocalsForThrow(count) => "spill_locals_for_throw \{count}"
-    GetSpilledLocal(idx) => "get_spilled_local \{idx}"
+    Wasm(Throw(tag_idx)) => "throw \{tag_idx} \{ops}"
+    Wasm(ThrowRef) => "throw_ref \{ops}"
+    Wasm(TryTableBegin(handler_id)) => "try_table_begin \{handler_id}"
+    Wasm(TryTableEnd(handler_id)) => "try_table_end \{handler_id}"
+    Wasm(GetExceptionTag) => "get_exception_tag"
+    Wasm(GetExceptionValue(idx)) => "get_exception_value \{idx}"
+    Wasm(GetExceptionValueCount) => "get_exception_value_count"
+    Wasm(Delegate(depth)) => "delegate \{depth}"
+    Wasm(SpillLocalsForThrow(count)) => "spill_locals_for_throw \{count}"
+    Wasm(GetSpilledLocal(idx)) => "get_spilled_local \{idx}"
 
     // SIMD operations
     V128Const(_) => "v128.const \{ops}"
