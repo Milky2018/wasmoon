@@ -1661,11 +1661,13 @@ pub fn compile_module_to_jit(
       func_idx=Some(func_idx),
       func_name=Some(func_name),
     )
+    let call_conv = @wasmoon_jit.wasm_calling_convention()
     let vcode_func = @lower.lower_function(
       ir_func,
       num_imports=mod_.imports.length(),
       run_ir_opt=false,
       runtime_layout=Some(@wasmoon_jit.runtime_context_layout()),
+      call_conv_layout=Some(call_conv),
       use_subtype_indirect_check~,
       canonical_type_indices~,
     )
@@ -1688,6 +1690,7 @@ pub fn compile_module_to_jit(
     )
     let (vcode_ra, ra_output) = @machv_regalloc.allocate_registers_backtracking_output(
       vcode_func,
+      call_conv_layout=Some(call_conv),
     )
     if regalloc_tick is Some(tick) {
       @perf.record_stage_us("regalloc", @perf.elapsed_us(tick))
@@ -1720,6 +1723,7 @@ pub fn compile_module_to_jit(
       debug_func_idx=Some(func_idx),
       force_frame_setup=enable_dwarf,
       runtime_layout=Some(@wasmoon_jit.runtime_context_layout()),
+      call_conv_layout=Some(call_conv),
       record_disasm=debug_db is Some(_),
     )
     if emit_tick is Some(tick) {

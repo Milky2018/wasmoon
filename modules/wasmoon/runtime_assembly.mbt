@@ -73,16 +73,24 @@ pub fn compiler_infrastructure_assembly() -> CompilerInfrastructureAssembly {
   let milk = @milkir.Function::new("wasmoon_runtime_probe", signature)
   let entry = milk.new_block0()
   entry.set_terminator(Return([]))
-  let machv_function = @lower.lower_function(milk, run_ir_opt=false)
+  let call_conv = @wasmoon_jit.wasm_calling_convention()
+  let machv_function = @lower.lower_function(
+    milk,
+    run_ir_opt=false,
+    call_conv_layout=Some(call_conv),
+  )
   let (allocated_function, output) = @machv_regalloc.allocate_registers_backtracking_output(
     machv_function,
+    call_conv_layout=Some(call_conv),
   )
   {
     signature,
     machv_function,
     allocated_function,
     code_object: @machv_emit.emit_function_with_regalloc(
-      allocated_function, output,
+      allocated_function,
+      output,
+      call_conv_layout=Some(call_conv),
     ),
     x64_abi: @x64_target.abi_policy(),
     aarch64_abi: @aarch64_target.abi_policy(),

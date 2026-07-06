@@ -75,6 +75,7 @@ pub struct JITStackFrame {
   cache_mem0_desc : Bool // Whether to cache memory0 base in X20
   cache_func_table : Bool // Whether to cache func_table pointer in X21
   runtime_layout : @abi.RuntimeContextLayout?
+  call_conv_layout : @abi.CallConventionLayout?
 }
 
 ///|
@@ -100,6 +101,7 @@ pub fn JITStackFrame::build(
   force_frame_setup? : Bool = false,
   has_incoming_stack_args? : Bool = false,
   runtime_layout? : @abi.RuntimeContextLayout? = None,
+  call_conv_layout? : @abi.CallConventionLayout? = None,
   isa? : @isa.ISA = @isa.ISA::current(),
   abi_settings? : @abi.ABISettings = @abi.ABISettings::default(),
 ) -> JITStackFrame {
@@ -173,6 +175,7 @@ pub fn JITStackFrame::build(
     cache_mem0_desc,
     cache_func_table,
     runtime_layout,
+    call_conv_layout,
   }
 }
 
@@ -184,6 +187,17 @@ pub fn JITStackFrame::require_runtime_layout(
     Some(layout) => layout
     None =>
       abort("runtime context layout is required for runtime-specific emission")
+  }
+}
+
+///|
+pub fn JITStackFrame::require_call_conv_layout(
+  self : JITStackFrame,
+) -> @abi.CallConventionLayout {
+  match self.call_conv_layout {
+    Some(layout) => layout
+    None =>
+      abort("call convention layout is required for ABI-specific emission")
   }
 }
 

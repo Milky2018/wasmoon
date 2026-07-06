@@ -173,12 +173,13 @@ fn MachineCode::emit_terminator_with_epilogue_x86_64(
     }
     Return(values) => {
       // Minimal return convention:
-      // - ints go to ISA.wasm_ret_gprs()
-      // - floats/vectors go to ISA.wasm_ret_fprs()
+      // - ints go to the provided call-convention GPR returns
+      // - floats/vectors go to the provided call-convention FPR returns
       //
       // For now, require returns fit in the register lists.
-      let int_rets = isa.wasm_ret_gprs()
-      let fp_rets = isa.wasm_ret_fprs()
+      let call_conv = stack_frame.require_call_conv_layout()
+      let int_rets = call_conv.ret_gprs
+      let fp_rets = call_conv.ret_fprs
       let int_moves : Array[(Int, Int)] = []
       let int_ret_regs_i32 : Array[Int] = []
       let fp_moves : Array[(Int, Int)] = []

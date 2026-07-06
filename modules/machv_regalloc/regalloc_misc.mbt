@@ -59,6 +59,16 @@ fn regalloc_validation_enabled() -> Bool {
 }
 
 ///|
+fn require_call_conv_layout(
+  layout : @abi.CallConventionLayout?,
+) -> @abi.CallConventionLayout {
+  match layout {
+    Some(call_conv) => call_conv
+    None => abort("call convention layout is required for MachV regalloc")
+  }
+}
+
+///|
 fn parse_regalloc_algorithm(value : String) -> RegallocAlgorithm? {
   if value == "backtracking" || value == "ion" {
     return Some(Backtracking)
@@ -318,8 +328,14 @@ fn build_reg_pools(
 pub fn allocate_registers_backtracking(
   func : @machv.Function,
   settings? : @abi.ABISettings = @abi.ABISettings::default(),
+  call_conv_layout? : @abi.CallConventionLayout? = None,
 ) -> @machv.Function {
-  allocate_registers_backtracking_with_isa(func, @isa.ISA::current(), settings)
+  allocate_registers_backtracking_with_isa(
+    func,
+    @isa.ISA::current(),
+    settings,
+    call_conv_layout~,
+  )
 }
 
 ///|
@@ -328,6 +344,7 @@ pub fn allocate_registers_backtracking_with_isa(
   func : @machv.Function,
   isa : @isa.ISA,
   settings : @abi.ABISettings,
+  call_conv_layout? : @abi.CallConventionLayout? = None,
 ) -> @machv.Function {
   // Keep Cranelift-style cheap rematerialization before allocation to shorten
   // cross-block live ranges for constants/function pointers.
@@ -347,6 +364,7 @@ pub fn allocate_registers_backtracking_with_isa(
   // Compute liveness (Phase 1)
   let liveness = compute_liveness_for_regalloc(func)
   let algorithm = selected_regalloc_algorithm()
+  let call_conv_layout = require_call_conv_layout(call_conv_layout)
 
   // Delegate allocator-core decisions to regalloc through the MachV adapter.
   let alloc_result = allocate_backtracking(
@@ -357,16 +375,24 @@ pub fn allocate_registers_backtracking_with_isa(
     vector_regs,
     callee_saved_int_regs,
     callee_saved_float_regs,
+    call_conv_layout,
     algorithm~,
   )
 
   // Optional safety net (Cranelift-like checker), enabled in CI/perf profiles.
   if regalloc_validation_enabled() {
-    verify_allocation(func, liveness, alloc_result, isa, settings~)
+    verify_allocation(
+      func,
+      liveness,
+      alloc_result,
+      isa,
+      call_conv_layout,
+      settings~,
+    )
   }
 
   // Apply allocation
-  apply_allocation(func, alloc_result)
+  apply_allocation(func, alloc_result, call_conv_layout)
 }
 
 ///|
@@ -378,11 +404,13 @@ pub fn allocate_registers_backtracking_with_isa(
 pub fn allocate_registers_backtracking_output(
   func : @machv.Function,
   settings? : @abi.ABISettings = @abi.ABISettings::default(),
+  call_conv_layout? : @abi.CallConventionLayout? = None,
 ) -> (@machv.Function, Output) {
   allocate_registers_backtracking_output_with_isa(
     func,
     @isa.ISA::current(),
     settings,
+    call_conv_layout~,
   )
 }
 
@@ -393,6 +421,7 @@ pub fn allocate_registers_backtracking_output_with_isa(
   func : @machv.Function,
   isa : @isa.ISA,
   settings : @abi.ABISettings,
+  call_conv_layout? : @abi.CallConventionLayout? = None,
 ) -> (@machv.Function, Output) {
   // Keep Cranelift-style cheap rematerialization before allocation to shorten
   // cross-block live ranges for constants/function pointers.
@@ -414,6 +443,7 @@ pub fn allocate_registers_backtracking_output_with_isa(
   let tick_liveness = if perf_on { Some(perf_tick_now()) } else { None }
   let liveness = compute_liveness_for_regalloc(func)
   let algorithm = selected_regalloc_algorithm()
+  let call_conv_layout = require_call_conv_layout(call_conv_layout)
   if tick_liveness is Some(tick) {
     perf_record_regalloc_phase_us(
       "phase_compute_liveness",
@@ -430,13 +460,21 @@ pub fn allocate_registers_backtracking_output_with_isa(
     vector_regs,
     callee_saved_int_regs,
     callee_saved_float_regs,
+    call_conv_layout,
     param_precolor_strict=true,
     algorithm~,
   )
 
   // Optional safety net (Cranelift-like checker), enabled in CI/perf profiles.
   if regalloc_validation_enabled() {
-    verify_allocation(func, liveness, alloc_result, isa, settings~)
+    verify_allocation(
+      func,
+      liveness,
+      alloc_result,
+      isa,
+      call_conv_layout,
+      settings~,
+    )
   }
 
   // Build output (allocs + edits). VCode remains in terms of vregs.
@@ -505,6 +543,7 @@ fn count_instructions(func : @machv.Function) -> AllocStats {
 pub fn get_alloc_stats(
   func : @machv.Function,
   settings? : @abi.ABISettings = @abi.ABISettings::default(),
+  call_conv_layout? : @abi.CallConventionLayout? = None,
 ) -> AllocStats {
   let func = eliminate_dead_code(func)
   let func = rematerialize_cross_block_constants(func)
@@ -521,6 +560,7 @@ pub fn get_alloc_stats(
   // Count vregs
   let num_vregs = liveness.intervals.length()
   let algorithm = selected_regalloc_algorithm()
+  let call_conv_layout = require_call_conv_layout(call_conv_layout)
   let alloc_result = allocate_backtracking(
     func,
     liveness,
@@ -529,10 +569,11 @@ pub fn get_alloc_stats(
     vector_regs,
     callee_saved_int_regs,
     callee_saved_float_regs,
+    call_conv_layout,
     algorithm~,
   )
   process_constraints(func, alloc_result)
-  let allocated = apply_allocation(func, alloc_result)
+  let allocated = apply_allocation(func, alloc_result, call_conv_layout)
   let stats = count_instructions(allocated)
   stats.num_vregs = num_vregs
   stats.num_spill_slots = alloc_result.num_spill_slots

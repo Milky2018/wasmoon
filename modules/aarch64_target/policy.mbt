@@ -149,39 +149,6 @@ pub fn aapcs64_ret_fprs() -> Array[@machv.PReg] {
 }
 
 ///|
-pub fn wasm_vmctx_arg_preg() -> @machv.PReg {
-  int_reg(0)
-}
-
-///|
-pub fn wasm_user_arg_gprs() -> Array[@machv.PReg] {
-  [
-    int_reg(1),
-    int_reg(2),
-    int_reg(3),
-    int_reg(4),
-    int_reg(5),
-    int_reg(6),
-    int_reg(7),
-  ]
-}
-
-///|
-pub fn wasm_arg_fprs() -> Array[@machv.PReg] {
-  aapcs64_arg_fprs()
-}
-
-///|
-pub fn wasm_ret_gprs() -> Array[@machv.PReg] {
-  aapcs64_ret_gprs()
-}
-
-///|
-pub fn wasm_ret_fprs() -> Array[@machv.PReg] {
-  aapcs64_ret_fprs()
-}
-
-///|
 pub fn callee_saved_fprs() -> Array[@machv.PReg] {
   [
     float_reg(8),

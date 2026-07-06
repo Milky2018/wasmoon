@@ -39,8 +39,9 @@ fn emit_wasm_overflow_arg_stores(
   int_args : Array[(@abi.VReg, @abi.RegClass)],
   float_args : Array[(@abi.VReg, @abi.RegClass)],
 ) -> Int {
-  let max_int_reg_args = wasm_user_arg_gprs().length()
-  let max_float_reg_args = wasm_arg_fprs().length()
+  let call_conv = ctx.require_call_conv_layout()
+  let max_int_reg_args = call_conv.user_arg_gprs.length()
+  let max_float_reg_args = call_conv.arg_fprs.length()
   let int_overflow = if int_args.length() > max_int_reg_args {
     int_args.length() - max_int_reg_args
   } else {
@@ -51,7 +52,7 @@ fn emit_wasm_overflow_arg_stores(
     let (_, class) = float_args[i]
     float_overflow_classes.push(class)
   }
-  let (int_offsets, float_offsets, total_bytes) = @abi.wasm_layout_overflow_stack(
+  let (int_offsets, float_offsets, total_bytes) = call_conv.layout_overflow_stack(
     int_overflow, float_overflow_classes,
   )
   if total_bytes > 0 {
@@ -114,6 +115,7 @@ fn lower_wasm_call_common(
   if !ctx.abi_settings.enable_pinned_reg {
     abort("unpinned VMContext ABI not implemented yet")
   }
+  let call_conv = ctx.require_call_conv_layout()
   // vmctx is pinned in `REG_VMCTX` (X21 when pinned).
   let vmctx_preg : @abi.PReg = vmctx_preg()
 
@@ -130,8 +132,8 @@ fn lower_wasm_call_common(
   }
 
   // Materialize constant overflow args before storing to stack.
-  let max_int_reg_args = wasm_user_arg_gprs().length()
-  let max_float_reg_args = wasm_arg_fprs().length()
+  let max_int_reg_args = call_conv.user_arg_gprs.length()
+  let max_float_reg_args = call_conv.arg_fprs.length()
   for i in max_int_reg_args..<int_args.length() {
     let (vreg, _) = int_args[i]
     if const_args.get(vreg.id) is Some(value) {
@@ -149,10 +151,10 @@ fn lower_wasm_call_common(
   emit_wasm_overflow_arg_stores(ctx, block, int_args, float_args) |> ignore
 
   // vmctx constrained to the ISA's vmctx-arg register.
-  call_inst.add_use_fixed(Physical(vmctx_preg), wasm_vmctx_arg_preg())
+  call_inst.add_use_fixed(Physical(vmctx_preg), call_conv.context_arg)
 
   // Register int args (ISA-specific).
-  let user_arg_gprs = wasm_user_arg_gprs()
+  let user_arg_gprs = call_conv.user_arg_gprs
   let int_reg_count = if int_args.length() < max_int_reg_args {
     int_args.length()
   } else {
@@ -168,7 +170,7 @@ fn lower_wasm_call_common(
   }
 
   // Register float args (ISA-specific; float/vector share the same bank).
-  let arg_fprs = wasm_arg_fprs()
+  let arg_fprs = call_conv.arg_fprs
   let float_reg_count = if float_args.length() < max_float_reg_args {
     float_args.length()
   } else {
@@ -190,8 +192,8 @@ fn lower_wasm_call_common(
 
   // Define results with fixed register constraints (ISA-specific).
   // Classify results by type and assign to return GPR/FPR lists.
-  let ret_gprs = wasm_ret_gprs()
-  let ret_fprs = wasm_ret_fprs()
+  let ret_gprs = call_conv.ret_gprs
+  let ret_fprs = call_conv.ret_fprs
   let mut int_result_idx = 0
   let mut float_result_idx = 0
   for result in results {
@@ -310,6 +312,7 @@ fn lower_return_call(
   let stack_arg_bytes = emit_wasm_overflow_arg_stores(
     ctx, block, int_args, float_args,
   )
+  let call_conv = ctx.require_call_conv_layout()
 
   // Create ReturnCallIndirect instruction with fixed register constraints
   // Encode tail-call stack-bytes in opcode metadata.
@@ -322,10 +325,10 @@ fn lower_return_call(
   })
 
   // vmctx constrained to the ISA's vmctx-arg register.
-  call_inst.add_use_fixed(Physical(vmctx_preg), wasm_vmctx_arg_preg())
+  call_inst.add_use_fixed(Physical(vmctx_preg), call_conv.context_arg)
 
   // Register int args (ISA-specific).
-  let user_arg_gprs = wasm_user_arg_gprs()
+  let user_arg_gprs = call_conv.user_arg_gprs
   let max_int_reg_args = user_arg_gprs.length()
   let int_reg_count = if int_args.length() < max_int_reg_args {
     int_args.length()
@@ -341,7 +344,7 @@ fn lower_return_call(
   }
 
   // Register float args (ISA-specific).
-  let arg_fprs = wasm_arg_fprs()
+  let arg_fprs = call_conv.arg_fprs
   let max_float_reg_args = arg_fprs.length()
   let float_reg_count = if float_args.length() < max_float_reg_args {
     float_args.length()
@@ -456,6 +459,7 @@ fn lower_return_call_indirect(
   let stack_arg_bytes = emit_wasm_overflow_arg_stores(
     ctx, block, int_args, float_args,
   )
+  let call_conv = ctx.require_call_conv_layout()
 
   // Create ReturnCallIndirect with fixed constraints
   // Encode tail-call stack-bytes in opcode metadata.
@@ -468,10 +472,10 @@ fn lower_return_call_indirect(
   })
 
   // vmctx constrained to the ISA's vmctx-arg register.
-  call_inst.add_use_fixed(Physical(vmctx_preg), wasm_vmctx_arg_preg())
+  call_inst.add_use_fixed(Physical(vmctx_preg), call_conv.context_arg)
 
   // Register int args (ISA-specific).
-  let user_arg_gprs = wasm_user_arg_gprs()
+  let user_arg_gprs = call_conv.user_arg_gprs
   let max_int_reg_args = user_arg_gprs.length()
   let int_reg_count = if int_args.length() < max_int_reg_args {
     int_args.length()
@@ -487,7 +491,7 @@ fn lower_return_call_indirect(
   }
 
   // Register float args (ISA-specific).
-  let arg_fprs = wasm_arg_fprs()
+  let arg_fprs = call_conv.arg_fprs
   let max_float_reg_args = arg_fprs.length()
   let float_reg_count = if float_args.length() < max_float_reg_args {
     float_args.length()
@@ -541,6 +545,7 @@ fn lower_return_call_ref(
   let stack_arg_bytes = emit_wasm_overflow_arg_stores(
     ctx, block, int_args, float_args,
   )
+  let call_conv = ctx.require_call_conv_layout()
 
   // Create ReturnCallIndirect with fixed constraints
   // Encode tail-call stack-bytes in opcode metadata.
@@ -553,10 +558,10 @@ fn lower_return_call_ref(
   })
 
   // vmctx constrained to the ISA's vmctx-arg register.
-  call_inst.add_use_fixed(Physical(vmctx_preg), wasm_vmctx_arg_preg())
+  call_inst.add_use_fixed(Physical(vmctx_preg), call_conv.context_arg)
 
   // Register int args (ISA-specific).
-  let user_arg_gprs = wasm_user_arg_gprs()
+  let user_arg_gprs = call_conv.user_arg_gprs
   let max_int_reg_args = user_arg_gprs.length()
   let int_reg_count = if int_args.length() < max_int_reg_args {
     int_args.length()
@@ -572,7 +577,7 @@ fn lower_return_call_ref(
   }
 
   // Register float args (ISA-specific).
-  let arg_fprs = wasm_arg_fprs()
+  let arg_fprs = call_conv.arg_fprs
   let max_float_reg_args = arg_fprs.length()
   let float_reg_count = if float_args.length() < max_float_reg_args {
     float_args.length()
@@ -864,6 +869,7 @@ fn lower_call_ptr(
     }
   }
   emit_wasm_overflow_arg_stores(ctx, block, int_args, float_args) |> ignore
+  let call_conv = ctx.require_call_conv_layout()
 
   // Collect result vregs (skip when results are unused)
   let result_vregs = collect_call_result_vregs(ctx, inst)
@@ -880,10 +886,10 @@ fn lower_call_ptr(
   })
 
   // callee_vmctx constrained to the ISA's vmctx-arg register.
-  call_inst.add_use_fixed(Virtual(callee_vmctx), wasm_vmctx_arg_preg())
+  call_inst.add_use_fixed(Virtual(callee_vmctx), call_conv.context_arg)
 
   // Register int args (ISA-specific).
-  let user_arg_gprs = wasm_user_arg_gprs()
+  let user_arg_gprs = call_conv.user_arg_gprs
   let max_int_reg_args = user_arg_gprs.length()
   let int_reg_count = if int_args.length() < max_int_reg_args {
     int_args.length()
@@ -899,7 +905,7 @@ fn lower_call_ptr(
   }
 
   // Register float args (ISA-specific).
-  let arg_fprs = wasm_arg_fprs()
+  let arg_fprs = call_conv.arg_fprs
   let max_float_reg_args = arg_fprs.length()
   let float_reg_count = if float_args.length() < max_float_reg_args {
     float_args.length()
@@ -912,8 +918,8 @@ fn lower_call_ptr(
   }
 
   // Step 4: Define results with constraints
-  let ret_gprs = wasm_ret_gprs()
-  let ret_fprs = wasm_ret_fprs()
+  let ret_gprs = call_conv.ret_gprs
+  let ret_fprs = call_conv.ret_fprs
   let mut int_result_idx = 0
   let mut float_result_idx = 0
   for dst in result_vregs {

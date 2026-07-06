@@ -128,44 +128,6 @@ pub fn aapcs64_ret_fprs() -> Array[@abi.PReg] {
 }
 
 ///|
-/// Internal Wasm ABI: vmctx argument register.
-pub fn wasm_vmctx_arg_preg() -> @abi.PReg {
-  { index: 0, class: Int }
-}
-
-///|
-/// Internal Wasm ABI: user integer argument registers (excluding vmctx).
-pub fn wasm_user_arg_gprs() -> Array[@abi.PReg] {
-  [
-    { index: 1, class: Int },
-    { index: 2, class: Int },
-    { index: 3, class: Int },
-    { index: 4, class: Int },
-    { index: 5, class: Int },
-    { index: 6, class: Int },
-    { index: 7, class: Int },
-  ]
-}
-
-///|
-/// Internal Wasm ABI: float argument registers (V0-V7).
-pub fn wasm_arg_fprs() -> Array[@abi.PReg] {
-  aapcs64_arg_fprs()
-}
-
-///|
-/// Internal Wasm ABI: integer return registers (X0-X7).
-pub fn wasm_ret_gprs() -> Array[@abi.PReg] {
-  aapcs64_ret_gprs()
-}
-
-///|
-/// Internal Wasm ABI: float return registers (V0-V7).
-pub fn wasm_ret_fprs() -> Array[@abi.PReg] {
-  aapcs64_ret_fprs()
-}
-
-///|
 /// Callee-saved FPRs (V8-V15).
 pub fn callee_saved_fprs() -> Array[@abi.PReg] {
   [

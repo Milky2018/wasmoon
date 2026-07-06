@@ -349,7 +349,8 @@ fn MachineCode::emit_prologue(
     }
 
     if debug_func_idx is Some(idx) {
-      let vmctx_src = isa.wasm_vmctx_arg_preg().index
+      let call_conv = stack_frame.require_call_conv_layout()
+      let vmctx_src = call_conv.context_arg.index
       let layout = stack_frame.require_runtime_layout()
       let scratch = 11
       if self.debug_prev_func_idx_spill_offset >= 0 {
@@ -377,7 +378,8 @@ fn MachineCode::emit_prologue(
       if !abi_settings.enable_pinned_reg {
         abort("unpinned VMContext ABI not implemented yet")
       }
-      let vmctx_src = isa.wasm_vmctx_arg_preg().index
+      let call_conv = stack_frame.require_call_conv_layout()
+      let vmctx_src = call_conv.context_arg.index
       let vmctx = @isaregs.vmctx_index()
       if vmctx != vmctx_src {
         self.x86_emit_mov_rr(vmctx, vmctx_src)
@@ -523,8 +525,9 @@ fn MachineCode::emit_prologue(
       }
     }
 
-    let user_gprs = isa.wasm_user_arg_gprs()
-    let float_regs = isa.wasm_arg_fprs()
+    let call_conv = stack_frame.require_call_conv_layout()
+    let user_gprs = call_conv.user_arg_gprs
+    let float_regs = call_conv.arg_fprs
     let int_moves : Array[(Int, Int)] = []
     let fp_moves : Array[(Int, Int)] = []
     let mut int_idx = 0
@@ -539,7 +542,7 @@ fn MachineCode::emit_prologue(
         Int =>
           if int_idx < 1 + user_gprs.length() {
             let src = if int_idx == 0 {
-              isa.wasm_vmctx_arg_preg().index
+              call_conv.context_arg.index
             } else {
               user_gprs[int_idx - 1].index
             }
@@ -650,7 +653,8 @@ fn MachineCode::emit_prologue(
   }
 
   if debug_func_idx is Some(idx) {
-    let vmctx_reg = @isaregs.current_isa().wasm_vmctx_arg_preg().index
+    let call_conv = stack_frame.require_call_conv_layout()
+    let vmctx_reg = call_conv.context_arg.index
     let layout = stack_frame.require_runtime_layout()
     if self.debug_prev_func_idx_spill_offset >= 0 {
       self.emit_ldr_w_imm(16, vmctx_reg, layout.debug_current_function_offset)
@@ -678,7 +682,8 @@ fn MachineCode::emit_prologue(
       abort("unpinned VMContext ABI not implemented yet")
     }
     let vmctx = @isaregs.vmctx_index()
-    self.emit_mov_reg(vmctx, 0)
+    let call_conv = stack_frame.require_call_conv_layout()
+    self.emit_mov_reg(vmctx, call_conv.context_arg.index)
     // Optionally cache memory0 base pointer in Mem0Desc role.
     if stack_frame.cache_mem0_desc {
       let layout = stack_frame.require_runtime_layout()
@@ -700,9 +705,9 @@ fn MachineCode::emit_prologue(
   }
 
   // Step 6: Move arguments from ABI registers to allocated registers
-  let isa = @isaregs.current_isa()
-  let int_arg_regs = [isa.wasm_vmctx_arg_preg(), ..isa.wasm_user_arg_gprs()]
-  let float_arg_regs = isa.wasm_arg_fprs()
+  let call_conv = stack_frame.require_call_conv_layout()
+  let int_arg_regs = [call_conv.context_arg, ..call_conv.user_arg_gprs]
+  let float_arg_regs = call_conv.arg_fprs
   let mut int_idx = 0
   let mut float_idx = 0
   for param_idx, param in params {
@@ -763,6 +768,7 @@ pub fn emit_function(
   force_frame_setup? : Bool = false,
   abi_settings? : @abi.ABISettings = @abi.ABISettings::default(),
   runtime_layout? : @abi.RuntimeContextLayout? = None,
+  call_conv_layout? : @abi.CallConventionLayout? = None,
   record_disasm? : Bool = true,
 ) -> MachineCode {
   // Optimize block layout for better branch prediction
@@ -828,6 +834,7 @@ pub fn emit_function(
     force_frame_setup~,
     has_incoming_stack_args~,
     runtime_layout~,
+    call_conv_layout~,
     abi_settings~,
   )
   if needs_debug_idx_restore {
@@ -1595,8 +1602,9 @@ fn MachineCode::emit_prologue_with_output(
     self.emit_prologue(
       stack_frame, params, dummy_param_pregs, debug_func_idx, abi_settings,
     )
-    let user_gprs = isa.wasm_user_arg_gprs()
-    let float_regs = isa.wasm_arg_fprs()
+    let call_conv = stack_frame.require_call_conv_layout()
+    let user_gprs = call_conv.user_arg_gprs
+    let float_regs = call_conv.arg_fprs
 
     // Store spilled params from incoming ABI regs to spill slots.
     let mut int_idx = 0
@@ -1607,7 +1615,7 @@ fn MachineCode::emit_prologue_with_output(
         Int =>
           if int_idx < 1 + user_gprs.length() {
             let src = if int_idx == 0 {
-              isa.wasm_vmctx_arg_preg().index
+              call_conv.context_arg.index
             } else {
               user_gprs[int_idx - 1].index
             }
@@ -1783,7 +1791,7 @@ fn MachineCode::emit_prologue_with_output(
         Int =>
           if int_idx < 1 + user_gprs.length() {
             let src = if int_idx == 0 {
-              isa.wasm_vmctx_arg_preg().index
+              call_conv.context_arg.index
             } else {
               user_gprs[int_idx - 1].index
             }
@@ -1835,9 +1843,9 @@ fn MachineCode::emit_prologue_with_output(
   )
 
   // Store spilled params from incoming ABI regs to spill slots.
-  let isa = @isaregs.current_isa()
-  let int_arg_regs = [isa.wasm_vmctx_arg_preg(), ..isa.wasm_user_arg_gprs()]
-  let float_arg_regs = isa.wasm_arg_fprs()
+  let call_conv = stack_frame.require_call_conv_layout()
+  let int_arg_regs = [call_conv.context_arg, ..call_conv.user_arg_gprs]
+  let float_arg_regs = call_conv.arg_fprs
   let mut int_idx = 0
   let mut float_idx = 0
   for param_idx, param in params {
@@ -2054,6 +2062,7 @@ pub fn emit_function_with_regalloc(
   force_frame_setup? : Bool = false,
   abi_settings? : @abi.ABISettings = @abi.ABISettings::default(),
   runtime_layout? : @abi.RuntimeContextLayout? = None,
+  call_conv_layout? : @abi.CallConventionLayout? = None,
   record_disasm? : Bool = true,
 ) -> MachineCode {
   // Keep block layout optimization (targets are block IDs; ids stay stable).
@@ -2109,6 +2118,7 @@ pub fn emit_function_with_regalloc(
     force_frame_setup~,
     has_incoming_stack_args~,
     runtime_layout~,
+    call_conv_layout~,
     abi_settings~,
   )
   if needs_debug_idx_restore {

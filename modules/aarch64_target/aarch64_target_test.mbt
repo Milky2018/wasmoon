@@ -8,10 +8,22 @@ test "AArch64 target owns ABI policy" {
 }
 
 ///|
-test "AArch64 target owns Wasm indirect-call ABI policy" {
-  inspect(wasm_vmctx_arg_preg().index, content="0")
-  inspect(wasm_user_arg_gprs().length(), content="7")
-  inspect(wasm_ret_gprs().length(), content="8")
+fn wasm_test_call_conv() -> @abi.CallConventionLayout {
+  {
+    context_arg: { index: 0, class: Int },
+    user_arg_gprs: [
+      { index: 1, class: Int },
+      { index: 2, class: Int },
+      { index: 3, class: Int },
+      { index: 4, class: Int },
+      { index: 5, class: Int },
+      { index: 6, class: Int },
+      { index: 7, class: Int },
+    ],
+    arg_fprs: @abi.aapcs64_arg_fprs(),
+    ret_gprs: @abi.aapcs64_ret_gprs(),
+    ret_fprs: @abi.aapcs64_ret_fprs(),
+  }
 }
 
 ///|
@@ -23,7 +35,7 @@ test "AArch64 lowers Wasm function body entry ABI" {
   func.add_result(I64)
   let entry = func.new_block([])
   entry.set_terminator(Return([]))
-  let lowered = lower_wasm_body_function(func)
+  let lowered = lower_wasm_body_function(func, wasm_test_call_conv())
   guard lowered.param_pregs[0] is Some(vmctx) else { fail("missing vmctx") }
   guard lowered.param_pregs[1] is Some(arg0) else { fail("missing arg0") }
   guard lowered.param_pregs[2] is Some(arg1) else { fail("missing arg1") }
@@ -76,7 +88,7 @@ test "AArch64 lowers Wasm return-area stores through ExtraResultsPtr" {
   }
   let entry = func.new_block([])
   entry.set_terminator(Return(values))
-  let lowered = lower_wasm_body_function(func)
+  let lowered = lower_wasm_body_function(func, wasm_test_call_conv())
   let mut has_store = false
   for inst in lowered.blocks[0].instructions {
     if inst.opcode == StorePtr(MemI64, 0) &&
@@ -498,7 +510,7 @@ test "AArch64 lowers CallPtr with Wasm ABI constraints and clobbers" {
     func.new_inst(CallPtr(2, 1), [callee, vmctx, int_arg, float_arg], [result]),
   )
   entry.set_terminator(Return([result]))
-  let lowered = lower_function(func)
+  let lowered = lower_wasm_body_function(func, wasm_test_call_conv())
   let call = lowered.blocks[0].instructions[0]
   inspect(call.opcode == CallPtr(2, 1), content="true")
   inspect(call.constraints.length(), content="4")
@@ -533,7 +545,7 @@ test "AArch64 records outgoing stack arguments for Wasm CallPtr" {
   let entry = func.new_block([])
   entry.append_inst(func.new_inst(CallPtr(8, 0), args, []))
   entry.set_terminator(Return([]))
-  let lowered = lower_function(func)
+  let lowered = lower_wasm_body_function(func, wasm_test_call_conv())
   let call = lowered.blocks[0].instructions[0]
   inspect(call.stack_effect == CallFrame(16), content="true")
   inspect(lowered.get_max_outgoing_args_size(), content="16")
@@ -557,7 +569,7 @@ test "AArch64 lowers Wasm CallPtr return-area loads through ExtraResultsPtr" {
   let entry = func.new_block([])
   entry.append_inst(func.new_inst(CallPtr(0, 9), [callee, vmctx], results))
   entry.set_terminator(Return([]))
-  let lowered = lower_function(func)
+  let lowered = lower_wasm_body_function(func, wasm_test_call_conv())
   let mut has_load = false
   for inst in lowered.blocks[0].instructions {
     if inst.opcode == LoadPtr(MemI64, 0) &&

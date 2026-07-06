@@ -287,7 +287,6 @@ fn MachineCode::emit_terminator_with_epilogue(
     )
     return
   }
-  let isa = @isaregs.current_isa()
   let sret_reg = @isaregs.sret_index()
   fn trap_msg_to_brk_imm(msg : String) -> Int {
     // Keep this mapping in sync with `jit/jit_ffi/trap.c`:
@@ -465,8 +464,9 @@ fn MachineCode::emit_terminator_with_epilogue(
         }
       }
 
-      let int_ret_regs = isa.wasm_ret_gprs()
-      let float_ret_regs = isa.wasm_ret_fprs()
+      let call_conv = stack_frame.require_call_conv_layout()
+      let int_ret_regs = call_conv.ret_gprs
+      let float_ret_regs = call_conv.ret_fprs
       let max_int_ret_regs = int_ret_regs.length()
       let max_float_ret_regs = float_ret_regs.length()
 

@@ -57,6 +57,7 @@ pub fn verify_allocation(
   liveness : LivenessResult,
   alloc : RegAllocResult,
   isa : @isa.ISA,
+  call_conv_layout : @abi.CallConventionLayout,
   settings? : @abi.ABISettings = @abi.ABISettings::default(),
 ) -> Unit {
   // Rebuild live ranges to verify with holes.
@@ -102,12 +103,12 @@ pub fn verify_allocation(
       param_ids.add(p.id) |> ignore
     }
   }
-  let wasm_int_arg_regs : @hashset.HashSet[Int] = HashSet([])
-  wasm_int_arg_regs.add(isa.wasm_vmctx_arg_preg().index) |> ignore
-  for preg in isa.wasm_user_arg_gprs() {
-    wasm_int_arg_regs.add(preg.index) |> ignore
+  let call_int_arg_regs : @hashset.HashSet[Int] = HashSet([])
+  call_int_arg_regs.add(call_conv_layout.context_arg.index) |> ignore
+  for preg in call_conv_layout.user_arg_gprs {
+    call_int_arg_regs.add(preg.index) |> ignore
   }
-  let wasm_float_arg_regs = build_index_set(isa.wasm_arg_fprs())
+  let call_float_arg_regs = build_index_set(call_conv_layout.arg_fprs)
 
   // Call-clobbered sets.
   let call_clobbered_int : @hashset.HashSet[Int] = HashSet([])
@@ -168,7 +169,7 @@ pub fn verify_allocation(
         Int =>
           if !allowed_int.contains(preg.index) {
             // Allow parameters in ABI argument registers.
-            let is_arg_gpr = wasm_int_arg_regs.contains(preg.index)
+            let is_arg_gpr = call_int_arg_regs.contains(preg.index)
             if !(param_ids.contains(vreg_id) && is_arg_gpr) &&
               !(is_arg_gpr && !lr.crosses_call) &&
               !(fixed_reg is Some(fr) && fr.index == preg.index) &&
@@ -181,7 +182,7 @@ pub fn verify_allocation(
         Float32 | Float64 =>
           if !allowed_float.contains(preg.index) &&
             !(param_ids.contains(vreg_id) &&
-            wasm_float_arg_regs.contains(preg.index)) &&
+            call_float_arg_regs.contains(preg.index)) &&
             !(fixed_reg is Some(fr) && fr.index == preg.index) {
             abort(
               "regalloc verifier: v\{vreg_id} assigned non-allocatable FPR v\{preg.index}",
@@ -190,7 +191,7 @@ pub fn verify_allocation(
         Vector =>
           if !allowed_vector.contains(preg.index) &&
             !(param_ids.contains(vreg_id) &&
-            wasm_float_arg_regs.contains(preg.index)) &&
+            call_float_arg_regs.contains(preg.index)) &&
             !(fixed_reg is Some(fr) && fr.index == preg.index) {
             abort(
               "regalloc verifier: v\{vreg_id} assigned non-allocatable vector v\{preg.index}",
@@ -263,7 +264,8 @@ pub fn verify_allocation_aarch64(
   func : @machv.Function,
   liveness : LivenessResult,
   alloc : RegAllocResult,
+  call_conv_layout : @abi.CallConventionLayout,
   settings? : @abi.ABISettings = @abi.ABISettings::default(),
 ) -> Unit {
-  verify_allocation(func, liveness, alloc, AArch64, settings~)
+  verify_allocation(func, liveness, alloc, AArch64, call_conv_layout, settings~)
 }

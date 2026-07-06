@@ -56,12 +56,6 @@ pub fn callee_saved_fprs() -> Array[PReg]
 
 pub let spill_slot_base : Int
 
-pub fn wasm_layout_overflow_stack(Int, Array[RegClass]) -> (Array[Int], Array[Int], Int)
-
-pub fn wasm_stack_slot_align(RegClass) -> Int
-
-pub fn wasm_stack_slot_size(RegClass) -> Int
-
 // Errors
 
 // Types and methods
@@ -88,6 +82,17 @@ pub enum CallConv {
   AppleAarch64
   SystemV
 }
+
+pub(all) struct CallConventionLayout {
+  context_arg : PReg
+  user_arg_gprs : Array[PReg]
+  arg_fprs : Array[PReg]
+  ret_gprs : Array[PReg]
+  ret_fprs : Array[PReg]
+}
+pub fn CallConventionLayout::layout_overflow_stack(Self, Int, Array[RegClass]) -> (Array[Int], Array[Int], Int)
+pub fn CallConventionLayout::stack_slot_align(Self, RegClass) -> Int
+pub fn CallConventionLayout::stack_slot_size(Self, RegClass) -> Int
 
 pub(all) enum OperandConstraint {
   Any

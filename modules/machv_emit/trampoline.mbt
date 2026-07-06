@@ -33,16 +33,23 @@
 pub fn emit_entry_trampoline(
   param_types : Array[Int],
   result_types : Array[Int],
+  call_conv_layout : @abi.CallConventionLayout,
 ) -> MachineCode {
   // Generate trampoline as IR using IRBuilder
   let ir_func = generate_trampoline_ir(param_types, result_types)
 
   // Compile through the normal pipeline
-  let vcode_func = @lower.lower_function(ir_func)
-  let allocated = @machv_regalloc.allocate_registers_backtracking(vcode_func)
+  let vcode_func = @lower.lower_function(
+    ir_func,
+    call_conv_layout=Some(call_conv_layout),
+  )
+  let allocated = @machv_regalloc.allocate_registers_backtracking(
+    vcode_func,
+    call_conv_layout=Some(call_conv_layout),
+  )
 
   // Emit machine code
-  emit_function(allocated)
+  emit_function(allocated, call_conv_layout=Some(call_conv_layout))
 }
 
 ///|

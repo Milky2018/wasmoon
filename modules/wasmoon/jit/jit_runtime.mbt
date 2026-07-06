@@ -253,6 +253,7 @@ pub fn JITModule::load_with_imports(
                 result_types,
                 host_func_addr,
                 @wasmoon_jit.runtime_hostcall_symbol(),
+                @wasmoon_jit.wasm_calling_convention(),
               )
               let code_ints = mc.get_bytes()
               let exec = @wasmoon_jit.ExecCode::new(code_ints)

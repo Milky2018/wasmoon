@@ -8,10 +8,35 @@ test "x64 target owns ABI policy" {
 }
 
 ///|
-test "x64 target owns Wasm indirect-call ABI policy" {
-  inspect(wasm_vmctx_arg_preg().index, content="7")
-  inspect(wasm_user_arg_gprs().length(), content="5")
-  inspect(wasm_ret_gprs().length(), content="8")
+fn wasm_test_call_conv() -> @abi.CallConventionLayout {
+  let arg_fprs : Array[@abi.PReg] = []
+  let ret_fprs : Array[@abi.PReg] = []
+  for i in 0..<8 {
+    arg_fprs.push({ index: i, class: Float64 })
+    ret_fprs.push({ index: i, class: Float64 })
+  }
+  {
+    context_arg: { index: 7, class: Int },
+    user_arg_gprs: [
+      { index: 6, class: Int },
+      { index: 2, class: Int },
+      { index: 1, class: Int },
+      { index: 8, class: Int },
+      { index: 9, class: Int },
+    ],
+    arg_fprs,
+    ret_gprs: [
+      { index: 0, class: Int },
+      { index: 2, class: Int },
+      { index: 1, class: Int },
+      { index: 8, class: Int },
+      { index: 9, class: Int },
+      { index: 6, class: Int },
+      { index: 7, class: Int },
+      { index: 10, class: Int },
+    ],
+    ret_fprs,
+  }
 }
 
 ///|
@@ -34,7 +59,7 @@ test "x64 lowers Wasm function body return ABI separately from SystemV" {
   let entry = func.new_block([])
   entry.set_terminator(Return([lhs, rhs]))
   let sysv = lower_function(func)
-  let wasm = lower_wasm_body_function(func)
+  let wasm = lower_wasm_body_function(func, wasm_test_call_conv())
   guard wasm.param_pregs[0] is Some(vmctx) else { fail("missing vmctx") }
   guard wasm.param_pregs[1] is Some(arg0) else { fail("missing arg0") }
   inspect(vmctx.index, content="7")
@@ -87,7 +112,7 @@ test "x64 lowers Wasm return-area stores through ExtraResultsPtr" {
   }
   let entry = func.new_block([])
   entry.set_terminator(Return(values))
-  let lowered = lower_wasm_body_function(func)
+  let lowered = lower_wasm_body_function(func, wasm_test_call_conv())
   let mut has_store = false
   for inst in lowered.blocks[0].instructions {
     if inst.opcode == StorePtr(MemI64, 0) &&
@@ -647,7 +672,7 @@ test "x64 lowers CallPtr with Wasm ABI constraints and clobbers" {
     func.new_inst(CallPtr(2, 1), [callee, vmctx, int_arg, float_arg], [result]),
   )
   entry.set_terminator(Return([result]))
-  let lowered = lower_function(func)
+  let lowered = lower_wasm_body_function(func, wasm_test_call_conv())
   let call = lowered.blocks[0].instructions[0]
   inspect(call.opcode == CallPtr(2, 1), content="true")
   inspect(call.constraints.length(), content="4")
@@ -682,7 +707,7 @@ test "x64 records outgoing stack arguments for Wasm CallPtr" {
   let entry = func.new_block([])
   entry.append_inst(func.new_inst(CallPtr(6, 0), args, []))
   entry.set_terminator(Return([]))
-  let lowered = lower_function(func)
+  let lowered = lower_wasm_body_function(func, wasm_test_call_conv())
   let call = lowered.blocks[0].instructions[0]
   inspect(call.stack_effect == CallFrame(16), content="true")
   inspect(lowered.get_max_outgoing_args_size(), content="16")
@@ -706,7 +731,7 @@ test "x64 lowers Wasm CallPtr return-area loads through ExtraResultsPtr" {
   let entry = func.new_block([])
   entry.append_inst(func.new_inst(CallPtr(0, 9), [callee, vmctx], results))
   entry.set_terminator(Return([]))
-  let lowered = lower_function(func)
+  let lowered = lower_wasm_body_function(func, wasm_test_call_conv())
   let mut has_load = false
   for inst in lowered.blocks[0].instructions {
     if inst.opcode == LoadPtr(MemI64, 0) &&

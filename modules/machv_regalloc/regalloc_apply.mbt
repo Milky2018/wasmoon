@@ -28,6 +28,7 @@ fn preg_to_loc(preg : @abi.PReg) -> Loc {
 pub fn apply_allocation(
   func : @machv.Function,
   alloc : RegAllocResult,
+  call_conv_layout : @abi.CallConventionLayout,
 ) -> @machv.Function {
   let new_func = func.clone_base()
   new_func.set_num_spill_slots(alloc.num_spill_slots)
@@ -36,9 +37,9 @@ pub fn apply_allocation(
     block_id_to_index.set(block.id, i)
   }
   let isa = @isa.ISA::current()
-  let wasm_vmctx_arg = isa.wasm_vmctx_arg_preg()
-  let wasm_user_gprs = isa.wasm_user_arg_gprs()
-  let wasm_arg_fprs = isa.wasm_arg_fprs()
+  let context_arg = call_conv_layout.context_arg
+  let user_arg_gprs = call_conv_layout.user_arg_gprs
+  let call_arg_fprs = call_conv_layout.arg_fprs
   let env = isa.machine_env()
   guard env.scratch_int.length() >= 2 && env.scratch_float.length() >= 2 else {
     abort(
@@ -200,28 +201,28 @@ pub fn apply_allocation(
           param.class {
           Int =>
             if int_idx == 0 {
-              (Some(wasm_vmctx_arg), true)
+              (Some(context_arg), true)
             } else {
               let user_idx = int_idx - 1
-              if user_idx < wasm_user_gprs.length() {
-                (Some(wasm_user_gprs[user_idx]), true)
+              if user_idx < user_arg_gprs.length() {
+                (Some(user_arg_gprs[user_idx]), true)
               } else {
                 (None, true) // Stack param
               }
             }
           Float32 =>
-            if float_idx < wasm_arg_fprs.length() {
+            if float_idx < call_arg_fprs.length() {
               (
-                Some({ index: wasm_arg_fprs[float_idx].index, class: Float32 }),
+                Some({ index: call_arg_fprs[float_idx].index, class: Float32 }),
                 false,
               )
             } else {
               (None, false)
             }
           Float64 =>
-            if float_idx < wasm_arg_fprs.length() {
+            if float_idx < call_arg_fprs.length() {
               (
-                Some({ index: wasm_arg_fprs[float_idx].index, class: Float64 }),
+                Some({ index: call_arg_fprs[float_idx].index, class: Float64 }),
                 false,
               )
             } else {
@@ -229,9 +230,9 @@ pub fn apply_allocation(
             }
           Vector =>
             // Vector uses same Vn registers as Float
-            if float_idx < wasm_arg_fprs.length() {
+            if float_idx < call_arg_fprs.length() {
               (
-                Some({ index: wasm_arg_fprs[float_idx].index, class: Vector }),
+                Some({ index: call_arg_fprs[float_idx].index, class: Vector }),
                 false,
               )
             } else {
@@ -267,24 +268,24 @@ pub fn apply_allocation(
           let incoming_preg_opt : @abi.PReg? = match param.class {
             Int =>
               if int_idx == 0 {
-                Some(wasm_vmctx_arg)
+                Some(context_arg)
               } else {
                 let user_idx = int_idx - 1
-                if user_idx < wasm_user_gprs.length() {
-                  Some(wasm_user_gprs[user_idx])
+                if user_idx < user_arg_gprs.length() {
+                  Some(user_arg_gprs[user_idx])
                 } else {
                   None
                 }
               }
             Float32 | Float64 =>
-              if float_idx < wasm_arg_fprs.length() {
-                Some({ index: wasm_arg_fprs[float_idx].index, class: Float64 })
+              if float_idx < call_arg_fprs.length() {
+                Some({ index: call_arg_fprs[float_idx].index, class: Float64 })
               } else {
                 None
               }
             Vector =>
-              if float_idx < wasm_arg_fprs.length() {
-                Some({ index: wasm_arg_fprs[float_idx].index, class: Vector })
+              if float_idx < call_arg_fprs.length() {
+                Some({ index: call_arg_fprs[float_idx].index, class: Vector })
               } else {
                 None
               }

@@ -175,6 +175,43 @@ fn align_to(value : Int, align : Int) -> Int {
 }
 
 ///|
+fn require_call_conv_layout(
+  layout : @abi.CallConventionLayout?,
+) -> @abi.CallConventionLayout {
+  match layout {
+    Some(call_conv) => call_conv
+    None =>
+      abort(
+        "aarch64_target: Wasm body lowering requires call convention layout",
+      )
+  }
+}
+
+///|
+fn machv_reg_class(class : @abi.RegClass) -> @machv.RegClass {
+  match class {
+    Int => Int
+    Float32 => Float32
+    Float64 => Float64
+    Vector => Vector
+  }
+}
+
+///|
+fn machv_preg(preg : @abi.PReg) -> @machv.PReg {
+  { index: preg.index, class: machv_reg_class(preg.class) }
+}
+
+///|
+fn machv_pregs(regs : Array[@abi.PReg]) -> Array[@machv.PReg] {
+  let result : Array[@machv.PReg] = []
+  for preg in regs {
+    result.push(machv_preg(preg))
+  }
+  result
+}
+
+///|
 fn abi_stack_size_align(ty : @milkir.Type) -> (Int, Int) {
   match ty {
     V128 => (16, 16)
@@ -335,15 +372,17 @@ fn signature_param_location(
   float_arg_idx : Int,
   stack_offset : Int,
   wasm_body? : Bool = false,
+  call_conv_layout? : @abi.CallConventionLayout? = None,
 ) -> (@machv.AbiValueLocation, Int, Int, Int) {
   let abi = abi_policy()
   let int_arg_regs = if wasm_body {
-    [wasm_vmctx_arg_preg(), ..wasm_user_arg_gprs()]
+    let call_conv = require_call_conv_layout(call_conv_layout)
+    [machv_preg(call_conv.context_arg), ..machv_pregs(call_conv.user_arg_gprs)]
   } else {
     abi.int_argument_regs
   }
   let float_arg_regs = if wasm_body {
-    wasm_arg_fprs()
+    machv_pregs(require_call_conv_layout(call_conv_layout).arg_fprs)
   } else {
     abi.float_argument_regs
   }
@@ -397,15 +436,16 @@ fn signature_result_location(
   float_result_idx : Int,
   return_area_offset : Int,
   wasm_body? : Bool = false,
+  call_conv_layout? : @abi.CallConventionLayout? = None,
 ) -> (@machv.AbiValueLocation, Int, Int, Int) {
   let abi = abi_policy()
   let int_return_regs = if wasm_body {
-    wasm_ret_gprs()
+    machv_pregs(require_call_conv_layout(call_conv_layout).ret_gprs)
   } else {
     abi.int_return_regs
   }
   let float_return_regs = if wasm_body {
-    wasm_ret_fprs()
+    machv_pregs(require_call_conv_layout(call_conv_layout).ret_fprs)
   } else {
     abi.float_return_regs
   }
@@ -457,6 +497,7 @@ fn add_function_signature(
   func : @milkir.Function,
   out : @machv.AbstractFunction,
   wasm_body? : Bool = false,
+  call_conv_layout? : @abi.CallConventionLayout? = None,
 ) -> Unit {
   let mut int_arg_idx = 0
   let mut float_arg_idx = 0
@@ -470,6 +511,7 @@ fn add_function_signature(
       float_arg_idx,
       stack_offset,
       wasm_body~,
+      call_conv_layout~,
     )
     out.add_param_location(location)
     out.add_param_preg(abi_location_preg(location))
@@ -491,6 +533,7 @@ fn add_function_signature(
       float_result_idx,
       return_area_offset,
       wasm_body~,
+      call_conv_layout~,
     )
     out.add_result_location(location)
     int_result_idx = next_int
@@ -633,16 +676,18 @@ fn add_callptr_abi_constraints(
   inst : @machv.Instruction,
   args : Array[@milkir.Value],
   _results : Array[@milkir.Value],
+  call_conv_layout : @abi.CallConventionLayout,
 ) -> Unit {
   guard args.length() >= 2 else { return }
   inst.add_abi_arg_location(Reg(int_reg(int_reg_index(Scratch2))))
   add_fixed_constraint(inst, 0, int_reg(int_reg_index(Scratch2)))
-  inst.add_abi_arg_location(Reg(wasm_vmctx_arg_preg()))
-  add_fixed_constraint(inst, 1, wasm_vmctx_arg_preg())
-  let user_arg_gprs = wasm_user_arg_gprs()
-  let user_arg_fprs = wasm_arg_fprs()
-  let ret_gprs = wasm_ret_gprs()
-  let ret_fprs = wasm_ret_fprs()
+  let context_arg = machv_preg(call_conv_layout.context_arg)
+  inst.add_abi_arg_location(Reg(context_arg))
+  add_fixed_constraint(inst, 1, context_arg)
+  let user_arg_gprs = machv_pregs(call_conv_layout.user_arg_gprs)
+  let user_arg_fprs = machv_pregs(call_conv_layout.arg_fprs)
+  let ret_gprs = machv_pregs(call_conv_layout.ret_gprs)
+  let ret_fprs = machv_pregs(call_conv_layout.ret_fprs)
   let mut int_arg_idx = 0
   let mut float_arg_idx = 0
   let mut arg_stack_offset = 0
@@ -1176,6 +1221,7 @@ fn lower_inst(
   out : @machv.AbstractFunction,
   block : @machv.Block,
   inst : @milkir.Inst,
+  call_conv_layout? : @abi.CallConventionLayout? = None,
 ) -> Unit {
   match inst.opcode {
     Srem => {
@@ -1200,9 +1246,16 @@ fn lower_inst(
     }
     Select => if lower_float_select(out, block, inst) { return }
     CallPtr(_, _) => {
+      let call_conv = require_call_conv_layout(call_conv_layout)
       let lowered = out.new_inst(opcode_for(inst.opcode))
       add_uses(lowered, inst.args)
-      add_callptr_abi_constraints(out, lowered, inst.args, inst.results)
+      add_callptr_abi_constraints(
+        out,
+        lowered,
+        inst.args,
+        inst.results,
+        call_conv,
+      )
       block.append(lowered)
       add_wasm_call_result_moves(out, block, lowered, inst.results)
       return
@@ -1272,7 +1325,13 @@ fn lower_inst(
       if inst.opcode is Call(_) {
         add_call_abi_constraints(out, lowered, inst.args, inst.results)
       } else if inst.opcode is CallPtr(_, _) {
-        add_callptr_abi_constraints(out, lowered, inst.args, inst.results)
+        add_callptr_abi_constraints(
+          out,
+          lowered,
+          inst.args,
+          inst.results,
+          require_call_conv_layout(call_conv_layout),
+        )
       } else if inst.opcode is CallIndirect(_) {
         // TODO(aarch64_target): lower generic indirect calls once MilkIR carries
         // target-independent callee/table ABI metadata.
@@ -1366,10 +1425,11 @@ fn map_block_id(block_map : Array[(Int, Int)], old_id : Int) -> Int {
 fn lower_function_with_abi(
   func : @milkir.Function,
   wasm_body : Bool,
+  call_conv_layout? : @abi.CallConventionLayout? = None,
 ) -> @machv.AbstractFunction {
   let out = @machv.AbstractFunction::new(func.name)
   out.next_vreg_id = func.next_value_id
-  add_function_signature(func, out, wasm_body~)
+  add_function_signature(func, out, wasm_body~, call_conv_layout~)
   for slot in func.stack_slots {
     out.new_stack_slot(slot.size, slot.align) |> ignore
   }
@@ -1385,7 +1445,7 @@ fn lower_function_with_abi(
   for i, milk_block in func.blocks {
     let block = out.blocks[i]
     for inst in milk_block.instructions {
-      lower_inst(func, out, block, inst)
+      lower_inst(func, out, block, inst, call_conv_layout~)
     }
     if milk_block.terminator is Some(terminator) {
       lower_terminator(out, block, terminator, block_map, wasm_body~)
@@ -1402,6 +1462,7 @@ pub fn lower_function(func : @milkir.Function) -> @machv.AbstractFunction {
 ///|
 pub fn lower_wasm_body_function(
   func : @milkir.Function,
+  call_conv_layout : @abi.CallConventionLayout,
 ) -> @machv.AbstractFunction {
-  lower_function_with_abi(func, true)
+  lower_function_with_abi(func, true, call_conv_layout=Some(call_conv_layout))
 }

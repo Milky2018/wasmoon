@@ -22,13 +22,13 @@ pub const TYPE_I64 : Int = 1
 
 pub const TYPE_V128 : Int = 4
 
-pub fn emit_entry_trampoline(Array[Int], Array[Int]) -> MachineCode
+pub fn emit_entry_trampoline(Array[Int], Array[Int], @abi.CallConventionLayout) -> MachineCode
 
-pub fn emit_function(@machv.Function, debug_func_idx? : Int?, force_frame_setup? : Bool, abi_settings? : @abi.ABISettings, runtime_layout? : @abi.RuntimeContextLayout?, record_disasm? : Bool) -> MachineCode
+pub fn emit_function(@machv.Function, debug_func_idx? : Int?, force_frame_setup? : Bool, abi_settings? : @abi.ABISettings, runtime_layout? : @abi.RuntimeContextLayout?, call_conv_layout? : @abi.CallConventionLayout?, record_disasm? : Bool) -> MachineCode
 
-pub fn emit_function_with_regalloc(@machv.Function, @machv_regalloc.Output, debug_func_idx? : Int?, force_frame_setup? : Bool, abi_settings? : @abi.ABISettings, runtime_layout? : @abi.RuntimeContextLayout?, record_disasm? : Bool) -> MachineCode
+pub fn emit_function_with_regalloc(@machv.Function, @machv_regalloc.Output, debug_func_idx? : Int?, force_frame_setup? : Bool, abi_settings? : @abi.ABISettings, runtime_layout? : @abi.RuntimeContextLayout?, call_conv_layout? : @abi.CallConventionLayout?, record_disasm? : Bool) -> MachineCode
 
-pub fn emit_hostcall_import_trampoline(Array[@types.ValueType], Array[@types.ValueType], Int, @instr.ExternalName) -> MachineCode
+pub fn emit_hostcall_import_trampoline(Array[@types.ValueType], Array[@types.ValueType], Int, @instr.ExternalName, @abi.CallConventionLayout) -> MachineCode
 
 pub fn fits_signed_i32(Int) -> Bool
 
@@ -166,12 +166,14 @@ pub struct JITStackFrame {
   cache_mem0_desc : Bool
   cache_func_table : Bool
   runtime_layout : @abi.RuntimeContextLayout?
+  call_conv_layout : @abi.CallConventionLayout?
 }
-pub fn JITStackFrame::build(Array[Int], Array[Int], Int, has_calls? : Bool, outgoing_args_size? : Int, needs_vmctx? : Bool, cache_mem0_desc? : Bool, cache_func_table? : Bool, force_frame_setup? : Bool, has_incoming_stack_args? : Bool, runtime_layout? : @abi.RuntimeContextLayout?, isa? : @isa.ISA, abi_settings? : @abi.ABISettings) -> Self
+pub fn JITStackFrame::build(Array[Int], Array[Int], Int, has_calls? : Bool, outgoing_args_size? : Int, needs_vmctx? : Bool, cache_mem0_desc? : Bool, cache_func_table? : Bool, force_frame_setup? : Bool, has_incoming_stack_args? : Bool, runtime_layout? : @abi.RuntimeContextLayout?, call_conv_layout? : @abi.CallConventionLayout?, isa? : @isa.ISA, abi_settings? : @abi.ABISettings) -> Self
 pub fn JITStackFrame::get_fpr_save_offset(Self, Int) -> Int
 pub fn JITStackFrame::get_gpr_save_offset(Self, Int) -> Int
 pub fn JITStackFrame::get_outgoing_arg_offset(Self, Int) -> Int
 pub fn JITStackFrame::get_spill_offset(Self, Int) -> Int
+pub fn JITStackFrame::require_call_conv_layout(Self) -> @abi.CallConventionLayout
 pub fn JITStackFrame::require_runtime_layout(Self) -> @abi.RuntimeContextLayout
 
 pub struct MachineCode {

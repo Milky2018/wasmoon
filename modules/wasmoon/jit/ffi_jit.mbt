@@ -292,7 +292,9 @@ fn JITContext::call_multi_return(
         )
       }
       let mc = @machv_emit.emit_entry_trampoline(
-        param_codes_arr, result_codes_arr,
+        param_codes_arr,
+        result_codes_arr,
+        @wasmoon_jit.wasm_calling_convention(),
       )
       let code_ints = mc.get_bytes()
       let trampoline = @wasmoon_jit.ExecCode::new(code_ints)

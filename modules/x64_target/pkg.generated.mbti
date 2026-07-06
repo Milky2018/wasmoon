@@ -3,6 +3,7 @@ package "Milky2018/x64_target"
 
 import {
   "Milky2018/machv",
+  "Milky2018/machv/abi",
   "Milky2018/milkir",
   "moonbitlang/core/debug",
 }
@@ -30,23 +31,13 @@ pub fn int_reg_index(IntRegRole) -> Int
 
 pub fn lower_function(@milkir.Function) -> @machv.AbstractFunction
 
-pub fn lower_wasm_body_function(@milkir.Function) -> @machv.AbstractFunction
+pub fn lower_wasm_body_function(@milkir.Function, @abi.CallConventionLayout) -> @machv.AbstractFunction
 
 pub fn sysv_arg_fprs() -> Array[@machv.PReg]
 
 pub fn sysv_callee_saved() -> Array[@machv.PReg]
 
 pub fn target() -> Target
-
-pub fn wasm_arg_fprs() -> Array[@machv.PReg]
-
-pub fn wasm_ret_fprs() -> Array[@machv.PReg]
-
-pub fn wasm_ret_gprs() -> Array[@machv.PReg]
-
-pub fn wasm_user_arg_gprs() -> Array[@machv.PReg]
-
-pub fn wasm_vmctx_arg_preg() -> @machv.PReg
 
 // Errors
 

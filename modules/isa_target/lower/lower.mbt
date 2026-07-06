@@ -14,6 +14,7 @@ struct LoweringContext {
   vcode_func : @machv.Function
   abi_settings : @abi.ABISettings
   runtime_layout : @abi.RuntimeContextLayout?
+  call_conv_layout : @abi.CallConventionLayout?
   num_imports : Int
   // Dense map from IR Value id to @abi.VReg (Cranelift SecondaryMap style).
   value_map_dense : Array[@abi.VReg?]
@@ -64,6 +65,7 @@ pub fn LoweringContext::new(
   ir_func : @milkir.Function,
   abi_settings : @abi.ABISettings,
   runtime_layout : @abi.RuntimeContextLayout?,
+  call_conv_layout : @abi.CallConventionLayout?,
   num_imports : Int,
   use_subtype_indirect_check : Bool,
   canonical_type_indices : Array[Int],
@@ -91,6 +93,7 @@ pub fn LoweringContext::new(
     vcode_func: @machv.Function::new(ir_func.name),
     abi_settings,
     runtime_layout,
+    call_conv_layout,
     num_imports,
     value_map_dense: Array::make(ir_func.next_value_id, None),
     block_map: {},
@@ -115,6 +118,17 @@ fn LoweringContext::require_runtime_layout(
     Some(layout) => layout
     None =>
       abort("runtime context layout is required for runtime-specific lowering")
+  }
+}
+
+///|
+fn LoweringContext::require_call_conv_layout(
+  self : LoweringContext,
+) -> @abi.CallConventionLayout {
+  match self.call_conv_layout {
+    Some(layout) => layout
+    None =>
+      abort("call convention layout is required for ABI-specific lowering")
   }
 }
 
@@ -1578,6 +1592,7 @@ pub fn lower_function(
   ir_func : @milkir.Function,
   abi_settings? : @abi.ABISettings = @abi.ABISettings::default(),
   runtime_layout? : @abi.RuntimeContextLayout? = None,
+  call_conv_layout? : @abi.CallConventionLayout? = None,
   num_imports? : Int = -1,
   run_ir_opt? : Bool = true,
   use_subtype_indirect_check? : Bool = true,
@@ -1589,7 +1604,7 @@ pub fn lower_function(
     @milkir.optimize_function(ir_func) |> ignore
   }
   let ctx = LoweringContext::new(
-    ir_func, abi_settings, runtime_layout, num_imports, use_subtype_indirect_check,
+    ir_func, abi_settings, runtime_layout, call_conv_layout, num_imports, use_subtype_indirect_check,
     canonical_type_indices,
   )
 
@@ -1623,8 +1638,9 @@ pub fn lower_function(
   // - int params: X0-X7 (vmctx consumes X0)
   // - float params: V0-V7
   // - overflow: int overflow first, then float overflow
-  let max_int_reg_params = 1 + wasm_user_arg_gprs().length()
-  let max_float_reg_params = wasm_arg_fprs().length()
+  let call_conv = ctx.require_call_conv_layout()
+  let max_int_reg_params = 1 + call_conv.user_arg_gprs.length()
+  let max_float_reg_params = call_conv.arg_fprs.length()
   let mut int_reg_count = 0
   let mut float_reg_count = 0
   let int_stack_values : Array[@milkir.Value] = []
@@ -1654,7 +1670,7 @@ pub fn lower_function(
       float_stack_classes.push(class)
     }
   }
-  let (int_offsets, float_offsets, _) = @abi.wasm_layout_overflow_stack(
+  let (int_offsets, float_offsets, _) = call_conv.layout_overflow_stack(
     int_stack_values.length(),
     float_stack_classes,
   )

@@ -1631,12 +1631,12 @@ fn BacktrackingAllocator::force_spill_bundle(
 ///|
 fn BacktrackingAllocator::preassign_params(
   self : BacktrackingAllocator,
+  call_conv_layout : @abi.CallConventionLayout,
   strict_precolor : Bool,
 ) -> Unit {
-  let isa = @isa.ISA::current()
-  let vmctx_preg = isa.wasm_vmctx_arg_preg()
-  let user_arg_gprs = isa.wasm_user_arg_gprs()
-  let arg_fprs = isa.wasm_arg_fprs()
+  let vmctx_preg = call_conv_layout.context_arg
+  let user_arg_gprs = call_conv_layout.user_arg_gprs
+  let arg_fprs = call_conv_layout.arg_fprs
   let mut int_idx = 0
   let mut float_idx = 0
   for param in self.func.params {
@@ -1685,7 +1685,7 @@ fn BacktrackingAllocator::preassign_params(
       // choose a safe location from full liveness/call-clobber information.
       if bundle.crosses_call(self.ranges) {
         if is_vmctx_param {
-          self.record_allocation(bundle, isa.vmctx_preg())
+          self.record_allocation(bundle, @isa.ISA::current().vmctx_preg())
           bundle.is_pinned = true
           continue
         }
@@ -1772,6 +1772,7 @@ fn allocate_backtracking(
   vector_regs : Array[@abi.PReg],
   callee_saved_int : Array[@abi.PReg],
   callee_saved_float : Array[@abi.PReg],
+  call_conv_layout : @abi.CallConventionLayout,
   param_precolor_strict? : Bool = true,
   algorithm? : RegallocAlgorithm = Backtracking,
 ) -> RegAllocResult {
@@ -1810,7 +1811,7 @@ fn allocate_backtracking(
 
   // Pre-assign function parameters to ABI registers (before main allocation)
   let tick_preassign = if perf_on { Some(perf_tick_now()) } else { None }
-  allocator.preassign_params(param_precolor_strict)
+  allocator.preassign_params(call_conv_layout, param_precolor_strict)
   if tick_preassign is Some(tick) {
     perf_record_regalloc_phase_us(
       "phase_preassign_params",

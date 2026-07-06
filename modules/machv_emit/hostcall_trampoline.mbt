@@ -71,16 +71,16 @@ pub fn emit_hostcall_import_trampoline(
   result_types : Array[@types.ValueType],
   host_func_addr : Int,
   hostcall_symbol : @instr.ExternalName,
+  call_conv_layout : @abi.CallConventionLayout,
 ) -> MachineCode {
-  let isa = @isa.ISA::current()
   let func = @machv.Function::new("host_import_trampoline")
 
   // Params: always include vmctx as the first parameter (ISA-specific ABI reg).
   let _vmctx_param = func.add_param(Int)
 
   // Pre-compute stack overflow layout for incoming params.
-  let max_int_reg = isa.wasm_user_arg_gprs().length()
-  let max_float_reg = isa.wasm_arg_fprs().length()
+  let max_int_reg = call_conv_layout.user_arg_gprs.length()
+  let max_float_reg = call_conv_layout.arg_fprs.length()
   let mut total_int = 0
   let mut total_float = 0
   for ty in param_types {
@@ -108,7 +108,7 @@ pub fn emit_hostcall_import_trampoline(
     }
     float_seen = float_seen + 1
   }
-  let (int_offsets, float_offsets, _) = @abi.wasm_layout_overflow_stack(
+  let (int_offsets, float_offsets, _) = call_conv_layout.layout_overflow_stack(
     int_overflow, float_overflow_classes,
   )
 
@@ -311,6 +311,9 @@ pub fn emit_hostcall_import_trampoline(
   block.set_terminator(Return(ret_regs))
 
   // Allocate registers and emit machine code.
-  let allocated = @machv_regalloc.allocate_registers_backtracking(func)
-  emit_function(allocated)
+  let allocated = @machv_regalloc.allocate_registers_backtracking(
+    func,
+    call_conv_layout=Some(call_conv_layout),
+  )
+  emit_function(allocated, call_conv_layout=Some(call_conv_layout))
 }

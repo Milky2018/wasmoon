@@ -132,40 +132,6 @@ pub fn call_clobbered_fprs_same_abi() -> Array[@machv.PReg] {
 }
 
 ///|
-pub fn wasm_vmctx_arg_preg() -> @machv.PReg {
-  int_reg(7)
-}
-
-///|
-pub fn wasm_user_arg_gprs() -> Array[@machv.PReg] {
-  [int_reg(6), int_reg(2), int_reg(1), int_reg(8), int_reg(9)]
-}
-
-///|
-pub fn wasm_arg_fprs() -> Array[@machv.PReg] {
-  sysv_arg_fprs()
-}
-
-///|
-pub fn wasm_ret_gprs() -> Array[@machv.PReg] {
-  [
-    int_reg(0),
-    int_reg(2),
-    int_reg(1),
-    int_reg(8),
-    int_reg(9),
-    int_reg(6),
-    int_reg(7),
-    int_reg(10),
-  ]
-}
-
-///|
-pub fn wasm_ret_fprs() -> Array[@machv.PReg] {
-  sysv_arg_fprs()
-}
-
-///|
 pub fn build_machine_env(
   settings? : TargetSettings = TargetSettings::default(),
   reserve_mem0_desc? : Bool = false,
