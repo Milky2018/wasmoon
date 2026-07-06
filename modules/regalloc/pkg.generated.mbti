@@ -10,6 +10,8 @@ pub fn allocate(Program) -> Allocation
 
 pub fn allocation_iteration_limit(Int) -> Int
 
+pub fn[P] backtracking_queue_entry_higher(BacktrackingQueueEntry[P], BacktrackingQueueEntry[P]) -> Bool
+
 pub fn build_dense_successor_edges(Array[Int], Array[Array[Int]]) -> DenseCfgEdges
 
 pub fn build_live_ranges(Program) -> LiveRangeSet
@@ -48,9 +50,15 @@ pub fn has_ordered_span_conflict(Array[OrderedProgramSpan], Array[OrderedProgram
 
 pub fn insert_allocated_spans(Array[AllocatedProgramSpan], Int, Array[OrderedProgramSpan]) -> Array[AllocatedProgramSpan]
 
+pub fn[P] lower_bound_backtracking_span_by_end(Array[(Int, OrderedSpan[P])], Int) -> Int
+
 pub fn lower_bound_ordered_span_by_end(Array[OrderedProgramSpan], Int) -> Int
 
 pub fn lower_bound_sorted_int(Array[Int], Int) -> Int
+
+pub fn[P] make_backtracking_alloc_table(Int) -> Array[Array[(Int, OrderedSpan[P])]]
+
+pub fn make_backtracking_bool_table(Int) -> Array[Bool]
 
 pub fn max_physical_reg_id(Array[PhysicalReg]) -> Int
 
@@ -132,10 +140,46 @@ pub fn Allocation::assign(Self, VirtualReg, Location) -> Unit
 pub fn Allocation::location_of(Self, VirtualReg) -> Location?
 pub fn Allocation::new() -> Self
 
+pub(all) struct AssignedSlot[R] {
+  start : Int
+  spans : Array[R]
+  old_slots : Array[Int]
+}
+
 pub(all) struct Assignment {
   vreg : VirtualReg
   mut location : Location
 } derive(Eq, @debug.Debug)
+
+type BacktrackingHintCache[P]
+pub fn[P] BacktrackingHintCache::hint(Self[P], Int) -> P?
+pub fn[P] BacktrackingHintCache::is_ready(Self[P], Int) -> Bool
+pub fn[P] BacktrackingHintCache::new(Int) -> Self[P]
+pub fn[P] BacktrackingHintCache::push_bundle_slot(Self[P]) -> Unit
+pub fn[P] BacktrackingHintCache::set(Self[P], Int, P?) -> Unit
+
+type BacktrackingQueue[P]
+pub fn[P] BacktrackingQueue::clear(Self[P]) -> Unit
+pub fn[P] BacktrackingQueue::length(Self[P]) -> Int
+pub fn[P] BacktrackingQueue::new(Int) -> Self[P]
+pub fn[P] BacktrackingQueue::pop(Self[P]) -> BacktrackingQueueEntry[P]?
+pub fn[P] BacktrackingQueue::push(Self[P], Int, Int, P?) -> Unit
+pub fn[P] BacktrackingQueue::push_bundle_slot(Self[P]) -> Unit
+
+pub(all) struct BacktrackingQueueEntry[P] {
+  bundle_id : Int
+  prio : Int
+  hint_preg : P?
+  seq : Int
+}
+
+type BacktrackingSpillsetState[P]
+pub fn[P] BacktrackingSpillsetState::hint(Self[P], Int) -> P?
+pub fn[P] BacktrackingSpillsetState::new(Int, max_splits_per_spillset? : Int) -> Self[P]
+pub fn[P] BacktrackingSpillsetState::push_bundle_slot(Self[P]) -> Unit
+pub fn[P] BacktrackingSpillsetState::record_hint(Self[P], Int, P) -> Unit
+pub fn[P] BacktrackingSpillsetState::record_split(Self[P], Int) -> Unit
+pub fn[P] BacktrackingSpillsetState::split_limit_reached(Self[P], Int) -> Bool
 
 pub(all) struct Block {
   id : Int
@@ -291,6 +335,13 @@ pub(all) enum Location {
   Spill(Int)
 } derive(Eq, @debug.Debug)
 
+pub(all) struct MergeSpan[R] {
+  span : R
+  start_ord : Int
+  start_before_ord : Int
+  end_ord : Int
+}
+
 pub(all) struct OccupiedProgramSpan {
   owner_id : Int
   span : OrderedProgramSpan
@@ -325,6 +376,12 @@ pub(all) struct OrderedProgramSpan {
   start_ord : Int
   end_ord : Int
 } derive(Eq, @debug.Debug)
+
+pub(all) struct OrderedSpan[P] {
+  start : P
+  start_ord : Int
+  end_ord : Int
+}
 
 pub(all) struct ParallelMove {
   from : Location
@@ -386,6 +443,12 @@ pub(all) enum RegClass {
   Vector
 } derive(Eq, @debug.Debug)
 
+pub(all) enum RegallocAlgorithm {
+  Backtracking
+  SinglePass
+}
+pub fn RegallocAlgorithm::enable_backtracking(Self) -> Bool
+
 pub(all) struct ReloadIntervalInfo {
   block_id : Int
   spill_slot : Int
@@ -424,6 +487,13 @@ pub(all) struct RematUseInfo {
   block_id : Int
   inst_index : Int
 } derive(Eq, @debug.Debug)
+
+pub(all) struct SpillSetInfo[C, R, P] {
+  old_slot : Int
+  reg_class : C
+  spans : Array[R]
+  start : P
+}
 
 pub(all) struct SpillSlotCompaction {
   remaps : Array[SpillSlotRemap]

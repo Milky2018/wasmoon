@@ -16,7 +16,7 @@ import {
 // Values
 pub fn allocate_and_apply(@machv.Function, Array[@machv.PReg]) -> ApplyResult raise @regalloc.VerifyError
 
-pub fn allocate_backtracking(VCodeFunction, LivenessResult, Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg], param_precolor_strict? : Bool, algorithm? : RegallocAlgorithm) -> RegAllocResult
+pub fn allocate_backtracking(VCodeFunction, LivenessResult, Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg], param_precolor_strict? : Bool, algorithm? : @regalloc.RegallocAlgorithm) -> RegAllocResult
 
 pub fn allocate_function(@machv.Function, Array[@machv.PReg]) -> @regalloc.Allocation raise @regalloc.VerifyError
 
@@ -96,7 +96,7 @@ pub(all) struct ApplyResult {
 type BacktrackingAllocator
 pub fn BacktrackingAllocator::allocate(Self) -> Unit
 pub fn BacktrackingAllocator::generate_result(Self) -> RegAllocResult
-pub fn BacktrackingAllocator::new(VCodeFunction, LiveRangeSet, BundleSet, Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg], algorithm? : RegallocAlgorithm) -> Self
+pub fn BacktrackingAllocator::new(VCodeFunction, LiveRangeSet, BundleSet, Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg], algorithm? : @regalloc.RegallocAlgorithm) -> Self
 
 type Bundle
 pub fn Bundle::contains_range(Self, Int) -> Bool
@@ -238,11 +238,6 @@ pub struct RegAllocResult {
 type RegMove
 pub impl Show for RegMove
 
-pub(all) enum RegallocAlgorithm {
-  Backtracking
-  SinglePass
-}
-
 type ScratchBinding derive(Eq, @debug.Debug)
 
 type SpillBundle
@@ -321,6 +316,8 @@ pub fn VCodeFunction::uses_mem0(Self) -> Bool
 pub impl Show for VCodeFunction
 
 // Type aliases
+pub using @regalloc {type RegallocAlgorithm}
+
 pub type SpillSlot = Int
 
 // Traits

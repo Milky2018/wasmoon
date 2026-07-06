@@ -16,29 +16,7 @@ fn reg_class_compatible(a : @abi.RegClass, b : @abi.RegClass) -> Bool {
 }
 
 ///|
-/// Priority queue entry for allocation
-priv struct QueueEntry {
-  bundle_id : Int
-  prio : Int
-  hint_preg : @abi.PReg?
-  // Insertion order for stable tie-breaking (monotonic).
-  seq : Int
-}
-
-///|
-/// Ordering for the allocator queue (max-heap).
-/// Higher priority gets popped first; ties keep the historical stable behavior.
-fn queue_entry_higher(a : QueueEntry, b : QueueEntry) -> Bool {
-  if a.prio > b.prio {
-    true
-  } else if a.prio < b.prio {
-    false
-  } else if a.seq != b.seq {
-    a.seq < b.seq
-  } else {
-    a.bundle_id < b.bundle_id
-  }
-}
+type QueueEntry = @regalloc.BacktrackingQueueEntry[@abi.PReg]
 
 ///|
 /// Check whether two pregs refer to the same hardware register bank + index.
@@ -51,27 +29,23 @@ fn preg_same_bank_and_index(a : @abi.PReg, b : @abi.PReg) -> Bool {
 ///
 /// - Backtracking: Ion-style backtracking + eviction/splitting (better codegen).
 /// - SinglePass: no eviction/backtracking, spills earlier (faster compile).
-pub(all) enum RegallocAlgorithm {
-  Backtracking
-  SinglePass
-}
+pub type RegallocAlgorithm = @regalloc.RegallocAlgorithm
 
 ///|
-/// A span with precomputed total-order keys for faster overlap tests.
-priv struct OrderedSpan {
-  start : ProgPoint
-  start_ord : Int
-  end_ord : Int
-}
+type OrderedSpan = @regalloc.OrderedSpan[ProgPoint]
 
 ///|
-/// Bundle-merge working span with cached order keys.
-priv struct MergeSpan {
-  span : ProgPointRange
-  start_ord : Int
-  start_before_ord : Int
-  end_ord : Int
-}
+type MergeSpan = @regalloc.MergeSpan[ProgPointRange]
+
+///|
+type SpillSetInfo = @regalloc.SpillSetInfo[
+  @abi.RegClass,
+  ProgPointRange,
+  ProgPoint,
+]
+
+///|
+type AssignedSlot = @regalloc.AssignedSlot[ProgPointRange]
 
 ///|
 /// The backtracking register allocator
@@ -95,20 +69,14 @@ struct BacktrackingAllocator {
   bundle_span_cache : Array[Array[OrderedSpan]?]
 
   // Priority queue of bundles to process
-  mut queue : Array[QueueEntry] // max-heap by QueueEntry.prio
-  mut queue_next_seq : Int
-  queue_in_heap : Array[Bool]
+  queue : @regalloc.BacktrackingQueue[@abi.PReg]
 
   // Cranelift-style spillset hint: remember last successful preg for an
   // "original" bundle (spillset), and prefer it for split pieces.
-  spillset_hints : Array[@abi.PReg?]
-  // Track split count per original spillset (regalloc2 MAX_SPLITS_PER_SPILLSET).
-  spillset_split_counts : Array[Int]
-  max_splits_per_spillset : Int
+  spillsets : @regalloc.BacktrackingSpillsetState[@abi.PReg]
   // Cache fixed-constraint-derived hints per bundle to avoid rescanning
   // all bundle uses on every queue pop.
-  bundle_hint_cache : Array[@abi.PReg?]
-  bundle_hint_ready : Array[Bool]
+  bundle_hint_cache : @regalloc.BacktrackingHintCache[@abi.PReg]
 
   // Configuration
   int_regs : Array[@abi.PReg]
@@ -147,35 +115,7 @@ fn BacktrackingAllocator::queue_push(
   prio : Int,
   hint_preg : @abi.PReg?,
 ) -> Unit {
-  if bundle_id >= 0 &&
-    bundle_id < self.queue_in_heap.length() &&
-    self.queue_in_heap[bundle_id] {
-    return
-  }
-  let entry : QueueEntry = {
-    bundle_id,
-    prio,
-    hint_preg,
-    seq: self.queue_next_seq,
-  }
-  self.queue_next_seq = self.queue_next_seq + 1
-  self.queue.push(entry)
-  if bundle_id >= 0 && bundle_id < self.queue_in_heap.length() {
-    self.queue_in_heap[bundle_id] = true
-  }
-  // Sift up.
-  let mut i = self.queue.length() - 1
-  while i > 0 {
-    let parent = (i - 1) / 2
-    if queue_entry_higher(self.queue[i], self.queue[parent]) {
-      let tmp = self.queue[i]
-      self.queue[i] = self.queue[parent]
-      self.queue[parent] = tmp
-      i = parent
-    } else {
-      break
-    }
-  }
+  self.queue.push(bundle_id, prio, hint_preg)
 }
 
 ///|
@@ -183,46 +123,7 @@ fn BacktrackingAllocator::queue_push(
 fn BacktrackingAllocator::queue_pop(
   self : BacktrackingAllocator,
 ) -> QueueEntry? {
-  if self.queue.is_empty() {
-    return None
-  }
-  // Remove root.
-  let top = self.queue[0]
-  if top.bundle_id >= 0 && top.bundle_id < self.queue_in_heap.length() {
-    self.queue_in_heap[top.bundle_id] = false
-  }
-  let last = self.queue.pop()
-  match last {
-    None => None
-    Some(v) => {
-      if !self.queue.is_empty() {
-        self.queue[0] = v
-        // Sift down.
-        let mut i = 0
-        while true {
-          let left = i * 2 + 1
-          if left >= self.queue.length() {
-            break
-          }
-          let right = left + 1
-          let mut best = left
-          if right < self.queue.length() &&
-            queue_entry_higher(self.queue[right], self.queue[left]) {
-            best = right
-          }
-          if queue_entry_higher(self.queue[best], self.queue[i]) {
-            let tmp = self.queue[i]
-            self.queue[i] = self.queue[best]
-            self.queue[best] = tmp
-            i = best
-          } else {
-            break
-          }
-        }
-      }
-      Some(top)
-    }
-  }
+  self.queue.pop()
 }
 
 ///|
@@ -238,20 +139,12 @@ fn max_preg_index(regs : Array[@abi.PReg]) -> Int {
 
 ///|
 fn make_reg_alloc_table(cap : Int) -> Array[Array[(Int, OrderedSpan)]] {
-  let table : Array[Array[(Int, OrderedSpan)]] = []
-  for _ in 0..<cap {
-    table.push([])
-  }
-  table
+  @regalloc.make_backtracking_alloc_table(cap)
 }
 
 ///|
 fn make_bool_table(cap : Int) -> Array[Bool] {
-  let table : Array[Bool] = []
-  for _ in 0..<cap {
-    table.push(false)
-  }
-  table
+  @regalloc.make_backtracking_bool_table(cap)
 }
 
 ///|
@@ -285,7 +178,7 @@ pub fn BacktrackingAllocator::new(
   // no large-function downscaling on the main allocation search.
   let split_probe_limit = 1 << 30
   let bundle_retry_limit = 1 << 30
-  let enable_backtracking = algorithm is Backtracking
+  let enable_backtracking = algorithm.enable_backtracking()
   let int_max = {
     let mut max_idx = max_preg_index(int_regs)
     let callee_max = max_preg_index(callee_saved_int)
@@ -340,14 +233,9 @@ pub fn BacktrackingAllocator::new(
     int_reg_allocs: make_reg_alloc_table(int_max + 1),
     float_reg_allocs: make_reg_alloc_table(float_max + 1),
     bundle_span_cache: Array::make(bundles.length(), None),
-    queue: [],
-    queue_next_seq: 0,
-    queue_in_heap: Array::make(bundles.length(), false),
-    spillset_hints: Array::make(bundles.length(), None),
-    spillset_split_counts: Array::make(bundles.length(), 0),
-    max_splits_per_spillset: 2,
-    bundle_hint_cache: Array::make(bundles.length(), None),
-    bundle_hint_ready: Array::make(bundles.length(), false),
+    queue: @regalloc.BacktrackingQueue::new(bundles.length()),
+    spillsets: @regalloc.BacktrackingSpillsetState::new(bundles.length()),
+    bundle_hint_cache: @regalloc.BacktrackingHintCache::new(bundles.length()),
     int_regs,
     float_regs,
     vector_regs,
@@ -475,24 +363,18 @@ fn BacktrackingAllocator::constraint_hint_preg_cached(
   self : BacktrackingAllocator,
   bundle : Bundle,
 ) -> @abi.PReg? {
-  if bundle.id >= 0 &&
-    bundle.id < self.bundle_hint_ready.length() &&
-    self.bundle_hint_ready[bundle.id] {
-    return self.bundle_hint_cache[bundle.id]
+  if bundle.id >= 0 && self.bundle_hint_cache.is_ready(bundle.id) {
+    return self.bundle_hint_cache.hint(bundle.id)
   }
   let hint = self.constraint_hint_preg(bundle)
-  if bundle.id >= 0 && bundle.id < self.bundle_hint_ready.length() {
-    self.bundle_hint_ready[bundle.id] = true
-    self.bundle_hint_cache[bundle.id] = hint
-  }
+  self.bundle_hint_cache.set(bundle.id, hint)
   hint
 }
 
 ///|
 /// Initialize the priority queue with all bundles
 fn BacktrackingAllocator::init_queue(self : BacktrackingAllocator) -> Unit {
-  self.queue = []
-  self.queue_next_seq = 0
+  self.queue.clear()
   // Recompute spill weights, enqueue by bundle priority.
   for i in 0..<self.bundles.length() {
     let bundle = self.bundles.get(i)
@@ -578,18 +460,7 @@ fn BacktrackingAllocator::occupied_lower_bound_by_end(
   point_ord : Int,
 ) -> Int {
   ignore(self)
-  let mut lo = 0
-  let mut hi = occupied.length()
-  while lo < hi {
-    let mid = lo + (hi - lo) / 2
-    let end_ord = occupied[mid].1.end_ord
-    if end_ord <= point_ord {
-      lo = mid + 1
-    } else {
-      hi = mid
-    }
-  }
-  lo
+  @regalloc.lower_bound_backtracking_span_by_end(occupied, point_ord)
 }
 
 ///|
@@ -731,10 +602,7 @@ fn BacktrackingAllocator::record_allocation(
 
   // Update spillset hint (Cranelift-style): this helps split pieces prefer
   // the same preg, reducing move traffic and improving locality.
-  let spillset_id = bundle.spillset_id
-  if spillset_id >= 0 && spillset_id < self.spillset_hints.length() {
-    self.spillset_hints[spillset_id] = Some(preg)
-  }
+  self.spillsets.record_hint(bundle.spillset_id, preg)
 }
 
 ///|
@@ -1101,19 +969,14 @@ fn BacktrackingAllocator::split_bundle(
   // regalloc2/Ion guards split explosion with MAX_SPLITS_PER_SPILLSET.
   // Once a spillset exceeds this cap, fall back to direct spilling.
   let spillset_id = bundle.spillset_id
-  if spillset_id >= 0 &&
-    spillset_id < self.spillset_split_counts.length() &&
-    self.spillset_split_counts[spillset_id] >= self.max_splits_per_spillset {
+  if self.spillsets.split_limit_reached(spillset_id) {
     self.split_into_minimal_bundles(bundle, split_hint)
     return
   }
 
   match split_opt {
     Some((split_point, split_hint_reg)) => {
-      if spillset_id >= 0 && spillset_id < self.spillset_split_counts.length() {
-        self.spillset_split_counts[spillset_id] = self.spillset_split_counts[spillset_id] +
-          1
-      }
+      self.spillsets.record_split(spillset_id)
       // Split the bundle at this point
       // Create two new bundles: before and after the split point
       let spill_bundle = self.bundles.get_or_create_spill_bundle(bundle)
@@ -1166,11 +1029,10 @@ fn BacktrackingAllocator::split_bundle(
       )
       self.bundles.add_bundle(before_bundle)
       self.conflict_seen_epoch.push(0)
-      self.queue_in_heap.push(false)
+      self.queue.push_bundle_slot()
       self.bundle_attempts.push(0)
       self.bundle_span_cache.push(None)
-      self.bundle_hint_cache.push(None)
-      self.bundle_hint_ready.push(false)
+      self.bundle_hint_cache.push_bundle_slot()
       spill_bundle.add_bundle(before_bundle.id)
       self.queue_push(
         before_bundle.id,
@@ -1195,11 +1057,10 @@ fn BacktrackingAllocator::split_bundle(
       )
       self.bundles.add_bundle(after_bundle)
       self.conflict_seen_epoch.push(0)
-      self.queue_in_heap.push(false)
+      self.queue.push_bundle_slot()
       self.bundle_attempts.push(0)
       self.bundle_span_cache.push(None)
-      self.bundle_hint_cache.push(None)
-      self.bundle_hint_ready.push(false)
+      self.bundle_hint_cache.push_bundle_slot()
       spill_bundle.add_bundle(after_bundle.id)
       self.queue_push(
         after_bundle.id,
@@ -1243,11 +1104,10 @@ fn BacktrackingAllocator::enqueue_single_range_bundle(
   new_bundle.spill_weight = self.recompute_bundle_spill_weight(new_bundle)
   self.bundles.add_bundle(new_bundle)
   self.conflict_seen_epoch.push(0)
-  self.queue_in_heap.push(false)
+  self.queue.push_bundle_slot()
   self.bundle_attempts.push(0)
   self.bundle_span_cache.push(None)
-  self.bundle_hint_cache.push(None)
-  self.bundle_hint_ready.push(false)
+  self.bundle_hint_cache.push_bundle_slot()
   spill_bundle.add_bundle(new_bundle.id)
   self.queue_push(new_bundle.id, self.bundle_queue_prio(new_bundle), hint)
 }
@@ -1296,11 +1156,7 @@ pub fn BacktrackingAllocator::allocate(self : BacktrackingAllocator) -> Unit {
       Some(p) => Some(p)
       None => {
         let spillset_id = bundle.spillset_id
-        if spillset_id >= 0 && spillset_id < self.spillset_hints.length() {
-          self.spillset_hints[spillset_id]
-        } else {
-          None
-        }
+        self.spillsets.hint(spillset_id)
       }
     }
     let hint_preg = match hint_preg {
@@ -1584,21 +1440,6 @@ pub fn BacktrackingAllocator::generate_result(
     num_spill_slots: compacted_spillslots,
     inst_edits: result.inst_edits,
   }
-}
-
-///|
-priv struct SpillSetInfo {
-  old_slot : Int
-  reg_class : @abi.RegClass
-  spans : Array[ProgPointRange]
-  start : ProgPoint
-}
-
-///|
-priv struct AssignedSlot {
-  start : Int
-  spans : Array[ProgPointRange]
-  old_slots : Array[Int]
 }
 
 ///|
@@ -2468,9 +2309,7 @@ fn BacktrackingAllocator::preassign_params(
             }
           Vector => ()
         }
-        if !assigned &&
-          bundle.spillset_id >= 0 &&
-          bundle.spillset_id < self.spillset_hints.length() {
+        if !assigned {
           // Give split pieces a callee-saved preference when possible.
           let hint = match param.class {
             Int =>
@@ -2488,7 +2327,7 @@ fn BacktrackingAllocator::preassign_params(
             Vector => None
           }
           if hint is Some(hint_preg) {
-            self.spillset_hints[bundle.spillset_id] = Some(hint_preg)
+            self.spillsets.record_hint(bundle.spillset_id, hint_preg)
           }
         }
         continue
@@ -2506,9 +2345,8 @@ fn BacktrackingAllocator::preassign_params(
           (strict_precolor && !bundle.crosses_call(self.ranges)) {
           bundle.is_pinned = true
         }
-      } else if bundle.spillset_id >= 0 &&
-        bundle.spillset_id < self.spillset_hints.length() {
-        self.spillset_hints[bundle.spillset_id] = Some(preg)
+      } else {
+        self.spillsets.record_hint(bundle.spillset_id, preg)
       }
     }
   }
