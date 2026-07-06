@@ -9,7 +9,7 @@ A WebAssembly runtime written in MoonBit with JIT compilation support.
 ## Features
 
 - **JIT Compiler**: AArch64 and amd64 native code generation with SSA-based IR
-- **Interpreter**: Full WebAssembly 1.0 support as fallback
+- **Interpreter**: Full WebAssembly 1.0 execution engine, available via `--no-jit`
 - **WAT/WASM Parser**: Parse both text and binary formats
 - **WASI Preview 1 Support**: File I/O, environment variables, command-line arguments
 - **GC Proposal Support**: i31/struct/array/ref operations in interpreter and JIT
