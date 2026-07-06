@@ -99,7 +99,7 @@ fn has_stackmap_live_ref_indices(safepoints : Array[GcSafepoint]) -> Bool {
 ///     u32 root_indices[root_index_count]
 fn build_gc_stackmap_blob_v2(
   safepoints : Array[GcSafepoint],
-  fallback_root_counts : Array[Int],
+  default_root_counts : Array[Int],
 ) -> Bytes {
   if safepoints.length() == 0 {
     return b""
@@ -108,8 +108,8 @@ fn build_gc_stackmap_blob_v2(
   append_u32_le(bytes, 2)
   append_u32_le(bytes, safepoints.length())
   for i, safepoint in safepoints {
-    let fallback_root_count = if i < fallback_root_counts.length() {
-      fallback_root_counts[i]
+    let default_root_count = if i < default_root_counts.length() {
+      default_root_counts[i]
     } else {
       safepoint.live_refs.length()
     }
@@ -120,7 +120,7 @@ fn build_gc_stackmap_blob_v2(
       if metadata_root_count > 0 {
         metadata_root_count
       } else {
-        fallback_root_count
+        default_root_count
       },
     )
     let valid_indices : Array[Int] = []

@@ -138,15 +138,15 @@ static const wasmoon_gc_safepoint_table_t *gc_active_safepoint_table(jit_context
 
 static int gc_alloc_debug_enabled(void);
 
-static int32_t gc_clamp_root_count(int32_t root_count, int32_t fallback) {
+static int32_t gc_clamp_root_count(int32_t root_count, int32_t max_root_count) {
     if (root_count <= 0) {
         return 0;
     }
-    if (fallback <= 0) {
+    if (max_root_count <= 0) {
         return 0;
     }
-    if (root_count > fallback) {
-        return fallback;
+    if (root_count > max_root_count) {
+        return max_root_count;
     }
     return root_count;
 }
@@ -177,7 +177,7 @@ static int32_t gc_select_alloc_roots(
     jit_context_t *ctx,
     int32_t safepoint_id,
     const int64_t *roots,
-    int32_t fallback_root_count,
+    int32_t default_root_count,
     const int64_t **selected_roots_out,
     int64_t **selected_roots_owned
 ) {
@@ -187,11 +187,11 @@ static int32_t gc_select_alloc_roots(
     if (selected_roots_owned) {
         *selected_roots_owned = NULL;
     }
-    if (!roots || fallback_root_count <= 0) {
+    if (!roots || default_root_count <= 0) {
         return 0;
     }
 
-    int32_t root_count = gc_clamp_root_count(fallback_root_count, fallback_root_count);
+    int32_t root_count = gc_clamp_root_count(default_root_count, default_root_count);
     if (!gc_requires_precise_roots(safepoint_id)) {
         return root_count;
     }
@@ -235,7 +235,7 @@ static int32_t gc_select_alloc_roots(
             continue;
         }
 
-        int32_t encoded_clamped = gc_clamp_root_count((int32_t)encoded_root_count, fallback_root_count);
+        int32_t encoded_clamped = gc_clamp_root_count((int32_t)encoded_root_count, default_root_count);
         if (encoded_clamped > 0) {
             root_count = encoded_clamped;
         } else {
@@ -257,7 +257,7 @@ static int32_t gc_select_alloc_roots(
         int invalid_index = 0;
         for (int32_t j = 0; j < root_count; j++) {
             uint32_t root_idx = gc_read_u32_le(blob + offset + ((size_t)j * 4u));
-            if (root_idx < (uint32_t)fallback_root_count) {
+            if (root_idx < (uint32_t)default_root_count) {
                 selected[j] = roots[root_idx];
             } else {
                 invalid_index = 1;
