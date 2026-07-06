@@ -1458,10 +1458,6 @@ pub fn build_bundles_with_merging(
 ) -> BundleSet {
   let perf_on = perf_enabled()
   let n = ranges.length()
-  let uf = @unionfind.UnionFind::new(n)
-  // regalloc2/ion always performs bundle coalescing, bounded by overlap and
-  // complexity guards inside merge checks.
-  let block_param_merge_enabled = true
   let num_blocks = func.blocks.length()
   let block_idx_by_order : Array[Int] = Array::make(num_blocks, 0)
   for block_idx in 0..<num_blocks {
@@ -1539,113 +1535,25 @@ pub fn build_bundles_with_merging(
     }
   }
 
-  fn clone_spans(spans : Array[MergeSpan]) -> Array[MergeSpan] {
-    let out : Array[MergeSpan] = []
-    for span in spans {
-      out.push(span)
-    }
-    out
-  }
-
-  fn insert_sorted_span(spans : Array[MergeSpan], insert : MergeSpan) -> Unit {
-    let insert_ord = insert.start_ord
-    let mut lo = 0
-    let mut hi = spans.length()
-    while lo < hi {
-      let mid = lo + (hi - lo) / 2
-      let mid_ord = spans[mid].start_ord
-      if mid_ord <= insert_ord {
-        lo = mid + 1
-      } else {
-        hi = mid
-      }
-    }
-    spans.insert(lo, insert)
-  }
-
-  // Keep merged-span buffers owned/cached by root and mutate only cache-owned
-  // arrays; never mutate original per-range span arrays in LiveRangeSet.
-  fn root_spans_owned(
-    root_spans_cache : Array[Array[MergeSpan]?],
-    root : Int,
-    fallback : Array[MergeSpan],
-  ) -> Array[MergeSpan] {
-    match root_spans_cache[root] {
-      Some(spans) => spans
-      None => {
-        // If fallback is exactly the source range's spans, clone once to get
-        // an owned mutable buffer for this root cache entry.
-        let owned = clone_spans(fallback)
-        root_spans_cache[root] = Some(owned)
-        owned
-      }
-    }
-  }
-
-  fn merge_into_root_spans(
-    root_spans_cache : Array[Array[MergeSpan]?],
-    target_root : Int,
-    target_fallback : Array[MergeSpan],
-    source_spans : Array[MergeSpan],
-  ) -> Array[MergeSpan] {
-    if source_spans.is_empty() {
-      return root_spans_owned(root_spans_cache, target_root, target_fallback)
-    }
-    if target_fallback.is_empty() {
-      // regalloc2 merge.rs empty-target fast path: move source list directly.
-      root_spans_cache[target_root] = Some(source_spans)
-      return source_spans
-    }
-    let target_spans = root_spans_owned(
-      root_spans_cache, target_root, target_fallback,
-    )
-    if source_spans.length() == 1 {
-      insert_sorted_span(target_spans, source_spans[0])
-      return target_spans
-    }
-    // Keep merge semantics equivalent to regalloc2 while avoiding
-    // full re-sort on every merge in MoonBit's runtime.
-    let merged : Array[MergeSpan] = []
-    let mut i = 0
-    let mut j = 0
-    while i < target_spans.length() && j < source_spans.length() {
-      if target_spans[i].start_ord <= source_spans[j].start_ord {
-        merged.push(target_spans[i])
-        i += 1
-      } else {
-        merged.push(source_spans[j])
-        j += 1
-      }
-    }
-    while i < target_spans.length() {
-      merged.push(target_spans[i])
-      i += 1
-    }
-    while j < source_spans.length() {
-      merged.push(source_spans[j])
-      j += 1
-    }
-    root_spans_cache[target_root] = Some(merged)
-    merged
-  }
-
-  let root_fixed_reg_cache : Array[@abi.PReg?] = []
-  let root_fixed_conflict_cache : Array[Bool] = []
-  let root_has_fixed_def_cache : Array[Bool] = []
-  let root_spans_cache : Array[Array[MergeSpan]?] = Array::make(n, None)
-  let mut merge_span_fetch_us = 0L
-  let mut merge_overlap_scan_us = 0L
-  let mut merge_commit_us = 0L
   let tick_init_metadata = if perf_on { Some(perf_tick_now()) } else { None }
-  // Initialize per-root fixed-info metadata so merges stay incremental.
-  // Keep span vectors lazy (on-demand) to avoid up-front copy/sort work for
-  // roots that never participate in merges.
+  let projected : Array[
+    @regalloc.BundleMergeRange[@abi.RegClass, @abi.PReg, ProgPointRange],
+  ] = []
   for i in 0..<n {
     let range = ranges.get(i)
     let (fixed_reg, fixed_conflict) = range_fixed_reg_conflict(range)
-    root_fixed_reg_cache.push(fixed_reg)
-    root_fixed_conflict_cache.push(fixed_conflict)
-    root_has_fixed_def_cache.push(range_has_fixed_def(range))
+    let spans : Array[MergeSpan] = []
+    for span in range.ranges {
+      spans.push(make_merge_span(span, ranges.block_order, block_point_base))
+    }
+    projected.push({
+      id: i,
+      class: range.vreg.class,
+      spans,
+      fixed_reg,
+      has_fixed_conflict: fixed_conflict,
+      has_fixed_def: range_has_fixed_def(range),
+    })
   }
   if tick_init_metadata is Some(tick) {
     perf_record_regalloc_phase_us(
@@ -1654,293 +1562,44 @@ pub fn build_bundles_with_merging(
     )
   }
 
-  fn root_fixed_info(
-    ranges : LiveRangeSet,
-    root_fixed_reg_cache : Array[@abi.PReg?],
-    root_fixed_conflict_cache : Array[Bool],
-    root : Int,
-  ) -> (@abi.PReg?, Bool) {
-    ignore(ranges)
-    (root_fixed_reg_cache[root], root_fixed_conflict_cache[root])
-  }
-
-  fn root_has_fixed_def(
-    ranges : LiveRangeSet,
-    root_has_fixed_def_cache : Array[Bool],
-    root : Int,
-  ) -> Bool {
-    ignore(ranges)
-    root_has_fixed_def_cache[root]
-  }
-
-  fn root_spans(
-    ranges : LiveRangeSet,
-    root_spans_cache : Array[Array[MergeSpan]?],
-    root : Int,
-  ) -> Array[MergeSpan] {
-    match root_spans_cache[root] {
-      Some(spans) => spans
-      None => {
-        let range = ranges.get(root)
-        let spans : Array[MergeSpan] = []
-        for span in range.ranges {
-          spans.push(
-            make_merge_span(span, ranges.block_order, block_point_base),
-          )
-        }
-        root_spans_cache[root] = Some(spans)
-        spans
-      }
-    }
-  }
-
-  // Helper to try merging two ranges
-  fn commit_union(
-    uf : @unionfind.UnionFind,
-    root_a : Int,
-    root_b : Int,
-    fixed_a : @abi.PReg?,
-    fixed_b : @abi.PReg?,
-    set_a_has_fixed_def : Bool,
-    set_b_has_fixed_def : Bool,
-    spans_a : Array[MergeSpan],
-    spans_b : Array[MergeSpan],
-  ) -> Bool {
-    // Keep directional merge semantics close to regalloc2/ion:
-    // merge `root_b` into `root_a` so the caller-chosen "to" root stays
-    // stable across repeated merges.
-    if !uf.union_into(root_b, root_a) {
-      return true
-    }
-    let new_root = uf.find(root_a)
-    let old_root = if new_root == root_a { root_b } else { root_a }
-    let merged_fixed_def = set_a_has_fixed_def || set_b_has_fixed_def
-    root_has_fixed_def_cache[new_root] = merged_fixed_def
-    root_has_fixed_def_cache[old_root] = merged_fixed_def
-    let merged_fixed = match (fixed_a, fixed_b) {
-      (Some(preg), _) => Some(preg)
-      (_, Some(preg)) => Some(preg)
-      _ => None
-    }
-    root_fixed_reg_cache[new_root] = merged_fixed
-    root_fixed_conflict_cache[new_root] = false
-    root_fixed_reg_cache[old_root] = merged_fixed
-    root_fixed_conflict_cache[old_root] = false
-    let (target_spans, source_spans) = if new_root == root_a {
-      (spans_a, spans_b)
-    } else {
-      (spans_b, spans_a)
-    }
-    let merged_spans = merge_into_root_spans(
-      root_spans_cache, new_root, target_spans, source_spans,
-    )
-    root_spans_cache[new_root] = Some(merged_spans)
-    root_spans_cache[old_root] = None
-    true
-  }
-
-  // Helper to try merging two ranges
-  fn try_merge(
-    uf : @unionfind.UnionFind,
-    a : Int,
-    b : Int,
-    ranges : LiveRangeSet,
-  ) -> Bool {
-    if a < 0 || b < 0 || a >= ranges.length() || b >= ranges.length() {
-      return false
-    }
-    let root_a = uf.find(a)
-    let root_b = uf.find(b)
-    if root_a == root_b {
-      return true
-    }
-    let range_a = ranges.get(a)
-    let range_b = ranges.get(b)
-
-    // Must be same register class
-    if !reg_class_compatible(range_a.vreg.class, range_b.vreg.class) {
-      return false
-    }
-    let set_a_has_fixed_def = root_has_fixed_def(
-      ranges, root_has_fixed_def_cache, root_a,
-    )
-    let set_b_has_fixed_def = root_has_fixed_def(
-      ranges, root_has_fixed_def_cache, root_b,
-    )
-
-    // Keep merged bundles compatible with fixed-register constraints.
-    // This follows regalloc2's spirit: avoid forcing one bundle to satisfy
-    // incompatible fixed uses.
-    let (fixed_a, conflict_a) = root_fixed_info(
-      ranges, root_fixed_reg_cache, root_fixed_conflict_cache, root_a,
-    )
-    let (fixed_b, conflict_b) = root_fixed_info(
-      ranges, root_fixed_reg_cache, root_fixed_conflict_cache, root_b,
-    )
-    if conflict_a || conflict_b {
-      return false
-    }
-    if fixed_a is Some(a_fixed) &&
-      fixed_b is Some(b_fixed) &&
-      (a_fixed.index != b_fixed.index || !same_fixed_bank(a_fixed, b_fixed)) {
-      return false
-    }
-
-    // Check for overlap within potential merged bundle.
-    // Follow regalloc2's merge scan style: compare sorted range starts with
-    // two cursors and stop early when one side advances past the other.
-    let tick_span_fetch = if perf_on { Some(perf_tick_now()) } else { None }
-    let spans_a = root_spans(ranges, root_spans_cache, root_a)
-    let spans_b = root_spans(ranges, root_spans_cache, root_b)
-    if tick_span_fetch is Some(tick) {
-      merge_span_fetch_us = merge_span_fetch_us + perf_elapsed_us(tick)
-    }
-    let adjust_a = set_a_has_fixed_def
-    let adjust_b = set_b_has_fixed_def
-    let tick_overlap_scan = if perf_on { Some(perf_tick_now()) } else { None }
-    if !spans_a.is_empty() && !spans_b.is_empty() {
-      let start_a_ord = if adjust_a {
-        spans_a[0].start_before_ord
-      } else {
-        spans_a[0].start_ord
-      }
-      let end_a_ord = spans_a[spans_a.length() - 1].end_ord
-      let start_b_ord = if adjust_b {
-        spans_b[0].start_before_ord
-      } else {
-        spans_b[0].start_ord
-      }
-      let end_b_ord = spans_b[spans_b.length() - 1].end_ord
-      let disjoint = start_a_ord >= end_b_ord || start_b_ord >= end_a_ord
-      if disjoint {
-        if tick_overlap_scan is Some(tick) {
-          merge_overlap_scan_us = merge_overlap_scan_us + perf_elapsed_us(tick)
-        }
-        let tick_commit = if perf_on { Some(perf_tick_now()) } else { None }
-        let merged = commit_union(
-          uf, root_a, root_b, fixed_a, fixed_b, set_a_has_fixed_def, set_b_has_fixed_def,
-          spans_a, spans_b,
-        )
-        if tick_commit is Some(tick) {
-          merge_commit_us = merge_commit_us + perf_elapsed_us(tick)
-        }
-        return merged
-      }
-    }
-    let mut ia = 0
-    let mut ib = 0
-    let mut range_checks = 0
-    while ia < spans_a.length() && ib < spans_b.length() {
-      range_checks += 1
-      if range_checks > 200 {
-        if tick_overlap_scan is Some(tick) {
-          merge_overlap_scan_us = merge_overlap_scan_us + perf_elapsed_us(tick)
-        }
-        return false
-      }
-      let span_a = spans_a[ia]
-      let span_b = spans_b[ib]
-      let start_a_ord = if adjust_a {
-        span_a.start_before_ord
-      } else {
-        span_a.start_ord
-      }
-      let end_a_ord = span_a.end_ord
-      let start_b_ord = if adjust_b {
-        span_b.start_before_ord
-      } else {
-        span_b.start_ord
-      }
-      let end_b_ord = span_b.end_ord
-      if start_a_ord >= end_b_ord {
-        ib = ib + 1
-      } else if start_b_ord >= end_a_ord {
-        ia = ia + 1
-      } else {
-        if tick_overlap_scan is Some(tick) {
-          merge_overlap_scan_us = merge_overlap_scan_us + perf_elapsed_us(tick)
-        }
-        return false
-      }
-    }
-    if tick_overlap_scan is Some(tick) {
-      merge_overlap_scan_us = merge_overlap_scan_us + perf_elapsed_us(tick)
-    }
-    let tick_commit = if perf_on { Some(perf_tick_now()) } else { None }
-    let merged = commit_union(
-      uf, root_a, root_b, fixed_a, fixed_b, set_a_has_fixed_def, set_b_has_fixed_def,
-      spans_a, spans_b,
-    )
-    if tick_commit is Some(tick) {
-      merge_commit_us = merge_commit_us + perf_elapsed_us(tick)
-    }
-    merged
-  }
-
   let tick_merge_blockargs = if perf_on { Some(perf_tick_now()) } else { None }
-  // Merge across block arguments (SSA phi-like connections).
-  if block_param_merge_enabled {
-    for pair in ranges.blockparam_out_pairs {
-      let (param_idx, arg_idx) = pair
-      if arg_idx == param_idx {
-        continue
-      }
-      try_merge(uf, param_idx, arg_idx, ranges) |> ignore
+  let merge_edges : Array[@regalloc.BundleMergeEdge] = []
+  for pair in ranges.blockparam_out_pairs {
+    let (param_idx, arg_idx) = pair
+    if arg_idx != param_idx {
+      merge_edges.push({ target: param_idx, source: arg_idx })
     }
   }
+  let plan = @regalloc.plan_bundle_merges(
+    projected, merge_edges, reg_class_compatible, same_fixed_bank,
+  )
   if tick_merge_blockargs is Some(tick) {
     perf_record_regalloc_phase_us(
       "phase_bundle_merge_blockargs",
       perf_elapsed_us(tick),
     )
-    perf_record_regalloc_phase_us(
-      "phase_bundle_merge_spans", merge_span_fetch_us,
-    )
-    perf_record_regalloc_phase_us(
-      "phase_bundle_merge_overlap", merge_overlap_scan_us,
-    )
-    perf_record_regalloc_phase_us("phase_bundle_merge_commit", merge_commit_us)
   }
 
   let tick_finalize = if perf_on { Some(perf_tick_now()) } else { None }
-  // Build final bundles from union-find roots (dense-indexed, regalloc2-style).
   let result = BundleSet::new()
-  let root_to_bundle : Array[Int] = Array::make(n, -1)
-  let bundle_to_root : Array[Int] = []
+  for bundle_id in 0..<plan.bundle_roots.length() {
+    let created = Bundle::new(
+      result.bundles.length(),
+      plan.bundle_classes[bundle_id],
+    )
+    result.add_bundle(created)
+  }
   for range_idx in 0..<n {
-    let root = uf.find(range_idx)
-    let bundle_id = root_to_bundle[root]
-    let bundle = if bundle_id >= 0 {
-      result.get(bundle_id)
-    } else {
-      let first_range = ranges.get(range_idx)
-      let created = Bundle::new(result.bundles.length(), first_range.vreg.class)
-      result.add_bundle(created)
-      let new_id = created.id
-      root_to_bundle[root] = new_id
-      bundle_to_root.push(root)
-      created
-    }
+    let bundle_id = plan.range_to_bundle[range_idx]
+    let bundle = result.get(bundle_id)
     bundle.add_range(range_idx)
     ranges.get(range_idx).bundle_id = bundle.id
   }
   for bundle_id in 0..<result.bundles.length() {
-    let root = bundle_to_root[bundle_id]
     let bundle = result.get(bundle_id)
     let merged_ranges : Array[ProgPointRange] = []
-    match root_spans_cache[root] {
-      Some(spans) =>
-        for span in spans {
-          merged_ranges.push(span.span)
-        }
-      None => {
-        // No merge cache materialized for this root: keep the original
-        // normalized ranges directly, avoiding redundant MergeSpan conversion.
-        let root_range = ranges.get(root)
-        for span in root_range.ranges {
-          merged_ranges.push(span)
-        }
-      }
+    for span in plan.bundle_ranges[bundle_id] {
+      merged_ranges.push(span)
     }
     bundle.merged_ranges = Some(merged_ranges)
   }

@@ -74,7 +74,7 @@ pub fn[P] plan_backtracking_fixed_constraint_edits(Array[BacktrackingFixedConstr
 
 pub fn[P] plan_backtracking_probe_order(Array[P], Array[P], Array[P], Bool, Int, Int, P?, (P, P) -> Bool) -> Array[P]
 
-pub fn plan_bundle_merges(Array[BundleMergeRange], Array[BundleMergeEdge], Array[Int], Array[Int]) -> BundleMergePlan
+pub fn[C, P, R] plan_bundle_merges(Array[BundleMergeRange[C, P, R]], Array[BundleMergeEdge], (C, C) -> Bool, (P, P) -> Bool) -> BundleMergePlan[C, R]
 
 pub fn plan_bundle_split(Array[BundleSplitRange], ProgramPoint?, Array[Int], Int, Int) -> BundleSplitPlan
 
@@ -303,18 +303,18 @@ pub(all) struct BundleMergeEdge {
   source : Int
 } derive(Eq, @debug.Debug)
 
-pub(all) struct BundleMergePlan {
+pub(all) struct BundleMergePlan[C, R] {
   range_to_bundle : Array[Int]
   bundle_roots : Array[Int]
-  bundle_classes : Array[RegClass]
-  bundle_ranges : Array[Array[ProgramRange]]
+  bundle_classes : Array[C]
+  bundle_ranges : Array[Array[R]]
 } derive(@debug.Debug)
 
-pub(all) struct BundleMergeRange {
+pub(all) struct BundleMergeRange[C, P, R] {
   id : Int
-  class : RegClass
-  ranges : Array[ProgramRange]
-  fixed_reg : PhysicalReg?
+  class : C
+  spans : Array[MergeSpan[R]]
+  fixed_reg : P?
   has_fixed_conflict : Bool
   has_fixed_def : Bool
 } derive(@debug.Debug)
@@ -448,7 +448,7 @@ pub(all) struct MergeSpan[R] {
   start_ord : Int
   start_before_ord : Int
   end_ord : Int
-}
+} derive(@debug.Debug)
 
 pub(all) struct OccupiedProgramSpan {
   owner_id : Int

@@ -1,9 +1,9 @@
 ///|
-pub(all) struct BundleMergeRange {
+pub(all) struct BundleMergeRange[C, P, R] {
   id : Int
-  class : RegClass
-  ranges : Array[ProgramRange]
-  fixed_reg : PhysicalReg?
+  class : C
+  spans : Array[MergeSpan[R]]
+  fixed_reg : P?
   has_fixed_conflict : Bool
   has_fixed_def : Bool
 } derive(Debug)
@@ -15,69 +15,18 @@ pub(all) struct BundleMergeEdge {
 } derive(Eq, Debug)
 
 ///|
-pub(all) struct BundleMergePlan {
+pub(all) struct BundleMergePlan[C, R] {
   range_to_bundle : Array[Int]
   bundle_roots : Array[Int]
-  bundle_classes : Array[RegClass]
-  bundle_ranges : Array[Array[ProgramRange]]
+  bundle_classes : Array[C]
+  bundle_ranges : Array[Array[R]]
 } derive(Debug)
 
 ///|
-priv struct BundleMergeSpan {
-  span : ProgramRange
-  start_ord : Int
-  start_before_ord : Int
-  end_ord : Int
-}
-
-///|
-fn bundle_merge_point_order(
-  point : ProgramPoint,
-  block_order : Array[Int],
-  block_point_base : Array[Int],
-) -> Int {
-  let block_ord = if point.block >= 0 && point.block < block_order.length() {
-    block_order[point.block]
-  } else {
-    point.block
-  }
-  let base = if block_ord >= 0 && block_ord < block_point_base.length() {
-    block_point_base[block_ord]
-  } else {
-    block_ord * 1_000_000
-  }
-  base + point.inst
-}
-
-///|
-fn bundle_merge_same_fixed_reg(a : PhysicalReg, b : PhysicalReg) -> Bool {
-  a.id == b.id && a.class == b.class
-}
-
-///|
-fn bundle_merge_span(
-  span : ProgramRange,
-  block_order : Array[Int],
-  block_point_base : Array[Int],
-) -> BundleMergeSpan {
-  let start_ord = bundle_merge_point_order(
-    span.start,
-    block_order,
-    block_point_base,
-  )
-  {
-    span,
-    start_ord,
-    start_before_ord: start_ord - 1,
-    end_ord: bundle_merge_point_order(span.end, block_order, block_point_base),
-  }
-}
-
-///|
-fn bundle_merge_clone_spans(
-  spans : Array[BundleMergeSpan],
-) -> Array[BundleMergeSpan] {
-  let out : Array[BundleMergeSpan] = []
+fn[R] bundle_merge_clone_spans(
+  spans : Array[MergeSpan[R]],
+) -> Array[MergeSpan[R]] {
+  let out : Array[MergeSpan[R]] = []
   for span in spans {
     out.push(span)
   }
@@ -85,9 +34,9 @@ fn bundle_merge_clone_spans(
 }
 
 ///|
-fn bundle_merge_insert_sorted(
-  spans : Array[BundleMergeSpan],
-  insert : BundleMergeSpan,
+fn[R] bundle_merge_insert_sorted(
+  spans : Array[MergeSpan[R]],
+  insert : MergeSpan[R],
 ) -> Unit {
   let insert_ord = insert.start_ord
   let mut lo = 0
@@ -104,11 +53,11 @@ fn bundle_merge_insert_sorted(
 }
 
 ///|
-fn bundle_merge_root_spans_owned(
-  root_spans_cache : Array[Array[BundleMergeSpan]?],
+fn[R] bundle_merge_root_spans_owned(
+  root_spans_cache : Array[Array[MergeSpan[R]]?],
   root : Int,
-  fallback : Array[BundleMergeSpan],
-) -> Array[BundleMergeSpan] {
+  fallback : Array[MergeSpan[R]],
+) -> Array[MergeSpan[R]] {
   match root_spans_cache[root] {
     Some(spans) => spans
     None => {
@@ -120,12 +69,12 @@ fn bundle_merge_root_spans_owned(
 }
 
 ///|
-fn bundle_merge_into_root_spans(
-  root_spans_cache : Array[Array[BundleMergeSpan]?],
+fn[R] bundle_merge_into_root_spans(
+  root_spans_cache : Array[Array[MergeSpan[R]]?],
   target_root : Int,
-  target_fallback : Array[BundleMergeSpan],
-  source_spans : Array[BundleMergeSpan],
-) -> Array[BundleMergeSpan] {
+  target_fallback : Array[MergeSpan[R]],
+  source_spans : Array[MergeSpan[R]],
+) -> Array[MergeSpan[R]] {
   if source_spans.is_empty() {
     return bundle_merge_root_spans_owned(
       root_spans_cache, target_root, target_fallback,
@@ -142,7 +91,7 @@ fn bundle_merge_into_root_spans(
     bundle_merge_insert_sorted(target_spans, source_spans[0])
     return target_spans
   }
-  let merged : Array[BundleMergeSpan] = []
+  let merged : Array[MergeSpan[R]] = []
   let mut i = 0
   let mut j = 0
   while i < target_spans.length() && j < source_spans.length() {
@@ -167,20 +116,15 @@ fn bundle_merge_into_root_spans(
 }
 
 ///|
-fn bundle_merge_spans_for_root(
-  ranges : Array[BundleMergeRange],
-  root_spans_cache : Array[Array[BundleMergeSpan]?],
+fn[C, P, R] bundle_merge_spans_for_root(
+  ranges : Array[BundleMergeRange[C, P, R]],
+  root_spans_cache : Array[Array[MergeSpan[R]]?],
   root : Int,
-  block_order : Array[Int],
-  block_point_base : Array[Int],
-) -> Array[BundleMergeSpan] {
+) -> Array[MergeSpan[R]] {
   match root_spans_cache[root] {
     Some(spans) => spans
     None => {
-      let spans : Array[BundleMergeSpan] = []
-      for span in ranges[root].ranges {
-        spans.push(bundle_merge_span(span, block_order, block_point_base))
-      }
+      let spans = bundle_merge_clone_spans(ranges[root].spans)
       root_spans_cache[root] = Some(spans)
       spans
     }
@@ -188,33 +132,35 @@ fn bundle_merge_spans_for_root(
 }
 
 ///|
-fn bundle_merge_ranges_compatible(
-  lhs : BundleMergeRange,
-  rhs : BundleMergeRange,
+fn[C, P, R] bundle_merge_ranges_compatible(
+  lhs : BundleMergeRange[C, P, R],
+  rhs : BundleMergeRange[C, P, R],
+  class_compatible : (C, C) -> Bool,
+  same_fixed_reg : (P, P) -> Bool,
 ) -> Bool {
-  if lhs.class != rhs.class {
+  if !class_compatible(lhs.class, rhs.class) {
     return false
   }
   if lhs.has_fixed_conflict || rhs.has_fixed_conflict {
     return false
   }
   match (lhs.fixed_reg, rhs.fixed_reg) {
-    (Some(a), Some(b)) => bundle_merge_same_fixed_reg(a, b)
+    (Some(a), Some(b)) => same_fixed_reg(a, b)
     _ => true
   }
 }
 
 ///|
-fn bundle_merge_try_edge(
+fn[C, P, R] bundle_merge_try_edge(
   uf : @unionfind.UnionFind,
-  ranges : Array[BundleMergeRange],
+  ranges : Array[BundleMergeRange[C, P, R]],
   edge : BundleMergeEdge,
-  root_fixed_reg_cache : Array[PhysicalReg?],
+  root_fixed_reg_cache : Array[P?],
   root_fixed_conflict_cache : Array[Bool],
   root_has_fixed_def_cache : Array[Bool],
-  root_spans_cache : Array[Array[BundleMergeSpan]?],
-  block_order : Array[Int],
-  block_point_base : Array[Int],
+  root_spans_cache : Array[Array[MergeSpan[R]]?],
+  class_compatible : (C, C) -> Bool,
+  same_fixed_reg : (P, P) -> Bool,
 ) -> Unit {
   if edge.target < 0 ||
     edge.source < 0 ||
@@ -230,7 +176,7 @@ fn bundle_merge_try_edge(
   let lhs = {
     id: ranges[edge.target].id,
     class: ranges[edge.target].class,
-    ranges: ranges[edge.target].ranges,
+    spans: ranges[edge.target].spans,
     fixed_reg: root_fixed_reg_cache[root_a],
     has_fixed_conflict: root_fixed_conflict_cache[root_a],
     has_fixed_def: root_has_fixed_def_cache[root_a],
@@ -238,20 +184,16 @@ fn bundle_merge_try_edge(
   let rhs = {
     id: ranges[edge.source].id,
     class: ranges[edge.source].class,
-    ranges: ranges[edge.source].ranges,
+    spans: ranges[edge.source].spans,
     fixed_reg: root_fixed_reg_cache[root_b],
     has_fixed_conflict: root_fixed_conflict_cache[root_b],
     has_fixed_def: root_has_fixed_def_cache[root_b],
   }
-  if !bundle_merge_ranges_compatible(lhs, rhs) {
+  if !bundle_merge_ranges_compatible(lhs, rhs, class_compatible, same_fixed_reg) {
     return
   }
-  let spans_a = bundle_merge_spans_for_root(
-    ranges, root_spans_cache, root_a, block_order, block_point_base,
-  )
-  let spans_b = bundle_merge_spans_for_root(
-    ranges, root_spans_cache, root_b, block_order, block_point_base,
-  )
+  let spans_a = bundle_merge_spans_for_root(ranges, root_spans_cache, root_a)
+  let spans_b = bundle_merge_spans_for_root(ranges, root_spans_cache, root_b)
   let adjust_a = root_has_fixed_def_cache[root_a]
   let adjust_b = root_has_fixed_def_cache[root_b]
   if !spans_a.is_empty() && !spans_b.is_empty() {
@@ -330,24 +272,18 @@ fn bundle_merge_try_edge(
 }
 
 ///|
-pub fn plan_bundle_merges(
-  ranges : Array[BundleMergeRange],
+pub fn[C, P, R] plan_bundle_merges(
+  ranges : Array[BundleMergeRange[C, P, R]],
   edges : Array[BundleMergeEdge],
-  block_order : Array[Int],
-  block_lengths : Array[Int],
-) -> BundleMergePlan {
+  class_compatible : (C, C) -> Bool,
+  same_fixed_reg : (P, P) -> Bool,
+) -> BundleMergePlan[C, R] {
   let n = ranges.length()
   let uf = @unionfind.UnionFind::new(n)
-  let block_point_base : Array[Int] = []
-  let mut point_cursor = 0
-  for block_ord in 0..<block_lengths.length() {
-    block_point_base.push(point_cursor)
-    point_cursor += block_lengths[block_ord]
-  }
-  let root_fixed_reg_cache : Array[PhysicalReg?] = []
+  let root_fixed_reg_cache : Array[P?] = []
   let root_fixed_conflict_cache : Array[Bool] = []
   let root_has_fixed_def_cache : Array[Bool] = []
-  let root_spans_cache : Array[Array[BundleMergeSpan]?] = Array::make(n, None)
+  let root_spans_cache : Array[Array[MergeSpan[R]]?] = Array::make(n, None)
   for range in ranges {
     root_fixed_reg_cache.push(range.fixed_reg)
     root_fixed_conflict_cache.push(range.has_fixed_conflict)
@@ -356,13 +292,13 @@ pub fn plan_bundle_merges(
   for edge in edges {
     bundle_merge_try_edge(
       uf, ranges, edge, root_fixed_reg_cache, root_fixed_conflict_cache, root_has_fixed_def_cache,
-      root_spans_cache, block_order, block_point_base,
+      root_spans_cache, class_compatible, same_fixed_reg,
     )
   }
   let range_to_bundle = Array::make(n, -1)
   let root_to_bundle = Array::make(n, -1)
   let bundle_roots : Array[Int] = []
-  let bundle_classes : Array[RegClass] = []
+  let bundle_classes : Array[C] = []
   for range_idx in 0..<n {
     let root = uf.find(range_idx)
     let bundle_id = if root_to_bundle[root] >= 0 {
@@ -376,17 +312,17 @@ pub fn plan_bundle_merges(
     }
     range_to_bundle[range_idx] = bundle_id
   }
-  let bundle_ranges : Array[Array[ProgramRange]] = []
+  let bundle_ranges : Array[Array[R]] = []
   for root in bundle_roots {
-    let out : Array[ProgramRange] = []
+    let out : Array[R] = []
     match root_spans_cache[root] {
       Some(spans) =>
         for span in spans {
           out.push(span.span)
         }
       None =>
-        for span in ranges[root].ranges {
-          out.push(span)
+        for span in ranges[root].spans {
+          out.push(span.span)
         }
     }
     bundle_ranges.push(out)

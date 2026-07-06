@@ -160,7 +160,7 @@ pub(all) struct MergeSpan[R] {
   start_ord : Int
   start_before_ord : Int
   end_ord : Int
-}
+} derive(Debug)
 
 ///|
 pub fn[P] make_backtracking_alloc_table(
