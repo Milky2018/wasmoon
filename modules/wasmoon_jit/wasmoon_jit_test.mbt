@@ -119,29 +119,6 @@ test "JIT trap code policy lives in wasmoon_jit" {
 }
 
 ///|
-test "legacy trap immediates are classified in wasmoon_jit" {
-  inspect(legacy_trap_immediate_from_message("unreachable"), content="0")
-  inspect(
-    legacy_trap_immediate_from_message("out of bounds memory access"),
-    content="1",
-  )
-  inspect(
-    legacy_trap_immediate_from_message("indirect call type mismatch"),
-    content="2",
-  )
-  inspect(
-    legacy_trap_immediate_from_message("invalid conversion to integer"),
-    content="3",
-  )
-  inspect(
-    legacy_trap_immediate_from_message("integer divide by zero"),
-    content="4",
-  )
-  inspect(legacy_trap_immediate_from_message("integer overflow"), content="5")
-  inspect(legacy_trap_immediate_from_message("backend trap"), content="6")
-}
-
-///|
 test "trap report message formatting lives in wasmoon_jit" {
   inspect(format_u64_hex(-1L), content="0xffffffffffffffff")
   inspect(sanitize_debug_filename("a/b:c"), content="a_b_c")

@@ -323,8 +323,6 @@ pub fn jit_runtime_fixup_idx(Int) -> Int
 
 pub fn jit_trap_message(Int) -> String
 
-pub fn legacy_trap_immediate_from_message(String) -> Int
-
 pub fn link_code_object(@machv_emit.MachineCode, RuntimeSymbolResolver) -> LinkedCode raise LinkError
 
 pub fn link_machine_code(@machv_emit.MachineCode, RuntimeSymbolResolver) -> LinkedCode raise LinkError
