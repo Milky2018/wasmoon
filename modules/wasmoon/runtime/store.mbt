@@ -125,7 +125,7 @@ pub fn Store::with_c_heap() -> Store {
     tag_type_indices: [],
     tag_owners: [],
     exns: [],
-    heap: MarkSweepHeap::new(), // Keep for fallback
+    heap: MarkSweepHeap::new(), // Used only when c_heap is None.
     c_heap: Some(@wasmoon_jit.CHeap::new(capacity=initial_capacity)),
     module_types: [],
     module_rec_groups: [],
