@@ -390,9 +390,8 @@ pub fn FuncEnvironment::emit_atomic_alignment_check(
   builder.switch_to_block(continue_block)
 }
 
-// Note: Linear memory base is accessed via a dedicated `LoadMemBase` opcode so
-// the optimizer can safely reduce redundant base reloads within a block while
-// respecting invalidation around calls/grow.
+// Note: Linear memory base is represented in MilkIR and lowered by the target
+// backend into generic MachV loads from the embedding runtime layout.
 
 ///|
 /// Get the byte size for a type

@@ -2461,31 +2461,6 @@ fn MachineCode::emit_instruction_x86_64(
       }
       // Remainder is in rdx already.
     }
-    LoadMemBase(memidx) => {
-      // Load linear memory base pointer from VMContext.
-      // Uses: [vmctx], Defs: [result]
-      let layout = stack_frame.require_runtime_layout()
-      let dst = wreg_num(inst.defs[0])
-      let vmctx_reg = reg_num(inst.uses[0])
-      if memidx == 0 && stack_frame.cache_mem0_desc {
-        // Fast path: memory0 descriptor pointer is cached in Mem0Desc role.
-        self.x86_emit_mov_r64_m64(dst, @isaregs.mem0_desc_index(), 0)
-      } else if memidx == 0 {
-        self.x86_emit_mov_r64_m64(
-          dst,
-          vmctx_reg,
-          layout.primary_memory_base_offset,
-        )
-      } else {
-        self.x86_emit_mov_r64_m64(
-          dst,
-          vmctx_reg,
-          layout.memory_directory_offset,
-        )
-        self.x86_emit_mov_r64_m64(dst, dst, memidx * layout.pointer_stride)
-        self.x86_emit_mov_r64_m64(dst, dst, 0)
-      }
-    }
     Load(ty, offset) => {
       let rt = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])

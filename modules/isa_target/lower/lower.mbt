@@ -1484,11 +1484,6 @@ fn match_addr_reg_offset(
       shift = scale
       score = score + 1
     }
-    // Prefer shapes where the base is a known memory-base pointer.
-    if find_defining_inst(ctx, base) is Some(base_inst) &&
-      base_inst.opcode is LoadMemBase(_) {
-      score = score + 1
-    }
     (base, index, ext, shift, subsumed, extra_offset, score)
   }
 
@@ -1725,11 +1720,6 @@ pub fn lower_function(
 
   // Phase 6: Target-specific fixups (Cranelift-style).
   //
-  // AArch64 target-specific role fixups for memory0-base caching.
-  fixup_aarch64_mem0_desc_constraints(ctx.vcode_func, abi_settings)
-
-  // Phase 7: Target-specific fixups (Cranelift-style).
-  //
   // On amd64, variable shifts/rotates use CL (rcx) as the implicit count
   // register. Enforce this constraint universally to avoid relying on each
   // lowering site to set it correctly.
@@ -1737,27 +1727,6 @@ pub fn lower_function(
     fixup_amd64_shift_count_constraints(ctx.vcode_func)
   }
   ctx.vcode_func
-}
-
-///|
-fn fixup_aarch64_mem0_desc_constraints(
-  func : @machv.Function,
-  abi_settings : @abi.ABISettings,
-) -> Unit {
-  if @isa.ISA::current() is AMD64 || !abi_settings.enable_pinned_reg {
-    return
-  }
-  if !func.should_cache_mem0_desc() {
-    return
-  }
-  let mem0_desc = @abi.PReg::{ index: mem0_desc_index(), class: Int }
-  for block in func.blocks {
-    for inst in block.insts {
-      if inst.opcode is LoadMemBase(0) && inst.def_constraints.length() > 0 {
-        inst.def_constraints[0] = FixedReg(mem0_desc)
-      }
-    }
-  }
 }
 
 ///|

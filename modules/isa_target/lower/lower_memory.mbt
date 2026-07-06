@@ -95,7 +95,7 @@ fn lower_get_func_ref(
 // VCode lowering now uses LoadPtr/StorePtr/LoadPtrNarrow/StorePtrNarrow directly
 
 ///|
-/// Lower LoadMemBase - load linear memory base pointer from VMContext.
+/// Lower memory-base access to generic pointer loads from the runtime context.
 /// memidx: memory index for multi-memory support
 fn lower_load_mem_base(
   ctx : LoweringContext,
@@ -112,15 +112,43 @@ fn lower_load_mem_base(
     return
   }
   let result_vreg = ctx.get_vreg(result)
-  let load_inst = @instr.VCodeInst::new(LoadMemBase(memidx))
-  load_inst.add_def({ reg: Virtual(result_vreg) })
-  if ctx.abi_settings.enable_pinned_reg {
-    load_inst.add_use(Physical({ index: vmctx_index(), class: Int }))
+  let vmctx_reg : @abi.Reg = if ctx.abi_settings.enable_pinned_reg {
+    Physical(vmctx_preg())
   } else {
     let vmctx_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
-    load_inst.add_use(Virtual(vmctx_vreg))
+    Virtual(vmctx_vreg)
   }
-  block.add_inst(load_inst)
+  let layout = ctx.require_runtime_layout()
+  if memidx == 0 {
+    ctx.vcode_func.mark_uses_primary_memory_base()
+    let load_base = @instr.VCodeInst::new(
+      Load(I64, layout.primary_memory_base_offset),
+    )
+    load_base.add_def({ reg: Virtual(result_vreg) })
+    load_base.add_use(vmctx_reg)
+    block.add_inst(load_base)
+  } else {
+    let directory_vreg = ctx.vcode_func.new_vreg(Int)
+    let load_directory = @instr.VCodeInst::new(
+      Load(I64, layout.memory_directory_offset),
+    )
+    load_directory.add_def({ reg: Virtual(directory_vreg) })
+    load_directory.add_use(vmctx_reg)
+    block.add_inst(load_directory)
+
+    let descriptor_vreg = ctx.vcode_func.new_vreg(Int)
+    let load_descriptor = @instr.VCodeInst::new(
+      Load(I64, memidx * layout.pointer_stride),
+    )
+    load_descriptor.add_def({ reg: Virtual(descriptor_vreg) })
+    load_descriptor.add_use(Virtual(directory_vreg))
+    block.add_inst(load_descriptor)
+
+    let load_base = @instr.VCodeInst::new(Load(I64, 0))
+    load_base.add_def({ reg: Virtual(result_vreg) })
+    load_base.add_use(Virtual(descriptor_vreg))
+    block.add_inst(load_base)
+  }
   ctx.mem_base_cache.set(memidx, result_vreg)
 }
 

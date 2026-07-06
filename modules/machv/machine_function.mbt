@@ -32,6 +32,8 @@ pub(all) struct Function {
   // Maximum outgoing argument space needed by any call in this function
   // Pre-allocated in prologue so SP doesn't move during call sequences
   mut max_outgoing_args_size : Int
+  // True when lowering materialized the embedding's primary memory base.
+  mut uses_primary_memory_base : Bool
 }
 
 ///|
@@ -82,12 +84,14 @@ pub fn Function::new(name : String) -> Function {
     param_pregs: [],
     int_stack_params: 0,
     max_outgoing_args_size: 0,
+    uses_primary_memory_base: false,
   }
 }
 
 ///|
 /// Clone the base structure of a function for regalloc transformations.
-/// Copies: name, next_vreg_id, int_stack_params, max_outgoing_args_size
+/// Copies: name, next_vreg_id, int_stack_params, max_outgoing_args_size,
+/// uses_primary_memory_base
 /// Empty: params, results, result_kinds, blocks, param_pregs
 /// Zero: num_spill_slots
 pub fn Function::clone_base(self : Function) -> Function {
@@ -102,6 +106,7 @@ pub fn Function::clone_base(self : Function) -> Function {
     param_pregs: [],
     int_stack_params: self.int_stack_params,
     max_outgoing_args_size: self.max_outgoing_args_size,
+    uses_primary_memory_base: self.uses_primary_memory_base,
   }
 }
 
@@ -132,6 +137,16 @@ pub fn Function::update_max_outgoing_args_size(
   if size > self.max_outgoing_args_size {
     self.max_outgoing_args_size = size
   }
+}
+
+///|
+pub fn Function::mark_uses_primary_memory_base(self : Function) -> Unit {
+  self.uses_primary_memory_base = true
+}
+
+///|
+pub fn Function::uses_primary_memory_base(self : Function) -> Bool {
+  self.uses_primary_memory_base
 }
 
 ///|
@@ -202,20 +217,6 @@ pub fn Function::has_calls(self : Function) -> Bool {
     for inst in block.insts {
       let call_type = inst.opcode.call_type()
       if call_type is Regular || call_type is TailCall {
-        return true
-      }
-    }
-  }
-  false
-}
-
-///|
-/// Returns true if the function uses `LoadMemBase(memidx=0)`.
-/// Used to enable caching of the memory0 descriptor pointer in a reserved register.
-pub fn Function::uses_mem0(self : Function) -> Bool {
-  for block in self.blocks {
-    for inst in block.insts {
-      if inst.opcode is LoadMemBase(0) {
         return true
       }
     }

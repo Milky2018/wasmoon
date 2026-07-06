@@ -791,7 +791,7 @@ pub fn emit_function(
   // has_calls is true if function makes any calls
   let has_calls = func_has_calls(func)
   let has_incoming_stack_args = func_has_incoming_stack_args(func)
-  let uses_mem0 = func.uses_mem0()
+  let uses_primary_memory_base = func.uses_primary_memory_base()
   let cache_mem0_desc = func.should_cache_mem0_desc()
   let cache_func_table = func.should_cache_func_table()
 
@@ -805,7 +805,7 @@ pub fn emit_function(
   let needs_vmctx = force_vmctx_cache ||
     has_calls ||
     func_uses_vmctx(func) ||
-    uses_mem0
+    uses_primary_memory_base
   let clobbered_gprs = clobbered
   let mem0_desc = @isaregs.mem0_desc_index()
   if cache_mem0_desc && !clobbered_gprs.contains(mem0_desc) {
@@ -2079,7 +2079,7 @@ pub fn emit_function_with_regalloc(
   )
   let has_calls = func_has_calls(func)
   let has_incoming_stack_args = func_has_incoming_stack_args(func)
-  let uses_mem0 = func.uses_mem0()
+  let uses_primary_memory_base = func.uses_primary_memory_base()
   let cache_mem0_desc = func.should_cache_mem0_desc()
   let cache_func_table = func.should_cache_func_table()
   let vmctx = @isaregs.vmctx_index()
@@ -2089,7 +2089,7 @@ pub fn emit_function_with_regalloc(
     has_calls ||
     func_uses_vmctx(func) ||
     output_uses_preg(func, output, vmctx) ||
-    uses_mem0
+    uses_primary_memory_base
   let clobbered_gprs = clobbered
   let mem0_desc = @isaregs.mem0_desc_index()
   if cache_mem0_desc && !clobbered_gprs.contains(mem0_desc) {

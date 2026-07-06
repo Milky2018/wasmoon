@@ -1281,26 +1281,6 @@ fn MachineCode::emit_instruction(
         Vector => self.emit_ldr_q_imm(rd, 31, stack_offset) // LDR Qd, [SP, #offset]
       }
     }
-    LoadMemBase(memidx) => {
-      // Load linear memory base pointer from VMContext
-      // Uses: [vmctx], Defs: [result]
-      let layout = stack_frame.require_runtime_layout()
-      let dst = wreg_num(inst.defs[0])
-      let vmctx_reg = reg_num(inst.uses[0])
-      if memidx == 0 && stack_frame.cache_mem0_desc {
-        // Fast path: memory0 base pointer is cached in the fixed register.
-        let mem0_base = @isaregs.mem0_desc_index()
-        if dst != mem0_base {
-          self.emit_mov_reg(dst, mem0_base)
-        }
-      } else if memidx == 0 {
-        self.emit_ldr_imm(dst, vmctx_reg, layout.primary_memory_base_offset)
-      } else {
-        self.emit_ldr_imm(dst, vmctx_reg, layout.memory_directory_offset)
-        self.emit_ldr_imm(dst, dst, memidx * layout.pointer_stride)
-        self.emit_ldr_imm(dst, dst, 0)
-      }
-    }
     LoadPtr(ty, offset) => {
       // Raw pointer load (no bounds checking)
       // Uses: [base], Defs: [result]
