@@ -1192,8 +1192,8 @@ fn is_valid_add_sub_imm_for_isa(isa : @isa.ISA, value : Int64) -> Bool {
 /// Check whether a logical immediate form is worth selecting for current ISA.
 ///
 /// AArch64 requires bitmask-immediate encodability.
-/// AMD64 accepts this form for all constants and handles large immediates in
-/// the emitter fallback path.
+/// AMD64 accepts this VCode form for all constants; its emitter materializes
+/// the immediate as needed before selecting the final machine instruction shape.
 fn is_valid_logic_imm_for_isa(
   isa : @isa.ISA,
   value : Int64,
