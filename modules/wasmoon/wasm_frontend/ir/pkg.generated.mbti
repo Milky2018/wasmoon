@@ -1,9 +1,10 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "Milky2018/wasmoon_jit/ir"
+package "Milky2018/wasmoon/wasm_frontend/ir"
 
 import {
   "Milky2018/milkir",
   "Milky2018/wasm_core/types",
+  "Milky2018/wasmoon/wasm_frontend",
 }
 
 // Values
@@ -17,7 +18,7 @@ pub fn optimize_function(@milkir.Function) -> Bool
 
 pub fn optimize_with_level(@milkir.Function, @milkir.OptLevel) -> @milkir.OptResult
 
-pub fn translate_function(@types.Module, Int, name? : String, memory_max_override? : Int?) -> @milkir.Function
+pub fn translate_function(@types.Module, Int, @wasm_frontend.EmbeddingEnvironment, name? : String, memory_max_override? : Int?) -> @milkir.Function
 
 pub fn type_from_wasm(@types.ValueType) -> @milkir.Type
 
@@ -29,7 +30,7 @@ pub fn validate_function(@milkir.Function) -> @milkir.ValidationResult
 type FuncEnvironment
 pub fn FuncEnvironment::emit_atomic_alignment_check(Self, @milkir.IRBuilder, Int, @milkir.Value, Int64, Int) -> Unit
 pub fn FuncEnvironment::emit_bounds_check(Self, @milkir.IRBuilder, @milkir.Value, Int, @milkir.Value, Int64, Int) -> @milkir.Value
-pub fn FuncEnvironment::new(Array[@types.GlobalType], memory_mins? : Array[Int64], memory_is_64? : Array[Bool], memory_page_size_log2? : Array[Int]) -> Self
+pub fn FuncEnvironment::new(@wasm_frontend.EmbeddingEnvironment, Array[@types.GlobalType], memory_mins? : Array[Int64], memory_is_64? : Array[Bool], memory_page_size_log2? : Array[Int]) -> Self
 pub fn FuncEnvironment::translate_global_get(Self, @milkir.IRBuilder, @milkir.Value, Int) -> @milkir.Value
 pub fn FuncEnvironment::translate_global_set(Self, @milkir.IRBuilder, @milkir.Value, Int, @milkir.Value) -> Unit
 pub fn FuncEnvironment::translate_memory_copy(Self, @milkir.IRBuilder, Int, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
@@ -45,8 +46,8 @@ pub fn FuncEnvironment::translate_table_set(Self, @milkir.IRBuilder, @milkir.Val
 pub fn FuncEnvironment::translate_table_size(Self, @milkir.IRBuilder, @milkir.Value, Int, is_table64? : Bool) -> @milkir.Value
 
 type Translator
-pub fn Translator::from_module(@types.Module, Int, name? : String, memory_max_override? : Int?) -> Self
-pub fn Translator::new(String, @types.FuncType, Array[@types.ValueType], Array[@types.FuncType], Array[Int], Int, Array[Int], memory_max? : Int?, memory_is_64? : Array[Bool], memory_page_size_log2? : Array[Int], tables? : Array[@types.Table], global_types? : Array[@types.GlobalType], type_rec_groups? : Array[Int], func_base? : Int, import_remap? : Array[Int], module_types? : Array[@types.SubType], tags? : Array[@types.TagType], memory_mins? : Array[Int64]) -> Self
+pub fn Translator::from_module(@types.Module, Int, @wasm_frontend.EmbeddingEnvironment, name? : String, memory_max_override? : Int?) -> Self
+pub fn Translator::new(String, @types.FuncType, Array[@types.ValueType], Array[@types.FuncType], Array[Int], Int, Array[Int], @wasm_frontend.EmbeddingEnvironment, memory_max? : Int?, memory_is_64? : Array[Bool], memory_page_size_log2? : Array[Int], tables? : Array[@types.Table], global_types? : Array[@types.GlobalType], type_rec_groups? : Array[Int], func_base? : Int, import_remap? : Array[Int], module_types? : Array[@types.SubType], tags? : Array[@types.TagType], memory_mins? : Array[Int64]) -> Self
 pub fn Translator::translate(Self, Array[@types.Instruction]) -> @milkir.Function
 
 // Type aliases

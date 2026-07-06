@@ -1610,6 +1610,7 @@ pub fn compile_module_to_jit(
       mod_.funcs,
       num_imports,
       import_func_type_indices,
+      @wasmoon.wasm_frontend_embedding_environment(),
       memory_max=memory_max_for_translate,
       memory_is_64~,
       memory_page_size_log2~,

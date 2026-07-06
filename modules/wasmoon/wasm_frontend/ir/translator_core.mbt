@@ -90,6 +90,7 @@ pub fn Translator::new(
   func_type_indices : Array[Int],
   num_imports : Int,
   import_func_type_indices : Array[Int],
+  embedding_env : @wasm_frontend.EmbeddingEnvironment,
   memory_max? : Int? = None,
   memory_is_64? : Array[Bool] = [],
   memory_page_size_log2? : Array[Int] = [],
@@ -111,6 +112,7 @@ pub fn Translator::new(
 
   // Create function environment for desugaring Wasm operations
   let func_env = FuncEnvironment::new(
+    embedding_env,
     global_types,
     memory_mins~,
     memory_is_64~,
@@ -186,6 +188,7 @@ pub fn Translator::new(
 pub fn Translator::from_module(
   mod_ : @types.Module,
   func_local_idx : Int,
+  embedding_env : @wasm_frontend.EmbeddingEnvironment,
   name? : String,
   memory_max_override? : Int? = None,
 ) -> Translator {
@@ -286,6 +289,7 @@ pub fn Translator::from_module(
     mod_.funcs,
     num_imports,
     import_func_type_indices,
+    embedding_env,
     memory_max~,
     memory_is_64~,
     memory_page_size_log2~,
@@ -304,12 +308,14 @@ pub fn Translator::from_module(
 pub fn translate_function(
   mod_ : @types.Module,
   func_local_idx : Int,
+  embedding_env : @wasm_frontend.EmbeddingEnvironment,
   name? : String,
   memory_max_override? : Int? = None,
 ) -> Function {
   let translator = Translator::from_module(
     mod_,
     func_local_idx,
+    embedding_env,
     name?,
     memory_max_override~,
   )

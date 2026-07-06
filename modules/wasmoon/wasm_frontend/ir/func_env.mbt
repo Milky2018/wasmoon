@@ -6,7 +6,7 @@
 //
 // Benefits:
 // - Simpler lowering phase (no special cases for these operations)
-// - Centralized VMContext layout knowledge
+// - Centralized embedding layout knowledge
 // - Easier to change ABI (modify here, not scattered across lowering/emit)
 
 ///|
@@ -17,6 +17,8 @@ pub const WASM_PAGE_SIZE : Int = 65536
 /// FuncEnvironment holds VMContext layout info used during IR translation to
 /// desugar Wasm operations.
 struct FuncEnvironment {
+  runtime_layout : @wasm_frontend.RuntimeLayout
+  memory_descriptor_layout : @wasm_frontend.MemoryDescriptorLayout
   // Global variable types (for determining load/store width)
   global_types : Array[@types.GlobalType]
   // Minimum guaranteed memory size in bytes for each memory index
@@ -43,12 +45,24 @@ struct FuncEnvironment {
 
 ///|
 pub fn FuncEnvironment::new(
+  embedding_env : @wasm_frontend.EmbeddingEnvironment,
   global_types : Array[@types.GlobalType],
   memory_mins? : Array[Int64] = [],
   memory_is_64? : Array[Bool] = [],
   memory_page_size_log2? : Array[Int] = [],
 ) -> FuncEnvironment {
+  let runtime_layout = match embedding_env.runtime_layout() {
+    Some(layout) => layout
+    None => abort("wasm frontend IR translator requires runtime layout")
+  }
+  let memory_descriptor_layout = match
+    embedding_env.memory_descriptor_layout() {
+    Some(layout) => layout
+    None => abort("wasm frontend IR translator requires memory layout")
+  }
   {
+    runtime_layout,
+    memory_descriptor_layout,
     global_types,
     memory_mins,
     memory_is_64,
@@ -73,7 +87,7 @@ pub fn FuncEnvironment::translate_global_get(
 ) -> Value {
   let global_type = self.global_types[global_idx]
   let ty = type_from_wasm(global_type.value_type)
-  let layout = @wasmoon_jit.vmcontext_layout()
+  let layout = self.runtime_layout
 
   // Load globals_ptr from vmctx
   let globals_offset = builder.iconst(I64, layout.globals_offset.to_int64())
@@ -100,7 +114,7 @@ pub fn FuncEnvironment::translate_global_set(
 ) -> Unit {
   let global_type = self.global_types[global_idx]
   let ty = type_from_wasm(global_type.value_type)
-  let layout = @wasmoon_jit.vmcontext_layout()
+  let layout = self.runtime_layout
 
   // Load globals_ptr from vmctx
   let globals_offset = builder.iconst(I64, layout.globals_offset.to_int64())
@@ -121,13 +135,13 @@ pub fn FuncEnvironment::translate_global_set(
 /// For table 0: Load from vmctx.table0_elements
 /// For table N: Load from vmctx.table_sizes[N]
 pub fn FuncEnvironment::translate_table_size(
-  _self : FuncEnvironment,
+  self : FuncEnvironment,
   builder : IRBuilder,
   vmctx : Value,
   table_idx : Int,
   is_table64? : Bool = false,
 ) -> Value {
-  let layout = @wasmoon_jit.vmcontext_layout()
+  let layout = self.runtime_layout
   if table_idx == 0 {
     // Fast path for table 0
     let offset = builder.iconst(I64, layout.table0_elements_offset.to_int64())
@@ -162,14 +176,14 @@ pub fn FuncEnvironment::translate_table_size(
 /// 3. Calculate address: table_base + elem_idx * 16
 /// 4. Load value
 pub fn FuncEnvironment::translate_table_get(
-  _self : FuncEnvironment,
+  self : FuncEnvironment,
   builder : IRBuilder,
   vmctx : Value,
   table_idx : Int,
   elem_idx : Value,
   is_table64? : Bool = false,
 ) -> Value {
-  let layout = @wasmoon_jit.vmcontext_layout()
+  let layout = self.runtime_layout
   // Get table size for bounds check
   let (table_size, table_base) = if table_idx == 0 {
     // Fast path for table 0
@@ -259,8 +273,13 @@ pub fn FuncEnvironment::translate_table_set(
 /// Helper to load memory size in bytes for a given memidx.
 /// For memidx 0: use fast path (direct vmctx field)
 /// For memidx > 0: load from memories array
-fn load_memory_size(builder : IRBuilder, vmctx : Value, memidx : Int) -> Value {
-  let layout = @wasmoon_jit.vmcontext_layout()
+fn FuncEnvironment::load_memory_size(
+  self : FuncEnvironment,
+  builder : IRBuilder,
+  vmctx : Value,
+  memidx : Int,
+) -> Value {
+  let layout = self.runtime_layout
   if memidx == 0 {
     let mem0_size_off = builder.iconst(
       I64,
@@ -277,7 +296,7 @@ fn load_memory_size(builder : IRBuilder, vmctx : Value, memidx : Int) -> Value {
     )
     builder.load_ptr(I64, memories_ptr, idx_off)
   }
-  let memory_layout = @wasmoon_jit.memory_descriptor_layout()
+  let memory_layout = self.memory_descriptor_layout
   let size_off = builder.iconst(
     I64,
     memory_layout.current_length_offset.to_int64(),
@@ -537,7 +556,7 @@ pub fn FuncEnvironment::emit_bounds_check(
   )
   let skip_bounds_check = skip_const_bounds_check || skip_redundant_bounds_check
   let memory_base = builder.load_mem_base(vmctx, memidx)
-  let memory_size = load_memory_size(builder, vmctx, memidx)
+  let memory_size = self.load_memory_size(builder, vmctx, memidx)
 
   // For memory64, address is already i64; for memory32, extend i32 to i64
   let is_memory64 = memidx < self.memory_is_64.length() &&
@@ -629,7 +648,7 @@ pub fn FuncEnvironment::translate_memory_load(
   )
   let skip_bounds_check = skip_const_bounds_check || skip_redundant_bounds_check
   let memory_base = builder.load_mem_base(vmctx, memidx)
-  let memory_size = load_memory_size(builder, vmctx, memidx)
+  let memory_size = self.load_memory_size(builder, vmctx, memidx)
 
   // For memory64, address is already i64; for memory32, extend i32 to i64
   let is_memory64 = memidx < self.memory_is_64.length() &&
@@ -730,7 +749,7 @@ pub fn FuncEnvironment::translate_memory_store(
   )
   let skip_bounds_check = skip_const_bounds_check || skip_redundant_bounds_check
   let memory_base = builder.load_mem_base(vmctx, memidx)
-  let memory_size = load_memory_size(builder, vmctx, memidx)
+  let memory_size = self.load_memory_size(builder, vmctx, memidx)
 
   // For memory64, address is already i64; for memory32, extend i32 to i64
   let is_memory64 = memidx < self.memory_is_64.length() &&
@@ -823,7 +842,7 @@ pub fn FuncEnvironment::translate_memory_load_narrow(
   )
   let skip_bounds_check = skip_const_bounds_check || skip_redundant_bounds_check
   let memory_base = builder.load_mem_base(vmctx, memidx)
-  let memory_size = load_memory_size(builder, vmctx, memidx)
+  let memory_size = self.load_memory_size(builder, vmctx, memidx)
 
   // For memory64, address is already i64; for memory32, extend i32 to i64
   let is_memory64 = memidx < self.memory_is_64.length() &&
@@ -917,7 +936,7 @@ pub fn FuncEnvironment::translate_memory_store_narrow(
   )
   let skip_bounds_check = skip_const_bounds_check || skip_redundant_bounds_check
   let memory_base = builder.load_mem_base(vmctx, memidx)
-  let memory_size = load_memory_size(builder, vmctx, memidx)
+  let memory_size = self.load_memory_size(builder, vmctx, memidx)
 
   // For memory64, address is already i64; for memory32, extend i32 to i64
   let is_memory64 = memidx < self.memory_is_64.length() &&
