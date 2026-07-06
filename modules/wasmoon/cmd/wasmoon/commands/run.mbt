@@ -1602,10 +1602,11 @@ pub fn compile_module_to_jit(
     )
     let normalized_opt_level = normalize_opt_level(opt_level)
     let code = mod_.codes[i]
-    let translator = @ir.Translator::new(
+    let ir_func = @ir.translate_function_body(
       func_name,
       func_type,
       code.locals,
+      code.body,
       func_types,
       mod_.funcs,
       num_imports,
@@ -1621,7 +1622,6 @@ pub fn compile_module_to_jit(
       tags=all_tags,
       memory_mins~,
     )
-    let ir_func = translator.translate(code.body)
     emit_compile_progress(
       on_progress,
       Optimize,
@@ -1637,12 +1637,12 @@ pub fn compile_module_to_jit(
         func_idx,
         func_name,
         normalized_opt_level,
-        @ir.instruction_count(ir_func),
+        @milkir.instruction_count(ir_func),
       )
     }
-    @ir.optimize_with_level(
+    @milkir.optimize_with_level(
       ir_func,
-      @ir.OptLevel::from_int(normalized_opt_level),
+      @milkir.OptLevel::from_int(normalized_opt_level),
     )
     |> ignore
     if optimize_tick is Some(tick) {
@@ -1764,7 +1764,10 @@ pub fn compile_module_to_jit(
       func_name=Some(func_name),
     )
     if perf_on {
-      @perf.finish_function(@ir.instruction_count(ir_func), compiled.code_size)
+      @perf.finish_function(
+        @milkir.instruction_count(ir_func),
+        compiled.code_size,
+      )
     }
     if debug_db is Some(db) {
       db.set(

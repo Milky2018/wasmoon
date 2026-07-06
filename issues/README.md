@@ -86,6 +86,7 @@ graph TD
   ISS_070["ISS-070: Lower exact indirect type checks without a MachV Wasm pseudo-op"]
   ISS_071["ISS-071: Move subtype indirect-check slow path out of MachV instruction core"]
   ISS_072["ISS-072: Move Wasmoon GC allocation pseudo-ops out of MachV instruction core"]
+  ISS_073["ISS-073: Narrow wasm frontend IR public API"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
@@ -162,6 +163,7 @@ graph TD
   ISS_069 --> ISS_070
   ISS_070 --> ISS_071
   ISS_071 --> ISS_072
+  ISS_066 --> ISS_073
 ```
 
 ## Warnings

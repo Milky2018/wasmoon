@@ -10,13 +10,9 @@
 // - Easier to change ABI (modify here, not scattered across lowering/emit)
 
 ///|
-/// WASM page size in bytes (64KB)
-pub const WASM_PAGE_SIZE : Int = 65536
-
-///|
 /// FuncEnvironment holds VMContext layout info used during IR translation to
 /// desugar Wasm operations.
-struct FuncEnvironment {
+priv struct FuncEnvironment {
   runtime_layout : @wasm_frontend.RuntimeLayout
   memory_descriptor_layout : @wasm_frontend.MemoryDescriptorLayout
   // Global variable types (for determining load/store width)
@@ -44,7 +40,7 @@ struct FuncEnvironment {
 }
 
 ///|
-pub fn FuncEnvironment::new(
+fn FuncEnvironment::new(
   embedding_env : @wasm_frontend.EmbeddingEnvironment,
   global_types : Array[@types.GlobalType],
   memory_mins? : Array[Int64] = [],
@@ -79,7 +75,7 @@ pub fn FuncEnvironment::new(
 /// Translate global.get to IR primitives:
 /// 1. Load globals_ptr from vmctx
 /// 2. Load value from globals_ptr + (global_idx * 16)
-pub fn FuncEnvironment::translate_global_get(
+fn FuncEnvironment::translate_global_get(
   self : FuncEnvironment,
   builder : IRBuilder,
   vmctx : Value,
@@ -105,7 +101,7 @@ pub fn FuncEnvironment::translate_global_get(
 /// Translate global.set to IR primitives:
 /// 1. Load globals_ptr from vmctx
 /// 2. Store value to globals_ptr + (global_idx * 16)
-pub fn FuncEnvironment::translate_global_set(
+fn FuncEnvironment::translate_global_set(
   self : FuncEnvironment,
   builder : IRBuilder,
   vmctx : Value,
@@ -134,7 +130,7 @@ pub fn FuncEnvironment::translate_global_set(
 /// Translate table.size to IR primitives:
 /// For table 0: Load from vmctx.table0_elements
 /// For table N: Load from vmctx.table_sizes[N]
-pub fn FuncEnvironment::translate_table_size(
+fn FuncEnvironment::translate_table_size(
   self : FuncEnvironment,
   builder : IRBuilder,
   vmctx : Value,
@@ -175,7 +171,7 @@ pub fn FuncEnvironment::translate_table_size(
 /// 2. Load table_base
 /// 3. Calculate address: table_base + elem_idx * 16
 /// 4. Load value
-pub fn FuncEnvironment::translate_table_get(
+fn FuncEnvironment::translate_table_get(
   self : FuncEnvironment,
   builder : IRBuilder,
   vmctx : Value,
@@ -247,7 +243,7 @@ pub fn FuncEnvironment::translate_table_get(
 /// 2. Load table_base
 /// 3. Calculate address: table_base + elem_idx * 16
 /// 4. Store value
-pub fn FuncEnvironment::translate_table_set(
+fn FuncEnvironment::translate_table_set(
   _self : FuncEnvironment,
   builder : IRBuilder,
   vmctx : Value,
@@ -379,7 +375,7 @@ fn FuncEnvironment::get_or_create_atomic_unaligned_trap_block(
 /// Emit an atomic alignment check. Atomics trap on misalignment.
 ///
 /// The check is performed on the linear memory effective address (addr + offset).
-pub fn FuncEnvironment::emit_atomic_alignment_check(
+fn FuncEnvironment::emit_atomic_alignment_check(
   self : FuncEnvironment,
   builder : IRBuilder,
   memidx : Int,
@@ -525,9 +521,9 @@ fn FuncEnvironment::record_bounds_check(
 }
 
 ///|
-/// Emit bounds check and return effective address for memory access
-/// This is a public helper for SIMD and other complex load operations
-pub fn FuncEnvironment::emit_bounds_check(
+/// Emit bounds check and return effective address for memory access.
+/// Shared by SIMD and other complex load operations.
+fn FuncEnvironment::emit_bounds_check(
   self : FuncEnvironment,
   builder : IRBuilder,
   vmctx : Value,
@@ -616,7 +612,7 @@ pub fn FuncEnvironment::emit_bounds_check(
 ///    - Skip bounds check for constant addresses within minimum memory size
 /// 3. Calculate effective address: memory_base + addr + offset
 /// 4. LoadPtr
-pub fn FuncEnvironment::translate_memory_load(
+fn FuncEnvironment::translate_memory_load(
   self : FuncEnvironment,
   builder : IRBuilder,
   vmctx : Value,
@@ -716,7 +712,7 @@ pub fn FuncEnvironment::translate_memory_load(
 ///    - Skip bounds check for constant addresses within minimum memory size
 /// 3. Calculate effective address: memory_base + addr + offset
 /// 4. StorePtr
-pub fn FuncEnvironment::translate_memory_store(
+fn FuncEnvironment::translate_memory_store(
   self : FuncEnvironment,
   builder : IRBuilder,
   vmctx : Value,
@@ -806,7 +802,7 @@ pub fn FuncEnvironment::translate_memory_store(
 
 ///|
 /// Translate narrow memory load (i32.load8_s, i32.load16_u, etc.) to IR primitives
-pub fn FuncEnvironment::translate_memory_load_narrow(
+fn FuncEnvironment::translate_memory_load_narrow(
   self : FuncEnvironment,
   builder : IRBuilder,
   vmctx : Value,
@@ -901,7 +897,7 @@ pub fn FuncEnvironment::translate_memory_load_narrow(
 
 ///|
 /// Translate narrow memory store (i32.store8, i32.store16, etc.) to IR primitives
-pub fn FuncEnvironment::translate_memory_store_narrow(
+fn FuncEnvironment::translate_memory_store_narrow(
   self : FuncEnvironment,
   builder : IRBuilder,
   vmctx : Value,
@@ -989,60 +985,4 @@ pub fn FuncEnvironment::translate_memory_store_narrow(
   let effective_addr = builder.iadd(memory_base, addr_plus_offset)
   let zero_offset = builder.iconst(I64, 0L)
   builder.store_ptr_narrow(narrow_bits, effective_addr, value, zero_offset)
-}
-
-///|
-/// Translate memory.size to IR primitives:
-/// Uses existing MemorySize IR opcode (lowering handles reading from vmctx)
-pub fn FuncEnvironment::translate_memory_size(
-  _self : FuncEnvironment,
-  builder : IRBuilder,
-  memidx : Int,
-) -> Value {
-  builder.memory_size(memidx)
-}
-
-///|
-/// Translate memory.grow to IR primitives:
-/// Uses existing MemoryGrow IR opcode (lowering handles C call)
-pub fn FuncEnvironment::translate_memory_grow(
-  _self : FuncEnvironment,
-  builder : IRBuilder,
-  memidx : Int,
-  delta : Value,
-  max_pages : Int?,
-) -> Value {
-  match max_pages {
-    Some(max) => builder.memory_grow(memidx, delta, max_pages=max)
-    None => builder.memory_grow(memidx, delta)
-  }
-}
-
-///|
-/// Translate memory.fill to IR primitives:
-/// Uses existing MemoryFill IR opcode (lowering handles C call)
-pub fn FuncEnvironment::translate_memory_fill(
-  _self : FuncEnvironment,
-  builder : IRBuilder,
-  memidx : Int,
-  dst : Value,
-  val : Value,
-  size : Value,
-) -> Unit {
-  builder.memory_fill(memidx, dst, val, size)
-}
-
-///|
-/// Translate memory.copy to IR primitives:
-/// Uses existing MemoryCopy IR opcode (lowering handles C call)
-pub fn FuncEnvironment::translate_memory_copy(
-  _self : FuncEnvironment,
-  builder : IRBuilder,
-  dst_memidx : Int,
-  src_memidx : Int,
-  dst : Value,
-  src : Value,
-  size : Value,
-) -> Unit {
-  builder.memory_copy(dst_memidx, src_memidx, dst, src, size)
 }

@@ -8,80 +8,15 @@ import {
 }
 
 // Values
-pub const WASM_PAGE_SIZE : Int = 65536
-
-pub fn instruction_count(@milkir.Function) -> Int
-
-pub fn optimize(@milkir.Function) -> @milkir.OptResult
-
-pub fn optimize_function(@milkir.Function) -> Bool
-
-pub fn optimize_with_level(@milkir.Function, @milkir.OptLevel) -> @milkir.OptResult
-
 pub fn translate_function(@types.Module, Int, @wasm_frontend.EmbeddingEnvironment, name? : String, memory_max_override? : Int?) -> @milkir.Function
 
-pub fn type_from_wasm(@types.ValueType) -> @milkir.Type
-
-pub fn validate_function(@milkir.Function) -> @milkir.ValidationResult
+pub fn translate_function_body(String, @types.FuncType, Array[@types.ValueType], Array[@types.Instruction], Array[@types.FuncType], Array[Int], Int, Array[Int], @wasm_frontend.EmbeddingEnvironment, memory_max? : Int?, memory_is_64? : Array[Bool], memory_page_size_log2? : Array[Int], tables? : Array[@types.Table], global_types? : Array[@types.GlobalType], type_rec_groups? : Array[Int], func_base? : Int, import_remap? : Array[Int], module_types? : Array[@types.SubType], tags? : Array[@types.TagType], memory_mins? : Array[Int64]) -> @milkir.Function
 
 // Errors
 
 // Types and methods
-type FuncEnvironment
-pub fn FuncEnvironment::emit_atomic_alignment_check(Self, @milkir.IRBuilder, Int, @milkir.Value, Int64, Int) -> Unit
-pub fn FuncEnvironment::emit_bounds_check(Self, @milkir.IRBuilder, @milkir.Value, Int, @milkir.Value, Int64, Int) -> @milkir.Value
-pub fn FuncEnvironment::new(@wasm_frontend.EmbeddingEnvironment, Array[@types.GlobalType], memory_mins? : Array[Int64], memory_is_64? : Array[Bool], memory_page_size_log2? : Array[Int]) -> Self
-pub fn FuncEnvironment::translate_global_get(Self, @milkir.IRBuilder, @milkir.Value, Int) -> @milkir.Value
-pub fn FuncEnvironment::translate_global_set(Self, @milkir.IRBuilder, @milkir.Value, Int, @milkir.Value) -> Unit
-pub fn FuncEnvironment::translate_memory_copy(Self, @milkir.IRBuilder, Int, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
-pub fn FuncEnvironment::translate_memory_fill(Self, @milkir.IRBuilder, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
-pub fn FuncEnvironment::translate_memory_grow(Self, @milkir.IRBuilder, Int, @milkir.Value, Int?) -> @milkir.Value
-pub fn FuncEnvironment::translate_memory_load(Self, @milkir.IRBuilder, @milkir.Value, Int, @milkir.Type, @milkir.Value, Int64) -> @milkir.Value
-pub fn FuncEnvironment::translate_memory_load_narrow(Self, @milkir.IRBuilder, @milkir.Value, Int, @milkir.Type, Int, Bool, @milkir.Value, Int64) -> @milkir.Value
-pub fn FuncEnvironment::translate_memory_size(Self, @milkir.IRBuilder, Int) -> @milkir.Value
-pub fn FuncEnvironment::translate_memory_store(Self, @milkir.IRBuilder, @milkir.Value, Int, @milkir.Type, @milkir.Value, @milkir.Value, Int64) -> Unit
-pub fn FuncEnvironment::translate_memory_store_narrow(Self, @milkir.IRBuilder, @milkir.Value, Int, Int, @milkir.Value, @milkir.Value, Int64) -> Unit
-pub fn FuncEnvironment::translate_table_get(Self, @milkir.IRBuilder, @milkir.Value, Int, @milkir.Value, is_table64? : Bool) -> @milkir.Value
-pub fn FuncEnvironment::translate_table_set(Self, @milkir.IRBuilder, @milkir.Value, Int, @milkir.Value, @milkir.Value, is_table64? : Bool) -> Unit
-pub fn FuncEnvironment::translate_table_size(Self, @milkir.IRBuilder, @milkir.Value, Int, is_table64? : Bool) -> @milkir.Value
-
-type Translator
-pub fn Translator::from_module(@types.Module, Int, @wasm_frontend.EmbeddingEnvironment, name? : String, memory_max_override? : Int?) -> Self
-pub fn Translator::new(String, @types.FuncType, Array[@types.ValueType], Array[@types.FuncType], Array[Int], Int, Array[Int], @wasm_frontend.EmbeddingEnvironment, memory_max? : Int?, memory_is_64? : Array[Bool], memory_page_size_log2? : Array[Int], tables? : Array[@types.Table], global_types? : Array[@types.GlobalType], type_rec_groups? : Array[Int], func_base? : Int, import_remap? : Array[Int], module_types? : Array[@types.SubType], tags? : Array[@types.TagType], memory_mins? : Array[Int64]) -> Self
-pub fn Translator::translate(Self, Array[@types.Instruction]) -> @milkir.Function
 
 // Type aliases
-pub using @milkir {type Block}
-
-pub using @milkir {type ExternalSymbol}
-
-pub using @milkir {type FloatCC}
-
-pub using @milkir {type Function}
-
-pub using @milkir {type IRBuilder}
-
-pub using @milkir {type Inst}
-
-pub using @milkir {type IntCC}
-
-pub using @milkir {type Metadata}
-
-pub using @milkir {type Opcode}
-
-pub using @milkir {type OptLevel}
-
-pub using @milkir {type OptResult}
-
-pub using @milkir {type Signature}
-
-pub using @milkir {type StackSlot}
-
-pub using @milkir {type Terminator}
-
-pub using @milkir {type Type}
-
-pub using @milkir {type Value}
 
 // Traits
 

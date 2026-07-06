@@ -3,7 +3,7 @@
 
 ///|
 /// Translator state for converting a single WASM function to IR
-struct Translator {
+priv struct Translator {
   builder : IRBuilder
   // Value stack - simulates WASM's operand stack
   value_stack : Array[Value]
@@ -82,7 +82,7 @@ fn Translator::mark_block_frame_reachable(self : Translator, idx : Int) -> Unit 
 /// Low-level constructor with explicit parameters.
 /// Prefer `Translator::from_module` for normal use - it extracts all
 /// parameters from the module automatically and is less error-prone.
-pub fn Translator::new(
+fn Translator::new(
   name : String,
   func_type : @types.FuncType,
   locals : Array[@types.ValueType],
@@ -185,7 +185,7 @@ pub fn Translator::new(
 /// - mod_: The WASM module
 /// - func_local_idx: Index of the function in mod_.codes (0-based, excludes imports)
 /// - name: Optional function name override (defaults to export name or "func_N")
-pub fn Translator::from_module(
+fn Translator::from_module(
   mod_ : @types.Module,
   func_local_idx : Int,
   embedding_env : @wasm_frontend.EmbeddingEnvironment,
@@ -321,6 +321,54 @@ pub fn translate_function(
   )
   let code = mod_.codes[func_local_idx]
   translator.translate(code.body)
+}
+
+///|
+/// Translate a decoded Wasm function body with explicit module metadata.
+pub fn translate_function_body(
+  name : String,
+  func_type : @types.FuncType,
+  locals : Array[@types.ValueType],
+  body : Array[@types.Instruction],
+  func_types : Array[@types.FuncType],
+  func_type_indices : Array[Int],
+  num_imports : Int,
+  import_func_type_indices : Array[Int],
+  embedding_env : @wasm_frontend.EmbeddingEnvironment,
+  memory_max? : Int? = None,
+  memory_is_64? : Array[Bool] = [],
+  memory_page_size_log2? : Array[Int] = [],
+  tables? : Array[@types.Table] = [],
+  global_types? : Array[@types.GlobalType] = [],
+  type_rec_groups? : Array[Int] = [],
+  func_base? : Int = 0,
+  import_remap? : Array[Int] = [],
+  module_types? : Array[@types.SubType] = [],
+  tags? : Array[@types.TagType] = [],
+  memory_mins? : Array[Int64] = [],
+) -> Function {
+  let translator = Translator::new(
+    name,
+    func_type,
+    locals,
+    func_types,
+    func_type_indices,
+    num_imports,
+    import_func_type_indices,
+    embedding_env,
+    memory_max~,
+    memory_is_64~,
+    memory_page_size_log2~,
+    tables~,
+    global_types~,
+    type_rec_groups~,
+    func_base~,
+    import_remap~,
+    module_types~,
+    tags~,
+    memory_mins~,
+  )
+  translator.translate(body)
 }
 
 ///|
@@ -620,7 +668,7 @@ fn get_block_param_types(
 
 ///|
 /// Translate a sequence of WASM instructions
-pub fn Translator::translate(
+fn Translator::translate(
   self : Translator,
   instrs : Array[@types.Instruction],
 ) -> Function {
