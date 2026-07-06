@@ -46,6 +46,8 @@ pub fn find_back_edges_from_edges(DenseCfgEdges) -> Array[(Int, Int)]
 
 pub fn find_loops_from_edges(DenseCfgEdges) -> Array[DenseCfgLoop]
 
+pub fn[P] has_backtracking_span_conflict(Array[OrderedSpan[P]], Array[(Int, OrderedSpan[P])]) -> Bool
+
 pub fn has_ordered_span_conflict(Array[OrderedProgramSpan], Array[OrderedProgramSpan]) -> Bool
 
 pub fn insert_allocated_spans(Array[AllocatedProgramSpan], Int, Array[OrderedProgramSpan]) -> Array[AllocatedProgramSpan]
@@ -61,6 +63,8 @@ pub fn[P] make_backtracking_alloc_table(Int) -> Array[Array[(Int, OrderedSpan[P]
 pub fn make_backtracking_bool_table(Int) -> Array[Bool]
 
 pub fn max_physical_reg_id(Array[PhysicalReg]) -> Int
+
+pub fn[P] plan_backtracking_bundle_split(Array[BacktrackingSplitRange[P]], P?, Bool, (P, P) -> Bool, (P, P) -> Bool) -> BacktrackingSplitPlan
 
 pub fn plan_bundle_merges(Array[BundleMergeRange], Array[BundleMergeEdge], Array[Int], Array[Int]) -> BundleMergePlan
 
@@ -88,6 +92,8 @@ pub fn resolve_parallel_moves(Array[ParallelMove], Array[PhysicalReg], Array[Phy
 
 pub fn resolve_threaded_jump(Array[ThreadBlock], Int, Array[ThreadArg]) -> ThreadedJump
 
+pub fn[P] scan_backtracking_conflicts_with_cutoff(Array[OrderedSpan[P]], Array[BacktrackingOccupiedSpan[P]], Int, Int?) -> BacktrackingConflictScanResult[P]
+
 pub fn scan_conflicts_with_cutoff(Array[OrderedProgramSpan], Array[OccupiedProgramSpan], Int, Int?) -> ConflictScanResult
 
 pub fn select_available_regs_for_bundle(RegClass, Bool, Array[PhysicalReg], Array[PhysicalReg]) -> Array[PhysicalReg]
@@ -97,6 +103,10 @@ pub fn select_caller_saved_regs(Array[PhysicalReg], Array[PhysicalReg]) -> Array
 pub fn should_force_spill_after_retry(Int, Int, Bool, Bool) -> Bool
 
 pub fn should_force_spill_for_class_and_call(RegClass, Bool) -> Bool
+
+pub fn should_prefer_caller_saved_for_backtracking(RegClass, Bool, Bool) -> Bool
+
+pub fn[P] should_take_backtracking_split_candidate(Int?, P?, Int, P, (P, P) -> Int) -> Bool
 
 pub fn should_take_eviction_candidate(Int?, PhysicalReg?, Int, PhysicalReg, PhysicalReg?) -> Bool
 
@@ -151,12 +161,26 @@ pub(all) struct Assignment {
   mut location : Location
 } derive(Eq, @debug.Debug)
 
+pub(all) struct BacktrackingConflictScanResult[P] {
+  conflict_ids : Array[Int]
+  max_conflict_weight : Int
+  first_conflict_point : P?
+  rejected : Bool
+}
+
 type BacktrackingHintCache[P]
 pub fn[P] BacktrackingHintCache::hint(Self[P], Int) -> P?
 pub fn[P] BacktrackingHintCache::is_ready(Self[P], Int) -> Bool
 pub fn[P] BacktrackingHintCache::new(Int) -> Self[P]
 pub fn[P] BacktrackingHintCache::push_bundle_slot(Self[P]) -> Unit
 pub fn[P] BacktrackingHintCache::set(Self[P], Int, P?) -> Unit
+
+pub(all) struct BacktrackingOccupiedSpan[P] {
+  owner_id : Int
+  span : OrderedSpan[P]
+  owner_weight : Int
+  owner_pinned : Bool
+}
 
 type BacktrackingQueue[P]
 pub fn[P] BacktrackingQueue::clear(Self[P]) -> Unit
@@ -180,6 +204,18 @@ pub fn[P] BacktrackingSpillsetState::push_bundle_slot(Self[P]) -> Unit
 pub fn[P] BacktrackingSpillsetState::record_hint(Self[P], Int, P) -> Unit
 pub fn[P] BacktrackingSpillsetState::record_split(Self[P], Int) -> Unit
 pub fn[P] BacktrackingSpillsetState::split_limit_reached(Self[P], Int) -> Bool
+
+pub(all) enum BacktrackingSplitPlan {
+  BacktrackingSplit(Array[Int], Array[Int])
+  BacktrackingMinimal
+  BacktrackingSpillWhole
+} derive(@debug.Debug)
+
+pub(all) struct BacktrackingSplitRange[P] {
+  range_id : Int
+  start : P?
+  end : P?
+}
 
 pub(all) struct Block {
   id : Int

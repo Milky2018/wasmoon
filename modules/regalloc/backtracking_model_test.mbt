@@ -35,3 +35,90 @@ test "backtracking spillset state records hints and split caps" {
   spillsets.record_split(1)
   inspect(spillsets.split_limit_reached(1), content="true")
 }
+
+///|
+test "backtracking conflict scan is generic over point type" {
+  let span : OrderedSpan[Int] = { start: 10, start_ord: 10, end_ord: 30 }
+  let occupied : Array[BacktrackingOccupiedSpan[Int]] = [
+    {
+      owner_id: 7,
+      span: { start: 0, start_ord: 0, end_ord: 12 },
+      owner_weight: 2,
+      owner_pinned: false,
+    },
+    {
+      owner_id: 8,
+      span: { start: 20, start_ord: 20, end_ord: 40 },
+      owner_weight: 5,
+      owner_pinned: false,
+    },
+  ]
+  let result = scan_backtracking_conflicts_with_cutoff(
+    [span],
+    occupied,
+    9,
+    None,
+  )
+  debug_inspect(result.conflict_ids, content="[7, 8]")
+  inspect(result.max_conflict_weight, content="5")
+  inspect(result.first_conflict_point == Some(10), content="true")
+  inspect(result.rejected, content="false")
+  let rejected = scan_backtracking_conflicts_with_cutoff(
+    [span],
+    [
+      {
+        owner_id: 9,
+        span: { start: 11, start_ord: 11, end_ord: 12 },
+        owner_weight: 1,
+        owner_pinned: true,
+      },
+    ],
+    9,
+    None,
+  )
+  inspect(rejected.rejected, content="true")
+}
+
+///|
+test "backtracking split plan is generic over point ordering" {
+  let ranges : Array[BacktrackingSplitRange[Int]] = [
+    { range_id: 0, start: Some(0), end: Some(4) },
+    { range_id: 1, start: Some(6), end: Some(10) },
+  ]
+  match
+    plan_backtracking_bundle_split(
+      ranges,
+      Some(5),
+      false,
+      fn(end_point, split_point) { end_point <= split_point },
+      fn(start_point, split_point) { start_point >= split_point },
+    ) {
+    BacktrackingSplit(before, after) => {
+      debug_inspect(before, content="[0]")
+      debug_inspect(after, content="[1]")
+    }
+    _ => abort("expected split")
+  }
+  match
+    plan_backtracking_bundle_split(
+      ranges,
+      Some(20),
+      false,
+      fn(end_point, split_point) { end_point <= split_point },
+      fn(start_point, split_point) { start_point >= split_point },
+    ) {
+    BacktrackingMinimal => ()
+    _ => abort("expected minimal fallback")
+  }
+  match
+    plan_backtracking_bundle_split(
+      ranges,
+      None,
+      false,
+      fn(end_point, split_point) { end_point <= split_point },
+      fn(start_point, split_point) { start_point >= split_point },
+    ) {
+    BacktrackingSpillWhole => ()
+    _ => abort("expected whole-bundle spill")
+  }
+}
