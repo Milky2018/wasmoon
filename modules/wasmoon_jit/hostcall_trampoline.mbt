@@ -72,7 +72,7 @@ pub fn emit_hostcall_import_trampoline(
   host_func_addr : Int,
   hostcall_symbol : @instr.ExternalName,
   call_conv_layout : @abi.CallConventionLayout,
-) -> MachineCode {
+) -> @machv_emit.MachineCode {
   let func = @machv.Function::new("host_import_trampoline")
 
   // Params: always include vmctx as the first parameter (ISA-specific ABI reg).
@@ -315,5 +315,5 @@ pub fn emit_hostcall_import_trampoline(
     func,
     call_conv_layout=Some(call_conv_layout),
   )
-  emit_function(allocated, call_conv_layout=Some(call_conv_layout))
+  @machv_emit.emit_function(allocated, call_conv_layout=Some(call_conv_layout))
 }

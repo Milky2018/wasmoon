@@ -1,5 +1,4 @@
 import {
-  "Milky2018/milkir",
   "Milky2018/machv",
   "Milky2018/machv/abi",
   "Milky2018/machv/instr",
@@ -7,8 +6,6 @@ import {
   "Milky2018/machv_regalloc/layout",
   "Milky2018/machv_emit/isaregs",
   "Milky2018/machv_regalloc",
-  "Milky2018/isa_target/lower",
-  "Milky2018/wasm_core/types",
   "moonbitlang/core/cmp",
   "moonbitlang/core/hashset",
 }

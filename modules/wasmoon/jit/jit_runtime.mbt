@@ -248,7 +248,7 @@ pub fn JITModule::load_with_imports(
               } else {
                 ([], [])
               }
-              let mc = @machv_emit.emit_hostcall_import_trampoline(
+              let mc = @wasmoon_jit.emit_hostcall_import_trampoline(
                 param_types,
                 result_types,
                 host_func_addr,

@@ -291,7 +291,7 @@ fn JITContext::call_multi_return(
           @wasmoon_jit.entry_trampoline_value_type_code(result_type),
         )
       }
-      let mc = @machv_emit.emit_entry_trampoline(
+      let mc = @wasmoon_jit.emit_entry_trampoline(
         param_codes_arr,
         result_codes_arr,
         @wasmoon_jit.wasm_calling_convention(),

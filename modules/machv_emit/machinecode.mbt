@@ -263,12 +263,24 @@ pub fn MachineCode::dump_disasm(self : MachineCode) -> String {
 
 ///|
 fn hex2(n : Int) -> String {
-  @types.to_hex_byte(n)
+  let hi = (n >> 4) & 0xF
+  let lo = n & 0xF
+  let hi_c = if hi < 10 {
+    (hi + 48).unsafe_to_char()
+  } else {
+    (hi - 10 + 97).unsafe_to_char()
+  }
+  let lo_c = if lo < 10 {
+    (lo + 48).unsafe_to_char()
+  } else {
+    (lo - 10 + 97).unsafe_to_char()
+  }
+  hi_c.to_string() + lo_c.to_string()
 }
 
 ///|
 fn to_hex_offset(n : Int, width : Int) -> String {
-  let hex = @types.int_to_hex(n)
+  let hex = int_to_hex(n)
   if hex.length() >= width {
     hex
   } else {
@@ -380,7 +392,7 @@ pub fn MachineCode::record_gc_safepoint(
 ) -> Int {
   let sanitized_indices : Array[Int] = []
   for idx in root_indices {
-    if idx >= 0 && idx <= @types.I32_MAX {
+    if idx >= 0 && idx <= STACKMAP_I32_MAX {
       sanitized_indices.push(idx)
     }
   }
@@ -511,7 +523,7 @@ pub fn MachineCode::resolve_fixups(self : MachineCode) -> Unit {
 fn amd64_const_key(bytes : Bytes, align : Int) -> String {
   let mut key = "\{align}:"
   for b in bytes {
-    key = key + @types.to_hex_byte(b.to_int())
+    key = key + hex2(b.to_int())
   }
   key
 }

@@ -34,7 +34,7 @@ pub fn emit_entry_trampoline(
   param_types : Array[Int],
   result_types : Array[Int],
   call_conv_layout : @abi.CallConventionLayout,
-) -> MachineCode {
+) -> @machv_emit.MachineCode {
   // Generate trampoline as IR using IRBuilder
   let ir_func = generate_trampoline_ir(param_types, result_types)
 
@@ -49,7 +49,7 @@ pub fn emit_entry_trampoline(
   )
 
   // Emit machine code
-  emit_function(allocated, call_conv_layout=Some(call_conv_layout))
+  @machv_emit.emit_function(allocated, call_conv_layout=Some(call_conv_layout))
 }
 
 ///|

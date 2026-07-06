@@ -16,6 +16,16 @@ import {
 }
 
 // Values
+pub const TYPE_F32 : Int = 2
+
+pub const TYPE_F64 : Int = 3
+
+pub const TYPE_I32 : Int = 0
+
+pub const TYPE_I64 : Int = 1
+
+pub const TYPE_V128 : Int = 4
+
 pub fn alloc_guarded_memory_desc(Int, Int?) -> Int64
 
 pub fn alloc_memory(Int64) -> Int64
@@ -85,6 +95,10 @@ pub fn derive_gc_safepoints(Array[Int], Array[Int], Array[Array[Int]]) -> Array[
 pub fn direct_call_idx_memory_copy_mem0() -> Int
 
 pub fn direct_call_idx_memory_fill_mem0() -> Int
+
+pub fn emit_entry_trampoline(Array[Int], Array[Int], @abi.CallConventionLayout) -> @machv_emit.MachineCode
+
+pub fn emit_hostcall_import_trampoline(Array[@types.ValueType], Array[@types.ValueType], Int, @instr.ExternalName, @abi.CallConventionLayout) -> @machv_emit.MachineCode
 
 pub fn encode_aarch64_bl_imm26(Int64, Int64) -> Int?
 
@@ -539,6 +553,17 @@ pub fn CallCounter::reset(Self, Int) -> Unit
 pub fn CallCounter::total(Self) -> Int
 pub fn CallCounter::unique_functions(Self) -> Int
 
+type CodeCache
+pub fn CodeCache::clear(Self) -> Unit
+pub fn CodeCache::contains(Self, Int) -> Bool
+pub fn CodeCache::get(Self, Int) -> @machv_emit.CompiledFunction?
+pub fn CodeCache::insert(Self, Int, @machv_emit.CompiledFunction) -> Unit
+pub fn CodeCache::invalidate(Self, Int) -> Unit
+pub fn CodeCache::new(Int) -> Self
+pub fn CodeCache::remove(Self, Int) -> Unit
+pub fn CodeCache::stats(Self) -> (Int, Int, Int, Int)
+pub impl Show for CodeCache
+
 pub(all) enum CompilationDecision {
   Interpret
   CompileAndExecute(CompilationMode)
@@ -647,6 +672,15 @@ type ExecCode
 pub fn ExecCode::new(Array[Int]) -> Self?
 pub fn ExecCode::ptr(Self) -> Int64
 
+type ExecutableRegion
+pub fn ExecutableRegion::address_at(Self, Int) -> Int
+pub fn ExecutableRegion::finalize(Self) -> Unit
+pub fn ExecutableRegion::new(Int, Int) -> Self
+pub fn ExecutableRegion::read_at(Self, Int, Int) -> Array[Int]
+pub fn ExecutableRegion::remaining(Self) -> Int
+pub fn ExecutableRegion::write(Self, Array[Int]) -> Result[Int, String]
+pub impl Show for ExecutableRegion
+
 pub struct FunctionInfo {
   name : String
   func_idx : Int
@@ -702,6 +736,15 @@ pub struct JITFunctionDebug {
 }
 pub fn JITFunctionDebug::new(String, String, String, String) -> Self
 
+type JITRuntime
+pub fn JITRuntime::clear(Self) -> Unit
+pub fn JITRuntime::invalidate(Self, Int) -> Unit
+pub fn JITRuntime::lookup(Self, Int) -> @machv_emit.CompiledFunction?
+pub fn JITRuntime::new(Int, Int) -> Self
+pub fn JITRuntime::register(Self, Int, @machv_emit.CompiledFunction) -> Result[Int, String]
+pub fn JITRuntime::stats(Self) -> (Int, Int, Int, Int, Int, Int, Int)
+pub impl Show for JITRuntime
+
 type JITTable derive(@debug.Debug)
 pub fn JITTable::get_entry_type(Self, Int) -> Int
 pub fn JITTable::get_entry_value(Self, Int) -> Int64
@@ -740,6 +783,16 @@ pub struct MemoryInfo {
   max_pages : Int?
 }
 pub fn MemoryInfo::new(Int64, Int64, Int?) -> Self
+
+type MemoryManager
+pub fn MemoryManager::alloc_region(Self, Int) -> ExecutableRegion
+pub fn MemoryManager::finalize_all(Self) -> Unit
+pub fn MemoryManager::get_current_region(Self) -> ExecutableRegion
+pub fn MemoryManager::new(Int) -> Self
+pub fn MemoryManager::total_allocated(Self) -> Int
+pub fn MemoryManager::total_used(Self) -> Int
+pub fn MemoryManager::write_code(Self, @machv_emit.MachineCode) -> Result[(ExecutableRegion, Int), String]
+pub impl Show for MemoryManager
 
 pub(all) struct NativeGlueBinding {
   kind : NativeGlueKind
