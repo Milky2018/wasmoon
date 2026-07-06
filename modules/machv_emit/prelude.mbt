@@ -350,12 +350,13 @@ fn MachineCode::emit_prologue(
 
     if debug_func_idx is Some(idx) {
       let vmctx_src = isa.wasm_vmctx_arg_preg().index
+      let layout = stack_frame.require_runtime_layout()
       let scratch = 11
       if self.debug_prev_func_idx_spill_offset >= 0 {
         self.x86_emit_mov_r32_m32(
           scratch,
           vmctx_src,
-          @abi.VMCTX_DEBUG_CURRENT_FUNC_IDX_OFFSET,
+          layout.debug_current_function_offset,
         )
         self.x86_emit_mov_m32_r32(
           4,
@@ -366,7 +367,7 @@ fn MachineCode::emit_prologue(
       self.x86_emit_mov_imm64(scratch, idx.to_int64())
       self.x86_emit_mov_m32_r32(
         vmctx_src,
-        @abi.VMCTX_DEBUG_CURRENT_FUNC_IDX_OFFSET,
+        layout.debug_current_function_offset,
         scratch,
       )
     }
@@ -382,17 +383,19 @@ fn MachineCode::emit_prologue(
         self.x86_emit_mov_rr(vmctx, vmctx_src)
       }
       if stack_frame.cache_mem0_desc {
+        let layout = stack_frame.require_runtime_layout()
         self.x86_emit_mov_r64_m64(
           @isaregs.mem0_desc_index(),
           vmctx,
-          @abi.VMCTX_MEMORY0_OFFSET,
+          layout.primary_memory_descriptor_offset,
         )
       }
       if stack_frame.cache_func_table {
+        let layout = stack_frame.require_runtime_layout()
         self.x86_emit_mov_r64_m64(
           @isaregs.func_table_index(),
           vmctx,
-          @abi.VMCTX_FUNC_TABLE_OFFSET,
+          layout.function_table_offset,
         )
       }
     }
@@ -648,12 +651,9 @@ fn MachineCode::emit_prologue(
 
   if debug_func_idx is Some(idx) {
     let vmctx_reg = @isaregs.current_isa().wasm_vmctx_arg_preg().index
+    let layout = stack_frame.require_runtime_layout()
     if self.debug_prev_func_idx_spill_offset >= 0 {
-      self.emit_ldr_w_imm(
-        16,
-        vmctx_reg,
-        @abi.VMCTX_DEBUG_CURRENT_FUNC_IDX_OFFSET,
-      )
+      self.emit_ldr_w_imm(16, vmctx_reg, layout.debug_current_function_offset)
       if self.debug_prev_func_idx_spill_offset <= 16380 {
         self.emit_str_w_imm(16, 31, self.debug_prev_func_idx_spill_offset)
       } else {
@@ -666,7 +666,7 @@ fn MachineCode::emit_prologue(
       }
     }
     self.emit_load_imm64(16, idx.to_int64())
-    self.emit_str_w_imm(16, vmctx_reg, @abi.VMCTX_DEBUG_CURRENT_FUNC_IDX_OFFSET)
+    self.emit_str_w_imm(16, vmctx_reg, layout.debug_current_function_offset)
   }
 
   // Step 5: Cache vmctx to X19 (only if function uses vmctx)
@@ -681,18 +681,20 @@ fn MachineCode::emit_prologue(
     self.emit_mov_reg(vmctx, 0)
     // Optionally cache memory0 base pointer in Mem0Desc role.
     if stack_frame.cache_mem0_desc {
+      let layout = stack_frame.require_runtime_layout()
       self.emit_ldr_imm(
         @isaregs.mem0_desc_index(),
         vmctx,
-        @abi.VMCTX_MEMORY0_BASE_OFFSET,
+        layout.primary_memory_base_offset,
       )
     }
     // Optionally cache func_table pointer.
     if stack_frame.cache_func_table {
+      let layout = stack_frame.require_runtime_layout()
       self.emit_ldr_imm(
         @isaregs.func_table_index(),
         vmctx,
-        @abi.VMCTX_FUNC_TABLE_OFFSET,
+        layout.function_table_offset,
       )
     }
   }
@@ -760,6 +762,7 @@ pub fn emit_function(
   debug_func_idx? : Int? = None,
   force_frame_setup? : Bool = false,
   abi_settings? : @abi.ABISettings = @abi.ABISettings::default(),
+  runtime_layout? : @abi.RuntimeContextLayout? = None,
   record_disasm? : Bool = true,
 ) -> MachineCode {
   // Optimize block layout for better branch prediction
@@ -824,6 +827,7 @@ pub fn emit_function(
     cache_func_table~,
     force_frame_setup~,
     has_incoming_stack_args~,
+    runtime_layout~,
     abi_settings~,
   )
   if needs_debug_idx_restore {
@@ -2049,6 +2053,7 @@ pub fn emit_function_with_regalloc(
   debug_func_idx? : Int? = None,
   force_frame_setup? : Bool = false,
   abi_settings? : @abi.ABISettings = @abi.ABISettings::default(),
+  runtime_layout? : @abi.RuntimeContextLayout? = None,
   record_disasm? : Bool = true,
 ) -> MachineCode {
   // Keep block layout optimization (targets are block IDs; ids stay stable).
@@ -2103,6 +2108,7 @@ pub fn emit_function_with_regalloc(
     cache_func_table~,
     force_frame_setup~,
     has_incoming_stack_args~,
+    runtime_layout~,
     abi_settings~,
   )
   if needs_debug_idx_restore {

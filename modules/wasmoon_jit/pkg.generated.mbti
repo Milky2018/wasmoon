@@ -3,6 +3,7 @@ package "Milky2018/wasmoon_jit"
 
 import {
   "Milky2018/machv",
+  "Milky2018/machv/abi",
   "Milky2018/machv/instr",
   "Milky2018/machv_emit",
   "Milky2018/machv_regalloc",
@@ -401,6 +402,8 @@ pub fn resolve_import_function_ptr(Map[String, Map[String, Int64]], String, Stri
 pub fn resolve_runtime_func_fixup_idx(Int) -> Int64?
 
 pub fn resolve_wasm_func_symbol(String) -> Int?
+
+pub fn runtime_context_layout() -> @abi.RuntimeContextLayout
 
 pub fn runtime_hostcall_symbol() -> @instr.ExternalName
 
@@ -886,6 +889,7 @@ pub(all) struct VMContextLayout {
   table_entry_stride : Int
   func_table_entry_stride : Int
 }
+pub fn VMContextLayout::to_runtime_context_layout(Self) -> @abi.RuntimeContextLayout
 
 pub(all) struct WasmTrapFrame {
   pc : Int64

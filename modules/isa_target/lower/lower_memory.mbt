@@ -12,8 +12,9 @@ fn emit_load_func_table(
   if ctx.func_table_cache.get(block.id) is Some(vreg) {
     return vreg
   }
+  let layout = ctx.require_runtime_layout()
   let func_table_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_inst = @instr.VCodeInst::new(Load(I64, @abi.VMCTX_FUNC_TABLE_OFFSET))
+  let load_inst = @instr.VCodeInst::new(Load(I64, layout.function_table_offset))
   load_inst.add_def({ reg: Virtual(func_table_vreg) })
   load_inst.add_use(Physical({ index: vmctx_index(), class: Int })) // vmctx
   block.add_inst(load_inst)
@@ -32,9 +33,10 @@ fn emit_load_table0_base(
   if ctx.table0_base_cache.get(block.id) is Some(vreg) {
     return vreg
   }
+  let layout = ctx.require_runtime_layout()
   let table0_base_vreg = ctx.vcode_func.new_vreg(Int)
   let load_inst = @instr.VCodeInst::new(
-    Load(I64, @abi.VMCTX_TABLE0_BASE_OFFSET),
+    Load(I64, layout.primary_table_base_offset),
   )
   load_inst.add_def({ reg: Virtual(table0_base_vreg) })
   load_inst.add_use(Physical({ index: vmctx_index(), class: Int })) // vmctx

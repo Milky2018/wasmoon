@@ -11,6 +11,9 @@ pub fn optimize_vcode(func : @machv.Function) -> Unit {
 }
 
 ///|
-pub fn optimize_vcode_for_lowering(func : @machv.Function) -> Unit {
-  @peephole.optimize_vcode(func, profile=Lowering)
+pub fn optimize_vcode_for_lowering(
+  func : @machv.Function,
+  runtime_layout? : @abi.RuntimeContextLayout? = None,
+) -> Unit {
+  @peephole.optimize_vcode(func, profile=Lowering, runtime_layout~)
 }

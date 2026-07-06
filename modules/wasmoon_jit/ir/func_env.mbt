@@ -10,67 +10,8 @@
 // - Easier to change ABI (modify here, not scattered across lowering/emit)
 
 ///|
-/// VMContext structure offsets (matching jit_ffi.h and vcode/abi)
-/// These define the layout of the VMContext structure passed to JIT functions
-pub const VMCTX_MEMORY0_OFFSET : Int = 0
-
-///|
-pub const VMCTX_MEMORY0_BASE_OFFSET : Int = 8
-
-///|
-pub const VMCTX_MEMORY0_SIZE_OFFSET : Int = 16
-
-///|
-pub const VMCTX_FUNC_TABLE_OFFSET : Int = 24
-
-///|
-pub const VMCTX_TABLE0_BASE_OFFSET : Int = 32
-
-///|
-pub const VMCTX_TABLE0_ELEMENTS_OFFSET : Int = 40
-
-///|
-pub const VMCTX_GLOBALS_OFFSET : Int = 48
-
-///|
-pub const VMCTX_TABLES_OFFSET : Int = 56
-
-///|
-pub const VMCTX_TABLE_COUNT_OFFSET : Int = 64
-
-///|
-pub const VMCTX_TABLE_SIZES_OFFSET : Int = 72
-
-///|
-pub const VMCTX_TABLE_MAX_SIZES_OFFSET : Int = 80
-
-// Multi-memory support offsets
-
-///|
-pub const VMCTX_MEMORIES_OFFSET : Int = 88
-
-///|
-pub const VMCTX_MEMORY_COUNT_OFFSET : Int = 96
-
-// Offsets within `wasmoon_memory_t` (see jit_ffi.h)
-
-///|
-pub const MEMORY_BASE_OFFSET : Int = 0
-
-///|
-pub const MEMORY_CURRENT_LENGTH_OFFSET : Int = 8
-
-///|
 /// WASM page size in bytes (64KB)
 pub const WASM_PAGE_SIZE : Int = 65536
-
-///|
-/// Global variable stride (each global occupies 16 bytes for alignment)
-pub const GLOBAL_STRIDE : Int = 16
-
-///|
-/// Table entry stride (each entry is 16 bytes: func_ptr + type_idx)
-pub const TABLE_ENTRY_STRIDE : Int = 16
 
 ///|
 /// FuncEnvironment holds VMContext layout info used during IR translation to
@@ -132,15 +73,16 @@ pub fn FuncEnvironment::translate_global_get(
 ) -> Value {
   let global_type = self.global_types[global_idx]
   let ty = type_from_wasm(global_type.value_type)
+  let layout = @wasmoon_jit.vmcontext_layout()
 
   // Load globals_ptr from vmctx
-  let globals_offset = builder.iconst(I64, VMCTX_GLOBALS_OFFSET.to_int64())
+  let globals_offset = builder.iconst(I64, layout.globals_offset.to_int64())
   let globals_ptr = builder.load_ptr(I64, vmctx, globals_offset)
 
   // Load value from globals_ptr + field_offset
   let field_offset = builder.iconst(
     I64,
-    (global_idx * GLOBAL_STRIDE).to_int64(),
+    (global_idx * layout.global_value_stride).to_int64(),
   )
   builder.load_ptr(ty, globals_ptr, field_offset)
 }
@@ -158,15 +100,16 @@ pub fn FuncEnvironment::translate_global_set(
 ) -> Unit {
   let global_type = self.global_types[global_idx]
   let ty = type_from_wasm(global_type.value_type)
+  let layout = @wasmoon_jit.vmcontext_layout()
 
   // Load globals_ptr from vmctx
-  let globals_offset = builder.iconst(I64, VMCTX_GLOBALS_OFFSET.to_int64())
+  let globals_offset = builder.iconst(I64, layout.globals_offset.to_int64())
   let globals_ptr = builder.load_ptr(I64, vmctx, globals_offset)
 
   // Store value to globals_ptr + field_offset
   let field_offset = builder.iconst(
     I64,
-    (global_idx * GLOBAL_STRIDE).to_int64(),
+    (global_idx * layout.global_value_stride).to_int64(),
   )
   builder.store_ptr(ty, globals_ptr, value, field_offset)
 }
@@ -184,9 +127,10 @@ pub fn FuncEnvironment::translate_table_size(
   table_idx : Int,
   is_table64? : Bool = false,
 ) -> Value {
+  let layout = @wasmoon_jit.vmcontext_layout()
   if table_idx == 0 {
     // Fast path for table 0
-    let offset = builder.iconst(I64, VMCTX_TABLE0_ELEMENTS_OFFSET.to_int64())
+    let offset = builder.iconst(I64, layout.table0_elements_offset.to_int64())
     let size_i64 = builder.load_ptr(I64, vmctx, offset)
     // For table64, return i64; for table32, reduce to i32
     if is_table64 {
@@ -196,9 +140,12 @@ pub fn FuncEnvironment::translate_table_size(
     }
   } else {
     // General path: load from table_sizes array
-    let sizes_offset = builder.iconst(I64, VMCTX_TABLE_SIZES_OFFSET.to_int64())
+    let sizes_offset = builder.iconst(I64, layout.table_sizes_offset.to_int64())
     let sizes_ptr = builder.load_ptr(I64, vmctx, sizes_offset)
-    let elem_offset = builder.iconst(I64, (table_idx * 8).to_int64())
+    let elem_offset = builder.iconst(
+      I64,
+      (table_idx * layout.pointer_stride).to_int64(),
+    )
     let size_i64 = builder.load_ptr(I64, sizes_ptr, elem_offset)
     if is_table64 {
       size_i64
@@ -222,24 +169,28 @@ pub fn FuncEnvironment::translate_table_get(
   elem_idx : Value,
   is_table64? : Bool = false,
 ) -> Value {
+  let layout = @wasmoon_jit.vmcontext_layout()
   // Get table size for bounds check
   let (table_size, table_base) = if table_idx == 0 {
     // Fast path for table 0
     let size_offset = builder.iconst(
       I64,
-      VMCTX_TABLE0_ELEMENTS_OFFSET.to_int64(),
+      layout.table0_elements_offset.to_int64(),
     )
     let size = builder.load_ptr(I64, vmctx, size_offset)
-    let base_offset = builder.iconst(I64, VMCTX_TABLE0_BASE_OFFSET.to_int64())
+    let base_offset = builder.iconst(I64, layout.table0_base_offset.to_int64())
     let base = builder.load_ptr(I64, vmctx, base_offset)
     (size, base)
   } else {
     // General path: load from tables array
-    let sizes_offset = builder.iconst(I64, VMCTX_TABLE_SIZES_OFFSET.to_int64())
+    let sizes_offset = builder.iconst(I64, layout.table_sizes_offset.to_int64())
     let sizes_ptr = builder.load_ptr(I64, vmctx, sizes_offset)
-    let idx_offset = builder.iconst(I64, (table_idx * 8).to_int64())
+    let idx_offset = builder.iconst(
+      I64,
+      (table_idx * layout.pointer_stride).to_int64(),
+    )
     let size = builder.load_ptr(I64, sizes_ptr, idx_offset)
-    let tables_offset = builder.iconst(I64, VMCTX_TABLES_OFFSET.to_int64())
+    let tables_offset = builder.iconst(I64, layout.tables_offset.to_int64())
     let tables_ptr = builder.load_ptr(I64, vmctx, tables_offset)
     let base = builder.load_ptr(I64, tables_ptr, idx_offset)
     (size, base)
@@ -267,7 +218,7 @@ pub fn FuncEnvironment::translate_table_get(
   builder.switch_to_block(continue_block)
 
   // Calculate address: table_base + elem_idx * 16
-  let stride = builder.iconst(I64, TABLE_ENTRY_STRIDE.to_int64())
+  let stride = builder.iconst(I64, layout.table_entry_stride.to_int64())
   let byte_offset = builder.imul(elem_idx_i64, stride)
   let addr = builder.iadd(table_base, byte_offset)
 
@@ -309,20 +260,28 @@ pub fn FuncEnvironment::translate_table_set(
 /// For memidx 0: use fast path (direct vmctx field)
 /// For memidx > 0: load from memories array
 fn load_memory_size(builder : IRBuilder, vmctx : Value, memidx : Int) -> Value {
+  let layout = @wasmoon_jit.vmcontext_layout()
   if memidx == 0 {
     let mem0_size_off = builder.iconst(
       I64,
-      VMCTX_MEMORY0_SIZE_OFFSET.to_int64(),
+      layout.memory0_size_offset.to_int64(),
     )
     return builder.load_ptr(I64, vmctx, mem0_size_off)
   }
   let mem_ptr = {
-    let memories_off = builder.iconst(I64, VMCTX_MEMORIES_OFFSET.to_int64())
+    let memories_off = builder.iconst(I64, layout.memories_offset.to_int64())
     let memories_ptr = builder.load_ptr(I64, vmctx, memories_off)
-    let idx_off = builder.iconst(I64, (memidx * 8).to_int64())
+    let idx_off = builder.iconst(
+      I64,
+      (memidx * layout.pointer_stride).to_int64(),
+    )
     builder.load_ptr(I64, memories_ptr, idx_off)
   }
-  let size_off = builder.iconst(I64, MEMORY_CURRENT_LENGTH_OFFSET.to_int64())
+  let memory_layout = @wasmoon_jit.memory_descriptor_layout()
+  let size_off = builder.iconst(
+    I64,
+    memory_layout.current_length_offset.to_int64(),
+  )
   builder.load_ptr(I64, mem_ptr, size_off)
 }
 

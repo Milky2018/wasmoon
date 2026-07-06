@@ -524,15 +524,17 @@ fn MachineCode::emit_instruction(
       let rt = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       // Fast path: cached func_table pointer.
-      if stack_frame.cache_func_table &&
-        ty is I64 &&
-        rn == @isaregs.vmctx_index() &&
-        offset == @abi.VMCTX_FUNC_TABLE_OFFSET {
-        let func_table = @isaregs.func_table_index()
-        if rt != func_table {
-          self.emit_mov_reg(rt, func_table)
+      if stack_frame.runtime_layout is Some(layout) {
+        if stack_frame.cache_func_table &&
+          ty is I64 &&
+          rn == @isaregs.vmctx_index() &&
+          offset == layout.function_table_offset {
+          let func_table = @isaregs.func_table_index()
+          if rt != func_table {
+            self.emit_mov_reg(rt, func_table)
+          }
+          return
         }
-        return
       }
       // F32 loads directly into S register (raw f32 bits preserved)
       self.emit_load(ty, rt, rn, offset)
@@ -1282,6 +1284,7 @@ fn MachineCode::emit_instruction(
     LoadMemBase(memidx) => {
       // Load linear memory base pointer from VMContext
       // Uses: [vmctx], Defs: [result]
+      let layout = stack_frame.require_runtime_layout()
       let dst = wreg_num(inst.defs[0])
       let vmctx_reg = reg_num(inst.uses[0])
       if memidx == 0 && stack_frame.cache_mem0_desc {
@@ -1291,10 +1294,10 @@ fn MachineCode::emit_instruction(
           self.emit_mov_reg(dst, mem0_base)
         }
       } else if memidx == 0 {
-        self.emit_ldr_imm(dst, vmctx_reg, @abi.VMCTX_MEMORY0_BASE_OFFSET)
+        self.emit_ldr_imm(dst, vmctx_reg, layout.primary_memory_base_offset)
       } else {
-        self.emit_ldr_imm(dst, vmctx_reg, @abi.VMCTX_MEMORIES_OFFSET)
-        self.emit_ldr_imm(dst, dst, memidx * 8)
+        self.emit_ldr_imm(dst, vmctx_reg, layout.memory_directory_offset)
+        self.emit_ldr_imm(dst, dst, memidx * layout.pointer_stride)
         self.emit_ldr_imm(dst, dst, 0)
       }
     }
@@ -1453,20 +1456,22 @@ fn MachineCode::emit_instruction(
     CallDirect(func_idx, _num_args, _num_results, _call_conv) => {
       self.emit_bl_func(func_idx)
       if stack_frame.cache_mem0_desc {
+        let layout = stack_frame.require_runtime_layout()
         self.emit_ldr_imm(
           @isaregs.mem0_desc_index(),
           @isaregs.vmctx_index(),
-          @abi.VMCTX_MEMORY0_BASE_OFFSET,
+          layout.primary_memory_base_offset,
         )
       }
     }
     CallExternal(symbol, _num_args, _num_results, _call_conv) => {
       self.emit_bl_external(symbol)
       if stack_frame.cache_mem0_desc {
+        let layout = stack_frame.require_runtime_layout()
         self.emit_ldr_imm(
           @isaregs.mem0_desc_index(),
           @isaregs.vmctx_index(),
-          @abi.VMCTX_MEMORY0_BASE_OFFSET,
+          layout.primary_memory_base_offset,
         )
       }
     }
@@ -1479,10 +1484,11 @@ fn MachineCode::emit_instruction(
       }
       self.emit_blr(target)
       if stack_frame.cache_mem0_desc {
+        let layout = stack_frame.require_runtime_layout()
         self.emit_ldr_imm(
           @isaregs.mem0_desc_index(),
           @isaregs.vmctx_index(),
-          @abi.VMCTX_MEMORY0_BASE_OFFSET,
+          layout.primary_memory_base_offset,
         )
       }
     }
@@ -1588,14 +1594,15 @@ fn MachineCode::emit_instruction(
 
       let slow_label = self.new_internal_label()
       let done_label = self.new_internal_label()
+      let layout = stack_frame.require_runtime_layout()
 
       // next = vmctx->gc_heap_ptr
-      self.emit_ldr_imm(16, vmctx_reg, @abi.VMCTX_GC_HEAP_PTR_OFFSET)
+      self.emit_ldr_imm(16, vmctx_reg, layout.gc_allocation_cursor_offset)
       // end = next + total_size
       self.emit_load_imm64(17, total_size.to_int64())
       self.emit_add_reg(17, 16, 17)
       // if end > vmctx->gc_heap_limit: go slow
-      self.emit_ldr_imm(2, vmctx_reg, @abi.VMCTX_GC_HEAP_LIMIT_OFFSET)
+      self.emit_ldr_imm(2, vmctx_reg, layout.gc_allocation_limit_offset)
       self.emit_cmp_reg(17, 2)
       self.emit_b_cond(@instr.Cond::Hi.to_bits(), slow_label)
 
@@ -1610,7 +1617,7 @@ fn MachineCode::emit_instruction(
         self.emit_str_imm(3, 16, gc_header_size + off)
       }
       // vmctx->gc_heap_ptr = end
-      self.emit_str_imm(17, vmctx_reg, @abi.VMCTX_GC_HEAP_PTR_OFFSET)
+      self.emit_str_imm(17, vmctx_reg, layout.gc_allocation_cursor_offset)
 
       // register_struct_inline(vmctx, obj_ptr, total_size)
       if vmctx_reg != 0 {
@@ -1685,14 +1692,15 @@ fn MachineCode::emit_instruction(
 
       let slow_label = self.new_internal_label()
       let done_label = self.new_internal_label()
+      let layout = stack_frame.require_runtime_layout()
 
       // next = vmctx->gc_heap_ptr
-      self.emit_ldr_imm(16, vmctx_reg, @abi.VMCTX_GC_HEAP_PTR_OFFSET)
+      self.emit_ldr_imm(16, vmctx_reg, layout.gc_allocation_cursor_offset)
       // end = next + total_size
       self.emit_load_imm64(17, total_size.to_int64())
       self.emit_add_reg(17, 16, 17)
       // if end > vmctx->gc_heap_limit: go slow
-      self.emit_ldr_imm(2, vmctx_reg, @abi.VMCTX_GC_HEAP_LIMIT_OFFSET)
+      self.emit_ldr_imm(2, vmctx_reg, layout.gc_allocation_limit_offset)
       self.emit_cmp_reg(17, 2)
       self.emit_b_cond(@instr.Cond::Hi.to_bits(), slow_label)
 
@@ -1709,7 +1717,7 @@ fn MachineCode::emit_instruction(
         self.emit_str_imm(3, 16, gc_header_size + array_meta_size + off)
       }
       // vmctx->gc_heap_ptr = end
-      self.emit_str_imm(17, vmctx_reg, @abi.VMCTX_GC_HEAP_PTR_OFFSET)
+      self.emit_str_imm(17, vmctx_reg, layout.gc_allocation_cursor_offset)
 
       // register_array_inline(vmctx, obj_ptr, total_size)
       if vmctx_reg != 0 {

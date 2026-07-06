@@ -20,7 +20,7 @@ pub enum CallConv {
 ///|
 pub struct ABISettings {
   ///
-  /// When true, reserve a pinned register for VMContext (Cranelift: enable_pinned_reg).
+  /// When true, reserve the target's pinned runtime-context register.
   enable_pinned_reg : Bool
   ///
   /// Target calling convention.

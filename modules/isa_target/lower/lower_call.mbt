@@ -377,14 +377,15 @@ fn lower_return_call_indirect(
   let table_ptr_vreg : @abi.VReg = if table_idx == 0 {
     emit_load_table0_base(ctx, block)
   } else {
+    let layout = ctx.require_runtime_layout()
     let indirect_tables_vreg = ctx.vcode_func.new_vreg(Int)
     let load_array_inst = @instr.VCodeInst::new(
-      Load(I64, @abi.VMCTX_TABLES_OFFSET),
+      Load(I64, layout.table_directory_offset),
     )
     load_array_inst.add_def({ reg: Virtual(indirect_tables_vreg) })
     load_array_inst.add_use(Physical({ index: vmctx_index(), class: Int }))
     block.add_inst(load_array_inst)
-    let table_offset = table_idx * 8
+    let table_offset = table_idx * layout.pointer_stride
     let ptr_vreg = ctx.vcode_func.new_vreg(Int)
     let load_table_inst = @instr.VCodeInst::new(Load(I64, table_offset))
     load_table_inst.add_def({ reg: Virtual(ptr_vreg) })
@@ -613,16 +614,17 @@ fn lower_call_indirect(
     emit_load_table0_base(ctx, block)
   } else {
     // Slow path: load indirect_tables[table_idx] from context
-    // 1. Load indirect_tables array pointer: [X19 + 32]
+    // 1. Load indirect_tables array pointer from the runtime context.
+    let layout = ctx.require_runtime_layout()
     let indirect_tables_vreg = ctx.vcode_func.new_vreg(Int)
     let load_array_inst = @instr.VCodeInst::new(
-      Load(I64, @abi.VMCTX_TABLES_OFFSET),
+      Load(I64, layout.table_directory_offset),
     )
     load_array_inst.add_def({ reg: Virtual(indirect_tables_vreg) })
     load_array_inst.add_use(Physical({ index: vmctx_index(), class: Int }))
     block.add_inst(load_array_inst)
-    // 2. Calculate offset = table_idx * 8 (pointer size)
-    let table_offset = table_idx * 8
+    // 2. Calculate offset = table_idx * pointer size
+    let table_offset = table_idx * layout.pointer_stride
     // 3. Load table pointer: [indirect_tables + offset]
     let ptr_vreg = ctx.vcode_func.new_vreg(Int)
     let load_table_inst = @instr.VCodeInst::new(Load(I64, table_offset))

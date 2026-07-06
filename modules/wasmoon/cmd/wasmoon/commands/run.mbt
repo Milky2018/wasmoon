@@ -1665,6 +1665,7 @@ pub fn compile_module_to_jit(
       ir_func,
       num_imports=mod_.imports.length(),
       run_ir_opt=false,
+      runtime_layout=Some(@wasmoon_jit.runtime_context_layout()),
       use_subtype_indirect_check~,
       canonical_type_indices~,
     )
@@ -1718,6 +1719,7 @@ pub fn compile_module_to_jit(
       ra_output,
       debug_func_idx=Some(func_idx),
       force_frame_setup=enable_dwarf,
+      runtime_layout=Some(@wasmoon_jit.runtime_context_layout()),
       record_disasm=debug_db is Some(_),
     )
     if emit_tick is Some(tick) {

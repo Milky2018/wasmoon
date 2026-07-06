@@ -13,6 +13,7 @@ struct LoweringContext {
   ir_func : @milkir.Function
   vcode_func : @machv.Function
   abi_settings : @abi.ABISettings
+  runtime_layout : @abi.RuntimeContextLayout?
   num_imports : Int
   // Dense map from IR Value id to @abi.VReg (Cranelift SecondaryMap style).
   value_map_dense : Array[@abi.VReg?]
@@ -62,6 +63,7 @@ fn function_params_for_lowering(
 pub fn LoweringContext::new(
   ir_func : @milkir.Function,
   abi_settings : @abi.ABISettings,
+  runtime_layout : @abi.RuntimeContextLayout?,
   num_imports : Int,
   use_subtype_indirect_check : Bool,
   canonical_type_indices : Array[Int],
@@ -88,6 +90,7 @@ pub fn LoweringContext::new(
     ir_func,
     vcode_func: @machv.Function::new(ir_func.name),
     abi_settings,
+    runtime_layout,
     num_imports,
     value_map_dense: Array::make(ir_func.next_value_id, None),
     block_map: {},
@@ -101,6 +104,17 @@ pub fn LoweringContext::new(
     skipped_values_dense: Array::make(ir_func.next_value_id, false),
     use_counts,
     def_inst_table,
+  }
+}
+
+///|
+fn LoweringContext::require_runtime_layout(
+  self : LoweringContext,
+) -> @abi.RuntimeContextLayout {
+  match self.runtime_layout {
+    Some(layout) => layout
+    None =>
+      abort("runtime context layout is required for runtime-specific lowering")
   }
 }
 
@@ -1563,6 +1577,7 @@ fn intcc_to_cond(cc : @milkir.IntCC) -> @instr.Cond {
 pub fn lower_function(
   ir_func : @milkir.Function,
   abi_settings? : @abi.ABISettings = @abi.ABISettings::default(),
+  runtime_layout? : @abi.RuntimeContextLayout? = None,
   num_imports? : Int = -1,
   run_ir_opt? : Bool = true,
   use_subtype_indirect_check? : Bool = true,
@@ -1574,7 +1589,8 @@ pub fn lower_function(
     @milkir.optimize_function(ir_func) |> ignore
   }
   let ctx = LoweringContext::new(
-    ir_func, abi_settings, num_imports, use_subtype_indirect_check, canonical_type_indices,
+    ir_func, abi_settings, runtime_layout, num_imports, use_subtype_indirect_check,
+    canonical_type_indices,
   )
 
   // Phase 0: Pre-compute which Icmps can be fused with Select
@@ -1689,7 +1705,7 @@ pub fn lower_function(
   // Phase 5: Peephole optimization
   // Keep post-lowering cleanup deterministic (profile-driven) instead of
   // function-size gating.
-  optimize_vcode_for_lowering(ctx.vcode_func)
+  optimize_vcode_for_lowering(ctx.vcode_func, runtime_layout~)
 
   // Phase 6: Target-specific fixups (Cranelift-style).
   //

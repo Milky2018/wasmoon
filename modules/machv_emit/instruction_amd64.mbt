@@ -2464,6 +2464,7 @@ fn MachineCode::emit_instruction_x86_64(
     LoadMemBase(memidx) => {
       // Load linear memory base pointer from VMContext.
       // Uses: [vmctx], Defs: [result]
+      let layout = stack_frame.require_runtime_layout()
       let dst = wreg_num(inst.defs[0])
       let vmctx_reg = reg_num(inst.uses[0])
       if memidx == 0 && stack_frame.cache_mem0_desc {
@@ -2473,26 +2474,32 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_mov_r64_m64(
           dst,
           vmctx_reg,
-          @abi.VMCTX_MEMORY0_BASE_OFFSET,
+          layout.primary_memory_base_offset,
         )
       } else {
-        self.x86_emit_mov_r64_m64(dst, vmctx_reg, @abi.VMCTX_MEMORIES_OFFSET)
-        self.x86_emit_mov_r64_m64(dst, dst, memidx * 8)
+        self.x86_emit_mov_r64_m64(
+          dst,
+          vmctx_reg,
+          layout.memory_directory_offset,
+        )
+        self.x86_emit_mov_r64_m64(dst, dst, memidx * layout.pointer_stride)
         self.x86_emit_mov_r64_m64(dst, dst, 0)
       }
     }
     Load(ty, offset) => {
       let rt = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
-      if stack_frame.cache_func_table &&
-        ty is I64 &&
-        rn == @isaregs.vmctx_index() &&
-        offset == @abi.VMCTX_FUNC_TABLE_OFFSET {
-        let ft = @isaregs.func_table_index()
-        if rt != ft {
-          self.x86_emit_mov_rr(rt, ft)
+      if stack_frame.runtime_layout is Some(layout) {
+        if stack_frame.cache_func_table &&
+          ty is I64 &&
+          rn == @isaregs.vmctx_index() &&
+          offset == layout.function_table_offset {
+          let ft = @isaregs.func_table_index()
+          if rt != ft {
+            self.x86_emit_mov_rr(rt, ft)
+          }
+          return
         }
-        return
       }
       match ty {
         I32 => self.x86_emit_mov_r32_m32(rt, rn, offset)
@@ -3152,7 +3159,8 @@ fn MachineCode::emit_instruction_x86_64(
       let rd = wreg_num(inst.defs[0])
       let vmctx = @isaregs.vmctx_index()
       let table = isa.scratch_reg_1_index()
-      self.x86_emit_mov_r64_m64(table, vmctx, @abi.VMCTX_FUNC_TABLE_OFFSET)
+      let layout = stack_frame.require_runtime_layout()
+      self.x86_emit_mov_r64_m64(table, vmctx, layout.function_table_offset)
       self.x86_emit_mov_r64_m64(rd, table, func_idx * 8)
     }
     CallDirect(func_idx, _num_args, _num_results, _call_conv) => {
@@ -3160,7 +3168,8 @@ fn MachineCode::emit_instruction_x86_64(
       let vmctx = @isaregs.vmctx_index()
       let table = isa.scratch_reg_1_index()
       let callee = isa.scratch_reg_2_index()
-      self.x86_emit_mov_r64_m64(table, vmctx, @abi.VMCTX_FUNC_TABLE_OFFSET)
+      let layout = stack_frame.require_runtime_layout()
+      self.x86_emit_mov_r64_m64(table, vmctx, layout.function_table_offset)
       self.x86_emit_mov_r64_m64(callee, table, func_idx * 8)
       self.x86_emit_call_r64(callee)
     }
@@ -3194,7 +3203,7 @@ fn MachineCode::emit_instruction_x86_64(
       } else {
         // Preserve tail target across epilogue debug-state restore.
         // emit_epilogue() may use scratch2 (r11) as a temporary when writing
-        // VMCTX_DEBUG_CURRENT_FUNC_IDX. Tail calls also constrain target to
+        // the runtime debug-current-function slot. Tail calls also constrain target to
         // scratch2, so copy to scratch1 first.
         let mut jump_target = target
         if target == @isaregs.current_isa().scratch_reg_2_index() {
@@ -3292,13 +3301,14 @@ fn MachineCode::emit_instruction_x86_64(
 
       let slow = self.new_internal_label()
       let done = self.new_internal_label()
+      let layout = stack_frame.require_runtime_layout()
 
       // next = vmctx->gc_heap_ptr; end = next + total_size.
-      self.x86_emit_mov_r64_m64(obj, vmctx, @abi.VMCTX_GC_HEAP_PTR_OFFSET)
+      self.x86_emit_mov_r64_m64(obj, vmctx, layout.gc_allocation_cursor_offset)
       self.x86_emit_mov_rr(end, obj)
       emit_add_imm_to_reg_in_chunks(self, end, total_size)
       // if end > vmctx->gc_heap_limit: slow path.
-      self.x86_emit_mov_r64_m64(tmp, vmctx, @abi.VMCTX_GC_HEAP_LIMIT_OFFSET)
+      self.x86_emit_mov_r64_m64(tmp, vmctx, layout.gc_allocation_limit_offset)
       self.x86_emit_cmp_rr(end, tmp)
       self.x86_emit_jcc_rel32(Hi, slow)
 
@@ -3312,7 +3322,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_mov_r64_m64(tmp, 4, stack_base_off + off)
         self.x86_emit_mov_m64_r64(obj, gc_header_size + off, tmp)
       }
-      self.x86_emit_mov_m64_r64(vmctx, @abi.VMCTX_GC_HEAP_PTR_OFFSET, end)
+      self.x86_emit_mov_m64_r64(vmctx, layout.gc_allocation_cursor_offset, end)
 
       // register_struct_inline(vmctx, obj_ptr, total_size)
       if vmctx != arg0 {
@@ -3388,13 +3398,14 @@ fn MachineCode::emit_instruction_x86_64(
 
       let slow = self.new_internal_label()
       let done = self.new_internal_label()
+      let layout = stack_frame.require_runtime_layout()
 
       // next = vmctx->gc_heap_ptr; end = next + total_size.
-      self.x86_emit_mov_r64_m64(obj, vmctx, @abi.VMCTX_GC_HEAP_PTR_OFFSET)
+      self.x86_emit_mov_r64_m64(obj, vmctx, layout.gc_allocation_cursor_offset)
       self.x86_emit_mov_rr(end, obj)
       emit_add_imm_to_reg_in_chunks(self, end, total_size)
       // if end > vmctx->gc_heap_limit: slow path.
-      self.x86_emit_mov_r64_m64(tmp, vmctx, @abi.VMCTX_GC_HEAP_LIMIT_OFFSET)
+      self.x86_emit_mov_r64_m64(tmp, vmctx, layout.gc_allocation_limit_offset)
       self.x86_emit_cmp_rr(end, tmp)
       self.x86_emit_jcc_rel32(Hi, slow)
 
@@ -3414,7 +3425,7 @@ fn MachineCode::emit_instruction_x86_64(
           tmp,
         )
       }
-      self.x86_emit_mov_m64_r64(vmctx, @abi.VMCTX_GC_HEAP_PTR_OFFSET, end)
+      self.x86_emit_mov_m64_r64(vmctx, layout.gc_allocation_cursor_offset, end)
 
       // register_array_inline(vmctx, obj_ptr, total_size)
       if vmctx != arg0 {

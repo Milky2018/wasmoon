@@ -6,7 +6,10 @@
 /// preheader and hoist:
 /// - `LoadConst` (with heuristics to avoid reg pressure)
 /// - a small set of loop-invariant `Load`/`LoadPtr` from immutable vmctx-derived data
-fn licm_hoist_invariants(func : @machv.Function) -> Unit {
+fn licm_hoist_invariants(
+  func : @machv.Function,
+  runtime_layout : @abi.RuntimeContextLayout,
+) -> Unit {
   let n = func.blocks.length()
   if n == 0 {
     return
@@ -142,11 +145,12 @@ fn licm_hoist_invariants(func : @machv.Function) -> Unit {
         fn is_immutable_ptr(vreg_id : Int) -> Bool {
           match def_inst.get(vreg_id) {
             Some(inst) =>
-              if inst.opcode is Load(I64, @abi.VMCTX_FUNC_TABLE_OFFSET) &&
-                inst.uses.length() == 1 {
-                is_vmctx_reg(inst.uses[0])
-              } else {
-                false
+              match inst.opcode {
+                Load(I64, off) =>
+                  off == runtime_layout.function_table_offset &&
+                  inst.uses.length() == 1 &&
+                  is_vmctx_reg(inst.uses[0])
+                _ => false
               }
             None => false
           }
@@ -157,8 +161,8 @@ fn licm_hoist_invariants(func : @machv.Function) -> Unit {
           match op {
             Load(I64, off) | LoadPtr(I64, off) =>
               if is_vmctx_reg(base) {
-                // Only allow vmctx.func_table load at the moment.
-                off == @abi.VMCTX_FUNC_TABLE_OFFSET
+                // Only allow runtime function-table load at the moment.
+                off == runtime_layout.function_table_offset
               } else if base is Virtual(v) {
                 // Allow loads from the func_table pointer.
                 is_immutable_ptr(v.id)
@@ -240,7 +244,10 @@ fn licm_hoist_invariants(func : @machv.Function) -> Unit {
 /// - vmctx base must be `x19`
 /// - only track immutable vmctx-derived base pointers (`func_table`, `globals`)
 /// - only CSE `Load(I64, off)` / `LoadPtr(I64, off)` from that func_table pointer
-fn cse_immutable_loads(func : @machv.Function) -> Unit {
+fn cse_immutable_loads(
+  func : @machv.Function,
+  runtime_layout : @abi.RuntimeContextLayout,
+) -> Unit {
   let vmctx_idx = @isa.ISA::current().vmctx_reg_index()
   // Wasm ABI: param 0 is vmctx. Treat it as vmctx alias so repeated
   // vmctx-derived base loads can be CSE'd even before prelude rewrites.
@@ -251,6 +258,21 @@ fn cse_immutable_loads(func : @machv.Function) -> Unit {
   }
   // Collect all vregs that are func_table pointers.
   let func_table_ptrs : @hashset.HashSet[Int] = HashSet([])
+  fn is_function_table_context_load(op : @instr.VCodeOpcode) -> Bool {
+    match op {
+      Load(I64, off) | LoadPtr(I64, off) =>
+        off == runtime_layout.function_table_offset
+      _ => false
+    }
+  }
+  fn is_context_base_load(op : @instr.VCodeOpcode) -> Bool {
+    match op {
+      Load(I64, off) | LoadPtr(I64, off) =>
+        off == runtime_layout.function_table_offset ||
+        off == runtime_layout.global_storage_offset
+      _ => false
+    }
+  }
   fn is_vmctx_alias(
     reg : @abi.Reg,
     copies : Map[Int, Int],
@@ -291,10 +313,7 @@ fn cse_immutable_loads(func : @machv.Function) -> Unit {
           vmctx_aliases.add(dst)
         }
       }
-      if (
-          inst.opcode is Load(I64, @abi.VMCTX_FUNC_TABLE_OFFSET) ||
-          inst.opcode is LoadPtr(I64, @abi.VMCTX_FUNC_TABLE_OFFSET)
-        ) &&
+      if is_function_table_context_load(inst.opcode) &&
         inst.defs.length() == 1 &&
         inst.uses.length() == 1 &&
         is_vmctx_alias(inst.uses[0], copies, vmctx_aliases) &&
@@ -386,15 +405,10 @@ fn cse_immutable_loads(func : @machv.Function) -> Unit {
       }
 
       // Also CSE duplicate vmctx-derived immutable base loads:
-      // - func_table: `load.i64 +8 x19`
-      // - globals ptr: `load.i64 +32 x19`
+      // - function table: `load.i64 +function_table_offset context`
+      // - global storage: `load.i64 +global_storage_offset context`
       if !replaced &&
-        (
-          inst.opcode is Load(I64, @abi.VMCTX_FUNC_TABLE_OFFSET) ||
-          inst.opcode is Load(I64, @abi.VMCTX_GLOBALS_OFFSET) ||
-          inst.opcode is LoadPtr(I64, @abi.VMCTX_FUNC_TABLE_OFFSET) ||
-          inst.opcode is LoadPtr(I64, @abi.VMCTX_GLOBALS_OFFSET)
-        ) &&
+        is_context_base_load(inst.opcode) &&
         inst.defs.length() == 1 &&
         inst.uses.length() == 1 &&
         is_vmctx(inst.uses[0]) {
@@ -1381,6 +1395,7 @@ pub(all) enum PeepholeProfile {
 pub fn optimize_vcode(
   func : @machv.Function,
   profile? : PeepholeProfile = Full,
+  runtime_layout? : @abi.RuntimeContextLayout? = None,
 ) -> Unit {
   let mut inst_count = 0
   for block in func.blocks {
@@ -1394,8 +1409,12 @@ pub fn optimize_vcode(
   let is_large_func = inst_count >= large_func_threshold
 
   let enable_full_passes = profile is Full
-  let enable_licm = enable_full_passes && !is_large_func
-  let enable_immutable_load_cse = enable_full_passes && !is_large_func
+  let enable_licm = enable_full_passes &&
+    !is_large_func &&
+    runtime_layout is Some(_)
+  let enable_immutable_load_cse = enable_full_passes &&
+    !is_large_func &&
+    runtime_layout is Some(_)
   let enable_mem_base_cse = enable_full_passes
   let enable_mem_peepholes = enable_full_passes && !is_large_func
   let enable_inplace_updates = enable_full_passes && !is_large_func
@@ -1403,11 +1422,11 @@ pub fn optimize_vcode(
 
   // Pass 0: loop-invariant code motion
   if enable_licm {
-    licm_hoist_invariants(func)
+    licm_hoist_invariants(func, runtime_layout.unwrap())
   }
   // Pass 0.5: block-local CSE for immutable loads
   if enable_immutable_load_cse {
-    cse_immutable_loads(func)
+    cse_immutable_loads(func, runtime_layout.unwrap())
   }
   // Pass 0.6: block-local CSE for LoadMemBase
   if enable_mem_base_cse {

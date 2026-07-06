@@ -74,6 +74,7 @@ pub struct JITStackFrame {
   needs_vmctx : Bool // Whether function uses vmctx (X19)
   cache_mem0_desc : Bool // Whether to cache memory0 base in X20
   cache_func_table : Bool // Whether to cache func_table pointer in X21
+  runtime_layout : @abi.RuntimeContextLayout?
 }
 
 ///|
@@ -98,6 +99,7 @@ pub fn JITStackFrame::build(
   cache_func_table? : Bool = false,
   force_frame_setup? : Bool = false,
   has_incoming_stack_args? : Bool = false,
+  runtime_layout? : @abi.RuntimeContextLayout? = None,
   isa? : @isa.ISA = @isa.ISA::current(),
   abi_settings? : @abi.ABISettings = @abi.ABISettings::default(),
 ) -> JITStackFrame {
@@ -170,6 +172,18 @@ pub fn JITStackFrame::build(
     needs_vmctx,
     cache_mem0_desc,
     cache_func_table,
+    runtime_layout,
+  }
+}
+
+///|
+pub fn JITStackFrame::require_runtime_layout(
+  self : JITStackFrame,
+) -> @abi.RuntimeContextLayout {
+  match self.runtime_layout {
+    Some(layout) => layout
+    None =>
+      abort("runtime context layout is required for runtime-specific emission")
   }
 }
 

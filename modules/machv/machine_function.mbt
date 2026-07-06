@@ -237,19 +237,9 @@ pub fn Function::should_cache_mem0_desc(self : Function) -> Bool {
 /// Returns true if the function loads the module `func_table` from vmctx.
 /// Used to reserve a dedicated register for caching the func_table pointer.
 pub fn Function::uses_func_table(self : Function) -> Bool {
-  let vmctx = @isa.ISA::current().vmctx_reg_index()
-  for block in self.blocks {
-    for inst in block.insts {
-      if inst.opcode is Load(I64, @abi.VMCTX_FUNC_TABLE_OFFSET) {
-        // The base should be vmctx (X19).
-        if inst.uses.length() > 0 &&
-          inst.uses[0] is Physical(preg) &&
-          preg.index == vmctx {
-          return true
-        }
-      }
-    }
-  }
+  ignore(self)
+  // Function-table layout is owned by the embedding runtime. MachV no longer
+  // infers it from a built-in context offset.
   false
 }
 

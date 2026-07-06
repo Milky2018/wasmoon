@@ -60,6 +60,32 @@ pub fn vmcontext_layout() -> VMContextLayout {
 }
 
 ///|
+/// Translate Wasmoon's concrete VMContext prefix into the generic machine-level
+/// runtime context layout consumed by lowering and emission.
+pub fn VMContextLayout::to_runtime_context_layout(
+  self : VMContextLayout,
+) -> @abi.RuntimeContextLayout {
+  {
+    primary_memory_descriptor_offset: self.memory0_offset,
+    primary_memory_base_offset: self.memory0_base_offset,
+    function_table_offset: self.func_table_offset,
+    primary_table_base_offset: self.table0_base_offset,
+    table_directory_offset: self.tables_offset,
+    global_storage_offset: self.globals_offset,
+    memory_directory_offset: self.memories_offset,
+    debug_current_function_offset: self.debug_current_func_idx_offset,
+    gc_allocation_cursor_offset: self.gc_heap_ptr_offset,
+    gc_allocation_limit_offset: self.gc_heap_limit_offset,
+    pointer_stride: self.pointer_stride,
+  }
+}
+
+///|
+pub fn runtime_context_layout() -> @abi.RuntimeContextLayout {
+  vmcontext_layout().to_runtime_context_layout()
+}
+
+///|
 /// Fixed prefix layout of `wasmoon_memory_t` accessed by generated JIT code.
 ///
 /// Keep these offsets in sync with `jit_ffi/jit_ffi.h::wasmoon_memory_t`.

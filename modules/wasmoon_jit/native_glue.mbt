@@ -125,7 +125,11 @@ pub fn plan_integration_for_target(
     entry_symbol: func.name,
     target,
     native_glue: default_native_glue(),
-    object: @machv_emit.emit_function_with_regalloc(vcode_func, regalloc_output),
+    object: @machv_emit.emit_function_with_regalloc(
+      vcode_func,
+      regalloc_output,
+      runtime_layout=Some(runtime_context_layout()),
+    ),
   }
 }
 
@@ -144,7 +148,10 @@ pub fn lower_milkir_for_target(
 ) -> @machv.Function {
   let isa = emit_target_to_isa(target)
   let previous = @isa.push_isa_override(isa)
-  let lowered = @lower.lower_function(func)
+  let lowered = @lower.lower_function(
+    func,
+    runtime_layout=Some(runtime_context_layout()),
+  )
   @isa.restore_isa_override(previous)
   lowered
 }
@@ -156,7 +163,11 @@ pub fn lower_wasm_body_milkir_for_target(
 ) -> @machv.Function {
   let isa = emit_target_to_isa(target)
   let previous = @isa.push_isa_override(isa)
-  let lowered = @lower.lower_function(func, run_ir_opt=false)
+  let lowered = @lower.lower_function(
+    func,
+    run_ir_opt=false,
+    runtime_layout=Some(runtime_context_layout()),
+  )
   @isa.restore_isa_override(previous)
   lowered
 }
@@ -168,7 +179,10 @@ pub fn plan_milkir_integration_for_target(
 ) -> JitIntegrationPlan {
   let isa = emit_target_to_isa(target)
   let previous = @isa.push_isa_override(isa)
-  let vcode_func = @lower.lower_function(func)
+  let vcode_func = @lower.lower_function(
+    func,
+    runtime_layout=Some(runtime_context_layout()),
+  )
   let (allocated_func, output) = @machv_regalloc.allocate_registers_backtracking_output_with_isa(
     vcode_func,
     isa,
@@ -186,7 +200,11 @@ pub fn plan_wasm_body_milkir_integration_for_target(
 ) -> JitIntegrationPlan {
   let isa = emit_target_to_isa(target)
   let previous = @isa.push_isa_override(isa)
-  let vcode_func = @lower.lower_function(func, run_ir_opt=false)
+  let vcode_func = @lower.lower_function(
+    func,
+    run_ir_opt=false,
+    runtime_layout=Some(runtime_context_layout()),
+  )
   let (allocated_func, output) = @machv_regalloc.allocate_registers_backtracking_output_with_isa(
     vcode_func,
     isa,

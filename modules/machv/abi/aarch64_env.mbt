@@ -9,9 +9,9 @@
 /// - Provide ordered preferred/non-preferred register lists.
 /// - Make reserved scratch registers explicit.
 ///
-/// Note: Wasmoon currently reserves V16/V17 as scratch temporaries in several
-/// emission paths (SIMD select/popcnt/etc). Unlike Cranelift, we keep them
-/// non-allocatable for now.
+/// Note: V16/V17 are reserved as scratch temporaries in several emission paths
+/// (SIMD select/popcnt/etc). Unlike Cranelift, we keep them non-allocatable
+/// for now.
 pub struct AArch64MachineEnv {
   preferred_int : Array[PReg]
   nonpreferred_int : Array[PReg]
@@ -32,6 +32,12 @@ pub struct AArch64MachineEnv {
 }
 
 ///|
+const AARCH64_CONTEXT_CACHE_REG_0 : Int = 20
+
+///|
+const AARCH64_CONTEXT_CACHE_REG_1 : Int = 19
+
+///|
 /// Construct the AArch64 machine environment, optionally reserving some regs.
 pub fn build_aarch64_machine_env(
   settings? : ABISettings = ABISettings::default(),
@@ -45,10 +51,9 @@ pub fn build_aarch64_machine_env(
 
   // Preferred GPRs for allocation.
   //
-  // Cranelift’s `create_reg_env()` prefers x0-x15, but wasmoon’s allocator
-  // currently relies on keeping x0-x7 out of the general pool (they are heavily
-  // used for call arg constraints). We will lift this restriction after we reach
-  // full regalloc parity.
+  // Cranelift’s `create_reg_env()` prefers x0-x15, but this allocator currently
+  // relies on keeping x0-x7 out of the general pool because they are heavily
+  // used for call-argument constraints.
   for r in allocatable_scratch_regs() {
     preferred_int.push(r)
   }
@@ -61,10 +66,10 @@ pub fn build_aarch64_machine_env(
     if reserve_x23 && r.index == 23 {
       continue
     }
-    if reserve_mem0_desc && r.index == REG_MEM0_DESC {
+    if reserve_mem0_desc && r.index == AARCH64_CONTEXT_CACHE_REG_0 {
       continue
     }
-    if reserve_func_table && r.index == REG_FUNC_TABLE {
+    if reserve_func_table && r.index == AARCH64_CONTEXT_CACHE_REG_1 {
       continue
     }
     nonpreferred_int.push(r)
