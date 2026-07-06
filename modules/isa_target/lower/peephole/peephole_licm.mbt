@@ -900,10 +900,11 @@ fn is_mem_base_cse_barrier(opcode : @instr.VCodeOpcode) -> Bool {
   match opcode {
     CallDirect(_, _, _, Wasm) => false
     CallDirect(_, _, _, C) => true
+    CallExternal(_, _, _, _) => true
     CallPtr(_, _, C) => true
     CallPtr(_, _, Wasm) => true
     ReturnCallIndirect(_, _) => true
-    TypeCheckSubtypeIndirect(_) => true
+    TypeCheckSubtypeIndirect(_, _) => true
     _ => false
   }
 }

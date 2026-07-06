@@ -16,66 +16,13 @@ pub(all) enum CallConv {
 } derive(Eq, Debug)
 
 ///|
-/// GC runtime library calls
-pub(all) enum GCLibcall {
-  RefTest // gc_ref_test_impl
-  RefCast // gc_ref_cast_impl
-  StructNew // gc_struct_new_impl
-  StructGet // gc_struct_get_impl
-  StructSet // gc_struct_set_impl
-  ArrayNew // gc_array_new_impl
-  ArrayGet // gc_array_get_impl
-  ArraySet // gc_array_set_impl
-  ArrayLen // gc_array_len_impl
-  ArrayFill // gc_array_fill_impl
-  ArrayCopy // gc_array_copy_impl
-  ArrayNewData // gc_array_new_data_impl - create array from data segment
-  ArrayNewElem // gc_array_new_elem_impl - create array from elem segment
-  ArrayInitData // gc_array_init_data_impl - initialize array from data segment
-  ArrayInitElem // gc_array_init_elem_impl - initialize array from elem segment
-  TypeCheckSubtype // gc_type_check_subtype - checks subtyping for call_indirect
-  // Inline allocation support (ctx-passing)
-  RegisterStructInline // gc_register_struct_inline - register inline-allocated struct
-  RegisterArrayInline // gc_register_array_inline - register inline-allocated array
-  AllocStructSlow // gc_alloc_struct_slow - slow path for struct allocation
-  AllocArraySlow // gc_alloc_array_slow - slow path for array allocation
-} derive(Eq, Debug)
-
-///|
-/// JIT runtime library calls
-pub(all) enum JITLibcall {
-  MemoryGrow
-  MemorySize
-  MemoryFill
-  MemoryFillMem0
-  MemoryCopy
-  MemoryCopyMem0
-  MemoryInit
-  DataDrop
-  TableGrow
-  TableFill
-  TableCopy
-  TableInit
-  ElemDrop
-  HostCall
-} derive(Eq, Debug)
-
-///|
-/// Exception handling runtime library calls
-pub(all) enum ExceptionLibcall {
-  TryBegin // exception_try_begin - setup handler, returns jmp_buf ptr
-  TryEnd // exception_try_end - pop handler
-  Throw // exception_throw - throw exception (noreturn)
-  ThrowTag // exception_throw_tag - throw exception without payload (noreturn)
-  ThrowRef // exception_throw_ref - re-throw from exnref (noreturn)
-  Delegate // exception_delegate - delegate to outer handler (noreturn)
-  GetTag // exception_get_tag - get exception tag
-  GetValue // exception_get_value - get exception value at index
-  GetValueCount // exception_get_value_count - get number of values
-  Sigsetjmp // sigsetjmp(jmp_buf, savemask) - libc setjmp, returns 0 or handler_id
-  SpillLocals // exception_spill_locals - save locals before throw
-  GetSpilledLocal // exception_get_spilled_local - get spilled local value
-} derive(Eq, Debug)
+/// Symbolic name for a runtime or external helper address.
+///
+/// MachV treats this as an opaque relocation key. Product-specific packages,
+/// such as `wasmoon_jit`, own the mapping from names to native addresses.
+pub(all) struct ExternalName {
+  name : String
+} derive(Eq, Debug, Hash)
 
 ///|
 /// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
@@ -85,18 +32,13 @@ pub impl Show for CallConv with fn output(self, logger) {
 }
 
 ///|
-pub impl Show for GCLibcall with fn output(self, logger) {
-  logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
+pub fn ExternalName::new(name : String) -> ExternalName {
+  { name, }
 }
 
 ///|
-pub impl Show for JITLibcall with fn output(self, logger) {
-  logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
-}
-
-///|
-pub impl Show for ExceptionLibcall with fn output(self, logger) {
-  logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
+pub impl Show for ExternalName with fn output(self, logger) {
+  logger.write_string(self.name)
 }
 
 ///|
@@ -157,7 +99,7 @@ fn VCodeInst::to_string(self : VCodeInst) -> String {
     ReturnCallIndirect(_, num_results) | CallPtr(_, num_results, _) =>
       // Only print result registers, not clobbers
       self.defs.iter().take(num_results).collect()
-    TypeCheckSubtypeIndirect(_) =>
+    TypeCheckSubtypeIndirect(_, _) =>
       // Only clobbers are attached (no results); keep output compact.
       []
     _ => self.defs
@@ -401,7 +343,7 @@ pub(all) enum VCodeOpcode {
   //
   // This removes the unconditional C call on the hot exact-match path while
   // preserving full GC subtyping semantics via the existing runtime helper.
-  TypeCheckSubtypeIndirect(Int)
+  TypeCheckSubtypeIndirect(Int, ExternalName)
   // Stack operations for spilling
   // StackLoad(offset): Load from [SP + offset] into the def register
   // StackStore(offset): Store the use register to [SP + offset]
@@ -454,20 +396,10 @@ pub(all) enum VCodeOpcode {
   // Uses: [base, value], Defs: []
   StorePtrNarrow(Int, Int) // (bits, offset)
 
-  // Load GC runtime function pointer
-  // LoadGCFuncPtr(libcall): Load function pointer for GC runtime call
+  // Load external function pointer
+  // LoadExternalFuncAddr(symbol): Load function pointer for an external helper.
   // Uses: [], Defs: [result (function pointer)]
-  LoadGCFuncPtr(GCLibcall)
-
-  // Load JIT runtime function pointer (ctx-passing v3 helpers)
-  // LoadJITFuncPtr(libcall): Load function pointer for JIT runtime call
-  // Uses: [], Defs: [result (function pointer)]
-  LoadJITFuncPtr(JITLibcall)
-
-  // Load exception handling runtime function pointer
-  // LoadExceptionFuncPtr(libcall): Load function pointer for exception runtime call
-  // Uses: [], Defs: [result (function pointer)]
-  LoadExceptionFuncPtr(ExceptionLibcall)
+  LoadExternalFuncAddr(ExternalName)
 
   // Load direct function address (resolved at JIT module load time)
   // LoadFuncAddr(func_idx): Load function pointer for func_idx
@@ -489,6 +421,13 @@ pub(all) enum VCodeOpcode {
   // Defs: [result0, result1, ...]
   // Parameters: func_idx, num_args, num_results, calling convention
   CallDirect(Int, Int, Int, CallConv)
+
+  // CallExternal: direct call to an external helper symbol.
+  // Uses depend on calling convention:
+  //   C: [arg0, arg1, ...]
+  // Defs: [result0, result1, ...]
+  // Parameters: symbol, num_args, num_results, calling convention
+  CallExternal(ExternalName, Int, Int, CallConv)
 
   // Stack pointer adjustment for outgoing call arguments (Standard)
   // AdjustSP(delta): Adjust SP by delta bytes
@@ -516,13 +455,13 @@ pub(all) enum VCodeOpcode {
   //   - Fields source is fixed to caller stack pointer (SP outgoing args area).
   //   - Slow path: calls gc_alloc_struct_slow(vmctx, type_idx, SP, num_fields).
   //   - Always registers allocated object via gc_register_struct_inline.
-  GCAllocStructInline(Int, Int)
+  GCAllocStructInline(Int, Int, ExternalName, ExternalName)
 
   // GCAllocStructSlowPrecise(type_idx, num_fields):
   //   Uses: [vmctx], Defs: [result_ref]
   //   - Calls gc_alloc_struct_slow(vmctx, type_idx, SP, num_fields, safepoint_id).
   //   - Emits safepoint metadata (root indices [0..num_fields-1]).
-  GCAllocStructSlowPrecise(Int, Int)
+  GCAllocStructSlowPrecise(Int, Int, ExternalName)
 
   // GCAllocArrayFixedInline(type_idx, len):
   //   Uses: [vmctx], Defs: [result_ref]
@@ -530,13 +469,13 @@ pub(all) enum VCodeOpcode {
   //   - Values source is fixed to caller stack pointer (SP outgoing args area).
   //   - Slow path: calls gc_alloc_array_from_values_slow(vmctx, type_idx, SP, len).
   //   - Always registers allocated object via gc_register_array_inline.
-  GCAllocArrayFixedInline(Int, Int)
+  GCAllocArrayFixedInline(Int, Int, ExternalName, ExternalName)
 
   // GCAllocArraySlowPrecise(type_idx):
   //   Uses: [vmctx, len, init_value], Defs: [result_ref]
   //   - Calls gc_alloc_array_slow(vmctx, type_idx, len, init_value, safepoint_id).
   //   - Emits safepoint metadata (root index [0] for init_value).
-  GCAllocArraySlowPrecise(Int)
+  GCAllocArraySlowPrecise(Int, ExternalName)
 
   // ============ SIMD Instructions (AArch64 NEON) ============
 
@@ -1094,8 +1033,8 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     ReturnCallIndirect(stack_arg_bytes, num_results) =>
       "return_call_indirect(stack=\{stack_arg_bytes}) -> \{num_results} results"
     TypeCheckIndirect(expected_type) => "type_check_indirect \{expected_type}"
-    TypeCheckSubtypeIndirect(expected_type) =>
-      "type_check_subtype_indirect \{expected_type}"
+    TypeCheckSubtypeIndirect(expected_type, helper) =>
+      "type_check_subtype_indirect \{expected_type} via \{helper}"
     StackLoad(offset) => "stack_load [sp+\{offset}]"
     StackStore(offset) => "stack_store [sp+\{offset}]"
     LoadStackParam(offset, class) => "load_stack_param +\{offset} (\{class})"
@@ -1125,14 +1064,14 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
       "load_ptr\{bits}_\{sign_str} +\{offset}"
     }
     StorePtrNarrow(bits, offset) => "store_ptr\{bits} +\{offset}"
-    LoadGCFuncPtr(libcall) => "load_gc_func_ptr.\{libcall}"
-    LoadJITFuncPtr(libcall) => "load_jit_func_ptr.\{libcall}"
-    LoadExceptionFuncPtr(libcall) => "load_exception_func_ptr.\{libcall}"
+    LoadExternalFuncAddr(symbol) => "load_external_func_addr.\{symbol}"
     LoadFuncAddr(func_idx) => "load_func_addr.\{func_idx}"
     CallPtr(num_args, num_results, call_conv) =>
       "call_ptr[\{call_conv}](\{num_args}) -> \{num_results} results"
     CallDirect(func_idx, num_args, num_results, call_conv) =>
       "call_direct[\{call_conv}].\{func_idx}(\{num_args}) -> \{num_results} results"
+    CallExternal(symbol, num_args, num_results, call_conv) =>
+      "call_external[\{call_conv}].\{symbol}(\{num_args}) -> \{num_results} results"
     AdjustSP(delta) =>
       if delta >= 0 {
         "add sp, sp, #\{delta}"
@@ -1141,13 +1080,13 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
       }
     StoreToStack(offset) => "str [sp+\{offset}]"
     LoadSP => "mov rd, outgoing_args_base"
-    GCAllocStructInline(type_idx, num_fields) =>
+    GCAllocStructInline(type_idx, num_fields, _, _) =>
       "gc_alloc_struct_inline type=\{type_idx} fields=\{num_fields}"
-    GCAllocStructSlowPrecise(type_idx, num_fields) =>
+    GCAllocStructSlowPrecise(type_idx, num_fields, _) =>
       "gc_alloc_struct_slow_precise type=\{type_idx} fields=\{num_fields}"
-    GCAllocArrayFixedInline(type_idx, len) =>
+    GCAllocArrayFixedInline(type_idx, len, _, _) =>
       "gc_alloc_array_fixed_inline type=\{type_idx} len=\{len}"
-    GCAllocArraySlowPrecise(type_idx) =>
+    GCAllocArraySlowPrecise(type_idx, _) =>
       "gc_alloc_array_slow_precise type=\{type_idx}"
     // SIMD instructions
     LoadConstV128(_) => "ldi.v128"
@@ -1694,12 +1633,13 @@ pub fn VCodeOpcode::call_type(self : VCodeOpcode) -> CallType {
     // Direct and indirect function calls (Standard via CallPtr)
     CallPtr(_, _, _)
     | CallDirect(_, _, _, _)
-    | GCAllocStructInline(_, _)
-    | GCAllocStructSlowPrecise(_, _)
-    | GCAllocArrayFixedInline(_, _)
-    | GCAllocArraySlowPrecise(_) => Regular
+    | CallExternal(_, _, _, _)
+    | GCAllocStructInline(_, _, _, _)
+    | GCAllocStructSlowPrecise(_, _, _)
+    | GCAllocArrayFixedInline(_, _, _, _)
+    | GCAllocArraySlowPrecise(_, _) => Regular
     // TypeCheckSubtypeIndirect can call a C helper on the slow path; treat it as a call.
-    TypeCheckSubtypeIndirect(_) => Regular
+    TypeCheckSubtypeIndirect(_, _) => Regular
     // Tail calls that don't return to caller
     ReturnCallIndirect(_, _) => TailCall
     // Everything else is not a call

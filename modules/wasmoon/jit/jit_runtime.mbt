@@ -249,7 +249,10 @@ pub fn JITModule::load_with_imports(
                 ([], [])
               }
               let mc = @machv_emit.emit_hostcall_import_trampoline(
-                param_types, result_types, host_func_addr,
+                param_types,
+                result_types,
+                host_func_addr,
+                @wasmoon_jit.runtime_hostcall_symbol(),
               )
               let code_ints = mc.get_bytes()
               let exec = @wasmoon_jit.ExecCode::new(code_ints)
@@ -259,12 +262,22 @@ pub fn JITModule::load_with_imports(
                   // fixups (LoadJITFuncPtr). Patch them before first execution.
                   let func_table_ptr = ctx.get_func_table_ptr()
                   for fixup in mc.get_func_addr_fixups() {
+                    let func_idx = match
+                      @wasmoon_jit.machv_reloc_target_to_cwasm_func_idx(
+                        fixup.target,
+                      ) {
+                      Some(idx) => idx
+                      None =>
+                        abort(
+                          "cannot patch hostcall trampoline target: \{fixup.target}",
+                        )
+                    }
                     @wasmoon_jit.patch_func_addr_fixup_raw_for_target(
                       precompiled.target,
                       ec.ptr(),
                       fixup.offset,
                       fixup.reg,
-                      fixup.func_idx,
+                      func_idx,
                       func_table_ptr,
                     )
                   }

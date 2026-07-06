@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "Milky2018/machv_emit/jit_ffi"
+package "Milky2018/wasmoon_jit/jit_ffi"
 
 // Values
 pub fn c_dwarf_add_function(Int64, Bytes, Int64, Int, Int) -> Unit

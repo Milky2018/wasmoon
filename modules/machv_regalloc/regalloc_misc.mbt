@@ -17,14 +17,17 @@ fn has_side_effects(opcode : @instr.VCodeOpcode) -> Bool {
     | StorePtrNarrowRegOffset(_, _, _, _) => true
     // Type check can trap
     TypeCheckIndirect(_) => true
-    TypeCheckSubtypeIndirect(_) => true
+    TypeCheckSubtypeIndirect(_, _) => true
     // GC alloc pseudo-ops may call slow-path helpers
-    GCAllocStructInline(_, _)
-    | GCAllocStructSlowPrecise(_, _)
-    | GCAllocArrayFixedInline(_, _)
-    | GCAllocArraySlowPrecise(_) => true
+    GCAllocStructInline(_, _, _, _)
+    | GCAllocStructSlowPrecise(_, _, _)
+    | GCAllocArrayFixedInline(_, _, _, _)
+    | GCAllocArraySlowPrecise(_, _) => true
     // Function calls have side effects
-    ReturnCallIndirect(_, _) | CallPtr(_, _, _) | CallDirect(_, _, _, _) => true
+    ReturnCallIndirect(_, _)
+    | CallPtr(_, _, _)
+    | CallDirect(_, _, _, _)
+    | CallExternal(_, _, _, _) => true
     // Traps must not be eliminated
     TrapIfZero(_, _)
     | TrapIfDivOverflow(_, _)

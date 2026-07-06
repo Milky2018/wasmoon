@@ -1565,70 +1565,11 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_lea_r64_riprel32(scratch, label)
       self.x86_emit_movsd_xmm_m64(rd, scratch, 0)
     }
-    LoadGCFuncPtr(libcall) => {
+    LoadExternalFuncAddr(symbol) => {
       let rd = wreg_num(inst.defs[0])
-      let func_ptr = match libcall {
-        RefTest => @jit_ffi.c_jit_get_gc_ref_test_ptr()
-        RefCast => @jit_ffi.c_jit_get_gc_ref_cast_ptr()
-        StructNew => @jit_ffi.c_jit_get_gc_struct_new_ptr()
-        StructGet => @jit_ffi.c_jit_get_gc_struct_get_ptr()
-        StructSet => @jit_ffi.c_jit_get_gc_struct_set_ptr()
-        ArrayNew => @jit_ffi.c_jit_get_gc_array_new_ptr()
-        ArrayGet => @jit_ffi.c_jit_get_gc_array_get_ptr()
-        ArraySet => @jit_ffi.c_jit_get_gc_array_set_ptr()
-        ArrayLen => @jit_ffi.c_jit_get_gc_array_len_ptr()
-        ArrayFill => @jit_ffi.c_jit_get_gc_array_fill_ptr()
-        ArrayCopy => @jit_ffi.c_jit_get_gc_array_copy_ptr()
-        ArrayNewData => @jit_ffi.c_jit_get_gc_array_new_data_ptr()
-        ArrayNewElem => @jit_ffi.c_jit_get_gc_array_new_elem_ptr()
-        ArrayInitData => @jit_ffi.c_jit_get_gc_array_init_data_ptr()
-        ArrayInitElem => @jit_ffi.c_jit_get_gc_array_init_elem_ptr()
-        TypeCheckSubtype => @jit_ffi.c_jit_get_gc_type_check_subtype_ptr()
-        RegisterStructInline =>
-          @jit_ffi.c_jit_get_gc_register_struct_inline_ptr()
-        RegisterArrayInline => @jit_ffi.c_jit_get_gc_register_array_inline_ptr()
-        AllocStructSlow => @jit_ffi.c_jit_get_gc_alloc_struct_slow_ptr()
-        AllocArraySlow => @jit_ffi.c_jit_get_gc_alloc_array_slow_ptr()
-      }
-      self.x86_emit_mov_imm64(rd, func_ptr)
-    }
-    LoadJITFuncPtr(libcall) => {
-      let rd = wreg_num(inst.defs[0])
-      let func_ptr = match libcall {
-        MemoryGrow => @jit_ffi.c_jit_get_memory_grow_ptr()
-        MemorySize => @jit_ffi.c_jit_get_memory_size_ptr()
-        MemoryFill => @jit_ffi.c_jit_get_memory_fill_ptr()
-        MemoryFillMem0 => @jit_ffi.c_jit_get_memory_fill_mem0_ptr()
-        MemoryCopy => @jit_ffi.c_jit_get_memory_copy_ptr()
-        MemoryCopyMem0 => @jit_ffi.c_jit_get_memory_copy_mem0_ptr()
-        MemoryInit => @jit_ffi.c_jit_get_memory_init_ptr()
-        DataDrop => @jit_ffi.c_jit_get_data_drop_ptr()
-        TableGrow => @jit_ffi.c_jit_get_table_grow_ptr()
-        TableFill => @jit_ffi.c_jit_get_table_fill_ptr()
-        TableCopy => @jit_ffi.c_jit_get_table_copy_ptr()
-        TableInit => @jit_ffi.c_jit_get_table_init_ptr()
-        ElemDrop => @jit_ffi.c_jit_get_elem_drop_ptr()
-        HostCall => @jit_ffi.c_jit_get_hostcall_ptr()
-      }
-      self.x86_emit_mov_imm64(rd, func_ptr)
-    }
-    LoadExceptionFuncPtr(libcall) => {
-      let rd = wreg_num(inst.defs[0])
-      let func_ptr = match libcall {
-        TryBegin => @jit_ffi.c_jit_get_exception_try_begin_ptr()
-        TryEnd => @jit_ffi.c_jit_get_exception_try_end_ptr()
-        Throw => @jit_ffi.c_jit_get_exception_throw_ptr()
-        ThrowTag => @jit_ffi.c_jit_get_exception_throw_tag_ptr()
-        ThrowRef => @jit_ffi.c_jit_get_exception_throw_ref_ptr()
-        Delegate => @jit_ffi.c_jit_get_exception_delegate_ptr()
-        GetTag => @jit_ffi.c_jit_get_exception_get_tag_ptr()
-        GetValue => @jit_ffi.c_jit_get_exception_get_value_ptr()
-        GetValueCount => @jit_ffi.c_jit_get_exception_get_value_count_ptr()
-        Sigsetjmp => @jit_ffi.c_jit_get_sigsetjmp_ptr()
-        SpillLocals => @jit_ffi.c_jit_get_exception_spill_locals_ptr()
-        GetSpilledLocal => @jit_ffi.c_jit_get_exception_get_spilled_local_ptr()
-      }
-      self.x86_emit_mov_imm64(rd, func_ptr)
+      let fixup_offset = self.current_pos()
+      self.x86_emit_mov_imm64(rd, 0L)
+      self.add_external_func_addr_fixup(fixup_offset, symbol, rd)
     }
     Cmp(kind, is_64) => {
       let rn = reg_num(inst.uses[0])
@@ -1795,7 +1736,7 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_trap_imm16(2)
       self.define_label(ok)
     }
-    TypeCheckSubtypeIndirect(expected_type) => {
+    TypeCheckSubtypeIndirect(expected_type, helper_symbol) => {
       // Fast path for call_indirect type checks:
       // - If actual_type == expected_type: do nothing.
       // - Otherwise: call the runtime subtype checker (traps on failure).
@@ -1812,9 +1753,10 @@ fn MachineCode::emit_instruction_x86_64(
       let arg1 = 6 // rsi
       self.x86_emit_mov_rr32(arg0, actual_type_reg)
       self.x86_emit_mov_imm64(arg1, expected_type.to_int64())
-      let func_ptr = @jit_ffi.c_jit_get_gc_type_check_subtype_ptr()
       let scratch = isa.scratch_reg_1_index()
-      self.x86_emit_mov_imm64(scratch, func_ptr)
+      let fixup_offset = self.current_pos()
+      self.x86_emit_mov_imm64(scratch, 0L)
+      self.add_external_func_addr_fixup(fixup_offset, helper_symbol, scratch)
       self.x86_emit_call_r64(scratch)
       self.define_label(done)
     }
@@ -3222,6 +3164,13 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_mov_r64_m64(callee, table, func_idx * 8)
       self.x86_emit_call_r64(callee)
     }
+    CallExternal(symbol, _num_args, _num_results, _call_conv) => {
+      let callee = isa.scratch_reg_2_index()
+      let fixup_offset = self.current_pos()
+      self.x86_emit_mov_imm64(callee, 0L)
+      self.add_external_func_addr_fixup(fixup_offset, symbol, callee)
+      self.x86_emit_call_r64(callee)
+    }
     CallPtr(_, _, _call_conv) => {
       // Standard call: arguments already placed by lowering.
       let target = match inst.use_constraints[0] {
@@ -3284,7 +3233,7 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_mov_rr(rd, 4)
       emit_add_imm_to_reg_in_chunks(self, rd, stack_frame.outgoing_args_offset)
     }
-    GCAllocStructSlowPrecise(type_idx, num_fields) => {
+    GCAllocStructSlowPrecise(type_idx, num_fields, alloc_slow_symbol) => {
       let dst = wreg_num(inst.defs[0])
       let vmctx = reg_num(inst.uses[0])
       let stack_base_off = stack_frame.outgoing_args_offset
@@ -3312,16 +3261,15 @@ fn MachineCode::emit_instruction_x86_64(
         root_indices=safepoint_root_indices,
       )
       self.x86_emit_mov_imm64(arg4, safepoint_id.to_int64())
-      self.x86_emit_mov_imm64(
-        tmp,
-        @jit_ffi.c_jit_get_gc_alloc_struct_slow_ptr(),
-      )
+      let fixup_offset = self.current_pos()
+      self.x86_emit_mov_imm64(tmp, 0L)
+      self.add_external_func_addr_fixup(fixup_offset, alloc_slow_symbol, tmp)
       self.x86_emit_call_r64(tmp)
       if dst != 0 {
         self.x86_emit_mov_rr(dst, 0)
       }
     }
-    GCAllocStructInline(type_idx, num_fields) => {
+    GCAllocStructInline(type_idx, num_fields, register_symbol, slow_symbol) => {
       // Inline bump allocation with slow-path fallback.
       let dst = wreg_num(inst.defs[0])
       let vmctx = @isaregs.vmctx_index()
@@ -3374,9 +3322,10 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_mov_rr(arg1, obj)
       }
       self.x86_emit_mov_imm64(arg2, total_size.to_int64())
-      self.x86_emit_mov_imm64(
-        end,
-        @jit_ffi.c_jit_get_gc_register_struct_inline_ptr(),
+      let register_fixup_offset = self.current_pos()
+      self.x86_emit_mov_imm64(end, 0L)
+      self.add_external_func_addr_fixup(
+        register_fixup_offset, register_symbol, end,
       )
       self.x86_emit_call_r64(end)
       if dst != 0 {
@@ -3403,17 +3352,16 @@ fn MachineCode::emit_instruction_x86_64(
         root_indices=safepoint_root_indices,
       )
       self.x86_emit_mov_imm64(arg4, safepoint_id.to_int64())
-      self.x86_emit_mov_imm64(
-        end,
-        @jit_ffi.c_jit_get_gc_alloc_struct_slow_ptr(),
-      )
+      let slow_fixup_offset = self.current_pos()
+      self.x86_emit_mov_imm64(end, 0L)
+      self.add_external_func_addr_fixup(slow_fixup_offset, slow_symbol, end)
       self.x86_emit_call_r64(end)
       if dst != 0 {
         self.x86_emit_mov_rr(dst, 0)
       }
       self.define_label(done)
     }
-    GCAllocArrayFixedInline(type_idx, len) => {
+    GCAllocArrayFixedInline(type_idx, len, register_symbol, slow_symbol) => {
       // Inline bump allocation with slow-path fallback.
       let dst = wreg_num(inst.defs[0])
       let vmctx = @isaregs.vmctx_index()
@@ -3476,9 +3424,10 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_mov_rr(arg1, obj)
       }
       self.x86_emit_mov_imm64(arg2, total_size.to_int64())
-      self.x86_emit_mov_imm64(
-        end,
-        @jit_ffi.c_jit_get_gc_register_array_inline_ptr(),
+      let register_fixup_offset = self.current_pos()
+      self.x86_emit_mov_imm64(end, 0L)
+      self.add_external_func_addr_fixup(
+        register_fixup_offset, register_symbol, end,
       )
       self.x86_emit_call_r64(end)
       if dst != 0 {
@@ -3505,17 +3454,16 @@ fn MachineCode::emit_instruction_x86_64(
         root_indices=safepoint_root_indices,
       )
       self.x86_emit_mov_imm64(arg4, safepoint_id.to_int64())
-      self.x86_emit_mov_imm64(
-        end,
-        @jit_ffi.c_jit_get_gc_alloc_array_from_values_slow_ptr(),
-      )
+      let slow_fixup_offset = self.current_pos()
+      self.x86_emit_mov_imm64(end, 0L)
+      self.add_external_func_addr_fixup(slow_fixup_offset, slow_symbol, end)
       self.x86_emit_call_r64(end)
       if dst != 0 {
         self.x86_emit_mov_rr(dst, 0)
       }
       self.define_label(done)
     }
-    GCAllocArraySlowPrecise(type_idx) => {
+    GCAllocArraySlowPrecise(type_idx, alloc_slow_symbol) => {
       let dst = wreg_num(inst.defs[0])
       let vmctx = reg_num(inst.uses[0])
       let mut len_reg = reg_num(inst.uses[1])
@@ -3559,7 +3507,9 @@ fn MachineCode::emit_instruction_x86_64(
         root_indices=[0],
       )
       self.x86_emit_mov_imm64(arg4, safepoint_id.to_int64())
-      self.x86_emit_mov_imm64(tmp, @jit_ffi.c_jit_get_gc_alloc_array_slow_ptr())
+      let fixup_offset = self.current_pos()
+      self.x86_emit_mov_imm64(tmp, 0L)
+      self.add_external_func_addr_fixup(fixup_offset, alloc_slow_symbol, tmp)
       self.x86_emit_call_r64(tmp)
       if dst != 0 {
         self.x86_emit_mov_rr(dst, 0)

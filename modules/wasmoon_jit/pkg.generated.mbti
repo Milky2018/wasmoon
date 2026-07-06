@@ -2,6 +2,7 @@
 package "Milky2018/wasmoon_jit"
 
 import {
+  "Milky2018/machv/instr",
   "Milky2018/machv_emit",
   "Milky2018/machv_regalloc",
   "Milky2018/milkir",
@@ -332,6 +333,8 @@ pub fn lower_milkir_for_target(@milkir.Function, @machv_emit.EmitTarget) -> @mac
 
 pub fn lower_wasm_body_milkir_for_target(@milkir.Function, @machv_emit.EmitTarget) -> @machv_regalloc.VCodeFunction
 
+pub fn machv_reloc_target_to_cwasm_func_idx(@machv_emit.RelocTarget) -> Int?
+
 pub fn make_cstring(String) -> FixedArray[Byte]
 
 pub fn memory_descriptor_layout() -> MemoryDescriptorLayout
@@ -370,6 +373,12 @@ pub fn patch_x64_call_fixups(Int64, Array[@cwasm.CallFixup], Int64, Map[Int, Int
 
 pub fn patch_x64_direct_call(Int64, @cwasm.CallFixup, Int64) -> Unit
 
+pub fn patch_x64_func_addr_fixup_parts(Int64, Int, Int, Int64) -> Unit
+
+pub fn patch_x64_func_addr_fixup_raw(Int64, Int, Int, Int, Int64) -> Unit
+
+pub fn patch_x64_func_addr_fixups(Int64, Array[@cwasm.FuncAddrFixup], Int64) -> Unit
+
 pub fn plan_entry_trampoline_for_target(Array[@types.ValueType], Array[@types.ValueType], @machv_emit.EmitTarget) -> JitIntegrationPlan raise JitPipelineError
 
 pub fn plan_hostcall_import_trampoline_layout(Array[@types.ValueType], Array[@types.ValueType], Int, Int) -> HostcallImportTrampolineLayout
@@ -393,6 +402,8 @@ pub fn resolve_import_function_ptr(Map[String, Map[String, Int64]], String, Stri
 pub fn resolve_runtime_func_fixup_idx(Int) -> Int64?
 
 pub fn resolve_wasm_func_symbol(String) -> Int?
+
+pub fn runtime_hostcall_symbol() -> @instr.ExternalName
 
 pub fn sanitize_debug_filename(String) -> String
 

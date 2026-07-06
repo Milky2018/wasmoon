@@ -14,6 +14,7 @@ REUSABLE_MODULES = [
     "modules/regalloc",
     "modules/machv_regalloc",
     "modules/machv_emit",
+    "modules/isa_target",
     "modules/aarch64_target",
     "modules/x64_target",
 ]
@@ -22,7 +23,14 @@ FORBIDDEN = [
     "Milky2018/wasmoon",
     "Milky2018/wasmoon/ir",
     "Milky2018/wasmoon/vcode",
+    "Milky2018/machv_emit/jit_ffi",
+    "Milky2018/wasmoon_jit",
     "@wasmoon",
+    "@jit_ffi",
+    "c_jit_",
+    "wasmoon_jit_",
+    "wasmoon_host_arch",
+    "wasmoon.runtime",
 ]
 
 

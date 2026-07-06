@@ -1,5 +1,5 @@
 // Copyright 2026
-// Host architecture detection for the vcode ISA layer.
+// Host architecture detection for the MachV ISA layer.
 //
 // We use C preprocessor macros so the result reflects the actual compilation
 // target (works on CI without requiring MoonBit conditional compilation).
@@ -17,7 +17,7 @@
 //   0: AArch64
 //   1: amd64
 //  -1: unknown/other
-MOONBIT_FFI_EXPORT int wasmoon_host_arch(void) {
+MOONBIT_FFI_EXPORT int machv_host_arch(void) {
 #if !defined(_WIN32)
   // Linux-first: detect the *process* architecture from the ELF header.
   // This works even under user-mode emulation where uname() reports the host

@@ -6,4 +6,4 @@
 /// native stub, so amd64 CI can select the correct JIT backend.
 
 ///|
-pub extern "c" fn c_host_arch() -> Int = "wasmoon_host_arch"
+pub extern "c" fn c_host_arch() -> Int = "machv_host_arch"

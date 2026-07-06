@@ -39,6 +39,11 @@ pub fn exception_runtime_fixup_idx(ordinal : Int) -> Int {
 }
 
 ///|
+pub fn runtime_hostcall_symbol() -> @instr.ExternalName {
+  @instr.ExternalName::new("wasm.runtime.hostcall")
+}
+
+///|
 pub fn RuntimeSymbolResolver::new() -> RuntimeSymbolResolver {
   { symbols: [] }
 }
@@ -47,9 +52,119 @@ pub fn RuntimeSymbolResolver::new() -> RuntimeSymbolResolver {
 pub fn RuntimeSymbolResolver::with_wasmoon_runtime_symbols() -> RuntimeSymbolResolver {
   let resolver = RuntimeSymbolResolver::new()
   resolver.add_symbol_fixup(
+    "wasmoon.runtime.gc.ref_test",
+    @jit_ffi.c_jit_get_gc_ref_test_ptr(),
+    gc_runtime_fixup_idx(0),
+  )
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.gc.ref_cast",
+    @jit_ffi.c_jit_get_gc_ref_cast_ptr(),
+    gc_runtime_fixup_idx(1),
+  )
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.gc.struct_new",
+    @jit_ffi.c_jit_get_gc_struct_new_ptr(),
+    gc_runtime_fixup_idx(2),
+  )
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.gc.struct_get",
+    @jit_ffi.c_jit_get_gc_struct_get_ptr(),
+    gc_runtime_fixup_idx(3),
+  )
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.gc.struct_set",
+    @jit_ffi.c_jit_get_gc_struct_set_ptr(),
+    gc_runtime_fixup_idx(4),
+  )
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.gc.array_new",
+    @jit_ffi.c_jit_get_gc_array_new_ptr(),
+    gc_runtime_fixup_idx(5),
+  )
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.gc.array_get",
+    @jit_ffi.c_jit_get_gc_array_get_ptr(),
+    gc_runtime_fixup_idx(6),
+  )
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.gc.array_set",
+    @jit_ffi.c_jit_get_gc_array_set_ptr(),
+    gc_runtime_fixup_idx(7),
+  )
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.gc.array_len",
+    @jit_ffi.c_jit_get_gc_array_len_ptr(),
+    gc_runtime_fixup_idx(8),
+  )
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.gc.array_fill",
+    @jit_ffi.c_jit_get_gc_array_fill_ptr(),
+    gc_runtime_fixup_idx(9),
+  )
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.gc.array_copy",
+    @jit_ffi.c_jit_get_gc_array_copy_ptr(),
+    gc_runtime_fixup_idx(10),
+  )
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.gc.array_new_data",
+    @jit_ffi.c_jit_get_gc_array_new_data_ptr(),
+    gc_runtime_fixup_idx(11),
+  )
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.gc.array_new_elem",
+    @jit_ffi.c_jit_get_gc_array_new_elem_ptr(),
+    gc_runtime_fixup_idx(12),
+  )
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.gc.array_init_data",
+    @jit_ffi.c_jit_get_gc_array_init_data_ptr(),
+    gc_runtime_fixup_idx(13),
+  )
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.gc.array_init_elem",
+    @jit_ffi.c_jit_get_gc_array_init_elem_ptr(),
+    gc_runtime_fixup_idx(14),
+  )
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.gc.type_check_subtype",
+    @jit_ffi.c_jit_get_gc_type_check_subtype_ptr(),
+    gc_runtime_fixup_idx(15),
+  )
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.gc.register_struct_inline",
+    @jit_ffi.c_jit_get_gc_register_struct_inline_ptr(),
+    gc_runtime_fixup_idx(16),
+  )
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.gc.register_array_inline",
+    @jit_ffi.c_jit_get_gc_register_array_inline_ptr(),
+    gc_runtime_fixup_idx(17),
+  )
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.gc.alloc_struct_slow",
+    @jit_ffi.c_jit_get_gc_alloc_struct_slow_ptr(),
+    gc_runtime_fixup_idx(18),
+  )
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.gc.alloc_array_slow",
+    @jit_ffi.c_jit_get_gc_alloc_array_slow_ptr(),
+    gc_runtime_fixup_idx(19),
+  )
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.gc.alloc_array_from_values_slow",
+    @jit_ffi.c_jit_get_gc_alloc_array_from_values_slow_ptr(),
+    gc_runtime_fixup_idx(20),
+  )
+  resolver.add_symbol_fixup(
     "wasmoon.runtime.memory_grow",
     @jit_ffi.c_jit_get_memory_grow_ptr(),
     jit_runtime_fixup_idx(0),
+  )
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.memory_size",
+    @jit_ffi.c_jit_get_memory_size_ptr(),
+    jit_runtime_fixup_idx(1),
   )
   resolver.add_symbol_fixup(
     "wasmoon.runtime.memory_fill",
@@ -57,9 +172,19 @@ pub fn RuntimeSymbolResolver::with_wasmoon_runtime_symbols() -> RuntimeSymbolRes
     jit_runtime_fixup_idx(2),
   )
   resolver.add_symbol_fixup(
+    "wasmoon.runtime.memory_fill_mem0",
+    @jit_ffi.c_jit_get_memory_fill_mem0_ptr(),
+    jit_runtime_fixup_idx(3),
+  )
+  resolver.add_symbol_fixup(
     "wasmoon.runtime.memory_copy",
     @jit_ffi.c_jit_get_memory_copy_ptr(),
     jit_runtime_fixup_idx(4),
+  )
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.memory_copy_mem0",
+    @jit_ffi.c_jit_get_memory_copy_mem0_ptr(),
+    jit_runtime_fixup_idx(5),
   )
   resolver.add_symbol_fixup(
     "wasmoon.runtime.memory_init",
@@ -96,6 +221,71 @@ pub fn RuntimeSymbolResolver::with_wasmoon_runtime_symbols() -> RuntimeSymbolRes
     @jit_ffi.c_jit_get_elem_drop_ptr(),
     jit_runtime_fixup_idx(12),
   )
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.hostcall",
+    @jit_ffi.c_jit_get_hostcall_ptr(),
+    jit_runtime_fixup_idx(13),
+  )
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.exception.try_begin",
+    @jit_ffi.c_jit_get_exception_try_begin_ptr(),
+    exception_runtime_fixup_idx(0),
+  )
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.exception.try_end",
+    @jit_ffi.c_jit_get_exception_try_end_ptr(),
+    exception_runtime_fixup_idx(1),
+  )
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.exception.throw",
+    @jit_ffi.c_jit_get_exception_throw_ptr(),
+    exception_runtime_fixup_idx(2),
+  )
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.exception.throw_tag",
+    @jit_ffi.c_jit_get_exception_throw_tag_ptr(),
+    exception_runtime_fixup_idx(3),
+  )
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.exception.throw_ref",
+    @jit_ffi.c_jit_get_exception_throw_ref_ptr(),
+    exception_runtime_fixup_idx(4),
+  )
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.exception.delegate",
+    @jit_ffi.c_jit_get_exception_delegate_ptr(),
+    exception_runtime_fixup_idx(5),
+  )
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.exception.get_tag",
+    @jit_ffi.c_jit_get_exception_get_tag_ptr(),
+    exception_runtime_fixup_idx(6),
+  )
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.exception.get_value",
+    @jit_ffi.c_jit_get_exception_get_value_ptr(),
+    exception_runtime_fixup_idx(7),
+  )
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.exception.get_value_count",
+    @jit_ffi.c_jit_get_exception_get_value_count_ptr(),
+    exception_runtime_fixup_idx(8),
+  )
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.exception.sigsetjmp",
+    @jit_ffi.c_jit_get_sigsetjmp_ptr(),
+    exception_runtime_fixup_idx(9),
+  )
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.exception.spill_locals",
+    @jit_ffi.c_jit_get_exception_spill_locals_ptr(),
+    exception_runtime_fixup_idx(10),
+  )
+  resolver.add_symbol_fixup(
+    "wasmoon.runtime.exception.get_spilled_local",
+    @jit_ffi.c_jit_get_exception_get_spilled_local_ptr(),
+    exception_runtime_fixup_idx(11),
+  )
   resolver
 }
 
@@ -128,7 +318,25 @@ pub fn RuntimeSymbolResolver::resolve_symbol(
       return Some(symbol)
     }
   }
-  None
+  match runtime_symbol_wasmoon_alias(name) {
+    Some(alias_name) => {
+      for symbol in self.symbols {
+        if symbol.name == alias_name {
+          return Some(symbol)
+        }
+      }
+      None
+    }
+    None => None
+  }
+}
+
+///|
+fn runtime_symbol_wasmoon_alias(name : String) -> String? {
+  match name {
+    [.. "wasm.runtime.", .. rest] => Some("wasmoon.runtime." + rest.to_owned())
+    _ => None
+  }
 }
 
 ///|
@@ -193,6 +401,7 @@ pub fn resolve_runtime_func_fixup_idx(idx : Int) -> Int64? {
     -20017 => Some(@jit_ffi.c_jit_get_gc_register_array_inline_ptr())
     -20018 => Some(@jit_ffi.c_jit_get_gc_alloc_struct_slow_ptr())
     -20019 => Some(@jit_ffi.c_jit_get_gc_alloc_array_slow_ptr())
+    -20020 => Some(@jit_ffi.c_jit_get_gc_alloc_array_from_values_slow_ptr())
     -21000 => Some(@jit_ffi.c_jit_get_memory_grow_ptr())
     -21001 => Some(@jit_ffi.c_jit_get_memory_size_ptr())
     -21002 => Some(@jit_ffi.c_jit_get_memory_fill_ptr())
@@ -224,6 +433,49 @@ pub fn resolve_runtime_func_fixup_idx(idx : Int) -> Int64? {
 }
 
 ///|
+pub fn machv_reloc_target_to_cwasm_func_idx(
+  target : @machv_emit.RelocTarget,
+) -> Int? {
+  match target {
+    Func(func_idx) => Some(func_idx)
+    External(symbol) => {
+      let resolver = RuntimeSymbolResolver::with_wasmoon_runtime_symbols()
+      match resolver.resolve_symbol(symbol.name) {
+        Some(runtime_symbol) => runtime_symbol.fixup_idx
+        None => None
+      }
+    }
+  }
+}
+
+///|
+fn resolve_machv_reloc_target(
+  target : @machv_emit.RelocTarget,
+  resolver : RuntimeSymbolResolver,
+) -> ResolvedRuntimeRelocation? {
+  match target {
+    Func(func_idx) =>
+      Some({
+        offset: 0,
+        symbol: "wasm.func.\{func_idx}",
+        address: 0L,
+        fixup_idx: Some(func_idx),
+      })
+    External(symbol) =>
+      match resolver.resolve_symbol(symbol.name) {
+        Some(runtime_symbol) =>
+          Some({
+            offset: 0,
+            symbol: symbol.name,
+            address: runtime_symbol.address,
+            fixup_idx: runtime_symbol.fixup_idx,
+          })
+        None => None
+      }
+  }
+}
+
+///|
 pub(all) struct ResolvedRuntimeRelocation {
   offset : Int
   symbol : String
@@ -243,45 +495,27 @@ pub(all) struct LinkedCode {
 } derive(Debug)
 
 ///|
-fn cwasm_symbol_for_fixup_idx(func_idx : Int) -> String {
-  if func_idx >= 0 {
-    "wasm.func.\{func_idx}"
-  } else {
-    "wasmoon.runtime.fixup.\{func_idx}"
-  }
-}
-
-///|
 fn runtime_relocations_from_machine_code(
   object : @machv_emit.MachineCode,
   resolver : RuntimeSymbolResolver,
 ) -> Array[ResolvedRuntimeRelocation] raise LinkError {
   let runtime_relocations : Array[ResolvedRuntimeRelocation] = []
   for fixup in object.get_call_fixups() {
-    let symbol = cwasm_symbol_for_fixup_idx(fixup.func_idx)
-    if fixup.func_idx >= 0 {
-      runtime_relocations.push({
-        offset: fixup.offset,
-        symbol,
-        address: 0L,
-        fixup_idx: Some(fixup.func_idx),
-      })
-    } else if resolve_runtime_func_fixup_idx(fixup.func_idx) is Some(address) {
-      runtime_relocations.push({
-        offset: fixup.offset,
-        symbol,
-        address,
-        fixup_idx: Some(fixup.func_idx),
-      })
-    } else if resolver.resolve_symbol(symbol) is Some(runtime_symbol) {
-      runtime_relocations.push({
-        offset: fixup.offset,
-        symbol,
-        address: runtime_symbol.address,
-        fixup_idx: runtime_symbol.fixup_idx,
-      })
-    } else {
-      raise UnknownRuntimeSymbol(symbol)
+    match resolve_machv_reloc_target(fixup.target, resolver) {
+      Some(relocation) =>
+        runtime_relocations.push({
+          offset: fixup.offset,
+          symbol: relocation.symbol,
+          address: relocation.address,
+          fixup_idx: relocation.fixup_idx,
+        })
+      None => {
+        let name = match fixup.target {
+          Func(func_idx) => "wasm.func.\{func_idx}"
+          External(symbol) => symbol.name
+        }
+        raise UnknownRuntimeSymbol(name)
+      }
     }
   }
   runtime_relocations

@@ -988,8 +988,9 @@ fn optimize_load_store_forwarding(block : @block.VCodeBlock) -> Int {
       // Calls may have side effects
       CallPtr(_, _, _)
       | CallDirect(_, _, _, _)
+      | CallExternal(_, _, _, _)
       | ReturnCallIndirect(_, _)
-      | TypeCheckSubtypeIndirect(_) => store_map.clear()
+      | TypeCheckSubtypeIndirect(_, _) => store_map.clear()
       _ => ()
     }
   }

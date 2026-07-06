@@ -61,22 +61,6 @@ pub fn Cond::invert(Self) -> Self
 pub fn Cond::to_bits(Self) -> Int
 pub impl Show for Cond
 
-pub(all) enum ExceptionLibcall {
-  TryBegin
-  TryEnd
-  Throw
-  ThrowTag
-  ThrowRef
-  Delegate
-  GetTag
-  GetValue
-  GetValueCount
-  Sigsetjmp
-  SpillLocals
-  GetSpilledLocal
-} derive(Eq, @debug.Debug)
-pub impl Show for ExceptionLibcall
-
 pub(all) enum ExtendKind {
   Signed8To32
   Signed8To64
@@ -90,6 +74,12 @@ pub(all) enum ExtendKind {
   Unsigned32To64
 }
 pub impl Show for ExtendKind
+
+pub(all) struct ExternalName {
+  name : String
+} derive(Eq, Hash, @debug.Debug)
+pub fn ExternalName::new(String) -> Self
+pub impl Show for ExternalName
 
 pub(all) enum FCmpKind {
   Eq
@@ -121,30 +111,6 @@ pub(all) enum FloatToIntKind {
 }
 pub impl Show for FloatToIntKind
 
-pub(all) enum GCLibcall {
-  RefTest
-  RefCast
-  StructNew
-  StructGet
-  StructSet
-  ArrayNew
-  ArrayGet
-  ArraySet
-  ArrayLen
-  ArrayFill
-  ArrayCopy
-  ArrayNewData
-  ArrayNewElem
-  ArrayInitData
-  ArrayInitElem
-  TypeCheckSubtype
-  RegisterStructInline
-  RegisterArrayInline
-  AllocStructSlow
-  AllocArraySlow
-} derive(Eq, @debug.Debug)
-pub impl Show for GCLibcall
-
 pub(all) enum IndexExtend {
   None
   Uxtw
@@ -163,24 +129,6 @@ pub(all) enum IntToFloatKind {
   I64UToF64
 }
 pub impl Show for IntToFloatKind
-
-pub(all) enum JITLibcall {
-  MemoryGrow
-  MemorySize
-  MemoryFill
-  MemoryFillMem0
-  MemoryCopy
-  MemoryCopyMem0
-  MemoryInit
-  DataDrop
-  TableGrow
-  TableFill
-  TableCopy
-  TableInit
-  ElemDrop
-  HostCall
-} derive(Eq, @debug.Debug)
-pub impl Show for JITLibcall
 
 pub(all) enum LaneSize {
   B8
@@ -338,7 +286,7 @@ pub(all) enum VCodeOpcode {
   Smull
   ReturnCallIndirect(Int, Int)
   TypeCheckIndirect(Int)
-  TypeCheckSubtypeIndirect(Int)
+  TypeCheckSubtypeIndirect(Int, ExternalName)
   StackLoad(Int)
   StackStore(Int)
   LoadStackParam(Int, @abi.RegClass)
@@ -351,19 +299,18 @@ pub(all) enum VCodeOpcode {
   StorePtrNarrowRegOffset(Int, IndexExtend, Int, Int)
   LoadPtrNarrow(Int, Bool, Int)
   StorePtrNarrow(Int, Int)
-  LoadGCFuncPtr(GCLibcall)
-  LoadJITFuncPtr(JITLibcall)
-  LoadExceptionFuncPtr(ExceptionLibcall)
+  LoadExternalFuncAddr(ExternalName)
   LoadFuncAddr(Int)
   CallPtr(Int, Int, CallConv)
   CallDirect(Int, Int, Int, CallConv)
+  CallExternal(ExternalName, Int, Int, CallConv)
   AdjustSP(Int)
   StoreToStack(Int)
   LoadSP
-  GCAllocStructInline(Int, Int)
-  GCAllocStructSlowPrecise(Int, Int)
-  GCAllocArrayFixedInline(Int, Int)
-  GCAllocArraySlowPrecise(Int)
+  GCAllocStructInline(Int, Int, ExternalName, ExternalName)
+  GCAllocStructSlowPrecise(Int, Int, ExternalName)
+  GCAllocArrayFixedInline(Int, Int, ExternalName, ExternalName)
+  GCAllocArraySlowPrecise(Int, ExternalName)
   LoadConstV128(Bytes)
   SIMDSplat(LaneSize)
   SIMDSplatF(Bool)

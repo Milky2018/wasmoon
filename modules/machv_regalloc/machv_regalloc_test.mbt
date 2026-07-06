@@ -230,7 +230,7 @@ test "apply keeps fixed call inputs out of cycle scratch registers" {
   defs.add_constraint({ operand_index: 2, allowed_regs: [p2] })
   defs.add_constraint({ operand_index: 3, allowed_regs: [p3] })
   entry.append(defs)
-  let call = func.new_inst(Call("wasmoon.runtime.memory_grow"))
+  let call = func.new_inst(Call("wasm.runtime.memory_grow"))
   call.add_operand(@machv.Operand::use_reg(Virtual(vmctx)))
   call.add_operand(@machv.Operand::use_reg(Virtual(memidx)))
   call.add_operand(@machv.Operand::use_reg(Virtual(delta)))

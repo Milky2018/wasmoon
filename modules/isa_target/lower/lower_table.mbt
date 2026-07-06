@@ -26,9 +26,9 @@ fn lower_table_grow(
   }
 
   // Lower to a C call:
-  //   wasmoon_jit_table_grow(vmctx, table_idx, delta, init_value) -> i32
+  //   runtime.table_grow(vmctx, table_idx, delta, init_value) -> i32
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_ptr = @instr.VCodeInst::new(LoadJITFuncPtr(TableGrow))
+  let load_ptr = @instr.VCodeInst::new(LoadExternalFuncAddr(rt_table_grow()))
   load_ptr.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_ptr)
   let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
@@ -63,9 +63,9 @@ fn lower_table_fill(
   let size = ctx.get_vreg_for_use(inst.operands[2], block)
 
   // Lower to a C call:
-  //   wasmoon_jit_table_fill(vmctx, table_idx, dst, val, size)
+  //   runtime.table_fill(vmctx, table_idx, dst, val, size)
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_ptr = @instr.VCodeInst::new(LoadJITFuncPtr(TableFill))
+  let load_ptr = @instr.VCodeInst::new(LoadExternalFuncAddr(rt_table_fill()))
   load_ptr.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_ptr)
   let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
@@ -101,9 +101,9 @@ fn lower_table_copy(
   let size = ctx.get_vreg_for_use(inst.operands[2], block)
 
   // Lower to a C call:
-  //   wasmoon_jit_table_copy(vmctx, dst_table_idx, src_table_idx, dst, src, size)
+  //   runtime.table_copy(vmctx, dst_table_idx, src_table_idx, dst, src, size)
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_ptr = @instr.VCodeInst::new(LoadJITFuncPtr(TableCopy))
+  let load_ptr = @instr.VCodeInst::new(LoadExternalFuncAddr(rt_table_copy()))
   load_ptr.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_ptr)
   let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
@@ -140,9 +140,9 @@ fn lower_table_init(
   let size = ctx.get_vreg_for_use(inst.operands[2], block)
 
   // Lower to a C call:
-  //   wasmoon_jit_table_init(vmctx, table_idx, elem_idx, dst, src, size)
+  //   runtime.table_init(vmctx, table_idx, elem_idx, dst, src, size)
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_ptr = @instr.VCodeInst::new(LoadJITFuncPtr(TableInit))
+  let load_ptr = @instr.VCodeInst::new(LoadExternalFuncAddr(rt_table_init()))
   load_ptr.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_ptr)
   let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
@@ -172,9 +172,9 @@ fn lower_elem_drop(
   elem_idx : Int,
 ) -> Unit {
   // Lower to a C call:
-  //   wasmoon_jit_elem_drop(vmctx, elem_idx)
+  //   runtime.elem_drop(vmctx, elem_idx)
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_ptr = @instr.VCodeInst::new(LoadJITFuncPtr(ElemDrop))
+  let load_ptr = @instr.VCodeInst::new(LoadExternalFuncAddr(rt_elem_drop()))
   load_ptr.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_ptr)
   let vmctx_vreg = ctx.vcode_func.new_vreg(Int)

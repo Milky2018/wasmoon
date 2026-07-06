@@ -1404,7 +1404,12 @@ fn vcode_func_addr_fixups_to_cwasm(
 ) -> Array[@cwasm.FuncAddrFixup] {
   let out : Array[@cwasm.FuncAddrFixup] = []
   for fixup in fixups {
-    out.push({ offset: fixup.offset, func_idx: fixup.func_idx, reg: fixup.reg })
+    let func_idx = match
+      @wasmoon_jit.machv_reloc_target_to_cwasm_func_idx(fixup.target) {
+      Some(idx) => idx
+      None => abort("cannot encode external func-addr target: \{fixup.target}")
+    }
+    out.push({ offset: fixup.offset, func_idx, reg: fixup.reg })
   }
   out
 }
@@ -1415,9 +1420,14 @@ fn vcode_call_fixups_to_cwasm(
 ) -> Array[@cwasm.CallFixup] {
   let out : Array[@cwasm.CallFixup] = []
   for fixup in fixups {
+    let func_idx = match
+      @wasmoon_jit.machv_reloc_target_to_cwasm_func_idx(fixup.target) {
+      Some(idx) => idx
+      None => abort("cannot encode external call target: \{fixup.target}")
+    }
     out.push({
       offset: fixup.offset,
-      func_idx: fixup.func_idx,
+      func_idx,
       veneer_offset: fixup.veneer_offset,
     })
   }

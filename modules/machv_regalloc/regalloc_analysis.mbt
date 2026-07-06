@@ -576,12 +576,13 @@ fn collect_defs_uses(
         let conv = match inst.opcode {
           CallPtr(_, _, call_conv) => call_conv
           CallDirect(_, _, _, call_conv) => call_conv
+          CallExternal(_, _, _, call_conv) => call_conv
           // This pseudo-op may call a C helper on a slow path.
-          TypeCheckSubtypeIndirect(_) => C
-          GCAllocStructInline(_, _) => C
-          GCAllocStructSlowPrecise(_, _) => C
-          GCAllocArrayFixedInline(_, _) => C
-          GCAllocArraySlowPrecise(_) => C
+          TypeCheckSubtypeIndirect(_, _) => C
+          GCAllocStructInline(_, _, _, _) => C
+          GCAllocStructSlowPrecise(_, _, _) => C
+          GCAllocArrayFixedInline(_, _, _, _) => C
+          GCAllocArraySlowPrecise(_, _) => C
           _ => Wasm
         }
         result.call_points.push(

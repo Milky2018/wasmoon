@@ -146,16 +146,21 @@ fn collect_call_veneers(
   let out : Array[CwasmCallVeneer] = []
   let seen : Map[Int, Unit] = {}
   for fixup in call_fixups {
-    if fixup.veneer_offset >= 0 && seen.get(fixup.func_idx) is None {
-      seen.set(fixup.func_idx, ())
-      out.push({
-        function_index,
-        func_idx: fixup.func_idx,
-        offset: fixup.veneer_offset,
-      })
+    let func_idx = cwasm_func_idx_for_reloc_target(fixup.target)
+    if fixup.veneer_offset >= 0 && seen.get(func_idx) is None {
+      seen.set(func_idx, ())
+      out.push({ function_index, func_idx, offset: fixup.veneer_offset })
     }
   }
   out
+}
+
+///|
+fn cwasm_func_idx_for_reloc_target(target : @machv_emit.RelocTarget) -> Int {
+  match machv_reloc_target_to_cwasm_func_idx(target) {
+    Some(func_idx) => func_idx
+    None => abort("cannot encode external reloc target in cwasm: \{target}")
+  }
 }
 
 ///|
@@ -204,11 +209,8 @@ fn CwasmArtifact::function_func_addr_fixups(
   let end = record.code_offset + record.code_size
   for fixup in self.func_addr_fixups {
     if fixup.offset >= start && fixup.offset < end {
-      out.push({
-        offset: fixup.offset - start,
-        func_idx: fixup.func_idx,
-        reg: fixup.reg,
-      })
+      let func_idx = cwasm_func_idx_for_reloc_target(fixup.target)
+      out.push({ offset: fixup.offset - start, func_idx, reg: fixup.reg })
     }
   }
   out
@@ -224,16 +226,13 @@ fn CwasmArtifact::function_call_fixups(
   let end = record.code_offset + record.code_size
   for fixup in self.call_fixups {
     if fixup.offset >= start && fixup.offset < end {
+      let func_idx = cwasm_func_idx_for_reloc_target(fixup.target)
       let veneer_offset = match
-        self.find_call_veneer(record.function_index, fixup.func_idx) {
+        self.find_call_veneer(record.function_index, func_idx) {
         Some(offset) => offset - start
         None => fixup.veneer_offset
       }
-      out.push({
-        offset: fixup.offset - start,
-        func_idx: fixup.func_idx,
-        veneer_offset,
-      })
+      out.push({ offset: fixup.offset - start, func_idx, veneer_offset })
     }
   }
   out

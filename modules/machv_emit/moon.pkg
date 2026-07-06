@@ -5,7 +5,6 @@ import {
   "Milky2018/machv/isa",
   "Milky2018/machv_regalloc/layout",
   "Milky2018/machv_emit/isaregs",
-  "Milky2018/machv_emit/jit_ffi",
   "Milky2018/machv_regalloc",
   "Milky2018/isa_target/lower",
   "Milky2018/wasm_core/types",

@@ -144,9 +144,9 @@ fn lower_memory_grow(
   let is_memory64 = result.ty is I64
 
   // Lower to a C call:
-  //   wasmoon_jit_memory_grow(vmctx, memidx, delta(i64), max_pages) -> i32
+  //   runtime.memory_grow(vmctx, memidx, delta(i64), max_pages) -> i32
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_ptr = @instr.VCodeInst::new(LoadJITFuncPtr(MemoryGrow))
+  let load_ptr = @instr.VCodeInst::new(LoadExternalFuncAddr(rt_memory_grow()))
   load_ptr.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_ptr)
   let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
@@ -200,9 +200,9 @@ fn lower_memory_size(
   let is_memory64 = result.ty is I64
 
   // Lower to a C call:
-  //   wasmoon_jit_memory_size(vmctx, memidx) -> i32
+  //   runtime.memory_size(vmctx, memidx) -> i32
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_ptr = @instr.VCodeInst::new(LoadJITFuncPtr(MemorySize))
+  let load_ptr = @instr.VCodeInst::new(LoadExternalFuncAddr(rt_memory_size()))
   load_ptr.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_ptr)
   let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
@@ -253,7 +253,7 @@ fn lower_memory_fill(
   let size = ctx.get_vreg_for_use(inst.operands[2], block)
 
   // Lower to a C call:
-  //   wasmoon_jit_memory_fill(vmctx, memidx, dst, val, size)
+  //   runtime.memory_fill(vmctx, memidx, dst, val, size)
   let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
   let vmctx_mov = @instr.VCodeInst::new(Move)
   vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
@@ -263,14 +263,16 @@ fn lower_memory_fill(
     lower_c_libcall_direct(
       ctx,
       block,
-      jit_direct_call_func_idx(MemoryFillMem0),
+      rt_memory_fill_mem0(),
       [vmctx_vreg, dst, val, size],
       None,
     )
   } else if memidx == 0 {
     // Fast path for memory 0: avoid memidx argument and indexed-memory helper.
     let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-    let load_ptr = @instr.VCodeInst::new(LoadJITFuncPtr(MemoryFillMem0))
+    let load_ptr = @instr.VCodeInst::new(
+      LoadExternalFuncAddr(rt_memory_fill_mem0()),
+    )
     load_ptr.add_def({ reg: Virtual(func_ptr_vreg) })
     block.add_inst(load_ptr)
     lower_c_libcall(
@@ -282,7 +284,7 @@ fn lower_memory_fill(
     )
   } else {
     let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-    let load_ptr = @instr.VCodeInst::new(LoadJITFuncPtr(MemoryFill))
+    let load_ptr = @instr.VCodeInst::new(LoadExternalFuncAddr(rt_memory_fill()))
     load_ptr.add_def({ reg: Virtual(func_ptr_vreg) })
     block.add_inst(load_ptr)
     let memidx_vreg = materialize_imm(ctx, block, memidx.to_int64())
@@ -315,7 +317,7 @@ fn lower_memory_copy(
   let size = ctx.get_vreg_for_use(inst.operands[2], block)
 
   // Lower to a C call:
-  //   wasmoon_jit_memory_copy(vmctx, dst_memidx, src_memidx, dst, src, size)
+  //   runtime.memory_copy(vmctx, dst_memidx, src_memidx, dst, src, size)
   let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
   let vmctx_mov = @instr.VCodeInst::new(Move)
   vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
@@ -325,14 +327,16 @@ fn lower_memory_copy(
     lower_c_libcall_direct(
       ctx,
       block,
-      jit_direct_call_func_idx(MemoryCopyMem0),
+      rt_memory_copy_mem0(),
       [vmctx_vreg, dst, src, size],
       None,
     )
   } else if dst_memidx == 0 && src_memidx == 0 {
     // Fast path for memory 0 copy.
     let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-    let load_ptr = @instr.VCodeInst::new(LoadJITFuncPtr(MemoryCopyMem0))
+    let load_ptr = @instr.VCodeInst::new(
+      LoadExternalFuncAddr(rt_memory_copy_mem0()),
+    )
     load_ptr.add_def({ reg: Virtual(func_ptr_vreg) })
     block.add_inst(load_ptr)
     lower_c_libcall(
@@ -344,7 +348,7 @@ fn lower_memory_copy(
     )
   } else {
     let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-    let load_ptr = @instr.VCodeInst::new(LoadJITFuncPtr(MemoryCopy))
+    let load_ptr = @instr.VCodeInst::new(LoadExternalFuncAddr(rt_memory_copy()))
     load_ptr.add_def({ reg: Virtual(func_ptr_vreg) })
     block.add_inst(load_ptr)
     let dst_memidx_vreg = materialize_imm(ctx, block, dst_memidx.to_int64())
@@ -377,9 +381,9 @@ fn lower_memory_init(
   let size = ctx.get_vreg_for_use(inst.operands[2], block)
 
   // Lower to a C call:
-  //   wasmoon_jit_memory_init(vmctx, memidx, data_idx, dst, src, size)
+  //   runtime.memory_init(vmctx, memidx, data_idx, dst, src, size)
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_ptr = @instr.VCodeInst::new(LoadJITFuncPtr(MemoryInit))
+  let load_ptr = @instr.VCodeInst::new(LoadExternalFuncAddr(rt_memory_init()))
   load_ptr.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_ptr)
   let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
@@ -409,9 +413,9 @@ fn lower_data_drop(
   data_idx : Int,
 ) -> Unit {
   // Lower to a C call:
-  //   wasmoon_jit_data_drop(vmctx, data_idx)
+  //   runtime.data_drop(vmctx, data_idx)
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_ptr = @instr.VCodeInst::new(LoadJITFuncPtr(DataDrop))
+  let load_ptr = @instr.VCodeInst::new(LoadExternalFuncAddr(rt_data_drop()))
   load_ptr.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_ptr)
   let vmctx_vreg = ctx.vcode_func.new_vreg(Int)

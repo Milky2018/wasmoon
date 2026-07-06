@@ -2,7 +2,7 @@
 //
 // These trampolines implement Wasm calling convention so JIT-compiled wasm can
 // call imported host functions. The trampoline packs args/results into a stack
-// `values_vec` buffer and calls the C libcall `wasmoon_jit_hostcall`.
+// `values_vec` buffer and calls an embedding-provided hostcall bridge symbol.
 
 ///|
 fn value_type_to_reg_class(ty : @types.ValueType) -> @abi.RegClass {
@@ -63,13 +63,14 @@ fn add_call_clobbers(call_inst : @instr.VCodeInst) -> Unit {
 }
 
 ///|
-/// Generate a Wasm-ABI trampoline for calling a host function via `wasmoon_jit_hostcall`.
+/// Generate a Wasm-ABI trampoline for calling a host function via a hostcall bridge.
 ///
 /// `host_func_addr` is the runtime Store function address and is passed to the dispatcher.
 pub fn emit_hostcall_import_trampoline(
   param_types : Array[@types.ValueType],
   result_types : Array[@types.ValueType],
   host_func_addr : Int,
+  hostcall_symbol : @instr.ExternalName,
 ) -> MachineCode {
   let isa = @isa.ISA::current()
   let func = @machv_regalloc.VCodeFunction::new("host_import_trampoline")
@@ -216,9 +217,9 @@ pub fn emit_hostcall_import_trampoline(
     }
   }
 
-  // Prepare C call: wasmoon_jit_hostcall(ctx, host_func_addr, values_ptr, arg_slots, result_slots)
+  // Prepare C call: hostcall_bridge(ctx, host_func_addr, values_ptr, arg_slots, result_slots)
   let func_ptr_vreg = func.new_vreg(Int)
-  let load_fp = @instr.VCodeInst::new(LoadJITFuncPtr(HostCall))
+  let load_fp = @instr.VCodeInst::new(LoadExternalFuncAddr(hostcall_symbol))
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
 

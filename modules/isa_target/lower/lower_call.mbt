@@ -425,7 +425,9 @@ fn lower_return_call_indirect(
   // use exact check when subtype checks are unnecessary.
   let expected_type_idx = ctx.canonicalize_indirect_type_idx(type_idx)
   let type_check = if ctx.use_subtype_indirect_check {
-    @instr.VCodeInst::new(TypeCheckSubtypeIndirect(expected_type_idx))
+    @instr.VCodeInst::new(
+      TypeCheckSubtypeIndirect(expected_type_idx, rt_gc_type_check_subtype()),
+    )
   } else {
     @instr.VCodeInst::new(TypeCheckIndirect(expected_type_idx))
   }
@@ -681,7 +683,12 @@ fn lower_call_indirect(
     expected_type_idx,
   )
   let type_check = if ctx.use_subtype_indirect_check {
-    @instr.VCodeInst::new(TypeCheckSubtypeIndirect(expected_canonical_type_idx))
+    @instr.VCodeInst::new(
+      TypeCheckSubtypeIndirect(
+        expected_canonical_type_idx,
+        rt_gc_type_check_subtype(),
+      ),
+    )
   } else {
     @instr.VCodeInst::new(TypeCheckIndirect(expected_canonical_type_idx))
   }
@@ -778,24 +785,12 @@ fn add_c_call_clobbers(inst : @instr.VCodeInst) -> Unit {
 }
 
 ///|
-/// Pseudo function indices for AArch64 direct BL fixups to JIT libcalls.
-/// Negative indices are never used by wasm/imported functions.
-fn jit_direct_call_func_idx(libcall : @instr.JITLibcall) -> Int {
-  match libcall {
-    MemoryFillMem0 => -1001
-    MemoryCopyMem0 => -1002
-    _ => abort("jit_direct_call_func_idx: unsupported libcall \{libcall}")
-  }
-}
-
-///|
 /// Lower a C libcall as direct-call fixup (AArch64 only).
-/// This emits `CallDirect` with a pseudo function index that is patched in
-/// runtime to a near call stub, avoiding an indirect `blr` on the hot path.
+/// This emits a symbolic `CallExternal` that the embedding runtime resolves.
 fn lower_c_libcall_direct(
   ctx : LoweringContext,
   block : @block.VCodeBlock,
-  pseudo_func_idx : Int,
+  symbol : @instr.ExternalName,
   args : Array[@abi.VReg],
   result : @abi.VReg?,
 ) -> Unit {
@@ -813,7 +808,7 @@ fn lower_c_libcall_direct(
   let num_args = args.length()
   let num_results = if result is Some(_) { 1 } else { 0 }
   let call_inst = @instr.VCodeInst::new(
-    CallDirect(pseudo_func_idx, num_args, num_results, C),
+    CallExternal(symbol, num_args, num_results, C),
   )
   for i, arg in args {
     call_inst.add_use_fixed(Virtual(arg), { index: arg_regs[i], class: Int })

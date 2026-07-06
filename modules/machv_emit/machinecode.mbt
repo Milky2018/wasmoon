@@ -74,12 +74,38 @@ struct X86Rel32Fixup {
 }
 
 ///|
+/// Target for a relocatable function address or direct call.
+///
+/// `Func` is a module-local function index. `External` is an opaque symbol name
+/// that the embedding runtime resolves after code emission.
+pub(all) enum RelocTarget {
+  Func(Int)
+  External(@instr.ExternalName)
+} derive(Eq, Debug)
+
+///|
+pub impl Show for RelocTarget with fn output(self, logger) {
+  match self {
+    Func(func_idx) => logger.write_string("func_\{func_idx}")
+    External(symbol) => logger.write_string(symbol.name)
+  }
+}
+
+///|
+fn RelocTarget::key(self : RelocTarget) -> String {
+  match self {
+    Func(func_idx) => "func:\{func_idx}"
+    External(symbol) => "external:\{symbol.name}"
+  }
+}
+
+///|
 /// Fixup for direct function address loads
 pub(all) struct FuncAddrFixup {
   // Offset in the code buffer where the load starts
   offset : Int
-  // Target function index
-  func_idx : Int
+  // Target function or external symbol
+  target : RelocTarget
   // Destination register (physical)
   reg : Int
 } derive(Eq, Debug)
@@ -89,8 +115,8 @@ pub(all) struct FuncAddrFixup {
 pub(all) struct CallFixup {
   // Offset in the code buffer where the call instruction starts
   offset : Int
-  // Target function index
-  func_idx : Int
+  // Target function or external symbol
+  target : RelocTarget
   // Offset of a local call veneer (load-absolute + br), -1 when absent
   veneer_offset : Int
 } derive(Eq, Debug)
@@ -100,182 +126,6 @@ pub(all) struct CallFixup {
 pub(all) enum FixupKind {
   Branch26 // 26-bit PC-relative branch (B, BL)
   Branch19 // 19-bit PC-relative branch (B.cond, CBZ, CBNZ)
-}
-
-///|
-/// Reserve negative func_idx values for runtime helper pointer fixups.
-const RUNTIME_FIXUP_GC_BASE : Int = -20_000
-
-///|
-const RUNTIME_FIXUP_JIT_BASE : Int = -21_000
-
-///|
-const RUNTIME_FIXUP_EXCEPTION_BASE : Int = -22_000
-
-///|
-pub fn gc_libcall_fixup_idx(libcall : @instr.GCLibcall) -> Int {
-  let ord = match libcall {
-    RefTest => 0
-    RefCast => 1
-    StructNew => 2
-    StructGet => 3
-    StructSet => 4
-    ArrayNew => 5
-    ArrayGet => 6
-    ArraySet => 7
-    ArrayLen => 8
-    ArrayFill => 9
-    ArrayCopy => 10
-    ArrayNewData => 11
-    ArrayNewElem => 12
-    ArrayInitData => 13
-    ArrayInitElem => 14
-    TypeCheckSubtype => 15
-    RegisterStructInline => 16
-    RegisterArrayInline => 17
-    AllocStructSlow => 18
-    AllocArraySlow => 19
-  }
-  RUNTIME_FIXUP_GC_BASE - ord
-}
-
-///|
-pub fn jit_libcall_fixup_idx(libcall : @instr.JITLibcall) -> Int {
-  let ord = match libcall {
-    MemoryGrow => 0
-    MemorySize => 1
-    MemoryFill => 2
-    MemoryFillMem0 => 3
-    MemoryCopy => 4
-    MemoryCopyMem0 => 5
-    MemoryInit => 6
-    DataDrop => 7
-    TableGrow => 8
-    TableFill => 9
-    TableCopy => 10
-    TableInit => 11
-    ElemDrop => 12
-    HostCall => 13
-  }
-  RUNTIME_FIXUP_JIT_BASE - ord
-}
-
-///|
-pub fn exception_libcall_fixup_idx(libcall : @instr.ExceptionLibcall) -> Int {
-  let ord = match libcall {
-    TryBegin => 0
-    TryEnd => 1
-    Throw => 2
-    ThrowTag => 3
-    ThrowRef => 4
-    Delegate => 5
-    GetTag => 6
-    GetValue => 7
-    GetValueCount => 8
-    Sigsetjmp => 9
-    SpillLocals => 10
-    GetSpilledLocal => 11
-  }
-  RUNTIME_FIXUP_EXCEPTION_BASE - ord
-}
-
-///|
-pub fn resolve_runtime_func_fixup_idx(idx : Int) -> Int64? {
-  match idx {
-    i if i == gc_libcall_fixup_idx(RefTest) =>
-      Some(@jit_ffi.c_jit_get_gc_ref_test_ptr())
-    i if i == gc_libcall_fixup_idx(RefCast) =>
-      Some(@jit_ffi.c_jit_get_gc_ref_cast_ptr())
-    i if i == gc_libcall_fixup_idx(StructNew) =>
-      Some(@jit_ffi.c_jit_get_gc_struct_new_ptr())
-    i if i == gc_libcall_fixup_idx(StructGet) =>
-      Some(@jit_ffi.c_jit_get_gc_struct_get_ptr())
-    i if i == gc_libcall_fixup_idx(StructSet) =>
-      Some(@jit_ffi.c_jit_get_gc_struct_set_ptr())
-    i if i == gc_libcall_fixup_idx(ArrayNew) =>
-      Some(@jit_ffi.c_jit_get_gc_array_new_ptr())
-    i if i == gc_libcall_fixup_idx(ArrayGet) =>
-      Some(@jit_ffi.c_jit_get_gc_array_get_ptr())
-    i if i == gc_libcall_fixup_idx(ArraySet) =>
-      Some(@jit_ffi.c_jit_get_gc_array_set_ptr())
-    i if i == gc_libcall_fixup_idx(ArrayLen) =>
-      Some(@jit_ffi.c_jit_get_gc_array_len_ptr())
-    i if i == gc_libcall_fixup_idx(ArrayFill) =>
-      Some(@jit_ffi.c_jit_get_gc_array_fill_ptr())
-    i if i == gc_libcall_fixup_idx(ArrayCopy) =>
-      Some(@jit_ffi.c_jit_get_gc_array_copy_ptr())
-    i if i == gc_libcall_fixup_idx(ArrayNewData) =>
-      Some(@jit_ffi.c_jit_get_gc_array_new_data_ptr())
-    i if i == gc_libcall_fixup_idx(ArrayNewElem) =>
-      Some(@jit_ffi.c_jit_get_gc_array_new_elem_ptr())
-    i if i == gc_libcall_fixup_idx(ArrayInitData) =>
-      Some(@jit_ffi.c_jit_get_gc_array_init_data_ptr())
-    i if i == gc_libcall_fixup_idx(ArrayInitElem) =>
-      Some(@jit_ffi.c_jit_get_gc_array_init_elem_ptr())
-    i if i == gc_libcall_fixup_idx(TypeCheckSubtype) =>
-      Some(@jit_ffi.c_jit_get_gc_type_check_subtype_ptr())
-    i if i == gc_libcall_fixup_idx(RegisterStructInline) =>
-      Some(@jit_ffi.c_jit_get_gc_register_struct_inline_ptr())
-    i if i == gc_libcall_fixup_idx(RegisterArrayInline) =>
-      Some(@jit_ffi.c_jit_get_gc_register_array_inline_ptr())
-    i if i == gc_libcall_fixup_idx(AllocStructSlow) =>
-      Some(@jit_ffi.c_jit_get_gc_alloc_struct_slow_ptr())
-    i if i == gc_libcall_fixup_idx(AllocArraySlow) =>
-      Some(@jit_ffi.c_jit_get_gc_alloc_array_slow_ptr())
-    i if i == jit_libcall_fixup_idx(MemoryGrow) =>
-      Some(@jit_ffi.c_jit_get_memory_grow_ptr())
-    i if i == jit_libcall_fixup_idx(MemorySize) =>
-      Some(@jit_ffi.c_jit_get_memory_size_ptr())
-    i if i == jit_libcall_fixup_idx(MemoryFill) =>
-      Some(@jit_ffi.c_jit_get_memory_fill_ptr())
-    i if i == jit_libcall_fixup_idx(MemoryFillMem0) =>
-      Some(@jit_ffi.c_jit_get_memory_fill_mem0_ptr())
-    i if i == jit_libcall_fixup_idx(MemoryCopy) =>
-      Some(@jit_ffi.c_jit_get_memory_copy_ptr())
-    i if i == jit_libcall_fixup_idx(MemoryCopyMem0) =>
-      Some(@jit_ffi.c_jit_get_memory_copy_mem0_ptr())
-    i if i == jit_libcall_fixup_idx(MemoryInit) =>
-      Some(@jit_ffi.c_jit_get_memory_init_ptr())
-    i if i == jit_libcall_fixup_idx(DataDrop) =>
-      Some(@jit_ffi.c_jit_get_data_drop_ptr())
-    i if i == jit_libcall_fixup_idx(TableGrow) =>
-      Some(@jit_ffi.c_jit_get_table_grow_ptr())
-    i if i == jit_libcall_fixup_idx(TableFill) =>
-      Some(@jit_ffi.c_jit_get_table_fill_ptr())
-    i if i == jit_libcall_fixup_idx(TableCopy) =>
-      Some(@jit_ffi.c_jit_get_table_copy_ptr())
-    i if i == jit_libcall_fixup_idx(TableInit) =>
-      Some(@jit_ffi.c_jit_get_table_init_ptr())
-    i if i == jit_libcall_fixup_idx(ElemDrop) =>
-      Some(@jit_ffi.c_jit_get_elem_drop_ptr())
-    i if i == jit_libcall_fixup_idx(HostCall) =>
-      Some(@jit_ffi.c_jit_get_hostcall_ptr())
-    i if i == exception_libcall_fixup_idx(TryBegin) =>
-      Some(@jit_ffi.c_jit_get_exception_try_begin_ptr())
-    i if i == exception_libcall_fixup_idx(TryEnd) =>
-      Some(@jit_ffi.c_jit_get_exception_try_end_ptr())
-    i if i == exception_libcall_fixup_idx(Throw) =>
-      Some(@jit_ffi.c_jit_get_exception_throw_ptr())
-    i if i == exception_libcall_fixup_idx(ThrowTag) =>
-      Some(@jit_ffi.c_jit_get_exception_throw_tag_ptr())
-    i if i == exception_libcall_fixup_idx(ThrowRef) =>
-      Some(@jit_ffi.c_jit_get_exception_throw_ref_ptr())
-    i if i == exception_libcall_fixup_idx(Delegate) =>
-      Some(@jit_ffi.c_jit_get_exception_delegate_ptr())
-    i if i == exception_libcall_fixup_idx(GetTag) =>
-      Some(@jit_ffi.c_jit_get_exception_get_tag_ptr())
-    i if i == exception_libcall_fixup_idx(GetValue) =>
-      Some(@jit_ffi.c_jit_get_exception_get_value_ptr())
-    i if i == exception_libcall_fixup_idx(GetValueCount) =>
-      Some(@jit_ffi.c_jit_get_exception_get_value_count_ptr())
-    i if i == exception_libcall_fixup_idx(Sigsetjmp) =>
-      Some(@jit_ffi.c_jit_get_sigsetjmp_ptr())
-    i if i == exception_libcall_fixup_idx(SpillLocals) =>
-      Some(@jit_ffi.c_jit_get_exception_spill_locals_ptr())
-    i if i == exception_libcall_fixup_idx(GetSpilledLocal) =>
-      Some(@jit_ffi.c_jit_get_exception_get_spilled_local_ptr())
-    _ => None
-  }
 }
 
 ///|
@@ -338,13 +188,31 @@ pub fn MachineCode::emit_inst(
 }
 
 ///|
-/// Emit a direct BL with a runtime fixup to a function index.
-pub fn MachineCode::emit_bl_func(self : MachineCode, func_idx : Int) -> Unit {
+/// Emit a direct BL with a relocation fixup.
+pub fn MachineCode::emit_bl_target(
+  self : MachineCode,
+  target : RelocTarget,
+) -> Unit {
   let offset = self.current_pos()
-  self.annotate("bl func_\{func_idx}")
+  self.annotate("bl \{target}")
   // BL with imm=0; patched later using CallFixup.
   self.emit_inst(0, 0, 0, 148)
-  self.add_call_fixup(offset, func_idx)
+  self.add_call_target_fixup(offset, target)
+}
+
+///|
+/// Emit a direct BL with a relocation fixup to a module-local function index.
+pub fn MachineCode::emit_bl_func(self : MachineCode, func_idx : Int) -> Unit {
+  self.emit_bl_target(Func(func_idx))
+}
+
+///|
+/// Emit a direct BL with a relocation fixup to an external symbol.
+pub fn MachineCode::emit_bl_external(
+  self : MachineCode,
+  symbol : @instr.ExternalName,
+) -> Unit {
+  self.emit_bl_target(External(symbol))
 }
 
 ///|
@@ -467,7 +335,29 @@ pub fn MachineCode::add_func_addr_fixup(
   func_idx : Int,
   reg : Int,
 ) -> Unit {
-  self.func_addr_fixups.push({ offset, func_idx, reg })
+  self.add_func_addr_target_fixup(offset, Func(func_idx), reg)
+}
+
+///|
+/// Add a fixup for a relocatable function address load.
+pub fn MachineCode::add_func_addr_target_fixup(
+  self : MachineCode,
+  offset : Int,
+  target : RelocTarget,
+  reg : Int,
+) -> Unit {
+  self.func_addr_fixups.push({ offset, target, reg })
+}
+
+///|
+/// Add a fixup for an external function address load.
+pub fn MachineCode::add_external_func_addr_fixup(
+  self : MachineCode,
+  offset : Int,
+  symbol : @instr.ExternalName,
+  reg : Int,
+) -> Unit {
+  self.add_func_addr_target_fixup(offset, External(symbol), reg)
 }
 
 ///|
@@ -478,7 +368,29 @@ pub fn MachineCode::add_call_fixup(
   func_idx : Int,
   veneer_offset? : Int = -1,
 ) -> Unit {
-  self.call_fixups.push({ offset, func_idx, veneer_offset })
+  self.add_call_target_fixup(offset, Func(func_idx), veneer_offset~)
+}
+
+///|
+/// Add a fixup for a relocatable direct call.
+pub fn MachineCode::add_call_target_fixup(
+  self : MachineCode,
+  offset : Int,
+  target : RelocTarget,
+  veneer_offset? : Int = -1,
+) -> Unit {
+  self.call_fixups.push({ offset, target, veneer_offset })
+}
+
+///|
+/// Add a fixup for a direct call to an external symbol.
+pub fn MachineCode::add_external_call_fixup(
+  self : MachineCode,
+  offset : Int,
+  symbol : @instr.ExternalName,
+  veneer_offset? : Int = -1,
+) -> Unit {
+  self.add_call_target_fixup(offset, External(symbol), veneer_offset~)
 }
 
 ///|
@@ -518,9 +430,12 @@ pub fn MachineCode::record_gc_safepoint(
 ///
 /// Callers branch to this veneer with BL; BR preserves LR so the callee returns
 /// to the original callsite.
-fn MachineCode::emit_call_veneer(self : MachineCode, func_idx : Int) -> Int {
+fn MachineCode::emit_call_veneer(
+  self : MachineCode,
+  target : RelocTarget,
+) -> Int {
   let veneer_offset = self.current_pos()
-  self.annotate("call_veneer.\{func_idx}")
+  self.annotate("call_veneer.\{target}")
   // LDR (literal, 64-bit), Rt=x16, imm19=2 => literal at PC+8.
   self.annotate("ldr x16, #8")
   self.emit_inst(0x50, 0x00, 0x00, 0x58)
@@ -540,26 +455,27 @@ fn MachineCode::emit_call_veneer(self : MachineCode, func_idx : Int) -> Int {
 ///|
 /// Materialize local veneers for all direct-call fixups.
 ///
-/// Veneers are emitted once per callee function index at function end; each
+/// Veneers are emitted once per relocation target at function end; each
 /// callsite fixup records the corresponding veneer offset as fallback.
 fn MachineCode::materialize_call_veneers(self : MachineCode) -> Unit {
   if self.call_fixups.length() == 0 {
     return
   }
-  let veneers_by_func : Map[Int, Int] = {}
+  let veneers_by_target : Map[String, Int] = {}
   for i in 0..<self.call_fixups.length() {
     let fixup = self.call_fixups[i]
-    let veneer_offset = match veneers_by_func.get(fixup.func_idx) {
+    let key = fixup.target.key()
+    let veneer_offset = match veneers_by_target.get(key) {
       Some(offset) => offset
       None => {
-        let offset = self.emit_call_veneer(fixup.func_idx)
-        veneers_by_func.set(fixup.func_idx, offset)
+        let offset = self.emit_call_veneer(fixup.target)
+        veneers_by_target.set(key, offset)
         offset
       }
     }
     self.call_fixups[i] = {
       offset: fixup.offset,
-      func_idx: fixup.func_idx,
+      target: fixup.target,
       veneer_offset,
     }
   }

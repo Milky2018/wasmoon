@@ -1181,7 +1181,7 @@ fn MachineCode::emit_instruction(
       // BRK #2: trap (indirect call type mismatch)
       self.emit_brk(2)
     }
-    TypeCheckSubtypeIndirect(expected_type) => {
+    TypeCheckSubtypeIndirect(expected_type, helper_symbol) => {
       // Fast path for call_indirect type checks:
       // - If actual_type == expected_type: do nothing.
       // - Otherwise: call the runtime subtype checker (traps on failure).
@@ -1204,8 +1204,9 @@ fn MachineCode::emit_instruction(
       // Args: x0 = actual_type, x1 = expected_type
       self.emit_mov_reg(0, actual_type_reg)
       self.emit_load_imm64(1, expected_type.to_int64())
-      let func_ptr = @jit_ffi.c_jit_get_gc_type_check_subtype_ptr()
-      self.emit_load_imm64(17, func_ptr)
+      let fixup_offset = self.current_pos()
+      self.emit_load_imm64_fixed(17, 0L)
+      self.add_external_func_addr_fixup(fixup_offset, helper_symbol, 17)
       self.emit_blr(17)
       self.define_label(done_label)
     }
@@ -1432,41 +1433,13 @@ fn MachineCode::emit_instruction(
         _ => () // Unsupported bit width
       }
     }
-    LoadGCFuncPtr(libcall) => {
-      // Load GC runtime function pointer
+    LoadExternalFuncAddr(symbol) => {
+      // Load external function pointer
       // Uses: [], Defs: [result (function pointer)]
       let result_reg = wreg_num(inst.defs[0])
       let fixup_offset = self.current_pos()
       self.emit_load_imm64_fixed(result_reg, 0L)
-      self.add_func_addr_fixup(
-        fixup_offset,
-        gc_libcall_fixup_idx(libcall),
-        result_reg,
-      )
-    }
-    LoadJITFuncPtr(libcall) => {
-      // Load JIT runtime function pointer
-      // Uses: [], Defs: [result (function pointer)]
-      let result_reg = wreg_num(inst.defs[0])
-      let fixup_offset = self.current_pos()
-      self.emit_load_imm64_fixed(result_reg, 0L)
-      self.add_func_addr_fixup(
-        fixup_offset,
-        jit_libcall_fixup_idx(libcall),
-        result_reg,
-      )
-    }
-    LoadExceptionFuncPtr(libcall) => {
-      // Load exception handling runtime function pointer
-      // Uses: [], Defs: [result (function pointer)]
-      let result_reg = wreg_num(inst.defs[0])
-      let fixup_offset = self.current_pos()
-      self.emit_load_imm64_fixed(result_reg, 0L)
-      self.add_func_addr_fixup(
-        fixup_offset,
-        exception_libcall_fixup_idx(libcall),
-        result_reg,
-      )
+      self.add_external_func_addr_fixup(fixup_offset, symbol, result_reg)
     }
     LoadFuncAddr(func_idx) => {
       // Load function address (patched at JIT load time)
@@ -1479,6 +1452,16 @@ fn MachineCode::emit_instruction(
     // (during function finalization) for out-of-range targets.
     CallDirect(func_idx, _num_args, _num_results, _call_conv) => {
       self.emit_bl_func(func_idx)
+      if stack_frame.cache_mem0_desc {
+        self.emit_ldr_imm(
+          @isaregs.mem0_desc_index(),
+          @isaregs.vmctx_index(),
+          @abi.VMCTX_MEMORY0_BASE_OFFSET,
+        )
+      }
+    }
+    CallExternal(symbol, _num_args, _num_results, _call_conv) => {
+      self.emit_bl_external(symbol)
       if stack_frame.cache_mem0_desc {
         self.emit_ldr_imm(
           @isaregs.mem0_desc_index(),
@@ -1550,7 +1533,7 @@ fn MachineCode::emit_instruction(
         base_off = base_off + chunk
       }
     }
-    GCAllocStructSlowPrecise(type_idx, num_fields) => {
+    GCAllocStructSlowPrecise(type_idx, num_fields, alloc_slow_symbol) => {
       // Direct slow-path struct allocation with precise safepoint metadata.
       let dst = wreg_num(inst.defs[0])
       let vmctx_reg = reg_num(inst.uses[0])
@@ -1580,13 +1563,15 @@ fn MachineCode::emit_instruction(
         root_indices=safepoint_root_indices,
       )
       self.emit_load_imm64(4, safepoint_id.to_int64())
-      self.emit_load_imm64(17, @jit_ffi.c_jit_get_gc_alloc_struct_slow_ptr())
+      let fixup_offset = self.current_pos()
+      self.emit_load_imm64_fixed(17, 0L)
+      self.add_external_func_addr_fixup(fixup_offset, alloc_slow_symbol, 17)
       self.emit_blr(17)
       if dst != 0 {
         self.emit_mov_reg(dst, 0)
       }
     }
-    GCAllocStructInline(type_idx, num_fields) => {
+    GCAllocStructInline(type_idx, num_fields, register_symbol, slow_symbol) => {
       // Inline bump allocation for struct.new with C slow-path fallback.
       // Uses: [vmctx], Defs: [result_ref]
       let dst = wreg_num(inst.defs[0])
@@ -1633,9 +1618,10 @@ fn MachineCode::emit_instruction(
       }
       self.emit_mov_reg(1, 16)
       self.emit_load_imm64(2, total_size.to_int64())
-      self.emit_load_imm64(
-        17,
-        @jit_ffi.c_jit_get_gc_register_struct_inline_ptr(),
+      let register_fixup_offset = self.current_pos()
+      self.emit_load_imm64_fixed(17, 0L)
+      self.add_external_func_addr_fixup(
+        register_fixup_offset, register_symbol, 17,
       )
       self.emit_blr(17)
       if dst != 0 {
@@ -1669,14 +1655,16 @@ fn MachineCode::emit_instruction(
         root_indices=safepoint_root_indices,
       )
       self.emit_load_imm64(4, safepoint_id.to_int64())
-      self.emit_load_imm64(17, @jit_ffi.c_jit_get_gc_alloc_struct_slow_ptr())
+      let slow_fixup_offset = self.current_pos()
+      self.emit_load_imm64_fixed(17, 0L)
+      self.add_external_func_addr_fixup(slow_fixup_offset, slow_symbol, 17)
       self.emit_blr(17)
       if dst != 0 {
         self.emit_mov_reg(dst, 0)
       }
       self.define_label(done_label)
     }
-    GCAllocArrayFixedInline(type_idx, len) => {
+    GCAllocArrayFixedInline(type_idx, len, register_symbol, slow_symbol) => {
       // Inline bump allocation for array.new_fixed with C slow-path fallback.
       // Uses: [vmctx], Defs: [result_ref]
       let dst = wreg_num(inst.defs[0])
@@ -1729,9 +1717,10 @@ fn MachineCode::emit_instruction(
       }
       self.emit_mov_reg(1, 16)
       self.emit_load_imm64(2, total_size.to_int64())
-      self.emit_load_imm64(
-        17,
-        @jit_ffi.c_jit_get_gc_register_array_inline_ptr(),
+      let register_fixup_offset = self.current_pos()
+      self.emit_load_imm64_fixed(17, 0L)
+      self.add_external_func_addr_fixup(
+        register_fixup_offset, register_symbol, 17,
       )
       self.emit_blr(17)
       if dst != 0 {
@@ -1765,17 +1754,16 @@ fn MachineCode::emit_instruction(
         root_indices=safepoint_root_indices,
       )
       self.emit_load_imm64(4, safepoint_id.to_int64())
-      self.emit_load_imm64(
-        17,
-        @jit_ffi.c_jit_get_gc_alloc_array_from_values_slow_ptr(),
-      )
+      let slow_fixup_offset = self.current_pos()
+      self.emit_load_imm64_fixed(17, 0L)
+      self.add_external_func_addr_fixup(slow_fixup_offset, slow_symbol, 17)
       self.emit_blr(17)
       if dst != 0 {
         self.emit_mov_reg(dst, 0)
       }
       self.define_label(done_label)
     }
-    GCAllocArraySlowPrecise(type_idx) => {
+    GCAllocArraySlowPrecise(type_idx, alloc_slow_symbol) => {
       // Direct slow-path array allocation with precise safepoint metadata.
       let dst = wreg_num(inst.defs[0])
       let vmctx_reg = reg_num(inst.uses[0])
@@ -1807,7 +1795,9 @@ fn MachineCode::emit_instruction(
         root_indices=[0],
       )
       self.emit_load_imm64(4, safepoint_id.to_int64())
-      self.emit_load_imm64(17, @jit_ffi.c_jit_get_gc_alloc_array_slow_ptr())
+      let fixup_offset = self.current_pos()
+      self.emit_load_imm64_fixed(17, 0L)
+      self.add_external_func_addr_fixup(fixup_offset, alloc_slow_symbol, 17)
       self.emit_blr(17)
       if dst != 0 {
         self.emit_mov_reg(dst, 0)

@@ -1349,6 +1349,33 @@ pub fn patch_aarch64_func_addr_fixup_raw(
 }
 
 ///|
+pub fn patch_x64_func_addr_fixup_parts(
+  exec_ptr : Int64,
+  offset : Int,
+  _reg : Int,
+  target_ptr : Int64,
+) -> Unit {
+  // x86_emit_mov_imm64 emits: REX.W, B8+rd, then the 8-byte immediate.
+  c_jit_write_i64(exec_ptr + offset.to_int64() + 2L, target_ptr)
+}
+
+///|
+pub fn patch_x64_func_addr_fixup_raw(
+  exec_ptr : Int64,
+  offset : Int,
+  reg : Int,
+  func_idx : Int,
+  func_table_ptr : Int64,
+) -> Unit {
+  let target_ptr = match
+    resolve_func_addr_fixup_target(func_idx, func_table_ptr) {
+    Some(ptr) => ptr
+    None => abort("unknown func addr fixup idx \{func_idx}")
+  }
+  patch_x64_func_addr_fixup_parts(exec_ptr, offset, reg, target_ptr)
+}
+
+///|
 pub fn patch_func_addr_fixup_raw_for_target(
   target : @cwasm.TargetArch,
   exec_ptr : Int64,
@@ -1362,7 +1389,10 @@ pub fn patch_func_addr_fixup_raw_for_target(
       patch_aarch64_func_addr_fixup_raw(
         exec_ptr, offset, reg, func_idx, func_table_ptr,
       )
-    X86_64 => abort("x64 cwasm function-address fixups are not modelled yet")
+    X86_64 =>
+      patch_x64_func_addr_fixup_raw(
+        exec_ptr, offset, reg, func_idx, func_table_ptr,
+      )
     Unknown =>
       abort("cannot patch function-address fixup for unknown cwasm target")
   }
@@ -1385,6 +1415,27 @@ pub fn patch_aarch64_func_addr_fixups(
 }
 
 ///|
+pub fn patch_x64_func_addr_fixups(
+  exec_ptr : Int64,
+  fixups : Array[@cwasm.FuncAddrFixup],
+  func_table_ptr : Int64,
+) -> Unit {
+  for fixup in fixups {
+    let target_ptr = match
+      resolve_func_addr_fixup_target(fixup.func_idx, func_table_ptr) {
+      Some(ptr) => ptr
+      None => abort("unknown func addr fixup idx \{fixup.func_idx}")
+    }
+    patch_x64_func_addr_fixup_parts(
+      exec_ptr,
+      fixup.offset,
+      fixup.reg,
+      target_ptr,
+    )
+  }
+}
+
+///|
 pub fn patch_func_addr_fixups_for_target(
   target : @cwasm.TargetArch,
   exec_ptr : Int64,
@@ -1393,10 +1444,7 @@ pub fn patch_func_addr_fixups_for_target(
 ) -> Unit {
   match target {
     AArch64 => patch_aarch64_func_addr_fixups(exec_ptr, fixups, func_table_ptr)
-    X86_64 =>
-      if fixups.length() > 0 {
-        abort("x64 cwasm function-address fixups are not modelled yet")
-      }
+    X86_64 => patch_x64_func_addr_fixups(exec_ptr, fixups, func_table_ptr)
     Unknown =>
       if fixups.length() > 0 {
         abort("cannot patch function-address fixups for unknown cwasm target")
