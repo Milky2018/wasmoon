@@ -72,6 +72,8 @@ pub fn[P] plan_backtracking_bundle_split(Array[BacktrackingSplitRange[P]], P?, B
 
 pub fn[P] plan_backtracking_fixed_constraint_edits(Array[BacktrackingFixedConstraintInst[P]], (P, P) -> Bool) -> Array[BacktrackingConstraintInstEdits[P]]
 
+pub fn[P] plan_backtracking_probe_order(Array[P], Array[P], Array[P], Bool, Int, Int, P?, (P, P) -> Bool) -> Array[P]
+
 pub fn plan_bundle_merges(Array[BundleMergeRange], Array[BundleMergeEdge], Array[Int], Array[Int]) -> BundleMergePlan
 
 pub fn plan_bundle_split(Array[BundleSplitRange], ProgramPoint?, Array[Int], Int, Int) -> BundleSplitPlan
@@ -98,6 +100,8 @@ pub fn resolve_parallel_moves(Array[ParallelMove], Array[PhysicalReg], Array[Phy
 
 pub fn resolve_threaded_jump(Array[ThreadBlock], Int, Array[ThreadArg]) -> ThreadedJump
 
+pub fn[B, R, P] run_backtracking_allocation_loop(BacktrackingQueue[R], Array[Int], Int, Bool, Int, (Int) -> B, (B) -> Bool, (B) -> Bool, (B) -> Bool, (B) -> Bool, (B, R?) -> R?, (B, R?) -> (R?, (P, R)?), (B, R?) -> R?, (B, R) -> Unit, (B, (P, R)?) -> Unit, (B) -> Unit) -> Unit
+
 pub fn[P] scan_backtracking_conflicts_with_cutoff(Array[OrderedSpan[P]], Array[BacktrackingOccupiedSpan[P]], Int, Int?) -> BacktrackingConflictScanResult[P]
 
 pub fn scan_conflicts_with_cutoff(Array[OrderedProgramSpan], Array[OccupiedProgramSpan], Int, Int?) -> ConflictScanResult
@@ -117,6 +121,10 @@ pub fn[P] should_take_backtracking_split_candidate(Int?, P?, Int, P, (P, P) -> I
 pub fn should_take_eviction_candidate(Int?, PhysicalReg?, Int, PhysicalReg, PhysicalReg?) -> Bool
 
 pub fn should_take_split_candidate(Int?, ProgramPoint?, Int, ProgramPoint, Array[Int]) -> Bool
+
+pub fn[P, Q] try_backtracking_eviction_register(Array[P], Array[P], Array[P], Array[OrderedSpan[Q]], Int, P?, Bool, Int, Int, (P, P) -> Bool, (P) -> PhysicalReg, (P) -> Array[BacktrackingOccupiedSpan[Q]], (Q, Q) -> Int) -> BacktrackingAllocationAttempt[P, Q]
+
+pub fn[P, Q] try_backtracking_single_pass_register(Array[P], Array[P], Array[P], Array[OrderedSpan[Q]], P?, Bool, Int, Int, (P, P) -> Bool, (P, Array[OrderedSpan[Q]]) -> Bool) -> P?
 
 pub fn upper_bound_sorted_int(Array[Int], Int) -> Int
 
@@ -166,6 +174,12 @@ pub(all) struct Assignment {
   vreg : VirtualReg
   mut location : Location
 } derive(Eq, @debug.Debug)
+
+pub(all) struct BacktrackingAllocationAttempt[P, Q] {
+  reg : P?
+  evicted_ids : Array[Int]
+  split : (Q, P)?
+}
 
 pub(all) enum BacktrackingAllocationLoc[P] {
   BacktrackingReg(P)

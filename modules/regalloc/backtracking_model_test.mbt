@@ -219,3 +219,90 @@ test "backtracking fixed constraints plan reloads stores and moves" {
     _ => abort("expected spill destination")
   }
 }
+
+///|
+test "backtracking register attempts are generic over machine registers" {
+  let spans : Array[OrderedSpan[Int]] = [
+    { start: 10, start_ord: 10, end_ord: 20 },
+  ]
+  let single_pass = try_backtracking_single_pass_register(
+    [0, 1],
+    [],
+    [],
+    spans,
+    Some(1),
+    false,
+    8,
+    0,
+    fn(a, b) { a == b },
+    fn(preg, _) { preg == 0 },
+  )
+  inspect(single_pass == Some(1), content="true")
+
+  let eviction = try_backtracking_eviction_register(
+    [0],
+    [],
+    [],
+    spans,
+    9,
+    None,
+    false,
+    8,
+    0,
+    fn(a, b) { a == b },
+    fn(reg) { { id: reg, class: Int } },
+    fn(_) {
+      [
+        {
+          owner_id: 7,
+          span: { start: 0, start_ord: 0, end_ord: 30 },
+          owner_weight: 2,
+          owner_pinned: false,
+        },
+      ]
+    },
+    fn(a, b) { a - b },
+  )
+  inspect(eviction.reg == Some(0), content="true")
+  debug_inspect(eviction.evicted_ids, content="[7]")
+  inspect(eviction.split is None, content="true")
+}
+
+///|
+test "backtracking allocation loop drives production callbacks" {
+  let queue : BacktrackingQueue[Int] = BacktrackingQueue::new(2)
+  queue.push(0, 10, None)
+  queue.push(1, 5, Some(9))
+  let attempts = Array::make(2, 0)
+  let allocated = Array::make(2, -1)
+  let spilled = Array::make(2, false)
+  let try_backtracking = fn(bundle : Int, hint : Int?) -> (Int?, (Int, Int)?) {
+    ignore(hint)
+    (Some(bundle + 100), None)
+  }
+  let split_bundle = fn(bundle : Int, split : (Int, Int)?) -> Unit {
+    ignore(split)
+    spilled[bundle] = true
+  }
+  run_backtracking_allocation_loop(
+    queue,
+    attempts,
+    3,
+    true,
+    2,
+    fn(bundle_id) { bundle_id },
+    fn(bundle) { allocated[bundle] >= 0 || spilled[bundle] },
+    fn(_) { false },
+    fn(_) { false },
+    fn(bundle) { bundle == 1 },
+    fn(_, hint) { hint },
+    try_backtracking,
+    fn(_, _) { None },
+    fn(bundle, reg) { allocated[bundle] = reg },
+    split_bundle,
+    fn(bundle) { spilled[bundle] = true },
+  )
+  inspect(allocated[0], content="100")
+  inspect(spilled[1], content="true")
+  debug_inspect(attempts, content="[1, 1]")
+}

@@ -1,5 +1,6 @@
-// Ion-Style Backtracking Register Allocator
-// Main allocator implementation with bundle merging, eviction, and splitting.
+// MachV adapter for the reusable backtracking allocator core in `regalloc`.
+// This file owns MachV projection/materialization; allocation policy and
+// state-machine decisions must stay in `regalloc`.
 
 ///|
 /// Check if two register classes are compatible
@@ -16,9 +17,6 @@ fn reg_class_compatible(a : @abi.RegClass, b : @abi.RegClass) -> Bool {
 }
 
 ///|
-type QueueEntry = @regalloc.BacktrackingQueueEntry[@abi.PReg]
-
-///|
 fn abi_class_to_regalloc_policy(class : @abi.RegClass) -> @regalloc.RegClass {
   match class {
     Int => Int
@@ -30,6 +28,11 @@ fn abi_class_to_regalloc_policy(class : @abi.RegClass) -> @regalloc.RegClass {
 ///|
 fn abi_preg_to_regalloc_policy(preg : @abi.PReg) -> @regalloc.PhysicalReg {
   { id: preg.index, class: abi_class_to_regalloc_policy(preg.class) }
+}
+
+///|
+fn same_abi_preg(lhs : @abi.PReg, rhs : @abi.PReg) -> Bool {
+  lhs.class == rhs.class && lhs.index == rhs.index
 }
 
 ///|
@@ -76,43 +79,6 @@ fn backtracking_move_loc_to_machv(
 }
 
 ///|
-fn abi_pregs_to_regalloc_policy(
-  pregs : Array[@abi.PReg],
-) -> Array[@regalloc.PhysicalReg] {
-  let out : Array[@regalloc.PhysicalReg] = []
-  for preg in pregs {
-    out.push(abi_preg_to_regalloc_policy(preg))
-  }
-  out
-}
-
-///|
-fn regalloc_preg_matches_abi(
-  planned : @regalloc.PhysicalReg,
-  preg : @abi.PReg,
-) -> Bool {
-  planned.id == preg.index &&
-  planned.class == abi_class_to_regalloc_policy(preg.class)
-}
-
-///|
-fn project_regalloc_probe_order(
-  source : Array[@abi.PReg],
-  planned : Array[@regalloc.PhysicalReg],
-) -> Array[@abi.PReg] {
-  let out : Array[@abi.PReg] = []
-  for planned_reg in planned {
-    for preg in source {
-      if regalloc_preg_matches_abi(planned_reg, preg) {
-        out.push(preg)
-        break
-      }
-    }
-  }
-  out
-}
-
-///|
 /// Register allocation algorithm policy.
 ///
 /// - Backtracking: Ion-style backtracking + eviction/splitting (better codegen).
@@ -155,7 +121,7 @@ type BacktrackingMoveLoc = @regalloc.BacktrackingMoveLoc[@abi.PReg]
 
 ///|
 /// The backtracking register allocator
-struct BacktrackingAllocator {
+priv struct BacktrackingAllocator {
   // Core data
   ranges : LiveRangeSet
   bundles : BundleSet
@@ -206,8 +172,6 @@ struct BacktrackingAllocator {
   // Reference to function for constraint lookups
   func : VCodeFunction
   bundle_attempts : Array[Int]
-  scratch_conflicts : Array[Int]
-  scratch_best_conflicts : Array[Int]
 }
 
 ///|
@@ -219,14 +183,6 @@ fn BacktrackingAllocator::queue_push(
   hint_preg : @abi.PReg?,
 ) -> Unit {
   self.queue.push(bundle_id, prio, hint_preg)
-}
-
-///|
-/// Heap pop-max from the allocator queue.
-fn BacktrackingAllocator::queue_pop(
-  self : BacktrackingAllocator,
-) -> QueueEntry? {
-  self.queue.pop()
 }
 
 ///|
@@ -251,7 +207,7 @@ fn make_bool_table(cap : Int) -> Array[Bool] {
 }
 
 ///|
-pub fn BacktrackingAllocator::new(
+fn BacktrackingAllocator::new(
   func : VCodeFunction,
   ranges : LiveRangeSet,
   bundles : BundleSet,
@@ -354,8 +310,6 @@ pub fn BacktrackingAllocator::new(
     block_point_base,
     func,
     bundle_attempts: Array::make(bundles.length(), 0),
-    scratch_conflicts: [],
-    scratch_best_conflicts: [],
   }
 }
 
@@ -596,14 +550,14 @@ fn BacktrackingAllocator::get_available_regs(
     Vector => []
   }
   let crosses_call = bundle.crosses_call(self.ranges)
-  let selected = @regalloc.select_available_regs_for_bundle(
-    abi_class_to_regalloc_policy(bundle.reg_class),
-    crosses_call,
-    abi_pregs_to_regalloc_policy(available),
-    abi_pregs_to_regalloc_policy(callee_saved),
-  )
-  let source = if crosses_call { callee_saved } else { available }
-  project_regalloc_probe_order(source, selected)
+  if crosses_call {
+    match abi_class_to_regalloc_policy(bundle.reg_class) {
+      Int | Float => callee_saved
+      Vector => []
+    }
+  } else {
+    available
+  }
 }
 
 ///|
@@ -631,38 +585,6 @@ fn BacktrackingAllocator::callee_saved_regs_for_class(
 }
 
 ///|
-fn BacktrackingAllocator::probe_order_for_bundle(
-  self : BacktrackingAllocator,
-  bundle : Bundle,
-  available_regs : Array[@abi.PReg],
-  offset : Int,
-  skip_preg : @abi.PReg?,
-) -> Array[@abi.PReg] {
-  let prefer_caller_saved = @regalloc.should_prefer_caller_saved_for_backtracking(
-    abi_class_to_regalloc_policy(bundle.reg_class),
-    self.enable_backtracking,
-    bundle.crosses_call(self.ranges),
-  )
-  let planned = @regalloc.plan_register_probe_order(
-    abi_pregs_to_regalloc_policy(available_regs),
-    abi_pregs_to_regalloc_policy(
-      self.caller_saved_regs_for_class(bundle.reg_class),
-    ),
-    abi_pregs_to_regalloc_policy(
-      self.callee_saved_regs_for_class(bundle.reg_class),
-    ),
-    prefer_caller_saved,
-    self.split_probe_limit,
-    offset,
-    match skip_preg {
-      Some(preg) => Some(abi_preg_to_regalloc_policy(preg))
-      None => None
-    },
-  )
-  project_regalloc_probe_order(available_regs, planned)
-}
-
-///|
 /// Check if a register is free for all ranges in a bundle
 fn BacktrackingAllocator::is_reg_free(
   self : BacktrackingAllocator,
@@ -670,6 +592,29 @@ fn BacktrackingAllocator::is_reg_free(
   bundle : Bundle,
 ) -> Bool {
   !self.has_conflict_on_preg(bundle, preg)
+}
+
+///|
+fn BacktrackingAllocator::occupied_spans_for_preg(
+  self : BacktrackingAllocator,
+  preg : @abi.PReg,
+) -> Array[@regalloc.BacktrackingOccupiedSpan[ProgPoint]] {
+  let projected : Array[@regalloc.BacktrackingOccupiedSpan[ProgPoint]] = []
+  let allocs = self.get_reg_allocs(preg.class)
+  if preg.index < 0 || preg.index >= allocs.length() {
+    return projected
+  }
+  let occupied = allocs[preg.index]
+  for item in occupied {
+    let other = self.bundles.get(item.0)
+    projected.push({
+      owner_id: item.0,
+      span: item.1,
+      owner_weight: other.spill_weight,
+      owner_pinned: other.is_pinned,
+    })
+  }
+  projected
 }
 
 ///|
@@ -776,78 +721,25 @@ fn BacktrackingAllocator::try_allocate(
   hint_preg : @abi.PReg?,
 ) -> @abi.PReg? {
   let avail_regs = self.get_available_regs(bundle)
-  let n = avail_regs.length()
-  if n == 0 {
-    return None
-  }
   let spans = self.bundle_sorted_spans(bundle)
-
-  // Probe hint first if present and available.
-  if hint_preg is Some(hint) {
-    for preg in avail_regs {
-      if preg.class == hint.class && preg.index == hint.index {
-        if !self.has_conflict_on_preg_with_spans(spans, preg) {
-          return Some(preg)
-        }
-        break
-      }
-    }
-  }
-
-  // Try each available register using the generic regalloc probe policy.
   let start_inst = if !spans.is_empty() { spans[0].start.inst } else { 0 }
-  let probe_order = self.probe_order_for_bundle(
-    bundle,
+  let prefer_caller_saved = @regalloc.should_prefer_caller_saved_for_backtracking(
+    abi_class_to_regalloc_policy(bundle.reg_class),
+    self.enable_backtracking,
+    bundle.crosses_call(self.ranges),
+  )
+  @regalloc.try_backtracking_single_pass_register(
     avail_regs,
-    bundle.id + start_inst,
-    hint_preg,
-  )
-  for preg in probe_order {
-    if !self.has_conflict_on_preg_with_spans(spans, preg) {
-      return Some(preg)
-    }
-  }
-  None
-}
-
-///|
-fn BacktrackingAllocator::scan_conflicts_with_cutoff(
-  self : BacktrackingAllocator,
-  bundle : Bundle,
-  preg : @abi.PReg,
-  spans : Array[OrderedSpan],
-  max_allowable_cost : Int?,
-  conflicts : Array[Int],
-) -> (Int, ProgPoint?, Bool) {
-  conflicts.clear()
-  let allocs = self.get_reg_allocs(preg.class)
-  if preg.index < 0 || preg.index >= allocs.length() {
-    return (0, None, false)
-  }
-  let occupied = allocs[preg.index]
-  if occupied.is_empty() || spans.is_empty() {
-    return (0, None, false)
-  }
-  let projected : Array[@regalloc.BacktrackingOccupiedSpan[ProgPoint]] = []
-  for item in occupied {
-    let other = self.bundles.get(item.0)
-    projected.push({
-      owner_id: item.0,
-      span: item.1,
-      owner_weight: other.spill_weight,
-      owner_pinned: other.is_pinned,
-    })
-  }
-  let result = @regalloc.scan_backtracking_conflicts_with_cutoff(
+    self.caller_saved_regs_for_class(bundle.reg_class),
+    self.callee_saved_regs_for_class(bundle.reg_class),
     spans,
-    projected,
-    bundle.spill_weight,
-    max_allowable_cost,
+    hint_preg,
+    prefer_caller_saved,
+    self.split_probe_limit,
+    bundle.id + start_inst,
+    same_abi_preg,
+    fn(preg, spans) { self.has_conflict_on_preg_with_spans(spans, preg) },
   )
-  for conflict_id in result.conflict_ids {
-    conflicts.push(conflict_id)
-  }
-  (result.max_conflict_weight, result.first_conflict_point, result.rejected)
 }
 
 ///|
@@ -863,95 +755,36 @@ fn BacktrackingAllocator::try_evict(
   hint_preg : @abi.PReg?,
 ) -> (@abi.PReg?, (ProgPoint, @abi.PReg)?) {
   let avail_regs = self.get_available_regs(bundle)
-  let n = avail_regs.length()
-  if n == 0 {
-    return (None, None)
-  }
   let spans = self.bundle_sorted_spans(bundle)
-  let mut best_preg : @abi.PReg? = None
-  let mut best_conflict_cost : Int? = None
-  let best_conflicts = self.scratch_best_conflicts
-  let scratch_conflicts = self.scratch_conflicts
-  best_conflicts.clear()
-  scratch_conflicts.clear()
-  let mut best_split_cost : Int? = None
-  let mut best_split : (ProgPoint, @abi.PReg)? = None
-  let probe_order = self.probe_order_for_bundle(
-    bundle,
-    avail_regs,
-    bundle.id,
-    None,
+  let prefer_caller_saved = @regalloc.should_prefer_caller_saved_for_backtracking(
+    abi_class_to_regalloc_policy(bundle.reg_class),
+    self.enable_backtracking,
+    bundle.crosses_call(self.ranges),
   )
-  for preg in probe_order {
-    // regalloc2-style high-cost cutoff:
-    // when we already have a best candidate (evict/split), stop considering
-    // higher-cost registers early.
-    let cutoff = @regalloc.eviction_cutoff(best_conflict_cost, best_split_cost)
-    let (max_conflict_weight, first_conflict_point, rejected) = self.scan_conflicts_with_cutoff(
-      bundle, preg, spans, cutoff, scratch_conflicts,
-    )
-    if rejected {
-      continue
+  let attempt = @regalloc.try_backtracking_eviction_register(
+    avail_regs,
+    self.caller_saved_regs_for_class(bundle.reg_class),
+    self.callee_saved_regs_for_class(bundle.reg_class),
+    spans,
+    bundle.spill_weight,
+    hint_preg,
+    prefer_caller_saved,
+    self.split_probe_limit,
+    bundle.id,
+    same_abi_preg,
+    abi_preg_to_regalloc_policy,
+    fn(preg) { self.occupied_spans_for_preg(preg) },
+    fn(a, b) { a.compare_with_order(b, self.block_order) },
+  )
+  if attempt.reg is Some(preg) {
+    for conflict_id in attempt.evicted_ids {
+      let conflict = self.bundles.get(conflict_id)
+      self.remove_allocation(conflict)
+      self.queue_push(conflict_id, self.bundle_queue_prio(conflict), None)
     }
-    if scratch_conflicts.is_empty() {
-      return (Some(preg), None)
-    }
-    if first_conflict_point is Some(point) {
-      let best_split_point = match best_split {
-        Some((existing_point, _)) => Some(existing_point)
-        None => None
-      }
-      if @regalloc.should_take_backtracking_split_candidate(
-          best_split_cost,
-          best_split_point,
-          max_conflict_weight,
-          point,
-          fn(a, b) { a.compare_with_order(b, self.block_order) },
-        ) {
-        best_split_cost = Some(max_conflict_weight)
-        best_split = Some((point, preg))
-      }
-    }
-
-    // Keep only legal eviction candidates.
-    // Mirrors regalloc2's "lowest conflict cost" selection strategy:
-    // - reject pinned / heavier-or-equal conflicts
-    // - choose the candidate with minimum maximum conflict spill weight.
-    if @regalloc.should_take_eviction_candidate(
-        best_conflict_cost,
-        match best_preg {
-          Some(current_best) => Some(abi_preg_to_regalloc_policy(current_best))
-          None => None
-        },
-        max_conflict_weight,
-        abi_preg_to_regalloc_policy(preg),
-        match hint_preg {
-          Some(hint) => Some(abi_preg_to_regalloc_policy(hint))
-          None => None
-        },
-      ) {
-      best_preg = Some(preg)
-      best_conflict_cost = Some(max_conflict_weight)
-      best_conflicts.clear()
-      for conflict_id in scratch_conflicts {
-        best_conflicts.push(conflict_id)
-      }
-    }
+    return (Some(preg), None)
   }
-  if best_preg is Some(preg) {
-    // Only evict when our spill weight strictly dominates the chosen conflict cost.
-    if best_conflict_cost is Some(cost) && bundle.spill_weight > cost {
-      for conflict_id in best_conflicts {
-        let conflict = self.bundles.get(conflict_id)
-        self.remove_allocation(conflict)
-        self.queue_push(conflict_id, self.bundle_queue_prio(conflict), None)
-      }
-      return (Some(preg), None)
-    }
-  }
-  best_conflicts.clear()
-  scratch_conflicts.clear()
-  (None, best_split)
+  (None, attempt.split)
 }
 
 ///|
@@ -1129,91 +962,45 @@ fn BacktrackingAllocator::split_into_minimal_bundles(
 
 ///|
 /// Main allocation loop
-pub fn BacktrackingAllocator::allocate(self : BacktrackingAllocator) -> Unit {
+fn BacktrackingAllocator::allocate(self : BacktrackingAllocator) -> Unit {
   self.init_queue()
-
-  let max_iterations = @regalloc.allocation_iteration_limit(
+  @regalloc.run_backtracking_allocation_loop(
+    self.queue,
+    self.bundle_attempts,
+    self.bundle_retry_limit,
+    self.enable_backtracking,
     self.bundles.length(),
-  )
-  let mut iterations = 0
-  while self.queue.length() > 0 && iterations < max_iterations {
-    iterations += 1
-
-    // Pop highest priority bundle
-    let entry = match self.queue_pop() {
-      Some(e) => e
-      None => break
-    }
-    let bundle = self.bundles.get(entry.bundle_id)
-    let hint_preg = match entry.hint_preg {
-      Some(p) => Some(p)
-      None => {
-        let spillset_id = bundle.spillset_id
-        self.spillsets.hint(spillset_id)
-      }
-    }
-    let hint_preg = match hint_preg {
-      Some(p) => Some(p)
-      None =>
-        if self.enable_backtracking {
-          self.constraint_hint_preg_cached(bundle)
-        } else {
-          None
-        }
-    }
-
-    // Skip if already allocated
-    if bundle.allocation is Reg(_) || bundle.allocation is Spill(_) {
-      continue
-    }
-    if entry.bundle_id >= 0 && entry.bundle_id < self.bundle_attempts.length() {
-      self.bundle_attempts[entry.bundle_id] = self.bundle_attempts[entry.bundle_id] +
-        1
-      if @regalloc.should_force_spill_after_retry(
-          self.bundle_attempts[entry.bundle_id],
-          self.bundle_retry_limit,
-          bundle.is_pinned,
-          bundle.has_fixed_constraint(self.ranges),
-        ) {
-        self.force_spill_bundle(bundle)
-        continue
-      }
-    }
-
-    // Vector values live across calls must spill.
-    if @regalloc.should_force_spill_for_class_and_call(
+    fn(bundle_id) { self.bundles.get(bundle_id) },
+    fn(bundle) { bundle.allocation is Reg(_) || bundle.allocation is Spill(_) },
+    fn(bundle) { bundle.is_pinned },
+    fn(bundle) { bundle.has_fixed_constraint(self.ranges) },
+    fn(bundle) {
+      @regalloc.should_force_spill_for_class_and_call(
         abi_class_to_regalloc_policy(bundle.reg_class),
         bundle.crosses_call(self.ranges),
-      ) {
-      self.force_spill_bundle(bundle)
-      continue
-    }
-
-    if self.enable_backtracking {
-      // Cranelift/regalloc2-like single register scan: free-reg allocation and
-      // eviction candidate selection share one conflict walk.
-      let (alloc_preg, split_opt) = self.try_evict(bundle, hint_preg)
-      if alloc_preg is Some(preg) {
-        self.record_allocation(bundle, preg)
-        continue
+      )
+    },
+    fn(bundle, entry_hint) {
+      match entry_hint {
+        Some(preg) => Some(preg)
+        None =>
+          match self.spillsets.hint(bundle.spillset_id) {
+            Some(preg) => Some(preg)
+            None =>
+              if self.enable_backtracking {
+                self.constraint_hint_preg_cached(bundle)
+              } else {
+                None
+              }
+          }
       }
-      self.split_bundle(bundle, split_opt)
-      continue
-    } else {
-      // Non-backtracking fallback keeps simple first-fit behavior.
-      if self.try_allocate(bundle, hint_preg) is Some(preg) {
-        self.record_allocation(bundle, preg)
-        continue
-      }
-      if !bundle.is_pinned && !bundle.has_fixed_constraint(self.ranges) {
-        self.force_spill_bundle(bundle)
-        continue
-      }
-    }
-
-    // Split (spill) the bundle
-    self.split_bundle(bundle, None)
-  }
+    },
+    fn(bundle, hint) { self.try_evict(bundle, hint) },
+    fn(bundle, hint) { self.try_allocate(bundle, hint) },
+    fn(bundle, preg) { self.record_allocation(bundle, preg) },
+    fn(bundle, split_opt) { self.split_bundle(bundle, split_opt) },
+    fn(bundle) { self.force_spill_bundle(bundle) },
+  )
 }
 
 ///|
@@ -1303,7 +1090,7 @@ fn backtracking_location_for_vreg(
 
 ///|
 /// Generate allocation result compatible with existing code
-pub fn BacktrackingAllocator::generate_result(
+fn BacktrackingAllocator::generate_result(
   self : BacktrackingAllocator,
 ) -> RegAllocResult {
   // Generate any needed moves for split bundles

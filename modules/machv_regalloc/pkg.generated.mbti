@@ -93,11 +93,6 @@ pub(all) struct ApplyResult {
   spill_slots : Array[@machv.StackSlot]
 } derive(@debug.Debug)
 
-type BacktrackingAllocator
-pub fn BacktrackingAllocator::allocate(Self) -> Unit
-pub fn BacktrackingAllocator::generate_result(Self) -> RegAllocResult
-pub fn BacktrackingAllocator::new(VCodeFunction, LiveRangeSet, BundleSet, Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg], Array[@abi.PReg], algorithm? : @regalloc.RegallocAlgorithm) -> Self
-
 type Bundle
 pub fn Bundle::contains_range(Self, Int) -> Bool
 pub fn Bundle::crosses_c_call(Self, LiveRangeSet) -> Bool
