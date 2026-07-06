@@ -122,3 +122,100 @@ test "backtracking split plan is generic over point ordering" {
     _ => abort("expected whole-bundle spill")
   }
 }
+
+///|
+test "backtracking spill compaction is generic over range and class" {
+  fn reserve_test_slot(next_slot : Int, class : Int) -> SpillSlotReservation {
+    if class == 2 {
+      let aligned = if next_slot % 2 == 0 { next_slot } else { next_slot + 1 }
+      { slot: aligned, next_slot: aligned + 2, slots_used: 2 }
+    } else {
+      { slot: next_slot, next_slot: next_slot + 1, slots_used: 1 }
+    }
+  }
+
+  fn ranges_overlap(a : Array[(Int, Int)], b : Array[(Int, Int)]) -> Bool {
+    for lhs in a {
+      for rhs in b {
+        if lhs.0 < rhs.1 && rhs.0 < lhs.1 {
+          return true
+        }
+      }
+    }
+    false
+  }
+
+  let spillsets : Array[SpillSetInfo[Int, (Int, Int), Int]] = [
+    { old_slot: 0, reg_class: 1, spans: [(0, 4)], start: 0 },
+    { old_slot: 1, reg_class: 1, spans: [(5, 8)], start: 5 },
+    { old_slot: 2, reg_class: 2, spans: [(10, 12)], start: 10 },
+  ]
+  let compaction = compact_backtracking_spill_slots(
+    spillsets,
+    [{ lhs: 0, rhs: 1 }],
+    reserve_test_slot,
+    ranges_overlap,
+    fn(a, b) { a - b },
+  )
+  debug_inspect(
+    compaction.remaps,
+    content=(
+      #|[
+      #|  { old_slot: 0, new_slot: 0 },
+      #|  { old_slot: 1, new_slot: 1 },
+      #|  { old_slot: 2, new_slot: 2 },
+      #|]
+    ),
+  )
+  inspect(compaction.total_slots, content="4")
+}
+
+///|
+test "backtracking allocation result builder records regs and spills" {
+  let result = build_backtracking_allocation_result(
+    [
+      { vreg_id: 1, allocation: BacktrackingReg(10) },
+      { vreg_id: 2, allocation: BacktrackingSpill(3) },
+      { vreg_id: 3, allocation: BacktrackingUnallocated },
+    ],
+    4,
+  )
+  debug_inspect(result.assignments, content="[(1, 10)]")
+  debug_inspect(result.spill_slots, content="[(2, 3)]")
+  inspect(result.num_spill_slots, content="4")
+}
+
+///|
+test "backtracking fixed constraints plan reloads stores and moves" {
+  let inst : BacktrackingFixedConstraintInst[Int] = {
+    block_index: 0,
+    inst_index: 1,
+    uses: [
+      { operand: BacktrackingVirtual(BacktrackingReg(5), 0), required: 7 },
+      { operand: BacktrackingVirtual(BacktrackingSpill(3), 1), required: 8 },
+      { operand: BacktrackingPhysical(9, 0), required: 9 },
+    ],
+    defs: [
+      { operand: BacktrackingVirtual(BacktrackingReg(6), 0), required: 7 },
+      { operand: BacktrackingVirtual(BacktrackingSpill(4), 1), required: 8 },
+    ],
+  }
+  let edits = plan_backtracking_fixed_constraint_edits([inst], fn(a, b) {
+    a == b
+  })
+  inspect(edits.length(), content="1")
+  inspect(edits[0].before.length(), content="2")
+  inspect(edits[0].after.length(), content="2")
+  match edits[0].before[0].from {
+    BacktrackingMoveReg(reg) => inspect(reg, content="5")
+    _ => abort("expected reg source")
+  }
+  match edits[0].before[1].from {
+    BacktrackingMoveSpill(slot) => inspect(slot, content="3")
+    _ => abort("expected spill source")
+  }
+  match edits[0].after[1].to {
+    BacktrackingMoveSpill(slot) => inspect(slot, content="4")
+    _ => abort("expected spill destination")
+  }
+}

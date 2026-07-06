@@ -12,6 +12,8 @@ pub fn allocation_iteration_limit(Int) -> Int
 
 pub fn[P] backtracking_queue_entry_higher(BacktrackingQueueEntry[P], BacktrackingQueueEntry[P]) -> Bool
 
+pub fn[P] build_backtracking_allocation_result(Array[BacktrackingRangeResult[P]], Int) -> BacktrackingAllocationResult[P]
+
 pub fn build_dense_successor_edges(Array[Int], Array[Array[Int]]) -> DenseCfgEdges
 
 pub fn build_live_ranges(Program) -> LiveRangeSet
@@ -19,6 +21,8 @@ pub fn build_live_ranges(Program) -> LiveRangeSet
 pub fn choose_fixed_reg_hint(Array[PhysicalReg], Array[PhysicalReg]) -> PhysicalReg?
 
 pub fn choose_temp_register(RegClass, Array[Int], Array[Int], Array[Int], Array[Int], Bool, Int, Int) -> TempRegisterChoice
+
+pub fn[C, R, P] compact_backtracking_spill_slots(Array[SpillSetInfo[C, R, P]], Array[SpillSlotNoShareEdge], (Int, C) -> SpillSlotReservation, (Array[R], Array[R]) -> Bool, (P, P) -> Int) -> SpillSlotCompaction
 
 pub fn compact_spill_slots(Array[CompactSpillSet], Array[SpillSlotNoShareEdge], Array[Int]) -> SpillSlotCompaction
 
@@ -65,6 +69,8 @@ pub fn make_backtracking_bool_table(Int) -> Array[Bool]
 pub fn max_physical_reg_id(Array[PhysicalReg]) -> Int
 
 pub fn[P] plan_backtracking_bundle_split(Array[BacktrackingSplitRange[P]], P?, Bool, (P, P) -> Bool, (P, P) -> Bool) -> BacktrackingSplitPlan
+
+pub fn[P] plan_backtracking_fixed_constraint_edits(Array[BacktrackingFixedConstraintInst[P]], (P, P) -> Bool) -> Array[BacktrackingConstraintInstEdits[P]]
 
 pub fn plan_bundle_merges(Array[BundleMergeRange], Array[BundleMergeEdge], Array[Int], Array[Int]) -> BundleMergePlan
 
@@ -161,11 +167,53 @@ pub(all) struct Assignment {
   mut location : Location
 } derive(Eq, @debug.Debug)
 
+pub(all) enum BacktrackingAllocationLoc[P] {
+  BacktrackingReg(P)
+  BacktrackingSpill(Int)
+  BacktrackingUnallocated
+}
+
+pub(all) struct BacktrackingAllocationResult[P] {
+  assignments : Array[(Int, P)]
+  spill_slots : Array[(Int, Int)]
+  num_spill_slots : Int
+}
+
 pub(all) struct BacktrackingConflictScanResult[P] {
   conflict_ids : Array[Int]
   max_conflict_weight : Int
   first_conflict_point : P?
   rejected : Bool
+}
+
+pub(all) struct BacktrackingConstraintInstEdits[P] {
+  block_index : Int
+  inst_index : Int
+  before : Array[BacktrackingConstraintMove[P]]
+  after : Array[BacktrackingConstraintMove[P]]
+}
+
+pub(all) struct BacktrackingConstraintMove[P] {
+  from : BacktrackingMoveLoc[P]
+  to : BacktrackingMoveLoc[P]
+  class_tag : Int
+}
+
+pub(all) enum BacktrackingConstraintOperand[P] {
+  BacktrackingVirtual(BacktrackingAllocationLoc[P], Int)
+  BacktrackingPhysical(P, Int)
+}
+
+pub(all) struct BacktrackingFixedConstraint[P] {
+  operand : BacktrackingConstraintOperand[P]
+  required : P
+}
+
+pub(all) struct BacktrackingFixedConstraintInst[P] {
+  block_index : Int
+  inst_index : Int
+  uses : Array[BacktrackingFixedConstraint[P]]
+  defs : Array[BacktrackingFixedConstraint[P]]
 }
 
 type BacktrackingHintCache[P]
@@ -174,6 +222,11 @@ pub fn[P] BacktrackingHintCache::is_ready(Self[P], Int) -> Bool
 pub fn[P] BacktrackingHintCache::new(Int) -> Self[P]
 pub fn[P] BacktrackingHintCache::push_bundle_slot(Self[P]) -> Unit
 pub fn[P] BacktrackingHintCache::set(Self[P], Int, P?) -> Unit
+
+pub(all) enum BacktrackingMoveLoc[P] {
+  BacktrackingMoveReg(P)
+  BacktrackingMoveSpill(Int)
+}
 
 pub(all) struct BacktrackingOccupiedSpan[P] {
   owner_id : Int
@@ -195,6 +248,11 @@ pub(all) struct BacktrackingQueueEntry[P] {
   prio : Int
   hint_preg : P?
   seq : Int
+}
+
+pub(all) struct BacktrackingRangeResult[P] {
+  vreg_id : Int
+  allocation : BacktrackingAllocationLoc[P]
 }
 
 type BacktrackingSpillsetState[P]

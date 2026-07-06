@@ -33,6 +33,49 @@ fn abi_preg_to_regalloc_policy(preg : @abi.PReg) -> @regalloc.PhysicalReg {
 }
 
 ///|
+fn reserve_abi_spill_slot(
+  next_slot : Int,
+  class : @abi.RegClass,
+) -> @regalloc.SpillSlotReservation {
+  @regalloc.reserve_spill_slot(next_slot, abi_class_to_regalloc_policy(class))
+}
+
+///|
+fn abi_class_tag_for_constraint(class : @abi.RegClass) -> Int {
+  match class {
+    Int => 0
+    Float32 => 1
+    Float64 => 2
+    Vector => 3
+  }
+}
+
+///|
+fn abi_class_from_constraint_tag(tag : Int) -> @abi.RegClass {
+  match tag {
+    0 => Int
+    1 => Float32
+    2 => Float64
+    3 => Vector
+    _ => Int
+  }
+}
+
+///|
+fn backtracking_move_loc_to_machv(
+  loc : BacktrackingMoveLoc,
+  class_tag : Int,
+) -> Loc {
+  match loc {
+    BacktrackingMoveReg(preg) => Reg(preg)
+    BacktrackingMoveSpill(slot) => {
+      ignore(class_tag)
+      Spill(slot)
+    }
+  }
+}
+
+///|
 fn abi_pregs_to_regalloc_policy(
   pregs : Array[@abi.PReg],
 ) -> Array[@regalloc.PhysicalReg] {
@@ -90,7 +133,25 @@ type SpillSetInfo = @regalloc.SpillSetInfo[
 ]
 
 ///|
-type AssignedSlot = @regalloc.AssignedSlot[ProgPointRange]
+type BacktrackingAllocationLoc = @regalloc.BacktrackingAllocationLoc[@abi.PReg]
+
+///|
+type BacktrackingConstraintOperand = @regalloc.BacktrackingConstraintOperand[
+  @abi.PReg,
+]
+
+///|
+type BacktrackingFixedConstraint = @regalloc.BacktrackingFixedConstraint[
+  @abi.PReg,
+]
+
+///|
+type BacktrackingFixedConstraintInst = @regalloc.BacktrackingFixedConstraintInst[
+  @abi.PReg,
+]
+
+///|
+type BacktrackingMoveLoc = @regalloc.BacktrackingMoveLoc[@abi.PReg]
 
 ///|
 /// The backtracking register allocator
@@ -1208,152 +1269,174 @@ fn BacktrackingAllocator::generate_moves(
 }
 
 ///|
+fn backtracking_location_for_vreg(
+  vreg_id : Int,
+  assignment_dense : Array[@abi.PReg?],
+  spill_slot_dense : Array[Int],
+  result : RegAllocResult,
+  max_vreg_id : Int,
+) -> BacktrackingAllocationLoc {
+  let assigned_opt = if vreg_id >= 0 && vreg_id < max_vreg_id {
+    assignment_dense[vreg_id]
+  } else {
+    result.assignments.get(vreg_id)
+  }
+  match assigned_opt {
+    Some(preg) => BacktrackingReg(preg)
+    None => {
+      let spill_slot = if vreg_id >= 0 && vreg_id < max_vreg_id {
+        spill_slot_dense[vreg_id]
+      } else {
+        match result.spill_slots.get(vreg_id) {
+          Some(slot) => slot
+          None => -1
+        }
+      }
+      if spill_slot >= 0 {
+        BacktrackingSpill(spill_slot)
+      } else {
+        BacktrackingUnallocated
+      }
+    }
+  }
+}
+
+///|
 /// Generate allocation result compatible with existing code
 pub fn BacktrackingAllocator::generate_result(
   self : BacktrackingAllocator,
 ) -> RegAllocResult {
   // Generate any needed moves for split bundles
   let _moves = self.generate_moves()
-  let result : RegAllocResult = {
-    assignments: {},
-    spill_slots: {},
-    num_spill_slots: self.bundles.next_spill_slot,
-    inst_edits: [],
-  }
   let max_vreg_id = self.func.next_vreg_id
-  let assignment_dense : Array[@abi.PReg?] = Array::make(max_vreg_id, None)
-  let spill_slot_dense : Array[Int] = Array::make(max_vreg_id, -1)
-
-  // Collect assignments from LiveRanges
+  let range_results : Array[@regalloc.BacktrackingRangeResult[@abi.PReg]] = []
   for i in 0..<self.ranges.length() {
     let range = self.ranges.get(i)
-    match range.allocation {
+    let allocation : BacktrackingAllocationLoc = match range.allocation {
       Reg(preg) => {
-        // Ensure the preg class matches the vreg class
-        // This is important for float registers where the pool uses Float64
-        // but the vreg might be Float32
+        // Ensure the preg class matches the vreg class. This is important for
+        // float registers where the pool uses Float64 but the vreg might be
+        // Float32.
         let corrected_preg : @abi.PReg = {
           index: preg.index,
           class: range.vreg.class,
         }
-        result.assignments.set(range.vreg.id, corrected_preg)
-        if range.vreg.id >= 0 && range.vreg.id < max_vreg_id {
-          assignment_dense[range.vreg.id] = Some(corrected_preg)
-        }
+        BacktrackingReg(corrected_preg)
       }
-      Spill(slot) => {
-        result.spill_slots.set(range.vreg.id, slot)
-        if range.vreg.id >= 0 && range.vreg.id < max_vreg_id {
-          spill_slot_dense[range.vreg.id] = slot
-        }
-      }
-      Unallocated => () // Should not happen after allocation
+      Spill(slot) => BacktrackingSpill(slot)
+      Unallocated => BacktrackingUnallocated
+    }
+    range_results.push({ vreg_id: range.vreg.id, allocation })
+  }
+  let generic_result = @regalloc.build_backtracking_allocation_result(
+    range_results,
+    self.bundles.next_spill_slot,
+  )
+  let result : RegAllocResult = {
+    assignments: {},
+    spill_slots: {},
+    num_spill_slots: generic_result.num_spill_slots,
+    inst_edits: [],
+  }
+  let assignment_dense : Array[@abi.PReg?] = Array::make(max_vreg_id, None)
+  let spill_slot_dense : Array[Int] = Array::make(max_vreg_id, -1)
+
+  for assignment in generic_result.assignments {
+    let (vreg_id, preg) = assignment
+    result.assignments.set(vreg_id, preg)
+    if vreg_id >= 0 && vreg_id < max_vreg_id {
+      assignment_dense[vreg_id] = Some(preg)
+    }
+  }
+  for spill in generic_result.spill_slots {
+    let (vreg_id, slot) = spill
+    result.spill_slots.set(vreg_id, slot)
+    if vreg_id >= 0 && vreg_id < max_vreg_id {
+      spill_slot_dense[vreg_id] = slot
     }
   }
 
-  // Generate moves for FixedReg constraints
-  // When a vreg is used/defined with a FixedReg constraint, we need to
-  // insert moves if the vreg is allocated to a different register
+  // Generate moves for FixedReg constraints.
   for block_idx, block in self.func.blocks {
     for inst_idx, inst in block.insts {
-      // Skip if no constraints
       if inst.use_constraints.is_empty() && inst.def_constraints.is_empty() {
         continue
       }
-      let edits = InstEdits::new()
-
-      // Process use constraints (moves before the instruction)
+      let uses : Array[BacktrackingFixedConstraint] = []
+      let defs : Array[BacktrackingFixedConstraint] = []
       for i, constraint in inst.use_constraints {
         if constraint is FixedReg(required_preg) {
           let use_reg = inst.uses[i]
           if use_reg is Virtual(vreg) {
-            // Check if already allocated to the required register
-            let assigned_opt = if vreg.id >= 0 && vreg.id < max_vreg_id {
-              assignment_dense[vreg.id]
-            } else {
-              result.assignments.get(vreg.id)
-            }
-            let spill_slot = if vreg.id >= 0 && vreg.id < max_vreg_id {
-              spill_slot_dense[vreg.id]
-            } else {
-              match result.spill_slots.get(vreg.id) {
-                Some(slot) => slot
-                None => -1
-              }
-            }
-            if assigned_opt is Some(assigned_preg) {
-              if assigned_preg.index != required_preg.index {
-                // Need to move from assigned to required
-                edits.before.push({
-                  from: Reg(assigned_preg),
-                  to: Reg(required_preg),
-                  class: vreg.class,
-                })
-              }
-            } else if spill_slot >= 0 {
-              // Spilled: need to reload to the required register
-              edits.before.push({
-                from: Spill(spill_slot),
-                to: Reg(required_preg),
-                class: vreg.class,
-              })
-            }
+            let operand : BacktrackingConstraintOperand = BacktrackingVirtual(
+              backtracking_location_for_vreg(
+                vreg.id,
+                assignment_dense,
+                spill_slot_dense,
+                result,
+                max_vreg_id,
+              ),
+              abi_class_tag_for_constraint(vreg.class),
+            )
+            uses.push({ operand, required: required_preg })
           } else if use_reg is Physical(preg) {
-            if preg.index != required_preg.index {
-              edits.before.push({
-                from: Reg(preg),
-                to: Reg(required_preg),
-                class: preg.class,
-              })
-            }
+            let operand : BacktrackingConstraintOperand = BacktrackingPhysical(
+              preg,
+              abi_class_tag_for_constraint(preg.class),
+            )
+            uses.push({ operand, required: required_preg })
           }
         }
       }
-
-      // Process def constraints (moves after the instruction)
       for i, constraint in inst.def_constraints {
         if constraint is FixedReg(required_preg) {
           let def = inst.defs[i]
           if def.reg is Virtual(vreg) {
-            // Check if already allocated to the required register
-            let assigned_opt = if vreg.id >= 0 && vreg.id < max_vreg_id {
-              assignment_dense[vreg.id]
-            } else {
-              result.assignments.get(vreg.id)
-            }
-            let spill_slot = if vreg.id >= 0 && vreg.id < max_vreg_id {
-              spill_slot_dense[vreg.id]
-            } else {
-              match result.spill_slots.get(vreg.id) {
-                Some(slot) => slot
-                None => -1
-              }
-            }
-            if assigned_opt is Some(assigned_preg) {
-              if assigned_preg.index != required_preg.index {
-                // Need to move from required to assigned
-                // (the instruction produces in required_preg, we need to move to assigned)
-                edits.after.push({
-                  from: Reg(required_preg),
-                  to: Reg(assigned_preg),
-                  class: vreg.class,
-                })
-              }
-            } else if spill_slot >= 0 {
-              // Spilled: need to store from required register to spill slot
-              edits.after.push({
-                from: Reg(required_preg),
-                to: Spill(spill_slot),
-                class: vreg.class,
-              })
-            }
+            let operand : BacktrackingConstraintOperand = BacktrackingVirtual(
+              backtracking_location_for_vreg(
+                vreg.id,
+                assignment_dense,
+                spill_slot_dense,
+                result,
+                max_vreg_id,
+              ),
+              abi_class_tag_for_constraint(vreg.class),
+            )
+            defs.push({ operand, required: required_preg })
           }
         }
       }
-
-      // Store edits if any
-      if !edits.before.is_empty() || !edits.after.is_empty() {
-        result.inst_edits.push((block_idx, inst_idx, edits))
+      if !uses.is_empty() || !defs.is_empty() {
+        let constraint_inst : BacktrackingFixedConstraintInst = {
+          block_index: block_idx,
+          inst_index: inst_idx,
+          uses,
+          defs,
+        }
+        let planned = @regalloc.plan_backtracking_fixed_constraint_edits(
+          [constraint_inst],
+          fn(a, b) { a.index == b.index },
+        )
+        for planned_edits in planned {
+          let edits = InstEdits::new()
+          for mv in planned_edits.before {
+            edits.before.push({
+              from: backtracking_move_loc_to_machv(mv.from, mv.class_tag),
+              to: backtracking_move_loc_to_machv(mv.to, mv.class_tag),
+              class: abi_class_from_constraint_tag(mv.class_tag),
+            })
+          }
+          for mv in planned_edits.after {
+            edits.after.push({
+              from: backtracking_move_loc_to_machv(mv.from, mv.class_tag),
+              to: backtracking_move_loc_to_machv(mv.to, mv.class_tag),
+              class: abi_class_from_constraint_tag(mv.class_tag),
+            })
+          }
+          result.inst_edits.push(
+            (planned_edits.block_index, planned_edits.inst_index, edits),
+          )
+        }
       }
     }
   }
@@ -1386,13 +1469,6 @@ fn BacktrackingAllocator::compact_spill_slots(
   self : BacktrackingAllocator,
   result : RegAllocResult,
 ) -> Int {
-  fn slots_used(cls : @abi.RegClass) -> Int {
-    match cls {
-      Vector => 2
-      _ => 1
-    }
-  }
-
   fn spans_overlap(
     a : Array[ProgPointRange],
     b : Array[ProgPointRange],
@@ -1420,20 +1496,6 @@ fn BacktrackingAllocator::compact_spill_slots(
       }
     }
     s
-  }
-
-  fn add_no_share_edge(
-    no_share : Map[Int, Set[Int]],
-    a : Int,
-    b : Int,
-  ) -> Unit {
-    if a == b {
-      return
-    }
-    if no_share.get(a) is None {
-      no_share.set(a, Set([]))
-    }
-    no_share.get(a).unwrap().add(b) |> ignore
   }
 
   // 1) Build spillsets keyed by the old spill-slot id.
@@ -1497,7 +1559,7 @@ fn BacktrackingAllocator::compact_spill_slots(
   // distinct spill slots after compaction. Otherwise, compaction can collapse
   // logically distinct values onto one stack location at the jump boundary and
   // break SSA block-arg semantics.
-  let no_share : Map[Int, Set[Int]] = {}
+  let no_share_edges : Array[@regalloc.SpillSlotNoShareEdge] = []
   let block_id_to_index : Map[Int, Int] = {}
   for i, block in self.func.blocks {
     block_id_to_index.set(block.id, i)
@@ -1528,60 +1590,23 @@ fn BacktrackingAllocator::compact_spill_slots(
       }
       for i in 0..<slots.length() {
         for j in (i + 1)..<slots.length() {
-          add_no_share_edge(no_share, slots[i], slots[j])
-          add_no_share_edge(no_share, slots[j], slots[i])
+          no_share_edges.push({ lhs: slots[i], rhs: slots[j] })
         }
       }
     }
   }
 
   // 3) Assign spillsets to a compact set of physical spill slots.
-  let scalar_slots : Array[AssignedSlot] = []
-  let vector_slots : Array[AssignedSlot] = []
+  let compaction = @regalloc.compact_backtracking_spill_slots(
+    spillsets,
+    no_share_edges,
+    reserve_abi_spill_slot,
+    fn(a, b) { spans_overlap(a, b, self.ranges.block_order) },
+    fn(a, b) { a.compare_with_order(b, self.ranges.block_order) },
+  )
   let slot_remap : Map[Int, Int] = {}
-  let mut next_slot = 0
-  for ss in spillsets {
-    let used = slots_used(ss.reg_class)
-    let pool = if used == 2 { vector_slots } else { scalar_slots }
-    let mut placed = false
-    for slot in pool {
-      let mut edge_conflict = false
-      if no_share.get(ss.old_slot) is Some(disallowed) {
-        for existing_old_slot in slot.old_slots {
-          if disallowed.contains(existing_old_slot) {
-            edge_conflict = true
-            break
-          }
-        }
-      }
-      if !edge_conflict &&
-        !spans_overlap(ss.spans, slot.spans, self.ranges.block_order) {
-        slot_remap.set(ss.old_slot, slot.start)
-        // Extend occupancy for future overlap checks.
-        for span in ss.spans {
-          slot.spans.push(span)
-        }
-        slot.old_slots.push(ss.old_slot)
-        placed = true
-        break
-      }
-    }
-    if placed {
-      continue
-    }
-
-    // Allocate a fresh slot (respect vector alignment).
-    if used == 2 && next_slot % 2 != 0 {
-      next_slot += 1
-    }
-    let new_slot = next_slot
-    next_slot += used
-    let new_spans : Array[ProgPointRange] = []
-    for span in ss.spans {
-      new_spans.push(span)
-    }
-    pool.push({ start: new_slot, spans: new_spans, old_slots: [ss.old_slot] })
-    slot_remap.set(ss.old_slot, new_slot)
+  for remap in compaction.remaps {
+    slot_remap.set(remap.old_slot, remap.new_slot)
   }
 
   // 4) Rewrite all spill-slot references (spill map + constraint edits).
@@ -1635,7 +1660,7 @@ fn BacktrackingAllocator::compact_spill_slots(
   }
 
   // 5) Return total spill-slot count.
-  next_slot
+  compaction.total_slots
 }
 
 ///|
