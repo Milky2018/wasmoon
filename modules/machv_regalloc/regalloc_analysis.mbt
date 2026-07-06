@@ -576,7 +576,7 @@ fn collect_defs_uses(
           CallDirect(_, _, _, call_conv) => call_conv
           CallExternal(_, _, _, call_conv) => call_conv
           // These pseudo-ops may call foreign helpers on slow paths.
-          TypeCheckSubtypeIndirect(_, _) => Foreign
+          CallExternalIfI32NeImm(_, _) => Foreign
           GCAllocStructInline(_, _, _, _) => Foreign
           GCAllocStructSlowPrecise(_, _, _) => Foreign
           GCAllocArrayFixedInline(_, _, _, _) => Foreign

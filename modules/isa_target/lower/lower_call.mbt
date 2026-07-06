@@ -462,7 +462,7 @@ fn lower_return_call_indirect(
   let expected_type_idx = ctx.canonicalize_indirect_type_idx(type_idx)
   if ctx.use_subtype_indirect_check {
     let type_check = @instr.VCodeInst::new(
-      TypeCheckSubtypeIndirect(expected_type_idx, rt_gc_type_check_subtype()),
+      CallExternalIfI32NeImm(expected_type_idx, rt_gc_type_check_subtype()),
     )
     type_check.add_use(Virtual(actual_type_vreg))
     add_c_call_clobbers(type_check)
@@ -723,7 +723,7 @@ fn lower_call_indirect(
   )
   if ctx.use_subtype_indirect_check {
     let type_check = @instr.VCodeInst::new(
-      TypeCheckSubtypeIndirect(
+      CallExternalIfI32NeImm(
         expected_canonical_type_idx,
         rt_gc_type_check_subtype(),
       ),

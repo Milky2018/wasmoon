@@ -300,7 +300,7 @@ pub(all) enum VCodeOpcode {
   Umull
   Smull
   ReturnCallIndirect(Int, Int)
-  TypeCheckSubtypeIndirect(Int, ExternalName)
+  CallExternalIfI32NeImm(Int, ExternalName)
   StackLoad(Int)
   StackStore(Int)
   LoadStackParam(Int, @abi.RegClass)

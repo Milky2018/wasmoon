@@ -1732,23 +1732,22 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_trap_imm16(trap_code)
       self.define_label(done)
     }
-    TypeCheckSubtypeIndirect(expected_type, helper_symbol) => {
-      // Fast path for call_indirect type checks:
-      // - If actual_type == expected_type: do nothing.
-      // - Otherwise: call the runtime subtype checker (traps on failure).
+    CallExternalIfI32NeImm(expected_value, helper_symbol) => {
+      // Fast path for conditional helper calls:
+      // - If actual == expected_value: do nothing.
+      // - Otherwise: call helper(actual, expected_value).
       //
-      // Uses: [actual_type_vreg]
-      let actual_type_reg = reg_num(inst.uses[0])
-      self.x86_emit_cmp_r32_imm32(actual_type_reg, expected_type)
+      // Uses: [actual_i32_vreg]
+      let actual_value_reg = reg_num(inst.uses[0])
+      self.x86_emit_cmp_r32_imm32(actual_value_reg, expected_value)
       let done = self.new_internal_label()
       self.x86_emit_jcc_rel32(Eq, done)
 
-      // Slow path: call gc_type_check_subtype_impl(actual, expected).
-      // SysV AMD64 args: rdi, rsi.
+      // Slow path helper args: rdi = actual, rsi = expected.
       let arg0 = 7 // rdi
       let arg1 = 6 // rsi
-      self.x86_emit_mov_rr32(arg0, actual_type_reg)
-      self.x86_emit_mov_imm64(arg1, expected_type.to_int64())
+      self.x86_emit_mov_rr32(arg0, actual_value_reg)
+      self.x86_emit_mov_imm64(arg1, expected_value.to_int64())
       let scratch = isa.scratch_reg_1_index()
       let fixup_offset = self.current_pos()
       self.x86_emit_mov_imm64(scratch, 0L)

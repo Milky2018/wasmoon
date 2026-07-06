@@ -147,7 +147,7 @@ fn VCodeInst::to_string(self : VCodeInst) -> String {
     ReturnCallIndirect(_, num_results) | CallPtr(_, num_results, _) =>
       // Only print result registers, not clobbers
       self.defs.iter().take(num_results).collect()
-    TypeCheckSubtypeIndirect(_, _) =>
+    CallExternalIfI32NeImm(_, _) =>
       // Only clobbers are attached (no results); keep output compact.
       []
     _ => self.defs
@@ -380,18 +380,19 @@ pub(all) enum VCodeOpcode {
   // - num_results: reserved metadata (currently informational)
   // This is a terminator - it does not return to the caller
   ReturnCallIndirect(Int, Int)
-  // TypeCheckSubtypeIndirect: fast-path for call_indirect type checks.
+  // CallExternalIfI32NeImm: fast-path conditional helper call.
   //
-  // Uses: [actual_type_vreg]
-  // Parameters: expected_type (immediate)
+  // Uses: [actual_i32_vreg]
+  // Parameters: expected_i32 (immediate), helper (external symbol)
   //
   // Semantics:
-  // - If actual_type == expected_type: do nothing.
-  // - Otherwise: call the GC subtype checker (C libcall) which traps on failure.
+  // - If actual_i32 == expected_i32: do nothing.
+  // - Otherwise: call helper(actual_i32, expected_i32).
   //
-  // This removes the unconditional C call on the hot exact-match path while
-  // preserving full GC subtyping semantics via the existing runtime helper.
-  TypeCheckSubtypeIndirect(Int, ExternalName)
+  // TODO(ISS-071): Lower this generic pseudo-op into explicit MachV CFG once
+  // block-local cold-path helper calls can be represented without emitter-local
+  // labels.
+  CallExternalIfI32NeImm(Int, ExternalName)
   // Stack operations for spilling
   // StackLoad(offset): Load from [SP + offset] into the def register
   // StackStore(offset): Store the use register to [SP + offset]
@@ -1070,8 +1071,8 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     Smull => "smull"
     ReturnCallIndirect(stack_arg_bytes, num_results) =>
       "return_call_indirect(stack=\{stack_arg_bytes}) -> \{num_results} results"
-    TypeCheckSubtypeIndirect(expected_type, helper) =>
-      "type_check_subtype_indirect \{expected_type} via \{helper}"
+    CallExternalIfI32NeImm(expected_value, helper) =>
+      "call_external_if_i32_ne_imm \{expected_value} via \{helper}"
     StackLoad(offset) => "stack_load [sp+\{offset}]"
     StackStore(offset) => "stack_store [sp+\{offset}]"
     LoadStackParam(offset, class) => "load_stack_param +\{offset} (\{class})"
@@ -1675,8 +1676,8 @@ pub fn VCodeOpcode::call_type(self : VCodeOpcode) -> CallType {
     | GCAllocStructSlowPrecise(_, _, _)
     | GCAllocArrayFixedInline(_, _, _, _)
     | GCAllocArraySlowPrecise(_, _) => Regular
-    // TypeCheckSubtypeIndirect can call a C helper on the slow path; treat it as a call.
-    TypeCheckSubtypeIndirect(_, _) => Regular
+    // Conditional helpers can call a C helper on the slow path; treat them as calls.
+    CallExternalIfI32NeImm(_, _) => Regular
     // Tail calls that don't return to caller
     ReturnCallIndirect(_, _) => TailCall
     // Everything else is not a call

@@ -990,7 +990,7 @@ fn optimize_load_store_forwarding(block : @block.VCodeBlock) -> Int {
       | CallDirect(_, _, _, _)
       | CallExternal(_, _, _, _)
       | ReturnCallIndirect(_, _)
-      | TypeCheckSubtypeIndirect(_, _) => store_map.clear()
+      | CallExternalIfI32NeImm(_, _) => store_map.clear()
       _ => ()
     }
   }

@@ -15,8 +15,8 @@ fn has_side_effects(opcode : @instr.VCodeOpcode) -> Bool {
     | StorePtr(_, _)
     | StorePtrRegOffset(_, _, _, _)
     | StorePtrNarrowRegOffset(_, _, _, _) => true
-    // Type check can trap.
-    TypeCheckSubtypeIndirect(_, _) => true
+    // Conditional helpers may call foreign code on slow paths.
+    CallExternalIfI32NeImm(_, _) => true
     // GC alloc pseudo-ops may call slow-path helpers
     GCAllocStructInline(_, _, _, _)
     | GCAllocStructSlowPrecise(_, _, _)

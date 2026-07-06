@@ -1172,29 +1172,27 @@ fn MachineCode::emit_instruction(
         self.emit_br(target)
       }
     }
-    TypeCheckSubtypeIndirect(expected_type, helper_symbol) => {
-      // Fast path for call_indirect type checks:
-      // - If actual_type == expected_type: do nothing.
-      // - Otherwise: call the runtime subtype checker (traps on failure).
+    CallExternalIfI32NeImm(expected_value, helper_symbol) => {
+      // Fast path for conditional helper calls:
+      // - If actual == expected_value: do nothing.
+      // - Otherwise: call helper(actual, expected_value).
       //
-      // Uses: [actual_type_vreg]
-      let actual_type_reg = reg_num(inst.uses[0])
-      // Compare as i32 (type indices are 32-bit).
-      if expected_type >= 0 && expected_type <= 4095 {
-        self.emit_cmp_imm32(actual_type_reg, expected_type)
+      // Uses: [actual_i32_vreg]
+      let actual_value_reg = reg_num(inst.uses[0])
+      if expected_value >= 0 && expected_value <= 4095 {
+        self.emit_cmp_imm32(actual_value_reg, expected_value)
       } else {
-        self.emit_load_imm64(17, expected_type.to_int64())
-        self.emit_cmp_reg32(actual_type_reg, 17)
+        self.emit_load_imm64(17, expected_value.to_int64())
+        self.emit_cmp_reg32(actual_value_reg, 17)
       }
 
       // Branch to done if equal.
       let done_label = -self.current_pos() - 1
       self.emit_b_cond(@instr.Cond::Eq.to_bits(), done_label)
 
-      // Slow path: call gc_type_check_subtype_impl(actual, expected).
-      // Args: x0 = actual_type, x1 = expected_type
-      self.emit_mov_reg(0, actual_type_reg)
-      self.emit_load_imm64(1, expected_type.to_int64())
+      // Slow path helper args: x0 = actual, x1 = expected.
+      self.emit_mov_reg(0, actual_value_reg)
+      self.emit_load_imm64(1, expected_value.to_int64())
       let fixup_offset = self.current_pos()
       self.emit_load_imm64_fixed(17, 0L)
       self.add_external_func_addr_fixup(fixup_offset, helper_symbol, 17)
