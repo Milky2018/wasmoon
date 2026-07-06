@@ -485,6 +485,10 @@ pub(all) enum VCodeOpcode {
   // LoadSP: Defs: [result], Uses: []
   // Used for passing stack addresses to C helpers that consume StoreToStack data
   LoadSP
+  // LoadSafepointId(root_count): record a stack-root safepoint at this code
+  // position and load its generated id into the def register. Root slots are
+  // the contiguous outgoing-args slots [0, root_count).
+  LoadSafepointId(Int)
 
   // GC inline allocation helpers (fast path + C slow-path fallback)
   //
@@ -496,12 +500,6 @@ pub(all) enum VCodeOpcode {
   //   - Always registers allocated object via gc_register_struct_inline.
   GCAllocStructInline(Int, Int, ExternalName, ExternalName)
 
-  // GCAllocStructSlowPrecise(type_idx, num_fields):
-  //   Uses: [vmctx], Defs: [result_ref]
-  //   - Calls gc_alloc_struct_slow(vmctx, type_idx, SP, num_fields, safepoint_id).
-  //   - Emits safepoint metadata (root indices [0..num_fields-1]).
-  GCAllocStructSlowPrecise(Int, Int, ExternalName)
-
   // GCAllocArrayFixedInline(type_idx, len):
   //   Uses: [vmctx], Defs: [result_ref]
   //   - Fast path: inline bump allocation + header/len/element stores.
@@ -509,12 +507,6 @@ pub(all) enum VCodeOpcode {
   //   - Slow path: calls gc_alloc_array_from_values_slow(vmctx, type_idx, SP, len).
   //   - Always registers allocated object via gc_register_array_inline.
   GCAllocArrayFixedInline(Int, Int, ExternalName, ExternalName)
-
-  // GCAllocArraySlowPrecise(type_idx):
-  //   Uses: [vmctx, len, init_value], Defs: [result_ref]
-  //   - Calls gc_alloc_array_slow(vmctx, type_idx, len, init_value, safepoint_id).
-  //   - Emits safepoint metadata (root index [0] for init_value).
-  GCAllocArraySlowPrecise(Int, ExternalName)
 
   // ============ SIMD Instructions (AArch64 NEON) ============
 
@@ -1118,14 +1110,11 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
       }
     StoreToStack(offset) => "str [sp+\{offset}]"
     LoadSP => "mov rd, outgoing_args_base"
+    LoadSafepointId(root_count) => "load_safepoint_id roots=\{root_count}"
     GCAllocStructInline(type_idx, num_fields, _, _) =>
       "gc_alloc_struct_inline type=\{type_idx} fields=\{num_fields}"
-    GCAllocStructSlowPrecise(type_idx, num_fields, _) =>
-      "gc_alloc_struct_slow_precise type=\{type_idx} fields=\{num_fields}"
     GCAllocArrayFixedInline(type_idx, len, _, _) =>
       "gc_alloc_array_fixed_inline type=\{type_idx} len=\{len}"
-    GCAllocArraySlowPrecise(type_idx, _) =>
-      "gc_alloc_array_slow_precise type=\{type_idx}"
     // SIMD instructions
     LoadConstV128(_) => "ldi.v128"
     SIMDSplat(lane_size) => "dup.\{lane_size}"
@@ -1673,9 +1662,7 @@ pub fn VCodeOpcode::call_type(self : VCodeOpcode) -> CallType {
     | CallDirect(_, _, _, _)
     | CallExternal(_, _, _, _)
     | GCAllocStructInline(_, _, _, _)
-    | GCAllocStructSlowPrecise(_, _, _)
-    | GCAllocArrayFixedInline(_, _, _, _)
-    | GCAllocArraySlowPrecise(_, _) => Regular
+    | GCAllocArrayFixedInline(_, _, _, _) => Regular
     // Conditional helpers can call a C helper on the slow path; treat them as calls.
     CallExternalIfI32NeImm(_, _) => Regular
     // Tail calls that don't return to caller

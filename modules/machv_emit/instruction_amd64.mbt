@@ -3212,41 +3212,18 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_mov_rr(rd, 4)
       emit_add_imm_to_reg_in_chunks(self, rd, stack_frame.outgoing_args_offset)
     }
-    GCAllocStructSlowPrecise(type_idx, num_fields, alloc_slow_symbol) => {
+    LoadSafepointId(root_count) => {
       let dst = wreg_num(inst.defs[0])
-      let vmctx = reg_num(inst.uses[0])
-      let stack_base_off = stack_frame.outgoing_args_offset
-      let arg0 = 7 // rdi
-      let arg1 = 6 // rsi
-      let arg2 = 2 // rdx
-      let arg3 = 1 // rcx
-      let arg4 = 8 // r8
-      let tmp = isa.scratch_reg_2_index()
-
-      if vmctx != arg0 {
-        self.x86_emit_mov_rr(arg0, vmctx)
-      }
-      self.x86_emit_mov_imm64(arg1, type_idx.to_int64())
-      self.x86_emit_mov_rr(arg2, 4) // rsp
-      emit_add_imm_to_reg_in_chunks(self, arg2, stack_base_off)
-      self.x86_emit_mov_imm64(arg3, num_fields.to_int64())
       let safepoint_root_indices : Array[Int] = []
-      for i in 0..<num_fields {
+      for i in 0..<root_count {
         safepoint_root_indices.push(i)
       }
       let safepoint_id = self.record_gc_safepoint(
         self.current_pos(),
-        root_count=num_fields,
+        root_count~,
         root_indices=safepoint_root_indices,
       )
-      self.x86_emit_mov_imm64(arg4, safepoint_id.to_int64())
-      let fixup_offset = self.current_pos()
-      self.x86_emit_mov_imm64(tmp, 0L)
-      self.add_external_func_addr_fixup(fixup_offset, alloc_slow_symbol, tmp)
-      self.x86_emit_call_r64(tmp)
-      if dst != 0 {
-        self.x86_emit_mov_rr(dst, 0)
-      }
+      self.x86_emit_mov_imm64(dst, safepoint_id.to_int64())
     }
     GCAllocStructInline(type_idx, num_fields, register_symbol, slow_symbol) => {
       // Inline bump allocation with slow-path fallback.
@@ -3443,58 +3420,6 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_mov_rr(dst, 0)
       }
       self.define_label(done)
-    }
-    GCAllocArraySlowPrecise(type_idx, alloc_slow_symbol) => {
-      let dst = wreg_num(inst.defs[0])
-      let vmctx = reg_num(inst.uses[0])
-      let mut len_reg = reg_num(inst.uses[1])
-      let mut init_reg = reg_num(inst.uses[2])
-      let arg0 = 7 // rdi
-      let arg1 = 6 // rsi
-      let arg2 = 2 // rdx
-      let arg3 = 1 // rcx
-      let arg4 = 8 // r8
-      let save0 = isa.scratch_reg_1_index()
-      let tmp = isa.scratch_reg_2_index()
-
-      // Preserve sources that would be clobbered by setting call args.
-      if len_reg == arg0 ||
-        len_reg == arg1 ||
-        len_reg == arg3 ||
-        len_reg == arg4 {
-        self.x86_emit_mov_rr(save0, len_reg)
-        len_reg = save0
-      }
-      if init_reg == arg0 ||
-        init_reg == arg1 ||
-        init_reg == arg2 ||
-        init_reg == arg4 {
-        self.x86_emit_mov_rr(tmp, init_reg)
-        init_reg = tmp
-      }
-      if vmctx != arg0 {
-        self.x86_emit_mov_rr(arg0, vmctx)
-      }
-      self.x86_emit_mov_imm64(arg1, type_idx.to_int64())
-      if len_reg != arg2 {
-        self.x86_emit_mov_rr(arg2, len_reg)
-      }
-      if init_reg != arg3 {
-        self.x86_emit_mov_rr(arg3, init_reg)
-      }
-      let safepoint_id = self.record_gc_safepoint(
-        self.current_pos(),
-        root_count=1,
-        root_indices=[0],
-      )
-      self.x86_emit_mov_imm64(arg4, safepoint_id.to_int64())
-      let fixup_offset = self.current_pos()
-      self.x86_emit_mov_imm64(tmp, 0L)
-      self.add_external_func_addr_fixup(fixup_offset, alloc_slow_symbol, tmp)
-      self.x86_emit_call_r64(tmp)
-      if dst != 0 {
-        self.x86_emit_mov_rr(dst, 0)
-      }
     }
     LoadConstV128(bytes) => {
       // Materialize a 128-bit constant via constant pool (Cranelift-style).

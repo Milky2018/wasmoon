@@ -1,4 +1,87 @@
 ///|
+fn emit_load_vmctx_for_gc(
+  ctx : LoweringContext,
+  block : @block.VCodeBlock,
+) -> @abi.VReg {
+  let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
+  let vmctx_mov = @instr.VCodeInst::new(Move)
+  vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
+  vmctx_mov.add_use(Physical({ index: vmctx_index(), class: Int }))
+  block.add_inst(vmctx_mov)
+  vmctx_vreg
+}
+
+///|
+fn emit_load_stack_args_base(
+  ctx : LoweringContext,
+  block : @block.VCodeBlock,
+) -> @abi.VReg {
+  let sp_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_sp = @instr.VCodeInst::new(LoadSP)
+  load_sp.add_def({ reg: Virtual(sp_vreg) })
+  block.add_inst(load_sp)
+  sp_vreg
+}
+
+///|
+fn emit_load_safepoint_id(
+  ctx : LoweringContext,
+  block : @block.VCodeBlock,
+  root_count : Int,
+) -> @abi.VReg {
+  let safepoint_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_safepoint = @instr.VCodeInst::new(LoadSafepointId(root_count))
+  load_safepoint.add_def({ reg: Virtual(safepoint_vreg) })
+  block.add_inst(load_safepoint)
+  safepoint_vreg
+}
+
+///|
+fn emit_gc_struct_slow_alloc(
+  ctx : LoweringContext,
+  block : @block.VCodeBlock,
+  dst : @abi.VReg,
+  type_idx : Int,
+  num_fields : Int,
+) -> Unit {
+  let vmctx_vreg = emit_load_vmctx_for_gc(ctx, block)
+  let type_idx_vreg = materialize_imm(ctx, block, type_idx.to_int64())
+  let fields_ptr_vreg = emit_load_stack_args_base(ctx, block)
+  let num_fields_vreg = materialize_imm(ctx, block, num_fields.to_int64())
+  let safepoint_vreg = emit_load_safepoint_id(ctx, block, num_fields)
+  lower_c_libcall_direct(
+    ctx,
+    block,
+    rt_gc_alloc_struct_slow(),
+    [
+      vmctx_vreg, type_idx_vreg, fields_ptr_vreg, num_fields_vreg, safepoint_vreg,
+    ],
+    Some(dst),
+  )
+}
+
+///|
+fn emit_gc_array_slow_alloc(
+  ctx : LoweringContext,
+  block : @block.VCodeBlock,
+  dst : @abi.VReg,
+  type_idx : Int,
+  len_vreg : @abi.VReg,
+  init_vreg : @abi.VReg,
+) -> Unit {
+  let vmctx_vreg = emit_load_vmctx_for_gc(ctx, block)
+  let type_idx_vreg = materialize_imm(ctx, block, type_idx.to_int64())
+  let safepoint_vreg = emit_load_safepoint_id(ctx, block, 1)
+  lower_c_libcall_direct(
+    ctx,
+    block,
+    rt_gc_alloc_array_slow(),
+    [vmctx_vreg, type_idx_vreg, len_vreg, init_vreg, safepoint_vreg],
+    Some(dst),
+  )
+}
+
+///|
 /// Lower i31.new: Convert i32 to i31ref
 /// Encoding: (value << 1) | 1 (positive odd for i31)
 fn lower_i31_new(
@@ -295,12 +378,7 @@ fn lower_struct_new(
       block.add_inst(store)
     }
   }
-  let alloc_inst = @instr.VCodeInst::new(
-    GCAllocStructSlowPrecise(type_idx, num_fields, rt_gc_alloc_struct_slow()),
-  )
-  alloc_inst.add_def({ reg: Virtual(dst) })
-  alloc_inst.add_use_fixed(Physical(vmctx_preg()), vmctx_preg())
-  block.add_inst(alloc_inst)
+  emit_gc_struct_slow_alloc(ctx, block, dst, type_idx, num_fields)
 }
 
 ///|
@@ -316,12 +394,7 @@ fn lower_struct_new_default(
   guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
 
-  let alloc_inst = @instr.VCodeInst::new(
-    GCAllocStructSlowPrecise(type_idx, 0, rt_gc_alloc_struct_slow()),
-  )
-  alloc_inst.add_def({ reg: Virtual(dst) })
-  alloc_inst.add_use_fixed(Physical(vmctx_preg()), vmctx_preg())
-  block.add_inst(alloc_inst)
+  emit_gc_struct_slow_alloc(ctx, block, dst, type_idx, 0)
 }
 
 ///|
@@ -554,14 +627,9 @@ fn lower_array_new(
   } else {
     init_vreg
   }
-  let alloc_inst = @instr.VCodeInst::new(
-    GCAllocArraySlowPrecise(type_idx, rt_gc_alloc_array_slow()),
+  emit_gc_array_slow_alloc(
+    ctx, block, dst, type_idx, len_vreg, actual_init_vreg,
   )
-  alloc_inst.add_def({ reg: Virtual(dst) })
-  alloc_inst.add_use_fixed(Physical(vmctx_preg()), vmctx_preg())
-  alloc_inst.add_use(Virtual(len_vreg))
-  alloc_inst.add_use(Virtual(actual_init_vreg))
-  block.add_inst(alloc_inst)
 }
 
 ///|
@@ -580,14 +648,7 @@ fn lower_array_new_default(
 
   // Load default value (0) for the init value.
   let zero_vreg = materialize_imm(ctx, block, 0L)
-  let alloc_inst = @instr.VCodeInst::new(
-    GCAllocArraySlowPrecise(type_idx, rt_gc_alloc_array_slow()),
-  )
-  alloc_inst.add_def({ reg: Virtual(dst) })
-  alloc_inst.add_use_fixed(Physical(vmctx_preg()), vmctx_preg())
-  alloc_inst.add_use(Virtual(len_vreg))
-  alloc_inst.add_use(Virtual(zero_vreg))
-  block.add_inst(alloc_inst)
+  emit_gc_array_slow_alloc(ctx, block, dst, type_idx, len_vreg, zero_vreg)
 }
 
 ///|
@@ -644,14 +705,7 @@ fn lower_array_new_fixed(
   let len_vreg = materialize_imm(ctx, block, len.to_int64())
   if len == 0 {
     let zero_vreg = materialize_imm(ctx, block, 0L)
-    let alloc_inst = @instr.VCodeInst::new(
-      GCAllocArraySlowPrecise(type_idx, rt_gc_alloc_array_slow()),
-    )
-    alloc_inst.add_def({ reg: Virtual(dst) })
-    alloc_inst.add_use_fixed(Physical(vmctx_preg()), vmctx_preg())
-    alloc_inst.add_use(Virtual(zero_vreg))
-    alloc_inst.add_use(Virtual(zero_vreg))
-    block.add_inst(alloc_inst)
+    emit_gc_array_slow_alloc(ctx, block, dst, type_idx, zero_vreg, zero_vreg)
     return
   }
 
@@ -667,14 +721,7 @@ fn lower_array_new_fixed(
   } else {
     first_vreg
   }
-  let alloc_inst = @instr.VCodeInst::new(
-    GCAllocArraySlowPrecise(type_idx, rt_gc_alloc_array_slow()),
-  )
-  alloc_inst.add_def({ reg: Virtual(dst) })
-  alloc_inst.add_use_fixed(Physical(vmctx_preg()), vmctx_preg())
-  alloc_inst.add_use(Virtual(len_vreg))
-  alloc_inst.add_use(Virtual(actual_first))
-  block.add_inst(alloc_inst)
+  emit_gc_array_slow_alloc(ctx, block, dst, type_idx, len_vreg, actual_first)
   if len > 1 {
     let type_idx_vreg = materialize_imm(ctx, block, type_idx.to_int64())
     let array_set_fp = ctx.vcode_func.new_vreg(Int)

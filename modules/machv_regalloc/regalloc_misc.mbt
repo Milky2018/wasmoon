@@ -18,10 +18,8 @@ fn has_side_effects(opcode : @instr.VCodeOpcode) -> Bool {
     // Conditional helpers may call foreign code on slow paths.
     CallExternalIfI32NeImm(_, _) => true
     // GC alloc pseudo-ops may call slow-path helpers
-    GCAllocStructInline(_, _, _, _)
-    | GCAllocStructSlowPrecise(_, _, _)
-    | GCAllocArrayFixedInline(_, _, _, _)
-    | GCAllocArraySlowPrecise(_, _) => true
+    GCAllocStructInline(_, _, _, _) | GCAllocArrayFixedInline(_, _, _, _) =>
+      true
     // Function calls have side effects
     ReturnCallIndirect(_, _)
     | CallPtr(_, _, _)

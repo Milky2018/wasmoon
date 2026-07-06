@@ -320,10 +320,9 @@ pub(all) enum VCodeOpcode {
   AdjustSP(Int)
   StoreToStack(Int)
   LoadSP
+  LoadSafepointId(Int)
   GCAllocStructInline(Int, Int, ExternalName, ExternalName)
-  GCAllocStructSlowPrecise(Int, Int, ExternalName)
   GCAllocArrayFixedInline(Int, Int, ExternalName, ExternalName)
-  GCAllocArraySlowPrecise(Int, ExternalName)
   LoadConstV128(Bytes)
   SIMDSplat(LaneSize)
   SIMDSplatF(Bool)
