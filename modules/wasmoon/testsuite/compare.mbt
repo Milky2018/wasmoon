@@ -220,7 +220,8 @@ pub fn value_to_jit_arg_typed(
 }
 
 ///|
-/// Convert @types.Value to Int64 for JIT call (legacy)
+/// Convert a value to the default single-slot JIT argument encoding used without static parameter type context.
+/// Typed call sites use static parameter types so values such as V128 can expand to multiple JIT argument slots.
 pub fn value_to_jit_arg(value : @types.Value) -> Int64 {
   value_to_jit_arg_typed(value, I64)
 }
