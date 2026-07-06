@@ -123,7 +123,7 @@ pub fn run_explore(
       }
     }
 
-    let env = @wasm_frontend.EmbeddingEnvironment::new()
+    let env = @wasmoon.wasm_frontend_embedding_environment()
     let milk_result = @wasm_frontend.lower_function(env, mod_, local_idx) catch {
       err => {
         let text = "error: \{to_repr(err)}"

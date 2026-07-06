@@ -23,6 +23,7 @@ import {
   "Milky2018/wasmoon/executor",
   "Milky2018/wasmoon/runtime",
   "Milky2018/wasmoon/jit",
+  "Milky2018/wasmoon",
   "Milky2018/wasmoon/wasm_frontend",
   "Milky2018/wasmoon/logger",
   "moonbitlang/core/buffer",

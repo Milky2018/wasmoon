@@ -26,10 +26,36 @@ pub impl Show for LowerError
 pub(all) struct EmbeddingEnvironment {
   runtime_symbol_prefix : String
   hidden_context_type : @milkir.Type?
+  runtime_layout : RuntimeLayout?
+  memory_descriptor_layout : MemoryDescriptorLayout?
 } derive(@debug.Debug)
 pub fn EmbeddingEnvironment::hidden_context_param(Self) -> @milkir.Type?
-pub fn EmbeddingEnvironment::new(runtime_symbol_prefix? : String, hidden_context_type? : @milkir.Type?) -> Self
+pub fn EmbeddingEnvironment::memory_descriptor_layout(Self) -> MemoryDescriptorLayout?
+pub fn EmbeddingEnvironment::new(runtime_symbol_prefix? : String, hidden_context_type? : @milkir.Type?, runtime_layout? : RuntimeLayout?, memory_descriptor_layout? : MemoryDescriptorLayout?) -> Self
+pub fn EmbeddingEnvironment::runtime_layout(Self) -> RuntimeLayout?
 pub fn EmbeddingEnvironment::runtime_symbol(Self, String) -> @milkir.ExternalSymbol
+
+pub(all) struct MemoryDescriptorLayout {
+  base_offset : Int
+  current_length_offset : Int
+} derive(Eq, @debug.Debug)
+
+pub(all) struct RuntimeLayout {
+  memory0_base_offset : Int
+  memory0_size_offset : Int
+  func_table_offset : Int
+  table0_base_offset : Int
+  table0_elements_offset : Int
+  globals_offset : Int
+  tables_offset : Int
+  table_sizes_offset : Int
+  memories_offset : Int
+  pointer_stride : Int
+  global_value_stride : Int
+  table_entry_value_offset : Int
+  table_entry_stride : Int
+  func_table_entry_stride : Int
+} derive(Eq, @debug.Debug)
 
 // Type aliases
 

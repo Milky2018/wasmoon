@@ -1,7 +1,30 @@
 ///|
+fn native_test_env() -> EmbeddingEnvironment {
+  EmbeddingEnvironment::new(
+    runtime_layout=Some({
+      memory0_base_offset: 8,
+      memory0_size_offset: 16,
+      func_table_offset: 24,
+      table0_base_offset: 32,
+      table0_elements_offset: 40,
+      globals_offset: 48,
+      tables_offset: 56,
+      table_sizes_offset: 72,
+      memories_offset: 88,
+      pointer_stride: 8,
+      global_value_stride: 16,
+      table_entry_value_offset: 0,
+      table_entry_stride: 16,
+      func_table_entry_stride: 8,
+    }),
+    memory_descriptor_layout=Some({ base_offset: 0, current_length_offset: 8 }),
+  )
+}
+
+///|
 test "lower empty wasm function through embedding environment" {
   let mod_ = @types.Module::simple([], [], [], "run")
-  let env = EmbeddingEnvironment::new()
+  let env = native_test_env()
   let func = lower_function(env, mod_, 0)
   inspect(func.name, content="wasm_func_0")
   inspect(func.signature.params.length(), content="1")
@@ -269,7 +292,7 @@ test "lower globals through native VMContext loads and stores" {
       { type_: { value_type: I32, mutable: true }, init: [I32Const(0)] },
     ],
   }
-  let env = EmbeddingEnvironment::new()
+  let env = native_test_env()
   let lowered = try_lower_native_function(env, mod_, 0)
   guard lowered is Some(func) else {
     fail("global roundtrip did not lower natively")
@@ -301,7 +324,7 @@ test "lower table size and get through native VMContext loads" {
     ),
     tables: [table],
   }
-  let env = EmbeddingEnvironment::new()
+  let env = native_test_env()
   let func = lower_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("load_ptr.i64"), content="true")
@@ -330,7 +353,7 @@ test "lower table set through native table fill runtime call" {
     ),
     tables: [table],
   }
-  let env = EmbeddingEnvironment::new()
+  let env = native_test_env()
   let func = lower_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("wasmoon.TableFill"), content="false")
@@ -663,7 +686,7 @@ test "lower direct calls as generic MilkIR calls" {
     tags: [],
     func_names: {},
   }
-  let env = EmbeddingEnvironment::new()
+  let env = native_test_env()
   let func = lower_function(env, mod_, 1)
   let text = func.print()
   inspect(text.contains("call_ptr(2) -> 1"), content="true")
@@ -690,7 +713,7 @@ test "lower memory operations through native MilkIR pointer ops" {
       { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
     ],
   }
-  let env = EmbeddingEnvironment::new()
+  let env = native_test_env()
   let func = lower_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("wasmoon.LoadMemBase"), content="false")
@@ -769,7 +792,7 @@ test "lower narrow memory operations through native MilkIR pointer ops" {
       { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
     ],
   }
-  let env = EmbeddingEnvironment::new()
+  let env = native_test_env()
   let func = lower_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("wasmoon.LoadMemBase"), content="false")
@@ -810,7 +833,7 @@ test "lower memory grow size and bulk helpers as native custom ops" {
       { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
     ],
   }
-  let env = EmbeddingEnvironment::new()
+  let env = native_test_env()
   let func = lower_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("wasmoon.MemorySize"), content="false")
@@ -839,7 +862,7 @@ test "lower non-zero memory.size through native descriptor loads" {
       { limits: { min: 2, max: None }, is_memory64: false, page_size_log2: 16 },
     ],
   }
-  let env = EmbeddingEnvironment::new()
+  let env = native_test_env()
   let func = lower_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("wasmoon.MemorySize"), content="false")
@@ -869,7 +892,7 @@ test "lower non-zero memory load store with explicit bounds check" {
       { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
     ],
   }
-  let env = EmbeddingEnvironment::new()
+  let env = native_test_env()
   let func = lower_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("wasmoon.LoadMemBase"), content="false")
@@ -893,7 +916,7 @@ test "lower memory64 load with overflow-safe bounds check" {
       { limits: { min: 1, max: None }, is_memory64: true, page_size_log2: 16 },
     ],
   }
-  let env = EmbeddingEnvironment::new()
+  let env = native_test_env()
   let lowered = try_lower_native_function(env, mod_, 0)
   guard lowered is Some(func) else {
     fail("memory64 load did not lower natively")
@@ -926,7 +949,7 @@ test "lower memory64 narrow load store with overflow-safe bounds check" {
       { limits: { min: 1, max: None }, is_memory64: true, page_size_log2: 16 },
     ],
   }
-  let env = EmbeddingEnvironment::new()
+  let env = native_test_env()
   let lowered = try_lower_native_function(env, mod_, 0)
   guard lowered is Some(func) else {
     fail("memory64 narrow load/store did not lower natively")
@@ -955,7 +978,7 @@ test "lower v128 load store through native memory path" {
       { limits: { min: 1, max: None }, is_memory64: false, page_size_log2: 16 },
     ],
   }
-  let env = EmbeddingEnvironment::new()
+  let env = native_test_env()
   let func = lower_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("load_ptr.v128"), content="true")
@@ -1002,7 +1025,7 @@ test "lower table bulk helpers as native custom ops" {
     ),
     tables: [table],
   }
-  let env = EmbeddingEnvironment::new()
+  let env = native_test_env()
   inspect(try_lower_native_function(env, mod_, 0) is Some(_), content="true")
   let func = lower_function(env, mod_, 0)
   let text = func.print()
@@ -1028,7 +1051,7 @@ test "lower reference null and is_null natively" {
     [RefNull(FuncRef), RefIsNull],
     "ref_null_test",
   )
-  let env = EmbeddingEnvironment::new()
+  let env = native_test_env()
   let func = lower_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("iconst"), content="true")
@@ -1045,7 +1068,7 @@ test "lower reference func non-null and eq natively" {
     [RefFunc(0), RefAsNonNull, RefFunc(0), RefEqInstr],
     "ref_func_eq",
   )
-  let env = EmbeddingEnvironment::new()
+  let env = native_test_env()
   let func = lower_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("wasmoon.GetFuncRef"), content="false")
@@ -1138,7 +1161,7 @@ test "unsupported memory64 bulk helper reports runtime ABI capability" {
       { limits: { min: 1, max: None }, is_memory64: true, page_size_log2: 16 },
     ],
   }
-  let env = EmbeddingEnvironment::new()
+  let env = native_test_env()
   try lower_function(env, mod_, 0) catch {
     err => {
       let msg = to_repr(err).to_string()
@@ -1157,7 +1180,7 @@ test "unsupported memory64 bulk helper reports runtime ABI capability" {
 ///|
 test "lower rejects missing wasm function" {
   let mod_ = @types.Module::empty()
-  let env = EmbeddingEnvironment::new()
+  let env = native_test_env()
   try lower_function(env, mod_, 0) catch {
     err => inspect(err, content="FunctionIndexOutOfRange(index=0)")
   } noraise {

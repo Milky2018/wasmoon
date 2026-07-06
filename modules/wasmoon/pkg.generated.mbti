@@ -20,6 +20,8 @@ pub fn plan_wasm_function_with_compiler_infra(@wasm_frontend.EmbeddingEnvironmen
 
 pub fn runtime_assembly() -> RuntimeAssembly
 
+pub fn wasm_frontend_embedding_environment(runtime_symbol_prefix? : String, hidden_context_type? : @milkir.Type?) -> @wasm_frontend.EmbeddingEnvironment
+
 // Errors
 pub suberror WasmCompilerPipelineError {
   WasmCompilerPipelineFailure(message~ : String)

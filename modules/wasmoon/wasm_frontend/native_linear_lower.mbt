@@ -481,11 +481,13 @@ fn collect_memory_types(mod_ : @types.Module) -> Array[@types.MemoryType] {
 fn push_direct_call(
   builder : @milkir.IRBuilder,
   stack : Array[@milkir.Value],
+  env : EmbeddingEnvironment,
   mod_ : @types.Module,
   vmctx : @milkir.Value?,
   func_idx : Int,
 ) -> Bool {
   guard vmctx is Some(context) else { return false }
+  guard env.runtime_layout() is Some(layout) else { return false }
   guard get_global_func_type(mod_, func_idx) is Some(func_type) else {
     return false
   }
@@ -499,16 +501,12 @@ fn push_direct_call(
   let func_table = builder.load_ptr(
     Ptr,
     context,
-    builder.iconst_i64(
-      @wasmoon_jit.vmcontext_layout().func_table_offset.to_int64(),
-    ),
+    builder.iconst_i64(layout.func_table_offset.to_int64()),
   )
   let callee = builder.load_ptr(
     Ptr,
     func_table,
-    builder.iconst_i64(
-      (func_idx * @wasmoon_jit.vmcontext_layout().func_table_entry_stride).to_int64(),
-    ),
+    builder.iconst_i64((func_idx * layout.func_table_entry_stride).to_int64()),
   )
   let args : Array[@milkir.Value] = [callee, context]
   for arg in wasm_args {
@@ -538,21 +536,21 @@ fn push_direct_call(
 fn push_global_get(
   builder : @milkir.IRBuilder,
   stack : Array[@milkir.Value],
+  env : EmbeddingEnvironment,
   vmctx : @milkir.Value?,
   global_types : Array[@types.GlobalType],
   global_idx : Int,
 ) -> Bool {
   guard vmctx is Some(context) else { return false }
+  guard env.runtime_layout() is Some(layout) else { return false }
   if global_idx < 0 || global_idx >= global_types.length() {
     return false
   }
   let ty = wasm_value_type_to_milkir(global_types[global_idx].value_type)
-  let globals_offset = builder.iconst_i64(
-    @wasmoon_jit.vmcontext_layout().globals_offset.to_int64(),
-  )
+  let globals_offset = builder.iconst_i64(layout.globals_offset.to_int64())
   let globals_ptr = builder.load_ptr(I64, context, globals_offset)
   let field_offset = builder.iconst_i64(
-    (global_idx * @wasmoon_jit.vmcontext_layout().global_value_stride).to_int64(),
+    (global_idx * layout.global_value_stride).to_int64(),
   )
   stack.push(builder.load_ptr(ty, globals_ptr, field_offset))
   true
@@ -562,22 +560,22 @@ fn push_global_get(
 fn push_global_set(
   builder : @milkir.IRBuilder,
   stack : Array[@milkir.Value],
+  env : EmbeddingEnvironment,
   vmctx : @milkir.Value?,
   global_types : Array[@types.GlobalType],
   global_idx : Int,
 ) -> Bool {
   guard vmctx is Some(context) else { return false }
+  guard env.runtime_layout() is Some(layout) else { return false }
   if global_idx < 0 || global_idx >= global_types.length() {
     return false
   }
   guard pop_value(stack) is Some(value) else { return false }
   let ty = wasm_value_type_to_milkir(global_types[global_idx].value_type)
-  let globals_offset = builder.iconst_i64(
-    @wasmoon_jit.vmcontext_layout().globals_offset.to_int64(),
-  )
+  let globals_offset = builder.iconst_i64(layout.globals_offset.to_int64())
   let globals_ptr = builder.load_ptr(I64, context, globals_offset)
   let field_offset = builder.iconst_i64(
-    (global_idx * @wasmoon_jit.vmcontext_layout().global_value_stride).to_int64(),
+    (global_idx * layout.global_value_stride).to_int64(),
   )
   builder.store_ptr(ty, globals_ptr, value, field_offset)
   true
@@ -596,11 +594,13 @@ fn table_is_64(table_types : Array[@types.TableType], table_idx : Int) -> Bool? 
 fn push_table_size(
   builder : @milkir.IRBuilder,
   stack : Array[@milkir.Value],
+  env : EmbeddingEnvironment,
   vmctx : @milkir.Value?,
   table_types : Array[@types.TableType],
   table_idx : Int,
 ) -> Bool {
   guard vmctx is Some(context) else { return false }
+  guard env.runtime_layout() is Some(layout) else { return false }
   guard table_is_64(table_types, table_idx) is Some(is_table64) else {
     return false
   }
@@ -608,24 +608,18 @@ fn push_table_size(
     builder.load_ptr(
       I64,
       context,
-      builder.iconst_i64(
-        @wasmoon_jit.vmcontext_layout().table0_elements_offset.to_int64(),
-      ),
+      builder.iconst_i64(layout.table0_elements_offset.to_int64()),
     )
   } else {
     let sizes_ptr = builder.load_ptr(
       I64,
       context,
-      builder.iconst_i64(
-        @wasmoon_jit.vmcontext_layout().table_sizes_offset.to_int64(),
-      ),
+      builder.iconst_i64(layout.table_sizes_offset.to_int64()),
     )
     builder.load_ptr(
       I64,
       sizes_ptr,
-      builder.iconst_i64(
-        (table_idx * @wasmoon_jit.vmcontext_layout().pointer_stride).to_int64(),
-      ),
+      builder.iconst_i64((table_idx * layout.pointer_stride).to_int64()),
     )
   }
   if is_table64 {
@@ -642,46 +636,40 @@ fn push_table_size(
 ///|
 fn load_table_size_and_base(
   builder : @milkir.IRBuilder,
+  env : EmbeddingEnvironment,
   context : @milkir.Value,
   table_idx : Int,
-) -> (@milkir.Value, @milkir.Value) {
+) -> (@milkir.Value, @milkir.Value)? {
+  guard env.runtime_layout() is Some(layout) else { return None }
   if table_idx == 0 {
     let size = builder.load_ptr(
       I64,
       context,
-      builder.iconst_i64(
-        @wasmoon_jit.vmcontext_layout().table0_elements_offset.to_int64(),
-      ),
+      builder.iconst_i64(layout.table0_elements_offset.to_int64()),
     )
     let base = builder.load_ptr(
       I64,
       context,
-      builder.iconst_i64(
-        @wasmoon_jit.vmcontext_layout().table0_base_offset.to_int64(),
-      ),
+      builder.iconst_i64(layout.table0_base_offset.to_int64()),
     )
-    (size, base)
+    Some((size, base))
   } else {
     let idx_offset = builder.iconst_i64(
-      (table_idx * @wasmoon_jit.vmcontext_layout().pointer_stride).to_int64(),
+      (table_idx * layout.pointer_stride).to_int64(),
     )
     let sizes_ptr = builder.load_ptr(
       I64,
       context,
-      builder.iconst_i64(
-        @wasmoon_jit.vmcontext_layout().table_sizes_offset.to_int64(),
-      ),
+      builder.iconst_i64(layout.table_sizes_offset.to_int64()),
     )
     let size = builder.load_ptr(I64, sizes_ptr, idx_offset)
     let tables_ptr = builder.load_ptr(
       I64,
       context,
-      builder.iconst_i64(
-        @wasmoon_jit.vmcontext_layout().tables_offset.to_int64(),
-      ),
+      builder.iconst_i64(layout.tables_offset.to_int64()),
     )
     let base = builder.load_ptr(I64, tables_ptr, idx_offset)
-    (size, base)
+    Some((size, base))
   }
 }
 
@@ -689,18 +677,21 @@ fn load_table_size_and_base(
 fn push_table_get(
   builder : @milkir.IRBuilder,
   stack : Array[@milkir.Value],
+  env : EmbeddingEnvironment,
   vmctx : @milkir.Value?,
   table_types : Array[@types.TableType],
   table_idx : Int,
 ) -> Bool {
   guard vmctx is Some(context) else { return false }
+  guard env.runtime_layout() is Some(layout) else { return false }
   guard table_is_64(table_types, table_idx) is Some(is_table64) else {
     return false
   }
   guard pop_value(stack) is Some(elem_idx) else { return false }
-  let (table_size, table_base) = load_table_size_and_base(
-    builder, context, table_idx,
-  )
+  guard load_table_size_and_base(builder, env, context, table_idx)
+    is Some((table_size, table_base)) else {
+    return false
+  }
   let elem_idx_i64 = if is_table64 {
     elem_idx
   } else {
@@ -721,18 +712,14 @@ fn push_table_get(
   builder.switch_to_block(continue_block)
   let byte_offset = builder.imul(
     elem_idx_i64,
-    builder.iconst_i64(
-      @wasmoon_jit.vmcontext_layout().table_entry_stride.to_int64(),
-    ),
+    builder.iconst_i64(layout.table_entry_stride.to_int64()),
   )
   let addr = builder.iadd(table_base, byte_offset)
   stack.push(
     builder.load_ptr(
       I64,
       addr,
-      builder.iconst_i64(
-        @wasmoon_jit.vmcontext_layout().table_entry_value_offset.to_int64(),
-      ),
+      builder.iconst_i64(layout.table_entry_value_offset.to_int64()),
     ),
   )
   true
@@ -818,37 +805,38 @@ fn memory_index_type(
 ///|
 fn load_memory_base(
   builder : @milkir.IRBuilder,
+  env : EmbeddingEnvironment,
   context : @milkir.Value,
   memidx : Int,
-) -> @milkir.Value {
+) -> @milkir.Value? {
+  guard env.runtime_layout() is Some(layout) else { return None }
   if memidx == 0 {
-    builder.load_ptr(
-      I64,
-      context,
-      builder.iconst_i64(
-        @wasmoon_jit.vmcontext_layout().memory0_base_offset.to_int64(),
+    Some(
+      builder.load_ptr(
+        I64,
+        context,
+        builder.iconst_i64(layout.memory0_base_offset.to_int64()),
       ),
     )
   } else {
+    guard env.memory_descriptor_layout() is Some(memory_layout) else {
+      return None
+    }
     let memories_ptr = builder.load_ptr(
       I64,
       context,
-      builder.iconst_i64(
-        @wasmoon_jit.vmcontext_layout().memories_offset.to_int64(),
-      ),
+      builder.iconst_i64(layout.memories_offset.to_int64()),
     )
     let memory_ptr = builder.load_ptr(
       I64,
       memories_ptr,
-      builder.iconst_i64(
-        (memidx * @wasmoon_jit.vmcontext_layout().pointer_stride).to_int64(),
-      ),
+      builder.iconst_i64((memidx * layout.pointer_stride).to_int64()),
     )
-    builder.load_ptr(
-      I64,
-      memory_ptr,
-      builder.iconst_i64(
-        @wasmoon_jit.memory_descriptor_layout().base_offset.to_int64(),
+    Some(
+      builder.load_ptr(
+        I64,
+        memory_ptr,
+        builder.iconst_i64(memory_layout.base_offset.to_int64()),
       ),
     )
   }
@@ -857,37 +845,38 @@ fn load_memory_base(
 ///|
 fn load_memory_size_bytes(
   builder : @milkir.IRBuilder,
+  env : EmbeddingEnvironment,
   context : @milkir.Value,
   memidx : Int,
-) -> @milkir.Value {
+) -> @milkir.Value? {
+  guard env.runtime_layout() is Some(layout) else { return None }
   if memidx == 0 {
-    builder.load_ptr(
-      I64,
-      context,
-      builder.iconst_i64(
-        @wasmoon_jit.vmcontext_layout().memory0_size_offset.to_int64(),
+    Some(
+      builder.load_ptr(
+        I64,
+        context,
+        builder.iconst_i64(layout.memory0_size_offset.to_int64()),
       ),
     )
   } else {
+    guard env.memory_descriptor_layout() is Some(memory_layout) else {
+      return None
+    }
     let memories_ptr = builder.load_ptr(
       I64,
       context,
-      builder.iconst_i64(
-        @wasmoon_jit.vmcontext_layout().memories_offset.to_int64(),
-      ),
+      builder.iconst_i64(layout.memories_offset.to_int64()),
     )
     let memory_ptr = builder.load_ptr(
       I64,
       memories_ptr,
-      builder.iconst_i64(
-        (memidx * @wasmoon_jit.vmcontext_layout().pointer_stride).to_int64(),
-      ),
+      builder.iconst_i64((memidx * layout.pointer_stride).to_int64()),
     )
-    builder.load_ptr(
-      I64,
-      memory_ptr,
-      builder.iconst_i64(
-        @wasmoon_jit.memory_descriptor_layout().current_length_offset.to_int64(),
+    Some(
+      builder.load_ptr(
+        I64,
+        memory_ptr,
+        builder.iconst_i64(memory_layout.current_length_offset.to_int64()),
       ),
     )
   }
@@ -897,6 +886,7 @@ fn load_memory_size_bytes(
 fn push_memory_size(
   builder : @milkir.IRBuilder,
   stack : Array[@milkir.Value],
+  env : EmbeddingEnvironment,
   vmctx : @milkir.Value?,
   memory_types : Array[@types.MemoryType],
   memidx : Int,
@@ -905,7 +895,10 @@ fn push_memory_size(
   guard memory_index_type(memory_types, memidx) is Some(result_ty) else {
     return false
   }
-  let size_bytes = load_memory_size_bytes(builder, context, memidx)
+  guard load_memory_size_bytes(builder, env, context, memidx)
+    is Some(size_bytes) else {
+    return false
+  }
   let page_shift = builder.iconst_i64(
     memory_types[memidx].page_size_log2.to_int64(),
   )
@@ -1264,23 +1257,21 @@ fn push_ref_is_null(
 fn push_ref_func(
   builder : @milkir.IRBuilder,
   stack : Array[@milkir.Value],
+  env : EmbeddingEnvironment,
   vmctx : @milkir.Value?,
   func_idx : Int,
 ) -> Bool {
   guard vmctx is Some(context) else { return false }
+  guard env.runtime_layout() is Some(layout) else { return false }
   let func_table = builder.load_ptr(
     I64,
     context,
-    builder.iconst_i64(
-      @wasmoon_jit.vmcontext_layout().func_table_offset.to_int64(),
-    ),
+    builder.iconst_i64(layout.func_table_offset.to_int64()),
   )
   let raw_func_ptr = builder.load_ptr(
     Ref,
     func_table,
-    builder.iconst_i64(
-      (func_idx * @wasmoon_jit.vmcontext_layout().func_table_entry_stride).to_int64(),
-    ),
+    builder.iconst_i64((func_idx * layout.func_table_entry_stride).to_int64()),
   )
   let tag = builder.iconst(Ref, @types.FUNCREF_TAG)
   guard emit_op(builder, Ref, Bor, [raw_func_ptr, tag]) is Some(result) else {
@@ -1568,10 +1559,11 @@ fn push_simple_if_select(
 ///|
 fn push_memory_base(
   builder : @milkir.IRBuilder,
+  env : EmbeddingEnvironment,
   vmctx : @milkir.Value,
   memidx : Int,
 ) -> @milkir.Value? {
-  Some(load_memory_base(builder, vmctx, memidx))
+  load_memory_base(builder, env, vmctx, memidx)
 }
 
 ///|
@@ -1632,6 +1624,7 @@ fn push_memory_bounds_check(
 ///|
 fn memory_effective_addr(
   builder : @milkir.IRBuilder,
+  env : EmbeddingEnvironment,
   vmctx : @milkir.Value,
   memory_types : Array[@types.MemoryType],
   memidx : Int,
@@ -1639,7 +1632,7 @@ fn memory_effective_addr(
   offset : Int64,
   access_size : Int,
 ) -> @milkir.Value? {
-  guard push_memory_base(builder, vmctx, memidx) is Some(base) else {
+  guard push_memory_base(builder, env, vmctx, memidx) is Some(base) else {
     return None
   }
   guard extend_memory_addr(builder, memory_types, memidx, wasm_addr)
@@ -1649,7 +1642,10 @@ fn memory_effective_addr(
   let offset_value = builder.iconst_i64(offset)
   let addr_plus_offset = builder.iadd(addr_i64, offset_value)
   if memidx != 0 || memory_types[memidx].is_memory64 {
-    let memory_size = load_memory_size_bytes(builder, vmctx, memidx)
+    guard load_memory_size_bytes(builder, env, vmctx, memidx)
+      is Some(memory_size) else {
+      return None
+    }
     if !push_memory_bounds_check(
         builder, memory_types, memidx, addr_i64, addr_plus_offset, memory_size, access_size,
       ) {
@@ -1663,6 +1659,7 @@ fn memory_effective_addr(
 fn push_memory_load(
   builder : @milkir.IRBuilder,
   stack : Array[@milkir.Value],
+  env : EmbeddingEnvironment,
   vmctx : @milkir.Value?,
   mod_ : @types.Module,
   memidx : Int,
@@ -1676,6 +1673,7 @@ fn push_memory_load(
   guard pop_value(stack) is Some(wasm_addr) else { return false }
   guard memory_effective_addr(
       builder,
+      env,
       context,
       mod_.memories,
       memidx,
@@ -1694,6 +1692,7 @@ fn push_memory_load(
 fn push_memory_load_narrow(
   builder : @milkir.IRBuilder,
   stack : Array[@milkir.Value],
+  env : EmbeddingEnvironment,
   vmctx : @milkir.Value?,
   mod_ : @types.Module,
   memidx : Int,
@@ -1709,6 +1708,7 @@ fn push_memory_load_narrow(
   guard pop_value(stack) is Some(wasm_addr) else { return false }
   guard memory_effective_addr(
       builder,
+      env,
       context,
       mod_.memories,
       memidx,
@@ -1735,6 +1735,7 @@ fn push_memory_load_narrow(
 fn push_memory_store(
   builder : @milkir.IRBuilder,
   stack : Array[@milkir.Value],
+  env : EmbeddingEnvironment,
   vmctx : @milkir.Value?,
   mod_ : @types.Module,
   memidx : Int,
@@ -1749,6 +1750,7 @@ fn push_memory_store(
   guard pop_value(stack) is Some(wasm_addr) else { return false }
   guard memory_effective_addr(
       builder,
+      env,
       context,
       mod_.memories,
       memidx,
@@ -1767,6 +1769,7 @@ fn push_memory_store(
 fn push_memory_store_narrow(
   builder : @milkir.IRBuilder,
   stack : Array[@milkir.Value],
+  env : EmbeddingEnvironment,
   vmctx : @milkir.Value?,
   mod_ : @types.Module,
   memidx : Int,
@@ -1781,6 +1784,7 @@ fn push_memory_store_narrow(
   guard pop_value(stack) is Some(wasm_addr) else { return false }
   guard memory_effective_addr(
       builder,
+      env,
       context,
       mod_.memories,
       memidx,
@@ -1982,19 +1986,19 @@ fn try_lower_linear_function(
         locals[idx] = value
       }
       GlobalGet(idx) =>
-        if !push_global_get(builder, stack, vmctx, global_types, idx) {
+        if !push_global_get(builder, stack, env, vmctx, global_types, idx) {
           return None
         }
       GlobalSet(idx) =>
-        if !push_global_set(builder, stack, vmctx, global_types, idx) {
+        if !push_global_set(builder, stack, env, vmctx, global_types, idx) {
           return None
         }
       TableSize(idx) =>
-        if !push_table_size(builder, stack, vmctx, table_types, idx) {
+        if !push_table_size(builder, stack, env, vmctx, table_types, idx) {
           return None
         }
       TableGet(idx) =>
-        if !push_table_get(builder, stack, vmctx, table_types, idx) {
+        if !push_table_get(builder, stack, env, vmctx, table_types, idx) {
           return None
         }
       TableSet(idx) =>
@@ -2276,29 +2280,66 @@ fn try_lower_linear_function(
           return None
         }
       Call(func_idx) =>
-        if !push_direct_call(builder, stack, mod_, vmctx, func_idx) {
+        if !push_direct_call(builder, stack, env, mod_, vmctx, func_idx) {
           return None
         }
       I32Load(memidx, _, offset) =>
-        if !push_memory_load(builder, stack, vmctx, mod_, memidx, I32, offset) {
+        if !push_memory_load(
+            builder,
+            stack,
+            env,
+            vmctx,
+            mod_,
+            memidx,
+            I32,
+            offset,
+          ) {
           return None
         }
       I64Load(memidx, _, offset) =>
-        if !push_memory_load(builder, stack, vmctx, mod_, memidx, I64, offset) {
+        if !push_memory_load(
+            builder,
+            stack,
+            env,
+            vmctx,
+            mod_,
+            memidx,
+            I64,
+            offset,
+          ) {
           return None
         }
       F32Load(memidx, _, offset) =>
-        if !push_memory_load(builder, stack, vmctx, mod_, memidx, F32, offset) {
+        if !push_memory_load(
+            builder,
+            stack,
+            env,
+            vmctx,
+            mod_,
+            memidx,
+            F32,
+            offset,
+          ) {
           return None
         }
       F64Load(memidx, _, offset) =>
-        if !push_memory_load(builder, stack, vmctx, mod_, memidx, F64, offset) {
+        if !push_memory_load(
+            builder,
+            stack,
+            env,
+            vmctx,
+            mod_,
+            memidx,
+            F64,
+            offset,
+          ) {
           return None
         }
       I32Load8S(memidx, _, offset) =>
         if !push_memory_load_narrow(
             builder,
             stack,
+            env,
             vmctx,
             mod_,
             memidx,
@@ -2313,6 +2354,7 @@ fn try_lower_linear_function(
         if !push_memory_load_narrow(
             builder,
             stack,
+            env,
             vmctx,
             mod_,
             memidx,
@@ -2327,6 +2369,7 @@ fn try_lower_linear_function(
         if !push_memory_load_narrow(
             builder,
             stack,
+            env,
             vmctx,
             mod_,
             memidx,
@@ -2341,6 +2384,7 @@ fn try_lower_linear_function(
         if !push_memory_load_narrow(
             builder,
             stack,
+            env,
             vmctx,
             mod_,
             memidx,
@@ -2355,6 +2399,7 @@ fn try_lower_linear_function(
         if !push_memory_load_narrow(
             builder,
             stack,
+            env,
             vmctx,
             mod_,
             memidx,
@@ -2369,6 +2414,7 @@ fn try_lower_linear_function(
         if !push_memory_load_narrow(
             builder,
             stack,
+            env,
             vmctx,
             mod_,
             memidx,
@@ -2383,6 +2429,7 @@ fn try_lower_linear_function(
         if !push_memory_load_narrow(
             builder,
             stack,
+            env,
             vmctx,
             mod_,
             memidx,
@@ -2397,6 +2444,7 @@ fn try_lower_linear_function(
         if !push_memory_load_narrow(
             builder,
             stack,
+            env,
             vmctx,
             mod_,
             memidx,
@@ -2411,6 +2459,7 @@ fn try_lower_linear_function(
         if !push_memory_load_narrow(
             builder,
             stack,
+            env,
             vmctx,
             mod_,
             memidx,
@@ -2425,6 +2474,7 @@ fn try_lower_linear_function(
         if !push_memory_load_narrow(
             builder,
             stack,
+            env,
             vmctx,
             mod_,
             memidx,
@@ -2436,61 +2486,115 @@ fn try_lower_linear_function(
           return None
         }
       I32Store(memidx, _, offset) =>
-        if !push_memory_store(builder, stack, vmctx, mod_, memidx, I32, offset) {
+        if !push_memory_store(
+            builder,
+            stack,
+            env,
+            vmctx,
+            mod_,
+            memidx,
+            I32,
+            offset,
+          ) {
           return None
         }
       I64Store(memidx, _, offset) =>
-        if !push_memory_store(builder, stack, vmctx, mod_, memidx, I64, offset) {
+        if !push_memory_store(
+            builder,
+            stack,
+            env,
+            vmctx,
+            mod_,
+            memidx,
+            I64,
+            offset,
+          ) {
           return None
         }
       F32Store(memidx, _, offset) =>
-        if !push_memory_store(builder, stack, vmctx, mod_, memidx, F32, offset) {
+        if !push_memory_store(
+            builder,
+            stack,
+            env,
+            vmctx,
+            mod_,
+            memidx,
+            F32,
+            offset,
+          ) {
           return None
         }
       F64Store(memidx, _, offset) =>
-        if !push_memory_store(builder, stack, vmctx, mod_, memidx, F64, offset) {
+        if !push_memory_store(
+            builder,
+            stack,
+            env,
+            vmctx,
+            mod_,
+            memidx,
+            F64,
+            offset,
+          ) {
           return None
         }
       V128Load(memidx, _, offset) =>
-        if !push_memory_load(builder, stack, vmctx, mod_, memidx, V128, offset) {
+        if !push_memory_load(
+            builder,
+            stack,
+            env,
+            vmctx,
+            mod_,
+            memidx,
+            V128,
+            offset,
+          ) {
           return None
         }
       V128Store(memidx, _, offset) =>
-        if !push_memory_store(builder, stack, vmctx, mod_, memidx, V128, offset) {
+        if !push_memory_store(
+            builder,
+            stack,
+            env,
+            vmctx,
+            mod_,
+            memidx,
+            V128,
+            offset,
+          ) {
           return None
         }
       I32Store8(memidx, _, offset) =>
         if !push_memory_store_narrow(
-            builder, stack, vmctx, mod_, memidx, 8, offset,
+            builder, stack, env, vmctx, mod_, memidx, 8, offset,
           ) {
           return None
         }
       I32Store16(memidx, _, offset) =>
         if !push_memory_store_narrow(
-            builder, stack, vmctx, mod_, memidx, 16, offset,
+            builder, stack, env, vmctx, mod_, memidx, 16, offset,
           ) {
           return None
         }
       I64Store8(memidx, _, offset) =>
         if !push_memory_store_narrow(
-            builder, stack, vmctx, mod_, memidx, 8, offset,
+            builder, stack, env, vmctx, mod_, memidx, 8, offset,
           ) {
           return None
         }
       I64Store16(memidx, _, offset) =>
         if !push_memory_store_narrow(
-            builder, stack, vmctx, mod_, memidx, 16, offset,
+            builder, stack, env, vmctx, mod_, memidx, 16, offset,
           ) {
           return None
         }
       I64Store32(memidx, _, offset) =>
         if !push_memory_store_narrow(
-            builder, stack, vmctx, mod_, memidx, 32, offset,
+            builder, stack, env, vmctx, mod_, memidx, 32, offset,
           ) {
           return None
         }
       MemorySize(memidx) =>
-        if !push_memory_size(builder, stack, vmctx, memory_types, memidx) {
+        if !push_memory_size(builder, stack, env, vmctx, memory_types, memidx) {
           return None
         }
       MemoryGrow(memidx) =>
@@ -2547,7 +2651,7 @@ fn try_lower_linear_function(
         }
       RefIsNull => if !push_ref_is_null(builder, stack) { return None }
       RefFunc(func_idx) =>
-        if !push_ref_func(builder, stack, vmctx, func_idx) {
+        if !push_ref_func(builder, stack, env, vmctx, func_idx) {
           return None
         }
       RefAsNonNull => if !push_ref_as_non_null(builder, stack) { return None }
