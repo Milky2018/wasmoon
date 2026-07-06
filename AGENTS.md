@@ -56,6 +56,15 @@ lldb -- ./wasmoon test path/to/test.wast
 - `.mbti` files - Generated interfaces (check diffs to verify API changes)
 - Code organized in **block style** separated by `///|`
 
+## Compiler Infrastructure Boundaries
+
+Reusable compiler-infrastructure modules include `wasm_core`, `milkir`, `machv`, `regalloc`, `machv_regalloc`, `machv_emit`, `isa_target`, `aarch64_target`, and `x64_target`.
+
+- Hard boundary: reusable modules must not import Wasmoon-owned packages such as `Milky2018/wasmoon`, `Milky2018/wasmoon_jit`, or Wasmoon native FFI packages. `scripts/audit_module_boundaries.py` enforces this at `moon.pkg` import level.
+- Soft convention: avoid product-specific runtime names such as `wasmoon_jit_*`, `c_jit_*`, and `wasmoon.runtime.*` in reusable module code, comments, tests, and public APIs. Prefer generic terms such as external symbol, runtime helper, `wasm.runtime.*`, or embedding runtime.
+- Native runtime address resolution belongs in `wasmoon_jit` or another explicitly Wasmoon-owned package. Generic emitters should produce machine code plus symbolic relocation/fixup metadata.
+- If a product-specific name is temporarily necessary in reusable infrastructure, document why in the local code and track the cleanup in an issue instead of broadening the boundary audit with ad-hoc string checks.
+
 ## Git Conventions
 
 - **NEVER commit or push directly to main branch** - always create a feature branch and merge via PR
