@@ -353,7 +353,7 @@ fn lower_struct_new(
       block.add_inst(store)
     }
     let alloc_inst = @instr.VCodeInst::new(
-      GCAllocStructInline(
+      BumpAllocRecordFromStackInline(
         type_idx,
         num_fields,
         rt_gc_register_struct_inline(),
@@ -688,7 +688,7 @@ fn lower_array_new_fixed(
       block.add_inst(store)
     }
     let alloc_inst = @instr.VCodeInst::new(
-      GCAllocArrayFixedInline(
+      BumpAllocArrayFromStackInline(
         type_idx,
         len,
         rt_gc_register_array_inline(),

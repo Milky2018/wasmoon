@@ -321,8 +321,8 @@ pub(all) enum VCodeOpcode {
   StoreToStack(Int)
   LoadSP
   LoadSafepointId(Int)
-  GCAllocStructInline(Int, Int, ExternalName, ExternalName)
-  GCAllocArrayFixedInline(Int, Int, ExternalName, ExternalName)
+  BumpAllocRecordFromStackInline(Int, Int, ExternalName, ExternalName)
+  BumpAllocArrayFromStackInline(Int, Int, ExternalName, ExternalName)
   LoadConstV128(Bytes)
   SIMDSplat(LaneSize)
   SIMDSplatF(Bool)

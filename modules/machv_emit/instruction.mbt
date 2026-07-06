@@ -1519,8 +1519,13 @@ fn MachineCode::emit_instruction(
       )
       self.emit_load_imm64(dst, safepoint_id.to_int64())
     }
-    GCAllocStructInline(type_idx, num_fields, register_symbol, slow_symbol) => {
-      // Inline bump allocation for struct.new with C slow-path fallback.
+    BumpAllocRecordFromStackInline(
+      type_idx,
+      num_fields,
+      register_symbol,
+      slow_symbol
+    ) => {
+      // Inline record bump allocation with C slow-path fallback.
       // Uses: [vmctx], Defs: [result_ref]
       let dst = wreg_num(inst.defs[0])
       let vmctx_reg = @isaregs.vmctx_index()
@@ -1578,7 +1583,7 @@ fn MachineCode::emit_instruction(
       }
       self.emit_b(done_label)
 
-      // Slow path: gc_alloc_struct_slow(vmctx, type_idx, sp, num_fields, safepoint_id)
+      // Slow path: slow_helper(vmctx, type_tag, stack_values, field_count, safepoint_id)
       self.define_label(slow_label)
       if vmctx_reg != 0 {
         self.emit_mov_reg(0, vmctx_reg)
@@ -1613,8 +1618,8 @@ fn MachineCode::emit_instruction(
       }
       self.define_label(done_label)
     }
-    GCAllocArrayFixedInline(type_idx, len, register_symbol, slow_symbol) => {
-      // Inline bump allocation for array.new_fixed with C slow-path fallback.
+    BumpAllocArrayFromStackInline(type_idx, len, register_symbol, slow_symbol) => {
+      // Inline fixed-array bump allocation with C slow-path fallback.
       // Uses: [vmctx], Defs: [result_ref]
       let dst = wreg_num(inst.defs[0])
       let vmctx_reg = @isaregs.vmctx_index()
