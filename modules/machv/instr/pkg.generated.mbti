@@ -253,6 +253,7 @@ pub(all) enum VCodeOpcode {
   LoadConstF32(Int)
   LoadConstF64(Int64)
   Cmp(CmpKind, Bool)
+  IntCmp(Bool)
   FCmp(FCmpKind)
   Extend(ExtendKind)
   Truncate
@@ -299,7 +300,6 @@ pub(all) enum VCodeOpcode {
   Umull
   Smull
   ReturnCallIndirect(Int, Int)
-  TypeCheckIndirect(Int)
   TypeCheckSubtypeIndirect(Int, ExternalName)
   StackLoad(Int)
   StackStore(Int)

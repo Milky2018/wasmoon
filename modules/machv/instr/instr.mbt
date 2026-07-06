@@ -260,6 +260,10 @@ pub(all) enum VCodeOpcode {
   // Comparisons (result is 0 or 1)
   // Cmp(kind, is_64bit): CMP Xn/Wn, Xm/Wm; CSET Wd, cond
   Cmp(CmpKind, Bool)
+  // IntCmp(is_64bit): CMP Xn/Wn, Xm/Wm
+  // Uses: [lhs, rhs], Defs: [] (only sets flags)
+  // Used before TrapIf when no boolean compare result is needed.
+  IntCmp(Bool)
   FCmp(FCmpKind)
   // Conversions
   Extend(ExtendKind)
@@ -376,10 +380,6 @@ pub(all) enum VCodeOpcode {
   // - num_results: reserved metadata (currently informational)
   // This is a terminator - it does not return to the caller
   ReturnCallIndirect(Int, Int)
-  // TypeCheckIndirect: check if actual_type == expected_type, trap if not
-  // Uses: [actual_type_vreg], Parameters: expected_type (immediate)
-  // Emits: CMP actual, expected; B.EQ +8; BRK #2 (type mismatch trap)
-  TypeCheckIndirect(Int)
   // TypeCheckSubtypeIndirect: fast-path for call_indirect type checks.
   //
   // Uses: [actual_type_vreg]
@@ -996,6 +996,7 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
       "ldf \{f}"
     }
     Cmp(kind, is_64) => if is_64 { "cmp.\{kind}" } else { "cmp32.\{kind}" }
+    IntCmp(is_64) => if is_64 { "icmp" } else { "icmp32" }
     FCmp(kind) => "fcmp.\{kind}"
     Extend(kind) => "extend.\{kind}"
     Truncate => "trunc"
@@ -1069,7 +1070,6 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     Smull => "smull"
     ReturnCallIndirect(stack_arg_bytes, num_results) =>
       "return_call_indirect(stack=\{stack_arg_bytes}) -> \{num_results} results"
-    TypeCheckIndirect(expected_type) => "type_check_indirect \{expected_type}"
     TypeCheckSubtypeIndirect(expected_type, helper) =>
       "type_check_subtype_indirect \{expected_type} via \{helper}"
     StackLoad(offset) => "stack_load [sp+\{offset}]"

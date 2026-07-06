@@ -642,6 +642,15 @@ fn MachineCode::emit_instruction(
       let cond = cmp_kind_to_cond(kind)
       self.emit_cset(rd, cond)
     }
+    IntCmp(is_64) => {
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      if is_64 {
+        self.emit_cmp_reg(rn, rm)
+      } else {
+        self.emit_cmp_reg32(rn, rm)
+      }
+    }
     FCmp(kind) => {
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
@@ -1162,26 +1171,6 @@ fn MachineCode::emit_instruction(
         self.emit_epilogue(stack_frame)
         self.emit_br(target)
       }
-    }
-    TypeCheckIndirect(expected_type) => {
-      // Check if actual_type == expected_type, trap if not
-      // Uses: [actual_type_vreg]
-      // Emits: CMP actual, expected; B.EQ +8; BRK #2
-      let actual_type_reg = reg_num(inst.uses[0])
-      // Compare as i32 (type indices are 32-bit).
-      // CMP immediate can only handle 12-bit values (0-4095).
-      // For larger values, load into scratch register and use CMP register.
-      if expected_type <= 4095 {
-        self.emit_cmp_imm32(actual_type_reg, expected_type)
-      } else {
-        // Load expected_type into x17 and compare
-        self.emit_load_imm64(17, expected_type.to_int64())
-        self.emit_cmp_reg32(actual_type_reg, 17)
-      }
-      // B.EQ +8: skip BRK (4 bytes) if types match
-      self.emit_b_cond_offset(0, 8) // cond=0 is EQ
-      // BRK #2: trap (indirect call type mismatch)
-      self.emit_brk(2)
     }
     TypeCheckSubtypeIndirect(expected_type, helper_symbol) => {
       // Fast path for call_indirect type checks:

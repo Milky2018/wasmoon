@@ -1584,6 +1584,15 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_setcc_r8(cond, rd)
       self.x86_emit_movzx_r32_r8(rd, rd)
     }
+    IntCmp(is_64) => {
+      let rn = reg_num(inst.uses[0])
+      let rm = reg_num(inst.uses[1])
+      if is_64 {
+        self.x86_emit_cmp_rr(rn, rm)
+      } else {
+        self.x86_emit_cmp_rr32(rn, rm)
+      }
+    }
     FCmp(kind) => {
       // Match Cranelift x64 scalar fcmp lowering (see wasmtime cranelift x64 inst.isle `emit_fcmp`):
       // - UCOMIS* sets ZF/CF/PF; unordered => PF=1.
@@ -1722,19 +1731,6 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_jcc_rel32(Lo, done)
       self.x86_emit_trap_imm16(trap_code)
       self.define_label(done)
-    }
-    TypeCheckIndirect(expected_type) => {
-      // Check if actual_type == expected_type, trap if not.
-      //
-      // Uses: [actual_type_vreg]
-      let actual_type_reg = reg_num(inst.uses[0])
-      self.x86_emit_cmp_r32_imm32(actual_type_reg, expected_type)
-      let ok = self.new_internal_label()
-      self.x86_emit_jcc_rel32(Eq, ok)
-      // Trap code matches the AArch64 brk immediate used for indirect-call type
-      // mismatch.
-      self.x86_emit_trap_imm16(2)
-      self.define_label(ok)
     }
     TypeCheckSubtypeIndirect(expected_type, helper_symbol) => {
       // Fast path for call_indirect type checks:

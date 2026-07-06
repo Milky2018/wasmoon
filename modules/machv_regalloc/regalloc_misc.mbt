@@ -15,8 +15,7 @@ fn has_side_effects(opcode : @instr.VCodeOpcode) -> Bool {
     | StorePtr(_, _)
     | StorePtrRegOffset(_, _, _, _)
     | StorePtrNarrowRegOffset(_, _, _, _) => true
-    // Type check can trap
-    TypeCheckIndirect(_) => true
+    // Type check can trap.
     TypeCheckSubtypeIndirect(_, _) => true
     // GC alloc pseudo-ops may call slow-path helpers
     GCAllocStructInline(_, _, _, _)
@@ -34,6 +33,8 @@ fn has_side_effects(opcode : @instr.VCodeOpcode) -> Bool {
     | TrapIfUge(_)
     | TrapIfUgt(_)
     | TrapIf(_, _) => true
+    // Flag-setting compares must stay paired with following flag consumers.
+    IntCmp(_) => true
     // Everything else is pure computation
     _ => false
   }

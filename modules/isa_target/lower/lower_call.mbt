@@ -14,6 +14,29 @@ fn wasm_func_symbol(func_idx : Int) -> @instr.CodeSymbol {
 }
 
 ///|
+fn emit_exact_indirect_type_check(
+  ctx : LoweringContext,
+  block : @block.VCodeBlock,
+  actual_type_vreg : @abi.VReg,
+  expected_type_idx : Int,
+) -> Unit {
+  let expected_type_vreg = ctx.vcode_func.new_vreg(Int)
+  let load_expected = @instr.VCodeInst::new(
+    LoadConst(expected_type_idx.to_int64()),
+  )
+  load_expected.add_def({ reg: Virtual(expected_type_vreg) })
+  block.add_inst(load_expected)
+
+  let cmp = @instr.VCodeInst::new(IntCmp(false))
+  cmp.add_use(Virtual(actual_type_vreg))
+  cmp.add_use(Virtual(expected_type_vreg))
+  block.add_inst(cmp)
+
+  let trap = @instr.VCodeInst::new(TrapIf(Ne, 2))
+  block.add_inst(trap)
+}
+
+///|
 /// Emit a constant load for a call argument, optionally constrained to a register.
 fn emit_call_const(
   block : @block.VCodeBlock,
@@ -437,18 +460,18 @@ fn lower_return_call_indirect(
   // Type check (fast path); align with Cranelift behavior:
   // use exact check when subtype checks are unnecessary.
   let expected_type_idx = ctx.canonicalize_indirect_type_idx(type_idx)
-  let type_check = if ctx.use_subtype_indirect_check {
-    @instr.VCodeInst::new(
+  if ctx.use_subtype_indirect_check {
+    let type_check = @instr.VCodeInst::new(
       TypeCheckSubtypeIndirect(expected_type_idx, rt_gc_type_check_subtype()),
     )
-  } else {
-    @instr.VCodeInst::new(TypeCheckIndirect(expected_type_idx))
-  }
-  type_check.add_use(Virtual(actual_type_vreg))
-  if ctx.use_subtype_indirect_check {
+    type_check.add_use(Virtual(actual_type_vreg))
     add_c_call_clobbers(type_check)
+    block.add_inst(type_check)
+  } else {
+    emit_exact_indirect_type_check(
+      ctx, block, actual_type_vreg, expected_type_idx,
+    )
   }
-  block.add_inst(type_check)
 
   // Get pinned vmctx.
   let vmctx_preg : @abi.PReg = vmctx_preg()
@@ -698,21 +721,21 @@ fn lower_call_indirect(
   let expected_canonical_type_idx = ctx.canonicalize_indirect_type_idx(
     expected_type_idx,
   )
-  let type_check = if ctx.use_subtype_indirect_check {
-    @instr.VCodeInst::new(
+  if ctx.use_subtype_indirect_check {
+    let type_check = @instr.VCodeInst::new(
       TypeCheckSubtypeIndirect(
         expected_canonical_type_idx,
         rt_gc_type_check_subtype(),
       ),
     )
-  } else {
-    @instr.VCodeInst::new(TypeCheckIndirect(expected_canonical_type_idx))
-  }
-  type_check.add_use(Virtual(actual_type_vreg))
-  if ctx.use_subtype_indirect_check {
+    type_check.add_use(Virtual(actual_type_vreg))
     add_c_call_clobbers(type_check)
+    block.add_inst(type_check)
+  } else {
+    emit_exact_indirect_type_check(
+      ctx, block, actual_type_vreg, expected_canonical_type_idx,
+    )
   }
-  block.add_inst(type_check)
 
   // Step 6: Use Standard call lowering
   lower_wasm_call(
