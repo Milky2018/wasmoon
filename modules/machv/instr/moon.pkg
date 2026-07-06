@@ -1,4 +1,3 @@
 import {
   "Milky2018/machv/abi",
-  "Milky2018/wasm_core/types",
 }

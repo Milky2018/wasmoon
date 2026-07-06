@@ -241,7 +241,7 @@ pub fn emit_hostcall_import_trampoline(
   let c_res_slots = @instr.VCodeInst::new(LoadConst(result_slots.to_int64()))
   c_res_slots.add_def({ reg: Virtual(result_slots_vreg) })
   block.add_inst(c_res_slots)
-  let call = @instr.VCodeInst::new(CallPtr(5, 0, C))
+  let call = @instr.VCodeInst::new(CallPtr(5, 0, Foreign))
   fn c_arg_gpr_indices() -> Array[Int] {
     match @isa.ISA::current() {
       // AAPCS64: X0-X7

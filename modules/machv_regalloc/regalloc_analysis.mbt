@@ -79,8 +79,8 @@ pub struct LiveInterval {
   spill_slot : Int?
   // Whether this interval crosses a function call (cannot use caller-saved registers)
   mut crosses_call : Bool
-  // Whether this interval crosses a C call (stricter ABI assumptions)
-  mut crosses_c_call : Bool
+  // Whether this interval crosses a foreign/helper call.
+  mut crosses_foreign_call : Bool
 }
 
 ///|
@@ -94,7 +94,7 @@ fn LiveInterval::new(vreg : @abi.VReg, start : ProgPoint) -> LiveInterval {
     assigned: None,
     spill_slot: None,
     crosses_call: false,
-    crosses_c_call: false,
+    crosses_foreign_call: false,
   }
 }
 
@@ -356,7 +356,7 @@ pub struct LivenessResult {
   // Block order: block_order[block_id] = linear position (O(1) lookup)
   block_order : FixedArray[Int]
   // Call points (block_idx, inst_idx) - instructions that clobber caller-saved registers
-  call_points : Array[(ProgPoint, @instr.CallConv)]
+  call_points : Array[(ProgPoint, @instr.CallClobberClass)]
 }
 
 ///|
@@ -575,13 +575,13 @@ fn collect_defs_uses(
           CallPtr(_, _, call_conv) => call_conv
           CallDirect(_, _, _, call_conv) => call_conv
           CallExternal(_, _, _, call_conv) => call_conv
-          // This pseudo-op may call a C helper on a slow path.
-          TypeCheckSubtypeIndirect(_, _) => C
-          GCAllocStructInline(_, _, _, _) => C
-          GCAllocStructSlowPrecise(_, _, _) => C
-          GCAllocArrayFixedInline(_, _, _, _) => C
-          GCAllocArraySlowPrecise(_, _) => C
-          _ => Wasm
+          // These pseudo-ops may call foreign helpers on slow paths.
+          TypeCheckSubtypeIndirect(_, _) => Foreign
+          GCAllocStructInline(_, _, _, _) => Foreign
+          GCAllocStructSlowPrecise(_, _, _) => Foreign
+          GCAllocArrayFixedInline(_, _, _, _) => Foreign
+          GCAllocArraySlowPrecise(_, _) => Foreign
+          _ => Internal
         }
         result.call_points.push(
           ({ block: block_idx, inst: inst_idx, pos: After }, conv),
@@ -849,13 +849,13 @@ fn build_intervals(func : @machv.Function, result : LivenessResult) -> Unit {
     a.0.compare_with_order(b.0, block_order)
   })
   let call_prog_points : Array[ProgPoint] = []
-  let c_call_prefix : Array[Int] = [0]
+  let foreign_call_prefix : Array[Int] = [0]
   for entry in sorted_call_points {
-    let (call_point, call_conv) = entry
+    let (call_point, call_class) = entry
     call_prog_points.push(call_point)
-    let prev = c_call_prefix[c_call_prefix.length() - 1]
-    let add = if call_conv is C { 1 } else { 0 }
-    c_call_prefix.push(prev + add)
+    let prev = foreign_call_prefix[foreign_call_prefix.length() - 1]
+    let add = if call_class is Foreign { 1 } else { 0 }
+    foreign_call_prefix.push(prev + add)
   }
 
   fn upper_bound_call_points(
@@ -985,10 +985,10 @@ fn build_intervals(func : @machv.Function, result : LivenessResult) -> Unit {
       )
       if first_after_start < first_at_or_after_end {
         interval.crosses_call = true
-        let c_calls = c_call_prefix[first_at_or_after_end] -
-          c_call_prefix[first_after_start]
-        if c_calls > 0 {
-          interval.crosses_c_call = true
+        let foreign_calls = foreign_call_prefix[first_at_or_after_end] -
+          foreign_call_prefix[first_after_start]
+        if foreign_calls > 0 {
+          interval.crosses_foreign_call = true
         }
       }
     }

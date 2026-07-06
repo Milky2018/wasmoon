@@ -115,18 +115,18 @@ pub fn verify_allocation(
   for r in isa.call_clobbered_gprs() {
     call_clobbered_int.add(r.index) |> ignore
   }
-  // For scalar FPR values crossing C calls, model low-64-bit preservation of
+  // For scalar FPR values crossing foreign/helper calls, model low-64-bit preservation of
   // V8-V15 (AAPCS64) the same way as same-ABI calls.
   //
   // Vector values are handled separately below and must never cross calls.
-  let call_clobbered_float_c : @hashset.HashSet[Int] = HashSet([])
+  let call_clobbered_float_foreign : @hashset.HashSet[Int] = HashSet([])
   for r in isa.call_clobbered_fprs_same_abi() {
-    call_clobbered_float_c.add(r.index) |> ignore
+    call_clobbered_float_foreign.add(r.index) |> ignore
   }
-  // For Wasm-to-Wasm calls (same ABI), allow V8-V15 as callee-saved (low 64 bits).
-  let call_clobbered_float_wasm : @hashset.HashSet[Int] = HashSet([])
+  // For internal same-ABI calls, allow V8-V15 as callee-saved (low 64 bits).
+  let call_clobbered_float_internal : @hashset.HashSet[Int] = HashSet([])
   for r in isa.call_clobbered_fprs_same_abi() {
-    call_clobbered_float_wasm.add(r.index) |> ignore
+    call_clobbered_float_internal.add(r.index) |> ignore
   }
   fn has_any_fixed_constraint_to(lr : LiveRange, preg : @abi.PReg) -> Bool {
     // Treat any FixedReg at any point as justification for using a register
@@ -210,18 +210,19 @@ pub fn verify_allocation(
           )
         }
         if preg.class is Float32 || preg.class is Float64 {
-          // If this value crosses any C call, use the scalar same-ABI
+          // If this value crosses any foreign/helper call, use the scalar same-ABI
           // caller-saved subset (V8-V15 low 64-bit remain preserved).
-          if lr.crosses_c_call && call_clobbered_float_c.contains(preg.index) {
+          if lr.crosses_foreign_call &&
+            call_clobbered_float_foreign.contains(preg.index) {
             abort(
-              "regalloc verifier: value live across C call assigned to caller-saved v\{preg.index}",
+              "regalloc verifier: value live across foreign call assigned to caller-saved v\{preg.index}",
             )
           }
-          // If this value crosses any Wasm call, treat the standard caller-saved subset as clobbered.
-          if lr.crosses_wasm_call &&
-            call_clobbered_float_wasm.contains(preg.index) {
+          // If this value crosses any internal call, treat the standard caller-saved subset as clobbered.
+          if lr.crosses_internal_call &&
+            call_clobbered_float_internal.contains(preg.index) {
             abort(
-              "regalloc verifier: value live across Wasm call assigned to caller-saved v\{preg.index}",
+              "regalloc verifier: value live across internal call assigned to caller-saved v\{preg.index}",
             )
           }
         }

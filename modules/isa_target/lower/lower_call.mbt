@@ -245,7 +245,9 @@ fn lower_wasm_call(
 ) -> Unit {
   let num_args = args.length()
   let num_results = results.length()
-  let call_inst = @instr.VCodeInst::new(CallPtr(num_args, num_results, Wasm))
+  let call_inst = @instr.VCodeInst::new(
+    CallPtr(num_args, num_results, Internal),
+  )
   // Call target is constrained to SCRATCH_REG_2 (IP1).
   call_inst.add_use_fixed(Virtual(func_ptr), {
     index: scratch2_index(),
@@ -267,7 +269,7 @@ fn lower_wasm_call_direct(
   let num_args = args.length()
   let num_results = results.length()
   let call_inst = @instr.VCodeInst::new(
-    CallDirect(func_idx, num_args, num_results, Wasm),
+    CallDirect(func_idx, num_args, num_results, Internal),
   )
   lower_wasm_call_common(ctx, block, call_inst, args, results, const_args)
 }
@@ -767,10 +769,11 @@ fn add_call_clobbers(call_inst : @instr.VCodeInst) -> Unit {
   }
   // Add clobbers for caller-saved FPRs.
   //
-  // Cranelift-style conservative clobbers (V0-V31) apply to C calls.
-  // For Wasm-to-Wasm calls (same ABI), we treat V8-V15 as callee-saved.
+  // Cranelift-style conservative clobbers (V0-V31) apply to foreign calls.
+  // For internal same-ABI calls, we treat V8-V15 as callee-saved.
   let fpr_clobbers = match call_inst.opcode {
-    CallPtr(_, _, C) | CallDirect(_, _, _, C) => isa.call_clobbered_fprs()
+    CallPtr(_, _, Foreign) | CallDirect(_, _, _, Foreign) =>
+      isa.call_clobbered_fprs()
     _ => isa.call_clobbered_fprs_same_abi()
   }
   for preg in fpr_clobbers {
@@ -815,7 +818,7 @@ fn lower_c_libcall_direct(
   let num_args = args.length()
   let num_results = if result is Some(_) { 1 } else { 0 }
   let call_inst = @instr.VCodeInst::new(
-    CallExternal(symbol, num_args, num_results, C),
+    CallExternal(symbol, num_args, num_results, Foreign),
   )
   for i, arg in args {
     call_inst.add_use_fixed(Virtual(arg), { index: arg_regs[i], class: Int })
@@ -874,9 +877,9 @@ fn lower_call_ptr(
   // Collect result vregs (skip when results are unused)
   let result_vregs = collect_call_result_vregs(ctx, inst)
 
-  // Step 3: Create CallPtr instruction with FixedReg constraints (Wasm calling convention)
+  // Step 3: Create an internal call with fixed-register constraints.
   let call_inst = @instr.VCodeInst::new(
-    CallPtr(num_args, result_vregs.length(), Wasm),
+    CallPtr(num_args, result_vregs.length(), Internal),
   )
 
   // Call target is constrained to SCRATCH_REG_2 (IP1).
@@ -976,10 +979,10 @@ fn lower_c_libcall(
 
   let arg_regs = c_arg_gpr_indices()
 
-  // Create CallPtr instruction with C calling convention
+  // Create a foreign call with platform-ABI constraints.
   let num_args = args.length()
   let num_results = if result is Some(_) { 1 } else { 0 }
-  let call_inst = @instr.VCodeInst::new(CallPtr(num_args, num_results, C))
+  let call_inst = @instr.VCodeInst::new(CallPtr(num_args, num_results, Foreign))
 
   // Call target is constrained to SCRATCH_REG_2 (IP1).
   call_inst.add_use_fixed(Virtual(func_ptr), {

@@ -91,9 +91,9 @@ pub(all) struct ApplyResult {
 
 type Bundle
 pub fn Bundle::contains_range(Self, Int) -> Bool
-pub fn Bundle::crosses_c_call(Self, LiveRangeSet) -> Bool
 pub fn Bundle::crosses_call(Self, LiveRangeSet) -> Bool
-pub fn Bundle::crosses_wasm_call(Self, LiveRangeSet) -> Bool
+pub fn Bundle::crosses_foreign_call(Self, LiveRangeSet) -> Bool
+pub fn Bundle::crosses_internal_call(Self, LiveRangeSet) -> Bool
 pub fn Bundle::get_fixed_reg(Self, LiveRangeSet) -> @abi.PReg?
 pub fn Bundle::has_fixed_constraint(Self, LiveRangeSet) -> Bool
 pub fn Bundle::new(Int, @abi.RegClass) -> Self
@@ -122,7 +122,7 @@ pub struct LiveInterval {
   assigned : @abi.PReg?
   spill_slot : Int?
   mut crosses_call : Bool
-  mut crosses_c_call : Bool
+  mut crosses_foreign_call : Bool
 }
 pub impl Show for LiveInterval
 
@@ -150,7 +150,7 @@ pub struct LivenessResult {
   mut live_in_dense : Array[Array[Int]]?
   mut live_out_dense : Array[Array[Int]]?
   block_order : FixedArray[Int]
-  call_points : Array[(ProgPoint, @instr.CallConv)]
+  call_points : Array[(ProgPoint, @instr.CallClobberClass)]
 }
 
 pub(all) enum Loc {

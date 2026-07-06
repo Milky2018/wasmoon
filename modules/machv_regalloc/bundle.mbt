@@ -18,8 +18,8 @@ struct Bundle {
   mut is_pinned : Bool // If true, cannot be evicted (e.g., function parameters)
   mut call_flags_ready : Bool // Lazy cache for call-crossing queries
   mut crosses_call_cached : Bool
-  mut crosses_wasm_call_cached : Bool
-  mut crosses_c_call_cached : Bool
+  mut crosses_internal_call_cached : Bool
+  mut crosses_foreign_call_cached : Bool
   mut requirement_flags_ready : Bool // Lazy cache for fixed-constraint queries
   mut has_fixed_constraint_cached : Bool
 }
@@ -39,8 +39,8 @@ pub fn Bundle::new(id : Int, reg_class : @abi.RegClass) -> Bundle {
     is_pinned: false,
     call_flags_ready: false,
     crosses_call_cached: false,
-    crosses_wasm_call_cached: false,
-    crosses_c_call_cached: false,
+    crosses_internal_call_cached: false,
+    crosses_foreign_call_cached: false,
     requirement_flags_ready: false,
     has_fixed_constraint_cached: false,
   }
@@ -157,20 +157,20 @@ fn Bundle::ensure_call_flags(self : Bundle, ranges : LiveRangeSet) -> Unit {
     return
   }
   let mut crosses_call = false
-  let mut crosses_wasm = false
-  let mut crosses_c = false
+  let mut crosses_internal = false
+  let mut crosses_foreign = false
   for range_id in self.range_ids {
     let range = ranges.get(range_id)
     crosses_call = crosses_call || range.crosses_call
-    crosses_wasm = crosses_wasm || range.crosses_wasm_call
-    crosses_c = crosses_c || range.crosses_c_call
-    if crosses_call && crosses_wasm && crosses_c {
+    crosses_internal = crosses_internal || range.crosses_internal_call
+    crosses_foreign = crosses_foreign || range.crosses_foreign_call
+    if crosses_call && crosses_internal && crosses_foreign {
       break
     }
   }
   self.crosses_call_cached = crosses_call
-  self.crosses_wasm_call_cached = crosses_wasm
-  self.crosses_c_call_cached = crosses_c
+  self.crosses_internal_call_cached = crosses_internal
+  self.crosses_foreign_call_cached = crosses_foreign
   self.call_flags_ready = true
 }
 
@@ -182,17 +182,23 @@ pub fn Bundle::crosses_call(self : Bundle, ranges : LiveRangeSet) -> Bool {
 }
 
 ///|
-/// Check if any range in this bundle crosses a Wasm call
-pub fn Bundle::crosses_wasm_call(self : Bundle, ranges : LiveRangeSet) -> Bool {
+/// Check if any range in this bundle crosses an internal call
+pub fn Bundle::crosses_internal_call(
+  self : Bundle,
+  ranges : LiveRangeSet,
+) -> Bool {
   self.ensure_call_flags(ranges)
-  self.crosses_wasm_call_cached
+  self.crosses_internal_call_cached
 }
 
 ///|
-/// Check if any range in this bundle crosses a C call
-pub fn Bundle::crosses_c_call(self : Bundle, ranges : LiveRangeSet) -> Bool {
+/// Check if any range in this bundle crosses a foreign/helper call
+pub fn Bundle::crosses_foreign_call(
+  self : Bundle,
+  ranges : LiveRangeSet,
+) -> Bool {
   self.ensure_call_flags(ranges)
-  self.crosses_c_call_cached
+  self.crosses_foreign_call_cached
 }
 
 ///|

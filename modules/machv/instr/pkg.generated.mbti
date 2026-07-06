@@ -12,11 +12,11 @@ pub fn aarch64_logic_imm_enc_bits(Int64, Bool) -> Int?
 // Errors
 
 // Types and methods
-pub(all) enum CallConv {
-  Wasm
-  C
+pub(all) enum CallClobberClass {
+  Internal
+  Foreign
 } derive(Eq, @debug.Debug)
-pub impl Show for CallConv
+pub impl Show for CallClobberClass
 
 pub(all) enum CallType {
   None
@@ -301,9 +301,9 @@ pub(all) enum VCodeOpcode {
   StorePtrNarrow(Int, Int)
   LoadExternalFuncAddr(ExternalName)
   LoadFuncAddr(Int)
-  CallPtr(Int, Int, CallConv)
-  CallDirect(Int, Int, Int, CallConv)
-  CallExternal(ExternalName, Int, Int, CallConv)
+  CallPtr(Int, Int, CallClobberClass)
+  CallDirect(Int, Int, Int, CallClobberClass)
+  CallExternal(ExternalName, Int, Int, CallClobberClass)
   AdjustSP(Int)
   StoreToStack(Int)
   LoadSP

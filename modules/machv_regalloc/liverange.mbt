@@ -152,8 +152,8 @@ struct LiveRange {
   mut allocation : Allocation // Allocation result
   // Cached properties
   mut crosses_call : Bool // Spans across any function call
-  mut crosses_wasm_call : Bool // Spans across a Wasm call
-  mut crosses_c_call : Bool // Spans across a C call
+  mut crosses_internal_call : Bool // Spans across an internal call
+  mut crosses_foreign_call : Bool // Spans across a foreign/helper call
 }
 
 ///|
@@ -166,8 +166,8 @@ pub fn LiveRange::new(id : Int, vreg : @abi.VReg) -> LiveRange {
     bundle_id: -1,
     allocation: Unallocated,
     crosses_call: false,
-    crosses_wasm_call: false,
-    crosses_c_call: false,
+    crosses_internal_call: false,
+    crosses_foreign_call: false,
   }
 }
 
@@ -452,46 +452,47 @@ pub fn build_live_ranges(
     }
   })
   let block_call_point_orders : Array[Array[Int]] = []
-  let block_c_call_point_orders : Array[Array[Int]] = []
+  let block_foreign_call_point_orders : Array[Array[Int]] = []
   for _ in 0..<num_blocks {
     block_call_point_orders.push([])
-    block_c_call_point_orders.push([])
+    block_foreign_call_point_orders.push([])
   }
   let call_prog_point_orders : Array[Int] = []
-  let c_call_prefix : Array[Int] = [0]
+  let foreign_call_prefix : Array[Int] = [0]
   for entry in sorted_call_points {
-    let (call_point, call_conv) = entry
+    let (call_point, call_class) = entry
     let call_ord = point_order(call_point, block_order, block_point_base)
     call_prog_point_orders.push(call_ord)
     if call_point.block >= 0 && call_point.block < num_blocks {
       block_call_point_orders[call_point.block].push(call_ord)
-      if call_conv is C {
-        block_c_call_point_orders[call_point.block].push(call_ord)
+      if call_class is Foreign {
+        block_foreign_call_point_orders[call_point.block].push(call_ord)
       }
     }
-    let prev = c_call_prefix[c_call_prefix.length() - 1]
-    let add = if call_conv is C { 1 } else { 0 }
-    c_call_prefix.push(prev + add)
+    let prev = foreign_call_prefix[foreign_call_prefix.length() - 1]
+    let add = if call_class is Foreign { 1 } else { 0 }
+    foreign_call_prefix.push(prev + add)
   }
   let calls_per_block_order : Array[Int] = Array::make(num_blocks, 0)
-  let c_calls_per_block_order : Array[Int] = Array::make(num_blocks, 0)
+  let foreign_calls_per_block_order : Array[Int] = Array::make(num_blocks, 0)
   for block_idx in 0..<num_blocks {
     let ord = block_order[block_idx]
     if ord >= 0 && ord < num_blocks {
       calls_per_block_order[ord] = block_call_point_orders[block_idx].length()
-      c_calls_per_block_order[ord] = block_c_call_point_orders[block_idx].length()
+      foreign_calls_per_block_order[ord] = block_foreign_call_point_orders[block_idx].length()
     }
   }
   let call_prefix_by_block_order : Array[Int] = [0]
-  let c_call_prefix_by_block_order : Array[Int] = [0]
+  let foreign_call_prefix_by_block_order : Array[Int] = [0]
   for ord in 0..<num_blocks {
     call_prefix_by_block_order.push(
       call_prefix_by_block_order[call_prefix_by_block_order.length() - 1] +
       calls_per_block_order[ord],
     )
-    c_call_prefix_by_block_order.push(
-      c_call_prefix_by_block_order[c_call_prefix_by_block_order.length() - 1] +
-      c_calls_per_block_order[ord],
+    foreign_call_prefix_by_block_order.push(
+      foreign_call_prefix_by_block_order[foreign_call_prefix_by_block_order.length() -
+      1] +
+      foreign_calls_per_block_order[ord],
     )
   }
   fn upper_bound_call_points(
@@ -879,7 +880,7 @@ pub fn build_live_ranges(
             block_point_base,
           )
           let mut call_count = 0
-          let mut c_call_count = 0
+          let mut foreign_call_count = 0
           let mut used_block_fast_path = false
           let start_block = span.start.block
           let end_block = span.end.block
@@ -897,8 +898,8 @@ pub fn build_live_ranges(
                   span_start_ord,
                   span_end_ord,
                 )
-                c_call_count = count_call_points_in_range(
-                  block_c_call_point_orders[start_block],
+                foreign_call_count = count_call_points_in_range(
+                  block_foreign_call_point_orders[start_block],
                   span_start_ord,
                   span_end_ord,
                 )
@@ -909,9 +910,9 @@ pub fn build_live_ranges(
                     span_start_ord,
                     span_end_ord,
                   )
-                c_call_count = c_call_count +
+                foreign_call_count = foreign_call_count +
                   count_call_points_in_range(
-                    block_c_call_point_orders[start_block],
+                    block_foreign_call_point_orders[start_block],
                     span_start_ord,
                     span_end_ord,
                   )
@@ -921,9 +922,9 @@ pub fn build_live_ranges(
                     span_start_ord,
                     span_end_ord,
                   )
-                c_call_count = c_call_count +
+                foreign_call_count = foreign_call_count +
                   count_call_points_in_range(
-                    block_c_call_point_orders[end_block],
+                    block_foreign_call_point_orders[end_block],
                     span_start_ord,
                     span_end_ord,
                   )
@@ -935,10 +936,10 @@ pub fn build_live_ranges(
                       call_prefix_by_block_order[mid_hi] -
                       call_prefix_by_block_order[mid_lo]
                     )
-                  c_call_count = c_call_count +
+                  foreign_call_count = foreign_call_count +
                     (
-                      c_call_prefix_by_block_order[mid_hi] -
-                      c_call_prefix_by_block_order[mid_lo]
+                      foreign_call_prefix_by_block_order[mid_hi] -
+                      foreign_call_prefix_by_block_order[mid_lo]
                     )
                 }
               }
@@ -953,21 +954,22 @@ pub fn build_live_ranges(
             )
             if first_after_start < first_at_or_after_end {
               call_count = first_at_or_after_end - first_after_start
-              c_call_count = c_call_prefix[first_at_or_after_end] -
-                c_call_prefix[first_after_start]
+              foreign_call_count = foreign_call_prefix[first_at_or_after_end] -
+                foreign_call_prefix[first_after_start]
             }
           }
           if call_count > 0 {
             range.crosses_call = true
-            if c_call_count > 0 {
-              range.crosses_c_call = true
+            if foreign_call_count > 0 {
+              range.crosses_foreign_call = true
             }
-            if range.crosses_c_call {
+            if range.crosses_foreign_call {
               break
             }
           }
         }
-        range.crosses_wasm_call = range.crosses_call && !range.crosses_c_call
+        range.crosses_internal_call = range.crosses_call &&
+          !range.crosses_foreign_call
       }
       result.add_range(range)
     }

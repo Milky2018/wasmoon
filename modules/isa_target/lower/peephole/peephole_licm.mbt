@@ -908,15 +908,15 @@ fn propagate_moves_global(func : @machv.Function) -> Unit {
 ///|
 /// Treat call-like instructions as barriers for mem-base value availability.
 fn is_mem_base_cse_barrier(opcode : @instr.VCodeOpcode) -> Bool {
-  // Cranelift keeps heap-base values live across direct Wasm calls in hot
-  // paths. Keep barriers for C/indirect calls (and subtype checks) where the
+  // Cranelift keeps heap-base values live across direct internal calls in hot
+  // paths. Keep barriers for foreign/indirect calls and subtype checks where the
   // callee/slow path may mutate runtime-managed memory state.
   match opcode {
-    CallDirect(_, _, _, Wasm) => false
-    CallDirect(_, _, _, C) => true
+    CallDirect(_, _, _, Internal) => false
+    CallDirect(_, _, _, Foreign) => true
     CallExternal(_, _, _, _) => true
-    CallPtr(_, _, C) => true
-    CallPtr(_, _, Wasm) => true
+    CallPtr(_, _, Foreign) => true
+    CallPtr(_, _, Internal) => true
     ReturnCallIndirect(_, _) => true
     TypeCheckSubtypeIndirect(_, _) => true
     _ => false

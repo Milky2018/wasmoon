@@ -8,11 +8,10 @@ pub(all) enum CallType {
 }
 
 ///|
-/// Calling convention for function calls
-/// Calling convention specification
-pub(all) enum CallConv {
-  Wasm // Wasm calling convention: X0=vmctx, X1-X7=user_args
-  C // Standard C calling convention: X0-X7=args, no vmctx
+/// Call-site clobber class for register allocation and optimization barriers.
+pub(all) enum CallClobberClass {
+  Internal // Same-embedding ABI call.
+  Foreign // Foreign/helper ABI call with conservative clobbers.
 } derive(Eq, Debug)
 
 ///|
@@ -25,10 +24,11 @@ pub(all) struct ExternalName {
 } derive(Eq, Debug, Hash)
 
 ///|
-/// Keep `Show` behavior while migrating from deprecated `derive(Show)` to
-/// `derive(Debug)`.
-pub impl Show for CallConv with fn output(self, logger) {
-  logger.write_string(@types.compact_show_repr(to_repr(self).to_string()))
+pub impl Show for CallClobberClass with fn output(self, logger) {
+  match self {
+    Internal => logger.write_string("Internal")
+    Foreign => logger.write_string("Foreign")
+  }
 }
 
 ///|
@@ -354,7 +354,7 @@ pub(all) enum VCodeOpcode {
   //   offset: byte offset from entry SP (start of overflow area)
   // Stack layout: [int_overflow..., float_overflow...] with V128 aligned to 16.
   LoadStackParam(Int, @abi.RegClass)
-  // NOTE: memory.grow/size/fill/copy and table.grow are lowered to CallPtr[ C ].
+  // NOTE: memory.grow/size/fill/copy and table.grow are lowered to foreign calls.
   // NOTE: TableGet, TableSet are desugared at IR level via FuncEnvironment to LoadPtr/StorePtr
   // NOTE: GlobalGet, GlobalSet are desugared at IR level via FuncEnvironment to LoadPtr/StorePtr
 
@@ -407,27 +407,22 @@ pub(all) enum VCodeOpcode {
   LoadFuncAddr(Int)
 
   // CallPtr: call through a function pointer
-  // Uses depend on calling convention:
-  //   Wasm: [func_ptr, vmctx, arg0, arg1, ...]
-  //   C:    [func_ptr, arg0, arg1, ...]
+  // Uses are already constrained by the lowering-selected ABI.
   // Defs: [result0, result1, ...] (multiple results supported)
-  // Parameters: num_args, num_results, calling convention
-  CallPtr(Int, Int, CallConv)
+  // Parameters: num_args, num_results, clobber class
+  CallPtr(Int, Int, CallClobberClass)
 
   // CallDirect: direct call to a known function index
-  // Uses depend on calling convention:
-  //   Wasm: [vmctx, arg0, arg1, ...]
-  //   C:    [arg0, arg1, ...]
+  // Uses are already constrained by the lowering-selected ABI.
   // Defs: [result0, result1, ...]
-  // Parameters: func_idx, num_args, num_results, calling convention
-  CallDirect(Int, Int, Int, CallConv)
+  // Parameters: func_idx, num_args, num_results, clobber class
+  CallDirect(Int, Int, Int, CallClobberClass)
 
   // CallExternal: direct call to an external helper symbol.
-  // Uses depend on calling convention:
-  //   C: [arg0, arg1, ...]
+  // Uses are already constrained by the lowering-selected ABI.
   // Defs: [result0, result1, ...]
-  // Parameters: symbol, num_args, num_results, calling convention
-  CallExternal(ExternalName, Int, Int, CallConv)
+  // Parameters: symbol, num_args, num_results, clobber class
+  CallExternal(ExternalName, Int, Int, CallClobberClass)
 
   // Stack pointer adjustment for outgoing call arguments (Standard)
   // AdjustSP(delta): Adjust SP by delta bytes
@@ -1038,7 +1033,7 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
     StackLoad(offset) => "stack_load [sp+\{offset}]"
     StackStore(offset) => "stack_store [sp+\{offset}]"
     LoadStackParam(offset, class) => "load_stack_param +\{offset} (\{class})"
-    // NOTE: memory.grow/size/fill/copy and table.grow are lowered to CallPtr[ C ].
+    // NOTE: memory.grow/size/fill/copy and table.grow are lowered to foreign calls.
     // NOTE: TableGet, TableSet, GlobalGet, GlobalSet removed - desugared at IR level
     LoadPtr(ty, offset) => "load_ptr.\{ty} +\{offset}"
     LoadPtrRegOffset(ty, ext, shift, offset) => {
