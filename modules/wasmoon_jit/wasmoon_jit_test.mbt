@@ -34,7 +34,7 @@ test "resolve wasm function symbols into cwasm call fixups" {
 }
 
 ///|
-test "resolve legacy runtime fixup ids in wasmoon_jit" {
+test "resolve cwasm runtime helper fixup ids in wasmoon_jit" {
   inspect(gc_runtime_fixup_idx(0), content="-20000")
   inspect(jit_runtime_fixup_idx(13), content="-21013")
   inspect(exception_runtime_fixup_idx(11), content="-22011")

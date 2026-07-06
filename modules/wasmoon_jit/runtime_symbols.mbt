@@ -21,19 +21,19 @@ pub impl Show for LinkError with fn output(self, logger) {
 }
 
 ///|
-/// Reserve negative function-index values for legacy runtime helper fixups.
+/// Reserve negative function-index values for cwasm runtime-helper fixups.
 pub fn gc_runtime_fixup_idx(ordinal : Int) -> Int {
   -20_000 - ordinal
 }
 
 ///|
-/// Reserve negative function-index values for legacy runtime helper fixups.
+/// Reserve negative function-index values for cwasm runtime-helper fixups.
 pub fn jit_runtime_fixup_idx(ordinal : Int) -> Int {
   -21_000 - ordinal
 }
 
 ///|
-/// Reserve negative function-index values for legacy runtime helper fixups.
+/// Reserve negative function-index values for cwasm runtime-helper fixups.
 pub fn exception_runtime_fixup_idx(ordinal : Int) -> Int {
   -22_000 - ordinal
 }
@@ -375,10 +375,10 @@ pub fn resolve_wasm_func_symbol(name : String) -> Int? {
 }
 
 ///|
-/// Resolve the legacy negative runtime-helper fixup id used by the old VCode
-/// emitter. New MachV emission should prefer named external-symbol relocations.
-/// TODO(ISS-021): delete this compatibility entry once the production JIT
-/// loader consumes `machv_emit` relocations end-to-end.
+/// Resolve the negative cwasm runtime-helper function index used by Wasmoon
+/// JIT call fixups. MachV emission uses named external-symbol relocations, and
+/// the cwasm artifact stores those runtime helper targets as negative function
+/// indices for the loader to patch.
 pub fn resolve_runtime_func_fixup_idx(idx : Int) -> Int64? {
   match idx {
     -20000 => Some(@jit_ffi.c_jit_get_gc_ref_test_ptr())
