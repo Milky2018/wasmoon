@@ -589,9 +589,7 @@ pub fn lower_inst_with_patterns(
 
 ///|
 /// Lower a function with pattern matching optimizations enabled
-pub fn lower_function_optimized(
-  ir_func : @milkir.Function,
-) -> @machv_regalloc.VCodeFunction {
+pub fn lower_function_optimized(ir_func : @milkir.Function) -> @machv.Function {
   let ctx = LoweringContext::new(
     ir_func,
     @abi.ABISettings::default(),

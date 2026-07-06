@@ -2,6 +2,7 @@
 package "Milky2018/machv_emit"
 
 import {
+  "Milky2018/machv",
   "Milky2018/machv/abi",
   "Milky2018/machv/instr",
   "Milky2018/machv/isa",
@@ -23,9 +24,9 @@ pub const TYPE_V128 : Int = 4
 
 pub fn emit_entry_trampoline(Array[Int], Array[Int]) -> MachineCode
 
-pub fn emit_function(@machv_regalloc.VCodeFunction, debug_func_idx? : Int?, force_frame_setup? : Bool, abi_settings? : @abi.ABISettings, record_disasm? : Bool) -> MachineCode
+pub fn emit_function(@machv.Function, debug_func_idx? : Int?, force_frame_setup? : Bool, abi_settings? : @abi.ABISettings, record_disasm? : Bool) -> MachineCode
 
-pub fn emit_function_with_regalloc(@machv_regalloc.VCodeFunction, @machv_regalloc.Output, debug_func_idx? : Int?, force_frame_setup? : Bool, abi_settings? : @abi.ABISettings, record_disasm? : Bool) -> MachineCode
+pub fn emit_function_with_regalloc(@machv.Function, @machv_regalloc.Output, debug_func_idx? : Int?, force_frame_setup? : Bool, abi_settings? : @abi.ABISettings, record_disasm? : Bool) -> MachineCode
 
 pub fn emit_hostcall_import_trampoline(Array[@types.ValueType], Array[@types.ValueType], Int, @instr.ExternalName) -> MachineCode
 

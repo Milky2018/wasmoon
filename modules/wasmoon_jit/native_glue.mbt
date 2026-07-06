@@ -117,7 +117,7 @@ pub fn native_glue_covers_jit_ffi_stubs(
 ///|
 pub fn plan_integration_for_target(
   func : @milkir.Function,
-  vcode_func : @machv_regalloc.VCodeFunction,
+  vcode_func : @machv.Function,
   regalloc_output : @machv_regalloc.Output,
   target : @machv_emit.EmitTarget,
 ) -> JitIntegrationPlan {
@@ -141,7 +141,7 @@ fn emit_target_to_isa(target : @machv_emit.EmitTarget) -> @isa.ISA {
 pub fn lower_milkir_for_target(
   func : @milkir.Function,
   target : @machv_emit.EmitTarget,
-) -> @machv_regalloc.VCodeFunction {
+) -> @machv.Function {
   let isa = emit_target_to_isa(target)
   let previous = @isa.push_isa_override(isa)
   let lowered = @lower.lower_function(func)
@@ -153,7 +153,7 @@ pub fn lower_milkir_for_target(
 pub fn lower_wasm_body_milkir_for_target(
   func : @milkir.Function,
   target : @machv_emit.EmitTarget,
-) -> @machv_regalloc.VCodeFunction {
+) -> @machv.Function {
   let isa = emit_target_to_isa(target)
   let previous = @isa.push_isa_override(isa)
   let lowered = @lower.lower_function(func, run_ir_opt=false)

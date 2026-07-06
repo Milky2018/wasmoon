@@ -6,13 +6,11 @@
 // - peephole_licm.mbt
 
 ///|
-pub fn optimize_vcode(func : @machv_regalloc.VCodeFunction) -> Unit {
+pub fn optimize_vcode(func : @machv.Function) -> Unit {
   @peephole.optimize_vcode(func, profile=Full)
 }
 
 ///|
-pub fn optimize_vcode_for_lowering(
-  func : @machv_regalloc.VCodeFunction,
-) -> Unit {
+pub fn optimize_vcode_for_lowering(func : @machv.Function) -> Unit {
   @peephole.optimize_vcode(func, profile=Lowering)
 }

@@ -24,7 +24,7 @@ fn bytes_to_int64_le(bytes : Bytes, offset : Int) -> Int64 {
 
 ///|
 fn collect_used_callee_saved(
-  func : @machv_regalloc.VCodeFunction,
+  func : @machv.Function,
   _needs_sret : Bool,
   abi_settings : @abi.ABISettings,
 ) -> Array[Int] {
@@ -79,7 +79,7 @@ fn collect_used_callee_saved(
 ///|
 /// Collect all callee-saved FPRs (D8-D15) that are defined in the function
 fn collect_used_callee_saved_fprs(
-  func : @machv_regalloc.VCodeFunction,
+  func : @machv.Function,
   abi_settings : @abi.ABISettings,
 ) -> Array[Int] {
   let used : @hashset.HashSet[Int] = HashSet([])
@@ -120,13 +120,13 @@ fn collect_used_callee_saved_fprs(
 
 ///|
 /// Check if a function makes any calls
-fn func_has_calls(func : @machv_regalloc.VCodeFunction) -> Bool {
+fn func_has_calls(func : @machv.Function) -> Bool {
   func.has_calls()
 }
 
 ///|
 /// Check if a function reads any incoming stack parameters
-fn func_has_incoming_stack_args(func : @machv_regalloc.VCodeFunction) -> Bool {
+fn func_has_incoming_stack_args(func : @machv.Function) -> Bool {
   for block in func.get_blocks() {
     for inst in block.insts {
       if inst.opcode is LoadStackParam(_, _) {
@@ -142,7 +142,7 @@ fn func_has_incoming_stack_args(func : @machv_regalloc.VCodeFunction) -> Bool {
 /// A function needs vmctx if:
 /// - It uses X19 as a physical register in any instruction
 /// - It uses X19 in any terminator
-fn func_uses_vmctx(func : @machv_regalloc.VCodeFunction) -> Bool {
+fn func_uses_vmctx(func : @machv.Function) -> Bool {
   let vmctx = @isaregs.vmctx_index()
   for block in func.get_blocks() {
     // Check instructions for X19 usage
@@ -756,7 +756,7 @@ fn MachineCode::emit_prologue(
 ///|
 /// Emit machine code for a VCode function
 pub fn emit_function(
-  func : @machv_regalloc.VCodeFunction,
+  func : @machv.Function,
   debug_func_idx? : Int? = None,
   force_frame_setup? : Bool = false,
   abi_settings? : @abi.ABISettings = @abi.ABISettings::default(),
@@ -1218,7 +1218,7 @@ pub fn emit_function(
       mc.emit_terminator_with_epilogue(
         term,
         stack_frame,
-        func.get_result_types(),
+        func.get_result_kinds(),
         next_block,
         shared_exit_block,
       )
@@ -1247,7 +1247,7 @@ pub fn emit_function(
 
 ///|
 fn output_uses_preg(
-  func : @machv_regalloc.VCodeFunction,
+  func : @machv.Function,
   output : @machv_regalloc.Output,
   preg_idx : Int,
 ) -> Bool {
@@ -1257,7 +1257,7 @@ fn output_uses_preg(
 
 ///|
 fn collect_used_callee_saved_from_output(
-  func : @machv_regalloc.VCodeFunction,
+  func : @machv.Function,
   output : @machv_regalloc.Output,
   abi_settings : @abi.ABISettings,
 ) -> Array[Int] {
@@ -1333,7 +1333,7 @@ fn collect_used_callee_saved_from_output(
 
 ///|
 fn collect_used_callee_saved_fprs_from_output(
-  func : @machv_regalloc.VCodeFunction,
+  func : @machv.Function,
   output : @machv_regalloc.Output,
   abi_settings : @abi.ABISettings,
 ) -> Array[Int] {
@@ -2044,7 +2044,7 @@ fn MachineCode::emit_prologue_with_output(
 ///|
 /// Emit machine code using the Cranelift-style regalloc output.
 pub fn emit_function_with_regalloc(
-  func : @machv_regalloc.VCodeFunction,
+  func : @machv.Function,
   output : @machv_regalloc.Output,
   debug_func_idx? : Int? = None,
   force_frame_setup? : Bool = false,
@@ -2203,7 +2203,7 @@ pub fn emit_function_with_regalloc(
       mc.emit_terminator_with_epilogue(
         mapped_term,
         stack_frame,
-        func.get_result_types(),
+        func.get_result_kinds(),
         next_block,
         shared_exit_block,
       )

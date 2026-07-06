@@ -68,8 +68,8 @@ fn clone_remat_inst(def : RematDef, dst : @abi.VReg) -> @instr.VCodeInst {
 /// This mirrors Cranelift's remat intent for cheap constants: shorten very long
 /// live ranges by re-defining constants near far-away uses.
 pub fn rematerialize_long_distance_constants(
-  func : VCodeFunction,
-) -> VCodeFunction {
+  func : @machv.Function,
+) -> @machv.Function {
   let remat_defs : Map[Int, RematDef] = {}
   for block in func.blocks {
     for inst_idx, inst in block.insts {
@@ -103,7 +103,7 @@ pub fn rematerialize_long_distance_constants(
     }
     let clone_count : Map[Int, Int] = {}
     fn maybe_remat_use(
-      func : VCodeFunction,
+      func : @machv.Function,
       reg : @abi.Reg,
       block_id : Int,
       use_inst_idx : Int,
@@ -313,8 +313,8 @@ pub fn rematerialize_long_distance_constants(
 /// This is intentionally conservative and mirrors Cranelift’s “clone remat
 /// values into the block where used” strategy.
 pub fn rematerialize_cross_block_constants(
-  func : VCodeFunction,
-) -> VCodeFunction {
+  func : @machv.Function,
+) -> @machv.Function {
   // vreg_id -> rematerializable def
   let remat_defs : Map[Int, RematDef] = {}
 
@@ -352,7 +352,7 @@ pub fn rematerialize_cross_block_constants(
     // Per-block remat cache, mirrors Cranelift remat_copies[(block, value)].
     let local_map : Map[Int, @abi.VReg] = {}
     fn rewrite_use_with_local_remat(
-      func : VCodeFunction,
+      func : @machv.Function,
       reg : @abi.Reg,
       remat_defs : Map[Int, RematDef],
       local_map : Map[Int, @abi.VReg],

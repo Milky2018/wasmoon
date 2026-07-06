@@ -338,7 +338,7 @@ fn pick_temp_preg(
 /// - Stack loads/stores are expressed as `Edit::Move` between `Loc::Spill` and
 ///   `Loc::Reg`.
 fn build_output(
-  func : VCodeFunction,
+  func : @machv.Function,
   liveness : LivenessResult,
   alloc : RegAllocResult,
   isa : @isa.ISA,

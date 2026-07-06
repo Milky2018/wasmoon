@@ -10,8 +10,8 @@ pub struct VCodeCFG {
 }
 
 ///|
-/// Build a CFG from a VCodeFunction
-pub fn VCodeCFG::build(func : @machv_regalloc.VCodeFunction) -> VCodeCFG {
+/// Build a CFG from a @machv.Function
+pub fn VCodeCFG::build(func : @machv.Function) -> VCodeCFG {
   let blocks = func.get_blocks()
   let n = blocks.length()
   let preds : Array[Array[Int]] = []

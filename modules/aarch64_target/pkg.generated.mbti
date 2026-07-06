@@ -40,9 +40,9 @@ pub fn callee_saved_fprs() -> Array[@machv.PReg]
 
 pub fn int_reg_index(IntRegRole) -> Int
 
-pub fn lower_function(@milkir.Function) -> @machv.Function
+pub fn lower_function(@milkir.Function) -> @machv.AbstractFunction
 
-pub fn lower_wasm_body_function(@milkir.Function) -> @machv.Function
+pub fn lower_wasm_body_function(@milkir.Function) -> @machv.AbstractFunction
 
 pub fn target() -> Target
 

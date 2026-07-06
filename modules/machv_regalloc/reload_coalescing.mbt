@@ -19,7 +19,7 @@ priv struct ReloadInterval {
 /// Compute reload intervals for spilled values in each block.
 /// Returns a map: (block_id, spill_slot) -> ReloadInterval.
 fn compute_reload_intervals(
-  func : VCodeFunction,
+  func : @machv.Function,
   alloc : RegAllocResult,
 ) -> Map[(Int, Int), ReloadInterval] {
   let intervals : Map[(Int, Int), ReloadInterval] = {}
@@ -79,7 +79,7 @@ fn compute_reload_intervals(
 /// Try to allocate registers for reload intervals.
 /// Uses callee-saved registers that aren't already in use.
 fn allocate_reload_registers(
-  func : VCodeFunction,
+  func : @machv.Function,
   alloc : RegAllocResult,
   intervals : Map[(Int, Int), ReloadInterval],
   liveness : LivenessResult,

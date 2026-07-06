@@ -275,7 +275,7 @@ fn MachineCode::emit_terminator_with_epilogue(
   self : MachineCode,
   term : @instr.VCodeTerminator,
   stack_frame : JITStackFrame,
-  result_types : Array[@milkir.Type],
+  result_types : Array[@machv.ValueKind],
   next_block : Int?,
   shared_exit_block : Int?,
 ) -> Unit {
@@ -453,7 +453,7 @@ fn MachineCode::emit_terminator_with_epilogue(
 
       // First pass: collect sources for each return type
       let int_sources : Array[(Int, Int)] = [] // (src_reg, value_index)
-      let float_sources : Array[(@milkir.Type, Int, Int)] = [] // (type, src_reg, value_index)
+      let float_sources : Array[(@machv.ValueKind, Int, Int)] = [] // (type, src_reg, value_index)
       for i, value in values {
         let src = reg_num(value)
         let ty = if i < result_types.length() { result_types[i] } else { I64 }

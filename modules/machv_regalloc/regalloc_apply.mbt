@@ -26,9 +26,9 @@ fn preg_to_loc(preg : @abi.PReg) -> Loc {
 /// Apply register allocation results to a VCode function
 /// Handles spilled registers by inserting StackLoad/StackStore instructions
 pub fn apply_allocation(
-  func : VCodeFunction,
+  func : @machv.Function,
   alloc : RegAllocResult,
-) -> VCodeFunction {
+) -> @machv.Function {
   let new_func = func.clone_base()
   new_func.set_num_spill_slots(alloc.num_spill_slots)
   let block_id_to_index : Map[Int, Int] = {}
@@ -310,8 +310,8 @@ pub fn apply_allocation(
   }
 
   // Copy result types for multi-value return support
-  for ty in func.result_types {
-    new_func.result_types.push(ty)
+  for ty in func.result_kinds {
+    new_func.result_kinds.push(ty)
   }
 
   // Consume regalloc2-style linear edit stream with a forward cursor.
@@ -906,7 +906,7 @@ pub fn apply_allocation(
 
 ///|
 /// Remove redundant Move instructions where source and destination alias.
-fn eliminate_trivial_moves(func : VCodeFunction) -> VCodeFunction {
+fn eliminate_trivial_moves(func : @machv.Function) -> @machv.Function {
   fn same_location(a : @abi.PReg, b : @abi.PReg) -> Bool {
     let same_bank = match (a.class, b.class) {
       (Int, Int) => true
@@ -927,8 +927,8 @@ fn eliminate_trivial_moves(func : VCodeFunction) -> VCodeFunction {
   for result in func.results {
     new_func.results.push(result)
   }
-  for ty in func.result_types {
-    new_func.result_types.push(ty)
+  for ty in func.result_kinds {
+    new_func.result_kinds.push(ty)
   }
   for block in func.blocks {
     let new_block = new_func.new_block()

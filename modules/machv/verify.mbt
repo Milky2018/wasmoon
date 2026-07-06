@@ -10,7 +10,9 @@ pub impl Show for VerifyError with fn output(self, logger) {
 }
 
 ///|
-pub fn Function::verify(self : Function) -> Unit raise VerifyError {
+pub fn AbstractFunction::verify(
+  self : AbstractFunction,
+) -> Unit raise VerifyError {
   if self.blocks.is_empty() {
     raise EmptyFunction
   }

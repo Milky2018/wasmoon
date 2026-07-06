@@ -53,7 +53,7 @@ fn union_sets(
 
 ///|
 pub fn verify_allocation(
-  func : VCodeFunction,
+  func : @machv.Function,
   liveness : LivenessResult,
   alloc : RegAllocResult,
   isa : @isa.ISA,
@@ -260,7 +260,7 @@ pub fn verify_allocation(
 ///|
 /// Backwards-compatible wrapper for existing call sites.
 pub fn verify_allocation_aarch64(
-  func : VCodeFunction,
+  func : @machv.Function,
   liveness : LivenessResult,
   alloc : RegAllocResult,
   settings? : @abi.ABISettings = @abi.ABISettings::default(),

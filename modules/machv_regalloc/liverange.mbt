@@ -406,7 +406,7 @@ pub fn LiveRangeSet::length(self : LiveRangeSet) -> Int {
 /// Build LiveRanges from liveness analysis result
 /// This is Phase 2 of the Ion allocator
 pub fn build_live_ranges(
-  func : VCodeFunction,
+  func : @machv.Function,
   liveness : LivenessResult,
 ) -> LiveRangeSet {
   let result = LiveRangeSet::new(liveness.block_order, func.next_vreg_id)

@@ -2,11 +2,11 @@
 package "Milky2018/isa_target/lower/peephole"
 
 import {
-  "Milky2018/machv_regalloc",
+  "Milky2018/machv",
 }
 
 // Values
-pub fn optimize_vcode(@machv_regalloc.VCodeFunction, profile? : PeepholeProfile) -> Unit
+pub fn optimize_vcode(@machv.Function, profile? : PeepholeProfile) -> Unit
 
 // Errors
 

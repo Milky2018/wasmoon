@@ -6,7 +6,7 @@
 /// preheader and hoist:
 /// - `LoadConst` (with heuristics to avoid reg pressure)
 /// - a small set of loop-invariant `Load`/`LoadPtr` from immutable vmctx-derived data
-fn licm_hoist_invariants(func : @machv_regalloc.VCodeFunction) -> Unit {
+fn licm_hoist_invariants(func : @machv.Function) -> Unit {
   let n = func.blocks.length()
   if n == 0 {
     return
@@ -240,7 +240,7 @@ fn licm_hoist_invariants(func : @machv_regalloc.VCodeFunction) -> Unit {
 /// - vmctx base must be `x19`
 /// - only track immutable vmctx-derived base pointers (`func_table`, `globals`)
 /// - only CSE `Load(I64, off)` / `LoadPtr(I64, off)` from that func_table pointer
-fn cse_immutable_loads(func : @machv_regalloc.VCodeFunction) -> Unit {
+fn cse_immutable_loads(func : @machv.Function) -> Unit {
   let vmctx_idx = @isa.ISA::current().vmctx_reg_index()
   // Wasm ABI: param 0 is vmctx. Treat it as vmctx alias so repeated
   // vmctx-derived base loads can be CSE'd even before prelude rewrites.
@@ -565,7 +565,7 @@ fn is_trivially_dead_opcode(op : @instr.VCodeOpcode) -> Bool {
 
 ///|
 /// Remove trivially-dead value defs (constants/moves) across the function.
-fn dce_trivially_dead(func : @machv_regalloc.VCodeFunction) -> Unit {
+fn dce_trivially_dead(func : @machv.Function) -> Unit {
   let mut changed = true
   while changed {
     changed = false
@@ -750,7 +750,7 @@ fn propagate_single_use_moves(
 
 ///|
 /// Propagate virtual moves across the whole function and remove redundant copies.
-fn propagate_moves_global(func : @machv_regalloc.VCodeFunction) -> Unit {
+fn propagate_moves_global(func : @machv.Function) -> Unit {
   let dom = compute_dominators(func)
   let def_pos : Map[Int, (Int, Int)] = {}
   for block in func.blocks {
@@ -975,7 +975,7 @@ fn merge_mem_base_preds(
 /// Unlike the previous block-local pass, this computes a forward dataflow
 /// environment and allows reuse across block boundaries when all predecessors
 /// agree on the exact same available vreg.
-fn cse_mem_base_loads(func : @machv_regalloc.VCodeFunction) -> Unit {
+fn cse_mem_base_loads(func : @machv.Function) -> Unit {
   let n = func.blocks.length()
   if n == 0 {
     return
@@ -1083,7 +1083,7 @@ fn cse_mem_base_loads(func : @machv_regalloc.VCodeFunction) -> Unit {
 ///|
 /// Fuse `cmp` + `branch` into `br_cmp`/`br_cmp_imm` when the cmp result
 /// is only used by the branch terminator.
-fn fuse_cmp_branch(func : @machv_regalloc.VCodeFunction) -> Unit {
+fn fuse_cmp_branch(func : @machv.Function) -> Unit {
   let const_defs : Map[Int, Int64] = {}
   for blk in func.blocks {
     for inst in blk.insts {
@@ -1186,7 +1186,7 @@ priv struct ResolvedJump {
 
 ///|
 fn build_jump_forwarding_map(
-  func : @machv_regalloc.VCodeFunction,
+  func : @machv.Function,
 ) -> Map[Int, JumpForwardInfo] {
   let forwarding : Map[Int, JumpForwardInfo] = {}
   for block in func.blocks {
@@ -1226,7 +1226,7 @@ fn build_jump_forwarding_map(
 }
 
 ///|
-fn thread_trivial_jump_blocks(func : @machv_regalloc.VCodeFunction) -> Int {
+fn thread_trivial_jump_blocks(func : @machv.Function) -> Int {
   let forwarding = build_jump_forwarding_map(func)
   if forwarding.is_empty() {
     return 0
@@ -1379,7 +1379,7 @@ pub(all) enum PeepholeProfile {
 
 ///|
 pub fn optimize_vcode(
-  func : @machv_regalloc.VCodeFunction,
+  func : @machv.Function,
   profile? : PeepholeProfile = Full,
 ) -> Unit {
   let mut inst_count = 0

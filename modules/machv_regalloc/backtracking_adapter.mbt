@@ -170,7 +170,7 @@ priv struct BacktrackingAllocator {
   block_point_base : Array[Int]
 
   // Reference to function for constraint lookups
-  func : VCodeFunction
+  func : @machv.Function
   bundle_attempts : Array[Int]
 }
 
@@ -208,7 +208,7 @@ fn make_bool_table(cap : Int) -> Array[Bool] {
 
 ///|
 fn BacktrackingAllocator::new(
-  func : VCodeFunction,
+  func : @machv.Function,
   ranges : LiveRangeSet,
   bundles : BundleSet,
   int_regs : Array[@abi.PReg],
@@ -1453,7 +1453,7 @@ fn BacktrackingAllocator::compact_spill_slots(
 ///|
 /// Build bundles with merging from Move instructions and block arguments
 pub fn build_bundles_with_merging(
-  func : VCodeFunction,
+  func : @machv.Function,
   ranges : LiveRangeSet,
 ) -> BundleSet {
   let perf_on = perf_enabled()
@@ -1765,7 +1765,7 @@ fn BacktrackingAllocator::preassign_params(
 /// Project MachV liveness/bundles into `regalloc` backtracking APIs and
 /// materialize the generic allocation decisions as a MachV `RegAllocResult`.
 fn allocate_backtracking(
-  func : VCodeFunction,
+  func : @machv.Function,
   liveness : LivenessResult,
   int_regs : Array[@abi.PReg],
   float_regs : Array[@abi.PReg],

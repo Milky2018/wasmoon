@@ -118,7 +118,7 @@ fn block_params_to_regalloc(block : @machv.Block) -> @regalloc.Instruction? {
 
 ///|
 fn function_params_to_regalloc(
-  func : @machv.Function,
+  func : @machv.AbstractFunction,
 ) -> @regalloc.Instruction? {
   if func.params.length() == 0 {
     return None
@@ -185,7 +185,7 @@ fn terminator_to_regalloc(
 
 ///|
 pub fn project_function(
-  func : @machv.Function,
+  func : @machv.AbstractFunction,
   physical_regs : Array[@machv.PReg],
 ) -> @regalloc.Program {
   project_function_impl(func, physical_regs, true)
@@ -193,7 +193,7 @@ pub fn project_function(
 
 ///|
 fn project_function_impl(
-  func : @machv.Function,
+  func : @machv.AbstractFunction,
   physical_regs : Array[@machv.PReg],
   include_fixed_constraints : Bool,
 ) -> @regalloc.Program {
@@ -227,7 +227,7 @@ fn project_function_impl(
 /// Project a small MachV function into `regalloc.Program` and run the simple
 /// linear-scan allocator. This is not the production VCode backtracking path.
 pub fn allocate_function_linear_scan(
-  func : @machv.Function,
+  func : @machv.AbstractFunction,
   physical_regs : Array[@machv.PReg],
 ) -> @regalloc.Allocation raise @regalloc.VerifyError {
   let program = project_function(func, physical_regs)
@@ -238,7 +238,7 @@ pub fn allocate_function_linear_scan(
 
 ///|
 fn allocate_function_linear_scan_for_apply(
-  func : @machv.Function,
+  func : @machv.AbstractFunction,
   physical_regs : Array[@machv.PReg],
 ) -> @regalloc.Allocation raise @regalloc.VerifyError {
   let program = project_function_impl(func, physical_regs, true)
@@ -401,7 +401,7 @@ fn reserve_scratch(
 
 ///|
 fn allocate_with_optional_scratch(
-  func : @machv.Function,
+  func : @machv.AbstractFunction,
   physical_regs : Array[@machv.PReg],
 ) -> @regalloc.Allocation raise @regalloc.VerifyError {
   let first = allocate_function_linear_scan_for_apply(func, physical_regs)
@@ -424,7 +424,7 @@ fn slot_size(class : @regalloc.RegClass) -> Int {
 
 ///|
 fn ensure_spill_slots(
-  func : @machv.Function,
+  func : @machv.AbstractFunction,
   allocation : @regalloc.Allocation,
 ) -> Array[@machv.StackSlot] {
   let spill_slots : Array[@machv.StackSlot?] = []
@@ -487,7 +487,7 @@ fn rewrite_allocated_reg(
 
 ///|
 fn rewrite_spilled_operand(
-  func : @machv.Function,
+  func : @machv.AbstractFunction,
   allocation : @regalloc.Allocation,
   spill_slots : Array[@machv.StackSlot],
   physical_regs : Array[@machv.PReg],
@@ -532,7 +532,7 @@ fn rewrite_spilled_operand(
 
 ///|
 fn rewrite_spilled_reg(
-  func : @machv.Function,
+  func : @machv.AbstractFunction,
   allocation : @regalloc.Allocation,
   spill_slots : Array[@machv.StackSlot],
   physical_regs : Array[@machv.PReg],
@@ -568,7 +568,7 @@ fn rewrite_spilled_reg(
 
 ///|
 fn rewrite_reg_array(
-  func : @machv.Function,
+  func : @machv.AbstractFunction,
   allocation : @regalloc.Allocation,
   spill_slots : Array[@machv.StackSlot],
   physical_regs : Array[@machv.PReg],
@@ -589,7 +589,7 @@ fn rewrite_reg_array(
 
 ///|
 fn rewrite_terminator(
-  func : @machv.Function,
+  func : @machv.AbstractFunction,
   allocation : @regalloc.Allocation,
   spill_slots : Array[@machv.StackSlot],
   physical_regs : Array[@machv.PReg],
@@ -716,7 +716,7 @@ fn rewrite_terminator(
 }
 
 ///|
-fn find_block(func : @machv.Function, block_id : Int) -> @machv.Block? {
+fn find_block(func : @machv.AbstractFunction, block_id : Int) -> @machv.Block? {
   for block in func.blocks {
     if block.id == block_id {
       return Some(block)
@@ -849,7 +849,7 @@ fn fixed_constraint_inst_edits(
 
 ///|
 fn append_fixed_constraint_moves(
-  func : @machv.Function,
+  func : @machv.AbstractFunction,
   spill_slots : Array[@machv.StackSlot],
   physical_regs : Array[@machv.PReg],
   class : @machv.RegClass,
@@ -888,7 +888,7 @@ fn append_fixed_constraint_moves(
 
 ///|
 fn append_location_move(
-  func : @machv.Function,
+  func : @machv.AbstractFunction,
   spill_slots : Array[@machv.StackSlot],
   class : @machv.RegClass,
   from : @regalloc.Location,
@@ -954,7 +954,7 @@ fn operand_with_physical(
 
 ///|
 fn materialize_fixed_constraint_moves(
-  func : @machv.Function,
+  func : @machv.AbstractFunction,
   allocation : @regalloc.Allocation,
   spill_slots : Array[@machv.StackSlot],
   physical_regs : Array[@machv.PReg],
@@ -1100,7 +1100,7 @@ fn materialize_fixed_constraint_moves(
 
 ///|
 fn resolve_edge_moves(
-  func : @machv.Function,
+  func : @machv.AbstractFunction,
   spill_slots : Array[@machv.StackSlot],
   physical_regs : Array[@machv.PReg],
   class : @machv.RegClass,
@@ -1129,7 +1129,7 @@ fn resolve_edge_moves(
 
 ///|
 fn edge_transfer_insts(
-  func : @machv.Function,
+  func : @machv.AbstractFunction,
   allocation : @regalloc.Allocation,
   spill_slots : Array[@machv.StackSlot],
   physical_regs : Array[@machv.PReg],
@@ -1180,7 +1180,7 @@ fn edge_transfer_insts(
 
 ///|
 fn append_edge_transfers(
-  func : @machv.Function,
+  func : @machv.AbstractFunction,
   allocation : @regalloc.Allocation,
   spill_slots : Array[@machv.StackSlot],
   physical_regs : Array[@machv.PReg],
@@ -1198,7 +1198,7 @@ fn append_edge_transfers(
 
 ///|
 fn make_edge_transfer_block(
-  func : @machv.Function,
+  func : @machv.AbstractFunction,
   allocation : @regalloc.Allocation,
   spill_slots : Array[@machv.StackSlot],
   physical_regs : Array[@machv.PReg],
@@ -1218,7 +1218,7 @@ fn make_edge_transfer_block(
 
 ///|
 fn materialize_edge_transfers(
-  func : @machv.Function,
+  func : @machv.AbstractFunction,
   allocation : @regalloc.Allocation,
   spill_slots : Array[@machv.StackSlot],
   physical_regs : Array[@machv.PReg],
@@ -1341,7 +1341,7 @@ fn materialize_edge_transfers(
 
 ///|
 fn rewrite_operands_and_spills(
-  func : @machv.Function,
+  func : @machv.AbstractFunction,
   allocation : @regalloc.Allocation,
   spill_slots : Array[@machv.StackSlot],
   physical_regs : Array[@machv.PReg],
@@ -1385,7 +1385,7 @@ fn rewrite_operands_and_spills(
 
 ///|
 fn materialize_entry_param_transfers(
-  func : @machv.Function,
+  func : @machv.AbstractFunction,
   allocation : @regalloc.Allocation,
   spill_slots : Array[@machv.StackSlot],
   physical_regs : Array[@machv.PReg],
@@ -1466,7 +1466,7 @@ fn materialize_entry_param_transfers(
 /// MachV function model. Production VCode allocation uses
 /// `allocate_registers_backtracking_output`.
 pub fn allocate_and_apply_linear_scan(
-  func : @machv.Function,
+  func : @machv.AbstractFunction,
   physical_regs : Array[@machv.PReg],
 ) -> ApplyResult raise @regalloc.VerifyError {
   let allocation = allocate_with_optional_scratch(func, physical_regs)

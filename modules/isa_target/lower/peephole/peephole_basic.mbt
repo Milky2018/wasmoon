@@ -61,7 +61,7 @@ fn collect_uses(inst : @instr.VCodeInst, used : @hashset.HashSet[Int]) -> Unit {
 
 ///|
 /// Count uses of virtual regs across the whole function.
-fn collect_use_counts(func : @machv_regalloc.VCodeFunction) -> Array[Int] {
+fn collect_use_counts(func : @machv.Function) -> Array[Int] {
   let counts : Array[Int] = Array::make(func.next_vreg_id, 0)
   fn inc_use(counts : Array[Int], id : Int) -> Unit {
     if id < 0 {
@@ -146,7 +146,7 @@ fn collect_terminator_uses(
 /// Collect uses from block parameters (values that flow to successor blocks)
 fn collect_block_param_uses(
   block : @block.VCodeBlock,
-  func : @machv_regalloc.VCodeFunction,
+  func : @machv.Function,
   used : @hashset.HashSet[Int],
 ) -> Unit {
   // Get successor block IDs from terminator
@@ -183,7 +183,7 @@ fn collect_block_param_uses(
 /// Returns the number of instructions eliminated
 fn optimize_block(
   block : @block.VCodeBlock,
-  func : @machv_regalloc.VCodeFunction,
+  func : @machv.Function,
   state : PeepholeState,
 ) -> Int {
   // Phase 1: Collect all used vregs (for dead code elimination)
@@ -748,7 +748,7 @@ fn can_merge_mem_ops(op1 : MemOpInfo, op2 : MemOpInfo) -> Bool {
 /// Becomes: combined = (val2 << 8) | val1; store16 [base+off], combined
 fn optimize_store_merging(
   block : @block.VCodeBlock,
-  func : @machv_regalloc.VCodeFunction,
+  func : @machv.Function,
 ) -> Int {
   if block.insts.length() < 2 {
     return 0
@@ -793,7 +793,7 @@ fn optimize_store_merging(
 /// Create merged store instructions
 /// Combines two values: combined = val_lo | (val_hi << bits)
 fn create_merged_store(
-  func : @machv_regalloc.VCodeFunction,
+  func : @machv.Function,
   lo : MemOpInfo,
   hi : MemOpInfo,
   new_bits : Int,
@@ -825,7 +825,7 @@ fn create_merged_store(
 /// Becomes: combined = load16 [base+off]; store16 [dst+off], combined
 fn optimize_load_merging(
   block : @block.VCodeBlock,
-  func : @machv_regalloc.VCodeFunction,
+  func : @machv.Function,
 ) -> Int {
   if block.insts.length() < 2 {
     return 0
@@ -911,7 +911,7 @@ fn find_store_pair_for_loads(
 ///|
 /// Create merged load + store instructions
 fn create_merged_load_store(
-  func : @machv_regalloc.VCodeFunction,
+  func : @machv.Function,
   load_info : MemOpInfo,
   dst_base : Int,
   dst_offset : Int,
@@ -1082,9 +1082,7 @@ fn clone_hashset_int(set : @hashset.HashSet[Int]) -> @hashset.HashSet[Int] {
 
 ///|
 /// Compute dominators for all blocks (simple iterative algorithm).
-fn compute_dominators(
-  func : @machv_regalloc.VCodeFunction,
-) -> Array[@hashset.HashSet[Int]] {
+fn compute_dominators(func : @machv.Function) -> Array[@hashset.HashSet[Int]] {
   let n = func.blocks.length()
 
   // IMPORTANT: avoid `Array::make(n, [])` because it aliases the same array.

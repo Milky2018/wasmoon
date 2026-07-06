@@ -2,15 +2,15 @@
 package "Milky2018/machv_regalloc/layout"
 
 import {
-  "Milky2018/machv_regalloc",
+  "Milky2018/machv",
 }
 
 // Values
-pub fn layout_blocks(@machv_regalloc.VCodeFunction) -> Array[Int]
+pub fn layout_blocks(@machv.Function) -> Array[Int]
 
-pub fn optimize_layout(@machv_regalloc.VCodeFunction) -> @machv_regalloc.VCodeFunction
+pub fn optimize_layout(@machv.Function) -> @machv.Function
 
-pub fn reorder_blocks(@machv_regalloc.VCodeFunction, Array[Int]) -> @machv_regalloc.VCodeFunction
+pub fn reorder_blocks(@machv.Function, Array[Int]) -> @machv.Function
 
 // Errors
 
@@ -20,7 +20,7 @@ pub struct VCodeCFG {
   preds : Array[Array[Int]]
   succs : Array[Array[Int]]
 }
-pub fn VCodeCFG::build(@machv_regalloc.VCodeFunction) -> Self
+pub fn VCodeCFG::build(@machv.Function) -> Self
 pub fn VCodeCFG::compute_dominators(Self) -> Array[Int]
 pub fn VCodeCFG::find_back_edges(Self) -> Array[(Int, Int)]
 pub fn VCodeCFG::find_loops(Self) -> Array[VCodeLoop]

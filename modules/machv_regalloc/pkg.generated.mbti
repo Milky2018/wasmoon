@@ -4,63 +4,61 @@ package "Milky2018/machv_regalloc"
 import {
   "Milky2018/machv",
   "Milky2018/machv/abi",
-  "Milky2018/machv/block",
   "Milky2018/machv/instr",
   "Milky2018/machv/isa",
-  "Milky2018/milkir",
   "Milky2018/regalloc",
   "moonbitlang/core/debug",
   "moonbitlang/core/set",
 }
 
 // Values
-pub fn allocate_and_apply_linear_scan(@machv.Function, Array[@machv.PReg]) -> ApplyResult raise @regalloc.VerifyError
+pub fn allocate_and_apply_linear_scan(@machv.AbstractFunction, Array[@machv.PReg]) -> ApplyResult raise @regalloc.VerifyError
 
-pub fn allocate_function_linear_scan(@machv.Function, Array[@machv.PReg]) -> @regalloc.Allocation raise @regalloc.VerifyError
+pub fn allocate_function_linear_scan(@machv.AbstractFunction, Array[@machv.PReg]) -> @regalloc.Allocation raise @regalloc.VerifyError
 
-pub fn allocate_registers_backtracking(VCodeFunction, settings? : @abi.ABISettings) -> VCodeFunction
+pub fn allocate_registers_backtracking(@machv.Function, settings? : @abi.ABISettings) -> @machv.Function
 
-pub fn allocate_registers_backtracking_output(VCodeFunction, settings? : @abi.ABISettings) -> (VCodeFunction, Output)
+pub fn allocate_registers_backtracking_output(@machv.Function, settings? : @abi.ABISettings) -> (@machv.Function, Output)
 
-pub fn allocate_registers_backtracking_output_with_isa(VCodeFunction, @isa.ISA, @abi.ABISettings) -> (VCodeFunction, Output)
+pub fn allocate_registers_backtracking_output_with_isa(@machv.Function, @isa.ISA, @abi.ABISettings) -> (@machv.Function, Output)
 
-pub fn allocate_registers_backtracking_with_isa(VCodeFunction, @isa.ISA, @abi.ABISettings) -> VCodeFunction
+pub fn allocate_registers_backtracking_with_isa(@machv.Function, @isa.ISA, @abi.ABISettings) -> @machv.Function
 
-pub fn apply_allocation(VCodeFunction, RegAllocResult) -> VCodeFunction
+pub fn apply_allocation(@machv.Function, RegAllocResult) -> @machv.Function
 
-pub fn build_bundles_with_merging(VCodeFunction, LiveRangeSet) -> BundleSet
+pub fn build_bundles_with_merging(@machv.Function, LiveRangeSet) -> BundleSet
 
 pub fn build_initial_bundles(LiveRangeSet) -> BundleSet
 
-pub fn build_live_ranges(VCodeFunction, LivenessResult) -> LiveRangeSet
+pub fn build_live_ranges(@machv.Function, LivenessResult) -> LiveRangeSet
 
-pub fn build_stack_layout_aarch64(RegAllocResult, VCodeFunction) -> AArch64StackFrame
+pub fn build_stack_layout_aarch64(RegAllocResult, @machv.Function) -> AArch64StackFrame
 
-pub fn compute_liveness(VCodeFunction) -> LivenessResult
+pub fn compute_liveness(@machv.Function) -> LivenessResult
 
-pub fn compute_liveness_for_regalloc(VCodeFunction) -> LivenessResult
+pub fn compute_liveness_for_regalloc(@machv.Function) -> LivenessResult
 
-pub fn compute_loop_depths(VCodeFunction) -> Array[Int]
+pub fn compute_loop_depths(@machv.Function) -> Array[Int]
 
 pub fn compute_spill_weight(Bundle, LiveRangeSet, Array[Int]) -> Int
 
 pub fn debug_liveness(LivenessResult) -> String
 
-pub fn eliminate_dead_code(VCodeFunction) -> VCodeFunction
+pub fn eliminate_dead_code(@machv.Function) -> @machv.Function
 
-pub fn get_alloc_stats(VCodeFunction, settings? : @abi.ABISettings) -> AllocStats
+pub fn get_alloc_stats(@machv.Function, settings? : @abi.ABISettings) -> AllocStats
 
-pub fn process_constraints(VCodeFunction, RegAllocResult) -> Unit
+pub fn process_constraints(@machv.Function, RegAllocResult) -> Unit
 
-pub fn project_function(@machv.Function, Array[@machv.PReg]) -> @regalloc.Program
+pub fn project_function(@machv.AbstractFunction, Array[@machv.PReg]) -> @regalloc.Program
 
-pub fn rematerialize_cross_block_constants(VCodeFunction) -> VCodeFunction
+pub fn rematerialize_cross_block_constants(@machv.Function) -> @machv.Function
 
-pub fn rematerialize_long_distance_constants(VCodeFunction) -> VCodeFunction
+pub fn rematerialize_long_distance_constants(@machv.Function) -> @machv.Function
 
-pub fn verify_allocation(VCodeFunction, LivenessResult, RegAllocResult, @isa.ISA, settings? : @abi.ABISettings) -> Unit
+pub fn verify_allocation(@machv.Function, LivenessResult, RegAllocResult, @isa.ISA, settings? : @abi.ABISettings) -> Unit
 
-pub fn verify_allocation_aarch64(VCodeFunction, LivenessResult, RegAllocResult, settings? : @abi.ABISettings) -> Unit
+pub fn verify_allocation_aarch64(@machv.Function, LivenessResult, RegAllocResult, settings? : @abi.ABISettings) -> Unit
 
 // Errors
 
@@ -266,47 +264,6 @@ pub impl Show for UseKind
 
 type UsePosition
 pub impl Show for UsePosition
-
-pub struct VCodeFunction {
-  name : String
-  params : Array[@abi.VReg]
-  results : Array[@abi.RegClass]
-  result_types : Array[@milkir.Type]
-  blocks : Array[@block.VCodeBlock]
-  mut next_vreg_id : Int
-  mut num_spill_slots : Int
-  param_pregs : Array[@abi.PReg?]
-  mut int_stack_params : Int
-  mut max_outgoing_args_size : Int
-}
-pub fn VCodeFunction::add_param(Self, @abi.RegClass) -> @abi.VReg
-pub fn VCodeFunction::add_param_preg(Self, @abi.PReg?) -> Unit
-pub fn VCodeFunction::add_result(Self, @abi.RegClass) -> Unit
-pub fn VCodeFunction::add_result_type(Self, @milkir.Type) -> Unit
-pub fn VCodeFunction::calls_multi_value_function(Self) -> Bool
-pub fn VCodeFunction::clone_base(Self) -> Self
-pub fn VCodeFunction::get_blocks(Self) -> Array[@block.VCodeBlock]
-pub fn VCodeFunction::get_max_outgoing_args_size(Self) -> Int
-pub fn VCodeFunction::get_name(Self) -> String
-pub fn VCodeFunction::get_num_spill_slots(Self) -> Int
-pub fn VCodeFunction::get_param_pregs(Self) -> Array[@abi.PReg?]
-pub fn VCodeFunction::get_params(Self) -> Array[@abi.VReg]
-pub fn VCodeFunction::get_result_types(Self) -> Array[@milkir.Type]
-pub fn VCodeFunction::has_calls(Self) -> Bool
-pub fn VCodeFunction::needs_extra_results_ptr(Self) -> Bool
-pub fn VCodeFunction::new(String) -> Self
-pub fn VCodeFunction::new_block(Self) -> @block.VCodeBlock
-pub fn VCodeFunction::new_vreg(Self, @abi.RegClass) -> @abi.VReg
-pub fn VCodeFunction::print(Self) -> String
-pub fn VCodeFunction::push_param(Self, @abi.VReg) -> Unit
-pub fn VCodeFunction::set_int_stack_params(Self, Int) -> Unit
-pub fn VCodeFunction::set_num_spill_slots(Self, Int) -> Unit
-pub fn VCodeFunction::should_cache_func_table(Self) -> Bool
-pub fn VCodeFunction::should_cache_mem0_desc(Self) -> Bool
-pub fn VCodeFunction::update_max_outgoing_args_size(Self, Int) -> Unit
-pub fn VCodeFunction::uses_func_table(Self) -> Bool
-pub fn VCodeFunction::uses_mem0(Self) -> Bool
-pub impl Show for VCodeFunction
 
 // Type aliases
 pub using @regalloc {type RegallocAlgorithm}

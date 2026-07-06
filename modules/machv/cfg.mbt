@@ -33,7 +33,7 @@ fn terminator_successor_ids(term : Terminator) -> Array[Int] {
 }
 
 ///|
-pub fn CFG::build(func : Function) -> CFG {
+pub fn CFG::build(func : AbstractFunction) -> CFG {
   let blocks = func.blocks
   let n = blocks.length()
   let preds : Array[Array[Int]] = []

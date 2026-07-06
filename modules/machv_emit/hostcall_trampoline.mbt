@@ -27,7 +27,7 @@ fn value_type_to_mem_type(ty : @types.ValueType) -> @instr.MemType {
 }
 
 ///|
-fn value_type_to_ir_type(ty : @types.ValueType) -> @milkir.Type {
+fn value_type_to_value_kind(ty : @types.ValueType) -> @machv.ValueKind {
   match ty {
     I32 => I32
     I64 => I64
@@ -73,7 +73,7 @@ pub fn emit_hostcall_import_trampoline(
   hostcall_symbol : @instr.ExternalName,
 ) -> MachineCode {
   let isa = @isa.ISA::current()
-  let func = @machv_regalloc.VCodeFunction::new("host_import_trampoline")
+  let func = @machv.Function::new("host_import_trampoline")
 
   // Params: always include vmctx as the first parameter (ISA-specific ABI reg).
   let _vmctx_param = func.add_param(Int)
@@ -134,7 +134,7 @@ pub fn emit_hostcall_import_trampoline(
   // Results.
   for ty in result_types {
     func.add_result(value_type_to_reg_class(ty))
-    func.add_result_type(value_type_to_ir_type(ty))
+    func.add_result_kind(value_type_to_value_kind(ty))
   }
 
   // Reserve outgoing args area for our values_vec buffer.

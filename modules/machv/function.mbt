@@ -58,7 +58,7 @@ pub fn Block::set_terminator(self : Block, term : Terminator) -> Unit {
 }
 
 ///|
-pub(all) struct Function {
+pub(all) struct AbstractFunction {
   name : String
   params : Array[VReg]
   results : Array[RegClass]
@@ -78,7 +78,7 @@ pub(all) struct Function {
 } derive(Debug)
 
 ///|
-pub fn Function::new(name : String) -> Function {
+pub fn AbstractFunction::new(name : String) -> AbstractFunction {
   {
     name,
     params: [],
@@ -100,7 +100,7 @@ pub fn Function::new(name : String) -> Function {
 }
 
 ///|
-pub fn Function::new_block(self : Function) -> Block {
+pub fn AbstractFunction::new_block(self : AbstractFunction) -> Block {
   let block = Block::new(self.next_block_id)
   self.next_block_id = self.next_block_id + 1
   self.blocks.push(block)
@@ -108,39 +108,54 @@ pub fn Function::new_block(self : Function) -> Block {
 }
 
 ///|
-pub fn Function::new_vreg(self : Function, class : RegClass) -> VReg {
+pub fn AbstractFunction::new_vreg(
+  self : AbstractFunction,
+  class : RegClass,
+) -> VReg {
   let reg = { id: self.next_vreg_id, class }
   self.next_vreg_id = self.next_vreg_id + 1
   reg
 }
 
 ///|
-pub fn Function::add_param(self : Function, class : RegClass) -> VReg {
+pub fn AbstractFunction::add_param(
+  self : AbstractFunction,
+  class : RegClass,
+) -> VReg {
   let vreg = self.new_vreg(class)
   self.params.push(vreg)
   vreg
 }
 
 ///|
-pub fn Function::push_param(self : Function, vreg : VReg) -> Unit {
+pub fn AbstractFunction::push_param(
+  self : AbstractFunction,
+  vreg : VReg,
+) -> Unit {
   self.params.push(vreg)
 }
 
 ///|
-pub fn Function::add_result(self : Function, class : RegClass) -> Unit {
+pub fn AbstractFunction::add_result(
+  self : AbstractFunction,
+  class : RegClass,
+) -> Unit {
   self.results.push(class)
 }
 
 ///|
-pub fn Function::new_inst(self : Function, opcode : Opcode) -> Instruction {
+pub fn AbstractFunction::new_inst(
+  self : AbstractFunction,
+  opcode : Opcode,
+) -> Instruction {
   let inst = Instruction::new(self.next_inst_id, opcode)
   self.next_inst_id = self.next_inst_id + 1
   inst
 }
 
 ///|
-pub fn Function::new_stack_slot(
-  self : Function,
+pub fn AbstractFunction::new_stack_slot(
+  self : AbstractFunction,
   size : Int,
   align : Int,
 ) -> StackSlot {
@@ -151,44 +166,56 @@ pub fn Function::new_stack_slot(
 }
 
 ///|
-pub fn Function::set_num_spill_slots(self : Function, n : Int) -> Unit {
+pub fn AbstractFunction::set_num_spill_slots(
+  self : AbstractFunction,
+  n : Int,
+) -> Unit {
   self.num_spill_slots = n
 }
 
 ///|
-pub fn Function::add_param_preg(self : Function, preg : PReg?) -> Unit {
+pub fn AbstractFunction::add_param_preg(
+  self : AbstractFunction,
+  preg : PReg?,
+) -> Unit {
   self.param_pregs.push(preg)
 }
 
 ///|
-pub fn Function::add_param_location(
-  self : Function,
+pub fn AbstractFunction::add_param_location(
+  self : AbstractFunction,
   location : AbiValueLocation,
 ) -> Unit {
   self.param_locations.push(location)
 }
 
 ///|
-pub fn Function::add_result_location(
-  self : Function,
+pub fn AbstractFunction::add_result_location(
+  self : AbstractFunction,
   location : AbiValueLocation,
 ) -> Unit {
   self.result_locations.push(location)
 }
 
 ///|
-pub fn Function::set_return_area(self : Function, area : AbiReturnArea) -> Unit {
+pub fn AbstractFunction::set_return_area(
+  self : AbstractFunction,
+  area : AbiReturnArea,
+) -> Unit {
   self.return_area = Some(area)
 }
 
 ///|
-pub fn Function::set_int_stack_params(self : Function, n : Int) -> Unit {
+pub fn AbstractFunction::set_int_stack_params(
+  self : AbstractFunction,
+  n : Int,
+) -> Unit {
   self.int_stack_params = n
 }
 
 ///|
-pub fn Function::update_max_outgoing_args_size(
-  self : Function,
+pub fn AbstractFunction::update_max_outgoing_args_size(
+  self : AbstractFunction,
   size : Int,
 ) -> Unit {
   if size > self.max_outgoing_args_size {
@@ -197,11 +224,13 @@ pub fn Function::update_max_outgoing_args_size(
 }
 
 ///|
-pub fn Function::get_max_outgoing_args_size(self : Function) -> Int {
+pub fn AbstractFunction::get_max_outgoing_args_size(
+  self : AbstractFunction,
+) -> Int {
   self.max_outgoing_args_size
 }
 
 ///|
-pub fn Function::get_num_spill_slots(self : Function) -> Int {
+pub fn AbstractFunction::get_num_spill_slots(self : AbstractFunction) -> Int {
   self.num_spill_slots
 }

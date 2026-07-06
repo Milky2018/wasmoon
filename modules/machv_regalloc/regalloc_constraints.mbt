@@ -314,7 +314,7 @@ pub struct RegAllocResult {
 /// Design: constraints are processed after allocation
 /// and moves are inserted when the allocated register doesn't match the constraint
 pub fn process_constraints(
-  func : VCodeFunction,
+  func : @machv.Function,
   alloc : RegAllocResult,
 ) -> Unit {
   for block_idx, block in func.blocks {

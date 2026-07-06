@@ -305,7 +305,7 @@ fn BundleSet::get_or_create_spill_bundle(
 /// Pre-compute per-block approximate loop depth, aligned with regalloc2's
 /// CFG heuristic (`cfg.rs::approx_loop_depth`): count backedge entries/exits
 /// over linear block order and maintain a small nesting stack.
-pub fn compute_loop_depths(func : VCodeFunction) -> Array[Int] {
+pub fn compute_loop_depths(func : @machv.Function) -> Array[Int] {
   let n = func.blocks.length()
   if n == 0 {
     return []

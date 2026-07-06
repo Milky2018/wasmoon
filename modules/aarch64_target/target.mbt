@@ -244,7 +244,7 @@ fn add_defs(inst : @machv.Instruction, values : Array[@milkir.Value]) -> Unit {
 
 ///|
 fn add_return_moves(
-  out : @machv.Function,
+  out : @machv.AbstractFunction,
   block : @machv.Block,
   values : Array[@milkir.Value],
   wasm_body? : Bool = false,
@@ -278,7 +278,7 @@ fn add_return_moves(
 
 ///|
 fn add_call_return_area_loads(
-  out : @machv.Function,
+  out : @machv.AbstractFunction,
   block : @machv.Block,
   inst : @machv.Instruction,
   values : Array[@milkir.Value],
@@ -301,7 +301,7 @@ fn add_call_return_area_loads(
 
 ///|
 fn add_wasm_call_result_moves(
-  out : @machv.Function,
+  out : @machv.AbstractFunction,
   block : @machv.Block,
   inst : @machv.Instruction,
   values : Array[@milkir.Value],
@@ -455,7 +455,7 @@ fn signature_result_location(
 ///|
 fn add_function_signature(
   func : @milkir.Function,
-  out : @machv.Function,
+  out : @machv.AbstractFunction,
   wasm_body? : Bool = false,
 ) -> Unit {
   let mut int_arg_idx = 0
@@ -518,7 +518,7 @@ fn add_fixed_constraint(
 
 ///|
 fn add_call_abi_constraints(
-  out : @machv.Function,
+  out : @machv.AbstractFunction,
   inst : @machv.Instruction,
   args : Array[@milkir.Value],
   results : Array[@milkir.Value],
@@ -629,7 +629,7 @@ fn add_call_abi_constraints(
 
 ///|
 fn add_callptr_abi_constraints(
-  out : @machv.Function,
+  out : @machv.AbstractFunction,
   inst : @machv.Instruction,
   args : Array[@milkir.Value],
   _results : Array[@milkir.Value],
@@ -880,7 +880,7 @@ fn opcode_for(opcode : @milkir.Opcode) -> @machv.Opcode {
 
 ///|
 fn lower_int_rem(
-  out : @machv.Function,
+  out : @machv.AbstractFunction,
   block : @machv.Block,
   inst : @milkir.Inst,
   signed : Bool,
@@ -909,7 +909,7 @@ fn lower_int_rem(
 
 ///|
 fn append_int_const(
-  out : @machv.Function,
+  out : @machv.AbstractFunction,
   block : @machv.Block,
   value : Int64,
 ) -> @machv.VReg {
@@ -922,7 +922,7 @@ fn append_int_const(
 
 ///|
 fn append_int_binop(
-  out : @machv.Function,
+  out : @machv.AbstractFunction,
   block : @machv.Block,
   opcode : @machv.Opcode,
   lhs : @machv.Reg,
@@ -940,7 +940,7 @@ fn append_int_binop(
 ///|
 fn append_int_binop_result(
   block : @machv.Block,
-  out : @machv.Function,
+  out : @machv.AbstractFunction,
   opcode : @machv.Opcode,
   lhs : @machv.Reg,
   rhs : @machv.Reg,
@@ -955,7 +955,7 @@ fn append_int_binop_result(
 
 ///|
 fn lower_int_popcnt(
-  out : @machv.Function,
+  out : @machv.AbstractFunction,
   block : @machv.Block,
   inst : @milkir.Inst,
 ) -> Unit {
@@ -1069,7 +1069,7 @@ fn lower_int_popcnt(
 
 ///|
 fn lower_int_rotl(
-  out : @machv.Function,
+  out : @machv.AbstractFunction,
   block : @machv.Block,
   inst : @milkir.Inst,
 ) -> Unit {
@@ -1095,7 +1095,7 @@ fn lower_int_rotl(
 
 ///|
 fn lower_fconst(
-  out : @machv.Function,
+  out : @machv.AbstractFunction,
   block : @machv.Block,
   inst : @milkir.Inst,
   value : Double,
@@ -1118,7 +1118,7 @@ fn lower_fconst(
 
 ///|
 fn lower_float_select(
-  out : @machv.Function,
+  out : @machv.AbstractFunction,
   block : @machv.Block,
   inst : @milkir.Inst,
 ) -> Bool {
@@ -1173,7 +1173,7 @@ fn store_mem_type(inst : @milkir.Inst) -> @machv.MemType {
 ///|
 fn lower_inst(
   func : @milkir.Function,
-  out : @machv.Function,
+  out : @machv.AbstractFunction,
   block : @machv.Block,
   inst : @milkir.Inst,
 ) -> Unit {
@@ -1289,7 +1289,7 @@ fn lower_inst(
 
 ///|
 fn lower_terminator(
-  out : @machv.Function,
+  out : @machv.AbstractFunction,
   block : @machv.Block,
   terminator : @milkir.Terminator,
   block_map : Array[(Int, Int)],
@@ -1366,8 +1366,8 @@ fn map_block_id(block_map : Array[(Int, Int)], old_id : Int) -> Int {
 fn lower_function_with_abi(
   func : @milkir.Function,
   wasm_body : Bool,
-) -> @machv.Function {
-  let out = @machv.Function::new(func.name)
+) -> @machv.AbstractFunction {
+  let out = @machv.AbstractFunction::new(func.name)
   out.next_vreg_id = func.next_value_id
   add_function_signature(func, out, wasm_body~)
   for slot in func.stack_slots {
@@ -1395,11 +1395,13 @@ fn lower_function_with_abi(
 }
 
 ///|
-pub fn lower_function(func : @milkir.Function) -> @machv.Function {
+pub fn lower_function(func : @milkir.Function) -> @machv.AbstractFunction {
   lower_function_with_abi(func, false)
 }
 
 ///|
-pub fn lower_wasm_body_function(func : @milkir.Function) -> @machv.Function {
+pub fn lower_wasm_body_function(
+  func : @milkir.Function,
+) -> @machv.AbstractFunction {
   lower_function_with_abi(func, true)
 }

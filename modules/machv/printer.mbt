@@ -94,7 +94,7 @@ fn format_block_header(block : Block) -> String {
 }
 
 ///|
-pub fn Function::print(self : Function) -> String {
+pub fn AbstractFunction::print(self : AbstractFunction) -> String {
   let lines : Array[String] = []
   let params = self.params.map(fn(param) { param.to_string() }).join(", ")
   let results = self.results.map(fn(class) { class.to_string() }).join(", ")

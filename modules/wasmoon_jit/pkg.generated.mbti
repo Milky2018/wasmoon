@@ -2,6 +2,7 @@
 package "Milky2018/wasmoon_jit"
 
 import {
+  "Milky2018/machv",
   "Milky2018/machv/instr",
   "Milky2018/machv_emit",
   "Milky2018/machv_regalloc",
@@ -327,9 +328,9 @@ pub fn link_code_object(@machv_emit.MachineCode, RuntimeSymbolResolver) -> Linke
 
 pub fn link_machine_code(@machv_emit.MachineCode, RuntimeSymbolResolver) -> LinkedCode raise LinkError
 
-pub fn lower_milkir_for_target(@milkir.Function, @machv_emit.EmitTarget) -> @machv_regalloc.VCodeFunction
+pub fn lower_milkir_for_target(@milkir.Function, @machv_emit.EmitTarget) -> @machv.Function
 
-pub fn lower_wasm_body_milkir_for_target(@milkir.Function, @machv_emit.EmitTarget) -> @machv_regalloc.VCodeFunction
+pub fn lower_wasm_body_milkir_for_target(@milkir.Function, @machv_emit.EmitTarget) -> @machv.Function
 
 pub fn machv_reloc_target_to_cwasm_func_idx(@machv_emit.RelocTarget) -> Int?
 
@@ -381,7 +382,7 @@ pub fn plan_entry_trampoline_for_target(Array[@types.ValueType], Array[@types.Va
 
 pub fn plan_hostcall_import_trampoline_layout(Array[@types.ValueType], Array[@types.ValueType], Int, Int) -> HostcallImportTrampolineLayout
 
-pub fn plan_integration_for_target(@milkir.Function, @machv_regalloc.VCodeFunction, @machv_regalloc.Output, @machv_emit.EmitTarget) -> JitIntegrationPlan
+pub fn plan_integration_for_target(@milkir.Function, @machv.Function, @machv_regalloc.Output, @machv_emit.EmitTarget) -> JitIntegrationPlan
 
 pub fn plan_milkir_integration_for_target(@milkir.Function, @machv_emit.EmitTarget) -> JitIntegrationPlan
 

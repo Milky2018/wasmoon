@@ -407,7 +407,7 @@ pub impl Show for AArch64StackFrame with fn output(self, logger) {
 /// Build stack layout from register allocation result
 pub fn build_stack_layout_aarch64(
   alloc : RegAllocResult,
-  func : VCodeFunction,
+  func : @machv.Function,
 ) -> AArch64StackFrame {
   let frame = AArch64StackFrame::new()
 
@@ -430,7 +430,7 @@ pub fn build_stack_layout_aarch64(
 }
 
 ///|
-fn find_vreg_by_id(func : VCodeFunction, id : Int) -> @abi.VReg? {
+fn find_vreg_by_id(func : @machv.Function, id : Int) -> @abi.VReg? {
   // Check params
   for param in func.params {
     if param.id == id {

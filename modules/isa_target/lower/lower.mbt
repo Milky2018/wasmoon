@@ -11,7 +11,7 @@
 /// Lowering context - tracks state during IR to VCode conversion
 struct LoweringContext {
   ir_func : @milkir.Function
-  vcode_func : @machv_regalloc.VCodeFunction
+  vcode_func : @machv.Function
   abi_settings : @abi.ABISettings
   num_imports : Int
   // Dense map from IR Value id to @abi.VReg (Cranelift SecondaryMap style).
@@ -86,7 +86,7 @@ pub fn LoweringContext::new(
   }
   {
     ir_func,
-    vcode_func: @machv_regalloc.VCodeFunction::new(ir_func.name),
+    vcode_func: @machv.Function::new(ir_func.name),
     abi_settings,
     num_imports,
     value_map_dense: Array::make(ir_func.next_value_id, None),
@@ -968,6 +968,19 @@ fn ir_type_to_reg_class(ty : @milkir.Type) -> @abi.RegClass {
 }
 
 ///|
+/// Convert IR Type to MachV result kind.
+fn ir_type_to_value_kind(ty : @milkir.Type) -> @machv.ValueKind {
+  match ty {
+    I32 => I32
+    I64 => I64
+    F32 => F32
+    F64 => F64
+    V128 => V128
+    Ptr | Ref | FuncRef | ExternRef => Ptr
+  }
+}
+
+///|
 /// Convert IR Type to @instr.MemType
 fn ir_type_to_mem_type(ty : @milkir.Type) -> @instr.MemType {
   match ty {
@@ -1554,7 +1567,7 @@ pub fn lower_function(
   run_ir_opt? : Bool = true,
   use_subtype_indirect_check? : Bool = true,
   canonical_type_indices? : Array[Int] = [],
-) -> @machv_regalloc.VCodeFunction {
+) -> @machv.Function {
   // Keep this optional for call sites that already ran full IR optimization.
   if run_ir_opt {
     // Apply e-graph optimization before lowering (constant folding, uextend(const) -> const, etc.)
@@ -1652,7 +1665,7 @@ pub fn lower_function(
   for ty in ir_func.results {
     let class = ir_type_to_reg_class(ty)
     ctx.vcode_func.add_result(class)
-    ctx.vcode_func.add_result_type(ty) // Also store full type info
+    ctx.vcode_func.add_result_kind(ir_type_to_value_kind(ty))
   }
 
   // Phase 3.5: Pre-register all block parameters
@@ -1696,7 +1709,7 @@ pub fn lower_function(
 
 ///|
 fn fixup_aarch64_mem0_desc_constraints(
-  func : @machv_regalloc.VCodeFunction,
+  func : @machv.Function,
   abi_settings : @abi.ABISettings,
 ) -> Unit {
   if @isa.ISA::current() is AMD64 || !abi_settings.enable_pinned_reg {
@@ -1716,9 +1729,7 @@ fn fixup_aarch64_mem0_desc_constraints(
 }
 
 ///|
-fn fixup_amd64_shift_count_constraints(
-  func : @machv_regalloc.VCodeFunction,
-) -> Unit {
+fn fixup_amd64_shift_count_constraints(func : @machv.Function) -> Unit {
   for block in func.blocks {
     for inst in block.insts {
       if (

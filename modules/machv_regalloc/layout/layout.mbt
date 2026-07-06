@@ -5,7 +5,7 @@
 ///|
 /// Compute an optimized block ordering for the function
 /// Returns an array of block indices in the new order
-pub fn layout_blocks(func : @machv_regalloc.VCodeFunction) -> Array[Int] {
+pub fn layout_blocks(func : @machv.Function) -> Array[Int] {
   let blocks = func.get_blocks()
   let n = blocks.length()
   if n <= 1 {
@@ -67,7 +67,7 @@ pub fn layout_blocks(func : @machv_regalloc.VCodeFunction) -> Array[Int] {
 
 ///|
 /// Build a map from block ID to block index in the block array.
-fn build_block_index_map(func : @machv_regalloc.VCodeFunction) -> Map[Int, Int] {
+fn build_block_index_map(func : @machv.Function) -> Map[Int, Int] {
   let block_idx_by_id : Map[Int, Int] = {}
   for i, block in func.get_blocks() {
     block_idx_by_id.set(block.id, i)
@@ -119,7 +119,7 @@ fn substitute_forwarded_args(
 fn resolve_threaded_jump(
   start_target : Int,
   start_args : Array[@abi.Reg],
-  func : @machv_regalloc.VCodeFunction,
+  func : @machv.Function,
   block_idx_by_id : Map[Int, Int],
 ) -> (Int, Array[@abi.Reg], Bool) {
   let mut current = start_target
@@ -161,7 +161,7 @@ fn resolve_threaded_jump(
 /// are available.
 fn resolve_threaded_target(
   start_target : Int,
-  func : @machv_regalloc.VCodeFunction,
+  func : @machv.Function,
   block_idx_by_id : Map[Int, Int],
 ) -> Int {
   let (target, _, _) = resolve_threaded_jump(
@@ -177,7 +177,7 @@ fn resolve_threaded_target(
 /// Rewrite one terminator by threading successors through trivial jump blocks.
 fn rewrite_terminator_targets(
   term : @instr.VCodeTerminator,
-  func : @machv_regalloc.VCodeFunction,
+  func : @machv.Function,
   block_idx_by_id : Map[Int, Int],
 ) -> (@instr.VCodeTerminator, Bool) {
   match term {
@@ -275,9 +275,7 @@ fn rewrite_terminator_targets(
 ///|
 /// Thread trivial jump blocks across the function terminators to reduce
 /// branch-to-branch chains before final code emission.
-fn thread_trivial_jumps(
-  func : @machv_regalloc.VCodeFunction,
-) -> @machv_regalloc.VCodeFunction {
+fn thread_trivial_jumps(func : @machv.Function) -> @machv.Function {
   let blocks = func.get_blocks()
   if blocks.length() == 0 {
     return func
@@ -309,9 +307,9 @@ fn thread_trivial_jumps(
 /// Reorder blocks in a function according to the computed layout
 /// Returns a new function with blocks in the specified order
 pub fn reorder_blocks(
-  func : @machv_regalloc.VCodeFunction,
+  func : @machv.Function,
   order : Array[Int],
-) -> @machv_regalloc.VCodeFunction {
+) -> @machv.Function {
   let blocks = func.get_blocks()
 
   // Check if reordering is actually needed
@@ -336,8 +334,8 @@ pub fn reorder_blocks(
   }
 
   // Copy result types
-  for rt in func.get_result_types() {
-    new_func.add_result_type(rt)
+  for rt in func.get_result_kinds() {
+    new_func.add_result_kind(rt)
   }
 
   // Add blocks in new order
@@ -355,9 +353,7 @@ pub fn reorder_blocks(
 ///|
 /// Optimize block layout for a function
 /// This is the main entry point for the layout optimization pass
-pub fn optimize_layout(
-  func : @machv_regalloc.VCodeFunction,
-) -> @machv_regalloc.VCodeFunction {
+pub fn optimize_layout(func : @machv.Function) -> @machv.Function {
   // First pass: simplify branch targets on the original CFG.
   let threaded = thread_trivial_jumps(func)
   // Then reorder for fall-through opportunities.

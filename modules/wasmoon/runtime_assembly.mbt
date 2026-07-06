@@ -17,8 +17,8 @@ pub(all) struct RuntimeAssembly {
 ///|
 pub(all) struct CompilerInfrastructureAssembly {
   signature : @milkir.Signature
-  vcode_function : @machv_regalloc.VCodeFunction
-  allocated_function : @machv_regalloc.VCodeFunction
+  machv_function : @machv.Function
+  allocated_function : @machv.Function
   code_object : @machv_emit.MachineCode
   x64_abi : @x64_target.AbiPolicy
   aarch64_abi : @aarch64_target.AbiPolicy
@@ -73,13 +73,13 @@ pub fn compiler_infrastructure_assembly() -> CompilerInfrastructureAssembly {
   let milk = @milkir.Function::new("wasmoon_runtime_probe", signature)
   let entry = milk.new_block0()
   entry.set_terminator(Return([]))
-  let vcode_function = @lower.lower_function(milk, run_ir_opt=false)
+  let machv_function = @lower.lower_function(milk, run_ir_opt=false)
   let (allocated_function, output) = @machv_regalloc.allocate_registers_backtracking_output(
-    vcode_function,
+    machv_function,
   )
   {
     signature,
-    vcode_function,
+    machv_function,
     allocated_function,
     code_object: @machv_emit.emit_function_with_regalloc(
       allocated_function, output,

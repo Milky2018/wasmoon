@@ -90,7 +90,7 @@ fn selected_regalloc_algorithm() -> RegallocAlgorithm {
 ///|
 /// Eliminate dead code from a VCode function
 /// Removes instructions that define vregs which are never used
-pub fn eliminate_dead_code(func : VCodeFunction) -> VCodeFunction {
+pub fn eliminate_dead_code(func : @machv.Function) -> @machv.Function {
   // Step 1: Collect all used vregs
   let used_vregs : Set[Int] = Set([])
 
@@ -160,7 +160,7 @@ pub fn eliminate_dead_code(func : VCodeFunction) -> VCodeFunction {
   }
 
   // Step 2: Build new function without dead instructions
-  let new_func = VCodeFunction::new(func.name)
+  let new_func = @machv.Function::new(func.name)
   new_func.next_vreg_id = func.next_vreg_id
   new_func.int_stack_params = func.int_stack_params
   new_func.max_outgoing_args_size = func.max_outgoing_args_size
@@ -173,8 +173,8 @@ pub fn eliminate_dead_code(func : VCodeFunction) -> VCodeFunction {
     new_func.results.push(result)
   }
   // Copy result types for multi-value return support
-  for ty in func.result_types {
-    new_func.result_types.push(ty)
+  for ty in func.result_kinds {
+    new_func.result_kinds.push(ty)
   }
 
   // Copy blocks, filtering out dead instructions
@@ -224,7 +224,7 @@ pub fn eliminate_dead_code(func : VCodeFunction) -> VCodeFunction {
 /// Build the register pools for AArch64 allocation
 fn build_reg_pools(
   isa : @isa.ISA,
-  func : VCodeFunction,
+  func : @machv.Function,
   settings : @abi.ABISettings,
 ) -> (
   Array[@abi.PReg],
@@ -316,19 +316,19 @@ fn build_reg_pools(
 /// reusable allocation-loop, probe, eviction, split, and spill policies live in
 /// `regalloc`.
 pub fn allocate_registers_backtracking(
-  func : VCodeFunction,
+  func : @machv.Function,
   settings? : @abi.ABISettings = @abi.ABISettings::default(),
-) -> VCodeFunction {
+) -> @machv.Function {
   allocate_registers_backtracking_with_isa(func, @isa.ISA::current(), settings)
 }
 
 ///|
 /// Allocate registers using a specific ISA policy implementation.
 pub fn allocate_registers_backtracking_with_isa(
-  func : VCodeFunction,
+  func : @machv.Function,
   isa : @isa.ISA,
   settings : @abi.ABISettings,
-) -> VCodeFunction {
+) -> @machv.Function {
   // Keep Cranelift-style cheap rematerialization before allocation to shorten
   // cross-block live ranges for constants/function pointers.
   let func = rematerialize_long_distance_constants(func)
@@ -372,13 +372,13 @@ pub fn allocate_registers_backtracking_with_isa(
 ///|
 /// Allocate VCode registers and return a Cranelift-style regalloc `Output`.
 ///
-/// The returned `VCodeFunction` is *not* rewritten to physical registers; the
+/// The returned `@machv.Function` is *not* rewritten to physical registers; the
 /// emitter consumes the returned `Output` to materialize edits and operand
 /// allocations on the fly.
 pub fn allocate_registers_backtracking_output(
-  func : VCodeFunction,
+  func : @machv.Function,
   settings? : @abi.ABISettings = @abi.ABISettings::default(),
-) -> (VCodeFunction, Output) {
+) -> (@machv.Function, Output) {
   allocate_registers_backtracking_output_with_isa(
     func,
     @isa.ISA::current(),
@@ -390,10 +390,10 @@ pub fn allocate_registers_backtracking_output(
 /// Allocate VCode registers and return `Output` using a specific ISA policy
 /// implementation.
 pub fn allocate_registers_backtracking_output_with_isa(
-  func : VCodeFunction,
+  func : @machv.Function,
   isa : @isa.ISA,
   settings : @abi.ABISettings,
-) -> (VCodeFunction, Output) {
+) -> (@machv.Function, Output) {
   // Keep Cranelift-style cheap rematerialization before allocation to shorten
   // cross-block live ranges for constants/function pointers.
   let func = rematerialize_long_distance_constants(func)
@@ -474,7 +474,7 @@ pub impl Show for AllocStats with fn output(self, logger) {
 
 ///|
 /// Count instructions by type in allocated function
-fn count_instructions(func : VCodeFunction) -> AllocStats {
+fn count_instructions(func : @machv.Function) -> AllocStats {
   let mut num_spills = 0
   let mut num_reloads = 0
   let mut num_moves = 0
@@ -503,7 +503,7 @@ fn count_instructions(func : VCodeFunction) -> AllocStats {
 ///|
 /// Get allocation statistics
 pub fn get_alloc_stats(
-  func : VCodeFunction,
+  func : @machv.Function,
   settings? : @abi.ABISettings = @abi.ABISettings::default(),
 ) -> AllocStats {
   let func = eliminate_dead_code(func)

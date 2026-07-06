@@ -1,6 +1,6 @@
 ///|
 test "project and allocate MachV function" {
-  let func = @machv.Function::new("copy")
+  let func = @machv.AbstractFunction::new("copy")
   let entry = func.new_block()
   let v0 = func.new_vreg(Int)
   let v1 = func.new_vreg(Int)
@@ -17,7 +17,7 @@ test "project and allocate MachV function" {
 
 ///|
 test "apply materializes MachV spill slots" {
-  let func = @machv.Function::new("spill")
+  let func = @machv.AbstractFunction::new("spill")
   let entry = func.new_block()
   let v0 = func.new_vreg(Int)
   let v1 = func.new_vreg(Int)
@@ -34,7 +34,7 @@ test "apply materializes MachV spill slots" {
 
 ///|
 test "apply materializes aligned vector spill slots" {
-  let func = @machv.Function::new("vector_spill")
+  let func = @machv.AbstractFunction::new("vector_spill")
   let entry = func.new_block()
   let v0 = func.new_vreg(Vector)
   let v1 = func.new_vreg(Vector)
@@ -51,7 +51,7 @@ test "apply materializes aligned vector spill slots" {
 
 ///|
 test "apply rewrites allocated virtual operands to physical registers" {
-  let func = @machv.Function::new("rewrite")
+  let func = @machv.AbstractFunction::new("rewrite")
   let entry = func.new_block()
   let v0 = func.new_vreg(Int)
   let v1 = func.new_vreg(Int)
@@ -68,7 +68,7 @@ test "apply rewrites allocated virtual operands to physical registers" {
 
 ///|
 test "apply preserves MachV float width classes when rewriting operands" {
-  let func = @machv.Function::new("float_width")
+  let func = @machv.AbstractFunction::new("float_width")
   let entry = func.new_block()
   let f32_value = func.new_vreg(Float32)
   let f64_value = func.new_vreg(Float64)
@@ -93,7 +93,7 @@ test "apply preserves MachV float width classes when rewriting operands" {
 
 ///|
 test "projected MachV constraints guide fixed register allocation" {
-  let func = @machv.Function::new("fixed")
+  let func = @machv.AbstractFunction::new("fixed")
   let entry = func.new_block()
   let v0 = func.new_vreg(Int)
   let inst = func.new_inst(Target("fixed_def"))
@@ -112,7 +112,7 @@ test "projected MachV constraints guide fixed register allocation" {
 
 ///|
 test "apply materializes call fixed constraints as moves" {
-  let func = @machv.Function::new("call_fixed_moves")
+  let func = @machv.AbstractFunction::new("call_fixed_moves")
   let entry = func.new_block()
   let value = func.new_vreg(Int)
   let p0 : @machv.PReg = { index: 0, class: Int }
@@ -147,7 +147,7 @@ test "apply materializes call fixed constraints as moves" {
 
 ///|
 test "apply materializes overlapping call fixed constraints in reverse order" {
-  let func = @machv.Function::new("call_fixed_overlap")
+  let func = @machv.AbstractFunction::new("call_fixed_overlap")
   let entry = func.new_block()
   let v0 = func.new_vreg(Int)
   let v1 = func.new_vreg(Int)
@@ -208,7 +208,7 @@ test "apply materializes overlapping call fixed constraints in reverse order" {
 
 ///|
 test "apply keeps fixed call inputs out of cycle scratch registers" {
-  let func = @machv.Function::new("call_fixed_protected_scratch")
+  let func = @machv.AbstractFunction::new("call_fixed_protected_scratch")
   let entry = func.new_block()
   let vmctx = func.new_vreg(Int)
   let delta = func.new_vreg(Int)
@@ -263,7 +263,7 @@ test "apply keeps fixed call inputs out of cycle scratch registers" {
 
 ///|
 test "projected MachV ties co-locate use-def operands" {
-  let func = @machv.Function::new("tied")
+  let func = @machv.AbstractFunction::new("tied")
   let entry = func.new_block()
   let v0 = func.new_vreg(Int)
   let v1 = func.new_vreg(Int)
@@ -292,7 +292,7 @@ test "projected MachV ties co-locate use-def operands" {
 
 ///|
 test "allocate_function_linear_scan accepts fixed registers outside the allocatable pool" {
-  let func = @machv.Function::new("fixed_outside_pool")
+  let func = @machv.AbstractFunction::new("fixed_outside_pool")
   let entry = func.new_block()
   let v0 = func.new_vreg(Int)
   let inst = func.new_inst(Target("fixed_def"))
@@ -313,7 +313,7 @@ test "allocate_function_linear_scan accepts fixed registers outside the allocata
 
 ///|
 test "allocate_function_linear_scan avoids projected clobbered registers" {
-  let func = @machv.Function::new("clobber")
+  let func = @machv.AbstractFunction::new("clobber")
   let entry = func.new_block()
   let v0 = func.new_vreg(Int)
   let def_inst = func.new_inst(Target("def"))
@@ -337,7 +337,7 @@ test "allocate_function_linear_scan avoids projected clobbered registers" {
 
 ///|
 test "projected MachV terminator return keeps result live" {
-  let func = @machv.Function::new("return_live")
+  let func = @machv.AbstractFunction::new("return_live")
   let entry = func.new_block()
   let v0 = func.new_vreg(Int)
   let v1 = func.new_vreg(Int)
@@ -361,7 +361,7 @@ test "projected MachV terminator return keeps result live" {
 
 ///|
 test "projected MachV successors extend live ranges across empty blocks" {
-  let func = @machv.Function::new("successor_live")
+  let func = @machv.AbstractFunction::new("successor_live")
   let entry = func.new_block()
   let middle = func.new_block()
   let exit = func.new_block()
@@ -389,7 +389,7 @@ test "projected MachV successors extend live ranges across empty blocks" {
 
 ///|
 test "apply rewrites terminator virtual registers" {
-  let func = @machv.Function::new("term_rewrite")
+  let func = @machv.AbstractFunction::new("term_rewrite")
   let entry = func.new_block()
   let v0 = func.new_vreg(Int)
   let def_v0 = func.new_inst(Target("def_v0"))
@@ -406,7 +406,7 @@ test "apply rewrites terminator virtual registers" {
 
 ///|
 test "apply materializes jump edge args for block params" {
-  let func = @machv.Function::new("edge_jump")
+  let func = @machv.AbstractFunction::new("edge_jump")
   let entry = func.new_block()
   let target = func.new_block()
   let source = func.new_vreg(Int)
@@ -443,7 +443,7 @@ test "apply materializes jump edge args for block params" {
 
 ///|
 test "apply preserves float32 class in edge transfers" {
-  let func = @machv.Function::new("edge_jump_f32")
+  let func = @machv.AbstractFunction::new("edge_jump_f32")
   let entry = func.new_block()
   let target = func.new_block()
   let source = func.new_vreg(Float32)
@@ -475,7 +475,7 @@ test "apply preserves float32 class in edge transfers" {
 
 ///|
 test "apply preserves vector class in edge transfers" {
-  let func = @machv.Function::new("edge_jump_vector")
+  let func = @machv.AbstractFunction::new("edge_jump_vector")
   let entry = func.new_block()
   let target = func.new_block()
   let source = func.new_vreg(Vector)
@@ -507,7 +507,7 @@ test "apply preserves vector class in edge transfers" {
 
 ///|
 test "apply splits conditional branch edge args through copy blocks" {
-  let func = @machv.Function::new("edge_branch")
+  let func = @machv.AbstractFunction::new("edge_branch")
   let entry = func.new_block()
   let then_block = func.new_block()
   let else_block = func.new_block()
@@ -570,7 +570,7 @@ test "apply splits conditional branch edge args through copy blocks" {
 
 ///|
 test "apply reloads spilled terminator operands before terminator" {
-  let func = @machv.Function::new("term_reload")
+  let func = @machv.AbstractFunction::new("term_reload")
   let entry = func.new_block()
   let v0 = func.new_vreg(Int)
   let v1 = func.new_vreg(Int)
@@ -609,7 +609,7 @@ test "apply reloads spilled terminator operands before terminator" {
 
 ///|
 test "apply inserts reloads and spills for stack allocated operands" {
-  let func = @machv.Function::new("reload_spill")
+  let func = @machv.AbstractFunction::new("reload_spill")
   let entry = func.new_block()
   let v0 = func.new_vreg(Int)
   let v1 = func.new_vreg(Int)

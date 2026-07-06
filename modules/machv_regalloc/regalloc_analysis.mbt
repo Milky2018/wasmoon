@@ -173,7 +173,7 @@ priv struct CFGEdges {
 }
 
 ///|
-fn build_block_id_to_index_dense(func : VCodeFunction) -> Array[Int] {
+fn build_block_id_to_index_dense(func : @machv.Function) -> Array[Int] {
   let mut max_block_id = -1
   for block in func.blocks {
     if block.id > max_block_id {
@@ -194,7 +194,7 @@ fn build_block_id_to_index_dense(func : VCodeFunction) -> Array[Int] {
 
 ///|
 /// Build CFG edges once (O(B + E))
-fn build_cfg_edges(func : VCodeFunction) -> CFGEdges {
+fn build_cfg_edges(func : @machv.Function) -> CFGEdges {
   let blocks = func.blocks
   let n = func.blocks.length()
   let preds : Array[Array[Int]] = []
@@ -362,7 +362,7 @@ pub struct LivenessResult {
 ///|
 /// Compute reverse postorder of blocks (for linearizing the CFG)
 /// Returns a FixedArray where order[block_idx] = position in reverse postorder
-fn compute_reverse_postorder(func : VCodeFunction) -> FixedArray[Int] {
+fn compute_reverse_postorder(func : @machv.Function) -> FixedArray[Int] {
   let n = func.blocks.length()
   let visited : Array[Bool] = Array::make(n, false)
   let postorder : Array[Int] = []
@@ -370,7 +370,7 @@ fn compute_reverse_postorder(func : VCodeFunction) -> FixedArray[Int] {
 
   // DFS to compute postorder
   fn dfs(
-    func : VCodeFunction,
+    func : @machv.Function,
     block_id_to_index : Array[Int],
     block_idx : Int,
     visited : Array[Bool],
@@ -385,7 +385,7 @@ fn compute_reverse_postorder(func : VCodeFunction) -> FixedArray[Int] {
     let block = func.blocks[block_idx]
     if block.terminator is Some(term) {
       fn visit_succ(
-        func : VCodeFunction,
+        func : @machv.Function,
         block_id_to_index : Array[Int],
         succ_id : Int,
         visited : Array[Bool],
@@ -455,7 +455,7 @@ fn compute_reverse_postorder(func : VCodeFunction) -> FixedArray[Int] {
 ///|
 /// Compute liveness information for a VCode function.
 fn compute_liveness_with_options(
-  func : VCodeFunction,
+  func : @machv.Function,
   build_live_intervals : Bool,
   record_sparse_use_def_map : Bool,
 ) -> LivenessResult {
@@ -497,13 +497,13 @@ fn compute_liveness_with_options(
 
 ///|
 /// Compute full liveness information including interval maps.
-pub fn compute_liveness(func : VCodeFunction) -> LivenessResult {
+pub fn compute_liveness(func : @machv.Function) -> LivenessResult {
   compute_liveness_with_options(func, true, true)
 }
 
 ///|
 /// Compute liveness for regalloc hot path (no interval map construction).
-pub fn compute_liveness_for_regalloc(func : VCodeFunction) -> LivenessResult {
+pub fn compute_liveness_for_regalloc(func : @machv.Function) -> LivenessResult {
   compute_liveness_with_options(func, false, false)
 }
 
@@ -540,7 +540,7 @@ fn ensure_use_def_info(
 ///|
 /// Phase 1: Collect all definitions and uses
 fn collect_defs_uses(
-  func : VCodeFunction,
+  func : @machv.Function,
   result : LivenessResult,
   record_sparse_use_def_map : Bool,
 ) -> Unit {
@@ -680,7 +680,7 @@ fn collect_defs_uses(
 ///|
 /// Phase 2: Compute live-in and live-out sets
 fn compute_live_sets(
-  func : VCodeFunction,
+  func : @machv.Function,
   result : LivenessResult,
   materialize_sets : Bool,
 ) -> Unit {
@@ -841,7 +841,7 @@ fn compute_live_sets(
 
 ///|
 /// Phase 3: Build live intervals from use-def info
-fn build_intervals(func : VCodeFunction, result : LivenessResult) -> Unit {
+fn build_intervals(func : @machv.Function, result : LivenessResult) -> Unit {
   // Get block order for correct interval comparison
   let block_order = result.block_order
   let sorted_call_points = result.call_points.copy()
