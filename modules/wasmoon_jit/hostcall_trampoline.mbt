@@ -52,8 +52,7 @@ fn bytes_for_type(ty : @types.ValueType) -> Int {
 }
 
 ///|
-fn add_call_clobbers(call_inst : @instr.VCodeInst) -> Unit {
-  let isa = @isa.ISA::current()
+fn add_call_clobbers(call_inst : @instr.VCodeInst, isa : @isa.ISA) -> Unit {
   for preg in isa.call_clobbered_gprs() {
     call_inst.add_def({ reg: Physical(preg) })
   }
@@ -72,6 +71,7 @@ pub fn emit_hostcall_import_trampoline(
   host_func_addr : Int,
   hostcall_symbol : @instr.ExternalName,
   call_conv_layout : @abi.CallConventionLayout,
+  isa? : @isa.ISA = AArch64,
 ) -> @machv_emit.MachineCode {
   let func = @machv.Function::new("host_import_trampoline")
 
@@ -227,7 +227,7 @@ pub fn emit_hostcall_import_trampoline(
   let ctx_arg = func.new_vreg(Int)
   let mv_ctx = @instr.VCodeInst::new(Move)
   mv_ctx.add_def({ reg: Virtual(ctx_arg) })
-  mv_ctx.add_use(Physical({ index: @isaregs.vmctx_index(), class: Int }))
+  mv_ctx.add_use(Physical({ index: isa.vmctx_reg_index(), class: Int }))
   block.add_inst(mv_ctx)
   let host_addr_vreg = func.new_vreg(Int)
   let c_host = @instr.VCodeInst::new(LoadConst(host_func_addr.to_int64()))
@@ -243,7 +243,7 @@ pub fn emit_hostcall_import_trampoline(
   block.add_inst(c_res_slots)
   let call = @instr.VCodeInst::new(CallPtr(5, 0, Foreign))
   fn c_arg_gpr_indices() -> Array[Int] {
-    match @isa.ISA::current() {
+    match isa {
       // AAPCS64: X0-X7
       AArch64 => [0, 1, 2, 3, 4, 5, 6, 7]
       // SysV AMD64: RDI,RSI,RDX,RCX,R8,R9 (in our 0..15 numbering)
@@ -254,7 +254,7 @@ pub fn emit_hostcall_import_trampoline(
   let arg_regs = c_arg_gpr_indices()
   // Call target in IP1.
   call.add_use_fixed(Virtual(func_ptr_vreg), {
-    index: @isaregs.scratch2_index(),
+    index: isa.scratch_reg_2_index(),
     class: Int,
   })
   call.add_use_fixed(Virtual(ctx_arg), { index: arg_regs[0], class: Int })
@@ -265,7 +265,7 @@ pub fn emit_hostcall_import_trampoline(
     index: arg_regs[4],
     class: Int,
   })
-  add_call_clobbers(call)
+  add_call_clobbers(call, isa)
   block.add_inst(call)
 
   // Load results from values_vec and return.
@@ -311,9 +311,15 @@ pub fn emit_hostcall_import_trampoline(
   block.set_terminator(Return(ret_regs))
 
   // Allocate registers and emit machine code.
-  let allocated = @machv_regalloc.allocate_registers_backtracking(
+  let allocated = @machv_regalloc.allocate_registers_backtracking_with_isa(
     func,
+    isa,
+    @abi.ABISettings::default(),
     call_conv_layout=Some(call_conv_layout),
   )
-  @machv_emit.emit_function(allocated, call_conv_layout=Some(call_conv_layout))
+  @machv_emit.emit_function(
+    allocated,
+    isa~,
+    call_conv_layout=Some(call_conv_layout),
+  )
 }

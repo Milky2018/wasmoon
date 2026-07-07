@@ -96,9 +96,11 @@ pub fn direct_call_idx_memory_copy_mem0() -> Int
 
 pub fn direct_call_idx_memory_fill_mem0() -> Int
 
-pub fn emit_entry_trampoline(Array[Int], Array[Int], @abi.CallConventionLayout) -> @machv_emit.MachineCode
+pub fn emit_entry_trampoline(Array[Int], Array[Int], @abi.CallConventionLayout, isa? : @isa.ISA) -> @machv_emit.MachineCode
 
-pub fn emit_hostcall_import_trampoline(Array[@types.ValueType], Array[@types.ValueType], Int, @instr.ExternalName, @abi.CallConventionLayout) -> @machv_emit.MachineCode
+pub fn emit_hostcall_import_trampoline(Array[@types.ValueType], Array[@types.ValueType], Int, @instr.ExternalName, @abi.CallConventionLayout, isa? : @isa.ISA) -> @machv_emit.MachineCode
+
+pub fn emit_target_to_isa(@machv_emit.EmitTarget) -> @isa.ISA
 
 pub fn encode_aarch64_bl_imm26(Int64, Int64) -> Int?
 
@@ -448,6 +450,8 @@ pub fn take_wasi_stderr(Int64) -> Bytes
 
 pub fn take_wasi_stdout(Int64) -> Bytes
 
+pub fn target_arch_to_isa(@cwasm.TargetArch) -> @isa.ISA
+
 pub fn throw_exception_tag(Int64, Int) -> Unit
 
 pub fn throw_exception_values(Int64, Int, Array[Int64]) -> Unit
@@ -460,7 +464,7 @@ pub fn value_type_may_hold_gc_ref(@types.ValueType) -> Bool
 
 pub fn vmcontext_layout() -> VMContextLayout
 
-pub fn wasm_calling_convention() -> @abi.CallConventionLayout
+pub fn wasm_calling_convention(isa? : @isa.ISA) -> @abi.CallConventionLayout
 
 pub fn wasm_calling_convention_for_isa(@isa.ISA) -> @abi.CallConventionLayout
 

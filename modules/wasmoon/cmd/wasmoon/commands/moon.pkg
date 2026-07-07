@@ -9,6 +9,7 @@ import {
   "Milky2018/wasmoon/wat",
   "Milky2018/wasmoon/wast",
   "Milky2018/machv",
+  "Milky2018/machv/abi",
   "Milky2018/machv_emit",
   "Milky2018/milkir",
   "Milky2018/wasmoon/wasm_frontend/ir",

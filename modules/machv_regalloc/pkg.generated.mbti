@@ -24,7 +24,7 @@ pub fn allocate_registers_backtracking_output_with_isa(@machv.Function, @isa.ISA
 
 pub fn allocate_registers_backtracking_with_isa(@machv.Function, @isa.ISA, @abi.ABISettings, call_conv_layout? : @abi.CallConventionLayout?) -> @machv.Function
 
-pub fn apply_allocation(@machv.Function, RegAllocResult, @abi.CallConventionLayout) -> @machv.Function
+pub fn apply_allocation(@machv.Function, RegAllocResult, @isa.ISA, @abi.CallConventionLayout) -> @machv.Function
 
 pub fn build_bundles_with_merging(@machv.Function, LiveRangeSet) -> BundleSet
 
@@ -46,7 +46,7 @@ pub fn debug_liveness(LivenessResult) -> String
 
 pub fn eliminate_dead_code(@machv.Function) -> @machv.Function
 
-pub fn get_alloc_stats(@machv.Function, settings? : @abi.ABISettings, call_conv_layout? : @abi.CallConventionLayout?) -> AllocStats
+pub fn get_alloc_stats(@machv.Function, isa? : @isa.ISA, settings? : @abi.ABISettings, call_conv_layout? : @abi.CallConventionLayout?) -> AllocStats
 
 pub fn process_constraints(@machv.Function, RegAllocResult) -> Unit
 

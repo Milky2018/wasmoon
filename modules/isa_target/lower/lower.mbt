@@ -12,6 +12,7 @@
 struct LoweringContext {
   ir_func : @milkir.Function
   vcode_func : @machv.Function
+  isa : @isa.ISA
   abi_settings : @abi.ABISettings
   runtime_layout : @abi.RuntimeContextLayout?
   call_conv_layout : @abi.CallConventionLayout?
@@ -63,6 +64,7 @@ fn function_params_for_lowering(
 ///|
 pub fn LoweringContext::new(
   ir_func : @milkir.Function,
+  isa : @isa.ISA,
   abi_settings : @abi.ABISettings,
   runtime_layout : @abi.RuntimeContextLayout?,
   call_conv_layout : @abi.CallConventionLayout?,
@@ -91,6 +93,7 @@ pub fn LoweringContext::new(
   {
     ir_func,
     vcode_func: @machv.Function::new(ir_func.name),
+    isa,
     abi_settings,
     runtime_layout,
     call_conv_layout,
@@ -223,7 +226,7 @@ fn get_adjusted_base_with_offset(
   if offset == 0L {
     return base
   }
-  let isa = @isa.ISA::current()
+  let isa = ctx.isa
   let result = ctx.vcode_func.new_vreg(Int)
   if offset > 0L && is_valid_add_sub_imm_for_isa(isa, offset) {
     let add_inst = @instr.VCodeInst::new(AddImm(offset.to_int(), true))
@@ -278,7 +281,7 @@ fn get_adjusted_regoff_index_with_offset(
   } else {
     return None
   }
-  let isa = @isa.ISA::current()
+  let isa = ctx.isa
   let result = ctx.vcode_func.new_vreg(Int)
   if offset > 0L && is_valid_add_sub_imm_for_isa(isa, offset) {
     let add_inst = @instr.VCodeInst::new(AddImm(offset.to_int(), !is_i32_index))
@@ -326,8 +329,8 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
     ctx.ir_func.next_value_id,
     0,
   )
-  let is_amd64 = @isa.ISA::current() is AMD64
-  let is_aarch64 = @isa.ISA::current() is AArch64
+  let is_amd64 = ctx.isa is AMD64
+  let is_aarch64 = ctx.isa is AArch64
   let enable_subextend_fusion = true
 
   fn ensure_bool_slot(arr : Array[Bool], idx : Int) -> Unit {
@@ -412,7 +415,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
           if !matched &&
             match_iadd_const(ctx, base_value) is Some((_, addr_offset)) {
             let combined = explicit_offset + addr_offset
-            if is_valid_load_store_offset(combined, access_size) {
+            if is_valid_load_store_offset(ctx, combined, access_size) {
               mark_addrmode_subsumed_use(base_value.id)
             }
           }
@@ -455,7 +458,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
           if !matched &&
             match_iadd_const(ctx, base_value) is Some((_, addr_offset)) {
             let combined = explicit_offset + addr_offset
-            if is_valid_load_store_offset(combined, access_size) {
+            if is_valid_load_store_offset(ctx, combined, access_size) {
               mark_addrmode_subsumed_use(base_value.id)
             }
           }
@@ -494,7 +497,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
           if !matched &&
             match_iadd_const(ctx, base_value) is Some((_, addr_offset)) {
             let combined = explicit_offset + addr_offset
-            if is_valid_load_store_offset(combined, access_size) {
+            if is_valid_load_store_offset(ctx, combined, access_size) {
               mark_addrmode_subsumed_use(base_value.id)
             }
           }
@@ -533,7 +536,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
           if !matched &&
             match_iadd_const(ctx, base_value) is Some((_, addr_offset)) {
             let combined = explicit_offset + addr_offset
-            if is_valid_load_store_offset(combined, access_size) {
+            if is_valid_load_store_offset(ctx, combined, access_size) {
               mark_addrmode_subsumed_use(base_value.id)
             }
           }
@@ -1250,7 +1253,7 @@ fn is_valid_logic_imm_for_isa(
 /// Check if a value is a constant and return the value if valid for ADD/SUB immediate
 /// Returns Some(val) if the value is a constant in current ISA immediate range.
 fn match_add_imm_value(ctx : LoweringContext, value : @milkir.Value) -> Int64? {
-  let isa = @isa.ISA::current()
+  let isa = ctx.isa
   if resolve_iconst_value(ctx, value) is Some(val) &&
     is_valid_add_sub_imm_for_isa(isa, val) {
     return Some(val)
@@ -1265,7 +1268,7 @@ fn match_negated_add_imm_value(
   ctx : LoweringContext,
   value : @milkir.Value,
 ) -> Int64? {
-  let isa = @isa.ISA::current()
+  let isa = ctx.isa
   if resolve_iconst_value(ctx, value) is Some(val) {
     let neg = -val
     if val < 0L && is_valid_add_sub_imm_for_isa(isa, neg) {
@@ -1316,7 +1319,7 @@ fn prefer_reg_offset_for_index(
 ) -> Bool {
   if iconst_value(ctx, index) is Some(iconst) {
     let combined = explicit_offset + extra_offset + iconst
-    return !is_valid_load_store_offset(combined, access_size)
+    return !is_valid_load_store_offset(ctx, combined, access_size)
   }
   true
 }
@@ -1530,8 +1533,12 @@ fn is_valid_load_store_offset_for_isa(
 
 ///|
 /// Check if an offset is encodable in current ISA addressing mode immediate.
-fn is_valid_load_store_offset(offset : Int64, access_size : Int) -> Bool {
-  is_valid_load_store_offset_for_isa(@isa.ISA::current(), offset, access_size)
+fn is_valid_load_store_offset(
+  ctx : LoweringContext,
+  offset : Int64,
+  access_size : Int,
+) -> Bool {
+  is_valid_load_store_offset_for_isa(ctx.isa, offset, access_size)
 }
 
 ///|
@@ -1585,6 +1592,7 @@ fn intcc_to_cond(cc : @milkir.IntCC) -> @instr.Cond {
 /// Lower an entire IR function to VCode
 pub fn lower_function(
   ir_func : @milkir.Function,
+  isa? : @isa.ISA = AArch64,
   abi_settings? : @abi.ABISettings = @abi.ABISettings::default(),
   runtime_layout? : @abi.RuntimeContextLayout? = None,
   call_conv_layout? : @abi.CallConventionLayout? = None,
@@ -1599,7 +1607,7 @@ pub fn lower_function(
     @milkir.optimize_function(ir_func) |> ignore
   }
   let ctx = LoweringContext::new(
-    ir_func, abi_settings, runtime_layout, call_conv_layout, num_imports, use_subtype_indirect_check,
+    ir_func, isa, abi_settings, runtime_layout, call_conv_layout, num_imports, use_subtype_indirect_check,
     canonical_type_indices,
   )
 
@@ -1672,7 +1680,7 @@ pub fn lower_function(
   // amd64 uses a CALL instruction, so the return address occupies 8 bytes at
   // the entry SP. Stack parameters are therefore at [entry_sp + 8 + offset].
   // (Cranelift x64 models this the same way.)
-  let stack_arg_base = if @isa.ISA::current() is AMD64 { 8 } else { 0 }
+  let stack_arg_base = if ctx.isa is AMD64 { 8 } else { 0 }
   for i in 0..<int_stack_values.length() {
     ctx.stack_param_map.set(
       int_stack_values[i].id,
@@ -1716,14 +1724,14 @@ pub fn lower_function(
   // Phase 5: Peephole optimization
   // Keep post-lowering cleanup deterministic (profile-driven) instead of
   // function-size gating.
-  optimize_vcode_for_lowering(ctx.vcode_func, runtime_layout~)
+  optimize_vcode_for_lowering(ctx.vcode_func, isa=ctx.isa, runtime_layout~)
 
   // Phase 6: Target-specific fixups (Cranelift-style).
   //
   // On amd64, variable shifts/rotates use CL (rcx) as the implicit count
   // register. Enforce this constraint universally to avoid relying on each
   // lowering site to set it correctly.
-  if @isa.ISA::current() is AMD64 {
+  if ctx.isa is AMD64 {
     fixup_amd64_shift_count_constraints(ctx.vcode_func)
   }
   ctx.vcode_func
@@ -2431,8 +2439,7 @@ fn lower_icmp(
     let vcode_inst = @instr.VCodeInst::new(Cmp(kind, is_64))
     vcode_inst.add_def({ reg: Virtual(dst) })
     vcode_inst.add_use(Virtual(lhs))
-    if @isa.ISA::current() is AArch64 &&
-      is_const_zero_value(ctx, inst.operands[1]) {
+    if ctx.isa is AArch64 && is_const_zero_value(ctx, inst.operands[1]) {
       // Cranelift-style zero-compare fast path: use xzr/wzr directly and
       // avoid materializing an explicit zero register.
       vcode_inst.add_use(Physical({ index: 31, class: Int }))
@@ -2771,7 +2778,7 @@ fn lower_load_ptr(
   //   load [base + (extend/ishl index)] => load_regoff base, index, (ext/scale)
   //
   // On amd64, we support scales 0..3 and lower extends through regoffset as well.
-  let isa = @isa.ISA::current()
+  let isa = ctx.isa
   let is_amd64 = isa is AMD64
   let allow_nonzero_regoff = is_amd64
   if (mem_ty is I32 || mem_ty is I64) &&
@@ -2829,7 +2836,7 @@ fn lower_load_ptr(
   let (actual_base_value, total_offset) = if match_iadd_const(ctx, base_value)
     is Some((real_base, addr_offset)) {
     let combined = explicit_offset + addr_offset
-    if is_valid_load_store_offset(combined, access_size) {
+    if is_valid_load_store_offset(ctx, combined, access_size) {
       (real_base, combined.to_int())
     } else {
       // Offset too large or unaligned, can't fold
@@ -2883,7 +2890,7 @@ fn lower_store_ptr(
     0L
   }
   // Try Cranelift-style register-offset addressing for stores.
-  let isa = @isa.ISA::current()
+  let isa = ctx.isa
   let is_amd64 = isa is AMD64
   let allow_nonzero_regoff = is_amd64
   if (mem_ty is I32 || mem_ty is I64) &&
@@ -2941,7 +2948,7 @@ fn lower_store_ptr(
   let (actual_base_value, total_offset) = if match_iadd_const(ctx, base_value)
     is Some((real_base, addr_offset)) {
     let combined = explicit_offset + addr_offset
-    if is_valid_load_store_offset(combined, access_size) {
+    if is_valid_load_store_offset(ctx, combined, access_size) {
       (real_base, combined.to_int())
     } else {
       // Offset too large or unaligned, can't fold
@@ -2995,7 +3002,7 @@ fn lower_load_ptr_narrow(
 
   // Cranelift-style narrow register-offset addressing:
   //   load{8,16,32} [base + index{,extend}{,scale}]
-  let isa = @isa.ISA::current()
+  let isa = ctx.isa
   let is_aarch64 = isa is AArch64
   let is_amd64 = isa is AMD64
   let allow_nonzero_regoff = is_amd64
@@ -3052,7 +3059,7 @@ fn lower_load_ptr_narrow(
   let (actual_base_value, total_offset) = if match_iadd_const(ctx, base_value)
     is Some((real_base, addr_offset)) {
     let combined = explicit_offset + addr_offset
-    if is_valid_load_store_offset(combined, access_size) {
+    if is_valid_load_store_offset(ctx, combined, access_size) {
       (real_base, combined.to_int())
     } else {
       (base_value, explicit_offset.to_int())
@@ -3104,7 +3111,7 @@ fn lower_store_ptr_narrow(
 
   // Cranelift-style narrow register-offset addressing:
   //   store{8,16,32} [base + index{,extend}{,scale}]
-  let isa = @isa.ISA::current()
+  let isa = ctx.isa
   let is_aarch64 = isa is AArch64
   let is_amd64 = isa is AMD64
   let allow_nonzero_regoff = is_amd64
@@ -3162,7 +3169,7 @@ fn lower_store_ptr_narrow(
   let (actual_base_value, total_offset) = if match_iadd_const(ctx, base_value)
     is Some((real_base, addr_offset)) {
     let combined = explicit_offset + addr_offset
-    if is_valid_load_store_offset(combined, access_size) {
+    if is_valid_load_store_offset(ctx, combined, access_size) {
       (real_base, combined.to_int())
     } else {
       (base_value, explicit_offset.to_int())

@@ -19,6 +19,15 @@ pub fn host_target_arch() -> @cwasm.TargetArch {
 }
 
 ///|
+pub fn target_arch_to_isa(target : @cwasm.TargetArch) -> @isa.ISA {
+  match target {
+    X86_64 => AMD64
+    AArch64 => AArch64
+    Unknown => AArch64
+  }
+}
+
+///|
 /// Low-level trap detail captured by the JIT signal handlers (best-effort).
 pub struct TrapDetails {
   signal : Int

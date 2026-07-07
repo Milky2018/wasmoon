@@ -102,7 +102,7 @@ pub fn JITStackFrame::build(
   has_incoming_stack_args? : Bool = false,
   runtime_layout? : @abi.RuntimeContextLayout? = None,
   call_conv_layout? : @abi.CallConventionLayout? = None,
-  isa? : @isa.ISA = @isa.ISA::current(),
+  isa? : @isa.ISA = AArch64,
   abi_settings? : @abi.ABISettings = @abi.ABISettings::default(),
 ) -> JITStackFrame {
   let isa = isa

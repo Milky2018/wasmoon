@@ -291,10 +291,13 @@ fn JITContext::call_multi_return(
           @wasmoon_jit.entry_trampoline_value_type_code(result_type),
         )
       }
+      let target_arch = @wasmoon_jit.host_target_arch()
+      let isa = @wasmoon_jit.target_arch_to_isa(target_arch)
       let mc = @wasmoon_jit.emit_entry_trampoline(
         param_codes_arr,
         result_codes_arr,
-        @wasmoon_jit.wasm_calling_convention(),
+        @wasmoon_jit.wasm_calling_convention(isa~),
+        isa~,
       )
       let code_ints = mc.get_bytes()
       let trampoline = @wasmoon_jit.ExecCode::new(code_ints)

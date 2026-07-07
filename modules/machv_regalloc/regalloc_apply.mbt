@@ -28,6 +28,7 @@ fn preg_to_loc(preg : @abi.PReg) -> Loc {
 pub fn apply_allocation(
   func : @machv.Function,
   alloc : RegAllocResult,
+  isa : @isa.ISA,
   call_conv_layout : @abi.CallConventionLayout,
 ) -> @machv.Function {
   let new_func = func.clone_base()
@@ -36,7 +37,6 @@ pub fn apply_allocation(
   for i, block in func.blocks {
     block_id_to_index.set(block.id, i)
   }
-  let isa = @isa.ISA::current()
   let context_arg = call_conv_layout.context_arg
   let user_arg_gprs = call_conv_layout.user_arg_gprs
   let call_arg_fprs = call_conv_layout.arg_fprs
@@ -175,7 +175,7 @@ pub fn apply_allocation(
   let enable_reload_coalescing = false
   let reload_intervals : Map[(Int, Int), ReloadInterval] = if enable_reload_coalescing {
     let intervals = compute_reload_intervals(func, alloc)
-    allocate_reload_registers(func, alloc, intervals, liveness)
+    allocate_reload_registers(func, alloc, intervals, liveness, isa)
     intervals
   } else {
     {}
@@ -598,7 +598,7 @@ pub fn apply_allocation(
       // Fixed register constraint handling
       // Use parallel move resolver to handle cyclic dependencies
       if point_edits is Some(edits) {
-        let resolved_moves = resolve_parallel_moves(edits.before)
+        let resolved_moves = resolve_parallel_moves(edits.before, isa)
         // Track which spill slots have been reloaded in this batch for coalescing
         let reloaded_slots : Map[Int, @abi.PReg] = {}
         for mv in resolved_moves {
@@ -669,7 +669,7 @@ pub fn apply_allocation(
       // Process constraint edits: insert moves after the instruction
       // Use parallel move resolver for consistency (though after moves rarely conflict)
       if point_edits is Some(edits) {
-        let resolved_moves = resolve_parallel_moves(edits.after)
+        let resolved_moves = resolve_parallel_moves(edits.after, isa)
         for mv in resolved_moves {
           if mv.to.is_spilled() {
             // Store to spill slot from source register
@@ -755,7 +755,7 @@ pub fn apply_allocation(
 
           // Resolve all moves together (including spill destinations), otherwise
           // a register move can clobber a source before it is stored to a spill slot.
-          let resolved_moves = resolve_parallel_moves(moves)
+          let resolved_moves = resolve_parallel_moves(moves, isa)
           for mv in resolved_moves {
             if mv.to.is_spilled() {
               let to_slot = mv.to.get_spill_slot()

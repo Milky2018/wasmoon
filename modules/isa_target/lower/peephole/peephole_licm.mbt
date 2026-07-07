@@ -9,6 +9,7 @@
 fn licm_hoist_invariants(
   func : @machv.Function,
   runtime_layout : @abi.RuntimeContextLayout,
+  isa : @isa.ISA,
 ) -> Unit {
   let n = func.blocks.length()
   if n == 0 {
@@ -125,7 +126,7 @@ fn licm_hoist_invariants(
             }
           }
         }
-        let vmctx_idx = @isa.ISA::current().vmctx_reg_index()
+        let vmctx_idx = isa.vmctx_reg_index()
         fn is_vmctx_reg(r : @abi.Reg) -> Bool {
           r is Physical(p) && p.index == vmctx_idx
         }
@@ -247,8 +248,9 @@ fn licm_hoist_invariants(
 fn cse_immutable_loads(
   func : @machv.Function,
   runtime_layout : @abi.RuntimeContextLayout,
+  isa : @isa.ISA,
 ) -> Unit {
-  let vmctx_idx = @isa.ISA::current().vmctx_reg_index()
+  let vmctx_idx = isa.vmctx_reg_index()
   // Wasm ABI: param 0 is vmctx. Treat it as vmctx alias so repeated
   // vmctx-derived base loads can be CSE'd even before prelude rewrites.
   let vmctx_aliases : @hashset.HashSet[Int] = HashSet([])
@@ -1205,6 +1207,7 @@ pub(all) enum PeepholeProfile {
 ///|
 pub fn optimize_vcode(
   func : @machv.Function,
+  isa? : @isa.ISA = AArch64,
   profile? : PeepholeProfile = Full,
   runtime_layout? : @abi.RuntimeContextLayout? = None,
 ) -> Unit {
@@ -1232,16 +1235,16 @@ pub fn optimize_vcode(
 
   // Pass 0: loop-invariant code motion
   if enable_licm {
-    licm_hoist_invariants(func, runtime_layout.unwrap())
+    licm_hoist_invariants(func, runtime_layout.unwrap(), isa)
   }
   // Pass 0.5: block-local CSE for immutable loads
   if enable_immutable_load_cse {
-    cse_immutable_loads(func, runtime_layout.unwrap())
+    cse_immutable_loads(func, runtime_layout.unwrap(), isa)
   }
   // Pass 1: Basic peephole optimizations (constant folding, move elimination)
   for block in func.blocks {
     let state = PeepholeState::new()
-    optimize_block(block, func, state) |> ignore
+    optimize_block(block, func, state, isa) |> ignore
   }
   // Pass 1.5: Copy propagation for single-use moves
   if enable_copy_prop {

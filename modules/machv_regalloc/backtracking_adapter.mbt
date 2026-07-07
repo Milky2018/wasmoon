@@ -156,6 +156,7 @@ priv struct BacktrackingAllocator {
   vector_regs : Array[@abi.PReg]
   callee_saved_int : Array[@abi.PReg]
   callee_saved_float : Array[@abi.PReg]
+  isa : @isa.ISA
   int_caller_saved : Array[@abi.PReg]
   float_caller_saved : Array[@abi.PReg]
   split_probe_limit : Int
@@ -211,6 +212,7 @@ fn BacktrackingAllocator::new(
   func : @machv.Function,
   ranges : LiveRangeSet,
   bundles : BundleSet,
+  isa : @isa.ISA,
   int_regs : Array[@abi.PReg],
   float_regs : Array[@abi.PReg],
   vector_regs : Array[@abi.PReg],
@@ -300,6 +302,7 @@ fn BacktrackingAllocator::new(
     vector_regs,
     callee_saved_int,
     callee_saved_float,
+    isa,
     int_caller_saved,
     float_caller_saved,
     split_probe_limit,
@@ -1685,7 +1688,7 @@ fn BacktrackingAllocator::preassign_params(
       // choose a safe location from full liveness/call-clobber information.
       if bundle.crosses_call(self.ranges) {
         if is_vmctx_param {
-          self.record_allocation(bundle, @isa.ISA::current().vmctx_preg())
+          self.record_allocation(bundle, self.isa.vmctx_preg())
           bundle.is_pinned = true
           continue
         }
@@ -1767,6 +1770,7 @@ fn BacktrackingAllocator::preassign_params(
 fn allocate_backtracking(
   func : @machv.Function,
   liveness : LivenessResult,
+  isa : @isa.ISA,
   int_regs : Array[@abi.PReg],
   float_regs : Array[@abi.PReg],
   vector_regs : Array[@abi.PReg],
@@ -1798,6 +1802,7 @@ fn allocate_backtracking(
     func,
     ranges,
     bundles,
+    isa,
     int_regs,
     float_regs,
     vector_regs,

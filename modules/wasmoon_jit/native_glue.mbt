@@ -129,6 +129,7 @@ pub fn plan_integration_for_target(
     object: @machv_emit.emit_function_with_regalloc(
       vcode_func,
       regalloc_output,
+      isa=emit_target_to_isa(target),
       runtime_layout=Some(runtime_context_layout()),
       call_conv_layout=Some(call_conv),
     ),
@@ -136,7 +137,7 @@ pub fn plan_integration_for_target(
 }
 
 ///|
-fn emit_target_to_isa(target : @machv_emit.EmitTarget) -> @isa.ISA {
+pub fn emit_target_to_isa(target : @machv_emit.EmitTarget) -> @isa.ISA {
   match target {
     AArch64 => AArch64
     X64 => AMD64
@@ -149,15 +150,13 @@ pub fn lower_milkir_for_target(
   target : @machv_emit.EmitTarget,
 ) -> @machv.Function {
   let isa = emit_target_to_isa(target)
-  let previous = @isa.push_isa_override(isa)
   let call_conv = wasm_calling_convention_for_isa(isa)
-  let lowered = @lower.lower_function(
+  @lower.lower_function(
     func,
+    isa~,
     runtime_layout=Some(runtime_context_layout()),
     call_conv_layout=Some(call_conv),
   )
-  @isa.restore_isa_override(previous)
-  lowered
 }
 
 ///|
@@ -166,16 +165,14 @@ pub fn lower_wasm_body_milkir_for_target(
   target : @machv_emit.EmitTarget,
 ) -> @machv.Function {
   let isa = emit_target_to_isa(target)
-  let previous = @isa.push_isa_override(isa)
   let call_conv = wasm_calling_convention_for_isa(isa)
-  let lowered = @lower.lower_function(
+  @lower.lower_function(
     func,
+    isa~,
     run_ir_opt=false,
     runtime_layout=Some(runtime_context_layout()),
     call_conv_layout=Some(call_conv),
   )
-  @isa.restore_isa_override(previous)
-  lowered
 }
 
 ///|
@@ -184,10 +181,10 @@ pub fn plan_milkir_integration_for_target(
   target : @machv_emit.EmitTarget,
 ) -> JitIntegrationPlan {
   let isa = emit_target_to_isa(target)
-  let previous = @isa.push_isa_override(isa)
   let call_conv = wasm_calling_convention_for_isa(isa)
   let vcode_func = @lower.lower_function(
     func,
+    isa~,
     runtime_layout=Some(runtime_context_layout()),
     call_conv_layout=Some(call_conv),
   )
@@ -197,9 +194,7 @@ pub fn plan_milkir_integration_for_target(
     @abi.ABISettings::default(),
     call_conv_layout=Some(call_conv),
   )
-  let plan = plan_integration_for_target(func, allocated_func, output, target)
-  @isa.restore_isa_override(previous)
-  plan
+  plan_integration_for_target(func, allocated_func, output, target)
 }
 
 ///|
@@ -208,10 +203,10 @@ pub fn plan_wasm_body_milkir_integration_for_target(
   target : @machv_emit.EmitTarget,
 ) -> JitIntegrationPlan {
   let isa = emit_target_to_isa(target)
-  let previous = @isa.push_isa_override(isa)
   let call_conv = wasm_calling_convention_for_isa(isa)
   let vcode_func = @lower.lower_function(
     func,
+    isa~,
     run_ir_opt=false,
     runtime_layout=Some(runtime_context_layout()),
     call_conv_layout=Some(call_conv),
@@ -222,7 +217,5 @@ pub fn plan_wasm_body_milkir_integration_for_target(
     @abi.ABISettings::default(),
     call_conv_layout=Some(call_conv),
   )
-  let plan = plan_integration_for_target(func, allocated_func, output, target)
-  @isa.restore_isa_override(previous)
-  plan
+  plan_integration_for_target(func, allocated_func, output, target)
 }

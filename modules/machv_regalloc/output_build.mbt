@@ -371,7 +371,7 @@ fn build_output(
   let enable_reload_coalescing = false
   let reload_intervals : Map[(Int, Int), ReloadInterval] = if enable_reload_coalescing {
     let intervals = compute_reload_intervals(func, alloc)
-    allocate_reload_registers(func, alloc, intervals, liveness)
+    allocate_reload_registers(func, alloc, intervals, liveness, isa)
     intervals
   } else {
     {}
@@ -507,7 +507,7 @@ fn build_output(
     if moves.is_empty() {
       return
     }
-    let resolved = resolve_parallel_moves(moves)
+    let resolved = resolve_parallel_moves(moves, isa)
     for mv in resolved {
       out.push_edit(block_id, inst_idx, pos, Move(mv.from, mv.to, mv.class))
     }

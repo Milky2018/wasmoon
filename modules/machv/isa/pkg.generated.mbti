@@ -7,11 +7,6 @@ import {
 }
 
 // Values
-pub fn c_host_arch() -> Int
-
-pub fn push_isa_override(ISA) -> ISA?
-
-pub fn restore_isa_override(ISA?) -> Unit
 
 // Errors
 
@@ -23,11 +18,9 @@ pub(all) enum ISA {
 pub fn ISA::call_clobbered_fprs(Self) -> Array[@abi.PReg]
 pub fn ISA::call_clobbered_fprs_same_abi(Self) -> Array[@abi.PReg]
 pub fn ISA::call_clobbered_gprs(Self) -> Array[@abi.PReg]
-pub fn ISA::current() -> Self
 pub fn ISA::extra_results_ptr_reg_index(Self) -> Int
 pub fn ISA::fp_reg_index(Self) -> Int
 pub fn ISA::func_table_reg_index(Self) -> Int
-pub fn ISA::host() -> Self
 pub fn ISA::int_reg(Self, @spec.IntRegRole) -> @abi.PReg
 pub fn ISA::int_reg_index(Self, @spec.IntRegRole) -> Int
 pub fn ISA::lr_reg_index(Self) -> Int

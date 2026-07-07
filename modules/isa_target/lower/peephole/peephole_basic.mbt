@@ -185,6 +185,7 @@ fn optimize_block(
   block : @block.VCodeBlock,
   func : @machv.Function,
   state : PeepholeState,
+  isa : @isa.ISA,
 ) -> Int {
   // Phase 1: Collect all used vregs (for dead code elimination)
   let used : @hashset.HashSet[Int] = HashSet([])
@@ -212,7 +213,7 @@ fn optimize_block(
     // vregs are live-out from each block, which requires cross-block analysis.
     // For now, DCE is only done by the register allocator's dead code marking.
 
-    let optimized = optimize_instruction(inst, state)
+    let optimized = optimize_instruction(inst, state, isa)
     if optimized is Some(new_inst) {
       new_insts.push(new_inst)
       // Update state based on the new instruction
@@ -309,8 +310,8 @@ fn fits_i32(value : Int64) -> Bool {
 }
 
 ///|
-fn is_valid_add_sub_imm_for_target(value : Int64) -> Bool {
-  match @isa.ISA::current() {
+fn is_valid_add_sub_imm_for_target(value : Int64, isa : @isa.ISA) -> Bool {
+  match isa {
     AArch64 =>
       value >= 0L &&
       (value <= 4095L || ((value & 0xFFFL) == 0L && value >> 12 <= 4095L))
@@ -334,6 +335,7 @@ fn known_const(state : PeepholeState, reg : @abi.Reg) -> Int64? {
 fn optimize_instruction(
   inst : @instr.VCodeInst,
   state : PeepholeState,
+  isa : @isa.ISA,
 ) -> @instr.VCodeInst? {
   match inst.opcode {
     // AddImm(0) → Move or eliminate
@@ -396,11 +398,11 @@ fn optimize_instruction(
             }
             return Some(make_move(def, lhs))
           }
-          if is_valid_add_sub_imm_for_target(const_val) {
+          if is_valid_add_sub_imm_for_target(const_val, isa) {
             return Some(make_add_imm(const_val.to_int(), is_64, def, lhs))
           }
           let neg = -const_val
-          if const_val < 0L && is_valid_add_sub_imm_for_target(neg) {
+          if const_val < 0L && is_valid_add_sub_imm_for_target(neg, isa) {
             return Some(make_sub_imm(neg.to_int(), is_64, def, lhs))
           }
         }
@@ -411,11 +413,11 @@ fn optimize_instruction(
             }
             return Some(make_move(def, rhs))
           }
-          if is_valid_add_sub_imm_for_target(const_val) {
+          if is_valid_add_sub_imm_for_target(const_val, isa) {
             return Some(make_add_imm(const_val.to_int(), is_64, def, rhs))
           }
           let neg = -const_val
-          if const_val < 0L && is_valid_add_sub_imm_for_target(neg) {
+          if const_val < 0L && is_valid_add_sub_imm_for_target(neg, isa) {
             return Some(make_sub_imm(neg.to_int(), is_64, def, rhs))
           }
         }
@@ -435,11 +437,11 @@ fn optimize_instruction(
             }
             return Some(make_move(def, lhs))
           }
-          if is_valid_add_sub_imm_for_target(const_val) {
+          if is_valid_add_sub_imm_for_target(const_val, isa) {
             return Some(make_sub_imm(const_val.to_int(), is_64, def, lhs))
           }
           let neg = -const_val
-          if const_val < 0L && is_valid_add_sub_imm_for_target(neg) {
+          if const_val < 0L && is_valid_add_sub_imm_for_target(neg, isa) {
             return Some(make_add_imm(neg.to_int(), is_64, def, lhs))
           }
         }

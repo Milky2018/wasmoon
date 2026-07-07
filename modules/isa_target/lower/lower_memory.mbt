@@ -16,7 +16,7 @@ fn emit_load_func_table(
   let func_table_vreg = ctx.vcode_func.new_vreg(Int)
   let load_inst = @instr.VCodeInst::new(Load(I64, layout.function_table_offset))
   load_inst.add_def({ reg: Virtual(func_table_vreg) })
-  load_inst.add_use(Physical({ index: vmctx_index(), class: Int })) // vmctx
+  load_inst.add_use(Physical({ index: vmctx_index(ctx), class: Int })) // vmctx
   block.add_inst(load_inst)
   ctx.func_table_cache.set(block.id, func_table_vreg)
   func_table_vreg
@@ -39,7 +39,7 @@ fn emit_load_table0_base(
     Load(I64, layout.primary_table_base_offset),
   )
   load_inst.add_def({ reg: Virtual(table0_base_vreg) })
-  load_inst.add_use(Physical({ index: vmctx_index(), class: Int })) // vmctx
+  load_inst.add_use(Physical({ index: vmctx_index(ctx), class: Int })) // vmctx
   block.add_inst(load_inst)
   ctx.table0_base_cache.set(block.id, table0_base_vreg)
   table0_base_vreg
@@ -63,7 +63,7 @@ fn lower_get_func_ref(
   // Step 2: Load func_ptr from func_table[func_idx * 8]
   let raw_func_ptr = ctx.vcode_func.new_vreg(Int)
   let offset = func_idx * 8
-  if is_valid_load_store_offset(offset.to_int64(), 8) {
+  if is_valid_load_store_offset(ctx, offset.to_int64(), 8) {
     let load_ptr = @instr.VCodeInst::new(Load(I64, offset))
     load_ptr.add_def({ reg: Virtual(raw_func_ptr) })
     load_ptr.add_use(Virtual(func_table_vreg))
@@ -113,7 +113,7 @@ fn lower_load_mem_base(
   }
   let result_vreg = ctx.get_vreg(result)
   let vmctx_reg : @abi.Reg = if ctx.abi_settings.enable_pinned_reg {
-    Physical(vmctx_preg())
+    Physical(vmctx_preg(ctx))
   } else {
     let vmctx_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
     Virtual(vmctx_vreg)
@@ -182,7 +182,7 @@ fn lower_memory_grow(
   let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
   let vmctx_mov = @instr.VCodeInst::new(Move)
   vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
-  vmctx_mov.add_use(Physical({ index: vmctx_index(), class: Int }))
+  vmctx_mov.add_use(Physical({ index: vmctx_index(ctx), class: Int }))
   block.add_inst(vmctx_mov)
   let memidx_vreg = materialize_imm(ctx, block, memidx.to_int64())
   let max_pages_value = max_pages.unwrap_or(-1)
@@ -238,7 +238,7 @@ fn lower_memory_size(
   let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
   let vmctx_mov = @instr.VCodeInst::new(Move)
   vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
-  vmctx_mov.add_use(Physical({ index: vmctx_index(), class: Int }))
+  vmctx_mov.add_use(Physical({ index: vmctx_index(ctx), class: Int }))
   block.add_inst(vmctx_mov)
   let memidx_vreg = materialize_imm(ctx, block, memidx.to_int64())
 
@@ -287,9 +287,9 @@ fn lower_memory_fill(
   let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
   let vmctx_mov = @instr.VCodeInst::new(Move)
   vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
-  vmctx_mov.add_use(Physical({ index: vmctx_index(), class: Int }))
+  vmctx_mov.add_use(Physical({ index: vmctx_index(ctx), class: Int }))
   block.add_inst(vmctx_mov)
-  if memidx == 0 && @isa.ISA::current() is AArch64 {
+  if memidx == 0 && ctx.isa is AArch64 {
     lower_c_libcall_direct(
       ctx,
       block,
@@ -351,9 +351,9 @@ fn lower_memory_copy(
   let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
   let vmctx_mov = @instr.VCodeInst::new(Move)
   vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
-  vmctx_mov.add_use(Physical({ index: vmctx_index(), class: Int }))
+  vmctx_mov.add_use(Physical({ index: vmctx_index(ctx), class: Int }))
   block.add_inst(vmctx_mov)
-  if dst_memidx == 0 && src_memidx == 0 && @isa.ISA::current() is AArch64 {
+  if dst_memidx == 0 && src_memidx == 0 && ctx.isa is AArch64 {
     lower_c_libcall_direct(
       ctx,
       block,
@@ -419,7 +419,7 @@ fn lower_memory_init(
   let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
   let vmctx_mov = @instr.VCodeInst::new(Move)
   vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
-  vmctx_mov.add_use(Physical({ index: vmctx_index(), class: Int }))
+  vmctx_mov.add_use(Physical({ index: vmctx_index(ctx), class: Int }))
   block.add_inst(vmctx_mov)
   let memidx_vreg = materialize_imm(ctx, block, memidx.to_int64())
   let data_idx_vreg = materialize_imm(ctx, block, data_idx.to_int64())
@@ -451,7 +451,7 @@ fn lower_data_drop(
   let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
   let vmctx_mov = @instr.VCodeInst::new(Move)
   vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
-  vmctx_mov.add_use(Physical({ index: vmctx_index(), class: Int }))
+  vmctx_mov.add_use(Physical({ index: vmctx_index(ctx), class: Int }))
   block.add_inst(vmctx_mov)
   let data_idx_vreg = materialize_imm(ctx, block, data_idx.to_int64())
   lower_c_libcall(ctx, block, func_ptr_vreg, [vmctx_vreg, data_idx_vreg], None)

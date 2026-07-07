@@ -13,7 +13,7 @@ fn MachineCode::emit_instruction_x86_64(
 ) -> Unit {
   let spill_base_offset = stack_frame.spill_offset
   let frame_size = stack_frame.total_size
-  let isa = @isa.ISA::current()
+  let isa = self.isa
   fn cmp_kind_to_cond(kind : @instr.CmpKind) -> @instr.Cond {
     match kind {
       Eq => Eq
@@ -2462,9 +2462,9 @@ fn MachineCode::emit_instruction_x86_64(
       if stack_frame.runtime_layout is Some(layout) {
         if stack_frame.cache_func_table &&
           ty is I64 &&
-          rn == @isaregs.vmctx_index() &&
+          rn == self.isa.vmctx_reg_index() &&
           offset == layout.function_table_offset {
-          let ft = @isaregs.func_table_index()
+          let ft = self.isa.func_table_reg_index()
           if rt != ft {
             self.x86_emit_mov_rr(rt, ft)
           }
@@ -3127,7 +3127,7 @@ fn MachineCode::emit_instruction_x86_64(
     LoadCodeAddr(symbol) => {
       // Load function pointer from the embedding function table.
       let rd = wreg_num(inst.defs[0])
-      let vmctx = @isaregs.vmctx_index()
+      let vmctx = self.isa.vmctx_reg_index()
       let table = isa.scratch_reg_1_index()
       let layout = stack_frame.require_runtime_layout()
       self.x86_emit_mov_r64_m64(table, vmctx, layout.function_table_offset)
@@ -3135,7 +3135,7 @@ fn MachineCode::emit_instruction_x86_64(
     }
     CallDirect(symbol, _num_args, _num_results, _call_conv) => {
       // Call via embedding function table to avoid rel32 patching.
-      let vmctx = @isaregs.vmctx_index()
+      let vmctx = self.isa.vmctx_reg_index()
       let table = isa.scratch_reg_1_index()
       let callee = isa.scratch_reg_2_index()
       let layout = stack_frame.require_runtime_layout()
@@ -3176,8 +3176,8 @@ fn MachineCode::emit_instruction_x86_64(
         // the runtime debug-current-function slot. Tail calls also constrain target to
         // scratch2, so copy to scratch1 first.
         let mut jump_target = target
-        if target == @isaregs.current_isa().scratch_reg_2_index() {
-          let preserved_target = @isaregs.current_isa().scratch_reg_1_index()
+        if target == self.isa.scratch_reg_2_index() {
+          let preserved_target = self.isa.scratch_reg_1_index()
           self.x86_emit_mov_rr(preserved_target, target)
           jump_target = preserved_target
         }
@@ -3233,7 +3233,7 @@ fn MachineCode::emit_instruction_x86_64(
     ) => {
       // Inline record bump allocation with slow-path fallback.
       let dst = wreg_num(inst.defs[0])
-      let vmctx = @isaregs.vmctx_index()
+      let vmctx = self.isa.vmctx_reg_index()
       let arg0 = 7 // rdi
       let arg1 = 6 // rsi
       let arg2 = 2 // rdx
@@ -3326,7 +3326,7 @@ fn MachineCode::emit_instruction_x86_64(
     BumpAllocArrayFromStackInline(type_idx, len, register_symbol, slow_symbol) => {
       // Inline fixed-array bump allocation with slow-path fallback.
       let dst = wreg_num(inst.defs[0])
-      let vmctx = @isaregs.vmctx_index()
+      let vmctx = self.isa.vmctx_reg_index()
       let arg0 = 7 // rdi
       let arg1 = 6 // rsi
       let arg2 = 2 // rdx

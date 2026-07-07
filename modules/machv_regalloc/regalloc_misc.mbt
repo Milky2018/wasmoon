@@ -331,7 +331,7 @@ pub fn allocate_registers_backtracking(
 ) -> @machv.Function {
   allocate_registers_backtracking_with_isa(
     func,
-    @isa.ISA::current(),
+    AArch64,
     settings,
     call_conv_layout~,
   )
@@ -369,6 +369,7 @@ pub fn allocate_registers_backtracking_with_isa(
   let alloc_result = allocate_backtracking(
     func,
     liveness,
+    isa,
     int_regs,
     float_regs,
     vector_regs,
@@ -391,7 +392,7 @@ pub fn allocate_registers_backtracking_with_isa(
   }
 
   // Apply allocation
-  apply_allocation(func, alloc_result, call_conv_layout)
+  apply_allocation(func, alloc_result, isa, call_conv_layout)
 }
 
 ///|
@@ -407,7 +408,7 @@ pub fn allocate_registers_backtracking_output(
 ) -> (@machv.Function, Output) {
   allocate_registers_backtracking_output_with_isa(
     func,
-    @isa.ISA::current(),
+    AArch64,
     settings,
     call_conv_layout~,
   )
@@ -454,6 +455,7 @@ pub fn allocate_registers_backtracking_output_with_isa(
   let alloc_result = allocate_backtracking(
     func,
     liveness,
+    isa,
     int_regs,
     float_regs,
     vector_regs,
@@ -541,6 +543,7 @@ fn count_instructions(func : @machv.Function) -> AllocStats {
 /// Get allocation statistics
 pub fn get_alloc_stats(
   func : @machv.Function,
+  isa? : @isa.ISA = AArch64,
   settings? : @abi.ABISettings = @abi.ABISettings::default(),
   call_conv_layout? : @abi.CallConventionLayout? = None,
 ) -> AllocStats {
@@ -553,7 +556,7 @@ pub fn get_alloc_stats(
     vector_regs,
     callee_saved_int_regs,
     callee_saved_float_regs,
-  ) = build_reg_pools(@isa.ISA::current(), func, settings)
+  ) = build_reg_pools(isa, func, settings)
   let liveness = compute_liveness(func)
 
   // Count vregs
@@ -563,6 +566,7 @@ pub fn get_alloc_stats(
   let alloc_result = allocate_backtracking(
     func,
     liveness,
+    isa,
     int_regs,
     float_regs,
     vector_regs,
@@ -572,7 +576,7 @@ pub fn get_alloc_stats(
     algorithm~,
   )
   process_constraints(func, alloc_result)
-  let allocated = apply_allocation(func, alloc_result, call_conv_layout)
+  let allocated = apply_allocation(func, alloc_result, isa, call_conv_layout)
   let stats = count_instructions(allocated)
   stats.num_vregs = num_vregs
   stats.num_spill_slots = alloc_result.num_spill_slots

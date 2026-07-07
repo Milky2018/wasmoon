@@ -592,6 +592,7 @@ pub fn lower_inst_with_patterns(
 pub fn lower_function_optimized(ir_func : @milkir.Function) -> @machv.Function {
   let ctx = LoweringContext::new(
     ir_func,
+    AArch64,
     @abi.ABISettings::default(),
     None,
     None,

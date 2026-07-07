@@ -11,6 +11,7 @@
 ///|
 /// A buffer for accumulating machine code bytes
 pub struct MachineCode {
+  isa : @isa.ISA
   bytes : Array[Int] // Using Int for bytes (0-255)
   mut pos : Int
   // Labels for branch targets
@@ -103,8 +104,12 @@ pub(all) enum FixupKind {
 }
 
 ///|
-pub fn MachineCode::new(record_disasm? : Bool = true) -> MachineCode {
+pub fn MachineCode::new(
+  isa? : @isa.ISA = AArch64,
+  record_disasm? : Bool = true,
+) -> MachineCode {
   {
+    isa,
     bytes: [],
     pos: 0,
     labels: {},

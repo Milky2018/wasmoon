@@ -26,12 +26,12 @@ fn bytes_to_int64_le(bytes : Bytes, offset : Int) -> Int64 {
 fn collect_used_callee_saved(
   func : @machv.Function,
   _needs_sret : Bool,
+  isa : @isa.ISA,
   abi_settings : @abi.ABISettings,
 ) -> Array[Int] {
   // ABI: SRET uses a caller-saved register, so no special exclusion needed here.
   let used : @hashset.HashSet[Int] = HashSet([])
   let mut has_calls = false
-  let isa = @isa.ISA::current()
   let env = isa.machine_env(settings=abi_settings)
   let callee_saved_int : @hashset.HashSet[Int] = HashSet([])
   for r in env.callee_saved_int {
@@ -65,7 +65,7 @@ fn collect_used_callee_saved(
   // Note: X20-X24 are no longer pre-loaded in prologue (on-demand)
   // They are loaded on-demand from vmctx and only need saving if used by regalloc
   if has_calls && isa is AArch64 {
-    used.add(@isaregs.lr_index())
+    used.add(isa.lr_reg_index())
   }
   // Sort the registers for consistent ordering
   let result : Array[Int] = []
@@ -80,10 +80,10 @@ fn collect_used_callee_saved(
 /// Collect all callee-saved FPRs (D8-D15) that are defined in the function
 fn collect_used_callee_saved_fprs(
   func : @machv.Function,
+  isa : @isa.ISA,
   abi_settings : @abi.ABISettings,
 ) -> Array[Int] {
   let used : @hashset.HashSet[Int] = HashSet([])
-  let isa = @isa.ISA::current()
   let env = isa.machine_env(settings=abi_settings)
   let callee_saved_fprs : @hashset.HashSet[Int] = HashSet([])
   for r in env.callee_saved_float {
@@ -142,8 +142,8 @@ fn func_has_incoming_stack_args(func : @machv.Function) -> Bool {
 /// A function needs vmctx if:
 /// - It uses X19 as a physical register in any instruction
 /// - It uses X19 in any terminator
-fn func_uses_vmctx(func : @machv.Function) -> Bool {
-  let vmctx = @isaregs.vmctx_index()
+fn func_uses_vmctx(func : @machv.Function, isa : @isa.ISA) -> Bool {
+  let vmctx = isa.vmctx_reg_index()
   for block in func.get_blocks() {
     // Check instructions for X19 usage
     for inst in block.insts {
@@ -154,7 +154,7 @@ fn func_uses_vmctx(func : @machv.Function) -> Bool {
       }
     }
     // Check terminator for X19 usage
-    if block.terminator is Some(term) && terminator_uses_vmctx(term) {
+    if block.terminator is Some(term) && terminator_uses_vmctx(term, isa) {
       return true
     }
   }
@@ -163,8 +163,8 @@ fn func_uses_vmctx(func : @machv.Function) -> Bool {
 
 ///|
 /// Check if a terminator uses vmctx (x19)
-fn terminator_uses_vmctx(term : @instr.VCodeTerminator) -> Bool {
-  let vmctx = @isaregs.vmctx_index()
+fn terminator_uses_vmctx(term : @instr.VCodeTerminator, isa : @isa.ISA) -> Bool {
+  let vmctx = isa.vmctx_reg_index()
   match term {
     Return(values) => {
       for v in values {
@@ -219,14 +219,14 @@ fn MachineCode::emit_sp_adjust(self : MachineCode, amount : Int) -> Unit {
   if amount == 0 {
     return
   }
-  if @isaregs.current_isa() is AMD64 {
+  if self.isa is AMD64 {
     let (abs_amount, is_sub) = if amount < 0 {
       (-amount, true)
     } else {
       (amount, false)
     }
     let step = 4096
-    let scratch = @isaregs.scratch1_index()
+    let scratch = self.isa.scratch_reg_1_index()
     if is_sub {
       // Probe only when crossing at least one full page, matching Cranelift's
       // inline-probestack rule (probe_count = frame_size / guard_size).
@@ -313,8 +313,8 @@ fn MachineCode::emit_prologue(
   debug_func_idx : Int?,
   abi_settings : @abi.ABISettings,
 ) -> Unit {
-  if @isaregs.current_isa() is AMD64 {
-    let isa = @isaregs.current_isa()
+  if self.isa is AMD64 {
+    let isa = self.isa
     let saved_gprs = stack_frame.saved_gprs
 
     // Setup area: push rbp so the stack is 16-byte aligned after the prologue
@@ -380,14 +380,14 @@ fn MachineCode::emit_prologue(
       }
       let call_conv = stack_frame.require_call_conv_layout()
       let vmctx_src = call_conv.context_arg.index
-      let vmctx = @isaregs.vmctx_index()
+      let vmctx = self.isa.vmctx_reg_index()
       if vmctx != vmctx_src {
         self.x86_emit_mov_rr(vmctx, vmctx_src)
       }
       if stack_frame.cache_mem0_desc {
         let layout = stack_frame.require_runtime_layout()
         self.x86_emit_mov_r64_m64(
-          @isaregs.mem0_desc_index(),
+          self.isa.mem0_desc_reg_index(),
           vmctx,
           layout.primary_memory_descriptor_offset,
         )
@@ -395,7 +395,7 @@ fn MachineCode::emit_prologue(
       if stack_frame.cache_func_table {
         let layout = stack_frame.require_runtime_layout()
         self.x86_emit_mov_r64_m64(
-          @isaregs.func_table_index(),
+          self.isa.func_table_reg_index(),
           vmctx,
           layout.function_table_offset,
         )
@@ -549,7 +549,7 @@ fn MachineCode::emit_prologue(
             match dest_preg {
               Some(preg) =>
                 if preg.index != src {
-                  let vmctx_dst = @isaregs.vmctx_index()
+                  let vmctx_dst = self.isa.vmctx_reg_index()
                   let is_redundant_vmctx_move = int_idx == 0 &&
                     stack_frame.needs_vmctx &&
                     preg.index == vmctx_dst
@@ -681,14 +681,14 @@ fn MachineCode::emit_prologue(
     if !abi_settings.enable_pinned_reg {
       abort("unpinned VMContext ABI not implemented yet")
     }
-    let vmctx = @isaregs.vmctx_index()
+    let vmctx = self.isa.vmctx_reg_index()
     let call_conv = stack_frame.require_call_conv_layout()
     self.emit_mov_reg(vmctx, call_conv.context_arg.index)
     // Optionally cache memory0 base pointer in Mem0Desc role.
     if stack_frame.cache_mem0_desc {
       let layout = stack_frame.require_runtime_layout()
       self.emit_ldr_imm(
-        @isaregs.mem0_desc_index(),
+        self.isa.mem0_desc_reg_index(),
         vmctx,
         layout.primary_memory_base_offset,
       )
@@ -697,7 +697,7 @@ fn MachineCode::emit_prologue(
     if stack_frame.cache_func_table {
       let layout = stack_frame.require_runtime_layout()
       self.emit_ldr_imm(
-        @isaregs.func_table_index(),
+        self.isa.func_table_reg_index(),
         vmctx,
         layout.function_table_offset,
       )
@@ -764,6 +764,7 @@ fn MachineCode::emit_prologue(
 /// Emit machine code for a VCode function
 pub fn emit_function(
   func : @machv.Function,
+  isa? : @isa.ISA = AArch64,
   debug_func_idx? : Int? = None,
   force_frame_setup? : Bool = false,
   abi_settings? : @abi.ABISettings = @abi.ABISettings::default(),
@@ -774,7 +775,7 @@ pub fn emit_function(
   // Optimize block layout for better branch prediction
   // Loop rotation makes back edges fall through, reducing taken branches
   let func = @layout.optimize_layout(func)
-  let mc = MachineCode::new(record_disasm~)
+  let mc = MachineCode::new(isa~, record_disasm~)
   // ABI: Check if we need SRET (more than 8 int or 8 float returns)
   let needs_sret = func.needs_extra_results_ptr()
   // Check if we call functions that return more than register capacity
@@ -783,9 +784,9 @@ pub fn emit_function(
   // We need SRET if either we return multi-value OR we call multi-value functions
   let uses_sret = needs_sret || calls_multi_value
   // Collect callee-saved GPRs that this function clobbers
-  let clobbered = collect_used_callee_saved(func, uses_sret, abi_settings)
+  let clobbered = collect_used_callee_saved(func, uses_sret, isa, abi_settings)
   // Collect callee-saved FPRs (D8-D15) that this function clobbers
-  let clobbered_fprs = collect_used_callee_saved_fprs(func, abi_settings)
+  let clobbered_fprs = collect_used_callee_saved_fprs(func, isa, abi_settings)
 
   // Build stack frame layout using JITStackFrame
   // has_calls is true if function makes any calls
@@ -800,18 +801,17 @@ pub fn emit_function(
   // 1. It directly uses x19 in instructions/terminators
   // 2. It makes any calls (wasm ABI requires passing vmctx to callees)
   // 3. It uses memory0 base loads that may leverage cached memory0 descriptor
-  let force_vmctx_cache = abi_settings.enable_pinned_reg &&
-    @isaregs.current_isa() is AMD64
+  let force_vmctx_cache = abi_settings.enable_pinned_reg && isa is AMD64
   let needs_vmctx = force_vmctx_cache ||
     has_calls ||
-    func_uses_vmctx(func) ||
+    func_uses_vmctx(func, isa) ||
     uses_primary_memory_base
   let clobbered_gprs = clobbered
-  let mem0_desc = @isaregs.mem0_desc_index()
+  let mem0_desc = isa.mem0_desc_reg_index()
   if cache_mem0_desc && !clobbered_gprs.contains(mem0_desc) {
     clobbered_gprs.push(mem0_desc)
   }
-  let func_table = @isaregs.func_table_index()
+  let func_table = isa.func_table_reg_index()
   if cache_func_table && !clobbered_gprs.contains(func_table) {
     clobbered_gprs.push(func_table)
   }
@@ -1036,7 +1036,7 @@ pub fn emit_function(
       }
     }
   }
-  let is_amd64 = @isaregs.current_isa() is AMD64
+  let is_amd64 = mc.isa is AMD64
   for i, block in blocks {
     mc.define_label(block.id)
     let mut inst_idx = 0
@@ -1270,10 +1270,10 @@ fn output_uses_preg(
 fn collect_used_callee_saved_from_output(
   func : @machv.Function,
   output : @machv_regalloc.Output,
+  isa : @isa.ISA,
   abi_settings : @abi.ABISettings,
 ) -> Array[Int] {
   let used : Array[Bool] = Array::make(128, false)
-  let isa = @isa.ISA::current()
   let env = isa.machine_env(settings=abi_settings)
   let callee_saved_int : Array[Bool] = Array::make(128, false)
   for r in env.callee_saved_int {
@@ -1327,7 +1327,7 @@ fn collect_used_callee_saved_from_output(
     }
   }
   if func_has_calls(func) && isa is AArch64 {
-    let lr = @isaregs.lr_index()
+    let lr = isa.lr_reg_index()
     if lr >= 0 && lr < used.length() {
       used[lr] = true
     }
@@ -1346,10 +1346,10 @@ fn collect_used_callee_saved_from_output(
 fn collect_used_callee_saved_fprs_from_output(
   func : @machv.Function,
   output : @machv_regalloc.Output,
+  isa : @isa.ISA,
   abi_settings : @abi.ABISettings,
 ) -> Array[Int] {
   let used : Array[Bool] = Array::make(128, false)
-  let isa = @isa.ISA::current()
   let env = isa.machine_env(settings=abi_settings)
   let callee_saved_fprs : Array[Bool] = Array::make(128, false)
   for r in env.callee_saved_float {
@@ -1587,8 +1587,8 @@ fn MachineCode::emit_prologue_with_output(
   debug_func_idx : Int?,
   abi_settings : @abi.ABISettings,
 ) -> Unit {
-  if @isaregs.current_isa() is AMD64 {
-    let isa = @isaregs.current_isa()
+  if self.isa is AMD64 {
+    let isa = self.isa
     // Reuse the existing prologue structure (save regs, allocate frame, cache vmctx),
     // then do a Cranelift-style "param moves + param spills" stage.
     //
@@ -2023,7 +2023,7 @@ fn MachineCode::emit_prologue_with_output(
           match loc {
             Reg(dst) =>
               if dst.index != x_src {
-                let vmctx_dst = @isaregs.vmctx_index()
+                let vmctx_dst = self.isa.vmctx_reg_index()
                 let is_redundant_vmctx_move = int_idx == 0 &&
                   stack_frame.needs_vmctx &&
                   dst.index == vmctx_dst
@@ -2058,6 +2058,7 @@ fn MachineCode::emit_prologue_with_output(
 pub fn emit_function_with_regalloc(
   func : @machv.Function,
   output : @machv_regalloc.Output,
+  isa? : @isa.ISA = AArch64,
   debug_func_idx? : Int? = None,
   force_frame_setup? : Bool = false,
   abi_settings? : @abi.ABISettings = @abi.ABISettings::default(),
@@ -2068,35 +2069,34 @@ pub fn emit_function_with_regalloc(
   // Regalloc output carries edge copies as edits keyed by original blocks.
   // Reorder blocks, but do not thread jumps across edge-copy blocks.
   let func = @layout.optimize_layout_preserving_edges(func)
-  let mc = MachineCode::new(record_disasm~)
-  let is_amd64 = @isaregs.current_isa() is AMD64
+  let mc = MachineCode::new(isa~, record_disasm~)
+  let is_amd64 = isa is AMD64
 
   // Compute clobbers from regalloc output.
   let clobbered = collect_used_callee_saved_from_output(
-    func, output, abi_settings,
+    func, output, isa, abi_settings,
   )
   let clobbered_fprs = collect_used_callee_saved_fprs_from_output(
-    func, output, abi_settings,
+    func, output, isa, abi_settings,
   )
   let has_calls = func_has_calls(func)
   let has_incoming_stack_args = func_has_incoming_stack_args(func)
   let uses_primary_memory_base = func.uses_primary_memory_base()
   let cache_mem0_desc = func.should_cache_mem0_desc()
   let cache_func_table = func.should_cache_func_table()
-  let vmctx = @isaregs.vmctx_index()
-  let force_vmctx_cache = abi_settings.enable_pinned_reg &&
-    @isaregs.current_isa() is AMD64
+  let vmctx = isa.vmctx_reg_index()
+  let force_vmctx_cache = abi_settings.enable_pinned_reg && isa is AMD64
   let needs_vmctx = force_vmctx_cache ||
     has_calls ||
-    func_uses_vmctx(func) ||
+    func_uses_vmctx(func, isa) ||
     output_uses_preg(func, output, vmctx) ||
     uses_primary_memory_base
   let clobbered_gprs = clobbered
-  let mem0_desc = @isaregs.mem0_desc_index()
+  let mem0_desc = isa.mem0_desc_reg_index()
   if cache_mem0_desc && !clobbered_gprs.contains(mem0_desc) {
     clobbered_gprs.push(mem0_desc)
   }
-  let func_table = @isaregs.func_table_index()
+  let func_table = isa.func_table_reg_index()
   if cache_func_table && !clobbered_gprs.contains(func_table) {
     clobbered_gprs.push(func_table)
   }

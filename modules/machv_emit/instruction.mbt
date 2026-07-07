@@ -4,7 +4,7 @@ fn MachineCode::emit_instruction(
   inst : @instr.VCodeInst,
   stack_frame : JITStackFrame,
 ) -> Unit {
-  if @isaregs.current_isa() is AMD64 {
+  if self.isa is AMD64 {
     self.emit_instruction_x86_64(inst, stack_frame)
     return
   }
@@ -46,7 +46,7 @@ fn MachineCode::emit_instruction(
         self.emit_add_imm32_shifted12(rd, rn, imm >> 12)
       } else {
         // Fallback: materialize immediate and use ADD (register).
-        let scratch = @isaregs.scratch1_index()
+        let scratch = self.isa.scratch_reg_1_index()
         self.emit_load_imm64(scratch, imm.to_int64())
         self.emit_add_reg32(rd, rn, scratch)
       }
@@ -74,7 +74,7 @@ fn MachineCode::emit_instruction(
           self.emit_sub_imm_shifted12(rd, rn, imm >> 12)
         } else {
           // Fallback: materialize immediate and use SUB (register).
-          let scratch = @isaregs.scratch1_index()
+          let scratch = self.isa.scratch_reg_1_index()
           self.emit_load_imm64(scratch, imm.to_int64())
           self.emit_sub_reg(rd, rn, scratch)
         }
@@ -84,7 +84,7 @@ fn MachineCode::emit_instruction(
         self.emit_sub_imm32_shifted12(rd, rn, imm >> 12)
       } else {
         // Fallback: materialize immediate and use SUB (register).
-        let scratch = @isaregs.scratch1_index()
+        let scratch = self.isa.scratch_reg_1_index()
         self.emit_load_imm64(scratch, imm.to_int64())
         self.emit_sub_reg32(rd, rn, scratch)
       }
@@ -151,7 +151,7 @@ fn MachineCode::emit_instruction(
           }
         None => {
           // Fallback: materialize immediate and use AND (register).
-          let scratch = @isaregs.scratch1_index()
+          let scratch = self.isa.scratch_reg_1_index()
           self.emit_load_imm64(scratch, imm)
           if is_64 {
             self.emit_and_reg(rd, rn, scratch)
@@ -192,7 +192,7 @@ fn MachineCode::emit_instruction(
             self.emit_orr_imm32(rd, rn, bits)
           }
         None => {
-          let scratch = @isaregs.scratch1_index()
+          let scratch = self.isa.scratch_reg_1_index()
           self.emit_load_imm64(scratch, imm)
           if is_64 {
             self.emit_orr_reg(rd, rn, scratch)
@@ -233,7 +233,7 @@ fn MachineCode::emit_instruction(
             self.emit_eor_imm32(rd, rn, bits)
           }
         None => {
-          let scratch = @isaregs.scratch1_index()
+          let scratch = self.isa.scratch_reg_1_index()
           self.emit_load_imm64(scratch, imm)
           if is_64 {
             self.emit_eor_reg(rd, rn, scratch)
@@ -527,9 +527,9 @@ fn MachineCode::emit_instruction(
       if stack_frame.runtime_layout is Some(layout) {
         if stack_frame.cache_func_table &&
           ty is I64 &&
-          rn == @isaregs.vmctx_index() &&
+          rn == self.isa.vmctx_reg_index() &&
           offset == layout.function_table_offset {
-          let func_table = @isaregs.func_table_index()
+          let func_table = self.isa.func_table_reg_index()
           if rt != func_table {
             self.emit_mov_reg(rt, func_table)
           }
@@ -1425,8 +1425,8 @@ fn MachineCode::emit_instruction(
       if stack_frame.cache_mem0_desc {
         let layout = stack_frame.require_runtime_layout()
         self.emit_ldr_imm(
-          @isaregs.mem0_desc_index(),
-          @isaregs.vmctx_index(),
+          self.isa.mem0_desc_reg_index(),
+          self.isa.vmctx_reg_index(),
           layout.primary_memory_base_offset,
         )
       }
@@ -1436,8 +1436,8 @@ fn MachineCode::emit_instruction(
       if stack_frame.cache_mem0_desc {
         let layout = stack_frame.require_runtime_layout()
         self.emit_ldr_imm(
-          @isaregs.mem0_desc_index(),
-          @isaregs.vmctx_index(),
+          self.isa.mem0_desc_reg_index(),
+          self.isa.vmctx_reg_index(),
           layout.primary_memory_base_offset,
         )
       }
@@ -1453,8 +1453,8 @@ fn MachineCode::emit_instruction(
       if stack_frame.cache_mem0_desc {
         let layout = stack_frame.require_runtime_layout()
         self.emit_ldr_imm(
-          @isaregs.mem0_desc_index(),
-          @isaregs.vmctx_index(),
+          self.isa.mem0_desc_reg_index(),
+          self.isa.vmctx_reg_index(),
           layout.primary_memory_base_offset,
         )
       }
@@ -1528,7 +1528,7 @@ fn MachineCode::emit_instruction(
       // Inline record bump allocation with C slow-path fallback.
       // Uses: [vmctx], Defs: [result_ref]
       let dst = wreg_num(inst.defs[0])
-      let vmctx_reg = @isaregs.vmctx_index()
+      let vmctx_reg = self.isa.vmctx_reg_index()
 
       let gc_header_size = 16
       let gc_align = 16
@@ -1622,7 +1622,7 @@ fn MachineCode::emit_instruction(
       // Inline fixed-array bump allocation with C slow-path fallback.
       // Uses: [vmctx], Defs: [result_ref]
       let dst = wreg_num(inst.defs[0])
-      let vmctx_reg = @isaregs.vmctx_index()
+      let vmctx_reg = self.isa.vmctx_reg_index()
 
       let gc_header_size = 16
       let gc_align = 16

@@ -40,11 +40,13 @@ fn InstEdits::new() -> InstEdits {
 ///|
 /// Resolve parallel moves and emit them in the correct order.
 /// Returns a list of moves that can be safely executed in sequence.
-fn resolve_parallel_moves(moves : Array[RegMove]) -> Array[RegMove] {
+fn resolve_parallel_moves(
+  moves : Array[RegMove],
+  isa : @isa.ISA,
+) -> Array[RegMove] {
   if moves.is_empty() {
     return moves
   }
-  let isa = @isa.ISA::current()
   let machine_env = isa.machine_env()
 
   fn class_bank(cls : @abi.RegClass) -> Int {
@@ -76,8 +78,8 @@ fn resolve_parallel_moves(moves : Array[RegMove]) -> Array[RegMove] {
         fp_moves.push(mv)
       }
     }
-    let resolved = resolve_parallel_moves(int_moves)
-    let resolved_fp = resolve_parallel_moves(fp_moves)
+    let resolved = resolve_parallel_moves(int_moves, isa)
+    let resolved_fp = resolve_parallel_moves(fp_moves, isa)
     for mv in resolved_fp {
       resolved.push(mv)
     }

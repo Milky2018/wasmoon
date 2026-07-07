@@ -1,49 +1,15 @@
 ///|
 /// ISA layer (Cranelift-style) for target-specific policy used by the JIT backend.
 ///
-/// Step 1 goal: centralize ABI/ISA policy (regalloc env + call-clobbered sets)
-/// behind a stable interface so future AMD64 support can plug in cleanly.
-///
-/// Note: Wasmoon currently only generates AArch64 machine code. `ISA::current()`
-/// always returns `AArch64` for now; amd64 is a stub and must compile only.
+/// Centralize ABI/ISA policy (regalloc env + call-clobbered sets) behind a
+/// stable interface. Host selection belongs to the embedding layer, which must
+/// pass the chosen ISA explicitly into lowering, allocation, and emission.
 
 ///|
 #warnings("-unused_constructor")
 pub(all) enum ISA {
   AArch64
   AMD64
-}
-
-///|
-let current_isa_override : Ref[ISA?] = { val: None }
-
-///|
-pub fn ISA::host() -> ISA {
-  match c_host_arch() {
-    1 => AMD64
-    0 => AArch64
-    _ => AArch64
-  }
-}
-
-///|
-pub fn ISA::current() -> ISA {
-  match current_isa_override.val {
-    Some(isa) => isa
-    None => ISA::host()
-  }
-}
-
-///|
-pub fn push_isa_override(isa : ISA) -> ISA? {
-  let previous = current_isa_override.val
-  current_isa_override.val = Some(isa)
-  previous
-}
-
-///|
-pub fn restore_isa_override(previous : ISA?) -> Unit {
-  current_isa_override.val = previous
 }
 
 ///|

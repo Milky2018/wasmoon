@@ -6,14 +6,18 @@
 // - peephole_licm.mbt
 
 ///|
-pub fn optimize_vcode(func : @machv.Function) -> Unit {
-  @peephole.optimize_vcode(func, profile=Full)
+pub fn optimize_vcode(
+  func : @machv.Function,
+  isa? : @isa.ISA = AArch64,
+) -> Unit {
+  @peephole.optimize_vcode(func, isa~, profile=Full)
 }
 
 ///|
 pub fn optimize_vcode_for_lowering(
   func : @machv.Function,
+  isa? : @isa.ISA = AArch64,
   runtime_layout? : @abi.RuntimeContextLayout? = None,
 ) -> Unit {
-  @peephole.optimize_vcode(func, profile=Lowering, runtime_layout~)
+  @peephole.optimize_vcode(func, isa~, profile=Lowering, runtime_layout~)
 }

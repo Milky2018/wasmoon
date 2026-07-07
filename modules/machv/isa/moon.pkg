@@ -4,7 +4,3 @@ import {
   "Milky2018/machv/isa/aarch64",
   "Milky2018/machv/isa/amd64",
 }
-
-options(
-  "native-stub": [ "host_arch.c" ],
-)

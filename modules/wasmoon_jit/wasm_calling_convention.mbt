@@ -54,6 +54,8 @@ pub fn wasm_calling_convention_for_isa(
 }
 
 ///|
-pub fn wasm_calling_convention() -> @abi.CallConventionLayout {
-  wasm_calling_convention_for_isa(@isa.ISA::current())
+pub fn wasm_calling_convention(
+  isa? : @isa.ISA = AArch64,
+) -> @abi.CallConventionLayout {
+  wasm_calling_convention_for_isa(isa)
 }

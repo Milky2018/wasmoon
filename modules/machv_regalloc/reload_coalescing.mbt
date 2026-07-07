@@ -83,6 +83,7 @@ fn allocate_reload_registers(
   alloc : RegAllocResult,
   intervals : Map[(Int, Int), ReloadInterval],
   liveness : LivenessResult,
+  isa : @isa.ISA,
 ) -> Unit {
   if intervals.is_empty() {
     return
@@ -97,7 +98,6 @@ fn allocate_reload_registers(
   // coalescing.
   let reserved_int_regs : @hashset.HashSet[Int] = HashSet([])
   let reserved_float_regs : @hashset.HashSet[Int] = HashSet([])
-  let isa = @isa.ISA::current()
   // - The pinned VMContext register (AArch64: x21).
   reserved_int_regs.add(isa.vmctx_reg_index()) |> ignore
   // - The cached memory0 descriptor pointer register when needed.

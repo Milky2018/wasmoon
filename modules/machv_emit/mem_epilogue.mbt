@@ -141,12 +141,12 @@ fn MachineCode::emit_epilogue(
   self : MachineCode,
   stack_frame : JITStackFrame,
 ) -> Unit {
-  if @isaregs.current_isa() is AMD64 {
-    let isa = @isaregs.current_isa()
+  if self.isa is AMD64 {
+    let isa = self.isa
     let saved_gprs = stack_frame.saved_gprs
 
     if self.debug_prev_func_idx_spill_offset >= 0 && stack_frame.needs_vmctx {
-      let vmctx = @isaregs.vmctx_index()
+      let vmctx = self.isa.vmctx_reg_index()
       let scratch = 11
       let layout = stack_frame.require_runtime_layout()
       self.x86_emit_mov_r32_m32(
@@ -198,7 +198,7 @@ fn MachineCode::emit_epilogue(
   let saved_fprs = stack_frame.saved_fprs
 
   if self.debug_prev_func_idx_spill_offset >= 0 && stack_frame.needs_vmctx {
-    let vmctx = @isaregs.vmctx_index()
+    let vmctx = self.isa.vmctx_reg_index()
     let layout = stack_frame.require_runtime_layout()
     if self.debug_prev_func_idx_spill_offset <= 16380 {
       self.emit_ldr_w_imm(16, 31, self.debug_prev_func_idx_spill_offset)
@@ -281,13 +281,13 @@ fn MachineCode::emit_terminator_with_epilogue(
   next_block : Int?,
   shared_exit_block : Int?,
 ) -> Unit {
-  if @isaregs.current_isa() is AMD64 {
+  if self.isa is AMD64 {
     self.emit_terminator_with_epilogue_x86_64(
       term, stack_frame, result_types, next_block, shared_exit_block,
     )
     return
   }
-  let sret_reg = @isaregs.sret_index()
+  let sret_reg = self.isa.sret_reg_index()
   fn trap_msg_to_brk_imm(msg : String) -> Int {
     // Keep this mapping in sync with `jit/jit_ffi/trap.c`:
     //   0 unreachable

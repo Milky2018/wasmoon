@@ -13,7 +13,7 @@ fn MachineCode::emit_terminator_with_epilogue_x86_64(
   next_block : Int?,
   _shared_exit_block : Int?,
 ) -> Unit {
-  let isa = @isa.ISA::current()
+  let isa = self.isa
   fn fits_i32(value : Int) -> Bool {
     value >= -2147483648 && value <= 2147483647
   }

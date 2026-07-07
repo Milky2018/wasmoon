@@ -243,6 +243,7 @@ pub fn JITModule::load_with_imports(
               // This allows callers to pass host funcs through `external_imports` without
               // exposing raw function pointers.
               let host_func_addr = (-(ptr + 1L)).to_int()
+              let isa = @wasmoon_jit.target_arch_to_isa(precompiled.target)
               let (param_types, result_types) = if i < func_signatures.length() {
                 func_signatures[i]
               } else {
@@ -253,7 +254,8 @@ pub fn JITModule::load_with_imports(
                 result_types,
                 host_func_addr,
                 @wasmoon_jit.runtime_hostcall_symbol(),
-                @wasmoon_jit.wasm_calling_convention(),
+                @wasmoon_jit.wasm_calling_convention(isa~),
+                isa~,
               )
               let code_ints = mc.get_bytes()
               let exec = @wasmoon_jit.ExecCode::new(code_ints)

@@ -516,7 +516,7 @@ fn lower_div(
 
   // x86_64 backend is still incomplete; avoid magic-division lowering which
   // currently relies on AArch64-specific opcodes and patterns.
-  let enable_magic_div = !(@isa.ISA::current() is AMD64)
+  let enable_magic_div = !(ctx.isa is AMD64)
 
   // Check if divisor is a constant suitable for magic division
   if enable_magic_div &&
@@ -630,12 +630,12 @@ fn lower_shift(
     }
     let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
     let vcode_inst = @instr.VCodeInst::new(make_reg_opcode(is_64))
-    if @isa.ISA::current() is AMD64 {
+    if ctx.isa is AMD64 {
       // x86_64 variable shifts/rotates use CL as the implicit count register.
       // Keep the data operand in Scratch1 to avoid clobbering when the count
       // operand is moved into rcx by fixed-reg constraint edits.
       let shift_data : @abi.PReg = {
-        index: @isa.ISA::current().scratch_reg_1_index(),
+        index: ctx.isa.scratch_reg_1_index(),
         class: Int,
       }
       vcode_inst.add_def_fixed({ reg: Virtual(dst) }, shift_data)
@@ -880,7 +880,7 @@ fn lower_umulh(
   let dst = ctx.get_vreg(result)
   let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
   let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
-  if @isa.ISA::current() is AMD64 {
+  if ctx.isa is AMD64 {
     // Match Cranelift x64: use MUL with implicit RAX/RDX.
     //
     // Result (high 64 bits) is produced in RDX. Keep both inputs as ordinary
@@ -907,7 +907,7 @@ fn lower_smulh(
   let dst = ctx.get_vreg(result)
   let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
   let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
-  if @isa.ISA::current() is AMD64 {
+  if ctx.isa is AMD64 {
     // Match Cranelift x64: use one-operand IMUL with implicit RAX/RDX.
     //
     // Result (high 64 bits) is produced in RDX. Keep both inputs as ordinary
@@ -952,7 +952,7 @@ fn lower_isub(
     block.add_inst(move_inst)
     return
   }
-  let lhs_reg : @abi.Reg = if @isa.ISA::current() is AArch64 &&
+  let lhs_reg : @abi.Reg = if ctx.isa is AArch64 &&
     is_const_zero_value(ctx, lhs_val) {
     // Cranelift-style negation path: use xzr/wzr directly for `0 - x`.
     Physical({ index: 31, class: Int })
@@ -960,7 +960,7 @@ fn lower_isub(
     Virtual(ctx.get_vreg_for_use(lhs_val, block))
   }
   let lhs_is_aarch64_zero_reg = match lhs_reg {
-    Physical(preg) => @isa.ISA::current() is AArch64 && preg.index == 31
+    Physical(preg) => ctx.isa is AArch64 && preg.index == 31
     _ => false
   }
 
@@ -1064,7 +1064,7 @@ fn lower_band(
   let lhs_val = inst.operands[0]
   let rhs_val = inst.operands[1]
   let is_64 = result.ty is I64
-  let isa = @isa.ISA::current()
+  let isa = ctx.isa
 
   // Pattern: and(x, const) -> AndImm if const is encodable as a logical immediate.
   if get_const_value(ctx, rhs_val) is Some(imm) &&
@@ -1170,7 +1170,7 @@ fn lower_bor(
   let lhs_val = inst.operands[0]
   let rhs_val = inst.operands[1]
   let is_64 = result.ty is I64
-  let isa = @isa.ISA::current()
+  let isa = ctx.isa
 
   // Pattern: or(x, const) -> OrImm if const is encodable as a logical immediate.
   if get_const_value(ctx, rhs_val) is Some(imm) &&
@@ -1304,7 +1304,7 @@ fn lower_bxor(
   let lhs_val = inst.operands[0]
   let rhs_val = inst.operands[1]
   let is_64 = result.ty is I64
-  let isa = @isa.ISA::current()
+  let isa = ctx.isa
 
   // Pattern: xor(x, const) -> XorImm if const is encodable as a logical immediate.
   if get_const_value(ctx, rhs_val) is Some(imm) &&
@@ -1448,7 +1448,7 @@ fn lower_rotl(
   let neg_n = ctx.vcode_func.new_vreg(Int)
   let sub_inst = @instr.VCodeInst::new(Sub(is_64))
   sub_inst.add_def({ reg: Virtual(neg_n) })
-  if @isa.ISA::current() is AArch64 {
+  if ctx.isa is AArch64 {
     sub_inst.add_use(Physical({ index: 31, class: Int }))
   } else {
     let zero = ctx.vcode_func.new_vreg(Int)
@@ -1462,11 +1462,11 @@ fn lower_rotl(
 
   // Step 2: Rotate right by -n (effectively rotl by n)
   let rotr_inst = @instr.VCodeInst::new(Rotr(is_64))
-  if @isa.ISA::current() is AMD64 {
+  if ctx.isa is AMD64 {
     // x86_64 variable shifts/rotates use CL as the implicit count register.
     // Keep rotate source/dest away from rcx (count register).
     let shift_data : @abi.PReg = {
-      index: @isa.ISA::current().scratch_reg_1_index(),
+      index: ctx.isa.scratch_reg_1_index(),
       class: Int,
     }
     rotr_inst.add_def_fixed({ reg: Virtual(dst) }, shift_data)
@@ -1646,8 +1646,8 @@ fn lower_rem(
   let lhs = ctx.get_vreg_for_use(inst.operands[0], block) // a (dividend)
   let rhs = ctx.get_vreg_for_use(inst.operands[1], block) // b (divisor)
   let is_64 = inst.operands[0].ty is I64
-  let use_fixed_divisor = @isa.ISA::current() is AMD64
-  let divisor_preg : @abi.PReg = { index: scratch1_index(), class: Int }
+  let use_fixed_divisor = ctx.isa is AMD64
+  let divisor_preg : @abi.PReg = { index: scratch1_index(ctx), class: Int }
 
   // Trap if divisor is zero (trap_code 4 = integer divide by zero)
   // Must always emit even if result is unused (for side effect)
@@ -1662,7 +1662,7 @@ fn lower_rem(
   // Only emit remainder computation if result is used
   if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
-    if @isa.ISA::current() is AMD64 {
+    if ctx.isa is AMD64 {
       // Match Cranelift x64: use IDIV/DIV remainder directly.
       //
       // Note: the remainder value is produced in RDX/EDX by the hardware.
@@ -1691,7 +1691,7 @@ fn lower_rem(
     // - For i64, use MSUB (single instruction): a - quotient*b
     // - For i32, avoid MSUB because our MSUB opcode is 64-bit (X regs) and
     //   would mis-handle signed values by zero-extending w-reg results.
-    if is_64 && !(@isa.ISA::current() is AMD64) {
+    if is_64 && !(ctx.isa is AMD64) {
       // MSUB rd, rn, rm, ra computes: ra - rn * rm
       // We want: a - quotient * b, so: ra=a, rn=quotient, rm=b
       let msub_inst = @instr.VCodeInst::new(Msub)

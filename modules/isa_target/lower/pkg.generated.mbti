@@ -6,6 +6,7 @@ import {
   "Milky2018/machv/abi",
   "Milky2018/machv/block",
   "Milky2018/machv/instr",
+  "Milky2018/machv/isa",
   "Milky2018/milkir",
 }
 
@@ -22,7 +23,7 @@ pub fn is_valid_add_imm(Int64) -> Bool
 
 pub fn is_valid_logical_imm(Int64) -> Bool
 
-pub fn lower_function(@milkir.Function, abi_settings? : @abi.ABISettings, runtime_layout? : @abi.RuntimeContextLayout?, call_conv_layout? : @abi.CallConventionLayout?, num_imports? : Int, run_ir_opt? : Bool, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @machv.Function
+pub fn lower_function(@milkir.Function, isa? : @isa.ISA, abi_settings? : @abi.ABISettings, runtime_layout? : @abi.RuntimeContextLayout?, call_conv_layout? : @abi.CallConventionLayout?, num_imports? : Int, run_ir_opt? : Bool, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @machv.Function
 
 pub fn lower_function_optimized(@milkir.Function) -> @machv.Function
 
@@ -30,9 +31,9 @@ pub fn lower_inst_with_patterns(LoweringContext, @milkir.Inst, @block.VCodeBlock
 
 pub fn match_pattern(Pattern, @milkir.Inst, LoweringContext) -> MatchResult?
 
-pub fn optimize_vcode(@machv.Function) -> Unit
+pub fn optimize_vcode(@machv.Function, isa? : @isa.ISA) -> Unit
 
-pub fn optimize_vcode_for_lowering(@machv.Function, runtime_layout? : @abi.RuntimeContextLayout?) -> Unit
+pub fn optimize_vcode_for_lowering(@machv.Function, isa? : @isa.ISA, runtime_layout? : @abi.RuntimeContextLayout?) -> Unit
 
 pub fn try_apply_rules(@milkir.Inst, LoweringContext, Array[RewriteRule]) -> RewriteResult
 
@@ -50,7 +51,7 @@ pub enum AArch64RewriteResult {
 }
 
 type LoweringContext
-pub fn LoweringContext::new(@milkir.Function, @abi.ABISettings, @abi.RuntimeContextLayout?, @abi.CallConventionLayout?, Int, Bool, Array[Int]) -> Self
+pub fn LoweringContext::new(@milkir.Function, @isa.ISA, @abi.ABISettings, @abi.RuntimeContextLayout?, @abi.CallConventionLayout?, Int, Bool, Array[Int]) -> Self
 
 type MatchResult
 

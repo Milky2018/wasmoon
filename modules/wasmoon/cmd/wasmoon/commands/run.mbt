@@ -1472,6 +1472,7 @@ pub fn compile_module_to_jit(
   let perf_on = @perf.enabled()
   let module_tick = if perf_on { Some(@perf.tick_now()) } else { None }
   let target_arch = @wasmoon_jit.host_target_arch()
+  let isa = @wasmoon_jit.target_arch_to_isa(target_arch)
   let precompiled = @cwasm.PrecompiledModule::new(target_arch)
   let debug_db : @wasmoon_jit.JITDebugDB? = if dump_on_trap {
     Some(@wasmoon_jit.JITDebugDB::new())
@@ -1622,9 +1623,10 @@ pub fn compile_module_to_jit(
       func_idx=Some(func_idx),
       func_name=Some(func_name),
     )
-    let call_conv = @wasmoon_jit.wasm_calling_convention()
+    let call_conv = @wasmoon_jit.wasm_calling_convention(isa~)
     let vcode_func = @lower.lower_function(
       ir_func,
+      isa~,
       num_imports=mod_.imports.length(),
       run_ir_opt=false,
       runtime_layout=Some(@wasmoon_jit.runtime_context_layout()),
@@ -1649,8 +1651,10 @@ pub fn compile_module_to_jit(
       func_idx=Some(func_idx),
       func_name=Some(func_name),
     )
-    let (vcode_ra, ra_output) = @machv_regalloc.allocate_registers_backtracking_output(
+    let (vcode_ra, ra_output) = @machv_regalloc.allocate_registers_backtracking_output_with_isa(
       vcode_func,
+      isa,
+      @abi.ABISettings::default(),
       call_conv_layout=Some(call_conv),
     )
     if regalloc_tick is Some(tick) {
@@ -1681,6 +1685,7 @@ pub fn compile_module_to_jit(
     let mc = @machv_emit.emit_function_with_regalloc(
       vcode_ra,
       ra_output,
+      isa~,
       debug_func_idx=Some(func_idx),
       force_frame_setup=enable_dwarf,
       runtime_layout=Some(@wasmoon_jit.runtime_context_layout()),

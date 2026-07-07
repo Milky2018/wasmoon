@@ -4,10 +4,11 @@ package "Milky2018/isa_target/lower/peephole"
 import {
   "Milky2018/machv",
   "Milky2018/machv/abi",
+  "Milky2018/machv/isa",
 }
 
 // Values
-pub fn optimize_vcode(@machv.Function, profile? : PeepholeProfile, runtime_layout? : @abi.RuntimeContextLayout?) -> Unit
+pub fn optimize_vcode(@machv.Function, isa? : @isa.ISA, profile? : PeepholeProfile, runtime_layout? : @abi.RuntimeContextLayout?) -> Unit
 
 // Errors
 

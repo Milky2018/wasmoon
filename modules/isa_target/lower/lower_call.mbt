@@ -145,7 +145,7 @@ fn lower_wasm_call_common(
   }
   let call_conv = ctx.require_call_conv_layout()
   // vmctx is pinned in `REG_VMCTX` (X21 when pinned).
-  let vmctx_preg : @abi.PReg = vmctx_preg()
+  let vmctx_preg : @abi.PReg = vmctx_preg(ctx)
 
   // Classify user arguments by type
   let int_args : Array[(@abi.VReg, @abi.RegClass)] = []
@@ -246,7 +246,7 @@ fn lower_wasm_call_common(
   }
 
   // Add clobbers for all caller-saved registers
-  add_call_clobbers(call_inst)
+  add_call_clobbers(ctx, call_inst)
   block.add_inst(call_inst)
   invalidate_mem_base_cache(ctx)
   invalidate_table0_base_cache(ctx)
@@ -278,7 +278,7 @@ fn lower_wasm_call(
   )
   // Call target is constrained to SCRATCH_REG_2 (IP1).
   call_inst.add_use_fixed(Virtual(func_ptr), {
-    index: scratch2_index(),
+    index: scratch2_index(ctx),
     class: Int,
   })
   lower_wasm_call_common(ctx, block, call_inst, args, results, const_args)
@@ -325,7 +325,7 @@ fn lower_return_call(
   block.add_inst(load_inst)
 
   // Get pinned vmctx.
-  let vmctx_preg : @abi.PReg = vmctx_preg()
+  let vmctx_preg : @abi.PReg = vmctx_preg(ctx)
 
   // Classify user arguments by type
   let int_args : Array[(@abi.VReg, @abi.RegClass)] = []
@@ -352,7 +352,7 @@ fn lower_return_call(
 
   // Call target is constrained to SCRATCH_REG_2 (IP1).
   call_inst.add_use_fixed(Virtual(func_ptr_vreg), {
-    index: scratch2_index(),
+    index: scratch2_index(ctx),
     class: Int,
   })
 
@@ -390,7 +390,7 @@ fn lower_return_call(
 
   // No result defs for tail call (doesn't return to this function)
   // Add clobbers for caller-saved registers
-  add_call_clobbers(call_inst)
+  add_call_clobbers(ctx, call_inst)
   block.add_inst(call_inst)
 }
 
@@ -418,7 +418,7 @@ fn lower_return_call_indirect(
       Load(I64, layout.table_directory_offset),
     )
     load_array_inst.add_def({ reg: Virtual(indirect_tables_vreg) })
-    load_array_inst.add_use(Physical({ index: vmctx_index(), class: Int }))
+    load_array_inst.add_use(Physical({ index: vmctx_index(ctx), class: Int }))
     block.add_inst(load_array_inst)
     let table_offset = table_idx * layout.pointer_stride
     let ptr_vreg = ctx.vcode_func.new_vreg(Int)
@@ -465,7 +465,7 @@ fn lower_return_call_indirect(
       CallExternalIfI32NeImm(expected_type_idx, rt_gc_type_check_subtype()),
     )
     type_check.add_use(Virtual(actual_type_vreg))
-    add_c_call_clobbers(type_check)
+    add_c_call_clobbers(ctx, type_check)
     block.add_inst(type_check)
   } else {
     emit_exact_indirect_type_check(
@@ -474,7 +474,7 @@ fn lower_return_call_indirect(
   }
 
   // Get pinned vmctx.
-  let vmctx_preg : @abi.PReg = vmctx_preg()
+  let vmctx_preg : @abi.PReg = vmctx_preg(ctx)
 
   // Classify user arguments (skip first operand which is elem_idx)
   let int_args : Array[(@abi.VReg, @abi.RegClass)] = []
@@ -499,7 +499,7 @@ fn lower_return_call_indirect(
 
   // Call target is constrained to SCRATCH_REG_2 (IP1).
   call_inst.add_use_fixed(Virtual(func_ptr_vreg), {
-    index: scratch2_index(),
+    index: scratch2_index(ctx),
     class: Int,
   })
 
@@ -534,7 +534,7 @@ fn lower_return_call_indirect(
     let (vreg, class) = float_args[i]
     call_inst.add_use_fixed(Virtual(vreg), { index: arg_fprs[i].index, class })
   }
-  add_call_clobbers(call_inst)
+  add_call_clobbers(ctx, call_inst)
   block.add_inst(call_inst)
 }
 
@@ -560,7 +560,7 @@ fn lower_return_call_ref(
   block.add_inst(and_inst)
 
   // Get vmctx
-  let vmctx_preg : @abi.PReg = vmctx_preg()
+  let vmctx_preg : @abi.PReg = vmctx_preg(ctx)
 
   // Classify user arguments (skip first operand which is func_ref)
   let int_args : Array[(@abi.VReg, @abi.RegClass)] = []
@@ -585,7 +585,7 @@ fn lower_return_call_ref(
 
   // Call target is constrained to SCRATCH_REG_2 (IP1).
   call_inst.add_use_fixed(Virtual(func_ptr_vreg), {
-    index: scratch2_index(),
+    index: scratch2_index(ctx),
     class: Int,
   })
 
@@ -620,7 +620,7 @@ fn lower_return_call_ref(
     let (vreg, class) = float_args[i]
     call_inst.add_use_fixed(Virtual(vreg), { index: arg_fprs[i].index, class })
   }
-  add_call_clobbers(call_inst)
+  add_call_clobbers(ctx, call_inst)
   block.add_inst(call_inst)
 }
 
@@ -658,7 +658,7 @@ fn lower_call_indirect(
       Load(I64, layout.table_directory_offset),
     )
     load_array_inst.add_def({ reg: Virtual(indirect_tables_vreg) })
-    load_array_inst.add_use(Physical({ index: vmctx_index(), class: Int }))
+    load_array_inst.add_use(Physical({ index: vmctx_index(ctx), class: Int }))
     block.add_inst(load_array_inst)
     // 2. Calculate offset = table_idx * pointer size
     let table_offset = table_idx * layout.pointer_stride
@@ -729,7 +729,7 @@ fn lower_call_indirect(
       ),
     )
     type_check.add_use(Virtual(actual_type_vreg))
-    add_c_call_clobbers(type_check)
+    add_c_call_clobbers(ctx, type_check)
     block.add_inst(type_check)
   } else {
     emit_exact_indirect_type_check(
@@ -791,8 +791,11 @@ fn lower_call_ref(
 /// This tells the register allocator that these registers are destroyed by the call,
 /// so any values that need to survive across the call must be spilled or allocated
 /// to callee-saved registers.
-fn add_call_clobbers(call_inst : @instr.VCodeInst) -> Unit {
-  let isa = @isa.ISA::current()
+fn add_call_clobbers(
+  ctx : LoweringContext,
+  call_inst : @instr.VCodeInst,
+) -> Unit {
+  let isa = ctx.isa
   // Add clobbers for all caller-saved GPRs (X0-X17)
   for preg in isa.call_clobbered_gprs() {
     call_inst.add_def({ reg: Physical(preg) })
@@ -814,8 +817,8 @@ fn add_call_clobbers(call_inst : @instr.VCodeInst) -> Unit {
 ///|
 /// Add clobbers for a C call unconditionally (used for pseudo-ops that may call
 /// a C helper on a slow path).
-fn add_c_call_clobbers(inst : @instr.VCodeInst) -> Unit {
-  let isa = @isa.ISA::current()
+fn add_c_call_clobbers(ctx : LoweringContext, inst : @instr.VCodeInst) -> Unit {
+  let isa = ctx.isa
   for preg in isa.call_clobbered_gprs() {
     inst.add_def({ reg: Physical(preg) })
   }
@@ -835,7 +838,7 @@ fn lower_c_libcall_direct(
   result : @abi.VReg?,
 ) -> Unit {
   fn c_arg_gpr_indices() -> Array[Int] {
-    match @isa.ISA::current() {
+    match ctx.isa {
       AArch64 => [0, 1, 2, 3, 4, 5, 6, 7]
       AMD64 => [7, 6, 2, 1, 8, 9]
     }
@@ -856,7 +859,7 @@ fn lower_c_libcall_direct(
   if result is Some(dst) {
     call_inst.add_def_fixed({ reg: Virtual(dst) }, { index: 0, class: Int })
   }
-  add_call_clobbers(call_inst)
+  add_call_clobbers(ctx, call_inst)
   block.add_inst(call_inst)
   invalidate_mem_base_cache(ctx)
   invalidate_table0_base_cache(ctx)
@@ -914,7 +917,7 @@ fn lower_call_ptr(
 
   // Call target is constrained to SCRATCH_REG_2 (IP1).
   call_inst.add_use_fixed(Virtual(func_ptr), {
-    index: scratch2_index(),
+    index: scratch2_index(ctx),
     class: Int,
   })
 
@@ -975,7 +978,7 @@ fn lower_call_ptr(
   }
 
   // Add clobbers for all caller-saved registers
-  add_call_clobbers(call_inst)
+  add_call_clobbers(ctx, call_inst)
   block.add_inst(call_inst)
   invalidate_mem_base_cache(ctx)
   invalidate_table0_base_cache(ctx)
@@ -999,7 +1002,7 @@ fn lower_c_libcall(
   result : @abi.VReg?,
 ) -> Unit {
   fn c_arg_gpr_indices() -> Array[Int] {
-    match @isa.ISA::current() {
+    match ctx.isa {
       // AAPCS64: X0-X7
       AArch64 => [0, 1, 2, 3, 4, 5, 6, 7]
       // SysV AMD64: RDI,RSI,RDX,RCX,R8,R9 (in our 0..15 numbering)
@@ -1016,7 +1019,7 @@ fn lower_c_libcall(
 
   // Call target is constrained to SCRATCH_REG_2 (IP1).
   call_inst.add_use_fixed(Virtual(func_ptr), {
-    index: scratch2_index(),
+    index: scratch2_index(ctx),
     class: Int,
   })
 
@@ -1038,7 +1041,7 @@ fn lower_c_libcall(
   }
 
   // Add clobbers for all caller-saved registers
-  add_call_clobbers(call_inst)
+  add_call_clobbers(ctx, call_inst)
   block.add_inst(call_inst)
   invalidate_mem_base_cache(ctx)
   invalidate_table0_base_cache(ctx)

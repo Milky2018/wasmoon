@@ -11,9 +11,9 @@ import {
 }
 
 // Values
-pub fn emit_function(@machv.Function, debug_func_idx? : Int?, force_frame_setup? : Bool, abi_settings? : @abi.ABISettings, runtime_layout? : @abi.RuntimeContextLayout?, call_conv_layout? : @abi.CallConventionLayout?, record_disasm? : Bool) -> MachineCode
+pub fn emit_function(@machv.Function, isa? : @isa.ISA, debug_func_idx? : Int?, force_frame_setup? : Bool, abi_settings? : @abi.ABISettings, runtime_layout? : @abi.RuntimeContextLayout?, call_conv_layout? : @abi.CallConventionLayout?, record_disasm? : Bool) -> MachineCode
 
-pub fn emit_function_with_regalloc(@machv.Function, @machv_regalloc.Output, debug_func_idx? : Int?, force_frame_setup? : Bool, abi_settings? : @abi.ABISettings, runtime_layout? : @abi.RuntimeContextLayout?, call_conv_layout? : @abi.CallConventionLayout?, record_disasm? : Bool) -> MachineCode
+pub fn emit_function_with_regalloc(@machv.Function, @machv_regalloc.Output, isa? : @isa.ISA, debug_func_idx? : Int?, force_frame_setup? : Bool, abi_settings? : @abi.ABISettings, runtime_layout? : @abi.RuntimeContextLayout?, call_conv_layout? : @abi.CallConventionLayout?, record_disasm? : Bool) -> MachineCode
 
 pub fn fits_signed_i32(Int) -> Bool
 
@@ -133,6 +133,7 @@ pub fn JITStackFrame::require_call_conv_layout(Self) -> @abi.CallConventionLayou
 pub fn JITStackFrame::require_runtime_layout(Self) -> @abi.RuntimeContextLayout
 
 pub struct MachineCode {
+  isa : @isa.ISA
   bytes : Array[Int]
   mut pos : Int
   labels : Map[Int, Int]
@@ -390,7 +391,7 @@ pub fn MachineCode::hex_dump(Self) -> String
 pub fn MachineCode::intern_amd64_const(Self, Bytes, Int) -> Int
 pub fn MachineCode::intern_amd64_const_f32(Self, Int) -> Int
 pub fn MachineCode::intern_amd64_const_f64(Self, Int64) -> Int
-pub fn MachineCode::new(record_disasm? : Bool) -> Self
+pub fn MachineCode::new(isa? : @isa.ISA, record_disasm? : Bool) -> Self
 pub fn MachineCode::new_internal_label(Self) -> Int
 pub fn MachineCode::record_gc_safepoint(Self, Int, root_count? : Int, root_indices? : Array[Int]) -> Int
 pub fn MachineCode::resolve_fixups(Self) -> Unit
