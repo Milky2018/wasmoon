@@ -760,19 +760,21 @@ pub fn IRBuilder::store_ptr_narrow(
 
 ///|
 /// Call via function pointer with multiple return values
-/// For trampolines calling through an embedding-defined function pointer.
+/// For calls through an indirect callee address.
 ///
-/// Design: the embedding context is an explicit special parameter.
+/// Design: a callee environment operand is passed explicitly before user
+/// arguments; callers can provide a null/sentinel value when their convention
+/// does not use an environment.
 ///
-/// Operand layout: [func_ptr, context, user_args...]
+/// Operand layout: [func_ptr, callee_env, user_args...]
 pub fn IRBuilder::call_ptr(
   self : IRBuilder,
   func_ptr : Value,
-  context : Value,
+  callee_env : Value,
   args : Array[Value],
   result_types : Array[Type],
 ) -> Array[Value] {
-  let all_args : Array[Value] = [func_ptr, context]
+  let all_args : Array[Value] = [func_ptr, callee_env]
   for arg in args {
     all_args.push(arg)
   }
