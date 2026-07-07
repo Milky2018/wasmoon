@@ -52,6 +52,7 @@ pub fn external_helper_symbols(
 struct WasmLoweringOptions {
   use_subtype_indirect_check : Bool
   canonical_type_indices : Array[Int]
+  context_slots : WasmContextSlots
 }
 
 ///|
@@ -79,7 +80,8 @@ fn lower_extension_with_options(
   ext : @milkir.ExtOp,
 ) -> Bool {
   match @wasm_milkir.decode(ext) {
-    Some(LoadMemBase(memidx)) => lower_load_mem_base(ctx, inst, block, memidx)
+    Some(LoadMemBase(memidx)) =>
+      lower_load_mem_base(ctx, inst, block, memidx, options.context_slots)
     Some(MemoryGrow(_))
     | Some(MemorySize(_))
     | Some(MemoryFill(_))
@@ -101,7 +103,8 @@ fn lower_extension_with_options(
       lower_return_call_indirect(ctx, inst, block, type_idx, table_idx, options)
     Some(ReturnCallRef(type_idx)) =>
       lower_return_call_ref(ctx, inst, block, type_idx)
-    Some(GetFuncRef(func_idx)) => lower_get_func_ref(ctx, inst, block, func_idx)
+    Some(GetFuncRef(func_idx)) =>
+      lower_get_func_ref(ctx, inst, block, func_idx, options.context_slots)
     Some(I31New) => lower_i31_new(ctx, inst, block)
     Some(I31GetS) => lower_i31_get_s(ctx, inst, block)
     Some(I31GetU) => lower_i31_get_u(ctx, inst, block)
@@ -169,6 +172,7 @@ fn lower_extension_with_options(
 ///|
 pub fn lower_function(
   func : @milkir.Function,
+  context_slots : WasmContextSlots,
   isa? : @isa.ISA = AArch64,
   abi_settings? : @abi.ABISettings = @abi.ABISettings::default(),
   embedding_reg_roles? : @abi.EmbeddingRegRoles = @abi.EmbeddingRegRoles::none(),
@@ -186,6 +190,7 @@ pub fn lower_function(
   let options : WasmLoweringOptions = {
     use_subtype_indirect_check,
     canonical_type_indices,
+    context_slots,
   }
   fn lower_extension(
     ctx : @lower.LoweringContext,

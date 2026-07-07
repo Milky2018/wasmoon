@@ -1627,6 +1627,7 @@ pub fn compile_module_to_jit(
     let roles = @wasmoon_jit.wasm_embedding_reg_roles(isa~)
     let machv_func = @wasm_isa_lower.lower_function(
       ir_func,
+      @wasmoon_jit.wasm_context_slots(),
       isa~,
       embedding_reg_roles=roles,
       num_imports=mod_.imports.length(),

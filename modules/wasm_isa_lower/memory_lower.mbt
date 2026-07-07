@@ -52,11 +52,12 @@ pub fn load_context_slot_pointer_from_pinned_context(
 fn emit_load_func_table(
   ctx : @lower.LoweringContext,
   block : @block.MachVBlock,
+  context_slots : WasmContextSlots,
 ) -> @abi.VReg {
   load_context_slot_pointer_from_pinned_context(
     ctx,
     block,
-    CONTEXT_SLOT_FUNCTION_TABLE,
+    context_slots.function_table,
   )
 }
 
@@ -68,12 +69,13 @@ pub fn lower_get_func_ref(
   inst : @milkir.Inst,
   block : @block.MachVBlock,
   func_idx : Int,
+  context_slots : WasmContextSlots,
 ) -> Unit {
   guard inst.first_result() is Some(result) else { return }
   let result_vreg = ctx.get_vreg(result)
 
   // Step 1: Load func_table pointer from vmctx
-  let func_table_vreg = emit_load_func_table(ctx, block)
+  let func_table_vreg = emit_load_func_table(ctx, block, context_slots)
 
   // Step 2: Load func_ptr from func_table[func_idx * 8]
   let raw_func_ptr = ctx.machv_function().new_vreg(Int)
@@ -117,6 +119,7 @@ pub fn lower_load_mem_base(
   inst : @milkir.Inst,
   block : @block.MachVBlock,
   memidx : Int,
+  context_slots : WasmContextSlots,
 ) -> Unit {
   guard inst.first_result() is Some(result) else { return }
   if inst.operands.length() != 1 {
@@ -138,7 +141,7 @@ pub fn lower_load_mem_base(
     let cached_vreg = load_context_slot_pointer(
       ctx,
       block,
-      CONTEXT_SLOT_MEMORY0_BASE,
+      context_slots.memory0_base,
       vmctx_reg,
     )
     ctx.set_cached_vreg(result.id, cached_vreg)
@@ -147,7 +150,7 @@ pub fn lower_load_mem_base(
   } else {
     let directory_vreg = ctx.machv_function().new_vreg(Int)
     let load_directory = @instr.MachVInst::new(
-      Load(I64, context_slot_offset(ctx, CONTEXT_SLOT_MEMORY_DIRECTORY)),
+      Load(I64, context_slot_offset(ctx, context_slots.memory_directory)),
     )
     load_directory.add_def({ reg: Virtual(directory_vreg) })
     load_directory.add_use(vmctx_reg)
@@ -155,7 +158,7 @@ pub fn lower_load_mem_base(
 
     let descriptor_vreg = ctx.machv_function().new_vreg(Int)
     let load_descriptor = @instr.MachVInst::new(
-      Load(I64, memidx * WASM_CONTEXT_POINTER_STRIDE),
+      Load(I64, memidx * context_slots.pointer_stride),
     )
     load_descriptor.add_def({ reg: Virtual(descriptor_vreg) })
     load_descriptor.add_use(Virtual(directory_vreg))

@@ -157,6 +157,7 @@ pub fn lower_milkir_for_target(
   let roles = wasm_embedding_reg_roles_for_isa(isa)
   @wasm_isa_lower.lower_function(
     func,
+    wasm_context_slots(),
     isa~,
     embedding_reg_roles=roles,
     embedding_context_layout=Some(embedding_context_layout()),
@@ -176,6 +177,7 @@ pub fn lower_wasm_body_milkir_for_target(
   let roles = wasm_embedding_reg_roles_for_isa(isa)
   @wasm_isa_lower.lower_function(
     func,
+    wasm_context_slots(),
     isa~,
     embedding_reg_roles=roles,
     run_ir_opt=false,
@@ -196,6 +198,7 @@ pub fn plan_milkir_integration_for_target(
   let roles = wasm_embedding_reg_roles_for_isa(isa)
   let machv_func = @wasm_isa_lower.lower_function(
     func,
+    wasm_context_slots(),
     isa~,
     embedding_reg_roles=roles,
     embedding_context_layout=Some(embedding_context_layout()),
@@ -223,6 +226,7 @@ pub fn plan_wasm_body_milkir_integration_for_target(
   let roles = wasm_embedding_reg_roles_for_isa(isa)
   let machv_func = @wasm_isa_lower.lower_function(
     func,
+    wasm_context_slots(),
     isa~,
     embedding_reg_roles=roles,
     run_ir_opt=false,

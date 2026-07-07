@@ -384,19 +384,19 @@ pub fn lower_return_call_indirect(
     load_context_slot_pointer_from_pinned_context(
       ctx,
       block,
-      CONTEXT_SLOT_TABLE0_BASE,
+      options.context_slots.table0_base,
     )
   } else {
     let indirect_tables_vreg = ctx.machv_function().new_vreg(Int)
     let load_array_inst = @instr.MachVInst::new(
-      Load(I64, context_slot_offset(ctx, CONTEXT_SLOT_TABLE_DIRECTORY)),
+      Load(I64, context_slot_offset(ctx, options.context_slots.table_directory)),
     )
     load_array_inst.add_def({ reg: Virtual(indirect_tables_vreg) })
     load_array_inst.add_use(
       Physical({ index: @lower.context_index(ctx), class: Int }),
     )
     block.add_inst(load_array_inst)
-    let table_offset = table_idx * WASM_CONTEXT_POINTER_STRIDE
+    let table_offset = table_idx * options.context_slots.pointer_stride
     let ptr_vreg = ctx.machv_function().new_vreg(Int)
     let load_table_inst = @instr.MachVInst::new(Load(I64, table_offset))
     load_table_inst.add_def({ reg: Virtual(ptr_vreg) })
@@ -628,14 +628,14 @@ pub fn lower_call_indirect(
     load_context_slot_pointer_from_pinned_context(
       ctx,
       block,
-      CONTEXT_SLOT_TABLE0_BASE,
+      options.context_slots.table0_base,
     )
   } else {
     // Slow path: load indirect_tables[table_idx] from context
     // 1. Load indirect_tables array pointer from the runtime context.
     let indirect_tables_vreg = ctx.machv_function().new_vreg(Int)
     let load_array_inst = @instr.MachVInst::new(
-      Load(I64, context_slot_offset(ctx, CONTEXT_SLOT_TABLE_DIRECTORY)),
+      Load(I64, context_slot_offset(ctx, options.context_slots.table_directory)),
     )
     load_array_inst.add_def({ reg: Virtual(indirect_tables_vreg) })
     load_array_inst.add_use(
@@ -643,7 +643,7 @@ pub fn lower_call_indirect(
     )
     block.add_inst(load_array_inst)
     // 2. Calculate offset = table_idx * pointer size
-    let table_offset = table_idx * WASM_CONTEXT_POINTER_STRIDE
+    let table_offset = table_idx * options.context_slots.pointer_stride
     // 3. Load table pointer: [indirect_tables + offset]
     let ptr_vreg = ctx.machv_function().new_vreg(Int)
     let load_table_inst = @instr.MachVInst::new(Load(I64, table_offset))
