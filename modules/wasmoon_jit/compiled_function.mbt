@@ -1,24 +1,16 @@
-// JIT Runtime Support
-// Manages compiled code caching and execution
-//
-// This module provides:
-// 1. Code cache for storing compiled functions
-// 2. Executable memory management abstraction
-// 3. Code unloading support
-
-// ============ Compiled Function ============
+/// Compiled function lifecycle support owned by Wasmoon JIT.
 
 ///|
 const STACKMAP_I32_MAX : Int = 0x7FFFFFFF
 
 ///|
-/// Information about a GC safepoint in generated code
+/// Information about a GC safepoint in generated code.
 pub struct GcSafepoint {
-  /// Offset in generated machine code where this safepoint is
+  /// Offset in generated machine code where this safepoint is.
   code_offset : Int
-  /// Which virtual registers contain live GC references at this point
+  /// Which virtual registers contain live GC references at this point.
   live_refs : Array[Int]
-  /// Additional metadata (e.g., return address for stack unwinding)
+  /// Additional metadata, such as return address for stack unwinding.
   metadata : Int64
 } derive(Debug)
 
@@ -32,7 +24,7 @@ pub fn GcSafepoint::new(
 }
 
 ///|
-fn append_u32_le(buf : Array[Byte], value : Int) -> Unit {
+fn compiled_append_u32_le(buf : Array[Byte], value : Int) -> Unit {
   buf.push((value & 0xFF).to_byte())
   buf.push(((value >> 8) & 0xFF).to_byte())
   buf.push(((value >> 16) & 0xFF).to_byte())
@@ -45,15 +37,15 @@ fn append_u32_le(buf : Array[Byte], value : Int) -> Unit {
 ///   u32 version (=1)
 ///   u32 safepoint_count
 ///   u32 root_count[safepoint_count]
-fn build_gc_stackmap_blob(root_counts : Array[Int]) -> Bytes {
+fn compiled_build_gc_stackmap_blob(root_counts : Array[Int]) -> Bytes {
   if root_counts.length() == 0 {
     return b""
   }
   let bytes : Array[Byte] = []
-  append_u32_le(bytes, 1)
-  append_u32_le(bytes, root_counts.length())
+  compiled_append_u32_le(bytes, 1)
+  compiled_append_u32_le(bytes, root_counts.length())
   for count in root_counts {
-    append_u32_le(bytes, count)
+    compiled_append_u32_le(bytes, count)
   }
   Bytes::from_array(bytes)
 }
@@ -71,7 +63,7 @@ fn safepoint_metadata_to_root_count(metadata : Int64) -> Int {
 }
 
 ///|
-fn encode_stackmap_root_count(root_count : Int) -> Int {
+fn compiled_encode_stackmap_root_count(root_count : Int) -> Int {
   if root_count <= 0 {
     0
   } else if root_count > STACKMAP_I32_MAX {
@@ -82,7 +74,9 @@ fn encode_stackmap_root_count(root_count : Int) -> Int {
 }
 
 ///|
-fn has_stackmap_live_ref_indices(safepoints : Array[GcSafepoint]) -> Bool {
+fn compiled_has_stackmap_live_ref_indices(
+  safepoints : Array[GcSafepoint],
+) -> Bool {
   for safepoint in safepoints {
     if safepoint.live_refs.length() > 0 {
       return true
@@ -100,7 +94,7 @@ fn has_stackmap_live_ref_indices(safepoints : Array[GcSafepoint]) -> Bool {
 ///     u32 root_count
 ///     u32 root_index_count
 ///     u32 root_indices[root_index_count]
-fn build_gc_stackmap_blob_v2(
+fn compiled_build_gc_stackmap_blob_v2(
   safepoints : Array[GcSafepoint],
   default_root_counts : Array[Int],
 ) -> Bytes {
@@ -108,8 +102,8 @@ fn build_gc_stackmap_blob_v2(
     return b""
   }
   let bytes : Array[Byte] = []
-  append_u32_le(bytes, 2)
-  append_u32_le(bytes, safepoints.length())
+  compiled_append_u32_le(bytes, 2)
+  compiled_append_u32_le(bytes, safepoints.length())
   for i, safepoint in safepoints {
     let default_root_count = if i < default_root_counts.length() {
       default_root_counts[i]
@@ -119,7 +113,7 @@ fn build_gc_stackmap_blob_v2(
     let metadata_root_count = safepoint_metadata_to_root_count(
       safepoint.metadata,
     )
-    let mut root_count = encode_stackmap_root_count(
+    let mut root_count = compiled_encode_stackmap_root_count(
       if metadata_root_count > 0 {
         metadata_root_count
       } else {
@@ -136,44 +130,44 @@ fn build_gc_stackmap_blob_v2(
       if root_count <= 0 || root_count > valid_indices.length() {
         root_count = valid_indices.length()
       }
-      append_u32_le(bytes, root_count)
-      append_u32_le(bytes, root_count)
+      compiled_append_u32_le(bytes, root_count)
+      compiled_append_u32_le(bytes, root_count)
       for idx in 0..<root_count {
-        append_u32_le(bytes, valid_indices[idx])
+        compiled_append_u32_le(bytes, valid_indices[idx])
       }
     } else {
-      append_u32_le(bytes, root_count)
-      append_u32_le(bytes, 0)
+      compiled_append_u32_le(bytes, root_count)
+      compiled_append_u32_le(bytes, 0)
     }
   }
   Bytes::from_array(bytes)
 }
 
 ///|
-/// A compiled function ready for execution
+/// A compiled function ready for Wasmoon JIT execution.
 pub struct CompiledFunction {
-  // Function name or identifier
+  // Function name or identifier.
   name : String
-  // The compiled machine code bytes
-  code : MachineCode
-  // Entry point offset (usually 0)
+  // The compiled machine code bytes and metadata.
+  code : @machv_emit.MachineCode
+  // Entry point offset, usually 0.
   entry_offset : Int
-  // Size of the code in bytes
+  // Size of the code in bytes.
   code_size : Int
-  // Stack frame size needed
+  // Stack frame size needed.
   frame_size : Int
-  // GC safepoint metadata (per-function)
+  // GC safepoint metadata for this function.
   gc_safepoints : Array[GcSafepoint]
-  // Compact stack-map payload for GC roots
+  // Compact stack-map payload for GC roots.
   gc_stackmap_blob : Bytes
-  // Whether this function is currently valid
+  // Whether this function is currently valid.
   mut valid : Bool
 }
 
 ///|
 pub fn CompiledFunction::new(
   name : String,
-  code : MachineCode,
+  code : @machv_emit.MachineCode,
   frame_size : Int,
   gc_safepoints? : Array[GcSafepoint] = [],
   gc_stackmap_blob? : Bytes = b"",
@@ -214,10 +208,12 @@ pub fn CompiledFunction::new(
   }
   let resolved_gc_stackmap_blob = if gc_stackmap_blob.length() > 0 {
     gc_stackmap_blob
-  } else if has_stackmap_live_ref_indices(resolved_gc_safepoints) {
-    build_gc_stackmap_blob_v2(resolved_gc_safepoints, stackmap_root_counts)
+  } else if compiled_has_stackmap_live_ref_indices(resolved_gc_safepoints) {
+    compiled_build_gc_stackmap_blob_v2(
+      resolved_gc_safepoints, stackmap_root_counts,
+    )
   } else {
-    build_gc_stackmap_blob(stackmap_root_counts)
+    compiled_build_gc_stackmap_blob(stackmap_root_counts)
   }
   {
     name,
@@ -232,36 +228,36 @@ pub fn CompiledFunction::new(
 }
 
 ///|
-/// Invalidate this compiled function (mark for recompilation)
+/// Invalidate this compiled function and mark it for recompilation.
 pub fn CompiledFunction::invalidate(self : CompiledFunction) -> Unit {
   self.valid = false
 }
 
 ///|
-/// Check if the function is still valid
+/// Check if the function is still valid.
 pub fn CompiledFunction::is_valid(self : CompiledFunction) -> Bool {
   self.valid
 }
 
 ///|
-/// Get the machine code bytes
+/// Get the machine code bytes.
 pub fn CompiledFunction::get_code(self : CompiledFunction) -> Array[Int] {
   self.code.get_bytes()
 }
 
 ///|
-/// Get direct function address fixups
+/// Get direct function address fixups.
 pub fn CompiledFunction::get_func_addr_fixups(
   self : CompiledFunction,
-) -> Array[FuncAddrFixup] {
+) -> Array[@machv_emit.FuncAddrFixup] {
   self.code.get_func_addr_fixups()
 }
 
 ///|
-/// Get direct function call fixups
+/// Get direct function call fixups.
 pub fn CompiledFunction::get_call_fixups(
   self : CompiledFunction,
-) -> Array[CallFixup] {
+) -> Array[@machv_emit.CallFixup] {
   self.code.get_call_fixups()
 }
 
@@ -289,8 +285,3 @@ fn CompiledFunction::to_string(self : CompiledFunction) -> String {
 pub impl Show for CompiledFunction with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
-
-// ============ Code Cache ============
-
-///|
-/// Cache for storing compiled functions

@@ -572,8 +572,8 @@ pub fn CallCounter::unique_functions(Self) -> Int
 type CodeCache
 pub fn CodeCache::clear(Self) -> Unit
 pub fn CodeCache::contains(Self, Int) -> Bool
-pub fn CodeCache::get(Self, Int) -> @machv_emit.CompiledFunction?
-pub fn CodeCache::insert(Self, Int, @machv_emit.CompiledFunction) -> Unit
+pub fn CodeCache::get(Self, Int) -> CompiledFunction?
+pub fn CodeCache::insert(Self, Int, CompiledFunction) -> Unit
 pub fn CodeCache::invalidate(Self, Int) -> Unit
 pub fn CodeCache::new(Int) -> Self
 pub fn CodeCache::remove(Self, Int) -> Unit
@@ -631,6 +631,26 @@ pub fn CompilationStrategy::schedule_compilation(Self, Int, CompilationMode) -> 
 pub fn CompilationStrategy::stats(Self) -> (Int, Int, Int, Int, Int, Int)
 pub impl Show for CompilationStrategy
 
+pub struct CompiledFunction {
+  name : String
+  code : @machv_emit.MachineCode
+  entry_offset : Int
+  code_size : Int
+  frame_size : Int
+  gc_safepoints : Array[GcSafepoint]
+  gc_stackmap_blob : Bytes
+  mut valid : Bool
+}
+pub fn CompiledFunction::get_call_fixups(Self) -> Array[@machv_emit.CallFixup]
+pub fn CompiledFunction::get_code(Self) -> Array[Int]
+pub fn CompiledFunction::get_func_addr_fixups(Self) -> Array[@machv_emit.FuncAddrFixup]
+pub fn CompiledFunction::get_gc_safepoints(Self) -> Array[GcSafepoint]
+pub fn CompiledFunction::get_gc_stackmap_blob(Self) -> Bytes
+pub fn CompiledFunction::invalidate(Self) -> Unit
+pub fn CompiledFunction::is_valid(Self) -> Bool
+pub fn CompiledFunction::new(String, @machv_emit.MachineCode, Int, gc_safepoints? : Array[GcSafepoint], gc_stackmap_blob? : Bytes) -> Self
+pub impl Show for CompiledFunction
+
 pub(all) struct CwasmArtifact {
   version : Int
   target : @cwasm.TargetArch
@@ -641,7 +661,7 @@ pub(all) struct CwasmArtifact {
   runtime_relocations : Array[ResolvedRuntimeRelocation]
   func_addr_fixups : Array[@machv_emit.FuncAddrFixup]
   call_fixups : Array[@machv_emit.CallFixup]
-  gc_safepoints : Array[@machv_emit.GcSafepoint]
+  gc_safepoints : Array[GcSafepoint]
   gc_stackmap_blob : Bytes
 } derive(@debug.Debug)
 pub fn CwasmArtifact::from_jit_plan(JitIntegrationPlan, RuntimeSymbolResolver, Int) -> Self raise LinkError
@@ -710,6 +730,13 @@ pub(all) enum FunctionTemperature {
 }
 pub impl Show for FunctionTemperature
 
+pub struct GcSafepoint {
+  code_offset : Int
+  live_refs : Array[Int]
+  metadata : Int64
+} derive(@debug.Debug)
+pub fn GcSafepoint::new(Int, Array[Int], Int64) -> Self
+
 pub(all) struct HostcallImportTrampolineCode {
   code : Array[Int]
   func_addr_fixups : Array[@cwasm.FuncAddrFixup]
@@ -755,9 +782,9 @@ pub fn JITFunctionDebug::new(String, String, String, String) -> Self
 type JITRuntime
 pub fn JITRuntime::clear(Self) -> Unit
 pub fn JITRuntime::invalidate(Self, Int) -> Unit
-pub fn JITRuntime::lookup(Self, Int) -> @machv_emit.CompiledFunction?
+pub fn JITRuntime::lookup(Self, Int) -> CompiledFunction?
 pub fn JITRuntime::new(Int, Int) -> Self
-pub fn JITRuntime::register(Self, Int, @machv_emit.CompiledFunction) -> Result[Int, String]
+pub fn JITRuntime::register(Self, Int, CompiledFunction) -> Result[Int, String]
 pub fn JITRuntime::stats(Self) -> (Int, Int, Int, Int, Int, Int, Int)
 pub impl Show for JITRuntime
 
@@ -784,7 +811,7 @@ pub(all) struct LinkedCode {
   runtime_relocations : Array[ResolvedRuntimeRelocation]
   func_addr_fixups : Array[@machv_emit.FuncAddrFixup]
   call_fixups : Array[@machv_emit.CallFixup]
-  gc_safepoints : Array[@machv_emit.GcSafepoint]
+  gc_safepoints : Array[GcSafepoint]
   gc_stackmap_blob : Bytes
 } derive(@debug.Debug)
 

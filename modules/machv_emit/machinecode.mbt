@@ -9,6 +9,9 @@
 // ============ Machine Code Buffer ============
 
 ///|
+const STACKMAP_I32_MAX : Int = 0x7FFFFFFF
+
+///|
 /// A buffer for accumulating machine code bytes
 pub struct MachineCode {
   isa : @isa.ISA

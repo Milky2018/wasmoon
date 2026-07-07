@@ -1,7 +1,7 @@
 ///|
 struct CodeCache {
   // Function index -> compiled function
-  functions : Map[Int, @machv_emit.CompiledFunction]
+  functions : Map[Int, CompiledFunction]
   // Total size of all cached code
   mut total_size : Int
   // Maximum cache size (0 = unlimited)
@@ -18,10 +18,7 @@ pub fn CodeCache::new(max_size : Int) -> CodeCache {
 
 ///|
 /// Look up a compiled function by index
-pub fn CodeCache::get(
-  self : CodeCache,
-  func_idx : Int,
-) -> @machv_emit.CompiledFunction? {
+pub fn CodeCache::get(self : CodeCache, func_idx : Int) -> CompiledFunction? {
   match self.functions.get(func_idx) {
     Some(func) =>
       if func.valid {
@@ -52,7 +49,7 @@ pub fn CodeCache::contains(self : CodeCache, func_idx : Int) -> Bool {
 pub fn CodeCache::insert(
   self : CodeCache,
   func_idx : Int,
-  func : @machv_emit.CompiledFunction,
+  func : CompiledFunction,
 ) -> Unit {
   // Check if we need to evict
   if self.max_size > 0 && self.total_size + func.code_size > self.max_size {
@@ -400,7 +397,7 @@ pub fn JITRuntime::new(cache_size : Int, region_size : Int) -> JITRuntime {
 pub fn JITRuntime::register(
   self : JITRuntime,
   func_idx : Int,
-  func : @machv_emit.CompiledFunction,
+  func : CompiledFunction,
 ) -> Result[Int, String] {
   // Write code to memory
   match self.memory.write_code(func.code) {
@@ -427,7 +424,7 @@ pub fn JITRuntime::register(
 pub fn JITRuntime::lookup(
   self : JITRuntime,
   func_idx : Int,
-) -> @machv_emit.CompiledFunction? {
+) -> CompiledFunction? {
   self.cache.get(func_idx)
 }
 

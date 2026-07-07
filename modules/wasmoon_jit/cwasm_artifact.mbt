@@ -26,7 +26,7 @@ pub(all) struct CwasmArtifact {
   runtime_relocations : Array[ResolvedRuntimeRelocation]
   func_addr_fixups : Array[@machv_emit.FuncAddrFixup]
   call_fixups : Array[@machv_emit.CallFixup]
-  gc_safepoints : Array[@machv_emit.GcSafepoint]
+  gc_safepoints : Array[GcSafepoint]
   gc_stackmap_blob : Bytes
 } derive(Debug)
 

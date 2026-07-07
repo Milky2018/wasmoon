@@ -508,7 +508,7 @@ pub(all) struct LinkedCode {
   runtime_relocations : Array[ResolvedRuntimeRelocation]
   func_addr_fixups : Array[@machv_emit.FuncAddrFixup]
   call_fixups : Array[@machv_emit.CallFixup]
-  gc_safepoints : Array[@machv_emit.GcSafepoint]
+  gc_safepoints : Array[GcSafepoint]
   gc_stackmap_blob : Bytes
 } derive(Debug)
 
@@ -550,8 +550,8 @@ pub fn link_machine_code(
     runtime_relocations: runtime_relocations_from_machine_code(object, resolver),
     func_addr_fixups: object.get_func_addr_fixups(),
     call_fixups: object.get_call_fixups(),
-    gc_safepoints: @machv_emit.CompiledFunction::new("", object, 0).get_gc_safepoints(),
-    gc_stackmap_blob: @machv_emit.CompiledFunction::new("", object, 0).get_gc_stackmap_blob(),
+    gc_safepoints: CompiledFunction::new("", object, 0).get_gc_safepoints(),
+    gc_stackmap_blob: CompiledFunction::new("", object, 0).get_gc_stackmap_blob(),
   }
 }
 

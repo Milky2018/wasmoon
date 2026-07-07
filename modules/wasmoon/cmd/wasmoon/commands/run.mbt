@@ -1436,7 +1436,7 @@ fn machv_call_fixups_to_cwasm(
 
 ///|
 fn machv_gc_safepoints_to_cwasm(
-  safepoints : Array[@machv_emit.GcSafepoint],
+  safepoints : Array[@wasmoon_jit.GcSafepoint],
 ) -> Array[@cwasm.GcSafepoint] {
   let out : Array[@cwasm.GcSafepoint] = []
   for safepoint in safepoints {
@@ -1706,7 +1706,7 @@ pub fn compile_module_to_jit(
     if debug_db is Some(_) {
       mc_dump = Some(mc.dump_disasm())
     }
-    let compiled = @machv_emit.CompiledFunction::new(func_name, mc, 0)
+    let compiled = @wasmoon_jit.CompiledFunction::new(func_name, mc, 0)
     let num_params = func_type.params.length()
     let num_results = func_type.results.length()
     precompiled.add_function(

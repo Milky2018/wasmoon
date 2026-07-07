@@ -36,26 +36,6 @@ pub(all) struct CallFixup {
   veneer_offset : Int
 } derive(Eq, @debug.Debug)
 
-pub struct CompiledFunction {
-  name : String
-  code : MachineCode
-  entry_offset : Int
-  code_size : Int
-  frame_size : Int
-  gc_safepoints : Array[GcSafepoint]
-  gc_stackmap_blob : Bytes
-  mut valid : Bool
-}
-pub fn CompiledFunction::get_call_fixups(Self) -> Array[CallFixup]
-pub fn CompiledFunction::get_code(Self) -> Array[Int]
-pub fn CompiledFunction::get_func_addr_fixups(Self) -> Array[FuncAddrFixup]
-pub fn CompiledFunction::get_gc_safepoints(Self) -> Array[GcSafepoint]
-pub fn CompiledFunction::get_gc_stackmap_blob(Self) -> Bytes
-pub fn CompiledFunction::invalidate(Self) -> Unit
-pub fn CompiledFunction::is_valid(Self) -> Bool
-pub fn CompiledFunction::new(String, MachineCode, Int, gc_safepoints? : Array[GcSafepoint], gc_stackmap_blob? : Bytes) -> Self
-pub impl Show for CompiledFunction
-
 pub(all) enum CondCode {
   EQ
   NE
@@ -127,13 +107,6 @@ pub(all) struct FuncAddrFixup {
   target : @instr.RelocTarget
   reg : Int
 } derive(Eq, @debug.Debug)
-
-pub struct GcSafepoint {
-  code_offset : Int
-  live_refs : Array[Int]
-  metadata : Int64
-} derive(@debug.Debug)
-pub fn GcSafepoint::new(Int, Array[Int], Int64) -> Self
 
 type Instruction
 pub fn Instruction::emit(Self, MachineCode) -> Unit
