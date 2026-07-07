@@ -1555,12 +1555,20 @@ fn MachineCode::emit_instruction(
       let layout = stack_frame.require_embedding_context_layout()
 
       // next = context->gc_heap_ptr
-      self.emit_ldr_imm(16, context_reg, layout.gc_allocation_cursor_offset)
+      self.emit_ldr_imm(
+        16,
+        context_reg,
+        layout.require_allocation_cursor_offset(),
+      )
       // end = next + total_size
       self.emit_load_imm64(17, total_size.to_int64())
       self.emit_add_reg(17, 16, 17)
       // if end > context->gc_heap_limit: go slow
-      self.emit_ldr_imm(2, context_reg, layout.gc_allocation_limit_offset)
+      self.emit_ldr_imm(
+        2,
+        context_reg,
+        layout.require_allocation_limit_offset(),
+      )
       self.emit_cmp_reg(17, 2)
       self.emit_b_cond(@instr.Cond::Hi.to_bits(), slow_label)
 
@@ -1575,7 +1583,11 @@ fn MachineCode::emit_instruction(
         self.emit_str_imm(3, 16, gc_header_size + off)
       }
       // context->gc_heap_ptr = end
-      self.emit_str_imm(17, context_reg, layout.gc_allocation_cursor_offset)
+      self.emit_str_imm(
+        17,
+        context_reg,
+        layout.require_allocation_cursor_offset(),
+      )
 
       // register_struct_inline(context, obj_ptr, total_size)
       if context_reg != 0 {
@@ -1653,12 +1665,20 @@ fn MachineCode::emit_instruction(
       let layout = stack_frame.require_embedding_context_layout()
 
       // next = context->gc_heap_ptr
-      self.emit_ldr_imm(16, context_reg, layout.gc_allocation_cursor_offset)
+      self.emit_ldr_imm(
+        16,
+        context_reg,
+        layout.require_allocation_cursor_offset(),
+      )
       // end = next + total_size
       self.emit_load_imm64(17, total_size.to_int64())
       self.emit_add_reg(17, 16, 17)
       // if end > context->gc_heap_limit: go slow
-      self.emit_ldr_imm(2, context_reg, layout.gc_allocation_limit_offset)
+      self.emit_ldr_imm(
+        2,
+        context_reg,
+        layout.require_allocation_limit_offset(),
+      )
       self.emit_cmp_reg(17, 2)
       self.emit_b_cond(@instr.Cond::Hi.to_bits(), slow_label)
 
@@ -1675,7 +1695,11 @@ fn MachineCode::emit_instruction(
         self.emit_str_imm(3, 16, gc_header_size + array_meta_size + off)
       }
       // context->gc_heap_ptr = end
-      self.emit_str_imm(17, context_reg, layout.gc_allocation_cursor_offset)
+      self.emit_str_imm(
+        17,
+        context_reg,
+        layout.require_allocation_cursor_offset(),
+      )
 
       // register_array_inline(context, obj_ptr, total_size)
       if context_reg != 0 {

@@ -3261,12 +3261,16 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_mov_r64_m64(
         obj,
         context,
-        layout.gc_allocation_cursor_offset,
+        layout.require_allocation_cursor_offset(),
       )
       self.x86_emit_mov_rr(end, obj)
       emit_add_imm_to_reg_in_chunks(self, end, total_size)
       // if end > context->gc_heap_limit: slow path.
-      self.x86_emit_mov_r64_m64(tmp, context, layout.gc_allocation_limit_offset)
+      self.x86_emit_mov_r64_m64(
+        tmp,
+        context,
+        layout.require_allocation_limit_offset(),
+      )
       self.x86_emit_cmp_rr(end, tmp)
       self.x86_emit_jcc_rel32(Hi, slow)
 
@@ -3282,7 +3286,7 @@ fn MachineCode::emit_instruction_x86_64(
       }
       self.x86_emit_mov_m64_r64(
         context,
-        layout.gc_allocation_cursor_offset,
+        layout.require_allocation_cursor_offset(),
         end,
       )
 
@@ -3366,12 +3370,16 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_mov_r64_m64(
         obj,
         context,
-        layout.gc_allocation_cursor_offset,
+        layout.require_allocation_cursor_offset(),
       )
       self.x86_emit_mov_rr(end, obj)
       emit_add_imm_to_reg_in_chunks(self, end, total_size)
       // if end > context->gc_heap_limit: slow path.
-      self.x86_emit_mov_r64_m64(tmp, context, layout.gc_allocation_limit_offset)
+      self.x86_emit_mov_r64_m64(
+        tmp,
+        context,
+        layout.require_allocation_limit_offset(),
+      )
       self.x86_emit_cmp_rr(end, tmp)
       self.x86_emit_jcc_rel32(Hi, slow)
 
@@ -3393,7 +3401,7 @@ fn MachineCode::emit_instruction_x86_64(
       }
       self.x86_emit_mov_m64_r64(
         context,
-        layout.gc_allocation_cursor_offset,
+        layout.require_allocation_cursor_offset(),
         end,
       )
 

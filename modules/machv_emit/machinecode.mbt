@@ -40,7 +40,7 @@ pub struct MachineCode {
   disasm : Array[(Int, String)]
   // Whether to record disassembly annotations during emission.
   record_disasm : Bool
-  // Stack spill-slot offset (from SP) used to stash caller debug_current_func_idx.
+  // Stack spill-slot offset (from SP) used to stash caller active function index.
   // -1 means disabled for this function.
   mut debug_prev_func_idx_spill_offset : Int
 }

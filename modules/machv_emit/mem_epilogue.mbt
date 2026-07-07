@@ -157,7 +157,7 @@ fn MachineCode::emit_epilogue(
       )
       self.x86_emit_mov_m32_r32(
         context,
-        layout.debug_current_function_offset,
+        layout.require_active_function_index_offset(),
         scratch,
       )
     }
@@ -208,7 +208,11 @@ fn MachineCode::emit_epilogue(
       self.emit_add_reg(17, 31, 17)
       self.emit_ldr_w_imm(16, 17, 0)
     }
-    self.emit_str_w_imm(16, context, layout.debug_current_function_offset)
+    self.emit_str_w_imm(
+      16,
+      context,
+      layout.require_active_function_index_offset(),
+    )
   }
 
   // Step 1: Deallocate remaining stack space (spill slots + outgoing args)

@@ -128,6 +128,15 @@ pub fn VMContextLayout::to_embedding_context_layout(
         cache_role: NoContextCache,
       },
     ],
+    active_function_index_slot: Some(
+      @wasm_isa_lower.CONTEXT_SLOT_DEBUG_CURRENT_FUNCTION,
+    ),
+    allocation_cursor_slot: Some(
+      @wasm_isa_lower.CONTEXT_SLOT_GC_ALLOCATION_CURSOR,
+    ),
+    allocation_limit_slot: Some(
+      @wasm_isa_lower.CONTEXT_SLOT_GC_ALLOCATION_LIMIT,
+    ),
     context_cache_0_descriptor_offset: self.memory0_offset,
     context_cache_0_source_offset: self.memory0_base_offset,
     function_table_offset: self.func_table_offset,

@@ -35,6 +35,9 @@ pub(all) struct ContextSlot {
 /// this shape before invoking lowering or emission.
 pub(all) struct EmbeddingContextLayout {
   slots : Array[ContextSlot]
+  active_function_index_slot : Int?
+  allocation_cursor_slot : Int?
+  allocation_limit_slot : Int?
   context_cache_0_descriptor_offset : Int
   context_cache_0_source_offset : Int
   function_table_offset : Int
@@ -73,5 +76,46 @@ pub fn EmbeddingContextLayout::slot_offset(
   match self.slot(id) {
     Some(slot) => Some(slot.offset)
     None => None
+  }
+}
+
+///|
+pub fn EmbeddingContextLayout::require_slot_offset(
+  self : EmbeddingContextLayout,
+  id : Int,
+) -> Int {
+  match self.slot_offset(id) {
+    Some(offset) => offset
+    None => abort("missing embedding context slot \{id}")
+  }
+}
+
+///|
+pub fn EmbeddingContextLayout::require_active_function_index_offset(
+  self : EmbeddingContextLayout,
+) -> Int {
+  match self.active_function_index_slot {
+    Some(id) => self.require_slot_offset(id)
+    None => abort("active function index context slot is required")
+  }
+}
+
+///|
+pub fn EmbeddingContextLayout::require_allocation_cursor_offset(
+  self : EmbeddingContextLayout,
+) -> Int {
+  match self.allocation_cursor_slot {
+    Some(id) => self.require_slot_offset(id)
+    None => abort("allocation cursor context slot is required")
+  }
+}
+
+///|
+pub fn EmbeddingContextLayout::require_allocation_limit_offset(
+  self : EmbeddingContextLayout,
+) -> Int {
+  match self.allocation_limit_slot {
+    Some(id) => self.require_slot_offset(id)
+    None => abort("allocation limit context slot is required")
   }
 }

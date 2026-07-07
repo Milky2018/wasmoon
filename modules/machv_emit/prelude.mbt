@@ -354,7 +354,7 @@ fn MachineCode::emit_prologue(
         self.x86_emit_mov_r32_m32(
           scratch,
           context_src,
-          layout.debug_current_function_offset,
+          layout.require_active_function_index_offset(),
         )
         self.x86_emit_mov_m32_r32(
           4,
@@ -365,7 +365,7 @@ fn MachineCode::emit_prologue(
       self.x86_emit_mov_imm64(scratch, idx.to_int64())
       self.x86_emit_mov_m32_r32(
         context_src,
-        layout.debug_current_function_offset,
+        layout.require_active_function_index_offset(),
         scratch,
       )
     }
@@ -660,7 +660,11 @@ fn MachineCode::emit_prologue(
     let context_reg = call_conv.context_arg.index
     let layout = stack_frame.require_embedding_context_layout()
     if self.debug_prev_func_idx_spill_offset >= 0 {
-      self.emit_ldr_w_imm(16, context_reg, layout.debug_current_function_offset)
+      self.emit_ldr_w_imm(
+        16,
+        context_reg,
+        layout.require_active_function_index_offset(),
+      )
       if self.debug_prev_func_idx_spill_offset <= 16380 {
         self.emit_str_w_imm(16, 31, self.debug_prev_func_idx_spill_offset)
       } else {
@@ -673,7 +677,11 @@ fn MachineCode::emit_prologue(
       }
     }
     self.emit_load_imm64(16, idx.to_int64())
-    self.emit_str_w_imm(16, context_reg, layout.debug_current_function_offset)
+    self.emit_str_w_imm(
+      16,
+      context_reg,
+      layout.require_active_function_index_offset(),
+    )
   }
 
   // Step 5: Cache the embedding context when needed.
