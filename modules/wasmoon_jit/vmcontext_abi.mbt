@@ -61,10 +61,10 @@ pub fn vmcontext_layout() -> VMContextLayout {
 
 ///|
 /// Translate Wasmoon's concrete VMContext prefix into the generic machine-level
-/// runtime context layout consumed by lowering and emission.
-pub fn VMContextLayout::to_runtime_context_layout(
+/// embedding context layout consumed by reusable code.
+pub fn VMContextLayout::to_embedding_context_layout(
   self : VMContextLayout,
-) -> @abi.RuntimeContextLayout {
+) -> @abi.EmbeddingContextLayout {
   {
     primary_memory_descriptor_offset: self.memory0_offset,
     primary_memory_base_offset: self.memory0_base_offset,
@@ -81,8 +81,20 @@ pub fn VMContextLayout::to_runtime_context_layout(
 }
 
 ///|
+pub fn embedding_context_layout() -> @abi.EmbeddingContextLayout {
+  vmcontext_layout().to_embedding_context_layout()
+}
+
+///|
+pub fn VMContextLayout::to_runtime_context_layout(
+  self : VMContextLayout,
+) -> @abi.RuntimeContextLayout {
+  self.to_embedding_context_layout()
+}
+
+///|
 pub fn runtime_context_layout() -> @abi.RuntimeContextLayout {
-  vmcontext_layout().to_runtime_context_layout()
+  embedding_context_layout()
 }
 
 ///|

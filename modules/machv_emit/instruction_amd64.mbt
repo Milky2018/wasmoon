@@ -9,7 +9,7 @@
 fn MachineCode::emit_instruction_x86_64(
   self : MachineCode,
   inst : @instr.VCodeInst,
-  stack_frame : JITStackFrame,
+  stack_frame : EmitStackFrame,
 ) -> Unit {
   let spill_base_offset = stack_frame.spill_offset
   let frame_size = stack_frame.total_size
@@ -233,7 +233,7 @@ fn MachineCode::emit_instruction_x86_64(
   }
 
   fn emit_amd64_abort(msg : String) -> Unit {
-    println("wasmoon amd64 emit: \{msg}")
+    println("machv amd64 emit: \{msg}")
     abort(msg)
   }
 
@@ -2459,8 +2459,8 @@ fn MachineCode::emit_instruction_x86_64(
     Load(ty, offset) => {
       let rt = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
-      if stack_frame.runtime_layout is Some(layout) {
-        if stack_frame.cache_func_table &&
+      if stack_frame.embedding_context_layout is Some(layout) {
+        if stack_frame.cache_context_1 &&
           ty is I64 &&
           rn == stack_frame.context_reg_index() &&
           offset == layout.function_table_offset {
@@ -3129,19 +3129,19 @@ fn MachineCode::emit_instruction_x86_64(
     LoadCodeAddr(symbol) => {
       // Load function pointer from the embedding function table.
       let rd = wreg_num(inst.defs[0])
-      let vmctx = stack_frame.context_reg_index()
+      let context = stack_frame.context_reg_index()
       let table = isa.scratch_reg_1_index()
-      let layout = stack_frame.require_runtime_layout()
-      self.x86_emit_mov_r64_m64(table, vmctx, layout.function_table_offset)
+      let layout = stack_frame.require_embedding_context_layout()
+      self.x86_emit_mov_r64_m64(table, context, layout.function_table_offset)
       self.x86_emit_mov_r64_m64(rd, table, symbol.ordinal * 8)
     }
     CallDirect(symbol, _num_args, _num_results, _call_conv) => {
       // Call via embedding function table to avoid rel32 patching.
-      let vmctx = stack_frame.context_reg_index()
+      let context = stack_frame.context_reg_index()
       let table = isa.scratch_reg_1_index()
       let callee = isa.scratch_reg_2_index()
-      let layout = stack_frame.require_runtime_layout()
-      self.x86_emit_mov_r64_m64(table, vmctx, layout.function_table_offset)
+      let layout = stack_frame.require_embedding_context_layout()
+      self.x86_emit_mov_r64_m64(table, context, layout.function_table_offset)
       self.x86_emit_mov_r64_m64(callee, table, symbol.ordinal * 8)
       self.x86_emit_call_r64(callee)
     }
@@ -3235,7 +3235,7 @@ fn MachineCode::emit_instruction_x86_64(
     ) => {
       // Inline record bump allocation with slow-path fallback.
       let dst = wreg_num(inst.defs[0])
-      let vmctx = stack_frame.context_reg_index()
+      let context = stack_frame.context_reg_index()
       let arg0 = 7 // rdi
       let arg1 = 6 // rsi
       let arg2 = 2 // rdx
@@ -3255,14 +3255,18 @@ fn MachineCode::emit_instruction_x86_64(
 
       let slow = self.new_internal_label()
       let done = self.new_internal_label()
-      let layout = stack_frame.require_runtime_layout()
+      let layout = stack_frame.require_embedding_context_layout()
 
-      // next = vmctx->gc_heap_ptr; end = next + total_size.
-      self.x86_emit_mov_r64_m64(obj, vmctx, layout.gc_allocation_cursor_offset)
+      // next = context->gc_heap_ptr; end = next + total_size.
+      self.x86_emit_mov_r64_m64(
+        obj,
+        context,
+        layout.gc_allocation_cursor_offset,
+      )
       self.x86_emit_mov_rr(end, obj)
       emit_add_imm_to_reg_in_chunks(self, end, total_size)
-      // if end > vmctx->gc_heap_limit: slow path.
-      self.x86_emit_mov_r64_m64(tmp, vmctx, layout.gc_allocation_limit_offset)
+      // if end > context->gc_heap_limit: slow path.
+      self.x86_emit_mov_r64_m64(tmp, context, layout.gc_allocation_limit_offset)
       self.x86_emit_cmp_rr(end, tmp)
       self.x86_emit_jcc_rel32(Hi, slow)
 
@@ -3276,11 +3280,15 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_mov_r64_m64(tmp, 4, stack_base_off + off)
         self.x86_emit_mov_m64_r64(obj, gc_header_size + off, tmp)
       }
-      self.x86_emit_mov_m64_r64(vmctx, layout.gc_allocation_cursor_offset, end)
+      self.x86_emit_mov_m64_r64(
+        context,
+        layout.gc_allocation_cursor_offset,
+        end,
+      )
 
-      // register_struct_inline(vmctx, obj_ptr, total_size)
-      if vmctx != arg0 {
-        self.x86_emit_mov_rr(arg0, vmctx)
+      // register_struct_inline(context, obj_ptr, total_size)
+      if context != arg0 {
+        self.x86_emit_mov_rr(arg0, context)
       }
       if obj != arg1 {
         self.x86_emit_mov_rr(arg1, obj)
@@ -3297,10 +3305,10 @@ fn MachineCode::emit_instruction_x86_64(
       }
       self.x86_emit_jmp_rel32(done)
 
-      // Slow path: slow_helper(vmctx, type_tag, stack_values, field_count, safepoint_id)
+      // Slow path: slow_helper(context, type_tag, stack_values, field_count, safepoint_id)
       self.define_label(slow)
-      if vmctx != arg0 {
-        self.x86_emit_mov_rr(arg0, vmctx)
+      if context != arg0 {
+        self.x86_emit_mov_rr(arg0, context)
       }
       self.x86_emit_mov_imm64(arg1, type_idx.to_int64())
       self.x86_emit_mov_rr(arg2, 4) // rsp
@@ -3328,7 +3336,7 @@ fn MachineCode::emit_instruction_x86_64(
     BumpAllocArrayFromStackInline(type_idx, len, register_symbol, slow_symbol) => {
       // Inline fixed-array bump allocation with slow-path fallback.
       let dst = wreg_num(inst.defs[0])
-      let vmctx = stack_frame.context_reg_index()
+      let context = stack_frame.context_reg_index()
       let arg0 = 7 // rdi
       let arg1 = 6 // rsi
       let arg2 = 2 // rdx
@@ -3352,14 +3360,18 @@ fn MachineCode::emit_instruction_x86_64(
 
       let slow = self.new_internal_label()
       let done = self.new_internal_label()
-      let layout = stack_frame.require_runtime_layout()
+      let layout = stack_frame.require_embedding_context_layout()
 
-      // next = vmctx->gc_heap_ptr; end = next + total_size.
-      self.x86_emit_mov_r64_m64(obj, vmctx, layout.gc_allocation_cursor_offset)
+      // next = context->gc_heap_ptr; end = next + total_size.
+      self.x86_emit_mov_r64_m64(
+        obj,
+        context,
+        layout.gc_allocation_cursor_offset,
+      )
       self.x86_emit_mov_rr(end, obj)
       emit_add_imm_to_reg_in_chunks(self, end, total_size)
-      // if end > vmctx->gc_heap_limit: slow path.
-      self.x86_emit_mov_r64_m64(tmp, vmctx, layout.gc_allocation_limit_offset)
+      // if end > context->gc_heap_limit: slow path.
+      self.x86_emit_mov_r64_m64(tmp, context, layout.gc_allocation_limit_offset)
       self.x86_emit_cmp_rr(end, tmp)
       self.x86_emit_jcc_rel32(Hi, slow)
 
@@ -3379,11 +3391,15 @@ fn MachineCode::emit_instruction_x86_64(
           tmp,
         )
       }
-      self.x86_emit_mov_m64_r64(vmctx, layout.gc_allocation_cursor_offset, end)
+      self.x86_emit_mov_m64_r64(
+        context,
+        layout.gc_allocation_cursor_offset,
+        end,
+      )
 
-      // register_array_inline(vmctx, obj_ptr, total_size)
-      if vmctx != arg0 {
-        self.x86_emit_mov_rr(arg0, vmctx)
+      // register_array_inline(context, obj_ptr, total_size)
+      if context != arg0 {
+        self.x86_emit_mov_rr(arg0, context)
       }
       if obj != arg1 {
         self.x86_emit_mov_rr(arg1, obj)
@@ -3400,10 +3416,10 @@ fn MachineCode::emit_instruction_x86_64(
       }
       self.x86_emit_jmp_rel32(done)
 
-      // Slow path: gc_alloc_array_from_values_slow(vmctx, type_idx, values_ptr, len, safepoint_id)
+      // Slow path: gc_alloc_array_from_values_slow(context, type_idx, values_ptr, len, safepoint_id)
       self.define_label(slow)
-      if vmctx != arg0 {
-        self.x86_emit_mov_rr(arg0, vmctx)
+      if context != arg0 {
+        self.x86_emit_mov_rr(arg0, context)
       }
       self.x86_emit_mov_imm64(arg1, type_idx.to_int64())
       self.x86_emit_mov_rr(arg2, 4) // rsp

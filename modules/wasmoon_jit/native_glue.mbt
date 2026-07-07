@@ -132,7 +132,7 @@ pub fn plan_integration_for_target(
       vcode_func,
       regalloc_output,
       isa~,
-      runtime_layout=Some(runtime_context_layout()),
+      embedding_context_layout=Some(embedding_context_layout()),
       call_conv_layout=Some(call_conv),
       embedding_reg_roles=roles,
     ),

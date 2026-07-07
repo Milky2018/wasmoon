@@ -94,6 +94,21 @@ pub fn CallConventionLayout::layout_overflow_stack(Self, Int, Array[RegClass]) -
 pub fn CallConventionLayout::stack_slot_align(Self, RegClass) -> Int
 pub fn CallConventionLayout::stack_slot_size(Self, RegClass) -> Int
 
+#alias(RuntimeContextLayout)
+pub(all) struct EmbeddingContextLayout {
+  primary_memory_descriptor_offset : Int
+  primary_memory_base_offset : Int
+  function_table_offset : Int
+  primary_table_base_offset : Int
+  table_directory_offset : Int
+  global_storage_offset : Int
+  memory_directory_offset : Int
+  debug_current_function_offset : Int
+  gc_allocation_cursor_offset : Int
+  gc_allocation_limit_offset : Int
+  pointer_stride : Int
+}
+
 pub(all) struct EmbeddingRegRoles {
   context : PReg?
   context_cache_0 : PReg?
@@ -131,20 +146,6 @@ pub(all) enum RegClass {
   Vector
 } derive(Eq)
 pub impl Show for RegClass
-
-pub(all) struct RuntimeContextLayout {
-  primary_memory_descriptor_offset : Int
-  primary_memory_base_offset : Int
-  function_table_offset : Int
-  primary_table_base_offset : Int
-  table_directory_offset : Int
-  global_storage_offset : Int
-  memory_directory_offset : Int
-  debug_current_function_offset : Int
-  gc_allocation_cursor_offset : Int
-  gc_allocation_limit_offset : Int
-  pointer_stride : Int
-}
 
 pub(all) struct VReg {
   id : Int

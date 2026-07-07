@@ -45,7 +45,7 @@ pub fn lower_c_libcall(LoweringContext, @block.VCodeBlock, @abi.VReg, Array[@abi
 
 pub fn lower_c_libcall_direct(LoweringContext, @block.VCodeBlock, @instr.ExternalName, Array[@abi.VReg], @abi.VReg?) -> Unit
 
-pub fn lower_function(@milkir.Function, isa? : @isa.ISA, abi_settings? : @abi.ABISettings, embedding_reg_roles? : @abi.EmbeddingRegRoles, runtime_layout? : @abi.RuntimeContextLayout?, call_conv_layout? : @abi.CallConventionLayout?, runtime_helper_symbols? : Map[String, String], extension_lowerer? : ((LoweringContext, @milkir.Inst, @block.VCodeBlock, @milkir.ExtOp) -> Bool)?, num_imports? : Int, run_ir_opt? : Bool, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @machv.Function
+pub fn lower_function(@milkir.Function, isa? : @isa.ISA, abi_settings? : @abi.ABISettings, embedding_reg_roles? : @abi.EmbeddingRegRoles, runtime_layout? : @abi.EmbeddingContextLayout?, call_conv_layout? : @abi.CallConventionLayout?, runtime_helper_symbols? : Map[String, String], extension_lowerer? : ((LoweringContext, @milkir.Inst, @block.VCodeBlock, @milkir.ExtOp) -> Bool)?, num_imports? : Int, run_ir_opt? : Bool, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @machv.Function
 
 pub fn lower_function_optimized(@milkir.Function) -> @machv.Function
 
@@ -59,7 +59,7 @@ pub fn materialize_imm(LoweringContext, @block.VCodeBlock, Int64) -> @abi.VReg
 
 pub fn optimize_vcode(@machv.Function, isa? : @isa.ISA) -> Unit
 
-pub fn optimize_vcode_for_lowering(@machv.Function, isa? : @isa.ISA, runtime_layout? : @abi.RuntimeContextLayout?, embedding_reg_roles? : @abi.EmbeddingRegRoles) -> Unit
+pub fn optimize_vcode_for_lowering(@machv.Function, isa? : @isa.ISA, runtime_layout? : @abi.EmbeddingContextLayout?, embedding_reg_roles? : @abi.EmbeddingRegRoles) -> Unit
 
 pub fn runtime_helper_symbol(LoweringContext, String) -> @instr.ExternalName
 
@@ -95,10 +95,10 @@ pub fn LoweringContext::canonicalize_indirect_type_idx(Self, Int) -> Int
 pub fn LoweringContext::embedding_reg_roles(Self) -> @abi.EmbeddingRegRoles
 pub fn LoweringContext::get_vreg(Self, @milkir.Value) -> @abi.VReg
 pub fn LoweringContext::get_vreg_for_use(Self, @milkir.Value, @block.VCodeBlock) -> @abi.VReg
-pub fn LoweringContext::new(@milkir.Function, @isa.ISA, @abi.ABISettings, @abi.EmbeddingRegRoles, @abi.RuntimeContextLayout?, @abi.CallConventionLayout?, Map[String, String], ((Self, @milkir.Inst, @block.VCodeBlock, @milkir.ExtOp) -> Bool)?, Int, Bool, Array[Int]) -> Self
+pub fn LoweringContext::new(@milkir.Function, @isa.ISA, @abi.ABISettings, @abi.EmbeddingRegRoles, @abi.EmbeddingContextLayout?, @abi.CallConventionLayout?, Map[String, String], ((Self, @milkir.Inst, @block.VCodeBlock, @milkir.ExtOp) -> Bool)?, Int, Bool, Array[Int]) -> Self
 pub fn LoweringContext::new_vreg(Self, @abi.RegClass) -> @abi.VReg
 pub fn LoweringContext::num_imports(Self) -> Int
-pub fn LoweringContext::runtime_layout(Self) -> @abi.RuntimeContextLayout
+pub fn LoweringContext::runtime_layout(Self) -> @abi.EmbeddingContextLayout
 pub fn LoweringContext::set_cached_vreg(Self, Int, @abi.VReg) -> Unit
 pub fn LoweringContext::use_count(Self, Int) -> Int
 pub fn LoweringContext::use_subtype_indirect_check(Self) -> Bool

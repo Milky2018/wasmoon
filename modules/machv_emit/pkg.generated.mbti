@@ -11,9 +11,9 @@ import {
 }
 
 // Values
-pub fn emit_function(@machv.Function, isa? : @isa.ISA, debug_func_idx? : Int?, force_frame_setup? : Bool, abi_settings? : @abi.ABISettings, runtime_layout? : @abi.RuntimeContextLayout?, call_conv_layout? : @abi.CallConventionLayout?, embedding_reg_roles? : @abi.EmbeddingRegRoles, record_disasm? : Bool) -> MachineCode
+pub fn emit_function(@machv.Function, isa? : @isa.ISA, debug_func_idx? : Int?, force_frame_setup? : Bool, abi_settings? : @abi.ABISettings, embedding_context_layout? : @abi.EmbeddingContextLayout?, call_conv_layout? : @abi.CallConventionLayout?, embedding_reg_roles? : @abi.EmbeddingRegRoles, record_disasm? : Bool) -> MachineCode
 
-pub fn emit_function_with_regalloc(@machv.Function, @machv_regalloc.Output, isa? : @isa.ISA, debug_func_idx? : Int?, force_frame_setup? : Bool, abi_settings? : @abi.ABISettings, runtime_layout? : @abi.RuntimeContextLayout?, call_conv_layout? : @abi.CallConventionLayout?, embedding_reg_roles? : @abi.EmbeddingRegRoles, record_disasm? : Bool) -> MachineCode
+pub fn emit_function_with_regalloc(@machv.Function, @machv_regalloc.Output, isa? : @isa.ISA, debug_func_idx? : Int?, force_frame_setup? : Bool, abi_settings? : @abi.ABISettings, embedding_context_layout? : @abi.EmbeddingContextLayout?, call_conv_layout? : @abi.CallConventionLayout?, embedding_reg_roles? : @abi.EmbeddingRegRoles, record_disasm? : Bool) -> MachineCode
 
 pub fn fits_signed_i32(Int) -> Bool
 
@@ -75,6 +75,41 @@ pub(all) enum CondCode {
 }
 pub fn CondCode::to_int(Self) -> Int
 
+pub struct EmitStackFrame {
+  setup_area_size : Int
+  gpr_save_size : Int
+  fpr_save_size : Int
+  spill_size : Int
+  outgoing_args_size : Int
+  gpr_save_offset : Int
+  fpr_save_offset : Int
+  spill_offset : Int
+  outgoing_args_offset : Int
+  total_size : Int
+  frame_size : Int
+  saved_gprs : Array[Int]
+  saved_fprs : Array[Int]
+  has_setup_area : Bool
+  needs_context_reg : Bool
+  cache_context_0 : Bool
+  cache_context_1 : Bool
+  embedding_context_layout : @abi.EmbeddingContextLayout?
+  call_conv_layout : @abi.CallConventionLayout?
+  embedding_reg_roles : @abi.EmbeddingRegRoles
+}
+pub fn EmitStackFrame::build(Array[Int], Array[Int], Int, has_calls? : Bool, outgoing_args_size? : Int, needs_context_reg? : Bool, cache_context_0? : Bool, cache_context_1? : Bool, force_frame_setup? : Bool, has_incoming_stack_args? : Bool, embedding_context_layout? : @abi.EmbeddingContextLayout?, call_conv_layout? : @abi.CallConventionLayout?, embedding_reg_roles? : @abi.EmbeddingRegRoles, isa? : @isa.ISA, abi_settings? : @abi.ABISettings) -> Self
+pub fn EmitStackFrame::context_cache_0_index(Self) -> Int?
+pub fn EmitStackFrame::context_cache_1_index(Self) -> Int?
+pub fn EmitStackFrame::context_reg_index(Self) -> Int
+pub fn EmitStackFrame::extra_results_ptr_index(Self) -> Int?
+pub fn EmitStackFrame::get_fpr_save_offset(Self, Int) -> Int
+pub fn EmitStackFrame::get_gpr_save_offset(Self, Int) -> Int
+pub fn EmitStackFrame::get_outgoing_arg_offset(Self, Int) -> Int
+pub fn EmitStackFrame::get_spill_offset(Self, Int) -> Int
+pub fn EmitStackFrame::require_call_conv_layout(Self) -> @abi.CallConventionLayout
+pub fn EmitStackFrame::require_context_reg(Self) -> @abi.PReg
+pub fn EmitStackFrame::require_embedding_context_layout(Self) -> @abi.EmbeddingContextLayout
+
 pub(all) enum EmitTarget {
   AArch64
   X64
@@ -102,41 +137,6 @@ pub fn GcSafepoint::new(Int, Array[Int], Int64) -> Self
 
 type Instruction
 pub fn Instruction::emit(Self, MachineCode) -> Unit
-
-pub struct JITStackFrame {
-  setup_area_size : Int
-  gpr_save_size : Int
-  fpr_save_size : Int
-  spill_size : Int
-  outgoing_args_size : Int
-  gpr_save_offset : Int
-  fpr_save_offset : Int
-  spill_offset : Int
-  outgoing_args_offset : Int
-  total_size : Int
-  frame_size : Int
-  saved_gprs : Array[Int]
-  saved_fprs : Array[Int]
-  has_setup_area : Bool
-  needs_vmctx : Bool
-  cache_mem0_desc : Bool
-  cache_func_table : Bool
-  runtime_layout : @abi.RuntimeContextLayout?
-  call_conv_layout : @abi.CallConventionLayout?
-  embedding_reg_roles : @abi.EmbeddingRegRoles
-}
-pub fn JITStackFrame::build(Array[Int], Array[Int], Int, has_calls? : Bool, outgoing_args_size? : Int, needs_vmctx? : Bool, cache_mem0_desc? : Bool, cache_func_table? : Bool, force_frame_setup? : Bool, has_incoming_stack_args? : Bool, runtime_layout? : @abi.RuntimeContextLayout?, call_conv_layout? : @abi.CallConventionLayout?, embedding_reg_roles? : @abi.EmbeddingRegRoles, isa? : @isa.ISA, abi_settings? : @abi.ABISettings) -> Self
-pub fn JITStackFrame::context_cache_0_index(Self) -> Int?
-pub fn JITStackFrame::context_cache_1_index(Self) -> Int?
-pub fn JITStackFrame::context_reg_index(Self) -> Int
-pub fn JITStackFrame::extra_results_ptr_index(Self) -> Int?
-pub fn JITStackFrame::get_fpr_save_offset(Self, Int) -> Int
-pub fn JITStackFrame::get_gpr_save_offset(Self, Int) -> Int
-pub fn JITStackFrame::get_outgoing_arg_offset(Self, Int) -> Int
-pub fn JITStackFrame::get_spill_offset(Self, Int) -> Int
-pub fn JITStackFrame::require_call_conv_layout(Self) -> @abi.CallConventionLayout
-pub fn JITStackFrame::require_context_reg(Self) -> @abi.PReg
-pub fn JITStackFrame::require_runtime_layout(Self) -> @abi.RuntimeContextLayout
 
 pub struct MachineCode {
   isa : @isa.ISA

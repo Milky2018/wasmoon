@@ -4,7 +4,7 @@
 fn MachineCode::emit_instruction_simd(
   self : MachineCode,
   inst : @instr.VCodeInst,
-  stack_frame : JITStackFrame,
+  stack_frame : EmitStackFrame,
   spill_base_offset : Int,
   frame_size : Int,
 ) -> Unit {

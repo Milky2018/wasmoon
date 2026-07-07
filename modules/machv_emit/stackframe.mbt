@@ -43,11 +43,11 @@ const SETUP_AREA_SIZE : Int = 16
 // 16-byte aligned (16n) after the prologue and therefore aligned at call sites.
 const X86_SETUP_AREA_SIZE : Int = 8
 
-// ============ JITStackFrame ============
+// ============ EmitStackFrame ============
 
 ///|
 /// Encapsulates the stack frame layout for a JIT-compiled function
-pub struct JITStackFrame {
+pub struct EmitStackFrame {
   // Size of each region (in bytes)
   setup_area_size : Int // ISA-dependent setup (AArch64: FP+LR=16, amd64: push rbp=8)
   gpr_save_size : Int // Callee-saved GPRs (excluding FP/LR)
@@ -71,16 +71,16 @@ pub struct JITStackFrame {
   saved_fprs : Array[Int] // Callee-saved FPRs to save
   // Flags
   has_setup_area : Bool // Whether FP/LR are saved
-  needs_vmctx : Bool // Whether function uses vmctx (X19)
-  cache_mem0_desc : Bool // Whether to cache memory0 base in X20
-  cache_func_table : Bool // Whether to cache func_table pointer in X21
-  runtime_layout : @abi.RuntimeContextLayout?
+  needs_context_reg : Bool // Whether function uses context (X19)
+  cache_context_0 : Bool // Whether to cache primary memory base in X20
+  cache_context_1 : Bool // Whether to cache function table pointer in X21
+  embedding_context_layout : @abi.EmbeddingContextLayout?
   call_conv_layout : @abi.CallConventionLayout?
   embedding_reg_roles : @abi.EmbeddingRegRoles
 }
 
 ///|
-/// Build a JITStackFrame from function metadata
+/// Build a EmitStackFrame from function metadata
 ///
 /// Parameters:
 /// - clobbered_gprs: GPRs that are clobbered and need saving (callee-saved only)
@@ -88,25 +88,25 @@ pub struct JITStackFrame {
 /// - num_spill_slots: Number of spill slots needed
 /// - has_calls: Whether function contains calls (requires FP/LR save)
 /// - outgoing_args_size: Stack space needed for outgoing call arguments
-/// - needs_vmctx: Whether function uses vmctx (pinned reg)
+/// - needs_context_reg: Whether function uses context (pinned reg)
 /// - has_incoming_stack_args: Whether function reads any stack parameters
-pub fn JITStackFrame::build(
+pub fn EmitStackFrame::build(
   clobbered_gprs : Array[Int],
   clobbered_fprs : Array[Int],
   num_spill_slots : Int,
   has_calls? : Bool = false,
   outgoing_args_size? : Int = 0,
-  needs_vmctx? : Bool = true,
-  cache_mem0_desc? : Bool = false,
-  cache_func_table? : Bool = false,
+  needs_context_reg? : Bool = true,
+  cache_context_0? : Bool = false,
+  cache_context_1? : Bool = false,
   force_frame_setup? : Bool = false,
   has_incoming_stack_args? : Bool = false,
-  runtime_layout? : @abi.RuntimeContextLayout? = None,
+  embedding_context_layout? : @abi.EmbeddingContextLayout? = None,
   call_conv_layout? : @abi.CallConventionLayout? = None,
   embedding_reg_roles? : @abi.EmbeddingRegRoles = @abi.EmbeddingRegRoles::none(),
   isa? : @isa.ISA = AArch64,
   abi_settings? : @abi.ABISettings = @abi.ABISettings::default(),
-) -> JITStackFrame {
+) -> EmitStackFrame {
   let isa = isa
   let abi_settings = abi_settings
   // Build the list of GPRs to save
@@ -173,29 +173,28 @@ pub fn JITStackFrame::build(
     saved_gprs,
     saved_fprs: clobbered_fprs.copy(),
     has_setup_area,
-    needs_vmctx,
-    cache_mem0_desc,
-    cache_func_table,
-    runtime_layout,
+    needs_context_reg,
+    cache_context_0,
+    cache_context_1,
+    embedding_context_layout,
     call_conv_layout,
     embedding_reg_roles,
   }
 }
 
 ///|
-pub fn JITStackFrame::require_runtime_layout(
-  self : JITStackFrame,
-) -> @abi.RuntimeContextLayout {
-  match self.runtime_layout {
+pub fn EmitStackFrame::require_embedding_context_layout(
+  self : EmitStackFrame,
+) -> @abi.EmbeddingContextLayout {
+  match self.embedding_context_layout {
     Some(layout) => layout
-    None =>
-      abort("runtime context layout is required for runtime-specific emission")
+    None => abort("embedding context layout is required for emission")
   }
 }
 
 ///|
-pub fn JITStackFrame::require_call_conv_layout(
-  self : JITStackFrame,
+pub fn EmitStackFrame::require_call_conv_layout(
+  self : EmitStackFrame,
 ) -> @abi.CallConventionLayout {
   match self.call_conv_layout {
     Some(layout) => layout
@@ -205,7 +204,7 @@ pub fn JITStackFrame::require_call_conv_layout(
 }
 
 ///|
-pub fn JITStackFrame::require_context_reg(self : JITStackFrame) -> @abi.PReg {
+pub fn EmitStackFrame::require_context_reg(self : EmitStackFrame) -> @abi.PReg {
   match self.embedding_reg_roles.context {
     Some(preg) => preg
     None => abort("embedding context register role is required for emission")
@@ -213,12 +212,12 @@ pub fn JITStackFrame::require_context_reg(self : JITStackFrame) -> @abi.PReg {
 }
 
 ///|
-pub fn JITStackFrame::context_reg_index(self : JITStackFrame) -> Int {
+pub fn EmitStackFrame::context_reg_index(self : EmitStackFrame) -> Int {
   self.require_context_reg().index
 }
 
 ///|
-pub fn JITStackFrame::context_cache_0_index(self : JITStackFrame) -> Int? {
+pub fn EmitStackFrame::context_cache_0_index(self : EmitStackFrame) -> Int? {
   match self.embedding_reg_roles.context_cache_0 {
     Some({ index, class: Int }) => Some(index)
     _ => None
@@ -226,7 +225,7 @@ pub fn JITStackFrame::context_cache_0_index(self : JITStackFrame) -> Int? {
 }
 
 ///|
-pub fn JITStackFrame::context_cache_1_index(self : JITStackFrame) -> Int? {
+pub fn EmitStackFrame::context_cache_1_index(self : EmitStackFrame) -> Int? {
   match self.embedding_reg_roles.context_cache_1 {
     Some({ index, class: Int }) => Some(index)
     _ => None
@@ -234,7 +233,7 @@ pub fn JITStackFrame::context_cache_1_index(self : JITStackFrame) -> Int? {
 }
 
 ///|
-pub fn JITStackFrame::extra_results_ptr_index(self : JITStackFrame) -> Int? {
+pub fn EmitStackFrame::extra_results_ptr_index(self : EmitStackFrame) -> Int? {
   match self.embedding_reg_roles.extra_results_ptr {
     Some({ index, class: Int }) => Some(index)
     _ => None
@@ -243,8 +242,8 @@ pub fn JITStackFrame::extra_results_ptr_index(self : JITStackFrame) -> Int? {
 
 ///|
 /// Get the stack offset for a spill slot index
-pub fn JITStackFrame::get_spill_offset(
-  self : JITStackFrame,
+pub fn EmitStackFrame::get_spill_offset(
+  self : EmitStackFrame,
   slot_idx : Int,
 ) -> Int {
   self.spill_offset + slot_idx * SPILL_SLOT_SIZE
@@ -252,8 +251,8 @@ pub fn JITStackFrame::get_spill_offset(
 
 ///|
 /// Get the stack offset for outgoing arguments
-pub fn JITStackFrame::get_outgoing_arg_offset(
-  self : JITStackFrame,
+pub fn EmitStackFrame::get_outgoing_arg_offset(
+  self : EmitStackFrame,
   arg_offset : Int,
 ) -> Int {
   self.outgoing_args_offset + arg_offset
@@ -261,8 +260,8 @@ pub fn JITStackFrame::get_outgoing_arg_offset(
 
 ///|
 /// Get the offset for saving a specific GPR (relative to SP after frame setup)
-pub fn JITStackFrame::get_gpr_save_offset(
-  self : JITStackFrame,
+pub fn EmitStackFrame::get_gpr_save_offset(
+  self : EmitStackFrame,
   reg_idx : Int,
 ) -> Int {
   // Find the register in the saved list
@@ -278,8 +277,8 @@ pub fn JITStackFrame::get_gpr_save_offset(
 
 ///|
 /// Get the offset for saving a specific FPR (relative to SP after frame setup)
-pub fn JITStackFrame::get_fpr_save_offset(
-  self : JITStackFrame,
+pub fn EmitStackFrame::get_fpr_save_offset(
+  self : EmitStackFrame,
   reg_idx : Int,
 ) -> Int {
   for i, reg in self.saved_fprs {
@@ -295,7 +294,7 @@ pub fn JITStackFrame::get_fpr_save_offset(
 ///|
 /// Build the list of callee-saved GPRs to save.
 ///
-/// Cranelift behavior: when `enable_pinned_reg` is enabled, the pinned VMContext
+/// Cranelift behavior: when `enable_pinned_reg` is enabled, the pinned embedding context
 /// register is globally-reserved and is not saved/restored in prologues.
 fn build_gpr_save_list_v3(
   clobbered : Array[Int],

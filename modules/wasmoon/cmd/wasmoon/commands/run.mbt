@@ -1692,7 +1692,7 @@ pub fn compile_module_to_jit(
       isa~,
       debug_func_idx=Some(func_idx),
       force_frame_setup=enable_dwarf,
-      runtime_layout=Some(@wasmoon_jit.runtime_context_layout()),
+      embedding_context_layout=Some(@wasmoon_jit.embedding_context_layout()),
       call_conv_layout=Some(call_conv),
       embedding_reg_roles=roles,
       record_disasm=debug_db is Some(_),

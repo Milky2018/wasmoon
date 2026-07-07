@@ -97,6 +97,8 @@ pub fn direct_call_idx_memory_copy_mem0() -> Int
 
 pub fn direct_call_idx_memory_fill_mem0() -> Int
 
+pub fn embedding_context_layout() -> @abi.EmbeddingContextLayout
+
 pub fn emit_entry_trampoline(Array[Int], Array[Int], @abi.CallConventionLayout, isa? : @isa.ISA) -> @machv_emit.MachineCode
 
 pub fn emit_hostcall_import_trampoline(Array[@types.ValueType], Array[@types.ValueType], Int, @instr.ExternalName, @abi.CallConventionLayout, isa? : @isa.ISA) -> @machv_emit.MachineCode
@@ -423,7 +425,7 @@ pub fn resolve_wasm_func_code_symbol(@instr.CodeSymbol) -> Int?
 
 pub fn resolve_wasm_func_symbol(String) -> Int?
 
-pub fn runtime_context_layout() -> @abi.RuntimeContextLayout
+pub fn runtime_context_layout() -> @abi.EmbeddingContextLayout
 
 pub fn runtime_hostcall_symbol() -> @instr.ExternalName
 
@@ -960,7 +962,8 @@ pub(all) struct VMContextLayout {
   table_entry_stride : Int
   func_table_entry_stride : Int
 }
-pub fn VMContextLayout::to_runtime_context_layout(Self) -> @abi.RuntimeContextLayout
+pub fn VMContextLayout::to_embedding_context_layout(Self) -> @abi.EmbeddingContextLayout
+pub fn VMContextLayout::to_runtime_context_layout(Self) -> @abi.EmbeddingContextLayout
 
 pub(all) struct WasmTrapFrame {
   pc : Int64

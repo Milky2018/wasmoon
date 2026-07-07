@@ -8,7 +8,7 @@
 fn MachineCode::emit_terminator_with_epilogue_x86_64(
   self : MachineCode,
   term : @instr.VCodeTerminator,
-  stack_frame : JITStackFrame,
+  stack_frame : EmitStackFrame,
   result_types : Array[@machv.ValueKind],
   next_block : Int?,
   _shared_exit_block : Int?,

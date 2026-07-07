@@ -63,7 +63,7 @@ fn collect_used_callee_saved(
   }
   // If the function makes any calls, we must save LR on AArch64.
   // Note: X20-X24 are no longer pre-loaded in prologue (on-demand)
-  // They are loaded on-demand from vmctx and only need saving if used by regalloc
+  // They are loaded on-demand from context and only need saving if used by regalloc
   if has_calls && isa is AArch64 {
     used.add(isa.lr_reg_index())
   }
@@ -204,7 +204,7 @@ fn terminator_uses_context_reg(
 /// └═══════════════════════════┘ ← SP after prologue
 ///
 /// ABI Parameter Passing:
-/// - X0 = vmctx (cached to pinned vmctx reg)
+/// - X0 = context (cached to pinned context reg)
 /// - X1.. = user args
 /// - V0-V7 = user float params (S for f32, D for f64)
 /// Emit stack pointer adjustment for arbitrary sizes (Standard)
@@ -304,7 +304,7 @@ fn MachineCode::emit_sp_adjust(self : MachineCode, amount : Int) -> Unit {
 ///|
 fn MachineCode::emit_prologue(
   self : MachineCode,
-  stack_frame : JITStackFrame,
+  stack_frame : EmitStackFrame,
   params : Array[@abi.VReg],
   param_pregs : Array[@abi.PReg?],
   debug_func_idx : Int?,
@@ -347,13 +347,13 @@ fn MachineCode::emit_prologue(
 
     if debug_func_idx is Some(idx) {
       let call_conv = stack_frame.require_call_conv_layout()
-      let vmctx_src = call_conv.context_arg.index
-      let layout = stack_frame.require_runtime_layout()
+      let context_src = call_conv.context_arg.index
+      let layout = stack_frame.require_embedding_context_layout()
       let scratch = 11
       if self.debug_prev_func_idx_spill_offset >= 0 {
         self.x86_emit_mov_r32_m32(
           scratch,
-          vmctx_src,
+          context_src,
           layout.debug_current_function_offset,
         )
         self.x86_emit_mov_m32_r32(
@@ -364,42 +364,42 @@ fn MachineCode::emit_prologue(
       }
       self.x86_emit_mov_imm64(scratch, idx.to_int64())
       self.x86_emit_mov_m32_r32(
-        vmctx_src,
+        context_src,
         layout.debug_current_function_offset,
         scratch,
       )
     }
 
     // Cache embedding context and optional context-derived pointers.
-    if stack_frame.needs_vmctx {
+    if stack_frame.needs_context_reg {
       if !abi_settings.enable_pinned_reg {
-        abort("unpinned VMContext ABI not implemented yet")
+        abort("unpinned embedding context ABI not implemented yet")
       }
       let call_conv = stack_frame.require_call_conv_layout()
-      let vmctx_src = call_conv.context_arg.index
-      let vmctx = stack_frame.context_reg_index()
-      if vmctx != vmctx_src {
-        self.x86_emit_mov_rr(vmctx, vmctx_src)
+      let context_src = call_conv.context_arg.index
+      let context = stack_frame.context_reg_index()
+      if context != context_src {
+        self.x86_emit_mov_rr(context, context_src)
       }
-      if stack_frame.cache_mem0_desc {
-        let layout = stack_frame.require_runtime_layout()
+      if stack_frame.cache_context_0 {
+        let layout = stack_frame.require_embedding_context_layout()
         guard stack_frame.context_cache_0_index() is Some(cache_reg) else {
           abort("embedding context cache 0 register role is required")
         }
         self.x86_emit_mov_r64_m64(
           cache_reg,
-          vmctx,
+          context,
           layout.primary_memory_descriptor_offset,
         )
       }
-      if stack_frame.cache_func_table {
-        let layout = stack_frame.require_runtime_layout()
+      if stack_frame.cache_context_1 {
+        let layout = stack_frame.require_embedding_context_layout()
         guard stack_frame.context_cache_1_index() is Some(cache_reg) else {
           abort("embedding context cache 1 register role is required")
         }
         self.x86_emit_mov_r64_m64(
           cache_reg,
-          vmctx,
+          context,
           layout.function_table_offset,
         )
       }
@@ -552,11 +552,11 @@ fn MachineCode::emit_prologue(
             match dest_preg {
               Some(preg) =>
                 if preg.index != src {
-                  let vmctx_dst = stack_frame.context_reg_index()
-                  let is_redundant_vmctx_move = int_idx == 0 &&
-                    stack_frame.needs_vmctx &&
-                    preg.index == vmctx_dst
-                  if !is_redundant_vmctx_move {
+                  let context_dst = stack_frame.context_reg_index()
+                  let is_redundant_context_move = int_idx == 0 &&
+                    stack_frame.needs_context_reg &&
+                    preg.index == context_dst
+                  if !is_redundant_context_move {
                     int_moves.push((src, preg.index))
                   }
                 }
@@ -657,10 +657,10 @@ fn MachineCode::emit_prologue(
 
   if debug_func_idx is Some(idx) {
     let call_conv = stack_frame.require_call_conv_layout()
-    let vmctx_reg = call_conv.context_arg.index
-    let layout = stack_frame.require_runtime_layout()
+    let context_reg = call_conv.context_arg.index
+    let layout = stack_frame.require_embedding_context_layout()
     if self.debug_prev_func_idx_spill_offset >= 0 {
-      self.emit_ldr_w_imm(16, vmctx_reg, layout.debug_current_function_offset)
+      self.emit_ldr_w_imm(16, context_reg, layout.debug_current_function_offset)
       if self.debug_prev_func_idx_spill_offset <= 16380 {
         self.emit_str_w_imm(16, 31, self.debug_prev_func_idx_spill_offset)
       } else {
@@ -673,32 +673,32 @@ fn MachineCode::emit_prologue(
       }
     }
     self.emit_load_imm64(16, idx.to_int64())
-    self.emit_str_w_imm(16, vmctx_reg, layout.debug_current_function_offset)
+    self.emit_str_w_imm(16, context_reg, layout.debug_current_function_offset)
   }
 
   // Step 5: Cache the embedding context when needed.
-  if stack_frame.needs_vmctx {
+  if stack_frame.needs_context_reg {
     if !abi_settings.enable_pinned_reg {
-      abort("unpinned VMContext ABI not implemented yet")
+      abort("unpinned embedding context ABI not implemented yet")
     }
-    let vmctx = stack_frame.context_reg_index()
+    let context = stack_frame.context_reg_index()
     let call_conv = stack_frame.require_call_conv_layout()
-    self.emit_mov_reg(vmctx, call_conv.context_arg.index)
+    self.emit_mov_reg(context, call_conv.context_arg.index)
     // Optionally cache the primary memory base pointer.
-    if stack_frame.cache_mem0_desc {
-      let layout = stack_frame.require_runtime_layout()
+    if stack_frame.cache_context_0 {
+      let layout = stack_frame.require_embedding_context_layout()
       guard stack_frame.context_cache_0_index() is Some(cache_reg) else {
         abort("embedding context cache 0 register role is required")
       }
-      self.emit_ldr_imm(cache_reg, vmctx, layout.primary_memory_base_offset)
+      self.emit_ldr_imm(cache_reg, context, layout.primary_memory_base_offset)
     }
-    // Optionally cache func_table pointer.
-    if stack_frame.cache_func_table {
-      let layout = stack_frame.require_runtime_layout()
+    // Optionally cache function table pointer.
+    if stack_frame.cache_context_1 {
+      let layout = stack_frame.require_embedding_context_layout()
       guard stack_frame.context_cache_1_index() is Some(cache_reg) else {
         abort("embedding context cache 1 register role is required")
       }
-      self.emit_ldr_imm(cache_reg, vmctx, layout.function_table_offset)
+      self.emit_ldr_imm(cache_reg, context, layout.function_table_offset)
     }
   }
 
@@ -766,7 +766,7 @@ pub fn emit_function(
   debug_func_idx? : Int? = None,
   force_frame_setup? : Bool = false,
   abi_settings? : @abi.ABISettings = @abi.ABISettings::default(),
-  runtime_layout? : @abi.RuntimeContextLayout? = None,
+  embedding_context_layout? : @abi.EmbeddingContextLayout? = None,
   call_conv_layout? : @abi.CallConventionLayout? = None,
   embedding_reg_roles? : @abi.EmbeddingRegRoles = @abi.EmbeddingRegRoles::none(),
   record_disasm? : Bool = true,
@@ -787,52 +787,52 @@ pub fn emit_function(
   // Collect callee-saved FPRs (D8-D15) that this function clobbers
   let clobbered_fprs = collect_used_callee_saved_fprs(func, isa, abi_settings)
 
-  // Build stack frame layout using JITStackFrame
+  // Build stack frame layout using EmitStackFrame
   // has_calls is true if function makes any calls
   let has_calls = func_has_calls(func)
   let has_incoming_stack_args = func_has_incoming_stack_args(func)
   let uses_primary_memory_base = func.uses_primary_memory_base()
-  let cache_mem0_desc = func.should_cache_mem0_desc()
-  let cache_func_table = func.should_cache_func_table()
+  let cache_context_0 = func.should_cache_mem0_desc()
+  let cache_context_1 = func.should_cache_func_table()
   let context_reg = embedding_reg_roles.context
 
-  let force_vmctx_cache = abi_settings.enable_pinned_reg &&
+  let force_context_reg_cache = abi_settings.enable_pinned_reg &&
     isa is AMD64 &&
     context_reg is Some(_)
-  let needs_vmctx = force_vmctx_cache ||
+  let needs_context_reg = force_context_reg_cache ||
     has_calls ||
     (context_reg is Some({ index, .. }) && func_uses_context_reg(func, index)) ||
     uses_primary_memory_base
   let clobbered_gprs = clobbered
-  if cache_mem0_desc &&
+  if cache_context_0 &&
     embedding_reg_roles.context_cache_0 is Some(cache) &&
     !clobbered_gprs.contains(cache.index) {
     clobbered_gprs.push(cache.index)
   }
-  if cache_func_table &&
+  if cache_context_1 &&
     embedding_reg_roles.context_cache_1 is Some(cache) &&
     !clobbered_gprs.contains(cache.index) {
     clobbered_gprs.push(cache.index)
   }
   let num_spill_slots = func.get_num_spill_slots()
-  let needs_debug_idx_restore = debug_func_idx is Some(_) && needs_vmctx
+  let needs_debug_idx_restore = debug_func_idx is Some(_) && needs_context_reg
   let total_spill_slots = if needs_debug_idx_restore {
     num_spill_slots + 1
   } else {
     num_spill_slots
   }
-  let stack_frame = JITStackFrame::build(
+  let stack_frame = EmitStackFrame::build(
     clobbered_gprs,
     clobbered_fprs,
     total_spill_slots,
     has_calls~,
     outgoing_args_size=func.get_max_outgoing_args_size(),
-    needs_vmctx~,
-    cache_mem0_desc~,
-    cache_func_table~,
+    needs_context_reg~,
+    cache_context_0~,
+    cache_context_1~,
     force_frame_setup~,
     has_incoming_stack_args~,
-    runtime_layout~,
+    embedding_context_layout~,
     call_conv_layout~,
     embedding_reg_roles~,
     abi_settings~,
@@ -843,7 +843,7 @@ pub fn emit_function(
     )
   }
 
-  // Emit prologue: save callee-saved registers, cache vmctx to X19, and move params
+  // Emit prologue: save callee-saved registers, cache context to X19, and move params
   mc.emit_prologue(
     stack_frame,
     func.get_params(),
@@ -1459,7 +1459,7 @@ fn invalidate_edit_slot_cache_range(
 fn emit_edit_move_with_cache(
   mc : MachineCode,
   edit : @machv_regalloc.Edit,
-  stack_frame : JITStackFrame,
+  stack_frame : EmitStackFrame,
   slot_cache : Map[Int, @abi.PReg],
 ) -> Unit {
   match edit {
@@ -1581,7 +1581,7 @@ fn map_term_for_emission(
 ///|
 fn MachineCode::emit_prologue_with_output(
   self : MachineCode,
-  stack_frame : JITStackFrame,
+  stack_frame : EmitStackFrame,
   params : Array[@abi.VReg],
   output : @machv_regalloc.Output,
   debug_func_idx : Int?,
@@ -1589,7 +1589,7 @@ fn MachineCode::emit_prologue_with_output(
 ) -> Unit {
   if self.isa is AMD64 {
     let isa = self.isa
-    // Reuse the existing prologue structure (save regs, allocate frame, cache vmctx),
+    // Reuse the existing prologue structure (save regs, allocate frame, cache context),
     // then do a Cranelift-style "param moves + param spills" stage.
     //
     // We must spill any spilled params *before* we clobber their incoming ABI regs.
@@ -1798,11 +1798,11 @@ fn MachineCode::emit_prologue_with_output(
             match loc {
               Reg(dst) =>
                 if dst.index != src {
-                  let vmctx_dst = stack_frame.context_reg_index()
-                  let is_redundant_vmctx_move = int_idx == 0 &&
-                    stack_frame.needs_vmctx &&
-                    dst.index == vmctx_dst
-                  if !is_redundant_vmctx_move {
+                  let context_dst = stack_frame.context_reg_index()
+                  let is_redundant_context_move = int_idx == 0 &&
+                    stack_frame.needs_context_reg &&
+                    dst.index == context_dst
+                  if !is_redundant_context_move {
                     int_moves.push((src, dst.index))
                   }
                 }
@@ -1828,7 +1828,7 @@ fn MachineCode::emit_prologue_with_output(
     emit_parallel_moves_xmm(self, 15, fp_moves)
     return
   }
-  // Reuse the existing prologue structure (save regs, allocate frame, cache vmctx),
+  // Reuse the existing prologue structure (save regs, allocate frame, cache context),
   // then do a Cranelift-style "param moves + param spills" stage.
   //
   // We must spill any spilled params *before* we clobber their incoming ABI regs.
@@ -2023,11 +2023,11 @@ fn MachineCode::emit_prologue_with_output(
           match loc {
             Reg(dst) =>
               if dst.index != x_src {
-                let vmctx_dst = stack_frame.context_reg_index()
-                let is_redundant_vmctx_move = int_idx == 0 &&
-                  stack_frame.needs_vmctx &&
-                  dst.index == vmctx_dst
-                if !is_redundant_vmctx_move {
+                let context_dst = stack_frame.context_reg_index()
+                let is_redundant_context_move = int_idx == 0 &&
+                  stack_frame.needs_context_reg &&
+                  dst.index == context_dst
+                if !is_redundant_context_move {
                   int_moves.push((x_src, dst.index))
                 }
               }
@@ -2062,7 +2062,7 @@ pub fn emit_function_with_regalloc(
   debug_func_idx? : Int? = None,
   force_frame_setup? : Bool = false,
   abi_settings? : @abi.ABISettings = @abi.ABISettings::default(),
-  runtime_layout? : @abi.RuntimeContextLayout? = None,
+  embedding_context_layout? : @abi.EmbeddingContextLayout? = None,
   call_conv_layout? : @abi.CallConventionLayout? = None,
   embedding_reg_roles? : @abi.EmbeddingRegRoles = @abi.EmbeddingRegRoles::none(),
   record_disasm? : Bool = true,
@@ -2083,13 +2083,13 @@ pub fn emit_function_with_regalloc(
   let has_calls = func_has_calls(func)
   let has_incoming_stack_args = func_has_incoming_stack_args(func)
   let uses_primary_memory_base = func.uses_primary_memory_base()
-  let cache_mem0_desc = func.should_cache_mem0_desc()
-  let cache_func_table = func.should_cache_func_table()
+  let cache_context_0 = func.should_cache_mem0_desc()
+  let cache_context_1 = func.should_cache_func_table()
   let context_reg = embedding_reg_roles.context
-  let force_vmctx_cache = abi_settings.enable_pinned_reg &&
+  let force_context_reg_cache = abi_settings.enable_pinned_reg &&
     isa is AMD64 &&
     context_reg is Some(_)
-  let needs_vmctx = force_vmctx_cache ||
+  let needs_context_reg = force_context_reg_cache ||
     has_calls ||
     (context_reg is Some({ index, .. }) && func_uses_context_reg(func, index)) ||
     (
@@ -2098,35 +2098,35 @@ pub fn emit_function_with_regalloc(
     ) ||
     uses_primary_memory_base
   let clobbered_gprs = clobbered
-  if cache_mem0_desc &&
+  if cache_context_0 &&
     embedding_reg_roles.context_cache_0 is Some(cache) &&
     !clobbered_gprs.contains(cache.index) {
     clobbered_gprs.push(cache.index)
   }
-  if cache_func_table &&
+  if cache_context_1 &&
     embedding_reg_roles.context_cache_1 is Some(cache) &&
     !clobbered_gprs.contains(cache.index) {
     clobbered_gprs.push(cache.index)
   }
   let num_spill_slots = output.get_num_spillslots()
-  let needs_debug_idx_restore = debug_func_idx is Some(_) && needs_vmctx
+  let needs_debug_idx_restore = debug_func_idx is Some(_) && needs_context_reg
   let total_spill_slots = if needs_debug_idx_restore {
     num_spill_slots + 1
   } else {
     num_spill_slots
   }
-  let stack_frame = JITStackFrame::build(
+  let stack_frame = EmitStackFrame::build(
     clobbered_gprs,
     clobbered_fprs,
     total_spill_slots,
     has_calls~,
     outgoing_args_size=func.get_max_outgoing_args_size(),
-    needs_vmctx~,
-    cache_mem0_desc~,
-    cache_func_table~,
+    needs_context_reg~,
+    cache_context_0~,
+    cache_context_1~,
     force_frame_setup~,
     has_incoming_stack_args~,
-    runtime_layout~,
+    embedding_context_layout~,
     call_conv_layout~,
     embedding_reg_roles~,
     abi_settings~,
@@ -2170,7 +2170,7 @@ pub fn emit_function_with_regalloc(
     block_id : Int,
     inst_idx : Int,
     pos : @machv_regalloc.ProgPos,
-    stack_frame : JITStackFrame,
+    stack_frame : EmitStackFrame,
     edit_slot_cache : Map[Int, @abi.PReg],
   ) -> Unit {
     if output.edits_at(block_id, inst_idx, pos) is Some(edits) {

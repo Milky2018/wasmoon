@@ -139,23 +139,24 @@ fn fcmp_kind_to_cond(kind : @instr.FCmpKind) -> Int {
 /// 4. Restore FP/LR with post-indexed pop
 fn MachineCode::emit_epilogue(
   self : MachineCode,
-  stack_frame : JITStackFrame,
+  stack_frame : EmitStackFrame,
 ) -> Unit {
   if self.isa is AMD64 {
     let isa = self.isa
     let saved_gprs = stack_frame.saved_gprs
 
-    if self.debug_prev_func_idx_spill_offset >= 0 && stack_frame.needs_vmctx {
-      let vmctx = stack_frame.context_reg_index()
+    if self.debug_prev_func_idx_spill_offset >= 0 &&
+      stack_frame.needs_context_reg {
+      let context = stack_frame.context_reg_index()
       let scratch = 11
-      let layout = stack_frame.require_runtime_layout()
+      let layout = stack_frame.require_embedding_context_layout()
       self.x86_emit_mov_r32_m32(
         scratch,
         4,
         self.debug_prev_func_idx_spill_offset,
       )
       self.x86_emit_mov_m32_r32(
-        vmctx,
+        context,
         layout.debug_current_function_offset,
         scratch,
       )
@@ -197,9 +198,9 @@ fn MachineCode::emit_epilogue(
   let saved_gprs = stack_frame.saved_gprs
   let saved_fprs = stack_frame.saved_fprs
 
-  if self.debug_prev_func_idx_spill_offset >= 0 && stack_frame.needs_vmctx {
-    let vmctx = stack_frame.context_reg_index()
-    let layout = stack_frame.require_runtime_layout()
+  if self.debug_prev_func_idx_spill_offset >= 0 && stack_frame.needs_context_reg {
+    let context = stack_frame.context_reg_index()
+    let layout = stack_frame.require_embedding_context_layout()
     if self.debug_prev_func_idx_spill_offset <= 16380 {
       self.emit_ldr_w_imm(16, 31, self.debug_prev_func_idx_spill_offset)
     } else {
@@ -207,7 +208,7 @@ fn MachineCode::emit_epilogue(
       self.emit_add_reg(17, 31, 17)
       self.emit_ldr_w_imm(16, 17, 0)
     }
-    self.emit_str_w_imm(16, vmctx, layout.debug_current_function_offset)
+    self.emit_str_w_imm(16, context, layout.debug_current_function_offset)
   }
 
   // Step 1: Deallocate remaining stack space (spill slots + outgoing args)
@@ -271,12 +272,12 @@ fn MachineCode::emit_epilogue(
 }
 
 ///|
-/// Emit terminator with epilogue for Return (JITStackFrame)
+/// Emit terminator with epilogue for Return (EmitStackFrame)
 /// next_block: the ID of the physically next block, used for fall-through optimization
 fn MachineCode::emit_terminator_with_epilogue(
   self : MachineCode,
   term : @instr.VCodeTerminator,
-  stack_frame : JITStackFrame,
+  stack_frame : EmitStackFrame,
   result_types : Array[@machv.ValueKind],
   next_block : Int?,
   shared_exit_block : Int?,

@@ -4,7 +4,7 @@
 /// MachV treats these as opaque offsets from the context base register. The
 /// embedding owns the concrete runtime structure and translates its layout into
 /// this shape before invoking lowering or emission.
-pub(all) struct RuntimeContextLayout {
+pub(all) struct EmbeddingContextLayout {
   primary_memory_descriptor_offset : Int
   primary_memory_base_offset : Int
   function_table_offset : Int
@@ -17,3 +17,7 @@ pub(all) struct RuntimeContextLayout {
   gc_allocation_limit_offset : Int
   pointer_stride : Int
 }
+
+///|
+/// Compatibility alias for lowering code that still uses the old name.
+pub type RuntimeContextLayout = EmbeddingContextLayout

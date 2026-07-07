@@ -2,7 +2,7 @@
 fn MachineCode::emit_instruction(
   self : MachineCode,
   inst : @instr.VCodeInst,
-  stack_frame : JITStackFrame,
+  stack_frame : EmitStackFrame,
 ) -> Unit {
   if self.isa is AMD64 {
     self.emit_instruction_x86_64(inst, stack_frame)
@@ -523,9 +523,9 @@ fn MachineCode::emit_instruction(
     Load(ty, offset) => {
       let rt = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
-      // Fast path: cached func_table pointer.
-      if stack_frame.runtime_layout is Some(layout) {
-        if stack_frame.cache_func_table &&
+      // Fast path: cached function table pointer.
+      if stack_frame.embedding_context_layout is Some(layout) {
+        if stack_frame.cache_context_1 &&
           ty is I64 &&
           rn == stack_frame.context_reg_index() &&
           offset == layout.function_table_offset {
@@ -1424,8 +1424,8 @@ fn MachineCode::emit_instruction(
     // (during function finalization) for out-of-range targets.
     CallDirect(target, _num_args, _num_results, _call_conv) => {
       self.emit_bl_code(target)
-      if stack_frame.cache_mem0_desc {
-        let layout = stack_frame.require_runtime_layout()
+      if stack_frame.cache_context_0 {
+        let layout = stack_frame.require_embedding_context_layout()
         guard stack_frame.context_cache_0_index() is Some(cache_reg) else {
           abort("embedding context cache 0 register role is required")
         }
@@ -1438,8 +1438,8 @@ fn MachineCode::emit_instruction(
     }
     CallExternal(symbol, _num_args, _num_results, _call_conv) => {
       self.emit_bl_external(symbol)
-      if stack_frame.cache_mem0_desc {
-        let layout = stack_frame.require_runtime_layout()
+      if stack_frame.cache_context_0 {
+        let layout = stack_frame.require_embedding_context_layout()
         guard stack_frame.context_cache_0_index() is Some(cache_reg) else {
           abort("embedding context cache 0 register role is required")
         }
@@ -1458,8 +1458,8 @@ fn MachineCode::emit_instruction(
         _ => reg_num(inst.uses[0])
       }
       self.emit_blr(target)
-      if stack_frame.cache_mem0_desc {
-        let layout = stack_frame.require_runtime_layout()
+      if stack_frame.cache_context_0 {
+        let layout = stack_frame.require_embedding_context_layout()
         guard stack_frame.context_cache_0_index() is Some(cache_reg) else {
           abort("embedding context cache 0 register role is required")
         }
@@ -1537,9 +1537,9 @@ fn MachineCode::emit_instruction(
       slow_symbol
     ) => {
       // Inline record bump allocation with C slow-path fallback.
-      // Uses: [vmctx], Defs: [result_ref]
+      // Uses: [context], Defs: [result_ref]
       let dst = wreg_num(inst.defs[0])
-      let vmctx_reg = stack_frame.context_reg_index()
+      let context_reg = stack_frame.context_reg_index()
 
       let gc_header_size = 16
       let gc_align = 16
@@ -1552,15 +1552,15 @@ fn MachineCode::emit_instruction(
 
       let slow_label = self.new_internal_label()
       let done_label = self.new_internal_label()
-      let layout = stack_frame.require_runtime_layout()
+      let layout = stack_frame.require_embedding_context_layout()
 
-      // next = vmctx->gc_heap_ptr
-      self.emit_ldr_imm(16, vmctx_reg, layout.gc_allocation_cursor_offset)
+      // next = context->gc_heap_ptr
+      self.emit_ldr_imm(16, context_reg, layout.gc_allocation_cursor_offset)
       // end = next + total_size
       self.emit_load_imm64(17, total_size.to_int64())
       self.emit_add_reg(17, 16, 17)
-      // if end > vmctx->gc_heap_limit: go slow
-      self.emit_ldr_imm(2, vmctx_reg, layout.gc_allocation_limit_offset)
+      // if end > context->gc_heap_limit: go slow
+      self.emit_ldr_imm(2, context_reg, layout.gc_allocation_limit_offset)
       self.emit_cmp_reg(17, 2)
       self.emit_b_cond(@instr.Cond::Hi.to_bits(), slow_label)
 
@@ -1574,12 +1574,12 @@ fn MachineCode::emit_instruction(
         self.emit_ldr_imm(3, 31, stack_base_off + off)
         self.emit_str_imm(3, 16, gc_header_size + off)
       }
-      // vmctx->gc_heap_ptr = end
-      self.emit_str_imm(17, vmctx_reg, layout.gc_allocation_cursor_offset)
+      // context->gc_heap_ptr = end
+      self.emit_str_imm(17, context_reg, layout.gc_allocation_cursor_offset)
 
-      // register_struct_inline(vmctx, obj_ptr, total_size)
-      if vmctx_reg != 0 {
-        self.emit_mov_reg(0, vmctx_reg)
+      // register_struct_inline(context, obj_ptr, total_size)
+      if context_reg != 0 {
+        self.emit_mov_reg(0, context_reg)
       }
       self.emit_mov_reg(1, 16)
       self.emit_load_imm64(2, total_size.to_int64())
@@ -1594,10 +1594,10 @@ fn MachineCode::emit_instruction(
       }
       self.emit_b(done_label)
 
-      // Slow path: slow_helper(vmctx, type_tag, stack_values, field_count, safepoint_id)
+      // Slow path: slow_helper(context, type_tag, stack_values, field_count, safepoint_id)
       self.define_label(slow_label)
-      if vmctx_reg != 0 {
-        self.emit_mov_reg(0, vmctx_reg)
+      if context_reg != 0 {
+        self.emit_mov_reg(0, context_reg)
       }
       self.emit_load_imm64(1, type_idx.to_int64())
       self.emit_add_imm(2, 31, 0)
@@ -1631,9 +1631,9 @@ fn MachineCode::emit_instruction(
     }
     BumpAllocArrayFromStackInline(type_idx, len, register_symbol, slow_symbol) => {
       // Inline fixed-array bump allocation with C slow-path fallback.
-      // Uses: [vmctx], Defs: [result_ref]
+      // Uses: [context], Defs: [result_ref]
       let dst = wreg_num(inst.defs[0])
-      let vmctx_reg = stack_frame.context_reg_index()
+      let context_reg = stack_frame.context_reg_index()
 
       let gc_header_size = 16
       let gc_align = 16
@@ -1650,15 +1650,15 @@ fn MachineCode::emit_instruction(
 
       let slow_label = self.new_internal_label()
       let done_label = self.new_internal_label()
-      let layout = stack_frame.require_runtime_layout()
+      let layout = stack_frame.require_embedding_context_layout()
 
-      // next = vmctx->gc_heap_ptr
-      self.emit_ldr_imm(16, vmctx_reg, layout.gc_allocation_cursor_offset)
+      // next = context->gc_heap_ptr
+      self.emit_ldr_imm(16, context_reg, layout.gc_allocation_cursor_offset)
       // end = next + total_size
       self.emit_load_imm64(17, total_size.to_int64())
       self.emit_add_reg(17, 16, 17)
-      // if end > vmctx->gc_heap_limit: go slow
-      self.emit_ldr_imm(2, vmctx_reg, layout.gc_allocation_limit_offset)
+      // if end > context->gc_heap_limit: go slow
+      self.emit_ldr_imm(2, context_reg, layout.gc_allocation_limit_offset)
       self.emit_cmp_reg(17, 2)
       self.emit_b_cond(@instr.Cond::Hi.to_bits(), slow_label)
 
@@ -1674,12 +1674,12 @@ fn MachineCode::emit_instruction(
         self.emit_ldr_imm(3, 31, stack_base_off + off)
         self.emit_str_imm(3, 16, gc_header_size + array_meta_size + off)
       }
-      // vmctx->gc_heap_ptr = end
-      self.emit_str_imm(17, vmctx_reg, layout.gc_allocation_cursor_offset)
+      // context->gc_heap_ptr = end
+      self.emit_str_imm(17, context_reg, layout.gc_allocation_cursor_offset)
 
-      // register_array_inline(vmctx, obj_ptr, total_size)
-      if vmctx_reg != 0 {
-        self.emit_mov_reg(0, vmctx_reg)
+      // register_array_inline(context, obj_ptr, total_size)
+      if context_reg != 0 {
+        self.emit_mov_reg(0, context_reg)
       }
       self.emit_mov_reg(1, 16)
       self.emit_load_imm64(2, total_size.to_int64())
@@ -1694,10 +1694,10 @@ fn MachineCode::emit_instruction(
       }
       self.emit_b(done_label)
 
-      // Slow path: gc_alloc_array_from_values_slow(vmctx, type_idx, sp, len, safepoint_id)
+      // Slow path: gc_alloc_array_from_values_slow(context, type_idx, sp, len, safepoint_id)
       self.define_label(slow_label)
-      if vmctx_reg != 0 {
-        self.emit_mov_reg(0, vmctx_reg)
+      if context_reg != 0 {
+        self.emit_mov_reg(0, context_reg)
       }
       self.emit_load_imm64(1, type_idx.to_int64())
       self.emit_add_imm(2, 31, 0)
