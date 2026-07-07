@@ -851,6 +851,7 @@ pub fn emit_function(
     embedding_context_layout~,
     call_conv_layout~,
     embedding_reg_roles~,
+    isa~,
     abi_settings~,
   )
   if needs_debug_idx_restore {
@@ -2145,6 +2146,7 @@ pub fn emit_function_with_regalloc(
     embedding_context_layout~,
     call_conv_layout~,
     embedding_reg_roles~,
+    isa~,
     abi_settings~,
   )
   if needs_debug_idx_restore {
