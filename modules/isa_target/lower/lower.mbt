@@ -16,6 +16,7 @@ struct LoweringContext {
   abi_settings : @abi.ABISettings
   runtime_layout : @abi.RuntimeContextLayout?
   call_conv_layout : @abi.CallConventionLayout?
+  wasm_runtime_symbols : @wasm_milkir.RuntimeSymbols?
   num_imports : Int
   // Dense map from IR Value id to @abi.VReg (Cranelift SecondaryMap style).
   value_map_dense : Array[@abi.VReg?]
@@ -68,6 +69,7 @@ pub fn LoweringContext::new(
   abi_settings : @abi.ABISettings,
   runtime_layout : @abi.RuntimeContextLayout?,
   call_conv_layout : @abi.CallConventionLayout?,
+  wasm_runtime_symbols : @wasm_milkir.RuntimeSymbols?,
   num_imports : Int,
   use_subtype_indirect_check : Bool,
   canonical_type_indices : Array[Int],
@@ -97,6 +99,7 @@ pub fn LoweringContext::new(
     abi_settings,
     runtime_layout,
     call_conv_layout,
+    wasm_runtime_symbols,
     num_imports,
     value_map_dense: Array::make(ir_func.next_value_id, None),
     block_map: {},
@@ -1596,6 +1599,7 @@ pub fn lower_function(
   abi_settings? : @abi.ABISettings = @abi.ABISettings::default(),
   runtime_layout? : @abi.RuntimeContextLayout? = None,
   call_conv_layout? : @abi.CallConventionLayout? = None,
+  wasm_runtime_symbols? : @wasm_milkir.RuntimeSymbols? = None,
   num_imports? : Int = -1,
   run_ir_opt? : Bool = true,
   use_subtype_indirect_check? : Bool = true,
@@ -1607,8 +1611,8 @@ pub fn lower_function(
     @milkir.optimize_function(ir_func) |> ignore
   }
   let ctx = LoweringContext::new(
-    ir_func, isa, abi_settings, runtime_layout, call_conv_layout, num_imports, use_subtype_indirect_check,
-    canonical_type_indices,
+    ir_func, isa, abi_settings, runtime_layout, call_conv_layout, wasm_runtime_symbols,
+    num_imports, use_subtype_indirect_check, canonical_type_indices,
   )
 
   // Phase 0: Pre-compute which Icmps can be fused with Select

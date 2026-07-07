@@ -43,7 +43,7 @@ pub fn call_multi(@milkir.IRBuilder, Int, Array[@milkir.Type], Array[@milkir.Val
 
 pub fn call_ref_multi(@milkir.IRBuilder, Int, Array[@milkir.Type], @milkir.Value, Array[@milkir.Value]) -> Array[@milkir.Value]
 
-pub fn data_drop(@milkir.IRBuilder, @milkir.Value, Int) -> Unit
+pub fn data_drop(@milkir.IRBuilder, RuntimeSymbols, @milkir.Value, Int) -> Unit
 
 pub fn decode(@milkir.ExtOp) -> WasmOpcode?
 
@@ -51,7 +51,7 @@ pub fn decode_opcode(@milkir.Opcode) -> WasmOpcode?
 
 pub fn delegate(@milkir.IRBuilder, Int) -> Unit
 
-pub fn elem_drop(@milkir.IRBuilder, @milkir.Value, Int) -> Unit
+pub fn elem_drop(@milkir.IRBuilder, RuntimeSymbols, @milkir.Value, Int) -> Unit
 
 pub fn emit_throw(@milkir.IRBuilder, Int, Array[@milkir.Value]) -> Unit
 
@@ -79,15 +79,15 @@ pub fn i31_new(@milkir.IRBuilder, @milkir.Value) -> @milkir.Value
 
 pub fn load_mem_base(@milkir.IRBuilder, @milkir.Value, Int) -> @milkir.Value
 
-pub fn memory_copy(@milkir.IRBuilder, @milkir.Value, Int, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
+pub fn memory_copy(@milkir.IRBuilder, RuntimeSymbols, @milkir.Value, Int, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
 
-pub fn memory_fill(@milkir.IRBuilder, @milkir.Value, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
+pub fn memory_fill(@milkir.IRBuilder, RuntimeSymbols, @milkir.Value, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
 
-pub fn memory_grow(@milkir.IRBuilder, @milkir.Value, Int, @milkir.Value, max_pages? : Int, is_memory64? : Bool) -> @milkir.Value
+pub fn memory_grow(@milkir.IRBuilder, RuntimeSymbols, @milkir.Value, Int, @milkir.Value, max_pages? : Int, is_memory64? : Bool) -> @milkir.Value
 
-pub fn memory_init(@milkir.IRBuilder, @milkir.Value, Int, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
+pub fn memory_init(@milkir.IRBuilder, RuntimeSymbols, @milkir.Value, Int, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
 
-pub fn memory_size(@milkir.IRBuilder, @milkir.Value, Int, is_memory64? : Bool) -> @milkir.Value
+pub fn memory_size(@milkir.IRBuilder, RuntimeSymbols, @milkir.Value, Int, is_memory64? : Bool) -> @milkir.Value
 
 pub fn ref_cast(@milkir.IRBuilder, Int, Bool, @milkir.Value) -> @milkir.Value
 
@@ -115,13 +115,13 @@ pub fn struct_new_default(@milkir.IRBuilder, Int) -> @milkir.Value
 
 pub fn struct_set(@milkir.IRBuilder, Int, Int, @milkir.Value, @milkir.Value) -> Unit
 
-pub fn table_copy(@milkir.IRBuilder, @milkir.Value, Int, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
+pub fn table_copy(@milkir.IRBuilder, RuntimeSymbols, @milkir.Value, Int, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
 
-pub fn table_fill(@milkir.IRBuilder, @milkir.Value, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
+pub fn table_fill(@milkir.IRBuilder, RuntimeSymbols, @milkir.Value, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
 
-pub fn table_grow(@milkir.IRBuilder, @milkir.Value, Int, @milkir.Value, @milkir.Value) -> @milkir.Value
+pub fn table_grow(@milkir.IRBuilder, RuntimeSymbols, @milkir.Value, Int, @milkir.Value, @milkir.Value) -> @milkir.Value
 
-pub fn table_init(@milkir.IRBuilder, @milkir.Value, Int, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
+pub fn table_init(@milkir.IRBuilder, RuntimeSymbols, @milkir.Value, Int, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
 
 pub fn try_table_begin(@milkir.IRBuilder, Int) -> @milkir.Value
 
@@ -130,6 +130,52 @@ pub fn try_table_end(@milkir.IRBuilder, Int) -> Unit
 // Errors
 
 // Types and methods
+pub(all) struct RuntimeSymbols {
+  memory_grow : String
+  memory_size : String
+  memory_fill : String
+  memory_copy : String
+  memory_init : String
+  data_drop : String
+  table_grow : String
+  table_fill : String
+  table_copy : String
+  table_init : String
+  elem_drop : String
+  gc_ref_test : String
+  gc_ref_cast : String
+  gc_struct_get : String
+  gc_struct_set : String
+  gc_array_get : String
+  gc_array_set : String
+  gc_array_len : String
+  gc_array_fill : String
+  gc_array_copy : String
+  gc_array_new_data : String
+  gc_array_new_elem : String
+  gc_array_init_data : String
+  gc_array_init_elem : String
+  gc_type_check_subtype : String
+  gc_register_struct_inline : String
+  gc_register_array_inline : String
+  gc_alloc_struct_slow : String
+  gc_alloc_array_from_values_slow : String
+  gc_alloc_array_slow : String
+  exception_try_begin : String
+  exception_try_end : String
+  exception_throw : String
+  exception_throw_tag : String
+  exception_throw_ref : String
+  exception_delegate : String
+  exception_get_tag : String
+  exception_get_value : String
+  exception_get_value_count : String
+  exception_sigsetjmp : String
+  exception_spill_locals : String
+  exception_get_spilled_local : String
+} derive(Eq, @debug.Debug)
+pub fn RuntimeSymbols::with_runtime_prefix(String) -> Self
+
 pub(all) enum WasmOpcode {
   LoadMemBase(Int)
   MemoryGrow(Int, Int?)

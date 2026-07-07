@@ -729,6 +729,7 @@ fn push_table_get(
 fn push_table_set(
   builder : @milkir.IRBuilder,
   stack : Array[@milkir.Value],
+  runtime_symbols : @wasm_milkir.RuntimeSymbols,
   vmctx : @milkir.Value?,
   table_types : Array[@types.TableType],
   table_idx : Int,
@@ -744,7 +745,7 @@ fn push_table_set(
   }
   let symbol = builder
     .get_function()
-    .declare_external_symbol("wasmoon.runtime.table_fill")
+    .declare_external_symbol(runtime_symbols.table_fill)
   builder.call_symbol(symbol, None, [
     context,
     builder.iconst_i32(table_idx),
@@ -760,6 +761,7 @@ fn push_table_set(
 fn push_table_fill(
   builder : @milkir.IRBuilder,
   stack : Array[@milkir.Value],
+  runtime_symbols : @wasm_milkir.RuntimeSymbols,
   vmctx : @milkir.Value?,
   table_types : Array[@types.TableType],
   table_idx : Int,
@@ -769,7 +771,7 @@ fn push_table_fill(
   guard pop3(stack) is Some((dst, value, size)) else { return false }
   let symbol = builder
     .get_function()
-    .declare_external_symbol("wasmoon.runtime.table_fill")
+    .declare_external_symbol(runtime_symbols.table_fill)
   builder.call_symbol(symbol, None, [
     context,
     builder.iconst_i32(table_idx),
@@ -920,6 +922,7 @@ fn push_memory_size(
 fn push_memory_grow(
   builder : @milkir.IRBuilder,
   stack : Array[@milkir.Value],
+  runtime_symbols : @wasm_milkir.RuntimeSymbols,
   vmctx : @milkir.Value?,
   memory_types : Array[@types.MemoryType],
   memidx : Int,
@@ -942,7 +945,7 @@ fn push_memory_grow(
     .unwrap_or(-1)
   let symbol = builder
     .get_function()
-    .declare_external_symbol("wasmoon.runtime.memory_grow")
+    .declare_external_symbol(runtime_symbols.memory_grow)
   guard builder.call_symbol(symbol, Some(I32), [
       context,
       builder.iconst_i32(memidx),
@@ -978,6 +981,7 @@ fn pop3(
 fn push_memory_fill(
   builder : @milkir.IRBuilder,
   stack : Array[@milkir.Value],
+  runtime_symbols : @wasm_milkir.RuntimeSymbols,
   vmctx : @milkir.Value?,
   memory_types : Array[@types.MemoryType],
   memidx : Int,
@@ -991,7 +995,7 @@ fn push_memory_fill(
   guard pop3(stack) is Some((dst, value, size)) else { return false }
   let symbol = builder
     .get_function()
-    .declare_external_symbol("wasmoon.runtime.memory_fill")
+    .declare_external_symbol(runtime_symbols.memory_fill)
   builder.call_symbol(symbol, None, [
     context,
     builder.iconst_i32(memidx),
@@ -1007,6 +1011,7 @@ fn push_memory_fill(
 fn push_memory_copy(
   builder : @milkir.IRBuilder,
   stack : Array[@milkir.Value],
+  runtime_symbols : @wasm_milkir.RuntimeSymbols,
   vmctx : @milkir.Value?,
   memory_types : Array[@types.MemoryType],
   dst_memidx : Int,
@@ -1026,7 +1031,7 @@ fn push_memory_copy(
   guard pop3(stack) is Some((dst, src, size)) else { return false }
   let symbol = builder
     .get_function()
-    .declare_external_symbol("wasmoon.runtime.memory_copy")
+    .declare_external_symbol(runtime_symbols.memory_copy)
   builder.call_symbol(symbol, None, [
     context,
     builder.iconst_i32(dst_memidx),
@@ -1043,6 +1048,7 @@ fn push_memory_copy(
 fn push_memory_init(
   builder : @milkir.IRBuilder,
   stack : Array[@milkir.Value],
+  runtime_symbols : @wasm_milkir.RuntimeSymbols,
   vmctx : @milkir.Value?,
   memory_types : Array[@types.MemoryType],
   memidx : Int,
@@ -1081,7 +1087,7 @@ fn push_memory_init(
   }
   let symbol = builder
     .get_function()
-    .declare_external_symbol("wasmoon.runtime.memory_init")
+    .declare_external_symbol(runtime_symbols.memory_init)
   builder.call_symbol(symbol, None, [
     context,
     builder.iconst_i32(memidx),
@@ -1097,13 +1103,14 @@ fn push_memory_init(
 ///|
 fn push_data_drop(
   builder : @milkir.IRBuilder,
+  runtime_symbols : @wasm_milkir.RuntimeSymbols,
   vmctx : @milkir.Value?,
   data_idx : Int,
 ) -> Bool {
   guard vmctx is Some(context) else { return false }
   let symbol = builder
     .get_function()
-    .declare_external_symbol("wasmoon.runtime.data_drop")
+    .declare_external_symbol(runtime_symbols.data_drop)
   builder.call_symbol(symbol, None, [context, builder.iconst_i32(data_idx)])
   |> ignore
   true
@@ -1113,6 +1120,7 @@ fn push_data_drop(
 fn push_table_grow(
   builder : @milkir.IRBuilder,
   stack : Array[@milkir.Value],
+  runtime_symbols : @wasm_milkir.RuntimeSymbols,
   vmctx : @milkir.Value?,
   table_types : Array[@types.TableType],
   table_idx : Int,
@@ -1133,7 +1141,7 @@ fn push_table_grow(
   }
   let symbol = builder
     .get_function()
-    .declare_external_symbol("wasmoon.runtime.table_grow")
+    .declare_external_symbol(runtime_symbols.table_grow)
   guard builder.call_symbol(symbol, Some(I32), [
       context,
       builder.iconst_i32(table_idx),
@@ -1159,6 +1167,7 @@ fn push_table_grow(
 fn push_table_copy(
   builder : @milkir.IRBuilder,
   stack : Array[@milkir.Value],
+  runtime_symbols : @wasm_milkir.RuntimeSymbols,
   vmctx : @milkir.Value?,
   table_types : Array[@types.TableType],
   dst_table_idx : Int,
@@ -1170,7 +1179,7 @@ fn push_table_copy(
   guard pop3(stack) is Some((dst, src, size)) else { return false }
   let symbol = builder
     .get_function()
-    .declare_external_symbol("wasmoon.runtime.table_copy")
+    .declare_external_symbol(runtime_symbols.table_copy)
   builder.call_symbol(symbol, None, [
     context,
     builder.iconst_i32(dst_table_idx),
@@ -1187,6 +1196,7 @@ fn push_table_copy(
 fn push_table_init(
   builder : @milkir.IRBuilder,
   stack : Array[@milkir.Value],
+  runtime_symbols : @wasm_milkir.RuntimeSymbols,
   vmctx : @milkir.Value?,
   table_types : Array[@types.TableType],
   table_idx : Int,
@@ -1197,7 +1207,7 @@ fn push_table_init(
   guard pop3(stack) is Some((dst, src, size)) else { return false }
   let symbol = builder
     .get_function()
-    .declare_external_symbol("wasmoon.runtime.table_init")
+    .declare_external_symbol(runtime_symbols.table_init)
   builder.call_symbol(symbol, None, [
     context,
     builder.iconst_i32(table_idx),
@@ -1213,13 +1223,14 @@ fn push_table_init(
 ///|
 fn push_elem_drop(
   builder : @milkir.IRBuilder,
+  runtime_symbols : @wasm_milkir.RuntimeSymbols,
   vmctx : @milkir.Value?,
   elem_idx : Int,
 ) -> Bool {
   guard vmctx is Some(context) else { return false }
   let symbol = builder
     .get_function()
-    .declare_external_symbol("wasmoon.runtime.elem_drop")
+    .declare_external_symbol(runtime_symbols.elem_drop)
   builder.call_symbol(symbol, None, [context, builder.iconst_i32(elem_idx)])
   |> ignore
   true
@@ -1928,6 +1939,7 @@ fn try_lower_linear_function(
   let global_types = collect_global_types(mod_)
   let table_types = collect_table_types(mod_)
   let memory_types = collect_memory_types(mod_)
+  let runtime_symbols = env.wasm_runtime_symbols()
   let builder = @milkir.IRBuilder::new(function_name(mod_, func_local_idx))
   let locals : Array[@milkir.Value] = []
   let mut vmctx : @milkir.Value? = None
@@ -2002,7 +2014,9 @@ fn try_lower_linear_function(
           return None
         }
       TableSet(idx) =>
-        if !push_table_set(builder, stack, vmctx, table_types, idx) {
+        if !push_table_set(
+            builder, stack, runtime_symbols, vmctx, table_types, idx,
+          ) {
           return None
         }
       I32Const(value) => stack.push(builder.iconst_i32(value))
@@ -2598,51 +2612,59 @@ fn try_lower_linear_function(
           return None
         }
       MemoryGrow(memidx) =>
-        if !push_memory_grow(builder, stack, vmctx, memory_types, memidx) {
+        if !push_memory_grow(
+            builder, stack, runtime_symbols, vmctx, memory_types, memidx,
+          ) {
           return None
         }
       MemoryFill(memidx) =>
-        if !push_memory_fill(builder, stack, vmctx, memory_types, memidx) {
+        if !push_memory_fill(
+            builder, stack, runtime_symbols, vmctx, memory_types, memidx,
+          ) {
           return None
         }
       MemoryCopy(dst_memidx, src_memidx) =>
         if !push_memory_copy(
-            builder, stack, vmctx, memory_types, dst_memidx, src_memidx,
+            builder, stack, runtime_symbols, vmctx, memory_types, dst_memidx, src_memidx,
           ) {
           return None
         }
       MemoryInit(memidx, data_idx) =>
         if !push_memory_init(
-            builder, stack, vmctx, memory_types, memidx, data_idx,
+            builder, stack, runtime_symbols, vmctx, memory_types, memidx, data_idx,
           ) {
           return None
         }
       DataDrop(data_idx) =>
-        if !push_data_drop(builder, vmctx, data_idx) {
+        if !push_data_drop(builder, runtime_symbols, vmctx, data_idx) {
           return None
         }
       TableGrow(table_idx) =>
-        if !push_table_grow(builder, stack, vmctx, table_types, table_idx) {
+        if !push_table_grow(
+            builder, stack, runtime_symbols, vmctx, table_types, table_idx,
+          ) {
           return None
         }
       TableFill(table_idx) =>
-        if !push_table_fill(builder, stack, vmctx, table_types, table_idx) {
+        if !push_table_fill(
+            builder, stack, runtime_symbols, vmctx, table_types, table_idx,
+          ) {
           return None
         }
       TableCopy(dst_table_idx, src_table_idx) =>
         if !push_table_copy(
-            builder, stack, vmctx, table_types, dst_table_idx, src_table_idx,
+            builder, stack, runtime_symbols, vmctx, table_types, dst_table_idx, src_table_idx,
           ) {
           return None
         }
       TableInit(table_idx, elem_idx) =>
         if !push_table_init(
-            builder, stack, vmctx, table_types, table_idx, elem_idx,
+            builder, stack, runtime_symbols, vmctx, table_types, table_idx, elem_idx,
           ) {
           return None
         }
       ElemDrop(elem_idx) =>
-        if !push_elem_drop(builder, vmctx, elem_idx) {
+        if !push_elem_drop(builder, runtime_symbols, vmctx, elem_idx) {
           return None
         }
       RefNull(ref_type) =>

@@ -44,6 +44,11 @@ pub fn runtime_hostcall_symbol() -> @instr.ExternalName {
 }
 
 ///|
+pub fn wasm_runtime_symbols() -> @wasm_milkir.RuntimeSymbols {
+  @wasm_milkir.RuntimeSymbols::with_runtime_prefix("wasmoon.runtime")
+}
+
+///|
 pub fn RuntimeSymbolResolver::new() -> RuntimeSymbolResolver {
   { symbols: [] }
 }

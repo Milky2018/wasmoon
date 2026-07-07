@@ -52,7 +52,7 @@ fn emit_gc_struct_slow_alloc(
   lower_c_libcall_direct(
     ctx,
     block,
-    rt_gc_alloc_struct_slow(),
+    rt_gc_alloc_struct_slow(ctx),
     [
       vmctx_vreg, type_idx_vreg, fields_ptr_vreg, num_fields_vreg, safepoint_vreg,
     ],
@@ -75,7 +75,7 @@ fn emit_gc_array_slow_alloc(
   lower_c_libcall_direct(
     ctx,
     block,
-    rt_gc_alloc_array_slow(),
+    rt_gc_alloc_array_slow(ctx),
     [vmctx_vreg, type_idx_vreg, len_vreg, init_vreg, safepoint_vreg],
     Some(dst),
   )
@@ -250,7 +250,7 @@ fn lower_ref_test(
   )
   // Load function pointer
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_fp = @instr.VCodeInst::new(LoadExternalFuncAddr(rt_gc_ref_test()))
+  let load_fp = @instr.VCodeInst::new(LoadExternalFuncAddr(rt_gc_ref_test(ctx)))
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
   // Call: gc_ref_test_impl(ref, type_idx, nullable) -> result
@@ -289,7 +289,7 @@ fn lower_ref_cast(
   )
   // Load function pointer
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_fp = @instr.VCodeInst::new(LoadExternalFuncAddr(rt_gc_ref_cast()))
+  let load_fp = @instr.VCodeInst::new(LoadExternalFuncAddr(rt_gc_ref_cast(ctx)))
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
   // Call: gc_ref_cast_impl(ref, type_idx, nullable) -> result
@@ -356,8 +356,8 @@ fn lower_struct_new(
       BumpAllocRecordFromStackInline(
         type_idx,
         num_fields,
-        rt_gc_register_struct_inline(),
-        rt_gc_alloc_struct_slow(),
+        rt_gc_register_struct_inline(ctx),
+        rt_gc_alloc_struct_slow(ctx),
       ),
     )
     alloc_inst.add_def({ reg: Virtual(dst) })
@@ -415,7 +415,9 @@ fn lower_struct_get(
   let field_idx_vreg = materialize_imm(ctx, block, field_idx.to_int64())
   // Load function pointer
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_fp = @instr.VCodeInst::new(LoadExternalFuncAddr(rt_gc_struct_get()))
+  let load_fp = @instr.VCodeInst::new(
+    LoadExternalFuncAddr(rt_gc_struct_get(ctx)),
+  )
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
   // Check if result is a float type - C libcall returns int64, need bitcast
@@ -466,7 +468,9 @@ fn lower_struct_get_s(
   let field_idx_vreg = materialize_imm(ctx, block, field_idx.to_int64())
   // Load function pointer
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_fp = @instr.VCodeInst::new(LoadExternalFuncAddr(rt_gc_struct_get()))
+  let load_fp = @instr.VCodeInst::new(
+    LoadExternalFuncAddr(rt_gc_struct_get(ctx)),
+  )
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
   // Call and get raw value
@@ -521,7 +525,9 @@ fn lower_struct_get_u(
   let field_idx_vreg = materialize_imm(ctx, block, field_idx.to_int64())
   // Load function pointer
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_fp = @instr.VCodeInst::new(LoadExternalFuncAddr(rt_gc_struct_get()))
+  let load_fp = @instr.VCodeInst::new(
+    LoadExternalFuncAddr(rt_gc_struct_get(ctx)),
+  )
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
   // Call and get raw value
@@ -574,7 +580,9 @@ fn lower_struct_set(
   let field_idx_vreg = materialize_imm(ctx, block, field_idx.to_int64())
   // Load function pointer
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_fp = @instr.VCodeInst::new(LoadExternalFuncAddr(rt_gc_struct_set()))
+  let load_fp = @instr.VCodeInst::new(
+    LoadExternalFuncAddr(rt_gc_struct_set(ctx)),
+  )
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
   // Check if value is a float type - C libcall expects int64, need bitcast
@@ -691,8 +699,8 @@ fn lower_array_new_fixed(
       BumpAllocArrayFromStackInline(
         type_idx,
         len,
-        rt_gc_register_array_inline(),
-        rt_gc_alloc_array_from_values_slow(),
+        rt_gc_register_array_inline(ctx),
+        rt_gc_alloc_array_from_values_slow(ctx),
       ),
     )
     alloc_inst.add_def({ reg: Virtual(dst) })
@@ -726,7 +734,7 @@ fn lower_array_new_fixed(
     let type_idx_vreg = materialize_imm(ctx, block, type_idx.to_int64())
     let array_set_fp = ctx.vcode_func.new_vreg(Int)
     let load_set_fp = @instr.VCodeInst::new(
-      LoadExternalFuncAddr(rt_gc_array_set()),
+      LoadExternalFuncAddr(rt_gc_array_set(ctx)),
     )
     load_set_fp.add_def({ reg: Virtual(array_set_fp) })
     block.add_inst(load_set_fp)
@@ -771,7 +779,9 @@ fn lower_array_get(
   let type_idx_vreg = materialize_imm(ctx, block, type_idx.to_int64())
   // Load function pointer
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_fp = @instr.VCodeInst::new(LoadExternalFuncAddr(rt_gc_array_get()))
+  let load_fp = @instr.VCodeInst::new(
+    LoadExternalFuncAddr(rt_gc_array_get(ctx)),
+  )
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
   // Check if result is a float type - C libcall returns int64, need bitcast
@@ -821,7 +831,9 @@ fn lower_array_get_s(
   let type_idx_vreg = materialize_imm(ctx, block, type_idx.to_int64())
   // Load function pointer
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_fp = @instr.VCodeInst::new(LoadExternalFuncAddr(rt_gc_array_get()))
+  let load_fp = @instr.VCodeInst::new(
+    LoadExternalFuncAddr(rt_gc_array_get(ctx)),
+  )
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
   // Call and get raw value
@@ -870,7 +882,9 @@ fn lower_array_get_u(
   let type_idx_vreg = materialize_imm(ctx, block, type_idx.to_int64())
   // Load function pointer
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_fp = @instr.VCodeInst::new(LoadExternalFuncAddr(rt_gc_array_get()))
+  let load_fp = @instr.VCodeInst::new(
+    LoadExternalFuncAddr(rt_gc_array_get(ctx)),
+  )
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
   // Call and get raw value
@@ -917,7 +931,9 @@ fn lower_array_set(
   let type_idx_vreg = materialize_imm(ctx, block, type_idx.to_int64())
   // Load function pointer
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_fp = @instr.VCodeInst::new(LoadExternalFuncAddr(rt_gc_array_set()))
+  let load_fp = @instr.VCodeInst::new(
+    LoadExternalFuncAddr(rt_gc_array_set(ctx)),
+  )
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
   // Check if value is a float type - C libcall expects int64, need bitcast
@@ -956,7 +972,9 @@ fn lower_array_len(
   let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
   // Load function pointer
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_fp = @instr.VCodeInst::new(LoadExternalFuncAddr(rt_gc_array_len()))
+  let load_fp = @instr.VCodeInst::new(
+    LoadExternalFuncAddr(rt_gc_array_len(ctx)),
+  )
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
   // Call: gc_array_len_impl(ref) -> result
@@ -979,7 +997,9 @@ fn lower_array_fill(
   let count_vreg = ctx.get_vreg_for_use(inst.operands[3], block)
   // Load function pointer
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_fp = @instr.VCodeInst::new(LoadExternalFuncAddr(rt_gc_array_fill()))
+  let load_fp = @instr.VCodeInst::new(
+    LoadExternalFuncAddr(rt_gc_array_fill(ctx)),
+  )
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
   // Call: gc_array_fill_impl(ref, offset, value, count)
@@ -1010,7 +1030,9 @@ fn lower_array_copy(
   let count_vreg = ctx.get_vreg_for_use(inst.operands[4], block)
   // Load function pointer
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
-  let load_fp = @instr.VCodeInst::new(LoadExternalFuncAddr(rt_gc_array_copy()))
+  let load_fp = @instr.VCodeInst::new(
+    LoadExternalFuncAddr(rt_gc_array_copy(ctx)),
+  )
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
   // Call: gc_array_copy_impl(dst_ref, dst_off, src_ref, src_off, count)
@@ -1043,7 +1065,7 @@ fn lower_array_new_data(
   // Load function pointer
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
   let load_fp = @instr.VCodeInst::new(
-    LoadExternalFuncAddr(rt_gc_array_new_data()),
+    LoadExternalFuncAddr(rt_gc_array_new_data(ctx)),
   )
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
@@ -1085,7 +1107,7 @@ fn lower_array_new_elem(
   // Load function pointer
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
   let load_fp = @instr.VCodeInst::new(
-    LoadExternalFuncAddr(rt_gc_array_new_elem()),
+    LoadExternalFuncAddr(rt_gc_array_new_elem(ctx)),
   )
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
@@ -1125,7 +1147,7 @@ fn lower_array_init_data(
   // Load function pointer
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
   let load_fp = @instr.VCodeInst::new(
-    LoadExternalFuncAddr(rt_gc_array_init_data()),
+    LoadExternalFuncAddr(rt_gc_array_init_data(ctx)),
   )
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
@@ -1168,7 +1190,7 @@ fn lower_array_init_elem(
   // Load function pointer
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
   let load_fp = @instr.VCodeInst::new(
-    LoadExternalFuncAddr(rt_gc_array_init_elem()),
+    LoadExternalFuncAddr(rt_gc_array_init_elem(ctx)),
   )
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)

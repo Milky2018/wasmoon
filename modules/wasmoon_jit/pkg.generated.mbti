@@ -10,6 +10,7 @@ import {
   "Milky2018/machv_regalloc",
   "Milky2018/milkir",
   "Milky2018/wasm_core/types",
+  "Milky2018/wasm_milkir",
   "Milky2018/wasmoon_jit/cwasm",
   "moonbitlang/core/debug",
   "moonbitlang/core/hashset",
@@ -467,6 +468,8 @@ pub fn vmcontext_layout() -> VMContextLayout
 pub fn wasm_calling_convention(isa? : @isa.ISA) -> @abi.CallConventionLayout
 
 pub fn wasm_calling_convention_for_isa(@isa.ISA) -> @abi.CallConventionLayout
+
+pub fn wasm_runtime_symbols() -> @wasm_milkir.RuntimeSymbols
 
 // Errors
 pub(all) suberror CHeapError {

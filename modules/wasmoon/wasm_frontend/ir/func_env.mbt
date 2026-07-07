@@ -15,6 +15,7 @@
 priv struct FuncEnvironment {
   runtime_layout : @wasm_frontend.RuntimeLayout
   memory_descriptor_layout : @wasm_frontend.MemoryDescriptorLayout
+  runtime_symbols : @wasm_milkir.RuntimeSymbols
   // Global variable types (for determining load/store width)
   global_types : Array[@types.GlobalType]
   // Minimum guaranteed memory size in bytes for each memory index
@@ -59,6 +60,7 @@ fn FuncEnvironment::new(
   {
     runtime_layout,
     memory_descriptor_layout,
+    runtime_symbols: embedding_env.wasm_runtime_symbols(),
     global_types,
     memory_mins,
     memory_is_64,
@@ -259,7 +261,15 @@ fn FuncEnvironment::translate_table_set(
   // We keep is_table64 only to choose the correct immediate width for `size=1`.
   ignore(is_table64)
   let one = builder.iconst(elem_idx.ty, 1L)
-  @wasm_milkir.table_fill(builder, vmctx, table_idx, elem_idx, value, one)
+  @wasm_milkir.table_fill(
+    builder,
+    _self.runtime_symbols,
+    vmctx,
+    table_idx,
+    elem_idx,
+    value,
+    one,
+  )
 }
 
 // ============ Memory Operations ============

@@ -1631,6 +1631,7 @@ pub fn compile_module_to_jit(
       run_ir_opt=false,
       runtime_layout=Some(@wasmoon_jit.runtime_context_layout()),
       call_conv_layout=Some(call_conv),
+      wasm_runtime_symbols=Some(@wasmoon_jit.wasm_runtime_symbols()),
       use_subtype_indirect_check~,
       canonical_type_indices~,
     )

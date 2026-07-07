@@ -66,9 +66,9 @@ fn lower_throw(
 
   // Select throw helper.
   let throw_libcall = if num_operands == 0 {
-    rt_exception_throw_tag()
+    rt_exception_throw_tag(ctx)
   } else {
-    rt_exception_throw()
+    rt_exception_throw(ctx)
   }
 
   // Load function pointer
@@ -113,7 +113,7 @@ fn lower_throw_ref(
   // Load function pointer
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
   let load_fp = @instr.VCodeInst::new(
-    LoadExternalFuncAddr(rt_exception_throw_ref()),
+    LoadExternalFuncAddr(rt_exception_throw_ref(ctx)),
   )
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
@@ -147,7 +147,7 @@ fn lower_try_table_begin(
   // Load function pointer for try_begin
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
   let load_fp = @instr.VCodeInst::new(
-    LoadExternalFuncAddr(rt_exception_try_begin()),
+    LoadExternalFuncAddr(rt_exception_try_begin(ctx)),
   )
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
@@ -168,7 +168,7 @@ fn lower_try_table_begin(
   // Load sigsetjmp function pointer
   let setjmp_ptr_vreg = ctx.vcode_func.new_vreg(Int)
   let load_setjmp = @instr.VCodeInst::new(
-    LoadExternalFuncAddr(rt_exception_sigsetjmp()),
+    LoadExternalFuncAddr(rt_exception_sigsetjmp(ctx)),
   )
   load_setjmp.add_def({ reg: Virtual(setjmp_ptr_vreg) })
   block.add_inst(load_setjmp)
@@ -205,7 +205,7 @@ fn lower_try_table_end(
   // Load function pointer
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
   let load_fp = @instr.VCodeInst::new(
-    LoadExternalFuncAddr(rt_exception_try_end()),
+    LoadExternalFuncAddr(rt_exception_try_end(ctx)),
   )
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
@@ -237,7 +237,7 @@ fn lower_get_exception_tag(
   // Load function pointer
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
   let load_fp = @instr.VCodeInst::new(
-    LoadExternalFuncAddr(rt_exception_get_tag()),
+    LoadExternalFuncAddr(rt_exception_get_tag(ctx)),
   )
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
@@ -267,7 +267,7 @@ fn lower_get_exception_value(
   // Load function pointer
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
   let load_fp = @instr.VCodeInst::new(
-    LoadExternalFuncAddr(rt_exception_get_value()),
+    LoadExternalFuncAddr(rt_exception_get_value(ctx)),
   )
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
@@ -293,7 +293,7 @@ fn lower_get_exception_value_count(
   // Load function pointer
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
   let load_fp = @instr.VCodeInst::new(
-    LoadExternalFuncAddr(rt_exception_get_value_count()),
+    LoadExternalFuncAddr(rt_exception_get_value_count(ctx)),
   )
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
@@ -320,7 +320,7 @@ fn lower_delegate(
   // Load function pointer
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
   let load_fp = @instr.VCodeInst::new(
-    LoadExternalFuncAddr(rt_exception_delegate()),
+    LoadExternalFuncAddr(rt_exception_delegate(ctx)),
   )
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
@@ -371,7 +371,7 @@ fn lower_spill_locals_for_throw(
     // Call spill_locals helper
     let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
     let load_fp = @instr.VCodeInst::new(
-      LoadExternalFuncAddr(rt_exception_spill_locals()),
+      LoadExternalFuncAddr(rt_exception_spill_locals(ctx)),
     )
     load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
     block.add_inst(load_fp)
@@ -391,7 +391,7 @@ fn lower_spill_locals_for_throw(
     // Still call spill_locals to clear any previous spilled state
     let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
     let load_fp = @instr.VCodeInst::new(
-      LoadExternalFuncAddr(rt_exception_spill_locals()),
+      LoadExternalFuncAddr(rt_exception_spill_locals(ctx)),
     )
     load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
     block.add_inst(load_fp)
@@ -428,7 +428,7 @@ fn lower_get_spilled_local(
   // Load function pointer
   let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
   let load_fp = @instr.VCodeInst::new(
-    LoadExternalFuncAddr(rt_exception_get_spilled_local()),
+    LoadExternalFuncAddr(rt_exception_get_spilled_local(ctx)),
   )
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)

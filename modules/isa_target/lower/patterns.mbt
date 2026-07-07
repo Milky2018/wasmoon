@@ -596,6 +596,7 @@ pub fn lower_function_optimized(ir_func : @milkir.Function) -> @machv.Function {
     @abi.ABISettings::default(),
     None,
     None,
+    None,
     -1,
     true,
     [],
