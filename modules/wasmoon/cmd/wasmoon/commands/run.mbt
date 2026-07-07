@@ -1631,7 +1631,7 @@ pub fn compile_module_to_jit(
       embedding_reg_roles=roles,
       num_imports=mod_.imports.length(),
       run_ir_opt=false,
-      runtime_layout=Some(@wasmoon_jit.embedding_context_layout()),
+      embedding_context_layout=Some(@wasmoon_jit.embedding_context_layout()),
       call_conv_layout=Some(call_conv),
       runtime_symbols=@wasmoon_jit.wasm_runtime_symbols(),
       trap_payload_resolver=@wasmoon_jit.wasm_trap_payload,

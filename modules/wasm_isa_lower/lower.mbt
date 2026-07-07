@@ -172,7 +172,7 @@ pub fn lower_function(
   isa? : @isa.ISA = AArch64,
   abi_settings? : @abi.ABISettings = @abi.ABISettings::default(),
   embedding_reg_roles? : @abi.EmbeddingRegRoles = @abi.EmbeddingRegRoles::none(),
-  runtime_layout? : @abi.EmbeddingContextLayout? = None,
+  embedding_context_layout? : @abi.EmbeddingContextLayout? = None,
   call_conv_layout? : @abi.CallConventionLayout? = None,
   runtime_symbols? : @wasm_milkir.RuntimeSymbols = @wasm_milkir.RuntimeSymbols::with_runtime_prefix(
     "wasm.runtime",
@@ -200,7 +200,7 @@ pub fn lower_function(
     isa~,
     abi_settings~,
     embedding_reg_roles~,
-    embedding_context_layout=runtime_layout,
+    embedding_context_layout~,
     call_conv_layout~,
     external_helper_symbols=external_helper_symbols(runtime_symbols),
     trap_payload_resolver~,
