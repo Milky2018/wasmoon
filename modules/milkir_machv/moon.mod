@@ -18,6 +18,6 @@ import {
   "Milky2018/machv@0.1.0",
 }
 
-preferred_target = "native"
+preferred_target = "wasm-gc"
 
-supported_targets = "native"
+supported_targets = "all"
