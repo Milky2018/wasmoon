@@ -262,7 +262,7 @@ fn lower_float_to_int_sat(
   let is_f32 = src_ty is F32
   let is_i64 = dst_ty is I64
 
-  // AArch64 FCVTZS/FCVTZU already implements WebAssembly saturating semantics
+  // AArch64 FCVTZS/FCVTZU already implements MilkIR saturating conversion semantics.
   let fcvt = @instr.MachVInst::new(FcvtToInt(is_f32, is_i64, signed))
   fcvt.add_def({ reg: Virtual(dst) })
   fcvt.add_use(Virtual(src))

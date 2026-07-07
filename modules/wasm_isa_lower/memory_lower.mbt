@@ -84,7 +84,7 @@ pub fn lower_load_mem_base(
   if inst.operands.length() != 1 {
     return
   }
-  if ctx.cached_mem_base(memidx) is Some(cached_vreg) {
+  if ctx.cached_context_pointer(memidx) is Some(cached_vreg) {
     ctx.set_cached_vreg(result.id, cached_vreg)
     return
   }
@@ -97,9 +97,9 @@ pub fn lower_load_mem_base(
   }
   let layout = ctx.embedding_context_layout()
   if memidx == 0 {
-    ctx.machv_function().mark_uses_primary_memory_base()
+    ctx.machv_function().mark_uses_context_cache_0_source()
     let load_base = @instr.MachVInst::new(
-      Load(I64, layout.primary_memory_base_offset),
+      Load(I64, layout.context_cache_0_source_offset),
     )
     load_base.add_def({ reg: Virtual(result_vreg) })
     load_base.add_use(vmctx_reg)
@@ -126,5 +126,5 @@ pub fn lower_load_mem_base(
     load_base.add_use(Virtual(descriptor_vreg))
     block.add_inst(load_base)
   }
-  ctx.cache_mem_base(memidx, result_vreg)
+  ctx.cache_context_pointer(memidx, result_vreg)
 }

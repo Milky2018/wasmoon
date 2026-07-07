@@ -238,7 +238,7 @@ fn MachineCode::emit_instruction_x86_64(
   }
 
   ///|
-  /// Scalar min/max with WebAssembly semantics, aligned with Cranelift x64.
+  /// Scalar min/max with MilkIR semantics, aligned with Cranelift x64.
   ///
   /// Implements the `XmmMinMaxSeq` sequence from Cranelift:
   /// - Handle NaNs symmetrically (propagate a quiet NaN via add).

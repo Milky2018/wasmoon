@@ -36,9 +36,9 @@ struct LoweringContext {
   func_table_cache : Map[Int, @abi.VReg]
   // Cache of table0_base per MachV block (block-local CSE)
   table0_base_cache : Map[Int, @abi.VReg]
-  // Cache of memory base pointers per memidx (cleared at block boundaries and
-  // invalidated at call sites that may mutate memory base).
-  mem_base_cache : Map[Int, @abi.VReg]
+  // Cache of embedding-context-derived pointers keyed by extension-defined id.
+  // Cleared at block boundaries and invalidated at call sites.
+  context_pointer_cache : Map[Int, @abi.VReg]
   // Icmp result value IDs exclusively used by Select/branch and fused in lowering.
   fused_icmps_dense : Array[Bool]
   // Values that should not be lowered because they are subsumed by fused lowering.
@@ -117,7 +117,7 @@ pub fn LoweringContext::new(
     stack_param_map: {},
     func_table_cache: {},
     table0_base_cache: {},
-    mem_base_cache: {},
+    context_pointer_cache: {},
     fused_icmps_dense: Array::make(ir_func.next_value_id, false),
     skipped_values_dense: Array::make(ir_func.next_value_id, false),
     use_counts,
@@ -272,26 +272,26 @@ pub fn LoweringContext::cache_func_table(
 }
 
 ///|
-pub fn LoweringContext::cached_mem_base(
+pub fn LoweringContext::cached_context_pointer(
   self : LoweringContext,
-  memidx : Int,
+  key : Int,
 ) -> @abi.VReg? {
-  self.mem_base_cache.get(memidx)
+  self.context_pointer_cache.get(key)
 }
 
 ///|
-pub fn LoweringContext::cache_mem_base(
+pub fn LoweringContext::cache_context_pointer(
   self : LoweringContext,
-  memidx : Int,
+  key : Int,
   vreg : @abi.VReg,
 ) -> Unit {
-  self.mem_base_cache.set(memidx, vreg)
+  self.context_pointer_cache.set(key, vreg)
 }
 
 ///|
-/// Invalidate cached memory bases in lowering context.
-pub fn invalidate_mem_base_cache(ctx : LoweringContext) -> Unit {
-  ctx.mem_base_cache.clear()
+/// Invalidate cached embedding-context-derived pointers in lowering context.
+pub fn invalidate_context_pointer_cache(ctx : LoweringContext) -> Unit {
+  ctx.context_pointer_cache.clear()
 }
 
 ///|
@@ -1069,7 +1069,7 @@ fn ir_type_to_mem_type(ty : @milkir.Type) -> @instr.MemType {
 ///|
 /// Check if a value is defined by a shift-left instruction with a constant
 /// Returns (shifted_value, shift_amount) if matched
-/// The shift amount is masked according to WebAssembly semantics:
+/// The shift amount is masked according to MilkIR semantics:
 /// - i32: amount & 31
 /// - i64: amount & 63
 fn match_shl_const_value(
@@ -1095,7 +1095,7 @@ fn match_shl_const_value(
 ///|
 /// Check if a value is defined by an unsigned shift-right with a constant.
 /// Returns (shifted_value, shift_amount) if matched.
-/// The shift amount is masked according to WebAssembly semantics:
+/// The shift amount is masked according to MilkIR semantics:
 /// - i32: amount & 31
 /// - i64: amount & 63
 fn match_ushr_const_value(
@@ -1815,8 +1815,8 @@ fn lower_block_body(
   ir_block : @milkir.Block,
   machv_block : @block.MachVBlock,
 ) -> Unit {
-  // Block-local cache: do not carry memory-base CSE across block boundaries.
-  invalidate_mem_base_cache(ctx)
+  // Block-local cache: do not carry context-pointer CSE across block boundaries.
+  invalidate_context_pointer_cache(ctx)
 
   // Block parameters are already handled in pre-registration phase
 

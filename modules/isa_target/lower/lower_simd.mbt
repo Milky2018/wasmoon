@@ -613,7 +613,7 @@ fn lower_v128_fcmp_ne(
 
 ///|
 /// Lower V128 fused multiply-add (relaxed_madd) or fused multiply-subtract (relaxed_nmadd)
-/// WebAssembly spec:
+/// MilkIR relaxed SIMD semantics:
 ///   relaxed_madd(a, b, c) = a * b + c
 ///   relaxed_nmadd(a, b, c) = -(a * b) + c = c - a * b
 fn lower_v128_fma(
@@ -625,8 +625,8 @@ fn lower_v128_fma(
 ) -> Unit {
   if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
-    // WebAssembly relaxed_madd: (a, b, c) -> a * b + c
-    // WebAssembly relaxed_nmadd: (a, b, c) -> -(a * b) + c = c - a * b
+    // relaxed_madd: (a, b, c) -> a * b + c
+    // relaxed_nmadd: (a, b, c) -> -(a * b) + c = c - a * b
     // AArch64 FMLA: Vd = Vd + Vn * Vm (accumulator is first operand AND destination)
     // AArch64 FMLS: Vd = Vd - Vn * Vm
     // For madd: dst = a * b + c = c + a * b, use FMLA with Vd=c, Vn=a, Vm=b

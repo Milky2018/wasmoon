@@ -219,7 +219,7 @@ fn lower_wasm_call_common(
   // Add clobbers for all caller-saved registers
   @lower.add_call_clobbers(ctx, call_inst)
   block.add_inst(call_inst)
-  @lower.invalidate_mem_base_cache(ctx)
+  @lower.invalidate_context_pointer_cache(ctx)
   @lower.invalidate_table0_base_cache(ctx)
 }
 

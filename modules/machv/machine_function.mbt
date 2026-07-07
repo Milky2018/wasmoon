@@ -32,8 +32,8 @@ pub(all) struct Function {
   // Maximum outgoing argument space needed by any call in this function
   // Pre-allocated in prologue so SP doesn't move during call sequences
   mut max_outgoing_args_size : Int
-  // True when lowering materialized the embedding's primary memory base.
-  mut uses_primary_memory_base : Bool
+  // True when lowering materialized the embedding-defined context cache 0 source.
+  mut uses_context_cache_0_source : Bool
 }
 
 ///|
@@ -84,14 +84,14 @@ pub fn Function::new(name : String) -> Function {
     param_pregs: [],
     int_stack_params: 0,
     max_outgoing_args_size: 0,
-    uses_primary_memory_base: false,
+    uses_context_cache_0_source: false,
   }
 }
 
 ///|
 /// Clone the base structure of a function for regalloc transformations.
 /// Copies: name, next_vreg_id, int_stack_params, max_outgoing_args_size,
-/// uses_primary_memory_base
+/// uses_context_cache_0_source
 /// Empty: params, results, result_kinds, blocks, param_pregs
 /// Zero: num_spill_slots
 pub fn Function::clone_base(self : Function) -> Function {
@@ -106,7 +106,7 @@ pub fn Function::clone_base(self : Function) -> Function {
     param_pregs: [],
     int_stack_params: self.int_stack_params,
     max_outgoing_args_size: self.max_outgoing_args_size,
-    uses_primary_memory_base: self.uses_primary_memory_base,
+    uses_context_cache_0_source: self.uses_context_cache_0_source,
   }
 }
 
@@ -140,13 +140,13 @@ pub fn Function::update_max_outgoing_args_size(
 }
 
 ///|
-pub fn Function::mark_uses_primary_memory_base(self : Function) -> Unit {
-  self.uses_primary_memory_base = true
+pub fn Function::mark_uses_context_cache_0_source(self : Function) -> Unit {
+  self.uses_context_cache_0_source = true
 }
 
 ///|
-pub fn Function::uses_primary_memory_base(self : Function) -> Bool {
-  self.uses_primary_memory_base
+pub fn Function::uses_context_cache_0_source(self : Function) -> Bool {
+  self.uses_context_cache_0_source
 }
 
 ///|

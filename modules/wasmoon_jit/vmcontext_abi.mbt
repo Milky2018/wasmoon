@@ -66,8 +66,8 @@ pub fn VMContextLayout::to_embedding_context_layout(
   self : VMContextLayout,
 ) -> @abi.EmbeddingContextLayout {
   {
-    primary_memory_descriptor_offset: self.memory0_offset,
-    primary_memory_base_offset: self.memory0_base_offset,
+    context_cache_0_descriptor_offset: self.memory0_offset,
+    context_cache_0_source_offset: self.memory0_base_offset,
     function_table_offset: self.func_table_offset,
     primary_table_base_offset: self.table0_base_offset,
     table_directory_offset: self.tables_offset,

@@ -128,7 +128,7 @@ pub(all) struct Function {
   param_pregs : Array[@abi.PReg?]
   mut int_stack_params : Int
   mut max_outgoing_args_size : Int
-  mut uses_primary_memory_base : Bool
+  mut uses_context_cache_0_source : Bool
 }
 pub fn Function::add_param(Self, @abi.RegClass) -> @abi.VReg
 pub fn Function::add_param_preg(Self, @abi.PReg?) -> Unit
@@ -144,7 +144,7 @@ pub fn Function::get_param_pregs(Self) -> Array[@abi.PReg?]
 pub fn Function::get_params(Self) -> Array[@abi.VReg]
 pub fn Function::get_result_kinds(Self) -> Array[ValueKind]
 pub fn Function::has_calls(Self) -> Bool
-pub fn Function::mark_uses_primary_memory_base(Self) -> Unit
+pub fn Function::mark_uses_context_cache_0_source(Self) -> Unit
 pub fn Function::needs_extra_results_ptr(Self) -> Bool
 pub fn Function::new(String) -> Self
 pub fn Function::new_block(Self) -> @block.MachVBlock
@@ -156,8 +156,8 @@ pub fn Function::set_num_spill_slots(Self, Int) -> Unit
 pub fn Function::should_reserve_context_cache_0(Self) -> Bool
 pub fn Function::should_reserve_context_cache_1(Self) -> Bool
 pub fn Function::update_max_outgoing_args_size(Self, Int) -> Unit
+pub fn Function::uses_context_cache_0_source(Self) -> Bool
 pub fn Function::uses_context_cache_1(Self) -> Bool
-pub fn Function::uses_primary_memory_base(Self) -> Bool
 pub impl Show for Function
 
 pub(all) struct Instruction {

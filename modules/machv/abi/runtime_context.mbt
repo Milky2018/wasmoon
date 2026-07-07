@@ -5,8 +5,8 @@
 /// embedding owns the concrete runtime structure and translates its layout into
 /// this shape before invoking lowering or emission.
 pub(all) struct EmbeddingContextLayout {
-  primary_memory_descriptor_offset : Int
-  primary_memory_base_offset : Int
+  context_cache_0_descriptor_offset : Int
+  context_cache_0_source_offset : Int
   function_table_offset : Int
   primary_table_base_offset : Int
   table_directory_offset : Int

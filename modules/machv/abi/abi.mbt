@@ -294,7 +294,7 @@ pub fn call_clobbered_fprs() -> Array[PReg] {
 /// Floating-point registers clobbered by *same-ABI* calls.
 ///
 /// When both caller and callee use the same AArch64 ABI, V8-V15 are callee-saved
-/// (low 64 bits). We treat them as preserved across Wasm-to-Wasm calls.
+/// (low 64 bits). We treat them as preserved across same-ABI internal calls.
 ///
 /// This mirrors Cranelift’s practice of excluding V8-V15 clobbers when the callee
 /// has the same ABI as the caller.

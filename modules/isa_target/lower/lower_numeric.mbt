@@ -619,7 +619,7 @@ fn lower_shift(
     let mask = if is_64 { 63 } else { 31 }
 
     // Cranelift-style: if shift amount is constant, use immediate encoding and
-    // mask it by bitwidth-1 (WebAssembly semantics).
+    // mask it by bitwidth-1, matching MilkIR shift semantics.
     if get_const_value(ctx, inst.operands[1]) is Some(amount) {
       let shift = amount.to_int() & mask
       let machv_inst = @instr.MachVInst::new(make_imm_opcode(shift, is_64))

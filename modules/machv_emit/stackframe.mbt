@@ -72,8 +72,8 @@ pub struct EmitStackFrame {
   // Flags
   has_setup_area : Bool // Whether FP/LR are saved
   needs_context_reg : Bool // Whether function uses context (X19)
-  cache_context_0 : Bool // Whether to cache primary memory base in X20
-  cache_context_1 : Bool // Whether to cache function table pointer in X21
+  cache_context_0 : Bool // Whether to cache embedding context-derived pointer 0
+  cache_context_1 : Bool // Whether to cache embedding context-derived pointer 1
   embedding_context_layout : @abi.EmbeddingContextLayout?
   call_conv_layout : @abi.CallConventionLayout?
   embedding_reg_roles : @abi.EmbeddingRegRoles

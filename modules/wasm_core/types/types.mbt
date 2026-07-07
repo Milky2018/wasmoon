@@ -1,11 +1,9 @@
-// Wasmoon - A WebAssembly Runtime in MoonBit
-// Core data structures and type definitions
+// Reusable WebAssembly core data structures and type definitions.
 
 // ============================================================
 // Reference Encoding Constants
 // ============================================================
-// These constants define how references are encoded in JIT mode.
-// They must match the encoding in jit/jit_ffi/jit.c
+// These constants define the shared reference tagging scheme used by embedders.
 
 ///|
 /// Null reference value in JIT/reference encodings.

@@ -263,7 +263,7 @@ fn MachineCode::emit_sp_adjust(self : MachineCode, amount : Int) -> Unit {
   let step = 4096
   if is_sub {
     // Stack allocation: touch stack pages so a guard page can't be skipped by a
-    // single large SP adjustment (e.g. large frames on the independent WASM stack).
+    // single large SP adjustment (e.g. large frames on an embedding-managed stack).
     //
     // We probe in 4KB steps only when crossing at least one full page.
     // This follows Cranelift's `probe_count = frame_size / guard_size` behavior
@@ -389,7 +389,7 @@ fn MachineCode::emit_prologue(
         self.x86_emit_mov_r64_m64(
           cache_reg,
           context,
-          layout.primary_memory_descriptor_offset,
+          layout.context_cache_0_descriptor_offset,
         )
       }
       if stack_frame.cache_context_1 {
@@ -684,13 +684,17 @@ fn MachineCode::emit_prologue(
     let context = stack_frame.context_reg_index()
     let call_conv = stack_frame.require_call_conv_layout()
     self.emit_mov_reg(context, call_conv.context_arg.index)
-    // Optionally cache the primary memory base pointer.
+    // Optionally cache embedding context-derived pointer 0.
     if stack_frame.cache_context_0 {
       let layout = stack_frame.require_embedding_context_layout()
       guard stack_frame.context_cache_0_index() is Some(cache_reg) else {
         abort("embedding context cache 0 register role is required")
       }
-      self.emit_ldr_imm(cache_reg, context, layout.primary_memory_base_offset)
+      self.emit_ldr_imm(
+        cache_reg,
+        context,
+        layout.context_cache_0_source_offset,
+      )
     }
     // Optionally cache function table pointer.
     if stack_frame.cache_context_1 {
@@ -791,7 +795,7 @@ pub fn emit_function(
   // has_calls is true if function makes any calls
   let has_calls = func_has_calls(func)
   let has_incoming_stack_args = func_has_incoming_stack_args(func)
-  let uses_primary_memory_base = func.uses_primary_memory_base()
+  let uses_context_cache_0_source = func.uses_context_cache_0_source()
   let cache_context_0 = func.should_reserve_context_cache_0()
   let cache_context_1 = func.should_reserve_context_cache_1()
   let context_reg = embedding_reg_roles.context
@@ -802,7 +806,7 @@ pub fn emit_function(
   let needs_context_reg = force_context_reg_cache ||
     has_calls ||
     (context_reg is Some({ index, .. }) && func_uses_context_reg(func, index)) ||
-    uses_primary_memory_base
+    uses_context_cache_0_source
   let clobbered_gprs = clobbered
   if cache_context_0 &&
     embedding_reg_roles.context_cache_0 is Some(cache) &&
@@ -2082,7 +2086,7 @@ pub fn emit_function_with_regalloc(
   )
   let has_calls = func_has_calls(func)
   let has_incoming_stack_args = func_has_incoming_stack_args(func)
-  let uses_primary_memory_base = func.uses_primary_memory_base()
+  let uses_context_cache_0_source = func.uses_context_cache_0_source()
   let cache_context_0 = func.should_reserve_context_cache_0()
   let cache_context_1 = func.should_reserve_context_cache_1()
   let context_reg = embedding_reg_roles.context
@@ -2096,7 +2100,7 @@ pub fn emit_function_with_regalloc(
       context_reg is Some({ index, .. }) &&
       output_uses_preg(func, output, index)
     ) ||
-    uses_primary_memory_base
+    uses_context_cache_0_source
   let clobbered_gprs = clobbered
   if cache_context_0 &&
     embedding_reg_roles.context_cache_0 is Some(cache) &&

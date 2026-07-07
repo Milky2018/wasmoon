@@ -413,14 +413,14 @@ enum Instruction {
   Cmhs2D(Int, Int, Int) // CMHS Vd.2D, Vn.2D, Vm.2D
   // Narrowing (non-saturating - used by i64x2.mul implementation)
   Xtn2S(Int, Int) // XTN Vd.2S, Vn.2D
-  // Narrowing (saturating - used by WebAssembly narrow operations)
+  // Narrowing (saturating vector lane pack)
   Sqxtn8B(Int, Int) // SQXTN Vd.8B, Vn.8H
   Sqxtn4H(Int, Int) // SQXTN Vd.4H, Vn.4S
   Sqxtn2S(Int, Int) // SQXTN Vd.2S, Vn.2D
   Sqxtun8B(Int, Int) // SQXTUN Vd.8B, Vn.8H
   Sqxtun4H(Int, Int) // SQXTUN Vd.4H, Vn.4S
-  // Note: Sqxtun2S not needed - no i64->i32 narrow in WebAssembly
-  // Note: Uqxtn8B/4H not needed - WebAssembly narrow_u uses SQXTUN (signed source)
+  // Note: Sqxtun2S not needed because there is no i64->i32 vector narrow op.
+  // Note: Uqxtn8B/4H not needed because unsigned narrow uses a signed source.
   Uqxtn2S(Int, Int) // UQXTN Vd.2S, Vn.2D - used by i32x4.trunc_sat_f64x2_u_zero
   // Narrowing (second half - writes to upper portion of Vd)
   Sqxtn2_16B(Int, Int) // SQXTN2 Vd.16B, Vn.8H (writes upper 8 bytes)

@@ -676,7 +676,7 @@ fn MachineCode::emit_instruction(
       let cond_reg = reg_num(inst.uses[0])
       let true_val = reg_num(inst.uses[1])
       let false_val = reg_num(inst.uses[2])
-      // Compare cond with 0 (Wasm select condition is i32): CMP Wcond, #0
+      // Compare the integer select condition with zero: CMP Wcond, #0
       self.emit_cmp_imm32(cond_reg, 0)
       // Check register class to use appropriate select instruction
       let reg_class = match inst.defs[0].reg {
@@ -1432,7 +1432,7 @@ fn MachineCode::emit_instruction(
         self.emit_ldr_imm(
           cache_reg,
           stack_frame.context_reg_index(),
-          layout.primary_memory_base_offset,
+          layout.context_cache_0_source_offset,
         )
       }
     }
@@ -1446,7 +1446,7 @@ fn MachineCode::emit_instruction(
         self.emit_ldr_imm(
           cache_reg,
           stack_frame.context_reg_index(),
-          layout.primary_memory_base_offset,
+          layout.context_cache_0_source_offset,
         )
       }
     }
@@ -1466,7 +1466,7 @@ fn MachineCode::emit_instruction(
         self.emit_ldr_imm(
           cache_reg,
           stack_frame.context_reg_index(),
-          layout.primary_memory_base_offset,
+          layout.context_cache_0_source_offset,
         )
       }
     }

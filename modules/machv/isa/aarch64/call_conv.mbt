@@ -195,7 +195,7 @@ pub fn call_clobbered_fprs() -> Array[@abi.PReg] {
 }
 
 ///|
-/// For Wasm-to-Wasm calls (same ABI), treat V8-V15 as callee-saved (low 64 bits).
+/// For same-ABI internal calls, treat V8-V15 as callee-saved (low 64 bits).
 pub fn call_clobbered_fprs_same_abi() -> Array[@abi.PReg] {
   let regs : Array[@abi.PReg] = []
   for i in 0..<32 {
