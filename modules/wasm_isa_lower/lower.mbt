@@ -179,6 +179,7 @@ pub fn lower_function(
   ),
   num_imports? : Int = -1,
   run_ir_opt? : Bool = true,
+  trap_payload_resolver? : (String) -> Int = fn(_reason) { 0 },
   use_subtype_indirect_check? : Bool = true,
   canonical_type_indices? : Array[Int] = [],
 ) -> @machv.Function {
@@ -202,6 +203,7 @@ pub fn lower_function(
     embedding_context_layout=runtime_layout,
     call_conv_layout~,
     external_helper_symbols=external_helper_symbols(runtime_symbols),
+    trap_payload_resolver~,
     extension_lowerer=Some(lower_extension),
     num_imports~,
     run_ir_opt~,

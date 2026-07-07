@@ -289,32 +289,6 @@ fn MachineCode::emit_terminator_with_epilogue(
     return
   }
   let sret_reg = self.isa.sret_reg_index()
-  fn trap_msg_to_brk_imm(msg : String) -> Int {
-    // Keep this mapping in sync with `jit/jit_ffi/trap.c`:
-    //   0 unreachable
-    //   1 out of bounds (memory/table)
-    //   2 indirect call type mismatch
-    //   3 invalid conversion to integer
-    //   4 integer divide by zero
-    //   5 integer overflow
-    //   6 backend/unknown JIT trap
-    if msg == "unreachable" {
-      0
-    } else if msg.contains("out of bounds") {
-      1
-    } else if msg.contains("type mismatch") {
-      2
-    } else if msg.contains("invalid conversion") {
-      3
-    } else if msg.contains("divide by zero") {
-      4
-    } else if msg.contains("overflow") {
-      5
-    } else {
-      6
-    }
-  }
-
   match term {
     Jump(target, _args) =>
       // Unconditional branch.
@@ -655,7 +629,7 @@ fn MachineCode::emit_terminator_with_epilogue(
         }
       }
     }
-    Trap(msg) => self.emit_brk(trap_msg_to_brk_imm(msg))
+    Trap(payload) => self.emit_brk(payload)
     BrTable(index, targets, default) => {
       // Jump table implementation for br_table
       let index_reg = reg_num(index)

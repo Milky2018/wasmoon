@@ -75,7 +75,7 @@ fn format_terminator(term : Terminator) -> String {
       "    branch_cmp_imm \{reg}, \{imm}, \{cond_text}, \{format_target_args(true_target, true_args)}, \{format_target_args(false_target, false_args)}"
     }
     TermReturn(values) => "    return \{format_reg_list(values)}"
-    TermTrap(reason) => "    trap \{reason}"
+    TermTrap(payload) => "    trap #\{payload}"
     TermBrTable(index, targets, default_target) => {
       let targets_text = targets.map(fn(t) { t.to_string() }).join(", ")
       "    br_table \{index}, [\{targets_text}], block\{default_target}"

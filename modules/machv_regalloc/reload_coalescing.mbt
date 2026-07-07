@@ -90,7 +90,7 @@ fn allocate_reload_registers(
   if intervals.is_empty() {
     return
   }
-  if @sys.get_env_var("WASMOON_DISABLE_RELOAD_COALESCING") is Some(v) &&
+  if @sys.get_env_var("MACHV_DISABLE_RELOAD_COALESCING") is Some(v) &&
     (v == "1" || v == "true" || v == "TRUE") {
     return
   }

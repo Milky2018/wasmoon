@@ -18,6 +18,7 @@ struct LoweringContext {
   embedding_context_layout : @abi.RuntimeContextLayout?
   call_conv_layout : @abi.CallConventionLayout?
   external_helper_symbols : Map[String, String]
+  trap_payload_resolver : (String) -> Int
   extension_lowerer : ((
     LoweringContext,
     @milkir.Inst,
@@ -72,6 +73,7 @@ pub fn LoweringContext::new(
   embedding_context_layout : @abi.RuntimeContextLayout?,
   call_conv_layout : @abi.CallConventionLayout?,
   external_helper_symbols : Map[String, String],
+  trap_payload_resolver : (String) -> Int,
   extension_lowerer : ((
     LoweringContext,
     @milkir.Inst,
@@ -107,6 +109,7 @@ pub fn LoweringContext::new(
     embedding_context_layout,
     call_conv_layout,
     external_helper_symbols,
+    trap_payload_resolver,
     extension_lowerer,
     num_imports,
     value_map_dense: Array::make(ir_func.next_value_id, None),
@@ -184,6 +187,14 @@ pub fn LoweringContext::embedding_reg_roles(
 ///|
 pub fn LoweringContext::num_imports(self : LoweringContext) -> Int {
   self.num_imports
+}
+
+///|
+fn LoweringContext::trap_payload(
+  self : LoweringContext,
+  reason : String,
+) -> Int {
+  (self.trap_payload_resolver)(reason)
 }
 
 ///|
@@ -1626,6 +1637,7 @@ pub fn lower_function(
   embedding_context_layout? : @abi.RuntimeContextLayout? = None,
   call_conv_layout? : @abi.CallConventionLayout? = None,
   external_helper_symbols? : Map[String, String] = {},
+  trap_payload_resolver? : (String) -> Int = fn(_reason) { 0 },
   extension_lowerer? : ((
     LoweringContext,
     @milkir.Inst,
@@ -1642,7 +1654,7 @@ pub fn lower_function(
   }
   let ctx = LoweringContext::new(
     ir_func, isa, abi_settings, embedding_reg_roles, embedding_context_layout, call_conv_layout,
-    external_helper_symbols, extension_lowerer, num_imports,
+    external_helper_symbols, trap_payload_resolver, extension_lowerer, num_imports,
   )
 
   // Phase 0: Pre-compute which Icmps can be fused with Select
@@ -2587,7 +2599,8 @@ fn lower_terminator(
       }
       block.set_terminator(Return(regs))
     }
-    Trap(msg) | TrapExit(msg) => block.set_terminator(Trap(msg))
+    Trap(msg) | TrapExit(msg) =>
+      block.set_terminator(Trap(ctx.trap_payload(msg)))
     BrTable(index, targets, default) => {
       let index_vreg = ctx.get_vreg_for_use(index, block)
       let default_id = ctx.get_block_id(default)

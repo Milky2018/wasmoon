@@ -162,6 +162,7 @@ pub fn lower_milkir_for_target(
     runtime_layout=Some(runtime_context_layout()),
     call_conv_layout=Some(call_conv),
     runtime_symbols=wasm_runtime_symbols(),
+    trap_payload_resolver=wasm_trap_payload,
   )
 }
 
@@ -181,6 +182,7 @@ pub fn lower_wasm_body_milkir_for_target(
     runtime_layout=Some(runtime_context_layout()),
     call_conv_layout=Some(call_conv),
     runtime_symbols=wasm_runtime_symbols(),
+    trap_payload_resolver=wasm_trap_payload,
   )
 }
 
@@ -199,6 +201,7 @@ pub fn plan_milkir_integration_for_target(
     runtime_layout=Some(runtime_context_layout()),
     call_conv_layout=Some(call_conv),
     runtime_symbols=wasm_runtime_symbols(),
+    trap_payload_resolver=wasm_trap_payload,
   )
   let (allocated_func, output) = @machv_regalloc.allocate_registers_backtracking_output_with_isa(
     machv_func,
@@ -226,6 +229,7 @@ pub fn plan_wasm_body_milkir_integration_for_target(
     runtime_layout=Some(runtime_context_layout()),
     call_conv_layout=Some(call_conv),
     runtime_symbols=wasm_runtime_symbols(),
+    trap_payload_resolver=wasm_trap_payload,
   )
   let (allocated_func, output) = @machv_regalloc.allocate_registers_backtracking_output_with_isa(
     machv_func,

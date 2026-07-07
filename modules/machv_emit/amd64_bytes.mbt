@@ -5065,8 +5065,8 @@ pub fn MachineCode::x86_emit_bsr_r64_r64(
 ///|
 /// Emit a trap instruction with a 16-bit payload.
 ///
-/// Encoding: INT3 (0xCC) followed by imm16 (little-endian). The JIT trap signal
-/// handler decodes the payload to map to a WebAssembly trap code.
+/// Encoding: INT3 (0xCC) followed by imm16 (little-endian). The embedding trap
+/// handler owns the payload policy.
 pub fn MachineCode::x86_emit_trap_imm16(
   self : MachineCode,
   imm16 : Int,

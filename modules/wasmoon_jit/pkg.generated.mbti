@@ -477,6 +477,8 @@ pub fn wasm_embedding_reg_roles_for_isa(@isa.ISA) -> @abi.EmbeddingRegRoles
 
 pub fn wasm_runtime_symbols() -> @wasm_milkir.RuntimeSymbols
 
+pub fn wasm_trap_payload(String) -> Int
+
 // Errors
 pub(all) suberror CHeapError {
   OutOfBoundsArrayAccess

@@ -1413,7 +1413,7 @@ fn opcode_for(opcode : @milkir.Opcode) -> @machv.Opcode {
     Call(symbol) => Call(symbol.name)
     CallIndirect(_) => CallIndirect
     CallPtr(params, results) => CallPtr(params, results)
-    Trap(reason) => Trap(reason)
+    Trap(reason) => Trap(default_trap_payload(reason))
     Custom(name) => Custom(name)
     _ => Custom(to_repr(opcode).to_string())
   }
@@ -1621,7 +1621,8 @@ fn lower_terminator(
           regs_for_values(false_args),
         ),
       )
-    TrapExit(reason) => block.set_terminator(TermTrap(reason))
+    TrapExit(reason) =>
+      block.set_terminator(TermTrap(default_trap_payload(reason)))
     Brz(cond, true_target, false_target) =>
       block.set_terminator(
         TermBranchZero(
@@ -1654,8 +1655,13 @@ fn lower_terminator(
           map_block_id(block_map, default_target),
         ),
       )
-    Trap(reason) => block.set_terminator(TermTrap(reason))
+    Trap(reason) => block.set_terminator(TermTrap(default_trap_payload(reason)))
   }
+}
+
+///|
+fn default_trap_payload(_reason : String) -> Int {
+  0
 }
 
 ///|

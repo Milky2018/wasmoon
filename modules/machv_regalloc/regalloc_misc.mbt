@@ -51,7 +51,7 @@ fn is_truthy_env_flag(value : String) -> Bool {
 
 ///|
 fn regalloc_validation_enabled() -> Bool {
-  match @sys.get_env_var("WASMOON_REGALLOC_VALIDATION") {
+  match @sys.get_env_var("MACHV_REGALLOC_VALIDATION") {
     Some(v) => is_truthy_env_flag(v)
     None => false
   }
@@ -86,7 +86,7 @@ fn parse_regalloc_algorithm(value : String) -> RegallocAlgorithm? {
 ///
 /// Default keeps code-quality-first Cranelift-like behavior.
 fn selected_regalloc_algorithm() -> RegallocAlgorithm {
-  match @sys.get_env_var("WASMOON_REGALLOC_ALGORITHM") {
+  match @sys.get_env_var("MACHV_REGALLOC_ALGORITHM") {
     Some(value) =>
       match parse_regalloc_algorithm(value) {
         Some(algo) => algo

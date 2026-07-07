@@ -65,7 +65,7 @@ pub(all) enum Opcode {
   Load(StackSlot)
   Store(StackSlot)
   Call(String)
-  Trap(String)
+  Trap(Int)
   Jump(Int)
   Branch(Int, Int)
   Return
@@ -125,7 +125,7 @@ pub(all) enum Terminator {
   TermBranchZero(Reg, Bool, Bool, Int, Array[Reg], Int, Array[Reg])
   TermBranchCmpImm(Reg, Int, Cond, Bool, Int, Array[Reg], Int, Array[Reg])
   TermReturn(Array[Reg])
-  TermTrap(String)
+  TermTrap(Int)
   TermBrTable(Reg, Array[Int], Int)
 } derive(Eq, Debug)
 

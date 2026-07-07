@@ -598,6 +598,7 @@ pub fn lower_function_optimized(ir_func : @milkir.Function) -> @machv.Function {
     None,
     None,
     {},
+    fn(_reason) { 0 },
     None,
     -1,
   )

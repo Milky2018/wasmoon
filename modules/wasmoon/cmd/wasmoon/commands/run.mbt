@@ -1634,6 +1634,7 @@ pub fn compile_module_to_jit(
       runtime_layout=Some(@wasmoon_jit.runtime_context_layout()),
       call_conv_layout=Some(call_conv),
       runtime_symbols=@wasmoon_jit.wasm_runtime_symbols(),
+      trap_payload_resolver=@wasmoon_jit.wasm_trap_payload,
       use_subtype_indirect_check~,
       canonical_type_indices~,
     )

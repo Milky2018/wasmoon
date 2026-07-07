@@ -377,7 +377,7 @@ pub(all) enum MachVTerminator {
   BranchZero(@abi.Reg, Bool, Bool, Int, Int)
   BranchCmpImm(@abi.Reg, Int, Cond, Bool, Int, Int)
   Return(Array[@abi.Reg])
-  Trap(String)
+  Trap(Int)
   BrTable(@abi.Reg, Array[Int], Int)
 }
 pub impl Show for MachVTerminator

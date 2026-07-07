@@ -372,7 +372,7 @@ fn MachineCode::emit_instruction(
           // This preserves exact bit patterns including signaling NaNs
           self.emit_fmov_s_to_w(rd, rn) // FMOV Wd, Sn (bit-exact, no conversion)
         _ =>
-          // Fallback for other cases (shouldn't happen with valid WASM)
+          // Fallback for cases rejected by the MachV type checker.
           self.emit_fmov_x_to_d(rd, rn)
       }
     }

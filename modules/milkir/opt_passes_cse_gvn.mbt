@@ -45,25 +45,6 @@ pub fn eliminate_common_subexpressions_global(func : Function) -> OptResult {
   run_global_value_numbering(func, PureCSE)
 }
 
-// ============ Extension Load Elimination ============
-
-///|
-/// Placeholder for dialect-owned extension load elimination.
-/// TODO(wasm_milkir): Reintroduce Wasm mem-base load elimination as a
-/// dialect-owned optimization pass if performance gates require it.
-pub fn eliminate_redundant_mem_base_loads(_func : Function) -> OptResult {
-  OptResult::new()
-}
-
-///|
-/// Placeholder for dialect-owned cross-block extension load elimination.
-/// TODO(wasm_milkir): Reintroduce cross-block Wasm mem-base load elimination
-/// outside generic MilkIR core.
-pub fn eliminate_redundant_mem_base_loads_global(func : Function) -> OptResult {
-  ignore(func)
-  OptResult::new()
-}
-
 // ============ Global Value Numbering with Load CSE ============
 
 ///|

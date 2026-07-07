@@ -1589,7 +1589,7 @@ pub(all) enum MachVTerminator {
   // Parameters: lhs, imm, cond, is_64, then-block, else-block
   BranchCmpImm(@abi.Reg, Int, Cond, Bool, Int, Int)
   Return(Array[@abi.Reg]) // Return with values
-  Trap(String) // Trap with message
+  Trap(Int) // Trap with embedding-defined payload
   // BrTable: index register, target block IDs, default block ID
   // Uses jump table for O(1) dispatch instead of comparison chain
   BrTable(@abi.Reg, Array[Int], Int)
@@ -1635,7 +1635,7 @@ fn MachVTerminator::to_string(self : MachVTerminator) -> String {
       }
       result
     }
-    Trap(msg) => "trap \"\{msg}\""
+    Trap(payload) => "trap #\{payload}"
     BrTable(index, targets, default) => {
       let mut result = "br_table \{index}, ["
       for i, t in targets {

@@ -139,12 +139,6 @@ fn optimize_cranelift_style(
     if alias_result.changed {
       result.mark_changed()
     }
-    let mb_result = run_opt_pass(
-      func, "mem_base_cse", eliminate_redundant_mem_base_loads,
-    )
-    if mb_result.changed {
-      result.mark_changed()
-    }
     let gvn_result = run_opt_pass(func, "cse_gvn_global", cse_gvn_global)
     if gvn_result.changed {
       result.mark_changed()
