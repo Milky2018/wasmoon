@@ -66,6 +66,68 @@ pub fn VMContextLayout::to_embedding_context_layout(
   self : VMContextLayout,
 ) -> @abi.EmbeddingContextLayout {
   {
+    slots: [
+      {
+        id: @wasm_isa_lower.CONTEXT_SLOT_MEMORY0_DESCRIPTOR,
+        offset: self.memory0_offset,
+        mutability: Immutable,
+        cache_role: ContextCache0Descriptor,
+      },
+      {
+        id: @wasm_isa_lower.CONTEXT_SLOT_MEMORY0_BASE,
+        offset: self.memory0_base_offset,
+        mutability: Mutable,
+        cache_role: ContextCache0Source,
+      },
+      {
+        id: @wasm_isa_lower.CONTEXT_SLOT_FUNCTION_TABLE,
+        offset: self.func_table_offset,
+        mutability: Immutable,
+        cache_role: ContextCache1,
+      },
+      {
+        id: @wasm_isa_lower.CONTEXT_SLOT_TABLE0_BASE,
+        offset: self.table0_base_offset,
+        mutability: Mutable,
+        cache_role: NoContextCache,
+      },
+      {
+        id: @wasm_isa_lower.CONTEXT_SLOT_TABLE_DIRECTORY,
+        offset: self.tables_offset,
+        mutability: Mutable,
+        cache_role: NoContextCache,
+      },
+      {
+        id: @wasm_isa_lower.CONTEXT_SLOT_GLOBAL_STORAGE,
+        offset: self.globals_offset,
+        mutability: Mutable,
+        cache_role: NoContextCache,
+      },
+      {
+        id: @wasm_isa_lower.CONTEXT_SLOT_MEMORY_DIRECTORY,
+        offset: self.memories_offset,
+        mutability: Mutable,
+        cache_role: NoContextCache,
+      },
+      {
+        id: @wasm_isa_lower.CONTEXT_SLOT_DEBUG_CURRENT_FUNCTION,
+        offset: self.debug_current_func_idx_offset,
+        mutability: Mutable,
+        cache_role: NoContextCache,
+      },
+      {
+        id: @wasm_isa_lower.CONTEXT_SLOT_GC_ALLOCATION_CURSOR,
+        offset: self.gc_heap_ptr_offset,
+        mutability: Mutable,
+        cache_role: NoContextCache,
+      },
+      {
+        id: @wasm_isa_lower.CONTEXT_SLOT_GC_ALLOCATION_LIMIT,
+        offset: self.gc_heap_limit_offset,
+        mutability: Mutable,
+        cache_role: NoContextCache,
+      },
+    ],
     context_cache_0_descriptor_offset: self.memory0_offset,
     context_cache_0_source_offset: self.memory0_base_offset,
     function_table_offset: self.func_table_offset,

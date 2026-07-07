@@ -1,6 +1,10 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "Milky2018/machv/abi"
 
+import {
+  "moonbitlang/core/debug",
+}
+
 // Values
 pub const FLOAT_PARAM_BASE_REG : Int = 0
 
@@ -94,8 +98,28 @@ pub fn CallConventionLayout::layout_overflow_stack(Self, Int, Array[RegClass]) -
 pub fn CallConventionLayout::stack_slot_align(Self, RegClass) -> Int
 pub fn CallConventionLayout::stack_slot_size(Self, RegClass) -> Int
 
+pub(all) struct ContextSlot {
+  id : Int
+  offset : Int
+  mutability : ContextSlotMutability
+  cache_role : ContextSlotCacheRole
+} derive(Eq, @debug.Debug)
+
+pub(all) enum ContextSlotCacheRole {
+  NoContextCache
+  ContextCache0Descriptor
+  ContextCache0Source
+  ContextCache1
+} derive(Eq, @debug.Debug)
+
+pub(all) enum ContextSlotMutability {
+  Immutable
+  Mutable
+} derive(Eq, @debug.Debug)
+
 #alias(RuntimeContextLayout)
 pub(all) struct EmbeddingContextLayout {
+  slots : Array[ContextSlot]
   context_cache_0_descriptor_offset : Int
   context_cache_0_source_offset : Int
   function_table_offset : Int
@@ -108,6 +132,8 @@ pub(all) struct EmbeddingContextLayout {
   gc_allocation_limit_offset : Int
   pointer_stride : Int
 }
+pub fn EmbeddingContextLayout::slot(Self, Int) -> ContextSlot?
+pub fn EmbeddingContextLayout::slot_offset(Self, Int) -> Int?
 
 pub(all) struct EmbeddingRegRoles {
   context : PReg?
