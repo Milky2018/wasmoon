@@ -5,13 +5,13 @@
 ///|
 /// Helper to get vmctx register as vreg
 fn emit_load_vmctx(
-  ctx : LoweringContext,
+  ctx : @lower.LoweringContext,
   block : @block.VCodeBlock,
 ) -> @abi.VReg {
-  let vmctx_vreg = ctx.vcode_func.new_vreg(Int)
+  let vmctx_vreg = ctx.vcode_function().new_vreg(Int)
   let vmctx_mov = @instr.VCodeInst::new(Move)
   vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
-  vmctx_mov.add_use(Physical({ index: vmctx_index(ctx), class: Int }))
+  vmctx_mov.add_use(Physical({ index: @lower.vmctx_index(ctx), class: Int }))
   block.add_inst(vmctx_mov)
   vmctx_vreg
 }
@@ -20,7 +20,7 @@ fn emit_load_vmctx(
 /// Lower Throw(tag_idx) instruction
 /// Calls exception_throw(ctx, tag_idx, values_ptr, count)
 pub fn lower_throw(
-  ctx : LoweringContext,
+  ctx : @lower.LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
   tag_idx : Int,
@@ -29,7 +29,7 @@ pub fn lower_throw(
   let vmctx_vreg = emit_load_vmctx(ctx, block)
 
   // Materialize tag index
-  let tag_idx_vreg = materialize_imm(ctx, block, tag_idx.to_int64())
+  let tag_idx_vreg = @lower.materialize_imm(ctx, block, tag_idx.to_int64())
 
   // Allocate space for exception values (if any).
   //
@@ -42,7 +42,7 @@ pub fn lower_throw(
   let num_operands = inst.operands.length()
   let (values_ptr_vreg, count_vreg) = if num_operands > 0 {
     let stack_space = (num_operands * 8 + 15) / 16 * 16
-    ctx.vcode_func.update_max_outgoing_args_size(stack_space)
+    ctx.vcode_function().update_max_outgoing_args_size(stack_space)
 
     // Store each value to the outgoing args area at SP.
     for i in 0..<num_operands {
@@ -54,14 +54,17 @@ pub fn lower_throw(
     }
 
     // Get outgoing-args base as values_ptr (matches StoreToStack addressing).
-    let sp_vreg = ctx.vcode_func.new_vreg(Int)
+    let sp_vreg = ctx.vcode_function().new_vreg(Int)
     let load_sp = @instr.VCodeInst::new(LoadSP)
     load_sp.add_def({ reg: Virtual(sp_vreg) })
     block.add_inst(load_sp)
-    (sp_vreg, materialize_imm(ctx, block, num_operands.to_int64()))
+    (sp_vreg, @lower.materialize_imm(ctx, block, num_operands.to_int64()))
   } else {
     // No values - pass null and 0
-    (materialize_imm(ctx, block, 0L), materialize_imm(ctx, block, 0L))
+    (
+      @lower.materialize_imm(ctx, block, 0L),
+      @lower.materialize_imm(ctx, block, 0L),
+    )
   }
 
   // Select throw helper.
@@ -72,7 +75,7 @@ pub fn lower_throw(
   }
 
   // Load function pointer
-  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let func_ptr_vreg = ctx.vcode_function().new_vreg(Int)
   let load_fp = @instr.VCodeInst::new(LoadExternalFuncAddr(throw_libcall))
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
@@ -80,9 +83,15 @@ pub fn lower_throw(
   // Call throw helper.
   // This is noreturn, but we still emit the call
   if num_operands == 0 {
-    lower_c_libcall(ctx, block, func_ptr_vreg, [vmctx_vreg, tag_idx_vreg], None)
+    @lower.lower_c_libcall(
+      ctx,
+      block,
+      func_ptr_vreg,
+      [vmctx_vreg, tag_idx_vreg],
+      None,
+    )
   } else {
-    lower_c_libcall(
+    @lower.lower_c_libcall(
       ctx,
       block,
       func_ptr_vreg,
@@ -98,7 +107,7 @@ pub fn lower_throw(
 /// Lower ThrowRef instruction
 /// Calls exception_throw_ref(ctx, exnref)
 pub fn lower_throw_ref(
-  ctx : LoweringContext,
+  ctx : @lower.LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
 ) -> Unit {
@@ -111,7 +120,7 @@ pub fn lower_throw_ref(
   let exnref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
 
   // Load function pointer
-  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let func_ptr_vreg = ctx.vcode_function().new_vreg(Int)
   let load_fp = @instr.VCodeInst::new(
     LoadExternalFuncAddr(rt_exception_throw_ref(ctx)),
   )
@@ -119,7 +128,13 @@ pub fn lower_throw_ref(
   block.add_inst(load_fp)
 
   // Call: exception_throw_ref(ctx, exnref)
-  lower_c_libcall(ctx, block, func_ptr_vreg, [vmctx_vreg, exnref_vreg], None)
+  @lower.lower_c_libcall(
+    ctx,
+    block,
+    func_ptr_vreg,
+    [vmctx_vreg, exnref_vreg],
+    None,
+  )
 }
 
 ///|
@@ -130,7 +145,7 @@ pub fn lower_throw_ref(
 /// The TryTableBegin IR instruction returns 0 normally, or handler_id on catch.
 /// This is the result of sigsetjmp.
 pub fn lower_try_table_begin(
-  ctx : LoweringContext,
+  ctx : @lower.LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
   handler_id : Int,
@@ -142,10 +157,14 @@ pub fn lower_try_table_begin(
   let vmctx_vreg = emit_load_vmctx(ctx, block)
 
   // Materialize handler_id
-  let handler_id_vreg = materialize_imm(ctx, block, handler_id.to_int64())
+  let handler_id_vreg = @lower.materialize_imm(
+    ctx,
+    block,
+    handler_id.to_int64(),
+  )
 
   // Load function pointer for try_begin
-  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let func_ptr_vreg = ctx.vcode_function().new_vreg(Int)
   let load_fp = @instr.VCodeInst::new(
     LoadExternalFuncAddr(rt_exception_try_begin(ctx)),
   )
@@ -153,8 +172,8 @@ pub fn lower_try_table_begin(
   block.add_inst(load_fp)
 
   // Call: exception_try_begin(ctx, handler_id) -> jmp_buf ptr
-  let jmp_buf_ptr = ctx.vcode_func.new_vreg(Int)
-  lower_c_libcall(
+  let jmp_buf_ptr = ctx.vcode_function().new_vreg(Int)
+  @lower.lower_c_libcall(
     ctx,
     block,
     func_ptr_vreg,
@@ -166,7 +185,7 @@ pub fn lower_try_table_begin(
   // sigsetjmp returns 0 normally, or handler_id when longjmp is called
   //
   // Load sigsetjmp function pointer
-  let setjmp_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let setjmp_ptr_vreg = ctx.vcode_function().new_vreg(Int)
   let load_setjmp = @instr.VCodeInst::new(
     LoadExternalFuncAddr(rt_exception_sigsetjmp(ctx)),
   )
@@ -174,11 +193,11 @@ pub fn lower_try_table_begin(
   block.add_inst(load_setjmp)
 
   // Second argument: savemask = 0 (don't save signal mask)
-  let savemask_vreg = materialize_imm(ctx, block, 0L)
+  let savemask_vreg = @lower.materialize_imm(ctx, block, 0L)
 
   // Call: sigsetjmp(jmp_buf_ptr, 0) -> result
   // Result is 0 on first call, handler_id on longjmp
-  lower_c_libcall(
+  @lower.lower_c_libcall(
     ctx,
     block,
     setjmp_ptr_vreg,
@@ -191,7 +210,7 @@ pub fn lower_try_table_begin(
 /// Lower TryTableEnd(handler_id) instruction
 /// Calls exception_try_end(ctx, handler_id)
 pub fn lower_try_table_end(
-  ctx : LoweringContext,
+  ctx : @lower.LoweringContext,
   _inst : @milkir.Inst,
   block : @block.VCodeBlock,
   handler_id : Int,
@@ -200,10 +219,14 @@ pub fn lower_try_table_end(
   let vmctx_vreg = emit_load_vmctx(ctx, block)
 
   // Materialize handler_id
-  let handler_id_vreg = materialize_imm(ctx, block, handler_id.to_int64())
+  let handler_id_vreg = @lower.materialize_imm(
+    ctx,
+    block,
+    handler_id.to_int64(),
+  )
 
   // Load function pointer
-  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let func_ptr_vreg = ctx.vcode_function().new_vreg(Int)
   let load_fp = @instr.VCodeInst::new(
     LoadExternalFuncAddr(rt_exception_try_end(ctx)),
   )
@@ -211,7 +234,7 @@ pub fn lower_try_table_end(
   block.add_inst(load_fp)
 
   // Call: exception_try_end(ctx, handler_id)
-  lower_c_libcall(
+  @lower.lower_c_libcall(
     ctx,
     block,
     func_ptr_vreg,
@@ -224,7 +247,7 @@ pub fn lower_try_table_end(
 /// Lower GetExceptionTag instruction
 /// Calls exception_get_tag(ctx) -> tag
 pub fn lower_get_exception_tag(
-  ctx : LoweringContext,
+  ctx : @lower.LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
 ) -> Unit {
@@ -235,7 +258,7 @@ pub fn lower_get_exception_tag(
   let vmctx_vreg = emit_load_vmctx(ctx, block)
 
   // Load function pointer
-  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let func_ptr_vreg = ctx.vcode_function().new_vreg(Int)
   let load_fp = @instr.VCodeInst::new(
     LoadExternalFuncAddr(rt_exception_get_tag(ctx)),
   )
@@ -243,14 +266,14 @@ pub fn lower_get_exception_tag(
   block.add_inst(load_fp)
 
   // Call: exception_get_tag(ctx) -> tag
-  lower_c_libcall(ctx, block, func_ptr_vreg, [vmctx_vreg], Some(dst))
+  @lower.lower_c_libcall(ctx, block, func_ptr_vreg, [vmctx_vreg], Some(dst))
 }
 
 ///|
 /// Lower GetExceptionValue(idx) instruction
 /// Calls exception_get_value(ctx, idx) -> value
 pub fn lower_get_exception_value(
-  ctx : LoweringContext,
+  ctx : @lower.LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
   idx : Int,
@@ -262,10 +285,10 @@ pub fn lower_get_exception_value(
   let vmctx_vreg = emit_load_vmctx(ctx, block)
 
   // Materialize index
-  let idx_vreg = materialize_imm(ctx, block, idx.to_int64())
+  let idx_vreg = @lower.materialize_imm(ctx, block, idx.to_int64())
 
   // Load function pointer
-  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let func_ptr_vreg = ctx.vcode_function().new_vreg(Int)
   let load_fp = @instr.VCodeInst::new(
     LoadExternalFuncAddr(rt_exception_get_value(ctx)),
   )
@@ -273,14 +296,20 @@ pub fn lower_get_exception_value(
   block.add_inst(load_fp)
 
   // Call: exception_get_value(ctx, idx) -> value
-  lower_c_libcall(ctx, block, func_ptr_vreg, [vmctx_vreg, idx_vreg], Some(dst))
+  @lower.lower_c_libcall(
+    ctx,
+    block,
+    func_ptr_vreg,
+    [vmctx_vreg, idx_vreg],
+    Some(dst),
+  )
 }
 
 ///|
 /// Lower GetExceptionValueCount instruction
 /// Calls exception_get_value_count(ctx) -> count
 pub fn lower_get_exception_value_count(
-  ctx : LoweringContext,
+  ctx : @lower.LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
 ) -> Unit {
@@ -291,7 +320,7 @@ pub fn lower_get_exception_value_count(
   let vmctx_vreg = emit_load_vmctx(ctx, block)
 
   // Load function pointer
-  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let func_ptr_vreg = ctx.vcode_function().new_vreg(Int)
   let load_fp = @instr.VCodeInst::new(
     LoadExternalFuncAddr(rt_exception_get_value_count(ctx)),
   )
@@ -299,14 +328,14 @@ pub fn lower_get_exception_value_count(
   block.add_inst(load_fp)
 
   // Call: exception_get_value_count(ctx) -> count
-  lower_c_libcall(ctx, block, func_ptr_vreg, [vmctx_vreg], Some(dst))
+  @lower.lower_c_libcall(ctx, block, func_ptr_vreg, [vmctx_vreg], Some(dst))
 }
 
 ///|
 /// Lower Delegate(depth) instruction
 /// Calls exception_delegate(ctx, depth)
 pub fn lower_delegate(
-  ctx : LoweringContext,
+  ctx : @lower.LoweringContext,
   _inst : @milkir.Inst,
   block : @block.VCodeBlock,
   depth : Int,
@@ -315,10 +344,10 @@ pub fn lower_delegate(
   let vmctx_vreg = emit_load_vmctx(ctx, block)
 
   // Materialize depth
-  let depth_vreg = materialize_imm(ctx, block, depth.to_int64())
+  let depth_vreg = @lower.materialize_imm(ctx, block, depth.to_int64())
 
   // Load function pointer
-  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let func_ptr_vreg = ctx.vcode_function().new_vreg(Int)
   let load_fp = @instr.VCodeInst::new(
     LoadExternalFuncAddr(rt_exception_delegate(ctx)),
   )
@@ -327,7 +356,13 @@ pub fn lower_delegate(
 
   // Call: exception_delegate(ctx, depth)
   // This is noreturn
-  lower_c_libcall(ctx, block, func_ptr_vreg, [vmctx_vreg, depth_vreg], None)
+  @lower.lower_c_libcall(
+    ctx,
+    block,
+    func_ptr_vreg,
+    [vmctx_vreg, depth_vreg],
+    None,
+  )
 }
 
 ///|
@@ -335,7 +370,7 @@ pub fn lower_delegate(
 /// Calls exception_spill_locals(ctx, locals_ptr, count)
 /// This saves all locals to memory so catch handlers can see throw-time values
 pub fn lower_spill_locals_for_throw(
-  ctx : LoweringContext,
+  ctx : @lower.LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
   count : Int,
@@ -348,7 +383,7 @@ pub fn lower_spill_locals_for_throw(
     // Use pre-allocated outgoing args area for temporary local snapshots.
     // Do not adjust SP dynamically inside function bodies.
     let stack_space = (count * 8 + 15) / 16 * 16
-    ctx.vcode_func.update_max_outgoing_args_size(stack_space)
+    ctx.vcode_function().update_max_outgoing_args_size(stack_space)
 
     // Store each local value to outgoing args area at SP + offset.
     for i in 0..<count {
@@ -360,22 +395,22 @@ pub fn lower_spill_locals_for_throw(
     }
 
     // Get outgoing-args base pointer.
-    let sp_vreg = ctx.vcode_func.new_vreg(Int)
+    let sp_vreg = ctx.vcode_function().new_vreg(Int)
     let load_sp = @instr.VCodeInst::new(LoadSP)
     load_sp.add_def({ reg: Virtual(sp_vreg) })
     block.add_inst(load_sp)
 
     // Materialize count
-    let count_vreg = materialize_imm(ctx, block, count.to_int64())
+    let count_vreg = @lower.materialize_imm(ctx, block, count.to_int64())
 
     // Call spill_locals helper
-    let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+    let func_ptr_vreg = ctx.vcode_function().new_vreg(Int)
     let load_fp = @instr.VCodeInst::new(
       LoadExternalFuncAddr(rt_exception_spill_locals(ctx)),
     )
     load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
     block.add_inst(load_fp)
-    lower_c_libcall(
+    @lower.lower_c_libcall(
       ctx,
       block,
       func_ptr_vreg,
@@ -385,17 +420,17 @@ pub fn lower_spill_locals_for_throw(
     (sp_vreg, count_vreg)
   } else {
     // No locals - pass null and 0
-    let null_vreg = materialize_imm(ctx, block, 0L)
-    let zero_vreg = materialize_imm(ctx, block, 0L)
+    let null_vreg = @lower.materialize_imm(ctx, block, 0L)
+    let zero_vreg = @lower.materialize_imm(ctx, block, 0L)
 
     // Still call spill_locals to clear any previous spilled state
-    let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+    let func_ptr_vreg = ctx.vcode_function().new_vreg(Int)
     let load_fp = @instr.VCodeInst::new(
       LoadExternalFuncAddr(rt_exception_spill_locals(ctx)),
     )
     load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
     block.add_inst(load_fp)
-    lower_c_libcall(
+    @lower.lower_c_libcall(
       ctx,
       block,
       func_ptr_vreg,
@@ -411,7 +446,7 @@ pub fn lower_spill_locals_for_throw(
 /// Lower GetSpilledLocal(idx) instruction
 /// Calls exception_get_spilled_local(ctx, idx) -> value
 pub fn lower_get_spilled_local(
-  ctx : LoweringContext,
+  ctx : @lower.LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
   idx : Int,
@@ -423,10 +458,10 @@ pub fn lower_get_spilled_local(
   let vmctx_vreg = emit_load_vmctx(ctx, block)
 
   // Materialize index
-  let idx_vreg = materialize_imm(ctx, block, idx.to_int64())
+  let idx_vreg = @lower.materialize_imm(ctx, block, idx.to_int64())
 
   // Load function pointer
-  let func_ptr_vreg = ctx.vcode_func.new_vreg(Int)
+  let func_ptr_vreg = ctx.vcode_function().new_vreg(Int)
   let load_fp = @instr.VCodeInst::new(
     LoadExternalFuncAddr(rt_exception_get_spilled_local(ctx)),
   )
@@ -434,5 +469,11 @@ pub fn lower_get_spilled_local(
   block.add_inst(load_fp)
 
   // Call: exception_get_spilled_local(ctx, idx) -> value
-  lower_c_libcall(ctx, block, func_ptr_vreg, [vmctx_vreg, idx_vreg], Some(dst))
+  @lower.lower_c_libcall(
+    ctx,
+    block,
+    func_ptr_vreg,
+    [vmctx_vreg, idx_vreg],
+    Some(dst),
+  )
 }

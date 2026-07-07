@@ -13,9 +13,15 @@ import {
 // Values
 pub fn apply_aarch64_rule(String, MatchResult, @milkir.Inst, LoweringContext) -> AArch64RewriteResult
 
+pub fn collect_call_result_vregs(LoweringContext, @milkir.Inst) -> Array[@abi.VReg]
+
 pub fn get_aarch64_rules() -> Array[RewriteRule]
 
 pub fn get_optimization_rules() -> Array[RewriteRule]
+
+pub fn invalidate_mem_base_cache(LoweringContext) -> Unit
+
+pub fn invalidate_table0_base_cache(LoweringContext) -> Unit
 
 pub fn is_consecutive_ones(Int64) -> Bool
 
@@ -23,33 +29,9 @@ pub fn is_valid_add_imm(Int64) -> Bool
 
 pub fn is_valid_logical_imm(Int64) -> Bool
 
-pub fn lower_array_copy(LoweringContext, @milkir.Inst, @block.VCodeBlock, Int, Int) -> Unit
+pub fn lower_c_libcall(LoweringContext, @block.VCodeBlock, @abi.VReg, Array[@abi.VReg], @abi.VReg?) -> Unit
 
-pub fn lower_array_fill(LoweringContext, @milkir.Inst, @block.VCodeBlock, Int) -> Unit
-
-pub fn lower_array_get(LoweringContext, @milkir.Inst, @block.VCodeBlock, Int) -> Unit
-
-pub fn lower_array_get_s(LoweringContext, @milkir.Inst, @block.VCodeBlock, Int, Int) -> Unit
-
-pub fn lower_array_get_u(LoweringContext, @milkir.Inst, @block.VCodeBlock, Int, Int) -> Unit
-
-pub fn lower_array_init_data(LoweringContext, @milkir.Inst, @block.VCodeBlock, Int, Int) -> Unit
-
-pub fn lower_array_init_elem(LoweringContext, @milkir.Inst, @block.VCodeBlock, Int, Int) -> Unit
-
-pub fn lower_array_len(LoweringContext, @milkir.Inst, @block.VCodeBlock) -> Unit
-
-pub fn lower_array_new(LoweringContext, @milkir.Inst, @block.VCodeBlock, Int) -> Unit
-
-pub fn lower_array_new_data(LoweringContext, @milkir.Inst, @block.VCodeBlock, Int, Int) -> Unit
-
-pub fn lower_array_new_default(LoweringContext, @milkir.Inst, @block.VCodeBlock, Int) -> Unit
-
-pub fn lower_array_new_elem(LoweringContext, @milkir.Inst, @block.VCodeBlock, Int, Int) -> Unit
-
-pub fn lower_array_new_fixed(LoweringContext, @milkir.Inst, @block.VCodeBlock, Int, Int) -> Unit
-
-pub fn lower_array_set(LoweringContext, @milkir.Inst, @block.VCodeBlock, Int) -> Unit
+pub fn lower_c_libcall_direct(LoweringContext, @block.VCodeBlock, @instr.ExternalName, Array[@abi.VReg], @abi.VReg?) -> Unit
 
 pub fn lower_call(LoweringContext, @milkir.Inst, @block.VCodeBlock, Int) -> Unit
 
@@ -57,39 +39,15 @@ pub fn lower_call_indirect(LoweringContext, @milkir.Inst, @block.VCodeBlock, Int
 
 pub fn lower_call_ref(LoweringContext, @milkir.Inst, @block.VCodeBlock, Int) -> Unit
 
-pub fn lower_delegate(LoweringContext, @milkir.Inst, @block.VCodeBlock, Int) -> Unit
-
 pub fn lower_function(@milkir.Function, isa? : @isa.ISA, abi_settings? : @abi.ABISettings, runtime_layout? : @abi.RuntimeContextLayout?, call_conv_layout? : @abi.CallConventionLayout?, runtime_helper_symbols? : Map[String, String], extension_lowerer? : ((LoweringContext, @milkir.Inst, @block.VCodeBlock, @milkir.ExtOp) -> Bool)?, num_imports? : Int, run_ir_opt? : Bool, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @machv.Function
 
 pub fn lower_function_optimized(@milkir.Function) -> @machv.Function
 
-pub fn lower_gc_convert(LoweringContext, @milkir.Inst, @block.VCodeBlock) -> Unit
-
-pub fn lower_get_exception_tag(LoweringContext, @milkir.Inst, @block.VCodeBlock) -> Unit
-
-pub fn lower_get_exception_value(LoweringContext, @milkir.Inst, @block.VCodeBlock, Int) -> Unit
-
-pub fn lower_get_exception_value_count(LoweringContext, @milkir.Inst, @block.VCodeBlock) -> Unit
-
 pub fn lower_get_func_ref(LoweringContext, @milkir.Inst, @block.VCodeBlock, Int) -> Unit
-
-pub fn lower_get_spilled_local(LoweringContext, @milkir.Inst, @block.VCodeBlock, Int) -> Unit
-
-pub fn lower_i31_get_s(LoweringContext, @milkir.Inst, @block.VCodeBlock) -> Unit
-
-pub fn lower_i31_get_u(LoweringContext, @milkir.Inst, @block.VCodeBlock) -> Unit
-
-pub fn lower_i31_new(LoweringContext, @milkir.Inst, @block.VCodeBlock) -> Unit
 
 pub fn lower_inst_with_patterns(LoweringContext, @milkir.Inst, @block.VCodeBlock, Array[RewriteRule]) -> Bool
 
 pub fn lower_load_mem_base(LoweringContext, @milkir.Inst, @block.VCodeBlock, Int) -> Unit
-
-pub fn lower_ref_cast(LoweringContext, @milkir.Inst, @block.VCodeBlock, Int, Bool) -> Unit
-
-pub fn lower_ref_eq(LoweringContext, @milkir.Inst, @block.VCodeBlock) -> Unit
-
-pub fn lower_ref_test(LoweringContext, @milkir.Inst, @block.VCodeBlock, Int, Bool) -> Unit
 
 pub fn lower_return_call(LoweringContext, @milkir.Inst, @block.VCodeBlock, Int) -> Unit
 
@@ -97,37 +55,23 @@ pub fn lower_return_call_indirect(LoweringContext, @milkir.Inst, @block.VCodeBlo
 
 pub fn lower_return_call_ref(LoweringContext, @milkir.Inst, @block.VCodeBlock, Int) -> Unit
 
-pub fn lower_spill_locals_for_throw(LoweringContext, @milkir.Inst, @block.VCodeBlock, Int) -> Unit
-
-pub fn lower_struct_get(LoweringContext, @milkir.Inst, @block.VCodeBlock, Int, Int) -> Unit
-
-pub fn lower_struct_get_s(LoweringContext, @milkir.Inst, @block.VCodeBlock, Int, Int, Int) -> Unit
-
-pub fn lower_struct_get_u(LoweringContext, @milkir.Inst, @block.VCodeBlock, Int, Int, Int) -> Unit
-
-pub fn lower_struct_new(LoweringContext, @milkir.Inst, @block.VCodeBlock, Int) -> Unit
-
-pub fn lower_struct_new_default(LoweringContext, @milkir.Inst, @block.VCodeBlock, Int) -> Unit
-
-pub fn lower_struct_set(LoweringContext, @milkir.Inst, @block.VCodeBlock, Int, Int) -> Unit
-
-pub fn lower_throw(LoweringContext, @milkir.Inst, @block.VCodeBlock, Int) -> Unit
-
-pub fn lower_throw_ref(LoweringContext, @milkir.Inst, @block.VCodeBlock) -> Unit
-
-pub fn lower_try_table_begin(LoweringContext, @milkir.Inst, @block.VCodeBlock, Int) -> Unit
-
-pub fn lower_try_table_end(LoweringContext, @milkir.Inst, @block.VCodeBlock, Int) -> Unit
-
 pub fn lower_unsupported_extension_opcode(@milkir.Inst, @block.VCodeBlock) -> Unit
 
 pub fn match_pattern(Pattern, @milkir.Inst, LoweringContext) -> MatchResult?
+
+pub fn materialize_imm(LoweringContext, @block.VCodeBlock, Int64) -> @abi.VReg
 
 pub fn optimize_vcode(@machv.Function, isa? : @isa.ISA) -> Unit
 
 pub fn optimize_vcode_for_lowering(@machv.Function, isa? : @isa.ISA, runtime_layout? : @abi.RuntimeContextLayout?) -> Unit
 
+pub fn runtime_helper_symbol(LoweringContext, String) -> @instr.ExternalName
+
 pub fn try_apply_rules(@milkir.Inst, LoweringContext, Array[RewriteRule]) -> RewriteResult
+
+pub fn vmctx_index(LoweringContext) -> Int
+
+pub fn vmctx_preg(LoweringContext) -> @abi.PReg
 
 // Errors
 
@@ -143,7 +87,17 @@ pub enum AArch64RewriteResult {
 }
 
 type LoweringContext
+pub fn LoweringContext::abi_settings(Self) -> @abi.ABISettings
+pub fn LoweringContext::call_conv_layout(Self) -> @abi.CallConventionLayout
+pub fn LoweringContext::canonicalize_indirect_type_idx(Self, Int) -> Int
+pub fn LoweringContext::get_vreg(Self, @milkir.Value) -> @abi.VReg
+pub fn LoweringContext::get_vreg_for_use(Self, @milkir.Value, @block.VCodeBlock) -> @abi.VReg
 pub fn LoweringContext::new(@milkir.Function, @isa.ISA, @abi.ABISettings, @abi.RuntimeContextLayout?, @abi.CallConventionLayout?, Map[String, String], ((Self, @milkir.Inst, @block.VCodeBlock, @milkir.ExtOp) -> Bool)?, Int, Bool, Array[Int]) -> Self
+pub fn LoweringContext::new_vreg(Self, @abi.RegClass) -> @abi.VReg
+pub fn LoweringContext::runtime_layout(Self) -> @abi.RuntimeContextLayout
+pub fn LoweringContext::set_cached_vreg(Self, Int, @abi.VReg) -> Unit
+pub fn LoweringContext::use_subtype_indirect_check(Self) -> Bool
+pub fn LoweringContext::vcode_function(Self) -> @machv.Function
 
 type MatchResult
 

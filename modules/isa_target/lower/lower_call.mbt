@@ -830,7 +830,7 @@ fn add_c_call_clobbers(ctx : LoweringContext, inst : @instr.VCodeInst) -> Unit {
 ///|
 /// Lower a C libcall as direct-call fixup (AArch64 only).
 /// This emits a symbolic `CallExternal` that the embedding runtime resolves.
-fn lower_c_libcall_direct(
+pub fn lower_c_libcall_direct(
   ctx : LoweringContext,
   block : @block.VCodeBlock,
   symbol : @instr.ExternalName,
@@ -1040,7 +1040,7 @@ fn lower_external_call(
 ///
 /// Unlike lower_call_ptr which handles Wasm calling convention with vmctx,
 /// this is for simple C functions where args follow the platform C ABI.
-fn lower_c_libcall(
+pub fn lower_c_libcall(
   ctx : LoweringContext,
   block : @block.VCodeBlock,
   func_ptr : @abi.VReg,
@@ -1095,7 +1095,7 @@ fn lower_c_libcall(
 
 ///|
 /// Helper to materialize an immediate value into a vreg
-fn materialize_imm(
+pub fn materialize_imm(
   ctx : LoweringContext,
   block : @block.VCodeBlock,
   value : Int64,

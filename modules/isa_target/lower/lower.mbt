@@ -141,6 +141,13 @@ fn LoweringContext::require_runtime_layout(
 }
 
 ///|
+pub fn LoweringContext::runtime_layout(
+  self : LoweringContext,
+) -> @abi.RuntimeContextLayout {
+  self.require_runtime_layout()
+}
+
+///|
 fn LoweringContext::require_call_conv_layout(
   self : LoweringContext,
 ) -> @abi.CallConventionLayout {
@@ -149,6 +156,27 @@ fn LoweringContext::require_call_conv_layout(
     None =>
       abort("call convention layout is required for ABI-specific lowering")
   }
+}
+
+///|
+pub fn LoweringContext::call_conv_layout(
+  self : LoweringContext,
+) -> @abi.CallConventionLayout {
+  self.require_call_conv_layout()
+}
+
+///|
+pub fn LoweringContext::vcode_function(
+  self : LoweringContext,
+) -> @machv.Function {
+  self.vcode_func
+}
+
+///|
+pub fn LoweringContext::abi_settings(
+  self : LoweringContext,
+) -> @abi.ABISettings {
+  self.abi_settings
 }
 
 ///|
@@ -163,7 +191,7 @@ fn LoweringContext::get_cached_vreg(
 }
 
 ///|
-fn LoweringContext::set_cached_vreg(
+pub fn LoweringContext::set_cached_vreg(
   self : LoweringContext,
   value_id : Int,
   vreg : @abi.VReg,
@@ -201,7 +229,7 @@ fn LoweringContext::is_fused_icmp_result(
 }
 
 ///|
-fn LoweringContext::canonicalize_indirect_type_idx(
+pub fn LoweringContext::canonicalize_indirect_type_idx(
   self : LoweringContext,
   raw_type_idx : Int,
 ) -> Int {
@@ -217,14 +245,21 @@ fn LoweringContext::canonicalize_indirect_type_idx(
 }
 
 ///|
+pub fn LoweringContext::use_subtype_indirect_check(
+  self : LoweringContext,
+) -> Bool {
+  self.use_subtype_indirect_check
+}
+
+///|
 /// Invalidate cached memory bases in lowering context.
-fn invalidate_mem_base_cache(ctx : LoweringContext) -> Unit {
+pub fn invalidate_mem_base_cache(ctx : LoweringContext) -> Unit {
   ctx.mem_base_cache.clear()
 }
 
 ///|
 /// Invalidate cached table0 base pointers in lowering context.
-fn invalidate_table0_base_cache(ctx : LoweringContext) -> Unit {
+pub fn invalidate_table0_base_cache(ctx : LoweringContext) -> Unit {
   ctx.table0_base_cache.clear()
 }
 
@@ -860,7 +895,7 @@ fn compute_fused_icmps(
 
 ///|
 /// Collect call result vregs, skipping all results if none are used.
-fn collect_call_result_vregs(
+pub fn collect_call_result_vregs(
   ctx : LoweringContext,
   inst : @milkir.Inst,
 ) -> Array[@abi.VReg] {
@@ -932,7 +967,7 @@ fn collect_call_args_with_consts(
 
 ///|
 /// Get or create a @abi.VReg for an IR Value
-fn LoweringContext::get_vreg(
+pub fn LoweringContext::get_vreg(
   self : LoweringContext,
   value : @milkir.Value,
 ) -> @abi.VReg {
@@ -950,7 +985,7 @@ fn LoweringContext::get_vreg(
 ///|
 /// Get @abi.VReg for an IR Value, generating LoadStackParam if it's a stack parameter
 /// This should be used when lowering instructions that use values
-fn LoweringContext::get_vreg_for_use(
+pub fn LoweringContext::get_vreg_for_use(
   self : LoweringContext,
   value : @milkir.Value,
   block : @block.VCodeBlock,
@@ -987,7 +1022,7 @@ fn LoweringContext::get_vreg_for_use(
 
 ///|
 /// Create a new @abi.VReg with the given class
-fn LoweringContext::new_vreg(
+pub fn LoweringContext::new_vreg(
   self : LoweringContext,
   class : @abi.RegClass,
 ) -> @abi.VReg {

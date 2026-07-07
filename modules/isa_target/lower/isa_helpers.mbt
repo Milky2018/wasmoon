@@ -10,12 +10,12 @@ fn current_isa(ctx : LoweringContext) -> @isa.ISA {
 }
 
 ///|
-fn vmctx_index(ctx : LoweringContext) -> Int {
+pub fn vmctx_index(ctx : LoweringContext) -> Int {
   current_isa(ctx).vmctx_reg_index()
 }
 
 ///|
-fn vmctx_preg(ctx : LoweringContext) -> @abi.PReg {
+pub fn vmctx_preg(ctx : LoweringContext) -> @abi.PReg {
   current_isa(ctx).vmctx_preg()
 }
 
