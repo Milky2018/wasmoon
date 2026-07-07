@@ -111,9 +111,9 @@ pub fn target() -> Target {
 
 ///|
 pub fn allocatable_regs(
-  reserve_extra_results_ptr? : Bool = false,
+  reserved_int_regs? : Array[Int] = [],
 ) -> Array[@machv.PReg] {
-  let env = build_machine_env(reserve_extra_results_ptr~)
+  let env = build_machine_env(reserved_int_regs~)
   let regs : Array[@machv.PReg] = []
   for r in env.preferred_int {
     regs.push(r)
@@ -229,8 +229,13 @@ fn abi_location_preg(location : @machv.AbiValueLocation) -> @machv.PReg? {
 }
 
 ///|
-fn extra_results_ptr_preg() -> @machv.PReg {
-  int_reg(int_reg_index(ExtraResultsPtr))
+fn require_return_area_base_reg(
+  return_area_base_reg : @machv.PReg?,
+) -> @machv.PReg {
+  match return_area_base_reg {
+    Some(preg) => preg
+    None => abort("x64_target: return-area base register is required")
+  }
 }
 
 ///|
@@ -267,6 +272,7 @@ fn add_return_moves(
   out : @machv.AbstractFunction,
   block : @machv.Block,
   values : Array[@milkir.Value],
+  return_area_base_reg : @machv.PReg?,
   uses_call_conv_layout? : Bool = false,
 ) -> Unit {
   for i, value in values {
@@ -286,7 +292,9 @@ fn add_return_moves(
         uses_call_conv_layout |> ignore
         let store = out.new_inst(StorePtr(mem_type_for_type(value.ty), offset))
         store.add_operand(
-          @machv.Operand::use_reg(Physical(extra_results_ptr_preg())),
+          @machv.Operand::use_reg(
+            Physical(require_return_area_base_reg(return_area_base_reg)),
+          ),
         )
         store.add_operand(@machv.Operand::use_reg(reg_for_value(value)))
         block.append(store)
@@ -302,6 +310,7 @@ fn add_call_return_area_loads(
   block : @machv.Block,
   inst : @machv.Instruction,
   values : Array[@milkir.Value],
+  return_area_base_reg : @machv.PReg?,
 ) -> Unit {
   for i, value in values {
     guard i < inst.abi_result_locations.length() else { continue }
@@ -309,7 +318,9 @@ fn add_call_return_area_loads(
       ReturnArea(offset~, ..) => {
         let load = out.new_inst(LoadPtr(mem_type_for_type(value.ty), offset))
         load.add_operand(
-          @machv.Operand::use_reg(Physical(extra_results_ptr_preg())),
+          @machv.Operand::use_reg(
+            Physical(require_return_area_base_reg(return_area_base_reg)),
+          ),
         )
         load.add_operand(@machv.Operand::def(reg_for_value(value)))
         block.append(load)
@@ -325,6 +336,7 @@ fn add_call_conv_result_moves(
   block : @machv.Block,
   inst : @machv.Instruction,
   values : Array[@milkir.Value],
+  return_area_base_reg : @machv.PReg?,
 ) -> Unit {
   for i, value in values {
     guard i < inst.abi_result_locations.length() else { continue }
@@ -338,7 +350,9 @@ fn add_call_conv_result_moves(
       ReturnArea(offset~, ..) => {
         let load = out.new_inst(LoadPtr(mem_type_for_type(value.ty), offset))
         load.add_operand(
-          @machv.Operand::use_reg(Physical(extra_results_ptr_preg())),
+          @machv.Operand::use_reg(
+            Physical(require_return_area_base_reg(return_area_base_reg)),
+          ),
         )
         load.add_operand(@machv.Operand::def(reg_for_value(value)))
         block.append(load)
@@ -1425,6 +1439,7 @@ fn lower_inst(
   out : @machv.AbstractFunction,
   block : @machv.Block,
   inst : @milkir.Inst,
+  return_area_base_reg : @machv.PReg?,
   call_conv_layout? : @abi.CallConventionLayout? = None,
 ) -> Unit {
   match inst.opcode {
@@ -1496,7 +1511,13 @@ fn lower_inst(
         call_conv,
       )
       block.append(lowered)
-      add_call_conv_result_moves(out, block, lowered, inst.results)
+      add_call_conv_result_moves(
+        out,
+        block,
+        lowered,
+        inst.results,
+        return_area_base_reg,
+      )
       return
     }
     Fconst(value) => {
@@ -1590,7 +1611,13 @@ fn lower_inst(
   // constraints, and legalization for non-trivial memory ops.
   block.append(lowered)
   if inst.opcode is Call(_) {
-    add_call_return_area_loads(out, block, lowered, inst.results)
+    add_call_return_area_loads(
+      out,
+      block,
+      lowered,
+      inst.results,
+      return_area_base_reg,
+    )
   }
 }
 
@@ -1600,11 +1627,18 @@ fn lower_terminator(
   block : @machv.Block,
   terminator : @milkir.Terminator,
   block_map : Array[(Int, Int)],
+  return_area_base_reg : @machv.PReg?,
   uses_call_conv_layout? : Bool = false,
 ) -> Unit {
   match terminator {
     Return(values) => {
-      add_return_moves(out, block, values, uses_call_conv_layout~)
+      add_return_moves(
+        out,
+        block,
+        values,
+        return_area_base_reg,
+        uses_call_conv_layout~,
+      )
       block.set_terminator(TermReturn([]))
     }
     Jump(target, values) =>
@@ -1680,6 +1714,7 @@ fn lower_function_with_abi(
   func : @milkir.Function,
   uses_call_conv_layout : Bool,
   call_conv_layout? : @abi.CallConventionLayout? = None,
+  return_area_base_reg? : @machv.PReg? = None,
 ) -> @machv.AbstractFunction {
   let out = @machv.AbstractFunction::new(func.name)
   out.next_vreg_id = func.next_value_id
@@ -1699,7 +1734,14 @@ fn lower_function_with_abi(
   for i, milk_block in func.blocks {
     let block = out.blocks[i]
     for inst in milk_block.instructions {
-      lower_inst(func, out, block, inst, call_conv_layout~)
+      lower_inst(
+        func,
+        out,
+        block,
+        inst,
+        return_area_base_reg,
+        call_conv_layout~,
+      )
     }
     if milk_block.terminator is Some(terminator) {
       lower_terminator(
@@ -1707,6 +1749,7 @@ fn lower_function_with_abi(
         block,
         terminator,
         block_map,
+        return_area_base_reg,
         uses_call_conv_layout~,
       )
     }
@@ -1715,14 +1758,23 @@ fn lower_function_with_abi(
 }
 
 ///|
-pub fn lower_function(func : @milkir.Function) -> @machv.AbstractFunction {
-  lower_function_with_abi(func, false)
+pub fn lower_function(
+  func : @milkir.Function,
+  return_area_base_reg? : @machv.PReg? = None,
+) -> @machv.AbstractFunction {
+  lower_function_with_abi(func, false, return_area_base_reg~)
 }
 
 ///|
 pub fn lower_function_with_call_conv(
   func : @milkir.Function,
   call_conv_layout : @abi.CallConventionLayout,
+  return_area_base_reg? : @machv.PReg? = None,
 ) -> @machv.AbstractFunction {
-  lower_function_with_abi(func, true, call_conv_layout=Some(call_conv_layout))
+  lower_function_with_abi(
+    func,
+    true,
+    call_conv_layout=Some(call_conv_layout),
+    return_area_base_reg~,
+  )
 }

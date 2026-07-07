@@ -13,13 +13,13 @@ pub fn abi_policy() -> AbiPolicy
 
 pub fn allocatable_callee_saved_regs(enable_pinned_reg? : Bool) -> Array[@machv.PReg]
 
-pub fn allocatable_regs(reserve_extra_results_ptr? : Bool) -> Array[@machv.PReg]
+pub fn allocatable_regs(reserved_int_regs? : Array[Int]) -> Array[@machv.PReg]
 
 pub fn allocatable_scratch_fprs() -> Array[@machv.PReg]
 
 pub fn allocatable_scratch_regs() -> Array[@machv.PReg]
 
-pub fn build_machine_env(settings? : TargetSettings, reserve_context_cache_0? : Bool, reserve_context_cache_1? : Bool, reserve_extra_results_ptr? : Bool) -> MachineEnvData
+pub fn build_machine_env(settings? : TargetSettings, reserve_context_cache_0? : Bool, reserve_context_cache_1? : Bool, reserved_int_regs? : Array[Int]) -> MachineEnvData
 
 pub fn call_clobbered_fprs() -> Array[@machv.PReg]
 
@@ -29,9 +29,9 @@ pub fn call_clobbered_gprs() -> Array[@machv.PReg]
 
 pub fn int_reg_index(IntRegRole) -> Int
 
-pub fn lower_function(@milkir.Function) -> @machv.AbstractFunction
+pub fn lower_function(@milkir.Function, return_area_base_reg? : @machv.PReg?) -> @machv.AbstractFunction
 
-pub fn lower_function_with_call_conv(@milkir.Function, @abi.CallConventionLayout) -> @machv.AbstractFunction
+pub fn lower_function_with_call_conv(@milkir.Function, @abi.CallConventionLayout, return_area_base_reg? : @machv.PReg?) -> @machv.AbstractFunction
 
 pub fn sysv_arg_fprs() -> Array[@machv.PReg]
 
@@ -61,7 +61,6 @@ pub(all) enum IntRegRole {
   Context
   ContextCache0
   ContextCache1
-  ExtraResultsPtr
   Scratch1
   Scratch2
   FP

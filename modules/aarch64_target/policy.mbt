@@ -3,7 +3,6 @@ pub(all) enum IntRegRole {
   Context
   ContextCache0
   ContextCache1
-  ExtraResultsPtr
   Scratch1
   Scratch2
   FP
@@ -17,7 +16,6 @@ pub fn int_reg_index(role : IntRegRole) -> Int {
     Context => 21
     ContextCache0 => 20
     ContextCache1 => 19
-    ExtraResultsPtr => 23
     Scratch1 => 16
     Scratch2 => 17
     FP => 29
@@ -206,11 +204,10 @@ pub fn build_machine_env(
   settings? : TargetSettings = TargetSettings::default(),
   reserve_context_cache_0? : Bool = false,
   reserve_context_cache_1? : Bool = false,
-  reserve_extra_results_ptr? : Bool = false,
+  reserved_int_regs? : Array[Int] = [],
 ) -> MachineEnvData {
   let context_cache_0_idx = int_reg_index(ContextCache0)
   let context_cache_1_idx = int_reg_index(ContextCache1)
-  let extra_results_ptr_idx = int_reg_index(ExtraResultsPtr)
   let preferred_int : Array[@machv.PReg] = []
   let nonpreferred_int : Array[@machv.PReg] = []
   let callee_saved_int : Array[@machv.PReg] = []
@@ -221,7 +218,7 @@ pub fn build_machine_env(
     r in allocatable_callee_saved_regs(
       enable_pinned_reg=settings.enable_pinned_reg,
     ) {
-    if reserve_extra_results_ptr && r.index == extra_results_ptr_idx {
+    if reserved_int_regs.contains(r.index) {
       continue
     }
     if reserve_context_cache_0 && r.index == context_cache_0_idx {

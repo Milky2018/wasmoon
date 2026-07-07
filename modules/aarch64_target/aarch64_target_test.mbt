@@ -27,6 +27,11 @@ fn custom_test_call_conv() -> @abi.CallConventionLayout {
 }
 
 ///|
+fn test_return_area_base_reg() -> @machv.PReg {
+  { index: 23, class: Int }
+}
+
+///|
 test "AArch64 lowers custom call-convention function entry ABI" {
   let func = @milkir.Function::new(
     "custom_call_conv_body",
@@ -81,7 +86,7 @@ test "AArch64 records stack parameters and return area ABI locations" {
 }
 
 ///|
-test "AArch64 lowers custom call-convention return-area stores through ExtraResultsPtr" {
+test "AArch64 lowers custom call-convention return-area stores through return-area base register" {
   let func = @milkir.Function::new_empty("custom_return_area_store")
   let values : Array[@milkir.Value] = []
   for _ in 0..<9 {
@@ -91,7 +96,11 @@ test "AArch64 lowers custom call-convention return-area stores through ExtraResu
   }
   let entry = func.new_block([])
   entry.set_terminator(Return(values))
-  let lowered = lower_function_with_call_conv(func, custom_test_call_conv())
+  let lowered = lower_function_with_call_conv(
+    func,
+    custom_test_call_conv(),
+    return_area_base_reg=Some(test_return_area_base_reg()),
+  )
   let mut has_store = false
   for inst in lowered.blocks[0].instructions {
     if inst.opcode == StorePtr(MemI64, 0) &&
@@ -104,7 +113,7 @@ test "AArch64 lowers custom call-convention return-area stores through ExtraResu
 }
 
 ///|
-test "AArch64 lowers generic return-area stores through ExtraResultsPtr" {
+test "AArch64 lowers generic return-area stores through return-area base register" {
   let func = @milkir.Function::new_empty("generic_return_area_store")
   let values : Array[@milkir.Value] = []
   for _ in 0..<3 {
@@ -114,7 +123,10 @@ test "AArch64 lowers generic return-area stores through ExtraResultsPtr" {
   }
   let entry = func.new_block([])
   entry.set_terminator(Return(values))
-  let lowered = lower_function(func)
+  let lowered = lower_function(
+    func,
+    return_area_base_reg=Some(test_return_area_base_reg()),
+  )
   let mut has_store = false
   for inst in lowered.blocks[0].instructions {
     if inst.opcode == StorePtr(MemI64, 0) &&
@@ -481,7 +493,10 @@ test "AArch64 records outgoing stack arguments for direct calls" {
     func.new_inst(Call(@milkir.ExternalSymbol::new("callee")), args, results),
   )
   entry.set_terminator(Return([]))
-  let lowered = lower_function(func)
+  let lowered = lower_function(
+    func,
+    return_area_base_reg=Some(test_return_area_base_reg()),
+  )
   let call = lowered.blocks[0].instructions[0]
   inspect(call.stack_effect == CallFrame(16), content="true")
   inspect(lowered.get_max_outgoing_args_size(), content="16")
@@ -513,7 +528,11 @@ test "AArch64 lowers CallPtr with embedding ABI constraints and clobbers" {
     func.new_inst(CallPtr(2, 1), [callee, context, int_arg, float_arg], [result]),
   )
   entry.set_terminator(Return([result]))
-  let lowered = lower_function_with_call_conv(func, custom_test_call_conv())
+  let lowered = lower_function_with_call_conv(
+    func,
+    custom_test_call_conv(),
+    return_area_base_reg=Some(test_return_area_base_reg()),
+  )
   let call = lowered.blocks[0].instructions[0]
   inspect(call.opcode == CallPtr(2, 1), content="true")
   inspect(call.constraints.length(), content="4")
@@ -561,7 +580,7 @@ test "AArch64 records outgoing stack arguments for CallPtr" {
 }
 
 ///|
-test "AArch64 lowers CallPtr return-area loads through ExtraResultsPtr" {
+test "AArch64 lowers CallPtr return-area loads through return-area base register" {
   let func = @milkir.Function::new_empty("callptr_return_area_load")
   let callee = func.new_value(Ptr)
   let context = func.new_value(Ptr)
@@ -572,7 +591,11 @@ test "AArch64 lowers CallPtr return-area loads through ExtraResultsPtr" {
   let entry = func.new_block([])
   entry.append_inst(func.new_inst(CallPtr(0, 9), [callee, context], results))
   entry.set_terminator(Return([]))
-  let lowered = lower_function_with_call_conv(func, custom_test_call_conv())
+  let lowered = lower_function_with_call_conv(
+    func,
+    custom_test_call_conv(),
+    return_area_base_reg=Some(test_return_area_base_reg()),
+  )
   let mut has_load = false
   for inst in lowered.blocks[0].instructions {
     if inst.opcode == LoadPtr(MemI64, 0) &&
@@ -585,7 +608,7 @@ test "AArch64 lowers CallPtr return-area loads through ExtraResultsPtr" {
 }
 
 ///|
-test "AArch64 lowers generic Call return-area loads through ExtraResultsPtr" {
+test "AArch64 lowers generic Call return-area loads through return-area base register" {
   let func = @milkir.Function::new_empty("call_return_area_load")
   let results : Array[@milkir.Value] = []
   for _ in 0..<3 {
@@ -596,7 +619,10 @@ test "AArch64 lowers generic Call return-area loads through ExtraResultsPtr" {
     func.new_inst(Call(@milkir.ExternalSymbol::new("callee")), [], results),
   )
   entry.set_terminator(Return([]))
-  let lowered = lower_function(func)
+  let lowered = lower_function(
+    func,
+    return_area_base_reg=Some(test_return_area_base_reg()),
+  )
   let mut has_load = false
   for inst in lowered.blocks[0].instructions {
     if inst.opcode == LoadPtr(MemI64, 0) &&
