@@ -12,10 +12,6 @@ keywords = [ "compiler", "machine-ir", "codegen", "jit" ]
 
 description = "Reusable virtual-register machine IR"
 
-import {
-  "Milky2018/wasm_core@0.1.0",
-}
-
 preferred_target = "wasm-gc"
 
 supported_targets = "all"
