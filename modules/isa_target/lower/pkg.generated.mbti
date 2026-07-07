@@ -49,11 +49,7 @@ pub fn lower_function(@milkir.Function, isa? : @isa.ISA, abi_settings? : @abi.AB
 
 pub fn lower_function_optimized(@milkir.Function) -> @machv.Function
 
-pub fn lower_get_func_ref(LoweringContext, @milkir.Inst, @block.VCodeBlock, Int) -> Unit
-
 pub fn lower_inst_with_patterns(LoweringContext, @milkir.Inst, @block.VCodeBlock, Array[RewriteRule]) -> Bool
-
-pub fn lower_load_mem_base(LoweringContext, @milkir.Inst, @block.VCodeBlock, Int) -> Unit
 
 pub fn lower_unsupported_extension_opcode(@milkir.Inst, @block.VCodeBlock) -> Unit
 
@@ -90,6 +86,10 @@ pub enum AArch64RewriteResult {
 
 type LoweringContext
 pub fn LoweringContext::abi_settings(Self) -> @abi.ABISettings
+pub fn LoweringContext::cache_func_table(Self, Int, @abi.VReg) -> Unit
+pub fn LoweringContext::cache_mem_base(Self, Int, @abi.VReg) -> Unit
+pub fn LoweringContext::cached_func_table(Self, Int) -> @abi.VReg?
+pub fn LoweringContext::cached_mem_base(Self, Int) -> @abi.VReg?
 pub fn LoweringContext::call_conv_layout(Self) -> @abi.CallConventionLayout
 pub fn LoweringContext::canonicalize_indirect_type_idx(Self, Int) -> Int
 pub fn LoweringContext::get_vreg(Self, @milkir.Value) -> @abi.VReg

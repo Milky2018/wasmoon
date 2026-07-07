@@ -56,8 +56,7 @@ pub fn lower_extension(
   ext : @milkir.ExtOp,
 ) -> Bool {
   match @wasm_milkir.decode(ext) {
-    Some(LoadMemBase(memidx)) =>
-      @lower.lower_load_mem_base(ctx, inst, block, memidx)
+    Some(LoadMemBase(memidx)) => lower_load_mem_base(ctx, inst, block, memidx)
     Some(MemoryGrow(_))
     | Some(MemorySize(_))
     | Some(MemoryFill(_))
@@ -79,8 +78,7 @@ pub fn lower_extension(
       lower_return_call_indirect(ctx, inst, block, type_idx, table_idx)
     Some(ReturnCallRef(type_idx)) =>
       lower_return_call_ref(ctx, inst, block, type_idx)
-    Some(GetFuncRef(func_idx)) =>
-      @lower.lower_get_func_ref(ctx, inst, block, func_idx)
+    Some(GetFuncRef(func_idx)) => lower_get_func_ref(ctx, inst, block, func_idx)
     Some(I31New) => lower_i31_new(ctx, inst, block)
     Some(I31GetS) => lower_i31_get_s(ctx, inst, block)
     Some(I31GetU) => lower_i31_get_u(ctx, inst, block)

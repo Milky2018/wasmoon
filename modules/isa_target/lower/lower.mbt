@@ -265,6 +265,40 @@ pub fn LoweringContext::use_count(
 }
 
 ///|
+pub fn LoweringContext::cached_func_table(
+  self : LoweringContext,
+  block_id : Int,
+) -> @abi.VReg? {
+  self.func_table_cache.get(block_id)
+}
+
+///|
+pub fn LoweringContext::cache_func_table(
+  self : LoweringContext,
+  block_id : Int,
+  vreg : @abi.VReg,
+) -> Unit {
+  self.func_table_cache.set(block_id, vreg)
+}
+
+///|
+pub fn LoweringContext::cached_mem_base(
+  self : LoweringContext,
+  memidx : Int,
+) -> @abi.VReg? {
+  self.mem_base_cache.get(memidx)
+}
+
+///|
+pub fn LoweringContext::cache_mem_base(
+  self : LoweringContext,
+  memidx : Int,
+  vreg : @abi.VReg,
+) -> Unit {
+  self.mem_base_cache.set(memidx, vreg)
+}
+
+///|
 /// Invalidate cached memory bases in lowering context.
 pub fn invalidate_mem_base_cache(ctx : LoweringContext) -> Unit {
   ctx.mem_base_cache.clear()

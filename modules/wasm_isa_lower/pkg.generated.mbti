@@ -60,6 +60,8 @@ pub fn lower_get_exception_value(@lower.LoweringContext, @milkir.Inst, @block.VC
 
 pub fn lower_get_exception_value_count(@lower.LoweringContext, @milkir.Inst, @block.VCodeBlock) -> Unit
 
+pub fn lower_get_func_ref(@lower.LoweringContext, @milkir.Inst, @block.VCodeBlock, Int) -> Unit
+
 pub fn lower_get_spilled_local(@lower.LoweringContext, @milkir.Inst, @block.VCodeBlock, Int) -> Unit
 
 pub fn lower_i31_get_s(@lower.LoweringContext, @milkir.Inst, @block.VCodeBlock) -> Unit
@@ -67,6 +69,8 @@ pub fn lower_i31_get_s(@lower.LoweringContext, @milkir.Inst, @block.VCodeBlock) 
 pub fn lower_i31_get_u(@lower.LoweringContext, @milkir.Inst, @block.VCodeBlock) -> Unit
 
 pub fn lower_i31_new(@lower.LoweringContext, @milkir.Inst, @block.VCodeBlock) -> Unit
+
+pub fn lower_load_mem_base(@lower.LoweringContext, @milkir.Inst, @block.VCodeBlock, Int) -> Unit
 
 pub fn lower_ref_cast(@lower.LoweringContext, @milkir.Inst, @block.VCodeBlock, Int, Bool) -> Unit
 

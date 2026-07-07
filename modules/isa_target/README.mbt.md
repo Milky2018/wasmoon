@@ -81,3 +81,8 @@ test "optimize an explicitly targeted MachV function" {
 
 `isa_target` is compiler infrastructure. It should not own embedding-specific
 runtime helper addresses, Wasmoon host functions, or native FFI resolution.
+Dialect-specific `ExtOp` lowering is supplied by callers through
+`lower_function`'s `extension_lowerer` hook plus an explicit runtime-helper
+symbol map. WebAssembly uses the separate `Milky2018/wasm_isa_lower` adapter for
+that boundary; generic ISA lowering treats unknown extensions as unsupported
+instead of decoding Wasm opcodes itself.
