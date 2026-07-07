@@ -870,7 +870,7 @@ fn run_jit_cache_file(
   let mask_hash = hash_run_compile_mask(local_compile_mask)
   let dwarf_tag = if enable_dwarf { 1 } else { 0 }
   // Bump cache key version when generated machine code semantics change.
-  let file_name = "v2-\{run_jit_cache_arch_tag()}-o\{opt_level}-d\{dwarf_tag}-f\{func_hash}-m\{mask_hash}-n\{wasm_binary.length()}-h\{module_hash}.cwasm"
+  let file_name = "v3-\{run_jit_cache_arch_tag()}-o\{opt_level}-d\{dwarf_tag}-f\{func_hash}-m\{mask_hash}-n\{wasm_binary.length()}-h\{module_hash}.cwasm"
   if cache_dir.has_suffix("/") {
     "\{cache_dir}\{file_name}"
   } else {

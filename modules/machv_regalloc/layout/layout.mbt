@@ -362,3 +362,16 @@ pub fn optimize_layout(func : @machv.Function) -> @machv.Function {
   // Final pass: re-thread after reordering (some branches become collapsible).
   thread_trivial_jumps(reordered)
 }
+
+///|
+/// Optimize block order without rewriting successor targets.
+///
+/// Use this after register allocation has materialized edge-argument copies
+/// outside the terminator. At that point jump threading can skip the block that
+/// owns the edge copy and break SSA block-argument semantics.
+pub fn optimize_layout_preserving_edges(
+  func : @machv.Function,
+) -> @machv.Function {
+  let order = layout_blocks(func)
+  reorder_blocks(func, order)
+}

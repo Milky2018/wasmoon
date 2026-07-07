@@ -10,6 +10,8 @@ pub fn layout_blocks(@machv.Function) -> Array[Int]
 
 pub fn optimize_layout(@machv.Function) -> @machv.Function
 
+pub fn optimize_layout_preserving_edges(@machv.Function) -> @machv.Function
+
 pub fn reorder_blocks(@machv.Function, Array[Int]) -> @machv.Function
 
 // Errors

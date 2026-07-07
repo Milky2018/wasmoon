@@ -1137,6 +1137,20 @@ static int first_non_empty_iov(
     return 0;
 }
 
+static int validate_iovecs(
+    jit_context_t *ctx,
+    uint8_t *mem,
+    uint32_t iovs_u,
+    uint32_t iovs_len_u
+) {
+    for (uint32_t i = 0; i < iovs_len_u; i++) {
+        uint32_t buf_ptr = *(uint32_t *)(mem + iovs_u + i * 8);
+        uint32_t buf_len = *(uint32_t *)(mem + iovs_u + i * 8 + 4);
+        if (!check_mem_range(ctx, buf_ptr, (size_t)buf_len)) return 0;
+    }
+    return 1;
+}
+
 static int invalid_lookupflags(int32_t flags) {
     return (flags & ~0x01) != 0;
 }
@@ -1200,13 +1214,13 @@ static int64_t wasi_fd_write_impl(
     if (!check_mem_range(ctx, iovs_u, (size_t)iovs_len_u * 8)) return WASI_EFAULT;
     if (!check_mem_range(ctx, nwritten_ptr_u, 4)) return WASI_EFAULT;
 
-    uint32_t buf_ptr = 0;
-    uint32_t buf_len = 0;
-    int first_iov = first_non_empty_iov(ctx, mem, iovs_u, iovs_len_u, &buf_ptr, &buf_len);
-    if (first_iov < 0) return WASI_EFAULT;
+    if (!validate_iovecs(ctx, mem, iovs_u, iovs_len_u)) return WASI_EFAULT;
 
     uint32_t total = 0;
-    if (first_iov > 0) {
+    for (uint32_t i = 0; i < iovs_len_u; i++) {
+        uint32_t buf_ptr = *(uint32_t *)(mem + iovs_u + i * 8);
+        uint32_t buf_len = *(uint32_t *)(mem + iovs_u + i * 8 + 4);
+        if (buf_len == 0) continue;
         if (use_stdout_capture) {
             if (!append_output_buffer(
                     &ctx->wasi_stdout_buf,
@@ -1217,7 +1231,7 @@ static int64_t wasi_fd_write_impl(
                 )) {
                 return WASI_ENOMEM;
             }
-            total = buf_len;
+            total += buf_len;
         } else if (use_stderr_capture) {
             if (!append_output_buffer(
                     &ctx->wasi_stderr_buf,
@@ -1228,7 +1242,7 @@ static int64_t wasi_fd_write_impl(
                 )) {
                 return WASI_ENOMEM;
             }
-            total = buf_len;
+            total += buf_len;
         } else {
 #ifdef _WIN32
             int n = _write(native_fd, mem + buf_ptr, buf_len);
@@ -1236,7 +1250,8 @@ static int64_t wasi_fd_write_impl(
             ssize_t n = write(native_fd, mem + buf_ptr, buf_len);
 #endif
             if (n < 0) return errno_to_wasi(errno);
-            total = (uint32_t)n;
+            total += (uint32_t)n;
+            if ((uint32_t)n < buf_len) break;
         }
     }
 

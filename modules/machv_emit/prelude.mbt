@@ -2065,8 +2065,9 @@ pub fn emit_function_with_regalloc(
   call_conv_layout? : @abi.CallConventionLayout? = None,
   record_disasm? : Bool = true,
 ) -> MachineCode {
-  // Keep block layout optimization (targets are block IDs; ids stay stable).
-  let func = @layout.optimize_layout(func)
+  // Regalloc output carries edge copies as edits keyed by original blocks.
+  // Reorder blocks, but do not thread jumps across edge-copy blocks.
+  let func = @layout.optimize_layout_preserving_edges(func)
   let mc = MachineCode::new(record_disasm~)
   let is_amd64 = @isaregs.current_isa() is AMD64
 

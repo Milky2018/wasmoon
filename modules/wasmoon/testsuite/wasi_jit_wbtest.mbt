@@ -460,7 +460,7 @@ test "wasi jit: fd_write out-of-bounds iovec returns EFAULT" {
 }
 
 ///|
-test "wasi jit: fd_write uses first non-empty iovec only" {
+test "wasi jit: fd_write writes all non-empty iovecs" {
   let source =
     #|(module
     #|  (import "wasi_snapshot_preview1" "fd_write"
@@ -472,6 +472,27 @@ test "wasi jit: fd_write uses first non-empty iovec only" {
     #|  (func (export "test") (result i32)
     #|    (drop (call $fd_write
     #|      (i32.const 1) (i32.const 0) (i32.const 3) (i32.const 220)))
+    #|    (i32.load (i32.const 220))))
+  let result = compare_wasi(source, "test")
+  inspect(result.match_, content="true")
+  inspect(wasi_errno_from_result(result.interp_result), content="6")
+  inspect(wasi_errno_from_result(result.jit_result), content="6")
+  inspect(result.interp_stdout.length(), content="6")
+  inspect(result.jit_stdout.length(), content="6")
+}
+
+///|
+test "wasi jit: fd_write skips empty iovecs and continues" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "fd_write"
+    #|    (func $fd_write (param i32 i32 i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (data (i32.const 0) "\A0\00\00\00\00\00\00\00\B0\00\00\00\03\00\00\00")
+    #|  (data (i32.const 176) "abc")
+    #|  (func (export "test") (result i32)
+    #|    (drop (call $fd_write
+    #|      (i32.const 1) (i32.const 0) (i32.const 2) (i32.const 220)))
     #|    (i32.load (i32.const 220))))
   let result = compare_wasi(source, "test")
   inspect(result.match_, content="true")

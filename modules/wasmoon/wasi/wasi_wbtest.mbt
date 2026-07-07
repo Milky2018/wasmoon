@@ -35,10 +35,10 @@ test "wasi: fd_write returns EFAULT on out-of-bounds iovec" {
 }
 
 ///|
-test "wasi: fd_write uses first non-empty iovec only" {
+test "wasi: fd_write writes all non-empty iovecs" {
   let ctx = WasiContextBuilder::new().preopen_dir("/tmp", "/").build()
   let mem = @runtime.Memory::new(1, None)
-  let test_path = "wasmoon_fd_write_first_iov.txt"
+  let test_path = "wasmoon_fd_write_all_iovecs.txt"
   for i, c in test_path {
     mem.write_byte(1000 + i, c.to_int().to_byte())
   }
@@ -73,18 +73,18 @@ test "wasi: fd_write uses first non-empty iovec only" {
     mem.write_byte(340 + i, c.to_int().to_byte())
   }
   inspect(fd_write(ctx, mem, fd, 0, 3, 400), content="0")
-  inspect(mem.read_i32(400), content="3")
+  inspect(mem.read_i32(400), content="6")
   inspect(fd_seek(ctx, mem, fd, 0L, 0, 404), content="0")
   mem.write_i32(24, 360)
   mem.write_i32(28, 8)
   inspect(fd_read(ctx, mem, fd, 24, 1, 412), content="0")
-  inspect(mem.read_i32(412), content="3")
+  inspect(mem.read_i32(412), content="6")
   let mut content = ""
-  for i in 0..<3 {
+  for i in 0..<6 {
     content = content +
       mem.read_byte(360 + i).to_int().unsafe_to_char().to_string()
   }
-  inspect(content, content="abc")
+  inspect(content, content="abcXYZ")
   fd_close(ctx, fd) |> ignore
 }
 

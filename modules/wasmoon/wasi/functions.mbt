@@ -184,7 +184,7 @@ pub fn fd_write(
   if !check_mem_range(mem, nwritten_ptr, 4) {
     return Errno::Fault.to_i32()
   }
-  if iovs_len < 0 || !check_mem_range(mem, iovs, iovs_len * 8) {
+  if !check_iovecs_mem_range(mem, iovs, iovs_len) {
     return Errno::Fault.to_i32()
   }
   // Handle stdio streams
@@ -196,10 +196,12 @@ pub fn fd_write(
       return Errno::Badf.to_i32()
     }
     let mut total_written = 0
-    if first_non_empty_iov(mem, iovs, iovs_len) is Some(entry) {
-      let (buf_ptr, buf_len) = entry
-      if !check_mem_range(mem, buf_ptr, buf_len) {
-        return Errno::Fault.to_i32()
+    for i in 0..<iovs_len {
+      let iov_offset = iovs + i * 8
+      let buf_ptr = mem.read_i32(iov_offset)
+      let buf_len = mem.read_i32(iov_offset + 4)
+      if buf_len == 0 {
+        continue
       }
       let data = mem.read_bytes(buf_ptr, buf_len)
       if slot == 1 {
@@ -207,7 +209,7 @@ pub fn fd_write(
       } else {
         (ctx.stderr_callback)(data)
       }
-      total_written = buf_len
+      total_written = total_written + buf_len
     }
     mem.write_i32(nwritten_ptr, total_written)
     return Errno::Success.to_i32()
@@ -220,10 +222,12 @@ pub fn fd_write(
         _ => return Errno::Badf.to_i32()
       }
       let mut total_written = 0
-      if first_non_empty_iov(mem, iovs, iovs_len) is Some(entry) {
-        let (buf_ptr, buf_len) = entry
-        if !check_mem_range(mem, buf_ptr, buf_len) {
-          return Errno::Fault.to_i32()
+      for i in 0..<iovs_len {
+        let iov_offset = iovs + i * 8
+        let buf_ptr = mem.read_i32(iov_offset)
+        let buf_len = mem.read_i32(iov_offset + 4)
+        if buf_len == 0 {
+          continue
         }
         let buf = FixedArray::make(buf_len, b'\x00')
         for j in 0..<buf_len {
@@ -231,7 +235,7 @@ pub fn fd_write(
         }
         let written = native_write(file_entry.native_fd, buf, buf_len)
         match written {
-          Some(n) => total_written = n
+          Some(n) => total_written = total_written + n
           None => {
             mem.write_i32(nwritten_ptr, total_written)
             return native_last_errno_to_wasi()
