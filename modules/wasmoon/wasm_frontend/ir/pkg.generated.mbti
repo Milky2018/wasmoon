@@ -10,11 +10,13 @@ import {
 // Values
 pub fn translate_function(@types.Module, Int, @wasm_frontend.EmbeddingEnvironment, name? : String, memory_max_override? : Int?) -> @milkir.Function
 
-pub fn translate_function_body(String, @types.FuncType, Array[@types.ValueType], Array[@types.Instruction], Array[@types.FuncType], Array[Int], Int, Array[Int], @wasm_frontend.EmbeddingEnvironment, memory_max? : Int?, memory_is_64? : Array[Bool], memory_page_size_log2? : Array[Int], tables? : Array[@types.Table], global_types? : Array[@types.GlobalType], type_rec_groups? : Array[Int], func_base? : Int, import_remap? : Array[Int], module_types? : Array[@types.SubType], tags? : Array[@types.TagType], memory_mins? : Array[Int64]) -> @milkir.Function
+pub fn translate_function_body(TranslationContext, String, @types.FuncType, Array[@types.ValueType], Array[@types.Instruction]) -> @milkir.Function
 
 // Errors
 
 // Types and methods
+type TranslationContext
+pub fn TranslationContext::from_module(@types.Module, @wasm_frontend.EmbeddingEnvironment, memory_max_override? : Int?, func_base? : Int, import_remap? : Array[Int]) -> Self
 
 // Type aliases
 

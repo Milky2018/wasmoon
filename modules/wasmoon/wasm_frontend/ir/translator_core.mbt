@@ -72,6 +72,117 @@ priv struct BlockFrame {
 }
 
 ///|
+/// Immutable public translation context for Wasm-to-MilkIR frontend lowering.
+struct TranslationContext {
+  func_types : Array[@types.FuncType]
+  func_type_indices : Array[Int]
+  num_imports : Int
+  import_func_type_indices : Array[Int]
+  embedding_env : @wasm_frontend.EmbeddingEnvironment
+  memory_max : Int?
+  memory_is_64 : Array[Bool]
+  memory_page_size_log2 : Array[Int]
+  tables : Array[@types.Table]
+  global_types : Array[@types.GlobalType]
+  type_rec_groups : Array[Int]
+  func_base : Int
+  import_remap : Array[Int]
+  module_types : Array[@types.SubType]
+  tags : Array[@types.TagType]
+  memory_mins : Array[Int64]
+}
+
+///|
+/// Build frontend translation metadata from a decoded Wasm module.
+pub fn TranslationContext::from_module(
+  mod_ : @types.Module,
+  embedding_env : @wasm_frontend.EmbeddingEnvironment,
+  memory_max_override? : Int? = None,
+  func_base? : Int = 0,
+  import_remap? : Array[Int] = [],
+) -> TranslationContext {
+  let mut num_imports = 0
+  let import_func_type_indices : Array[Int] = []
+  let global_types : Array[@types.GlobalType] = []
+  let tags : Array[@types.TagType] = []
+  for imp in mod_.imports {
+    match imp.desc {
+      Func(type_idx) => {
+        num_imports = num_imports + 1
+        import_func_type_indices.push(type_idx)
+      }
+      Global(global_type) => global_types.push(global_type)
+      Tag(tag_type_idx) => tags.push({ type_idx: tag_type_idx })
+      _ => ()
+    }
+  }
+  for global in mod_.globals {
+    global_types.push(global.type_)
+  }
+  for tag in mod_.tags {
+    tags.push(tag)
+  }
+  let memory_max : Int? = match memory_max_override {
+    Some(_) => memory_max_override
+    None =>
+      if mod_.memories.length() > 0 {
+        mod_.memories[0].limits.max.map(fn(m) { m.to_int() })
+      } else {
+        None
+      }
+  }
+  {
+    func_types: @types.extract_func_types(mod_.types),
+    func_type_indices: mod_.funcs,
+    num_imports,
+    import_func_type_indices,
+    embedding_env,
+    memory_max,
+    memory_is_64: mod_.memories.map(fn(m) { m.is_memory64 }),
+    memory_page_size_log2: mod_.memories.map(fn(m) { m.page_size_log2 }),
+    tables: mod_.tables,
+    global_types,
+    type_rec_groups: mod_.type_rec_groups,
+    func_base,
+    import_remap,
+    module_types: mod_.types,
+    tags,
+    memory_mins: mod_.memories.map(fn(m) {
+      m.limits.min * (1L << m.page_size_log2)
+    }),
+  }
+}
+
+///|
+fn get_module_func_name(
+  mod_ : @types.Module,
+  func_idx : Int,
+  name? : String,
+) -> String {
+  if name is Some(n) {
+    n
+  } else {
+    match mod_.func_names.get(func_idx) {
+      Some(n) => n
+      None => {
+        let mut export_name = ""
+        for exp in mod_.exports {
+          if exp.desc is Func(idx) && idx == func_idx {
+            export_name = exp.name
+            break
+          }
+        }
+        if export_name == "" {
+          "func_\{func_idx}"
+        } else {
+          export_name
+        }
+      }
+    }
+  }
+}
+
+///|
 fn Translator::mark_block_frame_reachable(self : Translator, idx : Int) -> Unit {
   if idx >= 0 && idx < self.block_stack.length() {
     self.block_stack[idx].has_predecessor = true
@@ -80,8 +191,7 @@ fn Translator::mark_block_frame_reachable(self : Translator, idx : Int) -> Unit 
 
 ///|
 /// Low-level constructor with explicit parameters.
-/// Prefer `Translator::from_module` for normal use - it extracts all
-/// parameters from the module automatically and is less error-prone.
+/// Prefer `TranslationContext`-based public APIs for normal use.
 fn Translator::new(
   name : String,
   func_type : @types.FuncType,
@@ -177,134 +287,7 @@ fn Translator::new(
 }
 
 ///|
-/// Create a Translator from a module directly.
-/// This is the preferred factory method as it extracts all necessary
-/// information from the module automatically.
-///
-/// Parameters:
-/// - mod_: The WASM module
-/// - func_local_idx: Index of the function in mod_.codes (0-based, excludes imports)
-/// - name: Optional function name override (defaults to export name or "func_N")
-fn Translator::from_module(
-  mod_ : @types.Module,
-  func_local_idx : Int,
-  embedding_env : @wasm_frontend.EmbeddingEnvironment,
-  name? : String,
-  memory_max_override? : Int? = None,
-) -> Translator {
-  // Count function imports
-  let mut num_imports = 0
-  for imp in mod_.imports {
-    if imp.desc is Func(_) {
-      num_imports = num_imports + 1
-    }
-  }
-
-  // Build import function type indices
-  let import_func_type_indices : Array[Int] = []
-  for imp in mod_.imports {
-    if imp.desc is Func(type_idx) {
-      import_func_type_indices.push(type_idx)
-    }
-  }
-
-  // Build global types array (imports + module globals)
-  let global_types : Array[@types.GlobalType] = []
-  for imp in mod_.imports {
-    if imp.desc is Global(global_type) {
-      global_types.push(global_type)
-    }
-  }
-  for global in mod_.globals {
-    global_types.push(global.type_)
-  }
-
-  // Get memory max limit - prefer override (for imported memories),
-  // otherwise fall back to module's declared memory limits
-  let memory_max : Int? = match memory_max_override {
-    Some(_) => memory_max_override
-    None =>
-      if mod_.memories.length() > 0 {
-        mod_.memories[0].limits.max.map(fn(m) { m.to_int() })
-      } else {
-        None
-      }
-  }
-
-  // Build memory metadata arrays
-  let memory_is_64 = mod_.memories.map(fn(m) { m.is_memory64 })
-  let memory_page_size_log2 = mod_.memories.map(fn(m) { m.page_size_log2 })
-
-  // Calculate memory_mins (minimum guaranteed memory size in bytes)
-  let memory_mins = mod_.memories.map(fn(m) {
-    m.limits.min * (1L << m.page_size_log2)
-  })
-
-  // Determine function name: prefer internal name, then export name, then anonymous
-  let func_idx = num_imports + func_local_idx
-  let func_name = if name is Some(n) {
-    n
-  } else {
-    // First check internal name from WAT parsing
-    match mod_.func_names.get(func_idx) {
-      Some(n) => n
-      None => {
-        // Fall back to export name
-        let mut export_name = ""
-        for exp in mod_.exports {
-          if exp.desc is Func(idx) && idx == func_idx {
-            export_name = exp.name
-            break
-          }
-        }
-        if export_name == "" {
-          "func_\{func_idx}"
-        } else {
-          export_name
-        }
-      }
-    }
-  }
-
-  // Get function type and locals
-  let type_idx = mod_.funcs[func_local_idx]
-  let func_type = mod_.get_func_type(type_idx)
-  let code = mod_.codes[func_local_idx]
-  let all_tags : Array[@types.TagType] = []
-  for imp in mod_.imports {
-    if imp.desc is Tag(tag_type_idx) {
-      all_tags.push({ type_idx: tag_type_idx })
-    }
-  }
-  for tag in mod_.tags {
-    all_tags.push(tag)
-  }
-
-  // Call the main constructor
-  Translator::new(
-    func_name,
-    func_type,
-    code.locals,
-    @types.extract_func_types(mod_.types),
-    mod_.funcs,
-    num_imports,
-    import_func_type_indices,
-    embedding_env,
-    memory_max~,
-    memory_is_64~,
-    memory_page_size_log2~,
-    tables=mod_.tables,
-    global_types~,
-    type_rec_groups=mod_.type_rec_groups,
-    module_types=mod_.types,
-    tags=all_tags,
-    memory_mins~,
-  )
-}
-
-///|
 /// Translate a function body from a module.
-/// Convenience method that creates a Translator and translates in one step.
 pub fn translate_function(
   mod_ : @types.Module,
   func_local_idx : Int,
@@ -312,61 +295,48 @@ pub fn translate_function(
   name? : String,
   memory_max_override? : Int? = None,
 ) -> Function {
-  let translator = Translator::from_module(
+  let ctx = TranslationContext::from_module(
     mod_,
-    func_local_idx,
     embedding_env,
-    name?,
     memory_max_override~,
   )
+  let func_idx = ctx.num_imports + func_local_idx
+  let func_name = get_module_func_name(mod_, func_idx, name?)
+  let type_idx = mod_.funcs[func_local_idx]
+  let func_type = mod_.get_func_type(type_idx)
   let code = mod_.codes[func_local_idx]
-  translator.translate(code.body)
+  translate_function_body(ctx, func_name, func_type, code.locals, code.body)
 }
 
 ///|
-/// Translate a decoded Wasm function body with explicit module metadata.
+/// Translate a decoded Wasm function body using a frontend translation context.
 pub fn translate_function_body(
+  ctx : TranslationContext,
   name : String,
   func_type : @types.FuncType,
   locals : Array[@types.ValueType],
   body : Array[@types.Instruction],
-  func_types : Array[@types.FuncType],
-  func_type_indices : Array[Int],
-  num_imports : Int,
-  import_func_type_indices : Array[Int],
-  embedding_env : @wasm_frontend.EmbeddingEnvironment,
-  memory_max? : Int? = None,
-  memory_is_64? : Array[Bool] = [],
-  memory_page_size_log2? : Array[Int] = [],
-  tables? : Array[@types.Table] = [],
-  global_types? : Array[@types.GlobalType] = [],
-  type_rec_groups? : Array[Int] = [],
-  func_base? : Int = 0,
-  import_remap? : Array[Int] = [],
-  module_types? : Array[@types.SubType] = [],
-  tags? : Array[@types.TagType] = [],
-  memory_mins? : Array[Int64] = [],
 ) -> Function {
   let translator = Translator::new(
     name,
     func_type,
     locals,
-    func_types,
-    func_type_indices,
-    num_imports,
-    import_func_type_indices,
-    embedding_env,
-    memory_max~,
-    memory_is_64~,
-    memory_page_size_log2~,
-    tables~,
-    global_types~,
-    type_rec_groups~,
-    func_base~,
-    import_remap~,
-    module_types~,
-    tags~,
-    memory_mins~,
+    ctx.func_types,
+    ctx.func_type_indices,
+    ctx.num_imports,
+    ctx.import_func_type_indices,
+    ctx.embedding_env,
+    memory_max=ctx.memory_max,
+    memory_is_64=ctx.memory_is_64,
+    memory_page_size_log2=ctx.memory_page_size_log2,
+    tables=ctx.tables,
+    global_types=ctx.global_types,
+    type_rec_groups=ctx.type_rec_groups,
+    func_base=ctx.func_base,
+    import_remap=ctx.import_remap,
+    module_types=ctx.module_types,
+    tags=ctx.tags,
+    memory_mins=ctx.memory_mins,
   )
   translator.translate(body)
 }
