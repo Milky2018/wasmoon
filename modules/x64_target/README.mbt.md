@@ -10,6 +10,53 @@ target lowering hooks used by the generic ISA lowering pipeline.
 - `Milky2018/x64_target`: x64 target descriptor, ABI policy, machine
   environment, and lowering entry points.
 
+## When to use it
+
+Use this module when you want x86-64 target policy: System V register
+assignment, callee-saved sets, allocatable registers, and convenience lowering
+from MilkIR to MachV.
+
+## Example: inspect System V policy
+
+The target API exposes the ABI details a compiler backend needs before
+register allocation and emission.
+
+```moonbit check
+///|
+test "inspect x64 ABI policy" {
+  let abi = abi_policy()
+  inspect(abi.pointer_size, content="8")
+  inspect(abi.stack_alignment, content="16")
+  inspect(abi.int_argument_regs.length(), content="6")
+  inspect(abi.float_argument_regs.length(), content="8")
+}
+```
+
+## Example: lower MilkIR through the x64 target
+
+The wrapper returns MachV with x64-specific instruction choices and ABI
+locations.
+
+```moonbit check
+///|
+test "lower an integer add function for x64" {
+  let builder = @milkir.IRBuilder::new("add64")
+  let lhs = builder.add_param(I64)
+  let rhs = builder.add_param(I64)
+  builder.add_result(I64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  builder.return_([builder.iadd(lhs, rhs)])
+  let lowered = lower_function(builder.get_function())
+  inspect(lowered.name, content="add64")
+  inspect(lowered.blocks.length(), content="1")
+  inspect(
+    lowered.blocks[0].instructions.any(fn(inst) { inst.opcode == IntAdd }),
+    content="true",
+  )
+}
+```
+
 ## Boundary
 
 This module is a target backend. It should stay independent from Wasmoon

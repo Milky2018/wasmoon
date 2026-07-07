@@ -10,6 +10,52 @@ target lowering hooks used by the generic ISA lowering pipeline.
 - `Milky2018/aarch64_target`: AArch64 target descriptor, ABI policy, machine
   environment, and lowering entry points.
 
+## When to use it
+
+Use this module when you want the AArch64-specific policies that sit around the
+generic lowering pipeline: AAPCS64 argument registers, callee-saved registers,
+allocatable register sets, and convenience lowering entry points.
+
+## Example: inspect AAPCS64 policy
+
+The target owns ABI constants. Higher-level embedders can use this information
+to build compatible call boundaries.
+
+```moonbit check
+///|
+test "inspect AArch64 ABI policy" {
+  let abi = abi_policy()
+  inspect(abi.pointer_size, content="8")
+  inspect(abi.stack_alignment, content="16")
+  inspect(abi.int_argument_regs.length(), content="8")
+  inspect(abi.float_argument_regs.length(), content="8")
+}
+```
+
+## Example: lower MilkIR through the AArch64 target
+
+This convenience wrapper chooses AArch64 policy and returns MachV machine IR.
+
+```moonbit check
+///|
+test "lower an integer add function for AArch64" {
+  let builder = @milkir.IRBuilder::new("add64")
+  let lhs = builder.add_param(I64)
+  let rhs = builder.add_param(I64)
+  builder.add_result(I64)
+  let entry = builder.create_block()
+  builder.switch_to_block(entry)
+  builder.return_([builder.iadd(lhs, rhs)])
+  let lowered = lower_function(builder.get_function())
+  inspect(lowered.name, content="add64")
+  inspect(lowered.blocks.length(), content="1")
+  inspect(
+    lowered.blocks[0].instructions.any(fn(inst) { inst.opcode == IntAdd }),
+    content="true",
+  )
+}
+```
+
 ## Boundary
 
 This module is a target backend. It should stay independent from Wasmoon
