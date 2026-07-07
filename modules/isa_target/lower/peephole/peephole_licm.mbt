@@ -1,4 +1,17 @@
 ///|
+fn is_immutable_context_slot_offset(
+  embedding_context_layout : @abi.RuntimeContextLayout,
+  offset : Int,
+) -> Bool {
+  for slot in embedding_context_layout.slots {
+    if slot.offset == offset && slot.mutability is Immutable {
+      return true
+    }
+  }
+  false
+}
+
+///|
 /// Loop-invariant code motion for simple invariants.
 ///
 /// Detect natural loops via backedges (h dominates b for edge b->h). If the
@@ -145,13 +158,15 @@ fn licm_hoist_invariants(
           }
         }
 
-        // Is this vreg an immutable pointer derived from context.function_table?
+        // Is this vreg an immutable pointer derived from the embedding context?
         fn is_immutable_ptr(vreg_id : Int) -> Bool {
           match def_inst.get(vreg_id) {
             Some(inst) =>
               match inst.opcode {
                 Load(I64, off) =>
-                  off == embedding_context_layout.function_table_offset &&
+                  is_immutable_context_slot_offset(
+                    embedding_context_layout, off,
+                  ) &&
                   inst.uses.length() == 1 &&
                   is_context_reg(inst.uses[0])
                 _ => false
@@ -165,10 +180,9 @@ fn licm_hoist_invariants(
           match op {
             Load(I64, off) | LoadPtr(I64, off) =>
               if is_context_reg(base) {
-                // Only allow runtime function-table load at the moment.
-                off == embedding_context_layout.function_table_offset
+                is_immutable_context_slot_offset(embedding_context_layout, off)
               } else if base is Virtual(v) {
-                // Allow loads from the func_table pointer.
+                // Allow loads from immutable context-derived pointers.
                 is_immutable_ptr(v.id)
               } else {
                 false
@@ -242,12 +256,12 @@ fn licm_hoist_invariants(
 }
 
 ///|
-/// Block-local CSE for immutable context/function-table loads.
+/// Block-local CSE for immutable context-derived loads.
 ///
 /// Today this is intentionally conservative:
-/// - context base must be `x19`
-/// - only track immutable context-derived base pointers (`func_table`, `globals`)
-/// - only CSE `Load(I64, off)` / `LoadPtr(I64, off)` from that func_table pointer
+/// - context base must be the embedding context register or an alias
+/// - only track context slots marked immutable by the embedding layout
+/// - only CSE `Load(I64, off)` / `LoadPtr(I64, off)` from immutable pointers
 fn cse_immutable_loads(
   func : @machv.Function,
   embedding_context_layout : @abi.RuntimeContextLayout,
@@ -264,20 +278,12 @@ fn cse_immutable_loads(
   if params.length() > 0 {
     context_aliases.add(params[0].id)
   }
-  // Collect all vregs that are func_table pointers.
-  let func_table_ptrs : @hashset.HashSet[Int] = HashSet([])
-  fn is_function_table_context_load(op : @instr.MachVOpcode) -> Bool {
+  // Collect all vregs that are immutable pointers loaded from context slots.
+  let immutable_context_ptrs : @hashset.HashSet[Int] = HashSet([])
+  fn is_immutable_context_load(op : @instr.MachVOpcode) -> Bool {
     match op {
       Load(I64, off) | LoadPtr(I64, off) =>
-        off == embedding_context_layout.function_table_offset
-      _ => false
-    }
-  }
-  fn is_context_base_load(op : @instr.MachVOpcode) -> Bool {
-    match op {
-      Load(I64, off) | LoadPtr(I64, off) =>
-        off == embedding_context_layout.function_table_offset ||
-        off == embedding_context_layout.global_storage_offset
+        is_immutable_context_slot_offset(embedding_context_layout, off)
       _ => false
     }
   }
@@ -321,12 +327,12 @@ fn cse_immutable_loads(
           context_aliases.add(dst)
         }
       }
-      if is_function_table_context_load(inst.opcode) &&
+      if is_immutable_context_load(inst.opcode) &&
         inst.defs.length() == 1 &&
         inst.uses.length() == 1 &&
         is_context_alias(inst.uses[0], copies, context_aliases) &&
         get_def_vreg_id(inst.defs[0]) is Some(did) {
-        func_table_ptrs.add(did)
+        immutable_context_ptrs.add(did)
       }
     }
   }
@@ -370,7 +376,7 @@ fn cse_immutable_loads(
             let base = inst.uses[0]
             if base is Virtual(v) {
               let base_id = canonical_id(v.id, copies)
-              if func_table_ptrs.contains(base_id) {
+              if immutable_context_ptrs.contains(base_id) {
                 let key = "0|" + base_id.to_string() + "|" + off.to_string()
                 if seen.get(key) is Some(prev_id) {
                   let mv = @instr.MachVInst::new(Move)
@@ -392,7 +398,7 @@ fn cse_immutable_loads(
             let base = inst.uses[0]
             if base is Virtual(v) {
               let base_id = canonical_id(v.id, copies)
-              if func_table_ptrs.contains(base_id) {
+              if immutable_context_ptrs.contains(base_id) {
                 let key = "1|" + base_id.to_string() + "|" + off.to_string()
                 if seen.get(key) is Some(prev_id) {
                   let mv = @instr.MachVInst::new(Move)
@@ -412,11 +418,9 @@ fn cse_immutable_loads(
         _ => ()
       }
 
-      // Also CSE duplicate context-derived immutable base loads:
-      // - function table: `load.i64 +function_table_offset context`
-      // - global storage: `load.i64 +global_storage_offset context`
+      // Also CSE duplicate immutable context-slot base loads.
       if !replaced &&
-        is_context_base_load(inst.opcode) &&
+        is_immutable_context_load(inst.opcode) &&
         inst.defs.length() == 1 &&
         inst.uses.length() == 1 &&
         is_context(inst.uses[0]) {

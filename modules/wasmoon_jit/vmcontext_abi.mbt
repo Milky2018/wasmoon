@@ -100,7 +100,7 @@ pub fn VMContextLayout::to_embedding_context_layout(
       {
         id: @wasm_isa_lower.CONTEXT_SLOT_GLOBAL_STORAGE,
         offset: self.globals_offset,
-        mutability: Mutable,
+        mutability: Immutable,
         cache_role: NoContextCache,
       },
       {
