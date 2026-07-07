@@ -12,8 +12,8 @@ fn format_type(ty : Type) -> String {
     V128 => "v128"
     Ptr => "ptr"
     Ref => "ref"
-    FuncRef => "funcref"
-    ExternRef => "externref"
+    CallableRef => "callable_ref"
+    OpaqueRef => "opaque_ref"
   }
 }
 

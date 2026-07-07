@@ -2,7 +2,7 @@
 fn type_byte_size(ty : @milkir.Type) -> Int {
   match ty {
     I32 | F32 => 4
-    I64 | F64 | Ptr | Ref | FuncRef | ExternRef => 8
+    I64 | F64 | Ptr | Ref | CallableRef | OpaqueRef => 8
     V128 => 16
   }
 }
@@ -11,7 +11,7 @@ fn type_byte_size(ty : @milkir.Type) -> Int {
 fn zero_value(builder : @milkir.IRBuilder, ty : @milkir.Type) -> @milkir.Value? {
   match ty {
     I32 => Some(builder.iconst_i32(0))
-    I64 | Ref | Ptr | FuncRef | ExternRef => Some(builder.iconst_i64(0L))
+    I64 | Ref | Ptr | CallableRef | OpaqueRef => Some(builder.iconst_i64(0L))
     F32 => Some(builder.fconst_f32(0.0))
     F64 => Some(builder.fconst_f64(0.0))
     _ => None

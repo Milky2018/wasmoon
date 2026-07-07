@@ -144,7 +144,7 @@ fn class_for_type(ty : @milkir.Type) -> @machv.RegClass {
     F32 => Float32
     F64 => Float64
     V128 => Vector
-    I32 | I64 | Ptr | Ref | FuncRef | ExternRef => Int
+    I32 | I64 | Ptr | Ref | CallableRef | OpaqueRef => Int
   }
 }
 
@@ -796,7 +796,7 @@ fn mem_type_for_type(ty : @milkir.Type) -> @machv.MemType {
     F32 => MemF32
     F64 => MemF64
     V128 => MemV128
-    Ptr | Ref | FuncRef | ExternRef => MemPtr
+    Ptr | Ref | CallableRef | OpaqueRef => MemPtr
   }
 }
 

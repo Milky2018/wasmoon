@@ -351,7 +351,7 @@ fn Translator::local_to_spill_words(
 ) -> Array[Value] {
   match loc_val.ty {
     I32 => [self.builder.uextend(I64, loc_val)]
-    I64 | Ptr | Ref | FuncRef | ExternRef => [loc_val] // refs are already word-sized
+    I64 | Ptr | Ref | CallableRef | OpaqueRef => [loc_val] // refs are already word-sized
     F32 => {
       let bits32 = self.builder.bitcast(I32, loc_val)
       [self.builder.uextend(I64, bits32)]
@@ -374,7 +374,7 @@ fn Translator::i64_bits_to_local(
 ) -> Value {
   match target_ty {
     I32 => self.builder.ireduce(I32, bits)
-    I64 | Ptr | Ref | FuncRef | ExternRef => bits // refs are already i64
+    I64 | Ptr | Ref | CallableRef | OpaqueRef => bits // refs are already i64
     F32 => {
       let bits32 = self.builder.ireduce(I32, bits)
       self.builder.bitcast(F32, bits32)
@@ -698,7 +698,7 @@ fn Translator::translate(
             init_f64 = Some(v)
             v
           }
-        Ptr | Ref | FuncRef =>
+        Ptr | Ref | CallableRef =>
           if init_funcref is Some(v) {
             v
           } else {
@@ -706,11 +706,11 @@ fn Translator::translate(
             init_funcref = Some(v)
             v
           }
-        ExternRef =>
+        OpaqueRef =>
           if init_externref is Some(v) {
             v
           } else {
-            let v = self.builder.iconst(ExternRef, @types.NULL_REF)
+            let v = self.builder.iconst(OpaqueRef, @types.NULL_REF)
             init_externref = Some(v)
             v
           }

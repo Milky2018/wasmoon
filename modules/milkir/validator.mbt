@@ -889,8 +889,8 @@ fn types_match(a : Type, b : Type) -> Bool {
     | (V128, V128)
     | (Ptr, Ptr)
     | (Ref, Ref)
-    | (FuncRef, FuncRef)
-    | (ExternRef, ExternRef) => true
+    | (CallableRef, CallableRef)
+    | (OpaqueRef, OpaqueRef) => true
     _ => false
   }
 }

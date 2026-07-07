@@ -19,8 +19,8 @@ fn type_from_wasm(wasm_type : @types.ValueType) -> Type {
     F64 => F64
     V128 => V128
     FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) | NullFuncRef =>
-      FuncRef
-    ExternRef | RefExtern | NullExternRef => ExternRef
+      @wasm_milkir.wasm_funcref_type()
+    ExternRef | RefExtern | NullExternRef => @wasm_milkir.wasm_externref_type()
     _ => Ref
   }
 }

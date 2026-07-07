@@ -138,7 +138,7 @@ fn type_bits(ty : Type) -> Int {
     F32 => 32
     F64 => 64
     V128 => 128
-    Ptr | Ref | FuncRef | ExternRef => 64 // Pointer-sized
+    Ptr | Ref | CallableRef | OpaqueRef => 64 // Pointer-sized
   }
 }
 

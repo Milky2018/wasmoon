@@ -127,6 +127,10 @@ pub fn try_table_begin(@milkir.IRBuilder, Int) -> @milkir.Value
 
 pub fn try_table_end(@milkir.IRBuilder, Int) -> Unit
 
+pub fn wasm_externref_type() -> @milkir.Type
+
+pub fn wasm_funcref_type() -> @milkir.Type
+
 // Errors
 
 // Types and methods

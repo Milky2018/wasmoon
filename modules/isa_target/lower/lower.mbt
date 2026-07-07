@@ -441,7 +441,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
           let base_value = inst.operands[0]
           let access_size = match ty {
             I32 | F32 => 4
-            I64 | F64 | Ptr | Ref | FuncRef | ExternRef => 8
+            I64 | F64 | Ptr | Ref | CallableRef | OpaqueRef => 8
             V128 => 16
           }
           let explicit_offset = if inst.operands.length() > 1 {
@@ -484,7 +484,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
           let base_value = inst.operands[0]
           let access_size = match ty {
             I32 | F32 => 4
-            I64 | F64 | Ptr | Ref | FuncRef | ExternRef => 8
+            I64 | F64 | Ptr | Ref | CallableRef | OpaqueRef => 8
             V128 => 16
           }
           let explicit_offset = if inst.operands.length() > 2 {
@@ -1001,7 +1001,7 @@ fn LoweringContext::get_block_id(
 /// Convert IR Type to @abi.RegClass
 pub fn ir_type_to_reg_class(ty : @milkir.Type) -> @abi.RegClass {
   match ty {
-    I32 | I64 | Ptr | Ref | FuncRef | ExternRef => Int
+    I32 | I64 | Ptr | Ref | CallableRef | OpaqueRef => Int
     F32 => Float32
     F64 => Float64
     V128 => Vector // SIMD uses vector register class
@@ -1017,7 +1017,7 @@ fn ir_type_to_value_kind(ty : @milkir.Type) -> @machv.ValueKind {
     F32 => F32
     F64 => F64
     V128 => V128
-    Ptr | Ref | FuncRef | ExternRef => Ptr
+    Ptr | Ref | CallableRef | OpaqueRef => Ptr
   }
 }
 
@@ -1031,7 +1031,7 @@ fn ir_type_to_mem_type(ty : @milkir.Type) -> @instr.MemType {
     F64 => F64
     V128 => V128
     // Reference types use 64-bit storage (0 as null)
-    Ptr | Ref | FuncRef | ExternRef => I64
+    Ptr | Ref | CallableRef | OpaqueRef => I64
   }
 }
 
@@ -2375,9 +2375,9 @@ fn lower_icmp(
     let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
     let kind = ir_intcc_to_cmp_kind(cc)
     // Determine is_64 from operand type, not result type (result is always i32)
-    // Reference types (FuncRef, ExternRef) are also 64-bit values
+    // Reference types (CallableRef, OpaqueRef) are also 64-bit values
     let is_64 = match inst.operands[0].ty {
-      I64 | FuncRef | ExternRef => true
+      I64 | CallableRef | OpaqueRef => true
       _ => false
     }
     let machv_inst = @instr.MachVInst::new(Cmp(kind, is_64))
@@ -2472,7 +2472,7 @@ fn lower_terminator(
         let machv_cond = intcc_to_cond(cc)
         // Determine is_64 from operand type (same as lower_icmp)
         let is_64 = match lhs.ty {
-          I64 | FuncRef | ExternRef => true
+          I64 | CallableRef | OpaqueRef => true
           _ => false
         }
         // Try to use BranchCmpImm if RHS is a valid immediate
@@ -2524,7 +2524,7 @@ fn lower_terminator(
         let machv_cond = intcc_to_cond(cc)
         // Determine is_64 from operand type (same as lower_icmp)
         let is_64 = match lhs.ty {
-          I64 | FuncRef | ExternRef => true
+          I64 | CallableRef | OpaqueRef => true
           _ => false
         }
         // Try to use BranchCmpImm if RHS is a valid immediate
@@ -2668,7 +2668,7 @@ fn lower_load_ptr(
   let mem_ty = ir_type_to_mem_type(ty)
   let access_size = match ty {
     I32 | F32 => 4
-    I64 | F64 | Ptr | Ref | FuncRef | ExternRef => 8
+    I64 | F64 | Ptr | Ref | CallableRef | OpaqueRef => 8
     V128 => 16
   }
 
@@ -2786,7 +2786,7 @@ fn lower_store_ptr(
   let mem_ty = ir_type_to_mem_type(ty)
   let access_size = match ty {
     I32 | F32 => 4
-    I64 | F64 | Ptr | Ref | FuncRef | ExternRef => 8
+    I64 | F64 | Ptr | Ref | CallableRef | OpaqueRef => 8
     V128 => 16
   }
   let base_value = inst.operands[0]

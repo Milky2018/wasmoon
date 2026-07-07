@@ -102,6 +102,7 @@ graph TD
   ISS_086["ISS-086: Make LICM and CSE consume generic memory facts"]
   ISS_087["ISS-087: Move Wasmoon debug and GC context offsets out of machv_emit"]
   ISS_088["ISS-088: Delete fixed EmbeddingContextLayout schema and compatibility alias"]
+  ISS_089["ISS-089: Remove Wasm-named reference types from MilkIR core"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005

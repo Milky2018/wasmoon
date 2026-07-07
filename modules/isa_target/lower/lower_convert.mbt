@@ -340,7 +340,7 @@ fn lower_select(
       let kind = ir_intcc_to_cmp_kind(cc)
       // Determine is_64 from comparison operand type
       let is_64 = match lhs.ty {
-        I64 | FuncRef | ExternRef => true
+        I64 | CallableRef | OpaqueRef => true
         _ => false
       }
       let machv_inst = @instr.MachVInst::new(SelectCmp(kind, is_64))

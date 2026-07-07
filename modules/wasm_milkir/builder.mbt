@@ -9,8 +9,13 @@ fn i64_type() -> @milkir.Type {
 }
 
 ///|
-fn funcref_type() -> @milkir.Type {
-  FuncRef
+pub fn wasm_funcref_type() -> @milkir.Type {
+  CallableRef
+}
+
+///|
+pub fn wasm_externref_type() -> @milkir.Type {
+  OpaqueRef
 }
 
 ///|
@@ -310,7 +315,7 @@ pub fn get_func_ref(
   builder : @milkir.IRBuilder,
   func_idx : Int,
 ) -> @milkir.Value {
-  emit_wasm_inst(builder, funcref_type(), GetFuncRef(func_idx), [])
+  emit_wasm_inst(builder, wasm_funcref_type(), GetFuncRef(func_idx), [])
 }
 
 ///|

@@ -24,10 +24,8 @@ pub(all) enum Type {
   V128 // SIMD 128-bit vector
   Ptr
   Ref
-  // TODO(ISS-065): Replace Wasm-shaped reference names with a generic reference
-  // taxonomy once the Wasm frontend owns all reference-type interpretation.
-  FuncRef
-  ExternRef
+  CallableRef
+  OpaqueRef
 } derive(Debug, Eq, Hash)
 
 ///|
@@ -43,8 +41,8 @@ pub impl Show for Type with fn output(self, logger) {
       V128 => "v128"
       Ptr => "ptr"
       Ref => "ref"
-      FuncRef => "funcref"
-      ExternRef => "externref"
+      CallableRef => "callable_ref"
+      OpaqueRef => "opaque_ref"
     },
   )
 }

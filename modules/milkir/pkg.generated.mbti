@@ -735,8 +735,8 @@ pub(all) enum Type {
   V128
   Ptr
   Ref
-  FuncRef
-  ExternRef
+  CallableRef
+  OpaqueRef
 } derive(Eq, Hash, @debug.Debug)
 pub impl Show for Type
 

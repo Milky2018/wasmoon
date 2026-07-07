@@ -6,6 +6,9 @@ fn wasm_value_type_to_milkir(ty : @types.ValueType) -> @milkir.Type {
     F32 => F32
     F64 => F64
     V128 => V128
+    FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) | NullFuncRef =>
+      @wasm_milkir.wasm_funcref_type()
+    ExternRef | RefExtern | NullExternRef => @wasm_milkir.wasm_externref_type()
     _ => Ref
   }
 }

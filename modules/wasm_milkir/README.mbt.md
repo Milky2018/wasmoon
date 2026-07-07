@@ -18,6 +18,16 @@ lowering.
 through MilkIR extension operations. Product-specific runtime addresses,
 VMContext layouts, and native glue still belong outside this module.
 
+## Example: map Wasm reference types to MilkIR
+
+```moonbit check
+///|
+test "map Wasm reference spelling to generic MilkIR references" {
+  inspect(wasm_funcref_type().to_string(), content="callable_ref")
+  inspect(wasm_externref_type().to_string(), content="opaque_ref")
+}
+```
+
 ## Example: encode a Wasm memory operation
 
 ```moonbit check

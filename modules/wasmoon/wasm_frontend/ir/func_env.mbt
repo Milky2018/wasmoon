@@ -426,7 +426,7 @@ fn type_byte_size(ty : Type) -> Int {
     F32 => 4
     F64 => 8
     V128 => 16 // SIMD vector
-    Ptr | Ref | FuncRef | ExternRef => 8 // Reference/pointer types are pointer-sized
+    Ptr | Ref | CallableRef | OpaqueRef => 8 // Reference/pointer types are pointer-sized
   }
 }
 
