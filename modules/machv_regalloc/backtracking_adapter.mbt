@@ -156,7 +156,6 @@ priv struct BacktrackingAllocator {
   vector_regs : Array[@abi.PReg]
   callee_saved_int : Array[@abi.PReg]
   callee_saved_float : Array[@abi.PReg]
-  isa : @isa.ISA
   int_caller_saved : Array[@abi.PReg]
   float_caller_saved : Array[@abi.PReg]
   split_probe_limit : Int
@@ -212,7 +211,6 @@ fn BacktrackingAllocator::new(
   func : @machv.Function,
   ranges : LiveRangeSet,
   bundles : BundleSet,
-  isa : @isa.ISA,
   int_regs : Array[@abi.PReg],
   float_regs : Array[@abi.PReg],
   vector_regs : Array[@abi.PReg],
@@ -302,7 +300,6 @@ fn BacktrackingAllocator::new(
     vector_regs,
     callee_saved_int,
     callee_saved_float,
-    isa,
     int_caller_saved,
     float_caller_saved,
     split_probe_limit,
@@ -1240,7 +1237,7 @@ fn BacktrackingAllocator::generate_result(
   // physical stack slot when their lifetimes do not overlap.
   //
   // This mirrors regalloc2's concept of assigning spillsets to spillslots
-  // (see regalloc2 doc/ION.md), but adapted to Wasmoon’s existing BundleSet.
+  // (see regalloc2 doc/ION.md), but adapted to MachV's existing BundleSet.
   if self.ranges.length() >= 2000 || self.bundles.next_spill_slot >= 256 {
     return result
   }
@@ -1635,9 +1632,13 @@ fn BacktrackingAllocator::force_spill_bundle(
 fn BacktrackingAllocator::preassign_params(
   self : BacktrackingAllocator,
   call_conv_layout : @abi.CallConventionLayout,
+  embedding_reg_roles : @abi.EmbeddingRegRoles,
   strict_precolor : Bool,
 ) -> Unit {
-  let vmctx_preg = call_conv_layout.context_arg
+  let context_arg_preg = call_conv_layout.context_arg
+  let pinned_context_preg = embedding_reg_roles.context.unwrap_or(
+    context_arg_preg,
+  )
   let user_arg_gprs = call_conv_layout.user_arg_gprs
   let arg_fprs = call_conv_layout.arg_fprs
   let mut int_idx = 0
@@ -1648,8 +1649,8 @@ fn BacktrackingAllocator::preassign_params(
     let (preg_opt, is_int) : (@abi.PReg?, Bool) = match param.class {
       Int =>
         if int_idx == 0 {
-          // First integer argument is always vmctx in the internal Wasm ABI.
-          (Some(vmctx_preg), true)
+          // First integer argument is the embedding context in this call ABI.
+          (Some(context_arg_preg), true)
         } else if int_idx - 1 < user_arg_gprs.length() {
           (Some(user_arg_gprs[int_idx - 1]), true)
         } else {
@@ -1688,7 +1689,7 @@ fn BacktrackingAllocator::preassign_params(
       // choose a safe location from full liveness/call-clobber information.
       if bundle.crosses_call(self.ranges) {
         if is_vmctx_param {
-          self.record_allocation(bundle, self.isa.vmctx_preg())
+          self.record_allocation(bundle, pinned_context_preg)
           bundle.is_pinned = true
           continue
         }
@@ -1770,13 +1771,13 @@ fn BacktrackingAllocator::preassign_params(
 fn allocate_backtracking(
   func : @machv.Function,
   liveness : LivenessResult,
-  isa : @isa.ISA,
   int_regs : Array[@abi.PReg],
   float_regs : Array[@abi.PReg],
   vector_regs : Array[@abi.PReg],
   callee_saved_int : Array[@abi.PReg],
   callee_saved_float : Array[@abi.PReg],
   call_conv_layout : @abi.CallConventionLayout,
+  embedding_reg_roles : @abi.EmbeddingRegRoles,
   param_precolor_strict? : Bool = true,
   algorithm? : RegallocAlgorithm = Backtracking,
 ) -> RegAllocResult {
@@ -1802,7 +1803,6 @@ fn allocate_backtracking(
     func,
     ranges,
     bundles,
-    isa,
     int_regs,
     float_regs,
     vector_regs,
@@ -1816,7 +1816,9 @@ fn allocate_backtracking(
 
   // Pre-assign function parameters to ABI registers (before main allocation)
   let tick_preassign = if perf_on { Some(perf_tick_now()) } else { None }
-  allocator.preassign_params(call_conv_layout, param_precolor_strict)
+  allocator.preassign_params(
+    call_conv_layout, embedding_reg_roles, param_precolor_strict,
+  )
   if tick_preassign is Some(tick) {
     perf_record_regalloc_phase_us(
       "phase_preassign_params",

@@ -101,6 +101,7 @@ pub(all) struct EmbeddingRegRoles {
   extra_results_ptr : PReg?
 }
 pub fn EmbeddingRegRoles::none() -> Self
+pub fn EmbeddingRegRoles::reserved_int_indices(Self, reserve_context? : Bool, reserve_context_cache_0? : Bool, reserve_context_cache_1? : Bool, reserve_extra_results_ptr? : Bool) -> Array[Int]
 
 pub(all) enum OperandConstraint {
   Any

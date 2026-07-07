@@ -20,3 +20,32 @@ pub fn EmbeddingRegRoles::none() -> EmbeddingRegRoles {
     extra_results_ptr: None,
   }
 }
+
+///|
+pub fn EmbeddingRegRoles::reserved_int_indices(
+  self : EmbeddingRegRoles,
+  reserve_context? : Bool = false,
+  reserve_context_cache_0? : Bool = false,
+  reserve_context_cache_1? : Bool = false,
+  reserve_extra_results_ptr? : Bool = false,
+) -> Array[Int] {
+  let out : Array[Int] = []
+  fn push_if_int(out : Array[Int], preg : PReg?) -> Unit {
+    if preg is Some({ index, class: Int }) {
+      out.push(index)
+    }
+  }
+  if reserve_context {
+    push_if_int(out, self.context)
+  }
+  if reserve_context_cache_0 {
+    push_if_int(out, self.context_cache_0)
+  }
+  if reserve_context_cache_1 {
+    push_if_int(out, self.context_cache_1)
+  }
+  if reserve_extra_results_ptr {
+    push_if_int(out, self.extra_results_ptr)
+  }
+  out
+}

@@ -7,7 +7,7 @@ import {
 }
 
 // Values
-pub fn build_machine_env(@abi.ABISettings, Bool, Bool, Bool) -> @spec.MachineEnvData
+pub fn build_machine_env(@abi.ABISettings, Bool, Bool, Bool, Array[Int]) -> @spec.MachineEnvData
 
 pub fn call_clobbered_fprs() -> Array[@abi.PReg]
 

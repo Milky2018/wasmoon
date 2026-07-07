@@ -190,15 +190,18 @@ fn pick_temp_preg(
   temp_int_pool : Array[Int],
   temp_fp_pool : Array[Int],
   temp_vec_pool : Array[Int],
+  reserved_int_regs : Array[Int],
   need_preserve : Bool,
   cursor : Int,
 ) -> (@abi.PReg, Int, Int?) {
   let scratch1 = isa.scratch_reg_1_index()
   let scratch2 = isa.scratch_reg_2_index()
-  let vmctx = isa.vmctx_reg_index()
-  let mem0_desc = isa.mem0_desc_reg_index()
-  let func_table = isa.func_table_reg_index()
-  let extra_results_ptr = isa.extra_results_ptr_reg_index()
+  fn is_reserved_int_reg(idx : Int) -> Bool {
+    if idx == scratch1 || idx == scratch2 {
+      return true
+    }
+    reserved_int_regs.contains(idx)
+  }
   fn alloc_temp_spill_slot(out : Output, cls : @abi.RegClass) -> Int {
     // Spill slots are counted in 8-byte units.
     // Keep the same rules as BundleSet::new_spill_bundle.
@@ -241,12 +244,7 @@ fn pick_temp_preg(
       for p in candidates {
         let idx = p.index
         // Skip special-purpose registers.
-        if idx == scratch1 ||
-          idx == scratch2 ||
-          idx == func_table ||
-          idx == vmctx ||
-          idx == mem0_desc ||
-          idx == extra_results_ptr {
+        if is_reserved_int_reg(idx) {
           continue
         }
         if !is_used(used_int_marks, idx, used_epoch) {
@@ -343,6 +341,7 @@ fn build_output(
   alloc : RegAllocResult,
   isa : @isa.ISA,
   settings : @abi.ABISettings,
+  embedding_reg_roles : @abi.EmbeddingRegRoles,
 ) -> Output {
   let out = Output::new()
   out.num_spillslots = alloc.num_spill_slots
@@ -371,7 +370,9 @@ fn build_output(
   let enable_reload_coalescing = false
   let reload_intervals : Map[(Int, Int), ReloadInterval] = if enable_reload_coalescing {
     let intervals = compute_reload_intervals(func, alloc)
-    allocate_reload_registers(func, alloc, intervals, liveness, isa)
+    allocate_reload_registers(
+      func, alloc, intervals, liveness, isa, settings, embedding_reg_roles,
+    )
     intervals
   } else {
     {}
@@ -385,14 +386,13 @@ fn build_output(
   }
   let reserve_extra_results_ptr = func.needs_extra_results_ptr() ||
     func.calls_multi_value_function()
-  let reserve_mem0_desc = func.should_cache_mem0_desc()
-  let reserve_func_table = func.should_cache_func_table()
-  let env = isa.machine_env(
-    settings~,
-    reserve_mem0_desc~,
-    reserve_func_table~,
+  let reserved_int_regs = embedding_reg_roles.reserved_int_indices(
+    reserve_context=settings.enable_pinned_reg,
+    reserve_context_cache_0=func.should_cache_mem0_desc(),
+    reserve_context_cache_1=func.should_cache_func_table(),
     reserve_extra_results_ptr~,
   )
+  let env = isa.machine_env(settings~, reserved_int_regs~)
 
   // Reserve dedicated scratch regs (used by the move resolver).
   for idx in env.scratch_int {
@@ -402,16 +402,9 @@ fn build_output(
     mark_used_reg(used_fp_regs, idx)
   }
 
-  // Reserve pinned registers.
-  mark_used_reg(used_int_regs, isa.vmctx_reg_index())
-  if reserve_mem0_desc {
-    mark_used_reg(used_int_regs, isa.mem0_desc_reg_index())
-  }
-  if reserve_func_table {
-    mark_used_reg(used_int_regs, isa.func_table_reg_index())
-  }
-  if reserve_extra_results_ptr {
-    mark_used_reg(used_int_regs, isa.extra_results_ptr_reg_index())
+  // Reserve embedding-owned registers.
+  for idx in reserved_int_regs {
+    mark_used_reg(used_int_regs, idx)
   }
 
   // Temp-reg pools for local reloads/move resolution:
@@ -760,6 +753,7 @@ fn build_output(
             temp_int_pool,
             temp_fp_pool,
             temp_vec_pool,
+            reserved_int_regs,
             true,
             temp_cursor,
           )
@@ -817,6 +811,7 @@ fn build_output(
             temp_int_pool,
             temp_fp_pool,
             temp_vec_pool,
+            reserved_int_regs,
             true,
             temp_cursor,
           )
@@ -1025,6 +1020,7 @@ fn build_output(
                 temp_int_pool,
                 temp_fp_pool,
                 temp_vec_pool,
+                reserved_int_regs,
                 false,
                 temp_cursor,
               )

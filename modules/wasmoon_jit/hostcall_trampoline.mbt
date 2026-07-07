@@ -319,6 +319,7 @@ pub fn emit_hostcall_import_trampoline(
     func,
     isa,
     @abi.ABISettings::default(),
+    roles,
     call_conv_layout=Some(call_conv_layout),
   )
   @machv_emit.emit_function(

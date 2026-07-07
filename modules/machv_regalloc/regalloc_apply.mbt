@@ -30,6 +30,8 @@ pub fn apply_allocation(
   alloc : RegAllocResult,
   isa : @isa.ISA,
   call_conv_layout : @abi.CallConventionLayout,
+  settings : @abi.ABISettings,
+  embedding_reg_roles : @abi.EmbeddingRegRoles,
 ) -> @machv.Function {
   let new_func = func.clone_base()
   new_func.set_num_spill_slots(alloc.num_spill_slots)
@@ -40,7 +42,7 @@ pub fn apply_allocation(
   let context_arg = call_conv_layout.context_arg
   let user_arg_gprs = call_conv_layout.user_arg_gprs
   let call_arg_fprs = call_conv_layout.arg_fprs
-  let env = isa.machine_env()
+  let env = isa.machine_env(settings~)
   guard env.scratch_int.length() >= 2 && env.scratch_float.length() >= 2 else {
     abort(
       "regalloc_apply: ISA machine env must reserve at least 2 scratch regs",
@@ -175,15 +177,17 @@ pub fn apply_allocation(
   let enable_reload_coalescing = false
   let reload_intervals : Map[(Int, Int), ReloadInterval] = if enable_reload_coalescing {
     let intervals = compute_reload_intervals(func, alloc)
-    allocate_reload_registers(func, alloc, intervals, liveness, isa)
+    allocate_reload_registers(
+      func, alloc, intervals, liveness, isa, settings, embedding_reg_roles,
+    )
     intervals
   } else {
     {}
   }
 
   // Convert function parameters
-  // Parameters use Wasmoon's internal Wasm ABI (ISA-dependent).
-  // vmctx is an explicit param in the function signature.
+  // Parameters use the selected call ABI.
+  // The embedding context is an explicit param in the function signature.
   let mut int_idx = 0
   let mut float_idx = 0
 

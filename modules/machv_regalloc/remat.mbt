@@ -4,7 +4,7 @@
 // cheap-to-recompute instructions (especially constants) into blocks where they
 // are used, shortening live ranges and reducing register pressure.
 //
-// Wasmoon’s VCode is already close to machine code; we implement a conservative
+// MachV VCode is already close to machine code; we implement a conservative
 // subset that clones cheap, side-effect-free defs into each use block when the
 // value is used across blocks.
 //

@@ -201,6 +201,7 @@ pub fn plan_milkir_integration_for_target(
     vcode_func,
     isa,
     @abi.ABISettings::default(),
+    roles,
     call_conv_layout=Some(call_conv),
   )
   plan_integration_for_target(func, allocated_func, output, target)
@@ -227,6 +228,7 @@ pub fn plan_wasm_body_milkir_integration_for_target(
     vcode_func,
     isa,
     @abi.ABISettings::default(),
+    roles,
     call_conv_layout=Some(call_conv),
   )
   plan_integration_for_target(func, allocated_func, output, target)

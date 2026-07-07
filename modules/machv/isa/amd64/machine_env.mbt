@@ -17,16 +17,12 @@ fn sysv_callee_saved() -> Array[@abi.PReg] {
 }
 
 ///|
-fn allocatable_callee_saved_regs(enable_pinned_reg : Bool) -> Array[@abi.PReg] {
+fn allocatable_callee_saved_regs() -> Array[@abi.PReg] {
   let fp_idx = int_reg_index(FP)
-  let vmctx_idx = int_reg_index(Vmctx)
   let regs : Array[@abi.PReg] = []
   for r in sysv_callee_saved() {
     // Keep rbp out of the general pool.
     if r.index == fp_idx {
-      continue
-    }
-    if enable_pinned_reg && r.index == vmctx_idx {
       continue
     }
     regs.push(r)
@@ -71,10 +67,11 @@ fn allocatable_scratch_fprs() -> Array[@abi.PReg] {
 
 ///|
 pub fn build_machine_env(
-  settings : @abi.ABISettings,
+  _settings : @abi.ABISettings,
   reserve_mem0_desc : Bool,
   reserve_func_table : Bool,
   reserve_extra_results_ptr : Bool,
+  reserved_int_regs : Array[Int],
 ) -> @spec.MachineEnvData {
   let mem0_desc_idx = int_reg_index(Mem0Desc)
   let func_table_idx = int_reg_index(FuncTable)
@@ -89,7 +86,10 @@ pub fn build_machine_env(
   }
 
   // Nonpreferred: callee-saved regs (excluding pinned/FP).
-  for r in allocatable_callee_saved_regs(settings.enable_pinned_reg) {
+  for r in allocatable_callee_saved_regs() {
+    if reserved_int_regs.contains(r.index) {
+      continue
+    }
     if reserve_extra_results_ptr && r.index == extra_results_ptr_idx {
       continue
     }

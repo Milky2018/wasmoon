@@ -50,6 +50,7 @@ pub fn emit_entry_trampoline(
     vcode_func,
     isa,
     @abi.ABISettings::default(),
+    wasm_embedding_reg_roles(isa~),
     call_conv_layout=Some(call_conv_layout),
   )
 

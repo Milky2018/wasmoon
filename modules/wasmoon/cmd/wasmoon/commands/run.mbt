@@ -1658,6 +1658,7 @@ pub fn compile_module_to_jit(
       vcode_func,
       isa,
       @abi.ABISettings::default(),
+      roles,
       call_conv_layout=Some(call_conv),
     )
     if regalloc_tick is Some(tick) {

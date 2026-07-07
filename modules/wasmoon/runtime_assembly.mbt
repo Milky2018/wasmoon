@@ -109,13 +109,16 @@ pub fn compiler_infrastructure_assembly() -> CompilerInfrastructureAssembly {
   let entry = milk.new_block0()
   entry.set_terminator(Return([]))
   let call_conv = @wasmoon_jit.wasm_calling_convention()
+  let roles = @wasmoon_jit.wasm_embedding_reg_roles()
   let machv_function = @lower.lower_function(
     milk,
     run_ir_opt=false,
+    embedding_reg_roles=roles,
     call_conv_layout=Some(call_conv),
   )
   let (allocated_function, output) = @machv_regalloc.allocate_registers_backtracking_output(
     machv_function,
+    embedding_reg_roles=roles,
     call_conv_layout=Some(call_conv),
   )
   {

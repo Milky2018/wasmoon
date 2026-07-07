@@ -6,10 +6,11 @@
 
 ///|
 pub fn build_machine_env(
-  settings : @abi.ABISettings,
+  _settings : @abi.ABISettings,
   reserve_mem0_desc : Bool,
   reserve_func_table : Bool,
   reserve_extra_results_ptr : Bool,
+  reserved_int_regs : Array[Int],
 ) -> @spec.MachineEnvData {
   let mem0_desc_idx = int_reg_index(Mem0Desc)
   let func_table_idx = int_reg_index(FuncTable)
@@ -29,10 +30,10 @@ pub fn build_machine_env(
   }
 
   // Nonpreferred callee-saved GPRs: x19-x28, excluding pinned reg when enabled.
-  for
-    r in allocatable_callee_saved_regs(
-      enable_pinned_reg=settings.enable_pinned_reg,
-    ) {
+  for r in allocatable_callee_saved_regs() {
+    if reserved_int_regs.contains(r.index) {
+      continue
+    }
     if reserve_extra_results_ptr && r.index == extra_results_ptr_idx {
       continue
     }

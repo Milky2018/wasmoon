@@ -55,18 +55,21 @@ pub fn ISA::machine_env(
   reserve_mem0_desc? : Bool = false,
   reserve_func_table? : Bool = false,
   reserve_extra_results_ptr? : Bool = false,
+  reserved_int_regs? : Array[Int] = [],
 ) -> MachineEnv {
   match self {
     AArch64 =>
       MachineEnv::from_data(
         @aarch64.build_machine_env(
           settings, reserve_mem0_desc, reserve_func_table, reserve_extra_results_ptr,
+          reserved_int_regs,
         ),
       )
     AMD64 =>
       MachineEnv::from_data(
         @amd64.build_machine_env(
           settings, reserve_mem0_desc, reserve_func_table, reserve_extra_results_ptr,
+          reserved_int_regs,
         ),
       )
   }

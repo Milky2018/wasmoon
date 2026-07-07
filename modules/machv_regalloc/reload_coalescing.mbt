@@ -84,6 +84,8 @@ fn allocate_reload_registers(
   intervals : Map[(Int, Int), ReloadInterval],
   liveness : LivenessResult,
   isa : @isa.ISA,
+  settings : @abi.ABISettings,
+  embedding_reg_roles : @abi.EmbeddingRegRoles,
 ) -> Unit {
   if intervals.is_empty() {
     return
@@ -98,21 +100,17 @@ fn allocate_reload_registers(
   // coalescing.
   let reserved_int_regs : @hashset.HashSet[Int] = HashSet([])
   let reserved_float_regs : @hashset.HashSet[Int] = HashSet([])
-  // - The pinned VMContext register (AArch64: x21).
-  reserved_int_regs.add(isa.vmctx_reg_index()) |> ignore
-  // - The cached memory0 descriptor pointer register when needed.
-  if func.should_cache_mem0_desc() {
-    reserved_int_regs.add(isa.mem0_desc_reg_index()) |> ignore
-  }
-  if func.should_cache_func_table() {
-    reserved_int_regs.add(isa.func_table_reg_index()) |> ignore
-  }
-  // - Extra results pointer register when needed.
   let calls_multi = func.calls_multi_value_function()
   let needs_extra = func.needs_extra_results_ptr()
-  let needs_x23_reserved = needs_extra || calls_multi
-  if needs_x23_reserved {
-    reserved_int_regs.add(isa.extra_results_ptr_reg_index()) |> ignore
+  let reserve_extra_results_ptr = needs_extra || calls_multi
+  for
+    idx in embedding_reg_roles.reserved_int_indices(
+      reserve_context=settings.enable_pinned_reg,
+      reserve_context_cache_0=func.should_cache_mem0_desc(),
+      reserve_context_cache_1=func.should_cache_func_table(),
+      reserve_extra_results_ptr~,
+    ) {
+    reserved_int_regs.add(idx) |> ignore
   }
 
   // Candidate registers for reload coalescing.
@@ -128,7 +126,7 @@ fn allocate_reload_registers(
   let reload_int_regs_callfree_extra : Array[Int] = []
   match isa {
     AArch64 => {
-      // AArch64: use a subset of callee-saved regs that are not used by Wasmoon's ABI roles.
+      // AArch64: use a subset of callee-saved regs that are not used by embedding ABI roles.
       for idx in [19, 20, 22, 23, 24, 25, 26, 27, 28] {
         reload_int_regs.push(idx)
       }
@@ -144,9 +142,13 @@ fn allocate_reload_registers(
     }
     AMD64 => {
       let env = isa.machine_env(
-        reserve_mem0_desc=func.should_cache_mem0_desc(),
-        reserve_func_table=func.should_cache_func_table(),
-        reserve_extra_results_ptr=needs_x23_reserved,
+        settings~,
+        reserved_int_regs=embedding_reg_roles.reserved_int_indices(
+          reserve_context=settings.enable_pinned_reg,
+          reserve_context_cache_0=func.should_cache_mem0_desc(),
+          reserve_context_cache_1=func.should_cache_func_table(),
+          reserve_extra_results_ptr~,
+        ),
       )
       for r in env.callee_saved_int {
         // rbp is already excluded from MachineEnv; still, keep it out here too.

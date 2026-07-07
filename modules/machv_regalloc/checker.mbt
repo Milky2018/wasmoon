@@ -59,6 +59,7 @@ pub fn verify_allocation(
   isa : @isa.ISA,
   call_conv_layout : @abi.CallConventionLayout,
   settings? : @abi.ABISettings = @abi.ABISettings::default(),
+  embedding_reg_roles? : @abi.EmbeddingRegRoles = @abi.EmbeddingRegRoles::none(),
 ) -> Unit {
   // Rebuild live ranges to verify with holes.
   let ranges = build_live_ranges(func, liveness)
@@ -67,15 +68,14 @@ pub fn verify_allocation(
   // Rebuild MachineEnv to compute allocatable + scratch sets.
   let calls_multi = func.calls_multi_value_function()
   let needs_extra = func.needs_extra_results_ptr()
-  let needs_x23_reserved = needs_extra || calls_multi
-  let needs_x20_reserved = func.should_cache_mem0_desc()
-  let needs_x21_reserved = func.should_cache_func_table()
-  let env = isa.machine_env(
-    settings~,
-    reserve_mem0_desc=needs_x20_reserved,
-    reserve_func_table=needs_x21_reserved,
-    reserve_extra_results_ptr=needs_x23_reserved,
+  let reserve_extra_results_ptr = needs_extra || calls_multi
+  let reserved_int_regs = embedding_reg_roles.reserved_int_indices(
+    reserve_context=settings.enable_pinned_reg,
+    reserve_context_cache_0=func.should_cache_mem0_desc(),
+    reserve_context_cache_1=func.should_cache_func_table(),
+    reserve_extra_results_ptr~,
   )
+  let env = isa.machine_env(settings~, reserved_int_regs~)
   let allowed_int = union_sets(
     build_index_set(env.preferred_int),
     build_index_set(env.nonpreferred_int),
@@ -267,6 +267,15 @@ pub fn verify_allocation_aarch64(
   alloc : RegAllocResult,
   call_conv_layout : @abi.CallConventionLayout,
   settings? : @abi.ABISettings = @abi.ABISettings::default(),
+  embedding_reg_roles? : @abi.EmbeddingRegRoles = @abi.EmbeddingRegRoles::none(),
 ) -> Unit {
-  verify_allocation(func, liveness, alloc, AArch64, call_conv_layout, settings~)
+  verify_allocation(
+    func,
+    liveness,
+    alloc,
+    AArch64,
+    call_conv_layout,
+    settings~,
+    embedding_reg_roles~,
+  )
 }
