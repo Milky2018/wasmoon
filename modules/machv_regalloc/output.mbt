@@ -1,7 +1,7 @@
 // Cranelift-style regalloc output consumed directly by the emitter.
 //
 // Design note:
-// - Keep VCode unchanged after regalloc.
+// - Keep MachV instructions unchanged after regalloc.
 // - Regalloc produces per-operand allocations plus a stream of edits (moves
 //   between regs and spillslots) that the emitter interleaves with original
 //   instructions, mirroring Cranelift machinst + regalloc2::Output.

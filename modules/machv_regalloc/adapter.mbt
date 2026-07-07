@@ -225,7 +225,7 @@ fn project_function_impl(
 
 ///|
 /// Project a small MachV function into `regalloc.Program` and run the simple
-/// linear-scan allocator. This is not the production VCode backtracking path.
+/// linear-scan allocator. This is not the production MachV backtracking path.
 pub fn allocate_function_linear_scan(
   func : @machv.AbstractFunction,
   physical_regs : Array[@machv.PReg],
@@ -1463,7 +1463,7 @@ fn materialize_entry_param_transfers(
 
 ///|
 /// Run the simple linear-scan adapter and materialize its result into the small
-/// MachV function model. Production VCode allocation uses
+/// MachV function model. Production MachV allocation uses
 /// `allocate_registers_backtracking_output`.
 pub fn allocate_and_apply_linear_scan(
   func : @machv.AbstractFunction,

@@ -1,7 +1,7 @@
 // ============ Reload Coalescing ============
 //
 // This logic is shared by both regalloc result application paths: the in-place
-// VCode rewrite path and the Cranelift-style regalloc-output path.
+// MachV rewrite path and the Cranelift-style regalloc-output path.
 //
 // Goal: when the same spill slot is used multiple times within a block, keep it
 // live in a chosen register for the duration of the block interval to avoid
@@ -106,8 +106,8 @@ fn allocate_reload_registers(
   for
     idx in embedding_reg_roles.reserved_int_indices(
       reserve_context=settings.enable_pinned_reg,
-      reserve_context_cache_0=func.should_cache_mem0_desc(),
-      reserve_context_cache_1=func.should_cache_func_table(),
+      reserve_context_cache_0=func.should_reserve_context_cache_0(),
+      reserve_context_cache_1=func.should_reserve_context_cache_1(),
       reserve_extra_results_ptr~,
     ) {
     reserved_int_regs.add(idx) |> ignore
@@ -145,8 +145,8 @@ fn allocate_reload_registers(
         settings~,
         reserved_int_regs=embedding_reg_roles.reserved_int_indices(
           reserve_context=settings.enable_pinned_reg,
-          reserve_context_cache_0=func.should_cache_mem0_desc(),
-          reserve_context_cache_1=func.should_cache_func_table(),
+          reserve_context_cache_0=func.should_reserve_context_cache_0(),
+          reserve_context_cache_1=func.should_reserve_context_cache_1(),
           reserve_extra_results_ptr~,
         ),
       )

@@ -97,7 +97,7 @@ fn selected_regalloc_algorithm() -> RegallocAlgorithm {
 }
 
 ///|
-/// Eliminate dead code from a VCode function
+/// Eliminate dead code from a MachV function
 /// Removes instructions that define vregs which are never used
 pub fn eliminate_dead_code(func : @machv.Function) -> @machv.Function {
   // Step 1: Collect all used vregs
@@ -248,8 +248,8 @@ fn build_reg_pools(
   let reserve_extra_results_ptr = needs_extra || calls_multi
   let reserved_int_regs = embedding_reg_roles.reserved_int_indices(
     reserve_context=settings.enable_pinned_reg,
-    reserve_context_cache_0=func.should_cache_mem0_desc(),
-    reserve_context_cache_1=func.should_cache_func_table(),
+    reserve_context_cache_0=func.should_reserve_context_cache_0(),
+    reserve_context_cache_1=func.should_reserve_context_cache_1(),
     reserve_extra_results_ptr~,
   )
 
@@ -317,7 +317,7 @@ fn build_reg_pools(
 }
 
 ///|
-/// Allocate VCode registers through the production backtracking path.
+/// Allocate MachV virtual registers through the production backtracking path.
 ///
 /// `machv_regalloc` builds MachV liveness, register pools, and output edits;
 /// reusable allocation-loop, probe, eviction, split, and spill policies live in
@@ -400,7 +400,7 @@ pub fn allocate_registers_backtracking_with_isa(
 }
 
 ///|
-/// Allocate VCode registers and return a Cranelift-style regalloc `Output`.
+/// Allocate MachV virtual registers and return a Cranelift-style regalloc `Output`.
 ///
 /// The returned `@machv.Function` is *not* rewritten to physical registers; the
 /// emitter consumes the returned `Output` to materialize edits and operand
@@ -421,7 +421,7 @@ pub fn allocate_registers_backtracking_output(
 }
 
 ///|
-/// Allocate VCode registers and return `Output` using a specific ISA policy
+/// Allocate MachV virtual registers and return `Output` using a specific ISA policy
 /// implementation.
 pub fn allocate_registers_backtracking_output_with_isa(
   func : @machv.Function,
@@ -486,7 +486,7 @@ pub fn allocate_registers_backtracking_output_with_isa(
     )
   }
 
-  // Build output (allocs + edits). VCode remains in terms of vregs.
+  // Build output (allocs + edits). MachV remains in terms of vregs.
   let tick_output = if perf_on { Some(perf_tick_now()) } else { None }
   let output = build_output(
     func, liveness, alloc_result, isa, settings, embedding_reg_roles,

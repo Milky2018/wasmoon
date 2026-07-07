@@ -792,8 +792,8 @@ pub fn emit_function(
   let has_calls = func_has_calls(func)
   let has_incoming_stack_args = func_has_incoming_stack_args(func)
   let uses_primary_memory_base = func.uses_primary_memory_base()
-  let cache_context_0 = func.should_cache_mem0_desc()
-  let cache_context_1 = func.should_cache_func_table()
+  let cache_context_0 = func.should_reserve_context_cache_0()
+  let cache_context_1 = func.should_reserve_context_cache_1()
   let context_reg = embedding_reg_roles.context
 
   let force_context_reg_cache = abi_settings.enable_pinned_reg &&
@@ -2083,8 +2083,8 @@ pub fn emit_function_with_regalloc(
   let has_calls = func_has_calls(func)
   let has_incoming_stack_args = func_has_incoming_stack_args(func)
   let uses_primary_memory_base = func.uses_primary_memory_base()
-  let cache_context_0 = func.should_cache_mem0_desc()
-  let cache_context_1 = func.should_cache_func_table()
+  let cache_context_0 = func.should_reserve_context_cache_0()
+  let cache_context_1 = func.should_reserve_context_cache_1()
   let context_reg = embedding_reg_roles.context
   let force_context_reg_cache = abi_settings.enable_pinned_reg &&
     isa is AMD64 &&

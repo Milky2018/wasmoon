@@ -8,7 +8,7 @@
 // ============ Live Interval ============
 
 ///|
-/// A program point - identifies a position in the VCode
+/// A program point - identifies a position in the MachV function
 /// Using #valtype for stack allocation - this struct is created/compared frequently
 #valtype
 pub struct ProgPoint {
@@ -453,7 +453,7 @@ fn compute_reverse_postorder(func : @machv.Function) -> FixedArray[Int] {
 }
 
 ///|
-/// Compute liveness information for a VCode function.
+/// Compute liveness information for a MachV function.
 fn compute_liveness_with_options(
   func : @machv.Function,
   build_live_intervals : Bool,

@@ -72,5 +72,5 @@ test "rewrite virtual operands to physical registers" {
 
 ## Boundary
 
-This module may depend on MachV and regalloc, but should not depend on Wasmoon
+This module may depend on MachV and regalloc, but should not depend on product
 runtime packages or native embedding details.

@@ -1644,7 +1644,6 @@ fn BacktrackingAllocator::preassign_params(
   let mut int_idx = 0
   let mut float_idx = 0
   for param in self.func.params {
-    let is_vmctx_param = param.class is Int && int_idx == 0
     // Determine which ABI register this param comes in
     let (preg_opt, is_int) : (@abi.PReg?, Bool) = match param.class {
       Int =>
@@ -1674,6 +1673,9 @@ fn BacktrackingAllocator::preassign_params(
 
     // Skip stack params (handled by normal allocation).
     guard preg_opt is Some(preg) else { continue }
+    let is_context_param = param.class is Int &&
+      preg.index == context_arg_preg.index &&
+      preg.class == context_arg_preg.class
 
     // Find the LiveRange for this param and get its bundle
     let range = self.ranges.get_by_vreg(param.id)
@@ -1688,7 +1690,7 @@ fn BacktrackingAllocator::preassign_params(
       // avoid pre-assigning caller-saved ABI arg registers. Let the allocator
       // choose a safe location from full liveness/call-clobber information.
       if bundle.crosses_call(self.ranges) {
-        if is_vmctx_param {
+        if is_context_param {
           self.record_allocation(bundle, pinned_context_preg)
           bundle.is_pinned = true
           continue
@@ -1748,13 +1750,14 @@ fn BacktrackingAllocator::preassign_params(
 
       // Normal case:
       // - strict mode: pin param bundle to incoming ABI register.
-      // - relaxed mode: keep vmctx pinned, but treat other params as hints only.
-      if strict_precolor || is_vmctx_param {
+      // - relaxed mode: keep the embedding context pinned, but treat other
+      //   params as hints only.
+      if strict_precolor || is_context_param {
         self.record_allocation(bundle, preg)
-        // Keep VMContext pinned. For strict precoloring, only pin params that
-        // do not cross calls; call-crossing values must remain movable so the
-        // allocator can satisfy call-clobber constraints.
-        if is_vmctx_param ||
+        // Keep the embedding context pinned. For strict precoloring, only pin
+        // params that do not cross calls; call-crossing values must remain
+        // movable so the allocator can satisfy call-clobber constraints.
+        if is_context_param ||
           (strict_precolor && !bundle.crosses_call(self.ranges)) {
           bundle.is_pinned = true
         }

@@ -15,8 +15,8 @@ depending on a concrete machine IR.
 
 Use `regalloc` when you have a machine-independent allocation problem: virtual
 registers, physical registers, instructions, use/def operands, clobbers, and a
-control-flow graph. It deliberately does not know about MachV, Wasm, x64, or
-AArch64 instruction formats.
+control-flow graph. It deliberately does not know about concrete IRs, frontend
+dialects, or target instruction formats.
 
 ## Example: allocate an abstract program
 

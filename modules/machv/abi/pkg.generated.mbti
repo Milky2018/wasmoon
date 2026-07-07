@@ -44,7 +44,7 @@ pub fn allocatable_scratch_fprs() -> Array[PReg]
 
 pub fn allocatable_scratch_regs() -> Array[PReg]
 
-pub fn build_aarch64_machine_env(settings? : ABISettings, reserve_mem0_desc? : Bool, reserve_func_table? : Bool, reserve_x23? : Bool) -> AArch64MachineEnv
+pub fn build_aarch64_machine_env(settings? : ABISettings, reserve_context_cache_0? : Bool, reserve_context_cache_1? : Bool, reserve_x23? : Bool) -> AArch64MachineEnv
 
 pub fn call_clobbered_fprs() -> Array[PReg]
 

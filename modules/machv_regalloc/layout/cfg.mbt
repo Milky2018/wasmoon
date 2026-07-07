@@ -1,8 +1,8 @@
-// VCode CFG for block layout optimization
+// MachV CFG for block layout optimization
 // Provides control flow analysis and loop detection
 
 ///|
-/// VCode CFG - Control Flow Graph for VCode functions
+/// MachV CFG - Control Flow Graph for MachV functions
 pub struct VCodeCFG {
   size : Int
   preds : Array[Array[Int]]

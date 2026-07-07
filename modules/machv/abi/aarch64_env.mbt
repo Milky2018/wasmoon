@@ -41,8 +41,8 @@ const AARCH64_CONTEXT_CACHE_REG_1 : Int = 19
 /// Construct the AArch64 machine environment, optionally reserving some regs.
 pub fn build_aarch64_machine_env(
   settings? : ABISettings = ABISettings::default(),
-  reserve_mem0_desc? : Bool = false,
-  reserve_func_table? : Bool = false,
+  reserve_context_cache_0? : Bool = false,
+  reserve_context_cache_1? : Bool = false,
   reserve_x23? : Bool = false,
 ) -> AArch64MachineEnv {
   let preferred_int : Array[PReg] = []
@@ -66,10 +66,10 @@ pub fn build_aarch64_machine_env(
     if reserve_x23 && r.index == 23 {
       continue
     }
-    if reserve_mem0_desc && r.index == AARCH64_CONTEXT_CACHE_REG_0 {
+    if reserve_context_cache_0 && r.index == AARCH64_CONTEXT_CACHE_REG_0 {
       continue
     }
-    if reserve_func_table && r.index == AARCH64_CONTEXT_CACHE_REG_1 {
+    if reserve_context_cache_1 && r.index == AARCH64_CONTEXT_CACHE_REG_1 {
       continue
     }
     nonpreferred_int.push(r)

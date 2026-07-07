@@ -205,9 +205,9 @@ fn choose_spill_candidate(
 /// Allocate virtual registers over the small abstract `Program` model using a
 /// linear-scan allocator.
 ///
-/// This is the simple allocator for examples and model-level tests. The
-/// production Wasmoon JIT path uses the `backtracking_*` APIs in this package
-/// through `machv_regalloc`.
+/// This is the simple allocator for examples and model-level tests. Production
+/// embedding pipelines should use the `backtracking_*` APIs in this package
+/// through an adapter such as `machv_regalloc`.
 ///
 /// TODO(regalloc): add interval splitting, bundle coalescing, rematerialization,
 /// and target-provided spill-cost modeling.

@@ -153,10 +153,10 @@ pub fn Function::print(Self) -> String
 pub fn Function::push_param(Self, @abi.VReg) -> Unit
 pub fn Function::set_int_stack_params(Self, Int) -> Unit
 pub fn Function::set_num_spill_slots(Self, Int) -> Unit
-pub fn Function::should_cache_func_table(Self) -> Bool
-pub fn Function::should_cache_mem0_desc(Self) -> Bool
+pub fn Function::should_reserve_context_cache_0(Self) -> Bool
+pub fn Function::should_reserve_context_cache_1(Self) -> Bool
 pub fn Function::update_max_outgoing_args_size(Self, Int) -> Unit
-pub fn Function::uses_func_table(Self) -> Bool
+pub fn Function::uses_context_cache_1(Self) -> Bool
 pub fn Function::uses_primary_memory_base(Self) -> Bool
 pub impl Show for Function
 

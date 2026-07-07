@@ -23,7 +23,7 @@ fn preg_to_loc(preg : @abi.PReg) -> Loc {
 }
 
 ///|
-/// Apply register allocation results to a VCode function
+/// Apply register allocation results to a MachV function
 /// Handles spilled registers by inserting StackLoad/StackStore instructions
 pub fn apply_allocation(
   func : @machv.Function,

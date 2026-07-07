@@ -225,19 +225,19 @@ pub fn Function::has_calls(self : Function) -> Bool {
 }
 
 ///|
-/// Returns true if memory0 descriptor caching should be enabled for this function.
-pub fn Function::should_cache_mem0_desc(self : Function) -> Bool {
+/// Returns true if context cache 0 caching should be enabled for this function.
+pub fn Function::should_reserve_context_cache_0(self : Function) -> Bool {
   ignore(self)
   // Cranelift-style policy:
   // Keep memory base as a regular SSA value and let RA/CSE/LICM place it.
-  // Do not reserve a dedicated physical register for mem0 cache.
+  // Do not reserve a dedicated physical register for context cache 0.
   false
 }
 
 ///|
-/// Returns true if the function loads the module `func_table` from vmctx.
-/// Used to reserve a dedicated register for caching the func_table pointer.
-pub fn Function::uses_func_table(self : Function) -> Bool {
+/// Returns true if the function loads the module `context cache 1` from embedding context.
+/// Used to reserve a dedicated register for caching the context cache 1 pointer.
+pub fn Function::uses_context_cache_1(self : Function) -> Bool {
   ignore(self)
   // Function-table layout is owned by the embedding runtime. MachV no longer
   // infers it from a built-in context offset.
@@ -245,11 +245,11 @@ pub fn Function::uses_func_table(self : Function) -> Bool {
 }
 
 ///|
-/// Returns true if func_table pointer caching should be enabled for this function.
-pub fn Function::should_cache_func_table(self : Function) -> Bool {
+/// Returns true if context cache 1 pointer caching should be enabled for this function.
+pub fn Function::should_reserve_context_cache_1(self : Function) -> Bool {
   ignore(self)
   // Cranelift-style policy:
-  // Keep func_table pointer as a regular SSA value; avoid a dedicated pinned
+  // Keep context cache 1 pointer as a regular SSA value; avoid a dedicated pinned
   // physical register that increases global register pressure.
   false
 }

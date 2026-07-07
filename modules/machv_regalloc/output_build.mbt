@@ -1,6 +1,6 @@
 // Build Cranelift-style regalloc `Output` for emission.
 //
-// This pass does not rewrite VCode instructions. Instead, it produces:
+// This pass does not rewrite MachV instructions. Instead, it produces:
 // - Per-operand allocations for each instruction/terminator.
 // - An edit stream (moves between regs and spill slots) that the emitter
 //   interleaves with instructions.
@@ -388,8 +388,8 @@ fn build_output(
     func.calls_multi_value_function()
   let reserved_int_regs = embedding_reg_roles.reserved_int_indices(
     reserve_context=settings.enable_pinned_reg,
-    reserve_context_cache_0=func.should_cache_mem0_desc(),
-    reserve_context_cache_1=func.should_cache_func_table(),
+    reserve_context_cache_0=func.should_reserve_context_cache_0(),
+    reserve_context_cache_1=func.should_reserve_context_cache_1(),
     reserve_extra_results_ptr~,
   )
   let env = isa.machine_env(settings~, reserved_int_regs~)

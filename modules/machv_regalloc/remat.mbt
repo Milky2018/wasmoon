@@ -1,10 +1,10 @@
-// Cranelift-style rematerialization for VCode.
+// Cranelift-style rematerialization for MachV.
 //
 // Cranelift performs rematerialization in IR opts (egraph/elaborate) by cloning
 // cheap-to-recompute instructions (especially constants) into blocks where they
 // are used, shortening live ranges and reducing register pressure.
 //
-// MachV VCode is already close to machine code; we implement a conservative
+// MachV is already close to machine code; we implement a conservative
 // subset that clones cheap, side-effect-free defs into each use block when the
 // value is used across blocks.
 //

@@ -210,7 +210,7 @@ test "apply materializes overlapping call fixed constraints in reverse order" {
 test "apply keeps fixed call inputs out of cycle scratch registers" {
   let func = @machv.AbstractFunction::new("call_fixed_protected_scratch")
   let entry = func.new_block()
-  let vmctx = func.new_vreg(Int)
+  let context = func.new_vreg(Int)
   let delta = func.new_vreg(Int)
   let memidx = func.new_vreg(Int)
   let max_pages = func.new_vreg(Int)
@@ -221,7 +221,7 @@ test "apply keeps fixed call inputs out of cycle scratch registers" {
   let p3 : @machv.PReg = { index: 3, class: Int }
   let p4 : @machv.PReg = { index: 4, class: Int }
   let defs = func.new_inst(Target("defs"))
-  defs.add_operand(@machv.Operand::def(Virtual(vmctx)))
+  defs.add_operand(@machv.Operand::def(Virtual(context)))
   defs.add_operand(@machv.Operand::def(Virtual(delta)))
   defs.add_operand(@machv.Operand::def(Virtual(memidx)))
   defs.add_operand(@machv.Operand::def(Virtual(max_pages)))
@@ -230,8 +230,8 @@ test "apply keeps fixed call inputs out of cycle scratch registers" {
   defs.add_constraint({ operand_index: 2, allowed_regs: [p2] })
   defs.add_constraint({ operand_index: 3, allowed_regs: [p3] })
   entry.append(defs)
-  let call = func.new_inst(Call("wasm.runtime.memory_grow"))
-  call.add_operand(@machv.Operand::use_reg(Virtual(vmctx)))
+  let call = func.new_inst(Call("runtime.memory_grow"))
+  call.add_operand(@machv.Operand::use_reg(Virtual(context)))
   call.add_operand(@machv.Operand::use_reg(Virtual(memidx)))
   call.add_operand(@machv.Operand::use_reg(Virtual(delta)))
   call.add_operand(@machv.Operand::use_reg(Virtual(max_pages)))
