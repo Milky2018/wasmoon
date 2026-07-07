@@ -8,7 +8,7 @@ test "AArch64 target owns ABI policy" {
 }
 
 ///|
-fn wasm_test_call_conv() -> @abi.CallConventionLayout {
+fn custom_test_call_conv() -> @abi.CallConventionLayout {
   {
     context_arg: { index: 0, class: Int },
     user_arg_gprs: [
@@ -27,19 +27,22 @@ fn wasm_test_call_conv() -> @abi.CallConventionLayout {
 }
 
 ///|
-test "AArch64 lowers Wasm function body entry ABI" {
-  let func = @milkir.Function::new("wasm_body", @milkir.Signature::new([], []))
+test "AArch64 lowers custom call-convention function entry ABI" {
+  let func = @milkir.Function::new(
+    "custom_call_conv_body",
+    @milkir.Signature::new([], []),
+  )
   func.add_param(Ptr) |> ignore
   func.add_param(I64) |> ignore
   func.add_param(I64) |> ignore
   func.add_result(I64)
   let entry = func.new_block([])
   entry.set_terminator(Return([]))
-  let lowered = lower_wasm_body_function(func, wasm_test_call_conv())
-  guard lowered.param_pregs[0] is Some(vmctx) else { fail("missing vmctx") }
+  let lowered = lower_function_with_call_conv(func, custom_test_call_conv())
+  guard lowered.param_pregs[0] is Some(context) else { fail("missing context") }
   guard lowered.param_pregs[1] is Some(arg0) else { fail("missing arg0") }
   guard lowered.param_pregs[2] is Some(arg1) else { fail("missing arg1") }
-  inspect(vmctx.index, content="0")
+  inspect(context.index, content="0")
   inspect(arg0.index, content="1")
   inspect(arg1.index, content="2")
 }
@@ -78,8 +81,8 @@ test "AArch64 records stack parameters and return area ABI locations" {
 }
 
 ///|
-test "AArch64 lowers Wasm return-area stores through ExtraResultsPtr" {
-  let func = @milkir.Function::new_empty("wasm_return_area_store")
+test "AArch64 lowers custom call-convention return-area stores through ExtraResultsPtr" {
+  let func = @milkir.Function::new_empty("custom_return_area_store")
   let values : Array[@milkir.Value] = []
   for _ in 0..<9 {
     let value = func.new_value(I64)
@@ -88,7 +91,7 @@ test "AArch64 lowers Wasm return-area stores through ExtraResultsPtr" {
   }
   let entry = func.new_block([])
   entry.set_terminator(Return(values))
-  let lowered = lower_wasm_body_function(func, wasm_test_call_conv())
+  let lowered = lower_function_with_call_conv(func, custom_test_call_conv())
   let mut has_store = false
   for inst in lowered.blocks[0].instructions {
     if inst.opcode == StorePtr(MemI64, 0) &&
@@ -501,16 +504,16 @@ test "AArch64 records outgoing stack arguments for direct calls" {
 test "AArch64 lowers CallPtr with Wasm ABI constraints and clobbers" {
   let func = @milkir.Function::new_empty("callptr")
   let callee = func.new_value(Ptr)
-  let vmctx = func.new_value(Ptr)
+  let context = func.new_value(Ptr)
   let int_arg = func.new_value(I64)
   let float_arg = func.new_value(F64)
   let result = func.new_value(I64)
   let entry = func.new_block([])
   entry.append_inst(
-    func.new_inst(CallPtr(2, 1), [callee, vmctx, int_arg, float_arg], [result]),
+    func.new_inst(CallPtr(2, 1), [callee, context, int_arg, float_arg], [result]),
   )
   entry.set_terminator(Return([result]))
-  let lowered = lower_wasm_body_function(func, wasm_test_call_conv())
+  let lowered = lower_function_with_call_conv(func, custom_test_call_conv())
   let call = lowered.blocks[0].instructions[0]
   inspect(call.opcode == CallPtr(2, 1), content="true")
   inspect(call.constraints.length(), content="4")
@@ -537,15 +540,15 @@ test "AArch64 lowers CallPtr with Wasm ABI constraints and clobbers" {
 test "AArch64 records outgoing stack arguments for Wasm CallPtr" {
   let func = @milkir.Function::new_empty("callptr_stack_args")
   let callee = func.new_value(Ptr)
-  let vmctx = func.new_value(Ptr)
-  let args : Array[@milkir.Value] = [callee, vmctx]
+  let context = func.new_value(Ptr)
+  let args : Array[@milkir.Value] = [callee, context]
   for _ in 0..<8 {
     args.push(func.new_value(I64))
   }
   let entry = func.new_block([])
   entry.append_inst(func.new_inst(CallPtr(8, 0), args, []))
   entry.set_terminator(Return([]))
-  let lowered = lower_wasm_body_function(func, wasm_test_call_conv())
+  let lowered = lower_function_with_call_conv(func, custom_test_call_conv())
   let call = lowered.blocks[0].instructions[0]
   inspect(call.stack_effect == CallFrame(16), content="true")
   inspect(lowered.get_max_outgoing_args_size(), content="16")
@@ -561,15 +564,15 @@ test "AArch64 records outgoing stack arguments for Wasm CallPtr" {
 test "AArch64 lowers Wasm CallPtr return-area loads through ExtraResultsPtr" {
   let func = @milkir.Function::new_empty("callptr_return_area_load")
   let callee = func.new_value(Ptr)
-  let vmctx = func.new_value(Ptr)
+  let context = func.new_value(Ptr)
   let results : Array[@milkir.Value] = []
   for _ in 0..<9 {
     results.push(func.new_value(I64))
   }
   let entry = func.new_block([])
-  entry.append_inst(func.new_inst(CallPtr(0, 9), [callee, vmctx], results))
+  entry.append_inst(func.new_inst(CallPtr(0, 9), [callee, context], results))
   entry.set_terminator(Return([]))
-  let lowered = lower_wasm_body_function(func, wasm_test_call_conv())
+  let lowered = lower_function_with_call_conv(func, custom_test_call_conv())
   let mut has_load = false
   for inst in lowered.blocks[0].instructions {
     if inst.opcode == LoadPtr(MemI64, 0) &&

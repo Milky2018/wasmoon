@@ -12,8 +12,8 @@ Wasmoon-specific integration packages. The public package boundary is:
 | `Milky2018/regalloc` | Target-independent register allocation algorithm. | `Program`, `Block`, `Instruction`, `allocate_linear_scan`, `verify_allocation`, live-range and move-resolution planning helpers. |
 | `Milky2018/machv_regalloc` | Adapter from MachV to the pure register allocator. | `project_function`, `allocate_function_linear_scan`, `allocate_and_apply_linear_scan`, `allocate_registers_backtracking_output_with_isa`. |
 | `Milky2018/machv_emit` | Machine-code emission from allocated MachV. | `MachineCode`, `emit_function`, `emit_function_with_regalloc`, relocation/fixup and stack-frame helpers. |
-| `Milky2018/x64_target` | x64 target lowering and ABI policy. | `target`, `abi_policy`, `build_machine_env`, `lower_function`, `lower_wasm_body_function`. |
-| `Milky2018/aarch64_target` | AArch64 target lowering and ABI policy. | `target`, `abi_policy`, `build_machine_env`, `lower_function`, `lower_wasm_body_function`. |
+| `Milky2018/x64_target` | x64 target lowering and ABI policy. | `target`, `abi_policy`, `build_machine_env`, `lower_function`, `lower_function_with_call_conv`. |
+| `Milky2018/aarch64_target` | AArch64 target lowering and ABI policy. | `target`, `abi_policy`, `build_machine_env`, `lower_function`, `lower_function_with_call_conv`. |
 | `Milky2018/isa_target/lower` | Generic MilkIR-to-MachV lowering pipeline. | `lower_function`, `optimize_vcode`, rewrite-rule helpers, explicit ISA/ABI lowering context. |
 | `Milky2018/wasmoon_jit` | Wasmoon-specific native runtime and JIT integration. | `plan_milkir_integration_for_target`, cwasm artifact construction, native runtime wrappers, Wasm entry/hostcall trampolines, VMContext layout, runtime symbols, and integration planning. |
 

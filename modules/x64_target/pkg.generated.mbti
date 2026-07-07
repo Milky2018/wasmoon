@@ -19,7 +19,7 @@ pub fn allocatable_scratch_fprs() -> Array[@machv.PReg]
 
 pub fn allocatable_scratch_regs() -> Array[@machv.PReg]
 
-pub fn build_machine_env(settings? : TargetSettings, reserve_mem0_desc? : Bool, reserve_func_table? : Bool, reserve_extra_results_ptr? : Bool) -> MachineEnvData
+pub fn build_machine_env(settings? : TargetSettings, reserve_context_cache_0? : Bool, reserve_context_cache_1? : Bool, reserve_extra_results_ptr? : Bool) -> MachineEnvData
 
 pub fn call_clobbered_fprs() -> Array[@machv.PReg]
 
@@ -31,7 +31,7 @@ pub fn int_reg_index(IntRegRole) -> Int
 
 pub fn lower_function(@milkir.Function) -> @machv.AbstractFunction
 
-pub fn lower_wasm_body_function(@milkir.Function, @abi.CallConventionLayout) -> @machv.AbstractFunction
+pub fn lower_function_with_call_conv(@milkir.Function, @abi.CallConventionLayout) -> @machv.AbstractFunction
 
 pub fn sysv_arg_fprs() -> Array[@machv.PReg]
 
@@ -58,9 +58,9 @@ pub(all) enum CallingConvention {
 } derive(Eq, @debug.Debug)
 
 pub(all) enum IntRegRole {
-  Vmctx
-  Mem0Desc
-  FuncTable
+  Context
+  ContextCache0
+  ContextCache1
   ExtraResultsPtr
   Scratch1
   Scratch2

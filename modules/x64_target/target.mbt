@@ -164,7 +164,9 @@ fn require_call_conv_layout(
   match layout {
     Some(call_conv) => call_conv
     None =>
-      abort("x64_target: Wasm body lowering requires call convention layout")
+      abort(
+        "x64_target: call-convention lowering requires a call convention layout",
+      )
   }
 }
 
@@ -265,7 +267,7 @@ fn add_return_moves(
   out : @machv.AbstractFunction,
   block : @machv.Block,
   values : Array[@milkir.Value],
-  wasm_body? : Bool = false,
+  uses_call_conv_layout? : Bool = false,
 ) -> Unit {
   for i, value in values {
     let location = if i < out.result_locations.length() {
@@ -281,7 +283,7 @@ fn add_return_moves(
         block.append(move_inst)
       }
       ReturnArea(offset~, ..) => {
-        wasm_body |> ignore
+        uses_call_conv_layout |> ignore
         let store = out.new_inst(StorePtr(mem_type_for_type(value.ty), offset))
         store.add_operand(
           @machv.Operand::use_reg(Physical(extra_results_ptr_preg())),
@@ -318,7 +320,7 @@ fn add_call_return_area_loads(
 }
 
 ///|
-fn add_wasm_call_result_moves(
+fn add_call_conv_result_moves(
   out : @machv.AbstractFunction,
   block : @machv.Block,
   inst : @machv.Instruction,
@@ -352,17 +354,17 @@ fn signature_param_location(
   int_arg_idx : Int,
   float_arg_idx : Int,
   stack_offset : Int,
-  wasm_body? : Bool = false,
+  uses_call_conv_layout? : Bool = false,
   call_conv_layout? : @abi.CallConventionLayout? = None,
 ) -> (@machv.AbiValueLocation, Int, Int, Int) {
   let abi = abi_policy()
-  let int_arg_regs = if wasm_body {
+  let int_arg_regs = if uses_call_conv_layout {
     let call_conv = require_call_conv_layout(call_conv_layout)
     [machv_preg(call_conv.context_arg), ..machv_pregs(call_conv.user_arg_gprs)]
   } else {
     abi.int_argument_regs
   }
-  let float_arg_regs = if wasm_body {
+  let float_arg_regs = if uses_call_conv_layout {
     machv_pregs(require_call_conv_layout(call_conv_layout).arg_fprs)
   } else {
     abi.float_argument_regs
@@ -416,16 +418,16 @@ fn signature_result_location(
   int_result_idx : Int,
   float_result_idx : Int,
   return_area_offset : Int,
-  wasm_body? : Bool = false,
+  uses_call_conv_layout? : Bool = false,
   call_conv_layout? : @abi.CallConventionLayout? = None,
 ) -> (@machv.AbiValueLocation, Int, Int, Int) {
   let abi = abi_policy()
-  let int_return_regs = if wasm_body {
+  let int_return_regs = if uses_call_conv_layout {
     machv_pregs(require_call_conv_layout(call_conv_layout).ret_gprs)
   } else {
     abi.int_return_regs
   }
-  let float_return_regs = if wasm_body {
+  let float_return_regs = if uses_call_conv_layout {
     machv_pregs(require_call_conv_layout(call_conv_layout).ret_fprs)
   } else {
     abi.float_return_regs
@@ -477,7 +479,7 @@ fn signature_result_location(
 fn add_function_signature(
   func : @milkir.Function,
   out : @machv.AbstractFunction,
-  wasm_body? : Bool = false,
+  uses_call_conv_layout? : Bool = false,
   call_conv_layout? : @abi.CallConventionLayout? = None,
 ) -> Unit {
   let mut int_arg_idx = 0
@@ -491,7 +493,7 @@ fn add_function_signature(
       int_arg_idx,
       float_arg_idx,
       stack_offset,
-      wasm_body~,
+      uses_call_conv_layout~,
       call_conv_layout~,
     )
     out.add_param_location(location)
@@ -513,7 +515,7 @@ fn add_function_signature(
       int_result_idx,
       float_result_idx,
       return_area_offset,
-      wasm_body~,
+      uses_call_conv_layout~,
       call_conv_layout~,
     )
     out.add_result_location(location)
@@ -1494,7 +1496,7 @@ fn lower_inst(
         call_conv,
       )
       block.append(lowered)
-      add_wasm_call_result_moves(out, block, lowered, inst.results)
+      add_call_conv_result_moves(out, block, lowered, inst.results)
       return
     }
     Fconst(value) => {
@@ -1598,11 +1600,11 @@ fn lower_terminator(
   block : @machv.Block,
   terminator : @milkir.Terminator,
   block_map : Array[(Int, Int)],
-  wasm_body? : Bool = false,
+  uses_call_conv_layout? : Bool = false,
 ) -> Unit {
   match terminator {
     Return(values) => {
-      add_return_moves(out, block, values, wasm_body~)
+      add_return_moves(out, block, values, uses_call_conv_layout~)
       block.set_terminator(TermReturn([]))
     }
     Jump(target, values) =>
@@ -1670,12 +1672,12 @@ fn map_block_id(block_map : Array[(Int, Int)], old_id : Int) -> Int {
 ///|
 fn lower_function_with_abi(
   func : @milkir.Function,
-  wasm_body : Bool,
+  uses_call_conv_layout : Bool,
   call_conv_layout? : @abi.CallConventionLayout? = None,
 ) -> @machv.AbstractFunction {
   let out = @machv.AbstractFunction::new(func.name)
   out.next_vreg_id = func.next_value_id
-  add_function_signature(func, out, wasm_body~, call_conv_layout~)
+  add_function_signature(func, out, uses_call_conv_layout~, call_conv_layout~)
   for slot in func.stack_slots {
     out.new_stack_slot(slot.size, slot.align) |> ignore
   }
@@ -1694,7 +1696,13 @@ fn lower_function_with_abi(
       lower_inst(func, out, block, inst, call_conv_layout~)
     }
     if milk_block.terminator is Some(terminator) {
-      lower_terminator(out, block, terminator, block_map, wasm_body~)
+      lower_terminator(
+        out,
+        block,
+        terminator,
+        block_map,
+        uses_call_conv_layout~,
+      )
     }
   }
   out
@@ -1706,7 +1714,7 @@ pub fn lower_function(func : @milkir.Function) -> @machv.AbstractFunction {
 }
 
 ///|
-pub fn lower_wasm_body_function(
+pub fn lower_function_with_call_conv(
   func : @milkir.Function,
   call_conv_layout : @abi.CallConventionLayout,
 ) -> @machv.AbstractFunction {
