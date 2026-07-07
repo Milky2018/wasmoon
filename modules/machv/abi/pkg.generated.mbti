@@ -117,30 +117,20 @@ pub(all) enum ContextSlotMutability {
   Mutable
 } derive(Eq, @debug.Debug)
 
-#alias(RuntimeContextLayout)
 pub(all) struct EmbeddingContextLayout {
   slots : Array[ContextSlot]
   active_function_index_slot : Int?
   allocation_cursor_slot : Int?
   allocation_limit_slot : Int?
-  context_cache_0_descriptor_offset : Int
-  context_cache_0_source_offset : Int
-  function_table_offset : Int
-  primary_table_base_offset : Int
-  table_directory_offset : Int
-  global_storage_offset : Int
-  memory_directory_offset : Int
-  debug_current_function_offset : Int
-  gc_allocation_cursor_offset : Int
-  gc_allocation_limit_offset : Int
-  pointer_stride : Int
 }
 pub fn EmbeddingContextLayout::require_active_function_index_offset(Self) -> Int
 pub fn EmbeddingContextLayout::require_allocation_cursor_offset(Self) -> Int
 pub fn EmbeddingContextLayout::require_allocation_limit_offset(Self) -> Int
+pub fn EmbeddingContextLayout::require_cache_role_offset(Self, ContextSlotCacheRole) -> Int
 pub fn EmbeddingContextLayout::require_slot_offset(Self, Int) -> Int
 pub fn EmbeddingContextLayout::slot(Self, Int) -> ContextSlot?
 pub fn EmbeddingContextLayout::slot_offset(Self, Int) -> Int?
+pub fn EmbeddingContextLayout::slot_offset_for_cache_role(Self, ContextSlotCacheRole) -> Int?
 
 pub(all) struct EmbeddingRegRoles {
   context : PReg?

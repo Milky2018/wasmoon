@@ -137,35 +137,12 @@ pub fn VMContextLayout::to_embedding_context_layout(
     allocation_limit_slot: Some(
       @wasm_isa_lower.CONTEXT_SLOT_GC_ALLOCATION_LIMIT,
     ),
-    context_cache_0_descriptor_offset: self.memory0_offset,
-    context_cache_0_source_offset: self.memory0_base_offset,
-    function_table_offset: self.func_table_offset,
-    primary_table_base_offset: self.table0_base_offset,
-    table_directory_offset: self.tables_offset,
-    global_storage_offset: self.globals_offset,
-    memory_directory_offset: self.memories_offset,
-    debug_current_function_offset: self.debug_current_func_idx_offset,
-    gc_allocation_cursor_offset: self.gc_heap_ptr_offset,
-    gc_allocation_limit_offset: self.gc_heap_limit_offset,
-    pointer_stride: self.pointer_stride,
   }
 }
 
 ///|
 pub fn embedding_context_layout() -> @abi.EmbeddingContextLayout {
   vmcontext_layout().to_embedding_context_layout()
-}
-
-///|
-pub fn VMContextLayout::to_runtime_context_layout(
-  self : VMContextLayout,
-) -> @abi.RuntimeContextLayout {
-  self.to_embedding_context_layout()
-}
-
-///|
-pub fn runtime_context_layout() -> @abi.RuntimeContextLayout {
-  embedding_context_layout()
 }
 
 ///|

@@ -31,6 +31,9 @@ pub const CONTEXT_SLOT_GC_ALLOCATION_CURSOR : Int = 8
 pub const CONTEXT_SLOT_GC_ALLOCATION_LIMIT : Int = 9
 
 ///|
+pub const WASM_CONTEXT_POINTER_STRIDE : Int = 8
+
+///|
 pub fn context_slot_cache_key(slot_id : Int) -> Int {
   -slot_id - 1
 }

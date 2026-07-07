@@ -38,22 +38,7 @@ pub(all) struct EmbeddingContextLayout {
   active_function_index_slot : Int?
   allocation_cursor_slot : Int?
   allocation_limit_slot : Int?
-  context_cache_0_descriptor_offset : Int
-  context_cache_0_source_offset : Int
-  function_table_offset : Int
-  primary_table_base_offset : Int
-  table_directory_offset : Int
-  global_storage_offset : Int
-  memory_directory_offset : Int
-  debug_current_function_offset : Int
-  gc_allocation_cursor_offset : Int
-  gc_allocation_limit_offset : Int
-  pointer_stride : Int
 }
-
-///|
-/// Compatibility alias for lowering code that still uses the old name.
-pub type RuntimeContextLayout = EmbeddingContextLayout
 
 ///|
 pub fn EmbeddingContextLayout::slot(
@@ -76,6 +61,30 @@ pub fn EmbeddingContextLayout::slot_offset(
   match self.slot(id) {
     Some(slot) => Some(slot.offset)
     None => None
+  }
+}
+
+///|
+pub fn EmbeddingContextLayout::slot_offset_for_cache_role(
+  self : EmbeddingContextLayout,
+  role : ContextSlotCacheRole,
+) -> Int? {
+  for slot in self.slots {
+    if slot.cache_role == role {
+      return Some(slot.offset)
+    }
+  }
+  None
+}
+
+///|
+pub fn EmbeddingContextLayout::require_cache_role_offset(
+  self : EmbeddingContextLayout,
+  role : ContextSlotCacheRole,
+) -> Int {
+  match self.slot_offset_for_cache_role(role) {
+    Some(offset) => offset
+    None => abort("missing embedding context cache role")
   }
 }
 

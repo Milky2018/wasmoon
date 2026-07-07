@@ -15,7 +15,7 @@ struct LoweringContext {
   isa : @isa.ISA
   abi_settings : @abi.ABISettings
   embedding_reg_roles : @abi.EmbeddingRegRoles
-  embedding_context_layout : @abi.RuntimeContextLayout?
+  embedding_context_layout : @abi.EmbeddingContextLayout?
   call_conv_layout : @abi.CallConventionLayout?
   external_helper_symbols : Map[String, String]
   trap_payload_resolver : (String) -> Int
@@ -66,7 +66,7 @@ pub fn LoweringContext::new(
   isa : @isa.ISA,
   abi_settings : @abi.ABISettings,
   embedding_reg_roles : @abi.EmbeddingRegRoles,
-  embedding_context_layout : @abi.RuntimeContextLayout?,
+  embedding_context_layout : @abi.EmbeddingContextLayout?,
   call_conv_layout : @abi.CallConventionLayout?,
   external_helper_symbols : Map[String, String],
   trap_payload_resolver : (String) -> Int,
@@ -122,7 +122,7 @@ pub fn LoweringContext::new(
 ///|
 fn LoweringContext::require_embedding_context_layout(
   self : LoweringContext,
-) -> @abi.RuntimeContextLayout {
+) -> @abi.EmbeddingContextLayout {
   match self.embedding_context_layout {
     Some(layout) => layout
     None =>
@@ -135,7 +135,7 @@ fn LoweringContext::require_embedding_context_layout(
 ///|
 pub fn LoweringContext::embedding_context_layout(
   self : LoweringContext,
-) -> @abi.RuntimeContextLayout {
+) -> @abi.EmbeddingContextLayout {
   self.require_embedding_context_layout()
 }
 
@@ -1605,7 +1605,7 @@ pub fn lower_function(
   isa? : @isa.ISA = AArch64,
   abi_settings? : @abi.ABISettings = @abi.ABISettings::default(),
   embedding_reg_roles? : @abi.EmbeddingRegRoles = @abi.EmbeddingRegRoles::none(),
-  embedding_context_layout? : @abi.RuntimeContextLayout? = None,
+  embedding_context_layout? : @abi.EmbeddingContextLayout? = None,
   call_conv_layout? : @abi.CallConventionLayout? = None,
   external_helper_symbols? : Map[String, String] = {},
   trap_payload_resolver? : (String) -> Int = fn(_reason) { 0 },

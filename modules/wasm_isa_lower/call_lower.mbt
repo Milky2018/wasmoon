@@ -387,7 +387,6 @@ pub fn lower_return_call_indirect(
       CONTEXT_SLOT_TABLE0_BASE,
     )
   } else {
-    let layout = ctx.embedding_context_layout()
     let indirect_tables_vreg = ctx.machv_function().new_vreg(Int)
     let load_array_inst = @instr.MachVInst::new(
       Load(I64, context_slot_offset(ctx, CONTEXT_SLOT_TABLE_DIRECTORY)),
@@ -397,7 +396,7 @@ pub fn lower_return_call_indirect(
       Physical({ index: @lower.context_index(ctx), class: Int }),
     )
     block.add_inst(load_array_inst)
-    let table_offset = table_idx * layout.pointer_stride
+    let table_offset = table_idx * WASM_CONTEXT_POINTER_STRIDE
     let ptr_vreg = ctx.machv_function().new_vreg(Int)
     let load_table_inst = @instr.MachVInst::new(Load(I64, table_offset))
     load_table_inst.add_def({ reg: Virtual(ptr_vreg) })
@@ -634,7 +633,6 @@ pub fn lower_call_indirect(
   } else {
     // Slow path: load indirect_tables[table_idx] from context
     // 1. Load indirect_tables array pointer from the runtime context.
-    let layout = ctx.embedding_context_layout()
     let indirect_tables_vreg = ctx.machv_function().new_vreg(Int)
     let load_array_inst = @instr.MachVInst::new(
       Load(I64, context_slot_offset(ctx, CONTEXT_SLOT_TABLE_DIRECTORY)),
@@ -645,7 +643,7 @@ pub fn lower_call_indirect(
     )
     block.add_inst(load_array_inst)
     // 2. Calculate offset = table_idx * pointer size
-    let table_offset = table_idx * layout.pointer_stride
+    let table_offset = table_idx * WASM_CONTEXT_POINTER_STRIDE
     // 3. Load table pointer: [indirect_tables + offset]
     let ptr_vreg = ctx.machv_function().new_vreg(Int)
     let load_table_inst = @instr.MachVInst::new(Load(I64, table_offset))

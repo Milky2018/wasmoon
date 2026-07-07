@@ -1,6 +1,6 @@
 ///|
 fn is_immutable_context_slot_offset(
-  embedding_context_layout : @abi.RuntimeContextLayout,
+  embedding_context_layout : @abi.EmbeddingContextLayout,
   offset : Int,
 ) -> Bool {
   for slot in embedding_context_layout.slots {
@@ -21,7 +21,7 @@ fn is_immutable_context_slot_offset(
 /// - a small set of loop-invariant `Load`/`LoadPtr` from immutable context-derived data
 fn licm_hoist_invariants(
   func : @machv.Function,
-  embedding_context_layout : @abi.RuntimeContextLayout,
+  embedding_context_layout : @abi.EmbeddingContextLayout,
   embedding_reg_roles : @abi.EmbeddingRegRoles,
 ) -> Unit {
   let n = func.blocks.length()
@@ -264,7 +264,7 @@ fn licm_hoist_invariants(
 /// - only CSE `Load(I64, off)` / `LoadPtr(I64, off)` from immutable pointers
 fn cse_immutable_loads(
   func : @machv.Function,
-  embedding_context_layout : @abi.RuntimeContextLayout,
+  embedding_context_layout : @abi.EmbeddingContextLayout,
   embedding_reg_roles : @abi.EmbeddingRegRoles,
 ) -> Unit {
   let context_idx = match embedding_reg_roles.context {
@@ -1219,7 +1219,7 @@ pub fn optimize_machv(
   func : @machv.Function,
   isa? : @isa.ISA = AArch64,
   profile? : PeepholeProfile = Full,
-  embedding_context_layout? : @abi.RuntimeContextLayout? = None,
+  embedding_context_layout? : @abi.EmbeddingContextLayout? = None,
   embedding_reg_roles? : @abi.EmbeddingRegRoles = @abi.EmbeddingRegRoles::none(),
 ) -> Unit {
   let mut inst_count = 0

@@ -523,12 +523,12 @@ fn MachineCode::emit_instruction(
     Load(ty, offset) => {
       let rt = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
-      // Fast path: cached function table pointer.
+      // Fast path: cached embedding context-derived pointer 1.
       if stack_frame.embedding_context_layout is Some(layout) {
         if stack_frame.cache_context_1 &&
           ty is I64 &&
           rn == stack_frame.context_reg_index() &&
-          offset == layout.function_table_offset {
+          offset == layout.require_cache_role_offset(ContextCache1) {
           guard stack_frame.context_cache_1_index() is Some(cache_reg) else {
             abort("embedding context cache 1 register role is required")
           }
@@ -1432,7 +1432,7 @@ fn MachineCode::emit_instruction(
         self.emit_ldr_imm(
           cache_reg,
           stack_frame.context_reg_index(),
-          layout.context_cache_0_source_offset,
+          layout.require_cache_role_offset(ContextCache0Source),
         )
       }
     }
@@ -1446,7 +1446,7 @@ fn MachineCode::emit_instruction(
         self.emit_ldr_imm(
           cache_reg,
           stack_frame.context_reg_index(),
-          layout.context_cache_0_source_offset,
+          layout.require_cache_role_offset(ContextCache0Source),
         )
       }
     }
@@ -1466,7 +1466,7 @@ fn MachineCode::emit_instruction(
         self.emit_ldr_imm(
           cache_reg,
           stack_frame.context_reg_index(),
-          layout.context_cache_0_source_offset,
+          layout.require_cache_role_offset(ContextCache0Source),
         )
       }
     }

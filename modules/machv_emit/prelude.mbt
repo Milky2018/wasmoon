@@ -389,7 +389,7 @@ fn MachineCode::emit_prologue(
         self.x86_emit_mov_r64_m64(
           cache_reg,
           context,
-          layout.context_cache_0_descriptor_offset,
+          layout.require_cache_role_offset(ContextCache0Descriptor),
         )
       }
       if stack_frame.cache_context_1 {
@@ -400,7 +400,7 @@ fn MachineCode::emit_prologue(
         self.x86_emit_mov_r64_m64(
           cache_reg,
           context,
-          layout.function_table_offset,
+          layout.require_cache_role_offset(ContextCache1),
         )
       }
     }
@@ -701,16 +701,20 @@ fn MachineCode::emit_prologue(
       self.emit_ldr_imm(
         cache_reg,
         context,
-        layout.context_cache_0_source_offset,
+        layout.require_cache_role_offset(ContextCache0Source),
       )
     }
-    // Optionally cache function table pointer.
+    // Optionally cache embedding context-derived pointer 1.
     if stack_frame.cache_context_1 {
       let layout = stack_frame.require_embedding_context_layout()
       guard stack_frame.context_cache_1_index() is Some(cache_reg) else {
         abort("embedding context cache 1 register role is required")
       }
-      self.emit_ldr_imm(cache_reg, context, layout.function_table_offset)
+      self.emit_ldr_imm(
+        cache_reg,
+        context,
+        layout.require_cache_role_offset(ContextCache1),
+      )
     }
   }
 

@@ -2463,7 +2463,7 @@ fn MachineCode::emit_instruction_x86_64(
         if stack_frame.cache_context_1 &&
           ty is I64 &&
           rn == stack_frame.context_reg_index() &&
-          offset == layout.function_table_offset {
+          offset == layout.require_cache_role_offset(ContextCache1) {
           guard stack_frame.context_cache_1_index() is Some(ft) else {
             abort("embedding context cache 1 register role is required")
           }
@@ -3127,21 +3127,29 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_mov_r32_m32(rt, rn, offset)
     }
     LoadCodeAddr(symbol) => {
-      // Load function pointer from the embedding function table.
+      // Load code pointer from the embedding code-pointer table.
       let rd = wreg_num(inst.defs[0])
       let context = stack_frame.context_reg_index()
       let table = isa.scratch_reg_1_index()
       let layout = stack_frame.require_embedding_context_layout()
-      self.x86_emit_mov_r64_m64(table, context, layout.function_table_offset)
+      self.x86_emit_mov_r64_m64(
+        table,
+        context,
+        layout.require_cache_role_offset(ContextCache1),
+      )
       self.x86_emit_mov_r64_m64(rd, table, symbol.ordinal * 8)
     }
     CallDirect(symbol, _num_args, _num_results, _call_conv) => {
-      // Call via embedding function table to avoid rel32 patching.
+      // Call via embedding code-pointer table to avoid rel32 patching.
       let context = stack_frame.context_reg_index()
       let table = isa.scratch_reg_1_index()
       let callee = isa.scratch_reg_2_index()
       let layout = stack_frame.require_embedding_context_layout()
-      self.x86_emit_mov_r64_m64(table, context, layout.function_table_offset)
+      self.x86_emit_mov_r64_m64(
+        table,
+        context,
+        layout.require_cache_role_offset(ContextCache1),
+      )
       self.x86_emit_mov_r64_m64(callee, table, symbol.ordinal * 8)
       self.x86_emit_call_r64(callee)
     }

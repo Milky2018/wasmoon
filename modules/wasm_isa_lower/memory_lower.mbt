@@ -145,7 +145,6 @@ pub fn lower_load_mem_base(
     ctx.cache_context_pointer(memidx, cached_vreg)
     return
   } else {
-    let layout = ctx.embedding_context_layout()
     let directory_vreg = ctx.machv_function().new_vreg(Int)
     let load_directory = @instr.MachVInst::new(
       Load(I64, context_slot_offset(ctx, CONTEXT_SLOT_MEMORY_DIRECTORY)),
@@ -156,7 +155,7 @@ pub fn lower_load_mem_base(
 
     let descriptor_vreg = ctx.machv_function().new_vreg(Int)
     let load_descriptor = @instr.MachVInst::new(
-      Load(I64, memidx * layout.pointer_stride),
+      Load(I64, memidx * WASM_CONTEXT_POINTER_STRIDE),
     )
     load_descriptor.add_def({ reg: Virtual(descriptor_vreg) })
     load_descriptor.add_use(Virtual(directory_vreg))

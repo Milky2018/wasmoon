@@ -425,8 +425,6 @@ pub fn resolve_wasm_func_code_symbol(@instr.CodeSymbol) -> Int?
 
 pub fn resolve_wasm_func_symbol(String) -> Int?
 
-pub fn runtime_context_layout() -> @abi.EmbeddingContextLayout
-
 pub fn runtime_hostcall_symbol() -> @instr.ExternalName
 
 pub fn sanitize_debug_filename(String) -> String
@@ -965,7 +963,6 @@ pub(all) struct VMContextLayout {
   func_table_entry_stride : Int
 }
 pub fn VMContextLayout::to_embedding_context_layout(Self) -> @abi.EmbeddingContextLayout
-pub fn VMContextLayout::to_runtime_context_layout(Self) -> @abi.EmbeddingContextLayout
 
 pub(all) struct WasmTrapFrame {
   pc : Int64
