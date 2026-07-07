@@ -408,7 +408,7 @@ fn Translator::spill_locals_if_in_try(self : Translator) -> Unit {
         locals_words.push(w)
       }
     }
-    self.builder.spill_locals_for_throw(locals_words)
+    @wasm_milkir.spill_locals_for_throw(self.builder, locals_words)
   }
 }
 
@@ -419,7 +419,7 @@ fn Translator::unwind_try_handlers_for_tail_call(self : Translator) -> Unit {
   let mut i = self.try_handler_stack.length()
   while i > 0 {
     i = i - 1
-    self.builder.try_table_end(self.try_handler_stack[i])
+    @wasm_milkir.try_table_end(self.builder, self.try_handler_stack[i])
   }
 }
 
@@ -813,7 +813,7 @@ fn Translator::emit_catch_branch(
   // Get exception values BEFORE calling try_table_end (which frees them)
   let args : Array[Value] = []
   for i, ty in tag_types {
-    let val_i64 = self.builder.get_exception_value(i)
+    let val_i64 = @wasm_milkir.get_exception_value(self.builder, i)
     // Convert i64 to appropriate type
     let val = match ty {
       I32 => self.builder.ireduce(I32, val_i64)
@@ -831,7 +831,7 @@ fn Translator::emit_catch_branch(
 
   // Pop the exception handler AFTER reading values
   // This is required so that throw_ref doesn't loop back to the same handler
-  self.builder.try_table_end(handler_id)
+  @wasm_milkir.try_table_end(self.builder, handler_id)
 
   // Also pass current local values (for SSA correctness)
   for loc in self.locals {
@@ -865,7 +865,7 @@ fn Translator::emit_catch_ref_branch(
   // Get exception values BEFORE calling try_table_end (which frees them)
   let args : Array[Value] = []
   for i, ty in tag_types {
-    let val_i64 = self.builder.get_exception_value(i)
+    let val_i64 = @wasm_milkir.get_exception_value(self.builder, i)
     // Convert i64 to appropriate type
     let val = match ty {
       I32 => self.builder.ireduce(I32, val_i64)
@@ -881,12 +881,12 @@ fn Translator::emit_catch_ref_branch(
   }
 
   // Add exnref (placeholder - use exception tag as simple exnref)
-  let exnref = self.builder.get_exception_tag()
+  let exnref = @wasm_milkir.get_exception_tag(self.builder)
   let exnref_i64 = self.builder.sextend32(exnref)
   args.push(exnref_i64)
 
   // Pop the exception handler AFTER reading values
-  self.builder.try_table_end(handler_id)
+  @wasm_milkir.try_table_end(self.builder, handler_id)
 
   // Also pass current local values
   for loc in self.locals {
@@ -913,7 +913,7 @@ fn Translator::emit_catch_all_branch(
   handler_id : Int,
 ) -> Unit {
   // Pop the exception handler before branching to the catch target
-  self.builder.try_table_end(handler_id)
+  @wasm_milkir.try_table_end(self.builder, handler_id)
 
   // catch_all doesn't pass exception values, just branches
   let args : Array[Value] = []
@@ -943,11 +943,11 @@ fn Translator::emit_catch_all_ref_branch(
   handler_id : Int,
 ) -> Unit {
   // Pop the exception handler before branching to the catch target
-  self.builder.try_table_end(handler_id)
+  @wasm_milkir.try_table_end(self.builder, handler_id)
   let args : Array[Value] = []
 
   // Add exnref (placeholder)
-  let exnref = self.builder.get_exception_tag()
+  let exnref = @wasm_milkir.get_exception_tag(self.builder)
   let exnref_i64 = self.builder.sextend32(exnref)
   args.push(exnref_i64)
 

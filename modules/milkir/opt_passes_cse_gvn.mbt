@@ -45,558 +45,23 @@ pub fn eliminate_common_subexpressions_global(func : Function) -> OptResult {
   run_global_value_numbering(func, PureCSE)
 }
 
-// ============ LoadMemBase Elimination ============
+// ============ Extension Load Elimination ============
 
 ///|
-/// Eliminate redundant `LoadMemBase` instructions within a basic block.
-///
-/// `LoadMemBase` reads global runtime state (the memory descriptor), so it must
-/// not be CSE'd across calls or `memory.grow`. This pass performs a simple
-/// forward scan with conservative invalidation on any call-like instruction and
-/// `MemoryGrow`.
-pub fn eliminate_redundant_mem_base_loads(func : Function) -> OptResult {
-  let result = OptResult::new()
-  let iconst_values = collect_iconst_values(func)
-  let ptr_base_infos = collect_ptr_base_infos(func, iconst_values)
-  for block in func.blocks {
-    // Key: (memidx, vmctx_value_id) packed into an Int64.
-    let seen : @hashmap.HashMap[Int64, Value] = HashMap([])
-    // Key: opcode/base/offset for vmctx field loads.
-    let seen_vmctx_loads : @hashmap.HashMap[String, Value] = HashMap([])
-    for inst in block.instructions {
-      match inst.opcode {
-        Wasm(LoadMemBase(memidx)) =>
-          if inst.first_result() is Some(r) && inst.operands.length() == 1 {
-            let vmctx = inst.operands[0]
-            let key = (memidx.to_int64() << 32) |
-              (vmctx.id.to_int64() & 0xFFFF_FFFFL)
-            match seen.get(key) {
-              Some(existing) => {
-                inst.opcode = Copy
-                inst.operands.clear()
-                inst.operands.push(existing)
-                result.mark_changed()
-              }
-              None => seen.set(key, r)
-            }
-          }
-        LoadPtr(ty) =>
-          if inst.first_result() is Some(r) && inst.operands.length() >= 2 {
-            let base = inst.operands[0]
-            let offset = inst.operands[1]
-            if ptr_base_infos.get(base.id) is Some(base_info) &&
-              base_info.region is Vmctx {
-              let key = "load_ptr:\{ty}:\{base.id}:\{offset.id}"
-              match seen_vmctx_loads.get(key) {
-                Some(existing) => {
-                  inst.opcode = Copy
-                  inst.operands.clear()
-                  inst.operands.push(existing)
-                  result.mark_changed()
-                }
-                None => seen_vmctx_loads.set(key, r)
-              }
-            }
-          }
-        LoadPtrNarrow(ty, bits, signed) =>
-          if inst.first_result() is Some(r) && inst.operands.length() >= 2 {
-            let base = inst.operands[0]
-            let offset = inst.operands[1]
-            if ptr_base_infos.get(base.id) is Some(base_info) &&
-              base_info.region is Vmctx {
-              let key = "load_ptr_narrow:\{ty}:\{bits}:\{signed}:\{base.id}:\{offset.id}"
-              match seen_vmctx_loads.get(key) {
-                Some(existing) => {
-                  inst.opcode = Copy
-                  inst.operands.clear()
-                  inst.operands.push(existing)
-                  result.mark_changed()
-                }
-                None => seen_vmctx_loads.set(key, r)
-              }
-            }
-          }
-        // Conservatively invalidate on operations that can mutate memory base.
-        Wasm(MemoryGrow(_, _))
-        | Wasm(WasmCall(_))
-        | Wasm(WasmCallIndirect(_, _))
-        | Wasm(CallRef(_))
-        | Wasm(ReturnCall(_))
-        | Wasm(ReturnCallIndirect(_, _))
-        | Wasm(ReturnCallRef(_))
-        | CallPtr(_, _)
-        | Wasm(TableGrow(_)) => {
-          seen.clear()
-          seen_vmctx_loads.clear()
-        }
-        StorePtr(_) | StorePtrNarrow(_) =>
-          if ptr_access_from_inst(inst, ptr_base_infos) is Some(store_access) &&
-            store_access.region is Vmctx {
-            seen_vmctx_loads.clear()
-          }
-        _ => ()
-      }
-    }
-  }
-  result
+/// Placeholder for dialect-owned extension load elimination.
+/// TODO(wasm_milkir): Reintroduce Wasm mem-base load elimination as a
+/// dialect-owned optimization pass if performance gates require it.
+pub fn eliminate_redundant_mem_base_loads(_func : Function) -> OptResult {
+  OptResult::new()
 }
 
 ///|
-/// Eliminate redundant `LoadMemBase` across basic blocks with CFG meet.
-///
-/// This mirrors Cranelift-style dataflow:
-/// - forward-propagate available memory-base loads,
-/// - meet at merge points (keep only identical dominating values),
-/// - invalidate on operations that may mutate memory base.
+/// Placeholder for dialect-owned cross-block extension load elimination.
+/// TODO(wasm_milkir): Reintroduce cross-block Wasm mem-base load elimination
+/// outside generic MilkIR core.
 pub fn eliminate_redundant_mem_base_loads_global(func : Function) -> OptResult {
-  let result = OptResult::new()
-  if func.blocks.length() == 0 {
-    return result
-  }
-  let cfg = CFG::build(func)
-  if !cfg.is_valid(0) {
-    return result
-  }
-  let block_idx : @hashmap.HashMap[Int, Int] = HashMap([])
-  for i, block in func.blocks {
-    block_idx.set(block.id, i)
-  }
-  let iconst_values = collect_iconst_values(func)
-  let ptr_base_infos = collect_ptr_base_infos(func, iconst_values)
-
-  fn copy_state(
-    src : @hashmap.HashMap[Int64, Value],
-  ) -> @hashmap.HashMap[Int64, Value] {
-    let dst : @hashmap.HashMap[Int64, Value] = HashMap([])
-    for entry in src.iter() {
-      let (k, v) = entry
-      dst.set(k, v)
-    }
-    dst
-  }
-
-  fn invalidates_mem_base(
-    inst : Inst,
-    ptr_base_infos : @hashmap.HashMap[Int, PtrBaseInfo],
-  ) -> Bool {
-    match inst.opcode {
-      Wasm(MemoryGrow(_, _))
-      | Wasm(WasmCall(_))
-      | Wasm(WasmCallIndirect(_, _))
-      | Wasm(CallRef(_))
-      | Wasm(ReturnCall(_))
-      | Wasm(ReturnCallIndirect(_, _))
-      | Wasm(ReturnCallRef(_))
-      | CallPtr(_, _)
-      | Wasm(TableGrow(_)) => true
-      StorePtr(_) | StorePtrNarrow(_) =>
-        if ptr_access_from_inst(inst, ptr_base_infos) is Some(access) {
-          access.region is Vmctx
-        } else {
-          false
-        }
-      _ => false
-    }
-  }
-
-  fn transfer_mem_base_state(
-    in_state : @hashmap.HashMap[Int64, Value],
-    block : Block,
-    ptr_base_infos : @hashmap.HashMap[Int, PtrBaseInfo],
-  ) -> @hashmap.HashMap[Int64, Value] {
-    let out_state = copy_state(in_state)
-    for inst in block.instructions {
-      if invalidates_mem_base(inst, ptr_base_infos) {
-        out_state.clear()
-        continue
-      }
-      if inst.opcode is Wasm(LoadMemBase(memidx)) &&
-        inst.first_result() is Some(r) &&
-        inst.operands.length() == 1 {
-        let vmctx = inst.operands[0]
-        let key = (memidx.to_int64() << 32) |
-          (vmctx.id.to_int64() & 0xFFFF_FFFFL)
-        if out_state.get(key) is None {
-          out_state.set(key, r)
-        }
-      }
-    }
-    out_state
-  }
-
-  fn update_meet_state(
-    dst : @hashmap.HashMap[Int64, Value],
-    incoming : @hashmap.HashMap[Int64, Value],
-  ) -> Bool {
-    let next : @hashmap.HashMap[Int64, Value] = HashMap([])
-    for entry in dst.iter() {
-      let (k, old_v) = entry
-      if incoming.get(k) is Some(in_v) && in_v.id == old_v.id {
-        next.set(k, old_v)
-      }
-    }
-    let mut changed = dst.length() != next.length()
-    if !changed {
-      for entry in next.iter() {
-        let (k, v) = entry
-        if dst.get(k) is Some(old_v) {
-          if old_v.id != v.id {
-            changed = true
-            break
-          }
-        } else {
-          changed = true
-          break
-        }
-      }
-    }
-    if changed {
-      dst.clear()
-      for entry in next.iter() {
-        let (k, v) = entry
-        dst.set(k, v)
-      }
-    }
-    changed
-  }
-
-  // Block input state: block_id -> available (memidx, vmctx) -> dominating value.
-  let block_input : @hashmap.HashMap[Int, @hashmap.HashMap[Int64, Value]] = HashMap([],
-  )
-  block_input.set(0, HashMap([]))
-  let worklist : Array[Int] = [0]
-  let in_worklist : @hashset.HashSet[Int] = HashSet([])
-  in_worklist.add(0) |> ignore
-
-  while worklist.length() > 0 {
-    let block_id = worklist.pop().unwrap()
-    in_worklist.remove(block_id) |> ignore
-    let block_i = match block_idx.get(block_id) {
-      Some(i) => i
-      None => continue
-    }
-    let in_state = match block_input.get(block_id) {
-      Some(state) => state
-      None => continue
-    }
-    let out_state = transfer_mem_base_state(
-      in_state,
-      func.blocks[block_i],
-      ptr_base_infos,
-    )
-    for succ in cfg.get_successors(block_id) {
-      if !cfg.is_valid(succ) {
-        continue
-      }
-      match block_input.get(succ) {
-        None => {
-          block_input.set(succ, copy_state(out_state))
-          if !in_worklist.contains(succ) {
-            worklist.push(succ)
-            in_worklist.add(succ) |> ignore
-          }
-        }
-        Some(succ_state) =>
-          if update_meet_state(succ_state, out_state) &&
-            !in_worklist.contains(succ) {
-            worklist.push(succ)
-            in_worklist.add(succ) |> ignore
-          }
-      }
-    }
-  }
-
-  // Rewrite using computed block input states.
-  for block in func.blocks {
-    let state = match block_input.get(block.id) {
-      Some(s) => copy_state(s)
-      None => HashMap([])
-    }
-    for inst in block.instructions {
-      if invalidates_mem_base(inst, ptr_base_infos) {
-        state.clear()
-        continue
-      }
-      if inst.opcode is Wasm(LoadMemBase(memidx)) &&
-        inst.first_result() is Some(r) &&
-        inst.operands.length() == 1 {
-        let vmctx = inst.operands[0]
-        let key = (memidx.to_int64() << 32) |
-          (vmctx.id.to_int64() & 0xFFFF_FFFFL)
-        if state.get(key) is Some(existing) {
-          inst.opcode = Copy
-          inst.operands.clear()
-          inst.operands.push(existing)
-          result.mark_changed()
-        } else {
-          state.set(key, r)
-        }
-      }
-    }
-  }
-
-  result
-}
-
-///|
-/// Reassociate wasm memory addresses in a V8-like style.
-///
-/// This mirrors the intent of V8's `WasmAddressReassociation` pass:
-/// - separate register and immediate address components,
-/// - canonicalize memory ops to a shared `(base + reg)` plus per-op immediate.
-///
-/// Our IR models memory ops as `load/store(base, offset_imm_value)`, where
-/// dynamic offsets often appear folded into `base` as add-chains. We rewrite:
-/// - `mem(iadd(iadd(base, reg), k), off)` -> `mem(iadd(base, reg), off+k)`
-/// but only for `(base, reg)` pairs used by more than one memory op in the
-/// same block (same profitability guard as V8's multi-use heuristic).
-pub fn reassociate_wasm_addresses(func : Function) -> OptResult {
-  let result = OptResult::new()
-  if func.blocks.length() == 0 {
-    return result
-  }
-
-  fn mem_addr_operand_indices(inst : Inst) -> (Int, Int)? {
-    match inst.opcode {
-      LoadPtr(_) | LoadPtrNarrow(_, _, _) =>
-        if inst.operands.length() >= 2 {
-          Some((0, 1))
-        } else {
-          None
-        }
-      StorePtr(_) | StorePtrNarrow(_) =>
-        if inst.operands.length() >= 3 {
-          Some((0, 2))
-        } else {
-          None
-        }
-      _ => None
-    }
-  }
-
-  fn pair_key(a : Value, b : Value) -> String {
-    let a_id = a.id
-    let b_id = b.id
-    if a_id <= b_id {
-      "\{a_id}:\{b_id}"
-    } else {
-      "\{b_id}:\{a_id}"
-    }
-  }
-
-  fn extract_pair_with_imm(
-    base : Value,
-    off_imm : Int64,
-    def_inst : @hashmap.HashMap[Int, Inst],
-    iconst_values : @hashmap.HashMap[Int, Int64],
-  ) -> (Value, Value, Value, Int64)? {
-    let mut current = base
-    let mut imm = off_imm
-    while true {
-      let inst = match def_inst.get(current.id) {
-        Some(i) => i
-        None => return None
-      }
-      match inst.opcode {
-        Copy =>
-          if inst.operands.length() >= 1 {
-            current = inst.operands[0]
-            continue
-          } else {
-            return None
-          }
-        Iadd => {
-          guard inst.operands.length() >= 2 else { return None }
-          let lhs = inst.operands[0]
-          let rhs = inst.operands[1]
-          let lhs_const = iconst_values.get(lhs.id)
-          let rhs_const = iconst_values.get(rhs.id)
-          match (lhs_const, rhs_const) {
-            (Some(c), None) => {
-              imm = imm + c
-              current = rhs
-              continue
-            }
-            (None, Some(c)) => {
-              imm = imm + c
-              current = lhs
-              continue
-            }
-            (None, None) =>
-              if current.ty is I64 && lhs.ty is I64 && rhs.ty is I64 {
-                return Some((current, lhs, rhs, imm))
-              } else {
-                return None
-              }
-            (Some(_), Some(_)) => return None
-          }
-        }
-        _ => return None
-      }
-    }
-    None
-  }
-
-  let iconst_values = collect_iconst_values(func)
-  let def_inst : @hashmap.HashMap[Int, Inst] = HashMap([])
-  for block in func.blocks {
-    for inst in block.instructions {
-      if inst.first_result() is Some(r) {
-        def_inst.set(r.id, inst)
-      }
-    }
-  }
-
-  let has_mem_base_cache : @hashmap.HashMap[Int, Bool] = HashMap([])
-
-  fn has_wasm_mem_base(
-    value : Value,
-    def_inst : @hashmap.HashMap[Int, Inst],
-    cache : @hashmap.HashMap[Int, Bool],
-  ) -> Bool {
-    if cache.get(value.id) is Some(cached) {
-      return cached
-    }
-    let stack : Array[Value] = [value]
-    let visited : @hashset.HashSet[Int] = HashSet([])
-    while stack.length() > 0 {
-      let current = stack.pop().unwrap()
-      if visited.contains(current.id) {
-        continue
-      }
-      visited.add(current.id) |> ignore
-      if def_inst.get(current.id) is Some(inst) {
-        match inst.opcode {
-          Wasm(LoadMemBase(_)) => {
-            cache.set(value.id, true)
-            return true
-          }
-          Copy | Bitcast | Uextend | Sextend | Ireduce =>
-            if inst.operands.length() > 0 {
-              stack.push(inst.operands[0])
-            }
-          Iadd | Isub =>
-            if inst.operands.length() >= 2 {
-              stack.push(inst.operands[0])
-              stack.push(inst.operands[1])
-            }
-          Select =>
-            if inst.operands.length() >= 3 {
-              stack.push(inst.operands[1])
-              stack.push(inst.operands[2])
-            }
-          _ => ()
-        }
-      }
-    }
-    cache.set(value.id, false)
-    false
-  }
-
-  for block in func.blocks {
-    let pair_use_count : @hashmap.HashMap[String, Int] = HashMap([])
-    // Pass 1: count candidate `(base, reg)` pairs in this block.
-    for inst in block.instructions {
-      guard mem_addr_operand_indices(inst) is Some((base_idx, off_idx)) else {
-        continue
-      }
-      let base = inst.operands[base_idx]
-      guard has_wasm_mem_base(base, def_inst, has_mem_base_cache) else {
-        continue
-      }
-      let off = inst.operands[off_idx]
-      guard off.ty is I64 else { continue }
-      let off_imm = match iconst_values.get(off.id) {
-        Some(v) => v
-        None => continue
-      }
-      let base = inst.operands[base_idx]
-      if extract_pair_with_imm(base, off_imm, def_inst, iconst_values)
-        is Some((_, lhs, rhs, _)) {
-        let key = pair_key(lhs, rhs)
-        let n = match pair_use_count.get(key) {
-          Some(v) => v
-          None => 0
-        }
-        pair_use_count.set(key, n + 1)
-      }
-    }
-    if pair_use_count.length() == 0 {
-      continue
-    }
-
-    // Pass 2: rewrite memory ops to shared pair-base + immediate offset.
-    let shared_pairs : @hashmap.HashMap[String, Value] = HashMap([])
-    let local_consts : @hashmap.HashMap[Int64, Value] = HashMap([])
-    let new_insts : Array[Inst] = []
-    let orig_len = block.instructions.length()
-
-    for inst in block.instructions {
-      let mut changed_inst = false
-      if mem_addr_operand_indices(inst) is Some((base_idx, off_idx)) {
-        if has_wasm_mem_base(
-            inst.operands[base_idx],
-            def_inst,
-            has_mem_base_cache,
-          ) {
-          let off = inst.operands[off_idx]
-          if off.ty is I64 {
-            if iconst_values.get(off.id) is Some(off_imm) {
-              let base = inst.operands[base_idx]
-              if extract_pair_with_imm(base, off_imm, def_inst, iconst_values)
-                is Some((pair_v, lhs, rhs, new_imm)) {
-                let key = pair_key(lhs, rhs)
-                let count = match pair_use_count.get(key) {
-                  Some(v) => v
-                  None => 0
-                }
-                if count > 1 {
-                  let shared_base = match shared_pairs.get(key) {
-                    Some(v) => v
-                    None => {
-                      shared_pairs.set(key, pair_v)
-                      pair_v
-                    }
-                  }
-                  if inst.operands[base_idx].id != shared_base.id {
-                    inst.operands[base_idx] = shared_base
-                    changed_inst = true
-                  }
-                  if new_imm != off_imm {
-                    let new_off = match local_consts.get(new_imm) {
-                      Some(v) => v
-                      None => {
-                        let v = func.new_value(I64)
-                        new_insts.push(Inst::new(Some(v), Iconst(new_imm), []))
-                        local_consts.set(new_imm, v)
-                        v
-                      }
-                    }
-                    if inst.operands[off_idx].id != new_off.id {
-                      inst.operands[off_idx] = new_off
-                      changed_inst = true
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-      if changed_inst {
-        result.mark_changed()
-      }
-      new_insts.push(inst)
-    }
-
-    if new_insts.length() != orig_len {
-      block.instructions.clear()
-      for inst in new_insts {
-        block.instructions.push(inst)
-      }
-    }
-  }
-  result
+  ignore(func)
+  OptResult::new()
 }
 
 // ============ Global Value Numbering with Load CSE ============
@@ -606,16 +71,7 @@ pub fn reassociate_wasm_addresses(func : Function) -> OptResult {
 fn reads_memory(opcode : Opcode) -> Bool {
   match opcode {
     LoadPtr(_) | LoadPtrNarrow(_, _, _) => true
-    // MemorySize reads the current memory size (invalidated by MemoryGrow)
-    Wasm(MemorySize(_)) => true
-    // GC struct/array gets read from memory
-    Wasm(StructGet(_, _))
-    | Wasm(StructGetS(_, _, _))
-    | Wasm(StructGetU(_, _, _)) => true
-    Wasm(ArrayGet(_))
-    | Wasm(ArrayGetS(_, _))
-    | Wasm(ArrayGetU(_, _))
-    | Wasm(ArrayLen) => true
+    Ext(_) => true
     _ => false
   }
 }
@@ -627,31 +83,8 @@ fn may_write_memory(opcode : Opcode) -> Bool {
   match opcode {
     // Direct memory writes
     StorePtr(_) | StorePtrNarrow(_) => true
-    // Memory operations
-    Wasm(MemoryGrow(_, _)) | Wasm(MemoryFill(_)) | Wasm(MemoryCopy(_, _)) =>
-      true
-    // Calls may write memory
-    Wasm(WasmCall(_))
-    | Wasm(WasmCallIndirect(_, _))
-    | Wasm(CallRef(_))
-    | Wasm(ReturnCall(_))
-    | Wasm(ReturnCallIndirect(_, _))
-    | Wasm(ReturnCallRef(_))
-    | CallPtr(_, _) => true
-    // GC operations that modify memory
-    Wasm(StructSet(_, _))
-    | Wasm(ArraySet(_))
-    | Wasm(ArrayFill(_))
-    | Wasm(ArrayCopy(_, _)) => true
-    // GC allocations modify memory (the GC heap)
-    Wasm(StructNew(_)) | Wasm(StructNewDefault(_)) => true
-    Wasm(ArrayNew(_)) | Wasm(ArrayNewDefault(_)) | Wasm(ArrayNewFixed(_, _)) =>
-      true
-    // Table operations may involve memory
-    Wasm(TableGrow(_)) => true
-    // Exception handling can modify state
-    Wasm(Throw(_)) | Wasm(ThrowRef) => true
-    Wasm(SpillLocalsForThrow(_)) => true
+    CallPtr(_, _) => true
+    Ext(_) => true
     _ => false
   }
 }
@@ -665,8 +98,6 @@ priv struct PtrAccess {
 
 ///|
 priv enum PtrAliasRegion {
-  Heap(Int)
-  Vmctx
   Other
 } derive(Eq, Hash)
 
@@ -819,12 +250,6 @@ fn LastStoreState::get_region_token(
   region : PtrAliasRegion,
 ) -> StoreVersion? {
   match region {
-    Heap(memidx) =>
-      match self.heap.get(memidx) {
-        Some(token) => Some(token)
-        None => self.heap_default
-      }
-    Vmctx => self.vmctx
     Other => self.other
   }
 }
@@ -836,8 +261,6 @@ fn LastStoreState::set_region_token(
   token : StoreVersion,
 ) -> Unit {
   match region {
-    Heap(memidx) => self.heap.set(memidx, token)
-    Vmctx => self.vmctx = Some(token)
     Other => self.other = Some(token)
   }
 }
@@ -969,16 +392,13 @@ fn collect_ptr_base_infos(
   iconst_values : @hashmap.HashMap[Int, Int64],
 ) -> @hashmap.HashMap[Int, PtrBaseInfo] {
   let result : @hashmap.HashMap[Int, PtrBaseInfo] = HashMap([])
-  if func.params.length() > 0 {
-    // Wasm ABI: function param 0 is vmctx.
-    let vmctx = func.params[0].0
-    result.set(vmctx.id, { region: Vmctx })
+  for param in func.params {
+    result.set(param.0.id, { region: Other })
   }
-  if func.blocks.length() > 0 && func.blocks[0].params.length() > 0 {
-    // Some IR forms thread vmctx through entry block params; keep this as a
-    // secondary source of vmctx-region seeds.
-    let vmctx = func.blocks[0].params[0].0
-    result.set(vmctx.id, { region: Vmctx })
+  if func.blocks.length() > 0 {
+    for param in func.blocks[0].params {
+      result.set(param.0.id, { region: Other })
+    }
   }
   let mut changed = true
   while changed {
@@ -987,7 +407,7 @@ fn collect_ptr_base_infos(
       for inst in block.instructions {
         if inst.first_result() is Some(v) && result.get(v.id) is None {
           let inferred : PtrBaseInfo? = match inst.opcode {
-            Wasm(LoadMemBase(memidx)) => Some({ region: Heap(memidx) })
+            Ext(_) => None
             Copy | Bitcast | Uextend | Sextend | Ireduce =>
               if inst.operands.length() > 0 {
                 result.get(inst.operands[0].id)

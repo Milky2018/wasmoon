@@ -773,62 +773,80 @@ fn Translator::translate_instruction(
       let max_pages = if memidx == 0 { self.memory_max } else { None }
       let result = match max_pages {
         Some(max) =>
-          self.builder.memory_grow(
+          @wasm_milkir.memory_grow(
+            self.builder,
             memidx,
             delta,
             max_pages=max,
             is_memory64=is_mem64,
           )
-        None => self.builder.memory_grow(memidx, delta, is_memory64=is_mem64)
+        None =>
+          @wasm_milkir.memory_grow(
+            self.builder,
+            memidx,
+            delta,
+            is_memory64=is_mem64,
+          )
       }
       self.push(result)
     }
     MemorySize(memidx) => {
       let is_mem64 = memidx < self.memory_is_64.length() &&
         self.memory_is_64[memidx]
-      let result = self.builder.memory_size(memidx, is_memory64=is_mem64)
+      let result = @wasm_milkir.memory_size(
+        self.builder,
+        memidx,
+        is_memory64=is_mem64,
+      )
       self.push(result)
     }
     MemoryFill(memidx) => {
       let n = self.pop() // size
       let val = self.pop() // value (byte)
       let d = self.pop() // destination
-      self.builder.memory_fill(memidx, d, val, n)
+      @wasm_milkir.memory_fill(self.builder, memidx, d, val, n)
     }
     MemoryCopy(dst_memidx, src_memidx) => {
       let n = self.pop() // size
       let s = self.pop() // source
       let d = self.pop() // destination
-      self.builder.memory_copy(dst_memidx, src_memidx, d, s, n)
+      @wasm_milkir.memory_copy(self.builder, dst_memidx, src_memidx, d, s, n)
     }
     MemoryInit(memidx, data_idx) => {
       let n = self.pop() // size
       let s = self.pop() // source offset in data segment
       let d = self.pop() // destination offset in memory
-      self.builder.memory_init(memidx, data_idx, d, s, n)
+      @wasm_milkir.memory_init(self.builder, memidx, data_idx, d, s, n)
     }
-    DataDrop(data_idx) => self.builder.data_drop(data_idx)
+    DataDrop(data_idx) => @wasm_milkir.data_drop(self.builder, data_idx)
 
     // Table bulk operations
     TableFill(table_idx) => {
       let n = self.pop() // size
       let val = self.pop() // value (ref)
       let d = self.pop() // destination
-      self.builder.table_fill(table_idx, d, val, n)
+      @wasm_milkir.table_fill(self.builder, table_idx, d, val, n)
     }
     TableCopy(dst_table_idx, src_table_idx) => {
       let n = self.pop() // size
       let s = self.pop() // source
       let d = self.pop() // destination
-      self.builder.table_copy(dst_table_idx, src_table_idx, d, s, n)
+      @wasm_milkir.table_copy(
+        self.builder,
+        dst_table_idx,
+        src_table_idx,
+        d,
+        s,
+        n,
+      )
     }
     TableInit(table_idx, elem_idx) => {
       let n = self.pop() // size
       let s = self.pop() // source offset in element segment
       let d = self.pop() // destination offset in table
-      self.builder.table_init(table_idx, elem_idx, d, s, n)
+      @wasm_milkir.table_init(self.builder, table_idx, elem_idx, d, s, n)
     }
-    ElemDrop(elem_idx) => self.builder.elem_drop(elem_idx)
+    ElemDrop(elem_idx) => @wasm_milkir.elem_drop(self.builder, elem_idx)
 
     // Reference types
     RefNull(ref_type) => {
@@ -846,7 +864,7 @@ fn Translator::translate_instruction(
     RefFunc(func_idx) => {
       // Create a function reference - use GetFuncRef to get tagged function pointer
       // The pointer is tagged with FUNCREF_TAG (bit 61) for ref.test detection
-      let result = self.builder.get_func_ref(func_idx)
+      let result = @wasm_milkir.get_func_ref(self.builder, func_idx)
       self.push(result)
     }
     RefAsNonNull => {
@@ -875,7 +893,7 @@ fn Translator::translate_instruction(
       // ref.eq: compare two references for equality
       let ref2 = self.pop()
       let ref1 = self.pop()
-      let result = self.builder.ref_eq(ref1, ref2)
+      let result = @wasm_milkir.ref_eq(self.builder, ref1, ref2)
       self.push(result)
     }
     TableGet(table_idx) => {
@@ -925,7 +943,12 @@ fn Translator::translate_instruction(
       // Stack: [init_value, delta] -> [result]
       let delta = self.pop()
       let init_value = self.pop()
-      let result = self.builder.table_grow(table_idx, delta, init_value)
+      let result = @wasm_milkir.table_grow(
+        self.builder,
+        table_idx,
+        delta,
+        init_value,
+      )
       self.push(result)
     }
     GlobalGet(idx) => {
@@ -953,18 +976,22 @@ fn Translator::translate_instruction(
       }
       // Reverse to get correct order
       fields.rev_in_place()
-      let result = self.builder.struct_new(type_idx, fields)
+      let result = @wasm_milkir.struct_new(self.builder, type_idx, fields)
       self.push(result)
     }
     StructNewDefault(type_idx) => {
-      let result = self.builder.struct_new_default(type_idx)
+      let result = @wasm_milkir.struct_new_default(self.builder, type_idx)
       self.push(result)
     }
     StructGet(type_idx, field_idx) => {
       let struct_ref = self.pop()
       let field_type = self.get_struct_field_ir_type(type_idx, field_idx)
-      let result = self.builder.struct_get(
-        type_idx, field_idx, struct_ref, field_type,
+      let result = @wasm_milkir.struct_get(
+        self.builder,
+        type_idx,
+        field_idx,
+        struct_ref,
+        field_type,
       )
       self.push(result)
     }
@@ -972,8 +999,13 @@ fn Translator::translate_instruction(
       let struct_ref = self.pop()
       let field_type = self.get_struct_field_ir_type(type_idx, field_idx)
       let byte_width = self.get_struct_field_byte_width(type_idx, field_idx)
-      let result = self.builder.struct_get_s(
-        type_idx, field_idx, struct_ref, field_type, byte_width,
+      let result = @wasm_milkir.struct_get_s(
+        self.builder,
+        type_idx,
+        field_idx,
+        struct_ref,
+        field_type,
+        byte_width,
       )
       self.push(result)
     }
@@ -981,15 +1013,26 @@ fn Translator::translate_instruction(
       let struct_ref = self.pop()
       let field_type = self.get_struct_field_ir_type(type_idx, field_idx)
       let byte_width = self.get_struct_field_byte_width(type_idx, field_idx)
-      let result = self.builder.struct_get_u(
-        type_idx, field_idx, struct_ref, field_type, byte_width,
+      let result = @wasm_milkir.struct_get_u(
+        self.builder,
+        type_idx,
+        field_idx,
+        struct_ref,
+        field_type,
+        byte_width,
       )
       self.push(result)
     }
     StructSet(type_idx, field_idx) => {
       let value = self.pop()
       let struct_ref = self.pop()
-      self.builder.struct_set(type_idx, field_idx, struct_ref, value)
+      @wasm_milkir.struct_set(
+        self.builder,
+        type_idx,
+        field_idx,
+        struct_ref,
+        value,
+      )
     }
 
     // GC instructions - array operations
@@ -997,13 +1040,22 @@ fn Translator::translate_instruction(
       // Stack: [init_value, length] -> [arrayref]
       let length = self.pop()
       let init_value = self.pop()
-      let result = self.builder.array_new(type_idx, init_value, length)
+      let result = @wasm_milkir.array_new(
+        self.builder,
+        type_idx,
+        init_value,
+        length,
+      )
       self.push(result)
     }
     ArrayNewDefault(type_idx) => {
       // Stack: [length] -> [arrayref]
       let length = self.pop()
-      let result = self.builder.array_new_default(type_idx, length)
+      let result = @wasm_milkir.array_new_default(
+        self.builder,
+        type_idx,
+        length,
+      )
       self.push(result)
     }
     ArrayNewFixed(type_idx, count) => {
@@ -1014,7 +1066,12 @@ fn Translator::translate_instruction(
       }
       // Reverse to get correct order
       elements.rev_in_place()
-      let result = self.builder.array_new_fixed(type_idx, count, elements)
+      let result = @wasm_milkir.array_new_fixed(
+        self.builder,
+        type_idx,
+        count,
+        elements,
+      )
       self.push(result)
     }
     ArrayGet(type_idx) => {
@@ -1022,7 +1079,13 @@ fn Translator::translate_instruction(
       let index = self.pop()
       let array_ref = self.pop()
       let elem_type = self.get_array_element_ir_type(type_idx)
-      let result = self.builder.array_get(type_idx, array_ref, index, elem_type)
+      let result = @wasm_milkir.array_get(
+        self.builder,
+        type_idx,
+        array_ref,
+        index,
+        elem_type,
+      )
       self.push(result)
     }
     ArrayGetS(type_idx) => {
@@ -1030,8 +1093,13 @@ fn Translator::translate_instruction(
       let array_ref = self.pop()
       let elem_type = self.get_array_element_ir_type(type_idx)
       let byte_width = self.get_array_element_byte_width(type_idx)
-      let result = self.builder.array_get_s(
-        type_idx, array_ref, index, elem_type, byte_width,
+      let result = @wasm_milkir.array_get_s(
+        self.builder,
+        type_idx,
+        array_ref,
+        index,
+        elem_type,
+        byte_width,
       )
       self.push(result)
     }
@@ -1040,8 +1108,13 @@ fn Translator::translate_instruction(
       let array_ref = self.pop()
       let elem_type = self.get_array_element_ir_type(type_idx)
       let byte_width = self.get_array_element_byte_width(type_idx)
-      let result = self.builder.array_get_u(
-        type_idx, array_ref, index, elem_type, byte_width,
+      let result = @wasm_milkir.array_get_u(
+        self.builder,
+        type_idx,
+        array_ref,
+        index,
+        elem_type,
+        byte_width,
       )
       self.push(result)
     }
@@ -1050,11 +1123,11 @@ fn Translator::translate_instruction(
       let value = self.pop()
       let index = self.pop()
       let array_ref = self.pop()
-      self.builder.array_set(type_idx, array_ref, index, value)
+      @wasm_milkir.array_set(self.builder, type_idx, array_ref, index, value)
     }
     ArrayLen => {
       let array_ref = self.pop()
-      let result = self.builder.array_len(array_ref)
+      let result = @wasm_milkir.array_len(self.builder, array_ref)
       self.push(result)
     }
     ArrayFill(type_idx) => {
@@ -1063,7 +1136,14 @@ fn Translator::translate_instruction(
       let value = self.pop()
       let offset = self.pop()
       let array_ref = self.pop()
-      self.builder.array_fill(type_idx, array_ref, offset, value, count)
+      @wasm_milkir.array_fill(
+        self.builder,
+        type_idx,
+        array_ref,
+        offset,
+        value,
+        count,
+      )
     }
     ArrayCopy(dst_type_idx, src_type_idx) => {
       // Stack: [dst, dst_offset, src, src_offset, count] -> []
@@ -1072,16 +1152,27 @@ fn Translator::translate_instruction(
       let src = self.pop()
       let dst_offset = self.pop()
       let dst = self.pop()
-      self.builder.array_copy(
-        dst_type_idx, src_type_idx, dst, dst_offset, src, src_offset, count,
+      @wasm_milkir.array_copy(
+        self.builder,
+        dst_type_idx,
+        src_type_idx,
+        dst,
+        dst_offset,
+        src,
+        src_offset,
+        count,
       )
     }
     ArrayNewData(type_idx, data_idx) => {
       // Stack: [data_offset, length] -> [arrayref]
       let length = self.pop()
       let data_offset = self.pop()
-      let result = self.builder.array_new_data(
-        type_idx, data_idx, data_offset, length,
+      let result = @wasm_milkir.array_new_data(
+        self.builder,
+        type_idx,
+        data_idx,
+        data_offset,
+        length,
       )
       self.push(result)
     }
@@ -1089,8 +1180,12 @@ fn Translator::translate_instruction(
       // Stack: [elem_offset, length] -> [arrayref]
       let length = self.pop()
       let elem_offset = self.pop()
-      let result = self.builder.array_new_elem(
-        type_idx, elem_idx, elem_offset, length,
+      let result = @wasm_milkir.array_new_elem(
+        self.builder,
+        type_idx,
+        elem_idx,
+        elem_offset,
+        length,
       )
       self.push(result)
     }
@@ -1100,8 +1195,14 @@ fn Translator::translate_instruction(
       let data_offset = self.pop()
       let arr_offset = self.pop()
       let array_ref = self.pop()
-      self.builder.array_init_data(
-        type_idx, data_idx, array_ref, arr_offset, data_offset, length,
+      @wasm_milkir.array_init_data(
+        self.builder,
+        type_idx,
+        data_idx,
+        array_ref,
+        arr_offset,
+        data_offset,
+        length,
       )
     }
     ArrayInitElem(type_idx, elem_idx) => {
@@ -1110,37 +1211,43 @@ fn Translator::translate_instruction(
       let elem_offset = self.pop()
       let arr_offset = self.pop()
       let array_ref = self.pop()
-      self.builder.array_init_elem(
-        type_idx, elem_idx, array_ref, arr_offset, elem_offset, length,
+      @wasm_milkir.array_init_elem(
+        self.builder,
+        type_idx,
+        elem_idx,
+        array_ref,
+        arr_offset,
+        elem_offset,
+        length,
       )
     }
 
     // GC instructions - i31 operations
     RefI31 => {
       let value = self.pop()
-      let result = self.builder.i31_new(value)
+      let result = @wasm_milkir.i31_new(self.builder, value)
       self.push(result)
     }
     I31GetS => {
       let i31_ref = self.pop()
-      let result = self.builder.i31_get_s(i31_ref)
+      let result = @wasm_milkir.i31_get_s(self.builder, i31_ref)
       self.push(result)
     }
     I31GetU => {
       let i31_ref = self.pop()
-      let result = self.builder.i31_get_u(i31_ref)
+      let result = @wasm_milkir.i31_get_u(self.builder, i31_ref)
       self.push(result)
     }
 
     // GC instructions - type conversions
     AnyConvertExtern => {
       let extern_ref = self.pop()
-      let result = self.builder.any_convert_extern(extern_ref)
+      let result = @wasm_milkir.any_convert_extern(self.builder, extern_ref)
       self.push(result)
     }
     ExternConvertAny => {
       let any_ref = self.pop()
-      let result = self.builder.extern_convert_any(any_ref)
+      let result = @wasm_milkir.extern_convert_any(self.builder, any_ref)
       self.push(result)
     }
 
@@ -1148,25 +1255,25 @@ fn Translator::translate_instruction(
     RefTest(value_type) => {
       let ref_val = self.pop()
       let type_idx = self.extract_type_idx(value_type)
-      let result = self.builder.ref_test(type_idx, false, ref_val)
+      let result = @wasm_milkir.ref_test(self.builder, type_idx, false, ref_val)
       self.push(result)
     }
     RefTestNull(value_type) => {
       let ref_val = self.pop()
       let type_idx = self.extract_type_idx(value_type)
-      let result = self.builder.ref_test(type_idx, true, ref_val)
+      let result = @wasm_milkir.ref_test(self.builder, type_idx, true, ref_val)
       self.push(result)
     }
     RefCast(value_type) => {
       let ref_val = self.pop()
       let type_idx = self.extract_type_idx(value_type)
-      let result = self.builder.ref_cast(type_idx, false, ref_val)
+      let result = @wasm_milkir.ref_cast(self.builder, type_idx, false, ref_val)
       self.push(result)
     }
     RefCastNull(value_type) => {
       let ref_val = self.pop()
       let type_idx = self.extract_type_idx(value_type)
-      let result = self.builder.ref_cast(type_idx, true, ref_val)
+      let result = @wasm_milkir.ref_cast(self.builder, type_idx, true, ref_val)
       self.push(result)
     }
     BrOnCast(label_depth, _from_type, to_type) =>
@@ -1191,7 +1298,7 @@ fn Translator::translate_instruction(
       self.spill_locals_if_in_try()
 
       // Emit Throw IR opcode with the exception values
-      self.builder.emit_throw(tag_idx, values)
+      @wasm_milkir.emit_throw(self.builder, tag_idx, values)
       self.is_unreachable = true
     }
     ThrowRef => {
@@ -1200,7 +1307,7 @@ fn Translator::translate_instruction(
       // Spill all locals before throw so catch handlers see throw-time values
       self.spill_locals_if_in_try()
       // Emit ThrowRef IR opcode
-      self.builder.emit_throw_ref(exnref)
+      @wasm_milkir.emit_throw_ref(self.builder, exnref)
       self.is_unreachable = true
     }
     TryTable(block_type, handlers, body) => {
@@ -1228,7 +1335,7 @@ fn Translator::translate_instruction(
       }
 
       // Emit TryTableBegin - sets up exception handler and calls setjmp
-      let setjmp_result = self.builder.try_table_begin(handler_id)
+      let setjmp_result = @wasm_milkir.try_table_begin(self.builder, handler_id)
 
       // Branch based on setjmp result: 0 = normal, non-zero = exception caught
       let zero = self.builder.iconst_i32(0)
@@ -1259,7 +1366,7 @@ fn Translator::translate_instruction(
       let post_body_locals = self.locals.copy()
 
       // Emit TryTableEnd - pops exception handler
-      self.builder.try_table_end(handler_id)
+      @wasm_milkir.try_table_end(self.builder, handler_id)
 
       // Jump to continuation after try body
       let normal_args : Array[Value] = []
@@ -1284,13 +1391,16 @@ fn Translator::translate_instruction(
       for i in 0..<num_locals {
         match local_types[i] {
           V128 => {
-            let lo = self.builder.get_spilled_local(spill_idx)
-            let hi = self.builder.get_spilled_local(spill_idx + 1)
+            let lo = @wasm_milkir.get_spilled_local(self.builder, spill_idx)
+            let hi = @wasm_milkir.get_spilled_local(self.builder, spill_idx + 1)
             spill_idx += 2
             self.locals.push(self.spill_words_to_v128(lo, hi))
           }
           ty => {
-            let spilled_bits = self.builder.get_spilled_local(spill_idx)
+            let spilled_bits = @wasm_milkir.get_spilled_local(
+              self.builder,
+              spill_idx,
+            )
             spill_idx += 1
             let restored_val = self.i64_bits_to_local(spilled_bits, ty)
             self.locals.push(restored_val)
@@ -1299,7 +1409,7 @@ fn Translator::translate_instruction(
       }
 
       // Get exception tag for matching
-      let exn_tag = self.builder.get_exception_tag()
+      let exn_tag = @wasm_milkir.get_exception_tag(self.builder)
 
       // Process each handler
       // Note: handlers reference labels in the OUTER block stack, not inside try_table
@@ -1351,7 +1461,7 @@ fn Translator::translate_instruction(
       // Use depth=1 to skip this handler and propagate to the next outer one
       // (depth=0 would cause infinite loop by re-entering this same handler)
       if self.builder.current_block() is Some(blk) && blk.terminator is None {
-        self.builder.delegate(1) // Propagate to outer handler
+        @wasm_milkir.delegate(self.builder, 1) // Propagate to outer handler
       }
 
       // Decrement try_table_depth AFTER all catch handlers are translated

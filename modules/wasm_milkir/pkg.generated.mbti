@@ -1,0 +1,196 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasm_milkir"
+
+import {
+  "Milky2018/milkir",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn any_convert_extern(@milkir.IRBuilder, @milkir.Value) -> @milkir.Value
+
+pub fn array_copy(@milkir.IRBuilder, Int, Int, @milkir.Value, @milkir.Value, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
+
+pub fn array_fill(@milkir.IRBuilder, Int, @milkir.Value, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
+
+pub fn array_get(@milkir.IRBuilder, Int, @milkir.Value, @milkir.Value, @milkir.Type) -> @milkir.Value
+
+pub fn array_get_s(@milkir.IRBuilder, Int, @milkir.Value, @milkir.Value, @milkir.Type, Int) -> @milkir.Value
+
+pub fn array_get_u(@milkir.IRBuilder, Int, @milkir.Value, @milkir.Value, @milkir.Type, Int) -> @milkir.Value
+
+pub fn array_init_data(@milkir.IRBuilder, Int, Int, @milkir.Value, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
+
+pub fn array_init_elem(@milkir.IRBuilder, Int, Int, @milkir.Value, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
+
+pub fn array_len(@milkir.IRBuilder, @milkir.Value) -> @milkir.Value
+
+pub fn array_new(@milkir.IRBuilder, Int, @milkir.Value, @milkir.Value) -> @milkir.Value
+
+pub fn array_new_data(@milkir.IRBuilder, Int, Int, @milkir.Value, @milkir.Value) -> @milkir.Value
+
+pub fn array_new_default(@milkir.IRBuilder, Int, @milkir.Value) -> @milkir.Value
+
+pub fn array_new_elem(@milkir.IRBuilder, Int, Int, @milkir.Value, @milkir.Value) -> @milkir.Value
+
+pub fn array_new_fixed(@milkir.IRBuilder, Int, Int, Array[@milkir.Value]) -> @milkir.Value
+
+pub fn array_set(@milkir.IRBuilder, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
+
+pub fn call_indirect_multi(@milkir.IRBuilder, Int, Int, Array[@milkir.Type], @milkir.Value, Array[@milkir.Value]) -> Array[@milkir.Value]
+
+pub fn call_multi(@milkir.IRBuilder, Int, Array[@milkir.Type], Array[@milkir.Value]) -> Array[@milkir.Value]
+
+pub fn call_ref_multi(@milkir.IRBuilder, Int, Array[@milkir.Type], @milkir.Value, Array[@milkir.Value]) -> Array[@milkir.Value]
+
+pub fn data_drop(@milkir.IRBuilder, Int) -> Unit
+
+pub fn decode(@milkir.ExtOp) -> WasmOpcode?
+
+pub fn decode_opcode(@milkir.Opcode) -> WasmOpcode?
+
+pub fn delegate(@milkir.IRBuilder, Int) -> Unit
+
+pub fn elem_drop(@milkir.IRBuilder, Int) -> Unit
+
+pub fn emit_throw(@milkir.IRBuilder, Int, Array[@milkir.Value]) -> Unit
+
+pub fn emit_throw_ref(@milkir.IRBuilder, @milkir.Value) -> Unit
+
+pub fn encode(WasmOpcode) -> @milkir.ExtOp
+
+pub fn extern_convert_any(@milkir.IRBuilder, @milkir.Value) -> @milkir.Value
+
+pub fn get_exception_tag(@milkir.IRBuilder) -> @milkir.Value
+
+pub fn get_exception_value(@milkir.IRBuilder, Int) -> @milkir.Value
+
+pub fn get_exception_value_count(@milkir.IRBuilder) -> @milkir.Value
+
+pub fn get_func_ref(@milkir.IRBuilder, Int) -> @milkir.Value
+
+pub fn get_spilled_local(@milkir.IRBuilder, Int) -> @milkir.Value
+
+pub fn i31_get_s(@milkir.IRBuilder, @milkir.Value) -> @milkir.Value
+
+pub fn i31_get_u(@milkir.IRBuilder, @milkir.Value) -> @milkir.Value
+
+pub fn i31_new(@milkir.IRBuilder, @milkir.Value) -> @milkir.Value
+
+pub fn load_mem_base(@milkir.IRBuilder, @milkir.Value, Int) -> @milkir.Value
+
+pub fn memory_copy(@milkir.IRBuilder, Int, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
+
+pub fn memory_fill(@milkir.IRBuilder, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
+
+pub fn memory_grow(@milkir.IRBuilder, Int, @milkir.Value, max_pages? : Int, is_memory64? : Bool) -> @milkir.Value
+
+pub fn memory_init(@milkir.IRBuilder, Int, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
+
+pub fn memory_size(@milkir.IRBuilder, Int, is_memory64? : Bool) -> @milkir.Value
+
+pub fn ref_cast(@milkir.IRBuilder, Int, Bool, @milkir.Value) -> @milkir.Value
+
+pub fn ref_eq(@milkir.IRBuilder, @milkir.Value, @milkir.Value) -> @milkir.Value
+
+pub fn ref_test(@milkir.IRBuilder, Int, Bool, @milkir.Value) -> @milkir.Value
+
+pub fn return_call_indirect_multi(@milkir.IRBuilder, Int, Int, @milkir.Value, Array[@milkir.Value]) -> Unit
+
+pub fn return_call_multi(@milkir.IRBuilder, Int, Array[@milkir.Value]) -> Unit
+
+pub fn return_call_ref_multi(@milkir.IRBuilder, Int, @milkir.Value, Array[@milkir.Value]) -> Unit
+
+pub fn spill_locals_for_throw(@milkir.IRBuilder, Array[@milkir.Value]) -> Unit
+
+pub fn struct_get(@milkir.IRBuilder, Int, Int, @milkir.Value, @milkir.Type) -> @milkir.Value
+
+pub fn struct_get_s(@milkir.IRBuilder, Int, Int, @milkir.Value, @milkir.Type, Int) -> @milkir.Value
+
+pub fn struct_get_u(@milkir.IRBuilder, Int, Int, @milkir.Value, @milkir.Type, Int) -> @milkir.Value
+
+pub fn struct_new(@milkir.IRBuilder, Int, Array[@milkir.Value]) -> @milkir.Value
+
+pub fn struct_new_default(@milkir.IRBuilder, Int) -> @milkir.Value
+
+pub fn struct_set(@milkir.IRBuilder, Int, Int, @milkir.Value, @milkir.Value) -> Unit
+
+pub fn table_copy(@milkir.IRBuilder, Int, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
+
+pub fn table_fill(@milkir.IRBuilder, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
+
+pub fn table_grow(@milkir.IRBuilder, Int, @milkir.Value, @milkir.Value) -> @milkir.Value
+
+pub fn table_init(@milkir.IRBuilder, Int, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
+
+pub fn try_table_begin(@milkir.IRBuilder, Int) -> @milkir.Value
+
+pub fn try_table_end(@milkir.IRBuilder, Int) -> Unit
+
+// Errors
+
+// Types and methods
+pub(all) enum WasmOpcode {
+  LoadMemBase(Int)
+  MemoryGrow(Int, Int?)
+  MemorySize(Int)
+  MemoryFill(Int)
+  MemoryCopy(Int, Int)
+  MemoryInit(Int, Int)
+  DataDrop(Int)
+  TableGrow(Int)
+  TableFill(Int)
+  TableCopy(Int, Int)
+  TableInit(Int, Int)
+  ElemDrop(Int)
+  WasmCall(Int)
+  WasmCallIndirect(Int, Int)
+  CallRef(Int)
+  ReturnCall(Int)
+  ReturnCallIndirect(Int, Int)
+  ReturnCallRef(Int)
+  GetFuncRef(Int)
+  StructNew(Int)
+  StructNewDefault(Int)
+  StructGet(Int, Int)
+  StructGetS(Int, Int, Int)
+  StructGetU(Int, Int, Int)
+  StructSet(Int, Int)
+  ArrayNew(Int)
+  ArrayNewDefault(Int)
+  ArrayNewFixed(Int, Int)
+  ArrayGet(Int)
+  ArrayGetS(Int, Int)
+  ArrayGetU(Int, Int)
+  ArraySet(Int)
+  ArrayLen
+  ArrayFill(Int)
+  ArrayCopy(Int, Int)
+  ArrayNewData(Int, Int)
+  ArrayNewElem(Int, Int)
+  ArrayInitData(Int, Int)
+  ArrayInitElem(Int, Int)
+  I31New
+  I31GetS
+  I31GetU
+  RefTest(Int, Bool)
+  RefCast(Int, Bool)
+  AnyConvertExtern
+  ExternConvertAny
+  RefEq
+  Throw(Int)
+  ThrowRef
+  TryTableBegin(Int)
+  TryTableEnd(Int)
+  GetExceptionTag
+  GetExceptionValue(Int)
+  GetExceptionValueCount
+  Delegate(Int)
+  SpillLocalsForThrow(Int)
+  GetSpilledLocal(Int)
+} derive(Eq, Hash, @debug.Debug)
+
+// Type aliases
+
+// Traits
+

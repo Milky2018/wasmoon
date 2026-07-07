@@ -65,8 +65,6 @@ pub fn propagate_copies(Function) -> OptResult
 
 pub fn propagate_copies_global(Function) -> OptResult
 
-pub fn reassociate_wasm_addresses(Function) -> OptResult
-
 pub fn reduce_strength(Function) -> OptResult
 
 pub fn rematerialize_across_blocks(Function) -> OptResult
@@ -143,6 +141,15 @@ pub struct EGraphOptimizeStats {
   total_rule_applications : Int
 }
 
+pub(all) struct ExtOp {
+  dialect : String
+  opcode : String
+  immediates : FixedArray[Int]
+} derive(@debug.Debug)
+pub fn ExtOp::new(String, String, FixedArray[Int]) -> Self
+pub impl Eq for ExtOp
+pub impl Hash for ExtOp
+
 pub(all) struct ExternalSymbol {
   name : String
 } derive(Eq, Hash, @debug.Debug)
@@ -187,21 +194,6 @@ type IRBuilder
 pub fn IRBuilder::add_block_param(Self, Block, Type) -> Value
 pub fn IRBuilder::add_param(Self, Type) -> Value
 pub fn IRBuilder::add_result(Self, Type) -> Unit
-pub fn IRBuilder::any_convert_extern(Self, Value) -> Value
-pub fn IRBuilder::array_copy(Self, Int, Int, Value, Value, Value, Value, Value) -> Unit
-pub fn IRBuilder::array_fill(Self, Int, Value, Value, Value, Value) -> Unit
-pub fn IRBuilder::array_get(Self, Int, Value, Value, Type) -> Value
-pub fn IRBuilder::array_get_s(Self, Int, Value, Value, Type, Int) -> Value
-pub fn IRBuilder::array_get_u(Self, Int, Value, Value, Type, Int) -> Value
-pub fn IRBuilder::array_init_data(Self, Int, Int, Value, Value, Value, Value) -> Unit
-pub fn IRBuilder::array_init_elem(Self, Int, Int, Value, Value, Value, Value) -> Unit
-pub fn IRBuilder::array_len(Self, Value) -> Value
-pub fn IRBuilder::array_new(Self, Int, Value, Value) -> Value
-pub fn IRBuilder::array_new_data(Self, Int, Int, Value, Value) -> Value
-pub fn IRBuilder::array_new_default(Self, Int, Value) -> Value
-pub fn IRBuilder::array_new_elem(Self, Int, Int, Value, Value) -> Value
-pub fn IRBuilder::array_new_fixed(Self, Int, Int, Array[Value]) -> Value
-pub fn IRBuilder::array_set(Self, Int, Value, Value, Value) -> Unit
 pub fn IRBuilder::band(Self, Value, Value) -> Value
 pub fn IRBuilder::bitcast(Self, Type, Value) -> Value
 pub fn IRBuilder::bnot(Self, Value) -> Value
@@ -210,12 +202,7 @@ pub fn IRBuilder::br_table(Self, Value, Array[Block], Block) -> Unit
 pub fn IRBuilder::brnz(Self, Value, Block, Block) -> Unit
 pub fn IRBuilder::brz(Self, Value, Block, Block) -> Unit
 pub fn IRBuilder::bxor(Self, Value, Value) -> Value
-pub fn IRBuilder::call(Self, Int, Type?, Array[Value]) -> Value?
-pub fn IRBuilder::call_indirect(Self, Int, Int, Type?, Value, Array[Value]) -> Value?
-pub fn IRBuilder::call_indirect_multi(Self, Int, Int, Array[Type], Value, Array[Value]) -> Array[Value]
-pub fn IRBuilder::call_multi(Self, Int, Array[Type], Array[Value]) -> Array[Value]
 pub fn IRBuilder::call_ptr(Self, Value, Value, Array[Value], Array[Type]) -> Array[Value]
-pub fn IRBuilder::call_ref_multi(Self, Int, Array[Type], Value, Array[Value]) -> Array[Value]
 pub fn IRBuilder::call_symbol(Self, ExternalSymbol, Type?, Array[Value]) -> Value?
 pub fn IRBuilder::call_symbol_multi(Self, ExternalSymbol, Array[Type], Array[Value]) -> Array[Value]
 pub fn IRBuilder::clz(Self, Value) -> Value
@@ -223,13 +210,9 @@ pub fn IRBuilder::copy(Self, Value) -> Value
 pub fn IRBuilder::create_block(Self) -> Block
 pub fn IRBuilder::ctz(Self, Value) -> Value
 pub fn IRBuilder::current_block(Self) -> Block?
-pub fn IRBuilder::data_drop(Self, Int) -> Unit
-pub fn IRBuilder::delegate(Self, Int) -> Unit
-pub fn IRBuilder::elem_drop(Self, Int) -> Unit
+pub fn IRBuilder::emit_ext_inst(Self, Type, ExtOp, Array[Value]) -> Value
 pub fn IRBuilder::emit_inst(Self, Type, Opcode, Array[Value]) -> Value
-pub fn IRBuilder::emit_throw(Self, Int, Array[Value]) -> Unit
-pub fn IRBuilder::emit_throw_ref(Self, Value) -> Unit
-pub fn IRBuilder::extern_convert_any(Self, Value) -> Value
+pub fn IRBuilder::emit_void_ext_inst(Self, ExtOp, Array[Value]) -> Unit
 pub fn IRBuilder::fabs(Self, Value) -> Value
 pub fn IRBuilder::fadd(Self, Value, Value) -> Value
 pub fn IRBuilder::fceil(Self, Value) -> Value
@@ -254,15 +237,7 @@ pub fn IRBuilder::fsqrt(Self, Value) -> Value
 pub fn IRBuilder::fsub(Self, Value, Value) -> Value
 pub fn IRBuilder::ftrunc(Self, Value) -> Value
 pub fn IRBuilder::get_const_value(Self, Value) -> Int64?
-pub fn IRBuilder::get_exception_tag(Self) -> Value
-pub fn IRBuilder::get_exception_value(Self, Int) -> Value
-pub fn IRBuilder::get_exception_value_count(Self) -> Value
-pub fn IRBuilder::get_func_ref(Self, Int) -> Value
 pub fn IRBuilder::get_function(Self) -> Function
-pub fn IRBuilder::get_spilled_local(Self, Int) -> Value
-pub fn IRBuilder::i31_get_s(Self, Value) -> Value
-pub fn IRBuilder::i31_get_u(Self, Value) -> Value
-pub fn IRBuilder::i31_new(Self, Value) -> Value
 pub fn IRBuilder::iadd(Self, Value, Value) -> Value
 pub fn IRBuilder::icmp(Self, IntCC, Value, Value) -> Value
 pub fn IRBuilder::icmp_eq(Self, Value, Value) -> Value
@@ -283,24 +258,12 @@ pub fn IRBuilder::ireduce(Self, Type, Value) -> Value
 pub fn IRBuilder::ishl(Self, Value, Value) -> Value
 pub fn IRBuilder::isub(Self, Value, Value) -> Value
 pub fn IRBuilder::jump(Self, Block, Array[Value]) -> Unit
-pub fn IRBuilder::load_mem_base(Self, Value, Int) -> Value
 pub fn IRBuilder::load_ptr(Self, Type, Value, Value) -> Value
 pub fn IRBuilder::load_ptr_narrow(Self, Type, Int, Bool, Value, Value) -> Value
-pub fn IRBuilder::memory_copy(Self, Int, Int, Value, Value, Value) -> Unit
-pub fn IRBuilder::memory_fill(Self, Int, Value, Value, Value) -> Unit
-pub fn IRBuilder::memory_grow(Self, Int, Value, max_pages? : Int, is_memory64? : Bool) -> Value
-pub fn IRBuilder::memory_init(Self, Int, Int, Value, Value, Value) -> Unit
-pub fn IRBuilder::memory_size(Self, Int, is_memory64? : Bool) -> Value
 pub fn IRBuilder::new(String) -> Self
 pub fn IRBuilder::popcnt(Self, Value) -> Value
 pub fn IRBuilder::print(Self) -> String
-pub fn IRBuilder::ref_cast(Self, Int, Bool, Value) -> Value
-pub fn IRBuilder::ref_eq(Self, Value, Value) -> Value
-pub fn IRBuilder::ref_test(Self, Int, Bool, Value) -> Value
 pub fn IRBuilder::return_(Self, Array[Value]) -> Unit
-pub fn IRBuilder::return_call_indirect_multi(Self, Int, Int, Value, Array[Value]) -> Unit
-pub fn IRBuilder::return_call_multi(Self, Int, Array[Value]) -> Unit
-pub fn IRBuilder::return_call_ref_multi(Self, Int, Value, Array[Value]) -> Unit
 pub fn IRBuilder::rotl(Self, Value, Value) -> Value
 pub fn IRBuilder::rotr(Self, Value, Value) -> Value
 pub fn IRBuilder::sdiv(Self, Value, Value) -> Value
@@ -311,25 +274,12 @@ pub fn IRBuilder::sextend32(Self, Value) -> Value
 pub fn IRBuilder::sextend8(Self, Type, Value) -> Value
 pub fn IRBuilder::sint_to_fcvt(Self, Type, Value) -> Value
 pub fn IRBuilder::smulh(Self, Value, Value) -> Value
-pub fn IRBuilder::spill_locals_for_throw(Self, Array[Value]) -> Unit
 pub fn IRBuilder::srem(Self, Value, Value) -> Value
 pub fn IRBuilder::sshr(Self, Value, Value) -> Value
 pub fn IRBuilder::store_ptr(Self, Type, Value, Value, Value) -> Unit
 pub fn IRBuilder::store_ptr_narrow(Self, Int, Value, Value, Value) -> Unit
-pub fn IRBuilder::struct_get(Self, Int, Int, Value, Type) -> Value
-pub fn IRBuilder::struct_get_s(Self, Int, Int, Value, Type, Int) -> Value
-pub fn IRBuilder::struct_get_u(Self, Int, Int, Value, Type, Int) -> Value
-pub fn IRBuilder::struct_new(Self, Int, Array[Value]) -> Value
-pub fn IRBuilder::struct_new_default(Self, Int) -> Value
-pub fn IRBuilder::struct_set(Self, Int, Int, Value, Value) -> Unit
 pub fn IRBuilder::switch_to_block(Self, Block) -> Unit
-pub fn IRBuilder::table_copy(Self, Int, Int, Value, Value, Value) -> Unit
-pub fn IRBuilder::table_fill(Self, Int, Value, Value, Value) -> Unit
-pub fn IRBuilder::table_grow(Self, Int, Value, Value) -> Value
-pub fn IRBuilder::table_init(Self, Int, Int, Value, Value, Value) -> Unit
 pub fn IRBuilder::trap(Self, String) -> Unit
-pub fn IRBuilder::try_table_begin(Self, Int) -> Value
-pub fn IRBuilder::try_table_end(Self, Int) -> Unit
 pub fn IRBuilder::udiv(Self, Value, Value) -> Value
 pub fn IRBuilder::uextend(Self, Type, Value) -> Value
 pub fn IRBuilder::uint_to_fcvt(Self, Type, Value) -> Value
@@ -484,7 +434,7 @@ pub(all) enum Opcode {
   CallPtr(Int, Int)
   Trap(String)
   Custom(String)
-  Wasm(WasmOpcode)
+  Ext(ExtOp)
   V128Const(Bytes)
   V128Splat8
   V128Splat16
@@ -803,66 +753,6 @@ pub fn ValidationResult::new() -> Self
 pub(all) struct Value {
   id : Int
   ty : Type
-} derive(Eq, Hash, @debug.Debug)
-
-pub(all) enum WasmOpcode {
-  LoadMemBase(Int)
-  MemoryGrow(Int, Int?)
-  MemorySize(Int)
-  MemoryFill(Int)
-  MemoryCopy(Int, Int)
-  MemoryInit(Int, Int)
-  DataDrop(Int)
-  TableGrow(Int)
-  TableFill(Int)
-  TableCopy(Int, Int)
-  TableInit(Int, Int)
-  ElemDrop(Int)
-  WasmCall(Int)
-  WasmCallIndirect(Int, Int)
-  CallRef(Int)
-  ReturnCall(Int)
-  ReturnCallIndirect(Int, Int)
-  ReturnCallRef(Int)
-  GetFuncRef(Int)
-  StructNew(Int)
-  StructNewDefault(Int)
-  StructGet(Int, Int)
-  StructGetS(Int, Int, Int)
-  StructGetU(Int, Int, Int)
-  StructSet(Int, Int)
-  ArrayNew(Int)
-  ArrayNewDefault(Int)
-  ArrayNewFixed(Int, Int)
-  ArrayGet(Int)
-  ArrayGetS(Int, Int)
-  ArrayGetU(Int, Int)
-  ArraySet(Int)
-  ArrayLen
-  ArrayFill(Int)
-  ArrayCopy(Int, Int)
-  ArrayNewData(Int, Int)
-  ArrayNewElem(Int, Int)
-  ArrayInitData(Int, Int)
-  ArrayInitElem(Int, Int)
-  I31New
-  I31GetS
-  I31GetU
-  RefTest(Int, Bool)
-  RefCast(Int, Bool)
-  AnyConvertExtern
-  ExternConvertAny
-  RefEq
-  Throw(Int)
-  ThrowRef
-  TryTableBegin(Int)
-  TryTableEnd(Int)
-  GetExceptionTag
-  GetExceptionValue(Int)
-  GetExceptionValueCount
-  Delegate(Int)
-  SpillLocalsForThrow(Int)
-  GetSpilledLocal(Int)
 } derive(Eq, Hash, @debug.Debug)
 
 // Type aliases

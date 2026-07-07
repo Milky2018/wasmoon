@@ -441,7 +441,7 @@ fn Translator::translate_br_on_cast(
   let type_idx = self.extract_type_idx(target_type)
   let nullable = target_type.is_nullable()
   // Use ref_test to check if the reference matches the target type
-  let matches = self.builder.ref_test(type_idx, nullable, ref_val)
+  let matches = @wasm_milkir.ref_test(self.builder, type_idx, nullable, ref_val)
   // Create fallthrough and taken blocks
   let fallthrough = self.builder.create_block()
   let taken = self.builder.create_block()
@@ -460,7 +460,12 @@ fn Translator::translate_br_on_cast(
     // Critical edge split: taken block creates cast value and jumps to target
     self.builder.switch_to_block(taken)
     // Create the cast value in the taken block (we know the cast succeeded here)
-    let cast_val = self.builder.ref_cast(type_idx, nullable, ref_val)
+    let cast_val = @wasm_milkir.ref_cast(
+      self.builder,
+      type_idx,
+      nullable,
+      ref_val,
+    )
     let args : Array[Value] = []
     for v in stack_args {
       args.push(v)
@@ -487,7 +492,12 @@ fn Translator::translate_br_on_cast(
     self.builder.brnz(matches, taken, fallthrough)
     self.builder.switch_to_block(taken)
     // Create the cast value in the taken block
-    let cast_val = self.builder.ref_cast(type_idx, nullable, ref_val)
+    let cast_val = @wasm_milkir.ref_cast(
+      self.builder,
+      type_idx,
+      nullable,
+      ref_val,
+    )
     let args : Array[Value] = []
     for v in stack_args {
       args.push(v)
@@ -517,7 +527,7 @@ fn Translator::translate_br_on_cast_fail(
   let type_idx = self.extract_type_idx(target_type)
   let nullable = target_type.is_nullable()
   // Use ref_test to check if the reference matches the target type
-  let matches = self.builder.ref_test(type_idx, nullable, ref_val)
+  let matches = @wasm_milkir.ref_test(self.builder, type_idx, nullable, ref_val)
   // Create fallthrough and taken blocks
   let fallthrough = self.builder.create_block()
   let taken = self.builder.create_block()
@@ -549,7 +559,12 @@ fn Translator::translate_br_on_cast_fail(
     self.builder.jump(frame.block, args)
     // Continue with fallthrough - push the cast ref (it matched)
     self.builder.switch_to_block(fallthrough)
-    let cast_val = self.builder.ref_cast(type_idx, nullable, ref_val)
+    let cast_val = @wasm_milkir.ref_cast(
+      self.builder,
+      type_idx,
+      nullable,
+      ref_val,
+    )
     self.push(cast_val)
   } else if idx == -1 {
     // Jump to function level (early return)
@@ -575,7 +590,12 @@ fn Translator::translate_br_on_cast_fail(
     self.builder.jump(ret_cont, args)
     // Continue with fallthrough - push the cast ref (it matched)
     self.builder.switch_to_block(fallthrough)
-    let cast_val = self.builder.ref_cast(type_idx, nullable, ref_val)
+    let cast_val = @wasm_milkir.ref_cast(
+      self.builder,
+      type_idx,
+      nullable,
+      ref_val,
+    )
     self.push(cast_val)
   }
 }
@@ -724,7 +744,12 @@ fn Translator::translate_call(self : Translator, func_idx : Int) -> Unit {
     // Remap function index for cross-module calls
     let global_func_idx = self.remap_func_idx(func_idx)
     // Emit call with multi-value support
-    let results = self.builder.call_multi(global_func_idx, result_types, args)
+    let results = @wasm_milkir.call_multi(
+      self.builder,
+      global_func_idx,
+      result_types,
+      args,
+    )
     // Push all results onto the stack
     for v in results {
       self.push(v)
@@ -780,8 +805,13 @@ fn Translator::translate_call_indirect(
     let result_types : Array[Type] = func_type.results.map(type_from_wasm)
     // Emit call_indirect with original type_idx
     // is_subtype_cached handles canonical indices for structural equivalence
-    let results = self.builder.call_indirect_multi(
-      type_idx, table_idx, result_types, elem_idx, args,
+    let results = @wasm_milkir.call_indirect_multi(
+      self.builder,
+      type_idx,
+      table_idx,
+      result_types,
+      elem_idx,
+      args,
     )
     // Push all results onto the stack
     for v in results {
@@ -827,8 +857,12 @@ fn Translator::translate_call_ref(self : Translator, type_idx : Int) -> Unit {
     let result_types : Array[Type] = func_type.results.map(type_from_wasm)
 
     // Emit call_ref instruction
-    let results = self.builder.call_ref_multi(
-      type_idx, result_types, func_ref, args,
+    let results = @wasm_milkir.call_ref_multi(
+      self.builder,
+      type_idx,
+      result_types,
+      func_ref,
+      args,
     )
 
     // Push all results onto the stack
@@ -869,7 +903,7 @@ fn Translator::translate_return_call(self : Translator, func_idx : Int) -> Unit 
     let global_func_idx = self.remap_func_idx(func_idx)
     // Emit return_call instruction (tail call - does not return to caller)
     // Note: emit a single ReturnCall IR instruction, not call + return
-    self.builder.return_call_multi(global_func_idx, args)
+    @wasm_milkir.return_call_multi(self.builder, global_func_idx, args)
     // Mark as unreachable since this is a terminator (does not return to this function)
     self.is_unreachable = true
   }
@@ -898,7 +932,13 @@ fn Translator::translate_return_call_indirect(
 
     // Emit return_call_indirect instruction (tail call - does not return to caller)
     // Note: emit a single ReturnCallIndirect IR instruction, not call + return
-    self.builder.return_call_indirect_multi(type_idx, table_idx, elem_idx, args)
+    @wasm_milkir.return_call_indirect_multi(
+      self.builder,
+      type_idx,
+      table_idx,
+      elem_idx,
+      args,
+    )
     // Mark as unreachable since this is a terminator (does not return to this function)
     self.is_unreachable = true
   }
@@ -942,7 +982,7 @@ fn Translator::translate_return_call_ref(
 
     // Emit return_call_ref instruction (tail call - does not return to caller)
     // Note: emit a single ReturnCallRef IR instruction, not call + return
-    self.builder.return_call_ref_multi(type_idx, func_ref, args)
+    @wasm_milkir.return_call_ref_multi(self.builder, type_idx, func_ref, args)
     // Mark as unreachable since this is a terminator (does not return to this function)
     self.is_unreachable = true
   }

@@ -112,61 +112,16 @@ fn has_side_effects(inst : Inst) -> Bool {
     StorePtr(_) | StorePtrNarrow(_) => true
     // LoadPtr has side effects (can trap on null pointer)
     LoadPtr(_) | LoadPtrNarrow(_, _, _) => true
-    // Calls may have side effects
-    Wasm(WasmCall(_))
-    | Wasm(WasmCallIndirect(_))
-    | Wasm(CallRef(_))
-    | Wasm(ReturnCall(_))
-    | Wasm(ReturnCallIndirect(_, _))
-    | Wasm(ReturnCallRef(_)) => true
-    // Memory operations that modify global state
-    Wasm(MemoryGrow(_, _)) | Wasm(MemoryFill(_)) | Wasm(MemoryCopy(_, _)) =>
-      true
-    // Memory base reads global state and must not be CSE'd across calls/grow
-    Wasm(LoadMemBase(_)) => true
-    // MemorySize reads global state that can change (invalidated by MemoryGrow)
-    // Must not be CSE'd across MemoryGrow calls
-    Wasm(MemorySize(_)) => true
-    // Table operations that modify global state
-    Wasm(TableGrow(_)) => true
-    // NOTE: GlobalGet, GlobalSet are desugared via FuncEnvironment to LoadPtr/StorePtr
+    // Dialect extension operations are conservatively effectful unless a
+    // dialect-owned optimization pass proves otherwise.
+    Ext(_) => true
+    // NOTE: GlobalGet, GlobalSet are desugared via frontends to LoadPtr/StorePtr
     // Division/remainder can trap on divide-by-zero or overflow (INT_MIN / -1)
     Sdiv | Udiv | Srem | Urem => true
     // Float-to-int conversion can trap on NaN or out-of-range values
     FcvtToSint | FcvtToUint => true
-    // GC operations that allocate memory - each call allocates a new object
-    Wasm(StructNew(_)) | Wasm(StructNewDefault(_)) => true
-    Wasm(ArrayNew(_)) | Wasm(ArrayNewDefault(_)) | Wasm(ArrayNewFixed(_, _)) =>
-      true
-    // GC segment ops can allocate and/or trap (bounds checks, dropped segments, etc.)
-    Wasm(ArrayNewData(_, _)) | Wasm(ArrayNewElem(_, _)) => true
-    // GC operations that modify state
-    Wasm(StructSet(_, _))
-    | Wasm(ArraySet(_))
-    | Wasm(ArrayFill(_))
-    | Wasm(ArrayCopy(_, _)) => true
-    Wasm(ArrayInitData(_, _)) | Wasm(ArrayInitElem(_, _)) => true
-    // GC read operations can trap on null reference
-    Wasm(StructGet(_, _))
-    | Wasm(StructGetS(_, _, _))
-    | Wasm(StructGetU(_, _, _)) => true
-    Wasm(ArrayGet(_))
-    | Wasm(ArrayGetS(_, _))
-    | Wasm(ArrayGetU(_, _))
-    | Wasm(ArrayLen) => true
-    // GC type check operations can trap
-    Wasm(RefCast(_, _)) => true
     // CallPtr can have side effects (calls arbitrary functions)
     CallPtr(_, _) => true
-    // Exception handling operations - TryTableBegin calls setjmp which returns
-    // different values on normal entry vs exception catch, so it's not pure
-    Wasm(TryTableBegin(_)) | Wasm(TryTableEnd(_)) => true
-    // Throw operations have control flow side effects
-    Wasm(Throw(_)) | Wasm(ThrowRef) => true
-    // GetExceptionTag reads global exception state
-    Wasm(GetExceptionTag) => true
-    // Spill/restore locals interact with exception handling state
-    Wasm(SpillLocalsForThrow(_)) | Wasm(GetSpilledLocal(_)) => true
     // Other instructions are pure
     _ => false
   }

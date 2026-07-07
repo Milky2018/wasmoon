@@ -71,6 +71,48 @@ pub fn ExternalSymbol::new(name : String) -> ExternalSymbol {
 }
 
 ///|
+pub(all) struct ExtOp {
+  dialect : String
+  opcode : String
+  immediates : FixedArray[Int]
+} derive(Debug)
+
+///|
+pub fn ExtOp::new(
+  dialect : String,
+  opcode : String,
+  immediates : FixedArray[Int],
+) -> ExtOp {
+  { dialect, opcode, immediates }
+}
+
+///|
+pub impl Eq for ExtOp with fn equal(self, other) {
+  if self.dialect != other.dialect || self.opcode != other.opcode {
+    return false
+  }
+  if self.immediates.length() != other.immediates.length() {
+    return false
+  }
+  for i in 0..<self.immediates.length() {
+    if self.immediates[i] != other.immediates[i] {
+      return false
+    }
+  }
+  true
+}
+
+///|
+pub impl Hash for ExtOp with fn hash_combine(self, hasher) {
+  self.dialect.hash_combine(hasher)
+  self.opcode.hash_combine(hasher)
+  self.immediates.length().hash_combine(hasher)
+  for imm in self.immediates {
+    imm.hash_combine(hasher)
+  }
+}
+
+///|
 pub(all) struct StackSlot {
   id : Int
   size : Int
@@ -323,10 +365,10 @@ pub(all) enum Opcode {
   Trap(String)
   Custom(String)
 
-  // Wasm semantic extension operations. These are kept out of the generic core
-  // opcode list while existing frontends finish lowering them to generic calls,
-  // pointer operations, or Wasm-owned extension handling.
-  Wasm(WasmOpcode)
+  // Dialect extension operations. The core IR treats these conservatively;
+  // dialect-owned packages define the opcode set, builders, validation rules,
+  // and lowering behavior.
+  Ext(ExtOp)
 
   // ============================================
   // SIMD operations (V128)
