@@ -16,7 +16,13 @@ struct LoweringContext {
   abi_settings : @abi.ABISettings
   runtime_layout : @abi.RuntimeContextLayout?
   call_conv_layout : @abi.CallConventionLayout?
-  wasm_runtime_symbols : @wasm_milkir.RuntimeSymbols?
+  runtime_helper_symbols : Map[String, String]
+  extension_lowerer : ((
+    LoweringContext,
+    @milkir.Inst,
+    @block.VCodeBlock,
+    @milkir.ExtOp,
+  ) -> Bool)?
   num_imports : Int
   // Dense map from IR Value id to @abi.VReg (Cranelift SecondaryMap style).
   value_map_dense : Array[@abi.VReg?]
@@ -69,7 +75,13 @@ pub fn LoweringContext::new(
   abi_settings : @abi.ABISettings,
   runtime_layout : @abi.RuntimeContextLayout?,
   call_conv_layout : @abi.CallConventionLayout?,
-  wasm_runtime_symbols : @wasm_milkir.RuntimeSymbols?,
+  runtime_helper_symbols : Map[String, String],
+  extension_lowerer : ((
+    LoweringContext,
+    @milkir.Inst,
+    @block.VCodeBlock,
+    @milkir.ExtOp,
+  ) -> Bool)?,
   num_imports : Int,
   use_subtype_indirect_check : Bool,
   canonical_type_indices : Array[Int],
@@ -99,7 +111,8 @@ pub fn LoweringContext::new(
     abi_settings,
     runtime_layout,
     call_conv_layout,
-    wasm_runtime_symbols,
+    runtime_helper_symbols,
+    extension_lowerer,
     num_imports,
     value_map_dense: Array::make(ir_func.next_value_id, None),
     block_map: {},
@@ -1599,7 +1612,13 @@ pub fn lower_function(
   abi_settings? : @abi.ABISettings = @abi.ABISettings::default(),
   runtime_layout? : @abi.RuntimeContextLayout? = None,
   call_conv_layout? : @abi.CallConventionLayout? = None,
-  wasm_runtime_symbols? : @wasm_milkir.RuntimeSymbols? = None,
+  runtime_helper_symbols? : Map[String, String] = {},
+  extension_lowerer? : ((
+    LoweringContext,
+    @milkir.Inst,
+    @block.VCodeBlock,
+    @milkir.ExtOp,
+  ) -> Bool)? = None,
   num_imports? : Int = -1,
   run_ir_opt? : Bool = true,
   use_subtype_indirect_check? : Bool = true,
@@ -1611,8 +1630,8 @@ pub fn lower_function(
     @milkir.optimize_function(ir_func) |> ignore
   }
   let ctx = LoweringContext::new(
-    ir_func, isa, abi_settings, runtime_layout, call_conv_layout, wasm_runtime_symbols,
-    num_imports, use_subtype_indirect_check, canonical_type_indices,
+    ir_func, isa, abi_settings, runtime_layout, call_conv_layout, runtime_helper_symbols,
+    extension_lowerer, num_imports, use_subtype_indirect_check, canonical_type_indices,
   )
 
   // Phase 0: Pre-compute which Icmps can be fused with Select
@@ -1799,98 +1818,25 @@ fn lower_unsupported_generic_opcode(
 }
 
 ///|
-// TODO(ISS-077): Move Wasm runtime-helper lowering out of generic isa_target
-// into a Wasm-owned lowering adapter.
-fn lower_wasm_extension(
+pub fn lower_unsupported_extension_opcode(
+  inst : @milkir.Inst,
+  block : @block.VCodeBlock,
+) -> Unit {
+  lower_unsupported_generic_opcode(inst, block)
+}
+
+///|
+fn lower_extension(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
   ext : @milkir.ExtOp,
 ) -> Unit {
-  match @wasm_milkir.decode(ext) {
-    Some(LoadMemBase(memidx)) => lower_load_mem_base(ctx, inst, block, memidx)
-    Some(
-      MemoryGrow(_, _)
-      | MemorySize(_)
-      | MemoryFill(_)
-      | MemoryCopy(_, _)
-      | MemoryInit(_, _)
-      | DataDrop(_)
-      | TableGrow(_)
-      | TableFill(_)
-      | TableCopy(_, _)
-      | TableInit(_, _)
-      | ElemDrop(_)
-    ) => lower_unsupported_generic_opcode(inst, block)
-    Some(WasmCall(func_idx)) => lower_call(ctx, inst, block, func_idx)
-    Some(WasmCallIndirect(type_idx, table_idx)) =>
-      lower_call_indirect(ctx, inst, block, type_idx, table_idx)
-    Some(CallRef(type_idx)) => lower_call_ref(ctx, inst, block, type_idx)
-    Some(ReturnCall(func_idx)) => lower_return_call(ctx, inst, block, func_idx)
-    Some(ReturnCallIndirect(type_idx, table_idx)) =>
-      lower_return_call_indirect(ctx, inst, block, type_idx, table_idx)
-    Some(ReturnCallRef(type_idx)) =>
-      lower_return_call_ref(ctx, inst, block, type_idx)
-    Some(GetFuncRef(func_idx)) => lower_get_func_ref(ctx, inst, block, func_idx)
-    Some(I31New) => lower_i31_new(ctx, inst, block)
-    Some(I31GetS) => lower_i31_get_s(ctx, inst, block)
-    Some(I31GetU) => lower_i31_get_u(ctx, inst, block)
-    Some(AnyConvertExtern) | Some(ExternConvertAny) =>
-      lower_gc_convert(ctx, inst, block)
-    Some(StructNew(type_idx)) => lower_struct_new(ctx, inst, block, type_idx)
-    Some(StructNewDefault(type_idx)) =>
-      lower_struct_new_default(ctx, inst, block, type_idx)
-    Some(StructGet(type_idx, field_idx)) =>
-      lower_struct_get(ctx, inst, block, type_idx, field_idx)
-    Some(StructGetS(type_idx, field_idx, byte_width)) =>
-      lower_struct_get_s(ctx, inst, block, type_idx, field_idx, byte_width)
-    Some(StructGetU(type_idx, field_idx, byte_width)) =>
-      lower_struct_get_u(ctx, inst, block, type_idx, field_idx, byte_width)
-    Some(StructSet(type_idx, field_idx)) =>
-      lower_struct_set(ctx, inst, block, type_idx, field_idx)
-    Some(ArrayNew(type_idx)) => lower_array_new(ctx, inst, block, type_idx)
-    Some(ArrayNewDefault(type_idx)) =>
-      lower_array_new_default(ctx, inst, block, type_idx)
-    Some(ArrayNewFixed(type_idx, len)) =>
-      lower_array_new_fixed(ctx, inst, block, type_idx, len)
-    Some(ArrayGet(type_idx)) => lower_array_get(ctx, inst, block, type_idx)
-    Some(ArrayGetS(type_idx, byte_width)) =>
-      lower_array_get_s(ctx, inst, block, type_idx, byte_width)
-    Some(ArrayGetU(type_idx, byte_width)) =>
-      lower_array_get_u(ctx, inst, block, type_idx, byte_width)
-    Some(ArraySet(type_idx)) => lower_array_set(ctx, inst, block, type_idx)
-    Some(ArrayLen) => lower_array_len(ctx, inst, block)
-    Some(ArrayFill(type_idx)) => lower_array_fill(ctx, inst, block, type_idx)
-    Some(ArrayCopy(dst_type, src_type)) =>
-      lower_array_copy(ctx, inst, block, dst_type, src_type)
-    Some(ArrayNewData(type_idx, data_idx)) =>
-      lower_array_new_data(ctx, inst, block, type_idx, data_idx)
-    Some(ArrayNewElem(type_idx, elem_idx)) =>
-      lower_array_new_elem(ctx, inst, block, type_idx, elem_idx)
-    Some(ArrayInitData(type_idx, data_idx)) =>
-      lower_array_init_data(ctx, inst, block, type_idx, data_idx)
-    Some(ArrayInitElem(type_idx, elem_idx)) =>
-      lower_array_init_elem(ctx, inst, block, type_idx, elem_idx)
-    Some(RefTest(type_idx, nullable)) =>
-      lower_ref_test(ctx, inst, block, type_idx, nullable)
-    Some(RefCast(type_idx, nullable)) =>
-      lower_ref_cast(ctx, inst, block, type_idx, nullable)
-    Some(RefEq) => lower_ref_eq(ctx, inst, block)
-    Some(Throw(tag_idx)) => lower_throw(ctx, inst, block, tag_idx)
-    Some(ThrowRef) => lower_throw_ref(ctx, inst, block)
-    Some(TryTableBegin(handler_id)) =>
-      lower_try_table_begin(ctx, inst, block, handler_id)
-    Some(TryTableEnd(handler_id)) =>
-      lower_try_table_end(ctx, inst, block, handler_id)
-    Some(GetExceptionTag) => lower_get_exception_tag(ctx, inst, block)
-    Some(GetExceptionValue(idx)) =>
-      lower_get_exception_value(ctx, inst, block, idx)
-    Some(GetExceptionValueCount) =>
-      lower_get_exception_value_count(ctx, inst, block)
-    Some(Delegate(depth)) => lower_delegate(ctx, inst, block, depth)
-    Some(SpillLocalsForThrow(count)) =>
-      lower_spill_locals_for_throw(ctx, inst, block, count)
-    Some(GetSpilledLocal(idx)) => lower_get_spilled_local(ctx, inst, block, idx)
+  match ctx.extension_lowerer {
+    Some(lowerer) =>
+      if !lowerer(ctx, inst, block, ext) {
+        lower_unsupported_generic_opcode(inst, block)
+      }
     None => lower_unsupported_generic_opcode(inst, block)
   }
 }
@@ -2007,7 +1953,7 @@ fn lower_inst(
     CallPtr(num_args, num_results) =>
       lower_call_ptr(ctx, inst, block, num_args, num_results)
     Trap(_) | Custom(_) => lower_unsupported_generic_opcode(inst, block)
-    Ext(ext) => lower_wasm_extension(ctx, inst, block, ext)
+    Ext(ext) => lower_extension(ctx, inst, block, ext)
 
     // SIMD operations
     V128Const(bytes) => lower_v128_const(ctx, inst, block, bytes)
@@ -2706,7 +2652,7 @@ fn lower_terminator(
 /// Cranelift-aligned strategy: use direct call fixups (`CallDirect`) for both
 /// defined and imported functions. Imported targets are resolved from
 /// `vmctx->func_table` when call fixups are applied at module load time.
-fn lower_call(
+pub fn lower_call(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,

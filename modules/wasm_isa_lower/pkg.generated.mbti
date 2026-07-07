@@ -1,0 +1,28 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasm_isa_lower"
+
+import {
+  "Milky2018/isa_target/lower",
+  "Milky2018/machv",
+  "Milky2018/machv/abi",
+  "Milky2018/machv/block",
+  "Milky2018/machv/isa",
+  "Milky2018/milkir",
+  "Milky2018/wasm_milkir",
+}
+
+// Values
+pub fn lower_extension(@lower.LoweringContext, @milkir.Inst, @block.VCodeBlock, @milkir.ExtOp) -> Bool
+
+pub fn lower_function(@milkir.Function, isa? : @isa.ISA, abi_settings? : @abi.ABISettings, runtime_layout? : @abi.RuntimeContextLayout?, call_conv_layout? : @abi.CallConventionLayout?, runtime_symbols? : @wasm_milkir.RuntimeSymbols, num_imports? : Int, run_ir_opt? : Bool, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @machv.Function
+
+pub fn runtime_helper_symbols(@wasm_milkir.RuntimeSymbols) -> Map[String, String]
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+

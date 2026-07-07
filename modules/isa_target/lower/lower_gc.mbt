@@ -84,7 +84,7 @@ fn emit_gc_array_slow_alloc(
 ///|
 /// Lower i31.new: Convert i32 to i31ref
 /// Encoding: (value << 1) | 1 (positive odd for i31)
-fn lower_i31_new(
+pub fn lower_i31_new(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
@@ -120,7 +120,7 @@ fn lower_i31_new(
 /// 1. Check for null (0) and trap
 /// 2. Shift right by 1 to decode (removes the tag bit)
 /// 3. Sign-extend from 31 bits
-fn lower_i31_get_s(
+pub fn lower_i31_get_s(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
@@ -166,7 +166,7 @@ fn lower_i31_get_s(
 /// 1. Check for null (0) and trap
 /// 2. Shift right by 1 to decode (removes the tag bit)
 /// 3. Mask with 0x7FFFFFFF for 31 bits
-fn lower_i31_get_u(
+pub fn lower_i31_get_u(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
@@ -209,7 +209,7 @@ fn lower_i31_get_u(
 ///|
 /// Lower GC type conversions (any.convert_extern, extern.convert_any)
 /// These are no-ops in the JIT - just pass the reference through
-fn lower_gc_convert(
+pub fn lower_gc_convert(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
@@ -227,7 +227,7 @@ fn lower_gc_convert(
 ///|
 /// Lower ref.test: Test if reference matches type
 /// Uses runtime libcall: gc_ref_test_impl(ref, type_idx, nullable) -> 0 or 1
-fn lower_ref_test(
+pub fn lower_ref_test(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
@@ -266,7 +266,7 @@ fn lower_ref_test(
 ///|
 /// Lower ref.cast: Cast reference to type (traps on failure)
 /// Uses runtime libcall: gc_ref_cast_impl(ref, type_idx, nullable) -> ref or trap
-fn lower_ref_cast(
+pub fn lower_ref_cast(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
@@ -305,7 +305,7 @@ fn lower_ref_cast(
 ///|
 /// Lower ref.eq: Compare two references for equality
 /// Returns 1 if equal, 0 otherwise
-fn lower_ref_eq(
+pub fn lower_ref_eq(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
@@ -328,7 +328,7 @@ fn lower_ref_eq(
 /// Lower struct.new: Allocate struct with field values
 /// Uses runtime libcall:
 ///   gc_alloc_struct_slow(vmctx, type_idx, fields_ptr, num_fields, safepoint_id) -> struct_ref
-fn lower_struct_new(
+pub fn lower_struct_new(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
@@ -385,7 +385,7 @@ fn lower_struct_new(
 /// Lower struct.new_default: Allocate struct with default values
 /// Uses runtime libcall:
 ///   gc_alloc_struct_slow(vmctx, type_idx, null, 0, safepoint_id) -> struct_ref
-fn lower_struct_new_default(
+pub fn lower_struct_new_default(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
@@ -400,7 +400,7 @@ fn lower_struct_new_default(
 ///|
 /// Lower struct.get: Get struct field value
 /// Uses runtime libcall: gc_struct_get_impl(ref, type_idx, field_idx) -> value
-fn lower_struct_get(
+pub fn lower_struct_get(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
@@ -452,7 +452,7 @@ fn lower_struct_get(
 ///|
 /// Lower struct.get_s: Get struct field value with sign extension
 /// Uses runtime libcall then sign extends based on byte_width
-fn lower_struct_get_s(
+pub fn lower_struct_get_s(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
@@ -509,7 +509,7 @@ fn lower_struct_get_s(
 ///|
 /// Lower struct.get_u: Get struct field value with zero extension
 /// Uses runtime libcall then zero extends based on byte_width
-fn lower_struct_get_u(
+pub fn lower_struct_get_u(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
@@ -566,7 +566,7 @@ fn lower_struct_get_u(
 ///|
 /// Lower struct.set: Set struct field value
 /// Uses runtime libcall: gc_struct_set_impl(ref, type_idx, field_idx, value)
-fn lower_struct_set(
+pub fn lower_struct_set(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
@@ -612,7 +612,7 @@ fn lower_struct_set(
 /// Lower array.new: Allocate array with init value and length
 /// Uses runtime libcall:
 ///   gc_alloc_array_slow(vmctx, type_idx, length, init_value, safepoint_id) -> array_ref
-fn lower_array_new(
+pub fn lower_array_new(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
@@ -644,7 +644,7 @@ fn lower_array_new(
 /// Lower array.new_default: Allocate array with default values
 /// Uses runtime libcall:
 ///   gc_alloc_array_slow(vmctx, type_idx, length, init_value=0, safepoint_id) -> array_ref
-fn lower_array_new_default(
+pub fn lower_array_new_default(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
@@ -662,7 +662,7 @@ fn lower_array_new_default(
 ///|
 /// Lower array.new_fixed: Allocate fixed-size array with element values
 /// Uses runtime libcalls: gc_alloc_array_slow and gc_array_set_impl
-fn lower_array_new_fixed(
+pub fn lower_array_new_fixed(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
@@ -765,7 +765,7 @@ fn lower_array_new_fixed(
 ///|
 /// Lower array.get: Get array element
 /// Uses runtime libcall: gc_array_get_impl(ref, type_idx, idx) -> value
-fn lower_array_get(
+pub fn lower_array_get(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
@@ -816,7 +816,7 @@ fn lower_array_get(
 ///|
 /// Lower array.get_s: Get array element with sign extension
 /// Uses runtime libcall then sign extends based on byte_width
-fn lower_array_get_s(
+pub fn lower_array_get_s(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
@@ -867,7 +867,7 @@ fn lower_array_get_s(
 ///|
 /// Lower array.get_u: Get array element with zero extension
 /// Uses runtime libcall then zero extends based on byte_width
-fn lower_array_get_u(
+pub fn lower_array_get_u(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
@@ -918,7 +918,7 @@ fn lower_array_get_u(
 ///|
 /// Lower array.set: Set array element
 /// Uses runtime libcall: gc_array_set_impl(ref, type_idx, idx, value)
-fn lower_array_set(
+pub fn lower_array_set(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
@@ -962,7 +962,7 @@ fn lower_array_set(
 ///|
 /// Lower array.len: Get array length
 /// Uses runtime libcall: gc_array_len_impl(ref) -> length
-fn lower_array_len(
+pub fn lower_array_len(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
@@ -984,7 +984,7 @@ fn lower_array_len(
 ///|
 /// Lower array.fill: Fill array elements with a value
 /// Uses runtime libcall: gc_array_fill_impl(ref, offset, value, count)
-fn lower_array_fill(
+pub fn lower_array_fill(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
@@ -1015,7 +1015,7 @@ fn lower_array_fill(
 ///|
 /// Lower array.copy: Copy elements between arrays
 /// Uses runtime libcall: gc_array_copy_impl(dst_ref, dst_off, src_ref, src_off, count)
-fn lower_array_copy(
+pub fn lower_array_copy(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
@@ -1048,7 +1048,7 @@ fn lower_array_copy(
 ///|
 /// Lower array.new_data instruction
 /// Creates an array from a data segment
-fn lower_array_new_data(
+pub fn lower_array_new_data(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
@@ -1090,7 +1090,7 @@ fn lower_array_new_data(
 ///|
 /// Lower array.new_elem instruction
 /// Creates an array from an element segment
-fn lower_array_new_elem(
+pub fn lower_array_new_elem(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
@@ -1132,7 +1132,7 @@ fn lower_array_new_elem(
 ///|
 /// Lower array.init_data instruction
 /// Initializes array elements from a data segment
-fn lower_array_init_data(
+pub fn lower_array_init_data(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
@@ -1175,7 +1175,7 @@ fn lower_array_init_data(
 ///|
 /// Lower array.init_elem instruction
 /// Initializes array elements from an element segment
-fn lower_array_init_elem(
+pub fn lower_array_init_elem(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,

@@ -4,9 +4,12 @@ fn external_symbol(name : String) -> @instr.ExternalName {
 }
 
 ///|
-fn wasm_runtime_symbols(ctx : LoweringContext) -> @wasm_milkir.RuntimeSymbols {
-  match ctx.wasm_runtime_symbols {
-    Some(symbols) => symbols
+fn runtime_helper_symbol(
+  ctx : LoweringContext,
+  key : String,
+) -> @instr.ExternalName {
+  match ctx.runtime_helper_symbols.get(key) {
+    Some(symbol) => external_symbol(symbol)
     None =>
       abort("Wasm runtime-helper lowering requires explicit runtime symbols")
   }
@@ -14,157 +17,157 @@ fn wasm_runtime_symbols(ctx : LoweringContext) -> @wasm_milkir.RuntimeSymbols {
 
 ///|
 fn rt_gc_ref_test(ctx : LoweringContext) -> @instr.ExternalName {
-  external_symbol(wasm_runtime_symbols(ctx).gc_ref_test)
+  runtime_helper_symbol(ctx, "gc.ref_test")
 }
 
 ///|
 fn rt_gc_ref_cast(ctx : LoweringContext) -> @instr.ExternalName {
-  external_symbol(wasm_runtime_symbols(ctx).gc_ref_cast)
+  runtime_helper_symbol(ctx, "gc.ref_cast")
 }
 
 ///|
 fn rt_gc_struct_get(ctx : LoweringContext) -> @instr.ExternalName {
-  external_symbol(wasm_runtime_symbols(ctx).gc_struct_get)
+  runtime_helper_symbol(ctx, "gc.struct_get")
 }
 
 ///|
 fn rt_gc_struct_set(ctx : LoweringContext) -> @instr.ExternalName {
-  external_symbol(wasm_runtime_symbols(ctx).gc_struct_set)
+  runtime_helper_symbol(ctx, "gc.struct_set")
 }
 
 ///|
 fn rt_gc_array_get(ctx : LoweringContext) -> @instr.ExternalName {
-  external_symbol(wasm_runtime_symbols(ctx).gc_array_get)
+  runtime_helper_symbol(ctx, "gc.array_get")
 }
 
 ///|
 fn rt_gc_array_set(ctx : LoweringContext) -> @instr.ExternalName {
-  external_symbol(wasm_runtime_symbols(ctx).gc_array_set)
+  runtime_helper_symbol(ctx, "gc.array_set")
 }
 
 ///|
 fn rt_gc_array_len(ctx : LoweringContext) -> @instr.ExternalName {
-  external_symbol(wasm_runtime_symbols(ctx).gc_array_len)
+  runtime_helper_symbol(ctx, "gc.array_len")
 }
 
 ///|
 fn rt_gc_array_fill(ctx : LoweringContext) -> @instr.ExternalName {
-  external_symbol(wasm_runtime_symbols(ctx).gc_array_fill)
+  runtime_helper_symbol(ctx, "gc.array_fill")
 }
 
 ///|
 fn rt_gc_array_copy(ctx : LoweringContext) -> @instr.ExternalName {
-  external_symbol(wasm_runtime_symbols(ctx).gc_array_copy)
+  runtime_helper_symbol(ctx, "gc.array_copy")
 }
 
 ///|
 fn rt_gc_array_new_data(ctx : LoweringContext) -> @instr.ExternalName {
-  external_symbol(wasm_runtime_symbols(ctx).gc_array_new_data)
+  runtime_helper_symbol(ctx, "gc.array_new_data")
 }
 
 ///|
 fn rt_gc_array_new_elem(ctx : LoweringContext) -> @instr.ExternalName {
-  external_symbol(wasm_runtime_symbols(ctx).gc_array_new_elem)
+  runtime_helper_symbol(ctx, "gc.array_new_elem")
 }
 
 ///|
 fn rt_gc_array_init_data(ctx : LoweringContext) -> @instr.ExternalName {
-  external_symbol(wasm_runtime_symbols(ctx).gc_array_init_data)
+  runtime_helper_symbol(ctx, "gc.array_init_data")
 }
 
 ///|
 fn rt_gc_array_init_elem(ctx : LoweringContext) -> @instr.ExternalName {
-  external_symbol(wasm_runtime_symbols(ctx).gc_array_init_elem)
+  runtime_helper_symbol(ctx, "gc.array_init_elem")
 }
 
 ///|
 fn rt_gc_type_check_subtype(ctx : LoweringContext) -> @instr.ExternalName {
-  external_symbol(wasm_runtime_symbols(ctx).gc_type_check_subtype)
+  runtime_helper_symbol(ctx, "gc.type_check_subtype")
 }
 
 ///|
 fn rt_gc_register_struct_inline(ctx : LoweringContext) -> @instr.ExternalName {
-  external_symbol(wasm_runtime_symbols(ctx).gc_register_struct_inline)
+  runtime_helper_symbol(ctx, "gc.register_struct_inline")
 }
 
 ///|
 fn rt_gc_register_array_inline(ctx : LoweringContext) -> @instr.ExternalName {
-  external_symbol(wasm_runtime_symbols(ctx).gc_register_array_inline)
+  runtime_helper_symbol(ctx, "gc.register_array_inline")
 }
 
 ///|
 fn rt_gc_alloc_struct_slow(ctx : LoweringContext) -> @instr.ExternalName {
-  external_symbol(wasm_runtime_symbols(ctx).gc_alloc_struct_slow)
+  runtime_helper_symbol(ctx, "gc.alloc_struct_slow")
 }
 
 ///|
 fn rt_gc_alloc_array_from_values_slow(
   ctx : LoweringContext,
 ) -> @instr.ExternalName {
-  external_symbol(wasm_runtime_symbols(ctx).gc_alloc_array_from_values_slow)
+  runtime_helper_symbol(ctx, "gc.alloc_array_from_values_slow")
 }
 
 ///|
 fn rt_gc_alloc_array_slow(ctx : LoweringContext) -> @instr.ExternalName {
-  external_symbol(wasm_runtime_symbols(ctx).gc_alloc_array_slow)
+  runtime_helper_symbol(ctx, "gc.alloc_array_slow")
 }
 
 ///|
 fn rt_exception_try_begin(ctx : LoweringContext) -> @instr.ExternalName {
-  external_symbol(wasm_runtime_symbols(ctx).exception_try_begin)
+  runtime_helper_symbol(ctx, "exception.try_begin")
 }
 
 ///|
 fn rt_exception_try_end(ctx : LoweringContext) -> @instr.ExternalName {
-  external_symbol(wasm_runtime_symbols(ctx).exception_try_end)
+  runtime_helper_symbol(ctx, "exception.try_end")
 }
 
 ///|
 fn rt_exception_throw(ctx : LoweringContext) -> @instr.ExternalName {
-  external_symbol(wasm_runtime_symbols(ctx).exception_throw)
+  runtime_helper_symbol(ctx, "exception.throw")
 }
 
 ///|
 fn rt_exception_throw_tag(ctx : LoweringContext) -> @instr.ExternalName {
-  external_symbol(wasm_runtime_symbols(ctx).exception_throw_tag)
+  runtime_helper_symbol(ctx, "exception.throw_tag")
 }
 
 ///|
 fn rt_exception_throw_ref(ctx : LoweringContext) -> @instr.ExternalName {
-  external_symbol(wasm_runtime_symbols(ctx).exception_throw_ref)
+  runtime_helper_symbol(ctx, "exception.throw_ref")
 }
 
 ///|
 fn rt_exception_delegate(ctx : LoweringContext) -> @instr.ExternalName {
-  external_symbol(wasm_runtime_symbols(ctx).exception_delegate)
+  runtime_helper_symbol(ctx, "exception.delegate")
 }
 
 ///|
 fn rt_exception_get_tag(ctx : LoweringContext) -> @instr.ExternalName {
-  external_symbol(wasm_runtime_symbols(ctx).exception_get_tag)
+  runtime_helper_symbol(ctx, "exception.get_tag")
 }
 
 ///|
 fn rt_exception_get_value(ctx : LoweringContext) -> @instr.ExternalName {
-  external_symbol(wasm_runtime_symbols(ctx).exception_get_value)
+  runtime_helper_symbol(ctx, "exception.get_value")
 }
 
 ///|
 fn rt_exception_get_value_count(ctx : LoweringContext) -> @instr.ExternalName {
-  external_symbol(wasm_runtime_symbols(ctx).exception_get_value_count)
+  runtime_helper_symbol(ctx, "exception.get_value_count")
 }
 
 ///|
 fn rt_exception_sigsetjmp(ctx : LoweringContext) -> @instr.ExternalName {
-  external_symbol(wasm_runtime_symbols(ctx).exception_sigsetjmp)
+  runtime_helper_symbol(ctx, "exception.sigsetjmp")
 }
 
 ///|
 fn rt_exception_spill_locals(ctx : LoweringContext) -> @instr.ExternalName {
-  external_symbol(wasm_runtime_symbols(ctx).exception_spill_locals)
+  runtime_helper_symbol(ctx, "exception.spill_locals")
 }
 
 ///|
 fn rt_exception_get_spilled_local(ctx : LoweringContext) -> @instr.ExternalName {
-  external_symbol(wasm_runtime_symbols(ctx).exception_get_spilled_local)
+  runtime_helper_symbol(ctx, "exception.get_spilled_local")
 }

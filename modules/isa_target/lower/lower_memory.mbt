@@ -48,7 +48,7 @@ fn emit_load_table0_base(
 ///|
 /// Lower GetFuncRef - get tagged function pointer for storing in tables
 /// Returns func_ptr | FUNCREF_TAG (bit 61) for ref.test detection
-fn lower_get_func_ref(
+pub fn lower_get_func_ref(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
@@ -97,7 +97,7 @@ fn lower_get_func_ref(
 ///|
 /// Lower memory-base access to generic pointer loads from the runtime context.
 /// memidx: memory index for multi-memory support
-fn lower_load_mem_base(
+pub fn lower_load_mem_base(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,

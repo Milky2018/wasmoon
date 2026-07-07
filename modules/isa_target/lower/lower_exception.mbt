@@ -19,7 +19,7 @@ fn emit_load_vmctx(
 ///|
 /// Lower Throw(tag_idx) instruction
 /// Calls exception_throw(ctx, tag_idx, values_ptr, count)
-fn lower_throw(
+pub fn lower_throw(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
@@ -97,7 +97,7 @@ fn lower_throw(
 ///|
 /// Lower ThrowRef instruction
 /// Calls exception_throw_ref(ctx, exnref)
-fn lower_throw_ref(
+pub fn lower_throw_ref(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
@@ -129,7 +129,7 @@ fn lower_throw_ref(
 ///
 /// The TryTableBegin IR instruction returns 0 normally, or handler_id on catch.
 /// This is the result of sigsetjmp.
-fn lower_try_table_begin(
+pub fn lower_try_table_begin(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
@@ -190,7 +190,7 @@ fn lower_try_table_begin(
 ///|
 /// Lower TryTableEnd(handler_id) instruction
 /// Calls exception_try_end(ctx, handler_id)
-fn lower_try_table_end(
+pub fn lower_try_table_end(
   ctx : LoweringContext,
   _inst : @milkir.Inst,
   block : @block.VCodeBlock,
@@ -223,7 +223,7 @@ fn lower_try_table_end(
 ///|
 /// Lower GetExceptionTag instruction
 /// Calls exception_get_tag(ctx) -> tag
-fn lower_get_exception_tag(
+pub fn lower_get_exception_tag(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
@@ -249,7 +249,7 @@ fn lower_get_exception_tag(
 ///|
 /// Lower GetExceptionValue(idx) instruction
 /// Calls exception_get_value(ctx, idx) -> value
-fn lower_get_exception_value(
+pub fn lower_get_exception_value(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
@@ -279,7 +279,7 @@ fn lower_get_exception_value(
 ///|
 /// Lower GetExceptionValueCount instruction
 /// Calls exception_get_value_count(ctx) -> count
-fn lower_get_exception_value_count(
+pub fn lower_get_exception_value_count(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
@@ -305,7 +305,7 @@ fn lower_get_exception_value_count(
 ///|
 /// Lower Delegate(depth) instruction
 /// Calls exception_delegate(ctx, depth)
-fn lower_delegate(
+pub fn lower_delegate(
   ctx : LoweringContext,
   _inst : @milkir.Inst,
   block : @block.VCodeBlock,
@@ -334,7 +334,7 @@ fn lower_delegate(
 /// Lower SpillLocalsForThrow(count) instruction
 /// Calls exception_spill_locals(ctx, locals_ptr, count)
 /// This saves all locals to memory so catch handlers can see throw-time values
-fn lower_spill_locals_for_throw(
+pub fn lower_spill_locals_for_throw(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
@@ -410,7 +410,7 @@ fn lower_spill_locals_for_throw(
 ///|
 /// Lower GetSpilledLocal(idx) instruction
 /// Calls exception_get_spilled_local(ctx, idx) -> value
-fn lower_get_spilled_local(
+pub fn lower_get_spilled_local(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,

@@ -1,6 +1,7 @@
 members = [
   "./modules/wasm_core",
   "./modules/wasm_milkir",
+  "./modules/wasm_isa_lower",
   "./modules/milkir",
   "./modules/machv",
   "./modules/isa_target",

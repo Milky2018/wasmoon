@@ -14,7 +14,6 @@ description = "ISA lowering from MilkIR to MachV VCode"
 
 import {
   "moonbitlang/x@0.4.38",
-  "Milky2018/wasm_milkir@0.1.0",
   "Milky2018/milkir@0.1.0",
   "Milky2018/machv@0.1.0",
 }

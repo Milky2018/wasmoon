@@ -310,7 +310,7 @@ fn lower_wasm_call_direct(
 /// - Overflow args: StoreToStack instructions
 /// - Register args: Fixed register constraints via add_use_fixed
 /// - ReturnCallIndirect instruction only contains func_ptr use
-fn lower_return_call(
+pub fn lower_return_call(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
@@ -397,7 +397,7 @@ fn lower_return_call(
 ///|
 /// Lower return_call_indirect (indirect tail call)
 /// Note: parameters handled in lowering via StoreToStack and add_use_fixed
-fn lower_return_call_indirect(
+pub fn lower_return_call_indirect(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
@@ -542,7 +542,7 @@ fn lower_return_call_indirect(
 /// Lower return_call_ref (tail call through function reference)
 /// The func_ref is a tagged pointer (func_ptr | FUNCREF_TAG where FUNCREF_TAG = 0x2000000000000000)
 /// Note: parameters handled in lowering
-fn lower_return_call_ref(
+pub fn lower_return_call_ref(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
@@ -627,7 +627,7 @@ fn lower_return_call_ref(
 ///|
 /// Lower an indirect function call (call_indirect)
 /// The callee is already on the stack as a function table index
-fn lower_call_indirect(
+pub fn lower_call_indirect(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
@@ -750,7 +750,7 @@ fn lower_call_indirect(
 /// The null check is already done in IR, so we just need to:
 /// 1. Strip the FUNCREF_TAG to get the raw function pointer
 /// 2. Call through the function pointer
-fn lower_call_ref(
+pub fn lower_call_ref(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.VCodeBlock,
