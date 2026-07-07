@@ -1,6 +1,6 @@
-# isa_target
+# milkir_machv
 
-Generic ISA lowering from MilkIR to MachV.
+Generic MilkIR-to-MachV lowering.
 
 This module contains reusable lowering infrastructure shared by concrete
 machine targets. It translates `Milky2018/milkir` functions into
@@ -9,14 +9,14 @@ details supplied by target modules.
 
 ## Packages
 
-- `Milky2018/isa_target/lower`: core lowering pipeline from MilkIR to MachV.
-- `Milky2018/isa_target/lower/peephole`: post-lowering machine-level cleanup
+- `Milky2018/milkir_machv/lower`: core lowering pipeline from MilkIR to MachV.
+- `Milky2018/milkir_machv/lower/peephole`: post-lowering machine-level cleanup
   and peephole utilities.
 
 ## Module-root README tests
 
 This module root exists to document the lowering family. The executable package
-is `Milky2018/isa_target/lower`, so `README.mbt.md` examples run through the
+is `Milky2018/milkir_machv/lower`, so `README.mbt.md` examples run through the
 root facade package in this directory.
 
 ## Example: lower MilkIR with an explicit ISA
@@ -79,10 +79,10 @@ test "optimize an explicitly targeted MachV function" {
 
 ## Boundary
 
-`isa_target` is compiler infrastructure. It should not own embedding-specific
+`milkir_machv` is compiler infrastructure. It should not own embedding-specific
 runtime helper addresses, Wasmoon host functions, or native FFI resolution.
 Dialect-specific `ExtOp` lowering is supplied by callers through
 `lower_function`'s `extension_lowerer` hook plus an explicit runtime-helper
 symbol map. WebAssembly uses the separate `Milky2018/wasm_isa_lower` adapter for
-that boundary; generic ISA lowering treats unknown extensions as unsupported
-instead of decoding Wasm opcodes itself.
+that boundary; generic MilkIR-to-MachV lowering treats unknown extensions as
+unsupported instead of decoding Wasm opcodes itself.

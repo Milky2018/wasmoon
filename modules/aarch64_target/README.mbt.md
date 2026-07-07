@@ -3,7 +3,7 @@
 AArch64 target support for MilkIR-to-MachV lowering.
 
 This module provides AArch64 ABI policy, machine-environment construction, and
-target lowering hooks used by the generic ISA lowering pipeline.
+target lowering hooks used by the generic MilkIR-to-MachV lowering pipeline.
 
 ## Package
 

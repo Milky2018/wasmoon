@@ -53,7 +53,7 @@ Wasmoon is a WebAssembly runtime written in MoonBit with JIT compilation support
 |---------|-------------|
 | `modules/milkir/` | Intermediate representation (SSA-based IR) |
 | `modules/machv/` | Virtual-register machine IR |
-| `modules/isa_target/` | Lowering from MilkIR to MachV |
+| `modules/milkir_machv/` | Lowering from MilkIR to MachV |
 | `modules/machv_regalloc/` | MachV-specific register allocation adapter |
 | `modules/machv_emit/` | Machine code emission |
 | `modules/wasmoon_jit/` | Wasmoon-specific native runtime and JIT integration |

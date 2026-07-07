@@ -829,7 +829,7 @@ For amd64 runtime/perf gating, use CI job `build-ubuntu-amd64` in
   - `cranelift/codegen/src/egraph.rs`
   - `cranelift/codegen/src/remove_constant_phis.rs`
   - `cranelift/codegen/src/opts/*` and generated ISLE rules
-- ISA lowering / isel:
+- MilkIR-to-MachV lowering / isel:
   - `cranelift/codegen/src/isa/x64/lower.isle`
   - `cranelift/codegen/src/isa/x64/inst.isle`
   - `cranelift/codegen/src/isa/aarch64/lower.isle`

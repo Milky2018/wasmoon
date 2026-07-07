@@ -1,4 +1,4 @@
-name = "Milky2018/isa_target"
+name = "Milky2018/milkir_machv"
 
 version = "0.1.0"
 
@@ -10,7 +10,7 @@ license = "Apache-2.0"
 
 keywords = [ "compiler", "lowering", "isa", "codegen" ]
 
-description = "ISA lowering from MilkIR to MachV"
+description = "MilkIR-to-MachV lowering"
 
 import {
   "moonbitlang/x@0.4.38",

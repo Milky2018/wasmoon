@@ -4,7 +4,7 @@ members = [
   "./modules/wasm_isa_lower",
   "./modules/milkir",
   "./modules/machv",
-  "./modules/isa_target",
+  "./modules/milkir_machv",
   "./modules/regalloc",
   "./modules/machv_regalloc",
   "./modules/machv_emit",

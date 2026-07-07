@@ -1,5 +1,5 @@
 ///|
-/// Context slot roles required by reusable Wasm-to-ISA lowering.
+/// Context slot roles required by reusable Wasm-to-MachV lowering.
 ///
 /// The numeric ids are embedding-defined handles into the generic MachV
 /// embedding context layout. Product-specific runtimes own the concrete ids.

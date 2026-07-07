@@ -40,7 +40,7 @@ _Avoid_: IR type system when referring to WebAssembly heap types
 A reusable low-level virtual-register representation used after instruction selection and before machine-code emission.
 _Avoid_: VCode, Machine IR
 
-**ISA Target**:
+**MilkIR-MachV Lowering**:
 The target-specific layer that lowers **MilkIR** into **MachV** and owns instruction selection, calling conventions, and target constraints.
 _Avoid_: backend, isa_backend, backend_common before duplication exists, MilkIR, MachV core, wasmoon JIT
 
@@ -85,8 +85,8 @@ _Avoid_: MachV emitter output, generic object format
 - A **Frontend Type System** may inform **Runtime Lowering**, but does not become the **MilkIR** type system.
 - **MilkIR Core** starts as the smallest useful subset and uses **Completeness TODO** comments for known gaps.
 - A **Completeness TODO** documents an accepted limitation, but is not itself a correctness gate.
-- An **ISA Target** lowers one **MilkIR** function into one **MachV** function.
-- An **ISA Target** owns **ABI Policy**, while **MachV** only represents registers, constraints, calls, clobbers, and stack effects.
+- **MilkIR-MachV Lowering** lowers one **MilkIR** function into one **MachV** function.
+- **Machine Targets** own **ABI Policy**, while **MachV** only represents registers, constraints, calls, clobbers, and stack effects.
 - A **MachV Register Allocation Adapter** lets **Register Allocation** allocate **MachV** without depending on **MachV** instruction data structures.
 - A **MachV Emitter** produces generic relocation and metadata records; **Wasmoon JIT** resolves those records to Wasmoon runtime helpers and executable memory.
 - A **Cwasm Artifact** may wrap **MachV Emitter** output with Wasmoon function indices, imports, traps, debug mapping, and runtime metadata.
@@ -108,9 +108,9 @@ _Avoid_: MachV emitter output, generic object format
 - The reusable IR scope was previously ambiguous; resolved: **MilkIR Core** is intentionally minimal, and incomplete areas must be marked with **Completeness TODO** comments.
 - TODO policy was ambiguous; resolved: **Completeness TODO** comments are required for known gaps but are not part of the current correctness gates.
 - "VCode" previously named both the current Wasmoon machine IR and the reusable machine layer; resolved: use **MachV** for the reusable virtual-register machine IR.
-- Instruction selection ownership was previously unclear; resolved: an **ISA Target** bridges **MilkIR** and **MachV** instead of putting target lowering into either core module.
+- Instruction selection ownership was previously unclear; resolved: **milkir_machv** bridges **MilkIR** and **MachV** instead of putting target lowering into either core module.
 - Target packaging was ambiguous; resolved: use ISA-specific modules such as `x64_target` and `aarch64_target`, not generic `backend` or `isa_backend` packages.
-- ABI ownership was previously mixed into the machine layer; resolved: **ISA Target** owns **ABI Policy** and **MachV** only expresses the policy's effects.
+- ABI ownership was previously mixed into the machine layer; resolved: **Machine Targets** own **ABI Policy** and **MachV** only expresses the policy's effects.
 - Register allocation previously depended on concrete VCode structures; resolved: keep **Register Allocation** independent and put **MachV**-specific projection and rewriting in a **MachV Register Allocation Adapter**.
 - Machine-code emission previously mixed byte encoding with Wasmoon runtime fixups; resolved: **MachV Emitter** emits generic relocation records and **Wasmoon JIT** owns runtime symbol resolution.
 - Emitter packaging was ambiguous; resolved: keep one `machv_emit` package with ISA-specific internals instead of first splitting `x64_emit` or `aarch64_emit`.

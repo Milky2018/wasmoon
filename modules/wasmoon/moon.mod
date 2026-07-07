@@ -10,7 +10,7 @@ import {
   "Milky2018/wasm_isa_lower@0.1.0",
   "Milky2018/milkir@0.1.0",
   "Milky2018/machv@0.1.0",
-  "Milky2018/isa_target@0.1.0",
+  "Milky2018/milkir_machv@0.1.0",
   "Milky2018/machv_regalloc@0.1.0",
   "Milky2018/machv_emit@0.1.0",
   "Milky2018/x64_target@0.1.0",

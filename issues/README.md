@@ -90,7 +90,7 @@ graph TD
   ISS_074["ISS-074: Replace wasm frontend translation parameter list with typed context"]
   ISS_075["ISS-075: Pass host ISA explicitly instead of detecting it in MachV"]
   ISS_076["ISS-076: Split Wasm dialect operations out of MilkIR core"]
-  ISS_077["ISS-077: Move Wasm runtime-helper lowering out of isa_target"]
+  ISS_077["ISS-077: Move Wasm runtime-helper lowering out of milkir_machv"]
   ISS_078["ISS-078: Move VMContext and Wasmoon register roles out of MachV ISA core"]
   ISS_079["ISS-079: Narrow machv_emit to generic emission inputs"]
   ISS_080["ISS-080: Replace Wasm-body APIs in target modules with generic call-convention lowering"]

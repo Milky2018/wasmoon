@@ -16,7 +16,7 @@ middle-end layer for MoonBit compiler projects.
 
 Use MilkIR when a frontend needs a target-independent SSA form before
 instruction selection. A typical pipeline builds a `Function`, verifies it,
-runs one or more optimization passes, then lowers it through `isa_target` into
+runs one or more optimization passes, then lowers it through `milkir_machv` into
 MachV.
 
 ## Example: build and verify SSA

@@ -277,8 +277,8 @@ fn lower_call_ptr(
 /// Lower a generic external-symbol call using the platform C ABI.
 ///
 /// Frontends that need embedding-specific runtime helpers should express them
-/// as MilkIR `Call(ExternalSymbol)` nodes before generic ISA lowering. The
-/// symbol resolver is owned by the embedding runtime, not by `isa_target`.
+/// as MilkIR `Call(ExternalSymbol)` nodes before generic MilkIR-to-MachV lowering. The
+/// symbol resolver is owned by the embedding runtime, not by `milkir_machv`.
 fn lower_external_call(
   ctx : LoweringContext,
   inst : @milkir.Inst,

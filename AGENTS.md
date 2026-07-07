@@ -58,7 +58,7 @@ lldb -- ./wasmoon test path/to/test.wast
 
 ## Compiler Infrastructure Boundaries
 
-Reusable compiler-infrastructure modules include `wasm_core`, `milkir`, `machv`, `regalloc`, `machv_regalloc`, `machv_emit`, `isa_target`, `aarch64_target`, and `x64_target`.
+Reusable compiler-infrastructure modules include `wasm_core`, `milkir`, `machv`, `regalloc`, `machv_regalloc`, `machv_emit`, `milkir_machv`, `aarch64_target`, and `x64_target`.
 
 - Hard boundary: reusable modules must not import Wasmoon-owned packages such as `Milky2018/wasmoon`, `Milky2018/wasmoon_jit`, or Wasmoon native FFI packages. `scripts/audit_module_boundaries.py` enforces this at `moon.pkg` import level.
 - Soft convention: avoid product-specific runtime names such as `wasmoon_jit_*`, `c_jit_*`, and `wasmoon.runtime.*` in reusable module code, comments, tests, and public APIs. Prefer generic terms such as external symbol, runtime helper, `wasm.runtime.*`, or embedding runtime.
