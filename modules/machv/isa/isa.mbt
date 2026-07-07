@@ -52,25 +52,16 @@ fn MachineEnv::from_data(data : @spec.MachineEnvData) -> MachineEnv {
 pub fn ISA::machine_env(
   self : ISA,
   settings? : @abi.ABISettings = @abi.ABISettings::default(),
-  reserve_mem0_desc? : Bool = false,
-  reserve_func_table? : Bool = false,
-  reserve_extra_results_ptr? : Bool = false,
   reserved_int_regs? : Array[Int] = [],
 ) -> MachineEnv {
   match self {
     AArch64 =>
       MachineEnv::from_data(
-        @aarch64.build_machine_env(
-          settings, reserve_mem0_desc, reserve_func_table, reserve_extra_results_ptr,
-          reserved_int_regs,
-        ),
+        @aarch64.build_machine_env(settings, reserved_int_regs),
       )
     AMD64 =>
       MachineEnv::from_data(
-        @amd64.build_machine_env(
-          settings, reserve_mem0_desc, reserve_func_table, reserve_extra_results_ptr,
-          reserved_int_regs,
-        ),
+        @amd64.build_machine_env(settings, reserved_int_regs),
       )
   }
 }
@@ -115,26 +106,6 @@ pub fn ISA::int_reg(self : ISA, role : @spec.IntRegRole) -> @abi.PReg {
 }
 
 ///|
-pub fn ISA::vmctx_reg_index(self : ISA) -> Int {
-  self.int_reg_index(Vmctx)
-}
-
-///|
-pub fn ISA::mem0_desc_reg_index(self : ISA) -> Int {
-  self.int_reg_index(Mem0Desc)
-}
-
-///|
-pub fn ISA::func_table_reg_index(self : ISA) -> Int {
-  self.int_reg_index(FuncTable)
-}
-
-///|
-pub fn ISA::extra_results_ptr_reg_index(self : ISA) -> Int {
-  self.int_reg_index(ExtraResultsPtr)
-}
-
-///|
 pub fn ISA::scratch_reg_1_index(self : ISA) -> Int {
   self.int_reg_index(Scratch1)
 }
@@ -157,9 +128,4 @@ pub fn ISA::lr_reg_index(self : ISA) -> Int {
 ///|
 pub fn ISA::sret_reg_index(self : ISA) -> Int {
   self.int_reg_index(SRet)
-}
-
-///|
-pub fn ISA::vmctx_preg(self : ISA) -> @abi.PReg {
-  { index: self.vmctx_reg_index(), class: Int }
 }

@@ -1,7 +1,5 @@
 ///|
-/// amd64 role mapping stub.
-///
-/// SysV AMD64 register assignment for Wasmoon's JIT backend.
+/// amd64 target-owned register role mapping.
 
 ///|
 pub fn int_reg_index(_role : @spec.IntRegRole) -> Int {
@@ -11,11 +9,6 @@ pub fn int_reg_index(_role : @spec.IntRegRole) -> Int {
   //   8: r8   9: r9  10: r10 11: r11
   //  12: r12 13: r13 14: r14 15: r15
   match _role {
-    // Cranelift x64 uses r15 as pinned vmctx.
-    Vmctx => 15 // r15
-    Mem0Desc => 14 // r14
-    FuncTable => 13 // r13
-    ExtraResultsPtr => 12 // r12
     // Reserve two caller-saved scratch regs for lowering/emission.
     Scratch1 => 10 // r10
     Scratch2 => 11 // r11

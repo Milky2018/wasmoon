@@ -129,6 +129,7 @@ pub fn compiler_infrastructure_assembly() -> CompilerInfrastructureAssembly {
       allocated_function,
       output,
       call_conv_layout=Some(call_conv),
+      embedding_reg_roles=roles,
     ),
     x64_abi: @x64_target.abi_policy(),
     aarch64_abi: @aarch64_target.abi_policy(),

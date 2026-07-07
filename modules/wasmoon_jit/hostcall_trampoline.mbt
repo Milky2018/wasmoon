@@ -326,5 +326,6 @@ pub fn emit_hostcall_import_trampoline(
     allocated,
     isa~,
     call_conv_layout=Some(call_conv_layout),
+    embedding_reg_roles=roles,
   )
 }

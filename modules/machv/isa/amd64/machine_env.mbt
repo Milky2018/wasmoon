@@ -68,14 +68,8 @@ fn allocatable_scratch_fprs() -> Array[@abi.PReg] {
 ///|
 pub fn build_machine_env(
   _settings : @abi.ABISettings,
-  reserve_mem0_desc : Bool,
-  reserve_func_table : Bool,
-  reserve_extra_results_ptr : Bool,
   reserved_int_regs : Array[Int],
 ) -> @spec.MachineEnvData {
-  let mem0_desc_idx = int_reg_index(Mem0Desc)
-  let func_table_idx = int_reg_index(FuncTable)
-  let extra_results_ptr_idx = int_reg_index(ExtraResultsPtr)
   let preferred_int : Array[@abi.PReg] = []
   let nonpreferred_int : Array[@abi.PReg] = []
   let callee_saved_int : Array[@abi.PReg] = []
@@ -88,15 +82,6 @@ pub fn build_machine_env(
   // Nonpreferred: callee-saved regs (excluding pinned/FP).
   for r in allocatable_callee_saved_regs() {
     if reserved_int_regs.contains(r.index) {
-      continue
-    }
-    if reserve_extra_results_ptr && r.index == extra_results_ptr_idx {
-      continue
-    }
-    if reserve_mem0_desc && r.index == mem0_desc_idx {
-      continue
-    }
-    if reserve_func_table && r.index == func_table_idx {
       continue
     }
     nonpreferred_int.push(r)

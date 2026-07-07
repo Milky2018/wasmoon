@@ -20,19 +20,8 @@ pub(all) struct MachineEnvData {
 }
 
 ///|
-/// Integer physical-register roles used by the JIT backend.
-///
-/// Step 2 goal: eliminate direct uses of AArch64-specific register constants
-/// (e.g. `REG_VMCTX`) in shared lowering/emission code.
+/// Target-owned integer physical-register roles.
 pub(all) enum IntRegRole {
-  /// Pinned/cached VMContext register.
-  Vmctx
-  /// Cached memory0 descriptor pointer register (optional).
-  Mem0Desc
-  /// Cached func_table pointer register (optional).
-  FuncTable
-  /// Extra results pointer register for multi-value calls.
-  ExtraResultsPtr
   /// Scratch temporaries reserved for emission/lowering.
   Scratch1
   Scratch2

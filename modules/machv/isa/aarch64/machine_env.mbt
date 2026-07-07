@@ -7,24 +7,15 @@
 ///|
 pub fn build_machine_env(
   _settings : @abi.ABISettings,
-  reserve_mem0_desc : Bool,
-  reserve_func_table : Bool,
-  reserve_extra_results_ptr : Bool,
   reserved_int_regs : Array[Int],
 ) -> @spec.MachineEnvData {
-  let mem0_desc_idx = int_reg_index(Mem0Desc)
-  let func_table_idx = int_reg_index(FuncTable)
-  let extra_results_ptr_idx = int_reg_index(ExtraResultsPtr)
   let preferred_int : Array[@abi.PReg] = []
   let nonpreferred_int : Array[@abi.PReg] = []
   let callee_saved_int : Array[@abi.PReg] = []
 
   // Preferred GPRs for allocation:
-  // Prefer scratch/caller-saved (x0-x15).
-  //
-  // Note: Wasmoon currently relies on keeping x0-x7 out of the general pool in
-  // some places due to call arg constraints; this is enforced elsewhere via
-  // fixed-reg constraints. We keep the historical preference ordering here.
+  // Prefer scratch/caller-saved (x0-x15). Call-argument constraints are modeled
+  // as fixed-reg constraints outside the target register environment.
   for r in allocatable_scratch_regs() {
     preferred_int.push(r)
   }
@@ -32,15 +23,6 @@ pub fn build_machine_env(
   // Nonpreferred callee-saved GPRs: x19-x28, excluding pinned reg when enabled.
   for r in allocatable_callee_saved_regs() {
     if reserved_int_regs.contains(r.index) {
-      continue
-    }
-    if reserve_extra_results_ptr && r.index == extra_results_ptr_idx {
-      continue
-    }
-    if reserve_mem0_desc && r.index == mem0_desc_idx {
-      continue
-    }
-    if reserve_func_table && r.index == func_table_idx {
       continue
     }
     nonpreferred_int.push(r)

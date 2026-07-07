@@ -183,7 +183,12 @@ fn MachineCode::emit_terminator_with_epilogue_x86_64(
       let int_moves : Array[(Int, Int)] = []
       let int_ret_regs_i32 : Array[Int] = []
       let fp_moves : Array[(Int, Int)] = []
-      let extra_results_ptr = isa.extra_results_ptr_reg_index()
+      fn require_extra_results_ptr() -> Int {
+        match stack_frame.extra_results_ptr_index() {
+          Some(idx) => idx
+          None => abort("embedding extra-results register role is required")
+        }
+      }
       let mut extra_offset = 0
       let mut int_idx = 0
       let mut fp_idx = 0
@@ -195,11 +200,13 @@ fn MachineCode::emit_terminator_with_epilogue_x86_64(
             if fp_idx < fp_rets.length() {
               fp_moves.push((src, fp_rets[fp_idx].index))
             } else if ty is V128 {
+              let extra_results_ptr = require_extra_results_ptr()
               self.x86_emit_movdqu_m128_xmm(
                 extra_results_ptr, extra_offset, src,
               )
               extra_offset += 16
             } else {
+              let extra_results_ptr = require_extra_results_ptr()
               self.x86_emit_movsd_m64_xmm(extra_results_ptr, extra_offset, src)
               extra_offset += 8
             }
@@ -213,6 +220,7 @@ fn MachineCode::emit_terminator_with_epilogue_x86_64(
                 int_ret_regs_i32.push(dst)
               }
             } else {
+              let extra_results_ptr = require_extra_results_ptr()
               self.x86_emit_mov_m64_r64(extra_results_ptr, extra_offset, src)
               extra_offset += 8
             }

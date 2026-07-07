@@ -121,7 +121,9 @@ pub fn plan_integration_for_target(
   regalloc_output : @machv_regalloc.Output,
   target : @machv_emit.EmitTarget,
 ) -> JitIntegrationPlan {
-  let call_conv = wasm_calling_convention_for_isa(emit_target_to_isa(target))
+  let isa = emit_target_to_isa(target)
+  let call_conv = wasm_calling_convention_for_isa(isa)
+  let roles = wasm_embedding_reg_roles_for_isa(isa)
   {
     entry_symbol: func.name,
     target,
@@ -129,9 +131,10 @@ pub fn plan_integration_for_target(
     object: @machv_emit.emit_function_with_regalloc(
       vcode_func,
       regalloc_output,
-      isa=emit_target_to_isa(target),
+      isa~,
       runtime_layout=Some(runtime_context_layout()),
       call_conv_layout=Some(call_conv),
+      embedding_reg_roles=roles,
     ),
   }
 }

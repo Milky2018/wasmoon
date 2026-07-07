@@ -2462,9 +2462,11 @@ fn MachineCode::emit_instruction_x86_64(
       if stack_frame.runtime_layout is Some(layout) {
         if stack_frame.cache_func_table &&
           ty is I64 &&
-          rn == self.isa.vmctx_reg_index() &&
+          rn == stack_frame.context_reg_index() &&
           offset == layout.function_table_offset {
-          let ft = self.isa.func_table_reg_index()
+          guard stack_frame.context_cache_1_index() is Some(ft) else {
+            abort("embedding context cache 1 register role is required")
+          }
           if rt != ft {
             self.x86_emit_mov_rr(rt, ft)
           }
@@ -3127,7 +3129,7 @@ fn MachineCode::emit_instruction_x86_64(
     LoadCodeAddr(symbol) => {
       // Load function pointer from the embedding function table.
       let rd = wreg_num(inst.defs[0])
-      let vmctx = self.isa.vmctx_reg_index()
+      let vmctx = stack_frame.context_reg_index()
       let table = isa.scratch_reg_1_index()
       let layout = stack_frame.require_runtime_layout()
       self.x86_emit_mov_r64_m64(table, vmctx, layout.function_table_offset)
@@ -3135,7 +3137,7 @@ fn MachineCode::emit_instruction_x86_64(
     }
     CallDirect(symbol, _num_args, _num_results, _call_conv) => {
       // Call via embedding function table to avoid rel32 patching.
-      let vmctx = self.isa.vmctx_reg_index()
+      let vmctx = stack_frame.context_reg_index()
       let table = isa.scratch_reg_1_index()
       let callee = isa.scratch_reg_2_index()
       let layout = stack_frame.require_runtime_layout()
@@ -3233,7 +3235,7 @@ fn MachineCode::emit_instruction_x86_64(
     ) => {
       // Inline record bump allocation with slow-path fallback.
       let dst = wreg_num(inst.defs[0])
-      let vmctx = self.isa.vmctx_reg_index()
+      let vmctx = stack_frame.context_reg_index()
       let arg0 = 7 // rdi
       let arg1 = 6 // rsi
       let arg2 = 2 // rdx
@@ -3326,7 +3328,7 @@ fn MachineCode::emit_instruction_x86_64(
     BumpAllocArrayFromStackInline(type_idx, len, register_symbol, slow_symbol) => {
       // Inline fixed-array bump allocation with slow-path fallback.
       let dst = wreg_num(inst.defs[0])
-      let vmctx = self.isa.vmctx_reg_index()
+      let vmctx = stack_frame.context_reg_index()
       let arg0 = 7 // rdi
       let arg1 = 6 // rsi
       let arg2 = 2 // rdx

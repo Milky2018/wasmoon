@@ -11,10 +11,6 @@ import {
 
 // Types and methods
 pub(all) enum IntRegRole {
-  Vmctx
-  Mem0Desc
-  FuncTable
-  ExtraResultsPtr
   Scratch1
   Scratch2
   FP

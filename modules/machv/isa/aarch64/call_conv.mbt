@@ -136,7 +136,7 @@ pub fn callee_saved_fprs() -> Array[@abi.PReg] {
 
 ///|
 /// Allocatable floating-point registers (caller-saved, no save/restore needed).
-/// V16-V31 are available for allocation. (V16/V17 are reserved scratch in Wasmoon.)
+/// V16-V31 are available for allocation. V16/V17 are reserved emitter scratch.
 pub fn allocatable_scratch_fprs() -> Array[@abi.PReg] {
   [
     { index: 16, class: Float64 },

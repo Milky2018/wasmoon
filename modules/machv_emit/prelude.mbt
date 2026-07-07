@@ -138,23 +138,18 @@ fn func_has_incoming_stack_args(func : @machv.Function) -> Bool {
 }
 
 ///|
-/// Check if a function uses vmctx (x19)
-/// A function needs vmctx if:
-/// - It uses X19 as a physical register in any instruction
-/// - It uses X19 in any terminator
-fn func_uses_vmctx(func : @machv.Function, isa : @isa.ISA) -> Bool {
-  let vmctx = isa.vmctx_reg_index()
+/// Check if a function uses the embedding context register.
+fn func_uses_context_reg(func : @machv.Function, context_reg : Int) -> Bool {
   for block in func.get_blocks() {
-    // Check instructions for X19 usage
     for inst in block.insts {
       for use_ in inst.uses {
-        if use_ is Physical(preg) && preg.index == vmctx {
+        if use_ is Physical(preg) && preg.index == context_reg {
           return true
         }
       }
     }
-    // Check terminator for X19 usage
-    if block.terminator is Some(term) && terminator_uses_vmctx(term, isa) {
+    if block.terminator is Some(term) &&
+      terminator_uses_context_reg(term, context_reg) {
       return true
     }
   }
@@ -162,26 +157,28 @@ fn func_uses_vmctx(func : @machv.Function, isa : @isa.ISA) -> Bool {
 }
 
 ///|
-/// Check if a terminator uses vmctx (x19)
-fn terminator_uses_vmctx(term : @instr.VCodeTerminator, isa : @isa.ISA) -> Bool {
-  let vmctx = isa.vmctx_reg_index()
+fn terminator_uses_context_reg(
+  term : @instr.VCodeTerminator,
+  context_reg : Int,
+) -> Bool {
   match term {
     Return(values) => {
       for v in values {
-        if v is Physical(preg) && preg.index == vmctx {
+        if v is Physical(preg) && preg.index == context_reg {
           return true
         }
       }
       false
     }
-    Branch(cond, _, _) => cond is Physical(preg) && preg.index == vmctx
+    Branch(cond, _, _) => cond is Physical(preg) && preg.index == context_reg
     BranchCmp(lhs, rhs, _, _, _, _) =>
-      (lhs is Physical(preg) && preg.index == vmctx) ||
-      (rhs is Physical(preg2) && preg2.index == vmctx)
-    BranchZero(reg, _, _, _, _) => reg is Physical(preg) && preg.index == vmctx
+      (lhs is Physical(preg) && preg.index == context_reg) ||
+      (rhs is Physical(preg2) && preg2.index == context_reg)
+    BranchZero(reg, _, _, _, _) =>
+      reg is Physical(preg) && preg.index == context_reg
     BranchCmpImm(lhs, _, _, _, _, _) =>
-      lhs is Physical(preg) && preg.index == vmctx
-    BrTable(index, _, _) => index is Physical(preg) && preg.index == vmctx
+      lhs is Physical(preg) && preg.index == context_reg
+    BrTable(index, _, _) => index is Physical(preg) && preg.index == context_reg
     Jump(_) | Trap(_) => false
   }
 }
@@ -373,29 +370,35 @@ fn MachineCode::emit_prologue(
       )
     }
 
-    // Cache vmctx (pinned reg) and optional cached pointers.
+    // Cache embedding context and optional context-derived pointers.
     if stack_frame.needs_vmctx {
       if !abi_settings.enable_pinned_reg {
         abort("unpinned VMContext ABI not implemented yet")
       }
       let call_conv = stack_frame.require_call_conv_layout()
       let vmctx_src = call_conv.context_arg.index
-      let vmctx = self.isa.vmctx_reg_index()
+      let vmctx = stack_frame.context_reg_index()
       if vmctx != vmctx_src {
         self.x86_emit_mov_rr(vmctx, vmctx_src)
       }
       if stack_frame.cache_mem0_desc {
         let layout = stack_frame.require_runtime_layout()
+        guard stack_frame.context_cache_0_index() is Some(cache_reg) else {
+          abort("embedding context cache 0 register role is required")
+        }
         self.x86_emit_mov_r64_m64(
-          self.isa.mem0_desc_reg_index(),
+          cache_reg,
           vmctx,
           layout.primary_memory_descriptor_offset,
         )
       }
       if stack_frame.cache_func_table {
         let layout = stack_frame.require_runtime_layout()
+        guard stack_frame.context_cache_1_index() is Some(cache_reg) else {
+          abort("embedding context cache 1 register role is required")
+        }
         self.x86_emit_mov_r64_m64(
-          self.isa.func_table_reg_index(),
+          cache_reg,
           vmctx,
           layout.function_table_offset,
         )
@@ -549,7 +552,7 @@ fn MachineCode::emit_prologue(
             match dest_preg {
               Some(preg) =>
                 if preg.index != src {
-                  let vmctx_dst = self.isa.vmctx_reg_index()
+                  let vmctx_dst = stack_frame.context_reg_index()
                   let is_redundant_vmctx_move = int_idx == 0 &&
                     stack_frame.needs_vmctx &&
                     preg.index == vmctx_dst
@@ -673,34 +676,29 @@ fn MachineCode::emit_prologue(
     self.emit_str_w_imm(16, vmctx_reg, layout.debug_current_function_offset)
   }
 
-  // Step 5: Cache vmctx to X19 (only if function uses vmctx)
-  // Note: vmctx is params[0], passed in X0
-  // All other values (memory_base, memory_size, func_table, table0_base) are
-  // loaded on-demand from vmctx, on-demand.
+  // Step 5: Cache the embedding context when needed.
   if stack_frame.needs_vmctx {
     if !abi_settings.enable_pinned_reg {
       abort("unpinned VMContext ABI not implemented yet")
     }
-    let vmctx = self.isa.vmctx_reg_index()
+    let vmctx = stack_frame.context_reg_index()
     let call_conv = stack_frame.require_call_conv_layout()
     self.emit_mov_reg(vmctx, call_conv.context_arg.index)
-    // Optionally cache memory0 base pointer in Mem0Desc role.
+    // Optionally cache the primary memory base pointer.
     if stack_frame.cache_mem0_desc {
       let layout = stack_frame.require_runtime_layout()
-      self.emit_ldr_imm(
-        self.isa.mem0_desc_reg_index(),
-        vmctx,
-        layout.primary_memory_base_offset,
-      )
+      guard stack_frame.context_cache_0_index() is Some(cache_reg) else {
+        abort("embedding context cache 0 register role is required")
+      }
+      self.emit_ldr_imm(cache_reg, vmctx, layout.primary_memory_base_offset)
     }
     // Optionally cache func_table pointer.
     if stack_frame.cache_func_table {
       let layout = stack_frame.require_runtime_layout()
-      self.emit_ldr_imm(
-        self.isa.func_table_reg_index(),
-        vmctx,
-        layout.function_table_offset,
-      )
+      guard stack_frame.context_cache_1_index() is Some(cache_reg) else {
+        abort("embedding context cache 1 register role is required")
+      }
+      self.emit_ldr_imm(cache_reg, vmctx, layout.function_table_offset)
     }
   }
 
@@ -770,6 +768,7 @@ pub fn emit_function(
   abi_settings? : @abi.ABISettings = @abi.ABISettings::default(),
   runtime_layout? : @abi.RuntimeContextLayout? = None,
   call_conv_layout? : @abi.CallConventionLayout? = None,
+  embedding_reg_roles? : @abi.EmbeddingRegRoles = @abi.EmbeddingRegRoles::none(),
   record_disasm? : Bool = true,
 ) -> MachineCode {
   // Optimize block layout for better branch prediction
@@ -795,25 +794,25 @@ pub fn emit_function(
   let uses_primary_memory_base = func.uses_primary_memory_base()
   let cache_mem0_desc = func.should_cache_mem0_desc()
   let cache_func_table = func.should_cache_func_table()
+  let context_reg = embedding_reg_roles.context
 
-  // Check if function uses vmctx (x19)
-  // A function needs vmctx if:
-  // 1. It directly uses x19 in instructions/terminators
-  // 2. It makes any calls (wasm ABI requires passing vmctx to callees)
-  // 3. It uses memory0 base loads that may leverage cached memory0 descriptor
-  let force_vmctx_cache = abi_settings.enable_pinned_reg && isa is AMD64
+  let force_vmctx_cache = abi_settings.enable_pinned_reg &&
+    isa is AMD64 &&
+    context_reg is Some(_)
   let needs_vmctx = force_vmctx_cache ||
     has_calls ||
-    func_uses_vmctx(func, isa) ||
+    (context_reg is Some({ index, .. }) && func_uses_context_reg(func, index)) ||
     uses_primary_memory_base
   let clobbered_gprs = clobbered
-  let mem0_desc = isa.mem0_desc_reg_index()
-  if cache_mem0_desc && !clobbered_gprs.contains(mem0_desc) {
-    clobbered_gprs.push(mem0_desc)
+  if cache_mem0_desc &&
+    embedding_reg_roles.context_cache_0 is Some(cache) &&
+    !clobbered_gprs.contains(cache.index) {
+    clobbered_gprs.push(cache.index)
   }
-  let func_table = isa.func_table_reg_index()
-  if cache_func_table && !clobbered_gprs.contains(func_table) {
-    clobbered_gprs.push(func_table)
+  if cache_func_table &&
+    embedding_reg_roles.context_cache_1 is Some(cache) &&
+    !clobbered_gprs.contains(cache.index) {
+    clobbered_gprs.push(cache.index)
   }
   let num_spill_slots = func.get_num_spill_slots()
   let needs_debug_idx_restore = debug_func_idx is Some(_) && needs_vmctx
@@ -835,6 +834,7 @@ pub fn emit_function(
     has_incoming_stack_args~,
     runtime_layout~,
     call_conv_layout~,
+    embedding_reg_roles~,
     abi_settings~,
   )
   if needs_debug_idx_restore {
@@ -1798,7 +1798,7 @@ fn MachineCode::emit_prologue_with_output(
             match loc {
               Reg(dst) =>
                 if dst.index != src {
-                  let vmctx_dst = isa.vmctx_preg().index
+                  let vmctx_dst = stack_frame.context_reg_index()
                   let is_redundant_vmctx_move = int_idx == 0 &&
                     stack_frame.needs_vmctx &&
                     dst.index == vmctx_dst
@@ -2023,7 +2023,7 @@ fn MachineCode::emit_prologue_with_output(
           match loc {
             Reg(dst) =>
               if dst.index != x_src {
-                let vmctx_dst = self.isa.vmctx_reg_index()
+                let vmctx_dst = stack_frame.context_reg_index()
                 let is_redundant_vmctx_move = int_idx == 0 &&
                   stack_frame.needs_vmctx &&
                   dst.index == vmctx_dst
@@ -2064,6 +2064,7 @@ pub fn emit_function_with_regalloc(
   abi_settings? : @abi.ABISettings = @abi.ABISettings::default(),
   runtime_layout? : @abi.RuntimeContextLayout? = None,
   call_conv_layout? : @abi.CallConventionLayout? = None,
+  embedding_reg_roles? : @abi.EmbeddingRegRoles = @abi.EmbeddingRegRoles::none(),
   record_disasm? : Bool = true,
 ) -> MachineCode {
   // Regalloc output carries edge copies as edits keyed by original blocks.
@@ -2084,21 +2085,28 @@ pub fn emit_function_with_regalloc(
   let uses_primary_memory_base = func.uses_primary_memory_base()
   let cache_mem0_desc = func.should_cache_mem0_desc()
   let cache_func_table = func.should_cache_func_table()
-  let vmctx = isa.vmctx_reg_index()
-  let force_vmctx_cache = abi_settings.enable_pinned_reg && isa is AMD64
+  let context_reg = embedding_reg_roles.context
+  let force_vmctx_cache = abi_settings.enable_pinned_reg &&
+    isa is AMD64 &&
+    context_reg is Some(_)
   let needs_vmctx = force_vmctx_cache ||
     has_calls ||
-    func_uses_vmctx(func, isa) ||
-    output_uses_preg(func, output, vmctx) ||
+    (context_reg is Some({ index, .. }) && func_uses_context_reg(func, index)) ||
+    (
+      context_reg is Some({ index, .. }) &&
+      output_uses_preg(func, output, index)
+    ) ||
     uses_primary_memory_base
   let clobbered_gprs = clobbered
-  let mem0_desc = isa.mem0_desc_reg_index()
-  if cache_mem0_desc && !clobbered_gprs.contains(mem0_desc) {
-    clobbered_gprs.push(mem0_desc)
+  if cache_mem0_desc &&
+    embedding_reg_roles.context_cache_0 is Some(cache) &&
+    !clobbered_gprs.contains(cache.index) {
+    clobbered_gprs.push(cache.index)
   }
-  let func_table = isa.func_table_reg_index()
-  if cache_func_table && !clobbered_gprs.contains(func_table) {
-    clobbered_gprs.push(func_table)
+  if cache_func_table &&
+    embedding_reg_roles.context_cache_1 is Some(cache) &&
+    !clobbered_gprs.contains(cache.index) {
+    clobbered_gprs.push(cache.index)
   }
   let num_spill_slots = output.get_num_spillslots()
   let needs_debug_idx_restore = debug_func_idx is Some(_) && needs_vmctx
@@ -2120,6 +2128,7 @@ pub fn emit_function_with_regalloc(
     has_incoming_stack_args~,
     runtime_layout~,
     call_conv_layout~,
+    embedding_reg_roles~,
     abi_settings~,
   )
   if needs_debug_idx_restore {

@@ -59,6 +59,7 @@ pub fn emit_entry_trampoline(
     allocated,
     isa~,
     call_conv_layout=Some(call_conv_layout),
+    embedding_reg_roles=wasm_embedding_reg_roles(isa~),
   )
 }
 

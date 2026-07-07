@@ -527,11 +527,13 @@ fn MachineCode::emit_instruction(
       if stack_frame.runtime_layout is Some(layout) {
         if stack_frame.cache_func_table &&
           ty is I64 &&
-          rn == self.isa.vmctx_reg_index() &&
+          rn == stack_frame.context_reg_index() &&
           offset == layout.function_table_offset {
-          let func_table = self.isa.func_table_reg_index()
-          if rt != func_table {
-            self.emit_mov_reg(rt, func_table)
+          guard stack_frame.context_cache_1_index() is Some(cache_reg) else {
+            abort("embedding context cache 1 register role is required")
+          }
+          if rt != cache_reg {
+            self.emit_mov_reg(rt, cache_reg)
           }
           return
         }
@@ -1424,9 +1426,12 @@ fn MachineCode::emit_instruction(
       self.emit_bl_code(target)
       if stack_frame.cache_mem0_desc {
         let layout = stack_frame.require_runtime_layout()
+        guard stack_frame.context_cache_0_index() is Some(cache_reg) else {
+          abort("embedding context cache 0 register role is required")
+        }
         self.emit_ldr_imm(
-          self.isa.mem0_desc_reg_index(),
-          self.isa.vmctx_reg_index(),
+          cache_reg,
+          stack_frame.context_reg_index(),
           layout.primary_memory_base_offset,
         )
       }
@@ -1435,9 +1440,12 @@ fn MachineCode::emit_instruction(
       self.emit_bl_external(symbol)
       if stack_frame.cache_mem0_desc {
         let layout = stack_frame.require_runtime_layout()
+        guard stack_frame.context_cache_0_index() is Some(cache_reg) else {
+          abort("embedding context cache 0 register role is required")
+        }
         self.emit_ldr_imm(
-          self.isa.mem0_desc_reg_index(),
-          self.isa.vmctx_reg_index(),
+          cache_reg,
+          stack_frame.context_reg_index(),
           layout.primary_memory_base_offset,
         )
       }
@@ -1452,9 +1460,12 @@ fn MachineCode::emit_instruction(
       self.emit_blr(target)
       if stack_frame.cache_mem0_desc {
         let layout = stack_frame.require_runtime_layout()
+        guard stack_frame.context_cache_0_index() is Some(cache_reg) else {
+          abort("embedding context cache 0 register role is required")
+        }
         self.emit_ldr_imm(
-          self.isa.mem0_desc_reg_index(),
-          self.isa.vmctx_reg_index(),
+          cache_reg,
+          stack_frame.context_reg_index(),
           layout.primary_memory_base_offset,
         )
       }
@@ -1528,7 +1539,7 @@ fn MachineCode::emit_instruction(
       // Inline record bump allocation with C slow-path fallback.
       // Uses: [vmctx], Defs: [result_ref]
       let dst = wreg_num(inst.defs[0])
-      let vmctx_reg = self.isa.vmctx_reg_index()
+      let vmctx_reg = stack_frame.context_reg_index()
 
       let gc_header_size = 16
       let gc_align = 16
@@ -1622,7 +1633,7 @@ fn MachineCode::emit_instruction(
       // Inline fixed-array bump allocation with C slow-path fallback.
       // Uses: [vmctx], Defs: [result_ref]
       let dst = wreg_num(inst.defs[0])
-      let vmctx_reg = self.isa.vmctx_reg_index()
+      let vmctx_reg = stack_frame.context_reg_index()
 
       let gc_header_size = 16
       let gc_align = 16

@@ -76,6 +76,7 @@ pub struct JITStackFrame {
   cache_func_table : Bool // Whether to cache func_table pointer in X21
   runtime_layout : @abi.RuntimeContextLayout?
   call_conv_layout : @abi.CallConventionLayout?
+  embedding_reg_roles : @abi.EmbeddingRegRoles
 }
 
 ///|
@@ -102,6 +103,7 @@ pub fn JITStackFrame::build(
   has_incoming_stack_args? : Bool = false,
   runtime_layout? : @abi.RuntimeContextLayout? = None,
   call_conv_layout? : @abi.CallConventionLayout? = None,
+  embedding_reg_roles? : @abi.EmbeddingRegRoles = @abi.EmbeddingRegRoles::none(),
   isa? : @isa.ISA = AArch64,
   abi_settings? : @abi.ABISettings = @abi.ABISettings::default(),
 ) -> JITStackFrame {
@@ -176,6 +178,7 @@ pub fn JITStackFrame::build(
     cache_func_table,
     runtime_layout,
     call_conv_layout,
+    embedding_reg_roles,
   }
 }
 
@@ -198,6 +201,43 @@ pub fn JITStackFrame::require_call_conv_layout(
     Some(layout) => layout
     None =>
       abort("call convention layout is required for ABI-specific emission")
+  }
+}
+
+///|
+pub fn JITStackFrame::require_context_reg(self : JITStackFrame) -> @abi.PReg {
+  match self.embedding_reg_roles.context {
+    Some(preg) => preg
+    None => abort("embedding context register role is required for emission")
+  }
+}
+
+///|
+pub fn JITStackFrame::context_reg_index(self : JITStackFrame) -> Int {
+  self.require_context_reg().index
+}
+
+///|
+pub fn JITStackFrame::context_cache_0_index(self : JITStackFrame) -> Int? {
+  match self.embedding_reg_roles.context_cache_0 {
+    Some({ index, class: Int }) => Some(index)
+    _ => None
+  }
+}
+
+///|
+pub fn JITStackFrame::context_cache_1_index(self : JITStackFrame) -> Int? {
+  match self.embedding_reg_roles.context_cache_1 {
+    Some({ index, class: Int }) => Some(index)
+    _ => None
+  }
+}
+
+///|
+pub fn JITStackFrame::extra_results_ptr_index(self : JITStackFrame) -> Int? {
+  match self.embedding_reg_roles.extra_results_ptr {
+    Some({ index, class: Int }) => Some(index)
+    _ => None
   }
 }
 

@@ -146,7 +146,7 @@ fn MachineCode::emit_epilogue(
     let saved_gprs = stack_frame.saved_gprs
 
     if self.debug_prev_func_idx_spill_offset >= 0 && stack_frame.needs_vmctx {
-      let vmctx = self.isa.vmctx_reg_index()
+      let vmctx = stack_frame.context_reg_index()
       let scratch = 11
       let layout = stack_frame.require_runtime_layout()
       self.x86_emit_mov_r32_m32(
@@ -198,7 +198,7 @@ fn MachineCode::emit_epilogue(
   let saved_fprs = stack_frame.saved_fprs
 
   if self.debug_prev_func_idx_spill_offset >= 0 && stack_frame.needs_vmctx {
-    let vmctx = self.isa.vmctx_reg_index()
+    let vmctx = stack_frame.context_reg_index()
     let layout = stack_frame.require_runtime_layout()
     if self.debug_prev_func_idx_spill_offset <= 16380 {
       self.emit_ldr_w_imm(16, 31, self.debug_prev_func_idx_spill_offset)
