@@ -307,8 +307,8 @@ pub fn AArch64StackFrame::size(self : AArch64StackFrame) -> Int {
 /// Generate prologue instructions
 pub fn AArch64StackFrame::gen_prologue(
   self : AArch64StackFrame,
-) -> Array[@instr.VCodeInst] {
-  let insts : Array[@instr.VCodeInst] = []
+) -> Array[@instr.MachVInst] {
+  let insts : Array[@instr.MachVInst] = []
   let frame_size = self.frame.size()
   if frame_size == 0 {
     return insts
@@ -323,7 +323,7 @@ pub fn AArch64StackFrame::gen_prologue(
   // Adjust stack pointer: SUB sp, sp, #frame_size
   // We represent this as a Sub instruction with the SP as both src and dest
   // Stack pointer operations are always 64-bit
-  let sub_sp = @instr.VCodeInst::new(Sub(true))
+  let sub_sp = @instr.MachVInst::new(Sub(true))
   sub_sp.add_def({ reg: Physical({ index: 31, class: Int }) }) // SP
   sub_sp.add_use(Physical({ index: 31, class: Int })) // SP
   // The immediate is encoded in the opcode, use LoadConst to represent it
@@ -332,19 +332,19 @@ pub fn AArch64StackFrame::gen_prologue(
   // Save FP and LR if using frame pointer
   if self.use_fp && (self.fp_slot, self.lr_slot) is (Some(fp_off), Some(lr_off)) {
     // Store FP
-    let store_fp = @instr.VCodeInst::new(Store(I64, fp_off))
+    let store_fp = @instr.MachVInst::new(Store(I64, fp_off))
     store_fp.add_use(Physical({ index: 29, class: Int })) // FP
     store_fp.add_use(Physical({ index: 31, class: Int })) // SP (conceptual)
     insts.push(store_fp)
 
     // Store LR
-    let store_lr = @instr.VCodeInst::new(Store(I64, lr_off))
+    let store_lr = @instr.MachVInst::new(Store(I64, lr_off))
     store_lr.add_use(Physical({ index: 30, class: Int })) // LR
     store_lr.add_use(Physical({ index: 31, class: Int })) // SP
     insts.push(store_lr)
 
     // Set up frame pointer: MOV x29, sp
-    let setup_fp = @instr.VCodeInst::new(Move)
+    let setup_fp = @instr.MachVInst::new(Move)
     setup_fp.add_def({ reg: Physical({ index: 29, class: Int }) })
     setup_fp.add_use(Physical({ index: 31, class: Int }))
     insts.push(setup_fp)
@@ -356,8 +356,8 @@ pub fn AArch64StackFrame::gen_prologue(
 /// Generate epilogue instructions
 pub fn AArch64StackFrame::gen_epilogue(
   self : AArch64StackFrame,
-) -> Array[@instr.VCodeInst] {
-  let insts : Array[@instr.VCodeInst] = []
+) -> Array[@instr.MachVInst] {
+  let insts : Array[@instr.MachVInst] = []
   let frame_size = self.frame.size()
   if frame_size == 0 {
     return insts
@@ -366,20 +366,20 @@ pub fn AArch64StackFrame::gen_epilogue(
   // Restore FP and LR if using frame pointer
   if self.use_fp && (self.fp_slot, self.lr_slot) is (Some(fp_off), Some(lr_off)) {
     // Restore FP
-    let load_fp = @instr.VCodeInst::new(Load(I64, fp_off))
+    let load_fp = @instr.MachVInst::new(Load(I64, fp_off))
     load_fp.add_def({ reg: Physical({ index: 29, class: Int }) })
     load_fp.add_use(Physical({ index: 31, class: Int })) // SP
     insts.push(load_fp)
 
     // Restore LR
-    let load_lr = @instr.VCodeInst::new(Load(I64, lr_off))
+    let load_lr = @instr.MachVInst::new(Load(I64, lr_off))
     load_lr.add_def({ reg: Physical({ index: 30, class: Int }) })
     load_lr.add_use(Physical({ index: 31, class: Int })) // SP
     insts.push(load_lr)
   }
 
   // Restore stack pointer: ADD sp, sp, #frame_size (64-bit)
-  let add_sp = @instr.VCodeInst::new(Add(true))
+  let add_sp = @instr.MachVInst::new(Add(true))
   add_sp.add_def({ reg: Physical({ index: 31, class: Int }) }) // SP
   add_sp.add_use(Physical({ index: 31, class: Int })) // SP
   insts.push(add_sp)

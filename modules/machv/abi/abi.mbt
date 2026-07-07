@@ -4,7 +4,7 @@
 // ============ Reserved Registers ============
 
 // NOTE: Shared lowering/emission/regalloc code should query ISA roles
-// (`vcode/isa` + `vcode/emit/isaregs`) instead of using these constants directly.
+// (`machv/isa` + `machv/emit/isaregs`) instead of using these constants directly.
 // These constants remain for AArch64-local code and compatibility during migration.
 
 ///|

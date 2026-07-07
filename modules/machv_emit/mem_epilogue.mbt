@@ -276,7 +276,7 @@ fn MachineCode::emit_epilogue(
 /// next_block: the ID of the physically next block, used for fall-through optimization
 fn MachineCode::emit_terminator_with_epilogue(
   self : MachineCode,
-  term : @instr.VCodeTerminator,
+  term : @instr.MachVTerminator,
   stack_frame : EmitStackFrame,
   result_types : Array[@machv.ValueKind],
   next_block : Int?,

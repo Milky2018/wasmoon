@@ -11,15 +11,15 @@ import {
 // Errors
 
 // Types and methods
-pub struct VCodeBlock {
+pub struct MachVBlock {
   id : Int
-  insts : Array[@instr.VCodeInst]
+  insts : Array[@instr.MachVInst]
   params : Array[@abi.VReg]
-  mut terminator : @instr.VCodeTerminator?
+  mut terminator : @instr.MachVTerminator?
 }
-pub fn VCodeBlock::add_inst(Self, @instr.VCodeInst) -> Unit
-pub fn VCodeBlock::new(Int) -> Self
-pub fn VCodeBlock::set_terminator(Self, @instr.VCodeTerminator) -> Unit
+pub fn MachVBlock::add_inst(Self, @instr.MachVInst) -> Unit
+pub fn MachVBlock::new(Int) -> Self
+pub fn MachVBlock::set_terminator(Self, @instr.MachVTerminator) -> Unit
 
 // Type aliases
 

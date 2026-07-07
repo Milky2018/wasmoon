@@ -51,12 +51,12 @@ Explore the compilation pipeline stages for debugging and analysis.
 Stages:
 - `ast`: Parsed AST
 - `ir`: Intermediate representation (SSA)
-- `vcode`: Virtual code (pre-register allocation)
+- `machv`: MachV virtual-register machine IR (pre-register allocation)
 - `mc`: Machine code (final assembly)
 
 Example:
 ```bash
-./wasmoon explore test.wat --stage ir vcode mc
+./wasmoon explore test.wat --stage ir machv mc
 ```
 
 ### Disassemble
@@ -107,7 +107,7 @@ python3 scripts/run_all_wast.py
 ./wasmoon explore mymodule.wat --stage mc
 
 # View full pipeline
-./wasmoon explore mymodule.wat --stage ir vcode mc
+./wasmoon explore mymodule.wat --stage ir machv mc
 ```
 
 ## Exit Codes

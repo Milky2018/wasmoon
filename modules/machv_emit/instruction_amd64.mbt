@@ -1,5 +1,5 @@
 ///|
-/// x86_64 VCode -> machine code emission (minimal subset).
+/// x86_64 MachV -> machine code emission (minimal subset).
 ///
 /// This is Step 3 scaffolding: implement enough to validate the ABI plumbing
 /// (prologue/epilogue, stack slots, simple arithmetic). The full backend will
@@ -8,7 +8,7 @@
 ///|
 fn MachineCode::emit_instruction_x86_64(
   self : MachineCode,
-  inst : @instr.VCodeInst,
+  inst : @instr.MachVInst,
   stack_frame : EmitStackFrame,
 ) -> Unit {
   let spill_base_offset = stack_frame.spill_offset
@@ -58,7 +58,7 @@ fn MachineCode::emit_instruction_x86_64(
   ///|
   /// Prepare a two-operand SSE instruction destination.
   ///
-  /// Many amd64 SIMD instructions are 2-operand (dst is overwritten). Our VCode
+  /// Many amd64 SIMD instructions are 2-operand (dst is overwritten). Our MachV
   /// IR does not enforce `dst == lhs`, so the emitter must handle aliasing
   /// where `dst` equals the rhs operand.
   ///

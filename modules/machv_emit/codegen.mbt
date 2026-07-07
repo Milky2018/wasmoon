@@ -1,4 +1,4 @@
-// AArch64 code generator (VCode -> MachineCode)
+// AArch64 code generator (MachV -> MachineCode)
 
 // NOTE: This file is intentionally kept small. The implementation is split
 // across:

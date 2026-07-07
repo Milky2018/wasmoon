@@ -1621,7 +1621,7 @@ test "plan MilkIR StackAddr through reusable x64 JIT pipeline" {
   entry.append_inst(milk.new_inst(StackAddr(slot), [], [ptr]))
   entry.set_terminator(Return([ptr]))
   // TODO(milkir): lower StackAddr through MachV once generic stack slots are
-  // represented in the copied VCode pipeline.
+  // represented in the copied MachV pipeline.
   inspect(milk.stack_slots.length(), content="1")
   inspect(entry.instructions.length(), content="1")
 }

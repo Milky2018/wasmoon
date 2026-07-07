@@ -71,7 +71,7 @@ test "optimize an explicitly targeted MachV function" {
     isa=AMD64,
     call_conv_layout=Some(readme_call_conv()),
   )
-  @lower.optimize_vcode(lowered, isa=AMD64)
+  @lower.optimize_machv(lowered, isa=AMD64)
   inspect(lowered.get_blocks().length(), content="1")
   inspect(lowered.print().contains("return"), content="true")
 }

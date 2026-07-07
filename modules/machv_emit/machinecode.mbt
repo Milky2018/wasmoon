@@ -1,10 +1,10 @@
 // Code Emission
-// Generates machine code from VCode representation
+// Generates machine code from MachV representation
 //
 // This module provides:
 // 1. Machine code buffer for accumulating bytes
 // 2. AArch64 instruction encoding
-// 3. VCode to machine code translation
+// 3. MachV to machine code translation
 
 // ============ Machine Code Buffer ============
 

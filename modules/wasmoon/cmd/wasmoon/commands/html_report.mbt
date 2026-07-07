@@ -169,11 +169,11 @@ fn generate_html_report(funcs : Array[CompiledFunc]) -> String {
     )
     sb.write_string(html_escape(func.ir_opt))
     sb.write_string("</pre></div></div>\n")
-    // VCode column
+    // MachV column
     sb.write_string(
-      "          <div class=\"column stage-vcode\"><div class=\"column-header\">VCode</div><div class=\"column-content\"><pre>",
+      "          <div class=\"column stage-machv\"><div class=\"column-header\">MachV</div><div class=\"column-content\"><pre>",
     )
-    sb.write_string(html_escape(func.vcode))
+    sb.write_string(html_escape(func.machv))
     sb.write_string("</pre></div></div>\n")
     // Register Allocation column (hidden by default)
     sb.write_string(
@@ -200,7 +200,7 @@ fn generate_html_report(funcs : Array[CompiledFunc]) -> String {
       #|        <label><input type="checkbox" id="toggle-source" checked onchange="toggleStage('source')"> WAT Source</label>
       #|        <label><input type="checkbox" id="toggle-ir" onchange="toggleStage('ir')"> IR (SSA)</label>
       #|        <label><input type="checkbox" id="toggle-opt" onchange="toggleStage('opt')"> Optimized IR</label>
-      #|        <label><input type="checkbox" id="toggle-vcode" checked onchange="toggleStage('vcode')"> VCode</label>
+      #|        <label><input type="checkbox" id="toggle-machv" checked onchange="toggleStage('machv')"> MachV</label>
       #|        <label><input type="checkbox" id="toggle-reg" onchange="toggleStage('reg')"> Reg Alloc</label>
       #|        <label><input type="checkbox" id="toggle-mc" checked onchange="toggleStage('mc')"> Machine Code</label>
       #|      </div>

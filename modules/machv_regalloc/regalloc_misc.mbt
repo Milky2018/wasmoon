@@ -2,7 +2,7 @@
 
 ///|
 /// Check if an opcode has side effects (cannot be eliminated even if dead)
-fn has_side_effects(opcode : @instr.VCodeOpcode) -> Bool {
+fn has_side_effects(opcode : @instr.MachVOpcode) -> Bool {
   match opcode {
     // Loads can trap (e.g. guard pages / invalid pointers), so must not be eliminated.
     LoadPtr(_, _)

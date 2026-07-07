@@ -1,10 +1,10 @@
 ///|
-/// Emit StoreToStack for overflow arguments according to the Wasm ABI.
+/// Emit StoreToStack for overflow arguments according to the configured call convention.
 /// This also updates `max_outgoing_args_size` so the prologue reserves enough
 /// space and SP doesn't move at call sites.
-fn emit_wasm_overflow_arg_stores(
+fn emit_embedding_overflow_arg_stores(
   ctx : LoweringContext,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   int_args : Array[(@abi.VReg, @abi.RegClass)],
   float_args : Array[(@abi.VReg, @abi.RegClass)],
 ) -> Int {
@@ -25,17 +25,17 @@ fn emit_wasm_overflow_arg_stores(
     int_overflow, float_overflow_classes,
   )
   if total_bytes > 0 {
-    ctx.vcode_func.update_max_outgoing_args_size(total_bytes)
+    ctx.machv_func.update_max_outgoing_args_size(total_bytes)
   }
   for i in 0..<int_overflow {
     let (vreg, _) = int_args[max_int_reg_args + i]
-    let store = @instr.VCodeInst::new(StoreToStack(int_offsets[i]))
+    let store = @instr.MachVInst::new(StoreToStack(int_offsets[i]))
     store.add_use(Virtual(vreg))
     block.add_inst(store)
   }
   for i in 0..<float_offsets.length() {
     let (vreg, _) = float_args[max_float_reg_args + i]
-    let store = @instr.VCodeInst::new(StoreToStack(float_offsets[i]))
+    let store = @instr.MachVInst::new(StoreToStack(float_offsets[i]))
     store.add_use(Virtual(vreg))
     block.add_inst(store)
   }
@@ -49,7 +49,7 @@ fn emit_wasm_overflow_arg_stores(
 /// register arguments.
 fn emit_c_overflow_arg_stores(
   ctx : LoweringContext,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   args : Array[@abi.VReg],
   max_reg_args : Int,
 ) -> Unit {
@@ -62,10 +62,10 @@ fn emit_c_overflow_arg_stores(
     return
   }
   let total_bytes = overflow * 8
-  ctx.vcode_func.update_max_outgoing_args_size(total_bytes)
+  ctx.machv_func.update_max_outgoing_args_size(total_bytes)
   for i in 0..<overflow {
     let arg = args[max_reg_args + i]
-    let store = @instr.VCodeInst::new(StoreToStack(i * 8))
+    let store = @instr.MachVInst::new(StoreToStack(i * 8))
     store.add_use(Virtual(arg))
     block.add_inst(store)
   }
@@ -78,7 +78,7 @@ fn emit_c_overflow_arg_stores(
 /// to callee-saved registers.
 pub fn add_call_clobbers(
   ctx : LoweringContext,
-  call_inst : @instr.VCodeInst,
+  call_inst : @instr.MachVInst,
 ) -> Unit {
   let isa = ctx.isa
   // Add clobbers for all caller-saved GPRs (X0-X17)
@@ -104,7 +104,7 @@ pub fn add_call_clobbers(
 /// a C helper on a slow path).
 pub fn add_c_call_clobbers(
   ctx : LoweringContext,
-  inst : @instr.VCodeInst,
+  inst : @instr.MachVInst,
 ) -> Unit {
   let isa = ctx.isa
   for preg in isa.call_clobbered_gprs() {
@@ -120,7 +120,7 @@ pub fn add_c_call_clobbers(
 /// This emits a symbolic `CallExternal` that the embedding runtime resolves.
 pub fn lower_c_libcall_direct(
   ctx : LoweringContext,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   symbol : @instr.ExternalName,
   args : Array[@abi.VReg],
   result : @abi.VReg?,
@@ -138,7 +138,7 @@ pub fn lower_c_libcall_direct(
   }
   let num_args = args.length()
   let num_results = if result is Some(_) { 1 } else { 0 }
-  let call_inst = @instr.VCodeInst::new(
+  let call_inst = @instr.MachVInst::new(
     CallExternal(symbol, num_args, num_results, Foreign),
   )
   for i, arg in args {
@@ -155,11 +155,11 @@ pub fn lower_c_libcall_direct(
 
 ///|
 /// Lower call_ptr instruction (call through a function pointer)
-/// Used in trampolines to call the target WASM function
+/// Used in trampolines to call an embedding-defined target function.
 ///
 /// Operand layout:
 ///   operand 0 = function pointer
-///   operand 1 = vmctx (X0)
+///   operand 1 = embedding context
 ///   operands 2..n = user arguments
 ///
 /// Standard ABI refactoring:
@@ -169,15 +169,15 @@ pub fn lower_c_libcall_direct(
 fn lower_call_ptr(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   num_args : Int,
   _num_results : Int,
 ) -> Unit {
   // Collect function pointer
   let func_ptr = ctx.get_vreg_for_use(inst.operands[0], block)
 
-  // Collect vmctx argument
-  let callee_vmctx = ctx.get_vreg_for_use(inst.operands[1], block)
+  // Collect embedding context argument
+  let callee_context = ctx.get_vreg_for_use(inst.operands[1], block)
 
   // Classify user arguments by type (starting from operand index 2)
   // int_args and float_args contain (vreg, class) tuples
@@ -192,14 +192,14 @@ fn lower_call_ptr(
       Vector => float_args.push((vreg, Vector)) // SIMD uses Vn registers
     }
   }
-  emit_wasm_overflow_arg_stores(ctx, block, int_args, float_args) |> ignore
+  emit_embedding_overflow_arg_stores(ctx, block, int_args, float_args) |> ignore
   let call_conv = ctx.require_call_conv_layout()
 
   // Collect result vregs (skip when results are unused)
   let result_vregs = collect_call_result_vregs(ctx, inst)
 
   // Step 3: Create an internal call with fixed-register constraints.
-  let call_inst = @instr.VCodeInst::new(
+  let call_inst = @instr.MachVInst::new(
     CallPtr(num_args, result_vregs.length(), Internal),
   )
 
@@ -209,8 +209,8 @@ fn lower_call_ptr(
     class: Int,
   })
 
-  // callee_vmctx constrained to the ISA's vmctx-arg register.
-  call_inst.add_use_fixed(Virtual(callee_vmctx), call_conv.context_arg)
+  // Callee context is constrained to the configured context argument register.
+  call_inst.add_use_fixed(Virtual(callee_context), call_conv.context_arg)
 
   // Register int args (ISA-specific).
   let user_arg_gprs = call_conv.user_arg_gprs
@@ -284,7 +284,7 @@ fn lower_call_ptr(
 fn lower_external_call(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   symbol : @milkir.ExternalSymbol,
 ) -> Unit {
   let args : Array[@abi.VReg] = []
@@ -293,10 +293,10 @@ fn lower_external_call(
       ctx.abi_settings.enable_pinned_reg &&
       ctx.ir_func.params.length() > 0 &&
       operand.id == ctx.ir_func.params[0].0.id {
-      let context_vreg = ctx.vcode_func.new_vreg(Int)
-      let context_mov = @instr.VCodeInst::new(Move)
+      let context_vreg = ctx.machv_func.new_vreg(Int)
+      let context_mov = @instr.MachVInst::new(Move)
       context_mov.add_def({ reg: Virtual(context_vreg) })
-      context_mov.add_use(Physical(vmctx_preg(ctx)))
+      context_mov.add_use(Physical(context_preg(ctx)))
       block.add_inst(context_mov)
       args.push(context_vreg)
     } else {
@@ -326,11 +326,11 @@ fn lower_external_call(
 /// This is for calling C runtime functions like GC helpers.
 /// Uses ISA C calling convention (register args + stack overflow args).
 ///
-/// Unlike lower_call_ptr which handles Wasm calling convention with vmctx,
+/// Unlike lower_call_ptr which handles the embedding call convention,
 /// this is for simple C functions where args follow the platform C ABI.
 pub fn lower_c_libcall(
   ctx : LoweringContext,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   func_ptr : @abi.VReg,
   args : Array[@abi.VReg],
   result : @abi.VReg?,
@@ -349,7 +349,7 @@ pub fn lower_c_libcall(
   // Create a foreign call with platform-ABI constraints.
   let num_args = args.length()
   let num_results = if result is Some(_) { 1 } else { 0 }
-  let call_inst = @instr.VCodeInst::new(CallPtr(num_args, num_results, Foreign))
+  let call_inst = @instr.MachVInst::new(CallPtr(num_args, num_results, Foreign))
 
   // Call target is constrained to SCRATCH_REG_2 (IP1).
   call_inst.add_use_fixed(Virtual(func_ptr), {
@@ -385,11 +385,11 @@ pub fn lower_c_libcall(
 /// Helper to materialize an immediate value into a vreg
 pub fn materialize_imm(
   ctx : LoweringContext,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   value : Int64,
 ) -> @abi.VReg {
-  let vreg = ctx.vcode_func.new_vreg(Int)
-  let mov = @instr.VCodeInst::new(LoadConst(value))
+  let vreg = ctx.machv_func.new_vreg(Int)
+  let mov = @instr.MachVInst::new(LoadConst(value))
   mov.add_def({ reg: Virtual(vreg) })
   block.add_inst(mov)
   vreg

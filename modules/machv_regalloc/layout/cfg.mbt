@@ -3,7 +3,7 @@
 
 ///|
 /// MachV CFG - Control Flow Graph for MachV functions
-pub struct VCodeCFG {
+pub struct MachVCFG {
   size : Int
   preds : Array[Array[Int]]
   succs : Array[Array[Int]]
@@ -11,7 +11,7 @@ pub struct VCodeCFG {
 
 ///|
 /// Build a CFG from a @machv.Function
-pub fn VCodeCFG::build(func : @machv.Function) -> VCodeCFG {
+pub fn MachVCFG::build(func : @machv.Function) -> MachVCFG {
   let blocks = func.get_blocks()
   let n = blocks.length()
   let preds : Array[Array[Int]] = []
@@ -46,7 +46,7 @@ pub fn VCodeCFG::build(func : @machv.Function) -> VCodeCFG {
 
 ///|
 /// Extract successor block IDs from terminator.
-fn get_terminator_succ_ids(term : @instr.VCodeTerminator) -> Array[Int] {
+fn get_terminator_succ_ids(term : @instr.MachVTerminator) -> Array[Int] {
   match term {
     Jump(target, _) => [target]
     Branch(_, then_b, else_b) => [then_b, else_b]
@@ -67,11 +67,11 @@ fn get_terminator_succ_ids(term : @instr.VCodeTerminator) -> Array[Int] {
 
 ///|
 /// Perform a post-order traversal of the CFG
-fn VCodeCFG::postorder(self : VCodeCFG) -> Array[Int] {
+fn MachVCFG::postorder(self : MachVCFG) -> Array[Int] {
   let visited : Array[Bool] = Array::make(self.size, false)
   let result : Array[Int] = []
   fn visit(
-    cfg : VCodeCFG,
+    cfg : MachVCFG,
     block : Int,
     visited : Array[Bool],
     result : Array[Int],
@@ -94,7 +94,7 @@ fn VCodeCFG::postorder(self : VCodeCFG) -> Array[Int] {
 
 ///|
 /// Perform a reverse post-order traversal of the CFG
-fn VCodeCFG::reverse_postorder(self : VCodeCFG) -> Array[Int] {
+fn MachVCFG::reverse_postorder(self : MachVCFG) -> Array[Int] {
   let po = self.postorder()
   po.rev_in_place()
   po
@@ -103,7 +103,7 @@ fn VCodeCFG::reverse_postorder(self : VCodeCFG) -> Array[Int] {
 ///|
 /// Compute dominators using simple iterative algorithm
 /// Returns immediate dominator for each block (-1 for entry/undefined)
-pub fn VCodeCFG::compute_dominators(self : VCodeCFG) -> Array[Int] {
+pub fn MachVCFG::compute_dominators(self : MachVCFG) -> Array[Int] {
   let idom : Array[Int] = Array::make(self.size, -1)
   if self.size == 0 {
     return idom
@@ -188,7 +188,7 @@ fn dominates_with_idom(idom : Array[Int], a : Int, b : Int) -> Bool {
 
 ///|
 /// Find all back edges (source, target) where target dominates source
-pub fn VCodeCFG::find_back_edges(self : VCodeCFG) -> Array[(Int, Int)] {
+pub fn MachVCFG::find_back_edges(self : MachVCFG) -> Array[(Int, Int)] {
   let idom = self.compute_dominators()
   let back_edges : Array[(Int, Int)] = []
   for block_id in 0..<self.size {
@@ -203,7 +203,7 @@ pub fn VCodeCFG::find_back_edges(self : VCodeCFG) -> Array[(Int, Int)] {
 
 ///|
 /// Natural loop representation
-pub struct VCodeLoop {
+pub struct MachVLoop {
   header : Int // Loop header (target of back edges)
   body : Array[Int] // All blocks in the loop
   latch : Int // Block with back edge to header (for single-latch loops)
@@ -211,8 +211,8 @@ pub struct VCodeLoop {
 
 ///|
 /// Find all natural loops in the CFG
-pub fn VCodeCFG::find_loops(self : VCodeCFG) -> Array[VCodeLoop] {
-  let loops : Array[VCodeLoop] = []
+pub fn MachVCFG::find_loops(self : MachVCFG) -> Array[MachVLoop] {
+  let loops : Array[MachVLoop] = []
   let back_edges = self.find_back_edges()
 
   // Group back edges by header
@@ -237,8 +237,8 @@ pub fn VCodeCFG::find_loops(self : VCodeCFG) -> Array[VCodeLoop] {
 
 ///|
 /// Find all blocks in a natural loop given the header and latch blocks
-fn VCodeCFG::find_loop_body(
-  self : VCodeCFG,
+fn MachVCFG::find_loop_body(
+  self : MachVCFG,
   header : Int,
   latches : Array[Int],
 ) -> Array[Int] {

@@ -743,8 +743,8 @@ pub fn JITDebugDB::set(Self, Int, JITFunctionDebug) -> Unit
 
 pub struct JITFunctionDebug {
   ir : String
-  vcode_before_regalloc : String
-  vcode_after_regalloc : String
+  machv_before_regalloc : String
+  machv_after_regalloc : String
   machine_code : String
 }
 pub fn JITFunctionDebug::new(String, String, String, String) -> Self

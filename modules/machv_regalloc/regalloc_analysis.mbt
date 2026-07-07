@@ -1,4 +1,4 @@
-// Register-allocation analysis for MachV VCode.
+// Register-allocation analysis for MachV MachV.
 //
 // This module provides:
 // 1. Liveness analysis (live intervals, use-def chains)

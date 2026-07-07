@@ -21,7 +21,7 @@ pub(all) struct Function {
   params : Array[@abi.VReg] // Function parameters
   results : Array[@abi.RegClass] // Result types (for return value allocation)
   result_kinds : Array[ValueKind] // Full return kind info for multi-value returns
-  blocks : Array[@block.VCodeBlock]
+  blocks : Array[@block.MachVBlock]
   mut next_vreg_id : Int
   mut num_spill_slots : Int // Number of spill slots used by register allocator
   // Map from param index to allocated physical register (for params that cross calls)
@@ -57,7 +57,7 @@ pub fn Function::get_params(self : Function) -> Array[@abi.VReg] {
 }
 
 ///|
-pub fn Function::get_blocks(self : Function) -> Array[@block.VCodeBlock] {
+pub fn Function::get_blocks(self : Function) -> Array[@block.MachVBlock] {
   self.blocks
 }
 
@@ -255,16 +255,16 @@ pub fn Function::should_reserve_context_cache_1(self : Function) -> Bool {
 }
 
 ///|
-pub fn Function::new_block(self : Function) -> @block.VCodeBlock {
+pub fn Function::new_block(self : Function) -> @block.MachVBlock {
   let id = self.blocks.length()
-  let block = @block.VCodeBlock::new(id)
+  let block = @block.MachVBlock::new(id)
   self.blocks.push(block)
   block
 }
 
 ///|
 pub fn Function::print(self : Function) -> String {
-  let mut result = "vcode \{self.name}("
+  let mut result = "machv \{self.name}("
   // Parameters
   for i, param in self.params {
     if i > 0 {

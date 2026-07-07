@@ -117,7 +117,7 @@ pub fn native_glue_covers_jit_ffi_stubs(
 ///|
 pub fn plan_integration_for_target(
   func : @milkir.Function,
-  vcode_func : @machv.Function,
+  machv_func : @machv.Function,
   regalloc_output : @machv_regalloc.Output,
   target : @machv_emit.EmitTarget,
 ) -> JitIntegrationPlan {
@@ -129,7 +129,7 @@ pub fn plan_integration_for_target(
     target,
     native_glue: default_native_glue(),
     object: @machv_emit.emit_function_with_regalloc(
-      vcode_func,
+      machv_func,
       regalloc_output,
       isa~,
       embedding_context_layout=Some(embedding_context_layout()),
@@ -192,7 +192,7 @@ pub fn plan_milkir_integration_for_target(
   let isa = emit_target_to_isa(target)
   let call_conv = wasm_calling_convention_for_isa(isa)
   let roles = wasm_embedding_reg_roles_for_isa(isa)
-  let vcode_func = @wasm_isa_lower.lower_function(
+  let machv_func = @wasm_isa_lower.lower_function(
     func,
     isa~,
     embedding_reg_roles=roles,
@@ -201,7 +201,7 @@ pub fn plan_milkir_integration_for_target(
     runtime_symbols=wasm_runtime_symbols(),
   )
   let (allocated_func, output) = @machv_regalloc.allocate_registers_backtracking_output_with_isa(
-    vcode_func,
+    machv_func,
     isa,
     @abi.ABISettings::default(),
     roles,
@@ -218,7 +218,7 @@ pub fn plan_wasm_body_milkir_integration_for_target(
   let isa = emit_target_to_isa(target)
   let call_conv = wasm_calling_convention_for_isa(isa)
   let roles = wasm_embedding_reg_roles_for_isa(isa)
-  let vcode_func = @wasm_isa_lower.lower_function(
+  let machv_func = @wasm_isa_lower.lower_function(
     func,
     isa~,
     embedding_reg_roles=roles,
@@ -228,7 +228,7 @@ pub fn plan_wasm_body_milkir_integration_for_target(
     runtime_symbols=wasm_runtime_symbols(),
   )
   let (allocated_func, output) = @machv_regalloc.allocate_registers_backtracking_output_with_isa(
-    vcode_func,
+    machv_func,
     isa,
     @abi.ABISettings::default(),
     roles,

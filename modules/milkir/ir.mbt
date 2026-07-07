@@ -360,7 +360,7 @@ pub(all) enum Opcode {
 
   // Raw function pointer call (for trampolines)
   // CallPtr(num_args, num_results) - call via function pointer
-  // operand 0 = function pointer, operands 1..n = vmctx + args
+  // operand 0 = function pointer, operands 1..n = context + args
   CallPtr(Int, Int)
   Trap(String)
   Custom(String)

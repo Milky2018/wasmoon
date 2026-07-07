@@ -1,26 +1,26 @@
 ///|
-/// VCode block - a basic block in VCode
-pub struct VCodeBlock {
+/// MachV block - a basic block in MachV
+pub struct MachVBlock {
   id : Int
-  insts : Array[@instr.VCodeInst] // Instructions in this block
+  insts : Array[@instr.MachVInst] // Instructions in this block
   params : Array[@abi.VReg] // Block parameters
-  mut terminator : @instr.VCodeTerminator? // How the block ends
+  mut terminator : @instr.MachVTerminator? // How the block ends
 }
 
 ///|
-pub fn VCodeBlock::new(id : Int) -> VCodeBlock {
+pub fn MachVBlock::new(id : Int) -> MachVBlock {
   { id, insts: [], params: [], terminator: None }
 }
 
 ///|
-pub fn VCodeBlock::add_inst(self : VCodeBlock, inst : @instr.VCodeInst) -> Unit {
+pub fn MachVBlock::add_inst(self : MachVBlock, inst : @instr.MachVInst) -> Unit {
   self.insts.push(inst)
 }
 
 ///|
-pub fn VCodeBlock::set_terminator(
-  self : VCodeBlock,
-  term : @instr.VCodeTerminator,
+pub fn MachVBlock::set_terminator(
+  self : MachVBlock,
+  term : @instr.MachVTerminator,
 ) -> Unit {
   self.terminator = Some(term)
 }

@@ -1,7 +1,7 @@
 ///|
 /// AArch64 machine environment for register allocation (Cranelift-inspired).
 ///
-/// Returns a shared `@spec.MachineEnvData` so the `vcode/isa` facade can convert
+/// Returns a shared `@spec.MachineEnvData` so the `machv/isa` facade can convert
 /// it into its public `MachineEnv` type without introducing package cycles.
 
 ///|

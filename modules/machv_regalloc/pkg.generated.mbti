@@ -66,8 +66,8 @@ pub fn verify_allocation_aarch64(@machv.Function, LivenessResult, RegAllocResult
 type AArch64StackFrame
 pub fn AArch64StackFrame::alloc_spill(Self, @abi.VReg) -> Int
 pub fn AArch64StackFrame::finalize(Self) -> Unit
-pub fn AArch64StackFrame::gen_epilogue(Self) -> Array[@instr.VCodeInst]
-pub fn AArch64StackFrame::gen_prologue(Self) -> Array[@instr.VCodeInst]
+pub fn AArch64StackFrame::gen_epilogue(Self) -> Array[@instr.MachVInst]
+pub fn AArch64StackFrame::gen_prologue(Self) -> Array[@instr.MachVInst]
 pub fn AArch64StackFrame::new() -> Self
 pub fn AArch64StackFrame::save_callee_reg(Self, @abi.PReg) -> Int
 pub fn AArch64StackFrame::setup(Self) -> Unit

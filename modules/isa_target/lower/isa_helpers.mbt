@@ -10,7 +10,7 @@ fn current_isa(ctx : LoweringContext) -> @isa.ISA {
 }
 
 ///|
-pub fn vmctx_index(ctx : LoweringContext) -> Int {
+pub fn context_index(ctx : LoweringContext) -> Int {
   match ctx.embedding_reg_roles().context {
     Some(preg) => preg.index
     None => abort("embedding context register role is required")
@@ -18,7 +18,7 @@ pub fn vmctx_index(ctx : LoweringContext) -> Int {
 }
 
 ///|
-pub fn vmctx_preg(ctx : LoweringContext) -> @abi.PReg {
+pub fn context_preg(ctx : LoweringContext) -> @abi.PReg {
   match ctx.embedding_reg_roles().context {
     Some(preg) => preg
     None => abort("embedding context register role is required")

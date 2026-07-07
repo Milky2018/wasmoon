@@ -1399,7 +1399,7 @@ fn normalize_opt_level(opt_level : Int) -> Int {
 }
 
 ///|
-fn vcode_func_addr_fixups_to_cwasm(
+fn machv_func_addr_fixups_to_cwasm(
   fixups : Array[@machv_emit.FuncAddrFixup],
 ) -> Array[@cwasm.FuncAddrFixup] {
   let out : Array[@cwasm.FuncAddrFixup] = []
@@ -1415,7 +1415,7 @@ fn vcode_func_addr_fixups_to_cwasm(
 }
 
 ///|
-fn vcode_call_fixups_to_cwasm(
+fn machv_call_fixups_to_cwasm(
   fixups : Array[@machv_emit.CallFixup],
 ) -> Array[@cwasm.CallFixup] {
   let out : Array[@cwasm.CallFixup] = []
@@ -1435,7 +1435,7 @@ fn vcode_call_fixups_to_cwasm(
 }
 
 ///|
-fn vcode_gc_safepoints_to_cwasm(
+fn machv_gc_safepoints_to_cwasm(
   safepoints : Array[@machv_emit.GcSafepoint],
 ) -> Array[@cwasm.GcSafepoint] {
   let out : Array[@cwasm.GcSafepoint] = []
@@ -1625,7 +1625,7 @@ pub fn compile_module_to_jit(
     )
     let call_conv = @wasmoon_jit.wasm_calling_convention(isa~)
     let roles = @wasmoon_jit.wasm_embedding_reg_roles(isa~)
-    let vcode_func = @wasm_isa_lower.lower_function(
+    let machv_func = @wasm_isa_lower.lower_function(
       ir_func,
       isa~,
       embedding_reg_roles=roles,
@@ -1641,9 +1641,9 @@ pub fn compile_module_to_jit(
       @perf.record_stage_us("lower", @perf.elapsed_us(tick))
     }
     let regalloc_tick = if perf_on { Some(@perf.tick_now()) } else { None }
-    let mut vcode_before_dump : String? = None
+    let mut machv_before_dump : String? = None
     if debug_db is Some(_) {
-      vcode_before_dump = Some(vcode_func.print())
+      machv_before_dump = Some(machv_func.print())
     }
     emit_compile_progress(
       on_progress,
@@ -1654,8 +1654,8 @@ pub fn compile_module_to_jit(
       func_idx=Some(func_idx),
       func_name=Some(func_name),
     )
-    let (vcode_ra, ra_output) = @machv_regalloc.allocate_registers_backtracking_output_with_isa(
-      vcode_func,
+    let (machv_ra, ra_output) = @machv_regalloc.allocate_registers_backtracking_output_with_isa(
+      machv_func,
       isa,
       @abi.ABISettings::default(),
       roles,
@@ -1673,9 +1673,9 @@ pub fn compile_module_to_jit(
       )
     }
     let emit_tick = if perf_on { Some(@perf.tick_now()) } else { None }
-    let mut vcode_after_dump : String? = None
+    let mut machv_after_dump : String? = None
     if debug_db is Some(_) {
-      vcode_after_dump = Some(vcode_ra.print())
+      machv_after_dump = Some(machv_ra.print())
     }
     emit_compile_progress(
       on_progress,
@@ -1687,7 +1687,7 @@ pub fn compile_module_to_jit(
       func_name=Some(func_name),
     )
     let mc = @machv_emit.emit_function_with_regalloc(
-      vcode_ra,
+      machv_ra,
       ra_output,
       isa~,
       debug_func_idx=Some(func_idx),
@@ -1716,11 +1716,11 @@ pub fn compile_module_to_jit(
         compiled.entry_offset,
         num_params,
         num_results,
-        func_addr_fixups=vcode_func_addr_fixups_to_cwasm(
+        func_addr_fixups=machv_func_addr_fixups_to_cwasm(
           compiled.get_func_addr_fixups(),
         ),
-        call_fixups=vcode_call_fixups_to_cwasm(compiled.get_call_fixups()),
-        gc_safepoints=vcode_gc_safepoints_to_cwasm(compiled.get_gc_safepoints()),
+        call_fixups=machv_call_fixups_to_cwasm(compiled.get_call_fixups()),
+        gc_safepoints=machv_gc_safepoints_to_cwasm(compiled.get_gc_safepoints()),
         gc_stackmap_blob=compiled.get_gc_stackmap_blob(),
       ),
     )
@@ -1744,8 +1744,8 @@ pub fn compile_module_to_jit(
         func_idx,
         @wasmoon_jit.JITFunctionDebug::new(
           ir_dump.unwrap_or(""),
-          vcode_before_dump.unwrap_or(""),
-          vcode_after_dump.unwrap_or(""),
+          machv_before_dump.unwrap_or(""),
+          machv_after_dump.unwrap_or(""),
           mc_dump.unwrap_or(""),
         ),
       )

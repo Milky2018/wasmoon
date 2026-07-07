@@ -1,5 +1,5 @@
 ///|
-pub fn runtime_helper_symbols(
+pub fn external_helper_symbols(
   symbols : @wasm_milkir.RuntimeSymbols,
 ) -> Map[String, String] {
   {
@@ -49,10 +49,33 @@ pub fn runtime_helper_symbols(
 }
 
 ///|
-pub fn lower_extension(
+struct WasmLoweringOptions {
+  use_subtype_indirect_check : Bool
+  canonical_type_indices : Array[Int]
+}
+
+///|
+fn WasmLoweringOptions::canonicalize_indirect_type_idx(
+  self : WasmLoweringOptions,
+  raw_type_idx : Int,
+) -> Int {
+  // Keep raw indices when full subtype checks are enabled.
+  if self.use_subtype_indirect_check {
+    return raw_type_idx
+  }
+  if raw_type_idx >= 0 && raw_type_idx < self.canonical_type_indices.length() {
+    self.canonical_type_indices[raw_type_idx]
+  } else {
+    raw_type_idx
+  }
+}
+
+///|
+fn lower_extension_with_options(
+  options : WasmLoweringOptions,
   ctx : @lower.LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   ext : @milkir.ExtOp,
 ) -> Bool {
   match @wasm_milkir.decode(ext) {
@@ -71,11 +94,11 @@ pub fn lower_extension(
       @lower.lower_unsupported_extension_opcode(inst, block)
     Some(WasmCall(func_idx)) => lower_call(ctx, inst, block, func_idx)
     Some(WasmCallIndirect(type_idx, table_idx)) =>
-      lower_call_indirect(ctx, inst, block, type_idx, table_idx)
+      lower_call_indirect(ctx, inst, block, type_idx, table_idx, options)
     Some(CallRef(type_idx)) => lower_call_ref(ctx, inst, block, type_idx)
     Some(ReturnCall(func_idx)) => lower_return_call(ctx, inst, block, func_idx)
     Some(ReturnCallIndirect(type_idx, table_idx)) =>
-      lower_return_call_indirect(ctx, inst, block, type_idx, table_idx)
+      lower_return_call_indirect(ctx, inst, block, type_idx, table_idx, options)
     Some(ReturnCallRef(type_idx)) =>
       lower_return_call_ref(ctx, inst, block, type_idx)
     Some(GetFuncRef(func_idx)) => lower_get_func_ref(ctx, inst, block, func_idx)
@@ -159,18 +182,28 @@ pub fn lower_function(
   use_subtype_indirect_check? : Bool = true,
   canonical_type_indices? : Array[Int] = [],
 ) -> @machv.Function {
+  let options : WasmLoweringOptions = {
+    use_subtype_indirect_check,
+    canonical_type_indices,
+  }
+  fn lower_extension(
+    ctx : @lower.LoweringContext,
+    inst : @milkir.Inst,
+    block : @block.MachVBlock,
+    ext : @milkir.ExtOp,
+  ) -> Bool {
+    lower_extension_with_options(options, ctx, inst, block, ext)
+  }
   @lower.lower_function(
     func,
     isa~,
     abi_settings~,
     embedding_reg_roles~,
-    runtime_layout~,
+    embedding_context_layout=runtime_layout,
     call_conv_layout~,
-    runtime_helper_symbols=runtime_helper_symbols(runtime_symbols),
+    external_helper_symbols=external_helper_symbols(runtime_symbols),
     extension_lowerer=Some(lower_extension),
     num_imports~,
     run_ir_opt~,
-    use_subtype_indirect_check~,
-    canonical_type_indices~,
   )
 }

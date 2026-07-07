@@ -16,8 +16,8 @@ Wasmoon is a WebAssembly runtime written in MoonBit with JIT compilation support
 ├────────────────────────┬────────────────────────────────────────┤
 │      Interpreter       │              JIT Compiler              │
 │      (executor)        │  ┌──────────────────────────────────┐  │
-│                        │  │  IR → VCode → Machine Code       │  │
-│                        │  │  (ir)  (vcode)    (jit)          │  │
+│                        │  │  MilkIR → MachV → Machine Code   │  │
+│                        │  │  (ir)    (machv)  (jit)          │  │
 │                        │  └──────────────────────────────────┘  │
 └────────────────────────┴────────────────────────────────────────┘
 ```
@@ -51,9 +51,12 @@ Wasmoon is a WebAssembly runtime written in MoonBit with JIT compilation support
 
 | Package | Description |
 |---------|-------------|
-| `ir/` | Intermediate representation (SSA-based IR) |
-| `vcode/` | Virtual code generation and register allocation |
-| `jit/` | Machine code emission and FFI |
+| `modules/milkir/` | Intermediate representation (SSA-based IR) |
+| `modules/machv/` | Virtual-register machine IR |
+| `modules/isa_target/` | Lowering from MilkIR to MachV |
+| `modules/machv_regalloc/` | MachV-specific register allocation adapter |
+| `modules/machv_emit/` | Machine code emission |
+| `modules/wasmoon_jit/` | Wasmoon-specific native runtime and JIT integration |
 
 ### Other
 
@@ -79,7 +82,7 @@ Wasmoon is a WebAssembly runtime written in MoonBit with JIT compilation support
 2. Validate module
 3. Lower to IR (SSA form)
 4. Optimize IR (DCE, CSE, constant folding)
-5. Lower to VCode (virtual instructions)
+5. Lower to MachV (virtual-register machine instructions)
 6. Register allocation
 7. Emit machine code (AArch64)
 8. Execute native code
@@ -93,12 +96,12 @@ The IR uses Static Single Assignment form for easier optimization:
 - Phi nodes handle control flow merges
 - Enables standard optimizations (DCE, CSE, constant propagation)
 
-### VCode (Virtual Code)
+### MachV
 
-VCode is a low-level IR designed for efficient code generation:
+MachV is a low-level IR designed for efficient code generation:
 - Virtual registers (infinite)
 - Platform-specific instructions
-- Linear scan register allocation
+- Register allocation through `machv_regalloc`
 - Direct mapping to machine instructions
 
 ### ABI Compatibility

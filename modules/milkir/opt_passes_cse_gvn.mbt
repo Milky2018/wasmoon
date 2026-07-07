@@ -125,7 +125,7 @@ priv struct StoreVersion {
 priv struct LastStoreState {
   mut heap : @hashmap.HashMap[Int, StoreVersion]
   mut heap_default : StoreVersion?
-  mut vmctx : StoreVersion?
+  mut context : StoreVersion?
   mut other : StoreVersion?
 }
 
@@ -150,7 +150,7 @@ fn PtrAccess::location_key(self : PtrAccess) -> PtrLocationKey {
 
 ///|
 fn LastStoreState::new() -> LastStoreState {
-  { heap: HashMap([]), heap_default: None, vmctx: None, other: None }
+  { heap: HashMap([]), heap_default: None, context: None, other: None }
 }
 
 ///|
@@ -163,7 +163,7 @@ fn LastStoreState::clone(self : LastStoreState) -> LastStoreState {
   {
     heap,
     heap_default: self.heap_default,
-    vmctx: self.vmctx,
+    context: self.context,
     other: self.other,
   }
 }
@@ -174,7 +174,7 @@ fn LastStoreState::equals(
   other : LastStoreState,
 ) -> Bool {
   if self.heap_default != other.heap_default ||
-    self.vmctx != other.vmctx ||
+    self.context != other.context ||
     self.other != other.other ||
     self.heap.length() != other.heap.length() {
     return false
@@ -213,7 +213,7 @@ fn LastStoreState::meet_from(
   other : LastStoreState,
   join_token : StoreVersion,
 ) -> Unit {
-  self.vmctx = meet_last_store_token(self.vmctx, other.vmctx, join_token)
+  self.context = meet_last_store_token(self.context, other.context, join_token)
   self.other = meet_last_store_token(self.other, other.other, join_token)
   self.heap_default = meet_last_store_token(
     self.heap_default,
@@ -274,7 +274,7 @@ fn LastStoreState::set_all_tokens(
 ) -> Unit {
   self.heap.clear()
   self.heap_default = Some(token)
-  self.vmctx = Some(token)
+  self.context = Some(token)
   self.other = Some(token)
 }
 

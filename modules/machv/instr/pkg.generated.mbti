@@ -145,60 +145,21 @@ pub(all) enum LaneSize {
 }
 pub impl Show for LaneSize
 
-pub(all) enum MemType {
-  I32
-  I64
-  F32
-  F64
-  V128
-}
-pub impl Show for MemType
-
-pub(all) enum RelocTarget {
-  Code(CodeSymbol)
-  External(ExternalName)
-} derive(Eq, @debug.Debug)
-pub fn RelocTarget::key(Self) -> String
-pub impl Show for RelocTarget
-
-pub(all) enum SIMDCmpKind {
-  Eq
-  GtS
-  GeS
-  GtU
-  GeU
-}
-pub impl Show for SIMDCmpKind
-
-pub(all) enum SIMDFCmpKind {
-  Eq
-  Gt
-  Ge
-}
-pub impl Show for SIMDFCmpKind
-
-pub(all) enum ShiftType {
-  Lsl
-  Lsr
-  Asr
-}
-pub impl Show for ShiftType
-
-pub struct VCodeInst {
-  opcode : VCodeOpcode
+pub struct MachVInst {
+  opcode : MachVOpcode
   defs : Array[@abi.Writable]
   uses : Array[@abi.Reg]
   use_constraints : Array[@abi.OperandConstraint]
   def_constraints : Array[@abi.OperandConstraint]
 }
-pub fn VCodeInst::add_def(Self, @abi.Writable) -> Unit
-pub fn VCodeInst::add_def_fixed(Self, @abi.Writable, @abi.PReg) -> Unit
-pub fn VCodeInst::add_use(Self, @abi.Reg) -> Unit
-pub fn VCodeInst::add_use_fixed(Self, @abi.Reg, @abi.PReg) -> Unit
-pub fn VCodeInst::new(VCodeOpcode) -> Self
-pub impl Show for VCodeInst
+pub fn MachVInst::add_def(Self, @abi.Writable) -> Unit
+pub fn MachVInst::add_def_fixed(Self, @abi.Writable, @abi.PReg) -> Unit
+pub fn MachVInst::add_use(Self, @abi.Reg) -> Unit
+pub fn MachVInst::add_use_fixed(Self, @abi.Reg, @abi.PReg) -> Unit
+pub fn MachVInst::new(MachVOpcode) -> Self
+pub impl Show for MachVInst
 
-pub(all) enum VCodeOpcode {
+pub(all) enum MachVOpcode {
   Add(Bool)
   AddImm(Int, Bool)
   Sub(Bool)
@@ -406,10 +367,10 @@ pub(all) enum VCodeOpcode {
   SIMDRelaxedDot8to16
   SIMDRelaxedDot8to32Add
 }
-pub fn VCodeOpcode::call_type(Self) -> CallType
-pub impl Show for VCodeOpcode
+pub fn MachVOpcode::call_type(Self) -> CallType
+pub impl Show for MachVOpcode
 
-pub(all) enum VCodeTerminator {
+pub(all) enum MachVTerminator {
   Jump(Int, Array[@abi.Reg])
   Branch(@abi.Reg, Int, Int)
   BranchCmp(@abi.Reg, @abi.Reg, Cond, Bool, Int, Int)
@@ -419,7 +380,46 @@ pub(all) enum VCodeTerminator {
   Trap(String)
   BrTable(@abi.Reg, Array[Int], Int)
 }
-pub impl Show for VCodeTerminator
+pub impl Show for MachVTerminator
+
+pub(all) enum MemType {
+  I32
+  I64
+  F32
+  F64
+  V128
+}
+pub impl Show for MemType
+
+pub(all) enum RelocTarget {
+  Code(CodeSymbol)
+  External(ExternalName)
+} derive(Eq, @debug.Debug)
+pub fn RelocTarget::key(Self) -> String
+pub impl Show for RelocTarget
+
+pub(all) enum SIMDCmpKind {
+  Eq
+  GtS
+  GeS
+  GtU
+  GeU
+}
+pub impl Show for SIMDCmpKind
+
+pub(all) enum SIMDFCmpKind {
+  Eq
+  Gt
+  Ge
+}
+pub impl Show for SIMDFCmpKind
+
+pub(all) enum ShiftType {
+  Lsl
+  Lsr
+  Asr
+}
+pub impl Show for ShiftType
 
 // Type aliases
 

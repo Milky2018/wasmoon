@@ -2,8 +2,8 @@
 fn main {
   // Define choices for explore stages
   let stage_choices = @hashset.HashSet::from_array([
-    "source", "ir", "opt-ir", "vcode", "regalloc", "mc", "milkir", "opt-milkir",
-    "machv", "machv-mc",
+    "source", "ir", "opt-ir", "machv", "regalloc", "mc", "milkir", "opt-milkir",
+    "machv-mc",
   ])
 
   // Define choices for config action
@@ -41,7 +41,7 @@ fn main {
         ),
         "debug": @clap.Arg::flag(short='D', help="Enable debug output"),
         "dump-on-trap": @clap.Arg::flag(
-          help="On JIT trap, dump IR/VCode/MC for the failing function",
+          help="On JIT trap, dump IR/MachV/MC for the failing function",
         ),
         "dwarf": @clap.Arg::flag(
           short='W',
@@ -111,7 +111,7 @@ fn main {
             short='s',
             nargs=Any,
             choices=stage_choices,
-            help="Stages to show: source, ir, opt-ir, vcode, regalloc, mc, milkir, opt-milkir, machv, machv-mc (default all)",
+            help="Stages to show: source, ir, opt-ir, machv, regalloc, mc, milkir, opt-milkir, machv-mc (default all)",
           ),
           "html": @clap.Arg::flag(help="Output HTML report"),
           "debug": @clap.Arg::flag(short='D', help="Enable debug output"),

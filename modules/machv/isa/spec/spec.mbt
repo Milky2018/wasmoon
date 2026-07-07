@@ -2,8 +2,8 @@
 /// Shared types for the ISA policy layer.
 ///
 /// This package exists to avoid dependency cycles between:
-/// - `vcode/isa` (facade, exposes `ISA` + dispatch helpers)
-/// - `vcode/isa/<backend>` (backend-specific policy implementations)
+/// - `machv/isa` (facade, exposes `ISA` + dispatch helpers)
+/// - `machv/isa/<backend>` (backend-specific policy implementations)
 
 ///|
 pub(all) struct MachineEnvData {

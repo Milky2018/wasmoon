@@ -122,7 +122,7 @@ pub(all) struct Function {
   params : Array[@abi.VReg]
   results : Array[@abi.RegClass]
   result_kinds : Array[ValueKind]
-  blocks : Array[@block.VCodeBlock]
+  blocks : Array[@block.MachVBlock]
   mut next_vreg_id : Int
   mut num_spill_slots : Int
   param_pregs : Array[@abi.PReg?]
@@ -136,7 +136,7 @@ pub fn Function::add_result(Self, @abi.RegClass) -> Unit
 pub fn Function::add_result_kind(Self, ValueKind) -> Unit
 pub fn Function::calls_multi_value_function(Self) -> Bool
 pub fn Function::clone_base(Self) -> Self
-pub fn Function::get_blocks(Self) -> Array[@block.VCodeBlock]
+pub fn Function::get_blocks(Self) -> Array[@block.MachVBlock]
 pub fn Function::get_max_outgoing_args_size(Self) -> Int
 pub fn Function::get_name(Self) -> String
 pub fn Function::get_num_spill_slots(Self) -> Int
@@ -147,7 +147,7 @@ pub fn Function::has_calls(Self) -> Bool
 pub fn Function::mark_uses_primary_memory_base(Self) -> Unit
 pub fn Function::needs_extra_results_ptr(Self) -> Bool
 pub fn Function::new(String) -> Self
-pub fn Function::new_block(Self) -> @block.VCodeBlock
+pub fn Function::new_block(Self) -> @block.MachVBlock
 pub fn Function::new_vreg(Self, @abi.RegClass) -> @abi.VReg
 pub fn Function::print(Self) -> String
 pub fn Function::push_param(Self, @abi.VReg) -> Unit

@@ -2,7 +2,7 @@
 /// amd64 machine environment for register allocation (SysV AMD64).
 ///
 /// This provides a Cranelift-style regalloc machine env that matches the
-/// register/role assignments in `vcode/isa/amd64/roles.mbt`.
+/// register/role assignments in `machv/isa/amd64/roles.mbt`.
 
 ///|
 fn sysv_callee_saved() -> Array[@abi.PReg] {

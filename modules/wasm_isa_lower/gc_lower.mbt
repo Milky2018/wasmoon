@@ -1,12 +1,12 @@
 ///|
 fn emit_load_vmctx_for_gc(
   ctx : @lower.LoweringContext,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
 ) -> @abi.VReg {
-  let vmctx_vreg = ctx.vcode_function().new_vreg(Int)
-  let vmctx_mov = @instr.VCodeInst::new(Move)
+  let vmctx_vreg = ctx.machv_function().new_vreg(Int)
+  let vmctx_mov = @instr.MachVInst::new(Move)
   vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
-  vmctx_mov.add_use(Physical({ index: @lower.vmctx_index(ctx), class: Int }))
+  vmctx_mov.add_use(Physical({ index: @lower.context_index(ctx), class: Int }))
   block.add_inst(vmctx_mov)
   vmctx_vreg
 }
@@ -14,10 +14,10 @@ fn emit_load_vmctx_for_gc(
 ///|
 fn emit_load_stack_args_base(
   ctx : @lower.LoweringContext,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
 ) -> @abi.VReg {
-  let sp_vreg = ctx.vcode_function().new_vreg(Int)
-  let load_sp = @instr.VCodeInst::new(LoadSP)
+  let sp_vreg = ctx.machv_function().new_vreg(Int)
+  let load_sp = @instr.MachVInst::new(LoadSP)
   load_sp.add_def({ reg: Virtual(sp_vreg) })
   block.add_inst(load_sp)
   sp_vreg
@@ -26,11 +26,11 @@ fn emit_load_stack_args_base(
 ///|
 fn emit_load_safepoint_id(
   ctx : @lower.LoweringContext,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   root_count : Int,
 ) -> @abi.VReg {
-  let safepoint_vreg = ctx.vcode_function().new_vreg(Int)
-  let load_safepoint = @instr.VCodeInst::new(LoadSafepointId(root_count))
+  let safepoint_vreg = ctx.machv_function().new_vreg(Int)
+  let load_safepoint = @instr.MachVInst::new(LoadSafepointId(root_count))
   load_safepoint.add_def({ reg: Virtual(safepoint_vreg) })
   block.add_inst(load_safepoint)
   safepoint_vreg
@@ -39,7 +39,7 @@ fn emit_load_safepoint_id(
 ///|
 fn emit_gc_struct_slow_alloc(
   ctx : @lower.LoweringContext,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   dst : @abi.VReg,
   type_idx : Int,
   num_fields : Int,
@@ -67,7 +67,7 @@ fn emit_gc_struct_slow_alloc(
 ///|
 fn emit_gc_array_slow_alloc(
   ctx : @lower.LoweringContext,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   dst : @abi.VReg,
   type_idx : Int,
   len_vreg : @abi.VReg,
@@ -91,28 +91,28 @@ fn emit_gc_array_slow_alloc(
 pub fn lower_i31_new(
   ctx : @lower.LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
 ) -> Unit {
   guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let src = ctx.get_vreg_for_use(inst.operands[0], block)
 
   // Step 1: Zero-extend i32 to i64
-  let ext_vreg = ctx.vcode_function().new_vreg(Int)
-  let extend_inst = @instr.VCodeInst::new(Extend(Unsigned32To64))
+  let ext_vreg = ctx.machv_function().new_vreg(Int)
+  let extend_inst = @instr.MachVInst::new(Extend(Unsigned32To64))
   extend_inst.add_def({ reg: Virtual(ext_vreg) })
   extend_inst.add_use(Virtual(src))
   block.add_inst(extend_inst)
 
   // Step 2: Shift left by immediate 1
-  let shifted_vreg = ctx.vcode_function().new_vreg(Int)
-  let shift_inst = @instr.VCodeInst::new(ShlImm(1, true))
+  let shifted_vreg = ctx.machv_function().new_vreg(Int)
+  let shift_inst = @instr.MachVInst::new(ShlImm(1, true))
   shift_inst.add_def({ reg: Virtual(shifted_vreg) })
   shift_inst.add_use(Virtual(ext_vreg))
   block.add_inst(shift_inst)
 
   // Step 3: OR with immediate 1 to set low bit
-  let or_inst = @instr.VCodeInst::new(OrImm(1L, true))
+  let or_inst = @instr.MachVInst::new(OrImm(1L, true))
   or_inst.add_def({ reg: Virtual(dst) })
   or_inst.add_use(Virtual(shifted_vreg))
   block.add_inst(or_inst)
@@ -127,38 +127,38 @@ pub fn lower_i31_new(
 pub fn lower_i31_get_s(
   ctx : @lower.LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
 ) -> Unit {
   guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let src = ctx.get_vreg_for_use(inst.operands[0], block)
 
   // Step 0: Null check - trap if i31 ref is null (0)
-  let trap_inst = @instr.VCodeInst::new(TrapIfZero(true, 2))
+  let trap_inst = @instr.MachVInst::new(TrapIfZero(true, 2))
   trap_inst.add_use(Virtual(src))
   block.add_inst(trap_inst)
 
   // Step 1: Shift right by immediate 1 to decode the i31 value (64-bit)
   let decoded = ctx.new_vreg(Int)
-  let lsr_inst = @instr.VCodeInst::new(LShrImm(1, true))
+  let lsr_inst = @instr.MachVInst::new(LShrImm(1, true))
   lsr_inst.add_def({ reg: Virtual(decoded) })
   lsr_inst.add_use(Virtual(src))
   block.add_inst(lsr_inst)
 
   // Step 2: Truncate to 32 bits
   let tmp = ctx.new_vreg(Int)
-  let trunc_inst = @instr.VCodeInst::new(Truncate)
+  let trunc_inst = @instr.MachVInst::new(Truncate)
   trunc_inst.add_def({ reg: Virtual(tmp) })
   trunc_inst.add_use(Virtual(decoded))
   block.add_inst(trunc_inst)
 
   // Step 3: Sign-extend from 31 bits by shifting left then arithmetic right
   let tmp2 = ctx.new_vreg(Int)
-  let shl_inst = @instr.VCodeInst::new(ShlImm(1, false))
+  let shl_inst = @instr.MachVInst::new(ShlImm(1, false))
   shl_inst.add_def({ reg: Virtual(tmp2) })
   shl_inst.add_use(Virtual(tmp))
   block.add_inst(shl_inst)
-  let asr_inst = @instr.VCodeInst::new(AShrImm(1, false))
+  let asr_inst = @instr.MachVInst::new(AShrImm(1, false))
   asr_inst.add_def({ reg: Virtual(dst) })
   asr_inst.add_use(Virtual(tmp2))
   block.add_inst(asr_inst)
@@ -173,37 +173,37 @@ pub fn lower_i31_get_s(
 pub fn lower_i31_get_u(
   ctx : @lower.LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
 ) -> Unit {
   guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let src = ctx.get_vreg_for_use(inst.operands[0], block)
 
   // Step 0: Null check - trap if i31 ref is null (0)
-  let trap_inst = @instr.VCodeInst::new(TrapIfZero(true, 2))
+  let trap_inst = @instr.MachVInst::new(TrapIfZero(true, 2))
   trap_inst.add_use(Virtual(src))
   block.add_inst(trap_inst)
 
   // Step 1: Shift right by immediate 1 to decode the i31 value (64-bit)
   let decoded = ctx.new_vreg(Int)
-  let lsr_inst = @instr.VCodeInst::new(LShrImm(1, true))
+  let lsr_inst = @instr.MachVInst::new(LShrImm(1, true))
   lsr_inst.add_def({ reg: Virtual(decoded) })
   lsr_inst.add_use(Virtual(src))
   block.add_inst(lsr_inst)
 
   // Step 2: Truncate to 32 bits
   let tmp = ctx.new_vreg(Int)
-  let trunc_inst = @instr.VCodeInst::new(Truncate)
+  let trunc_inst = @instr.MachVInst::new(Truncate)
   trunc_inst.add_def({ reg: Virtual(tmp) })
   trunc_inst.add_use(Virtual(decoded))
   block.add_inst(trunc_inst)
 
   // Step 3: Mask with 0x7FFFFFFF for 31 bits (already decoded, just ensure upper bit is clear)
   let mask = ctx.new_vreg(Int)
-  let load_mask = @instr.VCodeInst::new(LoadConst(0x7FFFFFFFL))
+  let load_mask = @instr.MachVInst::new(LoadConst(0x7FFFFFFFL))
   load_mask.add_def({ reg: Virtual(mask) })
   block.add_inst(load_mask)
-  let and_inst = @instr.VCodeInst::new(And(false))
+  let and_inst = @instr.MachVInst::new(And(false))
   and_inst.add_def({ reg: Virtual(dst) })
   and_inst.add_use(Virtual(tmp))
   and_inst.add_use(Virtual(mask))
@@ -216,16 +216,16 @@ pub fn lower_i31_get_u(
 pub fn lower_gc_convert(
   ctx : @lower.LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
 ) -> Unit {
   guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let src = ctx.get_vreg_for_use(inst.operands[0], block)
   // Just move the value - the representation is the same
-  let vcode_inst = @instr.VCodeInst::new(Move)
-  vcode_inst.add_def({ reg: Virtual(dst) })
-  vcode_inst.add_use(Virtual(src))
-  block.add_inst(vcode_inst)
+  let machv_inst = @instr.MachVInst::new(Move)
+  machv_inst.add_def({ reg: Virtual(dst) })
+  machv_inst.add_use(Virtual(src))
+  block.add_inst(machv_inst)
 }
 
 ///|
@@ -234,7 +234,7 @@ pub fn lower_gc_convert(
 pub fn lower_ref_test(
   ctx : @lower.LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   type_idx : Int,
   nullable : Bool,
 ) -> Unit {
@@ -253,8 +253,8 @@ pub fn lower_ref_test(
     },
   )
   // Load function pointer
-  let func_ptr_vreg = ctx.vcode_function().new_vreg(Int)
-  let load_fp = @instr.VCodeInst::new(LoadExternalFuncAddr(rt_gc_ref_test(ctx)))
+  let func_ptr_vreg = ctx.machv_function().new_vreg(Int)
+  let load_fp = @instr.MachVInst::new(LoadExternalFuncAddr(rt_gc_ref_test(ctx)))
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
   // Call: gc_ref_test_impl(ref, type_idx, nullable) -> result
@@ -273,7 +273,7 @@ pub fn lower_ref_test(
 pub fn lower_ref_cast(
   ctx : @lower.LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   type_idx : Int,
   nullable : Bool,
 ) -> Unit {
@@ -292,8 +292,8 @@ pub fn lower_ref_cast(
     },
   )
   // Load function pointer
-  let func_ptr_vreg = ctx.vcode_function().new_vreg(Int)
-  let load_fp = @instr.VCodeInst::new(LoadExternalFuncAddr(rt_gc_ref_cast(ctx)))
+  let func_ptr_vreg = ctx.machv_function().new_vreg(Int)
+  let load_fp = @instr.MachVInst::new(LoadExternalFuncAddr(rt_gc_ref_cast(ctx)))
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
   // Call: gc_ref_cast_impl(ref, type_idx, nullable) -> result
@@ -312,7 +312,7 @@ pub fn lower_ref_cast(
 pub fn lower_ref_eq(
   ctx : @lower.LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
 ) -> Unit {
   guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
@@ -321,7 +321,7 @@ pub fn lower_ref_eq(
 
   // Compare two references as i64 values
   // Use Cmp(Eq, true) for 64-bit equality comparison
-  let cmp_inst = @instr.VCodeInst::new(Cmp(Eq, true))
+  let cmp_inst = @instr.MachVInst::new(Cmp(Eq, true))
   cmp_inst.add_def({ reg: Virtual(dst) })
   cmp_inst.add_use(Virtual(ref1_vreg))
   cmp_inst.add_use(Virtual(ref2_vreg))
@@ -335,7 +335,7 @@ pub fn lower_ref_eq(
 pub fn lower_struct_new(
   ctx : @lower.LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   type_idx : Int,
 ) -> Unit {
   guard inst.first_result() is Some(result) else { return }
@@ -348,15 +348,15 @@ pub fn lower_struct_new(
   if num_fields > 0 && num_fields <= 4092 {
     // Use outgoing args area as temporary field buffer.
     let stack_space = (num_fields * 8 + 15) / 16 * 16
-    ctx.vcode_function().update_max_outgoing_args_size(stack_space)
+    ctx.machv_function().update_max_outgoing_args_size(stack_space)
     for i in 0..<num_fields {
       let field_vreg = ctx.get_vreg_for_use(inst.operands[i], block)
       let offset = i * 8
-      let store = @instr.VCodeInst::new(StoreToStack(offset))
+      let store = @instr.MachVInst::new(StoreToStack(offset))
       store.add_use(Virtual(field_vreg))
       block.add_inst(store)
     }
-    let alloc_inst = @instr.VCodeInst::new(
+    let alloc_inst = @instr.MachVInst::new(
       BumpAllocRecordFromStackInline(
         type_idx,
         num_fields,
@@ -366,8 +366,8 @@ pub fn lower_struct_new(
     )
     alloc_inst.add_def({ reg: Virtual(dst) })
     alloc_inst.add_use_fixed(
-      Physical(@lower.vmctx_preg(ctx)),
-      @lower.vmctx_preg(ctx),
+      Physical(@lower.context_preg(ctx)),
+      @lower.context_preg(ctx),
     )
     block.add_inst(alloc_inst)
     return
@@ -376,11 +376,11 @@ pub fn lower_struct_new(
   // Fallback path: precise slow alloc call with safepoint metadata.
   if num_fields > 0 {
     let stack_space = (num_fields * 8 + 15) / 16 * 16
-    ctx.vcode_function().update_max_outgoing_args_size(stack_space)
+    ctx.machv_function().update_max_outgoing_args_size(stack_space)
     for i in 0..<num_fields {
       let field_vreg = ctx.get_vreg_for_use(inst.operands[i], block)
       let offset = i * 8
-      let store = @instr.VCodeInst::new(StoreToStack(offset))
+      let store = @instr.MachVInst::new(StoreToStack(offset))
       store.add_use(Virtual(field_vreg))
       block.add_inst(store)
     }
@@ -395,7 +395,7 @@ pub fn lower_struct_new(
 pub fn lower_struct_new_default(
   ctx : @lower.LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   type_idx : Int,
 ) -> Unit {
   guard inst.first_result() is Some(result) else { return }
@@ -410,7 +410,7 @@ pub fn lower_struct_new_default(
 pub fn lower_struct_get(
   ctx : @lower.LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   type_idx : Int,
   field_idx : Int,
 ) -> Unit {
@@ -421,8 +421,8 @@ pub fn lower_struct_get(
   let type_idx_vreg = @lower.materialize_imm(ctx, block, type_idx.to_int64())
   let field_idx_vreg = @lower.materialize_imm(ctx, block, field_idx.to_int64())
   // Load function pointer
-  let func_ptr_vreg = ctx.vcode_function().new_vreg(Int)
-  let load_fp = @instr.VCodeInst::new(
+  let func_ptr_vreg = ctx.machv_function().new_vreg(Int)
+  let load_fp = @instr.MachVInst::new(
     LoadExternalFuncAddr(rt_gc_struct_get(ctx)),
   )
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
@@ -431,7 +431,7 @@ pub fn lower_struct_get(
   let is_float = result.ty is (F32 | F64)
   if is_float {
     // For float results: call returns int64, then bitcast to float
-    let int_result = ctx.vcode_function().new_vreg(Int)
+    let int_result = ctx.machv_function().new_vreg(Int)
     @lower.lower_c_libcall(
       ctx,
       block,
@@ -440,7 +440,7 @@ pub fn lower_struct_get(
       Some(int_result),
     )
     // Bitcast from int to float
-    let bitcast = @instr.VCodeInst::new(Bitcast)
+    let bitcast = @instr.MachVInst::new(Bitcast)
     bitcast.add_def({ reg: Virtual(dst) })
     bitcast.add_use(Virtual(int_result))
     block.add_inst(bitcast)
@@ -462,7 +462,7 @@ pub fn lower_struct_get(
 pub fn lower_struct_get_s(
   ctx : @lower.LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   type_idx : Int,
   field_idx : Int,
   byte_width : Int,
@@ -474,14 +474,14 @@ pub fn lower_struct_get_s(
   let type_idx_vreg = @lower.materialize_imm(ctx, block, type_idx.to_int64())
   let field_idx_vreg = @lower.materialize_imm(ctx, block, field_idx.to_int64())
   // Load function pointer
-  let func_ptr_vreg = ctx.vcode_function().new_vreg(Int)
-  let load_fp = @instr.VCodeInst::new(
+  let func_ptr_vreg = ctx.machv_function().new_vreg(Int)
+  let load_fp = @instr.MachVInst::new(
     LoadExternalFuncAddr(rt_gc_struct_get(ctx)),
   )
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
   // Call and get raw value
-  let raw_result = ctx.vcode_function().new_vreg(Int)
+  let raw_result = ctx.machv_function().new_vreg(Int)
   @lower.lower_c_libcall(
     ctx,
     block,
@@ -494,19 +494,19 @@ pub fn lower_struct_get_s(
   // For i16 (byte_width=2): sign extend halfword to i32
   if byte_width == 1 {
     // SXTB: Sign extend byte to 32-bit
-    let ext = @instr.VCodeInst::new(Extend(Signed8To32))
+    let ext = @instr.MachVInst::new(Extend(Signed8To32))
     ext.add_def({ reg: Virtual(dst) })
     ext.add_use(Virtual(raw_result))
     block.add_inst(ext)
   } else if byte_width == 2 {
     // SXTH: Sign extend halfword to 32-bit
-    let ext = @instr.VCodeInst::new(Extend(Signed16To32))
+    let ext = @instr.MachVInst::new(Extend(Signed16To32))
     ext.add_def({ reg: Virtual(dst) })
     ext.add_use(Virtual(raw_result))
     block.add_inst(ext)
   } else {
     // No extension needed, just move
-    let mov = @instr.VCodeInst::new(Move)
+    let mov = @instr.MachVInst::new(Move)
     mov.add_def({ reg: Virtual(dst) })
     mov.add_use(Virtual(raw_result))
     block.add_inst(mov)
@@ -519,7 +519,7 @@ pub fn lower_struct_get_s(
 pub fn lower_struct_get_u(
   ctx : @lower.LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   type_idx : Int,
   field_idx : Int,
   byte_width : Int,
@@ -531,14 +531,14 @@ pub fn lower_struct_get_u(
   let type_idx_vreg = @lower.materialize_imm(ctx, block, type_idx.to_int64())
   let field_idx_vreg = @lower.materialize_imm(ctx, block, field_idx.to_int64())
   // Load function pointer
-  let func_ptr_vreg = ctx.vcode_function().new_vreg(Int)
-  let load_fp = @instr.VCodeInst::new(
+  let func_ptr_vreg = ctx.machv_function().new_vreg(Int)
+  let load_fp = @instr.MachVInst::new(
     LoadExternalFuncAddr(rt_gc_struct_get(ctx)),
   )
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
   // Call and get raw value
-  let raw_result = ctx.vcode_function().new_vreg(Int)
+  let raw_result = ctx.machv_function().new_vreg(Int)
   @lower.lower_c_libcall(
     ctx,
     block,
@@ -551,19 +551,19 @@ pub fn lower_struct_get_u(
   // For i16 (byte_width=2): mask with 0xFFFF
   if byte_width == 1 {
     // UXTB: Zero extend byte to 32-bit
-    let ext = @instr.VCodeInst::new(Extend(Unsigned8To32))
+    let ext = @instr.MachVInst::new(Extend(Unsigned8To32))
     ext.add_def({ reg: Virtual(dst) })
     ext.add_use(Virtual(raw_result))
     block.add_inst(ext)
   } else if byte_width == 2 {
     // UXTH: Zero extend halfword to 32-bit
-    let ext = @instr.VCodeInst::new(Extend(Unsigned16To32))
+    let ext = @instr.MachVInst::new(Extend(Unsigned16To32))
     ext.add_def({ reg: Virtual(dst) })
     ext.add_use(Virtual(raw_result))
     block.add_inst(ext)
   } else {
     // No extension needed, just move
-    let mov = @instr.VCodeInst::new(Move)
+    let mov = @instr.MachVInst::new(Move)
     mov.add_def({ reg: Virtual(dst) })
     mov.add_use(Virtual(raw_result))
     block.add_inst(mov)
@@ -576,7 +576,7 @@ pub fn lower_struct_get_u(
 pub fn lower_struct_set(
   ctx : @lower.LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   type_idx : Int,
   field_idx : Int,
 ) -> Unit {
@@ -586,8 +586,8 @@ pub fn lower_struct_set(
   let type_idx_vreg = @lower.materialize_imm(ctx, block, type_idx.to_int64())
   let field_idx_vreg = @lower.materialize_imm(ctx, block, field_idx.to_int64())
   // Load function pointer
-  let func_ptr_vreg = ctx.vcode_function().new_vreg(Int)
-  let load_fp = @instr.VCodeInst::new(
+  let func_ptr_vreg = ctx.machv_function().new_vreg(Int)
+  let load_fp = @instr.MachVInst::new(
     LoadExternalFuncAddr(rt_gc_struct_set(ctx)),
   )
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
@@ -596,8 +596,8 @@ pub fn lower_struct_set(
   let is_float = inst.operands[1].ty is (F32 | F64)
   let actual_val_vreg = if is_float {
     // For float values: bitcast to int before passing to C function
-    let int_val = ctx.vcode_function().new_vreg(Int)
-    let bitcast = @instr.VCodeInst::new(Bitcast)
+    let int_val = ctx.machv_function().new_vreg(Int)
+    let bitcast = @instr.MachVInst::new(Bitcast)
     bitcast.add_def({ reg: Virtual(int_val) })
     bitcast.add_use(Virtual(val_vreg))
     block.add_inst(bitcast)
@@ -622,7 +622,7 @@ pub fn lower_struct_set(
 pub fn lower_array_new(
   ctx : @lower.LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   type_idx : Int,
 ) -> Unit {
   guard inst.first_result() is Some(result) else { return }
@@ -633,8 +633,8 @@ pub fn lower_array_new(
   // Check if init value is float - C libcall expects int64, need bitcast
   let is_float = inst.operands[0].ty is (F32 | F64)
   let actual_init_vreg = if is_float {
-    let int_val = ctx.vcode_function().new_vreg(Int)
-    let bitcast = @instr.VCodeInst::new(Bitcast)
+    let int_val = ctx.machv_function().new_vreg(Int)
+    let bitcast = @instr.MachVInst::new(Bitcast)
     bitcast.add_def({ reg: Virtual(int_val) })
     bitcast.add_use(Virtual(init_vreg))
     block.add_inst(bitcast)
@@ -654,7 +654,7 @@ pub fn lower_array_new(
 pub fn lower_array_new_default(
   ctx : @lower.LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   type_idx : Int,
 ) -> Unit {
   guard inst.first_result() is Some(result) else { return }
@@ -672,7 +672,7 @@ pub fn lower_array_new_default(
 pub fn lower_array_new_fixed(
   ctx : @lower.LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   type_idx : Int,
   len : Int,
 ) -> Unit {
@@ -684,13 +684,13 @@ pub fn lower_array_new_fixed(
   if len > 0 && len <= 4092 {
     // Spill all element values to outgoing args area as contiguous int64_t[].
     let stack_space = (len * 8 + 15) / 16 * 16
-    ctx.vcode_function().update_max_outgoing_args_size(stack_space)
+    ctx.machv_function().update_max_outgoing_args_size(stack_space)
     let is_float = inst.operands[0].ty is (F32 | F64)
     for i in 0..<len {
       let elem_vreg = ctx.get_vreg_for_use(inst.operands[i], block)
       let actual_elem = if is_float {
-        let int_val = ctx.vcode_function().new_vreg(Int)
-        let bitcast = @instr.VCodeInst::new(Bitcast)
+        let int_val = ctx.machv_function().new_vreg(Int)
+        let bitcast = @instr.MachVInst::new(Bitcast)
         bitcast.add_def({ reg: Virtual(int_val) })
         bitcast.add_use(Virtual(elem_vreg))
         block.add_inst(bitcast)
@@ -698,11 +698,11 @@ pub fn lower_array_new_fixed(
       } else {
         elem_vreg
       }
-      let store = @instr.VCodeInst::new(StoreToStack(i * 8))
+      let store = @instr.MachVInst::new(StoreToStack(i * 8))
       store.add_use(Virtual(actual_elem))
       block.add_inst(store)
     }
-    let alloc_inst = @instr.VCodeInst::new(
+    let alloc_inst = @instr.MachVInst::new(
       BumpAllocArrayFromStackInline(
         type_idx,
         len,
@@ -712,8 +712,8 @@ pub fn lower_array_new_fixed(
     )
     alloc_inst.add_def({ reg: Virtual(dst) })
     alloc_inst.add_use_fixed(
-      Physical(@lower.vmctx_preg(ctx)),
-      @lower.vmctx_preg(ctx),
+      Physical(@lower.context_preg(ctx)),
+      @lower.context_preg(ctx),
     )
     block.add_inst(alloc_inst)
     return
@@ -730,8 +730,8 @@ pub fn lower_array_new_fixed(
   let is_float = inst.operands[0].ty is (F32 | F64)
   let first_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
   let actual_first = if is_float {
-    let int_val = ctx.vcode_function().new_vreg(Int)
-    let bitcast = @instr.VCodeInst::new(Bitcast)
+    let int_val = ctx.machv_function().new_vreg(Int)
+    let bitcast = @instr.MachVInst::new(Bitcast)
     bitcast.add_def({ reg: Virtual(int_val) })
     bitcast.add_use(Virtual(first_vreg))
     block.add_inst(bitcast)
@@ -742,8 +742,8 @@ pub fn lower_array_new_fixed(
   emit_gc_array_slow_alloc(ctx, block, dst, type_idx, len_vreg, actual_first)
   if len > 1 {
     let type_idx_vreg = @lower.materialize_imm(ctx, block, type_idx.to_int64())
-    let array_set_fp = ctx.vcode_function().new_vreg(Int)
-    let load_set_fp = @instr.VCodeInst::new(
+    let array_set_fp = ctx.machv_function().new_vreg(Int)
+    let load_set_fp = @instr.MachVInst::new(
       LoadExternalFuncAddr(rt_gc_array_set(ctx)),
     )
     load_set_fp.add_def({ reg: Virtual(array_set_fp) })
@@ -751,8 +751,8 @@ pub fn lower_array_new_fixed(
     for i in 1..<len {
       let elem_vreg = ctx.get_vreg_for_use(inst.operands[i], block)
       let actual_elem = if is_float {
-        let int_val = ctx.vcode_function().new_vreg(Int)
-        let bitcast = @instr.VCodeInst::new(Bitcast)
+        let int_val = ctx.machv_function().new_vreg(Int)
+        let bitcast = @instr.MachVInst::new(Bitcast)
         bitcast.add_def({ reg: Virtual(int_val) })
         bitcast.add_use(Virtual(elem_vreg))
         block.add_inst(bitcast)
@@ -778,7 +778,7 @@ pub fn lower_array_new_fixed(
 pub fn lower_array_get(
   ctx : @lower.LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   type_idx : Int,
 ) -> Unit {
   guard inst.first_result() is Some(result) else { return }
@@ -788,8 +788,8 @@ pub fn lower_array_get(
   // Materialize type_idx
   let type_idx_vreg = @lower.materialize_imm(ctx, block, type_idx.to_int64())
   // Load function pointer
-  let func_ptr_vreg = ctx.vcode_function().new_vreg(Int)
-  let load_fp = @instr.VCodeInst::new(
+  let func_ptr_vreg = ctx.machv_function().new_vreg(Int)
+  let load_fp = @instr.MachVInst::new(
     LoadExternalFuncAddr(rt_gc_array_get(ctx)),
   )
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
@@ -798,7 +798,7 @@ pub fn lower_array_get(
   let is_float = result.ty is (F32 | F64)
   if is_float {
     // For float results: call returns int64, then bitcast to float
-    let int_result = ctx.vcode_function().new_vreg(Int)
+    let int_result = ctx.machv_function().new_vreg(Int)
     @lower.lower_c_libcall(
       ctx,
       block,
@@ -807,7 +807,7 @@ pub fn lower_array_get(
       Some(int_result),
     )
     // Bitcast from int to float
-    let bitcast = @instr.VCodeInst::new(Bitcast)
+    let bitcast = @instr.MachVInst::new(Bitcast)
     bitcast.add_def({ reg: Virtual(dst) })
     bitcast.add_use(Virtual(int_result))
     block.add_inst(bitcast)
@@ -829,7 +829,7 @@ pub fn lower_array_get(
 pub fn lower_array_get_s(
   ctx : @lower.LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   type_idx : Int,
   byte_width : Int,
 ) -> Unit {
@@ -840,14 +840,14 @@ pub fn lower_array_get_s(
   // Materialize type_idx
   let type_idx_vreg = @lower.materialize_imm(ctx, block, type_idx.to_int64())
   // Load function pointer
-  let func_ptr_vreg = ctx.vcode_function().new_vreg(Int)
-  let load_fp = @instr.VCodeInst::new(
+  let func_ptr_vreg = ctx.machv_function().new_vreg(Int)
+  let load_fp = @instr.MachVInst::new(
     LoadExternalFuncAddr(rt_gc_array_get(ctx)),
   )
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
   // Call and get raw value
-  let raw_result = ctx.vcode_function().new_vreg(Int)
+  let raw_result = ctx.machv_function().new_vreg(Int)
   @lower.lower_c_libcall(
     ctx,
     block,
@@ -857,17 +857,17 @@ pub fn lower_array_get_s(
   )
   // Sign extend based on byte_width
   if byte_width == 1 {
-    let ext = @instr.VCodeInst::new(Extend(Signed8To32))
+    let ext = @instr.MachVInst::new(Extend(Signed8To32))
     ext.add_def({ reg: Virtual(dst) })
     ext.add_use(Virtual(raw_result))
     block.add_inst(ext)
   } else if byte_width == 2 {
-    let ext = @instr.VCodeInst::new(Extend(Signed16To32))
+    let ext = @instr.MachVInst::new(Extend(Signed16To32))
     ext.add_def({ reg: Virtual(dst) })
     ext.add_use(Virtual(raw_result))
     block.add_inst(ext)
   } else {
-    let mov = @instr.VCodeInst::new(Move)
+    let mov = @instr.MachVInst::new(Move)
     mov.add_def({ reg: Virtual(dst) })
     mov.add_use(Virtual(raw_result))
     block.add_inst(mov)
@@ -880,7 +880,7 @@ pub fn lower_array_get_s(
 pub fn lower_array_get_u(
   ctx : @lower.LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   type_idx : Int,
   byte_width : Int,
 ) -> Unit {
@@ -891,14 +891,14 @@ pub fn lower_array_get_u(
   // Materialize type_idx
   let type_idx_vreg = @lower.materialize_imm(ctx, block, type_idx.to_int64())
   // Load function pointer
-  let func_ptr_vreg = ctx.vcode_function().new_vreg(Int)
-  let load_fp = @instr.VCodeInst::new(
+  let func_ptr_vreg = ctx.machv_function().new_vreg(Int)
+  let load_fp = @instr.MachVInst::new(
     LoadExternalFuncAddr(rt_gc_array_get(ctx)),
   )
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
   // Call and get raw value
-  let raw_result = ctx.vcode_function().new_vreg(Int)
+  let raw_result = ctx.machv_function().new_vreg(Int)
   @lower.lower_c_libcall(
     ctx,
     block,
@@ -908,17 +908,17 @@ pub fn lower_array_get_u(
   )
   // Zero extend based on byte_width
   if byte_width == 1 {
-    let ext = @instr.VCodeInst::new(Extend(Unsigned8To32))
+    let ext = @instr.MachVInst::new(Extend(Unsigned8To32))
     ext.add_def({ reg: Virtual(dst) })
     ext.add_use(Virtual(raw_result))
     block.add_inst(ext)
   } else if byte_width == 2 {
-    let ext = @instr.VCodeInst::new(Extend(Unsigned16To32))
+    let ext = @instr.MachVInst::new(Extend(Unsigned16To32))
     ext.add_def({ reg: Virtual(dst) })
     ext.add_use(Virtual(raw_result))
     block.add_inst(ext)
   } else {
-    let mov = @instr.VCodeInst::new(Move)
+    let mov = @instr.MachVInst::new(Move)
     mov.add_def({ reg: Virtual(dst) })
     mov.add_use(Virtual(raw_result))
     block.add_inst(mov)
@@ -931,7 +931,7 @@ pub fn lower_array_get_u(
 pub fn lower_array_set(
   ctx : @lower.LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   type_idx : Int,
 ) -> Unit {
   let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
@@ -940,8 +940,8 @@ pub fn lower_array_set(
   // Materialize type_idx
   let type_idx_vreg = @lower.materialize_imm(ctx, block, type_idx.to_int64())
   // Load function pointer
-  let func_ptr_vreg = ctx.vcode_function().new_vreg(Int)
-  let load_fp = @instr.VCodeInst::new(
+  let func_ptr_vreg = ctx.machv_function().new_vreg(Int)
+  let load_fp = @instr.MachVInst::new(
     LoadExternalFuncAddr(rt_gc_array_set(ctx)),
   )
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
@@ -950,8 +950,8 @@ pub fn lower_array_set(
   let is_float = inst.operands[2].ty is (F32 | F64)
   let actual_val_vreg = if is_float {
     // For float values: bitcast to int before passing to C function
-    let int_val = ctx.vcode_function().new_vreg(Int)
-    let bitcast = @instr.VCodeInst::new(Bitcast)
+    let int_val = ctx.machv_function().new_vreg(Int)
+    let bitcast = @instr.MachVInst::new(Bitcast)
     bitcast.add_def({ reg: Virtual(int_val) })
     bitcast.add_use(Virtual(val_vreg))
     block.add_inst(bitcast)
@@ -975,14 +975,14 @@ pub fn lower_array_set(
 pub fn lower_array_len(
   ctx : @lower.LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
 ) -> Unit {
   guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
   // Load function pointer
-  let func_ptr_vreg = ctx.vcode_function().new_vreg(Int)
-  let load_fp = @instr.VCodeInst::new(
+  let func_ptr_vreg = ctx.machv_function().new_vreg(Int)
+  let load_fp = @instr.MachVInst::new(
     LoadExternalFuncAddr(rt_gc_array_len(ctx)),
   )
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
@@ -997,7 +997,7 @@ pub fn lower_array_len(
 pub fn lower_array_fill(
   ctx : @lower.LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   _type_idx : Int,
 ) -> Unit {
   // Operands: ref, offset, value, count
@@ -1006,8 +1006,8 @@ pub fn lower_array_fill(
   let val_vreg = ctx.get_vreg_for_use(inst.operands[2], block)
   let count_vreg = ctx.get_vreg_for_use(inst.operands[3], block)
   // Load function pointer
-  let func_ptr_vreg = ctx.vcode_function().new_vreg(Int)
-  let load_fp = @instr.VCodeInst::new(
+  let func_ptr_vreg = ctx.machv_function().new_vreg(Int)
+  let load_fp = @instr.MachVInst::new(
     LoadExternalFuncAddr(rt_gc_array_fill(ctx)),
   )
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
@@ -1028,7 +1028,7 @@ pub fn lower_array_fill(
 pub fn lower_array_copy(
   ctx : @lower.LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   _dst_type : Int,
   _src_type : Int,
 ) -> Unit {
@@ -1039,8 +1039,8 @@ pub fn lower_array_copy(
   let src_off_vreg = ctx.get_vreg_for_use(inst.operands[3], block)
   let count_vreg = ctx.get_vreg_for_use(inst.operands[4], block)
   // Load function pointer
-  let func_ptr_vreg = ctx.vcode_function().new_vreg(Int)
-  let load_fp = @instr.VCodeInst::new(
+  let func_ptr_vreg = ctx.machv_function().new_vreg(Int)
+  let load_fp = @instr.MachVInst::new(
     LoadExternalFuncAddr(rt_gc_array_copy(ctx)),
   )
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
@@ -1061,7 +1061,7 @@ pub fn lower_array_copy(
 pub fn lower_array_new_data(
   ctx : @lower.LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   type_idx : Int,
   data_idx : Int,
 ) -> Unit {
@@ -1070,20 +1070,20 @@ pub fn lower_array_new_data(
   let length_vreg = ctx.get_vreg_for_use(inst.operands[1], block)
   let result_vreg = match inst.first_result() {
     Some(r) => ctx.get_vreg(r)
-    None => ctx.vcode_function().new_vreg(Int)
+    None => ctx.machv_function().new_vreg(Int)
   }
   // Load function pointer
-  let func_ptr_vreg = ctx.vcode_function().new_vreg(Int)
-  let load_fp = @instr.VCodeInst::new(
+  let func_ptr_vreg = ctx.machv_function().new_vreg(Int)
+  let load_fp = @instr.MachVInst::new(
     LoadExternalFuncAddr(rt_gc_array_new_data(ctx)),
   )
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
   // Get vmctx
-  let vmctx_vreg = ctx.vcode_function().new_vreg(Int)
-  let vmctx_mov = @instr.VCodeInst::new(Move)
+  let vmctx_vreg = ctx.machv_function().new_vreg(Int)
+  let vmctx_mov = @instr.MachVInst::new(Move)
   vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
-  vmctx_mov.add_use(Physical({ index: @lower.vmctx_index(ctx), class: Int }))
+  vmctx_mov.add_use(Physical({ index: @lower.context_index(ctx), class: Int }))
   block.add_inst(vmctx_mov)
   let type_idx_vreg = @lower.materialize_imm(ctx, block, type_idx.to_int64())
   let data_idx_vreg = @lower.materialize_imm(ctx, block, data_idx.to_int64())
@@ -1103,7 +1103,7 @@ pub fn lower_array_new_data(
 pub fn lower_array_new_elem(
   ctx : @lower.LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   type_idx : Int,
   elem_idx : Int,
 ) -> Unit {
@@ -1112,20 +1112,20 @@ pub fn lower_array_new_elem(
   let length_vreg = ctx.get_vreg_for_use(inst.operands[1], block)
   let result_vreg = match inst.first_result() {
     Some(r) => ctx.get_vreg(r)
-    None => ctx.vcode_function().new_vreg(Int)
+    None => ctx.machv_function().new_vreg(Int)
   }
   // Load function pointer
-  let func_ptr_vreg = ctx.vcode_function().new_vreg(Int)
-  let load_fp = @instr.VCodeInst::new(
+  let func_ptr_vreg = ctx.machv_function().new_vreg(Int)
+  let load_fp = @instr.MachVInst::new(
     LoadExternalFuncAddr(rt_gc_array_new_elem(ctx)),
   )
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
   // Get vmctx
-  let vmctx_vreg = ctx.vcode_function().new_vreg(Int)
-  let vmctx_mov = @instr.VCodeInst::new(Move)
+  let vmctx_vreg = ctx.machv_function().new_vreg(Int)
+  let vmctx_mov = @instr.MachVInst::new(Move)
   vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
-  vmctx_mov.add_use(Physical({ index: @lower.vmctx_index(ctx), class: Int }))
+  vmctx_mov.add_use(Physical({ index: @lower.context_index(ctx), class: Int }))
   block.add_inst(vmctx_mov)
   let type_idx_vreg = @lower.materialize_imm(ctx, block, type_idx.to_int64())
   let elem_idx_vreg = @lower.materialize_imm(ctx, block, elem_idx.to_int64())
@@ -1145,7 +1145,7 @@ pub fn lower_array_new_elem(
 pub fn lower_array_init_data(
   ctx : @lower.LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   type_idx : Int,
   data_idx : Int,
 ) -> Unit {
@@ -1155,17 +1155,17 @@ pub fn lower_array_init_data(
   let data_off_vreg = ctx.get_vreg_for_use(inst.operands[2], block)
   let length_vreg = ctx.get_vreg_for_use(inst.operands[3], block)
   // Load function pointer
-  let func_ptr_vreg = ctx.vcode_function().new_vreg(Int)
-  let load_fp = @instr.VCodeInst::new(
+  let func_ptr_vreg = ctx.machv_function().new_vreg(Int)
+  let load_fp = @instr.MachVInst::new(
     LoadExternalFuncAddr(rt_gc_array_init_data(ctx)),
   )
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
   // Get vmctx
-  let vmctx_vreg = ctx.vcode_function().new_vreg(Int)
-  let vmctx_mov = @instr.VCodeInst::new(Move)
+  let vmctx_vreg = ctx.machv_function().new_vreg(Int)
+  let vmctx_mov = @instr.MachVInst::new(Move)
   vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
-  vmctx_mov.add_use(Physical({ index: @lower.vmctx_index(ctx), class: Int }))
+  vmctx_mov.add_use(Physical({ index: @lower.context_index(ctx), class: Int }))
   block.add_inst(vmctx_mov)
   let type_idx_vreg = @lower.materialize_imm(ctx, block, type_idx.to_int64())
   let data_idx_vreg = @lower.materialize_imm(ctx, block, data_idx.to_int64())
@@ -1188,7 +1188,7 @@ pub fn lower_array_init_data(
 pub fn lower_array_init_elem(
   ctx : @lower.LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   type_idx : Int,
   elem_idx : Int,
 ) -> Unit {
@@ -1198,17 +1198,17 @@ pub fn lower_array_init_elem(
   let elem_off_vreg = ctx.get_vreg_for_use(inst.operands[2], block)
   let length_vreg = ctx.get_vreg_for_use(inst.operands[3], block)
   // Load function pointer
-  let func_ptr_vreg = ctx.vcode_function().new_vreg(Int)
-  let load_fp = @instr.VCodeInst::new(
+  let func_ptr_vreg = ctx.machv_function().new_vreg(Int)
+  let load_fp = @instr.MachVInst::new(
     LoadExternalFuncAddr(rt_gc_array_init_elem(ctx)),
   )
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
   // Get vmctx
-  let vmctx_vreg = ctx.vcode_function().new_vreg(Int)
-  let vmctx_mov = @instr.VCodeInst::new(Move)
+  let vmctx_vreg = ctx.machv_function().new_vreg(Int)
+  let vmctx_mov = @instr.MachVInst::new(Move)
   vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
-  vmctx_mov.add_use(Physical({ index: @lower.vmctx_index(ctx), class: Int }))
+  vmctx_mov.add_use(Physical({ index: @lower.context_index(ctx), class: Int }))
   block.add_inst(vmctx_mov)
   let type_idx_vreg = @lower.materialize_imm(ctx, block, type_idx.to_int64())
   let elem_idx_vreg = @lower.materialize_imm(ctx, block, elem_idx.to_int64())

@@ -71,5 +71,5 @@ test "represent a call clobber and outgoing stack frame" {
 ## Boundary
 
 `machv` should remain independent from Wasmoon. Product-specific runtime
-symbols, WASI, VMContext fields, and native FFI glue belong in embedding
+symbols, WASI, embedding context fields, and native FFI glue belong in embedding
 modules such as `wasmoon_jit`.

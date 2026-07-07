@@ -70,7 +70,7 @@ test "fold constants in a MilkIR function" {
 ## Boundary
 
 `milkir` is generic compiler infrastructure. It should not depend on Wasmoon
-runtime concepts, VMContext layouts, WASI, or machine-code emission.
+runtime concepts, embedding context layouts, WASI, or machine-code emission.
 
 Dialect-specific operations should travel through the generic `ExtOp`
 extension hook. The WebAssembly dialect is owned by `Milky2018/wasm_milkir`,

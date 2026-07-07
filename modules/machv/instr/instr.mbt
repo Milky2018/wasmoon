@@ -90,10 +90,10 @@ pub fn RelocTarget::key(self : RelocTarget) -> String {
 }
 
 ///|
-/// VCode instruction - a machine-level instruction with virtual registers
+/// MachV instruction - a machine-level instruction with virtual registers
 /// Operand constraints for fixed register allocation
-pub struct VCodeInst {
-  opcode : VCodeOpcode
+pub struct MachVInst {
+  opcode : MachVOpcode
   defs : Array[@abi.Writable] // Registers defined (written)
   uses : Array[@abi.Reg] // Registers used (read)
   use_constraints : Array[@abi.OperandConstraint] // Constraints for uses
@@ -101,26 +101,26 @@ pub struct VCodeInst {
 }
 
 ///|
-pub fn VCodeInst::new(opcode : VCodeOpcode) -> VCodeInst {
+pub fn MachVInst::new(opcode : MachVOpcode) -> MachVInst {
   { opcode, defs: [], uses: [], use_constraints: [], def_constraints: [] }
 }
 
 ///|
-pub fn VCodeInst::add_def(self : VCodeInst, reg : @abi.Writable) -> Unit {
+pub fn MachVInst::add_def(self : MachVInst, reg : @abi.Writable) -> Unit {
   self.defs.push(reg)
   self.def_constraints.push(Any)
 }
 
 ///|
-pub fn VCodeInst::add_use(self : VCodeInst, reg : @abi.Reg) -> Unit {
+pub fn MachVInst::add_use(self : MachVInst, reg : @abi.Reg) -> Unit {
   self.uses.push(reg)
   self.use_constraints.push(Any)
 }
 
 ///|
 /// Add a use operand with a fixed register constraint
-pub fn VCodeInst::add_use_fixed(
-  self : VCodeInst,
+pub fn MachVInst::add_use_fixed(
+  self : MachVInst,
   reg : @abi.Reg,
   preg : @abi.PReg,
 ) -> Unit {
@@ -130,8 +130,8 @@ pub fn VCodeInst::add_use_fixed(
 
 ///|
 /// Add a def operand with a fixed register constraint
-pub fn VCodeInst::add_def_fixed(
-  self : VCodeInst,
+pub fn MachVInst::add_def_fixed(
+  self : MachVInst,
   reg : @abi.Writable,
   preg : @abi.PReg,
 ) -> Unit {
@@ -140,7 +140,7 @@ pub fn VCodeInst::add_def_fixed(
 }
 
 ///|
-fn VCodeInst::to_string(self : VCodeInst) -> String {
+fn MachVInst::to_string(self : MachVInst) -> String {
   let mut result = ""
   // Print definitions (skip clobbers for call instructions)
   let defs_to_print = match self.opcode {
@@ -182,13 +182,13 @@ fn VCodeInst::to_string(self : VCodeInst) -> String {
 }
 
 ///|
-pub impl Show for VCodeInst with fn output(self, logger) {
+pub impl Show for MachVInst with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
 ///|
-/// VCode opcode - machine-level operation (target-independent subset)
-pub(all) enum VCodeOpcode {
+/// MachV opcode - machine-level operation (target-independent subset)
+pub(all) enum MachVOpcode {
   // Integer arithmetic (Bool = true for 64-bit, false for 32-bit)
   Add(Bool) // ADD with size: true = 64-bit, false = 32-bit
   AddImm(Int, Bool) // ADD Xd, Xn, #imm with size: true = 64-bit, false = 32-bit
@@ -929,7 +929,7 @@ pub(all) enum VCodeOpcode {
 }
 
 ///|
-fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
+fn MachVOpcode::to_string(self : MachVOpcode) -> String {
   match self {
     Add(is_64) => if is_64 { "add" } else { "add32" }
     AddImm(imm, is_64) => if is_64 { "add #\{imm}" } else { "add32 #\{imm}" }
@@ -1256,7 +1256,7 @@ fn VCodeOpcode::to_string(self : VCodeOpcode) -> String {
 }
 
 ///|
-pub impl Show for VCodeOpcode with fn output(self, logger) {
+pub impl Show for MachVOpcode with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -1570,8 +1570,8 @@ pub fn Cond::invert(self : Cond) -> Cond {
 }
 
 ///|
-/// VCode terminator - how a block ends
-pub(all) enum VCodeTerminator {
+/// MachV terminator - how a block ends
+pub(all) enum MachVTerminator {
   // Jump to target block with SSA block arguments.
   // The length of args must match the target block's params.
   Jump(Int, Array[@abi.Reg])
@@ -1596,7 +1596,7 @@ pub(all) enum VCodeTerminator {
 }
 
 ///|
-fn VCodeTerminator::to_string(self : VCodeTerminator) -> String {
+fn MachVTerminator::to_string(self : MachVTerminator) -> String {
   match self {
     Jump(target, args) => {
       let mut result = "jump block\{target}"
@@ -1651,7 +1651,7 @@ fn VCodeTerminator::to_string(self : VCodeTerminator) -> String {
 }
 
 ///|
-pub impl Show for VCodeTerminator with fn output(self, logger) {
+pub impl Show for MachVTerminator with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -1659,7 +1659,7 @@ pub impl Show for VCodeTerminator with fn output(self, logger) {
 /// Get the call type for this opcode
 /// Design: instructions that clobber caller-saved registers
 /// are classified as calls for register allocation purposes
-pub fn VCodeOpcode::call_type(self : VCodeOpcode) -> CallType {
+pub fn MachVOpcode::call_type(self : MachVOpcode) -> CallType {
   match self {
     // Direct and indirect function calls (Standard via CallPtr)
     CallPtr(_, _, _)

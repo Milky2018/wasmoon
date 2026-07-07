@@ -3,14 +3,14 @@
 fn lower_iconst(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   val : Int64,
 ) -> Unit {
   if inst.first_result() is Some(result) {
     let vreg = ctx.get_vreg(result)
-    let vcode_inst = @instr.VCodeInst::new(LoadConst(val))
-    vcode_inst.add_def({ reg: Virtual(vreg) })
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(LoadConst(val))
+    machv_inst.add_def({ reg: Virtual(vreg) })
+    block.add_inst(machv_inst)
   }
 }
 
@@ -19,7 +19,7 @@ fn lower_iconst(
 fn lower_fconst(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   val : Double,
 ) -> Unit {
   if inst.first_result() is Some(result) {
@@ -38,9 +38,9 @@ fn lower_fconst(
         LoadConstF64(bits)
       }
     }
-    let vcode_inst = @instr.VCodeInst::new(opcode)
-    vcode_inst.add_def({ reg: Virtual(vreg) })
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(opcode)
+    machv_inst.add_def({ reg: Virtual(vreg) })
+    block.add_inst(machv_inst)
   }
 }
 
@@ -49,18 +49,18 @@ fn lower_fconst(
 fn lower_binary_int(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
-  opcode : @instr.VCodeOpcode,
+  block : @block.MachVBlock,
+  opcode : @instr.MachVOpcode,
 ) -> Unit {
   if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
     let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
-    let vcode_inst = @instr.VCodeInst::new(opcode)
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(lhs))
-    vcode_inst.add_use(Virtual(rhs))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(opcode)
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(lhs))
+    machv_inst.add_use(Virtual(rhs))
+    block.add_inst(machv_inst)
   }
 }
 
@@ -144,14 +144,14 @@ fn match_add_sub_cancel_value(
 /// q = (n * magic) >> 64 >> shift (with optional add correction)
 fn lower_magic_udiv64(
   ctx : LoweringContext,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   dst : @abi.VReg,
   lhs : @abi.VReg,
   magic : @divmagic.MagicU64,
 ) -> Unit {
   // Load magic constant
   let magic_reg = ctx.new_vreg(Int)
-  let load_magic = @instr.VCodeInst::new(
+  let load_magic = @instr.MachVInst::new(
     LoadConst(magic.mul_by.reinterpret_as_int64()),
   )
   load_magic.add_def({ reg: Virtual(magic_reg) })
@@ -159,7 +159,7 @@ fn lower_magic_udiv64(
 
   // q = UMULH(n, magic)
   let q_reg = ctx.new_vreg(Int)
-  let umulh = @instr.VCodeInst::new(Umulh)
+  let umulh = @instr.MachVInst::new(Umulh)
   umulh.add_def({ reg: Virtual(q_reg) })
   umulh.add_use(Virtual(lhs))
   umulh.add_use(Virtual(magic_reg))
@@ -167,7 +167,7 @@ fn lower_magic_udiv64(
   if magic.do_add {
     // t = n - q
     let t1_reg = ctx.new_vreg(Int)
-    let sub1 = @instr.VCodeInst::new(Sub(true))
+    let sub1 = @instr.MachVInst::new(Sub(true))
     sub1.add_def({ reg: Virtual(t1_reg) })
     sub1.add_use(Virtual(lhs))
     sub1.add_use(Virtual(q_reg))
@@ -175,11 +175,11 @@ fn lower_magic_udiv64(
 
     // t = t >> 1
     let t2_reg = ctx.new_vreg(Int)
-    let shr1 = @instr.VCodeInst::new(LShr(true))
+    let shr1 = @instr.MachVInst::new(LShr(true))
     shr1.add_def({ reg: Virtual(t2_reg) })
     shr1.add_use(Virtual(t1_reg))
     let one_reg = ctx.new_vreg(Int)
-    let load_one = @instr.VCodeInst::new(LoadConst(1L))
+    let load_one = @instr.MachVInst::new(LoadConst(1L))
     load_one.add_def({ reg: Virtual(one_reg) })
     block.add_inst(load_one)
     shr1.add_use(Virtual(one_reg))
@@ -187,7 +187,7 @@ fn lower_magic_udiv64(
 
     // t = t + q
     let t3_reg = ctx.new_vreg(Int)
-    let add1 = @instr.VCodeInst::new(Add(true))
+    let add1 = @instr.MachVInst::new(Add(true))
     add1.add_def({ reg: Virtual(t3_reg) })
     add1.add_use(Virtual(t2_reg))
     add1.add_use(Virtual(q_reg))
@@ -195,12 +195,12 @@ fn lower_magic_udiv64(
 
     // q = t >> (shift - 1)
     let shift_reg = ctx.new_vreg(Int)
-    let load_shift = @instr.VCodeInst::new(
+    let load_shift = @instr.MachVInst::new(
       LoadConst((magic.shift_by - 1).to_int64()),
     )
     load_shift.add_def({ reg: Virtual(shift_reg) })
     block.add_inst(load_shift)
-    let final_shr = @instr.VCodeInst::new(LShr(true))
+    let final_shr = @instr.MachVInst::new(LShr(true))
     final_shr.add_def({ reg: Virtual(dst) })
     final_shr.add_use(Virtual(t3_reg))
     final_shr.add_use(Virtual(shift_reg))
@@ -208,17 +208,17 @@ fn lower_magic_udiv64(
   } else if magic.shift_by > 0 {
     // q = q >> shift
     let shift_reg = ctx.new_vreg(Int)
-    let load_shift = @instr.VCodeInst::new(LoadConst(magic.shift_by.to_int64()))
+    let load_shift = @instr.MachVInst::new(LoadConst(magic.shift_by.to_int64()))
     load_shift.add_def({ reg: Virtual(shift_reg) })
     block.add_inst(load_shift)
-    let final_shr = @instr.VCodeInst::new(LShr(true))
+    let final_shr = @instr.MachVInst::new(LShr(true))
     final_shr.add_def({ reg: Virtual(dst) })
     final_shr.add_use(Virtual(q_reg))
     final_shr.add_use(Virtual(shift_reg))
     block.add_inst(final_shr)
   } else {
     // No shift needed, just move
-    let mov = @instr.VCodeInst::new(Move)
+    let mov = @instr.MachVInst::new(Move)
     mov.add_def({ reg: Virtual(dst) })
     mov.add_use(Virtual(q_reg))
     block.add_inst(mov)
@@ -229,7 +229,7 @@ fn lower_magic_udiv64(
 /// Lower signed 64-bit magic division
 fn lower_magic_sdiv64(
   ctx : LoweringContext,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   dst : @abi.VReg,
   lhs : @abi.VReg,
   divisor : Int64,
@@ -237,13 +237,13 @@ fn lower_magic_sdiv64(
 ) -> Unit {
   // Load magic constant
   let magic_reg = ctx.new_vreg(Int)
-  let load_magic = @instr.VCodeInst::new(LoadConst(magic.mul_by))
+  let load_magic = @instr.MachVInst::new(LoadConst(magic.mul_by))
   load_magic.add_def({ reg: Virtual(magic_reg) })
   block.add_inst(load_magic)
 
   // q = SMULH(n, magic)
   let q_reg = ctx.new_vreg(Int)
-  let smulh = @instr.VCodeInst::new(Smulh)
+  let smulh = @instr.MachVInst::new(Smulh)
   smulh.add_def({ reg: Virtual(q_reg) })
   smulh.add_use(Virtual(lhs))
   smulh.add_use(Virtual(magic_reg))
@@ -253,7 +253,7 @@ fn lower_magic_sdiv64(
   let q2_reg = if divisor > 0L && magic.mul_by < 0L {
     // q = q + n
     let tmp = ctx.new_vreg(Int)
-    let add1 = @instr.VCodeInst::new(Add(true))
+    let add1 = @instr.MachVInst::new(Add(true))
     add1.add_def({ reg: Virtual(tmp) })
     add1.add_use(Virtual(q_reg))
     add1.add_use(Virtual(lhs))
@@ -262,7 +262,7 @@ fn lower_magic_sdiv64(
   } else if divisor < 0L && magic.mul_by > 0L {
     // q = q - n
     let tmp = ctx.new_vreg(Int)
-    let sub1 = @instr.VCodeInst::new(Sub(true))
+    let sub1 = @instr.MachVInst::new(Sub(true))
     sub1.add_def({ reg: Virtual(tmp) })
     sub1.add_use(Virtual(q_reg))
     sub1.add_use(Virtual(lhs))
@@ -275,11 +275,11 @@ fn lower_magic_sdiv64(
   // q = q >> shift (arithmetic)
   let q3_reg = if magic.shift_by > 0 {
     let shift_reg = ctx.new_vreg(Int)
-    let load_shift = @instr.VCodeInst::new(LoadConst(magic.shift_by.to_int64()))
+    let load_shift = @instr.MachVInst::new(LoadConst(magic.shift_by.to_int64()))
     load_shift.add_def({ reg: Virtual(shift_reg) })
     block.add_inst(load_shift)
     let tmp = ctx.new_vreg(Int)
-    let ashr = @instr.VCodeInst::new(AShr(true))
+    let ashr = @instr.MachVInst::new(AShr(true))
     ashr.add_def({ reg: Virtual(tmp) })
     ashr.add_use(Virtual(q2_reg))
     ashr.add_use(Virtual(shift_reg))
@@ -292,17 +292,17 @@ fn lower_magic_sdiv64(
   // t = q >> 63 (extract sign bit, logical shift)
   let t_reg = ctx.new_vreg(Int)
   let shift63_reg = ctx.new_vreg(Int)
-  let load_63 = @instr.VCodeInst::new(LoadConst(63L))
+  let load_63 = @instr.MachVInst::new(LoadConst(63L))
   load_63.add_def({ reg: Virtual(shift63_reg) })
   block.add_inst(load_63)
-  let lshr63 = @instr.VCodeInst::new(LShr(true))
+  let lshr63 = @instr.MachVInst::new(LShr(true))
   lshr63.add_def({ reg: Virtual(t_reg) })
   lshr63.add_use(Virtual(q3_reg))
   lshr63.add_use(Virtual(shift63_reg))
   block.add_inst(lshr63)
 
   // q = q + t (add 1 if negative to round toward zero)
-  let final_add = @instr.VCodeInst::new(Add(true))
+  let final_add = @instr.MachVInst::new(Add(true))
   final_add.add_def({ reg: Virtual(dst) })
   final_add.add_use(Virtual(q3_reg))
   final_add.add_use(Virtual(t_reg))
@@ -314,14 +314,14 @@ fn lower_magic_sdiv64(
 /// q = (n * magic) >> 32 >> shift (with optional add correction)
 fn lower_magic_udiv32(
   ctx : LoweringContext,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   dst : @abi.VReg,
   lhs : @abi.VReg,
   magic : @divmagic.MagicU32,
 ) -> Unit {
   // Load magic constant (32-bit, zero-extended to 64-bit for UMULL)
   let magic_reg = ctx.new_vreg(Int)
-  let load_magic = @instr.VCodeInst::new(
+  let load_magic = @instr.MachVInst::new(
     LoadConst(magic.mul_by.reinterpret_as_int().to_int64() & 0xFFFFFFFFL),
   )
   load_magic.add_def({ reg: Virtual(magic_reg) })
@@ -329,7 +329,7 @@ fn lower_magic_udiv32(
 
   // q = UMULL(n, magic) - produces 64-bit result in X register
   let q64_reg = ctx.new_vreg(Int)
-  let umull = @instr.VCodeInst::new(Umull)
+  let umull = @instr.MachVInst::new(Umull)
   umull.add_def({ reg: Virtual(q64_reg) })
   umull.add_use(Virtual(lhs))
   umull.add_use(Virtual(magic_reg))
@@ -338,10 +338,10 @@ fn lower_magic_udiv32(
   // Extract high 32 bits: q = q64 >> 32
   let q_reg = ctx.new_vreg(Int)
   let shift32_reg = ctx.new_vreg(Int)
-  let load_32 = @instr.VCodeInst::new(LoadConst(32L))
+  let load_32 = @instr.MachVInst::new(LoadConst(32L))
   load_32.add_def({ reg: Virtual(shift32_reg) })
   block.add_inst(load_32)
-  let lsr32 = @instr.VCodeInst::new(LShr(true)) // Use 64-bit shift
+  let lsr32 = @instr.MachVInst::new(LShr(true)) // Use 64-bit shift
   lsr32.add_def({ reg: Virtual(q_reg) })
   lsr32.add_use(Virtual(q64_reg))
   lsr32.add_use(Virtual(shift32_reg))
@@ -349,7 +349,7 @@ fn lower_magic_udiv32(
   if magic.do_add {
     // t = n - q (32-bit)
     let t1_reg = ctx.new_vreg(Int)
-    let sub1 = @instr.VCodeInst::new(Sub(false))
+    let sub1 = @instr.MachVInst::new(Sub(false))
     sub1.add_def({ reg: Virtual(t1_reg) })
     sub1.add_use(Virtual(lhs))
     sub1.add_use(Virtual(q_reg))
@@ -357,11 +357,11 @@ fn lower_magic_udiv32(
 
     // t = t >> 1 (32-bit)
     let t2_reg = ctx.new_vreg(Int)
-    let shr1 = @instr.VCodeInst::new(LShr(false))
+    let shr1 = @instr.MachVInst::new(LShr(false))
     shr1.add_def({ reg: Virtual(t2_reg) })
     shr1.add_use(Virtual(t1_reg))
     let one_reg = ctx.new_vreg(Int)
-    let load_one = @instr.VCodeInst::new(LoadConst(1L))
+    let load_one = @instr.MachVInst::new(LoadConst(1L))
     load_one.add_def({ reg: Virtual(one_reg) })
     block.add_inst(load_one)
     shr1.add_use(Virtual(one_reg))
@@ -369,7 +369,7 @@ fn lower_magic_udiv32(
 
     // t = t + q (32-bit)
     let t3_reg = ctx.new_vreg(Int)
-    let add1 = @instr.VCodeInst::new(Add(false))
+    let add1 = @instr.MachVInst::new(Add(false))
     add1.add_def({ reg: Virtual(t3_reg) })
     add1.add_use(Virtual(t2_reg))
     add1.add_use(Virtual(q_reg))
@@ -377,12 +377,12 @@ fn lower_magic_udiv32(
 
     // q = t >> (shift - 1) (32-bit)
     let shift_reg = ctx.new_vreg(Int)
-    let load_shift = @instr.VCodeInst::new(
+    let load_shift = @instr.MachVInst::new(
       LoadConst((magic.shift_by - 1).to_int64()),
     )
     load_shift.add_def({ reg: Virtual(shift_reg) })
     block.add_inst(load_shift)
-    let final_shr = @instr.VCodeInst::new(LShr(false))
+    let final_shr = @instr.MachVInst::new(LShr(false))
     final_shr.add_def({ reg: Virtual(dst) })
     final_shr.add_use(Virtual(t3_reg))
     final_shr.add_use(Virtual(shift_reg))
@@ -390,17 +390,17 @@ fn lower_magic_udiv32(
   } else if magic.shift_by > 0 {
     // q = q >> shift (32-bit)
     let shift_reg = ctx.new_vreg(Int)
-    let load_shift = @instr.VCodeInst::new(LoadConst(magic.shift_by.to_int64()))
+    let load_shift = @instr.MachVInst::new(LoadConst(magic.shift_by.to_int64()))
     load_shift.add_def({ reg: Virtual(shift_reg) })
     block.add_inst(load_shift)
-    let final_shr = @instr.VCodeInst::new(LShr(false))
+    let final_shr = @instr.MachVInst::new(LShr(false))
     final_shr.add_def({ reg: Virtual(dst) })
     final_shr.add_use(Virtual(q_reg))
     final_shr.add_use(Virtual(shift_reg))
     block.add_inst(final_shr)
   } else {
     // No shift needed, just move
-    let mov = @instr.VCodeInst::new(Move)
+    let mov = @instr.MachVInst::new(Move)
     mov.add_def({ reg: Virtual(dst) })
     mov.add_use(Virtual(q_reg))
     block.add_inst(mov)
@@ -411,7 +411,7 @@ fn lower_magic_udiv32(
 /// Lower signed 32-bit magic division
 fn lower_magic_sdiv32(
   ctx : LoweringContext,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   dst : @abi.VReg,
   lhs : @abi.VReg,
   divisor : Int,
@@ -419,13 +419,13 @@ fn lower_magic_sdiv32(
 ) -> Unit {
   // Load magic constant (sign-extended for SMULL)
   let magic_reg = ctx.new_vreg(Int)
-  let load_magic = @instr.VCodeInst::new(LoadConst(magic.mul_by.to_int64()))
+  let load_magic = @instr.MachVInst::new(LoadConst(magic.mul_by.to_int64()))
   load_magic.add_def({ reg: Virtual(magic_reg) })
   block.add_inst(load_magic)
 
   // q = SMULL(n, magic) - produces 64-bit signed result
   let q64_reg = ctx.new_vreg(Int)
-  let smull = @instr.VCodeInst::new(Smull)
+  let smull = @instr.MachVInst::new(Smull)
   smull.add_def({ reg: Virtual(q64_reg) })
   smull.add_use(Virtual(lhs))
   smull.add_use(Virtual(magic_reg))
@@ -434,10 +434,10 @@ fn lower_magic_sdiv32(
   // Extract high 32 bits with sign: q = q64 >> 32 (arithmetic)
   let q_reg = ctx.new_vreg(Int)
   let shift32_reg = ctx.new_vreg(Int)
-  let load_32 = @instr.VCodeInst::new(LoadConst(32L))
+  let load_32 = @instr.MachVInst::new(LoadConst(32L))
   load_32.add_def({ reg: Virtual(shift32_reg) })
   block.add_inst(load_32)
-  let asr32 = @instr.VCodeInst::new(AShr(true)) // Arithmetic shift to preserve sign
+  let asr32 = @instr.MachVInst::new(AShr(true)) // Arithmetic shift to preserve sign
   asr32.add_def({ reg: Virtual(q_reg) })
   asr32.add_use(Virtual(q64_reg))
   asr32.add_use(Virtual(shift32_reg))
@@ -447,7 +447,7 @@ fn lower_magic_sdiv32(
   let q2_reg = if divisor > 0 && magic.mul_by < 0 {
     // q = q + n
     let tmp = ctx.new_vreg(Int)
-    let add1 = @instr.VCodeInst::new(Add(false))
+    let add1 = @instr.MachVInst::new(Add(false))
     add1.add_def({ reg: Virtual(tmp) })
     add1.add_use(Virtual(q_reg))
     add1.add_use(Virtual(lhs))
@@ -456,7 +456,7 @@ fn lower_magic_sdiv32(
   } else if divisor < 0 && magic.mul_by > 0 {
     // q = q - n
     let tmp = ctx.new_vreg(Int)
-    let sub1 = @instr.VCodeInst::new(Sub(false))
+    let sub1 = @instr.MachVInst::new(Sub(false))
     sub1.add_def({ reg: Virtual(tmp) })
     sub1.add_use(Virtual(q_reg))
     sub1.add_use(Virtual(lhs))
@@ -469,11 +469,11 @@ fn lower_magic_sdiv32(
   // q = q >> shift (arithmetic, 32-bit)
   let q3_reg = if magic.shift_by > 0 {
     let shift_reg = ctx.new_vreg(Int)
-    let load_shift = @instr.VCodeInst::new(LoadConst(magic.shift_by.to_int64()))
+    let load_shift = @instr.MachVInst::new(LoadConst(magic.shift_by.to_int64()))
     load_shift.add_def({ reg: Virtual(shift_reg) })
     block.add_inst(load_shift)
     let tmp = ctx.new_vreg(Int)
-    let ashr = @instr.VCodeInst::new(AShr(false))
+    let ashr = @instr.MachVInst::new(AShr(false))
     ashr.add_def({ reg: Virtual(tmp) })
     ashr.add_use(Virtual(q2_reg))
     ashr.add_use(Virtual(shift_reg))
@@ -486,17 +486,17 @@ fn lower_magic_sdiv32(
   // t = q >> 31 (extract sign bit, logical shift for 32-bit)
   let t_reg = ctx.new_vreg(Int)
   let shift31_reg = ctx.new_vreg(Int)
-  let load_31 = @instr.VCodeInst::new(LoadConst(31L))
+  let load_31 = @instr.MachVInst::new(LoadConst(31L))
   load_31.add_def({ reg: Virtual(shift31_reg) })
   block.add_inst(load_31)
-  let lshr31 = @instr.VCodeInst::new(LShr(false))
+  let lshr31 = @instr.MachVInst::new(LShr(false))
   lshr31.add_def({ reg: Virtual(t_reg) })
   lshr31.add_use(Virtual(q3_reg))
   lshr31.add_use(Virtual(shift31_reg))
   block.add_inst(lshr31)
 
   // q = q + t (add 1 if negative to round toward zero)
-  let final_add = @instr.VCodeInst::new(Add(false))
+  let final_add = @instr.MachVInst::new(Add(false))
   final_add.add_def({ reg: Virtual(dst) })
   final_add.add_use(Virtual(q3_reg))
   final_add.add_use(Virtual(t_reg))
@@ -508,7 +508,7 @@ fn lower_magic_sdiv32(
 fn lower_div(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   signed~ : Bool,
 ) -> Unit {
   let lhs_val = inst.operands[1]
@@ -574,14 +574,14 @@ fn lower_div(
 
   // Trap if divisor is zero (trap_code 4 = integer divide by zero)
   // Must always emit even if result is unused (for side effect)
-  let trap_zero = @instr.VCodeInst::new(TrapIfZero(is_64, 4))
+  let trap_zero = @instr.MachVInst::new(TrapIfZero(is_64, 4))
   trap_zero.add_use(Virtual(rhs))
   block.add_inst(trap_zero)
 
   // For signed division, also trap if INT_MIN / -1 (would overflow)
   // Use trap_code 5 = integer overflow
   if signed {
-    let trap_overflow = @instr.VCodeInst::new(TrapIfDivOverflow(is_64, 5))
+    let trap_overflow = @instr.MachVInst::new(TrapIfDivOverflow(is_64, 5))
     trap_overflow.add_use(Virtual(lhs))
     trap_overflow.add_use(Virtual(rhs))
     block.add_inst(trap_overflow)
@@ -590,16 +590,16 @@ fn lower_div(
   // Only emit division if result is used
   if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
-    let opcode : @instr.VCodeOpcode = if signed {
+    let opcode : @instr.MachVOpcode = if signed {
       SDiv(is_64)
     } else {
       UDiv(is_64)
     }
-    let vcode_inst = @instr.VCodeInst::new(opcode)
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(lhs))
-    vcode_inst.add_use(Virtual(rhs))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(opcode)
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(lhs))
+    machv_inst.add_use(Virtual(rhs))
+    block.add_inst(machv_inst)
   }
 }
 
@@ -608,9 +608,9 @@ fn lower_div(
 fn lower_shift(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
-  make_reg_opcode : (Bool) -> @instr.VCodeOpcode,
-  make_imm_opcode : (Int, Bool) -> @instr.VCodeOpcode,
+  block : @block.MachVBlock,
+  make_reg_opcode : (Bool) -> @instr.MachVOpcode,
+  make_imm_opcode : (Int, Bool) -> @instr.MachVOpcode,
 ) -> Unit {
   if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
@@ -622,14 +622,14 @@ fn lower_shift(
     // mask it by bitwidth-1 (WebAssembly semantics).
     if get_const_value(ctx, inst.operands[1]) is Some(amount) {
       let shift = amount.to_int() & mask
-      let vcode_inst = @instr.VCodeInst::new(make_imm_opcode(shift, is_64))
-      vcode_inst.add_def({ reg: Virtual(dst) })
-      vcode_inst.add_use(Virtual(lhs))
-      block.add_inst(vcode_inst)
+      let machv_inst = @instr.MachVInst::new(make_imm_opcode(shift, is_64))
+      machv_inst.add_def({ reg: Virtual(dst) })
+      machv_inst.add_use(Virtual(lhs))
+      block.add_inst(machv_inst)
       return
     }
     let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
-    let vcode_inst = @instr.VCodeInst::new(make_reg_opcode(is_64))
+    let machv_inst = @instr.MachVInst::new(make_reg_opcode(is_64))
     if ctx.isa is AMD64 {
       // x86_64 variable shifts/rotates use CL as the implicit count register.
       // Keep the data operand in Scratch1 to avoid clobbering when the count
@@ -638,15 +638,15 @@ fn lower_shift(
         index: ctx.isa.scratch_reg_1_index(),
         class: Int,
       }
-      vcode_inst.add_def_fixed({ reg: Virtual(dst) }, shift_data)
-      vcode_inst.add_use_fixed(Virtual(lhs), shift_data)
-      vcode_inst.add_use_fixed(Virtual(rhs), { index: 1, class: Int }) // rcx
+      machv_inst.add_def_fixed({ reg: Virtual(dst) }, shift_data)
+      machv_inst.add_use_fixed(Virtual(lhs), shift_data)
+      machv_inst.add_use_fixed(Virtual(rhs), { index: 1, class: Int }) // rcx
     } else {
-      vcode_inst.add_def({ reg: Virtual(dst) })
-      vcode_inst.add_use(Virtual(lhs))
-      vcode_inst.add_use(Virtual(rhs))
+      machv_inst.add_def({ reg: Virtual(dst) })
+      machv_inst.add_use(Virtual(lhs))
+      machv_inst.add_use(Virtual(rhs))
     }
-    block.add_inst(vcode_inst)
+    block.add_inst(machv_inst)
   }
 }
 
@@ -655,17 +655,17 @@ fn lower_shift(
 fn lower_bitcount(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
-  make_opcode : (Bool) -> @instr.VCodeOpcode,
+  block : @block.MachVBlock,
+  make_opcode : (Bool) -> @instr.MachVOpcode,
 ) -> Unit {
   if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let src = ctx.get_vreg_for_use(inst.operands[0], block)
     let is_64 = result.ty is I64
-    let vcode_inst = @instr.VCodeInst::new(make_opcode(is_64))
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(src))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(make_opcode(is_64))
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(src))
+    block.add_inst(machv_inst)
   }
 }
 
@@ -682,7 +682,7 @@ fn lower_bitcount(
 fn lower_iadd(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
 ) -> Unit {
   guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
@@ -693,7 +693,7 @@ fn lower_iadd(
   // Cranelift algebraic cancelation: (x - y) + y -> x.
   if match_sub_add_cancel_value(ctx, lhs_val, rhs_val) is Some(base) {
     let src = ctx.get_vreg_for_use(base, block)
-    let move_inst = @instr.VCodeInst::new(Move)
+    let move_inst = @instr.MachVInst::new(Move)
     move_inst.add_def({ reg: Virtual(dst) })
     move_inst.add_use(Virtual(src))
     block.add_inst(move_inst)
@@ -701,7 +701,7 @@ fn lower_iadd(
   }
   if match_sub_add_cancel_value(ctx, rhs_val, lhs_val) is Some(base) {
     let src = ctx.get_vreg_for_use(base, block)
-    let move_inst = @instr.VCodeInst::new(Move)
+    let move_inst = @instr.MachVInst::new(Move)
     move_inst.add_def({ reg: Virtual(dst) })
     move_inst.add_use(Virtual(src))
     block.add_inst(move_inst)
@@ -714,12 +714,12 @@ fn lower_iadd(
     let acc = ctx.get_vreg_for_use(lhs_val, block)
     let src1 = ctx.get_vreg_for_use(mul_lhs, block)
     let src2 = ctx.get_vreg_for_use(mul_rhs, block)
-    let vcode_inst = @instr.VCodeInst::new(if is_64 { Madd } else { Madd32 })
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(acc)) // accumulator
-    vcode_inst.add_use(Virtual(src1)) // multiplicand
-    vcode_inst.add_use(Virtual(src2)) // multiplier
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(if is_64 { Madd } else { Madd32 })
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(acc)) // accumulator
+    machv_inst.add_use(Virtual(src1)) // multiplicand
+    machv_inst.add_use(Virtual(src2)) // multiplier
+    block.add_inst(machv_inst)
     return
   }
 
@@ -728,12 +728,12 @@ fn lower_iadd(
     let acc = ctx.get_vreg_for_use(rhs_val, block)
     let src1 = ctx.get_vreg_for_use(mul_lhs, block)
     let src2 = ctx.get_vreg_for_use(mul_rhs, block)
-    let vcode_inst = @instr.VCodeInst::new(if is_64 { Madd } else { Madd32 })
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(acc))
-    vcode_inst.add_use(Virtual(src1))
-    vcode_inst.add_use(Virtual(src2))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(if is_64 { Madd } else { Madd32 })
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(acc))
+    machv_inst.add_use(Virtual(src1))
+    machv_inst.add_use(Virtual(src2))
+    block.add_inst(machv_inst)
     return
   }
 
@@ -741,17 +741,17 @@ fn lower_iadd(
   if match_shl_const_value(ctx, rhs_val) is Some((shifted, amount)) {
     let rn = ctx.get_vreg_for_use(lhs_val, block)
     let rm = ctx.get_vreg_for_use(shifted, block)
-    let vcode_inst = @instr.VCodeInst::new(
+    let machv_inst = @instr.MachVInst::new(
       if is_64 {
         AddShifted(Lsl, amount)
       } else {
         AddShifted32(Lsl, amount)
       },
     )
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(rn))
-    vcode_inst.add_use(Virtual(rm))
-    block.add_inst(vcode_inst)
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(rn))
+    machv_inst.add_use(Virtual(rm))
+    block.add_inst(machv_inst)
     return
   }
 
@@ -759,17 +759,17 @@ fn lower_iadd(
   if match_shl_const_value(ctx, lhs_val) is Some((shifted, amount)) {
     let rn = ctx.get_vreg_for_use(rhs_val, block)
     let rm = ctx.get_vreg_for_use(shifted, block)
-    let vcode_inst = @instr.VCodeInst::new(
+    let machv_inst = @instr.MachVInst::new(
       if is_64 {
         AddShifted(Lsl, amount)
       } else {
         AddShifted32(Lsl, amount)
       },
     )
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(rn))
-    vcode_inst.add_use(Virtual(rm))
-    block.add_inst(vcode_inst)
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(rn))
+    machv_inst.add_use(Virtual(rm))
+    block.add_inst(machv_inst)
     return
   }
 
@@ -779,11 +779,11 @@ fn lower_iadd(
     !(ext is None) {
     let rn = ctx.get_vreg_for_use(lhs_val, block)
     let rm = ctx.get_vreg_for_use(inner, block)
-    let vcode_inst = @instr.VCodeInst::new(AddExtend(ext, 0))
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(rn))
-    vcode_inst.add_use(Virtual(rm))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(AddExtend(ext, 0))
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(rn))
+    machv_inst.add_use(Virtual(rm))
+    block.add_inst(machv_inst)
     return
   }
 
@@ -793,11 +793,11 @@ fn lower_iadd(
     !(ext is None) {
     let rn = ctx.get_vreg_for_use(rhs_val, block)
     let rm = ctx.get_vreg_for_use(inner, block)
-    let vcode_inst = @instr.VCodeInst::new(AddExtend(ext, 0))
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(rn))
-    vcode_inst.add_use(Virtual(rm))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(AddExtend(ext, 0))
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(rn))
+    machv_inst.add_use(Virtual(rm))
+    block.add_inst(machv_inst)
     return
   }
 
@@ -805,50 +805,50 @@ fn lower_iadd(
   // add(x, -C) -> sub #C, x when C is encodable for current ISA.
   if match_negated_add_imm_value(ctx, rhs_val) is Some(imm_val) {
     let lhs = ctx.get_vreg_for_use(lhs_val, block)
-    let vcode_inst = @instr.VCodeInst::new(SubImm(imm_val.to_int(), is_64))
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(lhs))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(SubImm(imm_val.to_int(), is_64))
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(lhs))
+    block.add_inst(machv_inst)
     return
   }
 
   if match_negated_add_imm_value(ctx, lhs_val) is Some(imm_val) {
     let rhs = ctx.get_vreg_for_use(rhs_val, block)
-    let vcode_inst = @instr.VCodeInst::new(SubImm(imm_val.to_int(), is_64))
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(rhs))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(SubImm(imm_val.to_int(), is_64))
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(rhs))
+    block.add_inst(machv_inst)
     return
   }
 
   // Pattern: add(x, const) -> AddImm where const is encodable for current ISA.
   if match_add_imm_value(ctx, rhs_val) is Some(imm_val) {
     let lhs = ctx.get_vreg_for_use(lhs_val, block)
-    let vcode_inst = @instr.VCodeInst::new(AddImm(imm_val.to_int(), is_64))
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(lhs))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(AddImm(imm_val.to_int(), is_64))
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(lhs))
+    block.add_inst(machv_inst)
     return
   }
 
   // Pattern: add(const, x) -> AddImm (commutative)
   if match_add_imm_value(ctx, lhs_val) is Some(imm_val) {
     let rhs = ctx.get_vreg_for_use(rhs_val, block)
-    let vcode_inst = @instr.VCodeInst::new(AddImm(imm_val.to_int(), is_64))
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(rhs))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(AddImm(imm_val.to_int(), is_64))
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(rhs))
+    block.add_inst(machv_inst)
     return
   }
 
   // Default: regular add
   let lhs = ctx.get_vreg_for_use(lhs_val, block)
   let rhs = ctx.get_vreg_for_use(rhs_val, block)
-  let vcode_inst = @instr.VCodeInst::new(Add(is_64))
-  vcode_inst.add_def({ reg: Virtual(dst) })
-  vcode_inst.add_use(Virtual(lhs))
-  vcode_inst.add_use(Virtual(rhs))
-  block.add_inst(vcode_inst)
+  let machv_inst = @instr.MachVInst::new(Add(is_64))
+  machv_inst.add_def({ reg: Virtual(dst) })
+  machv_inst.add_use(Virtual(lhs))
+  machv_inst.add_use(Virtual(rhs))
+  block.add_inst(machv_inst)
 }
 
 ///|
@@ -856,25 +856,25 @@ fn lower_iadd(
 fn lower_imul(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
 ) -> Unit {
   guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
   let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
   let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
   let is_64 = result.ty is I64
-  let vcode_inst = @instr.VCodeInst::new(Mul(is_64))
-  vcode_inst.add_def({ reg: Virtual(dst) })
-  vcode_inst.add_use(Virtual(lhs))
-  vcode_inst.add_use(Virtual(rhs))
-  block.add_inst(vcode_inst)
+  let machv_inst = @instr.MachVInst::new(Mul(is_64))
+  machv_inst.add_def({ reg: Virtual(dst) })
+  machv_inst.add_use(Virtual(lhs))
+  machv_inst.add_use(Virtual(rhs))
+  block.add_inst(machv_inst)
 }
 
 ///|
 fn lower_umulh(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
 ) -> Unit {
   guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
@@ -885,13 +885,13 @@ fn lower_umulh(
     //
     // Result (high 64 bits) is produced in RDX. Keep both inputs as ordinary
     // uses; the amd64 emitter moves lhs into RAX and preserves rhs if needed.
-    let vcode_inst = @instr.VCodeInst::new(Umulh)
-    vcode_inst.add_def_fixed({ reg: Virtual(dst) }, { index: 2, class: Int }) // rdx
-    vcode_inst.add_use(Virtual(lhs))
-    vcode_inst.add_use(Virtual(rhs))
+    let machv_inst = @instr.MachVInst::new(Umulh)
+    machv_inst.add_def_fixed({ reg: Virtual(dst) }, { index: 2, class: Int }) // rdx
+    machv_inst.add_use(Virtual(lhs))
+    machv_inst.add_use(Virtual(rhs))
     // Clobbers: rax is the implicit low-half output; rdx is the fixed result.
-    vcode_inst.add_def({ reg: Physical({ index: 0, class: Int }) })
-    block.add_inst(vcode_inst)
+    machv_inst.add_def({ reg: Physical({ index: 0, class: Int }) })
+    block.add_inst(machv_inst)
     return
   }
   lower_binary_int(ctx, inst, block, Umulh)
@@ -901,7 +901,7 @@ fn lower_umulh(
 fn lower_smulh(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
 ) -> Unit {
   guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
@@ -912,13 +912,13 @@ fn lower_smulh(
     //
     // Result (high 64 bits) is produced in RDX. Keep both inputs as ordinary
     // uses; the amd64 emitter moves lhs into RAX and preserves rhs if needed.
-    let vcode_inst = @instr.VCodeInst::new(Smulh)
-    vcode_inst.add_def_fixed({ reg: Virtual(dst) }, { index: 2, class: Int }) // rdx
-    vcode_inst.add_use(Virtual(lhs))
-    vcode_inst.add_use(Virtual(rhs))
+    let machv_inst = @instr.MachVInst::new(Smulh)
+    machv_inst.add_def_fixed({ reg: Virtual(dst) }, { index: 2, class: Int }) // rdx
+    machv_inst.add_use(Virtual(lhs))
+    machv_inst.add_use(Virtual(rhs))
     // Clobbers: rax is the implicit low-half output; rdx is the fixed result.
-    vcode_inst.add_def({ reg: Physical({ index: 0, class: Int }) })
-    block.add_inst(vcode_inst)
+    machv_inst.add_def({ reg: Physical({ index: 0, class: Int }) })
+    block.add_inst(machv_inst)
     return
   }
   lower_binary_int(ctx, inst, block, Smulh)
@@ -934,7 +934,7 @@ fn lower_smulh(
 fn lower_isub(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
 ) -> Unit {
   guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
@@ -946,7 +946,7 @@ fn lower_isub(
   // Cranelift algebraic cancelation: (x + y) - y -> x.
   if match_add_sub_cancel_value(ctx, lhs_val, rhs_val) is Some(base) {
     let src = ctx.get_vreg_for_use(base, block)
-    let move_inst = @instr.VCodeInst::new(Move)
+    let move_inst = @instr.MachVInst::new(Move)
     move_inst.add_def({ reg: Virtual(dst) })
     move_inst.add_use(Virtual(src))
     block.add_inst(move_inst)
@@ -970,11 +970,11 @@ fn lower_isub(
     match_mul_value(ctx, rhs_val) is Some((mul_lhs, mul_rhs)) {
     let src1 = ctx.get_vreg_for_use(mul_lhs, block)
     let src2 = ctx.get_vreg_for_use(mul_rhs, block)
-    let vcode_inst = @instr.VCodeInst::new(if is_64 { Mneg } else { Mneg32 })
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(src1))
-    vcode_inst.add_use(Virtual(src2))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(if is_64 { Mneg } else { Mneg32 })
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(src1))
+    machv_inst.add_use(Virtual(src2))
+    block.add_inst(machv_inst)
     return
   }
 
@@ -983,29 +983,29 @@ fn lower_isub(
     let acc = ctx.get_vreg_for_use(lhs_val, block)
     let src1 = ctx.get_vreg_for_use(mul_lhs, block)
     let src2 = ctx.get_vreg_for_use(mul_rhs, block)
-    let vcode_inst = @instr.VCodeInst::new(if is_64 { Msub } else { Msub32 })
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(acc))
-    vcode_inst.add_use(Virtual(src1))
-    vcode_inst.add_use(Virtual(src2))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(if is_64 { Msub } else { Msub32 })
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(acc))
+    machv_inst.add_use(Virtual(src1))
+    machv_inst.add_use(Virtual(src2))
+    block.add_inst(machv_inst)
     return
   }
 
   // Pattern: sub(x, shl(y, n)) -> SubShifted/SubShifted32
   if match_shl_const_value(ctx, rhs_val) is Some((shifted, amount)) {
     let rm = ctx.get_vreg_for_use(shifted, block)
-    let vcode_inst = @instr.VCodeInst::new(
+    let machv_inst = @instr.MachVInst::new(
       if is_64 {
         SubShifted(Lsl, amount)
       } else {
         SubShifted32(Lsl, amount)
       },
     )
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(lhs_reg)
-    vcode_inst.add_use(Virtual(rm))
-    block.add_inst(vcode_inst)
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(lhs_reg)
+    machv_inst.add_use(Virtual(rm))
+    block.add_inst(machv_inst)
     return
   }
 
@@ -1016,40 +1016,40 @@ fn lower_isub(
     match_extend_i32_to_i64(ctx, rhs_val) is Some((inner, ext)) &&
     !(ext is None) {
     let rm = ctx.get_vreg_for_use(inner, block)
-    let vcode_inst = @instr.VCodeInst::new(SubExtend(ext, 0))
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(lhs_reg)
-    vcode_inst.add_use(Virtual(rm))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(SubExtend(ext, 0))
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(lhs_reg)
+    machv_inst.add_use(Virtual(rm))
+    block.add_inst(machv_inst)
     return
   }
 
   // Match Cranelift immediate-negation canonicalization:
   // sub(x, -C) -> add #C, x when C is encodable for current ISA.
   if match_negated_add_imm_value(ctx, rhs_val) is Some(imm_val) {
-    let vcode_inst = @instr.VCodeInst::new(AddImm(imm_val.to_int(), is_64))
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(lhs_reg)
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(AddImm(imm_val.to_int(), is_64))
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(lhs_reg)
+    block.add_inst(machv_inst)
     return
   }
 
   // Pattern: sub(x, const) -> SubImm where const is encodable for current ISA.
   if match_add_imm_value(ctx, rhs_val) is Some(imm_val) {
-    let vcode_inst = @instr.VCodeInst::new(SubImm(imm_val.to_int(), is_64))
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(lhs_reg)
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(SubImm(imm_val.to_int(), is_64))
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(lhs_reg)
+    block.add_inst(machv_inst)
     return
   }
 
   // Default: regular sub
   let rhs = ctx.get_vreg_for_use(rhs_val, block)
-  let vcode_inst = @instr.VCodeInst::new(Sub(is_64))
-  vcode_inst.add_def({ reg: Virtual(dst) })
-  vcode_inst.add_use(lhs_reg)
-  vcode_inst.add_use(Virtual(rhs))
-  block.add_inst(vcode_inst)
+  let machv_inst = @instr.MachVInst::new(Sub(is_64))
+  machv_inst.add_def({ reg: Virtual(dst) })
+  machv_inst.add_use(lhs_reg)
+  machv_inst.add_use(Virtual(rhs))
+  block.add_inst(machv_inst)
 }
 
 ///|
@@ -1057,7 +1057,7 @@ fn lower_isub(
 fn lower_band(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
 ) -> Unit {
   guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
@@ -1070,10 +1070,10 @@ fn lower_band(
   if get_const_value(ctx, rhs_val) is Some(imm) &&
     is_valid_logic_imm_for_isa(isa, imm, is_64) {
     let lhs = ctx.get_vreg_for_use(lhs_val, block)
-    let vcode_inst = @instr.VCodeInst::new(AndImm(imm, is_64))
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(lhs))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(AndImm(imm, is_64))
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(lhs))
+    block.add_inst(machv_inst)
     return
   }
 
@@ -1081,10 +1081,10 @@ fn lower_band(
   if get_const_value(ctx, lhs_val) is Some(imm) &&
     is_valid_logic_imm_for_isa(isa, imm, is_64) {
     let rhs = ctx.get_vreg_for_use(rhs_val, block)
-    let vcode_inst = @instr.VCodeInst::new(AndImm(imm, is_64))
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(rhs))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(AndImm(imm, is_64))
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(rhs))
+    block.add_inst(machv_inst)
     return
   }
 
@@ -1092,11 +1092,11 @@ fn lower_band(
   if match_bnot_value(ctx, rhs_val) is Some(not_src) {
     let rn = ctx.get_vreg_for_use(lhs_val, block)
     let rm = ctx.get_vreg_for_use(not_src, block)
-    let vcode_inst = @instr.VCodeInst::new(AndNot(is_64))
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(rn))
-    vcode_inst.add_use(Virtual(rm))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(AndNot(is_64))
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(rn))
+    machv_inst.add_use(Virtual(rm))
+    block.add_inst(machv_inst)
     return
   }
 
@@ -1104,11 +1104,11 @@ fn lower_band(
   if match_bnot_value(ctx, lhs_val) is Some(not_src) {
     let rn = ctx.get_vreg_for_use(rhs_val, block)
     let rm = ctx.get_vreg_for_use(not_src, block)
-    let vcode_inst = @instr.VCodeInst::new(AndNot(is_64))
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(rn))
-    vcode_inst.add_use(Virtual(rm))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(AndNot(is_64))
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(rn))
+    machv_inst.add_use(Virtual(rm))
+    block.add_inst(machv_inst)
     return
   }
 
@@ -1116,17 +1116,17 @@ fn lower_band(
   if match_shl_const_value(ctx, rhs_val) is Some((shifted, amount)) {
     let rn = ctx.get_vreg_for_use(lhs_val, block)
     let rm = ctx.get_vreg_for_use(shifted, block)
-    let vcode_inst = @instr.VCodeInst::new(
+    let machv_inst = @instr.MachVInst::new(
       if is_64 {
         AndShifted(Lsl, amount)
       } else {
         AndShifted32(Lsl, amount)
       },
     )
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(rn))
-    vcode_inst.add_use(Virtual(rm))
-    block.add_inst(vcode_inst)
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(rn))
+    machv_inst.add_use(Virtual(rm))
+    block.add_inst(machv_inst)
     return
   }
 
@@ -1134,28 +1134,28 @@ fn lower_band(
   if match_shl_const_value(ctx, lhs_val) is Some((shifted, amount)) {
     let rn = ctx.get_vreg_for_use(rhs_val, block)
     let rm = ctx.get_vreg_for_use(shifted, block)
-    let vcode_inst = @instr.VCodeInst::new(
+    let machv_inst = @instr.MachVInst::new(
       if is_64 {
         AndShifted(Lsl, amount)
       } else {
         AndShifted32(Lsl, amount)
       },
     )
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(rn))
-    vcode_inst.add_use(Virtual(rm))
-    block.add_inst(vcode_inst)
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(rn))
+    machv_inst.add_use(Virtual(rm))
+    block.add_inst(machv_inst)
     return
   }
 
   // Default: regular and
   let lhs = ctx.get_vreg_for_use(lhs_val, block)
   let rhs = ctx.get_vreg_for_use(rhs_val, block)
-  let vcode_inst = @instr.VCodeInst::new(And(is_64))
-  vcode_inst.add_def({ reg: Virtual(dst) })
-  vcode_inst.add_use(Virtual(lhs))
-  vcode_inst.add_use(Virtual(rhs))
-  block.add_inst(vcode_inst)
+  let machv_inst = @instr.MachVInst::new(And(is_64))
+  machv_inst.add_def({ reg: Virtual(dst) })
+  machv_inst.add_use(Virtual(lhs))
+  machv_inst.add_use(Virtual(rhs))
+  block.add_inst(machv_inst)
 }
 
 ///|
@@ -1163,7 +1163,7 @@ fn lower_band(
 fn lower_bor(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
 ) -> Unit {
   guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
@@ -1176,10 +1176,10 @@ fn lower_bor(
   if get_const_value(ctx, rhs_val) is Some(imm) &&
     is_valid_logic_imm_for_isa(isa, imm, is_64) {
     let lhs = ctx.get_vreg_for_use(lhs_val, block)
-    let vcode_inst = @instr.VCodeInst::new(OrImm(imm, is_64))
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(lhs))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(OrImm(imm, is_64))
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(lhs))
+    block.add_inst(machv_inst)
     return
   }
 
@@ -1187,10 +1187,10 @@ fn lower_bor(
   if get_const_value(ctx, lhs_val) is Some(imm) &&
     is_valid_logic_imm_for_isa(isa, imm, is_64) {
     let rhs = ctx.get_vreg_for_use(rhs_val, block)
-    let vcode_inst = @instr.VCodeInst::new(OrImm(imm, is_64))
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(rhs))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(OrImm(imm, is_64))
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(rhs))
+    block.add_inst(machv_inst)
     return
   }
 
@@ -1198,11 +1198,11 @@ fn lower_bor(
   if match_bnot_value(ctx, rhs_val) is Some(not_src) {
     let rn = ctx.get_vreg_for_use(lhs_val, block)
     let rm = ctx.get_vreg_for_use(not_src, block)
-    let vcode_inst = @instr.VCodeInst::new(OrNot(is_64))
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(rn))
-    vcode_inst.add_use(Virtual(rm))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(OrNot(is_64))
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(rn))
+    machv_inst.add_use(Virtual(rm))
+    block.add_inst(machv_inst)
     return
   }
 
@@ -1210,11 +1210,11 @@ fn lower_bor(
   if match_bnot_value(ctx, lhs_val) is Some(not_src) {
     let rn = ctx.get_vreg_for_use(rhs_val, block)
     let rm = ctx.get_vreg_for_use(not_src, block)
-    let vcode_inst = @instr.VCodeInst::new(OrNot(is_64))
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(rn))
-    vcode_inst.add_use(Virtual(rm))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(OrNot(is_64))
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(rn))
+    machv_inst.add_use(Virtual(rm))
+    block.add_inst(machv_inst)
     return
   }
 
@@ -1223,10 +1223,10 @@ fn lower_bor(
   if match_rotate_or_value(ctx, lhs_val, rhs_val, is_64)
     is Some((src, rotr_amt)) {
     let rn = ctx.get_vreg_for_use(src, block)
-    let vcode_inst = @instr.VCodeInst::new(RotrImm(rotr_amt, is_64))
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(rn))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(RotrImm(rotr_amt, is_64))
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(rn))
+    block.add_inst(machv_inst)
     return
   }
 
@@ -1238,11 +1238,11 @@ fn lower_bor(
     is Some((x_src, y_src, extr_amt)) {
     let rn = ctx.get_vreg_for_use(x_src, block)
     let rm = ctx.get_vreg_for_use(y_src, block)
-    let vcode_inst = @instr.VCodeInst::new(ExtrImm(extr_amt, is_64))
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(rn))
-    vcode_inst.add_use(Virtual(rm))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(ExtrImm(extr_amt, is_64))
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(rn))
+    machv_inst.add_use(Virtual(rm))
+    block.add_inst(machv_inst)
     return
   }
 
@@ -1250,17 +1250,17 @@ fn lower_bor(
   if match_shl_const_value(ctx, rhs_val) is Some((shifted, amount)) {
     let rn = ctx.get_vreg_for_use(lhs_val, block)
     let rm = ctx.get_vreg_for_use(shifted, block)
-    let vcode_inst = @instr.VCodeInst::new(
+    let machv_inst = @instr.MachVInst::new(
       if is_64 {
         OrShifted(Lsl, amount)
       } else {
         OrShifted32(Lsl, amount)
       },
     )
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(rn))
-    vcode_inst.add_use(Virtual(rm))
-    block.add_inst(vcode_inst)
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(rn))
+    machv_inst.add_use(Virtual(rm))
+    block.add_inst(machv_inst)
     return
   }
 
@@ -1268,28 +1268,28 @@ fn lower_bor(
   if match_shl_const_value(ctx, lhs_val) is Some((shifted, amount)) {
     let rn = ctx.get_vreg_for_use(rhs_val, block)
     let rm = ctx.get_vreg_for_use(shifted, block)
-    let vcode_inst = @instr.VCodeInst::new(
+    let machv_inst = @instr.MachVInst::new(
       if is_64 {
         OrShifted(Lsl, amount)
       } else {
         OrShifted32(Lsl, amount)
       },
     )
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(rn))
-    vcode_inst.add_use(Virtual(rm))
-    block.add_inst(vcode_inst)
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(rn))
+    machv_inst.add_use(Virtual(rm))
+    block.add_inst(machv_inst)
     return
   }
 
   // Default: regular or
   let lhs = ctx.get_vreg_for_use(lhs_val, block)
   let rhs = ctx.get_vreg_for_use(rhs_val, block)
-  let vcode_inst = @instr.VCodeInst::new(Or(is_64))
-  vcode_inst.add_def({ reg: Virtual(dst) })
-  vcode_inst.add_use(Virtual(lhs))
-  vcode_inst.add_use(Virtual(rhs))
-  block.add_inst(vcode_inst)
+  let machv_inst = @instr.MachVInst::new(Or(is_64))
+  machv_inst.add_def({ reg: Virtual(dst) })
+  machv_inst.add_use(Virtual(lhs))
+  machv_inst.add_use(Virtual(rhs))
+  block.add_inst(machv_inst)
 }
 
 ///|
@@ -1297,7 +1297,7 @@ fn lower_bor(
 fn lower_bxor(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
 ) -> Unit {
   guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
@@ -1310,10 +1310,10 @@ fn lower_bxor(
   if get_const_value(ctx, rhs_val) is Some(imm) &&
     is_valid_logic_imm_for_isa(isa, imm, is_64) {
     let lhs = ctx.get_vreg_for_use(lhs_val, block)
-    let vcode_inst = @instr.VCodeInst::new(XorImm(imm, is_64))
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(lhs))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(XorImm(imm, is_64))
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(lhs))
+    block.add_inst(machv_inst)
     return
   }
 
@@ -1321,10 +1321,10 @@ fn lower_bxor(
   if get_const_value(ctx, lhs_val) is Some(imm) &&
     is_valid_logic_imm_for_isa(isa, imm, is_64) {
     let rhs = ctx.get_vreg_for_use(rhs_val, block)
-    let vcode_inst = @instr.VCodeInst::new(XorImm(imm, is_64))
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(rhs))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(XorImm(imm, is_64))
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(rhs))
+    block.add_inst(machv_inst)
     return
   }
 
@@ -1332,11 +1332,11 @@ fn lower_bxor(
   if match_bnot_value(ctx, rhs_val) is Some(not_src) {
     let rn = ctx.get_vreg_for_use(lhs_val, block)
     let rm = ctx.get_vreg_for_use(not_src, block)
-    let vcode_inst = @instr.VCodeInst::new(XorNot(is_64))
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(rn))
-    vcode_inst.add_use(Virtual(rm))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(XorNot(is_64))
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(rn))
+    machv_inst.add_use(Virtual(rm))
+    block.add_inst(machv_inst)
     return
   }
 
@@ -1344,11 +1344,11 @@ fn lower_bxor(
   if match_bnot_value(ctx, lhs_val) is Some(not_src) {
     let rn = ctx.get_vreg_for_use(rhs_val, block)
     let rm = ctx.get_vreg_for_use(not_src, block)
-    let vcode_inst = @instr.VCodeInst::new(XorNot(is_64))
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(rn))
-    vcode_inst.add_use(Virtual(rm))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(XorNot(is_64))
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(rn))
+    machv_inst.add_use(Virtual(rm))
+    block.add_inst(machv_inst)
     return
   }
 
@@ -1356,17 +1356,17 @@ fn lower_bxor(
   if match_shl_const_value(ctx, rhs_val) is Some((shifted, amount)) {
     let rn = ctx.get_vreg_for_use(lhs_val, block)
     let rm = ctx.get_vreg_for_use(shifted, block)
-    let vcode_inst = @instr.VCodeInst::new(
+    let machv_inst = @instr.MachVInst::new(
       if is_64 {
         XorShifted(Lsl, amount)
       } else {
         XorShifted32(Lsl, amount)
       },
     )
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(rn))
-    vcode_inst.add_use(Virtual(rm))
-    block.add_inst(vcode_inst)
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(rn))
+    machv_inst.add_use(Virtual(rm))
+    block.add_inst(machv_inst)
     return
   }
 
@@ -1374,28 +1374,28 @@ fn lower_bxor(
   if match_shl_const_value(ctx, lhs_val) is Some((shifted, amount)) {
     let rn = ctx.get_vreg_for_use(rhs_val, block)
     let rm = ctx.get_vreg_for_use(shifted, block)
-    let vcode_inst = @instr.VCodeInst::new(
+    let machv_inst = @instr.MachVInst::new(
       if is_64 {
         XorShifted(Lsl, amount)
       } else {
         XorShifted32(Lsl, amount)
       },
     )
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(rn))
-    vcode_inst.add_use(Virtual(rm))
-    block.add_inst(vcode_inst)
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(rn))
+    machv_inst.add_use(Virtual(rm))
+    block.add_inst(machv_inst)
     return
   }
 
   // Default: regular xor
   let lhs = ctx.get_vreg_for_use(lhs_val, block)
   let rhs = ctx.get_vreg_for_use(rhs_val, block)
-  let vcode_inst = @instr.VCodeInst::new(Xor(is_64))
-  vcode_inst.add_def({ reg: Virtual(dst) })
-  vcode_inst.add_use(Virtual(lhs))
-  vcode_inst.add_use(Virtual(rhs))
-  block.add_inst(vcode_inst)
+  let machv_inst = @instr.MachVInst::new(Xor(is_64))
+  machv_inst.add_def({ reg: Virtual(dst) })
+  machv_inst.add_use(Virtual(lhs))
+  machv_inst.add_use(Virtual(rhs))
+  block.add_inst(machv_inst)
 }
 
 ///|
@@ -1413,7 +1413,7 @@ fn lower_bxor(
 fn lower_rotl(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
 ) -> Unit {
   guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
@@ -1426,7 +1426,7 @@ fn lower_rotl(
   if get_const_value(ctx, inst.operands[1]) is Some(k_imm) {
     let k = k_imm.to_int() & mask
     if k == 0 {
-      let mov = @instr.VCodeInst::new(Move)
+      let mov = @instr.MachVInst::new(Move)
       mov.add_def({ reg: Virtual(dst) })
       mov.add_use(Virtual(src))
       block.add_inst(mov)
@@ -1434,7 +1434,7 @@ fn lower_rotl(
     }
     let bits = if is_64 { 64 } else { 32 }
     let rotr_k = (bits - k) & mask
-    let ror = @instr.VCodeInst::new(RotrImm(rotr_k, is_64))
+    let ror = @instr.MachVInst::new(RotrImm(rotr_k, is_64))
     ror.add_def({ reg: Virtual(dst) })
     ror.add_use(Virtual(src))
     block.add_inst(ror)
@@ -1445,14 +1445,14 @@ fn lower_rotl(
   // Step 1: Compute (0 - n) = -n.
   // AArch64 can use the zero register directly (`xzr/wzr`) as the lhs.
   // Keep the previous generic path for other ISAs.
-  let neg_n = ctx.vcode_func.new_vreg(Int)
-  let sub_inst = @instr.VCodeInst::new(Sub(is_64))
+  let neg_n = ctx.machv_func.new_vreg(Int)
+  let sub_inst = @instr.MachVInst::new(Sub(is_64))
   sub_inst.add_def({ reg: Virtual(neg_n) })
   if ctx.isa is AArch64 {
     sub_inst.add_use(Physical({ index: 31, class: Int }))
   } else {
-    let zero = ctx.vcode_func.new_vreg(Int)
-    let load_zero = @instr.VCodeInst::new(LoadConst(0L))
+    let zero = ctx.machv_func.new_vreg(Int)
+    let load_zero = @instr.MachVInst::new(LoadConst(0L))
     load_zero.add_def({ reg: Virtual(zero) })
     block.add_inst(load_zero)
     sub_inst.add_use(Virtual(zero))
@@ -1461,7 +1461,7 @@ fn lower_rotl(
   block.add_inst(sub_inst)
 
   // Step 2: Rotate right by -n (effectively rotl by n)
-  let rotr_inst = @instr.VCodeInst::new(Rotr(is_64))
+  let rotr_inst = @instr.MachVInst::new(Rotr(is_64))
   if ctx.isa is AMD64 {
     // x86_64 variable shifts/rotates use CL as the implicit count register.
     // Keep rotate source/dest away from rcx (count register).
@@ -1491,7 +1491,7 @@ fn lower_rotl(
 fn lower_ctz(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
 ) -> Unit {
   guard inst.first_result() is Some(result) else { return }
   let dst = ctx.get_vreg(result)
@@ -1499,14 +1499,14 @@ fn lower_ctz(
   let is_64 = result.ty is I64
 
   // Step 1: Reverse bits
-  let reversed = ctx.vcode_func.new_vreg(Int)
-  let rbit_inst = @instr.VCodeInst::new(Rbit(is_64))
+  let reversed = ctx.machv_func.new_vreg(Int)
+  let rbit_inst = @instr.MachVInst::new(Rbit(is_64))
   rbit_inst.add_def({ reg: Virtual(reversed) })
   rbit_inst.add_use(Virtual(src))
   block.add_inst(rbit_inst)
 
   // Step 2: Count leading zeros
-  let clz_inst = @instr.VCodeInst::new(Clz(is_64))
+  let clz_inst = @instr.MachVInst::new(Clz(is_64))
   clz_inst.add_def({ reg: Virtual(dst) })
   clz_inst.add_use(Virtual(reversed))
   block.add_inst(clz_inst)
@@ -1517,7 +1517,7 @@ fn lower_ctz(
 fn lower_binary_float(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
 ) -> Unit {
   if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
@@ -1525,8 +1525,8 @@ fn lower_binary_float(
     let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
     // Determine if this is f32 based on result type
     let is_f32 = result.ty is F32
-    // Select VCode opcode based on IR opcode
-    let opcode : @instr.VCodeOpcode = match inst.opcode {
+    // Select MachV opcode based on IR opcode
+    let opcode : @instr.MachVOpcode = match inst.opcode {
       Fadd => FAdd(is_f32)
       Fsub => FSub(is_f32)
       Fmul => FMul(is_f32)
@@ -1535,11 +1535,11 @@ fn lower_binary_float(
       Fmax => FMax(is_f32)
       _ => FAdd(is_f32) // Fallback, should not happen
     }
-    let vcode_inst = @instr.VCodeInst::new(opcode)
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(lhs))
-    vcode_inst.add_use(Virtual(rhs))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(opcode)
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(lhs))
+    machv_inst.add_use(Virtual(rhs))
+    block.add_inst(machv_inst)
   }
 }
 
@@ -1548,15 +1548,15 @@ fn lower_binary_float(
 fn lower_unary_float(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
 ) -> Unit {
   if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let src = ctx.get_vreg_for_use(inst.operands[0], block)
     // Determine if this is f32 based on result type
     let is_f32 = result.ty is F32
-    // Select VCode opcode based on IR opcode
-    let opcode : @instr.VCodeOpcode = match inst.opcode {
+    // Select MachV opcode based on IR opcode
+    let opcode : @instr.MachVOpcode = match inst.opcode {
       Fsqrt => FSqrt(is_f32)
       Fabs => FAbs(is_f32)
       Fneg => FNeg(is_f32)
@@ -1566,10 +1566,10 @@ fn lower_unary_float(
       Fnearest => FNearest(is_f32)
       _ => FSqrt(is_f32) // Fallback, should not happen
     }
-    let vcode_inst = @instr.VCodeInst::new(opcode)
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(src))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(opcode)
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(src))
+    block.add_inst(machv_inst)
   }
 }
 
@@ -1578,15 +1578,15 @@ fn lower_unary_float(
 fn lower_promote(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
 ) -> Unit {
   if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let src = ctx.get_vreg_for_use(inst.operands[0], block)
-    let vcode_inst = @instr.VCodeInst::new(FPromote)
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(src))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(FPromote)
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(src))
+    block.add_inst(machv_inst)
   }
 }
 
@@ -1595,15 +1595,15 @@ fn lower_promote(
 fn lower_demote(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
 ) -> Unit {
   if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let src = ctx.get_vreg_for_use(inst.operands[0], block)
-    let vcode_inst = @instr.VCodeInst::new(FDemote)
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(src))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(FDemote)
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(src))
+    block.add_inst(machv_inst)
   }
 }
 
@@ -1612,17 +1612,17 @@ fn lower_demote(
 fn lower_unary_int(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
-  make_opcode : (Bool) -> @instr.VCodeOpcode,
+  block : @block.MachVBlock,
+  make_opcode : (Bool) -> @instr.MachVOpcode,
 ) -> Unit {
   if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let src = ctx.get_vreg_for_use(inst.operands[0], block)
     let is_64 = result.ty is I64
-    let vcode_inst = @instr.VCodeInst::new(make_opcode(is_64))
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(src))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(make_opcode(is_64))
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(src))
+    block.add_inst(machv_inst)
   }
 }
 
@@ -1640,7 +1640,7 @@ fn lower_unary_int(
 fn lower_rem(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   signed : Bool,
 ) -> Unit {
   let lhs = ctx.get_vreg_for_use(inst.operands[0], block) // a (dividend)
@@ -1651,7 +1651,7 @@ fn lower_rem(
 
   // Trap if divisor is zero (trap_code 4 = integer divide by zero)
   // Must always emit even if result is unused (for side effect)
-  let trap_zero = @instr.VCodeInst::new(TrapIfZero(is_64, 4))
+  let trap_zero = @instr.MachVInst::new(TrapIfZero(is_64, 4))
   if use_fixed_divisor {
     trap_zero.add_use_fixed(Virtual(rhs), divisor_preg)
   } else {
@@ -1667,7 +1667,7 @@ fn lower_rem(
       //
       // Note: the remainder value is produced in RDX/EDX by the hardware.
       let opcode = if signed { @instr.SRem(is_64) } else { URem(is_64) }
-      let rem_inst = @instr.VCodeInst::new(opcode)
+      let rem_inst = @instr.MachVInst::new(opcode)
       rem_inst.add_def_fixed({ reg: Virtual(dst) }, { index: 2, class: Int }) // rdx
       rem_inst.add_use_fixed(Virtual(lhs), { index: 0, class: Int }) // rax
       rem_inst.add_use_fixed(Virtual(rhs), divisor_preg)
@@ -1679,9 +1679,9 @@ fn lower_rem(
     }
 
     // Step 1: Compute quotient = a / b
-    let quotient = ctx.vcode_func.new_vreg(Int)
+    let quotient = ctx.machv_func.new_vreg(Int)
     let div_opcode = if signed { @instr.SDiv(is_64) } else { UDiv(is_64) }
-    let div_inst = @instr.VCodeInst::new(div_opcode)
+    let div_inst = @instr.MachVInst::new(div_opcode)
     div_inst.add_def({ reg: Virtual(quotient) })
     div_inst.add_use(Virtual(lhs))
     div_inst.add_use(Virtual(rhs))
@@ -1694,20 +1694,20 @@ fn lower_rem(
     if is_64 && !(ctx.isa is AMD64) {
       // MSUB rd, rn, rm, ra computes: ra - rn * rm
       // We want: a - quotient * b, so: ra=a, rn=quotient, rm=b
-      let msub_inst = @instr.VCodeInst::new(Msub)
+      let msub_inst = @instr.MachVInst::new(Msub)
       msub_inst.add_def({ reg: Virtual(dst) })
       msub_inst.add_use(Virtual(lhs)) // accumulator (a)
       msub_inst.add_use(Virtual(quotient)) // multiplicand
       msub_inst.add_use(Virtual(rhs)) // multiplier (b)
       block.add_inst(msub_inst)
     } else {
-      let product = ctx.vcode_func.new_vreg(Int)
-      let mul_inst = @instr.VCodeInst::new(Mul(is_64))
+      let product = ctx.machv_func.new_vreg(Int)
+      let mul_inst = @instr.MachVInst::new(Mul(is_64))
       mul_inst.add_def({ reg: Virtual(product) })
       mul_inst.add_use(Virtual(quotient))
       mul_inst.add_use(Virtual(rhs))
       block.add_inst(mul_inst)
-      let sub_inst = @instr.VCodeInst::new(Sub(is_64))
+      let sub_inst = @instr.MachVInst::new(Sub(is_64))
       sub_inst.add_def({ reg: Virtual(dst) })
       sub_inst.add_use(Virtual(lhs))
       sub_inst.add_use(Virtual(product))
@@ -1721,14 +1721,14 @@ fn lower_rem(
 fn lower_bitcast(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
 ) -> Unit {
   if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let src = ctx.get_vreg_for_use(inst.operands[0], block)
-    let vcode_inst = @instr.VCodeInst::new(Bitcast)
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(src))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(Bitcast)
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(src))
+    block.add_inst(machv_inst)
   }
 }

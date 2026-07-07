@@ -760,19 +760,19 @@ pub fn IRBuilder::store_ptr_narrow(
 
 ///|
 /// Call via function pointer with multiple return values
-/// For trampolines calling WASM functions
+/// For trampolines calling through an embedding-defined function pointer.
 ///
-/// Design: VMContext is an explicit special parameter (Cranelift-style).
+/// Design: the embedding context is an explicit special parameter.
 ///
-/// Operand layout: [func_ptr, vmctx, user_args...]
+/// Operand layout: [func_ptr, context, user_args...]
 pub fn IRBuilder::call_ptr(
   self : IRBuilder,
   func_ptr : Value,
-  vmctx : Value,
+  context : Value,
   args : Array[Value],
   result_types : Array[Type],
 ) -> Array[Value] {
-  let all_args : Array[Value] = [func_ptr, vmctx]
+  let all_args : Array[Value] = [func_ptr, context]
   for arg in args {
     all_args.push(arg)
   }

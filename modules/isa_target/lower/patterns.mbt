@@ -340,7 +340,7 @@ fn is_power_of_2(val : Int64) -> Int? {
 }
 
 ///|
-/// A rewrite rule - matches a pattern and produces optimized VCode
+/// A rewrite rule - matches a pattern and produces optimized MachV
 struct RewriteRule {
   name : String
   pattern : Pattern
@@ -522,7 +522,7 @@ fn apply_rule(
 pub fn lower_inst_with_patterns(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   rules : Array[RewriteRule],
 ) -> Bool {
   let rewrite_result = try_apply_rules(inst, ctx, rules)
@@ -532,10 +532,10 @@ pub fn lower_inst_with_patterns(
       if inst.first_result() is Some(result) {
         let dst = ctx.get_vreg(result)
         let src = ctx.get_vreg(inst.operands[operand_idx])
-        let vcode_inst = @instr.VCodeInst::new(Move)
-        vcode_inst.add_def({ reg: Virtual(dst) })
-        vcode_inst.add_use(Virtual(src))
-        block.add_inst(vcode_inst)
+        let machv_inst = @instr.MachVInst::new(Move)
+        machv_inst.add_def({ reg: Virtual(dst) })
+        machv_inst.add_use(Virtual(src))
+        block.add_inst(machv_inst)
         true
       } else {
         false
@@ -544,9 +544,9 @@ pub fn lower_inst_with_patterns(
       // Emit a load constant
       if inst.first_result() is Some(result) {
         let dst = ctx.get_vreg(result)
-        let vcode_inst = @instr.VCodeInst::new(LoadConst(val))
-        vcode_inst.add_def({ reg: Virtual(dst) })
-        block.add_inst(vcode_inst)
+        let machv_inst = @instr.MachVInst::new(LoadConst(val))
+        machv_inst.add_def({ reg: Virtual(dst) })
+        block.add_inst(machv_inst)
         true
       } else {
         false
@@ -559,7 +559,7 @@ pub fn lower_inst_with_patterns(
         let is_64 = result.ty is I64
         let mask = if is_64 { 63 } else { 31 }
         let shift = shift_amount & mask
-        let shl_inst = @instr.VCodeInst::new(ShlImm(shift, is_64))
+        let shl_inst = @instr.MachVInst::new(ShlImm(shift, is_64))
         shl_inst.add_def({ reg: Virtual(dst) })
         shl_inst.add_use(Virtual(src))
         block.add_inst(shl_inst)
@@ -575,7 +575,7 @@ pub fn lower_inst_with_patterns(
         let is_64 = result.ty is I64
         let mask = if is_64 { 63 } else { 31 }
         let shift = shift_amount & mask
-        let lshr_inst = @instr.VCodeInst::new(LShrImm(shift, is_64))
+        let lshr_inst = @instr.MachVInst::new(LShrImm(shift, is_64))
         lshr_inst.add_def({ reg: Virtual(dst) })
         lshr_inst.add_use(Virtual(src))
         block.add_inst(lshr_inst)
@@ -600,66 +600,64 @@ pub fn lower_function_optimized(ir_func : @milkir.Function) -> @machv.Function {
     {},
     None,
     -1,
-    true,
-    [],
   )
   let rules = get_optimization_rules()
 
-  // Phase 1: Create VCode blocks and set up block mapping
+  // Phase 1: Create MachV blocks and set up block mapping
   for ir_block in ir_func.blocks {
-    let vcode_block = ctx.vcode_func.new_block()
-    ctx.block_map.set(ir_block.id, vcode_block.id)
+    let machv_block = ctx.machv_func.new_block()
+    ctx.block_map.set(ir_block.id, machv_block.id)
   }
 
   // Phase 2: Lower function parameters
   for param in function_params_for_lowering(ir_func) {
     let (value, ty) = param
     let class = ir_type_to_reg_class(ty)
-    let vreg = ctx.vcode_func.add_param(class)
+    let vreg = ctx.machv_func.add_param(class)
     ctx.set_cached_vreg(value.id, vreg)
   }
 
   // Phase 3: Lower result types
   for ty in ir_func.results {
     let class = ir_type_to_reg_class(ty)
-    ctx.vcode_func.add_result(class)
+    ctx.machv_func.add_result(class)
   }
 
   // Phase 4: Lower each block with pattern matching
   for i, ir_block in ir_func.blocks {
-    lower_block_optimized(ctx, ir_block, ctx.vcode_func.blocks[i], rules)
+    lower_block_optimized(ctx, ir_block, ctx.machv_func.blocks[i], rules)
   }
-  ctx.vcode_func
+  ctx.machv_func
 }
 
 ///|
 fn lower_block_optimized(
   ctx : LoweringContext,
   ir_block : @milkir.Block,
-  vcode_block : @block.VCodeBlock,
+  machv_block : @block.MachVBlock,
   rules : Array[RewriteRule],
 ) -> Unit {
   // Lower block parameters
   for param in ir_block.params {
     let (value, ty) = param
     let class = ir_type_to_reg_class(ty)
-    let vreg = ctx.vcode_func.new_vreg(class)
+    let vreg = ctx.machv_func.new_vreg(class)
     ctx.set_cached_vreg(value.id, vreg)
-    vcode_block.params.push(vreg)
+    machv_block.params.push(vreg)
   }
 
   // Lower instructions with pattern matching
   for inst in ir_block.instructions {
     // First try pattern-based optimization
-    if !lower_inst_with_patterns(ctx, inst, vcode_block, rules) {
+    if !lower_inst_with_patterns(ctx, inst, machv_block, rules) {
       // Fall back to default lowering
-      lower_inst_default(ctx, inst, vcode_block)
+      lower_inst_default(ctx, inst, machv_block)
     }
   }
 
   // Lower terminator
   if ir_block.terminator is Some(term) {
-    lower_terminator(ctx, term, vcode_block)
+    lower_terminator(ctx, term, machv_block)
   }
 }
 
@@ -668,7 +666,7 @@ fn lower_block_optimized(
 fn lower_inst_default(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
 ) -> Unit {
   match inst.opcode {
     // Constants
@@ -725,6 +723,6 @@ fn lower_inst_default(
     // Misc
     Copy => lower_copy(ctx, inst, block)
     Select => lower_select(ctx, inst, block)
-    opcode => abort("unimplemented vcode lowering for opcode \{opcode}")
+    opcode => abort("unimplemented machv lowering for opcode \{opcode}")
   }
 }

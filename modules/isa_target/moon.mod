@@ -10,7 +10,7 @@ license = "Apache-2.0"
 
 keywords = [ "compiler", "lowering", "isa", "codegen" ]
 
-description = "ISA lowering from MilkIR to MachV VCode"
+description = "ISA lowering from MilkIR to MachV"
 
 import {
   "moonbitlang/x@0.4.38",

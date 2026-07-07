@@ -11,15 +11,21 @@ import {
 }
 
 // Values
-pub fn add_c_call_clobbers(LoweringContext, @instr.VCodeInst) -> Unit
+pub fn add_c_call_clobbers(LoweringContext, @instr.MachVInst) -> Unit
 
-pub fn add_call_clobbers(LoweringContext, @instr.VCodeInst) -> Unit
+pub fn add_call_clobbers(LoweringContext, @instr.MachVInst) -> Unit
 
 pub fn apply_aarch64_rule(String, MatchResult, @milkir.Inst, LoweringContext) -> AArch64RewriteResult
 
 pub fn collect_call_result_vregs(LoweringContext, @milkir.Inst) -> Array[@abi.VReg]
 
-pub fn emit_load_table0_base(LoweringContext, @block.VCodeBlock) -> @abi.VReg
+pub fn context_index(LoweringContext) -> Int
+
+pub fn context_preg(LoweringContext) -> @abi.PReg
+
+pub fn emit_load_table0_base(LoweringContext, @block.MachVBlock) -> @abi.VReg
+
+pub fn external_helper_symbol(LoweringContext, String) -> @instr.ExternalName
 
 pub fn find_defining_inst(LoweringContext, @milkir.Value) -> @milkir.Inst?
 
@@ -41,35 +47,29 @@ pub fn is_valid_load_store_offset(LoweringContext, Int64, Int) -> Bool
 
 pub fn is_valid_logical_imm(Int64) -> Bool
 
-pub fn lower_c_libcall(LoweringContext, @block.VCodeBlock, @abi.VReg, Array[@abi.VReg], @abi.VReg?) -> Unit
+pub fn lower_c_libcall(LoweringContext, @block.MachVBlock, @abi.VReg, Array[@abi.VReg], @abi.VReg?) -> Unit
 
-pub fn lower_c_libcall_direct(LoweringContext, @block.VCodeBlock, @instr.ExternalName, Array[@abi.VReg], @abi.VReg?) -> Unit
+pub fn lower_c_libcall_direct(LoweringContext, @block.MachVBlock, @instr.ExternalName, Array[@abi.VReg], @abi.VReg?) -> Unit
 
-pub fn lower_function(@milkir.Function, isa? : @isa.ISA, abi_settings? : @abi.ABISettings, embedding_reg_roles? : @abi.EmbeddingRegRoles, runtime_layout? : @abi.EmbeddingContextLayout?, call_conv_layout? : @abi.CallConventionLayout?, runtime_helper_symbols? : Map[String, String], extension_lowerer? : ((LoweringContext, @milkir.Inst, @block.VCodeBlock, @milkir.ExtOp) -> Bool)?, num_imports? : Int, run_ir_opt? : Bool, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @machv.Function
+pub fn lower_function(@milkir.Function, isa? : @isa.ISA, abi_settings? : @abi.ABISettings, embedding_reg_roles? : @abi.EmbeddingRegRoles, embedding_context_layout? : @abi.EmbeddingContextLayout?, call_conv_layout? : @abi.CallConventionLayout?, external_helper_symbols? : Map[String, String], extension_lowerer? : ((LoweringContext, @milkir.Inst, @block.MachVBlock, @milkir.ExtOp) -> Bool)?, num_imports? : Int, run_ir_opt? : Bool) -> @machv.Function
 
 pub fn lower_function_optimized(@milkir.Function) -> @machv.Function
 
-pub fn lower_inst_with_patterns(LoweringContext, @milkir.Inst, @block.VCodeBlock, Array[RewriteRule]) -> Bool
+pub fn lower_inst_with_patterns(LoweringContext, @milkir.Inst, @block.MachVBlock, Array[RewriteRule]) -> Bool
 
-pub fn lower_unsupported_extension_opcode(@milkir.Inst, @block.VCodeBlock) -> Unit
+pub fn lower_unsupported_extension_opcode(@milkir.Inst, @block.MachVBlock) -> Unit
 
 pub fn match_pattern(Pattern, @milkir.Inst, LoweringContext) -> MatchResult?
 
-pub fn materialize_imm(LoweringContext, @block.VCodeBlock, Int64) -> @abi.VReg
+pub fn materialize_imm(LoweringContext, @block.MachVBlock, Int64) -> @abi.VReg
 
-pub fn optimize_vcode(@machv.Function, isa? : @isa.ISA) -> Unit
+pub fn optimize_machv(@machv.Function, isa? : @isa.ISA) -> Unit
 
-pub fn optimize_vcode_for_lowering(@machv.Function, isa? : @isa.ISA, runtime_layout? : @abi.EmbeddingContextLayout?, embedding_reg_roles? : @abi.EmbeddingRegRoles) -> Unit
-
-pub fn runtime_helper_symbol(LoweringContext, String) -> @instr.ExternalName
+pub fn optimize_machv_for_lowering(@machv.Function, isa? : @isa.ISA, embedding_context_layout? : @abi.EmbeddingContextLayout?, embedding_reg_roles? : @abi.EmbeddingRegRoles) -> Unit
 
 pub fn scratch2_index(LoweringContext) -> Int
 
 pub fn try_apply_rules(@milkir.Inst, LoweringContext, Array[RewriteRule]) -> RewriteResult
-
-pub fn vmctx_index(LoweringContext) -> Int
-
-pub fn vmctx_preg(LoweringContext) -> @abi.PReg
 
 // Errors
 
@@ -80,7 +80,7 @@ pub enum AArch64RewriteResult {
   Madd(Int, Int, Int)
   Msub(Int, Int, Int)
   Mneg(Int, Int)
-  LogicalShifted(@instr.VCodeOpcode, Int, Int, Int)
+  LogicalShifted(@instr.MachVOpcode, Int, Int, Int)
   NoMatch
 }
 
@@ -91,18 +91,16 @@ pub fn LoweringContext::cache_mem_base(Self, Int, @abi.VReg) -> Unit
 pub fn LoweringContext::cached_func_table(Self, Int) -> @abi.VReg?
 pub fn LoweringContext::cached_mem_base(Self, Int) -> @abi.VReg?
 pub fn LoweringContext::call_conv_layout(Self) -> @abi.CallConventionLayout
-pub fn LoweringContext::canonicalize_indirect_type_idx(Self, Int) -> Int
+pub fn LoweringContext::embedding_context_layout(Self) -> @abi.EmbeddingContextLayout
 pub fn LoweringContext::embedding_reg_roles(Self) -> @abi.EmbeddingRegRoles
 pub fn LoweringContext::get_vreg(Self, @milkir.Value) -> @abi.VReg
-pub fn LoweringContext::get_vreg_for_use(Self, @milkir.Value, @block.VCodeBlock) -> @abi.VReg
-pub fn LoweringContext::new(@milkir.Function, @isa.ISA, @abi.ABISettings, @abi.EmbeddingRegRoles, @abi.EmbeddingContextLayout?, @abi.CallConventionLayout?, Map[String, String], ((Self, @milkir.Inst, @block.VCodeBlock, @milkir.ExtOp) -> Bool)?, Int, Bool, Array[Int]) -> Self
+pub fn LoweringContext::get_vreg_for_use(Self, @milkir.Value, @block.MachVBlock) -> @abi.VReg
+pub fn LoweringContext::machv_function(Self) -> @machv.Function
+pub fn LoweringContext::new(@milkir.Function, @isa.ISA, @abi.ABISettings, @abi.EmbeddingRegRoles, @abi.EmbeddingContextLayout?, @abi.CallConventionLayout?, Map[String, String], ((Self, @milkir.Inst, @block.MachVBlock, @milkir.ExtOp) -> Bool)?, Int) -> Self
 pub fn LoweringContext::new_vreg(Self, @abi.RegClass) -> @abi.VReg
 pub fn LoweringContext::num_imports(Self) -> Int
-pub fn LoweringContext::runtime_layout(Self) -> @abi.EmbeddingContextLayout
 pub fn LoweringContext::set_cached_vreg(Self, Int, @abi.VReg) -> Unit
 pub fn LoweringContext::use_count(Self, Int) -> Int
-pub fn LoweringContext::use_subtype_indirect_check(Self) -> Bool
-pub fn LoweringContext::vcode_function(Self) -> @machv.Function
 
 type MatchResult
 

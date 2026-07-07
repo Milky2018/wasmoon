@@ -1,8 +1,8 @@
 ///|
 /// AArch64 ABI/ISA policy (AAPCS64 / Apple ARM64).
 ///
-/// These helpers are extracted from `vcode/abi/abi.mbt` so other parts of the
-/// JIT backend can depend on `vcode/isa` instead of hardcoding AArch64.
+/// These helpers are extracted from `machv/abi/abi.mbt` so other parts of the
+/// JIT backend can depend on `machv/isa` instead of hardcoding AArch64.
 
 ///|
 pub fn aapcs64_arg_gprs() -> Array[@abi.PReg] {

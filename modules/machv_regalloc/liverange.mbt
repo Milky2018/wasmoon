@@ -52,7 +52,7 @@ pub fn ProgPointRange::contains(
 ///|
 /// Kind of use at a program point
 /// Note: For tied operands (same reg as both def and use), add a DefUse variant
-/// when VCodeInst supports tied operand representation.
+/// when MachVInst supports tied operand representation.
 enum UseKind {
   Def // Definition (value produced)
   Use // Use (value consumed)

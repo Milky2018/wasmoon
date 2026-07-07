@@ -34,19 +34,19 @@ pub(all) struct TrapReport {
 /// Per-function compilation dumps captured for dump-on-trap.
 pub struct JITFunctionDebug {
   ir : String
-  vcode_before_regalloc : String
-  vcode_after_regalloc : String
+  machv_before_regalloc : String
+  machv_after_regalloc : String
   machine_code : String
 }
 
 ///|
 pub fn JITFunctionDebug::new(
   ir : String,
-  vcode_before_regalloc : String,
-  vcode_after_regalloc : String,
+  machv_before_regalloc : String,
+  machv_after_regalloc : String,
   machine_code : String,
 ) -> JITFunctionDebug {
-  { ir, vcode_before_regalloc, vcode_after_regalloc, machine_code }
+  { ir, machv_before_regalloc, machv_after_regalloc, machine_code }
 }
 
 ///|

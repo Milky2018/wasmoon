@@ -6,7 +6,7 @@ priv struct CompiledFunc {
   source : String // WAT source code
   ir : String
   ir_opt : String
-  vcode : String
+  machv : String
   regalloc : String
   mc : String
 }
@@ -27,7 +27,6 @@ pub fn run_explore(
   let show_source = show_all || stages.contains("source")
   let show_ir = show_all || stages.contains("ir")
   let show_opt_ir = show_all || stages.contains("opt-ir")
-  let show_vcode = show_all || stages.contains("vcode")
   let show_regalloc = show_all || stages.contains("regalloc")
   let show_mc = show_all || stages.contains("mc")
   let show_milkir = show_all || stages.contains("milkir")
@@ -139,7 +138,7 @@ pub fn run_explore(
             source: source_text,
             ir: text,
             ir_opt: text,
-            vcode: text,
+            machv: text,
             regalloc: text,
             mc: text,
           })
@@ -175,11 +174,11 @@ pub fn run_explore(
     let mach_result = @wasmoon_jit.lower_wasm_body_milkir_for_target(
       milk_result, target,
     )
-    let vcode_text = mach_result.print()
-    if !html_output && show_vcode {
+    let machv_text = mach_result.print()
+    if !html_output && show_machv {
       println("")
-      println("── MachV (vcode alias) ──")
-      println(vcode_text)
+      println("── MachV ──")
+      println(machv_text)
     }
 
     let allocated_text = "MachV register allocation is integrated into the wasmoon_jit planning pipeline."
@@ -217,7 +216,7 @@ pub fn run_explore(
       if show_machv {
         println("")
         println("── MachV ──")
-        println(vcode_text)
+        println(machv_text)
       }
       if show_machv_mc {
         println("")
@@ -234,7 +233,7 @@ pub fn run_explore(
         source: source_text,
         ir: ir_text,
         ir_opt: ir_optimized,
-        vcode: vcode_text,
+        machv: machv_text,
         regalloc: allocated_text,
         mc: mc_text,
       })

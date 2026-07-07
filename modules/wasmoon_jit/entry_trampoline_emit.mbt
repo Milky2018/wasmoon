@@ -40,14 +40,14 @@ pub fn emit_entry_trampoline(
   let ir_func = generate_trampoline_ir(param_types, result_types)
 
   // Compile through the normal pipeline
-  let vcode_func = @lower.lower_function(
+  let machv_func = @lower.lower_function(
     ir_func,
     isa~,
     embedding_reg_roles=wasm_embedding_reg_roles(isa~),
     call_conv_layout=Some(call_conv_layout),
   )
   let allocated = @machv_regalloc.allocate_registers_backtracking_with_isa(
-    vcode_func,
+    machv_func,
     isa,
     @abi.ABISettings::default(),
     wasm_embedding_reg_roles(isa~),

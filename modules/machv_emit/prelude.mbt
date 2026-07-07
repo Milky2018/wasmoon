@@ -1,5 +1,5 @@
 // Code Generation
-// Translates VCode to machine code
+// Translates MachV to machine code
 
 ///|
 /// Convert 8 bytes from Bytes at given offset to Int64 (little-endian)
@@ -158,7 +158,7 @@ fn func_uses_context_reg(func : @machv.Function, context_reg : Int) -> Bool {
 
 ///|
 fn terminator_uses_context_reg(
-  term : @instr.VCodeTerminator,
+  term : @instr.MachVTerminator,
   context_reg : Int,
 ) -> Bool {
   match term {
@@ -759,7 +759,7 @@ fn MachineCode::emit_prologue(
 }
 
 ///|
-/// Emit machine code for a VCode function
+/// Emit machine code for a MachV function
 pub fn emit_function(
   func : @machv.Function,
   isa? : @isa.ISA = AArch64,
@@ -1254,7 +1254,7 @@ pub fn emit_function(
   mc
 }
 
-// ============ Cranelift-Style Emission (VCode + regalloc::Output) ============
+// ============ Cranelift-Style Emission (MachV + regalloc::Output) ============
 
 ///|
 fn output_uses_preg(
@@ -1426,7 +1426,7 @@ fn invalidate_edit_slot_cache_reg(
 ///|
 fn invalidate_edit_slot_cache_defs(
   slot_cache : Map[Int, @abi.PReg],
-  inst : @instr.VCodeInst,
+  inst : @instr.MachVInst,
 ) -> Unit {
   for def in inst.defs {
     if def.reg is Physical(preg) {
@@ -1468,7 +1468,7 @@ fn emit_edit_move_with_cache(
         (Reg(src), Reg(dst)) => {
           let dst_preg : @abi.PReg = { index: dst.index, class }
           invalidate_edit_slot_cache_reg(slot_cache, dst_preg)
-          let inst = @instr.VCodeInst::new(Move)
+          let inst = @instr.MachVInst::new(Move)
           inst.add_def({ reg: Physical(dst_preg) })
           inst.add_use(Physical({ index: src.index, class }))
           mc.emit_instruction(inst, stack_frame)
@@ -1477,14 +1477,14 @@ fn emit_edit_move_with_cache(
           let dst_preg : @abi.PReg = { index: dst.index, class }
           invalidate_edit_slot_cache_reg(slot_cache, dst_preg)
           invalidate_edit_slot_cache_range(slot_cache, slot, class)
-          let inst = @instr.VCodeInst::new(StackLoad(slot * 8))
+          let inst = @instr.MachVInst::new(StackLoad(slot * 8))
           inst.add_def({ reg: Physical(dst_preg) })
           mc.emit_instruction(inst, stack_frame)
         }
         (Reg(src), Spill(slot)) => {
           let src_preg : @abi.PReg = { index: src.index, class }
           invalidate_edit_slot_cache_range(slot_cache, slot, class)
-          let inst = @instr.VCodeInst::new(StackStore(slot * 8))
+          let inst = @instr.MachVInst::new(StackStore(slot * 8))
           inst.add_use(Physical(src_preg))
           mc.emit_instruction(inst, stack_frame)
         }
@@ -1500,9 +1500,9 @@ fn emit_edit_move_with_cache(
 fn map_inst_for_emission(
   block_id : Int,
   inst_idx : Int,
-  inst : @instr.VCodeInst,
+  inst : @instr.MachVInst,
   output : @machv_regalloc.Output,
-) -> @instr.VCodeInst {
+) -> @instr.MachVInst {
   for di in 0..<inst.defs.length() {
     match output.inst_def_loc(block_id, inst_idx, false, di) {
       Reg(preg) => inst.defs[di] = { reg: Physical(preg) }
@@ -1522,9 +1522,9 @@ fn map_inst_for_emission(
 fn map_term_for_emission(
   block_id : Int,
   term_inst : Int,
-  term : @instr.VCodeTerminator,
+  term : @instr.MachVTerminator,
   output : @machv_regalloc.Output,
-) -> @instr.VCodeTerminator {
+) -> @instr.MachVTerminator {
   // Jump and Trap don't consume vregs in the emitter.
   match term {
     Jump(_, _) | Trap(_) => term

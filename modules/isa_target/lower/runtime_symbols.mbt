@@ -4,13 +4,12 @@ fn external_symbol(name : String) -> @instr.ExternalName {
 }
 
 ///|
-pub fn runtime_helper_symbol(
+pub fn external_helper_symbol(
   ctx : LoweringContext,
   key : String,
 ) -> @instr.ExternalName {
-  match ctx.runtime_helper_symbols.get(key) {
+  match ctx.external_helper_symbols.get(key) {
     Some(symbol) => external_symbol(symbol)
-    None =>
-      abort("Wasm runtime-helper lowering requires explicit runtime symbols")
+    None => abort("external helper lowering requires explicit symbol mappings")
   }
 }

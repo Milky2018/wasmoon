@@ -810,11 +810,11 @@ fn JITModule::build_trap_report(
       "== IR ==\n" +
       dbg.ir +
       "\n\n" +
-      "== VCode (before regalloc) ==\n" +
-      dbg.vcode_before_regalloc +
+      "== MachV (before regalloc) ==\n" +
+      dbg.machv_before_regalloc +
       "\n\n" +
-      "== VCode (after regalloc) ==\n" +
-      dbg.vcode_after_regalloc +
+      "== MachV (after regalloc) ==\n" +
+      dbg.machv_after_regalloc +
       "\n\n" +
       "== Machine Code ==\n" +
       dbg.machine_code +
@@ -840,11 +840,11 @@ fn JITModule::build_trap_report(
             "== Caller IR ==\n" +
             cdbg.ir +
             "\n\n" +
-            "== Caller VCode (before regalloc) ==\n" +
-            cdbg.vcode_before_regalloc +
+            "== Caller MachV (before regalloc) ==\n" +
+            cdbg.machv_before_regalloc +
             "\n\n" +
-            "== Caller VCode (after regalloc) ==\n" +
-            cdbg.vcode_after_regalloc +
+            "== Caller MachV (after regalloc) ==\n" +
+            cdbg.machv_after_regalloc +
             "\n\n" +
             "== Caller Machine Code ==\n" +
             cdbg.machine_code +

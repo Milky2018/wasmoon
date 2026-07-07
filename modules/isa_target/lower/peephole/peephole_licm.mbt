@@ -5,10 +5,10 @@
 /// loop header has a unique predecessor outside the loop, treat it as a
 /// preheader and hoist:
 /// - `LoadConst` (with heuristics to avoid reg pressure)
-/// - a small set of loop-invariant `Load`/`LoadPtr` from immutable vmctx-derived data
+/// - a small set of loop-invariant `Load`/`LoadPtr` from immutable context-derived data
 fn licm_hoist_invariants(
   func : @machv.Function,
-  runtime_layout : @abi.RuntimeContextLayout,
+  embedding_context_layout : @abi.RuntimeContextLayout,
   embedding_reg_roles : @abi.EmbeddingRegRoles,
 ) -> Unit {
   let n = func.blocks.length()
@@ -130,12 +130,12 @@ fn licm_hoist_invariants(
           Some(preg) => preg.index
           None => return
         }
-        fn is_vmctx_reg(r : @abi.Reg) -> Bool {
+        fn is_context_reg(r : @abi.Reg) -> Bool {
           r is Physical(p) && p.index == context_idx
         }
 
         // Def map for virtual registers (only the simple case we care about).
-        let def_inst : Map[Int, @instr.VCodeInst] = {}
+        let def_inst : Map[Int, @instr.MachVInst] = {}
         for blk in func.blocks {
           for inst in blk.insts {
             if inst.defs.length() == 1 &&
@@ -145,15 +145,15 @@ fn licm_hoist_invariants(
           }
         }
 
-        // Is this vreg an immutable pointer derived from vmctx.func_table?
+        // Is this vreg an immutable pointer derived from context.function_table?
         fn is_immutable_ptr(vreg_id : Int) -> Bool {
           match def_inst.get(vreg_id) {
             Some(inst) =>
               match inst.opcode {
                 Load(I64, off) =>
-                  off == runtime_layout.function_table_offset &&
+                  off == embedding_context_layout.function_table_offset &&
                   inst.uses.length() == 1 &&
-                  is_vmctx_reg(inst.uses[0])
+                  is_context_reg(inst.uses[0])
                 _ => false
               }
             None => false
@@ -161,12 +161,12 @@ fn licm_hoist_invariants(
         }
 
         // Checks whether a load is safe to hoist.
-        fn is_hoistable_load(op : @instr.VCodeOpcode, base : @abi.Reg) -> Bool {
+        fn is_hoistable_load(op : @instr.MachVOpcode, base : @abi.Reg) -> Bool {
           match op {
             Load(I64, off) | LoadPtr(I64, off) =>
-              if is_vmctx_reg(base) {
+              if is_context_reg(base) {
                 // Only allow runtime function-table load at the moment.
-                off == runtime_layout.function_table_offset
+                off == embedding_context_layout.function_table_offset
               } else if base is Virtual(v) {
                 // Allow loads from the func_table pointer.
                 is_immutable_ptr(v.id)
@@ -178,18 +178,18 @@ fn licm_hoist_invariants(
         }
 
         // Hoist invariants from loop blocks to preheader.
-        let hoisted : Array[@instr.VCodeInst] = []
+        let hoisted : Array[@instr.MachVInst] = []
         let hoisted_defs : @hashset.HashSet[Int] = HashSet([])
         for i in 0..<n {
           if !loop_nodes.contains(i) {
             continue
           }
           let blk = func.blocks[i]
-          let new_insts : Array[@instr.VCodeInst] = []
+          let new_insts : Array[@instr.MachVInst] = []
           for inst in blk.insts {
             // Helper: can we treat this inst as loop-invariant now?
             fn base_is_invariant(base : @abi.Reg) -> Bool {
-              if is_vmctx_reg(base) {
+              if is_context_reg(base) {
                 return true
               }
               match base {
@@ -242,15 +242,15 @@ fn licm_hoist_invariants(
 }
 
 ///|
-/// Block-local CSE for immutable vmctx/func_table loads.
+/// Block-local CSE for immutable context/function-table loads.
 ///
 /// Today this is intentionally conservative:
-/// - vmctx base must be `x19`
-/// - only track immutable vmctx-derived base pointers (`func_table`, `globals`)
+/// - context base must be `x19`
+/// - only track immutable context-derived base pointers (`func_table`, `globals`)
 /// - only CSE `Load(I64, off)` / `LoadPtr(I64, off)` from that func_table pointer
 fn cse_immutable_loads(
   func : @machv.Function,
-  runtime_layout : @abi.RuntimeContextLayout,
+  embedding_context_layout : @abi.RuntimeContextLayout,
   embedding_reg_roles : @abi.EmbeddingRegRoles,
 ) -> Unit {
   let context_idx = match embedding_reg_roles.context {
@@ -259,29 +259,29 @@ fn cse_immutable_loads(
   }
   // Embedding ABI: param 0 is the context pointer. Treat it as a context alias
   // so repeated context-derived base loads can be CSE'd before prelude rewrites.
-  let vmctx_aliases : @hashset.HashSet[Int] = HashSet([])
+  let context_aliases : @hashset.HashSet[Int] = HashSet([])
   let params = func.get_params()
   if params.length() > 0 {
-    vmctx_aliases.add(params[0].id)
+    context_aliases.add(params[0].id)
   }
   // Collect all vregs that are func_table pointers.
   let func_table_ptrs : @hashset.HashSet[Int] = HashSet([])
-  fn is_function_table_context_load(op : @instr.VCodeOpcode) -> Bool {
+  fn is_function_table_context_load(op : @instr.MachVOpcode) -> Bool {
     match op {
       Load(I64, off) | LoadPtr(I64, off) =>
-        off == runtime_layout.function_table_offset
+        off == embedding_context_layout.function_table_offset
       _ => false
     }
   }
-  fn is_context_base_load(op : @instr.VCodeOpcode) -> Bool {
+  fn is_context_base_load(op : @instr.MachVOpcode) -> Bool {
     match op {
       Load(I64, off) | LoadPtr(I64, off) =>
-        off == runtime_layout.function_table_offset ||
-        off == runtime_layout.global_storage_offset
+        off == embedding_context_layout.function_table_offset ||
+        off == embedding_context_layout.global_storage_offset
       _ => false
     }
   }
-  fn is_vmctx_alias(
+  fn is_context_alias(
     reg : @abi.Reg,
     copies : Map[Int, Int],
     aliases : @hashset.HashSet[Int],
@@ -317,23 +317,23 @@ fn cse_immutable_loads(
           src_root = next
         }
         copies.set(dst, src_root)
-        if vmctx_aliases.contains(src_root) {
-          vmctx_aliases.add(dst)
+        if context_aliases.contains(src_root) {
+          context_aliases.add(dst)
         }
       }
       if is_function_table_context_load(inst.opcode) &&
         inst.defs.length() == 1 &&
         inst.uses.length() == 1 &&
-        is_vmctx_alias(inst.uses[0], copies, vmctx_aliases) &&
+        is_context_alias(inst.uses[0], copies, context_aliases) &&
         get_def_vreg_id(inst.defs[0]) is Some(did) {
         func_table_ptrs.add(did)
       }
     }
   }
-  fn is_vmctx(r : @abi.Reg) -> Bool {
+  fn is_context(r : @abi.Reg) -> Bool {
     match r {
       Physical(p) => p.index == context_idx
-      Virtual(v) => vmctx_aliases.contains(v.id)
+      Virtual(v) => context_aliases.contains(v.id)
     }
   }
 
@@ -353,7 +353,7 @@ fn cse_immutable_loads(
     // key: "kind|base|off" -> vreg id
     // kind = 0 for Load, 1 for LoadPtr
     let seen : Map[String, Int] = {}
-    let new_insts : Array[@instr.VCodeInst] = []
+    let new_insts : Array[@instr.MachVInst] = []
     for inst in blk.insts {
       // Track simple virtual copies for canonicalization.
       if inst.opcode is Move &&
@@ -373,7 +373,7 @@ fn cse_immutable_loads(
               if func_table_ptrs.contains(base_id) {
                 let key = "0|" + base_id.to_string() + "|" + off.to_string()
                 if seen.get(key) is Some(prev_id) {
-                  let mv = @instr.VCodeInst::new(Move)
+                  let mv = @instr.MachVInst::new(Move)
                   mv.add_def(inst.defs[0])
                   mv.add_use(Virtual({ id: prev_id, class: Int }))
                   new_insts.push(mv)
@@ -395,7 +395,7 @@ fn cse_immutable_loads(
               if func_table_ptrs.contains(base_id) {
                 let key = "1|" + base_id.to_string() + "|" + off.to_string()
                 if seen.get(key) is Some(prev_id) {
-                  let mv = @instr.VCodeInst::new(Move)
+                  let mv = @instr.MachVInst::new(Move)
                   mv.add_def(inst.defs[0])
                   mv.add_use(Virtual({ id: prev_id, class: Int }))
                   new_insts.push(mv)
@@ -412,20 +412,20 @@ fn cse_immutable_loads(
         _ => ()
       }
 
-      // Also CSE duplicate vmctx-derived immutable base loads:
+      // Also CSE duplicate context-derived immutable base loads:
       // - function table: `load.i64 +function_table_offset context`
       // - global storage: `load.i64 +global_storage_offset context`
       if !replaced &&
         is_context_base_load(inst.opcode) &&
         inst.defs.length() == 1 &&
         inst.uses.length() == 1 &&
-        is_vmctx(inst.uses[0]) {
+        is_context(inst.uses[0]) {
         let key = match inst.opcode {
-          Load(_, off) | LoadPtr(_, off) => "vmctx_base|" + off.to_string()
-          _ => "vmctx_base"
+          Load(_, off) | LoadPtr(_, off) => "context_base|" + off.to_string()
+          _ => "context_base"
         }
         if seen.get(key) is Some(prev_id) {
-          let mv = @instr.VCodeInst::new(Move)
+          let mv = @instr.MachVInst::new(Move)
           mv.add_def(inst.defs[0])
           mv.add_use(Virtual({ id: prev_id, class: Int }))
           new_insts.push(mv)
@@ -461,7 +461,7 @@ fn same_reg_class(a : @abi.RegClass, b : @abi.RegClass) -> Bool {
 ///|
 /// Check if an immediate fits AArch64 add/sub encoding (12-bit or 12-bit<<12).
 ///
-/// Kept local to avoid package cycles with `vcode/lower`.
+/// Kept local to avoid package cycles with `machv/lower`.
 fn is_valid_add_imm(val : Int64) -> Bool {
   if val >= 0L && val <= 4095L {
     return true
@@ -549,7 +549,7 @@ fn build_cmp_branch_terminator(
   then_id : Int,
   else_id : Int,
   const_defs : Map[Int, Int64],
-) -> @instr.VCodeTerminator {
+) -> @instr.MachVTerminator {
   let mut cond = cmp_kind_to_cond(cmp_kind)
   if !branch_when_cmp_true {
     cond = invert_cond(cond)
@@ -565,7 +565,7 @@ fn build_cmp_branch_terminator(
 
 ///|
 /// Check whether an opcode is trivially dead when its defs are unused.
-fn is_trivially_dead_opcode(op : @instr.VCodeOpcode) -> Bool {
+fn is_trivially_dead_opcode(op : @instr.MachVOpcode) -> Bool {
   match op {
     // Pure integer/extend ops: safe to drop when defs are unused.
     Add(_)
@@ -601,7 +601,7 @@ fn dce_trivially_dead(func : @machv.Function) -> Unit {
       }
     }
     for block in func.blocks {
-      let new_insts : Array[@instr.VCodeInst] = []
+      let new_insts : Array[@instr.MachVInst] = []
       for inst in block.insts {
         let mut remove = false
         if is_trivially_dead_opcode(inst.opcode) {
@@ -639,7 +639,7 @@ fn dce_trivially_dead(func : @machv.Function) -> Unit {
 /// Propagate single-use virtual moves within a block.
 /// This reduces redundant copies created by earlier passes.
 fn propagate_single_use_moves(
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   global_use_counts : Array[Int],
 ) -> Unit {
   let use_counts : Array[Int] = Array::make(global_use_counts.length(), 0)
@@ -717,7 +717,7 @@ fn propagate_single_use_moves(
       _ => reg
     }
   }
-  let new_insts : Array[@instr.VCodeInst] = []
+  let new_insts : Array[@instr.MachVInst] = []
   for i, inst in block.insts {
     if to_remove.contains(i) {
       continue
@@ -738,7 +738,7 @@ fn propagate_single_use_moves(
         for arg in args {
           new_args.push(rewrite_reg(arg))
         }
-        @instr.VCodeTerminator::Jump(target, new_args)
+        @instr.MachVTerminator::Jump(target, new_args)
       }
       Branch(cond, then_id, else_id) =>
         Branch(rewrite_reg(cond), then_id, else_id)
@@ -867,7 +867,7 @@ fn propagate_moves_global(func : @machv.Function) -> Unit {
           for arg in args {
             new_args.push(rewrite_reg(arg, block.id, use_idx))
           }
-          @instr.VCodeTerminator::Jump(target, new_args)
+          @instr.MachVTerminator::Jump(target, new_args)
         }
         Branch(cond, then_id, else_id) =>
           Branch(rewrite_reg(cond, block.id, use_idx), then_id, else_id)
@@ -968,7 +968,7 @@ fn fuse_cmp_branch(func : @machv.Function) -> Unit {
       }
       if cond_uses == 0 {
         let mut cmp_idx : Int? = None
-        let mut cmp_inst : @instr.VCodeInst? = None
+        let mut cmp_inst : @instr.MachVInst? = None
         for i, inst in blk.insts {
           if inst.defs.length() == 1 &&
             get_def_vreg_id(inst.defs[0]) == Some(cond_vreg.id) {
@@ -987,7 +987,7 @@ fn fuse_cmp_branch(func : @machv.Function) -> Unit {
           let new_term = build_cmp_branch_terminator(
             lhs, rhs, kind, is_64, branch_when_cmp_true, then_id, else_id, const_defs,
           )
-          let new_insts : Array[@instr.VCodeInst] = []
+          let new_insts : Array[@instr.MachVInst] = []
           for i, inst in blk.insts {
             if i != idx {
               new_insts.push(inst)
@@ -1203,7 +1203,7 @@ fn thread_trivial_jump_blocks(func : @machv.Function) -> Int {
 }
 
 ///|
-/// Run peephole optimization on an entire VCode function
+/// Run peephole optimization on an entire MachV function
 /// This should be called after lower_function and before register allocation
 pub(all) enum PeepholeProfile {
   Full
@@ -1211,11 +1211,11 @@ pub(all) enum PeepholeProfile {
 }
 
 ///|
-pub fn optimize_vcode(
+pub fn optimize_machv(
   func : @machv.Function,
   isa? : @isa.ISA = AArch64,
   profile? : PeepholeProfile = Full,
-  runtime_layout? : @abi.RuntimeContextLayout? = None,
+  embedding_context_layout? : @abi.RuntimeContextLayout? = None,
   embedding_reg_roles? : @abi.EmbeddingRegRoles = @abi.EmbeddingRegRoles::none(),
 ) -> Unit {
   let mut inst_count = 0
@@ -1224,7 +1224,7 @@ pub fn optimize_vcode(
   }
   // Cranelift-aligned compile-time guardrail:
   // avoid expensive ad-hoc peephole sweeps on very large functions.
-  // Large kernels already get most wins from IR/VCode canonicalization and
+  // Large kernels already get most wins from IR/MachV canonicalization and
   // regalloc; extra local sweeps tend to add substantial compile latency.
   let large_func_threshold = 1200
   let is_large_func = inst_count >= large_func_threshold
@@ -1232,21 +1232,29 @@ pub fn optimize_vcode(
   let enable_full_passes = profile is Full
   let enable_licm = enable_full_passes &&
     !is_large_func &&
-    runtime_layout is Some(_)
+    embedding_context_layout is Some(_)
   let enable_immutable_load_cse = enable_full_passes &&
     !is_large_func &&
-    runtime_layout is Some(_)
+    embedding_context_layout is Some(_)
   let enable_mem_peepholes = enable_full_passes && !is_large_func
   let enable_inplace_updates = enable_full_passes && !is_large_func
   let enable_copy_prop = true
 
   // Pass 0: loop-invariant code motion
   if enable_licm {
-    licm_hoist_invariants(func, runtime_layout.unwrap(), embedding_reg_roles)
+    licm_hoist_invariants(
+      func,
+      embedding_context_layout.unwrap(),
+      embedding_reg_roles,
+    )
   }
   // Pass 0.5: block-local CSE for immutable loads
   if enable_immutable_load_cse {
-    cse_immutable_loads(func, runtime_layout.unwrap(), embedding_reg_roles)
+    cse_immutable_loads(
+      func,
+      embedding_context_layout.unwrap(),
+      embedding_reg_roles,
+    )
   }
   // Pass 1: Basic peephole optimizations (constant folding, move elimination)
   for block in func.blocks {

@@ -15,7 +15,7 @@
 
 ///|
 priv struct RematDef {
-  opcode : @instr.VCodeOpcode
+  opcode : @instr.MachVOpcode
   def_block_id : Int
   def_inst_idx : Int
   cls : @abi.RegClass
@@ -24,7 +24,7 @@ priv struct RematDef {
 }
 
 ///|
-fn is_long_distance_remat_candidate(opcode : @instr.VCodeOpcode) -> Bool {
+fn is_long_distance_remat_candidate(opcode : @instr.MachVOpcode) -> Bool {
   match opcode {
     LoadConst(_)
     | LoadConstF32(_)
@@ -36,7 +36,7 @@ fn is_long_distance_remat_candidate(opcode : @instr.VCodeOpcode) -> Bool {
 }
 
 ///|
-fn is_cross_block_remat_candidate(opcode : @instr.VCodeOpcode) -> Bool {
+fn is_cross_block_remat_candidate(opcode : @instr.MachVOpcode) -> Bool {
   match opcode {
     LoadConst(_)
     | LoadConstF32(_)
@@ -48,8 +48,8 @@ fn is_cross_block_remat_candidate(opcode : @instr.VCodeOpcode) -> Bool {
 }
 
 ///|
-fn clone_remat_inst(def : RematDef, dst : @abi.VReg) -> @instr.VCodeInst {
-  let inst = @instr.VCodeInst::new(def.opcode)
+fn clone_remat_inst(def : RematDef, dst : @abi.VReg) -> @instr.MachVInst {
+  let inst = @instr.MachVInst::new(def.opcode)
   inst.add_def({ reg: Virtual(dst) })
   for i in 0..<def.uses.length() {
     let use_reg = def.uses[i]
@@ -97,7 +97,7 @@ pub fn rematerialize_long_distance_constants(
   let per_vreg_clone_cap = 16
   for i in 0..<func.blocks.length() {
     let block = func.blocks[i]
-    let new_block = @block.VCodeBlock::new(block.id)
+    let new_block = @block.MachVBlock::new(block.id)
     for p in block.params {
       new_block.params.push(p)
     }
@@ -109,7 +109,7 @@ pub fn rematerialize_long_distance_constants(
       use_inst_idx : Int,
       remat_defs : Map[Int, RematDef],
       clone_count : Map[Int, Int],
-      new_block : @block.VCodeBlock,
+      new_block : @block.MachVBlock,
       min_distance : Int,
       per_vreg_clone_cap : Int,
     ) -> @abi.Reg {
@@ -345,7 +345,7 @@ pub fn rematerialize_cross_block_constants(
   // 2) Rebuild blocks and materialize remat defs at first use position.
   for i in 0..<func.blocks.length() {
     let block = func.blocks[i]
-    let new_block = @block.VCodeBlock::new(block.id)
+    let new_block = @block.MachVBlock::new(block.id)
     for p in block.params {
       new_block.params.push(p)
     }
@@ -357,7 +357,7 @@ pub fn rematerialize_cross_block_constants(
       remat_defs : Map[Int, RematDef],
       local_map : Map[Int, @abi.VReg],
       block_id : Int,
-      new_block : @block.VCodeBlock,
+      new_block : @block.MachVBlock,
     ) -> @abi.Reg {
       match reg {
         Virtual(v) =>

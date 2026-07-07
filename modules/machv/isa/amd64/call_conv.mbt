@@ -8,7 +8,7 @@
 pub fn call_clobbered_gprs() -> Array[@abi.PReg] {
   // SysV AMD64: caller-saved GPRs.
   //
-  // We use the 0..15 numbering described in `vcode/isa/amd64/roles.mbt`.
+  // We use the 0..15 numbering described in `machv/isa/amd64/roles.mbt`.
   [
     { index: 0, class: Int }, // rax
     { index: 1, class: Int }, // rcx

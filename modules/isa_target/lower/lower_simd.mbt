@@ -1,19 +1,19 @@
-// SIMD IR to VCode Lowering
-// Converts SIMD IR opcodes to AArch64 NEON VCode instructions
+// SIMD IR to MachV Lowering
+// Converts SIMD IR opcodes to AArch64 NEON MachV instructions
 
 ///|
 /// Lower V128Const - load 128-bit constant
 fn lower_v128_const(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   bytes : Bytes,
 ) -> Unit {
   if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
-    let vcode_inst = @instr.VCodeInst::new(LoadConstV128(bytes))
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(LoadConstV128(bytes))
+    machv_inst.add_def({ reg: Virtual(dst) })
+    block.add_inst(machv_inst)
   }
 }
 
@@ -22,16 +22,16 @@ fn lower_v128_const(
 fn lower_v128_splat(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   lane_size : @instr.LaneSize,
 ) -> Unit {
   if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let src = ctx.get_vreg_for_use(inst.operands[0], block)
-    let vcode_inst = @instr.VCodeInst::new(SIMDSplat(lane_size))
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(src))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(SIMDSplat(lane_size))
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(src))
+    block.add_inst(machv_inst)
   }
 }
 
@@ -40,16 +40,16 @@ fn lower_v128_splat(
 fn lower_v128_splat_f(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   is_f32 : Bool,
 ) -> Unit {
   if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let src = ctx.get_vreg_for_use(inst.operands[0], block)
-    let vcode_inst = @instr.VCodeInst::new(SIMDSplatF(is_f32))
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(src))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(SIMDSplatF(is_f32))
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(src))
+    block.add_inst(machv_inst)
   }
 }
 
@@ -58,17 +58,17 @@ fn lower_v128_splat_f(
 fn lower_v128_extract_u(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   lane_size : @instr.LaneSize,
   lane : Int,
 ) -> Unit {
   if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let src = ctx.get_vreg_for_use(inst.operands[0], block)
-    let vcode_inst = @instr.VCodeInst::new(SIMDExtractU(lane_size, lane))
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(src))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(SIMDExtractU(lane_size, lane))
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(src))
+    block.add_inst(machv_inst)
   }
 }
 
@@ -77,17 +77,17 @@ fn lower_v128_extract_u(
 fn lower_v128_extract_s(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   lane_size : @instr.LaneSize,
   lane : Int,
 ) -> Unit {
   if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let src = ctx.get_vreg_for_use(inst.operands[0], block)
-    let vcode_inst = @instr.VCodeInst::new(SIMDExtractS(lane_size, lane))
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(src))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(SIMDExtractS(lane_size, lane))
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(src))
+    block.add_inst(machv_inst)
   }
 }
 
@@ -96,17 +96,17 @@ fn lower_v128_extract_s(
 fn lower_v128_extract_f(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   is_f32 : Bool,
   lane : Int,
 ) -> Unit {
   if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let src = ctx.get_vreg_for_use(inst.operands[0], block)
-    let vcode_inst = @instr.VCodeInst::new(SIMDExtractF(is_f32, lane))
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(src))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(SIMDExtractF(is_f32, lane))
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(src))
+    block.add_inst(machv_inst)
   }
 }
 
@@ -115,7 +115,7 @@ fn lower_v128_extract_f(
 fn lower_v128_replace(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   lane_size : @instr.LaneSize,
   lane : Int,
 ) -> Unit {
@@ -123,11 +123,11 @@ fn lower_v128_replace(
     let dst = ctx.get_vreg(result)
     let vec = ctx.get_vreg_for_use(inst.operands[0], block)
     let val = ctx.get_vreg_for_use(inst.operands[1], block)
-    let vcode_inst = @instr.VCodeInst::new(SIMDInsert(lane_size, lane))
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(vec))
-    vcode_inst.add_use(Virtual(val))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(SIMDInsert(lane_size, lane))
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(vec))
+    machv_inst.add_use(Virtual(val))
+    block.add_inst(machv_inst)
   }
 }
 
@@ -136,7 +136,7 @@ fn lower_v128_replace(
 fn lower_v128_replace_f(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   is_f32 : Bool,
   lane : Int,
 ) -> Unit {
@@ -144,11 +144,11 @@ fn lower_v128_replace_f(
     let dst = ctx.get_vreg(result)
     let vec = ctx.get_vreg_for_use(inst.operands[0], block)
     let val = ctx.get_vreg_for_use(inst.operands[1], block)
-    let vcode_inst = @instr.VCodeInst::new(SIMDInsertF(is_f32, lane))
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(vec))
-    vcode_inst.add_use(Virtual(val))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(SIMDInsertF(is_f32, lane))
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(vec))
+    machv_inst.add_use(Virtual(val))
+    block.add_inst(machv_inst)
   }
 }
 
@@ -157,23 +157,23 @@ fn lower_v128_replace_f(
 fn lower_v128_shuffle(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   lanes : FixedArray[Int],
 ) -> Unit {
   if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let v1 = ctx.get_vreg_for_use(inst.operands[0], block)
     let v2 = ctx.get_vreg_for_use(inst.operands[1], block)
-    let vcode_inst = @instr.VCodeInst::new(SIMDShuffle(lanes))
-    vcode_inst.add_def({ reg: Virtual(dst) })
+    let machv_inst = @instr.MachVInst::new(SIMDShuffle(lanes))
+    machv_inst.add_def({ reg: Virtual(dst) })
     // Add 2 temp vector defs for the expansion in the emitter.
-    let temp1 = ctx.vcode_func.new_vreg(Vector)
-    let temp2 = ctx.vcode_func.new_vreg(Vector)
-    vcode_inst.add_def({ reg: Virtual(temp1) })
-    vcode_inst.add_def({ reg: Virtual(temp2) })
-    vcode_inst.add_use(Virtual(v1))
-    vcode_inst.add_use(Virtual(v2))
-    block.add_inst(vcode_inst)
+    let temp1 = ctx.machv_func.new_vreg(Vector)
+    let temp2 = ctx.machv_func.new_vreg(Vector)
+    machv_inst.add_def({ reg: Virtual(temp1) })
+    machv_inst.add_def({ reg: Virtual(temp2) })
+    machv_inst.add_use(Virtual(v1))
+    machv_inst.add_use(Virtual(v2))
+    block.add_inst(machv_inst)
   }
 }
 
@@ -182,17 +182,17 @@ fn lower_v128_shuffle(
 fn lower_v128_swizzle(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
 ) -> Unit {
   if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let values = ctx.get_vreg_for_use(inst.operands[0], block)
     let indices = ctx.get_vreg_for_use(inst.operands[1], block)
-    let vcode_inst = @instr.VCodeInst::new(SIMDSwizzle)
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(values))
-    vcode_inst.add_use(Virtual(indices))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(SIMDSwizzle)
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(values))
+    machv_inst.add_use(Virtual(indices))
+    block.add_inst(machv_inst)
   }
 }
 
@@ -201,25 +201,25 @@ fn lower_v128_swizzle(
 fn lower_v128_unary(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
-  opcode : @instr.VCodeOpcode,
+  block : @block.MachVBlock,
+  opcode : @instr.MachVOpcode,
 ) -> Unit {
   if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let src = ctx.get_vreg_for_use(inst.operands[0], block)
-    let vcode_inst = @instr.VCodeInst::new(opcode)
-    vcode_inst.add_def({ reg: Virtual(dst) })
+    let machv_inst = @instr.MachVInst::new(opcode)
+    machv_inst.add_def({ reg: Virtual(dst) })
     // Some opcode expansions in the emitter require an extra temporary vector
     // register. Model it as an extra def so regalloc accounts for it.
     if opcode is SIMDTruncSatF64ToI32SZero ||
       opcode is SIMDTruncSatF64ToI32UZero ||
       opcode is SIMDConvertLowI32ToF64S ||
       opcode is SIMDConvertLowI32ToF64U {
-      let tmp = ctx.vcode_func.new_vreg(Vector)
-      vcode_inst.add_def({ reg: Virtual(tmp) })
+      let tmp = ctx.machv_func.new_vreg(Vector)
+      machv_inst.add_def({ reg: Virtual(tmp) })
     }
-    vcode_inst.add_use(Virtual(src))
-    block.add_inst(vcode_inst)
+    machv_inst.add_use(Virtual(src))
+    block.add_inst(machv_inst)
   }
 }
 
@@ -228,39 +228,39 @@ fn lower_v128_unary(
 fn lower_v128_binary(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
-  opcode : @instr.VCodeOpcode,
+  block : @block.MachVBlock,
+  opcode : @instr.MachVOpcode,
 ) -> Unit {
   if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
     let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
-    let vcode_inst = @instr.VCodeInst::new(opcode)
-    vcode_inst.add_def({ reg: Virtual(dst) })
+    let machv_inst = @instr.MachVInst::new(opcode)
+    machv_inst.add_def({ reg: Virtual(dst) })
     match opcode {
       SIMDMul(D64) => {
-        let t0 = ctx.vcode_func.new_vreg(Vector)
-        let t1 = ctx.vcode_func.new_vreg(Vector)
-        let t2 = ctx.vcode_func.new_vreg(Vector)
-        let t3 = ctx.vcode_func.new_vreg(Vector)
-        let t4 = ctx.vcode_func.new_vreg(Vector)
-        vcode_inst.add_def({ reg: Virtual(t0) })
-        vcode_inst.add_def({ reg: Virtual(t1) })
-        vcode_inst.add_def({ reg: Virtual(t2) })
-        vcode_inst.add_def({ reg: Virtual(t3) })
-        vcode_inst.add_def({ reg: Virtual(t4) })
+        let t0 = ctx.machv_func.new_vreg(Vector)
+        let t1 = ctx.machv_func.new_vreg(Vector)
+        let t2 = ctx.machv_func.new_vreg(Vector)
+        let t3 = ctx.machv_func.new_vreg(Vector)
+        let t4 = ctx.machv_func.new_vreg(Vector)
+        machv_inst.add_def({ reg: Virtual(t0) })
+        machv_inst.add_def({ reg: Virtual(t1) })
+        machv_inst.add_def({ reg: Virtual(t2) })
+        machv_inst.add_def({ reg: Virtual(t3) })
+        machv_inst.add_def({ reg: Virtual(t4) })
       }
       SIMDRelaxedDot8to16 => {
         // Expanded into multiple AArch64 instructions in the emitter.
         // Provide a temp vector so regalloc accounts for it.
-        let tmp = ctx.vcode_func.new_vreg(Vector)
-        vcode_inst.add_def({ reg: Virtual(tmp) })
+        let tmp = ctx.machv_func.new_vreg(Vector)
+        machv_inst.add_def({ reg: Virtual(tmp) })
       }
       _ => ()
     }
-    vcode_inst.add_use(Virtual(lhs))
-    vcode_inst.add_use(Virtual(rhs))
-    block.add_inst(vcode_inst)
+    machv_inst.add_use(Virtual(lhs))
+    machv_inst.add_use(Virtual(rhs))
+    block.add_inst(machv_inst)
   }
 }
 
@@ -270,19 +270,19 @@ fn lower_v128_binary(
 fn lower_v128_binary_swap(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
-  opcode : @instr.VCodeOpcode,
+  block : @block.MachVBlock,
+  opcode : @instr.MachVOpcode,
 ) -> Unit {
   if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
     let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
-    let vcode_inst = @instr.VCodeInst::new(opcode)
-    vcode_inst.add_def({ reg: Virtual(dst) })
+    let machv_inst = @instr.MachVInst::new(opcode)
+    machv_inst.add_def({ reg: Virtual(dst) })
     // Swap: use rhs first, then lhs
-    vcode_inst.add_use(Virtual(rhs))
-    vcode_inst.add_use(Virtual(lhs))
-    block.add_inst(vcode_inst)
+    machv_inst.add_use(Virtual(rhs))
+    machv_inst.add_use(Virtual(lhs))
+    block.add_inst(machv_inst)
   }
 }
 
@@ -291,20 +291,20 @@ fn lower_v128_binary_swap(
 fn lower_v128_ternary(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
-  opcode : @instr.VCodeOpcode,
+  block : @block.MachVBlock,
+  opcode : @instr.MachVOpcode,
 ) -> Unit {
   if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let a = ctx.get_vreg_for_use(inst.operands[0], block)
     let b = ctx.get_vreg_for_use(inst.operands[1], block)
     let c = ctx.get_vreg_for_use(inst.operands[2], block)
-    let vcode_inst = @instr.VCodeInst::new(opcode)
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(a))
-    vcode_inst.add_use(Virtual(b))
-    vcode_inst.add_use(Virtual(c))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(opcode)
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(a))
+    machv_inst.add_use(Virtual(b))
+    machv_inst.add_use(Virtual(c))
+    block.add_inst(machv_inst)
   }
 }
 
@@ -326,7 +326,7 @@ fn lower_v128_ternary(
 fn lower_v128_shift(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   lane_size : @instr.LaneSize,
   negate : Bool,
   use_ushl : Bool,
@@ -337,12 +337,12 @@ fn lower_v128_shift(
     let shift = ctx.get_vreg_for_use(inst.operands[1], block)
 
     // Allocate temp registers for broadcast shift
-    let temp_gpr = ctx.vcode_func.new_vreg(Int) // GPR for masked shift
-    let shift_vec = ctx.vcode_func.new_vreg(Vector) // FPR for broadcast
+    let temp_gpr = ctx.machv_func.new_vreg(Int) // GPR for masked shift
+    let shift_vec = ctx.machv_func.new_vreg(Vector) // FPR for broadcast
 
     // Instruction 1: SIMDBroadcastShift
     // Uses: [shift_scalar], Defs: [temp_gpr, shift_vec]
-    let broadcast_inst = @instr.VCodeInst::new(
+    let broadcast_inst = @instr.MachVInst::new(
       SIMDBroadcastShift(lane_size, negate),
     )
     broadcast_inst.add_def({ reg: Virtual(temp_gpr) }) // defs[0] = temp GPR
@@ -352,7 +352,7 @@ fn lower_v128_shift(
 
     // Instruction 2: SIMDShiftByVec
     // Uses: [input_vec, shift_vec], Defs: [result]
-    let shift_inst = @instr.VCodeInst::new(SIMDShiftByVec(lane_size, use_ushl))
+    let shift_inst = @instr.MachVInst::new(SIMDShiftByVec(lane_size, use_ushl))
     shift_inst.add_def({ reg: Virtual(dst) }) // defs[0] = result
     shift_inst.add_use(Virtual(vec)) // uses[0] = input vector
     shift_inst.add_use(Virtual(shift_vec)) // uses[1] = shift vector
@@ -366,40 +366,40 @@ fn lower_v128_shift(
 fn lower_v128_to_i32(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
-  opcode : @instr.VCodeOpcode,
+  block : @block.MachVBlock,
+  opcode : @instr.MachVOpcode,
 ) -> Unit {
   if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let src = ctx.get_vreg_for_use(inst.operands[0], block)
-    let vcode_inst = @instr.VCodeInst::new(opcode)
-    vcode_inst.add_def({ reg: Virtual(dst) })
+    let machv_inst = @instr.MachVInst::new(opcode)
+    machv_inst.add_def({ reg: Virtual(dst) })
     match opcode {
       // These expand to a reduction + move and need a temp vector for the scalar result.
       SIMDAnyTrue => {
-        let tmp = ctx.vcode_func.new_vreg(Vector)
-        vcode_inst.add_def({ reg: Virtual(tmp) })
+        let tmp = ctx.machv_func.new_vreg(Vector)
+        machv_inst.add_def({ reg: Virtual(tmp) })
       }
       SIMDAllTrue(lane_size) =>
         match lane_size {
           D64 => ()
           _ => {
-            let tmp = ctx.vcode_func.new_vreg(Vector)
-            vcode_inst.add_def({ reg: Virtual(tmp) })
+            let tmp = ctx.machv_func.new_vreg(Vector)
+            machv_inst.add_def({ reg: Virtual(tmp) })
           }
         }
       SIMDBitmask(B8) => {
-        let temp_weights = ctx.vcode_func.new_vreg(Vector)
-        let temp_shift = ctx.vcode_func.new_vreg(Vector)
-        let temp_work = ctx.vcode_func.new_vreg(Vector)
-        vcode_inst.add_def({ reg: Virtual(temp_weights) })
-        vcode_inst.add_def({ reg: Virtual(temp_shift) })
-        vcode_inst.add_def({ reg: Virtual(temp_work) })
+        let temp_weights = ctx.machv_func.new_vreg(Vector)
+        let temp_shift = ctx.machv_func.new_vreg(Vector)
+        let temp_work = ctx.machv_func.new_vreg(Vector)
+        machv_inst.add_def({ reg: Virtual(temp_weights) })
+        machv_inst.add_def({ reg: Virtual(temp_shift) })
+        machv_inst.add_def({ reg: Virtual(temp_work) })
       }
       _ => ()
     }
-    vcode_inst.add_use(Virtual(src))
-    block.add_inst(vcode_inst)
+    machv_inst.add_use(Virtual(src))
+    block.add_inst(machv_inst)
   }
 }
 
@@ -409,7 +409,7 @@ fn lower_v128_to_i32(
 fn lower_v128_load_splat(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   lane_size : @instr.LaneSize,
   _offset : Int,
 ) -> Unit {
@@ -417,10 +417,10 @@ fn lower_v128_load_splat(
     let dst = ctx.get_vreg(result)
     let base = ctx.get_vreg_for_use(inst.operands[0], block)
     // offset=0 since effective_addr already includes the offset
-    let vcode_inst = @instr.VCodeInst::new(SIMDLoadSplat(lane_size, 0))
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(base))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(SIMDLoadSplat(lane_size, 0))
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(base))
+    block.add_inst(machv_inst)
   }
 }
 
@@ -430,7 +430,7 @@ fn lower_v128_load_splat(
 fn lower_v128_load_extend(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   src_bits : Int,
   signed : Bool,
   _offset : Int,
@@ -439,10 +439,10 @@ fn lower_v128_load_extend(
     let dst = ctx.get_vreg(result)
     let base = ctx.get_vreg_for_use(inst.operands[0], block)
     // offset=0 since effective_addr already includes the offset
-    let vcode_inst = @instr.VCodeInst::new(SIMDLoadExtend(src_bits, signed, 0))
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(base))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(SIMDLoadExtend(src_bits, signed, 0))
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(base))
+    block.add_inst(machv_inst)
   }
 }
 
@@ -452,7 +452,7 @@ fn lower_v128_load_extend(
 fn lower_v128_load_zero(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   is_64 : Bool,
   _offset : Int,
 ) -> Unit {
@@ -460,10 +460,10 @@ fn lower_v128_load_zero(
     let dst = ctx.get_vreg(result)
     let base = ctx.get_vreg_for_use(inst.operands[0], block)
     // offset=0 since effective_addr already includes the offset
-    let vcode_inst = @instr.VCodeInst::new(SIMDLoadZero(is_64, 0))
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(base))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(SIMDLoadZero(is_64, 0))
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(base))
+    block.add_inst(machv_inst)
   }
 }
 
@@ -473,7 +473,7 @@ fn lower_v128_load_zero(
 fn lower_v128_load_lane(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   lane_size : @instr.LaneSize,
   lane : Int,
   _offset : Int,
@@ -483,11 +483,11 @@ fn lower_v128_load_lane(
     let base = ctx.get_vreg_for_use(inst.operands[0], block)
     let vec = ctx.get_vreg_for_use(inst.operands[1], block)
     // offset=0 since effective_addr already includes the offset
-    let vcode_inst = @instr.VCodeInst::new(SIMDLoadLane(lane_size, lane, 0))
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(base))
-    vcode_inst.add_use(Virtual(vec))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(SIMDLoadLane(lane_size, lane, 0))
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(base))
+    machv_inst.add_use(Virtual(vec))
+    block.add_inst(machv_inst)
   }
 }
 
@@ -497,7 +497,7 @@ fn lower_v128_load_lane(
 fn lower_v128_store_lane(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   lane_size : @instr.LaneSize,
   lane : Int,
   _offset : Int,
@@ -505,10 +505,10 @@ fn lower_v128_store_lane(
   let base = ctx.get_vreg_for_use(inst.operands[0], block)
   let vec = ctx.get_vreg_for_use(inst.operands[1], block)
   // offset=0 since effective_addr already includes the offset
-  let vcode_inst = @instr.VCodeInst::new(SIMDStoreLane(lane_size, lane, 0))
-  vcode_inst.add_use(Virtual(base))
-  vcode_inst.add_use(Virtual(vec))
-  block.add_inst(vcode_inst)
+  let machv_inst = @instr.MachVInst::new(SIMDStoreLane(lane_size, lane, 0))
+  machv_inst.add_use(Virtual(base))
+  machv_inst.add_use(Virtual(vec))
+  block.add_inst(machv_inst)
 }
 
 ///|
@@ -516,7 +516,7 @@ fn lower_v128_store_lane(
 fn lower_v128_cmp_ne(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   lane_size : @instr.LaneSize,
 ) -> Unit {
   if inst.first_result() is Some(result) {
@@ -525,13 +525,13 @@ fn lower_v128_cmp_ne(
     let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
     // First do CMEQ
     let tmp = ctx.new_vreg(Vector)
-    let eq_inst = @instr.VCodeInst::new(SIMDCmp(lane_size, Eq))
+    let eq_inst = @instr.MachVInst::new(SIMDCmp(lane_size, Eq))
     eq_inst.add_def({ reg: Virtual(tmp) })
     eq_inst.add_use(Virtual(lhs))
     eq_inst.add_use(Virtual(rhs))
     block.add_inst(eq_inst)
     // Then NOT to get NE
-    let not_inst = @instr.VCodeInst::new(SIMDNot)
+    let not_inst = @instr.MachVInst::new(SIMDNot)
     not_inst.add_def({ reg: Virtual(dst) })
     not_inst.add_use(Virtual(tmp))
     block.add_inst(not_inst)
@@ -543,7 +543,7 @@ fn lower_v128_cmp_ne(
 fn lower_v128_cmp_lt(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   lane_size : @instr.LaneSize,
   signed : Bool,
 ) -> Unit {
@@ -553,11 +553,11 @@ fn lower_v128_cmp_lt(
     let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
     // a < b is equivalent to b > a - swap operands
     let kind : @instr.SIMDCmpKind = if signed { GtS } else { GtU }
-    let vcode_inst = @instr.VCodeInst::new(SIMDCmp(lane_size, kind))
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(rhs)) // swapped!
-    vcode_inst.add_use(Virtual(lhs)) // swapped!
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(SIMDCmp(lane_size, kind))
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(rhs)) // swapped!
+    machv_inst.add_use(Virtual(lhs)) // swapped!
+    block.add_inst(machv_inst)
   }
 }
 
@@ -566,7 +566,7 @@ fn lower_v128_cmp_lt(
 fn lower_v128_cmp_le(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   lane_size : @instr.LaneSize,
   signed : Bool,
 ) -> Unit {
@@ -576,11 +576,11 @@ fn lower_v128_cmp_le(
     let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
     // a <= b is equivalent to b >= a - swap operands
     let kind : @instr.SIMDCmpKind = if signed { GeS } else { GeU }
-    let vcode_inst = @instr.VCodeInst::new(SIMDCmp(lane_size, kind))
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(rhs)) // swapped!
-    vcode_inst.add_use(Virtual(lhs)) // swapped!
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(SIMDCmp(lane_size, kind))
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(rhs)) // swapped!
+    machv_inst.add_use(Virtual(lhs)) // swapped!
+    block.add_inst(machv_inst)
   }
 }
 
@@ -589,7 +589,7 @@ fn lower_v128_cmp_le(
 fn lower_v128_fcmp_ne(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   is_f32 : Bool,
 ) -> Unit {
   if inst.first_result() is Some(result) {
@@ -598,13 +598,13 @@ fn lower_v128_fcmp_ne(
     let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
     // First do FCMEQ
     let tmp = ctx.new_vreg(Vector)
-    let eq_inst = @instr.VCodeInst::new(SIMDFCmp(is_f32, Eq))
+    let eq_inst = @instr.MachVInst::new(SIMDFCmp(is_f32, Eq))
     eq_inst.add_def({ reg: Virtual(tmp) })
     eq_inst.add_use(Virtual(lhs))
     eq_inst.add_use(Virtual(rhs))
     block.add_inst(eq_inst)
     // Then NOT to get NE
-    let not_inst = @instr.VCodeInst::new(SIMDNot)
+    let not_inst = @instr.MachVInst::new(SIMDNot)
     not_inst.add_def({ reg: Virtual(dst) })
     not_inst.add_use(Virtual(tmp))
     block.add_inst(not_inst)
@@ -619,7 +619,7 @@ fn lower_v128_fcmp_ne(
 fn lower_v128_fma(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
   is_f32 : Bool,
   is_sub : Bool,
 ) -> Unit {
@@ -638,12 +638,12 @@ fn lower_v128_fma(
     // madd: c + a * b = a * b + c
     // nmadd: c - a * b = -(a * b) + c
     let opcode = if is_sub { @instr.SIMDFMls(is_f32) } else { SIMDFMla(is_f32) }
-    let vcode_inst = @instr.VCodeInst::new(opcode)
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    vcode_inst.add_use(Virtual(c)) // accumulator
-    vcode_inst.add_use(Virtual(a)) // multiplicand 1
-    vcode_inst.add_use(Virtual(b)) // multiplicand 2
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(opcode)
+    machv_inst.add_def({ reg: Virtual(dst) })
+    machv_inst.add_use(Virtual(c)) // accumulator
+    machv_inst.add_use(Virtual(a)) // multiplicand 1
+    machv_inst.add_use(Virtual(b)) // multiplicand 2
+    block.add_inst(machv_inst)
   }
 }
 
@@ -652,20 +652,20 @@ fn lower_v128_fma(
 fn lower_v128_relaxed_dot_add(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.VCodeBlock,
+  block : @block.MachVBlock,
 ) -> Unit {
   if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let a = ctx.get_vreg_for_use(inst.operands[0], block)
     let b = ctx.get_vreg_for_use(inst.operands[1], block)
     let c = ctx.get_vreg_for_use(inst.operands[2], block)
-    let vcode_inst = @instr.VCodeInst::new(SIMDRelaxedDot8to32Add)
-    vcode_inst.add_def({ reg: Virtual(dst) })
-    let tmp = ctx.vcode_func.new_vreg(Vector)
-    vcode_inst.add_def({ reg: Virtual(tmp) })
-    vcode_inst.add_use(Virtual(a))
-    vcode_inst.add_use(Virtual(b))
-    vcode_inst.add_use(Virtual(c))
-    block.add_inst(vcode_inst)
+    let machv_inst = @instr.MachVInst::new(SIMDRelaxedDot8to32Add)
+    machv_inst.add_def({ reg: Virtual(dst) })
+    let tmp = ctx.machv_func.new_vreg(Vector)
+    machv_inst.add_def({ reg: Virtual(tmp) })
+    machv_inst.add_use(Virtual(a))
+    machv_inst.add_use(Virtual(b))
+    machv_inst.add_use(Virtual(c))
+    block.add_inst(machv_inst)
   }
 }

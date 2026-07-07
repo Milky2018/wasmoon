@@ -663,7 +663,7 @@ test "x64 records outgoing stack arguments for direct calls" {
 }
 
 ///|
-test "x64 lowers CallPtr with Wasm ABI constraints and clobbers" {
+test "x64 lowers CallPtr with embedding ABI constraints and clobbers" {
   let func = @milkir.Function::new_empty("callptr")
   let callee = func.new_value(Ptr)
   let context = func.new_value(Ptr)
@@ -699,7 +699,7 @@ test "x64 lowers CallPtr with Wasm ABI constraints and clobbers" {
 }
 
 ///|
-test "x64 records outgoing stack arguments for Wasm CallPtr" {
+test "x64 records outgoing stack arguments for CallPtr" {
   let func = @milkir.Function::new_empty("callptr_stack_args")
   let callee = func.new_value(Ptr)
   let context = func.new_value(Ptr)
@@ -715,7 +715,7 @@ test "x64 records outgoing stack arguments for Wasm CallPtr" {
   inspect(call.stack_effect == CallFrame(16), content="true")
   inspect(lowered.get_max_outgoing_args_size(), content="16")
   guard call.abi_arg_locations[7] is Stack(offset~, size~, align~) else {
-    fail("expected sixth Wasm CallPtr user argument on stack")
+    fail("expected sixth CallPtr user argument on stack")
   }
   inspect(offset, content="0")
   inspect(size, content="8")
@@ -723,7 +723,7 @@ test "x64 records outgoing stack arguments for Wasm CallPtr" {
 }
 
 ///|
-test "x64 lowers Wasm CallPtr return-area loads through ExtraResultsPtr" {
+test "x64 lowers CallPtr return-area loads through ExtraResultsPtr" {
   let func = @milkir.Function::new_empty("callptr_return_area_load")
   let callee = func.new_value(Ptr)
   let context = func.new_value(Ptr)
