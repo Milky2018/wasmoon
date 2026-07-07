@@ -4,11 +4,6 @@ fn external_symbol(name : String) -> @instr.ExternalName {
 }
 
 ///|
-fn rt(name : String) -> @instr.ExternalName {
-  external_symbol("wasm.runtime.\{name}")
-}
-
-///|
 fn rt_gc(name : String) -> @instr.ExternalName {
   external_symbol("wasm.runtime.gc.\{name}")
 }
@@ -16,71 +11,6 @@ fn rt_gc(name : String) -> @instr.ExternalName {
 ///|
 fn rt_exception(name : String) -> @instr.ExternalName {
   external_symbol("wasm.runtime.exception.\{name}")
-}
-
-///|
-fn rt_memory_grow() -> @instr.ExternalName {
-  rt("memory_grow")
-}
-
-///|
-fn rt_memory_size() -> @instr.ExternalName {
-  rt("memory_size")
-}
-
-///|
-fn rt_memory_fill() -> @instr.ExternalName {
-  rt("memory_fill")
-}
-
-///|
-fn rt_memory_fill_mem0() -> @instr.ExternalName {
-  rt("memory_fill_mem0")
-}
-
-///|
-fn rt_memory_copy() -> @instr.ExternalName {
-  rt("memory_copy")
-}
-
-///|
-fn rt_memory_copy_mem0() -> @instr.ExternalName {
-  rt("memory_copy_mem0")
-}
-
-///|
-fn rt_memory_init() -> @instr.ExternalName {
-  rt("memory_init")
-}
-
-///|
-fn rt_data_drop() -> @instr.ExternalName {
-  rt("data_drop")
-}
-
-///|
-fn rt_table_grow() -> @instr.ExternalName {
-  rt("table_grow")
-}
-
-///|
-fn rt_table_fill() -> @instr.ExternalName {
-  rt("table_fill")
-}
-
-///|
-fn rt_table_copy() -> @instr.ExternalName {
-  rt("table_copy")
-}
-
-///|
-fn rt_table_init() -> @instr.ExternalName {
-  rt("table_init")
-}
-
-///|
-fn rt_elem_drop() -> @instr.ExternalName {
-  rt("elem_drop")
 }
 
 ///|

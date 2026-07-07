@@ -1805,22 +1805,19 @@ fn lower_wasm_extension(
 ) -> Unit {
   match @wasm_milkir.decode(ext) {
     Some(LoadMemBase(memidx)) => lower_load_mem_base(ctx, inst, block, memidx)
-    Some(MemoryGrow(memidx, max_pages)) =>
-      lower_memory_grow(ctx, inst, block, memidx, max_pages)
-    Some(MemorySize(memidx)) => lower_memory_size(ctx, inst, block, memidx)
-    Some(MemoryFill(memidx)) => lower_memory_fill(ctx, inst, block, memidx)
-    Some(MemoryCopy(dst_memidx, src_memidx)) =>
-      lower_memory_copy(ctx, inst, block, dst_memidx, src_memidx)
-    Some(MemoryInit(memidx, data_idx)) =>
-      lower_memory_init(ctx, inst, block, memidx, data_idx)
-    Some(DataDrop(data_idx)) => lower_data_drop(ctx, inst, block, data_idx)
-    Some(TableGrow(table_idx)) => lower_table_grow(ctx, inst, block, table_idx)
-    Some(TableFill(table_idx)) => lower_table_fill(ctx, inst, block, table_idx)
-    Some(TableCopy(dst_table_idx, src_table_idx)) =>
-      lower_table_copy(ctx, inst, block, dst_table_idx, src_table_idx)
-    Some(TableInit(table_idx, elem_idx)) =>
-      lower_table_init(ctx, inst, block, table_idx, elem_idx)
-    Some(ElemDrop(elem_idx)) => lower_elem_drop(ctx, inst, block, elem_idx)
+    Some(
+      MemoryGrow(_, _)
+      | MemorySize(_)
+      | MemoryFill(_)
+      | MemoryCopy(_, _)
+      | MemoryInit(_, _)
+      | DataDrop(_)
+      | TableGrow(_)
+      | TableFill(_)
+      | TableCopy(_, _)
+      | TableInit(_, _)
+      | ElemDrop(_)
+    ) => lower_unsupported_generic_opcode(inst, block)
     Some(WasmCall(func_idx)) => lower_call(ctx, inst, block, func_idx)
     Some(WasmCallIndirect(type_idx, table_idx)) =>
       lower_call_indirect(ctx, inst, block, type_idx, table_idx)
