@@ -46,7 +46,7 @@ pub fn is_i31(value : Int64) -> Bool {
 ///|
 /// Check if a JIT value is null
 pub fn is_null(value : Int64) -> Bool {
-  value == @types.NULL_REF
+  value == @wasm_milkir.NULL_REF
 }
 
 ///|

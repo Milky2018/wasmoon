@@ -110,7 +110,7 @@ pub fn init_jit_globals_from_store(
           None =>
             match store_addr_to_module_func_idx(store_addr, instance) {
               Some(func_idx) => @wasmoon_jit.encode_funcref_idx(func_idx)
-              None => @types.NULL_REF
+              None => @wasm_milkir.NULL_REF
             }
         }
       ExternRef(idx) => idx.to_int64()
@@ -118,7 +118,7 @@ pub fn init_jit_globals_from_store(
       ArrayRef(gc_ref) => @wasmoon_jit.encode_heap_ref(gc_ref)
       StructRef(gc_ref) => @wasmoon_jit.encode_heap_ref(gc_ref)
       I31(n) => @wasmoon_jit.encode_i31(n)
-      Null => @types.NULL_REF
+      Null => @wasm_milkir.NULL_REF
       V128(bytes) => {
         let offset = globals_ptr + (i * 16).to_int64()
         @wasmoon_jit.c_jit_write_i64(offset, @types.bytes_to_int64_le(bytes, 0))
@@ -902,7 +902,7 @@ pub fn init_bulk_segments(
       )
 
       // Encode the value to the JIT segment format (value bits + type idx for funcref).
-      let mut raw = @types.NULL_REF
+      let mut raw = @wasm_milkir.NULL_REF
       let mut ty = -1L
       match value {
         Null => ()

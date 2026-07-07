@@ -90,7 +90,7 @@ pub fn value_to_i64(value : @types.Value) -> Int64 {
     ExternRef(idx) => (idx + 1).to_int64()
     ExnRef(idx) => (idx + 1).to_int64()
     I31(n) => (n.to_int64() << 1) | 1L
-    Null => @types.NULL_REF
+    Null => @wasm_milkir.NULL_REF
   }
 }
 
@@ -103,46 +103,46 @@ pub fn i64_to_value(raw : Int64, ty : @types.ValueType) -> @types.Value {
     F32 => F32(Float::reinterpret_from_int(raw.to_int()))
     F64 => F64(raw.reinterpret_as_double())
     RefStruct(_) | RefNullStruct(_) | StructRef | RefStructAbs =>
-      if raw == @types.NULL_REF {
+      if raw == @wasm_milkir.NULL_REF {
         Null
       } else {
         // Decode: gc_ref = raw >> 1, idx = gc_ref - 1
         StructRef(((raw >> 1) - 1L).to_int())
       }
     RefArray(_) | RefNullArray(_) | ArrayRef | RefArrayAbs =>
-      if raw == @types.NULL_REF {
+      if raw == @wasm_milkir.NULL_REF {
         Null
       } else {
         // Decode: gc_ref = raw >> 1, idx = gc_ref - 1
         ArrayRef(((raw >> 1) - 1L).to_int())
       }
     FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) =>
-      if raw == @types.NULL_REF {
+      if raw == @wasm_milkir.NULL_REF {
         Null
       } else {
         FuncRef((raw - 1L).to_int())
       }
     ExternRef | RefExtern =>
-      if raw == @types.NULL_REF {
+      if raw == @wasm_milkir.NULL_REF {
         Null
       } else {
         ExternRef((raw - 1L).to_int())
       }
     ExnRef =>
-      if raw == @types.NULL_REF {
+      if raw == @wasm_milkir.NULL_REF {
         Null
       } else {
         ExnRef((raw - 1L).to_int())
       }
     RefI31 | RefNullI31 =>
-      if raw == @types.NULL_REF {
+      if raw == @wasm_milkir.NULL_REF {
         Null
       } else {
         I31((raw >> 1).to_int())
       }
     RefEq | RefNullEq | AnyRef | RefAny =>
       // For abstract types, we need to decode based on the actual value
-      if raw == @types.NULL_REF {
+      if raw == @wasm_milkir.NULL_REF {
         Null
       } else if (raw & 1L) != 0L {
         // Tagged i31 (odd)

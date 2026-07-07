@@ -702,7 +702,7 @@ fn Translator::translate(
           if init_funcref is Some(v) {
             v
           } else {
-            let v = self.builder.iconst(loc.ty, @types.NULL_REF)
+            let v = self.builder.iconst(loc.ty, @wasm_milkir.NULL_REF)
             init_funcref = Some(v)
             v
           }
@@ -710,7 +710,7 @@ fn Translator::translate(
           if init_externref is Some(v) {
             v
           } else {
-            let v = self.builder.iconst(OpaqueRef, @types.NULL_REF)
+            let v = self.builder.iconst(OpaqueRef, @wasm_milkir.NULL_REF)
             init_externref = Some(v)
             v
           }

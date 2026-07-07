@@ -329,7 +329,7 @@ fn emit_i31_null_check(
   value : @milkir.Value,
 ) -> Bool {
   guard builder.current_block() is Some(_) else { return false }
-  guard emit_op(builder, value.ty, Iconst(@types.NULL_REF), [])
+  guard emit_op(builder, value.ty, Iconst(@wasm_milkir.NULL_REF), [])
     is Some(null_ref) else {
     return false
   }
@@ -1243,7 +1243,7 @@ fn push_ref_null(
   ref_type : @types.ValueType,
 ) -> Bool {
   let ty = wasm_value_type_to_milkir(ref_type)
-  guard emit_op(builder, ty, Iconst(@types.NULL_REF), []) is Some(result) else {
+  guard emit_op(builder, ty, Iconst(@wasm_milkir.NULL_REF), []) is Some(result) else {
     return false
   }
   stack.push(result)
@@ -1256,7 +1256,7 @@ fn push_ref_is_null(
   stack : Array[@milkir.Value],
 ) -> Bool {
   guard pop_value(stack) is Some(ref_value) else { return false }
-  guard emit_op(builder, ref_value.ty, Iconst(@types.NULL_REF), [])
+  guard emit_op(builder, ref_value.ty, Iconst(@wasm_milkir.NULL_REF), [])
     is Some(null_sentinel) else {
     return false
   }
@@ -1284,7 +1284,7 @@ fn push_ref_func(
     func_table,
     builder.iconst_i64((func_idx * layout.func_table_entry_stride).to_int64()),
   )
-  let tag = builder.iconst(Ref, @types.FUNCREF_TAG)
+  let tag = builder.iconst(Ref, @wasm_milkir.FUNCREF_TAG)
   guard emit_op(builder, Ref, Bor, [raw_func_ptr, tag]) is Some(result) else {
     return false
   }
@@ -1298,7 +1298,7 @@ fn push_ref_as_non_null(
   stack : Array[@milkir.Value],
 ) -> Bool {
   guard stack.last() is Some(ref_value) else { return false }
-  guard emit_op(builder, ref_value.ty, Iconst(@types.NULL_REF), [])
+  guard emit_op(builder, ref_value.ty, Iconst(@wasm_milkir.NULL_REF), [])
     is Some(null_sentinel) else {
     return false
   }
@@ -1350,7 +1350,7 @@ fn push_simple_expr_value(
     F64Const(value) => Some(builder.fconst_f64(value))
     RefNull(ref_type) => {
       let ty = wasm_value_type_to_milkir(ref_type)
-      emit_op(builder, ty, Iconst(@types.NULL_REF), [])
+      emit_op(builder, ty, Iconst(@wasm_milkir.NULL_REF), [])
     }
     _ => None
   }

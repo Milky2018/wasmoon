@@ -1259,7 +1259,7 @@ pub fn JITModule::init_shared_tables(
           @wasmoon_jit.tag_funcref_ptr(ptr)
         }
       }
-      None => @types.NULL_REF
+      None => @wasm_milkir.NULL_REF
     }
 
     // Set the table entry (including null references)

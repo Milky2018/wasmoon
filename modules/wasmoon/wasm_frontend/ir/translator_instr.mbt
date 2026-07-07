@@ -913,14 +913,14 @@ fn Translator::translate_instruction(
 
     // Reference types
     RefNull(ref_type) => {
-      // JIT/reference encoding uses 0 for null.
+      // Lowered reference encoding uses 0 for null.
       let result_ty = type_from_wasm(ref_type)
-      let result = self.builder.iconst(result_ty, @types.NULL_REF)
+      let result = self.builder.iconst(result_ty, @wasm_milkir.NULL_REF)
       self.push(result)
     }
     RefIsNull => {
       let ref_val = self.pop()
-      let null_sentinel = self.builder.iconst(ref_val.ty, @types.NULL_REF)
+      let null_sentinel = self.builder.iconst(ref_val.ty, @wasm_milkir.NULL_REF)
       let result = self.builder.icmp_eq(ref_val, null_sentinel)
       self.push(result)
     }
@@ -934,7 +934,7 @@ fn Translator::translate_instruction(
       // ref.as_non_null: convert nullable ref to non-null ref
       // Pop the reference, check if null, trap if so, otherwise push back
       let ref_val = self.pop()
-      let null_sentinel = self.builder.iconst(ref_val.ty, @types.NULL_REF)
+      let null_sentinel = self.builder.iconst(ref_val.ty, @wasm_milkir.NULL_REF)
       let is_null = self.builder.icmp_eq(ref_val, null_sentinel)
 
       // Create trap block and continuation block

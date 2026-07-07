@@ -12,6 +12,7 @@ import {
   "Milky2018/machv/abi",
   "Milky2018/machv_emit",
   "Milky2018/milkir",
+  "Milky2018/wasm_milkir",
   "Milky2018/wasmoon/wasm_frontend/ir",
   "Milky2018/wasm_isa_lower",
   "Milky2018/machv_regalloc",

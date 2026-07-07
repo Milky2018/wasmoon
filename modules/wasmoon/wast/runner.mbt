@@ -3,13 +3,13 @@
 // Reference encoding constants - re-exported from @types for convenience
 
 ///|
-pub const NULL_REF : Int64 = @types.NULL_REF
+pub const NULL_REF : Int64 = @wasm_milkir.NULL_REF
 
 ///|
-pub const EXTERNREF_TAG : Int64 = @types.EXTERNREF_TAG
+pub const EXTERNREF_TAG : Int64 = @wasm_milkir.EXTERNREF_TAG
 
 ///|
-pub const FUNCREF_TAG : Int64 = @types.FUNCREF_TAG
+pub const FUNCREF_TAG : Int64 = @wasm_milkir.FUNCREF_TAG
 
 ///|
 /// Result of running WAST commands
