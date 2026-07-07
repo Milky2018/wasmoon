@@ -71,6 +71,7 @@ pub fn eliminate_redundant_mem_base_loads_global(func : Function) -> OptResult {
 fn reads_memory(opcode : Opcode) -> Bool {
   match opcode {
     LoadPtr(_) | LoadPtrNarrow(_, _, _) => true
+    Call(_) => true
     Ext(_) => true
     _ => false
   }
@@ -83,6 +84,7 @@ fn may_write_memory(opcode : Opcode) -> Bool {
   match opcode {
     // Direct memory writes
     StorePtr(_) | StorePtrNarrow(_) => true
+    Call(_) => true
     CallPtr(_, _) => true
     Ext(_) => true
     _ => false

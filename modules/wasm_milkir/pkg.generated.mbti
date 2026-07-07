@@ -43,7 +43,7 @@ pub fn call_multi(@milkir.IRBuilder, Int, Array[@milkir.Type], Array[@milkir.Val
 
 pub fn call_ref_multi(@milkir.IRBuilder, Int, Array[@milkir.Type], @milkir.Value, Array[@milkir.Value]) -> Array[@milkir.Value]
 
-pub fn data_drop(@milkir.IRBuilder, Int) -> Unit
+pub fn data_drop(@milkir.IRBuilder, @milkir.Value, Int) -> Unit
 
 pub fn decode(@milkir.ExtOp) -> WasmOpcode?
 
@@ -51,7 +51,7 @@ pub fn decode_opcode(@milkir.Opcode) -> WasmOpcode?
 
 pub fn delegate(@milkir.IRBuilder, Int) -> Unit
 
-pub fn elem_drop(@milkir.IRBuilder, Int) -> Unit
+pub fn elem_drop(@milkir.IRBuilder, @milkir.Value, Int) -> Unit
 
 pub fn emit_throw(@milkir.IRBuilder, Int, Array[@milkir.Value]) -> Unit
 
@@ -79,15 +79,15 @@ pub fn i31_new(@milkir.IRBuilder, @milkir.Value) -> @milkir.Value
 
 pub fn load_mem_base(@milkir.IRBuilder, @milkir.Value, Int) -> @milkir.Value
 
-pub fn memory_copy(@milkir.IRBuilder, Int, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
+pub fn memory_copy(@milkir.IRBuilder, @milkir.Value, Int, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
 
-pub fn memory_fill(@milkir.IRBuilder, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
+pub fn memory_fill(@milkir.IRBuilder, @milkir.Value, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
 
-pub fn memory_grow(@milkir.IRBuilder, Int, @milkir.Value, max_pages? : Int, is_memory64? : Bool) -> @milkir.Value
+pub fn memory_grow(@milkir.IRBuilder, @milkir.Value, Int, @milkir.Value, max_pages? : Int, is_memory64? : Bool) -> @milkir.Value
 
-pub fn memory_init(@milkir.IRBuilder, Int, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
+pub fn memory_init(@milkir.IRBuilder, @milkir.Value, Int, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
 
-pub fn memory_size(@milkir.IRBuilder, Int, is_memory64? : Bool) -> @milkir.Value
+pub fn memory_size(@milkir.IRBuilder, @milkir.Value, Int, is_memory64? : Bool) -> @milkir.Value
 
 pub fn ref_cast(@milkir.IRBuilder, Int, Bool, @milkir.Value) -> @milkir.Value
 
@@ -115,13 +115,13 @@ pub fn struct_new_default(@milkir.IRBuilder, Int) -> @milkir.Value
 
 pub fn struct_set(@milkir.IRBuilder, Int, Int, @milkir.Value, @milkir.Value) -> Unit
 
-pub fn table_copy(@milkir.IRBuilder, Int, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
+pub fn table_copy(@milkir.IRBuilder, @milkir.Value, Int, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
 
-pub fn table_fill(@milkir.IRBuilder, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
+pub fn table_fill(@milkir.IRBuilder, @milkir.Value, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
 
-pub fn table_grow(@milkir.IRBuilder, Int, @milkir.Value, @milkir.Value) -> @milkir.Value
+pub fn table_grow(@milkir.IRBuilder, @milkir.Value, Int, @milkir.Value, @milkir.Value) -> @milkir.Value
 
-pub fn table_init(@milkir.IRBuilder, Int, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
+pub fn table_init(@milkir.IRBuilder, @milkir.Value, Int, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
 
 pub fn try_table_begin(@milkir.IRBuilder, Int) -> @milkir.Value
 

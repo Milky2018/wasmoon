@@ -1994,7 +1994,8 @@ fn lower_inst(
     Select => lower_select(ctx, inst, block)
 
     // Function calls
-    Call(_) | CallIndirect(_) => lower_unsupported_generic_opcode(inst, block)
+    Call(symbol) => lower_external_call(ctx, inst, block, symbol)
+    CallIndirect(_) => lower_unsupported_generic_opcode(inst, block)
 
     // Raw pointer operations (for trampolines)
     LoadPtr(ty) => lower_load_ptr(ctx, inst, block, ty)

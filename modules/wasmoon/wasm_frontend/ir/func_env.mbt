@@ -257,10 +257,9 @@ fn FuncEnvironment::translate_table_set(
   // slot for funcref values (needed for call_indirect type checks).
   //
   // We keep is_table64 only to choose the correct immediate width for `size=1`.
-  ignore(vmctx)
   ignore(is_table64)
   let one = builder.iconst(elem_idx.ty, 1L)
-  @wasm_milkir.table_fill(builder, table_idx, elem_idx, value, one)
+  @wasm_milkir.table_fill(builder, vmctx, table_idx, elem_idx, value, one)
 }
 
 // ============ Memory Operations ============

@@ -120,8 +120,9 @@ fn has_side_effects(inst : Inst) -> Bool {
     Sdiv | Udiv | Srem | Urem => true
     // Float-to-int conversion can trap on NaN or out-of-range values
     FcvtToSint | FcvtToUint => true
-    // CallPtr can have side effects (calls arbitrary functions)
-    CallPtr(_, _) => true
+    // External calls can have side effects and may interact with embedding
+    // runtime state.
+    Call(_) | CallPtr(_, _) => true
     // Other instructions are pure
     _ => false
   }

@@ -988,6 +988,52 @@ fn lower_call_ptr(
 // ============ C Libcall Lowering (Standard) ============
 
 ///|
+/// Lower a generic external-symbol call using the platform C ABI.
+///
+/// Frontends that need embedding-specific runtime helpers should express them
+/// as MilkIR `Call(ExternalSymbol)` nodes before generic ISA lowering. The
+/// symbol resolver is owned by the embedding runtime, not by `isa_target`.
+fn lower_external_call(
+  ctx : LoweringContext,
+  inst : @milkir.Inst,
+  block : @block.VCodeBlock,
+  symbol : @milkir.ExternalSymbol,
+) -> Unit {
+  let args : Array[@abi.VReg] = []
+  for i, operand in inst.operands {
+    if i == 0 &&
+      ctx.abi_settings.enable_pinned_reg &&
+      ctx.ir_func.params.length() > 0 &&
+      operand.id == ctx.ir_func.params[0].0.id {
+      let context_vreg = ctx.vcode_func.new_vreg(Int)
+      let context_mov = @instr.VCodeInst::new(Move)
+      context_mov.add_def({ reg: Virtual(context_vreg) })
+      context_mov.add_use(Physical(vmctx_preg(ctx)))
+      block.add_inst(context_mov)
+      args.push(context_vreg)
+    } else {
+      args.push(ctx.get_vreg_for_use(operand, block))
+    }
+  }
+  let result_vregs = collect_call_result_vregs(ctx, inst)
+  if result_vregs.length() > 1 {
+    abort("external C ABI call supports at most one direct result")
+  }
+  let result = if result_vregs.length() == 1 {
+    Some(result_vregs[0])
+  } else {
+    None
+  }
+  lower_c_libcall_direct(
+    ctx,
+    block,
+    @instr.ExternalName::new(symbol.name),
+    args,
+    result,
+  )
+}
+
+///|
 /// Lower a simple C libcall with integer arguments.
 /// This is for calling C runtime functions like GC helpers.
 /// Uses ISA C calling convention (register args + stack overflow args).

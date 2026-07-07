@@ -775,6 +775,7 @@ fn Translator::translate_instruction(
         Some(max) =>
           @wasm_milkir.memory_grow(
             self.builder,
+            self.vmctx,
             memidx,
             delta,
             max_pages=max,
@@ -783,6 +784,7 @@ fn Translator::translate_instruction(
         None =>
           @wasm_milkir.memory_grow(
             self.builder,
+            self.vmctx,
             memidx,
             delta,
             is_memory64=is_mem64,
@@ -795,6 +797,7 @@ fn Translator::translate_instruction(
         self.memory_is_64[memidx]
       let result = @wasm_milkir.memory_size(
         self.builder,
+        self.vmctx,
         memidx,
         is_memory64=is_mem64,
       )
@@ -804,28 +807,45 @@ fn Translator::translate_instruction(
       let n = self.pop() // size
       let val = self.pop() // value (byte)
       let d = self.pop() // destination
-      @wasm_milkir.memory_fill(self.builder, memidx, d, val, n)
+      @wasm_milkir.memory_fill(self.builder, self.vmctx, memidx, d, val, n)
     }
     MemoryCopy(dst_memidx, src_memidx) => {
       let n = self.pop() // size
       let s = self.pop() // source
       let d = self.pop() // destination
-      @wasm_milkir.memory_copy(self.builder, dst_memidx, src_memidx, d, s, n)
+      @wasm_milkir.memory_copy(
+        self.builder,
+        self.vmctx,
+        dst_memidx,
+        src_memidx,
+        d,
+        s,
+        n,
+      )
     }
     MemoryInit(memidx, data_idx) => {
       let n = self.pop() // size
       let s = self.pop() // source offset in data segment
       let d = self.pop() // destination offset in memory
-      @wasm_milkir.memory_init(self.builder, memidx, data_idx, d, s, n)
+      @wasm_milkir.memory_init(
+        self.builder,
+        self.vmctx,
+        memidx,
+        data_idx,
+        d,
+        s,
+        n,
+      )
     }
-    DataDrop(data_idx) => @wasm_milkir.data_drop(self.builder, data_idx)
+    DataDrop(data_idx) =>
+      @wasm_milkir.data_drop(self.builder, self.vmctx, data_idx)
 
     // Table bulk operations
     TableFill(table_idx) => {
       let n = self.pop() // size
       let val = self.pop() // value (ref)
       let d = self.pop() // destination
-      @wasm_milkir.table_fill(self.builder, table_idx, d, val, n)
+      @wasm_milkir.table_fill(self.builder, self.vmctx, table_idx, d, val, n)
     }
     TableCopy(dst_table_idx, src_table_idx) => {
       let n = self.pop() // size
@@ -833,6 +853,7 @@ fn Translator::translate_instruction(
       let d = self.pop() // destination
       @wasm_milkir.table_copy(
         self.builder,
+        self.vmctx,
         dst_table_idx,
         src_table_idx,
         d,
@@ -844,9 +865,18 @@ fn Translator::translate_instruction(
       let n = self.pop() // size
       let s = self.pop() // source offset in element segment
       let d = self.pop() // destination offset in table
-      @wasm_milkir.table_init(self.builder, table_idx, elem_idx, d, s, n)
+      @wasm_milkir.table_init(
+        self.builder,
+        self.vmctx,
+        table_idx,
+        elem_idx,
+        d,
+        s,
+        n,
+      )
     }
-    ElemDrop(elem_idx) => @wasm_milkir.elem_drop(self.builder, elem_idx)
+    ElemDrop(elem_idx) =>
+      @wasm_milkir.elem_drop(self.builder, self.vmctx, elem_idx)
 
     // Reference types
     RefNull(ref_type) => {
@@ -945,6 +975,7 @@ fn Translator::translate_instruction(
       let init_value = self.pop()
       let result = @wasm_milkir.table_grow(
         self.builder,
+        self.vmctx,
         table_idx,
         delta,
         init_value,

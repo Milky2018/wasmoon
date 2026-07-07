@@ -14,6 +14,32 @@ fn funcref_type() -> @milkir.Type {
 }
 
 ///|
+fn external_symbol(
+  builder : @milkir.IRBuilder,
+  name : String,
+) -> @milkir.ExternalSymbol {
+  builder.get_function().declare_external_symbol(name)
+}
+
+///|
+fn runtime_symbol(
+  builder : @milkir.IRBuilder,
+  name : String,
+) -> @milkir.ExternalSymbol {
+  external_symbol(builder, "wasmoon.runtime.\{name}")
+}
+
+///|
+fn call_runtime(
+  builder : @milkir.IRBuilder,
+  name : String,
+  result_ty : @milkir.Type?,
+  args : Array[@milkir.Value],
+) -> @milkir.Value? {
+  builder.call_symbol(runtime_symbol(builder, name), result_ty, args)
+}
+
+///|
 fn emit_wasm_inst(
   builder : @milkir.IRBuilder,
   ty : @milkir.Type,
@@ -67,117 +93,200 @@ pub fn load_mem_base(
 ///|
 pub fn memory_grow(
   builder : @milkir.IRBuilder,
+  vmctx : @milkir.Value,
   memidx : Int,
   delta : @milkir.Value,
   max_pages? : Int,
   is_memory64? : Bool = false,
 ) -> @milkir.Value {
-  let result_type = if is_memory64 { i64_type() } else { i32_type() }
-  emit_wasm_inst(builder, result_type, MemoryGrow(memidx, max_pages), [delta])
+  let max_pages_value = max_pages.unwrap_or(-1)
+  let call_result = call_runtime(builder, "memory_grow", Some(I32), [
+    vmctx,
+    builder.iconst_i32(memidx),
+    delta,
+    builder.iconst_i32(max_pages_value),
+  ]).unwrap()
+  if is_memory64 {
+    builder.sextend(I64, call_result)
+  } else {
+    call_result
+  }
 }
 
 ///|
 pub fn memory_size(
   builder : @milkir.IRBuilder,
+  vmctx : @milkir.Value,
   memidx : Int,
   is_memory64? : Bool = false,
 ) -> @milkir.Value {
-  let result_type = if is_memory64 { i64_type() } else { i32_type() }
-  emit_wasm_inst(builder, result_type, MemorySize(memidx), [])
+  let call_result = call_runtime(builder, "memory_size", Some(I32), [
+    vmctx,
+    builder.iconst_i32(memidx),
+  ]).unwrap()
+  if is_memory64 {
+    builder.uextend(I64, call_result)
+  } else {
+    call_result
+  }
 }
 
 ///|
 pub fn memory_fill(
   builder : @milkir.IRBuilder,
+  vmctx : @milkir.Value,
   memidx : Int,
   dst : @milkir.Value,
   val : @milkir.Value,
   size : @milkir.Value,
 ) -> Unit {
-  emit_void_wasm_inst(builder, MemoryFill(memidx), [dst, val, size])
+  call_runtime(builder, "memory_fill", None, [
+    vmctx,
+    builder.iconst_i32(memidx),
+    dst,
+    val,
+    size,
+  ])
+  |> ignore
 }
 
 ///|
 pub fn memory_copy(
   builder : @milkir.IRBuilder,
+  vmctx : @milkir.Value,
   dst_memidx : Int,
   src_memidx : Int,
   dst : @milkir.Value,
   src : @milkir.Value,
   size : @milkir.Value,
 ) -> Unit {
-  emit_void_wasm_inst(builder, MemoryCopy(dst_memidx, src_memidx), [
-    dst, src, size,
+  call_runtime(builder, "memory_copy", None, [
+    vmctx,
+    builder.iconst_i32(dst_memidx),
+    builder.iconst_i32(src_memidx),
+    dst,
+    src,
+    size,
   ])
+  |> ignore
 }
 
 ///|
 pub fn memory_init(
   builder : @milkir.IRBuilder,
+  vmctx : @milkir.Value,
   memidx : Int,
   data_idx : Int,
   dst : @milkir.Value,
   src : @milkir.Value,
   size : @milkir.Value,
 ) -> Unit {
-  emit_void_wasm_inst(builder, MemoryInit(memidx, data_idx), [dst, src, size])
+  call_runtime(builder, "memory_init", None, [
+    vmctx,
+    builder.iconst_i32(memidx),
+    builder.iconst_i32(data_idx),
+    dst,
+    src,
+    size,
+  ])
+  |> ignore
 }
 
 ///|
-pub fn data_drop(builder : @milkir.IRBuilder, data_idx : Int) -> Unit {
-  emit_void_wasm_inst(builder, DataDrop(data_idx), [])
+pub fn data_drop(
+  builder : @milkir.IRBuilder,
+  vmctx : @milkir.Value,
+  data_idx : Int,
+) -> Unit {
+  call_runtime(builder, "data_drop", None, [vmctx, builder.iconst_i32(data_idx)])
+  |> ignore
 }
 
 ///|
 pub fn table_grow(
   builder : @milkir.IRBuilder,
+  vmctx : @milkir.Value,
   table_idx : Int,
   delta : @milkir.Value,
   init_value : @milkir.Value,
 ) -> @milkir.Value {
-  emit_wasm_inst(builder, i32_type(), TableGrow(table_idx), [delta, init_value])
+  call_runtime(builder, "table_grow", Some(I32), [
+    vmctx,
+    builder.iconst_i32(table_idx),
+    delta,
+    init_value,
+  ]).unwrap()
 }
 
 ///|
 pub fn table_fill(
   builder : @milkir.IRBuilder,
+  vmctx : @milkir.Value,
   table_idx : Int,
   dst : @milkir.Value,
   val : @milkir.Value,
   size : @milkir.Value,
 ) -> Unit {
-  emit_void_wasm_inst(builder, TableFill(table_idx), [dst, val, size])
+  call_runtime(builder, "table_fill", None, [
+    vmctx,
+    builder.iconst_i32(table_idx),
+    dst,
+    val,
+    size,
+  ])
+  |> ignore
 }
 
 ///|
 pub fn table_copy(
   builder : @milkir.IRBuilder,
+  vmctx : @milkir.Value,
   dst_table_idx : Int,
   src_table_idx : Int,
   dst : @milkir.Value,
   src : @milkir.Value,
   size : @milkir.Value,
 ) -> Unit {
-  emit_void_wasm_inst(builder, TableCopy(dst_table_idx, src_table_idx), [
-    dst, src, size,
+  call_runtime(builder, "table_copy", None, [
+    vmctx,
+    builder.iconst_i32(dst_table_idx),
+    builder.iconst_i32(src_table_idx),
+    dst,
+    src,
+    size,
   ])
+  |> ignore
 }
 
 ///|
 pub fn table_init(
   builder : @milkir.IRBuilder,
+  vmctx : @milkir.Value,
   table_idx : Int,
   elem_idx : Int,
   dst : @milkir.Value,
   src : @milkir.Value,
   size : @milkir.Value,
 ) -> Unit {
-  emit_void_wasm_inst(builder, TableInit(table_idx, elem_idx), [dst, src, size])
+  call_runtime(builder, "table_init", None, [
+    vmctx,
+    builder.iconst_i32(table_idx),
+    builder.iconst_i32(elem_idx),
+    dst,
+    src,
+    size,
+  ])
+  |> ignore
 }
 
 ///|
-pub fn elem_drop(builder : @milkir.IRBuilder, elem_idx : Int) -> Unit {
-  emit_void_wasm_inst(builder, ElemDrop(elem_idx), [])
+pub fn elem_drop(
+  builder : @milkir.IRBuilder,
+  vmctx : @milkir.Value,
+  elem_idx : Int,
+) -> Unit {
+  call_runtime(builder, "elem_drop", None, [vmctx, builder.iconst_i32(elem_idx)])
+  |> ignore
 }
 
 ///|

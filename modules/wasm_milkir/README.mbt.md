@@ -24,16 +24,17 @@ VMContext layouts, and native glue still belong outside this module.
 ///|
 test "build a Wasm memory.size extension instruction" {
   let builder = @milkir.IRBuilder::new("memory_size")
+  let vmctx = builder.add_param(I64)
   builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
-  let size = memory_size(builder, 0)
+  let size = memory_size(builder, vmctx, 0)
   builder.return_([size])
   let func = builder.get_function()
   inspect(func.blocks.length(), content="1")
   inspect(func.verify(), content="()")
-  match func.blocks[0].instructions[0].opcode {
-    Ext(ext) => debug_inspect(decode(ext), content="Some(MemorySize(0))")
+  match func.blocks[0].instructions[1].opcode {
+    Call(symbol) => inspect(symbol.name, content="wasmoon.runtime.memory_size")
     _ => inspect(false, content="true")
   }
 }
