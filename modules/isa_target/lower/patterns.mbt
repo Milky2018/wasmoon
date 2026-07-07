@@ -306,7 +306,7 @@ fn pattern_opcode_eq(a : PatternOpcode, b : PatternOpcode) -> Bool {
 
 ///|
 /// Find the instruction that defines a given value
-fn find_defining_inst(
+pub fn find_defining_inst(
   ctx : LoweringContext,
   value : @milkir.Value,
 ) -> @milkir.Inst? {

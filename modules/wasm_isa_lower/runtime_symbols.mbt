@@ -72,6 +72,13 @@ fn rt_gc_array_init_elem(ctx : @lower.LoweringContext) -> @instr.ExternalName {
 }
 
 ///|
+fn rt_gc_type_check_subtype(
+  ctx : @lower.LoweringContext,
+) -> @instr.ExternalName {
+  runtime_helper_symbol(ctx, "gc.type_check_subtype")
+}
+
+///|
 fn rt_gc_register_struct_inline(
   ctx : @lower.LoweringContext,
 ) -> @instr.ExternalName {

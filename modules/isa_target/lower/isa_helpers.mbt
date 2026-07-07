@@ -20,7 +20,7 @@ pub fn vmctx_preg(ctx : LoweringContext) -> @abi.PReg {
 }
 
 ///|
-fn scratch2_index(ctx : LoweringContext) -> Int {
+pub fn scratch2_index(ctx : LoweringContext) -> Int {
   current_isa(ctx).scratch_reg_2_index()
 }
 

@@ -40,6 +40,12 @@ pub fn lower_array_new_fixed(@lower.LoweringContext, @milkir.Inst, @block.VCodeB
 
 pub fn lower_array_set(@lower.LoweringContext, @milkir.Inst, @block.VCodeBlock, Int) -> Unit
 
+pub fn lower_call(@lower.LoweringContext, @milkir.Inst, @block.VCodeBlock, Int) -> Unit
+
+pub fn lower_call_indirect(@lower.LoweringContext, @milkir.Inst, @block.VCodeBlock, Int, Int) -> Unit
+
+pub fn lower_call_ref(@lower.LoweringContext, @milkir.Inst, @block.VCodeBlock, Int) -> Unit
+
 pub fn lower_delegate(@lower.LoweringContext, @milkir.Inst, @block.VCodeBlock, Int) -> Unit
 
 pub fn lower_extension(@lower.LoweringContext, @milkir.Inst, @block.VCodeBlock, @milkir.ExtOp) -> Bool
@@ -67,6 +73,12 @@ pub fn lower_ref_cast(@lower.LoweringContext, @milkir.Inst, @block.VCodeBlock, I
 pub fn lower_ref_eq(@lower.LoweringContext, @milkir.Inst, @block.VCodeBlock) -> Unit
 
 pub fn lower_ref_test(@lower.LoweringContext, @milkir.Inst, @block.VCodeBlock, Int, Bool) -> Unit
+
+pub fn lower_return_call(@lower.LoweringContext, @milkir.Inst, @block.VCodeBlock, Int) -> Unit
+
+pub fn lower_return_call_indirect(@lower.LoweringContext, @milkir.Inst, @block.VCodeBlock, Int, Int) -> Unit
+
+pub fn lower_return_call_ref(@lower.LoweringContext, @milkir.Inst, @block.VCodeBlock, Int) -> Unit
 
 pub fn lower_spill_locals_for_throw(@lower.LoweringContext, @milkir.Inst, @block.VCodeBlock, Int) -> Unit
 

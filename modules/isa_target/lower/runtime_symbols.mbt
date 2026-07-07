@@ -14,8 +14,3 @@ pub fn runtime_helper_symbol(
       abort("Wasm runtime-helper lowering requires explicit runtime symbols")
   }
 }
-
-///|
-fn rt_gc_type_check_subtype(ctx : LoweringContext) -> @instr.ExternalName {
-  runtime_helper_symbol(ctx, "gc.type_check_subtype")
-}

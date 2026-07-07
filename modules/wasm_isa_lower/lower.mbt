@@ -70,16 +70,15 @@ pub fn lower_extension(
     | Some(TableInit(_, _))
     | Some(ElemDrop(_)) =>
       @lower.lower_unsupported_extension_opcode(inst, block)
-    Some(WasmCall(func_idx)) => @lower.lower_call(ctx, inst, block, func_idx)
+    Some(WasmCall(func_idx)) => lower_call(ctx, inst, block, func_idx)
     Some(WasmCallIndirect(type_idx, table_idx)) =>
-      @lower.lower_call_indirect(ctx, inst, block, type_idx, table_idx)
-    Some(CallRef(type_idx)) => @lower.lower_call_ref(ctx, inst, block, type_idx)
-    Some(ReturnCall(func_idx)) =>
-      @lower.lower_return_call(ctx, inst, block, func_idx)
+      lower_call_indirect(ctx, inst, block, type_idx, table_idx)
+    Some(CallRef(type_idx)) => lower_call_ref(ctx, inst, block, type_idx)
+    Some(ReturnCall(func_idx)) => lower_return_call(ctx, inst, block, func_idx)
     Some(ReturnCallIndirect(type_idx, table_idx)) =>
-      @lower.lower_return_call_indirect(ctx, inst, block, type_idx, table_idx)
+      lower_return_call_indirect(ctx, inst, block, type_idx, table_idx)
     Some(ReturnCallRef(type_idx)) =>
-      @lower.lower_return_call_ref(ctx, inst, block, type_idx)
+      lower_return_call_ref(ctx, inst, block, type_idx)
     Some(GetFuncRef(func_idx)) =>
       @lower.lower_get_func_ref(ctx, inst, block, func_idx)
     Some(I31New) => lower_i31_new(ctx, inst, block)

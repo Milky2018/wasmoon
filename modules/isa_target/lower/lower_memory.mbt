@@ -26,7 +26,7 @@ fn emit_load_func_table(
 /// Emit instruction to load table0_base from vmctx on-demand (Standard)
 /// Returns a virtual register containing table0_base pointer
 /// This is called before indirect calls to get the indirect table base address
-fn emit_load_table0_base(
+pub fn emit_load_table0_base(
   ctx : LoweringContext,
   block : @block.VCodeBlock,
 ) -> @abi.VReg {

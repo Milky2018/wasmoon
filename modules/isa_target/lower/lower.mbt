@@ -180,6 +180,11 @@ pub fn LoweringContext::abi_settings(
 }
 
 ///|
+pub fn LoweringContext::num_imports(self : LoweringContext) -> Int {
+  self.num_imports
+}
+
+///|
 fn LoweringContext::get_cached_vreg(
   self : LoweringContext,
   value_id : Int,
@@ -249,6 +254,14 @@ pub fn LoweringContext::use_subtype_indirect_check(
   self : LoweringContext,
 ) -> Bool {
   self.use_subtype_indirect_check
+}
+
+///|
+pub fn LoweringContext::use_count(
+  self : LoweringContext,
+  value_id : Int,
+) -> Int {
+  use_count(self.use_counts, value_id)
 }
 
 ///|
@@ -917,55 +930,6 @@ pub fn collect_call_result_vregs(
 }
 
 ///|
-/// Return a rematerializable constant for a call argument if it's a single-use const.
-fn try_collect_call_arg_const(
-  ctx : LoweringContext,
-  value : @milkir.Value,
-) -> CallConstArg? {
-  if use_count(ctx.use_counts, value.id) != 1 {
-    return None
-  }
-  if find_defining_inst(ctx, value) is Some(inst) {
-    match inst.opcode {
-      Iconst(v) => Some(Int(v))
-      Fconst(v) =>
-        match value.ty {
-          F32 => Some(F32(v.reinterpret_as_int64().to_int()))
-          F64 => Some(F64(v.reinterpret_as_int64()))
-          _ => None
-        }
-      _ => None
-    }
-  } else {
-    None
-  }
-}
-
-///|
-/// Collect call arguments and rematerializable constants.
-fn collect_call_args_with_consts(
-  ctx : LoweringContext,
-  operands : Array[@milkir.Value],
-  block : @block.VCodeBlock,
-  start_idx : Int,
-) -> (Array[@abi.VReg], Map[Int, CallConstArg]) {
-  let arg_vregs : Array[@abi.VReg] = []
-  let const_args : Map[Int, CallConstArg] = {}
-  for i in start_idx..<operands.length() {
-    let operand = operands[i]
-    if try_collect_call_arg_const(ctx, operand) is Some(value) {
-      let class = ir_type_to_reg_class(operand.ty)
-      let vreg = ctx.new_vreg(class)
-      arg_vregs.push(vreg)
-      const_args.set(vreg.id, value)
-    } else {
-      arg_vregs.push(ctx.get_vreg_for_use(operand, block))
-    }
-  }
-  (arg_vregs, const_args)
-}
-
-///|
 /// Get or create a @abi.VReg for an IR Value
 pub fn LoweringContext::get_vreg(
   self : LoweringContext,
@@ -1040,7 +1004,7 @@ fn LoweringContext::get_block_id(
 
 ///|
 /// Convert IR Type to @abi.RegClass
-fn ir_type_to_reg_class(ty : @milkir.Type) -> @abi.RegClass {
+pub fn ir_type_to_reg_class(ty : @milkir.Type) -> @abi.RegClass {
   match ty {
     I32 | I64 | Ptr | Ref | FuncRef | ExternRef => Int
     F32 => Float32
@@ -1584,7 +1548,7 @@ fn is_valid_load_store_offset_for_isa(
 
 ///|
 /// Check if an offset is encodable in current ISA addressing mode immediate.
-fn is_valid_load_store_offset(
+pub fn is_valid_load_store_offset(
   ctx : LoweringContext,
   offset : Int64,
   access_size : Int,
@@ -2680,37 +2644,6 @@ fn lower_terminator(
       }
     }
   }
-}
-
-///|
-/// Lower a direct function call
-/// Cranelift-aligned strategy: use direct call fixups (`CallDirect`) for both
-/// defined and imported functions. Imported targets are resolved from
-/// `vmctx->func_table` when call fixups are applied at module load time.
-pub fn lower_call(
-  ctx : LoweringContext,
-  inst : @milkir.Inst,
-  block : @block.VCodeBlock,
-  func_idx : Int,
-) -> Unit {
-  // Collect argument vregs, rematerializing single-use constants only for
-  // direct calls. Indirect calls (imports or default path) keep original vregs.
-  let use_const_args = ctx.num_imports >= 0 && func_idx >= ctx.num_imports
-  let (arg_vregs, const_args) = if use_const_args {
-    collect_call_args_with_consts(ctx, inst.operands, block, 0)
-  } else {
-    let args : Array[@abi.VReg] = []
-    for operand in inst.operands {
-      args.push(ctx.get_vreg_for_use(operand, block))
-    }
-    (args, {})
-  }
-
-  // Collect result vregs (skip when results are unused)
-  let result_vregs = collect_call_result_vregs(ctx, inst)
-  lower_wasm_call_direct(
-    ctx, block, func_idx, arg_vregs, result_vregs, const_args,
-  )
 }
 
 // NOTE: lower_global_get, lower_global_set are removed
