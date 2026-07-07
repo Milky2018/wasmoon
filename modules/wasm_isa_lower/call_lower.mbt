@@ -220,7 +220,6 @@ fn lower_wasm_call_common(
   @lower.add_call_clobbers(ctx, call_inst)
   block.add_inst(call_inst)
   @lower.invalidate_context_pointer_cache(ctx)
-  @lower.invalidate_table0_base_cache(ctx)
 }
 
 ///|
@@ -382,12 +381,16 @@ pub fn lower_return_call_indirect(
 
   // Load table pointer
   let table_ptr_vreg : @abi.VReg = if table_idx == 0 {
-    @lower.emit_load_table0_base(ctx, block)
+    load_context_slot_pointer_from_pinned_context(
+      ctx,
+      block,
+      CONTEXT_SLOT_TABLE0_BASE,
+    )
   } else {
     let layout = ctx.embedding_context_layout()
     let indirect_tables_vreg = ctx.machv_function().new_vreg(Int)
     let load_array_inst = @instr.MachVInst::new(
-      Load(I64, layout.table_directory_offset),
+      Load(I64, context_slot_offset(ctx, CONTEXT_SLOT_TABLE_DIRECTORY)),
     )
     load_array_inst.add_def({ reg: Virtual(indirect_tables_vreg) })
     load_array_inst.add_use(
@@ -622,15 +625,19 @@ pub fn lower_call_indirect(
   // Both table_idx == 0 and table_idx != 0 load the table pointer on-demand
   // on-demand (no pre-loaded registers for table pointers)
   let table_ptr_vreg : @abi.VReg = if table_idx == 0 {
-    // Fast path for table 0: load table0_base from vmctx on-demand
-    @lower.emit_load_table0_base(ctx, block)
+    // Fast path for table 0: load table0_base from the Wasm context on-demand.
+    load_context_slot_pointer_from_pinned_context(
+      ctx,
+      block,
+      CONTEXT_SLOT_TABLE0_BASE,
+    )
   } else {
     // Slow path: load indirect_tables[table_idx] from context
     // 1. Load indirect_tables array pointer from the runtime context.
     let layout = ctx.embedding_context_layout()
     let indirect_tables_vreg = ctx.machv_function().new_vreg(Int)
     let load_array_inst = @instr.MachVInst::new(
-      Load(I64, layout.table_directory_offset),
+      Load(I64, context_slot_offset(ctx, CONTEXT_SLOT_TABLE_DIRECTORY)),
     )
     load_array_inst.add_def({ reg: Virtual(indirect_tables_vreg) })
     load_array_inst.add_use(

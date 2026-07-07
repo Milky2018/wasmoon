@@ -2,24 +2,62 @@
 // Memory bounds checking is now done at IR translation time via FuncEnvironment
 
 ///|
-/// Emit instruction to load func_table from vmctx on-demand (Standard)
-/// Returns a virtual register containing func_table pointer
-/// This is called before function calls to get the function table base address
+fn context_slot_offset(ctx : @lower.LoweringContext, slot_id : Int) -> Int {
+  let layout = ctx.embedding_context_layout()
+  match layout.slot_offset(slot_id) {
+    Some(offset) => offset
+    None => abort("missing Wasm context slot \{slot_id}")
+  }
+}
+
+///|
+pub fn load_context_slot_pointer(
+  ctx : @lower.LoweringContext,
+  block : @block.MachVBlock,
+  slot_id : Int,
+  base : @abi.Reg,
+) -> @abi.VReg {
+  let cache_key = context_slot_cache_key(slot_id)
+  if ctx.cached_context_pointer(cache_key) is Some(vreg) {
+    return vreg
+  }
+  let result = ctx.machv_function().new_vreg(Int)
+  let load_inst = @instr.MachVInst::new(
+    Load(I64, context_slot_offset(ctx, slot_id)),
+  )
+  load_inst.add_def({ reg: Virtual(result) })
+  load_inst.add_use(base)
+  block.add_inst(load_inst)
+  ctx.cache_context_pointer(cache_key, result)
+  result
+}
+
+///|
+pub fn load_context_slot_pointer_from_pinned_context(
+  ctx : @lower.LoweringContext,
+  block : @block.MachVBlock,
+  slot_id : Int,
+) -> @abi.VReg {
+  load_context_slot_pointer(
+    ctx,
+    block,
+    slot_id,
+    Physical({ index: @lower.context_index(ctx), class: Int }),
+  )
+}
+
+///|
+/// Emit instruction to load func_table from the Wasm context on-demand.
+/// Returns a virtual register containing func_table pointer.
 fn emit_load_func_table(
   ctx : @lower.LoweringContext,
   block : @block.MachVBlock,
 ) -> @abi.VReg {
-  if ctx.cached_func_table(block.id) is Some(vreg) {
-    return vreg
-  }
-  let layout = ctx.embedding_context_layout()
-  let func_table_vreg = ctx.machv_function().new_vreg(Int)
-  let load_inst = @instr.MachVInst::new(Load(I64, layout.function_table_offset))
-  load_inst.add_def({ reg: Virtual(func_table_vreg) })
-  load_inst.add_use(Physical({ index: @lower.context_index(ctx), class: Int })) // vmctx
-  block.add_inst(load_inst)
-  ctx.cache_func_table(block.id, func_table_vreg)
-  func_table_vreg
+  load_context_slot_pointer_from_pinned_context(
+    ctx,
+    block,
+    CONTEXT_SLOT_FUNCTION_TABLE,
+  )
 }
 
 ///|
@@ -95,19 +133,22 @@ pub fn lower_load_mem_base(
     let vmctx_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
     Virtual(vmctx_vreg)
   }
-  let layout = ctx.embedding_context_layout()
   if memidx == 0 {
     ctx.machv_function().mark_uses_context_cache_0_source()
-    let load_base = @instr.MachVInst::new(
-      Load(I64, layout.context_cache_0_source_offset),
+    let cached_vreg = load_context_slot_pointer(
+      ctx,
+      block,
+      CONTEXT_SLOT_MEMORY0_BASE,
+      vmctx_reg,
     )
-    load_base.add_def({ reg: Virtual(result_vreg) })
-    load_base.add_use(vmctx_reg)
-    block.add_inst(load_base)
+    ctx.set_cached_vreg(result.id, cached_vreg)
+    ctx.cache_context_pointer(memidx, cached_vreg)
+    return
   } else {
+    let layout = ctx.embedding_context_layout()
     let directory_vreg = ctx.machv_function().new_vreg(Int)
     let load_directory = @instr.MachVInst::new(
-      Load(I64, layout.memory_directory_offset),
+      Load(I64, context_slot_offset(ctx, CONTEXT_SLOT_MEMORY_DIRECTORY)),
     )
     load_directory.add_def({ reg: Virtual(directory_vreg) })
     load_directory.add_use(vmctx_reg)

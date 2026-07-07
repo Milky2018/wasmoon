@@ -32,10 +32,6 @@ struct LoweringContext {
   block_map : Map[Int, Int]
   // Map from IR Value id to stack param index (for params >= 8)
   stack_param_map : Map[Int, (Int, @abi.RegClass)]
-  // Cache of func_table base per MachV block (block-local CSE)
-  func_table_cache : Map[Int, @abi.VReg]
-  // Cache of table0_base per MachV block (block-local CSE)
-  table0_base_cache : Map[Int, @abi.VReg]
   // Cache of embedding-context-derived pointers keyed by extension-defined id.
   // Cleared at block boundaries and invalidated at call sites.
   context_pointer_cache : Map[Int, @abi.VReg]
@@ -115,8 +111,6 @@ pub fn LoweringContext::new(
     value_map_dense: Array::make(ir_func.next_value_id, None),
     block_map: {},
     stack_param_map: {},
-    func_table_cache: {},
-    table0_base_cache: {},
     context_pointer_cache: {},
     fused_icmps_dense: Array::make(ir_func.next_value_id, false),
     skipped_values_dense: Array::make(ir_func.next_value_id, false),
@@ -255,23 +249,6 @@ pub fn LoweringContext::use_count(
 }
 
 ///|
-pub fn LoweringContext::cached_func_table(
-  self : LoweringContext,
-  block_id : Int,
-) -> @abi.VReg? {
-  self.func_table_cache.get(block_id)
-}
-
-///|
-pub fn LoweringContext::cache_func_table(
-  self : LoweringContext,
-  block_id : Int,
-  vreg : @abi.VReg,
-) -> Unit {
-  self.func_table_cache.set(block_id, vreg)
-}
-
-///|
 pub fn LoweringContext::cached_context_pointer(
   self : LoweringContext,
   key : Int,
@@ -292,12 +269,6 @@ pub fn LoweringContext::cache_context_pointer(
 /// Invalidate cached embedding-context-derived pointers in lowering context.
 pub fn invalidate_context_pointer_cache(ctx : LoweringContext) -> Unit {
   ctx.context_pointer_cache.clear()
-}
-
-///|
-/// Invalidate cached table0 base pointers in lowering context.
-pub fn invalidate_table0_base_cache(ctx : LoweringContext) -> Unit {
-  ctx.table0_base_cache.clear()
 }
 
 ///|

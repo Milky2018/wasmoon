@@ -150,7 +150,6 @@ pub fn lower_c_libcall_direct(
   add_call_clobbers(ctx, call_inst)
   block.add_inst(call_inst)
   invalidate_context_pointer_cache(ctx)
-  invalidate_table0_base_cache(ctx)
 }
 
 ///|
@@ -269,7 +268,6 @@ fn lower_call_ptr(
   add_call_clobbers(ctx, call_inst)
   block.add_inst(call_inst)
   invalidate_context_pointer_cache(ctx)
-  invalidate_table0_base_cache(ctx)
   // No AdjustSP needed - outgoing args space is pre-allocated in prologue
 }
 
@@ -378,7 +376,6 @@ pub fn lower_c_libcall(
   add_call_clobbers(ctx, call_inst)
   block.add_inst(call_inst)
   invalidate_context_pointer_cache(ctx)
-  invalidate_table0_base_cache(ctx)
 }
 
 ///|

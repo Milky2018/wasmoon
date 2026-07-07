@@ -23,8 +23,6 @@ pub fn context_index(LoweringContext) -> Int
 
 pub fn context_preg(LoweringContext) -> @abi.PReg
 
-pub fn emit_load_table0_base(LoweringContext, @block.MachVBlock) -> @abi.VReg
-
 pub fn external_helper_symbol(LoweringContext, String) -> @instr.ExternalName
 
 pub fn find_defining_inst(LoweringContext, @milkir.Value) -> @milkir.Inst?
@@ -34,8 +32,6 @@ pub fn get_aarch64_rules() -> Array[RewriteRule]
 pub fn get_optimization_rules() -> Array[RewriteRule]
 
 pub fn invalidate_context_pointer_cache(LoweringContext) -> Unit
-
-pub fn invalidate_table0_base_cache(LoweringContext) -> Unit
 
 pub fn ir_type_to_reg_class(@milkir.Type) -> @abi.RegClass
 
@@ -87,9 +83,7 @@ pub enum AArch64RewriteResult {
 type LoweringContext
 pub fn LoweringContext::abi_settings(Self) -> @abi.ABISettings
 pub fn LoweringContext::cache_context_pointer(Self, Int, @abi.VReg) -> Unit
-pub fn LoweringContext::cache_func_table(Self, Int, @abi.VReg) -> Unit
 pub fn LoweringContext::cached_context_pointer(Self, Int) -> @abi.VReg?
-pub fn LoweringContext::cached_func_table(Self, Int) -> @abi.VReg?
 pub fn LoweringContext::call_conv_layout(Self) -> @abi.CallConventionLayout
 pub fn LoweringContext::embedding_context_layout(Self) -> @abi.EmbeddingContextLayout
 pub fn LoweringContext::embedding_reg_roles(Self) -> @abi.EmbeddingRegRoles

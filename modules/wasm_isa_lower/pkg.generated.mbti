@@ -32,7 +32,13 @@ pub const CONTEXT_SLOT_TABLE0_BASE : Int = 3
 
 pub const CONTEXT_SLOT_TABLE_DIRECTORY : Int = 4
 
+pub fn context_slot_cache_key(Int) -> Int
+
 pub fn external_helper_symbols(@wasm_milkir.RuntimeSymbols) -> Map[String, String]
+
+pub fn load_context_slot_pointer(@lower.LoweringContext, @block.MachVBlock, Int, @abi.Reg) -> @abi.VReg
+
+pub fn load_context_slot_pointer_from_pinned_context(@lower.LoweringContext, @block.MachVBlock, Int) -> @abi.VReg
 
 pub fn lower_array_copy(@lower.LoweringContext, @milkir.Inst, @block.MachVBlock, Int, Int) -> Unit
 
