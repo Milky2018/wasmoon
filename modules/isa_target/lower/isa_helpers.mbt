@@ -1,8 +1,8 @@
 ///|
-/// Helpers for ISA role queries used in lowering.
+/// Helpers for target and embedding ABI role queries used in lowering.
 ///
-/// Keep ISA-dependent register choices out of the lowering logic. The selected
-/// ISA is carried by `LoweringContext` and supplied by the embedding pipeline.
+/// Target scratch choices come from ISA policy. Embedding-specific roles, such
+/// as a pinned context pointer, come from `EmbeddingRegRoles`.
 
 ///|
 fn current_isa(ctx : LoweringContext) -> @isa.ISA {
@@ -11,12 +11,18 @@ fn current_isa(ctx : LoweringContext) -> @isa.ISA {
 
 ///|
 pub fn vmctx_index(ctx : LoweringContext) -> Int {
-  current_isa(ctx).vmctx_reg_index()
+  match ctx.embedding_reg_roles().context {
+    Some(preg) => preg.index
+    None => abort("embedding context register role is required")
+  }
 }
 
 ///|
 pub fn vmctx_preg(ctx : LoweringContext) -> @abi.PReg {
-  current_isa(ctx).vmctx_preg()
+  match ctx.embedding_reg_roles().context {
+    Some(preg) => preg
+    None => abort("embedding context register role is required")
+  }
 }
 
 ///|

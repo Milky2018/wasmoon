@@ -151,9 +151,11 @@ pub fn lower_milkir_for_target(
 ) -> @machv.Function {
   let isa = emit_target_to_isa(target)
   let call_conv = wasm_calling_convention_for_isa(isa)
+  let roles = wasm_embedding_reg_roles_for_isa(isa)
   @wasm_isa_lower.lower_function(
     func,
     isa~,
+    embedding_reg_roles=roles,
     runtime_layout=Some(runtime_context_layout()),
     call_conv_layout=Some(call_conv),
     runtime_symbols=wasm_runtime_symbols(),
@@ -167,9 +169,11 @@ pub fn lower_wasm_body_milkir_for_target(
 ) -> @machv.Function {
   let isa = emit_target_to_isa(target)
   let call_conv = wasm_calling_convention_for_isa(isa)
+  let roles = wasm_embedding_reg_roles_for_isa(isa)
   @wasm_isa_lower.lower_function(
     func,
     isa~,
+    embedding_reg_roles=roles,
     run_ir_opt=false,
     runtime_layout=Some(runtime_context_layout()),
     call_conv_layout=Some(call_conv),
@@ -184,9 +188,11 @@ pub fn plan_milkir_integration_for_target(
 ) -> JitIntegrationPlan {
   let isa = emit_target_to_isa(target)
   let call_conv = wasm_calling_convention_for_isa(isa)
+  let roles = wasm_embedding_reg_roles_for_isa(isa)
   let vcode_func = @wasm_isa_lower.lower_function(
     func,
     isa~,
+    embedding_reg_roles=roles,
     runtime_layout=Some(runtime_context_layout()),
     call_conv_layout=Some(call_conv),
     runtime_symbols=wasm_runtime_symbols(),
@@ -207,9 +213,11 @@ pub fn plan_wasm_body_milkir_integration_for_target(
 ) -> JitIntegrationPlan {
   let isa = emit_target_to_isa(target)
   let call_conv = wasm_calling_convention_for_isa(isa)
+  let roles = wasm_embedding_reg_roles_for_isa(isa)
   let vcode_func = @wasm_isa_lower.lower_function(
     func,
     isa~,
+    embedding_reg_roles=roles,
     run_ir_opt=false,
     runtime_layout=Some(runtime_context_layout()),
     call_conv_layout=Some(call_conv),

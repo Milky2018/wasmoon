@@ -18,6 +18,13 @@ pub fn optimize_vcode_for_lowering(
   func : @machv.Function,
   isa? : @isa.ISA = AArch64,
   runtime_layout? : @abi.RuntimeContextLayout? = None,
+  embedding_reg_roles? : @abi.EmbeddingRegRoles = @abi.EmbeddingRegRoles::none(),
 ) -> Unit {
-  @peephole.optimize_vcode(func, isa~, profile=Lowering, runtime_layout~)
+  @peephole.optimize_vcode(
+    func,
+    isa~,
+    profile=Lowering,
+    runtime_layout~,
+    embedding_reg_roles~,
+  )
 }

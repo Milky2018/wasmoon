@@ -115,7 +115,7 @@ fn lower_wasm_call_common(
     abort("unpinned VMContext ABI not implemented yet")
   }
   let call_conv = ctx.call_conv_layout()
-  // vmctx is pinned in `REG_VMCTX` (X21 when pinned).
+  // vmctx is pinned by the embedding ABI role supplied to lowering.
   let vmctx_preg : @abi.PReg = @lower.vmctx_preg(ctx)
 
   // Classify user arguments by type

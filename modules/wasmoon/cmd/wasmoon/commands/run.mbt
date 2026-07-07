@@ -1624,9 +1624,11 @@ pub fn compile_module_to_jit(
       func_name=Some(func_name),
     )
     let call_conv = @wasmoon_jit.wasm_calling_convention(isa~)
+    let roles = @wasmoon_jit.wasm_embedding_reg_roles(isa~)
     let vcode_func = @wasm_isa_lower.lower_function(
       ir_func,
       isa~,
+      embedding_reg_roles=roles,
       num_imports=mod_.imports.length(),
       run_ir_opt=false,
       runtime_layout=Some(@wasmoon_jit.runtime_context_layout()),

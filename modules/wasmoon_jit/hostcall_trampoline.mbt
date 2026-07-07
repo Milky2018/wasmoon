@@ -74,6 +74,7 @@ pub fn emit_hostcall_import_trampoline(
   isa? : @isa.ISA = AArch64,
 ) -> @machv_emit.MachineCode {
   let func = @machv.Function::new("host_import_trampoline")
+  let roles = wasm_embedding_reg_roles(isa~)
 
   // Params: always include vmctx as the first parameter (ISA-specific ABI reg).
   let _vmctx_param = func.add_param(Int)
@@ -223,11 +224,14 @@ pub fn emit_hostcall_import_trampoline(
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
 
-  // ctx argument comes from pinned VMCTX register (X21).
+  // Context argument comes from Wasmoon's pinned embedding-context register.
   let ctx_arg = func.new_vreg(Int)
   let mv_ctx = @instr.VCodeInst::new(Move)
   mv_ctx.add_def({ reg: Virtual(ctx_arg) })
-  mv_ctx.add_use(Physical({ index: isa.vmctx_reg_index(), class: Int }))
+  match roles.context {
+    Some(context_reg) => mv_ctx.add_use(Physical(context_reg))
+    None => abort("Wasmoon hostcall trampoline requires a context register")
+  }
   block.add_inst(mv_ctx)
   let host_addr_vreg = func.new_vreg(Int)
   let c_host = @instr.VCodeInst::new(LoadConst(host_func_addr.to_int64()))

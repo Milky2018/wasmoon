@@ -594,6 +594,7 @@ pub fn lower_function_optimized(ir_func : @milkir.Function) -> @machv.Function {
     ir_func,
     AArch64,
     @abi.ABISettings::default(),
+    @abi.EmbeddingRegRoles::none(),
     None,
     None,
     {},

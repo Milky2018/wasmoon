@@ -43,6 +43,7 @@ pub fn emit_entry_trampoline(
   let vcode_func = @lower.lower_function(
     ir_func,
     isa~,
+    embedding_reg_roles=wasm_embedding_reg_roles(isa~),
     call_conv_layout=Some(call_conv_layout),
   )
   let allocated = @machv_regalloc.allocate_registers_backtracking_with_isa(

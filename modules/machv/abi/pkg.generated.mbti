@@ -94,6 +94,14 @@ pub fn CallConventionLayout::layout_overflow_stack(Self, Int, Array[RegClass]) -
 pub fn CallConventionLayout::stack_slot_align(Self, RegClass) -> Int
 pub fn CallConventionLayout::stack_slot_size(Self, RegClass) -> Int
 
+pub(all) struct EmbeddingRegRoles {
+  context : PReg?
+  context_cache_0 : PReg?
+  context_cache_1 : PReg?
+  extra_results_ptr : PReg?
+}
+pub fn EmbeddingRegRoles::none() -> Self
+
 pub(all) enum OperandConstraint {
   Any
   FixedReg(PReg)

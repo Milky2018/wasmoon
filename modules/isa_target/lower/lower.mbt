@@ -14,6 +14,7 @@ struct LoweringContext {
   vcode_func : @machv.Function
   isa : @isa.ISA
   abi_settings : @abi.ABISettings
+  embedding_reg_roles : @abi.EmbeddingRegRoles
   runtime_layout : @abi.RuntimeContextLayout?
   call_conv_layout : @abi.CallConventionLayout?
   runtime_helper_symbols : Map[String, String]
@@ -73,6 +74,7 @@ pub fn LoweringContext::new(
   ir_func : @milkir.Function,
   isa : @isa.ISA,
   abi_settings : @abi.ABISettings,
+  embedding_reg_roles : @abi.EmbeddingRegRoles,
   runtime_layout : @abi.RuntimeContextLayout?,
   call_conv_layout : @abi.CallConventionLayout?,
   runtime_helper_symbols : Map[String, String],
@@ -109,6 +111,7 @@ pub fn LoweringContext::new(
     vcode_func: @machv.Function::new(ir_func.name),
     isa,
     abi_settings,
+    embedding_reg_roles,
     runtime_layout,
     call_conv_layout,
     runtime_helper_symbols,
@@ -177,6 +180,13 @@ pub fn LoweringContext::abi_settings(
   self : LoweringContext,
 ) -> @abi.ABISettings {
   self.abi_settings
+}
+
+///|
+pub fn LoweringContext::embedding_reg_roles(
+  self : LoweringContext,
+) -> @abi.EmbeddingRegRoles {
+  self.embedding_reg_roles
 }
 
 ///|
@@ -1643,6 +1653,7 @@ pub fn lower_function(
   ir_func : @milkir.Function,
   isa? : @isa.ISA = AArch64,
   abi_settings? : @abi.ABISettings = @abi.ABISettings::default(),
+  embedding_reg_roles? : @abi.EmbeddingRegRoles = @abi.EmbeddingRegRoles::none(),
   runtime_layout? : @abi.RuntimeContextLayout? = None,
   call_conv_layout? : @abi.CallConventionLayout? = None,
   runtime_helper_symbols? : Map[String, String] = {},
@@ -1663,8 +1674,9 @@ pub fn lower_function(
     @milkir.optimize_function(ir_func) |> ignore
   }
   let ctx = LoweringContext::new(
-    ir_func, isa, abi_settings, runtime_layout, call_conv_layout, runtime_helper_symbols,
-    extension_lowerer, num_imports, use_subtype_indirect_check, canonical_type_indices,
+    ir_func, isa, abi_settings, embedding_reg_roles, runtime_layout, call_conv_layout,
+    runtime_helper_symbols, extension_lowerer, num_imports, use_subtype_indirect_check,
+    canonical_type_indices,
   )
 
   // Phase 0: Pre-compute which Icmps can be fused with Select
@@ -1780,7 +1792,12 @@ pub fn lower_function(
   // Phase 5: Peephole optimization
   // Keep post-lowering cleanup deterministic (profile-driven) instead of
   // function-size gating.
-  optimize_vcode_for_lowering(ctx.vcode_func, isa=ctx.isa, runtime_layout~)
+  optimize_vcode_for_lowering(
+    ctx.vcode_func,
+    isa=ctx.isa,
+    runtime_layout~,
+    embedding_reg_roles=ctx.embedding_reg_roles,
+  )
 
   // Phase 6: Target-specific fixups (Cranelift-style).
   //

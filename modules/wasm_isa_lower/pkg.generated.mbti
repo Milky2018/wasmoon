@@ -50,7 +50,7 @@ pub fn lower_delegate(@lower.LoweringContext, @milkir.Inst, @block.VCodeBlock, I
 
 pub fn lower_extension(@lower.LoweringContext, @milkir.Inst, @block.VCodeBlock, @milkir.ExtOp) -> Bool
 
-pub fn lower_function(@milkir.Function, isa? : @isa.ISA, abi_settings? : @abi.ABISettings, runtime_layout? : @abi.RuntimeContextLayout?, call_conv_layout? : @abi.CallConventionLayout?, runtime_symbols? : @wasm_milkir.RuntimeSymbols, num_imports? : Int, run_ir_opt? : Bool, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @machv.Function
+pub fn lower_function(@milkir.Function, isa? : @isa.ISA, abi_settings? : @abi.ABISettings, embedding_reg_roles? : @abi.EmbeddingRegRoles, runtime_layout? : @abi.RuntimeContextLayout?, call_conv_layout? : @abi.CallConventionLayout?, runtime_symbols? : @wasm_milkir.RuntimeSymbols, num_imports? : Int, run_ir_opt? : Bool, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @machv.Function
 
 pub fn lower_gc_convert(@lower.LoweringContext, @milkir.Inst, @block.VCodeBlock) -> Unit
 

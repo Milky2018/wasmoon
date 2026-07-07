@@ -148,6 +148,7 @@ pub fn lower_function(
   func : @milkir.Function,
   isa? : @isa.ISA = AArch64,
   abi_settings? : @abi.ABISettings = @abi.ABISettings::default(),
+  embedding_reg_roles? : @abi.EmbeddingRegRoles = @abi.EmbeddingRegRoles::none(),
   runtime_layout? : @abi.RuntimeContextLayout? = None,
   call_conv_layout? : @abi.CallConventionLayout? = None,
   runtime_symbols? : @wasm_milkir.RuntimeSymbols = @wasm_milkir.RuntimeSymbols::with_runtime_prefix(
@@ -162,6 +163,7 @@ pub fn lower_function(
     func,
     isa~,
     abi_settings~,
+    embedding_reg_roles~,
     runtime_layout~,
     call_conv_layout~,
     runtime_helper_symbols=runtime_helper_symbols(runtime_symbols),

@@ -9,7 +9,7 @@
 fn licm_hoist_invariants(
   func : @machv.Function,
   runtime_layout : @abi.RuntimeContextLayout,
-  isa : @isa.ISA,
+  embedding_reg_roles : @abi.EmbeddingRegRoles,
 ) -> Unit {
   let n = func.blocks.length()
   if n == 0 {
@@ -126,9 +126,12 @@ fn licm_hoist_invariants(
             }
           }
         }
-        let vmctx_idx = isa.vmctx_reg_index()
+        let context_idx = match embedding_reg_roles.context {
+          Some(preg) => preg.index
+          None => return
+        }
         fn is_vmctx_reg(r : @abi.Reg) -> Bool {
-          r is Physical(p) && p.index == vmctx_idx
+          r is Physical(p) && p.index == context_idx
         }
 
         // Def map for virtual registers (only the simple case we care about).
@@ -248,11 +251,14 @@ fn licm_hoist_invariants(
 fn cse_immutable_loads(
   func : @machv.Function,
   runtime_layout : @abi.RuntimeContextLayout,
-  isa : @isa.ISA,
+  embedding_reg_roles : @abi.EmbeddingRegRoles,
 ) -> Unit {
-  let vmctx_idx = isa.vmctx_reg_index()
-  // Wasm ABI: param 0 is vmctx. Treat it as vmctx alias so repeated
-  // vmctx-derived base loads can be CSE'd even before prelude rewrites.
+  let context_idx = match embedding_reg_roles.context {
+    Some(preg) => preg.index
+    None => return
+  }
+  // Embedding ABI: param 0 is the context pointer. Treat it as a context alias
+  // so repeated context-derived base loads can be CSE'd before prelude rewrites.
   let vmctx_aliases : @hashset.HashSet[Int] = HashSet([])
   let params = func.get_params()
   if params.length() > 0 {
@@ -281,7 +287,7 @@ fn cse_immutable_loads(
     aliases : @hashset.HashSet[Int],
   ) -> Bool {
     match reg {
-      Physical(p) => p.index == vmctx_idx
+      Physical(p) => p.index == context_idx
       Virtual(v) => {
         let mut cur = v.id
         while copies.get(cur) is Some(next) {
@@ -326,7 +332,7 @@ fn cse_immutable_loads(
   }
   fn is_vmctx(r : @abi.Reg) -> Bool {
     match r {
-      Physical(p) => p.index == vmctx_idx
+      Physical(p) => p.index == context_idx
       Virtual(v) => vmctx_aliases.contains(v.id)
     }
   }
@@ -1210,6 +1216,7 @@ pub fn optimize_vcode(
   isa? : @isa.ISA = AArch64,
   profile? : PeepholeProfile = Full,
   runtime_layout? : @abi.RuntimeContextLayout? = None,
+  embedding_reg_roles? : @abi.EmbeddingRegRoles = @abi.EmbeddingRegRoles::none(),
 ) -> Unit {
   let mut inst_count = 0
   for block in func.blocks {
@@ -1235,11 +1242,11 @@ pub fn optimize_vcode(
 
   // Pass 0: loop-invariant code motion
   if enable_licm {
-    licm_hoist_invariants(func, runtime_layout.unwrap(), isa)
+    licm_hoist_invariants(func, runtime_layout.unwrap(), embedding_reg_roles)
   }
   // Pass 0.5: block-local CSE for immutable loads
   if enable_immutable_load_cse {
-    cse_immutable_loads(func, runtime_layout.unwrap(), isa)
+    cse_immutable_loads(func, runtime_layout.unwrap(), embedding_reg_roles)
   }
   // Pass 1: Basic peephole optimizations (constant folding, move elimination)
   for block in func.blocks {
