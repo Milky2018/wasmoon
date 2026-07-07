@@ -12,6 +12,6 @@ keywords = [ "compiler", "register-allocation", "algorithm" ]
 
 description = "Target-independent register allocation algorithm"
 
-preferred_target = "native"
+preferred_target = "wasm-gc"
 
-supported_targets = "native"
+supported_targets = "all"

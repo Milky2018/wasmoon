@@ -12,6 +12,6 @@ keywords = [ "wasm", "webassembly", "spec", "types" ]
 
 description = "Reusable WebAssembly specification model for parsers, validators, and frontends"
 
-preferred_target = "native"
+preferred_target = "wasm-gc"
 
-supported_targets = "native"
+supported_targets = "all"

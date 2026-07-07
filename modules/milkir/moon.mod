@@ -12,6 +12,6 @@ keywords = [ "compiler", "ir", "ssa", "optimization" ]
 
 description = "Reusable Cranelift-like SSA intermediate representation"
 
-preferred_target = "native"
+preferred_target = "wasm-gc"
 
-supported_targets = "native"
+supported_targets = "all"
