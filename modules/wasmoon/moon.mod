@@ -23,7 +23,7 @@ repository = "https://github.com/Milky2018/wasmoon.git"
 
 license = "Apache-2.0"
 
-keywords = [ "wasm", "runtime" ]
+keywords = [ "wasm", "webassembly", "runtime", "jit" ]
 
 description = "A slow and insecure runtime for WebAssembly"
 

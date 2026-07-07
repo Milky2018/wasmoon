@@ -2,7 +2,13 @@ name = "Milky2018/wasmoon_jit"
 
 version = "0.1.0"
 
+readme = "README.mbt.md"
+
+repository = "https://github.com/Milky2018/wasmoon.git"
+
 license = "Apache-2.0"
+
+keywords = [ "wasm", "jit", "runtime", "native" ]
 
 description = "Wasmoon-specific JIT integration and native runtime glue"
 

@@ -2,7 +2,13 @@ name = "Milky2018/machv_regalloc"
 
 version = "0.1.0"
 
+readme = "README.mbt.md"
+
+repository = "https://github.com/Milky2018/wasmoon.git"
+
 license = "Apache-2.0"
+
+keywords = [ "compiler", "register-allocation", "machv", "jit" ]
 
 description = "MachV adapter for the reusable register allocator"
 
