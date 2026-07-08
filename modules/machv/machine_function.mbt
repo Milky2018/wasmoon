@@ -181,9 +181,7 @@ pub fn Function::add_result_kind(self : Function, ty : ValueKind) -> Unit {
 }
 
 ///|
-/// Check if this function needs a hidden pointer for extra return values
-/// Returns true if there are more than 2 integer or 2 float returns
-pub fn Function::needs_extra_results_ptr(self : Function) -> Bool {
+fn Function::result_counts(self : Function) -> (Int, Int) {
   let mut int_count = 0
   let mut float_count = 0
   for ty in self.result_kinds {
@@ -193,17 +191,68 @@ pub fn Function::needs_extra_results_ptr(self : Function) -> Bool {
       float_count = float_count + 1
     }
   }
+  (int_count, float_count)
+}
+
+///|
+/// Check if this function needs an embedding-provided extra-results pointer.
+pub fn Function::needs_extra_results_ptr_for_call_conv(
+  self : Function,
+  call_conv : @abi.CallConventionLayout,
+) -> Bool {
+  let (int_count, float_count) = self.result_counts()
+  call_conv.requires_extra_results_ptr_for_result_counts(int_count, float_count)
+}
+
+///|
+/// Compatibility fallback for older callers that have not threaded an ABI
+/// layout yet. New lowering, register allocation, and emission paths should
+/// use `needs_extra_results_ptr_for_call_conv`.
+pub fn Function::needs_extra_results_ptr(self : Function) -> Bool {
+  let (int_count, float_count) = self.result_counts()
   int_count > 2 || float_count > 2
 }
 
 ///|
-/// Check if this function calls any function that returns more than 2 values
-/// In that case, we need to allocate a local buffer for receiving extra results
+/// Check whether this function calls anything whose result count exceeds the
+/// selected call convention's register-result capacity.
+pub fn Function::calls_multi_value_function_for_call_conv(
+  self : Function,
+  call_conv : @abi.CallConventionLayout,
+) -> Bool {
+  for block in self.blocks {
+    for inst in block.insts {
+      match inst.opcode {
+        CallPtr(_, num_results, _)
+        | CallDirect(_, _, num_results, _)
+        | CallExternal(_, _, num_results, _) =>
+          if call_conv.requires_extra_results_ptr_for_unknown_results(
+              num_results,
+            ) {
+            return true
+          }
+        _ => ()
+      }
+    }
+  }
+  false
+}
+
+///|
+/// Compatibility fallback for older callers that have not threaded an ABI
+/// layout yet. New lowering, register allocation, and emission paths should
+/// use `calls_multi_value_function_for_call_conv`.
 pub fn Function::calls_multi_value_function(self : Function) -> Bool {
   for block in self.blocks {
     for inst in block.insts {
-      if inst.opcode is CallPtr(_, num_results, _) && num_results > 2 {
-        return true
+      match inst.opcode {
+        CallPtr(_, num_results, _)
+        | CallDirect(_, _, num_results, _)
+        | CallExternal(_, _, num_results, _) =>
+          if num_results > 2 {
+            return true
+          }
+        _ => ()
       }
     }
   }

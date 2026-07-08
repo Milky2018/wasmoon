@@ -178,7 +178,7 @@ pub fn apply_allocation(
   let reload_intervals : Map[(Int, Int), ReloadInterval] = if enable_reload_coalescing {
     let intervals = compute_reload_intervals(func, alloc)
     allocate_reload_registers(
-      func, alloc, intervals, liveness, isa, settings, embedding_reg_roles,
+      func, alloc, intervals, liveness, isa, settings, embedding_reg_roles, call_conv_layout,
     )
     intervals
   } else {

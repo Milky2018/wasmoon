@@ -2,6 +2,16 @@
 // Translates MachV to machine code
 
 ///|
+fn require_call_conv_layout(
+  layout : @abi.CallConventionLayout?,
+) -> @abi.CallConventionLayout {
+  match layout {
+    Some(call_conv) => call_conv
+    None => abort("machv_emit: emission requires a call convention layout")
+  }
+}
+
+///|
 /// Convert 8 bytes from Bytes at given offset to Int64 (little-endian)
 fn bytes_to_int64_le(bytes : Bytes, offset : Int) -> Int64 {
   let b0 = bytes[offset].to_int64() & 0xFFL
@@ -791,11 +801,13 @@ pub fn emit_function(
   // Loop rotation makes back edges fall through, reducing taken branches
   let func = @layout.optimize_layout(func)
   let mc = MachineCode::new(isa~, record_disasm~)
-  // ABI: Check if we need SRET (more than 8 int or 8 float returns)
-  let needs_sret = func.needs_extra_results_ptr()
-  // Check if we call functions that return more than register capacity
-  // In that case, we need to allocate a local buffer and use X8 (SRET) to point to it
-  let calls_multi_value = func.calls_multi_value_function()
+  let call_conv_layout = require_call_conv_layout(call_conv_layout)
+  // ABI: check if this function or one of its calls needs the embedding's
+  // extra-results pointer according to the selected call convention.
+  let needs_sret = func.needs_extra_results_ptr_for_call_conv(call_conv_layout)
+  let calls_multi_value = func.calls_multi_value_function_for_call_conv(
+    call_conv_layout,
+  )
   // We need SRET if either we return multi-value OR we call multi-value functions
   let uses_sret = needs_sret || calls_multi_value
   // Collect callee-saved GPRs that this function clobbers
@@ -849,7 +861,7 @@ pub fn emit_function(
     force_frame_setup~,
     has_incoming_stack_args~,
     embedding_context_layout~,
-    call_conv_layout~,
+    call_conv_layout=Some(call_conv_layout),
     embedding_reg_roles~,
     isa~,
     abi_settings~,

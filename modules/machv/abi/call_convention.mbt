@@ -12,6 +12,49 @@ pub(all) struct CallConventionLayout {
 }
 
 ///|
+pub fn CallConventionLayout::int_result_register_count(
+  self : CallConventionLayout,
+) -> Int {
+  self.ret_gprs.length()
+}
+
+///|
+pub fn CallConventionLayout::float_result_register_count(
+  self : CallConventionLayout,
+) -> Int {
+  self.ret_fprs.length()
+}
+
+///|
+pub fn CallConventionLayout::requires_extra_results_ptr_for_result_counts(
+  self : CallConventionLayout,
+  int_count : Int,
+  float_count : Int,
+) -> Bool {
+  int_count > self.int_result_register_count() ||
+  float_count > self.float_result_register_count()
+}
+
+///|
+pub fn CallConventionLayout::requires_extra_results_ptr_for_unknown_results(
+  self : CallConventionLayout,
+  result_count : Int,
+) -> Bool {
+  let int_count = self.int_result_register_count()
+  let float_count = self.float_result_register_count()
+  let capacity = if int_count == 0 {
+    float_count
+  } else if float_count == 0 {
+    int_count
+  } else if int_count < float_count {
+    int_count
+  } else {
+    float_count
+  }
+  result_count > capacity
+}
+
+///|
 /// Stack slot size (bytes) for overflow arguments in this convention.
 pub fn CallConventionLayout::stack_slot_size(
   self : CallConventionLayout,

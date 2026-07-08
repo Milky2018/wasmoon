@@ -86,6 +86,7 @@ fn allocate_reload_registers(
   isa : @isa.ISA,
   settings : @abi.ABISettings,
   embedding_reg_roles : @abi.EmbeddingRegRoles,
+  call_conv_layout : @abi.CallConventionLayout,
 ) -> Unit {
   if intervals.is_empty() {
     return
@@ -100,8 +101,10 @@ fn allocate_reload_registers(
   // coalescing.
   let reserved_int_regs : @hashset.HashSet[Int] = HashSet([])
   let reserved_float_regs : @hashset.HashSet[Int] = HashSet([])
-  let calls_multi = func.calls_multi_value_function()
-  let needs_extra = func.needs_extra_results_ptr()
+  let calls_multi = func.calls_multi_value_function_for_call_conv(
+    call_conv_layout,
+  )
+  let needs_extra = func.needs_extra_results_ptr_for_call_conv(call_conv_layout)
   let reserve_extra_results_ptr = needs_extra || calls_multi
   for
     idx in embedding_reg_roles.reserved_int_indices(

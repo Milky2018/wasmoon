@@ -135,6 +135,7 @@ pub fn Function::add_param_preg(Self, @abi.PReg?) -> Unit
 pub fn Function::add_result(Self, @abi.RegClass) -> Unit
 pub fn Function::add_result_kind(Self, ValueKind) -> Unit
 pub fn Function::calls_multi_value_function(Self) -> Bool
+pub fn Function::calls_multi_value_function_for_call_conv(Self, @abi.CallConventionLayout) -> Bool
 pub fn Function::clone_base(Self) -> Self
 pub fn Function::get_blocks(Self) -> Array[@block.MachVBlock]
 pub fn Function::get_max_outgoing_args_size(Self) -> Int
@@ -146,6 +147,7 @@ pub fn Function::get_result_kinds(Self) -> Array[ValueKind]
 pub fn Function::has_calls(Self) -> Bool
 pub fn Function::mark_uses_context_cache_0_source(Self) -> Unit
 pub fn Function::needs_extra_results_ptr(Self) -> Bool
+pub fn Function::needs_extra_results_ptr_for_call_conv(Self, @abi.CallConventionLayout) -> Bool
 pub fn Function::new(String) -> Self
 pub fn Function::new_block(Self) -> @block.MachVBlock
 pub fn Function::new_vreg(Self, @abi.RegClass) -> @abi.VReg

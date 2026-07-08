@@ -1,8 +1,5 @@
 ///|
 pub(all) enum IntRegRole {
-  Context
-  ContextCache0
-  ContextCache1
   Scratch1
   Scratch2
   FP
@@ -13,25 +10,12 @@ pub(all) enum IntRegRole {
 ///|
 pub fn int_reg_index(role : IntRegRole) -> Int {
   match role {
-    Context => 21
-    ContextCache0 => 20
-    ContextCache1 => 19
     Scratch1 => 16
     Scratch2 => 17
     FP => 29
     LR => 30
     SRet => 8
   }
-}
-
-///|
-pub(all) struct TargetSettings {
-  enable_pinned_reg : Bool
-} derive(Debug)
-
-///|
-pub fn TargetSettings::default() -> TargetSettings {
-  { enable_pinned_reg: true }
 }
 
 ///|
@@ -108,18 +92,12 @@ pub fn allocatable_scratch_regs() -> Array[@machv.PReg] {
 }
 
 ///|
-pub fn allocatable_callee_saved_regs(
-  enable_pinned_reg? : Bool = true,
-) -> Array[@machv.PReg] {
+pub fn allocatable_callee_saved_regs() -> Array[@machv.PReg] {
   let regs : Array[@machv.PReg] = []
   let fp_idx = int_reg_index(FP)
   let lr_idx = int_reg_index(LR)
-  let context_idx = int_reg_index(Context)
   for r in aapcs64_callee_saved() {
     if r.index == fp_idx || r.index == lr_idx {
-      continue
-    }
-    if enable_pinned_reg && r.index == context_idx {
       continue
     }
     regs.push(r)
@@ -201,30 +179,16 @@ pub fn call_clobbered_fprs_same_abi() -> Array[@machv.PReg] {
 
 ///|
 pub fn build_machine_env(
-  settings? : TargetSettings = TargetSettings::default(),
-  reserve_context_cache_0? : Bool = false,
-  reserve_context_cache_1? : Bool = false,
   reserved_int_regs? : Array[Int] = [],
 ) -> MachineEnvData {
-  let context_cache_0_idx = int_reg_index(ContextCache0)
-  let context_cache_1_idx = int_reg_index(ContextCache1)
   let preferred_int : Array[@machv.PReg] = []
   let nonpreferred_int : Array[@machv.PReg] = []
   let callee_saved_int : Array[@machv.PReg] = []
   for r in allocatable_scratch_regs() {
     preferred_int.push(r)
   }
-  for
-    r in allocatable_callee_saved_regs(
-      enable_pinned_reg=settings.enable_pinned_reg,
-    ) {
+  for r in allocatable_callee_saved_regs() {
     if reserved_int_regs.contains(r.index) {
-      continue
-    }
-    if reserve_context_cache_0 && r.index == context_cache_0_idx {
-      continue
-    }
-    if reserve_context_cache_1 && r.index == context_cache_1_idx {
       continue
     }
     nonpreferred_int.push(r)

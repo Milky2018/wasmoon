@@ -66,8 +66,10 @@ pub fn verify_allocation(
   let block_order = liveness.block_order
 
   // Rebuild MachineEnv to compute allocatable + scratch sets.
-  let calls_multi = func.calls_multi_value_function()
-  let needs_extra = func.needs_extra_results_ptr()
+  let calls_multi = func.calls_multi_value_function_for_call_conv(
+    call_conv_layout,
+  )
+  let needs_extra = func.needs_extra_results_ptr_for_call_conv(call_conv_layout)
   let reserve_extra_results_ptr = needs_extra || calls_multi
   let reserved_int_regs = embedding_reg_roles.reserved_int_indices(
     reserve_context=settings.enable_pinned_reg,

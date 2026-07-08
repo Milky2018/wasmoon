@@ -166,13 +166,8 @@ test "x64 lowers generic return-area stores through return-area base register" {
 test "x64 target owns SystemV machine environment policy" {
   inspect(call_clobbered_gprs().length(), content="9")
   inspect(call_clobbered_fprs().length(), content="16")
-  inspect(int_reg_index(Context), content="15")
-  let env = build_machine_env(
-    settings={ enable_pinned_reg: true },
-    reserve_context_cache_0=true,
-    reserve_context_cache_1=true,
-    reserved_int_regs=[12],
-  )
+  inspect(int_reg_index(Scratch1), content="10")
+  let env = build_machine_env(reserved_int_regs=[12, 13, 14, 15])
   inspect(env.preferred_int.length(), content="7")
   inspect(env.nonpreferred_int.length(), content="1")
   inspect(env.callee_saved_int.length(), content="1")

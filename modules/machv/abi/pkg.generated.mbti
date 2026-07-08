@@ -94,7 +94,11 @@ pub(all) struct CallConventionLayout {
   ret_gprs : Array[PReg]
   ret_fprs : Array[PReg]
 }
+pub fn CallConventionLayout::float_result_register_count(Self) -> Int
+pub fn CallConventionLayout::int_result_register_count(Self) -> Int
 pub fn CallConventionLayout::layout_overflow_stack(Self, Int, Array[RegClass]) -> (Array[Int], Array[Int], Int)
+pub fn CallConventionLayout::requires_extra_results_ptr_for_result_counts(Self, Int, Int) -> Bool
+pub fn CallConventionLayout::requires_extra_results_ptr_for_unknown_results(Self, Int) -> Bool
 pub fn CallConventionLayout::stack_slot_align(Self, RegClass) -> Int
 pub fn CallConventionLayout::stack_slot_size(Self, RegClass) -> Int
 
