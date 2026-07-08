@@ -1,6 +1,6 @@
 name = "Milky2018/wasm_isa_lower"
 
-version = "0.1.0"
+version = "0.2.0"
 
 readme = "README.mbt.md"
 
@@ -16,8 +16,8 @@ import {
   "moonbitlang/x@0.4.38",
   "Milky2018/wasm_milkir@0.1.0",
   "Milky2018/milkir@0.1.0",
-  "Milky2018/machv@0.1.0",
-  "Milky2018/milkir_machv@0.1.0",
+  "Milky2018/machv@0.2.0",
+  "Milky2018/milkir_machv@0.2.0",
 }
 
 preferred_target = "wasm-gc"
