@@ -17,9 +17,6 @@ fn has_side_effects(opcode : @instr.MachVOpcode) -> Bool {
     | StorePtrNarrowRegOffset(_, _, _, _) => true
     // Conditional helpers may call foreign code on slow paths.
     CallExternalIfI32NeImm(_, _) => true
-    // Inline bump-allocation pseudo-ops may call slow-path helpers.
-    BumpAllocRecordFromStackInline(_, _, _, _)
-    | BumpAllocArrayFromStackInline(_, _, _, _) => true
     // Function calls have side effects
     ReturnCallIndirect(_, _)
     | CallPtr(_, _, _)

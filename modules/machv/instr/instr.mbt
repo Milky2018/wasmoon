@@ -495,28 +495,6 @@ pub(all) enum MachVOpcode {
   // the contiguous outgoing-args slots [0, root_count).
   LoadSafepointId(Int)
 
-  // Inline bump-allocation helpers (fast path + C slow-path fallback).
-  //
-  // TODO(ISS-072): Lower these generic pseudo-ops into explicit MachV CFG once
-  // block-local fast/slow allocation paths can be represented without
-  // emitter-local labels.
-  //
-  // BumpAllocRecordFromStackInline(type_tag, field_count):
-  //   Uses: [embedding_context], Defs: [result_ref]
-  //   - Fast path: inline bump allocation + header/field stores.
-  //   - Fields source is fixed to caller stack pointer (SP outgoing args area).
-  //   - Slow path: calls slow helper(context, type_tag, SP, field_count, safepoint_id).
-  //   - Always registers allocated object via register helper.
-  BumpAllocRecordFromStackInline(Int, Int, ExternalName, ExternalName)
-
-  // BumpAllocArrayFromStackInline(type_tag, len):
-  //   Uses: [embedding_context], Defs: [result_ref]
-  //   - Fast path: inline bump allocation + header/len/element stores.
-  //   - Values source is fixed to caller stack pointer (SP outgoing args area).
-  //   - Slow path: calls slow helper(context, type_tag, SP, len, safepoint_id).
-  //   - Always registers allocated object via register helper.
-  BumpAllocArrayFromStackInline(Int, Int, ExternalName, ExternalName)
-
   // ============ SIMD Instructions (AArch64 NEON) ============
 
   // V128 constant load - load 128-bit immediate
@@ -1120,10 +1098,6 @@ fn MachVOpcode::to_string(self : MachVOpcode) -> String {
     StoreToStack(offset) => "str [sp+\{offset}]"
     LoadSP => "mov rd, outgoing_args_base"
     LoadSafepointId(root_count) => "load_safepoint_id roots=\{root_count}"
-    BumpAllocRecordFromStackInline(type_tag, field_count, _, _) =>
-      "bump_alloc_record_from_stack type=\{type_tag} fields=\{field_count}"
-    BumpAllocArrayFromStackInline(type_tag, len, _, _) =>
-      "bump_alloc_array_from_stack type=\{type_tag} len=\{len}"
     // SIMD instructions
     LoadConstV128(_) => "ldi.v128"
     SIMDSplat(lane_size) => "dup.\{lane_size}"
@@ -1698,11 +1672,8 @@ pub impl Show for MachVTerminator with fn output(self, logger) {
 pub fn MachVOpcode::call_type(self : MachVOpcode) -> CallType {
   match self {
     // Direct and indirect function calls (Standard via CallPtr)
-    CallPtr(_, _, _)
-    | CallDirect(_, _, _, _)
-    | CallExternal(_, _, _, _)
-    | BumpAllocRecordFromStackInline(_, _, _, _)
-    | BumpAllocArrayFromStackInline(_, _, _, _) => Regular
+    CallPtr(_, _, _) | CallDirect(_, _, _, _) | CallExternal(_, _, _, _) =>
+      Regular
     // Conditional helpers can call a C helper on the slow path; treat them as calls.
     CallExternalIfI32NeImm(_, _) => Regular
     // Tail calls that don't return to caller

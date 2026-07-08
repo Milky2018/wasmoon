@@ -9,6 +9,12 @@
 
 ///|
 /// Lowering context - tracks state during IR to MachV conversion
+pub(all) enum ExtensionLowerResult {
+  NotHandled
+  Handled(@block.MachVBlock)
+}
+
+///|
 struct LoweringContext {
   ir_func : @milkir.Function
   machv_func : @machv.Function
@@ -24,7 +30,7 @@ struct LoweringContext {
     @milkir.Inst,
     @block.MachVBlock,
     @milkir.ExtOp,
-  ) -> Bool)?
+  ) -> ExtensionLowerResult)?
   num_imports : Int
   // Dense map from IR Value id to @abi.VReg (Cranelift SecondaryMap style).
   value_map_dense : Array[@abi.VReg?]
@@ -75,7 +81,7 @@ pub fn LoweringContext::new(
     @milkir.Inst,
     @block.MachVBlock,
     @milkir.ExtOp,
-  ) -> Bool)?,
+  ) -> ExtensionLowerResult)?,
   num_imports : Int,
 ) -> LoweringContext {
   let use_counts = compute_use_counts(ir_func)
@@ -968,7 +974,7 @@ pub fn LoweringContext::get_vreg_for_use(
     // producer that is still required by another lowered instruction.
     if self.is_skipped_value(value.id) &&
       find_defining_inst(self, value) is Some(def_inst) {
-      lower_inst(self, def_inst, block)
+      lower_inst(self, def_inst, block) |> ignore
       if self.get_cached_vreg(value.id) is Some(vreg) {
         return vreg
       }
@@ -1614,7 +1620,7 @@ pub fn lower_function(
     @milkir.Inst,
     @block.MachVBlock,
     @milkir.ExtOp,
-  ) -> Bool)? = None,
+  ) -> ExtensionLowerResult)? = None,
   num_imports? : Int = -1,
   run_ir_opt? : Bool = true,
 ) -> @machv.Function {
@@ -1792,16 +1798,17 @@ fn lower_block_body(
   // Block parameters are already handled in pre-registration phase
 
   // Lower instructions
+  let mut current_block = machv_block
   for inst in ir_block.instructions {
     if inst.first_result() is Some(result) && ctx.is_skipped_value(result.id) {
       continue
     }
-    lower_inst(ctx, inst, machv_block)
+    current_block = lower_inst(ctx, inst, current_block)
   }
 
   // Lower terminator
   if ir_block.terminator is Some(term) {
-    lower_terminator(ctx, term, machv_block)
+    lower_terminator(ctx, term, current_block)
   }
 }
 
@@ -1830,19 +1837,41 @@ fn lower_extension(
   inst : @milkir.Inst,
   block : @block.MachVBlock,
   ext : @milkir.ExtOp,
-) -> Unit {
+) -> @block.MachVBlock {
   match ctx.extension_lowerer {
     Some(lowerer) =>
-      if !lowerer(ctx, inst, block, ext) {
-        lower_unsupported_generic_opcode(inst, block)
+      match lowerer(ctx, inst, block, ext) {
+        Handled(next_block) => next_block
+        NotHandled => {
+          lower_unsupported_generic_opcode(inst, block)
+          block
+        }
       }
-    None => lower_unsupported_generic_opcode(inst, block)
+    None => {
+      lower_unsupported_generic_opcode(inst, block)
+      block
+    }
   }
 }
 
 ///|
 /// Lower a single IR instruction to MachV
 fn lower_inst(
+  ctx : LoweringContext,
+  inst : @milkir.Inst,
+  block : @block.MachVBlock,
+) -> @block.MachVBlock {
+  match inst.opcode {
+    Ext(ext) => return lower_extension(ctx, inst, block, ext)
+    _ => ()
+  }
+  lower_inst_builtin(ctx, inst, block)
+  block
+}
+
+///|
+/// Lower a built-in IR instruction to MachV.
+fn lower_inst_builtin(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.MachVBlock,
@@ -1952,7 +1981,7 @@ fn lower_inst(
     CallPtr(num_args, num_results) =>
       lower_call_ptr(ctx, inst, block, num_args, num_results)
     Trap(_) | Custom(_) => lower_unsupported_generic_opcode(inst, block)
-    Ext(ext) => lower_extension(ctx, inst, block, ext)
+    Ext(_) => lower_unsupported_generic_opcode(inst, block)
 
     // SIMD operations
     V128Const(bytes) => lower_v128_const(ctx, inst, block, bytes)

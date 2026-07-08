@@ -78,8 +78,12 @@ fn lower_extension_with_options(
   inst : @milkir.Inst,
   block : @block.MachVBlock,
   ext : @milkir.ExtOp,
-) -> Bool {
+) -> @lower.ExtensionLowerResult {
   match @wasm_milkir.decode(ext) {
+    Some(StructNew(type_idx)) =>
+      return Handled(lower_struct_new(ctx, inst, block, type_idx))
+    Some(ArrayNewFixed(type_idx, len)) =>
+      return Handled(lower_array_new_fixed(ctx, inst, block, type_idx, len))
     Some(LoadMemBase(memidx)) =>
       lower_load_mem_base(ctx, inst, block, memidx, options.context_slots)
     Some(MemoryGrow(_))
@@ -110,7 +114,6 @@ fn lower_extension_with_options(
     Some(I31GetU) => lower_i31_get_u(ctx, inst, block)
     Some(AnyConvertExtern) | Some(ExternConvertAny) =>
       lower_gc_convert(ctx, inst, block)
-    Some(StructNew(type_idx)) => lower_struct_new(ctx, inst, block, type_idx)
     Some(StructNewDefault(type_idx)) =>
       lower_struct_new_default(ctx, inst, block, type_idx)
     Some(StructGet(type_idx, field_idx)) =>
@@ -124,8 +127,6 @@ fn lower_extension_with_options(
     Some(ArrayNew(type_idx)) => lower_array_new(ctx, inst, block, type_idx)
     Some(ArrayNewDefault(type_idx)) =>
       lower_array_new_default(ctx, inst, block, type_idx)
-    Some(ArrayNewFixed(type_idx, len)) =>
-      lower_array_new_fixed(ctx, inst, block, type_idx, len)
     Some(ArrayGet(type_idx)) => lower_array_get(ctx, inst, block, type_idx)
     Some(ArrayGetS(type_idx, byte_width)) =>
       lower_array_get_s(ctx, inst, block, type_idx, byte_width)
@@ -164,9 +165,9 @@ fn lower_extension_with_options(
     Some(SpillLocalsForThrow(count)) =>
       lower_spill_locals_for_throw(ctx, inst, block, count)
     Some(GetSpilledLocal(idx)) => lower_get_spilled_local(ctx, inst, block, idx)
-    None => return false
+    None => return NotHandled
   }
-  true
+  Handled(block)
 }
 
 ///|
@@ -197,7 +198,7 @@ pub fn lower_function(
     inst : @milkir.Inst,
     block : @block.MachVBlock,
     ext : @milkir.ExtOp,
-  ) -> Bool {
+  ) -> @lower.ExtensionLowerResult {
     lower_extension_with_options(options, ctx, inst, block, ext)
   }
   @lower.lower_function(

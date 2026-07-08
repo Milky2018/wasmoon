@@ -284,8 +284,6 @@ pub(all) enum MachVOpcode {
   StoreToStack(Int)
   LoadSP
   LoadSafepointId(Int)
-  BumpAllocRecordFromStackInline(Int, Int, ExternalName, ExternalName)
-  BumpAllocArrayFromStackInline(Int, Int, ExternalName, ExternalName)
   LoadConstV128(Bytes)
   SIMDSplat(LaneSize)
   SIMDSplatF(Bool)

@@ -86,6 +86,214 @@ fn emit_gc_array_slow_alloc(
 }
 
 ///|
+fn align_up(value : Int, align : Int) -> Int {
+  (value + align - 1) / align * align
+}
+
+///|
+fn gc_header_low(kind : Int, type_idx : Int, total_size : Int) -> Int64 {
+  kind.to_int64() |
+  ((type_idx & 0xFFFF).to_int64() << 16) |
+  (total_size.to_int64() << 32)
+}
+
+///|
+fn emit_load_context_slot(
+  ctx : @lower.LoweringContext,
+  block : @block.MachVBlock,
+  offset : Int,
+) -> @abi.VReg {
+  let dst = ctx.new_vreg(Int)
+  let inst = @instr.MachVInst::new(LoadPtr(I64, offset))
+  inst.add_def({ reg: Virtual(dst) })
+  inst.add_use(Physical(@lower.context_preg(ctx)))
+  block.add_inst(inst)
+  dst
+}
+
+///|
+fn emit_store_context_slot(
+  ctx : @lower.LoweringContext,
+  block : @block.MachVBlock,
+  offset : Int,
+  value : @abi.VReg,
+) -> Unit {
+  let inst = @instr.MachVInst::new(StorePtr(I64, offset))
+  inst.add_use(Physical(@lower.context_preg(ctx)))
+  inst.add_use(Virtual(value))
+  block.add_inst(inst)
+}
+
+///|
+fn emit_load_ptr_i64(
+  ctx : @lower.LoweringContext,
+  block : @block.MachVBlock,
+  base : @abi.VReg,
+  offset : Int,
+) -> @abi.VReg {
+  let dst = ctx.new_vreg(Int)
+  let inst = @instr.MachVInst::new(LoadPtr(I64, offset))
+  inst.add_def({ reg: Virtual(dst) })
+  inst.add_use(Virtual(base))
+  block.add_inst(inst)
+  dst
+}
+
+///|
+fn emit_store_ptr_i64(
+  block : @block.MachVBlock,
+  base : @abi.VReg,
+  offset : Int,
+  value : @abi.VReg,
+) -> Unit {
+  let inst = @instr.MachVInst::new(StorePtr(I64, offset))
+  inst.add_use(Virtual(base))
+  inst.add_use(Virtual(value))
+  block.add_inst(inst)
+}
+
+///|
+fn emit_add_const_i64(
+  ctx : @lower.LoweringContext,
+  block : @block.MachVBlock,
+  lhs : @abi.VReg,
+  imm : Int,
+) -> @abi.VReg {
+  let rhs = @lower.materialize_imm(ctx, block, imm.to_int64())
+  let dst = ctx.new_vreg(Int)
+  let inst = @instr.MachVInst::new(Add(true))
+  inst.add_def({ reg: Virtual(dst) })
+  inst.add_use(Virtual(lhs))
+  inst.add_use(Virtual(rhs))
+  block.add_inst(inst)
+  dst
+}
+
+///|
+fn emit_jump_result(
+  block : @block.MachVBlock,
+  done : @block.MachVBlock,
+  value : @abi.VReg,
+) -> Unit {
+  block.set_terminator(Jump(done.id, [Virtual(value)]))
+}
+
+///|
+fn emit_gc_inline_alloc_from_stack(
+  ctx : @lower.LoweringContext,
+  block : @block.MachVBlock,
+  dst : @abi.VReg,
+  type_idx : Int,
+  item_count : Int,
+  kind : Int,
+  payload_offset : Int,
+  register_symbol : @instr.ExternalName,
+  slow_symbol : @instr.ExternalName,
+) -> @block.MachVBlock {
+  let gc_header_size = 16
+  let gc_align = 16
+  let total_size = align_up(payload_offset + item_count * 8, gc_align)
+  let header = gc_header_low(kind, type_idx, total_size)
+  let layout = ctx.embedding_context_layout()
+  let fast_block = ctx.machv_function().new_block()
+  let slow_block = ctx.machv_function().new_block()
+  let done_block = ctx.machv_function().new_block()
+  done_block.params.push(dst)
+
+  let obj = emit_load_context_slot(
+    ctx,
+    block,
+    layout.require_allocation_cursor_offset(),
+  )
+  let end = emit_add_const_i64(ctx, block, obj, total_size)
+  let limit = emit_load_context_slot(
+    ctx,
+    block,
+    layout.require_allocation_limit_offset(),
+  )
+  block.set_terminator(
+    BranchCmp(
+      Virtual(end),
+      Virtual(limit),
+      Hi,
+      true,
+      slow_block.id,
+      fast_block.id,
+    ),
+  )
+
+  let header_vreg = @lower.materialize_imm(ctx, fast_block, header)
+  emit_store_ptr_i64(fast_block, obj, 0, header_vreg)
+  if kind == 1 {
+    let count_vreg = @lower.materialize_imm(
+      ctx,
+      fast_block,
+      item_count.to_int64(),
+    )
+    emit_store_ptr_i64(fast_block, obj, 8, count_vreg)
+  } else {
+    let zero_vreg = @lower.materialize_imm(ctx, fast_block, 0L)
+    emit_store_ptr_i64(fast_block, obj, 8, zero_vreg)
+    let len_vreg = @lower.materialize_imm(
+      ctx,
+      fast_block,
+      item_count.to_int64(),
+    )
+    emit_store_ptr_i64(fast_block, obj, gc_header_size, len_vreg)
+  }
+  let stack_base = emit_load_stack_args_base(ctx, fast_block)
+  for i in 0..<item_count {
+    let value = emit_load_ptr_i64(ctx, fast_block, stack_base, i * 8)
+    emit_store_ptr_i64(fast_block, obj, payload_offset + i * 8, value)
+  }
+  emit_store_context_slot(
+    ctx,
+    fast_block,
+    layout.require_allocation_cursor_offset(),
+    end,
+  )
+  let vmctx_fast = emit_load_vmctx_for_gc(ctx, fast_block)
+  let total_size_vreg = @lower.materialize_imm(
+    ctx,
+    fast_block,
+    total_size.to_int64(),
+  )
+  let fast_result = ctx.new_vreg(Int)
+  @lower.lower_c_libcall_direct(
+    ctx,
+    fast_block,
+    register_symbol,
+    [vmctx_fast, obj, total_size_vreg],
+    Some(fast_result),
+  )
+  emit_jump_result(fast_block, done_block, fast_result)
+
+  let vmctx_slow = emit_load_vmctx_for_gc(ctx, slow_block)
+  let type_idx_vreg = @lower.materialize_imm(
+    ctx,
+    slow_block,
+    type_idx.to_int64(),
+  )
+  let fields_ptr_vreg = emit_load_stack_args_base(ctx, slow_block)
+  let count_vreg = @lower.materialize_imm(
+    ctx,
+    slow_block,
+    item_count.to_int64(),
+  )
+  let safepoint_vreg = emit_load_safepoint_id(ctx, slow_block, item_count)
+  let slow_result = ctx.new_vreg(Int)
+  @lower.lower_c_libcall_direct(
+    ctx,
+    slow_block,
+    slow_symbol,
+    [vmctx_slow, type_idx_vreg, fields_ptr_vreg, count_vreg, safepoint_vreg],
+    Some(slow_result),
+  )
+  emit_jump_result(slow_block, done_block, slow_result)
+  done_block
+}
+
+///|
 /// Lower i31.new: Convert i32 to i31ref
 /// Encoding: (value << 1) | 1 (positive odd for i31)
 pub fn lower_i31_new(
@@ -337,8 +545,8 @@ pub fn lower_struct_new(
   inst : @milkir.Inst,
   block : @block.MachVBlock,
   type_idx : Int,
-) -> Unit {
-  guard inst.first_result() is Some(result) else { return }
+) -> @block.MachVBlock {
+  guard inst.first_result() is Some(result) else { return block }
   let dst = ctx.get_vreg(result)
   let num_fields = inst.operands.length()
 
@@ -356,21 +564,17 @@ pub fn lower_struct_new(
       store.add_use(Virtual(field_vreg))
       block.add_inst(store)
     }
-    let alloc_inst = @instr.MachVInst::new(
-      BumpAllocRecordFromStackInline(
-        type_idx,
-        num_fields,
-        rt_gc_register_struct_inline(ctx),
-        rt_gc_alloc_struct_slow(ctx),
-      ),
+    return emit_gc_inline_alloc_from_stack(
+      ctx,
+      block,
+      dst,
+      type_idx,
+      num_fields,
+      1,
+      16,
+      rt_gc_register_struct_inline(ctx),
+      rt_gc_alloc_struct_slow(ctx),
     )
-    alloc_inst.add_def({ reg: Virtual(dst) })
-    alloc_inst.add_use_fixed(
-      Physical(@lower.context_preg(ctx)),
-      @lower.context_preg(ctx),
-    )
-    block.add_inst(alloc_inst)
-    return
   }
 
   // Fallback path: precise slow alloc call with safepoint metadata.
@@ -386,6 +590,7 @@ pub fn lower_struct_new(
     }
   }
   emit_gc_struct_slow_alloc(ctx, block, dst, type_idx, num_fields)
+  block
 }
 
 ///|
@@ -675,8 +880,8 @@ pub fn lower_array_new_fixed(
   block : @block.MachVBlock,
   type_idx : Int,
   len : Int,
-) -> Unit {
-  guard inst.first_result() is Some(result) else { return }
+) -> @block.MachVBlock {
+  guard inst.first_result() is Some(result) else { return block }
   let dst = ctx.get_vreg(result)
 
   // Fast path: inline fixed-array allocation with slow-path fallback.
@@ -702,21 +907,17 @@ pub fn lower_array_new_fixed(
       store.add_use(Virtual(actual_elem))
       block.add_inst(store)
     }
-    let alloc_inst = @instr.MachVInst::new(
-      BumpAllocArrayFromStackInline(
-        type_idx,
-        len,
-        rt_gc_register_array_inline(ctx),
-        rt_gc_alloc_array_from_values_slow(ctx),
-      ),
+    return emit_gc_inline_alloc_from_stack(
+      ctx,
+      block,
+      dst,
+      type_idx,
+      len,
+      2,
+      24,
+      rt_gc_register_array_inline(ctx),
+      rt_gc_alloc_array_from_values_slow(ctx),
     )
-    alloc_inst.add_def({ reg: Virtual(dst) })
-    alloc_inst.add_use_fixed(
-      Physical(@lower.context_preg(ctx)),
-      @lower.context_preg(ctx),
-    )
-    block.add_inst(alloc_inst)
-    return
   }
 
   // Fallback path: precise slow alloc call with safepoint metadata.
@@ -724,7 +925,7 @@ pub fn lower_array_new_fixed(
   if len == 0 {
     let zero_vreg = @lower.materialize_imm(ctx, block, 0L)
     emit_gc_array_slow_alloc(ctx, block, dst, type_idx, zero_vreg, zero_vreg)
-    return
+    return block
   }
 
   let is_float = inst.operands[0].ty is (F32 | F64)
@@ -770,6 +971,7 @@ pub fn lower_array_new_fixed(
       )
     }
   }
+  block
 }
 
 ///|

@@ -44,7 +44,7 @@ pub fn lower_array_new_default(@lower.LoweringContext, @milkir.Inst, @block.Mach
 
 pub fn lower_array_new_elem(@lower.LoweringContext, @milkir.Inst, @block.MachVBlock, Int, Int) -> Unit
 
-pub fn lower_array_new_fixed(@lower.LoweringContext, @milkir.Inst, @block.MachVBlock, Int, Int) -> Unit
+pub fn lower_array_new_fixed(@lower.LoweringContext, @milkir.Inst, @block.MachVBlock, Int, Int) -> @block.MachVBlock
 
 pub fn lower_array_set(@lower.LoweringContext, @milkir.Inst, @block.MachVBlock, Int) -> Unit
 
@@ -98,7 +98,7 @@ pub fn lower_struct_get_s(@lower.LoweringContext, @milkir.Inst, @block.MachVBloc
 
 pub fn lower_struct_get_u(@lower.LoweringContext, @milkir.Inst, @block.MachVBlock, Int, Int, Int) -> Unit
 
-pub fn lower_struct_new(@lower.LoweringContext, @milkir.Inst, @block.MachVBlock, Int) -> Unit
+pub fn lower_struct_new(@lower.LoweringContext, @milkir.Inst, @block.MachVBlock, Int) -> @block.MachVBlock
 
 pub fn lower_struct_new_default(@lower.LoweringContext, @milkir.Inst, @block.MachVBlock, Int) -> Unit
 
