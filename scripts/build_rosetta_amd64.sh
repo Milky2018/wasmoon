@@ -52,7 +52,7 @@ if ! lipo -info "$ROSETTA_MOON_HOME/lib/libmoonbitrun.o" 2>/dev/null | grep -q '
   lipo -create -output libmoonbitrun.o "$SOURCE_MOON_HOME/lib/libmoonbitrun.o" libmoonbitrun.x86_64.o
 fi
 
-cd "$ROOT_DIR"
+cd "$ROOT_DIR/modules/wasmoon"
 MOON_HOME="$ROSETTA_MOON_HOME" \
   MOON_CC="$ROSETTA_MOON_HOME/bin/clang-x86_64" \
   MOON_AR=/usr/bin/ar \

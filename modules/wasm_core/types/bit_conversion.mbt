@@ -1,0 +1,123 @@
+// Bit conversion traits for converting between numeric types and Int64 bit patterns
+// Used for JIT calls, FFI, and low-level bit manipulation
+
+///|
+pub trait ToInt64 {
+  fn to_int64_bits(Self) -> Int64
+}
+
+///|
+pub impl ToInt64 for Int64 with fn to_int64_bits(self) {
+  self
+}
+
+///|
+pub impl ToInt64 for Int with fn to_int64_bits(self) {
+  self.to_int64()
+}
+
+///|
+pub impl ToInt64 for Double with fn to_int64_bits(self) {
+  self.reinterpret_as_int64()
+}
+
+///|
+pub impl ToInt64 for Float with fn to_int64_bits(self) {
+  self.reinterpret_as_int().to_int64()
+}
+
+///|
+pub trait FromInt64 {
+  fn from_int64_bits(Int64) -> Self
+}
+
+///|
+pub impl FromInt64 for Int64 with fn from_int64_bits(v) {
+  v
+}
+
+///|
+pub impl FromInt64 for Int with fn from_int64_bits(v) {
+  v.to_int()
+}
+
+///|
+pub impl FromInt64 for Double with fn from_int64_bits(v) {
+  v.reinterpret_as_double()
+}
+
+///|
+pub impl FromInt64 for Float with fn from_int64_bits(v) {
+  Float::reinterpret_from_int(v.to_int())
+}
+
+///|
+/// Decode 8 bytes at the given offset as a little-endian Int64 bit pattern.
+pub fn bytes_to_int64_le(bytes : Bytes, offset : Int) -> Int64 {
+  let mut result = 0L
+  for i in 0..<8 {
+    let b = bytes[offset + i].to_int64() & 0xFFL
+    result = result | (b << (i * 8))
+  }
+  result
+}
+
+///|
+/// Encode a Wasm v128 lane pair as 16 little-endian bytes.
+pub fn int64_pair_to_v128_le(low : Int64, high : Int64) -> Bytes {
+  let buf : @buffer.Buffer = Buffer(size_hint=16)
+  for i in 0..<8 {
+    buf.write_byte(((low >> (i * 8)) & 0xFFL).to_byte())
+  }
+  for i in 0..<8 {
+    buf.write_byte(((high >> (i * 8)) & 0xFFL).to_byte())
+  }
+  buf.contents()
+}
+
+// ============ Hex Conversion Utilities ============
+
+///|
+/// Convert a single byte (0-255) to a 2-character hex string
+pub fn to_hex_byte(b : Int) -> String {
+  let hi = (b >> 4) & 0xF
+  let lo = b & 0xF
+  let hi_c = if hi < 10 {
+    (hi + 48).unsafe_to_char() // '0' = 48
+  } else {
+    (hi - 10 + 97).unsafe_to_char() // 'a' = 97
+  }
+  let lo_c = if lo < 10 {
+    (lo + 48).unsafe_to_char()
+  } else {
+    (lo - 10 + 97).unsafe_to_char()
+  }
+  hi_c.to_string() + lo_c.to_string()
+}
+
+///|
+/// Convert a 16-bit value to a 4-character hex string
+pub fn to_hex_u16(n : Int) -> String {
+  to_hex_byte((n >> 8) & 0xFF) + to_hex_byte(n & 0xFF)
+}
+
+///|
+/// Convert an integer to a variable-length hex string (no leading zeros)
+pub fn int_to_hex(n : Int) -> String {
+  if n == 0 {
+    return "0"
+  }
+  let mut result = ""
+  let mut val = n
+  while val > 0 {
+    let digit = val & 0xF
+    let c = if digit < 10 {
+      (digit + 48).unsafe_to_char() // '0' = 48
+    } else {
+      (digit - 10 + 97).unsafe_to_char() // 'a' = 97
+    }
+    result = c.to_string() + result
+    val = val >> 4
+  }
+  result
+}

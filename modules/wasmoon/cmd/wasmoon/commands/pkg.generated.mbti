@@ -1,0 +1,97 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon/cmd/wasmoon/commands"
+
+import {
+  "Milky2018/wasm_core/types",
+  "Milky2018/wasmoon_jit",
+  "Milky2018/wasmoon_jit/cwasm",
+  "Milky2018/wasmoon_jit/perf",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn compile_module(Bytes, opt_level? : Int, enable_dwarf? : Bool, on_progress? : (CompileProgress) -> Unit?) -> @cwasm.PrecompiledModule?
+
+pub fn compile_module_to_jit(@types.Module, Bool, Bool, actual_memory_max? : Int?, Int, Bool, on_progress? : (CompileProgress) -> Unit?, compile_start? : @perf.Instant?, local_compile_mask? : Array[Bool]?, force_subtype_indirect_check? : Bool?, use_reusable_pipeline? : Bool) -> (@cwasm.PrecompiledModule, @wasmoon_jit.JITDebugDB?)?
+
+pub fn func_to_wat(String, @types.FuncType, Array[@types.ValueType], Array[@types.Instruction]) -> String
+
+pub fn run_component_command(String, Bool, Bool, Bool, ComponentErrorFormat) -> Int
+
+pub fn run_component_script(String, ComponentErrorFormat) -> Int
+
+pub fn run_component_script_cli(String, ComponentErrorFormat) -> Int
+
+pub fn run_config(String) -> Unit
+
+pub fn run_disasm(String) -> Unit
+
+pub fn run_explore(String, Int?, Int, Array[String], Bool, Bool) -> Unit
+
+pub fn run_settings() -> Unit
+
+pub fn run_testsuite(String, Bool, Bool) -> Unit
+
+pub fn run_wasm(String, String?, Array[String], Array[String], Array[String], Array[String], Array[String], Array[String], Bool, Bool, Bool, Int, Bool) -> Unit
+
+pub fn run_wat(String) -> Unit
+
+// Errors
+pub suberror ComponentTestError {
+  ParseError(String)
+  ScriptError(String)
+} derive(@debug.Debug)
+pub impl Show for ComponentTestError
+
+// Types and methods
+pub struct CompileProgress {
+  stage : CompileStage
+  func_idx : Int?
+  func_name : String?
+  total_funcs : Int
+  compiled_funcs : Int
+  elapsed_us : Int64
+  message : String?
+}
+pub fn CompileProgress::new(CompileStage, Int, Int, Int64, func_idx? : Int?, func_name? : String?, message? : String?) -> Self
+
+pub(all) enum CompileStage {
+  Parse
+  Verify
+  Translate
+  Optimize
+  Lower
+  Regalloc
+  Codegen
+  Link
+  Done
+  Failed
+}
+pub impl Show for CompileStage
+
+pub(all) enum ComponentErrorCode {
+  CompFileNotFound
+  CompParseError
+  CompValidateError
+  CompUnsupported
+} derive(Eq, @debug.Debug)
+pub impl Show for ComponentErrorCode
+
+pub(all) enum ComponentErrorFormat {
+  Text
+  Json
+} derive(Eq, @debug.Debug)
+pub impl Show for ComponentErrorFormat
+
+pub(all) enum ComponentTestErrorCode {
+  CompTestScriptError
+  CompTestRuntimeError
+  CompTestAssertFailed
+  CompTestUnsupportedCommand
+} derive(Eq, @debug.Debug)
+pub impl Show for ComponentTestErrorCode
+
+// Type aliases
+
+// Traits
+

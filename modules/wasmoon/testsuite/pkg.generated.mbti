@@ -1,0 +1,127 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon/testsuite"
+
+import {
+  "Milky2018/wasm_core/types",
+  "Milky2018/wasmoon/jit",
+  "Milky2018/wasmoon/runtime",
+  "Milky2018/wasmoon_jit/cwasm",
+  "moonbitlang/core/debug",
+  "moonbitlang/core/json",
+}
+
+// Values
+pub fn compare_jit_interp(String, String, Array[@types.Value]) -> CompareResult
+
+pub fn compare_result_is_match(CompareResult) -> Bool
+
+pub fn current_target_arch() -> @cwasm.TargetArch
+
+pub fn init_elem_segments(@types.Module, @jit.JITModule, Array[@runtime.GlobalInstance]) -> Unit
+
+pub fn jit_results_to_values(Array[Int64], Array[@types.ValueType]) -> Array[@types.Value]
+
+pub fn parse_json_test_file(String) -> ParsedTestFile raise TestRunnerError
+
+pub fn parse_test_value(TestValue) -> @types.Value
+
+pub fn run_assert_return(TestContext, String?, String, Array[TestValue], Array[TestValue]) -> Bool
+
+pub fn run_assert_trap(TestContext, String?, String, Array[TestValue], String) -> Bool
+
+pub fn run_interp_only(String, String, Array[@types.Value]) -> Result[Array[@types.Value], String]
+
+pub fn run_jit(@types.Module, String, Int, Array[@types.Value], Array[@types.ValueType], Array[@types.ValueType]) -> Result[Array[@types.Value], String]
+
+pub fn run_json_tests(String, String, (String) -> Bytes raise) -> TestResult raise TestRunnerError
+
+pub fn run_test_command(TestContext, TestCommand, TestResult, String, (String) -> Bytes raise) -> Unit raise TestRunnerError
+
+pub fn run_test_command_with_line(TestContext, TestCommandWithLine, TestResult, String, (String) -> Bytes raise) -> Unit raise TestRunnerError
+
+pub fn value_to_jit_arg(@types.Value) -> Int64
+
+pub fn value_to_jit_arg_typed(@types.Value, @types.ValueType) -> Int64
+
+pub fn values_array_equal(Array[@types.Value], Array[@types.Value]) -> Bool
+
+pub fn values_equal(@types.Value, @types.Value) -> Bool
+
+// Errors
+pub suberror TestRunnerError {
+  ParseError(String)
+  ModuleLoadError(String)
+} derive(@debug.Debug)
+
+// Types and methods
+type CompareResult
+pub fn CompareResult::matched(Self) -> Bool
+pub fn CompareResult::to_string(Self) -> String
+pub impl Show for CompareResult
+
+pub(all) struct JsonValue {
+  type_ : String
+  value : String?
+} derive(@debug.Debug, @json.FromJson)
+
+pub struct ParsedTestFile {
+  source_filename : String?
+  commands : Array[TestCommandWithLine]
+}
+
+pub enum TestAction {
+  Invoke(String?, String, Array[TestValue])
+  Get(String?, String)
+} derive(@debug.Debug)
+
+pub enum TestCommand {
+  Module(String)
+  AssertReturn(TestAction, Array[TestValue])
+  AssertTrap(TestAction, String)
+  AssertInvalid(String, String)
+  AssertMalformed(String, String)
+  AssertUninstantiable(String, String)
+  Register(String, String?)
+  Action(TestAction)
+} derive(@debug.Debug)
+
+pub struct TestCommandWithLine {
+  line : Int?
+  command : TestCommand
+} derive(@debug.Debug)
+
+pub struct TestContext {
+  store : @runtime.Store
+  linker : @runtime.Linker
+  mut current_module : @runtime.ModuleInstance?
+  named_modules : Map[String, @runtime.ModuleInstance]
+}
+pub fn TestContext::get_current_module(Self) -> @runtime.ModuleInstance?
+pub fn TestContext::get_global(Self, String?, String) -> @types.Value raise
+pub fn TestContext::invoke(Self, String?, String, Array[@types.Value]) -> Array[@types.Value] raise
+pub fn TestContext::load_module(Self, Bytes, String?) -> @runtime.ModuleInstance raise
+pub fn TestContext::new() -> Self
+pub fn TestContext::set_current_module(Self, @runtime.ModuleInstance) -> Unit
+
+pub(all) struct TestResult {
+  mut passed : Int
+  mut failed : Int
+  mut skipped : Int
+  failures : Array[String]
+  skip_reasons : Array[String]
+  mut source_filename : String?
+} derive(@debug.Debug)
+pub fn TestResult::add_failed(Self, String) -> Unit
+pub fn TestResult::add_passed(Self) -> Unit
+pub fn TestResult::add_skipped(Self, String) -> Unit
+pub fn TestResult::new() -> Self
+
+pub struct TestValue {
+  type_ : String
+  value : String?
+} derive(@debug.Debug)
+
+// Type aliases
+
+// Traits
+

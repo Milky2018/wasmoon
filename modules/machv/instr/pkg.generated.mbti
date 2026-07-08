@@ -1,0 +1,427 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/machv/instr"
+
+import {
+  "Milky2018/machv/abi",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn aarch64_logic_imm_enc_bits(Int64, Bool) -> Int?
+
+// Errors
+
+// Types and methods
+pub(all) enum CallClobberClass {
+  Internal
+  Foreign
+} derive(Eq, @debug.Debug)
+pub impl Show for CallClobberClass
+
+pub(all) enum CallType {
+  None
+  Regular
+  TailCall
+}
+
+pub(all) enum CmpKind {
+  Eq
+  Ne
+  Slt
+  Sle
+  Sgt
+  Sge
+  Ult
+  Ule
+  Ugt
+  Uge
+}
+pub impl Show for CmpKind
+
+pub(all) struct CodeSymbol {
+  scope : String
+  ordinal : Int
+} derive(Eq, Hash, @debug.Debug)
+pub fn CodeSymbol::new(String, Int) -> Self
+pub impl Show for CodeSymbol
+
+pub(all) enum Cond {
+  Eq
+  Ne
+  Hs
+  Lo
+  Mi
+  Pl
+  Vs
+  Vc
+  Ps
+  Pc
+  Hi
+  Ls
+  Ge
+  Lt
+  Gt
+  Le
+  Al
+}
+pub fn Cond::invert(Self) -> Self
+pub fn Cond::to_bits(Self) -> Int
+pub impl Show for Cond
+
+pub(all) enum ExtendKind {
+  Signed8To32
+  Signed8To64
+  Signed16To32
+  Signed16To64
+  Signed32To64
+  Unsigned8To32
+  Unsigned8To64
+  Unsigned16To32
+  Unsigned16To64
+  Unsigned32To64
+}
+pub impl Show for ExtendKind
+
+pub(all) struct ExternalName {
+  name : String
+} derive(Eq, Hash, @debug.Debug)
+pub fn ExternalName::new(String) -> Self
+pub impl Show for ExternalName
+
+pub(all) enum FCmpKind {
+  Eq
+  Ne
+  Lt
+  Le
+  Gt
+  Ge
+}
+pub impl Show for FCmpKind
+
+pub(all) enum FloatToIntKind {
+  F32ToI32S
+  F32ToI32U
+  F32ToI64S
+  F32ToI64U
+  F64ToI32S
+  F64ToI32U
+  F64ToI64S
+  F64ToI64U
+  F32ToI32SSat
+  F32ToI32USat
+  F32ToI64SSat
+  F32ToI64USat
+  F64ToI32SSat
+  F64ToI32USat
+  F64ToI64SSat
+  F64ToI64USat
+}
+pub impl Show for FloatToIntKind
+
+pub(all) enum IndexExtend {
+  None
+  Uxtw
+  Sxtw
+}
+pub impl Show for IndexExtend
+
+pub(all) enum IntToFloatKind {
+  I32SToF32
+  I32UToF32
+  I64SToF32
+  I64UToF32
+  I32SToF64
+  I32UToF64
+  I64SToF64
+  I64UToF64
+}
+pub impl Show for IntToFloatKind
+
+pub(all) enum LaneSize {
+  B8
+  H16
+  S32
+  D64
+}
+pub impl Show for LaneSize
+
+pub struct MachVInst {
+  opcode : MachVOpcode
+  defs : Array[@abi.Writable]
+  uses : Array[@abi.Reg]
+  use_constraints : Array[@abi.OperandConstraint]
+  def_constraints : Array[@abi.OperandConstraint]
+}
+pub fn MachVInst::add_def(Self, @abi.Writable) -> Unit
+pub fn MachVInst::add_def_fixed(Self, @abi.Writable, @abi.PReg) -> Unit
+pub fn MachVInst::add_use(Self, @abi.Reg) -> Unit
+pub fn MachVInst::add_use_fixed(Self, @abi.Reg, @abi.PReg) -> Unit
+pub fn MachVInst::new(MachVOpcode) -> Self
+pub impl Show for MachVInst
+
+pub(all) enum MachVOpcode {
+  Add(Bool)
+  AddImm(Int, Bool)
+  Sub(Bool)
+  SubImm(Int, Bool)
+  Mul(Bool)
+  SDiv(Bool)
+  UDiv(Bool)
+  SRem(Bool)
+  URem(Bool)
+  And(Bool)
+  AndImm(Int64, Bool)
+  Or(Bool)
+  OrImm(Int64, Bool)
+  Xor(Bool)
+  XorImm(Int64, Bool)
+  Shl(Bool)
+  ShlImm(Int, Bool)
+  AShr(Bool)
+  AShrImm(Int, Bool)
+  LShr(Bool)
+  LShrImm(Int, Bool)
+  Rotr(Bool)
+  RotrImm(Int, Bool)
+  ExtrImm(Int, Bool)
+  Not(Bool)
+  AndNot(Bool)
+  OrNot(Bool)
+  XorNot(Bool)
+  FAdd(Bool)
+  FSub(Bool)
+  FMul(Bool)
+  FDiv(Bool)
+  FMin(Bool)
+  FMax(Bool)
+  FSqrt(Bool)
+  FAbs(Bool)
+  FNeg(Bool)
+  FCeil(Bool)
+  FFloor(Bool)
+  FTrunc(Bool)
+  FNearest(Bool)
+  Load(MemType, Int)
+  Store(MemType, Int)
+  Load8S(Int)
+  Load8U(Int)
+  Load16S(Int)
+  Load16U(Int)
+  Load32S(Int)
+  Load32U(Int)
+  Move
+  LoadConst(Int64)
+  LoadConstF32(Int)
+  LoadConstF64(Int64)
+  Cmp(CmpKind, Bool)
+  IntCmp(Bool)
+  FCmp(FCmpKind)
+  Extend(ExtendKind)
+  Truncate
+  IntToFloat(IntToFloatKind)
+  FPromote
+  FDemote
+  Bitcast
+  Select
+  SelectCmp(CmpKind, Bool)
+  Clz(Bool)
+  Popcnt(Bool)
+  Rbit(Bool)
+  Nop
+  TrapIfUgt(Int)
+  TrapIfUge(Int)
+  FpuCmp(Bool)
+  TrapIf(Cond, Int)
+  TrapIfZero(Bool, Int)
+  TrapIfDivOverflow(Bool, Int)
+  FcvtToInt(Bool, Bool, Bool)
+  FpuSel(Bool, Cond)
+  FpuMaxnm(Bool)
+  FpuMinnm(Bool)
+  AddShifted(ShiftType, Int)
+  AddExtend(IndexExtend, Int)
+  SubExtend(IndexExtend, Int)
+  SubShifted(ShiftType, Int)
+  AndShifted(ShiftType, Int)
+  OrShifted(ShiftType, Int)
+  XorShifted(ShiftType, Int)
+  AddShifted32(ShiftType, Int)
+  SubShifted32(ShiftType, Int)
+  AndShifted32(ShiftType, Int)
+  OrShifted32(ShiftType, Int)
+  XorShifted32(ShiftType, Int)
+  Madd
+  Msub
+  Mneg
+  Madd32
+  Msub32
+  Mneg32
+  Umulh
+  Smulh
+  Umull
+  Smull
+  ReturnCallIndirect(Int, Int)
+  CallExternalIfI32NeImm(Int, ExternalName)
+  StackLoad(Int)
+  StackStore(Int)
+  LoadStackParam(Int, @abi.RegClass)
+  LoadPtr(MemType, Int)
+  LoadPtrRegOffset(MemType, IndexExtend, Int, Int)
+  LoadPtrNarrowRegOffset(Int, Bool, IndexExtend, Int, Int)
+  StorePtr(MemType, Int)
+  StorePtrRegOffset(MemType, IndexExtend, Int, Int)
+  StorePtrNarrowRegOffset(Int, IndexExtend, Int, Int)
+  LoadPtrNarrow(Int, Bool, Int)
+  StorePtrNarrow(Int, Int)
+  LoadExternalFuncAddr(ExternalName)
+  LoadCodeAddr(CodeSymbol)
+  CallPtr(Int, Int, CallClobberClass)
+  CallDirect(CodeSymbol, Int, Int, CallClobberClass)
+  CallExternal(ExternalName, Int, Int, CallClobberClass)
+  AdjustSP(Int)
+  StoreToStack(Int)
+  LoadSP
+  LoadSafepointId(Int)
+  BumpAllocRecordFromStackInline(Int, Int, ExternalName, ExternalName)
+  BumpAllocArrayFromStackInline(Int, Int, ExternalName, ExternalName)
+  LoadConstV128(Bytes)
+  SIMDSplat(LaneSize)
+  SIMDSplatF(Bool)
+  SIMDExtractU(LaneSize, Int)
+  SIMDExtractS(LaneSize, Int)
+  SIMDExtractF(Bool, Int)
+  SIMDInsert(LaneSize, Int)
+  SIMDInsertF(Bool, Int)
+  SIMDShuffle(FixedArray[Int])
+  SIMDSwizzle
+  SIMDNot
+  SIMDAnd
+  SIMDBic
+  SIMDOr
+  SIMDXor
+  SIMDBsl
+  SIMDAnyTrue
+  SIMDAllTrue(LaneSize)
+  SIMDBitmask(LaneSize)
+  SIMDAdd(LaneSize)
+  SIMDSub(LaneSize)
+  SIMDMul(LaneSize)
+  SIMDSqadd(LaneSize)
+  SIMDUqadd(LaneSize)
+  SIMDSqsub(LaneSize)
+  SIMDUqsub(LaneSize)
+  SIMDSmin(LaneSize)
+  SIMDUmin(LaneSize)
+  SIMDSmax(LaneSize)
+  SIMDUmax(LaneSize)
+  SIMDUrhadd(LaneSize)
+  SIMDAbs(LaneSize)
+  SIMDNeg(LaneSize)
+  SIMDCnt
+  SIMDBroadcastShift(LaneSize, Bool)
+  SIMDShiftByVec(LaneSize, Bool)
+  SIMDCmp(LaneSize, SIMDCmpKind)
+  SIMDNarrow(LaneSize, Bool)
+  SIMDExtendLow(LaneSize, Bool)
+  SIMDExtendHigh(LaneSize, Bool)
+  SIMDExtMulLow(LaneSize, Bool)
+  SIMDExtMulHigh(LaneSize, Bool)
+  SIMDExtAddPairwise(LaneSize, Bool)
+  SIMDDot
+  SIMDQ15MulrSat
+  SIMDFAdd(Bool)
+  SIMDFSub(Bool)
+  SIMDFMul(Bool)
+  SIMDFDiv(Bool)
+  SIMDFMin(Bool)
+  SIMDFMax(Bool)
+  SIMDFPMin(Bool)
+  SIMDFPMax(Bool)
+  SIMDFAbs(Bool)
+  SIMDFNeg(Bool)
+  SIMDFSqrt(Bool)
+  SIMDFCeil(Bool)
+  SIMDFFloor(Bool)
+  SIMDFTrunc(Bool)
+  SIMDFNearest(Bool)
+  SIMDFCmp(Bool, SIMDFCmpKind)
+  SIMDFCvtToIntS(Bool)
+  SIMDFCvtToIntU(Bool)
+  SIMDIntToFloatS(Bool)
+  SIMDIntToFloatU(Bool)
+  SIMDTruncSatF64ToI32SZero
+  SIMDTruncSatF64ToI32UZero
+  SIMDConvertLowI32ToF64S
+  SIMDConvertLowI32ToF64U
+  SIMDDemoteF64ToF32Zero
+  SIMDPromoteLowF32ToF64
+  SIMDLoad(Int)
+  SIMDStore(Int)
+  SIMDLoadSplat(LaneSize, Int)
+  SIMDLoadExtend(Int, Bool, Int)
+  SIMDLoadZero(Bool, Int)
+  SIMDLoadLane(LaneSize, Int, Int)
+  SIMDStoreLane(LaneSize, Int, Int)
+  SIMDFMla(Bool)
+  SIMDFMls(Bool)
+  SIMDRelaxedDot8to16
+  SIMDRelaxedDot8to32Add
+}
+pub fn MachVOpcode::call_type(Self) -> CallType
+pub impl Show for MachVOpcode
+
+pub(all) enum MachVTerminator {
+  Jump(Int, Array[@abi.Reg])
+  Branch(@abi.Reg, Int, Int)
+  BranchCmp(@abi.Reg, @abi.Reg, Cond, Bool, Int, Int)
+  BranchZero(@abi.Reg, Bool, Bool, Int, Int)
+  BranchCmpImm(@abi.Reg, Int, Cond, Bool, Int, Int)
+  Return(Array[@abi.Reg])
+  Trap(Int)
+  BrTable(@abi.Reg, Array[Int], Int)
+}
+pub impl Show for MachVTerminator
+
+pub(all) enum MemType {
+  I32
+  I64
+  F32
+  F64
+  V128
+}
+pub impl Show for MemType
+
+pub(all) enum RelocTarget {
+  Code(CodeSymbol)
+  External(ExternalName)
+} derive(Eq, @debug.Debug)
+pub fn RelocTarget::key(Self) -> String
+pub impl Show for RelocTarget
+
+pub(all) enum SIMDCmpKind {
+  Eq
+  GtS
+  GeS
+  GtU
+  GeU
+}
+pub impl Show for SIMDCmpKind
+
+pub(all) enum SIMDFCmpKind {
+  Eq
+  Gt
+  Ge
+}
+pub impl Show for SIMDFCmpKind
+
+pub(all) enum ShiftType {
+  Lsl
+  Lsr
+  Asr
+}
+pub impl Show for ShiftType
+
+// Type aliases
+
+// Traits
+

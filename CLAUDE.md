@@ -19,7 +19,7 @@ Wasmoon is a WebAssembly runtime written in MoonBit with JIT compilation support
 │                       Runtime                                   │
 ├────────────────────────┬────────────────────────────────────────┤
 │      Interpreter       │              JIT Compiler              │
-│      (executor)        │  IR → VCode → Machine Code             │
+│      (executor)        │  MilkIR → MachV → Machine Code         │
 └────────────────────────┴────────────────────────────────────────┘
 ```
 
@@ -28,9 +28,12 @@ Wasmoon is a WebAssembly runtime written in MoonBit with JIT compilation support
 - `validator/` - WebAssembly module validation
 - `runtime/` - Runtime structures (Module, Instance, Store, Memory, Table, Global)
 - `executor/` - Stack-based interpreter
-- `ir/` - SSA-based intermediate representation
-- `vcode/` - Virtual code generation, lowering (`vcode/lower/`), and register allocation
-- `jit/` - AArch64 machine code emission and FFI
+- `modules/milkir/` - SSA-based intermediate representation
+- `modules/machv/` - Virtual-register machine IR
+- `modules/milkir_machv/` - Lowering from MilkIR to MachV
+- `modules/machv_regalloc/` - MachV-specific register allocation adapter
+- `modules/machv_emit/` - Machine code emission
+- `modules/wasmoon_jit/` - Wasmoon-specific native runtime and JIT integration
 
 ## Development Commands
 
@@ -47,7 +50,7 @@ Wasmoon is a WebAssembly runtime written in MoonBit with JIT compilation support
 moon build && ./install.sh    # Build and install wasmoon binary
 ./wasmoon test <file.wast>    # Run WAST tests
 ./wasmoon test --no-jit <file.wast>  # Run in interpreter-only mode
-./wasmoon explore <file.wat> --stage ir vcode mc  # View compilation stages
+./wasmoon explore <file.wat> --stage ir machv mc  # View compilation stages
 python3 scripts/run_all_wast.py --rec  # Run all WAST tests (run ./install.sh first)
 ```
 

@@ -1,0 +1,359 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/machv"
+
+import {
+  "Milky2018/machv/abi",
+  "Milky2018/machv/block",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn abi_location_stack_align(AbiValueLocation) -> Int
+
+pub fn abi_location_stack_size(AbiValueLocation) -> Int
+
+pub let spill_slot_base : Int
+
+// Errors
+pub suberror VerifyError {
+  EmptyFunction
+  EmptyBlock(block_id~ : Int)
+} derive(Eq, @debug.Debug)
+pub impl Show for VerifyError
+
+// Types and methods
+pub(all) struct AbiReturnArea {
+  size : Int
+  align : Int
+} derive(Eq, @debug.Debug)
+
+pub(all) enum AbiValueLocation {
+  Reg(PReg)
+  Stack(offset~ : Int, size~ : Int, align~ : Int)
+  ReturnArea(offset~ : Int, size~ : Int, align~ : Int)
+} derive(Eq, @debug.Debug)
+
+pub(all) struct AbstractFunction {
+  name : String
+  params : Array[VReg]
+  results : Array[RegClass]
+  blocks : Array[Block]
+  stack_slots : Array[StackSlot]
+  mut num_spill_slots : Int
+  param_pregs : Array[PReg?]
+  param_locations : Array[AbiValueLocation]
+  result_locations : Array[AbiValueLocation]
+  mut return_area : AbiReturnArea?
+  mut int_stack_params : Int
+  mut max_outgoing_args_size : Int
+  mut next_block_id : Int
+  mut next_inst_id : Int
+  mut next_vreg_id : Int
+  mut next_stack_slot_id : Int
+} derive(@debug.Debug)
+pub fn AbstractFunction::add_param(Self, RegClass) -> VReg
+pub fn AbstractFunction::add_param_location(Self, AbiValueLocation) -> Unit
+pub fn AbstractFunction::add_param_preg(Self, PReg?) -> Unit
+pub fn AbstractFunction::add_result(Self, RegClass) -> Unit
+pub fn AbstractFunction::add_result_location(Self, AbiValueLocation) -> Unit
+pub fn AbstractFunction::get_max_outgoing_args_size(Self) -> Int
+pub fn AbstractFunction::get_num_spill_slots(Self) -> Int
+pub fn AbstractFunction::new(String) -> Self
+pub fn AbstractFunction::new_block(Self) -> Block
+pub fn AbstractFunction::new_inst(Self, Opcode) -> Instruction
+pub fn AbstractFunction::new_stack_slot(Self, Int, Int) -> StackSlot
+pub fn AbstractFunction::new_vreg(Self, RegClass) -> VReg
+pub fn AbstractFunction::print(Self) -> String
+pub fn AbstractFunction::push_param(Self, VReg) -> Unit
+pub fn AbstractFunction::set_int_stack_params(Self, Int) -> Unit
+pub fn AbstractFunction::set_num_spill_slots(Self, Int) -> Unit
+pub fn AbstractFunction::set_return_area(Self, AbiReturnArea) -> Unit
+pub fn AbstractFunction::update_max_outgoing_args_size(Self, Int) -> Unit
+pub fn AbstractFunction::verify(Self) -> Unit raise VerifyError
+
+pub(all) struct Block {
+  id : Int
+  params : Array[VReg]
+  instructions : Array[Instruction]
+  successors : Array[Int]
+  mut terminator : Terminator?
+} derive(@debug.Debug)
+pub fn Block::add_param(Self, VReg) -> Unit
+pub fn Block::add_successor(Self, Int) -> Unit
+pub fn Block::append(Self, Instruction) -> Unit
+pub fn Block::new(Int) -> Self
+pub fn Block::set_terminator(Self, Terminator) -> Unit
+
+pub(all) struct CFG {
+  size : Int
+  preds : Array[Array[Int]]
+  succs : Array[Array[Int]]
+}
+pub fn CFG::build(AbstractFunction) -> Self
+pub fn CFG::compute_dominators(Self) -> Array[Int]
+pub fn CFG::find_back_edges(Self) -> Array[(Int, Int)]
+pub fn CFG::find_loops(Self) -> Array[Loop]
+pub fn CFG::reverse_postorder(Self) -> Array[Int]
+
+pub(all) enum Cond {
+  Eq
+  Ne
+  Lt
+  Le
+  Gt
+  Ge
+  Ult
+  Ule
+  Ugt
+  Uge
+  Mi
+  Parity
+  NotParity
+  Custom(String)
+} derive(Eq, @debug.Debug)
+
+pub(all) struct Constraint {
+  operand_index : Int
+  allowed_regs : Array[PReg]
+} derive(Eq, @debug.Debug)
+
+pub(all) struct Function {
+  name : String
+  params : Array[@abi.VReg]
+  results : Array[@abi.RegClass]
+  result_kinds : Array[ValueKind]
+  blocks : Array[@block.MachVBlock]
+  mut next_vreg_id : Int
+  mut num_spill_slots : Int
+  param_pregs : Array[@abi.PReg?]
+  mut int_stack_params : Int
+  mut max_outgoing_args_size : Int
+  mut uses_context_cache_0_source : Bool
+}
+pub fn Function::add_param(Self, @abi.RegClass) -> @abi.VReg
+pub fn Function::add_param_preg(Self, @abi.PReg?) -> Unit
+pub fn Function::add_result(Self, @abi.RegClass) -> Unit
+pub fn Function::add_result_kind(Self, ValueKind) -> Unit
+pub fn Function::calls_multi_value_function(Self) -> Bool
+pub fn Function::clone_base(Self) -> Self
+pub fn Function::get_blocks(Self) -> Array[@block.MachVBlock]
+pub fn Function::get_max_outgoing_args_size(Self) -> Int
+pub fn Function::get_name(Self) -> String
+pub fn Function::get_num_spill_slots(Self) -> Int
+pub fn Function::get_param_pregs(Self) -> Array[@abi.PReg?]
+pub fn Function::get_params(Self) -> Array[@abi.VReg]
+pub fn Function::get_result_kinds(Self) -> Array[ValueKind]
+pub fn Function::has_calls(Self) -> Bool
+pub fn Function::mark_uses_context_cache_0_source(Self) -> Unit
+pub fn Function::needs_extra_results_ptr(Self) -> Bool
+pub fn Function::new(String) -> Self
+pub fn Function::new_block(Self) -> @block.MachVBlock
+pub fn Function::new_vreg(Self, @abi.RegClass) -> @abi.VReg
+pub fn Function::print(Self) -> String
+pub fn Function::push_param(Self, @abi.VReg) -> Unit
+pub fn Function::set_int_stack_params(Self, Int) -> Unit
+pub fn Function::set_num_spill_slots(Self, Int) -> Unit
+pub fn Function::should_reserve_context_cache_0(Self) -> Bool
+pub fn Function::should_reserve_context_cache_1(Self) -> Bool
+pub fn Function::update_max_outgoing_args_size(Self, Int) -> Unit
+pub fn Function::uses_context_cache_0_source(Self) -> Bool
+pub fn Function::uses_context_cache_1(Self) -> Bool
+pub impl Show for Function
+
+pub(all) struct Instruction {
+  id : Int
+  opcode : Opcode
+  operands : Array[Operand]
+  clobbers : Array[PReg]
+  constraints : Array[Constraint]
+  abi_arg_locations : Array[AbiValueLocation]
+  abi_result_locations : Array[AbiValueLocation]
+  mut stack_effect : StackEffect
+} derive(Eq, @debug.Debug)
+pub fn Instruction::add_abi_arg_location(Self, AbiValueLocation) -> Unit
+pub fn Instruction::add_abi_result_location(Self, AbiValueLocation) -> Unit
+pub fn Instruction::add_clobber(Self, PReg) -> Unit
+pub fn Instruction::add_constraint(Self, Constraint) -> Unit
+pub fn Instruction::add_operand(Self, Operand) -> Unit
+pub fn Instruction::new(Int, Opcode) -> Self
+pub fn Instruction::set_stack_effect(Self, StackEffect) -> Unit
+
+pub(all) struct Loop {
+  header : Int
+  body : Array[Int]
+  latch : Int
+}
+
+pub(all) enum MemType {
+  MemI32
+  MemI64
+  MemF32
+  MemF64
+  MemV128
+  MemPtr
+} derive(Eq, @debug.Debug)
+
+pub(all) enum Opcode {
+  Target(String)
+  Move
+  IntConst(Int64)
+  FloatConst(Double)
+  IntAdd
+  IntSub
+  IntMul
+  IntMulHigh(Bool)
+  IntDiv(Bool)
+  IntRem(Bool)
+  IntAnd
+  IntOr
+  IntXor
+  IntNot
+  IntShl
+  IntShr(Bool)
+  IntRotl
+  IntRotr
+  IntClz
+  IntCtz
+  IntPopcnt
+  IntCmp(Cond)
+  FloatAdd
+  FloatSub
+  FloatMul
+  FloatDiv
+  FloatMin
+  FloatMax
+  FloatCmp(Cond)
+  FloatNeg
+  FloatAbs
+  FloatSqrt
+  FloatCeil
+  FloatFloor
+  FloatTrunc
+  FloatNearest
+  Ireduce
+  Sextend
+  Uextend
+  Fpromote
+  Fdemote
+  FcvtToSint
+  FcvtToUint
+  FcvtToSintSat
+  FcvtToUintSat
+  SintToFcvt
+  UintToFcvt
+  Bitcast
+  Sextend8
+  Sextend16
+  Sextend32
+  Select
+  LoadMemory(MemType, Int)
+  StoreMemory(MemType, Int)
+  LoadPtr(MemType, Int)
+  LoadPtrNarrow(Int, Bool, Int)
+  StorePtr(MemType, Int)
+  StorePtrNarrow(Int, Int)
+  StackAddr(Int)
+  CallIndirect
+  CallPtr(Int, Int)
+  Custom(String)
+  Load(StackSlot)
+  Store(StackSlot)
+  Call(String)
+  Trap(Int)
+  Jump(Int)
+  Branch(Int, Int)
+  Return
+} derive(Eq, @debug.Debug)
+
+pub(all) struct Operand {
+  reg : Reg
+  role : OperandRole
+  tie_id : Int
+} derive(Eq, @debug.Debug)
+pub fn Operand::def(Reg) -> Self
+pub fn Operand::use_def(Reg) -> Self
+pub fn Operand::use_reg(Reg) -> Self
+pub fn Operand::with_tie(Self, Int) -> Self
+
+pub(all) enum OperandConstraint {
+  Any
+  FixedReg(PReg)
+} derive(Eq, @debug.Debug)
+pub impl Show for OperandConstraint
+
+pub(all) enum OperandRole {
+  Use
+  Def
+  UseDef
+} derive(Eq, @debug.Debug)
+
+pub(all) struct PReg {
+  index : Int
+  class : RegClass
+} derive(Eq, @debug.Debug)
+pub fn PReg::get_spill_slot(Self) -> Int
+pub fn PReg::is_spilled(Self) -> Bool
+pub fn PReg::spilled(Int, RegClass) -> Self
+pub impl Show for PReg
+
+pub(all) enum Reg {
+  Virtual(VReg)
+  Physical(PReg)
+} derive(Eq, @debug.Debug)
+pub impl Show for Reg
+
+pub(all) enum RegClass {
+  Int
+  Float32
+  Float64
+  Vector
+} derive(Eq, @debug.Debug)
+pub impl Show for RegClass
+
+pub(all) enum StackEffect {
+  None
+  Adjust(Int)
+  CallFrame(Int)
+} derive(Eq, @debug.Debug)
+
+pub(all) struct StackSlot {
+  id : Int
+  size : Int
+  align : Int
+} derive(Eq, @debug.Debug)
+
+pub(all) enum Terminator {
+  TermJump(Int, Array[Reg])
+  TermBranch(Reg, Int, Array[Reg], Int, Array[Reg])
+  TermBranchCmp(Reg, Reg, Cond, Bool, Int, Array[Reg], Int, Array[Reg])
+  TermBranchZero(Reg, Bool, Bool, Int, Array[Reg], Int, Array[Reg])
+  TermBranchCmpImm(Reg, Int, Cond, Bool, Int, Array[Reg], Int, Array[Reg])
+  TermReturn(Array[Reg])
+  TermTrap(Int)
+  TermBrTable(Reg, Array[Int], Int)
+} derive(Eq, @debug.Debug)
+
+pub(all) struct VReg {
+  id : Int
+  class : RegClass
+} derive(Eq, @debug.Debug)
+pub impl Show for VReg
+
+pub(all) enum ValueKind {
+  I32
+  I64
+  F32
+  F64
+  V128
+  Ptr
+} derive(Eq, @debug.Debug)
+
+pub(all) struct Writable {
+  reg : Reg
+} derive(Eq, @debug.Debug)
+pub impl Show for Writable
+
+// Type aliases
+
+// Traits
+

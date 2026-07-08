@@ -1,0 +1,1007 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon_jit"
+
+import {
+  "Milky2018/machv",
+  "Milky2018/machv/abi",
+  "Milky2018/machv/instr",
+  "Milky2018/machv/isa",
+  "Milky2018/machv_emit",
+  "Milky2018/machv_regalloc",
+  "Milky2018/milkir",
+  "Milky2018/wasm_core/types",
+  "Milky2018/wasm_isa_lower",
+  "Milky2018/wasm_milkir",
+  "Milky2018/wasmoon_jit/cwasm",
+  "moonbitlang/core/debug",
+  "moonbitlang/core/hashset",
+}
+
+// Values
+pub const TYPE_F32 : Int = 2
+
+pub const TYPE_F64 : Int = 3
+
+pub const TYPE_I32 : Int = 0
+
+pub const TYPE_I64 : Int = 1
+
+pub const TYPE_V128 : Int = 4
+
+pub fn alloc_guarded_memory_desc(Int, Int?) -> Int64
+
+pub fn alloc_memory(Int64) -> Int64
+
+pub fn alloc_memory_desc(Int64, Int?, is_memory64? : Bool, page_size_log2? : Int, is_shared? : Bool) -> Int64
+
+pub fn build_aarch64_direct_call_stub(Int64) -> Array[Int]
+
+pub fn build_aarch64_load_imm64_fixed_bytes(Int, Int64) -> Array[Int]
+
+pub fn build_cwasm_entry_from_code(Int, String, Array[Int], Int, Int, Int, Int, func_addr_fixups? : Array[@cwasm.FuncAddrFixup], call_fixups? : Array[@cwasm.CallFixup], gc_safepoint_offsets? : Array[Int], gc_safepoint_root_counts? : Array[Int], gc_safepoint_root_indices? : Array[Array[Int]], gc_safepoints? : Array[@cwasm.GcSafepoint], gc_stackmap_blob? : Bytes) -> @cwasm.CompiledEntry
+
+pub fn build_entry_trampoline_for_target(Array[@types.ValueType], Array[@types.ValueType], @cwasm.TargetArch) -> Array[Int] raise HostcallImportTrampolineError
+
+pub fn build_gc_stackmap_blob(Array[Int]) -> Bytes
+
+pub fn build_gc_stackmap_blob_for_safepoints(Array[@cwasm.GcSafepoint], Array[Int], explicit_blob? : Bytes) -> Bytes
+
+pub fn build_gc_stackmap_blob_v2(Array[@cwasm.GcSafepoint], Array[Int]) -> Bytes
+
+pub fn build_hostcall_import_trampoline_for_target(Array[@types.ValueType], Array[@types.ValueType], Int, @cwasm.TargetArch) -> HostcallImportTrampolineCode raise HostcallImportTrampolineError
+
+pub fn build_x64_direct_call_stub(Int64) -> Array[Int]
+
+pub fn c_jit_read_i64(Int64) -> Int64
+
+pub fn c_jit_write_i64(Int64, Int64) -> Unit
+
+pub fn c_jit_write_u32(Int64, Int) -> Unit
+
+pub fn can_use_reusable_entry_trampoline(Array[@types.ValueType], Array[@types.ValueType]) -> Bool
+
+pub fn classify_import_function_ptr(Int64) -> ImportFunctionResolution
+
+pub fn clear_segments(Int64) -> Unit
+
+pub fn clear_wasi_stdin_buffer(Int64) -> Unit
+
+pub fn clear_wasi_stdin_callback(Int64) -> Unit
+
+pub fn collect_gc_root_args(Array[Int64], Array[@types.ValueType]) -> Array[Int64]
+
+pub fn context_func_count(Int64) -> Int
+
+pub fn context_func_table_ptr(Int64) -> Int64
+
+pub fn context_table_ptr(Int64, Int) -> Int64
+
+pub fn context_table_size(Int64, Int) -> Int
+
+pub fn count_entry_trampoline_slots(Array[@types.ValueType]) -> Int
+
+pub fn decode_externref(Int64) -> Int?
+
+pub fn decode_funcref_idx(Int64) -> Int?
+
+pub fn decode_gc_heap_ref(Int64) -> Int?
+
+pub fn decode_heap_ref(Int64) -> Int
+
+pub fn decode_i31(Int64) -> Int
+
+pub fn default_native_glue() -> Array[NativeGlueBinding]
+
+pub fn derive_gc_safepoints(Array[Int], Array[Int], Array[Array[Int]]) -> Array[@cwasm.GcSafepoint]
+
+pub fn direct_call_idx_memory_copy_mem0() -> Int
+
+pub fn direct_call_idx_memory_fill_mem0() -> Int
+
+pub fn embedding_context_layout() -> @abi.EmbeddingContextLayout
+
+pub fn emit_entry_trampoline(Array[Int], Array[Int], @abi.CallConventionLayout, isa? : @isa.ISA) -> @machv_emit.MachineCode
+
+pub fn emit_hostcall_import_trampoline(Array[@types.ValueType], Array[@types.ValueType], Int, @instr.ExternalName, @abi.CallConventionLayout, isa? : @isa.ISA) -> @machv_emit.MachineCode
+
+pub fn emit_target_to_isa(@machv_emit.EmitTarget) -> @isa.ISA
+
+pub fn encode_aarch64_bl_imm26(Int64, Int64) -> Int?
+
+pub fn encode_externref(Int) -> Int64
+
+pub fn encode_funcref_idx(Int) -> Int64
+
+pub fn encode_gc_heap_ref(Int) -> Int64
+
+pub fn encode_heap_ref(Int) -> Int64
+
+pub fn encode_i31(Int) -> Int64
+
+pub fn encode_null_ref() -> Int64
+
+pub fn encode_x64_call_rel32_disp(Int64, Int64) -> Int?
+
+pub fn entry_trampoline_signature_hash(Array[@types.ValueType], Array[@types.ValueType]) -> Int64
+
+pub fn entry_trampoline_type_codes(Array[@types.ValueType]) -> Array[Int]
+
+pub fn entry_trampoline_value_type_code(@types.ValueType) -> Int
+
+pub fn exception_runtime_fixup_idx(Int) -> Int
+
+pub fn format_signal_name(Int) -> String
+
+pub fn format_trap_report_message(TrapReport) -> String
+
+pub fn format_u64_hex(Int64) -> String
+
+pub fn free_memory(Int64) -> Unit
+
+pub fn free_memory_desc(Int64) -> Unit
+
+pub fn gc_begin_frame(Int64, Int64) -> Unit
+
+pub fn gc_clear_heap(Int64) -> Unit
+
+pub fn gc_collect_for_alloc(Int64, Array[Int64]) -> Int
+
+pub fn gc_debug_set_fail_alloc(Int, fail_every? : Int) -> Unit
+
+pub fn gc_end_frame(Int64) -> Unit
+
+pub fn gc_runtime_fixup_idx(Int) -> Int
+
+pub fn gc_safepoint_metadata_to_root_count(Int64) -> Int
+
+pub fn gc_set_context_heap_ptr(Int64, Int64) -> Unit
+
+pub fn gc_set_func_safepoints(Int64, Int, Array[@cwasm.GcSafepoint], Bytes) -> Bool
+
+pub fn gc_set_heap(Int64, CHeap) -> Unit
+
+pub fn gc_set_root_scratch(Int64, Array[Int64]) -> Bool
+
+pub fn gc_set_safepoint_table(Int64, Int64) -> Unit
+
+pub fn gc_setup(CHeap, Array[@types.SubType], Array[Int], ctx_ptr~ : Int64, func_type_indices~ : Array[Int], func_table_ptr~ : Int64, num_funcs~ : Int) -> Unit raise GCSetupError
+
+pub fn gc_teardown(Int64) -> Unit
+
+pub fn gc_use_func_safepoints(Int64, Int) -> Unit
+
+pub fn get_args_get_ptr() -> Int64
+
+pub fn get_args_sizes_get_ptr() -> Int64
+
+pub fn get_clock_res_get_ptr() -> Int64
+
+pub fn get_clock_time_get_ptr() -> Int64
+
+pub fn get_environ_get_ptr() -> Int64
+
+pub fn get_environ_sizes_get_ptr() -> Int64
+
+pub fn get_fd_advise_ptr() -> Int64
+
+pub fn get_fd_allocate_ptr() -> Int64
+
+pub fn get_fd_close_ptr() -> Int64
+
+pub fn get_fd_datasync_ptr() -> Int64
+
+pub fn get_fd_fdstat_get_ptr() -> Int64
+
+pub fn get_fd_fdstat_set_flags_ptr() -> Int64
+
+pub fn get_fd_fdstat_set_rights_ptr() -> Int64
+
+pub fn get_fd_filestat_get_ptr() -> Int64
+
+pub fn get_fd_filestat_set_size_ptr() -> Int64
+
+pub fn get_fd_filestat_set_times_ptr() -> Int64
+
+pub fn get_fd_pread_ptr() -> Int64
+
+pub fn get_fd_prestat_dir_name_ptr() -> Int64
+
+pub fn get_fd_prestat_get_ptr() -> Int64
+
+pub fn get_fd_pwrite_ptr() -> Int64
+
+pub fn get_fd_read_ptr() -> Int64
+
+pub fn get_fd_readdir_ptr() -> Int64
+
+pub fn get_fd_renumber_ptr() -> Int64
+
+pub fn get_fd_seek_ptr() -> Int64
+
+pub fn get_fd_sync_ptr() -> Int64
+
+pub fn get_fd_tell_ptr() -> Int64
+
+pub fn get_fd_write_ptr() -> Int64
+
+pub fn get_gc_array_copy_ptr() -> Int64
+
+pub fn get_gc_array_fill_ptr() -> Int64
+
+pub fn get_gc_array_get_ptr() -> Int64
+
+pub fn get_gc_array_len_ptr() -> Int64
+
+pub fn get_gc_array_new_ptr() -> Int64
+
+pub fn get_gc_array_set_ptr() -> Int64
+
+pub fn get_gc_ref_cast_ptr() -> Int64
+
+pub fn get_gc_ref_test_ptr() -> Int64
+
+pub fn get_gc_struct_get_ptr() -> Int64
+
+pub fn get_gc_struct_new_ptr() -> Int64
+
+pub fn get_gc_struct_set_ptr() -> Int64
+
+pub fn get_gc_type_check_subtype_ptr() -> Int64
+
+pub fn get_hostcall_func_addr() -> Int
+
+pub fn get_hostcall_num_arg_slots() -> Int
+
+pub fn get_hostcall_num_result_slots() -> Int
+
+pub fn get_hostcall_values_ptr() -> Int64
+
+pub fn get_import_trampoline(String, String) -> Int64?
+
+pub fn get_last_trap_details() -> TrapDetails
+
+pub fn get_path_create_directory_ptr() -> Int64
+
+pub fn get_path_filestat_get_ptr() -> Int64
+
+pub fn get_path_filestat_set_times_ptr() -> Int64
+
+pub fn get_path_link_ptr() -> Int64
+
+pub fn get_path_open_ptr() -> Int64
+
+pub fn get_path_readlink_ptr() -> Int64
+
+pub fn get_path_remove_directory_ptr() -> Int64
+
+pub fn get_path_rename_ptr() -> Int64
+
+pub fn get_path_symlink_ptr() -> Int64
+
+pub fn get_path_unlink_file_ptr() -> Int64
+
+pub fn get_poll_oneoff_ptr() -> Int64
+
+pub fn get_proc_exit_ptr() -> Int64
+
+pub fn get_proc_raise_ptr() -> Int64
+
+pub fn get_random_get_ptr() -> Int64
+
+pub fn get_sched_yield_ptr() -> Int64
+
+pub fn get_sock_accept_ptr() -> Int64
+
+pub fn get_sock_recv_ptr() -> Int64
+
+pub fn get_sock_send_ptr() -> Int64
+
+pub fn get_sock_shutdown_ptr() -> Int64
+
+pub fn get_spectest_print_char_ptr() -> Int64
+
+pub fn get_spectest_print_f32_ptr() -> Int64
+
+pub fn get_spectest_print_f64_f64_ptr() -> Int64
+
+pub fn get_spectest_print_f64_ptr() -> Int64
+
+pub fn get_spectest_print_i32_f32_ptr() -> Int64
+
+pub fn get_spectest_print_i32_ptr() -> Int64
+
+pub fn get_spectest_print_i64_ptr() -> Int64
+
+pub fn get_spectest_print_ptr() -> Int64
+
+pub fn get_temperature(Int, HotThreshold) -> FunctionTemperature
+
+pub fn host_target_arch() -> @cwasm.TargetArch
+
+pub fn hostcall_value_byte_count(@types.ValueType) -> Int
+
+pub fn hostcall_value_slot_count(@types.ValueType) -> Int
+
+pub fn i64_to_value(Int64, @types.ValueType) -> @types.Value
+
+pub fn init_wasi_context(Int64, Array[String], Array[String], Array[(String, String)], quiet? : Bool) -> Unit
+
+pub fn install_direct_call_stubs_for_target(@cwasm.TargetArch) -> DirectCallStubSet raise DirectCallStubInstallError
+
+pub fn is_funcref_ptr(Int64) -> Bool
+
+pub fn is_i31(Int64) -> Bool
+
+pub fn is_jit_supported_module(String) -> Bool
+
+pub fn is_null(Int64) -> Bool
+
+pub fn is_null_ref(Int64) -> Bool
+
+pub fn is_wasi_exit_trap_code(Int) -> Bool
+
+pub fn jit_ffi_native_stub_sources() -> Array[String]
+
+pub fn jit_runtime_fixup_idx(Int) -> Int
+
+pub fn jit_trap_message(Int) -> String
+
+pub fn link_code_object(@machv_emit.MachineCode, RuntimeSymbolResolver) -> LinkedCode raise LinkError
+
+pub fn link_machine_code(@machv_emit.MachineCode, RuntimeSymbolResolver) -> LinkedCode raise LinkError
+
+pub fn lower_milkir_for_target(@milkir.Function, @machv_emit.EmitTarget) -> @machv.Function
+
+pub fn lower_wasm_body_milkir_for_target(@milkir.Function, @machv_emit.EmitTarget) -> @machv.Function
+
+pub fn machv_reloc_target_to_cwasm_func_idx(@instr.RelocTarget) -> Int?
+
+pub fn make_cstring(String) -> FixedArray[Byte]
+
+pub fn memory_descriptor_layout() -> MemoryDescriptorLayout
+
+pub fn memory_init(Int64, Int64, Bytes) -> Bool
+
+pub fn memory_read(Int64, Int64, Int) -> Bytes
+
+pub fn native_glue_covers_jit_ffi_stubs(glue? : Array[NativeGlueBinding]) -> Bool
+
+pub fn native_glue_covers_source(Array[NativeGlueBinding], String) -> Bool
+
+pub fn patch_aarch64_call_fixups(Int64, Array[@cwasm.CallFixup], Int64, Map[Int, Int64]) -> Unit
+
+pub fn patch_aarch64_call_veneer_target(Int64, @cwasm.CallFixup, Int64) -> Unit
+
+pub fn patch_aarch64_direct_call(Int64, @cwasm.CallFixup, Int64) -> Unit
+
+pub fn patch_aarch64_func_addr_fixup(Int64, @cwasm.FuncAddrFixup, Int64) -> Unit
+
+pub fn patch_aarch64_func_addr_fixup_parts(Int64, Int, Int, Int64) -> Unit
+
+pub fn patch_aarch64_func_addr_fixup_raw(Int64, Int, Int, Int, Int64) -> Unit
+
+pub fn patch_aarch64_func_addr_fixups(Int64, Array[@cwasm.FuncAddrFixup], Int64) -> Unit
+
+pub fn patch_aarch64_load_imm64_fixed(Int64, Int, Int, Int64) -> Unit
+
+pub fn patch_call_fixups_for_target(@cwasm.TargetArch, Int64, Array[@cwasm.CallFixup], Int64, Map[Int, Int64]) -> Unit
+
+pub fn patch_func_addr_fixup_raw_for_target(@cwasm.TargetArch, Int64, Int, Int, Int, Int64) -> Unit
+
+pub fn patch_func_addr_fixups_for_target(@cwasm.TargetArch, Int64, Array[@cwasm.FuncAddrFixup], Int64) -> Unit
+
+pub fn patch_x64_call_fixups(Int64, Array[@cwasm.CallFixup], Int64, Map[Int, Int64]) -> Unit
+
+pub fn patch_x64_direct_call(Int64, @cwasm.CallFixup, Int64) -> Unit
+
+pub fn patch_x64_func_addr_fixup_parts(Int64, Int, Int, Int64) -> Unit
+
+pub fn patch_x64_func_addr_fixup_raw(Int64, Int, Int, Int, Int64) -> Unit
+
+pub fn patch_x64_func_addr_fixups(Int64, Array[@cwasm.FuncAddrFixup], Int64) -> Unit
+
+pub fn plan_entry_trampoline_for_target(Array[@types.ValueType], Array[@types.ValueType], @machv_emit.EmitTarget) -> JitIntegrationPlan raise JitPipelineError
+
+pub fn plan_hostcall_import_trampoline_layout(Array[@types.ValueType], Array[@types.ValueType], Int, Int) -> HostcallImportTrampolineLayout
+
+pub fn plan_integration_for_target(@milkir.Function, @machv.Function, @machv_regalloc.Output, @machv_emit.EmitTarget) -> JitIntegrationPlan
+
+pub fn plan_milkir_integration_for_target(@milkir.Function, @machv_emit.EmitTarget) -> JitIntegrationPlan
+
+pub fn plan_wasm_body_milkir_integration_for_target(@milkir.Function, @machv_emit.EmitTarget) -> JitIntegrationPlan
+
+pub fn required_context_function_count(@cwasm.PrecompiledModule, Int) -> Int
+
+pub fn resolve_call_fixup_target(Int, Int64, Map[Int, Int64]) -> Int64?
+
+pub fn resolve_func_addr_fixup_target(Int, Int64) -> Int64?
+
+pub fn resolve_import_function(Map[String, Map[String, Int64]], String, String) -> ImportFunctionResolution
+
+pub fn resolve_import_function_ptr(Map[String, Map[String, Int64]], String, String) -> Int64?
+
+pub fn resolve_runtime_func_fixup_idx(Int) -> Int64?
+
+pub fn resolve_wasm_func_code_symbol(@instr.CodeSymbol) -> Int?
+
+pub fn resolve_wasm_func_symbol(String) -> Int?
+
+pub fn runtime_hostcall_symbol() -> @instr.ExternalName
+
+pub fn sanitize_debug_filename(String) -> String
+
+pub fn set_wasi_stderr_capture(Int64, Bool) -> Unit
+
+pub fn set_wasi_stdin_buffer(Int64, Bytes) -> Unit
+
+pub fn set_wasi_stdin_callback(Int64, () -> Bytes) -> Unit
+
+pub fn set_wasi_stdout_capture(Int64, Bool) -> Unit
+
+pub fn setup_segments(Int64, Array[@types.Data], Array[Array[Int64]], data_dropped? : Array[Bool], elem_dropped? : Array[Bool]) -> Unit
+
+pub fn setup_type_cache_from_types(Int64, Array[@types.SubType], Array[Int]) -> Unit
+
+pub fn tag_funcref_ptr(Int64) -> Int64
+
+pub fn take_pending_trap_message() -> String?
+
+pub fn take_wasi_exit_code(Int64) -> Int
+
+pub fn take_wasi_stderr(Int64) -> Bytes
+
+pub fn take_wasi_stdout(Int64) -> Bytes
+
+pub fn target_arch_to_isa(@cwasm.TargetArch) -> @isa.ISA
+
+pub fn throw_exception_tag(Int64, Int) -> Unit
+
+pub fn throw_exception_values(Int64, Int, Array[Int64]) -> Unit
+
+pub fn untag_funcref_ptr(Int64) -> Int64
+
+pub fn value_to_i64(@types.Value) -> Int64
+
+pub fn value_type_may_hold_gc_ref(@types.ValueType) -> Bool
+
+pub fn vmcontext_layout() -> VMContextLayout
+
+pub fn wasm_calling_convention(isa? : @isa.ISA) -> @abi.CallConventionLayout
+
+pub fn wasm_calling_convention_for_isa(@isa.ISA) -> @abi.CallConventionLayout
+
+pub fn wasm_context_slots() -> @wasm_isa_lower.WasmContextSlots
+
+pub fn wasm_embedding_reg_roles(isa? : @isa.ISA) -> @abi.EmbeddingRegRoles
+
+pub fn wasm_embedding_reg_roles_for_isa(@isa.ISA) -> @abi.EmbeddingRegRoles
+
+pub fn wasm_runtime_symbols() -> @wasm_milkir.RuntimeSymbols
+
+pub fn wasm_trap_payload(String) -> Int
+
+// Errors
+pub(all) suberror CHeapError {
+  OutOfBoundsArrayAccess
+  NullReference
+  OutOfMemory
+}
+
+pub suberror DirectCallStubInstallError {
+  UnsupportedDirectCallStubTarget(pseudo_idx~ : Int, code_size~ : Int)
+  DirectCallStubAllocationFailed(pseudo_idx~ : Int, code_size~ : Int)
+} derive(Eq, @debug.Debug)
+
+pub suberror GCSetupError {
+  MissingJITContext
+  InvalidFuncCount(num_funcs~ : Int)
+  FuncTypeIndicesLengthMismatch(func_type_indices_len~ : Int, num_funcs~ : Int)
+  MissingFunctionTableContext(num_funcs~ : Int)
+} derive(@debug.Debug)
+pub impl Show for GCSetupError
+
+pub suberror HostcallImportTrampolineError {
+  UnsupportedHostcallImportTrampoline(message~ : String)
+} derive(Eq, @debug.Debug)
+pub impl Show for HostcallImportTrampolineError
+
+pub suberror JitPipelineError {
+  PipelineFailure(message~ : String)
+} derive(Eq, @debug.Debug)
+pub impl Show for JitPipelineError
+
+pub suberror LinkError {
+  UnknownRuntimeSymbol(String)
+} derive(Eq, @debug.Debug)
+pub impl Show for LinkError
+
+// Types and methods
+pub struct BacktraceFrame {
+  pc : Int64
+  name : String
+  offset : Int64
+  func_idx : Int
+}
+
+pub struct CHeap {
+  ptr : Int64
+} derive(@debug.Debug)
+pub fn CHeap::alloc_array(Self, Int, Int, @types.Value) -> Int raise CHeapError
+pub fn CHeap::alloc_array_from_values(Self, Int, Array[@types.Value]) -> Int raise CHeapError
+pub fn CHeap::alloc_struct(Self, Int, Array[@types.Value]) -> Int raise CHeapError
+pub fn CHeap::array_copy(Self, Int, Int, Int, Int, Int) -> Unit raise CHeapError
+pub fn CHeap::array_fill(Self, Int, Int, @types.Value, Int) -> Unit raise CHeapError
+pub fn CHeap::array_get(Self, Int, Int, @types.ValueType) -> @types.Value raise CHeapError
+pub fn CHeap::array_len(Self, Int) -> Int
+pub fn CHeap::array_set(Self, Int, Int, @types.Value) -> Unit raise CHeapError
+pub fn CHeap::collect(Self, Array[@types.Value]) -> Int
+pub fn CHeap::free(Self) -> Unit
+pub fn CHeap::get_barrier_writes(Self) -> Int
+pub fn CHeap::get_base(Self) -> Int64
+pub fn CHeap::get_capacity(Self) -> Int64
+pub fn CHeap::get_kind(Self, Int) -> Int
+pub fn CHeap::get_object_count(Self) -> Int
+pub fn CHeap::get_offset(Self, Int) -> Int
+pub fn CHeap::get_ptr(Self) -> Int64
+pub fn CHeap::get_size(Self) -> Int64
+pub fn CHeap::get_total_allocations(Self) -> Int
+pub fn CHeap::get_total_collections(Self) -> Int
+pub fn CHeap::get_type_idx(Self, Int) -> Int
+pub fn CHeap::get_usage_ratio(Self) -> Double
+pub fn CHeap::is_array(Self, Int) -> Bool
+pub fn CHeap::is_struct(Self, Int) -> Bool
+pub fn CHeap::is_valid(Self, Int) -> Bool
+pub fn CHeap::new(capacity? : Int) -> Self
+pub fn CHeap::should_collect(Self, threshold? : Double) -> Bool
+pub fn CHeap::struct_get(Self, Int, Int, @types.ValueType) -> @types.Value
+pub fn CHeap::struct_set(Self, Int, Int, @types.Value) -> Unit
+pub fn CHeap::verify(Self, verbose? : Bool) -> Bool
+
+pub(all) struct CallCounter {
+  counts : Map[Int, Int]
+  mut total_calls : Int
+}
+pub fn CallCounter::clear(Self) -> Unit
+pub fn CallCounter::get_count(Self, Int) -> Int
+pub fn CallCounter::increment(Self, Int) -> Int
+pub fn CallCounter::new() -> Self
+pub fn CallCounter::reset(Self, Int) -> Unit
+pub fn CallCounter::total(Self) -> Int
+pub fn CallCounter::unique_functions(Self) -> Int
+
+type CodeCache
+pub fn CodeCache::clear(Self) -> Unit
+pub fn CodeCache::contains(Self, Int) -> Bool
+pub fn CodeCache::get(Self, Int) -> CompiledFunction?
+pub fn CodeCache::insert(Self, Int, CompiledFunction) -> Unit
+pub fn CodeCache::invalidate(Self, Int) -> Unit
+pub fn CodeCache::new(Int) -> Self
+pub fn CodeCache::remove(Self, Int) -> Unit
+pub fn CodeCache::stats(Self) -> (Int, Int, Int, Int)
+pub impl Show for CodeCache
+
+pub(all) enum CompilationDecision {
+  Interpret
+  CompileAndExecute(CompilationMode)
+  ExecuteCompiled
+}
+pub impl Show for CompilationDecision
+
+pub(all) enum CompilationMode {
+  Interpret
+  Baseline
+  Optimized
+}
+pub impl Show for CompilationMode
+
+pub(all) struct CompilationQueue {
+  requests : Array[CompilationRequest]
+  max_size : Int
+}
+pub fn CompilationQueue::clear(Self) -> Unit
+pub fn CompilationQueue::contains(Self, Int) -> Bool
+pub fn CompilationQueue::dequeue(Self) -> CompilationRequest?
+pub fn CompilationQueue::enqueue(Self, CompilationRequest) -> Bool
+pub fn CompilationQueue::is_empty(Self) -> Bool
+pub fn CompilationQueue::length(Self) -> Int
+pub fn CompilationQueue::new(Int) -> Self
+
+pub(all) struct CompilationRequest {
+  func_idx : Int
+  mode : CompilationMode
+  priority : Int
+}
+pub fn CompilationRequest::new(Int, CompilationMode) -> Self
+pub fn CompilationRequest::with_priority(Int, CompilationMode, Int) -> Self
+
+pub(all) struct CompilationStrategy {
+  profiler : Profiler
+  queue : CompilationQueue
+  config : TieredConfig
+  mut decisions_interpret : Int
+  mut decisions_compile : Int
+  mut decisions_compiled : Int
+}
+pub fn CompilationStrategy::decide(Self, Int) -> CompilationDecision
+pub fn CompilationStrategy::is_compiled(Self, Int) -> Bool
+pub fn CompilationStrategy::mark_compiled(Self, Int) -> Unit
+pub fn CompilationStrategy::new(TieredConfig) -> Self
+pub fn CompilationStrategy::next_to_compile(Self) -> CompilationRequest?
+pub fn CompilationStrategy::schedule_compilation(Self, Int, CompilationMode) -> Bool
+pub fn CompilationStrategy::stats(Self) -> (Int, Int, Int, Int, Int, Int)
+pub impl Show for CompilationStrategy
+
+pub struct CompiledFunction {
+  name : String
+  code : @machv_emit.MachineCode
+  entry_offset : Int
+  code_size : Int
+  frame_size : Int
+  gc_safepoints : Array[GcSafepoint]
+  gc_stackmap_blob : Bytes
+  mut valid : Bool
+}
+pub fn CompiledFunction::get_call_fixups(Self) -> Array[@machv_emit.CallFixup]
+pub fn CompiledFunction::get_code(Self) -> Array[Int]
+pub fn CompiledFunction::get_func_addr_fixups(Self) -> Array[@machv_emit.FuncAddrFixup]
+pub fn CompiledFunction::get_gc_safepoints(Self) -> Array[GcSafepoint]
+pub fn CompiledFunction::get_gc_stackmap_blob(Self) -> Bytes
+pub fn CompiledFunction::invalidate(Self) -> Unit
+pub fn CompiledFunction::is_valid(Self) -> Bool
+pub fn CompiledFunction::new(String, @machv_emit.MachineCode, Int, gc_safepoints? : Array[GcSafepoint], gc_stackmap_blob? : Bytes) -> Self
+pub impl Show for CompiledFunction
+
+pub(all) struct CwasmArtifact {
+  version : Int
+  target : @cwasm.TargetArch
+  entry_symbol : String
+  code : Array[Int]
+  functions : Array[CwasmFunctionRecord]
+  call_veneers : Array[CwasmCallVeneer]
+  runtime_relocations : Array[ResolvedRuntimeRelocation]
+  func_addr_fixups : Array[@machv_emit.FuncAddrFixup]
+  call_fixups : Array[@machv_emit.CallFixup]
+  gc_safepoints : Array[GcSafepoint]
+  gc_stackmap_blob : Bytes
+} derive(@debug.Debug)
+pub fn CwasmArtifact::from_jit_plan(JitIntegrationPlan, RuntimeSymbolResolver, Int) -> Self raise LinkError
+pub fn CwasmArtifact::from_jit_plan_with_signature(JitIntegrationPlan, RuntimeSymbolResolver, Int, Int, Int) -> Self raise LinkError
+pub fn CwasmArtifact::from_linked_code_for_target(LinkedCode, Int, @cwasm.TargetArch, String) -> Self
+pub fn CwasmArtifact::from_linked_code_for_target_with_signature(LinkedCode, Int, @cwasm.TargetArch, String, Int, Int) -> Self
+pub fn CwasmArtifact::manifest(Self) -> Array[String]
+pub fn CwasmArtifact::serialize(Self) -> Array[Int]
+pub fn CwasmArtifact::to_precompiled_module(Self) -> @cwasm.PrecompiledModule
+
+pub(all) struct CwasmCallVeneer {
+  function_index : Int
+  func_idx : Int
+  offset : Int
+} derive(Eq, @debug.Debug)
+
+pub(all) struct CwasmFunctionRecord {
+  function_index : Int
+  code_offset : Int
+  code_size : Int
+  frame_size : Int
+  num_params : Int
+  num_results : Int
+} derive(Eq, @debug.Debug)
+
+pub struct DWARFBuilder {
+  // private fields
+}
+pub fn DWARFBuilder::add_function(Self, String, Int64, Int, Int) -> Unit
+pub fn DWARFBuilder::capture_backtrace(Self) -> Array[BacktraceFrame]
+pub fn DWARFBuilder::destroy(Self) -> Unit
+pub fn DWARFBuilder::format_backtrace(Self, Array[BacktraceFrame]) -> String
+pub fn DWARFBuilder::lookup_address(Self, Int64) -> FunctionInfo?
+pub fn DWARFBuilder::new() -> Self
+pub fn DWARFBuilder::register(Self, verbose? : Bool) -> Unit
+pub fn DWARFBuilder::unregister(Self) -> Unit
+
+pub struct DirectCallStubSet {
+  exec_codes : Array[ExecCode]
+  targets : Map[Int, Int64]
+}
+
+type ExecCode
+pub fn ExecCode::new(Array[Int]) -> Self?
+pub fn ExecCode::ptr(Self) -> Int64
+
+type ExecutableRegion
+pub fn ExecutableRegion::address_at(Self, Int) -> Int
+pub fn ExecutableRegion::finalize(Self) -> Unit
+pub fn ExecutableRegion::new(Int, Int) -> Self
+pub fn ExecutableRegion::read_at(Self, Int, Int) -> Array[Int]
+pub fn ExecutableRegion::remaining(Self) -> Int
+pub fn ExecutableRegion::write(Self, Array[Int]) -> Result[Int, String]
+pub impl Show for ExecutableRegion
+
+pub struct FunctionInfo {
+  name : String
+  func_idx : Int
+  offset : Int64
+}
+
+pub(all) enum FunctionTemperature {
+  Cold
+  Warm
+  Hot
+}
+pub impl Show for FunctionTemperature
+
+pub struct GcSafepoint {
+  code_offset : Int
+  live_refs : Array[Int]
+  metadata : Int64
+} derive(@debug.Debug)
+pub fn GcSafepoint::new(Int, Array[Int], Int64) -> Self
+
+pub(all) struct HostcallImportTrampolineCode {
+  code : Array[Int]
+  func_addr_fixups : Array[@cwasm.FuncAddrFixup]
+}
+
+pub(all) struct HostcallImportTrampolineLayout {
+  arg_slots : Int
+  result_slots : Int
+  values_vec_bytes : Int
+  int_overflow_count : Int
+  float_overflow_types : Array[@types.ValueType]
+}
+
+pub(all) struct HotThreshold {
+  warm_threshold : Int
+  hot_threshold : Int
+}
+pub fn HotThreshold::aggressive() -> Self
+pub fn HotThreshold::conservative() -> Self
+pub fn HotThreshold::default() -> Self
+
+pub(all) enum ImportFunctionResolution {
+  DirectImportFunction(Int64)
+  HostImportFunctionAddr(Int)
+  UnsupportedImportFunction
+} derive(Eq, @debug.Debug)
+
+pub struct JITDebugDB {
+  entries : Map[Int, JITFunctionDebug]
+}
+pub fn JITDebugDB::get(Self, Int) -> JITFunctionDebug?
+pub fn JITDebugDB::new() -> Self
+pub fn JITDebugDB::set(Self, Int, JITFunctionDebug) -> Unit
+
+pub struct JITFunctionDebug {
+  ir : String
+  machv_before_regalloc : String
+  machv_after_regalloc : String
+  machine_code : String
+}
+pub fn JITFunctionDebug::new(String, String, String, String) -> Self
+
+type JITRuntime
+pub fn JITRuntime::clear(Self) -> Unit
+pub fn JITRuntime::invalidate(Self, Int) -> Unit
+pub fn JITRuntime::lookup(Self, Int) -> CompiledFunction?
+pub fn JITRuntime::new(Int, Int) -> Self
+pub fn JITRuntime::register(Self, Int, CompiledFunction) -> Result[Int, String]
+pub fn JITRuntime::stats(Self) -> (Int, Int, Int, Int, Int, Int, Int)
+pub impl Show for JITRuntime
+
+type JITTable derive(@debug.Debug)
+pub fn JITTable::get_entry_type(Self, Int) -> Int
+pub fn JITTable::get_entry_value(Self, Int) -> Int64
+pub fn JITTable::get_max(Self) -> Int?
+pub fn JITTable::get_size(Self) -> Int
+pub fn JITTable::new(Int, Int?) -> Self?
+pub fn JITTable::raw_ptr(Self) -> Int64
+pub fn JITTable::refresh_layout(Self, Int64, Int) -> Unit
+pub fn JITTable::set(Self, Int, Int64, Int) -> Unit
+
+pub(all) struct JitIntegrationPlan {
+  entry_symbol : String
+  target : @machv_emit.EmitTarget
+  native_glue : Array[NativeGlueBinding]
+  object : @machv_emit.MachineCode
+}
+
+pub(all) struct LinkedCode {
+  code : Array[Int]
+  frame_size : Int
+  runtime_relocations : Array[ResolvedRuntimeRelocation]
+  func_addr_fixups : Array[@machv_emit.FuncAddrFixup]
+  call_fixups : Array[@machv_emit.CallFixup]
+  gc_safepoints : Array[GcSafepoint]
+  gc_stackmap_blob : Bytes
+} derive(@debug.Debug)
+
+pub(all) struct MemoryDescriptorLayout {
+  base_offset : Int
+  current_length_offset : Int
+}
+
+pub struct MemoryInfo {
+  ptr : Int64
+  size : Int64
+  max_pages : Int?
+}
+pub fn MemoryInfo::new(Int64, Int64, Int?) -> Self
+
+type MemoryManager
+pub fn MemoryManager::alloc_region(Self, Int) -> ExecutableRegion
+pub fn MemoryManager::finalize_all(Self) -> Unit
+pub fn MemoryManager::get_current_region(Self) -> ExecutableRegion
+pub fn MemoryManager::new(Int) -> Self
+pub fn MemoryManager::total_allocated(Self) -> Int
+pub fn MemoryManager::total_used(Self) -> Int
+pub fn MemoryManager::write_code(Self, @machv_emit.MachineCode) -> Result[(ExecutableRegion, Int), String]
+pub impl Show for MemoryManager
+
+pub(all) struct NativeGlueBinding {
+  kind : NativeGlueKind
+  symbol : String
+  sources : Array[String]
+} derive(Eq, @debug.Debug)
+
+pub(all) enum NativeGlueKind {
+  ExecutableMemory
+  TrapHandler
+  StackSwitch
+  HostCallBridge
+  WasmMemoryOp
+  GcRuntime
+  ExceptionHandling
+  WasiPreview1
+  DebugInfo
+} derive(Eq, @debug.Debug)
+
+type NativeJITContext
+pub fn NativeJITContext::alloc_guarded_memory(Self, Int, Int?) -> Int64
+pub fn NativeJITContext::alloc_indirect_table(Self, Int) -> Bool
+pub fn NativeJITContext::alloc_wasm_stack(Self, Int64) -> Bool
+pub fn NativeJITContext::call_trampoline(Self, Int64, Int64, FixedArray[Int64], Int, Bool) -> Int
+pub fn NativeJITContext::clear_hostcall_callback(Self) -> Unit
+pub fn NativeJITContext::func_table_ptr(Self) -> Int64
+pub fn NativeJITContext::has_wasm_stack(Self) -> Bool
+pub fn NativeJITContext::memory_ptr(Self, Int) -> Int64
+pub fn NativeJITContext::memory_size(Self, Int) -> Int64
+pub fn NativeJITContext::new(Int) -> Self?
+pub fn NativeJITContext::ptr(Self) -> Int64
+pub fn NativeJITContext::set_func(Self, Int, Int64) -> Unit
+pub fn NativeJITContext::set_globals(Self, Int64) -> Unit
+pub fn NativeJITContext::set_hostcall_callback(Self, () -> Int) -> Unit
+pub fn NativeJITContext::set_indirect(Self, Int, Int, Int) -> Unit
+pub fn NativeJITContext::set_memory(Self, Int64) -> Unit
+pub fn NativeJITContext::set_memory_pointers(Self, Array[MemoryInfo]) -> Unit
+pub fn NativeJITContext::set_table_pointers(Self, Array[JITTable?]) -> Unit
+
+pub(all) struct Profiler {
+  counter : CallCounter
+  threshold : HotThreshold
+  hot_functions : @hashset.HashSet[Int]
+  pending_compilation : @hashset.HashSet[Int]
+  compiled_functions : @hashset.HashSet[Int]
+}
+pub fn Profiler::get_function_temperature(Self, Int) -> FunctionTemperature
+pub fn Profiler::get_pending(Self) -> Array[Int]
+pub fn Profiler::is_compiled(Self, Int) -> Bool
+pub fn Profiler::mark_compiled(Self, Int) -> Unit
+pub fn Profiler::new(HotThreshold) -> Self
+pub fn Profiler::record_call(Self, Int) -> (Int, Bool)
+pub fn Profiler::should_use_jit(Self, Int) -> Bool
+pub fn Profiler::stats(Self) -> (Int, Int, Int, Int)
+pub impl Show for Profiler
+
+pub(all) struct ResolvedRuntimeRelocation {
+  offset : Int
+  symbol : String
+  address : Int64
+  fixup_idx : Int?
+} derive(Eq, @debug.Debug)
+
+pub(all) struct RuntimeSymbol {
+  name : String
+  address : Int64
+  fixup_idx : Int?
+} derive(Eq, @debug.Debug)
+
+pub(all) struct RuntimeSymbolResolver {
+  symbols : Array[RuntimeSymbol]
+} derive(@debug.Debug)
+pub fn RuntimeSymbolResolver::add_symbol(Self, String, Int64) -> Unit
+pub fn RuntimeSymbolResolver::add_symbol_fixup(Self, String, Int64, Int) -> Unit
+pub fn RuntimeSymbolResolver::new() -> Self
+pub fn RuntimeSymbolResolver::resolve(Self, String) -> Int64?
+pub fn RuntimeSymbolResolver::resolve_symbol(Self, String) -> RuntimeSymbol?
+pub fn RuntimeSymbolResolver::with_wasmoon_runtime_symbols() -> Self
+
+pub(all) struct TieredConfig {
+  baseline_threshold : Int
+  optimize_threshold : Int
+  synchronous : Bool
+  max_concurrent : Int
+}
+pub fn TieredConfig::default() -> Self
+pub fn TieredConfig::deferred() -> Self
+pub fn TieredConfig::eager() -> Self
+
+pub struct TrapDetails {
+  signal : Int
+  pc : Int64
+  lr : Int64
+  fp : Int64
+  frame_lr : Int64
+  fault_addr : Int64
+  brk_imm : Int
+  func_idx : Int
+  x0 : Int64
+  x1 : Int64
+  x2 : Int64
+  x3 : Int64
+  x6 : Int64
+  x7 : Int64
+  x8 : Int64
+  x9 : Int64
+  x10 : Int64
+  x11 : Int64
+  x15 : Int64
+}
+pub fn TrapDetails::new() -> Self
+
+pub(all) struct TrapReport {
+  trap_kind : String
+  message : String
+  signal : Int
+  signal_name : String
+  pc : Int64
+  lr : Int64
+  fp : Int64
+  frame_lr : Int64
+  fault_addr : Int64
+  brk_imm : Int
+  wasm_func_idx : Int?
+  wasm_func_name : String?
+  wasm_offset : Int64?
+  wasm_frames : Array[WasmTrapFrame]
+  host_frames : Array[String]
+  dump_path : String?
+}
+
+pub(all) struct VMContextLayout {
+  memory0_offset : Int
+  memory0_base_offset : Int
+  memory0_size_offset : Int
+  func_table_offset : Int
+  table0_base_offset : Int
+  table0_elements_offset : Int
+  globals_offset : Int
+  tables_offset : Int
+  table_count_offset : Int
+  func_count_offset : Int
+  table_sizes_offset : Int
+  table_max_sizes_offset : Int
+  memories_offset : Int
+  memory_count_offset : Int
+  debug_current_func_idx_offset : Int
+  gc_heap_ptr_offset : Int
+  gc_heap_limit_offset : Int
+  gc_heap_offset : Int
+  pointer_stride : Int
+  global_value_stride : Int
+  table_entry_value_offset : Int
+  table_entry_stride : Int
+  func_table_entry_stride : Int
+}
+pub fn VMContextLayout::to_embedding_context_layout(Self) -> @abi.EmbeddingContextLayout
+
+pub(all) struct WasmTrapFrame {
+  pc : Int64
+  func_idx : Int
+  func_name : String
+  wasm_offset : Int64
+}
+
+// Type aliases
+
+// Traits
+

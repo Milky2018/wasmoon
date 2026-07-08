@@ -1,0 +1,157 @@
+///|
+pub(all) enum RuntimeComponent {
+  Cli
+  RuntimeObjects
+  InterpreterExecutor
+  WasiPreview1
+  JitSelection
+} derive(Eq, Debug)
+
+///|
+pub(all) struct RuntimeAssembly {
+  product_module : String
+  owned_components : Array[RuntimeComponent]
+  reusable_modules : Array[String]
+} derive(Eq, Debug)
+
+///|
+pub(all) struct CompilerInfrastructureAssembly {
+  signature : @milkir.Signature
+  machv_function : @machv.Function
+  allocated_function : @machv.Function
+  code_object : @machv_emit.MachineCode
+  x64_abi : @x64_target.AbiPolicy
+  aarch64_abi : @aarch64_target.AbiPolicy
+  jit_glue : Array[@wasmoon_jit.NativeGlueBinding]
+}
+
+///|
+pub suberror WasmCompilerPipelineError {
+  WasmCompilerPipelineFailure(message~ : String)
+} derive(Debug, Eq)
+
+///|
+pub impl Show for WasmCompilerPipelineError with fn output(self, logger) {
+  logger.write_string(to_repr(self).to_string())
+}
+
+///|
+pub fn wasm_frontend_embedding_environment(
+  runtime_symbol_prefix? : String = "wasmoon",
+  hidden_context_type? : @milkir.Type? = Some(Ptr),
+) -> @wasm_frontend.EmbeddingEnvironment {
+  let vm = @wasmoon_jit.vmcontext_layout()
+  let memory = @wasmoon_jit.memory_descriptor_layout()
+  @wasm_frontend.EmbeddingEnvironment::new(
+    runtime_symbol_prefix~,
+    hidden_context_type~,
+    runtime_layout=Some({
+      memory0_base_offset: vm.memory0_base_offset,
+      memory0_size_offset: vm.memory0_size_offset,
+      func_table_offset: vm.func_table_offset,
+      table0_base_offset: vm.table0_base_offset,
+      table0_elements_offset: vm.table0_elements_offset,
+      globals_offset: vm.globals_offset,
+      tables_offset: vm.tables_offset,
+      table_sizes_offset: vm.table_sizes_offset,
+      memories_offset: vm.memories_offset,
+      pointer_stride: vm.pointer_stride,
+      global_value_stride: vm.global_value_stride,
+      table_entry_value_offset: vm.table_entry_value_offset,
+      table_entry_stride: vm.table_entry_stride,
+      func_table_entry_stride: vm.func_table_entry_stride,
+    }),
+    memory_descriptor_layout=Some({
+      base_offset: memory.base_offset,
+      current_length_offset: memory.current_length_offset,
+    }),
+  )
+}
+
+///|
+fn wasm_body_embedding_env(
+  env : @wasm_frontend.EmbeddingEnvironment,
+) -> @wasm_frontend.EmbeddingEnvironment {
+  if env.hidden_context_param() is Some(_) {
+    env
+  } else {
+    @wasm_frontend.EmbeddingEnvironment::new(
+      runtime_symbol_prefix=env.runtime_symbol_prefix,
+      runtime_layout=env.runtime_layout(),
+      memory_descriptor_layout=env.memory_descriptor_layout(),
+    )
+  }
+}
+
+///|
+pub fn runtime_assembly() -> RuntimeAssembly {
+  {
+    product_module: "Milky2018/wasmoon",
+    owned_components: [
+      Cli,
+      RuntimeObjects,
+      InterpreterExecutor,
+      WasiPreview1,
+      JitSelection,
+    ],
+    reusable_modules: [
+      "Milky2018/wasm_core", "Milky2018/milkir", "Milky2018/machv", "Milky2018/regalloc",
+      "Milky2018/machv_regalloc", "Milky2018/machv_emit", "Milky2018/x64_target",
+      "Milky2018/aarch64_target", "Milky2018/wasmoon_jit",
+    ],
+  }
+}
+
+///|
+pub fn compiler_infrastructure_assembly() -> CompilerInfrastructureAssembly {
+  let signature = @milkir.Signature::new([], [])
+  let milk = @milkir.Function::new("wasmoon_runtime_probe", signature)
+  let entry = milk.new_block0()
+  entry.set_terminator(Return([]))
+  let call_conv = @wasmoon_jit.wasm_calling_convention()
+  let roles = @wasmoon_jit.wasm_embedding_reg_roles()
+  let machv_function = @lower.lower_function(
+    milk,
+    run_ir_opt=false,
+    embedding_reg_roles=roles,
+    call_conv_layout=Some(call_conv),
+  )
+  let (allocated_function, output) = @machv_regalloc.allocate_registers_backtracking_output(
+    machv_function,
+    embedding_reg_roles=roles,
+    call_conv_layout=Some(call_conv),
+  )
+  {
+    signature,
+    machv_function,
+    allocated_function,
+    code_object: @machv_emit.emit_function_with_regalloc(
+      allocated_function,
+      output,
+      call_conv_layout=Some(call_conv),
+      embedding_reg_roles=roles,
+    ),
+    x64_abi: @x64_target.abi_policy(),
+    aarch64_abi: @aarch64_target.abi_policy(),
+    jit_glue: @wasmoon_jit.default_native_glue(),
+  }
+}
+
+///|
+pub fn plan_wasm_function_with_compiler_infra(
+  env : @wasm_frontend.EmbeddingEnvironment,
+  mod_ : @types.Module,
+  func_local_idx : Int,
+  target : @machv_emit.EmitTarget,
+  opt_level? : Int = 2,
+) -> @wasmoon_jit.JitIntegrationPlan raise WasmCompilerPipelineError {
+  try {
+    let body_env = wasm_body_embedding_env(env)
+    let milk = @wasm_frontend.lower_function(body_env, mod_, func_local_idx)
+    @milkir.optimize_with_level(milk, @milkir.OptLevel::from_int(opt_level))
+    |> ignore
+    @wasmoon_jit.plan_wasm_body_milkir_integration_for_target(milk, target)
+  } catch {
+    err => raise WasmCompilerPipelineFailure(message=to_repr(err).to_string())
+  }
+}

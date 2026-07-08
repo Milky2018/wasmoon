@@ -1,8 +1,0 @@
-import {
-  "Milky2018/wasmoon/types",
-  "Milky2018/wasmoon/perf",
-  "Milky2018/wasmoon/ir/egraph",
-  "moonbitlang/core/debug",
-  "moonbitlang/core/hashmap",
-  "moonbitlang/core/hashset",
-}

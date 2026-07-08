@@ -1,0 +1,115 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon/jit"
+
+import {
+  "Milky2018/wasm_core/types",
+  "Milky2018/wasmoon_jit",
+  "Milky2018/wasmoon_jit/cwasm",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn throw_exception_tag(Int64, Int) -> Unit
+
+pub fn throw_exception_values(Int64, Int, Array[Int64]) -> Unit
+
+// Errors
+pub suberror JITModuleLoadError {
+  ContextAllocationFailed(total_funcs~ : Int)
+  UnsupportedImport(import_idx~ : Int, module_name~ : String, func_name~ : String)
+  ImportTrampolineAllocationFailed(import_idx~ : Int, module_name~ : String, func_name~ : String, code_size~ : Int)
+  FunctionCodeAllocationFailed(func_idx~ : Int, func_name~ : String, code_size~ : Int)
+} derive(@debug.Debug)
+pub impl Show for JITModuleLoadError
+
+pub suberror JITTrap {
+  JITTrap(String)
+  JITExit(Int)
+} derive(@debug.Debug)
+pub impl Show for JITTrap
+
+pub suberror PolycallError {
+  InputNumber(Int, Int)
+  OutputNumber(Int, Int)
+  JIT(JITTrap)
+}
+
+// Types and methods
+type AddressRange derive(@debug.Debug)
+
+pub struct JITFunction {
+  func_idx : Int
+  name : String
+  param_types : Array[@types.ValueType]
+  result_types : Array[@types.ValueType]
+  // private fields
+}
+
+type JITModule
+pub fn JITModule::alloc_guarded_memory(Self, Int, Int?) -> Int64
+pub fn JITModule::alloc_wasm_stack(Self, Int64) -> Bool
+pub fn JITModule::call_with_context(Self, JITFunction, Array[Int64]) -> Array[Int64] raise JITTrap
+pub fn[Arg : DynamicArgs, Ret : DynamicReturn] JITModule::call_with_context_poly(Self, JITFunction, Arg) -> Ret raise PolycallError
+pub fn JITModule::clear_hostcall_callback(Self) -> Unit
+pub fn JITModule::clear_segments(Self) -> Unit
+pub fn JITModule::export_functions(Self) -> Map[String, Int64]
+pub fn JITModule::find_func_by_pc(Self, Int64) -> (Int, JITFunction, Int)?
+pub fn JITModule::from_single_function(Array[Int], String, Array[@types.ValueType], Array[@types.ValueType], Int64) -> Self?
+pub fn JITModule::gc_begin_frame(Self, Int64) -> Unit
+pub fn JITModule::gc_end_frame(Self) -> Unit
+pub fn JITModule::gc_set_func_safepoints(Self, Int, Array[@cwasm.GcSafepoint], Bytes) -> Bool
+pub fn JITModule::gc_set_root_scratch(Self, Array[Int64]) -> Bool
+pub fn JITModule::gc_set_safepoint_table(Self, Int64) -> Unit
+pub fn JITModule::gc_use_func_safepoints(Self, Int) -> Unit
+pub fn JITModule::get_context_ptr(Self) -> Int64
+pub fn JITModule::get_func(Self, Int) -> JITFunction?
+pub fn JITModule::get_func_by_name(Self, String) -> JITFunction?
+pub fn JITModule::get_func_count(Self) -> Int
+pub fn JITModule::get_func_ptr(Self, Int) -> Int64
+pub fn JITModule::get_func_ptr_by_name(Self, String) -> Int64
+pub fn JITModule::get_func_table_ptr(Self) -> Int64
+pub fn JITModule::get_last_trap_report(Self) -> @wasmoon_jit.TrapReport?
+pub fn JITModule::get_memory_ptr(Self, Int) -> Int64
+pub fn JITModule::get_memory_size(Self, Int) -> Int64
+pub fn JITModule::get_table_ptr(Self, Int) -> Int64
+pub fn JITModule::get_table_size(Self, Int) -> Int
+pub fn JITModule::has_wasm_stack(Self) -> Bool
+pub fn JITModule::init_indirect_table(Self, Int, Array[(Int, Int, Int)]) -> Unit
+pub fn JITModule::init_shared_tables(Self, Array[@wasmoon_jit.JITTable?], Array[(Int, Int, Int?, Int)]) -> Unit
+pub fn JITModule::init_wasi(Self, Array[String], Array[String], Array[(String, String)]) -> Unit
+pub fn JITModule::init_wasi_quiet(Self, Array[String], Array[String], Array[(String, String)]) -> Unit
+pub fn JITModule::init_wasi_with_stdio(Self, Array[String], Array[String], Array[(String, String)], ((Bytes) -> Unit)?, ((Bytes) -> Unit)?, Bytes?, stdin_callback? : (() -> Bytes)?) -> Unit
+pub fn JITModule::load(@cwasm.PrecompiledModule, Array[(Array[@types.ValueType], Array[@types.ValueType])], debug_db? : @wasmoon_jit.JITDebugDB?) -> Self raise JITModuleLoadError
+pub fn JITModule::load_with_imports(@cwasm.PrecompiledModule, Array[(Array[@types.ValueType], Array[@types.ValueType])], Map[String, Map[String, Int64]], debug_db? : @wasmoon_jit.JITDebugDB?) -> Self raise JITModuleLoadError
+pub fn JITModule::new() -> Self
+pub fn JITModule::register_dwarf(Self, verbose? : Bool) -> @wasmoon_jit.DWARFBuilder
+pub fn JITModule::set_gc_heap(Self, Int64) -> Unit
+pub fn JITModule::set_globals(Self, Int64) -> Unit
+pub fn JITModule::set_hostcall_callback(Self, () -> Int) -> Unit
+pub fn JITModule::set_memory(Self, Int64) -> Unit
+pub fn JITModule::set_memory_pointers(Self, Array[@wasmoon_jit.MemoryInfo]) -> Unit
+pub fn JITModule::setup_segments(Self, Array[@types.Data], Array[Array[Int64]], data_dropped? : Array[Bool], elem_dropped? : Array[Bool]) -> Unit
+
+pub(all) struct Single[A](A)
+pub impl[A : @types.ToInt64] DynamicArgs for Single[A]
+pub impl[A : @types.FromInt64] DynamicReturn for Single[A]
+
+// Type aliases
+
+// Traits
+pub trait DynamicArgs {
+  fn to_int64_array(Self) -> Array[Int64]
+}
+pub impl DynamicArgs for Unit
+pub impl[A : @types.ToInt64, B : @types.ToInt64] DynamicArgs for (A, B)
+pub impl[A : @types.ToInt64, B : @types.ToInt64, C : @types.ToInt64] DynamicArgs for (A, B, C)
+pub impl[A : @types.ToInt64, B : @types.ToInt64, C : @types.ToInt64, D : @types.ToInt64] DynamicArgs for (A, B, C, D)
+
+pub trait DynamicReturn {
+  fn from_int64_array(Array[Int64]) -> Self
+}
+pub impl DynamicReturn for Unit
+pub impl[A : @types.FromInt64, B : @types.FromInt64] DynamicReturn for (A, B)
+pub impl[A : @types.FromInt64, B : @types.FromInt64, C : @types.FromInt64] DynamicReturn for (A, B, C)
+pub impl[A : @types.FromInt64, B : @types.FromInt64, C : @types.FromInt64, D : @types.FromInt64] DynamicReturn for (A, B, C, D)
+

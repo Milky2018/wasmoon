@@ -1,0 +1,597 @@
+// ============ Dead Code Elimination ============
+
+///|
+/// Check if an opcode has side effects (cannot be eliminated even if dead)
+fn has_side_effects(opcode : @instr.MachVOpcode) -> Bool {
+  match opcode {
+    // Loads can trap (e.g. guard pages / invalid pointers), so must not be eliminated.
+    LoadPtr(_, _)
+    | LoadPtrRegOffset(_, _, _, _)
+    | LoadPtrNarrowRegOffset(_, _, _, _, _)
+    | LoadPtrNarrow(_, _, _) => true
+    // Memory stores have side effects
+    Store(_, _)
+    | StackStore(_)
+    | StorePtr(_, _)
+    | StorePtrRegOffset(_, _, _, _)
+    | StorePtrNarrowRegOffset(_, _, _, _) => true
+    // Conditional helpers may call foreign code on slow paths.
+    CallExternalIfI32NeImm(_, _) => true
+    // Inline bump-allocation pseudo-ops may call slow-path helpers.
+    BumpAllocRecordFromStackInline(_, _, _, _)
+    | BumpAllocArrayFromStackInline(_, _, _, _) => true
+    // Function calls have side effects
+    ReturnCallIndirect(_, _)
+    | CallPtr(_, _, _)
+    | CallDirect(_, _, _, _)
+    | CallExternal(_, _, _, _) => true
+    // Traps must not be eliminated
+    TrapIfZero(_, _)
+    | TrapIfDivOverflow(_, _)
+    | TrapIfUge(_)
+    | TrapIfUgt(_)
+    | TrapIf(_, _) => true
+    // Flag-setting compares must stay paired with following flag consumers.
+    IntCmp(_) => true
+    // Everything else is pure computation
+    _ => false
+  }
+}
+
+///|
+fn is_truthy_env_flag(value : String) -> Bool {
+  value == "1" ||
+  value == "true" ||
+  value == "TRUE" ||
+  value == "yes" ||
+  value == "YES" ||
+  value == "on" ||
+  value == "ON"
+}
+
+///|
+fn regalloc_validation_enabled() -> Bool {
+  match @sys.get_env_var("MACHV_REGALLOC_VALIDATION") {
+    Some(v) => is_truthy_env_flag(v)
+    None => false
+  }
+}
+
+///|
+fn require_call_conv_layout(
+  layout : @abi.CallConventionLayout?,
+) -> @abi.CallConventionLayout {
+  match layout {
+    Some(call_conv) => call_conv
+    None => abort("call convention layout is required for MachV regalloc")
+  }
+}
+
+///|
+fn parse_regalloc_algorithm(value : String) -> RegallocAlgorithm? {
+  if value == "backtracking" || value == "ion" {
+    return Some(Backtracking)
+  }
+  if value == "single_pass" ||
+    value == "single-pass" ||
+    value == "fastalloc" ||
+    value == "fast" {
+    return Some(SinglePass)
+  }
+  None
+}
+
+///|
+/// Select regalloc policy from env.
+///
+/// Default keeps code-quality-first Cranelift-like behavior.
+fn selected_regalloc_algorithm() -> RegallocAlgorithm {
+  match @sys.get_env_var("MACHV_REGALLOC_ALGORITHM") {
+    Some(value) =>
+      match parse_regalloc_algorithm(value) {
+        Some(algo) => algo
+        None => Backtracking
+      }
+    None => Backtracking
+  }
+}
+
+///|
+/// Eliminate dead code from a MachV function
+/// Removes instructions that define vregs which are never used
+pub fn eliminate_dead_code(func : @machv.Function) -> @machv.Function {
+  // Step 1: Collect all used vregs
+  let used_vregs : Set[Int] = Set([])
+
+  // Add function parameters (they're implicitly used)
+  for param in func.params {
+    used_vregs.add(param.id)
+  }
+
+  // Scan all instructions and terminators for uses
+  for block in func.blocks {
+    // Block parameters are used (they receive values from jumps)
+    for param in block.params {
+      used_vregs.add(param.id)
+    }
+
+    // Instruction uses
+    for inst in block.insts {
+      for use_reg in inst.uses {
+        if use_reg is Virtual(vreg) {
+          used_vregs.add(vreg.id)
+        }
+      }
+    }
+
+    // Terminator uses
+    if block.terminator is Some(term) {
+      match term {
+        Branch(cond, _, _) =>
+          if cond is Virtual(vreg) {
+            used_vregs.add(vreg.id)
+          }
+        BranchCmp(lhs, rhs, _, _, _, _) => {
+          if lhs is Virtual(vreg) {
+            used_vregs.add(vreg.id)
+          }
+          if rhs is Virtual(vreg) {
+            used_vregs.add(vreg.id)
+          }
+        }
+        BranchCmpImm(lhs, _, _, _, _, _) =>
+          if lhs is Virtual(vreg) {
+            used_vregs.add(vreg.id)
+          }
+        BranchZero(reg, _, _, _, _) =>
+          if reg is Virtual(vreg) {
+            used_vregs.add(vreg.id)
+          }
+        BrTable(index, _, _) =>
+          if index is Virtual(vreg) {
+            used_vregs.add(vreg.id)
+          }
+        Return(values) =>
+          for v in values {
+            if v is Virtual(vreg) {
+              used_vregs.add(vreg.id)
+            }
+          }
+        Jump(_, args) =>
+          for a in args {
+            if a is Virtual(vreg) {
+              used_vregs.add(vreg.id)
+            }
+          }
+        Trap(_) => ()
+      }
+    }
+  }
+
+  // Step 2: Build new function without dead instructions
+  let new_func = @machv.Function::new(func.name)
+  new_func.next_vreg_id = func.next_vreg_id
+  new_func.int_stack_params = func.int_stack_params
+  new_func.max_outgoing_args_size = func.max_outgoing_args_size
+
+  // Copy params and results
+  for param in func.params {
+    new_func.params.push(param)
+  }
+  for result in func.results {
+    new_func.results.push(result)
+  }
+  // Copy result types for multi-value return support
+  for ty in func.result_kinds {
+    new_func.result_kinds.push(ty)
+  }
+
+  // Copy blocks, filtering out dead instructions
+  for block in func.blocks {
+    let new_block = new_func.new_block()
+
+    // Copy block params
+    for param in block.params {
+      new_block.params.push(param)
+    }
+
+    // Filter instructions: keep if has side effects OR defines a used vreg
+    for inst in block.insts {
+      let should_keep = if has_side_effects(inst.opcode) {
+        true
+      } else {
+        // Keep if any defined vreg is used
+        let mut any_def_used = false
+        for def in inst.defs {
+          if def.reg is Virtual(vreg) {
+            if used_vregs.contains(vreg.id) {
+              any_def_used = true
+            }
+          } else {
+            any_def_used = true // Always keep physical reg defs
+          }
+        }
+        // Also keep instructions with no defs (shouldn't happen for pure ops, but be safe)
+        any_def_used || inst.defs.is_empty()
+      }
+      if should_keep {
+        new_block.add_inst(inst)
+      }
+    }
+
+    // Copy terminator
+    if block.terminator is Some(term) {
+      new_block.set_terminator(term)
+    }
+  }
+  new_func
+}
+
+// ============ Convenience API ============
+
+///|
+/// Build the register pools for AArch64 allocation
+fn build_reg_pools(
+  isa : @isa.ISA,
+  func : @machv.Function,
+  settings : @abi.ABISettings,
+  embedding_reg_roles : @abi.EmbeddingRegRoles,
+) -> (
+  Array[@abi.PReg],
+  Array[@abi.PReg],
+  Array[@abi.PReg],
+  Array[@abi.PReg],
+  Array[@abi.PReg],
+) {
+  let calls_multi = func.calls_multi_value_function()
+  let needs_extra = func.needs_extra_results_ptr()
+  let reserve_extra_results_ptr = needs_extra || calls_multi
+  let reserved_int_regs = embedding_reg_roles.reserved_int_indices(
+    reserve_context=settings.enable_pinned_reg,
+    reserve_context_cache_0=func.should_reserve_context_cache_0(),
+    reserve_context_cache_1=func.should_reserve_context_cache_1(),
+    reserve_extra_results_ptr~,
+  )
+
+  // Build MachineEnv (Cranelift-inspired) and derive pools.
+  let env = isa.machine_env(settings~, reserved_int_regs~)
+  let int_regs : Array[@abi.PReg] = []
+  for r in env.preferred_int {
+    int_regs.push(r)
+  }
+  let callee_saved_int_regs = env.callee_saved_int
+  for r in env.nonpreferred_int {
+    int_regs.push(r)
+  }
+  let float_regs : Array[@abi.PReg] = []
+  for r in env.preferred_float {
+    float_regs.push(r)
+  }
+  let callee_saved_float_regs = env.callee_saved_float
+  for r in env.nonpreferred_float {
+    float_regs.push(r)
+  }
+  let vector_regs : Array[@abi.PReg] = []
+  for r in env.preferred_vector {
+    vector_regs.push(r)
+  }
+  for r in env.nonpreferred_vector {
+    vector_regs.push(r)
+  }
+  // amd64 backend currently uses the native 0..15 register numbering. If any
+  // higher preg indices leak into pools, x86 encoding will silently truncate and
+  // can clobber rsp/rbp (e.g. x20 -> rsp). Fail fast.
+  if isa is AMD64 {
+    fn validate(pregs : Array[@abi.PReg], kind : String) -> Unit {
+      for p in pregs {
+        if p.class is Int {
+          guard p.index >= 0 && p.index < 16 else {
+            abort(
+              "amd64 regalloc pool contains invalid Int preg: \{kind} index=\{p.index}",
+            )
+          }
+          guard p.index != 4 && p.index != 5 else {
+            abort(
+              "amd64 regalloc pool contains reserved Int preg: \{kind} index=\{p.index}",
+            )
+          }
+        } else {
+          guard p.index >= 0 && p.index < 16 else {
+            abort(
+              "amd64 regalloc pool contains invalid FP/Vec preg: \{kind} index=\{p.index}",
+            )
+          }
+        }
+      }
+    }
+
+    validate(int_regs, "int_regs")
+    validate(float_regs, "float_regs")
+    validate(vector_regs, "vector_regs")
+    validate(callee_saved_int_regs, "callee_saved_int_regs")
+    validate(callee_saved_float_regs, "callee_saved_float_regs")
+  }
+  (
+    int_regs, float_regs, vector_regs, callee_saved_int_regs, callee_saved_float_regs,
+  )
+}
+
+///|
+/// Allocate MachV virtual registers through the production backtracking path.
+///
+/// `machv_regalloc` builds MachV liveness, register pools, and output edits;
+/// reusable allocation-loop, probe, eviction, split, and spill policies live in
+/// `regalloc`.
+pub fn allocate_registers_backtracking(
+  func : @machv.Function,
+  settings? : @abi.ABISettings = @abi.ABISettings::default(),
+  embedding_reg_roles? : @abi.EmbeddingRegRoles = @abi.EmbeddingRegRoles::none(),
+  call_conv_layout? : @abi.CallConventionLayout? = None,
+) -> @machv.Function {
+  allocate_registers_backtracking_with_isa(
+    func,
+    AArch64,
+    settings,
+    embedding_reg_roles,
+    call_conv_layout~,
+  )
+}
+
+///|
+/// Allocate registers using a specific ISA policy implementation.
+pub fn allocate_registers_backtracking_with_isa(
+  func : @machv.Function,
+  isa : @isa.ISA,
+  settings : @abi.ABISettings,
+  embedding_reg_roles : @abi.EmbeddingRegRoles,
+  call_conv_layout? : @abi.CallConventionLayout? = None,
+) -> @machv.Function {
+  // Keep Cranelift-style cheap rematerialization before allocation to shorten
+  // cross-block live ranges for constants/function pointers.
+  let func = rematerialize_long_distance_constants(func)
+  let func = rematerialize_cross_block_constants(func)
+  let func = eliminate_dead_code(func)
+
+  // Build register pools
+  let (
+    int_regs,
+    float_regs,
+    vector_regs,
+    callee_saved_int_regs,
+    callee_saved_float_regs,
+  ) = build_reg_pools(isa, func, settings, embedding_reg_roles)
+
+  // Compute liveness (Phase 1)
+  let liveness = compute_liveness_for_regalloc(func)
+  let algorithm = selected_regalloc_algorithm()
+  let call_conv_layout = require_call_conv_layout(call_conv_layout)
+
+  // Delegate allocator-core decisions to regalloc through the MachV adapter.
+  let alloc_result = allocate_backtracking(
+    func,
+    liveness,
+    int_regs,
+    float_regs,
+    vector_regs,
+    callee_saved_int_regs,
+    callee_saved_float_regs,
+    call_conv_layout,
+    embedding_reg_roles,
+    algorithm~,
+  )
+
+  // Optional safety net (Cranelift-like checker), enabled in CI/perf profiles.
+  if regalloc_validation_enabled() {
+    verify_allocation(
+      func,
+      liveness,
+      alloc_result,
+      isa,
+      call_conv_layout,
+      settings~,
+      embedding_reg_roles~,
+    )
+  }
+
+  // Apply allocation
+  apply_allocation(
+    func, alloc_result, isa, call_conv_layout, settings, embedding_reg_roles,
+  )
+}
+
+///|
+/// Allocate MachV virtual registers and return a Cranelift-style regalloc `Output`.
+///
+/// The returned `@machv.Function` is *not* rewritten to physical registers; the
+/// emitter consumes the returned `Output` to materialize edits and operand
+/// allocations on the fly.
+pub fn allocate_registers_backtracking_output(
+  func : @machv.Function,
+  settings? : @abi.ABISettings = @abi.ABISettings::default(),
+  embedding_reg_roles? : @abi.EmbeddingRegRoles = @abi.EmbeddingRegRoles::none(),
+  call_conv_layout? : @abi.CallConventionLayout? = None,
+) -> (@machv.Function, Output) {
+  allocate_registers_backtracking_output_with_isa(
+    func,
+    AArch64,
+    settings,
+    embedding_reg_roles,
+    call_conv_layout~,
+  )
+}
+
+///|
+/// Allocate MachV virtual registers and return `Output` using a specific ISA policy
+/// implementation.
+pub fn allocate_registers_backtracking_output_with_isa(
+  func : @machv.Function,
+  isa : @isa.ISA,
+  settings : @abi.ABISettings,
+  embedding_reg_roles : @abi.EmbeddingRegRoles,
+  call_conv_layout? : @abi.CallConventionLayout? = None,
+) -> (@machv.Function, Output) {
+  // Keep Cranelift-style cheap rematerialization before allocation to shorten
+  // cross-block live ranges for constants/function pointers.
+  let func = rematerialize_long_distance_constants(func)
+  let func = rematerialize_cross_block_constants(func)
+  let func = eliminate_dead_code(func)
+
+  // Build register pools.
+  let (
+    int_regs,
+    float_regs,
+    vector_regs,
+    callee_saved_int_regs,
+    callee_saved_float_regs,
+  ) = build_reg_pools(isa, func, settings, embedding_reg_roles)
+
+  // Compute liveness (Phase 1).
+  let perf_on = perf_enabled()
+  let tick_liveness = if perf_on { Some(perf_tick_now()) } else { None }
+  let liveness = compute_liveness_for_regalloc(func)
+  let algorithm = selected_regalloc_algorithm()
+  let call_conv_layout = require_call_conv_layout(call_conv_layout)
+  if tick_liveness is Some(tick) {
+    perf_record_regalloc_phase_us(
+      "phase_compute_liveness",
+      perf_elapsed_us(tick),
+    )
+  }
+
+  // Delegate allocator-core decisions to regalloc through the MachV adapter.
+  let alloc_result = allocate_backtracking(
+    func,
+    liveness,
+    int_regs,
+    float_regs,
+    vector_regs,
+    callee_saved_int_regs,
+    callee_saved_float_regs,
+    call_conv_layout,
+    embedding_reg_roles,
+    param_precolor_strict=true,
+    algorithm~,
+  )
+
+  // Optional safety net (Cranelift-like checker), enabled in CI/perf profiles.
+  if regalloc_validation_enabled() {
+    verify_allocation(
+      func,
+      liveness,
+      alloc_result,
+      isa,
+      call_conv_layout,
+      settings~,
+      embedding_reg_roles~,
+    )
+  }
+
+  // Build output (allocs + edits). MachV remains in terms of vregs.
+  let tick_output = if perf_on { Some(perf_tick_now()) } else { None }
+  let output = build_output(
+    func, liveness, alloc_result, isa, settings, embedding_reg_roles,
+  )
+  if tick_output is Some(tick) {
+    perf_record_regalloc_phase_us("phase_build_output", perf_elapsed_us(tick))
+  }
+  if regalloc_validation_enabled() {
+    output.validate_for_isa(isa)
+  }
+  (func, output)
+}
+
+///|
+/// Allocation statistics for comparison
+struct AllocStats {
+  mut num_vregs : Int // Total virtual registers
+  mut num_spill_slots : Int // Number of spill slots used
+  num_spills : Int // Number of spill operations
+  num_reloads : Int // Number of reload operations
+  num_moves : Int // Number of move operations inserted
+  total_insts : Int // Total instructions after allocation
+}
+
+///|
+fn AllocStats::to_string(self : AllocStats) -> String {
+  "vregs=\{self.num_vregs}, spill_slots=\{self.num_spill_slots}, spills=\{self.num_spills}, reloads=\{self.num_reloads}, moves=\{self.num_moves}, total_insts=\{self.total_insts}"
+}
+
+///|
+pub impl Show for AllocStats with fn output(self, logger) {
+  logger.write_string(self.to_string())
+}
+
+///|
+/// Count instructions by type in allocated function
+fn count_instructions(func : @machv.Function) -> AllocStats {
+  let mut num_spills = 0
+  let mut num_reloads = 0
+  let mut num_moves = 0
+  let mut total_insts = 0
+  for block in func.blocks {
+    for inst in block.insts {
+      total_insts += 1
+      match inst.opcode {
+        StackStore(_) => num_spills += 1
+        StackLoad(_) => num_reloads += 1
+        Move => num_moves += 1
+        _ => ()
+      }
+    }
+  }
+  {
+    num_vregs: 0,
+    num_spill_slots: 0,
+    num_spills,
+    num_reloads,
+    num_moves,
+    total_insts,
+  }
+}
+
+///|
+/// Get allocation statistics
+pub fn get_alloc_stats(
+  func : @machv.Function,
+  isa? : @isa.ISA = AArch64,
+  settings? : @abi.ABISettings = @abi.ABISettings::default(),
+  embedding_reg_roles? : @abi.EmbeddingRegRoles = @abi.EmbeddingRegRoles::none(),
+  call_conv_layout? : @abi.CallConventionLayout? = None,
+) -> AllocStats {
+  let func = eliminate_dead_code(func)
+  let func = rematerialize_cross_block_constants(func)
+  let func = eliminate_dead_code(func)
+  let (
+    int_regs,
+    float_regs,
+    vector_regs,
+    callee_saved_int_regs,
+    callee_saved_float_regs,
+  ) = build_reg_pools(isa, func, settings, embedding_reg_roles)
+  let liveness = compute_liveness(func)
+
+  // Count vregs
+  let num_vregs = liveness.intervals.length()
+  let algorithm = selected_regalloc_algorithm()
+  let call_conv_layout = require_call_conv_layout(call_conv_layout)
+  let alloc_result = allocate_backtracking(
+    func,
+    liveness,
+    int_regs,
+    float_regs,
+    vector_regs,
+    callee_saved_int_regs,
+    callee_saved_float_regs,
+    call_conv_layout,
+    embedding_reg_roles,
+    algorithm~,
+  )
+  process_constraints(func, alloc_result)
+  let allocated = apply_allocation(
+    func, alloc_result, isa, call_conv_layout, settings, embedding_reg_roles,
+  )
+  let stats = count_instructions(allocated)
+  stats.num_vregs = num_vregs
+  stats.num_spill_slots = alloc_result.num_spill_slots
+  stats
+}

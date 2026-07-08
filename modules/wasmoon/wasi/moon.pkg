@@ -1,0 +1,13 @@
+import {
+  "Milky2018/wasm_core/types",
+  "Milky2018/wasmoon/runtime",
+  "moonbitlang/core/cmp",
+  "moonbitlang/core/debug",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/hashmap",
+}
+
+options(
+  "native-stub": [ "ffi_native.c" ],
+  targets: { "ffi_native.mbt": [ "native" ] },
+)

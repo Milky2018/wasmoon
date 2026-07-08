@@ -1,0 +1,150 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon/wast"
+
+import {
+  "Milky2018/wasm_core/types",
+  "Milky2018/wasmoon/jit",
+  "Milky2018/wasmoon/runtime",
+  "Milky2018/wasmoon/wasi",
+  "Milky2018/wasmoon/wat/parser_impl",
+  "Milky2018/wasmoon_jit",
+  "moonbitlang/core/hashset",
+}
+
+// Values
+pub const EXTERNREF_TAG : Int64 = 0x4000000000000000
+
+pub const FUNCREF_TAG : Int64 = 0x2000000000000000
+
+pub const NULL_REF : Int64 = 0
+
+pub fn build_external_imports_for_jit(@types.Module, @runtime.ModuleInstance, @runtime.Store) -> Map[String, Map[String, Int64]]
+
+pub fn build_func_signatures(@types.Module) -> Array[(Array[@types.ValueType], Array[@types.ValueType])]
+
+pub fn builtin_jit_modules() -> Array[String]
+
+pub fn clear_funcref_registry() -> Unit
+
+pub fn collect_registered_funcref_entries(@runtime.Store) -> Array[(Int64, Int)]
+
+pub fn count_func_imports(Array[@types.Import]) -> Int
+
+pub fn create_spectest_module(@runtime.Store) -> @runtime.ModuleInstance
+
+pub fn eval_elem_offset_expr(Array[@types.Instruction], Array[@runtime.GlobalInstance]) -> Int
+
+pub fn exports_shared_resources(@types.Module) -> Bool
+
+pub fn get_func_name(@types.Module, Int) -> String
+
+pub fn has_cross_module_imports(@types.Module) -> Bool
+
+pub fn has_unsupported_instructions(@types.Module) -> Bool
+
+pub fn has_unsupported_instructions_for_wast(@types.Module) -> Bool
+
+pub fn init_bulk_segments(@types.Module, @jit.JITModule, @runtime.ModuleInstance, @runtime.Store, use_subtype_indirect_check? : Bool) -> Unit raise @runtime.RuntimeError
+
+pub fn init_elem_segments(@types.Module, @jit.JITModule, @runtime.ModuleInstance, @runtime.Store, use_subtype_indirect_check? : Bool) -> Unit
+
+pub fn init_jit_globals_from_store(@runtime.ModuleInstance, @runtime.Store, @jit.JITModule) -> Int64
+
+pub fn init_jit_memories_from_store(@runtime.ModuleInstance, @runtime.Store, @jit.JITModule) -> Array[@wasmoon_jit.MemoryInfo]?
+
+pub fn install_jit_hostcall_dispatcher(@jit.JITModule, @runtime.Store, @runtime.ModuleInstance) -> Unit
+
+pub fn invoke_action(WastContext, @parser_impl.WastAction) -> Array[@types.Value] raise WastRunnerError
+
+pub fn parse(String) -> @parser_impl.WastScript raise @parser_impl.WatError
+
+pub fn register_instance_funcrefs_for_jit(@jit.JITModule, @runtime.ModuleInstance) -> Unit
+
+pub fn run_wast_command(WastContext, @parser_impl.WastCommand, Int, WastResult, String, Bool) -> Unit
+
+pub fn run_wast_commands(@parser_impl.WastScript, String, Bool, Bool, jit_compiler? : JITCompiler?) -> WastResult
+
+pub fn sync_jit_globals_to_store(JITModuleContext, @runtime.Store) -> Unit
+
+pub fn sync_jit_memories_to_store(@runtime.ModuleInstance, @runtime.Store, @jit.JITModule) -> Unit
+
+pub fn sync_jit_tables_to_store(JITModuleContext, @runtime.Store) -> Unit
+
+pub fn sync_store_globals_to_jit(JITModuleContext, @runtime.Store) -> Unit
+
+pub fn sync_table_to_jit(@runtime.Table, @wasmoon_jit.JITTable, @jit.JITModule, @runtime.ModuleInstance, @runtime.Store, use_subtype_indirect_check? : Bool) -> Unit
+
+pub fn sync_tables_to_jit(@runtime.ModuleInstance, @runtime.Store, @jit.JITModule, use_subtype_indirect_check? : Bool) -> Unit
+
+pub fn values_match(@types.Value, @parser_impl.WastValue) -> Bool
+
+pub fn wast_value_to_runtime(@parser_impl.WastValue) -> @types.Value
+
+// Errors
+pub(all) suberror WastRunnerError {
+  ModuleNotFound(String)
+  NoCurrentModule
+  RuntimeError(String)
+}
+pub impl Show for WastRunnerError
+
+// Types and methods
+pub struct JITCompiler {
+  compile_fn : (@types.Module, @runtime.ModuleInstance, @runtime.Store) -> Result[JITModuleContext, String]
+}
+pub fn JITCompiler::new((@types.Module, @runtime.ModuleInstance, @runtime.Store) -> Result[JITModuleContext, String]) -> Self
+
+pub struct JITModuleContext {
+  jit_module : @jit.JITModule
+  globals_ptr : Int64
+  global_addrs : Array[Int]
+  table_addrs : Array[Int]
+  func_addrs : Array[Int]
+  func_type_indices : Array[Int]
+  canonical_type_indices : Array[Int]
+  module_types : Array[@types.SubType]
+  module_rec_groups : Array[Int]
+  use_subtype_indirect_check : Bool
+}
+pub fn JITModuleContext::new(@jit.JITModule, Int64, Array[Int], Array[Int], Array[Int], Array[Int], Array[Int], Array[@types.SubType], Array[Int], Bool) -> Self
+
+pub struct WastContext {
+  store : @runtime.Store
+  mut current_module : @runtime.ModuleInstance?
+  named_modules : Map[String, @runtime.ModuleInstance]
+  module_definitions : Map[String, @types.Module]
+  registered_modules : Map[String, @runtime.ModuleInstance]
+  overridden_builtin_modules : @hashset.HashSet[String]
+  jit_modules : Map[String, JITModuleContext]
+  mut current_jit : JITModuleContext?
+  use_jit : Bool
+  jit_compiler : JITCompiler?
+  wasi_ctx : @wasi.WasiContext
+}
+pub fn WastContext::build_imports(Self) -> @runtime.Imports
+pub fn WastContext::get_store(Self) -> @runtime.Store
+pub fn WastContext::new(Bool, jit_compiler? : JITCompiler?) -> Self
+
+pub struct WastResult {
+  mut passed : Int
+  mut failed : Int
+  skipped : Int
+  failures : Array[String]
+}
+pub fn WastResult::new() -> Self
+
+// Type aliases
+pub using @parser_impl {type WastAction}
+
+pub using @parser_impl {type WastCommand}
+
+pub using @parser_impl {type WastModuleSource}
+
+pub using @parser_impl {type WastScript}
+
+pub using @parser_impl {type WastValue}
+
+pub using @parser_impl {type WatError}
+
+// Traits
+

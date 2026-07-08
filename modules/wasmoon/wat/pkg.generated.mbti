@@ -1,0 +1,38 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon/wat"
+
+import {
+  "Milky2018/wasm_core/types",
+  "Milky2018/wasmoon/wat/parser_impl",
+}
+
+// Values
+pub fn format_wat_error(@parser_impl.WatError, String) -> String
+
+pub fn parse(String) -> @types.Module raise @parser_impl.WatError
+
+pub fn parse_wast(String) -> @parser_impl.WastScript raise @parser_impl.WatError
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+pub using @parser_impl {type SourceLoc}
+
+pub using @parser_impl {type WastAction}
+
+pub using @parser_impl {type WastCommand}
+
+pub using @parser_impl {type WastLaneValue}
+
+pub using @parser_impl {type WastModuleSource}
+
+pub using @parser_impl {type WastScript}
+
+pub using @parser_impl {type WastValue}
+
+pub using @parser_impl {type WatError}
+
+// Traits
+

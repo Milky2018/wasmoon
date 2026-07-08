@@ -1,7 +1,0 @@
-import {
-  "Milky2018/wasmoon/vcode/abi",
-  "Milky2018/wasmoon/vcode/isa/spec",
-}
-
-import {
-} for "wbtest"

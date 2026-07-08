@@ -1,0 +1,24 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/milkir_machv/lower/peephole"
+
+import {
+  "Milky2018/machv",
+  "Milky2018/machv/abi",
+  "Milky2018/machv/isa",
+}
+
+// Values
+pub fn optimize_machv(@machv.Function, isa? : @isa.ISA, profile? : PeepholeProfile, embedding_context_layout? : @abi.EmbeddingContextLayout?, embedding_reg_roles? : @abi.EmbeddingRegRoles) -> Unit
+
+// Errors
+
+// Types and methods
+pub(all) enum PeepholeProfile {
+  Full
+  Lowering
+}
+
+// Type aliases
+
+// Traits
+

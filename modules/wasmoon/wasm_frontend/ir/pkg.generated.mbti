@@ -1,0 +1,24 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon/wasm_frontend/ir"
+
+import {
+  "Milky2018/milkir",
+  "Milky2018/wasm_core/types",
+  "Milky2018/wasmoon/wasm_frontend",
+}
+
+// Values
+pub fn translate_function(@types.Module, Int, @wasm_frontend.EmbeddingEnvironment, name? : String, memory_max_override? : Int?) -> @milkir.Function
+
+pub fn translate_function_body(TranslationContext, String, @types.FuncType, Array[@types.ValueType], Array[@types.Instruction]) -> @milkir.Function
+
+// Errors
+
+// Types and methods
+type TranslationContext
+pub fn TranslationContext::from_module(@types.Module, @wasm_frontend.EmbeddingEnvironment, memory_max_override? : Int?, func_base? : Int, import_remap? : Array[Int]) -> Self
+
+// Type aliases
+
+// Traits
+

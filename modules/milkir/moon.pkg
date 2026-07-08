@@ -1,0 +1,6 @@
+import {
+  "Milky2018/milkir/egraph",
+  "moonbitlang/core/debug",
+  "moonbitlang/core/hashmap",
+  "moonbitlang/core/hashset",
+}

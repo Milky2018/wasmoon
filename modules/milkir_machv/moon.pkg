@@ -1,0 +1,7 @@
+import {
+  "Milky2018/milkir_machv/lower",
+  "Milky2018/machv",
+  "Milky2018/machv/abi",
+  "Milky2018/machv/isa",
+  "Milky2018/milkir",
+} for "test"

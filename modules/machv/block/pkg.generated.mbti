@@ -1,0 +1,27 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/machv/block"
+
+import {
+  "Milky2018/machv/abi",
+  "Milky2018/machv/instr",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub struct MachVBlock {
+  id : Int
+  insts : Array[@instr.MachVInst]
+  params : Array[@abi.VReg]
+  mut terminator : @instr.MachVTerminator?
+}
+pub fn MachVBlock::add_inst(Self, @instr.MachVInst) -> Unit
+pub fn MachVBlock::new(Int) -> Self
+pub fn MachVBlock::set_terminator(Self, @instr.MachVTerminator) -> Unit
+
+// Type aliases
+
+// Traits
+

@@ -6,46 +6,36 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "$0")" && pwd)"
 build_dir="${repo_root}/target/moon-install-build"
-install_dir="${repo_root}/target/moon-install-bin"
+artifact_dir="${build_dir}/native/release/build/Milky2018/wasmoon/cmd"
 
-mkdir -p "$build_dir"
-mkdir -p "$install_dir"
+install_binary() {
+  local name="$1"
+  local src="${artifact_dir}/${name}/${name}.exe"
+  if [ ! -f "$src" ]; then
+    src="${artifact_dir}/${name}/${name}"
+  fi
+  if [ ! -f "$src" ]; then
+    echo "Error: missing built binary: ${artifact_dir}/${name}/${name}[.exe]" >&2
+    exit 1
+  fi
+  cp -f "$src" "${repo_root}/${name}"
+  chmod +x "${repo_root}/${name}"
+}
 
-# Build release artifacts first, then copy selected executables.
-# This mirrors Wasmtime's release-artifact pipeline style.
-moon build --target native --release --target-dir "$build_dir"
+rm -rf "$build_dir"
 
-main_bin_src="${build_dir}/native/release/build/cmd/wasmoon/wasmoon.exe"
-tools_bin_src="${build_dir}/native/release/build/cmd/wasmoon-tools/wasmoon-tools.exe"
-if [ ! -f "$main_bin_src" ]; then
-  main_bin_src="${build_dir}/native/release/build/cmd/wasmoon/wasmoon"
-fi
-if [ ! -f "$tools_bin_src" ]; then
-  tools_bin_src="${build_dir}/native/release/build/cmd/wasmoon-tools/wasmoon-tools"
-fi
-
-main_bin="${install_dir}/wasmoon"
-tools_bin="${install_dir}/wasmoon-tools"
-
-cp -f "$main_bin_src" "$main_bin"
-cp -f "$tools_bin_src" "$tools_bin"
-
-if [ ! -f "$main_bin" ]; then
-  echo "Error: missing installed binary: $main_bin" >&2
-  exit 1
-fi
-if [ ! -f "$tools_bin" ]; then
-  echo "Error: missing installed binary: $tools_bin" >&2
-  exit 1
-fi
-
-# Install repo-local entrypoints as direct binaries.
-# On macOS, running symlinked binaries from moon-install output can occasionally
-# get stuck during dynamic loader startup, so we keep a local executable copy.
+(
+  cd "$repo_root"
+  moon build \
+    modules/wasmoon/cmd/wasmoon \
+    modules/wasmoon/cmd/wasmoon-tools \
+    --target native \
+    --release \
+    --target-dir "$build_dir"
+)
 rm -f "${repo_root}/wasmoon" "${repo_root}/wasmoon-tools"
-cp -f "$main_bin" "${repo_root}/wasmoon"
-cp -f "$tools_bin" "${repo_root}/wasmoon-tools"
-chmod +x "${repo_root}/wasmoon" "${repo_root}/wasmoon-tools"
+install_binary wasmoon
+install_binary wasmoon-tools
 if command -v xattr >/dev/null 2>&1; then
   xattr -c "${repo_root}/wasmoon" "${repo_root}/wasmoon-tools" 2>/dev/null || true
 fi

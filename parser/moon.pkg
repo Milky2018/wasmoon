@@ -1,4 +1,0 @@
-import {
-  "Milky2018/wasmoon/types",
-  "moonbitlang/core/debug",
-}

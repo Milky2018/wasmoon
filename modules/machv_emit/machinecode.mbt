@@ -1,0 +1,737 @@
+// Code Emission
+// Generates machine code from MachV representation
+//
+// This module provides:
+// 1. Machine code buffer for accumulating bytes
+// 2. AArch64 instruction encoding
+// 3. MachV to machine code translation
+
+// ============ Machine Code Buffer ============
+
+///|
+const STACKMAP_I32_MAX : Int = 0x7FFFFFFF
+
+///|
+/// A buffer for accumulating machine code bytes
+pub struct MachineCode {
+  isa : @isa.ISA
+  bytes : Array[Int] // Using Int for bytes (0-255)
+  mut pos : Int
+  // Labels for branch targets
+  labels : Map[Int, Int] // block_id -> offset
+  // Internal labels are always negative and do not overlap with block ids.
+  mut next_internal_label : Int
+  // Pending fixups for forward branches
+  fixups : Array[Fixup]
+  // Pending x86_64 rel32 fixups for forward branches (disp32 patched at end).
+  x86_rel32_fixups : Array[X86Rel32Fixup]
+  // Pending fixups for direct function addresses (offset -> func_idx)
+  func_addr_fixups : Array[FuncAddrFixup]
+  // Pending fixups for direct function calls (offset -> func_idx)
+  call_fixups : Array[CallFixup]
+  // Offsets of allocation slow-path GC safepoints.
+  gc_safepoint_offsets : Array[Int]
+  // Root slot counts for each recorded GC safepoint.
+  gc_safepoint_root_counts : Array[Int]
+  // Root slot indices for each recorded GC safepoint.
+  gc_safepoint_root_indices : Array[Array[Int]]
+  // Deduplicated amd64 constant-pool entries (key -> label).
+  amd64_const_labels : Map[String, Int]
+  // Pending amd64 constant-pool bytes to emit at end of function.
+  amd64_const_entries : Array[Amd64ConstEntry]
+  // Disassembly annotations (offset -> instruction text)
+  disasm : Array[(Int, String)]
+  // Whether to record disassembly annotations during emission.
+  record_disasm : Bool
+  // Stack spill-slot offset (from SP) used to stash caller active function index.
+  // -1 means disabled for this function.
+  mut debug_prev_func_idx_spill_offset : Int
+}
+
+///|
+struct Amd64ConstEntry {
+  label : Int
+  align : Int
+  data : Bytes
+}
+
+///|
+/// A fixup for a forward branch
+struct Fixup {
+  // Offset in the code buffer where the fixup is needed
+  offset : Int
+  // Target block id
+  target_block : Int
+  // Kind of fixup
+  kind : FixupKind
+}
+
+///|
+/// x86_64 rel32 fixup for forward branches (jmp/jcc rel32).
+///
+/// `disp_offset` is the start of the 4-byte displacement field.
+/// `next_ip_offset` is the offset of the instruction end (RIP after the branch).
+struct X86Rel32Fixup {
+  disp_offset : Int
+  next_ip_offset : Int
+  target_block : Int
+}
+
+///|
+/// Fixup for direct function address loads
+pub(all) struct FuncAddrFixup {
+  // Offset in the code buffer where the load starts
+  offset : Int
+  // Target function or external symbol
+  target : @instr.RelocTarget
+  // Destination register (physical)
+  reg : Int
+} derive(Eq, Debug)
+
+///|
+/// Fixup for direct function call branches
+pub(all) struct CallFixup {
+  // Offset in the code buffer where the call instruction starts
+  offset : Int
+  // Target function or external symbol
+  target : @instr.RelocTarget
+  // Offset of a local call veneer (load-absolute + br), -1 when absent
+  veneer_offset : Int
+} derive(Eq, Debug)
+
+///|
+/// Kind of fixup
+pub(all) enum FixupKind {
+  Branch26 // 26-bit PC-relative branch (B, BL)
+  Branch19 // 19-bit PC-relative branch (B.cond, CBZ, CBNZ)
+}
+
+///|
+pub fn MachineCode::new(
+  isa? : @isa.ISA = AArch64,
+  record_disasm? : Bool = true,
+) -> MachineCode {
+  {
+    isa,
+    bytes: [],
+    pos: 0,
+    labels: {},
+    next_internal_label: -1,
+    fixups: [],
+    x86_rel32_fixups: [],
+    func_addr_fixups: [],
+    call_fixups: [],
+    gc_safepoint_offsets: [],
+    gc_safepoint_root_counts: [],
+    gc_safepoint_root_indices: [],
+    amd64_const_labels: {},
+    amd64_const_entries: [],
+    disasm: [],
+    record_disasm,
+    debug_prev_func_idx_spill_offset: -1,
+  }
+}
+
+///|
+pub fn MachineCode::set_debug_prev_func_idx_spill_offset(
+  self : MachineCode,
+  offset : Int,
+) -> Unit {
+  self.debug_prev_func_idx_spill_offset = offset
+}
+
+///|
+pub fn MachineCode::new_internal_label(self : MachineCode) -> Int {
+  let l = self.next_internal_label
+  self.next_internal_label = self.next_internal_label - 1
+  l
+}
+
+///|
+/// Emit a single byte
+pub fn MachineCode::emit_byte(self : MachineCode, b : Int) -> Unit {
+  self.bytes.push(b & 255)
+  self.pos = self.pos + 1
+}
+
+///|
+/// Emit 4 bytes (instruction) as 4 separate bytes
+pub fn MachineCode::emit_inst(
+  self : MachineCode,
+  b0 : Int,
+  b1 : Int,
+  b2 : Int,
+  b3 : Int,
+) -> Unit {
+  self.emit_byte(b0)
+  self.emit_byte(b1)
+  self.emit_byte(b2)
+  self.emit_byte(b3)
+}
+
+///|
+/// Emit a direct BL with a relocation fixup.
+pub fn MachineCode::emit_bl_target(
+  self : MachineCode,
+  target : @instr.RelocTarget,
+) -> Unit {
+  let offset = self.current_pos()
+  self.annotate("bl \{target}")
+  // BL with imm=0; patched later using CallFixup.
+  self.emit_inst(0, 0, 0, 148)
+  self.add_call_target_fixup(offset, target)
+}
+
+///|
+/// Emit a direct BL with a relocation fixup to an embedding-owned code symbol.
+pub fn MachineCode::emit_bl_code(
+  self : MachineCode,
+  symbol : @instr.CodeSymbol,
+) -> Unit {
+  self.emit_bl_target(Code(symbol))
+}
+
+///|
+/// Emit a direct BL with a relocation fixup to an external symbol.
+pub fn MachineCode::emit_bl_external(
+  self : MachineCode,
+  symbol : @instr.ExternalName,
+) -> Unit {
+  self.emit_bl_target(External(symbol))
+}
+
+///|
+/// Current position in the buffer
+pub fn MachineCode::current_pos(self : MachineCode) -> Int {
+  self.pos
+}
+
+///|
+/// Add a disassembly annotation at the current position
+pub fn MachineCode::annotate(self : MachineCode, text : String) -> Unit {
+  if self.record_disasm {
+    self.disasm.push((self.pos, text))
+  }
+}
+
+///|
+/// Dump disassembly with hex bytes
+pub fn MachineCode::dump_disasm(self : MachineCode) -> String {
+  let mut result = ""
+  let max_offset = if self.pos > 0 { self.pos - 1 } else { 0 }
+  let width = if max_offset <= 0xFFFF {
+    4
+  } else if max_offset <= 0xFFFFFF {
+    6
+  } else {
+    8
+  }
+  // Build a map of offset -> labels (multiple blocks can share same offset)
+  let label_map : Map[Int, Array[Int]] = {}
+  for entry in self.labels {
+    let (block_id, offset) = entry
+    match label_map.get(offset) {
+      Some(ids) => ids.push(block_id)
+      None => label_map.set(offset, [block_id])
+    }
+  }
+  // Sort disasm by offset
+  let sorted = self.disasm.copy()
+  sorted.sort_by(fn(a, b) { a.0.compare(b.0) })
+  for entry in sorted {
+    let (offset, text) = entry
+    // Check if there are labels at this offset
+    if label_map.get(offset) is Some(block_ids) {
+      for block_id in block_ids {
+        result = result + "block\{block_id}:\n"
+      }
+    }
+    // Get the 4 bytes at this offset
+    let b0 = if offset < self.bytes.length() { self.bytes[offset] } else { 0 }
+    let b1 = if offset + 1 < self.bytes.length() {
+      self.bytes[offset + 1]
+    } else {
+      0
+    }
+    let b2 = if offset + 2 < self.bytes.length() {
+      self.bytes[offset + 2]
+    } else {
+      0
+    }
+    let b3 = if offset + 3 < self.bytes.length() {
+      self.bytes[offset + 3]
+    } else {
+      0
+    }
+    let hex = hex2(b0) + hex2(b1) + hex2(b2) + hex2(b3)
+    result = result + "  \{to_hex_offset(offset, width)}: \{hex}  \{text}\n"
+  }
+  result
+}
+
+///|
+fn hex2(n : Int) -> String {
+  let hi = (n >> 4) & 0xF
+  let lo = n & 0xF
+  let hi_c = if hi < 10 {
+    (hi + 48).unsafe_to_char()
+  } else {
+    (hi - 10 + 97).unsafe_to_char()
+  }
+  let lo_c = if lo < 10 {
+    (lo + 48).unsafe_to_char()
+  } else {
+    (lo - 10 + 97).unsafe_to_char()
+  }
+  hi_c.to_string() + lo_c.to_string()
+}
+
+///|
+fn to_hex_offset(n : Int, width : Int) -> String {
+  let hex = int_to_hex(n)
+  if hex.length() >= width {
+    hex
+  } else {
+    "0".repeat(width - hex.length()) + hex
+  }
+}
+
+///|
+/// Define a label at the current position
+pub fn MachineCode::define_label(self : MachineCode, block_id : Int) -> Unit {
+  self.labels.set(block_id, self.pos)
+}
+
+///|
+/// Add a fixup for a forward branch
+pub fn MachineCode::add_fixup(
+  self : MachineCode,
+  target_block : Int,
+  kind : FixupKind,
+) -> Unit {
+  // Fixup is at current position - 4 (since we already emitted the instruction)
+  self.fixups.push({ offset: self.pos - 4, target_block, kind })
+}
+
+///|
+/// Add an x86_64 rel32 fixup for a forward branch.
+pub fn MachineCode::add_x86_rel32_fixup(
+  self : MachineCode,
+  target_block : Int,
+  disp_offset : Int,
+  next_ip_offset : Int,
+) -> Unit {
+  self.x86_rel32_fixups.push({ disp_offset, next_ip_offset, target_block })
+}
+
+///|
+/// Add a fixup for an embedding-owned code address load.
+pub fn MachineCode::add_code_addr_fixup(
+  self : MachineCode,
+  offset : Int,
+  symbol : @instr.CodeSymbol,
+  reg : Int,
+) -> Unit {
+  self.add_func_addr_target_fixup(offset, Code(symbol), reg)
+}
+
+///|
+/// Add a fixup for a relocatable function address load.
+pub fn MachineCode::add_func_addr_target_fixup(
+  self : MachineCode,
+  offset : Int,
+  target : @instr.RelocTarget,
+  reg : Int,
+) -> Unit {
+  self.func_addr_fixups.push({ offset, target, reg })
+}
+
+///|
+/// Add a fixup for an external function address load.
+pub fn MachineCode::add_external_func_addr_fixup(
+  self : MachineCode,
+  offset : Int,
+  symbol : @instr.ExternalName,
+  reg : Int,
+) -> Unit {
+  self.add_func_addr_target_fixup(offset, External(symbol), reg)
+}
+
+///|
+/// Add a fixup for a direct call to an embedding-owned code symbol.
+pub fn MachineCode::add_call_fixup(
+  self : MachineCode,
+  offset : Int,
+  symbol : @instr.CodeSymbol,
+  veneer_offset? : Int = -1,
+) -> Unit {
+  self.add_call_target_fixup(offset, Code(symbol), veneer_offset~)
+}
+
+///|
+/// Add a fixup for a relocatable direct call.
+pub fn MachineCode::add_call_target_fixup(
+  self : MachineCode,
+  offset : Int,
+  target : @instr.RelocTarget,
+  veneer_offset? : Int = -1,
+) -> Unit {
+  self.call_fixups.push({ offset, target, veneer_offset })
+}
+
+///|
+/// Add a fixup for a direct call to an external symbol.
+pub fn MachineCode::add_external_call_fixup(
+  self : MachineCode,
+  offset : Int,
+  symbol : @instr.ExternalName,
+  veneer_offset? : Int = -1,
+) -> Unit {
+  self.add_call_target_fixup(offset, External(symbol), veneer_offset~)
+}
+
+///|
+/// Record a GC safepoint at current code offset.
+pub fn MachineCode::record_gc_safepoint(
+  self : MachineCode,
+  offset : Int,
+  root_count? : Int = 0,
+  root_indices? : Array[Int] = [],
+) -> Int {
+  let sanitized_indices : Array[Int] = []
+  for idx in root_indices {
+    if idx >= 0 && idx <= STACKMAP_I32_MAX {
+      sanitized_indices.push(idx)
+    }
+  }
+  let resolved_root_count = if root_count > 0 {
+    root_count
+  } else if sanitized_indices.length() > 0 {
+    sanitized_indices.length()
+  } else {
+    0
+  }
+  self.gc_safepoint_offsets.push(offset)
+  self.gc_safepoint_root_counts.push(resolved_root_count)
+  self.gc_safepoint_root_indices.push(sanitized_indices)
+  self.gc_safepoint_offsets.length() - 1
+}
+
+///|
+/// Emit a local veneer for out-of-range direct calls.
+///
+/// Veneer sequence:
+///   ldr x16, #8             (load 64-bit literal placed right after BR)
+///   br x16
+///   .quad target_ptr        (patched at JIT load time)
+///
+/// Callers branch to this veneer with BL; BR preserves LR so the callee returns
+/// to the original callsite.
+fn MachineCode::emit_call_veneer(
+  self : MachineCode,
+  target : @instr.RelocTarget,
+) -> Int {
+  let veneer_offset = self.current_pos()
+  self.annotate("call_veneer.\{target}")
+  // LDR (literal, 64-bit), Rt=x16, imm19=2 => literal at PC+8.
+  self.annotate("ldr x16, #8")
+  self.emit_inst(0x50, 0x00, 0x00, 0x58)
+  self.emit_br(16)
+  // 64-bit target pointer literal (patched during call fixup application).
+  self.emit_byte(0)
+  self.emit_byte(0)
+  self.emit_byte(0)
+  self.emit_byte(0)
+  self.emit_byte(0)
+  self.emit_byte(0)
+  self.emit_byte(0)
+  self.emit_byte(0)
+  veneer_offset
+}
+
+///|
+/// Materialize local veneers for all direct-call fixups.
+///
+/// Veneers are emitted once per relocation target at function end; each
+/// callsite fixup records the corresponding veneer offset as fallback.
+fn MachineCode::materialize_call_veneers(self : MachineCode) -> Unit {
+  if self.call_fixups.length() == 0 {
+    return
+  }
+  let veneers_by_target : Map[String, Int] = {}
+  for i in 0..<self.call_fixups.length() {
+    let fixup = self.call_fixups[i]
+    let key = fixup.target.key()
+    let veneer_offset = match veneers_by_target.get(key) {
+      Some(offset) => offset
+      None => {
+        let offset = self.emit_call_veneer(fixup.target)
+        veneers_by_target.set(key, offset)
+        offset
+      }
+    }
+    self.call_fixups[i] = {
+      offset: fixup.offset,
+      target: fixup.target,
+      veneer_offset,
+    }
+  }
+}
+
+///|
+/// Resolve all pending fixups
+pub fn MachineCode::resolve_fixups(self : MachineCode) -> Unit {
+  for fixup in self.fixups {
+    if self.labels.get(fixup.target_block) is Some(target_offset) {
+      let pc_offset = (target_offset - fixup.offset) / 4 // Instructions are 4 bytes
+      match fixup.kind {
+        Branch26 => {
+          // Patch bits [25:0] with the 26-bit offset
+          // Keep opcode bits in byte 3
+          let imm26 = pc_offset & 0x3FFFFFF
+          self.bytes[fixup.offset] = imm26 & 255
+          self.bytes[fixup.offset + 1] = (imm26 >> 8) & 255
+          self.bytes[fixup.offset + 2] = (imm26 >> 16) & 255
+          // Keep upper bits of byte 3 (opcode)
+          let old_b3 = self.bytes[fixup.offset + 3]
+          self.bytes[fixup.offset + 3] = (old_b3 & 252) | ((imm26 >> 24) & 3)
+        }
+        Branch19 => {
+          // Patch bits [23:5] with the 19-bit offset
+          let imm19 = pc_offset & 0x7FFFF
+          // imm19 goes into bits [23:5], so bytes 0-2 primarily
+          // Byte 0: bits [7:5] from imm19 bits [2:0], keep bits [4:0] (Rt)
+          let old_b0 = self.bytes[fixup.offset]
+          self.bytes[fixup.offset] = (old_b0 & 31) | ((imm19 << 5) & 224)
+          self.bytes[fixup.offset + 1] = (imm19 >> 3) & 255
+          self.bytes[fixup.offset + 2] = (imm19 >> 11) & 255
+          // Byte 3: keep opcode, add top bits of imm19
+          let old_b3 = self.bytes[fixup.offset + 3]
+          self.bytes[fixup.offset + 3] = (old_b3 & 255) | 0
+        }
+      } // imm19 high bits already covered
+    }
+  }
+
+  // x86_64 rel32 fixups (byte offsets).
+  for fixup in self.x86_rel32_fixups {
+    if self.labels.get(fixup.target_block) is Some(target_offset) {
+      let disp = target_offset - fixup.next_ip_offset
+      // Patch little-endian disp32.
+      let disp32 = disp & 0xFFFFFFFF
+      self.bytes[fixup.disp_offset] = disp32 & 255
+      self.bytes[fixup.disp_offset + 1] = (disp32 >> 8) & 255
+      self.bytes[fixup.disp_offset + 2] = (disp32 >> 16) & 255
+      self.bytes[fixup.disp_offset + 3] = (disp32 >> 24) & 255
+    }
+  }
+}
+
+///|
+fn amd64_const_key(bytes : Bytes, align : Int) -> String {
+  let mut key = "\{align}:"
+  for b in bytes {
+    key = key + hex2(b.to_int())
+  }
+  key
+}
+
+///|
+pub fn MachineCode::intern_amd64_const(
+  self : MachineCode,
+  data : Bytes,
+  align : Int,
+) -> Int {
+  let key = amd64_const_key(data, align)
+  if self.amd64_const_labels.get(key) is Some(label) {
+    return label
+  }
+  let label = self.new_internal_label()
+  self.amd64_const_labels.set(key, label)
+  self.amd64_const_entries.push({ label, align, data })
+  label
+}
+
+///|
+pub fn MachineCode::intern_amd64_const_f32(
+  self : MachineCode,
+  bits : Int,
+) -> Int {
+  let data = Bytes::from_array([
+    (bits & 0xFF).to_byte(),
+    ((bits >> 8) & 0xFF).to_byte(),
+    ((bits >> 16) & 0xFF).to_byte(),
+    ((bits >> 24) & 0xFF).to_byte(),
+  ])
+  self.intern_amd64_const(data, 4)
+}
+
+///|
+pub fn MachineCode::intern_amd64_const_f64(
+  self : MachineCode,
+  bits : Int64,
+) -> Int {
+  let data = Bytes::makei(8, fn(i) { ((bits >> (i * 8)) & 0xFFL).to_byte() })
+  self.intern_amd64_const(data, 8)
+}
+
+///|
+pub fn MachineCode::emit_amd64_const_pool(self : MachineCode) -> Unit {
+  if self.amd64_const_entries.length() == 0 {
+    return
+  }
+  while self.pos % 16 != 0 {
+    self.emit_byte(0x90)
+  }
+  for entry in self.amd64_const_entries {
+    guard entry.align > 0 else { continue }
+    while self.pos % entry.align != 0 {
+      self.emit_byte(0x90)
+    }
+    self.define_label(entry.label)
+    for b in entry.data {
+      self.emit_byte(b.to_int())
+    }
+  }
+}
+
+///|
+/// Get the generated bytes
+pub fn MachineCode::get_bytes(self : MachineCode) -> Array[Int] {
+  self.bytes
+}
+
+///|
+/// Get direct function address fixups
+pub fn MachineCode::get_func_addr_fixups(
+  self : MachineCode,
+) -> Array[FuncAddrFixup] {
+  self.func_addr_fixups
+}
+
+///|
+/// Get direct function call fixups
+pub fn MachineCode::get_call_fixups(self : MachineCode) -> Array[CallFixup] {
+  self.call_fixups
+}
+
+///|
+/// Get recorded GC safepoint offsets.
+pub fn MachineCode::get_gc_safepoint_offsets(self : MachineCode) -> Array[Int] {
+  self.gc_safepoint_offsets
+}
+
+///|
+/// Get recorded GC safepoint root counts.
+pub fn MachineCode::get_gc_safepoint_root_counts(
+  self : MachineCode,
+) -> Array[Int] {
+  self.gc_safepoint_root_counts
+}
+
+///|
+/// Get recorded GC safepoint root indices.
+pub fn MachineCode::get_gc_safepoint_root_indices(
+  self : MachineCode,
+) -> Array[Array[Int]] {
+  self.gc_safepoint_root_indices
+}
+
+///|
+/// Get size in bytes
+pub fn MachineCode::size(self : MachineCode) -> Int {
+  self.pos
+}
+
+///|
+/// Align the code buffer to a given boundary
+/// Pads with NOP instructions (AArch64 NOP = 0xD503201F)
+pub fn MachineCode::align(self : MachineCode, alignment : Int) -> Unit {
+  // alignment must be a power of 2
+  guard alignment > 0 && (alignment & (alignment - 1)) == 0 else { return }
+  // Use AlignTo instruction to emit NOPs until aligned
+  AlignTo(alignment).emit(self)
+}
+
+///|
+/// Align to function boundary (typically 16 bytes on AArch64)
+pub fn MachineCode::align_function(self : MachineCode) -> Unit {
+  self.align(16)
+}
+
+///|
+/// Align to basic block boundary (typically 4 bytes for AArch64 instructions)
+pub fn MachineCode::align_block(self : MachineCode) -> Unit {
+  self.align(4)
+}
+
+// ============ Condition Codes ============
+
+///|
+/// AArch64 condition codes
+pub(all) enum CondCode {
+  EQ // Equal (Z=1)
+  NE // Not equal (Z=0)
+  HS // Unsigned higher or same (C=1), also CS
+  LO // Unsigned lower (C=0), also CC
+  MI // Minus/negative (N=1)
+  PL // Plus/positive or zero (N=0)
+  VS // Overflow (V=1)
+  VC // No overflow (V=0)
+  HI // Unsigned higher (C=1 & Z=0)
+  LS // Unsigned lower or same (C=0 | Z=1)
+  GE // Signed greater or equal (N=V)
+  LT // Signed less than (N!=V)
+  GT // Signed greater than (Z=0 & N=V)
+  LE // Signed less or equal (Z=1 | N!=V)
+  AL // Always
+}
+
+///|
+pub fn CondCode::to_int(self : CondCode) -> Int {
+  match self {
+    EQ => 0
+    NE => 1
+    HS => 2
+    LO => 3
+    MI => 4
+    PL => 5
+    VS => 6
+    VC => 7
+    HI => 8
+    LS => 9
+    GE => 10
+    LT => 11
+    GT => 12
+    LE => 13
+    AL => 14
+  }
+}
+
+///|
+/// Print machine code as hex dump
+pub fn MachineCode::hex_dump(self : MachineCode) -> String {
+  let mut result = ""
+  for i, b in self.bytes {
+    if i > 0 && i % 4 == 0 {
+      result = result + " "
+    }
+    if i > 0 && i % 16 == 0 {
+      result = result + "\n"
+    }
+    let hi = b / 16
+    let lo = b % 16
+    let hi_char = if hi < 10 {
+      (hi + 48).unsafe_to_char().to_string()
+    } else {
+      (hi - 10 + 97).unsafe_to_char().to_string()
+    }
+    let lo_char = if lo < 10 {
+      (lo + 48).unsafe_to_char().to_string()
+    } else {
+      (lo - 10 + 97).unsafe_to_char().to_string()
+    }
+    result = result + hi_char + lo_char
+  }
+  result
+}

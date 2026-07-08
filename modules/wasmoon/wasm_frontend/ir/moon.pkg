@@ -1,0 +1,7 @@
+import {
+  "Milky2018/milkir",
+  "Milky2018/wasm_core/types",
+  "Milky2018/wasm_milkir",
+  "Milky2018/wasmoon/wasm_frontend",
+  "moonbitlang/core/hashmap",
+}
