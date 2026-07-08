@@ -144,9 +144,14 @@ fn MachVInst::to_string(self : MachVInst) -> String {
   let mut result = ""
   // Print definitions (skip clobbers for call instructions)
   let defs_to_print = match self.opcode {
-    ReturnCallIndirect(_, num_results) | CallPtr(_, num_results, _) =>
+    ReturnCallIndirect(_, num_results) =>
       // Only print result registers, not clobbers
       self.defs.iter().take(num_results).collect()
+    CallPtr(_, result_classes, _)
+    | CallDirect(_, _, result_classes, _)
+    | CallExternal(_, _, result_classes, _) =>
+      // Only print result registers, not clobbers
+      self.defs.iter().take(result_classes.length()).collect()
     CallExternalIfI32NeImm(_, _) =>
       // Only clobbers are attached (no results); keep output compact.
       []
@@ -453,20 +458,20 @@ pub(all) enum MachVOpcode {
   // CallPtr: call through a function pointer
   // Uses are already constrained by the lowering-selected ABI.
   // Defs: [result0, result1, ...] (multiple results supported)
-  // Parameters: num_args, num_results, clobber class
-  CallPtr(Int, Int, CallClobberClass)
+  // Parameters: num_args, result classes, clobber class
+  CallPtr(Int, Array[@abi.RegClass], CallClobberClass)
 
   // CallDirect: direct call to a known code symbol
   // Uses are already constrained by the lowering-selected ABI.
   // Defs: [result0, result1, ...]
-  // Parameters: target, num_args, num_results, clobber class
-  CallDirect(CodeSymbol, Int, Int, CallClobberClass)
+  // Parameters: target, num_args, result classes, clobber class
+  CallDirect(CodeSymbol, Int, Array[@abi.RegClass], CallClobberClass)
 
   // CallExternal: direct call to an external helper symbol.
   // Uses are already constrained by the lowering-selected ABI.
   // Defs: [result0, result1, ...]
-  // Parameters: symbol, num_args, num_results, clobber class
-  CallExternal(ExternalName, Int, Int, CallClobberClass)
+  // Parameters: symbol, num_args, result classes, clobber class
+  CallExternal(ExternalName, Int, Array[@abi.RegClass], CallClobberClass)
 
   // Stack pointer adjustment for outgoing call arguments (Standard)
   // AdjustSP(delta): Adjust SP by delta bytes
@@ -1100,12 +1105,12 @@ fn MachVOpcode::to_string(self : MachVOpcode) -> String {
     StorePtrNarrow(bits, offset) => "store_ptr\{bits} +\{offset}"
     LoadExternalFuncAddr(symbol) => "load_external_func_addr.\{symbol}"
     LoadCodeAddr(symbol) => "load_code_addr.\{symbol}"
-    CallPtr(num_args, num_results, call_conv) =>
-      "call_ptr[\{call_conv}](\{num_args}) -> \{num_results} results"
-    CallDirect(target, num_args, num_results, call_conv) =>
-      "call_direct[\{call_conv}].\{target}(\{num_args}) -> \{num_results} results"
-    CallExternal(symbol, num_args, num_results, call_conv) =>
-      "call_external[\{call_conv}].\{symbol}(\{num_args}) -> \{num_results} results"
+    CallPtr(num_args, result_classes, call_conv) =>
+      "call_ptr[\{call_conv}](\{num_args}) -> \{result_classes.length()} results"
+    CallDirect(target, num_args, result_classes, call_conv) =>
+      "call_direct[\{call_conv}].\{target}(\{num_args}) -> \{result_classes.length()} results"
+    CallExternal(symbol, num_args, result_classes, call_conv) =>
+      "call_external[\{call_conv}].\{symbol}(\{num_args}) -> \{result_classes.length()} results"
     AdjustSP(delta) =>
       if delta >= 0 {
         "add sp, sp, #\{delta}"
@@ -1258,6 +1263,37 @@ fn MachVOpcode::to_string(self : MachVOpcode) -> String {
 ///|
 pub impl Show for MachVOpcode with fn output(self, logger) {
   logger.write_string(self.to_string())
+}
+
+///|
+pub fn MachVOpcode::call_result_classes(
+  self : MachVOpcode,
+) -> Array[@abi.RegClass]? {
+  match self {
+    CallPtr(_, result_classes, _)
+    | CallDirect(_, _, result_classes, _)
+    | CallExternal(_, _, result_classes, _) => Some(result_classes)
+    _ => None
+  }
+}
+
+///|
+pub fn MachVOpcode::call_result_count(self : MachVOpcode) -> Int? {
+  match self.call_result_classes() {
+    Some(result_classes) => Some(result_classes.length())
+    None => None
+  }
+}
+
+///|
+pub fn result_classes_for_vregs(
+  results : Array[@abi.VReg],
+) -> Array[@abi.RegClass] {
+  let classes : Array[@abi.RegClass] = []
+  for result in results {
+    classes.push(result.class)
+  }
+  classes
 }
 
 ///|

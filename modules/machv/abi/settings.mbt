@@ -1,12 +1,5 @@
 ///|
-/// Cranelift-style backend settings (minimal subset).
-///
-/// This is intentionally tiny for Phase 1: it only carries the settings we need
-/// to begin matching Cranelift’s AArch64 ABI, especially the pinned-reg toggle.
-///
-/// Reference:
-/// - wasmtime/cranelift `settings::Flags::enable_pinned_reg()`
-/// - wasmtime/cranelift `isa::CallConv::AppleAarch64`
+/// Backend ABI settings shared by lowering, register allocation, and emission.
 #warnings("-unused_constructor")
 pub enum CallConv {
   ///
@@ -20,8 +13,9 @@ pub enum CallConv {
 ///|
 pub struct ABISettings {
   ///
-  /// When true, reserve the target's pinned runtime-context register.
-  enable_pinned_reg : Bool
+  /// When true, reserve the embedding context register role supplied through
+  /// `EmbeddingRegRoles`.
+  reserve_embedding_context : Bool
   ///
   /// Target calling convention.
   call_conv : CallConv
@@ -29,5 +23,5 @@ pub struct ABISettings {
 
 ///|
 pub fn ABISettings::default() -> ABISettings {
-  { enable_pinned_reg: true, call_conv: AppleAarch64 }
+  { reserve_embedding_context: true, call_conv: AppleAarch64 }
 }

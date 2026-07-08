@@ -382,7 +382,7 @@ fn MachineCode::emit_prologue(
 
     // Cache embedding context and optional context-derived pointers.
     if stack_frame.needs_context_reg {
-      if !abi_settings.enable_pinned_reg {
+      if !abi_settings.reserve_embedding_context {
         abort("unpinned embedding context ABI not implemented yet")
       }
       let call_conv = stack_frame.require_call_conv_layout()
@@ -696,7 +696,7 @@ fn MachineCode::emit_prologue(
 
   // Step 5: Cache the embedding context when needed.
   if stack_frame.needs_context_reg {
-    if !abi_settings.enable_pinned_reg {
+    if !abi_settings.reserve_embedding_context {
       abort("unpinned embedding context ABI not implemented yet")
     }
     let context = stack_frame.context_reg_index()
@@ -824,7 +824,7 @@ pub fn emit_function(
   let cache_context_1 = func.should_reserve_context_cache_1()
   let context_reg = embedding_reg_roles.context
 
-  let force_context_reg_cache = abi_settings.enable_pinned_reg &&
+  let force_context_reg_cache = abi_settings.reserve_embedding_context &&
     isa is AMD64 &&
     context_reg is Some(_)
   let needs_context_reg = force_context_reg_cache ||
@@ -2115,7 +2115,7 @@ pub fn emit_function_with_regalloc(
   let cache_context_0 = func.should_reserve_context_cache_0()
   let cache_context_1 = func.should_reserve_context_cache_1()
   let context_reg = embedding_reg_roles.context
-  let force_context_reg_cache = abi_settings.enable_pinned_reg &&
+  let force_context_reg_cache = abi_settings.reserve_embedding_context &&
     isa is AMD64 &&
     context_reg is Some(_)
   let needs_context_reg = force_context_reg_cache ||

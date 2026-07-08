@@ -108,7 +108,7 @@ fn allocate_reload_registers(
   let reserve_extra_results_ptr = needs_extra || calls_multi
   for
     idx in embedding_reg_roles.reserved_int_indices(
-      reserve_context=settings.enable_pinned_reg,
+      reserve_context=settings.reserve_embedding_context,
       reserve_context_cache_0=func.should_reserve_context_cache_0(),
       reserve_context_cache_1=func.should_reserve_context_cache_1(),
       reserve_extra_results_ptr~,
@@ -147,7 +147,7 @@ fn allocate_reload_registers(
       let env = isa.machine_env(
         settings~,
         reserved_int_regs=embedding_reg_roles.reserved_int_indices(
-          reserve_context=settings.enable_pinned_reg,
+          reserve_context=settings.reserve_embedding_context,
           reserve_context_cache_0=func.should_reserve_context_cache_0(),
           reserve_context_cache_1=func.should_reserve_context_cache_1(),
           reserve_extra_results_ptr~,

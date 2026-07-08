@@ -294,8 +294,8 @@ pub fn EmitStackFrame::get_fpr_save_offset(
 ///|
 /// Build the list of callee-saved GPRs to save.
 ///
-/// Cranelift behavior: when `enable_pinned_reg` is enabled, the pinned embedding context
-/// register is globally-reserved and is not saved/restored in prologues.
+/// When the embedding context role is globally reserved, that register is not
+/// saved/restored in prologues.
 fn build_gpr_save_list_v3(
   clobbered : Array[Int],
   isa : @isa.ISA,

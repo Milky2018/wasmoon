@@ -9,6 +9,8 @@ import {
 // Values
 pub fn aarch64_logic_imm_enc_bits(Int64, Bool) -> Int?
 
+pub fn result_classes_for_vregs(Array[@abi.VReg]) -> Array[@abi.RegClass]
+
 // Errors
 
 // Types and methods
@@ -275,9 +277,9 @@ pub(all) enum MachVOpcode {
   StorePtrNarrow(Int, Int)
   LoadExternalFuncAddr(ExternalName)
   LoadCodeAddr(CodeSymbol)
-  CallPtr(Int, Int, CallClobberClass)
-  CallDirect(CodeSymbol, Int, Int, CallClobberClass)
-  CallExternal(ExternalName, Int, Int, CallClobberClass)
+  CallPtr(Int, Array[@abi.RegClass], CallClobberClass)
+  CallDirect(CodeSymbol, Int, Array[@abi.RegClass], CallClobberClass)
+  CallExternal(ExternalName, Int, Array[@abi.RegClass], CallClobberClass)
   AdjustSP(Int)
   StoreToStack(Int)
   LoadSP
@@ -367,6 +369,8 @@ pub(all) enum MachVOpcode {
   SIMDRelaxedDot8to16
   SIMDRelaxedDot8to32Add
 }
+pub fn MachVOpcode::call_result_classes(Self) -> Array[@abi.RegClass]?
+pub fn MachVOpcode::call_result_count(Self) -> Int?
 pub fn MachVOpcode::call_type(Self) -> CallType
 pub impl Show for MachVOpcode
 

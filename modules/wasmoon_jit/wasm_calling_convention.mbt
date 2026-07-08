@@ -16,9 +16,9 @@ pub fn wasm_calling_convention_for_isa(
           { index: 6, class: Int },
           { index: 7, class: Int },
         ],
-        arg_fprs: @abi.aapcs64_arg_fprs(),
-        ret_gprs: @abi.aapcs64_ret_gprs(),
-        ret_fprs: @abi.aapcs64_ret_fprs(),
+        arg_fprs: @aarch64.aapcs64_arg_fprs(),
+        ret_gprs: @aarch64.aapcs64_ret_gprs(),
+        ret_fprs: @aarch64.aapcs64_ret_fprs(),
       }
     AMD64 => {
       let arg_fprs : Array[@abi.PReg] = []

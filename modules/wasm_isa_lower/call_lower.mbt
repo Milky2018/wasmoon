@@ -111,7 +111,7 @@ fn lower_wasm_call_common(
   results : Array[@abi.VReg],
   const_args : Map[Int, CallConstArg],
 ) -> Unit {
-  if !ctx.abi_settings().enable_pinned_reg {
+  if !ctx.abi_settings().reserve_embedding_context {
     abort("unpinned VMContext ABI not implemented yet")
   }
   let call_conv = ctx.call_conv_layout()
@@ -242,9 +242,8 @@ fn lower_wasm_call(
   const_args : Map[Int, CallConstArg],
 ) -> Unit {
   let num_args = args.length()
-  let num_results = results.length()
   let call_inst = @instr.MachVInst::new(
-    CallPtr(num_args, num_results, Internal),
+    CallPtr(num_args, @instr.result_classes_for_vregs(results), Internal),
   )
   // Call target is constrained to SCRATCH_REG_2 (IP1).
   call_inst.add_use_fixed(Virtual(func_ptr), {
@@ -265,9 +264,13 @@ fn lower_wasm_call_direct(
   const_args : Map[Int, CallConstArg],
 ) -> Unit {
   let num_args = args.length()
-  let num_results = results.length()
   let call_inst = @instr.MachVInst::new(
-    CallDirect(wasm_func_symbol(func_idx), num_args, num_results, Internal),
+    CallDirect(
+      wasm_func_symbol(func_idx),
+      num_args,
+      @instr.result_classes_for_vregs(results),
+      Internal,
+    ),
   )
   lower_wasm_call_common(ctx, block, call_inst, args, results, const_args)
 }

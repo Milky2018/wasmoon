@@ -9,6 +9,13 @@ test "AArch64 target owns ABI policy" {
 
 ///|
 fn custom_test_call_conv() -> @abi.CallConventionLayout {
+  fn regs(start : Int, count : Int, class : @abi.RegClass) -> Array[@abi.PReg] {
+    let out : Array[@abi.PReg] = []
+    for i in start..<(start + count) {
+      out.push({ index: i, class })
+    }
+    out
+  }
   {
     context_arg: { index: 0, class: Int },
     user_arg_gprs: [
@@ -20,9 +27,9 @@ fn custom_test_call_conv() -> @abi.CallConventionLayout {
       { index: 6, class: Int },
       { index: 7, class: Int },
     ],
-    arg_fprs: @abi.aapcs64_arg_fprs(),
-    ret_gprs: @abi.aapcs64_ret_gprs(),
-    ret_fprs: @abi.aapcs64_ret_fprs(),
+    arg_fprs: regs(0, 8, Float64),
+    ret_gprs: regs(0, 8, Int),
+    ret_fprs: regs(0, 8, Float64),
   }
 }
 

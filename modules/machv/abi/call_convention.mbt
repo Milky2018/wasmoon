@@ -36,25 +36,6 @@ pub fn CallConventionLayout::requires_extra_results_ptr_for_result_counts(
 }
 
 ///|
-pub fn CallConventionLayout::requires_extra_results_ptr_for_unknown_results(
-  self : CallConventionLayout,
-  result_count : Int,
-) -> Bool {
-  let int_count = self.int_result_register_count()
-  let float_count = self.float_result_register_count()
-  let capacity = if int_count == 0 {
-    float_count
-  } else if float_count == 0 {
-    int_count
-  } else if int_count < float_count {
-    int_count
-  } else {
-    float_count
-  }
-  result_count > capacity
-}
-
-///|
 /// Stack slot size (bytes) for overflow arguments in this convention.
 pub fn CallConventionLayout::stack_slot_size(
   self : CallConventionLayout,

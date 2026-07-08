@@ -137,9 +137,12 @@ pub fn lower_c_libcall_direct(
     abort("lower_c_libcall_direct: too many arguments")
   }
   let num_args = args.length()
-  let num_results = if result is Some(_) { 1 } else { 0 }
+  let result_classes : Array[@abi.RegClass] = []
+  if result is Some(dst) {
+    result_classes.push(dst.class)
+  }
   let call_inst = @instr.MachVInst::new(
-    CallExternal(symbol, num_args, num_results, Foreign),
+    CallExternal(symbol, num_args, result_classes, Foreign),
   )
   for i, arg in args {
     call_inst.add_use_fixed(Virtual(arg), { index: arg_regs[i], class: Int })
@@ -199,7 +202,7 @@ fn lower_call_ptr(
 
   // Step 3: Create an internal call with fixed-register constraints.
   let call_inst = @instr.MachVInst::new(
-    CallPtr(num_args, result_vregs.length(), Internal),
+    CallPtr(num_args, @instr.result_classes_for_vregs(result_vregs), Internal),
   )
 
   // Call target is constrained to SCRATCH_REG_2 (IP1).
@@ -288,7 +291,7 @@ fn lower_external_call(
   let args : Array[@abi.VReg] = []
   for i, operand in inst.operands {
     if i == 0 &&
-      ctx.abi_settings.enable_pinned_reg &&
+      ctx.abi_settings.reserve_embedding_context &&
       ctx.ir_func.params.length() > 0 &&
       operand.id == ctx.ir_func.params[0].0.id {
       let context_vreg = ctx.machv_func.new_vreg(Int)
@@ -346,8 +349,13 @@ pub fn lower_c_libcall(
 
   // Create a foreign call with platform-ABI constraints.
   let num_args = args.length()
-  let num_results = if result is Some(_) { 1 } else { 0 }
-  let call_inst = @instr.MachVInst::new(CallPtr(num_args, num_results, Foreign))
+  let result_classes : Array[@abi.RegClass] = []
+  if result is Some(dst) {
+    result_classes.push(dst.class)
+  }
+  let call_inst = @instr.MachVInst::new(
+    CallPtr(num_args, result_classes, Foreign),
+  )
 
   // Call target is constrained to SCRATCH_REG_2 (IP1).
   call_inst.add_use_fixed(Virtual(func_ptr), {

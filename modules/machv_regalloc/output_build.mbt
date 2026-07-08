@@ -390,7 +390,7 @@ fn build_output(
     ) ||
     func.calls_multi_value_function_for_call_conv(call_conv_layout)
   let reserved_int_regs = embedding_reg_roles.reserved_int_indices(
-    reserve_context=settings.enable_pinned_reg,
+    reserve_context=settings.reserve_embedding_context,
     reserve_context_cache_0=func.should_reserve_context_cache_0(),
     reserve_context_cache_1=func.should_reserve_context_cache_1(),
     reserve_extra_results_ptr~,

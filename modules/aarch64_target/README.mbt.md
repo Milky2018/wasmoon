@@ -73,12 +73,19 @@ test "lower AArch64 with an explicit call convention" {
   builder.switch_to_block(entry)
   builder.return_([builder.iadd(lhs, rhs)])
   context |> ignore
+  fn regs(start : Int, count : Int, class : @abi.RegClass) -> Array[@abi.PReg] {
+    let out : Array[@abi.PReg] = []
+    for i in start..<(start + count) {
+      out.push({ index: i, class })
+    }
+    out
+  }
   let conv : @abi.CallConventionLayout = {
     context_arg: { index: 0, class: Int },
     user_arg_gprs: [{ index: 1, class: Int }, { index: 2, class: Int }],
-    arg_fprs: @abi.aapcs64_arg_fprs(),
-    ret_gprs: @abi.aapcs64_ret_gprs(),
-    ret_fprs: @abi.aapcs64_ret_fprs(),
+    arg_fprs: regs(0, 8, Float64),
+    ret_gprs: regs(0, 8, Int),
+    ret_fprs: regs(0, 8, Float64),
   }
   let lowered = lower_function_with_call_conv(builder.get_function(), conv)
   guard lowered.param_pregs[0] is Some(context_reg) else {
