@@ -40,7 +40,7 @@ pub fn exception_runtime_fixup_idx(ordinal : Int) -> Int {
 
 ///|
 pub fn runtime_hostcall_symbol() -> @instr.ExternalName {
-  ExternalName("wasm.runtime.hostcall")
+  ExternalName("wasmoon.runtime.hostcall")
 }
 
 ///|
@@ -323,25 +323,7 @@ pub fn RuntimeSymbolResolver::resolve_symbol(
       return Some(symbol)
     }
   }
-  match runtime_symbol_wasmoon_alias(name) {
-    Some(alias_name) => {
-      for symbol in self.symbols {
-        if symbol.name == alias_name {
-          return Some(symbol)
-        }
-      }
-      None
-    }
-    None => None
-  }
-}
-
-///|
-fn runtime_symbol_wasmoon_alias(name : String) -> String? {
-  match name {
-    [.. "wasm.runtime.", .. rest] => Some("wasmoon.runtime." + rest.to_owned())
-    _ => None
-  }
+  None
 }
 
 ///|

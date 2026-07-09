@@ -54,8 +54,6 @@ pub fn compact_show_repr(String) -> String
 
 pub fn compute_canonical_type_indices(Array[SubType], type_rec_groups? : Array[Int]) -> Array[Int]
 
-pub fn extract_func_types(Array[SubType]) -> Array[FuncType]
-
 pub fn func_types_equal(FuncType, FuncType) -> Bool
 
 pub fn func_types_to_subtypes(Array[FuncType]) -> Array[SubType]

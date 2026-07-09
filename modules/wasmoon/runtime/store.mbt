@@ -677,7 +677,7 @@ pub fn Store::get_func_canonical_type_idx(self : Store, func_addr : Int) -> Int 
 }
 
 ///|
-/// Get WASM function code (for backward compatibility)
+/// Get function code for a store address that is known to refer to a Wasm function.
 pub fn Store::get_func(
   self : Store,
   idx : Int,

@@ -115,7 +115,10 @@ fn main {
     return
   }
   let value = clap_simple_value("wasmoon-tools")
-  let cli_args : Array[String] = normalize_cli_args(args)
+  let cli_args : Array[String] = []
+  for i in 1..<args.length() {
+    cli_args.push(args[i])
+  }
   let subcmd_help = parser.parse(value, cli_args[:]) catch {
     e => {
       println(e)
@@ -208,24 +211,6 @@ fn main {
         }
         None => println(help_msg)
       }
-  }
-}
-
-///|
-/// Support `wasmoon-tools component wit ...` as an alias for `wasmoon-tools wit ...`.
-fn normalize_cli_args(args : Array[String]) -> Array[String] {
-  if args.length() >= 3 && args[1] == "component" && args[2] == "wit" {
-    let out : Array[String] = ["wit"]
-    for i in 3..<args.length() {
-      out.push(args[i])
-    }
-    out
-  } else {
-    let out : Array[String] = []
-    for i in 1..<args.length() {
-      out.push(args[i])
-    }
-    out
   }
 }
 

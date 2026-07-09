@@ -31,25 +31,6 @@ pub impl Show for Loc with fn output(self, logger) {
 }
 
 ///|
-/// Compatibility helpers for the existing regalloc pipeline.
-/// These mirror the historical `PReg::{is_spilled,get_spill_slot}` API but operate
-/// on `Loc`.
-pub fn Loc::is_spilled(self : Loc) -> Bool {
-  match self {
-    Spill(_) => true
-    _ => false
-  }
-}
-
-///|
-pub fn Loc::get_spill_slot(self : Loc) -> SpillSlot {
-  match self {
-    Spill(slot) => slot
-    _ => abort("Loc::get_spill_slot called on a register loc")
-  }
-}
-
-///|
 /// An edit produced by regalloc to be inserted at a program point.
 ///
 /// Equivalent to regalloc2::Edit::Move in Cranelift: move between two locations.

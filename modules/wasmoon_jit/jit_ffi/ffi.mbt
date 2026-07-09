@@ -1102,14 +1102,6 @@ pub extern "c" fn c_jit_gc_set_func_table(
 pub extern "c" fn c_jit_gc_clear_cache(ctx_ptr : Int64) -> Unit = "wasmoon_jit_gc_clear_cache"
 
 ///|
-/// Enter GC critical section (compatibility no-op)
-pub extern "c" fn c_jit_gc_enter_critical() -> Unit = "wasmoon_jit_gc_enter_critical"
-
-///|
-/// Leave GC critical section (compatibility no-op)
-pub extern "c" fn c_jit_gc_leave_critical() -> Unit = "wasmoon_jit_gc_leave_critical"
-
-///|
 /// Set GC heap pointer for JIT execution
 pub extern "c" fn c_jit_gc_set_heap(ctx_ptr : Int64, heap_ptr : Int64) -> Unit = "wasmoon_jit_gc_set_heap"
 

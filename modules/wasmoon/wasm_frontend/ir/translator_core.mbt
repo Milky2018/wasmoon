@@ -132,7 +132,7 @@ pub fn TranslationContext::from_module(
       }
   }
   {
-    func_types: @types.extract_func_types(mod_.types),
+    func_types: module_func_type_table(mod_.types),
     func_type_indices: mod_.funcs,
     num_imports,
     import_func_type_indices,
@@ -151,6 +151,22 @@ pub fn TranslationContext::from_module(
       m.limits.min * (1L << m.page_size_log2)
     }),
   }
+}
+
+///|
+/// Build the frontend's function-type lookup table while preserving module
+/// type indices used by `call_indirect` and typed references.
+fn module_func_type_table(
+  subtypes : Array[@types.SubType],
+) -> Array[@types.FuncType] {
+  let result : Array[@types.FuncType] = []
+  for subtype in subtypes {
+    match subtype.composite {
+      Func(ft) => result.push(ft)
+      _ => result.push({ params: [], results: [] })
+    }
+  }
+  result
 }
 
 ///|

@@ -504,7 +504,7 @@ void ctx_set_table_pointers_internal(
     }
     ctx->table_count = table_count;
 
-    // For backward compatibility: if there's at least one table, set it as table0_base
+    // Keep the first table in the dedicated fast-path slot used by table0 operations.
     if (table_count > 0 && table_ptrs[0] != 0) {
         ctx->table0_base = (void **)table_ptrs[0];
         ctx->owns_indirect_table = 0;  // Borrowed from JITTable, not owned

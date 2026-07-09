@@ -208,7 +208,7 @@ fn ExecContext::call_func_inst_with_context(
       // Call with the owner's context
       self.call_wasm_func_with_instance(owner_instance, code, args, num_results)
     } else {
-      // No registered owner, use current instance (backward compatibility)
+      // Imported host-created function instances may not have an owning module.
       self.call_wasm_func(code, args, num_results)
     }
   } else if func_inst is HostFunc(host_fn) {

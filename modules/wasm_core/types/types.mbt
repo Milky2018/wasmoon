@@ -154,20 +154,6 @@ pub fn func_types_to_subtypes(func_types : Array[FuncType]) -> Array[SubType] {
 }
 
 ///|
-/// Extract FuncTypes from an array of SubType (for backwards compatibility)
-/// Non-function types are replaced with empty function types
-pub fn extract_func_types(subtypes : Array[SubType]) -> Array[FuncType] {
-  let result : Array[FuncType] = []
-  for subtype in subtypes {
-    match subtype.composite {
-      Func(ft) => result.push(ft)
-      _ => result.push({ params: [], results: [] }) // placeholder
-    }
-  }
-  result
-}
-
-///|
 /// Runtime values
 pub(all) enum Value {
   I32(Int)

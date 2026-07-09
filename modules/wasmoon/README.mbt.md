@@ -188,8 +188,6 @@ wasmoon-tools wit path/to/foo.wit --wat > foo.wat
 wasmoon-tools wit foo.wasm --importize --wat
 wasmoon-tools wit path/to/pkgdir --importize-world my-world --wat
 
-# Compatibility alias (wasm-tools-like shape)
-wasmoon-tools component wit path/to/foo.wit --json
 ```
 
 WIT support is still evolving. Current `wasmoon-tools wit` supports parse/resolve

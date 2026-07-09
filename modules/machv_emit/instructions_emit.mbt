@@ -127,7 +127,7 @@ pub fn Instruction::emit(self : Instruction, mc : MachineCode) -> Unit {
   }
 }
 
-// ============ Public emit functions (backward compatibility) ============
+// ============ Low-level AArch64 encoder helpers ============
 
 ///|
 pub fn MachineCode::emit_add_reg(

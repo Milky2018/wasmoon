@@ -52,8 +52,6 @@ pub fn rematerialize_long_distance_constants(@machv.Function) -> @machv.Function
 
 pub fn verify_allocation(@machv.Function, LivenessResult, RegAllocResult, @isa.ISA, @abi.EmbeddingABI) -> Unit
 
-pub fn verify_allocation_aarch64(@machv.Function, LivenessResult, RegAllocResult, @abi.EmbeddingABI) -> Unit
-
 // Errors
 
 // Types and methods
@@ -146,8 +144,6 @@ pub(all) enum Loc {
   Reg(@abi.PReg)
   Spill(Int)
 }
-pub fn Loc::get_spill_slot(Self) -> Int
-pub fn Loc::is_spilled(Self) -> Bool
 pub impl Show for Loc
 
 pub enum OperandConstraint {

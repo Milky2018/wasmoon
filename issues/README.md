@@ -117,6 +117,14 @@ graph TD
   ISS_093["ISS-093: Replace stringly typed ExtOp with a stronger extension contract"]
   ISS_094["ISS-094: Introduce a user-facing MilkIR-to-MachV lowering configuration"]
   ISS_095["ISS-095: Document MilkIR semantics and invariants"]
+  ISS_096["ISS-096: Remove Wasmoon runtime symbol alias fallback"]
+  ISS_097["ISS-097: Remove machv_regalloc historical helper API"]
+  ISS_098["ISS-098: Clarify machv_emit public encoder helper status"]
+  ISS_099["ISS-099: Remove wasm_core FuncType compatibility extraction helper"]
+  ISS_100["ISS-100: Remove legacy funcref null sentinel"]
+  ISS_101["ISS-101: Remove JIT GC critical-section no-op compatibility exports"]
+  ISS_102["ISS-102: Remove wasmoon-tools component wit CLI alias"]
+  ISS_103["ISS-103: Refresh stale module boundary documentation"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005

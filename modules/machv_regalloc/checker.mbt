@@ -258,14 +258,3 @@ pub fn verify_allocation(
     }
   }
 }
-
-///|
-/// Backwards-compatible wrapper for existing call sites.
-pub fn verify_allocation_aarch64(
-  func : @machv.Function,
-  liveness : LivenessResult,
-  alloc : RegAllocResult,
-  embedding_abi : @abi.EmbeddingABI,
-) -> Unit {
-  verify_allocation(func, liveness, alloc, AArch64, embedding_abi)
-}

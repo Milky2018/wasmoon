@@ -8,7 +8,7 @@ fn MachineCode::emit_instruction(
     self.emit_instruction_x86_64(inst, stack_frame)
     return
   }
-  // Extract offsets from stack frame for backward compatibility
+  // Cache stack-frame offsets used by spill and frame-slot emission.
   let spill_base_offset = stack_frame.spill_offset
   let frame_size = stack_frame.total_size
   match inst.opcode {
