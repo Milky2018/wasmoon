@@ -10,8 +10,6 @@ pub fn allocate(Program, config? : RegallocConfig) -> Allocation raise VerifyErr
 
 pub fn allocate_linear_scan(Program) -> Allocation
 
-pub fn allocation_iteration_limit(Int) -> Int
-
 pub fn choose_fixed_reg_hint(Array[PhysicalReg], Array[PhysicalReg]) -> PhysicalReg?
 
 pub fn choose_temp_register(RegClass, Array[Int], Array[Int], Array[Int], Array[Int], Bool, Int, Int) -> TempRegisterChoice
@@ -44,8 +42,6 @@ pub fn lower_bound_ordered_span_by_end(Array[OrderedProgramSpan], Int) -> Int
 
 pub fn lower_bound_sorted_int(Array[Int], Int) -> Int
 
-pub fn max_physical_reg_id(Array[PhysicalReg]) -> Int
-
 pub fn plan_bundle_split(Array[BundleSplitRange], ProgramPoint?, Array[Int], Int, Int) -> BundleSplitPlan
 
 pub fn plan_cross_block_rematerializations(Array[RematDefInfo], Array[RematUseInfo]) -> Array[RematLocalCloneInfo]
@@ -53,8 +49,6 @@ pub fn plan_cross_block_rematerializations(Array[RematDefInfo], Array[RematUseIn
 pub fn plan_fixed_constraint_edits(Array[FixedConstraintInst]) -> Array[FixedConstraintInstEdits]
 
 pub fn plan_long_distance_rematerializations(Array[RematDefInfo], Array[RematUseInfo], min_distance? : Int, per_vreg_clone_cap? : Int) -> Array[RematCloneInfo]
-
-pub fn plan_param_preassignment(Bool, Bool, Bool) -> ParamPreassignDecision
 
 pub fn plan_register_probe_order(Array[PhysicalReg], Array[PhysicalReg], Array[PhysicalReg], Bool, Int, Int, PhysicalReg?) -> Array[PhysicalReg]
 
@@ -71,14 +65,6 @@ pub fn resolve_parallel_moves(Array[ParallelMove], Array[PhysicalReg], Array[Phy
 pub fn resolve_threaded_jump(Array[ThreadBlock], Int, Array[ThreadArg]) -> ThreadedJump
 
 pub fn scan_conflicts_with_cutoff(Array[OrderedProgramSpan], Array[OccupiedProgramSpan], Int, Int?) -> ConflictScanResult
-
-pub fn select_available_regs_for_bundle(RegClass, Bool, Array[PhysicalReg], Array[PhysicalReg]) -> Array[PhysicalReg]
-
-pub fn select_caller_saved_regs(Array[PhysicalReg], Array[PhysicalReg]) -> Array[PhysicalReg]
-
-pub fn should_force_spill_after_retry(Int, Int, Bool, Bool) -> Bool
-
-pub fn should_force_spill_for_class_and_call(RegClass, Bool) -> Bool
 
 pub fn upper_bound_sorted_int(Array[Int], Int) -> Int
 
@@ -286,12 +272,6 @@ pub(all) struct ParallelMove {
   from : Location
   to : Location
   class : RegClass
-} derive(Eq, @debug.Debug)
-
-pub(all) enum ParamPreassignDecision {
-  PreassignIncoming(Bool)
-  HintIncoming
-  Defer
 } derive(Eq, @debug.Debug)
 
 pub(all) struct PhysicalReg {

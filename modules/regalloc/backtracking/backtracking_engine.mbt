@@ -217,7 +217,7 @@ pub fn[B, R, P] run_backtracking_allocation_loop(
   split_bundle : (B, (P, R)?) -> Unit,
   force_spill : (B) -> Unit,
 ) -> Unit {
-  let max_iterations = @regalloc.allocation_iteration_limit(bundle_count)
+  let max_iterations = allocation_iteration_limit(bundle_count)
   let mut iterations = 0
   while queue.length() > 0 && iterations < max_iterations {
     iterations += 1
@@ -232,7 +232,7 @@ pub fn[B, R, P] run_backtracking_allocation_loop(
     }
     if entry.bundle_id >= 0 && entry.bundle_id < bundle_attempts.length() {
       bundle_attempts[entry.bundle_id] = bundle_attempts[entry.bundle_id] + 1
-      if @regalloc.should_force_spill_after_retry(
+      if should_force_spill_after_retry(
           bundle_attempts[entry.bundle_id],
           bundle_retry_limit,
           bundle_is_pinned(bundle),

@@ -411,3 +411,68 @@ test "bundle merge planner coalesces only compatible non-overlapping ranges" {
   inspect(plan.range_to_bundle[0] == plan.range_to_bundle[2], content="false")
   inspect(plan.range_to_bundle[0] == plan.range_to_bundle[3], content="false")
 }
+
+///|
+test "select available registers for call-crossing bundles" {
+  let r0 : @regalloc.PhysicalReg = { id: 0, class: Int }
+  let r1 : @regalloc.PhysicalReg = { id: 1, class: Int }
+  let f0 : @regalloc.PhysicalReg = { id: 0, class: Float }
+  let f1 : @regalloc.PhysicalReg = { id: 1, class: Float }
+  let v0 : @regalloc.PhysicalReg = { id: 0, class: Vector }
+  debug_inspect(
+    select_available_regs_for_bundle(Int, false, [r0, r1], [r1]),
+    content="[{ id: 0, class: Int }, { id: 1, class: Int }]",
+  )
+  debug_inspect(
+    select_available_regs_for_bundle(Int, true, [r0, r1], [r1]),
+    content="[{ id: 1, class: Int }]",
+  )
+  debug_inspect(
+    select_available_regs_for_bundle(Float, true, [f0, f1], [f1]),
+    content="[{ id: 1, class: Float }]",
+  )
+  debug_inspect(
+    select_available_regs_for_bundle(Vector, true, [v0], [v0]),
+    content="[]",
+  )
+}
+
+///|
+test "select caller saved registers from callee saved set" {
+  let r0 : @regalloc.PhysicalReg = { id: 0, class: Int }
+  let r1 : @regalloc.PhysicalReg = { id: 1, class: Int }
+  let r2 : @regalloc.PhysicalReg = { id: 2, class: Int }
+  let invalid : @regalloc.PhysicalReg = { id: -1, class: Int }
+  inspect(max_physical_reg_id([r0, r2]), content="2")
+  debug_inspect(
+    select_caller_saved_regs([r0, r1, invalid, r2], [r1]),
+    content="[{ id: 0, class: Int }, { id: 2, class: Int }]",
+  )
+}
+
+///|
+test "allocation policy covers retry and vector call spilling" {
+  inspect(allocation_iteration_limit(7), content="70")
+  inspect(should_force_spill_after_retry(4, 3, false, false), content="true")
+  inspect(should_force_spill_after_retry(4, 3, true, false), content="false")
+  inspect(should_force_spill_after_retry(4, 3, false, true), content="false")
+  inspect(should_force_spill_for_class_and_call(Vector, true), content="true")
+  inspect(should_force_spill_for_class_and_call(Float, true), content="false")
+}
+
+///|
+test "param preassignment policy separates pin hint and defer" {
+  debug_inspect(
+    plan_param_preassignment(true, false, false),
+    content="PreassignIncoming(true)",
+  )
+  debug_inspect(
+    plan_param_preassignment(false, true, true),
+    content="PreassignIncoming(true)",
+  )
+  debug_inspect(
+    plan_param_preassignment(false, false, false),
+    content="HintIncoming",
+  )
+  debug_inspect(plan_param_preassignment(true, false, true), content="Defer")
+}

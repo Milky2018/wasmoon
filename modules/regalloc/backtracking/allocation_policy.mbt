@@ -15,7 +15,7 @@ pub fn should_force_spill_after_retry(
 
 ///|
 pub fn should_force_spill_for_class_and_call(
-  class : RegClass,
+  class : @regalloc.RegClass,
   crosses_call : Bool,
 ) -> Bool {
   class == Vector && crosses_call
@@ -23,11 +23,11 @@ pub fn should_force_spill_for_class_and_call(
 
 ///|
 pub fn select_available_regs_for_bundle(
-  class : RegClass,
+  class : @regalloc.RegClass,
   crosses_call : Bool,
-  available_regs : Array[PhysicalReg],
-  callee_saved_regs : Array[PhysicalReg],
-) -> Array[PhysicalReg] {
+  available_regs : Array[@regalloc.PhysicalReg],
+  callee_saved_regs : Array[@regalloc.PhysicalReg],
+) -> Array[@regalloc.PhysicalReg] {
   if crosses_call {
     match class {
       Int | Float => callee_saved_regs
@@ -39,7 +39,7 @@ pub fn select_available_regs_for_bundle(
 }
 
 ///|
-pub fn max_physical_reg_id(regs : Array[PhysicalReg]) -> Int {
+pub fn max_physical_reg_id(regs : Array[@regalloc.PhysicalReg]) -> Int {
   let mut max_id = -1
   for preg in regs {
     if preg.id > max_id {
@@ -51,9 +51,9 @@ pub fn max_physical_reg_id(regs : Array[PhysicalReg]) -> Int {
 
 ///|
 pub fn select_caller_saved_regs(
-  allocatable_regs : Array[PhysicalReg],
-  callee_saved_regs : Array[PhysicalReg],
-) -> Array[PhysicalReg] {
+  allocatable_regs : Array[@regalloc.PhysicalReg],
+  callee_saved_regs : Array[@regalloc.PhysicalReg],
+) -> Array[@regalloc.PhysicalReg] {
   let mut max_id = max_physical_reg_id(allocatable_regs)
   let callee_max_id = max_physical_reg_id(callee_saved_regs)
   if callee_max_id > max_id {
@@ -65,7 +65,7 @@ pub fn select_caller_saved_regs(
       is_callee_saved[preg.id] = true
     }
   }
-  let caller_saved : Array[PhysicalReg] = []
+  let caller_saved : Array[@regalloc.PhysicalReg] = []
   for preg in allocatable_regs {
     if preg.id >= 0 &&
       preg.id < is_callee_saved.length() &&

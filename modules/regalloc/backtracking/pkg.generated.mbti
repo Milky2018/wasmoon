@@ -7,6 +7,8 @@ import {
 }
 
 // Values
+pub fn allocation_iteration_limit(Int) -> Int
+
 pub fn[P] backtracking_queue_entry_higher(BacktrackingQueueEntry[P], BacktrackingQueueEntry[P]) -> Bool
 
 pub fn[P] build_backtracking_allocation_result(Array[BacktrackingRangeResult[P]], Int) -> BacktrackingAllocationResult[P]
@@ -23,6 +25,8 @@ pub fn[P] make_backtracking_alloc_table(Int) -> Array[Array[(Int, OrderedSpan[P]
 
 pub fn make_backtracking_bool_table(Int) -> Array[Bool]
 
+pub fn max_physical_reg_id(Array[@regalloc.PhysicalReg]) -> Int
+
 pub fn[P] plan_backtracking_bundle_split(Array[BacktrackingSplitRange[P]], P?, Bool, (P, P) -> Bool, (P, P) -> Bool) -> BacktrackingSplitPlan
 
 pub fn[P] plan_backtracking_fixed_constraint_edits(Array[BacktrackingFixedConstraintInst[P]], (P, P) -> Bool) -> Array[BacktrackingConstraintInstEdits[P]]
@@ -31,9 +35,19 @@ pub fn[P] plan_backtracking_probe_order(Array[P], Array[P], Array[P], Bool, Int,
 
 pub fn[C, P, R] plan_bundle_merges(Array[BundleMergeRange[C, P, R]], Array[BundleMergeEdge], (C, C) -> Bool, (P, P) -> Bool) -> BundleMergePlan[C, R]
 
+pub fn plan_param_preassignment(Bool, Bool, Bool) -> ParamPreassignDecision
+
 pub fn[B, R, P] run_backtracking_allocation_loop(BacktrackingQueue[R], Array[Int], Int, Bool, Int, (Int) -> B, (B) -> Bool, (B) -> Bool, (B) -> Bool, (B) -> Bool, (B, R?) -> R?, (B, R?) -> (R?, (P, R)?), (B, R?) -> R?, (B, R) -> Unit, (B, (P, R)?) -> Unit, (B) -> Unit) -> Unit
 
 pub fn[P] scan_backtracking_conflicts_with_cutoff(Array[OrderedSpan[P]], Array[BacktrackingOccupiedSpan[P]], Int, Int?) -> BacktrackingConflictScanResult[P]
+
+pub fn select_available_regs_for_bundle(@regalloc.RegClass, Bool, Array[@regalloc.PhysicalReg], Array[@regalloc.PhysicalReg]) -> Array[@regalloc.PhysicalReg]
+
+pub fn select_caller_saved_regs(Array[@regalloc.PhysicalReg], Array[@regalloc.PhysicalReg]) -> Array[@regalloc.PhysicalReg]
+
+pub fn should_force_spill_after_retry(Int, Int, Bool, Bool) -> Bool
+
+pub fn should_force_spill_for_class_and_call(@regalloc.RegClass, Bool) -> Bool
 
 pub fn should_prefer_caller_saved_for_backtracking(@regalloc.RegClass, Bool, Bool) -> Bool
 
@@ -203,6 +217,12 @@ pub(all) struct OrderedSpan[P] {
   start_ord : Int
   end_ord : Int
 }
+
+pub(all) enum ParamPreassignDecision {
+  PreassignIncoming(Bool)
+  HintIncoming
+  Defer
+} derive(Eq, @debug.Debug)
 
 pub(all) enum RegallocAlgorithm {
   Backtracking

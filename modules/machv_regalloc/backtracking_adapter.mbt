@@ -977,7 +977,7 @@ fn BacktrackingAllocator::allocate(self : BacktrackingAllocator) -> Unit {
     fn(bundle) { bundle.is_pinned },
     fn(bundle) { bundle.has_fixed_constraint(self.ranges) },
     fn(bundle) {
-      @regalloc.should_force_spill_for_class_and_call(
+      @backtracking.should_force_spill_for_class_and_call(
         abi_class_to_regalloc_policy(bundle.reg_class),
         bundle.crosses_call(self.ranges),
       )
