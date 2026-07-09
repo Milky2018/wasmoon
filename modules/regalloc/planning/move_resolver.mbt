@@ -1,12 +1,12 @@
 ///|
 pub(all) struct ParallelMove {
-  from : Location
-  to : Location
-  class : RegClass
+  from : @regalloc.Location
+  to : @regalloc.Location
+  class : @regalloc.RegClass
 } derive(Eq, Debug)
 
 ///|
-fn move_class_bank(class : RegClass) -> Int {
+fn move_class_bank(class : @regalloc.RegClass) -> Int {
   match class {
     Int => 0
     Float | Vector => 1
@@ -14,7 +14,7 @@ fn move_class_bank(class : RegClass) -> Int {
 }
 
 ///|
-fn move_class_key(class : RegClass) -> Int {
+fn move_class_key(class : @regalloc.RegClass) -> Int {
   match class {
     Int => 0
     Float => 1
@@ -23,12 +23,15 @@ fn move_class_key(class : RegClass) -> Int {
 }
 
 ///|
-fn move_same_location(lhs : Location, rhs : Location) -> Bool {
+fn move_same_location(
+  lhs : @regalloc.Location,
+  rhs : @regalloc.Location,
+) -> Bool {
   lhs == rhs
 }
 
 ///|
-fn loc_exact_key(loc : Location, class : RegClass) -> Int {
+fn loc_exact_key(loc : @regalloc.Location, class : @regalloc.RegClass) -> Int {
   match loc {
     Reg(preg) => 1_000_000 + preg.id * 4 + move_class_key(preg.class)
     Spill(slot) => slot * 4 + move_class_key(class)
@@ -36,7 +39,7 @@ fn loc_exact_key(loc : Location, class : RegClass) -> Int {
 }
 
 ///|
-fn reg_bank(class : RegClass) -> Int {
+fn reg_bank(class : @regalloc.RegClass) -> Int {
   match class {
     Int => 0
     Float | Vector => 1
@@ -44,7 +47,7 @@ fn reg_bank(class : RegClass) -> Int {
 }
 
 ///|
-fn loc_key(loc : Location, class : RegClass) -> Int {
+fn loc_key(loc : @regalloc.Location, class : @regalloc.RegClass) -> Int {
   match loc {
     Reg(preg) => preg.id * 2 + reg_bank(preg.class)
     Spill(slot) => 1_000_000 + slot * 4 + move_class_key(class)
@@ -53,21 +56,21 @@ fn loc_key(loc : Location, class : RegClass) -> Int {
 
 ///|
 fn aliases(
-  lhs : Location,
-  lhs_class : RegClass,
-  rhs : Location,
-  rhs_class : RegClass,
+  lhs : @regalloc.Location,
+  lhs_class : @regalloc.RegClass,
+  rhs : @regalloc.Location,
+  rhs_class : @regalloc.RegClass,
 ) -> Bool {
   loc_key(lhs, lhs_class) == loc_key(rhs, rhs_class)
 }
 
 ///|
 fn pick_scratch(
-  class : RegClass,
-  scratch_int : Array[PhysicalReg],
-  scratch_float : Array[PhysicalReg],
-  avoid : Location?,
-) -> Location {
+  class : @regalloc.RegClass,
+  scratch_int : Array[@regalloc.PhysicalReg],
+  scratch_float : Array[@regalloc.PhysicalReg],
+  avoid : @regalloc.Location?,
+) -> @regalloc.Location {
   let candidates = match class {
     Int => scratch_int
     Float | Vector => scratch_float
@@ -86,19 +89,19 @@ fn pick_scratch(
 
 ///|
 fn pick_cycle_scratch(
-  class : RegClass,
-  scratch_int : Array[PhysicalReg],
-  scratch_float : Array[PhysicalReg],
+  class : @regalloc.RegClass,
+  scratch_int : Array[@regalloc.PhysicalReg],
+  scratch_float : Array[@regalloc.PhysicalReg],
   src_set : Set[Int],
-  avoid_a : Location,
-  avoid_b : Location,
-) -> Location {
+  avoid_a : @regalloc.Location,
+  avoid_b : @regalloc.Location,
+) -> @regalloc.Location {
   let candidates = match class {
     Int => scratch_int
     Float | Vector => scratch_float
   }
   for preg in candidates {
-    let candidate = Reg(preg)
+    let candidate : @regalloc.Location = Reg(preg)
     let key = loc_key(candidate, class)
     if src_set.contains(key) {
       continue
@@ -116,8 +119,8 @@ fn pick_cycle_scratch(
 fn emit_stack_to_stack(
   mv : ParallelMove,
   result : Array[ParallelMove],
-  scratch_int : Array[PhysicalReg],
-  scratch_float : Array[PhysicalReg],
+  scratch_int : Array[@regalloc.PhysicalReg],
+  scratch_float : Array[@regalloc.PhysicalReg],
 ) -> Unit {
   let temp = pick_scratch(mv.class, scratch_int, scratch_float, None)
   result.push({ from: mv.from, to: temp, class: mv.class })
@@ -136,8 +139,8 @@ fn rebuild_src_set(pending : Array[ParallelMove]) -> Set[Int] {
 ///|
 fn resolve_single_bank_moves(
   moves : Array[ParallelMove],
-  scratch_int : Array[PhysicalReg],
-  scratch_float : Array[PhysicalReg],
+  scratch_int : Array[@regalloc.PhysicalReg],
+  scratch_float : Array[@regalloc.PhysicalReg],
 ) -> Array[ParallelMove] {
   let result : Array[ParallelMove] = []
   let pending : Array[ParallelMove] = []
@@ -213,8 +216,8 @@ fn resolve_single_bank_moves(
 ///|
 pub fn resolve_parallel_moves(
   moves : Array[ParallelMove],
-  scratch_int : Array[PhysicalReg],
-  scratch_float : Array[PhysicalReg],
+  scratch_int : Array[@regalloc.PhysicalReg],
+  scratch_float : Array[@regalloc.PhysicalReg],
 ) -> Array[ParallelMove] {
   let mut has_int = false
   let mut has_fp = false

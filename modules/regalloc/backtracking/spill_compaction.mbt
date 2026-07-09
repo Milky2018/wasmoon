@@ -49,11 +49,11 @@ fn[R] backtracking_compact_slot_disallowed(
 ///|
 pub fn[C, R, P] compact_backtracking_spill_slots(
   spillsets : Array[SpillSetInfo[C, R, P]],
-  no_share_edges : Array[@regalloc.SpillSlotNoShareEdge],
+  no_share_edges : Array[@planning.SpillSlotNoShareEdge],
   reserve_slot : (Int, C) -> @regalloc.SpillSlotReservation,
   ranges_overlap : (Array[R], Array[R]) -> Bool,
   compare_start : (P, P) -> Int,
-) -> @regalloc.SpillSlotCompaction {
+) -> @planning.SpillSlotCompaction {
   let no_share : Map[Int, Set[Int]] = {}
   for edge in no_share_edges {
     compact_add_no_share_edge(no_share, edge.lhs, edge.rhs)
@@ -68,7 +68,7 @@ pub fn[C, R, P] compact_backtracking_spill_slots(
   ordered.sort_by(fn(a, b) { compare_start(a.start, b.start) })
   let scalar_slots : Array[AssignedSlot[R]] = []
   let vector_slots : Array[AssignedSlot[R]] = []
-  let remaps : Array[@regalloc.SpillSlotRemap] = []
+  let remaps : Array[@planning.SpillSlotRemap] = []
   let mut next_slot = 0
   for spillset in ordered {
     let reservation = reserve_slot(next_slot, spillset.reg_class)

@@ -1,8 +1,8 @@
 ///|
 pub(all) struct CompactSpillSet {
   old_slot : Int
-  class : RegClass
-  ranges : Array[ProgramRange]
+  class : @regalloc.RegClass
+  ranges : Array[@regalloc.ProgramRange]
 } derive(Debug)
 
 ///|
@@ -26,7 +26,7 @@ pub(all) struct SpillSlotCompaction {
 ///|
 priv struct CompactAssignedSlot {
   start : Int
-  ranges : Array[ProgramRange]
+  ranges : Array[@regalloc.ProgramRange]
   old_slots : Array[Int]
 }
 
@@ -52,8 +52,8 @@ fn compact_add_no_share_edge(
 
 ///|
 fn compact_point_before(
-  lhs : ProgramPoint,
-  rhs : ProgramPoint,
+  lhs : @regalloc.ProgramPoint,
+  rhs : @regalloc.ProgramPoint,
   block_order : Array[Int],
 ) -> Bool {
   lhs.compare_with_order(rhs, block_order) < 0
@@ -61,8 +61,8 @@ fn compact_point_before(
 
 ///|
 fn compact_ranges_overlap(
-  lhs : Array[ProgramRange],
-  rhs : Array[ProgramRange],
+  lhs : Array[@regalloc.ProgramRange],
+  rhs : Array[@regalloc.ProgramRange],
   block_order : Array[Int],
 ) -> Bool {
   for a in lhs {
@@ -78,9 +78,9 @@ fn compact_ranges_overlap(
 
 ///|
 fn compact_start(
-  ranges : Array[ProgramRange],
+  ranges : Array[@regalloc.ProgramRange],
   block_order : Array[Int],
-) -> ProgramPoint {
+) -> @regalloc.ProgramPoint {
   let mut start = ranges[0].start
   for i in 1..<ranges.length() {
     let candidate = ranges[i].start
@@ -92,8 +92,10 @@ fn compact_start(
 }
 
 ///|
-fn compact_copy_ranges(ranges : Array[ProgramRange]) -> Array[ProgramRange] {
-  let out : Array[ProgramRange] = []
+fn compact_copy_ranges(
+  ranges : Array[@regalloc.ProgramRange],
+) -> Array[@regalloc.ProgramRange] {
+  let out : Array[@regalloc.ProgramRange] = []
   for range in ranges {
     out.push(range)
   }
@@ -147,7 +149,7 @@ pub fn compact_spill_slots(
   let remaps : Array[SpillSlotRemap] = []
   let mut next_slot = 0
   for spillset in ordered {
-    let reservation = reserve_spill_slot(next_slot, spillset.class)
+    let reservation = @regalloc.reserve_spill_slot(next_slot, spillset.class)
     let slots_used = reservation.slots_used
     let pool = if slots_used == 2 { vector_slots } else { scalar_slots }
     let mut placed = false
@@ -166,7 +168,7 @@ pub fn compact_spill_slots(
     if placed {
       continue
     }
-    let reserved = reserve_spill_slot(next_slot, spillset.class)
+    let reserved = @regalloc.reserve_spill_slot(next_slot, spillset.class)
     next_slot = reserved.next_slot
     pool.push({
       start: reserved.slot,

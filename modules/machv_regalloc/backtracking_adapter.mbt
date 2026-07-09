@@ -1348,7 +1348,7 @@ fn BacktrackingAllocator::compact_spill_slots(
   // distinct spill slots after compaction. Otherwise, compaction can collapse
   // logically distinct values onto one stack location at the jump boundary and
   // break SSA block-arg semantics.
-  let no_share_edges : Array[@regalloc.SpillSlotNoShareEdge] = []
+  let no_share_edges : Array[@planning.SpillSlotNoShareEdge] = []
   let block_id_to_index : Map[Int, Int] = {}
   for i, block in self.func.blocks {
     block_id_to_index.set(block.id, i)

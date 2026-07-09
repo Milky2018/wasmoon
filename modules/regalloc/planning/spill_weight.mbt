@@ -1,6 +1,6 @@
 ///|
 pub fn compute_spill_weight(
-  uses : Array[UsePosition],
+  uses : Array[@regalloc.UsePosition],
   loop_depths : Array[Int],
 ) -> Int {
   let mut weight = 0

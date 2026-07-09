@@ -6,6 +6,7 @@ import {
   "Milky2018/machv/isa",
   "Milky2018/regalloc",
   "Milky2018/regalloc/backtracking",
+  "Milky2018/regalloc/planning",
   "moonbitlang/core/debug",
   "moonbitlang/core/hashset",
   "moonbitlang/core/math",

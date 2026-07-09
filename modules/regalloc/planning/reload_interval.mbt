@@ -3,14 +3,14 @@ pub(all) struct ReloadUseInfo {
   block_id : Int
   inst_index : Int
   spill_slot : Int
-  vreg : VirtualReg
+  vreg : @regalloc.VirtualReg
 } derive(Eq, Debug)
 
 ///|
 pub(all) struct ReloadIntervalInfo {
   block_id : Int
   spill_slot : Int
-  vreg : VirtualReg
+  vreg : @regalloc.VirtualReg
   first_inst : Int
   last_inst : Int
 } derive(Eq, Debug)

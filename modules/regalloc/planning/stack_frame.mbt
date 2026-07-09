@@ -1,9 +1,9 @@
 ///|
 pub(all) enum StackSlotKind {
-  Spill(VirtualReg)
+  Spill(@regalloc.VirtualReg)
   Local(Int)
   OutgoingArg(Int)
-  CalleeSaved(PhysicalReg)
+  CalleeSaved(@regalloc.PhysicalReg)
 } derive(Eq, Debug)
 
 ///|
@@ -47,7 +47,7 @@ pub(all) struct StackFrame {
   frame_align : Int
   mut next_spill_offset : Int
   mut next_arg_offset : Int
-  callee_saved_regs : Array[PhysicalReg]
+  callee_saved_regs : Array[@regalloc.PhysicalReg]
 }
 
 ///|
@@ -65,7 +65,7 @@ pub fn StackFrame::StackFrame(frame_align : Int) -> StackFrame {
 ///|
 pub fn StackFrame::alloc_spill_slot(
   self : StackFrame,
-  vreg : VirtualReg,
+  vreg : @regalloc.VirtualReg,
   size : Int,
   align : Int,
 ) -> Int {
@@ -122,7 +122,7 @@ pub fn StackFrame::alloc_outgoing_arg(
 ///|
 pub fn StackFrame::add_callee_saved(
   self : StackFrame,
-  preg : PhysicalReg,
+  preg : @regalloc.PhysicalReg,
 ) -> Int {
   let size = 8
   let align = 8
@@ -152,7 +152,9 @@ pub fn StackFrame::size(self : StackFrame) -> Int {
 }
 
 ///|
-pub fn StackFrame::get_callee_saved(self : StackFrame) -> Array[PhysicalReg] {
+pub fn StackFrame::get_callee_saved(
+  self : StackFrame,
+) -> Array[@regalloc.PhysicalReg] {
   self.callee_saved_regs
 }
 
@@ -190,7 +192,7 @@ fn align_up(value : Int, align : Int) -> Int {
 }
 
 ///|
-fn vreg_to_string(vreg : VirtualReg) -> String {
+fn vreg_to_string(vreg : @regalloc.VirtualReg) -> String {
   let prefix = match vreg.class {
     Int => "v"
     Float => "f"
@@ -200,7 +202,7 @@ fn vreg_to_string(vreg : VirtualReg) -> String {
 }
 
 ///|
-fn preg_to_string(preg : PhysicalReg) -> String {
+fn preg_to_string(preg : @regalloc.PhysicalReg) -> String {
   let prefix = match preg.class {
     Int => "x"
     Float => "f"

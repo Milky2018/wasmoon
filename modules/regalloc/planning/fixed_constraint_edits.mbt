@@ -1,13 +1,13 @@
 ///|
 pub(all) enum FixedConstraintOperand {
-  Virtual(Location?, Int)
-  Physical(PhysicalReg, Int)
+  Virtual(@regalloc.Location?, Int)
+  Physical(@regalloc.PhysicalReg, Int)
 } derive(Eq, Debug)
 
 ///|
 pub(all) struct FixedConstraint {
   operand : FixedConstraintOperand
-  required : PhysicalReg
+  required : @regalloc.PhysicalReg
 } derive(Eq, Debug)
 
 ///|
@@ -20,8 +20,8 @@ pub(all) struct FixedConstraintInst {
 
 ///|
 pub(all) struct FixedConstraintMove {
-  from : Location
-  to : Location
+  from : @regalloc.Location
+  to : @regalloc.Location
   class_tag : Int
 } derive(Eq, Debug)
 
@@ -34,7 +34,10 @@ pub(all) struct FixedConstraintInstEdits {
 } derive(Debug)
 
 ///|
-fn fixed_constraint_same_reg(a : PhysicalReg, b : PhysicalReg) -> Bool {
+fn fixed_constraint_same_reg(
+  a : @regalloc.PhysicalReg,
+  b : @regalloc.PhysicalReg,
+) -> Bool {
   a.id == b.id
 }
 

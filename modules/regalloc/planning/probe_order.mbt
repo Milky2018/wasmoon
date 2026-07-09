@@ -1,15 +1,18 @@
 ///|
-fn same_physical_reg(lhs : PhysicalReg, rhs : PhysicalReg) -> Bool {
+fn same_physical_reg(
+  lhs : @regalloc.PhysicalReg,
+  rhs : @regalloc.PhysicalReg,
+) -> Bool {
   lhs.id == rhs.id && lhs.class == rhs.class
 }
 
 ///|
 fn append_probe_phase(
-  out : Array[PhysicalReg],
-  regs : Array[PhysicalReg],
+  out : Array[@regalloc.PhysicalReg],
+  regs : Array[@regalloc.PhysicalReg],
   scan_limit : Int,
   offset : Int,
-  skip_reg : PhysicalReg?,
+  skip_reg : @regalloc.PhysicalReg?,
 ) -> Unit {
   let n = regs.length()
   if n == 0 {
@@ -33,15 +36,15 @@ fn append_probe_phase(
 
 ///|
 pub fn plan_register_probe_order(
-  available_regs : Array[PhysicalReg],
-  caller_saved_regs : Array[PhysicalReg],
-  callee_saved_regs : Array[PhysicalReg],
+  available_regs : Array[@regalloc.PhysicalReg],
+  caller_saved_regs : Array[@regalloc.PhysicalReg],
+  callee_saved_regs : Array[@regalloc.PhysicalReg],
   prefer_caller_saved : Bool,
   scan_limit : Int,
   offset : Int,
-  skip_reg : PhysicalReg?,
-) -> Array[PhysicalReg] {
-  let out : Array[PhysicalReg] = []
+  skip_reg : @regalloc.PhysicalReg?,
+) -> Array[@regalloc.PhysicalReg] {
+  let out : Array[@regalloc.PhysicalReg] = []
   let limit = if scan_limit < available_regs.length() {
     scan_limit
   } else {

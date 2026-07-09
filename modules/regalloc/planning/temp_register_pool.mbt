@@ -57,7 +57,7 @@ pub fn plan_temp_register_pool(
 
 ///|
 pub(all) struct TempRegisterChoice {
-  preg : PhysicalReg
+  preg : @regalloc.PhysicalReg
   next_cursor : Int
   save_slot : Int?
   next_spill_slot : Int
@@ -75,7 +75,7 @@ fn temp_id_in_list(values : Array[Int], value : Int) -> Bool {
 
 ///|
 pub fn choose_temp_register(
-  class : RegClass,
+  class : @regalloc.RegClass,
   used_ids : Array[Int],
   temp_pool : Array[Int],
   fallback_candidates : Array[Int],
@@ -100,7 +100,7 @@ pub fn choose_temp_register(
       continue
     }
     if need_preserve {
-      let reservation = reserve_spill_slot(next_spill_slot, class)
+      let reservation = @regalloc.reserve_spill_slot(next_spill_slot, class)
       return {
         preg: { id: idx, class },
         next_cursor: cursor + 1,

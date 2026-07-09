@@ -140,22 +140,27 @@ test "linear scan keeps successor-live values from reusing a register" {
 ///|
 test "compute reverse postorder from dense successors" {
   debug_inspect(
-    compute_reverse_postorder_from_successors([[1, 2], [3], [3], []]),
+    @planning.compute_reverse_postorder_from_successors([[1, 2], [3], [3], []]),
     content="[0, 2, 1, 3]",
   )
   debug_inspect(
-    compute_reverse_postorder_from_successors([[1], [], [], []]),
+    @planning.compute_reverse_postorder_from_successors([[1], [], [], []]),
     content="[2, 3, 1, 0]",
   )
   debug_inspect(
-    compute_reachable_reverse_postorder_from_successors([[1], [], [], []]),
+    @planning.compute_reachable_reverse_postorder_from_successors([
+      [1],
+      [],
+      [],
+      [],
+    ]),
     content="[0, 1]",
   )
 }
 
 ///|
 test "build dense CFG edges from sparse block ids" {
-  let edges = build_dense_successor_edges([10, 20, 30], [
+  let edges = @planning.build_dense_successor_edges([10, 20, 30], [
     [20, 30, 99],
     [30],
     [10],
@@ -166,12 +171,20 @@ test "build dense CFG edges from sparse block ids" {
 
 ///|
 test "dense CFG computes dominators and loops" {
-  let edges = build_dense_successor_edges([0, 1, 2, 3], [[1], [3, 2], [1], []])
-  debug_inspect(compute_dominators_from_edges(edges), content="[0, 0, 1, 1]")
-  let back_edges = find_back_edges_from_edges(edges)
+  let edges = @planning.build_dense_successor_edges([0, 1, 2, 3], [
+    [1],
+    [3, 2],
+    [1],
+    [],
+  ])
+  debug_inspect(
+    @planning.compute_dominators_from_edges(edges),
+    content="[0, 0, 1, 1]",
+  )
+  let back_edges = @planning.find_back_edges_from_edges(edges)
   inspect(back_edges.length(), content="1")
   debug_inspect(back_edges[0], content="(2, 1)")
-  let loops = find_loops_from_edges(edges)
+  let loops = @planning.find_loops_from_edges(edges)
   inspect(loops.length(), content="1")
   inspect(loops[0].header, content="1")
   inspect(loops[0].latch, content="2")
@@ -181,11 +194,14 @@ test "dense CFG computes dominators and loops" {
 ///|
 test "count sorted integer points in open range" {
   let points = [2, 4, 4, 8, 10]
-  inspect(lower_bound_sorted_int(points, 4), content="1")
-  inspect(upper_bound_sorted_int(points, 4), content="3")
-  inspect(count_sorted_ints_in_open_range(points, 4, 10), content="1")
-  inspect(count_sorted_ints_in_open_range(points, 1, 11), content="5")
-  inspect(count_sorted_ints_in_open_range(points, 10, 12), content="0")
+  inspect(@planning.lower_bound_sorted_int(points, 4), content="1")
+  inspect(@planning.upper_bound_sorted_int(points, 4), content="3")
+  inspect(@planning.count_sorted_ints_in_open_range(points, 4, 10), content="1")
+  inspect(@planning.count_sorted_ints_in_open_range(points, 1, 11), content="5")
+  inspect(
+    @planning.count_sorted_ints_in_open_range(points, 10, 12),
+    content="0",
+  )
 }
 
 ///|
@@ -276,14 +292,16 @@ test "linear scan can use fixed registers outside the allocatable pool" {
 ///|
 test "plan long-distance rematerialization clones by pure use positions" {
   let v0 : VirtualReg = { id: 0, class: Int }
-  let defs : Array[RematDefInfo] = [{ vreg: v0, block_id: 0, inst_index: 0 }]
-  let uses : Array[RematUseInfo] = [
+  let defs : Array[@planning.RematDefInfo] = [
+    { vreg: v0, block_id: 0, inst_index: 0 },
+  ]
+  let uses : Array[@planning.RematUseInfo] = [
     { vreg: v0, block_id: 0, inst_index: 2 },
     { vreg: v0, block_id: 0, inst_index: 4 },
     { vreg: v0, block_id: 1, inst_index: 8 },
     { vreg: v0, block_id: 0, inst_index: 9 },
   ]
-  let plan = plan_long_distance_rematerializations(
+  let plan = @planning.plan_long_distance_rematerializations(
     defs,
     uses,
     min_distance=4,
@@ -298,14 +316,16 @@ test "plan long-distance rematerialization clones by pure use positions" {
 ///|
 test "plan cross-block rematerialization clones once per use block" {
   let v0 : VirtualReg = { id: 0, class: Int }
-  let defs : Array[RematDefInfo] = [{ vreg: v0, block_id: 0, inst_index: 0 }]
-  let uses : Array[RematUseInfo] = [
+  let defs : Array[@planning.RematDefInfo] = [
+    { vreg: v0, block_id: 0, inst_index: 0 },
+  ]
+  let uses : Array[@planning.RematUseInfo] = [
     { vreg: v0, block_id: 0, inst_index: 3 },
     { vreg: v0, block_id: 1, inst_index: 2 },
     { vreg: v0, block_id: 1, inst_index: 4 },
     { vreg: v0, block_id: 2, inst_index: 1 },
   ]
-  let plan = plan_cross_block_rematerializations(defs, uses)
+  let plan = @planning.plan_cross_block_rematerializations(defs, uses)
   debug_inspect(
     plan,
     content=(
@@ -322,7 +342,7 @@ test "compact spill slots reuses non-overlapping scalar slots" {
   let a = ProgramRange::ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 2))
   let b = ProgramRange::ProgramRange(ProgramPoint(0, 2), ProgramPoint(0, 4))
   let c = ProgramRange::ProgramRange(ProgramPoint(0, 1), ProgramPoint(0, 3))
-  let result = compact_spill_slots(
+  let result = @planning.compact_spill_slots(
     [
       { old_slot: 0, class: Int, ranges: [a] },
       { old_slot: 1, class: Int, ranges: [b] },
@@ -350,7 +370,7 @@ test "compact spill slots reuses non-overlapping scalar slots" {
 test "compact spill slots honors vector alignment and no-share edges" {
   let full = ProgramRange::ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 5))
   let later = ProgramRange::ProgramRange(ProgramPoint(0, 5), ProgramPoint(0, 7))
-  let result = compact_spill_slots(
+  let result = @planning.compact_spill_slots(
     [
       { old_slot: 0, class: Int, ranges: [full] },
       { old_slot: 1, class: Vector, ranges: [later] },
@@ -376,7 +396,7 @@ test "compact spill slots honors vector alignment and no-share edges" {
 
 ///|
 test "priority work queue pops by priority with stable tie-breaks" {
-  let queue = PriorityWorkQueue::PriorityWorkQueue()
+  let queue = @planning.PriorityWorkQueue::PriorityWorkQueue()
   queue.push(3, 10)
   queue.push(1, 20)
   queue.push(2, 20)
@@ -407,27 +427,27 @@ test "choose fixed register hint by frequency and low-id tie break" {
   let r1 : PhysicalReg = { id: 1, class: Int }
   let r2 : PhysicalReg = { id: 2, class: Int }
   debug_inspect(
-    choose_fixed_reg_hint([r0, r1, r2], [r2, r1, r2]),
+    @planning.choose_fixed_reg_hint([r0, r1, r2], [r2, r1, r2]),
     content="Some({ id: 2, class: Int })",
   )
   debug_inspect(
-    choose_fixed_reg_hint([r0, r1, r2], [r2, r1]),
+    @planning.choose_fixed_reg_hint([r0, r1, r2], [r2, r1]),
     content="Some({ id: 1, class: Int })",
   )
   debug_inspect(
-    choose_fixed_reg_hint([r0], [{ id: 9, class: Int }]),
+    @planning.choose_fixed_reg_hint([r0], [{ id: 9, class: Int }]),
     content="None",
   )
 }
 
 ///|
 test "scan conflicts reports evictable owners and first conflict point" {
-  let span : OrderedProgramSpan = {
+  let span : @planning.OrderedProgramSpan = {
     start: ProgramPoint(0, 1),
     start_ord: 10,
     end_ord: 30,
   }
-  let occupied : Array[OccupiedProgramSpan] = [
+  let occupied : Array[@planning.OccupiedProgramSpan] = [
     {
       owner_id: 7,
       span: { start: ProgramPoint(0, 0), start_ord: 0, end_ord: 12 },
@@ -441,7 +461,7 @@ test "scan conflicts reports evictable owners and first conflict point" {
       owner_pinned: false,
     },
   ]
-  let result = scan_conflicts_with_cutoff([span], occupied, 9, None)
+  let result = @planning.scan_conflicts_with_cutoff([span], occupied, 9, None)
   debug_inspect(
     result,
     content=(
@@ -457,20 +477,20 @@ test "scan conflicts reports evictable owners and first conflict point" {
 
 ///|
 test "ordered span conflict scan skips ended occupied spans" {
-  let occupied : Array[OrderedProgramSpan] = [
+  let occupied : Array[@planning.OrderedProgramSpan] = [
     { start: ProgramPoint(0, 0), start_ord: 0, end_ord: 4 },
     { start: ProgramPoint(0, 1), start_ord: 8, end_ord: 12 },
   ]
-  inspect(lower_bound_ordered_span_by_end(occupied, 6), content="1")
+  inspect(@planning.lower_bound_ordered_span_by_end(occupied, 6), content="1")
   inspect(
-    has_ordered_span_conflict(
+    @planning.has_ordered_span_conflict(
       [{ start: ProgramPoint(0, 2), start_ord: 6, end_ord: 7 }],
       occupied,
     ),
     content="false",
   )
   inspect(
-    has_ordered_span_conflict(
+    @planning.has_ordered_span_conflict(
       [{ start: ProgramPoint(0, 2), start_ord: 6, end_ord: 9 }],
       occupied,
     ),
@@ -480,22 +500,22 @@ test "ordered span conflict scan skips ended occupied spans" {
 
 ///|
 test "allocated span table inserts and removes by owner" {
-  let a : OrderedProgramSpan = {
+  let a : @planning.OrderedProgramSpan = {
     start: ProgramPoint(0, 0),
     start_ord: 0,
     end_ord: 4,
   }
-  let b : OrderedProgramSpan = {
+  let b : @planning.OrderedProgramSpan = {
     start: ProgramPoint(0, 2),
     start_ord: 8,
     end_ord: 12,
   }
-  let c : OrderedProgramSpan = {
+  let c : @planning.OrderedProgramSpan = {
     start: ProgramPoint(0, 1),
     start_ord: 5,
     end_ord: 7,
   }
-  let inserted = insert_allocated_spans(
+  let inserted = @planning.insert_allocated_spans(
     [{ owner_id: 1, span: a }, { owner_id: 3, span: b }],
     2,
     [c],
@@ -520,7 +540,7 @@ test "allocated span table inserts and removes by owner" {
     ),
   )
   debug_inspect(
-    remove_allocated_spans(inserted, 2),
+    @planning.remove_allocated_spans(inserted, 2),
     content=(
       #|[
       #|  {
@@ -539,19 +559,19 @@ test "allocated span table inserts and removes by owner" {
 ///|
 test "compute block point bases from block order and lengths" {
   debug_inspect(
-    compute_block_point_bases([2, 0, 1], [3, 1, 0]),
+    @planning.compute_block_point_bases([2, 0, 1], [3, 1, 0]),
     content="[0, 6, 10]",
   )
 }
 
 ///|
 test "scan conflicts rejects pinned and cutoff conflicts" {
-  let span : OrderedProgramSpan = {
+  let span : @planning.OrderedProgramSpan = {
     start: ProgramPoint(0, 0),
     start_ord: 0,
     end_ord: 20,
   }
-  let pinned = scan_conflicts_with_cutoff(
+  let pinned = @planning.scan_conflicts_with_cutoff(
     [span],
     [
       {
@@ -565,7 +585,7 @@ test "scan conflicts rejects pinned and cutoff conflicts" {
     None,
   )
   inspect(pinned.rejected, content="true")
-  let cutoff = scan_conflicts_with_cutoff(
+  let cutoff = @planning.scan_conflicts_with_cutoff(
     [span],
     [
       {
@@ -587,7 +607,7 @@ test "plan register probe order uses phased rotation and skip" {
   let r1 : PhysicalReg = { id: 1, class: Int }
   let r2 : PhysicalReg = { id: 2, class: Int }
   let r3 : PhysicalReg = { id: 3, class: Int }
-  let order = plan_register_probe_order(
+  let order = @planning.plan_register_probe_order(
     [r0, r1, r2, r3],
     [r0, r1],
     [r2, r3],
@@ -600,13 +620,21 @@ test "plan register probe order uses phased rotation and skip" {
     order,
     content="[{ id: 0, class: Int }, { id: 3, class: Int }, { id: 2, class: Int }]",
   )
-  let flat = plan_register_probe_order([r0, r1, r2], [], [], false, 2, 2, None)
+  let flat = @planning.plan_register_probe_order(
+    [r0, r1, r2],
+    [],
+    [],
+    false,
+    2,
+    2,
+    None,
+  )
   debug_inspect(flat, content="[{ id: 2, class: Int }, { id: 0, class: Int }]")
 }
 
 ///|
 test "bundle split planner partitions around split point and handles fallbacks" {
-  let ranges : Array[BundleSplitRange] = [
+  let ranges : Array[@planning.BundleSplitRange] = [
     {
       range_id: 0,
       start: Some(ProgramPoint(0, 0)),
@@ -618,7 +646,13 @@ test "bundle split planner partitions around split point and handles fallbacks" 
       end: Some(ProgramPoint(0, 8)),
     },
   ]
-  let split = plan_bundle_split(ranges, Some(ProgramPoint(0, 3)), [0], 0, 8)
+  let split = @planning.plan_bundle_split(
+    ranges,
+    Some(ProgramPoint(0, 3)),
+    [0],
+    0,
+    8,
+  )
   match split {
     Split(before, after) => {
       debug_inspect(before, content="[0]")
@@ -626,11 +660,12 @@ test "bundle split planner partitions around split point and handles fallbacks" 
     }
     _ => abort("expected split")
   }
-  match plan_bundle_split(ranges, Some(ProgramPoint(0, 9)), [0], 0, 8) {
+  match
+    @planning.plan_bundle_split(ranges, Some(ProgramPoint(0, 9)), [0], 0, 8) {
     Minimal => ()
     _ => abort("expected minimal fallback")
   }
-  match plan_bundle_split(ranges, None, [0], 0, 8) {
+  match @planning.plan_bundle_split(ranges, None, [0], 0, 8) {
     SpillWhole => ()
     _ => abort("expected whole-bundle spill")
   }
@@ -641,7 +676,7 @@ test "fixed constraint edit planner emits before and after moves" {
   let r0 : PhysicalReg = { id: 0, class: Int }
   let r1 : PhysicalReg = { id: 1, class: Int }
   let r2 : PhysicalReg = { id: 2, class: Int }
-  let edits = plan_fixed_constraint_edits([
+  let edits = @planning.plan_fixed_constraint_edits([
     {
       block_index: 1,
       inst_index: 2,
@@ -697,7 +732,7 @@ test "temp register pool prefers scratch and high-index candidates" {
   let used = Array::make(12, false)
   used[10] = true
   debug_inspect(
-    plan_temp_register_pool(used, [3, 9], [1, 10, 11], [2, 8, 9]),
+    @planning.plan_temp_register_pool(used, [3, 9], [1, 10, 11], [2, 8, 9]),
     content="[3, 9, 11, 8, 1, 2]",
   )
 }
@@ -705,7 +740,7 @@ test "temp register pool prefers scratch and high-index candidates" {
 ///|
 test "temp register choice rotates pool and steals with preserve slot" {
   debug_inspect(
-    choose_temp_register(Int, [3], [3, 4], [5], [], true, 0, 7),
+    @planning.choose_temp_register(Int, [3], [3, 4], [5], [], true, 0, 7),
     content=(
       #|{
       #|  preg: { id: 4, class: Int },
@@ -716,7 +751,7 @@ test "temp register choice rotates pool and steals with preserve slot" {
     ),
   )
   debug_inspect(
-    choose_temp_register(Vector, [3, 4], [3, 4], [5], [], true, 0, 7),
+    @planning.choose_temp_register(Vector, [3, 4], [3, 4], [5], [], true, 0, 7),
     content=(
       #|{
       #|  preg: { id: 5, class: Vector },
@@ -730,7 +765,7 @@ test "temp register choice rotates pool and steals with preserve slot" {
 
 ///|
 test "active reload cache tracks block-local slot reloads" {
-  let cache = ActiveReloadCache::ActiveReloadCache(3)
+  let cache = @planning.ActiveReloadCache::ActiveReloadCache(3)
   debug_inspect(cache.get(1, 1), content="None")
   cache.set(1, 7, 1)
   debug_inspect(cache.get(1, 1), content="Some(7)")
@@ -901,11 +936,11 @@ test "resolve_parallel_moves breaks register cycles with scratch" {
   let r0 : PhysicalReg = { id: 0, class: Int }
   let r1 : PhysicalReg = { id: 1, class: Int }
   let r2 : PhysicalReg = { id: 2, class: Int }
-  let moves : Array[ParallelMove] = [
+  let moves : Array[@planning.ParallelMove] = [
     { from: Reg(r0), to: Reg(r1), class: Int },
     { from: Reg(r1), to: Reg(r0), class: Int },
   ]
-  let resolved = resolve_parallel_moves(moves, [r2], [])
+  let resolved = @planning.resolve_parallel_moves(moves, [r2], [])
   inspect(resolved.length(), content="3")
   inspect(resolved[0].from == Reg(r1), content="true")
   inspect(resolved[0].to == Reg(r2), content="true")
@@ -915,10 +950,10 @@ test "resolve_parallel_moves breaks register cycles with scratch" {
 ///|
 test "resolve_parallel_moves lowers stack to stack through scratch" {
   let scratch : PhysicalReg = { id: 10, class: Int }
-  let moves : Array[ParallelMove] = [
+  let moves : Array[@planning.ParallelMove] = [
     { from: Spill(0), to: Spill(1), class: Int },
   ]
-  let resolved = resolve_parallel_moves(moves, [scratch], [])
+  let resolved = @planning.resolve_parallel_moves(moves, [scratch], [])
   inspect(resolved.length(), content="2")
   inspect(resolved[0].from == Spill(0), content="true")
   inspect(resolved[0].to == Reg(scratch), content="true")
@@ -928,13 +963,13 @@ test "resolve_parallel_moves lowers stack to stack through scratch" {
 
 ///|
 test "compute approximate loop depths from successors" {
-  let depths = compute_approx_loop_depths([[1], [2], [1, 3], []])
+  let depths = @planning.compute_approx_loop_depths([[1], [2], [1, 3], []])
   debug_inspect(depths, content="[0, 1, 1, 0]")
 }
 
 ///|
 test "compute approximate loop depths ignores invalid successors" {
-  let depths = compute_approx_loop_depths([[1, -1, 99], [0], []])
+  let depths = @planning.compute_approx_loop_depths([[1, -1, 99], [0], []])
   debug_inspect(depths, content="[1, 1, 0]")
 }
 
@@ -952,7 +987,7 @@ test "reserve spill slots aligns vector slots" {
 
 ///|
 test "stack frame allocates spill slots" {
-  let frame = StackFrame::StackFrame(16)
+  let frame = @planning.StackFrame::StackFrame(16)
   let offset1 = frame.alloc_spill_slot({ id: 0, class: Int }, 8, 8)
   inspect(offset1, content="-8")
   let offset2 = frame.alloc_spill_slot({ id: 1, class: Int }, 8, 8)
@@ -963,7 +998,7 @@ test "stack frame allocates spill slots" {
 
 ///|
 test "stack frame aligns mixed slots" {
-  let frame = StackFrame::StackFrame(16)
+  let frame = @planning.StackFrame::StackFrame(16)
   inspect(frame.alloc_spill_slot({ id: 0, class: Int }, 4, 4), content="-4")
   inspect(frame.alloc_spill_slot({ id: 1, class: Int }, 8, 8), content="-16")
   frame.finalize()
@@ -972,7 +1007,7 @@ test "stack frame aligns mixed slots" {
 
 ///|
 test "stack frame records callee saved registers" {
-  let frame = StackFrame::StackFrame(16)
+  let frame = @planning.StackFrame::StackFrame(16)
   inspect(frame.add_callee_saved({ id: 19, class: Int }), content="-8")
   inspect(frame.add_callee_saved({ id: 20, class: Int }), content="-16")
   frame.finalize()
@@ -986,18 +1021,18 @@ test "spill weight applies loop and constraint bonuses" {
     UsePosition(ProgramPoint(0, 0), LiveDef, AnyReg),
     UsePosition(ProgramPoint(1, 0), LiveUse, FixedReg(r0)),
   ]
-  inspect(compute_spill_weight(uses, [0, 2]), content="22000")
+  inspect(@planning.compute_spill_weight(uses, [0, 2]), content="22000")
 }
 
 ///|
 test "spill weight has minimum one" {
-  inspect(compute_spill_weight([], []), content="1")
+  inspect(@planning.compute_spill_weight([], []), content="1")
 }
 
 ///|
 test "reload intervals keep repeated spill-slot uses" {
   let v0 : VirtualReg = { id: 0, class: Int }
-  let intervals = compute_reload_intervals([
+  let intervals = @planning.compute_reload_intervals([
     { block_id: 7, inst_index: 1, spill_slot: 3, vreg: v0 },
     { block_id: 7, inst_index: 4, spill_slot: 3, vreg: v0 },
   ])
@@ -1014,7 +1049,7 @@ test "reload intervals keep repeated spill-slot uses" {
 test "reload intervals reject reused spill slots" {
   let v0 : VirtualReg = { id: 0, class: Int }
   let v1 : VirtualReg = { id: 1, class: Int }
-  let intervals = compute_reload_intervals([
+  let intervals = @planning.compute_reload_intervals([
     { block_id: 0, inst_index: 0, spill_slot: 2, vreg: v0 },
     { block_id: 0, inst_index: 1, spill_slot: 2, vreg: v1 },
     { block_id: 0, inst_index: 2, spill_slot: 2, vreg: v0 },
@@ -1026,14 +1061,14 @@ test "reload intervals reject reused spill slots" {
 test "reload intervals skip vectors by default" {
   let v0 : VirtualReg = { id: 0, class: Vector }
   inspect(
-    compute_reload_intervals([
+    @planning.compute_reload_intervals([
       { block_id: 0, inst_index: 0, spill_slot: 1, vreg: v0 },
       { block_id: 0, inst_index: 2, spill_slot: 1, vreg: v0 },
     ]).length(),
     content="0",
   )
   inspect(
-    compute_reload_intervals(
+    @planning.compute_reload_intervals(
       [
         { block_id: 0, inst_index: 0, spill_slot: 1, vreg: v0 },
         { block_id: 0, inst_index: 2, spill_slot: 1, vreg: v0 },

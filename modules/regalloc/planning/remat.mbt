@@ -1,27 +1,27 @@
 ///|
 pub(all) struct RematDefInfo {
-  vreg : VirtualReg
+  vreg : @regalloc.VirtualReg
   block_id : Int
   inst_index : Int
 } derive(Eq, Debug)
 
 ///|
 pub(all) struct RematUseInfo {
-  vreg : VirtualReg
+  vreg : @regalloc.VirtualReg
   block_id : Int
   inst_index : Int
 } derive(Eq, Debug)
 
 ///|
 pub(all) struct RematCloneInfo {
-  vreg : VirtualReg
+  vreg : @regalloc.VirtualReg
   block_id : Int
   inst_index : Int
 } derive(Eq, Debug)
 
 ///|
 pub(all) struct RematLocalCloneInfo {
-  vreg : VirtualReg
+  vreg : @regalloc.VirtualReg
   block_id : Int
   first_inst_index : Int
 } derive(Eq, Debug)
@@ -29,7 +29,7 @@ pub(all) struct RematLocalCloneInfo {
 ///|
 fn find_remat_def(
   defs : Array[RematDefInfo],
-  vreg : VirtualReg,
+  vreg : @regalloc.VirtualReg,
 ) -> RematDefInfo? {
   for def in defs {
     if def.vreg == vreg {

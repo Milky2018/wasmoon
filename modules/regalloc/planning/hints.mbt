@@ -1,8 +1,8 @@
 ///|
 pub fn choose_fixed_reg_hint(
-  available_regs : Array[PhysicalReg],
-  fixed_regs : Array[PhysicalReg],
-) -> PhysicalReg? {
+  available_regs : Array[@regalloc.PhysicalReg],
+  fixed_regs : Array[@regalloc.PhysicalReg],
+) -> @regalloc.PhysicalReg? {
   if available_regs.is_empty() || fixed_regs.is_empty() {
     return None
   }
@@ -27,7 +27,7 @@ pub fn choose_fixed_reg_hint(
       counts[preg.id] = counts[preg.id] + 1
     }
   }
-  let mut best : PhysicalReg? = None
+  let mut best : @regalloc.PhysicalReg? = None
   let mut best_count = 0
   for preg in available_regs {
     let count = counts[preg.id]

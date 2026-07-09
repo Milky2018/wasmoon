@@ -3,6 +3,7 @@ package "Milky2018/regalloc/backtracking"
 
 import {
   "Milky2018/regalloc",
+  "Milky2018/regalloc/planning",
   "moonbitlang/core/debug",
 }
 
@@ -13,7 +14,7 @@ pub fn[P] backtracking_queue_entry_higher(BacktrackingQueueEntry[P], Backtrackin
 
 pub fn[P] build_backtracking_allocation_result(Array[BacktrackingRangeResult[P]], Int) -> BacktrackingAllocationResult[P]
 
-pub fn[C, R, P] compact_backtracking_spill_slots(Array[SpillSetInfo[C, R, P]], Array[@regalloc.SpillSlotNoShareEdge], (Int, C) -> @regalloc.SpillSlotReservation, (Array[R], Array[R]) -> Bool, (P, P) -> Int) -> @regalloc.SpillSlotCompaction
+pub fn[C, R, P] compact_backtracking_spill_slots(Array[SpillSetInfo[C, R, P]], Array[@planning.SpillSlotNoShareEdge], (Int, C) -> @regalloc.SpillSlotReservation, (Array[R], Array[R]) -> Bool, (P, P) -> Int) -> @planning.SpillSlotCompaction
 
 pub fn eviction_cutoff(Int?, Int?) -> Int?
 

@@ -1,8 +1,8 @@
 ///|
 pub(all) struct BundleSplitRange {
   range_id : Int
-  start : ProgramPoint?
-  end : ProgramPoint?
+  start : @regalloc.ProgramPoint?
+  end : @regalloc.ProgramPoint?
 } derive(Eq, Debug)
 
 ///|
@@ -15,7 +15,7 @@ pub(all) enum BundleSplitPlan {
 ///|
 pub fn plan_bundle_split(
   ranges : Array[BundleSplitRange],
-  split_point : ProgramPoint?,
+  split_point : @regalloc.ProgramPoint?,
   block_order : Array[Int],
   spillset_split_count : Int,
   max_splits_per_spillset : Int,

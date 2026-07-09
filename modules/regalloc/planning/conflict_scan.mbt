@@ -1,6 +1,6 @@
 ///|
 pub(all) struct OrderedProgramSpan {
-  start : ProgramPoint
+  start : @regalloc.ProgramPoint
   start_ord : Int
   end_ord : Int
 } derive(Eq, Debug)
@@ -23,7 +23,7 @@ pub(all) struct AllocatedProgramSpan {
 pub(all) struct ConflictScanResult {
   conflict_ids : Array[Int]
   max_conflict_weight : Int
-  first_conflict_point : ProgramPoint?
+  first_conflict_point : @regalloc.ProgramPoint?
   rejected : Bool
 } derive(Eq, Debug)
 
@@ -31,7 +31,7 @@ pub(all) struct ConflictScanResult {
 fn conflict_later_start(
   lhs : OrderedProgramSpan,
   rhs : OrderedProgramSpan,
-) -> ProgramPoint {
+) -> @regalloc.ProgramPoint {
   if lhs.start_ord >= rhs.start_ord {
     lhs.start
   } else {
@@ -178,7 +178,7 @@ pub fn scan_conflicts_with_cutoff(
   let conflict_ids : Array[Int] = []
   let seen : Array[Int] = []
   let mut max_conflict_weight = 0
-  let mut first_conflict_point : ProgramPoint? = None
+  let mut first_conflict_point : @regalloc.ProgramPoint? = None
   if spans.is_empty() || occupied.is_empty() {
     return {
       conflict_ids,
