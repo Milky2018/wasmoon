@@ -369,7 +369,7 @@ test "optimizer propagates local copies" {
   let sum = builder.iadd(copy, one)
   builder.return_([sum])
   let func = builder.get_function()
-  let result = propagate_copies(func)
+  let result = canonicalize_aliases(func)
   inspect(result.changed, content="true")
   inspect(
     func.print(),
