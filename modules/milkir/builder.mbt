@@ -113,31 +113,13 @@ pub fn FunctionBuilder::append_block_params_for_function_returns(
 ///|
 /// Return the SSA values used as block parameters.
 pub fn FunctionBuilder::block_params(
-  self : FunctionBuilder,
+  _self : FunctionBuilder,
   block : Block,
 ) -> Array[Value] {
-  self |> ignore
   block.params.map(fn(item) {
     let (value, _) = item
     value
   })
-}
-
-///|
-/// Mark a block as sealed. MilkIR does not yet run incremental SSA sealing, so
-/// this is currently a documentation-level frontend protocol hook.
-pub fn FunctionBuilder::seal_block(
-  self : FunctionBuilder,
-  block : Block,
-) -> Unit {
-  self |> ignore
-  block |> ignore
-}
-
-///|
-/// Mark all blocks as sealed.
-pub fn FunctionBuilder::seal_all_blocks(self : FunctionBuilder) -> Unit {
-  self |> ignore
 }
 
 ///|

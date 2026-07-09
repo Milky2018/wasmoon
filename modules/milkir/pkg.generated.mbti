@@ -187,8 +187,6 @@ pub fn FunctionBuilder::return_(Self, Array[Value]) -> Unit
 pub fn FunctionBuilder::rotl(Self, Value, Value) -> Value
 pub fn FunctionBuilder::rotr(Self, Value, Value) -> Value
 pub fn FunctionBuilder::sdiv(Self, Value, Value) -> Value
-pub fn FunctionBuilder::seal_all_blocks(Self) -> Unit
-pub fn FunctionBuilder::seal_block(Self, Block) -> Unit
 pub fn FunctionBuilder::select(Self, Value, Value, Value) -> Value
 pub fn FunctionBuilder::sextend(Self, Type, Value) -> Value
 pub fn FunctionBuilder::sextend16(Self, Type, Value) -> Value
