@@ -701,7 +701,7 @@ test "optimizer removes unreachable blocks" {
   let dead_value = builder.iconst_i32(99)
   builder.return_([dead_value])
   let func = builder.get_function()
-  let result = eliminate_unreachable_blocks(func)
+  let result = eliminate_unreachable_code(func)
   inspect(result.changed, content="true")
   inspect(
     func.print(),

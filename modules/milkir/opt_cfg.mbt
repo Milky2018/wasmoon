@@ -744,12 +744,6 @@ fn eliminate_unreachable_code(func : Function) -> OptResult {
   result
 }
 
-///|
-#warnings("-unused_value")
-fn eliminate_unreachable_blocks(func : Function) -> OptResult {
-  eliminate_unreachable_code(func)
-}
-
 // ============ Basic Block Merging ============
 
 ///|
