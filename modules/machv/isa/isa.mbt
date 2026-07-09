@@ -4,9 +4,6 @@
 /// Centralize ABI/ISA policy (regalloc env + call-clobbered sets) behind a
 /// stable interface. Host selection belongs to the embedding layer, which must
 /// pass the chosen ISA explicitly into lowering, allocation, and emission.
-
-///|
-#warnings("-unused_constructor")
 pub(all) enum ISA {
   AArch64
   AMD64

@@ -15,14 +15,8 @@ pub let spill_slot_base : Int
 // Types and methods
 pub struct ABISettings {
   reserve_embedding_context : Bool
-  call_conv : CallConv
 }
 pub fn ABISettings::default() -> Self
-
-pub enum CallConv {
-  AppleAarch64
-  SystemV
-}
 
 pub(all) struct CallConventionLayout {
   context_arg : PReg

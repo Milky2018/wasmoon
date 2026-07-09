@@ -313,13 +313,8 @@ pub(all) struct ENode {
 
 ///|
 /// E-class: an equivalence class of e-nodes
-#warnings("-unused_field")
 priv struct EClass {
-  id : EClassId
   mut nodes : Array[ENode] // All equivalent nodes in this class
-  // For extraction: best node and its cost (lazily computed)
-  mut best_node : ENode?
-  mut best_cost : Int
   // Cached constant values for O(1) lookup (instead of O(n) scan)
   mut const_value : Int64?
   mut fconst_value : UInt64?
@@ -517,10 +512,7 @@ pub fn EGraph::add(self : EGraph, node : ENode) -> EClassId {
     _ => None
   }
   let eclass : EClass = {
-    id: class_id,
     nodes: [node],
-    best_node: None,
-    best_cost: @int.MAX_VALUE,
     const_value: const_val,
     fconst_value: fconst_val,
   }
@@ -788,9 +780,6 @@ pub fn EGraph::merge(self : EGraph, a : EClassId, b : EClassId) -> EClassId {
           self.hashcons.set(canonical_node, new_id)
         }
       }
-      // Invalidate best node cache
-      root_class.best_node = None
-      root_class.best_cost = @int.MAX_VALUE
       // Merge constant caches: prefer non-None values
       if root_class.const_value is None && other_class.const_value is Some(_) {
         root_class.const_value = other_class.const_value
@@ -838,10 +827,7 @@ pub fn EGraph::rebuild(self : EGraph) -> Unit {
             nodes.push(node)
           }
           merged_classes.set(root, {
-            id: EClassId(root),
             nodes,
-            best_node: None,
-            best_cost: @int.MAX_VALUE,
             const_value: eclass.const_value,
             fconst_value: eclass.fconst_value,
           })
@@ -930,8 +916,6 @@ pub fn EGraph::rebuild(self : EGraph) -> Unit {
       root_class.nodes = canonical_nodes
       root_class.const_value = const_value
       root_class.fconst_value = fconst_value
-      root_class.best_node = None
-      root_class.best_cost = @int.MAX_VALUE
     }
     if unions.is_empty() {
       // Finalize: commit rebuilt structures and refresh type/remat maps.
