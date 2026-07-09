@@ -106,32 +106,52 @@ pub fn UsePosition::with_tie(self : UsePosition, tie_id : Int) -> UsePosition {
 }
 
 ///|
-pub(all) struct LiveRange {
+struct LiveRange {
   id : Int
   vreg : VirtualReg
   ranges : Array[ProgramRange]
   uses : Array[UsePosition]
-  mut bundle_id : Int
   mut allocation : Location?
-  mut crosses_call : Bool
 } derive(Debug)
 
 ///|
 pub fn LiveRange::LiveRange(id : Int, vreg : VirtualReg) -> LiveRange {
-  {
-    id,
-    vreg,
-    ranges: [],
-    uses: [],
-    bundle_id: -1,
-    allocation: None,
-    crosses_call: false,
-  }
+  { id, vreg, ranges: [], uses: [], allocation: None }
+}
+
+///|
+pub fn LiveRange::id(self : LiveRange) -> Int {
+  self.id
+}
+
+///|
+pub fn LiveRange::vreg(self : LiveRange) -> VirtualReg {
+  self.vreg
+}
+
+///|
+pub fn LiveRange::range_count(self : LiveRange) -> Int {
+  self.ranges.length()
+}
+
+///|
+pub fn LiveRange::range_at(self : LiveRange, index : Int) -> ProgramRange? {
+  self.ranges.get(index)
 }
 
 ///|
 pub fn LiveRange::add_range(self : LiveRange, range : ProgramRange) -> Unit {
   self.ranges.push(range)
+}
+
+///|
+pub fn LiveRange::use_count(self : LiveRange) -> Int {
+  self.uses.length()
+}
+
+///|
+pub fn LiveRange::use_at(self : LiveRange, index : Int) -> UsePosition? {
+  self.uses.get(index)
 }
 
 ///|
@@ -325,7 +345,7 @@ pub fn LiveRange::total_length(self : LiveRange) -> Int {
 }
 
 ///|
-pub(all) struct LiveRangeSet {
+struct LiveRangeSet {
   ranges : Array[LiveRange]
   block_order : Array[Int]
 } derive(Debug)
@@ -333,6 +353,21 @@ pub(all) struct LiveRangeSet {
 ///|
 pub fn LiveRangeSet::LiveRangeSet(block_order : Array[Int]) -> LiveRangeSet {
   { ranges: [], block_order }
+}
+
+///|
+pub fn LiveRangeSet::block_order_count(self : LiveRangeSet) -> Int {
+  self.block_order.length()
+}
+
+///|
+pub fn LiveRangeSet::block_order(self : LiveRangeSet) -> Array[Int] {
+  self.block_order.copy()
+}
+
+///|
+pub fn LiveRangeSet::block_order_at(self : LiveRangeSet, index : Int) -> Int? {
+  self.block_order.get(index)
 }
 
 ///|

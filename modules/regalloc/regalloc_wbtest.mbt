@@ -14,7 +14,7 @@ test "linear scan allocates abstract program registers" {
   let allocation = allocate(program)
   inspect(allocation.location_of(v0) == Some(Reg(r0)), content="true")
   inspect(allocation.location_of(v1) == Some(Reg(r1)), content="true")
-  inspect(allocation.spill_count, content="0")
+  inspect(allocation.spill_count(), content="0")
 }
 
 ///|
@@ -31,7 +31,7 @@ test "linear scan spills when class registers are exhausted" {
   program.add_block(block)
   let allocation = allocate(program)
   inspect(allocation.location_of(v1) == Some(Spill(0)), content="true")
-  inspect(allocation.spill_count, content="1")
+  inspect(allocation.spill_count(), content="1")
 }
 
 ///|
@@ -51,7 +51,7 @@ test "linear scan reuses registers for non-overlapping intervals" {
   let allocation = allocate(program)
   inspect(allocation.location_of(v0) == Some(Reg(r0)), content="true")
   inspect(allocation.location_of(v1) == Some(Reg(r0)), content="true")
-  inspect(allocation.spill_count, content="0")
+  inspect(allocation.spill_count(), content="0")
 }
 
 ///|
@@ -72,9 +72,9 @@ test "build_live_ranges records spans and uses" {
   let range = ranges.get_by_vreg(v0).unwrap()
   inspect(range.start() == Some(ProgramPoint(0, 0)), content="true")
   inspect(range.end() == Some(ProgramPoint(0, 1)), content="true")
-  inspect(range.uses.length(), content="2")
-  inspect(range.uses[0].kind == LiveDef, content="true")
-  inspect(range.uses[1].kind == LiveUse, content="true")
+  inspect(range.use_count(), content="2")
+  inspect(range.use_at(0).unwrap().kind == LiveDef, content="true")
+  inspect(range.use_at(1).unwrap().kind == LiveUse, content="true")
 }
 
 ///|
@@ -99,7 +99,10 @@ test "build_live_ranges extends values across successor blocks" {
   let ranges = build_live_ranges(program)
   let range = ranges.get_by_vreg(v0).unwrap()
   inspect(
-    range.ranges[0].contains(ProgramPoint(1, 0), ranges.block_order),
+    range
+    .range_at(0)
+    .unwrap()
+    .contains(ProgramPoint(1, 0), ranges.block_order()),
     content="true",
   )
 }
@@ -246,7 +249,7 @@ test "linear scan evicts longer active interval for shorter current interval" {
   let allocation = allocate(program)
   inspect(allocation.location_of(v0) == Some(Spill(0)), content="true")
   inspect(allocation.location_of(v1) == Some(Reg(r0)), content="true")
-  inspect(allocation.spill_count, content="1")
+  inspect(allocation.spill_count(), content="1")
 }
 
 ///|

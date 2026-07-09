@@ -28,54 +28,49 @@ pub suberror VerifyError {
 }
 
 // Types and methods
-pub(all) struct Allocation {
-  assignments : Array[Assignment]
-  mut spill_count : Int
-} derive(@debug.Debug)
+type Allocation derive(@debug.Debug)
 pub fn Allocation::Allocation() -> Self
 pub fn Allocation::assign(Self, VirtualReg, Location) -> Unit
+pub fn Allocation::assignment_at(Self, Int) -> Assignment?
+pub fn Allocation::assignment_count(Self) -> Int
+pub fn Allocation::assignments(Self) -> Array[Assignment]
 pub fn Allocation::location_of(Self, VirtualReg) -> Location?
+pub fn Allocation::spill_count(Self) -> Int
 
 pub(all) enum AllocatorStrategy {
   LinearScan
 } derive(Eq, @debug.Debug)
 
-pub(all) struct Assignment {
+pub struct Assignment {
   vreg : VirtualReg
-  mut location : Location
+  location : Location
 } derive(Eq, @debug.Debug)
 
-pub(all) struct Block {
-  id : Int
-  instructions : Array[Instruction]
-  successors : Array[Int]
-} derive(@debug.Debug)
+type Block derive(@debug.Debug)
 pub fn Block::Block(Int) -> Self
 pub fn Block::add_successor(Self, Int) -> Unit
 pub fn Block::append(Self, Instruction) -> Unit
+pub fn Block::id(Self) -> Int
+pub fn Block::instruction_at(Self, Int) -> Instruction?
+pub fn Block::instruction_count(Self) -> Int
+pub fn Block::successor_at(Self, Int) -> Int?
+pub fn Block::successor_count(Self) -> Int
 
 type DenseCfgEdges derive(@debug.Debug)
 
 type DenseLiveSets derive(@debug.Debug)
 
-pub(all) struct Instruction {
-  id : Int
-  operands : Array[Operand]
-  clobbers : Array[PhysicalReg]
-} derive(@debug.Debug)
+type Instruction derive(@debug.Debug)
 pub fn Instruction::Instruction(Int) -> Self
 pub fn Instruction::add_clobber(Self, PhysicalReg) -> Unit
 pub fn Instruction::add_operand(Self, Operand) -> Unit
+pub fn Instruction::clobber_at(Self, Int) -> PhysicalReg?
+pub fn Instruction::clobber_count(Self) -> Int
+pub fn Instruction::id(Self) -> Int
+pub fn Instruction::operand_at(Self, Int) -> Operand?
+pub fn Instruction::operand_count(Self) -> Int
 
-pub(all) struct LiveRange {
-  id : Int
-  vreg : VirtualReg
-  ranges : Array[ProgramRange]
-  uses : Array[UsePosition]
-  mut bundle_id : Int
-  mut allocation : Location?
-  mut crosses_call : Bool
-} derive(@debug.Debug)
+type LiveRange derive(@debug.Debug)
 pub fn LiveRange::LiveRange(Int, VirtualReg) -> Self
 pub fn LiveRange::add_range(Self, ProgramRange) -> Unit
 pub fn LiveRange::add_use(Self, UsePosition) -> Unit
@@ -83,20 +78,26 @@ pub fn LiveRange::end(Self) -> ProgramPoint?
 pub fn LiveRange::get_fixed_reg(Self) -> PhysicalReg?
 pub fn LiveRange::has_fixed_constraint(Self) -> Bool
 pub fn LiveRange::has_tie_at(Self, Self, ProgramPoint) -> Bool
+pub fn LiveRange::id(Self) -> Int
 pub fn LiveRange::is_live_across(Self, ProgramPoint, Array[Int]) -> Bool
 pub fn LiveRange::overlap_allowed_by_tie(Self, Self, Array[Int]) -> Bool
 pub fn LiveRange::overlaps(Self, Self, Array[Int]) -> Bool
+pub fn LiveRange::range_at(Self, Int) -> ProgramRange?
+pub fn LiveRange::range_count(Self) -> Int
 pub fn LiveRange::start(Self) -> ProgramPoint?
 pub fn LiveRange::total_length(Self) -> Int
 pub fn LiveRange::touch(Self, ProgramPoint) -> Unit
 pub fn LiveRange::touch_with_order(Self, ProgramPoint, Array[Int]) -> Unit
+pub fn LiveRange::use_at(Self, Int) -> UsePosition?
+pub fn LiveRange::use_count(Self) -> Int
+pub fn LiveRange::vreg(Self) -> VirtualReg
 
-pub(all) struct LiveRangeSet {
-  ranges : Array[LiveRange]
-  block_order : Array[Int]
-} derive(@debug.Debug)
+type LiveRangeSet derive(@debug.Debug)
 pub fn LiveRangeSet::LiveRangeSet(Array[Int]) -> Self
 pub fn LiveRangeSet::add_range(Self, LiveRange) -> Unit
+pub fn LiveRangeSet::block_order(Self) -> Array[Int]
+pub fn LiveRangeSet::block_order_at(Self, Int) -> Int?
+pub fn LiveRangeSet::block_order_count(Self) -> Int
 pub fn LiveRangeSet::get(Self, Int) -> LiveRange
 pub fn LiveRangeSet::get_by_vreg(Self, VirtualReg) -> LiveRange?
 pub fn LiveRangeSet::length(Self) -> Int
@@ -135,12 +136,13 @@ pub(all) struct PhysicalReg {
   class : RegClass
 } derive(Eq, @debug.Debug)
 
-pub(all) struct Program {
-  blocks : Array[Block]
-  physical_regs : Array[PhysicalReg]
-} derive(@debug.Debug)
+type Program derive(@debug.Debug)
 pub fn Program::Program(Array[PhysicalReg]) -> Self
 pub fn Program::add_block(Self, Block) -> Unit
+pub fn Program::block_at(Self, Int) -> Block?
+pub fn Program::block_count(Self) -> Int
+pub fn Program::physical_reg_at(Self, Int) -> PhysicalReg?
+pub fn Program::physical_reg_count(Self) -> Int
 
 pub(all) struct ProgramPoint {
   block : Int
