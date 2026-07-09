@@ -14,10 +14,10 @@ pub fn eviction_cutoff(
 ///|
 pub fn should_take_eviction_candidate(
   best_conflict_cost : Int?,
-  best_preg : PhysicalReg?,
+  best_preg : @regalloc.PhysicalReg?,
   candidate_cost : Int,
-  candidate_preg : PhysicalReg,
-  hint_preg : PhysicalReg?,
+  candidate_preg : @regalloc.PhysicalReg,
+  hint_preg : @regalloc.PhysicalReg?,
 ) -> Bool {
   match best_conflict_cost {
     None => true
@@ -39,9 +39,9 @@ pub fn should_take_eviction_candidate(
 ///|
 pub fn should_take_split_candidate(
   best_split_cost : Int?,
-  best_split_point : ProgramPoint?,
+  best_split_point : @regalloc.ProgramPoint?,
   candidate_cost : Int,
-  candidate_point : ProgramPoint,
+  candidate_point : @regalloc.ProgramPoint,
   block_order : Array[Int],
 ) -> Bool {
   match (best_split_cost, best_split_point) {

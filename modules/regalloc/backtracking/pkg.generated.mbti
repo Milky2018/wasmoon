@@ -1,0 +1,223 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/regalloc/backtracking"
+
+import {
+  "Milky2018/regalloc",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn[P] backtracking_queue_entry_higher(BacktrackingQueueEntry[P], BacktrackingQueueEntry[P]) -> Bool
+
+pub fn[P] build_backtracking_allocation_result(Array[BacktrackingRangeResult[P]], Int) -> BacktrackingAllocationResult[P]
+
+pub fn[C, R, P] compact_backtracking_spill_slots(Array[SpillSetInfo[C, R, P]], Array[@regalloc.SpillSlotNoShareEdge], (Int, C) -> @regalloc.SpillSlotReservation, (Array[R], Array[R]) -> Bool, (P, P) -> Int) -> @regalloc.SpillSlotCompaction
+
+pub fn eviction_cutoff(Int?, Int?) -> Int?
+
+pub fn[P] has_backtracking_span_conflict(Array[OrderedSpan[P]], Array[(Int, OrderedSpan[P])]) -> Bool
+
+pub fn[P] lower_bound_backtracking_span_by_end(Array[(Int, OrderedSpan[P])], Int) -> Int
+
+pub fn[P] make_backtracking_alloc_table(Int) -> Array[Array[(Int, OrderedSpan[P])]]
+
+pub fn make_backtracking_bool_table(Int) -> Array[Bool]
+
+pub fn[P] plan_backtracking_bundle_split(Array[BacktrackingSplitRange[P]], P?, Bool, (P, P) -> Bool, (P, P) -> Bool) -> BacktrackingSplitPlan
+
+pub fn[P] plan_backtracking_fixed_constraint_edits(Array[BacktrackingFixedConstraintInst[P]], (P, P) -> Bool) -> Array[BacktrackingConstraintInstEdits[P]]
+
+pub fn[P] plan_backtracking_probe_order(Array[P], Array[P], Array[P], Bool, Int, Int, P?, (P, P) -> Bool) -> Array[P]
+
+pub fn[C, P, R] plan_bundle_merges(Array[BundleMergeRange[C, P, R]], Array[BundleMergeEdge], (C, C) -> Bool, (P, P) -> Bool) -> BundleMergePlan[C, R]
+
+pub fn[B, R, P] run_backtracking_allocation_loop(BacktrackingQueue[R], Array[Int], Int, Bool, Int, (Int) -> B, (B) -> Bool, (B) -> Bool, (B) -> Bool, (B) -> Bool, (B, R?) -> R?, (B, R?) -> (R?, (P, R)?), (B, R?) -> R?, (B, R) -> Unit, (B, (P, R)?) -> Unit, (B) -> Unit) -> Unit
+
+pub fn[P] scan_backtracking_conflicts_with_cutoff(Array[OrderedSpan[P]], Array[BacktrackingOccupiedSpan[P]], Int, Int?) -> BacktrackingConflictScanResult[P]
+
+pub fn should_prefer_caller_saved_for_backtracking(@regalloc.RegClass, Bool, Bool) -> Bool
+
+pub fn[P] should_take_backtracking_split_candidate(Int?, P?, Int, P, (P, P) -> Int) -> Bool
+
+pub fn should_take_eviction_candidate(Int?, @regalloc.PhysicalReg?, Int, @regalloc.PhysicalReg, @regalloc.PhysicalReg?) -> Bool
+
+pub fn should_take_split_candidate(Int?, @regalloc.ProgramPoint?, Int, @regalloc.ProgramPoint, Array[Int]) -> Bool
+
+pub fn[P, Q] try_backtracking_eviction_register(Array[P], Array[P], Array[P], Array[OrderedSpan[Q]], Int, P?, Bool, Int, Int, (P, P) -> Bool, (P) -> @regalloc.PhysicalReg, (P) -> Array[BacktrackingOccupiedSpan[Q]], (Q, Q) -> Int) -> BacktrackingAllocationAttempt[P, Q]
+
+pub fn[P, Q] try_backtracking_single_pass_register(Array[P], Array[P], Array[P], Array[OrderedSpan[Q]], P?, Bool, Int, Int, (P, P) -> Bool, (P, Array[OrderedSpan[Q]]) -> Bool) -> P?
+
+// Errors
+
+// Types and methods
+pub(all) struct AssignedSlot[R] {
+  start : Int
+  spans : Array[R]
+  old_slots : Array[Int]
+}
+
+pub(all) struct BacktrackingAllocationAttempt[P, Q] {
+  reg : P?
+  evicted_ids : Array[Int]
+  split : (Q, P)?
+}
+
+pub(all) enum BacktrackingAllocationLoc[P] {
+  BacktrackingReg(P)
+  BacktrackingSpill(Int)
+  BacktrackingUnallocated
+}
+
+pub(all) struct BacktrackingAllocationResult[P] {
+  assignments : Array[(Int, P)]
+  spill_slots : Array[(Int, Int)]
+  num_spill_slots : Int
+}
+
+pub(all) struct BacktrackingConflictScanResult[P] {
+  conflict_ids : Array[Int]
+  max_conflict_weight : Int
+  first_conflict_point : P?
+  rejected : Bool
+}
+
+pub(all) struct BacktrackingConstraintInstEdits[P] {
+  block_index : Int
+  inst_index : Int
+  before : Array[BacktrackingConstraintMove[P]]
+  after : Array[BacktrackingConstraintMove[P]]
+}
+
+pub(all) struct BacktrackingConstraintMove[P] {
+  from : BacktrackingMoveLoc[P]
+  to : BacktrackingMoveLoc[P]
+  class_tag : Int
+}
+
+pub(all) enum BacktrackingConstraintOperand[P] {
+  BacktrackingVirtual(BacktrackingAllocationLoc[P], Int)
+  BacktrackingPhysical(P, Int)
+}
+
+pub(all) struct BacktrackingFixedConstraint[P] {
+  operand : BacktrackingConstraintOperand[P]
+  required : P
+}
+
+pub(all) struct BacktrackingFixedConstraintInst[P] {
+  block_index : Int
+  inst_index : Int
+  uses : Array[BacktrackingFixedConstraint[P]]
+  defs : Array[BacktrackingFixedConstraint[P]]
+}
+
+type BacktrackingHintCache[P]
+pub fn[P] BacktrackingHintCache::BacktrackingHintCache(Int) -> Self[P]
+pub fn[P] BacktrackingHintCache::hint(Self[P], Int) -> P?
+pub fn[P] BacktrackingHintCache::is_ready(Self[P], Int) -> Bool
+pub fn[P] BacktrackingHintCache::push_bundle_slot(Self[P]) -> Unit
+pub fn[P] BacktrackingHintCache::set(Self[P], Int, P?) -> Unit
+
+pub(all) enum BacktrackingMoveLoc[P] {
+  BacktrackingMoveReg(P)
+  BacktrackingMoveSpill(Int)
+}
+
+pub(all) struct BacktrackingOccupiedSpan[P] {
+  owner_id : Int
+  span : OrderedSpan[P]
+  owner_weight : Int
+  owner_pinned : Bool
+}
+
+type BacktrackingQueue[P]
+pub fn[P] BacktrackingQueue::BacktrackingQueue(Int) -> Self[P]
+pub fn[P] BacktrackingQueue::clear(Self[P]) -> Unit
+pub fn[P] BacktrackingQueue::length(Self[P]) -> Int
+pub fn[P] BacktrackingQueue::pop(Self[P]) -> BacktrackingQueueEntry[P]?
+pub fn[P] BacktrackingQueue::push(Self[P], Int, Int, P?) -> Unit
+pub fn[P] BacktrackingQueue::push_bundle_slot(Self[P]) -> Unit
+
+pub(all) struct BacktrackingQueueEntry[P] {
+  bundle_id : Int
+  prio : Int
+  hint_preg : P?
+  seq : Int
+}
+
+pub(all) struct BacktrackingRangeResult[P] {
+  vreg_id : Int
+  allocation : BacktrackingAllocationLoc[P]
+}
+
+type BacktrackingSpillsetState[P]
+pub fn[P] BacktrackingSpillsetState::BacktrackingSpillsetState(Int, max_splits_per_spillset? : Int) -> Self[P]
+pub fn[P] BacktrackingSpillsetState::hint(Self[P], Int) -> P?
+pub fn[P] BacktrackingSpillsetState::push_bundle_slot(Self[P]) -> Unit
+pub fn[P] BacktrackingSpillsetState::record_hint(Self[P], Int, P) -> Unit
+pub fn[P] BacktrackingSpillsetState::record_split(Self[P], Int) -> Unit
+pub fn[P] BacktrackingSpillsetState::split_limit_reached(Self[P], Int) -> Bool
+
+pub(all) enum BacktrackingSplitPlan {
+  BacktrackingSplit(Array[Int], Array[Int])
+  BacktrackingMinimal
+  BacktrackingSpillWhole
+} derive(@debug.Debug)
+
+pub(all) struct BacktrackingSplitRange[P] {
+  range_id : Int
+  start : P?
+  end : P?
+}
+
+pub(all) struct BundleMergeEdge {
+  target : Int
+  source : Int
+} derive(Eq, @debug.Debug)
+
+pub(all) struct BundleMergePlan[C, R] {
+  range_to_bundle : Array[Int]
+  bundle_roots : Array[Int]
+  bundle_classes : Array[C]
+  bundle_ranges : Array[Array[R]]
+} derive(@debug.Debug)
+
+pub(all) struct BundleMergeRange[C, P, R] {
+  id : Int
+  class : C
+  spans : Array[MergeSpan[R]]
+  fixed_reg : P?
+  has_fixed_conflict : Bool
+  has_fixed_def : Bool
+} derive(@debug.Debug)
+
+pub(all) struct MergeSpan[R] {
+  span : R
+  start_ord : Int
+  start_before_ord : Int
+  end_ord : Int
+} derive(@debug.Debug)
+
+pub(all) struct OrderedSpan[P] {
+  start : P
+  start_ord : Int
+  end_ord : Int
+}
+
+pub(all) enum RegallocAlgorithm {
+  Backtracking
+  SinglePass
+}
+pub fn RegallocAlgorithm::enable_backtracking(Self) -> Bool
+
+pub(all) struct SpillSetInfo[C, R, P] {
+  old_slot : Int
+  reg_class : C
+  spans : Array[R]
+  start : P
+}
+
+// Type aliases
+
+// Traits
+

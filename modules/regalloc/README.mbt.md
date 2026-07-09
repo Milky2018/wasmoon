@@ -10,6 +10,8 @@ depending on a concrete machine IR.
 
 - `Milky2018/regalloc`: allocation data structures, allocator entry points,
   and verifier APIs.
+- `Milky2018/regalloc/backtracking`: expert hooks for clients that integrate
+  the production backtracking allocator with their own machine IR adapter.
 
 ## When to use it
 

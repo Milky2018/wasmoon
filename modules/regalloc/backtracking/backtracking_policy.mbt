@@ -1,6 +1,6 @@
 ///|
 pub fn should_prefer_caller_saved_for_backtracking(
-  class : RegClass,
+  class : @regalloc.RegClass,
   enable_backtracking : Bool,
   crosses_call : Bool,
 ) -> Bool {

@@ -6,7 +6,7 @@ import {
   "Milky2018/machv/abi",
   "Milky2018/machv/instr",
   "Milky2018/machv/isa",
-  "Milky2018/regalloc",
+  "Milky2018/regalloc/backtracking",
   "moonbitlang/core/debug",
   "moonbitlang/core/set",
 }
@@ -249,7 +249,7 @@ type UsePosition
 pub impl Show for UsePosition
 
 // Type aliases
-pub using @regalloc {type RegallocAlgorithm}
+pub using @backtracking {type RegallocAlgorithm}
 
 pub type SpillSlot = Int
 

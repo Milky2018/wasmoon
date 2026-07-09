@@ -125,7 +125,10 @@ test "backtracking split plan is generic over point ordering" {
 
 ///|
 test "backtracking spill compaction is generic over range and class" {
-  fn reserve_test_slot(next_slot : Int, class : Int) -> SpillSlotReservation {
+  fn reserve_test_slot(
+    next_slot : Int,
+    class : Int,
+  ) -> @regalloc.SpillSlotReservation {
     if class == 2 {
       let aligned = if next_slot % 2 == 0 { next_slot } else { next_slot + 1 }
       { slot: aligned, next_slot: aligned + 2, slots_used: 2 }
@@ -305,4 +308,106 @@ test "backtracking allocation loop drives production callbacks" {
   inspect(allocated[0], content="100")
   inspect(spilled[1], content="true")
   debug_inspect(attempts, content="[1, 1]")
+}
+
+///|
+test "eviction policy chooses cutoff, best conflict, and later split" {
+  debug_inspect(eviction_cutoff(Some(3), Some(5)), content="Some(5)")
+  debug_inspect(eviction_cutoff(Some(3), None), content="Some(3)")
+  let r0 : @regalloc.PhysicalReg = { id: 0, class: Int }
+  let r1 : @regalloc.PhysicalReg = { id: 1, class: Int }
+  inspect(
+    should_take_eviction_candidate(Some(4), Some(r0), 3, r1, None),
+    content="true",
+  )
+  inspect(
+    should_take_eviction_candidate(Some(4), Some(r0), 4, r1, Some(r1)),
+    content="true",
+  )
+  inspect(
+    should_take_eviction_candidate(Some(4), Some(r1), 4, r0, Some(r1)),
+    content="false",
+  )
+  inspect(
+    should_take_split_candidate(
+      Some(5),
+      Some(ProgramPoint(0, 1)),
+      5,
+      ProgramPoint(0, 3),
+      [0],
+    ),
+    content="true",
+  )
+}
+
+///|
+fn make_bundle_merge_test_span(
+  start : Int,
+  end : Int,
+) -> MergeSpan[@regalloc.ProgramRange] {
+  {
+    span: ProgramRange(ProgramPoint(0, start), ProgramPoint(0, end)),
+    start_ord: start,
+    start_before_ord: start - 1,
+    end_ord: end,
+  }
+}
+
+///|
+test "bundle merge planner coalesces only compatible non-overlapping ranges" {
+  let r0 : @regalloc.PhysicalReg = { id: 0, class: Int }
+  let r1 : @regalloc.PhysicalReg = { id: 1, class: Int }
+  let ranges : Array[
+    BundleMergeRange[
+      @regalloc.RegClass,
+      @regalloc.PhysicalReg,
+      @regalloc.ProgramRange,
+    ],
+  ] = [
+    {
+      id: 0,
+      class: Int,
+      spans: [make_bundle_merge_test_span(0, 2)],
+      fixed_reg: Some(r0),
+      has_fixed_conflict: false,
+      has_fixed_def: false,
+    },
+    {
+      id: 1,
+      class: Int,
+      spans: [make_bundle_merge_test_span(4, 6)],
+      fixed_reg: Some(r0),
+      has_fixed_conflict: false,
+      has_fixed_def: false,
+    },
+    {
+      id: 2,
+      class: Int,
+      spans: [make_bundle_merge_test_span(1, 3)],
+      fixed_reg: Some(r0),
+      has_fixed_conflict: false,
+      has_fixed_def: false,
+    },
+    {
+      id: 3,
+      class: Int,
+      spans: [make_bundle_merge_test_span(8, 10)],
+      fixed_reg: Some(r1),
+      has_fixed_conflict: false,
+      has_fixed_def: false,
+    },
+  ]
+  let plan = plan_bundle_merges(
+    ranges,
+    [
+      { target: 0, source: 1 },
+      { target: 0, source: 2 },
+      { target: 0, source: 3 },
+    ],
+    fn(a, b) { a == b },
+    fn(a, b) { a == b },
+  )
+  inspect(plan.range_to_bundle[0] == plan.range_to_bundle[1], content="true")
+  inspect(plan.range_to_bundle[0] == plan.range_to_bundle[2], content="false")
+  inspect(plan.range_to_bundle[0] == plan.range_to_bundle[3], content="false")
 }
