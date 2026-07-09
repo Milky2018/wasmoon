@@ -73,5 +73,7 @@ test "fold constants in a MilkIR function" {
 runtime concepts, embedding context layouts, WASI, or machine-code emission.
 
 Dialect-specific operations should travel through the generic `ExtOp`
-extension hook. The WebAssembly dialect is owned by `Milky2018/wasm_milkir`,
-not by MilkIR core.
+extension hook. `ExtOpDescriptor` lets dialect packages describe and validate
+their own immediate layouts without teaching MilkIR core those dialect
+semantics. The WebAssembly dialect is owned by `Milky2018/wasm_milkir`, not by
+MilkIR core.

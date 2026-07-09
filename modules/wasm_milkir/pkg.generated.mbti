@@ -53,9 +53,17 @@ pub fn data_drop(@milkir.FunctionBuilder, RuntimeSymbols, @milkir.Value, Int) ->
 
 pub fn decode(@milkir.ExtOp) -> WasmOpcode?
 
+pub fn decode_error(@milkir.ExtOp) -> String?
+
 pub fn decode_opcode(@milkir.Opcode) -> WasmOpcode?
 
+pub fn decode_or_abort(@milkir.ExtOp) -> WasmOpcode
+
 pub fn delegate(@milkir.FunctionBuilder, Int) -> Unit
+
+pub fn descriptor(WasmOpcode) -> @milkir.ExtOpDescriptor
+
+pub fn descriptor_by_name(String) -> @milkir.ExtOpDescriptor?
 
 pub fn elem_drop(@milkir.FunctionBuilder, RuntimeSymbols, @milkir.Value, Int) -> Unit
 

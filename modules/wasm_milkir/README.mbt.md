@@ -2,10 +2,10 @@
 
 WebAssembly dialect adapter for MilkIR extension operations.
 
-`wasm_milkir` owns the Wasm-specific opcode set and builder helpers that are
-not part of generic MilkIR. Frontends can encode Wasm-only operations as
-`milkir.ExtOp` values, then a lowering adapter can decode them before machine
-lowering.
+`wasm_milkir` owns the Wasm-specific opcode set, extension descriptors, and
+builder helpers that are not part of generic MilkIR. Frontends encode Wasm-only
+operations through typed `WasmOpcode` constructors, then a lowering adapter
+checks and decodes those extensions before machine lowering.
 
 ## Packages
 
@@ -46,5 +46,29 @@ test "build a Wasm memory.size extension instruction" {
     Call(symbol) => inspect(symbol.name, content="example.runtime.memory_size")
     _ => inspect(false, content="true")
   }
+}
+```
+
+## Example: validate and decode a Wasm extension
+
+```moonbit check
+///|
+test "validate and decode a typed Wasm extension operation" {
+  let opcode = WasmOpcode::MemoryGrow(0, Some(1024))
+  let ext = encode(opcode)
+  let desc = descriptor(opcode)
+  inspect(ext.matches_descriptor(desc), content="true")
+  inspect(decode_or_abort(ext) == opcode, content="true")
+  let malformed = @milkir.ExtOp(
+    "wasm",
+    "memory_grow",
+    FixedArray::makei(0, fn(_) { 0 }),
+  )
+  debug_inspect(
+    decode_error(malformed),
+    content=(
+      #|Some("malformed Wasm MilkIR extension 'memory_grow': expected 1..2 immediates, got 0")
+    ),
+  )
 }
 ```

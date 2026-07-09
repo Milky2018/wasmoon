@@ -60,8 +60,20 @@ pub struct ExtOp {
   immediates : FixedArray[Int]
 } derive(@debug.Debug)
 pub fn ExtOp::ExtOp(String, String, FixedArray[Int]) -> Self
+pub fn ExtOp::matches_descriptor(Self, ExtOpDescriptor) -> Bool
 pub impl Eq for ExtOp
 pub impl Hash for ExtOp
+
+pub(all) struct ExtOpDescriptor {
+  dialect : String
+  opcode : String
+  min_immediates : Int
+  max_immediates : Int
+} derive(Eq, Hash, @debug.Debug)
+pub fn ExtOpDescriptor::ExtOpDescriptor(String, String, Int) -> Self
+pub fn ExtOpDescriptor::accepts_immediate_count(Self, Int) -> Bool
+pub fn ExtOpDescriptor::expected_immediate_count(Self) -> String
+pub fn ExtOpDescriptor::with_immediate_range(String, String, Int, Int) -> Self
 
 pub struct ExternalSymbol {
   name : String

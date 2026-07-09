@@ -79,12 +79,73 @@ pub struct ExtOp {
 } derive(Debug)
 
 ///|
+pub(all) struct ExtOpDescriptor {
+  dialect : String
+  opcode : String
+  min_immediates : Int
+  max_immediates : Int
+} derive(Eq, Debug, Hash)
+
+///|
+pub fn ExtOpDescriptor::ExtOpDescriptor(
+  dialect : String,
+  opcode : String,
+  immediate_count : Int,
+) -> ExtOpDescriptor {
+  {
+    dialect,
+    opcode,
+    min_immediates: immediate_count,
+    max_immediates: immediate_count,
+  }
+}
+
+///|
+pub fn ExtOpDescriptor::with_immediate_range(
+  dialect : String,
+  opcode : String,
+  min_immediates : Int,
+  max_immediates : Int,
+) -> ExtOpDescriptor {
+  { dialect, opcode, min_immediates, max_immediates }
+}
+
+///|
+pub fn ExtOpDescriptor::accepts_immediate_count(
+  self : ExtOpDescriptor,
+  count : Int,
+) -> Bool {
+  count >= self.min_immediates && count <= self.max_immediates
+}
+
+///|
+pub fn ExtOpDescriptor::expected_immediate_count(
+  self : ExtOpDescriptor,
+) -> String {
+  if self.min_immediates == self.max_immediates {
+    "\{self.min_immediates}"
+  } else {
+    "\{self.min_immediates}..\{self.max_immediates}"
+  }
+}
+
+///|
 pub fn ExtOp::ExtOp(
   dialect : String,
   opcode : String,
   immediates : FixedArray[Int],
 ) -> ExtOp {
   { dialect, opcode, immediates }
+}
+
+///|
+pub fn ExtOp::matches_descriptor(
+  self : ExtOp,
+  descriptor : ExtOpDescriptor,
+) -> Bool {
+  self.dialect == descriptor.dialect &&
+  self.opcode == descriptor.opcode &&
+  descriptor.accepts_immediate_count(self.immediates.length())
 }
 
 ///|

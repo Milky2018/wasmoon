@@ -60,6 +60,9 @@ pub(all) enum WasmOpcode {
 } derive(Debug, Eq, Hash)
 
 ///|
+const WASM_DIALECT : String = "wasm"
+
+///|
 fn imm(values : Array[Int]) -> FixedArray[Int] {
   FixedArray::makei(values.length(), fn(i) { values[i] })
 }
@@ -76,6 +79,154 @@ fn bool_imm(value : Bool) -> Int {
 ///|
 fn imm_bool(value : Int) -> Bool {
   value != 0
+}
+
+///|
+fn ext_descriptor(name : String, count : Int) -> @milkir.ExtOpDescriptor {
+  ExtOpDescriptor(WASM_DIALECT, name, count)
+}
+
+///|
+fn ext_descriptor_range(
+  name : String,
+  min_count : Int,
+  max_count : Int,
+) -> @milkir.ExtOpDescriptor {
+  @milkir.ExtOpDescriptor::with_immediate_range(
+    WASM_DIALECT,
+    name,
+    min_count,
+    max_count,
+  )
+}
+
+///|
+pub fn descriptor(opcode : WasmOpcode) -> @milkir.ExtOpDescriptor {
+  match opcode {
+    LoadMemBase(_) => ext_descriptor("load_mem_base", 1)
+    MemoryGrow(_, _) => ext_descriptor_range("memory_grow", 1, 2)
+    MemorySize(_) => ext_descriptor("memory_size", 1)
+    MemoryFill(_) => ext_descriptor("memory_fill", 1)
+    MemoryCopy(_, _) => ext_descriptor("memory_copy", 2)
+    MemoryInit(_, _) => ext_descriptor("memory_init", 2)
+    DataDrop(_) => ext_descriptor("data_drop", 1)
+    TableGrow(_) => ext_descriptor("table_grow", 1)
+    TableFill(_) => ext_descriptor("table_fill", 1)
+    TableCopy(_, _) => ext_descriptor("table_copy", 2)
+    TableInit(_, _) => ext_descriptor("table_init", 2)
+    ElemDrop(_) => ext_descriptor("elem_drop", 1)
+    WasmCall(_) => ext_descriptor("call", 1)
+    WasmCallIndirect(_, _) => ext_descriptor("call_indirect", 2)
+    CallRef(_) => ext_descriptor("call_ref", 1)
+    ReturnCall(_) => ext_descriptor("return_call", 1)
+    ReturnCallIndirect(_, _) => ext_descriptor("return_call_indirect", 2)
+    ReturnCallRef(_) => ext_descriptor("return_call_ref", 1)
+    GetFuncRef(_) => ext_descriptor("get_func_ref", 1)
+    StructNew(_) => ext_descriptor("struct_new", 1)
+    StructNewDefault(_) => ext_descriptor("struct_new_default", 1)
+    StructGet(_, _) => ext_descriptor("struct_get", 2)
+    StructGetS(_, _, _) => ext_descriptor("struct_get_s", 3)
+    StructGetU(_, _, _) => ext_descriptor("struct_get_u", 3)
+    StructSet(_, _) => ext_descriptor("struct_set", 2)
+    ArrayNew(_) => ext_descriptor("array_new", 1)
+    ArrayNewDefault(_) => ext_descriptor("array_new_default", 1)
+    ArrayNewFixed(_, _) => ext_descriptor("array_new_fixed", 2)
+    ArrayGet(_) => ext_descriptor("array_get", 1)
+    ArrayGetS(_, _) => ext_descriptor("array_get_s", 2)
+    ArrayGetU(_, _) => ext_descriptor("array_get_u", 2)
+    ArraySet(_) => ext_descriptor("array_set", 1)
+    ArrayLen => ext_descriptor("array_len", 0)
+    ArrayFill(_) => ext_descriptor("array_fill", 1)
+    ArrayCopy(_, _) => ext_descriptor("array_copy", 2)
+    ArrayNewData(_, _) => ext_descriptor("array_new_data", 2)
+    ArrayNewElem(_, _) => ext_descriptor("array_new_elem", 2)
+    ArrayInitData(_, _) => ext_descriptor("array_init_data", 2)
+    ArrayInitElem(_, _) => ext_descriptor("array_init_elem", 2)
+    I31New => ext_descriptor("i31_new", 0)
+    I31GetS => ext_descriptor("i31_get_s", 0)
+    I31GetU => ext_descriptor("i31_get_u", 0)
+    RefTest(_, _) => ext_descriptor("ref_test", 2)
+    RefCast(_, _) => ext_descriptor("ref_cast", 2)
+    AnyConvertExtern => ext_descriptor("any_convert_extern", 0)
+    ExternConvertAny => ext_descriptor("extern_convert_any", 0)
+    RefEq => ext_descriptor("ref_eq", 0)
+    Throw(_) => ext_descriptor("throw", 1)
+    ThrowRef => ext_descriptor("throw_ref", 0)
+    TryTableBegin(_) => ext_descriptor("try_table_begin", 1)
+    TryTableEnd(_) => ext_descriptor("try_table_end", 1)
+    GetExceptionTag => ext_descriptor("get_exception_tag", 0)
+    GetExceptionValue(_) => ext_descriptor("get_exception_value", 1)
+    GetExceptionValueCount => ext_descriptor("get_exception_value_count", 0)
+    Delegate(_) => ext_descriptor("delegate", 1)
+    SpillLocalsForThrow(_) => ext_descriptor("spill_locals_for_throw", 1)
+    GetSpilledLocal(_) => ext_descriptor("get_spilled_local", 1)
+  }
+}
+
+///|
+pub fn descriptor_by_name(name : String) -> @milkir.ExtOpDescriptor? {
+  match name {
+    "load_mem_base" => Some(ext_descriptor("load_mem_base", 1))
+    "memory_grow" => Some(ext_descriptor_range("memory_grow", 1, 2))
+    "memory_size" => Some(ext_descriptor("memory_size", 1))
+    "memory_fill" => Some(ext_descriptor("memory_fill", 1))
+    "memory_copy" => Some(ext_descriptor("memory_copy", 2))
+    "memory_init" => Some(ext_descriptor("memory_init", 2))
+    "data_drop" => Some(ext_descriptor("data_drop", 1))
+    "table_grow" => Some(ext_descriptor("table_grow", 1))
+    "table_fill" => Some(ext_descriptor("table_fill", 1))
+    "table_copy" => Some(ext_descriptor("table_copy", 2))
+    "table_init" => Some(ext_descriptor("table_init", 2))
+    "elem_drop" => Some(ext_descriptor("elem_drop", 1))
+    "call" => Some(ext_descriptor("call", 1))
+    "call_indirect" => Some(ext_descriptor("call_indirect", 2))
+    "call_ref" => Some(ext_descriptor("call_ref", 1))
+    "return_call" => Some(ext_descriptor("return_call", 1))
+    "return_call_indirect" => Some(ext_descriptor("return_call_indirect", 2))
+    "return_call_ref" => Some(ext_descriptor("return_call_ref", 1))
+    "get_func_ref" => Some(ext_descriptor("get_func_ref", 1))
+    "struct_new" => Some(ext_descriptor("struct_new", 1))
+    "struct_new_default" => Some(ext_descriptor("struct_new_default", 1))
+    "struct_get" => Some(ext_descriptor("struct_get", 2))
+    "struct_get_s" => Some(ext_descriptor("struct_get_s", 3))
+    "struct_get_u" => Some(ext_descriptor("struct_get_u", 3))
+    "struct_set" => Some(ext_descriptor("struct_set", 2))
+    "array_new" => Some(ext_descriptor("array_new", 1))
+    "array_new_default" => Some(ext_descriptor("array_new_default", 1))
+    "array_new_fixed" => Some(ext_descriptor("array_new_fixed", 2))
+    "array_get" => Some(ext_descriptor("array_get", 1))
+    "array_get_s" => Some(ext_descriptor("array_get_s", 2))
+    "array_get_u" => Some(ext_descriptor("array_get_u", 2))
+    "array_set" => Some(ext_descriptor("array_set", 1))
+    "array_len" => Some(ext_descriptor("array_len", 0))
+    "array_fill" => Some(ext_descriptor("array_fill", 1))
+    "array_copy" => Some(ext_descriptor("array_copy", 2))
+    "array_new_data" => Some(ext_descriptor("array_new_data", 2))
+    "array_new_elem" => Some(ext_descriptor("array_new_elem", 2))
+    "array_init_data" => Some(ext_descriptor("array_init_data", 2))
+    "array_init_elem" => Some(ext_descriptor("array_init_elem", 2))
+    "i31_new" => Some(ext_descriptor("i31_new", 0))
+    "i31_get_s" => Some(ext_descriptor("i31_get_s", 0))
+    "i31_get_u" => Some(ext_descriptor("i31_get_u", 0))
+    "ref_test" => Some(ext_descriptor("ref_test", 2))
+    "ref_cast" => Some(ext_descriptor("ref_cast", 2))
+    "any_convert_extern" => Some(ext_descriptor("any_convert_extern", 0))
+    "extern_convert_any" => Some(ext_descriptor("extern_convert_any", 0))
+    "ref_eq" => Some(ext_descriptor("ref_eq", 0))
+    "throw" => Some(ext_descriptor("throw", 1))
+    "throw_ref" => Some(ext_descriptor("throw_ref", 0))
+    "try_table_begin" => Some(ext_descriptor("try_table_begin", 1))
+    "try_table_end" => Some(ext_descriptor("try_table_end", 1))
+    "get_exception_tag" => Some(ext_descriptor("get_exception_tag", 0))
+    "get_exception_value" => Some(ext_descriptor("get_exception_value", 1))
+    "get_exception_value_count" =>
+      Some(ext_descriptor("get_exception_value_count", 0))
+    "delegate" => Some(ext_descriptor("delegate", 1))
+    "spill_locals_for_throw" =>
+      Some(ext_descriptor("spill_locals_for_throw", 1))
+    "get_spilled_local" => Some(ext_descriptor("get_spilled_local", 1))
+    _ => None
+  }
 }
 
 ///|
@@ -161,12 +312,19 @@ pub fn encode(opcode : WasmOpcode) -> @milkir.ExtOp {
     SpillLocalsForThrow(count) => ("spill_locals_for_throw", imm([count]))
     GetSpilledLocal(idx) => ("get_spilled_local", imm([idx]))
   }
-  ExtOp("wasm", name, immediates)
+  let desc = descriptor(opcode)
+  let ext = @milkir.ExtOp::ExtOp(WASM_DIALECT, name, immediates)
+  if !ext.matches_descriptor(desc) {
+    abort(
+      "invalid Wasm MilkIR descriptor for \{name}: expected \{desc.expected_immediate_count()} immediates, got \{immediates.length()}",
+    )
+  }
+  ext
 }
 
 ///|
 pub fn decode(ext : @milkir.ExtOp) -> WasmOpcode? {
-  guard ext.dialect == "wasm" else { return None }
+  guard ext.dialect == WASM_DIALECT else { return None }
   let imms = ext.immediates
   match ext.opcode {
     "load_mem_base" if imms.length() == 1 => Some(LoadMemBase(imms[0]))
@@ -244,6 +402,48 @@ pub fn decode(ext : @milkir.ExtOp) -> WasmOpcode? {
       Some(SpillLocalsForThrow(imms[0]))
     "get_spilled_local" if imms.length() == 1 => Some(GetSpilledLocal(imms[0]))
     _ => None
+  }
+}
+
+///|
+fn valid_bool_immediate(value : Int) -> Bool {
+  value == 0 || value == 1
+}
+
+///|
+pub fn decode_error(ext : @milkir.ExtOp) -> String? {
+  if ext.dialect != WASM_DIALECT {
+    return Some(
+      "expected Wasm MilkIR dialect '\{WASM_DIALECT}', got '\{ext.dialect}'",
+    )
+  }
+  let desc = match descriptor_by_name(ext.opcode) {
+    Some(desc) => desc
+    None => return Some("unknown Wasm MilkIR extension opcode '\{ext.opcode}'")
+  }
+  if !ext.matches_descriptor(desc) {
+    return Some(
+      "malformed Wasm MilkIR extension '\{ext.opcode}': expected \{desc.expected_immediate_count()} immediates, got \{ext.immediates.length()}",
+    )
+  }
+  if (ext.opcode == "ref_test" || ext.opcode == "ref_cast") &&
+    !valid_bool_immediate(ext.immediates[1]) {
+    return Some(
+      "malformed Wasm MilkIR extension '\{ext.opcode}': immediate 1 is a bool flag encoded as 0 or 1, got \{ext.immediates[1]}",
+    )
+  }
+  None
+}
+
+///|
+pub fn decode_or_abort(ext : @milkir.ExtOp) -> WasmOpcode {
+  match decode_error(ext) {
+    Some(message) => abort(message)
+    None =>
+      match decode(ext) {
+        Some(opcode) => opcode
+        None => abort("malformed Wasm MilkIR extension '\{ext.opcode}'")
+      }
   }
 }
 
