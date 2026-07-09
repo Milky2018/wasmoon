@@ -47,7 +47,6 @@ fn emit_op(
   opcode : @milkir.Opcode,
   operands : Array[@milkir.Value],
 ) -> @milkir.Value? {
-  guard builder.current_block() is Some(_) else { return None }
   Some(builder.emit_inst(ty, opcode, operands))
 }
 
@@ -57,7 +56,6 @@ fn emit_void_op(
   opcode : @milkir.Opcode,
   operands : Array[@milkir.Value],
 ) -> Bool {
-  guard builder.current_block() is Some(_) else { return false }
   builder.emit_void_inst(opcode, operands)
   true
 }
@@ -69,7 +67,6 @@ fn emit_multi_op(
   opcode : @milkir.Opcode,
   operands : Array[@milkir.Value],
 ) -> Array[@milkir.Value]? {
-  guard builder.current_block() is Some(_) else { return None }
   Some(builder.emit_multi_inst(result_types, opcode, operands))
 }
 
@@ -321,7 +318,6 @@ fn emit_i31_null_check(
   builder : @milkir.FunctionBuilder,
   value : @milkir.Value,
 ) -> Bool {
-  guard builder.current_block() is Some(_) else { return false }
   guard emit_op(builder, value.ty, Iconst(@wasm_milkir.NULL_REF), [])
     is Some(null_ref) else {
     return false
@@ -1947,8 +1943,6 @@ fn try_lower_linear_function(
   for result in func_type.results {
     builder.add_result(wasm_value_type_to_milkir(result))
   }
-  let entry = builder.create_block()
-  builder.switch_to_block(entry)
   for local_ty in code.locals {
     let milk_ty = wasm_value_type_to_milkir(local_ty)
     guard zero_value(builder, milk_ty) is Some(value) else { return None }

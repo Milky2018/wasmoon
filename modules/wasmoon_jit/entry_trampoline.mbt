@@ -50,8 +50,7 @@ fn build_entry_trampoline_milkir(
   let values_vec = builder.add_param(Ptr)
   let func_ptr = builder.add_param(Ptr)
   builder.add_result(I64)
-  let entry = builder.create_block()
-  builder.switch_to_block(entry)
+  let entry = builder.current_block()
   let wasm_args : Array[@milkir.Value] = []
   let mut offset = 0
   for ty in param_types {

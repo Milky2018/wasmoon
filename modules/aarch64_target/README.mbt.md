@@ -43,8 +43,6 @@ test "lower an integer add function for AArch64" {
   let lhs = builder.add_param(I64)
   let rhs = builder.add_param(I64)
   builder.add_result(I64)
-  let entry = builder.create_block()
-  builder.switch_to_block(entry)
   builder.return_([builder.iadd(lhs, rhs)])
   let lowered = lower_function(builder.get_function())
   inspect(lowered.name, content="add64")
@@ -69,8 +67,6 @@ test "lower AArch64 with an explicit call convention" {
   let lhs = builder.add_param(I64)
   let rhs = builder.add_param(I64)
   builder.add_result(I64)
-  let entry = builder.create_block()
-  builder.switch_to_block(entry)
   builder.return_([builder.iadd(lhs, rhs)])
   context |> ignore
   fn regs(start : Int, count : Int, class : @abi.RegClass) -> Array[@abi.PReg] {

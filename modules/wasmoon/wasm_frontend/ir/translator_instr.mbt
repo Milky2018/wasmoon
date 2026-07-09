@@ -1435,9 +1435,8 @@ fn Translator::translate_instruction(
 
       // Jump to continuation after try body
       let normal_args : Array[Value] = []
-      let normal_falls_through = !self.is_unreachable &&
-        self.builder.current_block() is Some(blk) &&
-        blk.terminator is None
+      let blk = self.builder.current_block()
+      let normal_falls_through = !self.is_unreachable && blk.terminator is None
       if normal_falls_through {
         for _ in 0..<result_types.length() {
           normal_args.push(self.pop())
@@ -1525,7 +1524,8 @@ fn Translator::translate_instruction(
       // If no handler matched, rethrow (delegate to outer handler)
       // Use depth=1 to skip this handler and propagate to the next outer one
       // (depth=0 would cause infinite loop by re-entering this same handler)
-      if self.builder.current_block() is Some(blk) && blk.terminator is None {
+      let blk = self.builder.current_block()
+      if blk.terminator is None {
         @wasm_milkir.delegate(self.builder, 1) // Propagate to outer handler
       }
 

@@ -77,10 +77,6 @@ fn generate_trampoline_ir(
   // Result: trap code (i64 for simplicity)
   builder.add_result(I64)
 
-  // Create entry block and switch to it
-  let entry = builder.create_block()
-  builder.switch_to_block(entry)
-
   // Load arguments from values_vec
   // V128 args are passed as two I64 values (low then high) to avoid alignment issues
   // with LDR Q which requires 16-byte aligned offsets

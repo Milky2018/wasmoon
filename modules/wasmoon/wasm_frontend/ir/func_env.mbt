@@ -347,10 +347,7 @@ fn FuncEnvironment::get_or_create_memory_trap_block(
       let current = builder.current_block() // save current position
       builder.switch_to_block(trap_block)
       builder.trap("memory out of bounds")
-      match current {
-        Some(block) => builder.switch_to_block(block) // restore position
-        None => ()
-      }
+      builder.switch_to_block(current) // restore position
       self.memory_trap_block = Some(trap_block)
       trap_block
     }
@@ -370,10 +367,7 @@ fn FuncEnvironment::get_or_create_atomic_unaligned_trap_block(
       let current = builder.current_block()
       builder.switch_to_block(trap_block)
       builder.trap("unaligned atomic")
-      match current {
-        Some(block) => builder.switch_to_block(block)
-        None => ()
-      }
+      builder.switch_to_block(current)
       self.atomic_unaligned_trap_block = Some(trap_block)
       trap_block
     }
@@ -500,7 +494,7 @@ fn FuncEnvironment::can_eliminate_redundant_bounds_check(
   offset : Int64,
   access_size : Int,
 ) -> Bool {
-  guard builder.current_block() is Some(block) else { return false }
+  let block = builder.current_block()
   guard checked_access_end(offset, access_size) is Some(end) else {
     return false
   }
@@ -520,7 +514,7 @@ fn FuncEnvironment::record_bounds_check(
   offset : Int64,
   access_size : Int,
 ) -> Unit {
-  guard builder.current_block() is Some(block) else { return }
+  let block = builder.current_block()
   guard checked_access_end(offset, access_size) is Some(end) else { return }
   let key = bounds_check_cache_key(block.id, memidx, wasm_addr.id)
   match self.bounds_check_cache.get(key) {

@@ -37,8 +37,6 @@ test "build a Wasm memory.size extension instruction" {
   let symbols = RuntimeSymbols::with_runtime_prefix("example.runtime")
   let vmctx = builder.add_param(I64)
   builder.add_result(I32)
-  let entry = builder.create_block()
-  builder.switch_to_block(entry)
   let size = memory_size(builder, symbols, vmctx, 0)
   builder.return_([size])
   let func = builder.get_function()

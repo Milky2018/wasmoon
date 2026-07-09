@@ -125,7 +125,7 @@ pub fn FunctionBuilder::clz(Self, Value) -> Value
 pub fn FunctionBuilder::copy(Self, Value) -> Value
 pub fn FunctionBuilder::create_block(Self) -> Block
 pub fn FunctionBuilder::ctz(Self, Value) -> Value
-pub fn FunctionBuilder::current_block(Self) -> Block?
+pub fn FunctionBuilder::current_block(Self) -> Block
 pub fn FunctionBuilder::emit_ext_inst(Self, Type, ExtOp, Array[Value]) -> Value
 pub fn FunctionBuilder::emit_inst(Self, Type, Opcode, Array[Value]) -> Value
 pub fn FunctionBuilder::emit_multi_ext_inst(Self, Array[Type], ExtOp, Array[Value]) -> Array[Value]

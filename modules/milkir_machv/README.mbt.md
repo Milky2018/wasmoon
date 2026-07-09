@@ -40,8 +40,6 @@ fn readme_call_conv() -> @abi.CallConventionLayout {
 ///|
 test "lower a leaf MilkIR function to AArch64 MachV" {
   let builder = @milkir.FunctionBuilder::new("leaf")
-  let entry = builder.create_block()
-  builder.switch_to_block(entry)
   builder.return_([])
   let lowered = @lower.lower_function(
     builder.get_function(),
@@ -63,8 +61,6 @@ modify MachV directly.
 ///|
 test "optimize an explicitly targeted MachV function" {
   let builder = @milkir.FunctionBuilder::new("empty_return")
-  let entry = builder.create_block()
-  builder.switch_to_block(entry)
   builder.return_([])
   let lowered = @lower.lower_function(
     builder.get_function(),

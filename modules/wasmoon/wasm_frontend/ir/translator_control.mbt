@@ -102,9 +102,8 @@ fn Translator::translate_if(
   }
 
   // Jump to continuation from then block with locals (only if not unreachable)
-  if !self.is_unreachable &&
-    self.builder.current_block() is Some(block) &&
-    block.terminator is None {
+  let block = self.builder.current_block()
+  if !self.is_unreachable && block.terminator is None {
     let args : Array[Value] = []
     for _ in 0..<result_types.length() {
       args.push(self.pop())
@@ -141,9 +140,8 @@ fn Translator::translate_if(
   }
 
   // Jump to continuation from else block with locals (only if not unreachable)
-  if !self.is_unreachable &&
-    self.builder.current_block() is Some(block) &&
-    block.terminator is None {
+  let block = self.builder.current_block()
+  if !self.is_unreachable && block.terminator is None {
     let args : Array[Value] = []
     for _ in 0..<result_types.length() {
       args.push(self.pop())
@@ -643,9 +641,6 @@ fn Translator::translate_br_table(
     args.push(loc)
   }
 
-  // Save the original block
-  let original_block = self.builder.current_block()
-
   // Phase 1: Create intermediate blocks for unique target depths.
   //
   // br_table payloads can be very large with many repeated labels. Emitting one
@@ -671,9 +666,7 @@ fn Translator::translate_br_table(
   }
 
   // Phase 2: Emit br_table in original block
-  if original_block is Some(_) {
-    self.builder.br_table(index, intermediate_blocks, default_intermediate)
-  }
+  self.builder.br_table(index, intermediate_blocks, default_intermediate)
 
   // Phase 3: Fill in unique intermediate blocks with jumps to real targets.
   for depth in unique_depths {

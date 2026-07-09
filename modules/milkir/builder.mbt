@@ -6,13 +6,14 @@
 /// Tracks the current block and provides methods for emitting instructions
 struct FunctionBuilder {
   func : Function
-  mut current_block : Block?
+  mut current_block : Block
 }
 
 ///|
 pub fn FunctionBuilder::new(name : String) -> FunctionBuilder {
   let func = Function::new_empty(name)
-  { func, current_block: None }
+  let entry = func.new_block0()
+  { func, current_block: entry }
 }
 
 ///|
@@ -52,27 +53,13 @@ pub fn FunctionBuilder::switch_to_block(
   self : FunctionBuilder,
   block : Block,
 ) -> Unit {
-  self.current_block = Some(block)
+  self.current_block = block
 }
 
 ///|
 /// Get the current block
-pub fn FunctionBuilder::current_block(self : FunctionBuilder) -> Block? {
+pub fn FunctionBuilder::current_block(self : FunctionBuilder) -> Block {
   self.current_block
-}
-
-///|
-fn FunctionBuilder::require_current_block(
-  self : FunctionBuilder,
-  operation : String,
-) -> Block {
-  match self.current_block {
-    Some(block) => block
-    None =>
-      abort(
-        "FunctionBuilder::\{operation} requires a current block; call switch_to_block before emitting instructions",
-      )
-  }
 }
 
 ///|
@@ -130,7 +117,7 @@ pub fn FunctionBuilder::emit_inst(
   opcode : Opcode,
   operands : Array[Value],
 ) -> Value {
-  let block = self.require_current_block("emit_inst")
+  let block = self.current_block
   let result = self.func.new_value(ty)
   let inst = Inst::new(Some(result), opcode, operands)
   block.add_inst(inst)
@@ -144,7 +131,7 @@ pub fn FunctionBuilder::emit_void_inst(
   opcode : Opcode,
   operands : Array[Value],
 ) -> Unit {
-  let block = self.require_current_block("emit_void_inst")
+  let block = self.current_block
   let inst = Inst::new(None, opcode, operands)
   block.add_inst(inst)
 }
@@ -161,7 +148,7 @@ pub fn FunctionBuilder::emit_multi_inst(
     self.emit_void_inst(opcode, operands)
     return []
   }
-  let block = self.require_current_block("emit_multi_inst")
+  let block = self.current_block
   let results : Array[Value] = []
   for ty in result_types {
     results.push(self.func.new_value(ty))
@@ -912,7 +899,7 @@ pub fn FunctionBuilder::jump(
   target : Block,
   args : Array[Value],
 ) -> Unit {
-  let block = self.require_current_block("jump")
+  let block = self.current_block
   block.set_terminator(Jump(target.id, args))
 }
 
@@ -924,7 +911,7 @@ pub fn FunctionBuilder::brz(
   then_block : Block,
   else_block : Block,
 ) -> Unit {
-  let block = self.require_current_block("brz")
+  let block = self.current_block
   block.set_terminator(Brz(cond, then_block.id, else_block.id))
 }
 
@@ -936,7 +923,7 @@ pub fn FunctionBuilder::brnz(
   then_block : Block,
   else_block : Block,
 ) -> Unit {
-  let block = self.require_current_block("brnz")
+  let block = self.current_block
   block.set_terminator(Brnz(cond, then_block.id, else_block.id))
 }
 
@@ -949,7 +936,7 @@ pub fn FunctionBuilder::br_table(
   default_target : Block,
 ) -> Unit {
   let target_ids = targets.map(fn(b) { b.id })
-  let block = self.require_current_block("br_table")
+  let block = self.current_block
   block.set_terminator(BrTable(index, target_ids, default_target.id))
 }
 
@@ -959,14 +946,14 @@ pub fn FunctionBuilder::return_(
   self : FunctionBuilder,
   values : Array[Value],
 ) -> Unit {
-  let block = self.require_current_block("return_")
+  let block = self.current_block
   block.set_terminator(Return(values))
 }
 
 ///|
 /// Trap/unreachable
 pub fn FunctionBuilder::trap(self : FunctionBuilder, reason : String) -> Unit {
-  let block = self.require_current_block("trap")
+  let block = self.current_block
   block.set_terminator(Trap(reason))
 }
 

@@ -21,8 +21,6 @@ test "builder prints generic SSA function" {
   let p0 = builder.add_param(I32)
   let p1 = builder.add_param(I32)
   builder.add_result(I32)
-  let entry = builder.create_block()
-  builder.switch_to_block(entry)
   let sum = builder.iadd(p0, p1)
   builder.return_([sum])
   inspect(
@@ -40,18 +38,10 @@ test "builder prints generic SSA function" {
 }
 
 ///|
-test "panic FunctionBuilder emit without current block" {
-  let builder = FunctionBuilder::new("missing_block")
-  builder.iconst_i32(1) |> ignore
-}
-
-///|
 test "builder prints pointer operations" {
   let builder = FunctionBuilder::new("load_store")
   let addr = builder.add_param(Ptr)
   builder.add_result(I32)
-  let entry = builder.create_block()
-  builder.switch_to_block(entry)
   let offset0 = builder.iconst_i64(0L)
   let loaded = builder.load_ptr(I32, addr, offset0)
   let one = builder.iconst_i32(1)
@@ -82,8 +72,6 @@ test "builder prints narrow pointer operations" {
   let builder = FunctionBuilder::new("narrow_mem")
   let addr = builder.add_param(Ptr)
   builder.add_result(I32)
-  let entry = builder.create_block()
-  builder.switch_to_block(entry)
   let load_offset = builder.iconst_i64(2L)
   let loaded = builder.load_ptr_narrow(I32, 8, true, addr, load_offset)
   let store_offset = builder.iconst_i64(6L)
@@ -111,11 +99,9 @@ test "builder and CFG support branches and block params" {
   let builder = FunctionBuilder::new("loop_sum")
   let n = builder.add_param(I32)
   builder.add_result(I32)
-  let entry = builder.create_block()
   let loop_header = builder.create_block()
   let loop_body = builder.create_block()
   let exit_block = builder.create_block()
-  builder.switch_to_block(entry)
   let init_sum = builder.iconst_i32(0)
   let init_counter = builder.iconst_i32(0)
   builder.jump(loop_header, [init_sum, init_counter])
@@ -172,8 +158,6 @@ test "verify catches undefined operands" {
 test "optimizer folds integer constants" {
   let builder = FunctionBuilder::new("const_add")
   builder.add_result(I32)
-  let entry = builder.create_block()
-  builder.switch_to_block(entry)
   let lhs = builder.iconst_i32(10)
   let rhs = builder.iconst_i32(20)
   let sum = builder.iadd(lhs, rhs)
@@ -199,8 +183,7 @@ test "optimizer folds integer constants" {
 test "optimizer leaves trap-prone division unfused" {
   let builder = FunctionBuilder::new("no_fold_div")
   builder.add_result(I32)
-  let entry = builder.create_block()
-  builder.switch_to_block(entry)
+  let entry = builder.current_block()
   let lhs = builder.iconst_i32(10)
   let rhs = builder.iconst_i32(0)
   let result = builder.get_function().new_value(I32)
@@ -228,8 +211,6 @@ test "optimizer leaves trap-prone division unfused" {
 test "optimizer O0 does not rewrite constants" {
   let builder = FunctionBuilder::new("o0")
   builder.add_result(I32)
-  let entry = builder.create_block()
-  builder.switch_to_block(entry)
   let lhs = builder.iconst_i32(1)
   let rhs = builder.iconst_i32(2)
   let sum = builder.iadd(lhs, rhs)
@@ -256,8 +237,6 @@ test "optimizer O0 does not rewrite constants" {
 test "optimizer O2 removes dead pure instructions after folding" {
   let builder = FunctionBuilder::new("o2_dce")
   builder.add_result(I32)
-  let entry = builder.create_block()
-  builder.switch_to_block(entry)
   let lhs = builder.iconst_i32(1)
   let rhs = builder.iconst_i32(2)
   let sum = builder.iadd(lhs, rhs)
@@ -284,8 +263,6 @@ test "dead code pass keeps unused loads without alias metadata" {
   let builder = FunctionBuilder::new("keep_load")
   let ptr = builder.add_param(Ptr)
   builder.add_result(I32)
-  let entry = builder.create_block()
-  builder.switch_to_block(entry)
   let offset = builder.iconst_i64(0L)
   let _loaded = builder.load_ptr(I32, ptr, offset)
   let result = builder.iconst_i32(7)
@@ -302,8 +279,6 @@ test "optimizer CSE replaces duplicate pure expression with copy" {
   let lhs = builder.add_param(I32)
   let rhs = builder.add_param(I32)
   builder.add_result(I32)
-  let entry = builder.create_block()
-  builder.switch_to_block(entry)
   let _sum0 = builder.iadd(lhs, rhs)
   let sum1 = builder.iadd(lhs, rhs)
   builder.return_([sum1])
@@ -331,10 +306,8 @@ test "optimizer CSE reuses expressions from dominating blocks" {
   let rhs = builder.add_param(I32)
   let cond = builder.add_param(I32)
   builder.add_result(I32)
-  let entry = builder.create_block()
   let then_block = builder.create_block()
   let else_block = builder.create_block()
-  builder.switch_to_block(entry)
   let sum0 = builder.iadd(lhs, rhs)
   builder.brnz(cond, then_block, else_block)
   builder.switch_to_block(then_block)
@@ -368,8 +341,6 @@ test "optimizer propagates local copies" {
   let builder = FunctionBuilder::new("copy_prop")
   let param = builder.add_param(I32)
   builder.add_result(I32)
-  let entry = builder.create_block()
-  builder.switch_to_block(entry)
   let copy = builder.copy(param)
   let one = builder.iconst_i32(1)
   let sum = builder.iadd(copy, one)
@@ -398,9 +369,7 @@ test "optimizer canonicalizes aliases through dominating blocks" {
   let builder = FunctionBuilder::new("alias_canon_copy_chain")
   let param = builder.add_param(I32)
   builder.add_result(I32)
-  let entry = builder.create_block()
   let body = builder.create_block()
-  builder.switch_to_block(entry)
   let copy0 = builder.copy(param)
   builder.jump(body, [])
   builder.switch_to_block(body)
@@ -438,12 +407,10 @@ test "optimizer canonicalizes branch args without crossing sibling dominance" {
   let value = builder.add_param(I32)
   let cond = builder.add_param(I32)
   builder.add_result(I32)
-  let entry = builder.create_block()
   let then_block = builder.create_block()
   let else_block = builder.create_block()
   let join = builder.create_block()
   let join_param = builder.add_block_param(join, I32)
-  builder.switch_to_block(entry)
   builder.brnz(cond, then_block, else_block)
   builder.switch_to_block(then_block)
   let copy = builder.copy(value)
@@ -483,9 +450,7 @@ test "optimizer canonicalizes branch args without crossing sibling dominance" {
 test "optimizer removes unused block params and jump args" {
   let builder = FunctionBuilder::new("dead_block_params")
   builder.add_result(I32)
-  let entry = builder.create_block()
   let target = builder.create_block()
-  builder.switch_to_block(entry)
   let used_arg = builder.iconst_i32(1)
   let dead_arg = builder.iconst_i32(2)
   builder.jump(target, [used_arg, dead_arg])
@@ -517,10 +482,8 @@ test "optimizer removes unused block params and jump args" {
 test "optimizer keeps block params forwarded through jump args" {
   let builder = FunctionBuilder::new("forwarded_block_params")
   builder.add_result(I32)
-  let entry = builder.create_block()
   let middle = builder.create_block()
   let exit = builder.create_block()
-  builder.switch_to_block(entry)
   let arg = builder.iconst_i32(7)
   builder.jump(middle, [arg])
   let middle_param = builder.add_block_param(middle, I32)
@@ -539,9 +502,7 @@ test "optimizer keeps block params forwarded through jump args" {
 test "optimizer removes constant block params and rewrites uses" {
   let builder = FunctionBuilder::new("const_block_params")
   builder.add_result(I32)
-  let entry = builder.create_block()
   let target = builder.create_block()
-  builder.switch_to_block(entry)
   let arg = builder.iconst_i32(7)
   builder.jump(target, [arg])
   let param = builder.add_block_param(target, I32)
@@ -570,14 +531,11 @@ test "optimizer removes constant block params and rewrites uses" {
 test "optimizer removes constant branch block params" {
   let builder = FunctionBuilder::new("branch_const_block_params")
   builder.add_result(I32)
-  let entry = builder.create_block()
   let join = builder.create_block()
-  builder.switch_to_block(entry)
   let cond = builder.iconst_i32(1)
   let arg = builder.iconst_i32(7)
-  if builder.current_block() is Some(block) {
-    block.set_terminator(Branch(cond, join.id, [arg], join.id, [arg]))
-  }
+  let block = builder.current_block()
+  block.set_terminator(Branch(cond, join.id, [arg], join.id, [arg]))
   let param = builder.add_block_param(join, I32)
   builder.switch_to_block(join)
   builder.return_([param])
@@ -607,15 +565,12 @@ test "optimizer removes constant branch block params" {
 test "optimizer keeps varying branch block params" {
   let builder = FunctionBuilder::new("branch_varying_block_params")
   builder.add_result(I32)
-  let entry = builder.create_block()
   let join = builder.create_block()
-  builder.switch_to_block(entry)
   let cond = builder.iconst_i32(1)
   let lhs = builder.iconst_i32(7)
   let rhs = builder.iconst_i32(9)
-  if builder.current_block() is Some(block) {
-    block.set_terminator(Branch(cond, join.id, [lhs], join.id, [rhs]))
-  }
+  let block = builder.current_block()
+  block.set_terminator(Branch(cond, join.id, [lhs], join.id, [rhs]))
   let param = builder.add_block_param(join, I32)
   builder.switch_to_block(join)
   builder.return_([param])
@@ -629,10 +584,8 @@ test "optimizer keeps varying branch block params" {
 test "optimizer removes unreachable blocks" {
   let builder = FunctionBuilder::new("unreachable")
   builder.add_result(I32)
-  let entry = builder.create_block()
   let exit = builder.create_block()
   let dead = builder.create_block()
-  builder.switch_to_block(entry)
   builder.jump(exit, [])
   builder.switch_to_block(exit)
   let result_value = builder.iconst_i32(1)
@@ -663,10 +616,8 @@ test "optimizer removes unreachable blocks" {
 test "optimizer simplifies constant brz" {
   let builder = FunctionBuilder::new("branch_simp_brz")
   builder.add_result(I32)
-  let entry = builder.create_block()
   let then_block = builder.create_block()
   let else_block = builder.create_block()
-  builder.switch_to_block(entry)
   let zero = builder.iconst_i32(0)
   builder.brz(zero, then_block, else_block)
   builder.switch_to_block(then_block)
@@ -701,11 +652,9 @@ test "optimizer simplifies constant brz" {
 ///|
 test "optimizer simplifies constant br_table" {
   let builder = FunctionBuilder::new("branch_simp_table")
-  let entry = builder.create_block()
   let target0 = builder.create_block()
   let target1 = builder.create_block()
   let default_target = builder.create_block()
-  builder.switch_to_block(entry)
   let index = builder.iconst_i32(1)
   builder.br_table(index, [target0, target1], default_target)
   builder.switch_to_block(target0)
@@ -740,10 +689,8 @@ test "optimizer simplifies constant br_table" {
 ///|
 test "optimizer threads trivial jump blocks" {
   let builder = FunctionBuilder::new("thread_jump")
-  let entry = builder.create_block()
   let middle = builder.create_block()
   let exit = builder.create_block()
-  builder.switch_to_block(entry)
   builder.jump(middle, [])
   builder.switch_to_block(middle)
   builder.jump(exit, [])
@@ -772,10 +719,8 @@ test "optimizer threads trivial jump blocks" {
 ///|
 test "optimizer threads jump args through block params" {
   let builder = FunctionBuilder::new("thread_jump_args")
-  let entry = builder.create_block()
   let middle = builder.create_block()
   let exit = builder.create_block()
-  builder.switch_to_block(entry)
   let a = builder.iconst_i32(1)
   let b = builder.iconst_i32(2)
   builder.jump(middle, [a, b])
@@ -815,9 +760,7 @@ test "optimizer threads jump args through block params" {
 test "optimizer merges straight line blocks" {
   let builder = FunctionBuilder::new("merge_blocks")
   builder.add_result(I32)
-  let entry = builder.create_block()
   let exit = builder.create_block()
-  builder.switch_to_block(entry)
   builder.jump(exit, [])
   builder.switch_to_block(exit)
   let value = builder.iconst_i32(7)
@@ -843,9 +786,7 @@ test "optimizer merges straight line blocks" {
 test "optimizer does not merge block with params" {
   let builder = FunctionBuilder::new("merge_skip_params")
   builder.add_result(I32)
-  let entry = builder.create_block()
   let exit = builder.create_block()
-  builder.switch_to_block(entry)
   let arg = builder.iconst_i32(7)
   builder.jump(exit, [arg])
   let param = builder.add_block_param(exit, I32)
@@ -862,8 +803,6 @@ test "CSE keeps duplicate loads without alias metadata" {
   let builder = FunctionBuilder::new("no_load_cse")
   let ptr = builder.add_param(Ptr)
   builder.add_result(I32)
-  let entry = builder.create_block()
-  builder.switch_to_block(entry)
   let offset = builder.iconst_i64(0L)
   let _loaded0 = builder.load_ptr(I32, ptr, offset)
   let loaded1 = builder.load_ptr(I32, ptr, offset)

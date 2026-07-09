@@ -1322,8 +1322,6 @@ test "plan MilkIR narrow memory through reusable x64 JIT pipeline" {
   let ptr = builder.add_param(Ptr)
   let value = builder.add_param(I32)
   builder.add_result(I32)
-  let entry = builder.create_block()
-  builder.switch_to_block(entry)
   builder.store_ptr_narrow(16, ptr, value, builder.iconst_i64(8L))
   let loaded = builder.load_ptr_narrow(
     I32,
@@ -1397,8 +1395,6 @@ test "plan MilkIR narrow memory through reusable AArch64 JIT pipeline" {
   let ptr = builder.add_param(Ptr)
   let value = builder.add_param(I32)
   builder.add_result(I32)
-  let entry = builder.create_block()
-  builder.switch_to_block(entry)
   builder.store_ptr_narrow(16, ptr, value, builder.iconst_i64(8L))
   let loaded = builder.load_ptr_narrow(
     I32,

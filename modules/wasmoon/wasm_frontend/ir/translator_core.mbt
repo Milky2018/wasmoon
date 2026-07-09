@@ -642,10 +642,7 @@ fn Translator::translate(
   self : Translator,
   instrs : Array[@types.Instruction],
 ) -> Function {
-  // Create the entry block
-  let entry = self.builder.create_block()
-  self.builder.switch_to_block(entry)
-  // Initialize locals with default values.
+  // Initialize locals with default values in the default entry block.
   //
   // Cranelift alignment:
   // - hoist zero/null initializer construction out of the per-local loop
@@ -735,9 +732,8 @@ fn Translator::translate(
   }
 
   // Handle function end
-  if !self.is_unreachable &&
-    self.builder.current_block() is Some(block) &&
-    block.terminator is None {
+  let block = self.builder.current_block()
+  if !self.is_unreachable && block.terminator is None {
     // Normal fall-through: check if return_continuation was created
     if self.return_continuation is Some(ret_cont) {
       // Someone jumped to function level, need to go through continuation
@@ -1296,9 +1292,8 @@ fn Translator::translate_block(
   }
 
   // Fall through to continuation (only if not unreachable)
-  if !self.is_unreachable &&
-    self.builder.current_block() is Some(block) &&
-    block.terminator is None {
+  let block = self.builder.current_block()
+  if !self.is_unreachable && block.terminator is None {
     // Collect results from stack
     let args : Array[Value] = []
     for _ in 0..<result_types.length() {
@@ -1427,9 +1422,8 @@ fn Translator::translate_loop(
 
   // Fall through to continuation (only if not unreachable)
   let mut loop_falls_through = false
-  if !self.is_unreachable &&
-    self.builder.current_block() is Some(block) &&
-    block.terminator is None {
+  let block = self.builder.current_block()
+  if !self.is_unreachable && block.terminator is None {
     let args : Array[Value] = []
     for _ in 0..<result_types.length() {
       args.push(self.pop())

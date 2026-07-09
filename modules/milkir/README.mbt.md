@@ -21,12 +21,11 @@ MachV.
 
 ## Example: build and verify SSA
 
-`FunctionBuilder` owns the common workflow: declare parameters/results, create
-blocks, switch to the block being translated, emit SSA values, and finish each
-block with a terminator. Like Cranelift's frontend builder, instructions are
-inserted at the current block; emitting without first calling
-`switch_to_block` is a builder error and fails immediately instead of creating
-orphan SSA values.
+`FunctionBuilder` owns the common workflow: declare parameters/results, emit
+the entry block, create additional blocks when control flow needs them, switch
+to the block being translated, and finish each block with a terminator. A new
+builder starts with an entry block as the current block, so simple straight-line
+functions can emit instructions immediately.
 
 ```moonbit check
 ///|
@@ -35,8 +34,6 @@ test "build an add function with FunctionBuilder" {
   let lhs = builder.add_param(I32)
   let rhs = builder.add_param(I32)
   builder.add_result(I32)
-  let entry = builder.create_block()
-  builder.switch_to_block(entry)
   let sum = builder.iadd(lhs, rhs)
   builder.return_([sum])
   let func = builder.finalize()
@@ -57,8 +54,6 @@ function.
 test "fold constants in a MilkIR function" {
   let builder = FunctionBuilder::new("const_add")
   builder.add_result(I32)
-  let entry = builder.create_block()
-  builder.switch_to_block(entry)
   let lhs = builder.iconst_i32(10)
   let rhs = builder.iconst_i32(20)
   let sum = builder.iadd(lhs, rhs)
