@@ -49,6 +49,136 @@ struct LoweringContext {
 }
 
 ///|
+struct LoweringConfig {
+  isa : @isa.ISA
+  embedding_abi : @abi.EmbeddingABI?
+  external_helper_symbols : Map[String, String]
+  trap_payload_resolver : (String) -> Int
+  extension_lowerer : ((
+    LoweringContext,
+    @milkir.Inst,
+    @block.Block,
+    @milkir.ExtOp,
+  ) -> ExtensionLowerResult)?
+  num_imports : Int
+  run_ir_opt : Bool
+}
+
+///|
+pub fn LoweringConfig::LoweringConfig(isa : @isa.ISA) -> LoweringConfig {
+  {
+    isa,
+    embedding_abi: None,
+    external_helper_symbols: {},
+    trap_payload_resolver: fn(_reason) { 0 },
+    extension_lowerer: None,
+    num_imports: -1,
+    run_ir_opt: true,
+  }
+}
+
+///|
+pub fn LoweringConfig::with_embedding_abi(
+  self : LoweringConfig,
+  embedding_abi : @abi.EmbeddingABI,
+) -> LoweringConfig {
+  {
+    isa: self.isa,
+    embedding_abi: Some(embedding_abi),
+    external_helper_symbols: self.external_helper_symbols,
+    trap_payload_resolver: self.trap_payload_resolver,
+    extension_lowerer: self.extension_lowerer,
+    num_imports: self.num_imports,
+    run_ir_opt: self.run_ir_opt,
+  }
+}
+
+///|
+pub fn LoweringConfig::with_external_helper_symbols(
+  self : LoweringConfig,
+  external_helper_symbols : Map[String, String],
+) -> LoweringConfig {
+  {
+    isa: self.isa,
+    embedding_abi: self.embedding_abi,
+    external_helper_symbols,
+    trap_payload_resolver: self.trap_payload_resolver,
+    extension_lowerer: self.extension_lowerer,
+    num_imports: self.num_imports,
+    run_ir_opt: self.run_ir_opt,
+  }
+}
+
+///|
+pub fn LoweringConfig::with_trap_payload_resolver(
+  self : LoweringConfig,
+  trap_payload_resolver : (String) -> Int,
+) -> LoweringConfig {
+  {
+    isa: self.isa,
+    embedding_abi: self.embedding_abi,
+    external_helper_symbols: self.external_helper_symbols,
+    trap_payload_resolver,
+    extension_lowerer: self.extension_lowerer,
+    num_imports: self.num_imports,
+    run_ir_opt: self.run_ir_opt,
+  }
+}
+
+///|
+pub fn LoweringConfig::with_extension_lowerer(
+  self : LoweringConfig,
+  extension_lowerer : (
+    LoweringContext,
+    @milkir.Inst,
+    @block.Block,
+    @milkir.ExtOp,
+  ) -> ExtensionLowerResult,
+) -> LoweringConfig {
+  {
+    isa: self.isa,
+    embedding_abi: self.embedding_abi,
+    external_helper_symbols: self.external_helper_symbols,
+    trap_payload_resolver: self.trap_payload_resolver,
+    extension_lowerer: Some(extension_lowerer),
+    num_imports: self.num_imports,
+    run_ir_opt: self.run_ir_opt,
+  }
+}
+
+///|
+pub fn LoweringConfig::with_num_imports(
+  self : LoweringConfig,
+  num_imports : Int,
+) -> LoweringConfig {
+  {
+    isa: self.isa,
+    embedding_abi: self.embedding_abi,
+    external_helper_symbols: self.external_helper_symbols,
+    trap_payload_resolver: self.trap_payload_resolver,
+    extension_lowerer: self.extension_lowerer,
+    num_imports,
+    run_ir_opt: self.run_ir_opt,
+  }
+}
+
+///|
+pub fn LoweringConfig::with_ir_optimization(
+  self : LoweringConfig,
+  enabled : Bool,
+) -> LoweringConfig {
+  {
+    isa: self.isa,
+    embedding_abi: self.embedding_abi,
+    external_helper_symbols: self.external_helper_symbols,
+    trap_payload_resolver: self.trap_payload_resolver,
+    extension_lowerer: self.extension_lowerer,
+    num_imports: self.num_imports,
+    run_ir_opt: enabled,
+  }
+}
+
+///|
 fn function_params_for_lowering(
   ir_func : @milkir.Function,
 ) -> Array[(@milkir.Value, @milkir.Type)] {
@@ -1600,30 +1730,24 @@ fn intcc_to_cond(cc : @milkir.IntCC) -> @instr.Cond {
 }
 
 ///|
-/// Lower an entire IR function to MachV
-pub fn lower_function(
+/// Lower an entire IR function to MachV using a grouped lowering config.
+pub fn lower_function_with_config(
   ir_func : @milkir.Function,
-  isa? : @isa.ISA = AArch64,
-  embedding_abi? : @abi.EmbeddingABI? = None,
-  external_helper_symbols? : Map[String, String] = {},
-  trap_payload_resolver? : (String) -> Int = fn(_reason) { 0 },
-  extension_lowerer? : ((
-    LoweringContext,
-    @milkir.Inst,
-    @block.Block,
-    @milkir.ExtOp,
-  ) -> ExtensionLowerResult)? = None,
-  num_imports? : Int = -1,
-  run_ir_opt? : Bool = true,
+  config : LoweringConfig,
 ) -> @machv.Function {
   // Keep this optional for call sites that already ran full IR optimization.
-  if run_ir_opt {
+  if config.run_ir_opt {
     @milkir.optimize_with_level(ir_func, @milkir.OptLevel::from_int(0))
     |> ignore
   }
   let ctx = LoweringContext::LoweringContext(
-    ir_func, isa, embedding_abi, external_helper_symbols, trap_payload_resolver,
-    extension_lowerer, num_imports,
+    ir_func,
+    config.isa,
+    config.embedding_abi,
+    config.external_helper_symbols,
+    config.trap_payload_resolver,
+    config.extension_lowerer,
+    config.num_imports,
   )
 
   // Phase 0: Pre-compute which Icmps can be fused with Select
@@ -1754,6 +1878,38 @@ pub fn lower_function(
     fixup_amd64_shift_count_constraints(ctx.machv_func)
   }
   ctx.machv_func
+}
+
+///|
+/// Lower an entire IR function to MachV.
+///
+/// This compatibility facade keeps the advanced keyword options available.
+/// Prefer `lower_function_with_config` for new user-facing code.
+pub fn lower_function(
+  ir_func : @milkir.Function,
+  isa? : @isa.ISA = AArch64,
+  embedding_abi? : @abi.EmbeddingABI? = None,
+  external_helper_symbols? : Map[String, String] = {},
+  trap_payload_resolver? : (String) -> Int = fn(_reason) { 0 },
+  extension_lowerer? : ((
+    LoweringContext,
+    @milkir.Inst,
+    @block.Block,
+    @milkir.ExtOp,
+  ) -> ExtensionLowerResult)? = None,
+  num_imports? : Int = -1,
+  run_ir_opt? : Bool = true,
+) -> @machv.Function {
+  let config : LoweringConfig = {
+    isa,
+    embedding_abi,
+    external_helper_symbols,
+    trap_payload_resolver,
+    extension_lowerer,
+    num_imports,
+    run_ir_opt,
+  }
+  lower_function_with_config(ir_func, config)
 }
 
 ///|

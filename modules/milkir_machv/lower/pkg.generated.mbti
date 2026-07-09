@@ -51,6 +51,8 @@ pub fn lower_function(@milkir.Function, isa? : @isa.ISA, embedding_abi? : @abi.E
 
 pub fn lower_function_optimized(@milkir.Function) -> @machv.Function
 
+pub fn lower_function_with_config(@milkir.Function, LoweringConfig) -> @machv.Function
+
 pub fn lower_inst_with_patterns(LoweringContext, @milkir.Inst, @block.Block, Array[RewriteRule]) -> Bool
 
 pub fn lower_unsupported_extension_opcode(@milkir.Inst, @block.Block) -> Unit
@@ -84,6 +86,15 @@ pub(all) enum ExtensionLowerResult {
   NotHandled
   Handled(@block.Block)
 }
+
+type LoweringConfig
+pub fn LoweringConfig::LoweringConfig(@isa.ISA) -> Self
+pub fn LoweringConfig::with_embedding_abi(Self, @abi.EmbeddingABI) -> Self
+pub fn LoweringConfig::with_extension_lowerer(Self, (LoweringContext, @milkir.Inst, @block.Block, @milkir.ExtOp) -> ExtensionLowerResult) -> Self
+pub fn LoweringConfig::with_external_helper_symbols(Self, Map[String, String]) -> Self
+pub fn LoweringConfig::with_ir_optimization(Self, Bool) -> Self
+pub fn LoweringConfig::with_num_imports(Self, Int) -> Self
+pub fn LoweringConfig::with_trap_payload_resolver(Self, (String) -> Int) -> Self
 
 type LoweringContext
 pub fn LoweringContext::LoweringContext(@milkir.Function, @isa.ISA, @abi.EmbeddingABI?, Map[String, String], (String) -> Int, ((Self, @milkir.Inst, @block.Block, @milkir.ExtOp) -> ExtensionLowerResult)?, Int) -> Self
