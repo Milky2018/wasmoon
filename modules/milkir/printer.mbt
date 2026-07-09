@@ -577,7 +577,7 @@ pub fn Function::print(self : Function) -> String {
 }
 
 ///|
-/// Print using IRBuilder
-pub fn IRBuilder::print(self : IRBuilder) -> String {
+/// Print using FunctionBuilder
+pub fn FunctionBuilder::print(self : FunctionBuilder) -> String {
   self.func.print()
 }

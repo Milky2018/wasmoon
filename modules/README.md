@@ -7,7 +7,7 @@ Wasmoon-specific integration packages. The public package boundary is:
 | --- | --- | --- |
 | `Milky2018/wasm_core` | Root facade for WebAssembly spec-model construction. | `empty_module`, `simple_module`, `func_type`, `func_subtype`; detailed types remain in `Milky2018/wasm_core/types`. |
 | `Milky2018/wasm_core/types` | WebAssembly value, instruction, module, and type-system model. | `ValueType`, `Instruction`, `Module`, `FuncType`, `SubType`, type equality/subtyping helpers. |
-| `Milky2018/milkir` | Cranelift-like SSA IR. | `Function`, `IRBuilder`, `Signature`, `Type`, verification, CFG, and optimization passes. |
+| `Milky2018/milkir` | Cranelift-like SSA IR. | `Function`, `FunctionBuilder`, `Signature`, `Type`, verification, CFG, and optimization passes. |
 | `Milky2018/machv` | Virtual-register machine IR. | `Function`, `Block`, `Instruction`, `Opcode`, `Operand`, `PReg`, `VReg`, ABI locations, stack effects, verification, and printing. |
 | `Milky2018/regalloc` | Target-independent register allocation algorithm. | `Program`, `Block`, `Instruction`, `allocate_linear_scan`, `verify_allocation`, live-range and move-resolution planning helpers. |
 | `Milky2018/machv_regalloc` | Adapter from MachV to the pure register allocator. | `project_function`, `allocate_function_linear_scan`, `allocate_and_apply_linear_scan`, `allocate_registers_backtracking_output_with_isa`. |

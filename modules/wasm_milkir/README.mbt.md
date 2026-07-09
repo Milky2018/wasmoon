@@ -33,7 +33,7 @@ test "map Wasm reference spelling to generic MilkIR references" {
 ```moonbit check
 ///|
 test "build a Wasm memory.size extension instruction" {
-  let builder = @milkir.IRBuilder::new("memory_size")
+  let builder = @milkir.FunctionBuilder::new("memory_size")
   let symbols = RuntimeSymbols::with_runtime_prefix("example.runtime")
   let vmctx = builder.add_param(I64)
   builder.add_result(I32)

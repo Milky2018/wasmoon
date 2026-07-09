@@ -103,142 +103,148 @@ pub fn Function::new_value(Self, Type) -> Value
 pub fn Function::print(Self) -> String
 pub fn Function::verify(Self) -> Unit raise VerifyError
 
-type IRBuilder
-pub fn IRBuilder::add_block_param(Self, Block, Type) -> Value
-pub fn IRBuilder::add_param(Self, Type) -> Value
-pub fn IRBuilder::add_result(Self, Type) -> Unit
-pub fn IRBuilder::band(Self, Value, Value) -> Value
-pub fn IRBuilder::bitcast(Self, Type, Value) -> Value
-pub fn IRBuilder::bnot(Self, Value) -> Value
-pub fn IRBuilder::bor(Self, Value, Value) -> Value
-pub fn IRBuilder::br_table(Self, Value, Array[Block], Block) -> Unit
-pub fn IRBuilder::brnz(Self, Value, Block, Block) -> Unit
-pub fn IRBuilder::brz(Self, Value, Block, Block) -> Unit
-pub fn IRBuilder::bxor(Self, Value, Value) -> Value
-pub fn IRBuilder::call_ptr(Self, Value, Value, Array[Value], Array[Type]) -> Array[Value]
-pub fn IRBuilder::call_symbol(Self, ExternalSymbol, Type?, Array[Value]) -> Value?
-pub fn IRBuilder::call_symbol_multi(Self, ExternalSymbol, Array[Type], Array[Value]) -> Array[Value]
-pub fn IRBuilder::clz(Self, Value) -> Value
-pub fn IRBuilder::copy(Self, Value) -> Value
-pub fn IRBuilder::create_block(Self) -> Block
-pub fn IRBuilder::ctz(Self, Value) -> Value
-pub fn IRBuilder::current_block(Self) -> Block?
-pub fn IRBuilder::emit_ext_inst(Self, Type, ExtOp, Array[Value]) -> Value
-pub fn IRBuilder::emit_inst(Self, Type, Opcode, Array[Value]) -> Value
-pub fn IRBuilder::emit_multi_ext_inst(Self, Array[Type], ExtOp, Array[Value]) -> Array[Value]
-pub fn IRBuilder::emit_multi_inst(Self, Array[Type], Opcode, Array[Value]) -> Array[Value]
-pub fn IRBuilder::emit_void_ext_inst(Self, ExtOp, Array[Value]) -> Unit
-pub fn IRBuilder::emit_void_inst(Self, Opcode, Array[Value]) -> Unit
-pub fn IRBuilder::fabs(Self, Value) -> Value
-pub fn IRBuilder::fadd(Self, Value, Value) -> Value
-pub fn IRBuilder::fceil(Self, Value) -> Value
-pub fn IRBuilder::fcmp(Self, FloatCC, Value, Value) -> Value
-pub fn IRBuilder::fconst(Self, Type, Double) -> Value
-pub fn IRBuilder::fconst_f32(Self, Float) -> Value
-pub fn IRBuilder::fconst_f64(Self, Double) -> Value
-pub fn IRBuilder::fcvt_to_sint(Self, Type, Value) -> Value
-pub fn IRBuilder::fcvt_to_sint_sat(Self, Type, Value) -> Value
-pub fn IRBuilder::fcvt_to_uint(Self, Type, Value) -> Value
-pub fn IRBuilder::fcvt_to_uint_sat(Self, Type, Value) -> Value
-pub fn IRBuilder::fdemote(Self, Value) -> Value
-pub fn IRBuilder::fdiv(Self, Value, Value) -> Value
-pub fn IRBuilder::ffloor(Self, Value) -> Value
-pub fn IRBuilder::fmax(Self, Value, Value) -> Value
-pub fn IRBuilder::fmin(Self, Value, Value) -> Value
-pub fn IRBuilder::fmul(Self, Value, Value) -> Value
-pub fn IRBuilder::fnearest(Self, Value) -> Value
-pub fn IRBuilder::fneg(Self, Value) -> Value
-pub fn IRBuilder::fpromote(Self, Value) -> Value
-pub fn IRBuilder::fsqrt(Self, Value) -> Value
-pub fn IRBuilder::fsub(Self, Value, Value) -> Value
-pub fn IRBuilder::ftrunc(Self, Value) -> Value
-pub fn IRBuilder::get_const_value(Self, Value) -> Int64?
-pub fn IRBuilder::get_function(Self) -> Function
-pub fn IRBuilder::iadd(Self, Value, Value) -> Value
-pub fn IRBuilder::icmp(Self, IntCC, Value, Value) -> Value
-pub fn IRBuilder::icmp_eq(Self, Value, Value) -> Value
-pub fn IRBuilder::icmp_ne(Self, Value, Value) -> Value
-pub fn IRBuilder::icmp_sge(Self, Value, Value) -> Value
-pub fn IRBuilder::icmp_sgt(Self, Value, Value) -> Value
-pub fn IRBuilder::icmp_sle(Self, Value, Value) -> Value
-pub fn IRBuilder::icmp_slt(Self, Value, Value) -> Value
-pub fn IRBuilder::icmp_uge(Self, Value, Value) -> Value
-pub fn IRBuilder::icmp_ugt(Self, Value, Value) -> Value
-pub fn IRBuilder::icmp_ule(Self, Value, Value) -> Value
-pub fn IRBuilder::icmp_ult(Self, Value, Value) -> Value
-pub fn IRBuilder::iconst(Self, Type, Int64) -> Value
-pub fn IRBuilder::iconst_i32(Self, Int) -> Value
-pub fn IRBuilder::iconst_i64(Self, Int64) -> Value
-pub fn IRBuilder::imul(Self, Value, Value) -> Value
-pub fn IRBuilder::ireduce(Self, Type, Value) -> Value
-pub fn IRBuilder::ishl(Self, Value, Value) -> Value
-pub fn IRBuilder::isub(Self, Value, Value) -> Value
-pub fn IRBuilder::jump(Self, Block, Array[Value]) -> Unit
-pub fn IRBuilder::load_ptr(Self, Type, Value, Value) -> Value
-pub fn IRBuilder::load_ptr_narrow(Self, Type, Int, Bool, Value, Value) -> Value
-pub fn IRBuilder::new(String) -> Self
-pub fn IRBuilder::popcnt(Self, Value) -> Value
-pub fn IRBuilder::print(Self) -> String
-pub fn IRBuilder::return_(Self, Array[Value]) -> Unit
-pub fn IRBuilder::rotl(Self, Value, Value) -> Value
-pub fn IRBuilder::rotr(Self, Value, Value) -> Value
-pub fn IRBuilder::sdiv(Self, Value, Value) -> Value
-pub fn IRBuilder::select(Self, Value, Value, Value) -> Value
-pub fn IRBuilder::sextend(Self, Type, Value) -> Value
-pub fn IRBuilder::sextend16(Self, Type, Value) -> Value
-pub fn IRBuilder::sextend32(Self, Value) -> Value
-pub fn IRBuilder::sextend8(Self, Type, Value) -> Value
-pub fn IRBuilder::sint_to_fcvt(Self, Type, Value) -> Value
-pub fn IRBuilder::smulh(Self, Value, Value) -> Value
-pub fn IRBuilder::srem(Self, Value, Value) -> Value
-pub fn IRBuilder::sshr(Self, Value, Value) -> Value
-pub fn IRBuilder::store_ptr(Self, Type, Value, Value, Value) -> Unit
-pub fn IRBuilder::store_ptr_narrow(Self, Int, Value, Value, Value) -> Unit
-pub fn IRBuilder::switch_to_block(Self, Block) -> Unit
-pub fn IRBuilder::trap(Self, String) -> Unit
-pub fn IRBuilder::udiv(Self, Value, Value) -> Value
-pub fn IRBuilder::uextend(Self, Type, Value) -> Value
-pub fn IRBuilder::uint_to_fcvt(Self, Type, Value) -> Value
-pub fn IRBuilder::umulh(Self, Value, Value) -> Value
-pub fn IRBuilder::urem(Self, Value, Value) -> Value
-pub fn IRBuilder::ushr(Self, Value, Value) -> Value
-pub fn IRBuilder::v128_and(Self, Value, Value) -> Value
-pub fn IRBuilder::v128_andnot(Self, Value, Value) -> Value
-pub fn IRBuilder::v128_anytrue(Self, Value) -> Value
-pub fn IRBuilder::v128_binary(Self, Opcode, Value, Value) -> Value
-pub fn IRBuilder::v128_bitselect(Self, Value, Value, Value) -> Value
-pub fn IRBuilder::v128_const(Self, Bytes) -> Value
-pub fn IRBuilder::v128_extract16s(Self, Value, Int) -> Value
-pub fn IRBuilder::v128_extract16u(Self, Value, Int) -> Value
-pub fn IRBuilder::v128_extract32(Self, Value, Int) -> Value
-pub fn IRBuilder::v128_extract64(Self, Value, Int) -> Value
-pub fn IRBuilder::v128_extract8s(Self, Value, Int) -> Value
-pub fn IRBuilder::v128_extract8u(Self, Value, Int) -> Value
-pub fn IRBuilder::v128_extract_f32(Self, Value, Int) -> Value
-pub fn IRBuilder::v128_extract_f64(Self, Value, Int) -> Value
-pub fn IRBuilder::v128_load_lane_with_addr(Self, Opcode, Value, Value) -> Value
-pub fn IRBuilder::v128_load_with_addr(Self, Opcode, Value) -> Value
-pub fn IRBuilder::v128_not(Self, Value) -> Value
-pub fn IRBuilder::v128_or(Self, Value, Value) -> Value
-pub fn IRBuilder::v128_replace16(Self, Value, Value, Int) -> Value
-pub fn IRBuilder::v128_replace32(Self, Value, Value, Int) -> Value
-pub fn IRBuilder::v128_replace64(Self, Value, Value, Int) -> Value
-pub fn IRBuilder::v128_replace8(Self, Value, Value, Int) -> Value
-pub fn IRBuilder::v128_replace_f32(Self, Value, Value, Int) -> Value
-pub fn IRBuilder::v128_replace_f64(Self, Value, Value, Int) -> Value
-pub fn IRBuilder::v128_shift(Self, Opcode, Value, Value) -> Value
-pub fn IRBuilder::v128_shuffle(Self, Value, Value, FixedArray[Int]) -> Value
-pub fn IRBuilder::v128_splat16(Self, Value) -> Value
-pub fn IRBuilder::v128_splat32(Self, Value) -> Value
-pub fn IRBuilder::v128_splat64(Self, Value) -> Value
-pub fn IRBuilder::v128_splat8(Self, Value) -> Value
-pub fn IRBuilder::v128_splat_f32(Self, Value) -> Value
-pub fn IRBuilder::v128_splat_f64(Self, Value) -> Value
-pub fn IRBuilder::v128_store_lane_with_addr(Self, Opcode, Value, Value) -> Unit
-pub fn IRBuilder::v128_swizzle(Self, Value, Value) -> Value
-pub fn IRBuilder::v128_to_i32(Self, Opcode, Value) -> Value
-pub fn IRBuilder::v128_unary(Self, Opcode, Value) -> Value
-pub fn IRBuilder::v128_xor(Self, Value, Value) -> Value
+type FunctionBuilder
+pub fn FunctionBuilder::add_block_param(Self, Block, Type) -> Value
+pub fn FunctionBuilder::add_param(Self, Type) -> Value
+pub fn FunctionBuilder::add_result(Self, Type) -> Unit
+pub fn FunctionBuilder::append_block_params_for_function_params(Self, Block) -> Unit
+pub fn FunctionBuilder::append_block_params_for_function_returns(Self, Block) -> Unit
+pub fn FunctionBuilder::band(Self, Value, Value) -> Value
+pub fn FunctionBuilder::bitcast(Self, Type, Value) -> Value
+pub fn FunctionBuilder::block_params(Self, Block) -> Array[Value]
+pub fn FunctionBuilder::bnot(Self, Value) -> Value
+pub fn FunctionBuilder::bor(Self, Value, Value) -> Value
+pub fn FunctionBuilder::br_table(Self, Value, Array[Block], Block) -> Unit
+pub fn FunctionBuilder::brnz(Self, Value, Block, Block) -> Unit
+pub fn FunctionBuilder::brz(Self, Value, Block, Block) -> Unit
+pub fn FunctionBuilder::bxor(Self, Value, Value) -> Value
+pub fn FunctionBuilder::call_ptr(Self, Value, Value, Array[Value], Array[Type]) -> Array[Value]
+pub fn FunctionBuilder::call_symbol(Self, ExternalSymbol, Type?, Array[Value]) -> Value?
+pub fn FunctionBuilder::call_symbol_multi(Self, ExternalSymbol, Array[Type], Array[Value]) -> Array[Value]
+pub fn FunctionBuilder::clz(Self, Value) -> Value
+pub fn FunctionBuilder::copy(Self, Value) -> Value
+pub fn FunctionBuilder::create_block(Self) -> Block
+pub fn FunctionBuilder::ctz(Self, Value) -> Value
+pub fn FunctionBuilder::current_block(Self) -> Block?
+pub fn FunctionBuilder::emit_ext_inst(Self, Type, ExtOp, Array[Value]) -> Value
+pub fn FunctionBuilder::emit_inst(Self, Type, Opcode, Array[Value]) -> Value
+pub fn FunctionBuilder::emit_multi_ext_inst(Self, Array[Type], ExtOp, Array[Value]) -> Array[Value]
+pub fn FunctionBuilder::emit_multi_inst(Self, Array[Type], Opcode, Array[Value]) -> Array[Value]
+pub fn FunctionBuilder::emit_void_ext_inst(Self, ExtOp, Array[Value]) -> Unit
+pub fn FunctionBuilder::emit_void_inst(Self, Opcode, Array[Value]) -> Unit
+pub fn FunctionBuilder::fabs(Self, Value) -> Value
+pub fn FunctionBuilder::fadd(Self, Value, Value) -> Value
+pub fn FunctionBuilder::fceil(Self, Value) -> Value
+pub fn FunctionBuilder::fcmp(Self, FloatCC, Value, Value) -> Value
+pub fn FunctionBuilder::fconst(Self, Type, Double) -> Value
+pub fn FunctionBuilder::fconst_f32(Self, Float) -> Value
+pub fn FunctionBuilder::fconst_f64(Self, Double) -> Value
+pub fn FunctionBuilder::fcvt_to_sint(Self, Type, Value) -> Value
+pub fn FunctionBuilder::fcvt_to_sint_sat(Self, Type, Value) -> Value
+pub fn FunctionBuilder::fcvt_to_uint(Self, Type, Value) -> Value
+pub fn FunctionBuilder::fcvt_to_uint_sat(Self, Type, Value) -> Value
+pub fn FunctionBuilder::fdemote(Self, Value) -> Value
+pub fn FunctionBuilder::fdiv(Self, Value, Value) -> Value
+pub fn FunctionBuilder::ffloor(Self, Value) -> Value
+pub fn FunctionBuilder::finalize(Self) -> Function
+pub fn FunctionBuilder::fmax(Self, Value, Value) -> Value
+pub fn FunctionBuilder::fmin(Self, Value, Value) -> Value
+pub fn FunctionBuilder::fmul(Self, Value, Value) -> Value
+pub fn FunctionBuilder::fnearest(Self, Value) -> Value
+pub fn FunctionBuilder::fneg(Self, Value) -> Value
+pub fn FunctionBuilder::fpromote(Self, Value) -> Value
+pub fn FunctionBuilder::fsqrt(Self, Value) -> Value
+pub fn FunctionBuilder::fsub(Self, Value, Value) -> Value
+pub fn FunctionBuilder::ftrunc(Self, Value) -> Value
+pub fn FunctionBuilder::get_const_value(Self, Value) -> Int64?
+pub fn FunctionBuilder::get_function(Self) -> Function
+pub fn FunctionBuilder::iadd(Self, Value, Value) -> Value
+pub fn FunctionBuilder::icmp(Self, IntCC, Value, Value) -> Value
+pub fn FunctionBuilder::icmp_eq(Self, Value, Value) -> Value
+pub fn FunctionBuilder::icmp_ne(Self, Value, Value) -> Value
+pub fn FunctionBuilder::icmp_sge(Self, Value, Value) -> Value
+pub fn FunctionBuilder::icmp_sgt(Self, Value, Value) -> Value
+pub fn FunctionBuilder::icmp_sle(Self, Value, Value) -> Value
+pub fn FunctionBuilder::icmp_slt(Self, Value, Value) -> Value
+pub fn FunctionBuilder::icmp_uge(Self, Value, Value) -> Value
+pub fn FunctionBuilder::icmp_ugt(Self, Value, Value) -> Value
+pub fn FunctionBuilder::icmp_ule(Self, Value, Value) -> Value
+pub fn FunctionBuilder::icmp_ult(Self, Value, Value) -> Value
+pub fn FunctionBuilder::iconst(Self, Type, Int64) -> Value
+pub fn FunctionBuilder::iconst_i32(Self, Int) -> Value
+pub fn FunctionBuilder::iconst_i64(Self, Int64) -> Value
+pub fn FunctionBuilder::imul(Self, Value, Value) -> Value
+pub fn FunctionBuilder::ireduce(Self, Type, Value) -> Value
+pub fn FunctionBuilder::ishl(Self, Value, Value) -> Value
+pub fn FunctionBuilder::isub(Self, Value, Value) -> Value
+pub fn FunctionBuilder::jump(Self, Block, Array[Value]) -> Unit
+pub fn FunctionBuilder::load_ptr(Self, Type, Value, Value) -> Value
+pub fn FunctionBuilder::load_ptr_narrow(Self, Type, Int, Bool, Value, Value) -> Value
+pub fn FunctionBuilder::new(String) -> Self
+pub fn FunctionBuilder::popcnt(Self, Value) -> Value
+pub fn FunctionBuilder::print(Self) -> String
+pub fn FunctionBuilder::return_(Self, Array[Value]) -> Unit
+pub fn FunctionBuilder::rotl(Self, Value, Value) -> Value
+pub fn FunctionBuilder::rotr(Self, Value, Value) -> Value
+pub fn FunctionBuilder::sdiv(Self, Value, Value) -> Value
+pub fn FunctionBuilder::seal_all_blocks(Self) -> Unit
+pub fn FunctionBuilder::seal_block(Self, Block) -> Unit
+pub fn FunctionBuilder::select(Self, Value, Value, Value) -> Value
+pub fn FunctionBuilder::sextend(Self, Type, Value) -> Value
+pub fn FunctionBuilder::sextend16(Self, Type, Value) -> Value
+pub fn FunctionBuilder::sextend32(Self, Value) -> Value
+pub fn FunctionBuilder::sextend8(Self, Type, Value) -> Value
+pub fn FunctionBuilder::sint_to_fcvt(Self, Type, Value) -> Value
+pub fn FunctionBuilder::smulh(Self, Value, Value) -> Value
+pub fn FunctionBuilder::srem(Self, Value, Value) -> Value
+pub fn FunctionBuilder::sshr(Self, Value, Value) -> Value
+pub fn FunctionBuilder::store_ptr(Self, Type, Value, Value, Value) -> Unit
+pub fn FunctionBuilder::store_ptr_narrow(Self, Int, Value, Value, Value) -> Unit
+pub fn FunctionBuilder::switch_to_block(Self, Block) -> Unit
+pub fn FunctionBuilder::trap(Self, String) -> Unit
+pub fn FunctionBuilder::udiv(Self, Value, Value) -> Value
+pub fn FunctionBuilder::uextend(Self, Type, Value) -> Value
+pub fn FunctionBuilder::uint_to_fcvt(Self, Type, Value) -> Value
+pub fn FunctionBuilder::umulh(Self, Value, Value) -> Value
+pub fn FunctionBuilder::urem(Self, Value, Value) -> Value
+pub fn FunctionBuilder::ushr(Self, Value, Value) -> Value
+pub fn FunctionBuilder::v128_and(Self, Value, Value) -> Value
+pub fn FunctionBuilder::v128_andnot(Self, Value, Value) -> Value
+pub fn FunctionBuilder::v128_anytrue(Self, Value) -> Value
+pub fn FunctionBuilder::v128_binary(Self, Opcode, Value, Value) -> Value
+pub fn FunctionBuilder::v128_bitselect(Self, Value, Value, Value) -> Value
+pub fn FunctionBuilder::v128_const(Self, Bytes) -> Value
+pub fn FunctionBuilder::v128_extract16s(Self, Value, Int) -> Value
+pub fn FunctionBuilder::v128_extract16u(Self, Value, Int) -> Value
+pub fn FunctionBuilder::v128_extract32(Self, Value, Int) -> Value
+pub fn FunctionBuilder::v128_extract64(Self, Value, Int) -> Value
+pub fn FunctionBuilder::v128_extract8s(Self, Value, Int) -> Value
+pub fn FunctionBuilder::v128_extract8u(Self, Value, Int) -> Value
+pub fn FunctionBuilder::v128_extract_f32(Self, Value, Int) -> Value
+pub fn FunctionBuilder::v128_extract_f64(Self, Value, Int) -> Value
+pub fn FunctionBuilder::v128_load_lane_with_addr(Self, Opcode, Value, Value) -> Value
+pub fn FunctionBuilder::v128_load_with_addr(Self, Opcode, Value) -> Value
+pub fn FunctionBuilder::v128_not(Self, Value) -> Value
+pub fn FunctionBuilder::v128_or(Self, Value, Value) -> Value
+pub fn FunctionBuilder::v128_replace16(Self, Value, Value, Int) -> Value
+pub fn FunctionBuilder::v128_replace32(Self, Value, Value, Int) -> Value
+pub fn FunctionBuilder::v128_replace64(Self, Value, Value, Int) -> Value
+pub fn FunctionBuilder::v128_replace8(Self, Value, Value, Int) -> Value
+pub fn FunctionBuilder::v128_replace_f32(Self, Value, Value, Int) -> Value
+pub fn FunctionBuilder::v128_replace_f64(Self, Value, Value, Int) -> Value
+pub fn FunctionBuilder::v128_shift(Self, Opcode, Value, Value) -> Value
+pub fn FunctionBuilder::v128_shuffle(Self, Value, Value, FixedArray[Int]) -> Value
+pub fn FunctionBuilder::v128_splat16(Self, Value) -> Value
+pub fn FunctionBuilder::v128_splat32(Self, Value) -> Value
+pub fn FunctionBuilder::v128_splat64(Self, Value) -> Value
+pub fn FunctionBuilder::v128_splat8(Self, Value) -> Value
+pub fn FunctionBuilder::v128_splat_f32(Self, Value) -> Value
+pub fn FunctionBuilder::v128_splat_f64(Self, Value) -> Value
+pub fn FunctionBuilder::v128_store_lane_with_addr(Self, Opcode, Value, Value) -> Unit
+pub fn FunctionBuilder::v128_swizzle(Self, Value, Value) -> Value
+pub fn FunctionBuilder::v128_to_i32(Self, Opcode, Value) -> Value
+pub fn FunctionBuilder::v128_unary(Self, Opcode, Value) -> Value
+pub fn FunctionBuilder::v128_xor(Self, Value, Value) -> Value
 
 pub struct Inst {
   id : Int

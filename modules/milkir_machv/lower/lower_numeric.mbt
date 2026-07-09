@@ -28,7 +28,7 @@ fn lower_fconst(
     let opcode = match result.ty {
       F32 => {
         // F32 bits are packed in the lower 32 bits of the Double's bit representation
-        // (see IRBuilder::fconst_f32). Extract them directly to preserve NaN payloads.
+        // (see FunctionBuilder::fconst_f32). Extract them directly to preserve NaN payloads.
         let bits = val.reinterpret_as_int64().to_int()
         @instr.LoadConstF32(bits)
       }

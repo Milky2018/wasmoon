@@ -9,7 +9,7 @@ middle-end layer for MoonBit compiler projects.
 ## Package
 
 - `Milky2018/milkir`: SSA values, blocks, instructions, terminators,
-  signatures, `IRBuilder`, verification, CFG utilities, and optimization
+  signatures, `FunctionBuilder`, verification, CFG utilities, and optimization
   drivers.
 
 ## When to use it
@@ -21,13 +21,17 @@ MachV.
 
 ## Example: build and verify SSA
 
-`IRBuilder` owns the common workflow: declare parameters/results, create
-blocks, emit SSA values, and finish each block with a terminator.
+`FunctionBuilder` owns the common workflow: declare parameters/results, create
+blocks, switch to the block being translated, emit SSA values, and finish each
+block with a terminator. Like Cranelift's frontend builder, instructions are
+inserted at the current block; emitting without first calling
+`switch_to_block` is a builder error and fails immediately instead of creating
+orphan SSA values.
 
 ```moonbit check
 ///|
-test "build an add function with IRBuilder" {
-  let builder = IRBuilder::new("add_i32")
+test "build an add function with FunctionBuilder" {
+  let builder = FunctionBuilder::new("add_i32")
   let lhs = builder.add_param(I32)
   let rhs = builder.add_param(I32)
   builder.add_result(I32)
@@ -35,7 +39,7 @@ test "build an add function with IRBuilder" {
   builder.switch_to_block(entry)
   let sum = builder.iadd(lhs, rhs)
   builder.return_([sum])
-  let func = builder.get_function()
+  let func = builder.finalize()
   inspect(func.verify(), content="()")
   inspect(func.blocks.length(), content="1")
   inspect(instruction_count(func), content="1")
@@ -51,7 +55,7 @@ function.
 ```moonbit check
 ///|
 test "fold constants in a MilkIR function" {
-  let builder = IRBuilder::new("const_add")
+  let builder = FunctionBuilder::new("const_add")
   builder.add_result(I32)
   let entry = builder.create_block()
   builder.switch_to_block(entry)
@@ -59,7 +63,7 @@ test "fold constants in a MilkIR function" {
   let rhs = builder.iconst_i32(20)
   let sum = builder.iadd(lhs, rhs)
   builder.return_([sum])
-  let func = builder.get_function()
+  let func = builder.finalize()
   let before = instruction_count(func)
   let result = optimize_with_level(func, OptLevel::from_int(1))
   inspect(result.changed, content="true")

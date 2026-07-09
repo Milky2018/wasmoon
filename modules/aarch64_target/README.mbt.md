@@ -39,7 +39,7 @@ This convenience wrapper chooses AArch64 policy and returns MachV machine IR.
 ```moonbit check
 ///|
 test "lower an integer add function for AArch64" {
-  let builder = @milkir.IRBuilder::new("add64")
+  let builder = @milkir.FunctionBuilder::new("add64")
   let lhs = builder.add_param(I64)
   let rhs = builder.add_param(I64)
   builder.add_result(I64)
@@ -64,7 +64,7 @@ explicit call-convention layout.
 ```moonbit check
 ///|
 test "lower AArch64 with an explicit call convention" {
-  let builder = @milkir.IRBuilder::new("custom_add64")
+  let builder = @milkir.FunctionBuilder::new("custom_add64")
   let context = builder.add_param(Ptr)
   let lhs = builder.add_param(I64)
   let rhs = builder.add_param(I64)

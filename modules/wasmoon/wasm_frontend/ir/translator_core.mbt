@@ -4,7 +4,7 @@
 ///|
 /// Translator state for converting a single WASM function to IR
 priv struct Translator {
-  builder : IRBuilder
+  builder : FunctionBuilder
   // Value stack - simulates WASM's operand stack
   value_stack : Array[Value]
   // Local variables - mutable in WASM, need SSA tracking
@@ -214,7 +214,7 @@ fn Translator::new(
   memory_mins? : Array[Int64] = [],
 ) -> Translator {
   type_rec_groups |> ignore // Reserved for future canonical type indices
-  let builder = IRBuilder::new(name)
+  let builder = FunctionBuilder::new(name)
   // Note: add vmctx as explicit param (Cranelift-style special param)
   // - params[0] = vmctx (X0)
   // This is referenced for desugaring global/table/memory operations
@@ -988,7 +988,7 @@ fn Translator::get_tag_param_types(
 /// Helper for binary i32 operations
 fn Translator::translate_binary_i32(
   self : Translator,
-  op : (IRBuilder, Value, Value) -> Value,
+  op : (FunctionBuilder, Value, Value) -> Value,
 ) -> Unit {
   let b = self.pop()
   let a = self.pop()
@@ -1000,7 +1000,7 @@ fn Translator::translate_binary_i32(
 /// Helper for binary i64 operations
 fn Translator::translate_binary_i64(
   self : Translator,
-  op : (IRBuilder, Value, Value) -> Value,
+  op : (FunctionBuilder, Value, Value) -> Value,
 ) -> Unit {
   let b = self.pop()
   let a = self.pop()
@@ -1012,7 +1012,7 @@ fn Translator::translate_binary_i64(
 /// Helper for binary f32 operations
 fn Translator::translate_binary_f32(
   self : Translator,
-  op : (IRBuilder, Value, Value) -> Value,
+  op : (FunctionBuilder, Value, Value) -> Value,
 ) -> Unit {
   let b = self.pop()
   let a = self.pop()
@@ -1024,7 +1024,7 @@ fn Translator::translate_binary_f32(
 /// Helper for binary f64 operations
 fn Translator::translate_binary_f64(
   self : Translator,
-  op : (IRBuilder, Value, Value) -> Value,
+  op : (FunctionBuilder, Value, Value) -> Value,
 ) -> Unit {
   let b = self.pop()
   let a = self.pop()
@@ -1036,7 +1036,7 @@ fn Translator::translate_binary_f64(
 /// Helper for unary f32 operations
 fn Translator::translate_unary_f32(
   self : Translator,
-  op : (IRBuilder, Value) -> Value,
+  op : (FunctionBuilder, Value) -> Value,
 ) -> Unit {
   let a = self.pop()
   let result = op(self.builder, a)
@@ -1047,7 +1047,7 @@ fn Translator::translate_unary_f32(
 /// Helper for unary f64 operations
 fn Translator::translate_unary_f64(
   self : Translator,
-  op : (IRBuilder, Value) -> Value,
+  op : (FunctionBuilder, Value) -> Value,
 ) -> Unit {
   let a = self.pop()
   let result = op(self.builder, a)
@@ -1058,7 +1058,7 @@ fn Translator::translate_unary_f64(
 /// Helper for unary i32 operations
 fn Translator::translate_unary_i32(
   self : Translator,
-  op : (IRBuilder, Value) -> Value,
+  op : (FunctionBuilder, Value) -> Value,
 ) -> Unit {
   let a = self.pop()
   let result = op(self.builder, a)
@@ -1069,7 +1069,7 @@ fn Translator::translate_unary_i32(
 /// Helper for unary i64 operations
 fn Translator::translate_unary_i64(
   self : Translator,
-  op : (IRBuilder, Value) -> Value,
+  op : (FunctionBuilder, Value) -> Value,
 ) -> Unit {
   let a = self.pop()
   let result = op(self.builder, a)

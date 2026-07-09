@@ -1318,7 +1318,7 @@ test "plan MilkIR generic memory through reusable x64 JIT pipeline" {
 
 ///|
 test "plan MilkIR narrow memory through reusable x64 JIT pipeline" {
-  let builder = @milkir.IRBuilder::new("narrow_mem_x64")
+  let builder = @milkir.FunctionBuilder::new("narrow_mem_x64")
   let ptr = builder.add_param(Ptr)
   let value = builder.add_param(I32)
   builder.add_result(I32)
@@ -1393,7 +1393,7 @@ test "plan MilkIR generic memory through reusable AArch64 JIT pipeline" {
 
 ///|
 test "plan MilkIR narrow memory through reusable AArch64 JIT pipeline" {
-  let builder = @milkir.IRBuilder::new("narrow_mem_aarch64")
+  let builder = @milkir.FunctionBuilder::new("narrow_mem_aarch64")
   let ptr = builder.add_param(Ptr)
   let value = builder.add_param(I32)
   builder.add_result(I32)

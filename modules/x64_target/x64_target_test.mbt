@@ -497,7 +497,7 @@ test "x64 lowers extended MilkIR ops into structured MachV opcodes" {
 
 ///|
 test "x64 folds constant pointer offsets into MachV memory opcodes" {
-  let builder = @milkir.IRBuilder::new("mem")
+  let builder = @milkir.FunctionBuilder::new("mem")
   let ptr = builder.add_param(Ptr)
   builder.add_result(I32)
   let entry = builder.create_block()
@@ -522,7 +522,7 @@ test "x64 folds constant pointer offsets into MachV memory opcodes" {
 
 ///|
 test "x64 folds constant narrow pointer offsets into MachV memory opcodes" {
-  let builder = @milkir.IRBuilder::new("narrow_mem")
+  let builder = @milkir.FunctionBuilder::new("narrow_mem")
   let ptr = builder.add_param(Ptr)
   builder.add_result(I32)
   let entry = builder.create_block()
