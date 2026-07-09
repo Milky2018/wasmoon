@@ -232,7 +232,7 @@ fn earlier_point(
 }
 
 ///|
-fn LiveRange::has_tie_at(
+pub fn LiveRange::has_tie_at(
   self : LiveRange,
   other : LiveRange,
   point : ProgramPoint,
@@ -273,7 +273,7 @@ pub fn LiveRange::overlap_allowed_by_tie(
 }
 
 ///|
-fn LiveRange::is_live_across(
+pub fn LiveRange::is_live_across(
   self : LiveRange,
   point : ProgramPoint,
   block_order : Array[Int],
@@ -564,7 +564,7 @@ fn extend_ranges_for_block_liveness(
 }
 
 ///|
-pub fn build_live_ranges(program : Program) -> LiveRangeSet {
+fn build_live_ranges(program : Program) -> LiveRangeSet {
   let block_order : Array[Int] = []
   for order, block in program.blocks {
     while block.id >= block_order.length() {

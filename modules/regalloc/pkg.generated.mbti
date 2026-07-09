@@ -12,10 +12,6 @@ pub fn allocate_linear_scan(Program) -> Allocation
 
 pub fn allocation_iteration_limit(Int) -> Int
 
-pub fn build_dense_successor_edges(Array[Int], Array[Array[Int]]) -> DenseCfgEdges
-
-pub fn build_live_ranges(Program) -> LiveRangeSet
-
 pub fn choose_fixed_reg_hint(Array[PhysicalReg], Array[PhysicalReg]) -> PhysicalReg?
 
 pub fn choose_temp_register(RegClass, Array[Int], Array[Int], Array[Int], Array[Int], Bool, Int, Int) -> TempRegisterChoice
@@ -26,11 +22,7 @@ pub fn compute_approx_loop_depths(Array[Array[Int]]) -> Array[Int]
 
 pub fn compute_block_point_bases(Array[Int], Array[Int]) -> Array[Int]
 
-pub fn compute_dense_live_sets(Int, Int, DenseCfgEdges, Array[LiveSetUseDef]) -> DenseLiveSets
-
 pub fn compute_dominators_from_edges(DenseCfgEdges) -> Array[Int]
-
-pub fn compute_reachable_reverse_postorder_from_successors(Array[Array[Int]]) -> Array[Int]
 
 pub fn compute_reload_intervals(Array[ReloadUseInfo], allow_vector? : Bool) -> Array[ReloadIntervalInfo]
 
@@ -169,21 +161,11 @@ pub(all) struct ConflictScanResult {
   rejected : Bool
 } derive(Eq, @debug.Debug)
 
-pub(all) struct DenseCfgEdges {
-  preds : Array[Array[Int]]
-  succs : Array[Array[Int]]
-} derive(@debug.Debug)
+type DenseCfgEdges derive(@debug.Debug)
 
-pub(all) struct DenseCfgLoop {
-  header : Int
-  body : Array[Int]
-  latch : Int
-} derive(@debug.Debug)
+type DenseCfgLoop derive(@debug.Debug)
 
-pub(all) struct DenseLiveSets {
-  live_in : Array[Array[Int]]
-  live_out : Array[Array[Int]]
-} derive(@debug.Debug)
+type DenseLiveSets derive(@debug.Debug)
 
 pub(all) struct FixedConstraint {
   operand : FixedConstraintOperand
@@ -239,6 +221,8 @@ pub fn LiveRange::add_use(Self, UsePosition) -> Unit
 pub fn LiveRange::end(Self) -> ProgramPoint?
 pub fn LiveRange::get_fixed_reg(Self) -> PhysicalReg?
 pub fn LiveRange::has_fixed_constraint(Self) -> Bool
+pub fn LiveRange::has_tie_at(Self, Self, ProgramPoint) -> Bool
+pub fn LiveRange::is_live_across(Self, ProgramPoint, Array[Int]) -> Bool
 pub fn LiveRange::overlap_allowed_by_tie(Self, Self, Array[Int]) -> Bool
 pub fn LiveRange::overlaps(Self, Self, Array[Int]) -> Bool
 pub fn LiveRange::start(Self) -> ProgramPoint?
@@ -256,12 +240,7 @@ pub fn LiveRangeSet::get(Self, Int) -> LiveRange
 pub fn LiveRangeSet::get_by_vreg(Self, VirtualReg) -> LiveRange?
 pub fn LiveRangeSet::length(Self) -> Int
 
-pub(all) struct LiveSetUseDef {
-  vreg_id : Int
-  def_point : ProgramPoint?
-  is_entry_param_def : Bool
-  use_points : Array[ProgramPoint]
-} derive(@debug.Debug)
+type LiveSetUseDef derive(@debug.Debug)
 
 pub(all) enum Location {
   Reg(PhysicalReg)

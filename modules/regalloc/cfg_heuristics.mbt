@@ -57,20 +57,20 @@ pub fn compute_approx_loop_depths(
 }
 
 ///|
-pub(all) struct DenseCfgEdges {
+struct DenseCfgEdges {
   preds : Array[Array[Int]]
   succs : Array[Array[Int]]
 } derive(Debug)
 
 ///|
-pub(all) struct DenseCfgLoop {
+struct DenseCfgLoop {
   header : Int
   body : Array[Int]
   latch : Int
 } derive(Debug)
 
 ///|
-pub fn build_dense_successor_edges(
+fn build_dense_successor_edges(
   block_ids : Array[Int],
   block_successor_ids : Array[Array[Int]],
 ) -> DenseCfgEdges {
@@ -169,7 +169,7 @@ pub fn compute_reverse_postorder_from_successors(
 }
 
 ///|
-pub fn compute_reachable_reverse_postorder_from_successors(
+fn compute_reachable_reverse_postorder_from_successors(
   block_successors : Array[Array[Int]],
 ) -> Array[Int] {
   let n = block_successors.length()
