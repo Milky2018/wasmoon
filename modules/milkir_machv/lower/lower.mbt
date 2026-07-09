@@ -19,10 +19,7 @@ struct LoweringContext {
   ir_func : @milkir.Function
   machv_func : @machv.Function
   isa : @isa.ISA
-  abi_settings : @abi.ABISettings
-  embedding_reg_roles : @abi.EmbeddingRegRoles
-  embedding_context_layout : @abi.EmbeddingContextLayout?
-  call_conv_layout : @abi.CallConventionLayout?
+  embedding_abi : @abi.EmbeddingABI?
   external_helper_symbols : Map[String, String]
   trap_payload_resolver : (String) -> Int
   extension_lowerer : ((
@@ -70,10 +67,7 @@ fn function_params_for_lowering(
 pub fn LoweringContext::new(
   ir_func : @milkir.Function,
   isa : @isa.ISA,
-  abi_settings : @abi.ABISettings,
-  embedding_reg_roles : @abi.EmbeddingRegRoles,
-  embedding_context_layout : @abi.EmbeddingContextLayout?,
-  call_conv_layout : @abi.CallConventionLayout?,
+  embedding_abi : @abi.EmbeddingABI?,
   external_helper_symbols : Map[String, String],
   trap_payload_resolver : (String) -> Int,
   extension_lowerer : ((
@@ -106,10 +100,7 @@ pub fn LoweringContext::new(
     ir_func,
     machv_func: @machv.Function::new(ir_func.name),
     isa,
-    abi_settings,
-    embedding_reg_roles,
-    embedding_context_layout,
-    call_conv_layout,
+    embedding_abi,
     external_helper_symbols,
     trap_payload_resolver,
     extension_lowerer,
@@ -126,10 +117,27 @@ pub fn LoweringContext::new(
 }
 
 ///|
+fn LoweringContext::require_embedding_abi(
+  self : LoweringContext,
+) -> @abi.EmbeddingABI {
+  match self.embedding_abi {
+    Some(embedding_abi) => embedding_abi
+    None => abort("embedding ABI is required for ABI-specific lowering")
+  }
+}
+
+///|
+pub fn LoweringContext::embedding_abi(
+  self : LoweringContext,
+) -> @abi.EmbeddingABI {
+  self.require_embedding_abi()
+}
+
+///|
 fn LoweringContext::require_embedding_context_layout(
   self : LoweringContext,
 ) -> @abi.EmbeddingContextLayout {
-  match self.embedding_context_layout {
+  match self.require_embedding_abi().context_layout {
     Some(layout) => layout
     None =>
       abort(
@@ -149,11 +157,7 @@ pub fn LoweringContext::embedding_context_layout(
 fn LoweringContext::require_call_conv_layout(
   self : LoweringContext,
 ) -> @abi.CallConventionLayout {
-  match self.call_conv_layout {
-    Some(layout) => layout
-    None =>
-      abort("call convention layout is required for ABI-specific lowering")
-  }
+  self.require_embedding_abi().call_conv
 }
 
 ///|
@@ -171,17 +175,10 @@ pub fn LoweringContext::machv_function(
 }
 
 ///|
-pub fn LoweringContext::abi_settings(
-  self : LoweringContext,
-) -> @abi.ABISettings {
-  self.abi_settings
-}
-
-///|
-pub fn LoweringContext::embedding_reg_roles(
+fn LoweringContext::embedding_reg_roles(
   self : LoweringContext,
 ) -> @abi.EmbeddingRegRoles {
-  self.embedding_reg_roles
+  self.require_embedding_abi().reg_roles
 }
 
 ///|
@@ -1609,10 +1606,7 @@ fn intcc_to_cond(cc : @milkir.IntCC) -> @instr.Cond {
 pub fn lower_function(
   ir_func : @milkir.Function,
   isa? : @isa.ISA = AArch64,
-  abi_settings? : @abi.ABISettings = @abi.ABISettings::default(),
-  embedding_reg_roles? : @abi.EmbeddingRegRoles = @abi.EmbeddingRegRoles::none(),
-  embedding_context_layout? : @abi.EmbeddingContextLayout? = None,
-  call_conv_layout? : @abi.CallConventionLayout? = None,
+  embedding_abi? : @abi.EmbeddingABI? = None,
   external_helper_symbols? : Map[String, String] = {},
   trap_payload_resolver? : (String) -> Int = fn(_reason) { 0 },
   extension_lowerer? : ((
@@ -1630,8 +1624,8 @@ pub fn lower_function(
     |> ignore
   }
   let ctx = LoweringContext::new(
-    ir_func, isa, abi_settings, embedding_reg_roles, embedding_context_layout, call_conv_layout,
-    external_helper_symbols, trap_payload_resolver, extension_lowerer, num_imports,
+    ir_func, isa, embedding_abi, external_helper_symbols, trap_payload_resolver,
+    extension_lowerer, num_imports,
   )
 
   // Phase 0: Pre-compute which Icmps can be fused with Select
@@ -1750,8 +1744,7 @@ pub fn lower_function(
   optimize_machv_for_lowering(
     ctx.machv_func,
     isa=ctx.isa,
-    embedding_context_layout~,
-    embedding_reg_roles=ctx.embedding_reg_roles,
+    embedding_abi=ctx.embedding_abi,
   )
 
   // Phase 6: Target-specific fixups (Cranelift-style).

@@ -57,10 +57,9 @@ pub fn verify_allocation(
   liveness : LivenessResult,
   alloc : RegAllocResult,
   isa : @isa.ISA,
-  call_conv_layout : @abi.CallConventionLayout,
-  settings? : @abi.ABISettings = @abi.ABISettings::default(),
-  embedding_reg_roles? : @abi.EmbeddingRegRoles = @abi.EmbeddingRegRoles::none(),
+  embedding_abi : @abi.EmbeddingABI,
 ) -> Unit {
+  let call_conv_layout = embedding_abi.call_conv
   // Rebuild live ranges to verify with holes.
   let ranges = build_live_ranges(func, liveness)
   let block_order = liveness.block_order
@@ -71,13 +70,12 @@ pub fn verify_allocation(
   )
   let needs_extra = func.needs_extra_results_ptr_for_call_conv(call_conv_layout)
   let reserve_extra_results_ptr = needs_extra || calls_multi
-  let reserved_int_regs = embedding_reg_roles.reserved_int_indices(
-    reserve_context=settings.reserve_embedding_context,
+  let reserved_int_regs = embedding_abi.reserved_int_indices(
     reserve_context_cache_0=func.should_reserve_context_cache_0(),
     reserve_context_cache_1=func.should_reserve_context_cache_1(),
     reserve_extra_results_ptr~,
   )
-  let env = isa.machine_env(settings~, reserved_int_regs~)
+  let env = isa.machine_env(reserved_int_regs~)
   let allowed_int = union_sets(
     build_index_set(env.preferred_int),
     build_index_set(env.nonpreferred_int),
@@ -267,17 +265,7 @@ pub fn verify_allocation_aarch64(
   func : @machv.Function,
   liveness : LivenessResult,
   alloc : RegAllocResult,
-  call_conv_layout : @abi.CallConventionLayout,
-  settings? : @abi.ABISettings = @abi.ABISettings::default(),
-  embedding_reg_roles? : @abi.EmbeddingRegRoles = @abi.EmbeddingRegRoles::none(),
+  embedding_abi : @abi.EmbeddingABI,
 ) -> Unit {
-  verify_allocation(
-    func,
-    liveness,
-    alloc,
-    AArch64,
-    call_conv_layout,
-    settings~,
-    embedding_reg_roles~,
-  )
+  verify_allocation(func, liveness, alloc, AArch64, embedding_abi)
 }

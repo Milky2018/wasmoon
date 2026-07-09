@@ -175,10 +175,7 @@ pub fn lower_function(
   func : @milkir.Function,
   context_slots : WasmContextSlots,
   isa? : @isa.ISA = AArch64,
-  abi_settings? : @abi.ABISettings = @abi.ABISettings::default(),
-  embedding_reg_roles? : @abi.EmbeddingRegRoles = @abi.EmbeddingRegRoles::none(),
-  embedding_context_layout? : @abi.EmbeddingContextLayout? = None,
-  call_conv_layout? : @abi.CallConventionLayout? = None,
+  embedding_abi? : @abi.EmbeddingABI? = None,
   runtime_symbols? : @wasm_milkir.RuntimeSymbols = @wasm_milkir.RuntimeSymbols::with_runtime_prefix(
     "wasm.runtime",
   ),
@@ -204,10 +201,7 @@ pub fn lower_function(
   @lower.lower_function(
     func,
     isa~,
-    abi_settings~,
-    embedding_reg_roles~,
-    embedding_context_layout~,
-    call_conv_layout~,
+    embedding_abi~,
     external_helper_symbols=external_helper_symbols(runtime_symbols),
     trap_payload_resolver~,
     extension_lowerer=Some(lower_extension),

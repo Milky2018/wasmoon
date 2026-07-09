@@ -47,7 +47,7 @@ pub fn lower_c_libcall(LoweringContext, @block.MachVBlock, @abi.VReg, Array[@abi
 
 pub fn lower_c_libcall_direct(LoweringContext, @block.MachVBlock, @instr.ExternalName, Array[@abi.VReg], @abi.VReg?) -> Unit
 
-pub fn lower_function(@milkir.Function, isa? : @isa.ISA, abi_settings? : @abi.ABISettings, embedding_reg_roles? : @abi.EmbeddingRegRoles, embedding_context_layout? : @abi.EmbeddingContextLayout?, call_conv_layout? : @abi.CallConventionLayout?, external_helper_symbols? : Map[String, String], trap_payload_resolver? : (String) -> Int, extension_lowerer? : ((LoweringContext, @milkir.Inst, @block.MachVBlock, @milkir.ExtOp) -> ExtensionLowerResult)?, num_imports? : Int, run_ir_opt? : Bool) -> @machv.Function
+pub fn lower_function(@milkir.Function, isa? : @isa.ISA, embedding_abi? : @abi.EmbeddingABI?, external_helper_symbols? : Map[String, String], trap_payload_resolver? : (String) -> Int, extension_lowerer? : ((LoweringContext, @milkir.Inst, @block.MachVBlock, @milkir.ExtOp) -> ExtensionLowerResult)?, num_imports? : Int, run_ir_opt? : Bool) -> @machv.Function
 
 pub fn lower_function_optimized(@milkir.Function) -> @machv.Function
 
@@ -61,7 +61,7 @@ pub fn materialize_imm(LoweringContext, @block.MachVBlock, Int64) -> @abi.VReg
 
 pub fn optimize_machv(@machv.Function, isa? : @isa.ISA) -> Unit
 
-pub fn optimize_machv_for_lowering(@machv.Function, isa? : @isa.ISA, embedding_context_layout? : @abi.EmbeddingContextLayout?, embedding_reg_roles? : @abi.EmbeddingRegRoles) -> Unit
+pub fn optimize_machv_for_lowering(@machv.Function, isa? : @isa.ISA, embedding_abi? : @abi.EmbeddingABI?) -> Unit
 
 pub fn scratch2_index(LoweringContext) -> Int
 
@@ -86,16 +86,15 @@ pub(all) enum ExtensionLowerResult {
 }
 
 type LoweringContext
-pub fn LoweringContext::abi_settings(Self) -> @abi.ABISettings
 pub fn LoweringContext::cache_context_pointer(Self, Int, @abi.VReg) -> Unit
 pub fn LoweringContext::cached_context_pointer(Self, Int) -> @abi.VReg?
 pub fn LoweringContext::call_conv_layout(Self) -> @abi.CallConventionLayout
+pub fn LoweringContext::embedding_abi(Self) -> @abi.EmbeddingABI
 pub fn LoweringContext::embedding_context_layout(Self) -> @abi.EmbeddingContextLayout
-pub fn LoweringContext::embedding_reg_roles(Self) -> @abi.EmbeddingRegRoles
 pub fn LoweringContext::get_vreg(Self, @milkir.Value) -> @abi.VReg
 pub fn LoweringContext::get_vreg_for_use(Self, @milkir.Value, @block.MachVBlock) -> @abi.VReg
 pub fn LoweringContext::machv_function(Self) -> @machv.Function
-pub fn LoweringContext::new(@milkir.Function, @isa.ISA, @abi.ABISettings, @abi.EmbeddingRegRoles, @abi.EmbeddingContextLayout?, @abi.CallConventionLayout?, Map[String, String], (String) -> Int, ((Self, @milkir.Inst, @block.MachVBlock, @milkir.ExtOp) -> ExtensionLowerResult)?, Int) -> Self
+pub fn LoweringContext::new(@milkir.Function, @isa.ISA, @abi.EmbeddingABI?, Map[String, String], (String) -> Int, ((Self, @milkir.Inst, @block.MachVBlock, @milkir.ExtOp) -> ExtensionLowerResult)?, Int) -> Self
 pub fn LoweringContext::new_vreg(Self, @abi.RegClass) -> @abi.VReg
 pub fn LoweringContext::num_imports(Self) -> Int
 pub fn LoweringContext::set_cached_vreg(Self, Int, @abi.VReg) -> Unit

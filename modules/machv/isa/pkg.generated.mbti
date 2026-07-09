@@ -22,7 +22,7 @@ pub fn ISA::fp_reg_index(Self) -> Int
 pub fn ISA::int_reg(Self, @spec.IntRegRole) -> @abi.PReg
 pub fn ISA::int_reg_index(Self, @spec.IntRegRole) -> Int
 pub fn ISA::lr_reg_index(Self) -> Int
-pub fn ISA::machine_env(Self, settings? : @abi.ABISettings, reserved_int_regs? : Array[Int]) -> MachineEnv
+pub fn ISA::machine_env(Self, reserved_int_regs? : Array[Int]) -> MachineEnv
 pub fn ISA::scratch_reg_1_index(Self) -> Int
 pub fn ISA::scratch_reg_2_index(Self) -> Int
 pub fn ISA::sret_reg_index(Self) -> Int

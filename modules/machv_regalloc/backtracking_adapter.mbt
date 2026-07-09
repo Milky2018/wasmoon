@@ -1631,12 +1631,12 @@ fn BacktrackingAllocator::force_spill_bundle(
 ///|
 fn BacktrackingAllocator::preassign_params(
   self : BacktrackingAllocator,
-  call_conv_layout : @abi.CallConventionLayout,
-  embedding_reg_roles : @abi.EmbeddingRegRoles,
+  embedding_abi : @abi.EmbeddingABI,
   strict_precolor : Bool,
 ) -> Unit {
+  let call_conv_layout = embedding_abi.call_conv
   let context_arg_preg = call_conv_layout.context_arg
-  let pinned_context_preg = embedding_reg_roles.context.unwrap_or(
+  let pinned_context_preg = embedding_abi.reg_roles.context.unwrap_or(
     context_arg_preg,
   )
   let user_arg_gprs = call_conv_layout.user_arg_gprs
@@ -1779,8 +1779,7 @@ fn allocate_backtracking(
   vector_regs : Array[@abi.PReg],
   callee_saved_int : Array[@abi.PReg],
   callee_saved_float : Array[@abi.PReg],
-  call_conv_layout : @abi.CallConventionLayout,
-  embedding_reg_roles : @abi.EmbeddingRegRoles,
+  embedding_abi : @abi.EmbeddingABI,
   param_precolor_strict? : Bool = true,
   algorithm? : RegallocAlgorithm = Backtracking,
 ) -> RegAllocResult {
@@ -1819,9 +1818,7 @@ fn allocate_backtracking(
 
   // Pre-assign function parameters to ABI registers (before main allocation)
   let tick_preassign = if perf_on { Some(perf_tick_now()) } else { None }
-  allocator.preassign_params(
-    call_conv_layout, embedding_reg_roles, param_precolor_strict,
-  )
+  allocator.preassign_params(embedding_abi, param_precolor_strict)
   if tick_preassign is Some(tick) {
     perf_record_regalloc_phase_us(
       "phase_preassign_params",

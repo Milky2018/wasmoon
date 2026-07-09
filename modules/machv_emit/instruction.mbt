@@ -524,7 +524,7 @@ fn MachineCode::emit_instruction(
       let rt = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       // Fast path: cached embedding context-derived pointer 1.
-      if stack_frame.embedding_context_layout is Some(layout) {
+      if stack_frame.embedding_abi is Some({ context_layout: Some(layout), .. }) {
         if stack_frame.cache_context_1 &&
           ty is I64 &&
           rn == stack_frame.context_reg_index() &&

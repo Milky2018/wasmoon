@@ -111,7 +111,7 @@ fn lower_wasm_call_common(
   results : Array[@abi.VReg],
   const_args : Map[Int, CallConstArg],
 ) -> Unit {
-  if !ctx.abi_settings().reserve_embedding_context {
+  if !ctx.embedding_abi().reserve_context_role {
     abort("unpinned VMContext ABI not implemented yet")
   }
   let call_conv = ctx.call_conv_layout()

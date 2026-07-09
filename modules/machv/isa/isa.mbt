@@ -48,18 +48,12 @@ fn MachineEnv::from_data(data : @spec.MachineEnvData) -> MachineEnv {
 ///|
 pub fn ISA::machine_env(
   self : ISA,
-  settings? : @abi.ABISettings = @abi.ABISettings::default(),
   reserved_int_regs? : Array[Int] = [],
 ) -> MachineEnv {
   match self {
     AArch64 =>
-      MachineEnv::from_data(
-        @aarch64.build_machine_env(settings, reserved_int_regs),
-      )
-    AMD64 =>
-      MachineEnv::from_data(
-        @amd64.build_machine_env(settings, reserved_int_regs),
-      )
+      MachineEnv::from_data(@aarch64.build_machine_env(reserved_int_regs))
+    AMD64 => MachineEnv::from_data(@amd64.build_machine_env(reserved_int_regs))
   }
 }
 

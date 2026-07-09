@@ -108,18 +108,15 @@ pub fn compiler_infrastructure_assembly() -> CompilerInfrastructureAssembly {
   let milk = @milkir.Function::new("wasmoon_runtime_probe", signature)
   let entry = milk.new_block0()
   entry.set_terminator(Return([]))
-  let call_conv = @wasmoon_jit.wasm_calling_convention()
-  let roles = @wasmoon_jit.wasm_embedding_reg_roles()
+  let embedding_abi = @wasmoon_jit.wasm_embedding_abi()
   let machv_function = @lower.lower_function(
     milk,
     run_ir_opt=false,
-    embedding_reg_roles=roles,
-    call_conv_layout=Some(call_conv),
+    embedding_abi=Some(embedding_abi),
   )
   let (allocated_function, output) = @machv_regalloc.allocate_registers_backtracking_output(
     machv_function,
-    embedding_reg_roles=roles,
-    call_conv_layout=Some(call_conv),
+    embedding_abi=Some(embedding_abi),
   )
   {
     signature,
@@ -128,8 +125,7 @@ pub fn compiler_infrastructure_assembly() -> CompilerInfrastructureAssembly {
     code_object: @machv_emit.emit_function_with_regalloc(
       allocated_function,
       output,
-      call_conv_layout=Some(call_conv),
-      embedding_reg_roles=roles,
+      embedding_abi=Some(embedding_abi),
     ),
     x64_abi: @x64_target.abi_policy(),
     aarch64_abi: @aarch64_target.abi_policy(),

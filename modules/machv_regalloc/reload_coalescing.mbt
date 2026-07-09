@@ -84,9 +84,7 @@ fn allocate_reload_registers(
   intervals : Map[(Int, Int), ReloadInterval],
   liveness : LivenessResult,
   isa : @isa.ISA,
-  settings : @abi.ABISettings,
-  embedding_reg_roles : @abi.EmbeddingRegRoles,
-  call_conv_layout : @abi.CallConventionLayout,
+  embedding_abi : @abi.EmbeddingABI,
 ) -> Unit {
   if intervals.is_empty() {
     return
@@ -102,17 +100,18 @@ fn allocate_reload_registers(
   let reserved_int_regs : @hashset.HashSet[Int] = HashSet([])
   let reserved_float_regs : @hashset.HashSet[Int] = HashSet([])
   let calls_multi = func.calls_multi_value_function_for_call_conv(
-    call_conv_layout,
+    embedding_abi.call_conv,
   )
-  let needs_extra = func.needs_extra_results_ptr_for_call_conv(call_conv_layout)
+  let needs_extra = func.needs_extra_results_ptr_for_call_conv(
+    embedding_abi.call_conv,
+  )
   let reserve_extra_results_ptr = needs_extra || calls_multi
-  for
-    idx in embedding_reg_roles.reserved_int_indices(
-      reserve_context=settings.reserve_embedding_context,
-      reserve_context_cache_0=func.should_reserve_context_cache_0(),
-      reserve_context_cache_1=func.should_reserve_context_cache_1(),
-      reserve_extra_results_ptr~,
-    ) {
+  let reserved_indices = embedding_abi.reserved_int_indices(
+    reserve_context_cache_0=func.should_reserve_context_cache_0(),
+    reserve_context_cache_1=func.should_reserve_context_cache_1(),
+    reserve_extra_results_ptr~,
+  )
+  for idx in reserved_indices {
     reserved_int_regs.add(idx) |> ignore
   }
 
@@ -144,15 +143,7 @@ fn allocate_reload_registers(
       }
     }
     AMD64 => {
-      let env = isa.machine_env(
-        settings~,
-        reserved_int_regs=embedding_reg_roles.reserved_int_indices(
-          reserve_context=settings.reserve_embedding_context,
-          reserve_context_cache_0=func.should_reserve_context_cache_0(),
-          reserve_context_cache_1=func.should_reserve_context_cache_1(),
-          reserve_extra_results_ptr~,
-        ),
-      )
+      let env = isa.machine_env(reserved_int_regs=reserved_indices)
       for r in env.callee_saved_int {
         // rbp is already excluded from MachineEnv; still, keep it out here too.
         if r.index == isa.fp_reg_index() {

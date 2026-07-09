@@ -1219,8 +1219,7 @@ pub fn optimize_machv(
   func : @machv.Function,
   isa? : @isa.ISA = AArch64,
   profile? : PeepholeProfile = Full,
-  embedding_context_layout? : @abi.EmbeddingContextLayout? = None,
-  embedding_reg_roles? : @abi.EmbeddingRegRoles = @abi.EmbeddingRegRoles::none(),
+  embedding_abi? : @abi.EmbeddingABI? = None,
 ) -> Unit {
   let mut inst_count = 0
   for block in func.blocks {
@@ -1236,28 +1235,30 @@ pub fn optimize_machv(
   let enable_full_passes = profile is Full
   let enable_licm = enable_full_passes &&
     !is_large_func &&
-    embedding_context_layout is Some(_)
+    embedding_abi is Some({ context_layout: Some(_), .. })
   let enable_immutable_load_cse = enable_full_passes &&
     !is_large_func &&
-    embedding_context_layout is Some(_)
+    embedding_abi is Some({ context_layout: Some(_), .. })
   let enable_mem_peepholes = enable_full_passes && !is_large_func
   let enable_inplace_updates = enable_full_passes && !is_large_func
   let enable_copy_prop = true
 
   // Pass 0: loop-invariant code motion
   if enable_licm {
+    let embedding_abi = embedding_abi.unwrap()
     licm_hoist_invariants(
       func,
-      embedding_context_layout.unwrap(),
-      embedding_reg_roles,
+      embedding_abi.context_layout.unwrap(),
+      embedding_abi.reg_roles,
     )
   }
   // Pass 0.5: block-local CSE for immutable loads
   if enable_immutable_load_cse {
+    let embedding_abi = embedding_abi.unwrap()
     cse_immutable_loads(
       func,
-      embedding_context_layout.unwrap(),
-      embedding_reg_roles,
+      embedding_abi.context_layout.unwrap(),
+      embedding_abi.reg_roles,
     )
   }
   // Pass 1: Basic peephole optimizations (constant folding, move elimination)

@@ -56,7 +56,7 @@ pub fn lower_call_ref(@lower.LoweringContext, @milkir.Inst, @block.MachVBlock, I
 
 pub fn lower_delegate(@lower.LoweringContext, @milkir.Inst, @block.MachVBlock, Int) -> Unit
 
-pub fn lower_function(@milkir.Function, WasmContextSlots, isa? : @isa.ISA, abi_settings? : @abi.ABISettings, embedding_reg_roles? : @abi.EmbeddingRegRoles, embedding_context_layout? : @abi.EmbeddingContextLayout?, call_conv_layout? : @abi.CallConventionLayout?, runtime_symbols? : @wasm_milkir.RuntimeSymbols, num_imports? : Int, run_ir_opt? : Bool, trap_payload_resolver? : (String) -> Int, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @machv.Function
+pub fn lower_function(@milkir.Function, WasmContextSlots, isa? : @isa.ISA, embedding_abi? : @abi.EmbeddingABI?, runtime_symbols? : @wasm_milkir.RuntimeSymbols, num_imports? : Int, run_ir_opt? : Bool, trap_payload_resolver? : (String) -> Int, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @machv.Function
 
 pub fn lower_gc_convert(@lower.LoweringContext, @milkir.Inst, @block.MachVBlock) -> Unit
 

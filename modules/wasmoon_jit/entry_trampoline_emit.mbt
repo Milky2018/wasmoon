@@ -38,29 +38,26 @@ pub fn emit_entry_trampoline(
 ) -> @machv_emit.MachineCode {
   // Generate trampoline as IR using IRBuilder
   let ir_func = generate_trampoline_ir(param_types, result_types)
+  let embedding_abi = @abi.EmbeddingABI::new(
+    call_conv_layout,
+    reg_roles=wasm_embedding_reg_roles(isa~),
+    context_layout=Some(embedding_context_layout()),
+  )
 
   // Compile through the normal pipeline
   let machv_func = @lower.lower_function(
     ir_func,
     isa~,
-    embedding_reg_roles=wasm_embedding_reg_roles(isa~),
-    call_conv_layout=Some(call_conv_layout),
+    embedding_abi=Some(embedding_abi),
   )
   let allocated = @machv_regalloc.allocate_registers_backtracking_with_isa(
     machv_func,
     isa,
-    @abi.ABISettings::default(),
-    wasm_embedding_reg_roles(isa~),
-    call_conv_layout=Some(call_conv_layout),
+    embedding_abi=Some(embedding_abi),
   )
 
   // Emit machine code
-  @machv_emit.emit_function(
-    allocated,
-    isa~,
-    call_conv_layout=Some(call_conv_layout),
-    embedding_reg_roles=wasm_embedding_reg_roles(isa~),
-  )
+  @machv_emit.emit_function(allocated, isa~, embedding_abi=Some(embedding_abi))
 }
 
 ///|

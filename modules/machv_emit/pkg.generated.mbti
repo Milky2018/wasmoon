@@ -11,9 +11,9 @@ import {
 }
 
 // Values
-pub fn emit_function(@machv.Function, isa? : @isa.ISA, debug_func_idx? : Int?, force_frame_setup? : Bool, abi_settings? : @abi.ABISettings, embedding_context_layout? : @abi.EmbeddingContextLayout?, call_conv_layout? : @abi.CallConventionLayout?, embedding_reg_roles? : @abi.EmbeddingRegRoles, record_disasm? : Bool) -> MachineCode
+pub fn emit_function(@machv.Function, isa? : @isa.ISA, debug_func_idx? : Int?, force_frame_setup? : Bool, embedding_abi? : @abi.EmbeddingABI?, record_disasm? : Bool) -> MachineCode
 
-pub fn emit_function_with_regalloc(@machv.Function, @machv_regalloc.Output, isa? : @isa.ISA, debug_func_idx? : Int?, force_frame_setup? : Bool, abi_settings? : @abi.ABISettings, embedding_context_layout? : @abi.EmbeddingContextLayout?, call_conv_layout? : @abi.CallConventionLayout?, embedding_reg_roles? : @abi.EmbeddingRegRoles, record_disasm? : Bool) -> MachineCode
+pub fn emit_function_with_regalloc(@machv.Function, @machv_regalloc.Output, isa? : @isa.ISA, debug_func_idx? : Int?, force_frame_setup? : Bool, embedding_abi? : @abi.EmbeddingABI?, record_disasm? : Bool) -> MachineCode
 
 pub fn fits_signed_i32(Int) -> Bool
 
@@ -73,11 +73,9 @@ pub struct EmitStackFrame {
   needs_context_reg : Bool
   cache_context_0 : Bool
   cache_context_1 : Bool
-  embedding_context_layout : @abi.EmbeddingContextLayout?
-  call_conv_layout : @abi.CallConventionLayout?
-  embedding_reg_roles : @abi.EmbeddingRegRoles
+  embedding_abi : @abi.EmbeddingABI?
 }
-pub fn EmitStackFrame::build(Array[Int], Array[Int], Int, has_calls? : Bool, outgoing_args_size? : Int, needs_context_reg? : Bool, cache_context_0? : Bool, cache_context_1? : Bool, force_frame_setup? : Bool, has_incoming_stack_args? : Bool, embedding_context_layout? : @abi.EmbeddingContextLayout?, call_conv_layout? : @abi.CallConventionLayout?, embedding_reg_roles? : @abi.EmbeddingRegRoles, isa? : @isa.ISA, abi_settings? : @abi.ABISettings) -> Self
+pub fn EmitStackFrame::build(Array[Int], Array[Int], Int, has_calls? : Bool, outgoing_args_size? : Int, needs_context_reg? : Bool, cache_context_0? : Bool, cache_context_1? : Bool, force_frame_setup? : Bool, has_incoming_stack_args? : Bool, embedding_abi? : @abi.EmbeddingABI?, isa? : @isa.ISA) -> Self
 pub fn EmitStackFrame::context_cache_0_index(Self) -> Int?
 pub fn EmitStackFrame::context_cache_1_index(Self) -> Int?
 pub fn EmitStackFrame::context_reg_index(Self) -> Int
@@ -88,6 +86,7 @@ pub fn EmitStackFrame::get_outgoing_arg_offset(Self, Int) -> Int
 pub fn EmitStackFrame::get_spill_offset(Self, Int) -> Int
 pub fn EmitStackFrame::require_call_conv_layout(Self) -> @abi.CallConventionLayout
 pub fn EmitStackFrame::require_context_reg(Self) -> @abi.PReg
+pub fn EmitStackFrame::require_embedding_abi(Self) -> @abi.EmbeddingABI
 pub fn EmitStackFrame::require_embedding_context_layout(Self) -> @abi.EmbeddingContextLayout
 
 pub(all) enum EmitTarget {

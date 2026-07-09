@@ -29,9 +29,7 @@ pub fn apply_allocation(
   func : @machv.Function,
   alloc : RegAllocResult,
   isa : @isa.ISA,
-  call_conv_layout : @abi.CallConventionLayout,
-  settings : @abi.ABISettings,
-  embedding_reg_roles : @abi.EmbeddingRegRoles,
+  embedding_abi : @abi.EmbeddingABI,
 ) -> @machv.Function {
   let new_func = func.clone_base()
   new_func.set_num_spill_slots(alloc.num_spill_slots)
@@ -39,10 +37,10 @@ pub fn apply_allocation(
   for i, block in func.blocks {
     block_id_to_index.set(block.id, i)
   }
-  let context_arg = call_conv_layout.context_arg
-  let user_arg_gprs = call_conv_layout.user_arg_gprs
-  let call_arg_fprs = call_conv_layout.arg_fprs
-  let env = isa.machine_env(settings~)
+  let context_arg = embedding_abi.call_conv.context_arg
+  let user_arg_gprs = embedding_abi.call_conv.user_arg_gprs
+  let call_arg_fprs = embedding_abi.call_conv.arg_fprs
+  let env = isa.machine_env()
   guard env.scratch_int.length() >= 2 && env.scratch_float.length() >= 2 else {
     abort(
       "regalloc_apply: ISA machine env must reserve at least 2 scratch regs",
@@ -178,7 +176,7 @@ pub fn apply_allocation(
   let reload_intervals : Map[(Int, Int), ReloadInterval] = if enable_reload_coalescing {
     let intervals = compute_reload_intervals(func, alloc)
     allocate_reload_registers(
-      func, alloc, intervals, liveness, isa, settings, embedding_reg_roles, call_conv_layout,
+      func, alloc, intervals, liveness, isa, embedding_abi,
     )
     intervals
   } else {

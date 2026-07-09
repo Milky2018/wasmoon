@@ -46,7 +46,7 @@ test "lower a leaf MilkIR function to AArch64 MachV" {
   let lowered = @lower.lower_function(
     builder.get_function(),
     isa=AArch64,
-    call_conv_layout=Some(readme_call_conv()),
+    embedding_abi=Some(@abi.EmbeddingABI::new(readme_call_conv())),
   )
   inspect(lowered.get_name(), content="leaf")
   inspect(lowered.get_blocks().length(), content="1")
@@ -69,7 +69,7 @@ test "optimize an explicitly targeted MachV function" {
   let lowered = @lower.lower_function(
     builder.get_function(),
     isa=AMD64,
-    call_conv_layout=Some(readme_call_conv()),
+    embedding_abi=Some(@abi.EmbeddingABI::new(readme_call_conv())),
   )
   @lower.optimize_machv(lowered, isa=AMD64)
   inspect(lowered.get_blocks().length(), content="1")

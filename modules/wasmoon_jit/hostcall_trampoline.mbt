@@ -314,18 +314,17 @@ pub fn emit_hostcall_import_trampoline(
   }
   block.set_terminator(Return(ret_regs))
 
+  let embedding_abi = @abi.EmbeddingABI::new(
+    call_conv_layout,
+    reg_roles=roles,
+    context_layout=Some(embedding_context_layout()),
+  )
+
   // Allocate registers and emit machine code.
   let allocated = @machv_regalloc.allocate_registers_backtracking_with_isa(
     func,
     isa,
-    @abi.ABISettings::default(),
-    roles,
-    call_conv_layout=Some(call_conv_layout),
+    embedding_abi=Some(embedding_abi),
   )
-  @machv_emit.emit_function(
-    allocated,
-    isa~,
-    call_conv_layout=Some(call_conv_layout),
-    embedding_reg_roles=roles,
-  )
+  @machv_emit.emit_function(allocated, isa~, embedding_abi=Some(embedding_abi))
 }

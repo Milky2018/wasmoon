@@ -291,7 +291,7 @@ fn lower_external_call(
   let args : Array[@abi.VReg] = []
   for i, operand in inst.operands {
     if i == 0 &&
-      ctx.abi_settings.reserve_embedding_context &&
+      ctx.embedding_abi().reserve_context_role &&
       ctx.ir_func.params.length() > 0 &&
       operand.id == ctx.ir_func.params[0].0.id {
       let context_vreg = ctx.machv_func.new_vreg(Int)

@@ -74,9 +74,7 @@ pub struct EmitStackFrame {
   needs_context_reg : Bool // Whether function uses context (X19)
   cache_context_0 : Bool // Whether to cache embedding context-derived pointer 0
   cache_context_1 : Bool // Whether to cache embedding context-derived pointer 1
-  embedding_context_layout : @abi.EmbeddingContextLayout?
-  call_conv_layout : @abi.CallConventionLayout?
-  embedding_reg_roles : @abi.EmbeddingRegRoles
+  embedding_abi : @abi.EmbeddingABI?
 }
 
 ///|
@@ -101,17 +99,13 @@ pub fn EmitStackFrame::build(
   cache_context_1? : Bool = false,
   force_frame_setup? : Bool = false,
   has_incoming_stack_args? : Bool = false,
-  embedding_context_layout? : @abi.EmbeddingContextLayout? = None,
-  call_conv_layout? : @abi.CallConventionLayout? = None,
-  embedding_reg_roles? : @abi.EmbeddingRegRoles = @abi.EmbeddingRegRoles::none(),
+  embedding_abi? : @abi.EmbeddingABI? = None,
   isa? : @isa.ISA = AArch64,
-  abi_settings? : @abi.ABISettings = @abi.ABISettings::default(),
 ) -> EmitStackFrame {
   let isa = isa
-  let abi_settings = abi_settings
   // Build the list of GPRs to save
   // ABI: saved GPR set + clobbered callee-saved regs
-  let saved_gprs = build_gpr_save_list_v3(clobbered_gprs, isa, abi_settings)
+  let saved_gprs = build_gpr_save_list_v3(clobbered_gprs, isa)
 
   // Determine if we need setup area (FP/LR)
   // Required when:
@@ -176,9 +170,17 @@ pub fn EmitStackFrame::build(
     needs_context_reg,
     cache_context_0,
     cache_context_1,
-    embedding_context_layout,
-    call_conv_layout,
-    embedding_reg_roles,
+    embedding_abi,
+  }
+}
+
+///|
+pub fn EmitStackFrame::require_embedding_abi(
+  self : EmitStackFrame,
+) -> @abi.EmbeddingABI {
+  match self.embedding_abi {
+    Some(embedding_abi) => embedding_abi
+    None => abort("embedding ABI is required for emission")
   }
 }
 
@@ -186,7 +188,7 @@ pub fn EmitStackFrame::build(
 pub fn EmitStackFrame::require_embedding_context_layout(
   self : EmitStackFrame,
 ) -> @abi.EmbeddingContextLayout {
-  match self.embedding_context_layout {
+  match self.require_embedding_abi().context_layout {
     Some(layout) => layout
     None => abort("embedding context layout is required for emission")
   }
@@ -196,16 +198,12 @@ pub fn EmitStackFrame::require_embedding_context_layout(
 pub fn EmitStackFrame::require_call_conv_layout(
   self : EmitStackFrame,
 ) -> @abi.CallConventionLayout {
-  match self.call_conv_layout {
-    Some(layout) => layout
-    None =>
-      abort("call convention layout is required for ABI-specific emission")
-  }
+  self.require_embedding_abi().call_conv
 }
 
 ///|
 pub fn EmitStackFrame::require_context_reg(self : EmitStackFrame) -> @abi.PReg {
-  match self.embedding_reg_roles.context {
+  match self.require_embedding_abi().reg_roles.context {
     Some(preg) => preg
     None => abort("embedding context register role is required for emission")
   }
@@ -218,7 +216,7 @@ pub fn EmitStackFrame::context_reg_index(self : EmitStackFrame) -> Int {
 
 ///|
 pub fn EmitStackFrame::context_cache_0_index(self : EmitStackFrame) -> Int? {
-  match self.embedding_reg_roles.context_cache_0 {
+  match self.require_embedding_abi().reg_roles.context_cache_0 {
     Some({ index, class: Int }) => Some(index)
     _ => None
   }
@@ -226,7 +224,7 @@ pub fn EmitStackFrame::context_cache_0_index(self : EmitStackFrame) -> Int? {
 
 ///|
 pub fn EmitStackFrame::context_cache_1_index(self : EmitStackFrame) -> Int? {
-  match self.embedding_reg_roles.context_cache_1 {
+  match self.require_embedding_abi().reg_roles.context_cache_1 {
     Some({ index, class: Int }) => Some(index)
     _ => None
   }
@@ -234,7 +232,7 @@ pub fn EmitStackFrame::context_cache_1_index(self : EmitStackFrame) -> Int? {
 
 ///|
 pub fn EmitStackFrame::extra_results_ptr_index(self : EmitStackFrame) -> Int? {
-  match self.embedding_reg_roles.extra_results_ptr {
+  match self.require_embedding_abi().reg_roles.extra_results_ptr {
     Some({ index, class: Int }) => Some(index)
     _ => None
   }
@@ -296,14 +294,10 @@ pub fn EmitStackFrame::get_fpr_save_offset(
 ///
 /// When the embedding context role is globally reserved, that register is not
 /// saved/restored in prologues.
-fn build_gpr_save_list_v3(
-  clobbered : Array[Int],
-  isa : @isa.ISA,
-  abi_settings : @abi.ABISettings,
-) -> Array[Int] {
+fn build_gpr_save_list_v3(clobbered : Array[Int], isa : @isa.ISA) -> Array[Int] {
   let fp = isa.fp_reg_index()
   let lr = isa.lr_reg_index()
-  let env = isa.machine_env(settings=abi_settings)
+  let env = isa.machine_env()
   let callee : @hashset.HashSet[Int] = HashSet([])
   for r in env.callee_saved_int {
     callee.add(r.index)

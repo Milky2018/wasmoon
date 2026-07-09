@@ -130,7 +130,7 @@ pub fn lower_load_mem_base(
     return
   }
   let result_vreg = ctx.get_vreg(result)
-  let vmctx_reg : @abi.Reg = if ctx.abi_settings().reserve_embedding_context {
+  let vmctx_reg : @abi.Reg = if ctx.embedding_abi().reserve_context_role {
     Physical(@lower.context_preg(ctx))
   } else {
     let vmctx_vreg = ctx.get_vreg_for_use(inst.operands[0], block)

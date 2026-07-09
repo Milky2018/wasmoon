@@ -16,15 +16,15 @@ pub fn allocate_and_apply_linear_scan(@machv.AbstractFunction, Array[@machv.PReg
 
 pub fn allocate_function_linear_scan(@machv.AbstractFunction, Array[@machv.PReg]) -> @regalloc.Allocation raise @regalloc.VerifyError
 
-pub fn allocate_registers_backtracking(@machv.Function, settings? : @abi.ABISettings, embedding_reg_roles? : @abi.EmbeddingRegRoles, call_conv_layout? : @abi.CallConventionLayout?) -> @machv.Function
+pub fn allocate_registers_backtracking(@machv.Function, embedding_abi? : @abi.EmbeddingABI?) -> @machv.Function
 
-pub fn allocate_registers_backtracking_output(@machv.Function, settings? : @abi.ABISettings, embedding_reg_roles? : @abi.EmbeddingRegRoles, call_conv_layout? : @abi.CallConventionLayout?) -> (@machv.Function, Output)
+pub fn allocate_registers_backtracking_output(@machv.Function, embedding_abi? : @abi.EmbeddingABI?) -> (@machv.Function, Output)
 
-pub fn allocate_registers_backtracking_output_with_isa(@machv.Function, @isa.ISA, @abi.ABISettings, @abi.EmbeddingRegRoles, call_conv_layout? : @abi.CallConventionLayout?) -> (@machv.Function, Output)
+pub fn allocate_registers_backtracking_output_with_isa(@machv.Function, @isa.ISA, embedding_abi? : @abi.EmbeddingABI?) -> (@machv.Function, Output)
 
-pub fn allocate_registers_backtracking_with_isa(@machv.Function, @isa.ISA, @abi.ABISettings, @abi.EmbeddingRegRoles, call_conv_layout? : @abi.CallConventionLayout?) -> @machv.Function
+pub fn allocate_registers_backtracking_with_isa(@machv.Function, @isa.ISA, embedding_abi? : @abi.EmbeddingABI?) -> @machv.Function
 
-pub fn apply_allocation(@machv.Function, RegAllocResult, @isa.ISA, @abi.CallConventionLayout, @abi.ABISettings, @abi.EmbeddingRegRoles) -> @machv.Function
+pub fn apply_allocation(@machv.Function, RegAllocResult, @isa.ISA, @abi.EmbeddingABI) -> @machv.Function
 
 pub fn build_bundles_with_merging(@machv.Function, LiveRangeSet) -> BundleSet
 
@@ -46,7 +46,7 @@ pub fn debug_liveness(LivenessResult) -> String
 
 pub fn eliminate_dead_code(@machv.Function) -> @machv.Function
 
-pub fn get_alloc_stats(@machv.Function, isa? : @isa.ISA, settings? : @abi.ABISettings, embedding_reg_roles? : @abi.EmbeddingRegRoles, call_conv_layout? : @abi.CallConventionLayout?) -> AllocStats
+pub fn get_alloc_stats(@machv.Function, isa? : @isa.ISA, embedding_abi? : @abi.EmbeddingABI?) -> AllocStats
 
 pub fn process_constraints(@machv.Function, RegAllocResult) -> Unit
 
@@ -56,9 +56,9 @@ pub fn rematerialize_cross_block_constants(@machv.Function) -> @machv.Function
 
 pub fn rematerialize_long_distance_constants(@machv.Function) -> @machv.Function
 
-pub fn verify_allocation(@machv.Function, LivenessResult, RegAllocResult, @isa.ISA, @abi.CallConventionLayout, settings? : @abi.ABISettings, embedding_reg_roles? : @abi.EmbeddingRegRoles) -> Unit
+pub fn verify_allocation(@machv.Function, LivenessResult, RegAllocResult, @isa.ISA, @abi.EmbeddingABI) -> Unit
 
-pub fn verify_allocation_aarch64(@machv.Function, LivenessResult, RegAllocResult, @abi.CallConventionLayout, settings? : @abi.ABISettings, embedding_reg_roles? : @abi.EmbeddingRegRoles) -> Unit
+pub fn verify_allocation_aarch64(@machv.Function, LivenessResult, RegAllocResult, @abi.EmbeddingABI) -> Unit
 
 // Errors
 

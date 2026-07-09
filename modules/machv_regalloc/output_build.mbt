@@ -340,9 +340,7 @@ fn build_output(
   liveness : LivenessResult,
   alloc : RegAllocResult,
   isa : @isa.ISA,
-  settings : @abi.ABISettings,
-  embedding_reg_roles : @abi.EmbeddingRegRoles,
-  call_conv_layout : @abi.CallConventionLayout,
+  embedding_abi : @abi.EmbeddingABI,
 ) -> Output {
   let out = Output::new()
   out.num_spillslots = alloc.num_spill_slots
@@ -372,7 +370,7 @@ fn build_output(
   let reload_intervals : Map[(Int, Int), ReloadInterval] = if enable_reload_coalescing {
     let intervals = compute_reload_intervals(func, alloc)
     allocate_reload_registers(
-      func, alloc, intervals, liveness, isa, settings, embedding_reg_roles, call_conv_layout,
+      func, alloc, intervals, liveness, isa, embedding_abi,
     )
     intervals
   } else {
@@ -386,16 +384,15 @@ fn build_output(
     add_used_reg(used_int_regs, used_fp_regs, preg)
   }
   let reserve_extra_results_ptr = func.needs_extra_results_ptr_for_call_conv(
-      call_conv_layout,
+      embedding_abi.call_conv,
     ) ||
-    func.calls_multi_value_function_for_call_conv(call_conv_layout)
-  let reserved_int_regs = embedding_reg_roles.reserved_int_indices(
-    reserve_context=settings.reserve_embedding_context,
+    func.calls_multi_value_function_for_call_conv(embedding_abi.call_conv)
+  let reserved_int_regs = embedding_abi.reserved_int_indices(
     reserve_context_cache_0=func.should_reserve_context_cache_0(),
     reserve_context_cache_1=func.should_reserve_context_cache_1(),
     reserve_extra_results_ptr~,
   )
-  let env = isa.machine_env(settings~, reserved_int_regs~)
+  let env = isa.machine_env(reserved_int_regs~)
 
   // Reserve dedicated scratch regs (used by the move resolver).
   for idx in env.scratch_int {
