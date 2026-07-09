@@ -82,7 +82,7 @@ pub fn IRBuilder::emit_inst(
 
 ///|
 /// Emit an instruction without a result
-fn IRBuilder::emit_void_inst(
+pub fn IRBuilder::emit_void_inst(
   self : IRBuilder,
   opcode : Opcode,
   operands : Array[Value],
@@ -91,6 +91,29 @@ fn IRBuilder::emit_void_inst(
   if self.current_block is Some(block) {
     block.add_inst(inst)
   }
+}
+
+///|
+/// Emit an instruction with multiple results.
+pub fn IRBuilder::emit_multi_inst(
+  self : IRBuilder,
+  result_types : Array[Type],
+  opcode : Opcode,
+  operands : Array[Value],
+) -> Array[Value] {
+  if result_types.length() == 0 {
+    self.emit_void_inst(opcode, operands)
+    return []
+  }
+  let results : Array[Value] = []
+  for ty in result_types {
+    results.push(self.func.new_value(ty))
+  }
+  let inst = Inst::new_multi(results, opcode, operands)
+  if self.current_block is Some(block) {
+    block.add_inst(inst)
+  }
+  results
 }
 
 ///|
@@ -110,6 +133,16 @@ pub fn IRBuilder::emit_void_ext_inst(
   operands : Array[Value],
 ) -> Unit {
   self.emit_void_inst(Ext(opcode), operands)
+}
+
+///|
+pub fn IRBuilder::emit_multi_ext_inst(
+  self : IRBuilder,
+  result_types : Array[Type],
+  opcode : ExtOp,
+  operands : Array[Value],
+) -> Array[Value] {
+  self.emit_multi_inst(result_types, Ext(opcode), operands)
 }
 
 // ============ Constants ============
@@ -617,19 +650,7 @@ pub fn IRBuilder::call_symbol_multi(
   result_types : Array[Type],
   args : Array[Value],
 ) -> Array[Value] {
-  if result_types.length() == 0 {
-    self.emit_void_inst(Call(symbol), args)
-    return []
-  }
-  let results : Array[Value] = []
-  for ty in result_types {
-    results.push(self.func.new_value(ty))
-  }
-  let inst = Inst::new_multi(results, Call(symbol), args)
-  if self.current_block is Some(block) {
-    block.add_inst(inst)
-  }
-  results
+  self.emit_multi_inst(result_types, Call(symbol), args)
 }
 
 // ============ Terminators ============
@@ -780,21 +801,7 @@ pub fn IRBuilder::call_ptr(
   }
   let num_args = args.length()
   let num_results = result_types.length()
-  if num_results == 0 {
-    self.emit_void_inst(CallPtr(num_args, 0), all_args)
-    return []
-  }
-  // Create result values for each return type
-  let results : Array[Value] = []
-  for ty in result_types {
-    results.push(self.func.new_value(ty))
-  }
-  // Create instruction with multiple results
-  let inst = Inst::new_multi(results, CallPtr(num_args, num_results), all_args)
-  if self.current_block is Some(block) {
-    block.add_inst(inst)
-  }
-  results
+  self.emit_multi_inst(result_types, CallPtr(num_args, num_results), all_args)
 }
 
 // ============ SIMD Operations ============

@@ -12,7 +12,8 @@
 ///
 /// This pass is intentionally non-recursive (it does not attempt to remat the
 /// operands of a rematted instruction), matching Cranelift's current behavior.
-pub fn rematerialize_across_blocks(func : Function) -> OptResult {
+#warnings("-unused_value")
+fn rematerialize_across_blocks(func : Function) -> OptResult {
   let result = OptResult::new()
 
   // value_id -> defining block id (for inst results and blockparams).

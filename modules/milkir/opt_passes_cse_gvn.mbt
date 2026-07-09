@@ -5,7 +5,8 @@
 /// Replaces duplicate computations with references to the first computation
 /// Note: This is local CSE - expressions are only reused within the same basic block
 /// to avoid incorrectly using values from non-dominating blocks (e.g., sibling branches)
-pub fn eliminate_common_subexpressions(func : Function) -> OptResult {
+#warnings("-unused_value")
+fn eliminate_common_subexpressions(func : Function) -> OptResult {
   let result = OptResult::new()
   for block in func.blocks {
     // Reset expressions map for each block to avoid cross-block CSE issues
@@ -41,7 +42,8 @@ pub fn eliminate_common_subexpressions(func : Function) -> OptResult {
 ///|
 /// Global Common Subexpression Elimination using dominance analysis
 /// Expressions in dominating blocks can be reused in dominated blocks
-pub fn eliminate_common_subexpressions_global(func : Function) -> OptResult {
+#warnings("-unused_value")
+fn eliminate_common_subexpressions_global(func : Function) -> OptResult {
   run_global_value_numbering(func, PureCSE)
 }
 
@@ -761,7 +763,8 @@ fn run_global_value_numbering(
 ///|
 /// Global Value Numbering with Load CSE
 /// Extends CSE to handle memory loads by tracking when stores invalidate loads
-pub fn gvn(func : Function) -> OptResult {
+#warnings("-unused_value")
+fn gvn(func : Function) -> OptResult {
   let result = OptResult::new()
   for block in func.blocks {
     // Value table: expression key -> (result value, reads_memory flag)
@@ -809,13 +812,14 @@ pub fn gvn(func : Function) -> OptResult {
 /// Global Value Numbering with dominance analysis
 /// Expressions in dominating blocks can be reused in dominated blocks,
 /// with proper invalidation of memory-based expressions
-pub fn gvn_global(func : Function) -> OptResult {
+#warnings("-unused_value")
+fn gvn_global(func : Function) -> OptResult {
   run_global_value_numbering(func, AliasAwareGVN)
 }
 
 ///|
 /// Unified global optimization pass that combines pure CSE and alias-aware GVN
 /// in a single dominator-tree walk.
-pub fn cse_gvn_global(func : Function) -> OptResult {
+fn cse_gvn_global(func : Function) -> OptResult {
   run_global_value_numbering(func, AliasAwareGVN)
 }

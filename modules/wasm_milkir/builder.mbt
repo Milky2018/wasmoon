@@ -66,16 +66,7 @@ fn append_multi_result_inst(
     emit_void_wasm_inst(builder, opcode, args)
     return []
   }
-  let func = builder.get_function()
-  let results : Array[@milkir.Value] = []
-  for ty in result_types {
-    results.push(func.new_value(ty))
-  }
-  let inst = @milkir.Inst::new_multi(results, Ext(encode(opcode)), args)
-  if builder.current_block() is Some(block) {
-    block.add_inst(inst)
-  }
-  results
+  builder.emit_multi_ext_inst(result_types, encode(opcode), args)
 }
 
 ///|

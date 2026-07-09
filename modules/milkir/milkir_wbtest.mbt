@@ -151,7 +151,7 @@ test "verify catches missing terminator" {
 test "verify catches undefined operands" {
   let func = Function::new("bad_use", Signature::new([], []))
   let entry = func.new_block([])
-  let bogus : Value = { id: 99, ty: I32 }
+  let bogus = Value::new(99, I32)
   let result = func.new_value(I32)
   entry.append_inst(func.new_inst(Iadd, [bogus, bogus], [result]))
   entry.set_terminator(Return([result]))

@@ -3,7 +3,7 @@
 Reusable Cranelift-like SSA intermediate representation.
 
 `milkir` provides compiler IR data structures, builders, verification, CFG
-helpers, printing, and optimization passes. It is intended as a reusable
+helpers, printing, and optimization drivers. It is intended as a reusable
 middle-end layer for MoonBit compiler projects.
 
 ## Package
@@ -44,8 +44,9 @@ test "build an add function with IRBuilder" {
 
 ## Example: run a small optimization pass
 
-Optimization passes mutate the function and report whether they changed it.
-This example folds two constants and then verifies the optimized function.
+The public optimization drivers mutate the function and report whether they
+changed it. This example folds two constants and then verifies the optimized
+function.
 
 ```moonbit check
 ///|
@@ -60,7 +61,7 @@ test "fold constants in a MilkIR function" {
   builder.return_([sum])
   let func = builder.get_function()
   let before = instruction_count(func)
-  let result = fold_constants(func)
+  let result = optimize_with_level(func, OptLevel::from_int(1))
   inspect(result.changed, content="true")
   inspect(instruction_count(func) <= before, content="true")
   inspect(func.verify(), content="()")

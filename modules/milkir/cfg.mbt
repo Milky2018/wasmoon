@@ -1,5 +1,5 @@
 ///|
-pub(all) struct CFG {
+pub struct CFG {
   size : Int
   num_blocks : Int
   successors : Array[Array[Int]]
@@ -220,7 +220,7 @@ fn dominates_with_idom(idom : Array[Int], a : Int, b : Int) -> Bool {
 }
 
 ///|
-pub fn build_dominator_tree(idom : Array[Int]) -> Array[Array[Int]] {
+fn build_dominator_tree(idom : Array[Int]) -> Array[Array[Int]] {
   let children : Array[Array[Int]] = []
   for _ in 0..<idom.length() {
     children.push([])
@@ -251,7 +251,7 @@ pub fn CFG::find_back_edges(self : CFG) -> Array[(Int, Int)] {
 }
 
 ///|
-pub(all) struct Loop {
+pub struct Loop {
   header : Int
   blocks : Array[Int]
   back_edges : Array[(Int, Int)]

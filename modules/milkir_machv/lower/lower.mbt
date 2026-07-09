@@ -60,7 +60,7 @@ fn function_params_for_lowering(
   }
   let params : Array[(@milkir.Value, @milkir.Type)] = []
   for i, ty in ir_func.signature.params {
-    let value : @milkir.Value = { id: i, ty }
+    let value = @milkir.Value::new(i, ty)
     params.push((value, ty))
   }
   params
@@ -1626,8 +1626,8 @@ pub fn lower_function(
 ) -> @machv.Function {
   // Keep this optional for call sites that already ran full IR optimization.
   if run_ir_opt {
-    // Apply e-graph optimization before lowering (constant folding, uextend(const) -> const, etc.)
-    @milkir.optimize_function(ir_func) |> ignore
+    @milkir.optimize_with_level(ir_func, @milkir.OptLevel::from_int(0))
+    |> ignore
   }
   let ctx = LoweringContext::new(
     ir_func, isa, abi_settings, embedding_reg_roles, embedding_context_layout, call_conv_layout,

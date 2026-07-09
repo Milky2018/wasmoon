@@ -3,7 +3,7 @@
 ///|
 /// Loop Invariant Code Motion
 /// Moves loop-invariant computations out of loops to the preheader
-pub fn hoist_loop_invariants(func : Function) -> OptResult {
+fn hoist_loop_invariants(func : Function) -> OptResult {
   let result = OptResult::new()
   let cfg = CFG::build(func)
   let loops = cfg.find_loops()
@@ -161,7 +161,7 @@ fn hoist_from_loop(
 /// Loop Unrolling
 /// Duplicates the loop body to reduce loop overhead and enable further optimizations
 /// This is a simple unrolling that only handles loops with known trip counts
-pub fn unroll_loops(func : Function, unroll_factor : Int) -> OptResult {
+fn unroll_loops(func : Function, unroll_factor : Int) -> OptResult {
   let result = OptResult::new()
   let cfg = CFG::build(func)
   let loops = cfg.find_loops()
@@ -255,7 +255,7 @@ fn clone_instruction(inst : Inst, func : Function) -> Inst {
 /// Strength Reduction
 /// Replaces expensive operations with cheaper equivalents
 /// Examples: multiplication by power of 2 -> shift, division by power of 2 -> shift
-pub fn reduce_strength(func : Function) -> OptResult {
+fn reduce_strength(func : Function) -> OptResult {
   let result = OptResult::new()
 
   // Build constant map

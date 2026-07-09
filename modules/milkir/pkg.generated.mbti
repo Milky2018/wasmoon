@@ -2,76 +2,15 @@
 package "Milky2018/milkir"
 
 import {
-  "Milky2018/milkir/egraph",
   "moonbitlang/core/debug",
 }
 
 // Values
-pub fn build_dominator_tree(Array[Int]) -> Array[Array[Int]]
-
-pub fn canonicalize_aliases(Function) -> OptResult
-
-pub fn cse_gvn_global(Function) -> OptResult
-
-pub fn eliminate_common_subexpressions(Function) -> OptResult
-
-pub fn eliminate_common_subexpressions_global(Function) -> OptResult
-
-pub fn eliminate_constant_block_params(Function) -> OptResult
-
-pub fn eliminate_dead_block_params(Function) -> OptResult
-
-pub fn eliminate_dead_code(Function) -> OptResult
-
-pub fn eliminate_unreachable_blocks(Function) -> OptResult
-
-pub fn eliminate_unreachable_code(Function) -> OptResult
-
-pub fn fold_constants(Function) -> OptResult
-
-pub fn gvn(Function) -> OptResult
-
-pub fn gvn_global(Function) -> OptResult
-
-pub fn hoist_loop_invariants(Function) -> OptResult
-
 pub fn instruction_count(Function) -> Int
-
-pub fn merge_blocks(Function) -> OptResult
 
 pub fn optimize(Function) -> OptResult
 
-pub fn optimize_block(Block) -> Map[Int, (Int, @egraph.ENode)]
-
-pub fn optimize_block_with_limits(Block, @egraph.SaturationLimits) -> Map[Int, (Int, @egraph.ENode)]
-
-pub fn optimize_function(Function) -> Bool
-
-pub fn optimize_function_with_limits(Function, @egraph.SaturationLimits) -> Bool
-
-pub fn optimize_function_with_stats(Function) -> EGraphOptimizeStats
-
-pub fn optimize_function_with_stats_with_limits(Function, @egraph.SaturationLimits) -> EGraphOptimizeStats
-
-pub fn optimize_function_with_stats_with_limits_and_ruleset(Function, @egraph.SaturationLimits, @egraph.IndexedRuleSet) -> EGraphOptimizeStats
-
 pub fn optimize_with_level(Function, OptLevel) -> OptResult
-
-pub fn propagate_copies(Function) -> OptResult
-
-pub fn propagate_copies_global(Function) -> OptResult
-
-pub fn reduce_strength(Function) -> OptResult
-
-pub fn rematerialize_across_blocks(Function) -> OptResult
-
-pub fn simplify_branches(Function) -> OptResult
-
-pub fn thread_jumps(Function) -> OptResult
-
-pub fn unroll_loops(Function, Int) -> OptResult
-
-pub fn validate_function(Function) -> ValidationResult
 
 // Errors
 pub suberror VerifyError {
@@ -90,13 +29,10 @@ pub struct Block {
   instructions : Array[Inst]
   mut terminator : Terminator?
 } derive(@debug.Debug)
-pub fn Block::add_inst(Self, Inst) -> Unit
-pub fn Block::add_param(Self, Value, Type) -> Unit
 pub fn Block::append_inst(Self, Inst) -> Unit
-pub fn Block::new_with_params(Int, Array[Value]) -> Self
 pub fn Block::set_terminator(Self, Terminator) -> Unit
 
-pub(all) struct CFG {
+pub struct CFG {
   size : Int
   num_blocks : Int
   successors : Array[Array[Int]]
@@ -118,26 +54,7 @@ pub fn CFG::postorder(Self) -> Array[Int]
 pub fn CFG::reverse_postorder(Self) -> Array[Int]
 pub fn CFG::to_dot(Self, String) -> String
 
-type EGraphBuilder
-pub fn EGraphBuilder::add_value(Self, Value) -> @egraph.EClassId
-pub fn EGraphBuilder::extract(Self, Value) -> (Int, @egraph.ENode)?
-pub fn EGraphBuilder::get_egraph(Self) -> @egraph.EGraph
-pub fn EGraphBuilder::get_simplified_opcode(Self, Value) -> Opcode?
-pub fn EGraphBuilder::get_simplified_operand(Self, Value) -> Value?
-pub fn EGraphBuilder::new() -> Self
-pub fn EGraphBuilder::new_with_limits(@egraph.SaturationLimits) -> Self
-pub fn EGraphBuilder::new_with_limits_and_ruleset(@egraph.SaturationLimits, @egraph.IndexedRuleSet) -> Self
-pub fn EGraphBuilder::optimize(Self) -> Unit
-pub fn EGraphBuilder::register_def(Self, Inst) -> Unit
-
-pub struct EGraphOptimizeStats {
-  changed : Bool
-  total_classes : Int
-  total_nodes : Int
-  total_rule_applications : Int
-}
-
-pub(all) struct ExtOp {
+pub struct ExtOp {
   dialect : String
   opcode : String
   immediates : FixedArray[Int]
@@ -146,7 +63,7 @@ pub fn ExtOp::new(String, String, FixedArray[Int]) -> Self
 pub impl Eq for ExtOp
 pub impl Hash for ExtOp
 
-pub(all) struct ExternalSymbol {
+pub struct ExternalSymbol {
   name : String
 } derive(Eq, Hash, @debug.Debug)
 pub fn ExternalSymbol::new(String) -> Self
@@ -208,7 +125,10 @@ pub fn IRBuilder::ctz(Self, Value) -> Value
 pub fn IRBuilder::current_block(Self) -> Block?
 pub fn IRBuilder::emit_ext_inst(Self, Type, ExtOp, Array[Value]) -> Value
 pub fn IRBuilder::emit_inst(Self, Type, Opcode, Array[Value]) -> Value
+pub fn IRBuilder::emit_multi_ext_inst(Self, Array[Type], ExtOp, Array[Value]) -> Array[Value]
+pub fn IRBuilder::emit_multi_inst(Self, Array[Type], Opcode, Array[Value]) -> Array[Value]
 pub fn IRBuilder::emit_void_ext_inst(Self, ExtOp, Array[Value]) -> Unit
+pub fn IRBuilder::emit_void_inst(Self, Opcode, Array[Value]) -> Unit
 pub fn IRBuilder::fabs(Self, Value) -> Value
 pub fn IRBuilder::fadd(Self, Value, Value) -> Value
 pub fn IRBuilder::fceil(Self, Value) -> Value
@@ -331,8 +251,6 @@ pub struct Inst {
 pub fn Inst::add_metadata(Self, Metadata) -> Unit
 pub fn Inst::all_results(Self) -> Array[Value]
 pub fn Inst::first_result(Self) -> Value?
-pub fn Inst::new_multi(Array[Value], Opcode, Array[Value]) -> Self
-pub fn Inst::new_with_id(Int, Opcode, Array[Value], Array[Value]) -> Self
 pub impl Eq for Inst
 pub impl Hash for Inst
 
@@ -349,7 +267,7 @@ pub(all) enum IntCC {
   Uge
 } derive(Eq, Hash, @debug.Debug)
 
-pub(all) struct Loop {
+pub struct Loop {
   header : Int
   blocks : Array[Int]
   back_edges : Array[(Int, Int)]
@@ -699,18 +617,14 @@ pub fn OptLevel::from_int(Int) -> Self
 pub struct OptResult {
   mut changed : Bool
 } derive(Eq)
-pub fn OptResult::mark_changed(Self) -> Unit
-pub fn OptResult::new() -> Self
 
-type RepKey derive(Eq, Hash, @debug.Debug)
-
-pub(all) struct Signature {
+pub struct Signature {
   params : Array[Type]
   results : Array[Type]
 } derive(Eq, Hash, @debug.Debug)
 pub fn Signature::new(Array[Type], Array[Type]) -> Self
 
-pub(all) struct StackSlot {
+pub struct StackSlot {
   id : Int
   size : Int
   align : Int
@@ -740,16 +654,11 @@ pub(all) enum Type {
 } derive(Eq, Hash, @debug.Debug)
 pub impl Show for Type
 
-pub struct ValidationResult {
-  mut valid : Bool
-  errors : Array[String]
-}
-pub fn ValidationResult::new() -> Self
-
-pub(all) struct Value {
+pub struct Value {
   id : Int
   ty : Type
 } derive(Eq, Hash, @debug.Debug)
+pub fn Value::new(Int, Type) -> Self
 
 // Type aliases
 

@@ -44,11 +44,8 @@ fn emit_op(
   opcode : @milkir.Opcode,
   operands : Array[@milkir.Value],
 ) -> @milkir.Value? {
-  guard builder.current_block() is Some(block) else { return None }
-  let func = builder.get_function()
-  let result = func.new_value(ty)
-  block.append_inst(func.new_inst(opcode, operands, [result]))
-  Some(result)
+  guard builder.current_block() is Some(_) else { return None }
+  Some(builder.emit_inst(ty, opcode, operands))
 }
 
 ///|
@@ -57,9 +54,8 @@ fn emit_void_op(
   opcode : @milkir.Opcode,
   operands : Array[@milkir.Value],
 ) -> Bool {
-  guard builder.current_block() is Some(block) else { return false }
-  let func = builder.get_function()
-  block.append_inst(func.new_inst(opcode, operands, []))
+  guard builder.current_block() is Some(_) else { return false }
+  builder.emit_void_inst(opcode, operands)
   true
 }
 
@@ -70,14 +66,8 @@ fn emit_multi_op(
   opcode : @milkir.Opcode,
   operands : Array[@milkir.Value],
 ) -> Array[@milkir.Value]? {
-  guard builder.current_block() is Some(block) else { return None }
-  let func = builder.get_function()
-  let results : Array[@milkir.Value] = []
-  for ty in result_types {
-    results.push(func.new_value(ty))
-  }
-  block.append_inst(func.new_inst(opcode, operands, results))
-  Some(results)
+  guard builder.current_block() is Some(_) else { return None }
+  Some(builder.emit_multi_inst(result_types, opcode, operands))
 }
 
 ///|

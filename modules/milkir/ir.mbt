@@ -4,13 +4,13 @@
 ///|
 /// IR Value - represents a virtual register in SSA form
 /// Each value is defined exactly once and can be used multiple times
-pub(all) struct Value {
+pub struct Value {
   id : Int // Unique identifier within a function
   ty : Type // The type of this value
 } derive(Eq, Debug, Hash)
 
 ///|
-fn Value::new(id : Int, ty : Type) -> Value {
+pub fn Value::new(id : Int, ty : Type) -> Value {
   { id, ty }
 }
 
@@ -48,7 +48,7 @@ pub impl Show for Type with fn output(self, logger) {
 }
 
 ///|
-pub(all) struct Signature {
+pub struct Signature {
   params : Array[Type]
   results : Array[Type]
 } derive(Eq, Debug, Hash)
@@ -59,7 +59,7 @@ pub fn Signature::new(params : Array[Type], results : Array[Type]) -> Signature 
 }
 
 ///|
-pub(all) struct ExternalSymbol {
+pub struct ExternalSymbol {
   name : String
 } derive(Eq, Debug, Hash)
 
@@ -69,7 +69,7 @@ pub fn ExternalSymbol::new(name : String) -> ExternalSymbol {
 }
 
 ///|
-pub(all) struct ExtOp {
+pub struct ExtOp {
   dialect : String
   opcode : String
   immediates : FixedArray[Int]
@@ -111,7 +111,7 @@ pub impl Hash for ExtOp with fn hash_combine(self, hasher) {
 }
 
 ///|
-pub(all) struct StackSlot {
+pub struct StackSlot {
   id : Int
   size : Int
   align : Int
@@ -141,7 +141,7 @@ fn Block::new(id : Int) -> Block {
 }
 
 ///|
-pub fn Block::new_with_params(id : Int, params : Array[Value]) -> Block {
+fn Block::new_with_params(id : Int, params : Array[Value]) -> Block {
   let block = Block::new(id)
   for param in params {
     block.add_param(param, param.ty)
@@ -151,13 +151,13 @@ pub fn Block::new_with_params(id : Int, params : Array[Value]) -> Block {
 
 ///|
 /// Add a parameter to this block (for SSA phi nodes)
-pub fn Block::add_param(self : Block, value : Value, ty : Type) -> Unit {
+fn Block::add_param(self : Block, value : Value, ty : Type) -> Unit {
   self.params.push((value, ty))
 }
 
 ///|
 /// Add an instruction to this block
-pub fn Block::add_inst(self : Block, inst : Inst) -> Unit {
+fn Block::add_inst(self : Block, inst : Inst) -> Unit {
   self.instructions.push(inst)
 }
 
@@ -220,7 +220,7 @@ fn Inst::new(result : Value?, opcode : Opcode, operands : Array[Value]) -> Inst 
 
 ///|
 /// Create an instruction with multiple results (for multi-value call)
-pub fn Inst::new_multi(
+fn Inst::new_multi(
   results : Array[Value],
   opcode : Opcode,
   operands : Array[Value],
@@ -229,7 +229,7 @@ pub fn Inst::new_multi(
 }
 
 ///|
-pub fn Inst::new_with_id(
+fn Inst::new_with_id(
   id : Int,
   opcode : Opcode,
   args : Array[Value],
