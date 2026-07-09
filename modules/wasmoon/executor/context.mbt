@@ -179,30 +179,6 @@ fn ExecContext::get_frame(
 }
 
 ///|
-/// Capture the current call stack for error reporting
-fn ExecContext::capture_call_stack(
-  self : ExecContext,
-) -> Array[@runtime.CallStackEntry] {
-  let stack : Array[@runtime.CallStackEntry] = []
-  for frame in self.frames {
-    stack.push({ func_idx: frame.get_func_idx(), func_name: None })
-  }
-  stack
-}
-
-///|
-/// Create a RuntimeErrorContext with the current call stack
-#warnings("-unused_value")
-fn ExecContext::make_error_context(
-  self : ExecContext,
-  error : @runtime.RuntimeError,
-) -> @runtime.RuntimeErrorContext {
-  @runtime.RuntimeErrorContext::new(error).with_call_stack(
-    self.capture_call_stack(),
-  )
-}
-
-///|
 /// Collect transient GC roots from interpreter stack and frame locals
 fn ExecContext::collect_gc_additional_roots(
   self : ExecContext,

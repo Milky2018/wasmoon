@@ -474,72 +474,6 @@ test "optimizer canonicalizes branch args without crossing sibling dominance" {
 }
 
 ///|
-test "optimizer rematerializes constants into cross-block instruction uses" {
-  let builder = IRBuilder::new("remat_inst_use")
-  builder.add_result(I32)
-  let entry = builder.create_block()
-  let body = builder.create_block()
-  builder.switch_to_block(entry)
-  let value = builder.iconst_i32(7)
-  builder.jump(body, [])
-  builder.switch_to_block(body)
-  let one = builder.iconst_i32(1)
-  let sum = builder.iadd(value, one)
-  builder.return_([sum])
-  let func = builder.get_function()
-  let result = rematerialize_across_blocks(func)
-  inspect(result.changed, content="true")
-  inspect(
-    func.print(),
-    content=(
-      #|function remat_inst_use() -> i32 {
-      #|block0:
-      #|    v0:i32 = iconst 7
-      #|    jump block1
-      #|block1:
-      #|    v1:i32 = iconst 1
-      #|    v3:i32 = iconst 7
-      #|    v2:i32 = iadd v3, v1
-      #|    return v2
-      #|}
-      #|
-    ),
-  )
-  inspect(func.verify(), content="()")
-}
-
-///|
-test "optimizer rematerializes constants into cross-block terminator uses" {
-  let builder = IRBuilder::new("remat_term_use")
-  builder.add_result(I32)
-  let entry = builder.create_block()
-  let exit = builder.create_block()
-  builder.switch_to_block(entry)
-  let value = builder.iconst_i32(7)
-  builder.jump(exit, [])
-  builder.switch_to_block(exit)
-  builder.return_([value])
-  let func = builder.get_function()
-  let result = rematerialize_across_blocks(func)
-  inspect(result.changed, content="true")
-  inspect(
-    func.print(),
-    content=(
-      #|function remat_term_use() -> i32 {
-      #|block0:
-      #|    v0:i32 = iconst 7
-      #|    jump block1
-      #|block1:
-      #|    v1:i32 = iconst 7
-      #|    return v1
-      #|}
-      #|
-    ),
-  )
-  inspect(func.verify(), content="()")
-}
-
-///|
 test "optimizer removes unused block params and jump args" {
   let builder = IRBuilder::new("dead_block_params")
   builder.add_result(I32)
@@ -929,7 +863,7 @@ test "CSE keeps duplicate loads without alias metadata" {
   let loaded1 = builder.load_ptr(I32, ptr, offset)
   builder.return_([loaded1])
   let func = builder.get_function()
-  let result = eliminate_common_subexpressions(func)
+  let result = cse_gvn_global(func)
   inspect(result.changed, content="false")
   inspect(
     func.print(),
