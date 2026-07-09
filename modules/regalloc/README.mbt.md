@@ -9,7 +9,7 @@ depending on a concrete machine IR.
 ## Package
 
 - `Milky2018/regalloc`: allocation data structures, allocator entry points,
-  policy helpers, and verifier APIs.
+  and verifier APIs.
 
 ## When to use it
 
@@ -38,38 +38,34 @@ test "allocate virtual registers to physical registers" {
   inst.add_operand(Operand::use_reg(v1))
   block.append(inst)
   program.add_block(block)
-  let allocation = allocate_linear_scan(program)
+  let allocation = allocate(program)
   inspect(allocation.location_of(v0) == Some(Reg(r0)), content="true")
   inspect(allocation.location_of(v1) == Some(Reg(r1)), content="true")
   inspect(verify_allocation(program, allocation), content="()")
 }
 ```
 
-## Example: inspect live ranges before allocation
+## Example: configure allocation
 
-Live ranges are independent of the allocator choice. Compiler authors can use
-them to debug why a value was spilled or why two values could not share a
-register.
+`RegallocConfig` controls user-facing allocation behavior. By default
+`allocate` verifies the result before returning it; callers that run their own
+validation can disable that check.
 
 ```moonbit check
 ///|
-test "compute a live range across two instructions" {
+test "allocate with explicit configuration" {
   let r0 : PhysicalReg = { id: 0, class: Int }
   let v0 : VirtualReg = { id: 0, class: Int }
   let program = Program::Program([r0])
   let block = Block::Block(0)
-  let def_inst = Instruction::Instruction(0)
-  def_inst.add_operand(Operand::def(v0))
-  block.append(def_inst)
-  let use_inst = Instruction::Instruction(1)
-  use_inst.add_operand(Operand::use_reg(v0))
-  block.append(use_inst)
+  let inst = Instruction::Instruction(0)
+  inst.add_operand(Operand::def(v0))
+  block.append(inst)
   program.add_block(block)
-  let ranges = build_live_ranges(program)
-  let range = ranges.get_by_vreg(v0).unwrap()
-  inspect(range.start() == Some(ProgramPoint(0, 0)), content="true")
-  inspect(range.end() == Some(ProgramPoint(0, 1)), content="true")
-  inspect(range.uses.length(), content="2")
+  let config = RegallocConfig::RegallocConfig(verify=false)
+  let allocation = allocate(program, config~)
+  inspect(config.strategy() == LinearScan, content="true")
+  inspect(allocation.location_of(v0) == Some(Reg(r0)), content="true")
 }
 ```
 

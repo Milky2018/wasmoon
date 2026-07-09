@@ -11,7 +11,7 @@ test "linear scan allocates abstract program registers" {
   inst.add_operand(Operand::use_reg(v1))
   block.append(inst)
   program.add_block(block)
-  let allocation = allocate_linear_scan(program)
+  let allocation = allocate(program)
   inspect(allocation.location_of(v0) == Some(Reg(r0)), content="true")
   inspect(allocation.location_of(v1) == Some(Reg(r1)), content="true")
   inspect(allocation.spill_count, content="0")
@@ -29,7 +29,7 @@ test "linear scan spills when class registers are exhausted" {
   inst.add_operand(Operand::def(v1))
   block.append(inst)
   program.add_block(block)
-  let allocation = allocate_linear_scan(program)
+  let allocation = allocate(program)
   inspect(allocation.location_of(v1) == Some(Spill(0)), content="true")
   inspect(allocation.spill_count, content="1")
 }
@@ -48,7 +48,7 @@ test "linear scan reuses registers for non-overlapping intervals" {
   second.add_operand(Operand::def(v1))
   block.append(second)
   program.add_block(block)
-  let allocation = allocate_linear_scan(program)
+  let allocation = allocate(program)
   inspect(allocation.location_of(v0) == Some(Reg(r0)), content="true")
   inspect(allocation.location_of(v1) == Some(Reg(r0)), content="true")
   inspect(allocation.spill_count, content="0")
@@ -129,7 +129,7 @@ test "linear scan keeps successor-live values from reusing a register" {
   use_v0.add_operand(Operand::use_reg(v0))
   exit.append(use_v0)
   program.add_block(exit)
-  let allocation = allocate_linear_scan(program)
+  let allocation = allocate(program)
   inspect(
     allocation.location_of(v0) != allocation.location_of(v1),
     content="true",
@@ -227,7 +227,7 @@ test "linear scan evicts longer active interval for shorter current interval" {
   long_use.add_operand(Operand::use_reg(v0))
   block.append(long_use)
   program.add_block(block)
-  let allocation = allocate_linear_scan(program)
+  let allocation = allocate(program)
   inspect(allocation.location_of(v0) == Some(Spill(0)), content="true")
   inspect(allocation.location_of(v1) == Some(Reg(r0)), content="true")
   inspect(allocation.spill_count, content="1")
@@ -252,7 +252,7 @@ test "linear scan honors fixed register constraints by evicting active range" {
   long_use.add_operand(Operand::use_reg(v0))
   block.append(long_use)
   program.add_block(block)
-  let allocation = allocate_linear_scan(program)
+  let allocation = allocate(program)
   inspect(allocation.location_of(v0) == Some(Spill(0)), content="true")
   inspect(allocation.location_of(v1) == Some(Reg(r0)), content="true")
 }
@@ -268,7 +268,7 @@ test "linear scan can use fixed registers outside the allocatable pool" {
   inst.add_operand(Operand::use_reg(v0).with_constraint(FixedReg(scratch)))
   block.append(inst)
   program.add_block(block)
-  let allocation = allocate_linear_scan(program)
+  let allocation = allocate(program)
   inspect(allocation.location_of(v0) == Some(Reg(scratch)), content="true")
   inspect(verify_allocation(program, allocation), content="()")
 }
@@ -921,7 +921,7 @@ test "linear scan co-locates tied use-def operands" {
   use_inst.add_operand(Operand::use_reg(v1))
   block.append(use_inst)
   program.add_block(block)
-  let allocation = allocate_linear_scan(program)
+  let allocation = allocate(program)
   inspect(allocation.location_of(v0) == Some(Reg(r0)), content="true")
   inspect(allocation.location_of(v1) == Some(Reg(r0)), content="true")
   inspect(verify_allocation(program, allocation), content="()")
@@ -944,7 +944,7 @@ test "linear scan avoids registers clobbered while range is live" {
   use_inst.add_operand(Operand::use_reg(v0))
   block.append(use_inst)
   program.add_block(block)
-  let allocation = allocate_linear_scan(program)
+  let allocation = allocate(program)
   inspect(allocation.location_of(v0) == Some(Reg(r1)), content="true")
 }
 
@@ -958,7 +958,7 @@ test "verify_allocation accepts allocator output" {
   inst.add_operand(Operand::def(v0))
   block.append(inst)
   program.add_block(block)
-  let allocation = allocate_linear_scan(program)
+  let allocation = allocate(program)
   inspect(verify_allocation(program, allocation), content="()")
 }
 

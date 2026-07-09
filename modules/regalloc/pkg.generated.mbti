@@ -6,6 +6,8 @@ import {
 }
 
 // Values
+pub fn allocate(Program, config? : RegallocConfig) -> Allocation raise VerifyError
+
 pub fn allocate_linear_scan(Program) -> Allocation
 
 pub fn allocation_iteration_limit(Int) -> Int
@@ -163,6 +165,10 @@ pub(all) struct Allocation {
 pub fn Allocation::Allocation() -> Self
 pub fn Allocation::assign(Self, VirtualReg, Location) -> Unit
 pub fn Allocation::location_of(Self, VirtualReg) -> Location?
+
+pub(all) enum AllocatorStrategy {
+  LinearScan
+} derive(Eq, @debug.Debug)
 
 pub(all) struct AssignedSlot[R] {
   start : Int
@@ -556,6 +562,14 @@ pub(all) enum RegallocAlgorithm {
   SinglePass
 }
 pub fn RegallocAlgorithm::enable_backtracking(Self) -> Bool
+
+pub struct RegallocConfig {
+  strategy : AllocatorStrategy
+  verify : Bool
+} derive(Eq, @debug.Debug)
+pub fn RegallocConfig::RegallocConfig(strategy? : AllocatorStrategy, verify? : Bool) -> Self
+pub fn RegallocConfig::strategy(Self) -> AllocatorStrategy
+pub fn RegallocConfig::verify(Self) -> Bool
 
 pub(all) struct ReloadIntervalInfo {
   block_id : Int
