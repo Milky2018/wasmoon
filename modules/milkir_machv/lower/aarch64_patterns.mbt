@@ -7,7 +7,7 @@
 // 3. Helper functions for immediate validation
 //
 // Note: AArch64-specific opcodes (Madd, Msub, Mneg, AddShifted, etc.) are
-// defined in machv.mbt as part of MachVOpcode. This design choice keeps
+// defined in machv.mbt as part of Opcode. This design choice keeps
 // MachV self-contained for a single target (AArch64). If multi-target support
 // is needed in the future, a separate AArch64Inst type should be introduced.
 
@@ -27,7 +27,7 @@ pub enum AArch64RewriteResult {
   // Emit negated multiply
   Mneg(Int, Int) // src1_idx, src2_idx
   // Emit and/or/xor with shifted operand
-  LogicalShifted(@instr.MachVOpcode, Int, Int, Int) // op, src1_idx, src2_idx, shift
+  LogicalShifted(@instr.Opcode, Int, Int, Int) // op, src1_idx, src2_idx, shift
   // No AArch64-specific optimization applies
   NoMatch
 }

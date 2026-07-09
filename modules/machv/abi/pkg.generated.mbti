@@ -6,6 +6,10 @@ import {
 }
 
 // Values
+pub fn abi_location_stack_align(AbiValueLocation) -> Int
+
+pub fn abi_location_stack_size(AbiValueLocation) -> Int
+
 pub fn align_up(Int, Int) -> Int
 
 pub let spill_slot_base : Int
@@ -13,6 +17,17 @@ pub let spill_slot_base : Int
 // Errors
 
 // Types and methods
+pub(all) struct AbiReturnArea {
+  size : Int
+  align : Int
+} derive(Eq, @debug.Debug)
+
+pub(all) enum AbiValueLocation {
+  Reg(PReg)
+  Stack(offset~ : Int, size~ : Int, align~ : Int)
+  ReturnArea(offset~ : Int, size~ : Int, align~ : Int)
+} derive(Eq, @debug.Debug)
+
 pub(all) struct CallConventionLayout {
   context_arg : PReg
   user_arg_gprs : Array[PReg]
@@ -82,13 +97,13 @@ pub fn EmbeddingRegRoles::reserved_int_indices(Self, reserve_context? : Bool, re
 pub(all) enum OperandConstraint {
   Any
   FixedReg(PReg)
-}
+} derive(Eq, @debug.Debug)
 pub impl Show for OperandConstraint
 
 pub(all) struct PReg {
   index : Int
   class : RegClass
-}
+} derive(Eq, @debug.Debug)
 pub fn PReg::get_spill_slot(Self) -> Int
 pub fn PReg::is_spilled(Self) -> Bool
 pub fn PReg::spilled(Int, RegClass) -> Self
@@ -97,7 +112,7 @@ pub impl Show for PReg
 pub(all) enum Reg {
   Virtual(VReg)
   Physical(PReg)
-}
+} derive(Eq, @debug.Debug)
 pub impl Show for Reg
 
 pub(all) enum RegClass {
@@ -105,18 +120,18 @@ pub(all) enum RegClass {
   Float32
   Float64
   Vector
-} derive(Eq)
+} derive(Eq, @debug.Debug)
 pub impl Show for RegClass
 
 pub(all) struct VReg {
   id : Int
   class : RegClass
-}
+} derive(Eq, @debug.Debug)
 pub impl Show for VReg
 
 pub(all) struct Writable {
   reg : Reg
-}
+} derive(Eq, @debug.Debug)
 pub impl Show for Writable
 
 // Type aliases

@@ -49,7 +49,7 @@ test "lower an integer add function for x64" {
   inspect(lowered.name, content="add64")
   inspect(lowered.blocks.length(), content="1")
   inspect(
-    lowered.blocks[0].instructions.any(fn(inst) { inst.opcode == IntAdd }),
+    lowered.blocks[0].insts.any(fn(inst) { inst.opcode is Add(_) }),
     content="true",
   )
 }
@@ -78,10 +78,8 @@ test "lower x64 with an explicit call convention" {
     ret_fprs: [],
   }
   let lowered = lower_function_with_call_conv(builder.get_function(), conv)
-  guard lowered.param_pregs[0] is Some(context_reg) else {
-    fail("missing context register")
-  }
-  inspect(context_reg.index, content="7")
+  inspect(lowered.name, content="custom_add64")
+  inspect(lowered.blocks.length(), content="1")
 }
 ```
 

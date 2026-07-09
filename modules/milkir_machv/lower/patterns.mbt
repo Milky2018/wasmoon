@@ -522,7 +522,7 @@ fn apply_rule(
 pub fn lower_inst_with_patterns(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.MachVBlock,
+  block : @block.Block,
   rules : Array[RewriteRule],
 ) -> Bool {
   let rewrite_result = try_apply_rules(inst, ctx, rules)
@@ -532,7 +532,7 @@ pub fn lower_inst_with_patterns(
       if inst.first_result() is Some(result) {
         let dst = ctx.get_vreg(result)
         let src = ctx.get_vreg(inst.operands[operand_idx])
-        let machv_inst = @instr.MachVInst::MachVInst(Move)
+        let machv_inst = @instr.Inst(Move)
         machv_inst.add_def({ reg: Virtual(dst) })
         machv_inst.add_use(Virtual(src))
         block.add_inst(machv_inst)
@@ -544,7 +544,7 @@ pub fn lower_inst_with_patterns(
       // Emit a load constant
       if inst.first_result() is Some(result) {
         let dst = ctx.get_vreg(result)
-        let machv_inst = @instr.MachVInst::MachVInst(LoadConst(val))
+        let machv_inst = @instr.Inst(LoadConst(val))
         machv_inst.add_def({ reg: Virtual(dst) })
         block.add_inst(machv_inst)
         true
@@ -559,7 +559,7 @@ pub fn lower_inst_with_patterns(
         let is_64 = result.ty is I64
         let mask = if is_64 { 63 } else { 31 }
         let shift = shift_amount & mask
-        let shl_inst = @instr.MachVInst::MachVInst(ShlImm(shift, is_64))
+        let shl_inst = @instr.Inst(ShlImm(shift, is_64))
         shl_inst.add_def({ reg: Virtual(dst) })
         shl_inst.add_use(Virtual(src))
         block.add_inst(shl_inst)
@@ -575,7 +575,7 @@ pub fn lower_inst_with_patterns(
         let is_64 = result.ty is I64
         let mask = if is_64 { 63 } else { 31 }
         let shift = shift_amount & mask
-        let lshr_inst = @instr.MachVInst::MachVInst(LShrImm(shift, is_64))
+        let lshr_inst = @instr.Inst(LShrImm(shift, is_64))
         lshr_inst.add_def({ reg: Virtual(dst) })
         lshr_inst.add_use(Virtual(src))
         block.add_inst(lshr_inst)
@@ -632,7 +632,7 @@ pub fn lower_function_optimized(ir_func : @milkir.Function) -> @machv.Function {
 fn lower_block_optimized(
   ctx : LoweringContext,
   ir_block : @milkir.Block,
-  machv_block : @block.MachVBlock,
+  machv_block : @block.Block,
   rules : Array[RewriteRule],
 ) -> Unit {
   // Lower block parameters
@@ -664,7 +664,7 @@ fn lower_block_optimized(
 fn lower_inst_default(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.MachVBlock,
+  block : @block.Block,
 ) -> Unit {
   match inst.opcode {
     // Constants

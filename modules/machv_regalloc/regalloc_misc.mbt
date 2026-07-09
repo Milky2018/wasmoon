@@ -2,7 +2,7 @@
 
 ///|
 /// Check if an opcode has side effects (cannot be eliminated even if dead)
-fn has_side_effects(opcode : @instr.MachVOpcode) -> Bool {
+fn has_side_effects(opcode : @instr.Opcode) -> Bool {
   match opcode {
     // Loads can trap (e.g. guard pages / invalid pointers), so must not be eliminated.
     LoadPtr(_, _)
@@ -166,10 +166,7 @@ pub fn eliminate_dead_code(func : @machv.Function) -> @machv.Function {
   }
 
   // Step 2: Build new function without dead instructions
-  let new_func = @machv.Function::Function(func.name)
-  new_func.next_vreg_id = func.next_vreg_id
-  new_func.int_stack_params = func.int_stack_params
-  new_func.max_outgoing_args_size = func.max_outgoing_args_size
+  let new_func = func.clone_base()
 
   // Copy params and results
   for param in func.params {

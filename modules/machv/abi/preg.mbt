@@ -3,7 +3,7 @@
 pub(all) struct PReg {
   index : Int // Register number (e.g., x0-x30 for AArch64)
   class : RegClass
-}
+} derive(Eq, Debug)
 
 ///|
 fn PReg::to_string(self : PReg) -> String {

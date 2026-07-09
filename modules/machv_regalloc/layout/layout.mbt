@@ -176,10 +176,10 @@ fn resolve_threaded_target(
 ///|
 /// Rewrite one terminator by threading successors through trivial jump blocks.
 fn rewrite_terminator_targets(
-  term : @instr.MachVTerminator,
+  term : @instr.Terminator,
   func : @machv.Function,
   block_idx_by_id : Map[Int, Int],
-) -> (@instr.MachVTerminator, Bool) {
+) -> (@instr.Terminator, Bool) {
   match term {
     Jump(target, args) => {
       let (resolved_target, resolved_args, changed) = resolve_threaded_jump(

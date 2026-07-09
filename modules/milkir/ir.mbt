@@ -145,7 +145,7 @@ fn Block::Block(id : Int) -> Block {
 
 ///|
 fn Block::new_with_params(id : Int, params : Array[Value]) -> Block {
-  let block = Block::Block(id)
+  let block = Block(id)
   for param in params {
     block.add_param(param, param.ty)
   }

@@ -14,15 +14,15 @@ pub(all) struct AbiReturnArea {
 ///|
 pub fn abi_location_stack_size(location : AbiValueLocation) -> Int {
   match location {
-    Stack(size~, ..) | ReturnArea(size~, ..) => size
     Reg(_) => 0
+    Stack(size~, ..) | ReturnArea(size~, ..) => size
   }
 }
 
 ///|
 pub fn abi_location_stack_align(location : AbiValueLocation) -> Int {
   match location {
-    Stack(align~, ..) | ReturnArea(align~, ..) => align
     Reg(_) => 1
+    Stack(align~, ..) | ReturnArea(align~, ..) => align
   }
 }

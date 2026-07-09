@@ -52,7 +52,7 @@ fn bytes_for_type(ty : @types.ValueType) -> Int {
 }
 
 ///|
-fn add_call_clobbers(call_inst : @instr.MachVInst, isa : @isa.ISA) -> Unit {
+fn add_call_clobbers(call_inst : @instr.Inst, isa : @isa.ISA) -> Unit {
   for preg in isa.call_clobbered_gprs() {
     call_inst.add_def({ reg: Physical(preg) })
   }
@@ -155,7 +155,7 @@ pub fn emit_hostcall_import_trampoline(
 
   // Base pointer to values_vec: current SP after prologue.
   let sp_vreg = func.new_vreg(Int)
-  let load_sp = @instr.MachVInst::MachVInst(LoadSP)
+  let load_sp = @instr.Inst(LoadSP)
   load_sp.add_def({ reg: Virtual(sp_vreg) })
   block.add_inst(load_sp)
 
@@ -176,7 +176,7 @@ pub fn emit_hostcall_import_trampoline(
         } else {
           float_offsets[float_seen - max_float_reg]
         }
-        let load = @instr.MachVInst::MachVInst(LoadStackParam(stack_off, cls))
+        let load = @instr.Inst(LoadStackParam(stack_off, cls))
         load.add_def({ reg: Virtual(tmp) })
         block.add_inst(load)
         tmp
@@ -187,23 +187,23 @@ pub fn emit_hostcall_import_trampoline(
         // Store as two i64 slots to avoid alignment requirements for Q stores.
         let lo = func.new_vreg(Int)
         let hi = func.new_vreg(Int)
-        let ex0 = @instr.MachVInst::MachVInst(SIMDExtractU(D64, 0))
+        let ex0 = @instr.Inst(SIMDExtractU(D64, 0))
         ex0.add_def({ reg: Virtual(lo) })
         ex0.add_use(Virtual(src_vreg))
         block.add_inst(ex0)
-        let ex1 = @instr.MachVInst::MachVInst(SIMDExtractU(D64, 1))
+        let ex1 = @instr.Inst(SIMDExtractU(D64, 1))
         ex1.add_def({ reg: Virtual(hi) })
         ex1.add_use(Virtual(src_vreg))
         block.add_inst(ex1)
-        let st0 = @instr.MachVInst::MachVInst(StoreToStack(slot_off))
+        let st0 = @instr.Inst(StoreToStack(slot_off))
         st0.add_use(Virtual(lo))
         block.add_inst(st0)
-        let st1 = @instr.MachVInst::MachVInst(StoreToStack(slot_off + 8))
+        let st1 = @instr.Inst(StoreToStack(slot_off + 8))
         st1.add_use(Virtual(hi))
         block.add_inst(st1)
       }
       _ => {
-        let st = @instr.MachVInst::MachVInst(StoreToStack(slot_off))
+        let st = @instr.Inst(StoreToStack(slot_off))
         st.add_use(Virtual(src_vreg))
         block.add_inst(st)
       }
@@ -220,15 +220,13 @@ pub fn emit_hostcall_import_trampoline(
 
   // Prepare C call: hostcall_bridge(ctx, host_func_addr, values_ptr, arg_slots, result_slots)
   let func_ptr_vreg = func.new_vreg(Int)
-  let load_fp = @instr.MachVInst::MachVInst(
-    LoadExternalFuncAddr(hostcall_symbol),
-  )
+  let load_fp = @instr.Inst(LoadExternalFuncAddr(hostcall_symbol))
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
 
   // Context argument comes from Wasmoon's pinned embedding-context register.
   let ctx_arg = func.new_vreg(Int)
-  let mv_ctx = @instr.MachVInst::MachVInst(Move)
+  let mv_ctx = @instr.Inst(Move)
   mv_ctx.add_def({ reg: Virtual(ctx_arg) })
   match roles.context {
     Some(context_reg) => mv_ctx.add_use(Physical(context_reg))
@@ -236,20 +234,18 @@ pub fn emit_hostcall_import_trampoline(
   }
   block.add_inst(mv_ctx)
   let host_addr_vreg = func.new_vreg(Int)
-  let c_host = @instr.MachVInst::MachVInst(LoadConst(host_func_addr.to_int64()))
+  let c_host = @instr.Inst(LoadConst(host_func_addr.to_int64()))
   c_host.add_def({ reg: Virtual(host_addr_vreg) })
   block.add_inst(c_host)
   let arg_slots_vreg = func.new_vreg(Int)
-  let c_arg_slots = @instr.MachVInst::MachVInst(LoadConst(arg_slots.to_int64()))
+  let c_arg_slots = @instr.Inst(LoadConst(arg_slots.to_int64()))
   c_arg_slots.add_def({ reg: Virtual(arg_slots_vreg) })
   block.add_inst(c_arg_slots)
   let result_slots_vreg = func.new_vreg(Int)
-  let c_res_slots = @instr.MachVInst::MachVInst(
-    LoadConst(result_slots.to_int64()),
-  )
+  let c_res_slots = @instr.Inst(LoadConst(result_slots.to_int64()))
   c_res_slots.add_def({ reg: Virtual(result_slots_vreg) })
   block.add_inst(c_res_slots)
-  let call = @instr.MachVInst::MachVInst(CallPtr(5, [], Foreign))
+  let call = @instr.Inst(CallPtr(5, [], Foreign))
   fn c_arg_gpr_indices() -> Array[Int] {
     match isa {
       // AAPCS64: X0-X7
@@ -284,20 +280,20 @@ pub fn emit_hostcall_import_trampoline(
       V128 => {
         let lo = func.new_vreg(Int)
         let hi = func.new_vreg(Int)
-        let ld0 = @instr.MachVInst::MachVInst(LoadPtr(I64, res_off))
+        let ld0 = @instr.Inst(LoadPtr(I64, res_off))
         ld0.add_def({ reg: Virtual(lo) })
         ld0.add_use(Virtual(sp_vreg))
         block.add_inst(ld0)
-        let ld1 = @instr.MachVInst::MachVInst(LoadPtr(I64, res_off + 8))
+        let ld1 = @instr.Inst(LoadPtr(I64, res_off + 8))
         ld1.add_def({ reg: Virtual(hi) })
         ld1.add_use(Virtual(sp_vreg))
         block.add_inst(ld1)
         let vec = func.new_vreg(Vector)
-        let splat = @instr.MachVInst::MachVInst(SIMDSplat(D64))
+        let splat = @instr.Inst(SIMDSplat(D64))
         splat.add_def({ reg: Virtual(vec) })
         splat.add_use(Virtual(lo))
         block.add_inst(splat)
-        let ins = @instr.MachVInst::MachVInst(SIMDInsert(D64, 1))
+        let ins = @instr.Inst(SIMDInsert(D64, 1))
         ins.add_def({ reg: Virtual(vec) })
         ins.add_use(Virtual(vec))
         ins.add_use(Virtual(hi))
@@ -307,7 +303,7 @@ pub fn emit_hostcall_import_trampoline(
       _ => {
         let memty = value_type_to_mem_type(ty)
         let dst = func.new_vreg(value_type_to_reg_class(ty))
-        let ld = @instr.MachVInst::MachVInst(LoadPtr(memty, res_off))
+        let ld = @instr.Inst(LoadPtr(memty, res_off))
         ld.add_def({ reg: Virtual(dst) })
         ld.add_use(Virtual(sp_vreg))
         block.add_inst(ld)

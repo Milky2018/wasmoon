@@ -11,9 +11,9 @@ import {
 }
 
 // Values
-pub fn add_c_call_clobbers(LoweringContext, @instr.MachVInst) -> Unit
+pub fn add_c_call_clobbers(LoweringContext, @instr.Inst) -> Unit
 
-pub fn add_call_clobbers(LoweringContext, @instr.MachVInst) -> Unit
+pub fn add_call_clobbers(LoweringContext, @instr.Inst) -> Unit
 
 pub fn apply_aarch64_rule(String, MatchResult, @milkir.Inst, LoweringContext) -> AArch64RewriteResult
 
@@ -43,21 +43,21 @@ pub fn is_valid_load_store_offset(LoweringContext, Int64, Int) -> Bool
 
 pub fn is_valid_logical_imm(Int64) -> Bool
 
-pub fn lower_c_libcall(LoweringContext, @block.MachVBlock, @abi.VReg, Array[@abi.VReg], @abi.VReg?) -> Unit
+pub fn lower_c_libcall(LoweringContext, @block.Block, @abi.VReg, Array[@abi.VReg], @abi.VReg?) -> Unit
 
-pub fn lower_c_libcall_direct(LoweringContext, @block.MachVBlock, @instr.ExternalName, Array[@abi.VReg], @abi.VReg?) -> Unit
+pub fn lower_c_libcall_direct(LoweringContext, @block.Block, @instr.ExternalName, Array[@abi.VReg], @abi.VReg?) -> Unit
 
-pub fn lower_function(@milkir.Function, isa? : @isa.ISA, embedding_abi? : @abi.EmbeddingABI?, external_helper_symbols? : Map[String, String], trap_payload_resolver? : (String) -> Int, extension_lowerer? : ((LoweringContext, @milkir.Inst, @block.MachVBlock, @milkir.ExtOp) -> ExtensionLowerResult)?, num_imports? : Int, run_ir_opt? : Bool) -> @machv.Function
+pub fn lower_function(@milkir.Function, isa? : @isa.ISA, embedding_abi? : @abi.EmbeddingABI?, external_helper_symbols? : Map[String, String], trap_payload_resolver? : (String) -> Int, extension_lowerer? : ((LoweringContext, @milkir.Inst, @block.Block, @milkir.ExtOp) -> ExtensionLowerResult)?, num_imports? : Int, run_ir_opt? : Bool) -> @machv.Function
 
 pub fn lower_function_optimized(@milkir.Function) -> @machv.Function
 
-pub fn lower_inst_with_patterns(LoweringContext, @milkir.Inst, @block.MachVBlock, Array[RewriteRule]) -> Bool
+pub fn lower_inst_with_patterns(LoweringContext, @milkir.Inst, @block.Block, Array[RewriteRule]) -> Bool
 
-pub fn lower_unsupported_extension_opcode(@milkir.Inst, @block.MachVBlock) -> Unit
+pub fn lower_unsupported_extension_opcode(@milkir.Inst, @block.Block) -> Unit
 
 pub fn match_pattern(Pattern, @milkir.Inst, LoweringContext) -> MatchResult?
 
-pub fn materialize_imm(LoweringContext, @block.MachVBlock, Int64) -> @abi.VReg
+pub fn materialize_imm(LoweringContext, @block.Block, Int64) -> @abi.VReg
 
 pub fn optimize_machv(@machv.Function, isa? : @isa.ISA) -> Unit
 
@@ -76,24 +76,24 @@ pub enum AArch64RewriteResult {
   Madd(Int, Int, Int)
   Msub(Int, Int, Int)
   Mneg(Int, Int)
-  LogicalShifted(@instr.MachVOpcode, Int, Int, Int)
+  LogicalShifted(@instr.Opcode, Int, Int, Int)
   NoMatch
 }
 
 pub(all) enum ExtensionLowerResult {
   NotHandled
-  Handled(@block.MachVBlock)
+  Handled(@block.Block)
 }
 
 type LoweringContext
-pub fn LoweringContext::LoweringContext(@milkir.Function, @isa.ISA, @abi.EmbeddingABI?, Map[String, String], (String) -> Int, ((Self, @milkir.Inst, @block.MachVBlock, @milkir.ExtOp) -> ExtensionLowerResult)?, Int) -> Self
+pub fn LoweringContext::LoweringContext(@milkir.Function, @isa.ISA, @abi.EmbeddingABI?, Map[String, String], (String) -> Int, ((Self, @milkir.Inst, @block.Block, @milkir.ExtOp) -> ExtensionLowerResult)?, Int) -> Self
 pub fn LoweringContext::cache_context_pointer(Self, Int, @abi.VReg) -> Unit
 pub fn LoweringContext::cached_context_pointer(Self, Int) -> @abi.VReg?
 pub fn LoweringContext::call_conv_layout(Self) -> @abi.CallConventionLayout
 pub fn LoweringContext::embedding_abi(Self) -> @abi.EmbeddingABI
 pub fn LoweringContext::embedding_context_layout(Self) -> @abi.EmbeddingContextLayout
 pub fn LoweringContext::get_vreg(Self, @milkir.Value) -> @abi.VReg
-pub fn LoweringContext::get_vreg_for_use(Self, @milkir.Value, @block.MachVBlock) -> @abi.VReg
+pub fn LoweringContext::get_vreg_for_use(Self, @milkir.Value, @block.Block) -> @abi.VReg
 pub fn LoweringContext::machv_function(Self) -> @machv.Function
 pub fn LoweringContext::new_vreg(Self, @abi.RegClass) -> @abi.VReg
 pub fn LoweringContext::num_imports(Self) -> Int

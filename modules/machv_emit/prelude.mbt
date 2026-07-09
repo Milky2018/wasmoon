@@ -166,7 +166,7 @@ fn func_uses_context_reg(func : @machv.Function, context_reg : Int) -> Bool {
 
 ///|
 fn terminator_uses_context_reg(
-  term : @instr.MachVTerminator,
+  term : @instr.Terminator,
   context_reg : Int,
 ) -> Bool {
   match term {
@@ -1444,7 +1444,7 @@ fn invalidate_edit_slot_cache_reg(
 ///|
 fn invalidate_edit_slot_cache_defs(
   slot_cache : Map[Int, @abi.PReg],
-  inst : @instr.MachVInst,
+  inst : @instr.Inst,
 ) -> Unit {
   for def in inst.defs {
     if def.reg is Physical(preg) {
@@ -1486,7 +1486,7 @@ fn emit_edit_move_with_cache(
         (Reg(src), Reg(dst)) => {
           let dst_preg : @abi.PReg = { index: dst.index, class }
           invalidate_edit_slot_cache_reg(slot_cache, dst_preg)
-          let inst = @instr.MachVInst::MachVInst(Move)
+          let inst = @instr.Inst(Move)
           inst.add_def({ reg: Physical(dst_preg) })
           inst.add_use(Physical({ index: src.index, class }))
           mc.emit_instruction(inst, stack_frame)
@@ -1495,14 +1495,14 @@ fn emit_edit_move_with_cache(
           let dst_preg : @abi.PReg = { index: dst.index, class }
           invalidate_edit_slot_cache_reg(slot_cache, dst_preg)
           invalidate_edit_slot_cache_range(slot_cache, slot, class)
-          let inst = @instr.MachVInst::MachVInst(StackLoad(slot * 8))
+          let inst = @instr.Inst(StackLoad(slot * 8))
           inst.add_def({ reg: Physical(dst_preg) })
           mc.emit_instruction(inst, stack_frame)
         }
         (Reg(src), Spill(slot)) => {
           let src_preg : @abi.PReg = { index: src.index, class }
           invalidate_edit_slot_cache_range(slot_cache, slot, class)
-          let inst = @instr.MachVInst::MachVInst(StackStore(slot * 8))
+          let inst = @instr.Inst(StackStore(slot * 8))
           inst.add_use(Physical(src_preg))
           mc.emit_instruction(inst, stack_frame)
         }
@@ -1518,9 +1518,9 @@ fn emit_edit_move_with_cache(
 fn map_inst_for_emission(
   block_id : Int,
   inst_idx : Int,
-  inst : @instr.MachVInst,
+  inst : @instr.Inst,
   output : @machv_regalloc.Output,
-) -> @instr.MachVInst {
+) -> @instr.Inst {
   for di in 0..<inst.defs.length() {
     match output.inst_def_loc(block_id, inst_idx, false, di) {
       Reg(preg) => inst.defs[di] = { reg: Physical(preg) }
@@ -1540,9 +1540,9 @@ fn map_inst_for_emission(
 fn map_term_for_emission(
   block_id : Int,
   term_inst : Int,
-  term : @instr.MachVTerminator,
+  term : @instr.Terminator,
   output : @machv_regalloc.Output,
-) -> @instr.MachVTerminator {
+) -> @instr.Terminator {
   // Jump and Trap don't consume vregs in the emitter.
   match term {
     Jump(_, _) | Trap(_) => term

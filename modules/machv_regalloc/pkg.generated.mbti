@@ -12,10 +12,6 @@ import {
 }
 
 // Values
-pub fn allocate_and_apply_linear_scan(@machv.AbstractFunction, Array[@machv.PReg]) -> ApplyResult raise @regalloc.VerifyError
-
-pub fn allocate_function_linear_scan(@machv.AbstractFunction, Array[@machv.PReg]) -> @regalloc.Allocation raise @regalloc.VerifyError
-
 pub fn allocate_registers_backtracking(@machv.Function, embedding_abi? : @abi.EmbeddingABI?) -> @machv.Function
 
 pub fn allocate_registers_backtracking_output(@machv.Function, embedding_abi? : @abi.EmbeddingABI?) -> (@machv.Function, Output)
@@ -50,8 +46,6 @@ pub fn get_alloc_stats(@machv.Function, isa? : @isa.ISA, embedding_abi? : @abi.E
 
 pub fn process_constraints(@machv.Function, RegAllocResult) -> Unit
 
-pub fn project_function(@machv.AbstractFunction, Array[@machv.PReg]) -> @regalloc.Program
-
 pub fn rematerialize_cross_block_constants(@machv.Function) -> @machv.Function
 
 pub fn rematerialize_long_distance_constants(@machv.Function) -> @machv.Function
@@ -67,8 +61,8 @@ type AArch64StackFrame
 pub fn AArch64StackFrame::AArch64StackFrame() -> Self
 pub fn AArch64StackFrame::alloc_spill(Self, @abi.VReg) -> Int
 pub fn AArch64StackFrame::finalize(Self) -> Unit
-pub fn AArch64StackFrame::gen_epilogue(Self) -> Array[@instr.MachVInst]
-pub fn AArch64StackFrame::gen_prologue(Self) -> Array[@instr.MachVInst]
+pub fn AArch64StackFrame::gen_epilogue(Self) -> Array[@instr.Inst]
+pub fn AArch64StackFrame::gen_prologue(Self) -> Array[@instr.Inst]
 pub fn AArch64StackFrame::save_callee_reg(Self, @abi.PReg) -> Int
 pub fn AArch64StackFrame::setup(Self) -> Unit
 pub fn AArch64StackFrame::size(Self) -> Int
@@ -83,11 +77,6 @@ pub enum Allocation {
   Unallocated
 }
 pub impl Show for Allocation
-
-pub(all) struct ApplyResult {
-  allocation : @regalloc.Allocation
-  spill_slots : Array[@machv.StackSlot]
-} derive(@debug.Debug)
 
 type Bundle
 pub fn Bundle::Bundle(Int, @abi.RegClass) -> Self
@@ -228,8 +217,6 @@ pub struct RegAllocResult {
 
 type RegMove
 pub impl Show for RegMove
-
-type ScratchBinding derive(Eq, @debug.Debug)
 
 type SpillBundle
 pub fn SpillBundle::SpillBundle(Int, Int) -> Self

@@ -1,7 +1,7 @@
 ///|
 fn MachineCode::emit_instruction(
   self : MachineCode,
-  inst : @instr.MachVInst,
+  inst : @instr.Inst,
   stack_frame : EmitStackFrame,
 ) -> Unit {
   if self.isa is AMD64 {

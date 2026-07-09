@@ -16,12 +16,12 @@ pub(all) enum ValueKind {
 
 ///|
 /// MachV function - a complete machine-level function in virtual-register form.
-pub(all) struct Function {
+pub struct Function {
   name : String
   params : Array[@abi.VReg] // Function parameters
   results : Array[@abi.RegClass] // Result types (for return value allocation)
   result_kinds : Array[ValueKind] // Full return kind info for multi-value returns
-  blocks : Array[@block.MachVBlock]
+  blocks : Array[@block.Block]
   mut next_vreg_id : Int
   mut num_spill_slots : Int // Number of spill slots used by register allocator
   // Map from param index to allocated physical register (for params that cross calls)
@@ -57,7 +57,7 @@ pub fn Function::get_params(self : Function) -> Array[@abi.VReg] {
 }
 
 ///|
-pub fn Function::get_blocks(self : Function) -> Array[@block.MachVBlock] {
+pub fn Function::get_blocks(self : Function) -> Array[@block.Block] {
   self.blocks
 }
 
@@ -284,9 +284,9 @@ pub fn Function::should_reserve_context_cache_1(self : Function) -> Bool {
 }
 
 ///|
-pub fn Function::new_block(self : Function) -> @block.MachVBlock {
+pub fn Function::new_block(self : Function) -> @block.Block {
   let id = self.blocks.length()
-  let block = @block.MachVBlock::MachVBlock(id)
+  let block = @block.Block(id)
   self.blocks.push(block)
   block
 }

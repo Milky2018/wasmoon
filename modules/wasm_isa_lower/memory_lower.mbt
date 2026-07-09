@@ -13,7 +13,7 @@ fn context_slot_offset(ctx : @lower.LoweringContext, slot_id : Int) -> Int {
 ///|
 pub fn load_context_slot_pointer(
   ctx : @lower.LoweringContext,
-  block : @block.MachVBlock,
+  block : @block.Block,
   slot_id : Int,
   base : @abi.Reg,
 ) -> @abi.VReg {
@@ -22,9 +22,7 @@ pub fn load_context_slot_pointer(
     return vreg
   }
   let result = ctx.machv_function().new_vreg(Int)
-  let load_inst = @instr.MachVInst::MachVInst(
-    Load(I64, context_slot_offset(ctx, slot_id)),
-  )
+  let load_inst = @instr.Inst(Load(I64, context_slot_offset(ctx, slot_id)))
   load_inst.add_def({ reg: Virtual(result) })
   load_inst.add_use(base)
   block.add_inst(load_inst)
@@ -35,7 +33,7 @@ pub fn load_context_slot_pointer(
 ///|
 pub fn load_context_slot_pointer_from_pinned_context(
   ctx : @lower.LoweringContext,
-  block : @block.MachVBlock,
+  block : @block.Block,
   slot_id : Int,
 ) -> @abi.VReg {
   load_context_slot_pointer(
@@ -51,7 +49,7 @@ pub fn load_context_slot_pointer_from_pinned_context(
 /// Returns a virtual register containing func_table pointer.
 fn emit_load_func_table(
   ctx : @lower.LoweringContext,
-  block : @block.MachVBlock,
+  block : @block.Block,
   context_slots : WasmContextSlots,
 ) -> @abi.VReg {
   load_context_slot_pointer_from_pinned_context(
@@ -67,7 +65,7 @@ fn emit_load_func_table(
 pub fn lower_get_func_ref(
   ctx : @lower.LoweringContext,
   inst : @milkir.Inst,
-  block : @block.MachVBlock,
+  block : @block.Block,
   func_idx : Int,
   context_slots : WasmContextSlots,
 ) -> Unit {
@@ -81,16 +79,14 @@ pub fn lower_get_func_ref(
   let raw_func_ptr = ctx.machv_function().new_vreg(Int)
   let offset = func_idx * 8
   if @lower.is_valid_load_store_offset(ctx, offset.to_int64(), 8) {
-    let load_ptr = @instr.MachVInst::MachVInst(Load(I64, offset))
+    let load_ptr = @instr.Inst(Load(I64, offset))
     load_ptr.add_def({ reg: Virtual(raw_func_ptr) })
     load_ptr.add_use(Virtual(func_table_vreg))
     block.add_inst(load_ptr)
   } else {
     // Large func-table indices exceed AArch64 LDR unsigned-imm range.
     let offset_vreg = @lower.materialize_imm(ctx, block, offset.to_int64())
-    let load_ptr = @instr.MachVInst::MachVInst(
-      LoadPtrRegOffset(I64, None, 0, 0),
-    )
+    let load_ptr = @instr.Inst(LoadPtrRegOffset(I64, None, 0, 0))
     load_ptr.add_def({ reg: Virtual(raw_func_ptr) })
     load_ptr.add_use(Virtual(func_table_vreg))
     load_ptr.add_use(Virtual(offset_vreg))
@@ -99,10 +95,10 @@ pub fn lower_get_func_ref(
 
   // Step 3: OR with FUNCREF_TAG (0x2000000000000000)
   let tag_vreg = ctx.machv_function().new_vreg(Int)
-  let load_tag = @instr.MachVInst::MachVInst(LoadConst(0x2000000000000000L))
+  let load_tag = @instr.Inst(LoadConst(0x2000000000000000L))
   load_tag.add_def({ reg: Virtual(tag_vreg) })
   block.add_inst(load_tag)
-  let or_inst = @instr.MachVInst::MachVInst(Or(true))
+  let or_inst = @instr.Inst(Or(true))
   or_inst.add_def({ reg: Virtual(result_vreg) })
   or_inst.add_use(Virtual(raw_func_ptr))
   or_inst.add_use(Virtual(tag_vreg))
@@ -119,7 +115,7 @@ pub fn lower_get_func_ref(
 pub fn lower_load_mem_base(
   ctx : @lower.LoweringContext,
   inst : @milkir.Inst,
-  block : @block.MachVBlock,
+  block : @block.Block,
   memidx : Int,
   context_slots : WasmContextSlots,
 ) -> Unit {
@@ -151,7 +147,7 @@ pub fn lower_load_mem_base(
     return
   } else {
     let directory_vreg = ctx.machv_function().new_vreg(Int)
-    let load_directory = @instr.MachVInst::MachVInst(
+    let load_directory = @instr.Inst(
       Load(I64, context_slot_offset(ctx, context_slots.memory_directory)),
     )
     load_directory.add_def({ reg: Virtual(directory_vreg) })
@@ -159,14 +155,14 @@ pub fn lower_load_mem_base(
     block.add_inst(load_directory)
 
     let descriptor_vreg = ctx.machv_function().new_vreg(Int)
-    let load_descriptor = @instr.MachVInst::MachVInst(
+    let load_descriptor = @instr.Inst(
       Load(I64, memidx * context_slots.pointer_stride),
     )
     load_descriptor.add_def({ reg: Virtual(descriptor_vreg) })
     load_descriptor.add_use(Virtual(directory_vreg))
     block.add_inst(load_descriptor)
 
-    let load_base = @instr.MachVInst::MachVInst(Load(I64, 0))
+    let load_base = @instr.Inst(Load(I64, 0))
     load_base.add_def({ reg: Virtual(result_vreg) })
     load_base.add_use(Virtual(descriptor_vreg))
     block.add_inst(load_base)

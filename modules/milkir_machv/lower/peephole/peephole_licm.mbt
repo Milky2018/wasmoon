@@ -148,7 +148,7 @@ fn licm_hoist_invariants(
         }
 
         // Def map for virtual registers (only the simple case we care about).
-        let def_inst : Map[Int, @instr.MachVInst] = {}
+        let def_inst : Map[Int, @instr.Inst] = {}
         for blk in func.blocks {
           for inst in blk.insts {
             if inst.defs.length() == 1 &&
@@ -176,7 +176,7 @@ fn licm_hoist_invariants(
         }
 
         // Checks whether a load is safe to hoist.
-        fn is_hoistable_load(op : @instr.MachVOpcode, base : @abi.Reg) -> Bool {
+        fn is_hoistable_load(op : @instr.Opcode, base : @abi.Reg) -> Bool {
           match op {
             Load(I64, off) | LoadPtr(I64, off) =>
               if is_context_reg(base) {
@@ -192,14 +192,14 @@ fn licm_hoist_invariants(
         }
 
         // Hoist invariants from loop blocks to preheader.
-        let hoisted : Array[@instr.MachVInst] = []
+        let hoisted : Array[@instr.Inst] = []
         let hoisted_defs : @hashset.HashSet[Int] = HashSet([])
         for i in 0..<n {
           if !loop_nodes.contains(i) {
             continue
           }
           let blk = func.blocks[i]
-          let new_insts : Array[@instr.MachVInst] = []
+          let new_insts : Array[@instr.Inst] = []
           for inst in blk.insts {
             // Helper: can we treat this inst as loop-invariant now?
             fn base_is_invariant(base : @abi.Reg) -> Bool {
@@ -280,7 +280,7 @@ fn cse_immutable_loads(
   }
   // Collect all vregs that are immutable pointers loaded from context slots.
   let immutable_context_ptrs : @hashset.HashSet[Int] = HashSet([])
-  fn is_immutable_context_load(op : @instr.MachVOpcode) -> Bool {
+  fn is_immutable_context_load(op : @instr.Opcode) -> Bool {
     match op {
       Load(I64, off) | LoadPtr(I64, off) =>
         is_immutable_context_slot_offset(embedding_context_layout, off)
@@ -359,7 +359,7 @@ fn cse_immutable_loads(
     // key: "kind|base|off" -> vreg id
     // kind = 0 for Load, 1 for LoadPtr
     let seen : Map[String, Int] = {}
-    let new_insts : Array[@instr.MachVInst] = []
+    let new_insts : Array[@instr.Inst] = []
     for inst in blk.insts {
       // Track simple virtual copies for canonicalization.
       if inst.opcode is Move &&
@@ -379,7 +379,7 @@ fn cse_immutable_loads(
               if immutable_context_ptrs.contains(base_id) {
                 let key = "0|" + base_id.to_string() + "|" + off.to_string()
                 if seen.get(key) is Some(prev_id) {
-                  let mv = @instr.MachVInst::MachVInst(Move)
+                  let mv = @instr.Inst(Move)
                   mv.add_def(inst.defs[0])
                   mv.add_use(Virtual({ id: prev_id, class: Int }))
                   new_insts.push(mv)
@@ -401,7 +401,7 @@ fn cse_immutable_loads(
               if immutable_context_ptrs.contains(base_id) {
                 let key = "1|" + base_id.to_string() + "|" + off.to_string()
                 if seen.get(key) is Some(prev_id) {
-                  let mv = @instr.MachVInst::MachVInst(Move)
+                  let mv = @instr.Inst(Move)
                   mv.add_def(inst.defs[0])
                   mv.add_use(Virtual({ id: prev_id, class: Int }))
                   new_insts.push(mv)
@@ -429,7 +429,7 @@ fn cse_immutable_loads(
           _ => "context_base"
         }
         if seen.get(key) is Some(prev_id) {
-          let mv = @instr.MachVInst::MachVInst(Move)
+          let mv = @instr.Inst(Move)
           mv.add_def(inst.defs[0])
           mv.add_use(Virtual({ id: prev_id, class: Int }))
           new_insts.push(mv)
@@ -553,7 +553,7 @@ fn build_cmp_branch_terminator(
   then_id : Int,
   else_id : Int,
   const_defs : Map[Int, Int64],
-) -> @instr.MachVTerminator {
+) -> @instr.Terminator {
   let mut cond = cmp_kind_to_cond(cmp_kind)
   if !branch_when_cmp_true {
     cond = invert_cond(cond)
@@ -569,7 +569,7 @@ fn build_cmp_branch_terminator(
 
 ///|
 /// Check whether an opcode is trivially dead when its defs are unused.
-fn is_trivially_dead_opcode(op : @instr.MachVOpcode) -> Bool {
+fn is_trivially_dead_opcode(op : @instr.Opcode) -> Bool {
   match op {
     // Pure integer/extend ops: safe to drop when defs are unused.
     Add(_)
@@ -605,7 +605,7 @@ fn dce_trivially_dead(func : @machv.Function) -> Unit {
       }
     }
     for block in func.blocks {
-      let new_insts : Array[@instr.MachVInst] = []
+      let new_insts : Array[@instr.Inst] = []
       for inst in block.insts {
         let mut remove = false
         if is_trivially_dead_opcode(inst.opcode) {
@@ -643,7 +643,7 @@ fn dce_trivially_dead(func : @machv.Function) -> Unit {
 /// Propagate single-use virtual moves within a block.
 /// This reduces redundant copies created by earlier passes.
 fn propagate_single_use_moves(
-  block : @block.MachVBlock,
+  block : @block.Block,
   global_use_counts : Array[Int],
 ) -> Unit {
   let use_counts : Array[Int] = Array::make(global_use_counts.length(), 0)
@@ -721,7 +721,7 @@ fn propagate_single_use_moves(
       _ => reg
     }
   }
-  let new_insts : Array[@instr.MachVInst] = []
+  let new_insts : Array[@instr.Inst] = []
   for i, inst in block.insts {
     if to_remove.contains(i) {
       continue
@@ -742,7 +742,7 @@ fn propagate_single_use_moves(
         for arg in args {
           new_args.push(rewrite_reg(arg))
         }
-        @instr.MachVTerminator::Jump(target, new_args)
+        @instr.Terminator::Jump(target, new_args)
       }
       Branch(cond, then_id, else_id) =>
         Branch(rewrite_reg(cond), then_id, else_id)
@@ -871,7 +871,7 @@ fn propagate_moves_global(func : @machv.Function) -> Unit {
           for arg in args {
             new_args.push(rewrite_reg(arg, block.id, use_idx))
           }
-          @instr.MachVTerminator::Jump(target, new_args)
+          @instr.Terminator::Jump(target, new_args)
         }
         Branch(cond, then_id, else_id) =>
           Branch(rewrite_reg(cond, block.id, use_idx), then_id, else_id)
@@ -972,7 +972,7 @@ fn fuse_cmp_branch(func : @machv.Function) -> Unit {
       }
       if cond_uses == 0 {
         let mut cmp_idx : Int? = None
-        let mut cmp_inst : @instr.MachVInst? = None
+        let mut cmp_inst : @instr.Inst? = None
         for i, inst in blk.insts {
           if inst.defs.length() == 1 &&
             get_def_vreg_id(inst.defs[0]) == Some(cond_vreg.id) {
@@ -991,7 +991,7 @@ fn fuse_cmp_branch(func : @machv.Function) -> Unit {
           let new_term = build_cmp_branch_terminator(
             lhs, rhs, kind, is_64, branch_when_cmp_true, then_id, else_id, const_defs,
           )
-          let new_insts : Array[@instr.MachVInst] = []
+          let new_insts : Array[@instr.Inst] = []
           for i, inst in blk.insts {
             if i != idx {
               new_insts.push(inst)

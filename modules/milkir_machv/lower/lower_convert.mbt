@@ -3,7 +3,7 @@
 fn lower_extend(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.MachVBlock,
+  block : @block.Block,
   signed~ : Bool,
 ) -> Unit {
   if inst.first_result() is Some(result) {
@@ -13,7 +13,7 @@ fn lower_extend(
     let src_ty = inst.operands[0].ty
     let dst_ty = result.ty
     let kind = get_extend_kind(src_ty, dst_ty, signed)
-    let machv_inst = @instr.MachVInst::MachVInst(Extend(kind))
+    let machv_inst = @instr.Inst(Extend(kind))
     machv_inst.add_def({ reg: Virtual(dst) })
     machv_inst.add_use(Virtual(src))
     block.add_inst(machv_inst)
@@ -26,7 +26,7 @@ fn lower_extend(
 fn lower_sextend_inplace(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.MachVBlock,
+  block : @block.Block,
   from_bits~ : Int,
 ) -> Unit {
   if inst.first_result() is Some(result) {
@@ -43,7 +43,7 @@ fn lower_sextend_inplace(
       (32, _) => Signed32To64 // 32-bit extend is always to 64-bit
       _ => Signed8To32 // fallback
     }
-    let machv_inst = @instr.MachVInst::MachVInst(Extend(kind))
+    let machv_inst = @instr.Inst(Extend(kind))
     machv_inst.add_def({ reg: Virtual(dst) })
     machv_inst.add_use(Virtual(src))
     block.add_inst(machv_inst)
@@ -70,12 +70,12 @@ fn get_extend_kind(
 fn lower_truncate(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.MachVBlock,
+  block : @block.Block,
 ) -> Unit {
   if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let src = ctx.get_vreg_for_use(inst.operands[0], block)
-    let machv_inst = @instr.MachVInst::MachVInst(Truncate)
+    let machv_inst = @instr.Inst(Truncate)
     machv_inst.add_def({ reg: Virtual(dst) })
     machv_inst.add_use(Virtual(src))
     block.add_inst(machv_inst)
@@ -99,7 +99,7 @@ fn lower_truncate(
 fn lower_float_to_int(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.MachVBlock,
+  block : @block.Block,
   signed~ : Bool,
 ) -> Unit {
   guard inst.first_result() is Some(result) else { return }
@@ -113,7 +113,7 @@ fn lower_float_to_int(
 
   // Step 1: NaN check - FpuCmp(src, src)
   // NaN != NaN sets V flag (unordered)
-  let nan_check = @instr.MachVInst::MachVInst(FpuCmp(is_f32))
+  let nan_check = @instr.Inst(FpuCmp(is_f32))
   nan_check.add_use(Virtual(src))
   nan_check.add_use(Virtual(src))
   block.add_inst(nan_check)
@@ -126,7 +126,7 @@ fn lower_float_to_int(
     // AArch64 FCMP reports unorderedness via the V flag.
     Vs
   }
-  let trap_nan = @instr.MachVInst::MachVInst(TrapIf(trap_nan_cond, 3))
+  let trap_nan = @instr.Inst(TrapIf(trap_nan_cond, 3))
   block.add_inst(trap_nan)
 
   // Get bounds based on conversion type
@@ -137,15 +137,15 @@ fn lower_float_to_int(
   // Step 3: Load minimum bound
   let tmp_min = ctx.machv_func.new_vreg(float_class)
   let load_min = if is_f32 {
-    @instr.MachVInst::MachVInst(LoadConstF32(min_bits.to_int()))
+    @instr.Inst(LoadConstF32(min_bits.to_int()))
   } else {
-    MachVInst(LoadConstF64(min_bits))
+    Inst(LoadConstF64(min_bits))
   }
   load_min.add_def({ reg: Virtual(tmp_min) })
   block.add_inst(load_min)
 
   // Step 4: FpuCmp(src, tmp_min)
-  let cmp_min = @instr.MachVInst::MachVInst(FpuCmp(is_f32))
+  let cmp_min = @instr.Inst(FpuCmp(is_f32))
   cmp_min.add_use(Virtual(src))
   cmp_min.add_use(Virtual(tmp_min))
   block.add_inst(cmp_min)
@@ -165,21 +165,21 @@ fn lower_float_to_int(
   } else {
     Lt
   }
-  let trap_min = @instr.MachVInst::MachVInst(TrapIf(trap_min_cond, 3))
+  let trap_min = @instr.Inst(TrapIf(trap_min_cond, 3))
   block.add_inst(trap_min)
 
   // Step 6: Load maximum bound
   let tmp_max = ctx.machv_func.new_vreg(float_class)
   let load_max = if is_f32 {
-    @instr.MachVInst::MachVInst(LoadConstF32(max_bits.to_int()))
+    @instr.Inst(LoadConstF32(max_bits.to_int()))
   } else {
-    MachVInst(LoadConstF64(max_bits))
+    Inst(LoadConstF64(max_bits))
   }
   load_max.add_def({ reg: Virtual(tmp_max) })
   block.add_inst(load_max)
 
   // Step 7: FpuCmp(src, tmp_max)
-  let cmp_max = @instr.MachVInst::MachVInst(FpuCmp(is_f32))
+  let cmp_max = @instr.Inst(FpuCmp(is_f32))
   cmp_max.add_use(Virtual(src))
   cmp_max.add_use(Virtual(tmp_max))
   block.add_inst(cmp_max)
@@ -191,11 +191,11 @@ fn lower_float_to_int(
   } else {
     Ge
   }
-  let trap_max = @instr.MachVInst::MachVInst(TrapIf(trap_max_cond, 3))
+  let trap_max = @instr.Inst(TrapIf(trap_max_cond, 3))
   block.add_inst(trap_max)
 
   // Step 9: FcvtToInt - raw conversion (no checks)
-  let fcvt = @instr.MachVInst::MachVInst(FcvtToInt(is_f32, is_i64, signed))
+  let fcvt = @instr.Inst(FcvtToInt(is_f32, is_i64, signed))
   fcvt.add_def({ reg: Virtual(dst) })
   fcvt.add_use(Virtual(src))
   block.add_inst(fcvt)
@@ -251,7 +251,7 @@ fn get_float_to_int_bounds(
 fn lower_float_to_int_sat(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.MachVBlock,
+  block : @block.Block,
   signed~ : Bool,
 ) -> Unit {
   guard inst.first_result() is Some(result) else { return }
@@ -263,7 +263,7 @@ fn lower_float_to_int_sat(
   let is_i64 = dst_ty is I64
 
   // AArch64 FCVTZS/FCVTZU already implements MilkIR saturating conversion semantics.
-  let fcvt = @instr.MachVInst::MachVInst(FcvtToInt(is_f32, is_i64, signed))
+  let fcvt = @instr.Inst(FcvtToInt(is_f32, is_i64, signed))
   fcvt.add_def({ reg: Virtual(dst) })
   fcvt.add_use(Virtual(src))
   block.add_inst(fcvt)
@@ -274,7 +274,7 @@ fn lower_float_to_int_sat(
 fn lower_int_to_float(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.MachVBlock,
+  block : @block.Block,
   signed~ : Bool,
 ) -> Unit {
   if inst.first_result() is Some(result) {
@@ -294,7 +294,7 @@ fn lower_int_to_float(
       (I64, F64, false) => I64UToF64
       _ => I64SToF64 // Default fallback
     }
-    let machv_inst = @instr.MachVInst::MachVInst(IntToFloat(kind))
+    let machv_inst = @instr.Inst(IntToFloat(kind))
     machv_inst.add_def({ reg: Virtual(dst) })
     machv_inst.add_use(Virtual(src))
     block.add_inst(machv_inst)
@@ -306,12 +306,12 @@ fn lower_int_to_float(
 fn lower_copy(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.MachVBlock,
+  block : @block.Block,
 ) -> Unit {
   if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let src = ctx.get_vreg_for_use(inst.operands[0], block)
-    let machv_inst = @instr.MachVInst::MachVInst(Move)
+    let machv_inst = @instr.Inst(Move)
     machv_inst.add_def({ reg: Virtual(dst) })
     machv_inst.add_use(Virtual(src))
     block.add_inst(machv_inst)
@@ -325,7 +325,7 @@ fn lower_copy(
 fn lower_select(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.MachVBlock,
+  block : @block.Block,
 ) -> Unit {
   if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
@@ -343,7 +343,7 @@ fn lower_select(
         I64 | CallableRef | OpaqueRef => true
         _ => false
       }
-      let machv_inst = @instr.MachVInst::MachVInst(SelectCmp(kind, is_64))
+      let machv_inst = @instr.Inst(SelectCmp(kind, is_64))
       machv_inst.add_def({ reg: Virtual(dst) })
       machv_inst.add_use(Virtual(lhs_vreg))
       if ctx.isa is AArch64 && is_const_zero_value(ctx, rhs) {
@@ -359,7 +359,7 @@ fn lower_select(
     } else {
       // Fall back to regular Select
       let cond = ctx.get_vreg_for_use(cond_ir, block)
-      let machv_inst = @instr.MachVInst::MachVInst(Select)
+      let machv_inst = @instr.Inst(Select)
       machv_inst.add_def({ reg: Virtual(dst) })
       machv_inst.add_use(Virtual(cond))
       machv_inst.add_use(Virtual(true_val))

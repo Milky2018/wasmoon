@@ -8,7 +8,7 @@
 ///|
 fn MachineCode::emit_instruction_x86_64(
   self : MachineCode,
-  inst : @instr.MachVInst,
+  inst : @instr.Inst,
   stack_frame : EmitStackFrame,
 ) -> Unit {
   let spill_base_offset = stack_frame.spill_offset

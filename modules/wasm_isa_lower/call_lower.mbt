@@ -16,30 +16,28 @@ fn wasm_func_symbol(func_idx : Int) -> @instr.CodeSymbol {
 ///|
 fn emit_exact_indirect_type_check(
   ctx : @lower.LoweringContext,
-  block : @block.MachVBlock,
+  block : @block.Block,
   actual_type_vreg : @abi.VReg,
   expected_type_idx : Int,
 ) -> Unit {
   let expected_type_vreg = ctx.machv_function().new_vreg(Int)
-  let load_expected = @instr.MachVInst::MachVInst(
-    LoadConst(expected_type_idx.to_int64()),
-  )
+  let load_expected = @instr.Inst(LoadConst(expected_type_idx.to_int64()))
   load_expected.add_def({ reg: Virtual(expected_type_vreg) })
   block.add_inst(load_expected)
 
-  let cmp = @instr.MachVInst::MachVInst(IntCmp(false))
+  let cmp = @instr.Inst(IntCmp(false))
   cmp.add_use(Virtual(actual_type_vreg))
   cmp.add_use(Virtual(expected_type_vreg))
   block.add_inst(cmp)
 
-  let trap = @instr.MachVInst::MachVInst(TrapIf(Ne, 2))
+  let trap = @instr.Inst(TrapIf(Ne, 2))
   block.add_inst(trap)
 }
 
 ///|
 /// Emit a constant load for a call argument, optionally constrained to a register.
 fn emit_call_const(
-  block : @block.MachVBlock,
+  block : @block.Block,
   vreg : @abi.VReg,
   value : CallConstArg,
   preg? : @abi.PReg? = None,
@@ -49,7 +47,7 @@ fn emit_call_const(
     F32(bits) => LoadConstF32(bits)
     F64(bits) => LoadConstF64(bits)
   }
-  let inst = @instr.MachVInst::MachVInst(opcode)
+  let inst = @instr.Inst(opcode)
   match preg {
     Some(p) => inst.add_def_fixed({ reg: Virtual(vreg) }, p)
     None => inst.add_def({ reg: Virtual(vreg) })
@@ -63,7 +61,7 @@ fn emit_call_const(
 /// space and SP doesn't move at call sites.
 fn emit_wasm_overflow_arg_stores(
   ctx : @lower.LoweringContext,
-  block : @block.MachVBlock,
+  block : @block.Block,
   int_args : Array[(@abi.VReg, @abi.RegClass)],
   float_args : Array[(@abi.VReg, @abi.RegClass)],
 ) -> Int {
@@ -88,13 +86,13 @@ fn emit_wasm_overflow_arg_stores(
   }
   for i in 0..<int_overflow {
     let (vreg, _) = int_args[max_int_reg_args + i]
-    let store = @instr.MachVInst::MachVInst(StoreToStack(int_offsets[i]))
+    let store = @instr.Inst(StoreToStack(int_offsets[i]))
     store.add_use(Virtual(vreg))
     block.add_inst(store)
   }
   for i in 0..<float_offsets.length() {
     let (vreg, _) = float_args[max_float_reg_args + i]
-    let store = @instr.MachVInst::MachVInst(StoreToStack(float_offsets[i]))
+    let store = @instr.Inst(StoreToStack(float_offsets[i]))
     store.add_use(Virtual(vreg))
     block.add_inst(store)
   }
@@ -105,8 +103,8 @@ fn emit_wasm_overflow_arg_stores(
 /// Lower a Wasm call with a prebuilt call instruction.
 fn lower_wasm_call_common(
   ctx : @lower.LoweringContext,
-  block : @block.MachVBlock,
-  call_inst : @instr.MachVInst,
+  block : @block.Block,
+  call_inst : @instr.Inst,
   args : Array[@abi.VReg],
   results : Array[@abi.VReg],
   const_args : Map[Int, CallConstArg],
@@ -235,14 +233,14 @@ fn lower_wasm_call_common(
 /// - X0/V0 = first result, etc.
 fn lower_wasm_call(
   ctx : @lower.LoweringContext,
-  block : @block.MachVBlock,
+  block : @block.Block,
   func_ptr : @abi.VReg,
   args : Array[@abi.VReg],
   results : Array[@abi.VReg],
   const_args : Map[Int, CallConstArg],
 ) -> Unit {
   let num_args = args.length()
-  let call_inst = @instr.MachVInst::MachVInst(
+  let call_inst = @instr.Inst(
     CallPtr(num_args, @instr.result_classes_for_vregs(results), Internal),
   )
   // Call target is constrained to SCRATCH_REG_2 (IP1).
@@ -257,14 +255,14 @@ fn lower_wasm_call(
 /// Lower a direct Wasm function call.
 fn lower_wasm_call_direct(
   ctx : @lower.LoweringContext,
-  block : @block.MachVBlock,
+  block : @block.Block,
   func_idx : Int,
   args : Array[@abi.VReg],
   results : Array[@abi.VReg],
   const_args : Map[Int, CallConstArg],
 ) -> Unit {
   let num_args = args.length()
-  let call_inst = @instr.MachVInst::MachVInst(
+  let call_inst = @instr.Inst(
     CallDirect(
       wasm_func_symbol(func_idx),
       num_args,
@@ -286,14 +284,12 @@ fn lower_wasm_call_direct(
 pub fn lower_return_call(
   ctx : @lower.LoweringContext,
   inst : @milkir.Inst,
-  block : @block.MachVBlock,
+  block : @block.Block,
   func_idx : Int,
 ) -> Unit {
   // Load function address (patched at JIT module load time)
   let func_ptr_vreg = ctx.machv_function().new_vreg(Int)
-  let load_inst = @instr.MachVInst::MachVInst(
-    LoadCodeAddr(wasm_func_symbol(func_idx)),
-  )
+  let load_inst = @instr.Inst(LoadCodeAddr(wasm_func_symbol(func_idx)))
   load_inst.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_inst)
 
@@ -321,9 +317,7 @@ pub fn lower_return_call(
 
   // Create ReturnCallIndirect instruction with fixed register constraints
   // Encode tail-call stack-bytes in opcode metadata.
-  let call_inst = @instr.MachVInst::MachVInst(
-    ReturnCallIndirect(stack_arg_bytes, 0),
-  )
+  let call_inst = @instr.Inst(ReturnCallIndirect(stack_arg_bytes, 0))
 
   // Call target is constrained to SCRATCH_REG_2 (IP1).
   call_inst.add_use_fixed(Virtual(func_ptr_vreg), {
@@ -375,7 +369,7 @@ pub fn lower_return_call(
 pub fn lower_return_call_indirect(
   ctx : @lower.LoweringContext,
   inst : @milkir.Inst,
-  block : @block.MachVBlock,
+  block : @block.Block,
   type_idx : Int,
   table_idx : Int,
   options : WasmLoweringOptions,
@@ -393,7 +387,7 @@ pub fn lower_return_call_indirect(
     )
   } else {
     let indirect_tables_vreg = ctx.machv_function().new_vreg(Int)
-    let load_array_inst = @instr.MachVInst::MachVInst(
+    let load_array_inst = @instr.Inst(
       Load(I64, context_slot_offset(ctx, options.context_slots.table_directory)),
     )
     load_array_inst.add_def({ reg: Virtual(indirect_tables_vreg) })
@@ -403,7 +397,7 @@ pub fn lower_return_call_indirect(
     block.add_inst(load_array_inst)
     let table_offset = table_idx * options.context_slots.pointer_stride
     let ptr_vreg = ctx.machv_function().new_vreg(Int)
-    let load_table_inst = @instr.MachVInst::MachVInst(Load(I64, table_offset))
+    let load_table_inst = @instr.Inst(Load(I64, table_offset))
     load_table_inst.add_def({ reg: Virtual(ptr_vreg) })
     load_table_inst.add_use(Virtual(indirect_tables_vreg))
     block.add_inst(load_table_inst)
@@ -413,27 +407,27 @@ pub fn lower_return_call_indirect(
   // Calculate address = table_ptr + (zext(elem_idx) << 4) (entry size = 16B).
   // Match Cranelift-style folded add+shift shape.
   let addr_vreg = ctx.machv_function().new_vreg(Int)
-  let add_inst = @instr.MachVInst::MachVInst(AddExtend(Uxtw, 4))
+  let add_inst = @instr.Inst(AddExtend(Uxtw, 4))
   add_inst.add_def({ reg: Virtual(addr_vreg) })
   add_inst.add_use(Virtual(table_ptr_vreg))
   add_inst.add_use(Virtual(elem_idx_vreg))
   block.add_inst(add_inst)
   // Load raw function pointer
   let raw_func_ptr_vreg = ctx.machv_function().new_vreg(Int)
-  let load_func_inst = @instr.MachVInst::MachVInst(Load(I64, 0))
+  let load_func_inst = @instr.Inst(Load(I64, 0))
   load_func_inst.add_def({ reg: Virtual(raw_func_ptr_vreg) })
   load_func_inst.add_use(Virtual(addr_vreg))
   block.add_inst(load_func_inst)
 
   // Clear FUNCREF_TAG (bit 61) from function pointer.
   let func_ptr_vreg = ctx.machv_function().new_vreg(Int)
-  let and_inst = @instr.MachVInst::MachVInst(AndImm(0xDFFFFFFFFFFFFFFFL, true))
+  let and_inst = @instr.Inst(AndImm(0xDFFFFFFFFFFFFFFFL, true))
   and_inst.add_def({ reg: Virtual(func_ptr_vreg) })
   and_inst.add_use(Virtual(raw_func_ptr_vreg))
   block.add_inst(and_inst)
 
   let actual_type_vreg = ctx.machv_function().new_vreg(Int)
-  let load_type_inst = @instr.MachVInst::MachVInst(Load(I32, 8))
+  let load_type_inst = @instr.Inst(Load(I32, 8))
   load_type_inst.add_def({ reg: Virtual(actual_type_vreg) })
   load_type_inst.add_use(Virtual(addr_vreg))
   block.add_inst(load_type_inst)
@@ -442,7 +436,7 @@ pub fn lower_return_call_indirect(
   // use exact check when subtype checks are unnecessary.
   let expected_type_idx = options.canonicalize_indirect_type_idx(type_idx)
   if options.use_subtype_indirect_check {
-    let type_check = @instr.MachVInst::MachVInst(
+    let type_check = @instr.Inst(
       CallExternalIfI32NeImm(expected_type_idx, rt_gc_type_check_subtype(ctx)),
     )
     type_check.add_use(Virtual(actual_type_vreg))
@@ -476,9 +470,7 @@ pub fn lower_return_call_indirect(
 
   // Create ReturnCallIndirect with fixed constraints
   // Encode tail-call stack-bytes in opcode metadata.
-  let call_inst = @instr.MachVInst::MachVInst(
-    ReturnCallIndirect(stack_arg_bytes, 0),
-  )
+  let call_inst = @instr.Inst(ReturnCallIndirect(stack_arg_bytes, 0))
 
   // Call target is constrained to SCRATCH_REG_2 (IP1).
   call_inst.add_use_fixed(Virtual(func_ptr_vreg), {
@@ -528,7 +520,7 @@ pub fn lower_return_call_indirect(
 pub fn lower_return_call_ref(
   ctx : @lower.LoweringContext,
   inst : @milkir.Inst,
-  block : @block.MachVBlock,
+  block : @block.Block,
   _type_idx : Int,
 ) -> Unit {
   guard inst.operands.length() > 0 else { return }
@@ -537,7 +529,7 @@ pub fn lower_return_call_ref(
   // Strip FUNCREF_TAG (0x2000000000000000) to get raw function pointer
   // func_ptr = func_ref & 0xDFFFFFFFFFFFFFFF (clear bit 61)
   let func_ptr_vreg = ctx.machv_function().new_vreg(Int)
-  let and_inst = @instr.MachVInst::MachVInst(AndImm(0xDFFFFFFFFFFFFFFFL, true))
+  let and_inst = @instr.Inst(AndImm(0xDFFFFFFFFFFFFFFFL, true))
   and_inst.add_def({ reg: Virtual(func_ptr_vreg) })
   and_inst.add_use(Virtual(func_ref_vreg))
   block.add_inst(and_inst)
@@ -564,9 +556,7 @@ pub fn lower_return_call_ref(
 
   // Create ReturnCallIndirect with fixed constraints
   // Encode tail-call stack-bytes in opcode metadata.
-  let call_inst = @instr.MachVInst::MachVInst(
-    ReturnCallIndirect(stack_arg_bytes, 0),
-  )
+  let call_inst = @instr.Inst(ReturnCallIndirect(stack_arg_bytes, 0))
 
   // Call target is constrained to SCRATCH_REG_2 (IP1).
   call_inst.add_use_fixed(Virtual(func_ptr_vreg), {
@@ -615,7 +605,7 @@ pub fn lower_return_call_ref(
 pub fn lower_call_indirect(
   ctx : @lower.LoweringContext,
   inst : @milkir.Inst,
-  block : @block.MachVBlock,
+  block : @block.Block,
   expected_type_idx : Int,
   table_idx : Int,
   options : WasmLoweringOptions,
@@ -643,7 +633,7 @@ pub fn lower_call_indirect(
     // Slow path: load indirect_tables[table_idx] from context
     // 1. Load indirect_tables array pointer from the runtime context.
     let indirect_tables_vreg = ctx.machv_function().new_vreg(Int)
-    let load_array_inst = @instr.MachVInst::MachVInst(
+    let load_array_inst = @instr.Inst(
       Load(I64, context_slot_offset(ctx, options.context_slots.table_directory)),
     )
     load_array_inst.add_def({ reg: Virtual(indirect_tables_vreg) })
@@ -655,7 +645,7 @@ pub fn lower_call_indirect(
     let table_offset = table_idx * options.context_slots.pointer_stride
     // 3. Load table pointer: [indirect_tables + offset]
     let ptr_vreg = ctx.machv_function().new_vreg(Int)
-    let load_table_inst = @instr.MachVInst::MachVInst(Load(I64, table_offset))
+    let load_table_inst = @instr.Inst(Load(I64, table_offset))
     load_table_inst.add_def({ reg: Virtual(ptr_vreg) })
     load_table_inst.add_use(Virtual(indirect_tables_vreg))
     block.add_inst(load_table_inst)
@@ -679,7 +669,7 @@ pub fn lower_call_indirect(
   // Step 1: Calculate address = table_ptr + (zext(elem_idx) << 4)
   // (entry size is 16 bytes).
   let addr_vreg = ctx.machv_function().new_vreg(Int)
-  let add_inst = @instr.MachVInst::MachVInst(AddExtend(Uxtw, 4))
+  let add_inst = @instr.Inst(AddExtend(Uxtw, 4))
   add_inst.add_def({ reg: Virtual(addr_vreg) })
   add_inst.add_use(Virtual(table_ptr_vreg))
   add_inst.add_use(Virtual(elem_idx_vreg))
@@ -687,19 +677,19 @@ pub fn lower_call_indirect(
 
   // Step 2: Load function pointer from address (offset 0)
   let raw_func_ptr_vreg = ctx.machv_function().new_vreg(Int)
-  let load_func_inst = @instr.MachVInst::MachVInst(Load(I64, 0))
+  let load_func_inst = @instr.Inst(Load(I64, 0))
   load_func_inst.add_def({ reg: Virtual(raw_func_ptr_vreg) })
   load_func_inst.add_use(Virtual(addr_vreg))
   block.add_inst(load_func_inst)
 
   // Step 2.5: Clear FUNCREF_TAG (bit 61) from function pointer.
-  let and_inst = @instr.MachVInst::MachVInst(AndImm(0xDFFFFFFFFFFFFFFFL, true))
+  let and_inst = @instr.Inst(AndImm(0xDFFFFFFFFFFFFFFFL, true))
   and_inst.add_def({ reg: Virtual(func_ptr_vreg) })
   and_inst.add_use(Virtual(raw_func_ptr_vreg))
   block.add_inst(and_inst)
 
   // Step 3: Load actual type index from address + 8
-  let load_type_inst = @instr.MachVInst::MachVInst(Load(I32, 8))
+  let load_type_inst = @instr.Inst(Load(I32, 8))
   load_type_inst.add_def({ reg: Virtual(actual_type_vreg) })
   load_type_inst.add_use(Virtual(addr_vreg))
   block.add_inst(load_type_inst)
@@ -713,7 +703,7 @@ pub fn lower_call_indirect(
     expected_type_idx,
   )
   if options.use_subtype_indirect_check {
-    let type_check = @instr.MachVInst::MachVInst(
+    let type_check = @instr.Inst(
       CallExternalIfI32NeImm(
         expected_canonical_type_idx,
         rt_gc_type_check_subtype(ctx),
@@ -744,7 +734,7 @@ pub fn lower_call_indirect(
 pub fn lower_call_ref(
   ctx : @lower.LoweringContext,
   inst : @milkir.Inst,
-  block : @block.MachVBlock,
+  block : @block.Block,
   _type_idx : Int,
 ) -> Unit {
   // First operand is the function reference (tagged function pointer)
@@ -766,7 +756,7 @@ pub fn lower_call_ref(
   // Step 1: Strip FUNCREF_TAG (0x2000000000000000) to get raw function pointer
   // func_ptr = func_ref & 0xDFFFFFFFFFFFFFFF (clear bit 61)
   let func_ptr_vreg = ctx.machv_function().new_vreg(Int)
-  let and_inst = @instr.MachVInst::MachVInst(AndImm(0xDFFFFFFFFFFFFFFFL, true))
+  let and_inst = @instr.Inst(AndImm(0xDFFFFFFFFFFFFFFFL, true))
   and_inst.add_def({ reg: Virtual(func_ptr_vreg) })
   and_inst.add_use(Virtual(func_ref_vreg))
   block.add_inst(and_inst)
@@ -807,7 +797,7 @@ fn try_collect_call_arg_const(
 fn collect_call_args_with_consts(
   ctx : @lower.LoweringContext,
   operands : Array[@milkir.Value],
-  block : @block.MachVBlock,
+  block : @block.Block,
   start_idx : Int,
 ) -> (Array[@abi.VReg], Map[Int, CallConstArg]) {
   let arg_vregs : Array[@abi.VReg] = []
@@ -834,7 +824,7 @@ fn collect_call_args_with_consts(
 pub fn lower_call(
   ctx : @lower.LoweringContext,
   inst : @milkir.Inst,
-  block : @block.MachVBlock,
+  block : @block.Block,
   func_idx : Int,
 ) -> Unit {
   // Collect argument vregs, rematerializing single-use constants only for

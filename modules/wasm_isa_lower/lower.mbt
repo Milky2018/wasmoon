@@ -76,7 +76,7 @@ fn lower_extension_with_options(
   options : WasmLoweringOptions,
   ctx : @lower.LoweringContext,
   inst : @milkir.Inst,
-  block : @block.MachVBlock,
+  block : @block.Block,
   ext : @milkir.ExtOp,
 ) -> @lower.ExtensionLowerResult {
   match @wasm_milkir.decode(ext) {
@@ -193,7 +193,7 @@ pub fn lower_function(
   fn lower_extension(
     ctx : @lower.LoweringContext,
     inst : @milkir.Inst,
-    block : @block.MachVBlock,
+    block : @block.Block,
     ext : @milkir.ExtOp,
   ) -> @lower.ExtensionLowerResult {
     lower_extension_with_options(options, ctx, inst, block, ext)

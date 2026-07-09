@@ -5,7 +5,7 @@ Reusable virtual-register machine IR.
 `machv` models low-level machine code before final register allocation and
 emission. It provides virtual registers, physical-register descriptions,
 machine instructions, blocks, ABI data, target ISA descriptors, printing, and
-verification helpers.
+machine-function helpers.
 
 ## Packages
 
@@ -22,49 +22,49 @@ verification helpers.
 
 Use MachV after instruction selection, but before final physical register
 allocation and encoding. It is the place to model virtual registers, machine
-instructions, ABI locations, block successors, clobbers, stack slots, and
-terminators.
+instructions, ABI locations, block successors, call metadata, and terminators.
 
 ## Example: build a virtual-register function
 
-The `AbstractFunction` API is useful for target-independent tests, adapters,
-and simple machine-IR construction. A real target lowering usually fills the
-same concepts from MilkIR.
+`FunctionBuilder` is the public construction API. Passes can read the finished
+`Function` directly, while mutation stays behind the builder or internal
+transformation helpers.
 
 ```moonbit check
 ///|
-test "build and verify a virtual-register copy" {
-  let func = AbstractFunction::AbstractFunction("copy")
-  let entry = func.new_block()
-  let src = func.add_param(Int)
-  let dst = func.new_vreg(Int)
-  let mov = func.new_inst(Move)
-  mov.add_operand(Operand::use_reg(Virtual(src)))
-  mov.add_operand(Operand::def(Virtual(dst)))
-  entry.append(mov)
-  entry.set_terminator(TermReturn([Virtual(dst)]))
-  inspect(func.verify(), content="()")
+test "build a virtual-register copy" {
+  let builder = FunctionBuilder::FunctionBuilder("copy")
+  let src = builder.add_param(Int)
+  let dst = builder.new_vreg(Int)
+  builder.append(Move, uses=[Virtual(src)], defs=[{ reg: Virtual(dst) }])
+  |> ignore
+  builder.terminate(Return([Virtual(dst)]))
+  let func = builder.finish()
   inspect(func.blocks.length(), content="1")
-  inspect(entry.instructions.length(), content="1")
+  inspect(func.blocks[0].insts.length(), content="1")
+  inspect(func.blocks[0].terminator is Some(Return(_)), content="true")
 }
 ```
 
-## Example: record call-side ABI effects
+## Example: build control flow
 
-Call instructions can declare clobbers and stack effects so allocation and
-emission can preserve live values correctly.
+Blocks are created through the builder and terminated explicitly.
 
 ```moonbit check
 ///|
-test "represent a call clobber and outgoing stack frame" {
-  let func = AbstractFunction::AbstractFunction("call_host")
-  let entry = func.new_block()
-  let call = func.new_inst(Call("host.print"))
-  call.add_clobber({ index: 0, class: Int })
-  call.set_stack_effect(CallFrame(16))
-  entry.append(call)
-  inspect(call.clobbers.length(), content="1")
-  debug_inspect(call.stack_effect, content="CallFrame(16)")
+test "build a branch" {
+  let builder = FunctionBuilder::FunctionBuilder("branch")
+  let cond = builder.add_param(Int)
+  let then_block = builder.create_block()
+  let else_block = builder.create_block()
+  builder.terminate(Branch(Virtual(cond), then_block, else_block))
+  builder.switch_to_block(then_block)
+  builder.terminate(Return([]))
+  builder.switch_to_block(else_block)
+  builder.terminate(Return([]))
+  let func = builder.finish()
+  inspect(func.blocks.length(), content="3")
+  inspect(func.blocks[0].terminator is Some(Branch(_, _, _)), content="true")
 }
 ```
 

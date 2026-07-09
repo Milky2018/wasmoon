@@ -57,7 +57,7 @@ fn reg_home_loc_dense(
 }
 
 ///|
-fn fixed_use_preg(inst : @instr.MachVInst, idx : Int) -> @abi.PReg? {
+fn fixed_use_preg(inst : @instr.Inst, idx : Int) -> @abi.PReg? {
   if idx < inst.use_constraints.length() {
     match inst.use_constraints[idx] {
       FixedReg(preg) => Some(preg)
@@ -69,7 +69,7 @@ fn fixed_use_preg(inst : @instr.MachVInst, idx : Int) -> @abi.PReg? {
 }
 
 ///|
-fn fixed_def_preg(inst : @instr.MachVInst, idx : Int) -> @abi.PReg? {
+fn fixed_def_preg(inst : @instr.Inst, idx : Int) -> @abi.PReg? {
   if idx < inst.def_constraints.length() {
     match inst.def_constraints[idx] {
       FixedReg(preg) => Some(preg)

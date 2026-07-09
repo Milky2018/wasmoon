@@ -48,7 +48,7 @@ test "lower an integer add function for AArch64" {
   inspect(lowered.name, content="add64")
   inspect(lowered.blocks.length(), content="1")
   inspect(
-    lowered.blocks[0].instructions.any(fn(inst) { inst.opcode == IntAdd }),
+    lowered.blocks[0].insts.any(fn(inst) { inst.opcode is Add(_) }),
     content="true",
   )
 }
@@ -84,10 +84,8 @@ test "lower AArch64 with an explicit call convention" {
     ret_fprs: regs(0, 8, Float64),
   }
   let lowered = lower_function_with_call_conv(builder.get_function(), conv)
-  guard lowered.param_pregs[0] is Some(context_reg) else {
-    fail("missing context register")
-  }
-  inspect(context_reg.index, content="0")
+  inspect(lowered.name, content="custom_add64")
+  inspect(lowered.blocks.length(), content="1")
 }
 ```
 

@@ -17,56 +17,69 @@ layout behavior compatible with MachV emission.
 ## When to use it
 
 Use `machv_regalloc` when your code is already in MachV and you want to reuse
-the target-independent allocator. This package projects MachV virtual
-registers into `regalloc.Program`, invokes the allocator, and can rewrite MachV
-operands to physical registers plus spill/reload code.
+the target-independent allocator. This package keeps MachV as the machine IR,
+invokes the allocator, and returns either a rewritten function or a
+Cranelift-style allocation `Output` that the emitter can consume without
+mutating the original virtual-register instructions.
 
-## Example: project MachV into the generic allocator
+## Example: allocate a MachV function
 
-Projection is a useful debugging step because it lets you inspect the pure
-allocation problem before mutating the MachV function.
+Embedders provide their calling-convention data explicitly; MachV and
+`machv_regalloc` do not know Wasmoon-specific runtime layouts.
 
 ```moonbit check
 ///|
-test "project a MachV copy into a regalloc program" {
-  let func = @machv.AbstractFunction::AbstractFunction("copy")
-  let entry = func.new_block()
-  let src = func.new_vreg(Int)
-  let dst = func.new_vreg(Int)
-  let mov = func.new_inst(Move)
-  mov.add_operand(@machv.Operand::use_reg(Virtual(src)))
-  mov.add_operand(@machv.Operand::def(Virtual(dst)))
-  entry.append(mov)
-  let p0 : @machv.PReg = { index: 0, class: Int }
-  let p1 : @machv.PReg = { index: 1, class: Int }
-  let program = project_function(func, [p0, p1])
-  inspect(program.blocks.length(), content="1")
-  inspect(program.physical_regs.length(), content="2")
+fn example_abi() -> @abi.EmbeddingABI {
+  let call_conv : @abi.CallConventionLayout = {
+    context_arg: { index: 27, class: Int },
+    user_arg_gprs: [{ index: 0, class: Int }, { index: 1, class: Int }],
+    arg_fprs: [{ index: 0, class: Float64 }, { index: 1, class: Float64 }],
+    ret_gprs: [{ index: 0, class: Int }],
+    ret_fprs: [{ index: 0, class: Float64 }],
+  }
+  EmbeddingABI(call_conv, reserve_context_role=false)
+}
+
+///|
+test "allocate a canonical MachV copy" {
+  let builder = @machv.FunctionBuilder::FunctionBuilder("copy")
+  let src = builder.add_param(Int)
+  let dst = builder.new_vreg(Int)
+  builder.append(Move, uses=[Virtual(src)], defs=[{ reg: Virtual(dst) }])
+  |> ignore
+  builder.terminate(Return([Virtual(dst)]))
+  let allocated = allocate_registers_backtracking_with_isa(
+    builder.finish(),
+    AArch64,
+    embedding_abi=Some(example_abi()),
+  )
+  inspect(allocated.blocks.length(), content="1")
+  inspect(allocated.blocks[0].terminator is Some(Return(_)), content="true")
 }
 ```
 
-## Example: allocate and apply the result
+## Example: consume Cranelift-style output
 
-`allocate_and_apply_linear_scan` is convenient for tests and simple pipelines:
-it allocates, rewrites virtual operands, and materializes spill slots.
+The output API records per-operand locations and inserted edits. This is the
+preferred path for emitters that materialize moves while encoding instructions.
 
 ```moonbit check
 ///|
-test "rewrite virtual operands to physical registers" {
-  let func = @machv.AbstractFunction::AbstractFunction("rewrite")
-  let entry = func.new_block()
-  let src = func.new_vreg(Int)
-  let dst = func.new_vreg(Int)
-  let mov = func.new_inst(Move)
-  mov.add_operand(@machv.Operand::use_reg(Virtual(src)))
-  mov.add_operand(@machv.Operand::def(Virtual(dst)))
-  entry.append(mov)
-  let p0 : @machv.PReg = { index: 0, class: Int }
-  let p1 : @machv.PReg = { index: 1, class: Int }
-  let result = allocate_and_apply_linear_scan(func, [p0, p1])
-  inspect(result.allocation.spill_count, content="0")
-  inspect(entry.instructions[0].operands[0].reg is Physical(_), content="true")
-  inspect(entry.instructions[0].operands[1].reg is Physical(_), content="true")
+test "read operand locations from regalloc output" {
+  let builder = @machv.FunctionBuilder::FunctionBuilder("rewrite")
+  let src = builder.add_param(Int)
+  let dst = builder.new_vreg(Int)
+  builder.append(Move, uses=[Virtual(src)], defs=[{ reg: Virtual(dst) }])
+  |> ignore
+  builder.terminate(Return([Virtual(dst)]))
+  let (_func, output) = allocate_registers_backtracking_output_with_isa(
+    builder.finish(),
+    AArch64,
+    embedding_abi=Some(example_abi()),
+  )
+  inspect(output.get_num_spillslots(), content="0")
+  inspect(output.inst_def_loc(0, 0, false, 0) is Reg(_), content="true")
+  inspect(output.inst_use_loc(0, 0, false, 0) is Reg(_), content="true")
 }
 ```
 
