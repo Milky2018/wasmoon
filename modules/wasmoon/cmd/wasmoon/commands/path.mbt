@@ -44,7 +44,7 @@ fn find_base_dir(path : String) -> String {
     }
   }
   if last_slash >= 0 {
-    let builder = StringBuilder::new()
+    let builder = StringBuilder::StringBuilder()
     for i in 0..<last_slash {
       builder.write_char(path.code_unit_at(i).unsafe_to_char())
     }

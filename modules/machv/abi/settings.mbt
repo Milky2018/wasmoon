@@ -20,7 +20,7 @@ pub(all) struct EmbeddingABI {
 }
 
 ///|
-pub fn EmbeddingABI::new(
+pub fn EmbeddingABI::EmbeddingABI(
   call_conv : CallConventionLayout,
   reg_roles? : EmbeddingRegRoles = EmbeddingRegRoles::none(),
   context_layout? : EmbeddingContextLayout? = None,

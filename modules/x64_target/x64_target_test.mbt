@@ -55,9 +55,9 @@ fn return_def_preg_index(inst : @machv.Instruction) -> Int {
 
 ///|
 test "x64 lowers custom call-convention function return ABI separately from SystemV" {
-  let func = @milkir.Function::new(
+  let func = @milkir.Function::Function(
     "custom_call_conv_body",
-    @milkir.Signature::new([], []),
+    Signature([], []),
   )
   func.add_param(Ptr) |> ignore
   let lhs = func.add_param(I64)
@@ -185,8 +185,8 @@ test "x64 allocatable regs include floating point registers" {
 
 ///|
 test "x64 lowers MilkIR arithmetic into MachV" {
-  let signature = @milkir.Signature::new([I64, I64], [I64])
-  let func = @milkir.Function::new("add64", signature)
+  let signature = @milkir.Signature::Signature([I64, I64], [I64])
+  let func = @milkir.Function::Function("add64", signature)
   let lhs = func.new_value(I64)
   let rhs = func.new_value(I64)
   let sum = func.new_value(I64)
@@ -285,8 +285,8 @@ test "x64 lowers bitcount ops through generic MachV arithmetic sequence" {
 
 ///|
 test "x64 lowers floating point select through integer MachV select" {
-  let signature = @milkir.Signature::new([I32, F64, F64], [F64])
-  let func = @milkir.Function::new("select_f64", signature)
+  let signature = @milkir.Signature::Signature([I32, F64, F64], [F64])
+  let func = @milkir.Function::Function("select_f64", signature)
   let cond = func.new_value(I32)
   let true_value = func.new_value(F64)
   let false_value = func.new_value(F64)
@@ -314,8 +314,8 @@ test "x64 lowers floating point select through integer MachV select" {
 
 ///|
 test "x64 legalizes integer division fixed-register operands" {
-  let signature = @milkir.Signature::new([I64, I64], [I64])
-  let func = @milkir.Function::new("sdiv64", signature)
+  let signature = @milkir.Signature::Signature([I64, I64], [I64])
+  let func = @milkir.Function::Function("sdiv64", signature)
   let lhs = func.new_value(I64)
   let rhs = func.new_value(I64)
   let quotient = func.new_value(I64)
@@ -351,8 +351,8 @@ test "x64 legalizes integer division fixed-register operands" {
 
 ///|
 test "x64 legalizes integer remainder fixed-register operands" {
-  let signature = @milkir.Signature::new([I64, I64], [I64])
-  let func = @milkir.Function::new("srem64", signature)
+  let signature = @milkir.Signature::Signature([I64, I64], [I64])
+  let func = @milkir.Function::Function("srem64", signature)
   let lhs = func.new_value(I64)
   let rhs = func.new_value(I64)
   let rem = func.new_value(I64)
@@ -388,8 +388,8 @@ test "x64 legalizes integer remainder fixed-register operands" {
 
 ///|
 test "x64 legalizes multiply-high fixed-register operands" {
-  let signature = @milkir.Signature::new([I64, I64], [I64])
-  let func = @milkir.Function::new("umulh64", signature)
+  let signature = @milkir.Signature::Signature([I64, I64], [I64])
+  let func = @milkir.Function::Function("umulh64", signature)
   let lhs = func.new_value(I64)
   let rhs = func.new_value(I64)
   let high = func.new_value(I64)
@@ -425,8 +425,8 @@ test "x64 legalizes multiply-high fixed-register operands" {
 
 ///|
 test "x64 legalizes shift count into rcx" {
-  let signature = @milkir.Signature::new([I64, I64], [I64])
-  let func = @milkir.Function::new("shl64", signature)
+  let signature = @milkir.Signature::Signature([I64, I64], [I64])
+  let func = @milkir.Function::Function("shl64", signature)
   let value = func.new_value(I64)
   let count = func.new_value(I64)
   let shifted = func.new_value(I64)
@@ -450,8 +450,8 @@ test "x64 legalizes shift count into rcx" {
 
 ///|
 test "x64 legalizes rotate count into rcx" {
-  let signature = @milkir.Signature::new([I64, I64], [I64])
-  let func = @milkir.Function::new("rotl64", signature)
+  let signature = @milkir.Signature::Signature([I64, I64], [I64])
+  let func = @milkir.Function::Function("rotl64", signature)
   let value = func.new_value(I64)
   let count = func.new_value(I64)
   let rotated = func.new_value(I64)
@@ -497,7 +497,7 @@ test "x64 lowers extended MilkIR ops into structured MachV opcodes" {
 
 ///|
 test "x64 folds constant pointer offsets into MachV memory opcodes" {
-  let builder = @milkir.FunctionBuilder::new("mem")
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("mem")
   let ptr = builder.add_param(Ptr)
   builder.add_result(I32)
   let load_offset = builder.iconst_i64(4L)
@@ -520,7 +520,7 @@ test "x64 folds constant pointer offsets into MachV memory opcodes" {
 
 ///|
 test "x64 folds constant narrow pointer offsets into MachV memory opcodes" {
-  let builder = @milkir.FunctionBuilder::new("narrow_mem")
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("narrow_mem")
   let ptr = builder.add_param(Ptr)
   builder.add_result(I32)
   let load_offset = builder.iconst_i64(4L)
@@ -596,11 +596,9 @@ test "x64 lowers direct calls with SystemV ABI constraints" {
   let result1 = func.new_value(F64)
   let entry = func.new_block([])
   entry.append_inst(
-    func.new_inst(
-      Call(@milkir.ExternalSymbol::new("callee")),
-      [int0, float0, int1],
-      [result0, result1],
-    ),
+    func.new_inst(Call(ExternalSymbol("callee")), [int0, float0, int1], [
+      result0, result1,
+    ]),
   )
   entry.set_terminator(Return([result0, result1]))
   let lowered = lower_function(func)
@@ -643,7 +641,7 @@ test "x64 records outgoing stack arguments for direct calls" {
   }
   let entry = func.new_block([])
   entry.append_inst(
-    func.new_inst(Call(@milkir.ExternalSymbol::new("callee")), args, results),
+    func.new_inst(Call(ExternalSymbol("callee")), args, results),
   )
   entry.set_terminator(Return([]))
   let lowered = lower_function(
@@ -772,9 +770,7 @@ test "x64 lowers generic Call return-area loads through return-area base registe
     results.push(func.new_value(I64))
   }
   let entry = func.new_block([])
-  entry.append_inst(
-    func.new_inst(Call(@milkir.ExternalSymbol::new("callee")), [], results),
-  )
+  entry.append_inst(func.new_inst(Call(ExternalSymbol("callee")), [], results))
   entry.set_terminator(Return([]))
   let lowered = lower_function(
     func,

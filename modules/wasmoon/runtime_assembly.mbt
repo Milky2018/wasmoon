@@ -42,7 +42,7 @@ pub fn wasm_frontend_embedding_environment(
 ) -> @wasm_frontend.EmbeddingEnvironment {
   let vm = @wasmoon_jit.vmcontext_layout()
   let memory = @wasmoon_jit.memory_descriptor_layout()
-  @wasm_frontend.EmbeddingEnvironment::new(
+  EmbeddingEnvironment(
     runtime_symbol_prefix~,
     hidden_context_type~,
     runtime_layout=Some({
@@ -75,7 +75,7 @@ fn wasm_body_embedding_env(
   if env.hidden_context_param() is Some(_) {
     env
   } else {
-    @wasm_frontend.EmbeddingEnvironment::new(
+    EmbeddingEnvironment(
       runtime_symbol_prefix=env.runtime_symbol_prefix,
       runtime_layout=env.runtime_layout(),
       memory_descriptor_layout=env.memory_descriptor_layout(),
@@ -104,8 +104,8 @@ pub fn runtime_assembly() -> RuntimeAssembly {
 
 ///|
 pub fn compiler_infrastructure_assembly() -> CompilerInfrastructureAssembly {
-  let signature = @milkir.Signature::new([], [])
-  let milk = @milkir.Function::new("wasmoon_runtime_probe", signature)
+  let signature = @milkir.Signature::Signature([], [])
+  let milk = @milkir.Function::Function("wasmoon_runtime_probe", signature)
   let entry = milk.new_block0()
   entry.set_terminator(Return([]))
   let embedding_abi = @wasmoon_jit.wasm_embedding_abi()

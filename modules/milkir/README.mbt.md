@@ -30,7 +30,7 @@ functions can emit instructions immediately.
 ```moonbit check
 ///|
 test "build an add function with FunctionBuilder" {
-  let builder = FunctionBuilder::new("add_i32")
+  let builder = FunctionBuilder::FunctionBuilder("add_i32")
   let lhs = builder.add_param(I32)
   let rhs = builder.add_param(I32)
   builder.add_result(I32)
@@ -52,7 +52,7 @@ function.
 ```moonbit check
 ///|
 test "fold constants in a MilkIR function" {
-  let builder = FunctionBuilder::new("const_add")
+  let builder = FunctionBuilder::FunctionBuilder("const_add")
   builder.add_result(I32)
   let lhs = builder.iconst_i32(10)
   let rhs = builder.iconst_i32(20)

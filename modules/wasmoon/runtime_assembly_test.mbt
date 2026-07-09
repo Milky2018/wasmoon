@@ -52,7 +52,9 @@ test "wasmoon planning restores hidden vmctx for wasm body ABI" {
     [LocalGet(0), LocalGet(1), I64Add],
     "add64",
   )
-  let env = @wasm_frontend.EmbeddingEnvironment::new(hidden_context_type=None)
+  let env = @wasm_frontend.EmbeddingEnvironment::EmbeddingEnvironment(
+    hidden_context_type=None,
+  )
   let plan = try! plan_wasm_function_with_compiler_infra(env, mod_, 0, X64)
   inspect(plan.entry_symbol, content="wasm_func_0")
   inspect(plan.object.get_bytes().length() > 0, content="true")

@@ -12,7 +12,7 @@ fn[T] heap_has_error(
 
 ///|
 test "MarkSweepHeap: alloc and get struct" {
-  let heap = MarkSweepHeap::new()
+  let heap = MarkSweepHeap::MarkSweepHeap()
   let idx = heap.alloc_struct(0, [I32(42), I64(100L)])
   inspect(idx, content="0")
   inspect(heap.length(), content="1")
@@ -25,7 +25,7 @@ test "MarkSweepHeap: alloc and get struct" {
 
 ///|
 test "MarkSweepHeap: alloc and get array" {
-  let heap = MarkSweepHeap::new()
+  let heap = MarkSweepHeap::MarkSweepHeap()
   let idx = heap.alloc_array(1, [F32(1.0), F32(2.0), F32(3.0)])
   inspect(idx, content="0")
   let a = heap.get_array(idx)
@@ -35,7 +35,7 @@ test "MarkSweepHeap: alloc and get array" {
 
 ///|
 test "MarkSweepHeap: struct get/set" {
-  let heap = MarkSweepHeap::new()
+  let heap = MarkSweepHeap::MarkSweepHeap()
   let idx = heap.alloc_struct(0, [I32(10), I32(20)])
 
   // Get field
@@ -50,7 +50,7 @@ test "MarkSweepHeap: struct get/set" {
 
 ///|
 test "MarkSweepHeap: array get/set/len" {
-  let heap = MarkSweepHeap::new()
+  let heap = MarkSweepHeap::MarkSweepHeap()
   let idx = heap.alloc_array(0, [I32(1), I32(2), I32(3)])
 
   // Length
@@ -66,7 +66,7 @@ test "MarkSweepHeap: array get/set/len" {
 
 ///|
 test "MarkSweepHeap: array fill" {
-  let heap = MarkSweepHeap::new()
+  let heap = MarkSweepHeap::MarkSweepHeap()
   let idx = heap.alloc_array(0, [I32(0), I32(0), I32(0), I32(0)])
   heap.array_fill(idx, 1, I32(42), 2) |> ignore
   inspect(heap.array_get(idx, 0), content="I32(0)")
@@ -77,7 +77,7 @@ test "MarkSweepHeap: array fill" {
 
 ///|
 test "MarkSweepHeap: array copy" {
-  let heap = MarkSweepHeap::new()
+  let heap = MarkSweepHeap::MarkSweepHeap()
   let src = heap.alloc_array(0, [I32(1), I32(2), I32(3)])
   let dst = heap.alloc_array(0, [I32(0), I32(0), I32(0)])
   heap.array_copy(dst, 0, src, 1, 2) |> ignore
@@ -88,7 +88,7 @@ test "MarkSweepHeap: array copy" {
 
 ///|
 test "MarkSweepHeap: array out of bounds" {
-  let heap = MarkSweepHeap::new()
+  let heap = MarkSweepHeap::MarkSweepHeap()
   let idx = heap.alloc_array(0, [I32(1), I32(2)])
   inspect(
     heap_has_error(() => heap.array_get(idx, 5), err => {
@@ -106,7 +106,7 @@ test "MarkSweepHeap: array out of bounds" {
 
 ///|
 test "MarkSweepHeap: type mismatch" {
-  let heap = MarkSweepHeap::new()
+  let heap = MarkSweepHeap::MarkSweepHeap()
   let struct_idx = heap.alloc_struct(0, [])
   let array_idx = heap.alloc_array(1, [])
 
@@ -124,7 +124,7 @@ test "MarkSweepHeap: type mismatch" {
 
 ///|
 test "MarkSweepHeap: get_type_idx" {
-  let heap = MarkSweepHeap::new()
+  let heap = MarkSweepHeap::MarkSweepHeap()
   let s = heap.alloc_struct(5, [])
   let a = heap.alloc_array(10, [])
   inspect(heap.get_type_idx(s), content="5")
@@ -133,7 +133,7 @@ test "MarkSweepHeap: get_type_idx" {
 
 ///|
 test "MarkSweepHeap: multiple allocations" {
-  let heap = MarkSweepHeap::new()
+  let heap = MarkSweepHeap::MarkSweepHeap()
   let s1 = heap.alloc_struct(0, [I32(1)])
   let a1 = heap.alloc_array(1, [I64(2L)])
   let s2 = heap.alloc_struct(2, [F32(3.0)])
@@ -154,7 +154,7 @@ test "MarkSweepHeap: multiple allocations" {
 
 ///|
 test "GC: stats initial" {
-  let heap = MarkSweepHeap::new()
+  let heap = MarkSweepHeap::MarkSweepHeap()
   let stats = heap.stats()
   inspect(stats.total_objects, content="0")
   inspect(stats.live_objects, content="0")
@@ -166,7 +166,7 @@ test "GC: stats initial" {
 
 ///|
 test "GC: stats after allocation" {
-  let heap = MarkSweepHeap::new()
+  let heap = MarkSweepHeap::MarkSweepHeap()
   let _ = heap.alloc_struct(0, [I32(1)])
   let _ = heap.alloc_array(0, [I32(2)])
   let stats = heap.stats()
@@ -179,7 +179,7 @@ test "GC: stats after allocation" {
 
 ///|
 test "GC: collect unreachable objects" {
-  let heap = MarkSweepHeap::new()
+  let heap = MarkSweepHeap::MarkSweepHeap()
   // Allocate some objects
   let _ = heap.alloc_struct(0, [I32(1)])
   let _ = heap.alloc_struct(0, [I32(2)])
@@ -197,7 +197,7 @@ test "GC: collect unreachable objects" {
 
 ///|
 test "GC: preserve reachable objects" {
-  let heap = MarkSweepHeap::new()
+  let heap = MarkSweepHeap::MarkSweepHeap()
   // Allocate objects
   let s1 = heap.alloc_struct(0, [I32(1)])
   let _ = heap.alloc_struct(0, [I32(2)]) // unreachable
@@ -216,7 +216,7 @@ test "GC: preserve reachable objects" {
 
 ///|
 test "GC: follow references in structs" {
-  let heap = MarkSweepHeap::new()
+  let heap = MarkSweepHeap::MarkSweepHeap()
   // Create a chain: s1 -> s2 -> s3
   let s3 = heap.alloc_struct(0, [I32(3)])
   let s2 = heap.alloc_struct(0, [StructRef(s3)])
@@ -236,7 +236,7 @@ test "GC: follow references in structs" {
 
 ///|
 test "GC: follow references in arrays" {
-  let heap = MarkSweepHeap::new()
+  let heap = MarkSweepHeap::MarkSweepHeap()
   // Create objects
   let s1 = heap.alloc_struct(0, [I32(1)])
   let s2 = heap.alloc_struct(0, [I32(2)])
@@ -252,7 +252,7 @@ test "GC: follow references in arrays" {
 
 ///|
 test "GC: reuse freed slots" {
-  let heap = MarkSweepHeap::new()
+  let heap = MarkSweepHeap::MarkSweepHeap()
   // Allocate and collect
   let _ = heap.alloc_struct(0, [I32(1)])
   let _ = heap.alloc_struct(0, [I32(2)])
@@ -286,7 +286,7 @@ test "GC: threshold check" {
 
 ///|
 test "GC: collected object becomes inaccessible" {
-  let heap = MarkSweepHeap::new()
+  let heap = MarkSweepHeap::MarkSweepHeap()
   let idx = heap.alloc_struct(0, [I32(42)])
   inspect(heap.is_alive(idx), content="true")
 

@@ -34,7 +34,7 @@ same concepts from MilkIR.
 ```moonbit check
 ///|
 test "build and verify a virtual-register copy" {
-  let func = AbstractFunction::new("copy")
+  let func = AbstractFunction::AbstractFunction("copy")
   let entry = func.new_block()
   let src = func.add_param(Int)
   let dst = func.new_vreg(Int)
@@ -57,7 +57,7 @@ emission can preserve live values correctly.
 ```moonbit check
 ///|
 test "represent a call clobber and outgoing stack frame" {
-  let func = AbstractFunction::new("call_host")
+  let func = AbstractFunction::AbstractFunction("call_host")
   let entry = func.new_block()
   let call = func.new_inst(Call("host.print"))
   call.add_clobber({ index: 0, class: Int })

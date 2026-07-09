@@ -71,7 +71,7 @@ pub fn format_wat_error(err : WatError, source : String) -> String {
   // Get the relevant source line
   let lines = split_lines(source)
   let line_idx = loc.line - 1
-  let result = StringBuilder::new()
+  let result = StringBuilder::StringBuilder()
   result.write_string("error: ")
   result.write_string(msg)
   result.write_string("\n")
@@ -101,7 +101,7 @@ pub fn format_wat_error(err : WatError, source : String) -> String {
 /// Split a string into lines
 fn split_lines(s : String) -> Array[String] {
   let lines : Array[String] = []
-  let current = StringBuilder::new()
+  let current = StringBuilder::StringBuilder()
   for i in 0..<s.length() {
     let c = s.code_unit_at(i).unsafe_to_char()
     if c == '\n' {

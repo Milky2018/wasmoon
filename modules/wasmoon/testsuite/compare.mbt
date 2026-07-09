@@ -324,7 +324,7 @@ fn run_interp(
 ) -> Result[Array[@types.Value], String] {
   try {
     // Convert module to binary for parser - need to use the binary encoder
-    let linker = @runtime.Linker::new()
+    let linker = @runtime.Linker::Linker()
     let store = linker.get_store()
     let instance = @executor.instantiate_with_linker(linker, "test", mod_)
     let result = @executor.call_exported_func(store, instance, func_name, args)
@@ -346,7 +346,7 @@ pub fn run_jit(
   func_name |> ignore
   let mut jm_opt : @jit.JITModule? = None
   try {
-    let linker = @runtime.Linker::new()
+    let linker = @runtime.Linker::Linker()
     let store = linker.get_store()
     let instance = @executor.instantiate_with_linker(linker, "test", mod_)
     guard @commands.compile_module_to_jit(mod_, false, false, 0, false)
@@ -415,12 +415,12 @@ pub fn run_jit(
     for group in mod_.type_rec_groups {
       module_rec_groups.push(group)
     }
-    @wast.JITModuleContext::new(
+    @wast.JITModuleContext::JITModuleContext(
       jm, globals_ptr, global_addrs, table_addrs, func_addrs, func_type_indices,
       canonical_type_indices, module_types, module_rec_groups, use_subtype_indirect_check,
     )
     |> ignore
-    let c_heap = @wasmoon_jit.CHeap::new()
+    let c_heap = @wasmoon_jit.CHeap::CHeap()
     @wasmoon_jit.gc_setup(
       c_heap,
       module_types,
@@ -576,7 +576,7 @@ pub fn init_elem_segments(
   for table in mod_.tables {
     let min_size = table.type_.limits.min.to_int()
     let max_size = table.type_.limits.max.map(fn(m) { m.to_int() })
-    match @wasmoon_jit.JITTable::new(min_size, max_size) {
+    match @wasmoon_jit.JITTable::try_alloc(min_size, max_size) {
       Some(jit_table) => jit_tables.push(Some(jit_table))
       None => jit_tables.push(None)
     }
@@ -662,7 +662,7 @@ pub fn run_interp_only(
     let mod_ = @wat.parse(source) catch {
       e => return Err("Failed to parse WAT: \{e}")
     }
-    let linker = @runtime.Linker::new()
+    let linker = @runtime.Linker::Linker()
     let store = linker.get_store()
     let instance = @executor.instantiate_with_linker(linker, "test", mod_)
     let result = @executor.call_exported_func(store, instance, func_name, args)

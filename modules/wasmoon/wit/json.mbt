@@ -1,7 +1,7 @@
 ///|
 pub fn package_to_json(pkg : Package) -> String {
   // Small JSON emitter for CLI output; stable ordering.
-  let sb = StringBuilder::new()
+  let sb = StringBuilder::StringBuilder()
   sb.write_char('{')
   sb.write_string("\"name\":")
   match pkg.name {

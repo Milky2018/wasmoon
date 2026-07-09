@@ -3,7 +3,7 @@ fn parse_int(s : String) -> Int raise WatError {
   let trimmed = s
   if trimmed.has_prefix("0x") || trimmed.has_prefix("0X") {
     if trimmed.length() > 2 {
-      let hex_part = StringBuilder::new()
+      let hex_part = StringBuilder::StringBuilder()
       for i in 2..<trimmed.length() {
         hex_part.write_char(trimmed.code_unit_at(i).unsafe_to_char())
       }
@@ -13,7 +13,7 @@ fn parse_int(s : String) -> Int raise WatError {
     }
   } else if trimmed.has_prefix("-0x") || trimmed.has_prefix("-0X") {
     if trimmed.length() > 3 {
-      let hex_part = StringBuilder::new()
+      let hex_part = StringBuilder::StringBuilder()
       for i in 3..<trimmed.length() {
         hex_part.write_char(trimmed.code_unit_at(i).unsafe_to_char())
       }
@@ -64,7 +64,7 @@ fn parse_u32(s : String) -> Int raise WatError {
   let trimmed = s
   if trimmed.has_prefix("0x") || trimmed.has_prefix("0X") {
     if trimmed.length() > 2 {
-      let hex_part = StringBuilder::new()
+      let hex_part = StringBuilder::StringBuilder()
       for i in 2..<trimmed.length() {
         hex_part.write_char(trimmed.code_unit_at(i).unsafe_to_char())
       }
@@ -120,7 +120,7 @@ fn parse_u64(s : String) -> Int64 raise WatError {
   let trimmed = s
   if trimmed.has_prefix("0x") || trimmed.has_prefix("0X") {
     if trimmed.length() > 2 {
-      let hex_part = StringBuilder::new()
+      let hex_part = StringBuilder::StringBuilder()
       for i in 2..<trimmed.length() {
         hex_part.write_char(trimmed.code_unit_at(i).unsafe_to_char())
       }
@@ -169,7 +169,7 @@ fn parse_int64(s : String) -> Int64 raise WatError {
   let trimmed = s
   if trimmed.has_prefix("0x") || trimmed.has_prefix("0X") {
     if trimmed.length() > 2 {
-      let hex_part = StringBuilder::new()
+      let hex_part = StringBuilder::StringBuilder()
       for i in 2..<trimmed.length() {
         hex_part.write_char(trimmed.code_unit_at(i).unsafe_to_char())
       }
@@ -179,7 +179,7 @@ fn parse_int64(s : String) -> Int64 raise WatError {
     }
   } else if trimmed.has_prefix("-0x") || trimmed.has_prefix("-0X") {
     if trimmed.length() > 3 {
-      let hex_part = StringBuilder::new()
+      let hex_part = StringBuilder::StringBuilder()
       for i in 3..<trimmed.length() {
         hex_part.write_char(trimmed.code_unit_at(i).unsafe_to_char())
       }

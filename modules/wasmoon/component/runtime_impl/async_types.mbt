@@ -62,7 +62,7 @@ pub(all) struct ResourceTable {
 let resource_table_id_counter : Array[Int] = [0]
 
 ///|
-pub fn ResourceTable::new() -> ResourceTable {
+pub fn ResourceTable::ResourceTable() -> ResourceTable {
   let id = resource_table_id_counter[0]
   resource_table_id_counter[0] = id + 1
   // Handle 0 is always invalid; the first valid allocation is 1.
@@ -175,7 +175,7 @@ pub(all) struct StreamTable {
 } derive(Debug)
 
 ///|
-pub fn StreamTable::new() -> StreamTable {
+pub fn StreamTable::StreamTable() -> StreamTable {
   { next_stream_id: [0], endpoints: {}, streams: {} }
 }
 
@@ -448,7 +448,7 @@ struct Subtask {
 } derive(Debug)
 
 ///|
-pub fn AsyncState::new(stream_table : StreamTable) -> AsyncState {
+pub fn AsyncState::AsyncState(stream_table : StreamTable) -> AsyncState {
   {
     next_handle_by_component: {},
     free_handles_by_component: {},

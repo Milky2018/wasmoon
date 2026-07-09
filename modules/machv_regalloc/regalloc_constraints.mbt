@@ -26,7 +26,7 @@ struct InstEdits {
 }
 
 ///|
-fn InstEdits::new() -> InstEdits {
+fn InstEdits::InstEdits() -> InstEdits {
   { before: [], after: [] }
 }
 
@@ -325,7 +325,7 @@ pub fn process_constraints(
       if inst.use_constraints.is_empty() && inst.def_constraints.is_empty() {
         continue
       }
-      let edits = InstEdits::new()
+      let edits = InstEdits::InstEdits()
 
       // Process use constraints (moves before the instruction)
       for i, constraint in inst.use_constraints {

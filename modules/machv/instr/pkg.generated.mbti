@@ -44,7 +44,7 @@ pub(all) struct CodeSymbol {
   scope : String
   ordinal : Int
 } derive(Eq, Hash, @debug.Debug)
-pub fn CodeSymbol::new(String, Int) -> Self
+pub fn CodeSymbol::CodeSymbol(String, Int) -> Self
 pub impl Show for CodeSymbol
 
 pub(all) enum Cond {
@@ -87,7 +87,7 @@ pub impl Show for ExtendKind
 pub(all) struct ExternalName {
   name : String
 } derive(Eq, Hash, @debug.Debug)
-pub fn ExternalName::new(String) -> Self
+pub fn ExternalName::ExternalName(String) -> Self
 pub impl Show for ExternalName
 
 pub(all) enum FCmpKind {
@@ -154,11 +154,11 @@ pub struct MachVInst {
   use_constraints : Array[@abi.OperandConstraint]
   def_constraints : Array[@abi.OperandConstraint]
 }
+pub fn MachVInst::MachVInst(MachVOpcode) -> Self
 pub fn MachVInst::add_def(Self, @abi.Writable) -> Unit
 pub fn MachVInst::add_def_fixed(Self, @abi.Writable, @abi.PReg) -> Unit
 pub fn MachVInst::add_use(Self, @abi.Reg) -> Unit
 pub fn MachVInst::add_use_fixed(Self, @abi.Reg, @abi.PReg) -> Unit
-pub fn MachVInst::new(MachVOpcode) -> Self
 pub impl Show for MachVInst
 
 pub(all) enum MachVOpcode {

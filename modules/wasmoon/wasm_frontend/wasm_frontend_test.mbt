@@ -1,6 +1,6 @@
 ///|
 fn native_test_env() -> EmbeddingEnvironment {
-  EmbeddingEnvironment::new(
+  EmbeddingEnvironment(
     runtime_layout=Some({
       memory0_base_offset: 8,
       memory0_size_offset: 16,
@@ -41,7 +41,7 @@ test "lower simple wasm body into MilkIR operations" {
     [LocalGet(0), LocalGet(1), I32Add],
     "run",
   )
-  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let env = EmbeddingEnvironment::EmbeddingEnvironment(hidden_context_type=None)
   let func = lower_function(env, mod_, 0)
   inspect(func.signature.params.length(), content="2")
   inspect(func.signature.results.length(), content="1")
@@ -67,7 +67,7 @@ test "lower locals through native linear fast path" {
     ..@types.Module::simple([I32, I32], [I32], body, "double_sum"),
     codes: [{ locals: [I32], body }],
   }
-  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let env = EmbeddingEnvironment::EmbeddingEnvironment(hidden_context_type=None)
   let func = lower_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("iadd"), content="true")
@@ -83,7 +83,7 @@ test "lower nop and float locals through native linear fast path" {
     ..@types.Module::simple([F64], [F64], body, "float_local_default"),
     codes: [{ locals: [F64], body }],
   }
-  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let env = EmbeddingEnvironment::EmbeddingEnvironment(hidden_context_type=None)
   let func = lower_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("fconst"), content="true")
@@ -100,7 +100,7 @@ test "lower branchless blocks through native linear fast path" {
     [Block(Value(I32), [LocalGet(0), Block(Value(I32), [I32Const(1)]), I32Add])],
     "branchless_block",
   )
-  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let env = EmbeddingEnvironment::EmbeddingEnvironment(hidden_context_type=None)
   let func = lower_function(env, mod_, 0)
   let text = func.print()
   inspect(func.blocks.length(), content="1")
@@ -117,7 +117,7 @@ test "lower branchless loop through native linear fast path" {
     [Loop(Value(I32), [LocalGet(0), I32Const(1), I32Add])],
     "branchless_loop",
   )
-  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let env = EmbeddingEnvironment::EmbeddingEnvironment(hidden_context_type=None)
   let func = lower_function(env, mod_, 0)
   let text = func.print()
   inspect(func.blocks.length(), content="1")
@@ -128,7 +128,7 @@ test "lower branchless loop through native linear fast path" {
 
 ///|
 test "try lower native function does not use legacy fallback" {
-  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let env = EmbeddingEnvironment::EmbeddingEnvironment(hidden_context_type=None)
   let linear = @types.Module::simple(
     [I32, I32],
     [I32],
@@ -166,7 +166,7 @@ test "lower direct block branch through native linear fast path" {
     [Block(Value(I32), [I32Const(7), Br(0)])],
     "block_exit_branch",
   )
-  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let env = EmbeddingEnvironment::EmbeddingEnvironment(hidden_context_type=None)
   let func = lower_function(env, mod_, 0)
   let text = func.print()
   inspect(func.blocks.length(), content="1")
@@ -184,7 +184,7 @@ test "non-terminal block branch falls back to interpreter trampoline" {
     [Block(Value(I32), [I32Const(4), I32Const(8), Br(0), I32Add])],
     "block_nonterminal_branch",
   )
-  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let env = EmbeddingEnvironment::EmbeddingEnvironment(hidden_context_type=None)
   inspect(try_lower_native_function(env, mod_, 0) is None, content="true")
 }
 
@@ -196,7 +196,7 @@ test "lower terminal block br_if through native linear fast path" {
     [Block(Value(I32), [I32Const(7), I32Const(1), BrIf(0)])],
     "block_exit_branch_if",
   )
-  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let env = EmbeddingEnvironment::EmbeddingEnvironment(hidden_context_type=None)
   let func = lower_function(env, mod_, 0)
   let text = func.print()
   inspect(func.blocks.length(), content="1")
@@ -213,7 +213,7 @@ test "lower terminal current-block br_table through native linear fast path" {
     [Block(Value(I32), [I32Const(7), I32Const(1), BrTable([0, 0], 0)])],
     "block_exit_branch_table",
   )
-  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let env = EmbeddingEnvironment::EmbeddingEnvironment(hidden_context_type=None)
   let func = lower_function(env, mod_, 0)
   let text = func.print()
   inspect(func.blocks.length(), content="1")
@@ -224,7 +224,7 @@ test "lower terminal current-block br_table through native linear fast path" {
 
 ///|
 test "lower terminal current-block ref branches through native linear fast path" {
-  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let env = EmbeddingEnvironment::EmbeddingEnvironment(hidden_context_type=None)
   let null_branch = @types.Module::simple(
     [],
     [FuncRef],
@@ -255,7 +255,7 @@ test "lower empty if through native linear fast path" {
     [I32Const(1), If(Empty, [], []), I32Const(7)],
     "empty_if",
   )
-  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let env = EmbeddingEnvironment::EmbeddingEnvironment(hidden_context_type=None)
   let func = lower_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("iconst 7"), content="true")
@@ -271,7 +271,7 @@ test "lower nop-only if through native linear fast path" {
     [I32Const(0), If(Empty, [Nop], [Nop, Nop]), I32Const(9)],
     "nop_only_if",
   )
-  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let env = EmbeddingEnvironment::EmbeddingEnvironment(hidden_context_type=None)
   let func = lower_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("iconst 9"), content="true")
@@ -370,7 +370,7 @@ test "lower linear explicit return without legacy bridge" {
     [LocalGet(0), LocalGet(1), I64Add, Return],
     "add64",
   )
-  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let env = EmbeddingEnvironment::EmbeddingEnvironment(hidden_context_type=None)
   let func = lower_function(env, mod_, 0)
   let text = func.print()
   inspect(func.blocks.length(), content="1")
@@ -387,7 +387,7 @@ test "lower return with dead tail without legacy bridge" {
     [I32Const(7), Return, I32Const(1), I32Const(2), I32Add],
     "dead_tail",
   )
-  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let env = EmbeddingEnvironment::EmbeddingEnvironment(hidden_context_type=None)
   let func = lower_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("return"), content="true")
@@ -404,7 +404,7 @@ test "lower linear float arithmetic and drop without legacy bridge" {
     [F64Const(99.0), Drop, LocalGet(0), F64Const(0.5), F64Sub],
     "adjust",
   )
-  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let env = EmbeddingEnvironment::EmbeddingEnvironment(hidden_context_type=None)
   let func = lower_function(env, mod_, 0)
   let text = func.print()
   inspect(func.blocks.length(), content="1")
@@ -446,7 +446,7 @@ test "lower linear integer bitops comparisons and select natively" {
     Select,
   ]
   let mod_ = { ..mod_, codes: [{ locals: [I32], body }] }
-  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let env = EmbeddingEnvironment::EmbeddingEnvironment(hidden_context_type=None)
   let func = lower_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("band"), content="true")
@@ -464,7 +464,7 @@ test "lower linear float compare and unary ops natively" {
     [LocalGet(0), F64Neg, F64Abs, F64Ceil, F64Const(1.0), F64Ge],
     "float_cmp",
   )
-  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let env = EmbeddingEnvironment::EmbeddingEnvironment(hidden_context_type=None)
   let func = lower_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("fneg"), content="true")
@@ -482,7 +482,7 @@ test "lower linear integer extensions and reduction natively" {
     [LocalGet(0), I32WrapI64, I32Extend8S],
     "extend_i32",
   )
-  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let env = EmbeddingEnvironment::EmbeddingEnvironment(hidden_context_type=None)
   let func = lower_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("ireduce"), content="true")
@@ -499,7 +499,7 @@ test "lower linear i64 extensions natively" {
     [LocalGet(0), I64ExtendI32U, I64Extend32S],
     "extend_i64",
   )
-  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let env = EmbeddingEnvironment::EmbeddingEnvironment(hidden_context_type=None)
   let func = lower_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("uextend"), content="true")
@@ -516,7 +516,7 @@ test "lower linear float promotion and demotion natively" {
     [LocalGet(0), F32DemoteF64, F64PromoteF32, F32DemoteF64],
     "float_resize",
   )
-  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let env = EmbeddingEnvironment::EmbeddingEnvironment(hidden_context_type=None)
   let func = lower_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("fdemote"), content="true")
@@ -533,7 +533,7 @@ test "lower linear numeric conversions natively" {
     [LocalGet(0), I32TruncF64S, Drop, LocalGet(1), F32ConvertI64U],
     "numeric_convert",
   )
-  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let env = EmbeddingEnvironment::EmbeddingEnvironment(hidden_context_type=None)
   let func = lower_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("fcvt_to_sint"), content="true")
@@ -550,7 +550,7 @@ test "lower linear saturating conversion and reinterpret natively" {
     [LocalGet(0), I32TruncSatF32U, Drop, LocalGet(1), F64ReinterpretI64],
     "sat_bitcast",
   )
-  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let env = EmbeddingEnvironment::EmbeddingEnvironment(hidden_context_type=None)
   let func = lower_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("fcvt_to_uint_sat"), content="true")
@@ -567,7 +567,7 @@ test "lower pure if into native MilkIR select" {
     [LocalGet(0), If(Value(I32), [I32Const(111)], [I32Const(222)])],
     "select_const",
   )
-  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let env = EmbeddingEnvironment::EmbeddingEnvironment(hidden_context_type=None)
   let func = lower_function(env, mod_, 0)
   let text = func.print()
   inspect(func.blocks.length(), content="1")
@@ -591,7 +591,7 @@ test "lower pure if expression bodies into native MilkIR select" {
     ],
     "select_expr_body",
   )
-  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let env = EmbeddingEnvironment::EmbeddingEnvironment(hidden_context_type=None)
   let func = lower_function(env, mod_, 0)
   let text = func.print()
   inspect(func.blocks.length(), content="1")
@@ -630,7 +630,7 @@ test "lower pure if copysign and wide multiply expression bodies" {
     ],
     "select_wide_mul_body",
   )
-  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let env = EmbeddingEnvironment::EmbeddingEnvironment(hidden_context_type=None)
   let float_func = lower_function(env, float_mod, 0)
   let wide_func = lower_function(env, wide_mod, 0)
   inspect(float_func.print().contains("bor"), content="true")
@@ -647,7 +647,7 @@ test "lower pure if copysign and wide multiply expression bodies" {
 ///|
 test "lower trap without wasm_frontend skeleton fallback" {
   let mod_ = @types.Module::simple([], [], [Unreachable], "trap")
-  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let env = EmbeddingEnvironment::EmbeddingEnvironment(hidden_context_type=None)
   let func = lower_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("unreachable"), content="true")
@@ -739,7 +739,7 @@ test "lower copysign through native MilkIR bit operations" {
     ],
     "copysign",
   )
-  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let env = EmbeddingEnvironment::EmbeddingEnvironment(hidden_context_type=None)
   let func = lower_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("bitcast"), content="true")
@@ -764,7 +764,7 @@ test "lower wide i64 multiply through native MilkIR high-half ops" {
     ],
     "wide_mul",
   )
-  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let env = EmbeddingEnvironment::EmbeddingEnvironment(hidden_context_type=None)
   let func = lower_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("umulh"), content="true")
@@ -1088,7 +1088,7 @@ test "lower i31 refs through native linear fast path" {
     [LocalGet(0), RefI31, I31GetS],
     "i31_roundtrip",
   )
-  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let env = EmbeddingEnvironment::EmbeddingEnvironment(hidden_context_type=None)
   let func = lower_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("band"), content="true")
@@ -1106,7 +1106,7 @@ test "lower ref conversion copies through native linear fast path" {
     [LocalGet(0), RefI31, ExternConvertAny, AnyConvertExtern, I31GetU],
     "ref_convert_copy",
   )
-  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let env = EmbeddingEnvironment::EmbeddingEnvironment(hidden_context_type=None)
   let func = lower_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("copy"), content="true")
@@ -1122,7 +1122,7 @@ test "pure if rejects trapping i31 get in branch expression" {
     [LocalGet(0), If(Value(I32), [I32Const(7)], [RefNull(RefNullI31), I31GetS])],
     "if_i31_trap_arm",
   )
-  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let env = EmbeddingEnvironment::EmbeddingEnvironment(hidden_context_type=None)
   inspect(try_lower_native_function(env, mod_, 0) is None, content="true")
 }
 
@@ -1134,7 +1134,7 @@ test "unsupported structured branch reports label-stack capability" {
     [Loop(Empty, [Br(0)])],
     "loop_branch",
   )
-  let env = EmbeddingEnvironment::new(hidden_context_type=None)
+  let env = EmbeddingEnvironment::EmbeddingEnvironment(hidden_context_type=None)
   try lower_function(env, mod_, 0) catch {
     err => {
       let msg = to_repr(err).to_string()

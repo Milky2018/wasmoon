@@ -21,7 +21,7 @@ pub struct WastResult {
 }
 
 ///|
-pub fn WastResult::new() -> WastResult {
+pub fn WastResult::WastResult() -> WastResult {
   { passed: 0, failed: 0, skipped: 0, failures: [] }
 }
 
@@ -48,7 +48,7 @@ pub struct JITModuleContext {
 }
 
 ///|
-pub fn JITModuleContext::new(
+pub fn JITModuleContext::JITModuleContext(
   jit_module : @jit.JITModule,
   globals_ptr : Int64,
   global_addrs : Array[Int],
@@ -104,19 +104,15 @@ pub struct WastContext {
 }
 
 ///|
-pub fn WastContext::new(
+pub fn WastContext::WastContext(
   use_jit : Bool,
   jit_compiler? : JITCompiler? = None,
 ) -> WastContext {
   // Use c_heap when JIT is enabled for GC support
-  let store = if use_jit {
-    @runtime.Store::with_c_heap()
-  } else {
-    @runtime.Store::new()
-  }
+  let store = if use_jit { @runtime.Store::with_c_heap() } else { Store() }
 
   // Create WASI context with default configuration for tests
-  let wasi_builder = @wasi.WasiContextBuilder::new()
+  let wasi_builder = @wasi.WasiContextBuilder::WasiContextBuilder()
   wasi_builder.inherit_stdin() |> ignore
   wasi_builder.inherit_stdout() |> ignore
   wasi_builder.inherit_stderr() |> ignore
@@ -134,7 +130,7 @@ pub fn WastContext::new(
   // Get the WASI module instance that was created by register_wasi
   let wasi_instance = match linker.get_module("wasi_snapshot_preview1") {
     Some(instance) => instance
-    None => @runtime.ModuleInstance::new() // Fallback: shouldn't happen
+    None => ModuleInstance() // Fallback: shouldn't happen
   }
   let registered_modules : Map[String, @runtime.ModuleInstance] = Map([])
   registered_modules.set("spectest", spectest_instance)
@@ -179,7 +175,7 @@ fn WastContext::try_compile_jit(
 ///|
 /// Build imports from registered modules
 pub fn WastContext::build_imports(self : WastContext) -> @runtime.Imports {
-  let imports = @runtime.Imports::new()
+  let imports = @runtime.Imports::Imports()
   for entry in self.registered_modules.iter() {
     let (mod_name, instance) = entry
     // Add all exports from this module as imports
@@ -220,8 +216,8 @@ pub fn run_wast_commands(
   show_success : Bool,
   jit_compiler? : JITCompiler? = None,
 ) -> WastResult {
-  let result = WastResult::new()
-  let ctx = WastContext::new(use_jit, jit_compiler~)
+  let result = WastResult::WastResult()
+  let ctx = WastContext::WastContext(use_jit, jit_compiler~)
   for item in script.commands {
     let (cmd, line) = item
     run_wast_command(ctx, cmd, line, result, base_dir, show_success)
@@ -293,7 +289,7 @@ pub fn run_wast_command(
     }
     ModuleQuote(parts) => {
       // Concatenate quoted strings and parse as WAT module
-      let wat_text = StringBuilder::new()
+      let wat_text = StringBuilder::StringBuilder()
       wat_text.write_string("(module ")
       for part in parts {
         wat_text.write_string(part)

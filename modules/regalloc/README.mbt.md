@@ -31,9 +31,9 @@ test "allocate virtual registers to physical registers" {
   let r1 : PhysicalReg = { id: 1, class: Int }
   let v0 : VirtualReg = { id: 0, class: Int }
   let v1 : VirtualReg = { id: 1, class: Int }
-  let program = Program::new([r0, r1])
-  let block = Block::new(0)
-  let inst = Instruction::new(0)
+  let program = Program::Program([r0, r1])
+  let block = Block::Block(0)
+  let inst = Instruction::Instruction(0)
   inst.add_operand(Operand::def(v0))
   inst.add_operand(Operand::use_reg(v1))
   block.append(inst)
@@ -56,19 +56,19 @@ register.
 test "compute a live range across two instructions" {
   let r0 : PhysicalReg = { id: 0, class: Int }
   let v0 : VirtualReg = { id: 0, class: Int }
-  let program = Program::new([r0])
-  let block = Block::new(0)
-  let def_inst = Instruction::new(0)
+  let program = Program::Program([r0])
+  let block = Block::Block(0)
+  let def_inst = Instruction::Instruction(0)
   def_inst.add_operand(Operand::def(v0))
   block.append(def_inst)
-  let use_inst = Instruction::new(1)
+  let use_inst = Instruction::Instruction(1)
   use_inst.add_operand(Operand::use_reg(v0))
   block.append(use_inst)
   program.add_block(block)
   let ranges = build_live_ranges(program)
   let range = ranges.get_by_vreg(v0).unwrap()
-  inspect(range.start() == Some(ProgramPoint::new(0, 0)), content="true")
-  inspect(range.end() == Some(ProgramPoint::new(0, 1)), content="true")
+  inspect(range.start() == Some(ProgramPoint(0, 0)), content="true")
+  inspect(range.end() == Some(ProgramPoint(0, 1)), content="true")
   inspect(range.uses.length(), content="2")
 }
 ```

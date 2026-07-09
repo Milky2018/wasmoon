@@ -379,7 +379,7 @@ fn cse_immutable_loads(
               if immutable_context_ptrs.contains(base_id) {
                 let key = "0|" + base_id.to_string() + "|" + off.to_string()
                 if seen.get(key) is Some(prev_id) {
-                  let mv = @instr.MachVInst::new(Move)
+                  let mv = @instr.MachVInst::MachVInst(Move)
                   mv.add_def(inst.defs[0])
                   mv.add_use(Virtual({ id: prev_id, class: Int }))
                   new_insts.push(mv)
@@ -401,7 +401,7 @@ fn cse_immutable_loads(
               if immutable_context_ptrs.contains(base_id) {
                 let key = "1|" + base_id.to_string() + "|" + off.to_string()
                 if seen.get(key) is Some(prev_id) {
-                  let mv = @instr.MachVInst::new(Move)
+                  let mv = @instr.MachVInst::MachVInst(Move)
                   mv.add_def(inst.defs[0])
                   mv.add_use(Virtual({ id: prev_id, class: Int }))
                   new_insts.push(mv)
@@ -429,7 +429,7 @@ fn cse_immutable_loads(
           _ => "context_base"
         }
         if seen.get(key) is Some(prev_id) {
-          let mv = @instr.MachVInst::new(Move)
+          let mv = @instr.MachVInst::MachVInst(Move)
           mv.add_def(inst.defs[0])
           mv.add_use(Virtual({ id: prev_id, class: Int }))
           new_insts.push(mv)
@@ -1263,7 +1263,7 @@ pub fn optimize_machv(
   }
   // Pass 1: Basic peephole optimizations (constant folding, move elimination)
   for block in func.blocks {
-    let state = PeepholeState::new()
+    let state = PeepholeState::PeepholeState()
     optimize_block(block, func, state, isa) |> ignore
   }
   // Pass 1.5: Copy propagation for single-use moves

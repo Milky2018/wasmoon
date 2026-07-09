@@ -63,7 +63,7 @@ pub(all) struct Instruction {
 } derive(Debug)
 
 ///|
-pub fn Instruction::new(id : Int) -> Instruction {
+pub fn Instruction::Instruction(id : Int) -> Instruction {
   { id, operands: [], clobbers: [] }
 }
 
@@ -85,7 +85,7 @@ pub(all) struct Block {
 } derive(Debug)
 
 ///|
-pub fn Block::new(id : Int) -> Block {
+pub fn Block::Block(id : Int) -> Block {
   { id, instructions: [], successors: [] }
 }
 
@@ -106,7 +106,7 @@ pub(all) struct Program {
 } derive(Debug)
 
 ///|
-pub fn Program::new(physical_regs : Array[PhysicalReg]) -> Program {
+pub fn Program::Program(physical_regs : Array[PhysicalReg]) -> Program {
   { blocks: [], physical_regs }
 }
 

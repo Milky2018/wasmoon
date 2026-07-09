@@ -4,7 +4,7 @@
 ///|
 /// Disassemble a WASM module to text format
 pub fn disassemble(mod_ : @types.Module) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder::StringBuilder()
   buf.write_string("(module\n")
 
   // Types section

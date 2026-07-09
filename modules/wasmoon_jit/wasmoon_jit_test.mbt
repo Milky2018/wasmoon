@@ -1,16 +1,16 @@
 ///|
 fn test_wasm_func_symbol(func_idx : Int) -> @instr.CodeSymbol {
-  @instr.CodeSymbol::new("wasm.func", func_idx)
+  CodeSymbol("wasm.func", func_idx)
 }
 
 ///|
 fn test_runtime_target(name : String) -> @instr.RelocTarget {
-  External(@instr.ExternalName::new(name))
+  External(ExternalName(name))
 }
 
 ///|
 test "resolve runtime helper relocations into linked code" {
-  let object = @machv_emit.MachineCode::new()
+  let object = @machv_emit.MachineCode::MachineCode()
   object.emit_byte(0)
   object.add_call_target_fixup(
     0,
@@ -30,10 +30,10 @@ test "resolve wasm function symbols into cwasm call fixups" {
   debug_inspect(resolve_wasm_func_symbol("wasm.func.12"), content="Some(12)")
   debug_inspect(resolve_wasm_func_symbol("wasm.func.x"), content="None")
   debug_inspect(resolve_wasm_func_symbol("runtime.func.12"), content="None")
-  let object = @machv_emit.MachineCode::new()
+  let object = @machv_emit.MachineCode::MachineCode()
   object.emit_byte(0)
   object.add_call_fixup(0, test_wasm_func_symbol(3))
-  let linked = try! link_code_object(object, RuntimeSymbolResolver::new())
+  let linked = try! link_code_object(object, RuntimeSymbolResolver())
   inspect(linked.runtime_relocations.length(), content="1")
   debug_inspect(linked.runtime_relocations[0].fixup_idx, content="Some(3)")
   let artifact = CwasmArtifact::from_linked_code_for_target(
@@ -62,7 +62,7 @@ test "resolve cwasm runtime helper fixup ids in wasmoon_jit" {
 
 ///|
 test "default wasmoon runtime resolver maps memory.grow fixup" {
-  let object = @machv_emit.MachineCode::new()
+  let object = @machv_emit.MachineCode::MachineCode()
   object.emit_byte(0)
   object.add_call_target_fixup(
     0,
@@ -171,9 +171,9 @@ test "trap report message formatting lives in wasmoon_jit" {
 
 ///|
 test "wrap linked code as cwasm artifact" {
-  let object = @machv_emit.MachineCode::new()
+  let object = @machv_emit.MachineCode::MachineCode()
   object.emit_byte(0)
-  let resolver = RuntimeSymbolResolver::new()
+  let resolver = RuntimeSymbolResolver::RuntimeSymbolResolver()
   let linked = try! link_code_object(object, resolver)
   let artifact = CwasmArtifact::from_linked_code_for_target(
     linked,
@@ -191,10 +191,10 @@ test "wrap linked code as cwasm artifact" {
 
 ///|
 test "cwasm artifact preserves reusable stack map offsets" {
-  let object = @machv_emit.MachineCode::new()
+  let object = @machv_emit.MachineCode::MachineCode()
   object.emit_byte(0)
   object.record_gc_safepoint(0, root_count=0) |> ignore
-  let linked = try! link_code_object(object, RuntimeSymbolResolver::new())
+  let linked = try! link_code_object(object, RuntimeSymbolResolver())
   let artifact = CwasmArtifact::from_linked_code_for_target(
     linked,
     7,
@@ -211,7 +211,7 @@ test "cwasm artifact preserves reusable stack map offsets" {
 
 ///|
 test "cwasm artifact preserves runtime call fixup metadata" {
-  let object = @machv_emit.MachineCode::new()
+  let object = @machv_emit.MachineCode::MachineCode()
   object.emit_byte(0)
   object.add_call_target_fixup(
     0,
@@ -234,7 +234,7 @@ test "cwasm artifact preserves runtime call fixup metadata" {
 
 ///|
 test "aarch64 cwasm artifact materializes runtime call veneers" {
-  let object = @machv_emit.MachineCode::new()
+  let object = @machv_emit.MachineCode::MachineCode()
   for _ in 0..<40 {
     object.emit_byte(0)
   }
@@ -363,10 +363,10 @@ test "install direct-call stubs in wasmoon_jit" {
 
 ///|
 test "compute required JIT context function count" {
-  let mod = @cwasm.PrecompiledModule::new(AArch64)
+  let mod = @cwasm.PrecompiledModule::PrecompiledModule(AArch64)
   mod.add_import("wasi_snapshot_preview1", "fd_write", 4, 1)
   mod.add_import("spectest", "print", 1, 0)
-  mod.add_function(@cwasm.CompiledEntry::new(7, "f7", [0xC3], 0, 0, 0, 0))
+  mod.add_function(CompiledEntry(7, "f7", [0xC3], 0, 0, 0, 0))
   inspect(required_context_function_count(mod, 5), content="8")
   inspect(required_context_function_count(mod, 12), content="12")
 }
@@ -399,7 +399,7 @@ test "encode X64 call rel32 displacement for direct-call fixups" {
 
 ///|
 test "plan Wasmoon JIT integration without leaking into machv_emit" {
-  let milk = @milkir.Function::new("entry", @milkir.Signature::new([], []))
+  let milk = @milkir.Function::Function("entry", Signature([], []))
   let entry = milk.new_block0()
   entry.set_terminator(Return([]))
   let x64_plan = plan_milkir_integration_for_target(milk, X64)
@@ -424,8 +424,8 @@ test "plan Wasmoon JIT integration without leaking into machv_emit" {
 
 ///|
 test "plan MilkIR through reusable JIT pipeline" {
-  let signature = @milkir.Signature::new([I64, I64], [I64])
-  let milk = @milkir.Function::new("add64", signature)
+  let signature = @milkir.Signature::Signature([I64, I64], [I64])
+  let milk = @milkir.Function::Function("add64", signature)
   let lhs = milk.new_value(I64)
   let rhs = milk.new_value(I64)
   let sum = milk.new_value(I64)
@@ -448,8 +448,8 @@ test "plan MilkIR through reusable JIT pipeline" {
 
 ///|
 test "Wasmoon JIT can request Wasm body ABI lowering" {
-  let signature = @milkir.Signature::new([Ptr, I64, I64], [I64, I64])
-  let milk = @milkir.Function::new("wasm_body", signature)
+  let signature = @milkir.Signature::Signature([Ptr, I64, I64], [I64, I64])
+  let milk = @milkir.Function::Function("wasm_body", signature)
   let vmctx = milk.new_value(Ptr)
   let lhs = milk.new_value(I64)
   let rhs = milk.new_value(I64)
@@ -465,8 +465,8 @@ test "Wasmoon JIT can request Wasm body ABI lowering" {
 
 ///|
 test "plan Wasm body MilkIR through reusable JIT pipeline" {
-  let signature = @milkir.Signature::new([Ptr, I64, I64], [I64])
-  let milk = @milkir.Function::new("wasm_body_add64", signature)
+  let signature = @milkir.Signature::Signature([Ptr, I64, I64], [I64])
+  let milk = @milkir.Function::Function("wasm_body_add64", signature)
   let vmctx = milk.new_value(Ptr)
   let lhs = milk.new_value(I64)
   let rhs = milk.new_value(I64)
@@ -488,8 +488,8 @@ test "plan Wasm body MilkIR through reusable JIT pipeline" {
 
 ///|
 test "plan MilkIR branch block params through reusable JIT pipeline" {
-  let signature = @milkir.Signature::new([], [I64])
-  let milk = @milkir.Function::new("branch_block_params", signature)
+  let signature = @milkir.Signature::Signature([], [I64])
+  let milk = @milkir.Function::Function("branch_block_params", signature)
   let cond = milk.new_value(I64)
   let true_value = milk.new_value(I64)
   let false_value = milk.new_value(I64)
@@ -520,8 +520,8 @@ test "plan MilkIR branch block params through reusable JIT pipeline" {
 
 ///|
 test "plan MilkIR CallPtr through reusable JIT pipeline" {
-  let signature = @milkir.Signature::new([Ptr, Ptr, I64], [I64])
-  let milk = @milkir.Function::new("callptr64", signature)
+  let signature = @milkir.Signature::Signature([Ptr, Ptr, I64], [I64])
+  let milk = @milkir.Function::Function("callptr64", signature)
   let callee = milk.new_value(Ptr)
   let vmctx = milk.new_value(Ptr)
   let arg = milk.new_value(I64)
@@ -553,7 +553,7 @@ test "plan scalar entry trampoline through reusable JIT pipeline" {
   inspect(plan.object.get_bytes().length() > 0, content="true")
   let artifact = try! CwasmArtifact::from_jit_plan(
     plan,
-    RuntimeSymbolResolver::new(),
+    RuntimeSymbolResolver(),
     11,
   )
   let restored = try! @cwasm.deserialize(artifact.serialize())
@@ -1019,8 +1019,8 @@ test "entry trampolines support overflow result areas" {
 
 ///|
 test "plan MilkIR floating point through reusable JIT pipeline" {
-  let signature = @milkir.Signature::new([F64, F64], [F64])
-  let milk = @milkir.Function::new("fadd64", signature)
+  let signature = @milkir.Signature::Signature([F64, F64], [F64])
+  let milk = @milkir.Function::Function("fadd64", signature)
   let lhs = milk.new_value(F64)
   let rhs = milk.new_value(F64)
   let sum = milk.new_value(F64)
@@ -1038,8 +1038,8 @@ test "plan MilkIR floating point through reusable JIT pipeline" {
 
 ///|
 test "plan MilkIR floating abs and neg through reusable JIT pipeline" {
-  let signature = @milkir.Signature::new([F64], [F64])
-  let milk = @milkir.Function::new("fabs_fneg64", signature)
+  let signature = @milkir.Signature::Signature([F64], [F64])
+  let milk = @milkir.Function::Function("fabs_fneg64", signature)
   let input = milk.new_value(F64)
   let neg = milk.new_value(F64)
   let abs = milk.new_value(F64)
@@ -1065,8 +1065,8 @@ test "plan MilkIR floating abs and neg through reusable JIT pipeline" {
 
 ///|
 test "plan MilkIR f64 const through reusable x64 JIT pipeline" {
-  let signature = @milkir.Signature::new([], [F64])
-  let milk = @milkir.Function::new("fconst64_x64", signature)
+  let signature = @milkir.Signature::Signature([], [F64])
+  let milk = @milkir.Function::Function("fconst64_x64", signature)
   let output = milk.new_value(F64)
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Fconst(1.5), [], [output]))
@@ -1079,8 +1079,8 @@ test "plan MilkIR f64 const through reusable x64 JIT pipeline" {
 
 ///|
 test "plan MilkIR f32 const through reusable AArch64 JIT pipeline" {
-  let signature = @milkir.Signature::new([], [F32])
-  let milk = @milkir.Function::new("fconst32_aarch64", signature)
+  let signature = @milkir.Signature::Signature([], [F32])
+  let milk = @milkir.Function::Function("fconst32_aarch64", signature)
   let output = milk.new_value(F32)
   let entry = milk.new_block([])
   let bits = (1.25 : Float).reinterpret_as_int().to_int64()
@@ -1109,8 +1109,8 @@ test "plan MilkIR f32 const through reusable AArch64 JIT pipeline" {
 
 ///|
 test "plan MilkIR float promote through reusable x64 JIT pipeline" {
-  let signature = @milkir.Signature::new([F32], [F64])
-  let milk = @milkir.Function::new("fpromote_x64", signature)
+  let signature = @milkir.Signature::Signature([F32], [F64])
+  let milk = @milkir.Function::Function("fpromote_x64", signature)
   let input = milk.new_value(F32)
   let output = milk.new_value(F64)
   let entry = milk.new_block([])
@@ -1134,8 +1134,8 @@ test "plan MilkIR float promote through reusable x64 JIT pipeline" {
 
 ///|
 test "plan MilkIR float demote through reusable AArch64 JIT pipeline" {
-  let signature = @milkir.Signature::new([F64], [F32])
-  let milk = @milkir.Function::new("fdemote_aarch64", signature)
+  let signature = @milkir.Signature::Signature([F64], [F32])
+  let milk = @milkir.Function::Function("fdemote_aarch64", signature)
   let input = milk.new_value(F64)
   let output = milk.new_value(F32)
   let entry = milk.new_block([])
@@ -1163,8 +1163,8 @@ test "plan MilkIR float demote through reusable AArch64 JIT pipeline" {
 
 ///|
 test "plan MilkIR float ceil through reusable x64 JIT pipeline" {
-  let signature = @milkir.Signature::new([F32], [F32])
-  let milk = @milkir.Function::new("fceil_x64", signature)
+  let signature = @milkir.Signature::Signature([F32], [F32])
+  let milk = @milkir.Function::Function("fceil_x64", signature)
   let input = milk.new_value(F32)
   let output = milk.new_value(F32)
   let entry = milk.new_block([])
@@ -1189,8 +1189,8 @@ test "plan MilkIR float ceil through reusable x64 JIT pipeline" {
 
 ///|
 test "plan MilkIR float nearest through reusable AArch64 JIT pipeline" {
-  let signature = @milkir.Signature::new([F64], [F64])
-  let milk = @milkir.Function::new("fnearest_aarch64", signature)
+  let signature = @milkir.Signature::Signature([F64], [F64])
+  let milk = @milkir.Function::Function("fnearest_aarch64", signature)
   let input = milk.new_value(F64)
   let output = milk.new_value(F64)
   let entry = milk.new_block([])
@@ -1218,8 +1218,8 @@ test "plan MilkIR float nearest through reusable AArch64 JIT pipeline" {
 
 ///|
 test "plan MilkIR float compare through reusable x64 JIT pipeline" {
-  let signature = @milkir.Signature::new([F64, F64], [I32])
-  let milk = @milkir.Function::new("fcmp_eq_x64", signature)
+  let signature = @milkir.Signature::Signature([F64, F64], [I32])
+  let milk = @milkir.Function::Function("fcmp_eq_x64", signature)
   let lhs = milk.new_value(F64)
   let rhs = milk.new_value(F64)
   let output = milk.new_value(I32)
@@ -1250,8 +1250,8 @@ test "plan MilkIR float compare through reusable x64 JIT pipeline" {
 
 ///|
 test "plan MilkIR float compare through reusable AArch64 JIT pipeline" {
-  let signature = @milkir.Signature::new([F32, F32], [I32])
-  let milk = @milkir.Function::new("fcmp_lt_aarch64", signature)
+  let signature = @milkir.Signature::Signature([F32, F32], [I32])
+  let milk = @milkir.Function::Function("fcmp_lt_aarch64", signature)
   let lhs = milk.new_value(F32)
   let rhs = milk.new_value(F32)
   let output = milk.new_value(I32)
@@ -1286,8 +1286,8 @@ test "plan MilkIR float compare through reusable AArch64 JIT pipeline" {
 
 ///|
 test "plan MilkIR generic memory through reusable x64 JIT pipeline" {
-  let signature = @milkir.Signature::new([Ptr, I32], [I32])
-  let milk = @milkir.Function::new("generic_mem_x64", signature)
+  let signature = @milkir.Signature::Signature([Ptr, I32], [I32])
+  let milk = @milkir.Function::Function("generic_mem_x64", signature)
   let ptr = milk.new_value(Ptr)
   let value = milk.new_value(I32)
   let loaded = milk.new_value(I32)
@@ -1318,7 +1318,7 @@ test "plan MilkIR generic memory through reusable x64 JIT pipeline" {
 
 ///|
 test "plan MilkIR narrow memory through reusable x64 JIT pipeline" {
-  let builder = @milkir.FunctionBuilder::new("narrow_mem_x64")
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("narrow_mem_x64")
   let ptr = builder.add_param(Ptr)
   let value = builder.add_param(I32)
   builder.add_result(I32)
@@ -1354,8 +1354,8 @@ test "plan MilkIR narrow memory through reusable x64 JIT pipeline" {
 
 ///|
 test "plan MilkIR generic memory through reusable AArch64 JIT pipeline" {
-  let signature = @milkir.Signature::new([Ptr, I32], [I32])
-  let milk = @milkir.Function::new("generic_mem_aarch64", signature)
+  let signature = @milkir.Signature::Signature([Ptr, I32], [I32])
+  let milk = @milkir.Function::Function("generic_mem_aarch64", signature)
   let ptr = milk.new_value(Ptr)
   let value = milk.new_value(I32)
   let loaded = milk.new_value(I32)
@@ -1391,7 +1391,7 @@ test "plan MilkIR generic memory through reusable AArch64 JIT pipeline" {
 
 ///|
 test "plan MilkIR narrow memory through reusable AArch64 JIT pipeline" {
-  let builder = @milkir.FunctionBuilder::new("narrow_mem_aarch64")
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("narrow_mem_aarch64")
   let ptr = builder.add_param(Ptr)
   let value = builder.add_param(I32)
   builder.add_result(I32)
@@ -1430,8 +1430,8 @@ test "plan MilkIR narrow memory through reusable AArch64 JIT pipeline" {
 
 ///|
 test "plan MilkIR scalar float memory through reusable x64 JIT pipeline" {
-  let signature = @milkir.Signature::new([Ptr, F64], [F64])
-  let milk = @milkir.Function::new("float_mem_x64", signature)
+  let signature = @milkir.Signature::Signature([Ptr, F64], [F64])
+  let milk = @milkir.Function::Function("float_mem_x64", signature)
   let ptr = milk.new_value(Ptr)
   let value = milk.new_value(F64)
   let loaded = milk.new_value(F64)
@@ -1466,8 +1466,8 @@ test "plan MilkIR scalar float memory through reusable x64 JIT pipeline" {
 
 ///|
 test "plan MilkIR scalar float memory through reusable AArch64 JIT pipeline" {
-  let signature = @milkir.Signature::new([Ptr, F64], [F64])
-  let milk = @milkir.Function::new("float_mem_aarch64", signature)
+  let signature = @milkir.Signature::Signature([Ptr, F64], [F64])
+  let milk = @milkir.Function::Function("float_mem_aarch64", signature)
   let ptr = milk.new_value(Ptr)
   let value = milk.new_value(F64)
   let loaded = milk.new_value(F64)
@@ -1503,8 +1503,8 @@ test "plan MilkIR scalar float memory through reusable AArch64 JIT pipeline" {
 
 ///|
 test "plan MilkIR vector memory through reusable x64 JIT pipeline" {
-  let signature = @milkir.Signature::new([Ptr, V128], [])
-  let milk = @milkir.Function::new("vector_mem_x64", signature)
+  let signature = @milkir.Signature::Signature([Ptr, V128], [])
+  let milk = @milkir.Function::Function("vector_mem_x64", signature)
   let ptr = milk.new_value(Ptr)
   let value = milk.new_value(V128)
   let loaded = milk.new_value(V128)
@@ -1539,8 +1539,8 @@ test "plan MilkIR vector memory through reusable x64 JIT pipeline" {
 
 ///|
 test "plan MilkIR vector memory through reusable AArch64 JIT pipeline" {
-  let signature = @milkir.Signature::new([Ptr, V128], [])
-  let milk = @milkir.Function::new("vector_mem_aarch64", signature)
+  let signature = @milkir.Signature::Signature([Ptr, V128], [])
+  let milk = @milkir.Function::Function("vector_mem_aarch64", signature)
   let ptr = milk.new_value(Ptr)
   let value = milk.new_value(V128)
   let loaded = milk.new_value(V128)
@@ -1576,8 +1576,8 @@ test "plan MilkIR vector memory through reusable AArch64 JIT pipeline" {
 
 ///|
 test "emit MachV regalloc through reusable x64 pipeline" {
-  let signature = @milkir.Signature::new([I64, I64], [I64])
-  let milk = @milkir.Function::new("regalloc_x64", signature)
+  let signature = @milkir.Signature::Signature([I64, I64], [I64])
+  let milk = @milkir.Function::Function("regalloc_x64", signature)
   let lhs = milk.new_value(I64)
   let rhs = milk.new_value(I64)
   let sum = milk.new_value(I64)
@@ -1609,8 +1609,8 @@ test "plan Wasm body return area through reusable JIT pipeline" {
 
 ///|
 test "plan MilkIR StackAddr through reusable x64 JIT pipeline" {
-  let signature = @milkir.Signature::new([], [Ptr])
-  let milk = @milkir.Function::new("stack_addr_x64", signature)
+  let signature = @milkir.Signature::Signature([], [Ptr])
+  let milk = @milkir.Function::Function("stack_addr_x64", signature)
   let slot = milk.new_stack_slot(16, 16)
   let ptr = milk.new_value(Ptr)
   let entry = milk.new_block([])
@@ -1624,8 +1624,8 @@ test "plan MilkIR StackAddr through reusable x64 JIT pipeline" {
 
 ///|
 test "plan MilkIR popcnt through reusable x64 JIT pipeline" {
-  let signature = @milkir.Signature::new([I64], [I64])
-  let milk = @milkir.Function::new("popcnt_x64", signature)
+  let signature = @milkir.Signature::Signature([I64], [I64])
+  let milk = @milkir.Function::Function("popcnt_x64", signature)
   let value = milk.new_value(I64)
   let count = milk.new_value(I64)
   let entry = milk.new_block([])
@@ -1644,8 +1644,8 @@ test "plan MilkIR popcnt through reusable x64 JIT pipeline" {
 
 ///|
 test "plan MilkIR bitcast through reusable x64 JIT pipeline" {
-  let signature = @milkir.Signature::new([I64], [F64])
-  let milk = @milkir.Function::new("bitcast_i64_f64", signature)
+  let signature = @milkir.Signature::Signature([I64], [F64])
+  let milk = @milkir.Function::Function("bitcast_i64_f64", signature)
   let input = milk.new_value(I64)
   let output = milk.new_value(F64)
   let entry = milk.new_block([])
@@ -1668,8 +1668,8 @@ test "plan MilkIR bitcast through reusable x64 JIT pipeline" {
 
 ///|
 test "plan MilkIR bitcast through reusable AArch64 JIT pipeline" {
-  let signature = @milkir.Signature::new([F64], [I64])
-  let milk = @milkir.Function::new("bitcast_f64_i64", signature)
+  let signature = @milkir.Signature::Signature([F64], [I64])
+  let milk = @milkir.Function::Function("bitcast_f64_i64", signature)
   let input = milk.new_value(F64)
   let output = milk.new_value(I64)
   let entry = milk.new_block([])
@@ -1696,8 +1696,8 @@ test "plan MilkIR bitcast through reusable AArch64 JIT pipeline" {
 
 ///|
 test "plan MilkIR sign-extension through reusable x64 JIT pipeline" {
-  let signature = @milkir.Signature::new([I64], [I64])
-  let milk = @milkir.Function::new("sext8_x64", signature)
+  let signature = @milkir.Signature::Signature([I64], [I64])
+  let milk = @milkir.Function::Function("sext8_x64", signature)
   let input = milk.new_value(I64)
   let output = milk.new_value(I64)
   let entry = milk.new_block([])
@@ -1720,8 +1720,8 @@ test "plan MilkIR sign-extension through reusable x64 JIT pipeline" {
 
 ///|
 test "plan MilkIR sign-extension through reusable AArch64 JIT pipeline" {
-  let signature = @milkir.Signature::new([I64], [I64])
-  let milk = @milkir.Function::new("sext32_aarch64", signature)
+  let signature = @milkir.Signature::Signature([I64], [I64])
+  let milk = @milkir.Function::Function("sext32_aarch64", signature)
   let input = milk.new_value(I64)
   let output = milk.new_value(I64)
   let entry = milk.new_block([])
@@ -1749,8 +1749,8 @@ test "plan MilkIR sign-extension through reusable AArch64 JIT pipeline" {
 
 ///|
 test "plan MilkIR unsigned extend through reusable x64 JIT pipeline" {
-  let signature = @milkir.Signature::new([I32], [I64])
-  let milk = @milkir.Function::new("uextend_x64", signature)
+  let signature = @milkir.Signature::Signature([I32], [I64])
+  let milk = @milkir.Function::Function("uextend_x64", signature)
   let input = milk.new_value(I32)
   let output = milk.new_value(I64)
   let entry = milk.new_block([])
@@ -1772,8 +1772,8 @@ test "plan MilkIR unsigned extend through reusable x64 JIT pipeline" {
 
 ///|
 test "plan MilkIR integer reduce through reusable AArch64 JIT pipeline" {
-  let signature = @milkir.Signature::new([I64], [I32])
-  let milk = @milkir.Function::new("ireduce_aarch64", signature)
+  let signature = @milkir.Signature::Signature([I64], [I32])
+  let milk = @milkir.Function::Function("ireduce_aarch64", signature)
   let input = milk.new_value(I64)
   let output = milk.new_value(I32)
   let entry = milk.new_block([])
@@ -1799,8 +1799,8 @@ test "plan MilkIR integer reduce through reusable AArch64 JIT pipeline" {
 
 ///|
 test "plan MilkIR integer select through reusable x64 JIT pipeline" {
-  let signature = @milkir.Signature::new([I32, I64, I64], [I64])
-  let milk = @milkir.Function::new("select_x64", signature)
+  let signature = @milkir.Signature::Signature([I32, I64, I64], [I64])
+  let milk = @milkir.Function::Function("select_x64", signature)
   let cond = milk.new_value(I32)
   let true_value = milk.new_value(I64)
   let false_value = milk.new_value(I64)
@@ -1818,8 +1818,8 @@ test "plan MilkIR integer select through reusable x64 JIT pipeline" {
 
 ///|
 test "plan MilkIR floating point select through reusable x64 JIT pipeline" {
-  let signature = @milkir.Signature::new([I32, F64, F64], [F64])
-  let milk = @milkir.Function::new("select_f64_x64", signature)
+  let signature = @milkir.Signature::Signature([I32, F64, F64], [F64])
+  let milk = @milkir.Function::Function("select_f64_x64", signature)
   let cond = milk.new_value(I32)
   let true_value = milk.new_value(F64)
   let false_value = milk.new_value(F64)
@@ -1841,8 +1841,8 @@ test "plan MilkIR floating point select through reusable x64 JIT pipeline" {
 
 ///|
 test "plan MilkIR integer select through reusable AArch64 JIT pipeline" {
-  let signature = @milkir.Signature::new([I32, I64, I64], [I64])
-  let milk = @milkir.Function::new("select_aarch64", signature)
+  let signature = @milkir.Signature::Signature([I32, I64, I64], [I64])
+  let milk = @milkir.Function::Function("select_aarch64", signature)
   let cond = milk.new_value(I32)
   let true_value = milk.new_value(I64)
   let false_value = milk.new_value(I64)
@@ -1866,8 +1866,8 @@ test "plan MilkIR integer select through reusable AArch64 JIT pipeline" {
 
 ///|
 test "plan MilkIR floating point select through reusable AArch64 JIT pipeline" {
-  let signature = @milkir.Signature::new([I32, F64, F64], [F64])
-  let milk = @milkir.Function::new("select_f64_aarch64", signature)
+  let signature = @milkir.Signature::Signature([I32, F64, F64], [F64])
+  let milk = @milkir.Function::Function("select_f64_aarch64", signature)
   let cond = milk.new_value(I32)
   let true_value = milk.new_value(F64)
   let false_value = milk.new_value(F64)
@@ -1891,8 +1891,8 @@ test "plan MilkIR floating point select through reusable AArch64 JIT pipeline" {
 
 ///|
 test "plan MilkIR signed integer division through reusable JIT pipeline" {
-  let signature = @milkir.Signature::new([I64, I64], [I64])
-  let milk = @milkir.Function::new("sdiv64", signature)
+  let signature = @milkir.Signature::Signature([I64, I64], [I64])
+  let milk = @milkir.Function::Function("sdiv64", signature)
   let lhs = milk.new_value(I64)
   let rhs = milk.new_value(I64)
   let quotient = milk.new_value(I64)
@@ -1923,8 +1923,8 @@ test "plan MilkIR signed integer division through reusable JIT pipeline" {
 
 ///|
 test "plan MilkIR signed integer remainder through reusable JIT pipeline" {
-  let signature = @milkir.Signature::new([I64, I64], [I64])
-  let milk = @milkir.Function::new("srem64", signature)
+  let signature = @milkir.Signature::Signature([I64, I64], [I64])
+  let milk = @milkir.Function::Function("srem64", signature)
   let lhs = milk.new_value(I64)
   let rhs = milk.new_value(I64)
   let rem = milk.new_value(I64)
@@ -1955,8 +1955,8 @@ test "plan MilkIR signed integer remainder through reusable JIT pipeline" {
 
 ///|
 test "plan MilkIR signed multiply-high through reusable JIT pipeline" {
-  let signature = @milkir.Signature::new([I64, I64], [I64])
-  let milk = @milkir.Function::new("smulh64", signature)
+  let signature = @milkir.Signature::Signature([I64, I64], [I64])
+  let milk = @milkir.Function::Function("smulh64", signature)
   let lhs = milk.new_value(I64)
   let rhs = milk.new_value(I64)
   let high = milk.new_value(I64)
@@ -1980,8 +1980,8 @@ test "plan MilkIR signed multiply-high through reusable JIT pipeline" {
 
 ///|
 test "plan MilkIR integer not through reusable JIT pipeline" {
-  let signature = @milkir.Signature::new([I64], [I64])
-  let milk = @milkir.Function::new("bnot64", signature)
+  let signature = @milkir.Signature::Signature([I64], [I64])
+  let milk = @milkir.Function::Function("bnot64", signature)
   let input = milk.new_value(I64)
   let inverted = milk.new_value(I64)
   let entry = milk.new_block([])
@@ -2003,8 +2003,8 @@ test "plan MilkIR integer not through reusable JIT pipeline" {
 
 ///|
 test "plan MilkIR integer compare through reusable JIT pipeline" {
-  let signature = @milkir.Signature::new([I64, I64], [I32])
-  let milk = @milkir.Function::new("icmp_slt64", signature)
+  let signature = @milkir.Signature::Signature([I64, I64], [I32])
+  let milk = @milkir.Function::Function("icmp_slt64", signature)
   let lhs = milk.new_value(I64)
   let rhs = milk.new_value(I64)
   let is_less = milk.new_value(I32)
@@ -2034,8 +2034,8 @@ test "plan MilkIR integer compare through reusable JIT pipeline" {
 
 ///|
 test "plan MilkIR integer shift through reusable JIT pipeline" {
-  let signature = @milkir.Signature::new([I64, I64], [I64])
-  let milk = @milkir.Function::new("shl64", signature)
+  let signature = @milkir.Signature::Signature([I64, I64], [I64])
+  let milk = @milkir.Function::Function("shl64", signature)
   let value = milk.new_value(I64)
   let count = milk.new_value(I64)
   let shifted = milk.new_value(I64)
@@ -2058,8 +2058,8 @@ test "plan MilkIR integer shift through reusable JIT pipeline" {
 
 ///|
 test "plan MilkIR integer rotate through reusable JIT pipeline" {
-  let signature = @milkir.Signature::new([I64, I64], [I64])
-  let milk = @milkir.Function::new("rotr64", signature)
+  let signature = @milkir.Signature::Signature([I64, I64], [I64])
+  let milk = @milkir.Function::Function("rotr64", signature)
   let value = milk.new_value(I64)
   let count = milk.new_value(I64)
   let rotated = milk.new_value(I64)
@@ -2083,8 +2083,8 @@ test "plan MilkIR integer rotate through reusable JIT pipeline" {
 
 ///|
 test "plan MilkIR integer ctz through reusable AArch64 JIT pipeline" {
-  let signature = @milkir.Signature::new([I64], [I64])
-  let milk = @milkir.Function::new("ctz64", signature)
+  let signature = @milkir.Signature::Signature([I64], [I64])
+  let milk = @milkir.Function::Function("ctz64", signature)
   let value = milk.new_value(I64)
   let trailing = milk.new_value(I64)
   let entry = milk.new_block([])
@@ -2117,8 +2117,8 @@ test "plan MilkIR integer ctz through reusable AArch64 JIT pipeline" {
 
 ///|
 test "plan MilkIR integer clz through reusable x64 JIT pipeline" {
-  let signature = @milkir.Signature::new([I64], [I64])
-  let milk = @milkir.Function::new("clz64_x64", signature)
+  let signature = @milkir.Signature::Signature([I64], [I64])
+  let milk = @milkir.Function::Function("clz64_x64", signature)
   let value = milk.new_value(I64)
   let leading = milk.new_value(I64)
   let entry = milk.new_block([])
@@ -2132,8 +2132,8 @@ test "plan MilkIR integer clz through reusable x64 JIT pipeline" {
 
 ///|
 test "plan MilkIR integer ctz through reusable x64 JIT pipeline" {
-  let signature = @milkir.Signature::new([I64], [I64])
-  let milk = @milkir.Function::new("ctz64_x64", signature)
+  let signature = @milkir.Signature::Signature([I64], [I64])
+  let milk = @milkir.Function::Function("ctz64_x64", signature)
   let value = milk.new_value(I64)
   let trailing = milk.new_value(I64)
   let entry = milk.new_block([])
@@ -2147,8 +2147,8 @@ test "plan MilkIR integer ctz through reusable x64 JIT pipeline" {
 
 ///|
 test "plan MilkIR unsigned multiply-high through reusable AArch64 JIT pipeline" {
-  let signature = @milkir.Signature::new([I64, I64], [I64])
-  let milk = @milkir.Function::new("umulh64", signature)
+  let signature = @milkir.Signature::Signature([I64, I64], [I64])
+  let milk = @milkir.Function::Function("umulh64", signature)
   let lhs = milk.new_value(I64)
   let rhs = milk.new_value(I64)
   let high = milk.new_value(I64)
@@ -2177,8 +2177,8 @@ test "plan MilkIR unsigned multiply-high through reusable AArch64 JIT pipeline" 
 
 ///|
 test "plan MilkIR rotate-right through reusable AArch64 JIT pipeline" {
-  let signature = @milkir.Signature::new([I64, I64], [I64])
-  let milk = @milkir.Function::new("rotr64_aarch64", signature)
+  let signature = @milkir.Signature::Signature([I64, I64], [I64])
+  let milk = @milkir.Function::Function("rotr64_aarch64", signature)
   let value = milk.new_value(I64)
   let count = milk.new_value(I64)
   let rotated = milk.new_value(I64)
@@ -2207,8 +2207,8 @@ test "plan MilkIR rotate-right through reusable AArch64 JIT pipeline" {
 
 ///|
 test "plan MilkIR rotate-left through reusable AArch64 JIT pipeline" {
-  let signature = @milkir.Signature::new([I64, I64], [I64])
-  let milk = @milkir.Function::new("rotl64_aarch64", signature)
+  let signature = @milkir.Signature::Signature([I64, I64], [I64])
+  let milk = @milkir.Function::Function("rotl64_aarch64", signature)
   let value = milk.new_value(I64)
   let count = milk.new_value(I64)
   let rotated = milk.new_value(I64)
@@ -2237,8 +2237,8 @@ test "plan MilkIR rotate-left through reusable AArch64 JIT pipeline" {
 
 ///|
 test "wrap reusable JIT plan as cwasm artifact" {
-  let signature = @milkir.Signature::new([I64, I64], [I64])
-  let milk = @milkir.Function::new("add64_artifact", signature)
+  let signature = @milkir.Signature::Signature([I64, I64], [I64])
+  let milk = @milkir.Function::Function("add64_artifact", signature)
   let lhs = milk.new_value(I64)
   let rhs = milk.new_value(I64)
   let sum = milk.new_value(I64)
@@ -2248,7 +2248,7 @@ test "wrap reusable JIT plan as cwasm artifact" {
   let plan = plan_milkir_integration_for_target(milk, X64)
   let artifact = try! CwasmArtifact::from_jit_plan(
     plan,
-    RuntimeSymbolResolver::new(),
+    RuntimeSymbolResolver(),
     3,
   )
   inspect(artifact.functions.length(), content="1")
@@ -2268,8 +2268,8 @@ test "wrap reusable JIT plan as cwasm artifact" {
 
 ///|
 test "wrap reusable JIT plan preserves cwasm signature metadata" {
-  let signature = @milkir.Signature::new([I64, I64], [I64])
-  let milk = @milkir.Function::new("add64_artifact_sig", signature)
+  let signature = @milkir.Signature::Signature([I64, I64], [I64])
+  let milk = @milkir.Function::Function("add64_artifact_sig", signature)
   let lhs = milk.new_value(I64)
   let rhs = milk.new_value(I64)
   let sum = milk.new_value(I64)
@@ -2279,7 +2279,7 @@ test "wrap reusable JIT plan preserves cwasm signature metadata" {
   let plan = plan_milkir_integration_for_target(milk, X64)
   let artifact = try! CwasmArtifact::from_jit_plan_with_signature(
     plan,
-    RuntimeSymbolResolver::new(),
+    RuntimeSymbolResolver(),
     4,
     2,
     1,

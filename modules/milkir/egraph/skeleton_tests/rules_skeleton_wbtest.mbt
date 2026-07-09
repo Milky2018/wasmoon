@@ -2,7 +2,7 @@
 
 ///|
 test "skeleton: udiv(y, select(cond, 4, 8)) = ushr(y, select(cond, 2, 3))" {
-  let eg = @egraph.EGraph::new()
+  let eg = @egraph.EGraph::EGraph()
   let y = eg.add_var(0)
   let cond = eg.add_var(1)
   let k4 = eg.add_const(4L) // 2^2
@@ -22,7 +22,7 @@ test "skeleton: udiv(y, select(cond, 4, 8)) = ushr(y, select(cond, 2, 3))" {
 
 ///|
 test "skeleton: udiv(y, select(cond, 2, 16)) = ushr(y, select(cond, 1, 4))" {
-  let eg = @egraph.EGraph::new()
+  let eg = @egraph.EGraph::EGraph()
   let y = eg.add_var(0)
   let cond = eg.add_var(1)
   let k2 = eg.add_const(2L) // 2^1
@@ -42,7 +42,7 @@ test "skeleton: udiv(y, select(cond, 2, 16)) = ushr(y, select(cond, 1, 4))" {
 
 ///|
 test "skeleton: udiv(y, select(cond, 1, 32)) = ushr(y, select(cond, 0, 5))" {
-  let eg = @egraph.EGraph::new()
+  let eg = @egraph.EGraph::EGraph()
   let y = eg.add_var(0)
   let cond = eg.add_var(1)
   let k1 = eg.add_const(1L) // 2^0

@@ -10,7 +10,7 @@ pub struct Value {
 } derive(Eq, Debug, Hash)
 
 ///|
-pub fn Value::new(id : Int, ty : Type) -> Value {
+pub fn Value::Value(id : Int, ty : Type) -> Value {
   { id, ty }
 }
 
@@ -54,7 +54,10 @@ pub struct Signature {
 } derive(Eq, Debug, Hash)
 
 ///|
-pub fn Signature::new(params : Array[Type], results : Array[Type]) -> Signature {
+pub fn Signature::Signature(
+  params : Array[Type],
+  results : Array[Type],
+) -> Signature {
   { params, results }
 }
 
@@ -64,7 +67,7 @@ pub struct ExternalSymbol {
 } derive(Eq, Debug, Hash)
 
 ///|
-pub fn ExternalSymbol::new(name : String) -> ExternalSymbol {
+pub fn ExternalSymbol::ExternalSymbol(name : String) -> ExternalSymbol {
   { name, }
 }
 
@@ -76,7 +79,7 @@ pub struct ExtOp {
 } derive(Debug)
 
 ///|
-pub fn ExtOp::new(
+pub fn ExtOp::ExtOp(
   dialect : String,
   opcode : String,
   immediates : FixedArray[Int],
@@ -136,13 +139,13 @@ pub struct Block {
 } derive(Debug)
 
 ///|
-fn Block::new(id : Int) -> Block {
+fn Block::Block(id : Int) -> Block {
   { id, params: [], instructions: [], terminator: None }
 }
 
 ///|
 fn Block::new_with_params(id : Int, params : Array[Value]) -> Block {
-  let block = Block::new(id)
+  let block = Block::Block(id)
   for param in params {
     block.add_param(param, param.ty)
   }
@@ -210,7 +213,11 @@ pub impl Eq for Inst with fn equal(self, other) {
 }
 
 ///|
-fn Inst::new(result : Value?, opcode : Opcode, operands : Array[Value]) -> Inst {
+fn Inst::Inst(
+  result : Value?,
+  opcode : Opcode,
+  operands : Array[Value],
+) -> Inst {
   let results = match result {
     Some(v) => [v]
     None => []
@@ -761,7 +768,7 @@ pub struct Function {
 } derive(Debug)
 
 ///|
-pub fn Function::new(name : String, signature : Signature) -> Function {
+pub fn Function::Function(name : String, signature : Signature) -> Function {
   {
     name,
     signature,
@@ -779,7 +786,7 @@ pub fn Function::new(name : String, signature : Signature) -> Function {
 
 ///|
 pub fn Function::new_empty(name : String) -> Function {
-  Function::new(name, Signature::new([], []))
+  Function(name, Signature([], []))
 }
 
 ///|
@@ -787,7 +794,7 @@ pub fn Function::new_empty(name : String) -> Function {
 pub fn Function::new_value(self : Function, ty : Type) -> Value {
   let id = self.next_value_id
   self.next_value_id = self.next_value_id + 1
-  Value::new(id, ty)
+  Value(id, ty)
 }
 
 ///|
@@ -850,7 +857,7 @@ pub fn Function::declare_external_symbol(
   self : Function,
   name : String,
 ) -> ExternalSymbol {
-  let symbol = ExternalSymbol::new(name)
+  let symbol = ExternalSymbol::ExternalSymbol(name)
   self.external_symbols.push(symbol)
   symbol
 }

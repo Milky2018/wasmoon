@@ -8,7 +8,7 @@ pub struct OptResult {
 } derive(Eq)
 
 ///|
-fn OptResult::new() -> OptResult {
+fn OptResult::OptResult() -> OptResult {
   { changed: false }
 }
 
@@ -24,7 +24,7 @@ fn OptResult::mark_changed(self : OptResult) -> Unit {
 /// Dead Code Elimination (DCE)
 /// Removes instructions whose results are never used
 fn eliminate_dead_code(func : Function) -> OptResult {
-  let result = OptResult::new()
+  let result = OptResult::OptResult()
   // Build use counts for all values
   let use_counts = compute_use_counts(func)
   // Iterate until fixed point
@@ -134,7 +134,7 @@ fn has_side_effects(inst : Inst) -> Bool {
 /// Constant Folding
 /// Evaluates constant expressions at compile time
 fn fold_constants(func : Function) -> OptResult {
-  let result = OptResult::new()
+  let result = OptResult::OptResult()
   // Map from value id to constant value (if known)
   let constants : @hashmap.HashMap[Int, ConstValue] = HashMap([])
   for block in func.blocks {
@@ -544,7 +544,7 @@ fn eval_icmp_i64(cc : IntCC, a : Int64, b : Int64) -> Bool {
 /// Resolves visible copy chains along the dominator tree and rewrites operands
 /// to canonical values (Cranelift analogue: `resolve_all_aliases()`).
 fn canonicalize_aliases(func : Function) -> OptResult {
-  let result = OptResult::new()
+  let result = OptResult::OptResult()
   if func.blocks.length() == 0 {
     return result
   }

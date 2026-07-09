@@ -41,7 +41,7 @@ priv struct FuncEnvironment {
 }
 
 ///|
-fn FuncEnvironment::new(
+fn FuncEnvironment::FuncEnvironment(
   embedding_env : @wasm_frontend.EmbeddingEnvironment,
   global_types : Array[@types.GlobalType],
   memory_mins? : Array[Int64] = [],

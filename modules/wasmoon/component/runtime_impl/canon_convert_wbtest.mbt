@@ -1,7 +1,7 @@
 ///|
 test "canon convert: lower non-empty list stores elements" {
-  let store = @runtime.Store::new()
-  let mem_addr = store.alloc_mem(@runtime.Memory::new(1, None))
+  let store = @runtime.Store::Store()
+  let mem_addr = store.alloc_mem(Memory(1, None))
   let heap_ptr = [1024]
   let realloc = alloc_host_core_func(
     store,
@@ -49,8 +49,8 @@ test "canon convert: lower non-empty list stores elements" {
     types,
     resources,
     store,
-    ResourceTable::new(),
-    ResourceTable::new(),
+    ResourceTable(),
+    ResourceTable(),
   ) catch {
     e => return fail("lower list failed: \{e}")
   }

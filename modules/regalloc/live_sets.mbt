@@ -19,7 +19,7 @@ priv struct LivenessWorklist {
 }
 
 ///|
-fn LivenessWorklist::new(size : Int) -> LivenessWorklist {
+fn LivenessWorklist::LivenessWorklist(size : Int) -> LivenessWorklist {
   { queue: [], in_worklist: Array::make(size, false) }
 }
 
@@ -108,7 +108,7 @@ pub fn compute_dense_live_sets(
     }
   }
 
-  let worklist = LivenessWorklist::new(num_blocks)
+  let worklist = LivenessWorklist::LivenessWorklist(num_blocks)
   for i in 0..<num_blocks {
     worklist.push(i)
   }

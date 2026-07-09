@@ -1716,7 +1716,7 @@ fn lower_function_with_abi(
   call_conv_layout? : @abi.CallConventionLayout? = None,
   return_area_base_reg? : @machv.PReg? = None,
 ) -> @machv.AbstractFunction {
-  let out = @machv.AbstractFunction::new(func.name)
+  let out = @machv.AbstractFunction::AbstractFunction(func.name)
   out.next_vreg_id = func.next_value_id
   add_function_signature(func, out, uses_call_conv_layout~, call_conv_layout~)
   for slot in func.stack_slots {

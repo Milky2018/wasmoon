@@ -22,7 +22,7 @@ pub fn load_context_slot_pointer(
     return vreg
   }
   let result = ctx.machv_function().new_vreg(Int)
-  let load_inst = @instr.MachVInst::new(
+  let load_inst = @instr.MachVInst::MachVInst(
     Load(I64, context_slot_offset(ctx, slot_id)),
   )
   load_inst.add_def({ reg: Virtual(result) })
@@ -81,14 +81,16 @@ pub fn lower_get_func_ref(
   let raw_func_ptr = ctx.machv_function().new_vreg(Int)
   let offset = func_idx * 8
   if @lower.is_valid_load_store_offset(ctx, offset.to_int64(), 8) {
-    let load_ptr = @instr.MachVInst::new(Load(I64, offset))
+    let load_ptr = @instr.MachVInst::MachVInst(Load(I64, offset))
     load_ptr.add_def({ reg: Virtual(raw_func_ptr) })
     load_ptr.add_use(Virtual(func_table_vreg))
     block.add_inst(load_ptr)
   } else {
     // Large func-table indices exceed AArch64 LDR unsigned-imm range.
     let offset_vreg = @lower.materialize_imm(ctx, block, offset.to_int64())
-    let load_ptr = @instr.MachVInst::new(LoadPtrRegOffset(I64, None, 0, 0))
+    let load_ptr = @instr.MachVInst::MachVInst(
+      LoadPtrRegOffset(I64, None, 0, 0),
+    )
     load_ptr.add_def({ reg: Virtual(raw_func_ptr) })
     load_ptr.add_use(Virtual(func_table_vreg))
     load_ptr.add_use(Virtual(offset_vreg))
@@ -97,10 +99,10 @@ pub fn lower_get_func_ref(
 
   // Step 3: OR with FUNCREF_TAG (0x2000000000000000)
   let tag_vreg = ctx.machv_function().new_vreg(Int)
-  let load_tag = @instr.MachVInst::new(LoadConst(0x2000000000000000L))
+  let load_tag = @instr.MachVInst::MachVInst(LoadConst(0x2000000000000000L))
   load_tag.add_def({ reg: Virtual(tag_vreg) })
   block.add_inst(load_tag)
-  let or_inst = @instr.MachVInst::new(Or(true))
+  let or_inst = @instr.MachVInst::MachVInst(Or(true))
   or_inst.add_def({ reg: Virtual(result_vreg) })
   or_inst.add_use(Virtual(raw_func_ptr))
   or_inst.add_use(Virtual(tag_vreg))
@@ -149,7 +151,7 @@ pub fn lower_load_mem_base(
     return
   } else {
     let directory_vreg = ctx.machv_function().new_vreg(Int)
-    let load_directory = @instr.MachVInst::new(
+    let load_directory = @instr.MachVInst::MachVInst(
       Load(I64, context_slot_offset(ctx, context_slots.memory_directory)),
     )
     load_directory.add_def({ reg: Virtual(directory_vreg) })
@@ -157,14 +159,14 @@ pub fn lower_load_mem_base(
     block.add_inst(load_directory)
 
     let descriptor_vreg = ctx.machv_function().new_vreg(Int)
-    let load_descriptor = @instr.MachVInst::new(
+    let load_descriptor = @instr.MachVInst::MachVInst(
       Load(I64, memidx * context_slots.pointer_stride),
     )
     load_descriptor.add_def({ reg: Virtual(descriptor_vreg) })
     load_descriptor.add_use(Virtual(directory_vreg))
     block.add_inst(load_descriptor)
 
-    let load_base = @instr.MachVInst::new(Load(I64, 0))
+    let load_base = @instr.MachVInst::MachVInst(Load(I64, 0))
     load_base.add_def({ reg: Virtual(result_vreg) })
     load_base.add_use(Virtual(descriptor_vreg))
     block.add_inst(load_base)

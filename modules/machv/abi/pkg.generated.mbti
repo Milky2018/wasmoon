@@ -52,7 +52,7 @@ pub(all) struct EmbeddingABI {
   context_layout : EmbeddingContextLayout?
   reserve_context_role : Bool
 }
-pub fn EmbeddingABI::new(CallConventionLayout, reg_roles? : EmbeddingRegRoles, context_layout? : EmbeddingContextLayout?, reserve_context_role? : Bool) -> Self
+pub fn EmbeddingABI::EmbeddingABI(CallConventionLayout, reg_roles? : EmbeddingRegRoles, context_layout? : EmbeddingContextLayout?, reserve_context_role? : Bool) -> Self
 pub fn EmbeddingABI::reserved_int_indices(Self, reserve_context_cache_0? : Bool, reserve_context_cache_1? : Bool, reserve_extra_results_ptr? : Bool) -> Array[Int]
 
 pub(all) struct EmbeddingContextLayout {

@@ -51,6 +51,7 @@ pub(all) struct AbstractFunction {
   mut next_vreg_id : Int
   mut next_stack_slot_id : Int
 } derive(@debug.Debug)
+pub fn AbstractFunction::AbstractFunction(String) -> Self
 pub fn AbstractFunction::add_param(Self, RegClass) -> VReg
 pub fn AbstractFunction::add_param_location(Self, AbiValueLocation) -> Unit
 pub fn AbstractFunction::add_param_preg(Self, PReg?) -> Unit
@@ -58,7 +59,6 @@ pub fn AbstractFunction::add_result(Self, RegClass) -> Unit
 pub fn AbstractFunction::add_result_location(Self, AbiValueLocation) -> Unit
 pub fn AbstractFunction::get_max_outgoing_args_size(Self) -> Int
 pub fn AbstractFunction::get_num_spill_slots(Self) -> Int
-pub fn AbstractFunction::new(String) -> Self
 pub fn AbstractFunction::new_block(Self) -> Block
 pub fn AbstractFunction::new_inst(Self, Opcode) -> Instruction
 pub fn AbstractFunction::new_stack_slot(Self, Int, Int) -> StackSlot
@@ -78,10 +78,10 @@ pub(all) struct Block {
   successors : Array[Int]
   mut terminator : Terminator?
 } derive(@debug.Debug)
+pub fn Block::Block(Int) -> Self
 pub fn Block::add_param(Self, VReg) -> Unit
 pub fn Block::add_successor(Self, Int) -> Unit
 pub fn Block::append(Self, Instruction) -> Unit
-pub fn Block::new(Int) -> Self
 pub fn Block::set_terminator(Self, Terminator) -> Unit
 
 pub(all) struct CFG {
@@ -130,6 +130,7 @@ pub(all) struct Function {
   mut max_outgoing_args_size : Int
   mut uses_context_cache_0_source : Bool
 }
+pub fn Function::Function(String) -> Self
 pub fn Function::add_param(Self, @abi.RegClass) -> @abi.VReg
 pub fn Function::add_param_preg(Self, @abi.PReg?) -> Unit
 pub fn Function::add_result(Self, @abi.RegClass) -> Unit
@@ -146,7 +147,6 @@ pub fn Function::get_result_kinds(Self) -> Array[ValueKind]
 pub fn Function::has_calls(Self) -> Bool
 pub fn Function::mark_uses_context_cache_0_source(Self) -> Unit
 pub fn Function::needs_extra_results_ptr_for_call_conv(Self, @abi.CallConventionLayout) -> Bool
-pub fn Function::new(String) -> Self
 pub fn Function::new_block(Self) -> @block.MachVBlock
 pub fn Function::new_vreg(Self, @abi.RegClass) -> @abi.VReg
 pub fn Function::print(Self) -> String
@@ -170,12 +170,12 @@ pub(all) struct Instruction {
   abi_result_locations : Array[AbiValueLocation]
   mut stack_effect : StackEffect
 } derive(Eq, @debug.Debug)
+pub fn Instruction::Instruction(Int, Opcode) -> Self
 pub fn Instruction::add_abi_arg_location(Self, AbiValueLocation) -> Unit
 pub fn Instruction::add_abi_result_location(Self, AbiValueLocation) -> Unit
 pub fn Instruction::add_clobber(Self, PReg) -> Unit
 pub fn Instruction::add_constraint(Self, Constraint) -> Unit
 pub fn Instruction::add_operand(Self, Operand) -> Unit
-pub fn Instruction::new(Int, Opcode) -> Self
 pub fn Instruction::set_stack_effect(Self, StackEffect) -> Unit
 
 pub(all) struct Loop {

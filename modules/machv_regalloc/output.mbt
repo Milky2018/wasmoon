@@ -100,7 +100,7 @@ pub struct Output {
 }
 
 ///|
-pub fn Output::new() -> Output {
+pub fn Output::Output() -> Output {
   {
     param_locs: [],
     allocs: [],

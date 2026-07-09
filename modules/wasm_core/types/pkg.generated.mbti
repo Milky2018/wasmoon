@@ -707,6 +707,7 @@ pub(all) struct Module {
   tags : Array[TagType]
   func_names : Map[Int, String]
 } derive(@debug.Debug)
+pub fn Module::Module() -> Self
 pub fn Module::empty() -> Self
 pub fn Module::get_array_type(Self, Int) -> ArrayType
 pub fn Module::get_func_type(Self, Int) -> FuncType
@@ -714,7 +715,6 @@ pub fn Module::get_struct_type(Self, Int) -> StructType
 pub fn Module::is_array_type(Self, Int) -> Bool
 pub fn Module::is_func_type(Self, Int) -> Bool
 pub fn Module::is_struct_type(Self, Int) -> Bool
-pub fn Module::new() -> Self
 pub fn Module::simple(Array[ValueType], Array[ValueType], Array[Instruction], String) -> Self
 pub impl Show for Module
 

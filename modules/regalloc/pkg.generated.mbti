@@ -146,9 +146,9 @@ pub(all) struct ActiveReloadCache {
   epoch : Array[Int]
   preg_ids : Array[Int]
 } derive(@debug.Debug)
+pub fn ActiveReloadCache::ActiveReloadCache(Int) -> Self
 pub fn ActiveReloadCache::clear(Self, Int) -> Unit
 pub fn ActiveReloadCache::get(Self, Int, Int) -> Int?
-pub fn ActiveReloadCache::new(Int) -> Self
 pub fn ActiveReloadCache::set(Self, Int, Int, Int) -> Unit
 
 pub(all) struct AllocatedProgramSpan {
@@ -160,9 +160,9 @@ pub(all) struct Allocation {
   assignments : Array[Assignment]
   mut spill_count : Int
 } derive(@debug.Debug)
+pub fn Allocation::Allocation() -> Self
 pub fn Allocation::assign(Self, VirtualReg, Location) -> Unit
 pub fn Allocation::location_of(Self, VirtualReg) -> Location?
-pub fn Allocation::new() -> Self
 
 pub(all) struct AssignedSlot[R] {
   start : Int
@@ -231,9 +231,9 @@ pub(all) struct BacktrackingFixedConstraintInst[P] {
 }
 
 type BacktrackingHintCache[P]
+pub fn[P] BacktrackingHintCache::BacktrackingHintCache(Int) -> Self[P]
 pub fn[P] BacktrackingHintCache::hint(Self[P], Int) -> P?
 pub fn[P] BacktrackingHintCache::is_ready(Self[P], Int) -> Bool
-pub fn[P] BacktrackingHintCache::new(Int) -> Self[P]
 pub fn[P] BacktrackingHintCache::push_bundle_slot(Self[P]) -> Unit
 pub fn[P] BacktrackingHintCache::set(Self[P], Int, P?) -> Unit
 
@@ -250,9 +250,9 @@ pub(all) struct BacktrackingOccupiedSpan[P] {
 }
 
 type BacktrackingQueue[P]
+pub fn[P] BacktrackingQueue::BacktrackingQueue(Int) -> Self[P]
 pub fn[P] BacktrackingQueue::clear(Self[P]) -> Unit
 pub fn[P] BacktrackingQueue::length(Self[P]) -> Int
-pub fn[P] BacktrackingQueue::new(Int) -> Self[P]
 pub fn[P] BacktrackingQueue::pop(Self[P]) -> BacktrackingQueueEntry[P]?
 pub fn[P] BacktrackingQueue::push(Self[P], Int, Int, P?) -> Unit
 pub fn[P] BacktrackingQueue::push_bundle_slot(Self[P]) -> Unit
@@ -270,8 +270,8 @@ pub(all) struct BacktrackingRangeResult[P] {
 }
 
 type BacktrackingSpillsetState[P]
+pub fn[P] BacktrackingSpillsetState::BacktrackingSpillsetState(Int, max_splits_per_spillset? : Int) -> Self[P]
 pub fn[P] BacktrackingSpillsetState::hint(Self[P], Int) -> P?
-pub fn[P] BacktrackingSpillsetState::new(Int, max_splits_per_spillset? : Int) -> Self[P]
 pub fn[P] BacktrackingSpillsetState::push_bundle_slot(Self[P]) -> Unit
 pub fn[P] BacktrackingSpillsetState::record_hint(Self[P], Int, P) -> Unit
 pub fn[P] BacktrackingSpillsetState::record_split(Self[P], Int) -> Unit
@@ -294,9 +294,9 @@ pub(all) struct Block {
   instructions : Array[Instruction]
   successors : Array[Int]
 } derive(@debug.Debug)
+pub fn Block::Block(Int) -> Self
 pub fn Block::add_successor(Self, Int) -> Unit
 pub fn Block::append(Self, Instruction) -> Unit
-pub fn Block::new(Int) -> Self
 
 pub(all) struct BundleMergeEdge {
   target : Int
@@ -395,9 +395,9 @@ pub(all) struct Instruction {
   operands : Array[Operand]
   clobbers : Array[PhysicalReg]
 } derive(@debug.Debug)
+pub fn Instruction::Instruction(Int) -> Self
 pub fn Instruction::add_clobber(Self, PhysicalReg) -> Unit
 pub fn Instruction::add_operand(Self, Operand) -> Unit
-pub fn Instruction::new(Int) -> Self
 
 pub(all) struct LiveRange {
   id : Int
@@ -408,12 +408,12 @@ pub(all) struct LiveRange {
   mut allocation : Location?
   mut crosses_call : Bool
 } derive(@debug.Debug)
+pub fn LiveRange::LiveRange(Int, VirtualReg) -> Self
 pub fn LiveRange::add_range(Self, ProgramRange) -> Unit
 pub fn LiveRange::add_use(Self, UsePosition) -> Unit
 pub fn LiveRange::end(Self) -> ProgramPoint?
 pub fn LiveRange::get_fixed_reg(Self) -> PhysicalReg?
 pub fn LiveRange::has_fixed_constraint(Self) -> Bool
-pub fn LiveRange::new(Int, VirtualReg) -> Self
 pub fn LiveRange::overlap_allowed_by_tie(Self, Self, Array[Int]) -> Bool
 pub fn LiveRange::overlaps(Self, Self, Array[Int]) -> Bool
 pub fn LiveRange::start(Self) -> ProgramPoint?
@@ -425,11 +425,11 @@ pub(all) struct LiveRangeSet {
   ranges : Array[LiveRange]
   block_order : Array[Int]
 } derive(@debug.Debug)
+pub fn LiveRangeSet::LiveRangeSet(Array[Int]) -> Self
 pub fn LiveRangeSet::add_range(Self, LiveRange) -> Unit
 pub fn LiveRangeSet::get(Self, Int) -> LiveRange
 pub fn LiveRangeSet::get_by_vreg(Self, VirtualReg) -> LiveRange?
 pub fn LiveRangeSet::length(Self) -> Int
-pub fn LiveRangeSet::new(Array[Int]) -> Self
 
 pub(all) struct LiveSetUseDef {
   vreg_id : Int
@@ -518,8 +518,8 @@ pub struct PriorityWorkQueue {
   items : Array[PriorityWorkItem]
   mut next_seq : Int
 }
+pub fn PriorityWorkQueue::PriorityWorkQueue() -> Self
 pub fn PriorityWorkQueue::length(Self) -> Int
-pub fn PriorityWorkQueue::new() -> Self
 pub fn PriorityWorkQueue::pop(Self) -> PriorityWorkItem?
 pub fn PriorityWorkQueue::push(Self, Int, Int) -> Unit
 
@@ -527,22 +527,22 @@ pub(all) struct Program {
   blocks : Array[Block]
   physical_regs : Array[PhysicalReg]
 } derive(@debug.Debug)
+pub fn Program::Program(Array[PhysicalReg]) -> Self
 pub fn Program::add_block(Self, Block) -> Unit
-pub fn Program::new(Array[PhysicalReg]) -> Self
 
 pub(all) struct ProgramPoint {
   block : Int
   inst : Int
 } derive(Eq, @debug.Debug)
+pub fn ProgramPoint::ProgramPoint(Int, Int) -> Self
 pub fn ProgramPoint::compare_with_order(Self, Self, Array[Int]) -> Int
-pub fn ProgramPoint::new(Int, Int) -> Self
 
 pub(all) struct ProgramRange {
   start : ProgramPoint
   end : ProgramPoint
 } derive(Eq, @debug.Debug)
+pub fn ProgramRange::ProgramRange(ProgramPoint, ProgramPoint) -> Self
 pub fn ProgramRange::contains(Self, ProgramPoint, Array[Int]) -> Bool
-pub fn ProgramRange::new(ProgramPoint, ProgramPoint) -> Self
 pub fn ProgramRange::overlaps(Self, Self, Array[Int]) -> Bool
 
 pub(all) enum RegClass {
@@ -632,13 +632,13 @@ pub(all) struct StackFrame {
   mut next_arg_offset : Int
   callee_saved_regs : Array[PhysicalReg]
 }
+pub fn StackFrame::StackFrame(Int) -> Self
 pub fn StackFrame::add_callee_saved(Self, PhysicalReg) -> Int
 pub fn StackFrame::alloc_local(Self, Int, Int, Int) -> Int
 pub fn StackFrame::alloc_outgoing_arg(Self, Int, Int, Int) -> Int
 pub fn StackFrame::alloc_spill_slot(Self, VirtualReg, Int, Int) -> Int
 pub fn StackFrame::finalize(Self) -> Unit
 pub fn StackFrame::get_callee_saved(Self) -> Array[PhysicalReg]
-pub fn StackFrame::new(Int) -> Self
 pub fn StackFrame::print(Self) -> String
 pub fn StackFrame::size(Self) -> Int
 pub impl Show for StackFrame
@@ -697,7 +697,7 @@ pub(all) struct UsePosition {
   constraint : OperandConstraint
   tie_id : Int
 } derive(Eq, @debug.Debug)
-pub fn UsePosition::new(ProgramPoint, UseKind, OperandConstraint) -> Self
+pub fn UsePosition::UsePosition(ProgramPoint, UseKind, OperandConstraint) -> Self
 pub fn UsePosition::with_tie(Self, Int) -> Self
 
 pub(all) struct VirtualReg {

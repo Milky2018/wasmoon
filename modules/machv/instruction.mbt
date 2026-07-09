@@ -130,7 +130,7 @@ pub(all) enum Terminator {
 } derive(Eq, Debug)
 
 ///|
-pub fn Instruction::new(id : Int, opcode : Opcode) -> Instruction {
+pub fn Instruction::Instruction(id : Int, opcode : Opcode) -> Instruction {
   {
     id,
     opcode,

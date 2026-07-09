@@ -41,7 +41,9 @@ struct BacktrackingQueue[P] {
 }
 
 ///|
-pub fn[P] BacktrackingQueue::new(bundle_count : Int) -> BacktrackingQueue[P] {
+pub fn[P] BacktrackingQueue::BacktrackingQueue(
+  bundle_count : Int,
+) -> BacktrackingQueue[P] {
   { items: [], next_seq: 0, in_heap: Array::make(bundle_count, false) }
 }
 
@@ -209,7 +211,7 @@ struct BacktrackingSpillsetState[P] {
 }
 
 ///|
-pub fn[P] BacktrackingSpillsetState::new(
+pub fn[P] BacktrackingSpillsetState::BacktrackingSpillsetState(
   bundle_count : Int,
   max_splits_per_spillset? : Int = 2,
 ) -> BacktrackingSpillsetState[P] {
@@ -278,7 +280,7 @@ struct BacktrackingHintCache[P] {
 }
 
 ///|
-pub fn[P] BacktrackingHintCache::new(
+pub fn[P] BacktrackingHintCache::BacktrackingHintCache(
   bundle_count : Int,
 ) -> BacktrackingHintCache[P] {
   {

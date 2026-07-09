@@ -161,7 +161,7 @@ pub fn encode(opcode : WasmOpcode) -> @milkir.ExtOp {
     SpillLocalsForThrow(count) => ("spill_locals_for_throw", imm([count]))
     GetSpilledLocal(idx) => ("get_spilled_local", imm([idx]))
   }
-  @milkir.ExtOp::new("wasm", name, immediates)
+  ExtOp("wasm", name, immediates)
 }
 
 ///|

@@ -1592,7 +1592,7 @@ fn find_last_code_unit(s : String, cu : Int) -> Int? {
 
 ///|
 fn slice_ascii(s : String, start : Int, end : Int) -> String {
-  let sb = StringBuilder::new()
+  let sb = StringBuilder::StringBuilder()
   let mut i = start
   while i < end && i < s.length() {
     sb.write_char(s.code_unit_at(i).to_int().unsafe_to_char())

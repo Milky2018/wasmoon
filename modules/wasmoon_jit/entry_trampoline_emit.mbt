@@ -38,7 +38,7 @@ pub fn emit_entry_trampoline(
 ) -> @machv_emit.MachineCode {
   // Generate trampoline as IR using FunctionBuilder
   let ir_func = generate_trampoline_ir(param_types, result_types)
-  let embedding_abi = @abi.EmbeddingABI::new(
+  let embedding_abi = @abi.EmbeddingABI::EmbeddingABI(
     call_conv_layout,
     reg_roles=wasm_embedding_reg_roles(isa~),
     context_layout=Some(embedding_context_layout()),
@@ -67,7 +67,7 @@ fn generate_trampoline_ir(
   param_types : Array[Int],
   result_types : Array[Int],
 ) -> @milkir.Function {
-  let builder = @milkir.FunctionBuilder::new("trampoline")
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("trampoline")
 
   // Trampoline parameters: vmctx, values_vec, func_ptr
   let vmctx = builder.add_param(I64)

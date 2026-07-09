@@ -63,8 +63,8 @@ priv struct Parser {
 }
 
 ///|
-fn Parser::new(input : String) -> Parser raise WatError {
-  let lexer = Lexer::new(input)
+fn Parser::Parser(input : String) -> Parser raise WatError {
+  let lexer = Lexer::Lexer(input)
   let first_token = lexer.next_token()
   {
     lexer,
@@ -641,7 +641,7 @@ fn count_tag_imports(imports : Array[@types.Import]) -> Int {
 ///|
 /// Parse a WAT module from string
 pub fn parse(input : String) -> @types.Module raise WatError {
-  let parser = Parser::new(input)
+  let parser = Parser::Parser(input)
   let mod_ = parser.parse_module()
   if parser.current.token != Eof {
     raise UnexpectedToken("unexpected trailing tokens", parser.loc())
@@ -658,7 +658,7 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
   if self.current.token is Id(_) {
     self.advance()
   }
-  let mod_ = @types.Module::new()
+  let mod_ = @types.Module::Module()
 
   // First pass: collect all names (to support forward references)
   // Save lexer state

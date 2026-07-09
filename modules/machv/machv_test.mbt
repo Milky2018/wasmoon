@@ -1,6 +1,6 @@
 ///|
 test "build simple MachV function" {
-  let func = AbstractFunction::new("copy")
+  let func = AbstractFunction::AbstractFunction("copy")
   let entry = func.new_block()
   let src = func.new_vreg(Int)
   let dst = func.new_vreg(Int)
@@ -15,7 +15,7 @@ test "build simple MachV function" {
 
 ///|
 test "represent call clobbers and stack slots" {
-  let func = AbstractFunction::new("call")
+  let func = AbstractFunction::AbstractFunction("call")
   let entry = func.new_block()
   let spill = func.new_stack_slot(8, 8)
   let call = func.new_inst(Call("host.fn"))
@@ -29,7 +29,7 @@ test "represent call clobbers and stack slots" {
 
 ///|
 test "print MachV function" {
-  let func = AbstractFunction::new("printed")
+  let func = AbstractFunction::AbstractFunction("printed")
   let p0 = func.add_param(Int)
   func.add_result(Int)
   let entry = func.new_block()

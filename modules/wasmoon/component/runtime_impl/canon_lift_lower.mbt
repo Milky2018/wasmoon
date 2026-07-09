@@ -65,7 +65,7 @@ fn instantiate_canon_lower(
       store.get_mem(addr) catch {
         e => raise CanonCallError(e.to_string())
       }
-    None => @runtime.Memory::new(0, None)
+    None => Memory(0, None)
   }
   if is_async_lower {
     // Async lowering: start a subtask and return a status code, writing

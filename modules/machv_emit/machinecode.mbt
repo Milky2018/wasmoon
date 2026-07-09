@@ -107,7 +107,7 @@ pub(all) enum FixupKind {
 }
 
 ///|
-pub fn MachineCode::new(
+pub fn MachineCode::MachineCode(
   isa? : @isa.ISA = AArch64,
   record_disasm? : Bool = true,
 ) -> MachineCode {

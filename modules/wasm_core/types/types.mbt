@@ -1167,7 +1167,7 @@ fn should_emit_show_space(last_sig : Char?, next_char : Char) -> Bool {
 
 ///|
 pub fn compact_show_repr(text : String) -> String {
-  let out = StringBuilder::new()
+  let out = StringBuilder::StringBuilder()
   let mut in_string = false
   let mut escaped = false
   let mut pending_space = false
@@ -1403,7 +1403,7 @@ pub fn Module::is_array_type(self : Module, idx : Int) -> Bool {
 
 ///|
 /// Create an empty module
-pub fn Module::new() -> Module {
+pub fn Module::Module() -> Module {
   {
     types: [],
     type_rec_groups: [],
@@ -1424,7 +1424,7 @@ pub fn Module::new() -> Module {
 
 ///|
 test "parse empty module" {
-  let mod = Module::new()
+  let mod = Module::Module()
   inspect(mod.types.length(), content="0")
   inspect(mod.funcs.length(), content="0")
   inspect(@debug.to_string(mod.start), content="None")

@@ -6,7 +6,7 @@ struct GlobalInstance {
 } derive(Debug)
 
 ///|
-pub fn GlobalInstance::new(
+pub fn GlobalInstance::GlobalInstance(
   type_ : @types.GlobalType,
   value : @types.Value,
 ) -> GlobalInstance {

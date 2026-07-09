@@ -1,7 +1,7 @@
 ///|
 /// Generate HTML report for explore command with multiple functions
 fn generate_html_report(funcs : Array[CompiledFunc]) -> String {
-  let sb = StringBuilder::new()
+  let sb = StringBuilder::StringBuilder()
   // HTML header with 3-column layout
   sb.write_string(
     (
@@ -252,7 +252,7 @@ fn generate_html_report(funcs : Array[CompiledFunc]) -> String {
 
 ///|
 fn html_escape(s : String) -> String {
-  let result = StringBuilder::new()
+  let result = StringBuilder::StringBuilder()
   for c in s {
     match c {
       '<' => result.write_string("&lt;")

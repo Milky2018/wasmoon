@@ -86,6 +86,7 @@ pub(all) enum ExtensionLowerResult {
 }
 
 type LoweringContext
+pub fn LoweringContext::LoweringContext(@milkir.Function, @isa.ISA, @abi.EmbeddingABI?, Map[String, String], (String) -> Int, ((Self, @milkir.Inst, @block.MachVBlock, @milkir.ExtOp) -> ExtensionLowerResult)?, Int) -> Self
 pub fn LoweringContext::cache_context_pointer(Self, Int, @abi.VReg) -> Unit
 pub fn LoweringContext::cached_context_pointer(Self, Int) -> @abi.VReg?
 pub fn LoweringContext::call_conv_layout(Self) -> @abi.CallConventionLayout
@@ -94,7 +95,6 @@ pub fn LoweringContext::embedding_context_layout(Self) -> @abi.EmbeddingContextL
 pub fn LoweringContext::get_vreg(Self, @milkir.Value) -> @abi.VReg
 pub fn LoweringContext::get_vreg_for_use(Self, @milkir.Value, @block.MachVBlock) -> @abi.VReg
 pub fn LoweringContext::machv_function(Self) -> @machv.Function
-pub fn LoweringContext::new(@milkir.Function, @isa.ISA, @abi.EmbeddingABI?, Map[String, String], (String) -> Int, ((Self, @milkir.Inst, @block.MachVBlock, @milkir.ExtOp) -> ExtensionLowerResult)?, Int) -> Self
 pub fn LoweringContext::new_vreg(Self, @abi.RegClass) -> @abi.VReg
 pub fn LoweringContext::num_imports(Self) -> Int
 pub fn LoweringContext::set_cached_vreg(Self, Int, @abi.VReg) -> Unit

@@ -104,7 +104,7 @@ fn parse_core_type_section(
   base_core_type_bound : Int,
   outer_core_type_bounds : Array[Int],
 ) -> Array[Map[String, Int]?] raise ComponentValidationError {
-  let r = CoreTypeReader::new(payload)
+  let r = CoreTypeReader::CoreTypeReader(payload)
   let n = r.read_leb_u32()
   let out : Array[Map[String, Int]?] = []
   for i in 0..<n {
@@ -140,7 +140,7 @@ fn parse_core_type_section_module_sigs(
   base_core_type_bound : Int,
   outer_core_type_bounds : Array[Int],
 ) -> (Array[Array[CoreModuleTypeImport]?], Array[Map[String, CoreExternType]?]) raise ComponentValidationError {
-  let r = CoreTypeReader::new(payload)
+  let r = CoreTypeReader::CoreTypeReader(payload)
   let n = r.read_leb_u32()
   let imports : Array[Array[CoreModuleTypeImport]?] = []
   let export_types : Array[Map[String, CoreExternType]?] = []
@@ -175,7 +175,7 @@ fn validate_single_core_type(
   current_core_type_bound : Int,
   outer_core_type_bounds : Array[Int],
 ) -> Map[String, Int]? raise ComponentValidationError {
-  let r = CoreTypeReader::new(payload)
+  let r = CoreTypeReader::CoreTypeReader(payload)
   let op = r.read_u8()
   // For module-type aliases, `depth` counts outward from the module:
   // depth 0/1 target the current component core-type index space; depth >= 2
@@ -245,7 +245,7 @@ fn exportname_to_string(name : @component.ExportName) -> String? {
 
 ///|
 fn ascii_lower_key(s : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder::StringBuilder()
   for c in s {
     let n = c.to_int()
     if n >= 0x41 && n <= 0x5A {
@@ -261,7 +261,7 @@ fn ascii_lower_key(s : String) -> String {
 ///|
 fn wit_name_conflict_base(name : String) -> String {
   fn parse_resource_prefix(name : String, prefix_len : Int) -> String {
-    let buf = StringBuilder::new()
+    let buf = StringBuilder::StringBuilder()
     let mut i = 0
     let mut saw_dot = false
     let mut after_dot = false
@@ -349,8 +349,8 @@ fn parse_bracket_resource_name(name : String) -> BracketResourceName? {
   if !name.has_prefix("[") {
     return None
   }
-  let prefix = StringBuilder::new()
-  let suffix = StringBuilder::new()
+  let prefix = StringBuilder::StringBuilder()
+  let suffix = StringBuilder::StringBuilder()
   let mut in_prefix = true
   let mut saw_close = false
   let mut i = 0
@@ -380,7 +380,7 @@ fn parse_bracket_resource_name(name : String) -> BracketResourceName? {
     return Some({ kind: Constructor, resource: s })
   }
   if p == "method" || p == "static" {
-    let res = StringBuilder::new()
+    let res = StringBuilder::StringBuilder()
     let mut after_dot = false
     for c in s {
       if c == '.' && !after_dot {

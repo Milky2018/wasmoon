@@ -1,7 +1,7 @@
 ///|
 /// Convert a Module to WAT text format
 fn module_to_wat(mod_ : @types.Module) -> String {
-  let sb = StringBuilder::new()
+  let sb = StringBuilder::StringBuilder()
   sb.write_string("(module\n")
 
   // Types section
@@ -269,7 +269,7 @@ fn module_to_wat(mod_ : @types.Module) -> String {
 
 ///|
 fn escape_data_string(data : Bytes) -> String {
-  let sb = StringBuilder::new()
+  let sb = StringBuilder::StringBuilder()
   for b in data {
     let c = b.to_int()
     if c >= 32 && c < 127 && c != 0x22 && c != 0x5c {
@@ -423,7 +423,7 @@ fn mem_instr(
   offset : Int64,
   natural_align : Int,
 ) -> String {
-  let sb = StringBuilder::new()
+  let sb = StringBuilder::StringBuilder()
   sb.write_string(name)
   if mem != 0 {
     sb.write_string(" \{mem}")
@@ -450,7 +450,7 @@ fn format_v128_bytes(bytes : Bytes) -> String {
 
 ///|
 fn instrs_to_wat(instrs : Array[@types.Instruction], indent : Int) -> String {
-  let sb = StringBuilder::new()
+  let sb = StringBuilder::StringBuilder()
   let indent_str = "  ".repeat(indent)
   for instr in instrs {
     sb.write_string(indent_str)

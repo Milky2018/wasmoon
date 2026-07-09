@@ -26,7 +26,7 @@ pub fn init_jit_memories_from_store(
     if mem_desc_ptr == 0L && size > 0L {
       return None
     }
-    memories.push(@wasmoon_jit.MemoryInfo::new(mem_desc_ptr, size, max_pages))
+    memories.push(MemoryInfo(mem_desc_ptr, size, max_pages))
   }
   jm.set_memory_pointers(memories)
   Some(memories)

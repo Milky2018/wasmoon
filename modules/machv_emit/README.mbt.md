@@ -27,7 +27,7 @@ machine running the test.
 ```moonbit check
 ///|
 test "emit a tiny AArch64 return stub" {
-  let code = MachineCode::new(isa=AArch64, record_disasm=false)
+  let code = MachineCode::MachineCode(isa=AArch64, record_disasm=false)
   code.emit_ret(30)
   let bytes = code.get_bytes()
   inspect(bytes.length(), content="4")
@@ -43,9 +43,9 @@ Wasmoon resolves them later in its own embedding layer.
 ```moonbit check
 ///|
 test "record an unresolved external call fixup" {
-  let code = MachineCode::new(isa=AMD64, record_disasm=false)
+  let code = MachineCode::MachineCode(isa=AMD64, record_disasm=false)
   code.emit_byte(0xe8)
-  code.add_external_call_fixup(1, @instr.ExternalName::new("env.print_i32"))
+  code.add_external_call_fixup(1, ExternalName("env.print_i32"))
   for _ in 0..<4 {
     code.emit_byte(0)
   }

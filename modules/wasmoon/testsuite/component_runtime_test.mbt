@@ -146,7 +146,7 @@ test "component runtime: host import export" {
   let component = @component.parse_component(bytes) catch {
     e => return fail("parse component failed: \{e}")
   }
-  let linker = @runtime_impl.ComponentLinker::new()
+  let linker = @runtime_impl.ComponentLinker::ComponentLinker()
   let func_type : @component.FuncType = {
     is_async: false,
     params: [{ label: "", ty: Prim(S32) }],
@@ -190,7 +190,7 @@ test "component runtime: canon lift core func" {
   let component = @component.parse_component(bytes) catch {
     e => return fail("parse component failed: \{e}")
   }
-  let linker = @runtime_impl.ComponentLinker::new()
+  let linker = @runtime_impl.ComponentLinker::ComponentLinker()
   let instance = linker.instantiate("canon_lift", component)
   let results = instance.call_exported_func("inc", [S32(41)])
   debug_inspect(results, content="[S32(42)]")
@@ -213,7 +213,7 @@ test "component runtime: canon lower to core func" {
   let component = @component.parse_component(bytes) catch {
     e => return fail("parse component failed: \{e}")
   }
-  let linker = @runtime_impl.ComponentLinker::new()
+  let linker = @runtime_impl.ComponentLinker::ComponentLinker()
   let func_type : @component.FuncType = {
     is_async: false,
     params: [{ label: "", ty: Prim(S32) }],

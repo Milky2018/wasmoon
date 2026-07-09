@@ -72,7 +72,7 @@ fn verify_clobber_safety(
 ) -> Unit raise VerifyError {
   for block in program.blocks {
     for inst_index, inst in block.instructions {
-      let point = ProgramPoint::new(block.id, inst_index)
+      let point = ProgramPoint::ProgramPoint(block.id, inst_index)
       if range.is_live_across(point, block_order) {
         for clobber in inst.clobbers {
           if clobber == preg {

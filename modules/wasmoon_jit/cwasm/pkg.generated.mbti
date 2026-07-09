@@ -37,7 +37,7 @@ pub(all) struct CompiledEntry {
   gc_safepoints : Array[GcSafepoint]
   gc_stackmap_blob : Bytes
 }
-pub fn CompiledEntry::new(Int, String, Array[Int], Int, Int, Int, Int, func_addr_fixups? : Array[FuncAddrFixup], call_fixups? : Array[CallFixup], gc_safepoints? : Array[GcSafepoint], gc_stackmap_blob? : Bytes) -> Self
+pub fn CompiledEntry::CompiledEntry(Int, String, Array[Int], Int, Int, Int, Int, func_addr_fixups? : Array[FuncAddrFixup], call_fixups? : Array[CallFixup], gc_safepoints? : Array[GcSafepoint], gc_stackmap_blob? : Bytes) -> Self
 pub impl Show for CompiledEntry
 
 pub(all) struct DataEntry {
@@ -45,7 +45,7 @@ pub(all) struct DataEntry {
   offset : Int
   data : Array[Int]
 }
-pub fn DataEntry::new(Int, Int, Array[Int]) -> Self
+pub fn DataEntry::DataEntry(Int, Int, Array[Int]) -> Self
 pub impl Show for DataEntry
 
 pub(all) struct ElemEntry {
@@ -53,7 +53,7 @@ pub(all) struct ElemEntry {
   offset : Int
   func_indices : Array[Int]
 }
-pub fn ElemEntry::new(Int, Int, Array[Int]) -> Self
+pub fn ElemEntry::ElemEntry(Int, Int, Array[Int]) -> Self
 pub impl Show for ElemEntry
 
 pub(all) struct FuncAddrFixup {
@@ -67,14 +67,14 @@ pub(all) struct GcSafepoint {
   live_refs : Array[Int]
   metadata : Int64
 } derive(@debug.Debug)
-pub fn GcSafepoint::new(Int, Array[Int], Int64) -> Self
+pub fn GcSafepoint::GcSafepoint(Int, Array[Int], Int64) -> Self
 
 pub(all) struct GlobalDef {
   value_type : Int
   mutable : Bool
   init_value : Int64
 }
-pub fn GlobalDef::new(Int, Bool, Int64) -> Self
+pub fn GlobalDef::GlobalDef(Int, Bool, Int64) -> Self
 pub impl Show for GlobalDef
 
 pub(all) struct ImportEntry {
@@ -83,14 +83,14 @@ pub(all) struct ImportEntry {
   num_params : Int
   num_results : Int
 }
-pub fn ImportEntry::new(String, String, Int, Int) -> Self
+pub fn ImportEntry::ImportEntry(String, String, Int, Int) -> Self
 pub impl Show for ImportEntry
 
 pub(all) struct MemoryDef {
   min_pages : Int
   max_pages : Int?
 }
-pub fn MemoryDef::new(Int, Int?) -> Self
+pub fn MemoryDef::MemoryDef(Int, Int?) -> Self
 pub impl Show for MemoryDef
 
 pub(all) struct PrecompiledModule {
@@ -106,6 +106,7 @@ pub(all) struct PrecompiledModule {
   elements : Array[ElemEntry]
   mut start_func : Int?
 }
+pub fn PrecompiledModule::PrecompiledModule(TargetArch) -> Self
 pub fn PrecompiledModule::add_data_segment(Self, Int, Int, Array[Int]) -> Unit
 pub fn PrecompiledModule::add_element(Self, Int, Int, Array[Int]) -> Unit
 pub fn PrecompiledModule::add_function(Self, CompiledEntry) -> Unit
@@ -116,7 +117,6 @@ pub fn PrecompiledModule::add_table(Self, Int, Int, Int?) -> Unit
 pub fn PrecompiledModule::add_type(Self, Array[Int], Array[Int]) -> Unit
 pub fn PrecompiledModule::function_count(Self) -> Int
 pub fn PrecompiledModule::import_count(Self) -> Int
-pub fn PrecompiledModule::new(TargetArch) -> Self
 pub fn PrecompiledModule::serialize(Self) -> Array[Int]
 pub fn PrecompiledModule::set_start_func(Self, Int) -> Unit
 pub impl Show for PrecompiledModule
@@ -126,7 +126,7 @@ pub(all) struct TableDef {
   min_size : Int
   max_size : Int?
 }
-pub fn TableDef::new(Int, Int, Int?) -> Self
+pub fn TableDef::TableDef(Int, Int, Int?) -> Self
 pub impl Show for TableDef
 
 pub(all) enum TargetArch {
@@ -140,7 +140,7 @@ pub(all) struct TypeEntry {
   param_types : Array[Int]
   result_types : Array[Int]
 }
-pub fn TypeEntry::new(Array[Int], Array[Int]) -> Self
+pub fn TypeEntry::TypeEntry(Array[Int], Array[Int]) -> Self
 pub impl Show for TypeEntry
 
 // Type aliases

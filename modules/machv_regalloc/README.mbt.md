@@ -29,7 +29,7 @@ allocation problem before mutating the MachV function.
 ```moonbit check
 ///|
 test "project a MachV copy into a regalloc program" {
-  let func = @machv.AbstractFunction::new("copy")
+  let func = @machv.AbstractFunction::AbstractFunction("copy")
   let entry = func.new_block()
   let src = func.new_vreg(Int)
   let dst = func.new_vreg(Int)
@@ -53,7 +53,7 @@ it allocates, rewrites virtual operands, and materializes spill slots.
 ```moonbit check
 ///|
 test "rewrite virtual operands to physical registers" {
-  let func = @machv.AbstractFunction::new("rewrite")
+  let func = @machv.AbstractFunction::AbstractFunction("rewrite")
   let entry = func.new_block()
   let src = func.new_vreg(Int)
   let dst = func.new_vreg(Int)

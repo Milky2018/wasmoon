@@ -54,7 +54,7 @@ fn read_string_from_memory_with_encoding(
     }
     if latin1 {
       // Latin1 is a byte-for-codepoint mapping.
-      let buf = StringBuilder::new()
+      let buf = StringBuilder::StringBuilder()
       for b in bytes {
         buf.write_char(b.to_int().unsafe_to_char())
       }
@@ -64,7 +64,7 @@ fn read_string_from_memory_with_encoding(
     }
   } else {
     // UTF-16LE decode.
-    let buf = StringBuilder::new()
+    let buf = StringBuilder::StringBuilder()
     let mut i = 0
     while i < byte_len {
       let b0 = mem.load_byte(ptr + i) catch {

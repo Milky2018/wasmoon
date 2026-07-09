@@ -118,7 +118,7 @@ fn validate_component_inner(
   core_type_bound_outers : Array[Int],
   component_size_outers : Array[Array[Int]],
 ) -> ValidatedComponentInfo raise ComponentValidationError {
-  let counts = Counts::new()
+  let counts = Counts::Counts()
   let type_table : Array[@component.TypeDef?] = []
   // Track which type indices correspond to resource types defined in the
   // current concrete component (as opposed to imported/aliased resource types).

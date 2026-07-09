@@ -56,7 +56,7 @@ pub struct CallExportOptions {
   budget : Int?
   cancel : (() -> Bool)?
 }
-pub fn CallExportOptions::new(timeout_ms? : Int?, fuel? : Int?, budget? : Int?, cancel? : (() -> Bool)?) -> Self
+pub fn CallExportOptions::CallExportOptions(timeout_ms? : Int?, fuel? : Int?, budget? : Int?, cancel? : (() -> Bool)?) -> Self
 
 pub(all) enum CallExportResult {
   Ok(Array[@types.Value])
@@ -89,7 +89,7 @@ pub struct ImportDiagnosticsResult {
   mut ok : Bool
   diagnostics : Array[ImportDiagnostic]
 }
-pub fn ImportDiagnosticsResult::new() -> Self
+pub fn ImportDiagnosticsResult::ImportDiagnosticsResult() -> Self
 
 pub(all) enum InstantiateWithImportDiagnosticsResult {
   Ok(@runtime.ModuleInstance)

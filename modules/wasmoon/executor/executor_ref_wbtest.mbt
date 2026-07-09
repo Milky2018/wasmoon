@@ -377,7 +377,7 @@ test "multi-value: empty block" {
 test "module linking: basic import from another module" {
   // Module A exports a function that returns 42
   // Module B imports that function and calls it
-  let linker = @runtime.Linker::new()
+  let linker = @runtime.Linker::Linker()
 
   // Module A: exports "get_value" -> returns 42
   let func_a : @types.FunctionCode = { locals: [], body: [I32Const(42)] }
@@ -436,7 +436,7 @@ test "module linking: basic import from another module" {
 test "module linking: import memory from another module" {
   // Module A exports a memory
   // Module B imports that memory and uses it
-  let linker = @runtime.Linker::new()
+  let linker = @runtime.Linker::Linker()
 
   // Module A: exports memory, has a function to store value
   let store_func : @types.FunctionCode = {
@@ -518,7 +518,7 @@ test "module linking: three modules chain" {
   // Module A exports add(x, y) -> x + y
   // Module B imports add from A, exports double(x) -> add(x, x)
   // Module C imports double from B, exports quad(x) -> double(double(x))
-  let linker = @runtime.Linker::new()
+  let linker = @runtime.Linker::Linker()
 
   // Module A
   let add_func : @types.FunctionCode = {
@@ -649,8 +649,8 @@ test "call_indirect with imports path" {
   }
 
   // Use instantiate_module_with_imports (same path as run.mbt)
-  let store = @runtime.Store::new()
-  let imports = @runtime.Imports::new()
+  let store = @runtime.Store::Store()
+  let imports = @runtime.Imports::Imports()
   let instance = instantiate_module_with_imports(store, mod, imports) catch {
     _ => fail("instantiate failed")
   }
@@ -709,8 +709,8 @@ test "call_indirect with multiple funcs and explicit type" {
     tags: [],
     func_names: {},
   }
-  let store = @runtime.Store::new()
-  let imports = @runtime.Imports::new()
+  let store = @runtime.Store::Store()
+  let imports = @runtime.Imports::Imports()
   let instance = instantiate_module_with_imports(store, mod, imports) catch {
     _ => fail("instantiate failed")
   }
@@ -773,8 +773,8 @@ test "call_indirect type index bug reproduction" {
     tags: [],
     func_names: {},
   }
-  let store = @runtime.Store::new()
-  let imports = @runtime.Imports::new()
+  let store = @runtime.Store::Store()
+  let imports = @runtime.Imports::Imports()
   let instance = instantiate_module_with_imports(store, mod, imports) catch {
     _ => fail("instantiate failed")
   }

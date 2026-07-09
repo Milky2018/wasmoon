@@ -1929,7 +1929,7 @@ fn try_lower_linear_function(
   let table_types = collect_table_types(mod_)
   let memory_types = collect_memory_types(mod_)
   let runtime_symbols = env.wasm_runtime_symbols()
-  let builder = @milkir.FunctionBuilder::new(
+  let builder = @milkir.FunctionBuilder::FunctionBuilder(
     function_name(mod_, func_local_idx),
   )
   let locals : Array[@milkir.Value] = []

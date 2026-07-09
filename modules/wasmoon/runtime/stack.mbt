@@ -6,7 +6,7 @@ struct Stack {
 } derive(Debug)
 
 ///|
-pub fn Stack::new() -> Stack {
+pub fn Stack::Stack() -> Stack {
   { values: [], sp: 0 }
 }
 

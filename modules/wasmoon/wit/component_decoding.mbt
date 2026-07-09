@@ -680,14 +680,14 @@ pub fn decode_wit_package_from_component(
     let short = match e.name {
       Plain(b) => {
         // ASCII
-        let sb = StringBuilder::new()
+        let sb = StringBuilder::StringBuilder()
         for i in 0..<b.length() {
           sb.write_char(b[i].to_int().unsafe_to_char())
         }
         sb.to_string()
       }
       WithVersion(b, _vs) => {
-        let sb = StringBuilder::new()
+        let sb = StringBuilder::StringBuilder()
         for i in 0..<b.length() {
           sb.write_char(b[i].to_int().unsafe_to_char())
         }

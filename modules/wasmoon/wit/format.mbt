@@ -1,6 +1,6 @@
 ///|
 pub fn format_package(pkg : Package) -> String {
-  let sb = StringBuilder::new()
+  let sb = StringBuilder::StringBuilder()
   if pkg.name is Some(n) {
     sb.write_string("package ")
     sb.write_string(n)
@@ -73,7 +73,7 @@ fn format_nested_package(sb : StringBuilder, pkg : Package) -> Unit {
   }
   sb.write_string(" {\n")
   for it in pkg.items {
-    let tmp = StringBuilder::new()
+    let tmp = StringBuilder::StringBuilder()
     match it {
       Interface(i) => format_interface(tmp, i)
       World(w) => format_world(tmp, w)
@@ -94,7 +94,7 @@ fn format_nested_package(sb : StringBuilder, pkg : Package) -> Unit {
   }
   for np in pkg.nested {
     sb.write_char('\n')
-    let tmp = StringBuilder::new()
+    let tmp = StringBuilder::StringBuilder()
     format_nested_package(tmp, np)
     sb.write_string(indent_lines(tmp.to_string(), "  "))
   }
@@ -103,7 +103,7 @@ fn format_nested_package(sb : StringBuilder, pkg : Package) -> Unit {
 
 ///|
 fn indent_lines(s : String, prefix : String) -> String {
-  let sb = StringBuilder::new()
+  let sb = StringBuilder::StringBuilder()
   let mut at_line_start = true
   for c in s {
     if at_line_start {

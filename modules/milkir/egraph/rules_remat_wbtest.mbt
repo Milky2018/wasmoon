@@ -2,7 +2,7 @@
 
 ///|
 test "remat: iadd with iconst is rematerializable" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let k5 = eg.add_const(5L)
   let result = eg.add_add(x, k5)
@@ -12,7 +12,7 @@ test "remat: iadd with iconst is rematerializable" {
 
 ///|
 test "remat: isub with iconst is rematerializable" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let k5 = eg.add_const(5L)
   let result = eg.add_sub(x, k5)
@@ -22,7 +22,7 @@ test "remat: isub with iconst is rematerializable" {
 
 ///|
 test "remat: band with iconst is rematerializable" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let k5 = eg.add_const(5L)
   let result = eg.add_and(x, k5)
@@ -32,7 +32,7 @@ test "remat: band with iconst is rematerializable" {
 
 ///|
 test "remat: bor with iconst is rematerializable" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let k5 = eg.add_const(5L)
   let result = eg.add_or(x, k5)
@@ -42,7 +42,7 @@ test "remat: bor with iconst is rematerializable" {
 
 ///|
 test "remat: bxor with iconst is rematerializable" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let k5 = eg.add_const(5L)
   let result = eg.add_xor(x, k5)
@@ -52,7 +52,7 @@ test "remat: bxor with iconst is rematerializable" {
 
 ///|
 test "remat: bnot is rematerializable" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let result = eg.add_bnot(x)
   eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
@@ -61,7 +61,7 @@ test "remat: bnot is rematerializable" {
 
 ///|
 test "remat: iconst is rematerializable" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let result = eg.add_const(42L)
   eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
   inspect(eg.is_marked_rematerializable(result), content="true")
@@ -69,7 +69,7 @@ test "remat: iconst is rematerializable" {
 
 ///|
 test "remat: fconst is rematerializable" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let result = eg.add_fconst(0x3FF0000000000000UL) // 1.0 as f64
   eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
   inspect(eg.is_marked_rematerializable(result), content="true")
@@ -77,7 +77,7 @@ test "remat: fconst is rematerializable" {
 
 ///|
 test "remat: iadd without iconst is not rematerializable" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let result = eg.add_add(x, y)
@@ -87,7 +87,7 @@ test "remat: iadd without iconst is not rematerializable" {
 
 ///|
 test "remat: mul is not rematerializable" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let k5 = eg.add_const(5L)
   let result = eg.add_mul(x, k5)
@@ -97,7 +97,7 @@ test "remat: mul is not rematerializable" {
 
 ///|
 test "remat: flag preserved through merge" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let k5 = eg.add_const(5L)
   let add_result = eg.add_add(x, k5)
@@ -112,7 +112,7 @@ test "remat: flag preserved through merge" {
 
 ///|
 test "remat: is_rematerializable checks node patterns" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let k5 = eg.add_const(5L)
   let add_result = eg.add_add(x, k5)

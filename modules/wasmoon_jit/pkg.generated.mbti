@@ -530,6 +530,7 @@ pub struct BacktraceFrame {
 pub struct CHeap {
   ptr : Int64
 } derive(@debug.Debug)
+pub fn CHeap::CHeap(capacity? : Int) -> Self
 pub fn CHeap::alloc_array(Self, Int, Int, @types.Value) -> Int raise CHeapError
 pub fn CHeap::alloc_array_from_values(Self, Int, Array[@types.Value]) -> Int raise CHeapError
 pub fn CHeap::alloc_struct(Self, Int, Array[@types.Value]) -> Int raise CHeapError
@@ -555,7 +556,6 @@ pub fn CHeap::get_usage_ratio(Self) -> Double
 pub fn CHeap::is_array(Self, Int) -> Bool
 pub fn CHeap::is_struct(Self, Int) -> Bool
 pub fn CHeap::is_valid(Self, Int) -> Bool
-pub fn CHeap::new(capacity? : Int) -> Self
 pub fn CHeap::should_collect(Self, threshold? : Double) -> Bool
 pub fn CHeap::struct_get(Self, Int, Int, @types.ValueType) -> @types.Value
 pub fn CHeap::struct_set(Self, Int, Int, @types.Value) -> Unit
@@ -565,21 +565,21 @@ pub(all) struct CallCounter {
   counts : Map[Int, Int]
   mut total_calls : Int
 }
+pub fn CallCounter::CallCounter() -> Self
 pub fn CallCounter::clear(Self) -> Unit
 pub fn CallCounter::get_count(Self, Int) -> Int
 pub fn CallCounter::increment(Self, Int) -> Int
-pub fn CallCounter::new() -> Self
 pub fn CallCounter::reset(Self, Int) -> Unit
 pub fn CallCounter::total(Self) -> Int
 pub fn CallCounter::unique_functions(Self) -> Int
 
 type CodeCache
+pub fn CodeCache::CodeCache(Int) -> Self
 pub fn CodeCache::clear(Self) -> Unit
 pub fn CodeCache::contains(Self, Int) -> Bool
 pub fn CodeCache::get(Self, Int) -> CompiledFunction?
 pub fn CodeCache::insert(Self, Int, CompiledFunction) -> Unit
 pub fn CodeCache::invalidate(Self, Int) -> Unit
-pub fn CodeCache::new(Int) -> Self
 pub fn CodeCache::remove(Self, Int) -> Unit
 pub fn CodeCache::stats(Self) -> (Int, Int, Int, Int)
 pub impl Show for CodeCache
@@ -602,20 +602,20 @@ pub(all) struct CompilationQueue {
   requests : Array[CompilationRequest]
   max_size : Int
 }
+pub fn CompilationQueue::CompilationQueue(Int) -> Self
 pub fn CompilationQueue::clear(Self) -> Unit
 pub fn CompilationQueue::contains(Self, Int) -> Bool
 pub fn CompilationQueue::dequeue(Self) -> CompilationRequest?
 pub fn CompilationQueue::enqueue(Self, CompilationRequest) -> Bool
 pub fn CompilationQueue::is_empty(Self) -> Bool
 pub fn CompilationQueue::length(Self) -> Int
-pub fn CompilationQueue::new(Int) -> Self
 
 pub(all) struct CompilationRequest {
   func_idx : Int
   mode : CompilationMode
   priority : Int
 }
-pub fn CompilationRequest::new(Int, CompilationMode) -> Self
+pub fn CompilationRequest::CompilationRequest(Int, CompilationMode) -> Self
 pub fn CompilationRequest::with_priority(Int, CompilationMode, Int) -> Self
 
 pub(all) struct CompilationStrategy {
@@ -626,10 +626,10 @@ pub(all) struct CompilationStrategy {
   mut decisions_compile : Int
   mut decisions_compiled : Int
 }
+pub fn CompilationStrategy::CompilationStrategy(TieredConfig) -> Self
 pub fn CompilationStrategy::decide(Self, Int) -> CompilationDecision
 pub fn CompilationStrategy::is_compiled(Self, Int) -> Bool
 pub fn CompilationStrategy::mark_compiled(Self, Int) -> Unit
-pub fn CompilationStrategy::new(TieredConfig) -> Self
 pub fn CompilationStrategy::next_to_compile(Self) -> CompilationRequest?
 pub fn CompilationStrategy::schedule_compilation(Self, Int, CompilationMode) -> Bool
 pub fn CompilationStrategy::stats(Self) -> (Int, Int, Int, Int, Int, Int)
@@ -645,6 +645,7 @@ pub struct CompiledFunction {
   gc_stackmap_blob : Bytes
   mut valid : Bool
 }
+pub fn CompiledFunction::CompiledFunction(String, @machv_emit.MachineCode, Int, gc_safepoints? : Array[GcSafepoint], gc_stackmap_blob? : Bytes) -> Self
 pub fn CompiledFunction::get_call_fixups(Self) -> Array[@machv_emit.CallFixup]
 pub fn CompiledFunction::get_code(Self) -> Array[Int]
 pub fn CompiledFunction::get_func_addr_fixups(Self) -> Array[@machv_emit.FuncAddrFixup]
@@ -652,7 +653,6 @@ pub fn CompiledFunction::get_gc_safepoints(Self) -> Array[GcSafepoint]
 pub fn CompiledFunction::get_gc_stackmap_blob(Self) -> Bytes
 pub fn CompiledFunction::invalidate(Self) -> Unit
 pub fn CompiledFunction::is_valid(Self) -> Bool
-pub fn CompiledFunction::new(String, @machv_emit.MachineCode, Int, gc_safepoints? : Array[GcSafepoint], gc_stackmap_blob? : Bytes) -> Self
 pub impl Show for CompiledFunction
 
 pub(all) struct CwasmArtifact {
@@ -694,12 +694,12 @@ pub(all) struct CwasmFunctionRecord {
 pub struct DWARFBuilder {
   // private fields
 }
+pub fn DWARFBuilder::DWARFBuilder() -> Self
 pub fn DWARFBuilder::add_function(Self, String, Int64, Int, Int) -> Unit
 pub fn DWARFBuilder::capture_backtrace(Self) -> Array[BacktraceFrame]
 pub fn DWARFBuilder::destroy(Self) -> Unit
 pub fn DWARFBuilder::format_backtrace(Self, Array[BacktraceFrame]) -> String
 pub fn DWARFBuilder::lookup_address(Self, Int64) -> FunctionInfo?
-pub fn DWARFBuilder::new() -> Self
 pub fn DWARFBuilder::register(Self, verbose? : Bool) -> Unit
 pub fn DWARFBuilder::unregister(Self) -> Unit
 
@@ -709,13 +709,13 @@ pub struct DirectCallStubSet {
 }
 
 type ExecCode
-pub fn ExecCode::new(Array[Int]) -> Self?
 pub fn ExecCode::ptr(Self) -> Int64
+pub fn ExecCode::try_alloc(Array[Int]) -> Self?
 
 type ExecutableRegion
+pub fn ExecutableRegion::ExecutableRegion(Int, Int) -> Self
 pub fn ExecutableRegion::address_at(Self, Int) -> Int
 pub fn ExecutableRegion::finalize(Self) -> Unit
-pub fn ExecutableRegion::new(Int, Int) -> Self
 pub fn ExecutableRegion::read_at(Self, Int, Int) -> Array[Int]
 pub fn ExecutableRegion::remaining(Self) -> Int
 pub fn ExecutableRegion::write(Self, Array[Int]) -> Result[Int, String]
@@ -739,7 +739,7 @@ pub struct GcSafepoint {
   live_refs : Array[Int]
   metadata : Int64
 } derive(@debug.Debug)
-pub fn GcSafepoint::new(Int, Array[Int], Int64) -> Self
+pub fn GcSafepoint::GcSafepoint(Int, Array[Int], Int64) -> Self
 
 pub(all) struct HostcallImportTrampolineCode {
   code : Array[Int]
@@ -771,8 +771,8 @@ pub(all) enum ImportFunctionResolution {
 pub struct JITDebugDB {
   entries : Map[Int, JITFunctionDebug]
 }
+pub fn JITDebugDB::JITDebugDB() -> Self
 pub fn JITDebugDB::get(Self, Int) -> JITFunctionDebug?
-pub fn JITDebugDB::new() -> Self
 pub fn JITDebugDB::set(Self, Int, JITFunctionDebug) -> Unit
 
 pub struct JITFunctionDebug {
@@ -781,13 +781,13 @@ pub struct JITFunctionDebug {
   machv_after_regalloc : String
   machine_code : String
 }
-pub fn JITFunctionDebug::new(String, String, String, String) -> Self
+pub fn JITFunctionDebug::JITFunctionDebug(String, String, String, String) -> Self
 
 type JITRuntime
+pub fn JITRuntime::JITRuntime(Int, Int) -> Self
 pub fn JITRuntime::clear(Self) -> Unit
 pub fn JITRuntime::invalidate(Self, Int) -> Unit
 pub fn JITRuntime::lookup(Self, Int) -> CompiledFunction?
-pub fn JITRuntime::new(Int, Int) -> Self
 pub fn JITRuntime::register(Self, Int, CompiledFunction) -> Result[Int, String]
 pub fn JITRuntime::stats(Self) -> (Int, Int, Int, Int, Int, Int, Int)
 pub impl Show for JITRuntime
@@ -797,10 +797,10 @@ pub fn JITTable::get_entry_type(Self, Int) -> Int
 pub fn JITTable::get_entry_value(Self, Int) -> Int64
 pub fn JITTable::get_max(Self) -> Int?
 pub fn JITTable::get_size(Self) -> Int
-pub fn JITTable::new(Int, Int?) -> Self?
 pub fn JITTable::raw_ptr(Self) -> Int64
 pub fn JITTable::refresh_layout(Self, Int64, Int) -> Unit
 pub fn JITTable::set(Self, Int, Int64, Int) -> Unit
+pub fn JITTable::try_alloc(Int, Int?) -> Self?
 
 pub(all) struct JitIntegrationPlan {
   entry_symbol : String
@@ -829,13 +829,13 @@ pub struct MemoryInfo {
   size : Int64
   max_pages : Int?
 }
-pub fn MemoryInfo::new(Int64, Int64, Int?) -> Self
+pub fn MemoryInfo::MemoryInfo(Int64, Int64, Int?) -> Self
 
 type MemoryManager
+pub fn MemoryManager::MemoryManager(Int) -> Self
 pub fn MemoryManager::alloc_region(Self, Int) -> ExecutableRegion
 pub fn MemoryManager::finalize_all(Self) -> Unit
 pub fn MemoryManager::get_current_region(Self) -> ExecutableRegion
-pub fn MemoryManager::new(Int) -> Self
 pub fn MemoryManager::total_allocated(Self) -> Int
 pub fn MemoryManager::total_used(Self) -> Int
 pub fn MemoryManager::write_code(Self, @machv_emit.MachineCode) -> Result[(ExecutableRegion, Int), String]
@@ -869,7 +869,6 @@ pub fn NativeJITContext::func_table_ptr(Self) -> Int64
 pub fn NativeJITContext::has_wasm_stack(Self) -> Bool
 pub fn NativeJITContext::memory_ptr(Self, Int) -> Int64
 pub fn NativeJITContext::memory_size(Self, Int) -> Int64
-pub fn NativeJITContext::new(Int) -> Self?
 pub fn NativeJITContext::ptr(Self) -> Int64
 pub fn NativeJITContext::set_func(Self, Int, Int64) -> Unit
 pub fn NativeJITContext::set_globals(Self, Int64) -> Unit
@@ -878,6 +877,7 @@ pub fn NativeJITContext::set_indirect(Self, Int, Int, Int) -> Unit
 pub fn NativeJITContext::set_memory(Self, Int64) -> Unit
 pub fn NativeJITContext::set_memory_pointers(Self, Array[MemoryInfo]) -> Unit
 pub fn NativeJITContext::set_table_pointers(Self, Array[JITTable?]) -> Unit
+pub fn NativeJITContext::try_alloc(Int) -> Self?
 
 pub(all) struct Profiler {
   counter : CallCounter
@@ -886,11 +886,11 @@ pub(all) struct Profiler {
   pending_compilation : @hashset.HashSet[Int]
   compiled_functions : @hashset.HashSet[Int]
 }
+pub fn Profiler::Profiler(HotThreshold) -> Self
 pub fn Profiler::get_function_temperature(Self, Int) -> FunctionTemperature
 pub fn Profiler::get_pending(Self) -> Array[Int]
 pub fn Profiler::is_compiled(Self, Int) -> Bool
 pub fn Profiler::mark_compiled(Self, Int) -> Unit
-pub fn Profiler::new(HotThreshold) -> Self
 pub fn Profiler::record_call(Self, Int) -> (Int, Bool)
 pub fn Profiler::should_use_jit(Self, Int) -> Bool
 pub fn Profiler::stats(Self) -> (Int, Int, Int, Int)
@@ -912,9 +912,9 @@ pub(all) struct RuntimeSymbol {
 pub(all) struct RuntimeSymbolResolver {
   symbols : Array[RuntimeSymbol]
 } derive(@debug.Debug)
+pub fn RuntimeSymbolResolver::RuntimeSymbolResolver() -> Self
 pub fn RuntimeSymbolResolver::add_symbol(Self, String, Int64) -> Unit
 pub fn RuntimeSymbolResolver::add_symbol_fixup(Self, String, Int64, Int) -> Unit
-pub fn RuntimeSymbolResolver::new() -> Self
 pub fn RuntimeSymbolResolver::resolve(Self, String) -> Int64?
 pub fn RuntimeSymbolResolver::resolve_symbol(Self, String) -> RuntimeSymbol?
 pub fn RuntimeSymbolResolver::with_wasmoon_runtime_symbols() -> Self
@@ -950,7 +950,7 @@ pub struct TrapDetails {
   x11 : Int64
   x15 : Int64
 }
-pub fn TrapDetails::new() -> Self
+pub fn TrapDetails::TrapDetails() -> Self
 
 pub(all) struct TrapReport {
   trap_kind : String

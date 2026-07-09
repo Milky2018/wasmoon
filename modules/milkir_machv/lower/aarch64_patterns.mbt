@@ -76,61 +76,53 @@ pub fn get_aarch64_rules() -> Array[RewriteRule] {
   [
     // add(x, shl(y, n)) -> add_shifted(x, y, lsl #n)
     // This pattern combines shift-and-add into a single instruction
-    RewriteRule::new(
+    RewriteRule(
       "aarch64_add_shifted",
       Inst(Iadd, [Any, Inst(Ishl, [Any, AnyConstInt])]),
       20,
     ),
     // add(shl(x, n), y) -> add_shifted(y, x, lsl #n) (commutative)
-    RewriteRule::new(
+    RewriteRule(
       "aarch64_shifted_add",
       Inst(Iadd, [Inst(Ishl, [Any, AnyConstInt]), Any]),
       20,
     ),
     // sub(x, shl(y, n)) -> sub_shifted(x, y, lsl #n)
-    RewriteRule::new(
+    RewriteRule(
       "aarch64_sub_shifted",
       Inst(Isub, [Any, Inst(Ishl, [Any, AnyConstInt])]),
       20,
     ),
     // add(a, mul(b, c)) -> madd(a, b, c)
-    RewriteRule::new(
-      "aarch64_madd",
-      Inst(Iadd, [Any, Inst(Imul, [Any, Any])]),
-      25,
-    ),
+    RewriteRule("aarch64_madd", Inst(Iadd, [Any, Inst(Imul, [Any, Any])]), 25),
     // add(mul(a, b), c) -> madd(c, a, b) (commutative)
-    RewriteRule::new(
+    RewriteRule(
       "aarch64_madd_comm",
       Inst(Iadd, [Inst(Imul, [Any, Any]), Any]),
       25,
     ),
     // sub(a, mul(b, c)) -> msub(a, b, c)
-    RewriteRule::new(
-      "aarch64_msub",
-      Inst(Isub, [Any, Inst(Imul, [Any, Any])]),
-      25,
-    ),
+    RewriteRule("aarch64_msub", Inst(Isub, [Any, Inst(Imul, [Any, Any])]), 25),
     // sub(0, mul(a, b)) -> mneg(a, b)
-    RewriteRule::new(
+    RewriteRule(
       "aarch64_mneg",
       Inst(Isub, [ConstInt(0L), Inst(Imul, [Any, Any])]),
       25,
     ),
     // and(x, shl(y, n)) -> and_shifted(x, y, lsl #n)
-    RewriteRule::new(
+    RewriteRule(
       "aarch64_and_shifted",
       Inst(Band, [Any, Inst(Ishl, [Any, AnyConstInt])]),
       20,
     ),
     // or(x, shl(y, n)) -> orr_shifted(x, y, lsl #n)
-    RewriteRule::new(
+    RewriteRule(
       "aarch64_orr_shifted",
       Inst(Bor, [Any, Inst(Ishl, [Any, AnyConstInt])]),
       20,
     ),
     // xor(x, shl(y, n)) -> eor_shifted(x, y, lsl #n)
-    RewriteRule::new(
+    RewriteRule(
       "aarch64_eor_shifted",
       Inst(Bxor, [Any, Inst(Ishl, [Any, AnyConstInt])]),
       20,

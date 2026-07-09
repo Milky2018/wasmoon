@@ -375,7 +375,7 @@ fn componenttype_import_core_module_sigs_of_decls(
   for d in decls {
     match d {
       CoreType(bytes) => {
-        let r = CoreTypeReader::new(bytes)
+        let r = CoreTypeReader::CoreTypeReader(bytes)
         let op = r.read_u8()
         if op == 0x50 {
           let (imps, exps) = parse_core_type_module_sig(
@@ -1106,7 +1106,7 @@ fn validate_typedef(
       for d in decls {
         match d {
           CoreType(bytes) => {
-            let r = CoreTypeReader::new(bytes)
+            let r = CoreTypeReader::CoreTypeReader(bytes)
             let op = r.read_u8()
             if op == 0x50 {
               local_core_type_exports.push(

@@ -342,7 +342,7 @@ fn build_output(
   isa : @isa.ISA,
   embedding_abi : @abi.EmbeddingABI,
 ) -> Output {
-  let out = Output::new()
+  let out = Output::Output()
   out.num_spillslots = alloc.num_spill_slots
   let max_vreg_id = func.next_vreg_id
   let assigned_pregs : Array[@abi.PReg?] = Array::make(max_vreg_id, None)

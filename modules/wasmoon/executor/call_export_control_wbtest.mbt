@@ -40,13 +40,13 @@ test "call_exported_func_with_options: classify wasm trap" {
 
 ///|
 test "call_exported_func_with_options: classify host invocation error" {
-  let store = @runtime.Store::new()
+  let store = @runtime.Store::Store()
   let host_addr = store.alloc_host_func_with_caller(
     (_caller, _args) => raise LinkErrorDetail("host failed"),
     func_type={ params: [], results: [I32] },
     type_idx=0,
   )
-  let imports = @runtime.Imports::new()
+  let imports = @runtime.Imports::Imports()
   imports.add_func("env", "fail", host_addr)
   let instance = instantiate_module_with_imports(
     store,
@@ -73,13 +73,13 @@ test "call_exported_func_with_options: classify host invocation error" {
 
 ///|
 test "call_exported_func_with_options: preserve legacy host error behavior" {
-  let store = @runtime.Store::new()
+  let store = @runtime.Store::Store()
   let host_addr = store.alloc_host_func_with_caller(
     (_caller, _args) => raise LinkErrorDetail("legacy host error"),
     func_type={ params: [], results: [I32] },
     type_idx=0,
   )
-  let imports = @runtime.Imports::new()
+  let imports = @runtime.Imports::Imports()
   imports.add_func("env", "fail", host_addr)
   let instance = instantiate_module_with_imports(
     store,
@@ -99,7 +99,7 @@ test "call_exported_func_with_options: preserve legacy host error behavior" {
 test "call_exported_func_with_options: cancel before invocation" {
   let mod = @types.Module::simple([], [I32], [I32Const(42)], "main")
   let (store, instance) = instantiate_module(mod)
-  let options = CallExportOptions::new(cancel=Some(fn() { true }))
+  let options = CallExportOptions::CallExportOptions(cancel=Some(fn() { true }))
   let result = call_exported_func_with_options(
     store,
     instance,
@@ -123,7 +123,7 @@ test "call_exported_func_with_options: cancel before invocation" {
 test "call_exported_func_with_options: unsupported budget options are structured" {
   let mod = @types.Module::simple([], [I32], [I32Const(1)], "main")
   let (store, instance) = instantiate_module(mod)
-  let options = CallExportOptions::new(fuel=Some(100))
+  let options = CallExportOptions::CallExportOptions(fuel=Some(100))
   let result = call_exported_func_with_options(
     store,
     instance,

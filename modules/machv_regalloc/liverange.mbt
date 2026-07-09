@@ -10,7 +10,10 @@ struct ProgPointRange {
 }
 
 ///|
-fn ProgPointRange::new(start : ProgPoint, end : ProgPoint) -> ProgPointRange {
+fn ProgPointRange::ProgPointRange(
+  start : ProgPoint,
+  end : ProgPoint,
+) -> ProgPointRange {
   { start, end }
 }
 
@@ -100,7 +103,7 @@ struct UsePosition {
 }
 
 ///|
-fn UsePosition::new(
+fn UsePosition::UsePosition(
   point : ProgPoint,
   kind : UseKind,
   constraint : OperandConstraint,
@@ -157,7 +160,7 @@ struct LiveRange {
 }
 
 ///|
-pub fn LiveRange::new(id : Int, vreg : @abi.VReg) -> LiveRange {
+pub fn LiveRange::LiveRange(id : Int, vreg : @abi.VReg) -> LiveRange {
   {
     id,
     vreg,
@@ -333,7 +336,7 @@ struct LiveRangeSet {
 }
 
 ///|
-fn LiveRangeSet::new(
+fn LiveRangeSet::LiveRangeSet(
   block_order : FixedArray[Int],
   max_vreg_id : Int,
 ) -> LiveRangeSet {
@@ -409,7 +412,10 @@ pub fn build_live_ranges(
   func : @machv.Function,
   liveness : LivenessResult,
 ) -> LiveRangeSet {
-  let result = LiveRangeSet::new(liveness.block_order, func.next_vreg_id)
+  let result = LiveRangeSet::LiveRangeSet(
+    liveness.block_order,
+    func.next_vreg_id,
+  )
   let mut next_id = 0
   let block_order = liveness.block_order
   let num_blocks = func.blocks.length()
@@ -671,7 +677,7 @@ pub fn build_live_ranges(
     if liveness.use_def_dense[vreg_id] is Some(info) {
       scratch_epoch = scratch_epoch + 1
       let epoch = scratch_epoch
-      let range = LiveRange::new(next_id, info.vreg)
+      let range = LiveRange::LiveRange(next_id, info.vreg)
       next_id += 1
 
       // Add use positions (for constraints / heuristics)
@@ -680,7 +686,7 @@ pub fn build_live_ranges(
           Some(preg) => FixedReg(preg)
           None => AnyReg
         }
-        range.add_use(UsePosition::new(def, Def, constraint))
+        range.add_use(UsePosition(def, Def, constraint))
       }
       for use_entry in info.use_points {
         let (use_point, fixed) = use_entry
@@ -688,7 +694,7 @@ pub fn build_live_ranges(
           Some(preg) => FixedReg(preg)
           None => AnyReg
         }
-        range.add_use(UsePosition::new(use_point, Use, constraint))
+        range.add_use(UsePosition(use_point, Use, constraint))
       }
 
       // Build multi-span ranges (with holes) from per-block liveness plus use/def.
@@ -839,7 +845,7 @@ pub fn build_live_ranges(
         } else {
           (start, end)
         }
-        range.add_range(ProgPointRange::new(start, end))
+        range.add_range(ProgPointRange(start, end))
       }
       // Fallback for malformed/edge cases where a use block was not covered by
       // live-in/live-out/def (should not happen in SSA; kept for safety).
@@ -860,7 +866,7 @@ pub fn build_live_ranges(
           block_point_base,
         )
         let end = point_after(use_bounds.1, block_len)
-        range.add_range(ProgPointRange::new(start, end))
+        range.add_range(ProgPointRange(start, end))
       }
       use_blocks_scratch.clear()
 

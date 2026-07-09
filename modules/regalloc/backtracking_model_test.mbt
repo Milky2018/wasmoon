@@ -1,6 +1,6 @@
 ///|
 test "backtracking queue pops higher priority with stable ties" {
-  let queue : BacktrackingQueue[Int] = BacktrackingQueue::new(4)
+  let queue : BacktrackingQueue[Int] = BacktrackingQueue(4)
   queue.push(2, 10, Some(20))
   queue.push(1, 20, Some(10))
   queue.push(3, 20, Some(30))
@@ -22,7 +22,7 @@ test "backtracking queue pops higher priority with stable ties" {
 
 ///|
 test "backtracking spillset state records hints and split caps" {
-  let spillsets : BacktrackingSpillsetState[Int] = BacktrackingSpillsetState::new(
+  let spillsets : BacktrackingSpillsetState[Int] = BacktrackingSpillsetState(
     2,
     max_splits_per_spillset=2,
   )
@@ -270,7 +270,7 @@ test "backtracking register attempts are generic over machine registers" {
 
 ///|
 test "backtracking allocation loop drives production callbacks" {
-  let queue : BacktrackingQueue[Int] = BacktrackingQueue::new(2)
+  let queue : BacktrackingQueue[Int] = BacktrackingQueue(2)
   queue.push(0, 10, None)
   queue.push(1, 5, Some(9))
   let attempts = Array::make(2, 0)

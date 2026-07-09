@@ -246,7 +246,7 @@ pub struct CompileProgress {
 }
 
 ///|
-pub fn CompileProgress::new(
+pub fn CompileProgress::CompileProgress(
   stage : CompileStage,
   total_funcs : Int,
   compiled_funcs : Int,
@@ -278,7 +278,7 @@ fn emit_compile_progress(
   message? : String? = None,
 ) -> Unit {
   on_progress(
-    CompileProgress::new(
+    CompileProgress(
       stage,
       total_funcs,
       compiled_funcs,
@@ -317,7 +317,7 @@ pub fn run_wasm(
   let jit_status = if use_jit { "enabled" } else { "disabled" }
   @logger.debug("JIT: \{jit_status}")
   // Create linker for module linking
-  let linker = @runtime.Linker::new()
+  let linker = @runtime.Linker::Linker()
 
   // Parse WASI options
   let mut inherit_env = false
@@ -346,7 +346,7 @@ pub fn run_wasm(
 
   // Build WASI context with directory mappings and environment variables
   // Also collect preopens and env for JIT mode
-  let wasi_builder = @wasi.WasiContextBuilder::new()
+  let wasi_builder = @wasi.WasiContextBuilder::WasiContextBuilder()
   // argv[0] is the basename of the wasm file (like wasmtime), followed by wasm_args
   let program_name = get_basename(wasm_path)
   let wasi_args = [program_name] + wasm_args
@@ -591,11 +591,11 @@ fn split_preload(s : String) -> (String, String)? {
     return None
   }
   // Build name and path strings manually
-  let name_builder = StringBuilder::new()
+  let name_builder = StringBuilder::StringBuilder()
   for i in 0..<eq_idx {
     name_builder.write_char(s.code_unit_at(i).unsafe_to_char())
   }
-  let path_builder = StringBuilder::new()
+  let path_builder = StringBuilder::StringBuilder()
   let path_start = eq_idx + 1
   for i in path_start..<s.length() {
     path_builder.write_char(s.code_unit_at(i).unsafe_to_char())
@@ -617,11 +617,11 @@ fn parse_env_var(s : String) -> (String, String)? {
     return None
   }
   // Build name and value strings
-  let name_builder = StringBuilder::new()
+  let name_builder = StringBuilder::StringBuilder()
   for i in 0..<eq_idx {
     name_builder.write_char(s.code_unit_at(i).unsafe_to_char())
   }
-  let value_builder = StringBuilder::new()
+  let value_builder = StringBuilder::StringBuilder()
   let value_start = eq_idx + 1
   for i in value_start..<s.length() {
     value_builder.write_char(s.code_unit_at(i).unsafe_to_char())
@@ -645,11 +645,11 @@ fn parse_wasi_option(s : String) -> (String, String) {
     return (s, "true")
   }
   // Build key and value strings
-  let key_builder = StringBuilder::new()
+  let key_builder = StringBuilder::StringBuilder()
   for i in 0..<eq_idx {
     key_builder.write_char(s.code_unit_at(i).unsafe_to_char())
   }
-  let value_builder = StringBuilder::new()
+  let value_builder = StringBuilder::StringBuilder()
   let value_start = eq_idx + 1
   for i in value_start..<s.length() {
     value_builder.write_char(s.code_unit_at(i).unsafe_to_char())
@@ -681,11 +681,11 @@ fn parse_dir_mapping(s : String) -> (String, String)? {
       return None // Empty host path
     }
     // Build host and guest path strings
-    let host_builder = StringBuilder::new()
+    let host_builder = StringBuilder::StringBuilder()
     for i in 0..<sep_idx {
       host_builder.write_char(s.code_unit_at(i).unsafe_to_char())
     }
-    let guest_builder = StringBuilder::new()
+    let guest_builder = StringBuilder::StringBuilder()
     let guest_start = sep_idx + 2
     for i in guest_start..<len {
       guest_builder.write_char(s.code_unit_at(i).unsafe_to_char())
@@ -1179,7 +1179,7 @@ fn run_with_jit(
               return exit_failure()
             }
           }
-          let jit_ctx = @wast.JITModuleContext::new(
+          let jit_ctx = @wast.JITModuleContext::JITModuleContext(
             jm,
             globals_ptr,
             instance.global_addrs,
@@ -1441,7 +1441,7 @@ fn machv_gc_safepoints_to_cwasm(
   let out : Array[@cwasm.GcSafepoint] = []
   for safepoint in safepoints {
     out.push(
-      @cwasm.GcSafepoint::new(
+      GcSafepoint(
         safepoint.code_offset,
         safepoint.live_refs,
         safepoint.metadata,
@@ -1473,9 +1473,9 @@ pub fn compile_module_to_jit(
   let module_tick = if perf_on { Some(@perf.tick_now()) } else { None }
   let target_arch = @wasmoon_jit.host_target_arch()
   let isa = @wasmoon_jit.target_arch_to_isa(target_arch)
-  let precompiled = @cwasm.PrecompiledModule::new(target_arch)
+  let precompiled = @cwasm.PrecompiledModule::PrecompiledModule(target_arch)
   let debug_db : @wasmoon_jit.JITDebugDB? = if dump_on_trap {
-    Some(@wasmoon_jit.JITDebugDB::new())
+    Some(JITDebugDB())
   } else {
     None
   }
@@ -1699,7 +1699,9 @@ pub fn compile_module_to_jit(
     if debug_db is Some(_) {
       mc_dump = Some(mc.dump_disasm())
     }
-    let compiled = @wasmoon_jit.CompiledFunction::new(func_name, mc, 0)
+    let compiled = @wasmoon_jit.CompiledFunction::CompiledFunction(
+      func_name, mc, 0,
+    )
     let num_params = func_type.params.length()
     let num_results = func_type.results.length()
     precompiled.add_function(
@@ -1737,7 +1739,7 @@ pub fn compile_module_to_jit(
     if debug_db is Some(db) {
       db.set(
         func_idx,
-        @wasmoon_jit.JITFunctionDebug::new(
+        JITFunctionDebug(
           ir_dump.unwrap_or(""),
           machv_before_dump.unwrap_or(""),
           machv_after_dump.unwrap_or(""),

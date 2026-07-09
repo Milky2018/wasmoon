@@ -10,7 +10,7 @@ struct FunctionBuilder {
 }
 
 ///|
-pub fn FunctionBuilder::new(name : String) -> FunctionBuilder {
+pub fn FunctionBuilder::FunctionBuilder(name : String) -> FunctionBuilder {
   let func = Function::new_empty(name)
   let entry = func.new_block0()
   { func, current_block: entry }
@@ -119,7 +119,7 @@ pub fn FunctionBuilder::emit_inst(
 ) -> Value {
   let block = self.current_block
   let result = self.func.new_value(ty)
-  let inst = Inst::new(Some(result), opcode, operands)
+  let inst = Inst::Inst(Some(result), opcode, operands)
   block.add_inst(inst)
   result
 }
@@ -132,7 +132,7 @@ pub fn FunctionBuilder::emit_void_inst(
   operands : Array[Value],
 ) -> Unit {
   let block = self.current_block
-  let inst = Inst::new(None, opcode, operands)
+  let inst = Inst::Inst(None, opcode, operands)
   block.add_inst(inst)
 }
 

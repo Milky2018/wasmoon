@@ -52,7 +52,7 @@ pub struct TrapDetails {
 }
 
 ///|
-pub fn TrapDetails::new() -> TrapDetails {
+pub fn TrapDetails::TrapDetails() -> TrapDetails {
   {
     signal: 0,
     pc: 0L,
@@ -418,7 +418,7 @@ pub fn clear_segments(ctx_ptr : Int64) -> Unit {
 struct NativeJITContext(@jit_ffi.JITContext)
 
 ///|
-pub fn NativeJITContext::new(total_funcs : Int) -> NativeJITContext? {
+pub fn NativeJITContext::try_alloc(total_funcs : Int) -> NativeJITContext? {
   let ctx = @jit_ffi.c_jit_alloc_context_managed(total_funcs)
   if @jit_ffi.c_jit_context_ptr(ctx) != 0L {
     Some(NativeJITContext(ctx))
@@ -652,7 +652,7 @@ pub struct MemoryInfo {
 
 ///|
 /// Create a new MemoryInfo.
-pub fn MemoryInfo::new(
+pub fn MemoryInfo::MemoryInfo(
   ptr : Int64,
   size : Int64,
   max_pages : Int?,
@@ -754,7 +754,7 @@ struct JITTable {
 ///|
 /// Create a new shared JIT table.
 /// Note: size 0 is valid (empty table that can grow later).
-pub fn JITTable::new(size : Int, max : Int?) -> JITTable? {
+pub fn JITTable::try_alloc(size : Int, max : Int?) -> JITTable? {
   if size < 0 {
     return None
   }
@@ -1220,7 +1220,7 @@ fn DirectCallStubSet::install_one(
       code_size=stub_code.length(),
     )
   }
-  match ExecCode::new(stub_code) {
+  match ExecCode::try_alloc(stub_code) {
     Some(ec) => {
       self.exec_codes.push(ec)
       self.targets.set(pseudo_idx, ec.ptr())
@@ -1608,7 +1608,7 @@ struct ExecCode(@jit_ffi.ExecCode)
 
 ///|
 /// Allocate and copy code to executable memory (GC-managed).
-pub fn ExecCode::new(code : Array[Int]) -> ExecCode? {
+pub fn ExecCode::try_alloc(code : Array[Int]) -> ExecCode? {
   let size = code.length()
   if size == 0 {
     return None

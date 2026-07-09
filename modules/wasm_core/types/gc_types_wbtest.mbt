@@ -471,7 +471,7 @@ test "PackedType equality" {
 
 ///|
 test "Module::get_func_type returns correct FuncType" {
-  let mod_ = Module::new()
+  let mod_ = Module::Module()
   mod_.types.push(SubType::func([I32, I32], [I32]))
   mod_.types.push(SubType::func([], [F64]))
   let ft0 = mod_.get_func_type(0)
@@ -484,7 +484,7 @@ test "Module::get_func_type returns correct FuncType" {
 
 ///|
 test "Module::get_struct_type returns correct StructType" {
-  let mod_ = Module::new()
+  let mod_ = Module::Module()
   let struct_type : StructType = {
     fields: [
       { storage_type: Val(I32), mutable: false },
@@ -500,7 +500,7 @@ test "Module::get_struct_type returns correct StructType" {
 
 ///|
 test "Module::get_array_type returns correct ArrayType" {
-  let mod_ = Module::new()
+  let mod_ = Module::Module()
   let array_type : ArrayType = {
     element: { storage_type: Packed(I8), mutable: true },
   }
@@ -512,7 +512,7 @@ test "Module::get_array_type returns correct ArrayType" {
 
 ///|
 test "Module::is_func_type correctly identifies function types" {
-  let mod_ = Module::new()
+  let mod_ = Module::Module()
   let struct_type : StructType = { fields: [] }
   let array_type : ArrayType = {
     element: { storage_type: Val(I32), mutable: true },
@@ -527,7 +527,7 @@ test "Module::is_func_type correctly identifies function types" {
 
 ///|
 test "Module::is_struct_type correctly identifies struct types" {
-  let mod_ = Module::new()
+  let mod_ = Module::Module()
   let struct_type : StructType = { fields: [] }
   let array_type : ArrayType = {
     element: { storage_type: Val(I32), mutable: true },
@@ -542,7 +542,7 @@ test "Module::is_struct_type correctly identifies struct types" {
 
 ///|
 test "Module::is_array_type correctly identifies array types" {
-  let mod_ = Module::new()
+  let mod_ = Module::Module()
   let struct_type : StructType = { fields: [] }
   let array_type : ArrayType = {
     element: { storage_type: Val(I32), mutable: true },
@@ -557,7 +557,7 @@ test "Module::is_array_type correctly identifies array types" {
 
 ///|
 test "Module with mixed type definitions" {
-  let mod_ = Module::new()
+  let mod_ = Module::Module()
   // Add various types
   mod_.types.push(SubType::func([], [])) // 0: void -> void
   mod_.types.push(SubType::func([I32, I32], [I32])) // 1: add signature

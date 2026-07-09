@@ -9,7 +9,7 @@ struct Table {
 } derive(Debug)
 
 ///|
-pub fn Table::new(
+pub fn Table::Table(
   elem_type : @types.ValueType,
   min : Int,
   max : Int?,

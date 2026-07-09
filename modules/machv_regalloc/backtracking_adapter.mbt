@@ -207,7 +207,7 @@ fn make_bool_table(cap : Int) -> Array[Bool] {
 }
 
 ///|
-fn BacktrackingAllocator::new(
+fn BacktrackingAllocator::BacktrackingAllocator(
   func : @machv.Function,
   ranges : LiveRangeSet,
   bundles : BundleSet,
@@ -292,9 +292,9 @@ fn BacktrackingAllocator::new(
     int_reg_allocs: make_reg_alloc_table(int_max + 1),
     float_reg_allocs: make_reg_alloc_table(float_max + 1),
     bundle_span_cache: Array::make(bundles.length(), None),
-    queue: @regalloc.BacktrackingQueue::new(bundles.length()),
-    spillsets: @regalloc.BacktrackingSpillsetState::new(bundles.length()),
-    bundle_hint_cache: @regalloc.BacktrackingHintCache::new(bundles.length()),
+    queue: BacktrackingQueue(bundles.length()),
+    spillsets: BacktrackingSpillsetState(bundles.length()),
+    bundle_hint_cache: BacktrackingHintCache(bundles.length()),
     int_regs,
     float_regs,
     vector_regs,
@@ -850,7 +850,7 @@ fn BacktrackingAllocator::split_bundle(
       let spill_bundle = self.bundles.get_or_create_spill_bundle(bundle)
 
       // Before bundle
-      let before_bundle = Bundle::new(
+      let before_bundle = Bundle::Bundle(
         self.bundles.bundles.length(),
         bundle.reg_class,
       )
@@ -877,7 +877,7 @@ fn BacktrackingAllocator::split_bundle(
       )
 
       // After bundle
-      let after_bundle = Bundle::new(
+      let after_bundle = Bundle::Bundle(
         self.bundles.bundles.length(),
         bundle.reg_class,
       )
@@ -917,7 +917,7 @@ fn BacktrackingAllocator::enqueue_single_range_bundle(
   range_id : Int,
   hint : @abi.PReg?,
 ) -> Unit {
-  let new_bundle = Bundle::new(
+  let new_bundle = Bundle::Bundle(
     self.bundles.bundles.length(),
     source_bundle.reg_class,
   )
@@ -1205,7 +1205,7 @@ fn BacktrackingAllocator::generate_result(
           fn(a, b) { a.index == b.index },
         )
         for planned_edits in planned {
-          let edits = InstEdits::new()
+          let edits = InstEdits::InstEdits()
           for mv in planned_edits.before {
             edits.before.push({
               from: backtracking_move_loc_to_machv(mv.from, mv.class_tag),
@@ -1581,9 +1581,9 @@ pub fn build_bundles_with_merging(
   }
 
   let tick_finalize = if perf_on { Some(perf_tick_now()) } else { None }
-  let result = BundleSet::new()
+  let result = BundleSet::BundleSet()
   for bundle_id in 0..<plan.bundle_roots.length() {
-    let created = Bundle::new(
+    let created = Bundle::Bundle(
       result.bundles.length(),
       plan.bundle_classes[bundle_id],
     )
@@ -1801,7 +1801,7 @@ fn allocate_backtracking(
 
   // Phase 4: Allocate
   let tick_alloc_new = if perf_on { Some(perf_tick_now()) } else { None }
-  let allocator = BacktrackingAllocator::new(
+  let allocator = BacktrackingAllocator::BacktrackingAllocator(
     func,
     ranges,
     bundles,

@@ -794,7 +794,7 @@ pub fn emit_function(
   // Optimize block layout for better branch prediction
   // Loop rotation makes back edges fall through, reducing taken branches
   let func = @layout.optimize_layout(func)
-  let mc = MachineCode::new(isa~, record_disasm~)
+  let mc = MachineCode::MachineCode(isa~, record_disasm~)
   let embedding_abi = require_embedding_abi(embedding_abi)
   let call_conv_layout = embedding_abi.call_conv
   // ABI: check if this function or one of its calls needs the embedding's
@@ -1486,7 +1486,7 @@ fn emit_edit_move_with_cache(
         (Reg(src), Reg(dst)) => {
           let dst_preg : @abi.PReg = { index: dst.index, class }
           invalidate_edit_slot_cache_reg(slot_cache, dst_preg)
-          let inst = @instr.MachVInst::new(Move)
+          let inst = @instr.MachVInst::MachVInst(Move)
           inst.add_def({ reg: Physical(dst_preg) })
           inst.add_use(Physical({ index: src.index, class }))
           mc.emit_instruction(inst, stack_frame)
@@ -1495,14 +1495,14 @@ fn emit_edit_move_with_cache(
           let dst_preg : @abi.PReg = { index: dst.index, class }
           invalidate_edit_slot_cache_reg(slot_cache, dst_preg)
           invalidate_edit_slot_cache_range(slot_cache, slot, class)
-          let inst = @instr.MachVInst::new(StackLoad(slot * 8))
+          let inst = @instr.MachVInst::MachVInst(StackLoad(slot * 8))
           inst.add_def({ reg: Physical(dst_preg) })
           mc.emit_instruction(inst, stack_frame)
         }
         (Reg(src), Spill(slot)) => {
           let src_preg : @abi.PReg = { index: src.index, class }
           invalidate_edit_slot_cache_range(slot_cache, slot, class)
-          let inst = @instr.MachVInst::new(StackStore(slot * 8))
+          let inst = @instr.MachVInst::MachVInst(StackStore(slot * 8))
           inst.add_use(Physical(src_preg))
           mc.emit_instruction(inst, stack_frame)
         }
@@ -2080,7 +2080,7 @@ pub fn emit_function_with_regalloc(
   // Regalloc output carries edge copies as edits keyed by original blocks.
   // Reorder blocks, but do not thread jumps across edge-copy blocks.
   let func = @layout.optimize_layout_preserving_edges(func)
-  let mc = MachineCode::new(isa~, record_disasm~)
+  let mc = MachineCode::MachineCode(isa~, record_disasm~)
   let is_amd64 = isa is AMD64
   let embedding_abi = require_embedding_abi(embedding_abi)
 

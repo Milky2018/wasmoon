@@ -1,7 +1,7 @@
 ///|
 /// Validate a complete module
 pub fn validate_module(mod : @types.Module) -> Unit raise ValidationError {
-  let ctx = ValidationContext::new(mod)
+  let ctx = ValidationContext::ValidationContext(mod)
   let num_types = ctx.types.length()
 
   // Validate that all function type indices are valid
@@ -259,7 +259,7 @@ pub fn validate_module(mod : @types.Module) -> Unit raise ValidationError {
 pub fn validate_module_with_context(
   mod : @types.Module,
 ) -> Unit raise ValidationError {
-  let ctx = ValidationContext::new(mod)
+  let ctx = ValidationContext::ValidationContext(mod)
 
   // Validate that all function type indices are valid
   for i, type_idx in ctx.funcs {

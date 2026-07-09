@@ -17,8 +17,8 @@ pub struct MachVBlock {
   params : Array[@abi.VReg]
   mut terminator : @instr.MachVTerminator?
 }
+pub fn MachVBlock::MachVBlock(Int) -> Self
 pub fn MachVBlock::add_inst(Self, @instr.MachVInst) -> Unit
-pub fn MachVBlock::new(Int) -> Self
 pub fn MachVBlock::set_terminator(Self, @instr.MachVTerminator) -> Unit
 
 // Type aliases

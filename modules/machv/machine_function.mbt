@@ -72,7 +72,7 @@ pub fn Function::get_result_kinds(self : Function) -> Array[ValueKind] {
 }
 
 ///|
-pub fn Function::new(name : String) -> Function {
+pub fn Function::Function(name : String) -> Function {
   {
     name,
     params: [],
@@ -286,7 +286,7 @@ pub fn Function::should_reserve_context_cache_1(self : Function) -> Bool {
 ///|
 pub fn Function::new_block(self : Function) -> @block.MachVBlock {
   let id = self.blocks.length()
-  let block = @block.MachVBlock::new(id)
+  let block = @block.MachVBlock::MachVBlock(id)
   self.blocks.push(block)
   block
 }

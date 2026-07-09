@@ -103,7 +103,7 @@ pub(all) struct ImportEntry {
 }
 
 ///|
-pub fn ImportEntry::new(
+pub fn ImportEntry::ImportEntry(
   module_name : String,
   func_name : String,
   num_params : Int,
@@ -158,7 +158,7 @@ pub(all) struct GcSafepoint {
 } derive(Debug)
 
 ///|
-pub fn GcSafepoint::new(
+pub fn GcSafepoint::GcSafepoint(
   code_offset : Int,
   live_refs : Array[Int],
   metadata : Int64,
@@ -196,7 +196,7 @@ pub(all) struct CompiledEntry {
 }
 
 ///|
-pub fn CompiledEntry::new(
+pub fn CompiledEntry::CompiledEntry(
   func_idx : Int,
   name : String,
   code : Array[Int],
@@ -244,7 +244,7 @@ pub(all) struct MemoryDef {
 }
 
 ///|
-pub fn MemoryDef::new(min_pages : Int, max_pages : Int?) -> MemoryDef {
+pub fn MemoryDef::MemoryDef(min_pages : Int, max_pages : Int?) -> MemoryDef {
   { min_pages, max_pages }
 }
 
@@ -275,7 +275,7 @@ pub(all) struct DataEntry {
 }
 
 ///|
-pub fn DataEntry::new(
+pub fn DataEntry::DataEntry(
   memory_idx : Int,
   offset : Int,
   data : Array[Int],
@@ -304,7 +304,7 @@ pub(all) struct TypeEntry {
 }
 
 ///|
-pub fn TypeEntry::new(
+pub fn TypeEntry::TypeEntry(
   param_types : Array[Int],
   result_types : Array[Int],
 ) -> TypeEntry {
@@ -335,7 +335,7 @@ pub(all) struct GlobalDef {
 }
 
 ///|
-pub fn GlobalDef::new(
+pub fn GlobalDef::GlobalDef(
   value_type : Int,
   mutable : Bool,
   init_value : Int64,
@@ -368,7 +368,7 @@ pub(all) struct TableDef {
 }
 
 ///|
-pub fn TableDef::new(
+pub fn TableDef::TableDef(
   elem_type : Int,
   min_size : Int,
   max_size : Int?,
@@ -403,7 +403,7 @@ pub(all) struct ElemEntry {
 }
 
 ///|
-pub fn ElemEntry::new(
+pub fn ElemEntry::ElemEntry(
   table_idx : Int,
   offset : Int,
   func_indices : Array[Int],
@@ -451,7 +451,9 @@ pub(all) struct PrecompiledModule {
 }
 
 ///|
-pub fn PrecompiledModule::new(target : TargetArch) -> PrecompiledModule {
+pub fn PrecompiledModule::PrecompiledModule(
+  target : TargetArch,
+) -> PrecompiledModule {
   {
     version: CWASM_VERSION,
     target,
@@ -477,7 +479,7 @@ pub fn PrecompiledModule::add_import(
   num_results : Int,
 ) -> Unit {
   self.imports.push(
-    ImportEntry::new(module_name, func_name, num_params, num_results),
+    ImportEntry(module_name, func_name, num_params, num_results),
   )
 }
 
@@ -497,7 +499,7 @@ pub fn PrecompiledModule::add_memory(
   min_pages : Int,
   max_pages : Int?,
 ) -> Unit {
-  self.memories.push(MemoryDef::new(min_pages, max_pages))
+  self.memories.push(MemoryDef(min_pages, max_pages))
 }
 
 ///|
@@ -508,7 +510,7 @@ pub fn PrecompiledModule::add_data_segment(
   offset : Int,
   data : Array[Int],
 ) -> Unit {
-  self.data_segments.push(DataEntry::new(memory_idx, offset, data))
+  self.data_segments.push(DataEntry(memory_idx, offset, data))
 }
 
 ///|
@@ -518,7 +520,7 @@ pub fn PrecompiledModule::add_type(
   param_types : Array[Int],
   result_types : Array[Int],
 ) -> Unit {
-  self.types.push(TypeEntry::new(param_types, result_types))
+  self.types.push(TypeEntry(param_types, result_types))
 }
 
 ///|
@@ -529,7 +531,7 @@ pub fn PrecompiledModule::add_global(
   mutable : Bool,
   init_value : Int64,
 ) -> Unit {
-  self.globals.push(GlobalDef::new(value_type, mutable, init_value))
+  self.globals.push(GlobalDef(value_type, mutable, init_value))
 }
 
 ///|
@@ -540,7 +542,7 @@ pub fn PrecompiledModule::add_table(
   min_size : Int,
   max_size : Int?,
 ) -> Unit {
-  self.tables.push(TableDef::new(elem_type, min_size, max_size))
+  self.tables.push(TableDef(elem_type, min_size, max_size))
 }
 
 ///|
@@ -551,7 +553,7 @@ pub fn PrecompiledModule::add_element(
   offset : Int,
   func_indices : Array[Int],
 ) -> Unit {
-  self.elements.push(ElemEntry::new(table_idx, offset, func_indices))
+  self.elements.push(ElemEntry(table_idx, offset, func_indices))
 }
 
 ///|
@@ -865,7 +867,7 @@ pub impl Show for DeserializeError with fn output(self, logger) {
 pub fn deserialize(
   bytes : Array[Int],
 ) -> PrecompiledModule raise DeserializeError {
-  let reader = ByteReader::new(bytes)
+  let reader = ByteReader::ByteReader(bytes)
 
   // Verify magic number
   let magic = [CWASM_MAGIC_0, CWASM_MAGIC_1, CWASM_MAGIC_2, CWASM_MAGIC_3]
@@ -900,9 +902,7 @@ pub fn deserialize(
     // Signature
     let num_params = reader.read_u32()
     let num_results = reader.read_u32()
-    imports.push(
-      ImportEntry::new(module_name, func_name, num_params, num_results),
-    )
+    imports.push(ImportEntry(module_name, func_name, num_params, num_results))
   }
 
   // Read number of functions
@@ -958,7 +958,7 @@ pub fn deserialize(
       for _ in 0..<live_ref_count {
         live_refs.push(reader.read_u32())
       }
-      gc_safepoints.push(GcSafepoint::new(code_offset, live_refs, metadata))
+      gc_safepoints.push(GcSafepoint(code_offset, live_refs, metadata))
     }
     let stackmap_blob_size = reader.read_u32()
     let stackmap_raw = reader.read_bytes(stackmap_blob_size)
@@ -968,7 +968,7 @@ pub fn deserialize(
     }
     gc_stackmap_blob = Bytes::from_array(stackmap_bytes)
     functions.push(
-      CompiledEntry::new(
+      CompiledEntry(
         func_idx,
         name,
         code,
@@ -991,7 +991,7 @@ pub fn deserialize(
     let min_pages = reader.read_u32()
     let max_raw = reader.read_u32()
     let max_pages : Int? = if max_raw == -1 { None } else { Some(max_raw) }
-    memories.push(MemoryDef::new(min_pages, max_pages))
+    memories.push(MemoryDef(min_pages, max_pages))
   }
 
   // Read data segments
@@ -1002,7 +1002,7 @@ pub fn deserialize(
     let offset = reader.read_u32()
     let data_len = reader.read_u32()
     let data = reader.read_bytes(data_len)
-    data_segments.push(DataEntry::new(memory_idx, offset, data))
+    data_segments.push(DataEntry(memory_idx, offset, data))
   }
 
   // Read type/global/table/element/start sections
@@ -1024,7 +1024,7 @@ pub fn deserialize(
     for _ in 0..<result_count {
       result_types.push(reader.read_u32())
     }
-    types.push(TypeEntry::new(param_types, result_types))
+    types.push(TypeEntry(param_types, result_types))
   }
 
   // Read globals
@@ -1033,7 +1033,7 @@ pub fn deserialize(
     let value_type = reader.read_u32()
     let mutable = reader.read_byte() != 0
     let init_value = reader.read_i64()
-    globals.push(GlobalDef::new(value_type, mutable, init_value))
+    globals.push(GlobalDef(value_type, mutable, init_value))
   }
 
   // Read tables
@@ -1043,7 +1043,7 @@ pub fn deserialize(
     let min_size = reader.read_u32()
     let max_raw = reader.read_u32()
     let max_size : Int? = if max_raw == -1 { None } else { Some(max_raw) }
-    tables.push(TableDef::new(elem_type, min_size, max_size))
+    tables.push(TableDef(elem_type, min_size, max_size))
   }
 
   // Read elements
@@ -1056,7 +1056,7 @@ pub fn deserialize(
     for _ in 0..<func_count {
       func_indices.push(reader.read_u32())
     }
-    elements.push(ElemEntry::new(table_idx, offset, func_indices))
+    elements.push(ElemEntry(table_idx, offset, func_indices))
   }
 
   // Read start function
@@ -1088,7 +1088,7 @@ priv struct ByteReader {
 }
 
 ///|
-fn ByteReader::new(bytes : Array[Int]) -> ByteReader {
+fn ByteReader::ByteReader(bytes : Array[Int]) -> ByteReader {
   { bytes, pos: 0 }
 }
 
@@ -1143,7 +1143,7 @@ fn ByteReader::read_bytes(self : ByteReader, count : Int) -> Array[Int] {
 
 ///|
 fn ByteReader::read_string(self : ByteReader, len : Int) -> String {
-  let builder = StringBuilder::new()
+  let builder = StringBuilder::StringBuilder()
   let end_pos = self.pos + len
   while self.pos < end_pos {
     let b1 = self.read_byte()

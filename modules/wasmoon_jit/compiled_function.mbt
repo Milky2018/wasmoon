@@ -15,7 +15,7 @@ pub struct GcSafepoint {
 } derive(Debug)
 
 ///|
-pub fn GcSafepoint::new(
+pub fn GcSafepoint::GcSafepoint(
   code_offset : Int,
   live_refs : Array[Int],
   metadata : Int64,
@@ -165,7 +165,7 @@ pub struct CompiledFunction {
 }
 
 ///|
-pub fn CompiledFunction::new(
+pub fn CompiledFunction::CompiledFunction(
   name : String,
   code : @machv_emit.MachineCode,
   frame_size : Int,
@@ -191,7 +191,7 @@ pub fn CompiledFunction::new(
       } else {
         []
       }
-      derived.push(GcSafepoint::new(offset, live_refs, metadata))
+      derived.push(GcSafepoint(offset, live_refs, metadata))
     }
     derived
   }

@@ -1,6 +1,6 @@
 ///|
 test "preserving-edge layout does not thread jump-only edge-copy blocks" {
-  let func = @machv.Function::new("edge_copy_layout")
+  let func = @machv.Function::Function("edge_copy_layout")
   let entry = func.new_block()
   let copy_block = func.new_block()
   let merge = func.new_block()

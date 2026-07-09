@@ -192,7 +192,7 @@ fn Translator::mark_block_frame_reachable(self : Translator, idx : Int) -> Unit 
 ///|
 /// Low-level constructor with explicit parameters.
 /// Prefer `TranslationContext`-based public APIs for normal use.
-fn Translator::new(
+fn Translator::Translator(
   name : String,
   func_type : @types.FuncType,
   locals : Array[@types.ValueType],
@@ -214,14 +214,14 @@ fn Translator::new(
   memory_mins? : Array[Int64] = [],
 ) -> Translator {
   type_rec_groups |> ignore // Reserved for future canonical type indices
-  let builder = FunctionBuilder::new(name)
+  let builder = FunctionBuilder::FunctionBuilder(name)
   // Note: add vmctx as explicit param (Cranelift-style special param)
   // - params[0] = vmctx (X0)
   // This is referenced for desugaring global/table/memory operations
   let vmctx = builder.add_param(I64)
 
   // Create function environment for desugaring Wasm operations
-  let func_env = FuncEnvironment::new(
+  let func_env = FuncEnvironment::FuncEnvironment(
     embedding_env,
     global_types,
     memory_mins~,
@@ -317,7 +317,7 @@ pub fn translate_function_body(
   locals : Array[@types.ValueType],
   body : Array[@types.Instruction],
 ) -> Function {
-  let translator = Translator::new(
+  let translator = Translator::Translator(
     name,
     func_type,
     locals,

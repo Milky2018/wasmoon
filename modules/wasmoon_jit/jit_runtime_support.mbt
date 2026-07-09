@@ -12,7 +12,7 @@ struct CodeCache {
 }
 
 ///|
-pub fn CodeCache::new(max_size : Int) -> CodeCache {
+pub fn CodeCache::CodeCache(max_size : Int) -> CodeCache {
   { functions: {}, total_size: 0, max_size, hits: 0, misses: 0 }
 }
 
@@ -168,7 +168,10 @@ struct ExecutableRegion {
 }
 
 ///|
-pub fn ExecutableRegion::new(id : Int, size : Int) -> ExecutableRegion {
+pub fn ExecutableRegion::ExecutableRegion(
+  id : Int,
+  size : Int,
+) -> ExecutableRegion {
   {
     id,
     base_addr: id * 0x10000, // Simulated base address
@@ -262,7 +265,7 @@ struct MemoryManager {
 }
 
 ///|
-pub fn MemoryManager::new(default_region_size : Int) -> MemoryManager {
+pub fn MemoryManager::MemoryManager(default_region_size : Int) -> MemoryManager {
   { regions: [], default_region_size, next_id: 0, current_region: None }
 }
 
@@ -272,7 +275,7 @@ pub fn MemoryManager::alloc_region(
   self : MemoryManager,
   size : Int,
 ) -> ExecutableRegion {
-  let region = ExecutableRegion::new(self.next_id, size)
+  let region = ExecutableRegion::ExecutableRegion(self.next_id, size)
   self.regions.push(region)
   self.next_id = self.next_id + 1
   self.current_region = Some(self.regions.length() - 1)
@@ -383,10 +386,13 @@ struct JITRuntime {
 }
 
 ///|
-pub fn JITRuntime::new(cache_size : Int, region_size : Int) -> JITRuntime {
+pub fn JITRuntime::JITRuntime(
+  cache_size : Int,
+  region_size : Int,
+) -> JITRuntime {
   {
-    cache: CodeCache::new(cache_size),
-    memory: MemoryManager::new(region_size),
+    cache: CodeCache(cache_size),
+    memory: MemoryManager(region_size),
     compilations: 0,
     recompilations: 0,
   }

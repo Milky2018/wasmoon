@@ -51,7 +51,7 @@ pub(all) struct StackFrame {
 }
 
 ///|
-pub fn StackFrame::new(frame_align : Int) -> StackFrame {
+pub fn StackFrame::StackFrame(frame_align : Int) -> StackFrame {
   {
     slots: [],
     frame_size: 0,

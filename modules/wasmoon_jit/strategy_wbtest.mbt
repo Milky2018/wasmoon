@@ -2,7 +2,7 @@
 
 ///|
 test "compilation request: creation" {
-  let req = CompilationRequest::new(0, Baseline)
+  let req = CompilationRequest::CompilationRequest(0, Baseline)
   inspect(req.func_idx, content="0")
   inspect(req.priority, content="0")
   let req2 = CompilationRequest::with_priority(1, Optimized, 100)
@@ -12,10 +12,10 @@ test "compilation request: creation" {
 
 ///|
 test "compilation queue: basic operations" {
-  let queue = CompilationQueue::new(0) // Unlimited
+  let queue = CompilationQueue::CompilationQueue(0) // Unlimited
   inspect(queue.is_empty(), content="true")
   inspect(queue.length(), content="0")
-  let req1 = CompilationRequest::new(0, Baseline)
+  let req1 = CompilationRequest::CompilationRequest(0, Baseline)
   let added = queue.enqueue(req1)
   inspect(added, content="true")
   inspect(queue.length(), content="1")
@@ -24,7 +24,7 @@ test "compilation queue: basic operations" {
 
 ///|
 test "compilation queue: priority ordering" {
-  let queue = CompilationQueue::new(0)
+  let queue = CompilationQueue::CompilationQueue(0)
   queue.enqueue(CompilationRequest::with_priority(0, Baseline, 10)) |> ignore
   queue.enqueue(CompilationRequest::with_priority(1, Baseline, 50)) |> ignore
   queue.enqueue(CompilationRequest::with_priority(2, Baseline, 30)) |> ignore
@@ -47,36 +47,36 @@ test "compilation queue: priority ordering" {
 
 ///|
 test "compilation queue: no duplicates" {
-  let queue = CompilationQueue::new(0)
-  queue.enqueue(CompilationRequest::new(0, Baseline)) |> ignore
-  let added = queue.enqueue(CompilationRequest::new(0, Optimized))
+  let queue = CompilationQueue::CompilationQueue(0)
+  queue.enqueue(CompilationRequest(0, Baseline)) |> ignore
+  let added = queue.enqueue(CompilationRequest(0, Optimized))
   inspect(added, content="false")
   inspect(queue.length(), content="1")
 }
 
 ///|
 test "compilation queue: size limit" {
-  let queue = CompilationQueue::new(2)
-  queue.enqueue(CompilationRequest::new(0, Baseline)) |> ignore
-  queue.enqueue(CompilationRequest::new(1, Baseline)) |> ignore
-  let added = queue.enqueue(CompilationRequest::new(2, Baseline))
+  let queue = CompilationQueue::CompilationQueue(2)
+  queue.enqueue(CompilationRequest(0, Baseline)) |> ignore
+  queue.enqueue(CompilationRequest(1, Baseline)) |> ignore
+  let added = queue.enqueue(CompilationRequest(2, Baseline))
   inspect(added, content="false")
   inspect(queue.length(), content="2")
 }
 
 ///|
 test "compilation queue: contains" {
-  let queue = CompilationQueue::new(0)
-  queue.enqueue(CompilationRequest::new(5, Baseline)) |> ignore
+  let queue = CompilationQueue::CompilationQueue(0)
+  queue.enqueue(CompilationRequest(5, Baseline)) |> ignore
   inspect(queue.contains(5), content="true")
   inspect(queue.contains(6), content="false")
 }
 
 ///|
 test "compilation queue: clear" {
-  let queue = CompilationQueue::new(0)
-  queue.enqueue(CompilationRequest::new(0, Baseline)) |> ignore
-  queue.enqueue(CompilationRequest::new(1, Baseline)) |> ignore
+  let queue = CompilationQueue::CompilationQueue(0)
+  queue.enqueue(CompilationRequest(0, Baseline)) |> ignore
+  queue.enqueue(CompilationRequest(1, Baseline)) |> ignore
   queue.clear()
   inspect(queue.is_empty(), content="true")
 }
@@ -94,7 +94,9 @@ test "tiered config: presets" {
 
 ///|
 test "compilation strategy: interpret cold functions" {
-  let strategy = CompilationStrategy::new(TieredConfig::default())
+  let strategy = CompilationStrategy::CompilationStrategy(
+    TieredConfig::default(),
+  )
 
   // First few calls should interpret
   for _ in 0..<10 {
@@ -114,7 +116,7 @@ test "compilation strategy: compile hot functions" {
     synchronous: true,
     max_concurrent: 1,
   }
-  let strategy = CompilationStrategy::new(config)
+  let strategy = CompilationStrategy::CompilationStrategy(config)
 
   // Call up to threshold - 1
   for _ in 0..<9 {
@@ -131,7 +133,9 @@ test "compilation strategy: compile hot functions" {
 
 ///|
 test "compilation strategy: mark compiled" {
-  let strategy = CompilationStrategy::new(TieredConfig::default())
+  let strategy = CompilationStrategy::CompilationStrategy(
+    TieredConfig::default(),
+  )
   inspect(strategy.is_compiled(0), content="false")
   strategy.mark_compiled(0)
   inspect(strategy.is_compiled(0), content="true")
@@ -146,7 +150,9 @@ test "compilation strategy: mark compiled" {
 
 ///|
 test "compilation strategy: schedule and retrieve" {
-  let strategy = CompilationStrategy::new(TieredConfig::default())
+  let strategy = CompilationStrategy::CompilationStrategy(
+    TieredConfig::default(),
+  )
   let scheduled = strategy.schedule_compilation(0, Baseline)
   inspect(scheduled, content="true")
   match strategy.next_to_compile() {
@@ -163,7 +169,7 @@ test "compilation strategy: stats" {
     synchronous: true,
     max_concurrent: 1,
   }
-  let strategy = CompilationStrategy::new(config)
+  let strategy = CompilationStrategy::CompilationStrategy(config)
 
   // Make some calls
   for _ in 0..<10 {

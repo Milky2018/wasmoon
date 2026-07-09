@@ -32,7 +32,7 @@ pub(all) struct EmbeddingEnvironment {
 } derive(Debug)
 
 ///|
-pub fn EmbeddingEnvironment::new(
+pub fn EmbeddingEnvironment::EmbeddingEnvironment(
   runtime_symbol_prefix? : String = "wasmoon",
   hidden_context_type? : @milkir.Type? = Some(Ptr),
   runtime_layout? : RuntimeLayout? = None,
@@ -58,7 +58,7 @@ pub fn EmbeddingEnvironment::runtime_symbol(
   self : EmbeddingEnvironment,
   name : String,
 ) -> @milkir.ExternalSymbol {
-  @milkir.ExternalSymbol::new(self.runtime_symbol_prefix + "." + name)
+  ExternalSymbol(self.runtime_symbol_prefix + "." + name)
 }
 
 ///|

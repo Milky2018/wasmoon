@@ -4,9 +4,9 @@ test "linear scan allocates abstract program registers" {
   let r1 : PhysicalReg = { id: 1, class: Int }
   let v0 : VirtualReg = { id: 0, class: Int }
   let v1 : VirtualReg = { id: 1, class: Int }
-  let program = Program::new([r0, r1])
-  let block = Block::new(0)
-  let inst = Instruction::new(0)
+  let program = Program::Program([r0, r1])
+  let block = Block::Block(0)
+  let inst = Instruction::Instruction(0)
   inst.add_operand(Operand::def(v0))
   inst.add_operand(Operand::use_reg(v1))
   block.append(inst)
@@ -22,9 +22,9 @@ test "linear scan spills when class registers are exhausted" {
   let r0 : PhysicalReg = { id: 0, class: Int }
   let v0 : VirtualReg = { id: 0, class: Int }
   let v1 : VirtualReg = { id: 1, class: Int }
-  let program = Program::new([r0])
-  let block = Block::new(0)
-  let inst = Instruction::new(0)
+  let program = Program::Program([r0])
+  let block = Block::Block(0)
+  let inst = Instruction::Instruction(0)
   inst.add_operand(Operand::def(v0))
   inst.add_operand(Operand::def(v1))
   block.append(inst)
@@ -39,12 +39,12 @@ test "linear scan reuses registers for non-overlapping intervals" {
   let r0 : PhysicalReg = { id: 0, class: Int }
   let v0 : VirtualReg = { id: 0, class: Int }
   let v1 : VirtualReg = { id: 1, class: Int }
-  let program = Program::new([r0])
-  let block = Block::new(0)
-  let first = Instruction::new(0)
+  let program = Program::Program([r0])
+  let block = Block::Block(0)
+  let first = Instruction::Instruction(0)
   first.add_operand(Operand::def(v0))
   block.append(first)
-  let second = Instruction::new(1)
+  let second = Instruction::Instruction(1)
   second.add_operand(Operand::def(v1))
   block.append(second)
   program.add_block(block)
@@ -58,20 +58,20 @@ test "linear scan reuses registers for non-overlapping intervals" {
 test "build_live_ranges records spans and uses" {
   let r0 : PhysicalReg = { id: 0, class: Int }
   let v0 : VirtualReg = { id: 0, class: Int }
-  let program = Program::new([r0])
-  let block = Block::new(0)
-  let def_inst = Instruction::new(0)
+  let program = Program::Program([r0])
+  let block = Block::Block(0)
+  let def_inst = Instruction::Instruction(0)
   def_inst.add_operand(Operand::def(v0))
   block.append(def_inst)
-  let use_inst = Instruction::new(1)
+  let use_inst = Instruction::Instruction(1)
   use_inst.add_operand(Operand::use_reg(v0))
   block.append(use_inst)
   program.add_block(block)
   let ranges = build_live_ranges(program)
   inspect(ranges.length(), content="1")
   let range = ranges.get_by_vreg(v0).unwrap()
-  inspect(range.start() == Some(ProgramPoint::new(0, 0)), content="true")
-  inspect(range.end() == Some(ProgramPoint::new(0, 1)), content="true")
+  inspect(range.start() == Some(ProgramPoint(0, 0)), content="true")
+  inspect(range.end() == Some(ProgramPoint(0, 1)), content="true")
   inspect(range.uses.length(), content="2")
   inspect(range.uses[0].kind == LiveDef, content="true")
   inspect(range.uses[1].kind == LiveUse, content="true")
@@ -81,25 +81,25 @@ test "build_live_ranges records spans and uses" {
 test "build_live_ranges extends values across successor blocks" {
   let r0 : PhysicalReg = { id: 0, class: Int }
   let v0 : VirtualReg = { id: 0, class: Int }
-  let program = Program::new([r0])
-  let entry = Block::new(0)
-  let def_inst = Instruction::new(0)
+  let program = Program::Program([r0])
+  let entry = Block::Block(0)
+  let def_inst = Instruction::Instruction(0)
   def_inst.add_operand(Operand::def(v0))
   entry.append(def_inst)
   entry.add_successor(1)
   program.add_block(entry)
-  let middle = Block::new(1)
+  let middle = Block::Block(1)
   middle.add_successor(2)
   program.add_block(middle)
-  let exit = Block::new(2)
-  let use_inst = Instruction::new(1)
+  let exit = Block::Block(2)
+  let use_inst = Instruction::Instruction(1)
   use_inst.add_operand(Operand::use_reg(v0))
   exit.append(use_inst)
   program.add_block(exit)
   let ranges = build_live_ranges(program)
   let range = ranges.get_by_vreg(v0).unwrap()
   inspect(
-    range.ranges[0].contains(ProgramPoint::new(1, 0), ranges.block_order),
+    range.ranges[0].contains(ProgramPoint(1, 0), ranges.block_order),
     content="true",
   )
 }
@@ -110,22 +110,22 @@ test "linear scan keeps successor-live values from reusing a register" {
   let r1 : PhysicalReg = { id: 1, class: Int }
   let v0 : VirtualReg = { id: 0, class: Int }
   let v1 : VirtualReg = { id: 1, class: Int }
-  let program = Program::new([r0, r1])
-  let entry = Block::new(0)
-  let def_v0 = Instruction::new(0)
+  let program = Program::Program([r0, r1])
+  let entry = Block::Block(0)
+  let def_v0 = Instruction::Instruction(0)
   def_v0.add_operand(Operand::def(v0))
   entry.append(def_v0)
   entry.add_successor(1)
   program.add_block(entry)
-  let middle = Block::new(1)
-  let def_v1 = Instruction::new(1)
+  let middle = Block::Block(1)
+  let def_v1 = Instruction::Instruction(1)
   def_v1.add_operand(Operand::def(v1))
   def_v1.add_operand(Operand::use_reg(v1))
   middle.append(def_v1)
   middle.add_successor(2)
   program.add_block(middle)
-  let exit = Block::new(2)
-  let use_v0 = Instruction::new(2)
+  let exit = Block::Block(2)
+  let use_v0 = Instruction::Instruction(2)
   use_v0.add_operand(Operand::use_reg(v0))
   exit.append(use_v0)
   program.add_block(exit)
@@ -194,15 +194,15 @@ test "compute dense live sets over reusable CFG model" {
   let live_sets = compute_dense_live_sets(3, 2, cfg, [
     {
       vreg_id: 0,
-      def_point: Some(ProgramPoint::new(0, 1)),
+      def_point: Some(ProgramPoint(0, 1)),
       is_entry_param_def: false,
-      use_points: [ProgramPoint::new(2, 0)],
+      use_points: [ProgramPoint(2, 0)],
     },
     {
       vreg_id: 1,
-      def_point: Some(ProgramPoint::new(0, -2)),
+      def_point: Some(ProgramPoint(0, -2)),
       is_entry_param_def: true,
-      use_points: [ProgramPoint::new(1, 0)],
+      use_points: [ProgramPoint(1, 0)],
     },
   ])
   debug_inspect(live_sets.live_in, content="[[1], [1, 0], [0]]")
@@ -214,16 +214,16 @@ test "linear scan evicts longer active interval for shorter current interval" {
   let r0 : PhysicalReg = { id: 0, class: Int }
   let v0 : VirtualReg = { id: 0, class: Int }
   let v1 : VirtualReg = { id: 1, class: Int }
-  let program = Program::new([r0])
-  let block = Block::new(0)
-  let long_def = Instruction::new(0)
+  let program = Program::Program([r0])
+  let block = Block::Block(0)
+  let long_def = Instruction::Instruction(0)
   long_def.add_operand(Operand::def(v0))
   block.append(long_def)
-  let short_live = Instruction::new(1)
+  let short_live = Instruction::Instruction(1)
   short_live.add_operand(Operand::def(v1))
   short_live.add_operand(Operand::use_reg(v1))
   block.append(short_live)
-  let long_use = Instruction::new(2)
+  let long_use = Instruction::Instruction(2)
   long_use.add_operand(Operand::use_reg(v0))
   block.append(long_use)
   program.add_block(block)
@@ -239,16 +239,16 @@ test "linear scan honors fixed register constraints by evicting active range" {
   let r1 : PhysicalReg = { id: 1, class: Int }
   let v0 : VirtualReg = { id: 0, class: Int }
   let v1 : VirtualReg = { id: 1, class: Int }
-  let program = Program::new([r0, r1])
-  let block = Block::new(0)
-  let long_def = Instruction::new(0)
+  let program = Program::Program([r0, r1])
+  let block = Block::Block(0)
+  let long_def = Instruction::Instruction(0)
   long_def.add_operand(Operand::def(v0))
   block.append(long_def)
-  let fixed_inst = Instruction::new(1)
+  let fixed_inst = Instruction::Instruction(1)
   fixed_inst.add_operand(Operand::def(v1).with_constraint(FixedReg(r0)))
   fixed_inst.add_operand(Operand::use_reg(v1).with_constraint(FixedReg(r0)))
   block.append(fixed_inst)
-  let long_use = Instruction::new(2)
+  let long_use = Instruction::Instruction(2)
   long_use.add_operand(Operand::use_reg(v0))
   block.append(long_use)
   program.add_block(block)
@@ -262,9 +262,9 @@ test "linear scan can use fixed registers outside the allocatable pool" {
   let r0 : PhysicalReg = { id: 0, class: Int }
   let scratch : PhysicalReg = { id: 11, class: Int }
   let v0 : VirtualReg = { id: 0, class: Int }
-  let program = Program::new([r0])
-  let block = Block::new(0)
-  let inst = Instruction::new(0)
+  let program = Program::Program([r0])
+  let block = Block::Block(0)
+  let inst = Instruction::Instruction(0)
   inst.add_operand(Operand::use_reg(v0).with_constraint(FixedReg(scratch)))
   block.append(inst)
   program.add_block(block)
@@ -319,9 +319,9 @@ test "plan cross-block rematerialization clones once per use block" {
 
 ///|
 test "compact spill slots reuses non-overlapping scalar slots" {
-  let a = ProgramRange::new(ProgramPoint::new(0, 0), ProgramPoint::new(0, 2))
-  let b = ProgramRange::new(ProgramPoint::new(0, 2), ProgramPoint::new(0, 4))
-  let c = ProgramRange::new(ProgramPoint::new(0, 1), ProgramPoint::new(0, 3))
+  let a = ProgramRange::ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 2))
+  let b = ProgramRange::ProgramRange(ProgramPoint(0, 2), ProgramPoint(0, 4))
+  let c = ProgramRange::ProgramRange(ProgramPoint(0, 1), ProgramPoint(0, 3))
   let result = compact_spill_slots(
     [
       { old_slot: 0, class: Int, ranges: [a] },
@@ -348,11 +348,8 @@ test "compact spill slots reuses non-overlapping scalar slots" {
 
 ///|
 test "compact spill slots honors vector alignment and no-share edges" {
-  let full = ProgramRange::new(ProgramPoint::new(0, 0), ProgramPoint::new(0, 5))
-  let later = ProgramRange::new(
-    ProgramPoint::new(0, 5),
-    ProgramPoint::new(0, 7),
-  )
+  let full = ProgramRange::ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 5))
+  let later = ProgramRange::ProgramRange(ProgramPoint(0, 5), ProgramPoint(0, 7))
   let result = compact_spill_slots(
     [
       { old_slot: 0, class: Int, ranges: [full] },
@@ -379,7 +376,7 @@ test "compact spill slots honors vector alignment and no-share edges" {
 
 ///|
 test "priority work queue pops by priority with stable tie-breaks" {
-  let queue = PriorityWorkQueue::new()
+  let queue = PriorityWorkQueue::PriorityWorkQueue()
   queue.push(3, 10)
   queue.push(1, 20)
   queue.push(2, 20)
@@ -426,20 +423,20 @@ test "choose fixed register hint by frequency and low-id tie break" {
 ///|
 test "scan conflicts reports evictable owners and first conflict point" {
   let span : OrderedProgramSpan = {
-    start: ProgramPoint::new(0, 1),
+    start: ProgramPoint(0, 1),
     start_ord: 10,
     end_ord: 30,
   }
   let occupied : Array[OccupiedProgramSpan] = [
     {
       owner_id: 7,
-      span: { start: ProgramPoint::new(0, 0), start_ord: 0, end_ord: 12 },
+      span: { start: ProgramPoint(0, 0), start_ord: 0, end_ord: 12 },
       owner_weight: 2,
       owner_pinned: false,
     },
     {
       owner_id: 8,
-      span: { start: ProgramPoint::new(0, 2), start_ord: 20, end_ord: 40 },
+      span: { start: ProgramPoint(0, 2), start_ord: 20, end_ord: 40 },
       owner_weight: 5,
       owner_pinned: false,
     },
@@ -461,20 +458,20 @@ test "scan conflicts reports evictable owners and first conflict point" {
 ///|
 test "ordered span conflict scan skips ended occupied spans" {
   let occupied : Array[OrderedProgramSpan] = [
-    { start: ProgramPoint::new(0, 0), start_ord: 0, end_ord: 4 },
-    { start: ProgramPoint::new(0, 1), start_ord: 8, end_ord: 12 },
+    { start: ProgramPoint(0, 0), start_ord: 0, end_ord: 4 },
+    { start: ProgramPoint(0, 1), start_ord: 8, end_ord: 12 },
   ]
   inspect(lower_bound_ordered_span_by_end(occupied, 6), content="1")
   inspect(
     has_ordered_span_conflict(
-      [{ start: ProgramPoint::new(0, 2), start_ord: 6, end_ord: 7 }],
+      [{ start: ProgramPoint(0, 2), start_ord: 6, end_ord: 7 }],
       occupied,
     ),
     content="false",
   )
   inspect(
     has_ordered_span_conflict(
-      [{ start: ProgramPoint::new(0, 2), start_ord: 6, end_ord: 9 }],
+      [{ start: ProgramPoint(0, 2), start_ord: 6, end_ord: 9 }],
       occupied,
     ),
     content="true",
@@ -484,17 +481,17 @@ test "ordered span conflict scan skips ended occupied spans" {
 ///|
 test "allocated span table inserts and removes by owner" {
   let a : OrderedProgramSpan = {
-    start: ProgramPoint::new(0, 0),
+    start: ProgramPoint(0, 0),
     start_ord: 0,
     end_ord: 4,
   }
   let b : OrderedProgramSpan = {
-    start: ProgramPoint::new(0, 2),
+    start: ProgramPoint(0, 2),
     start_ord: 8,
     end_ord: 12,
   }
   let c : OrderedProgramSpan = {
-    start: ProgramPoint::new(0, 1),
+    start: ProgramPoint(0, 1),
     start_ord: 5,
     end_ord: 7,
   }
@@ -550,7 +547,7 @@ test "compute block point bases from block order and lengths" {
 ///|
 test "scan conflicts rejects pinned and cutoff conflicts" {
   let span : OrderedProgramSpan = {
-    start: ProgramPoint::new(0, 0),
+    start: ProgramPoint(0, 0),
     start_ord: 0,
     end_ord: 20,
   }
@@ -559,7 +556,7 @@ test "scan conflicts rejects pinned and cutoff conflicts" {
     [
       {
         owner_id: 1,
-        span: { start: ProgramPoint::new(0, 1), start_ord: 5, end_ord: 10 },
+        span: { start: ProgramPoint(0, 1), start_ord: 5, end_ord: 10 },
         owner_weight: 1,
         owner_pinned: true,
       },
@@ -573,7 +570,7 @@ test "scan conflicts rejects pinned and cutoff conflicts" {
     [
       {
         owner_id: 2,
-        span: { start: ProgramPoint::new(0, 1), start_ord: 5, end_ord: 10 },
+        span: { start: ProgramPoint(0, 1), start_ord: 5, end_ord: 10 },
         owner_weight: 6,
         owner_pinned: false,
       },
@@ -666,9 +663,9 @@ test "eviction policy chooses cutoff, best conflict, and later split" {
   inspect(
     should_take_split_candidate(
       Some(5),
-      Some(ProgramPoint::new(0, 1)),
+      Some(ProgramPoint(0, 1)),
       5,
-      ProgramPoint::new(0, 3),
+      ProgramPoint(0, 3),
       [0],
     ),
     content="true",
@@ -681,10 +678,7 @@ fn make_bundle_merge_test_span(
   end : Int,
 ) -> MergeSpan[ProgramRange] {
   {
-    span: ProgramRange::new(
-      ProgramPoint::new(0, start),
-      ProgramPoint::new(0, end),
-    ),
+    span: ProgramRange(ProgramPoint(0, start), ProgramPoint(0, end)),
     start_ord: start,
     start_before_ord: start - 1,
     end_ord: end,
@@ -749,22 +743,16 @@ test "bundle split planner partitions around split point and handles fallbacks" 
   let ranges : Array[BundleSplitRange] = [
     {
       range_id: 0,
-      start: Some(ProgramPoint::new(0, 0)),
-      end: Some(ProgramPoint::new(0, 2)),
+      start: Some(ProgramPoint(0, 0)),
+      end: Some(ProgramPoint(0, 2)),
     },
     {
       range_id: 1,
-      start: Some(ProgramPoint::new(0, 4)),
-      end: Some(ProgramPoint::new(0, 8)),
+      start: Some(ProgramPoint(0, 4)),
+      end: Some(ProgramPoint(0, 8)),
     },
   ]
-  let split = plan_bundle_split(
-    ranges,
-    Some(ProgramPoint::new(0, 3)),
-    [0],
-    0,
-    8,
-  )
+  let split = plan_bundle_split(ranges, Some(ProgramPoint(0, 3)), [0], 0, 8)
   match split {
     Split(before, after) => {
       debug_inspect(before, content="[0]")
@@ -772,7 +760,7 @@ test "bundle split planner partitions around split point and handles fallbacks" 
     }
     _ => abort("expected split")
   }
-  match plan_bundle_split(ranges, Some(ProgramPoint::new(0, 9)), [0], 0, 8) {
+  match plan_bundle_split(ranges, Some(ProgramPoint(0, 9)), [0], 0, 8) {
     Minimal => ()
     _ => abort("expected minimal fallback")
   }
@@ -903,7 +891,7 @@ test "temp register choice rotates pool and steals with preserve slot" {
 
 ///|
 test "active reload cache tracks block-local slot reloads" {
-  let cache = ActiveReloadCache::new(3)
+  let cache = ActiveReloadCache::ActiveReloadCache(3)
   debug_inspect(cache.get(1, 1), content="None")
   cache.set(1, 7, 1)
   debug_inspect(cache.get(1, 1), content="Some(7)")
@@ -920,16 +908,16 @@ test "linear scan co-locates tied use-def operands" {
   let r1 : PhysicalReg = { id: 1, class: Int }
   let v0 : VirtualReg = { id: 0, class: Int }
   let v1 : VirtualReg = { id: 1, class: Int }
-  let program = Program::new([r0, r1])
-  let block = Block::new(0)
-  let def_inst = Instruction::new(0)
+  let program = Program::Program([r0, r1])
+  let block = Block::Block(0)
+  let def_inst = Instruction::Instruction(0)
   def_inst.add_operand(Operand::def(v0))
   block.append(def_inst)
-  let tied_inst = Instruction::new(1)
+  let tied_inst = Instruction::Instruction(1)
   tied_inst.add_operand(Operand::use_reg(v0).with_tie(0))
   tied_inst.add_operand(Operand::def(v1).with_tie(0))
   block.append(tied_inst)
-  let use_inst = Instruction::new(2)
+  let use_inst = Instruction::Instruction(2)
   use_inst.add_operand(Operand::use_reg(v1))
   block.append(use_inst)
   program.add_block(block)
@@ -944,15 +932,15 @@ test "linear scan avoids registers clobbered while range is live" {
   let r0 : PhysicalReg = { id: 0, class: Int }
   let r1 : PhysicalReg = { id: 1, class: Int }
   let v0 : VirtualReg = { id: 0, class: Int }
-  let program = Program::new([r0, r1])
-  let block = Block::new(0)
-  let def_inst = Instruction::new(0)
+  let program = Program::Program([r0, r1])
+  let block = Block::Block(0)
+  let def_inst = Instruction::Instruction(0)
   def_inst.add_operand(Operand::def(v0))
   block.append(def_inst)
-  let call_inst = Instruction::new(1)
+  let call_inst = Instruction::Instruction(1)
   call_inst.add_clobber(r0)
   block.append(call_inst)
-  let use_inst = Instruction::new(2)
+  let use_inst = Instruction::Instruction(2)
   use_inst.add_operand(Operand::use_reg(v0))
   block.append(use_inst)
   program.add_block(block)
@@ -964,9 +952,9 @@ test "linear scan avoids registers clobbered while range is live" {
 test "verify_allocation accepts allocator output" {
   let r0 : PhysicalReg = { id: 0, class: Int }
   let v0 : VirtualReg = { id: 0, class: Int }
-  let program = Program::new([r0])
-  let block = Block::new(0)
-  let inst = Instruction::new(0)
+  let program = Program::Program([r0])
+  let block = Block::Block(0)
+  let inst = Instruction::Instruction(0)
   inst.add_operand(Operand::def(v0))
   block.append(inst)
   program.add_block(block)
@@ -979,19 +967,19 @@ test "verify_allocation rejects clobbered live register" {
   let r0 : PhysicalReg = { id: 0, class: Int }
   let r1 : PhysicalReg = { id: 1, class: Int }
   let v0 : VirtualReg = { id: 0, class: Int }
-  let program = Program::new([r0, r1])
-  let block = Block::new(0)
-  let def_inst = Instruction::new(0)
+  let program = Program::Program([r0, r1])
+  let block = Block::Block(0)
+  let def_inst = Instruction::Instruction(0)
   def_inst.add_operand(Operand::def(v0))
   block.append(def_inst)
-  let call_inst = Instruction::new(1)
+  let call_inst = Instruction::Instruction(1)
   call_inst.add_clobber(r0)
   block.append(call_inst)
-  let use_inst = Instruction::new(2)
+  let use_inst = Instruction::Instruction(2)
   use_inst.add_operand(Operand::use_reg(v0))
   block.append(use_inst)
   program.add_block(block)
-  let allocation = Allocation::new()
+  let allocation = Allocation::Allocation()
   allocation.assign(v0, Reg(r0))
   try verify_allocation(program, allocation) catch {
     ClobberedRegister(_) => inspect("clobber", content="clobber")
@@ -1006,13 +994,13 @@ test "verify_allocation rejects fixed register mismatch" {
   let r0 : PhysicalReg = { id: 0, class: Int }
   let r1 : PhysicalReg = { id: 1, class: Int }
   let v0 : VirtualReg = { id: 0, class: Int }
-  let program = Program::new([r0, r1])
-  let block = Block::new(0)
-  let inst = Instruction::new(0)
+  let program = Program::Program([r0, r1])
+  let block = Block::Block(0)
+  let inst = Instruction::Instruction(0)
   inst.add_operand(Operand::def(v0).with_constraint(FixedReg(r1)))
   block.append(inst)
   program.add_block(block)
-  let allocation = Allocation::new()
+  let allocation = Allocation::Allocation()
   allocation.assign(v0, Reg(r0))
   try verify_allocation(program, allocation) catch {
     FixedConstraintViolation(_) => inspect("fixed", content="fixed")
@@ -1028,14 +1016,14 @@ test "verify_allocation rejects tied operands in different locations" {
   let r1 : PhysicalReg = { id: 1, class: Int }
   let v0 : VirtualReg = { id: 0, class: Int }
   let v1 : VirtualReg = { id: 1, class: Int }
-  let program = Program::new([r0, r1])
-  let block = Block::new(0)
-  let inst = Instruction::new(0)
+  let program = Program::Program([r0, r1])
+  let block = Block::Block(0)
+  let inst = Instruction::Instruction(0)
   inst.add_operand(Operand::use_reg(v0).with_tie(0))
   inst.add_operand(Operand::def(v1).with_tie(0))
   block.append(inst)
   program.add_block(block)
-  let allocation = Allocation::new()
+  let allocation = Allocation::Allocation()
   allocation.assign(v0, Reg(r0))
   allocation.assign(v1, Reg(r1))
   try verify_allocation(program, allocation) catch {
@@ -1051,14 +1039,14 @@ test "verify_allocation rejects overlapping physical register assignments" {
   let r0 : PhysicalReg = { id: 0, class: Int }
   let v0 : VirtualReg = { id: 0, class: Int }
   let v1 : VirtualReg = { id: 1, class: Int }
-  let program = Program::new([r0])
-  let block = Block::new(0)
-  let inst = Instruction::new(0)
+  let program = Program::Program([r0])
+  let block = Block::Block(0)
+  let inst = Instruction::Instruction(0)
   inst.add_operand(Operand::def(v0))
   inst.add_operand(Operand::def(v1))
   block.append(inst)
   program.add_block(block)
-  let allocation = Allocation::new()
+  let allocation = Allocation::Allocation()
   allocation.assign(v0, Reg(r0))
   allocation.assign(v1, Reg(r0))
   try verify_allocation(program, allocation) catch {
@@ -1125,7 +1113,7 @@ test "reserve spill slots aligns vector slots" {
 
 ///|
 test "stack frame allocates spill slots" {
-  let frame = StackFrame::new(16)
+  let frame = StackFrame::StackFrame(16)
   let offset1 = frame.alloc_spill_slot({ id: 0, class: Int }, 8, 8)
   inspect(offset1, content="-8")
   let offset2 = frame.alloc_spill_slot({ id: 1, class: Int }, 8, 8)
@@ -1136,7 +1124,7 @@ test "stack frame allocates spill slots" {
 
 ///|
 test "stack frame aligns mixed slots" {
-  let frame = StackFrame::new(16)
+  let frame = StackFrame::StackFrame(16)
   inspect(frame.alloc_spill_slot({ id: 0, class: Int }, 4, 4), content="-4")
   inspect(frame.alloc_spill_slot({ id: 1, class: Int }, 8, 8), content="-16")
   frame.finalize()
@@ -1145,7 +1133,7 @@ test "stack frame aligns mixed slots" {
 
 ///|
 test "stack frame records callee saved registers" {
-  let frame = StackFrame::new(16)
+  let frame = StackFrame::StackFrame(16)
   inspect(frame.add_callee_saved({ id: 19, class: Int }), content="-8")
   inspect(frame.add_callee_saved({ id: 20, class: Int }), content="-16")
   frame.finalize()
@@ -1155,9 +1143,9 @@ test "stack frame records callee saved registers" {
 ///|
 test "spill weight applies loop and constraint bonuses" {
   let r0 : PhysicalReg = { id: 0, class: Int }
-  let uses = [
-    UsePosition::new(ProgramPoint::new(0, 0), LiveDef, AnyReg),
-    UsePosition::new(ProgramPoint::new(1, 0), LiveUse, FixedReg(r0)),
+  let uses : Array[UsePosition] = [
+    UsePosition(ProgramPoint(0, 0), LiveDef, AnyReg),
+    UsePosition(ProgramPoint(1, 0), LiveUse, FixedReg(r0)),
   ]
   inspect(compute_spill_weight(uses, [0, 2]), content="22000")
 }

@@ -2,7 +2,7 @@
 
 ///|
 test "spaceship: (a <=>_s b) == 0 → a == b" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let a = eg.add_var(0)
   let b = eg.add_var(1)
   let zero = eg.add_const(0L)
@@ -16,7 +16,7 @@ test "spaceship: (a <=>_s b) == 0 → a == b" {
 
 ///|
 test "spaceship: (a <=>_u b) == 0 → a == b" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let a = eg.add_var(0)
   let b = eg.add_var(1)
   let zero = eg.add_const(0L)
@@ -30,7 +30,7 @@ test "spaceship: (a <=>_u b) == 0 → a == b" {
 
 ///|
 test "spaceship: (a <=>_s b) != 0 → a != b" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let a = eg.add_var(0)
   let b = eg.add_var(1)
   let zero = eg.add_const(0L)
@@ -44,7 +44,7 @@ test "spaceship: (a <=>_s b) != 0 → a != b" {
 
 ///|
 test "spaceship: (a <=>_s b) <_s 0 → a <_s b" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let a = eg.add_var(0)
   let b = eg.add_var(1)
   let zero = eg.add_const(0L)
@@ -58,7 +58,7 @@ test "spaceship: (a <=>_s b) <_s 0 → a <_s b" {
 
 ///|
 test "spaceship: (a <=>_u b) <_s 0 → a <_u b" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let a = eg.add_var(0)
   let b = eg.add_var(1)
   let zero = eg.add_const(0L)
@@ -72,7 +72,7 @@ test "spaceship: (a <=>_u b) <_s 0 → a <_u b" {
 
 ///|
 test "spaceship: (a <=>_s b) >_s 0 → a >_s b" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let a = eg.add_var(0)
   let b = eg.add_var(1)
   let zero = eg.add_const(0L)
@@ -86,7 +86,7 @@ test "spaceship: (a <=>_s b) >_s 0 → a >_s b" {
 
 ///|
 test "spaceship: (a <=>_u b) >_s 0 → a >_u b" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let a = eg.add_var(0)
   let b = eg.add_var(1)
   let zero = eg.add_const(0L)
@@ -100,7 +100,7 @@ test "spaceship: (a <=>_u b) >_s 0 → a >_u b" {
 
 ///|
 test "spaceship: (a <=>_s b) <=_s 0 → a <=_s b" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let a = eg.add_var(0)
   let b = eg.add_var(1)
   let zero = eg.add_const(0L)
@@ -114,7 +114,7 @@ test "spaceship: (a <=>_s b) <=_s 0 → a <=_s b" {
 
 ///|
 test "spaceship: (a <=>_s b) >=_s 0 → a >=_s b" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let a = eg.add_var(0)
   let b = eg.add_var(1)
   let zero = eg.add_const(0L)
@@ -128,7 +128,7 @@ test "spaceship: (a <=>_s b) >=_s 0 → a >=_s b" {
 
 ///|
 test "spaceship: (a <=>_s b) == -1 → a <_s b" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let a = eg.add_var(0)
   let b = eg.add_var(1)
   let neg_one = eg.add_const(-1L)
@@ -142,7 +142,7 @@ test "spaceship: (a <=>_s b) == -1 → a <_s b" {
 
 ///|
 test "spaceship: (a <=>_s b) == 1 → a >_s b" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let a = eg.add_var(0)
   let b = eg.add_var(1)
   let one = eg.add_const(1L)
@@ -156,7 +156,7 @@ test "spaceship: (a <=>_s b) == 1 → a >_s b" {
 
 ///|
 test "spaceship: (a <=>_s b) != -1 → a >=_s b" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let a = eg.add_var(0)
   let b = eg.add_var(1)
   let neg_one = eg.add_const(-1L)
@@ -170,7 +170,7 @@ test "spaceship: (a <=>_s b) != -1 → a >=_s b" {
 
 ///|
 test "spaceship: (a <=>_s b) != 1 → a <=_s b" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let a = eg.add_var(0)
   let b = eg.add_var(1)
   let one = eg.add_const(1L)

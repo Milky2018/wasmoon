@@ -74,7 +74,7 @@ fn component_validation_error_code(
 
 ///|
 fn json_escape_string(s : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder::StringBuilder()
   for c in s {
     match c {
       '"' => buf.write_string("\\\"")
@@ -162,7 +162,7 @@ fn run_component_command_eval(
   if validate {
     @component_model.validate_component_with_config(
       parsed,
-      @component_model.ComponentValidationConfig::new(wit_names),
+      ComponentValidationConfig(wit_names),
     ) catch {
       e =>
         return {

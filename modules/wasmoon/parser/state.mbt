@@ -12,7 +12,7 @@ struct Parser {
 
 ///|
 /// Create a new parser from bytes
-pub fn Parser::new(data : Bytes) -> Parser {
+pub fn Parser::Parser(data : Bytes) -> Parser {
   { data, pos: 0, has_data_count: false, types: [] }
 }
 

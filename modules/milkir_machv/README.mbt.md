@@ -39,12 +39,12 @@ fn readme_call_conv() -> @abi.CallConventionLayout {
 
 ///|
 test "lower a leaf MilkIR function to AArch64 MachV" {
-  let builder = @milkir.FunctionBuilder::new("leaf")
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("leaf")
   builder.return_([])
   let lowered = @lower.lower_function(
     builder.get_function(),
     isa=AArch64,
-    embedding_abi=Some(@abi.EmbeddingABI::new(readme_call_conv())),
+    embedding_abi=Some(EmbeddingABI(readme_call_conv())),
   )
   inspect(lowered.get_name(), content="leaf")
   inspect(lowered.get_blocks().length(), content="1")
@@ -60,12 +60,12 @@ modify MachV directly.
 ```moonbit check
 ///|
 test "optimize an explicitly targeted MachV function" {
-  let builder = @milkir.FunctionBuilder::new("empty_return")
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("empty_return")
   builder.return_([])
   let lowered = @lower.lower_function(
     builder.get_function(),
     isa=AMD64,
-    embedding_abi=Some(@abi.EmbeddingABI::new(readme_call_conv())),
+    embedding_abi=Some(EmbeddingABI(readme_call_conv())),
   )
   @lower.optimize_machv(lowered, isa=AMD64)
   inspect(lowered.get_blocks().length(), content="1")

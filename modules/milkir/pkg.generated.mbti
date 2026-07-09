@@ -59,14 +59,14 @@ pub struct ExtOp {
   opcode : String
   immediates : FixedArray[Int]
 } derive(@debug.Debug)
-pub fn ExtOp::new(String, String, FixedArray[Int]) -> Self
+pub fn ExtOp::ExtOp(String, String, FixedArray[Int]) -> Self
 pub impl Eq for ExtOp
 pub impl Hash for ExtOp
 
 pub struct ExternalSymbol {
   name : String
 } derive(Eq, Hash, @debug.Debug)
-pub fn ExternalSymbol::new(String) -> Self
+pub fn ExternalSymbol::ExternalSymbol(String) -> Self
 
 pub(all) enum FloatCC {
   Eq
@@ -90,10 +90,10 @@ pub struct Function {
   mut next_block_id : Int
   mut next_stack_slot_id : Int
 } derive(@debug.Debug)
+pub fn Function::Function(String, Signature) -> Self
 pub fn Function::add_param(Self, Type) -> Value
 pub fn Function::add_result(Self, Type) -> Unit
 pub fn Function::declare_external_symbol(Self, String) -> ExternalSymbol
-pub fn Function::new(String, Signature) -> Self
 pub fn Function::new_block(Self, Array[Value]) -> Block
 pub fn Function::new_block0(Self) -> Block
 pub fn Function::new_empty(String) -> Self
@@ -104,6 +104,7 @@ pub fn Function::print(Self) -> String
 pub fn Function::verify(Self) -> Unit raise VerifyError
 
 type FunctionBuilder
+pub fn FunctionBuilder::FunctionBuilder(String) -> Self
 pub fn FunctionBuilder::add_block_param(Self, Block, Type) -> Value
 pub fn FunctionBuilder::add_param(Self, Type) -> Value
 pub fn FunctionBuilder::add_result(Self, Type) -> Unit
@@ -180,7 +181,6 @@ pub fn FunctionBuilder::isub(Self, Value, Value) -> Value
 pub fn FunctionBuilder::jump(Self, Block, Array[Value]) -> Unit
 pub fn FunctionBuilder::load_ptr(Self, Type, Value, Value) -> Value
 pub fn FunctionBuilder::load_ptr_narrow(Self, Type, Int, Bool, Value, Value) -> Value
-pub fn FunctionBuilder::new(String) -> Self
 pub fn FunctionBuilder::popcnt(Self, Value) -> Value
 pub fn FunctionBuilder::print(Self) -> String
 pub fn FunctionBuilder::return_(Self, Array[Value]) -> Unit
@@ -626,7 +626,7 @@ pub struct Signature {
   params : Array[Type]
   results : Array[Type]
 } derive(Eq, Hash, @debug.Debug)
-pub fn Signature::new(Array[Type], Array[Type]) -> Self
+pub fn Signature::Signature(Array[Type], Array[Type]) -> Self
 
 pub struct StackSlot {
   id : Int
@@ -662,7 +662,7 @@ pub struct Value {
   id : Int
   ty : Type
 } derive(Eq, Hash, @debug.Debug)
-pub fn Value::new(Int, Type) -> Self
+pub fn Value::Value(Int, Type) -> Self
 
 // Type aliases
 

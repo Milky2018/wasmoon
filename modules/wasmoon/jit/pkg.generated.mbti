@@ -46,6 +46,7 @@ pub struct JITFunction {
 }
 
 type JITModule
+pub fn JITModule::JITModule() -> Self
 pub fn JITModule::alloc_guarded_memory(Self, Int, Int?) -> Int64
 pub fn JITModule::alloc_wasm_stack(Self, Int64) -> Bool
 pub fn JITModule::call_with_context(Self, JITFunction, Array[Int64]) -> Array[Int64] raise JITTrap
@@ -81,7 +82,6 @@ pub fn JITModule::init_wasi_quiet(Self, Array[String], Array[String], Array[(Str
 pub fn JITModule::init_wasi_with_stdio(Self, Array[String], Array[String], Array[(String, String)], ((Bytes) -> Unit)?, ((Bytes) -> Unit)?, Bytes?, stdin_callback? : (() -> Bytes)?) -> Unit
 pub fn JITModule::load(@cwasm.PrecompiledModule, Array[(Array[@types.ValueType], Array[@types.ValueType])], debug_db? : @wasmoon_jit.JITDebugDB?) -> Self raise JITModuleLoadError
 pub fn JITModule::load_with_imports(@cwasm.PrecompiledModule, Array[(Array[@types.ValueType], Array[@types.ValueType])], Map[String, Map[String, Int64]], debug_db? : @wasmoon_jit.JITDebugDB?) -> Self raise JITModuleLoadError
-pub fn JITModule::new() -> Self
 pub fn JITModule::register_dwarf(Self, verbose? : Bool) -> @wasmoon_jit.DWARFBuilder
 pub fn JITModule::set_gc_heap(Self, Int64) -> Unit
 pub fn JITModule::set_globals(Self, Int64) -> Unit

@@ -40,7 +40,7 @@ pub fn exception_runtime_fixup_idx(ordinal : Int) -> Int {
 
 ///|
 pub fn runtime_hostcall_symbol() -> @instr.ExternalName {
-  @instr.ExternalName::new("wasm.runtime.hostcall")
+  ExternalName("wasm.runtime.hostcall")
 }
 
 ///|
@@ -49,13 +49,13 @@ pub fn wasm_runtime_symbols() -> @wasm_milkir.RuntimeSymbols {
 }
 
 ///|
-pub fn RuntimeSymbolResolver::new() -> RuntimeSymbolResolver {
+pub fn RuntimeSymbolResolver::RuntimeSymbolResolver() -> RuntimeSymbolResolver {
   { symbols: [] }
 }
 
 ///|
 pub fn RuntimeSymbolResolver::with_wasmoon_runtime_symbols() -> RuntimeSymbolResolver {
-  let resolver = RuntimeSymbolResolver::new()
+  let resolver = RuntimeSymbolResolver::RuntimeSymbolResolver()
   resolver.add_symbol_fixup(
     "wasmoon.runtime.gc.ref_test",
     @jit_ffi.c_jit_get_gc_ref_test_ptr(),
@@ -550,8 +550,8 @@ pub fn link_machine_code(
     runtime_relocations: runtime_relocations_from_machine_code(object, resolver),
     func_addr_fixups: object.get_func_addr_fixups(),
     call_fixups: object.get_call_fixups(),
-    gc_safepoints: CompiledFunction::new("", object, 0).get_gc_safepoints(),
-    gc_stackmap_blob: CompiledFunction::new("", object, 0).get_gc_stackmap_blob(),
+    gc_safepoints: CompiledFunction::CompiledFunction("", object, 0).get_gc_safepoints(),
+    gc_stackmap_blob: CompiledFunction::CompiledFunction("", object, 0).get_gc_stackmap_blob(),
   }
 }
 

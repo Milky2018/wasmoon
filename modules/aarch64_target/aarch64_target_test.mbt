@@ -40,9 +40,9 @@ fn test_return_area_base_reg() -> @machv.PReg {
 
 ///|
 test "AArch64 lowers custom call-convention function entry ABI" {
-  let func = @milkir.Function::new(
+  let func = @milkir.Function::Function(
     "custom_call_conv_body",
-    @milkir.Signature::new([], []),
+    Signature([], []),
   )
   func.add_param(Ptr) |> ignore
   func.add_param(I64) |> ignore
@@ -155,8 +155,8 @@ test "AArch64 allocatable regs include floating point registers" {
 
 ///|
 test "AArch64 lowers MilkIR arithmetic into MachV" {
-  let signature = @milkir.Signature::new([I64, I64], [I64])
-  let func = @milkir.Function::new("add64", signature)
+  let signature = @milkir.Signature::Signature([I64, I64], [I64])
+  let func = @milkir.Function::Function("add64", signature)
   let lhs = func.new_value(I64)
   let rhs = func.new_value(I64)
   let sum = func.new_value(I64)
@@ -213,8 +213,8 @@ test "AArch64 lowers extended MilkIR ops into structured MachV opcodes" {
 
 ///|
 test "AArch64 lowers integer remainder to generic arithmetic sequence" {
-  let signature = @milkir.Signature::new([I64, I64], [I64])
-  let func = @milkir.Function::new("rem64", signature)
+  let signature = @milkir.Signature::Signature([I64, I64], [I64])
+  let func = @milkir.Function::Function("rem64", signature)
   let lhs = func.new_value(I64)
   let rhs = func.new_value(I64)
   let rem = func.new_value(I64)
@@ -276,8 +276,8 @@ test "AArch64 lowers popcnt through generic MachV arithmetic sequence" {
 
 ///|
 test "AArch64 lowers floating point select through integer MachV select" {
-  let signature = @milkir.Signature::new([I32, F64, F64], [F64])
-  let func = @milkir.Function::new("select_f64", signature)
+  let signature = @milkir.Signature::Signature([I32, F64, F64], [F64])
+  let func = @milkir.Function::Function("select_f64", signature)
   let cond = func.new_value(I32)
   let true_value = func.new_value(F64)
   let false_value = func.new_value(F64)
@@ -327,8 +327,8 @@ test "AArch64 lowers multiply-high ops into structured MachV opcodes" {
 
 ///|
 test "AArch64 lowers rotate-left through explicit rotate-right count transform" {
-  let signature = @milkir.Signature::new([I64, I64], [I64])
-  let func = @milkir.Function::new("rotl64", signature)
+  let signature = @milkir.Signature::Signature([I64, I64], [I64])
+  let func = @milkir.Function::Function("rotl64", signature)
   let value = func.new_value(I64)
   let count = func.new_value(I64)
   let rotated = func.new_value(I64)
@@ -347,7 +347,7 @@ test "AArch64 lowers rotate-left through explicit rotate-right count transform" 
 
 ///|
 test "AArch64 folds constant pointer offsets into MachV memory opcodes" {
-  let builder = @milkir.FunctionBuilder::new("mem")
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("mem")
   let ptr = builder.add_param(Ptr)
   builder.add_result(I32)
   let load_offset = builder.iconst_i64(4L)
@@ -370,7 +370,7 @@ test "AArch64 folds constant pointer offsets into MachV memory opcodes" {
 
 ///|
 test "AArch64 folds constant narrow pointer offsets into MachV memory opcodes" {
-  let builder = @milkir.FunctionBuilder::new("narrow_mem")
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("narrow_mem")
   let ptr = builder.add_param(Ptr)
   builder.add_result(I32)
   let load_offset = builder.iconst_i64(4L)
@@ -446,11 +446,9 @@ test "AArch64 lowers direct calls with AAPCS64 ABI constraints" {
   let result1 = func.new_value(F64)
   let entry = func.new_block([])
   entry.append_inst(
-    func.new_inst(
-      Call(@milkir.ExternalSymbol::new("callee")),
-      [int0, float0, int1],
-      [result0, result1],
-    ),
+    func.new_inst(Call(ExternalSymbol("callee")), [int0, float0, int1], [
+      result0, result1,
+    ]),
   )
   entry.set_terminator(Return([result0, result1]))
   let lowered = lower_function(func)
@@ -493,7 +491,7 @@ test "AArch64 records outgoing stack arguments for direct calls" {
   }
   let entry = func.new_block([])
   entry.append_inst(
-    func.new_inst(Call(@milkir.ExternalSymbol::new("callee")), args, results),
+    func.new_inst(Call(ExternalSymbol("callee")), args, results),
   )
   entry.set_terminator(Return([]))
   let lowered = lower_function(
@@ -618,9 +616,7 @@ test "AArch64 lowers generic Call return-area loads through return-area base reg
     results.push(func.new_value(I64))
   }
   let entry = func.new_block([])
-  entry.append_inst(
-    func.new_inst(Call(@milkir.ExternalSymbol::new("callee")), [], results),
-  )
+  entry.append_inst(func.new_inst(Call(ExternalSymbol("callee")), [], results))
   entry.set_terminator(Return([]))
   let lowered = lower_function(
     func,

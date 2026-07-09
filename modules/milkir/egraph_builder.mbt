@@ -36,7 +36,7 @@ fn EGraphBuilder::new_with_limits_and_ruleset(
   ruleset : @egraph.IndexedRuleSet,
 ) -> EGraphBuilder {
   {
-    egraph: @egraph.EGraph::new(),
+    egraph: EGraph(),
     value_map: [],
     class_to_value: {},
     def_map: [],

@@ -53,9 +53,9 @@ pub(all) struct ValidationErrorContext {
   instr_offset : Int?
   instruction : String?
 } derive(@debug.Debug)
+pub fn ValidationErrorContext::ValidationErrorContext(String) -> Self
 pub fn ValidationErrorContext::format(Self) -> String
 pub fn ValidationErrorContext::from_error(ValidationError) -> Self
-pub fn ValidationErrorContext::new(String) -> Self
 pub fn ValidationErrorContext::with_func_idx(Self, Int) -> Self
 pub fn ValidationErrorContext::with_instr_offset(Self, Int) -> Self
 pub fn ValidationErrorContext::with_instruction(Self, String) -> Self

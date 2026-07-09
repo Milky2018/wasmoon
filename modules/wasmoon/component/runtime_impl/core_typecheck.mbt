@@ -161,7 +161,7 @@ fn parse_core_extern_type_in_moduletype(
 fn parse_core_moduletype_spec(
   core_type : Bytes,
 ) -> CoreModuleTypeSpec raise ComponentRuntimeError {
-  let reader = Reader::new(core_type)
+  let reader = Reader::Reader(core_type)
   let op = reader.read_u8() catch {
     e => raise ComponentParseError(e.to_string())
   }
@@ -260,7 +260,7 @@ fn fmt_valtype(vt : @types.ValueType) -> String {
 
 ///|
 fn fmt_functype(ft : @types.FuncType) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder::StringBuilder()
   buf.write_string("(func")
   if ft.params.length() > 0 {
     buf.write_string(" (param")

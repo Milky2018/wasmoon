@@ -8,7 +8,7 @@ pub(all) struct Block {
 } derive(Debug)
 
 ///|
-pub fn Block::new(id : Int) -> Block {
+pub fn Block::Block(id : Int) -> Block {
   { id, params: [], instructions: [], successors: [], terminator: None }
 }
 
@@ -78,7 +78,7 @@ pub(all) struct AbstractFunction {
 } derive(Debug)
 
 ///|
-pub fn AbstractFunction::new(name : String) -> AbstractFunction {
+pub fn AbstractFunction::AbstractFunction(name : String) -> AbstractFunction {
   {
     name,
     params: [],
@@ -101,7 +101,7 @@ pub fn AbstractFunction::new(name : String) -> AbstractFunction {
 
 ///|
 pub fn AbstractFunction::new_block(self : AbstractFunction) -> Block {
-  let block = Block::new(self.next_block_id)
+  let block = Block::Block(self.next_block_id)
   self.next_block_id = self.next_block_id + 1
   self.blocks.push(block)
   block
@@ -148,7 +148,7 @@ pub fn AbstractFunction::new_inst(
   self : AbstractFunction,
   opcode : Opcode,
 ) -> Instruction {
-  let inst = Instruction::new(self.next_inst_id, opcode)
+  let inst = Instruction::Instruction(self.next_inst_id, opcode)
   self.next_inst_id = self.next_inst_id + 1
   inst
 }

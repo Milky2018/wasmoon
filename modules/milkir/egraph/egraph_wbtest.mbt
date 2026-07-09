@@ -1,6 +1,6 @@
 ///|
 test "egraph: basic add and find" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
 
   // Add a constant
   let c1 = eg.add_const(42L)
@@ -16,7 +16,7 @@ test "egraph: basic add and find" {
 
 ///|
 test "egraph: variable nodes" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let v1 = eg.add_var(0)
   let v2 = eg.add_var(0)
   let v3 = eg.add_var(1)
@@ -29,7 +29,7 @@ test "egraph: variable nodes" {
 
 ///|
 test "egraph: add operations" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let sum1 = eg.add_add(x, y)
@@ -45,7 +45,7 @@ test "egraph: add operations" {
 
 ///|
 test "egraph: merge" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
 
@@ -59,7 +59,7 @@ test "egraph: merge" {
 
 ///|
 test "egraph: x + 0 = x rule" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let zero = eg.add_const(0L)
   let x_plus_zero = eg.add_add(x, zero)
@@ -76,7 +76,7 @@ test "egraph: x + 0 = x rule" {
 
 ///|
 test "egraph: x * 1 = x rule" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let one = eg.add_const(1L)
   let x_times_one = eg.add_mul(x, one)
@@ -87,7 +87,7 @@ test "egraph: x * 1 = x rule" {
 
 ///|
 test "egraph: x * 0 = 0 rule" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let zero = eg.add_const(0L)
   let x_times_zero = eg.add_mul(x, zero)
@@ -97,7 +97,7 @@ test "egraph: x * 0 = 0 rule" {
 
 ///|
 test "egraph: x - x = 0 rule" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let x_minus_x = eg.add_sub(x, x)
   let zero = eg.add_const(0L)
@@ -107,7 +107,7 @@ test "egraph: x - x = 0 rule" {
 
 ///|
 test "egraph: x ^ x = 0 rule" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let x_xor_x = eg.add_xor(x, x)
   let zero = eg.add_const(0L)
@@ -117,7 +117,7 @@ test "egraph: x ^ x = 0 rule" {
 
 ///|
 test "egraph: x & x = x rule" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let x_and_x = eg.add_and(x, x)
   eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
@@ -126,7 +126,7 @@ test "egraph: x & x = x rule" {
 
 ///|
 test "egraph: x | x = x rule" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let x_or_x = eg.add_or(x, x)
   eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
@@ -135,7 +135,7 @@ test "egraph: x | x = x rule" {
 
 ///|
 test "egraph: x * 2 = x << 1 strength reduction" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let two = eg.add_const(2L)
   let one = eg.add_const(1L)
@@ -148,7 +148,7 @@ test "egraph: x * 2 = x << 1 strength reduction" {
 
 ///|
 test "egraph: x * 8 = x << 3 strength reduction" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let eight = eg.add_const(8L)
   let three = eg.add_const(3L)
@@ -160,7 +160,7 @@ test "egraph: x * 8 = x << 3 strength reduction" {
 
 ///|
 test "egraph: x + x = x << 1" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let one = eg.add_const(1L)
   let x_plus_x = eg.add_add(x, x)
@@ -171,7 +171,7 @@ test "egraph: x + x = x << 1" {
 
 ///|
 test "egraph: constant folding" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let a = eg.add_const(3L)
   let b = eg.add_const(4L)
   let sum = eg.add_add(a, b)
@@ -182,7 +182,7 @@ test "egraph: constant folding" {
 
 ///|
 test "egraph: constant folding mul" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let a = eg.add_const(5L)
   let b = eg.add_const(6L)
   let product = eg.add_mul(a, b)
@@ -193,7 +193,7 @@ test "egraph: constant folding mul" {
 
 ///|
 test "egraph: extraction prefers shifts over muls" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let two = eg.add_const(2L)
   let x_times_2 = eg.add_mul(x, two)
@@ -208,7 +208,7 @@ test "egraph: extraction prefers shifts over muls" {
 
 ///|
 test "egraph: extraction tie-break prefers shallower tree" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let a = eg.add_var(0)
   let b = eg.add_var(1)
   let c = eg.add_var(2)
@@ -229,7 +229,7 @@ test "egraph: extraction tie-break prefers shallower tree" {
 
 ///|
 test "egraph: extraction cost is saturating and deterministic" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let mut value = eg.add_const(1L)
   for _ in 0..<100 {
     value = eg.add_add(value, value)
@@ -242,7 +242,7 @@ test "egraph: extraction cost is saturating and deterministic" {
 
 ///|
 test "egraph: (x + 1) + 2 = x + 3 reassociation" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let one = eg.add_const(1L)
   let two = eg.add_const(2L)
@@ -256,7 +256,7 @@ test "egraph: (x + 1) + 2 = x + 3 reassociation" {
 
 ///|
 test "egraph: num_classes and num_nodes" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let _ = eg.add_add(x, y)
@@ -272,7 +272,7 @@ test "egraph: num_classes and num_nodes" {
 
 ///|
 test "egraph: x & 0 = 0" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let zero = eg.add_const(0L)
   let x_and_zero = eg.add_and(x, zero)
@@ -282,7 +282,7 @@ test "egraph: x & 0 = 0" {
 
 ///|
 test "egraph: x | 0 = x" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let zero = eg.add_const(0L)
   let x_or_zero = eg.add_or(x, zero)
@@ -292,7 +292,7 @@ test "egraph: x | 0 = x" {
 
 ///|
 test "egraph: x ^ 0 = x" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let zero = eg.add_const(0L)
   let x_xor_zero = eg.add_xor(x, zero)
@@ -302,7 +302,7 @@ test "egraph: x ^ 0 = x" {
 
 ///|
 test "egraph: x & -1 = x" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let all_ones = eg.add_const(-1L)
   let result = eg.add_and(x, all_ones)
@@ -312,7 +312,7 @@ test "egraph: x & -1 = x" {
 
 ///|
 test "egraph: x | -1 = -1" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let all_ones = eg.add_const(-1L)
   let result = eg.add_or(x, all_ones)
@@ -322,7 +322,7 @@ test "egraph: x | -1 = -1" {
 
 ///|
 test "egraph: x << 0 = x" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let zero = eg.add_const(0L)
   let result = eg.add_shl(x, zero)
@@ -332,7 +332,7 @@ test "egraph: x << 0 = x" {
 
 ///|
 test "egraph: 0 << x = 0" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let zero = eg.add_const(0L)
   let result = eg.add_shl(zero, x)
@@ -342,7 +342,7 @@ test "egraph: 0 << x = 0" {
 
 ///|
 test "egraph: (x << 2) << 3 = x << 5" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let two = eg.add_const(2L)
   let three = eg.add_const(3L)
@@ -356,7 +356,7 @@ test "egraph: (x << 2) << 3 = x << 5" {
 
 ///|
 test "egraph: x * 3 = (x << 1) + x" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let three = eg.add_const(3L)
   let one = eg.add_const(1L)
@@ -369,7 +369,7 @@ test "egraph: x * 3 = (x << 1) + x" {
 
 ///|
 test "egraph: x * 5 = (x << 2) + x" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let five = eg.add_const(5L)
   let two = eg.add_const(2L)
@@ -382,7 +382,7 @@ test "egraph: x * 5 = (x << 2) + x" {
 
 ///|
 test "egraph: x * 7 = (x << 3) - x" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let seven = eg.add_const(7L)
   let three = eg.add_const(3L)
@@ -395,7 +395,7 @@ test "egraph: x * 7 = (x << 3) - x" {
 
 ///|
 test "egraph: x * 9 = (x << 3) + x" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let nine = eg.add_const(9L)
   let three = eg.add_const(3L)
@@ -408,7 +408,7 @@ test "egraph: x * 9 = (x << 3) + x" {
 
 ///|
 test "egraph: generic rules exclude x % 8 = x & 7 (urem)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let eight = eg.add_const(8L)
   let seven = eg.add_const(7L)
@@ -422,7 +422,7 @@ test "egraph: generic rules exclude x % 8 = x & 7 (urem)" {
 
 ///|
 test "egraph: generic rules exclude x / 4 = x >> 2 (udiv)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let four = eg.add_const(4L)
   let two = eg.add_const(2L)
@@ -436,7 +436,7 @@ test "egraph: generic rules exclude x / 4 = x >> 2 (udiv)" {
 
 ///|
 test "egraph: 0 - x creates Neg node" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let zero = eg.add_const(0L)
   let neg_x = eg.add_sub(zero, x)
@@ -454,7 +454,7 @@ test "egraph: 0 - x creates Neg node" {
 
 ///|
 test "egraph: x - (0 - y) = x + y" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let zero = eg.add_const(0L)
@@ -467,7 +467,7 @@ test "egraph: x - (0 - y) = x + y" {
 
 ///|
 test "egraph: x + (0 - y) = x - y" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let zero = eg.add_const(0L)
@@ -480,7 +480,7 @@ test "egraph: x + (0 - y) = x - y" {
 
 ///|
 test "egraph: (a * 2) * 3 = a * 6" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let a = eg.add_var(0)
   let two = eg.add_const(2L)
   let three = eg.add_const(3L)
@@ -494,7 +494,7 @@ test "egraph: (a * 2) * 3 = a * 6" {
 
 ///|
 test "egraph: (a - 1) - 2 = a - 3" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let a = eg.add_var(0)
   let one = eg.add_const(1L)
   let two = eg.add_const(2L)
@@ -508,7 +508,7 @@ test "egraph: (a - 1) - 2 = a - 3" {
 
 ///|
 test "egraph: commutativity canonicalizes add" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let xy = eg.add_add(x, y)
@@ -519,7 +519,7 @@ test "egraph: commutativity canonicalizes add" {
 
 ///|
 test "egraph: commutativity canonicalizes mul" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let xy = eg.add_mul(x, y)
@@ -530,7 +530,7 @@ test "egraph: commutativity canonicalizes mul" {
 
 ///|
 test "egraph: extraction prefers add over mul for x*3" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let three = eg.add_const(3L)
   let mul3 = eg.add_mul(x, three)
@@ -544,7 +544,7 @@ test "egraph: extraction prefers add over mul for x*3" {
 
 ///|
 test "egraph: x * -1 = -x" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let neg_one = eg.add_const(-1L)
   let mul_neg_one = eg.add_mul(x, neg_one)
@@ -555,7 +555,7 @@ test "egraph: x * -1 = -x" {
 
 ///|
 test "egraph: -x * -y = x * y" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let neg_x = eg.add_neg(x)
@@ -568,7 +568,7 @@ test "egraph: -x * -y = x * y" {
 
 ///|
 test "egraph: (x - y) + y = x" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let x_sub_y = eg.add_sub(x, y)
@@ -579,7 +579,7 @@ test "egraph: (x - y) + y = x" {
 
 ///|
 test "egraph: (x + y) - y = x" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let x_add_y = eg.add_add(x, y)
@@ -590,7 +590,7 @@ test "egraph: (x + y) - y = x" {
 
 ///|
 test "egraph: (x + y) - x = y" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let x_add_y = eg.add_add(x, y)
@@ -601,7 +601,7 @@ test "egraph: (x + y) - x = y" {
 
 ///|
 test "egraph: (x - y) - x = -y" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let x_sub_y = eg.add_sub(x, y)
@@ -613,7 +613,7 @@ test "egraph: (x - y) - x = -y" {
 
 ///|
 test "egraph: generic rules exclude x / -1 = -x (sdiv)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let neg_one = eg.add_const(-1L)
   let div = eg.add({ op: Sdiv, children: [x, neg_one] })
@@ -626,7 +626,7 @@ test "egraph: generic rules exclude x / -1 = -x (sdiv)" {
 
 ///|
 test "egraph: generic rules exclude x % -1 = 0 (srem)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let neg_one = eg.add_const(-1L)
   let rem = eg.add({ op: Srem, children: [x, neg_one] })
@@ -639,7 +639,7 @@ test "egraph: generic rules exclude x % -1 = 0 (srem)" {
 
 ///|
 test "egraph: x * (1 << y) = x << y" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let one = eg.add_const(1L)
@@ -652,7 +652,7 @@ test "egraph: x * (1 << y) = x << y" {
 
 ///|
 test "egraph: x | x = x" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let x_or_x = eg.add_or(x, x)
   eg.saturate_indexed(standard_rules_indexed(), 10) |> ignore
@@ -661,7 +661,7 @@ test "egraph: x | x = x" {
 
 ///|
 test "egraph: x ^ ~x = -1" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let not_x = eg.add_bnot(x)
   let result = eg.add_xor(x, not_x)
@@ -672,7 +672,7 @@ test "egraph: x ^ ~x = -1" {
 
 ///|
 test "egraph: x | ~x = -1" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let not_x = eg.add_bnot(x)
   let result = eg.add_or(x, not_x)
@@ -683,7 +683,7 @@ test "egraph: x | ~x = -1" {
 
 ///|
 test "egraph: x & ~x = 0" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let not_x = eg.add_bnot(x)
   let result = eg.add_and(x, not_x)
@@ -694,7 +694,7 @@ test "egraph: x & ~x = 0" {
 
 ///|
 test "egraph: ~~x = x" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let not_x = eg.add_bnot(x)
   let not_not_x = eg.add_bnot(not_x)
@@ -704,7 +704,7 @@ test "egraph: ~~x = x" {
 
 ///|
 test "egraph: DeMorgan ~(x | y) = ~x & ~y" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let x_or_y = eg.add_or(x, y)
@@ -718,7 +718,7 @@ test "egraph: DeMorgan ~(x | y) = ~x & ~y" {
 
 ///|
 test "egraph: DeMorgan ~(x & y) = ~x | ~y" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let x_and_y = eg.add_and(x, y)
@@ -732,7 +732,7 @@ test "egraph: DeMorgan ~(x & y) = ~x | ~y" {
 
 ///|
 test "egraph: x ^ -1 = ~x" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let all_ones = eg.add_const(-1L)
   let result = eg.add_xor(x, all_ones)
@@ -743,7 +743,7 @@ test "egraph: x ^ -1 = ~x" {
 
 ///|
 test "egraph: (x & y) ^ (x ^ y) = x | y" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let x_and_y = eg.add_and(x, y)
@@ -756,7 +756,7 @@ test "egraph: (x & y) ^ (x ^ y) = x | y" {
 
 ///|
 test "egraph: (x | y) ^ (x & y) = x ^ y" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let x_or_y = eg.add_or(x, y)
@@ -769,7 +769,7 @@ test "egraph: (x | y) ^ (x & y) = x ^ y" {
 
 ///|
 test "egraph: (x & y) | x = x (absorption)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let x_and_y = eg.add_and(x, y)
@@ -780,7 +780,7 @@ test "egraph: (x & y) | x = x (absorption)" {
 
 ///|
 test "egraph: (x ^ y) ^ y = x" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let x_xor_y = eg.add_xor(x, y)
@@ -791,7 +791,7 @@ test "egraph: (x ^ y) ^ y = x" {
 
 ///|
 test "egraph: (z & x) ^ (z & y) = z & (x ^ y)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let z = eg.add_var(2)
@@ -806,7 +806,7 @@ test "egraph: (z & x) ^ (z & y) = z & (x ^ y)" {
 
 ///|
 test "egraph: (x & y) + (x ^ y) = x | y" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let x_and_y = eg.add_and(x, y)
@@ -819,7 +819,7 @@ test "egraph: (x & y) + (x ^ y) = x | y" {
 
 ///|
 test "egraph: (x | y) + (x & y) = x + y" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let x_or_y = eg.add_or(x, y)
@@ -832,7 +832,7 @@ test "egraph: (x | y) + (x & y) = x + y" {
 
 ///|
 test "egraph: (x & y) | ~y = x | ~y" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let x_and_y = eg.add_and(x, y)
@@ -845,7 +845,7 @@ test "egraph: (x & y) | ~y = x | ~y" {
 
 ///|
 test "egraph: (x | y) | x = x | y" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let x_or_y = eg.add_or(x, y)
@@ -856,7 +856,7 @@ test "egraph: (x | y) | x = x | y" {
 
 ///|
 test "egraph: (x & y) & x = x & y" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let x_and_y = eg.add_and(x, y)
@@ -867,7 +867,7 @@ test "egraph: (x & y) & x = x & y" {
 
 ///|
 test "egraph: (x ^ ~y) & x = x & y" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let not_y = eg.add_bnot(y)
@@ -880,7 +880,7 @@ test "egraph: (x ^ ~y) & x = x & y" {
 
 ///|
 test "egraph: (x & y) | ~x = y | ~x" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let x_and_y = eg.add_and(x, y)
@@ -893,7 +893,7 @@ test "egraph: (x & y) | ~x = y | ~x" {
 
 ///|
 test "egraph: (x | 3) | 5 = x | 7 (or reassociation)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let c3 = eg.add_const(3L)
   let c5 = eg.add_const(5L)
@@ -907,7 +907,7 @@ test "egraph: (x | 3) | 5 = x | 7 (or reassociation)" {
 
 ///|
 test "egraph: (x & 7) & 3 = x & 3 (and reassociation)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let c7 = eg.add_const(7L)
   let c3 = eg.add_const(3L)
@@ -920,7 +920,7 @@ test "egraph: (x & 7) & 3 = x & 3 (and reassociation)" {
 
 ///|
 test "egraph: (x ^ 3) ^ 5 = x ^ 6 (xor reassociation)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let c3 = eg.add_const(3L)
   let c5 = eg.add_const(5L)
@@ -934,7 +934,7 @@ test "egraph: (x ^ 3) ^ 5 = x ^ 6 (xor reassociation)" {
 
 ///|
 test "egraph: (x + 3) - 5 = x - 2 (sub-add reassociation)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let c3 = eg.add_const(3L)
   let c5 = eg.add_const(5L)
@@ -948,7 +948,7 @@ test "egraph: (x + 3) - 5 = x - 2 (sub-add reassociation)" {
 
 ///|
 test "egraph: (x - 3) + 5 = x + 2 (add-sub reassociation)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let c3 = eg.add_const(3L)
   let c5 = eg.add_const(5L)
@@ -966,7 +966,7 @@ test "egraph: (x - 3) + 5 = x + 2 (add-sub reassociation)" {
 
 ///|
 test "egraph: select(cond, x, x) = x" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let cond = eg.add_var(0)
   let x = eg.add_var(1)
   let select = eg.add({ op: Select, children: [cond, x, x] })
@@ -976,7 +976,7 @@ test "egraph: select(cond, x, x) = x" {
 
 ///|
 test "egraph: select(icmp, 1, 0) = icmp" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let one = eg.add_const(1L)
@@ -990,7 +990,7 @@ test "egraph: select(icmp, 1, 0) = icmp" {
 
 ///|
 test "egraph: select(d, a, select(d, _, y)) = select(d, a, y)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let d = eg.add_var(0)
   let a = eg.add_var(1)
   let b = eg.add_var(2)
@@ -1007,7 +1007,7 @@ test "egraph: select(d, a, select(d, _, y)) = select(d, a, y)" {
 
 ///|
 test "egraph: select(d, select(d, x, _), a) = select(d, x, a)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let d = eg.add_var(0)
   let x = eg.add_var(1)
   let b = eg.add_var(2)
@@ -1028,7 +1028,7 @@ test "egraph: select(d, select(d, x, _), a) = select(d, x, a)" {
 
 ///|
 test "egraph: x rotl 0 = x" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let zero = eg.add_const(0L)
   let result = eg.add({ op: Rotl, children: [x, zero] })
@@ -1038,7 +1038,7 @@ test "egraph: x rotl 0 = x" {
 
 ///|
 test "egraph: x rotr 0 = x" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let zero = eg.add_const(0L)
   let result = eg.add({ op: Rotr, children: [x, zero] })
@@ -1048,7 +1048,7 @@ test "egraph: x rotr 0 = x" {
 
 ///|
 test "egraph: (x >> 3) >> 2 = x >> 5 (ushr)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let two = eg.add_const(2L)
   let three = eg.add_const(3L)
@@ -1062,7 +1062,7 @@ test "egraph: (x >> 3) >> 2 = x >> 5 (ushr)" {
 
 ///|
 test "egraph: (x >> 3) >> 2 = x >> 5 (sshr)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let two = eg.add_const(2L)
   let three = eg.add_const(3L)
@@ -1076,7 +1076,7 @@ test "egraph: (x >> 3) >> 2 = x >> 5 (sshr)" {
 
 ///|
 test "egraph: rotl(rotr(x, y), y) = x" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let rotr_x = eg.add({ op: Rotr, children: [x, y] })
@@ -1087,7 +1087,7 @@ test "egraph: rotl(rotr(x, y), y) = x" {
 
 ///|
 test "egraph: rotr(rotl(x, y), y) = x" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let rotl_x = eg.add({ op: Rotl, children: [x, y] })
@@ -1098,7 +1098,7 @@ test "egraph: rotr(rotl(x, y), y) = x" {
 
 ///|
 test "egraph: (x >> k) << k = x & mask (ushr/shl)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let k = eg.add_const(4L)
   let ushr_x = eg.add({ op: Ushr, children: [x, k] })
@@ -1112,7 +1112,7 @@ test "egraph: (x >> k) << k = x & mask (ushr/shl)" {
 
 ///|
 test "egraph: band(ishl(x, z), ishl(y, z)) = ishl(band(x, y), z)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let z = eg.add_var(2)
@@ -1127,7 +1127,7 @@ test "egraph: band(ishl(x, z), ishl(y, z)) = ishl(band(x, y), z)" {
 
 ///|
 test "egraph: iadd(ishl(x, z), ishl(y, z)) = ishl(iadd(x, y), z)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let z = eg.add_var(2)
@@ -1142,7 +1142,7 @@ test "egraph: iadd(ishl(x, z), ishl(y, z)) = ishl(iadd(x, y), z)" {
 
 ///|
 test "egraph: isub(ishl(x, z), ishl(y, z)) = ishl(isub(x, y), z)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let z = eg.add_var(2)
@@ -1157,7 +1157,7 @@ test "egraph: isub(ishl(x, z), ishl(y, z)) = ishl(isub(x, y), z)" {
 
 ///|
 test "egraph: (x << 32) | (x >> 32) = rotl(x, 32)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let k = eg.add_const(32L)
   let shl_x = eg.add_shl(x, k)
@@ -1174,7 +1174,7 @@ test "egraph: (x << 32) | (x >> 32) = rotl(x, 32)" {
 
 ///|
 test "egraph: eq(x + 3, 10) = eq(x, 7)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let c3 = eg.add_const(3L)
   let c10 = eg.add_const(10L)
@@ -1188,7 +1188,7 @@ test "egraph: eq(x + 3, 10) = eq(x, 7)" {
 
 ///|
 test "egraph: ne(x + 3, 10) = ne(x, 7)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let c3 = eg.add_const(3L)
   let c10 = eg.add_const(10L)
@@ -1202,7 +1202,7 @@ test "egraph: ne(x + 3, 10) = ne(x, 7)" {
 
 ///|
 test "egraph: eq(x - 3, 10) = eq(x, 13)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let c3 = eg.add_const(3L)
   let c10 = eg.add_const(10L)
@@ -1216,7 +1216,7 @@ test "egraph: eq(x - 3, 10) = eq(x, 13)" {
 
 ///|
 test "egraph: ne(x - 3, 10) = ne(x, 13)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let c3 = eg.add_const(3L)
   let c10 = eg.add_const(10L)
@@ -1234,7 +1234,7 @@ test "egraph: ne(x - 3, 10) = ne(x, 13)" {
 
 ///|
 test "egraph: ineg(isub(y, x)) = isub(x, y)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let sub_yx = eg.add_sub(y, x)
@@ -1246,7 +1246,7 @@ test "egraph: ineg(isub(y, x)) = isub(x, y)" {
 
 ///|
 test "egraph: ineg(ushr(x, 63)) = sshr(x, 63)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let k63 = eg.add_const(63L)
   let ushr_x = eg.add({ op: Ushr, children: [x, k63] })
@@ -1258,7 +1258,7 @@ test "egraph: ineg(ushr(x, 63)) = sshr(x, 63)" {
 
 ///|
 test "egraph: (ishl (ishl x 40) 30) = 0 (shift overflow)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let k40 = eg.add_const(40L)
   let k30 = eg.add_const(30L)
@@ -1271,7 +1271,7 @@ test "egraph: (ishl (ishl x 40) 30) = 0 (shift overflow)" {
 
 ///|
 test "egraph: (ushr (ushr x 40) 30) = 0 (shift overflow)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let k40 = eg.add_const(40L)
   let k30 = eg.add_const(30L)
@@ -1284,7 +1284,7 @@ test "egraph: (ushr (ushr x 40) 30) = 0 (shift overflow)" {
 
 ///|
 test "egraph: iadd(select(c, 1, 2), 5) = select(c, 6, 7)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let c = eg.add_var(0)
   let k1 = eg.add_const(1L)
   let k2 = eg.add_const(2L)
@@ -1300,7 +1300,7 @@ test "egraph: iadd(select(c, 1, 2), 5) = select(c, 6, 7)" {
 
 ///|
 test "egraph: icmp(slt, 5, x) = icmp(sgt, x, 5) (swap const to right)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let k5 = eg.add_const(5L)
   let cc_slt = 2
@@ -1313,7 +1313,7 @@ test "egraph: icmp(slt, 5, x) = icmp(sgt, x, 5) (swap const to right)" {
 
 ///|
 test "egraph: eq(5, x) = eq(x, 5) (swap const to right)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let k5 = eg.add_const(5L)
   let result = eg.add({ op: Eq, children: [k5, x] })
@@ -1324,7 +1324,7 @@ test "egraph: eq(5, x) = eq(x, 5) (swap const to right)" {
 
 ///|
 test "egraph: eq(x + 3, y + 5) = eq(x, y + 2)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let k3 = eg.add_const(3L)
@@ -1341,7 +1341,7 @@ test "egraph: eq(x + 3, y + 5) = eq(x, y + 2)" {
 
 ///|
 test "egraph: ne(x + 3, y + 5) = ne(x, y + 2)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let k3 = eg.add_const(3L)
@@ -1362,7 +1362,7 @@ test "egraph: ne(x + 3, y + 5) = ne(x, y + 2)" {
 
 ///|
 test "egraph: ugt(x, UMAX_32) = false with type info" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   eg.set_type(x, 32) // Mark x as 32-bit
   let umax32 = eg.add_const(0xFFFF_FFFFL)
@@ -1375,7 +1375,7 @@ test "egraph: ugt(x, UMAX_32) = false with type info" {
 
 ///|
 test "egraph: ule(x, UMAX_32) = true with type info" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   eg.set_type(x, 32) // Mark x as 32-bit
   let umax32 = eg.add_const(0xFFFF_FFFFL)
@@ -1388,7 +1388,7 @@ test "egraph: ule(x, UMAX_32) = true with type info" {
 
 ///|
 test "egraph: sgt(x, SMAX_32) = false with type info" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   eg.set_type(x, 32) // Mark x as 32-bit
   let smax32 = eg.add_const(2147483647L) // 0x7FFF_FFFF
@@ -1401,7 +1401,7 @@ test "egraph: sgt(x, SMAX_32) = false with type info" {
 
 ///|
 test "egraph: slt(x, SMIN_32) = false with type info" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   eg.set_type(x, 32) // Mark x as 32-bit
   let smin32 = eg.add_const(-2147483648L) // 0x8000_0000
@@ -1414,7 +1414,7 @@ test "egraph: slt(x, SMIN_32) = false with type info" {
 
 ///|
 test "egraph: sge(x, SMIN_32) = true with type info" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   eg.set_type(x, 32) // Mark x as 32-bit
   let smin32 = eg.add_const(-2147483648L)
@@ -1427,7 +1427,7 @@ test "egraph: sge(x, SMIN_32) = true with type info" {
 
 ///|
 test "egraph: sle(x, SMAX_32) = true with type info" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   eg.set_type(x, 32) // Mark x as 32-bit
   let smax32 = eg.add_const(2147483647L)
@@ -1440,7 +1440,7 @@ test "egraph: sle(x, SMAX_32) = true with type info" {
 
 ///|
 test "egraph: type info is preserved through merge" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   eg.set_type(x, 32)
@@ -1453,7 +1453,7 @@ test "egraph: type info is preserved through merge" {
 
 ///|
 test "egraph: add_typed sets type correctly" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let k5 = eg.add_const(5L)
   let result = eg.add_typed({ op: Add, children: [x, k5] }, 32)
@@ -1463,7 +1463,7 @@ test "egraph: add_typed sets type correctly" {
 ///|
 /// Test that x + 0 = x extraction returns Var, not Const(0)
 test "egraph: x + 0 extract returns Var not Const" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let zero = eg.add_const(0L)
   let x_plus_zero = eg.add_add(x, zero)
@@ -1472,7 +1472,7 @@ test "egraph: x + 0 extract returns Var not Const" {
   inspect(eg.equiv(x_plus_zero, x), content="false")
 
   // Apply only add_zero rule
-  let rules = IndexedRuleSet::new()
+  let rules = IndexedRuleSet::IndexedRuleSet()
   rules.add_rule(rule_add_zero(), [TAdd])
   eg.saturate_indexed(rules, 10) |> ignore
 
@@ -1498,7 +1498,7 @@ test "egraph: x + 0 extract returns Var not Const" {
 /// 4. N2 is then added to canonical_nodes[B] using stale canonical_id
 /// 5. In the second pass, B is non-canonical, so nodes from canonical_nodes[B] are lost
 test "rebuild: nodes preserved after intra-rebuild union" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
 
   // Create two variables - x will be the "winner" after merge
   let x = eg.add_var(0) // class 0
@@ -1570,7 +1570,7 @@ test "rebuild: nodes preserved after intra-rebuild union" {
 /// - After union(2,3), find(3)=2, so Mul(0,3) should become Mul(0,2)
 /// - But without re-canonicalization, Mul(0,3) has stale child reference
 test "rebuild: re-canonicalize nodes after unions" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
 
   // Create two variables
   let x = eg.add_var(0) // class 0

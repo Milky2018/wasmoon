@@ -1,14 +1,43 @@
 ///|
+fn clap_parser(
+  prog~ : String,
+  description~ : String,
+  subcmds~ : Map[String, @clap.SubCommand],
+) -> @clap.Parser {
+  { prog, args: {}, subcmds, description }
+}
+
+///|
+fn clap_subcommand(
+  help~ : String,
+  args? : Map[String, @clap.Arg] = {},
+  subcmds? : Map[String, @clap.SubCommand] = {},
+) -> @clap.SubCommand {
+  { args, subcmds, help }
+}
+
+///|
+fn clap_simple_value(name : String) -> @clap.SimpleValue {
+  {
+    name,
+    args: HashMap([]),
+    flags: HashMap([]),
+    positional_args: [],
+    subcmd: None,
+  }
+}
+
+///|
 fn main {
   let args = @sys.get_cli_args()
-  let parser = @clap.Parser::new(
+  let parser = clap_parser(
     prog="wasmoon-tools",
     description="WebAssembly Utility Tools",
     subcmds={
-      "validate": @clap.SubCommand::new(help="Validate a WebAssembly module", args={
+      "validate": clap_subcommand(help="Validate a WebAssembly module", args={
         "file": @clap.Arg::positional(help="Path to WASM or WAT file"),
       }),
-      "wit": @clap.SubCommand::new(
+      "wit": clap_subcommand(
         help="Parse and resolve WIT packages and print as normalized text/JSON",
         args={
           "input": @clap.Arg::positional(
@@ -55,7 +84,7 @@ fn main {
           ),
         },
       ),
-      "wasm2wat": @clap.SubCommand::new(
+      "wasm2wat": clap_subcommand(
         help="Convert WASM binary to WAT text format",
         args={
           "file": @clap.Arg::positional(help="Path to WASM file"),
@@ -66,7 +95,7 @@ fn main {
           ),
         },
       ),
-      "wat2wasm": @clap.SubCommand::new(
+      "wat2wasm": clap_subcommand(
         help="Convert WAT text to WASM binary format",
         args={
           "file": @clap.Arg::positional(help="Path to WAT file"),
@@ -77,7 +106,7 @@ fn main {
           ),
         },
       ),
-      "help": @clap.SubCommand::new(help="Display help message"),
+      "help": clap_subcommand(help="Display help message"),
     },
   )
   let help_msg = parser.gen_help_message(["wasmoon-tools"], {})
@@ -85,7 +114,7 @@ fn main {
     println(help_msg)
     return
   }
-  let value = @clap.SimpleValue::new("wasmoon-tools")
+  let value = clap_simple_value("wasmoon-tools")
   let cli_args : Array[String] = normalize_cli_args(args)
   let subcmd_help = parser.parse(value, cli_args[:]) catch {
     e => {
@@ -532,7 +561,7 @@ fn read_stdin_all_bytes() -> Bytes {
 fn read_stdin_all_text() -> String {
   let bytes = read_stdin_all_bytes()
   // WIT inputs are assumed ASCII/UTF-8; this matches existing parser usage.
-  let sb = StringBuilder::new()
+  let sb = StringBuilder::StringBuilder()
   for i in 0..<bytes.length() {
     sb.write_char(bytes[i].to_int().unsafe_to_char())
   }
@@ -794,7 +823,7 @@ fn pkg_stem(pkg : @wit.Package) -> String {
 
 ///|
 fn slice_ascii(s : String, start : Int, end : Int) -> String {
-  let sb = StringBuilder::new()
+  let sb = StringBuilder::StringBuilder()
   let mut i = start
   while i < end && i < s.length() {
     sb.write_char(s.code_unit_at(i).to_int().unsafe_to_char())

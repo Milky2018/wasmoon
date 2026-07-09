@@ -64,11 +64,11 @@ pub fn verify_allocation_aarch64(@machv.Function, LivenessResult, RegAllocResult
 
 // Types and methods
 type AArch64StackFrame
+pub fn AArch64StackFrame::AArch64StackFrame() -> Self
 pub fn AArch64StackFrame::alloc_spill(Self, @abi.VReg) -> Int
 pub fn AArch64StackFrame::finalize(Self) -> Unit
 pub fn AArch64StackFrame::gen_epilogue(Self) -> Array[@instr.MachVInst]
 pub fn AArch64StackFrame::gen_prologue(Self) -> Array[@instr.MachVInst]
-pub fn AArch64StackFrame::new() -> Self
 pub fn AArch64StackFrame::save_callee_reg(Self, @abi.PReg) -> Int
 pub fn AArch64StackFrame::setup(Self) -> Unit
 pub fn AArch64StackFrame::size(Self) -> Int
@@ -90,21 +90,21 @@ pub(all) struct ApplyResult {
 } derive(@debug.Debug)
 
 type Bundle
+pub fn Bundle::Bundle(Int, @abi.RegClass) -> Self
 pub fn Bundle::contains_range(Self, Int) -> Bool
 pub fn Bundle::crosses_call(Self, LiveRangeSet) -> Bool
 pub fn Bundle::crosses_foreign_call(Self, LiveRangeSet) -> Bool
 pub fn Bundle::crosses_internal_call(Self, LiveRangeSet) -> Bool
 pub fn Bundle::get_fixed_reg(Self, LiveRangeSet) -> @abi.PReg?
 pub fn Bundle::has_fixed_constraint(Self, LiveRangeSet) -> Bool
-pub fn Bundle::new(Int, @abi.RegClass) -> Self
 pub fn Bundle::overlaps(Self, Self, LiveRangeSet) -> Bool
 pub fn Bundle::to_string(Self, LiveRangeSet) -> String
 pub fn Bundle::total_length(Self, LiveRangeSet) -> Int
 
 type BundleSet
+pub fn BundleSet::BundleSet() -> Self
 pub fn BundleSet::get(Self, Int) -> Bundle
 pub fn BundleSet::length(Self) -> Int
-pub fn BundleSet::new() -> Self
 
 pub(all) enum Edit {
   Move(Loc, Loc, @abi.RegClass)
@@ -127,10 +127,10 @@ pub struct LiveInterval {
 pub impl Show for LiveInterval
 
 type LiveRange
+pub fn LiveRange::LiveRange(Int, @abi.VReg) -> Self
 pub fn LiveRange::end(Self, FixedArray[Int]) -> ProgPoint?
 pub fn LiveRange::get_fixed_reg(Self) -> @abi.PReg?
 pub fn LiveRange::has_fixed_constraint(Self) -> Bool
-pub fn LiveRange::new(Int, @abi.VReg) -> Self
 pub fn LiveRange::overlaps(Self, Self, FixedArray[Int]) -> Bool
 pub fn LiveRange::start(Self, FixedArray[Int]) -> ProgPoint?
 pub fn LiveRange::total_length(Self) -> Int
@@ -180,6 +180,7 @@ pub struct Output {
   used_fp_pregs_any : Array[Bool]
   mut num_spillslots : Int
 }
+pub fn Output::Output() -> Self
 pub fn Output::begin_inst_allocs(Self, Int, Int, Bool, Int, Int) -> (Int, Int)
 pub fn Output::edits_at(Self, Int, Int, ProgPos) -> Array[Edit]?
 pub fn Output::end_inst_allocs(Self, Int, Int) -> Unit
@@ -191,7 +192,6 @@ pub fn Output::inst_def_loc(Self, Int, Int, Bool, Int) -> Loc
 pub fn Output::inst_use_loc(Self, Int, Int, Bool, Int) -> Loc
 pub fn Output::iter_allocs(Self) -> Array[Loc]
 pub fn Output::iter_edits(Self) -> Array[((Int, Int, ProgPos), Edit)]
-pub fn Output::new() -> Self
 pub fn Output::push_edit(Self, Int, Int, ProgPos, Edit) -> Unit
 pub fn Output::push_inst_alloc_loc(Self, Loc) -> Unit
 pub fn Output::push_inst_allocs(Self, Int, Int, Bool, Int, Int, Array[Loc]) -> Unit
@@ -232,16 +232,16 @@ pub impl Show for RegMove
 type ScratchBinding derive(Eq, @debug.Debug)
 
 type SpillBundle
-pub fn SpillBundle::new(Int, Int) -> Self
+pub fn SpillBundle::SpillBundle(Int, Int) -> Self
 
 type StackFrame
+pub fn StackFrame::StackFrame(Int) -> Self
 pub fn StackFrame::add_callee_saved(Self, @abi.PReg) -> Int
 pub fn StackFrame::alloc_local(Self, Int, Int, Int) -> Int
 pub fn StackFrame::alloc_outgoing_arg(Self, Int, Int, Int) -> Int
 pub fn StackFrame::alloc_spill_slot(Self, @abi.VReg, Int, Int) -> Int
 pub fn StackFrame::finalize(Self) -> Unit
 pub fn StackFrame::get_callee_saved(Self) -> Array[@abi.PReg]
-pub fn StackFrame::new(Int) -> Self
 pub fn StackFrame::print(Self) -> String
 pub fn StackFrame::size(Self) -> Int
 pub impl Show for StackFrame

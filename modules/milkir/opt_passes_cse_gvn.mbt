@@ -83,7 +83,7 @@ fn PtrAccess::location_key(self : PtrAccess) -> PtrLocationKey {
 }
 
 ///|
-fn LastStoreState::new() -> LastStoreState {
+fn LastStoreState::LastStoreState() -> LastStoreState {
   { heap: HashMap([]), heap_default: None, context: None, other: None }
 }
 
@@ -248,7 +248,7 @@ fn compute_block_input_last_store_states(
     queue_set.remove(block_id)
     let state = match block_input.get(block_id) {
       Some(existing) => existing.clone()
-      None => LastStoreState::new()
+      None => LastStoreState()
     }
     let idx = block_idx.get(block_id).unwrap()
     let block = func.blocks[idx]
@@ -528,7 +528,7 @@ fn is_gvn_candidate(inst : Inst) -> Bool {
 
 ///|
 fn run_global_value_numbering(func : Function) -> OptResult {
-  let result = OptResult::new()
+  let result = OptResult::OptResult()
   if func.blocks.length() == 0 {
     return result
   }
@@ -561,7 +561,7 @@ fn run_global_value_numbering(func : Function) -> OptResult {
     let local_entries : Array[(Inst, (Value, Bool)?)] = []
     let last_store_state = match block_input_state.get(block_id) {
       Some(state) => state.clone()
-      None => LastStoreState::new()
+      None => LastStoreState()
     }
     // Process instructions
     for inst_index, inst in block.instructions {

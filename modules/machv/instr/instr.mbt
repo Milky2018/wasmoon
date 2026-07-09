@@ -50,12 +50,12 @@ pub impl Show for CallClobberClass with fn output(self, logger) {
 }
 
 ///|
-pub fn ExternalName::new(name : String) -> ExternalName {
+pub fn ExternalName::ExternalName(name : String) -> ExternalName {
   { name, }
 }
 
 ///|
-pub fn CodeSymbol::new(scope : String, ordinal : Int) -> CodeSymbol {
+pub fn CodeSymbol::CodeSymbol(scope : String, ordinal : Int) -> CodeSymbol {
   { scope, ordinal }
 }
 
@@ -101,7 +101,7 @@ pub struct MachVInst {
 }
 
 ///|
-pub fn MachVInst::new(opcode : MachVOpcode) -> MachVInst {
+pub fn MachVInst::MachVInst(opcode : MachVOpcode) -> MachVInst {
   { opcode, defs: [], uses: [], use_constraints: [], def_constraints: [] }
 }
 

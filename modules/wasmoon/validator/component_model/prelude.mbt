@@ -77,7 +77,7 @@ pub struct ComponentValidationConfig {
 }
 
 ///|
-pub fn ComponentValidationConfig::new(
+pub fn ComponentValidationConfig::ComponentValidationConfig(
   wit_names : Bool,
 ) -> ComponentValidationConfig {
   { wit_names, }
@@ -601,7 +601,7 @@ fn check_core_module_import_subtype(
 }
 
 ///|
-fn Counts::new() -> Counts {
+fn Counts::Counts() -> Counts {
   {
     func: 0,
     value: 0,
@@ -1340,7 +1340,7 @@ priv struct CoreTypeReader {
 }
 
 ///|
-fn CoreTypeReader::new(data : Bytes) -> CoreTypeReader {
+fn CoreTypeReader::CoreTypeReader(data : Bytes) -> CoreTypeReader {
   { data, pos: 0 }
 }
 
@@ -1399,7 +1399,7 @@ fn CoreTypeReader::read_bytes(
 
 ///|
 fn ascii_bytes_to_string(bytes : Bytes) -> String? {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder::StringBuilder()
   for b in bytes {
     let n = b.to_int()
     if n >= 0x80 {

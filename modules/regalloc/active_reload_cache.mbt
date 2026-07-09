@@ -5,7 +5,9 @@ pub(all) struct ActiveReloadCache {
 } derive(Debug)
 
 ///|
-pub fn ActiveReloadCache::new(slot_count : Int) -> ActiveReloadCache {
+pub fn ActiveReloadCache::ActiveReloadCache(
+  slot_count : Int,
+) -> ActiveReloadCache {
   { epoch: Array::make(slot_count, 0), preg_ids: Array::make(slot_count, -1) }
 }
 

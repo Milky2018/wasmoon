@@ -236,7 +236,7 @@ These notes are based on a recent code audit of `vcode/regalloc/*` and its integ
 
 ```moonbit
 pub fn lower_function(ir_func: @ir.Function) -> @regalloc.VCodeFunction {
-  let ctx = LoweringContext::new(ir_func)
+  let ctx = LoweringContext::LoweringContext(ir_func)
   for block in ir_func.blocks {
     for inst in block.instructions {
       lower_instruction(ctx, inst)  // Hand-written pattern matching
@@ -294,7 +294,7 @@ pub fn lower_function(ir_func: @ir.Function) -> @regalloc.VCodeFunction {
 
 ```moonbit
 pub fn emit_function(func: @regalloc.VCodeFunction) -> Bytes {
-  let buffer = Buffer::new()
+  let buffer = Buffer::Buffer()
   emit_prologue(buffer, func)
   for block in func.blocks {
     for inst in block.instructions {

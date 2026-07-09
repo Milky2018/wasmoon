@@ -213,7 +213,7 @@ fn ExecContext::call_func_inst_with_context(
     }
   } else if func_inst is HostFunc(host_fn) {
     // Call host function directly
-    let caller = @runtime.Caller::new(self.store, self.instance)
+    let caller = @runtime.Caller::Caller(self.store, self.instance)
     let results = host_fn(caller, args) catch {
       e => raise InvocationSignal::HostInvocation(e)
     }
@@ -272,7 +272,7 @@ fn ExecContext::call_wasm_func_with_instance(
     }
 
     // Create and push frame
-    let frame = @runtime.Frame::new(-1, locals, num_results)
+    let frame = @runtime.Frame::Frame(-1, locals, num_results)
     self.push_frame(frame)
 
     // Execute function body, catching TailCall to loop instead of recurse
@@ -301,7 +301,7 @@ fn ExecContext::call_wasm_func_with_instance(
           }
           HostFunc(host_fn) => {
             // Host function - call directly and exit
-            let caller = @runtime.Caller::new(self.store, self.instance)
+            let caller = @runtime.Caller::Caller(self.store, self.instance)
             let results = host_fn(caller, tail_args) catch {
               e => raise InvocationSignal::HostInvocation(e)
             }

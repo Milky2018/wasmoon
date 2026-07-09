@@ -276,7 +276,7 @@ test "memory" {
 ```moonbit check
 ///|
 test "cross-module" {
-  let linker = @runtime.Linker::new()
+  let linker = @runtime.Linker::Linker()
   let mod_a =
     #|(module (func (export "add") (param i32 i32) (result i32)
     #|  local.get 0 local.get 1 i32.add))
@@ -305,7 +305,7 @@ test "cross-module" {
 ```moonbit check
 ///|
 test "host function" {
-  let linker = @runtime.Linker::new()
+  let linker = @runtime.Linker::Linker()
   // Register a host function that doubles an i32
   linker.add_host_func(
     "env",

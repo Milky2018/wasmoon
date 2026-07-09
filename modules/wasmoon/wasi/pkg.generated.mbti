@@ -463,6 +463,7 @@ pub(all) struct WasiContext {
   mut stdout_fd : Int
   mut stderr_fd : Int
 }
+pub fn WasiContext::WasiContext() -> Self
 pub fn WasiContext::alloc_fd(Self, OpenFile) -> Int
 pub fn WasiContext::close_fd(Self, Int) -> Bool
 pub fn WasiContext::get_exit_code(Self) -> Int?
@@ -470,7 +471,6 @@ pub fn WasiContext::get_file(Self, Int) -> OpenFile?
 pub fn WasiContext::get_preopen_host_path(Self, Int) -> String?
 pub fn WasiContext::has_exited(Self) -> Bool
 pub fn WasiContext::is_valid_fd(Self, Int) -> Bool
-pub fn WasiContext::new() -> Self
 pub fn WasiContext::resolve_path(Self, Int, String) -> Result[String, ResolvePathError]
 pub fn WasiContext::resolve_path_nofollow_leaf(Self, Int, String) -> Result[String, ResolvePathError]
 
@@ -485,6 +485,7 @@ pub(all) struct WasiContextBuilder {
   mut stderr_is_native : Bool
   mut stdin_is_native : Bool
 }
+pub fn WasiContextBuilder::WasiContextBuilder() -> Self
 pub fn WasiContextBuilder::args(Self, Array[String]) -> Self
 pub fn WasiContextBuilder::build(Self) -> WasiContext
 pub fn WasiContextBuilder::env(Self, String, String) -> Self
@@ -492,7 +493,6 @@ pub fn WasiContextBuilder::inherit_stderr(Self) -> Self
 pub fn WasiContextBuilder::inherit_stdin(Self) -> Self
 pub fn WasiContextBuilder::inherit_stdio(Self) -> Self
 pub fn WasiContextBuilder::inherit_stdout(Self) -> Self
-pub fn WasiContextBuilder::new() -> Self
 pub fn WasiContextBuilder::preopen_dir(Self, String, String) -> Self
 pub fn WasiContextBuilder::stderr(Self, (Bytes) -> Unit) -> Self
 pub fn WasiContextBuilder::stdin(Self, () -> Bytes) -> Self

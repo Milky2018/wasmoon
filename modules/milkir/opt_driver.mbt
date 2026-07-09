@@ -56,11 +56,11 @@ fn run_opt_pass(
 fn egraph_limits_for_function(func : Function) -> @egraph.SaturationLimits {
   let insts = instruction_count(func)
   if insts >= 600 {
-    @egraph.SaturationLimits::new(1, 1)
+    SaturationLimits(1, 1)
   } else if insts >= 300 {
     // Keep medium-large functions on minimal rewrite budgets to bound
     // compile-time while preserving canonical Cranelift-style egraph usage.
-    @egraph.SaturationLimits::new(1, 2)
+    SaturationLimits(1, 2)
   } else {
     @egraph.SaturationLimits::cranelift_default()
   }
@@ -107,7 +107,7 @@ fn optimize_cranelift_style(
   func : Function,
   run_egraph? : Bool = true,
 ) -> OptResult {
-  let result = OptResult::new()
+  let result = OptResult::OptResult()
   // Align with Cranelift's phase ordering by running constant-phi cleanup first.
   let cbpe_result = run_opt_pass(
     func, "const_block_param_elim", eliminate_constant_block_params,
@@ -177,7 +177,7 @@ pub fn optimize_with_level(func : Function, level : OptLevel) -> OptResult {
   // align with Cranelift's "mandatory" pre-optimization / canonicalization
   // philosophy.
   if level is O0 {
-    let result = OptResult::new()
+    let result = OptResult::OptResult()
     // Translator produces many SSA temps/block params (e.g. from WASM locals).
     // Removing trivially-dead IR avoids pathological regalloc pressure and
     // prevents backend miscompiles in very large unoptimized functions.
@@ -203,7 +203,7 @@ pub fn optimize_with_level(func : Function, level : OptLevel) -> OptResult {
     O1 => optimize_o1(func)
     O2 => optimize(func)
     O3 => optimize_o3(func)
-    O0 => OptResult::new()
+    O0 => OptResult()
   }
   result
 }
@@ -223,7 +223,7 @@ pub fn optimize(func : Function) -> OptResult {
 ///|
 /// O3: Aggressive optimizations including loop optimizations
 fn optimize_o3(func : Function) -> OptResult {
-  let result = OptResult::new()
+  let result = OptResult::OptResult()
   // First run O2 optimizations
   let o2_result = optimize(func)
   if o2_result.changed {

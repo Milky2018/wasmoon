@@ -9,7 +9,7 @@ fn emit_load_vmctx(
   block : @block.MachVBlock,
 ) -> @abi.VReg {
   let vmctx_vreg = ctx.machv_function().new_vreg(Int)
-  let vmctx_mov = @instr.MachVInst::new(Move)
+  let vmctx_mov = @instr.MachVInst::MachVInst(Move)
   vmctx_mov.add_def({ reg: Virtual(vmctx_vreg) })
   vmctx_mov.add_use(Physical({ index: @lower.context_index(ctx), class: Int }))
   block.add_inst(vmctx_mov)
@@ -48,14 +48,14 @@ pub fn lower_throw(
     for i in 0..<num_operands {
       let val_vreg = ctx.get_vreg_for_use(inst.operands[i], block)
       let offset = i * 8
-      let store = @instr.MachVInst::new(StoreToStack(offset))
+      let store = @instr.MachVInst::MachVInst(StoreToStack(offset))
       store.add_use(Virtual(val_vreg))
       block.add_inst(store)
     }
 
     // Get outgoing-args base as values_ptr (matches StoreToStack addressing).
     let sp_vreg = ctx.machv_function().new_vreg(Int)
-    let load_sp = @instr.MachVInst::new(LoadSP)
+    let load_sp = @instr.MachVInst::MachVInst(LoadSP)
     load_sp.add_def({ reg: Virtual(sp_vreg) })
     block.add_inst(load_sp)
     (sp_vreg, @lower.materialize_imm(ctx, block, num_operands.to_int64()))
@@ -76,7 +76,7 @@ pub fn lower_throw(
 
   // Load function pointer
   let func_ptr_vreg = ctx.machv_function().new_vreg(Int)
-  let load_fp = @instr.MachVInst::new(LoadExternalFuncAddr(throw_libcall))
+  let load_fp = @instr.MachVInst::MachVInst(LoadExternalFuncAddr(throw_libcall))
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
   block.add_inst(load_fp)
 
@@ -121,7 +121,7 @@ pub fn lower_throw_ref(
 
   // Load function pointer
   let func_ptr_vreg = ctx.machv_function().new_vreg(Int)
-  let load_fp = @instr.MachVInst::new(
+  let load_fp = @instr.MachVInst::MachVInst(
     LoadExternalFuncAddr(rt_exception_throw_ref(ctx)),
   )
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
@@ -165,7 +165,7 @@ pub fn lower_try_table_begin(
 
   // Load function pointer for try_begin
   let func_ptr_vreg = ctx.machv_function().new_vreg(Int)
-  let load_fp = @instr.MachVInst::new(
+  let load_fp = @instr.MachVInst::MachVInst(
     LoadExternalFuncAddr(rt_exception_try_begin(ctx)),
   )
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
@@ -186,7 +186,7 @@ pub fn lower_try_table_begin(
   //
   // Load sigsetjmp function pointer
   let setjmp_ptr_vreg = ctx.machv_function().new_vreg(Int)
-  let load_setjmp = @instr.MachVInst::new(
+  let load_setjmp = @instr.MachVInst::MachVInst(
     LoadExternalFuncAddr(rt_exception_sigsetjmp(ctx)),
   )
   load_setjmp.add_def({ reg: Virtual(setjmp_ptr_vreg) })
@@ -227,7 +227,7 @@ pub fn lower_try_table_end(
 
   // Load function pointer
   let func_ptr_vreg = ctx.machv_function().new_vreg(Int)
-  let load_fp = @instr.MachVInst::new(
+  let load_fp = @instr.MachVInst::MachVInst(
     LoadExternalFuncAddr(rt_exception_try_end(ctx)),
   )
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
@@ -259,7 +259,7 @@ pub fn lower_get_exception_tag(
 
   // Load function pointer
   let func_ptr_vreg = ctx.machv_function().new_vreg(Int)
-  let load_fp = @instr.MachVInst::new(
+  let load_fp = @instr.MachVInst::MachVInst(
     LoadExternalFuncAddr(rt_exception_get_tag(ctx)),
   )
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
@@ -289,7 +289,7 @@ pub fn lower_get_exception_value(
 
   // Load function pointer
   let func_ptr_vreg = ctx.machv_function().new_vreg(Int)
-  let load_fp = @instr.MachVInst::new(
+  let load_fp = @instr.MachVInst::MachVInst(
     LoadExternalFuncAddr(rt_exception_get_value(ctx)),
   )
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
@@ -321,7 +321,7 @@ pub fn lower_get_exception_value_count(
 
   // Load function pointer
   let func_ptr_vreg = ctx.machv_function().new_vreg(Int)
-  let load_fp = @instr.MachVInst::new(
+  let load_fp = @instr.MachVInst::MachVInst(
     LoadExternalFuncAddr(rt_exception_get_value_count(ctx)),
   )
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
@@ -348,7 +348,7 @@ pub fn lower_delegate(
 
   // Load function pointer
   let func_ptr_vreg = ctx.machv_function().new_vreg(Int)
-  let load_fp = @instr.MachVInst::new(
+  let load_fp = @instr.MachVInst::MachVInst(
     LoadExternalFuncAddr(rt_exception_delegate(ctx)),
   )
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
@@ -389,14 +389,14 @@ pub fn lower_spill_locals_for_throw(
     for i in 0..<count {
       let val_vreg = ctx.get_vreg_for_use(inst.operands[i], block)
       let offset = i * 8
-      let store = @instr.MachVInst::new(StoreToStack(offset))
+      let store = @instr.MachVInst::MachVInst(StoreToStack(offset))
       store.add_use(Virtual(val_vreg))
       block.add_inst(store)
     }
 
     // Get outgoing-args base pointer.
     let sp_vreg = ctx.machv_function().new_vreg(Int)
-    let load_sp = @instr.MachVInst::new(LoadSP)
+    let load_sp = @instr.MachVInst::MachVInst(LoadSP)
     load_sp.add_def({ reg: Virtual(sp_vreg) })
     block.add_inst(load_sp)
 
@@ -405,7 +405,7 @@ pub fn lower_spill_locals_for_throw(
 
     // Call spill_locals helper
     let func_ptr_vreg = ctx.machv_function().new_vreg(Int)
-    let load_fp = @instr.MachVInst::new(
+    let load_fp = @instr.MachVInst::MachVInst(
       LoadExternalFuncAddr(rt_exception_spill_locals(ctx)),
     )
     load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
@@ -425,7 +425,7 @@ pub fn lower_spill_locals_for_throw(
 
     // Still call spill_locals to clear any previous spilled state
     let func_ptr_vreg = ctx.machv_function().new_vreg(Int)
-    let load_fp = @instr.MachVInst::new(
+    let load_fp = @instr.MachVInst::MachVInst(
       LoadExternalFuncAddr(rt_exception_spill_locals(ctx)),
     )
     load_fp.add_def({ reg: Virtual(func_ptr_vreg) })
@@ -462,7 +462,7 @@ pub fn lower_get_spilled_local(
 
   // Load function pointer
   let func_ptr_vreg = ctx.machv_function().new_vreg(Int)
-  let load_fp = @instr.MachVInst::new(
+  let load_fp = @instr.MachVInst::MachVInst(
     LoadExternalFuncAddr(rt_exception_get_spilled_local(ctx)),
   )
   load_fp.add_def({ reg: Virtual(func_ptr_vreg) })

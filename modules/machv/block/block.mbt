@@ -8,7 +8,7 @@ pub struct MachVBlock {
 }
 
 ///|
-pub fn MachVBlock::new(id : Int) -> MachVBlock {
+pub fn MachVBlock::MachVBlock(id : Int) -> MachVBlock {
   { id, insts: [], params: [], terminator: None }
 }
 

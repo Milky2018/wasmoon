@@ -89,12 +89,12 @@ struct ExecContext {
 } derive(Debug)
 
 ///|
-fn ExecContext::new(
+fn ExecContext::ExecContext(
   store : @runtime.Store,
   instance : @runtime.ModuleInstance,
 ) -> ExecContext {
   {
-    stack: @runtime.Stack::new(),
+    stack: Stack(),
     store,
     instance,
     frames: [],

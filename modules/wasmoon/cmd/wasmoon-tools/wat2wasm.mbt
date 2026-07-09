@@ -20,7 +20,7 @@ fn starts_with_component_form(text : String) -> Bool {
           is_ascii_space(text.code_unit_at(i).unsafe_to_char()) {
       i += 1
     }
-    let keyword = StringBuilder::new()
+    let keyword = StringBuilder::StringBuilder()
     while i < text.length() {
       let k = text.code_unit_at(i).unsafe_to_char()
       if is_ascii_space(k) || k == ')' || k == '(' {
@@ -37,7 +37,7 @@ fn starts_with_component_form(text : String) -> Bool {
 ///|
 fn derive_wasm_output_path(file : String) -> String {
   if file.has_suffix(".wat") {
-    let sb = StringBuilder::new()
+    let sb = StringBuilder::StringBuilder()
     for index in 0..<(file.length() - 4) {
       sb.write_char(file.code_unit_at(index).unsafe_to_char())
     }

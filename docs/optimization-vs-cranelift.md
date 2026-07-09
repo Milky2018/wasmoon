@@ -493,7 +493,7 @@ Wasmoon currently uses the egraph **locally within each basic block**:
   SSA defs, and converts a subset of IR opcodes into e-nodes (others become
   `Var(_)` leaves).
 - The ruleset is a cached global singleton:
-  - `EGraphBuilder::new()` uses `@egraph.get_global_ruleset()`.
+  - `EGraphBuilder::EGraphBuilder()` uses `@egraph.get_global_ruleset()`.
   - Rules are indexed by opcode tags in `ir/egraph/rules_all.mbt`.
 - Optimization is intentionally **one-pass**:
   - `EGraphBuilder::optimize()` calls `egraph.saturate_indexed(ruleset, 1)` with

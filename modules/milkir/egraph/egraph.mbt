@@ -328,7 +328,7 @@ priv struct UnionFind {
 }
 
 ///|
-fn UnionFind::new() -> UnionFind {
+fn UnionFind::UnionFind() -> UnionFind {
   { parent: [] }
 }
 
@@ -409,9 +409,9 @@ struct EGraph {
 }
 
 ///|
-pub fn EGraph::new() -> EGraph {
+pub fn EGraph::EGraph() -> EGraph {
   {
-    uf: UnionFind::new(),
+    uf: UnionFind(),
     classes: {},
     hashcons: {},
     dirty: false,
@@ -1827,7 +1827,7 @@ pub struct SaturationLimits {
 } derive(Debug)
 
 ///|
-pub fn SaturationLimits::new(
+pub fn SaturationLimits::SaturationLimits(
   matches_limit : Int,
   eclass_enode_limit : Int,
 ) -> SaturationLimits {
@@ -1865,7 +1865,7 @@ pub fn EGraph::saturate(
 ) -> Int {
   // Legacy API: keep for tests, implement via the indexed driver and honor
   // `max_iterations` to avoid compile-time blowups.
-  let ruleset = IndexedRuleSet::new()
+  let ruleset = IndexedRuleSet::IndexedRuleSet()
   for rule in rules {
     ruleset.add_rule(rule, [])
   }
@@ -1892,7 +1892,7 @@ struct IndexedRuleSet {
 }
 
 ///|
-fn IndexedRuleSet::new() -> IndexedRuleSet {
+fn IndexedRuleSet::IndexedRuleSet() -> IndexedRuleSet {
   { by_opcode: {}, universal: [] }
 }
 

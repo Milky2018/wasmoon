@@ -79,7 +79,7 @@ fn parse_core_instanceexpr(
 pub fn parse_core_instance_section(
   payload : Bytes,
 ) -> Array[CoreInstanceDecl] raise ComponentParseError {
-  let reader = Reader::new(payload)
+  let reader = Reader::Reader(payload)
   let n = reader.read_leb_u32()
   let instances : Array[CoreInstanceDecl] = []
   for _ in 0..<n {

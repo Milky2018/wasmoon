@@ -12,7 +12,7 @@ pub struct PriorityWorkQueue {
 }
 
 ///|
-pub fn PriorityWorkQueue::new() -> PriorityWorkQueue {
+pub fn PriorityWorkQueue::PriorityWorkQueue() -> PriorityWorkQueue {
   { items: [], next_seq: 0 }
 }
 

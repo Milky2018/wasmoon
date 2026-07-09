@@ -9,14 +9,14 @@ fn instantiate_component(
   let stream_table = if outer_stack.length() > 0 {
     outer_stack[outer_stack.length() - 1].stream_table
   } else {
-    StreamTable::new()
+    StreamTable()
   }
   let async_state = if outer_stack.length() > 0 {
     outer_stack[outer_stack.length() - 1].async_state
   } else {
-    AsyncState::new(stream_table)
+    AsyncState(stream_table)
   }
-  let state = BuildState::new(stream_table, async_state)
+  let state = BuildState::BuildState(stream_table, async_state)
   // Reserve handle index 1 for nested component instances so tests that
   // assume a pre-existing handle slot (e.g. resources.wast) see the expected
   // numbering. If we end up running core start code, drop the reservation so
@@ -111,7 +111,7 @@ fn instantiate_component(
       3 => {
         // Core type section payload is a vec of core typedefs; store each
         // typedef's raw bytes so core:typeidx references work correctly.
-        let reader = Reader::new(section.payload)
+        let reader = Reader::Reader(section.payload)
         let n = reader.read_leb_u32() catch {
           e => raise ComponentParseError(e.to_string())
         }

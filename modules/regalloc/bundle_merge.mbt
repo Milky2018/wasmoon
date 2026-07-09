@@ -279,7 +279,7 @@ pub fn[C, P, R] plan_bundle_merges(
   same_fixed_reg : (P, P) -> Bool,
 ) -> BundleMergePlan[C, R] {
   let n = ranges.length()
-  let uf = @unionfind.UnionFind::new(n)
+  let uf = @unionfind.UnionFind::UnionFind(n)
   let root_fixed_reg_cache : Array[P?] = []
   let root_fixed_conflict_cache : Array[Bool] = []
   let root_has_fixed_def_cache : Array[Bool] = []

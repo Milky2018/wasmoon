@@ -29,13 +29,13 @@ fn emit_embedding_overflow_arg_stores(
   }
   for i in 0..<int_overflow {
     let (vreg, _) = int_args[max_int_reg_args + i]
-    let store = @instr.MachVInst::new(StoreToStack(int_offsets[i]))
+    let store = @instr.MachVInst::MachVInst(StoreToStack(int_offsets[i]))
     store.add_use(Virtual(vreg))
     block.add_inst(store)
   }
   for i in 0..<float_offsets.length() {
     let (vreg, _) = float_args[max_float_reg_args + i]
-    let store = @instr.MachVInst::new(StoreToStack(float_offsets[i]))
+    let store = @instr.MachVInst::MachVInst(StoreToStack(float_offsets[i]))
     store.add_use(Virtual(vreg))
     block.add_inst(store)
   }
@@ -65,7 +65,7 @@ fn emit_c_overflow_arg_stores(
   ctx.machv_func.update_max_outgoing_args_size(total_bytes)
   for i in 0..<overflow {
     let arg = args[max_reg_args + i]
-    let store = @instr.MachVInst::new(StoreToStack(i * 8))
+    let store = @instr.MachVInst::MachVInst(StoreToStack(i * 8))
     store.add_use(Virtual(arg))
     block.add_inst(store)
   }
@@ -141,7 +141,7 @@ pub fn lower_c_libcall_direct(
   if result is Some(dst) {
     result_classes.push(dst.class)
   }
-  let call_inst = @instr.MachVInst::new(
+  let call_inst = @instr.MachVInst::MachVInst(
     CallExternal(symbol, num_args, result_classes, Foreign),
   )
   for i, arg in args {
@@ -201,7 +201,7 @@ fn lower_call_ptr(
   let result_vregs = collect_call_result_vregs(ctx, inst)
 
   // Step 3: Create an internal call with fixed-register constraints.
-  let call_inst = @instr.MachVInst::new(
+  let call_inst = @instr.MachVInst::MachVInst(
     CallPtr(num_args, @instr.result_classes_for_vregs(result_vregs), Internal),
   )
 
@@ -295,7 +295,7 @@ fn lower_external_call(
       ctx.ir_func.params.length() > 0 &&
       operand.id == ctx.ir_func.params[0].0.id {
       let context_vreg = ctx.machv_func.new_vreg(Int)
-      let context_mov = @instr.MachVInst::new(Move)
+      let context_mov = @instr.MachVInst::MachVInst(Move)
       context_mov.add_def({ reg: Virtual(context_vreg) })
       context_mov.add_use(Physical(context_preg(ctx)))
       block.add_inst(context_mov)
@@ -313,13 +313,7 @@ fn lower_external_call(
   } else {
     None
   }
-  lower_c_libcall_direct(
-    ctx,
-    block,
-    @instr.ExternalName::new(symbol.name),
-    args,
-    result,
-  )
+  lower_c_libcall_direct(ctx, block, ExternalName(symbol.name), args, result)
 }
 
 ///|
@@ -353,7 +347,7 @@ pub fn lower_c_libcall(
   if result is Some(dst) {
     result_classes.push(dst.class)
   }
-  let call_inst = @instr.MachVInst::new(
+  let call_inst = @instr.MachVInst::MachVInst(
     CallPtr(num_args, result_classes, Foreign),
   )
 
@@ -394,7 +388,7 @@ pub fn materialize_imm(
   value : Int64,
 ) -> @abi.VReg {
   let vreg = ctx.machv_func.new_vreg(Int)
-  let mov = @instr.MachVInst::new(LoadConst(value))
+  let mov = @instr.MachVInst::MachVInst(LoadConst(value))
   mov.add_def({ reg: Virtual(vreg) })
   block.add_inst(mov)
   vreg

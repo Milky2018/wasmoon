@@ -188,7 +188,7 @@ fn CwasmArtifact::function_gc_safepoints(
   for safepoint in self.gc_safepoints {
     if safepoint.code_offset >= start && safepoint.code_offset < end {
       out.push(
-        @cwasm.GcSafepoint::new(
+        GcSafepoint(
           safepoint.code_offset - start,
           safepoint.live_refs,
           safepoint.metadata,
@@ -361,7 +361,7 @@ pub fn derive_gc_safepoints(
       0L
     }
     let live_refs = if i < root_indices.length() { root_indices[i] } else { [] }
-    safepoints.push(@cwasm.GcSafepoint::new(offset, live_refs, metadata))
+    safepoints.push(GcSafepoint(offset, live_refs, metadata))
   }
   safepoints
 }
@@ -413,7 +413,7 @@ pub fn build_cwasm_entry_from_code(
       gc_safepoint_offsets, gc_safepoint_root_counts, gc_safepoint_root_indices,
     )
   }
-  @cwasm.CompiledEntry::new(
+  CompiledEntry(
     func_idx,
     name,
     code,
@@ -436,7 +436,7 @@ pub fn build_cwasm_entry_from_code(
 pub fn CwasmArtifact::to_precompiled_module(
   self : CwasmArtifact,
 ) -> @cwasm.PrecompiledModule {
-  let module_ = @cwasm.PrecompiledModule::new(self.target)
+  let module_ = @cwasm.PrecompiledModule::PrecompiledModule(self.target)
   for record in self.functions {
     let gc_safepoints = self.function_gc_safepoints(record)
     let gc_root_counts = Array::make(gc_safepoints.length(), 0)

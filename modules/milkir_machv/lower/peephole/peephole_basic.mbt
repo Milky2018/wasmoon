@@ -21,7 +21,7 @@ priv struct PeepholeState {
 }
 
 ///|
-fn PeepholeState::new() -> PeepholeState {
+fn PeepholeState::PeepholeState() -> PeepholeState {
   { constants: {}, copies: {} }
 }
 
@@ -234,7 +234,7 @@ fn optimize_block(
 ///|
 /// Helper to create a Move instruction with given def and use
 fn make_move(def : @abi.Writable, use_ : @abi.Reg) -> @instr.MachVInst {
-  let new_inst = @instr.MachVInst::new(Move)
+  let new_inst = @instr.MachVInst::MachVInst(Move)
   new_inst.add_def(def)
   new_inst.add_use(use_)
   new_inst
@@ -248,7 +248,7 @@ fn make_add_imm(
   def : @abi.Writable,
   use_ : @abi.Reg,
 ) -> @instr.MachVInst {
-  let new_inst = @instr.MachVInst::new(AddImm(imm, is_64))
+  let new_inst = @instr.MachVInst::MachVInst(AddImm(imm, is_64))
   new_inst.add_def(def)
   new_inst.add_use(use_)
   new_inst
@@ -262,7 +262,7 @@ fn make_sub_imm(
   def : @abi.Writable,
   use_ : @abi.Reg,
 ) -> @instr.MachVInst {
-  let new_inst = @instr.MachVInst::new(SubImm(imm, is_64))
+  let new_inst = @instr.MachVInst::MachVInst(SubImm(imm, is_64))
   new_inst.add_def(def)
   new_inst.add_use(use_)
   new_inst
@@ -276,7 +276,7 @@ fn make_shl_imm(
   def : @abi.Writable,
   use_ : @abi.Reg,
 ) -> @instr.MachVInst {
-  let new_inst = @instr.MachVInst::new(ShlImm(imm, is_64))
+  let new_inst = @instr.MachVInst::MachVInst(ShlImm(imm, is_64))
   new_inst.add_def(def)
   new_inst.add_use(use_)
   new_inst
@@ -378,7 +378,7 @@ fn optimize_instruction(
         // If source is a known constant, replace with LoadConst
         if get_vreg_id(use_) is Some(use_id) &&
           state.constants.get(use_id) is Some(const_val) {
-          let new_inst = @instr.MachVInst::new(LoadConst(const_val))
+          let new_inst = @instr.MachVInst::MachVInst(LoadConst(const_val))
           new_inst.add_def(def)
           return Some(new_inst)
         }
@@ -806,14 +806,18 @@ fn create_merged_store(
   // OrShifted(Lsl, 8) computes: Rd = Rn | (Rm << 8)
   let combined_vreg = func.new_vreg(Int)
   let shift_amount = lo.bits // Shift by lo.bits (8 for store8->store16)
-  let or_shifted_inst = @instr.MachVInst::new(OrShifted(Lsl, shift_amount))
+  let or_shifted_inst = @instr.MachVInst::MachVInst(
+    OrShifted(Lsl, shift_amount),
+  )
   or_shifted_inst.add_def({ reg: Virtual(combined_vreg) })
   or_shifted_inst.add_use(Virtual({ id: lo.value_vreg_id, class: Int })) // Rn = val_lo
   or_shifted_inst.add_use(Virtual({ id: hi.value_vreg_id, class: Int })) // Rm = val_hi
   result.push(or_shifted_inst)
 
   // Create merged store: store16 [base+off], combined
-  let store_inst = @instr.MachVInst::new(StorePtrNarrow(new_bits, lo.offset))
+  let store_inst = @instr.MachVInst::MachVInst(
+    StorePtrNarrow(new_bits, lo.offset),
+  )
   store_inst.add_use(Virtual({ id: lo.base_vreg_id, class: Int }))
   store_inst.add_use(Virtual(combined_vreg))
   result.push(store_inst)
@@ -922,7 +926,7 @@ fn create_merged_load_store(
 
   // Create merged load: combined = load16u [src_base+off]
   let combined_vreg = func.new_vreg(Int)
-  let load_inst = @instr.MachVInst::new(
+  let load_inst = @instr.MachVInst::MachVInst(
     LoadPtrNarrow(16, false, load_info.offset),
   )
   load_inst.add_def({ reg: Virtual(combined_vreg) })
@@ -930,7 +934,7 @@ fn create_merged_load_store(
   result.push(load_inst)
 
   // Create merged store: store16 [dst_base+off], combined
-  let store_inst = @instr.MachVInst::new(StorePtrNarrow(16, dst_offset))
+  let store_inst = @instr.MachVInst::MachVInst(StorePtrNarrow(16, dst_offset))
   store_inst.add_use(Virtual({ id: dst_base, class: Int }))
   store_inst.add_use(Virtual(combined_vreg))
   result.push(store_inst)
@@ -978,7 +982,7 @@ fn optimize_load_store_forwarding(block : @block.MachVBlock) -> Int {
               (32, false) => Unsigned32To64
               _ => continue
             }
-            let ext = @instr.MachVInst::new(Extend(kind))
+            let ext = @instr.MachVInst::MachVInst(Extend(kind))
             ext.add_def(inst.defs[0])
             ext.add_use(Virtual({ id: val_vreg, class: Int }))
             to_replace.push((i, ext))

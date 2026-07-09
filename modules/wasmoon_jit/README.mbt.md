@@ -30,8 +30,8 @@ to native code bytes plus the runtime glue Wasmoon must provide.
 ```moonbit check
 ///|
 test "plan a small MilkIR function for x64 JIT integration" {
-  let signature = @milkir.Signature::new([I64, I64], [I64])
-  let milk = @milkir.Function::new("add64", signature)
+  let signature = @milkir.Signature::Signature([I64, I64], [I64])
+  let milk = @milkir.Function::Function("add64", signature)
   let lhs = milk.new_value(I64)
   let rhs = milk.new_value(I64)
   let sum = milk.new_value(I64)
@@ -57,10 +57,10 @@ segments, and target metadata in a portable artifact format.
 ```moonbit check
 ///|
 test "serialize and restore a precompiled module" {
-  let mod_ = @cwasm.PrecompiledModule::new(AArch64)
+  let mod_ = @cwasm.PrecompiledModule::PrecompiledModule(AArch64)
   mod_.add_type([TYPE_I32], [TYPE_I32])
   mod_.add_import("env", "host_inc", 1, 1)
-  let entry = @cwasm.CompiledEntry::new(0, "inc", [0xc3], 0, 0, 1, 1)
+  let entry = @cwasm.CompiledEntry::CompiledEntry(0, "inc", [0xc3], 0, 0, 1, 1)
   mod_.add_function(entry)
   let encoded = mod_.serialize()
   let decoded = @cwasm.deserialize(encoded)

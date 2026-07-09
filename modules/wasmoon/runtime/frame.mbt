@@ -8,7 +8,7 @@ struct Frame {
 } derive(Debug)
 
 ///|
-pub fn Frame::new(
+pub fn Frame::Frame(
   func_idx : Int,
   locals : Array[@types.Value],
   return_arity : Int,

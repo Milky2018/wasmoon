@@ -84,7 +84,10 @@ pub struct LiveInterval {
 }
 
 ///|
-fn LiveInterval::new(vreg : @abi.VReg, start : ProgPoint) -> LiveInterval {
+fn LiveInterval::LiveInterval(
+  vreg : @abi.VReg,
+  start : ProgPoint,
+) -> LiveInterval {
   {
     vreg,
     start,
@@ -141,7 +144,7 @@ struct UseDefInfo {
 }
 
 ///|
-fn UseDefInfo::new(vreg : @abi.VReg) -> UseDefInfo {
+fn UseDefInfo::UseDefInfo(vreg : @abi.VReg) -> UseDefInfo {
   { vreg, def_point: None, use_points: [] }
 }
 
@@ -269,7 +272,7 @@ priv struct LivenessWorklist {
 }
 
 ///|
-fn LivenessWorklist::new(size : Int) -> LivenessWorklist {
+fn LivenessWorklist::LivenessWorklist(size : Int) -> LivenessWorklist {
   { queue: [], in_worklist: Array::make(size, false) }
 }
 
@@ -517,7 +520,7 @@ fn ensure_use_def_info(
     match result.use_def_dense[vreg.id] {
       Some(info) => info
       None => {
-        let info = UseDefInfo::new(vreg)
+        let info = UseDefInfo::UseDefInfo(vreg)
         result.use_def_dense[vreg.id] = Some(info)
         if record_sparse_use_def_map {
           result.use_def.set(vreg.id, info)
@@ -529,7 +532,7 @@ fn ensure_use_def_info(
     match result.use_def.get(vreg.id) {
       Some(existing) => existing
       None => {
-        let info = UseDefInfo::new(vreg)
+        let info = UseDefInfo::UseDefInfo(vreg)
         result.use_def.set(vreg.id, info)
         info
       }
@@ -772,7 +775,7 @@ fn compute_live_sets(
   let cfg = build_cfg_edges(func)
 
   // Worklist-based dataflow with incremental update
-  let worklist = LivenessWorklist::new(num_blocks)
+  let worklist = LivenessWorklist::LivenessWorklist(num_blocks)
 
   // Initialize worklist - push in forward order so pop() gives reverse order
   // (pop removes from end, so queue [0,1,..,n-1] pops n-1, n-2, .., 0)
@@ -936,7 +939,7 @@ fn build_intervals(func : @machv.Function, result : LivenessResult) -> Unit {
     } else {
       continue // No uses or defs, skip
     }
-    let interval = LiveInterval::new(info.vreg, start)
+    let interval = LiveInterval::LiveInterval(info.vreg, start)
 
     // Extend to cover all uses (using block order for correct comparison)
     for use_entry in info.use_points {

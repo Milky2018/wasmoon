@@ -35,7 +35,7 @@ pub struct JITCompiler {
 }
 
 ///|
-pub fn JITCompiler::new(
+pub fn JITCompiler::JITCompiler(
   compile_fn : (@types.Module, @runtime.ModuleInstance, @runtime.Store) -> Result[
     JITModuleContext,
     String,
@@ -1515,7 +1515,7 @@ pub fn install_jit_hostcall_dispatcher(
     let inst = store.get_func_inst(func_addr)
     match inst {
       HostFunc(f) => {
-        let caller = @runtime.Caller::new(store, caller_instance)
+        let caller = @runtime.Caller::Caller(store, caller_instance)
         Returned(f(caller, args))
       }
       WasmFunc(_) => {

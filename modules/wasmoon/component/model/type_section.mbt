@@ -635,7 +635,7 @@ fn parse_typedef(reader : Reader) -> TypeDef raise ComponentParseError {
 pub fn parse_type_section(
   payload : Bytes,
 ) -> Array[TypeDef] raise ComponentParseError {
-  let reader = Reader::new(payload)
+  let reader = Reader::Reader(payload)
   let n = reader.read_leb_u32()
   let types : Array[TypeDef] = []
   for _ in 0..<n {

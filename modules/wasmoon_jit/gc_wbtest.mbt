@@ -24,7 +24,7 @@ test "gc: collect root args from reference-typed heap values" {
 
 ///|
 test "gc: unreachable objects are collected" {
-  let heap = CHeap::new()
+  let heap = CHeap::CHeap()
 
   // Allocate 3 structs, none are roots
   let _obj1 = heap.alloc_struct(0, [I32(1)])
@@ -45,7 +45,7 @@ test "gc: unreachable objects are collected" {
 
 ///|
 test "gc: rooted objects survive" {
-  let heap = CHeap::new()
+  let heap = CHeap::CHeap()
 
   // Allocate 3 structs
   let obj1 = heap.alloc_struct(0, [I32(1)])
@@ -70,7 +70,7 @@ test "gc: rooted objects survive" {
 
 ///|
 test "gc: reference chain keeps objects alive" {
-  let heap = CHeap::new()
+  let heap = CHeap::CHeap()
 
   // Create chain: obj1 -> obj2 -> obj3
   // obj3 has no references
@@ -102,7 +102,7 @@ test "gc: reference chain keeps objects alive" {
 
 ///|
 test "gc: circular references without root are collected" {
-  let heap = CHeap::new()
+  let heap = CHeap::CHeap()
 
   // Create two objects that will reference each other
   // First allocate with placeholder values
@@ -133,7 +133,7 @@ test "gc: circular references without root are collected" {
 
 ///|
 test "gc: array elements are traced" {
-  let heap = CHeap::new()
+  let heap = CHeap::CHeap()
 
   // Create leaf objects
   let leaf1 = heap.alloc_struct(0, [I32(1)])
@@ -166,7 +166,7 @@ test "gc: array elements are traced" {
 
 ///|
 test "gc: multiple collection cycles" {
-  let heap = CHeap::new()
+  let heap = CHeap::CHeap()
 
   // First cycle: create and collect
   let obj1 = heap.alloc_struct(0, [I32(1)])
@@ -195,7 +195,7 @@ test "gc: multiple collection cycles" {
 
 ///|
 test "gc: deep reference chain" {
-  let heap = CHeap::new()
+  let heap = CHeap::CHeap()
 
   // Create a chain of 10 objects
   let mut prev = heap.alloc_struct(0, [I32(0)]) // leaf
@@ -223,7 +223,7 @@ test "gc: deep reference chain" {
 
 ///|
 test "gc: i31 values are not traced as references" {
-  let heap = CHeap::new()
+  let heap = CHeap::CHeap()
 
   // Create struct with i31 value that looks like a valid gc_ref
   // i31 encoding: (value << 1) | 1
@@ -247,7 +247,7 @@ test "gc: i31 values are not traced as references" {
 
 ///|
 test "gc: heap size after allocation and collection" {
-  let heap = CHeap::new()
+  let heap = CHeap::CHeap()
   let initial_size = heap.get_size()
   inspect(initial_size, content="0")
 
@@ -274,7 +274,7 @@ test "gc: heap size after allocation and collection" {
 
 ///|
 test "gc: field access after collection" {
-  let heap = CHeap::new()
+  let heap = CHeap::CHeap()
 
   // Create objects with distinct values
   let leaf = heap.alloc_struct(0, [I32(42)])
@@ -301,7 +301,7 @@ test "gc: field access after collection" {
 
 ///|
 test "gc: heap verify succeeds on valid graph" {
-  let heap = CHeap::new()
+  let heap = CHeap::CHeap()
   let leaf = heap.alloc_struct(0, [I32(7)])
   let root = heap.alloc_struct(0, [StructRef(leaf)])
   let _ = heap.collect([StructRef(root)])
@@ -310,7 +310,7 @@ test "gc: heap verify succeeds on valid graph" {
 
 ///|
 test "gc: heap verify allows non-reference immediates" {
-  let heap = CHeap::new()
+  let heap = CHeap::CHeap()
   let obj = heap.alloc_struct(0, [I32(1)])
   // Large even i64 payload is a valid immediate value, not necessarily a GC ref.
   heap.struct_set(obj, 0, I64(2000000L))
@@ -319,7 +319,7 @@ test "gc: heap verify allows non-reference immediates" {
 
 ///|
 test "gc: barrier write counter tracks reference stores" {
-  let heap = CHeap::new()
+  let heap = CHeap::CHeap()
   let object0 = heap.alloc_struct(0, [I32(10)])
   let object1 = heap.alloc_struct(0, [I32(20)])
   let array0 = heap.alloc_array(0, 2, I32(0))
@@ -348,7 +348,7 @@ test "gc: fault injection fails configured allocation attempt" {
 ///|
 test "gc: c_heap allocation fault is surfaced as OutOfMemory" {
   gc_debug_set_fail_alloc(1)
-  let heap = CHeap::new(capacity=1024)
+  let heap = CHeap::CHeap(capacity=1024)
   let failed = try heap.alloc_struct(0, [I32(123)]) catch {
     OutOfMemory => true
     _ => false
@@ -362,7 +362,7 @@ test "gc: c_heap allocation fault is surfaced as OutOfMemory" {
 
 ///|
 test "gc_setup: fail fast on inconsistent function table context" {
-  let heap = CHeap::new()
+  let heap = CHeap::CHeap()
   let jit_ctx = @jit_ffi.c_jit_alloc_context_managed(1)
   let ctx_ptr = @jit_ffi.c_jit_context_ptr(jit_ctx)
   let missing_types = try
@@ -426,7 +426,7 @@ test "gc_setup: fail fast on inconsistent function table context" {
 
 ///|
 test "gc: collect_for_alloc keeps scratch roots alive" {
-  let heap = CHeap::new(capacity=1024)
+  let heap = CHeap::CHeap(capacity=1024)
   let jit_ctx = @jit_ffi.c_jit_alloc_context_managed(0)
   let ctx_ptr = @jit_ffi.c_jit_context_ptr(jit_ctx)
   gc_set_heap(ctx_ptr, heap)

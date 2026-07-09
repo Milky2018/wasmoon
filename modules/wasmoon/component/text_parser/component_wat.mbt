@@ -31,7 +31,7 @@ priv struct TextReader {
 }
 
 ///|
-fn TextReader::new(input : String) -> TextReader {
+fn TextReader::TextReader(input : String) -> TextReader {
   { input, pos: 0 }
 }
 
@@ -159,7 +159,7 @@ fn hex_digit_value(ch : Char) -> Int {
 fn TextReader::read_string(
   self : TextReader,
 ) -> String raise ComponentTextError {
-  let out = StringBuilder::new()
+  let out = StringBuilder::StringBuilder()
   self.next_char() |> ignore // consume opening quote
   while !self.is_eof() {
     let ch = match self.next_char() {
@@ -223,7 +223,7 @@ fn TextReader::read_atom(self : TextReader) -> String raise ComponentTextError {
   if self.pos <= start {
     raise ParseError("expected atom")
   }
-  let builder = StringBuilder::new()
+  let builder = StringBuilder::StringBuilder()
   for index in start..<self.pos {
     builder.write_char(self.input.code_unit_at(index).unsafe_to_char())
   }
@@ -413,7 +413,7 @@ priv struct ComponentBuildState {
 }
 
 ///|
-fn ComponentBuildState::new(
+fn ComponentBuildState::ComponentBuildState(
   outer_type_scopes : Array[Array[NamedBinding]],
   outer_core_type_scopes : Array[Array[NamedBinding]],
   outer_component_scopes : Array[Array[NamedBinding]],
@@ -464,7 +464,7 @@ priv struct ByteBuf {
 }
 
 ///|
-fn ByteBuf::new() -> ByteBuf {
+fn ByteBuf::ByteBuf() -> ByteBuf {
   { bytes: [] }
 }
 
@@ -828,7 +828,7 @@ fn int_array_to_bytes(values : Array[Int]) -> Bytes {
 
 ///|
 fn escape_wat_string(text : String) -> String {
-  let out = StringBuilder::new()
+  let out = StringBuilder::StringBuilder()
   out.write_char('"')
   for ch in text {
     if ch == '"' {
@@ -855,7 +855,7 @@ fn sexpr_to_wat(expr : SExpr) -> String {
     Atom(text) => text
     Str(text) => escape_wat_string(text)
     List(items) => {
-      let out = StringBuilder::new()
+      let out = StringBuilder::StringBuilder()
       out.write_char('(')
       for i in 0..<items.length() {
         if i > 0 {
@@ -918,7 +918,7 @@ fn parse_valtype(
     }
     if items.length() == 2 && items[0] is Atom("list") {
       let elem = parse_valtype(items[1], state)
-      let payload = ByteBuf::new()
+      let payload = ByteBuf::ByteBuf()
       payload.push_u8(0x70)
       push_valtype_encoding(payload, elem)
       let idx = ensure_type_bytes(state, payload.to_bytes())
@@ -926,7 +926,7 @@ fn parse_valtype(
     }
     if items.length() == 2 && items[0] is Atom("option") {
       let inner = parse_valtype(items[1], state)
-      let payload = ByteBuf::new()
+      let payload = ByteBuf::ByteBuf()
       payload.push_u8(0x6b)
       push_valtype_encoding(payload, inner)
       let idx = ensure_type_bytes(state, payload.to_bytes())
@@ -934,7 +934,7 @@ fn parse_valtype(
     }
     if items.length() == 2 && items[0] is Atom("own") {
       let target_idx = resolve_type_reference(items[1], state)
-      let payload = ByteBuf::new()
+      let payload = ByteBuf::ByteBuf()
       payload.push_u8(0x69)
       payload.push_uleb_u32(target_idx)
       let idx = ensure_type_bytes(state, payload.to_bytes())
@@ -942,7 +942,7 @@ fn parse_valtype(
     }
     if items.length() == 2 && items[0] is Atom("borrow") {
       let target_idx = resolve_type_reference(items[1], state)
-      let payload = ByteBuf::new()
+      let payload = ByteBuf::ByteBuf()
       payload.push_u8(0x68)
       payload.push_uleb_u32(target_idx)
       let idx = ensure_type_bytes(state, payload.to_bytes())
@@ -1063,7 +1063,7 @@ fn parse_func_sig(
 
 ///|
 fn encode_func_typedef(sig : FuncTypeSig) -> Bytes {
-  let payload = ByteBuf::new()
+  let payload = ByteBuf::ByteBuf()
   payload.push_u8(if sig.is_async { 0x43 } else { 0x40 })
   payload.push_uleb_u32(sig.params.length())
   for param in sig.params {
@@ -1135,7 +1135,7 @@ fn ensure_core_type_bytes(
 
 ///|
 fn ensure_empty_component_type(state : ComponentBuildState) -> Int {
-  let payload = ByteBuf::new()
+  let payload = ByteBuf::ByteBuf()
   payload.push_u8(0x41)
   payload.push_uleb_u32(0)
   ensure_type_bytes(state, payload.to_bytes())
@@ -1143,7 +1143,7 @@ fn ensure_empty_component_type(state : ComponentBuildState) -> Int {
 
 ///|
 fn ensure_empty_instance_type(state : ComponentBuildState) -> Int {
-  let payload = ByteBuf::new()
+  let payload = ByteBuf::ByteBuf()
   payload.push_u8(0x42)
   payload.push_uleb_u32(0)
   ensure_type_bytes(state, payload.to_bytes())
@@ -1151,7 +1151,7 @@ fn ensure_empty_instance_type(state : ComponentBuildState) -> Int {
 
 ///|
 fn ensure_empty_core_module_type(state : ComponentBuildState) -> Int {
-  let payload = ByteBuf::new()
+  let payload = ByteBuf::ByteBuf()
   payload.push_u8(0x50)
   payload.push_u8(0x00)
   ensure_core_type_bytes(state, payload.to_bytes())
@@ -1272,7 +1272,7 @@ fn parse_type_bound_bytes_inline(
   }
   if bound.length() == 2 && bound[0] is Atom("eq") {
     let idx = resolve_inline_type_ref(bound[1], state, local_type_names)
-    let bytes = ByteBuf::new()
+    let bytes = ByteBuf::ByteBuf()
     bytes.push_u8(0x00)
     bytes.push_uleb_u32(idx)
     return bytes.to_bytes()
@@ -1315,7 +1315,7 @@ fn parse_inline_valtype_encoding(
       )
     }
     if items.length() == 2 && items[0] is Atom("own") {
-      let payload = ByteBuf::new()
+      let payload = ByteBuf::ByteBuf()
       payload.push_u8(0x69)
       payload.push_uleb_u32(
         resolve_inline_type_ref(items[1], state, local_type_names),
@@ -1325,7 +1325,7 @@ fn parse_inline_valtype_encoding(
       return (TypeIdx(local_type_count), local_type_count + 1, 1)
     }
     if items.length() == 2 && items[0] is Atom("borrow") {
-      let payload = ByteBuf::new()
+      let payload = ByteBuf::ByteBuf()
       payload.push_u8(0x68)
       payload.push_uleb_u32(
         resolve_inline_type_ref(items[1], state, local_type_names),
@@ -1342,7 +1342,7 @@ fn parse_inline_valtype_encoding(
         local_type_count,
         local_type_names,
       )
-      let payload = ByteBuf::new()
+      let payload = ByteBuf::ByteBuf()
       payload.push_u8(0x70)
       push_valtype_encoding(payload, inner)
       decls.push_u8(0x01)
@@ -1357,7 +1357,7 @@ fn parse_inline_valtype_encoding(
         local_type_count,
         local_type_names,
       )
-      let payload = ByteBuf::new()
+      let payload = ByteBuf::ByteBuf()
       payload.push_u8(0x6b)
       push_valtype_encoding(payload, inner)
       decls.push_u8(0x01)
@@ -1365,7 +1365,7 @@ fn parse_inline_valtype_encoding(
       return (TypeIdx(next_count), next_count + 1, inner_decl_count + 1)
     }
     if items.length() > 0 && items[0] is Atom("tuple") {
-      let payload = ByteBuf::new()
+      let payload = ByteBuf::ByteBuf()
       payload.push_u8(0x6f)
       payload.push_uleb_u32(items.length() - 1)
       let mut next_count = local_type_count
@@ -1424,7 +1424,7 @@ fn parse_inline_valtype_encoding(
         total_decl_count += ty_decl_count
         ok_ty = Some(ty)
       }
-      let payload = ByteBuf::new()
+      let payload = ByteBuf::ByteBuf()
       payload.push_u8(0x6a)
       if ok_ty is Some(ty) {
         payload.push_u8(0x01)
@@ -1443,7 +1443,7 @@ fn parse_inline_valtype_encoding(
       return (TypeIdx(next_count), next_count + 1, total_decl_count + 1)
     }
     if items.length() > 0 && items[0] is Atom("future") {
-      let payload = ByteBuf::new()
+      let payload = ByteBuf::ByteBuf()
       payload.push_u8(0x65)
       if items.length() == 1 {
         payload.push_u8(0x00)
@@ -1468,7 +1468,7 @@ fn parse_inline_valtype_encoding(
       return (TypeIdx(next_count), next_count + 1, inner_decl_count + 1)
     }
     if items.length() > 0 && items[0] is Atom("stream") {
-      let payload = ByteBuf::new()
+      let payload = ByteBuf::ByteBuf()
       payload.push_u8(0x66)
       if items.length() == 1 {
         payload.push_u8(0x00)
@@ -1628,7 +1628,7 @@ fn parse_inline_type_decl(
       return (name_opt, encode_func_typedef(sig), next_type_count, decl_count)
     }
     if items[0] is Atom("record") {
-      let payload = ByteBuf::new()
+      let payload = ByteBuf::ByteBuf()
       payload.push_u8(0x72)
       payload.push_uleb_u32(items.length() - 1)
       for i in 1..<items.length() {
@@ -1668,7 +1668,7 @@ fn parse_inline_type_decl(
       return (name_opt, payload.to_bytes(), next_type_count, decl_count)
     }
     if items[0] is Atom("variant") {
-      let payload = ByteBuf::new()
+      let payload = ByteBuf::ByteBuf()
       let case_ids : Array[NamedBinding] = []
       payload.push_u8(0x71)
       payload.push_uleb_u32(items.length() - 1)
@@ -1730,7 +1730,7 @@ fn parse_inline_type_decl(
       return (name_opt, payload.to_bytes(), next_type_count, decl_count)
     }
     if items[0] is Atom("tuple") {
-      let payload = ByteBuf::new()
+      let payload = ByteBuf::ByteBuf()
       payload.push_u8(0x6f)
       payload.push_uleb_u32(items.length() - 1)
       for i in 1..<items.length() {
@@ -1760,7 +1760,7 @@ fn parse_inline_type_decl(
       )
       next_type_count = next_next_type_count
       decl_count += elem_decl_count
-      let payload = ByteBuf::new()
+      let payload = ByteBuf::ByteBuf()
       payload.push_u8(0x70)
       push_valtype_encoding(payload, elem)
       return (name_opt, payload.to_bytes(), next_type_count, decl_count)
@@ -1778,7 +1778,7 @@ fn parse_inline_type_decl(
       )
       next_type_count = next_next_type_count
       decl_count += inner_decl_count
-      let payload = ByteBuf::new()
+      let payload = ByteBuf::ByteBuf()
       payload.push_u8(0x6b)
       push_valtype_encoding(payload, inner)
       return (name_opt, payload.to_bytes(), next_type_count, decl_count)
@@ -1816,7 +1816,7 @@ fn parse_inline_type_decl(
         decl_count += ok_decl_count
         ok = Some(ty)
       }
-      let payload = ByteBuf::new()
+      let payload = ByteBuf::ByteBuf()
       payload.push_u8(0x6a)
       if ok is Some(ok_ty) {
         payload.push_u8(0x01)
@@ -1854,7 +1854,7 @@ fn parse_inline_type_decl(
           "resource handle type must contain exactly one type reference",
         )
       }
-      let payload = ByteBuf::new()
+      let payload = ByteBuf::ByteBuf()
       payload.push_u8(if items[0] is Atom("own") { 0x69 } else { 0x68 })
       payload.push_uleb_u32(
         resolve_inline_type_ref(items[1], state, local_type_names),
@@ -1862,7 +1862,7 @@ fn parse_inline_type_decl(
       return (name_opt, payload.to_bytes(), next_type_count, decl_count)
     }
     if items[0] is Atom("future") {
-      let payload = ByteBuf::new()
+      let payload = ByteBuf::ByteBuf()
       payload.push_u8(0x65)
       if items.length() == 1 {
         payload.push_u8(0x00)
@@ -1884,7 +1884,7 @@ fn parse_inline_type_decl(
       return (name_opt, payload.to_bytes(), next_type_count, decl_count)
     }
     if items[0] is Atom("stream") {
-      let payload = ByteBuf::new()
+      let payload = ByteBuf::ByteBuf()
       payload.push_u8(0x66)
       if items.length() == 1 {
         payload.push_u8(0x00)
@@ -1987,7 +1987,7 @@ fn parse_inline_externdesc_from_type_desc(
       type_count += 1
       idx
     }
-    let b = ByteBuf::new()
+    let b = ByteBuf::ByteBuf()
     b.push_u8(0x01)
     b.push_uleb_u32(type_idx)
     return (b.to_bytes(), type_count, core_type_count, decl_count)
@@ -2002,7 +2002,7 @@ fn parse_inline_externdesc_from_type_desc(
     if bound_index + 1 != desc.length() {
       raise Unsupported("type descriptor currently supports one bound")
     }
-    let b = ByteBuf::new()
+    let b = ByteBuf::ByteBuf()
     b.push_u8(0x03)
     b.push_bytes(
       parse_type_bound_bytes_inline(desc[bound_index], state, local_type_names),
@@ -2053,7 +2053,7 @@ fn parse_inline_externdesc_from_type_desc(
       type_count += 1
       idx
     }
-    let b = ByteBuf::new()
+    let b = ByteBuf::ByteBuf()
     b.push_u8(if is_component { 0x04 } else { 0x05 })
     b.push_uleb_u32(type_idx)
     return (b.to_bytes(), type_count, core_type_count, decl_count)
@@ -2104,7 +2104,7 @@ fn parse_inline_externdesc_from_type_desc(
       core_type_count += 1
       idx
     }
-    let b = ByteBuf::new()
+    let b = ByteBuf::ByteBuf()
     b.push_u8(0x00)
     b.push_u8(0x11)
     b.push_uleb_u32(type_idx)
@@ -2327,7 +2327,7 @@ fn build_inline_instance_type_bytes_with_ambient(
 ) -> Bytes raise ComponentTextError {
   let saved_type_name_len = state.type_names.length()
   let ref_names = collect_inline_ref_names(desc, start)
-  let decls = ByteBuf::new()
+  let decls = ByteBuf::ByteBuf()
   let mut count = 0
   let mut local_type_count = 0
   let mut local_core_type_count = 0
@@ -2469,7 +2469,7 @@ fn build_inline_instance_type_bytes_with_ambient(
     decls.push_bytes(desc_bytes)
     count += 1
   }
-  let payload = ByteBuf::new()
+  let payload = ByteBuf::ByteBuf()
   payload.push_u8(0x42)
   payload.push_uleb_u32(count)
   payload.push_bytes(decls.to_bytes())
@@ -2501,7 +2501,7 @@ fn build_inline_component_type_bytes_with_ambient(
 ) -> Bytes raise ComponentTextError {
   let saved_type_name_len = state.type_names.length()
   let ref_names = collect_inline_ref_names(desc, start)
-  let decls = ByteBuf::new()
+  let decls = ByteBuf::ByteBuf()
   let mut count = 0
   let mut local_type_count = 0
   let mut local_core_type_count = 0
@@ -2655,7 +2655,7 @@ fn build_inline_component_type_bytes_with_ambient(
     decls.push_bytes(desc_bytes)
     count += 1
   }
-  let payload = ByteBuf::new()
+  let payload = ByteBuf::ByteBuf()
   payload.push_u8(0x41)
   payload.push_uleb_u32(count)
   payload.push_bytes(decls.to_bytes())
@@ -2744,7 +2744,7 @@ fn parse_import(
     let import_entry : ImportEntry = {
       name,
       desc: {
-        let b = ByteBuf::new()
+        let b = ByteBuf::ByteBuf()
         b.push_u8(0x03)
         b.push_bytes(bound_bytes)
         b.to_bytes()
@@ -2770,7 +2770,7 @@ fn parse_import(
     let import_entry : ImportEntry = {
       name,
       desc: {
-        let b = ByteBuf::new()
+        let b = ByteBuf::ByteBuf()
         b.push_u8(0x01)
         b.push_uleb_u32(type_idx)
         b.to_bytes()
@@ -2818,7 +2818,7 @@ fn parse_import(
     let import_entry : ImportEntry = {
       name,
       desc: {
-        let b = ByteBuf::new()
+        let b = ByteBuf::ByteBuf()
         b.push_u8(if is_component { 0x04 } else { 0x05 })
         b.push_uleb_u32(type_idx)
         b.to_bytes()
@@ -2878,7 +2878,7 @@ fn parse_import(
     let import_entry : ImportEntry = {
       name,
       desc: {
-        let b = ByteBuf::new()
+        let b = ByteBuf::ByteBuf()
         b.push_u8(0x00)
         b.push_u8(0x11)
         b.push_uleb_u32(type_idx)
@@ -2905,7 +2905,7 @@ fn parse_import(
 
 ///|
 fn encode_import_decl(import_item : ImportEntry) -> Bytes {
-  let payload = ByteBuf::new()
+  let payload = ByteBuf::ByteBuf()
   payload.push_u8(0x00)
   payload.push_utf8_name(import_item.name)
   payload.push_bytes(import_item.desc)
@@ -2933,7 +2933,7 @@ fn push_sort_prefix(
 fn encode_export_section(
   exports : Array[ExportEntry],
 ) -> Bytes raise ComponentTextError {
-  let payload = ByteBuf::new()
+  let payload = ByteBuf::ByteBuf()
   payload.push_uleb_u32(exports.length())
   for export_item in exports {
     payload.push_u8(0x00)
@@ -2964,7 +2964,7 @@ fn push_export_decl(
 
 ///|
 fn wrap_single_decl(decl : Bytes) -> Bytes {
-  let payload = ByteBuf::new()
+  let payload = ByteBuf::ByteBuf()
   payload.push_uleb_u32(1)
   payload.push_bytes(decl)
   payload.to_bytes()
@@ -2981,7 +2981,7 @@ fn push_ordered_section(
 
 ///|
 fn encode_core_instance_decl(entry : CoreInstanceEntry) -> Bytes {
-  let payload = ByteBuf::new()
+  let payload = ByteBuf::ByteBuf()
   match entry.expr {
     Instantiate(module_idx, args) => {
       payload.push_u8(0x00)
@@ -3010,7 +3010,7 @@ fn encode_core_instance_decl(entry : CoreInstanceEntry) -> Bytes {
 fn encode_instance_decl(
   entry : InstanceEntry,
 ) -> Bytes raise ComponentTextError {
-  let payload = ByteBuf::new()
+  let payload = ByteBuf::ByteBuf()
   match entry.expr {
     Instantiate(component_idx, args) => {
       payload.push_u8(0x00)
@@ -3042,7 +3042,7 @@ fn encode_alias_core_export_decl(
   instance_idx : Int,
   name : String,
 ) -> Bytes {
-  let payload = ByteBuf::new()
+  let payload = ByteBuf::ByteBuf()
   payload.push_u8(0x00)
   payload.push_u8(kind)
   payload.push_u8(0x01)
@@ -3058,7 +3058,7 @@ fn encode_alias_instance_export_decl(
   instance_idx : Int,
   name : String,
 ) -> Bytes raise ComponentTextError {
-  let payload = ByteBuf::new()
+  let payload = ByteBuf::ByteBuf()
   push_sort_prefix(payload, sort_tag, core_kind)
   payload.push_u8(0x00)
   payload.push_uleb_u32(instance_idx)
@@ -3073,7 +3073,7 @@ fn encode_alias_outer_decl(
   count : Int,
   idx : Int,
 ) -> Bytes raise ComponentTextError {
-  let payload = ByteBuf::new()
+  let payload = ByteBuf::ByteBuf()
   if sort_tag == 0x00 && core_kind is Some(0x05) {
     payload.push_u8(0x00)
     payload.push_u8(0x10)
@@ -3091,7 +3091,7 @@ fn encode_module_type_alias_outer_core_type_decl(
   count : Int,
   idx : Int,
 ) -> Bytes {
-  let payload = ByteBuf::new()
+  let payload = ByteBuf::ByteBuf()
   payload.push_u8(0x10)
   payload.push_u8(0x01)
   payload.push_uleb_u32(count)
@@ -3111,7 +3111,7 @@ fn parse_type_bound_bytes(
   }
   if bound.length() == 2 && bound[0] is Atom("eq") {
     let idx = resolve_reference(bound[1], state.type_names, "type")
-    let bytes = ByteBuf::new()
+    let bytes = ByteBuf::ByteBuf()
     bytes.push_u8(0x00)
     bytes.push_uleb_u32(idx)
     return bytes.to_bytes()
@@ -3129,7 +3129,7 @@ fn parse_record_type_bytes(
   body : Array[SExpr],
   state : ComponentBuildState,
 ) -> Bytes raise ComponentTextError {
-  let payload = ByteBuf::new()
+  let payload = ByteBuf::ByteBuf()
   payload.push_u8(0x72)
   payload.push_uleb_u32(body.length() - 1)
   for i in 1..<body.length() {
@@ -3181,7 +3181,7 @@ fn parse_variant_type_bytes(
   body : Array[SExpr],
   state : ComponentBuildState,
 ) -> Bytes raise ComponentTextError {
-  let payload = ByteBuf::new()
+  let payload = ByteBuf::ByteBuf()
   let case_ids : Array[NamedBinding] = []
   payload.push_u8(0x71)
   payload.push_uleb_u32(body.length() - 1)
@@ -3238,7 +3238,7 @@ fn parse_tuple_type_bytes(
   body : Array[SExpr],
   state : ComponentBuildState,
 ) -> Bytes raise ComponentTextError {
-  let payload = ByteBuf::new()
+  let payload = ByteBuf::ByteBuf()
   payload.push_u8(0x6f)
   payload.push_uleb_u32(body.length() - 1)
   for i in 1..<body.length() {
@@ -3253,7 +3253,7 @@ fn parse_flags_or_enum_type_bytes(
   opcode : Int,
   body : Array[SExpr],
 ) -> Bytes raise ComponentTextError {
-  let payload = ByteBuf::new()
+  let payload = ByteBuf::ByteBuf()
   payload.push_u8(opcode)
   payload.push_uleb_u32(body.length() - 1)
   for i in 1..<body.length() {
@@ -3283,7 +3283,7 @@ fn parse_result_type_bytes(
     }
     ok = Some(parse_valtype(item, state))
   }
-  let payload = ByteBuf::new()
+  let payload = ByteBuf::ByteBuf()
   payload.push_u8(0x6a)
   if ok is Some(ok_ty) {
     payload.push_u8(0x01)
@@ -3309,7 +3309,7 @@ fn parse_future_or_stream_type_bytes(
   if body.length() > 2 {
     raise Unsupported("future/stream type takes at most one payload type")
   }
-  let payload = ByteBuf::new()
+  let payload = ByteBuf::ByteBuf()
   payload.push_u8(opcode)
   if body.length() == 1 {
     payload.push_u8(0x00)
@@ -3350,7 +3350,7 @@ fn parse_resource_type_bytes(
     }
     raise Unsupported("unsupported resource type option")
   }
-  let payload = ByteBuf::new()
+  let payload = ByteBuf::ByteBuf()
   payload.push_u8(0x3f)
   payload.push_u8(rep)
   if dtor_idx is Some(idx) {
@@ -3457,7 +3457,7 @@ fn parse_type_field(
       if items.length() != 2 {
         raise Unsupported("list type must be `(list <valtype>)`")
       }
-      let payload = ByteBuf::new()
+      let payload = ByteBuf::ByteBuf()
       payload.push_u8(0x70)
       push_valtype_encoding(payload, parse_valtype(items[1], state))
       let type_idx = add_type_entry(state, payload.to_bytes(), None, name_opt)
@@ -3468,7 +3468,7 @@ fn parse_type_field(
       if items.length() != 2 {
         raise Unsupported("option type must be `(option <valtype>)`")
       }
-      let payload = ByteBuf::new()
+      let payload = ByteBuf::ByteBuf()
       payload.push_u8(0x6b)
       push_valtype_encoding(payload, parse_valtype(items[1], state))
       let type_idx = add_type_entry(state, payload.to_bytes(), None, name_opt)
@@ -3509,7 +3509,7 @@ fn parse_type_field(
       if items.length() != 2 {
         raise Unsupported("\{head} type must be `(\{head} <type>)`")
       }
-      let payload = ByteBuf::new()
+      let payload = ByteBuf::ByteBuf()
       payload.push_u8(if head == "own" { 0x69 } else { 0x68 })
       payload.push_uleb_u32(
         resolve_reference(items[1], state.type_names, "type"),
@@ -3571,7 +3571,7 @@ fn parse_type_field(
   }
   if body is Atom(name) {
     if prim_type_opcode(name) is Some(opcode) {
-      let payload = ByteBuf::new()
+      let payload = ByteBuf::ByteBuf()
       payload.push_u8(opcode)
       let type_idx = add_type_entry(state, payload.to_bytes(), None, name_opt)
       push_type_exports(type_idx)
@@ -3970,7 +3970,7 @@ fn parse_canon_options(
   end_exclusive : Int,
   state : ComponentBuildState,
 ) -> (Int, Bytes) raise ComponentTextError {
-  let option_bytes = ByteBuf::new()
+  let option_bytes = ByteBuf::ByteBuf()
   let mut option_count = 0
   for i in start..<end_exclusive {
     parse_canon_option(canon_items[i], state, option_bytes)
@@ -3995,7 +3995,7 @@ fn parse_canon_lift(
     canon_items.length(),
     state,
   )
-  let out = ByteBuf::new()
+  let out = ByteBuf::ByteBuf()
   out.push_u8(0x00)
   out.push_u8(0x00)
   out.push_uleb_u32(core_func_idx)
@@ -4018,7 +4018,7 @@ fn parse_canon_lower(
   let (option_count, option_payload) = parse_canon_options(
     canon_items, 3, options_end, state,
   )
-  let out = ByteBuf::new()
+  let out = ByteBuf::ByteBuf()
   out.push_u8(0x01)
   out.push_u8(0x00)
   out.push_uleb_u32(func_idx)
@@ -4077,7 +4077,7 @@ fn parse_canon_result(
   } else {
     1
   }
-  let out = ByteBuf::new()
+  let out = ByteBuf::ByteBuf()
   if value_index >= result_items.length() {
     out.push_u8(0x01)
     out.push_u8(0x00)
@@ -4199,7 +4199,7 @@ fn parse_canon_decl(
       raise Unsupported("\{op_name} must be `(\{op_name} <type-ref>)`")
     }
     let type_idx = parse_component_type_ref(canon_items[2], state)
-    let decl = ByteBuf::new()
+    let decl = ByteBuf::ByteBuf()
     decl.push_u8(
       if op_name == "resource.new" {
         0x02
@@ -4225,7 +4225,7 @@ fn parse_canon_decl(
     } else if decl_end != 2 {
       raise Unsupported("subtask.cancel accepts at most one `async` flag")
     }
-    let decl = ByteBuf::new()
+    let decl = ByteBuf::ByteBuf()
     decl.push_u8(0x06)
     decl.push_u8(if is_async { 0x01 } else { 0x00 })
     return (decl.to_bytes(), true, target_name_opt)
@@ -4243,7 +4243,7 @@ fn parse_canon_decl(
     let (option_count, option_payload) = parse_canon_options(
       canon_items, index, decl_end, state,
     )
-    let decl = ByteBuf::new()
+    let decl = ByteBuf::ByteBuf()
     decl.push_u8(0x09)
     decl.push_bytes(result_bytes)
     decl.push_uleb_u32(option_count)
@@ -4256,7 +4256,7 @@ fn parse_canon_decl(
         "\{op_name} must be `(\{op_name} <corevaltype> <index>)`",
       )
     }
-    let decl = ByteBuf::new()
+    let decl = ByteBuf::ByteBuf()
     decl.push_u8(if op_name == "context.get" { 0x0a } else { 0x0b })
     decl.push_u8(parse_core_valtype_opcode(canon_items[2]))
     decl.push_uleb_u32(parse_u32_literal(canon_items[3], "context index"))
@@ -4280,7 +4280,7 @@ fn parse_canon_decl(
         "thread.new-indirect must be `(thread.new-indirect <core-type> <core-table>)`",
       )
     }
-    let decl = ByteBuf::new()
+    let decl = ByteBuf::ByteBuf()
     decl.push_u8(0x27)
     decl.push_uleb_u32(parse_core_type_ref(canon_items[2], state))
     decl.push_uleb_u32(parse_core_table_ref(canon_items[3], state))
@@ -4296,7 +4296,7 @@ fn parse_canon_decl(
     } else if decl_end != 2 {
       raise Unsupported("\{op_name} accepts at most one flag")
     }
-    let decl = ByteBuf::new()
+    let decl = ByteBuf::ByteBuf()
     decl.push_u8(
       if op_name == "thread.yield" {
         0x0c
@@ -4344,7 +4344,7 @@ fn parse_canon_decl(
         raise Unsupported("unsupported waitable-set option")
       }
       if arg_items.length() > 0 && arg_items[0] is Atom("memory") {
-        let option_payload = ByteBuf::new()
+        let option_payload = ByteBuf::ByteBuf()
         parse_canon_option(arg, state, option_payload)
         if option_payload.bytes.length() < 2 || option_payload.bytes[0] != 0x03 {
           raise Unsupported("waitable-set memory option is invalid")
@@ -4371,7 +4371,7 @@ fn parse_canon_decl(
       Some(idx) => idx
       None => raise Unsupported("\{op_name} requires a memory option")
     }
-    let decl = ByteBuf::new()
+    let decl = ByteBuf::ByteBuf()
     decl.push_u8(if op_name == "waitable-set.wait" { 0x20 } else { 0x21 })
     decl.push_u8(if cancellable { 0x01 } else { 0x00 })
     decl.push_uleb_u32(memory_idx)
@@ -4393,7 +4393,7 @@ fn parse_canon_decl(
       raise Unsupported("\{op_name} must be `(\{op_name} <type-ref>)`")
     }
     let type_idx = parse_component_type_ref(canon_items[2], state)
-    let decl = ByteBuf::new()
+    let decl = ByteBuf::ByteBuf()
     decl.push_u8(
       if op_name == "stream.new" {
         0x0e
@@ -4423,7 +4423,7 @@ fn parse_canon_decl(
     let (option_count, option_payload) = parse_canon_options(
       canon_items, 3, decl_end, state,
     )
-    let decl = ByteBuf::new()
+    let decl = ByteBuf::ByteBuf()
     decl.push_u8(
       if op_name == "stream.read" {
         0x0f
@@ -4453,7 +4453,7 @@ fn parse_canon_decl(
     } else {
       false
     }
-    let decl = ByteBuf::new()
+    let decl = ByteBuf::ByteBuf()
     decl.push_u8(
       if op_name == "stream.cancel-read" {
         0x11
@@ -4756,7 +4756,7 @@ fn parse_export_ascribed_desc(
     } else {
       ensure_func_type(state, parse_func_sig(sig_items, state))
     }
-    let payload = ByteBuf::new()
+    let payload = ByteBuf::ByteBuf()
     payload.push_u8(0x01)
     payload.push_uleb_u32(type_idx)
     return Some(payload.to_bytes())
@@ -4794,7 +4794,7 @@ fn parse_export_ascribed_desc(
     } else {
       ensure_empty_instance_type(state)
     }
-    let payload = ByteBuf::new()
+    let payload = ByteBuf::ByteBuf()
     payload.push_u8(if is_component { 0x04 } else { 0x05 })
     payload.push_uleb_u32(type_idx)
     return Some(payload.to_bytes())
@@ -4811,7 +4811,7 @@ fn parse_export_ascribed_desc(
     if bound_index >= ascribed.length() || bound_index + 1 != ascribed.length() {
       raise Unsupported("type export ascription must provide one bound")
     }
-    let payload = ByteBuf::new()
+    let payload = ByteBuf::ByteBuf()
     payload.push_u8(0x03)
     payload.push_bytes(parse_type_bound_bytes(ascribed[bound_index], state))
     return Some(payload.to_bytes())
@@ -5273,8 +5273,8 @@ fn parse_core_func_type_bytes(
   items : Array[SExpr],
   core_type_names : Array[NamedBinding],
 ) -> Bytes raise ComponentTextError {
-  let params = ByteBuf::new()
-  let results = ByteBuf::new()
+  let params = ByteBuf::ByteBuf()
+  let results = ByteBuf::ByteBuf()
   let mut param_count = 0
   let mut result_count = 0
   let mut index = 1
@@ -5322,7 +5322,7 @@ fn parse_core_func_type_bytes(
     raise Unsupported("unsupported core func type field")
   }
 
-  let payload = ByteBuf::new()
+  let payload = ByteBuf::ByteBuf()
   payload.push_u8(0x60)
   payload.push_uleb_u32(param_count)
   payload.push_bytes(params.to_bytes())
@@ -5356,7 +5356,7 @@ fn parse_core_extern_type_for_module_type(
   }
   let mut next_func_type_count = func_type_count
   let mut decl_count = 0
-  let b = ByteBuf::new()
+  let b = ByteBuf::ByteBuf()
   let head = if desc[0] is Atom(name) {
     name
   } else {
@@ -5561,7 +5561,7 @@ fn parse_core_module_type_bytes(
   start : Int,
   state : ComponentBuildState,
 ) -> Bytes raise ComponentTextError {
-  let decls = ByteBuf::new()
+  let decls = ByteBuf::ByteBuf()
   let mut decl_count = 0
   let mut func_type_count = 0
   let func_type_names : Array[NamedBinding] = []
@@ -5737,7 +5737,7 @@ fn parse_core_module_type_bytes(
     raise Unsupported("unsupported core module type declaration")
   }
 
-  let payload = ByteBuf::new()
+  let payload = ByteBuf::ByteBuf()
   payload.push_u8(0x50)
   payload.push_uleb_u32(decl_count)
   payload.push_bytes(decls.to_bytes())
@@ -6928,7 +6928,7 @@ fn compile_component_expr_with_outer(
     }
   }
 
-  let state = ComponentBuildState::new(
+  let state = ComponentBuildState::ComponentBuildState(
     outer_type_scopes, outer_core_type_scopes, outer_component_scopes, outer_core_module_scopes,
   )
 
@@ -7067,7 +7067,7 @@ fn compile_component_expr_with_outer(
     raise Unsupported("unsupported component field '\{head_name}'")
   }
 
-  let out = ByteBuf::new()
+  let out = ByteBuf::ByteBuf()
   out.push_u8(0x00)
   out.push_u8(0x61)
   out.push_u8(0x73)
@@ -7096,7 +7096,11 @@ fn keep_wbtest_imports_used() -> Unit {
   if false {
     let empty = Bytes::from_array([])
     ignore(@component.sniff_binary_kind(empty))
-    ignore(@component_model.ComponentValidationConfig::new(true))
+    ignore(
+      @component_model.ComponentValidationConfig::ComponentValidationConfig(
+        true,
+      ),
+    )
   }
 }
 
@@ -7116,7 +7120,7 @@ fn decode_wat_binary_string(text : String) -> Bytes raise ComponentTextError {
 ///|
 pub fn parse_component_wat(input : String) -> Bytes raise ComponentTextError {
   keep_wbtest_imports_used()
-  let reader = TextReader::new(input)
+  let reader = TextReader::TextReader(input)
   let root = parse_sexpr(reader)
   reader.skip_ws_and_comments()
   if !reader.is_eof() {

@@ -5,7 +5,8 @@
 /// Convert string to UTF-8 bytes
 fn string_to_utf8(s : String) -> Bytes {
   let len = s.length()
-  let buf = Array::new(capacity=len * 4)
+  let buf : Array[Byte] = []
+  buf.reserve_capacity(len * 4)
   for i in 0..<len {
     let c = s.code_unit_at(i).to_int()
     if c < 0x80 {
@@ -35,7 +36,7 @@ fn string_to_utf8(s : String) -> Bytes {
 ///|
 /// Convert UTF-8 bytes to string
 fn utf8_to_string(bytes : Bytes, len : Int) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder::StringBuilder()
   let mut i = 0
   while i < len {
     let b = bytes[i].to_int()

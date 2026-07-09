@@ -59,39 +59,33 @@ pub fn create_spectest_module(
   )
 
   // Allocate memory: (memory 1 2) - min 1 page, max 2 pages
-  let memory = @runtime.Memory::new(1, Some(2))
+  let memory = @runtime.Memory::Memory(1, Some(2))
   let memory_addr = store.alloc_mem(memory)
 
   // Allocate table: (table 10 20 funcref)
-  let table = @runtime.Table::new(FuncRef, 10, Some(20))
+  let table = @runtime.Table::Table(FuncRef, 10, Some(20))
   let table_addr = store.alloc_table(table)
 
   // Allocate table64: (table i64 10 20 funcref)
-  let table64 = @runtime.Table::new(FuncRef, 10, Some(20), is_table64=true)
+  let table64 = @runtime.Table::Table(FuncRef, 10, Some(20), is_table64=true)
   let table64_addr = store.alloc_table(table64)
 
   // Allocate globals
   // global_i32: (global i32 (i32.const 666))
   let global_i32_addr = store.alloc_global(
-    @runtime.GlobalInstance::new({ value_type: I32, mutable: false }, I32(666)),
+    GlobalInstance({ value_type: I32, mutable: false }, I32(666)),
   )
   // global_i64: (global i64 (i64.const 666))
   let global_i64_addr = store.alloc_global(
-    @runtime.GlobalInstance::new({ value_type: I64, mutable: false }, I64(666L)),
+    GlobalInstance({ value_type: I64, mutable: false }, I64(666L)),
   )
   // global_f32: (global f32 (f32.const 666))
   let global_f32_addr = store.alloc_global(
-    @runtime.GlobalInstance::new(
-      { value_type: F32, mutable: false },
-      F32(666.6),
-    ),
+    GlobalInstance({ value_type: F32, mutable: false }, F32(666.6)),
   )
   // global_f64: (global f64 (f64.const 666))
   let global_f64_addr = store.alloc_global(
-    @runtime.GlobalInstance::new(
-      { value_type: F64, mutable: false },
-      F64(666.6),
-    ),
+    GlobalInstance({ value_type: F64, mutable: false }, F64(666.6)),
   )
 
   // Create exports

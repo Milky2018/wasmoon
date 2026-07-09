@@ -17,7 +17,7 @@ test "build and verify minimal MilkIR function" {
 
 ///|
 test "builder prints generic SSA function" {
-  let builder = FunctionBuilder::new("add")
+  let builder = FunctionBuilder::FunctionBuilder("add")
   let p0 = builder.add_param(I32)
   let p1 = builder.add_param(I32)
   builder.add_result(I32)
@@ -39,7 +39,7 @@ test "builder prints generic SSA function" {
 
 ///|
 test "builder prints pointer operations" {
-  let builder = FunctionBuilder::new("load_store")
+  let builder = FunctionBuilder::FunctionBuilder("load_store")
   let addr = builder.add_param(Ptr)
   builder.add_result(I32)
   let offset0 = builder.iconst_i64(0L)
@@ -69,7 +69,7 @@ test "builder prints pointer operations" {
 
 ///|
 test "builder prints narrow pointer operations" {
-  let builder = FunctionBuilder::new("narrow_mem")
+  let builder = FunctionBuilder::FunctionBuilder("narrow_mem")
   let addr = builder.add_param(Ptr)
   builder.add_result(I32)
   let load_offset = builder.iconst_i64(2L)
@@ -96,7 +96,7 @@ test "builder prints narrow pointer operations" {
 
 ///|
 test "builder and CFG support branches and block params" {
-  let builder = FunctionBuilder::new("loop_sum")
+  let builder = FunctionBuilder::FunctionBuilder("loop_sum")
   let n = builder.add_param(I32)
   builder.add_result(I32)
   let loop_header = builder.create_block()
@@ -130,7 +130,7 @@ test "builder and CFG support branches and block params" {
 
 ///|
 test "verify catches missing terminator" {
-  let func = Function::new("bad", Signature::new([], []))
+  let func = Function("bad", Signature([], []))
   func.new_block([]) |> ignore
   try func.verify() catch {
     err => inspect(err, content="MissingTerminator(block_id=0)")
@@ -141,9 +141,9 @@ test "verify catches missing terminator" {
 
 ///|
 test "verify catches undefined operands" {
-  let func = Function::new("bad_use", Signature::new([], []))
+  let func = Function("bad_use", Signature([], []))
   let entry = func.new_block([])
-  let bogus = Value::new(99, I32)
+  let bogus = Value::Value(99, I32)
   let result = func.new_value(I32)
   entry.append_inst(func.new_inst(Iadd, [bogus, bogus], [result]))
   entry.set_terminator(Return([result]))
@@ -156,7 +156,7 @@ test "verify catches undefined operands" {
 
 ///|
 test "optimizer folds integer constants" {
-  let builder = FunctionBuilder::new("const_add")
+  let builder = FunctionBuilder::FunctionBuilder("const_add")
   builder.add_result(I32)
   let lhs = builder.iconst_i32(10)
   let rhs = builder.iconst_i32(20)
@@ -181,7 +181,7 @@ test "optimizer folds integer constants" {
 
 ///|
 test "optimizer leaves trap-prone division unfused" {
-  let builder = FunctionBuilder::new("no_fold_div")
+  let builder = FunctionBuilder::FunctionBuilder("no_fold_div")
   builder.add_result(I32)
   let entry = builder.current_block()
   let lhs = builder.iconst_i32(10)
@@ -209,7 +209,7 @@ test "optimizer leaves trap-prone division unfused" {
 
 ///|
 test "optimizer O0 does not rewrite constants" {
-  let builder = FunctionBuilder::new("o0")
+  let builder = FunctionBuilder::FunctionBuilder("o0")
   builder.add_result(I32)
   let lhs = builder.iconst_i32(1)
   let rhs = builder.iconst_i32(2)
@@ -235,7 +235,7 @@ test "optimizer O0 does not rewrite constants" {
 
 ///|
 test "optimizer O2 removes dead pure instructions after folding" {
-  let builder = FunctionBuilder::new("o2_dce")
+  let builder = FunctionBuilder::FunctionBuilder("o2_dce")
   builder.add_result(I32)
   let lhs = builder.iconst_i32(1)
   let rhs = builder.iconst_i32(2)
@@ -260,7 +260,7 @@ test "optimizer O2 removes dead pure instructions after folding" {
 
 ///|
 test "dead code pass keeps unused loads without alias metadata" {
-  let builder = FunctionBuilder::new("keep_load")
+  let builder = FunctionBuilder::FunctionBuilder("keep_load")
   let ptr = builder.add_param(Ptr)
   builder.add_result(I32)
   let offset = builder.iconst_i64(0L)
@@ -275,7 +275,7 @@ test "dead code pass keeps unused loads without alias metadata" {
 
 ///|
 test "optimizer CSE replaces duplicate pure expression with copy" {
-  let builder = FunctionBuilder::new("cse_local")
+  let builder = FunctionBuilder::FunctionBuilder("cse_local")
   let lhs = builder.add_param(I32)
   let rhs = builder.add_param(I32)
   builder.add_result(I32)
@@ -301,7 +301,7 @@ test "optimizer CSE replaces duplicate pure expression with copy" {
 
 ///|
 test "optimizer CSE reuses expressions from dominating blocks" {
-  let builder = FunctionBuilder::new("cse_global")
+  let builder = FunctionBuilder::FunctionBuilder("cse_global")
   let lhs = builder.add_param(I32)
   let rhs = builder.add_param(I32)
   let cond = builder.add_param(I32)
@@ -338,7 +338,7 @@ test "optimizer CSE reuses expressions from dominating blocks" {
 
 ///|
 test "optimizer propagates local copies" {
-  let builder = FunctionBuilder::new("copy_prop")
+  let builder = FunctionBuilder::FunctionBuilder("copy_prop")
   let param = builder.add_param(I32)
   builder.add_result(I32)
   let copy = builder.copy(param)
@@ -366,7 +366,7 @@ test "optimizer propagates local copies" {
 
 ///|
 test "optimizer canonicalizes aliases through dominating blocks" {
-  let builder = FunctionBuilder::new("alias_canon_copy_chain")
+  let builder = FunctionBuilder::FunctionBuilder("alias_canon_copy_chain")
   let param = builder.add_param(I32)
   builder.add_result(I32)
   let body = builder.create_block()
@@ -403,7 +403,7 @@ test "optimizer canonicalizes aliases through dominating blocks" {
 
 ///|
 test "optimizer canonicalizes branch args without crossing sibling dominance" {
-  let builder = FunctionBuilder::new("alias_canon_branch_args")
+  let builder = FunctionBuilder::FunctionBuilder("alias_canon_branch_args")
   let value = builder.add_param(I32)
   let cond = builder.add_param(I32)
   builder.add_result(I32)
@@ -448,7 +448,7 @@ test "optimizer canonicalizes branch args without crossing sibling dominance" {
 
 ///|
 test "optimizer removes unused block params and jump args" {
-  let builder = FunctionBuilder::new("dead_block_params")
+  let builder = FunctionBuilder::FunctionBuilder("dead_block_params")
   builder.add_result(I32)
   let target = builder.create_block()
   let used_arg = builder.iconst_i32(1)
@@ -480,7 +480,7 @@ test "optimizer removes unused block params and jump args" {
 
 ///|
 test "optimizer keeps block params forwarded through jump args" {
-  let builder = FunctionBuilder::new("forwarded_block_params")
+  let builder = FunctionBuilder::FunctionBuilder("forwarded_block_params")
   builder.add_result(I32)
   let middle = builder.create_block()
   let exit = builder.create_block()
@@ -500,7 +500,7 @@ test "optimizer keeps block params forwarded through jump args" {
 
 ///|
 test "optimizer removes constant block params and rewrites uses" {
-  let builder = FunctionBuilder::new("const_block_params")
+  let builder = FunctionBuilder::FunctionBuilder("const_block_params")
   builder.add_result(I32)
   let target = builder.create_block()
   let arg = builder.iconst_i32(7)
@@ -529,7 +529,7 @@ test "optimizer removes constant block params and rewrites uses" {
 
 ///|
 test "optimizer removes constant branch block params" {
-  let builder = FunctionBuilder::new("branch_const_block_params")
+  let builder = FunctionBuilder::FunctionBuilder("branch_const_block_params")
   builder.add_result(I32)
   let join = builder.create_block()
   let cond = builder.iconst_i32(1)
@@ -563,7 +563,7 @@ test "optimizer removes constant branch block params" {
 
 ///|
 test "optimizer keeps varying branch block params" {
-  let builder = FunctionBuilder::new("branch_varying_block_params")
+  let builder = FunctionBuilder::FunctionBuilder("branch_varying_block_params")
   builder.add_result(I32)
   let join = builder.create_block()
   let cond = builder.iconst_i32(1)
@@ -582,7 +582,7 @@ test "optimizer keeps varying branch block params" {
 
 ///|
 test "optimizer removes unreachable blocks" {
-  let builder = FunctionBuilder::new("unreachable")
+  let builder = FunctionBuilder::FunctionBuilder("unreachable")
   builder.add_result(I32)
   let exit = builder.create_block()
   let dead = builder.create_block()
@@ -614,7 +614,7 @@ test "optimizer removes unreachable blocks" {
 
 ///|
 test "optimizer simplifies constant brz" {
-  let builder = FunctionBuilder::new("branch_simp_brz")
+  let builder = FunctionBuilder::FunctionBuilder("branch_simp_brz")
   builder.add_result(I32)
   let then_block = builder.create_block()
   let else_block = builder.create_block()
@@ -651,7 +651,7 @@ test "optimizer simplifies constant brz" {
 
 ///|
 test "optimizer simplifies constant br_table" {
-  let builder = FunctionBuilder::new("branch_simp_table")
+  let builder = FunctionBuilder::FunctionBuilder("branch_simp_table")
   let target0 = builder.create_block()
   let target1 = builder.create_block()
   let default_target = builder.create_block()
@@ -688,7 +688,7 @@ test "optimizer simplifies constant br_table" {
 
 ///|
 test "optimizer threads trivial jump blocks" {
-  let builder = FunctionBuilder::new("thread_jump")
+  let builder = FunctionBuilder::FunctionBuilder("thread_jump")
   let middle = builder.create_block()
   let exit = builder.create_block()
   builder.jump(middle, [])
@@ -718,7 +718,7 @@ test "optimizer threads trivial jump blocks" {
 
 ///|
 test "optimizer threads jump args through block params" {
-  let builder = FunctionBuilder::new("thread_jump_args")
+  let builder = FunctionBuilder::FunctionBuilder("thread_jump_args")
   let middle = builder.create_block()
   let exit = builder.create_block()
   let a = builder.iconst_i32(1)
@@ -758,7 +758,7 @@ test "optimizer threads jump args through block params" {
 
 ///|
 test "optimizer merges straight line blocks" {
-  let builder = FunctionBuilder::new("merge_blocks")
+  let builder = FunctionBuilder::FunctionBuilder("merge_blocks")
   builder.add_result(I32)
   let exit = builder.create_block()
   builder.jump(exit, [])
@@ -784,7 +784,7 @@ test "optimizer merges straight line blocks" {
 
 ///|
 test "optimizer does not merge block with params" {
-  let builder = FunctionBuilder::new("merge_skip_params")
+  let builder = FunctionBuilder::FunctionBuilder("merge_skip_params")
   builder.add_result(I32)
   let exit = builder.create_block()
   let arg = builder.iconst_i32(7)
@@ -800,7 +800,7 @@ test "optimizer does not merge block with params" {
 
 ///|
 test "CSE keeps duplicate loads without alias metadata" {
-  let builder = FunctionBuilder::new("no_load_cse")
+  let builder = FunctionBuilder::FunctionBuilder("no_load_cse")
   let ptr = builder.add_param(Ptr)
   builder.add_result(I32)
   let offset = builder.iconst_i64(0L)

@@ -1158,7 +1158,7 @@ fn component_results_to_core(
           store.get_mem(addr) catch {
             e => raise CanonCallError(e.to_string())
           }
-        None => @runtime.Memory::new(0, None)
+        None => Memory(0, None)
       }
       let mem_is_64 = mem.is_memory64()
       let flat_res_types = core_types_for_valtype(r, types, mem_is_64)

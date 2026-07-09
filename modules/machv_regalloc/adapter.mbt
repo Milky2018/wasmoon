@@ -83,7 +83,7 @@ fn instruction_to_regalloc(
   inst : @machv.Instruction,
   include_fixed_constraints : Bool,
 ) -> @regalloc.Instruction {
-  let out = @regalloc.Instruction::new(inst.id)
+  let out = @regalloc.Instruction::Instruction(inst.id)
   for i, operand in inst.operands {
     if operand_to_regalloc(inst, i, operand, include_fixed_constraints)
       is Some(regalloc_operand) {
@@ -109,7 +109,7 @@ fn block_params_to_regalloc(block : @machv.Block) -> @regalloc.Instruction? {
   if block.params.length() == 0 {
     return None
   }
-  let out = @regalloc.Instruction::new(-10_000 - block.id)
+  let out = @regalloc.Instruction::Instruction(-10_000 - block.id)
   for param in block.params {
     out.add_operand(@regalloc.Operand::def(vreg_to_regalloc(param)))
   }
@@ -123,7 +123,7 @@ fn function_params_to_regalloc(
   if func.params.length() == 0 {
     return None
   }
-  let out = @regalloc.Instruction::new(-20_000)
+  let out = @regalloc.Instruction::Instruction(-20_000)
   for param in func.params {
     out.add_operand(@regalloc.Operand::def(vreg_to_regalloc(param)))
   }
@@ -152,7 +152,7 @@ fn terminator_to_regalloc(
   block_id : Int,
   term : @machv.Terminator,
 ) -> @regalloc.Instruction {
-  let out = @regalloc.Instruction::new(-1 - block_id)
+  let out = @regalloc.Instruction::Instruction(-1 - block_id)
   match term {
     TermJump(_, args) => add_terminator_uses(out, args)
     TermBranch(cond, _, true_args, _, false_args) => {
@@ -198,9 +198,9 @@ fn project_function_impl(
   include_fixed_constraints : Bool,
 ) -> @regalloc.Program {
   let regs = physical_regs.map(preg_to_regalloc)
-  let program = @regalloc.Program::new(regs)
+  let program = @regalloc.Program::Program(regs)
   for block in func.blocks {
-    let out_block = @regalloc.Block::new(block.id)
+    let out_block = @regalloc.Block::Block(block.id)
     if block.id == 0 && function_params_to_regalloc(func) is Some(param_defs) {
       out_block.append(param_defs)
     }

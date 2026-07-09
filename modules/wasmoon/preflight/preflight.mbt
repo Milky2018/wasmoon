@@ -55,7 +55,7 @@ pub struct PreflightDiagnostic {
 }
 
 ///|
-pub fn PreflightDiagnostic::new(
+pub fn PreflightDiagnostic::PreflightDiagnostic(
   severity : PreflightSeverity,
   stage : PreflightStage,
   message : String,
@@ -75,7 +75,7 @@ pub struct PreflightResult {
 }
 
 ///|
-pub fn PreflightResult::new() -> PreflightResult {
+pub fn PreflightResult::PreflightResult() -> PreflightResult {
   { ok: true, diagnostics: [], total_funcs: 0, checked_funcs: 0 }
 }
 
@@ -89,7 +89,7 @@ pub fn PreflightResult::add_error(
 ) -> Unit {
   self.ok = false
   self.diagnostics.push(
-    PreflightDiagnostic::new(Error, stage, message, func_idx~, func_name~),
+    PreflightDiagnostic(Error, stage, message, func_idx~, func_name~),
   )
 }
 
@@ -102,7 +102,7 @@ pub fn PreflightResult::add_warning(
   func_name? : String? = None,
 ) -> Unit {
   self.diagnostics.push(
-    PreflightDiagnostic::new(Warning, stage, message, func_idx~, func_name~),
+    PreflightDiagnostic(Warning, stage, message, func_idx~, func_name~),
   )
 }
 
@@ -166,7 +166,7 @@ fn parse_and_validate_module(
 ///|
 /// Validate module bytes (parse + wasm validation) and return structured diagnostics.
 pub fn validate_module(module_bytes : Bytes) -> PreflightResult {
-  let report = PreflightResult::new()
+  let report = PreflightResult::PreflightResult()
   ignore(parse_and_validate_module(module_bytes, report))
   report
 }
@@ -184,7 +184,7 @@ pub fn validate_jit(
   module_bytes : Bytes,
   opt_level? : Int = 2,
 ) -> PreflightResult {
-  let report = PreflightResult::new()
+  let report = PreflightResult::PreflightResult()
   let mod_ = parse_and_validate_module(module_bytes, report)
   guard mod_ is Some(wasm_module) else { return report }
   let normalized_opt_level = normalize_opt_level(opt_level)

@@ -8,7 +8,7 @@ priv struct Reader {
 }
 
 ///|
-fn Reader::new(data : Bytes) -> Reader {
+fn Reader::Reader(data : Bytes) -> Reader {
   { data, pos: 0 }
 }
 
@@ -45,7 +45,7 @@ fn Reader::read_bytes(
 
 ///|
 fn decode_utf8_validated(bytes : Bytes) -> String raise ComponentRuntimeError {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder::StringBuilder()
   let mut i = 0
   while i < bytes.length() {
     let b = bytes[i].to_int()

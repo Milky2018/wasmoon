@@ -17,7 +17,7 @@ pub(all) struct Allocation {
 } derive(Debug)
 
 ///|
-pub fn Allocation::new() -> Allocation {
+pub fn Allocation::Allocation() -> Allocation {
   { assignments: [], spill_count: 0 }
 }
 

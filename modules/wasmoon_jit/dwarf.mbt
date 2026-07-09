@@ -5,7 +5,7 @@
 /// information and registering JIT code with debuggers like LLDB.
 ///
 /// Usage:
-///   let dwarf = DWARFBuilder::new()
+///   let dwarf = DWARFBuilder::DWARFBuilder()
 ///   dwarf.add_function("func_0", addr, size, 0)
 ///   dwarf.add_function("func_1", addr, size, 1)
 ///   dwarf.register()  // Register with LLDB
@@ -21,7 +21,7 @@ pub struct DWARFBuilder {
 
 ///|
 /// Create a new DWARF builder
-pub fn DWARFBuilder::new() -> DWARFBuilder {
+pub fn DWARFBuilder::DWARFBuilder() -> DWARFBuilder {
   { handle: @jit_ffi.c_dwarf_create() }
 }
 
@@ -180,7 +180,7 @@ pub fn DWARFBuilder::format_backtrace(
   _self : DWARFBuilder,
   frames : Array[BacktraceFrame],
 ) -> String {
-  let sb = StringBuilder::new()
+  let sb = StringBuilder::StringBuilder()
   for i, frame in frames {
     if frame.func_idx >= 0 {
       sb.write_string("  #\{i} 0x")

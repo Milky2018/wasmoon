@@ -208,9 +208,9 @@ struct ComponentLinker {
 }
 
 ///|
-pub fn ComponentLinker::new() -> ComponentLinker {
+pub fn ComponentLinker::ComponentLinker() -> ComponentLinker {
   {
-    core_linker: @runtime.Linker::new(),
+    core_linker: Linker(),
     components: [],
     imports: {},
     resource_id_counter: [0],

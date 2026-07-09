@@ -166,7 +166,7 @@ pub fn eliminate_dead_code(func : @machv.Function) -> @machv.Function {
   }
 
   // Step 2: Build new function without dead instructions
-  let new_func = @machv.Function::new(func.name)
+  let new_func = @machv.Function::Function(func.name)
   new_func.next_vreg_id = func.next_vreg_id
   new_func.int_stack_params = func.int_stack_params
   new_func.max_outgoing_args_size = func.max_outgoing_args_size

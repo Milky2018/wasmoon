@@ -7,8 +7,8 @@ struct Linker {
 
 ///|
 /// Create a new linker with a fresh store
-pub fn Linker::new() -> Linker {
-  { store: Store::new(), modules: [] }
+pub fn Linker::Linker() -> Linker {
+  { store: Store(), modules: [] }
 }
 
 ///|
@@ -38,7 +38,7 @@ pub fn Linker::register(
 /// Build Imports from all registered modules
 /// This allows a new module to import from any previously registered module
 pub fn Linker::build_imports(self : Linker) -> Imports {
-  let imports = Imports::new()
+  let imports = Imports::Imports()
   for entry in self.modules {
     let (mod_name, instance) = entry
     for exp in instance.exports {

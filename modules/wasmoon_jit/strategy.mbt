@@ -46,7 +46,7 @@ pub(all) struct CompilationRequest {
 }
 
 ///|
-pub fn CompilationRequest::new(
+pub fn CompilationRequest::CompilationRequest(
   func_idx : Int,
   mode : CompilationMode,
 ) -> CompilationRequest {
@@ -74,7 +74,7 @@ pub(all) struct CompilationQueue {
 }
 
 ///|
-pub fn CompilationQueue::new(max_size : Int) -> CompilationQueue {
+pub fn CompilationQueue::CompilationQueue(max_size : Int) -> CompilationQueue {
   { requests: [], max_size }
 }
 
@@ -268,14 +268,16 @@ pub(all) struct CompilationStrategy {
 }
 
 ///|
-pub fn CompilationStrategy::new(config : TieredConfig) -> CompilationStrategy {
+pub fn CompilationStrategy::CompilationStrategy(
+  config : TieredConfig,
+) -> CompilationStrategy {
   let threshold = HotThreshold::{
     warm_threshold: config.baseline_threshold / 2,
     hot_threshold: config.baseline_threshold,
   }
   {
-    profiler: Profiler::new(threshold),
-    queue: CompilationQueue::new(100), // Max 100 pending compilations
+    profiler: Profiler(threshold),
+    queue: CompilationQueue(100), // Max 100 pending compilations
     config,
     decisions_interpret: 0,
     decisions_compile: 0,

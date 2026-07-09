@@ -524,7 +524,7 @@ fn format_terminator(term : Terminator) -> String {
 ///|
 /// Print a basic block
 fn format_block(block : Block) -> String {
-  let sb = StringBuilder::new()
+  let sb = StringBuilder::StringBuilder()
   // Block header with parameters
   if block.params.length() > 0 {
     let params_str = block.params
@@ -552,7 +552,7 @@ fn format_block(block : Block) -> String {
 ///|
 /// Print a function
 pub fn Function::print(self : Function) -> String {
-  let sb = StringBuilder::new()
+  let sb = StringBuilder::StringBuilder()
   // Function signature
   let params_str = self.params
     .map(fn(p) {
