@@ -2,14 +2,15 @@
 
 Target-independent register allocation algorithm.
 
-`regalloc` models allocation programs, machine environments, live ranges,
-allocation decisions, move resolution, spill planning, and verification without
-depending on a concrete machine IR.
+`regalloc` models allocation programs, machine environments, allocation
+decisions, and verification without depending on a concrete machine IR.
 
 ## Package
 
 - `Milky2018/regalloc`: allocation data structures, allocator entry points,
   and verifier APIs.
+- `Milky2018/regalloc/planning`: expert standalone planning algorithms for
+  clients that need lower-level allocation building blocks.
 - `Milky2018/regalloc/backtracking`: expert hooks for clients that integrate
   the production backtracking allocator with their own machine IR adapter.
 
