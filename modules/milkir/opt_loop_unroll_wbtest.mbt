@@ -609,28 +609,25 @@ test "counted-loop analysis supports signed and unsigned I32 and I64 relations" 
 
 ///|
 test "counted-loop analysis normalizes reversed operands and branch polarity" {
-  let reversed = make_counted_loop(
-    I64,
-    0L,
-    10L,
-    3L,
-    Sgt,
-    Iadd,
-    true,
-    ContinueOnTrue,
-  )
-  require_counted_trip_count(reversed.func, 4)
-  let false_branch = make_counted_loop(
-    I64,
-    0L,
-    10L,
-    3L,
-    Sge,
-    Iadd,
-    false,
-    ContinueOnFalseWithBrz,
-  )
-  require_counted_trip_count(false_branch.func, 4)
+  let cases = [
+    make_counted_loop(I64, 0L, 10L, 3L, Sgt, Iadd, true, ContinueOnTrue),
+    make_counted_loop(
+      I64,
+      0L,
+      10L,
+      3L,
+      Sge,
+      Iadd,
+      false,
+      ContinueOnFalseWithBrz,
+    ),
+    make_counted_loop(I64, 0L, 10L, 3L, Sle, Iadd, true, ContinueOnFalseWithBrz),
+  ]
+  for fixture in cases {
+    require_counted_trip_count(fixture.func, 4)
+    inspect(unroll_counted_loops(fixture.func).changed, content="true")
+    fixture.func.verify()
+  }
 }
 
 ///|
@@ -792,6 +789,22 @@ test "counted-loop unrolling transforms verified I64 loops" {
     false,
     ContinueOnTrue,
   )
+  inspect(unroll_counted_loops(fixture.func).changed, content="true")
+  fixture.func.verify()
+}
+
+///|
+test "counted-loop analysis follows loop-external constant copies" {
+  let fixture = make_canonical_i32_loop(0, 4, 1)
+  let initial = match fixture.preheader.terminator {
+    Some(Jump(_, args)) => args[0]
+    _ => fail("expected preheader jump")
+  }
+  let copied_initial = fixture.func.new_value(I32)
+  fixture.preheader.append_inst(
+    fixture.func.new_inst(Copy, [initial], [copied_initial]),
+  )
+  fixture.preheader.set_terminator(Jump(fixture.header.id, [copied_initial]))
   inspect(unroll_counted_loops(fixture.func).changed, content="true")
   fixture.func.verify()
 }

@@ -62,17 +62,41 @@ fn find_integer_constant_outside_loop(
   if value.ty != I32 && value.ty != I64 {
     return None
   }
+  let visited : @hashset.HashSet[Int] = HashSet([])
+  find_integer_constant_outside_loop_inner(func, loop_, value, visited)
+}
+
+///|
+fn find_integer_constant_outside_loop_inner(
+  func : Function,
+  loop_ : Loop,
+  value : Value,
+  visited : @hashset.HashSet[Int],
+) -> Int64? {
+  if visited.contains(value.id) {
+    return None
+  }
+  visited.add(value.id)
   for block in func.blocks {
     if loop_.contains(block.id) {
       continue
     }
     for inst in block.instructions {
-      if inst.opcode is Iconst(constant) {
-        for result in inst.results {
-          if result.id == value.id && result.ty == value.ty {
-            return Some(constant)
+      guard inst.results.any(result => result.id == value.id) else { continue }
+      match inst.opcode {
+        Iconst(constant) => return Some(constant)
+        Copy =>
+          if inst.operands.length() == 1 && inst.operands[0].ty == value.ty {
+            return find_integer_constant_outside_loop_inner(
+              func,
+              loop_,
+              inst.operands[0],
+              visited,
+            )
+          } else {
+            return None
           }
-        }
+        _ => return None
       }
     }
   }

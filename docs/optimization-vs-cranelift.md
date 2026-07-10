@@ -189,8 +189,9 @@ Defined in `ir/opt_driver.mbt`:
   - post-fixed-point IR-level rematerialization + DCE cleanup.
 - **O3 loop phase** additionally runs LICM, checked counted-loop unrolling,
   strength reduction, and a final O2 cleanup. Counted-loop unrolling requires a
-  complete constant-trip proof and uses bounded full or factor-two expansion;
-  unsupported loops are left unchanged.
+  complete constant-trip proof, follows loop-external constant copies, and uses
+  bounded full or factor-two expansion. Body/latch block parameters and other
+  unsupported loop shapes are left unchanged.
 
 **Alignment with Cranelift**: the “mandatory cleanup even at O0” approach is
 consistent with Cranelift’s view that downstream codegen benefits greatly from

@@ -68,6 +68,19 @@ pub fn compare_result_is_match(result : CompareResult) -> Bool {
 }
 
 ///|
+/// Return whether both execution paths failed with the expected trap text.
+pub fn compare_result_errors_contain(
+  result : CompareResult,
+  expected : String,
+) -> Bool {
+  match (result.jit_result, result.interp_result) {
+    (Err(jit_error), Err(interp_error)) =>
+      jit_error.contains(expected) && interp_error.contains(expected)
+    _ => false
+  }
+}
+
+///|
 pub impl Show for CompareResult with fn output(self, logger) {
   if self.match_ {
     logger.write_string("matched")
