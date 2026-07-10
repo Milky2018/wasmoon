@@ -1,6 +1,9 @@
 // ============ Run All Optimizations ============
 
 ///|
+const ENABLE_STAGED_LOOP_UNROLL : Bool = false
+
+///|
 /// Optimization level
 /// - 0: No optimization
 /// - 1: Basic optimizations (constant folding, copy propagation, CSE, DCE)
@@ -236,6 +239,14 @@ fn optimize_o3(func : Function) -> OptResult {
   }
   // Loop unrolling stays disabled until the IR has trip-count analysis and a
   // CFG/SSA rewrite that preserves control flow, dependencies, and effects.
+  if ENABLE_STAGED_LOOP_UNROLL {
+    let unroll_result = run_opt_pass(
+      func, "loop_full_unroll", full_unroll_i32_loops,
+    )
+    if unroll_result.changed {
+      result.mark_changed()
+    }
+  }
   let sr_result = run_opt_pass(func, "loop_strength_reduce", reduce_strength)
   if sr_result.changed {
     result.mark_changed()
