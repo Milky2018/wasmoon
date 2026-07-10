@@ -308,29 +308,6 @@ fn opcode_identity_equal(lhs : Opcode, rhs : Opcode) -> Bool {
 }
 
 ///|
-fn Inst::Inst(
-  result : Value?,
-  opcode : Opcode,
-  operands : Array[Value],
-) -> Inst {
-  let results = match result {
-    Some(v) => [v]
-    None => []
-  }
-  { id: -1, results, opcode, args: operands, operands, metadata: [] }
-}
-
-///|
-/// Create an instruction with multiple results (for multi-value call)
-fn Inst::new_multi(
-  results : Array[Value],
-  opcode : Opcode,
-  operands : Array[Value],
-) -> Inst {
-  { id: -1, results, opcode, args: operands, operands, metadata: [] }
-}
-
-///|
 fn Inst::new_with_id(
   id : Int,
   opcode : Opcode,

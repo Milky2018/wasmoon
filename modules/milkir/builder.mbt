@@ -119,7 +119,7 @@ pub fn FunctionBuilder::emit_inst(
 ) -> Value {
   let block = self.current_block
   let result = self.func.new_value(ty)
-  let inst = Inst(Some(result), opcode, operands)
+  let inst = self.func.new_inst(opcode, operands, [result])
   block.add_inst(inst)
   result
 }
@@ -132,7 +132,7 @@ pub fn FunctionBuilder::emit_void_inst(
   operands : Array[Value],
 ) -> Unit {
   let block = self.current_block
-  let inst = Inst(None, opcode, operands)
+  let inst = self.func.new_inst(opcode, operands, [])
   block.add_inst(inst)
 }
 
@@ -153,7 +153,7 @@ pub fn FunctionBuilder::emit_multi_inst(
   for ty in result_types {
     results.push(self.func.new_value(ty))
   }
-  let inst = Inst::new_multi(results, opcode, operands)
+  let inst = self.func.new_inst(opcode, operands, results)
   block.add_inst(inst)
   results
 }

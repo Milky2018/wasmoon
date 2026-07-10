@@ -17,6 +17,12 @@ pub suberror VerifyError {
   MissingTerminator(block_id~ : Int)
   EmptyFunction
   UndefinedValue(value_id~ : Int)
+  DuplicateBlockId(block_id~ : Int)
+  DuplicateValueDefinition(value_id~ : Int)
+  DuplicateInstructionId(inst_id~ : Int)
+  UseBeforeDefinition(value_id~ : Int)
+  NonDominatingUse(value_id~ : Int, defining_block~ : Int, use_block~ : Int)
+  InstructionOperandMismatch(inst_id~ : Int)
   InvalidBlockTarget(block_id~ : Int)
   ArityMismatch(message~ : String)
   TypeMismatch(message~ : String)

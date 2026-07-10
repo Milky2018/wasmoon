@@ -3,10 +3,23 @@ pub suberror VerifyError {
   MissingTerminator(block_id~ : Int)
   EmptyFunction
   UndefinedValue(value_id~ : Int)
+  DuplicateBlockId(block_id~ : Int)
+  DuplicateValueDefinition(value_id~ : Int)
+  DuplicateInstructionId(inst_id~ : Int)
+  UseBeforeDefinition(value_id~ : Int)
+  NonDominatingUse(value_id~ : Int, defining_block~ : Int, use_block~ : Int)
+  InstructionOperandMismatch(inst_id~ : Int)
   InvalidBlockTarget(block_id~ : Int)
   ArityMismatch(message~ : String)
   TypeMismatch(message~ : String)
 } derive(Debug, Eq)
+
+///|
+priv enum ValueDefinition {
+  FunctionParameter(Type)
+  BlockParameter(Type, Int)
+  InstructionResult(Type, Int, Int)
+}
 
 ///|
 pub impl Show for VerifyError with fn output(self, logger) {
@@ -18,47 +31,152 @@ pub fn Function::verify(self : Function) -> Unit raise VerifyError {
   if self.blocks.is_empty() {
     raise EmptyFunction
   }
-  let blocks : Array[Block?] = Array::make(self.next_block_id, None)
+  let mut max_block_id = -1
   for block in self.blocks {
-    blocks[block.id] = Some(block)
+    if block.id < 0 {
+      raise InvalidBlockTarget(block_id=block.id)
+    }
+    if block.id > max_block_id {
+      max_block_id = block.id
+    }
   }
-  let defined : @hashmap.HashMap[Int, Type] = HashMap([])
+  let blocks : Array[Block?] = Array::make(max_block_id + 1, None)
+  for block in self.blocks {
+    if blocks[block.id] is Some(_) {
+      raise DuplicateBlockId(block_id=block.id)
+    }
+    blocks[block.id] = Some(block)
+    if block.terminator is None {
+      raise MissingTerminator(block_id=block.id)
+    }
+  }
+  let definitions : @hashmap.HashMap[Int, ValueDefinition] = HashMap([])
   for item in self.params {
     let (param, ty) = item
-    defined.set(param.id, ty)
+    record_definition(param, ty, FunctionParameter(ty), definitions)
   }
+  let instruction_ids : @hashset.HashSet[Int] = HashSet([])
   for block in self.blocks {
     for item in block.params {
       let (param, ty) = item
-      defined.set(param.id, ty)
+      record_definition(param, ty, BlockParameter(ty, block.id), definitions)
     }
-    for inst in block.instructions {
-      verify_inst(inst, defined)
+    for inst_index, inst in block.instructions {
+      if instruction_ids.contains(inst.id) {
+        raise DuplicateInstructionId(inst_id=inst.id)
+      }
+      instruction_ids.add(inst.id)
+      verify_instruction_operands(inst)
       for result in inst.results {
-        defined.set(result.id, result.ty)
+        record_definition(
+          result,
+          result.ty,
+          InstructionResult(result.ty, block.id, inst_index),
+          definitions,
+        )
       }
     }
-    if block.terminator is None {
-      raise MissingTerminator(block_id=block.id)
-    } else if block.terminator is Some(term) {
-      verify_terminator(term, defined, blocks, self.results)
+  }
+  let idom = CFG::build(self).compute_dominators()
+  for block in self.blocks {
+    for inst_index, inst in block.instructions {
+      verify_inst(inst, definitions, block.id, inst_index, idom)
     }
+    if block.terminator is Some(term) {
+      verify_terminator(
+        term,
+        definitions,
+        blocks,
+        self.results,
+        block.id,
+        block.instructions.length(),
+        idom,
+      )
+    }
+  }
+}
+
+///|
+fn record_definition(
+  value : Value,
+  declared_type : Type,
+  definition : ValueDefinition,
+  definitions : @hashmap.HashMap[Int, ValueDefinition],
+) -> Unit raise VerifyError {
+  if value.ty != declared_type {
+    raise TypeMismatch(
+      message="value \{value.id} has type \{value.ty}, but its declaration has type \{declared_type}",
+    )
+  }
+  if definitions.get(value.id) is Some(_) {
+    raise DuplicateValueDefinition(value_id=value.id)
+  }
+  definitions.set(value.id, definition)
+}
+
+///|
+fn definition_type(definition : ValueDefinition) -> Type {
+  match definition {
+    FunctionParameter(ty)
+    | BlockParameter(ty, _)
+    | InstructionResult(ty, _, _) => ty
   }
 }
 
 ///|
 fn verify_defined(
   value : Value,
-  defined : @hashmap.HashMap[Int, Type],
+  definitions : @hashmap.HashMap[Int, ValueDefinition],
+  use_block : Int,
+  use_position : Int,
+  idom : Array[Int],
 ) -> Unit raise VerifyError {
-  match defined.get(value.id) {
+  match definitions.get(value.id) {
     None => raise UndefinedValue(value_id=value.id)
-    Some(defined_type) =>
+    Some(definition) => {
+      let defined_type = definition_type(definition)
       if value.ty != defined_type {
         raise TypeMismatch(
           message="value \{value.id} has type \{value.ty}, but its definition has type \{defined_type}",
         )
       }
+      match definition {
+        FunctionParameter(_) => ()
+        BlockParameter(_, defining_block) =>
+          if defining_block != use_block &&
+            !dominates_with_idom(idom, defining_block, use_block) {
+            raise NonDominatingUse(
+              value_id=value.id,
+              defining_block~,
+              use_block~,
+            )
+          }
+        InstructionResult(_, defining_block, defining_position) =>
+          if defining_block == use_block {
+            if defining_position >= use_position {
+              raise UseBeforeDefinition(value_id=value.id)
+            }
+          } else if !dominates_with_idom(idom, defining_block, use_block) {
+            raise NonDominatingUse(
+              value_id=value.id,
+              defining_block~,
+              use_block~,
+            )
+          }
+      }
+    }
+  }
+}
+
+///|
+fn verify_instruction_operands(inst : Inst) -> Unit raise VerifyError {
+  if inst.args.length() != inst.operands.length() {
+    raise InstructionOperandMismatch(inst_id=inst.id)
+  }
+  for i in 0..<inst.args.length() {
+    if inst.args[i] != inst.operands[i] {
+      raise InstructionOperandMismatch(inst_id=inst.id)
+    }
   }
 }
 
@@ -105,12 +223,15 @@ fn verify_block_args(
   block_id : Int,
   args : Array[Value],
   blocks : Array[Block?],
-  defined : @hashmap.HashMap[Int, Type],
+  definitions : @hashmap.HashMap[Int, ValueDefinition],
   edge : String,
+  use_block : Int,
+  use_position : Int,
+  idom : Array[Int],
 ) -> Unit raise VerifyError {
   let block = require_block(block_id, blocks)
   for arg in args {
-    verify_defined(arg, defined)
+    verify_defined(arg, definitions, use_block, use_position, idom)
   }
   if args.length() != block.params.length() {
     raise ArityMismatch(
@@ -137,10 +258,13 @@ fn verify_i32(value : Value, context : String) -> Unit raise VerifyError {
 ///|
 fn verify_inst(
   inst : Inst,
-  defined : @hashmap.HashMap[Int, Type],
+  definitions : @hashmap.HashMap[Int, ValueDefinition],
+  use_block : Int,
+  use_position : Int,
+  idom : Array[Int],
 ) -> Unit raise VerifyError {
   for arg in inst.args {
-    verify_defined(arg, defined)
+    verify_defined(arg, definitions, use_block, use_position, idom)
   }
   match inst.opcode {
     Iconst(_) | Fconst(_) | StackAddr(_) =>
@@ -235,14 +359,17 @@ fn verify_inst(
 ///|
 fn verify_terminator(
   term : Terminator,
-  defined : @hashmap.HashMap[Int, Type],
+  definitions : @hashmap.HashMap[Int, ValueDefinition],
   blocks : Array[Block?],
   result_types : Array[Type],
+  use_block : Int,
+  use_position : Int,
+  idom : Array[Int],
 ) -> Unit raise VerifyError {
   match term {
     Return(values) => {
       for value in values {
-        verify_defined(value, defined)
+        verify_defined(value, definitions, use_block, use_position, idom)
       }
       if values.length() != result_types.length() {
         raise ArityMismatch(
@@ -259,27 +386,71 @@ fn verify_terminator(
       }
     }
     Jump(target, values) =>
-      verify_block_args(target, values, blocks, defined, "jump")
+      verify_block_args(
+        target, values, blocks, definitions, "jump", use_block, use_position, idom,
+      )
     Branch(cond, true_target, true_args, false_target, false_args) => {
-      verify_defined(cond, defined)
+      verify_defined(cond, definitions, use_block, use_position, idom)
       verify_i32(cond, "branch condition")
-      verify_block_args(true_target, true_args, blocks, defined, "branch")
-      verify_block_args(false_target, false_args, blocks, defined, "branch")
+      verify_block_args(
+        true_target, true_args, blocks, definitions, "branch", use_block, use_position,
+        idom,
+      )
+      verify_block_args(
+        false_target, false_args, blocks, definitions, "branch", use_block, use_position,
+        idom,
+      )
     }
     Brz(cond, true_target, false_target)
     | Brnz(cond, true_target, false_target) => {
-      verify_defined(cond, defined)
+      verify_defined(cond, definitions, use_block, use_position, idom)
       verify_i32(cond, "branch condition")
-      verify_block_args(true_target, [], blocks, defined, "branch")
-      verify_block_args(false_target, [], blocks, defined, "branch")
+      verify_block_args(
+        true_target,
+        [],
+        blocks,
+        definitions,
+        "branch",
+        use_block,
+        use_position,
+        idom,
+      )
+      verify_block_args(
+        false_target,
+        [],
+        blocks,
+        definitions,
+        "branch",
+        use_block,
+        use_position,
+        idom,
+      )
     }
     BrTable(index, targets, default_target) => {
-      verify_defined(index, defined)
+      verify_defined(index, definitions, use_block, use_position, idom)
       verify_i32(index, "branch table index")
       for target in targets {
-        verify_block_args(target, [], blocks, defined, "branch table")
+        verify_block_args(
+          target,
+          [],
+          blocks,
+          definitions,
+          "branch table",
+          use_block,
+          use_position,
+          idom,
+        )
       }
-      verify_block_args(default_target, [], blocks, defined, "branch table")
+      verify_block_args(
+        default_target,
+        [],
+        blocks,
+        definitions,
+        "branch table",
+        use_block,
+        use_position,
+        idom,
+      )
     }
     Trap(_) | TrapExit(_) => ()
   }
