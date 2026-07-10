@@ -797,6 +797,22 @@ test "counted-loop unrolling transforms verified I64 loops" {
 }
 
 ///|
+test "O3 invokes safe counted-loop unrolling" {
+  let fixture = make_carried_effect_loop(10)
+  optimize_with_level(fixture.func, O3) |> ignore
+  let mut indirect_calls = 0
+  for block in fixture.func.blocks {
+    for inst in block.instructions {
+      if inst.opcode is CallIndirect(_) {
+        indirect_calls = indirect_calls + 1
+      }
+    }
+  }
+  inspect(indirect_calls, content="2")
+  fixture.func.verify()
+}
+
+///|
 test "full-unroll analysis skips reversed predicates and dynamic bounds" {
   let reversed = make_canonical_i32_loop(0, 4, 1)
   let compare = reversed.header.instructions[0]

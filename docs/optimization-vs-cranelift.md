@@ -187,6 +187,10 @@ Defined in `ir/opt_driver.mbt`:
   - classic scalar opts (constant fold, copy-prop, CSE, GVN, DCE),
   - CFG opts (branch simplify, unreachable, block merge, jump threading) at O2+,
   - post-fixed-point IR-level rematerialization + DCE cleanup.
+- **O3 loop phase** additionally runs LICM, checked counted-loop unrolling,
+  strength reduction, and a final O2 cleanup. Counted-loop unrolling requires a
+  complete constant-trip proof and uses bounded full or factor-two expansion;
+  unsupported loops are left unchanged.
 
 **Alignment with Cranelift**: the “mandatory cleanup even at O0” approach is
 consistent with Cranelift’s view that downstream codegen benefits greatly from
@@ -291,7 +295,7 @@ legalization. The table below is meant as an orientation aid.
 | Unreachable elimination | `ir/opt_cfg.mbt` | `unreachable_code::eliminate_unreachable_code` | Broadly aligned. |
 | Block merge / jump threading | `ir/opt_cfg.mbt` | (No direct analogue in `Context::optimize`) | Wasmoon is more aggressive at CFG shaping pre-isel. |
 | Rematerialization (post fixed-point) | `ir/opt_passes_remat.mbt` | `opts/remat.isle` + `egraph/elaborate.rs::maybe_remat_arg` | Strong alignment: same goal (shrink live ranges) and similar policy (non-recursive). |
-| Loop opts (O3) | `ir/opt_loops.mbt` | Loop-aware elaboration (LICM-like) | Wasmoon currently limits O3 loop transforms to LICM and strength reduction; loop unrolling requires trip-count and CFG/SSA rewrite support. |
+| Loop opts (O3) | `modules/milkir/opt_loops.mbt`, `modules/milkir/opt_loop_unroll.mbt` | Loop-aware elaboration (LICM-like) | Wasmoon runs LICM and strength reduction plus conservative counted-loop unrolling. The unroller supports checked signed/unsigned I32/I64 induction, complete loop-carried SSA remapping, full expansion up to eight trips, and factor-two expansion with strict code-growth limits. |
 
 ### 4.1 Dead code elimination (DCE)
 

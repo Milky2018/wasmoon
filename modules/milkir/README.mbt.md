@@ -262,9 +262,17 @@ The optimization levels are:
 | `O0` | Minimal pipeline: removes dead code plus constant and unused block parameters. |
 | `O1` | The standard Cranelift-style simplification pipeline. |
 | `O2` | The default level and an alias for the standard `O1` pass set. |
-| `O3` | The `O2` pipeline, loop-invariant code motion, strength reduction, and a final `O2` cleanup. |
+| `O3` | The `O2` pipeline, loop-invariant code motion, checked counted-loop unrolling, strength reduction, and a final `O2` cleanup. |
 
 Use `optimize(func)` for the default pipeline or `optimize_with_level(func, level)` when the caller chooses the level explicitly. Optimizers assume a valid SSA and block-parameter structure. Verify before optimization when the input comes from a frontend, then verify again after developing a new transformation.
+
+### Counted-loop unrolling at O3
+
+O3 unrolls only natural loops for which analysis produces a complete plan. The supported form has one preheader, one header comparison, one body path, one latch/back edge, and one exit. Initial values, bounds, and steps must be constants; the induction value may be I32 or I64 and may use signed or unsigned `<`, `<=`, `>`, or `>=` comparisons. Reversed comparison operands and inverted conditional-branch polarity are normalized before analysis. Increasing and decreasing updates use checked arithmetic, so a loop whose final update would wrap is rejected.
+
+All header block parameters are treated as loop-carried state. Full unrolling is limited to at most eight source iterations, while larger proven loops use factor-two unrolling with one peeled iteration for odd trip counts. Both strategies cap newly cloned instructions at 64. Cloning assigns fresh instruction and value IDs, remaps zero-result and multi-result instructions, preserves metadata and effect order, and verifies correctly with calls, loads, stores, and traps.
+
+The pass leaves the function unchanged when the CFG shape is unsupported, a bound or step is dynamic, the trip count exceeds the analysis limit, an operand or latch edge cannot be mapped, arithmetic may wrap, or code growth exceeds the budget.
 
 ## Calls, memory, and traps
 

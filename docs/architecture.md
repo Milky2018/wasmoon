@@ -83,6 +83,8 @@ Core modules pass through `wasmoon/validator` before the CLI instantiates or com
 7. Package compiled functions as an in-memory or serialized CWASM artifact.
 8. Let `wasmoon_jit` resolve runtime symbols, install code, initialize VMContext state, and enter native code through Wasmoon-owned trampolines.
 
+At O3, MilkIR may unroll only canonical constant-trip natural loops after checked signed/unsigned I32 or I64 trip analysis and complete SSA/effect remapping. Unsupported shapes, dynamic bounds, possible arithmetic wraparound, and transformations beyond the code-growth budget remain unchanged.
+
 The top-level `wasmoon/wasm_frontend` package is the product API boundary. Product callers do not import `wasmoon/wasm_frontend/ir` directly.
 
 ## IR and ABI Boundaries
