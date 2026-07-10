@@ -240,9 +240,7 @@ fn optimize_o3(func : Function) -> OptResult {
   // Loop unrolling stays disabled until the IR has trip-count analysis and a
   // CFG/SSA rewrite that preserves control flow, dependencies, and effects.
   if ENABLE_STAGED_LOOP_UNROLL {
-    let unroll_result = run_opt_pass(
-      func, "loop_full_unroll", full_unroll_i32_loops,
-    )
+    let unroll_result = run_opt_pass(func, "loop_unroll", unroll_i32_loops)
     if unroll_result.changed {
       result.mark_changed()
     }

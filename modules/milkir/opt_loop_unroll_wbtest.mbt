@@ -61,13 +61,13 @@ fn make_canonical_i32_loop(
 }
 
 ///|
-fn make_carried_effect_loop() -> CarriedEffectLoopFixture {
+fn make_carried_effect_loop(bound_value : Int) -> CarriedEffectLoopFixture {
   let builder = FunctionBuilder::FunctionBuilder("carried_effect_loop")
   let callee = builder.add_param(Ptr)
   let address = builder.add_param(Ptr)
   let preheader = builder.current_block()
   let initial = builder.iconst_i32(0)
-  let bound = builder.iconst_i32(2)
+  let bound = builder.iconst_i32(bound_value)
   let step = builder.iconst_i32(1)
   let initial_accumulator = builder.iconst_i32(10)
   let offset = builder.iconst_i64(0L)
@@ -119,7 +119,13 @@ fn require_full_unroll_plan(func : Function) -> FullUnrollPlan raise {
   if loops.length() != 1 {
     fail("expected exactly one loop")
   }
-  match analyze_i32_full_unroll(func, CFG::build(func), loops[0]) {
+  match
+    analyze_i32_counted_loop(
+      func,
+      CFG::build(func),
+      loops[0],
+      MAX_FACTOR_TWO_TRIP_COUNT,
+    ) {
     Apply(plan) => plan
     Skip(reason) => fail("expected an unroll plan, got: \{reason}")
   }
@@ -128,7 +134,7 @@ fn require_full_unroll_plan(func : Function) -> FullUnrollPlan raise {
 ///|
 fn require_unroll_skip_without_mutation(func : Function) -> Unit raise {
   let before = func.print()
-  let result = full_unroll_i32_loops(func)
+  let result = unroll_i32_loops(func)
   if result.changed {
     fail("unsupported loop was transformed")
   }
@@ -136,6 +142,67 @@ fn require_unroll_skip_without_mutation(func : Function) -> Unit raise {
     fail("unsupported loop was mutated")
   }
   func.verify()
+}
+
+///|
+fn evaluate_canonical_instructions(
+  instructions : Array[Inst],
+  values : @hashmap.HashMap[Int, Int64],
+) -> Int raise {
+  let mut body_executions = 0
+  for inst in instructions {
+    match inst.opcode {
+      Iconst(value) => values.set(inst.results[0].id, value)
+      Iadd => {
+        let lhs = values.get(inst.operands[0].id).unwrap()
+        let rhs = values.get(inst.operands[1].id).unwrap()
+        values.set(inst.results[0].id, lhs + rhs)
+      }
+      Imul => {
+        let lhs = values.get(inst.operands[0].id).unwrap()
+        let rhs = values.get(inst.operands[1].id).unwrap()
+        values.set(inst.results[0].id, lhs * rhs)
+        body_executions = body_executions + 1
+      }
+      _ => fail("unexpected opcode in canonical loop evaluator")
+    }
+  }
+  body_executions
+}
+
+///|
+fn evaluate_canonical_i32_loop(
+  fixture : CanonicalI32LoopFixture,
+) -> (Int64, Int) raise {
+  let values : @hashmap.HashMap[Int, Int64] = HashMap([])
+  let mut body_executions = evaluate_canonical_instructions(
+    fixture.preheader.instructions,
+    values,
+  )
+  let bound_value = values
+    .get(fixture.header.instructions[0].operands[1].id)
+    .unwrap()
+  let mut induction = match fixture.preheader.terminator {
+    Some(Jump(_, args)) => values.get(args[0].id).unwrap()
+    _ => fail("expected preheader jump")
+  }
+  let mut iterations = 0
+  while induction < bound_value {
+    values.set(fixture.induction.id, induction)
+    body_executions = body_executions +
+      evaluate_canonical_instructions(fixture.body.instructions, values)
+    body_executions = body_executions +
+      evaluate_canonical_instructions(fixture.latch.instructions, values)
+    induction = match fixture.latch.terminator {
+      Some(Jump(_, args)) => values.get(args[0].id).unwrap()
+      _ => fail("expected latch jump")
+    }
+    iterations = iterations + 1
+    if iterations > 1000 {
+      fail("canonical loop evaluator did not terminate")
+    }
+  }
+  (induction, body_executions)
 }
 
 ///|
@@ -155,7 +222,7 @@ test "full unrolling clones dependent pure instructions with fresh ids" {
   let original_preheader_insts = fixture.preheader.instructions.length()
   let first_fresh_value = fixture.func.next_value_id
   let first_fresh_inst = fixture.func.next_inst_id
-  let result = full_unroll_i32_loops(fixture.func)
+  let result = unroll_i32_loops(fixture.func)
   inspect(result.changed, content="true")
   let cloned = fixture.preheader.instructions[original_preheader_insts:]
   inspect(cloned.length(), content="9")
@@ -200,11 +267,11 @@ test "full unrolling clones dependent pure instructions with fresh ids" {
 
 ///|
 test "full unrolling preserves carried values, multi-results, and effect order" {
-  let fixture = make_carried_effect_loop()
+  let fixture = make_carried_effect_loop(2)
   let original_preheader_insts = fixture.preheader.instructions.length()
   let first_fresh_value = fixture.func.next_value_id
   let first_fresh_inst = fixture.func.next_inst_id
-  let result = full_unroll_i32_loops(fixture.func)
+  let result = unroll_i32_loops(fixture.func)
   inspect(result.changed, content="true")
   let cloned = fixture.preheader.instructions[original_preheader_insts:]
   inspect(cloned.length(), content="16")
@@ -276,13 +343,157 @@ test "full unrolling preserves carried values, multi-results, and effect order" 
 
 ///|
 test "full unrolling rejects an unmappable carried edge without mutation" {
-  let fixture = make_carried_effect_loop()
+  let fixture = make_carried_effect_loop(2)
   let next_induction = fixture.latch.instructions[0].results[0]
   let header_condition = fixture.header.instructions[0].results[0]
   fixture.latch.set_terminator(
     Jump(fixture.header.id, [next_induction, header_condition]),
   )
   require_unroll_skip_without_mutation(fixture.func)
+}
+
+///|
+test "factor-two unrolling composes two transitions for an even trip count" {
+  let fixture = make_canonical_i32_loop(0, 10, 1)
+  let original_preheader_insts = fixture.preheader.instructions.length()
+  let original_latch_insts = fixture.latch.instructions.length()
+  let first_state = fixture.latch.instructions[0].results[0]
+  let result = unroll_i32_loops(fixture.func)
+  inspect(result.changed, content="true")
+  inspect(
+    fixture.preheader.instructions.length(),
+    content=original_preheader_insts.to_string(),
+  )
+  inspect(fixture.latch.instructions.length(), content="4")
+  let second_body_add = fixture.latch.instructions[original_latch_insts]
+  let second_body_mul = fixture.latch.instructions[original_latch_insts + 1]
+  let second_latch_add = fixture.latch.instructions[original_latch_insts + 2]
+  if second_body_add.operands[0] != first_state ||
+    second_body_mul.operands[0] != second_body_add.results[0] ||
+    second_latch_add.operands[0] != first_state {
+    fail("factor-two transition did not start from the first transition state")
+  }
+  match fixture.latch.terminator {
+    Some(Jump(target, args)) =>
+      if target != fixture.header.id ||
+        args.length() != 1 ||
+        args[0] != second_latch_add.results[0] {
+        fail("factor-two latch did not forward the second transition state")
+      }
+    _ => fail("expected latch jump")
+  }
+  fixture.func.verify()
+}
+
+///|
+test "factor-two unrolling peels one transition for an odd trip count" {
+  let fixture = make_canonical_i32_loop(0, 11, 1)
+  let original_preheader_insts = fixture.preheader.instructions.length()
+  let original_latch_insts = fixture.latch.instructions.length()
+  let result = unroll_i32_loops(fixture.func)
+  inspect(result.changed, content="true")
+  inspect(
+    fixture.preheader.instructions.length() - original_preheader_insts,
+    content="3",
+  )
+  inspect(
+    fixture.latch.instructions.length() - original_latch_insts,
+    content="3",
+  )
+  let peeled_latch = fixture.preheader.instructions[fixture.preheader.instructions.length() -
+    1]
+  match fixture.preheader.terminator {
+    Some(Jump(target, args)) =>
+      if target != fixture.header.id ||
+        args.length() != 1 ||
+        args[0] != peeled_latch.results[0] {
+        fail("odd-trip remainder was not forwarded to the header")
+      }
+    _ => fail("expected preheader jump")
+  }
+  fixture.func.verify()
+}
+
+///|
+test "factor-two policy preserves zero-trip and one-trip loops" {
+  let zero = make_canonical_i32_loop(0, 0, 1)
+  let zero_before = zero.func.print()
+  inspect(unroll_i32_loops(zero.func).changed, content="false")
+  if zero.func.print() != zero_before {
+    fail("zero-trip loop was mutated")
+  }
+  let one = make_canonical_i32_loop(0, 1, 1)
+  let original_preheader_insts = one.preheader.instructions.length()
+  inspect(unroll_i32_loops(one.func).changed, content="true")
+  inspect(
+    one.preheader.instructions.length() - original_preheader_insts,
+    content="3",
+  )
+  inspect(one.latch.instructions.length(), content="1")
+  one.func.verify()
+}
+
+///|
+test "factor-two unrolling preserves carried effects in both transitions" {
+  let fixture = make_carried_effect_loop(10)
+  let original_latch_insts = fixture.latch.instructions.length()
+  let first_state = match fixture.latch.terminator {
+    Some(Jump(_, args)) => args
+    _ => fail("expected latch jump")
+  }
+  let result = unroll_i32_loops(fixture.func)
+  inspect(result.changed, content="true")
+  inspect(
+    fixture.latch.instructions.length() - original_latch_insts,
+    content="8",
+  )
+  let call = fixture.latch.instructions[original_latch_insts]
+  let pair_sum = fixture.latch.instructions[original_latch_insts + 1]
+  let load = fixture.latch.instructions[original_latch_insts + 2]
+  let accumulated = fixture.latch.instructions[original_latch_insts + 3]
+  let next_accumulator = fixture.latch.instructions[original_latch_insts + 4]
+  let store = fixture.latch.instructions[original_latch_insts + 5]
+  let trap = fixture.latch.instructions[original_latch_insts + 6]
+  let next_induction = fixture.latch.instructions[original_latch_insts + 7]
+  if !(call.opcode is CallIndirect(_)) ||
+    pair_sum.opcode != Iadd ||
+    load.opcode != LoadPtr(I32) ||
+    accumulated.opcode != Iadd ||
+    next_accumulator.opcode != Iadd ||
+    store.opcode != StorePtr(I32) ||
+    trap.opcode != Trap("effect trap") ||
+    next_induction.opcode != Iadd {
+    fail("factor-two effect order changed")
+  }
+  if accumulated.operands[0] != first_state[1] ||
+    next_induction.operands[0] != first_state[0] ||
+    store.operands[1] != next_accumulator.results[0] ||
+    trap.operands[0] != next_accumulator.results[0] {
+    fail("factor-two carried effects were not remapped")
+  }
+  match fixture.latch.terminator {
+    Some(Jump(_, args)) =>
+      if args[0] != next_induction.results[0] ||
+        args[1] != next_accumulator.results[0] {
+        fail("factor-two latch did not forward the second carried state")
+      }
+    _ => fail("expected latch jump")
+  }
+  fixture.func.verify()
+}
+
+///|
+test "factor-two transformed loops match the original state and body count" {
+  for trip_count in [0, 1, 9, 10, 11] {
+    let original = make_canonical_i32_loop(0, trip_count, 1)
+    let expected = evaluate_canonical_i32_loop(original)
+    let transformed = make_canonical_i32_loop(0, trip_count, 1)
+    unroll_i32_loops(transformed.func) |> ignore
+    let actual = evaluate_canonical_i32_loop(transformed)
+    if actual != expected {
+      fail("factor-two differential mismatch at trip \{trip_count}")
+    }
+  }
 }
 
 ///|
@@ -332,10 +543,10 @@ test "full-unroll analysis skips multiple latches and early exits" {
 test "full-unroll analysis skips unsafe arithmetic and excessive growth" {
   let overflowing = make_canonical_i32_loop(2147483646, 2147483647, 2)
   require_unroll_skip_without_mutation(overflowing.func)
-  let too_large = make_canonical_i32_loop(0, MAX_FULL_UNROLL_TRIP_COUNT + 1, 1)
+  let too_large = make_canonical_i32_loop(0, MAX_FACTOR_TWO_TRIP_COUNT + 1, 1)
   require_unroll_skip_without_mutation(too_large.func)
   let too_wide = make_canonical_i32_loop(0, MAX_FULL_UNROLL_TRIP_COUNT, 1)
-  for _ in 0..<6 {
+  for _ in 0..<62 {
     let result = too_wide.func.new_value(I32)
     too_wide.body.append_inst(
       too_wide.func.new_inst(Iadd, [too_wide.induction, too_wide.step], [result]),

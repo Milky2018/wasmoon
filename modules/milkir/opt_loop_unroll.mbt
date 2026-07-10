@@ -2,6 +2,9 @@
 const MAX_FULL_UNROLL_TRIP_COUNT : Int = 8
 
 ///|
+const MAX_FACTOR_TWO_TRIP_COUNT : Int = 1000000
+
+///|
 const MAX_FULL_UNROLL_CLONED_INSTRUCTIONS : Int = 64
 
 ///|
@@ -14,6 +17,7 @@ const I32_SIGNED_MAX : Int64 = 2147483647L
 priv struct FullUnrollPlan {
   preheader : Block
   header : Block
+  latch : Block
   header_params : Array[Value]
   initial_args : Array[Value]
   iteration_blocks : Array[Block]
@@ -112,6 +116,7 @@ fn checked_i32_full_unroll_trip_count(
   initial : Int64,
   bound : Int64,
   step : Int64,
+  max_trip_count : Int,
 ) -> Int? {
   if initial < I32_SIGNED_MIN ||
     initial > I32_SIGNED_MAX ||
@@ -126,7 +131,7 @@ fn checked_i32_full_unroll_trip_count(
   }
   let distance = bound - initial
   let trips = (distance + step - 1L) / step
-  if trips > MAX_FULL_UNROLL_TRIP_COUNT.to_int64() {
+  if trips > max_trip_count.to_int64() {
     return None
   }
   let final_value = initial + trips * step
@@ -137,10 +142,11 @@ fn checked_i32_full_unroll_trip_count(
 }
 
 ///|
-fn analyze_i32_full_unroll(
+fn analyze_i32_counted_loop(
   func : Function,
   cfg : CFG,
   loop_ : Loop,
+  max_trip_count : Int,
 ) -> FullUnrollDecision {
   if loop_.back_edges.length() != 1 {
     return Skip("loop must have one back edge")
@@ -331,23 +337,15 @@ fn analyze_i32_full_unroll(
   }
   let trip_count = match
     checked_i32_full_unroll_trip_count(
-      initial_constant, bound_constant, step_constant,
+      initial_constant, bound_constant, step_constant, max_trip_count,
     ) {
     Some(value) => value
     None => return Skip("trip count is unsafe or exceeds the unroll bound")
   }
-  let mut instructions_per_iteration = 0
-  for block in iteration_blocks {
-    instructions_per_iteration = instructions_per_iteration +
-      block.instructions.length()
-  }
-  if instructions_per_iteration * trip_count >
-    MAX_FULL_UNROLL_CLONED_INSTRUCTIONS {
-    return Skip("unrolled body exceeds the code-growth budget")
-  }
   Apply({
     preheader,
     header,
+    latch,
     header_params,
     initial_args,
     iteration_blocks,
@@ -385,38 +383,103 @@ fn clone_unrolled_instruction(
 }
 
 ///|
+fn unroll_transition_instructions(plan : FullUnrollPlan) -> Array[Inst] {
+  let instructions : Array[Inst] = []
+  for block in plan.iteration_blocks {
+    for inst in block.instructions {
+      instructions.push(inst)
+    }
+  }
+  instructions
+}
+
+///|
+fn clone_unrolled_transition(
+  func : Function,
+  plan : FullUnrollPlan,
+  source : Array[Inst],
+  start_args : Array[Value],
+  destination : Array[Inst],
+) -> Array[Value] {
+  let values : @hashmap.HashMap[Int, Value] = HashMap([])
+  for i, param in plan.header_params {
+    values.set(param.id, start_args[i])
+  }
+  for inst in source {
+    destination.push(clone_unrolled_instruction(func, inst, values))
+  }
+  plan.latch_args.map(fn(value) { remap_unrolled_value(value, values) })
+}
+
+///|
 fn apply_i32_full_unroll(func : Function, plan : FullUnrollPlan) -> Bool {
   if plan.trip_count == 0 {
     return false
   }
-  let values : @hashmap.HashMap[Int, Value] = HashMap([])
+  let source = unroll_transition_instructions(plan)
   let mut current_args = plan.initial_args.copy()
   for _ in 0..<plan.trip_count {
-    for i, param in plan.header_params {
-      values.set(param.id, current_args[i])
-    }
-    for block in plan.iteration_blocks {
-      for inst in block.instructions {
-        plan.preheader.instructions.push(
-          clone_unrolled_instruction(func, inst, values),
-        )
-      }
-    }
-    current_args = plan.latch_args.map(fn(value) {
-      remap_unrolled_value(value, values)
-    })
+    current_args = clone_unrolled_transition(
+      func,
+      plan,
+      source,
+      current_args,
+      plan.preheader.instructions,
+    )
   }
   plan.preheader.set_terminator(Jump(plan.header.id, current_args))
   true
 }
 
 ///|
-fn full_unroll_i32_loops(func : Function) -> OptResult {
+fn apply_i32_factor_two_unroll(func : Function, plan : FullUnrollPlan) -> Bool {
+  if plan.trip_count == 0 {
+    return false
+  }
+  let source = unroll_transition_instructions(plan)
+  let remainder = plan.trip_count % 2
+  let mut entry_args = plan.initial_args.copy()
+  if remainder == 1 {
+    entry_args = clone_unrolled_transition(
+      func,
+      plan,
+      source,
+      entry_args,
+      plan.preheader.instructions,
+    )
+    plan.preheader.set_terminator(Jump(plan.header.id, entry_args))
+  }
+  if plan.trip_count - remainder == 0 {
+    return true
+  }
+  let second_args = clone_unrolled_transition(
+    func,
+    plan,
+    source,
+    plan.latch_args,
+    plan.latch.instructions,
+  )
+  plan.latch.set_terminator(Jump(plan.header.id, second_args))
+  true
+}
+
+///|
+fn factor_two_growth(plan : FullUnrollPlan, instructions : Int) -> Int64 {
+  if plan.trip_count <= 1 {
+    instructions.to_int64() * plan.trip_count.to_int64()
+  } else {
+    instructions.to_int64() * (1 + plan.trip_count % 2).to_int64()
+  }
+}
+
+///|
+fn unroll_i32_loops(func : Function) -> OptResult {
   let result = OptResult::OptResult()
   let cfg = CFG::build(func)
   let plans : Array[FullUnrollPlan] = []
   for loop_ in cfg.find_loops() {
-    match analyze_i32_full_unroll(func, cfg, loop_) {
+    match
+      analyze_i32_counted_loop(func, cfg, loop_, MAX_FACTOR_TWO_TRIP_COUNT) {
       Apply(plan) => plans.push(plan)
       // Keep the reason available to white-box diagnostics while the staged
       // pass intentionally ignores unsupported loops.
@@ -424,7 +487,18 @@ fn full_unroll_i32_loops(func : Function) -> OptResult {
     }
   }
   for plan in plans {
-    if apply_i32_full_unroll(func, plan) {
+    let instruction_count = unroll_transition_instructions(plan).length()
+    let full_growth = instruction_count.to_int64() * plan.trip_count.to_int64()
+    let factor_growth = factor_two_growth(plan, instruction_count)
+    let changed = if plan.trip_count <= MAX_FULL_UNROLL_TRIP_COUNT &&
+      full_growth <= MAX_FULL_UNROLL_CLONED_INSTRUCTIONS.to_int64() {
+      apply_i32_full_unroll(func, plan)
+    } else if factor_growth <= MAX_FULL_UNROLL_CLONED_INSTRUCTIONS.to_int64() {
+      apply_i32_factor_two_unroll(func, plan)
+    } else {
+      false
+    }
+    if changed {
       result.mark_changed()
     }
   }
