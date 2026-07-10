@@ -18,8 +18,8 @@ allocatable register sets, and convenience lowering entry points.
 
 ## Example: inspect AAPCS64 policy
 
-The target owns ABI constants. Higher-level embedders can use this information
-to build compatible call boundaries.
+The target API exposes the ABI details a compiler backend needs before register
+allocation and emission.
 
 ```moonbit check
 ///|
@@ -89,7 +89,9 @@ test "lower AArch64 with an explicit call convention" {
 }
 ```
 
-## Boundary
+## Integration
 
-This module is a target backend. It should stay independent from Wasmoon
-runtime glue and embedding-specific helper resolution.
+Use this package with `Milky2018/milkir_machv` for AArch64 instruction
+selection and `Milky2018/machv_emit` for final machine-code emission. Runtime
+symbols and executable-memory allocation are supplied by the embedding
+application after emission.

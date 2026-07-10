@@ -68,8 +68,9 @@ test "build a branch" {
 }
 ```
 
-## Boundary
+## Integration
 
-`machv` should remain independent from Wasmoon. Product-specific runtime
-symbols, WASI, embedding context fields, and native FFI glue belong in embedding
-modules such as `wasmoon_jit`.
+MachV functions carry virtual registers, ABI locations, calls, and symbolic
+external references through allocation and emission. Target packages provide
+the instruction and register details needed to turn those functions into
+machine code.

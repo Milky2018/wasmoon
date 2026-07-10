@@ -24,7 +24,7 @@ python3 scripts/run_component_wast.py --dir examples/component-model --rec
 6. `06-async-future-stream-smoke.wast`
    - Async future read plus stream create/drop smoke coverage.
 7. `07-wasi-cli-status.wast`
-   - Current root-level WASI CLI import status (expected invalid for now).
+   - Validation behavior for root-level WASI CLI imports.
 8. `08-large-payload-stress.wast`
    - 512-byte string lowering stress check.
 

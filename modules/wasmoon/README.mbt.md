@@ -32,8 +32,7 @@ moon install Milky2018/wasmoon/cmd/wasmoon
 moon install Milky2018/wasmoon/cmd/wasmoon-tools
 ```
 
-If your registry release does not expose these main packages yet, install from
-the Git repository directly:
+To use unreleased changes directly from the Git repository:
 
 ```bash
 moon install https://github.com/Milky2018/wasmoon.git cmd/wasmoon
@@ -190,9 +189,10 @@ wasmoon-tools wit path/to/pkgdir --importize-world my-world --wat
 
 ```
 
-WIT support is still evolving. Current `wasmoon-tools wit` supports parse/resolve
-(`deps/`), JSON output, component encode/decode/importize workflows, and tested
-non-scalar/resource-related cases. Some spec corners may still be unsupported.
+`wasmoon-tools wit` supports parsing and dependency resolution through `deps/`,
+JSON output, component encoding and decoding, importize workflows, and tested
+non-scalar and resource-related cases. Unsupported specification cases return a
+diagnostic.
 
 ## License
 
@@ -213,19 +213,16 @@ python3 scripts/run_component_wast.py --dir component-spec --rec
 
 ## Library Usage
 
-### JIT GC Setup Migration
+### JIT GC Setup
 
-`@jit.gc_setup(...)` now requires VMContext + full function-table context for typed funcref/ref.func safety:
+Call `@jit.gc_setup(...)` with the VMContext and function-table data used by typed function references:
 
 - `ctx_ptr`
 - `func_type_indices`
 - `func_table_ptr`
 - `num_funcs`
 
-`@jit.gc_teardown(...)` also requires the same `ctx_ptr`.
-
-GC runtime caches/heap references are now VMContext-local (no process-global GC cache state), aligned with Wasmtime-style per-store/per-context runtime isolation.
-The API fails fast with `GCSetupError` when setup context is incomplete or inconsistent.
+The setup associates GC runtime state with `ctx_ptr`. Pass the same pointer to `@jit.gc_teardown(...)` when releasing that state. Incomplete or inconsistent setup data raises `GCSetupError`.
 
 ### Basic Example
 
@@ -340,7 +337,7 @@ test "host function" {
 - [x] Tail calls
 - [x] Cross-module function calls
 - [x] WASI Preview 1 support
-- [x] GC proposal support (current implemented subset; experimental)
+- [x] GC proposal support (experimental subset)
 - [x] Component Model support
 - [x] JIT optimizations (constant folding, dead code elimination, etc.)
 

@@ -24,8 +24,8 @@ mutating the original virtual-register instructions.
 
 ## Example: allocate a MachV function
 
-Embedders provide their calling-convention data explicitly; MachV and
-`machv_regalloc` do not know Wasmoon-specific runtime layouts.
+Callers provide their calling-convention data explicitly, allowing the same
+allocation workflow to support different ABIs and reserved-register policies.
 
 ```moonbit check
 ///|
@@ -41,7 +41,7 @@ fn example_abi() -> @abi.EmbeddingABI {
 }
 
 ///|
-test "allocate a canonical MachV copy" {
+test "allocate a MachV copy" {
   let builder = @machv.FunctionBuilder::FunctionBuilder("copy")
   let src = builder.add_param(Int)
   let dst = builder.new_vreg(Int)
@@ -83,7 +83,9 @@ test "read operand locations from regalloc output" {
 }
 ```
 
-## Boundary
+## Integration
 
-This module may depend on MachV and regalloc, but should not depend on product
-runtime packages or native embedding details.
+This package translates MachV functions into the `regalloc` input model and
+maps allocation results back to MachV locations and edits. Use the rewritten
+function API when later passes expect assigned registers, or consume `Output`
+directly while emitting instructions.

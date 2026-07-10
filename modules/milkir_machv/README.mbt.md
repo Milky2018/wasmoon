@@ -13,18 +13,12 @@ details supplied by target modules.
 - `Milky2018/milkir_machv/lower/peephole`: post-lowering machine-level cleanup
   and peephole utilities.
 
-## Module-root README tests
-
-This module root exists to document the lowering family. The executable package
-is `Milky2018/milkir_machv/lower`, so `README.mbt.md` examples run through the
-root facade package in this directory.
-
 ## Example: lower MilkIR with an explicit config
 
 `LoweringConfig` groups the target and lowering policy for user-facing code.
-Pass the target ISA explicitly; reusable infrastructure should not detect the
-host architecture on its own. Advanced hooks remain available as config methods
-when dialect or embedding lowering needs them.
+Passing the target ISA explicitly supports cross-target compilation and makes
+tests independent of the host architecture. Config methods provide additional
+hooks for dialect and embedding-specific lowering.
 
 ```moonbit check
 ///|
@@ -78,12 +72,9 @@ test "optimize an explicitly targeted MachV function" {
 }
 ```
 
-## Boundary
+## Extension lowering
 
-`milkir_machv` is compiler infrastructure. It should not own embedding-specific
-runtime helper addresses, Wasmoon host functions, or native FFI resolution.
-Dialect-specific `ExtOp` lowering is supplied by callers through
+Dialect-specific `ExtOp` lowering is supplied through
 `LoweringConfig::with_extension_lowerer` plus an explicit runtime-helper symbol
-map. WebAssembly uses the separate `Milky2018/wasm_isa_lower` adapter for that
-boundary; generic MilkIR-to-MachV lowering treats unknown extensions as
-unsupported instead of decoding Wasm opcodes itself.
+map. WebAssembly callers can use the `Milky2018/wasm_isa_lower` adapter. An
+extension without a configured lowerer is reported as unsupported.

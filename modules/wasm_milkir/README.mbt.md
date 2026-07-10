@@ -2,21 +2,22 @@
 
 WebAssembly dialect adapter for MilkIR extension operations.
 
-`wasm_milkir` owns the Wasm-specific opcode set, extension descriptors, and
-builder helpers that are not part of generic MilkIR. Frontends encode Wasm-only
-operations through typed `WasmOpcode` constructors, then a lowering adapter
-checks and decodes those extensions before machine lowering.
+`wasm_milkir` provides the Wasm-specific opcode set, extension descriptors, and
+builder helpers used with MilkIR. Frontends encode Wasm operations through
+typed `WasmOpcode` constructors, then a lowering adapter checks and decodes
+those extensions before machine lowering.
 
 ## Packages
 
 - `Milky2018/wasm_milkir`: Wasm opcode encoding/decoding and builder helpers
   for `Milky2018/milkir`.
 
-## Boundary
+## How it fits
 
-`milkir` owns generic SSA IR. `wasm_milkir` owns the WebAssembly dialect carried
-through MilkIR extension operations. Product-specific runtime addresses,
-VMContext layouts, and native glue still belong outside this module.
+MilkIR represents common SSA operations directly. This package represents
+WebAssembly operations that need additional immediates or lowering semantics as
+typed MilkIR extensions. The extension descriptor lets a lowering pipeline
+validate the encoded operation before decoding it.
 
 ## Example: map Wasm reference types to MilkIR
 

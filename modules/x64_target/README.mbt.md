@@ -83,7 +83,9 @@ test "lower x64 with an explicit call convention" {
 }
 ```
 
-## Boundary
+## Integration
 
-This module is a target backend. It should stay independent from Wasmoon
-runtime glue and embedding-specific helper resolution.
+Use this package with `Milky2018/milkir_machv` for x64 instruction selection
+and `Milky2018/machv_emit` for final machine-code emission. Runtime symbols and
+executable-memory allocation are supplied by the embedding application after
+emission.

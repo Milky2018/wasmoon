@@ -37,8 +37,8 @@ test "emit a tiny AArch64 return stub" {
 
 ## Example: collect relocation metadata
 
-Runtime and function-address fixups stay symbolic. A product JIT such as
-Wasmoon resolves them later in its own embedding layer.
+Runtime and function-address fixups stay symbolic so callers can resolve them
+after emission.
 
 ```moonbit check
 ///|
@@ -54,8 +54,9 @@ test "record an unresolved external call fixup" {
 }
 ```
 
-## Boundary
+## Emitter output
 
-Emitters should produce code plus symbolic metadata. Wasmoon-specific runtime
-helper lookup, JIT context ownership, and native FFI glue belong in
-`wasmoon_jit`.
+The emitter returns machine-code bytes together with relocation, call-fixup,
+trap, and stack-frame metadata. A caller can then resolve symbols, allocate
+executable memory, and install the generated code according to its runtime
+policy.

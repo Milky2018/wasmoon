@@ -18,8 +18,8 @@ decisions, and verification without depending on a concrete machine IR.
 
 Use `regalloc` when you have a machine-independent allocation problem: virtual
 registers, physical registers, instructions, use/def operands, clobbers, and a
-control-flow graph. It deliberately does not know about concrete IRs, frontend
-dialects, or target instruction formats.
+control-flow graph. Clients describe these inputs with `Program` and
+`MachineEnv`, then map the resulting locations back to their own machine IR.
 
 ## Example: allocate an abstract program
 
@@ -72,7 +72,8 @@ test "allocate with explicit configuration" {
 }
 ```
 
-## Boundary
+## Adapters
 
-This module should stay a pure algorithmic layer. Machine-IR-specific adapters
-belong in modules such as `machv_regalloc`.
+Clients can build `Program` values directly or use an adapter for an existing
+machine IR. `Milky2018/machv_regalloc` provides this integration for MachV and
+applies the resulting locations, spills, and edge edits to MachV functions.

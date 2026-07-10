@@ -12,8 +12,6 @@ frontend IR or bytecode
       MachV IR   -- select instructions and allocate registers later
 ```
 
-MilkIR deliberately does not know about WebAssembly runtimes, WASI, embedding context layouts, or a particular CPU. WebAssembly-specific MilkIR operations live in `Milky2018/wasm_milkir`.
-
 ## Start with one small function
 
 Suppose the source program contains this function:
@@ -222,7 +220,7 @@ let func = builder.finalize()
 func.verify()
 ```
 
-`Function::verify` currently checks core structural and local typing rules, including:
+`Function::verify` checks core structural and local typing rules, including:
 
 - the function contains at least one block;
 - each referenced operand has been defined;
@@ -231,7 +229,7 @@ func.verify()
 - operands that must agree have matching types;
 - comparison results have type `I32`.
 
-Verification is a useful construction guard, not a complete proof of every frontend, dialect, dominance, calling-convention, or embedding invariant. Packages that add such semantics must validate them at their own boundary.
+Verification is a useful construction guard, not a complete proof of every frontend, dialect, dominance, calling-convention, or embedding invariant. Frontends and dialects should perform any additional semantic checks their input requires.
 
 ## Optimization
 
@@ -261,16 +259,16 @@ The optimization levels are:
 
 | Level | Intended use |
 | --- | --- |
-| `O0` | Mandatory cleanup only: dead code plus constant and unused block parameters are removed to keep lowering and register allocation robust. |
-| `O1` | The standard Cranelift-style simplification pipeline. It currently uses the same pass set as `O2`. |
-| `O2` | The default level. It currently uses the same pass set as `O1`. |
+| `O0` | Minimal pipeline: removes dead code plus constant and unused block parameters. |
+| `O1` | The standard Cranelift-style simplification pipeline. |
+| `O2` | The default level and an alias for the standard `O1` pass set. |
 | `O3` | The `O2` pipeline, loop-invariant code motion, loop unrolling, strength reduction, and a final `O2` cleanup. |
 
 Use `optimize(func)` for the default pipeline or `optimize_with_level(func, level)` when the caller chooses the level explicitly. Optimizers assume a valid SSA and block-parameter structure. Verify before optimization when the input comes from a frontend, then verify again after developing a new transformation.
 
 ## Calls, memory, and traps
 
-The concepts below matter when a frontend moves beyond pure arithmetic. They are intentionally separate from the first example because they involve embedding and effect semantics.
+The concepts below matter when a frontend moves beyond pure arithmetic into embedding and effect semantics.
 
 ### Stack slots and pointers
 
@@ -286,7 +284,7 @@ Stack slots are per-function abstract local storage objects. `StackAddr(slot)` p
 2. operand 1 is an explicit callee environment;
 3. operands 2 and later are user arguments.
 
-An embedding that does not need an environment must still pass an explicit sentinel value. The embedding and lowering layer define the pointer meaning, sentinel, calling convention, and trap behavior; MilkIR core does not.
+An embedding that does not need an environment must still pass an explicit sentinel value. The embedding and lowering layer define the pointer meaning, sentinel, calling convention, and trap behavior.
 
 ### Traps and effects
 
@@ -294,7 +292,7 @@ An embedding that does not need an environment must still pass an explicit senti
 
 ## Dialect-specific operations
 
-`Ext(ExtOp)` is the escape hatch for operations that do not belong in generic MilkIR. The core stores a dialect name, opcode name, and integer immediates. The dialect package owns builders, semantic validation, decoding, and lowering.
+`Ext(ExtOp)` represents dialect-specific operations. MilkIR stores a dialect name, opcode name, and integer immediates, while the dialect package provides builders, semantic validation, decoding, and lowering.
 
 ```moonbit check
 ///|
@@ -323,18 +321,13 @@ A frontend using MilkIR normally follows this sequence:
 
 For debugging, `Function::print` produces a readable textual view and `CFG::to_dot` produces Graphviz DOT for the control-flow graph. `CFG` also provides predecessors, successors, traversal orders, dominators, back edges, and loop discovery.
 
-## Package boundary
+## Related packages
 
-`Milky2018/milkir` is reusable compiler infrastructure. It must not depend on Wasmoon-owned packages, runtime helper names, WASI, native runtime FFI, or machine-code emission.
+MilkIR focuses on target-independent SSA construction, verification, control-flow analysis, and optimization. Other compiler stages build on it through separate packages:
 
-Keep target- and product-specific responsibilities in their owning packages:
-
-| Responsibility | Owning layer |
+| Compiler stage | Package |
 | --- | --- |
-| Generic SSA construction, verification, CFGs, and optimization | `Milky2018/milkir` |
-| WebAssembly-specific extension operations | `Milky2018/wasm_milkir` |
+| SSA construction, verification, CFGs, and optimization | `Milky2018/milkir` |
+| Optional WebAssembly extension operations | `Milky2018/wasm_milkir` |
 | Lowering from MilkIR to machine-oriented IR | `Milky2018/milkir_machv` |
-| Target instruction selection and ABI details | target packages such as `aarch64_target` and `x64_target` |
-| Wasmoon runtime addresses and embedding behavior | Wasmoon-owned packages such as `wasmoon_jit` |
-
-This boundary keeps MilkIR useful to compiler projects that have no dependency on Wasmoon.
+| Target instruction selection and ABI details | `Milky2018/aarch64_target` and `Milky2018/x64_target` |
