@@ -19,6 +19,17 @@ priv struct CarriedEffectLoopFixture {
 }
 
 ///|
+priv struct CountedLoopFixture {
+  func : Function
+}
+
+///|
+priv enum TestBranchPolarity {
+  ContinueOnTrue
+  ContinueOnFalseWithBrz
+}
+
+///|
 fn make_canonical_i32_loop(
   initial : Int,
   bound_value : Int,
@@ -114,13 +125,56 @@ fn make_carried_effect_loop(bound_value : Int) -> CarriedEffectLoopFixture {
 }
 
 ///|
-fn require_full_unroll_plan(func : Function) -> FullUnrollPlan raise {
+fn make_counted_loop(
+  ty : Type,
+  initial_raw : Int64,
+  bound_raw : Int64,
+  step_raw : Int64,
+  cc : IntCC,
+  update_opcode : Opcode,
+  reversed_operands : Bool,
+  polarity : TestBranchPolarity,
+) -> CountedLoopFixture {
+  let builder = FunctionBuilder::FunctionBuilder("counted_loop")
+  let initial = builder.emit_inst(ty, Iconst(initial_raw), [])
+  let bound = builder.emit_inst(ty, Iconst(bound_raw), [])
+  let step = builder.emit_inst(ty, Iconst(step_raw), [])
+  let header = builder.create_block()
+  let body = builder.create_block()
+  let latch = builder.create_block()
+  let exit = builder.create_block()
+  builder.jump(header, [initial])
+  let induction = builder.add_block_param(header, ty)
+  builder.switch_to_block(header)
+  let condition = if reversed_operands {
+    builder.icmp(cc, bound, induction)
+  } else {
+    builder.icmp(cc, induction, bound)
+  }
+  match polarity {
+    ContinueOnTrue => builder.brnz(condition, body, exit)
+    ContinueOnFalseWithBrz =>
+      builder.current_block().set_terminator(Brz(condition, body.id, exit.id))
+  }
+  builder.switch_to_block(body)
+  builder.emit_inst(ty, Copy, [induction]) |> ignore
+  builder.jump(latch, [])
+  builder.switch_to_block(latch)
+  let next = builder.emit_inst(ty, update_opcode, [induction, step])
+  builder.jump(header, [next])
+  builder.switch_to_block(exit)
+  builder.return_([])
+  { func: builder.get_function() }
+}
+
+///|
+fn require_counted_loop_plan(func : Function) -> CountedLoopPlan raise {
   let loops = CFG::build(func).find_loops()
   if loops.length() != 1 {
     fail("expected exactly one loop")
   }
   match
-    analyze_i32_counted_loop(
+    analyze_counted_loop(
       func,
       CFG::build(func),
       loops[0],
@@ -132,9 +186,17 @@ fn require_full_unroll_plan(func : Function) -> FullUnrollPlan raise {
 }
 
 ///|
+fn require_counted_trip_count(func : Function, expected : Int) -> Unit raise {
+  let plan = require_counted_loop_plan(func)
+  if plan.trip_count != expected {
+    fail("unexpected counted-loop trip count")
+  }
+}
+
+///|
 fn require_unroll_skip_without_mutation(func : Function) -> Unit raise {
   let before = func.print()
-  let result = unroll_i32_loops(func)
+  let result = unroll_counted_loops(func)
   if result.changed {
     fail("unsupported loop was transformed")
   }
@@ -209,7 +271,7 @@ fn evaluate_canonical_i32_loop(
 test "full-unroll analysis counts canonical I32 trips from zero through the bound" {
   for expected in 0..<(MAX_FULL_UNROLL_TRIP_COUNT + 1) {
     let fixture = make_canonical_i32_loop(0, expected, 1)
-    let plan = require_full_unroll_plan(fixture.func)
+    let plan = require_counted_loop_plan(fixture.func)
     if plan.trip_count != expected {
       fail("expected \{expected} trips, got \{plan.trip_count}")
     }
@@ -222,7 +284,7 @@ test "full unrolling clones dependent pure instructions with fresh ids" {
   let original_preheader_insts = fixture.preheader.instructions.length()
   let first_fresh_value = fixture.func.next_value_id
   let first_fresh_inst = fixture.func.next_inst_id
-  let result = unroll_i32_loops(fixture.func)
+  let result = unroll_counted_loops(fixture.func)
   inspect(result.changed, content="true")
   let cloned = fixture.preheader.instructions[original_preheader_insts:]
   inspect(cloned.length(), content="9")
@@ -271,7 +333,7 @@ test "full unrolling preserves carried values, multi-results, and effect order" 
   let original_preheader_insts = fixture.preheader.instructions.length()
   let first_fresh_value = fixture.func.next_value_id
   let first_fresh_inst = fixture.func.next_inst_id
-  let result = unroll_i32_loops(fixture.func)
+  let result = unroll_counted_loops(fixture.func)
   inspect(result.changed, content="true")
   let cloned = fixture.preheader.instructions[original_preheader_insts:]
   inspect(cloned.length(), content="16")
@@ -358,7 +420,7 @@ test "factor-two unrolling composes two transitions for an even trip count" {
   let original_preheader_insts = fixture.preheader.instructions.length()
   let original_latch_insts = fixture.latch.instructions.length()
   let first_state = fixture.latch.instructions[0].results[0]
-  let result = unroll_i32_loops(fixture.func)
+  let result = unroll_counted_loops(fixture.func)
   inspect(result.changed, content="true")
   inspect(
     fixture.preheader.instructions.length(),
@@ -390,7 +452,7 @@ test "factor-two unrolling peels one transition for an odd trip count" {
   let fixture = make_canonical_i32_loop(0, 11, 1)
   let original_preheader_insts = fixture.preheader.instructions.length()
   let original_latch_insts = fixture.latch.instructions.length()
-  let result = unroll_i32_loops(fixture.func)
+  let result = unroll_counted_loops(fixture.func)
   inspect(result.changed, content="true")
   inspect(
     fixture.preheader.instructions.length() - original_preheader_insts,
@@ -418,13 +480,13 @@ test "factor-two unrolling peels one transition for an odd trip count" {
 test "factor-two policy preserves zero-trip and one-trip loops" {
   let zero = make_canonical_i32_loop(0, 0, 1)
   let zero_before = zero.func.print()
-  inspect(unroll_i32_loops(zero.func).changed, content="false")
+  inspect(unroll_counted_loops(zero.func).changed, content="false")
   if zero.func.print() != zero_before {
     fail("zero-trip loop was mutated")
   }
   let one = make_canonical_i32_loop(0, 1, 1)
   let original_preheader_insts = one.preheader.instructions.length()
-  inspect(unroll_i32_loops(one.func).changed, content="true")
+  inspect(unroll_counted_loops(one.func).changed, content="true")
   inspect(
     one.preheader.instructions.length() - original_preheader_insts,
     content="3",
@@ -441,7 +503,7 @@ test "factor-two unrolling preserves carried effects in both transitions" {
     Some(Jump(_, args)) => args
     _ => fail("expected latch jump")
   }
-  let result = unroll_i32_loops(fixture.func)
+  let result = unroll_counted_loops(fixture.func)
   inspect(result.changed, content="true")
   inspect(
     fixture.latch.instructions.length() - original_latch_insts,
@@ -488,12 +550,250 @@ test "factor-two transformed loops match the original state and body count" {
     let original = make_canonical_i32_loop(0, trip_count, 1)
     let expected = evaluate_canonical_i32_loop(original)
     let transformed = make_canonical_i32_loop(0, trip_count, 1)
-    unroll_i32_loops(transformed.func) |> ignore
+    unroll_counted_loops(transformed.func) |> ignore
     let actual = evaluate_canonical_i32_loop(transformed)
     if actual != expected {
       fail("factor-two differential mismatch at trip \{trip_count}")
     }
   }
+}
+
+///|
+test "counted-loop analysis supports signed and unsigned I32 and I64 relations" {
+  let cases = [
+    (Type::I32, 0L, 10L, 3L, Slt, Iadd, 4, "i32 slt"),
+    (Type::I32, 0L, 10L, 3L, Sle, Iadd, 4, "i32 sle"),
+    (Type::I32, 10L, 0L, 3L, Sgt, Isub, 4, "i32 sgt"),
+    (Type::I32, 10L, 0L, 3L, Sge, Isub, 4, "i32 sge"),
+    (Type::I32, 0L, 10L, 3L, Ult, Iadd, 4, "i32 ult"),
+    (Type::I32, 10L, 2L, 3L, Uge, Isub, 3, "i32 uge"),
+    (Type::I64, 0L, 10L, 3L, Slt, Iadd, 4, "i64 slt"),
+    (Type::I64, 0L, 10L, 3L, Sle, Iadd, 4, "i64 sle"),
+    (Type::I64, 10L, 0L, 3L, Sgt, Isub, 4, "i64 sgt"),
+    (Type::I64, 10L, 0L, 3L, Sge, Isub, 4, "i64 sge"),
+    (Type::I64, 10L, 0L, -3L, Sgt, Iadd, 4, "i64 negative add"),
+    (Type::I64, 0L, 10L, -3L, Slt, Isub, 4, "i64 negative sub"),
+    (Type::I64, 0L, 10L, 3L, Ult, Iadd, 4, "i64 ult"),
+    (Type::I64, 0L, 10L, 3L, Ule, Iadd, 4, "i64 ule"),
+    (Type::I64, 10L, 2L, 3L, Ugt, Isub, 3, "i64 ugt"),
+    (Type::I64, 10L, 2L, 3L, Uge, Isub, 3, "i64 uge"),
+  ]
+  for item in cases {
+    let (ty, initial, bound, step, cc, update, expected, label) = item
+    let fixture = make_counted_loop(
+      ty,
+      initial,
+      bound,
+      step,
+      cc,
+      update,
+      false,
+      ContinueOnTrue,
+    )
+    let loops = CFG::build(fixture.func).find_loops()
+    match
+      analyze_counted_loop(
+        fixture.func,
+        CFG::build(fixture.func),
+        loops[0],
+        MAX_FACTOR_TWO_TRIP_COUNT,
+      ) {
+      Apply(plan) =>
+        if plan.trip_count != expected {
+          fail("unexpected trip count for \{label}")
+        }
+      Skip(reason) => fail("\{label}: \{reason}")
+    }
+  }
+}
+
+///|
+test "counted-loop analysis normalizes reversed operands and branch polarity" {
+  let reversed = make_counted_loop(
+    I64,
+    0L,
+    10L,
+    3L,
+    Sgt,
+    Iadd,
+    true,
+    ContinueOnTrue,
+  )
+  require_counted_trip_count(reversed.func, 4)
+  let false_branch = make_counted_loop(
+    I64,
+    0L,
+    10L,
+    3L,
+    Sge,
+    Iadd,
+    false,
+    ContinueOnFalseWithBrz,
+  )
+  require_counted_trip_count(false_branch.func, 4)
+}
+
+///|
+test "counted-loop analysis handles valid signed and unsigned boundaries" {
+  let signed_i32_high = make_counted_loop(
+    I32,
+    2147483646L,
+    2147483647L,
+    1L,
+    Slt,
+    Iadd,
+    false,
+    ContinueOnTrue,
+  )
+  require_counted_trip_count(signed_i32_high.func, 1)
+  let unsigned_i32_high = make_counted_loop(
+    I32,
+    -2L,
+    -1L,
+    1L,
+    Ult,
+    Iadd,
+    false,
+    ContinueOnTrue,
+  )
+  require_counted_trip_count(unsigned_i32_high.func, 1)
+  let signed_high = make_counted_loop(
+    I64,
+    9223372036854775806L,
+    9223372036854775807L,
+    1L,
+    Slt,
+    Iadd,
+    false,
+    ContinueOnTrue,
+  )
+  require_counted_trip_count(signed_high.func, 1)
+  let signed_low = make_counted_loop(
+    I64,
+    -9223372036854775807L,
+    -9223372036854775808L,
+    1L,
+    Sgt,
+    Isub,
+    false,
+    ContinueOnTrue,
+  )
+  require_counted_trip_count(signed_low.func, 1)
+  let unsigned_high = make_counted_loop(
+    I64,
+    -2L,
+    -1L,
+    1L,
+    Ult,
+    Iadd,
+    false,
+    ContinueOnTrue,
+  )
+  require_counted_trip_count(unsigned_high.func, 1)
+  let unsigned_low = make_counted_loop(
+    I64,
+    1L,
+    0L,
+    1L,
+    Ugt,
+    Isub,
+    false,
+    ContinueOnTrue,
+  )
+  require_counted_trip_count(unsigned_low.func, 1)
+}
+
+///|
+test "counted-loop analysis rejects wraparound and invalid directions unchanged" {
+  let cases = [
+    make_counted_loop(
+      I32,
+      2147483646L,
+      2147483647L,
+      2L,
+      Slt,
+      Iadd,
+      false,
+      ContinueOnTrue,
+    ),
+    make_counted_loop(I32, -2L, -1L, 2L, Ult, Iadd, false, ContinueOnTrue),
+    make_counted_loop(
+      I64,
+      9223372036854775806L,
+      9223372036854775807L,
+      2L,
+      Slt,
+      Iadd,
+      false,
+      ContinueOnTrue,
+    ),
+    make_counted_loop(
+      I64,
+      -9223372036854775807L,
+      -9223372036854775808L,
+      2L,
+      Sgt,
+      Isub,
+      false,
+      ContinueOnTrue,
+    ),
+    make_counted_loop(
+      I64,
+      9223372036854775806L,
+      9223372036854775807L,
+      1L,
+      Sle,
+      Iadd,
+      false,
+      ContinueOnTrue,
+    ),
+    make_counted_loop(I64, -2L, -1L, 2L, Ult, Iadd, false, ContinueOnTrue),
+    make_counted_loop(I64, -2L, -1L, 1L, Ule, Iadd, false, ContinueOnTrue),
+    make_counted_loop(I64, 0L, 10L, 0L, Slt, Iadd, false, ContinueOnTrue),
+    make_counted_loop(I64, 0L, 10L, 1L, Slt, Isub, false, ContinueOnTrue),
+    make_counted_loop(
+      I64,
+      -9223372036854775808L,
+      9223372036854775807L,
+      1L,
+      Slt,
+      Iadd,
+      false,
+      ContinueOnTrue,
+    ),
+  ]
+  for fixture in cases {
+    require_unroll_skip_without_mutation(fixture.func)
+  }
+  let dynamic = make_counted_loop(
+    I64,
+    0L,
+    10L,
+    1L,
+    Slt,
+    Iadd,
+    false,
+    ContinueOnTrue,
+  )
+  let dynamic_bound = dynamic.func.add_param(I64)
+  dynamic.func.blocks[1].instructions[0].operands[1] = dynamic_bound
+  require_unroll_skip_without_mutation(dynamic.func)
+}
+
+///|
+test "counted-loop unrolling transforms verified I64 loops" {
+  let fixture = make_counted_loop(
+    I64,
+    0L,
+    10L,
+    3L,
+    Slt,
+    Iadd,
+    false,
+    ContinueOnTrue,
+  )
+  inspect(unroll_counted_loops(fixture.func).changed, content="true")
+  fixture.func.verify()
 }
 
 ///|

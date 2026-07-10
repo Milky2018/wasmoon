@@ -14,7 +14,7 @@ const I32_SIGNED_MIN : Int64 = -2147483648L
 const I32_SIGNED_MAX : Int64 = 2147483647L
 
 ///|
-priv struct FullUnrollPlan {
+priv struct CountedLoopPlan {
   preheader : Block
   header : Block
   latch : Block
@@ -26,9 +26,21 @@ priv struct FullUnrollPlan {
 }
 
 ///|
-priv enum FullUnrollDecision {
-  Apply(FullUnrollPlan)
+priv enum CountedLoopDecision {
+  Apply(CountedLoopPlan)
   Skip(String)
+}
+
+///|
+priv enum CountedDirection {
+  Increasing
+  Decreasing
+} derive(Eq)
+
+///|
+priv enum CountedSignedness {
+  Signed
+  Unsigned
 }
 
 ///|
@@ -42,12 +54,12 @@ fn find_unroll_block(func : Function, block_id : Int) -> Block? {
 }
 
 ///|
-fn find_i32_constant_outside_loop(
+fn find_integer_constant_outside_loop(
   func : Function,
   loop_ : Loop,
   value : Value,
 ) -> Int64? {
-  if value.ty != I32 {
+  if value.ty != I32 && value.ty != I64 {
     return None
   }
   for block in func.blocks {
@@ -57,7 +69,7 @@ fn find_i32_constant_outside_loop(
     for inst in block.instructions {
       if inst.opcode is Iconst(constant) {
         for result in inst.results {
-          if result.id == value.id && result.ty == I32 {
+          if result.id == value.id && result.ty == value.ty {
             return Some(constant)
           }
         }
@@ -112,42 +124,235 @@ fn is_defined_in_unroll_loop(
 }
 
 ///|
-fn checked_i32_full_unroll_trip_count(
-  initial : Int64,
-  bound : Int64,
-  step : Int64,
+fn counted_signedness(cc : IntCC) -> CountedSignedness? {
+  match cc {
+    Slt | Sle | Sgt | Sge => Some(Signed)
+    Ult | Ule | Ugt | Uge => Some(Unsigned)
+    Eq | Ne => None
+  }
+}
+
+///|
+fn swap_counted_condition(cc : IntCC) -> IntCC? {
+  match cc {
+    Slt => Some(Sgt)
+    Sle => Some(Sge)
+    Sgt => Some(Slt)
+    Sge => Some(Sle)
+    Ult => Some(Ugt)
+    Ule => Some(Uge)
+    Ugt => Some(Ult)
+    Uge => Some(Ule)
+    Eq | Ne => None
+  }
+}
+
+///|
+fn invert_counted_condition(cc : IntCC) -> IntCC? {
+  match cc {
+    Slt => Some(Sge)
+    Sle => Some(Sgt)
+    Sgt => Some(Sle)
+    Sge => Some(Slt)
+    Ult => Some(Uge)
+    Ule => Some(Ugt)
+    Ugt => Some(Ule)
+    Uge => Some(Ult)
+    Eq | Ne => None
+  }
+}
+
+///|
+fn counted_condition_direction(cc : IntCC) -> CountedDirection? {
+  match cc {
+    Slt | Sle | Ult | Ule => Some(Increasing)
+    Sgt | Sge | Ugt | Uge => Some(Decreasing)
+    Eq | Ne => None
+  }
+}
+
+///|
+fn counted_condition_is_inclusive(cc : IntCC) -> Bool {
+  match cc {
+    Sle | Sge | Ule | Uge => true
+    _ => false
+  }
+}
+
+///|
+fn integer_domain_max(ty : Type) -> UInt64? {
+  match ty {
+    I32 => Some(0xFFFFFFFFUL)
+    I64 => Some(0xFFFFFFFFFFFFFFFFUL)
+    _ => None
+  }
+}
+
+///|
+fn integer_rank(
+  raw : Int64,
+  ty : Type,
+  signedness : CountedSignedness,
+) -> UInt64? {
+  match (ty, signedness) {
+    (I32, Signed) =>
+      if raw < I32_SIGNED_MIN || raw > I32_SIGNED_MAX {
+        None
+      } else {
+        Some((raw - I32_SIGNED_MIN).reinterpret_as_uint64())
+      }
+    (I32, Unsigned) =>
+      if raw < I32_SIGNED_MIN || raw > I32_SIGNED_MAX {
+        None
+      } else {
+        Some(raw.reinterpret_as_uint64() & 0xFFFFFFFFUL)
+      }
+    (I64, Signed) => Some(raw.reinterpret_as_uint64() ^ 0x8000000000000000UL)
+    (I64, Unsigned) => Some(raw.reinterpret_as_uint64())
+    _ => None
+  }
+}
+
+///|
+fn counted_step(
+  raw : Int64,
+  ty : Type,
+  signedness : CountedSignedness,
+  opcode : Opcode,
+) -> (CountedDirection, UInt64)? {
+  if ty == I32 && (raw < I32_SIGNED_MIN || raw > I32_SIGNED_MAX) {
+    return None
+  }
+  match signedness {
+    Unsigned => {
+      let magnitude = match integer_rank(raw, ty, Unsigned) {
+        Some(value) => value
+        None => return None
+      }
+      if magnitude == 0UL {
+        return None
+      }
+      match opcode {
+        Iadd => Some((Increasing, magnitude))
+        Isub => Some((Decreasing, magnitude))
+        _ => None
+      }
+    }
+    Signed => {
+      if raw == 0L {
+        return None
+      }
+      let negative = raw < 0L
+      let magnitude = if negative {
+        0UL - raw.reinterpret_as_uint64()
+      } else {
+        raw.reinterpret_as_uint64()
+      }
+      match opcode {
+        Iadd =>
+          if negative {
+            Some((Decreasing, magnitude))
+          } else {
+            Some((Increasing, magnitude))
+          }
+        Isub =>
+          if negative {
+            Some((Increasing, magnitude))
+          } else {
+            Some((Decreasing, magnitude))
+          }
+        _ => None
+      }
+    }
+  }
+}
+
+///|
+fn checked_trip_product(trips : UInt64, step : UInt64) -> UInt64? {
+  if trips != 0UL && step > 0xFFFFFFFFFFFFFFFFUL / trips {
+    None
+  } else {
+    Some(trips * step)
+  }
+}
+
+///|
+fn bounded_trip_quotient(
+  distance : UInt64,
+  step : UInt64,
+  inclusive : Bool,
+  max_trip_count : Int,
+) -> UInt64? {
+  let quotient = distance / step
+  let remainder = distance % step
+  let max_trips = max_trip_count.to_uint64()
+  if inclusive {
+    if quotient >= max_trips {
+      return None
+    }
+    return Some(quotient + 1UL)
+  }
+  if quotient > max_trips || (quotient == max_trips && remainder != 0UL) {
+    return None
+  }
+  let extra = if remainder == 0UL { 0UL } else { 1UL }
+  Some(quotient + extra)
+}
+
+///|
+fn checked_counted_trip_count(
+  initial : UInt64,
+  bound : UInt64,
+  step : UInt64,
+  direction : CountedDirection,
+  condition : IntCC,
+  domain_max : UInt64,
   max_trip_count : Int,
 ) -> Int? {
-  if initial < I32_SIGNED_MIN ||
-    initial > I32_SIGNED_MAX ||
-    bound < I32_SIGNED_MIN ||
-    bound > I32_SIGNED_MAX ||
-    step <= 0L ||
-    step > I32_SIGNED_MAX {
+  if counted_condition_direction(condition) != Some(direction) {
     return None
   }
-  if initial >= bound {
-    return Some(0)
+  let inclusive = counted_condition_is_inclusive(condition)
+  let distance = match direction {
+    Increasing => {
+      if (!inclusive && initial >= bound) || (inclusive && initial > bound) {
+        return Some(0)
+      }
+      bound - initial
+    }
+    Decreasing => {
+      if (!inclusive && initial <= bound) || (inclusive && initial < bound) {
+        return Some(0)
+      }
+      initial - bound
+    }
   }
-  let distance = bound - initial
-  let trips = (distance + step - 1L) / step
-  if trips > max_trip_count.to_int64() {
-    return None
+  let trips = match
+    bounded_trip_quotient(distance, step, inclusive, max_trip_count) {
+    Some(value) => value
+    None => return None
   }
-  let final_value = initial + trips * step
-  if final_value > I32_SIGNED_MAX {
+  let product = match checked_trip_product(trips, step) {
+    Some(value) => value
+    None => return None
+  }
+  let wraps = match direction {
+    Increasing => product > domain_max - initial
+    Decreasing => product > initial
+  }
+  if wraps {
     return None
   }
   Some(trips.to_int())
 }
 
 ///|
-fn analyze_i32_counted_loop(
+fn analyze_counted_loop(
   func : Function,
   cfg : CFG,
   loop_ : Loop,
   max_trip_count : Int,
-) -> FullUnrollDecision {
+) -> CountedLoopDecision {
   if loop_.back_edges.length() != 1 {
     return Skip("loop must have one back edge")
   }
@@ -175,9 +380,30 @@ fn analyze_i32_counted_loop(
       }
     _ => return Skip("preheader must jump to the loop header")
   }
-  let (condition, body_id, exit_id) = match header.terminator {
-    Some(Brnz(cond, body, exit)) => (cond, body, exit)
-    _ => return Skip("header must use brnz for the canonical loop test")
+  let (condition, predicate_true_target, predicate_false_target) = match
+    header.terminator {
+    Some(Brnz(cond, true_target, false_target)) =>
+      (cond, true_target, false_target)
+    Some(Brz(cond, zero_target, nonzero_target)) =>
+      (cond, nonzero_target, zero_target)
+    Some(Branch(cond, true_target, true_args, false_target, false_args)) =>
+      if true_args.is_empty() && false_args.is_empty() {
+        (cond, true_target, false_target)
+      } else {
+        return Skip("header branch arguments are unsupported")
+      }
+    _ => return Skip("header must use a canonical conditional branch")
+  }
+  let (body_id, exit_id, continue_on_true) = if loop_.contains(
+      predicate_true_target,
+    ) &&
+    !loop_.contains(predicate_false_target) {
+    (predicate_true_target, predicate_false_target, true)
+  } else if loop_.contains(predicate_false_target) &&
+    !loop_.contains(predicate_true_target) {
+    (predicate_false_target, predicate_true_target, false)
+  } else {
+    return Skip("header must have one loop edge and one exit edge")
   }
   if !loop_.contains(body_id) || loop_.contains(exit_id) {
     return Skip("header must have one loop edge and one exit edge")
@@ -194,28 +420,59 @@ fn analyze_i32_counted_loop(
   }
   let comparison = header.instructions[0]
   let mut induction_index = -1
+  let mut induction_operand = -1
   if comparison.operands.length() == 2 {
     for i, item in header.params {
       let (param, declared_type) = item
       if param.id == comparison.operands[0].id &&
-        param.ty == I32 &&
-        declared_type == I32 {
+        (param.ty == I32 || param.ty == I64) &&
+        declared_type == param.ty {
         induction_index = i
+        induction_operand = 0
+        break
+      } else if param.id == comparison.operands[1].id &&
+        (param.ty == I32 || param.ty == I64) &&
+        declared_type == param.ty {
+        induction_index = i
+        induction_operand = 1
         break
       }
+    }
+  }
+  let original_condition = match comparison.opcode {
+    Icmp(cc) => cc
+    _ => return Skip("loop test must be an ordered integer comparison")
+  }
+  let operand_normalized_condition = if induction_operand == 1 {
+    match swap_counted_condition(original_condition) {
+      Some(cc) => cc
+      None => return Skip("loop test must use an ordered condition")
+    }
+  } else {
+    original_condition
+  }
+  let normalized_condition = if continue_on_true {
+    operand_normalized_condition
+  } else {
+    match invert_counted_condition(operand_normalized_condition) {
+      Some(cc) => cc
+      None => return Skip("loop test must use an ordered condition")
     }
   }
   if comparison.results.length() != 1 ||
     comparison.results[0].id != condition.id ||
     comparison.results[0].ty != I32 ||
     comparison.operands.length() != 2 ||
-    comparison.opcode != Icmp(Slt) ||
     induction_index < 0 ||
-    comparison.operands[0].ty != I32 ||
-    comparison.operands[1].ty != I32 {
-    return Skip("comparison must be icmp_slt(induction, bound)")
+    comparison.operands[0].ty != comparison.operands[1].ty {
+    return Skip("comparison must use the induction type")
   }
   let (induction, _) = header.params[induction_index]
+  let bound_value = comparison.operands[1 - induction_operand]
+  let signedness = match counted_signedness(normalized_condition) {
+    Some(value) => value
+    None => return Skip("loop test must use an ordered condition")
+  }
   for i, item in header.params {
     let (param, declared_type) = item
     if param.ty != declared_type || initial_args[i].ty != declared_type {
@@ -310,34 +567,66 @@ fn analyze_i32_counted_loop(
     Some(inst) => inst
     None => return Skip("latch induction update must be defined in the loop")
   }
-  if update.opcode != Iadd || update.operands.length() != 2 {
-    return Skip("induction update must be iadd")
+  if (update.opcode != Iadd && update.opcode != Isub) ||
+    update.operands.length() != 2 ||
+    update.results.length() != 1 {
+    return Skip("induction update must be iadd or isub")
+  }
+  if update.opcode == Isub && update.operands[0].id != induction.id {
+    return Skip("isub induction updates must subtract from the induction value")
   }
   let step_value = if update.operands[0].id == induction.id {
     update.operands[1]
   } else if update.operands[1].id == induction.id {
     update.operands[0]
   } else {
-    return Skip("induction update must add a constant step")
+    return Skip("induction update must use a constant step")
+  }
+  if step_value.ty != induction.ty {
+    return Skip("induction step type must match the induction value")
   }
   let initial_constant = match
-    find_i32_constant_outside_loop(func, loop_, initial_args[induction_index]) {
+    find_integer_constant_outside_loop(
+      func,
+      loop_,
+      initial_args[induction_index],
+    ) {
     Some(value) => value
     None => return Skip("initial induction value must be constant")
   }
   let bound_constant = match
-    find_i32_constant_outside_loop(func, loop_, comparison.operands[1]) {
+    find_integer_constant_outside_loop(func, loop_, bound_value) {
     Some(value) => value
     None => return Skip("loop bound must be constant")
   }
   let step_constant = match
-    find_i32_constant_outside_loop(func, loop_, step_value) {
+    find_integer_constant_outside_loop(func, loop_, step_value) {
     Some(value) => value
     None => return Skip("induction step must be constant")
   }
+  let initial_rank = match
+    integer_rank(initial_constant, induction.ty, signedness) {
+    Some(value) => value
+    None => return Skip("initial induction value is out of range")
+  }
+  let bound_rank = match
+    integer_rank(bound_constant, induction.ty, signedness) {
+    Some(value) => value
+    None => return Skip("loop bound is out of range")
+  }
+  let (direction, step_magnitude) = match
+    counted_step(step_constant, induction.ty, signedness, update.opcode) {
+    Some(value) => value
+    None => return Skip("induction step is zero or out of range")
+  }
+  let domain_max = match integer_domain_max(induction.ty) {
+    Some(value) => value
+    None => return Skip("induction type must be i32 or i64")
+  }
   let trip_count = match
-    checked_i32_full_unroll_trip_count(
-      initial_constant, bound_constant, step_constant, max_trip_count,
+    checked_counted_trip_count(
+      initial_rank, bound_rank, step_magnitude, direction, normalized_condition,
+      domain_max, max_trip_count,
     ) {
     Some(value) => value
     None => return Skip("trip count is unsafe or exceeds the unroll bound")
@@ -383,7 +672,7 @@ fn clone_unrolled_instruction(
 }
 
 ///|
-fn unroll_transition_instructions(plan : FullUnrollPlan) -> Array[Inst] {
+fn unroll_transition_instructions(plan : CountedLoopPlan) -> Array[Inst] {
   let instructions : Array[Inst] = []
   for block in plan.iteration_blocks {
     for inst in block.instructions {
@@ -396,7 +685,7 @@ fn unroll_transition_instructions(plan : FullUnrollPlan) -> Array[Inst] {
 ///|
 fn clone_unrolled_transition(
   func : Function,
-  plan : FullUnrollPlan,
+  plan : CountedLoopPlan,
   source : Array[Inst],
   start_args : Array[Value],
   destination : Array[Inst],
@@ -412,7 +701,7 @@ fn clone_unrolled_transition(
 }
 
 ///|
-fn apply_i32_full_unroll(func : Function, plan : FullUnrollPlan) -> Bool {
+fn apply_full_unroll(func : Function, plan : CountedLoopPlan) -> Bool {
   if plan.trip_count == 0 {
     return false
   }
@@ -432,7 +721,7 @@ fn apply_i32_full_unroll(func : Function, plan : FullUnrollPlan) -> Bool {
 }
 
 ///|
-fn apply_i32_factor_two_unroll(func : Function, plan : FullUnrollPlan) -> Bool {
+fn apply_factor_two_unroll(func : Function, plan : CountedLoopPlan) -> Bool {
   if plan.trip_count == 0 {
     return false
   }
@@ -464,7 +753,7 @@ fn apply_i32_factor_two_unroll(func : Function, plan : FullUnrollPlan) -> Bool {
 }
 
 ///|
-fn factor_two_growth(plan : FullUnrollPlan, instructions : Int) -> Int64 {
+fn factor_two_growth(plan : CountedLoopPlan, instructions : Int) -> Int64 {
   if plan.trip_count <= 1 {
     instructions.to_int64() * plan.trip_count.to_int64()
   } else {
@@ -473,13 +762,12 @@ fn factor_two_growth(plan : FullUnrollPlan, instructions : Int) -> Int64 {
 }
 
 ///|
-fn unroll_i32_loops(func : Function) -> OptResult {
+fn unroll_counted_loops(func : Function) -> OptResult {
   let result = OptResult::OptResult()
   let cfg = CFG::build(func)
-  let plans : Array[FullUnrollPlan] = []
+  let plans : Array[CountedLoopPlan] = []
   for loop_ in cfg.find_loops() {
-    match
-      analyze_i32_counted_loop(func, cfg, loop_, MAX_FACTOR_TWO_TRIP_COUNT) {
+    match analyze_counted_loop(func, cfg, loop_, MAX_FACTOR_TWO_TRIP_COUNT) {
       Apply(plan) => plans.push(plan)
       // Keep the reason available to white-box diagnostics while the staged
       // pass intentionally ignores unsupported loops.
@@ -492,9 +780,9 @@ fn unroll_i32_loops(func : Function) -> OptResult {
     let factor_growth = factor_two_growth(plan, instruction_count)
     let changed = if plan.trip_count <= MAX_FULL_UNROLL_TRIP_COUNT &&
       full_growth <= MAX_FULL_UNROLL_CLONED_INSTRUCTIONS.to_int64() {
-      apply_i32_full_unroll(func, plan)
+      apply_full_unroll(func, plan)
     } else if factor_growth <= MAX_FULL_UNROLL_CLONED_INSTRUCTIONS.to_int64() {
-      apply_i32_factor_two_unroll(func, plan)
+      apply_factor_two_unroll(func, plan)
     } else {
       false
     }
