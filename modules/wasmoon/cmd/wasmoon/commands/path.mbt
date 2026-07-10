@@ -35,6 +35,20 @@ fn load_module_from_path(path : String) -> @types.Module raise CliError {
 }
 
 ///|
+/// Validate a decoded core module before it reaches instantiation or JIT state.
+fn validate_module_for_execution(mod_ : @types.Module) -> Unit raise CliError {
+  @validator.validate_module_with_context(mod_) catch {
+    err => {
+      let message = match err {
+        WithContext(ctx) => ctx.format()
+        _ => @validator.format_validation_error(err)
+      }
+      raise ValidateModuleError(message)
+    }
+  }
+}
+
+///|
 /// Find base directory from a file path
 fn find_base_dir(path : String) -> String {
   let mut last_slash = -1

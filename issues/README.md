@@ -122,6 +122,11 @@ graph TD
   ISS_106["ISS-106: Hide CFG, liveness, and planner helper APIs"]
   ISS_107["ISS-107: Narrow regalloc model mutability and field visibility"]
   ISS_108["ISS-108: Stop regalloc tests and docs from cementing internal APIs"]
+  ISS_109["ISS-109: Close Wasmoon architecture integrity gaps"]
+  ISS_110["ISS-110: Validate CLI run modules before instantiation"]
+  ISS_111["ISS-111: Unify the production Wasm frontend entry point"]
+  ISS_112["ISS-112: Classify Wasmoon JIT integration as product-owned"]
+  ISS_113["ISS-113: Refresh architecture and readiness documentation"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
@@ -217,6 +222,13 @@ graph TD
   ISS_105 --> ISS_108
   ISS_106 --> ISS_108
   ISS_107 --> ISS_108
+  ISS_110 --> ISS_109
+  ISS_111 --> ISS_109
+  ISS_112 --> ISS_109
+  ISS_113 --> ISS_109
+  ISS_110 --> ISS_113
+  ISS_111 --> ISS_113
+  ISS_112 --> ISS_113
 ```
 
 ## Warnings

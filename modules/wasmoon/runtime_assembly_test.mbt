@@ -11,6 +11,18 @@ test "wasmoon remains the product runtime module" {
     assembly.reusable_modules.contains("Milky2018/wasmoon_runtime"),
     content="false",
   )
+  inspect(
+    assembly.reusable_modules.contains("Milky2018/wasmoon_jit"),
+    content="false",
+  )
+  inspect(
+    assembly.product_support_modules.contains("Milky2018/wasmoon_jit"),
+    content="true",
+  )
+  inspect(
+    assembly.reusable_modules.contains("Milky2018/milkir"),
+    content="true",
+  )
 }
 
 ///|

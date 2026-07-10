@@ -159,6 +159,19 @@ test "try lower native function does not use legacy fallback" {
 }
 
 ///|
+test "top-level frontend lowers structured if through production translator" {
+  let mod_ = @types.Module::simple(
+    [],
+    [I32],
+    [I32Const(1), If(Value(I32), [I32Const(7)], [I32Const(9)])],
+    "structured_if",
+  )
+  let func = translate_function(native_test_env(), mod_, 0)
+  inspect(func.blocks.length() > 1, content="true")
+  inspect(func.verify(), content="()")
+}
+
+///|
 test "lower direct block branch through native linear fast path" {
   let mod_ = @types.Module::simple(
     [],

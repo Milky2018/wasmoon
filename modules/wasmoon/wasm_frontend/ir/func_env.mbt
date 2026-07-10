@@ -13,8 +13,8 @@
 /// FuncEnvironment holds VMContext layout info used during IR translation to
 /// desugar Wasm operations.
 priv struct FuncEnvironment {
-  runtime_layout : @wasm_frontend.RuntimeLayout
-  memory_descriptor_layout : @wasm_frontend.MemoryDescriptorLayout
+  runtime_layout : @embedding.RuntimeLayout
+  memory_descriptor_layout : @embedding.MemoryDescriptorLayout
   runtime_symbols : @wasm_milkir.RuntimeSymbols
   // Global variable types (for determining load/store width)
   global_types : Array[@types.GlobalType]
@@ -42,7 +42,7 @@ priv struct FuncEnvironment {
 
 ///|
 fn FuncEnvironment::FuncEnvironment(
-  embedding_env : @wasm_frontend.EmbeddingEnvironment,
+  embedding_env : @embedding.EmbeddingEnvironment,
   global_types : Array[@types.GlobalType],
   memory_mins? : Array[Int64] = [],
   memory_is_64? : Array[Bool] = [],

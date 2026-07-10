@@ -78,7 +78,7 @@ struct TranslationContext {
   func_type_indices : Array[Int]
   num_imports : Int
   import_func_type_indices : Array[Int]
-  embedding_env : @wasm_frontend.EmbeddingEnvironment
+  embedding_env : @embedding.EmbeddingEnvironment
   memory_max : Int?
   memory_is_64 : Array[Bool]
   memory_page_size_log2 : Array[Int]
@@ -96,7 +96,7 @@ struct TranslationContext {
 /// Build frontend translation metadata from a decoded Wasm module.
 pub fn TranslationContext::from_module(
   mod_ : @types.Module,
-  embedding_env : @wasm_frontend.EmbeddingEnvironment,
+  embedding_env : @embedding.EmbeddingEnvironment,
   memory_max_override? : Int? = None,
   func_base? : Int = 0,
   import_remap? : Array[Int] = [],
@@ -216,7 +216,7 @@ fn Translator::Translator(
   func_type_indices : Array[Int],
   num_imports : Int,
   import_func_type_indices : Array[Int],
-  embedding_env : @wasm_frontend.EmbeddingEnvironment,
+  embedding_env : @embedding.EmbeddingEnvironment,
   memory_max? : Int? = None,
   memory_is_64? : Array[Bool] = [],
   memory_page_size_log2? : Array[Int] = [],
@@ -307,7 +307,7 @@ fn Translator::Translator(
 pub fn translate_function(
   mod_ : @types.Module,
   func_local_idx : Int,
-  embedding_env : @wasm_frontend.EmbeddingEnvironment,
+  embedding_env : @embedding.EmbeddingEnvironment,
   name? : String,
   memory_max_override? : Int? = None,
 ) -> Function {

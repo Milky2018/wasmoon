@@ -435,6 +435,13 @@ pub fn run_wasm(
             return
           }
         }
+        validate_module_for_execution(preload_mod) catch {
+          e => {
+            @logger.error("validating preload module '\{name}': \{e}")
+            exit_failure()
+            return
+          }
+        }
         let preload_instance = @executor.instantiate_with_linker(
           linker, name, preload_mod,
         ) catch {
@@ -464,6 +471,13 @@ pub fn run_wasm(
   @logger.debug(
     "Module loaded: \{mod_.codes.length()} functions, \{mod_.imports.length()} imports",
   )
+  validate_module_for_execution(mod_) catch {
+    e => {
+      @logger.error("validating main module: \{e}")
+      exit_failure()
+      return
+    }
+  }
   // Instantiate the main module
   // Note: instantiate_module_with_imports already handles:
   // - Data segment initialization
@@ -1534,7 +1548,7 @@ pub fn compile_module_to_jit(
       )
     }
   }
-  let translation_ctx = @ir.TranslationContext::from_module(
+  let translation_ctx = @wasm_frontend.translation_context_from_module(
     mod_,
     @wasmoon.wasm_frontend_embedding_environment(),
     memory_max_override=actual_memory_max,
@@ -1576,7 +1590,7 @@ pub fn compile_module_to_jit(
     )
     let normalized_opt_level = normalize_opt_level(opt_level)
     let code = mod_.codes[i]
-    let ir_func = @ir.translate_function_body(
+    let ir_func = @wasm_frontend.translate_function_body(
       translation_ctx,
       func_name,
       func_type,

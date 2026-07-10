@@ -15,6 +15,28 @@ fn minimal_i32_const_module_bytes() -> Bytes {
 }
 
 ///|
+test "run validation seam rejects invalid decoded module" {
+  let invalid = @types.Module::simple([], [], [LocalGet(0)], "invalid_local")
+  let error = try {
+    validate_module_for_execution(invalid)
+    None
+  } catch {
+    err => Some(err.to_string())
+  }
+  guard error is Some(message) else {
+    fail("invalid module unexpectedly passed run validation")
+  }
+  inspect(
+    message.contains(
+      "validate wasm module error: validation error: invalid local index: 0",
+    ),
+    content="true",
+  )
+  inspect(message.contains("in function: func[0]"), content="true")
+  inspect(message.contains("instruction: LocalGet(0)"), content="true")
+}
+
+///|
 test "compile api: emits stage progress and returns artifact" {
   let events : Array[CompileProgress] = []
   let compiled = compile_module(minimal_i32_const_module_bytes(), on_progress=fn(
