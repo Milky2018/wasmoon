@@ -388,6 +388,48 @@ test "optimizer CSE replaces duplicate pure expression with copy" {
 }
 
 ///|
+test "instruction identity includes result types and arity" {
+  let func = Function::new_empty("instruction_identity")
+  let i32_result = func.new_value(I32)
+  let i64_result = func.new_value(I64)
+  let second_i64_result = func.new_value(I64)
+  let i32_const = func.new_inst(Iconst(1L), [], [i32_result])
+  let i64_const = func.new_inst(Iconst(1L), [], [i64_result])
+  let i64_pair = func.new_inst(Iconst(1L), [], [i64_result, second_i64_result])
+  let expressions : @hashmap.HashMap[Inst, Unit] = HashMap([])
+  expressions.set(i32_const, ())
+  expressions.set(i64_const, ())
+  expressions.set(i64_pair, ())
+  inspect(expressions.length(), content="3")
+  inspect(is_gvn_candidate(i64_pair), content="false")
+}
+
+///|
+test "GVN does not conflate integer constants with different widths" {
+  let builder = FunctionBuilder::FunctionBuilder("gvn_integer_widths")
+  builder.add_result(I64)
+  let _narrow = builder.iconst_i32(1)
+  let wide = builder.iconst_i64(1L)
+  builder.return_([wide])
+  let func = builder.get_function()
+  let result = cse_gvn_global(func)
+  inspect(result.changed, content="false")
+  inspect(
+    func.print(),
+    content=(
+      #|function gvn_integer_widths() -> i64 {
+      #|block0:
+      #|    v0:i32 = iconst 1
+      #|    v1:i64 = iconst 1
+      #|    return v1
+      #|}
+      #|
+    ),
+  )
+  inspect(func.verify(), content="()")
+}
+
+///|
 test "optimizer CSE reuses expressions from dominating blocks" {
   let builder = FunctionBuilder::FunctionBuilder("cse_global")
   let lhs = builder.add_param(I32)

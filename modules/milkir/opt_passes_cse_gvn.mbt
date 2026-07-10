@@ -504,8 +504,9 @@ fn inst_dominates(
 /// Check if an instruction is suitable for GVN (can be CSE'd)
 /// This includes pure operations plus loads (which read but don't write)
 fn is_gvn_candidate(inst : Inst) -> Bool {
-  // Must have a result
-  if inst.first_result() is None {
+  // Replacement currently emits one copy, so only single-result instructions
+  // can participate in GVN.
+  if inst.results.length() != 1 {
     return false
   }
   // Use the existing has_side_effects check - if it has side effects, skip it
@@ -632,11 +633,14 @@ fn run_global_value_numbering(func : Function) -> OptResult {
       if inst.first_result() is Some(result_val) {
         let key = inst
         if value_table.get(key) is Some((existing, _)) {
-          // Already computed - replace with copy
-          inst.opcode = Copy
-          inst.operands.clear()
-          inst.operands.push(existing)
-          result.mark_changed()
+          // Already computed - replace with copy. The type check is defensive:
+          // Inst identity includes result types, so a mismatch is not expected.
+          if existing.ty == result_val.ty {
+            inst.opcode = Copy
+            inst.operands.clear()
+            inst.operands.push(existing)
+            result.mark_changed()
+          }
         } else {
           // Record previous value (None if new)
           let prev = value_table.get(key)

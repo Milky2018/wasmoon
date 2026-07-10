@@ -248,19 +248,32 @@ pub struct Inst {
 } derive(Debug)
 
 ///|
-/// Hash for CSE/GVN - based on opcode and operand IDs (not result)
+/// Hash for CSE/GVN - based on opcode, result types, and operand IDs.
+/// Result IDs are definitions rather than part of expression identity.
 pub impl Hash for Inst with fn hash_combine(self, hasher) {
   self.opcode.hash_combine(hasher)
+  self.results.length().hash_combine(hasher)
+  for result in self.results {
+    result.ty.hash_combine(hasher)
+  }
   for op in self.operands {
     op.id.hash_combine(hasher)
   }
 }
 
 ///|
-/// Eq for CSE/GVN - two instructions are equal if same opcode and operand IDs
+/// Eq for CSE/GVN - result types are part of expression identity.
 pub impl Eq for Inst with fn equal(self, other) {
   if self.opcode != other.opcode {
     return false
+  }
+  if self.results.length() != other.results.length() {
+    return false
+  }
+  for i in 0..<self.results.length() {
+    if self.results[i].ty != other.results[i].ty {
+      return false
+    }
   }
   if self.operands.length() != other.operands.length() {
     return false
