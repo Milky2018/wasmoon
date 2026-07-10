@@ -17,6 +17,7 @@ pub suberror VerifyError {
   MissingTerminator(block_id~ : Int)
   EmptyFunction
   UndefinedValue(value_id~ : Int)
+  InvalidBlockTarget(block_id~ : Int)
   ArityMismatch(message~ : String)
   TypeMismatch(message~ : String)
 } derive(Eq, @debug.Debug)

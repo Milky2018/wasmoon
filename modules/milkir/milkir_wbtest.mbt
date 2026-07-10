@@ -155,6 +155,94 @@ test "verify catches undefined operands" {
 }
 
 ///|
+test "verify rejects a value whose type disagrees with its definition" {
+  let func = Function::new_empty("bad_value_type")
+  let original = func.add_param(I32)
+  func.add_result(I64)
+  let forged = Value::Value(original.id, I64)
+  let copied = func.new_value(I64)
+  let entry = func.new_block([])
+  entry.append_inst(func.new_inst(Copy, [forged], [copied]))
+  entry.set_terminator(Return([copied]))
+  try func.verify() catch {
+    err =>
+      inspect(
+        err,
+        content=(
+          #|TypeMismatch(message="value 0 has type i64, but its definition has type i32")
+        ),
+      )
+  } noraise {
+    _ => fail("expected value type mismatch")
+  }
+}
+
+///|
+test "verify rejects a jump to a missing block" {
+  let func = Function::new_empty("bad_jump_target")
+  let entry = func.new_block([])
+  entry.set_terminator(Jump(99, []))
+  try func.verify() catch {
+    err => inspect(err, content="InvalidBlockTarget(block_id=99)")
+  } noraise {
+    _ => fail("expected invalid block target")
+  }
+}
+
+///|
+test "verify checks return values against the function signature" {
+  let func = Function::new_empty("bad_return")
+  func.add_result(I64)
+  let entry = func.new_block([])
+  entry.set_terminator(Return([]))
+  try func.verify() catch {
+    err =>
+      inspect(
+        err,
+        content="ArityMismatch(message=\"return expects 1 values, got 0\")",
+      )
+  } noraise {
+    _ => fail("expected return arity mismatch")
+  }
+}
+
+///|
+test "verify checks jump arguments against block parameters" {
+  let func = Function::new_empty("bad_jump_argument")
+  let argument = func.add_param(I32)
+  let entry = func.new_block([])
+  let target_param = func.new_value(I64)
+  let target = func.new_block([target_param])
+  entry.set_terminator(Jump(target.id, [argument]))
+  target.set_terminator(Return([]))
+  try func.verify() catch {
+    err =>
+      inspect(
+        err,
+        content=(
+          #|TypeMismatch(message="jump to block 1 argument 0 has type i32, expected i64")
+        ),
+      )
+  } noraise {
+    _ => fail("expected jump argument type mismatch")
+  }
+}
+
+///|
+test "optimizer preserves indirect calls with unused results" {
+  let func = Function::new_empty("indirect_effect")
+  let callee = func.add_param(Ptr)
+  let ignored = func.new_value(I32)
+  let entry = func.new_block([])
+  entry.append_inst(
+    func.new_inst(CallIndirect(Signature([], [I32])), [callee], [ignored]),
+  )
+  entry.set_terminator(Return([]))
+  optimize_with_level(func, O1) |> ignore
+  inspect(instruction_count(func), content="1")
+}
+
+///|
 test "optimizer folds integer constants" {
   let builder = FunctionBuilder::FunctionBuilder("const_add")
   builder.add_result(I32)
@@ -719,6 +807,7 @@ test "optimizer threads trivial jump blocks" {
 ///|
 test "optimizer threads jump args through block params" {
   let builder = FunctionBuilder::FunctionBuilder("thread_jump_args")
+  builder.add_result(I32)
   let middle = builder.create_block()
   let exit = builder.create_block()
   let a = builder.iconst_i32(1)
@@ -739,7 +828,7 @@ test "optimizer threads jump args through block params" {
   inspect(
     func.print(),
     content=(
-      #|function thread_jump_args() {
+      #|function thread_jump_args() -> i32 {
       #|block0:
       #|    v0:i32 = iconst 1
       #|    v1:i32 = iconst 2

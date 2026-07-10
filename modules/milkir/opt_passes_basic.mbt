@@ -122,7 +122,7 @@ fn has_side_effects(inst : Inst) -> Bool {
     FcvtToSint | FcvtToUint => true
     // External calls can have side effects and may interact with embedding
     // runtime state.
-    Call(_) | CallPtr(_, _) => true
+    Call(_) | CallIndirect(_) | CallPtr(_, _) => true
     // Other instructions are pure
     _ => false
   }
