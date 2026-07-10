@@ -8,7 +8,10 @@ fn type_byte_size(ty : @milkir.Type) -> Int {
 }
 
 ///|
-fn zero_value(builder : @milkir.IRBuilder, ty : @milkir.Type) -> @milkir.Value? {
+fn zero_value(
+  builder : @milkir.FunctionBuilder,
+  ty : @milkir.Type,
+) -> @milkir.Value? {
   match ty {
     I32 => Some(builder.iconst_i32(0))
     I64 | Ref | Ptr | CallableRef | OpaqueRef => Some(builder.iconst_i64(0L))
@@ -39,50 +42,37 @@ fn push_binary(
 
 ///|
 fn emit_op(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   ty : @milkir.Type,
   opcode : @milkir.Opcode,
   operands : Array[@milkir.Value],
 ) -> @milkir.Value? {
-  guard builder.current_block() is Some(block) else { return None }
-  let func = builder.get_function()
-  let result = func.new_value(ty)
-  block.append_inst(func.new_inst(opcode, operands, [result]))
-  Some(result)
+  Some(builder.emit_inst(ty, opcode, operands))
 }
 
 ///|
 fn emit_void_op(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   opcode : @milkir.Opcode,
   operands : Array[@milkir.Value],
 ) -> Bool {
-  guard builder.current_block() is Some(block) else { return false }
-  let func = builder.get_function()
-  block.append_inst(func.new_inst(opcode, operands, []))
+  builder.emit_void_inst(opcode, operands)
   true
 }
 
 ///|
 fn emit_multi_op(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   result_types : Array[@milkir.Type],
   opcode : @milkir.Opcode,
   operands : Array[@milkir.Value],
 ) -> Array[@milkir.Value]? {
-  guard builder.current_block() is Some(block) else { return None }
-  let func = builder.get_function()
-  let results : Array[@milkir.Value] = []
-  for ty in result_types {
-    results.push(func.new_value(ty))
-  }
-  block.append_inst(func.new_inst(opcode, operands, results))
-  Some(results)
+  Some(builder.emit_multi_inst(result_types, opcode, operands))
 }
 
 ///|
 fn push_unary_opcode(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   stack : Array[@milkir.Value],
   opcode : @milkir.Opcode,
 ) -> Bool {
@@ -96,7 +86,7 @@ fn push_unary_opcode(
 
 ///|
 fn push_unary_opcode_as(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   stack : Array[@milkir.Value],
   ty : @milkir.Type,
   opcode : @milkir.Opcode,
@@ -111,7 +101,7 @@ fn push_unary_opcode_as(
 
 ///|
 fn push_binary_opcode(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   stack : Array[@milkir.Value],
   opcode : @milkir.Opcode,
 ) -> Bool {
@@ -126,7 +116,7 @@ fn push_binary_opcode(
 
 ///|
 fn push_i32_binary_opcode(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   stack : Array[@milkir.Value],
   opcode : @milkir.Opcode,
 ) -> Bool {
@@ -144,7 +134,7 @@ fn push_i32_binary_opcode(
 
 ///|
 fn push_i32_shift_opcode(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   stack : Array[@milkir.Value],
   opcode : @milkir.Opcode,
 ) -> Bool {
@@ -166,7 +156,7 @@ fn push_i32_shift_opcode(
 
 ///|
 fn push_i32_clz(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   stack : Array[@milkir.Value],
 ) -> Bool {
   guard pop_value(stack) is Some(value) else { return false }
@@ -189,7 +179,7 @@ fn push_i32_clz(
 
 ///|
 fn push_i32_ctz(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   stack : Array[@milkir.Value],
 ) -> Bool {
   guard pop_value(stack) is Some(value) else { return false }
@@ -215,7 +205,7 @@ fn push_i32_ctz(
 
 ///|
 fn push_i32_popcnt(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   stack : Array[@milkir.Value],
 ) -> Bool {
   guard pop_value(stack) is Some(value) else { return false }
@@ -234,7 +224,7 @@ fn push_i32_popcnt(
 
 ///|
 fn push_int_cmp(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   stack : Array[@milkir.Value],
   cc : @milkir.IntCC,
 ) -> Bool {
@@ -249,7 +239,7 @@ fn push_int_cmp(
 
 ///|
 fn push_float_cmp(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   stack : Array[@milkir.Value],
   cc : @milkir.FloatCC,
 ) -> Bool {
@@ -264,7 +254,7 @@ fn push_float_cmp(
 
 ///|
 fn push_float_copysign(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   stack : Array[@milkir.Value],
   float_ty : @milkir.Type,
   int_ty : @milkir.Type,
@@ -300,7 +290,7 @@ fn push_float_copysign(
 
 ///|
 fn push_i31_new(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   stack : Array[@milkir.Value],
 ) -> Bool {
   guard pop_value(stack) is Some(value) else { return false }
@@ -325,10 +315,9 @@ fn push_i31_new(
 
 ///|
 fn emit_i31_null_check(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   value : @milkir.Value,
 ) -> Bool {
-  guard builder.current_block() is Some(_) else { return false }
   guard emit_op(builder, value.ty, Iconst(@wasm_milkir.NULL_REF), [])
     is Some(null_ref) else {
     return false
@@ -347,7 +336,7 @@ fn emit_i31_null_check(
 
 ///|
 fn push_i31_get(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   stack : Array[@milkir.Value],
   signed : Bool,
 ) -> Bool {
@@ -386,7 +375,7 @@ fn push_i31_get(
 
 ///|
 fn push_select(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   stack : Array[@milkir.Value],
 ) -> Bool {
   guard pop_value(stack) is Some(cond) else { return false }
@@ -479,7 +468,7 @@ fn collect_memory_types(mod_ : @types.Module) -> Array[@types.MemoryType] {
 
 ///|
 fn push_direct_call(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   stack : Array[@milkir.Value],
   env : EmbeddingEnvironment,
   mod_ : @types.Module,
@@ -534,7 +523,7 @@ fn push_direct_call(
 
 ///|
 fn push_global_get(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   stack : Array[@milkir.Value],
   env : EmbeddingEnvironment,
   vmctx : @milkir.Value?,
@@ -558,7 +547,7 @@ fn push_global_get(
 
 ///|
 fn push_global_set(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   stack : Array[@milkir.Value],
   env : EmbeddingEnvironment,
   vmctx : @milkir.Value?,
@@ -592,7 +581,7 @@ fn table_is_64(table_types : Array[@types.TableType], table_idx : Int) -> Bool? 
 
 ///|
 fn push_table_size(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   stack : Array[@milkir.Value],
   env : EmbeddingEnvironment,
   vmctx : @milkir.Value?,
@@ -635,7 +624,7 @@ fn push_table_size(
 
 ///|
 fn load_table_size_and_base(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   env : EmbeddingEnvironment,
   context : @milkir.Value,
   table_idx : Int,
@@ -675,7 +664,7 @@ fn load_table_size_and_base(
 
 ///|
 fn push_table_get(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   stack : Array[@milkir.Value],
   env : EmbeddingEnvironment,
   vmctx : @milkir.Value?,
@@ -727,7 +716,7 @@ fn push_table_get(
 
 ///|
 fn push_table_set(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   stack : Array[@milkir.Value],
   runtime_symbols : @wasm_milkir.RuntimeSymbols,
   vmctx : @milkir.Value?,
@@ -759,7 +748,7 @@ fn push_table_set(
 
 ///|
 fn push_table_fill(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   stack : Array[@milkir.Value],
   runtime_symbols : @wasm_milkir.RuntimeSymbols,
   vmctx : @milkir.Value?,
@@ -806,7 +795,7 @@ fn memory_index_type(
 
 ///|
 fn load_memory_base(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   env : EmbeddingEnvironment,
   context : @milkir.Value,
   memidx : Int,
@@ -846,7 +835,7 @@ fn load_memory_base(
 
 ///|
 fn load_memory_size_bytes(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   env : EmbeddingEnvironment,
   context : @milkir.Value,
   memidx : Int,
@@ -886,7 +875,7 @@ fn load_memory_size_bytes(
 
 ///|
 fn push_memory_size(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   stack : Array[@milkir.Value],
   env : EmbeddingEnvironment,
   vmctx : @milkir.Value?,
@@ -920,7 +909,7 @@ fn push_memory_size(
 
 ///|
 fn push_memory_grow(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   stack : Array[@milkir.Value],
   runtime_symbols : @wasm_milkir.RuntimeSymbols,
   vmctx : @milkir.Value?,
@@ -979,7 +968,7 @@ fn pop3(
 
 ///|
 fn push_memory_fill(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   stack : Array[@milkir.Value],
   runtime_symbols : @wasm_milkir.RuntimeSymbols,
   vmctx : @milkir.Value?,
@@ -1009,7 +998,7 @@ fn push_memory_fill(
 
 ///|
 fn push_memory_copy(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   stack : Array[@milkir.Value],
   runtime_symbols : @wasm_milkir.RuntimeSymbols,
   vmctx : @milkir.Value?,
@@ -1046,7 +1035,7 @@ fn push_memory_copy(
 
 ///|
 fn push_memory_init(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   stack : Array[@milkir.Value],
   runtime_symbols : @wasm_milkir.RuntimeSymbols,
   vmctx : @milkir.Value?,
@@ -1102,7 +1091,7 @@ fn push_memory_init(
 
 ///|
 fn push_data_drop(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   runtime_symbols : @wasm_milkir.RuntimeSymbols,
   vmctx : @milkir.Value?,
   data_idx : Int,
@@ -1118,7 +1107,7 @@ fn push_data_drop(
 
 ///|
 fn push_table_grow(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   stack : Array[@milkir.Value],
   runtime_symbols : @wasm_milkir.RuntimeSymbols,
   vmctx : @milkir.Value?,
@@ -1165,7 +1154,7 @@ fn push_table_grow(
 
 ///|
 fn push_table_copy(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   stack : Array[@milkir.Value],
   runtime_symbols : @wasm_milkir.RuntimeSymbols,
   vmctx : @milkir.Value?,
@@ -1194,7 +1183,7 @@ fn push_table_copy(
 
 ///|
 fn push_table_init(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   stack : Array[@milkir.Value],
   runtime_symbols : @wasm_milkir.RuntimeSymbols,
   vmctx : @milkir.Value?,
@@ -1222,7 +1211,7 @@ fn push_table_init(
 
 ///|
 fn push_elem_drop(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   runtime_symbols : @wasm_milkir.RuntimeSymbols,
   vmctx : @milkir.Value?,
   elem_idx : Int,
@@ -1238,7 +1227,7 @@ fn push_elem_drop(
 
 ///|
 fn push_ref_null(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   stack : Array[@milkir.Value],
   ref_type : @types.ValueType,
 ) -> Bool {
@@ -1252,7 +1241,7 @@ fn push_ref_null(
 
 ///|
 fn push_ref_is_null(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   stack : Array[@milkir.Value],
 ) -> Bool {
   guard pop_value(stack) is Some(ref_value) else { return false }
@@ -1266,7 +1255,7 @@ fn push_ref_is_null(
 
 ///|
 fn push_ref_func(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   stack : Array[@milkir.Value],
   env : EmbeddingEnvironment,
   vmctx : @milkir.Value?,
@@ -1294,7 +1283,7 @@ fn push_ref_func(
 
 ///|
 fn push_ref_as_non_null(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   stack : Array[@milkir.Value],
 ) -> Bool {
   guard stack.last() is Some(ref_value) else { return false }
@@ -1314,7 +1303,7 @@ fn push_ref_as_non_null(
 
 ///|
 fn push_ref_eq(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   stack : Array[@milkir.Value],
 ) -> Bool {
   if !push_int_cmp(builder, stack, Eq) {
@@ -1333,7 +1322,7 @@ fn single_block_result_type(block_type : @types.BlockType) -> @types.ValueType? 
 
 ///|
 fn push_simple_expr_value(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   locals : Array[@milkir.Value],
   instr : @types.Instruction,
 ) -> @milkir.Value? {
@@ -1358,7 +1347,7 @@ fn push_simple_expr_value(
 
 ///|
 fn push_simple_expr_instr(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   locals : Array[@milkir.Value],
   expr_stack : Array[@milkir.Value],
   instr : @types.Instruction,
@@ -1521,7 +1510,7 @@ fn push_simple_expr_instr(
 
 ///|
 fn push_simple_expr_body_value(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   locals : Array[@milkir.Value],
   body : Array[@types.Instruction],
   expected_ty : @milkir.Type,
@@ -1541,7 +1530,7 @@ fn push_simple_expr_body_value(
 
 ///|
 fn push_simple_if_select(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   stack : Array[@milkir.Value],
   locals : Array[@milkir.Value],
   block_type : @types.BlockType,
@@ -1569,7 +1558,7 @@ fn push_simple_if_select(
 
 ///|
 fn push_memory_base(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   env : EmbeddingEnvironment,
   vmctx : @milkir.Value,
   memidx : Int,
@@ -1579,7 +1568,7 @@ fn push_memory_base(
 
 ///|
 fn extend_memory_addr(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   memory_types : Array[@types.MemoryType],
   memidx : Int,
   addr : @milkir.Value,
@@ -1593,7 +1582,7 @@ fn extend_memory_addr(
 
 ///|
 fn push_memory_bounds_check(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   memory_types : Array[@types.MemoryType],
   memidx : Int,
   addr_i64 : @milkir.Value,
@@ -1634,7 +1623,7 @@ fn push_memory_bounds_check(
 
 ///|
 fn memory_effective_addr(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   env : EmbeddingEnvironment,
   vmctx : @milkir.Value,
   memory_types : Array[@types.MemoryType],
@@ -1668,7 +1657,7 @@ fn memory_effective_addr(
 
 ///|
 fn push_memory_load(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   stack : Array[@milkir.Value],
   env : EmbeddingEnvironment,
   vmctx : @milkir.Value?,
@@ -1701,7 +1690,7 @@ fn push_memory_load(
 
 ///|
 fn push_memory_load_narrow(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   stack : Array[@milkir.Value],
   env : EmbeddingEnvironment,
   vmctx : @milkir.Value?,
@@ -1744,7 +1733,7 @@ fn push_memory_load_narrow(
 
 ///|
 fn push_memory_store(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   stack : Array[@milkir.Value],
   env : EmbeddingEnvironment,
   vmctx : @milkir.Value?,
@@ -1778,7 +1767,7 @@ fn push_memory_store(
 
 ///|
 fn push_memory_store_narrow(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   stack : Array[@milkir.Value],
   env : EmbeddingEnvironment,
   vmctx : @milkir.Value?,
@@ -1812,7 +1801,7 @@ fn push_memory_store_narrow(
 
 ///|
 fn finish_linear_return(
-  builder : @milkir.IRBuilder,
+  builder : @milkir.FunctionBuilder,
   stack : Array[@milkir.Value],
   result_count : Int,
 ) -> Bool {
@@ -1940,7 +1929,9 @@ fn try_lower_linear_function(
   let table_types = collect_table_types(mod_)
   let memory_types = collect_memory_types(mod_)
   let runtime_symbols = env.wasm_runtime_symbols()
-  let builder = @milkir.IRBuilder::new(function_name(mod_, func_local_idx))
+  let builder = @milkir.FunctionBuilder::FunctionBuilder(
+    function_name(mod_, func_local_idx),
+  )
   let locals : Array[@milkir.Value] = []
   let mut vmctx : @milkir.Value? = None
   if env.hidden_context_param() is Some(hidden_context_type) {
@@ -1952,8 +1943,6 @@ fn try_lower_linear_function(
   for result in func_type.results {
     builder.add_result(wasm_value_type_to_milkir(result))
   }
-  let entry = builder.create_block()
-  builder.switch_to_block(entry)
   for local_ty in code.locals {
     let milk_ty = wasm_value_type_to_milkir(local_ty)
     guard zero_value(builder, milk_ty) is Some(value) else { return None }

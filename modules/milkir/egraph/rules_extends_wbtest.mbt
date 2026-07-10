@@ -1,7 +1,7 @@
 ///|
 /// Test for uextend(const) folding with cycle detection in extract
 test "rule_uextend_const_with_extract" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
 
   // Create const(200) in e-graph
   let const_200 = eg.add_const(200L)
@@ -13,7 +13,7 @@ test "rule_uextend_const_with_extract" {
   inspect(eg.get_nodes(uextend_node).length(), content="1")
 
   // Apply only the uextend_const rule
-  let rules = IndexedRuleSet::new()
+  let rules = IndexedRuleSet::IndexedRuleSet()
   rules.add_rule(rule_uextend_const(), [TUextend])
   eg.saturate_indexed(rules, 10) |> ignore
 
@@ -30,7 +30,7 @@ test "rule_uextend_const_with_extract" {
 ///|
 /// Test that typed nodes participate in rewrite_to_fixpoint
 test "rule_uextend_const_typed_rewrite" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let rules = standard_rules_indexed()
   let const_200 = eg.add_typed({ op: Const(200L), children: [] }, 32)
   let uextend_node = eg.add_typed(

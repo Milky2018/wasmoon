@@ -40,8 +40,8 @@ priv struct JITContext {
 
 ///|
 /// Create a new JIT context - GC managed
-fn JITContext::new(total_funcs : Int) -> JITContext? {
-  @wasmoon_jit.NativeJITContext::new(total_funcs).map(fn(ctx) {
+fn JITContext::try_alloc(total_funcs : Int) -> JITContext? {
+  @wasmoon_jit.NativeJITContext::try_alloc(total_funcs).map(fn(ctx) {
     { ctx, trampoline_cache: Map([]) }
   })
 }
@@ -300,7 +300,7 @@ fn JITContext::call_multi_return(
         isa~,
       )
       let code_ints = mc.get_bytes()
-      let trampoline = @wasmoon_jit.ExecCode::new(code_ints)
+      let trampoline = @wasmoon_jit.ExecCode::try_alloc(code_ints)
       match trampoline {
         Some(t) => {
           let ptr = t.ptr()

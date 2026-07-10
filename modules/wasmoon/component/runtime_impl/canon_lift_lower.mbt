@@ -65,7 +65,7 @@ fn instantiate_canon_lower(
       store.get_mem(addr) catch {
         e => raise CanonCallError(e.to_string())
       }
-    None => @runtime.Memory::new(0, None)
+    None => Memory(0, None)
   }
   if is_async_lower {
     // Async lowering: start a subtask and return a status code, writing
@@ -102,7 +102,7 @@ fn instantiate_canon_lower(
       let per_task = match async_state.call_results.get(cur_task_id) {
         Some(m) => m
         None => {
-          let m : Map[Int, Array[@types.Value]] = {}
+          let m : Map[Int, Array[@types.Value]] = Map([])
           async_state.call_results.set(cur_task_id, m)
           m
         }
@@ -624,7 +624,7 @@ fn instantiate_canon_lower(
         let per_task_calls = match async_state.call_results.get(outer_task_id) {
           Some(m) => m
           None => {
-            let m : Map[Int, Array[@types.Value]] = {}
+            let m : Map[Int, Array[@types.Value]] = Map([])
             async_state.call_results.set(outer_task_id, m)
             m
           }
@@ -638,7 +638,7 @@ fn instantiate_canon_lower(
           async_state.sync_lower_states.get(outer_task_id) {
           Some(m) => m
           None => {
-            let m : Map[Int, SyncLowerState] = {}
+            let m : Map[Int, SyncLowerState] = Map([])
             async_state.sync_lower_states.set(outer_task_id, m)
             m
           }

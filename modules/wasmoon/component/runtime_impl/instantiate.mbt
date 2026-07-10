@@ -9,14 +9,14 @@ fn instantiate_component(
   let stream_table = if outer_stack.length() > 0 {
     outer_stack[outer_stack.length() - 1].stream_table
   } else {
-    StreamTable::new()
+    StreamTable()
   }
   let async_state = if outer_stack.length() > 0 {
     outer_stack[outer_stack.length() - 1].async_state
   } else {
-    AsyncState::new(stream_table)
+    AsyncState(stream_table)
   }
-  let state = BuildState::new(stream_table, async_state)
+  let state = BuildState::BuildState(stream_table, async_state)
   // Reserve handle index 1 for nested component instances so tests that
   // assume a pre-existing handle slot (e.g. resources.wast) see the expected
   // numbering. If we end up running core start code, drop the reservation so
@@ -111,7 +111,7 @@ fn instantiate_component(
       3 => {
         // Core type section payload is a vec of core typedefs; store each
         // typedef's raw bytes so core:typeidx references work correctly.
-        let reader = Reader::new(section.payload)
+        let reader = Reader::Reader(section.payload)
         let n = reader.read_leb_u32() catch {
           e => raise ComponentParseError(e.to_string())
         }
@@ -148,7 +148,7 @@ fn instantiate_component(
                 raise InvalidComponentIndex(component_idx)
               }
               let closure = state.components[component_idx]
-              let overrides_for_child : Map[String, ComponentExtern] = {}
+              let overrides_for_child : Map[String, ComponentExtern] = Map([])
               for arg in args {
                 let ext = resolve_sortidx(arg.sortidx, state)
                 overrides_for_child.set(arg.name, ext)
@@ -163,7 +163,7 @@ fn instantiate_component(
               state.instances.push(nested)
             }
             InlineExports(exports) => {
-              let export_map : Map[String, ComponentExtern] = {}
+              let export_map : Map[String, ComponentExtern] = Map([])
               for ex in exports {
                 let ext = resolve_sortidx(ex.sortidx, state)
                 export_map.set(ex.name, ext)

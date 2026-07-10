@@ -51,7 +51,9 @@ pub(all) struct ValidationErrorContext {
 } derive(Debug)
 
 ///|
-pub fn ValidationErrorContext::new(msg : String) -> ValidationErrorContext {
+pub fn ValidationErrorContext::ValidationErrorContext(
+  msg : String,
+) -> ValidationErrorContext {
   { error_msg: msg, func_idx: None, instr_offset: None, instruction: None }
 }
 
@@ -120,7 +122,7 @@ pub fn ValidationErrorContext::with_instruction(
 ///|
 /// Format the validation error with full context for display
 pub fn ValidationErrorContext::format(self : ValidationErrorContext) -> String {
-  let result = StringBuilder::new()
+  let result = StringBuilder::StringBuilder()
   result.write_string("validation error: ")
   result.write_string(self.error_msg)
   result.write_string("\n")

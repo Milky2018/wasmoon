@@ -77,7 +77,7 @@ pub struct ComponentValidationConfig {
 }
 
 ///|
-pub fn ComponentValidationConfig::new(
+pub fn ComponentValidationConfig::ComponentValidationConfig(
   wit_names : Bool,
 ) -> ComponentValidationConfig {
   { wit_names, }
@@ -361,7 +361,7 @@ fn funcsig_valid_in_interface(
 
 ///|
 fn InstanceSig::empty() -> InstanceSig {
-  { exports: {}, nested: {} }
+  { exports: Map([]), nested: Map([]) }
 }
 
 ///|
@@ -536,7 +536,7 @@ fn core_kind_of_extern_type(ty : CoreExternType) -> Int {
 fn core_module_import_sig_of_module(
   m : @types.Module,
 ) -> Map[String, CoreExternType] {
-  let out : Map[String, CoreExternType] = {}
+  let out : Map[String, CoreExternType] = Map([])
   for imp in m.imports {
     if core_import_type_of_module(m, imp.desc) is Some(ty) {
       out.set("\{imp.mod_name}::\{imp.name}", ty)
@@ -549,7 +549,7 @@ fn core_module_import_sig_of_module(
 fn core_module_import_sig_of_type(
   sig : Array[CoreModuleTypeImport],
 ) -> Map[String, CoreExternType] {
-  let out : Map[String, CoreExternType] = {}
+  let out : Map[String, CoreExternType] = Map([])
   for imp in sig {
     out.set("\{imp.mod_name}::\{imp.name}", imp.ty)
   }
@@ -601,7 +601,7 @@ fn check_core_module_import_subtype(
 }
 
 ///|
-fn Counts::new() -> Counts {
+fn Counts::Counts() -> Counts {
   {
     func: 0,
     value: 0,
@@ -1340,7 +1340,7 @@ priv struct CoreTypeReader {
 }
 
 ///|
-fn CoreTypeReader::new(data : Bytes) -> CoreTypeReader {
+fn CoreTypeReader::CoreTypeReader(data : Bytes) -> CoreTypeReader {
   { data, pos: 0 }
 }
 
@@ -1399,7 +1399,7 @@ fn CoreTypeReader::read_bytes(
 
 ///|
 fn ascii_bytes_to_string(bytes : Bytes) -> String? {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder::StringBuilder()
   for b in bytes {
     let n = b.to_int()
     if n >= 0x80 {
@@ -1633,9 +1633,9 @@ fn parse_core_type_module_sig(
   outer_core_type_bounds : Array[Int],
 ) -> (Array[CoreModuleTypeImport], Map[String, CoreExternType]) raise ComponentValidationError {
   let ndecls = r.read_leb_u32()
-  let seen_imports : Map[String, Int] = {}
+  let seen_imports : Map[String, Int] = Map([])
   let imports : Array[CoreModuleTypeImport] = []
-  let export_types : Map[String, CoreExternType] = {}
+  let export_types : Map[String, CoreExternType] = Map([])
   let func_types : Array[@types.FuncType?] = []
   let mut func_type_bound = 0
   for _i in 0..<ndecls {

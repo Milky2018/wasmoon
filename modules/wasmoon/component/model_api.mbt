@@ -1,5 +1,5 @@
 ///|
-/// Public component-model parser API compatibility layer.
+/// Public component-model parser API facade.
 ///
 /// Implementation lives in `Milky2018/wasmoon/component/model`.
 

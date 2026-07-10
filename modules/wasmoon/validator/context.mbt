@@ -123,7 +123,9 @@ fn collect_declared_funcs(
 }
 
 ///|
-fn ValidationContext::new(mod : @types.Module) -> ValidationContext {
+fn ValidationContext::ValidationContext(
+  mod : @types.Module,
+) -> ValidationContext {
   // Collect function types (imports + defined functions)
   let funcs : Array[Int] = []
   for imp in mod.imports {

@@ -1,61 +1,71 @@
-// IR Builder - Convenient API for constructing IR
+// Function Builder - Convenient API for constructing IR
 // SSA function builder
 
 ///|
-/// IRBuilder - helps construct IR functions
+/// FunctionBuilder - helps construct IR functions
 /// Tracks the current block and provides methods for emitting instructions
-struct IRBuilder {
+struct FunctionBuilder {
   func : Function
-  mut current_block : Block?
+  mut current_block : Block
 }
 
 ///|
-pub fn IRBuilder::new(name : String) -> IRBuilder {
+pub fn FunctionBuilder::FunctionBuilder(name : String) -> FunctionBuilder {
   let func = Function::new_empty(name)
-  { func, current_block: None }
+  let entry = func.new_block0()
+  { func, current_block: entry }
 }
 
 ///|
 /// Get the function being built
-pub fn IRBuilder::get_function(self : IRBuilder) -> Function {
+pub fn FunctionBuilder::get_function(self : FunctionBuilder) -> Function {
+  self.func
+}
+
+///|
+/// Finish building and return the constructed function.
+pub fn FunctionBuilder::finalize(self : FunctionBuilder) -> Function {
   self.func
 }
 
 ///|
 /// Add a parameter to the function
-pub fn IRBuilder::add_param(self : IRBuilder, ty : Type) -> Value {
+pub fn FunctionBuilder::add_param(self : FunctionBuilder, ty : Type) -> Value {
   self.func.add_param(ty)
 }
 
 ///|
 /// Add a result type to the function
-pub fn IRBuilder::add_result(self : IRBuilder, ty : Type) -> Unit {
+pub fn FunctionBuilder::add_result(self : FunctionBuilder, ty : Type) -> Unit {
   self.func.add_result(ty)
 }
 
 ///|
-/// Create a new block and make it the current block
-pub fn IRBuilder::create_block(self : IRBuilder) -> Block {
+/// Create a new block.
+pub fn FunctionBuilder::create_block(self : FunctionBuilder) -> Block {
   let block = self.func.new_block0()
   block
 }
 
 ///|
 /// Switch to a different block for emitting instructions
-pub fn IRBuilder::switch_to_block(self : IRBuilder, block : Block) -> Unit {
-  self.current_block = Some(block)
+pub fn FunctionBuilder::switch_to_block(
+  self : FunctionBuilder,
+  block : Block,
+) -> Unit {
+  self.current_block = block
 }
 
 ///|
 /// Get the current block
-pub fn IRBuilder::current_block(self : IRBuilder) -> Block? {
+pub fn FunctionBuilder::current_block(self : FunctionBuilder) -> Block {
   self.current_block
 }
 
 ///|
 /// Add a block parameter (for SSA phi nodes)
-pub fn IRBuilder::add_block_param(
-  self : IRBuilder,
+pub fn FunctionBuilder::add_block_param(
+  self : FunctionBuilder,
   block : Block,
   ty : Type,
 ) -> Value {
@@ -65,37 +75,92 @@ pub fn IRBuilder::add_block_param(
 }
 
 ///|
+/// Append block parameters matching the function parameter types.
+pub fn FunctionBuilder::append_block_params_for_function_params(
+  self : FunctionBuilder,
+  block : Block,
+) -> Unit {
+  for item in self.func.params {
+    let (_, ty) = item
+    self.add_block_param(block, ty) |> ignore
+  }
+}
+
+///|
+/// Append block parameters matching the function result types.
+pub fn FunctionBuilder::append_block_params_for_function_returns(
+  self : FunctionBuilder,
+  block : Block,
+) -> Unit {
+  for ty in self.func.results {
+    self.add_block_param(block, ty) |> ignore
+  }
+}
+
+///|
+/// Return the SSA values used as block parameters.
+pub fn FunctionBuilder::block_params(
+  _self : FunctionBuilder,
+  block : Block,
+) -> Array[Value] {
+  block.params.map(fn(item) {
+    let (value, _) = item
+    value
+  })
+}
+
+///|
 /// Emit an instruction that produces a result
-pub fn IRBuilder::emit_inst(
-  self : IRBuilder,
+pub fn FunctionBuilder::emit_inst(
+  self : FunctionBuilder,
   ty : Type,
   opcode : Opcode,
   operands : Array[Value],
 ) -> Value {
+  let block = self.current_block
   let result = self.func.new_value(ty)
-  let inst = Inst::new(Some(result), opcode, operands)
-  if self.current_block is Some(block) {
-    block.add_inst(inst)
-  }
+  let inst = Inst(Some(result), opcode, operands)
+  block.add_inst(inst)
   result
 }
 
 ///|
 /// Emit an instruction without a result
-fn IRBuilder::emit_void_inst(
-  self : IRBuilder,
+pub fn FunctionBuilder::emit_void_inst(
+  self : FunctionBuilder,
   opcode : Opcode,
   operands : Array[Value],
 ) -> Unit {
-  let inst = Inst::new(None, opcode, operands)
-  if self.current_block is Some(block) {
-    block.add_inst(inst)
-  }
+  let block = self.current_block
+  let inst = Inst(None, opcode, operands)
+  block.add_inst(inst)
 }
 
 ///|
-pub fn IRBuilder::emit_ext_inst(
-  self : IRBuilder,
+/// Emit an instruction with multiple results.
+pub fn FunctionBuilder::emit_multi_inst(
+  self : FunctionBuilder,
+  result_types : Array[Type],
+  opcode : Opcode,
+  operands : Array[Value],
+) -> Array[Value] {
+  if result_types.length() == 0 {
+    self.emit_void_inst(opcode, operands)
+    return []
+  }
+  let block = self.current_block
+  let results : Array[Value] = []
+  for ty in result_types {
+    results.push(self.func.new_value(ty))
+  }
+  let inst = Inst::new_multi(results, opcode, operands)
+  block.add_inst(inst)
+  results
+}
+
+///|
+pub fn FunctionBuilder::emit_ext_inst(
+  self : FunctionBuilder,
   ty : Type,
   opcode : ExtOp,
   operands : Array[Value],
@@ -104,12 +169,22 @@ pub fn IRBuilder::emit_ext_inst(
 }
 
 ///|
-pub fn IRBuilder::emit_void_ext_inst(
-  self : IRBuilder,
+pub fn FunctionBuilder::emit_void_ext_inst(
+  self : FunctionBuilder,
   opcode : ExtOp,
   operands : Array[Value],
 ) -> Unit {
   self.emit_void_inst(Ext(opcode), operands)
+}
+
+///|
+pub fn FunctionBuilder::emit_multi_ext_inst(
+  self : FunctionBuilder,
+  result_types : Array[Type],
+  opcode : ExtOp,
+  operands : Array[Value],
+) -> Array[Value] {
+  self.emit_multi_inst(result_types, Ext(opcode), operands)
 }
 
 // ============ Constants ============
@@ -118,7 +193,10 @@ pub fn IRBuilder::emit_void_ext_inst(
 /// Get the constant value if a Value was defined by an Iconst instruction.
 /// Searches all blocks in the function to find the defining instruction.
 /// Returns None if the value is not a constant or not found.
-pub fn IRBuilder::get_const_value(self : IRBuilder, v : Value) -> Int64? {
+pub fn FunctionBuilder::get_const_value(
+  self : FunctionBuilder,
+  v : Value,
+) -> Int64? {
   for block in self.func.blocks {
     for inst in block.instructions {
       if inst.first_result() is Some(r) && r.id == v.id {
@@ -134,25 +212,39 @@ pub fn IRBuilder::get_const_value(self : IRBuilder, v : Value) -> Int64? {
 
 ///|
 /// Emit an integer constant
-pub fn IRBuilder::iconst(self : IRBuilder, ty : Type, value : Int64) -> Value {
+pub fn FunctionBuilder::iconst(
+  self : FunctionBuilder,
+  ty : Type,
+  value : Int64,
+) -> Value {
   self.emit_inst(ty, Iconst(value), [])
 }
 
 ///|
 /// Emit an i32 constant
-pub fn IRBuilder::iconst_i32(self : IRBuilder, value : Int) -> Value {
+pub fn FunctionBuilder::iconst_i32(
+  self : FunctionBuilder,
+  value : Int,
+) -> Value {
   self.iconst(I32, value.to_int64())
 }
 
 ///|
 /// Emit an i64 constant
-pub fn IRBuilder::iconst_i64(self : IRBuilder, value : Int64) -> Value {
+pub fn FunctionBuilder::iconst_i64(
+  self : FunctionBuilder,
+  value : Int64,
+) -> Value {
   self.iconst(I64, value)
 }
 
 ///|
 /// Emit a float constant
-pub fn IRBuilder::fconst(self : IRBuilder, ty : Type, value : Double) -> Value {
+pub fn FunctionBuilder::fconst(
+  self : FunctionBuilder,
+  ty : Type,
+  value : Double,
+) -> Value {
   self.emit_inst(ty, Fconst(value), [])
 }
 
@@ -161,14 +253,20 @@ pub fn IRBuilder::fconst(self : IRBuilder, ty : Type, value : Double) -> Value {
 /// Note: We pack the f32 bits into the Double's bit representation to preserve
 /// NaN payloads. Using value.to_double() would go through the FPU and convert
 /// signaling NaNs to quiet NaNs.
-pub fn IRBuilder::fconst_f32(self : IRBuilder, value : Float) -> Value {
+pub fn FunctionBuilder::fconst_f32(
+  self : FunctionBuilder,
+  value : Float,
+) -> Value {
   let f32_bits = value.reinterpret_as_int().to_int64()
   self.fconst(F32, f32_bits.reinterpret_as_double())
 }
 
 ///|
 /// Emit an f64 constant
-pub fn IRBuilder::fconst_f64(self : IRBuilder, value : Double) -> Value {
+pub fn FunctionBuilder::fconst_f64(
+  self : FunctionBuilder,
+  value : Double,
+) -> Value {
   self.fconst(F64, value)
 }
 
@@ -176,55 +274,91 @@ pub fn IRBuilder::fconst_f64(self : IRBuilder, value : Double) -> Value {
 
 ///|
 /// Integer add
-pub fn IRBuilder::iadd(self : IRBuilder, a : Value, b : Value) -> Value {
+pub fn FunctionBuilder::iadd(
+  self : FunctionBuilder,
+  a : Value,
+  b : Value,
+) -> Value {
   self.emit_inst(a.ty, Iadd, [a, b])
 }
 
 ///|
 /// Integer subtract
-pub fn IRBuilder::isub(self : IRBuilder, a : Value, b : Value) -> Value {
+pub fn FunctionBuilder::isub(
+  self : FunctionBuilder,
+  a : Value,
+  b : Value,
+) -> Value {
   self.emit_inst(a.ty, Isub, [a, b])
 }
 
 ///|
 /// Integer multiply
-pub fn IRBuilder::imul(self : IRBuilder, a : Value, b : Value) -> Value {
+pub fn FunctionBuilder::imul(
+  self : FunctionBuilder,
+  a : Value,
+  b : Value,
+) -> Value {
   self.emit_inst(a.ty, Imul, [a, b])
 }
 
 ///|
 /// Unsigned multiply high (i64 only)
-pub fn IRBuilder::umulh(self : IRBuilder, a : Value, b : Value) -> Value {
+pub fn FunctionBuilder::umulh(
+  self : FunctionBuilder,
+  a : Value,
+  b : Value,
+) -> Value {
   self.emit_inst(a.ty, Umulh, [a, b])
 }
 
 ///|
 /// Signed multiply high (i64 only)
-pub fn IRBuilder::smulh(self : IRBuilder, a : Value, b : Value) -> Value {
+pub fn FunctionBuilder::smulh(
+  self : FunctionBuilder,
+  a : Value,
+  b : Value,
+) -> Value {
   self.emit_inst(a.ty, Smulh, [a, b])
 }
 
 ///|
 /// Signed integer divide
-pub fn IRBuilder::sdiv(self : IRBuilder, a : Value, b : Value) -> Value {
+pub fn FunctionBuilder::sdiv(
+  self : FunctionBuilder,
+  a : Value,
+  b : Value,
+) -> Value {
   self.emit_inst(a.ty, Sdiv, [a, b])
 }
 
 ///|
 /// Unsigned integer divide
-pub fn IRBuilder::udiv(self : IRBuilder, a : Value, b : Value) -> Value {
+pub fn FunctionBuilder::udiv(
+  self : FunctionBuilder,
+  a : Value,
+  b : Value,
+) -> Value {
   self.emit_inst(a.ty, Udiv, [a, b])
 }
 
 ///|
 /// Signed integer remainder
-pub fn IRBuilder::srem(self : IRBuilder, a : Value, b : Value) -> Value {
+pub fn FunctionBuilder::srem(
+  self : FunctionBuilder,
+  a : Value,
+  b : Value,
+) -> Value {
   self.emit_inst(a.ty, Srem, [a, b])
 }
 
 ///|
 /// Unsigned integer remainder
-pub fn IRBuilder::urem(self : IRBuilder, a : Value, b : Value) -> Value {
+pub fn FunctionBuilder::urem(
+  self : FunctionBuilder,
+  a : Value,
+  b : Value,
+) -> Value {
   self.emit_inst(a.ty, Urem, [a, b])
 }
 
@@ -232,73 +366,105 @@ pub fn IRBuilder::urem(self : IRBuilder, a : Value, b : Value) -> Value {
 
 ///|
 /// Bitwise and
-pub fn IRBuilder::band(self : IRBuilder, a : Value, b : Value) -> Value {
+pub fn FunctionBuilder::band(
+  self : FunctionBuilder,
+  a : Value,
+  b : Value,
+) -> Value {
   self.emit_inst(a.ty, Band, [a, b])
 }
 
 ///|
 /// Bitwise or
-pub fn IRBuilder::bor(self : IRBuilder, a : Value, b : Value) -> Value {
+pub fn FunctionBuilder::bor(
+  self : FunctionBuilder,
+  a : Value,
+  b : Value,
+) -> Value {
   self.emit_inst(a.ty, Bor, [a, b])
 }
 
 ///|
 /// Bitwise xor
-pub fn IRBuilder::bxor(self : IRBuilder, a : Value, b : Value) -> Value {
+pub fn FunctionBuilder::bxor(
+  self : FunctionBuilder,
+  a : Value,
+  b : Value,
+) -> Value {
   self.emit_inst(a.ty, Bxor, [a, b])
 }
 
 ///|
 /// Bitwise not
-pub fn IRBuilder::bnot(self : IRBuilder, a : Value) -> Value {
+pub fn FunctionBuilder::bnot(self : FunctionBuilder, a : Value) -> Value {
   self.emit_inst(a.ty, Bnot, [a])
 }
 
 ///|
 /// Shift left
-pub fn IRBuilder::ishl(self : IRBuilder, a : Value, b : Value) -> Value {
+pub fn FunctionBuilder::ishl(
+  self : FunctionBuilder,
+  a : Value,
+  b : Value,
+) -> Value {
   self.emit_inst(a.ty, Ishl, [a, b])
 }
 
 ///|
 /// Signed shift right
-pub fn IRBuilder::sshr(self : IRBuilder, a : Value, b : Value) -> Value {
+pub fn FunctionBuilder::sshr(
+  self : FunctionBuilder,
+  a : Value,
+  b : Value,
+) -> Value {
   self.emit_inst(a.ty, Sshr, [a, b])
 }
 
 ///|
 /// Unsigned shift right
-pub fn IRBuilder::ushr(self : IRBuilder, a : Value, b : Value) -> Value {
+pub fn FunctionBuilder::ushr(
+  self : FunctionBuilder,
+  a : Value,
+  b : Value,
+) -> Value {
   self.emit_inst(a.ty, Ushr, [a, b])
 }
 
 ///|
 /// Rotate left
-pub fn IRBuilder::rotl(self : IRBuilder, a : Value, b : Value) -> Value {
+pub fn FunctionBuilder::rotl(
+  self : FunctionBuilder,
+  a : Value,
+  b : Value,
+) -> Value {
   self.emit_inst(a.ty, Rotl, [a, b])
 }
 
 ///|
 /// Rotate right
-pub fn IRBuilder::rotr(self : IRBuilder, a : Value, b : Value) -> Value {
+pub fn FunctionBuilder::rotr(
+  self : FunctionBuilder,
+  a : Value,
+  b : Value,
+) -> Value {
   self.emit_inst(a.ty, Rotr, [a, b])
 }
 
 ///|
 /// Count leading zeros
-pub fn IRBuilder::clz(self : IRBuilder, a : Value) -> Value {
+pub fn FunctionBuilder::clz(self : FunctionBuilder, a : Value) -> Value {
   self.emit_inst(a.ty, Clz, [a])
 }
 
 ///|
 /// Count trailing zeros
-pub fn IRBuilder::ctz(self : IRBuilder, a : Value) -> Value {
+pub fn FunctionBuilder::ctz(self : FunctionBuilder, a : Value) -> Value {
   self.emit_inst(a.ty, Ctz, [a])
 }
 
 ///|
 /// Population count (count number of 1 bits)
-pub fn IRBuilder::popcnt(self : IRBuilder, a : Value) -> Value {
+pub fn FunctionBuilder::popcnt(self : FunctionBuilder, a : Value) -> Value {
   self.emit_inst(a.ty, Popcnt, [a])
 }
 
@@ -306,8 +472,8 @@ pub fn IRBuilder::popcnt(self : IRBuilder, a : Value) -> Value {
 
 ///|
 /// Integer comparison (returns i32 0 or 1)
-pub fn IRBuilder::icmp(
-  self : IRBuilder,
+pub fn FunctionBuilder::icmp(
+  self : FunctionBuilder,
   cc : IntCC,
   a : Value,
   b : Value,
@@ -317,61 +483,101 @@ pub fn IRBuilder::icmp(
 
 ///|
 /// Integer equal
-pub fn IRBuilder::icmp_eq(self : IRBuilder, a : Value, b : Value) -> Value {
+pub fn FunctionBuilder::icmp_eq(
+  self : FunctionBuilder,
+  a : Value,
+  b : Value,
+) -> Value {
   self.icmp(Eq, a, b)
 }
 
 ///|
 /// Integer not equal
-pub fn IRBuilder::icmp_ne(self : IRBuilder, a : Value, b : Value) -> Value {
+pub fn FunctionBuilder::icmp_ne(
+  self : FunctionBuilder,
+  a : Value,
+  b : Value,
+) -> Value {
   self.icmp(Ne, a, b)
 }
 
 ///|
 /// Signed less than
-pub fn IRBuilder::icmp_slt(self : IRBuilder, a : Value, b : Value) -> Value {
+pub fn FunctionBuilder::icmp_slt(
+  self : FunctionBuilder,
+  a : Value,
+  b : Value,
+) -> Value {
   self.icmp(Slt, a, b)
 }
 
 ///|
 /// Signed less than or equal
-pub fn IRBuilder::icmp_sle(self : IRBuilder, a : Value, b : Value) -> Value {
+pub fn FunctionBuilder::icmp_sle(
+  self : FunctionBuilder,
+  a : Value,
+  b : Value,
+) -> Value {
   self.icmp(Sle, a, b)
 }
 
 ///|
 /// Signed greater than
-pub fn IRBuilder::icmp_sgt(self : IRBuilder, a : Value, b : Value) -> Value {
+pub fn FunctionBuilder::icmp_sgt(
+  self : FunctionBuilder,
+  a : Value,
+  b : Value,
+) -> Value {
   self.icmp(Sgt, a, b)
 }
 
 ///|
 /// Signed greater than or equal
-pub fn IRBuilder::icmp_sge(self : IRBuilder, a : Value, b : Value) -> Value {
+pub fn FunctionBuilder::icmp_sge(
+  self : FunctionBuilder,
+  a : Value,
+  b : Value,
+) -> Value {
   self.icmp(Sge, a, b)
 }
 
 ///|
 /// Unsigned less than
-pub fn IRBuilder::icmp_ult(self : IRBuilder, a : Value, b : Value) -> Value {
+pub fn FunctionBuilder::icmp_ult(
+  self : FunctionBuilder,
+  a : Value,
+  b : Value,
+) -> Value {
   self.icmp(Ult, a, b)
 }
 
 ///|
 /// Unsigned less than or equal
-pub fn IRBuilder::icmp_ule(self : IRBuilder, a : Value, b : Value) -> Value {
+pub fn FunctionBuilder::icmp_ule(
+  self : FunctionBuilder,
+  a : Value,
+  b : Value,
+) -> Value {
   self.icmp(Ule, a, b)
 }
 
 ///|
 /// Unsigned greater than
-pub fn IRBuilder::icmp_ugt(self : IRBuilder, a : Value, b : Value) -> Value {
+pub fn FunctionBuilder::icmp_ugt(
+  self : FunctionBuilder,
+  a : Value,
+  b : Value,
+) -> Value {
   self.icmp(Ugt, a, b)
 }
 
 ///|
 /// Unsigned greater than or equal
-pub fn IRBuilder::icmp_uge(self : IRBuilder, a : Value, b : Value) -> Value {
+pub fn FunctionBuilder::icmp_uge(
+  self : FunctionBuilder,
+  a : Value,
+  b : Value,
+) -> Value {
   self.icmp(Uge, a, b)
 }
 
@@ -379,37 +585,61 @@ pub fn IRBuilder::icmp_uge(self : IRBuilder, a : Value, b : Value) -> Value {
 
 ///|
 /// Float add
-pub fn IRBuilder::fadd(self : IRBuilder, a : Value, b : Value) -> Value {
+pub fn FunctionBuilder::fadd(
+  self : FunctionBuilder,
+  a : Value,
+  b : Value,
+) -> Value {
   self.emit_inst(a.ty, Fadd, [a, b])
 }
 
 ///|
 /// Float subtract
-pub fn IRBuilder::fsub(self : IRBuilder, a : Value, b : Value) -> Value {
+pub fn FunctionBuilder::fsub(
+  self : FunctionBuilder,
+  a : Value,
+  b : Value,
+) -> Value {
   self.emit_inst(a.ty, Fsub, [a, b])
 }
 
 ///|
 /// Float multiply
-pub fn IRBuilder::fmul(self : IRBuilder, a : Value, b : Value) -> Value {
+pub fn FunctionBuilder::fmul(
+  self : FunctionBuilder,
+  a : Value,
+  b : Value,
+) -> Value {
   self.emit_inst(a.ty, Fmul, [a, b])
 }
 
 ///|
 /// Float divide
-pub fn IRBuilder::fdiv(self : IRBuilder, a : Value, b : Value) -> Value {
+pub fn FunctionBuilder::fdiv(
+  self : FunctionBuilder,
+  a : Value,
+  b : Value,
+) -> Value {
   self.emit_inst(a.ty, Fdiv, [a, b])
 }
 
 ///|
 /// Float minimum
-pub fn IRBuilder::fmin(self : IRBuilder, a : Value, b : Value) -> Value {
+pub fn FunctionBuilder::fmin(
+  self : FunctionBuilder,
+  a : Value,
+  b : Value,
+) -> Value {
   self.emit_inst(a.ty, Fmin, [a, b])
 }
 
 ///|
 /// Float maximum
-pub fn IRBuilder::fmax(self : IRBuilder, a : Value, b : Value) -> Value {
+pub fn FunctionBuilder::fmax(
+  self : FunctionBuilder,
+  a : Value,
+  b : Value,
+) -> Value {
   self.emit_inst(a.ty, Fmax, [a, b])
 }
 
@@ -417,8 +647,8 @@ pub fn IRBuilder::fmax(self : IRBuilder, a : Value, b : Value) -> Value {
 
 ///|
 /// Float comparison (returns i32 0 or 1)
-pub fn IRBuilder::fcmp(
-  self : IRBuilder,
+pub fn FunctionBuilder::fcmp(
+  self : FunctionBuilder,
   cc : FloatCC,
   a : Value,
   b : Value,
@@ -430,43 +660,43 @@ pub fn IRBuilder::fcmp(
 
 ///|
 /// Float negate
-pub fn IRBuilder::fneg(self : IRBuilder, a : Value) -> Value {
+pub fn FunctionBuilder::fneg(self : FunctionBuilder, a : Value) -> Value {
   self.emit_inst(a.ty, Fneg, [a])
 }
 
 ///|
 /// Float absolute value
-pub fn IRBuilder::fabs(self : IRBuilder, a : Value) -> Value {
+pub fn FunctionBuilder::fabs(self : FunctionBuilder, a : Value) -> Value {
   self.emit_inst(a.ty, Fabs, [a])
 }
 
 ///|
 /// Float square root
-pub fn IRBuilder::fsqrt(self : IRBuilder, a : Value) -> Value {
+pub fn FunctionBuilder::fsqrt(self : FunctionBuilder, a : Value) -> Value {
   self.emit_inst(a.ty, Fsqrt, [a])
 }
 
 ///|
 /// Float ceiling
-pub fn IRBuilder::fceil(self : IRBuilder, a : Value) -> Value {
+pub fn FunctionBuilder::fceil(self : FunctionBuilder, a : Value) -> Value {
   self.emit_inst(a.ty, Fceil, [a])
 }
 
 ///|
 /// Float floor
-pub fn IRBuilder::ffloor(self : IRBuilder, a : Value) -> Value {
+pub fn FunctionBuilder::ffloor(self : FunctionBuilder, a : Value) -> Value {
   self.emit_inst(a.ty, Ffloor, [a])
 }
 
 ///|
 /// Float truncate
-pub fn IRBuilder::ftrunc(self : IRBuilder, a : Value) -> Value {
+pub fn FunctionBuilder::ftrunc(self : FunctionBuilder, a : Value) -> Value {
   self.emit_inst(a.ty, Ftrunc, [a])
 }
 
 ///|
 /// Float nearest (round to nearest even)
-pub fn IRBuilder::fnearest(self : IRBuilder, a : Value) -> Value {
+pub fn FunctionBuilder::fnearest(self : FunctionBuilder, a : Value) -> Value {
   self.emit_inst(a.ty, Fnearest, [a])
 }
 
@@ -474,71 +704,99 @@ pub fn IRBuilder::fnearest(self : IRBuilder, a : Value) -> Value {
 
 ///|
 /// Reduce integer width (e.g., i64 -> i32)
-pub fn IRBuilder::ireduce(self : IRBuilder, ty : Type, a : Value) -> Value {
+pub fn FunctionBuilder::ireduce(
+  self : FunctionBuilder,
+  ty : Type,
+  a : Value,
+) -> Value {
   self.emit_inst(ty, Ireduce, [a])
 }
 
 ///|
 /// Sign extend (e.g., i32 -> i64)
-pub fn IRBuilder::sextend(self : IRBuilder, ty : Type, a : Value) -> Value {
+pub fn FunctionBuilder::sextend(
+  self : FunctionBuilder,
+  ty : Type,
+  a : Value,
+) -> Value {
   self.emit_inst(ty, Sextend, [a])
 }
 
 ///|
 /// Zero extend (e.g., i32 -> i64)
-pub fn IRBuilder::uextend(self : IRBuilder, ty : Type, a : Value) -> Value {
+pub fn FunctionBuilder::uextend(
+  self : FunctionBuilder,
+  ty : Type,
+  a : Value,
+) -> Value {
   self.emit_inst(ty, Uextend, [a])
 }
 
 ///|
 /// Sign extend from 8 bits (in-place, keeps the same type)
 /// Similar to ireduce(I8) + sextend(ty)
-pub fn IRBuilder::sextend8(self : IRBuilder, ty : Type, a : Value) -> Value {
+pub fn FunctionBuilder::sextend8(
+  self : FunctionBuilder,
+  ty : Type,
+  a : Value,
+) -> Value {
   self.emit_inst(ty, Sextend8, [a])
 }
 
 ///|
 /// Sign extend from 16 bits (in-place, keeps the same type)
 /// Similar to ireduce(I16) + sextend(ty)
-pub fn IRBuilder::sextend16(self : IRBuilder, ty : Type, a : Value) -> Value {
+pub fn FunctionBuilder::sextend16(
+  self : FunctionBuilder,
+  ty : Type,
+  a : Value,
+) -> Value {
   self.emit_inst(ty, Sextend16, [a])
 }
 
 ///|
 /// Sign extend from 32 bits to 64 bits
 /// Similar to ireduce(I32) + sextend(I64)
-pub fn IRBuilder::sextend32(self : IRBuilder, a : Value) -> Value {
+pub fn FunctionBuilder::sextend32(self : FunctionBuilder, a : Value) -> Value {
   self.emit_inst(I64, Sextend32, [a])
 }
 
 ///|
 /// Promote float (f32 -> f64)
-pub fn IRBuilder::fpromote(self : IRBuilder, a : Value) -> Value {
+pub fn FunctionBuilder::fpromote(self : FunctionBuilder, a : Value) -> Value {
   self.emit_inst(F64, Fpromote, [a])
 }
 
 ///|
 /// Demote float (f64 -> f32)
-pub fn IRBuilder::fdemote(self : IRBuilder, a : Value) -> Value {
+pub fn FunctionBuilder::fdemote(self : FunctionBuilder, a : Value) -> Value {
   self.emit_inst(F32, Fdemote, [a])
 }
 
 ///|
 /// Float to signed int
-pub fn IRBuilder::fcvt_to_sint(self : IRBuilder, ty : Type, a : Value) -> Value {
+pub fn FunctionBuilder::fcvt_to_sint(
+  self : FunctionBuilder,
+  ty : Type,
+  a : Value,
+) -> Value {
   self.emit_inst(ty, FcvtToSint, [a])
 }
 
 ///|
 /// Float to unsigned int
-pub fn IRBuilder::fcvt_to_uint(self : IRBuilder, ty : Type, a : Value) -> Value {
+pub fn FunctionBuilder::fcvt_to_uint(
+  self : FunctionBuilder,
+  ty : Type,
+  a : Value,
+) -> Value {
   self.emit_inst(ty, FcvtToUint, [a])
 }
 
 ///|
 /// Float to signed int (saturating - NaN->0, overflow->max/min)
-pub fn IRBuilder::fcvt_to_sint_sat(
-  self : IRBuilder,
+pub fn FunctionBuilder::fcvt_to_sint_sat(
+  self : FunctionBuilder,
   ty : Type,
   a : Value,
 ) -> Value {
@@ -547,8 +805,8 @@ pub fn IRBuilder::fcvt_to_sint_sat(
 
 ///|
 /// Float to unsigned int (saturating - NaN->0, overflow->max, negative->0)
-pub fn IRBuilder::fcvt_to_uint_sat(
-  self : IRBuilder,
+pub fn FunctionBuilder::fcvt_to_uint_sat(
+  self : FunctionBuilder,
   ty : Type,
   a : Value,
 ) -> Value {
@@ -557,19 +815,31 @@ pub fn IRBuilder::fcvt_to_uint_sat(
 
 ///|
 /// Signed int to float
-pub fn IRBuilder::sint_to_fcvt(self : IRBuilder, ty : Type, a : Value) -> Value {
+pub fn FunctionBuilder::sint_to_fcvt(
+  self : FunctionBuilder,
+  ty : Type,
+  a : Value,
+) -> Value {
   self.emit_inst(ty, SintToFcvt, [a])
 }
 
 ///|
 /// Unsigned int to float
-pub fn IRBuilder::uint_to_fcvt(self : IRBuilder, ty : Type, a : Value) -> Value {
+pub fn FunctionBuilder::uint_to_fcvt(
+  self : FunctionBuilder,
+  ty : Type,
+  a : Value,
+) -> Value {
   self.emit_inst(ty, UintToFcvt, [a])
 }
 
 ///|
 /// Bitcast (reinterpret bits)
-pub fn IRBuilder::bitcast(self : IRBuilder, ty : Type, a : Value) -> Value {
+pub fn FunctionBuilder::bitcast(
+  self : FunctionBuilder,
+  ty : Type,
+  a : Value,
+) -> Value {
   self.emit_inst(ty, Bitcast, [a])
 }
 
@@ -577,8 +847,8 @@ pub fn IRBuilder::bitcast(self : IRBuilder, ty : Type, a : Value) -> Value {
 
 ///|
 /// Conditional select: cond ? a : b
-pub fn IRBuilder::select(
-  self : IRBuilder,
+pub fn FunctionBuilder::select(
+  self : FunctionBuilder,
   cond : Value,
   a : Value,
   b : Value,
@@ -588,15 +858,15 @@ pub fn IRBuilder::select(
 
 ///|
 /// Copy value (for register allocation)
-pub fn IRBuilder::copy(self : IRBuilder, a : Value) -> Value {
+pub fn FunctionBuilder::copy(self : FunctionBuilder, a : Value) -> Value {
   self.emit_inst(a.ty, Copy, [a])
 }
 
 // ============ Function Calls ============
 
 ///|
-pub fn IRBuilder::call_symbol(
-  self : IRBuilder,
+pub fn FunctionBuilder::call_symbol(
+  self : FunctionBuilder,
   symbol : ExternalSymbol,
   result_ty : Type?,
   args : Array[Value],
@@ -611,95 +881,80 @@ pub fn IRBuilder::call_symbol(
 }
 
 ///|
-pub fn IRBuilder::call_symbol_multi(
-  self : IRBuilder,
+pub fn FunctionBuilder::call_symbol_multi(
+  self : FunctionBuilder,
   symbol : ExternalSymbol,
   result_types : Array[Type],
   args : Array[Value],
 ) -> Array[Value] {
-  if result_types.length() == 0 {
-    self.emit_void_inst(Call(symbol), args)
-    return []
-  }
-  let results : Array[Value] = []
-  for ty in result_types {
-    results.push(self.func.new_value(ty))
-  }
-  let inst = Inst::new_multi(results, Call(symbol), args)
-  if self.current_block is Some(block) {
-    block.add_inst(inst)
-  }
-  results
+  self.emit_multi_inst(result_types, Call(symbol), args)
 }
 
 // ============ Terminators ============
 
 ///|
 /// Unconditional jump
-pub fn IRBuilder::jump(
-  self : IRBuilder,
+pub fn FunctionBuilder::jump(
+  self : FunctionBuilder,
   target : Block,
   args : Array[Value],
 ) -> Unit {
-  if self.current_block is Some(block) {
-    block.set_terminator(Jump(target.id, args))
-  }
+  let block = self.current_block
+  block.set_terminator(Jump(target.id, args))
 }
 
 ///|
 /// Conditional branch (branch if zero)
-pub fn IRBuilder::brz(
-  self : IRBuilder,
+pub fn FunctionBuilder::brz(
+  self : FunctionBuilder,
   cond : Value,
   then_block : Block,
   else_block : Block,
 ) -> Unit {
-  if self.current_block is Some(block) {
-    block.set_terminator(Brz(cond, then_block.id, else_block.id))
-  }
+  let block = self.current_block
+  block.set_terminator(Brz(cond, then_block.id, else_block.id))
 }
 
 ///|
 /// Conditional branch (branch if non-zero)
-pub fn IRBuilder::brnz(
-  self : IRBuilder,
+pub fn FunctionBuilder::brnz(
+  self : FunctionBuilder,
   cond : Value,
   then_block : Block,
   else_block : Block,
 ) -> Unit {
-  if self.current_block is Some(block) {
-    block.set_terminator(Brnz(cond, then_block.id, else_block.id))
-  }
+  let block = self.current_block
+  block.set_terminator(Brnz(cond, then_block.id, else_block.id))
 }
 
 ///|
 /// Branch table (switch)
-pub fn IRBuilder::br_table(
-  self : IRBuilder,
+pub fn FunctionBuilder::br_table(
+  self : FunctionBuilder,
   index : Value,
   targets : Array[Block],
   default_target : Block,
 ) -> Unit {
   let target_ids = targets.map(fn(b) { b.id })
-  if self.current_block is Some(block) {
-    block.set_terminator(BrTable(index, target_ids, default_target.id))
-  }
+  let block = self.current_block
+  block.set_terminator(BrTable(index, target_ids, default_target.id))
 }
 
 ///|
 /// Return from function
-pub fn IRBuilder::return_(self : IRBuilder, values : Array[Value]) -> Unit {
-  if self.current_block is Some(block) {
-    block.set_terminator(Return(values))
-  }
+pub fn FunctionBuilder::return_(
+  self : FunctionBuilder,
+  values : Array[Value],
+) -> Unit {
+  let block = self.current_block
+  block.set_terminator(Return(values))
 }
 
 ///|
 /// Trap/unreachable
-pub fn IRBuilder::trap(self : IRBuilder, reason : String) -> Unit {
-  if self.current_block is Some(block) {
-    block.set_terminator(Trap(reason))
-  }
+pub fn FunctionBuilder::trap(self : FunctionBuilder, reason : String) -> Unit {
+  let block = self.current_block
+  block.set_terminator(Trap(reason))
 }
 
 // ============ Raw Pointer Operations (for trampolines) ============
@@ -707,8 +962,8 @@ pub fn IRBuilder::trap(self : IRBuilder, reason : String) -> Unit {
 ///|
 /// Load from raw pointer (no bounds checking)
 /// For trampoline code that operates on host memory
-pub fn IRBuilder::load_ptr(
-  self : IRBuilder,
+pub fn FunctionBuilder::load_ptr(
+  self : FunctionBuilder,
   ty : Type,
   base : Value,
   offset : Value,
@@ -719,8 +974,8 @@ pub fn IRBuilder::load_ptr(
 ///|
 /// Store to raw pointer (no bounds checking)
 /// For trampoline code that operates on host memory
-pub fn IRBuilder::store_ptr(
-  self : IRBuilder,
+pub fn FunctionBuilder::store_ptr(
+  self : FunctionBuilder,
   ty : Type,
   base : Value,
   value : Value,
@@ -732,8 +987,8 @@ pub fn IRBuilder::store_ptr(
 ///|
 /// Load narrow value from raw pointer (no bounds checking)
 /// Loads 'bits' bits from memory and extends to result_ty
-pub fn IRBuilder::load_ptr_narrow(
-  self : IRBuilder,
+pub fn FunctionBuilder::load_ptr_narrow(
+  self : FunctionBuilder,
   result_ty : Type,
   bits : Int,
   signed : Bool,
@@ -748,8 +1003,8 @@ pub fn IRBuilder::load_ptr_narrow(
 ///|
 /// Store narrow value to raw pointer (no bounds checking)
 /// Stores the low 'bits' bits of value to memory
-pub fn IRBuilder::store_ptr_narrow(
-  self : IRBuilder,
+pub fn FunctionBuilder::store_ptr_narrow(
+  self : FunctionBuilder,
   bits : Int,
   base : Value,
   value : Value,
@@ -767,8 +1022,8 @@ pub fn IRBuilder::store_ptr_narrow(
 /// does not use an environment.
 ///
 /// Operand layout: [func_ptr, callee_env, user_args...]
-pub fn IRBuilder::call_ptr(
-  self : IRBuilder,
+pub fn FunctionBuilder::call_ptr(
+  self : FunctionBuilder,
   func_ptr : Value,
   callee_env : Value,
   args : Array[Value],
@@ -780,66 +1035,73 @@ pub fn IRBuilder::call_ptr(
   }
   let num_args = args.length()
   let num_results = result_types.length()
-  if num_results == 0 {
-    self.emit_void_inst(CallPtr(num_args, 0), all_args)
-    return []
-  }
-  // Create result values for each return type
-  let results : Array[Value] = []
-  for ty in result_types {
-    results.push(self.func.new_value(ty))
-  }
-  // Create instruction with multiple results
-  let inst = Inst::new_multi(results, CallPtr(num_args, num_results), all_args)
-  if self.current_block is Some(block) {
-    block.add_inst(inst)
-  }
-  results
+  self.emit_multi_inst(result_types, CallPtr(num_args, num_results), all_args)
 }
 
 // ============ SIMD Operations ============
 
 ///|
 /// v128_const - emit a V128 constant
-pub fn IRBuilder::v128_const(self : IRBuilder, bytes : Bytes) -> Value {
+pub fn FunctionBuilder::v128_const(
+  self : FunctionBuilder,
+  bytes : Bytes,
+) -> Value {
   self.emit_inst(V128, V128Const(bytes), [])
 }
 
 ///|
 /// v128_splat - broadcast a scalar to all lanes
-pub fn IRBuilder::v128_splat8(self : IRBuilder, val : Value) -> Value {
+pub fn FunctionBuilder::v128_splat8(
+  self : FunctionBuilder,
+  val : Value,
+) -> Value {
   self.emit_inst(V128, V128Splat8, [val])
 }
 
 ///|
-pub fn IRBuilder::v128_splat16(self : IRBuilder, val : Value) -> Value {
+pub fn FunctionBuilder::v128_splat16(
+  self : FunctionBuilder,
+  val : Value,
+) -> Value {
   self.emit_inst(V128, V128Splat16, [val])
 }
 
 ///|
-pub fn IRBuilder::v128_splat32(self : IRBuilder, val : Value) -> Value {
+pub fn FunctionBuilder::v128_splat32(
+  self : FunctionBuilder,
+  val : Value,
+) -> Value {
   self.emit_inst(V128, V128Splat32, [val])
 }
 
 ///|
-pub fn IRBuilder::v128_splat64(self : IRBuilder, val : Value) -> Value {
+pub fn FunctionBuilder::v128_splat64(
+  self : FunctionBuilder,
+  val : Value,
+) -> Value {
   self.emit_inst(V128, V128Splat64, [val])
 }
 
 ///|
-pub fn IRBuilder::v128_splat_f32(self : IRBuilder, val : Value) -> Value {
+pub fn FunctionBuilder::v128_splat_f32(
+  self : FunctionBuilder,
+  val : Value,
+) -> Value {
   self.emit_inst(V128, V128SplatF32, [val])
 }
 
 ///|
-pub fn IRBuilder::v128_splat_f64(self : IRBuilder, val : Value) -> Value {
+pub fn FunctionBuilder::v128_splat_f64(
+  self : FunctionBuilder,
+  val : Value,
+) -> Value {
   self.emit_inst(V128, V128SplatF64, [val])
 }
 
 ///|
 /// Extract a lane from a v128 value
-pub fn IRBuilder::v128_extract8s(
-  self : IRBuilder,
+pub fn FunctionBuilder::v128_extract8s(
+  self : FunctionBuilder,
   vec : Value,
   lane : Int,
 ) -> Value {
@@ -847,8 +1109,8 @@ pub fn IRBuilder::v128_extract8s(
 }
 
 ///|
-pub fn IRBuilder::v128_extract8u(
-  self : IRBuilder,
+pub fn FunctionBuilder::v128_extract8u(
+  self : FunctionBuilder,
   vec : Value,
   lane : Int,
 ) -> Value {
@@ -856,8 +1118,8 @@ pub fn IRBuilder::v128_extract8u(
 }
 
 ///|
-pub fn IRBuilder::v128_extract16s(
-  self : IRBuilder,
+pub fn FunctionBuilder::v128_extract16s(
+  self : FunctionBuilder,
   vec : Value,
   lane : Int,
 ) -> Value {
@@ -865,8 +1127,8 @@ pub fn IRBuilder::v128_extract16s(
 }
 
 ///|
-pub fn IRBuilder::v128_extract16u(
-  self : IRBuilder,
+pub fn FunctionBuilder::v128_extract16u(
+  self : FunctionBuilder,
   vec : Value,
   lane : Int,
 ) -> Value {
@@ -874,8 +1136,8 @@ pub fn IRBuilder::v128_extract16u(
 }
 
 ///|
-pub fn IRBuilder::v128_extract32(
-  self : IRBuilder,
+pub fn FunctionBuilder::v128_extract32(
+  self : FunctionBuilder,
   vec : Value,
   lane : Int,
 ) -> Value {
@@ -883,8 +1145,8 @@ pub fn IRBuilder::v128_extract32(
 }
 
 ///|
-pub fn IRBuilder::v128_extract64(
-  self : IRBuilder,
+pub fn FunctionBuilder::v128_extract64(
+  self : FunctionBuilder,
   vec : Value,
   lane : Int,
 ) -> Value {
@@ -892,8 +1154,8 @@ pub fn IRBuilder::v128_extract64(
 }
 
 ///|
-pub fn IRBuilder::v128_extract_f32(
-  self : IRBuilder,
+pub fn FunctionBuilder::v128_extract_f32(
+  self : FunctionBuilder,
   vec : Value,
   lane : Int,
 ) -> Value {
@@ -901,8 +1163,8 @@ pub fn IRBuilder::v128_extract_f32(
 }
 
 ///|
-pub fn IRBuilder::v128_extract_f64(
-  self : IRBuilder,
+pub fn FunctionBuilder::v128_extract_f64(
+  self : FunctionBuilder,
   vec : Value,
   lane : Int,
 ) -> Value {
@@ -911,8 +1173,8 @@ pub fn IRBuilder::v128_extract_f64(
 
 ///|
 /// Replace a lane in a v128 value
-pub fn IRBuilder::v128_replace8(
-  self : IRBuilder,
+pub fn FunctionBuilder::v128_replace8(
+  self : FunctionBuilder,
   vec : Value,
   val : Value,
   lane : Int,
@@ -921,8 +1183,8 @@ pub fn IRBuilder::v128_replace8(
 }
 
 ///|
-pub fn IRBuilder::v128_replace16(
-  self : IRBuilder,
+pub fn FunctionBuilder::v128_replace16(
+  self : FunctionBuilder,
   vec : Value,
   val : Value,
   lane : Int,
@@ -931,8 +1193,8 @@ pub fn IRBuilder::v128_replace16(
 }
 
 ///|
-pub fn IRBuilder::v128_replace32(
-  self : IRBuilder,
+pub fn FunctionBuilder::v128_replace32(
+  self : FunctionBuilder,
   vec : Value,
   val : Value,
   lane : Int,
@@ -941,8 +1203,8 @@ pub fn IRBuilder::v128_replace32(
 }
 
 ///|
-pub fn IRBuilder::v128_replace64(
-  self : IRBuilder,
+pub fn FunctionBuilder::v128_replace64(
+  self : FunctionBuilder,
   vec : Value,
   val : Value,
   lane : Int,
@@ -951,8 +1213,8 @@ pub fn IRBuilder::v128_replace64(
 }
 
 ///|
-pub fn IRBuilder::v128_replace_f32(
-  self : IRBuilder,
+pub fn FunctionBuilder::v128_replace_f32(
+  self : FunctionBuilder,
   vec : Value,
   val : Value,
   lane : Int,
@@ -961,8 +1223,8 @@ pub fn IRBuilder::v128_replace_f32(
 }
 
 ///|
-pub fn IRBuilder::v128_replace_f64(
-  self : IRBuilder,
+pub fn FunctionBuilder::v128_replace_f64(
+  self : FunctionBuilder,
   vec : Value,
   val : Value,
   lane : Int,
@@ -972,8 +1234,8 @@ pub fn IRBuilder::v128_replace_f64(
 
 ///|
 /// Shuffle lanes from two v128 values
-pub fn IRBuilder::v128_shuffle(
-  self : IRBuilder,
+pub fn FunctionBuilder::v128_shuffle(
+  self : FunctionBuilder,
   a : Value,
   b : Value,
   lanes : FixedArray[Int],
@@ -983,39 +1245,59 @@ pub fn IRBuilder::v128_shuffle(
 
 ///|
 /// Swizzle lanes using indices from another v128
-pub fn IRBuilder::v128_swizzle(self : IRBuilder, a : Value, b : Value) -> Value {
+pub fn FunctionBuilder::v128_swizzle(
+  self : FunctionBuilder,
+  a : Value,
+  b : Value,
+) -> Value {
   self.emit_inst(V128, V128Swizzle, [a, b])
 }
 
 ///|
 /// Bitwise operations on v128
-pub fn IRBuilder::v128_not(self : IRBuilder, a : Value) -> Value {
+pub fn FunctionBuilder::v128_not(self : FunctionBuilder, a : Value) -> Value {
   self.emit_inst(V128, V128Not, [a])
 }
 
 ///|
-pub fn IRBuilder::v128_and(self : IRBuilder, a : Value, b : Value) -> Value {
+pub fn FunctionBuilder::v128_and(
+  self : FunctionBuilder,
+  a : Value,
+  b : Value,
+) -> Value {
   self.emit_inst(V128, V128And, [a, b])
 }
 
 ///|
-pub fn IRBuilder::v128_andnot(self : IRBuilder, a : Value, b : Value) -> Value {
+pub fn FunctionBuilder::v128_andnot(
+  self : FunctionBuilder,
+  a : Value,
+  b : Value,
+) -> Value {
   self.emit_inst(V128, V128AndNot, [a, b])
 }
 
 ///|
-pub fn IRBuilder::v128_or(self : IRBuilder, a : Value, b : Value) -> Value {
+pub fn FunctionBuilder::v128_or(
+  self : FunctionBuilder,
+  a : Value,
+  b : Value,
+) -> Value {
   self.emit_inst(V128, V128Or, [a, b])
 }
 
 ///|
-pub fn IRBuilder::v128_xor(self : IRBuilder, a : Value, b : Value) -> Value {
+pub fn FunctionBuilder::v128_xor(
+  self : FunctionBuilder,
+  a : Value,
+  b : Value,
+) -> Value {
   self.emit_inst(V128, V128Xor, [a, b])
 }
 
 ///|
-pub fn IRBuilder::v128_bitselect(
-  self : IRBuilder,
+pub fn FunctionBuilder::v128_bitselect(
+  self : FunctionBuilder,
   a : Value,
   b : Value,
   c : Value,
@@ -1024,15 +1306,18 @@ pub fn IRBuilder::v128_bitselect(
 }
 
 ///|
-pub fn IRBuilder::v128_anytrue(self : IRBuilder, a : Value) -> Value {
+pub fn FunctionBuilder::v128_anytrue(
+  self : FunctionBuilder,
+  a : Value,
+) -> Value {
   self.emit_inst(I32, V128AnyTrue, [a])
 }
 
 ///|
 /// Generic SIMD instruction emitter
 /// Use this for operations that follow the pattern: opcode, operands -> V128/I32
-pub fn IRBuilder::v128_unary(
-  self : IRBuilder,
+pub fn FunctionBuilder::v128_unary(
+  self : FunctionBuilder,
   opcode : Opcode,
   a : Value,
 ) -> Value {
@@ -1040,8 +1325,8 @@ pub fn IRBuilder::v128_unary(
 }
 
 ///|
-pub fn IRBuilder::v128_binary(
-  self : IRBuilder,
+pub fn FunctionBuilder::v128_binary(
+  self : FunctionBuilder,
   opcode : Opcode,
   a : Value,
   b : Value,
@@ -1050,8 +1335,8 @@ pub fn IRBuilder::v128_binary(
 }
 
 ///|
-pub fn IRBuilder::v128_to_i32(
-  self : IRBuilder,
+pub fn FunctionBuilder::v128_to_i32(
+  self : FunctionBuilder,
   opcode : Opcode,
   a : Value,
 ) -> Value {
@@ -1059,8 +1344,8 @@ pub fn IRBuilder::v128_to_i32(
 }
 
 ///|
-pub fn IRBuilder::v128_shift(
-  self : IRBuilder,
+pub fn FunctionBuilder::v128_shift(
+  self : FunctionBuilder,
   opcode : Opcode,
   vec : Value,
   shift : Value,
@@ -1070,8 +1355,8 @@ pub fn IRBuilder::v128_shift(
 
 ///|
 /// SIMD load with effective address (for complex SIMD loads)
-pub fn IRBuilder::v128_load_with_addr(
-  self : IRBuilder,
+pub fn FunctionBuilder::v128_load_with_addr(
+  self : FunctionBuilder,
   opcode : Opcode,
   effective_addr : Value,
 ) -> Value {
@@ -1080,8 +1365,8 @@ pub fn IRBuilder::v128_load_with_addr(
 
 ///|
 /// SIMD load lane with effective address and existing vector
-pub fn IRBuilder::v128_load_lane_with_addr(
-  self : IRBuilder,
+pub fn FunctionBuilder::v128_load_lane_with_addr(
+  self : FunctionBuilder,
   opcode : Opcode,
   effective_addr : Value,
   vec : Value,
@@ -1091,8 +1376,8 @@ pub fn IRBuilder::v128_load_lane_with_addr(
 
 ///|
 /// SIMD store lane with effective address and vector (void)
-pub fn IRBuilder::v128_store_lane_with_addr(
-  self : IRBuilder,
+pub fn FunctionBuilder::v128_store_lane_with_addr(
+  self : FunctionBuilder,
   opcode : Opcode,
   effective_addr : Value,
   vec : Value,

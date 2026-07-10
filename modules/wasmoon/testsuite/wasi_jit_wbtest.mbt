@@ -231,10 +231,10 @@ fn run_wasi_interp_quiet(
   try {
     let stdout_buf : Array[Byte] = []
     let _stderr_buf : Array[Byte] = []
-    let linker = @runtime.Linker::new()
+    let linker = @runtime.Linker::Linker()
     let store = linker.get_store()
     // Register WASI with suppressed stdout/stderr
-    let wasi_builder = @wasi.WasiContextBuilder::new()
+    let wasi_builder = @wasi.WasiContextBuilder::WasiContextBuilder()
       .stdout(fn(bytes) {
         for b in bytes {
           stdout_buf.push(b)
@@ -292,9 +292,9 @@ fn run_wasi_jit_quiet(
   try {
     let stdout_buf : Array[Byte] = []
     let stderr_buf : Array[Byte] = []
-    let linker = @runtime.Linker::new()
+    let linker = @runtime.Linker::Linker()
     let store = linker.get_store()
-    let wasi_builder = @wasi.WasiContextBuilder::new()
+    let wasi_builder = @wasi.WasiContextBuilder::WasiContextBuilder()
       .stdout(fn(bytes) {
         for b in bytes {
           stdout_buf.push(b)
@@ -413,7 +413,7 @@ fn run_wasi_jit_quiet(
     for group in mod_.type_rec_groups {
       module_rec_groups.push(group)
     }
-    @wast.JITModuleContext::new(
+    @wast.JITModuleContext::JITModuleContext(
       jm, globals_ptr, global_addrs, table_addrs, func_addrs, func_type_indices,
       canonical_type_indices, module_types, module_rec_groups, use_subtype_indirect_check,
     )

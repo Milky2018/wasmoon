@@ -59,7 +59,7 @@ test "component command eval: minimal component validates ok" {
 
 ///|
 test "component-test json helper includes status fields" {
-  let result = ScriptResult::new()
+  let result = ScriptResult::ScriptResult()
   result.add_passed()
   result.add_failed("x")
   let json = component_test_json(

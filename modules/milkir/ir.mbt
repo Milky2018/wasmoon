@@ -4,13 +4,13 @@
 ///|
 /// IR Value - represents a virtual register in SSA form
 /// Each value is defined exactly once and can be used multiple times
-pub(all) struct Value {
+pub struct Value {
   id : Int // Unique identifier within a function
   ty : Type // The type of this value
 } derive(Eq, Debug, Hash)
 
 ///|
-fn Value::new(id : Int, ty : Type) -> Value {
+pub fn Value::Value(id : Int, ty : Type) -> Value {
   { id, ty }
 }
 
@@ -48,40 +48,104 @@ pub impl Show for Type with fn output(self, logger) {
 }
 
 ///|
-pub(all) struct Signature {
+pub struct Signature {
   params : Array[Type]
   results : Array[Type]
 } derive(Eq, Debug, Hash)
 
 ///|
-pub fn Signature::new(params : Array[Type], results : Array[Type]) -> Signature {
+pub fn Signature::Signature(
+  params : Array[Type],
+  results : Array[Type],
+) -> Signature {
   { params, results }
 }
 
 ///|
-pub(all) struct ExternalSymbol {
+pub struct ExternalSymbol {
   name : String
 } derive(Eq, Debug, Hash)
 
 ///|
-pub fn ExternalSymbol::new(name : String) -> ExternalSymbol {
+pub fn ExternalSymbol::ExternalSymbol(name : String) -> ExternalSymbol {
   { name, }
 }
 
 ///|
-pub(all) struct ExtOp {
+pub struct ExtOp {
   dialect : String
   opcode : String
   immediates : FixedArray[Int]
 } derive(Debug)
 
 ///|
-pub fn ExtOp::new(
+pub(all) struct ExtOpDescriptor {
+  dialect : String
+  opcode : String
+  min_immediates : Int
+  max_immediates : Int
+} derive(Eq, Debug, Hash)
+
+///|
+pub fn ExtOpDescriptor::ExtOpDescriptor(
+  dialect : String,
+  opcode : String,
+  immediate_count : Int,
+) -> ExtOpDescriptor {
+  {
+    dialect,
+    opcode,
+    min_immediates: immediate_count,
+    max_immediates: immediate_count,
+  }
+}
+
+///|
+pub fn ExtOpDescriptor::with_immediate_range(
+  dialect : String,
+  opcode : String,
+  min_immediates : Int,
+  max_immediates : Int,
+) -> ExtOpDescriptor {
+  { dialect, opcode, min_immediates, max_immediates }
+}
+
+///|
+pub fn ExtOpDescriptor::accepts_immediate_count(
+  self : ExtOpDescriptor,
+  count : Int,
+) -> Bool {
+  count >= self.min_immediates && count <= self.max_immediates
+}
+
+///|
+pub fn ExtOpDescriptor::expected_immediate_count(
+  self : ExtOpDescriptor,
+) -> String {
+  if self.min_immediates == self.max_immediates {
+    "\{self.min_immediates}"
+  } else {
+    "\{self.min_immediates}..\{self.max_immediates}"
+  }
+}
+
+///|
+pub fn ExtOp::ExtOp(
   dialect : String,
   opcode : String,
   immediates : FixedArray[Int],
 ) -> ExtOp {
   { dialect, opcode, immediates }
+}
+
+///|
+pub fn ExtOp::matches_descriptor(
+  self : ExtOp,
+  descriptor : ExtOpDescriptor,
+) -> Bool {
+  self.dialect == descriptor.dialect &&
+  self.opcode == descriptor.opcode &&
+  descriptor.accepts_immediate_count(self.immediates.length())
 }
 
 ///|
@@ -111,7 +175,7 @@ pub impl Hash for ExtOp with fn hash_combine(self, hasher) {
 }
 
 ///|
-pub(all) struct StackSlot {
+pub struct StackSlot {
   id : Int
   size : Int
   align : Int
@@ -136,13 +200,13 @@ pub struct Block {
 } derive(Debug)
 
 ///|
-fn Block::new(id : Int) -> Block {
+fn Block::Block(id : Int) -> Block {
   { id, params: [], instructions: [], terminator: None }
 }
 
 ///|
-pub fn Block::new_with_params(id : Int, params : Array[Value]) -> Block {
-  let block = Block::new(id)
+fn Block::new_with_params(id : Int, params : Array[Value]) -> Block {
+  let block = Block(id)
   for param in params {
     block.add_param(param, param.ty)
   }
@@ -151,13 +215,13 @@ pub fn Block::new_with_params(id : Int, params : Array[Value]) -> Block {
 
 ///|
 /// Add a parameter to this block (for SSA phi nodes)
-pub fn Block::add_param(self : Block, value : Value, ty : Type) -> Unit {
+fn Block::add_param(self : Block, value : Value, ty : Type) -> Unit {
   self.params.push((value, ty))
 }
 
 ///|
 /// Add an instruction to this block
-pub fn Block::add_inst(self : Block, inst : Inst) -> Unit {
+fn Block::add_inst(self : Block, inst : Inst) -> Unit {
   self.instructions.push(inst)
 }
 
@@ -210,7 +274,11 @@ pub impl Eq for Inst with fn equal(self, other) {
 }
 
 ///|
-fn Inst::new(result : Value?, opcode : Opcode, operands : Array[Value]) -> Inst {
+fn Inst::Inst(
+  result : Value?,
+  opcode : Opcode,
+  operands : Array[Value],
+) -> Inst {
   let results = match result {
     Some(v) => [v]
     None => []
@@ -220,7 +288,7 @@ fn Inst::new(result : Value?, opcode : Opcode, operands : Array[Value]) -> Inst 
 
 ///|
 /// Create an instruction with multiple results (for multi-value call)
-pub fn Inst::new_multi(
+fn Inst::new_multi(
   results : Array[Value],
   opcode : Opcode,
   operands : Array[Value],
@@ -229,7 +297,7 @@ pub fn Inst::new_multi(
 }
 
 ///|
-pub fn Inst::new_with_id(
+fn Inst::new_with_id(
   id : Int,
   opcode : Opcode,
   args : Array[Value],
@@ -761,7 +829,7 @@ pub struct Function {
 } derive(Debug)
 
 ///|
-pub fn Function::new(name : String, signature : Signature) -> Function {
+pub fn Function::Function(name : String, signature : Signature) -> Function {
   {
     name,
     signature,
@@ -779,7 +847,7 @@ pub fn Function::new(name : String, signature : Signature) -> Function {
 
 ///|
 pub fn Function::new_empty(name : String) -> Function {
-  Function::new(name, Signature::new([], []))
+  Function(name, Signature([], []))
 }
 
 ///|
@@ -787,7 +855,7 @@ pub fn Function::new_empty(name : String) -> Function {
 pub fn Function::new_value(self : Function, ty : Type) -> Value {
   let id = self.next_value_id
   self.next_value_id = self.next_value_id + 1
-  Value::new(id, ty)
+  Value(id, ty)
 }
 
 ///|
@@ -850,7 +918,7 @@ pub fn Function::declare_external_symbol(
   self : Function,
   name : String,
 ) -> ExternalSymbol {
-  let symbol = ExternalSymbol::new(name)
+  let symbol = ExternalSymbol::ExternalSymbol(name)
   self.external_symbols.push(symbol)
   symbol
 }

@@ -32,7 +32,7 @@ test "import trampolines: unsupported imports" {
 
 ///|
 test "import trampolines: external imports override builtin fallback" {
-  let external : Map[String, Map[String, Int64]] = {}
+  let external : Map[String, Map[String, Int64]] = Map([])
   external.set("spectest", { "print": 1234L })
   debug_inspect(
     resolve_import_function_ptr(external, "spectest", "print"),
@@ -50,7 +50,7 @@ test "import trampolines: external imports override builtin fallback" {
 
 ///|
 test "import trampolines: classify direct and hostcall pointers" {
-  let external : Map[String, Map[String, Int64]] = {}
+  let external : Map[String, Map[String, Int64]] = Map([])
   external.set("env", { "host": -124L, "direct": 4096L })
   debug_inspect(
     resolve_import_function(external, "env", "host"),

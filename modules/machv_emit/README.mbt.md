@@ -27,7 +27,7 @@ machine running the test.
 ```moonbit check
 ///|
 test "emit a tiny AArch64 return stub" {
-  let code = MachineCode::new(isa=AArch64, record_disasm=false)
+  let code = MachineCode::MachineCode(isa=AArch64, record_disasm=false)
   code.emit_ret(30)
   let bytes = code.get_bytes()
   inspect(bytes.length(), content="4")
@@ -37,15 +37,15 @@ test "emit a tiny AArch64 return stub" {
 
 ## Example: collect relocation metadata
 
-Runtime and function-address fixups stay symbolic. A product JIT such as
-Wasmoon resolves them later in its own embedding layer.
+Runtime and function-address fixups stay symbolic so callers can resolve them
+after emission.
 
 ```moonbit check
 ///|
 test "record an unresolved external call fixup" {
-  let code = MachineCode::new(isa=AMD64, record_disasm=false)
+  let code = MachineCode::MachineCode(isa=AMD64, record_disasm=false)
   code.emit_byte(0xe8)
-  code.add_external_call_fixup(1, @instr.ExternalName::new("env.print_i32"))
+  code.add_external_call_fixup(1, ExternalName("env.print_i32"))
   for _ in 0..<4 {
     code.emit_byte(0)
   }
@@ -54,8 +54,9 @@ test "record an unresolved external call fixup" {
 }
 ```
 
-## Boundary
+## Emitter output
 
-Emitters should produce code plus symbolic metadata. Wasmoon-specific runtime
-helper lookup, JIT context ownership, and native FFI glue belong in
-`wasmoon_jit`.
+The emitter returns machine-code bytes together with relocation, call-fixup,
+trap, and stack-frame metadata. A caller can then resolve symbols, allocate
+executable memory, and install the generated code according to its runtime
+policy.

@@ -4,7 +4,7 @@
 /// space and SP doesn't move at call sites.
 fn emit_embedding_overflow_arg_stores(
   ctx : LoweringContext,
-  block : @block.MachVBlock,
+  block : @block.Block,
   int_args : Array[(@abi.VReg, @abi.RegClass)],
   float_args : Array[(@abi.VReg, @abi.RegClass)],
 ) -> Int {
@@ -29,13 +29,13 @@ fn emit_embedding_overflow_arg_stores(
   }
   for i in 0..<int_overflow {
     let (vreg, _) = int_args[max_int_reg_args + i]
-    let store = @instr.MachVInst::new(StoreToStack(int_offsets[i]))
+    let store = @instr.Inst(StoreToStack(int_offsets[i]))
     store.add_use(Virtual(vreg))
     block.add_inst(store)
   }
   for i in 0..<float_offsets.length() {
     let (vreg, _) = float_args[max_float_reg_args + i]
-    let store = @instr.MachVInst::new(StoreToStack(float_offsets[i]))
+    let store = @instr.Inst(StoreToStack(float_offsets[i]))
     store.add_use(Virtual(vreg))
     block.add_inst(store)
   }
@@ -49,7 +49,7 @@ fn emit_embedding_overflow_arg_stores(
 /// register arguments.
 fn emit_c_overflow_arg_stores(
   ctx : LoweringContext,
-  block : @block.MachVBlock,
+  block : @block.Block,
   args : Array[@abi.VReg],
   max_reg_args : Int,
 ) -> Unit {
@@ -65,7 +65,7 @@ fn emit_c_overflow_arg_stores(
   ctx.machv_func.update_max_outgoing_args_size(total_bytes)
   for i in 0..<overflow {
     let arg = args[max_reg_args + i]
-    let store = @instr.MachVInst::new(StoreToStack(i * 8))
+    let store = @instr.Inst(StoreToStack(i * 8))
     store.add_use(Virtual(arg))
     block.add_inst(store)
   }
@@ -78,7 +78,7 @@ fn emit_c_overflow_arg_stores(
 /// to callee-saved registers.
 pub fn add_call_clobbers(
   ctx : LoweringContext,
-  call_inst : @instr.MachVInst,
+  call_inst : @instr.Inst,
 ) -> Unit {
   let isa = ctx.isa
   // Add clobbers for all caller-saved GPRs (X0-X17)
@@ -102,10 +102,7 @@ pub fn add_call_clobbers(
 ///|
 /// Add clobbers for a C call unconditionally (used for pseudo-ops that may call
 /// a C helper on a slow path).
-pub fn add_c_call_clobbers(
-  ctx : LoweringContext,
-  inst : @instr.MachVInst,
-) -> Unit {
+pub fn add_c_call_clobbers(ctx : LoweringContext, inst : @instr.Inst) -> Unit {
   let isa = ctx.isa
   for preg in isa.call_clobbered_gprs() {
     inst.add_def({ reg: Physical(preg) })
@@ -120,7 +117,7 @@ pub fn add_c_call_clobbers(
 /// This emits a symbolic `CallExternal` that the embedding runtime resolves.
 pub fn lower_c_libcall_direct(
   ctx : LoweringContext,
-  block : @block.MachVBlock,
+  block : @block.Block,
   symbol : @instr.ExternalName,
   args : Array[@abi.VReg],
   result : @abi.VReg?,
@@ -137,9 +134,12 @@ pub fn lower_c_libcall_direct(
     abort("lower_c_libcall_direct: too many arguments")
   }
   let num_args = args.length()
-  let num_results = if result is Some(_) { 1 } else { 0 }
-  let call_inst = @instr.MachVInst::new(
-    CallExternal(symbol, num_args, num_results, Foreign),
+  let result_classes : Array[@abi.RegClass] = []
+  if result is Some(dst) {
+    result_classes.push(dst.class)
+  }
+  let call_inst = @instr.Inst(
+    CallExternal(symbol, num_args, result_classes, Foreign),
   )
   for i, arg in args {
     call_inst.add_use_fixed(Virtual(arg), { index: arg_regs[i], class: Int })
@@ -168,7 +168,7 @@ pub fn lower_c_libcall_direct(
 fn lower_call_ptr(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.MachVBlock,
+  block : @block.Block,
   num_args : Int,
   _num_results : Int,
 ) -> Unit {
@@ -198,8 +198,8 @@ fn lower_call_ptr(
   let result_vregs = collect_call_result_vregs(ctx, inst)
 
   // Step 3: Create an internal call with fixed-register constraints.
-  let call_inst = @instr.MachVInst::new(
-    CallPtr(num_args, result_vregs.length(), Internal),
+  let call_inst = @instr.Inst(
+    CallPtr(num_args, @instr.result_classes_for_vregs(result_vregs), Internal),
   )
 
   // Call target is constrained to SCRATCH_REG_2 (IP1).
@@ -282,17 +282,17 @@ fn lower_call_ptr(
 fn lower_external_call(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.MachVBlock,
+  block : @block.Block,
   symbol : @milkir.ExternalSymbol,
 ) -> Unit {
   let args : Array[@abi.VReg] = []
   for i, operand in inst.operands {
     if i == 0 &&
-      ctx.abi_settings.enable_pinned_reg &&
+      ctx.embedding_abi().reserve_context_role &&
       ctx.ir_func.params.length() > 0 &&
       operand.id == ctx.ir_func.params[0].0.id {
       let context_vreg = ctx.machv_func.new_vreg(Int)
-      let context_mov = @instr.MachVInst::new(Move)
+      let context_mov = @instr.Inst(Move)
       context_mov.add_def({ reg: Virtual(context_vreg) })
       context_mov.add_use(Physical(context_preg(ctx)))
       block.add_inst(context_mov)
@@ -310,13 +310,7 @@ fn lower_external_call(
   } else {
     None
   }
-  lower_c_libcall_direct(
-    ctx,
-    block,
-    @instr.ExternalName::new(symbol.name),
-    args,
-    result,
-  )
+  lower_c_libcall_direct(ctx, block, ExternalName(symbol.name), args, result)
 }
 
 ///|
@@ -328,7 +322,7 @@ fn lower_external_call(
 /// this is for simple C functions where args follow the platform C ABI.
 pub fn lower_c_libcall(
   ctx : LoweringContext,
-  block : @block.MachVBlock,
+  block : @block.Block,
   func_ptr : @abi.VReg,
   args : Array[@abi.VReg],
   result : @abi.VReg?,
@@ -346,8 +340,11 @@ pub fn lower_c_libcall(
 
   // Create a foreign call with platform-ABI constraints.
   let num_args = args.length()
-  let num_results = if result is Some(_) { 1 } else { 0 }
-  let call_inst = @instr.MachVInst::new(CallPtr(num_args, num_results, Foreign))
+  let result_classes : Array[@abi.RegClass] = []
+  if result is Some(dst) {
+    result_classes.push(dst.class)
+  }
+  let call_inst = @instr.Inst(CallPtr(num_args, result_classes, Foreign))
 
   // Call target is constrained to SCRATCH_REG_2 (IP1).
   call_inst.add_use_fixed(Virtual(func_ptr), {
@@ -382,11 +379,11 @@ pub fn lower_c_libcall(
 /// Helper to materialize an immediate value into a vreg
 pub fn materialize_imm(
   ctx : LoweringContext,
-  block : @block.MachVBlock,
+  block : @block.Block,
   value : Int64,
 ) -> @abi.VReg {
   let vreg = ctx.machv_func.new_vreg(Int)
-  let mov = @instr.MachVInst::new(LoadConst(value))
+  let mov = @instr.Inst(LoadConst(value))
   mov.add_def({ reg: Virtual(vreg) })
   block.add_inst(mov)
   vreg

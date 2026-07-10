@@ -99,7 +99,7 @@ struct MatchResult {
 }
 
 ///|
-fn MatchResult::new() -> MatchResult {
+fn MatchResult::MatchResult() -> MatchResult {
   { values: [], int_consts: [], float_consts: [] }
 }
 
@@ -127,7 +127,7 @@ pub fn match_pattern(
   inst : @milkir.Inst,
   ctx : LoweringContext,
 ) -> MatchResult? {
-  let result = MatchResult::new()
+  let result = MatchResult::MatchResult()
   if match_pattern_impl(pattern, inst, ctx, result) {
     Some(result)
   } else {
@@ -349,7 +349,7 @@ struct RewriteRule {
 }
 
 ///|
-fn RewriteRule::new(
+fn RewriteRule::RewriteRule(
   name : String,
   pattern : Pattern,
   priority : Int,
@@ -362,50 +362,50 @@ fn RewriteRule::new(
 pub fn get_optimization_rules() -> Array[RewriteRule] {
   [
     // add(x, 0) -> x (identity)
-    RewriteRule::new("add_zero", Inst(Iadd, [Any, ConstInt(0L)]), 10),
+    RewriteRule("add_zero", Inst(Iadd, [Any, ConstInt(0L)]), 10),
     // add(0, x) -> x (identity, commutative)
-    RewriteRule::new("zero_add", Inst(Iadd, [ConstInt(0L), Any]), 10),
+    RewriteRule("zero_add", Inst(Iadd, [ConstInt(0L), Any]), 10),
     // sub(x, 0) -> x (identity)
-    RewriteRule::new("sub_zero", Inst(Isub, [Any, ConstInt(0L)]), 10),
+    RewriteRule("sub_zero", Inst(Isub, [Any, ConstInt(0L)]), 10),
     // mul(x, 1) -> x (identity)
-    RewriteRule::new("mul_one", Inst(Imul, [Any, ConstInt(1L)]), 10),
+    RewriteRule("mul_one", Inst(Imul, [Any, ConstInt(1L)]), 10),
     // mul(1, x) -> x (identity, commutative)
-    RewriteRule::new("one_mul", Inst(Imul, [ConstInt(1L), Any]), 10),
+    RewriteRule("one_mul", Inst(Imul, [ConstInt(1L), Any]), 10),
     // mul(x, 0) -> 0
-    RewriteRule::new("mul_zero", Inst(Imul, [Any, ConstInt(0L)]), 10),
+    RewriteRule("mul_zero", Inst(Imul, [Any, ConstInt(0L)]), 10),
     // mul(0, x) -> 0 (commutative)
-    RewriteRule::new("zero_mul", Inst(Imul, [ConstInt(0L), Any]), 10),
+    RewriteRule("zero_mul", Inst(Imul, [ConstInt(0L), Any]), 10),
     // and(x, 0) -> 0
-    RewriteRule::new("and_zero", Inst(Band, [Any, ConstInt(0L)]), 10),
+    RewriteRule("and_zero", Inst(Band, [Any, ConstInt(0L)]), 10),
     // and(0, x) -> 0 (commutative)
-    RewriteRule::new("zero_and", Inst(Band, [ConstInt(0L), Any]), 10),
+    RewriteRule("zero_and", Inst(Band, [ConstInt(0L), Any]), 10),
     // and(x, -1) -> x (all ones)
-    RewriteRule::new("and_ones", Inst(Band, [Any, ConstInt(-1L)]), 10),
+    RewriteRule("and_ones", Inst(Band, [Any, ConstInt(-1L)]), 10),
     // or(x, 0) -> x
-    RewriteRule::new("or_zero", Inst(Bor, [Any, ConstInt(0L)]), 10),
+    RewriteRule("or_zero", Inst(Bor, [Any, ConstInt(0L)]), 10),
     // or(0, x) -> x (commutative)
-    RewriteRule::new("zero_or", Inst(Bor, [ConstInt(0L), Any]), 10),
+    RewriteRule("zero_or", Inst(Bor, [ConstInt(0L), Any]), 10),
     // xor(x, 0) -> x
-    RewriteRule::new("xor_zero", Inst(Bxor, [Any, ConstInt(0L)]), 10),
+    RewriteRule("xor_zero", Inst(Bxor, [Any, ConstInt(0L)]), 10),
     // xor(0, x) -> x (commutative)
-    RewriteRule::new("zero_xor", Inst(Bxor, [ConstInt(0L), Any]), 10),
+    RewriteRule("zero_xor", Inst(Bxor, [ConstInt(0L), Any]), 10),
     // shl(x, 0) -> x
-    RewriteRule::new("shl_zero", Inst(Ishl, [Any, ConstInt(0L)]), 10),
+    RewriteRule("shl_zero", Inst(Ishl, [Any, ConstInt(0L)]), 10),
     // shr(x, 0) -> x
-    RewriteRule::new("sshr_zero", Inst(Sshr, [Any, ConstInt(0L)]), 10),
-    RewriteRule::new("ushr_zero", Inst(Ushr, [Any, ConstInt(0L)]), 10),
+    RewriteRule("sshr_zero", Inst(Sshr, [Any, ConstInt(0L)]), 10),
+    RewriteRule("ushr_zero", Inst(Ushr, [Any, ConstInt(0L)]), 10),
     // fadd(x, 0.0) -> x (float identity, be careful with -0.0)
-    RewriteRule::new("fadd_zero", Inst(Fadd, [Any, ConstFloat(0.0)]), 5),
+    RewriteRule("fadd_zero", Inst(Fadd, [Any, ConstFloat(0.0)]), 5),
     // fmul(x, 1.0) -> x
-    RewriteRule::new("fmul_one", Inst(Fmul, [Any, ConstFloat(1.0)]), 5),
+    RewriteRule("fmul_one", Inst(Fmul, [Any, ConstFloat(1.0)]), 5),
     // fmul(1.0, x) -> x (commutative)
-    RewriteRule::new("one_fmul", Inst(Fmul, [ConstFloat(1.0), Any]), 5),
+    RewriteRule("one_fmul", Inst(Fmul, [ConstFloat(1.0), Any]), 5),
     // Strength reduction: mul(x, power_of_2) -> shl(x, log2)
     // Use lower priority so specific constants (like 0, 1) match first
-    RewriteRule::new("mul_pow2", Inst(Imul, [Any, AnyConstInt]), 3),
-    RewriteRule::new("pow2_mul", Inst(Imul, [AnyConstInt, Any]), 3),
+    RewriteRule("mul_pow2", Inst(Imul, [Any, AnyConstInt]), 3),
+    RewriteRule("pow2_mul", Inst(Imul, [AnyConstInt, Any]), 3),
     // div(x, power_of_2) -> shr(x, log2) for unsigned
-    RewriteRule::new("udiv_pow2", Inst(Udiv, [Any, AnyConstInt]), 3),
+    RewriteRule("udiv_pow2", Inst(Udiv, [Any, AnyConstInt]), 3),
   ]
 }
 
@@ -522,7 +522,7 @@ fn apply_rule(
 pub fn lower_inst_with_patterns(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.MachVBlock,
+  block : @block.Block,
   rules : Array[RewriteRule],
 ) -> Bool {
   let rewrite_result = try_apply_rules(inst, ctx, rules)
@@ -532,7 +532,7 @@ pub fn lower_inst_with_patterns(
       if inst.first_result() is Some(result) {
         let dst = ctx.get_vreg(result)
         let src = ctx.get_vreg(inst.operands[operand_idx])
-        let machv_inst = @instr.MachVInst::new(Move)
+        let machv_inst = @instr.Inst(Move)
         machv_inst.add_def({ reg: Virtual(dst) })
         machv_inst.add_use(Virtual(src))
         block.add_inst(machv_inst)
@@ -544,7 +544,7 @@ pub fn lower_inst_with_patterns(
       // Emit a load constant
       if inst.first_result() is Some(result) {
         let dst = ctx.get_vreg(result)
-        let machv_inst = @instr.MachVInst::new(LoadConst(val))
+        let machv_inst = @instr.Inst(LoadConst(val))
         machv_inst.add_def({ reg: Virtual(dst) })
         block.add_inst(machv_inst)
         true
@@ -559,7 +559,7 @@ pub fn lower_inst_with_patterns(
         let is_64 = result.ty is I64
         let mask = if is_64 { 63 } else { 31 }
         let shift = shift_amount & mask
-        let shl_inst = @instr.MachVInst::new(ShlImm(shift, is_64))
+        let shl_inst = @instr.Inst(ShlImm(shift, is_64))
         shl_inst.add_def({ reg: Virtual(dst) })
         shl_inst.add_use(Virtual(src))
         block.add_inst(shl_inst)
@@ -575,7 +575,7 @@ pub fn lower_inst_with_patterns(
         let is_64 = result.ty is I64
         let mask = if is_64 { 63 } else { 31 }
         let shift = shift_amount & mask
-        let lshr_inst = @instr.MachVInst::new(LShrImm(shift, is_64))
+        let lshr_inst = @instr.Inst(LShrImm(shift, is_64))
         lshr_inst.add_def({ reg: Virtual(dst) })
         lshr_inst.add_use(Virtual(src))
         block.add_inst(lshr_inst)
@@ -590,14 +590,11 @@ pub fn lower_inst_with_patterns(
 ///|
 /// Lower a function with pattern matching optimizations enabled
 pub fn lower_function_optimized(ir_func : @milkir.Function) -> @machv.Function {
-  let ctx = LoweringContext::new(
+  let ctx = LoweringContext::LoweringContext(
     ir_func,
     AArch64,
-    @abi.ABISettings::default(),
-    @abi.EmbeddingRegRoles::none(),
     None,
-    None,
-    {},
+    Map([]),
     fn(_reason) { 0 },
     None,
     -1,
@@ -635,7 +632,7 @@ pub fn lower_function_optimized(ir_func : @milkir.Function) -> @machv.Function {
 fn lower_block_optimized(
   ctx : LoweringContext,
   ir_block : @milkir.Block,
-  machv_block : @block.MachVBlock,
+  machv_block : @block.Block,
   rules : Array[RewriteRule],
 ) -> Unit {
   // Lower block parameters
@@ -667,7 +664,7 @@ fn lower_block_optimized(
 fn lower_inst_default(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.MachVBlock,
+  block : @block.Block,
 ) -> Unit {
   match inst.opcode {
     // Constants

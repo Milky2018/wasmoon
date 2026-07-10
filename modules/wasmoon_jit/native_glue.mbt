@@ -122,8 +122,7 @@ pub fn plan_integration_for_target(
   target : @machv_emit.EmitTarget,
 ) -> JitIntegrationPlan {
   let isa = emit_target_to_isa(target)
-  let call_conv = wasm_calling_convention_for_isa(isa)
-  let roles = wasm_embedding_reg_roles_for_isa(isa)
+  let embedding_abi = wasm_embedding_abi_for_isa(isa)
   {
     entry_symbol: func.name,
     target,
@@ -132,9 +131,7 @@ pub fn plan_integration_for_target(
       machv_func,
       regalloc_output,
       isa~,
-      embedding_context_layout=Some(embedding_context_layout()),
-      call_conv_layout=Some(call_conv),
-      embedding_reg_roles=roles,
+      embedding_abi=Some(embedding_abi),
     ),
   }
 }
@@ -153,15 +150,12 @@ pub fn lower_milkir_for_target(
   target : @machv_emit.EmitTarget,
 ) -> @machv.Function {
   let isa = emit_target_to_isa(target)
-  let call_conv = wasm_calling_convention_for_isa(isa)
-  let roles = wasm_embedding_reg_roles_for_isa(isa)
+  let embedding_abi = wasm_embedding_abi_for_isa(isa)
   @wasm_isa_lower.lower_function(
     func,
     wasm_context_slots(),
     isa~,
-    embedding_reg_roles=roles,
-    embedding_context_layout=Some(embedding_context_layout()),
-    call_conv_layout=Some(call_conv),
+    embedding_abi=Some(embedding_abi),
     runtime_symbols=wasm_runtime_symbols(),
     trap_payload_resolver=wasm_trap_payload,
   )
@@ -173,16 +167,13 @@ pub fn lower_wasm_body_milkir_for_target(
   target : @machv_emit.EmitTarget,
 ) -> @machv.Function {
   let isa = emit_target_to_isa(target)
-  let call_conv = wasm_calling_convention_for_isa(isa)
-  let roles = wasm_embedding_reg_roles_for_isa(isa)
+  let embedding_abi = wasm_embedding_abi_for_isa(isa)
   @wasm_isa_lower.lower_function(
     func,
     wasm_context_slots(),
     isa~,
-    embedding_reg_roles=roles,
     run_ir_opt=false,
-    embedding_context_layout=Some(embedding_context_layout()),
-    call_conv_layout=Some(call_conv),
+    embedding_abi=Some(embedding_abi),
     runtime_symbols=wasm_runtime_symbols(),
     trap_payload_resolver=wasm_trap_payload,
   )
@@ -194,24 +185,19 @@ pub fn plan_milkir_integration_for_target(
   target : @machv_emit.EmitTarget,
 ) -> JitIntegrationPlan {
   let isa = emit_target_to_isa(target)
-  let call_conv = wasm_calling_convention_for_isa(isa)
-  let roles = wasm_embedding_reg_roles_for_isa(isa)
+  let embedding_abi = wasm_embedding_abi_for_isa(isa)
   let machv_func = @wasm_isa_lower.lower_function(
     func,
     wasm_context_slots(),
     isa~,
-    embedding_reg_roles=roles,
-    embedding_context_layout=Some(embedding_context_layout()),
-    call_conv_layout=Some(call_conv),
+    embedding_abi=Some(embedding_abi),
     runtime_symbols=wasm_runtime_symbols(),
     trap_payload_resolver=wasm_trap_payload,
   )
   let (allocated_func, output) = @machv_regalloc.allocate_registers_backtracking_output_with_isa(
     machv_func,
     isa,
-    @abi.ABISettings::default(),
-    roles,
-    call_conv_layout=Some(call_conv),
+    embedding_abi=Some(embedding_abi),
   )
   plan_integration_for_target(func, allocated_func, output, target)
 }
@@ -222,25 +208,20 @@ pub fn plan_wasm_body_milkir_integration_for_target(
   target : @machv_emit.EmitTarget,
 ) -> JitIntegrationPlan {
   let isa = emit_target_to_isa(target)
-  let call_conv = wasm_calling_convention_for_isa(isa)
-  let roles = wasm_embedding_reg_roles_for_isa(isa)
+  let embedding_abi = wasm_embedding_abi_for_isa(isa)
   let machv_func = @wasm_isa_lower.lower_function(
     func,
     wasm_context_slots(),
     isa~,
-    embedding_reg_roles=roles,
     run_ir_opt=false,
-    embedding_context_layout=Some(embedding_context_layout()),
-    call_conv_layout=Some(call_conv),
+    embedding_abi=Some(embedding_abi),
     runtime_symbols=wasm_runtime_symbols(),
     trap_payload_resolver=wasm_trap_payload,
   )
   let (allocated_func, output) = @machv_regalloc.allocate_registers_backtracking_output_with_isa(
     machv_func,
     isa,
-    @abi.ABISettings::default(),
-    roles,
-    call_conv_layout=Some(call_conv),
+    embedding_abi=Some(embedding_abi),
   )
   plan_integration_for_target(func, allocated_func, output, target)
 }

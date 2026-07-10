@@ -909,7 +909,7 @@ fn mem_instr(
   offset : Int64,
   natural_align : Int,
 ) -> String {
-  let sb = StringBuilder::new()
+  let sb = StringBuilder::StringBuilder()
   sb.write_string(name)
   // Memory index (only if not 0)
   if mem != 0 {
@@ -940,7 +940,7 @@ fn format_v128_bytes(bytes : Bytes) -> String {
 ///|
 /// Convert function body instructions to WAT format with proper indentation
 fn instrs_to_wat(instrs : Array[@types.Instruction], indent : Int) -> String {
-  let sb = StringBuilder::new()
+  let sb = StringBuilder::StringBuilder()
   let indent_str = "  ".repeat(indent)
   for instr in instrs {
     sb.write_string(indent_str)
@@ -982,7 +982,7 @@ pub fn func_to_wat(
   locals : Array[@types.ValueType],
   body : Array[@types.Instruction],
 ) -> String {
-  let sb = StringBuilder::new()
+  let sb = StringBuilder::StringBuilder()
   // Function signature
   sb.write_string("(func")
   if func_name != "" {

@@ -11,7 +11,7 @@ struct UnionFind {
 
 ///|
 /// Create a new UnionFind with n elements (0..n-1)
-pub fn UnionFind::new(n : Int) -> UnionFind {
+pub fn UnionFind::UnionFind(n : Int) -> UnionFind {
   let parent : Array[Int] = []
   let rank : Array[Int] = []
   for i in 0..<n {
@@ -97,7 +97,7 @@ pub fn UnionFind::get_set(self : UnionFind, x : Int) -> Array[Int] {
 ///|
 /// Get all unique sets (as arrays of their members)
 pub fn UnionFind::get_all_sets(self : UnionFind) -> Array[Array[Int]] {
-  let sets : Map[Int, Array[Int]] = {}
+  let sets : Map[Int, Array[Int]] = Map([])
   for i in 0..<self.parent.length() {
     let root = self.find(i)
     match sets.get(root) {

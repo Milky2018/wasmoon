@@ -64,7 +64,7 @@ pub fn legality_sensitive_rules() -> Array[RewriteRule] {
 ///|
 /// Build the indexed ruleset (internal, called once by get_global_ruleset)
 fn build_indexed_ruleset() -> IndexedRuleSet {
-  let rs = IndexedRuleSet::new()
+  let rs = IndexedRuleSet::IndexedRuleSet()
   // Identity rules - indexed by opcode
   rs.add_rule(rule_add_zero(), [TAdd])
   rs.add_rule(rule_sub_zero(), [TSub])
@@ -429,7 +429,7 @@ fn build_indexed_ruleset() -> IndexedRuleSet {
 
 ///|
 fn build_compact_indexed_ruleset() -> IndexedRuleSet {
-  let rs = IndexedRuleSet::new()
+  let rs = IndexedRuleSet::IndexedRuleSet()
   // Keep the same core simplifications Cranelift relies on frequently,
   // while avoiding expensive long-tail algebraic exploration.
   rs.add_rule(rule_const_fold(), [])

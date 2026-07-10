@@ -13,8 +13,8 @@
 /// FuncEnvironment holds VMContext layout info used during IR translation to
 /// desugar Wasm operations.
 priv struct FuncEnvironment {
-  runtime_layout : @wasm_frontend.RuntimeLayout
-  memory_descriptor_layout : @wasm_frontend.MemoryDescriptorLayout
+  runtime_layout : @embedding.RuntimeLayout
+  memory_descriptor_layout : @embedding.MemoryDescriptorLayout
   runtime_symbols : @wasm_milkir.RuntimeSymbols
   // Global variable types (for determining load/store width)
   global_types : Array[@types.GlobalType]
@@ -41,8 +41,8 @@ priv struct FuncEnvironment {
 }
 
 ///|
-fn FuncEnvironment::new(
-  embedding_env : @wasm_frontend.EmbeddingEnvironment,
+fn FuncEnvironment::FuncEnvironment(
+  embedding_env : @embedding.EmbeddingEnvironment,
   global_types : Array[@types.GlobalType],
   memory_mins? : Array[Int64] = [],
   memory_is_64? : Array[Bool] = [],
@@ -79,7 +79,7 @@ fn FuncEnvironment::new(
 /// 2. Load value from globals_ptr + (global_idx * 16)
 fn FuncEnvironment::translate_global_get(
   self : FuncEnvironment,
-  builder : IRBuilder,
+  builder : FunctionBuilder,
   vmctx : Value,
   global_idx : Int,
 ) -> Value {
@@ -105,7 +105,7 @@ fn FuncEnvironment::translate_global_get(
 /// 2. Store value to globals_ptr + (global_idx * 16)
 fn FuncEnvironment::translate_global_set(
   self : FuncEnvironment,
-  builder : IRBuilder,
+  builder : FunctionBuilder,
   vmctx : Value,
   global_idx : Int,
   value : Value,
@@ -134,7 +134,7 @@ fn FuncEnvironment::translate_global_set(
 /// For table N: Load from vmctx.table_sizes[N]
 fn FuncEnvironment::translate_table_size(
   self : FuncEnvironment,
-  builder : IRBuilder,
+  builder : FunctionBuilder,
   vmctx : Value,
   table_idx : Int,
   is_table64? : Bool = false,
@@ -175,7 +175,7 @@ fn FuncEnvironment::translate_table_size(
 /// 4. Load value
 fn FuncEnvironment::translate_table_get(
   self : FuncEnvironment,
-  builder : IRBuilder,
+  builder : FunctionBuilder,
   vmctx : Value,
   table_idx : Int,
   elem_idx : Value,
@@ -247,7 +247,7 @@ fn FuncEnvironment::translate_table_get(
 /// 4. Store value
 fn FuncEnvironment::translate_table_set(
   _self : FuncEnvironment,
-  builder : IRBuilder,
+  builder : FunctionBuilder,
   vmctx : Value,
   table_idx : Int,
   elem_idx : Value,
@@ -280,7 +280,7 @@ fn FuncEnvironment::translate_table_set(
 /// For memidx > 0: load from memories array
 fn FuncEnvironment::load_memory_size(
   self : FuncEnvironment,
-  builder : IRBuilder,
+  builder : FunctionBuilder,
   vmctx : Value,
   memidx : Int,
 ) -> Value {
@@ -338,7 +338,7 @@ fn FuncEnvironment::use_guard_pages(
 /// All bounds checks in the same function share this block to reduce CFG size.
 fn FuncEnvironment::get_or_create_memory_trap_block(
   self : FuncEnvironment,
-  builder : IRBuilder,
+  builder : FunctionBuilder,
 ) -> Block {
   match self.memory_trap_block {
     Some(block) => block
@@ -347,10 +347,7 @@ fn FuncEnvironment::get_or_create_memory_trap_block(
       let current = builder.current_block() // save current position
       builder.switch_to_block(trap_block)
       builder.trap("memory out of bounds")
-      match current {
-        Some(block) => builder.switch_to_block(block) // restore position
-        None => ()
-      }
+      builder.switch_to_block(current) // restore position
       self.memory_trap_block = Some(trap_block)
       trap_block
     }
@@ -361,7 +358,7 @@ fn FuncEnvironment::get_or_create_memory_trap_block(
 /// Get or create a shared trap block for unaligned atomic accesses.
 fn FuncEnvironment::get_or_create_atomic_unaligned_trap_block(
   self : FuncEnvironment,
-  builder : IRBuilder,
+  builder : FunctionBuilder,
 ) -> Block {
   match self.atomic_unaligned_trap_block {
     Some(block) => block
@@ -370,10 +367,7 @@ fn FuncEnvironment::get_or_create_atomic_unaligned_trap_block(
       let current = builder.current_block()
       builder.switch_to_block(trap_block)
       builder.trap("unaligned atomic")
-      match current {
-        Some(block) => builder.switch_to_block(block)
-        None => ()
-      }
+      builder.switch_to_block(current)
       self.atomic_unaligned_trap_block = Some(trap_block)
       trap_block
     }
@@ -386,7 +380,7 @@ fn FuncEnvironment::get_or_create_atomic_unaligned_trap_block(
 /// The check is performed on the linear memory effective address (addr + offset).
 fn FuncEnvironment::emit_atomic_alignment_check(
   self : FuncEnvironment,
-  builder : IRBuilder,
+  builder : FunctionBuilder,
   memidx : Int,
   wasm_addr : Value,
   offset : Int64,
@@ -435,7 +429,7 @@ fn type_byte_size(ty : Type) -> Int {
 /// Returns true if the access is guaranteed to be within the minimum memory size
 fn FuncEnvironment::can_eliminate_bounds_check(
   self : FuncEnvironment,
-  builder : IRBuilder,
+  builder : FunctionBuilder,
   memidx : Int,
   wasm_addr : Value,
   offset : Int64,
@@ -494,13 +488,13 @@ fn checked_access_end(offset : Int64, access_size : Int) -> Int64? {
 /// in this block with a larger (offset + size), we can skip the later check.
 fn FuncEnvironment::can_eliminate_redundant_bounds_check(
   self : FuncEnvironment,
-  builder : IRBuilder,
+  builder : FunctionBuilder,
   memidx : Int,
   wasm_addr : Value,
   offset : Int64,
   access_size : Int,
 ) -> Bool {
-  guard builder.current_block() is Some(block) else { return false }
+  let block = builder.current_block()
   guard checked_access_end(offset, access_size) is Some(end) else {
     return false
   }
@@ -514,13 +508,13 @@ fn FuncEnvironment::can_eliminate_redundant_bounds_check(
 ///|
 fn FuncEnvironment::record_bounds_check(
   self : FuncEnvironment,
-  builder : IRBuilder,
+  builder : FunctionBuilder,
   memidx : Int,
   wasm_addr : Value,
   offset : Int64,
   access_size : Int,
 ) -> Unit {
-  guard builder.current_block() is Some(block) else { return }
+  let block = builder.current_block()
   guard checked_access_end(offset, access_size) is Some(end) else { return }
   let key = bounds_check_cache_key(block.id, memidx, wasm_addr.id)
   match self.bounds_check_cache.get(key) {
@@ -534,7 +528,7 @@ fn FuncEnvironment::record_bounds_check(
 /// Shared by SIMD and other complex load operations.
 fn FuncEnvironment::emit_bounds_check(
   self : FuncEnvironment,
-  builder : IRBuilder,
+  builder : FunctionBuilder,
   vmctx : Value,
   memidx : Int,
   wasm_addr : Value,
@@ -623,7 +617,7 @@ fn FuncEnvironment::emit_bounds_check(
 /// 4. LoadPtr
 fn FuncEnvironment::translate_memory_load(
   self : FuncEnvironment,
-  builder : IRBuilder,
+  builder : FunctionBuilder,
   vmctx : Value,
   memidx : Int,
   ty : Type,
@@ -723,7 +717,7 @@ fn FuncEnvironment::translate_memory_load(
 /// 4. StorePtr
 fn FuncEnvironment::translate_memory_store(
   self : FuncEnvironment,
-  builder : IRBuilder,
+  builder : FunctionBuilder,
   vmctx : Value,
   memidx : Int,
   ty : Type,
@@ -813,7 +807,7 @@ fn FuncEnvironment::translate_memory_store(
 /// Translate narrow memory load (i32.load8_s, i32.load16_u, etc.) to IR primitives
 fn FuncEnvironment::translate_memory_load_narrow(
   self : FuncEnvironment,
-  builder : IRBuilder,
+  builder : FunctionBuilder,
   vmctx : Value,
   memidx : Int,
   result_ty : Type,
@@ -908,7 +902,7 @@ fn FuncEnvironment::translate_memory_load_narrow(
 /// Translate narrow memory store (i32.store8, i32.store16, etc.) to IR primitives
 fn FuncEnvironment::translate_memory_store_narrow(
   self : FuncEnvironment,
-  builder : IRBuilder,
+  builder : FunctionBuilder,
   vmctx : Value,
   memidx : Int,
   narrow_bits : Int,

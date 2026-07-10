@@ -16,7 +16,7 @@ pub struct PreflightDiagnostic {
   func_idx : Int?
   func_name : String?
 }
-pub fn PreflightDiagnostic::new(PreflightSeverity, PreflightStage, String, func_idx? : Int?, func_name? : String?) -> Self
+pub fn PreflightDiagnostic::PreflightDiagnostic(PreflightSeverity, PreflightStage, String, func_idx? : Int?, func_name? : String?) -> Self
 
 pub struct PreflightResult {
   mut ok : Bool
@@ -24,9 +24,9 @@ pub struct PreflightResult {
   mut total_funcs : Int
   mut checked_funcs : Int
 }
+pub fn PreflightResult::PreflightResult() -> Self
 pub fn PreflightResult::add_error(Self, PreflightStage, String, func_idx? : Int?, func_name? : String?) -> Unit
 pub fn PreflightResult::add_warning(Self, PreflightStage, String, func_idx? : Int?, func_name? : String?) -> Unit
-pub fn PreflightResult::new() -> Self
 
 pub(all) enum PreflightSeverity {
   Error

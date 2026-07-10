@@ -9,6 +9,8 @@ import {
 // Values
 pub fn aarch64_logic_imm_enc_bits(Int64, Bool) -> Int?
 
+pub fn result_classes_for_vregs(Array[@abi.VReg]) -> Array[@abi.RegClass]
+
 // Errors
 
 // Types and methods
@@ -42,7 +44,7 @@ pub(all) struct CodeSymbol {
   scope : String
   ordinal : Int
 } derive(Eq, Hash, @debug.Debug)
-pub fn CodeSymbol::new(String, Int) -> Self
+pub fn CodeSymbol::CodeSymbol(String, Int) -> Self
 pub impl Show for CodeSymbol
 
 pub(all) enum Cond {
@@ -85,7 +87,7 @@ pub impl Show for ExtendKind
 pub(all) struct ExternalName {
   name : String
 } derive(Eq, Hash, @debug.Debug)
-pub fn ExternalName::new(String) -> Self
+pub fn ExternalName::ExternalName(String) -> Self
 pub impl Show for ExternalName
 
 pub(all) enum FCmpKind {
@@ -125,6 +127,20 @@ pub(all) enum IndexExtend {
 }
 pub impl Show for IndexExtend
 
+pub struct Inst {
+  opcode : Opcode
+  defs : Array[@abi.Writable]
+  uses : Array[@abi.Reg]
+  use_constraints : Array[@abi.OperandConstraint]
+  def_constraints : Array[@abi.OperandConstraint]
+}
+pub fn Inst::Inst(Opcode) -> Self
+pub fn Inst::add_def(Self, @abi.Writable) -> Unit
+pub fn Inst::add_def_fixed(Self, @abi.Writable, @abi.PReg) -> Unit
+pub fn Inst::add_use(Self, @abi.Reg) -> Unit
+pub fn Inst::add_use_fixed(Self, @abi.Reg, @abi.PReg) -> Unit
+pub impl Show for Inst
+
 pub(all) enum IntToFloatKind {
   I32SToF32
   I32UToF32
@@ -145,21 +161,16 @@ pub(all) enum LaneSize {
 }
 pub impl Show for LaneSize
 
-pub struct MachVInst {
-  opcode : MachVOpcode
-  defs : Array[@abi.Writable]
-  uses : Array[@abi.Reg]
-  use_constraints : Array[@abi.OperandConstraint]
-  def_constraints : Array[@abi.OperandConstraint]
+pub(all) enum MemType {
+  I32
+  I64
+  F32
+  F64
+  V128
 }
-pub fn MachVInst::add_def(Self, @abi.Writable) -> Unit
-pub fn MachVInst::add_def_fixed(Self, @abi.Writable, @abi.PReg) -> Unit
-pub fn MachVInst::add_use(Self, @abi.Reg) -> Unit
-pub fn MachVInst::add_use_fixed(Self, @abi.Reg, @abi.PReg) -> Unit
-pub fn MachVInst::new(MachVOpcode) -> Self
-pub impl Show for MachVInst
+pub impl Show for MemType
 
-pub(all) enum MachVOpcode {
+pub(all) enum Opcode {
   Add(Bool)
   AddImm(Int, Bool)
   Sub(Bool)
@@ -275,15 +286,13 @@ pub(all) enum MachVOpcode {
   StorePtrNarrow(Int, Int)
   LoadExternalFuncAddr(ExternalName)
   LoadCodeAddr(CodeSymbol)
-  CallPtr(Int, Int, CallClobberClass)
-  CallDirect(CodeSymbol, Int, Int, CallClobberClass)
-  CallExternal(ExternalName, Int, Int, CallClobberClass)
+  CallPtr(Int, Array[@abi.RegClass], CallClobberClass)
+  CallDirect(CodeSymbol, Int, Array[@abi.RegClass], CallClobberClass)
+  CallExternal(ExternalName, Int, Array[@abi.RegClass], CallClobberClass)
   AdjustSP(Int)
   StoreToStack(Int)
   LoadSP
   LoadSafepointId(Int)
-  BumpAllocRecordFromStackInline(Int, Int, ExternalName, ExternalName)
-  BumpAllocArrayFromStackInline(Int, Int, ExternalName, ExternalName)
   LoadConstV128(Bytes)
   SIMDSplat(LaneSize)
   SIMDSplatF(Bool)
@@ -367,29 +376,10 @@ pub(all) enum MachVOpcode {
   SIMDRelaxedDot8to16
   SIMDRelaxedDot8to32Add
 }
-pub fn MachVOpcode::call_type(Self) -> CallType
-pub impl Show for MachVOpcode
-
-pub(all) enum MachVTerminator {
-  Jump(Int, Array[@abi.Reg])
-  Branch(@abi.Reg, Int, Int)
-  BranchCmp(@abi.Reg, @abi.Reg, Cond, Bool, Int, Int)
-  BranchZero(@abi.Reg, Bool, Bool, Int, Int)
-  BranchCmpImm(@abi.Reg, Int, Cond, Bool, Int, Int)
-  Return(Array[@abi.Reg])
-  Trap(Int)
-  BrTable(@abi.Reg, Array[Int], Int)
-}
-pub impl Show for MachVTerminator
-
-pub(all) enum MemType {
-  I32
-  I64
-  F32
-  F64
-  V128
-}
-pub impl Show for MemType
+pub fn Opcode::call_result_classes(Self) -> Array[@abi.RegClass]?
+pub fn Opcode::call_result_count(Self) -> Int?
+pub fn Opcode::call_type(Self) -> CallType
+pub impl Show for Opcode
 
 pub(all) enum RelocTarget {
   Code(CodeSymbol)
@@ -420,6 +410,18 @@ pub(all) enum ShiftType {
   Asr
 }
 pub impl Show for ShiftType
+
+pub(all) enum Terminator {
+  Jump(Int, Array[@abi.Reg])
+  Branch(@abi.Reg, Int, Int)
+  BranchCmp(@abi.Reg, @abi.Reg, Cond, Bool, Int, Int)
+  BranchZero(@abi.Reg, Bool, Bool, Int, Int)
+  BranchCmpImm(@abi.Reg, Int, Cond, Bool, Int, Int)
+  Return(Array[@abi.Reg])
+  Trap(Int)
+  BrTable(@abi.Reg, Array[Int], Int)
+}
+pub impl Show for Terminator
 
 // Type aliases
 

@@ -20,7 +20,7 @@ priv struct BuildState {
 }
 
 ///|
-fn BuildState::new(
+fn BuildState::BuildState(
   stream_table : StreamTable,
   async_state : AsyncState,
 ) -> BuildState {
@@ -30,7 +30,7 @@ fn BuildState::new(
     values: [],
     components: [],
     instances: [],
-    resource_table: ResourceTable::new(),
+    resource_table: ResourceTable(),
     stream_table,
     async_state,
     core_modules: [],
@@ -41,13 +41,13 @@ fn BuildState::new(
     core_mems: [],
     core_globals: [],
     core_tags: [],
-    exports: {},
+    exports: Map([]),
   }
 }
 
 ///|
 fn decode_utf8_runtime(bytes : Bytes) -> String raise ComponentRuntimeError {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder::StringBuilder()
   let mut i = 0
   while i < bytes.length() {
     let b = bytes[i].to_int()
@@ -241,8 +241,8 @@ fn synthesize_trivial_instance_import(
     name : String,
     exports : Map[String, ComponentExtern],
   ) -> ComponentInstance {
-    let stream_table = StreamTable::new()
-    let async_state = AsyncState::new(stream_table)
+    let stream_table = StreamTable::StreamTable()
+    let async_state = AsyncState::AsyncState(stream_table)
     {
       name,
       types: [],
@@ -250,7 +250,7 @@ fn synthesize_trivial_instance_import(
       values: [],
       components: [],
       instances: [],
-      resource_table: ResourceTable::new(),
+      resource_table: ResourceTable(),
       stream_table,
       async_state,
       core_modules: [],
@@ -271,10 +271,10 @@ fn synthesize_trivial_instance_import(
     td : TypeDef,
   ) -> ComponentInstance? raise ComponentRuntimeError {
     match td {
-      InstanceTypeEmpty => Some(make_instance("\{inst_key}::empty", {}))
+      InstanceTypeEmpty => Some(make_instance("\{inst_key}::empty", Map([])))
       InstanceType(decls) => {
         let local_types : Array[TypeDef?] = []
-        let exports : Map[String, ComponentExtern] = {}
+        let exports : Map[String, ComponentExtern] = Map([])
         for d in decls {
           match d {
             Type(t) => local_types.push(Some(t))

@@ -54,7 +54,7 @@ pub fn resolve_package(
       "no `package` header was found in any WIT file for this package",
     )
   }
-  let pkgs : Map[String, Package] = {}
+  let pkgs : Map[String, Package] = Map([])
   add_pkg_recursive_strict(pkgs, root_doc)
   for d in deps {
     add_pkg_recursive_strict(pkgs, desugar_toplevel_use(d))
@@ -62,10 +62,10 @@ pub fn resolve_package(
   let order = topo_sort_packages(pkgs)
 
   // Global interface dependency information for world transitive-import computation.
-  let iface_type_exports : Map[String, Map[String, Bool]] = {} // iface_key -> exported type/resource names
-  let iface_deps : Map[String, Array[IfaceRef]] = {} // iface_key -> direct interface deps
-  let resolved_pkgs : Map[String, Package] = {}
-  let resolved_worlds : Map[String, World] = {} // world_key -> resolved world
+  let iface_type_exports : Map[String, Map[String, Bool]] = Map([]) // iface_key -> exported type/resource names
+  let iface_deps : Map[String, Array[IfaceRef]] = Map([]) // iface_key -> direct interface deps
+  let resolved_pkgs : Map[String, Package] = Map([])
+  let resolved_worlds : Map[String, World] = Map([]) // world_key -> resolved world
   for key in order {
     let pkg = pkgs
       .get(key)
@@ -242,7 +242,7 @@ fn topo_sort_packages(
     keys.push(k)
   }
   keys.sort()
-  let deps_map : Map[String, Array[String]] = {}
+  let deps_map : Map[String, Array[String]] = Map([])
   for k in keys {
     let pkg = pkgs
       .get(k)
@@ -258,7 +258,7 @@ fn topo_sort_packages(
 
 ///|
 fn collect_package_deps(pkg_key : String, pkg : Package) -> Array[String] {
-  let set : Map[String, Bool] = {}
+  let set : Map[String, Bool] = Map([])
   for it in pkg.items {
     match it {
       Interface(i) =>
@@ -332,7 +332,7 @@ fn topo_sort_graph(
   deps_map : Map[String, Array[String]],
   cycle_msg : (String) -> String,
 ) -> Array[String] raise WitError {
-  let state : Map[String, Int] = {} // 0=unseen,1=visiting,2=done
+  let state : Map[String, Int] = Map([]) // 0=unseen,1=visiting,2=done
   let out : Array[String] = []
   fn dfs(k : String) -> Unit raise WitError {
     let st = state.get(k).unwrap_or(0)
@@ -371,8 +371,8 @@ fn resolve_one_package(
   resolved_worlds : Map[String, World],
 ) -> (Package, Array[(String, World)]) raise WitError {
   // Collect local interface/world definitions and check duplicates.
-  let ifaces : Map[String, Interface] = {}
-  let worlds : Map[String, World] = {}
+  let ifaces : Map[String, Interface] = Map([])
+  let worlds : Map[String, World] = Map([])
   for it in pkg.items {
     match it {
       Interface(i) =>
@@ -402,8 +402,8 @@ fn resolve_one_package(
     iface_names.push(n)
   }
   iface_names.sort()
-  let iface_edges : Map[String, Array[String]] = {}
-  let iface_direct_deps : Map[String, Array[IfaceRef]] = {}
+  let iface_edges : Map[String, Array[String]] = Map([])
+  let iface_direct_deps : Map[String, Array[IfaceRef]] = Map([])
   for n in iface_names {
     let iface = ifaces
       .get(n)
@@ -428,7 +428,7 @@ fn resolve_one_package(
   })
 
   // Resolve interfaces in topo order.
-  let resolved_ifaces : Map[String, Interface] = {}
+  let resolved_ifaces : Map[String, Interface] = Map([])
   for name in iface_order {
     let iface = ifaces
       .get(name)
@@ -448,7 +448,7 @@ fn resolve_one_package(
     world_names.push(n)
   }
   world_names.sort()
-  let world_edges : Map[String, Array[String]] = {}
+  let world_edges : Map[String, Array[String]] = Map([])
   for n in world_names {
     let w = worlds
       .get(n)
@@ -467,7 +467,7 @@ fn resolve_one_package(
   })
 
   // Resolve worlds in topo order so local `include` targets are already resolved.
-  let local_resolved_worlds : Map[String, World] = {}
+  let local_resolved_worlds : Map[String, World] = Map([])
   let worlds_out : Array[(String, World)] = []
   for wn in world_order {
     let w = worlds
@@ -519,8 +519,8 @@ fn resolve_interface_in_package(
   pkgs : Map[String, Package],
   iface_type_exports : Map[String, Map[String, Bool]],
 ) -> (Map[String, Bool], Array[IfaceRef]) raise WitError {
-  let names : Map[String, Bool] = {}
-  let type_exports : Map[String, Bool] = {}
+  let names : Map[String, Bool] = Map([])
+  let type_exports : Map[String, Bool] = Map([])
 
   // First pass: local defs + funcs occupy the interface namespace.
   for item in iface.items {
@@ -736,7 +736,7 @@ fn check_interface_type_cycles(
   iface : Interface,
 ) -> Unit raise WitError {
   // Only consider locally-defined names for cycle detection.
-  let locals : Map[String, Bool] = {}
+  let locals : Map[String, Bool] = Map([])
   for item in iface.items {
     match item {
       TypeAlias(t) => locals.set(t.name, true)
@@ -748,7 +748,7 @@ fn check_interface_type_cycles(
       _ => ()
     }
   }
-  let edges : Map[String, Array[String]] = {}
+  let edges : Map[String, Array[String]] = Map([])
   for kv in locals {
     let (n, _) = kv
     edges.set(n, [])
@@ -757,7 +757,7 @@ fn check_interface_type_cycles(
     match item {
       TypeAlias(t) => edges.set(t.name, type_deps_in_expr(locals, t.ty))
       Record(r) => {
-        let ds : Map[String, Bool] = {}
+        let ds : Map[String, Bool] = Map([])
         for f in r.fields {
           for dep in type_deps_in_expr(locals, f.1) {
             ds.set(dep, true)
@@ -766,7 +766,7 @@ fn check_interface_type_cycles(
         edges.set(r.name, map_keys(ds))
       }
       Variant(v) => {
-        let ds : Map[String, Bool] = {}
+        let ds : Map[String, Bool] = Map([])
         for c in v.cases {
           if c.payload is Some(t) {
             for dep in type_deps_in_expr(locals, t) {
@@ -793,7 +793,7 @@ fn check_interface_type_cycles(
 
 ///|
 fn type_deps_in_expr(locals : Map[String, Bool], t : TypeExpr) -> Array[String] {
-  let ds : Map[String, Bool] = {}
+  let ds : Map[String, Bool] = Map([])
   fn walk(tt : TypeExpr) -> Unit {
     match tt {
       Id(n) => if locals.get(n) is Some(_) { ds.set(n, true) }
@@ -860,7 +860,7 @@ fn resolve_world_in_package(
 
   // 2) Validate world-level `use` against target interface exports.
   // Also track required interfaces for transitive imports.
-  let required : Map[String, IfaceRef] = {}
+  let required : Map[String, IfaceRef] = Map([])
   for wi in items {
     match wi {
       Import(p) => {
@@ -913,8 +913,8 @@ fn resolve_world_in_package(
   }
 
   // 3) Add transitive interface imports implied by `use`.
-  let existing_imports : Map[String, IfaceRef] = {}
-  let existing_exports : Map[String, IfaceRef] = {}
+  let existing_imports : Map[String, IfaceRef] = Map([])
+  let existing_exports : Map[String, IfaceRef] = Map([])
   for wi in items {
     match wi {
       Import(p) => {
@@ -1001,7 +1001,7 @@ fn apply_include_renames(
   items : Array[WorldItem],
   renames : Array[(String, String)],
 ) -> Array[WorldItem] raise WitError {
-  let map : Map[String, String] = {}
+  let map : Map[String, String] = Map([])
   for pair in renames {
     let (from, to) = pair
     map.set(from, to)
@@ -1073,7 +1073,7 @@ fn merge_world_items(
   a : Array[WorldItem],
   b : Array[WorldItem],
 ) -> Array[WorldItem] {
-  let seen : Map[String, Bool] = {}
+  let seen : Map[String, Bool] = Map([])
   let out : Array[WorldItem] = []
   for wi in a {
     let k = world_item_key(wi)
@@ -1149,8 +1149,8 @@ fn compute_iface_closure(
   roots : Map[String, IfaceRef],
   iface_deps : Map[String, Array[IfaceRef]],
 ) -> Map[String, IfaceRef] raise WitError {
-  let out : Map[String, IfaceRef] = {}
-  let state : Map[String, Int] = {} // 0=unseen,1=visiting,2=done
+  let out : Map[String, IfaceRef] = Map([])
+  let state : Map[String, Int] = Map([]) // 0=unseen,1=visiting,2=done
   fn dfs(k : String, r : IfaceRef) -> Unit raise WitError {
     let st = state.get(k).unwrap_or(0)
     if st == 2 {
@@ -1189,7 +1189,7 @@ fn topo_sort_ifaces(
     keys.push(k)
   }
   keys.sort()
-  let deps_map : Map[String, Array[String]] = {}
+  let deps_map : Map[String, Array[String]] = Map([])
   for k in keys {
     let ds : Array[String] = []
     for d in iface_deps.get(k).unwrap_or([]) {
@@ -1238,8 +1238,8 @@ fn validate_inline_interface_types(
   pkg_key : String,
 ) -> Unit raise WitError {
   // Inline interfaces are validated like normal interfaces, but they don't participate in re-export.
-  let ns : Map[String, Bool] = {}
-  let visible : Map[String, Bool] = {}
+  let ns : Map[String, Bool] = Map([])
+  let visible : Map[String, Bool] = Map([])
   for item in iface.items {
     match item {
       Func(f) => ns.set(f.name, true)
@@ -1322,8 +1322,8 @@ fn validate_world_types(
   iface_type_exports : Map[String, Map[String, Bool]],
   pkgs : Map[String, Package],
 ) -> Unit raise WitError {
-  let ns : Map[String, Bool] = {}
-  let visible : Map[String, Bool] = {}
+  let ns : Map[String, Bool] = Map([])
+  let visible : Map[String, Bool] = Map([])
   for wi in items {
     match wi {
       TypeAlias(t) => {
@@ -1401,7 +1401,7 @@ fn validate_world_types(
 
 ///|
 fn collect_toplevel_aliases(pkg : Package) -> Map[String, UsePath] {
-  let m : Map[String, UsePath] = {}
+  let m : Map[String, UsePath] = Map([])
   for it in pkg.items {
     if it is ToplevelUse(u) {
       let name = match u.as_name {
@@ -1592,7 +1592,7 @@ fn find_last_code_unit(s : String, cu : Int) -> Int? {
 
 ///|
 fn slice_ascii(s : String, start : Int, end : Int) -> String {
-  let sb = StringBuilder::new()
+  let sb = StringBuilder::StringBuilder()
   let mut i = start
   while i < end && i < s.length() {
     sb.write_char(s.code_unit_at(i).to_int().unsafe_to_char())

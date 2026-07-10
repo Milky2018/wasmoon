@@ -2,7 +2,7 @@
 
 ///|
 test "shift: rotl(rotl(x, y), z) = rotl(x, y + z)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let k3 = eg.add_const(3L)
   let k5 = eg.add_const(5L)
@@ -17,7 +17,7 @@ test "shift: rotl(rotl(x, y), z) = rotl(x, y + z)" {
 
 ///|
 test "shift: rotr(rotr(x, y), z) = rotr(x, y + z)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let k2 = eg.add_const(2L)
   let k4 = eg.add_const(4L)
@@ -32,7 +32,7 @@ test "shift: rotr(rotr(x, y), z) = rotr(x, y + z)" {
 
 ///|
 test "shift: rotr(rotl(x, y), z) = rotl(x, y - z)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let k10 = eg.add_const(10L)
   let k3 = eg.add_const(3L)
@@ -47,7 +47,7 @@ test "shift: rotr(rotl(x, y), z) = rotl(x, y - z)" {
 
 ///|
 test "shift: rotl(rotr(x, y), z) = rotr(x, y - z)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let k8 = eg.add_const(8L)
   let k5 = eg.add_const(5L)
@@ -62,7 +62,7 @@ test "shift: rotl(rotr(x, y), z) = rotr(x, y - z)" {
 
 ///|
 test "shift: ishl(x, uextend(y)) = ishl(x, y)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let y_extended = eg.add({ op: Uextend(32, 64), children: [y] })
@@ -75,7 +75,7 @@ test "shift: ishl(x, uextend(y)) = ishl(x, y)" {
 
 ///|
 test "shift: ishl(x, sextend(y)) = ishl(x, y)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let y_extended = eg.add({ op: Sextend(32, 64), children: [y] })
@@ -88,7 +88,7 @@ test "shift: ishl(x, sextend(y)) = ishl(x, y)" {
 
 ///|
 test "shift: ishl(x, ireduce(y)) = ishl(x, y)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let y_reduced = eg.add({ op: Ireduce(64, 32), children: [y] })
@@ -101,7 +101,7 @@ test "shift: ishl(x, ireduce(y)) = ishl(x, y)" {
 
 ///|
 test "shift: ushr(x, uextend(y)) = ushr(x, y)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let y_extended = eg.add({ op: Uextend(32, 64), children: [y] })
@@ -114,7 +114,7 @@ test "shift: ushr(x, uextend(y)) = ushr(x, y)" {
 
 ///|
 test "shift: sshr(x, uextend(y)) = sshr(x, y)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let y_extended = eg.add({ op: Uextend(32, 64), children: [y] })
@@ -127,7 +127,7 @@ test "shift: sshr(x, uextend(y)) = sshr(x, y)" {
 
 ///|
 test "shift: rotl(x, uextend(y)) = rotl(x, y)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let y_extended = eg.add({ op: Uextend(32, 64), children: [y] })
@@ -140,7 +140,7 @@ test "shift: rotl(x, uextend(y)) = rotl(x, y)" {
 
 ///|
 test "shift: rotr(x, uextend(y)) = rotr(x, y)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let y_extended = eg.add({ op: Uextend(32, 64), children: [y] })

@@ -85,7 +85,7 @@ fn c_heap_initial_capacity() -> Int {
 }
 
 ///|
-pub fn Store::new() -> Store {
+pub fn Store::Store() -> Store {
   {
     funcs: [],
     func_types: [],
@@ -97,7 +97,7 @@ pub fn Store::new() -> Store {
     tag_type_indices: [],
     tag_owners: [],
     exns: [],
-    heap: MarkSweepHeap::new(),
+    heap: MarkSweepHeap(),
     c_heap: None,
     module_types: [],
     module_rec_groups: [],
@@ -125,8 +125,8 @@ pub fn Store::with_c_heap() -> Store {
     tag_type_indices: [],
     tag_owners: [],
     exns: [],
-    heap: MarkSweepHeap::new(), // Used only when c_heap is None.
-    c_heap: Some(@wasmoon_jit.CHeap::new(capacity=initial_capacity)),
+    heap: MarkSweepHeap(), // Used only when c_heap is None.
+    c_heap: Some(CHeap(capacity=initial_capacity)),
     module_types: [],
     module_rec_groups: [],
     wrapped_externs: [],
@@ -142,9 +142,7 @@ pub fn Store::with_c_heap() -> Store {
 /// Enable C heap for this store
 pub fn Store::enable_c_heap(self : Store) -> Unit {
   if self.c_heap is None {
-    self.c_heap = Some(
-      @wasmoon_jit.CHeap::new(capacity=c_heap_initial_capacity()),
-    )
+    self.c_heap = Some(CHeap(capacity=c_heap_initial_capacity()))
   }
 }
 
@@ -279,7 +277,7 @@ pub fn Store::alloc_table(
   // Create corresponding JIT table (always enabled for cross-module sharing)
   if use_jit {
     let (min, max) = table.get_limits()
-    let jit_table = @wasmoon_jit.JITTable::new(min, max)
+    let jit_table = @wasmoon_jit.JITTable::try_alloc(min, max)
     self.jit_tables.push(jit_table)
   } else {
     self.jit_tables.push(None)
@@ -679,7 +677,7 @@ pub fn Store::get_func_canonical_type_idx(self : Store, func_addr : Int) -> Int 
 }
 
 ///|
-/// Get WASM function code (for backward compatibility)
+/// Get function code for a store address that is known to refer to a Wasm function.
 pub fn Store::get_func(
   self : Store,
   idx : Int,
@@ -721,7 +719,7 @@ pub fn Store::get_mem(self : Store, idx : Int) -> Memory raise RuntimeError {
 pub fn Store::get_memory(self : Store, idx : Int) -> Memory {
   if idx < 0 || idx >= self.mems.length() {
     // Return a dummy empty memory if not found
-    Memory::new(0, None)
+    Memory(0, None)
   } else {
     self.mems[idx]
   }

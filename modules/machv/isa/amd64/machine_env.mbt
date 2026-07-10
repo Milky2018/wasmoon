@@ -67,7 +67,6 @@ fn allocatable_scratch_fprs() -> Array[@abi.PReg] {
 
 ///|
 pub fn build_machine_env(
-  _settings : @abi.ABISettings,
   reserved_int_regs : Array[Int],
 ) -> @spec.MachineEnvData {
   let preferred_int : Array[@abi.PReg] = []

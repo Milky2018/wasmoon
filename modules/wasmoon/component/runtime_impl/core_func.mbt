@@ -28,7 +28,7 @@ pub fn alloc_host_core_func(
 ///|
 /// Debug-only mapping from `ModuleInstance.store_idx` to a human-readable name.
 /// This helps diagnose which core module traps (e.g. `unreachable`) during component-spec runs.
-let core_instance_names : Map[Int, String] = {}
+let core_instance_names : Map[Int, String] = Map([])
 
 ///|
 /// Best-effort "last interesting action" marker to aid diagnosing core traps that originate

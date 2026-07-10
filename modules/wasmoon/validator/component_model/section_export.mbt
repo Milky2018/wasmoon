@@ -178,7 +178,7 @@ fn validate_component_section_export(
             type_table,
             resource_ids,
             named_types,
-            {},
+            Map([]),
           ) {
           raise SectionParseError(11, "type not valid to be used as export")
         }
@@ -231,7 +231,7 @@ fn validate_component_section_export(
         let inst_idx = e.sortidx.idx
         if inst_idx >= 0 && inst_idx < counts.instance {
           let exported_type_idxs : Array[Int] = []
-          let seen : Map[Int, Int] = {}
+          let seen : Map[Int, Int] = Map([])
           if inst_idx >= 0 && inst_idx < instance_export_type_idxs.length() {
             match instance_export_type_idxs[inst_idx] {
               Some(t_idxs) =>
@@ -278,7 +278,7 @@ fn validate_component_section_export(
               None => ()
             }
           }
-          let inst_named : Map[Int, Int] = {}
+          let inst_named : Map[Int, Int] = Map([])
           for kv in named_types.iter() {
             let (k, v) = kv
             inst_named.set(k, v)
@@ -292,7 +292,7 @@ fn validate_component_section_export(
                 type_table,
                 resource_ids,
                 inst_named,
-                {},
+                Map([]),
               ) {
               raise SectionParseError(
                 11, "instance not valid to be used as export",
@@ -434,7 +434,11 @@ fn validate_component_section_export(
     match (e.sortidx.sort, e.desc) {
       (Instance, Some(InstanceType(tyidx))) =>
         if tyidx >= 0 && tyidx < type_table.length() {
-          let expected = instancetype_sig_of_global_idx(tyidx, type_table, {})
+          let expected = instancetype_sig_of_global_idx(
+            tyidx,
+            type_table,
+            Map([]),
+          )
           let actual = if e.sortidx.idx >= 0 &&
             e.sortidx.idx < instance_sigs.length() {
             instance_sigs[e.sortidx.idx]

@@ -43,7 +43,7 @@ fn run_wast(wast_path : String, use_jit : Bool, show_success : Bool) -> Unit {
   // Run WAST commands with JIT compiler callback
   let base_dir = find_base_dir(wast_path)
   let jit_compiler : @wast.JITCompiler? = if use_jit {
-    Some(@wast.JITCompiler::new(try_compile_jit))
+    Some(JITCompiler(try_compile_jit))
   } else {
     None
   }
@@ -89,8 +89,8 @@ fn remap_index(idx : Int, alias_map : Map[Int, Int]) -> Int {
 
 ///|
 fn build_alias_map(addrs : Array[Int]) -> Map[Int, Int] {
-  let first_idx_by_addr : Map[Int, Int] = {}
-  let alias_map : Map[Int, Int] = {}
+  let first_idx_by_addr : Map[Int, Int] = Map([])
+  let alias_map : Map[Int, Int] = Map([])
   for idx, addr in addrs {
     match first_idx_by_addr.get(addr) {
       Some(first_idx) => if first_idx != idx { alias_map.set(idx, first_idx) }
@@ -558,7 +558,7 @@ fn try_compile_jit(
           for group in lowered_mod.type_rec_groups {
             module_rec_groups_copy.push(group)
           }
-          let jit_ctx = @wast.JITModuleContext::new(
+          let jit_ctx = @wast.JITModuleContext::JITModuleContext(
             jm, globals_ptr, global_addrs_copy, table_addrs_copy, func_addrs_copy,
             func_type_indices_copy, canonical_type_indices_copy, module_types_copy,
             module_rec_groups_copy, use_subtype_indirect_check,

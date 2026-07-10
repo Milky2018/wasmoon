@@ -123,7 +123,12 @@ pub fn run_explore(
     }
 
     let env = @wasmoon.wasm_frontend_embedding_environment()
-    let milk_result = @wasm_frontend.lower_function(env, mod_, local_idx) catch {
+    let milk_result = @wasm_frontend.translate_function(
+      env,
+      mod_,
+      local_idx,
+      name=func_name,
+    ) catch {
       err => {
         let text = "error: \{to_repr(err)}"
         if !html_output {

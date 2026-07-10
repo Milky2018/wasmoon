@@ -246,7 +246,7 @@ pub struct CompileProgress {
 }
 
 ///|
-pub fn CompileProgress::new(
+pub fn CompileProgress::CompileProgress(
   stage : CompileStage,
   total_funcs : Int,
   compiled_funcs : Int,
@@ -278,7 +278,7 @@ fn emit_compile_progress(
   message? : String? = None,
 ) -> Unit {
   on_progress(
-    CompileProgress::new(
+    CompileProgress(
       stage,
       total_funcs,
       compiled_funcs,
@@ -317,7 +317,7 @@ pub fn run_wasm(
   let jit_status = if use_jit { "enabled" } else { "disabled" }
   @logger.debug("JIT: \{jit_status}")
   // Create linker for module linking
-  let linker = @runtime.Linker::new()
+  let linker = @runtime.Linker::Linker()
 
   // Parse WASI options
   let mut inherit_env = false
@@ -346,14 +346,14 @@ pub fn run_wasm(
 
   // Build WASI context with directory mappings and environment variables
   // Also collect preopens and env for JIT mode
-  let wasi_builder = @wasi.WasiContextBuilder::new()
+  let wasi_builder = @wasi.WasiContextBuilder::WasiContextBuilder()
   // argv[0] is the basename of the wasm file (like wasmtime), followed by wasm_args
   let program_name = get_basename(wasm_path)
   let wasi_args = [program_name] + wasm_args
   wasi_builder.args(wasi_args) |> ignore
   let jit_preopens : Array[(String, String)] = []
   let jit_envs : Array[String] = []
-  let explicit_env_keys : Map[String, Bool] = {}
+  let explicit_env_keys : Map[String, Bool] = Map([])
   for dir in dirs {
     let mapping = parse_dir_mapping(dir)
     match mapping {
@@ -435,6 +435,13 @@ pub fn run_wasm(
             return
           }
         }
+        validate_module_for_execution(preload_mod) catch {
+          e => {
+            @logger.error("validating preload module '\{name}': \{e}")
+            exit_failure()
+            return
+          }
+        }
         let preload_instance = @executor.instantiate_with_linker(
           linker, name, preload_mod,
         ) catch {
@@ -464,6 +471,13 @@ pub fn run_wasm(
   @logger.debug(
     "Module loaded: \{mod_.codes.length()} functions, \{mod_.imports.length()} imports",
   )
+  validate_module_for_execution(mod_) catch {
+    e => {
+      @logger.error("validating main module: \{e}")
+      exit_failure()
+      return
+    }
+  }
   // Instantiate the main module
   // Note: instantiate_module_with_imports already handles:
   // - Data segment initialization
@@ -591,11 +605,11 @@ fn split_preload(s : String) -> (String, String)? {
     return None
   }
   // Build name and path strings manually
-  let name_builder = StringBuilder::new()
+  let name_builder = StringBuilder::StringBuilder()
   for i in 0..<eq_idx {
     name_builder.write_char(s.code_unit_at(i).unsafe_to_char())
   }
-  let path_builder = StringBuilder::new()
+  let path_builder = StringBuilder::StringBuilder()
   let path_start = eq_idx + 1
   for i in path_start..<s.length() {
     path_builder.write_char(s.code_unit_at(i).unsafe_to_char())
@@ -617,11 +631,11 @@ fn parse_env_var(s : String) -> (String, String)? {
     return None
   }
   // Build name and value strings
-  let name_builder = StringBuilder::new()
+  let name_builder = StringBuilder::StringBuilder()
   for i in 0..<eq_idx {
     name_builder.write_char(s.code_unit_at(i).unsafe_to_char())
   }
-  let value_builder = StringBuilder::new()
+  let value_builder = StringBuilder::StringBuilder()
   let value_start = eq_idx + 1
   for i in value_start..<s.length() {
     value_builder.write_char(s.code_unit_at(i).unsafe_to_char())
@@ -645,11 +659,11 @@ fn parse_wasi_option(s : String) -> (String, String) {
     return (s, "true")
   }
   // Build key and value strings
-  let key_builder = StringBuilder::new()
+  let key_builder = StringBuilder::StringBuilder()
   for i in 0..<eq_idx {
     key_builder.write_char(s.code_unit_at(i).unsafe_to_char())
   }
-  let value_builder = StringBuilder::new()
+  let value_builder = StringBuilder::StringBuilder()
   let value_start = eq_idx + 1
   for i in value_start..<s.length() {
     value_builder.write_char(s.code_unit_at(i).unsafe_to_char())
@@ -681,11 +695,11 @@ fn parse_dir_mapping(s : String) -> (String, String)? {
       return None // Empty host path
     }
     // Build host and guest path strings
-    let host_builder = StringBuilder::new()
+    let host_builder = StringBuilder::StringBuilder()
     for i in 0..<sep_idx {
       host_builder.write_char(s.code_unit_at(i).unsafe_to_char())
     }
-    let guest_builder = StringBuilder::new()
+    let guest_builder = StringBuilder::StringBuilder()
     let guest_start = sep_idx + 2
     for i in guest_start..<len {
       guest_builder.write_char(s.code_unit_at(i).unsafe_to_char())
@@ -979,7 +993,7 @@ fn init_jit_tables(
     jit_tables.push(store.get_jit_table(table_addr))
   }
   // Build store func address -> module func index map
-  let func_addr_to_idx : Map[Int, Int] = {}
+  let func_addr_to_idx : Map[Int, Int] = Map([])
   for i, addr in instance.func_addrs {
     func_addr_to_idx.set(addr, i)
   }
@@ -1179,7 +1193,7 @@ fn run_with_jit(
               return exit_failure()
             }
           }
-          let jit_ctx = @wast.JITModuleContext::new(
+          let jit_ctx = @wast.JITModuleContext::JITModuleContext(
             jm,
             globals_ptr,
             instance.global_addrs,
@@ -1441,7 +1455,7 @@ fn machv_gc_safepoints_to_cwasm(
   let out : Array[@cwasm.GcSafepoint] = []
   for safepoint in safepoints {
     out.push(
-      @cwasm.GcSafepoint::new(
+      GcSafepoint(
         safepoint.code_offset,
         safepoint.live_refs,
         safepoint.metadata,
@@ -1473,9 +1487,9 @@ pub fn compile_module_to_jit(
   let module_tick = if perf_on { Some(@perf.tick_now()) } else { None }
   let target_arch = @wasmoon_jit.host_target_arch()
   let isa = @wasmoon_jit.target_arch_to_isa(target_arch)
-  let precompiled = @cwasm.PrecompiledModule::new(target_arch)
+  let precompiled = @cwasm.PrecompiledModule::PrecompiledModule(target_arch)
   let debug_db : @wasmoon_jit.JITDebugDB? = if dump_on_trap {
-    Some(@wasmoon_jit.JITDebugDB::new())
+    Some(JITDebugDB())
   } else {
     None
   }
@@ -1534,7 +1548,7 @@ pub fn compile_module_to_jit(
       )
     }
   }
-  let translation_ctx = @ir.TranslationContext::from_module(
+  let translation_ctx = @wasm_frontend.translation_context_from_module(
     mod_,
     @wasmoon.wasm_frontend_embedding_environment(),
     memory_max_override=actual_memory_max,
@@ -1576,7 +1590,7 @@ pub fn compile_module_to_jit(
     )
     let normalized_opt_level = normalize_opt_level(opt_level)
     let code = mod_.codes[i]
-    let ir_func = @ir.translate_function_body(
+    let ir_func = @wasm_frontend.translate_function_body(
       translation_ctx,
       func_name,
       func_type,
@@ -1623,17 +1637,14 @@ pub fn compile_module_to_jit(
       func_idx=Some(func_idx),
       func_name=Some(func_name),
     )
-    let call_conv = @wasmoon_jit.wasm_calling_convention(isa~)
-    let roles = @wasmoon_jit.wasm_embedding_reg_roles(isa~)
+    let embedding_abi = @wasmoon_jit.wasm_embedding_abi(isa~)
     let machv_func = @wasm_isa_lower.lower_function(
       ir_func,
       @wasmoon_jit.wasm_context_slots(),
       isa~,
-      embedding_reg_roles=roles,
       num_imports=mod_.imports.length(),
       run_ir_opt=false,
-      embedding_context_layout=Some(@wasmoon_jit.embedding_context_layout()),
-      call_conv_layout=Some(call_conv),
+      embedding_abi=Some(embedding_abi),
       runtime_symbols=@wasmoon_jit.wasm_runtime_symbols(),
       trap_payload_resolver=@wasmoon_jit.wasm_trap_payload,
       use_subtype_indirect_check~,
@@ -1659,9 +1670,7 @@ pub fn compile_module_to_jit(
     let (machv_ra, ra_output) = @machv_regalloc.allocate_registers_backtracking_output_with_isa(
       machv_func,
       isa,
-      @abi.ABISettings::default(),
-      roles,
-      call_conv_layout=Some(call_conv),
+      embedding_abi=Some(embedding_abi),
     )
     if regalloc_tick is Some(tick) {
       @perf.record_stage_us("regalloc", @perf.elapsed_us(tick))
@@ -1694,9 +1703,7 @@ pub fn compile_module_to_jit(
       isa~,
       debug_func_idx=Some(func_idx),
       force_frame_setup=enable_dwarf,
-      embedding_context_layout=Some(@wasmoon_jit.embedding_context_layout()),
-      call_conv_layout=Some(call_conv),
-      embedding_reg_roles=roles,
+      embedding_abi=Some(embedding_abi),
       record_disasm=debug_db is Some(_),
     )
     if emit_tick is Some(tick) {
@@ -1706,7 +1713,9 @@ pub fn compile_module_to_jit(
     if debug_db is Some(_) {
       mc_dump = Some(mc.dump_disasm())
     }
-    let compiled = @wasmoon_jit.CompiledFunction::new(func_name, mc, 0)
+    let compiled = @wasmoon_jit.CompiledFunction::CompiledFunction(
+      func_name, mc, 0,
+    )
     let num_params = func_type.params.length()
     let num_results = func_type.results.length()
     precompiled.add_function(
@@ -1744,7 +1753,7 @@ pub fn compile_module_to_jit(
     if debug_db is Some(db) {
       db.set(
         func_idx,
-        @wasmoon_jit.JITFunctionDebug::new(
+        JITFunctionDebug(
           ir_dump.unwrap_or(""),
           machv_before_dump.unwrap_or(""),
           machv_after_dump.unwrap_or(""),

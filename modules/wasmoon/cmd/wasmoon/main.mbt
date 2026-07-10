@@ -1,4 +1,33 @@
 ///|
+fn clap_parser(
+  prog~ : String,
+  description~ : String,
+  subcmds~ : Map[String, @clap.SubCommand],
+) -> @clap.Parser {
+  { prog, args: Map([]), subcmds, description }
+}
+
+///|
+fn clap_subcommand(
+  help~ : String,
+  args? : Map[String, @clap.Arg] = Map([]),
+  subcmds? : Map[String, @clap.SubCommand] = Map([]),
+) -> @clap.SubCommand {
+  { args, subcmds, help }
+}
+
+///|
+fn clap_simple_value(name : String) -> @clap.SimpleValue {
+  {
+    name,
+    args: HashMap([]),
+    flags: HashMap([]),
+    positional_args: [],
+    subcmd: None,
+  }
+}
+
+///|
 fn main {
   // Define choices for explore stages
   let stage_choices = @hashset.HashSet::from_array([
@@ -11,11 +40,11 @@ fn main {
     "show", "path", "init",
   ])
   let error_format_choices = @hashset.HashSet::from_array(["text", "json"])
-  let parser = @clap.Parser::new(
+  let parser = clap_parser(
     prog="wasmoon",
     description="WebAssembly Runtime in MoonBit",
     subcmds={
-      "run": @clap.SubCommand::new(help="Run a WebAssembly module", args={
+      "run": clap_subcommand(help="Run a WebAssembly module", args={
         "file": @clap.Arg::positional(help="Path to WASM or WAT file"),
         "invoke": @clap.Arg::named(nargs=AtMost(1), help="Function to invoke"),
         "arg": @clap.Arg::named(
@@ -51,7 +80,7 @@ fn main {
           help="Disable JIT compilation (use interpreter)",
         ),
       }),
-      "test": @clap.SubCommand::new(
+      "test": clap_subcommand(
         help="Run WebAssembly test script (.wast format)",
         args={
           "file": @clap.Arg::positional(help="Path to WAST file"),
@@ -63,11 +92,10 @@ fn main {
           ),
         },
       ),
-      "disasm": @clap.SubCommand::new(
-        help="Disassemble WASM file to text format",
-        args={ "file": @clap.Arg::positional(help="Path to WASM file") },
-      ),
-      "component": @clap.SubCommand::new(
+      "disasm": clap_subcommand(help="Disassemble WASM file to text format", args={
+        "file": @clap.Arg::positional(help="Path to WASM file"),
+      }),
+      "component": clap_subcommand(
         help="Parse a WebAssembly component and print a summary",
         args={
           "file": @clap.Arg::positional(help="Path to component file"),
@@ -85,7 +113,7 @@ fn main {
           ),
         },
       ),
-      "component-test": @clap.SubCommand::new(
+      "component-test": clap_subcommand(
         help="Run component-model test script (JSON)",
         args={
           "file": @clap.Arg::positional(help="Path to component test script"),
@@ -96,46 +124,41 @@ fn main {
           ),
         },
       ),
-      "wat": @clap.SubCommand::new(help="Parse WAT file and display as text", args={
+      "wat": clap_subcommand(help="Parse WAT file and display as text", args={
         "file": @clap.Arg::positional(help="Path to WAT file"),
       }),
-      "explore": @clap.SubCommand::new(
-        help="Explore WASM compilation process",
-        args={
-          "file": @clap.Arg::positional(help="Path to WASM or WAT file"),
-          "func": @clap.Arg::named(
-            nargs=AtMost(1),
-            help="Function index to explore (default: 0)",
-          ),
-          "stage": @clap.Arg::named(
-            short='s',
-            nargs=Any,
-            choices=stage_choices,
-            help="Stages to show: source, ir, opt-ir, machv, regalloc, mc, milkir, opt-milkir, machv-mc (default all)",
-          ),
-          "html": @clap.Arg::flag(help="Output HTML report"),
-          "debug": @clap.Arg::flag(short='D', help="Enable debug output"),
-        },
-      ),
-      "settings": @clap.SubCommand::new(
-        help="Display available compiler settings",
-      ),
-      "config": @clap.SubCommand::new(help="Manage configuration", args={
+      "explore": clap_subcommand(help="Explore WASM compilation process", args={
+        "file": @clap.Arg::positional(help="Path to WASM or WAT file"),
+        "func": @clap.Arg::named(
+          nargs=AtMost(1),
+          help="Function index to explore (default: 0)",
+        ),
+        "stage": @clap.Arg::named(
+          short='s',
+          nargs=Any,
+          choices=stage_choices,
+          help="Stages to show: source, ir, opt-ir, machv, regalloc, mc, milkir, opt-milkir, machv-mc (default all)",
+        ),
+        "html": @clap.Arg::flag(help="Output HTML report"),
+        "debug": @clap.Arg::flag(short='D', help="Enable debug output"),
+      }),
+      "settings": clap_subcommand(help="Display available compiler settings"),
+      "config": clap_subcommand(help="Manage configuration", args={
         "action": @clap.Arg::positional(
           choices=config_action_choices,
           help="Action: show, path, init",
         ),
       }),
-      "help": @clap.SubCommand::new(help="Display help message"),
+      "help": clap_subcommand(help="Display help message"),
     },
   )
-  let help_msg = parser.gen_help_message(["wasmoon"], {})
+  let help_msg = parser.gen_help_message(["wasmoon"], Map([]))
   let args = @sys.get_cli_args()
   if args.length() < 2 {
     println(help_msg)
     return
   }
-  let value = @clap.SimpleValue::new("wasmoon")
+  let value = clap_simple_value("wasmoon")
   let cli_args : Array[String] = []
   for i in 1..<args.length() {
     cli_args.push(args[i])

@@ -15,7 +15,7 @@ pub impl Show for ParserError
 
 // Types and methods
 type Parser derive(@debug.Debug)
-pub fn Parser::new(Bytes) -> Self
+pub fn Parser::Parser(Bytes) -> Self
 
 // Type aliases
 

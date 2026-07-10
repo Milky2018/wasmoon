@@ -184,7 +184,7 @@ fn validate_component_section_import(
         let mut func_export_sigs : Map[String, FuncSigShape]? = None
         match type_table[tyidx] {
           Some(td) => {
-            let sig = instancetype_sig_of_typedef(td, type_table, {})
+            let sig = instancetype_sig_of_typedef(td, type_table, Map([]))
             instance_sigs.push(Some(sig))
             if importname_to_string(i.name) is Some(name) {
               my_import_instance_sigs.set(name, sig)
@@ -193,13 +193,13 @@ fn validate_component_section_import(
               InstanceType(decls) => {
                 let local_types : Array[@component.TypeDef] = []
                 let local_resource_ids : Array[Int?] = []
-                let out : Map[String, ExportedTypeInfo] = {}
-                let type_sigs : Map[String, TypeSig] = {}
-                let res : Map[String, Int] = {}
-                let fns : Map[String, FuncSigShape] = {}
+                let out : Map[String, ExportedTypeInfo] = Map([])
+                let type_sigs : Map[String, TypeSig] = Map([])
+                let res : Map[String, Int] = Map([])
+                let fns : Map[String, FuncSigShape] = Map([])
                 let mut any_types = false
                 let mut any_fns = false
-                let visiting : Map[Int, Int] = {}
+                let visiting : Map[Int, Int] = Map([])
                 fn record_type_slot() -> Unit {
                   local_types.push(InstanceTypeEmpty)
                   local_resource_ids.push(None)
@@ -484,7 +484,7 @@ fn validate_component_section_import(
           type_table,
           resource_ids,
           import_named_types,
-          {},
+          Map([]),
         ) {
         raise SectionParseError(10, "type not valid to be used as import")
       }

@@ -16,7 +16,7 @@ pub fn MachVCFG::build(func : @machv.Function) -> MachVCFG {
   let n = blocks.length()
   let preds : Array[Array[Int]] = []
   let succs : Array[Array[Int]] = []
-  let block_id_to_index : Map[Int, Int] = {}
+  let block_id_to_index : Map[Int, Int] = Map([])
 
   // Initialize arrays
   for _ in 0..<n {
@@ -46,7 +46,7 @@ pub fn MachVCFG::build(func : @machv.Function) -> MachVCFG {
 
 ///|
 /// Extract successor block IDs from terminator.
-fn get_terminator_succ_ids(term : @instr.MachVTerminator) -> Array[Int] {
+fn get_terminator_succ_ids(term : @instr.Terminator) -> Array[Int] {
   match term {
     Jump(target, _) => [target]
     Branch(_, then_b, else_b) => [then_b, else_b]

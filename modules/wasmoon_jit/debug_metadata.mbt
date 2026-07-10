@@ -40,7 +40,7 @@ pub struct JITFunctionDebug {
 }
 
 ///|
-pub fn JITFunctionDebug::new(
+pub fn JITFunctionDebug::JITFunctionDebug(
   ir : String,
   machv_before_regalloc : String,
   machv_after_regalloc : String,
@@ -56,7 +56,7 @@ pub struct JITDebugDB {
 }
 
 ///|
-pub fn JITDebugDB::new() -> JITDebugDB {
+pub fn JITDebugDB::JITDebugDB() -> JITDebugDB {
   { entries: Map([]) }
 }
 

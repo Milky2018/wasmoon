@@ -2,7 +2,7 @@
 /// A writable register reference (for instruction destinations)
 pub(all) struct Writable {
   reg : Reg
-}
+} derive(Eq, Debug)
 
 ///|
 fn Writable::to_string(self : Writable) -> String {

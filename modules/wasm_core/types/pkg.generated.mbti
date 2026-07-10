@@ -54,8 +54,6 @@ pub fn compact_show_repr(String) -> String
 
 pub fn compute_canonical_type_indices(Array[SubType], type_rec_groups? : Array[Int]) -> Array[Int]
 
-pub fn extract_func_types(Array[SubType]) -> Array[FuncType]
-
 pub fn func_types_equal(FuncType, FuncType) -> Bool
 
 pub fn func_types_to_subtypes(Array[FuncType]) -> Array[SubType]
@@ -707,6 +705,7 @@ pub(all) struct Module {
   tags : Array[TagType]
   func_names : Map[Int, String]
 } derive(@debug.Debug)
+pub fn Module::Module() -> Self
 pub fn Module::empty() -> Self
 pub fn Module::get_array_type(Self, Int) -> ArrayType
 pub fn Module::get_func_type(Self, Int) -> FuncType
@@ -714,7 +713,6 @@ pub fn Module::get_struct_type(Self, Int) -> StructType
 pub fn Module::is_array_type(Self, Int) -> Bool
 pub fn Module::is_func_type(Self, Int) -> Bool
 pub fn Module::is_struct_type(Self, Int) -> Bool
-pub fn Module::new() -> Self
 pub fn Module::simple(Array[ValueType], Array[ValueType], Array[Instruction], String) -> Self
 pub impl Show for Module
 

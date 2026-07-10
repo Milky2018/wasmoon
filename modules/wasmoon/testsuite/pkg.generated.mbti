@@ -96,11 +96,11 @@ pub struct TestContext {
   mut current_module : @runtime.ModuleInstance?
   named_modules : Map[String, @runtime.ModuleInstance]
 }
+pub fn TestContext::TestContext() -> Self
 pub fn TestContext::get_current_module(Self) -> @runtime.ModuleInstance?
 pub fn TestContext::get_global(Self, String?, String) -> @types.Value raise
 pub fn TestContext::invoke(Self, String?, String, Array[@types.Value]) -> Array[@types.Value] raise
 pub fn TestContext::load_module(Self, Bytes, String?) -> @runtime.ModuleInstance raise
-pub fn TestContext::new() -> Self
 pub fn TestContext::set_current_module(Self, @runtime.ModuleInstance) -> Unit
 
 pub(all) struct TestResult {
@@ -111,10 +111,10 @@ pub(all) struct TestResult {
   skip_reasons : Array[String]
   mut source_filename : String?
 } derive(@debug.Debug)
+pub fn TestResult::TestResult() -> Self
 pub fn TestResult::add_failed(Self, String) -> Unit
 pub fn TestResult::add_passed(Self) -> Unit
 pub fn TestResult::add_skipped(Self, String) -> Unit
-pub fn TestResult::new() -> Self
 
 pub struct TestValue {
   type_ : String

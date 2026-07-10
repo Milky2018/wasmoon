@@ -37,7 +37,7 @@ pub fn SubtypingContext::same_module(
     canonical1: canonical,
     canonical2: canonical,
     cross_module: false,
-    visited: {},
+    visited: Map([]),
   }
 }
 
@@ -59,7 +59,7 @@ pub fn SubtypingContext::cross_module(
     canonical1,
     canonical2,
     cross_module: true,
-    visited: {},
+    visited: Map([]),
   }
 }
 

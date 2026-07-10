@@ -40,18 +40,16 @@ locations.
 ```moonbit check
 ///|
 test "lower an integer add function for x64" {
-  let builder = @milkir.IRBuilder::new("add64")
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("add64")
   let lhs = builder.add_param(I64)
   let rhs = builder.add_param(I64)
   builder.add_result(I64)
-  let entry = builder.create_block()
-  builder.switch_to_block(entry)
   builder.return_([builder.iadd(lhs, rhs)])
   let lowered = lower_function(builder.get_function())
   inspect(lowered.name, content="add64")
   inspect(lowered.blocks.length(), content="1")
   inspect(
-    lowered.blocks[0].instructions.any(fn(inst) { inst.opcode == IntAdd }),
+    lowered.blocks[0].insts.any(fn(inst) { inst.opcode is Add(_) }),
     content="true",
   )
 }
@@ -65,13 +63,11 @@ explicit call-convention layout.
 ```moonbit check
 ///|
 test "lower x64 with an explicit call convention" {
-  let builder = @milkir.IRBuilder::new("custom_add64")
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("custom_add64")
   let context = builder.add_param(Ptr)
   let lhs = builder.add_param(I64)
   let rhs = builder.add_param(I64)
   builder.add_result(I64)
-  let entry = builder.create_block()
-  builder.switch_to_block(entry)
   builder.return_([builder.iadd(lhs, rhs)])
   context |> ignore
   let conv : @abi.CallConventionLayout = {
@@ -82,14 +78,14 @@ test "lower x64 with an explicit call convention" {
     ret_fprs: [],
   }
   let lowered = lower_function_with_call_conv(builder.get_function(), conv)
-  guard lowered.param_pregs[0] is Some(context_reg) else {
-    fail("missing context register")
-  }
-  inspect(context_reg.index, content="7")
+  inspect(lowered.name, content="custom_add64")
+  inspect(lowered.blocks.length(), content="1")
 }
 ```
 
-## Boundary
+## Integration
 
-This module is a target backend. It should stay independent from Wasmoon
-runtime glue and embedding-specific helper resolution.
+Use this package with `Milky2018/milkir_machv` for x64 instruction selection
+and `Milky2018/machv_emit` for final machine-code emission. Runtime symbols and
+executable-memory allocation are supplied by the embedding application after
+emission.

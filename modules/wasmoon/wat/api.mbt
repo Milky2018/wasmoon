@@ -1,5 +1,5 @@
 ///|
-/// Public WAT parser API compatibility layer.
+/// Public WAT parser API facade.
 ///
 /// Implementation lives in `Milky2018/wasmoon/wat/parser_impl`.
 

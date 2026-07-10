@@ -26,7 +26,7 @@ pub impl Show for ModuleInstance with fn output(self, logger) {
 }
 
 ///|
-pub fn ModuleInstance::new() -> ModuleInstance {
+pub fn ModuleInstance::ModuleInstance() -> ModuleInstance {
   {
     types: [],
     type_rec_groups: [],

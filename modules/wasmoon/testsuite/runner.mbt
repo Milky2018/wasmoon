@@ -90,7 +90,7 @@ pub(all) struct TestResult {
 } derive(Debug)
 
 ///|
-pub fn TestResult::new() -> TestResult {
+pub fn TestResult::TestResult() -> TestResult {
   {
     passed: 0,
     failed: 0,
@@ -132,7 +132,7 @@ pub fn TestResult::add_skipped(self : TestResult, reason : String) -> Unit {
 ///|
 /// Convert Bytes to String (UTF-8)
 fn bytes_to_string(bytes : Bytes) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder::StringBuilder()
   for i in 0..<bytes.length() {
     buf.write_char(bytes[i].to_int().unsafe_to_char())
   }
@@ -606,9 +606,9 @@ pub fn run_json_tests(
   read_file_fn : (String) -> Bytes raise Error,
 ) -> TestResult raise TestRunnerError {
   let parsed = parse_json_test_file(json_content)
-  let result = TestResult::new()
+  let result = TestResult::TestResult()
   result.source_filename = parsed.source_filename
-  let ctx = TestContext::new()
+  let ctx = TestContext::TestContext()
   for cmd in parsed.commands {
     run_test_command_with_line(ctx, cmd, result, base_dir, read_file_fn)
   }

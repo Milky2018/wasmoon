@@ -76,97 +76,91 @@ fn lower_extension_with_options(
   options : WasmLoweringOptions,
   ctx : @lower.LoweringContext,
   inst : @milkir.Inst,
-  block : @block.MachVBlock,
+  block : @block.Block,
   ext : @milkir.ExtOp,
-) -> Bool {
-  match @wasm_milkir.decode(ext) {
-    Some(LoadMemBase(memidx)) =>
+) -> @lower.ExtensionLowerResult {
+  match @wasm_milkir.decode_or_abort(ext) {
+    StructNew(type_idx) =>
+      return Handled(lower_struct_new(ctx, inst, block, type_idx))
+    ArrayNewFixed(type_idx, len) =>
+      return Handled(lower_array_new_fixed(ctx, inst, block, type_idx, len))
+    LoadMemBase(memidx) =>
       lower_load_mem_base(ctx, inst, block, memidx, options.context_slots)
-    Some(MemoryGrow(_))
-    | Some(MemorySize(_))
-    | Some(MemoryFill(_))
-    | Some(MemoryCopy(_, _))
-    | Some(MemoryInit(_, _))
-    | Some(DataDrop(_))
-    | Some(TableGrow(_))
-    | Some(TableFill(_))
-    | Some(TableCopy(_, _))
-    | Some(TableInit(_, _))
-    | Some(ElemDrop(_)) =>
-      @lower.lower_unsupported_extension_opcode(inst, block)
-    Some(WasmCall(func_idx)) => lower_call(ctx, inst, block, func_idx)
-    Some(WasmCallIndirect(type_idx, table_idx)) =>
+    MemoryGrow(_)
+    | MemorySize(_)
+    | MemoryFill(_)
+    | MemoryCopy(_, _)
+    | MemoryInit(_, _)
+    | DataDrop(_)
+    | TableGrow(_)
+    | TableFill(_)
+    | TableCopy(_, _)
+    | TableInit(_, _)
+    | ElemDrop(_) => @lower.lower_unsupported_extension_opcode(inst, block)
+    WasmCall(func_idx) => lower_call(ctx, inst, block, func_idx)
+    WasmCallIndirect(type_idx, table_idx) =>
       lower_call_indirect(ctx, inst, block, type_idx, table_idx, options)
-    Some(CallRef(type_idx)) => lower_call_ref(ctx, inst, block, type_idx)
-    Some(ReturnCall(func_idx)) => lower_return_call(ctx, inst, block, func_idx)
-    Some(ReturnCallIndirect(type_idx, table_idx)) =>
+    CallRef(type_idx) => lower_call_ref(ctx, inst, block, type_idx)
+    ReturnCall(func_idx) => lower_return_call(ctx, inst, block, func_idx)
+    ReturnCallIndirect(type_idx, table_idx) =>
       lower_return_call_indirect(ctx, inst, block, type_idx, table_idx, options)
-    Some(ReturnCallRef(type_idx)) =>
-      lower_return_call_ref(ctx, inst, block, type_idx)
-    Some(GetFuncRef(func_idx)) =>
+    ReturnCallRef(type_idx) => lower_return_call_ref(ctx, inst, block, type_idx)
+    GetFuncRef(func_idx) =>
       lower_get_func_ref(ctx, inst, block, func_idx, options.context_slots)
-    Some(I31New) => lower_i31_new(ctx, inst, block)
-    Some(I31GetS) => lower_i31_get_s(ctx, inst, block)
-    Some(I31GetU) => lower_i31_get_u(ctx, inst, block)
-    Some(AnyConvertExtern) | Some(ExternConvertAny) =>
-      lower_gc_convert(ctx, inst, block)
-    Some(StructNew(type_idx)) => lower_struct_new(ctx, inst, block, type_idx)
-    Some(StructNewDefault(type_idx)) =>
+    I31New => lower_i31_new(ctx, inst, block)
+    I31GetS => lower_i31_get_s(ctx, inst, block)
+    I31GetU => lower_i31_get_u(ctx, inst, block)
+    AnyConvertExtern | ExternConvertAny => lower_gc_convert(ctx, inst, block)
+    StructNewDefault(type_idx) =>
       lower_struct_new_default(ctx, inst, block, type_idx)
-    Some(StructGet(type_idx, field_idx)) =>
+    StructGet(type_idx, field_idx) =>
       lower_struct_get(ctx, inst, block, type_idx, field_idx)
-    Some(StructGetS(type_idx, field_idx, byte_width)) =>
+    StructGetS(type_idx, field_idx, byte_width) =>
       lower_struct_get_s(ctx, inst, block, type_idx, field_idx, byte_width)
-    Some(StructGetU(type_idx, field_idx, byte_width)) =>
+    StructGetU(type_idx, field_idx, byte_width) =>
       lower_struct_get_u(ctx, inst, block, type_idx, field_idx, byte_width)
-    Some(StructSet(type_idx, field_idx)) =>
+    StructSet(type_idx, field_idx) =>
       lower_struct_set(ctx, inst, block, type_idx, field_idx)
-    Some(ArrayNew(type_idx)) => lower_array_new(ctx, inst, block, type_idx)
-    Some(ArrayNewDefault(type_idx)) =>
+    ArrayNew(type_idx) => lower_array_new(ctx, inst, block, type_idx)
+    ArrayNewDefault(type_idx) =>
       lower_array_new_default(ctx, inst, block, type_idx)
-    Some(ArrayNewFixed(type_idx, len)) =>
-      lower_array_new_fixed(ctx, inst, block, type_idx, len)
-    Some(ArrayGet(type_idx)) => lower_array_get(ctx, inst, block, type_idx)
-    Some(ArrayGetS(type_idx, byte_width)) =>
+    ArrayGet(type_idx) => lower_array_get(ctx, inst, block, type_idx)
+    ArrayGetS(type_idx, byte_width) =>
       lower_array_get_s(ctx, inst, block, type_idx, byte_width)
-    Some(ArrayGetU(type_idx, byte_width)) =>
+    ArrayGetU(type_idx, byte_width) =>
       lower_array_get_u(ctx, inst, block, type_idx, byte_width)
-    Some(ArraySet(type_idx)) => lower_array_set(ctx, inst, block, type_idx)
-    Some(ArrayLen) => lower_array_len(ctx, inst, block)
-    Some(ArrayFill(type_idx)) => lower_array_fill(ctx, inst, block, type_idx)
-    Some(ArrayCopy(dst_type, src_type)) =>
+    ArraySet(type_idx) => lower_array_set(ctx, inst, block, type_idx)
+    ArrayLen => lower_array_len(ctx, inst, block)
+    ArrayFill(type_idx) => lower_array_fill(ctx, inst, block, type_idx)
+    ArrayCopy(dst_type, src_type) =>
       lower_array_copy(ctx, inst, block, dst_type, src_type)
-    Some(ArrayNewData(type_idx, data_idx)) =>
+    ArrayNewData(type_idx, data_idx) =>
       lower_array_new_data(ctx, inst, block, type_idx, data_idx)
-    Some(ArrayNewElem(type_idx, elem_idx)) =>
+    ArrayNewElem(type_idx, elem_idx) =>
       lower_array_new_elem(ctx, inst, block, type_idx, elem_idx)
-    Some(ArrayInitData(type_idx, data_idx)) =>
+    ArrayInitData(type_idx, data_idx) =>
       lower_array_init_data(ctx, inst, block, type_idx, data_idx)
-    Some(ArrayInitElem(type_idx, elem_idx)) =>
+    ArrayInitElem(type_idx, elem_idx) =>
       lower_array_init_elem(ctx, inst, block, type_idx, elem_idx)
-    Some(RefTest(type_idx, nullable)) =>
+    RefTest(type_idx, nullable) =>
       lower_ref_test(ctx, inst, block, type_idx, nullable)
-    Some(RefCast(type_idx, nullable)) =>
+    RefCast(type_idx, nullable) =>
       lower_ref_cast(ctx, inst, block, type_idx, nullable)
-    Some(RefEq) => lower_ref_eq(ctx, inst, block)
-    Some(Throw(tag_idx)) => lower_throw(ctx, inst, block, tag_idx)
-    Some(ThrowRef) => lower_throw_ref(ctx, inst, block)
-    Some(TryTableBegin(handler_id)) =>
+    RefEq => lower_ref_eq(ctx, inst, block)
+    Throw(tag_idx) => lower_throw(ctx, inst, block, tag_idx)
+    ThrowRef => lower_throw_ref(ctx, inst, block)
+    TryTableBegin(handler_id) =>
       lower_try_table_begin(ctx, inst, block, handler_id)
-    Some(TryTableEnd(handler_id)) =>
-      lower_try_table_end(ctx, inst, block, handler_id)
-    Some(GetExceptionTag) => lower_get_exception_tag(ctx, inst, block)
-    Some(GetExceptionValue(idx)) =>
-      lower_get_exception_value(ctx, inst, block, idx)
-    Some(GetExceptionValueCount) =>
-      lower_get_exception_value_count(ctx, inst, block)
-    Some(Delegate(depth)) => lower_delegate(ctx, inst, block, depth)
-    Some(SpillLocalsForThrow(count)) =>
+    TryTableEnd(handler_id) => lower_try_table_end(ctx, inst, block, handler_id)
+    GetExceptionTag => lower_get_exception_tag(ctx, inst, block)
+    GetExceptionValue(idx) => lower_get_exception_value(ctx, inst, block, idx)
+    GetExceptionValueCount => lower_get_exception_value_count(ctx, inst, block)
+    Delegate(depth) => lower_delegate(ctx, inst, block, depth)
+    SpillLocalsForThrow(count) =>
       lower_spill_locals_for_throw(ctx, inst, block, count)
-    Some(GetSpilledLocal(idx)) => lower_get_spilled_local(ctx, inst, block, idx)
-    None => return false
+    GetSpilledLocal(idx) => lower_get_spilled_local(ctx, inst, block, idx)
   }
-  true
+  Handled(block)
 }
 
 ///|
@@ -174,10 +168,7 @@ pub fn lower_function(
   func : @milkir.Function,
   context_slots : WasmContextSlots,
   isa? : @isa.ISA = AArch64,
-  abi_settings? : @abi.ABISettings = @abi.ABISettings::default(),
-  embedding_reg_roles? : @abi.EmbeddingRegRoles = @abi.EmbeddingRegRoles::none(),
-  embedding_context_layout? : @abi.EmbeddingContextLayout? = None,
-  call_conv_layout? : @abi.CallConventionLayout? = None,
+  embedding_abi? : @abi.EmbeddingABI? = None,
   runtime_symbols? : @wasm_milkir.RuntimeSymbols = @wasm_milkir.RuntimeSymbols::with_runtime_prefix(
     "wasm.runtime",
   ),
@@ -195,18 +186,15 @@ pub fn lower_function(
   fn lower_extension(
     ctx : @lower.LoweringContext,
     inst : @milkir.Inst,
-    block : @block.MachVBlock,
+    block : @block.Block,
     ext : @milkir.ExtOp,
-  ) -> Bool {
+  ) -> @lower.ExtensionLowerResult {
     lower_extension_with_options(options, ctx, inst, block, ext)
   }
   @lower.lower_function(
     func,
     isa~,
-    abi_settings~,
-    embedding_reg_roles~,
-    embedding_context_layout~,
-    call_conv_layout~,
+    embedding_abi~,
     external_helper_symbols=external_helper_symbols(runtime_symbols),
     trap_payload_resolver~,
     extension_lowerer=Some(lower_extension),

@@ -30,3 +30,18 @@ pub fn wasm_embedding_reg_roles(
 ) -> @abi.EmbeddingRegRoles {
   wasm_embedding_reg_roles_for_isa(isa)
 }
+
+///|
+/// Complete Wasmoon embedding ABI contract for reusable MachV/MilkIR stages.
+pub fn wasm_embedding_abi_for_isa(isa : @isa.ISA) -> @abi.EmbeddingABI {
+  EmbeddingABI(
+    wasm_calling_convention_for_isa(isa),
+    reg_roles=wasm_embedding_reg_roles_for_isa(isa),
+    context_layout=Some(embedding_context_layout()),
+  )
+}
+
+///|
+pub fn wasm_embedding_abi(isa? : @isa.ISA = AArch64) -> @abi.EmbeddingABI {
+  wasm_embedding_abi_for_isa(isa)
+}

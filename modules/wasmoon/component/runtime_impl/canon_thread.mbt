@@ -789,7 +789,7 @@ fn instantiate_canon_thread_new_indirect(
     init_task_meta(
       async_state, thread_task_id, owner_component_id, root_task_id,
     )
-    let per_task : Map[Int, Int] = {}
+    let per_task : Map[Int, Int] = Map([])
     per_task.set(owner_component_id, id)
     async_state.task_thread.set(thread_task_id, per_task)
 

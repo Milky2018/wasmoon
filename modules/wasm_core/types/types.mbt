@@ -154,20 +154,6 @@ pub fn func_types_to_subtypes(func_types : Array[FuncType]) -> Array[SubType] {
 }
 
 ///|
-/// Extract FuncTypes from an array of SubType (for backwards compatibility)
-/// Non-function types are replaced with empty function types
-pub fn extract_func_types(subtypes : Array[SubType]) -> Array[FuncType] {
-  let result : Array[FuncType] = []
-  for subtype in subtypes {
-    match subtype.composite {
-      Func(ft) => result.push(ft)
-      _ => result.push({ params: [], results: [] }) // placeholder
-    }
-  }
-  result
-}
-
-///|
 /// Runtime values
 pub(all) enum Value {
   I32(Int)
@@ -1167,7 +1153,7 @@ fn should_emit_show_space(last_sig : Char?, next_char : Char) -> Bool {
 
 ///|
 pub fn compact_show_repr(text : String) -> String {
-  let out = StringBuilder::new()
+  let out = StringBuilder::StringBuilder()
   let mut in_string = false
   let mut escaped = false
   let mut pending_space = false
@@ -1312,7 +1298,7 @@ pub fn Module::empty() -> Module {
     codes: [],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
 }
 
@@ -1340,7 +1326,7 @@ pub fn Module::simple(
     codes: [{ locals: [], body }],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
 }
 
@@ -1403,7 +1389,7 @@ pub fn Module::is_array_type(self : Module, idx : Int) -> Bool {
 
 ///|
 /// Create an empty module
-pub fn Module::new() -> Module {
+pub fn Module::Module() -> Module {
   {
     types: [],
     type_rec_groups: [],
@@ -1418,13 +1404,13 @@ pub fn Module::new() -> Module {
     codes: [],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
 }
 
 ///|
 test "parse empty module" {
-  let mod = Module::new()
+  let mod = Module::Module()
   inspect(mod.types.length(), content="0")
   inspect(mod.funcs.length(), content="0")
   inspect(@debug.to_string(mod.start), content="None")

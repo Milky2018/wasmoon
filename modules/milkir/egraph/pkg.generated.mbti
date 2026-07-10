@@ -37,6 +37,7 @@ pub(all) struct EClassId(Int) derive(Compare, Eq, Hash, @debug.Debug)
 pub impl Show for EClassId
 
 type EGraph
+pub fn EGraph::EGraph() -> Self
 pub fn EGraph::add(Self, ENode) -> EClassId
 pub fn EGraph::add_add(Self, EClassId, EClassId) -> EClassId
 pub fn EGraph::add_and(Self, EClassId, EClassId) -> EClassId
@@ -110,7 +111,6 @@ pub fn EGraph::last_matches_limit_hits(Self) -> Int
 pub fn EGraph::last_rule_applications(Self) -> Int
 pub fn EGraph::mark_rematerializable(Self, EClassId) -> Bool
 pub fn EGraph::merge(Self, EClassId, EClassId) -> EClassId
-pub fn EGraph::new() -> Self
 pub fn EGraph::num_classes(Self) -> Int
 pub fn EGraph::num_nodes(Self) -> Int
 pub fn EGraph::rebuild(Self) -> Unit
@@ -205,10 +205,10 @@ pub struct SaturationLimits {
   matches_limit : Int
   eclass_enode_limit : Int
 } derive(@debug.Debug)
+pub fn SaturationLimits::SaturationLimits(Int, Int) -> Self
 pub fn SaturationLimits::cranelift_default() -> Self
 pub fn SaturationLimits::eclass_enode_limit(Self) -> Int
 pub fn SaturationLimits::matches_limit(Self) -> Int
-pub fn SaturationLimits::new(Int, Int) -> Self
 
 // Type aliases
 

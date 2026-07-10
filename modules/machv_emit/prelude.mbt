@@ -2,6 +2,16 @@
 // Translates MachV to machine code
 
 ///|
+fn require_embedding_abi(
+  embedding_abi : @abi.EmbeddingABI?,
+) -> @abi.EmbeddingABI {
+  match embedding_abi {
+    Some(abi) => abi
+    None => abort("machv_emit: emission requires an embedding ABI")
+  }
+}
+
+///|
 /// Convert 8 bytes from Bytes at given offset to Int64 (little-endian)
 fn bytes_to_int64_le(bytes : Bytes, offset : Int) -> Int64 {
   let b0 = bytes[offset].to_int64() & 0xFFL
@@ -27,12 +37,11 @@ fn collect_used_callee_saved(
   func : @machv.Function,
   _needs_sret : Bool,
   isa : @isa.ISA,
-  abi_settings : @abi.ABISettings,
 ) -> Array[Int] {
   // ABI: SRET uses a caller-saved register, so no special exclusion needed here.
   let used : @hashset.HashSet[Int] = HashSet([])
   let mut has_calls = false
-  let env = isa.machine_env(settings=abi_settings)
+  let env = isa.machine_env()
   let callee_saved_int : @hashset.HashSet[Int] = HashSet([])
   for r in env.callee_saved_int {
     callee_saved_int.add(r.index)
@@ -81,10 +90,9 @@ fn collect_used_callee_saved(
 fn collect_used_callee_saved_fprs(
   func : @machv.Function,
   isa : @isa.ISA,
-  abi_settings : @abi.ABISettings,
 ) -> Array[Int] {
   let used : @hashset.HashSet[Int] = HashSet([])
-  let env = isa.machine_env(settings=abi_settings)
+  let env = isa.machine_env()
   let callee_saved_fprs : @hashset.HashSet[Int] = HashSet([])
   for r in env.callee_saved_float {
     callee_saved_fprs.add(r.index)
@@ -158,7 +166,7 @@ fn func_uses_context_reg(func : @machv.Function, context_reg : Int) -> Bool {
 
 ///|
 fn terminator_uses_context_reg(
-  term : @instr.MachVTerminator,
+  term : @instr.Terminator,
   context_reg : Int,
 ) -> Bool {
   match term {
@@ -308,7 +316,6 @@ fn MachineCode::emit_prologue(
   params : Array[@abi.VReg],
   param_pregs : Array[@abi.PReg?],
   debug_func_idx : Int?,
-  abi_settings : @abi.ABISettings,
 ) -> Unit {
   if self.isa is AMD64 {
     let isa = self.isa
@@ -372,7 +379,7 @@ fn MachineCode::emit_prologue(
 
     // Cache embedding context and optional context-derived pointers.
     if stack_frame.needs_context_reg {
-      if !abi_settings.enable_pinned_reg {
+      if !stack_frame.require_embedding_abi().reserve_context_role {
         abort("unpinned embedding context ABI not implemented yet")
       }
       let call_conv = stack_frame.require_call_conv_layout()
@@ -686,7 +693,7 @@ fn MachineCode::emit_prologue(
 
   // Step 5: Cache the embedding context when needed.
   if stack_frame.needs_context_reg {
-    if !abi_settings.enable_pinned_reg {
+    if !stack_frame.require_embedding_abi().reserve_context_role {
       abort("unpinned embedding context ABI not implemented yet")
     }
     let context = stack_frame.context_reg_index()
@@ -781,27 +788,27 @@ pub fn emit_function(
   isa? : @isa.ISA = AArch64,
   debug_func_idx? : Int? = None,
   force_frame_setup? : Bool = false,
-  abi_settings? : @abi.ABISettings = @abi.ABISettings::default(),
-  embedding_context_layout? : @abi.EmbeddingContextLayout? = None,
-  call_conv_layout? : @abi.CallConventionLayout? = None,
-  embedding_reg_roles? : @abi.EmbeddingRegRoles = @abi.EmbeddingRegRoles::none(),
+  embedding_abi? : @abi.EmbeddingABI? = None,
   record_disasm? : Bool = true,
 ) -> MachineCode {
   // Optimize block layout for better branch prediction
   // Loop rotation makes back edges fall through, reducing taken branches
   let func = @layout.optimize_layout(func)
-  let mc = MachineCode::new(isa~, record_disasm~)
-  // ABI: Check if we need SRET (more than 8 int or 8 float returns)
-  let needs_sret = func.needs_extra_results_ptr()
-  // Check if we call functions that return more than register capacity
-  // In that case, we need to allocate a local buffer and use X8 (SRET) to point to it
-  let calls_multi_value = func.calls_multi_value_function()
+  let mc = MachineCode::MachineCode(isa~, record_disasm~)
+  let embedding_abi = require_embedding_abi(embedding_abi)
+  let call_conv_layout = embedding_abi.call_conv
+  // ABI: check if this function or one of its calls needs the embedding's
+  // extra-results pointer according to the selected call convention.
+  let needs_sret = func.needs_extra_results_ptr_for_call_conv(call_conv_layout)
+  let calls_multi_value = func.calls_multi_value_function_for_call_conv(
+    call_conv_layout,
+  )
   // We need SRET if either we return multi-value OR we call multi-value functions
   let uses_sret = needs_sret || calls_multi_value
   // Collect callee-saved GPRs that this function clobbers
-  let clobbered = collect_used_callee_saved(func, uses_sret, isa, abi_settings)
+  let clobbered = collect_used_callee_saved(func, uses_sret, isa)
   // Collect callee-saved FPRs (D8-D15) that this function clobbers
-  let clobbered_fprs = collect_used_callee_saved_fprs(func, isa, abi_settings)
+  let clobbered_fprs = collect_used_callee_saved_fprs(func, isa)
 
   // Build stack frame layout using EmitStackFrame
   // has_calls is true if function makes any calls
@@ -810,9 +817,9 @@ pub fn emit_function(
   let uses_context_cache_0_source = func.uses_context_cache_0_source()
   let cache_context_0 = func.should_reserve_context_cache_0()
   let cache_context_1 = func.should_reserve_context_cache_1()
-  let context_reg = embedding_reg_roles.context
+  let context_reg = embedding_abi.reg_roles.context
 
-  let force_context_reg_cache = abi_settings.enable_pinned_reg &&
+  let force_context_reg_cache = embedding_abi.reserve_context_role &&
     isa is AMD64 &&
     context_reg is Some(_)
   let needs_context_reg = force_context_reg_cache ||
@@ -821,12 +828,12 @@ pub fn emit_function(
     uses_context_cache_0_source
   let clobbered_gprs = clobbered
   if cache_context_0 &&
-    embedding_reg_roles.context_cache_0 is Some(cache) &&
+    embedding_abi.reg_roles.context_cache_0 is Some(cache) &&
     !clobbered_gprs.contains(cache.index) {
     clobbered_gprs.push(cache.index)
   }
   if cache_context_1 &&
-    embedding_reg_roles.context_cache_1 is Some(cache) &&
+    embedding_abi.reg_roles.context_cache_1 is Some(cache) &&
     !clobbered_gprs.contains(cache.index) {
     clobbered_gprs.push(cache.index)
   }
@@ -848,11 +855,8 @@ pub fn emit_function(
     cache_context_1~,
     force_frame_setup~,
     has_incoming_stack_args~,
-    embedding_context_layout~,
-    call_conv_layout~,
-    embedding_reg_roles~,
+    embedding_abi=Some(embedding_abi),
     isa~,
-    abi_settings~,
   )
   if needs_debug_idx_restore {
     mc.set_debug_prev_func_idx_spill_offset(
@@ -866,7 +870,6 @@ pub fn emit_function(
     func.get_params(),
     func.get_param_pregs(),
     debug_func_idx,
-    abi_settings,
   )
 
   // Emit function body (blocks now in optimized order)
@@ -896,7 +899,7 @@ pub fn emit_function(
   let live_in_int : Array[Int64] = Array::make(nblocks, 0L)
   let use_int : Array[Int64] = Array::make(nblocks, 0L)
   let def_int : Array[Int64] = Array::make(nblocks, 0L)
-  let id_to_idx : Map[Int, Int] = {}
+  let id_to_idx : Map[Int, Int] = Map([])
   for bi, b in blocks {
     id_to_idx.set(b.id, bi)
   }
@@ -1288,10 +1291,9 @@ fn collect_used_callee_saved_from_output(
   func : @machv.Function,
   output : @machv_regalloc.Output,
   isa : @isa.ISA,
-  abi_settings : @abi.ABISettings,
 ) -> Array[Int] {
   let used : Array[Bool] = Array::make(128, false)
-  let env = isa.machine_env(settings=abi_settings)
+  let env = isa.machine_env()
   let callee_saved_int : Array[Bool] = Array::make(128, false)
   for r in env.callee_saved_int {
     if r.index >= 0 && r.index < callee_saved_int.length() {
@@ -1364,10 +1366,9 @@ fn collect_used_callee_saved_fprs_from_output(
   func : @machv.Function,
   output : @machv_regalloc.Output,
   isa : @isa.ISA,
-  abi_settings : @abi.ABISettings,
 ) -> Array[Int] {
   let used : Array[Bool] = Array::make(128, false)
-  let env = isa.machine_env(settings=abi_settings)
+  let env = isa.machine_env()
   let callee_saved_fprs : Array[Bool] = Array::make(128, false)
   for r in env.callee_saved_float {
     if r.index >= 0 && r.index < callee_saved_fprs.length() {
@@ -1443,7 +1444,7 @@ fn invalidate_edit_slot_cache_reg(
 ///|
 fn invalidate_edit_slot_cache_defs(
   slot_cache : Map[Int, @abi.PReg],
-  inst : @instr.MachVInst,
+  inst : @instr.Inst,
 ) -> Unit {
   for def in inst.defs {
     if def.reg is Physical(preg) {
@@ -1485,7 +1486,7 @@ fn emit_edit_move_with_cache(
         (Reg(src), Reg(dst)) => {
           let dst_preg : @abi.PReg = { index: dst.index, class }
           invalidate_edit_slot_cache_reg(slot_cache, dst_preg)
-          let inst = @instr.MachVInst::new(Move)
+          let inst = @instr.Inst(Move)
           inst.add_def({ reg: Physical(dst_preg) })
           inst.add_use(Physical({ index: src.index, class }))
           mc.emit_instruction(inst, stack_frame)
@@ -1494,14 +1495,14 @@ fn emit_edit_move_with_cache(
           let dst_preg : @abi.PReg = { index: dst.index, class }
           invalidate_edit_slot_cache_reg(slot_cache, dst_preg)
           invalidate_edit_slot_cache_range(slot_cache, slot, class)
-          let inst = @instr.MachVInst::new(StackLoad(slot * 8))
+          let inst = @instr.Inst(StackLoad(slot * 8))
           inst.add_def({ reg: Physical(dst_preg) })
           mc.emit_instruction(inst, stack_frame)
         }
         (Reg(src), Spill(slot)) => {
           let src_preg : @abi.PReg = { index: src.index, class }
           invalidate_edit_slot_cache_range(slot_cache, slot, class)
-          let inst = @instr.MachVInst::new(StackStore(slot * 8))
+          let inst = @instr.Inst(StackStore(slot * 8))
           inst.add_use(Physical(src_preg))
           mc.emit_instruction(inst, stack_frame)
         }
@@ -1517,9 +1518,9 @@ fn emit_edit_move_with_cache(
 fn map_inst_for_emission(
   block_id : Int,
   inst_idx : Int,
-  inst : @instr.MachVInst,
+  inst : @instr.Inst,
   output : @machv_regalloc.Output,
-) -> @instr.MachVInst {
+) -> @instr.Inst {
   for di in 0..<inst.defs.length() {
     match output.inst_def_loc(block_id, inst_idx, false, di) {
       Reg(preg) => inst.defs[di] = { reg: Physical(preg) }
@@ -1539,9 +1540,9 @@ fn map_inst_for_emission(
 fn map_term_for_emission(
   block_id : Int,
   term_inst : Int,
-  term : @instr.MachVTerminator,
+  term : @instr.Terminator,
   output : @machv_regalloc.Output,
-) -> @instr.MachVTerminator {
+) -> @instr.Terminator {
   // Jump and Trap don't consume vregs in the emitter.
   match term {
     Jump(_, _) | Trap(_) => term
@@ -1602,7 +1603,6 @@ fn MachineCode::emit_prologue_with_output(
   params : Array[@abi.VReg],
   output : @machv_regalloc.Output,
   debug_func_idx : Int?,
-  abi_settings : @abi.ABISettings,
 ) -> Unit {
   if self.isa is AMD64 {
     let isa = self.isa
@@ -1616,9 +1616,7 @@ fn MachineCode::emit_prologue_with_output(
     for _ in 0..<params.length() {
       dummy_param_pregs.push(None)
     }
-    self.emit_prologue(
-      stack_frame, params, dummy_param_pregs, debug_func_idx, abi_settings,
-    )
+    self.emit_prologue(stack_frame, params, dummy_param_pregs, debug_func_idx)
     let call_conv = stack_frame.require_call_conv_layout()
     let user_gprs = call_conv.user_arg_gprs
     let float_regs = call_conv.arg_fprs
@@ -1855,9 +1853,7 @@ fn MachineCode::emit_prologue_with_output(
   for _ in 0..<params.length() {
     dummy_param_pregs.push(None)
   }
-  self.emit_prologue(
-    stack_frame, params, dummy_param_pregs, debug_func_idx, abi_settings,
-  )
+  self.emit_prologue(stack_frame, params, dummy_param_pregs, debug_func_idx)
 
   // Store spilled params from incoming ABI regs to spill slots.
   let call_conv = stack_frame.require_call_conv_layout()
@@ -2078,32 +2074,28 @@ pub fn emit_function_with_regalloc(
   isa? : @isa.ISA = AArch64,
   debug_func_idx? : Int? = None,
   force_frame_setup? : Bool = false,
-  abi_settings? : @abi.ABISettings = @abi.ABISettings::default(),
-  embedding_context_layout? : @abi.EmbeddingContextLayout? = None,
-  call_conv_layout? : @abi.CallConventionLayout? = None,
-  embedding_reg_roles? : @abi.EmbeddingRegRoles = @abi.EmbeddingRegRoles::none(),
+  embedding_abi? : @abi.EmbeddingABI? = None,
   record_disasm? : Bool = true,
 ) -> MachineCode {
   // Regalloc output carries edge copies as edits keyed by original blocks.
   // Reorder blocks, but do not thread jumps across edge-copy blocks.
   let func = @layout.optimize_layout_preserving_edges(func)
-  let mc = MachineCode::new(isa~, record_disasm~)
+  let mc = MachineCode::MachineCode(isa~, record_disasm~)
   let is_amd64 = isa is AMD64
+  let embedding_abi = require_embedding_abi(embedding_abi)
 
   // Compute clobbers from regalloc output.
-  let clobbered = collect_used_callee_saved_from_output(
-    func, output, isa, abi_settings,
-  )
+  let clobbered = collect_used_callee_saved_from_output(func, output, isa)
   let clobbered_fprs = collect_used_callee_saved_fprs_from_output(
-    func, output, isa, abi_settings,
+    func, output, isa,
   )
   let has_calls = func_has_calls(func)
   let has_incoming_stack_args = func_has_incoming_stack_args(func)
   let uses_context_cache_0_source = func.uses_context_cache_0_source()
   let cache_context_0 = func.should_reserve_context_cache_0()
   let cache_context_1 = func.should_reserve_context_cache_1()
-  let context_reg = embedding_reg_roles.context
-  let force_context_reg_cache = abi_settings.enable_pinned_reg &&
+  let context_reg = embedding_abi.reg_roles.context
+  let force_context_reg_cache = embedding_abi.reserve_context_role &&
     isa is AMD64 &&
     context_reg is Some(_)
   let needs_context_reg = force_context_reg_cache ||
@@ -2116,12 +2108,12 @@ pub fn emit_function_with_regalloc(
     uses_context_cache_0_source
   let clobbered_gprs = clobbered
   if cache_context_0 &&
-    embedding_reg_roles.context_cache_0 is Some(cache) &&
+    embedding_abi.reg_roles.context_cache_0 is Some(cache) &&
     !clobbered_gprs.contains(cache.index) {
     clobbered_gprs.push(cache.index)
   }
   if cache_context_1 &&
-    embedding_reg_roles.context_cache_1 is Some(cache) &&
+    embedding_abi.reg_roles.context_cache_1 is Some(cache) &&
     !clobbered_gprs.contains(cache.index) {
     clobbered_gprs.push(cache.index)
   }
@@ -2143,11 +2135,8 @@ pub fn emit_function_with_regalloc(
     cache_context_1~,
     force_frame_setup~,
     has_incoming_stack_args~,
-    embedding_context_layout~,
-    call_conv_layout~,
-    embedding_reg_roles~,
+    embedding_abi=Some(embedding_abi),
     isa~,
-    abi_settings~,
   )
   if needs_debug_idx_restore {
     mc.set_debug_prev_func_idx_spill_offset(
@@ -2161,7 +2150,6 @@ pub fn emit_function_with_regalloc(
     func.get_params(),
     output,
     debug_func_idx,
-    abi_settings,
   )
 
   // Emit function body.
@@ -2181,7 +2169,7 @@ pub fn emit_function_with_regalloc(
   } else {
     None
   }
-  let edit_slot_cache : Map[Int, @abi.PReg] = {}
+  let edit_slot_cache : Map[Int, @abi.PReg] = Map([])
   fn emit_point_edits(
     mc : MachineCode,
     output : @machv_regalloc.Output,

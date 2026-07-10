@@ -2,7 +2,7 @@
 
 ///|
 /// Check if an opcode has side effects (cannot be eliminated even if dead)
-fn has_side_effects(opcode : @instr.MachVOpcode) -> Bool {
+fn has_side_effects(opcode : @instr.Opcode) -> Bool {
   match opcode {
     // Loads can trap (e.g. guard pages / invalid pointers), so must not be eliminated.
     LoadPtr(_, _)
@@ -17,9 +17,6 @@ fn has_side_effects(opcode : @instr.MachVOpcode) -> Bool {
     | StorePtrNarrowRegOffset(_, _, _, _) => true
     // Conditional helpers may call foreign code on slow paths.
     CallExternalIfI32NeImm(_, _) => true
-    // Inline bump-allocation pseudo-ops may call slow-path helpers.
-    BumpAllocRecordFromStackInline(_, _, _, _)
-    | BumpAllocArrayFromStackInline(_, _, _, _) => true
     // Function calls have side effects
     ReturnCallIndirect(_, _)
     | CallPtr(_, _, _)
@@ -58,12 +55,12 @@ fn regalloc_validation_enabled() -> Bool {
 }
 
 ///|
-fn require_call_conv_layout(
-  layout : @abi.CallConventionLayout?,
-) -> @abi.CallConventionLayout {
-  match layout {
-    Some(call_conv) => call_conv
-    None => abort("call convention layout is required for MachV regalloc")
+fn require_embedding_abi(
+  embedding_abi : @abi.EmbeddingABI?,
+) -> @abi.EmbeddingABI {
+  match embedding_abi {
+    Some(abi) => abi
+    None => abort("embedding ABI is required for MachV regalloc")
   }
 }
 
@@ -169,10 +166,7 @@ pub fn eliminate_dead_code(func : @machv.Function) -> @machv.Function {
   }
 
   // Step 2: Build new function without dead instructions
-  let new_func = @machv.Function::new(func.name)
-  new_func.next_vreg_id = func.next_vreg_id
-  new_func.int_stack_params = func.int_stack_params
-  new_func.max_outgoing_args_size = func.max_outgoing_args_size
+  let new_func = func.clone_base()
 
   // Copy params and results
   for param in func.params {
@@ -234,8 +228,7 @@ pub fn eliminate_dead_code(func : @machv.Function) -> @machv.Function {
 fn build_reg_pools(
   isa : @isa.ISA,
   func : @machv.Function,
-  settings : @abi.ABISettings,
-  embedding_reg_roles : @abi.EmbeddingRegRoles,
+  embedding_abi : @abi.EmbeddingABI,
 ) -> (
   Array[@abi.PReg],
   Array[@abi.PReg],
@@ -243,18 +236,21 @@ fn build_reg_pools(
   Array[@abi.PReg],
   Array[@abi.PReg],
 ) {
-  let calls_multi = func.calls_multi_value_function()
-  let needs_extra = func.needs_extra_results_ptr()
+  let calls_multi = func.calls_multi_value_function_for_call_conv(
+    embedding_abi.call_conv,
+  )
+  let needs_extra = func.needs_extra_results_ptr_for_call_conv(
+    embedding_abi.call_conv,
+  )
   let reserve_extra_results_ptr = needs_extra || calls_multi
-  let reserved_int_regs = embedding_reg_roles.reserved_int_indices(
-    reserve_context=settings.enable_pinned_reg,
+  let reserved_int_regs = embedding_abi.reserved_int_indices(
     reserve_context_cache_0=func.should_reserve_context_cache_0(),
     reserve_context_cache_1=func.should_reserve_context_cache_1(),
     reserve_extra_results_ptr~,
   )
 
   // Build MachineEnv (Cranelift-inspired) and derive pools.
-  let env = isa.machine_env(settings~, reserved_int_regs~)
+  let env = isa.machine_env(reserved_int_regs~)
   let int_regs : Array[@abi.PReg] = []
   for r in env.preferred_int {
     int_regs.push(r)
@@ -324,17 +320,9 @@ fn build_reg_pools(
 /// `regalloc`.
 pub fn allocate_registers_backtracking(
   func : @machv.Function,
-  settings? : @abi.ABISettings = @abi.ABISettings::default(),
-  embedding_reg_roles? : @abi.EmbeddingRegRoles = @abi.EmbeddingRegRoles::none(),
-  call_conv_layout? : @abi.CallConventionLayout? = None,
+  embedding_abi? : @abi.EmbeddingABI? = None,
 ) -> @machv.Function {
-  allocate_registers_backtracking_with_isa(
-    func,
-    AArch64,
-    settings,
-    embedding_reg_roles,
-    call_conv_layout~,
-  )
+  allocate_registers_backtracking_with_isa(func, AArch64, embedding_abi~)
 }
 
 ///|
@@ -342,15 +330,14 @@ pub fn allocate_registers_backtracking(
 pub fn allocate_registers_backtracking_with_isa(
   func : @machv.Function,
   isa : @isa.ISA,
-  settings : @abi.ABISettings,
-  embedding_reg_roles : @abi.EmbeddingRegRoles,
-  call_conv_layout? : @abi.CallConventionLayout? = None,
+  embedding_abi? : @abi.EmbeddingABI? = None,
 ) -> @machv.Function {
   // Keep Cranelift-style cheap rematerialization before allocation to shorten
   // cross-block live ranges for constants/function pointers.
   let func = rematerialize_long_distance_constants(func)
   let func = rematerialize_cross_block_constants(func)
   let func = eliminate_dead_code(func)
+  let embedding_abi = require_embedding_abi(embedding_abi)
 
   // Build register pools
   let (
@@ -359,12 +346,11 @@ pub fn allocate_registers_backtracking_with_isa(
     vector_regs,
     callee_saved_int_regs,
     callee_saved_float_regs,
-  ) = build_reg_pools(isa, func, settings, embedding_reg_roles)
+  ) = build_reg_pools(isa, func, embedding_abi)
 
   // Compute liveness (Phase 1)
   let liveness = compute_liveness_for_regalloc(func)
   let algorithm = selected_regalloc_algorithm()
-  let call_conv_layout = require_call_conv_layout(call_conv_layout)
 
   // Delegate allocator-core decisions to regalloc through the MachV adapter.
   let alloc_result = allocate_backtracking(
@@ -375,28 +361,17 @@ pub fn allocate_registers_backtracking_with_isa(
     vector_regs,
     callee_saved_int_regs,
     callee_saved_float_regs,
-    call_conv_layout,
-    embedding_reg_roles,
+    embedding_abi,
     algorithm~,
   )
 
   // Optional safety net (Cranelift-like checker), enabled in CI/perf profiles.
   if regalloc_validation_enabled() {
-    verify_allocation(
-      func,
-      liveness,
-      alloc_result,
-      isa,
-      call_conv_layout,
-      settings~,
-      embedding_reg_roles~,
-    )
+    verify_allocation(func, liveness, alloc_result, isa, embedding_abi)
   }
 
   // Apply allocation
-  apply_allocation(
-    func, alloc_result, isa, call_conv_layout, settings, embedding_reg_roles,
-  )
+  apply_allocation(func, alloc_result, isa, embedding_abi)
 }
 
 ///|
@@ -407,17 +382,9 @@ pub fn allocate_registers_backtracking_with_isa(
 /// allocations on the fly.
 pub fn allocate_registers_backtracking_output(
   func : @machv.Function,
-  settings? : @abi.ABISettings = @abi.ABISettings::default(),
-  embedding_reg_roles? : @abi.EmbeddingRegRoles = @abi.EmbeddingRegRoles::none(),
-  call_conv_layout? : @abi.CallConventionLayout? = None,
+  embedding_abi? : @abi.EmbeddingABI? = None,
 ) -> (@machv.Function, Output) {
-  allocate_registers_backtracking_output_with_isa(
-    func,
-    AArch64,
-    settings,
-    embedding_reg_roles,
-    call_conv_layout~,
-  )
+  allocate_registers_backtracking_output_with_isa(func, AArch64, embedding_abi~)
 }
 
 ///|
@@ -426,15 +393,14 @@ pub fn allocate_registers_backtracking_output(
 pub fn allocate_registers_backtracking_output_with_isa(
   func : @machv.Function,
   isa : @isa.ISA,
-  settings : @abi.ABISettings,
-  embedding_reg_roles : @abi.EmbeddingRegRoles,
-  call_conv_layout? : @abi.CallConventionLayout? = None,
+  embedding_abi? : @abi.EmbeddingABI? = None,
 ) -> (@machv.Function, Output) {
   // Keep Cranelift-style cheap rematerialization before allocation to shorten
   // cross-block live ranges for constants/function pointers.
   let func = rematerialize_long_distance_constants(func)
   let func = rematerialize_cross_block_constants(func)
   let func = eliminate_dead_code(func)
+  let embedding_abi = require_embedding_abi(embedding_abi)
 
   // Build register pools.
   let (
@@ -443,14 +409,13 @@ pub fn allocate_registers_backtracking_output_with_isa(
     vector_regs,
     callee_saved_int_regs,
     callee_saved_float_regs,
-  ) = build_reg_pools(isa, func, settings, embedding_reg_roles)
+  ) = build_reg_pools(isa, func, embedding_abi)
 
   // Compute liveness (Phase 1).
   let perf_on = perf_enabled()
   let tick_liveness = if perf_on { Some(perf_tick_now()) } else { None }
   let liveness = compute_liveness_for_regalloc(func)
   let algorithm = selected_regalloc_algorithm()
-  let call_conv_layout = require_call_conv_layout(call_conv_layout)
   if tick_liveness is Some(tick) {
     perf_record_regalloc_phase_us(
       "phase_compute_liveness",
@@ -467,30 +432,19 @@ pub fn allocate_registers_backtracking_output_with_isa(
     vector_regs,
     callee_saved_int_regs,
     callee_saved_float_regs,
-    call_conv_layout,
-    embedding_reg_roles,
+    embedding_abi,
     param_precolor_strict=true,
     algorithm~,
   )
 
   // Optional safety net (Cranelift-like checker), enabled in CI/perf profiles.
   if regalloc_validation_enabled() {
-    verify_allocation(
-      func,
-      liveness,
-      alloc_result,
-      isa,
-      call_conv_layout,
-      settings~,
-      embedding_reg_roles~,
-    )
+    verify_allocation(func, liveness, alloc_result, isa, embedding_abi)
   }
 
   // Build output (allocs + edits). MachV remains in terms of vregs.
   let tick_output = if perf_on { Some(perf_tick_now()) } else { None }
-  let output = build_output(
-    func, liveness, alloc_result, isa, settings, embedding_reg_roles,
-  )
+  let output = build_output(func, liveness, alloc_result, isa, embedding_abi)
   if tick_output is Some(tick) {
     perf_record_regalloc_phase_us("phase_build_output", perf_elapsed_us(tick))
   }
@@ -554,26 +508,24 @@ fn count_instructions(func : @machv.Function) -> AllocStats {
 pub fn get_alloc_stats(
   func : @machv.Function,
   isa? : @isa.ISA = AArch64,
-  settings? : @abi.ABISettings = @abi.ABISettings::default(),
-  embedding_reg_roles? : @abi.EmbeddingRegRoles = @abi.EmbeddingRegRoles::none(),
-  call_conv_layout? : @abi.CallConventionLayout? = None,
+  embedding_abi? : @abi.EmbeddingABI? = None,
 ) -> AllocStats {
   let func = eliminate_dead_code(func)
   let func = rematerialize_cross_block_constants(func)
   let func = eliminate_dead_code(func)
+  let embedding_abi = require_embedding_abi(embedding_abi)
   let (
     int_regs,
     float_regs,
     vector_regs,
     callee_saved_int_regs,
     callee_saved_float_regs,
-  ) = build_reg_pools(isa, func, settings, embedding_reg_roles)
+  ) = build_reg_pools(isa, func, embedding_abi)
   let liveness = compute_liveness(func)
 
   // Count vregs
   let num_vregs = liveness.intervals.length()
   let algorithm = selected_regalloc_algorithm()
-  let call_conv_layout = require_call_conv_layout(call_conv_layout)
   let alloc_result = allocate_backtracking(
     func,
     liveness,
@@ -582,14 +534,11 @@ pub fn get_alloc_stats(
     vector_regs,
     callee_saved_int_regs,
     callee_saved_float_regs,
-    call_conv_layout,
-    embedding_reg_roles,
+    embedding_abi,
     algorithm~,
   )
   process_constraints(func, alloc_result)
-  let allocated = apply_allocation(
-    func, alloc_result, isa, call_conv_layout, settings, embedding_reg_roles,
-  )
+  let allocated = apply_allocation(func, alloc_result, isa, embedding_abi)
   let stats = count_instructions(allocated)
   stats.num_vregs = num_vregs
   stats.num_spill_slots = alloc_result.num_spill_slots

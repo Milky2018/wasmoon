@@ -69,7 +69,7 @@ pub struct GCStats {
 
 ///|
 /// Create a new empty GC heap
-pub fn MarkSweepHeap::new() -> MarkSweepHeap {
+pub fn MarkSweepHeap::MarkSweepHeap() -> MarkSweepHeap {
   {
     objects: [],
     marks: [],

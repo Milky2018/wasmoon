@@ -21,8 +21,8 @@ priv struct PeepholeState {
 }
 
 ///|
-fn PeepholeState::new() -> PeepholeState {
-  { constants: {}, copies: {} }
+fn PeepholeState::PeepholeState() -> PeepholeState {
+  { constants: Map([]), copies: Map([]) }
 }
 
 ///|
@@ -51,7 +51,7 @@ fn same_vreg(r1 : @abi.Reg, r2 : @abi.Reg) -> Bool {
 
 ///|
 /// Collect all used vregs from an instruction (both uses and terminator uses)
-fn collect_uses(inst : @instr.MachVInst, used : @hashset.HashSet[Int]) -> Unit {
+fn collect_uses(inst : @instr.Inst, used : @hashset.HashSet[Int]) -> Unit {
   for use_ in inst.uses {
     if get_vreg_id(use_) is Some(id) {
       used.add(id)
@@ -104,7 +104,7 @@ fn collect_use_counts(func : @machv.Function) -> Array[Int] {
 ///|
 /// Collect uses from terminator
 fn collect_terminator_uses(
-  term : @instr.MachVTerminator,
+  term : @instr.Terminator,
   used : @hashset.HashSet[Int],
 ) -> Unit {
   match term {
@@ -145,7 +145,7 @@ fn collect_terminator_uses(
 ///|
 /// Collect uses from block parameters (values that flow to successor blocks)
 fn collect_block_param_uses(
-  block : @block.MachVBlock,
+  block : @block.Block,
   func : @machv.Function,
   used : @hashset.HashSet[Int],
 ) -> Unit {
@@ -182,7 +182,7 @@ fn collect_block_param_uses(
 /// Run peephole optimization on a single block
 /// Returns the number of instructions eliminated
 fn optimize_block(
-  block : @block.MachVBlock,
+  block : @block.Block,
   func : @machv.Function,
   state : PeepholeState,
   isa : @isa.ISA,
@@ -205,7 +205,7 @@ fn optimize_block(
 
   // Phase 2: Apply peephole optimizations and dead code elimination
   let mut eliminated = 0
-  let new_insts : Array[@instr.MachVInst] = []
+  let new_insts : Array[@instr.Inst] = []
   for inst in block.insts {
     // NOTE: Intra-block DCE requires global liveness analysis.
     // The `used` set only contains uses from THIS block, but a value defined
@@ -233,8 +233,8 @@ fn optimize_block(
 
 ///|
 /// Helper to create a Move instruction with given def and use
-fn make_move(def : @abi.Writable, use_ : @abi.Reg) -> @instr.MachVInst {
-  let new_inst = @instr.MachVInst::new(Move)
+fn make_move(def : @abi.Writable, use_ : @abi.Reg) -> @instr.Inst {
+  let new_inst = @instr.Inst(Move)
   new_inst.add_def(def)
   new_inst.add_use(use_)
   new_inst
@@ -247,8 +247,8 @@ fn make_add_imm(
   is_64 : Bool,
   def : @abi.Writable,
   use_ : @abi.Reg,
-) -> @instr.MachVInst {
-  let new_inst = @instr.MachVInst::new(AddImm(imm, is_64))
+) -> @instr.Inst {
+  let new_inst = @instr.Inst(AddImm(imm, is_64))
   new_inst.add_def(def)
   new_inst.add_use(use_)
   new_inst
@@ -261,8 +261,8 @@ fn make_sub_imm(
   is_64 : Bool,
   def : @abi.Writable,
   use_ : @abi.Reg,
-) -> @instr.MachVInst {
-  let new_inst = @instr.MachVInst::new(SubImm(imm, is_64))
+) -> @instr.Inst {
+  let new_inst = @instr.Inst(SubImm(imm, is_64))
   new_inst.add_def(def)
   new_inst.add_use(use_)
   new_inst
@@ -275,8 +275,8 @@ fn make_shl_imm(
   is_64 : Bool,
   def : @abi.Writable,
   use_ : @abi.Reg,
-) -> @instr.MachVInst {
-  let new_inst = @instr.MachVInst::new(ShlImm(imm, is_64))
+) -> @instr.Inst {
+  let new_inst = @instr.Inst(ShlImm(imm, is_64))
   new_inst.add_def(def)
   new_inst.add_use(use_)
   new_inst
@@ -333,10 +333,10 @@ fn known_const(state : PeepholeState, reg : @abi.Reg) -> Int64? {
 /// Returns None if the instruction should be eliminated
 /// Returns Some(inst) with possibly modified instruction otherwise
 fn optimize_instruction(
-  inst : @instr.MachVInst,
+  inst : @instr.Inst,
   state : PeepholeState,
   isa : @isa.ISA,
-) -> @instr.MachVInst? {
+) -> @instr.Inst? {
   match inst.opcode {
     // AddImm(0) → Move or eliminate
     AddImm(0, _) => {
@@ -378,7 +378,7 @@ fn optimize_instruction(
         // If source is a known constant, replace with LoadConst
         if get_vreg_id(use_) is Some(use_id) &&
           state.constants.get(use_id) is Some(const_val) {
-          let new_inst = @instr.MachVInst::new(LoadConst(const_val))
+          let new_inst = @instr.Inst(LoadConst(const_val))
           new_inst.add_def(def)
           return Some(new_inst)
         }
@@ -479,7 +479,7 @@ fn optimize_instruction(
 
 ///|
 /// Update state based on an instruction's effects
-fn update_state(inst : @instr.MachVInst, state : PeepholeState) -> Unit {
+fn update_state(inst : @instr.Inst, state : PeepholeState) -> Unit {
   match inst.opcode {
     // Track constant loads
     LoadConst(value) =>
@@ -514,14 +514,14 @@ fn update_state(inst : @instr.MachVInst, state : PeepholeState) -> Unit {
 /// Pattern: vA = op ... vB ...; vB = mov vA  →  vB = op ... vB ...
 /// This eliminates redundant moves when the result is only used to update
 /// the same operand.
-fn optimize_inplace_updates(block : @block.MachVBlock) -> Int {
+fn optimize_inplace_updates(block : @block.Block) -> Int {
   let mut eliminated = 0
 
   // Build def-use chains for vregs within this block
   // def_inst[vreg_id] = instruction index that defines it
-  let def_inst : Map[Int, Int] = {}
+  let def_inst : Map[Int, Int] = Map([])
   // use_count[vreg_id] = number of uses within this block
-  let use_count : Map[Int, Int] = {}
+  let use_count : Map[Int, Int] = Map([])
   for i, inst in block.insts {
     // Track definitions
     for def in inst.defs {
@@ -573,7 +573,7 @@ fn optimize_inplace_updates(block : @block.MachVBlock) -> Int {
   // Look for patterns: vA = op ... vB ...; vB = mov vA
   // where vA is only used by the mov AND vB is not used between def and mov
   let to_eliminate : @hashset.HashSet[Int] = HashSet([])
-  let replace_def : Map[Int, Int] = {} // inst_idx -> new_def_vreg_id
+  let replace_def : Map[Int, Int] = Map([]) // inst_idx -> new_def_vreg_id
   for i, inst in block.insts {
     if inst.opcode is Move && inst.defs.length() == 1 && inst.uses.length() == 1 {
       let def_vreg = get_def_vreg_id(inst.defs[0])
@@ -622,7 +622,7 @@ fn optimize_inplace_updates(block : @block.MachVBlock) -> Int {
 
   // Apply transformations if any found
   if eliminated > 0 {
-    let new_insts : Array[@instr.MachVInst] = []
+    let new_insts : Array[@instr.Inst] = []
     for i, inst in block.insts {
       if to_eliminate.contains(i) {
         // Skip this mov instruction
@@ -652,7 +652,7 @@ fn optimize_inplace_updates(block : @block.MachVBlock) -> Int {
 ///|
 /// Check if an instruction is safe for in-place update
 /// (reads operands before writing result)
-fn is_inplace_safe(opcode : @instr.MachVOpcode) -> Bool {
+fn is_inplace_safe(opcode : @instr.Opcode) -> Bool {
   match opcode {
     // Arithmetic operations - all read before write
     Add(_) | Sub(_) | Mul(_) => true
@@ -682,7 +682,7 @@ priv struct MemOpInfo {
 
 ///|
 /// Extract memory operation info from an instruction
-fn get_mem_op_info(inst : @instr.MachVInst) -> MemOpInfo? {
+fn get_mem_op_info(inst : @instr.Inst) -> MemOpInfo? {
   match inst.opcode {
     StorePtrNarrow(bits, offset) =>
       if inst.uses.length() >= 2 {
@@ -748,17 +748,14 @@ fn can_merge_mem_ops(op1 : MemOpInfo, op2 : MemOpInfo) -> Bool {
 /// Merge stores optimization
 /// Pattern: store8 [base+off], val1; store8 [base+off+1], val2
 /// Becomes: combined = (val2 << 8) | val1; store16 [base+off], combined
-fn optimize_store_merging(
-  block : @block.MachVBlock,
-  func : @machv.Function,
-) -> Int {
+fn optimize_store_merging(block : @block.Block, func : @machv.Function) -> Int {
   if block.insts.length() < 2 {
     return 0
   }
 
   // Track which instructions to remove and what to insert
   let to_remove : @hashset.HashSet[Int] = HashSet([])
-  let insertions : Array[(Int, Array[@instr.MachVInst])] = []
+  let insertions : Array[(Int, Array[@instr.Inst])] = []
   let mut merged = 0
 
   // Scan for consecutive store8 pairs
@@ -799,21 +796,21 @@ fn create_merged_store(
   lo : MemOpInfo,
   hi : MemOpInfo,
   new_bits : Int,
-) -> Array[@instr.MachVInst] {
-  let result : Array[@instr.MachVInst] = []
+) -> Array[@instr.Inst] {
+  let result : Array[@instr.Inst] = []
 
   // Use OrShifted to combine: combined = val_lo | (val_hi << 8)
   // OrShifted(Lsl, 8) computes: Rd = Rn | (Rm << 8)
   let combined_vreg = func.new_vreg(Int)
   let shift_amount = lo.bits // Shift by lo.bits (8 for store8->store16)
-  let or_shifted_inst = @instr.MachVInst::new(OrShifted(Lsl, shift_amount))
+  let or_shifted_inst = @instr.Inst(OrShifted(Lsl, shift_amount))
   or_shifted_inst.add_def({ reg: Virtual(combined_vreg) })
   or_shifted_inst.add_use(Virtual({ id: lo.value_vreg_id, class: Int })) // Rn = val_lo
   or_shifted_inst.add_use(Virtual({ id: hi.value_vreg_id, class: Int })) // Rm = val_hi
   result.push(or_shifted_inst)
 
   // Create merged store: store16 [base+off], combined
-  let store_inst = @instr.MachVInst::new(StorePtrNarrow(new_bits, lo.offset))
+  let store_inst = @instr.Inst(StorePtrNarrow(new_bits, lo.offset))
   store_inst.add_use(Virtual({ id: lo.base_vreg_id, class: Int }))
   store_inst.add_use(Virtual(combined_vreg))
   result.push(store_inst)
@@ -825,19 +822,16 @@ fn create_merged_store(
 /// Pattern: val1 = load8 [base+off]; val2 = load8 [base+off+1]
 /// If both values are only used for store8 to same relative offsets:
 /// Becomes: combined = load16 [base+off]; store16 [dst+off], combined
-fn optimize_load_merging(
-  block : @block.MachVBlock,
-  func : @machv.Function,
-) -> Int {
+fn optimize_load_merging(block : @block.Block, func : @machv.Function) -> Int {
   if block.insts.length() < 2 {
     return 0
   }
   let to_remove : @hashset.HashSet[Int] = HashSet([])
-  let insertions : Array[(Int, Array[@instr.MachVInst])] = []
+  let insertions : Array[(Int, Array[@instr.Inst])] = []
   let mut merged = 0
 
   // Build def-use map for this block
-  let def_map : Map[Int, Int] = {} // vreg_id -> instruction index
+  let def_map : Map[Int, Int] = Map([]) // vreg_id -> instruction index
   for i, inst in block.insts {
     for def in inst.defs {
       if get_def_vreg_id(def) is Some(id) {
@@ -884,7 +878,7 @@ fn optimize_load_merging(
 ///|
 /// Find store8 pair that uses the values from load8 pair
 fn find_store_pair_for_loads(
-  block : @block.MachVBlock,
+  block : @block.Block,
   load1 : MemOpInfo,
   load2 : MemOpInfo,
   start_idx : Int,
@@ -917,20 +911,18 @@ fn create_merged_load_store(
   load_info : MemOpInfo,
   dst_base : Int,
   dst_offset : Int,
-) -> Array[@instr.MachVInst] {
-  let result : Array[@instr.MachVInst] = []
+) -> Array[@instr.Inst] {
+  let result : Array[@instr.Inst] = []
 
   // Create merged load: combined = load16u [src_base+off]
   let combined_vreg = func.new_vreg(Int)
-  let load_inst = @instr.MachVInst::new(
-    LoadPtrNarrow(16, false, load_info.offset),
-  )
+  let load_inst = @instr.Inst(LoadPtrNarrow(16, false, load_info.offset))
   load_inst.add_def({ reg: Virtual(combined_vreg) })
   load_inst.add_use(Virtual({ id: load_info.base_vreg_id, class: Int }))
   result.push(load_inst)
 
   // Create merged store: store16 [dst_base+off], combined
-  let store_inst = @instr.MachVInst::new(StorePtrNarrow(16, dst_offset))
+  let store_inst = @instr.Inst(StorePtrNarrow(16, dst_offset))
   store_inst.add_use(Virtual({ id: dst_base, class: Int }))
   store_inst.add_use(Virtual(combined_vreg))
   result.push(store_inst)
@@ -941,12 +933,12 @@ fn create_merged_load_store(
 /// Load-store forwarding optimization
 /// Pattern: store [base+off], val; ... ; load [base+off] (no intervening store)
 /// Becomes: store [base+off], val; mov result, val
-fn optimize_load_store_forwarding(block : @block.MachVBlock) -> Int {
+fn optimize_load_store_forwarding(block : @block.Block) -> Int {
   // Build a map of recent stores: (base_vreg, offset, bits) -> value_vreg
   // Reset when we see a potentially aliasing store
-  let store_map : Map[String, Int] = {} // "base:offset:bits" -> value_vreg_id
+  let store_map : Map[String, Int] = Map([]) // "base:offset:bits" -> value_vreg_id
   let mut forwarded = 0
-  let to_replace : Array[(Int, @instr.MachVInst)] = []
+  let to_replace : Array[(Int, @instr.Inst)] = []
   for i, inst in block.insts {
     match inst.opcode {
       StorePtrNarrow(bits, offset) => {
@@ -978,7 +970,7 @@ fn optimize_load_store_forwarding(block : @block.MachVBlock) -> Int {
               (32, false) => Unsigned32To64
               _ => continue
             }
-            let ext = @instr.MachVInst::new(Extend(kind))
+            let ext = @instr.Inst(Extend(kind))
             ext.add_def(inst.defs[0])
             ext.add_use(Virtual({ id: val_vreg, class: Int }))
             to_replace.push((i, ext))
@@ -1008,14 +1000,14 @@ fn optimize_load_store_forwarding(block : @block.MachVBlock) -> Int {
 ///|
 /// Apply block transformations (remove and insert instructions)
 fn apply_block_transformations(
-  block : @block.MachVBlock,
+  block : @block.Block,
   to_remove : @hashset.HashSet[Int],
-  insertions : Array[(Int, Array[@instr.MachVInst])],
+  insertions : Array[(Int, Array[@instr.Inst])],
 ) -> Unit {
   // Sort insertions by position (descending) to maintain indices
   insertions.sort_by(fn(a, b) { b.0 - a.0 })
-  let new_insts : Array[@instr.MachVInst] = []
-  let insert_map : Map[Int, Array[@instr.MachVInst]] = {}
+  let new_insts : Array[@instr.Inst] = []
+  let insert_map : Map[Int, Array[@instr.Inst]] = Map([])
   for pair in insertions {
     insert_map.set(pair.0, pair.1)
   }
@@ -1039,7 +1031,7 @@ fn apply_block_transformations(
 
 ///|
 /// Build CFG successors for a block
-fn get_successors(term : @instr.MachVTerminator?) -> Array[Int] {
+fn get_successors(term : @instr.Terminator?) -> Array[Int] {
   match term {
     Some(Jump(target, _)) => [target]
     Some(Branch(_, then_b, else_b)) => [then_b, else_b]
@@ -1061,7 +1053,7 @@ fn get_successors(term : @instr.MachVTerminator?) -> Array[Int] {
 ///|
 /// Collect vreg uses from a terminator
 fn collect_terminator_uses_simple(
-  term : @instr.MachVTerminator,
+  term : @instr.Terminator,
   used : @hashset.HashSet[Int],
 ) -> Unit {
   collect_terminator_uses(term, used)

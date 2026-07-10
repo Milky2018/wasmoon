@@ -1379,14 +1379,14 @@ fn parse_mem_arg_tuple(parser : Parser) -> (Int, Int, Int64) raise WatError {
     match parser.current.token {
       Keyword(s) =>
         if s.has_prefix("offset=") {
-          let offset_str = StringBuilder::new()
+          let offset_str = StringBuilder::StringBuilder()
           for i in 7..<s.length() {
             offset_str.write_char(s.code_unit_at(i).unsafe_to_char())
           }
           offset = parse_u64(offset_str.to_string())
           parser.advance()
         } else if s.has_prefix("align=") {
-          let align_str = StringBuilder::new()
+          let align_str = StringBuilder::StringBuilder()
           for i in 6..<s.length() {
             align_str.write_char(s.code_unit_at(i).unsafe_to_char())
           }
@@ -1450,7 +1450,7 @@ fn parse_mem_arg(
     match parser.current.token {
       Keyword(s) =>
         if s.has_prefix("offset=") {
-          let offset_str = StringBuilder::new()
+          let offset_str = StringBuilder::StringBuilder()
           for i in 7..<s.length() {
             offset_str.write_char(s.code_unit_at(i).unsafe_to_char())
           }
@@ -1458,7 +1458,7 @@ fn parse_mem_arg(
           offset = parse_u64(offset_str.to_string())
           parser.advance()
         } else if s.has_prefix("align=") {
-          let align_str = StringBuilder::new()
+          let align_str = StringBuilder::StringBuilder()
           for i in 6..<s.length() {
             align_str.write_char(s.code_unit_at(i).unsafe_to_char())
           }

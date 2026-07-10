@@ -17,8 +17,8 @@ pub(all) struct CallCounter {
 }
 
 ///|
-pub fn CallCounter::new() -> CallCounter {
-  { counts: {}, total_calls: 0 }
+pub fn CallCounter::CallCounter() -> CallCounter {
+  { counts: Map([]), total_calls: 0 }
 }
 
 ///|
@@ -155,9 +155,9 @@ pub(all) struct Profiler {
 }
 
 ///|
-pub fn Profiler::new(threshold : HotThreshold) -> Profiler {
+pub fn Profiler::Profiler(threshold : HotThreshold) -> Profiler {
   {
-    counter: CallCounter::new(),
+    counter: CallCounter(),
     threshold,
     hot_functions: HashSet([]),
     pending_compilation: HashSet([]),

@@ -83,41 +83,43 @@ fn backtracking_move_loc_to_machv(
 ///
 /// - Backtracking: Ion-style backtracking + eviction/splitting (better codegen).
 /// - SinglePass: no eviction/backtracking, spills earlier (faster compile).
-pub type RegallocAlgorithm = @regalloc.RegallocAlgorithm
+pub type RegallocAlgorithm = @backtracking.RegallocAlgorithm
 
 ///|
-type OrderedSpan = @regalloc.OrderedSpan[ProgPoint]
+type OrderedSpan = @backtracking.OrderedSpan[ProgPoint]
 
 ///|
-type MergeSpan = @regalloc.MergeSpan[ProgPointRange]
+type MergeSpan = @backtracking.MergeSpan[ProgPointRange]
 
 ///|
-type SpillSetInfo = @regalloc.SpillSetInfo[
+type SpillSetInfo = @backtracking.SpillSetInfo[
   @abi.RegClass,
   ProgPointRange,
   ProgPoint,
 ]
 
 ///|
-type BacktrackingAllocationLoc = @regalloc.BacktrackingAllocationLoc[@abi.PReg]
-
-///|
-type BacktrackingConstraintOperand = @regalloc.BacktrackingConstraintOperand[
+type BacktrackingAllocationLoc = @backtracking.BacktrackingAllocationLoc[
   @abi.PReg,
 ]
 
 ///|
-type BacktrackingFixedConstraint = @regalloc.BacktrackingFixedConstraint[
+type BacktrackingConstraintOperand = @backtracking.BacktrackingConstraintOperand[
   @abi.PReg,
 ]
 
 ///|
-type BacktrackingFixedConstraintInst = @regalloc.BacktrackingFixedConstraintInst[
+type BacktrackingFixedConstraint = @backtracking.BacktrackingFixedConstraint[
   @abi.PReg,
 ]
 
 ///|
-type BacktrackingMoveLoc = @regalloc.BacktrackingMoveLoc[@abi.PReg]
+type BacktrackingFixedConstraintInst = @backtracking.BacktrackingFixedConstraintInst[
+  @abi.PReg,
+]
+
+///|
+type BacktrackingMoveLoc = @backtracking.BacktrackingMoveLoc[@abi.PReg]
 
 ///|
 /// MachV adapter state for the reusable backtracking allocator core.
@@ -141,14 +143,14 @@ priv struct BacktrackingAllocator {
   bundle_span_cache : Array[Array[OrderedSpan]?]
 
   // Priority queue of bundles to process
-  queue : @regalloc.BacktrackingQueue[@abi.PReg]
+  queue : @backtracking.BacktrackingQueue[@abi.PReg]
 
   // Cranelift-style spillset hint: remember last successful preg for an
   // "original" bundle (spillset), and prefer it for split pieces.
-  spillsets : @regalloc.BacktrackingSpillsetState[@abi.PReg]
+  spillsets : @backtracking.BacktrackingSpillsetState[@abi.PReg]
   // Cache fixed-constraint-derived hints per bundle to avoid rescanning
   // all bundle uses on every queue pop.
-  bundle_hint_cache : @regalloc.BacktrackingHintCache[@abi.PReg]
+  bundle_hint_cache : @backtracking.BacktrackingHintCache[@abi.PReg]
 
   // Configuration
   int_regs : Array[@abi.PReg]
@@ -198,16 +200,16 @@ fn max_preg_index(regs : Array[@abi.PReg]) -> Int {
 
 ///|
 fn make_reg_alloc_table(cap : Int) -> Array[Array[(Int, OrderedSpan)]] {
-  @regalloc.make_backtracking_alloc_table(cap)
+  @backtracking.make_backtracking_alloc_table(cap)
 }
 
 ///|
 fn make_bool_table(cap : Int) -> Array[Bool] {
-  @regalloc.make_backtracking_bool_table(cap)
+  @backtracking.make_backtracking_bool_table(cap)
 }
 
 ///|
-fn BacktrackingAllocator::new(
+fn BacktrackingAllocator::BacktrackingAllocator(
   func : @machv.Function,
   ranges : LiveRangeSet,
   bundles : BundleSet,
@@ -292,9 +294,9 @@ fn BacktrackingAllocator::new(
     int_reg_allocs: make_reg_alloc_table(int_max + 1),
     float_reg_allocs: make_reg_alloc_table(float_max + 1),
     bundle_span_cache: Array::make(bundles.length(), None),
-    queue: @regalloc.BacktrackingQueue::new(bundles.length()),
-    spillsets: @regalloc.BacktrackingSpillsetState::new(bundles.length()),
-    bundle_hint_cache: @regalloc.BacktrackingHintCache::new(bundles.length()),
+    queue: BacktrackingQueue(bundles.length()),
+    spillsets: BacktrackingSpillsetState(bundles.length()),
+    bundle_hint_cache: BacktrackingHintCache(bundles.length()),
     int_regs,
     float_regs,
     vector_regs,
@@ -519,7 +521,7 @@ fn BacktrackingAllocator::has_conflict_on_preg_with_spans(
   if occupied.is_empty() || spans.is_empty() {
     return false
   }
-  @regalloc.has_backtracking_span_conflict(spans, occupied)
+  @backtracking.has_backtracking_span_conflict(spans, occupied)
 }
 
 ///|
@@ -598,8 +600,8 @@ fn BacktrackingAllocator::is_reg_free(
 fn BacktrackingAllocator::occupied_spans_for_preg(
   self : BacktrackingAllocator,
   preg : @abi.PReg,
-) -> Array[@regalloc.BacktrackingOccupiedSpan[ProgPoint]] {
-  let projected : Array[@regalloc.BacktrackingOccupiedSpan[ProgPoint]] = []
+) -> Array[@backtracking.BacktrackingOccupiedSpan[ProgPoint]] {
+  let projected : Array[@backtracking.BacktrackingOccupiedSpan[ProgPoint]] = []
   let allocs = self.get_reg_allocs(preg.class)
   if preg.index < 0 || preg.index >= allocs.length() {
     return projected
@@ -723,12 +725,12 @@ fn BacktrackingAllocator::try_allocate(
   let avail_regs = self.get_available_regs(bundle)
   let spans = self.bundle_sorted_spans(bundle)
   let start_inst = if !spans.is_empty() { spans[0].start.inst } else { 0 }
-  let prefer_caller_saved = @regalloc.should_prefer_caller_saved_for_backtracking(
+  let prefer_caller_saved = @backtracking.should_prefer_caller_saved_for_backtracking(
     abi_class_to_regalloc_policy(bundle.reg_class),
     self.enable_backtracking,
     bundle.crosses_call(self.ranges),
   )
-  @regalloc.try_backtracking_single_pass_register(
+  @backtracking.try_backtracking_single_pass_register(
     avail_regs,
     self.caller_saved_regs_for_class(bundle.reg_class),
     self.callee_saved_regs_for_class(bundle.reg_class),
@@ -756,12 +758,12 @@ fn BacktrackingAllocator::try_evict(
 ) -> (@abi.PReg?, (ProgPoint, @abi.PReg)?) {
   let avail_regs = self.get_available_regs(bundle)
   let spans = self.bundle_sorted_spans(bundle)
-  let prefer_caller_saved = @regalloc.should_prefer_caller_saved_for_backtracking(
+  let prefer_caller_saved = @backtracking.should_prefer_caller_saved_for_backtracking(
     abi_class_to_regalloc_policy(bundle.reg_class),
     self.enable_backtracking,
     bundle.crosses_call(self.ranges),
   )
-  let attempt = @regalloc.try_backtracking_eviction_register(
+  let attempt = @backtracking.try_backtracking_eviction_register(
     avail_regs,
     self.caller_saved_regs_for_class(bundle.reg_class),
     self.callee_saved_regs_for_class(bundle.reg_class),
@@ -804,7 +806,7 @@ fn BacktrackingAllocator::split_bundle(
     Some((point, _)) => Some(point)
     None => None
   }
-  let split_ranges : Array[@regalloc.BacktrackingSplitRange[ProgPoint]] = []
+  let split_ranges : Array[@backtracking.BacktrackingSplitRange[ProgPoint]] = []
   for range_id in bundle.range_ids {
     let range = self.ranges.get(range_id)
     split_ranges.push({
@@ -813,7 +815,7 @@ fn BacktrackingAllocator::split_bundle(
       end: range.end(self.block_order),
     })
   }
-  let plan = @regalloc.plan_backtracking_bundle_split(
+  let plan = @backtracking.plan_backtracking_bundle_split(
     split_ranges,
     split_point,
     split_limit_reached,
@@ -850,7 +852,7 @@ fn BacktrackingAllocator::split_bundle(
       let spill_bundle = self.bundles.get_or_create_spill_bundle(bundle)
 
       // Before bundle
-      let before_bundle = Bundle::new(
+      let before_bundle = Bundle::Bundle(
         self.bundles.bundles.length(),
         bundle.reg_class,
       )
@@ -877,7 +879,7 @@ fn BacktrackingAllocator::split_bundle(
       )
 
       // After bundle
-      let after_bundle = Bundle::new(
+      let after_bundle = Bundle::Bundle(
         self.bundles.bundles.length(),
         bundle.reg_class,
       )
@@ -917,7 +919,7 @@ fn BacktrackingAllocator::enqueue_single_range_bundle(
   range_id : Int,
   hint : @abi.PReg?,
 ) -> Unit {
-  let new_bundle = Bundle::new(
+  let new_bundle = Bundle::Bundle(
     self.bundles.bundles.length(),
     source_bundle.reg_class,
   )
@@ -964,7 +966,7 @@ fn BacktrackingAllocator::split_into_minimal_bundles(
 /// Main allocation loop
 fn BacktrackingAllocator::allocate(self : BacktrackingAllocator) -> Unit {
   self.init_queue()
-  @regalloc.run_backtracking_allocation_loop(
+  @backtracking.run_backtracking_allocation_loop(
     self.queue,
     self.bundle_attempts,
     self.bundle_retry_limit,
@@ -975,7 +977,7 @@ fn BacktrackingAllocator::allocate(self : BacktrackingAllocator) -> Unit {
     fn(bundle) { bundle.is_pinned },
     fn(bundle) { bundle.has_fixed_constraint(self.ranges) },
     fn(bundle) {
-      @regalloc.should_force_spill_for_class_and_call(
+      @backtracking.should_force_spill_for_class_and_call(
         abi_class_to_regalloc_policy(bundle.reg_class),
         bundle.crosses_call(self.ranges),
       )
@@ -1096,7 +1098,7 @@ fn BacktrackingAllocator::generate_result(
   // Generate any needed moves for split bundles
   let _moves = self.generate_moves()
   let max_vreg_id = self.func.next_vreg_id
-  let range_results : Array[@regalloc.BacktrackingRangeResult[@abi.PReg]] = []
+  let range_results : Array[@backtracking.BacktrackingRangeResult[@abi.PReg]] = []
   for i in 0..<self.ranges.length() {
     let range = self.ranges.get(i)
     let allocation : BacktrackingAllocationLoc = match range.allocation {
@@ -1115,13 +1117,13 @@ fn BacktrackingAllocator::generate_result(
     }
     range_results.push({ vreg_id: range.vreg.id, allocation })
   }
-  let generic_result = @regalloc.build_backtracking_allocation_result(
+  let generic_result = @backtracking.build_backtracking_allocation_result(
     range_results,
     self.bundles.next_spill_slot,
   )
   let result : RegAllocResult = {
-    assignments: {},
-    spill_slots: {},
+    assignments: Map([]),
+    spill_slots: Map([]),
     num_spill_slots: generic_result.num_spill_slots,
     inst_edits: [],
   }
@@ -1200,12 +1202,12 @@ fn BacktrackingAllocator::generate_result(
           uses,
           defs,
         }
-        let planned = @regalloc.plan_backtracking_fixed_constraint_edits(
+        let planned = @backtracking.plan_backtracking_fixed_constraint_edits(
           [constraint_inst],
           fn(a, b) { a.index == b.index },
         )
         for planned_edits in planned {
-          let edits = InstEdits::new()
+          let edits = InstEdits::InstEdits()
           for mv in planned_edits.before {
             edits.before.push({
               from: backtracking_move_loc_to_machv(mv.from, mv.class_tag),
@@ -1286,7 +1288,7 @@ fn BacktrackingAllocator::compact_spill_slots(
   }
 
   // 1) Build spillsets keyed by the old spill-slot id.
-  let spillsets_by_slot : Map[Int, SpillSetInfo] = {}
+  let spillsets_by_slot : Map[Int, SpillSetInfo] = Map([])
   for vreg_id, old_slot in result.spill_slots {
     let range = match self.ranges.get_by_vreg(vreg_id) {
       Some(r) => r
@@ -1346,8 +1348,8 @@ fn BacktrackingAllocator::compact_spill_slots(
   // distinct spill slots after compaction. Otherwise, compaction can collapse
   // logically distinct values onto one stack location at the jump boundary and
   // break SSA block-arg semantics.
-  let no_share_edges : Array[@regalloc.SpillSlotNoShareEdge] = []
-  let block_id_to_index : Map[Int, Int] = {}
+  let no_share_edges : Array[@planning.SpillSlotNoShareEdge] = []
+  let block_id_to_index : Map[Int, Int] = Map([])
   for i, block in self.func.blocks {
     block_id_to_index.set(block.id, i)
   }
@@ -1384,14 +1386,14 @@ fn BacktrackingAllocator::compact_spill_slots(
   }
 
   // 3) Assign spillsets to a compact set of physical spill slots.
-  let compaction = @regalloc.compact_backtracking_spill_slots(
+  let compaction = @backtracking.compact_backtracking_spill_slots(
     spillsets,
     no_share_edges,
     reserve_abi_spill_slot,
     fn(a, b) { spans_overlap(a, b, self.ranges.block_order) },
     fn(a, b) { a.compare_with_order(b, self.ranges.block_order) },
   )
-  let slot_remap : Map[Int, Int] = {}
+  let slot_remap : Map[Int, Int] = Map([])
   for remap in compaction.remaps {
     slot_remap.set(remap.old_slot, remap.new_slot)
   }
@@ -1537,7 +1539,7 @@ pub fn build_bundles_with_merging(
 
   let tick_init_metadata = if perf_on { Some(perf_tick_now()) } else { None }
   let projected : Array[
-    @regalloc.BundleMergeRange[@abi.RegClass, @abi.PReg, ProgPointRange],
+    @backtracking.BundleMergeRange[@abi.RegClass, @abi.PReg, ProgPointRange],
   ] = []
   for i in 0..<n {
     let range = ranges.get(i)
@@ -1563,14 +1565,14 @@ pub fn build_bundles_with_merging(
   }
 
   let tick_merge_blockargs = if perf_on { Some(perf_tick_now()) } else { None }
-  let merge_edges : Array[@regalloc.BundleMergeEdge] = []
+  let merge_edges : Array[@backtracking.BundleMergeEdge] = []
   for pair in ranges.blockparam_out_pairs {
     let (param_idx, arg_idx) = pair
     if arg_idx != param_idx {
       merge_edges.push({ target: param_idx, source: arg_idx })
     }
   }
-  let plan = @regalloc.plan_bundle_merges(
+  let plan = @backtracking.plan_bundle_merges(
     projected, merge_edges, reg_class_compatible, same_fixed_bank,
   )
   if tick_merge_blockargs is Some(tick) {
@@ -1581,9 +1583,9 @@ pub fn build_bundles_with_merging(
   }
 
   let tick_finalize = if perf_on { Some(perf_tick_now()) } else { None }
-  let result = BundleSet::new()
+  let result = BundleSet::BundleSet()
   for bundle_id in 0..<plan.bundle_roots.length() {
-    let created = Bundle::new(
+    let created = Bundle::Bundle(
       result.bundles.length(),
       plan.bundle_classes[bundle_id],
     )
@@ -1631,12 +1633,12 @@ fn BacktrackingAllocator::force_spill_bundle(
 ///|
 fn BacktrackingAllocator::preassign_params(
   self : BacktrackingAllocator,
-  call_conv_layout : @abi.CallConventionLayout,
-  embedding_reg_roles : @abi.EmbeddingRegRoles,
+  embedding_abi : @abi.EmbeddingABI,
   strict_precolor : Bool,
 ) -> Unit {
+  let call_conv_layout = embedding_abi.call_conv
   let context_arg_preg = call_conv_layout.context_arg
-  let pinned_context_preg = embedding_reg_roles.context.unwrap_or(
+  let pinned_context_preg = embedding_abi.reg_roles.context.unwrap_or(
     context_arg_preg,
   )
   let user_arg_gprs = call_conv_layout.user_arg_gprs
@@ -1779,8 +1781,7 @@ fn allocate_backtracking(
   vector_regs : Array[@abi.PReg],
   callee_saved_int : Array[@abi.PReg],
   callee_saved_float : Array[@abi.PReg],
-  call_conv_layout : @abi.CallConventionLayout,
-  embedding_reg_roles : @abi.EmbeddingRegRoles,
+  embedding_abi : @abi.EmbeddingABI,
   param_precolor_strict? : Bool = true,
   algorithm? : RegallocAlgorithm = Backtracking,
 ) -> RegAllocResult {
@@ -1802,7 +1803,7 @@ fn allocate_backtracking(
 
   // Phase 4: Allocate
   let tick_alloc_new = if perf_on { Some(perf_tick_now()) } else { None }
-  let allocator = BacktrackingAllocator::new(
+  let allocator = BacktrackingAllocator::BacktrackingAllocator(
     func,
     ranges,
     bundles,
@@ -1819,9 +1820,7 @@ fn allocate_backtracking(
 
   // Pre-assign function parameters to ABI registers (before main allocation)
   let tick_preassign = if perf_on { Some(perf_tick_now()) } else { None }
-  allocator.preassign_params(
-    call_conv_layout, embedding_reg_roles, param_precolor_strict,
-  )
+  allocator.preassign_params(embedding_abi, param_precolor_strict)
   if tick_preassign is Some(tick) {
     perf_record_regalloc_phase_us(
       "phase_preassign_params",

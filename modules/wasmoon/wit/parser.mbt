@@ -54,9 +54,9 @@ priv struct Token {
 
 ///|
 pub fn parse_package(src : String) -> Package raise WitError {
-  let lx = Lexer::new(src)
+  let lx = Lexer::Lexer(src)
   let toks = lx.lex_all()
-  let p = Parser::new(toks)
+  let p = Parser::Parser(toks)
   p.parse_package()
 }
 
@@ -69,7 +69,7 @@ priv struct Lexer {
 }
 
 ///|
-fn Lexer::new(src : String) -> Lexer {
+fn Lexer::Lexer(src : String) -> Lexer {
   { src, i: 0, line: 1, col: 1 }
 }
 
@@ -283,7 +283,7 @@ fn Lexer::lex_one(self : Lexer) -> (TokenKind, Int, Int) raise WitError {
 
 ///|
 fn Lexer::lex_ident(self : Lexer) -> String {
-  let sb = StringBuilder::new()
+  let sb = StringBuilder::StringBuilder()
   // First char is known to be a valid ident start.
   let first = self.bump().unwrap_or(0)
   sb.write_char(first.unsafe_to_char())
@@ -317,7 +317,7 @@ fn Lexer::lex_int(self : Lexer) -> Int {
 fn Lexer::lex_string(self : Lexer) -> String raise WitError {
   // Consume opening quote.
   self.bump() |> ignore
-  let sb = StringBuilder::new()
+  let sb = StringBuilder::StringBuilder()
   while true {
     if self.i >= self.src.length() {
       raise Error("unterminated string literal")
@@ -365,7 +365,7 @@ priv struct Parser {
 }
 
 ///|
-fn Parser::new(toks : Array[Token]) -> Parser {
+fn Parser::Parser(toks : Array[Token]) -> Parser {
   { toks, i: 0 }
 }
 
@@ -480,7 +480,7 @@ fn Parser::parse_nested_package(self : Parser) -> Package raise WitError {
 ///|
 fn Parser::parse_package_name(self : Parser) -> String raise WitError {
   // Capture tokens up to '@', ';' or '{' (namespace:path[/path]*).
-  let sb = StringBuilder::new()
+  let sb = StringBuilder::StringBuilder()
   while self.i < self.toks.length() {
     match self.toks[self.i].kind {
       At | Semi | LBrace => break
@@ -509,7 +509,7 @@ fn Parser::parse_package_name(self : Parser) -> String raise WitError {
 ///|
 fn Parser::parse_version(self : Parser) -> String raise WitError {
   // Simple semver-ish capture until ';' or '{' (supports pre-release/build).
-  let sb = StringBuilder::new()
+  let sb = StringBuilder::StringBuilder()
   while self.i < self.toks.length() {
     match self.toks[self.i].kind {
       Semi | LBrace => break
@@ -544,7 +544,7 @@ fn Parser::parse_use_path_until(
   self : Parser,
   stops : Array[TokenKind],
 ) -> UsePath raise WitError {
-  let sb = StringBuilder::new()
+  let sb = StringBuilder::StringBuilder()
   while self.i < self.toks.length() && !self.peek_any(stops) {
     match self.toks[self.i].kind {
       Ident(s) => sb.write_string(s)
@@ -608,7 +608,7 @@ fn Parser::parse_use_item(self : Parser) -> UseItem raise WitError {
 fn Parser::parse_use_path_before_dot_lbrace(
   self : Parser,
 ) -> UsePath raise WitError {
-  let sb = StringBuilder::new()
+  let sb = StringBuilder::StringBuilder()
   while self.i < self.toks.length() {
     if self.peek_kw(Dot) && self.peek_next_is(LBrace) {
       break

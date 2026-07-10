@@ -203,100 +203,6 @@ test "func_types_to_subtypes with multiple types" {
 }
 
 // ============================================================
-// extract_func_types tests
-// ============================================================
-
-///|
-test "extract_func_types with empty array" {
-  let subtypes : Array[SubType] = []
-  let func_types = extract_func_types(subtypes)
-  inspect(func_types.length(), content="0")
-}
-
-///|
-test "extract_func_types with func subtypes" {
-  let subtypes : Array[SubType] = [
-    SubType::func([I32], [I32]),
-    SubType::func([F64, F64], [F64]),
-  ]
-  let func_types = extract_func_types(subtypes)
-  inspect(func_types.length(), content="2")
-  debug_inspect(func_types[0].params, content="[I32]")
-  debug_inspect(func_types[0].results, content="[I32]")
-  debug_inspect(func_types[1].params, content="[F64, F64]")
-  debug_inspect(func_types[1].results, content="[F64]")
-}
-
-///|
-test "extract_func_types with struct subtype returns placeholder" {
-  let struct_type : StructType = {
-    fields: [{ storage_type: Val(I32), mutable: false }],
-  }
-  let subtypes : Array[SubType] = [SubType::simple(Struct(struct_type))]
-  let func_types = extract_func_types(subtypes)
-  inspect(func_types.length(), content="1")
-  // Struct types get empty function placeholder
-  inspect(func_types[0].params.length(), content="0")
-  inspect(func_types[0].results.length(), content="0")
-}
-
-///|
-test "extract_func_types with array subtype returns placeholder" {
-  let array_type : ArrayType = {
-    element: { storage_type: Val(I64), mutable: true },
-  }
-  let subtypes : Array[SubType] = [SubType::simple(Array(array_type))]
-  let func_types = extract_func_types(subtypes)
-  inspect(func_types.length(), content="1")
-  // Array types get empty function placeholder
-  inspect(func_types[0].params.length(), content="0")
-  inspect(func_types[0].results.length(), content="0")
-}
-
-///|
-test "extract_func_types with mixed types" {
-  let struct_type : StructType = { fields: [] }
-  let array_type : ArrayType = {
-    element: { storage_type: Val(I32), mutable: true },
-  }
-  let subtypes : Array[SubType] = [
-    SubType::func([I32], [I32]),
-    SubType::simple(Struct(struct_type)),
-    SubType::func([F64], [F64]),
-    SubType::simple(Array(array_type)),
-  ]
-  let func_types = extract_func_types(subtypes)
-  inspect(func_types.length(), content="4")
-  // Index 0: actual func type
-  debug_inspect(func_types[0].params, content="[I32]")
-  // Index 1: struct placeholder
-  inspect(func_types[1].params.length(), content="0")
-  // Index 2: actual func type
-  debug_inspect(func_types[2].params, content="[F64]")
-  // Index 3: array placeholder
-  inspect(func_types[3].params.length(), content="0")
-}
-
-// ============================================================
-// roundtrip test: func_types_to_subtypes -> extract_func_types
-// ============================================================
-
-///|
-test "roundtrip: func_types -> subtypes -> func_types" {
-  let original : Array[FuncType] = [
-    { params: [], results: [] },
-    { params: [I32, I64], results: [F32] },
-    { params: [F64], results: [I32, I64] },
-  ]
-  let subtypes = func_types_to_subtypes(original)
-  let recovered = extract_func_types(subtypes)
-  inspect(recovered.length(), content="3")
-  for i in 0..<original.length() {
-    inspect(recovered[i] == original[i], content="true")
-  }
-}
-
-// ============================================================
 // GC ValueType tests
 // ============================================================
 
@@ -471,7 +377,7 @@ test "PackedType equality" {
 
 ///|
 test "Module::get_func_type returns correct FuncType" {
-  let mod_ = Module::new()
+  let mod_ = Module::Module()
   mod_.types.push(SubType::func([I32, I32], [I32]))
   mod_.types.push(SubType::func([], [F64]))
   let ft0 = mod_.get_func_type(0)
@@ -484,7 +390,7 @@ test "Module::get_func_type returns correct FuncType" {
 
 ///|
 test "Module::get_struct_type returns correct StructType" {
-  let mod_ = Module::new()
+  let mod_ = Module::Module()
   let struct_type : StructType = {
     fields: [
       { storage_type: Val(I32), mutable: false },
@@ -500,7 +406,7 @@ test "Module::get_struct_type returns correct StructType" {
 
 ///|
 test "Module::get_array_type returns correct ArrayType" {
-  let mod_ = Module::new()
+  let mod_ = Module::Module()
   let array_type : ArrayType = {
     element: { storage_type: Packed(I8), mutable: true },
   }
@@ -512,7 +418,7 @@ test "Module::get_array_type returns correct ArrayType" {
 
 ///|
 test "Module::is_func_type correctly identifies function types" {
-  let mod_ = Module::new()
+  let mod_ = Module::Module()
   let struct_type : StructType = { fields: [] }
   let array_type : ArrayType = {
     element: { storage_type: Val(I32), mutable: true },
@@ -527,7 +433,7 @@ test "Module::is_func_type correctly identifies function types" {
 
 ///|
 test "Module::is_struct_type correctly identifies struct types" {
-  let mod_ = Module::new()
+  let mod_ = Module::Module()
   let struct_type : StructType = { fields: [] }
   let array_type : ArrayType = {
     element: { storage_type: Val(I32), mutable: true },
@@ -542,7 +448,7 @@ test "Module::is_struct_type correctly identifies struct types" {
 
 ///|
 test "Module::is_array_type correctly identifies array types" {
-  let mod_ = Module::new()
+  let mod_ = Module::Module()
   let struct_type : StructType = { fields: [] }
   let array_type : ArrayType = {
     element: { storage_type: Val(I32), mutable: true },
@@ -557,7 +463,7 @@ test "Module::is_array_type correctly identifies array types" {
 
 ///|
 test "Module with mixed type definitions" {
-  let mod_ = Module::new()
+  let mod_ = Module::Module()
   // Add various types
   mod_.types.push(SubType::func([], [])) // 0: void -> void
   mod_.types.push(SubType::func([I32, I32], [I32])) // 1: add signature

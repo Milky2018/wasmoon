@@ -5,7 +5,7 @@ pub(all) struct ProgramPoint {
 } derive(Eq, Debug)
 
 ///|
-pub fn ProgramPoint::new(block : Int, inst : Int) -> ProgramPoint {
+pub fn ProgramPoint::ProgramPoint(block : Int, inst : Int) -> ProgramPoint {
   { block, inst }
 }
 
@@ -43,7 +43,7 @@ pub(all) struct ProgramRange {
 } derive(Eq, Debug)
 
 ///|
-pub fn ProgramRange::new(
+pub fn ProgramRange::ProgramRange(
   start : ProgramPoint,
   end : ProgramPoint,
 ) -> ProgramRange {
@@ -92,7 +92,7 @@ pub(all) struct UsePosition {
 } derive(Eq, Debug)
 
 ///|
-pub fn UsePosition::new(
+pub fn UsePosition::UsePosition(
   point : ProgramPoint,
   kind : UseKind,
   constraint : OperandConstraint,
@@ -106,32 +106,52 @@ pub fn UsePosition::with_tie(self : UsePosition, tie_id : Int) -> UsePosition {
 }
 
 ///|
-pub(all) struct LiveRange {
+struct LiveRange {
   id : Int
   vreg : VirtualReg
   ranges : Array[ProgramRange]
   uses : Array[UsePosition]
-  mut bundle_id : Int
   mut allocation : Location?
-  mut crosses_call : Bool
 } derive(Debug)
 
 ///|
-pub fn LiveRange::new(id : Int, vreg : VirtualReg) -> LiveRange {
-  {
-    id,
-    vreg,
-    ranges: [],
-    uses: [],
-    bundle_id: -1,
-    allocation: None,
-    crosses_call: false,
-  }
+pub fn LiveRange::LiveRange(id : Int, vreg : VirtualReg) -> LiveRange {
+  { id, vreg, ranges: [], uses: [], allocation: None }
+}
+
+///|
+pub fn LiveRange::id(self : LiveRange) -> Int {
+  self.id
+}
+
+///|
+pub fn LiveRange::vreg(self : LiveRange) -> VirtualReg {
+  self.vreg
+}
+
+///|
+pub fn LiveRange::range_count(self : LiveRange) -> Int {
+  self.ranges.length()
+}
+
+///|
+pub fn LiveRange::range_at(self : LiveRange, index : Int) -> ProgramRange? {
+  self.ranges.get(index)
 }
 
 ///|
 pub fn LiveRange::add_range(self : LiveRange, range : ProgramRange) -> Unit {
   self.ranges.push(range)
+}
+
+///|
+pub fn LiveRange::use_count(self : LiveRange) -> Int {
+  self.uses.length()
+}
+
+///|
+pub fn LiveRange::use_at(self : LiveRange, index : Int) -> UsePosition? {
+  self.uses.get(index)
 }
 
 ///|
@@ -151,17 +171,17 @@ pub fn LiveRange::touch_with_order(
   block_order : Array[Int],
 ) -> Unit {
   if self.ranges.length() == 0 {
-    self.ranges.push(ProgramRange::new(point, point))
+    self.ranges.push(ProgramRange(point, point))
     return
   }
   let first = self.ranges[0]
   if point.compare_with_order(first.start, block_order) < 0 {
-    self.ranges[0] = ProgramRange::new(point, first.end)
+    self.ranges[0] = ProgramRange(point, first.end)
   }
   let last_idx = self.ranges.length() - 1
   let last = self.ranges[last_idx]
   if last.end.compare_with_order(point, block_order) < 0 {
-    self.ranges[last_idx] = ProgramRange::new(last.start, point)
+    self.ranges[last_idx] = ProgramRange(last.start, point)
   }
 }
 
@@ -232,7 +252,7 @@ fn earlier_point(
 }
 
 ///|
-fn LiveRange::has_tie_at(
+pub fn LiveRange::has_tie_at(
   self : LiveRange,
   other : LiveRange,
   point : ProgramPoint,
@@ -273,7 +293,7 @@ pub fn LiveRange::overlap_allowed_by_tie(
 }
 
 ///|
-fn LiveRange::is_live_across(
+pub fn LiveRange::is_live_across(
   self : LiveRange,
   point : ProgramPoint,
   block_order : Array[Int],
@@ -325,14 +345,29 @@ pub fn LiveRange::total_length(self : LiveRange) -> Int {
 }
 
 ///|
-pub(all) struct LiveRangeSet {
+struct LiveRangeSet {
   ranges : Array[LiveRange]
   block_order : Array[Int]
 } derive(Debug)
 
 ///|
-pub fn LiveRangeSet::new(block_order : Array[Int]) -> LiveRangeSet {
+pub fn LiveRangeSet::LiveRangeSet(block_order : Array[Int]) -> LiveRangeSet {
   { ranges: [], block_order }
+}
+
+///|
+pub fn LiveRangeSet::block_order_count(self : LiveRangeSet) -> Int {
+  self.block_order.length()
+}
+
+///|
+pub fn LiveRangeSet::block_order(self : LiveRangeSet) -> Array[Int] {
+  self.block_order.copy()
+}
+
+///|
+pub fn LiveRangeSet::block_order_at(self : LiveRangeSet, index : Int) -> Int? {
+  self.block_order.get(index)
 }
 
 ///|
@@ -380,7 +415,7 @@ fn find_or_create_live_range(
   match ranges.get_by_vreg(vreg) {
     Some(range) => range
     None => {
-      let range = LiveRange::new(ranges.ranges.length(), vreg)
+      let range = LiveRange::LiveRange(ranges.ranges.length(), vreg)
       ranges.add_range(range)
       range
     }
@@ -476,14 +511,14 @@ fn compute_live_sets(
     for vreg in uses_by_block[block_index] {
       if vreg.id >= 0 && vreg.id < vregs_by_id.length() {
         vregs_by_id[vreg.id] = Some(vreg)
-        use_points_by_vreg[vreg.id].push(ProgramPoint::new(block.id, 0))
+        use_points_by_vreg[vreg.id].push(ProgramPoint(block.id, 0))
       }
     }
     for vreg in defs_by_block[block_index] {
       if vreg.id >= 0 && vreg.id < vregs_by_id.length() {
         vregs_by_id[vreg.id] = Some(vreg)
         if def_points[vreg.id] is None {
-          def_points[vreg.id] = Some(ProgramPoint::new(block.id, 0))
+          def_points[vreg.id] = Some(ProgramPoint(block.id, 0))
         }
       }
     }
@@ -539,7 +574,7 @@ fn block_end_point(block : Block) -> ProgramPoint {
   } else {
     block.instructions.length() - 1
   }
-  ProgramPoint::new(block.id, inst)
+  ProgramPoint(block.id, inst)
 }
 
 ///|
@@ -550,7 +585,7 @@ fn extend_ranges_for_block_liveness(
   live_out : Array[Array[VirtualReg]],
 ) -> Unit {
   for block_index, block in program.blocks {
-    let start = ProgramPoint::new(block.id, 0)
+    let start = ProgramPoint::ProgramPoint(block.id, 0)
     let end = block_end_point(block)
     for vreg in live_in[block_index] {
       let range = find_or_create_live_range(ranges, vreg)
@@ -564,7 +599,7 @@ fn extend_ranges_for_block_liveness(
 }
 
 ///|
-pub fn build_live_ranges(program : Program) -> LiveRangeSet {
+fn build_live_ranges(program : Program) -> LiveRangeSet {
   let block_order : Array[Int] = []
   for order, block in program.blocks {
     while block.id >= block_order.length() {
@@ -572,14 +607,14 @@ pub fn build_live_ranges(program : Program) -> LiveRangeSet {
     }
     block_order[block.id] = order
   }
-  let ranges = LiveRangeSet::new(block_order)
+  let ranges = LiveRangeSet::LiveRangeSet(block_order)
   for block in program.blocks {
     for inst_index, inst in block.instructions {
-      let point = ProgramPoint::new(block.id, inst_index)
+      let point = ProgramPoint::ProgramPoint(block.id, inst_index)
       for operand in inst.operands {
         let range = find_or_create_live_range(ranges, operand.vreg)
         range.touch_with_order(point, ranges.block_order)
-        let use_pos = UsePosition::new(
+        let use_pos = UsePosition::UsePosition(
           point,
           use_kind_of_role(operand.role),
           operand.constraint,

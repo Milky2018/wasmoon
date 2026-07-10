@@ -5,7 +5,7 @@
 ///|
 /// Parse WebAssembly module from bytes
 pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
-  let parser = Parser::new(data)
+  let parser = Parser::Parser(data)
 
   // Check magic number
   let magic = parser.read_bytes(4)
@@ -18,7 +18,7 @@ pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
   if version != b"\x01\x00\x00\x00" {
     raise UnsupportedVersion
   }
-  let mod = @types.Module::new()
+  let mod = @types.Module::Module()
 
   // Track last seen non-custom section id for ordering check
   let mut last_section_id = 0

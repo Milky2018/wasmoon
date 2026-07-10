@@ -7,7 +7,7 @@ fn core_valtypes_for_component_valtype(
   // be represented without linear memory. Types that require memory (strings,
   // lists, etc) return `None` and skip signature checks; those are still
   // validated structurally by canonical option checks.
-  let visiting : Map[Int, Unit] = {}
+  let visiting : Map[Int, Unit] = Map([])
   fn scalar_prim(p : @component.PrimValType) -> Array[@types.ValueType]? {
     match p {
       Bool | S8 | U8 | S16 | U16 | S32 | U32 | Char => Some([I32])

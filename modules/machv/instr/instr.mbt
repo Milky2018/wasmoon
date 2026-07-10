@@ -50,12 +50,12 @@ pub impl Show for CallClobberClass with fn output(self, logger) {
 }
 
 ///|
-pub fn ExternalName::new(name : String) -> ExternalName {
+pub fn ExternalName::ExternalName(name : String) -> ExternalName {
   { name, }
 }
 
 ///|
-pub fn CodeSymbol::new(scope : String, ordinal : Int) -> CodeSymbol {
+pub fn CodeSymbol::CodeSymbol(scope : String, ordinal : Int) -> CodeSymbol {
   { scope, ordinal }
 }
 
@@ -92,8 +92,8 @@ pub fn RelocTarget::key(self : RelocTarget) -> String {
 ///|
 /// MachV instruction - a machine-level instruction with virtual registers
 /// Operand constraints for fixed register allocation
-pub struct MachVInst {
-  opcode : MachVOpcode
+pub struct Inst {
+  opcode : Opcode
   defs : Array[@abi.Writable] // Registers defined (written)
   uses : Array[@abi.Reg] // Registers used (read)
   use_constraints : Array[@abi.OperandConstraint] // Constraints for uses
@@ -101,26 +101,26 @@ pub struct MachVInst {
 }
 
 ///|
-pub fn MachVInst::new(opcode : MachVOpcode) -> MachVInst {
+pub fn Inst::Inst(opcode : Opcode) -> Inst {
   { opcode, defs: [], uses: [], use_constraints: [], def_constraints: [] }
 }
 
 ///|
-pub fn MachVInst::add_def(self : MachVInst, reg : @abi.Writable) -> Unit {
+pub fn Inst::add_def(self : Inst, reg : @abi.Writable) -> Unit {
   self.defs.push(reg)
   self.def_constraints.push(Any)
 }
 
 ///|
-pub fn MachVInst::add_use(self : MachVInst, reg : @abi.Reg) -> Unit {
+pub fn Inst::add_use(self : Inst, reg : @abi.Reg) -> Unit {
   self.uses.push(reg)
   self.use_constraints.push(Any)
 }
 
 ///|
 /// Add a use operand with a fixed register constraint
-pub fn MachVInst::add_use_fixed(
-  self : MachVInst,
+pub fn Inst::add_use_fixed(
+  self : Inst,
   reg : @abi.Reg,
   preg : @abi.PReg,
 ) -> Unit {
@@ -130,8 +130,8 @@ pub fn MachVInst::add_use_fixed(
 
 ///|
 /// Add a def operand with a fixed register constraint
-pub fn MachVInst::add_def_fixed(
-  self : MachVInst,
+pub fn Inst::add_def_fixed(
+  self : Inst,
   reg : @abi.Writable,
   preg : @abi.PReg,
 ) -> Unit {
@@ -140,13 +140,18 @@ pub fn MachVInst::add_def_fixed(
 }
 
 ///|
-fn MachVInst::to_string(self : MachVInst) -> String {
+fn Inst::to_string(self : Inst) -> String {
   let mut result = ""
   // Print definitions (skip clobbers for call instructions)
   let defs_to_print = match self.opcode {
-    ReturnCallIndirect(_, num_results) | CallPtr(_, num_results, _) =>
+    ReturnCallIndirect(_, num_results) =>
       // Only print result registers, not clobbers
       self.defs.iter().take(num_results).collect()
+    CallPtr(_, result_classes, _)
+    | CallDirect(_, _, result_classes, _)
+    | CallExternal(_, _, result_classes, _) =>
+      // Only print result registers, not clobbers
+      self.defs.iter().take(result_classes.length()).collect()
     CallExternalIfI32NeImm(_, _) =>
       // Only clobbers are attached (no results); keep output compact.
       []
@@ -182,13 +187,13 @@ fn MachVInst::to_string(self : MachVInst) -> String {
 }
 
 ///|
-pub impl Show for MachVInst with fn output(self, logger) {
+pub impl Show for Inst with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
 ///|
 /// MachV opcode - machine-level operation (target-independent subset)
-pub(all) enum MachVOpcode {
+pub(all) enum Opcode {
   // Integer arithmetic (Bool = true for 64-bit, false for 32-bit)
   Add(Bool) // ADD with size: true = 64-bit, false = 32-bit
   AddImm(Int, Bool) // ADD Xd, Xn, #imm with size: true = 64-bit, false = 32-bit
@@ -453,20 +458,20 @@ pub(all) enum MachVOpcode {
   // CallPtr: call through a function pointer
   // Uses are already constrained by the lowering-selected ABI.
   // Defs: [result0, result1, ...] (multiple results supported)
-  // Parameters: num_args, num_results, clobber class
-  CallPtr(Int, Int, CallClobberClass)
+  // Parameters: num_args, result classes, clobber class
+  CallPtr(Int, Array[@abi.RegClass], CallClobberClass)
 
   // CallDirect: direct call to a known code symbol
   // Uses are already constrained by the lowering-selected ABI.
   // Defs: [result0, result1, ...]
-  // Parameters: target, num_args, num_results, clobber class
-  CallDirect(CodeSymbol, Int, Int, CallClobberClass)
+  // Parameters: target, num_args, result classes, clobber class
+  CallDirect(CodeSymbol, Int, Array[@abi.RegClass], CallClobberClass)
 
   // CallExternal: direct call to an external helper symbol.
   // Uses are already constrained by the lowering-selected ABI.
   // Defs: [result0, result1, ...]
-  // Parameters: symbol, num_args, num_results, clobber class
-  CallExternal(ExternalName, Int, Int, CallClobberClass)
+  // Parameters: symbol, num_args, result classes, clobber class
+  CallExternal(ExternalName, Int, Array[@abi.RegClass], CallClobberClass)
 
   // Stack pointer adjustment for outgoing call arguments (Standard)
   // AdjustSP(delta): Adjust SP by delta bytes
@@ -489,28 +494,6 @@ pub(all) enum MachVOpcode {
   // position and load its generated id into the def register. Root slots are
   // the contiguous outgoing-args slots [0, root_count).
   LoadSafepointId(Int)
-
-  // Inline bump-allocation helpers (fast path + C slow-path fallback).
-  //
-  // TODO(ISS-072): Lower these generic pseudo-ops into explicit MachV CFG once
-  // block-local fast/slow allocation paths can be represented without
-  // emitter-local labels.
-  //
-  // BumpAllocRecordFromStackInline(type_tag, field_count):
-  //   Uses: [embedding_context], Defs: [result_ref]
-  //   - Fast path: inline bump allocation + header/field stores.
-  //   - Fields source is fixed to caller stack pointer (SP outgoing args area).
-  //   - Slow path: calls slow helper(context, type_tag, SP, field_count, safepoint_id).
-  //   - Always registers allocated object via register helper.
-  BumpAllocRecordFromStackInline(Int, Int, ExternalName, ExternalName)
-
-  // BumpAllocArrayFromStackInline(type_tag, len):
-  //   Uses: [embedding_context], Defs: [result_ref]
-  //   - Fast path: inline bump allocation + header/len/element stores.
-  //   - Values source is fixed to caller stack pointer (SP outgoing args area).
-  //   - Slow path: calls slow helper(context, type_tag, SP, len, safepoint_id).
-  //   - Always registers allocated object via register helper.
-  BumpAllocArrayFromStackInline(Int, Int, ExternalName, ExternalName)
 
   // ============ SIMD Instructions (AArch64 NEON) ============
 
@@ -929,7 +912,7 @@ pub(all) enum MachVOpcode {
 }
 
 ///|
-fn MachVOpcode::to_string(self : MachVOpcode) -> String {
+fn Opcode::to_string(self : Opcode) -> String {
   match self {
     Add(is_64) => if is_64 { "add" } else { "add32" }
     AddImm(imm, is_64) => if is_64 { "add #\{imm}" } else { "add32 #\{imm}" }
@@ -1100,12 +1083,12 @@ fn MachVOpcode::to_string(self : MachVOpcode) -> String {
     StorePtrNarrow(bits, offset) => "store_ptr\{bits} +\{offset}"
     LoadExternalFuncAddr(symbol) => "load_external_func_addr.\{symbol}"
     LoadCodeAddr(symbol) => "load_code_addr.\{symbol}"
-    CallPtr(num_args, num_results, call_conv) =>
-      "call_ptr[\{call_conv}](\{num_args}) -> \{num_results} results"
-    CallDirect(target, num_args, num_results, call_conv) =>
-      "call_direct[\{call_conv}].\{target}(\{num_args}) -> \{num_results} results"
-    CallExternal(symbol, num_args, num_results, call_conv) =>
-      "call_external[\{call_conv}].\{symbol}(\{num_args}) -> \{num_results} results"
+    CallPtr(num_args, result_classes, call_conv) =>
+      "call_ptr[\{call_conv}](\{num_args}) -> \{result_classes.length()} results"
+    CallDirect(target, num_args, result_classes, call_conv) =>
+      "call_direct[\{call_conv}].\{target}(\{num_args}) -> \{result_classes.length()} results"
+    CallExternal(symbol, num_args, result_classes, call_conv) =>
+      "call_external[\{call_conv}].\{symbol}(\{num_args}) -> \{result_classes.length()} results"
     AdjustSP(delta) =>
       if delta >= 0 {
         "add sp, sp, #\{delta}"
@@ -1115,10 +1098,6 @@ fn MachVOpcode::to_string(self : MachVOpcode) -> String {
     StoreToStack(offset) => "str [sp+\{offset}]"
     LoadSP => "mov rd, outgoing_args_base"
     LoadSafepointId(root_count) => "load_safepoint_id roots=\{root_count}"
-    BumpAllocRecordFromStackInline(type_tag, field_count, _, _) =>
-      "bump_alloc_record_from_stack type=\{type_tag} fields=\{field_count}"
-    BumpAllocArrayFromStackInline(type_tag, len, _, _) =>
-      "bump_alloc_array_from_stack type=\{type_tag} len=\{len}"
     // SIMD instructions
     LoadConstV128(_) => "ldi.v128"
     SIMDSplat(lane_size) => "dup.\{lane_size}"
@@ -1256,8 +1235,37 @@ fn MachVOpcode::to_string(self : MachVOpcode) -> String {
 }
 
 ///|
-pub impl Show for MachVOpcode with fn output(self, logger) {
+pub impl Show for Opcode with fn output(self, logger) {
   logger.write_string(self.to_string())
+}
+
+///|
+pub fn Opcode::call_result_classes(self : Opcode) -> Array[@abi.RegClass]? {
+  match self {
+    CallPtr(_, result_classes, _)
+    | CallDirect(_, _, result_classes, _)
+    | CallExternal(_, _, result_classes, _) => Some(result_classes)
+    _ => None
+  }
+}
+
+///|
+pub fn Opcode::call_result_count(self : Opcode) -> Int? {
+  match self.call_result_classes() {
+    Some(result_classes) => Some(result_classes.length())
+    None => None
+  }
+}
+
+///|
+pub fn result_classes_for_vregs(
+  results : Array[@abi.VReg],
+) -> Array[@abi.RegClass] {
+  let classes : Array[@abi.RegClass] = []
+  for result in results {
+    classes.push(result.class)
+  }
+  classes
 }
 
 ///|
@@ -1571,7 +1579,7 @@ pub fn Cond::invert(self : Cond) -> Cond {
 
 ///|
 /// MachV terminator - how a block ends
-pub(all) enum MachVTerminator {
+pub(all) enum Terminator {
   // Jump to target block with SSA block arguments.
   // The length of args must match the target block's params.
   Jump(Int, Array[@abi.Reg])
@@ -1596,7 +1604,7 @@ pub(all) enum MachVTerminator {
 }
 
 ///|
-fn MachVTerminator::to_string(self : MachVTerminator) -> String {
+fn Terminator::to_string(self : Terminator) -> String {
   match self {
     Jump(target, args) => {
       let mut result = "jump block\{target}"
@@ -1651,7 +1659,7 @@ fn MachVTerminator::to_string(self : MachVTerminator) -> String {
 }
 
 ///|
-pub impl Show for MachVTerminator with fn output(self, logger) {
+pub impl Show for Terminator with fn output(self, logger) {
   logger.write_string(self.to_string())
 }
 
@@ -1659,14 +1667,11 @@ pub impl Show for MachVTerminator with fn output(self, logger) {
 /// Get the call type for this opcode
 /// Design: instructions that clobber caller-saved registers
 /// are classified as calls for register allocation purposes
-pub fn MachVOpcode::call_type(self : MachVOpcode) -> CallType {
+pub fn Opcode::call_type(self : Opcode) -> CallType {
   match self {
     // Direct and indirect function calls (Standard via CallPtr)
-    CallPtr(_, _, _)
-    | CallDirect(_, _, _, _)
-    | CallExternal(_, _, _, _)
-    | BumpAllocRecordFromStackInline(_, _, _, _)
-    | BumpAllocArrayFromStackInline(_, _, _, _) => Regular
+    CallPtr(_, _, _) | CallDirect(_, _, _, _) | CallExternal(_, _, _, _) =>
+      Regular
     // Conditional helpers can call a C helper on the slow path; treat them as calls.
     CallExternalIfI32NeImm(_, _) => Regular
     // Tail calls that don't return to caller

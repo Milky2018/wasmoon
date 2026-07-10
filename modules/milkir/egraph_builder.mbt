@@ -5,7 +5,7 @@
 
 ///|
 /// Builder for constructing an EGraph from IR instructions
-struct EGraphBuilder {
+priv struct EGraphBuilder {
   egraph : @egraph.EGraph
   // Dense map from IR Value id to EClassId (Cranelift SecondaryMap style).
   value_map : Array[@egraph.EClassId?]
@@ -25,38 +25,20 @@ struct EGraphBuilder {
 /// Key used for mapping an e-class to an in-scope IR value of a specific type.
 /// Note: an e-class may contain values of multiple IR types (e.g., shared constants),
 /// so the Type must be part of the key to avoid producing ill-typed IR.
-struct RepKey {
+priv struct RepKey {
   class_id : Int
   ty : Type
-} derive(Eq, Hash, Debug)
+} derive(Eq, Hash)
 
 ///|
-pub fn EGraphBuilder::new() -> EGraphBuilder {
-  EGraphBuilder::new_with_limits_and_ruleset(
-    @egraph.SaturationLimits::cranelift_default(),
-    @egraph.get_global_ruleset(),
-  )
-}
-
-///|
-pub fn EGraphBuilder::new_with_limits(
-  saturation_limits : @egraph.SaturationLimits,
-) -> EGraphBuilder {
-  EGraphBuilder::new_with_limits_and_ruleset(
-    saturation_limits,
-    @egraph.get_global_ruleset(),
-  )
-}
-
-///|
-pub fn EGraphBuilder::new_with_limits_and_ruleset(
+fn EGraphBuilder::new_with_limits_and_ruleset(
   saturation_limits : @egraph.SaturationLimits,
   ruleset : @egraph.IndexedRuleSet,
 ) -> EGraphBuilder {
   {
-    egraph: @egraph.EGraph::new(),
+    egraph: EGraph(),
     value_map: [],
-    class_to_value: {},
+    class_to_value: Map([]),
     def_map: [],
     def_eop_map: [],
     ruleset,
@@ -104,7 +86,7 @@ fn EGraphBuilder::reserve_value_slots(
 
 ///|
 /// Register an instruction's definition
-pub fn EGraphBuilder::register_def(self : EGraphBuilder, inst : Inst) -> Unit {
+fn EGraphBuilder::register_def(self : EGraphBuilder, inst : Inst) -> Unit {
   if inst.first_result() is Some(v) {
     self.ensure_value_slot(v.id)
     self.def_map[v.id] = Some(inst)
@@ -246,7 +228,7 @@ fn opcode_to_eopcode(inst : Inst) -> @egraph.EOpcode? {
 ///|
 /// Add an IR value to the e-graph, recursively adding its definition
 /// Uses eager optimization: rules are applied immediately when adding nodes
-pub fn EGraphBuilder::add_value(
+fn EGraphBuilder::add_value(
   self : EGraphBuilder,
   value : Value,
 ) -> @egraph.EClassId {
@@ -304,7 +286,7 @@ pub fn EGraphBuilder::add_value(
 ///|
 /// Run optimization on the e-graph
 /// With eager optimization, this only needs to rebuild to restore invariants
-pub fn EGraphBuilder::optimize(self : EGraphBuilder) -> Unit {
+fn EGraphBuilder::optimize(self : EGraphBuilder) -> Unit {
   // One-pass, directed simplification (Cranelift-style aegraph).
   // Additional improvement opportunities are handled by later passes.
   self.egraph.saturate_indexed_with_limits(
@@ -317,68 +299,8 @@ pub fn EGraphBuilder::optimize(self : EGraphBuilder) -> Unit {
 
 ///|
 /// Get the optimized e-graph
-pub fn EGraphBuilder::get_egraph(self : EGraphBuilder) -> @egraph.EGraph {
+fn EGraphBuilder::get_egraph(self : EGraphBuilder) -> @egraph.EGraph {
   self.egraph
-}
-
-///|
-/// Extract the best expression for a given IR value
-pub fn EGraphBuilder::extract(
-  self : EGraphBuilder,
-  value : Value,
-) -> (Int, @egraph.ENode)? {
-  if value.id >= 0 &&
-    value.id < self.value_map.length() &&
-    self.value_map[value.id] is Some(class_id) {
-    Some(self.egraph.extract(class_id))
-  } else {
-    None
-  }
-}
-
-///|
-/// Optimize a single basic block's arithmetic expressions
-/// Returns a map from original Value id to optimized ENode
-pub fn optimize_block(block : Block) -> Map[Int, (Int, @egraph.ENode)] {
-  optimize_block_with_limits(
-    block,
-    @egraph.SaturationLimits::cranelift_default(),
-  )
-}
-
-///|
-pub fn optimize_block_with_limits(
-  block : Block,
-  limits : @egraph.SaturationLimits,
-) -> Map[Int, (Int, @egraph.ENode)] {
-  let builder = EGraphBuilder::new_with_limits(limits)
-
-  // First pass: register all definitions
-  for inst in block.instructions {
-    builder.register_def(inst)
-  }
-
-  // Second pass: add all arithmetic values to e-graph
-  for inst in block.instructions {
-    if inst.first_result() is Some(v) &&
-      v.id >= 0 &&
-      v.id < builder.def_eop_map.length() &&
-      builder.def_eop_map[v.id] is Some(_) {
-      builder.add_value(v) |> ignore
-    }
-  }
-
-  // Run saturation
-  builder.optimize()
-
-  // Extract optimized results
-  let results : Map[Int, (Int, @egraph.ENode)] = {}
-  for inst in block.instructions {
-    if inst.first_result() is Some(v) && builder.extract(v) is Some(result) {
-      results.set(v.id, result)
-    }
-  }
-  results
 }
 
 ///|
@@ -386,7 +308,7 @@ pub fn optimize_block_with_limits(
 /// Returns Some(Iconst(c)) if constant folding found, None otherwise
 /// NOTE: Only handles constant folding. Complex rewrites (like x*3 -> (x<<1)+x)
 /// are not handled because they would require operand reconstruction.
-pub fn EGraphBuilder::get_simplified_opcode(
+fn EGraphBuilder::get_simplified_opcode(
   self : EGraphBuilder,
   value : Value,
 ) -> Opcode? {
@@ -409,7 +331,7 @@ pub fn EGraphBuilder::get_simplified_opcode(
 /// Get the simplified value for an operand (for operand rewriting)
 /// If the operand's e-class has a simpler representation that maps to
 /// an existing IR value, return that value; otherwise return None.
-pub fn EGraphBuilder::get_simplified_operand(
+fn EGraphBuilder::get_simplified_operand(
   self : EGraphBuilder,
   value : Value,
 ) -> Value? {
@@ -436,75 +358,8 @@ pub fn EGraphBuilder::get_simplified_operand(
 }
 
 ///|
-/// Recompute per-block representatives for operand rewriting.
-/// This ensures the representative:
-/// - has the correct IR type for the use site
-/// - is defined early enough in the block (dominates subsequent uses in the block)
-#warnings("-unused_value")
-fn EGraphBuilder::recompute_representatives_for_block(
-  self : EGraphBuilder,
-  func : Function,
-  block : Block,
-  idom : Array[Int],
-  block_idx : Map[Int, Int],
-) -> Unit {
-  self.class_to_value.clear()
-  fn try_add_rep(self : EGraphBuilder, value : Value) -> Unit {
-    if value.id >= 0 &&
-      value.id < self.value_map.length() &&
-      self.value_map[value.id] is Some(class_id) {
-      let canonical = self.egraph.find(class_id)
-      let key : RepKey = { class_id: canonical.0, ty: value.ty }
-      if !self.class_to_value.contains(key) {
-        self.class_to_value.set(key, value)
-      }
-    }
-  }
-
-  // Dominance-aware representatives:
-  // process dominator chain from root to current block so every chosen value
-  // dominates uses in `block`, while preferring earlier dominating forms.
-  let dom_chain : Array[Int] = []
-  if block.id >= 0 && block.id < idom.length() {
-    let mut current = block.id
-    dom_chain.push(current)
-    while current != 0 {
-      let parent = idom[current]
-      if parent < 0 || parent == current {
-        break
-      }
-      dom_chain.push(parent)
-      current = parent
-    }
-  } else {
-    dom_chain.push(block.id)
-  }
-  dom_chain.rev_in_place()
-
-  for block_id in dom_chain {
-    if block_idx.get(block_id) is Some(idx) {
-      let dom_block = func.blocks[idx]
-      // Block params dominate instructions in their block.
-      for pair in dom_block.params {
-        let (v, _) = pair
-        try_add_rep(self, v)
-      }
-      // Instruction order defines in-block dominance.
-      for inst in dom_block.instructions {
-        for op in inst.operands {
-          try_add_rep(self, op)
-        }
-        if inst.first_result() is Some(v) {
-          try_add_rep(self, v)
-        }
-      }
-    }
-  }
-}
-
-///|
 fn build_block_index(func : Function) -> Map[Int, Int] {
-  let index : Map[Int, Int] = {}
+  let index : Map[Int, Int] = Map([])
   for i, block in func.blocks {
     index.set(block.id, i)
   }
@@ -514,7 +369,7 @@ fn build_block_index(func : Function) -> Map[Int, Int] {
 ///|
 /// Apply e-graph optimization to a function
 /// Returns true if any optimization was applied
-pub struct EGraphOptimizeStats {
+priv struct EGraphOptimizeStats {
   changed : Bool
   total_classes : Int
   total_nodes : Int
@@ -522,28 +377,7 @@ pub struct EGraphOptimizeStats {
 }
 
 ///|
-/// Apply e-graph optimization to a function and return aggregate stats.
-pub fn optimize_function_with_stats(func : Function) -> EGraphOptimizeStats {
-  optimize_function_with_stats_with_limits(
-    func,
-    @egraph.SaturationLimits::cranelift_default(),
-  )
-}
-
-///|
-pub fn optimize_function_with_stats_with_limits(
-  func : Function,
-  limits : @egraph.SaturationLimits,
-) -> EGraphOptimizeStats {
-  optimize_function_with_stats_with_limits_and_ruleset(
-    func,
-    limits,
-    @egraph.get_global_ruleset(),
-  )
-}
-
-///|
-pub fn optimize_function_with_stats_with_limits_and_ruleset(
+fn optimize_function_with_stats_with_limits_and_ruleset(
   func : Function,
   limits : @egraph.SaturationLimits,
   ruleset : @egraph.IndexedRuleSet,
@@ -679,22 +513,4 @@ pub fn optimize_function_with_stats_with_limits_and_ruleset(
     rewrite_block(0)
   }
   { changed, total_classes, total_nodes, total_rule_applications }
-}
-
-///|
-/// Apply e-graph optimization to a function.
-/// Returns true if any optimization was applied.
-pub fn optimize_function(func : Function) -> Bool {
-  optimize_function_with_limits(
-    func,
-    @egraph.SaturationLimits::cranelift_default(),
-  )
-}
-
-///|
-pub fn optimize_function_with_limits(
-  func : Function,
-  limits : @egraph.SaturationLimits,
-) -> Bool {
-  optimize_function_with_stats_with_limits(func, limits).changed
 }

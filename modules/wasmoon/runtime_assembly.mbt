@@ -11,6 +11,7 @@ pub(all) enum RuntimeComponent {
 pub(all) struct RuntimeAssembly {
   product_module : String
   owned_components : Array[RuntimeComponent]
+  product_support_modules : Array[String]
   reusable_modules : Array[String]
 } derive(Eq, Debug)
 
@@ -42,7 +43,7 @@ pub fn wasm_frontend_embedding_environment(
 ) -> @wasm_frontend.EmbeddingEnvironment {
   let vm = @wasmoon_jit.vmcontext_layout()
   let memory = @wasmoon_jit.memory_descriptor_layout()
-  @wasm_frontend.EmbeddingEnvironment::new(
+  EmbeddingEnvironment(
     runtime_symbol_prefix~,
     hidden_context_type~,
     runtime_layout=Some({
@@ -72,15 +73,22 @@ pub fn wasm_frontend_embedding_environment(
 fn wasm_body_embedding_env(
   env : @wasm_frontend.EmbeddingEnvironment,
 ) -> @wasm_frontend.EmbeddingEnvironment {
-  if env.hidden_context_param() is Some(_) {
-    env
-  } else {
-    @wasm_frontend.EmbeddingEnvironment::new(
-      runtime_symbol_prefix=env.runtime_symbol_prefix,
-      runtime_layout=env.runtime_layout(),
-      memory_descriptor_layout=env.memory_descriptor_layout(),
-    )
-  }
+  let defaults = wasm_frontend_embedding_environment(
+    runtime_symbol_prefix=env.runtime_symbol_prefix,
+  )
+  EmbeddingEnvironment(
+    runtime_symbol_prefix=env.runtime_symbol_prefix,
+    hidden_context_type=Some(env.hidden_context_param().unwrap_or(Ptr)),
+    runtime_layout=match env.runtime_layout() {
+      Some(layout) => Some(layout)
+      None => defaults.runtime_layout()
+    },
+    memory_descriptor_layout=match env.memory_descriptor_layout() {
+      Some(layout) => Some(layout)
+      None => defaults.memory_descriptor_layout()
+    },
+    wasm_runtime_symbols=Some(env.wasm_runtime_symbols()),
+  )
 }
 
 ///|
@@ -94,32 +102,30 @@ pub fn runtime_assembly() -> RuntimeAssembly {
       WasiPreview1,
       JitSelection,
     ],
+    product_support_modules: ["Milky2018/wasmoon_jit"],
     reusable_modules: [
       "Milky2018/wasm_core", "Milky2018/milkir", "Milky2018/machv", "Milky2018/regalloc",
       "Milky2018/machv_regalloc", "Milky2018/machv_emit", "Milky2018/x64_target",
-      "Milky2018/aarch64_target", "Milky2018/wasmoon_jit",
+      "Milky2018/aarch64_target",
     ],
   }
 }
 
 ///|
 pub fn compiler_infrastructure_assembly() -> CompilerInfrastructureAssembly {
-  let signature = @milkir.Signature::new([], [])
-  let milk = @milkir.Function::new("wasmoon_runtime_probe", signature)
+  let signature = @milkir.Signature::Signature([], [])
+  let milk = @milkir.Function::Function("wasmoon_runtime_probe", signature)
   let entry = milk.new_block0()
   entry.set_terminator(Return([]))
-  let call_conv = @wasmoon_jit.wasm_calling_convention()
-  let roles = @wasmoon_jit.wasm_embedding_reg_roles()
+  let embedding_abi = @wasmoon_jit.wasm_embedding_abi()
   let machv_function = @lower.lower_function(
     milk,
     run_ir_opt=false,
-    embedding_reg_roles=roles,
-    call_conv_layout=Some(call_conv),
+    embedding_abi=Some(embedding_abi),
   )
   let (allocated_function, output) = @machv_regalloc.allocate_registers_backtracking_output(
     machv_function,
-    embedding_reg_roles=roles,
-    call_conv_layout=Some(call_conv),
+    embedding_abi=Some(embedding_abi),
   )
   {
     signature,
@@ -128,8 +134,7 @@ pub fn compiler_infrastructure_assembly() -> CompilerInfrastructureAssembly {
     code_object: @machv_emit.emit_function_with_regalloc(
       allocated_function,
       output,
-      call_conv_layout=Some(call_conv),
-      embedding_reg_roles=roles,
+      embedding_abi=Some(embedding_abi),
     ),
     x64_abi: @x64_target.abi_policy(),
     aarch64_abi: @aarch64_target.abi_policy(),
@@ -147,7 +152,12 @@ pub fn plan_wasm_function_with_compiler_infra(
 ) -> @wasmoon_jit.JitIntegrationPlan raise WasmCompilerPipelineError {
   try {
     let body_env = wasm_body_embedding_env(env)
-    let milk = @wasm_frontend.lower_function(body_env, mod_, func_local_idx)
+    let milk = @wasm_frontend.translate_function(
+      body_env,
+      mod_,
+      func_local_idx,
+      name="wasm_func_\{func_local_idx}",
+    )
     @milkir.optimize_with_level(milk, @milkir.OptLevel::from_int(opt_level))
     |> ignore
     @wasmoon_jit.plan_wasm_body_milkir_integration_for_target(milk, target)

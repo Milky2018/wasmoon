@@ -2,7 +2,7 @@
 
 ///|
 test "vector: band(splat(x), splat(y)) = splat(band(x, y))" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let splat_x = eg.add({ op: Splat, children: [x] })
@@ -17,7 +17,7 @@ test "vector: band(splat(x), splat(y)) = splat(band(x, y))" {
 
 ///|
 test "vector: bor(splat(x), splat(y)) = splat(bor(x, y))" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let splat_x = eg.add({ op: Splat, children: [x] })
@@ -32,7 +32,7 @@ test "vector: bor(splat(x), splat(y)) = splat(bor(x, y))" {
 
 ///|
 test "vector: bxor(splat(x), splat(y)) = splat(bxor(x, y))" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let splat_x = eg.add({ op: Splat, children: [x] })
@@ -47,7 +47,7 @@ test "vector: bxor(splat(x), splat(y)) = splat(bxor(x, y))" {
 
 ///|
 test "vector: bnot(splat(x)) = splat(bnot(x))" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let splat_x = eg.add({ op: Splat, children: [x] })
   let bnot = eg.add({ op: Bnot, children: [splat_x] })
@@ -60,7 +60,7 @@ test "vector: bnot(splat(x)) = splat(bnot(x))" {
 
 ///|
 test "vector: iadd(splat(x), splat(y)) = splat(iadd(x, y))" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let splat_x = eg.add({ op: Splat, children: [x] })
@@ -75,7 +75,7 @@ test "vector: iadd(splat(x), splat(y)) = splat(iadd(x, y))" {
 
 ///|
 test "vector: isub(splat(x), splat(y)) = splat(isub(x, y))" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let splat_x = eg.add({ op: Splat, children: [x] })
@@ -90,7 +90,7 @@ test "vector: isub(splat(x), splat(y)) = splat(isub(x, y))" {
 
 ///|
 test "vector: imul(splat(x), splat(y)) = splat(imul(x, y))" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let splat_x = eg.add({ op: Splat, children: [x] })
@@ -105,7 +105,7 @@ test "vector: imul(splat(x), splat(y)) = splat(imul(x, y))" {
 
 ///|
 test "vector: ineg(splat(x)) = splat(ineg(x))" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let splat_x = eg.add({ op: Splat, children: [x] })
   let ineg = eg.add({ op: Neg, children: [splat_x] })
@@ -118,7 +118,7 @@ test "vector: ineg(splat(x)) = splat(ineg(x))" {
 
 ///|
 test "vector: iabs(splat(x)) = splat(iabs(x))" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let splat_x = eg.add({ op: Splat, children: [x] })
   let iabs = eg.add({ op: Iabs, children: [splat_x] })
@@ -131,7 +131,7 @@ test "vector: iabs(splat(x)) = splat(iabs(x))" {
 
 ///|
 test "vector: popcnt(splat(x)) = splat(popcnt(x))" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let splat_x = eg.add({ op: Splat, children: [x] })
   let popcnt = eg.add({ op: Popcnt, children: [splat_x] })
@@ -144,7 +144,7 @@ test "vector: popcnt(splat(x)) = splat(popcnt(x))" {
 
 ///|
 test "vector: smin(splat(x), splat(y)) = splat(smin(x, y))" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let splat_x = eg.add({ op: Splat, children: [x] })
@@ -159,7 +159,7 @@ test "vector: smin(splat(x), splat(y)) = splat(smin(x, y))" {
 
 ///|
 test "vector: smax(splat(x), splat(y)) = splat(smax(x, y))" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let splat_x = eg.add({ op: Splat, children: [x] })
@@ -174,7 +174,7 @@ test "vector: smax(splat(x), splat(y)) = splat(smax(x, y))" {
 
 ///|
 test "vector: umin(splat(x), splat(y)) = splat(umin(x, y))" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let splat_x = eg.add({ op: Splat, children: [x] })
@@ -189,7 +189,7 @@ test "vector: umin(splat(x), splat(y)) = splat(umin(x, y))" {
 
 ///|
 test "vector: umax(splat(x), splat(y)) = splat(umax(x, y))" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let splat_x = eg.add({ op: Splat, children: [x] })
@@ -204,7 +204,7 @@ test "vector: umax(splat(x), splat(y)) = splat(umax(x, y))" {
 
 ///|
 test "vector: ishl(splat(x), y) = splat(ishl(x, y))" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let splat_x = eg.add({ op: Splat, children: [x] })
@@ -218,7 +218,7 @@ test "vector: ishl(splat(x), y) = splat(ishl(x, y))" {
 
 ///|
 test "vector: ushr(splat(x), y) = splat(ushr(x, y))" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let splat_x = eg.add({ op: Splat, children: [x] })
@@ -232,7 +232,7 @@ test "vector: ushr(splat(x), y) = splat(ushr(x, y))" {
 
 ///|
 test "vector: sshr(splat(x), y) = splat(sshr(x, y))" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let splat_x = eg.add({ op: Splat, children: [x] })
@@ -246,7 +246,7 @@ test "vector: sshr(splat(x), y) = splat(sshr(x, y))" {
 
 ///|
 test "vector: rotl(splat(x), y) = splat(rotl(x, y))" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let splat_x = eg.add({ op: Splat, children: [x] })
@@ -260,7 +260,7 @@ test "vector: rotl(splat(x), y) = splat(rotl(x, y))" {
 
 ///|
 test "vector: rotr(splat(x), y) = splat(rotr(x, y))" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let splat_x = eg.add({ op: Splat, children: [x] })

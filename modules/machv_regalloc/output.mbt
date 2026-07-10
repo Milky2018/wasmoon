@@ -31,25 +31,6 @@ pub impl Show for Loc with fn output(self, logger) {
 }
 
 ///|
-/// Compatibility helpers for the existing regalloc pipeline.
-/// These mirror the historical `PReg::{is_spilled,get_spill_slot}` API but operate
-/// on `Loc`.
-pub fn Loc::is_spilled(self : Loc) -> Bool {
-  match self {
-    Spill(_) => true
-    _ => false
-  }
-}
-
-///|
-pub fn Loc::get_spill_slot(self : Loc) -> SpillSlot {
-  match self {
-    Spill(slot) => slot
-    _ => abort("Loc::get_spill_slot called on a register loc")
-  }
-}
-
-///|
 /// An edit produced by regalloc to be inserted at a program point.
 ///
 /// Equivalent to regalloc2::Edit::Move in Cranelift: move between two locations.
@@ -100,7 +81,7 @@ pub struct Output {
 }
 
 ///|
-pub fn Output::new() -> Output {
+pub fn Output::Output() -> Output {
   {
     param_locs: [],
     allocs: [],
@@ -126,7 +107,7 @@ pub fn Output::summary(self : Output) -> String {
   let mut spills = 0
   let mut reg_moves = 0
   let mut spill_to_spill = 0
-  let slot_traffic : Map[Int, (Int, Int)] = {} // slot -> (reloads, spills)
+  let slot_traffic : Map[Int, (Int, Int)] = Map([]) // slot -> (reloads, spills)
   for _, entry in self.edits {
     let (_point, edit) = entry
     match edit {

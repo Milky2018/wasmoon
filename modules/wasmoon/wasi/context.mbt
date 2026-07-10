@@ -70,7 +70,7 @@ pub(all) struct WasiContext {
 
 ///|
 /// Create a new WASI context with default settings
-pub fn WasiContext::new() -> WasiContext {
+pub fn WasiContext::WasiContext() -> WasiContext {
   {
     args: [],
     env: [],
@@ -108,7 +108,7 @@ pub(all) struct WasiContextBuilder {
 }
 
 ///|
-pub fn WasiContextBuilder::new() -> WasiContextBuilder {
+pub fn WasiContextBuilder::WasiContextBuilder() -> WasiContextBuilder {
   {
     args: [],
     env: [],

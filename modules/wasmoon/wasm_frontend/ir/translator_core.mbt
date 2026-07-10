@@ -4,7 +4,7 @@
 ///|
 /// Translator state for converting a single WASM function to IR
 priv struct Translator {
-  builder : IRBuilder
+  builder : FunctionBuilder
   // Value stack - simulates WASM's operand stack
   value_stack : Array[Value]
   // Local variables - mutable in WASM, need SSA tracking
@@ -78,7 +78,7 @@ struct TranslationContext {
   func_type_indices : Array[Int]
   num_imports : Int
   import_func_type_indices : Array[Int]
-  embedding_env : @wasm_frontend.EmbeddingEnvironment
+  embedding_env : @embedding.EmbeddingEnvironment
   memory_max : Int?
   memory_is_64 : Array[Bool]
   memory_page_size_log2 : Array[Int]
@@ -96,7 +96,7 @@ struct TranslationContext {
 /// Build frontend translation metadata from a decoded Wasm module.
 pub fn TranslationContext::from_module(
   mod_ : @types.Module,
-  embedding_env : @wasm_frontend.EmbeddingEnvironment,
+  embedding_env : @embedding.EmbeddingEnvironment,
   memory_max_override? : Int? = None,
   func_base? : Int = 0,
   import_remap? : Array[Int] = [],
@@ -132,7 +132,7 @@ pub fn TranslationContext::from_module(
       }
   }
   {
-    func_types: @types.extract_func_types(mod_.types),
+    func_types: module_func_type_table(mod_.types),
     func_type_indices: mod_.funcs,
     num_imports,
     import_func_type_indices,
@@ -151,6 +151,22 @@ pub fn TranslationContext::from_module(
       m.limits.min * (1L << m.page_size_log2)
     }),
   }
+}
+
+///|
+/// Build the frontend's function-type lookup table while preserving module
+/// type indices used by `call_indirect` and typed references.
+fn module_func_type_table(
+  subtypes : Array[@types.SubType],
+) -> Array[@types.FuncType] {
+  let result : Array[@types.FuncType] = []
+  for subtype in subtypes {
+    match subtype.composite {
+      Func(ft) => result.push(ft)
+      _ => result.push({ params: [], results: [] })
+    }
+  }
+  result
 }
 
 ///|
@@ -192,7 +208,7 @@ fn Translator::mark_block_frame_reachable(self : Translator, idx : Int) -> Unit 
 ///|
 /// Low-level constructor with explicit parameters.
 /// Prefer `TranslationContext`-based public APIs for normal use.
-fn Translator::new(
+fn Translator::Translator(
   name : String,
   func_type : @types.FuncType,
   locals : Array[@types.ValueType],
@@ -200,7 +216,7 @@ fn Translator::new(
   func_type_indices : Array[Int],
   num_imports : Int,
   import_func_type_indices : Array[Int],
-  embedding_env : @wasm_frontend.EmbeddingEnvironment,
+  embedding_env : @embedding.EmbeddingEnvironment,
   memory_max? : Int? = None,
   memory_is_64? : Array[Bool] = [],
   memory_page_size_log2? : Array[Int] = [],
@@ -214,14 +230,14 @@ fn Translator::new(
   memory_mins? : Array[Int64] = [],
 ) -> Translator {
   type_rec_groups |> ignore // Reserved for future canonical type indices
-  let builder = IRBuilder::new(name)
+  let builder = FunctionBuilder::FunctionBuilder(name)
   // Note: add vmctx as explicit param (Cranelift-style special param)
   // - params[0] = vmctx (X0)
   // This is referenced for desugaring global/table/memory operations
   let vmctx = builder.add_param(I64)
 
   // Create function environment for desugaring Wasm operations
-  let func_env = FuncEnvironment::new(
+  let func_env = FuncEnvironment::FuncEnvironment(
     embedding_env,
     global_types,
     memory_mins~,
@@ -291,7 +307,7 @@ fn Translator::new(
 pub fn translate_function(
   mod_ : @types.Module,
   func_local_idx : Int,
-  embedding_env : @wasm_frontend.EmbeddingEnvironment,
+  embedding_env : @embedding.EmbeddingEnvironment,
   name? : String,
   memory_max_override? : Int? = None,
 ) -> Function {
@@ -317,7 +333,7 @@ pub fn translate_function_body(
   locals : Array[@types.ValueType],
   body : Array[@types.Instruction],
 ) -> Function {
-  let translator = Translator::new(
+  let translator = Translator::Translator(
     name,
     func_type,
     locals,
@@ -642,10 +658,7 @@ fn Translator::translate(
   self : Translator,
   instrs : Array[@types.Instruction],
 ) -> Function {
-  // Create the entry block
-  let entry = self.builder.create_block()
-  self.builder.switch_to_block(entry)
-  // Initialize locals with default values.
+  // Initialize locals with default values in the default entry block.
   //
   // Cranelift alignment:
   // - hoist zero/null initializer construction out of the per-local loop
@@ -735,9 +748,8 @@ fn Translator::translate(
   }
 
   // Handle function end
-  if !self.is_unreachable &&
-    self.builder.current_block() is Some(block) &&
-    block.terminator is None {
+  let block = self.builder.current_block()
+  if !self.is_unreachable && block.terminator is None {
     // Normal fall-through: check if return_continuation was created
     if self.return_continuation is Some(ret_cont) {
       // Someone jumped to function level, need to go through continuation
@@ -988,7 +1000,7 @@ fn Translator::get_tag_param_types(
 /// Helper for binary i32 operations
 fn Translator::translate_binary_i32(
   self : Translator,
-  op : (IRBuilder, Value, Value) -> Value,
+  op : (FunctionBuilder, Value, Value) -> Value,
 ) -> Unit {
   let b = self.pop()
   let a = self.pop()
@@ -1000,7 +1012,7 @@ fn Translator::translate_binary_i32(
 /// Helper for binary i64 operations
 fn Translator::translate_binary_i64(
   self : Translator,
-  op : (IRBuilder, Value, Value) -> Value,
+  op : (FunctionBuilder, Value, Value) -> Value,
 ) -> Unit {
   let b = self.pop()
   let a = self.pop()
@@ -1012,7 +1024,7 @@ fn Translator::translate_binary_i64(
 /// Helper for binary f32 operations
 fn Translator::translate_binary_f32(
   self : Translator,
-  op : (IRBuilder, Value, Value) -> Value,
+  op : (FunctionBuilder, Value, Value) -> Value,
 ) -> Unit {
   let b = self.pop()
   let a = self.pop()
@@ -1024,7 +1036,7 @@ fn Translator::translate_binary_f32(
 /// Helper for binary f64 operations
 fn Translator::translate_binary_f64(
   self : Translator,
-  op : (IRBuilder, Value, Value) -> Value,
+  op : (FunctionBuilder, Value, Value) -> Value,
 ) -> Unit {
   let b = self.pop()
   let a = self.pop()
@@ -1036,7 +1048,7 @@ fn Translator::translate_binary_f64(
 /// Helper for unary f32 operations
 fn Translator::translate_unary_f32(
   self : Translator,
-  op : (IRBuilder, Value) -> Value,
+  op : (FunctionBuilder, Value) -> Value,
 ) -> Unit {
   let a = self.pop()
   let result = op(self.builder, a)
@@ -1047,7 +1059,7 @@ fn Translator::translate_unary_f32(
 /// Helper for unary f64 operations
 fn Translator::translate_unary_f64(
   self : Translator,
-  op : (IRBuilder, Value) -> Value,
+  op : (FunctionBuilder, Value) -> Value,
 ) -> Unit {
   let a = self.pop()
   let result = op(self.builder, a)
@@ -1058,7 +1070,7 @@ fn Translator::translate_unary_f64(
 /// Helper for unary i32 operations
 fn Translator::translate_unary_i32(
   self : Translator,
-  op : (IRBuilder, Value) -> Value,
+  op : (FunctionBuilder, Value) -> Value,
 ) -> Unit {
   let a = self.pop()
   let result = op(self.builder, a)
@@ -1069,7 +1081,7 @@ fn Translator::translate_unary_i32(
 /// Helper for unary i64 operations
 fn Translator::translate_unary_i64(
   self : Translator,
-  op : (IRBuilder, Value) -> Value,
+  op : (FunctionBuilder, Value) -> Value,
 ) -> Unit {
   let a = self.pop()
   let result = op(self.builder, a)
@@ -1296,9 +1308,8 @@ fn Translator::translate_block(
   }
 
   // Fall through to continuation (only if not unreachable)
-  if !self.is_unreachable &&
-    self.builder.current_block() is Some(block) &&
-    block.terminator is None {
+  let block = self.builder.current_block()
+  if !self.is_unreachable && block.terminator is None {
     // Collect results from stack
     let args : Array[Value] = []
     for _ in 0..<result_types.length() {
@@ -1427,9 +1438,8 @@ fn Translator::translate_loop(
 
   // Fall through to continuation (only if not unreachable)
   let mut loop_falls_through = false
-  if !self.is_unreachable &&
-    self.builder.current_block() is Some(block) &&
-    block.terminator is None {
+  let block = self.builder.current_block()
+  if !self.is_unreachable && block.terminator is None {
     let args : Array[Value] = []
     for _ in 0..<result_types.length() {
       args.push(self.pop())

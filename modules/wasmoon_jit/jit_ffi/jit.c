@@ -1414,14 +1414,6 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_gc_clear_cache(int64_t ctx_ptr) {
     clear_type_cache_internal((jit_context_t *)(uintptr_t)ctx_ptr);
 }
 
-MOONBIT_FFI_EXPORT void wasmoon_jit_gc_enter_critical(void) {
-    // no-op: GC runtime state is context-local now.
-}
-
-MOONBIT_FFI_EXPORT void wasmoon_jit_gc_leave_critical(void) {
-    // no-op: GC runtime state is context-local now.
-}
-
 // ============ GC Heap Pointer Management ============
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_gc_set_heap(int64_t ctx_ptr, int64_t heap_ptr) {

@@ -93,7 +93,7 @@ fn parse_instanceexpr(
 pub fn parse_instance_section(
   payload : Bytes,
 ) -> Array[Instance] raise ComponentParseError {
-  let reader = Reader::new(payload)
+  let reader = Reader::Reader(payload)
   let n = reader.read_leb_u32()
   let instances : Array[Instance] = []
   for _ in 0..<n {
@@ -154,7 +154,7 @@ fn parse_alias(reader : Reader) -> Alias raise ComponentParseError {
 pub fn parse_alias_section(
   payload : Bytes,
 ) -> Array[Alias] raise ComponentParseError {
-  let reader = Reader::new(payload)
+  let reader = Reader::Reader(payload)
   let n = reader.read_leb_u32()
   let aliases : Array[Alias] = []
   for _ in 0..<n {

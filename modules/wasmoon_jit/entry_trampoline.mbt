@@ -45,13 +45,12 @@ fn build_entry_trampoline_milkir(
   param_types : Array[@types.ValueType],
   result_types : Array[@types.ValueType],
 ) -> @milkir.Function raise JitPipelineError {
-  let builder = @milkir.IRBuilder::new("entry_trampoline")
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("entry_trampoline")
   let vmctx = builder.add_param(Ptr)
   let values_vec = builder.add_param(Ptr)
   let func_ptr = builder.add_param(Ptr)
   builder.add_result(I64)
-  let entry = builder.create_block()
-  builder.switch_to_block(entry)
+  let entry = builder.current_block()
   let wasm_args : Array[@milkir.Value] = []
   let mut offset = 0
   for ty in param_types {

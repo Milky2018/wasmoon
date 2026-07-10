@@ -57,7 +57,7 @@ fn reg_home_loc_dense(
 }
 
 ///|
-fn fixed_use_preg(inst : @instr.MachVInst, idx : Int) -> @abi.PReg? {
+fn fixed_use_preg(inst : @instr.Inst, idx : Int) -> @abi.PReg? {
   if idx < inst.use_constraints.length() {
     match inst.use_constraints[idx] {
       FixedReg(preg) => Some(preg)
@@ -69,7 +69,7 @@ fn fixed_use_preg(inst : @instr.MachVInst, idx : Int) -> @abi.PReg? {
 }
 
 ///|
-fn fixed_def_preg(inst : @instr.MachVInst, idx : Int) -> @abi.PReg? {
+fn fixed_def_preg(inst : @instr.Inst, idx : Int) -> @abi.PReg? {
   if idx < inst.def_constraints.length() {
     match inst.def_constraints[idx] {
       FixedReg(preg) => Some(preg)
@@ -340,10 +340,9 @@ fn build_output(
   liveness : LivenessResult,
   alloc : RegAllocResult,
   isa : @isa.ISA,
-  settings : @abi.ABISettings,
-  embedding_reg_roles : @abi.EmbeddingRegRoles,
+  embedding_abi : @abi.EmbeddingABI,
 ) -> Output {
-  let out = Output::new()
+  let out = Output::Output()
   out.num_spillslots = alloc.num_spill_slots
   let max_vreg_id = func.next_vreg_id
   let assigned_pregs : Array[@abi.PReg?] = Array::make(max_vreg_id, None)
@@ -371,11 +370,11 @@ fn build_output(
   let reload_intervals : Map[(Int, Int), ReloadInterval] = if enable_reload_coalescing {
     let intervals = compute_reload_intervals(func, alloc)
     allocate_reload_registers(
-      func, alloc, intervals, liveness, isa, settings, embedding_reg_roles,
+      func, alloc, intervals, liveness, isa, embedding_abi,
     )
     intervals
   } else {
-    {}
+    Map([])
   }
 
   // Temp-reg pools for local reloads when no coalescing is available.
@@ -384,15 +383,16 @@ fn build_output(
   for _, preg in alloc.assignments {
     add_used_reg(used_int_regs, used_fp_regs, preg)
   }
-  let reserve_extra_results_ptr = func.needs_extra_results_ptr() ||
-    func.calls_multi_value_function()
-  let reserved_int_regs = embedding_reg_roles.reserved_int_indices(
-    reserve_context=settings.enable_pinned_reg,
+  let reserve_extra_results_ptr = func.needs_extra_results_ptr_for_call_conv(
+      embedding_abi.call_conv,
+    ) ||
+    func.calls_multi_value_function_for_call_conv(embedding_abi.call_conv)
+  let reserved_int_regs = embedding_abi.reserved_int_indices(
     reserve_context_cache_0=func.should_reserve_context_cache_0(),
     reserve_context_cache_1=func.should_reserve_context_cache_1(),
     reserve_extra_results_ptr~,
   )
-  let env = isa.machine_env(settings~, reserved_int_regs~)
+  let env = isa.machine_env(reserved_int_regs~)
 
   // Reserve dedicated scratch regs (used by the move resolver).
   for idx in env.scratch_int {

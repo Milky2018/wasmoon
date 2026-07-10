@@ -40,7 +40,7 @@ test "validator: valid simple function" {
     codes: [func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   // Should not raise
   validate_module(mod)
@@ -67,7 +67,7 @@ test "validator: valid function with params" {
     codes: [func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   validate_module(mod)
 }
@@ -93,7 +93,7 @@ test "validator: type mismatch - wrong operand type" {
     codes: [func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   assert_true(
     validate_module_has_error(mod, err => {
@@ -120,7 +120,7 @@ test "validator: stack underflow" {
     codes: [func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   assert_true(
     validate_module_has_error(mod, err => {
@@ -147,7 +147,7 @@ test "validator: invalid local index" {
     codes: [func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   assert_true(
     validate_module_has_error(mod, err => err is InvalidLocalIndex(5)),
@@ -175,7 +175,7 @@ test "validator: valid function call" {
     codes: [func0, func1],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   validate_module(mod)
 }
@@ -202,7 +202,7 @@ test "validator: valid global operations" {
     codes: [func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   validate_module(mod)
 }
@@ -229,7 +229,7 @@ test "validator: stack height - function returns too many values" {
     codes: [func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   assert_true(
     validate_module_has_error(mod, err => {
@@ -258,7 +258,7 @@ test "validator: stack height - function returns too few values" {
     codes: [func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   inspect(
     validate_module_has_error(mod, err => err is StackHeightMismatch(_)),
@@ -298,7 +298,7 @@ test "validator: stack height - block returns correct values" {
     codes: [func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   validate_module(mod) // Should pass
 }
@@ -325,7 +325,7 @@ test "validator: stack height - block leaves wrong number of values" {
     codes: [func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   inspect(
     validate_module_has_error(mod, err => err is StackHeightMismatch(_)),
@@ -359,7 +359,7 @@ test "validator: stack height - if branches must match" {
     codes: [func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   validate_module(mod) // Should pass
 }
@@ -383,7 +383,7 @@ test "validator: stack height - void function with leftover values" {
     codes: [func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   inspect(
     validate_module_has_error(mod, err => err is StackHeightMismatch(_)),
@@ -413,7 +413,7 @@ test "validator: control flow - valid br in block" {
     codes: [func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   validate_module(mod) // Should pass
 }
@@ -437,7 +437,7 @@ test "validator: control flow - invalid label index" {
     codes: [func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   inspect(
     validate_module_has_error(mod, err => err is InvalidLabelIndex(1)),
@@ -475,7 +475,7 @@ test "validator: control flow - nested blocks with br" {
     codes: [func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   validate_module(mod) // Should pass
 }
@@ -509,7 +509,7 @@ test "validator: control flow - br_if with correct type" {
     codes: [func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   validate_module(mod) // Should pass
 }
@@ -545,7 +545,7 @@ test "validator: control flow - loop with br back to start" {
     codes: [func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   validate_module(mod) // Should pass
 }
@@ -571,7 +571,7 @@ test "validator: control flow - return in nested block" {
     codes: [func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   validate_module(mod) // Should pass
 }
@@ -603,7 +603,7 @@ test "validator: control flow - br_table basic" {
     codes: [func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   validate_module(mod) // Should pass
 }
@@ -665,7 +665,7 @@ test "validator: validate_module_with_context provides location on error" {
     codes: [func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   let result = validate_module_with_context_error(mod)
   // Should fail with context
@@ -699,7 +699,7 @@ test "validator: validate_module_with_context reports correct function index" {
     codes: [func0, func1],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   let result = validate_module_with_context_error(mod)
   match result {
@@ -761,7 +761,7 @@ test "validator: data segment with i64 offset should fail" {
     codes: [],
     datas: [{ memory_idx: 0, offset: [I64Const(0L)], init: b"" }],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   assert_true(
     validate_module_has_error(mod, err => {
@@ -789,7 +789,7 @@ test "validator: data segment with ref.null offset should fail" {
     codes: [],
     datas: [{ memory_idx: 0, offset: [RefNull(FuncRef)], init: b"" }],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   assert_true(
     validate_module_has_error(mod, err => {
@@ -817,7 +817,7 @@ test "validator: data segment with empty offset should fail" {
     codes: [],
     datas: [{ memory_idx: 0, offset: [], init: b"" }],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   assert_true(
     validate_module_has_error(mod, err => {
@@ -845,7 +845,7 @@ test "validator: data segment with non-constant instruction should fail" {
     codes: [],
     datas: [{ memory_idx: 0, offset: [I32Ctz], init: b"" }],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   assert_true(
     validate_module_has_error(mod, err => err is ConstantExpressionRequired),
@@ -871,7 +871,7 @@ test "validator: data segment with nop offset should fail" {
     codes: [],
     datas: [{ memory_idx: 0, offset: [Nop], init: b"" }],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   assert_true(
     validate_module_has_error(mod, err => err is ConstantExpressionRequired),
@@ -897,7 +897,7 @@ test "validator: data segment with unknown global should fail" {
     codes: [],
     datas: [{ memory_idx: 0, offset: [GlobalGet(0)], init: b"" }],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   assert_true(
     validate_module_has_error(mod, err => err is InvalidGlobalIndex(0)),
@@ -925,7 +925,7 @@ test "validator: data segment with mutable global offset should fail" {
     codes: [],
     datas: [{ memory_idx: 0, offset: [GlobalGet(0)], init: b"" }],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   assert_true(
     validate_module_has_error(mod, err => err is MutableGlobalInConstExpr),
@@ -951,7 +951,7 @@ test "validator: data segment with valid i32 const offset should pass" {
     codes: [],
     datas: [{ memory_idx: 0, offset: [I32Const(0)], init: b"hello" }],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   validate_module(mod)
 }
@@ -977,7 +977,7 @@ test "validator: data segment with immutable global offset should pass" {
     codes: [],
     datas: [{ memory_idx: 0, offset: [GlobalGet(0)], init: b"hello" }],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   validate_module(mod)
 }
@@ -1012,7 +1012,7 @@ test "validator: elem segment with i64 offset should fail" {
     codes: [],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   assert_true(
     validate_module_has_error(mod, err => {
@@ -1047,7 +1047,7 @@ test "validator: elem segment with non-constant instruction should fail" {
     codes: [],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   assert_true(
     validate_module_has_error(mod, err => err is ConstantExpressionRequired),
@@ -1080,7 +1080,7 @@ test "validator: elem segment with unknown global should fail" {
     codes: [],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   assert_true(
     validate_module_has_error(mod, err => err is InvalidGlobalIndex(0)),
@@ -1115,7 +1115,7 @@ test "validator: elem segment with mutable global offset should fail" {
     codes: [],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   assert_true(
     validate_module_has_error(mod, err => err is MutableGlobalInConstExpr),
@@ -1139,7 +1139,7 @@ test "validator: elem segment with invalid table index should fail" {
     codes: [],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   assert_true(
     validate_module_has_error(mod, err => err is InvalidTableIndex(0)),
@@ -1172,7 +1172,7 @@ test "validator: elem segment type mismatch with table should fail" {
     codes: [],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   inspect(
     validate_module_has_error(mod, err => err is TypeMismatch(_)),
@@ -1205,7 +1205,7 @@ test "validator: elem segment with valid i32 const offset should pass" {
     codes: [],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   validate_module(mod)
 }
@@ -1242,7 +1242,7 @@ test "validator: elem init with wrong type should fail" {
     codes: [],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   inspect(
     validate_module_has_error(mod, err => err is TypeMismatch(_)),
@@ -1283,7 +1283,7 @@ test "validator: elem with unknown function should fail" {
     codes: [],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   // Should fail with "unknown function" error
   inspect(validate_module_has_error(mod, _ => true), content="true")
@@ -1311,7 +1311,7 @@ test "regression: invalid type index should fail" {
     codes: [{ locals: [], body: [] }],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   assert_true(validate_module_has_error(mod, err => err is InvalidTypeIndex(2)))
 }
@@ -1339,7 +1339,7 @@ test "regression: uninitialized non-nullable local should fail" {
     ],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   } // reading uninitialized local
   assert_true(
     validate_module_has_error(mod, err => err is UninitializedLocal(0)),
@@ -1377,7 +1377,7 @@ test "regression: initialized non-nullable local should pass" {
     ],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   validate_module(mod)
 }
@@ -1405,7 +1405,7 @@ test "regression: nullable ref local reading without initialization should pass"
     ],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   } // reading uninitialized nullable local is OK
   validate_module(mod)
 }
@@ -1427,7 +1427,7 @@ test "regression: param with non-nullable ref type should be initialized" {
     codes: [{ locals: [], body: [LocalGet(0), Drop] }],
     datas: [], // param 0 is always initialized
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   validate_module(mod)
 }
@@ -1456,7 +1456,7 @@ fn module_with_types(
     codes: [],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
 }
 
@@ -1604,7 +1604,7 @@ test "validator: mixed func, struct, array types should pass" {
     codes: [{ locals: [], body: [LocalGet(0)] }],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   validate_module(mod)
 }
@@ -1639,7 +1639,7 @@ fn module_with_memory(
     codes: [{ locals: [], body }],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
 }
 
@@ -1669,7 +1669,7 @@ fn module_with_table(
     codes: [{ locals: [], body }],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
 }
 

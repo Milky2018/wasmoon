@@ -2,7 +2,7 @@
 
 ///|
 test "call counter: basic operations" {
-  let counter = CallCounter::new()
+  let counter = CallCounter::CallCounter()
   inspect(counter.get_count(0), content="0")
   inspect(counter.total(), content="0")
 
@@ -21,7 +21,7 @@ test "call counter: basic operations" {
 
 ///|
 test "call counter: multiple functions" {
-  let counter = CallCounter::new()
+  let counter = CallCounter::CallCounter()
   counter.increment(0) |> ignore
   counter.increment(1) |> ignore
   counter.increment(0) |> ignore
@@ -35,7 +35,7 @@ test "call counter: multiple functions" {
 
 ///|
 test "call counter: reset and clear" {
-  let counter = CallCounter::new()
+  let counter = CallCounter::CallCounter()
   counter.increment(0) |> ignore
   counter.increment(1) |> ignore
   counter.reset(0)
@@ -61,7 +61,7 @@ test "hot threshold: temperature detection" {
 ///|
 test "profiler: record calls and detect hot" {
   let threshold = HotThreshold::{ warm_threshold: 5, hot_threshold: 10 }
-  let profiler = Profiler::new(threshold)
+  let profiler = Profiler::Profiler(threshold)
 
   // Cold function
   for _ in 0..<9 {
@@ -82,7 +82,7 @@ test "profiler: record calls and detect hot" {
 ///|
 test "profiler: mark compiled" {
   let threshold = HotThreshold::{ warm_threshold: 5, hot_threshold: 10 }
-  let profiler = Profiler::new(threshold)
+  let profiler = Profiler::Profiler(threshold)
   inspect(profiler.is_compiled(0), content="false")
   profiler.mark_compiled(0)
   inspect(profiler.is_compiled(0), content="true")
@@ -92,7 +92,7 @@ test "profiler: mark compiled" {
 ///|
 test "profiler: pending compilation" {
   let threshold = HotThreshold::{ warm_threshold: 5, hot_threshold: 10 }
-  let profiler = Profiler::new(threshold)
+  let profiler = Profiler::Profiler(threshold)
 
   // Trigger compilation for function 0
   for _ in 0..<10 {
@@ -111,7 +111,7 @@ test "profiler: pending compilation" {
 ///|
 test "profiler: stats" {
   let threshold = HotThreshold::{ warm_threshold: 5, hot_threshold: 10 }
-  let profiler = Profiler::new(threshold)
+  let profiler = Profiler::Profiler(threshold)
   for _ in 0..<15 {
     profiler.record_call(0) |> ignore
   }

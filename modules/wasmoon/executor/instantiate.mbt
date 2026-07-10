@@ -53,7 +53,7 @@ fn find_export_by_name(
 pub fn instantiate_module(
   mod : @types.Module,
 ) -> (@runtime.Store, @runtime.ModuleInstance) {
-  let store = @runtime.Store::new()
+  let store = @runtime.Store::Store()
   // Set module types for GC support
   store.set_module_types(mod.types, rec_groups=mod.type_rec_groups)
 
@@ -76,7 +76,7 @@ pub fn instantiate_module(
       mem_type.page_size_log2 == 16 {
       @runtime.Memory::new_guarded_memory0(min, max)
     } else {
-      @runtime.Memory::new(
+      Memory(
         min,
         max,
         is_memory64=mem_type.is_memory64,
@@ -108,7 +108,7 @@ pub fn instantiate_module(
     } else {
       Null
     }
-    let table = @runtime.Table::new(
+    let table = @runtime.Table::Table(
       table_def.type_.elem_type,
       table_def.type_.limits.min.to_int(),
       table_def.type_.limits.max.map(fn(m) { m.to_int() }),
@@ -134,7 +134,10 @@ pub fn instantiate_module(
     ) catch {
       e => abort(e.to_string())
     }
-    let global_inst = @runtime.GlobalInstance::new(global.type_, init_value)
+    let global_inst = @runtime.GlobalInstance::GlobalInstance(
+      global.type_,
+      init_value,
+    )
     let addr = store.alloc_global(global_inst)
     global_addrs.push(addr)
     global_instances.push(global_inst)
@@ -694,7 +697,7 @@ pub fn instantiate_module_with_init(
 
   // Execute start function if present
   if mod.start is Some(start_func_idx) {
-    let ctx = ExecContext::new(store, instance)
+    let ctx = ExecContext::ExecContext(store, instance)
     (ctx.call_func(start_func_idx, []) catch {
       BranchWith(_, _) | Return => raise Unreachable
       e => raise normalize_runtime_error(e)
@@ -732,7 +735,7 @@ pub struct ImportDiagnosticsResult {
 }
 
 ///|
-pub fn ImportDiagnosticsResult::new() -> ImportDiagnosticsResult {
+pub fn ImportDiagnosticsResult::ImportDiagnosticsResult() -> ImportDiagnosticsResult {
   { ok: true, diagnostics: [] }
 }
 
@@ -798,7 +801,7 @@ pub fn validate_imports_with_diagnostics(
   imports : @runtime.Imports,
 ) -> ImportDiagnosticsResult {
   store.set_module_types(mod.types, rec_groups=mod.type_rec_groups)
-  let result = ImportDiagnosticsResult::new()
+  let result = ImportDiagnosticsResult::ImportDiagnosticsResult()
   let canonical_type_indices = @types.compute_canonical_type_indices(
     mod.types,
     type_rec_groups=mod.type_rec_groups,
@@ -1558,7 +1561,7 @@ pub fn instantiate_module_with_imports(
   // Allocate memories (after imported memories)
   for mem_type in mod.memories {
     let min_pages = mem_type.limits.min.to_int()
-    let mem = @runtime.Memory::new(
+    let mem = @runtime.Memory::Memory(
       min_pages,
       mem_type.limits.max.map(fn(m) { m.to_int() }),
       is_memory64=mem_type.is_memory64,
@@ -1580,11 +1583,7 @@ pub fn instantiate_module_with_imports(
   for addr in global_addrs {
     global_instances.push(
       store.get_global(addr) catch {
-        _ =>
-          @runtime.GlobalInstance::new(
-            { value_type: I32, mutable: false },
-            I32(0),
-          )
+        _ => GlobalInstance({ value_type: I32, mutable: false }, I32(0))
       },
     )
   }
@@ -1605,7 +1604,7 @@ pub fn instantiate_module_with_imports(
       None => Null
     }
     let min_elems = table_def.type_.limits.min.to_int()
-    let table = @runtime.Table::new(
+    let table = @runtime.Table::Table(
       table_def.type_.elem_type,
       min_elems,
       table_def.type_.limits.max.map(fn(m) { m.to_int() }),
@@ -1625,7 +1624,10 @@ pub fn instantiate_module_with_imports(
       store=Some(store),
       types=mod.types,
     )
-    let global_inst = @runtime.GlobalInstance::new(global.type_, init_value)
+    let global_inst = @runtime.GlobalInstance::GlobalInstance(
+      global.type_,
+      init_value,
+    )
     let addr = store.alloc_global(global_inst)
     global_addrs.push(addr)
     global_instances.push(global_inst)
@@ -1720,7 +1722,7 @@ pub fn instantiate_module_with_imports(
 
   // Execute start function if present
   if mod.start is Some(start_func_idx) {
-    let ctx = ExecContext::new(store, instance)
+    let ctx = ExecContext::ExecContext(store, instance)
     (ctx.call_func(start_func_idx, []) catch {
       BranchWith(_, _) | Return => raise Unreachable
       e => raise normalize_runtime_error(e)
@@ -1771,7 +1773,7 @@ pub struct CallExportOptions {
 }
 
 ///|
-pub fn CallExportOptions::new(
+pub fn CallExportOptions::CallExportOptions(
   timeout_ms? : Int? = None,
   fuel? : Int? = None,
   budget? : Int? = None,
@@ -1830,7 +1832,7 @@ pub fn call_exported_func_with_options(
   instance : @runtime.ModuleInstance,
   name : String,
   args : Array[@types.Value],
-  options? : CallExportOptions = CallExportOptions::new(),
+  options? : CallExportOptions = CallExportOptions(),
 ) -> CallExportResult {
   if check_call_export_options(options) is Some(failure) {
     return Err(failure)
@@ -1840,7 +1842,7 @@ pub fn call_exported_func_with_options(
     Some(exp) =>
       match exp.desc {
         Func(func_idx) => {
-          let ctx = ExecContext::new(store, instance)
+          let ctx = ExecContext::ExecContext(store, instance)
           let results = ctx.call_func(func_idx, args) catch {
             BranchWith(_, _) | Return =>
               return Err(
@@ -1898,7 +1900,7 @@ pub fn call_exported_func(
     Some(exp) =>
       match exp.desc {
         Func(func_idx) => {
-          let ctx = ExecContext::new(store, instance)
+          let ctx = ExecContext::ExecContext(store, instance)
           // Catch any leaked ControlSignal and convert to RuntimeError
           ctx.call_func(func_idx, args) catch {
             BranchWith(_, _) | Return => raise Unreachable
@@ -1919,7 +1921,7 @@ pub fn call_func_by_index(
   func_idx : Int,
   args : Array[@types.Value],
 ) -> Array[@types.Value] raise @runtime.RuntimeError {
-  let ctx = ExecContext::new(store, instance)
+  let ctx = ExecContext::ExecContext(store, instance)
   // Catch any leaked ControlSignal and convert to RuntimeError
   ctx.call_func(func_idx, args) catch {
     BranchWith(_, _) | Return => raise Unreachable
@@ -1943,7 +1945,7 @@ pub fn call_func_by_index_with_exception(
   func_idx : Int,
   args : Array[@types.Value],
 ) -> InvokeWithExceptionResult raise @runtime.RuntimeError {
-  let ctx = ExecContext::new(store, instance)
+  let ctx = ExecContext::ExecContext(store, instance)
   let results = ctx.call_func(func_idx, args) catch {
     ThrowException(tag_addr, values) => return Thrown(tag_addr, values)
     BranchWith(_, _) | Return => raise Unreachable
@@ -2038,7 +2040,7 @@ pub fn instantiate_with_linker(
 
   // Execute start function if present
   if mod.start is Some(start_func_idx) {
-    let ctx = ExecContext::new(store, instance)
+    let ctx = ExecContext::ExecContext(store, instance)
     (ctx.call_func(start_func_idx, []) catch {
       BranchWith(_, _) | Return => raise Unreachable
       e => raise normalize_runtime_error(e)

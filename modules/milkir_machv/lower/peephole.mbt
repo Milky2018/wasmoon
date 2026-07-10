@@ -17,14 +17,7 @@ pub fn optimize_machv(
 pub fn optimize_machv_for_lowering(
   func : @machv.Function,
   isa? : @isa.ISA = AArch64,
-  embedding_context_layout? : @abi.EmbeddingContextLayout? = None,
-  embedding_reg_roles? : @abi.EmbeddingRegRoles = @abi.EmbeddingRegRoles::none(),
+  embedding_abi? : @abi.EmbeddingABI? = None,
 ) -> Unit {
-  @peephole.optimize_machv(
-    func,
-    isa~,
-    profile=Lowering,
-    embedding_context_layout~,
-    embedding_reg_roles~,
-  )
+  @peephole.optimize_machv(func, isa~, profile=Lowering, embedding_abi~)
 }

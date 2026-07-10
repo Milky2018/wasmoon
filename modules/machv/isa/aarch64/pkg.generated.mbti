@@ -23,7 +23,7 @@ pub fn allocatable_scratch_fprs() -> Array[@abi.PReg]
 
 pub fn allocatable_scratch_regs() -> Array[@abi.PReg]
 
-pub fn build_machine_env(@abi.ABISettings, Array[Int]) -> @spec.MachineEnvData
+pub fn build_machine_env(Array[Int]) -> @spec.MachineEnvData
 
 pub fn call_clobbered_fprs() -> Array[@abi.PReg]
 

@@ -2,7 +2,7 @@
 
 ///|
 test "select: select(_, x, x) = x" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let cond = eg.add_var(0)
   let x = eg.add_var(1)
   let select = eg.add({ op: Select, children: [cond, x, x] })
@@ -12,7 +12,7 @@ test "select: select(_, x, x) = x" {
 
 ///|
 test "select: select(icmp, 1, 0) = icmp" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let one = eg.add_const(1L)
@@ -25,7 +25,7 @@ test "select: select(icmp, 1, 0) = icmp" {
 
 ///|
 test "select: select(sgt(x, y), x, y) = smax(x, y)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let cmp = eg.add({ op: Icmp(CC_SGT), children: [x, y] })
@@ -43,7 +43,7 @@ test "select: select(sgt(x, y), x, y) = smax(x, y)" {
 
 ///|
 test "select: select(slt(x, y), x, y) = smin(x, y)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let cmp = eg.add({ op: Icmp(CC_SLT), children: [x, y] })
@@ -61,7 +61,7 @@ test "select: select(slt(x, y), x, y) = smin(x, y)" {
 
 ///|
 test "select: select(ugt(x, y), x, y) = umax(x, y)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let cmp = eg.add({ op: Icmp(CC_UGT), children: [x, y] })
@@ -79,7 +79,7 @@ test "select: select(ugt(x, y), x, y) = umax(x, y)" {
 
 ///|
 test "select: select(ult(x, y), x, y) = umin(x, y)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let cmp = eg.add({ op: Icmp(CC_ULT), children: [x, y] })
@@ -97,7 +97,7 @@ test "select: select(ult(x, y), x, y) = umin(x, y)" {
 
 ///|
 test "select: select(slt(x, y), y, x) = smax(x, y) (swapped)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let cmp = eg.add({ op: Icmp(CC_SLT), children: [x, y] })
@@ -116,7 +116,7 @@ test "select: select(slt(x, y), y, x) = smax(x, y) (swapped)" {
 
 ///|
 test "select: select(sgt(x, y), y, x) = smin(x, y) (swapped)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let cmp = eg.add({ op: Icmp(CC_SGT), children: [x, y] })
@@ -135,7 +135,7 @@ test "select: select(sgt(x, y), y, x) = smin(x, y) (swapped)" {
 
 ///|
 test "select: select(sgt(x, 0), x, -x) = iabs(x)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let zero = eg.add_const(0L)
   let neg_x = eg.add({ op: Neg, children: [x] })
@@ -148,7 +148,7 @@ test "select: select(sgt(x, 0), x, -x) = iabs(x)" {
 
 ///|
 test "select: select(slt(x, 0), -x, x) = iabs(x)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let zero = eg.add_const(0L)
   let neg_x = eg.add({ op: Neg, children: [x] })
@@ -161,7 +161,7 @@ test "select: select(slt(x, 0), -x, x) = iabs(x)" {
 
 ///|
 test "select: sgt(smin(x, y), x) = 0" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let smin = eg.add({ op: Smin, children: [x, y] })
@@ -173,7 +173,7 @@ test "select: sgt(smin(x, y), x) = 0" {
 
 ///|
 test "select: slt(x, smin(x, y)) = 0" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let smin = eg.add({ op: Smin, children: [x, y] })
@@ -185,7 +185,7 @@ test "select: slt(x, smin(x, y)) = 0" {
 
 ///|
 test "select: ugt(umin(x, y), x) = 0" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let umin = eg.add({ op: Umin, children: [x, y] })
@@ -197,7 +197,7 @@ test "select: ugt(umin(x, y), x) = 0" {
 
 ///|
 test "select: ult(x, umin(x, y)) = 0" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
   let umin = eg.add({ op: Umin, children: [x, y] })
@@ -209,7 +209,7 @@ test "select: ult(x, umin(x, y)) = 0" {
 
 ///|
 test "select: select(d, a, select(d, _, y)) = select(d, a, y)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let d = eg.add_var(0)
   let a = eg.add_var(1)
   let b = eg.add_var(2)
@@ -223,7 +223,7 @@ test "select: select(d, a, select(d, _, y)) = select(d, a, y)" {
 
 ///|
 test "select: select(d, select(d, x, _), a) = select(d, x, a)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let d = eg.add_var(0)
   let x = eg.add_var(1)
   let b = eg.add_var(2)
@@ -237,7 +237,7 @@ test "select: select(d, select(d, x, _), a) = select(d, x, a)" {
 
 ///|
 test "select: iadd(select(c, 1, 2), 5) = select(c, 6, 7)" {
-  let eg = EGraph::new()
+  let eg = EGraph::EGraph()
   let c = eg.add_var(0)
   let k1 = eg.add_const(1L)
   let k2 = eg.add_const(2L)

@@ -5,7 +5,7 @@ pub(all) enum RegClass {
   Float32 // 32-bit floating-point registers
   Float64 // 64-bit floating-point registers
   Vector // 128-bit SIMD vector registers
-} derive(Eq)
+} derive(Eq, Debug)
 
 ///|
 fn RegClass::to_string(self : RegClass) -> String {
@@ -27,7 +27,7 @@ pub impl Show for RegClass with fn output(self, logger) {
 pub(all) enum Reg {
   Virtual(VReg)
   Physical(PReg)
-}
+} derive(Eq, Debug)
 
 ///|
 fn Reg::to_string(self : Reg) -> String {
@@ -48,7 +48,7 @@ pub impl Show for Reg with fn output(self, logger) {
 pub(all) enum OperandConstraint {
   Any // Any register is acceptable
   FixedReg(PReg) // Must use specific physical register
-}
+} derive(Eq, Debug)
 
 ///|
 fn OperandConstraint::to_string(self : OperandConstraint) -> String {

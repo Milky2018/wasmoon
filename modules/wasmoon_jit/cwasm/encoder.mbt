@@ -13,7 +13,7 @@ priv struct BinaryWriter {
 }
 
 ///|
-fn BinaryWriter::new() -> BinaryWriter {
+fn BinaryWriter::BinaryWriter() -> BinaryWriter {
   { buf: [] }
 }
 
@@ -1198,7 +1198,7 @@ fn encode_type_section(mod : @types.Module) -> Array[Int] {
   if mod.types.is_empty() {
     return []
   }
-  let w = BinaryWriter::new()
+  let w = BinaryWriter::BinaryWriter()
   w.write_u32(mod.types.length())
   for subtype in mod.types {
     encode_subtype(w, subtype)
@@ -1212,7 +1212,7 @@ fn encode_import_section(mod : @types.Module) -> Array[Int] {
   if mod.imports.is_empty() {
     return []
   }
-  let w = BinaryWriter::new()
+  let w = BinaryWriter::BinaryWriter()
   w.write_u32(mod.imports.length())
   for imp in mod.imports {
     w.write_name(imp.mod_name)
@@ -1250,7 +1250,7 @@ fn encode_function_section(mod : @types.Module) -> Array[Int] {
   if mod.funcs.is_empty() {
     return []
   }
-  let w = BinaryWriter::new()
+  let w = BinaryWriter::BinaryWriter()
   w.write_u32(mod.funcs.length())
   for type_idx in mod.funcs {
     w.write_u32(type_idx)
@@ -1264,7 +1264,7 @@ fn encode_table_section(mod : @types.Module) -> Array[Int] {
   if mod.tables.is_empty() {
     return []
   }
-  let w = BinaryWriter::new()
+  let w = BinaryWriter::BinaryWriter()
   w.write_u32(mod.tables.length())
   for table in mod.tables {
     match table.init {
@@ -1288,7 +1288,7 @@ fn encode_memory_section(mod : @types.Module) -> Array[Int] {
   if mod.memories.is_empty() {
     return []
   }
-  let w = BinaryWriter::new()
+  let w = BinaryWriter::BinaryWriter()
   w.write_u32(mod.memories.length())
   for mem in mod.memories {
     encode_memory_type(w, mem)
@@ -1302,7 +1302,7 @@ fn encode_global_section(mod : @types.Module) -> Array[Int] {
   if mod.globals.is_empty() {
     return []
   }
-  let w = BinaryWriter::new()
+  let w = BinaryWriter::BinaryWriter()
   w.write_u32(mod.globals.length())
   for global in mod.globals {
     encode_global_type(w, global.type_)
@@ -1318,7 +1318,7 @@ fn encode_export_section(mod : @types.Module) -> Array[Int] {
   if mod.exports.is_empty() {
     return []
   }
-  let w = BinaryWriter::new()
+  let w = BinaryWriter::BinaryWriter()
   w.write_u32(mod.exports.length())
   for exp in mod.exports {
     w.write_name(exp.name)
@@ -1353,7 +1353,7 @@ fn encode_export_section(mod : @types.Module) -> Array[Int] {
 fn encode_start_section(mod : @types.Module) -> Array[Int] {
   match mod.start {
     Some(func_idx) => {
-      let w = BinaryWriter::new()
+      let w = BinaryWriter::BinaryWriter()
       w.write_u32(func_idx)
       w.to_bytes()
     }
@@ -1367,7 +1367,7 @@ fn encode_element_section(mod : @types.Module) -> Array[Int] {
   if mod.elems.is_empty() {
     return []
   }
-  let w = BinaryWriter::new()
+  let w = BinaryWriter::BinaryWriter()
   w.write_u32(mod.elems.length())
   for elem in mod.elems {
     match elem.mode {
@@ -1428,11 +1428,11 @@ fn encode_code_section(mod : @types.Module) -> Array[Int] {
   if mod.codes.is_empty() {
     return []
   }
-  let w = BinaryWriter::new()
+  let w = BinaryWriter::BinaryWriter()
   w.write_u32(mod.codes.length())
   for code in mod.codes {
     // Encode function body
-    let body_writer = BinaryWriter::new()
+    let body_writer = BinaryWriter::BinaryWriter()
 
     // Compress locals: group consecutive same-type locals
     let compressed_locals : Array[(Int, @types.ValueType)] = []
@@ -1473,7 +1473,7 @@ fn encode_data_section(mod : @types.Module) -> Array[Int] {
   if mod.datas.is_empty() {
     return []
   }
-  let w = BinaryWriter::new()
+  let w = BinaryWriter::BinaryWriter()
   w.write_u32(mod.datas.length())
   for data in mod.datas {
     if data.memory_idx < 0 {
@@ -1506,7 +1506,7 @@ fn encode_datacount_section(mod : @types.Module) -> Array[Int] {
   if mod.datas.is_empty() {
     return []
   }
-  let w = BinaryWriter::new()
+  let w = BinaryWriter::BinaryWriter()
   w.write_u32(mod.datas.length())
   w.to_bytes()
 }
@@ -1517,7 +1517,7 @@ fn encode_tag_section(mod : @types.Module) -> Array[Int] {
   if mod.tags.is_empty() {
     return []
   }
-  let w = BinaryWriter::new()
+  let w = BinaryWriter::BinaryWriter()
   w.write_u32(mod.tags.length())
   for tag in mod.tags {
     w.write_byte(0x00) // exception kind
@@ -1531,7 +1531,7 @@ fn encode_tag_section(mod : @types.Module) -> Array[Int] {
 ///|
 /// Encode a Module to WebAssembly binary format
 pub fn encode(mod : @types.Module) -> Array[Int] {
-  let w = BinaryWriter::new()
+  let w = BinaryWriter::BinaryWriter()
 
   // Write magic number: \0asm
   w.write_byte(0x00)

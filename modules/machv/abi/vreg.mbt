@@ -5,7 +5,7 @@
 pub(all) struct VReg {
   id : Int
   class : RegClass // Which register class this vreg belongs to
-}
+} derive(Eq, Debug)
 
 ///|
 fn VReg::to_string(self : VReg) -> String {

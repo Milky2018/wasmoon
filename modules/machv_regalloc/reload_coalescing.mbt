@@ -22,7 +22,7 @@ fn compute_reload_intervals(
   func : @machv.Function,
   alloc : RegAllocResult,
 ) -> Map[(Int, Int), ReloadInterval] {
-  let intervals : Map[(Int, Int), ReloadInterval] = {}
+  let intervals : Map[(Int, Int), ReloadInterval] = Map([])
   for block_idx, block in func.blocks {
     // Track uses of spilled vregs in this block.
     // Key: spill_slot, Value: (first_inst, last_inst, vreg_class, vreg_id)
@@ -33,7 +33,7 @@ fn compute_reload_intervals(
     // stale value in a register across a point where the slot's content
     // changes. Therefore, we disable coalescing for any spill slot that is
     // used by multiple vregs within the block.
-    let slot_uses : Map[Int, (Int, Int, @abi.RegClass, Int)] = {}
+    let slot_uses : Map[Int, (Int, Int, @abi.RegClass, Int)] = Map([])
     let conflicting_slots : @hashset.HashSet[Int] = HashSet([])
     for inst_idx, inst in block.insts {
       for use_reg in inst.uses {
@@ -84,8 +84,7 @@ fn allocate_reload_registers(
   intervals : Map[(Int, Int), ReloadInterval],
   liveness : LivenessResult,
   isa : @isa.ISA,
-  settings : @abi.ABISettings,
-  embedding_reg_roles : @abi.EmbeddingRegRoles,
+  embedding_abi : @abi.EmbeddingABI,
 ) -> Unit {
   if intervals.is_empty() {
     return
@@ -100,16 +99,19 @@ fn allocate_reload_registers(
   // coalescing.
   let reserved_int_regs : @hashset.HashSet[Int] = HashSet([])
   let reserved_float_regs : @hashset.HashSet[Int] = HashSet([])
-  let calls_multi = func.calls_multi_value_function()
-  let needs_extra = func.needs_extra_results_ptr()
+  let calls_multi = func.calls_multi_value_function_for_call_conv(
+    embedding_abi.call_conv,
+  )
+  let needs_extra = func.needs_extra_results_ptr_for_call_conv(
+    embedding_abi.call_conv,
+  )
   let reserve_extra_results_ptr = needs_extra || calls_multi
-  for
-    idx in embedding_reg_roles.reserved_int_indices(
-      reserve_context=settings.enable_pinned_reg,
-      reserve_context_cache_0=func.should_reserve_context_cache_0(),
-      reserve_context_cache_1=func.should_reserve_context_cache_1(),
-      reserve_extra_results_ptr~,
-    ) {
+  let reserved_indices = embedding_abi.reserved_int_indices(
+    reserve_context_cache_0=func.should_reserve_context_cache_0(),
+    reserve_context_cache_1=func.should_reserve_context_cache_1(),
+    reserve_extra_results_ptr~,
+  )
+  for idx in reserved_indices {
     reserved_int_regs.add(idx) |> ignore
   }
 
@@ -141,15 +143,7 @@ fn allocate_reload_registers(
       }
     }
     AMD64 => {
-      let env = isa.machine_env(
-        settings~,
-        reserved_int_regs=embedding_reg_roles.reserved_int_indices(
-          reserve_context=settings.enable_pinned_reg,
-          reserve_context_cache_0=func.should_reserve_context_cache_0(),
-          reserve_context_cache_1=func.should_reserve_context_cache_1(),
-          reserve_extra_results_ptr~,
-        ),
-      )
+      let env = isa.machine_env(reserved_int_regs=reserved_indices)
       for r in env.callee_saved_int {
         // rbp is already excluded from MachineEnv; still, keep it out here too.
         if r.index == isa.fp_reg_index() {
@@ -175,9 +169,9 @@ fn allocate_reload_registers(
   // fixed-reg constraints. This is less restrictive than a whole-function ban
   // and aligns closer to Cranelift/regalloc2's local freedom to reuse regs in
   // unrelated blocks.
-  let block_int_used_map : Map[Int, @hashset.HashSet[Int]] = {}
-  let block_float_used_map : Map[Int, @hashset.HashSet[Int]] = {}
-  let block_has_call_map : Map[Int, Bool] = {}
+  let block_int_used_map : Map[Int, @hashset.HashSet[Int]] = Map([])
+  let block_float_used_map : Map[Int, @hashset.HashSet[Int]] = Map([])
+  let block_has_call_map : Map[Int, Bool] = Map([])
   for block_idx, block in func.blocks {
     let block_int_used : @hashset.HashSet[Int] = HashSet([])
     let block_float_used : @hashset.HashSet[Int] = HashSet([])

@@ -57,7 +57,7 @@ fn LocatedToken::synthetic(token : Token) -> LocatedToken {
 ///|
 /// Extract substring from input without raising errors
 fn extract_substring(s : String, start : Int, end : Int) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder::StringBuilder()
   for i in start..<end {
     buf.write_char(s.code_unit_at(i).unsafe_to_char())
   }
@@ -77,7 +77,7 @@ priv struct Lexer {
 }
 
 ///|
-fn Lexer::new(input : String) -> Lexer {
+fn Lexer::Lexer(input : String) -> Lexer {
   {
     input,
     pos: 0,
@@ -354,7 +354,7 @@ fn is_idchar(c : Char) -> Bool {
 
 ///|
 fn Lexer::read_id_or_keyword(self : Lexer) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder::StringBuilder()
   while !self.is_eof() {
     match self.peek_char() {
       Some(c) =>
@@ -374,7 +374,7 @@ fn Lexer::read_id_or_keyword(self : Lexer) -> String {
 fn Lexer::read_string(self : Lexer) -> String raise WatError {
   // Write directly to StringBuilder - hex escapes produce raw byte values
   // that are stored as character code units (not UTF-8 interpreted)
-  let buf = StringBuilder::new()
+  let buf = StringBuilder::StringBuilder()
   let start_loc = self.current_loc()
   // Skip opening quote
   self.advance_pos()
@@ -397,7 +397,7 @@ fn Lexer::read_string(self : Lexer) -> String raise WatError {
             // Unicode escape \u{xxxx}
             match self.next_char() {
               Some('{') => {
-                let hex_buf = StringBuilder::new()
+                let hex_buf = StringBuilder::StringBuilder()
                 while !self.is_eof() {
                   match self.peek_char() {
                     Some('}') => {
@@ -497,7 +497,7 @@ fn Lexer::read_id_string(self : Lexer) -> String raise WatError {
             // Unicode escape \u{xxxx} - encode as UTF-8 bytes
             match self.next_char() {
               Some('{') => {
-                let hex_buf = StringBuilder::new()
+                let hex_buf = StringBuilder::StringBuilder()
                 while !self.is_eof() {
                   match self.peek_char() {
                     Some('}') => {
@@ -592,7 +592,7 @@ fn encode_utf8_codepoint(bytes : Array[Int], cp : Int) -> Unit {
 ///|
 /// Decode UTF-8 bytes to a string
 fn decode_utf8_bytes(bytes : Array[Int]) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder::StringBuilder()
   let mut i = 0
   while i < bytes.length() {
     let b = bytes[i]
@@ -730,7 +730,7 @@ fn Lexer::check_nan_or_inf(self : Lexer) -> Bool {
 
 ///|
 fn Lexer::read_number(self : Lexer) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder::StringBuilder()
   // Handle optional sign
   if self.peek_char() is (Some('-') | Some('+')) {
     buf.write_char(self.next_char().unwrap())

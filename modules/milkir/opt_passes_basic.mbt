@@ -8,13 +8,13 @@ pub struct OptResult {
 } derive(Eq)
 
 ///|
-pub fn OptResult::new() -> OptResult {
+fn OptResult::OptResult() -> OptResult {
   { changed: false }
 }
 
 ///|
 /// Mark that the IR was changed
-pub fn OptResult::mark_changed(self : OptResult) -> Unit {
+fn OptResult::mark_changed(self : OptResult) -> Unit {
   self.changed = true
 }
 
@@ -23,8 +23,8 @@ pub fn OptResult::mark_changed(self : OptResult) -> Unit {
 ///|
 /// Dead Code Elimination (DCE)
 /// Removes instructions whose results are never used
-pub fn eliminate_dead_code(func : Function) -> OptResult {
-  let result = OptResult::new()
+fn eliminate_dead_code(func : Function) -> OptResult {
+  let result = OptResult::OptResult()
   // Build use counts for all values
   let use_counts = compute_use_counts(func)
   // Iterate until fixed point
@@ -133,8 +133,8 @@ fn has_side_effects(inst : Inst) -> Bool {
 ///|
 /// Constant Folding
 /// Evaluates constant expressions at compile time
-pub fn fold_constants(func : Function) -> OptResult {
-  let result = OptResult::new()
+fn fold_constants(func : Function) -> OptResult {
+  let result = OptResult::OptResult()
   // Map from value id to constant value (if known)
   let constants : @hashmap.HashMap[Int, ConstValue] = HashMap([])
   for block in func.blocks {
@@ -540,48 +540,11 @@ fn eval_icmp_i64(cc : IntCC, a : Int64, b : Int64) -> Bool {
 // ============ Copy Propagation ============
 
 ///|
-/// Copy Propagation
-/// Replaces uses of copied values with the original value
-/// Note: This is local copy propagation - only propagates within the same basic block
-/// to avoid incorrectly using values from non-dominating blocks (e.g., sibling branches)
-pub fn propagate_copies(func : Function) -> OptResult {
-  let result = OptResult::new()
-  // Process each block independently to avoid cross-block copy propagation issues
-  for block in func.blocks {
-    // Map from copy destination to copy source (local to this block)
-    let copies : @hashmap.HashMap[Int, Value] = HashMap([])
-    // First pass: collect copy instructions in this block
-    for inst in block.instructions {
-      if inst.opcode is Copy &&
-        inst.first_result() is Some(dest) &&
-        inst.operands.length() > 0 {
-        copies.set(dest.id, inst.operands[0])
-      }
-    }
-    // Second pass: replace uses of copied values in this block
-    for inst in block.instructions {
-      for i, op in inst.operands {
-        if resolve_copy(op, copies) is Some(resolved) && resolved.id != op.id {
-          inst.operands[i] = resolved
-          result.mark_changed()
-        }
-      }
-    }
-    // Also update terminator operands
-    if block.terminator is Some(term) {
-      let new_term = propagate_copies_in_terminator(term, copies, result)
-      block.terminator = Some(new_term)
-    }
-  }
-  result
-}
-
-///|
 /// Alias/copy canonicalization pass.
 /// Resolves visible copy chains along the dominator tree and rewrites operands
 /// to canonical values (Cranelift analogue: `resolve_all_aliases()`).
-pub fn canonicalize_aliases(func : Function) -> OptResult {
-  let result = OptResult::new()
+fn canonicalize_aliases(func : Function) -> OptResult {
+  let result = OptResult::OptResult()
   if func.blocks.length() == 0 {
     return result
   }
@@ -639,13 +602,6 @@ pub fn canonicalize_aliases(func : Function) -> OptResult {
     dfs(0)
   }
   result
-}
-
-///|
-/// Cross-basic-block copy propagation using dominance analysis
-/// Compatibility wrapper around `canonicalize_aliases`.
-pub fn propagate_copies_global(func : Function) -> OptResult {
-  canonicalize_aliases(func)
 }
 
 ///|

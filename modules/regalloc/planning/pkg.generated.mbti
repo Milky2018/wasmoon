@@ -1,0 +1,303 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/regalloc/planning"
+
+import {
+  "Milky2018/regalloc",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn build_dense_successor_edges(Array[Int], Array[Array[Int]]) -> DenseCfgEdges
+
+pub fn choose_fixed_reg_hint(Array[@regalloc.PhysicalReg], Array[@regalloc.PhysicalReg]) -> @regalloc.PhysicalReg?
+
+pub fn choose_temp_register(@regalloc.RegClass, Array[Int], Array[Int], Array[Int], Array[Int], Bool, Int, Int) -> TempRegisterChoice
+
+pub fn compact_spill_slots(Array[CompactSpillSet], Array[SpillSlotNoShareEdge], Array[Int]) -> SpillSlotCompaction
+
+pub fn compute_approx_loop_depths(Array[Array[Int]]) -> Array[Int]
+
+pub fn compute_block_point_bases(Array[Int], Array[Int]) -> Array[Int]
+
+pub fn compute_dominators_from_edges(DenseCfgEdges) -> Array[Int]
+
+pub fn compute_reachable_reverse_postorder_from_successors(Array[Array[Int]]) -> Array[Int]
+
+pub fn compute_reload_intervals(Array[ReloadUseInfo], allow_vector? : Bool) -> Array[ReloadIntervalInfo]
+
+pub fn compute_reverse_postorder_from_successors(Array[Array[Int]]) -> Array[Int]
+
+pub fn compute_spill_weight(Array[@regalloc.UsePosition], Array[Int]) -> Int
+
+pub fn count_sorted_ints_in_open_range(Array[Int], Int, Int) -> Int
+
+pub fn find_back_edges_from_edges(DenseCfgEdges) -> Array[(Int, Int)]
+
+pub fn find_loops_from_edges(DenseCfgEdges) -> Array[DenseCfgLoop]
+
+pub fn has_ordered_span_conflict(Array[OrderedProgramSpan], Array[OrderedProgramSpan]) -> Bool
+
+pub fn insert_allocated_spans(Array[AllocatedProgramSpan], Int, Array[OrderedProgramSpan]) -> Array[AllocatedProgramSpan]
+
+pub fn lower_bound_ordered_span_by_end(Array[OrderedProgramSpan], Int) -> Int
+
+pub fn lower_bound_sorted_int(Array[Int], Int) -> Int
+
+pub fn plan_bundle_split(Array[BundleSplitRange], @regalloc.ProgramPoint?, Array[Int], Int, Int) -> BundleSplitPlan
+
+pub fn plan_cross_block_rematerializations(Array[RematDefInfo], Array[RematUseInfo]) -> Array[RematLocalCloneInfo]
+
+pub fn plan_fixed_constraint_edits(Array[FixedConstraintInst]) -> Array[FixedConstraintInstEdits]
+
+pub fn plan_long_distance_rematerializations(Array[RematDefInfo], Array[RematUseInfo], min_distance? : Int, per_vreg_clone_cap? : Int) -> Array[RematCloneInfo]
+
+pub fn plan_register_probe_order(Array[@regalloc.PhysicalReg], Array[@regalloc.PhysicalReg], Array[@regalloc.PhysicalReg], Bool, Int, Int, @regalloc.PhysicalReg?) -> Array[@regalloc.PhysicalReg]
+
+pub fn plan_temp_register_pool(Array[Bool], Array[Int], Array[Int], Array[Int]) -> Array[Int]
+
+pub fn remove_allocated_spans(Array[AllocatedProgramSpan], Int) -> Array[AllocatedProgramSpan]
+
+pub fn resolve_parallel_moves(Array[ParallelMove], Array[@regalloc.PhysicalReg], Array[@regalloc.PhysicalReg]) -> Array[ParallelMove]
+
+pub fn resolve_threaded_jump(Array[ThreadBlock], Int, Array[ThreadArg]) -> ThreadedJump
+
+pub fn scan_conflicts_with_cutoff(Array[OrderedProgramSpan], Array[OccupiedProgramSpan], Int, Int?) -> ConflictScanResult
+
+pub fn upper_bound_sorted_int(Array[Int], Int) -> Int
+
+// Errors
+
+// Types and methods
+pub(all) struct ActiveReloadCache {
+  epoch : Array[Int]
+  preg_ids : Array[Int]
+} derive(@debug.Debug)
+pub fn ActiveReloadCache::ActiveReloadCache(Int) -> Self
+pub fn ActiveReloadCache::clear(Self, Int) -> Unit
+pub fn ActiveReloadCache::get(Self, Int, Int) -> Int?
+pub fn ActiveReloadCache::set(Self, Int, Int, Int) -> Unit
+
+pub(all) struct AllocatedProgramSpan {
+  owner_id : Int
+  span : OrderedProgramSpan
+} derive(Eq, @debug.Debug)
+
+pub(all) enum BundleSplitPlan {
+  Split(Array[Int], Array[Int])
+  Minimal
+  SpillWhole
+} derive(@debug.Debug)
+
+pub(all) struct BundleSplitRange {
+  range_id : Int
+  start : @regalloc.ProgramPoint?
+  end : @regalloc.ProgramPoint?
+} derive(Eq, @debug.Debug)
+
+pub(all) struct CompactSpillSet {
+  old_slot : Int
+  class : @regalloc.RegClass
+  ranges : Array[@regalloc.ProgramRange]
+} derive(@debug.Debug)
+
+pub(all) struct ConflictScanResult {
+  conflict_ids : Array[Int]
+  max_conflict_weight : Int
+  first_conflict_point : @regalloc.ProgramPoint?
+  rejected : Bool
+} derive(Eq, @debug.Debug)
+
+pub(all) struct DenseCfgEdges {
+  preds : Array[Array[Int]]
+  succs : Array[Array[Int]]
+} derive(@debug.Debug)
+
+pub(all) struct DenseCfgLoop {
+  header : Int
+  body : Array[Int]
+  latch : Int
+} derive(@debug.Debug)
+
+pub(all) struct FixedConstraint {
+  operand : FixedConstraintOperand
+  required : @regalloc.PhysicalReg
+} derive(Eq, @debug.Debug)
+
+pub(all) struct FixedConstraintInst {
+  block_index : Int
+  inst_index : Int
+  uses : Array[FixedConstraint]
+  defs : Array[FixedConstraint]
+} derive(@debug.Debug)
+
+pub(all) struct FixedConstraintInstEdits {
+  block_index : Int
+  inst_index : Int
+  before : Array[FixedConstraintMove]
+  after : Array[FixedConstraintMove]
+} derive(@debug.Debug)
+
+pub(all) struct FixedConstraintMove {
+  from : @regalloc.Location
+  to : @regalloc.Location
+  class_tag : Int
+} derive(Eq, @debug.Debug)
+
+pub(all) enum FixedConstraintOperand {
+  Virtual(@regalloc.Location?, Int)
+  Physical(@regalloc.PhysicalReg, Int)
+} derive(Eq, @debug.Debug)
+
+pub(all) struct OccupiedProgramSpan {
+  owner_id : Int
+  span : OrderedProgramSpan
+  owner_weight : Int
+  owner_pinned : Bool
+} derive(Eq, @debug.Debug)
+
+pub(all) struct OrderedProgramSpan {
+  start : @regalloc.ProgramPoint
+  start_ord : Int
+  end_ord : Int
+} derive(Eq, @debug.Debug)
+
+pub(all) struct ParallelMove {
+  from : @regalloc.Location
+  to : @regalloc.Location
+  class : @regalloc.RegClass
+} derive(Eq, @debug.Debug)
+
+pub(all) struct PriorityWorkItem {
+  item_id : Int
+  priority : Int
+  seq : Int
+} derive(Eq, @debug.Debug)
+
+pub struct PriorityWorkQueue {
+  items : Array[PriorityWorkItem]
+  mut next_seq : Int
+}
+pub fn PriorityWorkQueue::PriorityWorkQueue() -> Self
+pub fn PriorityWorkQueue::length(Self) -> Int
+pub fn PriorityWorkQueue::pop(Self) -> PriorityWorkItem?
+pub fn PriorityWorkQueue::push(Self, Int, Int) -> Unit
+
+pub(all) struct ReloadIntervalInfo {
+  block_id : Int
+  spill_slot : Int
+  vreg : @regalloc.VirtualReg
+  first_inst : Int
+  last_inst : Int
+} derive(Eq, @debug.Debug)
+
+pub(all) struct ReloadUseInfo {
+  block_id : Int
+  inst_index : Int
+  spill_slot : Int
+  vreg : @regalloc.VirtualReg
+} derive(Eq, @debug.Debug)
+
+pub(all) struct RematCloneInfo {
+  vreg : @regalloc.VirtualReg
+  block_id : Int
+  inst_index : Int
+} derive(Eq, @debug.Debug)
+
+pub(all) struct RematDefInfo {
+  vreg : @regalloc.VirtualReg
+  block_id : Int
+  inst_index : Int
+} derive(Eq, @debug.Debug)
+
+pub(all) struct RematLocalCloneInfo {
+  vreg : @regalloc.VirtualReg
+  block_id : Int
+  first_inst_index : Int
+} derive(Eq, @debug.Debug)
+
+pub(all) struct RematUseInfo {
+  vreg : @regalloc.VirtualReg
+  block_id : Int
+  inst_index : Int
+} derive(Eq, @debug.Debug)
+
+pub(all) struct SpillSlotCompaction {
+  remaps : Array[SpillSlotRemap]
+  total_slots : Int
+} derive(Eq, @debug.Debug)
+
+pub(all) struct SpillSlotNoShareEdge {
+  lhs : Int
+  rhs : Int
+} derive(Eq, @debug.Debug)
+
+pub(all) struct SpillSlotRemap {
+  old_slot : Int
+  new_slot : Int
+} derive(Eq, @debug.Debug)
+
+pub(all) struct StackFrame {
+  slots : Array[StackSlot]
+  mut frame_size : Int
+  frame_align : Int
+  mut next_spill_offset : Int
+  mut next_arg_offset : Int
+  callee_saved_regs : Array[@regalloc.PhysicalReg]
+}
+pub fn StackFrame::StackFrame(Int) -> Self
+pub fn StackFrame::add_callee_saved(Self, @regalloc.PhysicalReg) -> Int
+pub fn StackFrame::alloc_local(Self, Int, Int, Int) -> Int
+pub fn StackFrame::alloc_outgoing_arg(Self, Int, Int, Int) -> Int
+pub fn StackFrame::alloc_spill_slot(Self, @regalloc.VirtualReg, Int, Int) -> Int
+pub fn StackFrame::finalize(Self) -> Unit
+pub fn StackFrame::get_callee_saved(Self) -> Array[@regalloc.PhysicalReg]
+pub fn StackFrame::print(Self) -> String
+pub fn StackFrame::size(Self) -> Int
+pub impl Show for StackFrame
+
+pub(all) struct StackSlot {
+  offset : Int
+  size : Int
+  align : Int
+  kind : StackSlotKind
+} derive(Eq, @debug.Debug)
+pub impl Show for StackSlot
+
+pub(all) enum StackSlotKind {
+  Spill(@regalloc.VirtualReg)
+  Local(Int)
+  OutgoingArg(Int)
+  CalleeSaved(@regalloc.PhysicalReg)
+} derive(Eq, @debug.Debug)
+pub impl Show for StackSlotKind
+
+pub(all) struct TempRegisterChoice {
+  preg : @regalloc.PhysicalReg
+  next_cursor : Int
+  save_slot : Int?
+  next_spill_slot : Int
+} derive(Eq, @debug.Debug)
+
+pub(all) enum ThreadArg {
+  PhysicalArg(Int, Int)
+  VirtualArg(Int, Int)
+} derive(Eq, @debug.Debug)
+
+pub(all) struct ThreadBlock {
+  id : Int
+  params : Array[Int]
+  target : Int?
+  target_args : Array[ThreadArg]
+  is_empty : Bool
+} derive(@debug.Debug)
+
+pub(all) struct ThreadedJump {
+  target : Int
+  args : Array[ThreadArg]
+  changed : Bool
+} derive(@debug.Debug)
+
+// Type aliases
+
+// Traits
+

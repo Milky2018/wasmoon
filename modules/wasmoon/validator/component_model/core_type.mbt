@@ -6,8 +6,8 @@ fn parse_core_type_module_exports(
   outer_core_type_bounds : Array[Int],
 ) -> Map[String, Int] raise ComponentValidationError {
   let ndecls = r.read_leb_u32()
-  let exports : Map[String, Int] = {}
-  let seen_imports : Map[String, Int] = {}
+  let exports : Map[String, Int] = Map([])
+  let seen_imports : Map[String, Int] = Map([])
   let mut func_type_bound = 0
   for _i in 0..<ndecls {
     let tag = r.read_u8()
@@ -104,7 +104,7 @@ fn parse_core_type_section(
   base_core_type_bound : Int,
   outer_core_type_bounds : Array[Int],
 ) -> Array[Map[String, Int]?] raise ComponentValidationError {
-  let r = CoreTypeReader::new(payload)
+  let r = CoreTypeReader::CoreTypeReader(payload)
   let n = r.read_leb_u32()
   let out : Array[Map[String, Int]?] = []
   for i in 0..<n {
@@ -140,7 +140,7 @@ fn parse_core_type_section_module_sigs(
   base_core_type_bound : Int,
   outer_core_type_bounds : Array[Int],
 ) -> (Array[Array[CoreModuleTypeImport]?], Array[Map[String, CoreExternType]?]) raise ComponentValidationError {
-  let r = CoreTypeReader::new(payload)
+  let r = CoreTypeReader::CoreTypeReader(payload)
   let n = r.read_leb_u32()
   let imports : Array[Array[CoreModuleTypeImport]?] = []
   let export_types : Array[Map[String, CoreExternType]?] = []
@@ -175,7 +175,7 @@ fn validate_single_core_type(
   current_core_type_bound : Int,
   outer_core_type_bounds : Array[Int],
 ) -> Map[String, Int]? raise ComponentValidationError {
-  let r = CoreTypeReader::new(payload)
+  let r = CoreTypeReader::CoreTypeReader(payload)
   let op = r.read_u8()
   // For module-type aliases, `depth` counts outward from the module:
   // depth 0/1 target the current component core-type index space; depth >= 2
@@ -245,7 +245,7 @@ fn exportname_to_string(name : @component.ExportName) -> String? {
 
 ///|
 fn ascii_lower_key(s : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder::StringBuilder()
   for c in s {
     let n = c.to_int()
     if n >= 0x41 && n <= 0x5A {
@@ -261,7 +261,7 @@ fn ascii_lower_key(s : String) -> String {
 ///|
 fn wit_name_conflict_base(name : String) -> String {
   fn parse_resource_prefix(name : String, prefix_len : Int) -> String {
-    let buf = StringBuilder::new()
+    let buf = StringBuilder::StringBuilder()
     let mut i = 0
     let mut saw_dot = false
     let mut after_dot = false
@@ -349,8 +349,8 @@ fn parse_bracket_resource_name(name : String) -> BracketResourceName? {
   if !name.has_prefix("[") {
     return None
   }
-  let prefix = StringBuilder::new()
-  let suffix = StringBuilder::new()
+  let prefix = StringBuilder::StringBuilder()
+  let suffix = StringBuilder::StringBuilder()
   let mut in_prefix = true
   let mut saw_close = false
   let mut i = 0
@@ -380,7 +380,7 @@ fn parse_bracket_resource_name(name : String) -> BracketResourceName? {
     return Some({ kind: Constructor, resource: s })
   }
   if p == "method" || p == "static" {
-    let res = StringBuilder::new()
+    let res = StringBuilder::StringBuilder()
     let mut after_dot = false
     for c in s {
       if c == '.' && !after_dot {
@@ -642,7 +642,7 @@ fn functype_uses_disallowed_resources(
   type_table : Array[@component.TypeDef?],
   allowed_resource_type_idxs : Map[Int, Int],
 ) -> Bool {
-  let visiting : Map[Int, Int] = {}
+  let visiting : Map[Int, Int] = Map([])
   for p in ft.params {
     if valtype_uses_disallowed_resources(
         p.ty,
@@ -668,7 +668,7 @@ fn funcsig_of_functype(
   type_table : Array[@component.TypeDef?],
   resource_ids : Array[Int?],
 ) -> FuncSigShape {
-  let visiting : Map[Int, Int] = {}
+  let visiting : Map[Int, Int] = Map([])
   let params : Array[ParamShape] = []
   for p in ft.params {
     params.push({
@@ -843,7 +843,7 @@ fn funcsig_of_functype_lg(
   global_types : Array[@component.TypeDef?],
   global_resource_ids : Array[Int?],
 ) -> FuncSigShape {
-  let visiting : Map[Int, Int] = {}
+  let visiting : Map[Int, Int] = Map([])
   let params : Array[ParamShape] = []
   for p in ft.params {
     params.push({
@@ -968,7 +968,7 @@ fn type_sig_of_typeidx(
   type_table : Array[@component.TypeDef?],
   resource_ids : Array[Int?],
 ) -> TypeSig {
-  type_sig_of_valtype(TypeIdx(idx), type_table, resource_ids, {})
+  type_sig_of_valtype(TypeIdx(idx), type_table, resource_ids, Map([]))
 }
 
 ///|
@@ -1414,7 +1414,7 @@ fn functype_valid_in_interface(
   resource_ids : Array[Int?],
   named_types : Map[Int, Int],
 ) -> Bool {
-  let visiting : Map[Int, Int] = {}
+  let visiting : Map[Int, Int] = Map([])
   for p in ft.params {
     if !valtype_valid_in_interface(
         p.ty,
@@ -1504,12 +1504,12 @@ fn instancetype_sig_of_decls(
   type_table : Array[@component.TypeDef?],
   visiting_global : Map[Int, Int],
 ) -> InstanceSig {
-  let exports : Map[String, @component.Sort] = {}
-  let nested : Map[String, InstanceSig] = {}
+  let exports : Map[String, @component.Sort] = Map([])
+  let nested : Map[String, InstanceSig] = Map([])
   // Instance types define their own internal type index space introduced by
   // `Type(...)` declarations in-order.
   let local_types : Array[@component.TypeDef] = []
-  let visiting_local : Map[Int, Int] = {}
+  let visiting_local : Map[Int, Int] = Map([])
   for d in decls {
     match d {
       Type(t) => local_types.push(t)
@@ -1546,7 +1546,7 @@ fn instancetype_valid_for_use_as_interface(
     Some(InstanceType(decls)) => {
       let local_type_table : Array[@component.TypeDef?] = []
       let local_resource_ids : Array[Int?] = []
-      let local_named_types : Map[Int, Int] = {}
+      let local_named_types : Map[Int, Int] = Map([])
       let mut next_rid = 0
       fn push_local(td : @component.TypeDef?) -> Unit {
         local_type_table.push(td)
@@ -1593,7 +1593,7 @@ fn instancetype_valid_for_use_as_interface(
                     local_type_table,
                     local_resource_ids,
                     local_named_types,
-                    {},
+                    Map([]),
                   ) {
                   return false
                 }
@@ -1631,15 +1631,15 @@ fn componenttype_signature_of_decls(
   Map[String, @component.Sort],
   Map[String, InstanceSig],
 ) {
-  let import_sorts : Map[String, @component.Sort] = {}
-  let import_instance_sigs : Map[String, InstanceSig] = {}
-  let export_sorts : Map[String, @component.Sort] = {}
-  let export_instance_sigs : Map[String, InstanceSig] = {}
+  let import_sorts : Map[String, @component.Sort] = Map([])
+  let import_instance_sigs : Map[String, InstanceSig] = Map([])
+  let export_sorts : Map[String, @component.Sort] = Map([])
+  let export_instance_sigs : Map[String, InstanceSig] = Map([])
   // Component type declarations define their own local type space introduced by
   // `Type(...)` plus type-valued alias/import/export declarations.
   let local_types : Array[@component.TypeDef] = []
-  let visiting_local : Map[Int, Int] = {}
-  let visiting_global : Map[Int, Int] = {}
+  let visiting_local : Map[Int, Int] = Map([])
+  let visiting_global : Map[Int, Int] = Map([])
   fn record_type_slot() -> Unit {
     // Placeholder for a type index introduced by an alias/import/export decl.
     local_types.push(InstanceTypeEmpty)

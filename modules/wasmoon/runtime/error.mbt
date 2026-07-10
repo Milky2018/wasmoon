@@ -92,7 +92,9 @@ pub struct RuntimeErrorContext {
 }
 
 ///|
-pub fn RuntimeErrorContext::new(error : RuntimeError) -> RuntimeErrorContext {
+pub fn RuntimeErrorContext::RuntimeErrorContext(
+  error : RuntimeError,
+) -> RuntimeErrorContext {
   { error, call_stack: [], instruction: None, func_idx: None }
 }
 
@@ -123,7 +125,7 @@ pub fn RuntimeErrorContext::with_func_idx(
 ///|
 /// Format the runtime error with full context for display
 pub fn RuntimeErrorContext::format(self : RuntimeErrorContext) -> String {
-  let result = StringBuilder::new()
+  let result = StringBuilder::StringBuilder()
   result.write_string("runtime error: ")
   result.write_string(self.error.to_string())
   result.write_string("\n")
@@ -160,5 +162,5 @@ pub impl Show for RuntimeErrorContext with fn output(self, logger) {
 ///|
 /// Format a basic RuntimeError without context
 pub fn format_runtime_error(error : RuntimeError) -> String {
-  RuntimeErrorContext::new(error).format()
+  RuntimeErrorContext::RuntimeErrorContext(error).format()
 }

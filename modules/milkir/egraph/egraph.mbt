@@ -313,13 +313,8 @@ pub(all) struct ENode {
 
 ///|
 /// E-class: an equivalence class of e-nodes
-#warnings("-unused_field")
 priv struct EClass {
-  id : EClassId
   mut nodes : Array[ENode] // All equivalent nodes in this class
-  // For extraction: best node and its cost (lazily computed)
-  mut best_node : ENode?
-  mut best_cost : Int
   // Cached constant values for O(1) lookup (instead of O(n) scan)
   mut const_value : Int64?
   mut fconst_value : UInt64?
@@ -333,7 +328,7 @@ priv struct UnionFind {
 }
 
 ///|
-fn UnionFind::new() -> UnionFind {
+fn UnionFind::UnionFind() -> UnionFind {
   { parent: [] }
 }
 
@@ -414,15 +409,15 @@ struct EGraph {
 }
 
 ///|
-pub fn EGraph::new() -> EGraph {
+pub fn EGraph::EGraph() -> EGraph {
   {
-    uf: UnionFind::new(),
-    classes: {},
-    hashcons: {},
+    uf: UnionFind(),
+    classes: Map([]),
+    hashcons: Map([]),
     dirty: false,
-    opcode_index: {},
-    uses: {},
-    type_map: {},
+    opcode_index: Map([]),
+    uses: Map([]),
+    type_map: Map([]),
     remat_set: HashSet([]),
     last_rule_applications: 0,
     last_matches_limit_hits: 0,
@@ -517,10 +512,7 @@ pub fn EGraph::add(self : EGraph, node : ENode) -> EClassId {
     _ => None
   }
   let eclass : EClass = {
-    id: class_id,
     nodes: [node],
-    best_node: None,
-    best_cost: @int.MAX_VALUE,
     const_value: const_val,
     fconst_value: fconst_val,
   }
@@ -788,9 +780,6 @@ pub fn EGraph::merge(self : EGraph, a : EClassId, b : EClassId) -> EClassId {
           self.hashcons.set(canonical_node, new_id)
         }
       }
-      // Invalidate best node cache
-      root_class.best_node = None
-      root_class.best_cost = @int.MAX_VALUE
       // Merge constant caches: prefer non-None values
       if root_class.const_value is None && other_class.const_value is Some(_) {
         root_class.const_value = other_class.const_value
@@ -823,7 +812,7 @@ pub fn EGraph::rebuild(self : EGraph) -> Unit {
   while true {
     // Merge all existing classes by their current union-find root.
     // This also deduplicates nodes and refreshes constant caches.
-    let merged_classes : Map[Int, EClass] = {}
+    let merged_classes : Map[Int, EClass] = Map([])
     for class_id, eclass in self.classes {
       let root = self.uf.find(class_id)
       match merged_classes.get(root) {
@@ -838,10 +827,7 @@ pub fn EGraph::rebuild(self : EGraph) -> Unit {
             nodes.push(node)
           }
           merged_classes.set(root, {
-            id: EClassId(root),
             nodes,
-            best_node: None,
-            best_cost: @int.MAX_VALUE,
             const_value: eclass.const_value,
             fconst_value: eclass.fconst_value,
           })
@@ -851,8 +837,8 @@ pub fn EGraph::rebuild(self : EGraph) -> Unit {
 
     // Rebuild hashcons/opcode_index from scratch using canonicalized nodes.
     // Also collect any new unions implied by congruence (same canonical node).
-    let new_hashcons : Map[ENode, EClassId] = {}
-    let new_opcode_index : Map[EOpcodeTag, @hashset.HashSet[Int]] = {}
+    let new_hashcons : Map[ENode, EClassId] = Map([])
+    let new_opcode_index : Map[EOpcodeTag, @hashset.HashSet[Int]] = Map([])
     let unions : Array[(Int, Int)] = []
 
     // Helper: add (tag -> root) to the new opcode index.
@@ -930,8 +916,6 @@ pub fn EGraph::rebuild(self : EGraph) -> Unit {
       root_class.nodes = canonical_nodes
       root_class.const_value = const_value
       root_class.fconst_value = fconst_value
-      root_class.best_node = None
-      root_class.best_cost = @int.MAX_VALUE
     }
     if unions.is_empty() {
       // Finalize: commit rebuilt structures and refresh type/remat maps.
@@ -964,7 +948,7 @@ pub fn EGraph::rebuild(self : EGraph) -> Unit {
       }
 
       // Re-root the type map.
-      let new_type_map : Map[Int, Int] = {}
+      let new_type_map : Map[Int, Int] = Map([])
       for id, bits in self.type_map {
         let root = self.uf.find(id)
         if new_type_map.get(root) is None {
@@ -1735,7 +1719,7 @@ fn extract_cost_apply_bonus(cost : ExtractCost, bonus : Int) -> ExtractCost {
 /// Returns the total cost and the best e-node
 pub fn EGraph::extract(self : EGraph, id : EClassId) -> (Int, ENode) {
   // Use memoization to avoid recomputing
-  let memo : Map[Int, (ExtractCost, ENode)] = {}
+  let memo : Map[Int, (ExtractCost, ENode)] = Map([])
   // Track classes currently being processed to detect cycles
   let in_progress : @hashset.HashSet[Int] = HashSet([])
   let (cost, node) = self.extract_impl(id, memo, in_progress)
@@ -1843,7 +1827,7 @@ pub struct SaturationLimits {
 } derive(Debug)
 
 ///|
-pub fn SaturationLimits::new(
+pub fn SaturationLimits::SaturationLimits(
   matches_limit : Int,
   eclass_enode_limit : Int,
 ) -> SaturationLimits {
@@ -1881,7 +1865,7 @@ pub fn EGraph::saturate(
 ) -> Int {
   // Legacy API: keep for tests, implement via the indexed driver and honor
   // `max_iterations` to avoid compile-time blowups.
-  let ruleset = IndexedRuleSet::new()
+  let ruleset = IndexedRuleSet::IndexedRuleSet()
   for rule in rules {
     ruleset.add_rule(rule, [])
   }
@@ -1908,8 +1892,8 @@ struct IndexedRuleSet {
 }
 
 ///|
-fn IndexedRuleSet::new() -> IndexedRuleSet {
-  { by_opcode: {}, universal: [] }
+fn IndexedRuleSet::IndexedRuleSet() -> IndexedRuleSet {
+  { by_opcode: Map([]), universal: [] }
 }
 
 ///|

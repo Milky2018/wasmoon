@@ -103,6 +103,30 @@ graph TD
   ISS_087["ISS-087: Move Wasmoon debug and GC context offsets out of machv_emit"]
   ISS_088["ISS-088: Delete fixed EmbeddingContextLayout schema and compatibility alias"]
   ISS_089["ISS-089: Remove Wasm-named reference types from MilkIR core"]
+  ISS_090["ISS-090: Lower Wasm GC inline allocation as explicit MachV CFG"]
+  ISS_091["ISS-091: Define a stable MilkIR facade API"]
+  ISS_092["ISS-092: Make FunctionBuilder construction failures explicit"]
+  ISS_093["ISS-093: Replace stringly typed ExtOp with a stronger extension contract"]
+  ISS_094["ISS-094: Introduce a user-facing MilkIR-to-MachV lowering configuration"]
+  ISS_095["ISS-095: Document MilkIR semantics and invariants"]
+  ISS_096["ISS-096: Remove Wasmoon runtime symbol alias fallback"]
+  ISS_097["ISS-097: Remove machv_regalloc historical helper API"]
+  ISS_098["ISS-098: Clarify machv_emit public encoder helper status"]
+  ISS_099["ISS-099: Remove wasm_core FuncType compatibility extraction helper"]
+  ISS_100["ISS-100: Remove legacy funcref null sentinel"]
+  ISS_101["ISS-101: Remove JIT GC critical-section no-op compatibility exports"]
+  ISS_102["ISS-102: Remove wasmoon-tools component wit CLI alias"]
+  ISS_103["ISS-103: Refresh stale module boundary documentation"]
+  ISS_104["ISS-104: Define the canonical regalloc public facade"]
+  ISS_105["ISS-105: Hide backtracking allocator internals from regalloc root API"]
+  ISS_106["ISS-106: Hide CFG, liveness, and planner helper APIs"]
+  ISS_107["ISS-107: Narrow regalloc model mutability and field visibility"]
+  ISS_108["ISS-108: Stop regalloc tests and docs from cementing internal APIs"]
+  ISS_109["ISS-109: Close Wasmoon architecture integrity gaps"]
+  ISS_110["ISS-110: Validate CLI run modules before instantiation"]
+  ISS_111["ISS-111: Unify the production Wasm frontend entry point"]
+  ISS_112["ISS-112: Classify Wasmoon JIT integration as product-owned"]
+  ISS_113["ISS-113: Refresh architecture and readiness documentation"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
@@ -191,6 +215,20 @@ graph TD
   ISS_085 --> ISS_088
   ISS_086 --> ISS_088
   ISS_087 --> ISS_088
+  ISS_104 --> ISS_105
+  ISS_104 --> ISS_106
+  ISS_104 --> ISS_107
+  ISS_104 --> ISS_108
+  ISS_105 --> ISS_108
+  ISS_106 --> ISS_108
+  ISS_107 --> ISS_108
+  ISS_110 --> ISS_109
+  ISS_111 --> ISS_109
+  ISS_112 --> ISS_109
+  ISS_113 --> ISS_109
+  ISS_110 --> ISS_113
+  ISS_111 --> ISS_113
+  ISS_112 --> ISS_113
 ```
 
 ## Warnings

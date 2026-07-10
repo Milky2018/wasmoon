@@ -111,7 +111,7 @@ fn Memory::store_byte_unchecked(
 }
 
 ///|
-pub fn Memory::new(
+pub fn Memory::Memory(
   min : Int,
   max : Int?,
   is_memory64? : Bool = false,

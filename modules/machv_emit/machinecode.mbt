@@ -107,7 +107,7 @@ pub(all) enum FixupKind {
 }
 
 ///|
-pub fn MachineCode::new(
+pub fn MachineCode::MachineCode(
   isa? : @isa.ISA = AArch64,
   record_disasm? : Bool = true,
 ) -> MachineCode {
@@ -115,7 +115,7 @@ pub fn MachineCode::new(
     isa,
     bytes: [],
     pos: 0,
-    labels: {},
+    labels: Map([]),
     next_internal_label: -1,
     fixups: [],
     x86_rel32_fixups: [],
@@ -124,7 +124,7 @@ pub fn MachineCode::new(
     gc_safepoint_offsets: [],
     gc_safepoint_root_counts: [],
     gc_safepoint_root_indices: [],
-    amd64_const_labels: {},
+    amd64_const_labels: Map([]),
     amd64_const_entries: [],
     disasm: [],
     record_disasm,
@@ -227,7 +227,7 @@ pub fn MachineCode::dump_disasm(self : MachineCode) -> String {
     8
   }
   // Build a map of offset -> labels (multiple blocks can share same offset)
-  let label_map : Map[Int, Array[Int]] = {}
+  let label_map : Map[Int, Array[Int]] = Map([])
   for entry in self.labels {
     let (block_id, offset) = entry
     match label_map.get(offset) {
@@ -458,7 +458,7 @@ fn MachineCode::materialize_call_veneers(self : MachineCode) -> Unit {
   if self.call_fixups.length() == 0 {
     return
   }
-  let veneers_by_target : Map[String, Int] = {}
+  let veneers_by_target : Map[String, Int] = Map([])
   for i in 0..<self.call_fixups.length() {
     let fixup = self.call_fixups[i]
     let key = fixup.target.key()

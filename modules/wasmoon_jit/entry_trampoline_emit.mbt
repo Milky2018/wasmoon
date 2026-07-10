@@ -36,31 +36,28 @@ pub fn emit_entry_trampoline(
   call_conv_layout : @abi.CallConventionLayout,
   isa? : @isa.ISA = AArch64,
 ) -> @machv_emit.MachineCode {
-  // Generate trampoline as IR using IRBuilder
+  // Generate trampoline as IR using FunctionBuilder
   let ir_func = generate_trampoline_ir(param_types, result_types)
+  let embedding_abi = @abi.EmbeddingABI::EmbeddingABI(
+    call_conv_layout,
+    reg_roles=wasm_embedding_reg_roles(isa~),
+    context_layout=Some(embedding_context_layout()),
+  )
 
   // Compile through the normal pipeline
   let machv_func = @lower.lower_function(
     ir_func,
     isa~,
-    embedding_reg_roles=wasm_embedding_reg_roles(isa~),
-    call_conv_layout=Some(call_conv_layout),
+    embedding_abi=Some(embedding_abi),
   )
   let allocated = @machv_regalloc.allocate_registers_backtracking_with_isa(
     machv_func,
     isa,
-    @abi.ABISettings::default(),
-    wasm_embedding_reg_roles(isa~),
-    call_conv_layout=Some(call_conv_layout),
+    embedding_abi=Some(embedding_abi),
   )
 
   // Emit machine code
-  @machv_emit.emit_function(
-    allocated,
-    isa~,
-    call_conv_layout=Some(call_conv_layout),
-    embedding_reg_roles=wasm_embedding_reg_roles(isa~),
-  )
+  @machv_emit.emit_function(allocated, isa~, embedding_abi=Some(embedding_abi))
 }
 
 ///|
@@ -70,7 +67,7 @@ fn generate_trampoline_ir(
   param_types : Array[Int],
   result_types : Array[Int],
 ) -> @milkir.Function {
-  let builder = @milkir.IRBuilder::new("trampoline")
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("trampoline")
 
   // Trampoline parameters: vmctx, values_vec, func_ptr
   let vmctx = builder.add_param(I64)
@@ -79,10 +76,6 @@ fn generate_trampoline_ir(
 
   // Result: trap code (i64 for simplicity)
   builder.add_result(I64)
-
-  // Create entry block and switch to it
-  let entry = builder.create_block()
-  builder.switch_to_block(entry)
 
   // Load arguments from values_vec
   // V128 args are passed as two I64 values (low then high) to avoid alignment issues

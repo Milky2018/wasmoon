@@ -1,6 +1,6 @@
 name = "Milky2018/machv_emit"
 
-version = "0.1.0"
+version = "0.2.1"
 
 readme = "README.mbt.md"
 
@@ -14,8 +14,8 @@ description = "Reusable MachV machine-code emitter"
 
 import {
   "moonbitlang/x@0.4.38",
-  "Milky2018/machv@0.1.0",
-  "Milky2018/machv_regalloc@0.1.0",
+  "Milky2018/machv@0.2.1",
+  "Milky2018/machv_regalloc@0.2.1",
 }
 
 preferred_target = "native"

@@ -1,7 +1,7 @@
 ///|
 /// Parse a WAST script (sequence of commands)
 pub fn parse_wast(input : String) -> WastScript raise WatError {
-  let parser = Parser::new(input)
+  let parser = Parser::Parser(input)
   let commands : Array[(WastCommand, Int)] = []
 
   // Check for inline module (module fields without explicit (module ...) wrapper)
@@ -78,7 +78,7 @@ fn is_module_field_keyword(k : String) -> Bool {
 ///|
 /// Parse an inline module (module fields without explicit module wrapper)
 fn Parser::parse_inline_module(self : Parser) -> @types.Module raise WatError {
-  let mod_ = @types.Module::new()
+  let mod_ = @types.Module::Module()
 
   // First pass: collect all names (to support forward references)
   let saved_pos = self.lexer.pos
@@ -691,7 +691,7 @@ fn Parser::collect_wast_module_text(self : Parser) -> String raise WatError {
       _ => pos += 1
     }
   }
-  let buf = StringBuilder::new()
+  let buf = StringBuilder::StringBuilder()
   for i in start_pos..<pos {
     buf.write_char(input.code_unit_at(i).unsafe_to_char())
   }

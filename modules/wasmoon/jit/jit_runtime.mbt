@@ -43,7 +43,7 @@ pub impl Show for JITModuleLoadError with fn output(self, logger) {
 }
 
 ///|
-fn JITFunction::new(
+fn JITFunction::JITFunction(
   func_idx : Int,
   name : String,
   exec_code : @wasmoon_jit.ExecCode,
@@ -81,7 +81,7 @@ struct JITModule {
 }
 
 ///|
-pub fn JITModule::new() -> JITModule {
+pub fn JITModule::JITModule() -> JITModule {
   {
     functions: Map([]),
     by_name: Map([]),
@@ -91,7 +91,7 @@ pub fn JITModule::new() -> JITModule {
     debug_db: None,
     last_trap_report: None,
     import_exec_codes: [],
-    direct_call_targets: {},
+    direct_call_targets: Map([]),
     wasi_stdout_callback: None,
     wasi_stderr_callback: None,
   }
@@ -196,7 +196,7 @@ pub fn JITModule::load(
   func_signatures : Array[(Array[@types.ValueType], Array[@types.ValueType])],
   debug_db? : @wasmoon_jit.JITDebugDB? = None,
 ) -> JITModule raise JITModuleLoadError {
-  JITModule::load_with_imports(precompiled, func_signatures, {}, debug_db~)
+  JITModule::load_with_imports(precompiled, func_signatures, Map([]), debug_db~)
 }
 
 ///|
@@ -209,14 +209,14 @@ pub fn JITModule::load_with_imports(
   external_imports : Map[String, Map[String, Int64]],
   debug_db? : @wasmoon_jit.JITDebugDB? = None,
 ) -> JITModule raise JITModuleLoadError {
-  let jit_module = JITModule::new()
+  let jit_module = JITModule::JITModule()
   let total_funcs = @wasmoon_jit.required_context_function_count(
     precompiled,
     func_signatures.length(),
   )
 
   // Create JIT context with function table
-  let context = JITContext::new(total_funcs)
+  let context = JITContext::try_alloc(total_funcs)
   match context {
     None => raise ContextAllocationFailed(total_funcs~)
     Some(ctx) => {
@@ -258,7 +258,7 @@ pub fn JITModule::load_with_imports(
                 isa~,
               )
               let code_ints = mc.get_bytes()
-              let exec = @wasmoon_jit.ExecCode::new(code_ints)
+              let exec = @wasmoon_jit.ExecCode::try_alloc(code_ints)
               match exec {
                 Some(ec) => {
                   // AArch64 hostcall trampolines may carry runtime func-address
@@ -316,7 +316,7 @@ pub fn JITModule::load_with_imports(
       // Step 2: Load compiled functions and populate their pointers
       for entry in precompiled.functions {
         // Allocate executable memory directly from code array
-        let exec_code = @wasmoon_jit.ExecCode::new(entry.code)
+        let exec_code = @wasmoon_jit.ExecCode::try_alloc(entry.code)
         match exec_code {
           Some(ec) => {
             // Get function signature
@@ -326,7 +326,7 @@ pub fn JITModule::load_with_imports(
             } else {
               ([], [])
             }
-            let jit_func = JITFunction::new(
+            let jit_func = JITFunction::JITFunction(
               entry.func_idx,
               entry.name,
               ec,
@@ -382,7 +382,7 @@ pub fn JITModule::from_single_function(
   mem_size : Int64,
 ) -> JITModule? {
   // Create context with 1 function slot
-  let context = JITContext::new(1)
+  let context = JITContext::try_alloc(1)
   match context {
     None => return None
     Some(ctx) => {
@@ -404,14 +404,14 @@ pub fn JITModule::from_single_function(
       }
       ctx.set_memory(mem_ptr)
       // Create executable code
-      let exec_code = @wasmoon_jit.ExecCode::new(code_bytes)
+      let exec_code = @wasmoon_jit.ExecCode::try_alloc(code_bytes)
       match exec_code {
         None => return None
         Some(ec) => {
           // Set function in table
           ctx.set_func(0, ec.ptr())
           // Create JIT function
-          let jit_func = JITFunction::new(
+          let jit_func = JITFunction::JITFunction(
             0,
             func_name,
             ec,
@@ -420,7 +420,7 @@ pub fn JITModule::from_single_function(
             result_types,
           )
           // Create module
-          let jit_module = JITModule::new()
+          let jit_module = JITModule::JITModule()
           jit_module.functions.set(0, jit_func)
           jit_module.by_name.set(func_name, 0)
           let context_ptr = ctx.ptr()
@@ -577,7 +577,7 @@ pub fn JITModule::get_func_ptr_by_name(
 /// Export all function pointers as a map from name to function pointer
 /// Used for cross-module imports
 pub fn JITModule::export_functions(self : JITModule) -> Map[String, Int64] {
-  let exports : Map[String, Int64] = {}
+  let exports : Map[String, Int64] = Map([])
   for name, _idx in self.by_name {
     let ptr = self.get_func_ptr_by_name(name)
     if ptr != 0L {
@@ -1276,7 +1276,7 @@ pub fn JITModule::register_dwarf(
   self : JITModule,
   verbose? : Bool = false,
 ) -> @wasmoon_jit.DWARFBuilder {
-  let dwarf = @wasmoon_jit.DWARFBuilder::new()
+  let dwarf = @wasmoon_jit.DWARFBuilder::DWARFBuilder()
   for func_idx, func in self.functions {
     let addr = self.get_func_ptr(func_idx)
     dwarf.add_function(func.name, addr, func.code_size, func_idx)

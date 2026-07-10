@@ -307,11 +307,11 @@ fn build_inline_core_instance(
   exports : Array[CoreInlineExport],
   state : BuildState,
 ) -> CoreInstance raise ComponentRuntimeError {
-  let funcs : Map[String, CoreFuncRef] = {}
-  let tables : Map[String, Int] = {}
-  let memories : Map[String, Int] = {}
-  let globals : Map[String, Int] = {}
-  let tags : Map[String, Int] = {}
+  let funcs : Map[String, CoreFuncRef] = Map([])
+  let tables : Map[String, Int] = Map([])
+  let memories : Map[String, Int] = Map([])
+  let globals : Map[String, Int] = Map([])
+  let tags : Map[String, Int] = Map([])
   for ex in exports {
     match resolve_sortidx(ex.sortidx, state) {
       CoreFunc(f) => funcs.set(ex.name, f)
@@ -349,7 +349,7 @@ fn core_imports_from_args(
   args : Array[CoreInstantiateArg],
   state : BuildState,
 ) -> @runtime.Imports raise ComponentRuntimeError {
-  let imports = @runtime.Imports::new()
+  let imports = @runtime.Imports::Imports()
   for arg in args {
     match resolve_sortidx(arg.sortidx, state) {
       CoreInstance(inst) => {

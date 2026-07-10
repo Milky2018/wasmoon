@@ -2,21 +2,24 @@
 
 Target-independent register allocation algorithm.
 
-`regalloc` models allocation programs, machine environments, live ranges,
-allocation decisions, move resolution, spill planning, and verification without
-depending on a concrete machine IR.
+`regalloc` models allocation programs, machine environments, allocation
+decisions, and verification without depending on a concrete machine IR.
 
 ## Package
 
 - `Milky2018/regalloc`: allocation data structures, allocator entry points,
-  policy helpers, and verifier APIs.
+  and verifier APIs.
+- `Milky2018/regalloc/planning`: expert standalone planning algorithms for
+  clients that need lower-level allocation building blocks.
+- `Milky2018/regalloc/backtracking`: expert hooks for clients that integrate
+  the production backtracking allocator with their own machine IR adapter.
 
 ## When to use it
 
 Use `regalloc` when you have a machine-independent allocation problem: virtual
 registers, physical registers, instructions, use/def operands, clobbers, and a
-control-flow graph. It deliberately does not know about concrete IRs, frontend
-dialects, or target instruction formats.
+control-flow graph. Clients describe these inputs with `Program` and
+`MachineEnv`, then map the resulting locations back to their own machine IR.
 
 ## Example: allocate an abstract program
 
@@ -31,49 +34,46 @@ test "allocate virtual registers to physical registers" {
   let r1 : PhysicalReg = { id: 1, class: Int }
   let v0 : VirtualReg = { id: 0, class: Int }
   let v1 : VirtualReg = { id: 1, class: Int }
-  let program = Program::new([r0, r1])
-  let block = Block::new(0)
-  let inst = Instruction::new(0)
+  let program = Program::Program([r0, r1])
+  let block = Block::Block(0)
+  let inst = Instruction::Instruction(0)
   inst.add_operand(Operand::def(v0))
   inst.add_operand(Operand::use_reg(v1))
   block.append(inst)
   program.add_block(block)
-  let allocation = allocate_linear_scan(program)
+  let allocation = allocate(program)
   inspect(allocation.location_of(v0) == Some(Reg(r0)), content="true")
   inspect(allocation.location_of(v1) == Some(Reg(r1)), content="true")
   inspect(verify_allocation(program, allocation), content="()")
 }
 ```
 
-## Example: inspect live ranges before allocation
+## Example: configure allocation
 
-Live ranges are independent of the allocator choice. Compiler authors can use
-them to debug why a value was spilled or why two values could not share a
-register.
+`RegallocConfig` controls user-facing allocation behavior. By default
+`allocate` verifies the result before returning it; callers that run their own
+validation can disable that check.
 
 ```moonbit check
 ///|
-test "compute a live range across two instructions" {
+test "allocate with explicit configuration" {
   let r0 : PhysicalReg = { id: 0, class: Int }
   let v0 : VirtualReg = { id: 0, class: Int }
-  let program = Program::new([r0])
-  let block = Block::new(0)
-  let def_inst = Instruction::new(0)
-  def_inst.add_operand(Operand::def(v0))
-  block.append(def_inst)
-  let use_inst = Instruction::new(1)
-  use_inst.add_operand(Operand::use_reg(v0))
-  block.append(use_inst)
+  let program = Program::Program([r0])
+  let block = Block::Block(0)
+  let inst = Instruction::Instruction(0)
+  inst.add_operand(Operand::def(v0))
+  block.append(inst)
   program.add_block(block)
-  let ranges = build_live_ranges(program)
-  let range = ranges.get_by_vreg(v0).unwrap()
-  inspect(range.start() == Some(ProgramPoint::new(0, 0)), content="true")
-  inspect(range.end() == Some(ProgramPoint::new(0, 1)), content="true")
-  inspect(range.uses.length(), content="2")
+  let config = RegallocConfig::RegallocConfig(verify=false)
+  let allocation = allocate(program, config~)
+  inspect(config.strategy() == LinearScan, content="true")
+  inspect(allocation.location_of(v0) == Some(Reg(r0)), content="true")
 }
 ```
 
-## Boundary
+## Adapters
 
-This module should stay a pure algorithmic layer. Machine-IR-specific adapters
-belong in modules such as `machv_regalloc`.
+Clients can build `Program` values directly or use an adapter for an existing
+machine IR. `Milky2018/machv_regalloc` provides this integration for MachV and
+applies the resulting locations, spills, and edge edits to MachV functions.

@@ -1,5 +1,5 @@
 ///|
-pub(all) struct LiveSetUseDef {
+struct LiveSetUseDef {
   vreg_id : Int
   def_point : ProgramPoint?
   is_entry_param_def : Bool
@@ -7,7 +7,7 @@ pub(all) struct LiveSetUseDef {
 } derive(Debug)
 
 ///|
-pub(all) struct DenseLiveSets {
+struct DenseLiveSets {
   live_in : Array[Array[Int]]
   live_out : Array[Array[Int]]
 } derive(Debug)
@@ -19,7 +19,7 @@ priv struct LivenessWorklist {
 }
 
 ///|
-fn LivenessWorklist::new(size : Int) -> LivenessWorklist {
+fn LivenessWorklist::LivenessWorklist(size : Int) -> LivenessWorklist {
   { queue: [], in_worklist: Array::make(size, false) }
 }
 
@@ -50,7 +50,7 @@ fn live_set_mask_index(block_idx : Int, vreg_id : Int, row_width : Int) -> Int {
 }
 
 ///|
-pub fn compute_dense_live_sets(
+fn compute_dense_live_sets(
   num_blocks : Int,
   num_vregs : Int,
   cfg : DenseCfgEdges,
@@ -108,7 +108,7 @@ pub fn compute_dense_live_sets(
     }
   }
 
-  let worklist = LivenessWorklist::new(num_blocks)
+  let worklist = LivenessWorklist::LivenessWorklist(num_blocks)
   for i in 0..<num_blocks {
     worklist.push(i)
   }

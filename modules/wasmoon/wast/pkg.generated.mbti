@@ -92,7 +92,7 @@ pub impl Show for WastRunnerError
 pub struct JITCompiler {
   compile_fn : (@types.Module, @runtime.ModuleInstance, @runtime.Store) -> Result[JITModuleContext, String]
 }
-pub fn JITCompiler::new((@types.Module, @runtime.ModuleInstance, @runtime.Store) -> Result[JITModuleContext, String]) -> Self
+pub fn JITCompiler::JITCompiler((@types.Module, @runtime.ModuleInstance, @runtime.Store) -> Result[JITModuleContext, String]) -> Self
 
 pub struct JITModuleContext {
   jit_module : @jit.JITModule
@@ -106,7 +106,7 @@ pub struct JITModuleContext {
   module_rec_groups : Array[Int]
   use_subtype_indirect_check : Bool
 }
-pub fn JITModuleContext::new(@jit.JITModule, Int64, Array[Int], Array[Int], Array[Int], Array[Int], Array[Int], Array[@types.SubType], Array[Int], Bool) -> Self
+pub fn JITModuleContext::JITModuleContext(@jit.JITModule, Int64, Array[Int], Array[Int], Array[Int], Array[Int], Array[Int], Array[@types.SubType], Array[Int], Bool) -> Self
 
 pub struct WastContext {
   store : @runtime.Store
@@ -121,9 +121,9 @@ pub struct WastContext {
   jit_compiler : JITCompiler?
   wasi_ctx : @wasi.WasiContext
 }
+pub fn WastContext::WastContext(Bool, jit_compiler? : JITCompiler?) -> Self
 pub fn WastContext::build_imports(Self) -> @runtime.Imports
 pub fn WastContext::get_store(Self) -> @runtime.Store
-pub fn WastContext::new(Bool, jit_compiler? : JITCompiler?) -> Self
 
 pub struct WastResult {
   mut passed : Int
@@ -131,7 +131,7 @@ pub struct WastResult {
   skipped : Int
   failures : Array[String]
 }
-pub fn WastResult::new() -> Self
+pub fn WastResult::WastResult() -> Self
 
 // Type aliases
 pub using @parser_impl {type WastAction}

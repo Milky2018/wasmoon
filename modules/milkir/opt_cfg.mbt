@@ -97,8 +97,8 @@ fn compress_replace_array(replace_ids : Array[Int]) -> Unit {
 /// Constant Block Parameter Elimination
 /// Removes block parameters that always take the same value across all incoming edges.
 /// This mirrors Cranelift's constant-phi removal, but operates on IR block params.
-pub fn eliminate_constant_block_params(func : Function) -> OptResult {
-  let result = OptResult::new()
+fn eliminate_constant_block_params(func : Function) -> OptResult {
+  let result = OptResult::OptResult()
   if func.blocks.length() == 0 {
     return result
   }
@@ -423,8 +423,8 @@ pub fn eliminate_constant_block_params(func : Function) -> OptResult {
 /// Dead Block Parameter Elimination
 /// Removes block parameters that are never used
 /// This is crucial for eliminating unused locals that get SSA-converted to block params
-pub fn eliminate_dead_block_params(func : Function) -> OptResult {
-  let result = OptResult::new()
+fn eliminate_dead_block_params(func : Function) -> OptResult {
+  let result = OptResult::OptResult()
 
   // Build use counts for values in each block
   // A block parameter is "used" if it's referenced in instructions or passed to another used param
@@ -643,8 +643,8 @@ fn compute_used_block_params(
 ///|
 /// Branch Simplification
 /// Simplifies conditional branches when the condition is a known constant
-pub fn simplify_branches(func : Function) -> OptResult {
-  let result = OptResult::new()
+fn simplify_branches(func : Function) -> OptResult {
+  let result = OptResult::OptResult()
   // Build constant map from constant folding
   let constants : @hashmap.HashMap[Int, ConstValue] = HashMap([])
   for block in func.blocks {
@@ -703,8 +703,8 @@ pub fn simplify_branches(func : Function) -> OptResult {
 ///|
 /// Unreachable Code Elimination
 /// Removes blocks that cannot be reached from the entry block
-pub fn eliminate_unreachable_code(func : Function) -> OptResult {
-  let result = OptResult::new()
+fn eliminate_unreachable_code(func : Function) -> OptResult {
+  let result = OptResult::OptResult()
   if func.blocks.length() == 0 {
     return result
   }
@@ -744,18 +744,13 @@ pub fn eliminate_unreachable_code(func : Function) -> OptResult {
   result
 }
 
-///|
-pub fn eliminate_unreachable_blocks(func : Function) -> OptResult {
-  eliminate_unreachable_code(func)
-}
-
 // ============ Basic Block Merging ============
 
 ///|
 /// Basic Block Merging
 /// Merges a block with its unique predecessor if the predecessor has only one successor
-pub fn merge_blocks(func : Function) -> OptResult {
-  let result = OptResult::new()
+fn merge_blocks(func : Function) -> OptResult {
+  let result = OptResult::OptResult()
   if func.blocks.length() <= 1 {
     return result
   }
@@ -917,8 +912,8 @@ fn resolve_jump_target_with_args(
 ///|
 /// Jump Threading
 /// Bypasses blocks that only contain an unconditional jump
-pub fn thread_jumps(func : Function) -> OptResult {
-  let result = OptResult::new()
+fn thread_jumps(func : Function) -> OptResult {
+  let result = OptResult::OptResult()
   let block_idx : @hashmap.HashMap[Int, Int] = HashMap([])
   for i, block in func.blocks {
     block_idx.set(block.id, i)

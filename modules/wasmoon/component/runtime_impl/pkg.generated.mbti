@@ -106,7 +106,7 @@ pub(all) struct AsyncState {
   next_error_context_by_component : Map[Int, Array[Int]]
   error_contexts : Map[Int64, String]
 } derive(@debug.Debug)
-pub fn AsyncState::new(StreamTable) -> Self
+pub fn AsyncState::AsyncState(StreamTable) -> Self
 
 type CallbackTask derive(@debug.Debug)
 
@@ -170,6 +170,7 @@ pub fn ComponentInstance::get_core_instance(Self, Int) -> CoreInstance?
 pub fn ComponentInstance::get_export(Self, String) -> ComponentExtern?
 
 type ComponentLinker
+pub fn ComponentLinker::ComponentLinker() -> Self
 pub fn ComponentLinker::add_component(Self, String, @model.Component) -> Unit
 pub fn ComponentLinker::add_core_instance(Self, String, CoreInstance) -> Unit
 pub fn ComponentLinker::add_core_module(Self, String, @types.Module) -> Unit
@@ -180,7 +181,6 @@ pub fn ComponentLinker::add_value(Self, String, ComponentValue) -> Unit
 pub fn ComponentLinker::get_component(Self, String) -> ComponentInstance?
 pub fn ComponentLinker::get_store(Self) -> @runtime.Store
 pub fn ComponentLinker::instantiate(Self, String, @model.Component) -> ComponentInstance raise ComponentRuntimeError
-pub fn ComponentLinker::new() -> Self
 pub fn ComponentLinker::register(Self, String, ComponentInstance) -> Unit
 
 pub(all) enum ComponentValue {
@@ -251,10 +251,10 @@ pub(all) struct ResourceTable {
   free_handles : Array[Int]
   entries : Map[Int, ResourceHandle]
 } derive(@debug.Debug)
+pub fn ResourceTable::ResourceTable() -> Self
 pub fn ResourceTable::alloc(Self, ResourceHandle) -> Int
 pub fn ResourceTable::free(Self, Int) -> ResourceHandle?
 pub fn ResourceTable::get(Self, Int) -> ResourceHandle?
-pub fn ResourceTable::new() -> Self
 
 pub(all) struct StreamEndpoint {
   stream_id : Int
@@ -269,7 +269,7 @@ pub(all) struct StreamTable {
   endpoints : Map[Int64, StreamEndpoint]
   streams : Map[Int, StreamState]
 } derive(@debug.Debug)
-pub fn StreamTable::new() -> Self
+pub fn StreamTable::StreamTable() -> Self
 
 type Subtask derive(@debug.Debug)
 

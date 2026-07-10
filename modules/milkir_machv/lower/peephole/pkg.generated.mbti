@@ -8,7 +8,7 @@ import {
 }
 
 // Values
-pub fn optimize_machv(@machv.Function, isa? : @isa.ISA, profile? : PeepholeProfile, embedding_context_layout? : @abi.EmbeddingContextLayout?, embedding_reg_roles? : @abi.EmbeddingRegRoles) -> Unit
+pub fn optimize_machv(@machv.Function, isa? : @isa.ISA, profile? : PeepholeProfile, embedding_abi? : @abi.EmbeddingABI?) -> Unit
 
 // Errors
 

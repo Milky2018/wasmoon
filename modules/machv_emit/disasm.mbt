@@ -57,7 +57,7 @@ pub fn format_disassembly(
   label_offsets : Array[(Int, Int)],
   annotations : Array[(Int, String)],
 ) -> String {
-  let label_map : Map[Int, Array[Int]] = {}
+  let label_map : Map[Int, Array[Int]] = Map([])
   for entry in label_offsets {
     let (block_id, offset) = entry
     match label_map.get(offset) {

@@ -44,7 +44,7 @@ struct Imports {
 }
 
 ///|
-pub fn Imports::new() -> Imports {
+pub fn Imports::Imports() -> Imports {
   { entries: [] }
 }
 

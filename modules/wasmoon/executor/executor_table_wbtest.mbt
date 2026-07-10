@@ -1,8 +1,8 @@
 ///|
 test "table import: call_indirect with imported table" {
   // Create a store with a shared table
-  let store = @runtime.Store::new()
-  let shared_table = @runtime.Table::new(FuncRef, 2, None)
+  let store = @runtime.Store::Store()
+  let shared_table = @runtime.Table::Table(FuncRef, 2, None)
   let table_addr = store.alloc_table(shared_table)
 
   // Create two functions: add and sub
@@ -69,9 +69,9 @@ test "table import: call_indirect with imported table" {
     codes: [apply_func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
-  let imports = @runtime.Imports::new()
+  let imports = @runtime.Imports::Imports()
   imports.add_table("env", "table", table_addr)
   let instance = instantiate_module_with_imports(store, mod, imports)
 
@@ -162,8 +162,8 @@ test "global variables: i64 global" {
 
 ///|
 test "global import: imported global" {
-  let store = @runtime.Store::new()
-  let global_inst = @runtime.GlobalInstance::new(
+  let store = @runtime.Store::Store()
+  let global_inst = @runtime.GlobalInstance::GlobalInstance(
     { value_type: I32, mutable: true },
     I32(42),
   )
@@ -178,7 +178,7 @@ test "global import: imported global" {
       },
     ],
   }
-  let imports = @runtime.Imports::new()
+  let imports = @runtime.Imports::Imports()
   imports.add_global("env", "g", global_addr)
   let instance = instantiate_module_with_imports(store, mod, imports)
   let results = call_exported_func(store, instance, "get", [])
@@ -249,7 +249,7 @@ test "table operations: table.grow" {
     ],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   let (store, instance) = instantiate_module(mod)
   // Grow table by 3, should return old size (2)
@@ -263,8 +263,8 @@ test "table operations: table.grow" {
 ///|
 test "table operations: table.fill" {
   // Test table.fill via direct runtime manipulation
-  let store = @runtime.Store::new()
-  let table = @runtime.Table::new(FuncRef, 5, None)
+  let store = @runtime.Store::Store()
+  let table = @runtime.Table::Table(FuncRef, 5, None)
   store.alloc_table(table) |> ignore
   // Fill table[1..4] with FuncRef(42)
   table.fill(1, FuncRef(42), 3) catch {
@@ -282,8 +282,8 @@ test "table operations: table.fill" {
 ///|
 test "table operations: table.copy same table" {
   // Test table.copy within the same table
-  let store = @runtime.Store::new()
-  let table = @runtime.Table::new(FuncRef, 6, None)
+  let store = @runtime.Store::Store()
+  let table = @runtime.Table::Table(FuncRef, 6, None)
   store.alloc_table(table) |> ignore
   // Set some initial values
   table.set(0, FuncRef(10)) catch {
@@ -311,9 +311,9 @@ test "table operations: table.copy same table" {
 ///|
 test "table operations: table.copy between tables" {
   // Test table.copy between different tables
-  let store = @runtime.Store::new()
-  let table1 = @runtime.Table::new(FuncRef, 4, None)
-  let table2 = @runtime.Table::new(FuncRef, 4, None)
+  let store = @runtime.Store::Store()
+  let table1 = @runtime.Table::Table(FuncRef, 4, None)
+  let table2 = @runtime.Table::Table(FuncRef, 4, None)
   store.alloc_table(table1) |> ignore
   store.alloc_table(table2) |> ignore
   // Set values in table1
@@ -337,8 +337,8 @@ test "table operations: table.copy between tables" {
 ///|
 test "table operations: table.copy overlapping backward" {
   // Test table.copy with overlapping regions (dest > src)
-  let store = @runtime.Store::new()
-  let table = @runtime.Table::new(FuncRef, 6, None)
+  let store = @runtime.Store::Store()
+  let table = @runtime.Table::Table(FuncRef, 6, None)
   store.alloc_table(table) |> ignore
   // Set initial values: [1, 2, 3, 0, 0, 0]
   table.set(0, FuncRef(1)) catch {

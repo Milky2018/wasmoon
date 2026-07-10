@@ -70,7 +70,7 @@ priv struct ScriptResult {
 }
 
 ///|
-fn ScriptResult::new() -> ScriptResult {
+fn ScriptResult::ScriptResult() -> ScriptResult {
   { passed: 0, failed: 0, skipped: 0, failures: [] }
 }
 
@@ -87,7 +87,7 @@ fn ScriptResult::add_failed(self : ScriptResult, msg : String) -> Unit {
 
 ///|
 fn json_escape_string_component_test(s : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder::StringBuilder()
   for c in s {
     match c {
       '"' => buf.write_string("\\\"")
@@ -144,7 +144,7 @@ fn strip_identifier(name : String) -> String {
 
 ///|
 fn strip_underscores(s : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder::StringBuilder()
   for c in s {
     if c != '_' {
       buf.write_char(c)
@@ -540,8 +540,8 @@ fn make_instance(
   store : @runtime.Store,
   exports : Map[String, @runtime_impl.ComponentExtern],
 ) -> @runtime_impl.ComponentInstance {
-  let stream_table = @runtime_impl.StreamTable::new()
-  let async_state = @runtime_impl.AsyncState::new(stream_table)
+  let stream_table = @runtime_impl.StreamTable::StreamTable()
+  let async_state = @runtime_impl.AsyncState::AsyncState(stream_table)
   {
     name,
     types: [],
@@ -549,7 +549,7 @@ fn make_instance(
     values: [],
     components: [],
     instances: [],
-    resource_table: @runtime_impl.ResourceTable::new(),
+    resource_table: ResourceTable(),
     stream_table,
     async_state,
     core_modules: [],
@@ -631,8 +631,8 @@ fn run_component_script_impl(
       return 1
     }
   }
-  let result = ScriptResult::new()
-  let linker = @runtime_impl.ComponentLinker::new()
+  let result = ScriptResult::ScriptResult()
+  let linker = @runtime_impl.ComponentLinker::ComponentLinker()
   let store = linker.get_store()
   let return_two = make_const_u32_func(2)
   let return_three = make_const_u32_func(3)
@@ -661,10 +661,10 @@ fn run_component_script_impl(
       return 1
     }
   }
-  let nested_exports : Map[String, @runtime_impl.ComponentExtern] = {}
+  let nested_exports : Map[String, @runtime_impl.ComponentExtern] = Map([])
   nested_exports.set("return-four", Func(return_four))
   let nested_instance = make_instance("host::nested", store, nested_exports)
-  let host_exports : Map[String, @runtime_impl.ComponentExtern] = {}
+  let host_exports : Map[String, @runtime_impl.ComponentExtern] = Map([])
   host_exports.set("return-two", Func(return_two))
   host_exports.set("return-three", Func(return_three))
   host_exports.set("simple-module", CoreModule(simple_module))
@@ -880,8 +880,8 @@ fn run_component_script_impl(
   host_exports.set("[method]resource1.take-own", Func(take_own))
   let host_instance = make_instance("host", store, host_exports)
   linker.add_instance("host", host_instance)
-  let components : Map[String, @component.Component] = {}
-  let instances : Map[String, @runtime_impl.ComponentInstance] = {}
+  let components : Map[String, @component.Component] = Map([])
+  let instances : Map[String, @runtime_impl.ComponentInstance] = Map([])
   let mut last_component : @component.Component? = None
   let mut last_component_name : String? = None
   let mut last_instance : @runtime_impl.ComponentInstance? = None

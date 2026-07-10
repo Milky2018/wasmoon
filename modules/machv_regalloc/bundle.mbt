@@ -25,7 +25,7 @@ struct Bundle {
 }
 
 ///|
-pub fn Bundle::new(id : Int, reg_class : @abi.RegClass) -> Bundle {
+pub fn Bundle::Bundle(id : Int, reg_class : @abi.RegClass) -> Bundle {
   {
     id,
     spillset_id: id,
@@ -225,7 +225,7 @@ struct SpillBundle {
 }
 
 ///|
-pub fn SpillBundle::new(id : Int, slot : Int) -> SpillBundle {
+pub fn SpillBundle::SpillBundle(id : Int, slot : Int) -> SpillBundle {
   { id, slot, bundle_ids: [] }
 }
 
@@ -244,7 +244,7 @@ struct BundleSet {
 }
 
 ///|
-pub fn BundleSet::new() -> BundleSet {
+pub fn BundleSet::BundleSet() -> BundleSet {
   { bundles: [], spill_bundles: [], next_spill_slot: 0 }
 }
 
@@ -286,7 +286,7 @@ fn BundleSet::new_spill_bundle(
     _ => (self.next_spill_slot, 1)
   }
   self.next_spill_slot += slots_used
-  let spill_bundle = SpillBundle::new(id, slot)
+  let spill_bundle = SpillBundle::SpillBundle(id, slot)
   self.spill_bundles.push(spill_bundle)
   spill_bundle
 }
@@ -437,10 +437,10 @@ pub fn compute_spill_weight(
 /// Build initial bundles from LiveRanges
 /// Each LiveRange starts in its own bundle
 pub fn build_initial_bundles(ranges : LiveRangeSet) -> BundleSet {
-  let result = BundleSet::new()
+  let result = BundleSet::BundleSet()
   for i in 0..<ranges.length() {
     let range = ranges.get(i)
-    let bundle = Bundle::new(i, range.vreg.class)
+    let bundle = Bundle::Bundle(i, range.vreg.class)
     bundle.add_range(i)
     range.bundle_id = i
     result.add_bundle(bundle)

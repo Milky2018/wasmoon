@@ -347,7 +347,7 @@ fn parse_canon(reader : Reader) -> Canon raise ComponentParseError {
 pub fn parse_canon_section(
   payload : Bytes,
 ) -> Array[Canon] raise ComponentParseError {
-  let reader = Reader::new(payload)
+  let reader = Reader::Reader(payload)
   let n = reader.read_leb_u32()
   let canons : Array[Canon] = []
   for _ in 0..<n {
@@ -373,7 +373,7 @@ pub impl Show for Start with fn output(self, logger) {
 
 ///|
 pub fn parse_start_section(payload : Bytes) -> Start raise ComponentParseError {
-  let reader = Reader::new(payload)
+  let reader = Reader::Reader(payload)
   let func_idx = reader.read_leb_u32()
   let n = reader.read_leb_u32()
   let args : Array[Int] = []

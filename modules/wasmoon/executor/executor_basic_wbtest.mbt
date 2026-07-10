@@ -607,7 +607,7 @@ test "function call: call instruction" {
     codes: [add_func, main_func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "main", [])
@@ -650,7 +650,7 @@ test "function call: nested calls" {
     codes: [double_func, add_one_func, main_func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "main", [I32(5)])
@@ -720,7 +720,7 @@ test "function call: call_indirect" {
     ],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   let (store, instance) = instantiate_module_with_init(mod) catch {
     _ => fail("instantiate_module_with_init failed")
@@ -750,7 +750,7 @@ test "function call: call_indirect" {
 ///|
 test "host function: simple call" {
   // Create a store and add host function to it
-  let store = @runtime.Store::new()
+  let store = @runtime.Store::Store()
   let host_fn : (Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError = args => {
     match args[0] {
       I32(n) => [I32(n * 2)]
@@ -781,11 +781,11 @@ test "host function: simple call" {
     codes: [main_func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
 
   // Set up imports
-  let imports = @runtime.Imports::new()
+  let imports = @runtime.Imports::Imports()
   imports.add_func("env", "double", host_addr)
 
   // Instantiate with the existing store
@@ -799,7 +799,7 @@ test "host function: simple call" {
 
 ///|
 test "host function: caller can access exported memory" {
-  let store = @runtime.Store::new()
+  let store = @runtime.Store::Store()
 
   // Host function writes 7 into caller-exported memory "mem" at address 0.
   let host_fn : (@runtime.Caller, Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError = (
@@ -852,9 +852,9 @@ test "host function: caller can access exported memory" {
     codes: [main_func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
-  let imports = @runtime.Imports::new()
+  let imports = @runtime.Imports::Imports()
   imports.add_func("env", "write_mem0", host_addr)
   let instance = instantiate_module_with_imports(store, mod, imports)
   let results = call_exported_func(store, instance, "main", [])
@@ -867,8 +867,8 @@ test "host function: caller can access exported memory" {
 ///|
 test "memory import: shared memory between modules" {
   // Create a store and allocate a shared memory
-  let store = @runtime.Store::new()
-  let shared_mem = @runtime.Memory::new(1, None) // 1 page
+  let store = @runtime.Store::Store()
+  let shared_mem = @runtime.Memory::Memory(1, None) // 1 page
   let mem_addr = store.alloc_mem(shared_mem)
 
   // Write a value to the shared memory
@@ -907,11 +907,11 @@ test "memory import: shared memory between modules" {
     codes: [read_func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
 
   // Set up imports
-  let imports = @runtime.Imports::new()
+  let imports = @runtime.Imports::Imports()
   imports.add_memory("env", "memory", mem_addr)
 
   // Instantiate with the existing store
@@ -926,8 +926,8 @@ test "memory import: shared memory between modules" {
 ///|
 test "memory import: write to imported memory" {
   // Create a store and allocate a shared memory
-  let store = @runtime.Store::new()
-  let shared_mem = @runtime.Memory::new(1, None)
+  let store = @runtime.Store::Store()
+  let shared_mem = @runtime.Memory::Memory(1, None)
   let mem_addr = store.alloc_mem(shared_mem)
 
   // Create a module that imports this memory and writes to it
@@ -961,9 +961,9 @@ test "memory import: write to imported memory" {
     codes: [write_func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
-  let imports = @runtime.Imports::new()
+  let imports = @runtime.Imports::Imports()
   imports.add_memory("env", "mem", mem_addr)
   let instance = instantiate_module_with_imports(store, mod, imports)
   call_exported_func(store, instance, "write", []) |> ignore
@@ -979,7 +979,7 @@ test "memory import: write to imported memory" {
 
 ///|
 test "import validation: missing import raises error" {
-  let store = @runtime.Store::new()
+  let store = @runtime.Store::Store()
 
   // Create a module that requires an import but don't provide it
   let func : @types.FunctionCode = { locals: [], body: [I32Const(1)] }
@@ -998,11 +998,11 @@ test "import validation: missing import raises error" {
     codes: [func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
 
   // Empty imports - should fail
-  let imports = @runtime.Imports::new()
+  let imports = @runtime.Imports::Imports()
 
   // Should raise UnknownImport
   inspect(

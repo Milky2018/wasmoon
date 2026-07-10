@@ -103,7 +103,7 @@ priv struct Reader {
 }
 
 ///|
-fn Reader::new(data : Bytes) -> Reader {
+fn Reader::Reader(data : Bytes) -> Reader {
   { data, pos: 0 }
 }
 
@@ -140,7 +140,7 @@ fn Reader::read_bytes(
 
 ///|
 fn decode_utf8_validated(bytes : Bytes) -> String raise ComponentParseError {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder::StringBuilder()
   let mut i = 0
   while i < bytes.length() {
     let b = bytes[i].to_int()
@@ -280,7 +280,7 @@ pub fn parse_component_binary(
     bytes[3].to_int() != 0x6d {
     raise InvalidMagic
   }
-  let reader = Reader::new(bytes)
+  let reader = Reader::Reader(bytes)
   // Skip magic.
   reader.read_bytes(4) |> ignore
   let version = reader.read_u16_le()

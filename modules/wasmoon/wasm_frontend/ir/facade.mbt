@@ -3,7 +3,7 @@ using @milkir {
   type Block,
   type FloatCC,
   type Function,
-  type IRBuilder,
+  type FunctionBuilder,
   type IntCC,
   type Opcode,
   type Type,

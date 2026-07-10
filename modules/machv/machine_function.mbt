@@ -16,12 +16,12 @@ pub(all) enum ValueKind {
 
 ///|
 /// MachV function - a complete machine-level function in virtual-register form.
-pub(all) struct Function {
+pub struct Function {
   name : String
   params : Array[@abi.VReg] // Function parameters
   results : Array[@abi.RegClass] // Result types (for return value allocation)
   result_kinds : Array[ValueKind] // Full return kind info for multi-value returns
-  blocks : Array[@block.MachVBlock]
+  blocks : Array[@block.Block]
   mut next_vreg_id : Int
   mut num_spill_slots : Int // Number of spill slots used by register allocator
   // Map from param index to allocated physical register (for params that cross calls)
@@ -57,7 +57,7 @@ pub fn Function::get_params(self : Function) -> Array[@abi.VReg] {
 }
 
 ///|
-pub fn Function::get_blocks(self : Function) -> Array[@block.MachVBlock] {
+pub fn Function::get_blocks(self : Function) -> Array[@block.Block] {
   self.blocks
 }
 
@@ -72,7 +72,7 @@ pub fn Function::get_result_kinds(self : Function) -> Array[ValueKind] {
 }
 
 ///|
-pub fn Function::new(name : String) -> Function {
+pub fn Function::Function(name : String) -> Function {
   {
     name,
     params: [],
@@ -181,29 +181,58 @@ pub fn Function::add_result_kind(self : Function, ty : ValueKind) -> Unit {
 }
 
 ///|
-/// Check if this function needs a hidden pointer for extra return values
-/// Returns true if there are more than 2 integer or 2 float returns
-pub fn Function::needs_extra_results_ptr(self : Function) -> Bool {
+fn Function::result_counts(self : Function) -> (Int, Int) {
   let mut int_count = 0
   let mut float_count = 0
   for ty in self.result_kinds {
     if ty is (I32 | I64) {
       int_count = int_count + 1
-    } else if ty is (F32 | F64) {
+    } else if ty is (F32 | F64 | V128) {
       float_count = float_count + 1
     }
   }
-  int_count > 2 || float_count > 2
+  (int_count, float_count)
 }
 
 ///|
-/// Check if this function calls any function that returns more than 2 values
-/// In that case, we need to allocate a local buffer for receiving extra results
-pub fn Function::calls_multi_value_function(self : Function) -> Bool {
+fn result_class_counts(classes : Array[@abi.RegClass]) -> (Int, Int) {
+  let mut int_count = 0
+  let mut float_count = 0
+  for class in classes {
+    match class {
+      Int => int_count = int_count + 1
+      Float32 | Float64 | Vector => float_count = float_count + 1
+    }
+  }
+  (int_count, float_count)
+}
+
+///|
+/// Check if this function needs an embedding-provided extra-results pointer.
+pub fn Function::needs_extra_results_ptr_for_call_conv(
+  self : Function,
+  call_conv : @abi.CallConventionLayout,
+) -> Bool {
+  let (int_count, float_count) = self.result_counts()
+  call_conv.requires_extra_results_ptr_for_result_counts(int_count, float_count)
+}
+
+///|
+/// Check whether this function calls anything whose result count exceeds the
+/// selected call convention's register-result capacity.
+pub fn Function::calls_multi_value_function_for_call_conv(
+  self : Function,
+  call_conv : @abi.CallConventionLayout,
+) -> Bool {
   for block in self.blocks {
     for inst in block.insts {
-      if inst.opcode is CallPtr(_, num_results, _) && num_results > 2 {
-        return true
+      if inst.opcode.call_result_classes() is Some(result_classes) {
+        let (int_count, float_count) = result_class_counts(result_classes)
+        if call_conv.requires_extra_results_ptr_for_result_counts(
+            int_count, float_count,
+          ) {
+          return true
+        }
       }
     }
   }
@@ -255,9 +284,9 @@ pub fn Function::should_reserve_context_cache_1(self : Function) -> Bool {
 }
 
 ///|
-pub fn Function::new_block(self : Function) -> @block.MachVBlock {
+pub fn Function::new_block(self : Function) -> @block.Block {
   let id = self.blocks.length()
-  let block = @block.MachVBlock::new(id)
+  let block = @block.Block(id)
   self.blocks.push(block)
   block
 }

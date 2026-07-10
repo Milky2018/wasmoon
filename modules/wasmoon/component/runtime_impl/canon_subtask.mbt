@@ -26,7 +26,7 @@ fn instantiate_canon_subtask_cancel(
     let per_task = match async_state.call_results.get(task_id) {
       Some(m) => m
       None => {
-        let m : Map[Int, Array[@types.Value]] = {}
+        let m : Map[Int, Array[@types.Value]] = Map([])
         async_state.call_results.set(task_id, m)
         m
       }
@@ -159,7 +159,7 @@ fn instantiate_canon_subtask_drop(
     let per_task = match async_state.call_results.get(task_id) {
       Some(m) => m
       None => {
-        let m : Map[Int, Array[@types.Value]] = {}
+        let m : Map[Int, Array[@types.Value]] = Map([])
         async_state.call_results.set(task_id, m)
         m
       }

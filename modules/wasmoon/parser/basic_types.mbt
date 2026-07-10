@@ -97,7 +97,7 @@ fn Parser::read_string(self : Parser) -> String raise ParserError {
 ///|
 /// Decode bytes as UTF-8 with validation, raising error on invalid sequences
 fn decode_utf8_validated(bytes : Bytes) -> String raise ParserError {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder::StringBuilder()
   let mut i = 0
   while i < bytes.length() {
     let b = bytes[i].to_int()

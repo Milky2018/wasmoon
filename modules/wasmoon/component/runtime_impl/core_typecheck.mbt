@@ -2,11 +2,11 @@
 fn core_instance_from_module(
   instance : @runtime.ModuleInstance,
 ) -> CoreInstance {
-  let funcs : Map[String, CoreFuncRef] = {}
-  let tables : Map[String, Int] = {}
-  let memories : Map[String, Int] = {}
-  let globals : Map[String, Int] = {}
-  let tags : Map[String, Int] = {}
+  let funcs : Map[String, CoreFuncRef] = Map([])
+  let tables : Map[String, Int] = Map([])
+  let memories : Map[String, Int] = Map([])
+  let globals : Map[String, Int] = Map([])
+  let tags : Map[String, Int] = Map([])
   for exp in instance.exports {
     match exp.desc {
       Func(idx) => funcs.set(exp.name, { instance, func_idx: idx })
@@ -161,7 +161,7 @@ fn parse_core_extern_type_in_moduletype(
 fn parse_core_moduletype_spec(
   core_type : Bytes,
 ) -> CoreModuleTypeSpec raise ComponentRuntimeError {
-  let reader = Reader::new(core_type)
+  let reader = Reader::Reader(core_type)
   let op = reader.read_u8() catch {
     e => raise ComponentParseError(e.to_string())
   }
@@ -172,8 +172,8 @@ fn parse_core_moduletype_spec(
     e => raise ComponentParseError(e.to_string())
   }
   let func_types : Array[@types.FuncType] = []
-  let imports : Map[String, CoreExternType] = {}
-  let exports : Map[String, CoreExternType] = {}
+  let imports : Map[String, CoreExternType] = Map([])
+  let exports : Map[String, CoreExternType] = Map([])
   for _i in 0..<ndecls {
     let tag = reader.read_u8() catch {
       e => raise ComponentParseError(e.to_string())
@@ -260,7 +260,7 @@ fn fmt_valtype(vt : @types.ValueType) -> String {
 
 ///|
 fn fmt_functype(ft : @types.FuncType) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder::StringBuilder()
   buf.write_string("(func")
   if ft.params.length() > 0 {
     buf.write_string(" (param")

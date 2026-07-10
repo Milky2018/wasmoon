@@ -53,7 +53,7 @@ pub struct CompileProgress {
   elapsed_us : Int64
   message : String?
 }
-pub fn CompileProgress::new(CompileStage, Int, Int, Int64, func_idx? : Int?, func_name? : String?, message? : String?) -> Self
+pub fn CompileProgress::CompileProgress(CompileStage, Int, Int, Int64, func_idx? : Int?, func_name? : String?, message? : String?) -> Self
 
 pub(all) enum CompileStage {
   Parse

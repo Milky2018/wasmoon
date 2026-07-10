@@ -9,22 +9,25 @@
 
 ///|
 /// Lowering context - tracks state during IR to MachV conversion
+pub(all) enum ExtensionLowerResult {
+  NotHandled
+  Handled(@block.Block)
+}
+
+///|
 struct LoweringContext {
   ir_func : @milkir.Function
   machv_func : @machv.Function
   isa : @isa.ISA
-  abi_settings : @abi.ABISettings
-  embedding_reg_roles : @abi.EmbeddingRegRoles
-  embedding_context_layout : @abi.EmbeddingContextLayout?
-  call_conv_layout : @abi.CallConventionLayout?
+  embedding_abi : @abi.EmbeddingABI?
   external_helper_symbols : Map[String, String]
   trap_payload_resolver : (String) -> Int
   extension_lowerer : ((
     LoweringContext,
     @milkir.Inst,
-    @block.MachVBlock,
+    @block.Block,
     @milkir.ExtOp,
-  ) -> Bool)?
+  ) -> ExtensionLowerResult)?
   num_imports : Int
   // Dense map from IR Value id to @abi.VReg (Cranelift SecondaryMap style).
   value_map_dense : Array[@abi.VReg?]
@@ -46,6 +49,136 @@ struct LoweringContext {
 }
 
 ///|
+struct LoweringConfig {
+  isa : @isa.ISA
+  embedding_abi : @abi.EmbeddingABI?
+  external_helper_symbols : Map[String, String]
+  trap_payload_resolver : (String) -> Int
+  extension_lowerer : ((
+    LoweringContext,
+    @milkir.Inst,
+    @block.Block,
+    @milkir.ExtOp,
+  ) -> ExtensionLowerResult)?
+  num_imports : Int
+  run_ir_opt : Bool
+}
+
+///|
+pub fn LoweringConfig::LoweringConfig(isa : @isa.ISA) -> LoweringConfig {
+  {
+    isa,
+    embedding_abi: None,
+    external_helper_symbols: Map([]),
+    trap_payload_resolver: fn(_reason) { 0 },
+    extension_lowerer: None,
+    num_imports: -1,
+    run_ir_opt: true,
+  }
+}
+
+///|
+pub fn LoweringConfig::with_embedding_abi(
+  self : LoweringConfig,
+  embedding_abi : @abi.EmbeddingABI,
+) -> LoweringConfig {
+  {
+    isa: self.isa,
+    embedding_abi: Some(embedding_abi),
+    external_helper_symbols: self.external_helper_symbols,
+    trap_payload_resolver: self.trap_payload_resolver,
+    extension_lowerer: self.extension_lowerer,
+    num_imports: self.num_imports,
+    run_ir_opt: self.run_ir_opt,
+  }
+}
+
+///|
+pub fn LoweringConfig::with_external_helper_symbols(
+  self : LoweringConfig,
+  external_helper_symbols : Map[String, String],
+) -> LoweringConfig {
+  {
+    isa: self.isa,
+    embedding_abi: self.embedding_abi,
+    external_helper_symbols,
+    trap_payload_resolver: self.trap_payload_resolver,
+    extension_lowerer: self.extension_lowerer,
+    num_imports: self.num_imports,
+    run_ir_opt: self.run_ir_opt,
+  }
+}
+
+///|
+pub fn LoweringConfig::with_trap_payload_resolver(
+  self : LoweringConfig,
+  trap_payload_resolver : (String) -> Int,
+) -> LoweringConfig {
+  {
+    isa: self.isa,
+    embedding_abi: self.embedding_abi,
+    external_helper_symbols: self.external_helper_symbols,
+    trap_payload_resolver,
+    extension_lowerer: self.extension_lowerer,
+    num_imports: self.num_imports,
+    run_ir_opt: self.run_ir_opt,
+  }
+}
+
+///|
+pub fn LoweringConfig::with_extension_lowerer(
+  self : LoweringConfig,
+  extension_lowerer : (
+    LoweringContext,
+    @milkir.Inst,
+    @block.Block,
+    @milkir.ExtOp,
+  ) -> ExtensionLowerResult,
+) -> LoweringConfig {
+  {
+    isa: self.isa,
+    embedding_abi: self.embedding_abi,
+    external_helper_symbols: self.external_helper_symbols,
+    trap_payload_resolver: self.trap_payload_resolver,
+    extension_lowerer: Some(extension_lowerer),
+    num_imports: self.num_imports,
+    run_ir_opt: self.run_ir_opt,
+  }
+}
+
+///|
+pub fn LoweringConfig::with_num_imports(
+  self : LoweringConfig,
+  num_imports : Int,
+) -> LoweringConfig {
+  {
+    isa: self.isa,
+    embedding_abi: self.embedding_abi,
+    external_helper_symbols: self.external_helper_symbols,
+    trap_payload_resolver: self.trap_payload_resolver,
+    extension_lowerer: self.extension_lowerer,
+    num_imports,
+    run_ir_opt: self.run_ir_opt,
+  }
+}
+
+///|
+pub fn LoweringConfig::with_ir_optimization(
+  self : LoweringConfig,
+  enabled : Bool,
+) -> LoweringConfig {
+  {
+    isa: self.isa,
+    embedding_abi: self.embedding_abi,
+    external_helper_symbols: self.external_helper_symbols,
+    trap_payload_resolver: self.trap_payload_resolver,
+    extension_lowerer: self.extension_lowerer,
+    num_imports: self.num_imports,
+    run_ir_opt: enabled,
+  }
+}
+
+///|
 fn function_params_for_lowering(
   ir_func : @milkir.Function,
 ) -> Array[(@milkir.Value, @milkir.Type)] {
@@ -54,28 +187,25 @@ fn function_params_for_lowering(
   }
   let params : Array[(@milkir.Value, @milkir.Type)] = []
   for i, ty in ir_func.signature.params {
-    let value : @milkir.Value = { id: i, ty }
+    let value = @milkir.Value::Value(i, ty)
     params.push((value, ty))
   }
   params
 }
 
 ///|
-pub fn LoweringContext::new(
+pub fn LoweringContext::LoweringContext(
   ir_func : @milkir.Function,
   isa : @isa.ISA,
-  abi_settings : @abi.ABISettings,
-  embedding_reg_roles : @abi.EmbeddingRegRoles,
-  embedding_context_layout : @abi.EmbeddingContextLayout?,
-  call_conv_layout : @abi.CallConventionLayout?,
+  embedding_abi : @abi.EmbeddingABI?,
   external_helper_symbols : Map[String, String],
   trap_payload_resolver : (String) -> Int,
   extension_lowerer : ((
     LoweringContext,
     @milkir.Inst,
-    @block.MachVBlock,
+    @block.Block,
     @milkir.ExtOp,
-  ) -> Bool)?,
+  ) -> ExtensionLowerResult)?,
   num_imports : Int,
 ) -> LoweringContext {
   let use_counts = compute_use_counts(ir_func)
@@ -98,20 +228,17 @@ pub fn LoweringContext::new(
   }
   {
     ir_func,
-    machv_func: @machv.Function::new(ir_func.name),
+    machv_func: Function(ir_func.name),
     isa,
-    abi_settings,
-    embedding_reg_roles,
-    embedding_context_layout,
-    call_conv_layout,
+    embedding_abi,
     external_helper_symbols,
     trap_payload_resolver,
     extension_lowerer,
     num_imports,
     value_map_dense: Array::make(ir_func.next_value_id, None),
-    block_map: {},
-    stack_param_map: {},
-    context_pointer_cache: {},
+    block_map: Map([]),
+    stack_param_map: Map([]),
+    context_pointer_cache: Map([]),
     fused_icmps_dense: Array::make(ir_func.next_value_id, false),
     skipped_values_dense: Array::make(ir_func.next_value_id, false),
     use_counts,
@@ -120,10 +247,27 @@ pub fn LoweringContext::new(
 }
 
 ///|
+fn LoweringContext::require_embedding_abi(
+  self : LoweringContext,
+) -> @abi.EmbeddingABI {
+  match self.embedding_abi {
+    Some(embedding_abi) => embedding_abi
+    None => abort("embedding ABI is required for ABI-specific lowering")
+  }
+}
+
+///|
+pub fn LoweringContext::embedding_abi(
+  self : LoweringContext,
+) -> @abi.EmbeddingABI {
+  self.require_embedding_abi()
+}
+
+///|
 fn LoweringContext::require_embedding_context_layout(
   self : LoweringContext,
 ) -> @abi.EmbeddingContextLayout {
-  match self.embedding_context_layout {
+  match self.require_embedding_abi().context_layout {
     Some(layout) => layout
     None =>
       abort(
@@ -143,11 +287,7 @@ pub fn LoweringContext::embedding_context_layout(
 fn LoweringContext::require_call_conv_layout(
   self : LoweringContext,
 ) -> @abi.CallConventionLayout {
-  match self.call_conv_layout {
-    Some(layout) => layout
-    None =>
-      abort("call convention layout is required for ABI-specific lowering")
-  }
+  self.require_embedding_abi().call_conv
 }
 
 ///|
@@ -165,17 +305,10 @@ pub fn LoweringContext::machv_function(
 }
 
 ///|
-pub fn LoweringContext::abi_settings(
-  self : LoweringContext,
-) -> @abi.ABISettings {
-  self.abi_settings
-}
-
-///|
-pub fn LoweringContext::embedding_reg_roles(
+fn LoweringContext::embedding_reg_roles(
   self : LoweringContext,
 ) -> @abi.EmbeddingRegRoles {
-  self.embedding_reg_roles
+  self.require_embedding_abi().reg_roles
 }
 
 ///|
@@ -278,7 +411,7 @@ pub fn invalidate_context_pointer_cache(ctx : LoweringContext) -> Unit {
 /// each amode construction rather than caching adjusted bases globally.
 fn get_adjusted_base_with_offset(
   ctx : LoweringContext,
-  block : @block.MachVBlock,
+  block : @block.Block,
   base : @abi.VReg,
   offset : Int64,
 ) -> @abi.VReg {
@@ -288,21 +421,21 @@ fn get_adjusted_base_with_offset(
   let isa = ctx.isa
   let result = ctx.machv_func.new_vreg(Int)
   if offset > 0L && is_valid_add_sub_imm_for_isa(isa, offset) {
-    let add_inst = @instr.MachVInst::new(AddImm(offset.to_int(), true))
+    let add_inst = @instr.Inst(AddImm(offset.to_int(), true))
     add_inst.add_def({ reg: Virtual(result) })
     add_inst.add_use(Virtual(base))
     block.add_inst(add_inst)
     return result
   }
   if offset < 0L && is_valid_add_sub_imm_for_isa(isa, -offset) {
-    let sub_inst = @instr.MachVInst::new(SubImm((-offset).to_int(), true))
+    let sub_inst = @instr.Inst(SubImm((-offset).to_int(), true))
     sub_inst.add_def({ reg: Virtual(result) })
     sub_inst.add_use(Virtual(base))
     block.add_inst(sub_inst)
     return result
   }
   let imm_vreg = materialize_imm(ctx, block, offset)
-  let add_inst = @instr.MachVInst::new(Add(true))
+  let add_inst = @instr.Inst(Add(true))
   add_inst.add_def({ reg: Virtual(result) })
   add_inst.add_use(Virtual(base))
   add_inst.add_use(Virtual(imm_vreg))
@@ -319,7 +452,7 @@ fn get_adjusted_base_with_offset(
 /// temporaries and improve generated shape for Wasm memory hot paths.
 fn get_adjusted_regoff_index_with_offset(
   ctx : LoweringContext,
-  block : @block.MachVBlock,
+  block : @block.Block,
   index : @abi.VReg,
   ext : @instr.IndexExtend,
   shift : Int,
@@ -343,23 +476,21 @@ fn get_adjusted_regoff_index_with_offset(
   let isa = ctx.isa
   let result = ctx.machv_func.new_vreg(Int)
   if offset > 0L && is_valid_add_sub_imm_for_isa(isa, offset) {
-    let add_inst = @instr.MachVInst::new(AddImm(offset.to_int(), !is_i32_index))
+    let add_inst = @instr.Inst(AddImm(offset.to_int(), !is_i32_index))
     add_inst.add_def({ reg: Virtual(result) })
     add_inst.add_use(Virtual(index))
     block.add_inst(add_inst)
     return Some((result, new_ext))
   }
   if offset < 0L && is_valid_add_sub_imm_for_isa(isa, -offset) {
-    let sub_inst = @instr.MachVInst::new(
-      SubImm((-offset).to_int(), !is_i32_index),
-    )
+    let sub_inst = @instr.Inst(SubImm((-offset).to_int(), !is_i32_index))
     sub_inst.add_def({ reg: Virtual(result) })
     sub_inst.add_use(Virtual(index))
     block.add_inst(sub_inst)
     return Some((result, new_ext))
   }
   let imm_vreg = materialize_imm(ctx, block, offset)
-  let add_inst = @instr.MachVInst::new(Add(!is_i32_index))
+  let add_inst = @instr.Inst(Add(!is_i32_index))
   add_inst.add_def({ reg: Virtual(result) })
   add_inst.add_use(Virtual(index))
   add_inst.add_use(Virtual(imm_vreg))
@@ -947,7 +1078,7 @@ pub fn LoweringContext::get_vreg(
 pub fn LoweringContext::get_vreg_for_use(
   self : LoweringContext,
   value : @milkir.Value,
-  block : @block.MachVBlock,
+  block : @block.Block,
 ) -> @abi.VReg {
   if self.get_cached_vreg(value.id) is Some(vreg) {
     return vreg
@@ -957,7 +1088,7 @@ pub fn LoweringContext::get_vreg_for_use(
   if self.stack_param_map.get(value.id) is Some((offset, class)) {
     // Generate LoadStackParam instruction
     let result = self.machv_func.new_vreg(class)
-    let inst = @instr.MachVInst::new(LoadStackParam(offset, class))
+    let inst = @instr.Inst(LoadStackParam(offset, class))
     inst.add_def({ reg: Virtual(result) })
     block.add_inst(inst)
     self.set_cached_vreg(value.id, result)
@@ -968,7 +1099,7 @@ pub fn LoweringContext::get_vreg_for_use(
     // producer that is still required by another lowered instruction.
     if self.is_skipped_value(value.id) &&
       find_defining_inst(self, value) is Some(def_inst) {
-      lower_inst(self, def_inst, block)
+      lower_inst(self, def_inst, block) |> ignore
       if self.get_cached_vreg(value.id) is Some(vreg) {
         return vreg
       }
@@ -1599,33 +1730,24 @@ fn intcc_to_cond(cc : @milkir.IntCC) -> @instr.Cond {
 }
 
 ///|
-/// Lower an entire IR function to MachV
-pub fn lower_function(
+/// Lower an entire IR function to MachV using a grouped lowering config.
+pub fn lower_function_with_config(
   ir_func : @milkir.Function,
-  isa? : @isa.ISA = AArch64,
-  abi_settings? : @abi.ABISettings = @abi.ABISettings::default(),
-  embedding_reg_roles? : @abi.EmbeddingRegRoles = @abi.EmbeddingRegRoles::none(),
-  embedding_context_layout? : @abi.EmbeddingContextLayout? = None,
-  call_conv_layout? : @abi.CallConventionLayout? = None,
-  external_helper_symbols? : Map[String, String] = {},
-  trap_payload_resolver? : (String) -> Int = fn(_reason) { 0 },
-  extension_lowerer? : ((
-    LoweringContext,
-    @milkir.Inst,
-    @block.MachVBlock,
-    @milkir.ExtOp,
-  ) -> Bool)? = None,
-  num_imports? : Int = -1,
-  run_ir_opt? : Bool = true,
+  config : LoweringConfig,
 ) -> @machv.Function {
   // Keep this optional for call sites that already ran full IR optimization.
-  if run_ir_opt {
-    // Apply e-graph optimization before lowering (constant folding, uextend(const) -> const, etc.)
-    @milkir.optimize_function(ir_func) |> ignore
+  if config.run_ir_opt {
+    @milkir.optimize_with_level(ir_func, @milkir.OptLevel::from_int(0))
+    |> ignore
   }
-  let ctx = LoweringContext::new(
-    ir_func, isa, abi_settings, embedding_reg_roles, embedding_context_layout, call_conv_layout,
-    external_helper_symbols, trap_payload_resolver, extension_lowerer, num_imports,
+  let ctx = LoweringContext::LoweringContext(
+    ir_func,
+    config.isa,
+    config.embedding_abi,
+    config.external_helper_symbols,
+    config.trap_payload_resolver,
+    config.extension_lowerer,
+    config.num_imports,
   )
 
   // Phase 0: Pre-compute which Icmps can be fused with Select
@@ -1744,8 +1866,7 @@ pub fn lower_function(
   optimize_machv_for_lowering(
     ctx.machv_func,
     isa=ctx.isa,
-    embedding_context_layout~,
-    embedding_reg_roles=ctx.embedding_reg_roles,
+    embedding_abi=ctx.embedding_abi,
   )
 
   // Phase 6: Target-specific fixups (Cranelift-style).
@@ -1757,6 +1878,38 @@ pub fn lower_function(
     fixup_amd64_shift_count_constraints(ctx.machv_func)
   }
   ctx.machv_func
+}
+
+///|
+/// Lower an entire IR function to MachV.
+///
+/// This compatibility facade keeps the advanced keyword options available.
+/// Prefer `lower_function_with_config` for new user-facing code.
+pub fn lower_function(
+  ir_func : @milkir.Function,
+  isa? : @isa.ISA = AArch64,
+  embedding_abi? : @abi.EmbeddingABI? = None,
+  external_helper_symbols? : Map[String, String] = Map([]),
+  trap_payload_resolver? : (String) -> Int = fn(_reason) { 0 },
+  extension_lowerer? : ((
+    LoweringContext,
+    @milkir.Inst,
+    @block.Block,
+    @milkir.ExtOp,
+  ) -> ExtensionLowerResult)? = None,
+  num_imports? : Int = -1,
+  run_ir_opt? : Bool = true,
+) -> @machv.Function {
+  let config : LoweringConfig = {
+    isa,
+    embedding_abi,
+    external_helper_symbols,
+    trap_payload_resolver,
+    extension_lowerer,
+    num_imports,
+    run_ir_opt,
+  }
+  lower_function_with_config(ir_func, config)
 }
 
 ///|
@@ -1784,7 +1937,7 @@ fn fixup_amd64_shift_count_constraints(func : @machv.Function) -> Unit {
 fn lower_block_body(
   ctx : LoweringContext,
   ir_block : @milkir.Block,
-  machv_block : @block.MachVBlock,
+  machv_block : @block.Block,
 ) -> Unit {
   // Block-local cache: do not carry context-pointer CSE across block boundaries.
   invalidate_context_pointer_cache(ctx)
@@ -1792,23 +1945,24 @@ fn lower_block_body(
   // Block parameters are already handled in pre-registration phase
 
   // Lower instructions
+  let mut current_block = machv_block
   for inst in ir_block.instructions {
     if inst.first_result() is Some(result) && ctx.is_skipped_value(result.id) {
       continue
     }
-    lower_inst(ctx, inst, machv_block)
+    current_block = lower_inst(ctx, inst, current_block)
   }
 
   // Lower terminator
   if ir_block.terminator is Some(term) {
-    lower_terminator(ctx, term, machv_block)
+    lower_terminator(ctx, term, current_block)
   }
 }
 
 ///|
 fn lower_unsupported_generic_opcode(
   inst : @milkir.Inst,
-  _block : @block.MachVBlock,
+  _block : @block.Block,
 ) -> Unit {
   // TODO(milkir): Implement full generic MilkIR lowering for this opcode.
   // Dialect extension lowering is handled explicitly; aborting here keeps
@@ -1819,7 +1973,7 @@ fn lower_unsupported_generic_opcode(
 ///|
 pub fn lower_unsupported_extension_opcode(
   inst : @milkir.Inst,
-  block : @block.MachVBlock,
+  block : @block.Block,
 ) -> Unit {
   lower_unsupported_generic_opcode(inst, block)
 }
@@ -1828,15 +1982,22 @@ pub fn lower_unsupported_extension_opcode(
 fn lower_extension(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.MachVBlock,
+  block : @block.Block,
   ext : @milkir.ExtOp,
-) -> Unit {
+) -> @block.Block {
   match ctx.extension_lowerer {
     Some(lowerer) =>
-      if !lowerer(ctx, inst, block, ext) {
-        lower_unsupported_generic_opcode(inst, block)
+      match lowerer(ctx, inst, block, ext) {
+        Handled(next_block) => next_block
+        NotHandled => {
+          lower_unsupported_generic_opcode(inst, block)
+          block
+        }
       }
-    None => lower_unsupported_generic_opcode(inst, block)
+    None => {
+      lower_unsupported_generic_opcode(inst, block)
+      block
+    }
   }
 }
 
@@ -1845,7 +2006,22 @@ fn lower_extension(
 fn lower_inst(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.MachVBlock,
+  block : @block.Block,
+) -> @block.Block {
+  match inst.opcode {
+    Ext(ext) => return lower_extension(ctx, inst, block, ext)
+    _ => ()
+  }
+  lower_inst_builtin(ctx, inst, block)
+  block
+}
+
+///|
+/// Lower a built-in IR instruction to MachV.
+fn lower_inst_builtin(
+  ctx : LoweringContext,
+  inst : @milkir.Inst,
+  block : @block.Block,
 ) -> Unit {
   match inst.opcode {
     // Constants
@@ -1952,7 +2128,7 @@ fn lower_inst(
     CallPtr(num_args, num_results) =>
       lower_call_ptr(ctx, inst, block, num_args, num_results)
     Trap(_) | Custom(_) => lower_unsupported_generic_opcode(inst, block)
-    Ext(ext) => lower_extension(ctx, inst, block, ext)
+    Ext(_) => lower_unsupported_generic_opcode(inst, block)
 
     // SIMD operations
     V128Const(bytes) => lower_v128_const(ctx, inst, block, bytes)
@@ -2363,7 +2539,7 @@ fn ir_intcc_to_cmp_kind(cc : @milkir.IntCC) -> @instr.CmpKind {
 fn lower_icmp(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.MachVBlock,
+  block : @block.Block,
   cc : @milkir.IntCC,
 ) -> Unit {
   if inst.first_result() is Some(result) {
@@ -2380,7 +2556,7 @@ fn lower_icmp(
       I64 | CallableRef | OpaqueRef => true
       _ => false
     }
-    let machv_inst = @instr.MachVInst::new(Cmp(kind, is_64))
+    let machv_inst = @instr.Inst(Cmp(kind, is_64))
     machv_inst.add_def({ reg: Virtual(dst) })
     machv_inst.add_use(Virtual(lhs))
     if ctx.isa is AArch64 && is_const_zero_value(ctx, inst.operands[1]) {
@@ -2413,7 +2589,7 @@ fn ir_floatcc_to_fcmp_kind(cc : @milkir.FloatCC) -> @instr.FCmpKind {
 fn lower_fcmp(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.MachVBlock,
+  block : @block.Block,
   cc : @milkir.FloatCC,
 ) -> Unit {
   if inst.first_result() is Some(result) {
@@ -2421,7 +2597,7 @@ fn lower_fcmp(
     let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
     let rhs = ctx.get_vreg_for_use(inst.operands[1], block)
     let kind = ir_floatcc_to_fcmp_kind(cc)
-    let machv_inst = @instr.MachVInst::new(FCmp(kind))
+    let machv_inst = @instr.Inst(FCmp(kind))
     machv_inst.add_def({ reg: Virtual(dst) })
     machv_inst.add_use(Virtual(lhs))
     machv_inst.add_use(Virtual(rhs))
@@ -2434,7 +2610,7 @@ fn lower_fcmp(
 fn lower_terminator(
   ctx : LoweringContext,
   term : @milkir.Terminator,
-  block : @block.MachVBlock,
+  block : @block.Block,
 ) -> Unit {
   match term {
     Jump(target, args) => {
@@ -2582,7 +2758,7 @@ fn lower_terminator(
         block.set_terminator(Jump(default_id, []))
       } else if targets.length() < 4 {
         // Small number of targets: use comparison chain (more efficient)
-        let chain_blocks : Array[@block.MachVBlock] = []
+        let chain_blocks : Array[@block.Block] = []
         for _ in 0..<(targets.length() - 1) {
           chain_blocks.push(ctx.machv_func.new_block())
         }
@@ -2590,10 +2766,10 @@ fn lower_terminator(
         // First comparison in original block
         let cmp_result_0 = ctx.machv_func.new_vreg(Int)
         let zero_vreg = ctx.machv_func.new_vreg(Int)
-        let load_zero = @instr.MachVInst::new(LoadConst(0L))
+        let load_zero = @instr.Inst(LoadConst(0L))
         load_zero.add_def({ reg: Virtual(zero_vreg) })
         block.add_inst(load_zero)
-        let cmp_inst_0 = @instr.MachVInst::new(Cmp(Eq, is_64))
+        let cmp_inst_0 = @instr.Inst(Cmp(Eq, is_64))
         cmp_inst_0.add_def({ reg: Virtual(cmp_result_0) })
         cmp_inst_0.add_use(Virtual(index_vreg))
         cmp_inst_0.add_use(Virtual(zero_vreg))
@@ -2614,11 +2790,11 @@ fn lower_terminator(
           let chain_block = chain_blocks[i - 1]
           let target_id = ctx.get_block_id(targets[i])
           let const_vreg = ctx.machv_func.new_vreg(Int)
-          let load_const = @instr.MachVInst::new(LoadConst(i.to_int64()))
+          let load_const = @instr.Inst(LoadConst(i.to_int64()))
           load_const.add_def({ reg: Virtual(const_vreg) })
           chain_block.add_inst(load_const)
           let cmp_result = ctx.machv_func.new_vreg(Int)
-          let cmp_inst = @instr.MachVInst::new(Cmp(Eq, is_64))
+          let cmp_inst = @instr.Inst(Cmp(Eq, is_64))
           cmp_inst.add_def({ reg: Virtual(cmp_result) })
           cmp_inst.add_use(Virtual(index_vreg))
           cmp_inst.add_use(Virtual(const_vreg))
@@ -2658,7 +2834,7 @@ fn lower_terminator(
 fn lower_load_ptr(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.MachVBlock,
+  block : @block.Block,
   ty : @milkir.Type,
 ) -> Unit {
   guard inst.first_result() is Some(result) else { return }
@@ -2735,7 +2911,7 @@ fn lower_load_ptr(
         (adjusted_base, index0, 0)
       }
     }
-    let load_inst = @instr.MachVInst::new(
+    let load_inst = @instr.Inst(
       LoadPtrRegOffset(mem_ty, regoff_ext, shift, regoff_offset),
     )
     load_inst.add_def({ reg: Virtual(result_vreg) })
@@ -2762,7 +2938,7 @@ fn lower_load_ptr(
   let base = ctx.get_vreg_for_use(actual_base_value, block)
 
   // Create LoadPtr instruction
-  let load_inst = @instr.MachVInst::new(LoadPtr(mem_ty, total_offset))
+  let load_inst = @instr.Inst(LoadPtr(mem_ty, total_offset))
   load_inst.add_def({ reg: Virtual(result_vreg) })
   load_inst.add_use(Virtual(base))
   block.add_inst(load_inst)
@@ -2774,7 +2950,7 @@ fn lower_load_ptr(
 fn lower_store_ptr(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.MachVBlock,
+  block : @block.Block,
   ty : @milkir.Type,
 ) -> Unit {
   // operand 0 = base pointer
@@ -2847,7 +3023,7 @@ fn lower_store_ptr(
       }
     }
     let value = ctx.get_vreg_for_use(store_value, block)
-    let store_inst = @instr.MachVInst::new(
+    let store_inst = @instr.Inst(
       StorePtrRegOffset(mem_ty, regoff_ext, shift, regoff_offset),
     )
     store_inst.add_use(Virtual(base))
@@ -2875,7 +3051,7 @@ fn lower_store_ptr(
   let value = ctx.get_vreg_for_use(store_value, block)
 
   // Create StorePtr instruction
-  let store_inst = @instr.MachVInst::new(StorePtr(mem_ty, total_offset))
+  let store_inst = @instr.Inst(StorePtr(mem_ty, total_offset))
   store_inst.add_use(Virtual(base))
   store_inst.add_use(Virtual(value))
   block.add_inst(store_inst)
@@ -2887,7 +3063,7 @@ fn lower_store_ptr(
 fn lower_load_ptr_narrow(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.MachVBlock,
+  block : @block.Block,
   _result_ty : @milkir.Type,
   bits : Int,
   signed : Bool,
@@ -2958,7 +3134,7 @@ fn lower_load_ptr_narrow(
         (adjusted_base, index0, 0)
       }
     }
-    let load_inst = @instr.MachVInst::new(
+    let load_inst = @instr.Inst(
       LoadPtrNarrowRegOffset(bits, signed, regoff_ext, shift, regoff_offset),
     )
     load_inst.add_def({ reg: Virtual(result_vreg) })
@@ -2984,9 +3160,7 @@ fn lower_load_ptr_narrow(
   let base = ctx.get_vreg_for_use(actual_base_value, block)
 
   // Create LoadPtrNarrow instruction
-  let load_inst = @instr.MachVInst::new(
-    LoadPtrNarrow(bits, signed, total_offset),
-  )
+  let load_inst = @instr.Inst(LoadPtrNarrow(bits, signed, total_offset))
   load_inst.add_def({ reg: Virtual(result_vreg) })
   load_inst.add_use(Virtual(base))
   block.add_inst(load_inst)
@@ -2998,7 +3172,7 @@ fn lower_load_ptr_narrow(
 fn lower_store_ptr_narrow(
   ctx : LoweringContext,
   inst : @milkir.Inst,
-  block : @block.MachVBlock,
+  block : @block.Block,
   bits : Int,
 ) -> Unit {
   // operand 0 = base pointer
@@ -3068,7 +3242,7 @@ fn lower_store_ptr_narrow(
       }
     }
     let value = ctx.get_vreg_for_use(store_value, block)
-    let store_inst = @instr.MachVInst::new(
+    let store_inst = @instr.Inst(
       StorePtrNarrowRegOffset(bits, regoff_ext, shift, regoff_offset),
     )
     store_inst.add_use(Virtual(base))
@@ -3095,7 +3269,7 @@ fn lower_store_ptr_narrow(
   let value = ctx.get_vreg_for_use(store_value, block)
 
   // Create StorePtrNarrow instruction
-  let store_inst = @instr.MachVInst::new(StorePtrNarrow(bits, total_offset))
+  let store_inst = @instr.Inst(StorePtrNarrow(bits, total_offset))
   store_inst.add_use(Virtual(base))
   store_inst.add_use(Virtual(value))
   block.add_inst(store_inst)

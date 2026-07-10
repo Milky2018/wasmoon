@@ -241,7 +241,7 @@ fn validate_component_section_alias(
             match outer_td {
               Some(td) => {
                 let tbl = type_outers[ct - 1]
-                if typedef_refers_to_resource(td, tbl, {}) {
+                if typedef_refers_to_resource(td, tbl, Map([])) {
                   raise SectionParseError(
                     6, "refers to resources not defined in the current component",
                   )

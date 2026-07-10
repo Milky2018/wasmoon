@@ -2,9 +2,17 @@
 
 ///|
 test "PrecompiledModule serialize and deserialize roundtrip" {
-  let pcm = @cwasm.PrecompiledModule::new(AArch64)
+  let pcm = @cwasm.PrecompiledModule::PrecompiledModule(AArch64)
   // Create a CompiledFunction mock via CompiledEntry
-  let entry = @cwasm.CompiledEntry::new(0, "add", [0xD503201F], 32, 0, 2, 1)
+  let entry = @cwasm.CompiledEntry::CompiledEntry(
+    0,
+    "add",
+    [0xD503201F],
+    32,
+    0,
+    2,
+    1,
+  )
   pcm.add_function(entry)
   inspect(pcm.function_count(), content="1")
   // Serialize
@@ -32,9 +40,17 @@ test "deserialize invalid data raises error" {
 
 ///|
 test "PrecompiledModule serialize roundtrip with multiple functions" {
-  let pcm = @cwasm.PrecompiledModule::new(AArch64)
-  let entry1 = @cwasm.CompiledEntry::new(0, "func0", [1, 2, 3, 4], 16, 0, 0, 0)
-  let entry2 = @cwasm.CompiledEntry::new(
+  let pcm = @cwasm.PrecompiledModule::PrecompiledModule(AArch64)
+  let entry1 = @cwasm.CompiledEntry::CompiledEntry(
+    0,
+    "func0",
+    [1, 2, 3, 4],
+    16,
+    0,
+    0,
+    0,
+  )
+  let entry2 = @cwasm.CompiledEntry::CompiledEntry(
     1,
     "func1",
     [5, 6, 7, 8, 9],

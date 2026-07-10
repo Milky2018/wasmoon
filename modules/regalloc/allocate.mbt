@@ -31,7 +31,7 @@ fn is_clobbered_while_live(
 ) -> Bool {
   for block in program.blocks {
     for inst_index, inst in block.instructions {
-      let point = ProgramPoint::new(block.id, inst_index)
+      let point = ProgramPoint::ProgramPoint(block.id, inst_index)
       if range.is_live_across(point, block_order) {
         for clobber in inst.clobbers {
           if clobber == preg {
@@ -212,7 +212,7 @@ fn choose_spill_candidate(
 /// TODO(regalloc): add interval splitting, bundle coalescing, rematerialization,
 /// and target-provided spill-cost modeling.
 pub fn allocate_linear_scan(program : Program) -> Allocation {
-  let allocation = Allocation::new()
+  let allocation = Allocation::Allocation()
   let ranges = build_live_ranges(program)
   let active : Array[(LiveRange, PhysicalReg)] = []
   for interval in ranges.ranges {

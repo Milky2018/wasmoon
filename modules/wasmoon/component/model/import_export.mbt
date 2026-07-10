@@ -211,7 +211,7 @@ fn parse_opt_externdesc(
 pub fn parse_import_section(
   payload : Bytes,
 ) -> Array[Import] raise ComponentParseError {
-  let reader = Reader::new(payload)
+  let reader = Reader::Reader(payload)
   let n = reader.read_leb_u32()
   let imports : Array[Import] = []
   for _i in 0..<n {
@@ -248,7 +248,7 @@ pub fn parse_import_section(
 pub fn parse_export_section(
   payload : Bytes,
 ) -> Array[Export] raise ComponentParseError {
-  let reader = Reader::new(payload)
+  let reader = Reader::Reader(payload)
   let n = reader.read_leb_u32()
   let exports : Array[Export] = []
   for _ in 0..<n {

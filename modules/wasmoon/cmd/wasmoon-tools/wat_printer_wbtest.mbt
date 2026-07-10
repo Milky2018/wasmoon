@@ -1,6 +1,6 @@
 ///|
 test "wat_printer: element segments" {
-  let mod_ = @types.Module::new()
+  let mod_ = @types.Module::Module()
   mod_.elems.push({
     mode: Passive,
     type_: FuncRef,

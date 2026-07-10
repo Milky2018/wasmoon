@@ -23,7 +23,7 @@ test "target arch: to_byte and from_byte" {
 ///|
 test "compiled entry: creation" {
   let code : Array[Int] = [0x90, 0xC3] // NOP, RET
-  let entry = CompiledEntry::new(0, "test_func", code, 16, 0, 2, 1)
+  let entry = CompiledEntry::CompiledEntry(0, "test_func", code, 16, 0, 2, 1)
   inspect(entry.func_idx, content="0")
   inspect(entry.name, content="test_func")
   inspect(entry.code.length(), content="2")
@@ -34,7 +34,7 @@ test "compiled entry: creation" {
 
 ///|
 test "precompiled module: creation" {
-  let mod = PrecompiledModule::new(AArch64)
+  let mod = PrecompiledModule::PrecompiledModule(AArch64)
   inspect(mod.version, content="7")
   inspect(mod.target.to_string(), content="aarch64")
   inspect(mod.function_count(), content="0")
@@ -42,10 +42,10 @@ test "precompiled module: creation" {
 
 ///|
 test "precompiled module: add function" {
-  let mod = PrecompiledModule::new(AArch64)
+  let mod = PrecompiledModule::PrecompiledModule(AArch64)
 
   // Create a simple compiled function
-  let entry = CompiledEntry::new(
+  let entry = CompiledEntry::CompiledEntry(
     0,
     "add",
     [0x1F, 0x20, 0x03, 0xD5, 0xC0, 0x03, 0x5F, 0xD6],
@@ -62,8 +62,8 @@ test "precompiled module: add function" {
 
 ///|
 test "serialize and deserialize: preserves direct-call fixups" {
-  let mod = PrecompiledModule::new(AArch64)
-  let entry = CompiledEntry::new(
+  let mod = PrecompiledModule::PrecompiledModule(AArch64)
+  let entry = CompiledEntry::CompiledEntry(
     7,
     "f",
     [0x1F, 0x20, 0x03, 0xD5, 0xC0, 0x03, 0x5F, 0xD6],
@@ -97,10 +97,10 @@ test "serialize and deserialize: preserves direct-call fixups" {
 
 ///|
 test "serialize and deserialize: roundtrip" {
-  let mod = PrecompiledModule::new(AArch64)
+  let mod = PrecompiledModule::PrecompiledModule(AArch64)
 
   // Add a function
-  let entry = CompiledEntry::new(
+  let entry = CompiledEntry::CompiledEntry(
     42,
     "test",
     [0x1F, 0x20, 0x03, 0xD5],
@@ -129,12 +129,12 @@ test "serialize and deserialize: roundtrip" {
 
 ///|
 test "serialize and deserialize: multiple functions" {
-  let mod = PrecompiledModule::new(AArch64)
+  let mod = PrecompiledModule::PrecompiledModule(AArch64)
 
   // Add multiple functions
   for i in 0..<3 {
     mod.add_function(
-      CompiledEntry::new(
+      CompiledEntry(
         i,
         "func_\{i}",
         [0x1F, 0x20, 0x03, 0xD5],
@@ -190,12 +190,12 @@ test "deserialize: unsupported version" {
 
 ///|
 test "serialize and deserialize: preserves gc metadata" {
-  let mod = PrecompiledModule::new(AArch64)
+  let mod = PrecompiledModule::PrecompiledModule(AArch64)
   let safepoints : Array[GcSafepoint] = [
-    GcSafepoint::new(4, [1, 2], 9L),
-    GcSafepoint::new(12, [], 42L),
+    GcSafepoint(4, [1, 2], 9L),
+    GcSafepoint(12, [], 42L),
   ]
-  let entry = CompiledEntry::new(
+  let entry = CompiledEntry::CompiledEntry(
     3,
     "gc_func",
     [0x1F, 0x20, 0x03, 0xD5, 0xC0, 0x03, 0x5F, 0xD6],
@@ -223,7 +223,7 @@ test "serialize and deserialize: preserves gc metadata" {
 ///|
 test "compiled entry: preserves raw code metadata" {
   let code : Array[Int] = [0xD5, 0x03, 0x20, 0x1F, 0xC0, 0x03, 0x5F, 0xD6]
-  let entry = CompiledEntry::new(0, "test", code, 16, 0, 2, 1)
+  let entry = CompiledEntry::CompiledEntry(0, "test", code, 16, 0, 2, 1)
   inspect(entry.name, content="test")
   inspect(entry.frame_size, content="16")
   inspect(entry.code.length(), content="8")
@@ -231,7 +231,7 @@ test "compiled entry: preserves raw code metadata" {
 
 ///|
 test "precompiled module: show" {
-  let mod = PrecompiledModule::new(X86_64)
+  let mod = PrecompiledModule::PrecompiledModule(X86_64)
   let s = mod.to_string()
   inspect(s.contains("v2"), content="false")
   inspect(s.contains("x86_64"), content="true")
@@ -240,7 +240,7 @@ test "precompiled module: show" {
 
 ///|
 test "memory definition: creation and roundtrip" {
-  let mod = PrecompiledModule::new(AArch64)
+  let mod = PrecompiledModule::PrecompiledModule(AArch64)
 
   // Add memory with no maximum
   mod.add_memory(1, None)
@@ -266,7 +266,7 @@ test "memory definition: creation and roundtrip" {
 
 ///|
 test "data segment: creation and roundtrip" {
-  let mod = PrecompiledModule::new(AArch64)
+  let mod = PrecompiledModule::PrecompiledModule(AArch64)
 
   // Add a data segment with "Hello"
   let hello_data : Array[Int] = [0x48, 0x65, 0x6C, 0x6C, 0x6F] // "Hello"
@@ -296,7 +296,7 @@ test "data segment: creation and roundtrip" {
 
 ///|
 test "complete module: memory + data + function roundtrip" {
-  let mod = PrecompiledModule::new(AArch64)
+  let mod = PrecompiledModule::PrecompiledModule(AArch64)
 
   // Add memory definition (1 page minimum, 4 pages maximum)
   mod.add_memory(1, Some(4))
@@ -321,7 +321,7 @@ test "complete module: memory + data + function roundtrip" {
 
   // Add a compiled function
   mod.add_function(
-    CompiledEntry::new(
+    CompiledEntry(
       0,
       "_start",
       [0x1F, 0x20, 0x03, 0xD5, 0xC0, 0x03, 0x5F, 0xD6],
@@ -367,7 +367,7 @@ test "complete module: memory + data + function roundtrip" {
 
 ///|
 test "data segment: empty data" {
-  let mod = PrecompiledModule::new(AArch64)
+  let mod = PrecompiledModule::PrecompiledModule(AArch64)
 
   // Add empty data segment
   let empty : Array[Int] = []
@@ -383,7 +383,7 @@ test "data segment: empty data" {
 
 ///|
 test "memory definition: large pages" {
-  let mod = PrecompiledModule::new(AArch64)
+  let mod = PrecompiledModule::PrecompiledModule(AArch64)
 
   // Add memory with large page counts (simulating real WASM modules)
   mod.add_memory(256, Some(65536)) // 16MB min, 4GB max

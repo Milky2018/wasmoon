@@ -2,21 +2,22 @@
 
 WebAssembly dialect adapter for MilkIR extension operations.
 
-`wasm_milkir` owns the Wasm-specific opcode set and builder helpers that are
-not part of generic MilkIR. Frontends can encode Wasm-only operations as
-`milkir.ExtOp` values, then a lowering adapter can decode them before machine
-lowering.
+`wasm_milkir` provides the Wasm-specific opcode set, extension descriptors, and
+builder helpers used with MilkIR. Frontends encode Wasm operations through
+typed `WasmOpcode` constructors, then a lowering adapter checks and decodes
+those extensions before machine lowering.
 
 ## Packages
 
 - `Milky2018/wasm_milkir`: Wasm opcode encoding/decoding and builder helpers
   for `Milky2018/milkir`.
 
-## Boundary
+## How it fits
 
-`milkir` owns generic SSA IR. `wasm_milkir` owns the WebAssembly dialect carried
-through MilkIR extension operations. Product-specific runtime addresses,
-VMContext layouts, and native glue still belong outside this module.
+MilkIR represents common SSA operations directly. This package represents
+WebAssembly operations that need additional immediates or lowering semantics as
+typed MilkIR extensions. The extension descriptor lets a lowering pipeline
+validate the encoded operation before decoding it.
 
 ## Example: map Wasm reference types to MilkIR
 
@@ -33,12 +34,10 @@ test "map Wasm reference spelling to generic MilkIR references" {
 ```moonbit check
 ///|
 test "build a Wasm memory.size extension instruction" {
-  let builder = @milkir.IRBuilder::new("memory_size")
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("memory_size")
   let symbols = RuntimeSymbols::with_runtime_prefix("example.runtime")
   let vmctx = builder.add_param(I64)
   builder.add_result(I32)
-  let entry = builder.create_block()
-  builder.switch_to_block(entry)
   let size = memory_size(builder, symbols, vmctx, 0)
   builder.return_([size])
   let func = builder.get_function()
@@ -48,5 +47,29 @@ test "build a Wasm memory.size extension instruction" {
     Call(symbol) => inspect(symbol.name, content="example.runtime.memory_size")
     _ => inspect(false, content="true")
   }
+}
+```
+
+## Example: validate and decode a Wasm extension
+
+```moonbit check
+///|
+test "validate and decode a typed Wasm extension operation" {
+  let opcode = WasmOpcode::MemoryGrow(0, Some(1024))
+  let ext = encode(opcode)
+  let desc = descriptor(opcode)
+  inspect(ext.matches_descriptor(desc), content="true")
+  inspect(decode_or_abort(ext) == opcode, content="true")
+  let malformed = @milkir.ExtOp(
+    "wasm",
+    "memory_grow",
+    FixedArray::makei(0, fn(_) { 0 }),
+  )
+  debug_inspect(
+    decode_error(malformed),
+    content=(
+      #|Some("malformed Wasm MilkIR extension 'memory_grow': expected 1..2 immediates, got 0")
+    ),
+  )
 }
 ```

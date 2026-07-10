@@ -43,7 +43,7 @@ test "module initialization: start function execution" {
     codes: [init_func, get_func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   let (store, instance) = instantiate_module_with_init(mod) catch {
     _ => fail("instantiate_module_with_init failed")
@@ -145,7 +145,7 @@ test "module initialization: element segment" {
     codes: [func0, func1, call_func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   let (store, instance) = instantiate_module_with_init(mod) catch {
     _ => fail("instantiate_module_with_init failed")
@@ -368,7 +368,7 @@ test "bulk memory: data.drop" {
     codes: [drop_func, init_zero_func, init_nonzero_func],
     datas: [{ memory_idx: 0, offset: [I32Const(0)], init: data_bytes }],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   let (store, instance) = instantiate_module_with_init(mod) catch {
     _ => fail("instantiate_module_with_init failed")
@@ -436,7 +436,7 @@ test "bulk memory: elem.drop" {
     codes: [drop_func, dummy_func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   let (store, instance) = instantiate_module_with_init(mod) catch {
     _ => fail("instantiate_module_with_init failed")
@@ -477,7 +477,7 @@ test "bulk memory: data.drop is idempotent" {
     codes: [drop_func],
     datas: [{ memory_idx: 0, offset: [I32Const(0)], init: data_bytes }],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   let (store, instance) = instantiate_module_with_init(mod) catch {
     _ => fail("instantiate_module_with_init failed")

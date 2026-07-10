@@ -1,6 +1,6 @@
 ///|
 fn external_symbol(name : String) -> @instr.ExternalName {
-  @instr.ExternalName::new(name)
+  ExternalName(name)
 }
 
 ///|
