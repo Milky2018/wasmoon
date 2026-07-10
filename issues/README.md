@@ -135,6 +135,7 @@ graph TD
   ISS_124["ISS-124: Extend checked trip-count analysis to I64 and boundary cases"]
   ISS_125["ISS-125: Enable safe O3 loop unrolling and differential validation"]
   ISS_126["ISS-126: Complete MilkIR verifier instruction contracts"]
+  ISS_127["ISS-127: Preserve reference widths during MilkIR-to-MachV lowering"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005

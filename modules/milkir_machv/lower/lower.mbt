@@ -1140,6 +1140,11 @@ pub fn ir_type_to_reg_class(ty : @milkir.Type) -> @abi.RegClass {
 }
 
 ///|
+fn is_64_bit_word_type(ty : @milkir.Type) -> Bool {
+  ty is (I64 | Ptr | Ref | CallableRef | OpaqueRef)
+}
+
+///|
 /// Convert IR Type to MachV result kind.
 fn ir_type_to_value_kind(ty : @milkir.Type) -> @machv.ValueKind {
   match ty {
@@ -2550,12 +2555,8 @@ fn lower_icmp(
     let dst = ctx.get_vreg(result)
     let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
     let kind = ir_intcc_to_cmp_kind(cc)
-    // Determine is_64 from operand type, not result type (result is always i32)
-    // Reference types (CallableRef, OpaqueRef) are also 64-bit values
-    let is_64 = match inst.operands[0].ty {
-      I64 | CallableRef | OpaqueRef => true
-      _ => false
-    }
+    // Determine width from the operand type; the result is always i32.
+    let is_64 = is_64_bit_word_type(inst.operands[0].ty)
     let machv_inst = @instr.Inst(Cmp(kind, is_64))
     machv_inst.add_def({ reg: Virtual(dst) })
     machv_inst.add_use(Virtual(lhs))
@@ -2646,11 +2647,7 @@ fn lower_terminator(
         // So we need to branch to else_block if condition is true, then_block if false
         // This means: BranchCmp with swapped targets
         let machv_cond = intcc_to_cond(cc)
-        // Determine is_64 from operand type (same as lower_icmp)
-        let is_64 = match lhs.ty {
-          I64 | CallableRef | OpaqueRef => true
-          _ => false
-        }
+        let is_64 = is_64_bit_word_type(lhs.ty)
         // Try to use BranchCmpImm if RHS is a valid immediate
         if match_add_imm_value(ctx, rhs) is Some(imm) {
           let lhs_vreg = ctx.get_vreg_for_use(lhs, block)
@@ -2698,11 +2695,7 @@ fn lower_terminator(
       if match_icmp_value(ctx, cond) is Some((lhs, rhs, cc)) {
         // Brnz(icmp(cc, a, b)) = branch to then if icmp result is nonzero (i.e., condition is true)
         let machv_cond = intcc_to_cond(cc)
-        // Determine is_64 from operand type (same as lower_icmp)
-        let is_64 = match lhs.ty {
-          I64 | CallableRef | OpaqueRef => true
-          _ => false
-        }
+        let is_64 = is_64_bit_word_type(lhs.ty)
         // Try to use BranchCmpImm if RHS is a valid immediate
         if match_add_imm_value(ctx, rhs) is Some(imm) {
           let lhs_vreg = ctx.get_vreg_for_use(lhs, block)

@@ -1053,7 +1053,7 @@ fn lower_band(
   let dst = ctx.get_vreg(result)
   let lhs_val = inst.operands[0]
   let rhs_val = inst.operands[1]
-  let is_64 = result.ty is I64
+  let is_64 = is_64_bit_word_type(result.ty)
   let isa = ctx.isa
 
   // Pattern: and(x, const) -> AndImm if const is encodable as a logical immediate.
@@ -1159,7 +1159,7 @@ fn lower_bor(
   let dst = ctx.get_vreg(result)
   let lhs_val = inst.operands[0]
   let rhs_val = inst.operands[1]
-  let is_64 = result.ty is I64
+  let is_64 = is_64_bit_word_type(result.ty)
   let isa = ctx.isa
 
   // Pattern: or(x, const) -> OrImm if const is encodable as a logical immediate.
@@ -1293,7 +1293,7 @@ fn lower_bxor(
   let dst = ctx.get_vreg(result)
   let lhs_val = inst.operands[0]
   let rhs_val = inst.operands[1]
-  let is_64 = result.ty is I64
+  let is_64 = is_64_bit_word_type(result.ty)
   let isa = ctx.isa
 
   // Pattern: xor(x, const) -> XorImm if const is encodable as a logical immediate.
