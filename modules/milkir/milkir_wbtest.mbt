@@ -434,6 +434,46 @@ test "instruction identity includes result types and arity" {
 }
 
 ///|
+test "instruction identity compares float constants by bit pattern" {
+  let func = Function::new_empty("float_instruction_identity")
+  let positive_zero = func.new_inst(Fconst(0.0), [], [func.new_value(F64)])
+  let negative_zero = func.new_inst(Fconst(-0.0), [], [func.new_value(F64)])
+  let nan_bits = 0x7FF8000000000001UL
+  let other_nan_bits = 0x7FF8000000000002UL
+  let nan0 = func.new_inst(Fconst(nan_bits.reinterpret_as_double()), [], [
+    func.new_value(F64),
+  ])
+  let nan0_again = func.new_inst(Fconst(nan_bits.reinterpret_as_double()), [], [
+    func.new_value(F64),
+  ])
+  let nan1 = func.new_inst(Fconst(other_nan_bits.reinterpret_as_double()), [], [
+    func.new_value(F64),
+  ])
+  inspect(positive_zero == negative_zero, content="false")
+  inspect(nan0 == nan0_again, content="true")
+  inspect(nan0 == nan1, content="false")
+  inspect(nan0.hash() == nan0_again.hash(), content="true")
+  let expressions : @hashmap.HashMap[Inst, Int] = HashMap([])
+  expressions.set(nan0, 7)
+  inspect(expressions.get(nan0_again).unwrap_or(-1), content="7")
+}
+
+///|
+test "GVN reuses float constants with identical NaN bits" {
+  let builder = FunctionBuilder::FunctionBuilder("gvn_nan_bits")
+  builder.add_result(F64)
+  let nan = 0x7FF8000000000001UL.reinterpret_as_double()
+  let _first = builder.fconst(F64, nan)
+  let second = builder.fconst(F64, nan)
+  builder.return_([second])
+  let func = builder.get_function()
+  let result = cse_gvn_global(func)
+  inspect(result.changed, content="true")
+  inspect(func.blocks[0].instructions[1].opcode is Copy, content="true")
+  inspect(func.verify(), content="()")
+}
+
+///|
 test "GVN does not conflate integer constants with different widths" {
   let builder = FunctionBuilder::FunctionBuilder("gvn_integer_widths")
   builder.add_result(I64)

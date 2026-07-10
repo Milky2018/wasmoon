@@ -251,7 +251,7 @@ pub struct Inst {
 /// Hash for CSE/GVN - based on opcode, result types, and operand IDs.
 /// Result IDs are definitions rather than part of expression identity.
 pub impl Hash for Inst with fn hash_combine(self, hasher) {
-  self.opcode.hash_combine(hasher)
+  hash_opcode_identity(self.opcode, hasher)
   self.results.length().hash_combine(hasher)
   for result in self.results {
     result.ty.hash_combine(hasher)
@@ -264,7 +264,7 @@ pub impl Hash for Inst with fn hash_combine(self, hasher) {
 ///|
 /// Eq for CSE/GVN - result types are part of expression identity.
 pub impl Eq for Inst with fn equal(self, other) {
-  if self.opcode != other.opcode {
+  if !opcode_identity_equal(self.opcode, other.opcode) {
     return false
   }
   if self.results.length() != other.results.length() {
@@ -284,6 +284,27 @@ pub impl Eq for Inst with fn equal(self, other) {
     }
   }
   true
+}
+
+///|
+fn hash_opcode_identity(opcode : Opcode, hasher : Hasher) -> Unit {
+  match opcode {
+    Fconst(value) => {
+      "milkir.fconst.bits".hash_combine(hasher)
+      value.reinterpret_as_uint64().hash_combine(hasher)
+    }
+    _ => opcode.hash_combine(hasher)
+  }
+}
+
+///|
+fn opcode_identity_equal(lhs : Opcode, rhs : Opcode) -> Bool {
+  match (lhs, rhs) {
+    (Fconst(a), Fconst(b)) =>
+      a.reinterpret_as_uint64() == b.reinterpret_as_uint64()
+    (Fconst(_), _) | (_, Fconst(_)) => false
+    _ => lhs == rhs
+  }
 }
 
 ///|
