@@ -8,7 +8,15 @@ No ready issues.
 
 ## Unresolved Issues
 
-No unresolved issues.
+| ID | Status | Priority | Type | Assignee | Blocked by | Blocks | Title |
+| --- | --- | ---: | --- | --- | --- | --- | --- |
+| [ISS-120](ISS-120.md) | in_progress | 0 | bug | codex | none | ISS-119, ISS-121 | Strengthen MilkIR SSA verification |
+| [ISS-119](ISS-119.md) | open | 1 | epic | unassigned | ISS-120, ISS-121, ISS-122, ISS-123, ISS-124, ISS-125 | none | Restore safe MilkIR loop unrolling |
+| [ISS-121](ISS-121.md) | open | 1 | feature | unassigned | ISS-120 | ISS-119, ISS-122 | Fully unroll canonical constant-trip I32 loops |
+| [ISS-122](ISS-122.md) | open | 1 | feature | unassigned | ISS-121 | ISS-119, ISS-123 | Preserve loop-carried SSA and effects during full unrolling |
+| [ISS-123](ISS-123.md) | open | 1 | feature | unassigned | ISS-122 | ISS-119, ISS-124 | Add factor-two loop unrolling with remainder handling |
+| [ISS-125](ISS-125.md) | open | 1 | task | unassigned | ISS-124 | ISS-119 | Enable safe O3 loop unrolling and differential validation |
+| [ISS-124](ISS-124.md) | open | 2 | feature | unassigned | ISS-123 | ISS-119, ISS-125 | Extend checked trip-count analysis to I64 and boundary cases |
 
 ## Dependency Graph
 
@@ -127,6 +135,13 @@ graph TD
   ISS_111["ISS-111: Unify the production Wasm frontend entry point"]
   ISS_112["ISS-112: Classify Wasmoon JIT integration as product-owned"]
   ISS_113["ISS-113: Refresh architecture and readiness documentation"]
+  ISS_119["ISS-119: Restore safe MilkIR loop unrolling"]
+  ISS_120["ISS-120: Strengthen MilkIR SSA verification"]
+  ISS_121["ISS-121: Fully unroll canonical constant-trip I32 loops"]
+  ISS_122["ISS-122: Preserve loop-carried SSA and effects during full unrolling"]
+  ISS_123["ISS-123: Add factor-two loop unrolling with remainder handling"]
+  ISS_124["ISS-124: Extend checked trip-count analysis to I64 and boundary cases"]
+  ISS_125["ISS-125: Enable safe O3 loop unrolling and differential validation"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
@@ -229,6 +244,17 @@ graph TD
   ISS_110 --> ISS_113
   ISS_111 --> ISS_113
   ISS_112 --> ISS_113
+  ISS_120 --> ISS_119
+  ISS_121 --> ISS_119
+  ISS_122 --> ISS_119
+  ISS_123 --> ISS_119
+  ISS_124 --> ISS_119
+  ISS_125 --> ISS_119
+  ISS_120 --> ISS_121
+  ISS_121 --> ISS_122
+  ISS_122 --> ISS_123
+  ISS_123 --> ISS_124
+  ISS_124 --> ISS_125
 ```
 
 ## Warnings
