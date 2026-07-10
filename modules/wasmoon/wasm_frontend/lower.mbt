@@ -165,7 +165,7 @@ pub fn try_lower_native_function(
 fn function_contains_custom_opcode(func : @milkir.Function) -> Bool {
   for block in func.blocks {
     for inst in block.instructions {
-      if inst.opcode is Custom(_) {
+      if inst.opcode is Custom(_, _) {
         return true
       }
     }

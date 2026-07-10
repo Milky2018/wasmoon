@@ -98,6 +98,20 @@ test "verify rejects indirect calls that disagree with their signature" {
 }
 
 ///|
+test "verify rejects direct calls that disagree with their signature" {
+  let func = Function::new_empty("bad_direct_call")
+  let result = func.new_value(I64)
+  let entry = func.new_block([])
+  entry.append_inst(
+    func.new_inst(Call(ExternalSymbol("callee"), Signature([I32], [I64])), [], [
+      result,
+    ]),
+  )
+  entry.set_terminator(Return([]))
+  expect_verify_rejection(func, "call argument arity")
+}
+
+///|
 test "verify rejects pointer calls that disagree with declared counts" {
   let func = Function::new_empty("bad_pointer_call")
   let entry = func.new_block([])
@@ -107,12 +121,24 @@ test "verify rejects pointer calls that disagree with declared counts" {
 }
 
 ///|
-test "verify rejects custom instructions without a verifiable contract" {
+test "verify rejects custom instructions that disagree with their contract" {
   let func = Function::new_empty("untyped_custom")
   let entry = func.new_block([])
-  entry.append_inst(func.new_inst(Custom("unknown"), [], []))
+  entry.append_inst(
+    func.new_inst(Custom("unknown", Signature([I32], [])), [], []),
+  )
   entry.set_terminator(Return([]))
   expect_verify_rejection(func, "custom instruction contract")
+}
+
+///|
+test "verify rejects extension instructions that disagree with their contract" {
+  let func = Function::new_empty("bad_extension_contract")
+  let entry = func.new_block([])
+  let ext = ExtOp("demo", "checked", FixedArray::make(0, 0))
+  entry.append_inst(func.new_inst(Ext(ext, Signature([I32], [])), [], []))
+  entry.set_terminator(Return([]))
+  expect_verify_rejection(func, "extension instruction contract")
 }
 
 ///|

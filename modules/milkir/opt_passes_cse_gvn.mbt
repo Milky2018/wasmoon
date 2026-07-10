@@ -5,8 +5,8 @@
 fn reads_memory(opcode : Opcode) -> Bool {
   match opcode {
     LoadPtr(_) | LoadPtrNarrow(_, _, _) => true
-    Call(_) => true
-    Ext(_) => true
+    Call(_, _) => true
+    Ext(_, _) => true
     _ => false
   }
 }
@@ -18,9 +18,9 @@ fn may_write_memory(opcode : Opcode) -> Bool {
   match opcode {
     // Direct memory writes
     StorePtr(_) | StorePtrNarrow(_) => true
-    Call(_) => true
+    Call(_, _) => true
     CallPtr(_, _) => true
-    Ext(_) => true
+    Ext(_, _) => true
     _ => false
   }
 }
@@ -343,7 +343,7 @@ fn collect_ptr_base_infos(
       for inst in block.instructions {
         if inst.first_result() is Some(v) && result.get(v.id) is None {
           let inferred : PtrBaseInfo? = match inst.opcode {
-            Ext(_) => None
+            Ext(_, _) => None
             Copy | Bitcast | Uextend | Sextend | Ireduce =>
               if inst.operands.length() > 0 {
                 result.get(inst.operands[0].id)

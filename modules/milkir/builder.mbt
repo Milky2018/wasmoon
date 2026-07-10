@@ -24,7 +24,10 @@ pub fn FunctionBuilder::get_function(self : FunctionBuilder) -> Function {
 
 ///|
 /// Finish building and return the constructed function.
-pub fn FunctionBuilder::finalize(self : FunctionBuilder) -> Function {
+pub fn FunctionBuilder::finalize(
+  self : FunctionBuilder,
+) -> Function raise VerifyError {
+  self.func.verify()
   self.func
 }
 
@@ -165,7 +168,11 @@ pub fn FunctionBuilder::emit_ext_inst(
   opcode : ExtOp,
   operands : Array[Value],
 ) -> Value {
-  self.emit_inst(ty, Ext(opcode), operands)
+  self.emit_inst(
+    ty,
+    Ext(opcode, Signature(operands.map(value => value.ty), [ty])),
+    operands,
+  )
 }
 
 ///|
@@ -174,7 +181,10 @@ pub fn FunctionBuilder::emit_void_ext_inst(
   opcode : ExtOp,
   operands : Array[Value],
 ) -> Unit {
-  self.emit_void_inst(Ext(opcode), operands)
+  self.emit_void_inst(
+    Ext(opcode, Signature(operands.map(value => value.ty), [])),
+    operands,
+  )
 }
 
 ///|
@@ -184,7 +194,11 @@ pub fn FunctionBuilder::emit_multi_ext_inst(
   opcode : ExtOp,
   operands : Array[Value],
 ) -> Array[Value] {
-  self.emit_multi_inst(result_types, Ext(opcode), operands)
+  self.emit_multi_inst(
+    result_types,
+    Ext(opcode, Signature(operands.map(value => value.ty), result_types.copy())),
+    operands,
+  )
 }
 
 // ============ Constants ============
@@ -871,10 +885,12 @@ pub fn FunctionBuilder::call_symbol(
   result_ty : Type?,
   args : Array[Value],
 ) -> Value? {
+  let param_types = args.map(value => value.ty)
   match result_ty {
-    Some(ty) => Some(self.emit_inst(ty, Call(symbol), args))
+    Some(ty) =>
+      Some(self.emit_inst(ty, Call(symbol, Signature(param_types, [ty])), args))
     None => {
-      self.emit_void_inst(Call(symbol), args)
+      self.emit_void_inst(Call(symbol, Signature(param_types, [])), args)
       None
     }
   }
@@ -887,7 +903,11 @@ pub fn FunctionBuilder::call_symbol_multi(
   result_types : Array[Type],
   args : Array[Value],
 ) -> Array[Value] {
-  self.emit_multi_inst(result_types, Call(symbol), args)
+  self.emit_multi_inst(
+    result_types,
+    Call(symbol, Signature(args.map(value => value.ty), result_types.copy())),
+    args,
+  )
 }
 
 // ============ Terminators ============

@@ -2009,7 +2009,7 @@ fn lower_inst(
   block : @block.Block,
 ) -> @block.Block {
   match inst.opcode {
-    Ext(ext) => return lower_extension(ctx, inst, block, ext)
+    Ext(ext, _) => return lower_extension(ctx, inst, block, ext)
     _ => ()
   }
   lower_inst_builtin(ctx, inst, block)
@@ -2116,7 +2116,7 @@ fn lower_inst_builtin(
     Select => lower_select(ctx, inst, block)
 
     // Function calls
-    Call(symbol) => lower_external_call(ctx, inst, block, symbol)
+    Call(symbol, _) => lower_external_call(ctx, inst, block, symbol)
     CallIndirect(_) => lower_unsupported_generic_opcode(inst, block)
 
     // Raw pointer operations (for trampolines)
@@ -2127,8 +2127,8 @@ fn lower_inst_builtin(
     StorePtrNarrow(bits) => lower_store_ptr_narrow(ctx, inst, block, bits)
     CallPtr(num_args, num_results) =>
       lower_call_ptr(ctx, inst, block, num_args, num_results)
-    Trap(_) | Custom(_) => lower_unsupported_generic_opcode(inst, block)
-    Ext(_) => lower_unsupported_generic_opcode(inst, block)
+    Trap(_) | Custom(_, _) => lower_unsupported_generic_opcode(inst, block)
+    Ext(_, _) => lower_unsupported_generic_opcode(inst, block)
 
     // SIMD operations
     V128Const(bytes) => lower_v128_const(ctx, inst, block, bytes)

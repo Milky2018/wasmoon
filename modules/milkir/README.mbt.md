@@ -62,6 +62,8 @@ block0:                             execution starts in block0
 }
 ```
 
+`finalize()` verifies the current function before returning it and raises `VerifyError` for malformed SSA, CFG, or instruction contracts. `get_function()` remains the explicit escape hatch for in-progress construction and transformation code; callers that mutate a function after finalization must verify it again.
+
 The important detail is that `x`, `one`, and `answer` are not runtime integers in the MoonBit program that builds the IR. They are MilkIR `Value`s: typed handles that name values in the function being compiled.
 
 ## The six concepts to know
@@ -284,7 +286,7 @@ Stack slots are per-function abstract local storage objects. `StackAddr(slot)` p
 
 ### External calls
 
-`ExternalSymbol` names a symbol outside the IR function. `Call(symbol)`, `CallIndirect(signature)`, and `CallPtr(num_args, num_results)` are treated conservatively by core optimizations because calls may observe or change state.
+`ExternalSymbol` names a symbol outside the IR function. `Call(symbol, signature)`, `CallIndirect(signature)`, and `CallPtr(num_args, num_results)` are treated conservatively by core optimizations because calls may observe or change state. Direct and indirect calls carry operand/result signatures that the verifier checks; pointer calls carry explicit argument and result counts.
 
 `CallPtr` has a generic operand contract:
 
@@ -300,7 +302,7 @@ An embedding that does not need an environment must still pass an explicit senti
 
 ## Dialect-specific operations
 
-`Ext(ExtOp)` represents dialect-specific operations. MilkIR stores a dialect name, opcode name, and integer immediates, while the dialect package provides builders, semantic validation, decoding, and lowering.
+`Ext(ExtOp, Signature)` represents dialect-specific operations. MilkIR stores a dialect name, opcode name, integer immediates, and an explicit operand/result contract, while the dialect package provides builders, semantic validation, decoding, and lowering.
 
 ```moonbit check
 ///|

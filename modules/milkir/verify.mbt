@@ -12,6 +12,7 @@ pub suberror VerifyError {
   InvalidBlockTarget(block_id~ : Int)
   ArityMismatch(message~ : String)
   TypeMismatch(message~ : String)
+  UnverifiableInstruction(message~ : String)
 } derive(Debug, Eq)
 
 ///|
@@ -266,94 +267,7 @@ fn verify_inst(
   for arg in inst.args {
     verify_defined(arg, definitions, use_block, use_position, idom)
   }
-  match inst.opcode {
-    Iconst(_) | Fconst(_) | StackAddr(_) =>
-      require_arity(inst.args.length(), 0, "constant")
-    Iadd
-    | Isub
-    | Imul
-    | Umulh
-    | Smulh
-    | Sdiv
-    | Udiv
-    | Srem
-    | Urem
-    | Band
-    | Bor
-    | Bxor
-    | Ishl
-    | Sshr
-    | Ushr
-    | Rotl
-    | Rotr => {
-      require_arity(inst.args.length(), 2, "binary")
-      require_same_type(inst.args[0], inst.args[1], "binary")
-    }
-    Bnot
-    | Clz
-    | Ctz
-    | Popcnt
-    | Fneg
-    | Fabs
-    | Fsqrt
-    | Fceil
-    | Ffloor
-    | Ftrunc
-    | Fnearest
-    | Ireduce
-    | Sextend
-    | Uextend
-    | Fpromote
-    | Fdemote
-    | FcvtToSint
-    | FcvtToUint
-    | FcvtToSintSat
-    | FcvtToUintSat
-    | SintToFcvt
-    | UintToFcvt
-    | Bitcast
-    | Sextend8
-    | Sextend16
-    | Sextend32
-    | Copy
-    | Trap(_) => require_arity(inst.args.length(), 1, "unary")
-    Icmp(_) | IcmpEq | Fcmp(_) => {
-      require_arity(inst.args.length(), 2, "compare")
-      require_same_type(inst.args[0], inst.args[1], "compare")
-      if inst.results.length() == 1 && inst.results[0].ty != I32 {
-        raise TypeMismatch(message="compare result must be i32")
-      }
-    }
-    Fadd | Fsub | Fmul | Fdiv | Fmin | Fmax => {
-      require_arity(inst.args.length(), 2, "float binary")
-      require_same_type(inst.args[0], inst.args[1], "float binary")
-    }
-    Select => require_arity(inst.args.length(), 3, "select")
-    Load => require_arity(inst.args.length(), 1, "load")
-    Store => require_arity(inst.args.length(), 2, "store")
-    LoadPtr(_) =>
-      if inst.args.length() < 1 {
-        raise ArityMismatch(message="load_ptr expects at least 1 operand")
-      }
-    LoadPtrNarrow(_, _, _) =>
-      if inst.args.length() < 1 {
-        raise ArityMismatch(
-          message="load_ptr_narrow expects at least 1 operand",
-        )
-      }
-    StorePtr(_) =>
-      if inst.args.length() < 2 {
-        raise ArityMismatch(message="store_ptr expects at least 2 operands")
-      }
-    StorePtrNarrow(_) =>
-      if inst.args.length() < 2 {
-        raise ArityMismatch(
-          message="store_ptr_narrow expects at least 2 operands",
-        )
-      }
-    Call(_) | CallIndirect(_) | CallPtr(_, _) | Custom(_) => ()
-    _ => ()
-  }
+  verify_opcode_contract(inst)
 }
 
 ///|

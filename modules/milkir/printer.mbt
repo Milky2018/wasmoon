@@ -153,7 +153,7 @@ fn format_opcode(
     StackAddr(slot) => "stack_addr slot\{slot.id}"
 
     // Function calls
-    Call(symbol) => "call \{symbol.name}(\{ops})"
+    Call(symbol, _) => "call \{symbol.name}(\{ops})"
     CallIndirect(signature) => "call_indirect sig=\{to_repr(signature)}(\{ops})"
 
     // Raw pointer operations (for trampolines)
@@ -167,8 +167,8 @@ fn format_opcode(
     CallPtr(num_args, num_results) =>
       "call_ptr(\{num_args}) -> \{num_results} (\{ops})"
     Trap(reason) => "trap \"\{reason}\" \{ops}"
-    Custom(name) => "custom \{name} \{ops}"
-    Ext(ext) => {
+    Custom(name, _) => "custom \{name} \{ops}"
+    Ext(ext, _) => {
       let imms : Array[String] = []
       for imm in ext.immediates {
         imms.push("\{imm}")

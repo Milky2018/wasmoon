@@ -368,7 +368,9 @@ test "dead code pass keeps multi-result instructions with a live later result" {
   let unused = func.new_value(I32)
   let live = func.new_value(I64)
   let entry = func.new_block([])
-  entry.append_inst(func.new_inst(Custom("pair"), [], [unused, live]))
+  entry.append_inst(
+    func.new_inst(Custom("pair", Signature([], [I32, I64])), [], [unused, live]),
+  )
   entry.set_terminator(Return([live]))
   let result = eliminate_dead_code(func)
   inspect(result.changed, content="false")
@@ -382,7 +384,9 @@ test "dead code pass removes multi-result instructions when all results are dead
   let first = func.new_value(I32)
   let second = func.new_value(I64)
   let entry = func.new_block([])
-  entry.append_inst(func.new_inst(Custom("pair"), [], [first, second]))
+  entry.append_inst(
+    func.new_inst(Custom("pair", Signature([], [I32, I64])), [], [first, second]),
+  )
   entry.set_terminator(Return([]))
   let result = eliminate_dead_code(func)
   inspect(result.changed, content="true")

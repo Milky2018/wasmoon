@@ -26,6 +26,7 @@ pub suberror VerifyError {
   InvalidBlockTarget(block_id~ : Int)
   ArityMismatch(message~ : String)
   TypeMismatch(message~ : String)
+  UnverifiableInstruction(message~ : String)
 } derive(Eq, @debug.Debug)
 pub impl Show for VerifyError
 
@@ -166,7 +167,7 @@ pub fn FunctionBuilder::fcvt_to_uint_sat(Self, Type, Value) -> Value
 pub fn FunctionBuilder::fdemote(Self, Value) -> Value
 pub fn FunctionBuilder::fdiv(Self, Value, Value) -> Value
 pub fn FunctionBuilder::ffloor(Self, Value) -> Value
-pub fn FunctionBuilder::finalize(Self) -> Function
+pub fn FunctionBuilder::finalize(Self) -> Function raise VerifyError
 pub fn FunctionBuilder::fmax(Self, Value, Value) -> Value
 pub fn FunctionBuilder::fmin(Self, Value, Value) -> Value
 pub fn FunctionBuilder::fmul(Self, Value, Value) -> Value
@@ -362,7 +363,7 @@ pub(all) enum Opcode {
   Load
   Store
   StackAddr(StackSlot)
-  Call(ExternalSymbol)
+  Call(ExternalSymbol, Signature)
   CallIndirect(Signature)
   LoadPtr(Type)
   StorePtr(Type)
@@ -370,8 +371,8 @@ pub(all) enum Opcode {
   StorePtrNarrow(Int)
   CallPtr(Int, Int)
   Trap(String)
-  Custom(String)
-  Ext(ExtOp)
+  Custom(String, Signature)
+  Ext(ExtOp, Signature)
   V128Const(Bytes)
   V128Splat8
   V128Splat16

@@ -113,7 +113,7 @@ fn has_side_effects(inst : Inst) -> Bool {
     LoadPtr(_) | LoadPtrNarrow(_, _, _) => true
     // Dialect extension operations are conservatively effectful unless a
     // dialect-owned optimization pass proves otherwise.
-    Ext(_) => true
+    Ext(_, _) => true
     // NOTE: GlobalGet, GlobalSet are desugared via frontends to LoadPtr/StorePtr
     // Division/remainder can trap on divide-by-zero or overflow (INT_MIN / -1)
     Sdiv | Udiv | Srem | Urem => true
@@ -121,7 +121,7 @@ fn has_side_effects(inst : Inst) -> Bool {
     FcvtToSint | FcvtToUint => true
     // External calls can have side effects and may interact with embedding
     // runtime state.
-    Call(_) | CallIndirect(_) | CallPtr(_, _) => true
+    Call(_, _) | CallIndirect(_) | CallPtr(_, _) => true
     // Other instructions are pure
     _ => false
   }

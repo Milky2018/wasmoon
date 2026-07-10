@@ -424,7 +424,7 @@ pub(all) enum Opcode {
   StackAddr(StackSlot)
 
   // Function calls
-  Call(ExternalSymbol)
+  Call(ExternalSymbol, Signature)
   CallIndirect(Signature)
 
   // Raw pointer operations (for trampolines, no bounds checking)
@@ -440,12 +440,12 @@ pub(all) enum Opcode {
   // operand 0 = function pointer, operands 1..n = context + args
   CallPtr(Int, Int)
   Trap(String)
-  Custom(String)
+  Custom(String, Signature)
 
   // Dialect extension operations. The core IR treats these conservatively;
   // dialect-owned packages define the opcode set, builders, validation rules,
   // and lowering behavior.
-  Ext(ExtOp)
+  Ext(ExtOp, Signature)
 
   // ============================================
   // SIMD operations (V128)
