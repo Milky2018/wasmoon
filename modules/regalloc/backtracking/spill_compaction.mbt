@@ -54,7 +54,7 @@ pub fn[C, R, P] compact_backtracking_spill_slots(
   ranges_overlap : (Array[R], Array[R]) -> Bool,
   compare_start : (P, P) -> Int,
 ) -> @planning.SpillSlotCompaction {
-  let no_share : Map[Int, Set[Int]] = {}
+  let no_share : Map[Int, Set[Int]] = Map([])
   for edge in no_share_edges {
     compact_add_no_share_edge(no_share, edge.lhs, edge.rhs)
     compact_add_no_share_edge(no_share, edge.rhs, edge.lhs)

@@ -4,14 +4,14 @@ fn clap_parser(
   description~ : String,
   subcmds~ : Map[String, @clap.SubCommand],
 ) -> @clap.Parser {
-  { prog, args: {}, subcmds, description }
+  { prog, args: Map([]), subcmds, description }
 }
 
 ///|
 fn clap_subcommand(
   help~ : String,
-  args? : Map[String, @clap.Arg] = {},
-  subcmds? : Map[String, @clap.SubCommand] = {},
+  args? : Map[String, @clap.Arg] = Map([]),
+  subcmds? : Map[String, @clap.SubCommand] = Map([]),
 ) -> @clap.SubCommand {
   { args, subcmds, help }
 }
@@ -152,7 +152,7 @@ fn main {
       "help": clap_subcommand(help="Display help message"),
     },
   )
-  let help_msg = parser.gen_help_message(["wasmoon"], {})
+  let help_msg = parser.gen_help_message(["wasmoon"], Map([]))
   let args = @sys.get_cli_args()
   if args.length() < 2 {
     println(help_msg)

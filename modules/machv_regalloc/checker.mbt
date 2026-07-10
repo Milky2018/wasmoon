@@ -148,7 +148,7 @@ pub fn verify_allocation(
   }
 
   // Build per-preg span lists for overlap checking.
-  let preg_spans : Map[Int, Array[(Int, ProgPointRange)]] = {}
+  let preg_spans : Map[Int, Array[(Int, ProgPointRange)]] = Map([])
   for entry in alloc.assignments {
     let (vreg_id, preg) = entry
     if ranges.get_by_vreg(vreg_id) is Some(lr) {

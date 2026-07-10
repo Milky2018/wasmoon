@@ -301,7 +301,7 @@ fn find_loop_body(
   header : Int,
   latches : Array[Int],
 ) -> Array[Int] {
-  let body : Map[Int, Bool] = {}
+  let body : Map[Int, Bool] = Map([])
   body.set(header, true)
   let worklist : Array[Int] = []
   for latch in latches {
@@ -331,7 +331,7 @@ fn find_loop_body(
 ///|
 pub fn find_loops_from_edges(edges : DenseCfgEdges) -> Array[DenseCfgLoop] {
   let loops : Array[DenseCfgLoop] = []
-  let header_to_latches : Map[Int, Array[Int]] = {}
+  let header_to_latches : Map[Int, Array[Int]] = Map([])
   for edge in find_back_edges_from_edges(edges) {
     let (latch, header) = edge
     match header_to_latches.get(header) {

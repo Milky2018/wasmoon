@@ -212,7 +212,7 @@ pub fn ComponentLinker::ComponentLinker() -> ComponentLinker {
   {
     core_linker: Linker(),
     components: [],
-    imports: {},
+    imports: Map([]),
     resource_id_counter: [0],
   }
 }
@@ -332,5 +332,5 @@ pub fn ComponentLinker::instantiate(
   name : String,
   component : Component,
 ) -> ComponentInstance raise ComponentRuntimeError {
-  instantiate_component(self, name, component, {}, [])
+  instantiate_component(self, name, component, Map([]), [])
 }

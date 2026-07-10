@@ -3,7 +3,7 @@
 ///|
 /// Trampoline registry - maps (module, field) to function pointer getter.
 let import_trampolines : Map[String, Map[String, () -> Int64]] = {
-  let m : Map[String, Map[String, () -> Int64]] = {}
+  let m : Map[String, Map[String, () -> Int64]] = Map([])
   // WASI Preview 1 functions.
   m["wasi_snapshot_preview1"] = {
     "fd_write": get_fd_write_ptr,

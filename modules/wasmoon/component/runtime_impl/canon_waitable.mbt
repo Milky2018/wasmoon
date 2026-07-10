@@ -28,7 +28,7 @@ fn instantiate_canon_waitable_set_new(
     let per_task = match async_state.call_results.get(task_id) {
       Some(m) => m
       None => {
-        let m : Map[Int, Array[@types.Value]] = {}
+        let m : Map[Int, Array[@types.Value]] = Map([])
         async_state.call_results.set(task_id, m)
         m
       }
@@ -46,7 +46,7 @@ fn instantiate_canon_waitable_set_new(
               is None {
               async_state.waitable_sets.set(
                 handle_key(owner_component_id, id),
-                { id, members: {}, queue: [], waiters: [0] },
+                { id, members: Map([]), queue: [], waiters: [0] },
               )
             } else {
               ()
@@ -59,7 +59,7 @@ fn instantiate_canon_waitable_set_new(
         let id = alloc_shared_handle(async_state, owner_component_id)
         async_state.waitable_sets.set(handle_key(owner_component_id, id), {
           id,
-          members: {},
+          members: Map([]),
           queue: [],
           waiters: [0],
         })
@@ -226,7 +226,7 @@ fn instantiate_canon_waitable_set_wait(
         let per_task = match async_state.wait_results.get(task_id) {
           Some(m) => m
           None => {
-            let m : Map[Int, WaitResult] = {}
+            let m : Map[Int, WaitResult] = Map([])
             async_state.wait_results.set(task_id, m)
             m
           }

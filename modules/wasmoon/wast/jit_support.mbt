@@ -50,10 +50,10 @@ pub fn JITCompiler::JITCompiler(
 /// Maps runtime store function addresses to executable pointers and back.
 /// This is required when shared tables/globals carry funcrefs across module
 /// boundaries.
-let jit_funcref_store_to_ptr : Ref[Map[Int, Int64]] = { val: {} }
+let jit_funcref_store_to_ptr : Ref[Map[Int, Int64]] = { val: Map([]) }
 
 ///|
-let jit_funcref_ptr_to_store : Ref[Map[Int64, Int]] = { val: {} }
+let jit_funcref_ptr_to_store : Ref[Map[Int64, Int]] = { val: Map([]) }
 
 ///|
 fn register_funcref_mapping(store_addr : Int, func_ptr : Int64) -> Unit {
@@ -137,8 +137,8 @@ pub fn init_jit_globals_from_store(
 
 ///|
 pub fn clear_funcref_registry() -> Unit {
-  jit_funcref_store_to_ptr.val = {}
-  jit_funcref_ptr_to_store.val = {}
+  jit_funcref_store_to_ptr.val = Map([])
+  jit_funcref_ptr_to_store.val = Map([])
 }
 
 ///|
@@ -762,7 +762,7 @@ pub fn init_elem_segments(
   }
 
   // Build store func address -> module func index map.
-  let func_addr_to_idx : Map[Int, Int] = {}
+  let func_addr_to_idx : Map[Int, Int] = Map([])
   for i, addr in instance.func_addrs {
     func_addr_to_idx.set(addr, i)
   }
@@ -856,7 +856,7 @@ pub fn init_bulk_segments(
   }
 
   // Build store func_addr -> module func_idx map (for GlobalGet funcref).
-  let func_addr_to_idx : Map[Int, Int] = {}
+  let func_addr_to_idx : Map[Int, Int] = Map([])
   for i, addr in instance.func_addrs {
     func_addr_to_idx.set(addr, i)
   }
@@ -1451,7 +1451,7 @@ pub fn build_external_imports_for_jit(
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
 ) -> Map[String, Map[String, Int64]] {
-  let external : Map[String, Map[String, Int64]] = {}
+  let external : Map[String, Map[String, Int64]] = Map([])
   let mut func_imp_idx = 0
   for imp in mod_.imports {
     if imp.desc is Func(_) {
@@ -1474,7 +1474,7 @@ pub fn build_external_imports_for_jit(
       let encoded = -(func_addr.to_int64() + 1L)
       let m = match external.get(imp.mod_name) {
         Some(mm) => mm
-        None => {}
+        None => Map([])
       }
       m.set(imp.name, encoded)
       external.set(imp.mod_name, m)

@@ -4,14 +4,14 @@ fn clap_parser(
   description~ : String,
   subcmds~ : Map[String, @clap.SubCommand],
 ) -> @clap.Parser {
-  { prog, args: {}, subcmds, description }
+  { prog, args: Map([]), subcmds, description }
 }
 
 ///|
 fn clap_subcommand(
   help~ : String,
-  args? : Map[String, @clap.Arg] = {},
-  subcmds? : Map[String, @clap.SubCommand] = {},
+  args? : Map[String, @clap.Arg] = Map([]),
+  subcmds? : Map[String, @clap.SubCommand] = Map([]),
 ) -> @clap.SubCommand {
   { args, subcmds, help }
 }
@@ -109,7 +109,7 @@ fn main {
       "help": clap_subcommand(help="Display help message"),
     },
   )
-  let help_msg = parser.gen_help_message(["wasmoon-tools"], {})
+  let help_msg = parser.gen_help_message(["wasmoon-tools"], Map([]))
   if args.length() < 2 {
     println(help_msg)
     return
@@ -738,7 +738,7 @@ fn write_wit_out_dir(
   }
 
   // wasm-tools writes deps first, then root. We'll do the same.
-  let used : Map[String, Bool] = {}
+  let used : Map[String, Bool] = Map([])
   for dep in res.deps {
     let stem = unique_pkg_stem(used, dep)
     let ext = if as_json { ".json" } else { ".wit" }

@@ -100,7 +100,7 @@ fn licm_hoist_invariants(
 
         // Count vreg uses inside the loop, to avoid hoisting cheap constants that
         // would increase live ranges/reg pressure.
-        let use_count_in_loop : Map[Int, Int] = {}
+        let use_count_in_loop : Map[Int, Int] = Map([])
         for i in 0..<n {
           if !loop_nodes.contains(i) {
             continue
@@ -148,7 +148,7 @@ fn licm_hoist_invariants(
         }
 
         // Def map for virtual registers (only the simple case we care about).
-        let def_inst : Map[Int, @instr.Inst] = {}
+        let def_inst : Map[Int, @instr.Inst] = Map([])
         for blk in func.blocks {
           for inst in blk.insts {
             if inst.defs.length() == 1 &&
@@ -308,7 +308,7 @@ fn cse_immutable_loads(
   }
 
   for blk in func.blocks {
-    let copies : Map[Int, Int] = {}
+    let copies : Map[Int, Int] = Map([])
     for inst in blk.insts {
       if inst.opcode is Move &&
         inst.defs.length() == 1 &&
@@ -355,10 +355,10 @@ fn cse_immutable_loads(
   }
 
   for blk in func.blocks {
-    let copies : Map[Int, Int] = {}
+    let copies : Map[Int, Int] = Map([])
     // key: "kind|base|off" -> vreg id
     // kind = 0 for Load, 1 for LoadPtr
-    let seen : Map[String, Int] = {}
+    let seen : Map[String, Int] = Map([])
     let new_insts : Array[@instr.Inst] = []
     for inst in blk.insts {
       // Track simple virtual copies for canonicalization.
@@ -693,7 +693,7 @@ fn propagate_single_use_moves(
     cur
   }
 
-  let copies : Map[Int, @abi.VReg] = {}
+  let copies : Map[Int, @abi.VReg] = Map([])
   let to_remove : @hashset.HashSet[Int] = HashSet([])
   for i, inst in block.insts {
     if inst.opcode is Move &&
@@ -778,7 +778,7 @@ fn propagate_single_use_moves(
 /// Propagate virtual moves across the whole function and remove redundant copies.
 fn propagate_moves_global(func : @machv.Function) -> Unit {
   let dom = compute_dominators(func)
-  let def_pos : Map[Int, (Int, Int)] = {}
+  let def_pos : Map[Int, (Int, Int)] = Map([])
   for block in func.blocks {
     for param in block.params {
       if !def_pos.contains(param.id) {
@@ -793,7 +793,7 @@ fn propagate_moves_global(func : @machv.Function) -> Unit {
       }
     }
   }
-  let copies : Map[Int, @abi.VReg] = {}
+  let copies : Map[Int, @abi.VReg] = Map([])
   for block in func.blocks {
     for inst_idx, inst in block.insts {
       if inst.opcode is Move &&
@@ -921,7 +921,7 @@ fn propagate_moves_global(func : @machv.Function) -> Unit {
 /// Fuse `cmp` + `branch` into `br_cmp`/`br_cmp_imm` when the cmp result
 /// is only used by the branch terminator.
 fn fuse_cmp_branch(func : @machv.Function) -> Unit {
-  let const_defs : Map[Int, Int64] = {}
+  let const_defs : Map[Int, Int64] = Map([])
   for blk in func.blocks {
     for inst in blk.insts {
       if inst.opcode is LoadConst(val) &&
@@ -1025,7 +1025,7 @@ priv struct ResolvedJump {
 fn build_jump_forwarding_map(
   func : @machv.Function,
 ) -> Map[Int, JumpForwardInfo] {
-  let forwarding : Map[Int, JumpForwardInfo] = {}
+  let forwarding : Map[Int, JumpForwardInfo] = Map([])
   for block in func.blocks {
     guard block.insts.length() == 0 else { continue }
     guard block.terminator is Some(Jump(target, args)) else { continue }

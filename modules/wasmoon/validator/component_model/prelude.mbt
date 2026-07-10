@@ -361,7 +361,7 @@ fn funcsig_valid_in_interface(
 
 ///|
 fn InstanceSig::empty() -> InstanceSig {
-  { exports: {}, nested: {} }
+  { exports: Map([]), nested: Map([]) }
 }
 
 ///|
@@ -536,7 +536,7 @@ fn core_kind_of_extern_type(ty : CoreExternType) -> Int {
 fn core_module_import_sig_of_module(
   m : @types.Module,
 ) -> Map[String, CoreExternType] {
-  let out : Map[String, CoreExternType] = {}
+  let out : Map[String, CoreExternType] = Map([])
   for imp in m.imports {
     if core_import_type_of_module(m, imp.desc) is Some(ty) {
       out.set("\{imp.mod_name}::\{imp.name}", ty)
@@ -549,7 +549,7 @@ fn core_module_import_sig_of_module(
 fn core_module_import_sig_of_type(
   sig : Array[CoreModuleTypeImport],
 ) -> Map[String, CoreExternType] {
-  let out : Map[String, CoreExternType] = {}
+  let out : Map[String, CoreExternType] = Map([])
   for imp in sig {
     out.set("\{imp.mod_name}::\{imp.name}", imp.ty)
   }
@@ -1633,9 +1633,9 @@ fn parse_core_type_module_sig(
   outer_core_type_bounds : Array[Int],
 ) -> (Array[CoreModuleTypeImport], Map[String, CoreExternType]) raise ComponentValidationError {
   let ndecls = r.read_leb_u32()
-  let seen_imports : Map[String, Int] = {}
+  let seen_imports : Map[String, Int] = Map([])
   let imports : Array[CoreModuleTypeImport] = []
-  let export_types : Map[String, CoreExternType] = {}
+  let export_types : Map[String, CoreExternType] = Map([])
   let func_types : Array[@types.FuncType?] = []
   let mut func_type_bound = 0
   for _i in 0..<ndecls {

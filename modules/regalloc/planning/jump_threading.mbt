@@ -50,7 +50,7 @@ fn substitute_thread_args(
 
 ///|
 fn build_thread_block_index(blocks : Array[ThreadBlock]) -> Map[Int, Int] {
-  let block_idx_by_id : Map[Int, Int] = {}
+  let block_idx_by_id : Map[Int, Int] = Map([])
   for i, block in blocks {
     block_idx_by_id.set(block.id, i)
   }
@@ -70,7 +70,7 @@ pub fn resolve_threaded_jump(
   let block_idx_by_id = build_thread_block_index(blocks)
   let mut current = start_target
   let mut current_args = start_args.copy()
-  let visited : Map[Int, Bool] = {}
+  let visited : Map[Int, Bool] = Map([])
   let mut changed = false
   while true {
     if visited.get(current).unwrap_or(false) {

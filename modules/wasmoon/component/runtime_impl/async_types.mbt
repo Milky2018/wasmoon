@@ -66,7 +66,7 @@ pub fn ResourceTable::ResourceTable() -> ResourceTable {
   let id = resource_table_id_counter[0]
   resource_table_id_counter[0] = id + 1
   // Handle 0 is always invalid; the first valid allocation is 1.
-  { id, next_handle: [1], free_handles: [], entries: {} }
+  { id, next_handle: [1], free_handles: [], entries: Map([]) }
 }
 
 ///|
@@ -176,7 +176,7 @@ pub(all) struct StreamTable {
 
 ///|
 pub fn StreamTable::StreamTable() -> StreamTable {
-  { next_stream_id: [0], endpoints: {}, streams: {} }
+  { next_stream_id: [0], endpoints: Map([]), streams: Map([]) }
 }
 
 ///|
@@ -450,22 +450,22 @@ struct Subtask {
 ///|
 pub fn AsyncState::AsyncState(stream_table : StreamTable) -> AsyncState {
   {
-    next_handle_by_component: {},
-    free_handles_by_component: {},
+    next_handle_by_component: Map([]),
+    free_handles_by_component: Map([]),
     stream_table,
     task_stack: [0L],
     // Use negative ids for internal tasks so they don't collide with the shared handle space.
     next_task_id: [-1L],
-    task_results: {},
-    task_result_owner: {},
-    task_returned: {},
-    task_self_cancelled: {},
-    task_cancelled: {},
-    task_contexts: {},
-    task_thread: {},
-    threads: {},
-    thread_runnable: {},
-    main_thread_scheduled: {},
+    task_results: Map([]),
+    task_result_owner: Map([]),
+    task_returned: Map([]),
+    task_self_cancelled: Map([]),
+    task_cancelled: Map([]),
+    task_contexts: Map([]),
+    task_thread: Map([]),
+    threads: Map([]),
+    thread_runnable: Map([]),
+    main_thread_scheduled: Map([]),
     task_can_block: [false],
     can_block_stack: [false],
     in_async_callback: [false],
@@ -473,28 +473,28 @@ pub fn AsyncState::AsyncState(stream_table : StreamTable) -> AsyncState {
     wait_cursor_stack: [0],
     call_cursor_stack: [0],
     stream_cursor_stack: [0],
-    task_caller: {},
-    task_instance: {},
-    yield_replay_upto: {},
-    wait_results: {},
-    waiting_ws: {},
-    call_results: {},
-    stream_results: {},
-    stream_results_cb: {},
-    sync_lower_states: {},
-    waitable_sets: {},
-    waitable_to_set: {},
-    waitable_events: {},
-    subtasks: {},
-    inflight_by_instance: {},
-    pending_by_instance: {},
+    task_caller: Map([]),
+    task_instance: Map([]),
+    yield_replay_upto: Map([]),
+    wait_results: Map([]),
+    waiting_ws: Map([]),
+    call_results: Map([]),
+    stream_results: Map([]),
+    stream_results_cb: Map([]),
+    sync_lower_states: Map([]),
+    waitable_sets: Map([]),
+    waitable_to_set: Map([]),
+    waitable_events: Map([]),
+    subtasks: Map([]),
+    inflight_by_instance: Map([]),
+    pending_by_instance: Map([]),
     next_future_id: [0],
-    futures: {},
-    future_endpoints: {},
-    thread_handle_required: {},
-    backpressure_by_instance: {},
-    next_error_context_by_component: {},
-    error_contexts: {},
+    futures: Map([]),
+    future_endpoints: Map([]),
+    thread_handle_required: Map([]),
+    backpressure_by_instance: Map([]),
+    next_error_context_by_component: Map([]),
+    error_contexts: Map([]),
   }
 }
 
@@ -1571,7 +1571,7 @@ fn ensure_task_thread(
   let per_task = match async_state.task_thread.get(task_id) {
     Some(m) => m
     None => {
-      let m : Map[Int, Int] = {}
+      let m : Map[Int, Int] = Map([])
       async_state.task_thread.set(task_id, m)
       m
     }

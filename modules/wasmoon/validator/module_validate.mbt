@@ -190,7 +190,7 @@ pub fn validate_module(mod : @types.Module) -> Unit raise ValidationError {
   }
 
   // Validate exports
-  let export_names : Map[String, Unit] = {}
+  let export_names : Map[String, Unit] = Map([])
   for exp in mod.exports {
     // Check for duplicate export names
     if export_names.contains(exp.name) {

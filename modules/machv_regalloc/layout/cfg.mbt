@@ -16,7 +16,7 @@ pub fn MachVCFG::build(func : @machv.Function) -> MachVCFG {
   let n = blocks.length()
   let preds : Array[Array[Int]] = []
   let succs : Array[Array[Int]] = []
-  let block_id_to_index : Map[Int, Int] = {}
+  let block_id_to_index : Map[Int, Int] = Map([])
 
   // Initialize arrays
   for _ in 0..<n {

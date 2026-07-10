@@ -144,7 +144,7 @@ fn collect_call_veneers(
   call_fixups : Array[@machv_emit.CallFixup],
 ) -> Array[CwasmCallVeneer] {
   let out : Array[CwasmCallVeneer] = []
-  let seen : Map[Int, Unit] = {}
+  let seen : Map[Int, Unit] = Map([])
   for fixup in call_fixups {
     let func_idx = cwasm_func_idx_for_reloc_target(fixup.target)
     if fixup.veneer_offset >= 0 && seen.get(func_idx) is None {

@@ -2,11 +2,11 @@
 fn core_instance_from_module(
   instance : @runtime.ModuleInstance,
 ) -> CoreInstance {
-  let funcs : Map[String, CoreFuncRef] = {}
-  let tables : Map[String, Int] = {}
-  let memories : Map[String, Int] = {}
-  let globals : Map[String, Int] = {}
-  let tags : Map[String, Int] = {}
+  let funcs : Map[String, CoreFuncRef] = Map([])
+  let tables : Map[String, Int] = Map([])
+  let memories : Map[String, Int] = Map([])
+  let globals : Map[String, Int] = Map([])
+  let tags : Map[String, Int] = Map([])
   for exp in instance.exports {
     match exp.desc {
       Func(idx) => funcs.set(exp.name, { instance, func_idx: idx })
@@ -172,8 +172,8 @@ fn parse_core_moduletype_spec(
     e => raise ComponentParseError(e.to_string())
   }
   let func_types : Array[@types.FuncType] = []
-  let imports : Map[String, CoreExternType] = {}
-  let exports : Map[String, CoreExternType] = {}
+  let imports : Map[String, CoreExternType] = Map([])
+  let exports : Map[String, CoreExternType] = Map([])
   for _i in 0..<ndecls {
     let tag = reader.read_u8() catch {
       e => raise ComponentParseError(e.to_string())

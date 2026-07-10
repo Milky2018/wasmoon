@@ -899,7 +899,7 @@ pub fn emit_function(
   let live_in_int : Array[Int64] = Array::make(nblocks, 0L)
   let use_int : Array[Int64] = Array::make(nblocks, 0L)
   let def_int : Array[Int64] = Array::make(nblocks, 0L)
-  let id_to_idx : Map[Int, Int] = {}
+  let id_to_idx : Map[Int, Int] = Map([])
   for bi, b in blocks {
     id_to_idx.set(b.id, bi)
   }
@@ -2169,7 +2169,7 @@ pub fn emit_function_with_regalloc(
   } else {
     None
   }
-  let edit_slot_cache : Map[Int, @abi.PReg] = {}
+  let edit_slot_cache : Map[Int, @abi.PReg] = Map([])
   fn emit_point_edits(
     mc : MachineCode,
     output : @machv_regalloc.Output,

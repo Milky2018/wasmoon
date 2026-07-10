@@ -13,7 +13,12 @@ pub struct TestContext {
 ///|
 pub fn TestContext::TestContext() -> TestContext {
   let linker = @runtime.Linker::Linker()
-  { store: linker.get_store(), linker, current_module: None, named_modules: {} }
+  {
+    store: linker.get_store(),
+    linker,
+    current_module: None,
+    named_modules: Map([]),
+  }
 }
 
 ///|

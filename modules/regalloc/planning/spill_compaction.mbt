@@ -127,7 +127,7 @@ pub fn compact_spill_slots(
   no_share_edges : Array[SpillSlotNoShareEdge],
   block_order : Array[Int],
 ) -> SpillSlotCompaction {
-  let no_share : Map[Int, Set[Int]] = {}
+  let no_share : Map[Int, Set[Int]] = Map([])
   for edge in no_share_edges {
     compact_add_no_share_edge(no_share, edge.lhs, edge.rhs)
     compact_add_no_share_edge(no_share, edge.rhs, edge.lhs)

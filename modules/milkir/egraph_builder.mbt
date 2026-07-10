@@ -38,7 +38,7 @@ fn EGraphBuilder::new_with_limits_and_ruleset(
   {
     egraph: EGraph(),
     value_map: [],
-    class_to_value: {},
+    class_to_value: Map([]),
     def_map: [],
     def_eop_map: [],
     ruleset,
@@ -359,7 +359,7 @@ fn EGraphBuilder::get_simplified_operand(
 
 ///|
 fn build_block_index(func : Function) -> Map[Int, Int] {
-  let index : Map[Int, Int] = {}
+  let index : Map[Int, Int] = Map([])
   for i, block in func.blocks {
     index.set(block.id, i)
   }

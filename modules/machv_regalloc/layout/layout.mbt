@@ -18,7 +18,7 @@ pub fn layout_blocks(func : @machv.Function) -> Array[Int] {
 
   let cfg = MachVCFG::build(func)
   let rpo = cfg.reverse_postorder()
-  let block_idx_by_id : Map[Int, Int] = {}
+  let block_idx_by_id : Map[Int, Int] = Map([])
   for i, block in blocks {
     block_idx_by_id.set(block.id, i)
   }
@@ -68,7 +68,7 @@ pub fn layout_blocks(func : @machv.Function) -> Array[Int] {
 ///|
 /// Build a map from block ID to block index in the block array.
 fn build_block_index_map(func : @machv.Function) -> Map[Int, Int] {
-  let block_idx_by_id : Map[Int, Int] = {}
+  let block_idx_by_id : Map[Int, Int] = Map([])
   for i, block in func.get_blocks() {
     block_idx_by_id.set(block.id, i)
   }
@@ -124,7 +124,7 @@ fn resolve_threaded_jump(
 ) -> (Int, Array[@abi.Reg], Bool) {
   let mut current = start_target
   let mut current_args = start_args.copy()
-  let visited : Map[Int, Bool] = {}
+  let visited : Map[Int, Bool] = Map([])
   let blocks = func.get_blocks()
   let mut changed = false
   while true {

@@ -607,7 +607,7 @@ test "function call: call instruction" {
     codes: [add_func, main_func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "main", [])
@@ -650,7 +650,7 @@ test "function call: nested calls" {
     codes: [double_func, add_one_func, main_func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "main", [I32(5)])
@@ -720,7 +720,7 @@ test "function call: call_indirect" {
     ],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   let (store, instance) = instantiate_module_with_init(mod) catch {
     _ => fail("instantiate_module_with_init failed")
@@ -781,7 +781,7 @@ test "host function: simple call" {
     codes: [main_func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
 
   // Set up imports
@@ -852,7 +852,7 @@ test "host function: caller can access exported memory" {
     codes: [main_func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   let imports = @runtime.Imports::Imports()
   imports.add_func("env", "write_mem0", host_addr)
@@ -907,7 +907,7 @@ test "memory import: shared memory between modules" {
     codes: [read_func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
 
   // Set up imports
@@ -961,7 +961,7 @@ test "memory import: write to imported memory" {
     codes: [write_func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   let imports = @runtime.Imports::Imports()
   imports.add_memory("env", "mem", mem_addr)
@@ -998,7 +998,7 @@ test "import validation: missing import raises error" {
     codes: [func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
 
   // Empty imports - should fail

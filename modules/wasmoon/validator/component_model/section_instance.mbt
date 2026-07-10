@@ -124,7 +124,7 @@ fn validate_component_section_instance(
         let pending_type_args : Array[(String, Int)] = []
         let pending_func_args : Array[(String, Int)] = []
         let pending_instance_args : Array[(String, Int)] = []
-        let seen_args : Map[String, Int] = {}
+        let seen_args : Map[String, Int] = Map([])
         for a in args {
           check_sortidx(a.sortidx, counts, type_table.length())
           if seen_args.get(a.name) is Some(_) {
@@ -214,7 +214,7 @@ fn validate_component_section_instance(
 
         // Validate type/function arguments that may depend on type-argument
         // substitution (notably for nominal resource types).
-        let rid_subst : Map[Int, Int] = {}
+        let rid_subst : Map[Int, Int] = Map([])
         match expected_import_instance_resource_exports {
           Some(inst_map) =>
             for kv in pending_instance_args {
@@ -392,10 +392,10 @@ fn validate_component_section_instance(
                 component_idx < component_export_instance_sigs.length() {
                 match component_export_instance_sigs[component_idx] {
                   Some(m) => m
-                  None => {}
+                  None => Map([])
                 }
               } else {
-                {}
+                Map([])
               }
               inst_sig = Some({ exports, nested })
             }
@@ -409,8 +409,8 @@ fn validate_component_section_instance(
           component_idx < component_export_type_sigs.length() {
           match component_export_type_sigs[component_idx] {
             Some(sig_map) => {
-              let out : Map[String, ExportedTypeInfo] = {}
-              let sig_out : Map[String, TypeSig] = {}
+              let out : Map[String, ExportedTypeInfo] = Map([])
+              let sig_out : Map[String, TypeSig] = Map([])
               for kv in sig_map.iter() {
                 let (name, sig0) = kv
                 sig_out.set(name, type_sig_subst_resources(sig0, rid_subst))
@@ -464,7 +464,7 @@ fn validate_component_section_instance(
           component_idx < component_export_func_sigs.length() {
           match component_export_func_sigs[component_idx] {
             Some(sig_map) => {
-              let out : Map[String, FuncSigShape] = {}
+              let out : Map[String, FuncSigShape] = Map([])
               for kv in sig_map.iter() {
                 let (name, sig0) = kv
                 out.set(name, funcsig_subst_resources(sig0, rid_subst))
@@ -478,10 +478,10 @@ fn validate_component_section_instance(
           component_idx < component_export_instance_type_sigs.length() {
           match component_export_instance_type_sigs[component_idx] {
             Some(inst_map0) => {
-              let out : Map[String, Map[String, TypeSig]] = {}
+              let out : Map[String, Map[String, TypeSig]] = Map([])
               for kv in inst_map0.iter() {
                 let (inst_name, types0) = kv
-                let types : Map[String, TypeSig] = {}
+                let types : Map[String, TypeSig] = Map([])
                 for kv2 in types0.iter() {
                   let (name, sig0) = kv2
                   types.set(name, type_sig_subst_resources(sig0, rid_subst))
@@ -497,10 +497,10 @@ fn validate_component_section_instance(
           component_idx < component_export_instance_func_sigs.length() {
           match component_export_instance_func_sigs[component_idx] {
             Some(inst_map0) => {
-              let out : Map[String, Map[String, FuncSigShape]] = {}
+              let out : Map[String, Map[String, FuncSigShape]] = Map([])
               for kv in inst_map0.iter() {
                 let (inst_name, funcs0) = kv
-                let funcs : Map[String, FuncSigShape] = {}
+                let funcs : Map[String, FuncSigShape] = Map([])
                 for kv2 in funcs0.iter() {
                   let (name, sig0) = kv2
                   funcs.set(name, funcsig_subst_resources(sig0, rid_subst))
@@ -514,13 +514,13 @@ fn validate_component_section_instance(
         }
       }
       InlineExports(inline_exports) => {
-        let map : Map[String, @component.Sort] = {}
+        let map : Map[String, @component.Sort] = Map([])
         let mut size = 1
         let t_idxs : Array[Int] = []
         let f_idxs : Array[Int] = []
-        let type_map : Map[String, ExportedTypeInfo] = {}
-        let type_sig_map : Map[String, TypeSig] = {}
-        let func_map : Map[String, FuncSigShape] = {}
+        let type_map : Map[String, ExportedTypeInfo] = Map([])
+        let type_sig_map : Map[String, TypeSig] = Map([])
+        let func_map : Map[String, FuncSigShape] = Map([])
         for ex in inline_exports {
           check_sortidx(ex.sortidx, counts, type_table.length())
           if cfg.wit_names && parse_bracket_resource_name(ex.name) is Some(_) {
@@ -580,7 +580,7 @@ fn validate_component_section_instance(
             _ => size = add_type_size(size, 1)
           }
         }
-        inst_sig = Some({ exports: map, nested: {} })
+        inst_sig = Some({ exports: map, nested: Map([]) })
         inst_size = size
         inst_type_idxs = Some(t_idxs)
         inst_func_idxs = Some(f_idxs)

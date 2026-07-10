@@ -18,7 +18,7 @@ pub(all) struct CallCounter {
 
 ///|
 pub fn CallCounter::CallCounter() -> CallCounter {
-  { counts: {}, total_calls: 0 }
+  { counts: Map([]), total_calls: 0 }
 }
 
 ///|

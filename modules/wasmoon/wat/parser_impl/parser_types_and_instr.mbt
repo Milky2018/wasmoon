@@ -273,7 +273,7 @@ fn Parser::parse_struct_type(
 ) -> @types.StructType raise WatError {
   let fields : Array[@types.FieldType] = []
   // Initialize field names map for this type
-  self.field_names.set(type_idx, {})
+  self.field_names.set(type_idx, Map([]))
   // Parse fields until we hit RParen (end of struct)
   while self.current.token != RParen {
     self.parse_field_types(type_idx, fields)

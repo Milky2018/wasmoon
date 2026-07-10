@@ -41,7 +41,7 @@ fn BuildState::BuildState(
     core_mems: [],
     core_globals: [],
     core_tags: [],
-    exports: {},
+    exports: Map([]),
   }
 }
 
@@ -271,10 +271,10 @@ fn synthesize_trivial_instance_import(
     td : TypeDef,
   ) -> ComponentInstance? raise ComponentRuntimeError {
     match td {
-      InstanceTypeEmpty => Some(make_instance("\{inst_key}::empty", {}))
+      InstanceTypeEmpty => Some(make_instance("\{inst_key}::empty", Map([])))
       InstanceType(decls) => {
         let local_types : Array[TypeDef?] = []
-        let exports : Map[String, ComponentExtern] = {}
+        let exports : Map[String, ComponentExtern] = Map([])
         for d in decls {
           match d {
             Type(t) => local_types.push(Some(t))

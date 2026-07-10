@@ -91,7 +91,7 @@ pub fn JITModule::JITModule() -> JITModule {
     debug_db: None,
     last_trap_report: None,
     import_exec_codes: [],
-    direct_call_targets: {},
+    direct_call_targets: Map([]),
     wasi_stdout_callback: None,
     wasi_stderr_callback: None,
   }
@@ -196,7 +196,7 @@ pub fn JITModule::load(
   func_signatures : Array[(Array[@types.ValueType], Array[@types.ValueType])],
   debug_db? : @wasmoon_jit.JITDebugDB? = None,
 ) -> JITModule raise JITModuleLoadError {
-  JITModule::load_with_imports(precompiled, func_signatures, {}, debug_db~)
+  JITModule::load_with_imports(precompiled, func_signatures, Map([]), debug_db~)
 }
 
 ///|
@@ -577,7 +577,7 @@ pub fn JITModule::get_func_ptr_by_name(
 /// Export all function pointers as a map from name to function pointer
 /// Used for cross-module imports
 pub fn JITModule::export_functions(self : JITModule) -> Map[String, Int64] {
-  let exports : Map[String, Int64] = {}
+  let exports : Map[String, Int64] = Map([])
   for name, _idx in self.by_name {
     let ptr = self.get_func_ptr_by_name(name)
     if ptr != 0L {

@@ -374,7 +374,7 @@ fn build_output(
     )
     intervals
   } else {
-    {}
+    Map([])
   }
 
   // Temp-reg pools for local reloads when no coalescing is available.

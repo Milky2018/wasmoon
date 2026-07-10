@@ -69,7 +69,7 @@ test "table import: call_indirect with imported table" {
     codes: [apply_func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   let imports = @runtime.Imports::Imports()
   imports.add_table("env", "table", table_addr)
@@ -249,7 +249,7 @@ test "table operations: table.grow" {
     ],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   let (store, instance) = instantiate_module(mod)
   // Grow table by 3, should return old size (2)

@@ -648,7 +648,7 @@ fn Translator::translate_br_table(
   // O(table_size) extra blocks in translator hot paths.
   let intermediate_blocks : Array[Block] = []
   let unique_depths : Array[Int] = []
-  let depth_to_intermediate : Map[Int, Block] = {}
+  let depth_to_intermediate : Map[Int, Block] = Map([])
   let default_intermediate = self.builder.create_block()
   for depth in labels {
     if depth == default_ {

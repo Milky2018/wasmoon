@@ -22,7 +22,7 @@ priv struct PeepholeState {
 
 ///|
 fn PeepholeState::PeepholeState() -> PeepholeState {
-  { constants: {}, copies: {} }
+  { constants: Map([]), copies: Map([]) }
 }
 
 ///|
@@ -519,9 +519,9 @@ fn optimize_inplace_updates(block : @block.Block) -> Int {
 
   // Build def-use chains for vregs within this block
   // def_inst[vreg_id] = instruction index that defines it
-  let def_inst : Map[Int, Int] = {}
+  let def_inst : Map[Int, Int] = Map([])
   // use_count[vreg_id] = number of uses within this block
-  let use_count : Map[Int, Int] = {}
+  let use_count : Map[Int, Int] = Map([])
   for i, inst in block.insts {
     // Track definitions
     for def in inst.defs {
@@ -573,7 +573,7 @@ fn optimize_inplace_updates(block : @block.Block) -> Int {
   // Look for patterns: vA = op ... vB ...; vB = mov vA
   // where vA is only used by the mov AND vB is not used between def and mov
   let to_eliminate : @hashset.HashSet[Int] = HashSet([])
-  let replace_def : Map[Int, Int] = {} // inst_idx -> new_def_vreg_id
+  let replace_def : Map[Int, Int] = Map([]) // inst_idx -> new_def_vreg_id
   for i, inst in block.insts {
     if inst.opcode is Move && inst.defs.length() == 1 && inst.uses.length() == 1 {
       let def_vreg = get_def_vreg_id(inst.defs[0])
@@ -831,7 +831,7 @@ fn optimize_load_merging(block : @block.Block, func : @machv.Function) -> Int {
   let mut merged = 0
 
   // Build def-use map for this block
-  let def_map : Map[Int, Int] = {} // vreg_id -> instruction index
+  let def_map : Map[Int, Int] = Map([]) // vreg_id -> instruction index
   for i, inst in block.insts {
     for def in inst.defs {
       if get_def_vreg_id(def) is Some(id) {
@@ -936,7 +936,7 @@ fn create_merged_load_store(
 fn optimize_load_store_forwarding(block : @block.Block) -> Int {
   // Build a map of recent stores: (base_vreg, offset, bits) -> value_vreg
   // Reset when we see a potentially aliasing store
-  let store_map : Map[String, Int] = {} // "base:offset:bits" -> value_vreg_id
+  let store_map : Map[String, Int] = Map([]) // "base:offset:bits" -> value_vreg_id
   let mut forwarded = 0
   let to_replace : Array[(Int, @instr.Inst)] = []
   for i, inst in block.insts {
@@ -1007,7 +1007,7 @@ fn apply_block_transformations(
   // Sort insertions by position (descending) to maintain indices
   insertions.sort_by(fn(a, b) { b.0 - a.0 })
   let new_insts : Array[@instr.Inst] = []
-  let insert_map : Map[Int, Array[@instr.Inst]] = {}
+  let insert_map : Map[Int, Array[@instr.Inst]] = Map([])
   for pair in insertions {
     insert_map.set(pair.0, pair.1)
   }

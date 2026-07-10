@@ -786,7 +786,7 @@ pub fn invoke_action(
                   for type_idx in jit_func_type_indices {
                     gc_func_type_indices.push(type_idx)
                   }
-                  let merged_funcref_types : Map[Int64, Int] = {}
+                  let merged_funcref_types : Map[Int64, Int] = Map([])
                   for func_idx, _func_addr in jit.func_addrs {
                     let func_ptr = jit.jit_module.get_func_ptr(func_idx)
                     if func_ptr == 0L {

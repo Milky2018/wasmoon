@@ -107,7 +107,7 @@ pub fn Output::summary(self : Output) -> String {
   let mut spills = 0
   let mut reg_moves = 0
   let mut spill_to_spill = 0
-  let slot_traffic : Map[Int, (Int, Int)] = {} // slot -> (reloads, spills)
+  let slot_traffic : Map[Int, (Int, Int)] = Map([]) // slot -> (reloads, spills)
   for _, entry in self.edits {
     let (_point, edit) = entry
     match edit {

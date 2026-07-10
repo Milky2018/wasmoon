@@ -28,7 +28,7 @@ pub fn TypeEquivalenceContext::same_module(
     rec_groups1: type_rec_groups,
     rec_groups2: type_rec_groups,
     cross_module: false,
-    visited: {},
+    visited: Map([]),
   }
 }
 
@@ -40,7 +40,14 @@ pub fn TypeEquivalenceContext::cross_module(
   rec_groups1? : Array[Int] = [],
   rec_groups2? : Array[Int] = [],
 ) -> TypeEquivalenceContext {
-  { types1, types2, rec_groups1, rec_groups2, cross_module: true, visited: {} }
+  {
+    types1,
+    types2,
+    rec_groups1,
+    rec_groups2,
+    cross_module: true,
+    visited: Map([]),
+  }
 }
 
 ///|
@@ -448,7 +455,7 @@ pub fn compute_canonical_type_indices(
   let canonical : Array[Int] = Array::make(n, -1)
   // Track which rec groups we've processed and their canonical mapping
   // Key: rec_group_id, Value: (canonical_rec_id, first_type_idx)
-  let rec_group_canonical : Map[Int, (Int, Int)] = {}
+  let rec_group_canonical : Map[Int, (Int, Int)] = Map([])
   let ctx = TypeEquivalenceContext::same_module(types, type_rec_groups~)
   for i in 0..<n {
     let rec_id_i = if i < type_rec_groups.length() {

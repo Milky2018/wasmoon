@@ -148,7 +148,7 @@ fn instantiate_component(
                 raise InvalidComponentIndex(component_idx)
               }
               let closure = state.components[component_idx]
-              let overrides_for_child : Map[String, ComponentExtern] = {}
+              let overrides_for_child : Map[String, ComponentExtern] = Map([])
               for arg in args {
                 let ext = resolve_sortidx(arg.sortidx, state)
                 overrides_for_child.set(arg.name, ext)
@@ -163,7 +163,7 @@ fn instantiate_component(
               state.instances.push(nested)
             }
             InlineExports(exports) => {
-              let export_map : Map[String, ComponentExtern] = {}
+              let export_map : Map[String, ComponentExtern] = Map([])
               for ex in exports {
                 let ext = resolve_sortidx(ex.sortidx, state)
                 export_map.set(ex.name, ext)

@@ -996,7 +996,7 @@ pub fn build_live_ranges(
   }
   // Keep blockparam-out pairs unique. Repeated (param,arg) edges are a no-op
   // for union-find coalescing but can amplify merge-phase cost on large CFGs.
-  let seen_blockparam_pairs : Map[(Int, Int), Unit] = {}
+  let seen_blockparam_pairs : Map[(Int, Int), Unit] = Map([])
   for pred_block in func.blocks {
     if pred_block.terminator is Some(Jump(target, args)) {
       if target < 0 || target >= block_idx_dense.length() {

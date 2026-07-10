@@ -661,10 +661,10 @@ fn run_component_script_impl(
       return 1
     }
   }
-  let nested_exports : Map[String, @runtime_impl.ComponentExtern] = {}
+  let nested_exports : Map[String, @runtime_impl.ComponentExtern] = Map([])
   nested_exports.set("return-four", Func(return_four))
   let nested_instance = make_instance("host::nested", store, nested_exports)
-  let host_exports : Map[String, @runtime_impl.ComponentExtern] = {}
+  let host_exports : Map[String, @runtime_impl.ComponentExtern] = Map([])
   host_exports.set("return-two", Func(return_two))
   host_exports.set("return-three", Func(return_three))
   host_exports.set("simple-module", CoreModule(simple_module))
@@ -880,8 +880,8 @@ fn run_component_script_impl(
   host_exports.set("[method]resource1.take-own", Func(take_own))
   let host_instance = make_instance("host", store, host_exports)
   linker.add_instance("host", host_instance)
-  let components : Map[String, @component.Component] = {}
-  let instances : Map[String, @runtime_impl.ComponentInstance] = {}
+  let components : Map[String, @component.Component] = Map([])
+  let instances : Map[String, @runtime_impl.ComponentInstance] = Map([])
   let mut last_component : @component.Component? = None
   let mut last_component_name : String? = None
   let mut last_instance : @runtime_impl.ComponentInstance? = None

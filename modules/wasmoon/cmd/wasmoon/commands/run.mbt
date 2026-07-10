@@ -353,7 +353,7 @@ pub fn run_wasm(
   wasi_builder.args(wasi_args) |> ignore
   let jit_preopens : Array[(String, String)] = []
   let jit_envs : Array[String] = []
-  let explicit_env_keys : Map[String, Bool] = {}
+  let explicit_env_keys : Map[String, Bool] = Map([])
   for dir in dirs {
     let mapping = parse_dir_mapping(dir)
     match mapping {
@@ -993,7 +993,7 @@ fn init_jit_tables(
     jit_tables.push(store.get_jit_table(table_addr))
   }
   // Build store func address -> module func index map
-  let func_addr_to_idx : Map[Int, Int] = {}
+  let func_addr_to_idx : Map[Int, Int] = Map([])
   for i, addr in instance.func_addrs {
     func_addr_to_idx.set(addr, i)
   }

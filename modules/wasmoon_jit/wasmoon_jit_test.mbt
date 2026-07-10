@@ -324,7 +324,7 @@ test "build X64 direct-call stubs in wasmoon_jit" {
 test "resolve direct-call fixup targets in wasmoon_jit" {
   inspect(direct_call_idx_memory_fill_mem0(), content="-1001")
   inspect(direct_call_idx_memory_copy_mem0(), content="-1002")
-  let targets : Map[Int, Int64] = {}
+  let targets : Map[Int, Int64] = Map([])
   targets.set(direct_call_idx_memory_fill_mem0(), 0x1234L)
   debug_inspect(
     resolve_call_fixup_target(direct_call_idx_memory_fill_mem0(), 0L, targets),

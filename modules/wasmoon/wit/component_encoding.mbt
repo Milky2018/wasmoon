@@ -508,7 +508,13 @@ priv struct TypeEnv {
 
 ///|
 fn TypeEnv::TypeEnv() -> TypeEnv {
-  { next_typeidx: [0], named_typeidx: {}, resources: {}, cache: {}, decls: [] }
+  {
+    next_typeidx: [0],
+    named_typeidx: Map([]),
+    resources: Map([]),
+    cache: Map([]),
+    decls: [],
+  }
 }
 
 ///|
@@ -760,7 +766,7 @@ fn encode_interface_instancetype_full(
   }
 
   // Collect local type items.
-  let local_type_names : Map[String, Bool] = {}
+  let local_type_names : Map[String, Bool] = Map([])
   for it in iface.items {
     match it {
       TypeAlias(t) => local_type_names.set(t.name, true)
@@ -788,14 +794,14 @@ fn encode_interface_instancetype_full(
   }
 
   // Toposort local type defs (excluding pure aliases-to-Id which become exports only).
-  let deps_map : Map[String, Array[String]] = {}
+  let deps_map : Map[String, Array[String]] = Map([])
   for it in iface.items {
     match it {
       TypeAlias(t) =>
         match t.ty {
           Id(_) => ()
           _ => {
-            let deps0 : Map[String, Bool] = {}
+            let deps0 : Map[String, Bool] = Map([])
             collect_deps_from_typeexpr(t.ty, deps0)
             let deps : Array[String] = []
             for kv in deps0.iter() {
@@ -808,7 +814,7 @@ fn encode_interface_instancetype_full(
           }
         }
       Record(r) => {
-        let deps0 : Map[String, Bool] = {}
+        let deps0 : Map[String, Bool] = Map([])
         for f in r.fields {
           collect_deps_from_typeexpr(f.1, deps0)
         }
@@ -822,7 +828,7 @@ fn encode_interface_instancetype_full(
         deps_map.set(r.name, deps)
       }
       Variant(v) => {
-        let deps0 : Map[String, Bool] = {}
+        let deps0 : Map[String, Bool] = Map([])
         for c in v.cases {
           if c.payload is Some(t) {
             collect_deps_from_typeexpr(t, deps0)
@@ -844,7 +850,7 @@ fn encode_interface_instancetype_full(
   }
 
   // DFS topo sort.
-  let state : Map[String, Int] = {}
+  let state : Map[String, Int] = Map([])
   let order : Array[String] = []
   fn dfs(n : String) -> Unit raise WitError {
     let st = state.get(n).unwrap_or(0)
@@ -1128,7 +1134,7 @@ fn encode_componenttype_wrapper_for_interface(
   iface_map : Map[String, Interface],
 ) -> Bytes raise WitError {
   // Collect interface-level `use` dependencies.
-  let deps : Map[String, Array[(String, String?)]] = {} // iface_key -> [(remote, local?)]
+  let deps : Map[String, Array[(String, String?)]] = Map([]) // iface_key -> [(remote, local?)]
   for it in iface.items {
     if it is Use(u) {
       let (pkg_key_opt, name, _) = split_use_path(u.path)
@@ -1384,7 +1390,7 @@ pub fn encode_wit_component_wasm(res : ResolveResult) -> Bytes raise WitError {
   let (root_pkg_name, root_pkg_ver) = split_pkg_key(root_key)
 
   // Build interface lookup across root + deps.
-  let iface_map : Map[String, Interface] = {}
+  let iface_map : Map[String, Interface] = Map([])
   let all : Array[Package] = [res.root]
   for d in res.deps {
     all.push(d)

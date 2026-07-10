@@ -48,7 +48,7 @@ test "reference types: ref.func" {
     codes: [func0, func1],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -94,7 +94,7 @@ test "reference types: ref.is_null with non-null value" {
     codes: [dummy_func, check_func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   let (store, instance) = instantiate_module_with_init(mod) catch {
     _ => fail("instantiate_module_with_init failed")
@@ -146,7 +146,7 @@ test "reference types: ref.func used with table.set" {
     codes: [target_func, test_func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -242,7 +242,7 @@ test "multi-value: call function with multi-value return" {
     codes: [swap_func, test_func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -284,7 +284,7 @@ test "multi-value: block returning two values" {
     codes: [func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   let (store, instance) = instantiate_module(mod)
   let results = call_exported_func(store, instance, "test", [])
@@ -328,7 +328,7 @@ test "multi-value: if returning two values" {
     codes: [func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   let (store, instance) = instantiate_module(mod)
 
@@ -396,7 +396,7 @@ test "module linking: basic import from another module" {
     codes: [func_a],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
 
   // Instantiate module A
@@ -420,7 +420,7 @@ test "module linking: basic import from another module" {
     codes: [func_b],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   let instance_b = instantiate_with_linker(linker, "mod_b", mod_b) catch {
     _ => fail("Failed to instantiate mod_b")
@@ -463,7 +463,7 @@ test "module linking: import memory from another module" {
     codes: [store_func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   let instance_a = instantiate_with_linker(linker, "mod_a", mod_a) catch {
     _ => fail("Failed to instantiate mod_a")
@@ -501,7 +501,7 @@ test "module linking: import memory from another module" {
     codes: [read_func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   let instance_b = instantiate_with_linker(linker, "mod_b", mod_b) catch {
     _ => fail("Failed to instantiate mod_b")
@@ -540,7 +540,7 @@ test "module linking: three modules chain" {
     codes: [add_func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   (instantiate_with_linker(linker, "math", mod_a) catch {
     _ => fail("Failed to instantiate math")
@@ -569,7 +569,7 @@ test "module linking: three modules chain" {
     codes: [double_func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   (instantiate_with_linker(linker, "utils", mod_b) catch {
     _ => fail("Failed to instantiate utils")
@@ -595,7 +595,7 @@ test "module linking: three modules chain" {
     codes: [quad_func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   let instance_c = instantiate_with_linker(linker, "app", mod_c) catch {
     _ => fail("Failed to instantiate app")
@@ -645,7 +645,7 @@ test "call_indirect with imports path" {
     codes: [func_code, test_code],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
 
   // Use instantiate_module_with_imports (same path as run.mbt)
@@ -707,7 +707,7 @@ test "call_indirect with multiple funcs and explicit type" {
     codes: [dummy_func, test1_func, func_code, test_code],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   let store = @runtime.Store::Store()
   let imports = @runtime.Imports::Imports()
@@ -771,7 +771,7 @@ test "call_indirect type index bug reproduction" {
     codes: [dummy_func, func_code, test_code],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   let store = @runtime.Store::Store()
   let imports = @runtime.Imports::Imports()

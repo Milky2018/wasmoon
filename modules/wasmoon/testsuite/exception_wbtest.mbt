@@ -41,7 +41,7 @@ fn create_throw_module() -> @types.Module {
     codes: [throw_func],
     datas: [],
     tags: [tag0],
-    func_names: {},
+    func_names: Map([]),
   }
 }
 
@@ -104,7 +104,7 @@ fn create_catch_module() -> @types.Module {
     codes: [catch_func],
     datas: [],
     tags: [tag0],
-    func_names: {},
+    func_names: Map([]),
   }
 }
 
@@ -159,7 +159,7 @@ fn create_throw_param_module() -> @types.Module {
     codes: [catch_func],
     datas: [],
     tags: [tag0],
-    func_names: {},
+    func_names: Map([]),
   }
 }
 
@@ -229,7 +229,7 @@ fn create_catch_all_module() -> @types.Module {
     codes: [catch_func],
     datas: [],
     tags: [tag0],
-    func_names: {},
+    func_names: Map([]),
   }
 }
 
@@ -284,7 +284,7 @@ fn create_catch_ref_module() -> @types.Module {
     codes: [catch_func],
     datas: [],
     tags: [tag0],
-    func_names: {},
+    func_names: Map([]),
   }
 }
 
@@ -364,7 +364,7 @@ fn create_catch_all_ref_module() -> @types.Module {
     codes: [catch_func],
     datas: [],
     tags: [tag0],
-    func_names: {},
+    func_names: Map([]),
   }
 }
 
@@ -444,7 +444,7 @@ fn create_throw_ref_module() -> @types.Module {
     codes: [throw_ref_func],
     datas: [],
     tags: [tag0],
-    func_names: {},
+    func_names: Map([]),
   }
 }
 
@@ -533,7 +533,7 @@ fn create_multi_tag_module() -> @types.Module {
     codes: [selective_func],
     datas: [],
     tags: [tag0, tag1],
-    func_names: {},
+    func_names: Map([]),
   }
 }
 
@@ -615,7 +615,7 @@ fn create_propagate_module() -> @types.Module {
     codes: [propagate_func],
     datas: [],
     tags: [tag0, tag1],
-    func_names: {},
+    func_names: Map([]),
   }
 }
 
@@ -677,7 +677,7 @@ fn create_multi_value_exception_module() -> @types.Module {
     codes: [func],
     datas: [],
     tags: [tag0],
-    func_names: {},
+    func_names: Map([]),
   }
 }
 
@@ -751,7 +751,7 @@ fn create_no_exception_module() -> @types.Module {
     codes: [func],
     datas: [],
     tags: [tag0],
-    func_names: {},
+    func_names: Map([]),
   }
 }
 
@@ -807,7 +807,7 @@ fn create_uncaught_module() -> @types.Module {
     codes: [func],
     datas: [],
     tags: [tag0, tag1],
-    func_names: {},
+    func_names: Map([]),
   }
 }
 
@@ -868,7 +868,7 @@ fn create_f32_exception_module() -> @types.Module {
     codes: [func],
     datas: [],
     tags: [tag0],
-    func_names: {},
+    func_names: Map([]),
   }
 }
 
@@ -929,7 +929,7 @@ fn create_i64_exception_module() -> @types.Module {
     codes: [func],
     datas: [],
     tags: [tag0],
-    func_names: {},
+    func_names: Map([]),
   }
 }
 
@@ -1002,7 +1002,7 @@ fn create_f64_exception_module() -> @types.Module {
     codes: [func],
     datas: [],
     tags: [tag0],
-    func_names: {},
+    func_names: Map([]),
   }
 }
 

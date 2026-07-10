@@ -412,12 +412,12 @@ struct EGraph {
 pub fn EGraph::EGraph() -> EGraph {
   {
     uf: UnionFind(),
-    classes: {},
-    hashcons: {},
+    classes: Map([]),
+    hashcons: Map([]),
     dirty: false,
-    opcode_index: {},
-    uses: {},
-    type_map: {},
+    opcode_index: Map([]),
+    uses: Map([]),
+    type_map: Map([]),
     remat_set: HashSet([]),
     last_rule_applications: 0,
     last_matches_limit_hits: 0,
@@ -812,7 +812,7 @@ pub fn EGraph::rebuild(self : EGraph) -> Unit {
   while true {
     // Merge all existing classes by their current union-find root.
     // This also deduplicates nodes and refreshes constant caches.
-    let merged_classes : Map[Int, EClass] = {}
+    let merged_classes : Map[Int, EClass] = Map([])
     for class_id, eclass in self.classes {
       let root = self.uf.find(class_id)
       match merged_classes.get(root) {
@@ -837,8 +837,8 @@ pub fn EGraph::rebuild(self : EGraph) -> Unit {
 
     // Rebuild hashcons/opcode_index from scratch using canonicalized nodes.
     // Also collect any new unions implied by congruence (same canonical node).
-    let new_hashcons : Map[ENode, EClassId] = {}
-    let new_opcode_index : Map[EOpcodeTag, @hashset.HashSet[Int]] = {}
+    let new_hashcons : Map[ENode, EClassId] = Map([])
+    let new_opcode_index : Map[EOpcodeTag, @hashset.HashSet[Int]] = Map([])
     let unions : Array[(Int, Int)] = []
 
     // Helper: add (tag -> root) to the new opcode index.
@@ -948,7 +948,7 @@ pub fn EGraph::rebuild(self : EGraph) -> Unit {
       }
 
       // Re-root the type map.
-      let new_type_map : Map[Int, Int] = {}
+      let new_type_map : Map[Int, Int] = Map([])
       for id, bits in self.type_map {
         let root = self.uf.find(id)
         if new_type_map.get(root) is None {
@@ -1719,7 +1719,7 @@ fn extract_cost_apply_bonus(cost : ExtractCost, bonus : Int) -> ExtractCost {
 /// Returns the total cost and the best e-node
 pub fn EGraph::extract(self : EGraph, id : EClassId) -> (Int, ENode) {
   // Use memoization to avoid recomputing
-  let memo : Map[Int, (ExtractCost, ENode)] = {}
+  let memo : Map[Int, (ExtractCost, ENode)] = Map([])
   // Track classes currently being processed to detect cycles
   let in_progress : @hashset.HashSet[Int] = HashSet([])
   let (cost, node) = self.extract_impl(id, memo, in_progress)
@@ -1893,7 +1893,7 @@ struct IndexedRuleSet {
 
 ///|
 fn IndexedRuleSet::IndexedRuleSet() -> IndexedRuleSet {
-  { by_opcode: {}, universal: [] }
+  { by_opcode: Map([]), universal: [] }
 }
 
 ///|

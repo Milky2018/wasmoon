@@ -1237,7 +1237,7 @@ fn DirectCallStubSet::install_one(
 pub fn install_direct_call_stubs_for_target(
   target : @cwasm.TargetArch,
 ) -> DirectCallStubSet raise DirectCallStubInstallError {
-  let stubs : DirectCallStubSet = { exec_codes: [], targets: {} }
+  let stubs : DirectCallStubSet = { exec_codes: [], targets: Map([]) }
   stubs.install_one(
     target,
     direct_call_idx_memory_fill_mem0(),

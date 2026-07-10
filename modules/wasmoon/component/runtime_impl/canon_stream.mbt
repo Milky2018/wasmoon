@@ -41,7 +41,7 @@ fn instantiate_canon_stream_new(
     let per_task = match async_state.call_results.get(task_id) {
       Some(m) => m
       None => {
-        let m : Map[Int, Array[@types.Value]] = {}
+        let m : Map[Int, Array[@types.Value]] = Map([])
         async_state.call_results.set(task_id, m)
         m
       }
@@ -137,7 +137,7 @@ fn instantiate_canon_stream_read(
       match async_state.stream_results_cb.get(task_id) {
         Some(m) => m
         None => {
-          let m : Map[Int, Int] = {}
+          let m : Map[Int, Int] = Map([])
           async_state.stream_results_cb.set(task_id, m)
           m
         }
@@ -146,7 +146,7 @@ fn instantiate_canon_stream_read(
       match async_state.stream_results.get(task_id) {
         Some(m) => m
         None => {
-          let m : Map[Int, Int] = {}
+          let m : Map[Int, Int] = Map([])
           async_state.stream_results.set(task_id, m)
           m
         }
@@ -688,7 +688,7 @@ fn instantiate_canon_stream_write(
       match async_state.stream_results_cb.get(task_id) {
         Some(m) => m
         None => {
-          let m : Map[Int, Int] = {}
+          let m : Map[Int, Int] = Map([])
           async_state.stream_results_cb.set(task_id, m)
           m
         }
@@ -697,7 +697,7 @@ fn instantiate_canon_stream_write(
       match async_state.stream_results.get(task_id) {
         Some(m) => m
         None => {
-          let m : Map[Int, Int] = {}
+          let m : Map[Int, Int] = Map([])
           async_state.stream_results.set(task_id, m)
           m
         }

@@ -70,7 +70,7 @@ fn clone_remat_inst(def : RematDef, dst : @abi.VReg) -> @instr.Inst {
 pub fn rematerialize_long_distance_constants(
   func : @machv.Function,
 ) -> @machv.Function {
-  let remat_defs : Map[Int, RematDef] = {}
+  let remat_defs : Map[Int, RematDef] = Map([])
   for block in func.blocks {
     for inst_idx, inst in block.insts {
       if is_long_distance_remat_candidate(inst.opcode) &&
@@ -101,7 +101,7 @@ pub fn rematerialize_long_distance_constants(
     for p in block.params {
       new_block.params.push(p)
     }
-    let clone_count : Map[Int, Int] = {}
+    let clone_count : Map[Int, Int] = Map([])
     fn maybe_remat_use(
       func : @machv.Function,
       reg : @abi.Reg,
@@ -316,7 +316,7 @@ pub fn rematerialize_cross_block_constants(
   func : @machv.Function,
 ) -> @machv.Function {
   // vreg_id -> rematerializable def
-  let remat_defs : Map[Int, RematDef] = {}
+  let remat_defs : Map[Int, RematDef] = Map([])
 
   // 1) Collect rematerializable defs.
   for block in func.blocks {
@@ -350,7 +350,7 @@ pub fn rematerialize_cross_block_constants(
       new_block.params.push(p)
     }
     // Per-block remat cache, mirrors Cranelift remat_copies[(block, value)].
-    let local_map : Map[Int, @abi.VReg] = {}
+    let local_map : Map[Int, @abi.VReg] = Map([])
     fn rewrite_use_with_local_remat(
       func : @machv.Function,
       reg : @abi.Reg,

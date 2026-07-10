@@ -474,8 +474,8 @@ fn compute_liveness_with_options(
   // Compute block order directly as FixedArray
   let block_order = compute_reverse_postorder(func)
   let result : LivenessResult = {
-    intervals: {},
-    use_def: {},
+    intervals: Map([]),
+    use_def: Map([]),
     use_def_dense: Array::make(func.next_vreg_id, None),
     live_in,
     live_out,

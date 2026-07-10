@@ -23,7 +23,7 @@ pub fn apply_allocation(
 ) -> @machv.Function {
   let new_func = func.clone_base()
   new_func.set_num_spill_slots(alloc.num_spill_slots)
-  let block_id_to_index : Map[Int, Int] = {}
+  let block_id_to_index : Map[Int, Int] = Map([])
   for i, block in func.blocks {
     block_id_to_index.set(block.id, i)
   }
@@ -82,7 +82,7 @@ pub fn apply_allocation(
     }
 
     let optimized : Array[@instr.Inst] = []
-    let slot_cache : Map[Int, @abi.PReg] = {}
+    let slot_cache : Map[Int, @abi.PReg] = Map([])
     for inst in block.insts {
       let mut emitted = false
       match inst.opcode {
@@ -170,7 +170,7 @@ pub fn apply_allocation(
     )
     intervals
   } else {
-    {}
+    Map([])
   }
 
   // Convert function parameters
@@ -355,7 +355,7 @@ pub fn apply_allocation(
 
     // Track which spill slots have been loaded into coalesced reload registers
     // Key: spill_slot, Value: preg holding the reloaded value
-    let active_reloads : Map[Int, @abi.PReg] = {}
+    let active_reloads : Map[Int, @abi.PReg] = Map([])
 
     // Process instructions
     for inst_idx, inst in block.insts {
@@ -369,7 +369,7 @@ pub fn apply_allocation(
 
       // First, insert reload instructions for any spilled uses
       // Track which scratch registers are used for each spilled vreg
-      let spill_regs : Map[Int, Loc] = {}
+      let spill_regs : Map[Int, Loc] = Map([])
 
       // X16, X17 are the only truly safe scratch registers because:
       // - X0-X7: parameter registers
@@ -470,7 +470,7 @@ pub fn apply_allocation(
 
       // Rewrite definitions - use X16, X17 as scratch for spilled defs
       // But for defs with fixed constraints, use the fixed register
-      let spill_scratch_map : Map[Int, @abi.PReg] = {} // vreg.id -> scratch preg
+      let spill_scratch_map : Map[Int, @abi.PReg] = Map([]) // vreg.id -> scratch preg
       for i, def in inst.defs {
         match def.reg {
           Virtual(vreg) => {
@@ -593,7 +593,7 @@ pub fn apply_allocation(
       if point_edits is Some(edits) {
         let resolved_moves = resolve_parallel_moves(edits.before, isa)
         // Track which spill slots have been reloaded in this batch for coalescing
-        let reloaded_slots : Map[Int, @abi.PReg] = {}
+        let reloaded_slots : Map[Int, @abi.PReg] = Map([])
         for mv in resolved_moves {
           match (mv.from, mv.to) {
             (Spill(from_slot), Spill(to_slot)) =>

@@ -13,7 +13,7 @@ struct CodeCache {
 
 ///|
 pub fn CodeCache::CodeCache(max_size : Int) -> CodeCache {
-  { functions: {}, total_size: 0, max_size, hits: 0, misses: 0 }
+  { functions: Map([]), total_size: 0, max_size, hits: 0, misses: 0 }
 }
 
 ///|

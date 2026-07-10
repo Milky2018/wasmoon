@@ -97,7 +97,7 @@ pub fn UnionFind::get_set(self : UnionFind, x : Int) -> Array[Int] {
 ///|
 /// Get all unique sets (as arrays of their members)
 pub fn UnionFind::get_all_sets(self : UnionFind) -> Array[Array[Int]] {
-  let sets : Map[Int, Array[Int]] = {}
+  let sets : Map[Int, Array[Int]] = Map([])
   for i in 0..<self.parent.length() {
     let root = self.find(i)
     match sets.get(root) {

@@ -89,8 +89,8 @@ fn remap_index(idx : Int, alias_map : Map[Int, Int]) -> Int {
 
 ///|
 fn build_alias_map(addrs : Array[Int]) -> Map[Int, Int] {
-  let first_idx_by_addr : Map[Int, Int] = {}
-  let alias_map : Map[Int, Int] = {}
+  let first_idx_by_addr : Map[Int, Int] = Map([])
+  let alias_map : Map[Int, Int] = Map([])
   for idx, addr in addrs {
     match first_idx_by_addr.get(addr) {
       Some(first_idx) => if first_idx != idx { alias_map.set(idx, first_idx) }

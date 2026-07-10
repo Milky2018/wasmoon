@@ -657,7 +657,7 @@ pub fn lower_call_indirect(
   for i in 1..<inst.operands.length() {
     arg_vregs.push(ctx.get_vreg_for_use(inst.operands[i], block))
   }
-  let const_args : Map[Int, CallConstArg] = {}
+  let const_args : Map[Int, CallConstArg] = Map([])
 
   // Collect result vregs (skip when results are unused)
   let result_vregs = @lower.collect_call_result_vregs(ctx, inst)
@@ -748,7 +748,7 @@ pub fn lower_call_ref(
   for i in 1..<inst.operands.length() {
     arg_vregs.push(ctx.get_vreg_for_use(inst.operands[i], block))
   }
-  let const_args : Map[Int, CallConstArg] = {}
+  let const_args : Map[Int, CallConstArg] = Map([])
 
   // Collect result vregs (skip when results are unused)
   let result_vregs = @lower.collect_call_result_vregs(ctx, inst)
@@ -801,7 +801,7 @@ fn collect_call_args_with_consts(
   start_idx : Int,
 ) -> (Array[@abi.VReg], Map[Int, CallConstArg]) {
   let arg_vregs : Array[@abi.VReg] = []
-  let const_args : Map[Int, CallConstArg] = {}
+  let const_args : Map[Int, CallConstArg] = Map([])
   for i in start_idx..<operands.length() {
     let operand = operands[i]
     if try_collect_call_arg_const(ctx, operand) is Some(value) {
@@ -837,7 +837,7 @@ pub fn lower_call(
     for operand in inst.operands {
       args.push(ctx.get_vreg_for_use(operand, block))
     }
-    (args, {})
+    (args, Map([]))
   }
 
   // Collect result vregs (skip when results are unused)

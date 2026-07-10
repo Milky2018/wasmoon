@@ -1122,8 +1122,8 @@ fn BacktrackingAllocator::generate_result(
     self.bundles.next_spill_slot,
   )
   let result : RegAllocResult = {
-    assignments: {},
-    spill_slots: {},
+    assignments: Map([]),
+    spill_slots: Map([]),
     num_spill_slots: generic_result.num_spill_slots,
     inst_edits: [],
   }
@@ -1288,7 +1288,7 @@ fn BacktrackingAllocator::compact_spill_slots(
   }
 
   // 1) Build spillsets keyed by the old spill-slot id.
-  let spillsets_by_slot : Map[Int, SpillSetInfo] = {}
+  let spillsets_by_slot : Map[Int, SpillSetInfo] = Map([])
   for vreg_id, old_slot in result.spill_slots {
     let range = match self.ranges.get_by_vreg(vreg_id) {
       Some(r) => r
@@ -1349,7 +1349,7 @@ fn BacktrackingAllocator::compact_spill_slots(
   // logically distinct values onto one stack location at the jump boundary and
   // break SSA block-arg semantics.
   let no_share_edges : Array[@planning.SpillSlotNoShareEdge] = []
-  let block_id_to_index : Map[Int, Int] = {}
+  let block_id_to_index : Map[Int, Int] = Map([])
   for i, block in self.func.blocks {
     block_id_to_index.set(block.id, i)
   }
@@ -1393,7 +1393,7 @@ fn BacktrackingAllocator::compact_spill_slots(
     fn(a, b) { spans_overlap(a, b, self.ranges.block_order) },
     fn(a, b) { a.compare_with_order(b, self.ranges.block_order) },
   )
-  let slot_remap : Map[Int, Int] = {}
+  let slot_remap : Map[Int, Int] = Map([])
   for remap in compaction.remaps {
     slot_remap.set(remap.old_slot, remap.new_slot)
   }

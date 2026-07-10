@@ -1298,7 +1298,7 @@ pub fn Module::empty() -> Module {
     codes: [],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
 }
 
@@ -1326,7 +1326,7 @@ pub fn Module::simple(
     codes: [{ locals: [], body }],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
 }
 
@@ -1404,7 +1404,7 @@ pub fn Module::Module() -> Module {
     codes: [],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
 }
 

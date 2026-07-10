@@ -235,9 +235,9 @@ fn build_instancetype_type_slots(
   decls : Array[@component.InstanceDecl],
 ) -> (Array[TypeSlot], Map[String, Int], Map[Int, String], Map[Int, String]) {
   let slots : Array[TypeSlot] = []
-  let exported_idx_by_name : Map[String, Int] = {}
-  let export_name_by_idx : Map[Int, String] = {}
-  let resource_by_idx : Map[Int, String] = {}
+  let exported_idx_by_name : Map[String, Int] = Map([])
+  let export_name_by_idx : Map[Int, String] = Map([])
+  let resource_by_idx : Map[Int, String] = Map([])
   for d in decls {
     match d {
       Type(td) => slots.push(Def(td))
@@ -289,8 +289,8 @@ fn decode_interface_from_componenttype(
 
   // Build a small amount of context for resolving `(alias outer 1 <idx>)` in the
   // exported instancetype back to the imported instance's type export.
-  let alias_export_by_typeidx : Map[Int, (Int, String)] = {} // typeidx -> (inst_idx, export_name)
-  let inst_sig_typeidx_by_inst : Map[Int, Int] = {} // inst_idx -> instancetype typeidx (in componenttype space)
+  let alias_export_by_typeidx : Map[Int, (Int, String)] = Map([]) // typeidx -> (inst_idx, export_name)
+  let inst_sig_typeidx_by_inst : Map[Int, Int] = Map([]) // inst_idx -> instancetype typeidx (in componenttype space)
   let mut cur_typeidx = 0
   let mut cur_instidx = 0
   for d in decls {
@@ -330,7 +330,7 @@ fn decode_interface_from_componenttype(
   )
 
   // Augment resource_by_idx: treat exported types that are eq to an outer resource as resources.
-  let resource_by_idx : Map[Int, String] = {}
+  let resource_by_idx : Map[Int, String] = Map([])
   for kv in resource_by_idx0.iter() {
     let (i, n) = kv
     resource_by_idx.set(i, n)
@@ -381,7 +381,7 @@ fn decode_interface_from_componenttype(
   }
 
   // Collect resources (from exported types).
-  let resources : Map[String, ResourceDecl] = {}
+  let resources : Map[String, ResourceDecl] = Map([])
   for kv in resource_by_idx.iter() {
     let (_i, rname) = kv
     resources.set(rname, { name: rname, methods: [] })

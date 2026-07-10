@@ -4,7 +4,7 @@ fn componenttype_import_func_sigs_of_decls(
   global_types : Array[@component.TypeDef?],
   global_resource_ids : Array[Int?],
 ) -> Map[String, FuncSigShape] {
-  let out : Map[String, FuncSigShape] = {}
+  let out : Map[String, FuncSigShape] = Map([])
   let local_types : Array[@component.TypeDef] = []
   let local_resource_ids : Array[Int?] = []
   // Avoid collisions with the enclosing component's nominal resource ids.
@@ -101,7 +101,7 @@ fn componenttype_import_type_sigs_of_decls(
   global_types : Array[@component.TypeDef?],
   global_resource_ids : Array[Int?],
 ) -> Map[String, TypeSig] {
-  let out : Map[String, TypeSig] = {}
+  let out : Map[String, TypeSig] = Map([])
   let local_types : Array[@component.TypeDef] = []
   let local_resource_ids : Array[Int?] = []
   // Avoid collisions with the enclosing component's nominal resource ids.
@@ -158,7 +158,7 @@ fn componenttype_import_type_sigs_of_decls(
                     local_resource_ids,
                     global_types,
                     global_resource_ids,
-                    {},
+                    Map([]),
                   ),
                 )
                 record_type_slot(false) |> ignore
@@ -173,7 +173,7 @@ fn componenttype_import_type_sigs_of_decls(
                     local_resource_ids,
                     global_types,
                     global_resource_ids,
-                    {},
+                    Map([]),
                   ),
                 )
               }
@@ -199,7 +199,7 @@ fn componenttype_import_type_sigs_of_decls(
 fn componenttype_import_type_bounds_of_decls(
   decls : Array[@component.ComponentDecl],
 ) -> Map[String, @component.TypeBound] {
-  let out : Map[String, @component.TypeBound] = {}
+  let out : Map[String, @component.TypeBound] = Map([])
   for d in decls {
     if d is Import(name, Type(b)) {
       out.set(name, b)
@@ -214,7 +214,7 @@ fn componenttype_export_func_sigs_of_decls(
   global_types : Array[@component.TypeDef?],
   global_resource_ids : Array[Int?],
 ) -> Map[String, FuncSigShape] {
-  let out : Map[String, FuncSigShape] = {}
+  let out : Map[String, FuncSigShape] = Map([])
   let local_types : Array[@component.TypeDef] = []
   let local_resource_ids : Array[Int?] = []
   // Avoid collisions with the enclosing component's nominal resource ids.
@@ -317,7 +317,7 @@ fn component_import_core_module_exports_of(
       core_type_exports.push(e)
     }
   }
-  let result : Map[String, Map[String, Int]] = {}
+  let result : Map[String, Map[String, Int]] = Map([])
   for i in c.imports {
     if (importname_to_string(i.name), i.desc)
       is (Some(name), CoreModuleType(tyidx)) &&
@@ -348,14 +348,14 @@ fn component_import_core_module_import_sigs_of(
     }
     base_bound += imports.length()
   }
-  let result : Map[String, Map[String, CoreExternType]] = {}
+  let result : Map[String, Map[String, CoreExternType]] = Map([])
   for i in c.imports {
     if (importname_to_string(i.name), i.desc)
       is (Some(name), CoreModuleType(tyidx)) &&
       tyidx >= 0 &&
       tyidx < core_type_imports.length() &&
       core_type_imports[tyidx] is Some(imps) {
-      let map : Map[String, CoreExternType] = {}
+      let map : Map[String, CoreExternType] = Map([])
       for imp in imps {
         map.set("\{imp.mod_name}::\{imp.name}", imp.ty)
       }
@@ -384,11 +384,11 @@ fn componenttype_import_core_module_sigs_of_decls(
             core_type_bound,
             [],
           )
-          let imp_map : Map[String, CoreExternType] = {}
+          let imp_map : Map[String, CoreExternType] = Map([])
           for imp in imps {
             imp_map.set("\{imp.mod_name}::\{imp.name}", imp.ty)
           }
-          let exp_kinds : Map[String, Int] = {}
+          let exp_kinds : Map[String, Int] = Map([])
           for kv in exps.iter() {
             let (nm, ty) = kv
             exp_kinds.set(nm, core_kind_of_extern_type(ty))
@@ -423,8 +423,8 @@ fn componenttype_import_core_module_sigs_of_decls(
       _ => ()
     }
   }
-  let import_sigs : Map[String, Map[String, CoreExternType]] = {}
-  let export_kinds : Map[String, Map[String, Int]] = {}
+  let import_sigs : Map[String, Map[String, CoreExternType]] = Map([])
+  let export_kinds : Map[String, Map[String, Int]] = Map([])
   for d in decls {
     if d is Import(name, desc) &&
       desc is CoreModuleType(tyidx) &&
@@ -728,7 +728,7 @@ fn validate_typedef(
       if fields.length() == 0 {
         raise SectionParseError(7, "record type must have at least one field")
       }
-      let seen : Map[String, String] = {}
+      let seen : Map[String, String] = Map([])
       for f in fields {
         validate_extern_name_string(f.label, cfg)
         let key = ascii_lower_key(f.label)
@@ -747,7 +747,7 @@ fn validate_typedef(
       if cases.length() == 0 {
         raise SectionParseError(7, "variant type must have at least one case")
       }
-      let seen : Map[String, String] = {}
+      let seen : Map[String, String] = Map([])
       for i in 0..<cases.length() {
         let c = cases[i]
         validate_extern_name_string(c.label, cfg)
@@ -790,7 +790,7 @@ fn validate_typedef(
       if cases.length() > 32 {
         raise SectionParseError(7, "cannot have more than 32 flags")
       }
-      let seen : Map[String, String] = {}
+      let seen : Map[String, String] = Map([])
       for name in cases {
         validate_extern_name_string(name, cfg)
         let key = ascii_lower_key(name)
@@ -808,7 +808,7 @@ fn validate_typedef(
       if cases.length() == 0 {
         raise SectionParseError(7, "enum type must have at least one variant")
       }
-      let seen : Map[String, String] = {}
+      let seen : Map[String, String] = Map([])
       for name in cases {
         validate_extern_name_string(name, cfg)
         let key = ascii_lower_key(name)
@@ -864,13 +864,13 @@ fn validate_typedef(
       let local_type_table : Array[@component.TypeDef?] = []
       let local_resource_ids : Array[Int?] = []
       let mut local_core_type_bound = 0
-      let seen_imports : Map[String, String] = {}
-      let seen_exports : Map[String, String] = {}
-      let local_named_types : Map[Int, Int] = {}
-      let local_import_resource_names : Map[String, Int] = {}
-      let local_export_resource_names : Map[String, Int] = {}
-      let local_import_resource_type_idxs : Map[Int, Int] = {}
-      let local_export_resource_type_idxs : Map[Int, Int] = {}
+      let seen_imports : Map[String, String] = Map([])
+      let seen_exports : Map[String, String] = Map([])
+      let local_named_types : Map[Int, Int] = Map([])
+      let local_import_resource_names : Map[String, Int] = Map([])
+      let local_export_resource_names : Map[String, Int] = Map([])
+      let local_import_resource_type_idxs : Map[Int, Int] = Map([])
+      let local_export_resource_type_idxs : Map[Int, Int] = Map([])
       let local_core_type_exports : Array[Map[String, Int]?] = []
       for d in decls {
         match d {
@@ -972,7 +972,7 @@ fn validate_typedef(
                     local_type_table,
                     local_resource_ids,
                     local_named_types,
-                    {},
+                    Map([]),
                   ) {
                   raise SectionParseError(
                     7, "type not valid to be used as import",
@@ -1064,7 +1064,7 @@ fn validate_typedef(
                     local_type_table,
                     local_resource_ids,
                     local_named_types,
-                    {},
+                    Map([]),
                   ) {
                   raise SectionParseError(
                     7, "type not valid to be used as export",
@@ -1101,7 +1101,7 @@ fn validate_typedef(
       // which is referenced by later exports within the same instance type.
       let local_type_table : Array[@component.TypeDef?] = []
       let mut local_core_type_bound = 0
-      let seen_exports : Map[String, String] = {}
+      let seen_exports : Map[String, String] = Map([])
       let local_core_type_exports : Array[Map[String, Int]?] = []
       for d in decls {
         match d {
@@ -1188,7 +1188,7 @@ fn validate_typedef(
       }
     }
     FuncType(ft) => {
-      let seen_params : Map[String, String] = {}
+      let seen_params : Map[String, String] = Map([])
       for p in ft.params {
         validate_extern_name_string(p.label, cfg)
         let key = ascii_lower_key(p.label)
@@ -1201,7 +1201,7 @@ fn validate_typedef(
       match ft.result {
         Some(r) => {
           validate_valtype(r, type_table)
-          if valtype_contains_borrow(r, type_table, {}) {
+          if valtype_contains_borrow(r, type_table, Map([])) {
             raise SectionParseError(
               7, "function result cannot contain a `borrow` type",
             )

@@ -74,7 +74,7 @@ fn instantiate_canon_context_set(
     let m = match async_state.task_contexts.get(task_id) {
       Some(m) => m
       None => {
-        let m : Map[Int, @types.Value] = {}
+        let m : Map[Int, @types.Value] = Map([])
         async_state.task_contexts.set(task_id, m)
         m
       }

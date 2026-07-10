@@ -47,7 +47,7 @@ pub fn plan_long_distance_rematerializations(
   per_vreg_clone_cap? : Int = 16,
 ) -> Array[RematCloneInfo] {
   let clones : Array[RematCloneInfo] = []
-  let clone_count : Map[Int, Int] = {}
+  let clone_count : Map[Int, Int] = Map([])
   for item in uses {
     match find_remat_def(defs, item.vreg) {
       Some(def) => {

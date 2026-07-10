@@ -697,7 +697,7 @@ test "lower direct calls as generic MilkIR calls" {
     codes: [add_func, main_func],
     datas: [],
     tags: [],
-    func_names: {},
+    func_names: Map([]),
   }
   let env = native_test_env()
   let func = lower_function(env, mod_, 1)
