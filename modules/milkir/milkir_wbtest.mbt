@@ -362,6 +362,35 @@ test "dead code pass keeps unused loads without alias metadata" {
 }
 
 ///|
+test "dead code pass keeps multi-result instructions with a live later result" {
+  let func = Function::new_empty("keep_live_second_result")
+  func.add_result(I64)
+  let unused = func.new_value(I32)
+  let live = func.new_value(I64)
+  let entry = func.new_block([])
+  entry.append_inst(func.new_inst(Custom("pair"), [], [unused, live]))
+  entry.set_terminator(Return([live]))
+  let result = eliminate_dead_code(func)
+  inspect(result.changed, content="false")
+  inspect(instruction_count(func), content="1")
+  inspect(func.verify(), content="()")
+}
+
+///|
+test "dead code pass removes multi-result instructions when all results are dead" {
+  let func = Function::new_empty("remove_dead_pair")
+  let first = func.new_value(I32)
+  let second = func.new_value(I64)
+  let entry = func.new_block([])
+  entry.append_inst(func.new_inst(Custom("pair"), [], [first, second]))
+  entry.set_terminator(Return([]))
+  let result = eliminate_dead_code(func)
+  inspect(result.changed, content="true")
+  inspect(instruction_count(func), content="0")
+  inspect(func.verify(), content="()")
+}
+
+///|
 test "optimizer CSE replaces duplicate pure expression with copy" {
   let builder = FunctionBuilder::FunctionBuilder("cse_local")
   let lhs = builder.add_param(I32)

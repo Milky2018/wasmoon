@@ -36,21 +36,20 @@ fn eliminate_dead_code(func : Function) -> OptResult {
       let mut i = block.instructions.length() - 1
       while i >= 0 {
         let inst = block.instructions[i]
-        if inst.first_result() is Some(v) {
-          // If the result is never used and the instruction has no side effects
-          if use_counts.get(v.id).unwrap_or(0) == 0 && !has_side_effects(inst) {
-            // Remove this instruction
-            block.instructions.remove(i) |> ignore
-            // Decrement use counts for operands
-            for op in inst.operands {
-              let count = use_counts.get(op.id).unwrap_or(0)
-              if count > 0 {
-                use_counts.set(op.id, count - 1)
-              }
+        let all_results_unused = inst.results.length() > 0 &&
+          inst.results.all(v => use_counts.get(v.id).unwrap_or(0) == 0)
+        if all_results_unused && !has_side_effects(inst) {
+          // Remove this instruction
+          block.instructions.remove(i) |> ignore
+          // Decrement use counts for operands
+          for op in inst.operands {
+            let count = use_counts.get(op.id).unwrap_or(0)
+            if count > 0 {
+              use_counts.set(op.id, count - 1)
             }
-            changed = true
-            result.mark_changed()
           }
+          changed = true
+          result.mark_changed()
         }
         i = i - 1
       }
