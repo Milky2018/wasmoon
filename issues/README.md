@@ -8,9 +8,7 @@ No ready issues.
 
 ## Unresolved Issues
 
-| ID | Status | Priority | Type | Assignee | Blocked by | Blocks | Title |
-| --- | --- | ---: | --- | --- | --- | --- | --- |
-| [ISS-126](ISS-126.md) | in_progress | 1 | bug | codex | none | none | Complete MilkIR verifier instruction contracts |
+No unresolved issues.
 
 ## Dependency Graph
 

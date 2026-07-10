@@ -59,6 +59,30 @@ test "verify rejects instruction result type mismatches" {
 }
 
 ///|
+test "verify rejects reference-typed integer arithmetic" {
+  let func = Function::new_empty("reference_integer_add")
+  let lhs = func.add_param(Ref)
+  let rhs = func.add_param(Ref)
+  let result = func.new_value(Ref)
+  let entry = func.new_block([])
+  entry.append_inst(func.new_inst(Iadd, [lhs, rhs], [result]))
+  entry.set_terminator(Return([]))
+  expect_verify_rejection(func, "integer arithmetic operand types")
+}
+
+///|
+test "verify rejects floating-point integer equality" {
+  let func = Function::new_empty("floating_integer_equality")
+  let lhs = func.add_param(F64)
+  let rhs = func.add_param(F64)
+  let result = func.new_value(I32)
+  let entry = func.new_block([])
+  entry.append_inst(func.new_inst(IcmpEq, [lhs, rhs], [result]))
+  entry.set_terminator(Return([]))
+  expect_verify_rejection(func, "integer equality operand types")
+}
+
+///|
 test "verify rejects malformed select types" {
   let func = Function::new_empty("bad_select_types")
   let condition = func.add_param(F32)
@@ -71,6 +95,31 @@ test "verify rejects malformed select types" {
   )
   entry.set_terminator(Return([]))
   expect_verify_rejection(func, "select operand types")
+}
+
+///|
+test "verify rejects generic loads with non-pointer addresses" {
+  let func = Function::new_empty("bad_generic_load_address")
+  let address = func.add_param(F32)
+  let result = func.new_value(V128)
+  let entry = func.new_block([])
+  entry.append_inst(func.new_inst(Load, [address], [result]))
+  entry.set_terminator(Return([]))
+  expect_verify_rejection(func, "generic load address type")
+}
+
+///|
+test "verify rejects narrow loads with non-integer results" {
+  let func = Function::new_empty("bad_narrow_load_result")
+  let address = func.add_param(Ptr)
+  let offset = func.add_param(I64)
+  let result = func.new_value(F64)
+  let entry = func.new_block([])
+  entry.append_inst(
+    func.new_inst(LoadPtrNarrow(F64, 8, false), [address, offset], [result]),
+  )
+  entry.set_terminator(Return([]))
+  expect_verify_rejection(func, "narrow load result type")
 }
 
 ///|
@@ -118,6 +167,15 @@ test "verify rejects pointer calls that disagree with declared counts" {
   entry.append_inst(func.new_inst(CallPtr(2, 1), [], []))
   entry.set_terminator(Return([]))
   expect_verify_rejection(func, "call_ptr argument and result counts")
+}
+
+///|
+test "verify rejects negative pointer call counts" {
+  let func = Function::new_empty("negative_pointer_call_counts")
+  let entry = func.new_block([])
+  entry.append_inst(func.new_inst(CallPtr(-2, 0), [], []))
+  entry.set_terminator(Return([]))
+  expect_verify_rejection(func, "negative call_ptr argument count")
 }
 
 ///|

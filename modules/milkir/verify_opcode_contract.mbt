@@ -79,10 +79,10 @@ fn require_no_results(inst : Inst, context : String) -> Unit raise VerifyError {
 }
 
 ///|
-fn require_integer_like(ty : Type, context : String) -> Unit raise VerifyError {
+fn require_word_value(ty : Type, context : String) -> Unit raise VerifyError {
   if !(ty is (I32 | I64 | Ptr | Ref | CallableRef | OpaqueRef)) {
     raise TypeMismatch(
-      message="\{context} requires an integer-like type, got \{ty}",
+      message="\{context} requires an integer or reference representation, got \{ty}",
     )
   }
 }
@@ -98,19 +98,6 @@ fn same_representation_width(a : Type, b : Type) -> Bool {
 }
 
 ///|
-fn require_same_representation_width(
-  a : Type,
-  b : Type,
-  context : String,
-) -> Unit raise VerifyError {
-  if !same_representation_width(a, b) {
-    raise TypeMismatch(
-      message="\{context} types \{a} and \{b} have incompatible representations",
-    )
-  }
-}
-
-///|
 fn require_pointer_value(ty : Type, context : String) -> Unit raise VerifyError {
   if !(ty is (Ptr | I64)) {
     raise TypeMismatch(message="\{context} requires ptr or i64, got \{ty}")
@@ -121,6 +108,16 @@ fn require_pointer_value(ty : Type, context : String) -> Unit raise VerifyError 
 fn require_integer(ty : Type, context : String) -> Unit raise VerifyError {
   if !(ty is (I32 | I64)) {
     raise TypeMismatch(message="\{context} requires i32 or i64, got \{ty}")
+  }
+}
+
+///|
+fn require_equality_comparable(
+  ty : Type,
+  context : String,
+) -> Unit raise VerifyError {
+  if !(ty is (I32 | I64 | Ptr | Ref | CallableRef | OpaqueRef)) {
+    raise TypeMismatch(message="\{context} cannot compare values of type \{ty}")
   }
 }
 
@@ -150,6 +147,20 @@ fn verify_same_type_binary(
   require_result_arity(inst, 1, context)
   require_same_type(inst.args[0], inst.args[1], context)
   require_result_type(inst, 0, inst.args[0].ty, context)
+}
+
+///|
+fn verify_bitwise_binary(inst : Inst) -> Unit raise VerifyError {
+  require_arity(inst.args.length(), 2, "bitwise binary")
+  require_result_arity(inst, 1, "bitwise binary")
+  require_same_type(inst.args[0], inst.args[1], "bitwise binary")
+  require_word_value(inst.args[0].ty, "bitwise binary")
+  require_word_value(inst.results[0].ty, "bitwise binary")
+  if !same_representation_width(inst.args[0].ty, inst.results[0].ty) {
+    raise TypeMismatch(
+      message="bitwise binary operand type \{inst.args[0].ty} and result type \{inst.results[0].ty} have incompatible representations",
+    )
+  }
 }
 
 ///|
@@ -231,12 +242,38 @@ fn verify_v128_replace(
 }
 
 ///|
+fn verify_v128_load_lane(
+  inst : Inst,
+  lane : Int,
+  lane_count : Int,
+) -> Unit raise VerifyError {
+  require_arity(inst.args.length(), 2, "v128 load lane")
+  require_pointer_value(inst.args[0].ty, "v128 load lane")
+  require_operand_type(inst, 1, V128, "v128 load lane")
+  require_result_types(inst, [V128], "v128 load lane")
+  require_lane(lane, lane_count, "v128 load lane")
+}
+
+///|
+fn verify_v128_store_lane(
+  inst : Inst,
+  lane : Int,
+  lane_count : Int,
+) -> Unit raise VerifyError {
+  require_arity(inst.args.length(), 2, "v128 store lane")
+  require_pointer_value(inst.args[0].ty, "v128 store lane")
+  require_operand_type(inst, 1, V128, "v128 store lane")
+  require_no_results(inst, "v128 store lane")
+  require_lane(lane, lane_count, "v128 store lane")
+}
+
+///|
 fn verify_opcode_contract(inst : Inst) -> Unit raise VerifyError {
   match inst.opcode {
     Iconst(_) => {
       require_arity(inst.args.length(), 0, "iconst")
       require_result_arity(inst, 1, "iconst")
-      require_integer_like(inst.results[0].ty, "iconst")
+      require_word_value(inst.results[0].ty, "iconst")
     }
     Fconst(_) => {
       require_arity(inst.args.length(), 0, "fconst")
@@ -246,15 +283,10 @@ fn verify_opcode_contract(inst : Inst) -> Unit raise VerifyError {
     Iadd
     | Isub
     | Imul
-    | Umulh
-    | Smulh
     | Sdiv
     | Udiv
     | Srem
     | Urem
-    | Band
-    | Bor
-    | Bxor
     | Ishl
     | Sshr
     | Ushr
@@ -263,27 +295,32 @@ fn verify_opcode_contract(inst : Inst) -> Unit raise VerifyError {
       require_arity(inst.args.length(), 2, "integer binary")
       require_result_arity(inst, 1, "integer binary")
       require_same_type(inst.args[0], inst.args[1], "integer binary")
-      require_integer_like(inst.args[0].ty, "integer binary")
-      require_integer_like(inst.results[0].ty, "integer binary")
-      require_same_representation_width(
-        inst.args[0].ty,
-        inst.results[0].ty,
-        "integer binary",
-      )
+      require_integer(inst.args[0].ty, "integer binary")
+      require_result_type(inst, 0, inst.args[0].ty, "integer binary")
+    }
+    Band | Bor | Bxor => verify_bitwise_binary(inst)
+    Umulh | Smulh => {
+      require_operand_types(inst, [I64, I64], "multiply high")
+      require_result_types(inst, [I64], "multiply high")
     }
     Bnot | Clz | Ctz | Popcnt => {
       verify_same_type_unary(inst, "integer unary")
       require_integer(inst.args[0].ty, "integer unary")
     }
-    Icmp(_) => {
+    Icmp(condition) => {
       require_arity(inst.args.length(), 2, "integer compare")
       require_same_type(inst.args[0], inst.args[1], "integer compare")
-      require_integer_like(inst.args[0].ty, "integer compare")
+      if condition is (Eq | Ne) {
+        require_equality_comparable(inst.args[0].ty, "integer compare")
+      } else {
+        require_integer(inst.args[0].ty, "integer compare")
+      }
       require_single_result(inst, I32, "integer compare")
     }
     IcmpEq => {
       require_arity(inst.args.length(), 2, "equality compare")
       require_same_type(inst.args[0], inst.args[1], "equality compare")
+      require_equality_comparable(inst.args[0].ty, "equality compare")
       require_single_result(inst, I32, "equality compare")
     }
     Fadd | Fsub | Fmul | Fdiv | Fmin | Fmax => {
@@ -302,7 +339,7 @@ fn verify_opcode_contract(inst : Inst) -> Unit raise VerifyError {
     }
     Ireduce => {
       require_arity(inst.args.length(), 1, "ireduce")
-      require_integer_like(inst.args[0].ty, "ireduce")
+      require_integer(inst.args[0].ty, "ireduce")
       require_result_types(inst, [I32], "ireduce")
     }
     Sextend | Uextend => {
@@ -359,10 +396,12 @@ fn verify_opcode_contract(inst : Inst) -> Unit raise VerifyError {
     Copy => verify_same_type_unary(inst, "copy")
     Load => {
       require_arity(inst.args.length(), 1, "load")
+      require_pointer_value(inst.args[0].ty, "load")
       require_result_arity(inst, 1, "load")
     }
     Store => {
       require_arity(inst.args.length(), 2, "store")
+      require_pointer_value(inst.args[0].ty, "store")
       require_no_results(inst, "store")
     }
     StackAddr(_) => {
@@ -392,6 +431,7 @@ fn verify_opcode_contract(inst : Inst) -> Unit raise VerifyError {
       require_pointer_value(inst.args[0].ty, "load_ptr_narrow")
       require_operand_type(inst, 1, I64, "load_ptr_narrow")
       require_result_types(inst, [result_type], "load_ptr_narrow")
+      require_integer(result_type, "load_ptr_narrow")
       if bits != 8 && bits != 16 && bits != 32 {
         raise TypeMismatch(message="load_ptr_narrow has invalid width \{bits}")
       }
@@ -407,7 +447,16 @@ fn verify_opcode_contract(inst : Inst) -> Unit raise VerifyError {
       }
     }
     CallPtr(num_args, num_results) => {
-      require_arity(inst.args.length(), num_args + 2, "call_ptr")
+      if num_args < 0 || num_results < 0 {
+        raise ArityMismatch(
+          message="call_ptr argument and result counts must be non-negative",
+        )
+      }
+      if inst.args.length() < 2 || inst.args.length() - 2 != num_args {
+        raise ArityMismatch(
+          message="call_ptr expects \{num_args + 2} operands, got \{inst.args.length()}",
+        )
+      }
       require_result_arity(inst, num_results, "call_ptr")
       require_operand_type(inst, 0, Ptr, "call_ptr")
       require_operand_type(inst, 1, Ptr, "call_ptr")
@@ -715,61 +764,13 @@ fn verify_opcode_contract(inst : Inst) -> Unit raise VerifyError {
       require_pointer_value(inst.args[0].ty, "v128 load")
       require_result_types(inst, [V128], "v128 load")
     }
-    V128Load8Lane(_, _, _, lane) => {
-      require_arity(inst.args.length(), 2, "v128 load lane")
-      require_pointer_value(inst.args[0].ty, "v128 load lane")
-      require_operand_type(inst, 1, V128, "v128 load lane")
-      require_result_types(inst, [V128], "v128 load lane")
-      require_lane(lane, 16, "v128 load lane")
-    }
-    V128Load16Lane(_, _, _, lane) => {
-      require_arity(inst.args.length(), 2, "v128 load lane")
-      require_pointer_value(inst.args[0].ty, "v128 load lane")
-      require_operand_type(inst, 1, V128, "v128 load lane")
-      require_result_types(inst, [V128], "v128 load lane")
-      require_lane(lane, 8, "v128 load lane")
-    }
-    V128Load32Lane(_, _, _, lane) => {
-      require_arity(inst.args.length(), 2, "v128 load lane")
-      require_pointer_value(inst.args[0].ty, "v128 load lane")
-      require_operand_type(inst, 1, V128, "v128 load lane")
-      require_result_types(inst, [V128], "v128 load lane")
-      require_lane(lane, 4, "v128 load lane")
-    }
-    V128Load64Lane(_, _, _, lane) => {
-      require_arity(inst.args.length(), 2, "v128 load lane")
-      require_pointer_value(inst.args[0].ty, "v128 load lane")
-      require_operand_type(inst, 1, V128, "v128 load lane")
-      require_result_types(inst, [V128], "v128 load lane")
-      require_lane(lane, 2, "v128 load lane")
-    }
-    V128Store8Lane(_, _, _, lane) => {
-      require_arity(inst.args.length(), 2, "v128 store lane")
-      require_pointer_value(inst.args[0].ty, "v128 store lane")
-      require_operand_type(inst, 1, V128, "v128 store lane")
-      require_no_results(inst, "v128 store lane")
-      require_lane(lane, 16, "v128 store lane")
-    }
-    V128Store16Lane(_, _, _, lane) => {
-      require_arity(inst.args.length(), 2, "v128 store lane")
-      require_pointer_value(inst.args[0].ty, "v128 store lane")
-      require_operand_type(inst, 1, V128, "v128 store lane")
-      require_no_results(inst, "v128 store lane")
-      require_lane(lane, 8, "v128 store lane")
-    }
-    V128Store32Lane(_, _, _, lane) => {
-      require_arity(inst.args.length(), 2, "v128 store lane")
-      require_pointer_value(inst.args[0].ty, "v128 store lane")
-      require_operand_type(inst, 1, V128, "v128 store lane")
-      require_no_results(inst, "v128 store lane")
-      require_lane(lane, 4, "v128 store lane")
-    }
-    V128Store64Lane(_, _, _, lane) => {
-      require_arity(inst.args.length(), 2, "v128 store lane")
-      require_pointer_value(inst.args[0].ty, "v128 store lane")
-      require_operand_type(inst, 1, V128, "v128 store lane")
-      require_no_results(inst, "v128 store lane")
-      require_lane(lane, 2, "v128 store lane")
-    }
+    V128Load8Lane(_, _, _, lane) => verify_v128_load_lane(inst, lane, 16)
+    V128Load16Lane(_, _, _, lane) => verify_v128_load_lane(inst, lane, 8)
+    V128Load32Lane(_, _, _, lane) => verify_v128_load_lane(inst, lane, 4)
+    V128Load64Lane(_, _, _, lane) => verify_v128_load_lane(inst, lane, 2)
+    V128Store8Lane(_, _, _, lane) => verify_v128_store_lane(inst, lane, 16)
+    V128Store16Lane(_, _, _, lane) => verify_v128_store_lane(inst, lane, 8)
+    V128Store32Lane(_, _, _, lane) => verify_v128_store_lane(inst, lane, 4)
+    V128Store64Lane(_, _, _, lane) => verify_v128_store_lane(inst, lane, 2)
   }
 }
