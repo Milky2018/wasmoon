@@ -391,6 +391,69 @@ test "dead code pass removes multi-result instructions when all results are dead
 }
 
 ///|
+test "strength reduction derives shift amounts and remainder masks" {
+  let builder = FunctionBuilder::FunctionBuilder("strength_reduce_pow2")
+  let value = builder.add_param(I32)
+  builder.add_result(I32)
+  builder.add_result(I32)
+  builder.add_result(I32)
+  let eight = builder.iconst_i32(8)
+  let product = builder.imul(value, eight)
+  let quotient = builder.udiv(value, eight)
+  let remainder = builder.urem(value, eight)
+  builder.return_([product, quotient, remainder])
+  let func = builder.get_function()
+  let result = reduce_strength(func)
+  inspect(result.changed, content="true")
+  inspect(
+    func.print(),
+    content=(
+      #|function strength_reduce_pow2(v0:i32) -> i32, i32, i32 {
+      #|block0:
+      #|    v1:i32 = iconst 8
+      #|    v5:i32 = iconst 3
+      #|    v2:i32 = ishl v0, v5
+      #|    v6:i32 = iconst 3
+      #|    v3:i32 = ushr v0, v6
+      #|    v7:i32 = iconst 7
+      #|    v4:i32 = band v0, v7
+      #|    return v2, v3, v4
+      #|}
+      #|
+    ),
+  )
+  inspect(func.verify(), content="()")
+}
+
+///|
+test "O3 derives power-of-two constants when the e-graph is skipped" {
+  let builder = FunctionBuilder::FunctionBuilder("o3_large_strength_reduce")
+  let value = builder.add_param(I32)
+  builder.add_result(I32)
+  builder.add_result(I32)
+  builder.add_result(I32)
+  for _ in 0..<296 {
+    builder.iconst_i32(0) |> ignore
+  }
+  let eight = builder.iconst_i32(8)
+  let product = builder.imul(value, eight)
+  let quotient = builder.udiv(value, eight)
+  let remainder = builder.urem(value, eight)
+  builder.return_([product, quotient, remainder])
+  let func = builder.get_function()
+  optimize_with_level(func, O3) |> ignore
+  let instructions = func.blocks[0].instructions
+  inspect(instructions.length(), content="303")
+  inspect(instructions[297].opcode, content="Iconst(3)")
+  inspect(instructions[298].opcode, content="Ishl")
+  inspect(instructions[299].opcode, content="Iconst(3)")
+  inspect(instructions[300].opcode, content="Ushr")
+  inspect(instructions[301].opcode, content="Iconst(7)")
+  inspect(instructions[302].opcode, content="Band")
+  inspect(func.verify(), content="()")
+}
+
+///|
 test "optimizer CSE replaces duplicate pure expression with copy" {
   let builder = FunctionBuilder::FunctionBuilder("cse_local")
   let lhs = builder.add_param(I32)

@@ -274,6 +274,7 @@ fn reduce_strength(func : Function) -> OptResult {
 
   // Apply strength reduction
   for block in func.blocks {
+    let rewritten : Array[Inst] = []
     for inst in block.instructions {
       match inst.opcode {
         // Multiplication by power of 2 -> left shift
@@ -288,11 +289,17 @@ fn reduce_strength(func : Function) -> OptResult {
               let other_idx = if const_idx == 0 { 1 } else { 0 }
               let other_operand = inst.operands[other_idx]
               let const_operand = inst.operands[const_idx]
+              let shift_operand = append_iconst(
+                rewritten,
+                func,
+                const_operand.ty,
+                shift_amount.to_int64(),
+              )
               // Replace imul with ishl
               inst.opcode = Ishl
               inst.operands.clear()
               inst.operands.push(other_operand)
-              inst.operands.push(const_operand) // Keep the constant, semantics change
+              inst.operands.push(shift_operand)
               result.mark_changed()
             }
           }
@@ -304,9 +311,20 @@ fn reduce_strength(func : Function) -> OptResult {
               constants,
             )
             if const_idx == 1 && shift_amount >= 0 {
+              let dividend = inst.operands[0]
+              let divisor = inst.operands[1]
+              let shift_operand = append_iconst(
+                rewritten,
+                func,
+                divisor.ty,
+                shift_amount.to_int64(),
+              )
               // Only reduce if divisor is constant power of 2
               // Replace udiv with ushr (logical right shift)
               inst.opcode = Ushr
+              inst.operands.clear()
+              inst.operands.push(dividend)
+              inst.operands.push(shift_operand)
               result.mark_changed()
             }
           }
@@ -317,18 +335,59 @@ fn reduce_strength(func : Function) -> OptResult {
               inst.operands,
               constants,
             )
-            if const_idx == 1 && shift_amount >= 0 {
+            if const_idx == 1 &&
+              shift_amount >= 0 &&
+              power_of_two_mask(inst.operands[1], constants) is Some(mask) {
+              let dividend = inst.operands[0]
+              let divisor = inst.operands[1]
+              let mask_operand = append_iconst(
+                rewritten,
+                func,
+                divisor.ty,
+                mask,
+              )
               // x % (2^n) == x & (2^n - 1)
               inst.opcode = Band
-              // The mask should be 2^n - 1, but we need to update the constant
+              inst.operands.clear()
+              inst.operands.push(dividend)
+              inst.operands.push(mask_operand)
               result.mark_changed()
             }
           }
         _ => ()
       }
+      rewritten.push(inst)
+    }
+    block.instructions.clear()
+    for inst in rewritten {
+      block.instructions.push(inst)
     }
   }
   result
+}
+
+///|
+fn append_iconst(
+  instructions : Array[Inst],
+  func : Function,
+  ty : Type,
+  value : Int64,
+) -> Value {
+  let result = func.new_value(ty)
+  instructions.push(func.new_inst(Iconst(value), [], [result]))
+  result
+}
+
+///|
+fn power_of_two_mask(
+  value : Value,
+  constants : @hashmap.HashMap[Int, ConstValue],
+) -> Int64? {
+  match constants.get(value.id) {
+    Some(I32(v)) => Some((v - 1).to_int64())
+    Some(I64(v)) => Some(v - 1L)
+    _ => None
+  }
 }
 
 ///|
