@@ -11,6 +11,14 @@ priv struct CanonicalI32LoopFixture {
 }
 
 ///|
+priv struct CarriedEffectLoopFixture {
+  func : Function
+  preheader : Block
+  header : Block
+  latch : Block
+}
+
+///|
 fn make_canonical_i32_loop(
   initial : Int,
   bound_value : Int,
@@ -50,6 +58,59 @@ fn make_canonical_i32_loop(
     induction,
     step,
   }
+}
+
+///|
+fn make_carried_effect_loop() -> CarriedEffectLoopFixture {
+  let builder = FunctionBuilder::FunctionBuilder("carried_effect_loop")
+  let callee = builder.add_param(Ptr)
+  let address = builder.add_param(Ptr)
+  let preheader = builder.current_block()
+  let initial = builder.iconst_i32(0)
+  let bound = builder.iconst_i32(2)
+  let step = builder.iconst_i32(1)
+  let initial_accumulator = builder.iconst_i32(10)
+  let offset = builder.iconst_i64(0L)
+  let header = builder.create_block()
+  let body = builder.create_block()
+  let latch = builder.create_block()
+  let exit = builder.create_block()
+  builder.jump(header, [initial, initial_accumulator])
+  let induction = builder.add_block_param(header, I32)
+  let accumulator = builder.add_block_param(header, I32)
+  builder.switch_to_block(header)
+  let condition = builder.icmp_slt(induction, bound)
+  builder.brnz(condition, body, exit)
+  builder.switch_to_block(body)
+  let func = builder.get_function()
+  let first = func.new_value(I32)
+  let second = func.new_value(I32)
+  let call = func.new_inst(CallIndirect(Signature([], [I32, I32])), [callee], [
+    first, second,
+  ])
+  call.add_metadata(Comment("effect order"))
+  body.append_inst(call)
+  let pair_sum = func.new_value(I32)
+  body.append_inst(func.new_inst(Iadd, [first, second], [pair_sum]))
+  let loaded = func.new_value(I32)
+  body.append_inst(func.new_inst(LoadPtr(I32), [address, offset], [loaded]))
+  let accumulated = func.new_value(I32)
+  body.append_inst(func.new_inst(Iadd, [accumulator, pair_sum], [accumulated]))
+  let next_accumulator = func.new_value(I32)
+  body.append_inst(
+    func.new_inst(Iadd, [accumulated, loaded], [next_accumulator]),
+  )
+  body.append_inst(
+    func.new_inst(StorePtr(I32), [address, next_accumulator, offset], []),
+  )
+  body.append_inst(func.new_inst(Trap("effect trap"), [next_accumulator], []))
+  builder.jump(latch, [])
+  builder.switch_to_block(latch)
+  let next_induction = builder.iadd(induction, step)
+  builder.jump(header, [next_induction, next_accumulator])
+  builder.switch_to_block(exit)
+  builder.return_([])
+  { func, preheader, header, latch }
 }
 
 ///|
@@ -135,6 +196,93 @@ test "full unrolling clones dependent pure instructions with fresh ids" {
     _ => fail("expected preheader jump")
   }
   fixture.func.verify()
+}
+
+///|
+test "full unrolling preserves carried values, multi-results, and effect order" {
+  let fixture = make_carried_effect_loop()
+  let original_preheader_insts = fixture.preheader.instructions.length()
+  let first_fresh_value = fixture.func.next_value_id
+  let first_fresh_inst = fixture.func.next_inst_id
+  let result = full_unroll_i32_loops(fixture.func)
+  inspect(result.changed, content="true")
+  let cloned = fixture.preheader.instructions[original_preheader_insts:]
+  inspect(cloned.length(), content="16")
+  let mut current_induction = fixture.preheader.instructions[0].results[0]
+  let mut current_accumulator = fixture.preheader.instructions[3].results[0]
+  for iteration in 0..<2 {
+    let base = iteration * 8
+    let call = cloned[base]
+    let pair_sum = cloned[base + 1]
+    let load = cloned[base + 2]
+    let accumulated = cloned[base + 3]
+    let next_accumulator = cloned[base + 4]
+    let store = cloned[base + 5]
+    let trap = cloned[base + 6]
+    let next_induction = cloned[base + 7]
+    if !(call.opcode is CallIndirect(_)) ||
+      pair_sum.opcode != Iadd ||
+      load.opcode != LoadPtr(I32) ||
+      accumulated.opcode != Iadd ||
+      next_accumulator.opcode != Iadd ||
+      store.opcode != StorePtr(I32) ||
+      trap.opcode != Trap("effect trap") ||
+      next_induction.opcode != Iadd {
+      fail("effectful instruction order changed")
+    }
+    if call.id < first_fresh_inst || call.results.length() != 2 {
+      fail("multi-result call was not freshly cloned")
+    }
+    for value in call.results {
+      if value.id < first_fresh_value {
+        fail("multi-result call reused an existing value id")
+      }
+    }
+    if pair_sum.operands[0] != call.results[0] ||
+      pair_sum.operands[1] != call.results[1] {
+      fail("multi-result dependencies were not remapped")
+    }
+    if accumulated.operands[0] != current_accumulator ||
+      accumulated.operands[1] != pair_sum.results[0] ||
+      next_accumulator.operands[0] != accumulated.results[0] ||
+      next_accumulator.operands[1] != load.results[0] {
+      fail("carried accumulator dependencies were not remapped")
+    }
+    if store.operands[1] != next_accumulator.results[0] ||
+      trap.operands[0] != next_accumulator.results[0] {
+      fail("effect operands were not remapped")
+    }
+    if next_induction.operands[0] != current_induction {
+      fail("carried induction dependency was not remapped")
+    }
+    if call.metadata != [Comment("effect order")] {
+      fail("instruction metadata was not preserved")
+    }
+    current_induction = next_induction.results[0]
+    current_accumulator = next_accumulator.results[0]
+  }
+  match fixture.preheader.terminator {
+    Some(Jump(target, args)) =>
+      if target != fixture.header.id ||
+        args.length() != 2 ||
+        args[0] != current_induction ||
+        args[1] != current_accumulator {
+        fail("final carried state was not forwarded to the header")
+      }
+    _ => fail("expected preheader jump")
+  }
+  fixture.func.verify()
+}
+
+///|
+test "full unrolling rejects an unmappable carried edge without mutation" {
+  let fixture = make_carried_effect_loop()
+  let next_induction = fixture.latch.instructions[0].results[0]
+  let header_condition = fixture.header.instructions[0].results[0]
+  fixture.latch.set_terminator(
+    Jump(fixture.header.id, [next_induction, header_condition]),
+  )
+  require_unroll_skip_without_mutation(fixture.func)
 }
 
 ///|

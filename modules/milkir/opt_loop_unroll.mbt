@@ -14,8 +14,8 @@ const I32_SIGNED_MAX : Int64 = 2147483647L
 priv struct FullUnrollPlan {
   preheader : Block
   header : Block
-  induction : Value
-  initial : Value
+  header_params : Array[Value]
+  initial_args : Array[Value]
   iteration_blocks : Array[Block]
   latch_args : Array[Value]
   trip_count : Int
@@ -108,45 +108,6 @@ fn is_defined_in_unroll_loop(
 }
 
 ///|
-fn is_full_unroll_pure_i32(inst : Inst) -> Bool {
-  for arg in inst.args {
-    if arg.ty != I32 {
-      return false
-    }
-  }
-  for result in inst.results {
-    if result.ty != I32 {
-      return false
-    }
-  }
-  match inst.opcode {
-    Iconst(_)
-    | Iadd
-    | Isub
-    | Imul
-    | Umulh
-    | Smulh
-    | Band
-    | Bor
-    | Bxor
-    | Bnot
-    | Ishl
-    | Sshr
-    | Ushr
-    | Rotl
-    | Rotr
-    | Clz
-    | Ctz
-    | Popcnt
-    | Icmp(_)
-    | IcmpEq
-    | Select
-    | Copy => true
-    _ => false
-  }
-}
-
-///|
 fn checked_i32_full_unroll_trip_count(
   initial : Int64,
   bound : Int64,
@@ -188,12 +149,8 @@ fn analyze_i32_full_unroll(
     Some(block) => block
     None => return Skip("missing loop header")
   }
-  if header.params.length() != 1 {
-    return Skip("loop must have only the induction block parameter")
-  }
-  let (induction, induction_type) = header.params[0]
-  if induction.ty != I32 || induction_type != I32 {
-    return Skip("induction variable must be i32")
+  if header.params.is_empty() {
+    return Skip("loop header must have an induction block parameter")
   }
   let preheader_id = match cfg.get_loop_preheader(loop_) {
     Some(block_id) => block_id
@@ -203,12 +160,12 @@ fn analyze_i32_full_unroll(
     Some(block) => block
     None => return Skip("missing loop preheader")
   }
-  let initial = match preheader.terminator {
+  let initial_args = match preheader.terminator {
     Some(Jump(target, args)) =>
-      if target == header.id && args.length() == 1 {
-        args[0]
+      if target == header.id && args.length() == header.params.length() {
+        args
       } else {
-        return Skip("preheader must pass only the induction value")
+        return Skip("preheader arguments must match the loop header")
       }
     _ => return Skip("preheader must jump to the loop header")
   }
@@ -230,15 +187,34 @@ fn analyze_i32_full_unroll(
     return Skip("header must contain only the induction comparison")
   }
   let comparison = header.instructions[0]
+  let mut induction_index = -1
+  if comparison.operands.length() == 2 {
+    for i, item in header.params {
+      let (param, declared_type) = item
+      if param.id == comparison.operands[0].id &&
+        param.ty == I32 &&
+        declared_type == I32 {
+        induction_index = i
+        break
+      }
+    }
+  }
   if comparison.results.length() != 1 ||
     comparison.results[0].id != condition.id ||
     comparison.results[0].ty != I32 ||
     comparison.operands.length() != 2 ||
     comparison.opcode != Icmp(Slt) ||
-    comparison.operands[0].id != induction.id ||
+    induction_index < 0 ||
     comparison.operands[0].ty != I32 ||
     comparison.operands[1].ty != I32 {
     return Skip("comparison must be icmp_slt(induction, bound)")
+  }
+  let (induction, _) = header.params[induction_index]
+  for i, item in header.params {
+    let (param, declared_type) = item
+    if param.ty != declared_type || initial_args[i].ty != declared_type {
+      return Skip("preheader argument types must match the loop header")
+    }
   }
   let body = match find_unroll_block(func, body_id) {
     Some(block) => block
@@ -278,17 +254,19 @@ fn analyze_i32_full_unroll(
     if !block.params.is_empty() {
       return Skip("initial slice does not support body parameters")
     }
-    for inst in block.instructions {
-      if !is_full_unroll_pure_i32(inst) {
-        return Skip("loop contains an unsupported or effectful instruction")
-      }
-    }
+  }
+  let header_param_ids : @hashset.HashSet[Int] = HashSet([])
+  let header_params : Array[Value] = []
+  for item in header.params {
+    let (param, _) = item
+    header_param_ids.add(param.id)
+    header_params.push(param)
   }
   let clone_available : @hashset.HashSet[Int] = HashSet([])
   for block in iteration_blocks {
     for inst in block.instructions {
       for arg in inst.args {
-        if arg.id != induction.id &&
+        if !header_param_ids.contains(arg.id) &&
           is_defined_in_unroll_loop(func, loop_, arg.id) &&
           !clone_available.contains(arg.id) {
           return Skip(
@@ -303,15 +281,26 @@ fn analyze_i32_full_unroll(
   }
   let latch_args = match latch.terminator {
     Some(Jump(target, args)) =>
-      if target == header.id && args.length() == 1 {
+      if target == header.id && args.length() == header.params.length() {
         args
       } else {
-        return Skip("latch must update only the induction value")
+        return Skip("latch arguments must match the loop header")
       }
     _ => return Skip("latch must jump to the header")
   }
+  for i, arg in latch_args {
+    let (_, expected_type) = header.params[i]
+    if arg.ty != expected_type {
+      return Skip("latch argument types must match the loop header")
+    }
+    if !header_param_ids.contains(arg.id) &&
+      is_defined_in_unroll_loop(func, loop_, arg.id) &&
+      !clone_available.contains(arg.id) {
+      return Skip("latch argument cannot be remapped in the preheader")
+    }
+  }
   let update = match
-    find_iteration_definition(iteration_blocks, latch_args[0].id) {
+    find_iteration_definition(iteration_blocks, latch_args[induction_index].id) {
     Some(inst) => inst
     None => return Skip("latch induction update must be defined in the loop")
   }
@@ -326,7 +315,7 @@ fn analyze_i32_full_unroll(
     return Skip("induction update must add a constant step")
   }
   let initial_constant = match
-    find_i32_constant_outside_loop(func, loop_, initial) {
+    find_i32_constant_outside_loop(func, loop_, initial_args[induction_index]) {
     Some(value) => value
     None => return Skip("initial induction value must be constant")
   }
@@ -359,8 +348,8 @@ fn analyze_i32_full_unroll(
   Apply({
     preheader,
     header,
-    induction,
-    initial,
+    header_params,
+    initial_args,
     iteration_blocks,
     latch_args,
     trip_count,
@@ -401,9 +390,11 @@ fn apply_i32_full_unroll(func : Function, plan : FullUnrollPlan) -> Bool {
     return false
   }
   let values : @hashmap.HashMap[Int, Value] = HashMap([])
-  let mut current_induction = plan.initial
+  let mut current_args = plan.initial_args.copy()
   for _ in 0..<plan.trip_count {
-    values.set(plan.induction.id, current_induction)
+    for i, param in plan.header_params {
+      values.set(param.id, current_args[i])
+    }
     for block in plan.iteration_blocks {
       for inst in block.instructions {
         plan.preheader.instructions.push(
@@ -411,9 +402,11 @@ fn apply_i32_full_unroll(func : Function, plan : FullUnrollPlan) -> Bool {
         )
       }
     }
-    current_induction = remap_unrolled_value(plan.latch_args[0], values)
+    current_args = plan.latch_args.map(fn(value) {
+      remap_unrolled_value(value, values)
+    })
   }
-  plan.preheader.set_terminator(Jump(plan.header.id, [current_induction]))
+  plan.preheader.set_terminator(Jump(plan.header.id, current_args))
   true
 }
 
