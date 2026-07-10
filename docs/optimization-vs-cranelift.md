@@ -291,7 +291,7 @@ legalization. The table below is meant as an orientation aid.
 | Unreachable elimination | `ir/opt_cfg.mbt` | `unreachable_code::eliminate_unreachable_code` | Broadly aligned. |
 | Block merge / jump threading | `ir/opt_cfg.mbt` | (No direct analogue in `Context::optimize`) | Wasmoon is more aggressive at CFG shaping pre-isel. |
 | Rematerialization (post fixed-point) | `ir/opt_passes_remat.mbt` | `opts/remat.isle` + `egraph/elaborate.rs::maybe_remat_arg` | Strong alignment: same goal (shrink live ranges) and similar policy (non-recursive). |
-| Loop opts (O3) | `ir/opt_loops.mbt` | Loop-aware elaboration (LICM-like) | Cranelift does not do classic loop-unroll in codegen; Wasmoon does. |
+| Loop opts (O3) | `ir/opt_loops.mbt` | Loop-aware elaboration (LICM-like) | Wasmoon currently limits O3 loop transforms to LICM and strength reduction; loop unrolling requires trip-count and CFG/SSA rewrite support. |
 
 ### 4.1 Dead code elimination (DCE)
 

@@ -454,6 +454,38 @@ test "O3 derives power-of-two constants when the e-graph is skipped" {
 }
 
 ///|
+test "O3 does not duplicate loop side effects without a safe unroll proof" {
+  let builder = FunctionBuilder::FunctionBuilder("o3_loop_side_effect")
+  let callee = builder.add_param(Ptr)
+  let condition = builder.add_param(I32)
+  let header = builder.create_block()
+  let body = builder.create_block()
+  let exit = builder.create_block()
+  builder.jump(header, [])
+  builder.switch_to_block(header)
+  builder.brnz(condition, body, exit)
+  builder.switch_to_block(body)
+  let func = builder.get_function()
+  builder
+  .current_block()
+  .append_inst(func.new_inst(CallIndirect(Signature([], [])), [callee], []))
+  builder.jump(header, [])
+  builder.switch_to_block(exit)
+  builder.return_([])
+  optimize_with_level(func, O3) |> ignore
+  let mut indirect_calls = 0
+  for block in func.blocks {
+    for inst in block.instructions {
+      if inst.opcode is CallIndirect(_) {
+        indirect_calls = indirect_calls + 1
+      }
+    }
+  }
+  inspect(indirect_calls, content="1")
+  inspect(func.verify(), content="()")
+}
+
+///|
 test "optimizer CSE replaces duplicate pure expression with copy" {
   let builder = FunctionBuilder::FunctionBuilder("cse_local")
   let lhs = builder.add_param(I32)

@@ -234,12 +234,8 @@ fn optimize_o3(func : Function) -> OptResult {
   if licm_result.changed {
     result.mark_changed()
   }
-  let unroll_result = run_opt_pass(func, "loop_unroll", fn(func) {
-    unroll_loops(func, 2)
-  }) // Unroll factor of 2
-  if unroll_result.changed {
-    result.mark_changed()
-  }
+  // Loop unrolling stays disabled until the IR has trip-count analysis and a
+  // CFG/SSA rewrite that preserves control flow, dependencies, and effects.
   let sr_result = run_opt_pass(func, "loop_strength_reduce", reduce_strength)
   if sr_result.changed {
     result.mark_changed()
