@@ -1006,6 +1006,8 @@ fn Translator::translate_instruction(
       // Stack: [init_value, delta] -> [result]
       let delta = self.pop()
       let init_value = self.pop()
+      let is_table64 = table_idx < self.table_is_64.length() &&
+        self.table_is_64[table_idx]
       let result = @wasm_milkir.table_grow(
         self.builder,
         self.func_env.runtime_symbols,
@@ -1013,6 +1015,7 @@ fn Translator::translate_instruction(
         table_idx,
         delta,
         init_value,
+        is_table64~,
       )
       self.push(result)
     }
@@ -1332,13 +1335,25 @@ fn Translator::translate_instruction(
     RefCast(value_type) => {
       let ref_val = self.pop()
       let type_idx = self.extract_type_idx(value_type)
-      let result = @wasm_milkir.ref_cast(self.builder, type_idx, false, ref_val)
+      let result = @wasm_milkir.ref_cast(
+        self.builder,
+        type_idx,
+        false,
+        ref_val,
+        type_from_wasm(value_type),
+      )
       self.push(result)
     }
     RefCastNull(value_type) => {
       let ref_val = self.pop()
       let type_idx = self.extract_type_idx(value_type)
-      let result = @wasm_milkir.ref_cast(self.builder, type_idx, true, ref_val)
+      let result = @wasm_milkir.ref_cast(
+        self.builder,
+        type_idx,
+        true,
+        ref_val,
+        type_from_wasm(value_type),
+      )
       self.push(result)
     }
     BrOnCast(label_depth, _from_type, to_type) =>
@@ -1364,6 +1379,7 @@ fn Translator::translate_instruction(
 
       // Emit Throw IR opcode with the exception values
       @wasm_milkir.emit_throw(self.builder, tag_idx, values)
+      self.builder.trap("unreachable after throw")
       self.is_unreachable = true
     }
     ThrowRef => {
@@ -1373,6 +1389,7 @@ fn Translator::translate_instruction(
       self.spill_locals_if_in_try()
       // Emit ThrowRef IR opcode
       @wasm_milkir.emit_throw_ref(self.builder, exnref)
+      self.builder.trap("unreachable after throw_ref")
       self.is_unreachable = true
     }
     TryTable(block_type, handlers, body) => {
@@ -1527,6 +1544,7 @@ fn Translator::translate_instruction(
       let blk = self.builder.current_block()
       if blk.terminator is None {
         @wasm_milkir.delegate(self.builder, 1) // Propagate to outer handler
+        self.builder.trap("unreachable after exception delegate")
       }
 
       // Decrement try_table_depth AFTER all catch handlers are translated
@@ -1547,6 +1565,8 @@ fn Translator::translate_instruction(
         for i, _ty in result_types {
           self.push(try_continuation.params[i].0)
         }
+      } else {
+        self.builder.trap("unreachable try_table continuation")
       }
       self.is_unreachable = !normal_falls_through
     }

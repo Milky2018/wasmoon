@@ -219,9 +219,7 @@ test "O3 loop unrolling matches memory effects and calls" {
     #|    i32.load)
     #|)
   require_o3_jit_match(memory_source, "memory_loop")
-  require_o3_duplicates_loop_effect(
-    memory_source, "memory_loop", "store_ptr.i32",
-  )
+  require_o3_duplicates_loop_effect(memory_source, "memory_loop", "store.i32")
   let call_source =
     #|(module
     #|  (func $bump (param i32) (result i32)

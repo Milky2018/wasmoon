@@ -55,3 +55,41 @@ test "Wasm extension decode validates bool immediates" {
     ),
   )
 }
+
+///|
+test "GC builders preserve reference carriers" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("gc_reference_types")
+  let i32 = builder.add_param(I32)
+  let any_ref = builder.add_param(Ref)
+  let extern_ref = builder.add_param(OpaqueRef)
+
+  inspect(struct_new(builder, 0, []).ty, content="ref")
+  inspect(struct_new_default(builder, 0).ty, content="ref")
+  inspect(array_new(builder, 0, i32, i32).ty, content="ref")
+  inspect(array_new_default(builder, 0, i32).ty, content="ref")
+  inspect(array_new_fixed(builder, 0, 1, [i32]).ty, content="ref")
+  inspect(array_new_data(builder, 0, 0, i32, i32).ty, content="ref")
+  inspect(array_new_elem(builder, 0, 0, i32, i32).ty, content="ref")
+  inspect(i31_new(builder, i32).ty, content="ref")
+  inspect(ref_cast(builder, 0, false, any_ref, Ref).ty, content="ref")
+  inspect(any_convert_extern(builder, extern_ref).ty, content="ref")
+  inspect(extern_convert_any(builder, any_ref).ty, content="opaque_ref")
+}
+
+///|
+test "table grow preserves table index width" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("table_grow_types")
+  let vmctx = builder.add_param(I64)
+  let delta = builder.add_param(I64)
+  let init_value = builder.add_param(CallableRef)
+  let symbols = RuntimeSymbols::with_runtime_prefix("wasm.runtime")
+
+  inspect(
+    table_grow(builder, symbols, vmctx, 0, delta, init_value).ty,
+    content="i32",
+  )
+  inspect(
+    table_grow(builder, symbols, vmctx, 0, delta, init_value, is_table64=true).ty,
+    content="i64",
+  )
+}

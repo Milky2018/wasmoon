@@ -154,6 +154,7 @@ graph TD
   ISS_143["ISS-143: Contract legacy vector opcode forms"]
   ISS_144["ISS-144: Remove residual opcode compatibility APIs"]
   ISS_145["ISS-145: Finalize the semantic opcode contract"]
+  ISS_146["ISS-146: Restore verifier-safe tail calls and reference carriers"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005

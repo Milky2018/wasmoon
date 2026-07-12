@@ -172,6 +172,27 @@ test "top-level frontend lowers structured if through production translator" {
 }
 
 ///|
+test "return_call terminates the translated MilkIR block" {
+  let mod_ = @types.Module::simple([], [], [ReturnCall(0)], "tail_recursive")
+  let func = translate_function(native_test_env(), mod_, 0)
+  inspect(func.verify(), content="()")
+}
+
+///|
+test "unreachable structured continuations remain verifier-safe" {
+  let bodies : Array[Array[@types.Instruction]] = [
+    [Block(Empty, [Return]), Unreachable],
+    [I32Const(1), If(Empty, [Return], [Return]), Unreachable],
+    [Loop(Empty, [Return]), Unreachable],
+  ]
+  for i, body in bodies {
+    let mod_ = @types.Module::simple([], [], body, "unreachable_control_\{i}")
+    let func = translate_function(native_test_env(), mod_, 0)
+    inspect(func.verify(), content="()")
+  }
+}
+
+///|
 test "lower direct block branch through native linear fast path" {
   let mod_ = @types.Module::simple(
     [],

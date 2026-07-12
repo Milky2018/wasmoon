@@ -103,7 +103,7 @@ pub fn memory_init(@milkir.FunctionBuilder, RuntimeSymbols, @milkir.Value, Int, 
 
 pub fn memory_size(@milkir.FunctionBuilder, RuntimeSymbols, @milkir.Value, Int, is_memory64? : Bool) -> @milkir.Value
 
-pub fn ref_cast(@milkir.FunctionBuilder, Int, Bool, @milkir.Value) -> @milkir.Value
+pub fn ref_cast(@milkir.FunctionBuilder, Int, Bool, @milkir.Value, @milkir.Type) -> @milkir.Value
 
 pub fn ref_eq(@milkir.FunctionBuilder, @milkir.Value, @milkir.Value) -> @milkir.Value
 
@@ -133,7 +133,7 @@ pub fn table_copy(@milkir.FunctionBuilder, RuntimeSymbols, @milkir.Value, Int, I
 
 pub fn table_fill(@milkir.FunctionBuilder, RuntimeSymbols, @milkir.Value, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
 
-pub fn table_grow(@milkir.FunctionBuilder, RuntimeSymbols, @milkir.Value, Int, @milkir.Value, @milkir.Value) -> @milkir.Value
+pub fn table_grow(@milkir.FunctionBuilder, RuntimeSymbols, @milkir.Value, Int, @milkir.Value, @milkir.Value, is_table64? : Bool) -> @milkir.Value
 
 pub fn table_init(@milkir.FunctionBuilder, RuntimeSymbols, @milkir.Value, Int, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
 

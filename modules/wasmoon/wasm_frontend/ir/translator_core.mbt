@@ -894,8 +894,8 @@ fn Translator::emit_catch_ref_branch(
 
   // Add exnref (placeholder - use exception tag as simple exnref)
   let exnref = @wasm_milkir.get_exception_tag(self.builder)
-  let exnref_i64 = self.builder.sextend32(exnref)
-  args.push(exnref_i64)
+  let exnref_i64 = self.builder.sextend(I64, exnref)
+  args.push(self.builder.bitcast(Ref, exnref_i64))
 
   // Pop the exception handler AFTER reading values
   @wasm_milkir.try_table_end(self.builder, handler_id)
@@ -960,8 +960,8 @@ fn Translator::emit_catch_all_ref_branch(
 
   // Add exnref (placeholder)
   let exnref = @wasm_milkir.get_exception_tag(self.builder)
-  let exnref_i64 = self.builder.sextend32(exnref)
-  args.push(exnref_i64)
+  let exnref_i64 = self.builder.sextend(I64, exnref)
+  args.push(self.builder.bitcast(Ref, exnref_i64))
 
   // Pass current local values
   for loc in self.locals {
@@ -1338,6 +1338,9 @@ fn Translator::translate_block(
   self.builder.switch_to_block(continuation)
 
   self.is_unreachable = outer_is_unreachable || !continuation_reachable
+  if !continuation_reachable {
+    self.builder.trap("unreachable block continuation")
+  }
 
   // Push block results onto stack
   if continuation_reachable {
@@ -1446,6 +1449,8 @@ fn Translator::translate_loop(
     args.rev_in_place()
     loop_falls_through = true
     self.builder.jump(continuation, args)
+  } else if block.terminator is None {
+    self.builder.trap("unreachable loop body")
   }
 
   // Restore stack to entry height (for unreachable code cleanup)
@@ -1457,6 +1462,9 @@ fn Translator::translate_loop(
   self.builder.switch_to_block(continuation)
 
   self.is_unreachable = outer_is_unreachable || !loop_falls_through
+  if !loop_falls_through {
+    self.builder.trap("unreachable loop continuation")
+  }
 
   // Push results onto stack
   if loop_falls_through {
