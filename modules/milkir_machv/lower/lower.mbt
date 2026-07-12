@@ -2160,70 +2160,43 @@ fn lower_scalar_inst(
 }
 
 ///|
-/// Lower a built-in IR instruction to MachV.
-fn lower_inst_builtin(
+fn lower_vector_inst(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.Block,
+  opcode : @milkir.VectorOp,
 ) -> Unit {
-  match inst.opcode {
-    // Function calls
-    Call(call_op) =>
-      match call_op {
-        @milkir.CallOp::Direct(symbol, _) =>
-          lower_external_call(ctx, inst, block, symbol)
-        @milkir.CallOp::Pointer(num_args, num_results) =>
-          lower_call_ptr(ctx, inst, block, num_args, num_results)
-      }
-    // Raw pointer operations (for trampolines)
-    LoadPtr(ty) => lower_load_ptr(ctx, inst, block, ty)
-    StorePtr(ty) => lower_store_ptr(ctx, inst, block, ty)
-    LoadPtrNarrow(result_ty, bits, signed) =>
-      lower_load_ptr_narrow(ctx, inst, block, result_ty, bits, signed)
-    StorePtrNarrow(bits) => lower_store_ptr_narrow(ctx, inst, block, bits)
-    Memory(memory_op) =>
-      match memory_op {
-        @milkir.MemoryOp::Load(ty) => lower_load_ptr(ctx, inst, block, ty)
-        @milkir.MemoryOp::Store(ty) => lower_store_ptr(ctx, inst, block, ty)
-        @milkir.MemoryOp::LoadNarrow(result_ty, bits, signed) =>
-          lower_load_ptr_narrow(ctx, inst, block, result_ty, bits, signed)
-        @milkir.MemoryOp::StoreNarrow(bits) =>
-          lower_store_ptr_narrow(ctx, inst, block, bits)
-      }
-    Ext(_, _) => lower_unsupported_generic_opcode(inst, block)
-    Scalar(scalar_op) => lower_scalar_inst(ctx, inst, block, scalar_op)
-    Vector(vector_op) => {
-      let legacy_inst = inst.with_opcode(vector_op.to_legacy_opcode())
-      lower_inst_builtin(ctx, legacy_inst, block)
-    }
-
-    // SIMD operations
+  match opcode {
     V128Const(bytes) => lower_v128_const(ctx, inst, block, bytes)
-    V128Splat8 => lower_v128_splat(ctx, inst, block, B8)
-    V128Splat16 => lower_v128_splat(ctx, inst, block, H16)
-    V128Splat32 => lower_v128_splat(ctx, inst, block, S32)
-    V128Splat64 => lower_v128_splat(ctx, inst, block, D64)
-    V128SplatF32 => lower_v128_splat_f(ctx, inst, block, true)
-    V128SplatF64 => lower_v128_splat_f(ctx, inst, block, false)
-    V128ExtractLane8S(lane) => lower_v128_extract_s(ctx, inst, block, B8, lane)
-    V128ExtractLane8U(lane) => lower_v128_extract_u(ctx, inst, block, B8, lane)
-    V128ExtractLane16S(lane) =>
+    Splat(I8) => lower_v128_splat(ctx, inst, block, B8)
+    Splat(I16) => lower_v128_splat(ctx, inst, block, H16)
+    Splat(I32) => lower_v128_splat(ctx, inst, block, S32)
+    Splat(I64) => lower_v128_splat(ctx, inst, block, D64)
+    Splat(F32) => lower_v128_splat_f(ctx, inst, block, true)
+    Splat(F64) => lower_v128_splat_f(ctx, inst, block, false)
+    ExtractLane(I8, Signed, lane) =>
+      lower_v128_extract_s(ctx, inst, block, B8, lane)
+    ExtractLane(I8, Unsigned, lane) =>
+      lower_v128_extract_u(ctx, inst, block, B8, lane)
+    ExtractLane(I16, Signed, lane) =>
       lower_v128_extract_s(ctx, inst, block, H16, lane)
-    V128ExtractLane16U(lane) =>
+    ExtractLane(I16, Unsigned, lane) =>
       lower_v128_extract_u(ctx, inst, block, H16, lane)
-    V128ExtractLane32(lane) => lower_v128_extract_u(ctx, inst, block, S32, lane)
-    V128ExtractLane64(lane) => lower_v128_extract_u(ctx, inst, block, D64, lane)
-    V128ExtractLaneF32(lane) =>
+    ExtractLane(I32, None, lane) =>
+      lower_v128_extract_u(ctx, inst, block, S32, lane)
+    ExtractLane(I64, None, lane) =>
+      lower_v128_extract_u(ctx, inst, block, D64, lane)
+    ExtractLane(F32, None, lane) =>
       lower_v128_extract_f(ctx, inst, block, true, lane)
-    V128ExtractLaneF64(lane) =>
+    ExtractLane(F64, None, lane) =>
       lower_v128_extract_f(ctx, inst, block, false, lane)
-    V128ReplaceLane8(lane) => lower_v128_replace(ctx, inst, block, B8, lane)
-    V128ReplaceLane16(lane) => lower_v128_replace(ctx, inst, block, H16, lane)
-    V128ReplaceLane32(lane) => lower_v128_replace(ctx, inst, block, S32, lane)
-    V128ReplaceLane64(lane) => lower_v128_replace(ctx, inst, block, D64, lane)
-    V128ReplaceLaneF32(lane) =>
-      lower_v128_replace_f(ctx, inst, block, true, lane)
-    V128ReplaceLaneF64(lane) =>
+    ExtractLane(_, _, _) => abort("invalid vector extract-lane semantics")
+    ReplaceLane(I8, lane) => lower_v128_replace(ctx, inst, block, B8, lane)
+    ReplaceLane(I16, lane) => lower_v128_replace(ctx, inst, block, H16, lane)
+    ReplaceLane(I32, lane) => lower_v128_replace(ctx, inst, block, S32, lane)
+    ReplaceLane(I64, lane) => lower_v128_replace(ctx, inst, block, D64, lane)
+    ReplaceLane(F32, lane) => lower_v128_replace_f(ctx, inst, block, true, lane)
+    ReplaceLane(F64, lane) =>
       lower_v128_replace_f(ctx, inst, block, false, lane)
     V128Shuffle(lanes) => lower_v128_shuffle(ctx, inst, block, lanes)
     V128Swizzle => lower_v128_swizzle(ctx, inst, block)
@@ -2500,47 +2473,41 @@ fn lower_inst_builtin(
     V128PromoteLowF32toF64 =>
       lower_v128_unary(ctx, inst, block, SIMDPromoteLowF32ToF64)
 
-    // Memory operations
-    V128Load8x8S(_, _, offset) =>
-      lower_v128_load_extend(ctx, inst, block, 8, true, offset.to_int())
-    V128Load8x8U(_, _, offset) =>
-      lower_v128_load_extend(ctx, inst, block, 8, false, offset.to_int())
-    V128Load16x4S(_, _, offset) =>
-      lower_v128_load_extend(ctx, inst, block, 16, true, offset.to_int())
-    V128Load16x4U(_, _, offset) =>
-      lower_v128_load_extend(ctx, inst, block, 16, false, offset.to_int())
-    V128Load32x2S(_, _, offset) =>
-      lower_v128_load_extend(ctx, inst, block, 32, true, offset.to_int())
-    V128Load32x2U(_, _, offset) =>
-      lower_v128_load_extend(ctx, inst, block, 32, false, offset.to_int())
-    V128Load8Splat(_, _, offset) =>
-      lower_v128_load_splat(ctx, inst, block, B8, offset.to_int())
-    V128Load16Splat(_, _, offset) =>
-      lower_v128_load_splat(ctx, inst, block, H16, offset.to_int())
-    V128Load32Splat(_, _, offset) =>
-      lower_v128_load_splat(ctx, inst, block, S32, offset.to_int())
-    V128Load64Splat(_, _, offset) =>
-      lower_v128_load_splat(ctx, inst, block, D64, offset.to_int())
-    V128Load32Zero(_, _, offset) =>
-      lower_v128_load_zero(ctx, inst, block, false, offset.to_int())
-    V128Load64Zero(_, _, offset) =>
-      lower_v128_load_zero(ctx, inst, block, true, offset.to_int())
-    V128Load8Lane(_, _, offset, lane) =>
-      lower_v128_load_lane(ctx, inst, block, B8, lane, offset.to_int())
-    V128Load16Lane(_, _, offset, lane) =>
-      lower_v128_load_lane(ctx, inst, block, H16, lane, offset.to_int())
-    V128Load32Lane(_, _, offset, lane) =>
-      lower_v128_load_lane(ctx, inst, block, S32, lane, offset.to_int())
-    V128Load64Lane(_, _, offset, lane) =>
-      lower_v128_load_lane(ctx, inst, block, D64, lane, offset.to_int())
-    V128Store8Lane(_, _, offset, lane) =>
-      lower_v128_store_lane(ctx, inst, block, B8, lane, offset.to_int())
-    V128Store16Lane(_, _, offset, lane) =>
-      lower_v128_store_lane(ctx, inst, block, H16, lane, offset.to_int())
-    V128Store32Lane(_, _, offset, lane) =>
-      lower_v128_store_lane(ctx, inst, block, S32, lane, offset.to_int())
-    V128Store64Lane(_, _, offset, lane) =>
-      lower_v128_store_lane(ctx, inst, block, D64, lane, offset.to_int())
+    // Memory operations consume a frontend-computed effective address.
+    LoadExtend(I8, Signed) =>
+      lower_v128_load_extend(ctx, inst, block, 8, true, 0)
+    LoadExtend(I8, Unsigned) =>
+      lower_v128_load_extend(ctx, inst, block, 8, false, 0)
+    LoadExtend(I16, Signed) =>
+      lower_v128_load_extend(ctx, inst, block, 16, true, 0)
+    LoadExtend(I16, Unsigned) =>
+      lower_v128_load_extend(ctx, inst, block, 16, false, 0)
+    LoadExtend(I32, Signed) =>
+      lower_v128_load_extend(ctx, inst, block, 32, true, 0)
+    LoadExtend(I32, Unsigned) =>
+      lower_v128_load_extend(ctx, inst, block, 32, false, 0)
+    LoadExtend(_, _) => abort("invalid vector extending-load semantics")
+    LoadSplat(I8) => lower_v128_load_splat(ctx, inst, block, B8, 0)
+    LoadSplat(I16) => lower_v128_load_splat(ctx, inst, block, H16, 0)
+    LoadSplat(I32) => lower_v128_load_splat(ctx, inst, block, S32, 0)
+    LoadSplat(I64) => lower_v128_load_splat(ctx, inst, block, D64, 0)
+    LoadSplat(_) => abort("invalid vector splat-load semantics")
+    LoadZero(I32) => lower_v128_load_zero(ctx, inst, block, false, 0)
+    LoadZero(I64) => lower_v128_load_zero(ctx, inst, block, true, 0)
+    LoadZero(_) => abort("invalid vector zero-load semantics")
+    LoadLane(I8, lane) => lower_v128_load_lane(ctx, inst, block, B8, lane, 0)
+    LoadLane(I16, lane) => lower_v128_load_lane(ctx, inst, block, H16, lane, 0)
+    LoadLane(I32, lane) => lower_v128_load_lane(ctx, inst, block, S32, lane, 0)
+    LoadLane(I64, lane) => lower_v128_load_lane(ctx, inst, block, D64, lane, 0)
+    LoadLane(_, _) => abort("invalid vector lane-load semantics")
+    StoreLane(I8, lane) => lower_v128_store_lane(ctx, inst, block, B8, lane, 0)
+    StoreLane(I16, lane) =>
+      lower_v128_store_lane(ctx, inst, block, H16, lane, 0)
+    StoreLane(I32, lane) =>
+      lower_v128_store_lane(ctx, inst, block, S32, lane, 0)
+    StoreLane(I64, lane) =>
+      lower_v128_store_lane(ctx, inst, block, D64, lane, 0)
+    StoreLane(_, _) => abort("invalid vector lane-store semantics")
 
     // ============ Relaxed SIMD ============
     // relaxed_swizzle: same as swizzle (TBL instruction, out-of-range gives 0)
@@ -2581,6 +2548,45 @@ fn lower_inst_builtin(
     V128RelaxedDot8to16S =>
       lower_v128_binary(ctx, inst, block, SIMDRelaxedDot8to16)
     V128RelaxedDot8to32AddS => lower_v128_relaxed_dot_add(ctx, inst, block)
+  }
+}
+
+///|
+
+///|
+/// Lower a built-in IR instruction to MachV.
+fn lower_inst_builtin(
+  ctx : LoweringContext,
+  inst : @milkir.Inst,
+  block : @block.Block,
+) -> Unit {
+  match inst.opcode {
+    // Function calls
+    Call(call_op) =>
+      match call_op {
+        @milkir.CallOp::Direct(symbol, _) =>
+          lower_external_call(ctx, inst, block, symbol)
+        @milkir.CallOp::Pointer(num_args, num_results) =>
+          lower_call_ptr(ctx, inst, block, num_args, num_results)
+      }
+    // Raw pointer operations (for trampolines)
+    LoadPtr(ty) => lower_load_ptr(ctx, inst, block, ty)
+    StorePtr(ty) => lower_store_ptr(ctx, inst, block, ty)
+    LoadPtrNarrow(result_ty, bits, signed) =>
+      lower_load_ptr_narrow(ctx, inst, block, result_ty, bits, signed)
+    StorePtrNarrow(bits) => lower_store_ptr_narrow(ctx, inst, block, bits)
+    Memory(memory_op) =>
+      match memory_op {
+        @milkir.MemoryOp::Load(ty) => lower_load_ptr(ctx, inst, block, ty)
+        @milkir.MemoryOp::Store(ty) => lower_store_ptr(ctx, inst, block, ty)
+        @milkir.MemoryOp::LoadNarrow(result_ty, bits, signed) =>
+          lower_load_ptr_narrow(ctx, inst, block, result_ty, bits, signed)
+        @milkir.MemoryOp::StoreNarrow(bits) =>
+          lower_store_ptr_narrow(ctx, inst, block, bits)
+      }
+    Ext(_, _) => lower_unsupported_generic_opcode(inst, block)
+    Scalar(scalar_op) => lower_scalar_inst(ctx, inst, block, scalar_op)
+    Vector(vector_op) => lower_vector_inst(ctx, inst, block, vector_op)
   }
 }
 

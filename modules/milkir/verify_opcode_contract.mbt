@@ -396,115 +396,11 @@ fn verify_scalar_contract(
 }
 
 ///|
-fn verify_opcode_contract(inst : Inst) -> Unit raise VerifyError {
-  match inst.opcode {
-    Call(call_op) =>
-      match call_op {
-        CallOp::Direct(_, signature) =>
-          verify_signature(inst, signature, 0, "direct call")
-        CallOp::Pointer(num_args, num_results) => {
-          if num_args < 0 || num_results < 0 {
-            raise ArityMismatch(
-              message="pointer call argument and result counts must be non-negative",
-            )
-          }
-          if inst.args.length() != num_args + 1 {
-            raise ArityMismatch(
-              message="pointer call expects \{num_args + 1} operands, got \{inst.args.length()}",
-            )
-          }
-          require_result_arity(inst, num_results, "pointer call")
-          require_pointer_value(inst.args[0].ty, "pointer call callee")
-        }
-      }
-    LoadPtr(result_type) => {
-      require_arity(inst.args.length(), 2, "load_ptr")
-      require_pointer_value(inst.args[0].ty, "load_ptr")
-      require_operand_type(inst, 1, I64, "load_ptr")
-      require_result_types(inst, [result_type], "load_ptr")
-    }
-    StorePtr(value_type) => {
-      require_arity(inst.args.length(), 3, "store_ptr")
-      require_pointer_value(inst.args[0].ty, "store_ptr")
-      require_operand_type(inst, 1, value_type, "store_ptr")
-      require_operand_type(inst, 2, I64, "store_ptr")
-      require_no_results(inst, "store_ptr")
-    }
-    LoadPtrNarrow(result_type, bits, _) => {
-      require_arity(inst.args.length(), 2, "load_ptr_narrow")
-      require_pointer_value(inst.args[0].ty, "load_ptr_narrow")
-      require_operand_type(inst, 1, I64, "load_ptr_narrow")
-      require_result_types(inst, [result_type], "load_ptr_narrow")
-      require_integer(result_type, "load_ptr_narrow")
-      if bits != 8 && bits != 16 && bits != 32 {
-        raise TypeMismatch(message="load_ptr_narrow has invalid width \{bits}")
-      }
-    }
-    StorePtrNarrow(bits) => {
-      require_arity(inst.args.length(), 3, "store_ptr_narrow")
-      require_pointer_value(inst.args[0].ty, "store_ptr_narrow")
-      require_integer(inst.args[1].ty, "store_ptr_narrow")
-      require_operand_type(inst, 2, I64, "store_ptr_narrow")
-      require_no_results(inst, "store_ptr_narrow")
-      if bits != 8 && bits != 16 && bits != 32 {
-        raise TypeMismatch(message="store_ptr_narrow has invalid width \{bits}")
-      }
-    }
-    Memory(memory_op) =>
-      match memory_op {
-        MemoryOp::Load(result_type) => {
-          require_arity(inst.args.length(), 2, "memory load")
-          require_pointer_value(inst.args[0].ty, "memory load")
-          require_operand_type(inst, 1, I64, "memory load")
-          require_result_types(inst, [result_type], "memory load")
-        }
-        MemoryOp::Store(value_type) => {
-          require_arity(inst.args.length(), 3, "memory store")
-          require_pointer_value(inst.args[0].ty, "memory store")
-          require_operand_type(inst, 1, value_type, "memory store")
-          require_operand_type(inst, 2, I64, "memory store")
-          require_no_results(inst, "memory store")
-        }
-        MemoryOp::LoadNarrow(result_type, bits, _) => {
-          require_arity(inst.args.length(), 2, "narrow memory load")
-          require_pointer_value(inst.args[0].ty, "narrow memory load")
-          require_operand_type(inst, 1, I64, "narrow memory load")
-          require_result_types(inst, [result_type], "narrow memory load")
-          require_integer(result_type, "narrow memory load")
-          if bits != 8 && bits != 16 && bits != 32 {
-            raise TypeMismatch(
-              message="narrow memory load has invalid width \{bits}",
-            )
-          }
-        }
-        MemoryOp::StoreNarrow(bits) => {
-          require_arity(inst.args.length(), 3, "narrow memory store")
-          require_pointer_value(inst.args[0].ty, "narrow memory store")
-          require_integer(inst.args[1].ty, "narrow memory store")
-          require_operand_type(inst, 2, I64, "narrow memory store")
-          require_no_results(inst, "narrow memory store")
-          if bits != 8 && bits != 16 && bits != 32 {
-            raise TypeMismatch(
-              message="narrow memory store has invalid width \{bits}",
-            )
-          }
-        }
-      }
-    Ext(ext, signature) => {
-      if ext.dialect == "" || ext.opcode == "" {
-        raise UnverifiableInstruction(
-          message="extension instructions require a dialect and opcode name",
-        )
-      }
-      verify_signature(inst, signature, 0, "extension instruction")
-    }
-    Scalar(scalar_op) => verify_scalar_contract(inst, scalar_op)
-    Vector(vector_op) => {
-      let original = inst.opcode
-      inst.opcode = vector_op.to_legacy_opcode()
-      verify_opcode_contract(inst)
-      inst.opcode = original
-    }
+fn verify_vector_contract(
+  inst : Inst,
+  opcode : VectorOp,
+) -> Unit raise VerifyError {
+  match opcode {
     V128Const(bytes) => {
       require_arity(inst.args.length(), 0, "v128.const")
       require_result_types(inst, [V128], "v128.const")
@@ -512,45 +408,45 @@ fn verify_opcode_contract(inst : Inst) -> Unit raise VerifyError {
         raise TypeMismatch(message="v128.const expects 16 bytes")
       }
     }
-    V128Splat8 | V128Splat16 | V128Splat32 => {
+    Splat(I8 | I16 | I32) => {
       require_operand_types(inst, [I32], "v128 splat")
       require_result_types(inst, [V128], "v128 splat")
     }
-    V128Splat64 => {
+    Splat(I64) => {
       require_operand_types(inst, [I64], "v128 splat")
       require_result_types(inst, [V128], "v128 splat")
     }
-    V128SplatF32 => {
+    Splat(F32) => {
       require_operand_types(inst, [F32], "v128 splat")
       require_result_types(inst, [V128], "v128 splat")
     }
-    V128SplatF64 => {
+    Splat(F64) => {
       require_operand_types(inst, [F64], "v128 splat")
       require_result_types(inst, [V128], "v128 splat")
     }
-    V128ExtractLane8S(lane) | V128ExtractLane8U(lane) =>
+    ExtractLane(I8, Signed | Unsigned, lane) =>
       verify_v128_extract(inst, I32, lane, 16, "v128 extract lane")
-    V128ExtractLane16S(lane) | V128ExtractLane16U(lane) =>
+    ExtractLane(I16, Signed | Unsigned, lane) =>
       verify_v128_extract(inst, I32, lane, 8, "v128 extract lane")
-    V128ExtractLane32(lane) =>
+    ExtractLane(I32, None, lane) =>
       verify_v128_extract(inst, I32, lane, 4, "v128 extract lane")
-    V128ExtractLane64(lane) =>
+    ExtractLane(I64, None, lane) =>
       verify_v128_extract(inst, I64, lane, 2, "v128 extract lane")
-    V128ExtractLaneF32(lane) =>
+    ExtractLane(F32, None, lane) =>
       verify_v128_extract(inst, F32, lane, 4, "v128 extract lane")
-    V128ExtractLaneF64(lane) =>
+    ExtractLane(F64, None, lane) =>
       verify_v128_extract(inst, F64, lane, 2, "v128 extract lane")
-    V128ReplaceLane8(lane) =>
+    ReplaceLane(I8, lane) =>
       verify_v128_replace(inst, I32, lane, 16, "v128 replace lane")
-    V128ReplaceLane16(lane) =>
+    ReplaceLane(I16, lane) =>
       verify_v128_replace(inst, I32, lane, 8, "v128 replace lane")
-    V128ReplaceLane32(lane) =>
+    ReplaceLane(I32, lane) =>
       verify_v128_replace(inst, I32, lane, 4, "v128 replace lane")
-    V128ReplaceLane64(lane) =>
+    ReplaceLane(I64, lane) =>
       verify_v128_replace(inst, I64, lane, 2, "v128 replace lane")
-    V128ReplaceLaneF32(lane) =>
+    ReplaceLane(F32, lane) =>
       verify_v128_replace(inst, F32, lane, 4, "v128 replace lane")
-    V128ReplaceLaneF64(lane) =>
+    ReplaceLane(F64, lane) =>
       verify_v128_replace(inst, F64, lane, 2, "v128 replace lane")
     V128Shuffle(lanes) => {
       verify_v128_binary(inst, "v128 shuffle")
@@ -779,29 +675,140 @@ fn verify_opcode_contract(inst : Inst) -> Unit raise VerifyError {
       require_operand_types(inst, [V128, I32], "v128 shift")
       require_result_types(inst, [V128], "v128 shift")
     }
-    V128Load8x8S(_, _, _)
-    | V128Load8x8U(_, _, _)
-    | V128Load16x4S(_, _, _)
-    | V128Load16x4U(_, _, _)
-    | V128Load32x2S(_, _, _)
-    | V128Load32x2U(_, _, _)
-    | V128Load8Splat(_, _, _)
-    | V128Load16Splat(_, _, _)
-    | V128Load32Splat(_, _, _)
-    | V128Load64Splat(_, _, _)
-    | V128Load32Zero(_, _, _)
-    | V128Load64Zero(_, _, _) => {
+    LoadExtend(I8 | I16 | I32, Signed | Unsigned)
+    | LoadSplat(I8 | I16 | I32 | I64)
+    | LoadZero(I32 | I64) => {
       require_arity(inst.args.length(), 1, "v128 load")
       require_pointer_value(inst.args[0].ty, "v128 load")
       require_result_types(inst, [V128], "v128 load")
     }
-    V128Load8Lane(_, _, _, lane) => verify_v128_load_lane(inst, lane, 16)
-    V128Load16Lane(_, _, _, lane) => verify_v128_load_lane(inst, lane, 8)
-    V128Load32Lane(_, _, _, lane) => verify_v128_load_lane(inst, lane, 4)
-    V128Load64Lane(_, _, _, lane) => verify_v128_load_lane(inst, lane, 2)
-    V128Store8Lane(_, _, _, lane) => verify_v128_store_lane(inst, lane, 16)
-    V128Store16Lane(_, _, _, lane) => verify_v128_store_lane(inst, lane, 8)
-    V128Store32Lane(_, _, _, lane) => verify_v128_store_lane(inst, lane, 4)
-    V128Store64Lane(_, _, _, lane) => verify_v128_store_lane(inst, lane, 2)
+    LoadLane(I8, lane) => verify_v128_load_lane(inst, lane, 16)
+    LoadLane(I16, lane) => verify_v128_load_lane(inst, lane, 8)
+    LoadLane(I32, lane) => verify_v128_load_lane(inst, lane, 4)
+    LoadLane(I64, lane) => verify_v128_load_lane(inst, lane, 2)
+    StoreLane(I8, lane) => verify_v128_store_lane(inst, lane, 16)
+    StoreLane(I16, lane) => verify_v128_store_lane(inst, lane, 8)
+    StoreLane(I32, lane) => verify_v128_store_lane(inst, lane, 4)
+    StoreLane(I64, lane) => verify_v128_store_lane(inst, lane, 2)
+    LoadExtend(_, _) =>
+      raise TypeMismatch(message="invalid vector extending-load semantics")
+    LoadSplat(_) =>
+      raise TypeMismatch(message="invalid vector splat-load semantics")
+    LoadZero(_) =>
+      raise TypeMismatch(message="invalid vector zero-load semantics")
+    ExtractLane(_, _, _) =>
+      raise TypeMismatch(message="invalid vector extract-lane semantics")
+    LoadLane(_, _) =>
+      raise TypeMismatch(message="invalid vector lane-load semantics")
+    StoreLane(_, _) =>
+      raise TypeMismatch(message="invalid vector lane-store semantics")
+  }
+}
+
+///|
+fn verify_opcode_contract(inst : Inst) -> Unit raise VerifyError {
+  match inst.opcode {
+    Call(call_op) =>
+      match call_op {
+        CallOp::Direct(_, signature) =>
+          verify_signature(inst, signature, 0, "direct call")
+        CallOp::Pointer(num_args, num_results) => {
+          if num_args < 0 || num_results < 0 {
+            raise ArityMismatch(
+              message="pointer call argument and result counts must be non-negative",
+            )
+          }
+          if inst.args.length() != num_args + 1 {
+            raise ArityMismatch(
+              message="pointer call expects \{num_args + 1} operands, got \{inst.args.length()}",
+            )
+          }
+          require_result_arity(inst, num_results, "pointer call")
+          require_pointer_value(inst.args[0].ty, "pointer call callee")
+        }
+      }
+    LoadPtr(result_type) => {
+      require_arity(inst.args.length(), 2, "load_ptr")
+      require_pointer_value(inst.args[0].ty, "load_ptr")
+      require_operand_type(inst, 1, I64, "load_ptr")
+      require_result_types(inst, [result_type], "load_ptr")
+    }
+    StorePtr(value_type) => {
+      require_arity(inst.args.length(), 3, "store_ptr")
+      require_pointer_value(inst.args[0].ty, "store_ptr")
+      require_operand_type(inst, 1, value_type, "store_ptr")
+      require_operand_type(inst, 2, I64, "store_ptr")
+      require_no_results(inst, "store_ptr")
+    }
+    LoadPtrNarrow(result_type, bits, _) => {
+      require_arity(inst.args.length(), 2, "load_ptr_narrow")
+      require_pointer_value(inst.args[0].ty, "load_ptr_narrow")
+      require_operand_type(inst, 1, I64, "load_ptr_narrow")
+      require_result_types(inst, [result_type], "load_ptr_narrow")
+      require_integer(result_type, "load_ptr_narrow")
+      if bits != 8 && bits != 16 && bits != 32 {
+        raise TypeMismatch(message="load_ptr_narrow has invalid width \{bits}")
+      }
+    }
+    StorePtrNarrow(bits) => {
+      require_arity(inst.args.length(), 3, "store_ptr_narrow")
+      require_pointer_value(inst.args[0].ty, "store_ptr_narrow")
+      require_integer(inst.args[1].ty, "store_ptr_narrow")
+      require_operand_type(inst, 2, I64, "store_ptr_narrow")
+      require_no_results(inst, "store_ptr_narrow")
+      if bits != 8 && bits != 16 && bits != 32 {
+        raise TypeMismatch(message="store_ptr_narrow has invalid width \{bits}")
+      }
+    }
+    Memory(memory_op) =>
+      match memory_op {
+        MemoryOp::Load(result_type) => {
+          require_arity(inst.args.length(), 2, "memory load")
+          require_pointer_value(inst.args[0].ty, "memory load")
+          require_operand_type(inst, 1, I64, "memory load")
+          require_result_types(inst, [result_type], "memory load")
+        }
+        MemoryOp::Store(value_type) => {
+          require_arity(inst.args.length(), 3, "memory store")
+          require_pointer_value(inst.args[0].ty, "memory store")
+          require_operand_type(inst, 1, value_type, "memory store")
+          require_operand_type(inst, 2, I64, "memory store")
+          require_no_results(inst, "memory store")
+        }
+        MemoryOp::LoadNarrow(result_type, bits, _) => {
+          require_arity(inst.args.length(), 2, "narrow memory load")
+          require_pointer_value(inst.args[0].ty, "narrow memory load")
+          require_operand_type(inst, 1, I64, "narrow memory load")
+          require_result_types(inst, [result_type], "narrow memory load")
+          require_integer(result_type, "narrow memory load")
+          if bits != 8 && bits != 16 && bits != 32 {
+            raise TypeMismatch(
+              message="narrow memory load has invalid width \{bits}",
+            )
+          }
+        }
+        MemoryOp::StoreNarrow(bits) => {
+          require_arity(inst.args.length(), 3, "narrow memory store")
+          require_pointer_value(inst.args[0].ty, "narrow memory store")
+          require_integer(inst.args[1].ty, "narrow memory store")
+          require_operand_type(inst, 2, I64, "narrow memory store")
+          require_no_results(inst, "narrow memory store")
+          if bits != 8 && bits != 16 && bits != 32 {
+            raise TypeMismatch(
+              message="narrow memory store has invalid width \{bits}",
+            )
+          }
+        }
+      }
+    Ext(ext, signature) => {
+      if ext.dialect == "" || ext.opcode == "" {
+        raise UnverifiableInstruction(
+          message="extension instructions require a dialect and opcode name",
+        )
+      }
+      verify_signature(inst, signature, 0, "extension instruction")
+    }
+    Scalar(scalar_op) => verify_scalar_contract(inst, scalar_op)
+    Vector(vector_op) => verify_vector_contract(inst, vector_op)
   }
 }

@@ -139,134 +139,31 @@ fn format_scalar_opcode(
 }
 
 ///|
-/// Print an opcode with its operands
-/// result_ty is needed for Fconst to correctly decode F32 bit-packed constants
-fn format_opcode(
-  opcode : Opcode,
-  operands : Array[Value],
-  result_ty : Type?,
-) -> String {
+fn format_vector_opcode(opcode : VectorOp, operands : Array[Value]) -> String {
   let ops = operands.map(format_value).join(", ")
   match opcode {
-    Scalar(scalar_op) => format_scalar_opcode(scalar_op, operands, result_ty)
-    // Function calls
-    Call(call_op) =>
-      match call_op {
-        CallOp::Direct(symbol, _) => "call \{symbol.name}(\{ops})"
-        CallOp::Pointer(num_args, num_results) =>
-          "call_ptr(\{num_args}) -> \{num_results} (\{ops})"
-      }
-
-    // Raw pointer operations (for trampolines)
-    LoadPtr(ty) => "load_ptr.\{ty} \{ops}"
-    StorePtr(ty) => "store_ptr.\{ty} \{ops}"
-    LoadPtrNarrow(result_ty, bits, signed) => {
-      let sign_str = if signed { "s" } else { "u" }
-      "load_ptr\{bits}_\{sign_str}.\{result_ty} \{ops}"
-    }
-    StorePtrNarrow(bits) => "store_ptr\{bits} \{ops}"
-    Memory(memory_op) =>
-      match memory_op {
-        MemoryOp::Load(ty) => "load.\{ty} \{ops}"
-        MemoryOp::Store(ty) => "store.\{ty} \{ops}"
-        MemoryOp::LoadNarrow(result_ty, bits, signed) => {
-          let sign_str = if signed { "s" } else { "u" }
-          "load\{bits}_\{sign_str}.\{result_ty} \{ops}"
-        }
-        MemoryOp::StoreNarrow(bits) => "store\{bits} \{ops}"
-      }
-    Ext(ext, _) => {
-      let imms : Array[String] = []
-      for imm in ext.immediates {
-        imms.push("\{imm}")
-      }
-      let imm_str = if imms.length() == 0 {
-        ""
-      } else {
-        " [" + imms.join(", ") + "]"
-      }
-      "ext.\{ext.dialect}.\{ext.opcode}\{imm_str} \{ops}"
-    }
-    Vector(vector_op) =>
-      match vector_op {
-        VectorOp::LoadExtend(lane, extension) => {
-          let lane_name = match lane {
-            VectorLane::I8 => "8x8"
-            VectorLane::I16 => "16x4"
-            VectorLane::I32 => "32x2"
-            _ => abort("invalid vector extending-load semantics")
-          }
-          let extension_name = match extension {
-            VectorExtension::Signed => "s"
-            VectorExtension::Unsigned => "u"
-            VectorExtension::None =>
-              abort("invalid vector extending-load semantics")
-          }
-          "v128.load\{lane_name}_\{extension_name} \{ops}"
-        }
-        VectorOp::LoadSplat(lane) => {
-          let bits = match lane {
-            VectorLane::I8 => 8
-            VectorLane::I16 => 16
-            VectorLane::I32 => 32
-            VectorLane::I64 => 64
-            _ => abort("invalid vector splat-load semantics")
-          }
-          "v128.load\{bits}_splat \{ops}"
-        }
-        VectorOp::LoadZero(lane) => {
-          let bits = match lane {
-            VectorLane::I32 => 32
-            VectorLane::I64 => 64
-            _ => abort("invalid vector zero-load semantics")
-          }
-          "v128.load\{bits}_zero \{ops}"
-        }
-        VectorOp::LoadLane(lane, index) => {
-          let bits = match lane {
-            VectorLane::I8 => 8
-            VectorLane::I16 => 16
-            VectorLane::I32 => 32
-            VectorLane::I64 => 64
-            _ => abort("invalid vector lane-load semantics")
-          }
-          "v128.load\{bits}_lane lane=\{index} \{ops}"
-        }
-        VectorOp::StoreLane(lane, index) => {
-          let bits = match lane {
-            VectorLane::I8 => 8
-            VectorLane::I16 => 16
-            VectorLane::I32 => 32
-            VectorLane::I64 => 64
-            _ => abort("invalid vector lane-store semantics")
-          }
-          "v128.store\{bits}_lane lane=\{index} \{ops}"
-        }
-        _ => format_opcode(vector_op.to_legacy_opcode(), operands, result_ty)
-      }
-
-    // SIMD operations
     V128Const(_) => "v128.const \{ops}"
-    V128Splat8 => "i8x16.splat \{ops}"
-    V128Splat16 => "i16x8.splat \{ops}"
-    V128Splat32 => "i32x4.splat \{ops}"
-    V128Splat64 => "i64x2.splat \{ops}"
-    V128SplatF32 => "f32x4.splat \{ops}"
-    V128SplatF64 => "f64x2.splat \{ops}"
-    V128ExtractLane8S(lane) => "i8x16.extract_lane_s \{lane} \{ops}"
-    V128ExtractLane8U(lane) => "i8x16.extract_lane_u \{lane} \{ops}"
-    V128ExtractLane16S(lane) => "i16x8.extract_lane_s \{lane} \{ops}"
-    V128ExtractLane16U(lane) => "i16x8.extract_lane_u \{lane} \{ops}"
-    V128ExtractLane32(lane) => "i32x4.extract_lane \{lane} \{ops}"
-    V128ExtractLane64(lane) => "i64x2.extract_lane \{lane} \{ops}"
-    V128ExtractLaneF32(lane) => "f32x4.extract_lane \{lane} \{ops}"
-    V128ExtractLaneF64(lane) => "f64x2.extract_lane \{lane} \{ops}"
-    V128ReplaceLane8(lane) => "i8x16.replace_lane \{lane} \{ops}"
-    V128ReplaceLane16(lane) => "i16x8.replace_lane \{lane} \{ops}"
-    V128ReplaceLane32(lane) => "i32x4.replace_lane \{lane} \{ops}"
-    V128ReplaceLane64(lane) => "i64x2.replace_lane \{lane} \{ops}"
-    V128ReplaceLaneF32(lane) => "f32x4.replace_lane \{lane} \{ops}"
-    V128ReplaceLaneF64(lane) => "f64x2.replace_lane \{lane} \{ops}"
+    Splat(I8) => "i8x16.splat \{ops}"
+    Splat(I16) => "i16x8.splat \{ops}"
+    Splat(I32) => "i32x4.splat \{ops}"
+    Splat(I64) => "i64x2.splat \{ops}"
+    Splat(F32) => "f32x4.splat \{ops}"
+    Splat(F64) => "f64x2.splat \{ops}"
+    ExtractLane(I8, Signed, lane) => "i8x16.extract_lane_s \{lane} \{ops}"
+    ExtractLane(I8, Unsigned, lane) => "i8x16.extract_lane_u \{lane} \{ops}"
+    ExtractLane(I16, Signed, lane) => "i16x8.extract_lane_s \{lane} \{ops}"
+    ExtractLane(I16, Unsigned, lane) => "i16x8.extract_lane_u \{lane} \{ops}"
+    ExtractLane(I32, None, lane) => "i32x4.extract_lane \{lane} \{ops}"
+    ExtractLane(I64, None, lane) => "i64x2.extract_lane \{lane} \{ops}"
+    ExtractLane(F32, None, lane) => "f32x4.extract_lane \{lane} \{ops}"
+    ExtractLane(F64, None, lane) => "f64x2.extract_lane \{lane} \{ops}"
+    ExtractLane(_, _, _) => abort("invalid vector extract-lane semantics")
+    ReplaceLane(I8, lane) => "i8x16.replace_lane \{lane} \{ops}"
+    ReplaceLane(I16, lane) => "i16x8.replace_lane \{lane} \{ops}"
+    ReplaceLane(I32, lane) => "i32x4.replace_lane \{lane} \{ops}"
+    ReplaceLane(I64, lane) => "i64x2.replace_lane \{lane} \{ops}"
+    ReplaceLane(F32, lane) => "f32x4.replace_lane \{lane} \{ops}"
+    ReplaceLane(F64, lane) => "f64x2.replace_lane \{lane} \{ops}"
     V128Shuffle(_) => "i8x16.shuffle \{ops}"
     V128Swizzle => "i8x16.swizzle \{ops}"
     V128Not => "v128.not \{ops}"
@@ -460,46 +357,6 @@ fn format_opcode(
     V128ConvertLowI32toF64U => "f64x2.convert_low_i32x4_u \{ops}"
     V128DemoteF64toF32Zero => "f32x4.demote_f64x2_zero \{ops}"
     V128PromoteLowF32toF64 => "f64x2.promote_low_f32x4 \{ops}"
-    V128Load8x8S(memidx, align, offset) =>
-      "v128.load8x8_s mem=\{memidx} align=\{align} offset=\{offset} \{ops}"
-    V128Load8x8U(memidx, align, offset) =>
-      "v128.load8x8_u mem=\{memidx} align=\{align} offset=\{offset} \{ops}"
-    V128Load16x4S(memidx, align, offset) =>
-      "v128.load16x4_s mem=\{memidx} align=\{align} offset=\{offset} \{ops}"
-    V128Load16x4U(memidx, align, offset) =>
-      "v128.load16x4_u mem=\{memidx} align=\{align} offset=\{offset} \{ops}"
-    V128Load32x2S(memidx, align, offset) =>
-      "v128.load32x2_s mem=\{memidx} align=\{align} offset=\{offset} \{ops}"
-    V128Load32x2U(memidx, align, offset) =>
-      "v128.load32x2_u mem=\{memidx} align=\{align} offset=\{offset} \{ops}"
-    V128Load8Splat(memidx, align, offset) =>
-      "v128.load8_splat mem=\{memidx} align=\{align} offset=\{offset} \{ops}"
-    V128Load16Splat(memidx, align, offset) =>
-      "v128.load16_splat mem=\{memidx} align=\{align} offset=\{offset} \{ops}"
-    V128Load32Splat(memidx, align, offset) =>
-      "v128.load32_splat mem=\{memidx} align=\{align} offset=\{offset} \{ops}"
-    V128Load64Splat(memidx, align, offset) =>
-      "v128.load64_splat mem=\{memidx} align=\{align} offset=\{offset} \{ops}"
-    V128Load32Zero(memidx, align, offset) =>
-      "v128.load32_zero mem=\{memidx} align=\{align} offset=\{offset} \{ops}"
-    V128Load64Zero(memidx, align, offset) =>
-      "v128.load64_zero mem=\{memidx} align=\{align} offset=\{offset} \{ops}"
-    V128Load8Lane(memidx, align, offset, lane) =>
-      "v128.load8_lane mem=\{memidx} align=\{align} offset=\{offset} lane=\{lane} \{ops}"
-    V128Load16Lane(memidx, align, offset, lane) =>
-      "v128.load16_lane mem=\{memidx} align=\{align} offset=\{offset} lane=\{lane} \{ops}"
-    V128Load32Lane(memidx, align, offset, lane) =>
-      "v128.load32_lane mem=\{memidx} align=\{align} offset=\{offset} lane=\{lane} \{ops}"
-    V128Load64Lane(memidx, align, offset, lane) =>
-      "v128.load64_lane mem=\{memidx} align=\{align} offset=\{offset} lane=\{lane} \{ops}"
-    V128Store8Lane(memidx, align, offset, lane) =>
-      "v128.store8_lane mem=\{memidx} align=\{align} offset=\{offset} lane=\{lane} \{ops}"
-    V128Store16Lane(memidx, align, offset, lane) =>
-      "v128.store16_lane mem=\{memidx} align=\{align} offset=\{offset} lane=\{lane} \{ops}"
-    V128Store32Lane(memidx, align, offset, lane) =>
-      "v128.store32_lane mem=\{memidx} align=\{align} offset=\{offset} lane=\{lane} \{ops}"
-    V128Store64Lane(memidx, align, offset, lane) =>
-      "v128.store64_lane mem=\{memidx} align=\{align} offset=\{offset} lane=\{lane} \{ops}"
     // Relaxed SIMD instructions
     V128RelaxedSwizzle => "v128.relaxed_swizzle \{ops}"
     V128RelaxedTruncF32toI32S => "v128.relaxed_trunc_f32_to_i32_s \{ops}"
@@ -523,6 +380,113 @@ fn format_opcode(
     V128RelaxedQ15MulrS => "v128.relaxed_q15mulr_s \{ops}"
     V128RelaxedDot8to16S => "v128.relaxed_dot_8_to_16_s \{ops}"
     V128RelaxedDot8to32AddS => "v128.relaxed_dot_8_to_32_add_s \{ops}"
+    LoadExtend(lane, extension) => {
+      let lane_name = match lane {
+        I8 => "8x8"
+        I16 => "16x4"
+        I32 => "32x2"
+        _ => abort("invalid vector extending-load semantics")
+      }
+      let extension_name = match extension {
+        Signed => "s"
+        Unsigned => "u"
+        None => abort("invalid vector extending-load semantics")
+      }
+      "v128.load\{lane_name}_\{extension_name} \{ops}"
+    }
+    LoadSplat(lane) => {
+      let bits = match lane {
+        I8 => 8
+        I16 => 16
+        I32 => 32
+        I64 => 64
+        _ => abort("invalid vector splat-load semantics")
+      }
+      "v128.load\{bits}_splat \{ops}"
+    }
+    LoadZero(lane) => {
+      let bits = match lane {
+        I32 => 32
+        I64 => 64
+        _ => abort("invalid vector zero-load semantics")
+      }
+      "v128.load\{bits}_zero \{ops}"
+    }
+    LoadLane(lane, index) => {
+      let bits = match lane {
+        I8 => 8
+        I16 => 16
+        I32 => 32
+        I64 => 64
+        _ => abort("invalid vector lane-load semantics")
+      }
+      "v128.load\{bits}_lane lane=\{index} \{ops}"
+    }
+    StoreLane(lane, index) => {
+      let bits = match lane {
+        I8 => 8
+        I16 => 16
+        I32 => 32
+        I64 => 64
+        _ => abort("invalid vector lane-store semantics")
+      }
+      "v128.store\{bits}_lane lane=\{index} \{ops}"
+    }
+  }
+}
+
+///|
+
+///|
+/// Print an opcode with its operands
+/// result_ty is needed for Fconst to correctly decode F32 bit-packed constants
+fn format_opcode(
+  opcode : Opcode,
+  operands : Array[Value],
+  result_ty : Type?,
+) -> String {
+  let ops = operands.map(format_value).join(", ")
+  match opcode {
+    Scalar(scalar_op) => format_scalar_opcode(scalar_op, operands, result_ty)
+    // Function calls
+    Call(call_op) =>
+      match call_op {
+        CallOp::Direct(symbol, _) => "call \{symbol.name}(\{ops})"
+        CallOp::Pointer(num_args, num_results) =>
+          "call_ptr(\{num_args}) -> \{num_results} (\{ops})"
+      }
+
+    // Raw pointer operations (for trampolines)
+    LoadPtr(ty) => "load_ptr.\{ty} \{ops}"
+    StorePtr(ty) => "store_ptr.\{ty} \{ops}"
+    LoadPtrNarrow(result_ty, bits, signed) => {
+      let sign_str = if signed { "s" } else { "u" }
+      "load_ptr\{bits}_\{sign_str}.\{result_ty} \{ops}"
+    }
+    StorePtrNarrow(bits) => "store_ptr\{bits} \{ops}"
+    Memory(memory_op) =>
+      match memory_op {
+        MemoryOp::Load(ty) => "load.\{ty} \{ops}"
+        MemoryOp::Store(ty) => "store.\{ty} \{ops}"
+        MemoryOp::LoadNarrow(result_ty, bits, signed) => {
+          let sign_str = if signed { "s" } else { "u" }
+          "load\{bits}_\{sign_str}.\{result_ty} \{ops}"
+        }
+        MemoryOp::StoreNarrow(bits) => "store\{bits} \{ops}"
+      }
+    Ext(ext, _) => {
+      let imms : Array[String] = []
+      for imm in ext.immediates {
+        imms.push("\{imm}")
+      }
+      let imm_str = if imms.length() == 0 {
+        ""
+      } else {
+        " [" + imms.join(", ") + "]"
+      }
+      "ext.\{ext.dialect}.\{ext.opcode}\{imm_str} \{ops}"
+    }
+    Vector(vector_op) => format_vector_opcode(vector_op, operands)
   }
 }
 

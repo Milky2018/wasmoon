@@ -1163,7 +1163,7 @@ pub fn FunctionBuilder::v128_const(
   self : FunctionBuilder,
   bytes : Bytes,
 ) -> Value {
-  self.emit_inst(V128, V128Const(bytes), [])
+  self.emit_inst(V128, Vector(VectorOp::V128Const(bytes)), [])
 }
 
 ///|
@@ -1172,7 +1172,7 @@ pub fn FunctionBuilder::v128_splat8(
   self : FunctionBuilder,
   val : Value,
 ) -> Value {
-  self.emit_inst(V128, V128Splat8, [val])
+  self.emit_inst(V128, Vector(VectorOp::Splat(VectorLane::I8)), [val])
 }
 
 ///|
@@ -1180,7 +1180,7 @@ pub fn FunctionBuilder::v128_splat16(
   self : FunctionBuilder,
   val : Value,
 ) -> Value {
-  self.emit_inst(V128, V128Splat16, [val])
+  self.emit_inst(V128, Vector(VectorOp::Splat(VectorLane::I16)), [val])
 }
 
 ///|
@@ -1188,7 +1188,7 @@ pub fn FunctionBuilder::v128_splat32(
   self : FunctionBuilder,
   val : Value,
 ) -> Value {
-  self.emit_inst(V128, V128Splat32, [val])
+  self.emit_inst(V128, Vector(VectorOp::Splat(VectorLane::I32)), [val])
 }
 
 ///|
@@ -1196,7 +1196,7 @@ pub fn FunctionBuilder::v128_splat64(
   self : FunctionBuilder,
   val : Value,
 ) -> Value {
-  self.emit_inst(V128, V128Splat64, [val])
+  self.emit_inst(V128, Vector(VectorOp::Splat(VectorLane::I64)), [val])
 }
 
 ///|
@@ -1204,7 +1204,7 @@ pub fn FunctionBuilder::v128_splat_f32(
   self : FunctionBuilder,
   val : Value,
 ) -> Value {
-  self.emit_inst(V128, V128SplatF32, [val])
+  self.emit_inst(V128, Vector(VectorOp::Splat(VectorLane::F32)), [val])
 }
 
 ///|
@@ -1212,7 +1212,7 @@ pub fn FunctionBuilder::v128_splat_f64(
   self : FunctionBuilder,
   val : Value,
 ) -> Value {
-  self.emit_inst(V128, V128SplatF64, [val])
+  self.emit_inst(V128, Vector(VectorOp::Splat(VectorLane::F64)), [val])
 }
 
 ///|
@@ -1222,7 +1222,11 @@ pub fn FunctionBuilder::v128_extract8s(
   vec : Value,
   lane : Int,
 ) -> Value {
-  self.emit_inst(I32, V128ExtractLane8S(lane), [vec])
+  self.emit_inst(
+    I32,
+    Vector(VectorOp::ExtractLane(VectorLane::I8, VectorExtension::Signed, lane)),
+    [vec],
+  )
 }
 
 ///|
@@ -1231,7 +1235,13 @@ pub fn FunctionBuilder::v128_extract8u(
   vec : Value,
   lane : Int,
 ) -> Value {
-  self.emit_inst(I32, V128ExtractLane8U(lane), [vec])
+  self.emit_inst(
+    I32,
+    Vector(
+      VectorOp::ExtractLane(VectorLane::I8, VectorExtension::Unsigned, lane),
+    ),
+    [vec],
+  )
 }
 
 ///|
@@ -1240,7 +1250,13 @@ pub fn FunctionBuilder::v128_extract16s(
   vec : Value,
   lane : Int,
 ) -> Value {
-  self.emit_inst(I32, V128ExtractLane16S(lane), [vec])
+  self.emit_inst(
+    I32,
+    Vector(
+      VectorOp::ExtractLane(VectorLane::I16, VectorExtension::Signed, lane),
+    ),
+    [vec],
+  )
 }
 
 ///|
@@ -1249,7 +1265,13 @@ pub fn FunctionBuilder::v128_extract16u(
   vec : Value,
   lane : Int,
 ) -> Value {
-  self.emit_inst(I32, V128ExtractLane16U(lane), [vec])
+  self.emit_inst(
+    I32,
+    Vector(
+      VectorOp::ExtractLane(VectorLane::I16, VectorExtension::Unsigned, lane),
+    ),
+    [vec],
+  )
 }
 
 ///|
@@ -1258,7 +1280,11 @@ pub fn FunctionBuilder::v128_extract32(
   vec : Value,
   lane : Int,
 ) -> Value {
-  self.emit_inst(I32, V128ExtractLane32(lane), [vec])
+  self.emit_inst(
+    I32,
+    Vector(VectorOp::ExtractLane(VectorLane::I32, VectorExtension::None, lane)),
+    [vec],
+  )
 }
 
 ///|
@@ -1267,7 +1293,11 @@ pub fn FunctionBuilder::v128_extract64(
   vec : Value,
   lane : Int,
 ) -> Value {
-  self.emit_inst(I64, V128ExtractLane64(lane), [vec])
+  self.emit_inst(
+    I64,
+    Vector(VectorOp::ExtractLane(VectorLane::I64, VectorExtension::None, lane)),
+    [vec],
+  )
 }
 
 ///|
@@ -1276,7 +1306,11 @@ pub fn FunctionBuilder::v128_extract_f32(
   vec : Value,
   lane : Int,
 ) -> Value {
-  self.emit_inst(F32, V128ExtractLaneF32(lane), [vec])
+  self.emit_inst(
+    F32,
+    Vector(VectorOp::ExtractLane(VectorLane::F32, VectorExtension::None, lane)),
+    [vec],
+  )
 }
 
 ///|
@@ -1285,7 +1319,11 @@ pub fn FunctionBuilder::v128_extract_f64(
   vec : Value,
   lane : Int,
 ) -> Value {
-  self.emit_inst(F64, V128ExtractLaneF64(lane), [vec])
+  self.emit_inst(
+    F64,
+    Vector(VectorOp::ExtractLane(VectorLane::F64, VectorExtension::None, lane)),
+    [vec],
+  )
 }
 
 ///|
@@ -1296,7 +1334,9 @@ pub fn FunctionBuilder::v128_replace8(
   val : Value,
   lane : Int,
 ) -> Value {
-  self.emit_inst(V128, V128ReplaceLane8(lane), [vec, val])
+  self.emit_inst(V128, Vector(VectorOp::ReplaceLane(VectorLane::I8, lane)), [
+    vec, val,
+  ])
 }
 
 ///|
@@ -1306,7 +1346,9 @@ pub fn FunctionBuilder::v128_replace16(
   val : Value,
   lane : Int,
 ) -> Value {
-  self.emit_inst(V128, V128ReplaceLane16(lane), [vec, val])
+  self.emit_inst(V128, Vector(VectorOp::ReplaceLane(VectorLane::I16, lane)), [
+    vec, val,
+  ])
 }
 
 ///|
@@ -1316,7 +1358,9 @@ pub fn FunctionBuilder::v128_replace32(
   val : Value,
   lane : Int,
 ) -> Value {
-  self.emit_inst(V128, V128ReplaceLane32(lane), [vec, val])
+  self.emit_inst(V128, Vector(VectorOp::ReplaceLane(VectorLane::I32, lane)), [
+    vec, val,
+  ])
 }
 
 ///|
@@ -1326,7 +1370,9 @@ pub fn FunctionBuilder::v128_replace64(
   val : Value,
   lane : Int,
 ) -> Value {
-  self.emit_inst(V128, V128ReplaceLane64(lane), [vec, val])
+  self.emit_inst(V128, Vector(VectorOp::ReplaceLane(VectorLane::I64, lane)), [
+    vec, val,
+  ])
 }
 
 ///|
@@ -1336,7 +1382,9 @@ pub fn FunctionBuilder::v128_replace_f32(
   val : Value,
   lane : Int,
 ) -> Value {
-  self.emit_inst(V128, V128ReplaceLaneF32(lane), [vec, val])
+  self.emit_inst(V128, Vector(VectorOp::ReplaceLane(VectorLane::F32, lane)), [
+    vec, val,
+  ])
 }
 
 ///|
@@ -1346,7 +1394,9 @@ pub fn FunctionBuilder::v128_replace_f64(
   val : Value,
   lane : Int,
 ) -> Value {
-  self.emit_inst(V128, V128ReplaceLaneF64(lane), [vec, val])
+  self.emit_inst(V128, Vector(VectorOp::ReplaceLane(VectorLane::F64, lane)), [
+    vec, val,
+  ])
 }
 
 ///|
@@ -1357,7 +1407,7 @@ pub fn FunctionBuilder::v128_shuffle(
   b : Value,
   lanes : FixedArray[Int],
 ) -> Value {
-  self.emit_inst(V128, V128Shuffle(lanes), [a, b])
+  self.emit_inst(V128, Vector(VectorOp::V128Shuffle(lanes)), [a, b])
 }
 
 ///|
@@ -1367,13 +1417,13 @@ pub fn FunctionBuilder::v128_swizzle(
   a : Value,
   b : Value,
 ) -> Value {
-  self.emit_inst(V128, V128Swizzle, [a, b])
+  self.emit_inst(V128, Vector(VectorOp::V128Swizzle), [a, b])
 }
 
 ///|
 /// Bitwise operations on v128
 pub fn FunctionBuilder::v128_not(self : FunctionBuilder, a : Value) -> Value {
-  self.emit_inst(V128, V128Not, [a])
+  self.emit_inst(V128, Vector(VectorOp::V128Not), [a])
 }
 
 ///|
@@ -1382,7 +1432,7 @@ pub fn FunctionBuilder::v128_and(
   a : Value,
   b : Value,
 ) -> Value {
-  self.emit_inst(V128, V128And, [a, b])
+  self.emit_inst(V128, Vector(VectorOp::V128And), [a, b])
 }
 
 ///|
@@ -1391,7 +1441,7 @@ pub fn FunctionBuilder::v128_andnot(
   a : Value,
   b : Value,
 ) -> Value {
-  self.emit_inst(V128, V128AndNot, [a, b])
+  self.emit_inst(V128, Vector(VectorOp::V128AndNot), [a, b])
 }
 
 ///|
@@ -1400,7 +1450,7 @@ pub fn FunctionBuilder::v128_or(
   a : Value,
   b : Value,
 ) -> Value {
-  self.emit_inst(V128, V128Or, [a, b])
+  self.emit_inst(V128, Vector(VectorOp::V128Or), [a, b])
 }
 
 ///|
@@ -1409,7 +1459,7 @@ pub fn FunctionBuilder::v128_xor(
   a : Value,
   b : Value,
 ) -> Value {
-  self.emit_inst(V128, V128Xor, [a, b])
+  self.emit_inst(V128, Vector(VectorOp::V128Xor), [a, b])
 }
 
 ///|
@@ -1419,7 +1469,7 @@ pub fn FunctionBuilder::v128_bitselect(
   b : Value,
   c : Value,
 ) -> Value {
-  self.emit_inst(V128, V128Bitselect, [a, b, c])
+  self.emit_inst(V128, Vector(VectorOp::V128Bitselect), [a, b, c])
 }
 
 ///|
@@ -1427,7 +1477,7 @@ pub fn FunctionBuilder::v128_anytrue(
   self : FunctionBuilder,
   a : Value,
 ) -> Value {
-  self.emit_inst(I32, V128AnyTrue, [a])
+  self.emit_inst(I32, Vector(VectorOp::V128AnyTrue), [a])
 }
 
 ///|
@@ -1435,69 +1485,69 @@ pub fn FunctionBuilder::v128_anytrue(
 /// Use this for operations that follow the pattern: opcode, operands -> V128/I32
 pub fn FunctionBuilder::v128_unary(
   self : FunctionBuilder,
-  opcode : Opcode,
+  opcode : VectorOp,
   a : Value,
 ) -> Value {
-  self.emit_inst(V128, opcode, [a])
+  self.emit_inst(V128, Vector(opcode), [a])
 }
 
 ///|
 pub fn FunctionBuilder::v128_binary(
   self : FunctionBuilder,
-  opcode : Opcode,
+  opcode : VectorOp,
   a : Value,
   b : Value,
 ) -> Value {
-  self.emit_inst(V128, opcode, [a, b])
+  self.emit_inst(V128, Vector(opcode), [a, b])
 }
 
 ///|
 pub fn FunctionBuilder::v128_to_i32(
   self : FunctionBuilder,
-  opcode : Opcode,
+  opcode : VectorOp,
   a : Value,
 ) -> Value {
-  self.emit_inst(I32, opcode, [a])
+  self.emit_inst(I32, Vector(opcode), [a])
 }
 
 ///|
 pub fn FunctionBuilder::v128_shift(
   self : FunctionBuilder,
-  opcode : Opcode,
+  opcode : VectorOp,
   vec : Value,
   shift : Value,
 ) -> Value {
-  self.emit_inst(V128, opcode, [vec, shift])
+  self.emit_inst(V128, Vector(opcode), [vec, shift])
 }
 
 ///|
 /// SIMD load with effective address (for complex SIMD loads)
 pub fn FunctionBuilder::v128_load_with_addr(
   self : FunctionBuilder,
-  opcode : Opcode,
+  opcode : VectorOp,
   effective_addr : Value,
 ) -> Value {
-  self.emit_inst(V128, opcode, [effective_addr])
+  self.emit_inst(V128, Vector(opcode), [effective_addr])
 }
 
 ///|
 /// SIMD load lane with effective address and existing vector
 pub fn FunctionBuilder::v128_load_lane_with_addr(
   self : FunctionBuilder,
-  opcode : Opcode,
+  opcode : VectorOp,
   effective_addr : Value,
   vec : Value,
 ) -> Value {
-  self.emit_inst(V128, opcode, [effective_addr, vec])
+  self.emit_inst(V128, Vector(opcode), [effective_addr, vec])
 }
 
 ///|
 /// SIMD store lane with effective address and vector (void)
 pub fn FunctionBuilder::v128_store_lane_with_addr(
   self : FunctionBuilder,
-  opcode : Opcode,
+  opcode : VectorOp,
   effective_addr : Value,
   vec : Value,
 ) -> Unit {
-  self.emit_void_inst(opcode, [effective_addr, vec])
+  self.emit_void_inst(Vector(opcode), [effective_addr, vec])
 }

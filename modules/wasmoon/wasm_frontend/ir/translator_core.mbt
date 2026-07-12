@@ -1110,7 +1110,7 @@ fn Translator::translate_fcmp(self : Translator, cc : FloatCC) -> Unit {
 /// Helper for SIMD binary operations (v128, v128 -> v128)
 fn Translator::translate_simd_binary(
   self : Translator,
-  opcode : Opcode,
+  opcode : @milkir.VectorOp,
 ) -> Unit {
   let b = self.pop()
   let a = self.pop()
@@ -1120,7 +1120,10 @@ fn Translator::translate_simd_binary(
 
 ///|
 /// Helper for SIMD unary operations (v128 -> v128)
-fn Translator::translate_simd_unary(self : Translator, opcode : Opcode) -> Unit {
+fn Translator::translate_simd_unary(
+  self : Translator,
+  opcode : @milkir.VectorOp,
+) -> Unit {
   let a = self.pop()
   let result = self.builder.v128_unary(opcode, a)
   self.push(result)
@@ -1130,7 +1133,7 @@ fn Translator::translate_simd_unary(self : Translator, opcode : Opcode) -> Unit 
 /// Helper for SIMD to i32 operations (v128 -> i32)
 fn Translator::translate_simd_to_i32(
   self : Translator,
-  opcode : Opcode,
+  opcode : @milkir.VectorOp,
 ) -> Unit {
   let a = self.pop()
   let result = self.builder.v128_to_i32(opcode, a)
@@ -1139,7 +1142,10 @@ fn Translator::translate_simd_to_i32(
 
 ///|
 /// Helper for SIMD shift operations (v128, i32 -> v128)
-fn Translator::translate_simd_shift(self : Translator, opcode : Opcode) -> Unit {
+fn Translator::translate_simd_shift(
+  self : Translator,
+  opcode : @milkir.VectorOp,
+) -> Unit {
   let shift = self.pop()
   let vec = self.pop()
   let result = self.builder.v128_shift(opcode, vec, shift)
@@ -1154,21 +1160,14 @@ fn Translator::translate_simd_load(
   memidx : Int,
   offset : Int64,
   addr : Value,
-  opcode : Opcode,
+  opcode : @milkir.VectorOp,
 ) -> Value {
   // Determine access size based on opcode
   let access_size = match opcode {
-    V128Load8x8S(_, _, _)
-    | V128Load8x8U(_, _, _)
-    | V128Load16x4S(_, _, _)
-    | V128Load16x4U(_, _, _)
-    | V128Load32x2S(_, _, _)
-    | V128Load32x2U(_, _, _)
-    | V128Load64Splat(_, _, _)
-    | V128Load64Zero(_, _, _) => 8
-    V128Load32Splat(_, _, _) | V128Load32Zero(_, _, _) => 4
-    V128Load16Splat(_, _, _) => 2
-    V128Load8Splat(_, _, _) => 1
+    LoadExtend(_, _) | LoadSplat(I64) | LoadZero(I64) => 8
+    LoadSplat(I32) | LoadZero(I32) => 4
+    LoadSplat(I16) => 2
+    LoadSplat(I8) => 1
     _ => 16
   }
   // Emit bounds check
@@ -1192,15 +1191,15 @@ fn Translator::translate_simd_load_lane(
   offset : Int64,
   addr : Value,
   vec : Value,
-  opcode : Opcode,
+  opcode : @milkir.VectorOp,
 ) -> Value {
   // Emit bounds check
   let lane_size = match opcode {
-    V128Load8Lane(_, _, _, _) => 1
-    V128Load16Lane(_, _, _, _) => 2
-    V128Load32Lane(_, _, _, _) => 4
-    V128Load64Lane(_, _, _, _) => 8
-    _ => 1
+    LoadLane(I8, _) => 1
+    LoadLane(I16, _) => 2
+    LoadLane(I32, _) => 4
+    LoadLane(I64, _) => 8
+    _ => abort("invalid vector lane-load operation")
   }
   let effective_addr = self.func_env.emit_bounds_check(
     self.builder,
@@ -1222,15 +1221,15 @@ fn Translator::translate_simd_store_lane(
   offset : Int64,
   addr : Value,
   vec : Value,
-  opcode : Opcode,
+  opcode : @milkir.VectorOp,
 ) -> Unit {
   // Emit bounds check
   let lane_size = match opcode {
-    V128Store8Lane(_, _, _, _) => 1
-    V128Store16Lane(_, _, _, _) => 2
-    V128Store32Lane(_, _, _, _) => 4
-    V128Store64Lane(_, _, _, _) => 8
-    _ => 1
+    StoreLane(I8, _) => 1
+    StoreLane(I16, _) => 2
+    StoreLane(I32, _) => 4
+    StoreLane(I64, _) => 8
+    _ => abort("invalid vector lane-store operation")
   }
   let effective_addr = self.func_env.emit_bounds_check(
     self.builder,

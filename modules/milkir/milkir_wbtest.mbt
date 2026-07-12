@@ -495,7 +495,10 @@ test "vector memory operations discard Wasm memory arguments" {
   let builder = FunctionBuilder::FunctionBuilder("vector_memory_family")
   let address = builder.add_param(Ptr)
   builder.add_result(V128)
-  let loaded = builder.v128_load_with_addr(V128Load8x8S(7, 4, 32L), address)
+  let loaded = builder.v128_load_with_addr(
+    LoadExtend(VectorLane::I8, VectorExtension::Signed),
+    address,
+  )
   builder.return_([loaded])
   let func = builder.get_function()
   inspect(

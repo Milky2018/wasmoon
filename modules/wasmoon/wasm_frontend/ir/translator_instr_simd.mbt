@@ -421,7 +421,7 @@ fn Translator::translate_instruction_simd(
         memidx,
         offset,
         addr,
-        V128Load8x8S(memidx, 0, offset),
+        LoadExtend(I8, Signed),
       )
       self.push(result)
     }
@@ -431,7 +431,7 @@ fn Translator::translate_instruction_simd(
         memidx,
         offset,
         addr,
-        V128Load8x8U(memidx, 0, offset),
+        LoadExtend(I8, Unsigned),
       )
       self.push(result)
     }
@@ -441,7 +441,7 @@ fn Translator::translate_instruction_simd(
         memidx,
         offset,
         addr,
-        V128Load16x4S(memidx, 0, offset),
+        LoadExtend(I16, Signed),
       )
       self.push(result)
     }
@@ -451,7 +451,7 @@ fn Translator::translate_instruction_simd(
         memidx,
         offset,
         addr,
-        V128Load16x4U(memidx, 0, offset),
+        LoadExtend(I16, Unsigned),
       )
       self.push(result)
     }
@@ -461,7 +461,7 @@ fn Translator::translate_instruction_simd(
         memidx,
         offset,
         addr,
-        V128Load32x2S(memidx, 0, offset),
+        LoadExtend(I32, Signed),
       )
       self.push(result)
     }
@@ -471,18 +471,13 @@ fn Translator::translate_instruction_simd(
         memidx,
         offset,
         addr,
-        V128Load32x2U(memidx, 0, offset),
+        LoadExtend(I32, Unsigned),
       )
       self.push(result)
     }
     V128Load8Splat(memidx, _, offset) => {
       let addr = self.pop()
-      let result = self.translate_simd_load(
-        memidx,
-        offset,
-        addr,
-        V128Load8Splat(memidx, 0, offset),
-      )
+      let result = self.translate_simd_load(memidx, offset, addr, LoadSplat(I8))
       self.push(result)
     }
     V128Load16Splat(memidx, _, offset) => {
@@ -491,7 +486,7 @@ fn Translator::translate_instruction_simd(
         memidx,
         offset,
         addr,
-        V128Load16Splat(memidx, 0, offset),
+        LoadSplat(I16),
       )
       self.push(result)
     }
@@ -501,7 +496,7 @@ fn Translator::translate_instruction_simd(
         memidx,
         offset,
         addr,
-        V128Load32Splat(memidx, 0, offset),
+        LoadSplat(I32),
       )
       self.push(result)
     }
@@ -511,28 +506,18 @@ fn Translator::translate_instruction_simd(
         memidx,
         offset,
         addr,
-        V128Load64Splat(memidx, 0, offset),
+        LoadSplat(I64),
       )
       self.push(result)
     }
     V128Load32Zero(memidx, _, offset) => {
       let addr = self.pop()
-      let result = self.translate_simd_load(
-        memidx,
-        offset,
-        addr,
-        V128Load32Zero(memidx, 0, offset),
-      )
+      let result = self.translate_simd_load(memidx, offset, addr, LoadZero(I32))
       self.push(result)
     }
     V128Load64Zero(memidx, _, offset) => {
       let addr = self.pop()
-      let result = self.translate_simd_load(
-        memidx,
-        offset,
-        addr,
-        V128Load64Zero(memidx, 0, offset),
-      )
+      let result = self.translate_simd_load(memidx, offset, addr, LoadZero(I64))
       self.push(result)
     }
     V128Load8Lane(memidx, _, offset, lane) => {
@@ -543,7 +528,7 @@ fn Translator::translate_instruction_simd(
         offset,
         addr,
         vec,
-        V128Load8Lane(memidx, 0, offset, lane),
+        LoadLane(I8, lane),
       )
       self.push(result)
     }
@@ -555,7 +540,7 @@ fn Translator::translate_instruction_simd(
         offset,
         addr,
         vec,
-        V128Load16Lane(memidx, 0, offset, lane),
+        LoadLane(I16, lane),
       )
       self.push(result)
     }
@@ -567,7 +552,7 @@ fn Translator::translate_instruction_simd(
         offset,
         addr,
         vec,
-        V128Load32Lane(memidx, 0, offset, lane),
+        LoadLane(I32, lane),
       )
       self.push(result)
     }
@@ -579,7 +564,7 @@ fn Translator::translate_instruction_simd(
         offset,
         addr,
         vec,
-        V128Load64Lane(memidx, 0, offset, lane),
+        LoadLane(I64, lane),
       )
       self.push(result)
     }
@@ -591,7 +576,7 @@ fn Translator::translate_instruction_simd(
         offset,
         addr,
         vec,
-        V128Store8Lane(memidx, 0, offset, lane),
+        StoreLane(I8, lane),
       )
     }
     V128Store16Lane(memidx, _, offset, lane) => {
@@ -602,7 +587,7 @@ fn Translator::translate_instruction_simd(
         offset,
         addr,
         vec,
-        V128Store16Lane(memidx, 0, offset, lane),
+        StoreLane(I16, lane),
       )
     }
     V128Store32Lane(memidx, _, offset, lane) => {
@@ -613,7 +598,7 @@ fn Translator::translate_instruction_simd(
         offset,
         addr,
         vec,
-        V128Store32Lane(memidx, 0, offset, lane),
+        StoreLane(I32, lane),
       )
     }
     V128Store64Lane(memidx, _, offset, lane) => {
@@ -624,7 +609,7 @@ fn Translator::translate_instruction_simd(
         offset,
         addr,
         vec,
-        V128Store64Lane(memidx, 0, offset, lane),
+        StoreLane(I64, lane),
       )
     }
 
@@ -633,7 +618,9 @@ fn Translator::translate_instruction_simd(
       // Same as regular swizzle on ARM
       let b = self.pop()
       let a = self.pop()
-      let result = self.builder.emit_inst(V128, V128RelaxedSwizzle, [a, b])
+      let result = self.builder.emit_inst(V128, Vector(V128RelaxedSwizzle), [
+        a, b,
+      ])
       self.push(result)
     }
     I32x4RelaxedTruncF32x4S =>
@@ -648,64 +635,80 @@ fn Translator::translate_instruction_simd(
       let c = self.pop()
       let b = self.pop()
       let a = self.pop()
-      let result = self.builder.emit_inst(V128, V128RelaxedMaddF32, [a, b, c])
+      let result = self.builder.emit_inst(V128, Vector(V128RelaxedMaddF32), [
+        a, b, c,
+      ])
       self.push(result)
     }
     F32x4RelaxedNmadd => {
       let c = self.pop()
       let b = self.pop()
       let a = self.pop()
-      let result = self.builder.emit_inst(V128, V128RelaxedNmaddF32, [a, b, c])
+      let result = self.builder.emit_inst(V128, Vector(V128RelaxedNmaddF32), [
+        a, b, c,
+      ])
       self.push(result)
     }
     F64x2RelaxedMadd => {
       let c = self.pop()
       let b = self.pop()
       let a = self.pop()
-      let result = self.builder.emit_inst(V128, V128RelaxedMaddF64, [a, b, c])
+      let result = self.builder.emit_inst(V128, Vector(V128RelaxedMaddF64), [
+        a, b, c,
+      ])
       self.push(result)
     }
     F64x2RelaxedNmadd => {
       let c = self.pop()
       let b = self.pop()
       let a = self.pop()
-      let result = self.builder.emit_inst(V128, V128RelaxedNmaddF64, [a, b, c])
+      let result = self.builder.emit_inst(V128, Vector(V128RelaxedNmaddF64), [
+        a, b, c,
+      ])
       self.push(result)
     }
     I8x16RelaxedLaneselect => {
       let c = self.pop()
       let b = self.pop()
       let a = self.pop()
-      let result = self.builder.emit_inst(V128, V128RelaxedLaneselect8, [
-        a, b, c,
-      ])
+      let result = self.builder.emit_inst(
+        V128,
+        Vector(V128RelaxedLaneselect8),
+        [a, b, c],
+      )
       self.push(result)
     }
     I16x8RelaxedLaneselect => {
       let c = self.pop()
       let b = self.pop()
       let a = self.pop()
-      let result = self.builder.emit_inst(V128, V128RelaxedLaneselect16, [
-        a, b, c,
-      ])
+      let result = self.builder.emit_inst(
+        V128,
+        Vector(V128RelaxedLaneselect16),
+        [a, b, c],
+      )
       self.push(result)
     }
     I32x4RelaxedLaneselect => {
       let c = self.pop()
       let b = self.pop()
       let a = self.pop()
-      let result = self.builder.emit_inst(V128, V128RelaxedLaneselect32, [
-        a, b, c,
-      ])
+      let result = self.builder.emit_inst(
+        V128,
+        Vector(V128RelaxedLaneselect32),
+        [a, b, c],
+      )
       self.push(result)
     }
     I64x2RelaxedLaneselect => {
       let c = self.pop()
       let b = self.pop()
       let a = self.pop()
-      let result = self.builder.emit_inst(V128, V128RelaxedLaneselect64, [
-        a, b, c,
-      ])
+      let result = self.builder.emit_inst(
+        V128,
+        Vector(V128RelaxedLaneselect64),
+        [a, b, c],
+      )
       self.push(result)
     }
     F32x4RelaxedMin => self.translate_simd_binary(V128RelaxedMinF32)
@@ -719,9 +722,11 @@ fn Translator::translate_instruction_simd(
       let c = self.pop()
       let b = self.pop()
       let a = self.pop()
-      let result = self.builder.emit_inst(V128, V128RelaxedDot8to32AddS, [
-        a, b, c,
-      ])
+      let result = self.builder.emit_inst(
+        V128,
+        Vector(V128RelaxedDot8to32AddS),
+        [a, b, c],
+      )
       self.push(result)
     }
     _ => abort("non-SIMD instruction routed to SIMD translator: \{instr}")

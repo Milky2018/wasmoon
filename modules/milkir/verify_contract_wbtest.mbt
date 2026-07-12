@@ -133,7 +133,7 @@ test "verify rejects malformed SIMD operand arity" {
   let lhs = func.add_param(V128)
   let result = func.new_value(V128)
   let entry = func.new_block([])
-  entry.append_inst(func.new_inst(V128Add32, [lhs], [result]))
+  entry.append_inst(func.new_inst(Vector(V128Add32), [lhs], [result]))
   entry.set_terminator(Return([]))
   expect_verify_rejection(func, "v128.add32 operand arity")
 }
