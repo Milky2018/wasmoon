@@ -214,7 +214,7 @@ pub fn FunctionBuilder::get_const_value(
   for block in self.func.blocks {
     for inst in block.instructions {
       if inst.first_result() is Some(r) && r.id == v.id {
-        if inst.opcode is Iconst(c) {
+        if inst.opcode.for_legacy_consumers() is Iconst(c) {
           return Some(c)
         }
         return None // Found defining instruction but not a constant
@@ -888,9 +888,18 @@ pub fn FunctionBuilder::call_symbol(
   let param_types = args.map(value => value.ty)
   match result_ty {
     Some(ty) =>
-      Some(self.emit_inst(ty, Call(symbol, Signature(param_types, [ty])), args))
+      Some(
+        self.emit_inst(
+          ty,
+          Call(CallOp::Direct(symbol, Signature(param_types, [ty]))),
+          args,
+        ),
+      )
     None => {
-      self.emit_void_inst(Call(symbol, Signature(param_types, [])), args)
+      self.emit_void_inst(
+        Call(CallOp::Direct(symbol, Signature(param_types, []))),
+        args,
+      )
       None
     }
   }
@@ -905,7 +914,12 @@ pub fn FunctionBuilder::call_symbol_multi(
 ) -> Array[Value] {
   self.emit_multi_inst(
     result_types,
-    Call(symbol, Signature(args.map(value => value.ty), result_types.copy())),
+    Call(
+      CallOp::Direct(
+        symbol,
+        Signature(args.map(value => value.ty), result_types.copy()),
+      ),
+    ),
     args,
   )
 }
@@ -988,7 +1002,7 @@ pub fn FunctionBuilder::load_ptr(
   base : Value,
   offset : Value,
 ) -> Value {
-  self.emit_inst(ty, LoadPtr(ty), [base, offset])
+  self.emit_inst(ty, Memory(MemoryOp::Load(ty)), [base, offset])
 }
 
 ///|
@@ -1001,7 +1015,7 @@ pub fn FunctionBuilder::store_ptr(
   value : Value,
   offset : Value,
 ) -> Unit {
-  self.emit_void_inst(StorePtr(ty), [base, value, offset])
+  self.emit_void_inst(Memory(MemoryOp::Store(ty)), [base, value, offset])
 }
 
 ///|
@@ -1015,9 +1029,11 @@ pub fn FunctionBuilder::load_ptr_narrow(
   base : Value,
   offset : Value,
 ) -> Value {
-  self.emit_inst(result_ty, LoadPtrNarrow(result_ty, bits, signed), [
-    base, offset,
-  ])
+  self.emit_inst(
+    result_ty,
+    Memory(MemoryOp::LoadNarrow(result_ty, bits, signed)),
+    [base, offset],
+  )
 }
 
 ///|
@@ -1030,18 +1046,12 @@ pub fn FunctionBuilder::store_ptr_narrow(
   value : Value,
   offset : Value,
 ) -> Unit {
-  self.emit_void_inst(StorePtrNarrow(bits), [base, value, offset])
+  self.emit_void_inst(Memory(MemoryOp::StoreNarrow(bits)), [base, value, offset])
 }
 
 ///|
-/// Call via function pointer with multiple return values
-/// For calls through an indirect callee address.
-///
-/// Design: a callee environment operand is passed explicitly before user
-/// arguments; callers can provide a null/sentinel value when their convention
-/// does not use an environment.
-///
-/// Operand layout: [func_ptr, callee_env, user_args...]
+/// Embedding convenience wrapper for a pointer call whose first argument is a
+/// callee environment.
 pub fn FunctionBuilder::call_ptr(
   self : FunctionBuilder,
   func_ptr : Value,
@@ -1049,13 +1059,32 @@ pub fn FunctionBuilder::call_ptr(
   args : Array[Value],
   result_types : Array[Type],
 ) -> Array[Value] {
-  let all_args : Array[Value] = [func_ptr, callee_env]
+  let args_with_env : Array[Value] = [callee_env]
   for arg in args {
-    all_args.push(arg)
+    args_with_env.push(arg)
+  }
+  self.call_pointer(func_ptr, args_with_env, result_types)
+}
+
+///|
+/// Call a function pointer with ordinary arguments.
+pub fn FunctionBuilder::call_pointer(
+  self : FunctionBuilder,
+  func_ptr : Value,
+  args : Array[Value],
+  result_types : Array[Type],
+) -> Array[Value] {
+  let operands : Array[Value] = [func_ptr]
+  for arg in args {
+    operands.push(arg)
   }
   let num_args = args.length()
   let num_results = result_types.length()
-  self.emit_multi_inst(result_types, CallPtr(num_args, num_results), all_args)
+  self.emit_multi_inst(
+    result_types,
+    Call(CallOp::Pointer(num_args, num_results)),
+    operands,
+  )
 }
 
 // ============ SIMD Operations ============

@@ -59,7 +59,7 @@ pub enum PatternOpcode {
 ///|
 /// Convert IR Opcode to Pattern Opcode for matching
 fn opcode_to_pattern(opcode : @milkir.Opcode) -> PatternOpcode? {
-  match opcode {
+  match opcode.for_legacy_consumers() {
     Iadd => Some(Iadd)
     Isub => Some(Isub)
     Imul => Some(Imul)
@@ -152,14 +152,14 @@ fn match_pattern_impl(
     }
     ConstInt(expected) =>
       // Check if this is an iconst with the expected value
-      if inst.opcode is Iconst(val) {
+      if inst.opcode.for_legacy_consumers() is Iconst(val) {
         val == expected
       } else {
         false
       }
     ConstFloat(expected) =>
       // Check if this is an fconst with the expected value
-      if inst.opcode is Fconst(val) {
+      if inst.opcode.for_legacy_consumers() is Fconst(val) {
         // For F32, bits are packed in the lower 32 bits of the Double
         // For F64, the Double is the actual value
         if inst.first_result() is Some(r) && r.ty is F32 {
@@ -174,7 +174,7 @@ fn match_pattern_impl(
       }
     AnyConstInt =>
       // Match any integer constant
-      if inst.opcode is Iconst(val) {
+      if inst.opcode.for_legacy_consumers() is Iconst(val) {
         result.add_int_const(val)
         true
       } else {
@@ -188,9 +188,9 @@ fn match_pattern_impl(
         None => return false
       }
       // For iconst/fconst, capture the constant
-      if inst.opcode is Iconst(v) {
+      if inst.opcode.for_legacy_consumers() is Iconst(v) {
         result.add_int_const(v)
-      } else if inst.opcode is Fconst(v) {
+      } else if inst.opcode.for_legacy_consumers() is Fconst(v) {
         result.add_float_const(v)
       }
       // Match sub-patterns against operands
@@ -207,7 +207,7 @@ fn match_pattern_impl(
             let def_inst = find_defining_inst(ctx, operand)
             match def_inst {
               Some(def) =>
-                if def.opcode is Iconst(val) {
+                if def.opcode.for_legacy_consumers() is Iconst(val) {
                   if val != expected {
                     return false
                   }
@@ -222,7 +222,7 @@ fn match_pattern_impl(
             let def_inst = find_defining_inst(ctx, operand)
             match def_inst {
               Some(def) =>
-                if def.opcode is Fconst(val) {
+                if def.opcode.for_legacy_consumers() is Fconst(val) {
                   // For F32, bits are packed in the lower 32 bits of the Double
                   let matches = if def.first_result() is Some(r) && r.ty is F32 {
                     let stored_bits = val.reinterpret_as_int64().to_int()
@@ -246,7 +246,7 @@ fn match_pattern_impl(
             let def_inst = find_defining_inst(ctx, operand)
             match def_inst {
               Some(def) =>
-                if def.opcode is Iconst(val) {
+                if def.opcode.for_legacy_consumers() is Iconst(val) {
                   result.add_int_const(val)
                 } else {
                   return false

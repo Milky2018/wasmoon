@@ -98,6 +98,22 @@ pub fn Function::verify(self : Function) -> Unit raise VerifyError {
 }
 
 ///|
+/// Verify that a function is self-contained core MilkIR. Dialect-bearing
+/// instructions must be validated and lowered by their owning adapter.
+pub fn Function::verify_core(self : Function) -> Unit raise VerifyError {
+  self.verify()
+  for block in self.blocks {
+    for inst in block.instructions {
+      if inst.opcode is Ext(ext, _) {
+        raise UnverifiableInstruction(
+          message="unresolved dialect operation \{ext.dialect}.\{ext.opcode} is not core MilkIR",
+        )
+      }
+    }
+  }
+}
+
+///|
 fn record_definition(
   value : Value,
   declared_type : Type,

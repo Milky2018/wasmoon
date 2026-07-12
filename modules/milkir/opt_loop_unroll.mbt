@@ -83,7 +83,7 @@ fn find_integer_constant_outside_loop_inner(
     }
     for inst in block.instructions {
       guard inst.results.any(result => result.id == value.id) else { continue }
-      match inst.opcode {
+      match inst.opcode.for_legacy_consumers() {
         Iconst(constant) => return Some(constant)
         Copy =>
           if inst.operands.length() == 1 && inst.operands[0].ty == value.ty {
@@ -463,7 +463,7 @@ fn analyze_counted_loop(
       }
     }
   }
-  let original_condition = match comparison.opcode {
+  let original_condition = match comparison.opcode.for_legacy_consumers() {
     Icmp(cc) => cc
     _ => return Skip("loop test must be an ordered integer comparison")
   }
@@ -591,12 +591,13 @@ fn analyze_counted_loop(
     Some(inst) => inst
     None => return Skip("latch induction update must be defined in the loop")
   }
-  if (update.opcode != Iadd && update.opcode != Isub) ||
+  let update_opcode = update.opcode.for_legacy_consumers()
+  if (update_opcode != Iadd && update_opcode != Isub) ||
     update.operands.length() != 2 ||
     update.results.length() != 1 {
     return Skip("induction update must be iadd or isub")
   }
-  if update.opcode == Isub && update.operands[0].id != induction.id {
+  if update_opcode == Isub && update.operands[0].id != induction.id {
     return Skip("isub induction updates must subtract from the induction value")
   }
   let step_value = if update.operands[0].id == induction.id {
@@ -639,7 +640,7 @@ fn analyze_counted_loop(
     None => return Skip("loop bound is out of range")
   }
   let (direction, step_magnitude) = match
-    counted_step(step_constant, induction.ty, signedness, update.opcode) {
+    counted_step(step_constant, induction.ty, signedness, update_opcode) {
     Some(value) => value
     None => return Skip("induction step is zero or out of range")
   }

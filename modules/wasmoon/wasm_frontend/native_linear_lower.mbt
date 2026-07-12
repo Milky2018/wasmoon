@@ -503,12 +503,21 @@ fn push_direct_call(
   }
   let result_types = func_type.results.map(wasm_value_type_to_milkir)
   if result_types.length() == 0 {
-    emit_void_op(builder, CallPtr(func_type.params.length(), 0), args)
+    emit_void_op(
+      builder,
+      Call(@milkir.CallOp::Pointer(func_type.params.length() + 1, 0)),
+      args,
+    )
   } else {
     guard emit_multi_op(
         builder,
         result_types,
-        CallPtr(func_type.params.length(), result_types.length()),
+        Call(
+          @milkir.CallOp::Pointer(
+            func_type.params.length() + 1,
+            result_types.length(),
+          ),
+        ),
         args,
       )
       is Some(results) else {

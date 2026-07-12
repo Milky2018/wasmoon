@@ -77,7 +77,7 @@ test "verify rejects floating-point integer equality" {
   let rhs = func.add_param(F64)
   let result = func.new_value(I32)
   let entry = func.new_block([])
-  entry.append_inst(func.new_inst(IcmpEq, [lhs, rhs], [result]))
+  entry.append_inst(func.new_inst(Icmp(Eq), [lhs, rhs], [result]))
   entry.set_terminator(Return([]))
   expect_verify_rejection(func, "integer equality operand types")
 }
@@ -98,17 +98,6 @@ test "verify rejects malformed select types" {
 }
 
 ///|
-test "verify rejects generic loads with non-pointer addresses" {
-  let func = Function::new_empty("bad_generic_load_address")
-  let address = func.add_param(F32)
-  let result = func.new_value(V128)
-  let entry = func.new_block([])
-  entry.append_inst(func.new_inst(Load, [address], [result]))
-  entry.set_terminator(Return([]))
-  expect_verify_rejection(func, "generic load address type")
-}
-
-///|
 test "verify rejects narrow loads with non-integer results" {
   let func = Function::new_empty("bad_narrow_load_result")
   let address = func.add_param(Ptr)
@@ -116,7 +105,11 @@ test "verify rejects narrow loads with non-integer results" {
   let result = func.new_value(F64)
   let entry = func.new_block([])
   entry.append_inst(
-    func.new_inst(LoadPtrNarrow(F64, 8, false), [address, offset], [result]),
+    func.new_inst(
+      Memory(MemoryOp::LoadNarrow(F64, 8, false)),
+      [address, offset],
+      [result],
+    ),
   )
   entry.set_terminator(Return([]))
   expect_verify_rejection(func, "narrow load result type")
@@ -134,27 +127,16 @@ test "verify rejects malformed SIMD operand arity" {
 }
 
 ///|
-test "verify rejects indirect calls that disagree with their signature" {
-  let func = Function::new_empty("bad_indirect_call")
-  let callee = func.add_param(Ptr)
-  let result = func.new_value(I64)
-  let entry = func.new_block([])
-  entry.append_inst(
-    func.new_inst(CallIndirect(Signature([I32], [I64])), [callee], [result]),
-  )
-  entry.set_terminator(Return([]))
-  expect_verify_rejection(func, "call_indirect argument arity")
-}
-
-///|
 test "verify rejects direct calls that disagree with their signature" {
   let func = Function::new_empty("bad_direct_call")
   let result = func.new_value(I64)
   let entry = func.new_block([])
   entry.append_inst(
-    func.new_inst(Call(ExternalSymbol("callee"), Signature([I32], [I64])), [], [
-      result,
-    ]),
+    func.new_inst(
+      Call(CallOp::Direct(ExternalSymbol("callee"), Signature([I32], [I64]))),
+      [],
+      [result],
+    ),
   )
   entry.set_terminator(Return([]))
   expect_verify_rejection(func, "call argument arity")
@@ -164,7 +146,7 @@ test "verify rejects direct calls that disagree with their signature" {
 test "verify rejects pointer calls that disagree with declared counts" {
   let func = Function::new_empty("bad_pointer_call")
   let entry = func.new_block([])
-  entry.append_inst(func.new_inst(CallPtr(2, 1), [], []))
+  entry.append_inst(func.new_inst(Call(CallOp::Pointer(2, 1)), [], []))
   entry.set_terminator(Return([]))
   expect_verify_rejection(func, "call_ptr argument and result counts")
 }
@@ -173,7 +155,7 @@ test "verify rejects pointer calls that disagree with declared counts" {
 test "verify rejects negative pointer call counts" {
   let func = Function::new_empty("negative_pointer_call_counts")
   let entry = func.new_block([])
-  entry.append_inst(func.new_inst(CallPtr(-2, 0), [], []))
+  entry.append_inst(func.new_inst(Call(CallOp::Pointer(-2, 0)), [], []))
   entry.set_terminator(Return([]))
   expect_verify_rejection(func, "negative call_ptr argument count")
 }
@@ -195,34 +177,23 @@ test "verify rejects a non-pointer call_ptr function carrier" {
   let callee_context = func.add_param(I64)
   let entry = func.new_block([])
   entry.append_inst(
-    func.new_inst(CallPtr(0, 0), [func_ptr, callee_context], []),
+    func.new_inst(Call(CallOp::Pointer(1, 0)), [func_ptr, callee_context], []),
   )
   entry.set_terminator(Return([]))
   expect_verify_rejection(func, "non-pointer call_ptr function carrier")
 }
 
 ///|
-test "verify rejects a non-pointer call_ptr context carrier" {
-  let func = Function::new_empty("floating_context_pointer_call")
+test "verify treats pointer call operands after the callee as ordinary arguments" {
+  let func = Function::new_empty("generic_pointer_call_arguments")
   let func_ptr = func.add_param(I64)
-  let callee_context = func.add_param(F64)
+  let floating_argument = func.add_param(F64)
   let entry = func.new_block([])
   entry.append_inst(
-    func.new_inst(CallPtr(0, 0), [func_ptr, callee_context], []),
+    func.new_inst(Call(CallOp::Pointer(1, 0)), [func_ptr, floating_argument], []),
   )
   entry.set_terminator(Return([]))
-  expect_verify_rejection(func, "non-pointer call_ptr context carrier")
-}
-
-///|
-test "verify rejects custom instructions that disagree with their contract" {
-  let func = Function::new_empty("untyped_custom")
-  let entry = func.new_block([])
-  entry.append_inst(
-    func.new_inst(Custom("unknown", Signature([I32], [])), [], []),
-  )
-  entry.set_terminator(Return([]))
-  expect_verify_rejection(func, "custom instruction contract")
+  inspect(func.verify(), content="()")
 }
 
 ///|
@@ -233,6 +204,26 @@ test "verify rejects extension instructions that disagree with their contract" {
   entry.append_inst(func.new_inst(Ext(ext, Signature([I32], [])), [], []))
   entry.set_terminator(Return([]))
   expect_verify_rejection(func, "extension instruction contract")
+}
+
+///|
+test "verify_core rejects unresolved dialect operations" {
+  let func = Function::new_empty("dialect_is_not_core")
+  let entry = func.new_block([])
+  let ext = ExtOp::ExtOp("wasm", "example", [])
+  entry.append_inst(func.new_inst(Ext(ext, Signature([], [])), [], []))
+  entry.set_terminator(Return([]))
+  inspect(func.verify(), content="()")
+  try func.verify_core() catch {
+    UnverifiableInstruction(message~) =>
+      inspect(
+        message,
+        content="unresolved dialect operation wasm.example is not core MilkIR",
+      )
+    err => fail("unexpected verification error: \{err}")
+  } noraise {
+    _ => fail("expected core verification to reject dialect operation")
+  }
 }
 
 ///|

@@ -3,9 +3,17 @@
 ///|
 /// Check if an instruction reads from memory
 fn reads_memory(opcode : Opcode) -> Bool {
-  match opcode {
-    LoadPtr(_) | LoadPtrNarrow(_, _, _) => true
-    Call(_, _) => true
+  match opcode.for_legacy_consumers() {
+    LoadPtr(_)
+    | LoadPtrNarrow(_, _, _)
+    | Memory(MemoryOp::Load(_) | MemoryOp::LoadNarrow(_, _, _))
+    | Vector(
+      VectorOp::LoadExtend(_, _)
+      | VectorOp::LoadSplat(_)
+      | VectorOp::LoadZero(_)
+      | VectorOp::LoadLane(_, _)
+    ) => true
+    Call(_) => true
     Ext(_, _) => true
     _ => false
   }
@@ -15,11 +23,13 @@ fn reads_memory(opcode : Opcode) -> Bool {
 /// Check if an instruction may write to memory or have other side effects
 /// that could invalidate memory-based expressions
 fn may_write_memory(opcode : Opcode) -> Bool {
-  match opcode {
+  match opcode.for_legacy_consumers() {
     // Direct memory writes
-    StorePtr(_) | StorePtrNarrow(_) => true
-    Call(_, _) => true
-    CallPtr(_, _) => true
+    StorePtr(_)
+    | StorePtrNarrow(_)
+    | Memory(MemoryOp::Store(_) | MemoryOp::StoreNarrow(_))
+    | Vector(VectorOp::StoreLane(_, _)) => true
+    Call(_) => true
     Ext(_, _) => true
     _ => false
   }
@@ -219,8 +229,14 @@ fn update_last_store_state(
   inst_version : StoreVersion,
   ptr_base_infos : @hashmap.HashMap[Int, PtrBaseInfo],
 ) -> Unit {
-  if (inst.opcode is StorePtr(_) || inst.opcode is StorePtrNarrow(_)) &&
-    ptr_access_from_inst(inst, ptr_base_infos) is Some(access) {
+  let is_store = match inst.opcode.for_legacy_consumers() {
+    StorePtr(_)
+    | StorePtrNarrow(_)
+    | Memory(MemoryOp::Store(_) | MemoryOp::StoreNarrow(_))
+    | Vector(VectorOp::StoreLane(_, _)) => true
+    _ => false
+  }
+  if is_store && ptr_access_from_inst(inst, ptr_base_infos) is Some(access) {
     state.set_region_token(access.region, inst_version)
     return
   }
@@ -299,7 +315,7 @@ fn collect_iconst_values(func : Function) -> @hashmap.HashMap[Int, Int64] {
   for block in func.blocks {
     for inst in block.instructions {
       if inst.first_result() is Some(v) {
-        match inst.opcode {
+        match inst.opcode.for_legacy_consumers() {
           Iconst(value) => result.set(v.id, value)
           Copy =>
             if inst.operands.length() > 0 &&
@@ -342,7 +358,8 @@ fn collect_ptr_base_infos(
     for block in func.blocks {
       for inst in block.instructions {
         if inst.first_result() is Some(v) && result.get(v.id) is None {
-          let inferred : PtrBaseInfo? = match inst.opcode {
+          let inferred : PtrBaseInfo? = match
+            inst.opcode.for_legacy_consumers() {
             Ext(_, _) => None
             Copy | Bitcast | Uextend | Sextend | Ireduce =>
               if inst.operands.length() > 0 {
@@ -406,8 +423,8 @@ fn ptr_access_from_inst(
   inst : Inst,
   ptr_base_infos : @hashmap.HashMap[Int, PtrBaseInfo],
 ) -> PtrAccess? {
-  match inst.opcode {
-    LoadPtr(_) =>
+  match inst.opcode.for_legacy_consumers() {
+    LoadPtr(_) | Memory(MemoryOp::Load(_)) =>
       if inst.operands.length() >= 2 {
         let base = inst.operands[0]
         let offset = inst.operands[1]
@@ -419,7 +436,7 @@ fn ptr_access_from_inst(
       } else {
         None
       }
-    LoadPtrNarrow(_, _, _) =>
+    LoadPtrNarrow(_, _, _) | Memory(MemoryOp::LoadNarrow(_, _, _)) =>
       if inst.operands.length() >= 2 {
         let base = inst.operands[0]
         let offset = inst.operands[1]
@@ -431,7 +448,7 @@ fn ptr_access_from_inst(
       } else {
         None
       }
-    StorePtr(_) =>
+    StorePtr(_) | Memory(MemoryOp::Store(_)) =>
       if inst.operands.length() >= 3 {
         let base = inst.operands[0]
         let offset = inst.operands[2]
@@ -443,7 +460,7 @@ fn ptr_access_from_inst(
       } else {
         None
       }
-    StorePtrNarrow(_) =>
+    StorePtrNarrow(_) | Memory(MemoryOp::StoreNarrow(_)) =>
       if inst.operands.length() >= 3 {
         let base = inst.operands[0]
         let offset = inst.operands[2]
@@ -515,13 +532,16 @@ fn is_gvn_candidate(inst : Inst) -> Bool {
   }
   // Instructions that write memory are handled by invalidation, not skipped
   // But we still need to skip them as candidates
-  match inst.opcode {
+  match inst.opcode.for_legacy_consumers() {
     // Division/remainder can trap, not suitable
     Sdiv | Udiv | Srem | Urem => false
     // Float-to-int can trap
     FcvtToSint | FcvtToUint => false
     // Memory writes are handled by may_write_memory, skip as candidates
-    StorePtr(_) | StorePtrNarrow(_) => false
+    StorePtr(_)
+    | StorePtrNarrow(_)
+    | Memory(MemoryOp::Store(_) | MemoryOp::StoreNarrow(_))
+    | Vector(VectorOp::StoreLane(_, _)) => false
     // All other non-side-effect instructions are candidates
     _ => true
   }
@@ -567,7 +587,8 @@ fn run_global_value_numbering(func : Function) -> OptResult {
     // Process instructions
     for inst_index, inst in block.instructions {
       let mut replaced_by_memory = false
-      if inst.opcode is LoadPtr(load_ty) &&
+      if inst.opcode.for_legacy_consumers()
+        is (LoadPtr(load_ty) | Memory(MemoryOp::Load(load_ty))) &&
         ptr_access_from_inst(inst, ptr_base_infos) is Some(load_access) {
         let key = memory_key_from_access(
           load_access,
@@ -589,7 +610,8 @@ fn run_global_value_numbering(func : Function) -> OptResult {
           replaced_by_memory = true
         }
       }
-      if inst.opcode is StorePtr(store_ty) &&
+      if inst.opcode.for_legacy_consumers()
+        is (StorePtr(store_ty) | Memory(MemoryOp::Store(store_ty))) &&
         ptr_access_from_inst(inst, ptr_base_infos) is Some(store_access) &&
         inst.operands.length() >= 2 {
         let key = memory_key_from_access(

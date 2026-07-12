@@ -47,11 +47,15 @@ pub fn lower_c_libcall(LoweringContext, @block.Block, @abi.VReg, Array[@abi.VReg
 
 pub fn lower_c_libcall_direct(LoweringContext, @block.Block, @instr.ExternalName, Array[@abi.VReg], @abi.VReg?) -> Unit
 
-pub fn lower_function(@milkir.Function, isa? : @isa.ISA, embedding_abi? : @abi.EmbeddingABI?, external_helper_symbols? : Map[String, String], trap_payload_resolver? : (String) -> Int, extension_lowerer? : ((LoweringContext, @milkir.Inst, @block.Block, @milkir.ExtOp) -> ExtensionLowerResult)?, num_imports? : Int, run_ir_opt? : Bool) -> @machv.Function
+pub fn lower_core_function_with_config(@milkir.Function, LoweringConfig) -> @machv.Function
+
+pub fn lower_dialect_function(@milkir.Function, (LoweringContext, @milkir.Inst, @block.Block, @milkir.ExtOp) -> ExtensionLowerResult, isa? : @isa.ISA, embedding_abi? : @abi.EmbeddingABI?, external_helper_symbols? : Map[String, String], trap_payload_resolver? : (String) -> Int, num_imports? : Int, run_ir_opt? : Bool) -> @machv.Function
+
+pub fn lower_dialect_function_with_config(@milkir.Function, LoweringConfig, (LoweringContext, @milkir.Inst, @block.Block, @milkir.ExtOp) -> ExtensionLowerResult) -> @machv.Function
+
+pub fn lower_function(@milkir.Function, isa? : @isa.ISA, embedding_abi? : @abi.EmbeddingABI?, external_helper_symbols? : Map[String, String], trap_payload_resolver? : (String) -> Int, num_imports? : Int, run_ir_opt? : Bool) -> @machv.Function
 
 pub fn lower_function_optimized(@milkir.Function) -> @machv.Function
-
-pub fn lower_function_with_config(@milkir.Function, LoweringConfig) -> @machv.Function
 
 pub fn lower_inst_with_patterns(LoweringContext, @milkir.Inst, @block.Block, Array[RewriteRule]) -> Bool
 

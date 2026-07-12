@@ -108,11 +108,11 @@ test "builder prints pointer operations" {
       #|function load_store(v0:ptr) -> i32 {
       #|block0:
       #|    v1:i64 = iconst 0
-      #|    v2:i32 = load_ptr.i32 v0, v1
+      #|    v2:i32 = load.i32 v0, v1
       #|    v3:i32 = iconst 1
       #|    v4:i32 = iadd v2, v3
       #|    v5:i64 = iconst 4
-      #|    store_ptr.i32 v0, v4, v5
+      #|    store.i32 v0, v4, v5
       #|    return v4
       #|}
       #|
@@ -136,9 +136,9 @@ test "builder prints narrow pointer operations" {
       #|function narrow_mem(v0:ptr) -> i32 {
       #|block0:
       #|    v1:i64 = iconst 2
-      #|    v2:i32 = load_ptr8_s.i32 v0, v1
+      #|    v2:i32 = load8_s.i32 v0, v1
       #|    v3:i64 = iconst 6
-      #|    store_ptr16 v0, v2, v3
+      #|    store16 v0, v2, v3
       #|    return v2
       #|}
       #|
@@ -282,13 +282,15 @@ test "verify checks jump arguments against block parameters" {
 }
 
 ///|
-test "optimizer preserves indirect calls with unused results" {
-  let func = Function::new_empty("indirect_effect")
-  let callee = func.add_param(Ptr)
+test "optimizer preserves external calls with unused results" {
+  let func = Function::new_empty("external_effect")
+  let symbol = func.declare_external_symbol("effect")
   let ignored = func.new_value(I32)
   let entry = func.new_block([])
   entry.append_inst(
-    func.new_inst(CallIndirect(Signature([], [I32])), [callee], [ignored]),
+    func.new_inst(Call(CallOp::Direct(symbol, Signature([], [I32]))), [], [
+      ignored,
+    ]),
   )
   entry.set_terminator(Return([]))
   optimize_with_level(func, O1) |> ignore
@@ -415,35 +417,80 @@ test "dead code pass keeps unused loads without alias metadata" {
 }
 
 ///|
-test "dead code pass keeps multi-result instructions with a live later result" {
-  let func = Function::new_empty("keep_live_second_result")
-  func.add_result(I64)
-  let unused = func.new_value(I32)
-  let live = func.new_value(I64)
-  let entry = func.new_block([])
-  entry.append_inst(
-    func.new_inst(Custom("pair", Signature([], [I32, I64])), [], [unused, live]),
+test "memory operations use the semantic opcode family" {
+  let builder = FunctionBuilder::FunctionBuilder("memory_family")
+  let address = builder.add_param(Ptr)
+  let value = builder.add_param(I32)
+  builder.add_result(I32)
+  let offset = builder.iconst_i64(0L)
+  let loaded = builder.load_ptr(I32, address, offset)
+  builder.store_ptr(I32, address, value, offset)
+  builder.return_([loaded])
+  let func = builder.get_function()
+  inspect(
+    func.blocks[0].instructions[1].opcode is Memory(MemoryOp::Load(I32)),
+    content="true",
   )
-  entry.set_terminator(Return([live]))
-  let result = eliminate_dead_code(func)
-  inspect(result.changed, content="false")
-  inspect(instruction_count(func), content="1")
+  inspect(
+    func.blocks[0].instructions[2].opcode is Memory(MemoryOp::Store(I32)),
+    content="true",
+  )
   inspect(func.verify(), content="()")
 }
 
 ///|
-test "dead code pass removes multi-result instructions when all results are dead" {
-  let func = Function::new_empty("remove_dead_pair")
-  let first = func.new_value(I32)
-  let second = func.new_value(I64)
-  let entry = func.new_block([])
-  entry.append_inst(
-    func.new_inst(Custom("pair", Signature([], [I32, I64])), [], [first, second]),
+test "vector operations use the semantic opcode family" {
+  let builder = FunctionBuilder::FunctionBuilder("vector_family")
+  let scalar = builder.add_param(I32)
+  builder.add_result(V128)
+  let vector = builder.v128_splat32(scalar)
+  builder.return_([vector])
+  let func = builder.get_function()
+  inspect(
+    func.blocks[0].instructions[0].opcode
+    is Vector(VectorOp::Splat(VectorLane::I32)),
+    content="true",
   )
-  entry.set_terminator(Return([]))
-  let result = eliminate_dead_code(func)
-  inspect(result.changed, content="true")
-  inspect(instruction_count(func), content="0")
+  inspect(func.verify(), content="()")
+}
+
+///|
+test "scalar operations use typed semantic families" {
+  let builder = FunctionBuilder::FunctionBuilder("scalar_family")
+  let lhs = builder.add_param(I64)
+  let rhs = builder.add_param(I64)
+  builder.add_result(I32)
+  let sum = builder.iadd(lhs, rhs)
+  let compared = builder.icmp(IntCC::Ult, sum, rhs)
+  builder.return_([compared])
+  let instructions = builder.get_function().blocks[0].instructions
+  inspect(
+    instructions[0].opcode is Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)),
+    content="true",
+  )
+  inspect(
+    instructions[1].opcode is Scalar(ScalarOp::IntCompare(IntCC::Ult)),
+    content="true",
+  )
+}
+
+///|
+test "vector memory operations discard Wasm memory arguments" {
+  let builder = FunctionBuilder::FunctionBuilder("vector_memory_family")
+  let address = builder.add_param(Ptr)
+  builder.add_result(V128)
+  let loaded = builder.v128_load_with_addr(V128Load8x8S(7, 4, 32L), address)
+  builder.return_([loaded])
+  let func = builder.get_function()
+  inspect(
+    func.blocks[0].instructions[0].opcode
+    is Vector(VectorOp::LoadExtend(VectorLane::I8, VectorExtension::Signed)),
+    content="true",
+  )
+  let printed = func.print()
+  inspect(printed.contains("v128.load8x8_s"), content="true")
+  inspect(printed.contains("mem="), content="false")
+  inspect(printed.contains("offset="), content="false")
   inspect(func.verify(), content="()")
 }
 
@@ -501,19 +548,21 @@ test "O3 derives power-of-two constants when the e-graph is skipped" {
   optimize_with_level(func, O3) |> ignore
   let instructions = func.blocks[0].instructions
   inspect(instructions.length(), content="303")
-  inspect(instructions[297].opcode, content="Iconst(3)")
-  inspect(instructions[298].opcode, content="Ishl")
-  inspect(instructions[299].opcode, content="Iconst(3)")
-  inspect(instructions[300].opcode, content="Ushr")
-  inspect(instructions[301].opcode, content="Iconst(7)")
-  inspect(instructions[302].opcode, content="Band")
+  inspect(instructions[297].opcode, content="Scalar(IntConst(3))")
+  inspect(instructions[298].opcode, content="Scalar(IntBinary(ShiftLeft))")
+  inspect(instructions[299].opcode, content="Scalar(IntConst(3))")
+  inspect(
+    instructions[300].opcode,
+    content="Scalar(IntBinary(UnsignedShiftRight))",
+  )
+  inspect(instructions[301].opcode, content="Scalar(IntConst(7))")
+  inspect(instructions[302].opcode, content="Scalar(IntBinary(And))")
   inspect(func.verify(), content="()")
 }
 
 ///|
 test "O3 does not duplicate loop side effects without a safe unroll proof" {
   let builder = FunctionBuilder::FunctionBuilder("o3_loop_side_effect")
-  let callee = builder.add_param(Ptr)
   let condition = builder.add_param(I32)
   let header = builder.create_block()
   let body = builder.create_block()
@@ -523,22 +572,25 @@ test "O3 does not duplicate loop side effects without a safe unroll proof" {
   builder.brnz(condition, body, exit)
   builder.switch_to_block(body)
   let func = builder.get_function()
+  let symbol = func.declare_external_symbol("effect")
   builder
   .current_block()
-  .append_inst(func.new_inst(CallIndirect(Signature([], [])), [callee], []))
+  .append_inst(
+    func.new_inst(Call(CallOp::Direct(symbol, Signature([], []))), [], []),
+  )
   builder.jump(header, [])
   builder.switch_to_block(exit)
   builder.return_([])
   optimize_with_level(func, O3) |> ignore
-  let mut indirect_calls = 0
+  let mut external_calls = 0
   for block in func.blocks {
     for inst in block.instructions {
-      if inst.opcode is CallIndirect(_) {
-        indirect_calls = indirect_calls + 1
+      if inst.opcode is Call(_) {
+        external_calls = external_calls + 1
       }
     }
   }
-  inspect(indirect_calls, content="1")
+  inspect(external_calls, content="1")
   inspect(func.verify(), content="()")
 }
 
@@ -1168,8 +1220,8 @@ test "CSE keeps duplicate loads without alias metadata" {
       #|function no_load_cse(v0:ptr) -> i32 {
       #|block0:
       #|    v1:i64 = iconst 0
-      #|    v2:i32 = load_ptr.i32 v0, v1
-      #|    v3:i32 = load_ptr.i32 v0, v1
+      #|    v2:i32 = load.i32 v0, v1
+      #|    v3:i32 = load.i32 v0, v1
       #|    return v3
       #|}
       #|

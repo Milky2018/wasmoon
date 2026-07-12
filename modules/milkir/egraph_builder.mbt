@@ -132,7 +132,7 @@ fn type_bits(ty : Type) -> Int {
 /// This is intentionally narrower than generic IR purity: admission also needs
 /// an explicit encoding in the e-graph node language.
 fn opcode_has_egraph_encoding(opcode : Opcode) -> Bool {
-  match opcode {
+  match opcode.for_legacy_consumers() {
     Iconst(_) => true
     Iadd | Isub | Imul => true
     Band | Bor | Bxor | Bnot => true
@@ -163,7 +163,7 @@ fn opcode_to_eopcode(inst : Inst) -> @egraph.EOpcode? {
   if !inst_is_egraph_pure(inst) {
     return None
   }
-  match inst.opcode {
+  match inst.opcode.for_legacy_consumers() {
     Iconst(c) => Some(Const(c))
     Iadd => Some(Add)
     Isub => Some(Sub)
@@ -465,15 +465,15 @@ fn optimize_function_with_stats_with_limits_and_ruleset(
           builder.get_simplified_opcode(v) is Some(op) {
           if op is Iconst(c) {
             let mut inst_changed = false
-            match inst.opcode {
+            match inst.opcode.for_legacy_consumers() {
               Iconst(old_c) =>
                 if old_c != c || inst.operands.length() > 0 {
-                  inst.opcode = Iconst(c)
+                  inst.opcode = Iconst(c).canonicalize()
                   inst.operands.clear()
                   inst_changed = true
                 }
               _ => {
-                inst.opcode = Iconst(c)
+                inst.opcode = Iconst(c).canonicalize()
                 inst.operands.clear()
                 inst_changed = true
               }
@@ -481,8 +481,8 @@ fn optimize_function_with_stats_with_limits_and_ruleset(
             if inst_changed {
               changed = true
             }
-          } else if inst.opcode != op {
-            inst.opcode = op
+          } else if inst.opcode.for_legacy_consumers() != op {
+            inst.opcode = op.canonicalize()
             changed = true
           }
         }

@@ -175,13 +175,6 @@ pub impl Hash for ExtOp with fn hash_combine(self, hasher) {
 }
 
 ///|
-pub struct StackSlot {
-  id : Int
-  size : Int
-  align : Int
-} derive(Eq, Debug, Hash)
-
-///|
 pub(all) enum Metadata {
   SourceLoc(String)
   Comment(String)
@@ -289,7 +282,7 @@ pub impl Eq for Inst with fn equal(self, other) {
 ///|
 fn hash_opcode_identity(opcode : Opcode, hasher : Hasher) -> Unit {
   match opcode {
-    Fconst(value) => {
+    Fconst(value) | Scalar(ScalarOp::FloatConst(value)) => {
       "milkir.fconst.bits".hash_combine(hasher)
       value.reinterpret_as_uint64().hash_combine(hasher)
     }
@@ -300,9 +293,14 @@ fn hash_opcode_identity(opcode : Opcode, hasher : Hasher) -> Unit {
 ///|
 fn opcode_identity_equal(lhs : Opcode, rhs : Opcode) -> Bool {
   match (lhs, rhs) {
-    (Fconst(a), Fconst(b)) =>
-      a.reinterpret_as_uint64() == b.reinterpret_as_uint64()
-    (Fconst(_), _) | (_, Fconst(_)) => false
+    (
+      Fconst(a)
+      | Scalar(ScalarOp::FloatConst(a)),
+      Fconst(b)
+      | Scalar(ScalarOp::FloatConst(b)),
+    ) => a.reinterpret_as_uint64() == b.reinterpret_as_uint64()
+    (Fconst(_) | Scalar(ScalarOp::FloatConst(_)), _)
+    | (_, Fconst(_) | Scalar(ScalarOp::FloatConst(_))) => false
     _ => lhs == rhs
   }
 }
@@ -315,6 +313,12 @@ fn Inst::new_with_id(
   results : Array[Value],
 ) -> Inst {
   { id, results, opcode, args, operands: args, metadata: [] }
+}
+
+///|
+/// Return an instruction view with a different opcode and shared SSA data.
+pub fn Inst::with_opcode(self : Inst, opcode : Opcode) -> Inst {
+  { ..self, opcode, }
 }
 
 ///|
@@ -339,8 +343,727 @@ pub fn Inst::all_results(self : Inst) -> Array[Value] {
 }
 
 ///|
+/// Generic memory semantics over an explicit address and offset operand.
+pub(all) enum MemoryOp {
+  Load(Type)
+  Store(Type)
+  LoadNarrow(Type, Int, Bool)
+  StoreNarrow(Int)
+} derive(Debug, Eq, Hash)
+
+///|
+/// Generic call semantics. Pointer-call operands are laid out as the callee
+/// pointer followed by ordinary arguments.
+pub(all) enum CallOp {
+  Direct(ExternalSymbol, Signature)
+  Pointer(Int, Int)
+} derive(Debug, Eq, Hash)
+
+///|
+pub(all) enum VectorLane {
+  I8
+  I16
+  I32
+  I64
+  F32
+  F64
+} derive(Debug, Eq, Hash)
+
+///|
+pub(all) enum VectorExtension {
+  None
+  Signed
+  Unsigned
+} derive(Debug, Eq, Hash)
+
+///|
+/// Language-neutral vector operations. The legacy flat variants remain
+/// temporarily as expand-contract compatibility forms.
+pub(all) enum VectorOp {
+  // ============================================
+  // SIMD operations (V128)
+  // ============================================
+
+  // V128 constant - 16 bytes stored as Bytes
+  V128Const(Bytes)
+
+  // Splat - replicate scalar to all lanes
+  // operand: scalar value, result: v128
+  Splat(VectorLane)
+
+  // Extract lane - extract scalar from vector
+  // operand: v128, result: scalar
+  ExtractLane(VectorLane, VectorExtension, Int)
+
+  // Replace lane - replace scalar in vector
+  // operands: v128, scalar, result: v128
+  ReplaceLane(VectorLane, Int)
+
+  // Shuffle - select lanes from two vectors
+  // operands: v128, v128, result: v128
+  V128Shuffle(FixedArray[Int]) // 16 lane indices (0-31)
+
+  // Swizzle - permute lanes based on indices vector
+  // operands: v128 (values), v128 (indices), result: v128
+  V128Swizzle
+
+  // Bitwise operations - v128 -> v128
+  V128Not
+  // Bitwise operations - v128, v128 -> v128
+  V128And
+  V128AndNot
+  V128Or
+  V128Xor
+  V128Bitselect // operands: v1, v2, mask
+
+  // Any true / All true
+  V128AnyTrue // v128 -> i32
+  V128AllTrue8 // i8x16.all_true: v128 -> i32
+  V128AllTrue16 // i16x8.all_true
+  V128AllTrue32 // i32x4.all_true
+  V128AllTrue64 // i64x2.all_true
+
+  // Bitmask - extract sign bits
+  V128Bitmask8 // i8x16.bitmask: v128 -> i32
+  V128Bitmask16 // i16x8.bitmask
+  V128Bitmask32 // i32x4.bitmask
+  V128Bitmask64 // i64x2.bitmask
+
+  // Integer arithmetic - v128, v128 -> v128
+  V128Add8
+  V128Add16
+  V128Add32
+  V128Add64
+  V128Sub8
+  V128Sub16
+  V128Sub32
+  V128Sub64
+  V128Mul16
+  V128Mul32
+  V128Mul64
+
+  // Saturating arithmetic
+  V128AddSat8S
+  V128AddSat8U
+  V128AddSat16S
+  V128AddSat16U
+  V128SubSat8S
+  V128SubSat8U
+  V128SubSat16S
+  V128SubSat16U
+
+  // Min/Max
+  V128Min8S
+  V128Min8U
+  V128Min16S
+  V128Min16U
+  V128Min32S
+  V128Min32U
+  V128Max8S
+  V128Max8U
+  V128Max16S
+  V128Max16U
+  V128Max32S
+  V128Max32U
+
+  // Average
+  V128Avgr8U
+  V128Avgr16U
+
+  // Unary - v128 -> v128
+  V128Abs8
+  V128Abs16
+  V128Abs32
+  V128Abs64
+  V128Neg8
+  V128Neg16
+  V128Neg32
+  V128Neg64
+  V128Popcnt8
+
+  // Shifts - v128, i32 -> v128
+  V128Shl8
+  V128Shl16
+  V128Shl32
+  V128Shl64
+  V128Shr8S
+  V128Shr8U
+  V128Shr16S
+  V128Shr16U
+  V128Shr32S
+  V128Shr32U
+  V128Shr64S
+  V128Shr64U
+
+  // Comparisons - v128, v128 -> v128 (all lanes compared)
+  V128Eq8
+  V128Eq16
+  V128Eq32
+  V128Eq64
+  V128Ne8
+  V128Ne16
+  V128Ne32
+  V128Ne64
+  V128Lt8S
+  V128Lt8U
+  V128Lt16S
+  V128Lt16U
+  V128Lt32S
+  V128Lt32U
+  V128Lt64S
+  V128Gt8S
+  V128Gt8U
+  V128Gt16S
+  V128Gt16U
+  V128Gt32S
+  V128Gt32U
+  V128Gt64S
+  V128Le8S
+  V128Le8U
+  V128Le16S
+  V128Le16U
+  V128Le32S
+  V128Le32U
+  V128Le64S
+  V128Ge8S
+  V128Ge8U
+  V128Ge16S
+  V128Ge16U
+  V128Ge32S
+  V128Ge32U
+  V128Ge64S
+
+  // Narrow - v128, v128 -> v128 (pack to smaller lanes)
+  V128Narrow16to8S
+  V128Narrow16to8U
+  V128Narrow32to16S
+  V128Narrow32to16U
+
+  // Extend - v128 -> v128 (widen from smaller lanes)
+  V128ExtendLow8to16S
+  V128ExtendHigh8to16S
+  V128ExtendLow8to16U
+  V128ExtendHigh8to16U
+  V128ExtendLow16to32S
+  V128ExtendHigh16to32S
+  V128ExtendLow16to32U
+  V128ExtendHigh16to32U
+  V128ExtendLow32to64S
+  V128ExtendHigh32to64S
+  V128ExtendLow32to64U
+  V128ExtendHigh32to64U
+
+  // Extended multiply - v128, v128 -> v128
+  V128ExtMulLow8to16S
+  V128ExtMulHigh8to16S
+  V128ExtMulLow8to16U
+  V128ExtMulHigh8to16U
+  V128ExtMulLow16to32S
+  V128ExtMulHigh16to32S
+  V128ExtMulLow16to32U
+  V128ExtMulHigh16to32U
+  V128ExtMulLow32to64S
+  V128ExtMulHigh32to64S
+  V128ExtMulLow32to64U
+  V128ExtMulHigh32to64U
+
+  // Extended add pairwise - v128 -> v128
+  V128ExtAddPairwise8to16S
+  V128ExtAddPairwise8to16U
+  V128ExtAddPairwise16to32S
+  V128ExtAddPairwise16to32U
+
+  // Dot product
+  V128Dot16to32S // i32x4.dot_i16x8_s
+
+  // Q15 multiply
+  V128Q15MulrSat16S
+
+  // Floating point arithmetic - v128, v128 -> v128
+  V128AddF32
+  V128AddF64
+  V128SubF32
+  V128SubF64
+  V128MulF32
+  V128MulF64
+  V128DivF32
+  V128DivF64
+  V128MinF32
+  V128MinF64
+  V128MaxF32
+  V128MaxF64
+  V128PMinF32
+  V128PMinF64
+  V128PMaxF32
+  V128PMaxF64
+
+  // Floating point unary - v128 -> v128
+  V128AbsF32
+  V128AbsF64
+  V128NegF32
+  V128NegF64
+  V128SqrtF32
+  V128SqrtF64
+  V128CeilF32
+  V128CeilF64
+  V128FloorF32
+  V128FloorF64
+  V128TruncF32
+  V128TruncF64
+  V128NearestF32
+  V128NearestF64
+
+  // Floating point comparisons - v128, v128 -> v128
+  V128EqF32
+  V128EqF64
+  V128NeF32
+  V128NeF64
+  V128LtF32
+  V128LtF64
+  V128GtF32
+  V128GtF64
+  V128LeF32
+  V128LeF64
+  V128GeF32
+  V128GeF64
+
+  // Conversions
+  V128TruncSatF32toI32S
+  V128TruncSatF32toI32U
+  V128TruncSatF64toI32SZero
+  V128TruncSatF64toI32UZero
+  V128ConvertI32toF32S
+  V128ConvertI32toF32U
+  V128ConvertLowI32toF64S
+  V128ConvertLowI32toF64U
+  V128DemoteF64toF32Zero
+  V128PromoteLowF32toF64
+
+  // Memory operations consume an already checked effective address. Wasm
+  // memory indices, alignment hints, and offsets belong to the frontend.
+  LoadExtend(VectorLane, VectorExtension)
+  LoadSplat(VectorLane)
+  LoadZero(VectorLane)
+  LoadLane(VectorLane, Int)
+  StoreLane(VectorLane, Int)
+
+  // Relaxed SIMD instructions
+  V128RelaxedSwizzle // v128, v128 -> v128 (same as swizzle on ARM)
+  V128RelaxedTruncF32toI32S // v128 -> v128
+  V128RelaxedTruncF32toI32U
+  V128RelaxedTruncF64toI32SZero
+  V128RelaxedTruncF64toI32UZero
+  V128RelaxedMaddF32 // v128, v128, v128 -> v128 (a * b + c)
+  V128RelaxedNmaddF32 // v128, v128, v128 -> v128 (-a * b + c)
+  V128RelaxedMaddF64
+  V128RelaxedNmaddF64
+  V128RelaxedLaneselect8 // v128, v128, v128 -> v128 (bitselect)
+  V128RelaxedLaneselect16
+  V128RelaxedLaneselect32
+  V128RelaxedLaneselect64
+  V128RelaxedMinF32 // v128, v128 -> v128
+  V128RelaxedMaxF32
+  V128RelaxedMinF64
+  V128RelaxedMaxF64
+  V128RelaxedQ15MulrS // v128, v128 -> v128
+  V128RelaxedDot8to16S // v128, v128 -> v128
+  V128RelaxedDot8to32AddS // v128, v128, v128 -> v128
+} derive(Debug, Eq, Hash)
+
+///|
+pub fn VectorOp::to_legacy_opcode(self : VectorOp) -> Opcode {
+  match self {
+    VectorOp::V128Const(arg0) => Opcode::V128Const(arg0)
+    VectorOp::Splat(lane) =>
+      match lane {
+        VectorLane::I8 => Opcode::V128Splat8
+        VectorLane::I16 => Opcode::V128Splat16
+        VectorLane::I32 => Opcode::V128Splat32
+        VectorLane::I64 => Opcode::V128Splat64
+        VectorLane::F32 => Opcode::V128SplatF32
+        VectorLane::F64 => Opcode::V128SplatF64
+      }
+    VectorOp::ExtractLane(lane, extension, index) =>
+      match (lane, extension) {
+        (VectorLane::I8, VectorExtension::Signed) =>
+          Opcode::V128ExtractLane8S(index)
+        (VectorLane::I8, VectorExtension::Unsigned) =>
+          Opcode::V128ExtractLane8U(index)
+        (VectorLane::I16, VectorExtension::Signed) =>
+          Opcode::V128ExtractLane16S(index)
+        (VectorLane::I16, VectorExtension::Unsigned) =>
+          Opcode::V128ExtractLane16U(index)
+        (VectorLane::I32, VectorExtension::None) =>
+          Opcode::V128ExtractLane32(index)
+        (VectorLane::I64, VectorExtension::None) =>
+          Opcode::V128ExtractLane64(index)
+        (VectorLane::F32, VectorExtension::None) =>
+          Opcode::V128ExtractLaneF32(index)
+        (VectorLane::F64, VectorExtension::None) =>
+          Opcode::V128ExtractLaneF64(index)
+        _ => abort("invalid vector extract-lane semantics")
+      }
+    VectorOp::ReplaceLane(lane, index) =>
+      match lane {
+        VectorLane::I8 => Opcode::V128ReplaceLane8(index)
+        VectorLane::I16 => Opcode::V128ReplaceLane16(index)
+        VectorLane::I32 => Opcode::V128ReplaceLane32(index)
+        VectorLane::I64 => Opcode::V128ReplaceLane64(index)
+        VectorLane::F32 => Opcode::V128ReplaceLaneF32(index)
+        VectorLane::F64 => Opcode::V128ReplaceLaneF64(index)
+      }
+    VectorOp::V128Shuffle(arg0) => Opcode::V128Shuffle(arg0)
+    VectorOp::V128Swizzle => Opcode::V128Swizzle
+    VectorOp::V128Not => Opcode::V128Not
+    VectorOp::V128And => Opcode::V128And
+    VectorOp::V128AndNot => Opcode::V128AndNot
+    VectorOp::V128Or => Opcode::V128Or
+    VectorOp::V128Xor => Opcode::V128Xor
+    VectorOp::V128Bitselect => Opcode::V128Bitselect
+    VectorOp::V128AnyTrue => Opcode::V128AnyTrue
+    VectorOp::V128AllTrue8 => Opcode::V128AllTrue8
+    VectorOp::V128AllTrue16 => Opcode::V128AllTrue16
+    VectorOp::V128AllTrue32 => Opcode::V128AllTrue32
+    VectorOp::V128AllTrue64 => Opcode::V128AllTrue64
+    VectorOp::V128Bitmask8 => Opcode::V128Bitmask8
+    VectorOp::V128Bitmask16 => Opcode::V128Bitmask16
+    VectorOp::V128Bitmask32 => Opcode::V128Bitmask32
+    VectorOp::V128Bitmask64 => Opcode::V128Bitmask64
+    VectorOp::V128Add8 => Opcode::V128Add8
+    VectorOp::V128Add16 => Opcode::V128Add16
+    VectorOp::V128Add32 => Opcode::V128Add32
+    VectorOp::V128Add64 => Opcode::V128Add64
+    VectorOp::V128Sub8 => Opcode::V128Sub8
+    VectorOp::V128Sub16 => Opcode::V128Sub16
+    VectorOp::V128Sub32 => Opcode::V128Sub32
+    VectorOp::V128Sub64 => Opcode::V128Sub64
+    VectorOp::V128Mul16 => Opcode::V128Mul16
+    VectorOp::V128Mul32 => Opcode::V128Mul32
+    VectorOp::V128Mul64 => Opcode::V128Mul64
+    VectorOp::V128AddSat8S => Opcode::V128AddSat8S
+    VectorOp::V128AddSat8U => Opcode::V128AddSat8U
+    VectorOp::V128AddSat16S => Opcode::V128AddSat16S
+    VectorOp::V128AddSat16U => Opcode::V128AddSat16U
+    VectorOp::V128SubSat8S => Opcode::V128SubSat8S
+    VectorOp::V128SubSat8U => Opcode::V128SubSat8U
+    VectorOp::V128SubSat16S => Opcode::V128SubSat16S
+    VectorOp::V128SubSat16U => Opcode::V128SubSat16U
+    VectorOp::V128Min8S => Opcode::V128Min8S
+    VectorOp::V128Min8U => Opcode::V128Min8U
+    VectorOp::V128Min16S => Opcode::V128Min16S
+    VectorOp::V128Min16U => Opcode::V128Min16U
+    VectorOp::V128Min32S => Opcode::V128Min32S
+    VectorOp::V128Min32U => Opcode::V128Min32U
+    VectorOp::V128Max8S => Opcode::V128Max8S
+    VectorOp::V128Max8U => Opcode::V128Max8U
+    VectorOp::V128Max16S => Opcode::V128Max16S
+    VectorOp::V128Max16U => Opcode::V128Max16U
+    VectorOp::V128Max32S => Opcode::V128Max32S
+    VectorOp::V128Max32U => Opcode::V128Max32U
+    VectorOp::V128Avgr8U => Opcode::V128Avgr8U
+    VectorOp::V128Avgr16U => Opcode::V128Avgr16U
+    VectorOp::V128Abs8 => Opcode::V128Abs8
+    VectorOp::V128Abs16 => Opcode::V128Abs16
+    VectorOp::V128Abs32 => Opcode::V128Abs32
+    VectorOp::V128Abs64 => Opcode::V128Abs64
+    VectorOp::V128Neg8 => Opcode::V128Neg8
+    VectorOp::V128Neg16 => Opcode::V128Neg16
+    VectorOp::V128Neg32 => Opcode::V128Neg32
+    VectorOp::V128Neg64 => Opcode::V128Neg64
+    VectorOp::V128Popcnt8 => Opcode::V128Popcnt8
+    VectorOp::V128Shl8 => Opcode::V128Shl8
+    VectorOp::V128Shl16 => Opcode::V128Shl16
+    VectorOp::V128Shl32 => Opcode::V128Shl32
+    VectorOp::V128Shl64 => Opcode::V128Shl64
+    VectorOp::V128Shr8S => Opcode::V128Shr8S
+    VectorOp::V128Shr8U => Opcode::V128Shr8U
+    VectorOp::V128Shr16S => Opcode::V128Shr16S
+    VectorOp::V128Shr16U => Opcode::V128Shr16U
+    VectorOp::V128Shr32S => Opcode::V128Shr32S
+    VectorOp::V128Shr32U => Opcode::V128Shr32U
+    VectorOp::V128Shr64S => Opcode::V128Shr64S
+    VectorOp::V128Shr64U => Opcode::V128Shr64U
+    VectorOp::V128Eq8 => Opcode::V128Eq8
+    VectorOp::V128Eq16 => Opcode::V128Eq16
+    VectorOp::V128Eq32 => Opcode::V128Eq32
+    VectorOp::V128Eq64 => Opcode::V128Eq64
+    VectorOp::V128Ne8 => Opcode::V128Ne8
+    VectorOp::V128Ne16 => Opcode::V128Ne16
+    VectorOp::V128Ne32 => Opcode::V128Ne32
+    VectorOp::V128Ne64 => Opcode::V128Ne64
+    VectorOp::V128Lt8S => Opcode::V128Lt8S
+    VectorOp::V128Lt8U => Opcode::V128Lt8U
+    VectorOp::V128Lt16S => Opcode::V128Lt16S
+    VectorOp::V128Lt16U => Opcode::V128Lt16U
+    VectorOp::V128Lt32S => Opcode::V128Lt32S
+    VectorOp::V128Lt32U => Opcode::V128Lt32U
+    VectorOp::V128Lt64S => Opcode::V128Lt64S
+    VectorOp::V128Gt8S => Opcode::V128Gt8S
+    VectorOp::V128Gt8U => Opcode::V128Gt8U
+    VectorOp::V128Gt16S => Opcode::V128Gt16S
+    VectorOp::V128Gt16U => Opcode::V128Gt16U
+    VectorOp::V128Gt32S => Opcode::V128Gt32S
+    VectorOp::V128Gt32U => Opcode::V128Gt32U
+    VectorOp::V128Gt64S => Opcode::V128Gt64S
+    VectorOp::V128Le8S => Opcode::V128Le8S
+    VectorOp::V128Le8U => Opcode::V128Le8U
+    VectorOp::V128Le16S => Opcode::V128Le16S
+    VectorOp::V128Le16U => Opcode::V128Le16U
+    VectorOp::V128Le32S => Opcode::V128Le32S
+    VectorOp::V128Le32U => Opcode::V128Le32U
+    VectorOp::V128Le64S => Opcode::V128Le64S
+    VectorOp::V128Ge8S => Opcode::V128Ge8S
+    VectorOp::V128Ge8U => Opcode::V128Ge8U
+    VectorOp::V128Ge16S => Opcode::V128Ge16S
+    VectorOp::V128Ge16U => Opcode::V128Ge16U
+    VectorOp::V128Ge32S => Opcode::V128Ge32S
+    VectorOp::V128Ge32U => Opcode::V128Ge32U
+    VectorOp::V128Ge64S => Opcode::V128Ge64S
+    VectorOp::V128Narrow16to8S => Opcode::V128Narrow16to8S
+    VectorOp::V128Narrow16to8U => Opcode::V128Narrow16to8U
+    VectorOp::V128Narrow32to16S => Opcode::V128Narrow32to16S
+    VectorOp::V128Narrow32to16U => Opcode::V128Narrow32to16U
+    VectorOp::V128ExtendLow8to16S => Opcode::V128ExtendLow8to16S
+    VectorOp::V128ExtendHigh8to16S => Opcode::V128ExtendHigh8to16S
+    VectorOp::V128ExtendLow8to16U => Opcode::V128ExtendLow8to16U
+    VectorOp::V128ExtendHigh8to16U => Opcode::V128ExtendHigh8to16U
+    VectorOp::V128ExtendLow16to32S => Opcode::V128ExtendLow16to32S
+    VectorOp::V128ExtendHigh16to32S => Opcode::V128ExtendHigh16to32S
+    VectorOp::V128ExtendLow16to32U => Opcode::V128ExtendLow16to32U
+    VectorOp::V128ExtendHigh16to32U => Opcode::V128ExtendHigh16to32U
+    VectorOp::V128ExtendLow32to64S => Opcode::V128ExtendLow32to64S
+    VectorOp::V128ExtendHigh32to64S => Opcode::V128ExtendHigh32to64S
+    VectorOp::V128ExtendLow32to64U => Opcode::V128ExtendLow32to64U
+    VectorOp::V128ExtendHigh32to64U => Opcode::V128ExtendHigh32to64U
+    VectorOp::V128ExtMulLow8to16S => Opcode::V128ExtMulLow8to16S
+    VectorOp::V128ExtMulHigh8to16S => Opcode::V128ExtMulHigh8to16S
+    VectorOp::V128ExtMulLow8to16U => Opcode::V128ExtMulLow8to16U
+    VectorOp::V128ExtMulHigh8to16U => Opcode::V128ExtMulHigh8to16U
+    VectorOp::V128ExtMulLow16to32S => Opcode::V128ExtMulLow16to32S
+    VectorOp::V128ExtMulHigh16to32S => Opcode::V128ExtMulHigh16to32S
+    VectorOp::V128ExtMulLow16to32U => Opcode::V128ExtMulLow16to32U
+    VectorOp::V128ExtMulHigh16to32U => Opcode::V128ExtMulHigh16to32U
+    VectorOp::V128ExtMulLow32to64S => Opcode::V128ExtMulLow32to64S
+    VectorOp::V128ExtMulHigh32to64S => Opcode::V128ExtMulHigh32to64S
+    VectorOp::V128ExtMulLow32to64U => Opcode::V128ExtMulLow32to64U
+    VectorOp::V128ExtMulHigh32to64U => Opcode::V128ExtMulHigh32to64U
+    VectorOp::V128ExtAddPairwise8to16S => Opcode::V128ExtAddPairwise8to16S
+    VectorOp::V128ExtAddPairwise8to16U => Opcode::V128ExtAddPairwise8to16U
+    VectorOp::V128ExtAddPairwise16to32S => Opcode::V128ExtAddPairwise16to32S
+    VectorOp::V128ExtAddPairwise16to32U => Opcode::V128ExtAddPairwise16to32U
+    VectorOp::V128Dot16to32S => Opcode::V128Dot16to32S
+    VectorOp::V128Q15MulrSat16S => Opcode::V128Q15MulrSat16S
+    VectorOp::V128AddF32 => Opcode::V128AddF32
+    VectorOp::V128AddF64 => Opcode::V128AddF64
+    VectorOp::V128SubF32 => Opcode::V128SubF32
+    VectorOp::V128SubF64 => Opcode::V128SubF64
+    VectorOp::V128MulF32 => Opcode::V128MulF32
+    VectorOp::V128MulF64 => Opcode::V128MulF64
+    VectorOp::V128DivF32 => Opcode::V128DivF32
+    VectorOp::V128DivF64 => Opcode::V128DivF64
+    VectorOp::V128MinF32 => Opcode::V128MinF32
+    VectorOp::V128MinF64 => Opcode::V128MinF64
+    VectorOp::V128MaxF32 => Opcode::V128MaxF32
+    VectorOp::V128MaxF64 => Opcode::V128MaxF64
+    VectorOp::V128PMinF32 => Opcode::V128PMinF32
+    VectorOp::V128PMinF64 => Opcode::V128PMinF64
+    VectorOp::V128PMaxF32 => Opcode::V128PMaxF32
+    VectorOp::V128PMaxF64 => Opcode::V128PMaxF64
+    VectorOp::V128AbsF32 => Opcode::V128AbsF32
+    VectorOp::V128AbsF64 => Opcode::V128AbsF64
+    VectorOp::V128NegF32 => Opcode::V128NegF32
+    VectorOp::V128NegF64 => Opcode::V128NegF64
+    VectorOp::V128SqrtF32 => Opcode::V128SqrtF32
+    VectorOp::V128SqrtF64 => Opcode::V128SqrtF64
+    VectorOp::V128CeilF32 => Opcode::V128CeilF32
+    VectorOp::V128CeilF64 => Opcode::V128CeilF64
+    VectorOp::V128FloorF32 => Opcode::V128FloorF32
+    VectorOp::V128FloorF64 => Opcode::V128FloorF64
+    VectorOp::V128TruncF32 => Opcode::V128TruncF32
+    VectorOp::V128TruncF64 => Opcode::V128TruncF64
+    VectorOp::V128NearestF32 => Opcode::V128NearestF32
+    VectorOp::V128NearestF64 => Opcode::V128NearestF64
+    VectorOp::V128EqF32 => Opcode::V128EqF32
+    VectorOp::V128EqF64 => Opcode::V128EqF64
+    VectorOp::V128NeF32 => Opcode::V128NeF32
+    VectorOp::V128NeF64 => Opcode::V128NeF64
+    VectorOp::V128LtF32 => Opcode::V128LtF32
+    VectorOp::V128LtF64 => Opcode::V128LtF64
+    VectorOp::V128GtF32 => Opcode::V128GtF32
+    VectorOp::V128GtF64 => Opcode::V128GtF64
+    VectorOp::V128LeF32 => Opcode::V128LeF32
+    VectorOp::V128LeF64 => Opcode::V128LeF64
+    VectorOp::V128GeF32 => Opcode::V128GeF32
+    VectorOp::V128GeF64 => Opcode::V128GeF64
+    VectorOp::V128TruncSatF32toI32S => Opcode::V128TruncSatF32toI32S
+    VectorOp::V128TruncSatF32toI32U => Opcode::V128TruncSatF32toI32U
+    VectorOp::V128TruncSatF64toI32SZero => Opcode::V128TruncSatF64toI32SZero
+    VectorOp::V128TruncSatF64toI32UZero => Opcode::V128TruncSatF64toI32UZero
+    VectorOp::V128ConvertI32toF32S => Opcode::V128ConvertI32toF32S
+    VectorOp::V128ConvertI32toF32U => Opcode::V128ConvertI32toF32U
+    VectorOp::V128ConvertLowI32toF64S => Opcode::V128ConvertLowI32toF64S
+    VectorOp::V128ConvertLowI32toF64U => Opcode::V128ConvertLowI32toF64U
+    VectorOp::V128DemoteF64toF32Zero => Opcode::V128DemoteF64toF32Zero
+    VectorOp::V128PromoteLowF32toF64 => Opcode::V128PromoteLowF32toF64
+    VectorOp::LoadExtend(lane, extension) =>
+      match (lane, extension) {
+        (VectorLane::I8, VectorExtension::Signed) =>
+          Opcode::V128Load8x8S(0, 0, 0L)
+        (VectorLane::I8, VectorExtension::Unsigned) =>
+          Opcode::V128Load8x8U(0, 0, 0L)
+        (VectorLane::I16, VectorExtension::Signed) =>
+          Opcode::V128Load16x4S(0, 0, 0L)
+        (VectorLane::I16, VectorExtension::Unsigned) =>
+          Opcode::V128Load16x4U(0, 0, 0L)
+        (VectorLane::I32, VectorExtension::Signed) =>
+          Opcode::V128Load32x2S(0, 0, 0L)
+        (VectorLane::I32, VectorExtension::Unsigned) =>
+          Opcode::V128Load32x2U(0, 0, 0L)
+        _ => abort("invalid vector extending-load semantics")
+      }
+    VectorOp::LoadSplat(lane) =>
+      match lane {
+        VectorLane::I8 => Opcode::V128Load8Splat(0, 0, 0L)
+        VectorLane::I16 => Opcode::V128Load16Splat(0, 0, 0L)
+        VectorLane::I32 => Opcode::V128Load32Splat(0, 0, 0L)
+        VectorLane::I64 => Opcode::V128Load64Splat(0, 0, 0L)
+        _ => abort("invalid vector splat-load semantics")
+      }
+    VectorOp::LoadZero(lane) =>
+      match lane {
+        VectorLane::I32 => Opcode::V128Load32Zero(0, 0, 0L)
+        VectorLane::I64 => Opcode::V128Load64Zero(0, 0, 0L)
+        _ => abort("invalid vector zero-load semantics")
+      }
+    VectorOp::LoadLane(lane, index) =>
+      match lane {
+        VectorLane::I8 => Opcode::V128Load8Lane(0, 0, 0L, index)
+        VectorLane::I16 => Opcode::V128Load16Lane(0, 0, 0L, index)
+        VectorLane::I32 => Opcode::V128Load32Lane(0, 0, 0L, index)
+        VectorLane::I64 => Opcode::V128Load64Lane(0, 0, 0L, index)
+        _ => abort("invalid vector lane-load semantics")
+      }
+    VectorOp::StoreLane(lane, index) =>
+      match lane {
+        VectorLane::I8 => Opcode::V128Store8Lane(0, 0, 0L, index)
+        VectorLane::I16 => Opcode::V128Store16Lane(0, 0, 0L, index)
+        VectorLane::I32 => Opcode::V128Store32Lane(0, 0, 0L, index)
+        VectorLane::I64 => Opcode::V128Store64Lane(0, 0, 0L, index)
+        _ => abort("invalid vector lane-store semantics")
+      }
+    VectorOp::V128RelaxedSwizzle => Opcode::V128RelaxedSwizzle
+    VectorOp::V128RelaxedTruncF32toI32S => Opcode::V128RelaxedTruncF32toI32S
+    VectorOp::V128RelaxedTruncF32toI32U => Opcode::V128RelaxedTruncF32toI32U
+    VectorOp::V128RelaxedTruncF64toI32SZero =>
+      Opcode::V128RelaxedTruncF64toI32SZero
+    VectorOp::V128RelaxedTruncF64toI32UZero =>
+      Opcode::V128RelaxedTruncF64toI32UZero
+    VectorOp::V128RelaxedMaddF32 => Opcode::V128RelaxedMaddF32
+    VectorOp::V128RelaxedNmaddF32 => Opcode::V128RelaxedNmaddF32
+    VectorOp::V128RelaxedMaddF64 => Opcode::V128RelaxedMaddF64
+    VectorOp::V128RelaxedNmaddF64 => Opcode::V128RelaxedNmaddF64
+    VectorOp::V128RelaxedLaneselect8 => Opcode::V128RelaxedLaneselect8
+    VectorOp::V128RelaxedLaneselect16 => Opcode::V128RelaxedLaneselect16
+    VectorOp::V128RelaxedLaneselect32 => Opcode::V128RelaxedLaneselect32
+    VectorOp::V128RelaxedLaneselect64 => Opcode::V128RelaxedLaneselect64
+    VectorOp::V128RelaxedMinF32 => Opcode::V128RelaxedMinF32
+    VectorOp::V128RelaxedMaxF32 => Opcode::V128RelaxedMaxF32
+    VectorOp::V128RelaxedMinF64 => Opcode::V128RelaxedMinF64
+    VectorOp::V128RelaxedMaxF64 => Opcode::V128RelaxedMaxF64
+    VectorOp::V128RelaxedQ15MulrS => Opcode::V128RelaxedQ15MulrS
+    VectorOp::V128RelaxedDot8to16S => Opcode::V128RelaxedDot8to16S
+    VectorOp::V128RelaxedDot8to32AddS => Opcode::V128RelaxedDot8to32AddS
+  }
+}
+
+///|
+pub(all) enum IntBinaryOp {
+  Add
+  Sub
+  Mul
+  UnsignedMulHigh
+  SignedMulHigh
+  SignedDiv
+  UnsignedDiv
+  SignedRem
+  UnsignedRem
+  And
+  Or
+  Xor
+  ShiftLeft
+  SignedShiftRight
+  UnsignedShiftRight
+  RotateLeft
+  RotateRight
+} derive(Debug, Eq, Hash)
+
+///|
+pub(all) enum IntUnaryOp {
+  Not
+  CountLeadingZeros
+  CountTrailingZeros
+  PopulationCount
+} derive(Debug, Eq, Hash)
+
+///|
+pub(all) enum FloatBinaryOp {
+  Add
+  Sub
+  Mul
+  Div
+  Min
+  Max
+} derive(Debug, Eq, Hash)
+
+///|
+pub(all) enum FloatUnaryOp {
+  Neg
+  Abs
+  Sqrt
+  Ceil
+  Floor
+  Trunc
+  Nearest
+} derive(Debug, Eq, Hash)
+
+///|
+pub(all) enum ConversionOp {
+  IntReduce
+  SignedExtend
+  UnsignedExtend
+  FloatPromote
+  FloatDemote
+  FloatToSignedInt
+  FloatToUnsignedInt
+  FloatToSignedIntSaturating
+  FloatToUnsignedIntSaturating
+  SignedIntToFloat
+  UnsignedIntToFloat
+  Bitcast
+} derive(Debug, Eq, Hash)
+
+///|
+pub(all) enum ScalarOp {
+  IntConst(Int64)
+  FloatConst(Double)
+  IntBinary(IntBinaryOp)
+  IntUnary(IntUnaryOp)
+  IntCompare(IntCC)
+  FloatBinary(FloatBinaryOp)
+  FloatUnary(FloatUnaryOp)
+  FloatCompare(FloatCC)
+  Convert(ConversionOp)
+  SignExtendFrom(Int)
+  Select
+  Copy
+} derive(Debug, Eq, Hash)
+
+///|
 /// Opcode - the operation performed by an instruction
 pub(all) enum Opcode {
+  // Language-neutral scalar operations.
+  Scalar(ScalarOp)
+
   // Constants
   Iconst(Int64) // Integer constant
   Fconst(Double) // Float constant
@@ -374,7 +1097,6 @@ pub(all) enum Opcode {
 
   // Comparisons (return i32 0 or 1)
   Icmp(IntCC) // Integer compare
-  IcmpEq
 
   // Floating point arithmetic
   Fadd // Float add
@@ -419,13 +1141,8 @@ pub(all) enum Opcode {
   // Misc
   Select // Conditional select (cond ? a : b)
   Copy // Copy value (for register allocation)
-  Load
-  Store
-  StackAddr(StackSlot)
-
   // Function calls
-  Call(ExternalSymbol, Signature)
-  CallIndirect(Signature)
+  Call(CallOp)
 
   // Raw pointer operations (for trampolines, no bounds checking)
   // Used for host code generation
@@ -435,17 +1152,17 @@ pub(all) enum Opcode {
   LoadPtrNarrow(Type, Int, Bool) // Load narrow from pointer+offset, extend to result_type
   StorePtrNarrow(Int) // Store narrow to pointer+offset (bits)
 
-  // Raw function pointer call (for trampolines)
-  // CallPtr(num_args, num_results) - call via function pointer
-  // operand 0 = function pointer, operands 1..n = context + args
-  CallPtr(Int, Int)
-  Trap(String)
-  Custom(String, Signature)
+  // Generic memory operations. Legacy raw-pointer variants remain during
+  // expand-contract migration and are removed after all callers move here.
+  Memory(MemoryOp)
 
   // Dialect extension operations. The core IR treats these conservatively;
   // dialect-owned packages define the opcode set, builders, validation rules,
   // and lowering behavior.
   Ext(ExtOp, Signature)
+
+  // Language-neutral vector operations.
+  Vector(VectorOp)
 
   // ============================================
   // SIMD operations (V128)
@@ -802,6 +1519,471 @@ pub(all) enum FloatCC {
 } derive(Debug, Eq, Hash)
 
 ///|
+pub fn ScalarOp::to_legacy_opcode(self : ScalarOp) -> Opcode {
+  match self {
+    ScalarOp::IntConst(value) => Opcode::Iconst(value)
+    ScalarOp::FloatConst(value) => Opcode::Fconst(value)
+    ScalarOp::IntBinary(op) =>
+      match op {
+        IntBinaryOp::Add => Opcode::Iadd
+        IntBinaryOp::Sub => Opcode::Isub
+        IntBinaryOp::Mul => Opcode::Imul
+        IntBinaryOp::UnsignedMulHigh => Opcode::Umulh
+        IntBinaryOp::SignedMulHigh => Opcode::Smulh
+        IntBinaryOp::SignedDiv => Opcode::Sdiv
+        IntBinaryOp::UnsignedDiv => Opcode::Udiv
+        IntBinaryOp::SignedRem => Opcode::Srem
+        IntBinaryOp::UnsignedRem => Opcode::Urem
+        IntBinaryOp::And => Opcode::Band
+        IntBinaryOp::Or => Opcode::Bor
+        IntBinaryOp::Xor => Opcode::Bxor
+        IntBinaryOp::ShiftLeft => Opcode::Ishl
+        IntBinaryOp::SignedShiftRight => Opcode::Sshr
+        IntBinaryOp::UnsignedShiftRight => Opcode::Ushr
+        IntBinaryOp::RotateLeft => Opcode::Rotl
+        IntBinaryOp::RotateRight => Opcode::Rotr
+      }
+    ScalarOp::IntUnary(op) =>
+      match op {
+        IntUnaryOp::Not => Opcode::Bnot
+        IntUnaryOp::CountLeadingZeros => Opcode::Clz
+        IntUnaryOp::CountTrailingZeros => Opcode::Ctz
+        IntUnaryOp::PopulationCount => Opcode::Popcnt
+      }
+    ScalarOp::IntCompare(condition) => Opcode::Icmp(condition)
+    ScalarOp::FloatBinary(op) =>
+      match op {
+        FloatBinaryOp::Add => Opcode::Fadd
+        FloatBinaryOp::Sub => Opcode::Fsub
+        FloatBinaryOp::Mul => Opcode::Fmul
+        FloatBinaryOp::Div => Opcode::Fdiv
+        FloatBinaryOp::Min => Opcode::Fmin
+        FloatBinaryOp::Max => Opcode::Fmax
+      }
+    ScalarOp::FloatUnary(op) =>
+      match op {
+        FloatUnaryOp::Neg => Opcode::Fneg
+        FloatUnaryOp::Abs => Opcode::Fabs
+        FloatUnaryOp::Sqrt => Opcode::Fsqrt
+        FloatUnaryOp::Ceil => Opcode::Fceil
+        FloatUnaryOp::Floor => Opcode::Ffloor
+        FloatUnaryOp::Trunc => Opcode::Ftrunc
+        FloatUnaryOp::Nearest => Opcode::Fnearest
+      }
+    ScalarOp::FloatCompare(condition) => Opcode::Fcmp(condition)
+    ScalarOp::Convert(op) =>
+      match op {
+        ConversionOp::IntReduce => Opcode::Ireduce
+        ConversionOp::SignedExtend => Opcode::Sextend
+        ConversionOp::UnsignedExtend => Opcode::Uextend
+        ConversionOp::FloatPromote => Opcode::Fpromote
+        ConversionOp::FloatDemote => Opcode::Fdemote
+        ConversionOp::FloatToSignedInt => Opcode::FcvtToSint
+        ConversionOp::FloatToUnsignedInt => Opcode::FcvtToUint
+        ConversionOp::FloatToSignedIntSaturating => Opcode::FcvtToSintSat
+        ConversionOp::FloatToUnsignedIntSaturating => Opcode::FcvtToUintSat
+        ConversionOp::SignedIntToFloat => Opcode::SintToFcvt
+        ConversionOp::UnsignedIntToFloat => Opcode::UintToFcvt
+        ConversionOp::Bitcast => Opcode::Bitcast
+      }
+    ScalarOp::SignExtendFrom(bits) =>
+      match bits {
+        8 => Opcode::Sextend8
+        16 => Opcode::Sextend16
+        32 => Opcode::Sextend32
+        _ => abort("invalid scalar sign-extension width")
+      }
+    ScalarOp::Select => Opcode::Select
+    ScalarOp::Copy => Opcode::Copy
+  }
+}
+
+///|
+pub fn Opcode::for_legacy_consumers(self : Opcode) -> Opcode {
+  match self {
+    Opcode::Scalar(op) => op.to_legacy_opcode()
+    Opcode::Vector(op) => op.to_legacy_opcode()
+    _ => self
+  }
+}
+
+///|
+fn Opcode::to_scalar_op(self : Opcode) -> ScalarOp? {
+  match self {
+    Opcode::Iconst(value) => Some(ScalarOp::IntConst(value))
+    Opcode::Fconst(value) => Some(ScalarOp::FloatConst(value))
+    Opcode::Iadd => Some(ScalarOp::IntBinary(IntBinaryOp::Add))
+    Opcode::Isub => Some(ScalarOp::IntBinary(IntBinaryOp::Sub))
+    Opcode::Imul => Some(ScalarOp::IntBinary(IntBinaryOp::Mul))
+    Opcode::Umulh => Some(ScalarOp::IntBinary(IntBinaryOp::UnsignedMulHigh))
+    Opcode::Smulh => Some(ScalarOp::IntBinary(IntBinaryOp::SignedMulHigh))
+    Opcode::Sdiv => Some(ScalarOp::IntBinary(IntBinaryOp::SignedDiv))
+    Opcode::Udiv => Some(ScalarOp::IntBinary(IntBinaryOp::UnsignedDiv))
+    Opcode::Srem => Some(ScalarOp::IntBinary(IntBinaryOp::SignedRem))
+    Opcode::Urem => Some(ScalarOp::IntBinary(IntBinaryOp::UnsignedRem))
+    Opcode::Band => Some(ScalarOp::IntBinary(IntBinaryOp::And))
+    Opcode::Bor => Some(ScalarOp::IntBinary(IntBinaryOp::Or))
+    Opcode::Bxor => Some(ScalarOp::IntBinary(IntBinaryOp::Xor))
+    Opcode::Bnot => Some(ScalarOp::IntUnary(IntUnaryOp::Not))
+    Opcode::Ishl => Some(ScalarOp::IntBinary(IntBinaryOp::ShiftLeft))
+    Opcode::Sshr => Some(ScalarOp::IntBinary(IntBinaryOp::SignedShiftRight))
+    Opcode::Ushr => Some(ScalarOp::IntBinary(IntBinaryOp::UnsignedShiftRight))
+    Opcode::Rotl => Some(ScalarOp::IntBinary(IntBinaryOp::RotateLeft))
+    Opcode::Rotr => Some(ScalarOp::IntBinary(IntBinaryOp::RotateRight))
+    Opcode::Clz => Some(ScalarOp::IntUnary(IntUnaryOp::CountLeadingZeros))
+    Opcode::Ctz => Some(ScalarOp::IntUnary(IntUnaryOp::CountTrailingZeros))
+    Opcode::Popcnt => Some(ScalarOp::IntUnary(IntUnaryOp::PopulationCount))
+    Opcode::Icmp(condition) => Some(ScalarOp::IntCompare(condition))
+    Opcode::Fadd => Some(ScalarOp::FloatBinary(FloatBinaryOp::Add))
+    Opcode::Fsub => Some(ScalarOp::FloatBinary(FloatBinaryOp::Sub))
+    Opcode::Fmul => Some(ScalarOp::FloatBinary(FloatBinaryOp::Mul))
+    Opcode::Fdiv => Some(ScalarOp::FloatBinary(FloatBinaryOp::Div))
+    Opcode::Fmin => Some(ScalarOp::FloatBinary(FloatBinaryOp::Min))
+    Opcode::Fmax => Some(ScalarOp::FloatBinary(FloatBinaryOp::Max))
+    Opcode::Fcmp(condition) => Some(ScalarOp::FloatCompare(condition))
+    Opcode::Fneg => Some(ScalarOp::FloatUnary(FloatUnaryOp::Neg))
+    Opcode::Fabs => Some(ScalarOp::FloatUnary(FloatUnaryOp::Abs))
+    Opcode::Fsqrt => Some(ScalarOp::FloatUnary(FloatUnaryOp::Sqrt))
+    Opcode::Fceil => Some(ScalarOp::FloatUnary(FloatUnaryOp::Ceil))
+    Opcode::Ffloor => Some(ScalarOp::FloatUnary(FloatUnaryOp::Floor))
+    Opcode::Ftrunc => Some(ScalarOp::FloatUnary(FloatUnaryOp::Trunc))
+    Opcode::Fnearest => Some(ScalarOp::FloatUnary(FloatUnaryOp::Nearest))
+    Opcode::Ireduce => Some(ScalarOp::Convert(ConversionOp::IntReduce))
+    Opcode::Sextend => Some(ScalarOp::Convert(ConversionOp::SignedExtend))
+    Opcode::Uextend => Some(ScalarOp::Convert(ConversionOp::UnsignedExtend))
+    Opcode::Fpromote => Some(ScalarOp::Convert(ConversionOp::FloatPromote))
+    Opcode::Fdemote => Some(ScalarOp::Convert(ConversionOp::FloatDemote))
+    Opcode::FcvtToSint =>
+      Some(ScalarOp::Convert(ConversionOp::FloatToSignedInt))
+    Opcode::FcvtToUint =>
+      Some(ScalarOp::Convert(ConversionOp::FloatToUnsignedInt))
+    Opcode::FcvtToSintSat =>
+      Some(ScalarOp::Convert(ConversionOp::FloatToSignedIntSaturating))
+    Opcode::FcvtToUintSat =>
+      Some(ScalarOp::Convert(ConversionOp::FloatToUnsignedIntSaturating))
+    Opcode::SintToFcvt =>
+      Some(ScalarOp::Convert(ConversionOp::SignedIntToFloat))
+    Opcode::UintToFcvt =>
+      Some(ScalarOp::Convert(ConversionOp::UnsignedIntToFloat))
+    Opcode::Bitcast => Some(ScalarOp::Convert(ConversionOp::Bitcast))
+    Opcode::Sextend8 => Some(ScalarOp::SignExtendFrom(8))
+    Opcode::Sextend16 => Some(ScalarOp::SignExtendFrom(16))
+    Opcode::Sextend32 => Some(ScalarOp::SignExtendFrom(32))
+    Opcode::Select => Some(ScalarOp::Select)
+    Opcode::Copy => Some(ScalarOp::Copy)
+    _ => None
+  }
+}
+
+///|
+fn Opcode::to_vector_op(self : Opcode) -> VectorOp? {
+  match self {
+    Opcode::V128Const(arg0) => Some(VectorOp::V128Const(arg0))
+    Opcode::V128Splat8 => Some(VectorOp::Splat(VectorLane::I8))
+    Opcode::V128Splat16 => Some(VectorOp::Splat(VectorLane::I16))
+    Opcode::V128Splat32 => Some(VectorOp::Splat(VectorLane::I32))
+    Opcode::V128Splat64 => Some(VectorOp::Splat(VectorLane::I64))
+    Opcode::V128SplatF32 => Some(VectorOp::Splat(VectorLane::F32))
+    Opcode::V128SplatF64 => Some(VectorOp::Splat(VectorLane::F64))
+    Opcode::V128ExtractLane8S(index) =>
+      Some(
+        VectorOp::ExtractLane(VectorLane::I8, VectorExtension::Signed, index),
+      )
+    Opcode::V128ExtractLane8U(index) =>
+      Some(
+        VectorOp::ExtractLane(VectorLane::I8, VectorExtension::Unsigned, index),
+      )
+    Opcode::V128ExtractLane16S(index) =>
+      Some(
+        VectorOp::ExtractLane(VectorLane::I16, VectorExtension::Signed, index),
+      )
+    Opcode::V128ExtractLane16U(index) =>
+      Some(
+        VectorOp::ExtractLane(VectorLane::I16, VectorExtension::Unsigned, index),
+      )
+    Opcode::V128ExtractLane32(index) =>
+      Some(VectorOp::ExtractLane(VectorLane::I32, VectorExtension::None, index))
+    Opcode::V128ExtractLane64(index) =>
+      Some(VectorOp::ExtractLane(VectorLane::I64, VectorExtension::None, index))
+    Opcode::V128ExtractLaneF32(index) =>
+      Some(VectorOp::ExtractLane(VectorLane::F32, VectorExtension::None, index))
+    Opcode::V128ExtractLaneF64(index) =>
+      Some(VectorOp::ExtractLane(VectorLane::F64, VectorExtension::None, index))
+    Opcode::V128ReplaceLane8(index) =>
+      Some(VectorOp::ReplaceLane(VectorLane::I8, index))
+    Opcode::V128ReplaceLane16(index) =>
+      Some(VectorOp::ReplaceLane(VectorLane::I16, index))
+    Opcode::V128ReplaceLane32(index) =>
+      Some(VectorOp::ReplaceLane(VectorLane::I32, index))
+    Opcode::V128ReplaceLane64(index) =>
+      Some(VectorOp::ReplaceLane(VectorLane::I64, index))
+    Opcode::V128ReplaceLaneF32(index) =>
+      Some(VectorOp::ReplaceLane(VectorLane::F32, index))
+    Opcode::V128ReplaceLaneF64(index) =>
+      Some(VectorOp::ReplaceLane(VectorLane::F64, index))
+    Opcode::V128Shuffle(arg0) => Some(VectorOp::V128Shuffle(arg0))
+    Opcode::V128Swizzle => Some(VectorOp::V128Swizzle)
+    Opcode::V128Not => Some(VectorOp::V128Not)
+    Opcode::V128And => Some(VectorOp::V128And)
+    Opcode::V128AndNot => Some(VectorOp::V128AndNot)
+    Opcode::V128Or => Some(VectorOp::V128Or)
+    Opcode::V128Xor => Some(VectorOp::V128Xor)
+    Opcode::V128Bitselect => Some(VectorOp::V128Bitselect)
+    Opcode::V128AnyTrue => Some(VectorOp::V128AnyTrue)
+    Opcode::V128AllTrue8 => Some(VectorOp::V128AllTrue8)
+    Opcode::V128AllTrue16 => Some(VectorOp::V128AllTrue16)
+    Opcode::V128AllTrue32 => Some(VectorOp::V128AllTrue32)
+    Opcode::V128AllTrue64 => Some(VectorOp::V128AllTrue64)
+    Opcode::V128Bitmask8 => Some(VectorOp::V128Bitmask8)
+    Opcode::V128Bitmask16 => Some(VectorOp::V128Bitmask16)
+    Opcode::V128Bitmask32 => Some(VectorOp::V128Bitmask32)
+    Opcode::V128Bitmask64 => Some(VectorOp::V128Bitmask64)
+    Opcode::V128Add8 => Some(VectorOp::V128Add8)
+    Opcode::V128Add16 => Some(VectorOp::V128Add16)
+    Opcode::V128Add32 => Some(VectorOp::V128Add32)
+    Opcode::V128Add64 => Some(VectorOp::V128Add64)
+    Opcode::V128Sub8 => Some(VectorOp::V128Sub8)
+    Opcode::V128Sub16 => Some(VectorOp::V128Sub16)
+    Opcode::V128Sub32 => Some(VectorOp::V128Sub32)
+    Opcode::V128Sub64 => Some(VectorOp::V128Sub64)
+    Opcode::V128Mul16 => Some(VectorOp::V128Mul16)
+    Opcode::V128Mul32 => Some(VectorOp::V128Mul32)
+    Opcode::V128Mul64 => Some(VectorOp::V128Mul64)
+    Opcode::V128AddSat8S => Some(VectorOp::V128AddSat8S)
+    Opcode::V128AddSat8U => Some(VectorOp::V128AddSat8U)
+    Opcode::V128AddSat16S => Some(VectorOp::V128AddSat16S)
+    Opcode::V128AddSat16U => Some(VectorOp::V128AddSat16U)
+    Opcode::V128SubSat8S => Some(VectorOp::V128SubSat8S)
+    Opcode::V128SubSat8U => Some(VectorOp::V128SubSat8U)
+    Opcode::V128SubSat16S => Some(VectorOp::V128SubSat16S)
+    Opcode::V128SubSat16U => Some(VectorOp::V128SubSat16U)
+    Opcode::V128Min8S => Some(VectorOp::V128Min8S)
+    Opcode::V128Min8U => Some(VectorOp::V128Min8U)
+    Opcode::V128Min16S => Some(VectorOp::V128Min16S)
+    Opcode::V128Min16U => Some(VectorOp::V128Min16U)
+    Opcode::V128Min32S => Some(VectorOp::V128Min32S)
+    Opcode::V128Min32U => Some(VectorOp::V128Min32U)
+    Opcode::V128Max8S => Some(VectorOp::V128Max8S)
+    Opcode::V128Max8U => Some(VectorOp::V128Max8U)
+    Opcode::V128Max16S => Some(VectorOp::V128Max16S)
+    Opcode::V128Max16U => Some(VectorOp::V128Max16U)
+    Opcode::V128Max32S => Some(VectorOp::V128Max32S)
+    Opcode::V128Max32U => Some(VectorOp::V128Max32U)
+    Opcode::V128Avgr8U => Some(VectorOp::V128Avgr8U)
+    Opcode::V128Avgr16U => Some(VectorOp::V128Avgr16U)
+    Opcode::V128Abs8 => Some(VectorOp::V128Abs8)
+    Opcode::V128Abs16 => Some(VectorOp::V128Abs16)
+    Opcode::V128Abs32 => Some(VectorOp::V128Abs32)
+    Opcode::V128Abs64 => Some(VectorOp::V128Abs64)
+    Opcode::V128Neg8 => Some(VectorOp::V128Neg8)
+    Opcode::V128Neg16 => Some(VectorOp::V128Neg16)
+    Opcode::V128Neg32 => Some(VectorOp::V128Neg32)
+    Opcode::V128Neg64 => Some(VectorOp::V128Neg64)
+    Opcode::V128Popcnt8 => Some(VectorOp::V128Popcnt8)
+    Opcode::V128Shl8 => Some(VectorOp::V128Shl8)
+    Opcode::V128Shl16 => Some(VectorOp::V128Shl16)
+    Opcode::V128Shl32 => Some(VectorOp::V128Shl32)
+    Opcode::V128Shl64 => Some(VectorOp::V128Shl64)
+    Opcode::V128Shr8S => Some(VectorOp::V128Shr8S)
+    Opcode::V128Shr8U => Some(VectorOp::V128Shr8U)
+    Opcode::V128Shr16S => Some(VectorOp::V128Shr16S)
+    Opcode::V128Shr16U => Some(VectorOp::V128Shr16U)
+    Opcode::V128Shr32S => Some(VectorOp::V128Shr32S)
+    Opcode::V128Shr32U => Some(VectorOp::V128Shr32U)
+    Opcode::V128Shr64S => Some(VectorOp::V128Shr64S)
+    Opcode::V128Shr64U => Some(VectorOp::V128Shr64U)
+    Opcode::V128Eq8 => Some(VectorOp::V128Eq8)
+    Opcode::V128Eq16 => Some(VectorOp::V128Eq16)
+    Opcode::V128Eq32 => Some(VectorOp::V128Eq32)
+    Opcode::V128Eq64 => Some(VectorOp::V128Eq64)
+    Opcode::V128Ne8 => Some(VectorOp::V128Ne8)
+    Opcode::V128Ne16 => Some(VectorOp::V128Ne16)
+    Opcode::V128Ne32 => Some(VectorOp::V128Ne32)
+    Opcode::V128Ne64 => Some(VectorOp::V128Ne64)
+    Opcode::V128Lt8S => Some(VectorOp::V128Lt8S)
+    Opcode::V128Lt8U => Some(VectorOp::V128Lt8U)
+    Opcode::V128Lt16S => Some(VectorOp::V128Lt16S)
+    Opcode::V128Lt16U => Some(VectorOp::V128Lt16U)
+    Opcode::V128Lt32S => Some(VectorOp::V128Lt32S)
+    Opcode::V128Lt32U => Some(VectorOp::V128Lt32U)
+    Opcode::V128Lt64S => Some(VectorOp::V128Lt64S)
+    Opcode::V128Gt8S => Some(VectorOp::V128Gt8S)
+    Opcode::V128Gt8U => Some(VectorOp::V128Gt8U)
+    Opcode::V128Gt16S => Some(VectorOp::V128Gt16S)
+    Opcode::V128Gt16U => Some(VectorOp::V128Gt16U)
+    Opcode::V128Gt32S => Some(VectorOp::V128Gt32S)
+    Opcode::V128Gt32U => Some(VectorOp::V128Gt32U)
+    Opcode::V128Gt64S => Some(VectorOp::V128Gt64S)
+    Opcode::V128Le8S => Some(VectorOp::V128Le8S)
+    Opcode::V128Le8U => Some(VectorOp::V128Le8U)
+    Opcode::V128Le16S => Some(VectorOp::V128Le16S)
+    Opcode::V128Le16U => Some(VectorOp::V128Le16U)
+    Opcode::V128Le32S => Some(VectorOp::V128Le32S)
+    Opcode::V128Le32U => Some(VectorOp::V128Le32U)
+    Opcode::V128Le64S => Some(VectorOp::V128Le64S)
+    Opcode::V128Ge8S => Some(VectorOp::V128Ge8S)
+    Opcode::V128Ge8U => Some(VectorOp::V128Ge8U)
+    Opcode::V128Ge16S => Some(VectorOp::V128Ge16S)
+    Opcode::V128Ge16U => Some(VectorOp::V128Ge16U)
+    Opcode::V128Ge32S => Some(VectorOp::V128Ge32S)
+    Opcode::V128Ge32U => Some(VectorOp::V128Ge32U)
+    Opcode::V128Ge64S => Some(VectorOp::V128Ge64S)
+    Opcode::V128Narrow16to8S => Some(VectorOp::V128Narrow16to8S)
+    Opcode::V128Narrow16to8U => Some(VectorOp::V128Narrow16to8U)
+    Opcode::V128Narrow32to16S => Some(VectorOp::V128Narrow32to16S)
+    Opcode::V128Narrow32to16U => Some(VectorOp::V128Narrow32to16U)
+    Opcode::V128ExtendLow8to16S => Some(VectorOp::V128ExtendLow8to16S)
+    Opcode::V128ExtendHigh8to16S => Some(VectorOp::V128ExtendHigh8to16S)
+    Opcode::V128ExtendLow8to16U => Some(VectorOp::V128ExtendLow8to16U)
+    Opcode::V128ExtendHigh8to16U => Some(VectorOp::V128ExtendHigh8to16U)
+    Opcode::V128ExtendLow16to32S => Some(VectorOp::V128ExtendLow16to32S)
+    Opcode::V128ExtendHigh16to32S => Some(VectorOp::V128ExtendHigh16to32S)
+    Opcode::V128ExtendLow16to32U => Some(VectorOp::V128ExtendLow16to32U)
+    Opcode::V128ExtendHigh16to32U => Some(VectorOp::V128ExtendHigh16to32U)
+    Opcode::V128ExtendLow32to64S => Some(VectorOp::V128ExtendLow32to64S)
+    Opcode::V128ExtendHigh32to64S => Some(VectorOp::V128ExtendHigh32to64S)
+    Opcode::V128ExtendLow32to64U => Some(VectorOp::V128ExtendLow32to64U)
+    Opcode::V128ExtendHigh32to64U => Some(VectorOp::V128ExtendHigh32to64U)
+    Opcode::V128ExtMulLow8to16S => Some(VectorOp::V128ExtMulLow8to16S)
+    Opcode::V128ExtMulHigh8to16S => Some(VectorOp::V128ExtMulHigh8to16S)
+    Opcode::V128ExtMulLow8to16U => Some(VectorOp::V128ExtMulLow8to16U)
+    Opcode::V128ExtMulHigh8to16U => Some(VectorOp::V128ExtMulHigh8to16U)
+    Opcode::V128ExtMulLow16to32S => Some(VectorOp::V128ExtMulLow16to32S)
+    Opcode::V128ExtMulHigh16to32S => Some(VectorOp::V128ExtMulHigh16to32S)
+    Opcode::V128ExtMulLow16to32U => Some(VectorOp::V128ExtMulLow16to32U)
+    Opcode::V128ExtMulHigh16to32U => Some(VectorOp::V128ExtMulHigh16to32U)
+    Opcode::V128ExtMulLow32to64S => Some(VectorOp::V128ExtMulLow32to64S)
+    Opcode::V128ExtMulHigh32to64S => Some(VectorOp::V128ExtMulHigh32to64S)
+    Opcode::V128ExtMulLow32to64U => Some(VectorOp::V128ExtMulLow32to64U)
+    Opcode::V128ExtMulHigh32to64U => Some(VectorOp::V128ExtMulHigh32to64U)
+    Opcode::V128ExtAddPairwise8to16S => Some(VectorOp::V128ExtAddPairwise8to16S)
+    Opcode::V128ExtAddPairwise8to16U => Some(VectorOp::V128ExtAddPairwise8to16U)
+    Opcode::V128ExtAddPairwise16to32S =>
+      Some(VectorOp::V128ExtAddPairwise16to32S)
+    Opcode::V128ExtAddPairwise16to32U =>
+      Some(VectorOp::V128ExtAddPairwise16to32U)
+    Opcode::V128Dot16to32S => Some(VectorOp::V128Dot16to32S)
+    Opcode::V128Q15MulrSat16S => Some(VectorOp::V128Q15MulrSat16S)
+    Opcode::V128AddF32 => Some(VectorOp::V128AddF32)
+    Opcode::V128AddF64 => Some(VectorOp::V128AddF64)
+    Opcode::V128SubF32 => Some(VectorOp::V128SubF32)
+    Opcode::V128SubF64 => Some(VectorOp::V128SubF64)
+    Opcode::V128MulF32 => Some(VectorOp::V128MulF32)
+    Opcode::V128MulF64 => Some(VectorOp::V128MulF64)
+    Opcode::V128DivF32 => Some(VectorOp::V128DivF32)
+    Opcode::V128DivF64 => Some(VectorOp::V128DivF64)
+    Opcode::V128MinF32 => Some(VectorOp::V128MinF32)
+    Opcode::V128MinF64 => Some(VectorOp::V128MinF64)
+    Opcode::V128MaxF32 => Some(VectorOp::V128MaxF32)
+    Opcode::V128MaxF64 => Some(VectorOp::V128MaxF64)
+    Opcode::V128PMinF32 => Some(VectorOp::V128PMinF32)
+    Opcode::V128PMinF64 => Some(VectorOp::V128PMinF64)
+    Opcode::V128PMaxF32 => Some(VectorOp::V128PMaxF32)
+    Opcode::V128PMaxF64 => Some(VectorOp::V128PMaxF64)
+    Opcode::V128AbsF32 => Some(VectorOp::V128AbsF32)
+    Opcode::V128AbsF64 => Some(VectorOp::V128AbsF64)
+    Opcode::V128NegF32 => Some(VectorOp::V128NegF32)
+    Opcode::V128NegF64 => Some(VectorOp::V128NegF64)
+    Opcode::V128SqrtF32 => Some(VectorOp::V128SqrtF32)
+    Opcode::V128SqrtF64 => Some(VectorOp::V128SqrtF64)
+    Opcode::V128CeilF32 => Some(VectorOp::V128CeilF32)
+    Opcode::V128CeilF64 => Some(VectorOp::V128CeilF64)
+    Opcode::V128FloorF32 => Some(VectorOp::V128FloorF32)
+    Opcode::V128FloorF64 => Some(VectorOp::V128FloorF64)
+    Opcode::V128TruncF32 => Some(VectorOp::V128TruncF32)
+    Opcode::V128TruncF64 => Some(VectorOp::V128TruncF64)
+    Opcode::V128NearestF32 => Some(VectorOp::V128NearestF32)
+    Opcode::V128NearestF64 => Some(VectorOp::V128NearestF64)
+    Opcode::V128EqF32 => Some(VectorOp::V128EqF32)
+    Opcode::V128EqF64 => Some(VectorOp::V128EqF64)
+    Opcode::V128NeF32 => Some(VectorOp::V128NeF32)
+    Opcode::V128NeF64 => Some(VectorOp::V128NeF64)
+    Opcode::V128LtF32 => Some(VectorOp::V128LtF32)
+    Opcode::V128LtF64 => Some(VectorOp::V128LtF64)
+    Opcode::V128GtF32 => Some(VectorOp::V128GtF32)
+    Opcode::V128GtF64 => Some(VectorOp::V128GtF64)
+    Opcode::V128LeF32 => Some(VectorOp::V128LeF32)
+    Opcode::V128LeF64 => Some(VectorOp::V128LeF64)
+    Opcode::V128GeF32 => Some(VectorOp::V128GeF32)
+    Opcode::V128GeF64 => Some(VectorOp::V128GeF64)
+    Opcode::V128TruncSatF32toI32S => Some(VectorOp::V128TruncSatF32toI32S)
+    Opcode::V128TruncSatF32toI32U => Some(VectorOp::V128TruncSatF32toI32U)
+    Opcode::V128TruncSatF64toI32SZero =>
+      Some(VectorOp::V128TruncSatF64toI32SZero)
+    Opcode::V128TruncSatF64toI32UZero =>
+      Some(VectorOp::V128TruncSatF64toI32UZero)
+    Opcode::V128ConvertI32toF32S => Some(VectorOp::V128ConvertI32toF32S)
+    Opcode::V128ConvertI32toF32U => Some(VectorOp::V128ConvertI32toF32U)
+    Opcode::V128ConvertLowI32toF64S => Some(VectorOp::V128ConvertLowI32toF64S)
+    Opcode::V128ConvertLowI32toF64U => Some(VectorOp::V128ConvertLowI32toF64U)
+    Opcode::V128DemoteF64toF32Zero => Some(VectorOp::V128DemoteF64toF32Zero)
+    Opcode::V128PromoteLowF32toF64 => Some(VectorOp::V128PromoteLowF32toF64)
+    Opcode::V128Load8x8S(_, _, _) =>
+      Some(VectorOp::LoadExtend(VectorLane::I8, VectorExtension::Signed))
+    Opcode::V128Load8x8U(_, _, _) =>
+      Some(VectorOp::LoadExtend(VectorLane::I8, VectorExtension::Unsigned))
+    Opcode::V128Load16x4S(_, _, _) =>
+      Some(VectorOp::LoadExtend(VectorLane::I16, VectorExtension::Signed))
+    Opcode::V128Load16x4U(_, _, _) =>
+      Some(VectorOp::LoadExtend(VectorLane::I16, VectorExtension::Unsigned))
+    Opcode::V128Load32x2S(_, _, _) =>
+      Some(VectorOp::LoadExtend(VectorLane::I32, VectorExtension::Signed))
+    Opcode::V128Load32x2U(_, _, _) =>
+      Some(VectorOp::LoadExtend(VectorLane::I32, VectorExtension::Unsigned))
+    Opcode::V128Load8Splat(_, _, _) => Some(VectorOp::LoadSplat(VectorLane::I8))
+    Opcode::V128Load16Splat(_, _, _) =>
+      Some(VectorOp::LoadSplat(VectorLane::I16))
+    Opcode::V128Load32Splat(_, _, _) =>
+      Some(VectorOp::LoadSplat(VectorLane::I32))
+    Opcode::V128Load64Splat(_, _, _) =>
+      Some(VectorOp::LoadSplat(VectorLane::I64))
+    Opcode::V128Load32Zero(_, _, _) => Some(VectorOp::LoadZero(VectorLane::I32))
+    Opcode::V128Load64Zero(_, _, _) => Some(VectorOp::LoadZero(VectorLane::I64))
+    Opcode::V128Load8Lane(_, _, _, index) =>
+      Some(VectorOp::LoadLane(VectorLane::I8, index))
+    Opcode::V128Load16Lane(_, _, _, index) =>
+      Some(VectorOp::LoadLane(VectorLane::I16, index))
+    Opcode::V128Load32Lane(_, _, _, index) =>
+      Some(VectorOp::LoadLane(VectorLane::I32, index))
+    Opcode::V128Load64Lane(_, _, _, index) =>
+      Some(VectorOp::LoadLane(VectorLane::I64, index))
+    Opcode::V128Store8Lane(_, _, _, index) =>
+      Some(VectorOp::StoreLane(VectorLane::I8, index))
+    Opcode::V128Store16Lane(_, _, _, index) =>
+      Some(VectorOp::StoreLane(VectorLane::I16, index))
+    Opcode::V128Store32Lane(_, _, _, index) =>
+      Some(VectorOp::StoreLane(VectorLane::I32, index))
+    Opcode::V128Store64Lane(_, _, _, index) =>
+      Some(VectorOp::StoreLane(VectorLane::I64, index))
+    Opcode::V128RelaxedSwizzle => Some(VectorOp::V128RelaxedSwizzle)
+    Opcode::V128RelaxedTruncF32toI32S =>
+      Some(VectorOp::V128RelaxedTruncF32toI32S)
+    Opcode::V128RelaxedTruncF32toI32U =>
+      Some(VectorOp::V128RelaxedTruncF32toI32U)
+    Opcode::V128RelaxedTruncF64toI32SZero =>
+      Some(VectorOp::V128RelaxedTruncF64toI32SZero)
+    Opcode::V128RelaxedTruncF64toI32UZero =>
+      Some(VectorOp::V128RelaxedTruncF64toI32UZero)
+    Opcode::V128RelaxedMaddF32 => Some(VectorOp::V128RelaxedMaddF32)
+    Opcode::V128RelaxedNmaddF32 => Some(VectorOp::V128RelaxedNmaddF32)
+    Opcode::V128RelaxedMaddF64 => Some(VectorOp::V128RelaxedMaddF64)
+    Opcode::V128RelaxedNmaddF64 => Some(VectorOp::V128RelaxedNmaddF64)
+    Opcode::V128RelaxedLaneselect8 => Some(VectorOp::V128RelaxedLaneselect8)
+    Opcode::V128RelaxedLaneselect16 => Some(VectorOp::V128RelaxedLaneselect16)
+    Opcode::V128RelaxedLaneselect32 => Some(VectorOp::V128RelaxedLaneselect32)
+    Opcode::V128RelaxedLaneselect64 => Some(VectorOp::V128RelaxedLaneselect64)
+    Opcode::V128RelaxedMinF32 => Some(VectorOp::V128RelaxedMinF32)
+    Opcode::V128RelaxedMaxF32 => Some(VectorOp::V128RelaxedMaxF32)
+    Opcode::V128RelaxedMinF64 => Some(VectorOp::V128RelaxedMinF64)
+    Opcode::V128RelaxedMaxF64 => Some(VectorOp::V128RelaxedMaxF64)
+    Opcode::V128RelaxedQ15MulrS => Some(VectorOp::V128RelaxedQ15MulrS)
+    Opcode::V128RelaxedDot8to16S => Some(VectorOp::V128RelaxedDot8to16S)
+    Opcode::V128RelaxedDot8to32AddS => Some(VectorOp::V128RelaxedDot8to32AddS)
+    _ => None
+  }
+}
+
+///|
 /// Terminator - how a basic block ends
 pub(all) enum Terminator {
   // Unconditional jump
@@ -830,12 +2012,10 @@ pub struct Function {
   params : Array[(Value, Type)] // Function parameters
   results : Array[Type] // Return types
   blocks : Array[Block] // Basic blocks (block 0 is entry)
-  stack_slots : Array[StackSlot]
   external_symbols : Array[ExternalSymbol]
   mut next_value_id : Int // For generating unique value IDs
   mut next_inst_id : Int
   mut next_block_id : Int // For generating unique block IDs
-  mut next_stack_slot_id : Int
 } derive(Debug)
 
 ///|
@@ -845,12 +2025,10 @@ pub fn Function::new_empty(name : String) -> Function {
     params: [],
     results: [],
     blocks: [],
-    stack_slots: [],
     external_symbols: [],
     next_value_id: 0,
     next_inst_id: 0,
     next_block_id: 0,
-    next_stack_slot_id: 0,
   }
 }
 
@@ -911,13 +2089,31 @@ pub fn Function::new_block0(self : Function) -> Block {
 }
 
 ///|
+pub fn Opcode::canonicalize(self : Opcode) -> Opcode {
+  match self.to_scalar_op() {
+    Some(scalar_op) => Scalar(scalar_op)
+    None =>
+      match self.to_vector_op() {
+        Some(vector_op) => Vector(vector_op)
+        None => self
+      }
+  }
+}
+
+///|
 pub fn Function::new_inst(
   self : Function,
   opcode : Opcode,
   args : Array[Value],
   results : Array[Value],
 ) -> Inst {
-  let inst = Inst::new_with_id(self.next_inst_id, opcode, args, results)
+  let canonical_opcode = opcode.canonicalize()
+  let inst = Inst::new_with_id(
+    self.next_inst_id,
+    canonical_opcode,
+    args,
+    results,
+  )
   self.next_inst_id = self.next_inst_id + 1
   inst
 }
@@ -934,18 +2130,6 @@ pub fn Function::add_param(self : Function, ty : Type) -> Value {
 /// Add a result type to the function
 pub fn Function::add_result(self : Function, ty : Type) -> Unit {
   self.results.push(ty)
-}
-
-///|
-pub fn Function::new_stack_slot(
-  self : Function,
-  size : Int,
-  align : Int,
-) -> StackSlot {
-  let slot = { id: self.next_stack_slot_id, size, align }
-  self.next_stack_slot_id = self.next_stack_slot_id + 1
-  self.stack_slots.push(slot)
-  slot
 }
 
 ///|

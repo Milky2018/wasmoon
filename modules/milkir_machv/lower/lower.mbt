@@ -551,8 +551,8 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
   // Pass 1: find address values that will be subsumed by load/store lowering.
   for block in ctx.ir_func.blocks {
     for inst in block.instructions {
-      match inst.opcode {
-        LoadPtr(ty) => {
+      match inst.opcode.for_legacy_consumers() {
+        LoadPtr(ty) | Memory(@milkir.MemoryOp::Load(ty)) => {
           guard inst.operands.length() >= 1 else { continue }
           let base_value = inst.operands[0]
           let access_size = match ty {
@@ -562,7 +562,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
           }
           let explicit_offset = if inst.operands.length() > 1 {
             if find_defining_inst(ctx, inst.operands[1]) is Some(def_inst) &&
-              def_inst.opcode is Iconst(off) {
+              def_inst.opcode.for_legacy_consumers() is Iconst(off) {
               off
             } else {
               0L
@@ -595,7 +595,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
             }
           }
         }
-        StorePtr(ty) => {
+        StorePtr(ty) | Memory(@milkir.MemoryOp::Store(ty)) => {
           guard inst.operands.length() >= 2 else { continue }
           let base_value = inst.operands[0]
           let access_size = match ty {
@@ -605,7 +605,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
           }
           let explicit_offset = if inst.operands.length() > 2 {
             if find_defining_inst(ctx, inst.operands[2]) is Some(def_inst) &&
-              def_inst.opcode is Iconst(off) {
+              def_inst.opcode.for_legacy_consumers() is Iconst(off) {
               off
             } else {
               0L
@@ -638,13 +638,14 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
             }
           }
         }
-        LoadPtrNarrow(_, bits, _) => {
+        LoadPtrNarrow(_, bits, _)
+        | Memory(@milkir.MemoryOp::LoadNarrow(_, bits, _)) => {
           guard inst.operands.length() >= 1 else { continue }
           let base_value = inst.operands[0]
           let access_size = bits / 8
           let explicit_offset = if inst.operands.length() > 1 {
             if find_defining_inst(ctx, inst.operands[1]) is Some(def_inst) &&
-              def_inst.opcode is Iconst(off) {
+              def_inst.opcode.for_legacy_consumers() is Iconst(off) {
               off
             } else {
               0L
@@ -677,13 +678,13 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
             }
           }
         }
-        StorePtrNarrow(bits) => {
+        StorePtrNarrow(bits) | Memory(@milkir.MemoryOp::StoreNarrow(bits)) => {
           guard inst.operands.length() >= 2 else { continue }
           let base_value = inst.operands[0]
           let access_size = bits / 8
           let explicit_offset = if inst.operands.length() > 2 {
             if find_defining_inst(ctx, inst.operands[2]) is Some(def_inst) &&
-              def_inst.opcode is Iconst(off) {
+              def_inst.opcode.for_legacy_consumers() is Iconst(off) {
               off
             } else {
               0L
@@ -735,7 +736,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
       let is_i64 = inst.first_result() is Some(result) && result.ty is I64
       let is_shift_fusable_int = inst.first_result() is Some(result) &&
         (result.ty is I64 || result.ty is I32)
-      match inst.opcode {
+      match inst.opcode.for_legacy_consumers() {
         Iadd => {
           if !is_shift_fusable_int {
             continue
@@ -832,7 +833,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
           if lhs_is_imm || rhs_is_imm {
             continue
           }
-          if inst.opcode is Bor &&
+          if inst.opcode.for_legacy_consumers() is Bor &&
             match_rotate_or_value(ctx, lhs, rhs, is_i64) is Some(_) {
             if use_count(ctx.use_counts, lhs.id) == 1 &&
               (
@@ -850,7 +851,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
             }
             continue
           }
-          if inst.opcode is Bor &&
+          if inst.opcode.for_legacy_consumers() is Bor &&
             match_extr_or_value(ctx, lhs, rhs, is_i64) is Some(_) {
             if use_count(ctx.use_counts, lhs.id) == 1 &&
               (
@@ -980,7 +981,7 @@ fn compute_fused_icmps(
       return false
     }
     match def_inst_table[value.id] {
-      Some(def_inst) => def_inst.opcode is Icmp(_)
+      Some(def_inst) => def_inst.opcode.for_legacy_consumers() is Icmp(_)
       None => false
     }
   }
@@ -999,7 +1000,7 @@ fn compute_fused_icmps(
   for block in ir_func.blocks {
     for inst in block.instructions {
       // Check if this is a Select instruction
-      if inst.opcode is Select {
+      if inst.opcode.for_legacy_consumers() is Select {
         let cond = inst.operands[0]
         if is_single_use_icmp_result(use_counts, def_inst_table, cond) {
           mark_fused(cond.id)
@@ -1168,11 +1169,12 @@ fn match_shl_const_value(
   ctx : LoweringContext,
   value : @milkir.Value,
 ) -> (@milkir.Value, Int)? {
-  if find_defining_inst(ctx, value) is Some(inst) && inst.opcode is Ishl {
+  if find_defining_inst(ctx, value) is Some(inst) &&
+    inst.opcode.for_legacy_consumers() is Ishl {
     // Check if shift amount is a constant
     let shift_operand = inst.operands[1]
     if find_defining_inst(ctx, shift_operand) is Some(shift_inst) &&
-      shift_inst.opcode is Iconst(amount) {
+      shift_inst.opcode.for_legacy_consumers() is Iconst(amount) {
       // Determine mask based on value type (i32 uses 31, i64 uses 63)
       let is_64 = value.ty is I64
       let mask = if is_64 { 63 } else { 31 }
@@ -1194,10 +1196,11 @@ fn match_ushr_const_value(
   ctx : LoweringContext,
   value : @milkir.Value,
 ) -> (@milkir.Value, Int)? {
-  if find_defining_inst(ctx, value) is Some(inst) && inst.opcode is Ushr {
+  if find_defining_inst(ctx, value) is Some(inst) &&
+    inst.opcode.for_legacy_consumers() is Ushr {
     let shift_operand = inst.operands[1]
     if find_defining_inst(ctx, shift_operand) is Some(shift_inst) &&
-      shift_inst.opcode is Iconst(amount) {
+      shift_inst.opcode.for_legacy_consumers() is Iconst(amount) {
       let is_64 = value.ty is I64
       let mask = if is_64 { 63 } else { 31 }
       let shift_val = amount.to_int() & mask
@@ -1291,7 +1294,8 @@ fn match_mul_value(
   ctx : LoweringContext,
   value : @milkir.Value,
 ) -> (@milkir.Value, @milkir.Value)? {
-  if find_defining_inst(ctx, value) is Some(inst) && inst.opcode is Imul {
+  if find_defining_inst(ctx, value) is Some(inst) &&
+    inst.opcode.for_legacy_consumers() is Imul {
     return Some((inst.operands[0], inst.operands[1]))
   }
   None
@@ -1304,7 +1308,8 @@ fn match_bnot_value(
   ctx : LoweringContext,
   value : @milkir.Value,
 ) -> @milkir.Value? {
-  if find_defining_inst(ctx, value) is Some(inst) && inst.opcode is Bnot {
+  if find_defining_inst(ctx, value) is Some(inst) &&
+    inst.opcode.for_legacy_consumers() is Bnot {
     return Some(inst.operands[0])
   }
   None
@@ -1331,7 +1336,7 @@ fn resolve_iconst_value(
   let mut value = value0
   for _ in 0..<8 {
     if find_defining_inst(ctx, value) is Some(inst) {
-      match inst.opcode {
+      match inst.opcode.for_legacy_consumers() {
         Iconst(c) => return Some(c)
         Copy =>
           if inst.operands.length() > 0 {
@@ -1416,15 +1421,16 @@ fn match_iadd_const(
   ctx : LoweringContext,
   value : @milkir.Value,
 ) -> (@milkir.Value, Int64)? {
-  if find_defining_inst(ctx, value) is Some(inst) && inst.opcode is Iadd {
+  if find_defining_inst(ctx, value) is Some(inst) &&
+    inst.opcode.for_legacy_consumers() is Iadd {
     // Check if second operand is a constant
     if find_defining_inst(ctx, inst.operands[1]) is Some(const_inst) &&
-      const_inst.opcode is Iconst(offset) {
+      const_inst.opcode.for_legacy_consumers() is Iconst(offset) {
       return Some((inst.operands[0], offset))
     }
     // Also check first operand (iadd is commutative)
     if find_defining_inst(ctx, inst.operands[0]) is Some(const_inst) &&
-      const_inst.opcode is Iconst(offset) {
+      const_inst.opcode.for_legacy_consumers() is Iconst(offset) {
       return Some((inst.operands[1], offset))
     }
   }
@@ -1462,7 +1468,7 @@ fn match_extend_i32_to_i64(
   value : @milkir.Value,
 ) -> (@milkir.Value, @instr.IndexExtend)? {
   if find_defining_inst(ctx, value) is Some(inst) {
-    match inst.opcode {
+    match inst.opcode.for_legacy_consumers() {
       Uextend =>
         if value.ty is I64 && inst.operands[0].ty is I32 {
           return Some((inst.operands[0], Uxtw))
@@ -1513,7 +1519,7 @@ fn match_addr_reg_offset(
   Bool,
 )? {
   guard find_defining_inst(ctx, value) is Some(inst) else { return None }
-  guard inst.opcode is Iadd else { return None }
+  guard inst.opcode.for_legacy_consumers() is Iadd else { return None }
   let scale = log2_access_size(access_size)
   if scale is None {
     return None
@@ -1684,7 +1690,7 @@ fn match_icmp_value(
   while depth < 8 {
     depth = depth + 1
     if find_defining_inst(ctx, current) is Some(inst) {
-      match inst.opcode {
+      match inst.opcode.for_legacy_consumers() {
         Icmp(cc) => return Some((inst.operands[0], inst.operands[1], cc))
         Copy =>
           if !inst.operands.is_empty() {
@@ -1721,7 +1727,7 @@ fn intcc_to_cond(cc : @milkir.IntCC) -> @instr.Cond {
 
 ///|
 /// Lower an entire IR function to MachV using a grouped lowering config.
-pub fn lower_function_with_config(
+fn lower_function_with_config_unchecked(
   ir_func : @milkir.Function,
   config : LoweringConfig,
 ) -> @machv.Function {
@@ -1875,18 +1881,44 @@ pub fn lower_function_with_config(
 ///
 /// This compatibility facade keeps the advanced keyword options available.
 /// Prefer `lower_function_with_config` for new user-facing code.
+pub fn lower_core_function_with_config(
+  ir_func : @milkir.Function,
+  config : LoweringConfig,
+) -> @machv.Function {
+  if config.extension_lowerer is Some(_) {
+    abort("core MilkIR lowering does not accept a dialect adapter")
+  }
+  try! ir_func.verify_core()
+  lower_function_with_config_unchecked(ir_func, config)
+}
+
+///|
+/// Lower dialect-bearing MilkIR with an explicit owning adapter.
+pub fn lower_dialect_function_with_config(
+  ir_func : @milkir.Function,
+  config : LoweringConfig,
+  extension_lowerer : (
+    LoweringContext,
+    @milkir.Inst,
+    @block.Block,
+    @milkir.ExtOp,
+  ) -> ExtensionLowerResult,
+) -> @machv.Function {
+  try! ir_func.verify()
+  lower_function_with_config_unchecked(
+    ir_func,
+    config.with_extension_lowerer(extension_lowerer),
+  )
+}
+
+///|
+/// Lower a self-contained core MilkIR function to MachV.
 pub fn lower_function(
   ir_func : @milkir.Function,
   isa? : @isa.ISA = AArch64,
   embedding_abi? : @abi.EmbeddingABI? = None,
   external_helper_symbols? : Map[String, String] = Map([]),
   trap_payload_resolver? : (String) -> Int = fn(_reason) { 0 },
-  extension_lowerer? : ((
-    LoweringContext,
-    @milkir.Inst,
-    @block.Block,
-    @milkir.ExtOp,
-  ) -> ExtensionLowerResult)? = None,
   num_imports? : Int = -1,
   run_ir_opt? : Bool = true,
 ) -> @machv.Function {
@@ -1895,11 +1927,40 @@ pub fn lower_function(
     embedding_abi,
     external_helper_symbols,
     trap_payload_resolver,
-    extension_lowerer,
+    extension_lowerer: None,
     num_imports,
     run_ir_opt,
   }
-  lower_function_with_config(ir_func, config)
+  lower_core_function_with_config(ir_func, config)
+}
+
+///|
+/// Lower dialect-bearing MilkIR to MachV with its required owning adapter.
+pub fn lower_dialect_function(
+  ir_func : @milkir.Function,
+  extension_lowerer : (
+    LoweringContext,
+    @milkir.Inst,
+    @block.Block,
+    @milkir.ExtOp,
+  ) -> ExtensionLowerResult,
+  isa? : @isa.ISA = AArch64,
+  embedding_abi? : @abi.EmbeddingABI? = None,
+  external_helper_symbols? : Map[String, String] = Map([]),
+  trap_payload_resolver? : (String) -> Int = fn(_reason) { 0 },
+  num_imports? : Int = -1,
+  run_ir_opt? : Bool = true,
+) -> @machv.Function {
+  let config : LoweringConfig = {
+    isa,
+    embedding_abi,
+    external_helper_symbols,
+    trap_payload_resolver,
+    extension_lowerer: None,
+    num_imports,
+    run_ir_opt,
+  }
+  lower_dialect_function_with_config(ir_func, config, extension_lowerer)
 }
 
 ///|
@@ -2054,7 +2115,6 @@ fn lower_inst_builtin(
 
     // Integer comparisons
     Icmp(cc) => lower_icmp(ctx, inst, block, cc)
-    IcmpEq => lower_unsupported_generic_opcode(inst, block)
 
     // Floating point arithmetic
     Fadd => lower_binary_float(ctx, inst, block)
@@ -2081,9 +2141,6 @@ fn lower_inst_builtin(
     // Floating point comparisons
     Fcmp(cc) => lower_fcmp(ctx, inst, block, cc)
 
-    // Note: Load/Store opcodes removed - now desugared via FuncEnvironment to LoadPtr/StorePtr
-    Load | Store | StackAddr(_) => lower_unsupported_generic_opcode(inst, block)
-
     // Conversions
     Sextend => lower_extend(ctx, inst, block, signed=true)
     Uextend => lower_extend(ctx, inst, block, signed=false)
@@ -2106,19 +2163,37 @@ fn lower_inst_builtin(
     Select => lower_select(ctx, inst, block)
 
     // Function calls
-    Call(symbol, _) => lower_external_call(ctx, inst, block, symbol)
-    CallIndirect(_) => lower_unsupported_generic_opcode(inst, block)
-
+    Call(call_op) =>
+      match call_op {
+        @milkir.CallOp::Direct(symbol, _) =>
+          lower_external_call(ctx, inst, block, symbol)
+        @milkir.CallOp::Pointer(num_args, num_results) =>
+          lower_call_ptr(ctx, inst, block, num_args, num_results)
+      }
     // Raw pointer operations (for trampolines)
     LoadPtr(ty) => lower_load_ptr(ctx, inst, block, ty)
     StorePtr(ty) => lower_store_ptr(ctx, inst, block, ty)
     LoadPtrNarrow(result_ty, bits, signed) =>
       lower_load_ptr_narrow(ctx, inst, block, result_ty, bits, signed)
     StorePtrNarrow(bits) => lower_store_ptr_narrow(ctx, inst, block, bits)
-    CallPtr(num_args, num_results) =>
-      lower_call_ptr(ctx, inst, block, num_args, num_results)
-    Trap(_) | Custom(_, _) => lower_unsupported_generic_opcode(inst, block)
+    Memory(memory_op) =>
+      match memory_op {
+        @milkir.MemoryOp::Load(ty) => lower_load_ptr(ctx, inst, block, ty)
+        @milkir.MemoryOp::Store(ty) => lower_store_ptr(ctx, inst, block, ty)
+        @milkir.MemoryOp::LoadNarrow(result_ty, bits, signed) =>
+          lower_load_ptr_narrow(ctx, inst, block, result_ty, bits, signed)
+        @milkir.MemoryOp::StoreNarrow(bits) =>
+          lower_store_ptr_narrow(ctx, inst, block, bits)
+      }
     Ext(_, _) => lower_unsupported_generic_opcode(inst, block)
+    Scalar(scalar_op) => {
+      let legacy_inst = inst.with_opcode(scalar_op.to_legacy_opcode())
+      lower_inst_builtin(ctx, legacy_inst, block)
+    }
+    Vector(vector_op) => {
+      let legacy_inst = inst.with_opcode(vector_op.to_legacy_opcode())
+      lower_inst_builtin(ctx, legacy_inst, block)
+    }
 
     // SIMD operations
     V128Const(bytes) => lower_v128_const(ctx, inst, block, bytes)
@@ -2834,7 +2909,7 @@ fn lower_load_ptr(
   // Check if we have an offset from a second operand (must be an iconst)
   let explicit_offset = if inst.operands.length() > 1 {
     if find_defining_inst(ctx, inst.operands[1]) is Some(def_inst) &&
-      def_inst.opcode is Iconst(off) {
+      def_inst.opcode.for_legacy_consumers() is Iconst(off) {
       off
     } else {
       0L
@@ -2949,7 +3024,7 @@ fn lower_store_ptr(
   // Check if we have an offset from a third operand
   let explicit_offset = if inst.operands.length() > 2 {
     if find_defining_inst(ctx, inst.operands[2]) is Some(def_inst) &&
-      def_inst.opcode is Iconst(off) {
+      def_inst.opcode.for_legacy_consumers() is Iconst(off) {
       off
     } else {
       0L
@@ -3059,7 +3134,7 @@ fn lower_load_ptr_narrow(
   // Check if we have an offset from a second operand
   let explicit_offset = if inst.operands.length() > 1 {
     if find_defining_inst(ctx, inst.operands[1]) is Some(def_inst) &&
-      def_inst.opcode is Iconst(off) {
+      def_inst.opcode.for_legacy_consumers() is Iconst(off) {
       off
     } else {
       0L
@@ -3166,7 +3241,7 @@ fn lower_store_ptr_narrow(
   // Check if we have an offset from a third operand
   let explicit_offset = if inst.operands.length() > 2 {
     if find_defining_inst(ctx, inst.operands[2]) is Some(def_inst) &&
-      def_inst.opcode is Iconst(off) {
+      def_inst.opcode.for_legacy_consumers() is Iconst(off) {
       off
     } else {
       0L

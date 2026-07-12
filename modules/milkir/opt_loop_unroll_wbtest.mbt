@@ -74,7 +74,6 @@ fn make_canonical_i32_loop(
 ///|
 fn make_carried_effect_loop(bound_value : Int) -> CarriedEffectLoopFixture {
   let builder = FunctionBuilder::FunctionBuilder("carried_effect_loop")
-  let callee = builder.add_param(Ptr)
   let address = builder.add_param(Ptr)
   let preheader = builder.current_block()
   let initial = builder.iconst_i32(0)
@@ -94,17 +93,23 @@ fn make_carried_effect_loop(bound_value : Int) -> CarriedEffectLoopFixture {
   builder.brnz(condition, body, exit)
   builder.switch_to_block(body)
   let func = builder.get_function()
+  let pair_symbol = func.declare_external_symbol("effect_pair")
+  let effect_symbol = func.declare_external_symbol("effect_sink")
   let first = func.new_value(I32)
   let second = func.new_value(I32)
-  let call = func.new_inst(CallIndirect(Signature([], [I32, I32])), [callee], [
-    first, second,
-  ])
+  let call = func.new_inst(
+    Call(CallOp::Direct(pair_symbol, Signature([], [I32, I32]))),
+    [],
+    [first, second],
+  )
   call.add_metadata(Comment("effect order"))
   body.append_inst(call)
   let pair_sum = func.new_value(I32)
   body.append_inst(func.new_inst(Iadd, [first, second], [pair_sum]))
   let loaded = func.new_value(I32)
-  body.append_inst(func.new_inst(LoadPtr(I32), [address, offset], [loaded]))
+  body.append_inst(
+    func.new_inst(Memory(MemoryOp::Load(I32)), [address, offset], [loaded]),
+  )
   let accumulated = func.new_value(I32)
   body.append_inst(func.new_inst(Iadd, [accumulator, pair_sum], [accumulated]))
   let next_accumulator = func.new_value(I32)
@@ -112,9 +117,19 @@ fn make_carried_effect_loop(bound_value : Int) -> CarriedEffectLoopFixture {
     func.new_inst(Iadd, [accumulated, loaded], [next_accumulator]),
   )
   body.append_inst(
-    func.new_inst(StorePtr(I32), [address, next_accumulator, offset], []),
+    func.new_inst(
+      Memory(MemoryOp::Store(I32)),
+      [address, next_accumulator, offset],
+      [],
+    ),
   )
-  body.append_inst(func.new_inst(Trap("effect trap"), [next_accumulator], []))
+  body.append_inst(
+    func.new_inst(
+      Call(CallOp::Direct(effect_symbol, Signature([I32], []))),
+      [next_accumulator],
+      [],
+    ),
+  )
   builder.jump(latch, [])
   builder.switch_to_block(latch)
   let next_induction = builder.iadd(induction, step)
@@ -213,7 +228,7 @@ fn evaluate_canonical_instructions(
 ) -> Int raise {
   let mut body_executions = 0
   for inst in instructions {
-    match inst.opcode {
+    match inst.opcode.for_legacy_consumers() {
       Iconst(value) => values.set(inst.results[0].id, value)
       Iadd => {
         let lhs = values.get(inst.operands[0].id).unwrap()
@@ -347,16 +362,16 @@ test "full unrolling preserves carried values, multi-results, and effect order" 
     let accumulated = cloned[base + 3]
     let next_accumulator = cloned[base + 4]
     let store = cloned[base + 5]
-    let trap = cloned[base + 6]
+    let effect = cloned[base + 6]
     let next_induction = cloned[base + 7]
-    if !(call.opcode is CallIndirect(_)) ||
-      pair_sum.opcode != Iadd ||
-      load.opcode != LoadPtr(I32) ||
-      accumulated.opcode != Iadd ||
-      next_accumulator.opcode != Iadd ||
-      store.opcode != StorePtr(I32) ||
-      trap.opcode != Trap("effect trap") ||
-      next_induction.opcode != Iadd {
+    if !(call.opcode is Call(_)) ||
+      pair_sum.opcode.for_legacy_consumers() != Iadd ||
+      load.opcode != Memory(MemoryOp::Load(I32)) ||
+      accumulated.opcode.for_legacy_consumers() != Iadd ||
+      next_accumulator.opcode.for_legacy_consumers() != Iadd ||
+      store.opcode != Memory(MemoryOp::Store(I32)) ||
+      !(effect.opcode is Call(_)) ||
+      next_induction.opcode.for_legacy_consumers() != Iadd {
       fail("effectful instruction order changed")
     }
     if call.id < first_fresh_inst || call.results.length() != 2 {
@@ -378,7 +393,7 @@ test "full unrolling preserves carried values, multi-results, and effect order" 
       fail("carried accumulator dependencies were not remapped")
     }
     if store.operands[1] != next_accumulator.results[0] ||
-      trap.operands[0] != next_accumulator.results[0] {
+      effect.operands[0] != next_accumulator.results[0] {
       fail("effect operands were not remapped")
     }
     if next_induction.operands[0] != current_induction {
@@ -515,22 +530,22 @@ test "factor-two unrolling preserves carried effects in both transitions" {
   let accumulated = fixture.latch.instructions[original_latch_insts + 3]
   let next_accumulator = fixture.latch.instructions[original_latch_insts + 4]
   let store = fixture.latch.instructions[original_latch_insts + 5]
-  let trap = fixture.latch.instructions[original_latch_insts + 6]
+  let effect = fixture.latch.instructions[original_latch_insts + 6]
   let next_induction = fixture.latch.instructions[original_latch_insts + 7]
-  if !(call.opcode is CallIndirect(_)) ||
-    pair_sum.opcode != Iadd ||
-    load.opcode != LoadPtr(I32) ||
-    accumulated.opcode != Iadd ||
-    next_accumulator.opcode != Iadd ||
-    store.opcode != StorePtr(I32) ||
-    trap.opcode != Trap("effect trap") ||
-    next_induction.opcode != Iadd {
+  if !(call.opcode is Call(_)) ||
+    pair_sum.opcode.for_legacy_consumers() != Iadd ||
+    load.opcode != Memory(MemoryOp::Load(I32)) ||
+    accumulated.opcode.for_legacy_consumers() != Iadd ||
+    next_accumulator.opcode.for_legacy_consumers() != Iadd ||
+    store.opcode != Memory(MemoryOp::Store(I32)) ||
+    !(effect.opcode is Call(_)) ||
+    next_induction.opcode.for_legacy_consumers() != Iadd {
     fail("factor-two effect order changed")
   }
   if accumulated.operands[0] != first_state[1] ||
     next_induction.operands[0] != first_state[0] ||
     store.operands[1] != next_accumulator.results[0] ||
-    trap.operands[0] != next_accumulator.results[0] {
+    effect.operands[0] != next_accumulator.results[0] {
     fail("factor-two carried effects were not remapped")
   }
   match fixture.latch.terminator {
@@ -813,15 +828,16 @@ test "counted-loop analysis follows loop-external constant copies" {
 test "O3 invokes safe counted-loop unrolling" {
   let fixture = make_carried_effect_loop(10)
   optimize_with_level(fixture.func, O3) |> ignore
-  let mut indirect_calls = 0
+  let mut pair_calls = 0
   for block in fixture.func.blocks {
     for inst in block.instructions {
-      if inst.opcode is CallIndirect(_) {
-        indirect_calls = indirect_calls + 1
+      if inst.opcode is Call(CallOp::Direct(symbol, _)) &&
+        symbol.name == "effect_pair" {
+        pair_calls = pair_calls + 1
       }
     }
   }
-  inspect(indirect_calls, content="2")
+  inspect(pair_calls, content="2")
   fixture.func.verify()
 }
 

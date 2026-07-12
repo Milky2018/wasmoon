@@ -16,8 +16,13 @@ test "verify rejects duplicate value definitions" {
 ///|
 test "verify rejects duplicate instruction ids" {
   let func = Function::new_empty("duplicate_instruction")
+  let symbol = func.declare_external_symbol("effect")
   let entry = func.new_block([])
-  let inst = func.new_inst(Custom("effect", Signature([], [])), [], [])
+  let inst = func.new_inst(
+    Call(CallOp::Direct(symbol, Signature([], []))),
+    [],
+    [],
+  )
   entry.append_inst(inst)
   entry.append_inst(inst)
   entry.set_terminator(Return([]))

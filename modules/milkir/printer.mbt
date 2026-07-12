@@ -63,6 +63,8 @@ fn format_opcode(
 ) -> String {
   let ops = operands.map(format_value).join(", ")
   match opcode {
+    Scalar(scalar_op) =>
+      format_opcode(scalar_op.to_legacy_opcode(), operands, result_ty)
     // Constants
     Iconst(n) => "iconst \{n}"
     Fconst(n) =>
@@ -104,7 +106,6 @@ fn format_opcode(
 
     // Comparisons
     Icmp(cc) => "icmp.\{format_intcc(cc)} \{ops}"
-    IcmpEq => "icmp.eq \{ops}"
 
     // Floating point arithmetic
     Fadd => "fadd \{ops}"
@@ -148,13 +149,13 @@ fn format_opcode(
     // Misc
     Select => "select \{ops}"
     Copy => "copy \{ops}"
-    Load => "load \{ops}"
-    Store => "store \{ops}"
-    StackAddr(slot) => "stack_addr slot\{slot.id}"
-
     // Function calls
-    Call(symbol, _) => "call \{symbol.name}(\{ops})"
-    CallIndirect(signature) => "call_indirect sig=\{to_repr(signature)}(\{ops})"
+    Call(call_op) =>
+      match call_op {
+        CallOp::Direct(symbol, _) => "call \{symbol.name}(\{ops})"
+        CallOp::Pointer(num_args, num_results) =>
+          "call_ptr(\{num_args}) -> \{num_results} (\{ops})"
+      }
 
     // Raw pointer operations (for trampolines)
     LoadPtr(ty) => "load_ptr.\{ty} \{ops}"
@@ -164,10 +165,16 @@ fn format_opcode(
       "load_ptr\{bits}_\{sign_str}.\{result_ty} \{ops}"
     }
     StorePtrNarrow(bits) => "store_ptr\{bits} \{ops}"
-    CallPtr(num_args, num_results) =>
-      "call_ptr(\{num_args}) -> \{num_results} (\{ops})"
-    Trap(reason) => "trap \"\{reason}\" \{ops}"
-    Custom(name, _) => "custom \{name} \{ops}"
+    Memory(memory_op) =>
+      match memory_op {
+        MemoryOp::Load(ty) => "load.\{ty} \{ops}"
+        MemoryOp::Store(ty) => "store.\{ty} \{ops}"
+        MemoryOp::LoadNarrow(result_ty, bits, signed) => {
+          let sign_str = if signed { "s" } else { "u" }
+          "load\{bits}_\{sign_str}.\{result_ty} \{ops}"
+        }
+        MemoryOp::StoreNarrow(bits) => "store\{bits} \{ops}"
+      }
     Ext(ext, _) => {
       let imms : Array[String] = []
       for imm in ext.immediates {
@@ -180,6 +187,63 @@ fn format_opcode(
       }
       "ext.\{ext.dialect}.\{ext.opcode}\{imm_str} \{ops}"
     }
+    Vector(vector_op) =>
+      match vector_op {
+        VectorOp::LoadExtend(lane, extension) => {
+          let lane_name = match lane {
+            VectorLane::I8 => "8x8"
+            VectorLane::I16 => "16x4"
+            VectorLane::I32 => "32x2"
+            _ => abort("invalid vector extending-load semantics")
+          }
+          let extension_name = match extension {
+            VectorExtension::Signed => "s"
+            VectorExtension::Unsigned => "u"
+            VectorExtension::None =>
+              abort("invalid vector extending-load semantics")
+          }
+          "v128.load\{lane_name}_\{extension_name} \{ops}"
+        }
+        VectorOp::LoadSplat(lane) => {
+          let bits = match lane {
+            VectorLane::I8 => 8
+            VectorLane::I16 => 16
+            VectorLane::I32 => 32
+            VectorLane::I64 => 64
+            _ => abort("invalid vector splat-load semantics")
+          }
+          "v128.load\{bits}_splat \{ops}"
+        }
+        VectorOp::LoadZero(lane) => {
+          let bits = match lane {
+            VectorLane::I32 => 32
+            VectorLane::I64 => 64
+            _ => abort("invalid vector zero-load semantics")
+          }
+          "v128.load\{bits}_zero \{ops}"
+        }
+        VectorOp::LoadLane(lane, index) => {
+          let bits = match lane {
+            VectorLane::I8 => 8
+            VectorLane::I16 => 16
+            VectorLane::I32 => 32
+            VectorLane::I64 => 64
+            _ => abort("invalid vector lane-load semantics")
+          }
+          "v128.load\{bits}_lane lane=\{index} \{ops}"
+        }
+        VectorOp::StoreLane(lane, index) => {
+          let bits = match lane {
+            VectorLane::I8 => 8
+            VectorLane::I16 => 16
+            VectorLane::I32 => 32
+            VectorLane::I64 => 64
+            _ => abort("invalid vector lane-store semantics")
+          }
+          "v128.store\{bits}_lane lane=\{index} \{ops}"
+        }
+        _ => format_opcode(vector_op.to_legacy_opcode(), operands, result_ty)
+      }
 
     // SIMD operations
     V128Const(_) => "v128.const \{ops}"

@@ -44,7 +44,7 @@ test "build a Wasm memory.size extension instruction" {
   inspect(func.blocks.length(), content="1")
   inspect(func.verify(), content="()")
   match func.blocks[0].instructions[1].opcode {
-    Call(symbol, _) =>
+    Call(@milkir.CallOp::Direct(symbol, _)) =>
       inspect(symbol.name, content="example.runtime.memory_size")
     _ => inspect(false, content="true")
   }

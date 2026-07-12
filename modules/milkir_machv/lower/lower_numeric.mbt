@@ -81,7 +81,7 @@ fn resolve_copy_value(
   while depth < 8 {
     depth += 1
     if find_defining_inst(ctx, value) is Some(inst) &&
-      inst.opcode is Copy &&
+      inst.opcode.for_legacy_consumers() is Copy &&
       !inst.operands.is_empty() {
       value = inst.operands[0]
       continue
@@ -111,7 +111,7 @@ fn match_sub_add_cancel_value(
   addend : @milkir.Value,
 ) -> @milkir.Value? {
   if find_defining_inst(ctx, maybe_sub) is Some(sub_inst) &&
-    sub_inst.opcode is Isub &&
+    sub_inst.opcode.for_legacy_consumers() is Isub &&
     sub_inst.operands.length() == 2 &&
     values_equivalent(ctx, sub_inst.operands[1], addend) {
     return Some(sub_inst.operands[0])
@@ -127,7 +127,7 @@ fn match_add_sub_cancel_value(
   subtrahend : @milkir.Value,
 ) -> @milkir.Value? {
   if find_defining_inst(ctx, maybe_add) is Some(add_inst) &&
-    add_inst.opcode is Iadd &&
+    add_inst.opcode.for_legacy_consumers() is Iadd &&
     add_inst.operands.length() == 2 {
     if values_equivalent(ctx, add_inst.operands[0], subtrahend) {
       return Some(add_inst.operands[1])

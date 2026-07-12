@@ -490,7 +490,7 @@ test "plan Wasm body MilkIR through reusable JIT pipeline" {
 test "plan MilkIR branch block params through reusable JIT pipeline" {
   let signature = @milkir.Signature::Signature([], [I64])
   let milk = @milkir.Function::with_signature("branch_block_params", signature)
-  let cond = milk.new_value(I64)
+  let cond = milk.new_value(I32)
   let true_value = milk.new_value(I64)
   let false_value = milk.new_value(I64)
   let true_param = milk.new_value(I64)
@@ -528,7 +528,9 @@ test "plan MilkIR CallPtr through reusable JIT pipeline" {
   let result = milk.new_value(I64)
   let entry = milk.new_block([])
   entry.append_inst(
-    milk.new_inst(CallPtr(1, 1), [callee, vmctx, arg], [result]),
+    milk.new_inst(Call(@milkir.CallOp::Pointer(2, 1)), [callee, vmctx, arg], [
+      result,
+    ]),
   )
   entry.set_terminator(Return([result]))
   let plan = plan_milkir_integration_for_target(milk, X64)
@@ -1294,8 +1296,12 @@ test "plan MilkIR generic memory through reusable x64 JIT pipeline" {
   let offset = milk.new_value(I64)
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Iconst(0L), [], [offset]))
-  entry.append_inst(milk.new_inst(StorePtr(I32), [ptr, value, offset], []))
-  entry.append_inst(milk.new_inst(LoadPtr(I32), [ptr, offset], [loaded]))
+  entry.append_inst(
+    milk.new_inst(Memory(@milkir.MemoryOp::Store(I32)), [ptr, value, offset], []),
+  )
+  entry.append_inst(
+    milk.new_inst(Memory(@milkir.MemoryOp::Load(I32)), [ptr, offset], [loaded]),
+  )
   entry.set_terminator(Return([loaded]))
   let plan = plan_milkir_integration_for_target(milk, X64)
   let mut has_store = false
@@ -1362,8 +1368,12 @@ test "plan MilkIR generic memory through reusable AArch64 JIT pipeline" {
   let offset = milk.new_value(I64)
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Iconst(0L), [], [offset]))
-  entry.append_inst(milk.new_inst(StorePtr(I32), [ptr, value, offset], []))
-  entry.append_inst(milk.new_inst(LoadPtr(I32), [ptr, offset], [loaded]))
+  entry.append_inst(
+    milk.new_inst(Memory(@milkir.MemoryOp::Store(I32)), [ptr, value, offset], []),
+  )
+  entry.append_inst(
+    milk.new_inst(Memory(@milkir.MemoryOp::Load(I32)), [ptr, offset], [loaded]),
+  )
   entry.set_terminator(Return([loaded]))
   let plan = plan_milkir_integration_for_target(milk, AArch64)
   let mut has_str_w = false
@@ -1438,8 +1448,12 @@ test "plan MilkIR scalar float memory through reusable x64 JIT pipeline" {
   let offset = milk.new_value(I64)
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Iconst(0L), [], [offset]))
-  entry.append_inst(milk.new_inst(StorePtr(F64), [ptr, value, offset], []))
-  entry.append_inst(milk.new_inst(LoadPtr(F64), [ptr, offset], [loaded]))
+  entry.append_inst(
+    milk.new_inst(Memory(@milkir.MemoryOp::Store(F64)), [ptr, value, offset], []),
+  )
+  entry.append_inst(
+    milk.new_inst(Memory(@milkir.MemoryOp::Load(F64)), [ptr, offset], [loaded]),
+  )
   entry.set_terminator(Return([loaded]))
   let plan = plan_milkir_integration_for_target(milk, X64)
   let mut has_movsd_store = false
@@ -1474,8 +1488,12 @@ test "plan MilkIR scalar float memory through reusable AArch64 JIT pipeline" {
   let offset = milk.new_value(I64)
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Iconst(0L), [], [offset]))
-  entry.append_inst(milk.new_inst(StorePtr(F64), [ptr, value, offset], []))
-  entry.append_inst(milk.new_inst(LoadPtr(F64), [ptr, offset], [loaded]))
+  entry.append_inst(
+    milk.new_inst(Memory(@milkir.MemoryOp::Store(F64)), [ptr, value, offset], []),
+  )
+  entry.append_inst(
+    milk.new_inst(Memory(@milkir.MemoryOp::Load(F64)), [ptr, offset], [loaded]),
+  )
   entry.set_terminator(Return([loaded]))
   let plan = plan_milkir_integration_for_target(milk, AArch64)
   let mut has_str_d = false
@@ -1511,8 +1529,12 @@ test "plan MilkIR vector memory through reusable x64 JIT pipeline" {
   let offset = milk.new_value(I64)
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Iconst(0L), [], [offset]))
-  entry.append_inst(milk.new_inst(StorePtr(V128), [ptr, value, offset], []))
-  entry.append_inst(milk.new_inst(LoadPtr(V128), [ptr, offset], [loaded]))
+  entry.append_inst(
+    milk.new_inst(Memory(@milkir.MemoryOp::Store(V128)), [ptr, value, offset], []),
+  )
+  entry.append_inst(
+    milk.new_inst(Memory(@milkir.MemoryOp::Load(V128)), [ptr, offset], [loaded]),
+  )
   entry.set_terminator(Return([]))
   let plan = plan_milkir_integration_for_target(milk, X64)
   let mut has_movdqu_store = false
@@ -1547,8 +1569,12 @@ test "plan MilkIR vector memory through reusable AArch64 JIT pipeline" {
   let offset = milk.new_value(I64)
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Iconst(0L), [], [offset]))
-  entry.append_inst(milk.new_inst(StorePtr(V128), [ptr, value, offset], []))
-  entry.append_inst(milk.new_inst(LoadPtr(V128), [ptr, offset], [loaded]))
+  entry.append_inst(
+    milk.new_inst(Memory(@milkir.MemoryOp::Store(V128)), [ptr, value, offset], []),
+  )
+  entry.append_inst(
+    milk.new_inst(Memory(@milkir.MemoryOp::Load(V128)), [ptr, offset], [loaded]),
+  )
   entry.set_terminator(Return([]))
   let plan = plan_milkir_integration_for_target(milk, AArch64)
   let mut has_str_q = false
@@ -1605,21 +1631,6 @@ test "plan Wasm body return area through reusable JIT pipeline" {
   inspect(x64_plan.object.get_bytes().length() > 0, content="true")
   let a64_plan = plan_wasm_body_milkir_integration_for_target(milk, AArch64)
   inspect(a64_plan.object.get_bytes().length() > 0, content="true")
-}
-
-///|
-test "plan MilkIR StackAddr through reusable x64 JIT pipeline" {
-  let signature = @milkir.Signature::Signature([], [Ptr])
-  let milk = @milkir.Function::with_signature("stack_addr_x64", signature)
-  let slot = milk.new_stack_slot(16, 16)
-  let ptr = milk.new_value(Ptr)
-  let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(StackAddr(slot), [], [ptr]))
-  entry.set_terminator(Return([ptr]))
-  // TODO(milkir): lower StackAddr through MachV once generic stack slots are
-  // represented in the copied MachV pipeline.
-  inspect(milk.stack_slots.length(), content="1")
-  inspect(entry.instructions.length(), content="1")
 }
 
 ///|

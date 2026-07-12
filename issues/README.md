@@ -8,7 +8,10 @@ No ready issues.
 
 ## Unresolved Issues
 
-No unresolved issues.
+| ID | Status | Priority | Type | Assignee | Blocked by | Blocks | Title |
+| --- | --- | ---: | --- | --- | --- | --- | --- |
+| [ISS-133](ISS-133.md) | in_progress | 1 | epic | codex | none | none | Establish a semantic MilkIR opcode hierarchy |
+| [ISS-141](ISS-141.md) | in_progress | 1 | task | codex | none | none | Contract the legacy opcode representation |
 
 ## Dependency Graph
 
@@ -141,6 +144,15 @@ graph TD
   ISS_130["ISS-130: Define canonical Function signature construction"]
   ISS_131["ISS-131: Migrate implicit Function parameter producers"]
   ISS_132["ISS-132: Remove duplicate Function signature state"]
+  ISS_133["ISS-133: Establish a semantic MilkIR opcode hierarchy"]
+  ISS_134["ISS-134: Remove unsupported and untyped core opcodes"]
+  ISS_135["ISS-135: Group generic memory operations under MemoryOp"]
+  ISS_136["ISS-136: Group calls under a generic CallOp contract"]
+  ISS_137["ISS-137: Group language-neutral vector operations under VectorOp"]
+  ISS_138["ISS-138: Consume Wasm SIMD memory arguments before MilkIR core"]
+  ISS_139["ISS-139: Group scalar operations under ScalarOp"]
+  ISS_140["ISS-140: Separate dialect-bearing IR from core lowering"]
+  ISS_141["ISS-141: Contract the legacy opcode representation"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
@@ -256,6 +268,16 @@ graph TD
   ISS_124 --> ISS_125
   ISS_130 --> ISS_131
   ISS_131 --> ISS_132
+  ISS_134 --> ISS_135
+  ISS_134 --> ISS_136
+  ISS_134 --> ISS_137
+  ISS_137 --> ISS_138
+  ISS_135 --> ISS_139
+  ISS_136 --> ISS_139
+  ISS_137 --> ISS_139
+  ISS_138 --> ISS_140
+  ISS_139 --> ISS_140
+  ISS_140 --> ISS_141
 ```
 
 ## Warnings

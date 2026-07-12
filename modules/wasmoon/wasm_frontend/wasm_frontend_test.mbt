@@ -311,9 +311,9 @@ test "lower globals through native VMContext loads and stores" {
     fail("global roundtrip did not lower natively")
   }
   let text = func.print()
-  inspect(text.contains("load_ptr.i64"), content="true")
-  inspect(text.contains("store_ptr.i32"), content="true")
-  inspect(text.contains("load_ptr.i32"), content="true")
+  inspect(text.contains("load.i64"), content="true")
+  inspect(text.contains("store.i32"), content="true")
+  inspect(text.contains("load.i32"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
   inspect(func.verify(), content="()")
 }
@@ -340,7 +340,7 @@ test "lower table size and get through native VMContext loads" {
   let env = native_test_env()
   let func = lower_function(env, mod_, 0)
   let text = func.print()
-  inspect(text.contains("load_ptr.i64"), content="true")
+  inspect(text.contains("load.i64"), content="true")
   inspect(text.contains("ireduce"), content="true")
   inspect(text.contains("trap \"table out of bounds\""), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
@@ -702,13 +702,13 @@ test "lower direct calls as generic MilkIR calls" {
   let env = native_test_env()
   let func = lower_function(env, mod_, 1)
   let text = func.print()
-  inspect(text.contains("call_ptr(2) -> 1"), content="true")
+  inspect(text.contains("call_ptr(3) -> 1"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
   inspect(func.verify(), content="()")
 }
 
 ///|
-test "lower memory operations through native MilkIR pointer ops" {
+test "lower memory operations through native MilkIR memory ops" {
   let mod_ = {
     ..@types.Module::simple(
       [],
@@ -730,9 +730,9 @@ test "lower memory operations through native MilkIR pointer ops" {
   let func = lower_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("wasmoon.LoadMemBase"), content="false")
-  inspect(text.contains("load_ptr.i64"), content="true")
-  inspect(text.contains("load_ptr.i32"), content="true")
-  inspect(text.contains("store_ptr.i32"), content="true")
+  inspect(text.contains("load.i64"), content="true")
+  inspect(text.contains("load.i32"), content="true")
+  inspect(text.contains("store.i32"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
   inspect(func.verify(), content="()")
 }
@@ -787,7 +787,7 @@ test "lower wide i64 multiply through native MilkIR high-half ops" {
 }
 
 ///|
-test "lower narrow memory operations through native MilkIR pointer ops" {
+test "lower narrow memory operations through native MilkIR memory ops" {
   let mod_ = {
     ..@types.Module::simple(
       [],
@@ -809,15 +809,15 @@ test "lower narrow memory operations through native MilkIR pointer ops" {
   let func = lower_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("wasmoon.LoadMemBase"), content="false")
-  inspect(text.contains("load_ptr.i64"), content="true")
-  inspect(text.contains("store_ptr16"), content="true")
-  inspect(text.contains("load_ptr8_s.i32"), content="true")
+  inspect(text.contains("load.i64"), content="true")
+  inspect(text.contains("store16"), content="true")
+  inspect(text.contains("load8_s.i32"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
   inspect(func.verify(), content="()")
 }
 
 ///|
-test "lower memory grow size and bulk helpers as native custom ops" {
+test "lower memory grow size and bulk helpers as native helper calls" {
   let mod_ = {
     ..@types.Module::simple(
       [],
@@ -851,7 +851,7 @@ test "lower memory grow size and bulk helpers as native custom ops" {
   let text = func.print()
   inspect(text.contains("wasmoon.MemorySize"), content="false")
   inspect(text.contains("wasmoon.MemoryGrow"), content="false")
-  inspect(text.contains("load_ptr.i64"), content="true")
+  inspect(text.contains("load.i64"), content="true")
   inspect(text.contains("ushr"), content="true")
   inspect(text.contains("call wasmoon.runtime.memory_grow"), content="true")
   inspect(text.contains("wasmoon.MemoryFill"), content="false")
@@ -879,7 +879,7 @@ test "lower non-zero memory.size through native descriptor loads" {
   let func = lower_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("wasmoon.MemorySize"), content="false")
-  inspect(text.contains("load_ptr.i64"), content="true")
+  inspect(text.contains("load.i64"), content="true")
   inspect(text.contains("ushr"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
   inspect(func.verify(), content="()")
@@ -910,8 +910,8 @@ test "lower non-zero memory load store with explicit bounds check" {
   let text = func.print()
   inspect(text.contains("wasmoon.LoadMemBase"), content="false")
   inspect(text.contains("trap \"memory out of bounds\""), content="true")
-  inspect(text.contains("load_ptr.i32"), content="true")
-  inspect(text.contains("store_ptr.i32"), content="true")
+  inspect(text.contains("load.i32"), content="true")
+  inspect(text.contains("store.i32"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
   inspect(func.verify(), content="()")
 }
@@ -970,8 +970,8 @@ test "lower memory64 narrow load store with overflow-safe bounds check" {
   let text = func.print()
   inspect(text.contains("wasmoon.LoadMemBase"), content="false")
   inspect(text.contains("trap \"memory out of bounds\""), content="true")
-  inspect(text.contains("load_ptr8_u.i32"), content="true")
-  inspect(text.contains("store_ptr8"), content="true")
+  inspect(text.contains("load8_u.i32"), content="true")
+  inspect(text.contains("store8"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
   inspect(func.verify(), content="()")
 }
@@ -994,15 +994,15 @@ test "lower v128 load store through native memory path" {
   let env = native_test_env()
   let func = lower_function(env, mod_, 0)
   let text = func.print()
-  inspect(text.contains("load_ptr.v128"), content="true")
-  inspect(text.contains("store_ptr.v128"), content="true")
+  inspect(text.contains("load.v128"), content="true")
+  inspect(text.contains("store.v128"), content="true")
   inspect(text.contains("wasmoon.LoadMemBase"), content="false")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
   inspect(func.verify(), content="()")
 }
 
 ///|
-test "lower table bulk helpers as native custom ops" {
+test "lower table bulk helpers as native helper calls" {
   let table : @types.Table = {
     type_: {
       elem_type: FuncRef,
@@ -1085,7 +1085,7 @@ test "lower reference func non-null and eq natively" {
   let func = lower_function(env, mod_, 0)
   let text = func.print()
   inspect(text.contains("wasmoon.GetFuncRef"), content="false")
-  inspect(text.contains("load_ptr.ref"), content="true")
+  inspect(text.contains("load.ref"), content="true")
   inspect(text.contains("bor"), content="true")
   inspect(text.contains("trap \"null reference\""), content="true")
   inspect(text.contains("icmp.eq"), content="true")

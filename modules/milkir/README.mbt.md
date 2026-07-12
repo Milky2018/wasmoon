@@ -282,25 +282,21 @@ The pass leaves the function unchanged when the CFG shape is unsupported, a boun
 
 The concepts below matter when a frontend moves beyond pure arithmetic into embedding and effect semantics.
 
-### Stack slots and pointers
-
-Stack slots are per-function abstract local storage objects. `StackAddr(slot)` produces an address-like value for lowering; MilkIR does not decide the final frame layout. Lower-level code can use pointer operations such as `LoadPtr`, `StorePtr`, narrow pointer loads and stores, and `CallPtr`.
-
 ### External calls
 
-`ExternalSymbol` names a symbol outside the IR function. `Call(symbol, signature)`, `CallIndirect(signature)`, and `CallPtr(num_args, num_results)` are treated conservatively by core optimizations because calls may observe or change state. Direct and indirect calls carry operand/result signatures that the verifier checks; pointer calls carry explicit argument and result counts.
+`ExternalSymbol` names a symbol outside the IR function. `CallOp::Direct(symbol, signature)` and `CallOp::Pointer(num_args, num_results)` are treated conservatively by core optimizations because calls may observe or change state. Direct calls carry operand/result signatures that the verifier checks; pointer calls carry explicit argument and result counts.
 
-`CallPtr` has a generic operand contract:
+`CallOp::Pointer` has a generic operand contract:
 
 1. operand 0 is the function pointer;
-2. operand 1 is an explicit callee environment;
-3. operands 2 and later are user arguments.
+2. operands 1 and later are ordinary arguments;
+3. `num_args` counts every operand after the callee pointer.
 
-An embedding that does not need an environment must still pass an explicit sentinel value. The embedding and lowering layer define the pointer meaning, sentinel, calling convention, and trap behavior.
+An embedding adapter may assign roles such as VMContext to those arguments when it chooses a calling convention, but that role is not part of the core opcode contract.
 
 ### Traps and effects
 
-`Trap(reason)` and `TrapExit(reason)` end execution without normal results. Stores, calls, pointer calls, traps, and unknown extension operations are observable or potentially observable. Optimizations must not delete or reorder them unless a stronger analysis proves that doing so preserves behavior.
+`Trap(reason)` and `TrapExit(reason)` terminators end execution without normal results. Stores, calls, pointer calls, traps, and unknown extension operations are observable or potentially observable. Optimizations must not delete or reorder them unless a stronger analysis proves that doing so preserves behavior.
 
 ## Dialect-specific operations
 

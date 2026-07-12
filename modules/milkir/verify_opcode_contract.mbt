@@ -317,12 +317,6 @@ fn verify_opcode_contract(inst : Inst) -> Unit raise VerifyError {
       }
       require_single_result(inst, I32, "integer compare")
     }
-    IcmpEq => {
-      require_arity(inst.args.length(), 2, "equality compare")
-      require_same_type(inst.args[0], inst.args[1], "equality compare")
-      require_equality_comparable(inst.args[0].ty, "equality compare")
-      require_single_result(inst, I32, "equality compare")
-    }
     Fadd | Fsub | Fmul | Fdiv | Fmin | Fmax => {
       verify_same_type_binary(inst, "float binary")
       require_float(inst.args[0].ty, "float binary")
@@ -394,25 +388,25 @@ fn verify_opcode_contract(inst : Inst) -> Unit raise VerifyError {
       require_result_type(inst, 0, inst.args[1].ty, "select")
     }
     Copy => verify_same_type_unary(inst, "copy")
-    Load => {
-      require_arity(inst.args.length(), 1, "load")
-      require_pointer_value(inst.args[0].ty, "load")
-      require_result_arity(inst, 1, "load")
-    }
-    Store => {
-      require_arity(inst.args.length(), 2, "store")
-      require_pointer_value(inst.args[0].ty, "store")
-      require_no_results(inst, "store")
-    }
-    StackAddr(_) => {
-      require_arity(inst.args.length(), 0, "stack_addr")
-      require_result_types(inst, [Ptr], "stack_addr")
-    }
-    Call(_, signature) => verify_signature(inst, signature, 0, "call")
-    CallIndirect(signature) => {
-      verify_signature(inst, signature, 1, "call_indirect")
-      require_operand_type(inst, 0, Ptr, "call_indirect")
-    }
+    Call(call_op) =>
+      match call_op {
+        CallOp::Direct(_, signature) =>
+          verify_signature(inst, signature, 0, "direct call")
+        CallOp::Pointer(num_args, num_results) => {
+          if num_args < 0 || num_results < 0 {
+            raise ArityMismatch(
+              message="pointer call argument and result counts must be non-negative",
+            )
+          }
+          if inst.args.length() != num_args + 1 {
+            raise ArityMismatch(
+              message="pointer call expects \{num_args + 1} operands, got \{inst.args.length()}",
+            )
+          }
+          require_result_arity(inst, num_results, "pointer call")
+          require_pointer_value(inst.args[0].ty, "pointer call callee")
+        }
+      }
     LoadPtr(result_type) => {
       require_arity(inst.args.length(), 2, "load_ptr")
       require_pointer_value(inst.args[0].ty, "load_ptr")
@@ -446,26 +440,46 @@ fn verify_opcode_contract(inst : Inst) -> Unit raise VerifyError {
         raise TypeMismatch(message="store_ptr_narrow has invalid width \{bits}")
       }
     }
-    CallPtr(num_args, num_results) => {
-      if num_args < 0 || num_results < 0 {
-        raise ArityMismatch(
-          message="call_ptr argument and result counts must be non-negative",
-        )
+    Memory(memory_op) =>
+      match memory_op {
+        MemoryOp::Load(result_type) => {
+          require_arity(inst.args.length(), 2, "memory load")
+          require_pointer_value(inst.args[0].ty, "memory load")
+          require_operand_type(inst, 1, I64, "memory load")
+          require_result_types(inst, [result_type], "memory load")
+        }
+        MemoryOp::Store(value_type) => {
+          require_arity(inst.args.length(), 3, "memory store")
+          require_pointer_value(inst.args[0].ty, "memory store")
+          require_operand_type(inst, 1, value_type, "memory store")
+          require_operand_type(inst, 2, I64, "memory store")
+          require_no_results(inst, "memory store")
+        }
+        MemoryOp::LoadNarrow(result_type, bits, _) => {
+          require_arity(inst.args.length(), 2, "narrow memory load")
+          require_pointer_value(inst.args[0].ty, "narrow memory load")
+          require_operand_type(inst, 1, I64, "narrow memory load")
+          require_result_types(inst, [result_type], "narrow memory load")
+          require_integer(result_type, "narrow memory load")
+          if bits != 8 && bits != 16 && bits != 32 {
+            raise TypeMismatch(
+              message="narrow memory load has invalid width \{bits}",
+            )
+          }
+        }
+        MemoryOp::StoreNarrow(bits) => {
+          require_arity(inst.args.length(), 3, "narrow memory store")
+          require_pointer_value(inst.args[0].ty, "narrow memory store")
+          require_integer(inst.args[1].ty, "narrow memory store")
+          require_operand_type(inst, 2, I64, "narrow memory store")
+          require_no_results(inst, "narrow memory store")
+          if bits != 8 && bits != 16 && bits != 32 {
+            raise TypeMismatch(
+              message="narrow memory store has invalid width \{bits}",
+            )
+          }
+        }
       }
-      if inst.args.length() < 2 || inst.args.length() - 2 != num_args {
-        raise ArityMismatch(
-          message="call_ptr expects \{num_args + 2} operands, got \{inst.args.length()}",
-        )
-      }
-      require_result_arity(inst, num_results, "call_ptr")
-      require_pointer_value(inst.args[0].ty, "call_ptr operand 0")
-      require_pointer_value(inst.args[1].ty, "call_ptr operand 1")
-    }
-    Trap(_) => {
-      require_arity(inst.args.length(), 1, "trap")
-      require_no_results(inst, "trap")
-    }
-    Custom(_, signature) => verify_signature(inst, signature, 0, "custom")
     Ext(ext, signature) => {
       if ext.dialect == "" || ext.opcode == "" {
         raise UnverifiableInstruction(
@@ -473,6 +487,18 @@ fn verify_opcode_contract(inst : Inst) -> Unit raise VerifyError {
         )
       }
       verify_signature(inst, signature, 0, "extension instruction")
+    }
+    Scalar(scalar_op) => {
+      let original = inst.opcode
+      inst.opcode = scalar_op.to_legacy_opcode()
+      verify_opcode_contract(inst)
+      inst.opcode = original
+    }
+    Vector(vector_op) => {
+      let original = inst.opcode
+      inst.opcode = vector_op.to_legacy_opcode()
+      verify_opcode_contract(inst)
+      inst.opcode = original
     }
     V128Const(bytes) => {
       require_arity(inst.args.length(), 0, "v128.const")

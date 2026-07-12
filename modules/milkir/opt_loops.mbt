@@ -168,7 +168,8 @@ fn reduce_strength(func : Function) -> OptResult {
   let constants : @hashmap.HashMap[Int, ConstValue] = HashMap([])
   for block in func.blocks {
     for inst in block.instructions {
-      if inst.opcode is Iconst(v) && inst.first_result() is Some(r) {
+      if inst.opcode.for_legacy_consumers() is Iconst(v) &&
+        inst.first_result() is Some(r) {
         if r.ty is I32 {
           constants.set(r.id, I32(v.to_int()))
         } else {
@@ -182,7 +183,7 @@ fn reduce_strength(func : Function) -> OptResult {
   for block in func.blocks {
     let rewritten : Array[Inst] = []
     for inst in block.instructions {
-      match inst.opcode {
+      match inst.opcode.for_legacy_consumers() {
         // Multiplication by power of 2 -> left shift
         Imul =>
           if inst.operands.length() == 2 {
@@ -202,7 +203,7 @@ fn reduce_strength(func : Function) -> OptResult {
                 shift_amount.to_int64(),
               )
               // Replace imul with ishl
-              inst.opcode = Ishl
+              inst.opcode = Scalar(ScalarOp::IntBinary(IntBinaryOp::ShiftLeft))
               inst.operands.clear()
               inst.operands.push(other_operand)
               inst.operands.push(shift_operand)
@@ -227,7 +228,9 @@ fn reduce_strength(func : Function) -> OptResult {
               )
               // Only reduce if divisor is constant power of 2
               // Replace udiv with ushr (logical right shift)
-              inst.opcode = Ushr
+              inst.opcode = Scalar(
+                ScalarOp::IntBinary(IntBinaryOp::UnsignedShiftRight),
+              )
               inst.operands.clear()
               inst.operands.push(dividend)
               inst.operands.push(shift_operand)
@@ -253,7 +256,7 @@ fn reduce_strength(func : Function) -> OptResult {
                 mask,
               )
               // x % (2^n) == x & (2^n - 1)
-              inst.opcode = Band
+              inst.opcode = Scalar(ScalarOp::IntBinary(IntBinaryOp::And))
               inst.operands.clear()
               inst.operands.push(dividend)
               inst.operands.push(mask_operand)

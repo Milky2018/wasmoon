@@ -5,7 +5,8 @@ Generic MilkIR-to-MachV lowering.
 This module contains reusable lowering infrastructure shared by concrete
 machine targets. It translates `Milky2018/milkir` functions into
 `Milky2018/machv` virtual-register machine functions, with target-specific
-details supplied by target modules.
+details supplied by target modules. Generic entry points accept only verified
+core MilkIR; dialect-bearing functions use a separately named adapter entry.
 
 ## Packages
 
@@ -18,7 +19,7 @@ details supplied by target modules.
 `LoweringConfig` groups the target and lowering policy for user-facing code.
 Passing the target ISA explicitly supports cross-target compilation and makes
 tests independent of the host architecture. Config methods provide additional
-hooks for dialect and embedding-specific lowering.
+hooks for embedding-specific lowering.
 
 ```moonbit check
 ///|
@@ -39,7 +40,7 @@ test "lower a leaf MilkIR function to AArch64 MachV" {
   let config = @lower.LoweringConfig(AArch64).with_embedding_abi(
     EmbeddingABI(readme_call_conv()),
   )
-  let lowered = @lower.lower_function_with_config(
+  let lowered = @lower.lower_core_function_with_config(
     builder.get_function(),
     config,
   )
@@ -62,7 +63,7 @@ test "optimize an explicitly targeted MachV function" {
   let config = @lower.LoweringConfig(AMD64).with_embedding_abi(
     EmbeddingABI(readme_call_conv()),
   )
-  let lowered = @lower.lower_function_with_config(
+  let lowered = @lower.lower_core_function_with_config(
     builder.get_function(),
     config,
   )
@@ -74,7 +75,7 @@ test "optimize an explicitly targeted MachV function" {
 
 ## Extension lowering
 
-Dialect-specific `ExtOp` lowering is supplied through
-`LoweringConfig::with_extension_lowerer` plus an explicit runtime-helper symbol
-map. WebAssembly callers can use the `Milky2018/wasm_isa_lower` adapter. An
-extension without a configured lowerer is reported as unsupported.
+Dialect-specific `ExtOp` lowering must use `lower_dialect_function` or
+`lower_dialect_function_with_config`, both of which require an adapter argument.
+WebAssembly callers use the `Milky2018/wasm_isa_lower` adapter; generic core
+lowering rejects unresolved extensions before instruction selection.

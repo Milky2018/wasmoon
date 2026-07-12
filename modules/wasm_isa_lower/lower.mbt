@@ -191,13 +191,13 @@ pub fn lower_function(
   ) -> @lower.ExtensionLowerResult {
     lower_extension_with_options(options, ctx, inst, block, ext)
   }
-  @lower.lower_function(
+  @lower.lower_dialect_function(
     func,
+    lower_extension,
     isa~,
     embedding_abi~,
     external_helper_symbols=external_helper_symbols(runtime_symbols),
     trap_payload_resolver~,
-    extension_lowerer=Some(lower_extension),
     num_imports~,
     run_ir_opt~,
   )

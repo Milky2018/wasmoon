@@ -106,11 +106,22 @@ fn get_terminator_uses(term : Terminator) -> Array[Value] {
 ///|
 /// Check if an instruction has side effects
 fn has_side_effects(inst : Inst) -> Bool {
-  match inst.opcode {
+  match inst.opcode.for_legacy_consumers() {
     // StorePtr has side effects (modifies memory)
     StorePtr(_) | StorePtrNarrow(_) => true
     // LoadPtr has side effects (can trap on null pointer)
     LoadPtr(_) | LoadPtrNarrow(_, _, _) => true
+    // Generic memory operations may trap or modify memory.
+    Memory(_) => true
+    // Vector memory operations consume checked effective addresses, but loads
+    // may still trap and stores modify memory.
+    Vector(
+      VectorOp::LoadExtend(_, _)
+      | VectorOp::LoadSplat(_)
+      | VectorOp::LoadZero(_)
+      | VectorOp::LoadLane(_, _)
+      | VectorOp::StoreLane(_, _)
+    ) => true
     // Dialect extension operations are conservatively effectful unless a
     // dialect-owned optimization pass proves otherwise.
     Ext(_, _) => true
@@ -121,7 +132,7 @@ fn has_side_effects(inst : Inst) -> Bool {
     FcvtToSint | FcvtToUint => true
     // External calls can have side effects and may interact with embedding
     // runtime state.
-    Call(_, _) | CallIndirect(_) | CallPtr(_, _) => true
+    Call(_) => true
     // Other instructions are pure
     _ => false
   }
@@ -139,7 +150,7 @@ fn fold_constants(func : Function) -> OptResult {
   for block in func.blocks {
     for inst in block.instructions {
       // First, record any constant instruction
-      match inst.opcode {
+      match inst.opcode.for_legacy_consumers() {
         Iconst(v) =>
           match inst.first_result() {
             Some(r) =>
@@ -193,14 +204,14 @@ priv enum ConstValue {
 /// Convert constant value to opcode
 fn ConstValue::to_opcode(self : ConstValue) -> Opcode {
   match self {
-    I32(v) => Iconst(v.to_int64())
-    I64(v) => Iconst(v)
+    I32(v) => Scalar(ScalarOp::IntConst(v.to_int64()))
+    I64(v) => Scalar(ScalarOp::IntConst(v))
     F32(v) => {
       // Pack F32 bits into Double's bit representation to preserve NaN payloads
       let f32_bits = v.reinterpret_as_int().to_int64()
-      Fconst(f32_bits.reinterpret_as_double())
+      Scalar(ScalarOp::FloatConst(f32_bits.reinterpret_as_double()))
     }
-    F64(v) => Fconst(v)
+    F64(v) => Scalar(ScalarOp::FloatConst(v))
   }
 }
 
@@ -210,7 +221,7 @@ fn try_fold_constant(
   inst : Inst,
   constants : @hashmap.HashMap[Int, ConstValue],
 ) -> ConstValue? {
-  match inst.opcode {
+  match inst.opcode.for_legacy_consumers() {
     // Constants are already folded
     Iconst(_) | Fconst(_) => None
     // Binary integer operations
@@ -572,7 +583,7 @@ fn canonicalize_aliases(func : Function) -> OptResult {
         }
       }
       // If this instruction defines a copy, make its destination an alias.
-      if inst.opcode is Copy &&
+      if inst.opcode.for_legacy_consumers() is Copy &&
         inst.first_result() is Some(dest) &&
         inst.operands.length() > 0 {
         aliases.set(dest.id, inst.operands[0])
