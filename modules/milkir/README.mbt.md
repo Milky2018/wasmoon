@@ -87,6 +87,20 @@ The important detail is that `x`, `one`, and `answer` are not runtime integers i
 
 Lower-level producers that already have a complete `Signature` can use `Function::with_signature`. It eagerly materializes every declared function parameter in `Function.params`; retrieve those values with `func.param(index)` before emitting instructions. `Function::signature()` returns a snapshot derived from the same explicit parameter and result arrays. Do not recreate parameters with `new_value()`: that method allocates instruction results, block values, and other values after the declared function parameters.
 
+## Opcode families
+
+Every instruction belongs to one semantic family. `Opcode` has no source-language instruction variants or target-machine operations of its own:
+
+| Family | Responsibility |
+| --- | --- |
+| `Scalar(ScalarOp)` | Constants, arithmetic, comparisons, conversions, selection, and copies. |
+| `Memory(MemoryOp)` | Full-width and narrow loads and stores over an explicit base and offset value. |
+| `Call(CallOp)` | Direct external-symbol calls and function-pointer calls with explicit contracts. |
+| `Vector(VectorOp)` | Language-neutral V128 lane, arithmetic, comparison, conversion, and effective-address memory operations. |
+| `Ext(ExtOp, Signature)` | Typed operations whose semantics belong to a separately owned dialect. |
+
+Frontends must consume source-only metadata before constructing a core instruction. For example, a WebAssembly frontend resolves a SIMD memory index, alignment hint, and immediate offset while computing the effective address; MilkIR receives that address and the vector load/store semantics. A frontend uses `Ext` only when the operation genuinely requires dialect-owned validation and lowering.
+
 ## Why values are called SSA values
 
 SSA means *static single assignment*: each MilkIR `Value` is defined exactly once. An instruction never changes an existing value; it creates a new one.
@@ -296,7 +310,7 @@ An embedding adapter may assign roles such as VMContext to those arguments when 
 
 ### Traps and effects
 
-`Trap(reason)` and `TrapExit(reason)` terminators end execution without normal results. Stores, calls, pointer calls, traps, and unknown extension operations are observable or potentially observable. Optimizations must not delete or reorder them unless a stronger analysis proves that doing so preserves behavior.
+`Trap(reason)` and `TrapExit(reason)` terminators end execution without normal results. Stores, calls, traps, and unknown extension operations are observable or potentially observable. Optimizations must not delete or reorder them unless a stronger analysis proves that doing so preserves behavior.
 
 ## Dialect-specific operations
 

@@ -7,6 +7,9 @@ machine targets. It translates `Milky2018/milkir` functions into
 `Milky2018/machv` virtual-register machine functions, with target-specific
 details supplied by target modules. Generic entry points accept only verified
 core MilkIR; dialect-bearing functions use a separately named adapter entry.
+Core lowering dispatches exhaustively on MilkIR's `ScalarOp`, `MemoryOp`,
+`CallOp`, and `VectorOp` families. It does not decode source-language memory
+arguments or reinterpret an instruction through a second opcode spelling.
 
 ## Packages
 

@@ -89,7 +89,7 @@ The top-level `wasmoon/wasm_frontend` package is the product API boundary. Produ
 
 ## IR and ABI Boundaries
 
-MilkIR uses SSA values and block parameters rather than WebAssembly operand-stack state. WebAssembly-specific operations are represented through the `wasm_milkir` dialect or lowered into ordinary MilkIR operations by the frontend.
+MilkIR uses SSA values and block parameters rather than WebAssembly operand-stack state. Its core opcode contract consists of five semantic families: scalar, memory, call, vector, and typed extension operations. WebAssembly-specific operations are represented through the `wasm_milkir` dialect or lowered into ordinary MilkIR operations by the frontend. Source-only fields such as WebAssembly SIMD memory indices, alignment hints, and immediate offsets are consumed before core IR construction.
 
 MachV represents virtual registers, physical-register constraints, calls, clobbers, blocks, and target instructions. Target modules and the embedding ABI supply calling-convention policy; Wasmoon-specific VMContext slot meanings and pinned-register roles remain owned by `wasmoon_jit`.
 
