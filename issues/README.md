@@ -136,6 +136,7 @@ graph TD
   ISS_125["ISS-125: Enable safe O3 loop unrolling and differential validation"]
   ISS_126["ISS-126: Complete MilkIR verifier instruction contracts"]
   ISS_127["ISS-127: Preserve reference widths during MilkIR-to-MachV lowering"]
+  ISS_128["ISS-128: Accept I64 pointer carriers in CallPtr verification"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005

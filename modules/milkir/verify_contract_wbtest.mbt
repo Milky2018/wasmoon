@@ -179,6 +179,29 @@ test "verify rejects negative pointer call counts" {
 }
 
 ///|
+test "builder finalize accepts i64 pointer carriers for call_ptr" {
+  let builder = FunctionBuilder::FunctionBuilder("i64_pointer_call")
+  let func_ptr = builder.add_param(I64)
+  let callee_context = builder.add_param(I64)
+  builder.call_ptr(func_ptr, callee_context, [], []) |> ignore
+  builder.return_([])
+  builder.finalize() |> ignore
+}
+
+///|
+test "verify rejects non-pointer call_ptr carriers" {
+  let func = Function::new_empty("floating_pointer_call")
+  let func_ptr = func.add_param(F64)
+  let callee_context = func.add_param(I64)
+  let entry = func.new_block([])
+  entry.append_inst(
+    func.new_inst(CallPtr(0, 0), [func_ptr, callee_context], []),
+  )
+  entry.set_terminator(Return([]))
+  expect_verify_rejection(func, "non-pointer call_ptr function carrier")
+}
+
+///|
 test "verify rejects custom instructions that disagree with their contract" {
   let func = Function::new_empty("untyped_custom")
   let entry = func.new_block([])

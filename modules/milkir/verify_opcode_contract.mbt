@@ -458,8 +458,8 @@ fn verify_opcode_contract(inst : Inst) -> Unit raise VerifyError {
         )
       }
       require_result_arity(inst, num_results, "call_ptr")
-      require_operand_type(inst, 0, Ptr, "call_ptr")
-      require_operand_type(inst, 1, Ptr, "call_ptr")
+      require_pointer_value(inst.args[0].ty, "call_ptr operand 0")
+      require_pointer_value(inst.args[1].ty, "call_ptr operand 1")
     }
     Trap(_) => {
       require_arity(inst.args.length(), 1, "trap")
