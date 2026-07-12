@@ -85,6 +85,8 @@ The important detail is that `x`, `one`, and `answer` are not runtime integers i
 4. End the current block with `return_`, `jump`, a branch, or `trap`.
 5. Call `finalize`, then `verify` the function.
 
+Lower-level producers that already have a complete `Signature` can use `Function::with_signature`. It eagerly materializes every declared function parameter in `Function.params`; retrieve those values with `func.param(index)` before emitting instructions. `Function::signature()` returns a snapshot derived from the same explicit parameter and result arrays. Do not recreate parameters with `new_value()`: that method allocates instruction results, block values, and other values after the declared function parameters.
+
 ## Why values are called SSA values
 
 SSA means *static single assignment*: each MilkIR `Value` is defined exactly once. An instruction never changes an existing value; it creates a new one.

@@ -138,6 +138,9 @@ graph TD
   ISS_127["ISS-127: Preserve reference widths during MilkIR-to-MachV lowering"]
   ISS_128["ISS-128: Accept I64 pointer carriers in CallPtr verification"]
   ISS_129["ISS-129: Complete carrier-width regression matrices"]
+  ISS_130["ISS-130: Define canonical Function signature construction"]
+  ISS_131["ISS-131: Migrate implicit Function parameter producers"]
+  ISS_132["ISS-132: Remove duplicate Function signature state"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
@@ -251,6 +254,8 @@ graph TD
   ISS_122 --> ISS_123
   ISS_123 --> ISS_124
   ISS_124 --> ISS_125
+  ISS_130 --> ISS_131
+  ISS_131 --> ISS_132
 ```
 
 ## Warnings

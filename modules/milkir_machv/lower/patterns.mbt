@@ -608,7 +608,7 @@ pub fn lower_function_optimized(ir_func : @milkir.Function) -> @machv.Function {
   }
 
   // Phase 2: Lower function parameters
-  for param in function_params_for_lowering(ir_func) {
+  for param in ir_func.params {
     let (value, ty) = param
     let class = ir_type_to_reg_class(ty)
     let vreg = ctx.machv_func.add_param(class)

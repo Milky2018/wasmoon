@@ -16,6 +16,59 @@ test "build and verify minimal MilkIR function" {
 }
 
 ///|
+test "signature construction materializes canonical function parameters" {
+  let func = Function::with_signature(
+    "canonical_signature",
+    Signature([Type::I32, Type::I64], [Type::I64]),
+  )
+  inspect(
+    func.params.length(),
+    content=(
+      #|2
+    ),
+  )
+  debug_inspect(
+    func.param(0),
+    content=(
+      #|Some({ id: 0, ty: I32 })
+    ),
+  )
+  debug_inspect(
+    func.param(1),
+    content=(
+      #|Some({ id: 1, ty: I64 })
+    ),
+  )
+  debug_inspect(
+    func.param(2),
+    content=(
+      #|None
+    ),
+  )
+  debug_inspect(
+    func.new_value(Type::F32),
+    content=(
+      #|{ id: 2, ty: F32 }
+    ),
+  )
+  debug_inspect(
+    func.signature(),
+    content=(
+      #|{ params: [I32, I64], results: [I64] }
+    ),
+  )
+  let entry = func.new_block0()
+  entry.set_terminator(Return([func.param(1).unwrap()]))
+  inspect(
+    func.print().contains("function canonical_signature(v0:i32, v1:i64) -> i64"),
+    content=(
+      #|true
+    ),
+  )
+  inspect(func.verify(), content="()")
+}
+
+///|
 test "builder prints generic SSA function" {
   let builder = FunctionBuilder::FunctionBuilder("add")
   let p0 = builder.add_param(I32)
@@ -130,7 +183,7 @@ test "builder and CFG support branches and block params" {
 
 ///|
 test "verify catches missing terminator" {
-  let func = Function("bad", Signature([], []))
+  let func = Function::new_empty("bad")
   func.new_block([]) |> ignore
   try func.verify() catch {
     err => inspect(err, content="MissingTerminator(block_id=0)")
@@ -141,7 +194,7 @@ test "verify catches missing terminator" {
 
 ///|
 test "verify catches undefined operands" {
-  let func = Function("bad_use", Signature([], []))
+  let func = Function::new_empty("bad_use")
   let entry = func.new_block([])
   let bogus = Value::Value(99, I32)
   let result = func.new_value(I32)

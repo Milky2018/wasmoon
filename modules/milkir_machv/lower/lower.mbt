@@ -179,21 +179,6 @@ pub fn LoweringConfig::with_ir_optimization(
 }
 
 ///|
-fn function_params_for_lowering(
-  ir_func : @milkir.Function,
-) -> Array[(@milkir.Value, @milkir.Type)] {
-  if ir_func.params.length() > 0 {
-    return ir_func.params
-  }
-  let params : Array[(@milkir.Value, @milkir.Type)] = []
-  for i, ty in ir_func.signature.params {
-    let value = @milkir.Value::Value(i, ty)
-    params.push((value, ty))
-  }
-  params
-}
-
-///|
 pub fn LoweringContext::LoweringContext(
   ir_func : @milkir.Function,
   isa : @isa.ISA,
@@ -1793,7 +1778,7 @@ pub fn lower_function_with_config(
   let int_stack_values : Array[@milkir.Value] = []
   let float_stack_values : Array[(@milkir.Value, @abi.RegClass)] = []
   let float_stack_classes : Array[@abi.RegClass] = []
-  for param in function_params_for_lowering(ir_func) {
+  for param in ir_func.params {
     let (value, ty) = param
     let class = ir_type_to_reg_class(ty)
     if class is Int {

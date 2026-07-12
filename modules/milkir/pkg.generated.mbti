@@ -99,7 +99,6 @@ pub(all) enum FloatCC {
 
 pub struct Function {
   name : String
-  signature : Signature
   params : Array[(Value, Type)]
   results : Array[Type]
   blocks : Array[Block]
@@ -110,7 +109,6 @@ pub struct Function {
   mut next_block_id : Int
   mut next_stack_slot_id : Int
 } derive(@debug.Debug)
-pub fn Function::Function(String, Signature) -> Self
 pub fn Function::add_param(Self, Type) -> Value
 pub fn Function::add_result(Self, Type) -> Unit
 pub fn Function::declare_external_symbol(Self, String) -> ExternalSymbol
@@ -120,8 +118,11 @@ pub fn Function::new_empty(String) -> Self
 pub fn Function::new_inst(Self, Opcode, Array[Value], Array[Value]) -> Inst
 pub fn Function::new_stack_slot(Self, Int, Int) -> StackSlot
 pub fn Function::new_value(Self, Type) -> Value
+pub fn Function::param(Self, Int) -> Value?
 pub fn Function::print(Self) -> String
+pub fn Function::signature(Self) -> Signature
 pub fn Function::verify(Self) -> Unit raise VerifyError
+pub fn Function::with_signature(String, Signature) -> Self
 
 type FunctionBuilder
 pub fn FunctionBuilder::FunctionBuilder(String) -> Self

@@ -827,7 +827,6 @@ pub(all) enum Terminator {
 /// Function - a complete IR function
 pub struct Function {
   name : String
-  signature : Signature
   params : Array[(Value, Type)] // Function parameters
   results : Array[Type] // Return types
   blocks : Array[Block] // Basic blocks (block 0 is entry)
@@ -840,12 +839,11 @@ pub struct Function {
 } derive(Debug)
 
 ///|
-pub fn Function::Function(name : String, signature : Signature) -> Function {
+pub fn Function::new_empty(name : String) -> Function {
   {
     name,
-    signature,
     params: [],
-    results: signature.results.copy(),
+    results: [],
     blocks: [],
     stack_slots: [],
     external_symbols: [],
@@ -857,8 +855,36 @@ pub fn Function::Function(name : String, signature : Signature) -> Function {
 }
 
 ///|
-pub fn Function::new_empty(name : String) -> Function {
-  Function(name, Signature([], []))
+/// Create a function whose declared signature is materialized as explicit
+/// parameter values and result types.
+pub fn Function::with_signature(
+  name : String,
+  signature : Signature,
+) -> Function {
+  let func = Function::new_empty(name)
+  for ty in signature.params {
+    func.add_param(ty) |> ignore
+  }
+  for ty in signature.results {
+    func.add_result(ty)
+  }
+  func
+}
+
+///|
+/// Return a declared function parameter by position.
+pub fn Function::param(self : Function, index : Int) -> Value? {
+  if index >= 0 && index < self.params.length() {
+    Some(self.params[index].0)
+  } else {
+    None
+  }
+}
+
+///|
+/// Return a signature snapshot derived from the explicit function contract.
+pub fn Function::signature(self : Function) -> Signature {
+  Signature([ for param in self.params => param.1 ], self.results.copy())
 }
 
 ///|
@@ -901,7 +927,6 @@ pub fn Function::new_inst(
 pub fn Function::add_param(self : Function, ty : Type) -> Value {
   let v = self.new_value(ty)
   self.params.push((v, ty))
-  self.signature.params.push(ty)
   v
 }
 
@@ -909,7 +934,6 @@ pub fn Function::add_param(self : Function, ty : Type) -> Value {
 /// Add a result type to the function
 pub fn Function::add_result(self : Function, ty : Type) -> Unit {
   self.results.push(ty)
-  self.signature.results.push(ty)
 }
 
 ///|
