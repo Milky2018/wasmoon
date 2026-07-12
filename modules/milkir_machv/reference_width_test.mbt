@@ -110,9 +110,9 @@ test "lower reference OR as a 64-bit MachV operation" {
 test "lower bitwise operations on all 64-bit word carriers" {
   let carrier_types : Array[@milkir.Type] = [Ptr, Ref, CallableRef, OpaqueRef]
   let operations : Array[(@milkir.Opcode, String)] = [
-    (Band, "and"),
-    (Bor, "or"),
-    (Bxor, "xor"),
+    (Scalar(IntBinary(And)), "and"),
+    (Scalar(IntBinary(Or)), "or"),
+    (Scalar(IntBinary(Xor)), "xor"),
   ]
   for ty in carrier_types {
     for operation in operations {

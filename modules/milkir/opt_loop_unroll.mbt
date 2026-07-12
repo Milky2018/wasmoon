@@ -83,9 +83,9 @@ fn find_integer_constant_outside_loop_inner(
     }
     for inst in block.instructions {
       guard inst.results.any(result => result.id == value.id) else { continue }
-      match inst.opcode.for_legacy_consumers() {
-        Iconst(constant) => return Some(constant)
-        Copy =>
+      match inst.opcode {
+        Scalar(ScalarOp::IntConst(constant)) => return Some(constant)
+        Scalar(ScalarOp::Copy) =>
           if inst.operands.length() == 1 && inst.operands[0].ty == value.ty {
             return find_integer_constant_outside_loop_inner(
               func,
@@ -257,8 +257,10 @@ fn counted_step(
         return None
       }
       match opcode {
-        Iadd => Some((Increasing, magnitude))
-        Isub => Some((Decreasing, magnitude))
+        Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)) =>
+          Some((Increasing, magnitude))
+        Scalar(ScalarOp::IntBinary(IntBinaryOp::Sub)) =>
+          Some((Decreasing, magnitude))
         _ => None
       }
     }
@@ -273,13 +275,13 @@ fn counted_step(
         raw.reinterpret_as_uint64()
       }
       match opcode {
-        Iadd =>
+        Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)) =>
           if negative {
             Some((Decreasing, magnitude))
           } else {
             Some((Increasing, magnitude))
           }
-        Isub =>
+        Scalar(ScalarOp::IntBinary(IntBinaryOp::Sub)) =>
           if negative {
             Some((Increasing, magnitude))
           } else {
@@ -463,8 +465,8 @@ fn analyze_counted_loop(
       }
     }
   }
-  let original_condition = match comparison.opcode.for_legacy_consumers() {
-    Icmp(cc) => cc
+  let original_condition = match comparison.opcode {
+    Scalar(ScalarOp::IntCompare(cc)) => cc
     _ => return Skip("loop test must be an ordered integer comparison")
   }
   let operand_normalized_condition = if induction_operand == 1 {
@@ -591,13 +593,17 @@ fn analyze_counted_loop(
     Some(inst) => inst
     None => return Skip("latch induction update must be defined in the loop")
   }
-  let update_opcode = update.opcode.for_legacy_consumers()
-  if (update_opcode != Iadd && update_opcode != Isub) ||
+  let update_opcode = update.opcode
+  if (
+      update_opcode != Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)) &&
+      update_opcode != Scalar(ScalarOp::IntBinary(IntBinaryOp::Sub))
+    ) ||
     update.operands.length() != 2 ||
     update.results.length() != 1 {
     return Skip("induction update must be iadd or isub")
   }
-  if update_opcode == Isub && update.operands[0].id != induction.id {
+  if update_opcode == Scalar(ScalarOp::IntBinary(IntBinaryOp::Sub)) &&
+    update.operands[0].id != induction.id {
     return Skip("isub induction updates must subtract from the induction value")
   }
   let step_value = if update.operands[0].id == induction.id {

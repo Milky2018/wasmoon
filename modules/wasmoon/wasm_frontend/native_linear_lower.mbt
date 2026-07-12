@@ -125,7 +125,7 @@ fn push_i32_binary_opcode(
   guard emit_op(builder, I32, opcode, [lhs, rhs]) is Some(raw) else {
     return false
   }
-  guard emit_op(builder, I32, Ireduce, [raw]) is Some(result) else {
+  guard emit_op(builder, I32, Scalar(Convert(IntReduce)), [raw]) is Some(result) else {
     return false
   }
   stack.push(result)
@@ -140,14 +140,17 @@ fn push_i32_shift_opcode(
 ) -> Bool {
   guard pop_value(stack) is Some(rhs) else { return false }
   guard pop_value(stack) is Some(lhs) else { return false }
-  guard emit_op(builder, I32, Band, [rhs, builder.iconst_i32(31)])
+  guard emit_op(builder, I32, Scalar(IntBinary(And)), [
+      rhs,
+      builder.iconst_i32(31),
+    ])
     is Some(masked) else {
     return false
   }
   guard emit_op(builder, I32, opcode, [lhs, masked]) is Some(raw) else {
     return false
   }
-  guard emit_op(builder, I32, Ireduce, [raw]) is Some(result) else {
+  guard emit_op(builder, I32, Scalar(Convert(IntReduce)), [raw]) is Some(result) else {
     return false
   }
   stack.push(result)
@@ -160,17 +163,23 @@ fn push_i32_clz(
   stack : Array[@milkir.Value],
 ) -> Bool {
   guard pop_value(stack) is Some(value) else { return false }
-  guard emit_op(builder, I64, Uextend, [value]) is Some(extended) else {
+  guard emit_op(builder, I64, Scalar(Convert(UnsignedExtend)), [value])
+    is Some(extended) else {
     return false
   }
-  guard emit_op(builder, I64, Clz, [extended]) is Some(raw_count) else {
+  guard emit_op(builder, I64, Scalar(IntUnary(CountLeadingZeros)), [extended])
+    is Some(raw_count) else {
     return false
   }
-  guard emit_op(builder, I64, Isub, [raw_count, builder.iconst_i64(32L)])
+  guard emit_op(builder, I64, Scalar(IntBinary(Sub)), [
+      raw_count,
+      builder.iconst_i64(32L),
+    ])
     is Some(i32_count) else {
     return false
   }
-  guard emit_op(builder, I32, Ireduce, [i32_count]) is Some(result) else {
+  guard emit_op(builder, I32, Scalar(Convert(IntReduce)), [i32_count])
+    is Some(result) else {
     return false
   }
   stack.push(result)
@@ -183,20 +192,23 @@ fn push_i32_ctz(
   stack : Array[@milkir.Value],
 ) -> Bool {
   guard pop_value(stack) is Some(value) else { return false }
-  guard emit_op(builder, I64, Uextend, [value]) is Some(extended) else {
+  guard emit_op(builder, I64, Scalar(Convert(UnsignedExtend)), [value])
+    is Some(extended) else {
     return false
   }
-  guard emit_op(builder, I64, Bor, [
+  guard emit_op(builder, I64, Scalar(IntBinary(Or)), [
       extended,
       builder.iconst_i64(0x1_0000_0000L),
     ])
     is Some(nonzero) else {
     return false
   }
-  guard emit_op(builder, I64, Ctz, [nonzero]) is Some(raw_count) else {
+  guard emit_op(builder, I64, Scalar(IntUnary(CountTrailingZeros)), [nonzero])
+    is Some(raw_count) else {
     return false
   }
-  guard emit_op(builder, I32, Ireduce, [raw_count]) is Some(result) else {
+  guard emit_op(builder, I32, Scalar(Convert(IntReduce)), [raw_count])
+    is Some(result) else {
     return false
   }
   stack.push(result)
@@ -209,13 +221,16 @@ fn push_i32_popcnt(
   stack : Array[@milkir.Value],
 ) -> Bool {
   guard pop_value(stack) is Some(value) else { return false }
-  guard emit_op(builder, I64, Uextend, [value]) is Some(extended) else {
+  guard emit_op(builder, I64, Scalar(Convert(UnsignedExtend)), [value])
+    is Some(extended) else {
     return false
   }
-  guard emit_op(builder, I64, Popcnt, [extended]) is Some(raw_count) else {
+  guard emit_op(builder, I64, Scalar(IntUnary(PopulationCount)), [extended])
+    is Some(raw_count) else {
     return false
   }
-  guard emit_op(builder, I32, Ireduce, [raw_count]) is Some(result) else {
+  guard emit_op(builder, I32, Scalar(Convert(IntReduce)), [raw_count])
+    is Some(result) else {
     return false
   }
   stack.push(result)
@@ -230,7 +245,8 @@ fn push_int_cmp(
 ) -> Bool {
   guard pop_value(stack) is Some(rhs) else { return false }
   guard pop_value(stack) is Some(lhs) else { return false }
-  guard emit_op(builder, I32, Icmp(cc), [lhs, rhs]) is Some(result) else {
+  guard emit_op(builder, I32, Scalar(IntCompare(cc)), [lhs, rhs])
+    is Some(result) else {
     return false
   }
   stack.push(result)
@@ -245,7 +261,8 @@ fn push_float_cmp(
 ) -> Bool {
   guard pop_value(stack) is Some(rhs) else { return false }
   guard pop_value(stack) is Some(lhs) else { return false }
-  guard emit_op(builder, I32, Fcmp(cc), [lhs, rhs]) is Some(result) else {
+  guard emit_op(builder, I32, Scalar(FloatCompare(cc)), [lhs, rhs])
+    is Some(result) else {
     return false
   }
   stack.push(result)
@@ -263,25 +280,34 @@ fn push_float_copysign(
 ) -> Bool {
   guard pop_value(stack) is Some(sign_source) else { return false }
   guard pop_value(stack) is Some(magnitude_source) else { return false }
-  guard emit_op(builder, int_ty, Bitcast, [magnitude_source]) is Some(x_bits) else {
+  guard emit_op(builder, int_ty, Scalar(Convert(Bitcast)), [magnitude_source])
+    is Some(x_bits) else {
     return false
   }
-  guard emit_op(builder, int_ty, Bitcast, [sign_source]) is Some(y_bits) else {
+  guard emit_op(builder, int_ty, Scalar(Convert(Bitcast)), [sign_source])
+    is Some(y_bits) else {
     return false
   }
   let magnitude_mask_value = builder.iconst(int_ty, magnitude_mask)
-  guard emit_op(builder, int_ty, Band, [x_bits, magnitude_mask_value])
+  guard emit_op(builder, int_ty, Scalar(IntBinary(And)), [
+      x_bits, magnitude_mask_value,
+    ])
     is Some(magnitude) else {
     return false
   }
   let sign_mask_value = builder.iconst(int_ty, sign_mask)
-  guard emit_op(builder, int_ty, Band, [y_bits, sign_mask_value]) is Some(sign) else {
+  guard emit_op(builder, int_ty, Scalar(IntBinary(And)), [
+      y_bits, sign_mask_value,
+    ])
+    is Some(sign) else {
     return false
   }
-  guard emit_op(builder, int_ty, Bor, [magnitude, sign]) is Some(result_bits) else {
+  guard emit_op(builder, int_ty, Scalar(IntBinary(Or)), [magnitude, sign])
+    is Some(result_bits) else {
     return false
   }
-  guard emit_op(builder, float_ty, Bitcast, [result_bits]) is Some(result) else {
+  guard emit_op(builder, float_ty, Scalar(Convert(Bitcast)), [result_bits])
+    is Some(result) else {
     return false
   }
   stack.push(result)
@@ -295,18 +321,22 @@ fn push_i31_new(
 ) -> Bool {
   guard pop_value(stack) is Some(value) else { return false }
   let masked = builder.iconst_i32(@types.I32_MAX)
-  guard emit_op(builder, I32, Band, [value, masked]) is Some(payload) else {
+  guard emit_op(builder, I32, Scalar(IntBinary(And)), [value, masked])
+    is Some(payload) else {
     return false
   }
-  guard emit_op(builder, I64, Uextend, [payload]) is Some(payload64) else {
+  guard emit_op(builder, I64, Scalar(Convert(UnsignedExtend)), [payload])
+    is Some(payload64) else {
     return false
   }
   let shift = builder.iconst_i64(1L)
-  guard emit_op(builder, I64, Ishl, [payload64, shift]) is Some(shifted) else {
+  guard emit_op(builder, I64, Scalar(IntBinary(ShiftLeft)), [payload64, shift])
+    is Some(shifted) else {
     return false
   }
   let tag = builder.iconst_i64(1L)
-  guard emit_op(builder, Ref, Bor, [shifted, tag]) is Some(encoded) else {
+  guard emit_op(builder, Ref, Scalar(IntBinary(Or)), [shifted, tag])
+    is Some(encoded) else {
     return false
   }
   stack.push(encoded)
@@ -318,11 +348,12 @@ fn emit_i31_null_check(
   builder : @milkir.FunctionBuilder,
   value : @milkir.Value,
 ) -> Bool {
-  guard emit_op(builder, value.ty, Iconst(@wasm_milkir.NULL_REF), [])
+  guard emit_op(builder, value.ty, Scalar(IntConst(@wasm_milkir.NULL_REF)), [])
     is Some(null_ref) else {
     return false
   }
-  guard emit_op(builder, I32, Icmp(Eq), [value, null_ref]) is Some(is_null) else {
+  guard emit_op(builder, I32, Scalar(IntCompare(Eq)), [value, null_ref])
+    is Some(is_null) else {
     return false
   }
   let trap_block = builder.create_block()
@@ -344,28 +375,39 @@ fn push_i31_get(
   if !emit_i31_null_check(builder, value) {
     return false
   }
-  guard emit_op(builder, I64, Bitcast, [value]) is Some(bits) else {
+  guard emit_op(builder, I64, Scalar(Convert(Bitcast)), [value]) is Some(bits) else {
     return false
   }
   let shift = builder.iconst_i64(1L)
-  guard emit_op(builder, I64, Ushr, [bits, shift]) is Some(decoded64) else {
+  guard emit_op(builder, I64, Scalar(IntBinary(UnsignedShiftRight)), [
+      bits, shift,
+    ])
+    is Some(decoded64) else {
     return false
   }
-  guard emit_op(builder, I32, Ireduce, [decoded64]) is Some(decoded32) else {
+  guard emit_op(builder, I32, Scalar(Convert(IntReduce)), [decoded64])
+    is Some(decoded32) else {
     return false
   }
   if signed {
     let sign_shift = builder.iconst_i32(1)
-    guard emit_op(builder, I32, Ishl, [decoded32, sign_shift]) is Some(left) else {
+    guard emit_op(builder, I32, Scalar(IntBinary(ShiftLeft)), [
+        decoded32, sign_shift,
+      ])
+      is Some(left) else {
       return false
     }
-    guard emit_op(builder, I32, Sshr, [left, sign_shift]) is Some(result) else {
+    guard emit_op(builder, I32, Scalar(IntBinary(SignedShiftRight)), [
+        left, sign_shift,
+      ])
+      is Some(result) else {
       return false
     }
     stack.push(result)
   } else {
     let mask = builder.iconst_i32(@types.I32_MAX)
-    guard emit_op(builder, I32, Band, [decoded32, mask]) is Some(result) else {
+    guard emit_op(builder, I32, Scalar(IntBinary(And)), [decoded32, mask])
+      is Some(result) else {
       return false
     }
     stack.push(result)
@@ -623,7 +665,8 @@ fn push_table_size(
   if is_table64 {
     stack.push(size_i64)
   } else {
-    guard emit_op(builder, I32, Ireduce, [size_i64]) is Some(size_i32) else {
+    guard emit_op(builder, I32, Scalar(Convert(IntReduce)), [size_i64])
+      is Some(size_i32) else {
       return false
     }
     stack.push(size_i32)
@@ -693,12 +736,15 @@ fn push_table_get(
   let elem_idx_i64 = if is_table64 {
     elem_idx
   } else {
-    guard emit_op(builder, I64, Uextend, [elem_idx]) is Some(extended) else {
+    guard emit_op(builder, I64, Scalar(Convert(UnsignedExtend)), [elem_idx])
+      is Some(extended) else {
       return false
     }
     extended
   }
-  guard emit_op(builder, I32, Icmp(Ult), [elem_idx_i64, table_size])
+  guard emit_op(builder, I32, Scalar(IntCompare(Ult)), [
+      elem_idx_i64, table_size,
+    ])
     is Some(in_bounds) else {
     return false
   }
@@ -902,13 +948,17 @@ fn push_memory_size(
   let page_shift = builder.iconst_i64(
     memory_types[memidx].page_size_log2.to_int64(),
   )
-  guard emit_op(builder, I64, Ushr, [size_bytes, page_shift]) is Some(pages_i64) else {
+  guard emit_op(builder, I64, Scalar(IntBinary(UnsignedShiftRight)), [
+      size_bytes, page_shift,
+    ])
+    is Some(pages_i64) else {
     return false
   }
   if result_ty == I64 {
     stack.push(pages_i64)
   } else {
-    guard emit_op(builder, I32, Ireduce, [pages_i64]) is Some(pages_i32) else {
+    guard emit_op(builder, I32, Scalar(Convert(IntReduce)), [pages_i64])
+      is Some(pages_i32) else {
       return false
     }
     stack.push(pages_i32)
@@ -933,7 +983,8 @@ fn push_memory_grow(
   let delta_i64 = if delta.ty == I64 {
     delta
   } else {
-    guard emit_op(builder, I64, Uextend, [delta]) is Some(extended) else {
+    guard emit_op(builder, I64, Scalar(Convert(UnsignedExtend)), [delta])
+      is Some(extended) else {
       return false
     }
     extended
@@ -954,7 +1005,8 @@ fn push_memory_grow(
     return false
   }
   let result = if result_ty == I64 {
-    guard emit_op(builder, I64, Sextend, [call_result_i32]) is Some(extended) else {
+    guard emit_op(builder, I64, Scalar(Convert(SignedExtend)), [call_result_i32])
+      is Some(extended) else {
       return false
     }
     extended
@@ -1062,7 +1114,8 @@ fn push_memory_init(
   let dst_i64 = if dst.ty == I64 {
     dst
   } else {
-    guard emit_op(builder, I64, Uextend, [dst]) is Some(extended) else {
+    guard emit_op(builder, I64, Scalar(Convert(UnsignedExtend)), [dst])
+      is Some(extended) else {
       return false
     }
     extended
@@ -1070,7 +1123,8 @@ fn push_memory_init(
   let src_i64 = if src.ty == I64 {
     src
   } else {
-    guard emit_op(builder, I64, Uextend, [src]) is Some(extended) else {
+    guard emit_op(builder, I64, Scalar(Convert(UnsignedExtend)), [src])
+      is Some(extended) else {
       return false
     }
     extended
@@ -1078,7 +1132,8 @@ fn push_memory_init(
   let size_i64 = if size.ty == I64 {
     size
   } else {
-    guard emit_op(builder, I64, Uextend, [size]) is Some(extended) else {
+    guard emit_op(builder, I64, Scalar(Convert(UnsignedExtend)), [size])
+      is Some(extended) else {
       return false
     }
     extended
@@ -1132,7 +1187,8 @@ fn push_table_grow(
   let delta_i64 = if delta.ty == I64 {
     delta
   } else {
-    guard emit_op(builder, I64, Uextend, [delta]) is Some(extended) else {
+    guard emit_op(builder, I64, Scalar(Convert(UnsignedExtend)), [delta])
+      is Some(extended) else {
       return false
     }
     extended
@@ -1150,7 +1206,8 @@ fn push_table_grow(
     return false
   }
   let result = if is_table64 {
-    guard emit_op(builder, I64, Sextend, [call_result_i32]) is Some(extended) else {
+    guard emit_op(builder, I64, Scalar(Convert(SignedExtend)), [call_result_i32])
+      is Some(extended) else {
       return false
     }
     extended
@@ -1241,7 +1298,8 @@ fn push_ref_null(
   ref_type : @types.ValueType,
 ) -> Bool {
   let ty = wasm_value_type_to_milkir(ref_type)
-  guard emit_op(builder, ty, Iconst(@wasm_milkir.NULL_REF), []) is Some(result) else {
+  guard emit_op(builder, ty, Scalar(IntConst(@wasm_milkir.NULL_REF)), [])
+    is Some(result) else {
     return false
   }
   stack.push(result)
@@ -1254,7 +1312,12 @@ fn push_ref_is_null(
   stack : Array[@milkir.Value],
 ) -> Bool {
   guard pop_value(stack) is Some(ref_value) else { return false }
-  guard emit_op(builder, ref_value.ty, Iconst(@wasm_milkir.NULL_REF), [])
+  guard emit_op(
+      builder,
+      ref_value.ty,
+      Scalar(IntConst(@wasm_milkir.NULL_REF)),
+      [],
+    )
     is Some(null_sentinel) else {
     return false
   }
@@ -1283,7 +1346,8 @@ fn push_ref_func(
     builder.iconst_i64((func_idx * layout.func_table_entry_stride).to_int64()),
   )
   let tag = builder.iconst(Ref, @wasm_milkir.FUNCREF_TAG)
-  guard emit_op(builder, Ref, Bor, [raw_func_ptr, tag]) is Some(result) else {
+  guard emit_op(builder, Ref, Scalar(IntBinary(Or)), [raw_func_ptr, tag])
+    is Some(result) else {
     return false
   }
   stack.push(result)
@@ -1296,7 +1360,12 @@ fn push_ref_as_non_null(
   stack : Array[@milkir.Value],
 ) -> Bool {
   guard stack.last() is Some(ref_value) else { return false }
-  guard emit_op(builder, ref_value.ty, Iconst(@wasm_milkir.NULL_REF), [])
+  guard emit_op(
+      builder,
+      ref_value.ty,
+      Scalar(IntConst(@wasm_milkir.NULL_REF)),
+      [],
+    )
     is Some(null_sentinel) else {
     return false
   }
@@ -1348,7 +1417,7 @@ fn push_simple_expr_value(
     F64Const(value) => Some(builder.fconst_f64(value))
     RefNull(ref_type) => {
       let ty = wasm_value_type_to_milkir(ref_type)
-      emit_op(builder, ty, Iconst(@wasm_milkir.NULL_REF), [])
+      emit_op(builder, ty, Scalar(IntConst(@wasm_milkir.NULL_REF)), [])
     }
     _ => None
   }
@@ -1393,36 +1462,84 @@ fn push_simple_expr_instr(
       expr_stack.push(value)
       true
     }
-    I32Add => push_i32_binary_opcode(builder, expr_stack, Iadd)
+    I32Add =>
+      push_i32_binary_opcode(builder, expr_stack, Scalar(IntBinary(Add)))
     I64Add => push_binary(expr_stack, fn(lhs, rhs) { builder.iadd(lhs, rhs) })
-    I32Sub => push_i32_binary_opcode(builder, expr_stack, Isub)
+    I32Sub =>
+      push_i32_binary_opcode(builder, expr_stack, Scalar(IntBinary(Sub)))
     I64Sub => push_binary(expr_stack, fn(lhs, rhs) { builder.isub(lhs, rhs) })
-    I32Mul => push_i32_binary_opcode(builder, expr_stack, Imul)
+    I32Mul =>
+      push_i32_binary_opcode(builder, expr_stack, Scalar(IntBinary(Mul)))
     I64Mul => push_binary(expr_stack, fn(lhs, rhs) { builder.imul(lhs, rhs) })
-    I64MulWideU => push_binary_opcode(builder, expr_stack, Umulh)
-    I64MulWideS => push_binary_opcode(builder, expr_stack, Smulh)
-    I32And => push_i32_binary_opcode(builder, expr_stack, Band)
-    I64And => push_binary_opcode(builder, expr_stack, Band)
-    I32Or => push_i32_binary_opcode(builder, expr_stack, Bor)
-    I64Or => push_binary_opcode(builder, expr_stack, Bor)
-    I32Xor => push_i32_binary_opcode(builder, expr_stack, Bxor)
-    I64Xor => push_binary_opcode(builder, expr_stack, Bxor)
-    I32Shl => push_i32_shift_opcode(builder, expr_stack, Ishl)
-    I64Shl => push_binary_opcode(builder, expr_stack, Ishl)
-    I32ShrS => push_i32_shift_opcode(builder, expr_stack, Sshr)
-    I64ShrS => push_binary_opcode(builder, expr_stack, Sshr)
-    I32ShrU => push_i32_shift_opcode(builder, expr_stack, Ushr)
-    I64ShrU => push_binary_opcode(builder, expr_stack, Ushr)
-    I32Rotl => push_i32_shift_opcode(builder, expr_stack, Rotl)
-    I64Rotl => push_binary_opcode(builder, expr_stack, Rotl)
-    I32Rotr => push_i32_shift_opcode(builder, expr_stack, Rotr)
-    I64Rotr => push_binary_opcode(builder, expr_stack, Rotr)
+    I64MulWideU =>
+      push_binary_opcode(
+        builder,
+        expr_stack,
+        Scalar(IntBinary(UnsignedMulHigh)),
+      )
+    I64MulWideS =>
+      push_binary_opcode(builder, expr_stack, Scalar(IntBinary(SignedMulHigh)))
+    I32And =>
+      push_i32_binary_opcode(builder, expr_stack, Scalar(IntBinary(And)))
+    I64And => push_binary_opcode(builder, expr_stack, Scalar(IntBinary(And)))
+    I32Or => push_i32_binary_opcode(builder, expr_stack, Scalar(IntBinary(Or)))
+    I64Or => push_binary_opcode(builder, expr_stack, Scalar(IntBinary(Or)))
+    I32Xor =>
+      push_i32_binary_opcode(builder, expr_stack, Scalar(IntBinary(Xor)))
+    I64Xor => push_binary_opcode(builder, expr_stack, Scalar(IntBinary(Xor)))
+    I32Shl =>
+      push_i32_shift_opcode(builder, expr_stack, Scalar(IntBinary(ShiftLeft)))
+    I64Shl =>
+      push_binary_opcode(builder, expr_stack, Scalar(IntBinary(ShiftLeft)))
+    I32ShrS =>
+      push_i32_shift_opcode(
+        builder,
+        expr_stack,
+        Scalar(IntBinary(SignedShiftRight)),
+      )
+    I64ShrS =>
+      push_binary_opcode(
+        builder,
+        expr_stack,
+        Scalar(IntBinary(SignedShiftRight)),
+      )
+    I32ShrU =>
+      push_i32_shift_opcode(
+        builder,
+        expr_stack,
+        Scalar(IntBinary(UnsignedShiftRight)),
+      )
+    I64ShrU =>
+      push_binary_opcode(
+        builder,
+        expr_stack,
+        Scalar(IntBinary(UnsignedShiftRight)),
+      )
+    I32Rotl =>
+      push_i32_shift_opcode(builder, expr_stack, Scalar(IntBinary(RotateLeft)))
+    I64Rotl =>
+      push_binary_opcode(builder, expr_stack, Scalar(IntBinary(RotateLeft)))
+    I32Rotr =>
+      push_i32_shift_opcode(builder, expr_stack, Scalar(IntBinary(RotateRight)))
+    I64Rotr =>
+      push_binary_opcode(builder, expr_stack, Scalar(IntBinary(RotateRight)))
     I32Clz => push_i32_clz(builder, expr_stack)
-    I64Clz => push_unary_opcode(builder, expr_stack, Clz)
+    I64Clz =>
+      push_unary_opcode(
+        builder,
+        expr_stack,
+        Scalar(IntUnary(CountLeadingZeros)),
+      )
     I32Ctz => push_i32_ctz(builder, expr_stack)
-    I64Ctz => push_unary_opcode(builder, expr_stack, Ctz)
+    I64Ctz =>
+      push_unary_opcode(
+        builder,
+        expr_stack,
+        Scalar(IntUnary(CountTrailingZeros)),
+      )
     I32Popcnt => push_i32_popcnt(builder, expr_stack)
-    I64Popcnt => push_unary_opcode(builder, expr_stack, Popcnt)
+    I64Popcnt =>
+      push_unary_opcode(builder, expr_stack, Scalar(IntUnary(PopulationCount)))
     I32Eqz => {
       guard pop_value(expr_stack) is Some(value) else { return false }
       expr_stack.push(builder.icmp_eq(value, builder.iconst_i32(0)))
@@ -1449,9 +1566,12 @@ fn push_simple_expr_instr(
       push_binary(expr_stack, fn(lhs, rhs) { builder.fsub(lhs, rhs) })
     F32Mul | F64Mul =>
       push_binary(expr_stack, fn(lhs, rhs) { builder.fmul(lhs, rhs) })
-    F32Div | F64Div => push_binary_opcode(builder, expr_stack, Fdiv)
-    F32Min | F64Min => push_binary_opcode(builder, expr_stack, Fmin)
-    F32Max | F64Max => push_binary_opcode(builder, expr_stack, Fmax)
+    F32Div | F64Div =>
+      push_binary_opcode(builder, expr_stack, Scalar(FloatBinary(Div)))
+    F32Min | F64Min =>
+      push_binary_opcode(builder, expr_stack, Scalar(FloatBinary(Min)))
+    F32Max | F64Max =>
+      push_binary_opcode(builder, expr_stack, Scalar(FloatBinary(Max)))
     F32Copysign =>
       push_float_copysign(
         builder,
@@ -1470,44 +1590,105 @@ fn push_simple_expr_instr(
         0x7FFFFFFFFFFFFFFFL,
         0x8000000000000000UL.reinterpret_as_int64(),
       )
-    F32Neg | F64Neg => push_unary_opcode(builder, expr_stack, Fneg)
-    F32Abs | F64Abs => push_unary_opcode(builder, expr_stack, Fabs)
-    F32Sqrt | F64Sqrt => push_unary_opcode(builder, expr_stack, Fsqrt)
-    F32Ceil | F64Ceil => push_unary_opcode(builder, expr_stack, Fceil)
-    F32Floor | F64Floor => push_unary_opcode(builder, expr_stack, Ffloor)
-    F32Trunc | F64Trunc => push_unary_opcode(builder, expr_stack, Ftrunc)
-    F32Nearest | F64Nearest => push_unary_opcode(builder, expr_stack, Fnearest)
+    F32Neg | F64Neg =>
+      push_unary_opcode(builder, expr_stack, Scalar(FloatUnary(Neg)))
+    F32Abs | F64Abs =>
+      push_unary_opcode(builder, expr_stack, Scalar(FloatUnary(Abs)))
+    F32Sqrt | F64Sqrt =>
+      push_unary_opcode(builder, expr_stack, Scalar(FloatUnary(Sqrt)))
+    F32Ceil | F64Ceil =>
+      push_unary_opcode(builder, expr_stack, Scalar(FloatUnary(Ceil)))
+    F32Floor | F64Floor =>
+      push_unary_opcode(builder, expr_stack, Scalar(FloatUnary(Floor)))
+    F32Trunc | F64Trunc =>
+      push_unary_opcode(builder, expr_stack, Scalar(FloatUnary(Trunc)))
+    F32Nearest | F64Nearest =>
+      push_unary_opcode(builder, expr_stack, Scalar(FloatUnary(Nearest)))
     F32Eq | F64Eq => push_float_cmp(builder, expr_stack, Eq)
     F32Ne | F64Ne => push_float_cmp(builder, expr_stack, Ne)
     F32Lt | F64Lt => push_float_cmp(builder, expr_stack, Lt)
     F32Gt | F64Gt => push_float_cmp(builder, expr_stack, Gt)
     F32Le | F64Le => push_float_cmp(builder, expr_stack, Le)
     F32Ge | F64Ge => push_float_cmp(builder, expr_stack, Ge)
-    I32WrapI64 => push_unary_opcode_as(builder, expr_stack, I32, Ireduce)
-    I64ExtendI32S => push_unary_opcode_as(builder, expr_stack, I64, Sextend)
-    I64ExtendI32U => push_unary_opcode_as(builder, expr_stack, I64, Uextend)
-    I32Extend8S => push_unary_opcode_as(builder, expr_stack, I32, Sextend8)
-    I32Extend16S => push_unary_opcode_as(builder, expr_stack, I32, Sextend16)
-    I64Extend8S => push_unary_opcode_as(builder, expr_stack, I64, Sextend8)
-    I64Extend16S => push_unary_opcode_as(builder, expr_stack, I64, Sextend16)
-    I64Extend32S => push_unary_opcode_as(builder, expr_stack, I64, Sextend32)
-    F32DemoteF64 => push_unary_opcode_as(builder, expr_stack, F32, Fdemote)
-    F64PromoteF32 => push_unary_opcode_as(builder, expr_stack, F64, Fpromote)
+    I32WrapI64 =>
+      push_unary_opcode_as(builder, expr_stack, I32, Scalar(Convert(IntReduce)))
+    I64ExtendI32S =>
+      push_unary_opcode_as(
+        builder,
+        expr_stack,
+        I64,
+        Scalar(Convert(SignedExtend)),
+      )
+    I64ExtendI32U =>
+      push_unary_opcode_as(
+        builder,
+        expr_stack,
+        I64,
+        Scalar(Convert(UnsignedExtend)),
+      )
+    I32Extend8S =>
+      push_unary_opcode_as(builder, expr_stack, I32, Scalar(SignExtendFrom(8)))
+    I32Extend16S =>
+      push_unary_opcode_as(builder, expr_stack, I32, Scalar(SignExtendFrom(16)))
+    I64Extend8S =>
+      push_unary_opcode_as(builder, expr_stack, I64, Scalar(SignExtendFrom(8)))
+    I64Extend16S =>
+      push_unary_opcode_as(builder, expr_stack, I64, Scalar(SignExtendFrom(16)))
+    I64Extend32S =>
+      push_unary_opcode_as(builder, expr_stack, I64, Scalar(SignExtendFrom(32)))
+    F32DemoteF64 =>
+      push_unary_opcode_as(
+        builder,
+        expr_stack,
+        F32,
+        Scalar(Convert(FloatDemote)),
+      )
+    F64PromoteF32 =>
+      push_unary_opcode_as(
+        builder,
+        expr_stack,
+        F64,
+        Scalar(Convert(FloatPromote)),
+      )
     I32TruncSatF32S | I32TruncSatF64S =>
-      push_unary_opcode_as(builder, expr_stack, I32, FcvtToSintSat)
+      push_unary_opcode_as(
+        builder,
+        expr_stack,
+        I32,
+        Scalar(Convert(FloatToSignedIntSaturating)),
+      )
     I32TruncSatF32U | I32TruncSatF64U =>
-      push_unary_opcode_as(builder, expr_stack, I32, FcvtToUintSat)
+      push_unary_opcode_as(
+        builder,
+        expr_stack,
+        I32,
+        Scalar(Convert(FloatToUnsignedIntSaturating)),
+      )
     I64TruncSatF32S | I64TruncSatF64S =>
-      push_unary_opcode_as(builder, expr_stack, I64, FcvtToSintSat)
+      push_unary_opcode_as(
+        builder,
+        expr_stack,
+        I64,
+        Scalar(Convert(FloatToSignedIntSaturating)),
+      )
     I64TruncSatF32U | I64TruncSatF64U =>
-      push_unary_opcode_as(builder, expr_stack, I64, FcvtToUintSat)
-    I32ReinterpretF32 => push_unary_opcode_as(builder, expr_stack, I32, Bitcast)
-    I64ReinterpretF64 => push_unary_opcode_as(builder, expr_stack, I64, Bitcast)
-    F32ReinterpretI32 => push_unary_opcode_as(builder, expr_stack, F32, Bitcast)
-    F64ReinterpretI64 => push_unary_opcode_as(builder, expr_stack, F64, Bitcast)
+      push_unary_opcode_as(
+        builder,
+        expr_stack,
+        I64,
+        Scalar(Convert(FloatToUnsignedIntSaturating)),
+      )
+    I32ReinterpretF32 =>
+      push_unary_opcode_as(builder, expr_stack, I32, Scalar(Convert(Bitcast)))
+    I64ReinterpretF64 =>
+      push_unary_opcode_as(builder, expr_stack, I64, Scalar(Convert(Bitcast)))
+    F32ReinterpretI32 =>
+      push_unary_opcode_as(builder, expr_stack, F32, Scalar(Convert(Bitcast)))
+    F64ReinterpretI64 =>
+      push_unary_opcode_as(builder, expr_stack, F64, Scalar(Convert(Bitcast)))
     RefI31 => push_i31_new(builder, expr_stack)
     AnyConvertExtern | ExternConvertAny =>
-      push_unary_opcode(builder, expr_stack, Copy)
+      push_unary_opcode(builder, expr_stack, Scalar(Copy))
     Select | SelectTyped(_) => push_select(builder, expr_stack)
     Drop => {
       guard pop_value(expr_stack) is Some(_) else { return false }
@@ -1585,7 +1766,7 @@ fn extend_memory_addr(
   if memory_types[memidx].is_memory64 || addr.ty == I64 {
     Some(addr)
   } else {
-    emit_op(builder, I64, Uextend, [addr])
+    emit_op(builder, I64, Scalar(Convert(UnsignedExtend)), [addr])
   }
 }
 
@@ -1604,14 +1785,18 @@ fn push_memory_bounds_check(
   let trap_block = builder.create_block()
   let continue_block = builder.create_block()
   if memory_types[memidx].is_memory64 {
-    guard emit_op(builder, I32, Icmp(Uge), [addr_plus_offset, addr_i64])
+    guard emit_op(builder, I32, Scalar(IntCompare(Uge)), [
+        addr_plus_offset, addr_i64,
+      ])
       is Some(no_overflow1) else {
       return false
     }
     let check2_block = builder.create_block()
     builder.brnz(no_overflow1, check2_block, trap_block)
     builder.switch_to_block(check2_block)
-    guard emit_op(builder, I32, Icmp(Uge), [end_addr, addr_plus_offset])
+    guard emit_op(builder, I32, Scalar(IntCompare(Uge)), [
+        end_addr, addr_plus_offset,
+      ])
       is Some(no_overflow2) else {
       return false
     }
@@ -1619,7 +1804,7 @@ fn push_memory_bounds_check(
     builder.brnz(no_overflow2, range_block, trap_block)
     builder.switch_to_block(range_block)
   }
-  guard emit_op(builder, I32, Icmp(Ule), [end_addr, memory_size])
+  guard emit_op(builder, I32, Scalar(IntCompare(Ule)), [end_addr, memory_size])
     is Some(in_bounds) else {
     return false
   }
@@ -2021,67 +2206,165 @@ fn try_lower_linear_function(
       I64Const(value) => stack.push(builder.iconst_i64(value))
       F32Const(value) => stack.push(builder.fconst_f32(value))
       F64Const(value) => stack.push(builder.fconst_f64(value))
-      I32Add => if !push_i32_binary_opcode(builder, stack, Iadd) { return None }
+      I32Add =>
+        if !push_i32_binary_opcode(builder, stack, Scalar(IntBinary(Add))) {
+          return None
+        }
       I64Add =>
         if !push_binary(stack, fn(lhs, rhs) { builder.iadd(lhs, rhs) }) {
           return None
         }
-      I32Sub => if !push_i32_binary_opcode(builder, stack, Isub) { return None }
+      I32Sub =>
+        if !push_i32_binary_opcode(builder, stack, Scalar(IntBinary(Sub))) {
+          return None
+        }
       I64Sub =>
         if !push_binary(stack, fn(lhs, rhs) { builder.isub(lhs, rhs) }) {
           return None
         }
-      I32Mul => if !push_i32_binary_opcode(builder, stack, Imul) { return None }
+      I32Mul =>
+        if !push_i32_binary_opcode(builder, stack, Scalar(IntBinary(Mul))) {
+          return None
+        }
       I64Mul =>
         if !push_binary(stack, fn(lhs, rhs) { builder.imul(lhs, rhs) }) {
           return None
         }
       I64MulWideU =>
-        if !push_binary_opcode(builder, stack, Umulh) {
+        if !push_binary_opcode(
+            builder,
+            stack,
+            Scalar(IntBinary(UnsignedMulHigh)),
+          ) {
           return None
         }
       I64MulWideS =>
-        if !push_binary_opcode(builder, stack, Smulh) {
+        if !push_binary_opcode(builder, stack, Scalar(IntBinary(SignedMulHigh))) {
           return None
         }
       I32DivS | I64DivS =>
-        if !push_binary_opcode(builder, stack, Sdiv) {
+        if !push_binary_opcode(builder, stack, Scalar(IntBinary(SignedDiv))) {
           return None
         }
       I32DivU | I64DivU =>
-        if !push_binary_opcode(builder, stack, Udiv) {
+        if !push_binary_opcode(builder, stack, Scalar(IntBinary(UnsignedDiv))) {
           return None
         }
       I32RemS | I64RemS =>
-        if !push_binary_opcode(builder, stack, Srem) {
+        if !push_binary_opcode(builder, stack, Scalar(IntBinary(SignedRem))) {
           return None
         }
       I32RemU | I64RemU =>
-        if !push_binary_opcode(builder, stack, Urem) {
+        if !push_binary_opcode(builder, stack, Scalar(IntBinary(UnsignedRem))) {
           return None
         }
-      I32And => if !push_i32_binary_opcode(builder, stack, Band) { return None }
-      I64And => if !push_binary_opcode(builder, stack, Band) { return None }
-      I32Or => if !push_i32_binary_opcode(builder, stack, Bor) { return None }
-      I64Or => if !push_binary_opcode(builder, stack, Bor) { return None }
-      I32Xor => if !push_i32_binary_opcode(builder, stack, Bxor) { return None }
-      I64Xor => if !push_binary_opcode(builder, stack, Bxor) { return None }
-      I32Shl => if !push_i32_shift_opcode(builder, stack, Ishl) { return None }
-      I64Shl => if !push_binary_opcode(builder, stack, Ishl) { return None }
-      I32ShrS => if !push_i32_shift_opcode(builder, stack, Sshr) { return None }
-      I64ShrS => if !push_binary_opcode(builder, stack, Sshr) { return None }
-      I32ShrU => if !push_i32_shift_opcode(builder, stack, Ushr) { return None }
-      I64ShrU => if !push_binary_opcode(builder, stack, Ushr) { return None }
-      I32Rotl => if !push_i32_shift_opcode(builder, stack, Rotl) { return None }
-      I64Rotl => if !push_binary_opcode(builder, stack, Rotl) { return None }
-      I32Rotr => if !push_i32_shift_opcode(builder, stack, Rotr) { return None }
-      I64Rotr => if !push_binary_opcode(builder, stack, Rotr) { return None }
+      I32And =>
+        if !push_i32_binary_opcode(builder, stack, Scalar(IntBinary(And))) {
+          return None
+        }
+      I64And =>
+        if !push_binary_opcode(builder, stack, Scalar(IntBinary(And))) {
+          return None
+        }
+      I32Or =>
+        if !push_i32_binary_opcode(builder, stack, Scalar(IntBinary(Or))) {
+          return None
+        }
+      I64Or =>
+        if !push_binary_opcode(builder, stack, Scalar(IntBinary(Or))) {
+          return None
+        }
+      I32Xor =>
+        if !push_i32_binary_opcode(builder, stack, Scalar(IntBinary(Xor))) {
+          return None
+        }
+      I64Xor =>
+        if !push_binary_opcode(builder, stack, Scalar(IntBinary(Xor))) {
+          return None
+        }
+      I32Shl =>
+        if !push_i32_shift_opcode(builder, stack, Scalar(IntBinary(ShiftLeft))) {
+          return None
+        }
+      I64Shl =>
+        if !push_binary_opcode(builder, stack, Scalar(IntBinary(ShiftLeft))) {
+          return None
+        }
+      I32ShrS =>
+        if !push_i32_shift_opcode(
+            builder,
+            stack,
+            Scalar(IntBinary(SignedShiftRight)),
+          ) {
+          return None
+        }
+      I64ShrS =>
+        if !push_binary_opcode(
+            builder,
+            stack,
+            Scalar(IntBinary(SignedShiftRight)),
+          ) {
+          return None
+        }
+      I32ShrU =>
+        if !push_i32_shift_opcode(
+            builder,
+            stack,
+            Scalar(IntBinary(UnsignedShiftRight)),
+          ) {
+          return None
+        }
+      I64ShrU =>
+        if !push_binary_opcode(
+            builder,
+            stack,
+            Scalar(IntBinary(UnsignedShiftRight)),
+          ) {
+          return None
+        }
+      I32Rotl =>
+        if !push_i32_shift_opcode(builder, stack, Scalar(IntBinary(RotateLeft))) {
+          return None
+        }
+      I64Rotl =>
+        if !push_binary_opcode(builder, stack, Scalar(IntBinary(RotateLeft))) {
+          return None
+        }
+      I32Rotr =>
+        if !push_i32_shift_opcode(
+            builder,
+            stack,
+            Scalar(IntBinary(RotateRight)),
+          ) {
+          return None
+        }
+      I64Rotr =>
+        if !push_binary_opcode(builder, stack, Scalar(IntBinary(RotateRight))) {
+          return None
+        }
       I32Clz => if !push_i32_clz(builder, stack) { return None }
-      I64Clz => if !push_unary_opcode(builder, stack, Clz) { return None }
+      I64Clz =>
+        if !push_unary_opcode(
+            builder,
+            stack,
+            Scalar(IntUnary(CountLeadingZeros)),
+          ) {
+          return None
+        }
       I32Ctz => if !push_i32_ctz(builder, stack) { return None }
-      I64Ctz => if !push_unary_opcode(builder, stack, Ctz) { return None }
+      I64Ctz =>
+        if !push_unary_opcode(
+            builder,
+            stack,
+            Scalar(IntUnary(CountTrailingZeros)),
+          ) {
+          return None
+        }
       I32Popcnt => if !push_i32_popcnt(builder, stack) { return None }
-      I64Popcnt => if !push_unary_opcode(builder, stack, Popcnt) { return None }
+      I64Popcnt =>
+        if !push_unary_opcode(builder, stack, Scalar(IntUnary(PopulationCount))) {
+          return None
+        }
       I32Eqz => {
         guard pop_value(stack) is Some(value) else { return None }
         stack.push(builder.icmp_eq(value, builder.iconst_i32(0)))
@@ -2113,15 +2396,15 @@ fn try_lower_linear_function(
           return None
         }
       F32Div | F64Div =>
-        if !push_binary_opcode(builder, stack, Fdiv) {
+        if !push_binary_opcode(builder, stack, Scalar(FloatBinary(Div))) {
           return None
         }
       F32Min | F64Min =>
-        if !push_binary_opcode(builder, stack, Fmin) {
+        if !push_binary_opcode(builder, stack, Scalar(FloatBinary(Min))) {
           return None
         }
       F32Max | F64Max =>
-        if !push_binary_opcode(builder, stack, Fmax) {
+        if !push_binary_opcode(builder, stack, Scalar(FloatBinary(Max))) {
           return None
         }
       F32Copysign =>
@@ -2147,31 +2430,31 @@ fn try_lower_linear_function(
           return None
         }
       F32Neg | F64Neg =>
-        if !push_unary_opcode(builder, stack, Fneg) {
+        if !push_unary_opcode(builder, stack, Scalar(FloatUnary(Neg))) {
           return None
         }
       F32Abs | F64Abs =>
-        if !push_unary_opcode(builder, stack, Fabs) {
+        if !push_unary_opcode(builder, stack, Scalar(FloatUnary(Abs))) {
           return None
         }
       F32Sqrt | F64Sqrt =>
-        if !push_unary_opcode(builder, stack, Fsqrt) {
+        if !push_unary_opcode(builder, stack, Scalar(FloatUnary(Sqrt))) {
           return None
         }
       F32Ceil | F64Ceil =>
-        if !push_unary_opcode(builder, stack, Fceil) {
+        if !push_unary_opcode(builder, stack, Scalar(FloatUnary(Ceil))) {
           return None
         }
       F32Floor | F64Floor =>
-        if !push_unary_opcode(builder, stack, Ffloor) {
+        if !push_unary_opcode(builder, stack, Scalar(FloatUnary(Floor))) {
           return None
         }
       F32Trunc | F64Trunc =>
-        if !push_unary_opcode(builder, stack, Ftrunc) {
+        if !push_unary_opcode(builder, stack, Scalar(FloatUnary(Trunc))) {
           return None
         }
       F32Nearest | F64Nearest =>
-        if !push_unary_opcode(builder, stack, Fnearest) {
+        if !push_unary_opcode(builder, stack, Scalar(FloatUnary(Nearest))) {
           return None
         }
       F32Eq | F64Eq => if !push_float_cmp(builder, stack, Eq) { return None }
@@ -2181,114 +2464,214 @@ fn try_lower_linear_function(
       F32Le | F64Le => if !push_float_cmp(builder, stack, Le) { return None }
       F32Ge | F64Ge => if !push_float_cmp(builder, stack, Ge) { return None }
       I32WrapI64 =>
-        if !push_unary_opcode_as(builder, stack, I32, Ireduce) {
+        if !push_unary_opcode_as(
+            builder,
+            stack,
+            I32,
+            Scalar(Convert(IntReduce)),
+          ) {
           return None
         }
       I64ExtendI32S =>
-        if !push_unary_opcode_as(builder, stack, I64, Sextend) {
+        if !push_unary_opcode_as(
+            builder,
+            stack,
+            I64,
+            Scalar(Convert(SignedExtend)),
+          ) {
           return None
         }
       I64ExtendI32U =>
-        if !push_unary_opcode_as(builder, stack, I64, Uextend) {
+        if !push_unary_opcode_as(
+            builder,
+            stack,
+            I64,
+            Scalar(Convert(UnsignedExtend)),
+          ) {
           return None
         }
       I32Extend8S =>
-        if !push_unary_opcode_as(builder, stack, I32, Sextend8) {
+        if !push_unary_opcode_as(builder, stack, I32, Scalar(SignExtendFrom(8))) {
           return None
         }
       I32Extend16S =>
-        if !push_unary_opcode_as(builder, stack, I32, Sextend16) {
+        if !push_unary_opcode_as(
+            builder,
+            stack,
+            I32,
+            Scalar(SignExtendFrom(16)),
+          ) {
           return None
         }
       I64Extend8S =>
-        if !push_unary_opcode_as(builder, stack, I64, Sextend8) {
+        if !push_unary_opcode_as(builder, stack, I64, Scalar(SignExtendFrom(8))) {
           return None
         }
       I64Extend16S =>
-        if !push_unary_opcode_as(builder, stack, I64, Sextend16) {
+        if !push_unary_opcode_as(
+            builder,
+            stack,
+            I64,
+            Scalar(SignExtendFrom(16)),
+          ) {
           return None
         }
       I64Extend32S =>
-        if !push_unary_opcode_as(builder, stack, I64, Sextend32) {
+        if !push_unary_opcode_as(
+            builder,
+            stack,
+            I64,
+            Scalar(SignExtendFrom(32)),
+          ) {
           return None
         }
       F32DemoteF64 =>
-        if !push_unary_opcode_as(builder, stack, F32, Fdemote) {
+        if !push_unary_opcode_as(
+            builder,
+            stack,
+            F32,
+            Scalar(Convert(FloatDemote)),
+          ) {
           return None
         }
       F64PromoteF32 =>
-        if !push_unary_opcode_as(builder, stack, F64, Fpromote) {
+        if !push_unary_opcode_as(
+            builder,
+            stack,
+            F64,
+            Scalar(Convert(FloatPromote)),
+          ) {
           return None
         }
       I32TruncF32S | I32TruncF64S =>
-        if !push_unary_opcode_as(builder, stack, I32, FcvtToSint) {
+        if !push_unary_opcode_as(
+            builder,
+            stack,
+            I32,
+            Scalar(Convert(FloatToSignedInt)),
+          ) {
           return None
         }
       I32TruncF32U | I32TruncF64U =>
-        if !push_unary_opcode_as(builder, stack, I32, FcvtToUint) {
+        if !push_unary_opcode_as(
+            builder,
+            stack,
+            I32,
+            Scalar(Convert(FloatToUnsignedInt)),
+          ) {
           return None
         }
       I64TruncF32S | I64TruncF64S =>
-        if !push_unary_opcode_as(builder, stack, I64, FcvtToSint) {
+        if !push_unary_opcode_as(
+            builder,
+            stack,
+            I64,
+            Scalar(Convert(FloatToSignedInt)),
+          ) {
           return None
         }
       I64TruncF32U | I64TruncF64U =>
-        if !push_unary_opcode_as(builder, stack, I64, FcvtToUint) {
+        if !push_unary_opcode_as(
+            builder,
+            stack,
+            I64,
+            Scalar(Convert(FloatToUnsignedInt)),
+          ) {
           return None
         }
       F32ConvertI32S | F32ConvertI64S =>
-        if !push_unary_opcode_as(builder, stack, F32, SintToFcvt) {
+        if !push_unary_opcode_as(
+            builder,
+            stack,
+            F32,
+            Scalar(Convert(SignedIntToFloat)),
+          ) {
           return None
         }
       F32ConvertI32U | F32ConvertI64U =>
-        if !push_unary_opcode_as(builder, stack, F32, UintToFcvt) {
+        if !push_unary_opcode_as(
+            builder,
+            stack,
+            F32,
+            Scalar(Convert(UnsignedIntToFloat)),
+          ) {
           return None
         }
       F64ConvertI32S | F64ConvertI64S =>
-        if !push_unary_opcode_as(builder, stack, F64, SintToFcvt) {
+        if !push_unary_opcode_as(
+            builder,
+            stack,
+            F64,
+            Scalar(Convert(SignedIntToFloat)),
+          ) {
           return None
         }
       F64ConvertI32U | F64ConvertI64U =>
-        if !push_unary_opcode_as(builder, stack, F64, UintToFcvt) {
+        if !push_unary_opcode_as(
+            builder,
+            stack,
+            F64,
+            Scalar(Convert(UnsignedIntToFloat)),
+          ) {
           return None
         }
       I32TruncSatF32S | I32TruncSatF64S =>
-        if !push_unary_opcode_as(builder, stack, I32, FcvtToSintSat) {
+        if !push_unary_opcode_as(
+            builder,
+            stack,
+            I32,
+            Scalar(Convert(FloatToSignedIntSaturating)),
+          ) {
           return None
         }
       I32TruncSatF32U | I32TruncSatF64U =>
-        if !push_unary_opcode_as(builder, stack, I32, FcvtToUintSat) {
+        if !push_unary_opcode_as(
+            builder,
+            stack,
+            I32,
+            Scalar(Convert(FloatToUnsignedIntSaturating)),
+          ) {
           return None
         }
       I64TruncSatF32S | I64TruncSatF64S =>
-        if !push_unary_opcode_as(builder, stack, I64, FcvtToSintSat) {
+        if !push_unary_opcode_as(
+            builder,
+            stack,
+            I64,
+            Scalar(Convert(FloatToSignedIntSaturating)),
+          ) {
           return None
         }
       I64TruncSatF32U | I64TruncSatF64U =>
-        if !push_unary_opcode_as(builder, stack, I64, FcvtToUintSat) {
+        if !push_unary_opcode_as(
+            builder,
+            stack,
+            I64,
+            Scalar(Convert(FloatToUnsignedIntSaturating)),
+          ) {
           return None
         }
       I32ReinterpretF32 =>
-        if !push_unary_opcode_as(builder, stack, I32, Bitcast) {
+        if !push_unary_opcode_as(builder, stack, I32, Scalar(Convert(Bitcast))) {
           return None
         }
       I64ReinterpretF64 =>
-        if !push_unary_opcode_as(builder, stack, I64, Bitcast) {
+        if !push_unary_opcode_as(builder, stack, I64, Scalar(Convert(Bitcast))) {
           return None
         }
       F32ReinterpretI32 =>
-        if !push_unary_opcode_as(builder, stack, F32, Bitcast) {
+        if !push_unary_opcode_as(builder, stack, F32, Scalar(Convert(Bitcast))) {
           return None
         }
       F64ReinterpretI64 =>
-        if !push_unary_opcode_as(builder, stack, F64, Bitcast) {
+        if !push_unary_opcode_as(builder, stack, F64, Scalar(Convert(Bitcast))) {
           return None
         }
       RefI31 => if !push_i31_new(builder, stack) { return None }
       I31GetS => if !push_i31_get(builder, stack, true) { return None }
       I31GetU => if !push_i31_get(builder, stack, false) { return None }
       AnyConvertExtern | ExternConvertAny =>
-        if !push_unary_opcode(builder, stack, Copy) {
+        if !push_unary_opcode(builder, stack, Scalar(Copy)) {
           return None
         }
       Call(func_idx) =>

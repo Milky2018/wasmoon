@@ -649,7 +649,7 @@ fn simplify_branches(func : Function) -> OptResult {
   let constants : @hashmap.HashMap[Int, ConstValue] = HashMap([])
   for block in func.blocks {
     for inst in block.instructions {
-      if inst.opcode.for_legacy_consumers() is Iconst(v) &&
+      if inst.opcode is Scalar(ScalarOp::IntConst(v)) &&
         inst.first_result() is Some(r) {
         if r.ty is I32 {
           constants.set(r.id, I32(v.to_int()))

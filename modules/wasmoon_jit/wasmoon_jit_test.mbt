@@ -430,7 +430,7 @@ test "plan MilkIR through reusable JIT pipeline" {
   let rhs = milk.param(1).unwrap()
   let sum = milk.new_value(I64)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Iadd, [lhs, rhs], [sum]))
+  entry.append_inst(milk.new_inst(Scalar(IntBinary(Add)), [lhs, rhs], [sum]))
   entry.set_terminator(Return([sum]))
   let plan = plan_milkir_integration_for_target(milk, X64)
   debug_inspect(plan.target, content="X64")
@@ -472,7 +472,7 @@ test "plan Wasm body MilkIR through reusable JIT pipeline" {
   let rhs = milk.param(2).unwrap()
   let sum = milk.new_value(I64)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Iadd, [lhs, rhs], [sum]))
+  entry.append_inst(milk.new_inst(Scalar(IntBinary(Add)), [lhs, rhs], [sum]))
   entry.set_terminator(Return([sum]))
   let plan = plan_wasm_body_milkir_integration_for_target(milk, X64)
   debug_inspect(plan.target, content="X64")
@@ -498,9 +498,9 @@ test "plan MilkIR branch block params through reusable JIT pipeline" {
   let entry = milk.new_block([])
   let then_block = milk.new_block([true_param])
   let else_block = milk.new_block([false_param])
-  entry.append_inst(milk.new_inst(Iconst(1L), [], [cond]))
-  entry.append_inst(milk.new_inst(Iconst(42L), [], [true_value]))
-  entry.append_inst(milk.new_inst(Iconst(7L), [], [false_value]))
+  entry.append_inst(milk.new_inst(Scalar(IntConst(1L)), [], [cond]))
+  entry.append_inst(milk.new_inst(Scalar(IntConst(42L)), [], [true_value]))
+  entry.append_inst(milk.new_inst(Scalar(IntConst(7L)), [], [false_value]))
   entry.set_terminator(
     Branch(cond, then_block.id, [true_value], else_block.id, [false_value]),
   )
@@ -1027,7 +1027,7 @@ test "plan MilkIR floating point through reusable JIT pipeline" {
   let rhs = milk.param(1).unwrap()
   let sum = milk.new_value(F64)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Fadd, [lhs, rhs], [sum]))
+  entry.append_inst(milk.new_inst(Scalar(FloatBinary(Add)), [lhs, rhs], [sum]))
   entry.set_terminator(Return([sum]))
   let plan = plan_milkir_integration_for_target(milk, X64)
   debug_inspect(plan.target, content="X64")
@@ -1046,8 +1046,8 @@ test "plan MilkIR floating abs and neg through reusable JIT pipeline" {
   let neg = milk.new_value(F64)
   let abs = milk.new_value(F64)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Fneg, [input], [neg]))
-  entry.append_inst(milk.new_inst(Fabs, [neg], [abs]))
+  entry.append_inst(milk.new_inst(Scalar(FloatUnary(Neg)), [input], [neg]))
+  entry.append_inst(milk.new_inst(Scalar(FloatUnary(Abs)), [neg], [abs]))
   entry.set_terminator(Return([abs]))
   let plan = plan_milkir_integration_for_target(milk, X64)
   let mut has_abs_mask = false
@@ -1071,7 +1071,7 @@ test "plan MilkIR f64 const through reusable x64 JIT pipeline" {
   let milk = @milkir.Function::with_signature("fconst64_x64", signature)
   let output = milk.new_value(F64)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Fconst(1.5), [], [output]))
+  entry.append_inst(milk.new_inst(Scalar(FloatConst(1.5)), [], [output]))
   entry.set_terminator(Return([output]))
   let plan = plan_milkir_integration_for_target(milk, X64)
   let bytes = plan.object.get_bytes()
@@ -1087,7 +1087,7 @@ test "plan MilkIR f32 const through reusable AArch64 JIT pipeline" {
   let entry = milk.new_block([])
   let bits = (1.25 : Float).reinterpret_as_int().to_int64()
   entry.append_inst(
-    milk.new_inst(Fconst(bits.reinterpret_as_double()), [], [output]),
+    milk.new_inst(Scalar(FloatConst(bits.reinterpret_as_double())), [], [output]),
   )
   entry.set_terminator(Return([output]))
   let plan = plan_milkir_integration_for_target(milk, AArch64)
@@ -1116,7 +1116,9 @@ test "plan MilkIR float promote through reusable x64 JIT pipeline" {
   let input = milk.param(0).unwrap()
   let output = milk.new_value(F64)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Fpromote, [input], [output]))
+  entry.append_inst(
+    milk.new_inst(Scalar(Convert(FloatPromote)), [input], [output]),
+  )
   entry.set_terminator(Return([output]))
   let plan = plan_milkir_integration_for_target(milk, X64)
   let mut has_cvtss2sd = false
@@ -1141,7 +1143,9 @@ test "plan MilkIR float demote through reusable AArch64 JIT pipeline" {
   let input = milk.param(0).unwrap()
   let output = milk.new_value(F32)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Fdemote, [input], [output]))
+  entry.append_inst(
+    milk.new_inst(Scalar(Convert(FloatDemote)), [input], [output]),
+  )
   entry.set_terminator(Return([output]))
   let plan = plan_milkir_integration_for_target(milk, AArch64)
   let mut has_fcvt_s_d = false
@@ -1170,7 +1174,7 @@ test "plan MilkIR float ceil through reusable x64 JIT pipeline" {
   let input = milk.param(0).unwrap()
   let output = milk.new_value(F32)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Fceil, [input], [output]))
+  entry.append_inst(milk.new_inst(Scalar(FloatUnary(Ceil)), [input], [output]))
   entry.set_terminator(Return([output]))
   let plan = plan_milkir_integration_for_target(milk, X64)
   let mut has_roundss_ceil = false
@@ -1196,7 +1200,9 @@ test "plan MilkIR float nearest through reusable AArch64 JIT pipeline" {
   let input = milk.param(0).unwrap()
   let output = milk.new_value(F64)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Fnearest, [input], [output]))
+  entry.append_inst(
+    milk.new_inst(Scalar(FloatUnary(Nearest)), [input], [output]),
+  )
   entry.set_terminator(Return([output]))
   let plan = plan_milkir_integration_for_target(milk, AArch64)
   let mut has_frintn_d = false
@@ -1226,7 +1232,9 @@ test "plan MilkIR float compare through reusable x64 JIT pipeline" {
   let rhs = milk.param(1).unwrap()
   let output = milk.new_value(I32)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Fcmp(Eq), [lhs, rhs], [output]))
+  entry.append_inst(
+    milk.new_inst(Scalar(FloatCompare(Eq)), [lhs, rhs], [output]),
+  )
   entry.set_terminator(Return([output]))
   let plan = plan_milkir_integration_for_target(milk, X64)
   let mut has_ucomisd = false
@@ -1258,7 +1266,9 @@ test "plan MilkIR float compare through reusable AArch64 JIT pipeline" {
   let rhs = milk.param(1).unwrap()
   let output = milk.new_value(I32)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Fcmp(Lt), [lhs, rhs], [output]))
+  entry.append_inst(
+    milk.new_inst(Scalar(FloatCompare(Lt)), [lhs, rhs], [output]),
+  )
   entry.set_terminator(Return([output]))
   let plan = plan_milkir_integration_for_target(milk, AArch64)
   let mut has_fcmp_s = false
@@ -1295,7 +1305,7 @@ test "plan MilkIR generic memory through reusable x64 JIT pipeline" {
   let loaded = milk.new_value(I32)
   let offset = milk.new_value(I64)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Iconst(0L), [], [offset]))
+  entry.append_inst(milk.new_inst(Scalar(IntConst(0L)), [], [offset]))
   entry.append_inst(
     milk.new_inst(Memory(@milkir.MemoryOp::Store(I32)), [ptr, value, offset], []),
   )
@@ -1367,7 +1377,7 @@ test "plan MilkIR generic memory through reusable AArch64 JIT pipeline" {
   let loaded = milk.new_value(I32)
   let offset = milk.new_value(I64)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Iconst(0L), [], [offset]))
+  entry.append_inst(milk.new_inst(Scalar(IntConst(0L)), [], [offset]))
   entry.append_inst(
     milk.new_inst(Memory(@milkir.MemoryOp::Store(I32)), [ptr, value, offset], []),
   )
@@ -1447,7 +1457,7 @@ test "plan MilkIR scalar float memory through reusable x64 JIT pipeline" {
   let loaded = milk.new_value(F64)
   let offset = milk.new_value(I64)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Iconst(0L), [], [offset]))
+  entry.append_inst(milk.new_inst(Scalar(IntConst(0L)), [], [offset]))
   entry.append_inst(
     milk.new_inst(Memory(@milkir.MemoryOp::Store(F64)), [ptr, value, offset], []),
   )
@@ -1487,7 +1497,7 @@ test "plan MilkIR scalar float memory through reusable AArch64 JIT pipeline" {
   let loaded = milk.new_value(F64)
   let offset = milk.new_value(I64)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Iconst(0L), [], [offset]))
+  entry.append_inst(milk.new_inst(Scalar(IntConst(0L)), [], [offset]))
   entry.append_inst(
     milk.new_inst(Memory(@milkir.MemoryOp::Store(F64)), [ptr, value, offset], []),
   )
@@ -1528,7 +1538,7 @@ test "plan MilkIR vector memory through reusable x64 JIT pipeline" {
   let loaded = milk.new_value(V128)
   let offset = milk.new_value(I64)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Iconst(0L), [], [offset]))
+  entry.append_inst(milk.new_inst(Scalar(IntConst(0L)), [], [offset]))
   entry.append_inst(
     milk.new_inst(Memory(@milkir.MemoryOp::Store(V128)), [ptr, value, offset], []),
   )
@@ -1568,7 +1578,7 @@ test "plan MilkIR vector memory through reusable AArch64 JIT pipeline" {
   let loaded = milk.new_value(V128)
   let offset = milk.new_value(I64)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Iconst(0L), [], [offset]))
+  entry.append_inst(milk.new_inst(Scalar(IntConst(0L)), [], [offset]))
   entry.append_inst(
     milk.new_inst(Memory(@milkir.MemoryOp::Store(V128)), [ptr, value, offset], []),
   )
@@ -1608,7 +1618,7 @@ test "emit MachV regalloc through reusable x64 pipeline" {
   let rhs = milk.param(1).unwrap()
   let sum = milk.new_value(I64)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Iadd, [lhs, rhs], [sum]))
+  entry.append_inst(milk.new_inst(Scalar(IntBinary(Add)), [lhs, rhs], [sum]))
   entry.set_terminator(Return([sum]))
   let plan = plan_milkir_integration_for_target(milk, X64)
   inspect(plan.object.get_bytes().length() > 0, content="true")
@@ -1623,7 +1633,9 @@ test "plan Wasm body return area through reusable JIT pipeline" {
   for i in 0..<9 {
     let value = milk.new_value(I64)
     milk.add_result(I64)
-    entry.append_inst(milk.new_inst(Iconst(i.to_int64()), [], [value]))
+    entry.append_inst(
+      milk.new_inst(Scalar(IntConst(i.to_int64())), [], [value]),
+    )
     values.push(value)
   }
   entry.set_terminator(Return(values))
@@ -1640,7 +1652,9 @@ test "plan MilkIR popcnt through reusable x64 JIT pipeline" {
   let value = milk.param(0).unwrap()
   let count = milk.new_value(I64)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Popcnt, [value], [count]))
+  entry.append_inst(
+    milk.new_inst(Scalar(IntUnary(PopulationCount)), [value], [count]),
+  )
   entry.set_terminator(Return([count]))
   let plan = plan_milkir_integration_for_target(milk, X64)
   let mut has_shift = false
@@ -1660,7 +1674,7 @@ test "plan MilkIR bitcast through reusable x64 JIT pipeline" {
   let input = milk.param(0).unwrap()
   let output = milk.new_value(F64)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Bitcast, [input], [output]))
+  entry.append_inst(milk.new_inst(Scalar(Convert(Bitcast)), [input], [output]))
   entry.set_terminator(Return([output]))
   let plan = plan_milkir_integration_for_target(milk, X64)
   let mut has_movq_to_xmm = false
@@ -1684,7 +1698,7 @@ test "plan MilkIR bitcast through reusable AArch64 JIT pipeline" {
   let input = milk.param(0).unwrap()
   let output = milk.new_value(I64)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Bitcast, [input], [output]))
+  entry.append_inst(milk.new_inst(Scalar(Convert(Bitcast)), [input], [output]))
   entry.set_terminator(Return([output]))
   let plan = plan_milkir_integration_for_target(milk, AArch64)
   let mut has_fmov_to_gpr = false
@@ -1712,7 +1726,7 @@ test "plan MilkIR sign-extension through reusable x64 JIT pipeline" {
   let input = milk.param(0).unwrap()
   let output = milk.new_value(I64)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Sextend8, [input], [output]))
+  entry.append_inst(milk.new_inst(Scalar(SignExtendFrom(8)), [input], [output]))
   entry.set_terminator(Return([output]))
   let plan = plan_milkir_integration_for_target(milk, X64)
   let mut has_movsx = false
@@ -1736,7 +1750,9 @@ test "plan MilkIR sign-extension through reusable AArch64 JIT pipeline" {
   let input = milk.param(0).unwrap()
   let output = milk.new_value(I64)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Sextend32, [input], [output]))
+  entry.append_inst(
+    milk.new_inst(Scalar(SignExtendFrom(32)), [input], [output]),
+  )
   entry.set_terminator(Return([output]))
   let plan = plan_milkir_integration_for_target(milk, AArch64)
   let mut has_sxtw = false
@@ -1765,7 +1781,9 @@ test "plan MilkIR unsigned extend through reusable x64 JIT pipeline" {
   let input = milk.param(0).unwrap()
   let output = milk.new_value(I64)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Uextend, [input], [output]))
+  entry.append_inst(
+    milk.new_inst(Scalar(Convert(UnsignedExtend)), [input], [output]),
+  )
   entry.set_terminator(Return([output]))
   let plan = plan_milkir_integration_for_target(milk, X64)
   let mut has_mov32 = false
@@ -1788,7 +1806,9 @@ test "plan MilkIR integer reduce through reusable AArch64 JIT pipeline" {
   let input = milk.param(0).unwrap()
   let output = milk.new_value(I32)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Ireduce, [input], [output]))
+  entry.append_inst(
+    milk.new_inst(Scalar(Convert(IntReduce)), [input], [output]),
+  )
   entry.set_terminator(Return([output]))
   let plan = plan_milkir_integration_for_target(milk, AArch64)
   let mut has_mov_w = false
@@ -1818,7 +1838,7 @@ test "plan MilkIR integer select through reusable x64 JIT pipeline" {
   let output = milk.new_value(I64)
   let entry = milk.new_block([])
   entry.append_inst(
-    milk.new_inst(Select, [cond, true_value, false_value], [output]),
+    milk.new_inst(Scalar(Select), [cond, true_value, false_value], [output]),
   )
   entry.set_terminator(Return([output]))
   let plan = plan_milkir_integration_for_target(milk, X64)
@@ -1837,7 +1857,7 @@ test "plan MilkIR floating point select through reusable x64 JIT pipeline" {
   let output = milk.new_value(F64)
   let entry = milk.new_block([])
   entry.append_inst(
-    milk.new_inst(Select, [cond, true_value, false_value], [output]),
+    milk.new_inst(Scalar(Select), [cond, true_value, false_value], [output]),
   )
   entry.set_terminator(Return([output]))
   let plan = plan_milkir_integration_for_target(milk, X64)
@@ -1860,7 +1880,7 @@ test "plan MilkIR integer select through reusable AArch64 JIT pipeline" {
   let output = milk.new_value(I64)
   let entry = milk.new_block([])
   entry.append_inst(
-    milk.new_inst(Select, [cond, true_value, false_value], [output]),
+    milk.new_inst(Scalar(Select), [cond, true_value, false_value], [output]),
   )
   entry.set_terminator(Return([output]))
   let plan = plan_milkir_integration_for_target(milk, AArch64)
@@ -1885,7 +1905,7 @@ test "plan MilkIR floating point select through reusable AArch64 JIT pipeline" {
   let output = milk.new_value(F64)
   let entry = milk.new_block([])
   entry.append_inst(
-    milk.new_inst(Select, [cond, true_value, false_value], [output]),
+    milk.new_inst(Scalar(Select), [cond, true_value, false_value], [output]),
   )
   entry.set_terminator(Return([output]))
   let plan = plan_milkir_integration_for_target(milk, AArch64)
@@ -1908,7 +1928,9 @@ test "plan MilkIR signed integer division through reusable JIT pipeline" {
   let rhs = milk.param(1).unwrap()
   let quotient = milk.new_value(I64)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Sdiv, [lhs, rhs], [quotient]))
+  entry.append_inst(
+    milk.new_inst(Scalar(IntBinary(SignedDiv)), [lhs, rhs], [quotient]),
+  )
   entry.set_terminator(Return([quotient]))
   let plan = plan_milkir_integration_for_target(milk, X64)
   let mut has_cqo = false
@@ -1940,7 +1962,9 @@ test "plan MilkIR signed integer remainder through reusable JIT pipeline" {
   let rhs = milk.param(1).unwrap()
   let rem = milk.new_value(I64)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Srem, [lhs, rhs], [rem]))
+  entry.append_inst(
+    milk.new_inst(Scalar(IntBinary(SignedRem)), [lhs, rhs], [rem]),
+  )
   entry.set_terminator(Return([rem]))
   let plan = plan_milkir_integration_for_target(milk, X64)
   let mut has_cqo = false
@@ -1972,7 +1996,9 @@ test "plan MilkIR signed multiply-high through reusable JIT pipeline" {
   let rhs = milk.param(1).unwrap()
   let high = milk.new_value(I64)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Smulh, [lhs, rhs], [high]))
+  entry.append_inst(
+    milk.new_inst(Scalar(IntBinary(SignedMulHigh)), [lhs, rhs], [high]),
+  )
   entry.set_terminator(Return([high]))
   let plan = plan_milkir_integration_for_target(milk, X64)
   let mut has_mul_opcode = false
@@ -1996,7 +2022,7 @@ test "plan MilkIR integer not through reusable JIT pipeline" {
   let input = milk.param(0).unwrap()
   let inverted = milk.new_value(I64)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Bnot, [input], [inverted]))
+  entry.append_inst(milk.new_inst(Scalar(IntUnary(Not)), [input], [inverted]))
   entry.set_terminator(Return([inverted]))
   let plan = plan_milkir_integration_for_target(milk, X64)
   let mut has_not_opcode = false
@@ -2020,7 +2046,9 @@ test "plan MilkIR integer compare through reusable JIT pipeline" {
   let rhs = milk.param(1).unwrap()
   let is_less = milk.new_value(I32)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Icmp(Slt), [lhs, rhs], [is_less]))
+  entry.append_inst(
+    milk.new_inst(Scalar(IntCompare(Slt)), [lhs, rhs], [is_less]),
+  )
   entry.set_terminator(Return([is_less]))
   let plan = plan_milkir_integration_for_target(milk, X64)
   let mut has_setcc = false
@@ -2051,7 +2079,9 @@ test "plan MilkIR integer shift through reusable JIT pipeline" {
   let count = milk.param(1).unwrap()
   let shifted = milk.new_value(I64)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Ishl, [value, count], [shifted]))
+  entry.append_inst(
+    milk.new_inst(Scalar(IntBinary(ShiftLeft)), [value, count], [shifted]),
+  )
   entry.set_terminator(Return([shifted]))
   let plan = plan_milkir_integration_for_target(milk, X64)
   let mut has_shift_cl = false
@@ -2075,7 +2105,9 @@ test "plan MilkIR integer rotate through reusable JIT pipeline" {
   let count = milk.param(1).unwrap()
   let rotated = milk.new_value(I64)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Rotr, [value, count], [rotated]))
+  entry.append_inst(
+    milk.new_inst(Scalar(IntBinary(RotateRight)), [value, count], [rotated]),
+  )
   entry.set_terminator(Return([rotated]))
   let plan = plan_milkir_integration_for_target(milk, X64)
   let mut has_rotate_cl = false
@@ -2099,7 +2131,9 @@ test "plan MilkIR integer ctz through reusable AArch64 JIT pipeline" {
   let value = milk.param(0).unwrap()
   let trailing = milk.new_value(I64)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Ctz, [value], [trailing]))
+  entry.append_inst(
+    milk.new_inst(Scalar(IntUnary(CountTrailingZeros)), [value], [trailing]),
+  )
   entry.set_terminator(Return([trailing]))
   let plan = plan_milkir_integration_for_target(milk, AArch64)
   let mut has_rbit = false
@@ -2133,7 +2167,9 @@ test "plan MilkIR integer clz through reusable x64 JIT pipeline" {
   let value = milk.param(0).unwrap()
   let leading = milk.new_value(I64)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Clz, [value], [leading]))
+  entry.append_inst(
+    milk.new_inst(Scalar(IntUnary(CountLeadingZeros)), [value], [leading]),
+  )
   entry.set_terminator(Return([leading]))
   let plan = plan_milkir_integration_for_target(milk, X64)
   let bytes = plan.object.get_bytes()
@@ -2148,7 +2184,9 @@ test "plan MilkIR integer ctz through reusable x64 JIT pipeline" {
   let value = milk.param(0).unwrap()
   let trailing = milk.new_value(I64)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Ctz, [value], [trailing]))
+  entry.append_inst(
+    milk.new_inst(Scalar(IntUnary(CountTrailingZeros)), [value], [trailing]),
+  )
   entry.set_terminator(Return([trailing]))
   let plan = plan_milkir_integration_for_target(milk, X64)
   let bytes = plan.object.get_bytes()
@@ -2164,7 +2202,9 @@ test "plan MilkIR unsigned multiply-high through reusable AArch64 JIT pipeline" 
   let rhs = milk.param(1).unwrap()
   let high = milk.new_value(I64)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Umulh, [lhs, rhs], [high]))
+  entry.append_inst(
+    milk.new_inst(Scalar(IntBinary(UnsignedMulHigh)), [lhs, rhs], [high]),
+  )
   entry.set_terminator(Return([high]))
   let plan = plan_milkir_integration_for_target(milk, AArch64)
   let mut has_umulh = false
@@ -2194,7 +2234,9 @@ test "plan MilkIR rotate-right through reusable AArch64 JIT pipeline" {
   let count = milk.param(1).unwrap()
   let rotated = milk.new_value(I64)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Rotr, [value, count], [rotated]))
+  entry.append_inst(
+    milk.new_inst(Scalar(IntBinary(RotateRight)), [value, count], [rotated]),
+  )
   entry.set_terminator(Return([rotated]))
   let plan = plan_milkir_integration_for_target(milk, AArch64)
   let mut has_rorv = false
@@ -2224,7 +2266,9 @@ test "plan MilkIR rotate-left through reusable AArch64 JIT pipeline" {
   let count = milk.param(1).unwrap()
   let rotated = milk.new_value(I64)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Rotl, [value, count], [rotated]))
+  entry.append_inst(
+    milk.new_inst(Scalar(IntBinary(RotateLeft)), [value, count], [rotated]),
+  )
   entry.set_terminator(Return([rotated]))
   let plan = plan_milkir_integration_for_target(milk, AArch64)
   let mut has_rorv = false
@@ -2254,7 +2298,7 @@ test "wrap reusable JIT plan as cwasm artifact" {
   let rhs = milk.param(1).unwrap()
   let sum = milk.new_value(I64)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Iadd, [lhs, rhs], [sum]))
+  entry.append_inst(milk.new_inst(Scalar(IntBinary(Add)), [lhs, rhs], [sum]))
   entry.set_terminator(Return([sum]))
   let plan = plan_milkir_integration_for_target(milk, X64)
   let artifact = try! CwasmArtifact::from_jit_plan(
@@ -2285,7 +2329,7 @@ test "wrap reusable JIT plan preserves cwasm signature metadata" {
   let rhs = milk.param(1).unwrap()
   let sum = milk.new_value(I64)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Iadd, [lhs, rhs], [sum]))
+  entry.append_inst(milk.new_inst(Scalar(IntBinary(Add)), [lhs, rhs], [sum]))
   entry.set_terminator(Return([sum]))
   let plan = plan_milkir_integration_for_target(milk, X64)
   let artifact = try! CwasmArtifact::from_jit_plan_with_signature(

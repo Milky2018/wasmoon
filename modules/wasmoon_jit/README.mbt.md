@@ -34,7 +34,7 @@ test "plan a small MilkIR function for x64 JIT integration" {
   let rhs = milk.param(1).unwrap()
   let sum = milk.new_value(I64)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Iadd, [lhs, rhs], [sum]))
+  entry.append_inst(milk.new_inst(Scalar(IntBinary(Add)), [lhs, rhs], [sum]))
   entry.set_terminator(Return([sum]))
   let plan = plan_milkir_integration_for_target(milk, X64)
   inspect(plan.entry_symbol, content="add64")

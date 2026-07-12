@@ -54,6 +54,91 @@ fn format_floatcc(cc : FloatCC) -> String {
 }
 
 ///|
+fn format_scalar_opcode(
+  opcode : ScalarOp,
+  operands : Array[Value],
+  result_ty : Type?,
+) -> String {
+  let ops = operands.map(format_value).join(", ")
+  match opcode {
+    IntConst(value) => "iconst \{value}"
+    FloatConst(value) =>
+      if result_ty is Some(F32) {
+        let bits = value.reinterpret_as_int64().to_int()
+        "fconst \{Float::reinterpret_from_int(bits)}"
+      } else {
+        "fconst \{value}"
+      }
+    IntBinary(op) =>
+      match op {
+        Add => "iadd \{ops}"
+        Sub => "isub \{ops}"
+        Mul => "imul \{ops}"
+        UnsignedMulHigh => "umulh \{ops}"
+        SignedMulHigh => "smulh \{ops}"
+        SignedDiv => "sdiv \{ops}"
+        UnsignedDiv => "udiv \{ops}"
+        SignedRem => "srem \{ops}"
+        UnsignedRem => "urem \{ops}"
+        And => "band \{ops}"
+        Or => "bor \{ops}"
+        Xor => "bxor \{ops}"
+        ShiftLeft => "ishl \{ops}"
+        SignedShiftRight => "sshr \{ops}"
+        UnsignedShiftRight => "ushr \{ops}"
+        RotateLeft => "rotl \{ops}"
+        RotateRight => "rotr \{ops}"
+      }
+    IntUnary(op) =>
+      match op {
+        Not => "bnot \{ops}"
+        CountLeadingZeros => "clz \{ops}"
+        CountTrailingZeros => "ctz \{ops}"
+        PopulationCount => "popcnt \{ops}"
+      }
+    IntCompare(cc) => "icmp.\{format_intcc(cc)} \{ops}"
+    FloatBinary(op) =>
+      match op {
+        Add => "fadd \{ops}"
+        Sub => "fsub \{ops}"
+        Mul => "fmul \{ops}"
+        Div => "fdiv \{ops}"
+        Min => "fmin \{ops}"
+        Max => "fmax \{ops}"
+      }
+    FloatUnary(op) =>
+      match op {
+        Neg => "fneg \{ops}"
+        Abs => "fabs \{ops}"
+        Sqrt => "fsqrt \{ops}"
+        Ceil => "fceil \{ops}"
+        Floor => "ffloor \{ops}"
+        Trunc => "ftrunc \{ops}"
+        Nearest => "fnearest \{ops}"
+      }
+    FloatCompare(cc) => "fcmp.\{format_floatcc(cc)} \{ops}"
+    Convert(op) =>
+      match op {
+        IntReduce => "ireduce \{ops}"
+        SignedExtend => "sextend \{ops}"
+        UnsignedExtend => "uextend \{ops}"
+        FloatPromote => "fpromote \{ops}"
+        FloatDemote => "fdemote \{ops}"
+        FloatToSignedInt => "fcvt_to_sint \{ops}"
+        FloatToUnsignedInt => "fcvt_to_uint \{ops}"
+        FloatToSignedIntSaturating => "fcvt_to_sint_sat \{ops}"
+        FloatToUnsignedIntSaturating => "fcvt_to_uint_sat \{ops}"
+        SignedIntToFloat => "sint_to_fcvt \{ops}"
+        UnsignedIntToFloat => "uint_to_fcvt \{ops}"
+        Bitcast => "bitcast \{ops}"
+      }
+    SignExtendFrom(bits) => "sextend\{bits} \{ops}"
+    Select => "select \{ops}"
+    Copy => "copy \{ops}"
+  }
+}
+
+///|
 /// Print an opcode with its operands
 /// result_ty is needed for Fconst to correctly decode F32 bit-packed constants
 fn format_opcode(
@@ -63,92 +148,7 @@ fn format_opcode(
 ) -> String {
   let ops = operands.map(format_value).join(", ")
   match opcode {
-    Scalar(scalar_op) =>
-      format_opcode(scalar_op.to_legacy_opcode(), operands, result_ty)
-    // Constants
-    Iconst(n) => "iconst \{n}"
-    Fconst(n) =>
-      // For F32, the bits are packed in the lower 32 bits of the Double
-      if result_ty is Some(F32) {
-        let f32_bits = n.reinterpret_as_int64().to_int()
-        let f32_val = Float::reinterpret_from_int(f32_bits)
-        "fconst \{f32_val}"
-      } else {
-        "fconst \{n}"
-      }
-
-    // Integer arithmetic
-    Iadd => "iadd \{ops}"
-    Isub => "isub \{ops}"
-    Imul => "imul \{ops}"
-    Umulh => "umulh \{ops}"
-    Smulh => "smulh \{ops}"
-    Sdiv => "sdiv \{ops}"
-    Udiv => "udiv \{ops}"
-    Srem => "srem \{ops}"
-    Urem => "urem \{ops}"
-
-    // Bitwise operations
-    Band => "band \{ops}"
-    Bor => "bor \{ops}"
-    Bxor => "bxor \{ops}"
-    Bnot => "bnot \{ops}"
-    Ishl => "ishl \{ops}"
-    Sshr => "sshr \{ops}"
-    Ushr => "ushr \{ops}"
-    Rotl => "rotl \{ops}"
-    Rotr => "rotr \{ops}"
-
-    // Bit counting
-    Clz => "clz \{ops}"
-    Ctz => "ctz \{ops}"
-    Popcnt => "popcnt \{ops}"
-
-    // Comparisons
-    Icmp(cc) => "icmp.\{format_intcc(cc)} \{ops}"
-
-    // Floating point arithmetic
-    Fadd => "fadd \{ops}"
-    Fsub => "fsub \{ops}"
-    Fmul => "fmul \{ops}"
-    Fdiv => "fdiv \{ops}"
-    Fmin => "fmin \{ops}"
-    Fmax => "fmax \{ops}"
-
-    // Floating point comparisons
-    Fcmp(cc) => "fcmp.\{format_floatcc(cc)} \{ops}"
-
-    // Floating point unary
-    Fneg => "fneg \{ops}"
-    Fabs => "fabs \{ops}"
-    Fsqrt => "fsqrt \{ops}"
-    Fceil => "fceil \{ops}"
-    Ffloor => "ffloor \{ops}"
-    Ftrunc => "ftrunc \{ops}"
-    Fnearest => "fnearest \{ops}"
-
-    // Conversions
-    Ireduce => "ireduce \{ops}"
-    Sextend => "sextend \{ops}"
-    Uextend => "uextend \{ops}"
-    Fpromote => "fpromote \{ops}"
-    Fdemote => "fdemote \{ops}"
-    FcvtToSint => "fcvt_to_sint \{ops}"
-    FcvtToUint => "fcvt_to_uint \{ops}"
-    FcvtToSintSat => "fcvt_to_sint_sat \{ops}"
-    FcvtToUintSat => "fcvt_to_uint_sat \{ops}"
-    SintToFcvt => "sint_to_fcvt \{ops}"
-    UintToFcvt => "uint_to_fcvt \{ops}"
-    Bitcast => "bitcast \{ops}"
-
-    // In-place sign extension
-    Sextend8 => "sextend8 \{ops}"
-    Sextend16 => "sextend16 \{ops}"
-    Sextend32 => "sextend32 \{ops}"
-
-    // Misc
-    Select => "select \{ops}"
-    Copy => "copy \{ops}"
+    Scalar(scalar_op) => format_scalar_opcode(scalar_op, operands, result_ty)
     // Function calls
     Call(call_op) =>
       match call_op {

@@ -132,15 +132,39 @@ fn type_bits(ty : Type) -> Int {
 /// This is intentionally narrower than generic IR purity: admission also needs
 /// an explicit encoding in the e-graph node language.
 fn opcode_has_egraph_encoding(opcode : Opcode) -> Bool {
-  match opcode.for_legacy_consumers() {
-    Iconst(_) => true
-    Iadd | Isub | Imul => true
-    Band | Bor | Bxor | Bnot => true
-    Ishl | Sshr | Ushr | Rotl | Rotr => true
-    Clz | Ctz | Popcnt => true
-    Icmp(_) => true
-    Select => true
-    Ireduce | Uextend | Sextend => true
+  match opcode {
+    Scalar(ScalarOp::IntConst(_)) => true
+    Scalar(
+      ScalarOp::IntBinary(
+        IntBinaryOp::Add
+        | IntBinaryOp::Sub
+        | IntBinaryOp::Mul
+        | IntBinaryOp::And
+        | IntBinaryOp::Or
+        | IntBinaryOp::Xor
+        | IntBinaryOp::ShiftLeft
+        | IntBinaryOp::SignedShiftRight
+        | IntBinaryOp::UnsignedShiftRight
+        | IntBinaryOp::RotateLeft
+        | IntBinaryOp::RotateRight
+      )
+    ) => true
+    Scalar(
+      ScalarOp::IntUnary(
+        IntUnaryOp::Not
+        | IntUnaryOp::CountLeadingZeros
+        | IntUnaryOp::CountTrailingZeros
+        | IntUnaryOp::PopulationCount
+      )
+    ) => true
+    Scalar(ScalarOp::IntCompare(_) | ScalarOp::Select) => true
+    Scalar(
+      ScalarOp::Convert(
+        ConversionOp::IntReduce
+        | ConversionOp::UnsignedExtend
+        | ConversionOp::SignedExtend
+      )
+    ) => true
     _ => false
   }
 }
@@ -163,26 +187,26 @@ fn opcode_to_eopcode(inst : Inst) -> @egraph.EOpcode? {
   if !inst_is_egraph_pure(inst) {
     return None
   }
-  match inst.opcode.for_legacy_consumers() {
-    Iconst(c) => Some(Const(c))
-    Iadd => Some(Add)
-    Isub => Some(Sub)
-    Imul => Some(Mul)
-    Band => Some(And)
-    Bor => Some(Or)
-    Bxor => Some(Xor)
-    Bnot => Some(Bnot)
-    Ishl => Some(Shl)
-    Sshr => Some(Sshr)
-    Ushr => Some(Ushr)
-    Rotl => Some(Rotl)
-    Rotr => Some(Rotr)
-    Clz => Some(Clz)
-    Ctz => Some(Ctz)
-    Popcnt => Some(Popcnt)
-    Icmp(cc) => Some(Icmp(intcc_to_ordinal(cc)))
-    Select => Some(Select)
-    Ireduce => {
+  match inst.opcode {
+    Scalar(ScalarOp::IntConst(c)) => Some(Const(c))
+    Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)) => Some(Add)
+    Scalar(ScalarOp::IntBinary(IntBinaryOp::Sub)) => Some(Sub)
+    Scalar(ScalarOp::IntBinary(IntBinaryOp::Mul)) => Some(Mul)
+    Scalar(ScalarOp::IntBinary(IntBinaryOp::And)) => Some(And)
+    Scalar(ScalarOp::IntBinary(IntBinaryOp::Or)) => Some(Or)
+    Scalar(ScalarOp::IntBinary(IntBinaryOp::Xor)) => Some(Xor)
+    Scalar(ScalarOp::IntUnary(IntUnaryOp::Not)) => Some(Bnot)
+    Scalar(ScalarOp::IntBinary(IntBinaryOp::ShiftLeft)) => Some(Shl)
+    Scalar(ScalarOp::IntBinary(IntBinaryOp::SignedShiftRight)) => Some(Sshr)
+    Scalar(ScalarOp::IntBinary(IntBinaryOp::UnsignedShiftRight)) => Some(Ushr)
+    Scalar(ScalarOp::IntBinary(IntBinaryOp::RotateLeft)) => Some(Rotl)
+    Scalar(ScalarOp::IntBinary(IntBinaryOp::RotateRight)) => Some(Rotr)
+    Scalar(ScalarOp::IntUnary(IntUnaryOp::CountLeadingZeros)) => Some(Clz)
+    Scalar(ScalarOp::IntUnary(IntUnaryOp::CountTrailingZeros)) => Some(Ctz)
+    Scalar(ScalarOp::IntUnary(IntUnaryOp::PopulationCount)) => Some(Popcnt)
+    Scalar(ScalarOp::IntCompare(cc)) => Some(Icmp(intcc_to_ordinal(cc)))
+    Scalar(ScalarOp::Select) => Some(Select)
+    Scalar(ScalarOp::Convert(ConversionOp::IntReduce)) => {
       // ireduce: from_bits = operand type, to_bits = result type
       let from_bits = if inst.operands.length() > 0 {
         type_bits(inst.operands[0].ty)
@@ -195,7 +219,7 @@ fn opcode_to_eopcode(inst : Inst) -> @egraph.EOpcode? {
       }
       Some(Ireduce(from_bits, to_bits))
     }
-    Uextend => {
+    Scalar(ScalarOp::Convert(ConversionOp::UnsignedExtend)) => {
       // uextend: from_bits = operand type, to_bits = result type
       let from_bits = if inst.operands.length() > 0 {
         type_bits(inst.operands[0].ty)
@@ -208,7 +232,7 @@ fn opcode_to_eopcode(inst : Inst) -> @egraph.EOpcode? {
       }
       Some(Uextend(from_bits, to_bits))
     }
-    Sextend => {
+    Scalar(ScalarOp::Convert(ConversionOp::SignedExtend)) => {
       // sextend: from_bits = operand type, to_bits = result type
       let from_bits = if inst.operands.length() > 0 {
         type_bits(inst.operands[0].ty)
@@ -318,7 +342,7 @@ fn EGraphBuilder::get_simplified_opcode(
     let (_, best_node) = self.egraph.extract(class_id)
     // Only handle constant folding - returns Iconst if the result is a constant
     match best_node.op {
-      Const(c) => Some(Iconst(c))
+      Const(c) => Some(Scalar(ScalarOp::IntConst(c)))
       // Don't change opcode for non-constant results - would need operand reconstruction
       _ => None
     }
@@ -463,17 +487,17 @@ fn optimize_function_with_stats_with_limits_and_ruleset(
 
         if inst.first_result() is Some(v) &&
           builder.get_simplified_opcode(v) is Some(op) {
-          if op is Iconst(c) {
+          if op is Scalar(IntConst(c)) {
             let mut inst_changed = false
-            match inst.opcode.for_legacy_consumers() {
-              Iconst(old_c) =>
+            match inst.opcode {
+              Scalar(ScalarOp::IntConst(old_c)) =>
                 if old_c != c || inst.operands.length() > 0 {
-                  inst.opcode = Iconst(c).canonicalize()
+                  inst.opcode = Scalar(ScalarOp::IntConst(c))
                   inst.operands.clear()
                   inst_changed = true
                 }
               _ => {
-                inst.opcode = Iconst(c).canonicalize()
+                inst.opcode = Scalar(ScalarOp::IntConst(c))
                 inst.operands.clear()
                 inst_changed = true
               }
@@ -481,8 +505,8 @@ fn optimize_function_with_stats_with_limits_and_ruleset(
             if inst_changed {
               changed = true
             }
-          } else if inst.opcode.for_legacy_consumers() != op {
-            inst.opcode = op.canonicalize()
+          } else if inst.opcode != op {
+            inst.opcode = op
             changed = true
           }
         }

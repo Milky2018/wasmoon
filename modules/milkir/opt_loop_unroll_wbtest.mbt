@@ -105,16 +105,32 @@ fn make_carried_effect_loop(bound_value : Int) -> CarriedEffectLoopFixture {
   call.add_metadata(Comment("effect order"))
   body.append_inst(call)
   let pair_sum = func.new_value(I32)
-  body.append_inst(func.new_inst(Iadd, [first, second], [pair_sum]))
+  body.append_inst(
+    func.new_inst(
+      Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)),
+      [first, second],
+      [pair_sum],
+    ),
+  )
   let loaded = func.new_value(I32)
   body.append_inst(
     func.new_inst(Memory(MemoryOp::Load(I32)), [address, offset], [loaded]),
   )
   let accumulated = func.new_value(I32)
-  body.append_inst(func.new_inst(Iadd, [accumulator, pair_sum], [accumulated]))
+  body.append_inst(
+    func.new_inst(
+      Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)),
+      [accumulator, pair_sum],
+      [accumulated],
+    ),
+  )
   let next_accumulator = func.new_value(I32)
   body.append_inst(
-    func.new_inst(Iadd, [accumulated, loaded], [next_accumulator]),
+    func.new_inst(
+      Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)),
+      [accumulated, loaded],
+      [next_accumulator],
+    ),
   )
   body.append_inst(
     func.new_inst(
@@ -151,9 +167,9 @@ fn make_counted_loop(
   polarity : TestBranchPolarity,
 ) -> CountedLoopFixture {
   let builder = FunctionBuilder::FunctionBuilder("counted_loop")
-  let initial = builder.emit_inst(ty, Iconst(initial_raw), [])
-  let bound = builder.emit_inst(ty, Iconst(bound_raw), [])
-  let step = builder.emit_inst(ty, Iconst(step_raw), [])
+  let initial = builder.emit_inst(ty, Scalar(ScalarOp::IntConst(initial_raw)), [])
+  let bound = builder.emit_inst(ty, Scalar(ScalarOp::IntConst(bound_raw)), [])
+  let step = builder.emit_inst(ty, Scalar(ScalarOp::IntConst(step_raw)), [])
   let header = builder.create_block()
   let body = builder.create_block()
   let latch = builder.create_block()
@@ -172,7 +188,7 @@ fn make_counted_loop(
       builder.current_block().set_terminator(Brz(condition, body.id, exit.id))
   }
   builder.switch_to_block(body)
-  builder.emit_inst(ty, Copy, [induction]) |> ignore
+  builder.emit_inst(ty, Scalar(ScalarOp::Copy), [induction]) |> ignore
   builder.jump(latch, [])
   builder.switch_to_block(latch)
   let next = builder.emit_inst(ty, update_opcode, [induction, step])
@@ -228,14 +244,14 @@ fn evaluate_canonical_instructions(
 ) -> Int raise {
   let mut body_executions = 0
   for inst in instructions {
-    match inst.opcode.for_legacy_consumers() {
-      Iconst(value) => values.set(inst.results[0].id, value)
-      Iadd => {
+    match inst.opcode {
+      Scalar(ScalarOp::IntConst(value)) => values.set(inst.results[0].id, value)
+      Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)) => {
         let lhs = values.get(inst.operands[0].id).unwrap()
         let rhs = values.get(inst.operands[1].id).unwrap()
         values.set(inst.results[0].id, lhs + rhs)
       }
-      Imul => {
+      Scalar(ScalarOp::IntBinary(IntBinaryOp::Mul)) => {
         let lhs = values.get(inst.operands[0].id).unwrap()
         let rhs = values.get(inst.operands[1].id).unwrap()
         values.set(inst.results[0].id, lhs * rhs)
@@ -365,13 +381,13 @@ test "full unrolling preserves carried values, multi-results, and effect order" 
     let effect = cloned[base + 6]
     let next_induction = cloned[base + 7]
     if !(call.opcode is Call(_)) ||
-      pair_sum.opcode.for_legacy_consumers() != Iadd ||
+      pair_sum.opcode != Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)) ||
       load.opcode != Memory(MemoryOp::Load(I32)) ||
-      accumulated.opcode.for_legacy_consumers() != Iadd ||
-      next_accumulator.opcode.for_legacy_consumers() != Iadd ||
+      accumulated.opcode != Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)) ||
+      next_accumulator.opcode != Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)) ||
       store.opcode != Memory(MemoryOp::Store(I32)) ||
       !(effect.opcode is Call(_)) ||
-      next_induction.opcode.for_legacy_consumers() != Iadd {
+      next_induction.opcode != Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)) {
       fail("effectful instruction order changed")
     }
     if call.id < first_fresh_inst || call.results.length() != 2 {
@@ -533,13 +549,13 @@ test "factor-two unrolling preserves carried effects in both transitions" {
   let effect = fixture.latch.instructions[original_latch_insts + 6]
   let next_induction = fixture.latch.instructions[original_latch_insts + 7]
   if !(call.opcode is Call(_)) ||
-    pair_sum.opcode.for_legacy_consumers() != Iadd ||
+    pair_sum.opcode != Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)) ||
     load.opcode != Memory(MemoryOp::Load(I32)) ||
-    accumulated.opcode.for_legacy_consumers() != Iadd ||
-    next_accumulator.opcode.for_legacy_consumers() != Iadd ||
+    accumulated.opcode != Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)) ||
+    next_accumulator.opcode != Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)) ||
     store.opcode != Memory(MemoryOp::Store(I32)) ||
     !(effect.opcode is Call(_)) ||
-    next_induction.opcode.for_legacy_consumers() != Iadd {
+    next_induction.opcode != Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)) {
     fail("factor-two effect order changed")
   }
   if accumulated.operands[0] != first_state[1] ||
@@ -576,22 +592,166 @@ test "factor-two transformed loops match the original state and body count" {
 ///|
 test "counted-loop analysis supports signed and unsigned I32 and I64 relations" {
   let cases = [
-    (Type::I32, 0L, 10L, 3L, Slt, Iadd, 4, "i32 slt"),
-    (Type::I32, 0L, 10L, 3L, Sle, Iadd, 4, "i32 sle"),
-    (Type::I32, 10L, 0L, 3L, Sgt, Isub, 4, "i32 sgt"),
-    (Type::I32, 10L, 0L, 3L, Sge, Isub, 4, "i32 sge"),
-    (Type::I32, 0L, 10L, 3L, Ult, Iadd, 4, "i32 ult"),
-    (Type::I32, 10L, 2L, 3L, Uge, Isub, 3, "i32 uge"),
-    (Type::I64, 0L, 10L, 3L, Slt, Iadd, 4, "i64 slt"),
-    (Type::I64, 0L, 10L, 3L, Sle, Iadd, 4, "i64 sle"),
-    (Type::I64, 10L, 0L, 3L, Sgt, Isub, 4, "i64 sgt"),
-    (Type::I64, 10L, 0L, 3L, Sge, Isub, 4, "i64 sge"),
-    (Type::I64, 10L, 0L, -3L, Sgt, Iadd, 4, "i64 negative add"),
-    (Type::I64, 0L, 10L, -3L, Slt, Isub, 4, "i64 negative sub"),
-    (Type::I64, 0L, 10L, 3L, Ult, Iadd, 4, "i64 ult"),
-    (Type::I64, 0L, 10L, 3L, Ule, Iadd, 4, "i64 ule"),
-    (Type::I64, 10L, 2L, 3L, Ugt, Isub, 3, "i64 ugt"),
-    (Type::I64, 10L, 2L, 3L, Uge, Isub, 3, "i64 uge"),
+    (
+      Type::I32,
+      0L,
+      10L,
+      3L,
+      Slt,
+      Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)),
+      4,
+      "i32 slt",
+    ),
+    (
+      Type::I32,
+      0L,
+      10L,
+      3L,
+      Sle,
+      Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)),
+      4,
+      "i32 sle",
+    ),
+    (
+      Type::I32,
+      10L,
+      0L,
+      3L,
+      Sgt,
+      Scalar(ScalarOp::IntBinary(IntBinaryOp::Sub)),
+      4,
+      "i32 sgt",
+    ),
+    (
+      Type::I32,
+      10L,
+      0L,
+      3L,
+      Sge,
+      Scalar(ScalarOp::IntBinary(IntBinaryOp::Sub)),
+      4,
+      "i32 sge",
+    ),
+    (
+      Type::I32,
+      0L,
+      10L,
+      3L,
+      Ult,
+      Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)),
+      4,
+      "i32 ult",
+    ),
+    (
+      Type::I32,
+      10L,
+      2L,
+      3L,
+      Uge,
+      Scalar(ScalarOp::IntBinary(IntBinaryOp::Sub)),
+      3,
+      "i32 uge",
+    ),
+    (
+      Type::I64,
+      0L,
+      10L,
+      3L,
+      Slt,
+      Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)),
+      4,
+      "i64 slt",
+    ),
+    (
+      Type::I64,
+      0L,
+      10L,
+      3L,
+      Sle,
+      Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)),
+      4,
+      "i64 sle",
+    ),
+    (
+      Type::I64,
+      10L,
+      0L,
+      3L,
+      Sgt,
+      Scalar(ScalarOp::IntBinary(IntBinaryOp::Sub)),
+      4,
+      "i64 sgt",
+    ),
+    (
+      Type::I64,
+      10L,
+      0L,
+      3L,
+      Sge,
+      Scalar(ScalarOp::IntBinary(IntBinaryOp::Sub)),
+      4,
+      "i64 sge",
+    ),
+    (
+      Type::I64,
+      10L,
+      0L,
+      -3L,
+      Sgt,
+      Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)),
+      4,
+      "i64 negative add",
+    ),
+    (
+      Type::I64,
+      0L,
+      10L,
+      -3L,
+      Slt,
+      Scalar(ScalarOp::IntBinary(IntBinaryOp::Sub)),
+      4,
+      "i64 negative sub",
+    ),
+    (
+      Type::I64,
+      0L,
+      10L,
+      3L,
+      Ult,
+      Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)),
+      4,
+      "i64 ult",
+    ),
+    (
+      Type::I64,
+      0L,
+      10L,
+      3L,
+      Ule,
+      Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)),
+      4,
+      "i64 ule",
+    ),
+    (
+      Type::I64,
+      10L,
+      2L,
+      3L,
+      Ugt,
+      Scalar(ScalarOp::IntBinary(IntBinaryOp::Sub)),
+      3,
+      "i64 ugt",
+    ),
+    (
+      Type::I64,
+      10L,
+      2L,
+      3L,
+      Uge,
+      Scalar(ScalarOp::IntBinary(IntBinaryOp::Sub)),
+      3,
+      "i64 uge",
+    ),
   ]
   for item in cases {
     let (ty, initial, bound, step, cc, update, expected, label) = item
@@ -625,18 +785,36 @@ test "counted-loop analysis supports signed and unsigned I32 and I64 relations" 
 ///|
 test "counted-loop analysis normalizes reversed operands and branch polarity" {
   let cases = [
-    make_counted_loop(I64, 0L, 10L, 3L, Sgt, Iadd, true, ContinueOnTrue),
+    make_counted_loop(
+      I64,
+      0L,
+      10L,
+      3L,
+      Sgt,
+      Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)),
+      true,
+      ContinueOnTrue,
+    ),
     make_counted_loop(
       I64,
       0L,
       10L,
       3L,
       Sge,
-      Iadd,
+      Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)),
       false,
       ContinueOnFalseWithBrz,
     ),
-    make_counted_loop(I64, 0L, 10L, 3L, Sle, Iadd, true, ContinueOnFalseWithBrz),
+    make_counted_loop(
+      I64,
+      0L,
+      10L,
+      3L,
+      Sle,
+      Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)),
+      true,
+      ContinueOnFalseWithBrz,
+    ),
   ]
   for fixture in cases {
     require_counted_trip_count(fixture.func, 4)
@@ -653,7 +831,7 @@ test "counted-loop analysis handles valid signed and unsigned boundaries" {
     2147483647L,
     1L,
     Slt,
-    Iadd,
+    Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)),
     false,
     ContinueOnTrue,
   )
@@ -664,7 +842,7 @@ test "counted-loop analysis handles valid signed and unsigned boundaries" {
     -1L,
     1L,
     Ult,
-    Iadd,
+    Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)),
     false,
     ContinueOnTrue,
   )
@@ -675,7 +853,7 @@ test "counted-loop analysis handles valid signed and unsigned boundaries" {
     9223372036854775807L,
     1L,
     Slt,
-    Iadd,
+    Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)),
     false,
     ContinueOnTrue,
   )
@@ -686,7 +864,7 @@ test "counted-loop analysis handles valid signed and unsigned boundaries" {
     -9223372036854775808L,
     1L,
     Sgt,
-    Isub,
+    Scalar(ScalarOp::IntBinary(IntBinaryOp::Sub)),
     false,
     ContinueOnTrue,
   )
@@ -697,7 +875,7 @@ test "counted-loop analysis handles valid signed and unsigned boundaries" {
     -1L,
     1L,
     Ult,
-    Iadd,
+    Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)),
     false,
     ContinueOnTrue,
   )
@@ -708,7 +886,7 @@ test "counted-loop analysis handles valid signed and unsigned boundaries" {
     0L,
     1L,
     Ugt,
-    Isub,
+    Scalar(ScalarOp::IntBinary(IntBinaryOp::Sub)),
     false,
     ContinueOnTrue,
   )
@@ -724,18 +902,27 @@ test "counted-loop analysis rejects wraparound and invalid directions unchanged"
       2147483647L,
       2L,
       Slt,
-      Iadd,
+      Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)),
       false,
       ContinueOnTrue,
     ),
-    make_counted_loop(I32, -2L, -1L, 2L, Ult, Iadd, false, ContinueOnTrue),
+    make_counted_loop(
+      I32,
+      -2L,
+      -1L,
+      2L,
+      Ult,
+      Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)),
+      false,
+      ContinueOnTrue,
+    ),
     make_counted_loop(
       I64,
       9223372036854775806L,
       9223372036854775807L,
       2L,
       Slt,
-      Iadd,
+      Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)),
       false,
       ContinueOnTrue,
     ),
@@ -745,7 +932,7 @@ test "counted-loop analysis rejects wraparound and invalid directions unchanged"
       -9223372036854775808L,
       2L,
       Sgt,
-      Isub,
+      Scalar(ScalarOp::IntBinary(IntBinaryOp::Sub)),
       false,
       ContinueOnTrue,
     ),
@@ -755,21 +942,57 @@ test "counted-loop analysis rejects wraparound and invalid directions unchanged"
       9223372036854775807L,
       1L,
       Sle,
-      Iadd,
+      Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)),
       false,
       ContinueOnTrue,
     ),
-    make_counted_loop(I64, -2L, -1L, 2L, Ult, Iadd, false, ContinueOnTrue),
-    make_counted_loop(I64, -2L, -1L, 1L, Ule, Iadd, false, ContinueOnTrue),
-    make_counted_loop(I64, 0L, 10L, 0L, Slt, Iadd, false, ContinueOnTrue),
-    make_counted_loop(I64, 0L, 10L, 1L, Slt, Isub, false, ContinueOnTrue),
+    make_counted_loop(
+      I64,
+      -2L,
+      -1L,
+      2L,
+      Ult,
+      Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)),
+      false,
+      ContinueOnTrue,
+    ),
+    make_counted_loop(
+      I64,
+      -2L,
+      -1L,
+      1L,
+      Ule,
+      Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)),
+      false,
+      ContinueOnTrue,
+    ),
+    make_counted_loop(
+      I64,
+      0L,
+      10L,
+      0L,
+      Slt,
+      Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)),
+      false,
+      ContinueOnTrue,
+    ),
+    make_counted_loop(
+      I64,
+      0L,
+      10L,
+      1L,
+      Slt,
+      Scalar(ScalarOp::IntBinary(IntBinaryOp::Sub)),
+      false,
+      ContinueOnTrue,
+    ),
     make_counted_loop(
       I64,
       -9223372036854775808L,
       9223372036854775807L,
       1L,
       Slt,
-      Iadd,
+      Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)),
       false,
       ContinueOnTrue,
     ),
@@ -783,7 +1006,7 @@ test "counted-loop analysis rejects wraparound and invalid directions unchanged"
     10L,
     1L,
     Slt,
-    Iadd,
+    Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)),
     false,
     ContinueOnTrue,
   )
@@ -800,7 +1023,7 @@ test "counted-loop unrolling transforms verified I64 loops" {
     10L,
     3L,
     Slt,
-    Iadd,
+    Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)),
     false,
     ContinueOnTrue,
   )
@@ -817,7 +1040,7 @@ test "counted-loop analysis follows loop-external constant copies" {
   }
   let copied_initial = fixture.func.new_value(I32)
   fixture.preheader.append_inst(
-    fixture.func.new_inst(Copy, [initial], [copied_initial]),
+    fixture.func.new_inst(Scalar(ScalarOp::Copy), [initial], [copied_initial]),
   )
   fixture.preheader.set_terminator(Jump(fixture.header.id, [copied_initial]))
   inspect(unroll_counted_loops(fixture.func).changed, content="true")
@@ -869,7 +1092,7 @@ test "full-unroll analysis skips multiple latches and early exits" {
   let second_next = multiple_latches.func.new_value(I32)
   second_latch.append_inst(
     multiple_latches.func.new_inst(
-      Iadd,
+      Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)),
       [multiple_latches.induction, multiple_latches.step],
       [second_next],
     ),
@@ -894,7 +1117,11 @@ test "full-unroll analysis skips unsafe arithmetic and excessive growth" {
   for _ in 0..<62 {
     let result = too_wide.func.new_value(I32)
     too_wide.body.append_inst(
-      too_wide.func.new_inst(Iadd, [too_wide.induction, too_wide.step], [result]),
+      too_wide.func.new_inst(
+        Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)),
+        [too_wide.induction, too_wide.step],
+        [result],
+      ),
     )
   }
   require_unroll_skip_without_mutation(too_wide.func)

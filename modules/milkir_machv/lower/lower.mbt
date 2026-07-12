@@ -551,7 +551,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
   // Pass 1: find address values that will be subsumed by load/store lowering.
   for block in ctx.ir_func.blocks {
     for inst in block.instructions {
-      match inst.opcode.for_legacy_consumers() {
+      match inst.opcode {
         LoadPtr(ty) | Memory(@milkir.MemoryOp::Load(ty)) => {
           guard inst.operands.length() >= 1 else { continue }
           let base_value = inst.operands[0]
@@ -562,7 +562,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
           }
           let explicit_offset = if inst.operands.length() > 1 {
             if find_defining_inst(ctx, inst.operands[1]) is Some(def_inst) &&
-              def_inst.opcode.for_legacy_consumers() is Iconst(off) {
+              def_inst.opcode is Scalar(IntConst(off)) {
               off
             } else {
               0L
@@ -605,7 +605,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
           }
           let explicit_offset = if inst.operands.length() > 2 {
             if find_defining_inst(ctx, inst.operands[2]) is Some(def_inst) &&
-              def_inst.opcode.for_legacy_consumers() is Iconst(off) {
+              def_inst.opcode is Scalar(IntConst(off)) {
               off
             } else {
               0L
@@ -645,7 +645,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
           let access_size = bits / 8
           let explicit_offset = if inst.operands.length() > 1 {
             if find_defining_inst(ctx, inst.operands[1]) is Some(def_inst) &&
-              def_inst.opcode.for_legacy_consumers() is Iconst(off) {
+              def_inst.opcode is Scalar(IntConst(off)) {
               off
             } else {
               0L
@@ -684,7 +684,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
           let access_size = bits / 8
           let explicit_offset = if inst.operands.length() > 2 {
             if find_defining_inst(ctx, inst.operands[2]) is Some(def_inst) &&
-              def_inst.opcode.for_legacy_consumers() is Iconst(off) {
+              def_inst.opcode is Scalar(IntConst(off)) {
               off
             } else {
               0L
@@ -736,8 +736,8 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
       let is_i64 = inst.first_result() is Some(result) && result.ty is I64
       let is_shift_fusable_int = inst.first_result() is Some(result) &&
         (result.ty is I64 || result.ty is I32)
-      match inst.opcode.for_legacy_consumers() {
-        Iadd => {
+      match inst.opcode {
+        Scalar(IntBinary(Add)) => {
           if !is_shift_fusable_int {
             continue
           }
@@ -784,7 +784,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
             continue
           }
         }
-        Isub => {
+        Scalar(IntBinary(Sub)) => {
           if !is_shift_fusable_int {
             continue
           }
@@ -808,7 +808,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
             mark_skipped(rhs.id)
           }
         }
-        Band | Bor | Bxor => {
+        Scalar(IntBinary(And | Or | Xor)) => {
           if !is_shift_fusable_int {
             continue
           }
@@ -833,7 +833,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
           if lhs_is_imm || rhs_is_imm {
             continue
           }
-          if inst.opcode.for_legacy_consumers() is Bor &&
+          if inst.opcode is Scalar(IntBinary(Or)) &&
             match_rotate_or_value(ctx, lhs, rhs, is_i64) is Some(_) {
             if use_count(ctx.use_counts, lhs.id) == 1 &&
               (
@@ -851,7 +851,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
             }
             continue
           }
-          if inst.opcode.for_legacy_consumers() is Bor &&
+          if inst.opcode is Scalar(IntBinary(Or)) &&
             match_extr_or_value(ctx, lhs, rhs, is_i64) is Some(_) {
             if use_count(ctx.use_counts, lhs.id) == 1 &&
               (
@@ -981,7 +981,7 @@ fn compute_fused_icmps(
       return false
     }
     match def_inst_table[value.id] {
-      Some(def_inst) => def_inst.opcode.for_legacy_consumers() is Icmp(_)
+      Some(def_inst) => def_inst.opcode is Scalar(IntCompare(_))
       None => false
     }
   }
@@ -1000,7 +1000,7 @@ fn compute_fused_icmps(
   for block in ir_func.blocks {
     for inst in block.instructions {
       // Check if this is a Select instruction
-      if inst.opcode.for_legacy_consumers() is Select {
+      if inst.opcode is Scalar(Select) {
         let cond = inst.operands[0]
         if is_single_use_icmp_result(use_counts, def_inst_table, cond) {
           mark_fused(cond.id)
@@ -1170,11 +1170,11 @@ fn match_shl_const_value(
   value : @milkir.Value,
 ) -> (@milkir.Value, Int)? {
   if find_defining_inst(ctx, value) is Some(inst) &&
-    inst.opcode.for_legacy_consumers() is Ishl {
+    inst.opcode is Scalar(IntBinary(ShiftLeft)) {
     // Check if shift amount is a constant
     let shift_operand = inst.operands[1]
     if find_defining_inst(ctx, shift_operand) is Some(shift_inst) &&
-      shift_inst.opcode.for_legacy_consumers() is Iconst(amount) {
+      shift_inst.opcode is Scalar(IntConst(amount)) {
       // Determine mask based on value type (i32 uses 31, i64 uses 63)
       let is_64 = value.ty is I64
       let mask = if is_64 { 63 } else { 31 }
@@ -1197,10 +1197,10 @@ fn match_ushr_const_value(
   value : @milkir.Value,
 ) -> (@milkir.Value, Int)? {
   if find_defining_inst(ctx, value) is Some(inst) &&
-    inst.opcode.for_legacy_consumers() is Ushr {
+    inst.opcode is Scalar(IntBinary(UnsignedShiftRight)) {
     let shift_operand = inst.operands[1]
     if find_defining_inst(ctx, shift_operand) is Some(shift_inst) &&
-      shift_inst.opcode.for_legacy_consumers() is Iconst(amount) {
+      shift_inst.opcode is Scalar(IntConst(amount)) {
       let is_64 = value.ty is I64
       let mask = if is_64 { 63 } else { 31 }
       let shift_val = amount.to_int() & mask
@@ -1295,7 +1295,7 @@ fn match_mul_value(
   value : @milkir.Value,
 ) -> (@milkir.Value, @milkir.Value)? {
   if find_defining_inst(ctx, value) is Some(inst) &&
-    inst.opcode.for_legacy_consumers() is Imul {
+    inst.opcode is Scalar(IntBinary(Mul)) {
     return Some((inst.operands[0], inst.operands[1]))
   }
   None
@@ -1309,7 +1309,7 @@ fn match_bnot_value(
   value : @milkir.Value,
 ) -> @milkir.Value? {
   if find_defining_inst(ctx, value) is Some(inst) &&
-    inst.opcode.for_legacy_consumers() is Bnot {
+    inst.opcode is Scalar(IntUnary(Not)) {
     return Some(inst.operands[0])
   }
   None
@@ -1336,9 +1336,9 @@ fn resolve_iconst_value(
   let mut value = value0
   for _ in 0..<8 {
     if find_defining_inst(ctx, value) is Some(inst) {
-      match inst.opcode.for_legacy_consumers() {
-        Iconst(c) => return Some(c)
-        Copy =>
+      match inst.opcode {
+        Scalar(IntConst(c)) => return Some(c)
+        Scalar(Copy) =>
           if inst.operands.length() > 0 {
             value = inst.operands[0]
             continue
@@ -1422,15 +1422,15 @@ fn match_iadd_const(
   value : @milkir.Value,
 ) -> (@milkir.Value, Int64)? {
   if find_defining_inst(ctx, value) is Some(inst) &&
-    inst.opcode.for_legacy_consumers() is Iadd {
+    inst.opcode is Scalar(IntBinary(Add)) {
     // Check if second operand is a constant
     if find_defining_inst(ctx, inst.operands[1]) is Some(const_inst) &&
-      const_inst.opcode.for_legacy_consumers() is Iconst(offset) {
+      const_inst.opcode is Scalar(IntConst(offset)) {
       return Some((inst.operands[0], offset))
     }
     // Also check first operand (iadd is commutative)
     if find_defining_inst(ctx, inst.operands[0]) is Some(const_inst) &&
-      const_inst.opcode.for_legacy_consumers() is Iconst(offset) {
+      const_inst.opcode is Scalar(IntConst(offset)) {
       return Some((inst.operands[1], offset))
     }
   }
@@ -1468,12 +1468,12 @@ fn match_extend_i32_to_i64(
   value : @milkir.Value,
 ) -> (@milkir.Value, @instr.IndexExtend)? {
   if find_defining_inst(ctx, value) is Some(inst) {
-    match inst.opcode.for_legacy_consumers() {
-      Uextend =>
+    match inst.opcode {
+      Scalar(Convert(UnsignedExtend)) =>
         if value.ty is I64 && inst.operands[0].ty is I32 {
           return Some((inst.operands[0], Uxtw))
         }
-      Sextend =>
+      Scalar(Convert(SignedExtend)) =>
         if value.ty is I64 && inst.operands[0].ty is I32 {
           return Some((inst.operands[0], Sxtw))
         }
@@ -1519,7 +1519,7 @@ fn match_addr_reg_offset(
   Bool,
 )? {
   guard find_defining_inst(ctx, value) is Some(inst) else { return None }
-  guard inst.opcode.for_legacy_consumers() is Iadd else { return None }
+  guard inst.opcode is Scalar(IntBinary(Add)) else { return None }
   let scale = log2_access_size(access_size)
   if scale is None {
     return None
@@ -1690,9 +1690,10 @@ fn match_icmp_value(
   while depth < 8 {
     depth = depth + 1
     if find_defining_inst(ctx, current) is Some(inst) {
-      match inst.opcode.for_legacy_consumers() {
-        Icmp(cc) => return Some((inst.operands[0], inst.operands[1], cc))
-        Copy =>
+      match inst.opcode {
+        Scalar(IntCompare(cc)) =>
+          return Some((inst.operands[0], inst.operands[1], cc))
+        Scalar(Copy) =>
           if !inst.operands.is_empty() {
             current = inst.operands[0]
             continue
@@ -2068,6 +2069,97 @@ fn lower_inst(
 }
 
 ///|
+fn lower_scalar_inst(
+  ctx : LoweringContext,
+  inst : @milkir.Inst,
+  block : @block.Block,
+  opcode : @milkir.ScalarOp,
+) -> Unit {
+  match opcode {
+    IntConst(value) => lower_iconst(ctx, inst, block, value)
+    FloatConst(value) => lower_fconst(ctx, inst, block, value)
+    IntBinary(op) =>
+      match op {
+        Add => lower_iadd(ctx, inst, block)
+        Sub => lower_isub(ctx, inst, block)
+        Mul => lower_imul(ctx, inst, block)
+        UnsignedMulHigh => lower_umulh(ctx, inst, block)
+        SignedMulHigh => lower_smulh(ctx, inst, block)
+        SignedDiv => lower_div(ctx, inst, block, signed=true)
+        UnsignedDiv => lower_div(ctx, inst, block, signed=false)
+        SignedRem => lower_rem(ctx, inst, block, true)
+        UnsignedRem => lower_rem(ctx, inst, block, false)
+        And => lower_band(ctx, inst, block)
+        Or => lower_bor(ctx, inst, block)
+        Xor => lower_bxor(ctx, inst, block)
+        ShiftLeft =>
+          lower_shift(ctx, inst, block, fn(is_64) { Shl(is_64) }, fn(
+            amt,
+            is_64,
+          ) {
+            ShlImm(amt, is_64)
+          })
+        SignedShiftRight =>
+          lower_shift(ctx, inst, block, fn(is_64) { AShr(is_64) }, fn(
+            amt,
+            is_64,
+          ) {
+            AShrImm(amt, is_64)
+          })
+        UnsignedShiftRight =>
+          lower_shift(ctx, inst, block, fn(is_64) { LShr(is_64) }, fn(
+            amt,
+            is_64,
+          ) {
+            LShrImm(amt, is_64)
+          })
+        RotateLeft => lower_rotl(ctx, inst, block)
+        RotateRight =>
+          lower_shift(ctx, inst, block, fn(is_64) { Rotr(is_64) }, fn(
+            amt,
+            is_64,
+          ) {
+            RotrImm(amt, is_64)
+          })
+      }
+    IntUnary(op) =>
+      match op {
+        Not => lower_unary_int(ctx, inst, block, fn(is_64) { Not(is_64) })
+        CountLeadingZeros =>
+          lower_bitcount(ctx, inst, block, fn(is_64) { Clz(is_64) })
+        CountTrailingZeros => lower_ctz(ctx, inst, block)
+        PopulationCount =>
+          lower_bitcount(ctx, inst, block, fn(is_64) { Popcnt(is_64) })
+      }
+    IntCompare(condition) => lower_icmp(ctx, inst, block, condition)
+    FloatBinary(op) => lower_binary_float(ctx, inst, block, op)
+    FloatUnary(op) => lower_unary_float(ctx, inst, block, op)
+    FloatCompare(condition) => lower_fcmp(ctx, inst, block, condition)
+    Convert(op) =>
+      match op {
+        IntReduce => lower_truncate(ctx, inst, block)
+        SignedExtend => lower_extend(ctx, inst, block, signed=true)
+        UnsignedExtend => lower_extend(ctx, inst, block, signed=false)
+        FloatPromote => lower_promote(ctx, inst, block)
+        FloatDemote => lower_demote(ctx, inst, block)
+        FloatToSignedInt => lower_float_to_int(ctx, inst, block, signed=true)
+        FloatToUnsignedInt => lower_float_to_int(ctx, inst, block, signed=false)
+        FloatToSignedIntSaturating =>
+          lower_float_to_int_sat(ctx, inst, block, signed=true)
+        FloatToUnsignedIntSaturating =>
+          lower_float_to_int_sat(ctx, inst, block, signed=false)
+        SignedIntToFloat => lower_int_to_float(ctx, inst, block, signed=true)
+        UnsignedIntToFloat => lower_int_to_float(ctx, inst, block, signed=false)
+        Bitcast => lower_bitcast(ctx, inst, block)
+      }
+    SignExtendFrom(bits) =>
+      lower_sextend_inplace(ctx, inst, block, from_bits=bits)
+    Copy => lower_copy(ctx, inst, block)
+    Select => lower_select(ctx, inst, block)
+  }
+}
+
+///|
 /// Lower a built-in IR instruction to MachV.
 fn lower_inst_builtin(
   ctx : LoweringContext,
@@ -2075,93 +2167,6 @@ fn lower_inst_builtin(
   block : @block.Block,
 ) -> Unit {
   match inst.opcode {
-    // Constants
-    Iconst(val) => lower_iconst(ctx, inst, block, val)
-    Fconst(val) => lower_fconst(ctx, inst, block, val)
-
-    // Integer arithmetic - with pattern matching for AArch64
-    Iadd => lower_iadd(ctx, inst, block)
-    Isub => lower_isub(ctx, inst, block)
-    Imul => lower_imul(ctx, inst, block)
-    Umulh => lower_umulh(ctx, inst, block)
-    Smulh => lower_smulh(ctx, inst, block)
-    Sdiv => lower_div(ctx, inst, block, signed=true)
-    Udiv => lower_div(ctx, inst, block, signed=false)
-    Srem => lower_rem(ctx, inst, block, true)
-    Urem => lower_rem(ctx, inst, block, false)
-
-    // Bitwise operations - with pattern matching for shifted operands
-    Band => lower_band(ctx, inst, block)
-    Bor => lower_bor(ctx, inst, block)
-    Bxor => lower_bxor(ctx, inst, block)
-    Ishl =>
-      lower_shift(ctx, inst, block, fn(is_64) { Shl(is_64) }, fn(amt, is_64) {
-        ShlImm(amt, is_64)
-      })
-    Sshr =>
-      lower_shift(ctx, inst, block, fn(is_64) { AShr(is_64) }, fn(amt, is_64) {
-        AShrImm(amt, is_64)
-      })
-    Ushr =>
-      lower_shift(ctx, inst, block, fn(is_64) { LShr(is_64) }, fn(amt, is_64) {
-        LShrImm(amt, is_64)
-      })
-    Rotl => lower_rotl(ctx, inst, block)
-    Rotr =>
-      lower_shift(ctx, inst, block, fn(is_64) { Rotr(is_64) }, fn(amt, is_64) {
-        RotrImm(amt, is_64)
-      })
-    Bnot => lower_unary_int(ctx, inst, block, fn(is_64) { Not(is_64) })
-
-    // Integer comparisons
-    Icmp(cc) => lower_icmp(ctx, inst, block, cc)
-
-    // Floating point arithmetic
-    Fadd => lower_binary_float(ctx, inst, block)
-    Fsub => lower_binary_float(ctx, inst, block)
-    Fmul => lower_binary_float(ctx, inst, block)
-    Fdiv => lower_binary_float(ctx, inst, block)
-    Fmin => lower_binary_float(ctx, inst, block)
-    Fmax => lower_binary_float(ctx, inst, block)
-
-    // Floating point unary operations
-    Fsqrt => lower_unary_float(ctx, inst, block)
-    Fabs => lower_unary_float(ctx, inst, block)
-    Fneg => lower_unary_float(ctx, inst, block)
-    Fceil => lower_unary_float(ctx, inst, block)
-    Ffloor => lower_unary_float(ctx, inst, block)
-    Ftrunc => lower_unary_float(ctx, inst, block)
-    Fnearest => lower_unary_float(ctx, inst, block)
-
-    // Bit counting operations
-    Clz => lower_bitcount(ctx, inst, block, fn(is_64) { Clz(is_64) })
-    Ctz => lower_ctz(ctx, inst, block)
-    Popcnt => lower_bitcount(ctx, inst, block, fn(is_64) { Popcnt(is_64) })
-
-    // Floating point comparisons
-    Fcmp(cc) => lower_fcmp(ctx, inst, block, cc)
-
-    // Conversions
-    Sextend => lower_extend(ctx, inst, block, signed=true)
-    Uextend => lower_extend(ctx, inst, block, signed=false)
-    Sextend8 => lower_sextend_inplace(ctx, inst, block, from_bits=8)
-    Sextend16 => lower_sextend_inplace(ctx, inst, block, from_bits=16)
-    Sextend32 => lower_sextend_inplace(ctx, inst, block, from_bits=32)
-    Ireduce => lower_truncate(ctx, inst, block)
-    FcvtToSint => lower_float_to_int(ctx, inst, block, signed=true)
-    FcvtToUint => lower_float_to_int(ctx, inst, block, signed=false)
-    FcvtToSintSat => lower_float_to_int_sat(ctx, inst, block, signed=true)
-    FcvtToUintSat => lower_float_to_int_sat(ctx, inst, block, signed=false)
-    SintToFcvt => lower_int_to_float(ctx, inst, block, signed=true)
-    UintToFcvt => lower_int_to_float(ctx, inst, block, signed=false)
-    Fpromote => lower_promote(ctx, inst, block)
-    Fdemote => lower_demote(ctx, inst, block)
-    Bitcast => lower_bitcast(ctx, inst, block)
-
-    // Misc
-    Copy => lower_copy(ctx, inst, block)
-    Select => lower_select(ctx, inst, block)
-
     // Function calls
     Call(call_op) =>
       match call_op {
@@ -2186,10 +2191,7 @@ fn lower_inst_builtin(
           lower_store_ptr_narrow(ctx, inst, block, bits)
       }
     Ext(_, _) => lower_unsupported_generic_opcode(inst, block)
-    Scalar(scalar_op) => {
-      let legacy_inst = inst.with_opcode(scalar_op.to_legacy_opcode())
-      lower_inst_builtin(ctx, legacy_inst, block)
-    }
+    Scalar(scalar_op) => lower_scalar_inst(ctx, inst, block, scalar_op)
     Vector(vector_op) => {
       let legacy_inst = inst.with_opcode(vector_op.to_legacy_opcode())
       lower_inst_builtin(ctx, legacy_inst, block)
@@ -2909,7 +2911,7 @@ fn lower_load_ptr(
   // Check if we have an offset from a second operand (must be an iconst)
   let explicit_offset = if inst.operands.length() > 1 {
     if find_defining_inst(ctx, inst.operands[1]) is Some(def_inst) &&
-      def_inst.opcode.for_legacy_consumers() is Iconst(off) {
+      def_inst.opcode is Scalar(IntConst(off)) {
       off
     } else {
       0L
@@ -3024,7 +3026,7 @@ fn lower_store_ptr(
   // Check if we have an offset from a third operand
   let explicit_offset = if inst.operands.length() > 2 {
     if find_defining_inst(ctx, inst.operands[2]) is Some(def_inst) &&
-      def_inst.opcode.for_legacy_consumers() is Iconst(off) {
+      def_inst.opcode is Scalar(IntConst(off)) {
       off
     } else {
       0L
@@ -3134,7 +3136,7 @@ fn lower_load_ptr_narrow(
   // Check if we have an offset from a second operand
   let explicit_offset = if inst.operands.length() > 1 {
     if find_defining_inst(ctx, inst.operands[1]) is Some(def_inst) &&
-      def_inst.opcode.for_legacy_consumers() is Iconst(off) {
+      def_inst.opcode is Scalar(IntConst(off)) {
       off
     } else {
       0L
@@ -3241,7 +3243,7 @@ fn lower_store_ptr_narrow(
   // Check if we have an offset from a third operand
   let explicit_offset = if inst.operands.length() > 2 {
     if find_defining_inst(ctx, inst.operands[2]) is Some(def_inst) &&
-      def_inst.opcode.for_legacy_consumers() is Iconst(off) {
+      def_inst.opcode is Scalar(IntConst(off)) {
       off
     } else {
       0L

@@ -11,7 +11,10 @@ No ready issues.
 | ID | Status | Priority | Type | Assignee | Blocked by | Blocks | Title |
 | --- | --- | ---: | --- | --- | --- | --- | --- |
 | [ISS-133](ISS-133.md) | in_progress | 1 | epic | codex | none | none | Establish a semantic MilkIR opcode hierarchy |
-| [ISS-141](ISS-141.md) | in_progress | 1 | task | codex | none | none | Contract the legacy opcode representation |
+| [ISS-141](ISS-141.md) | in_progress | 1 | epic | codex | none | none | Contract the legacy opcode representation |
+| [ISS-143](ISS-143.md) | in_progress | 1 | task | codex | none | ISS-144 | Contract legacy vector opcode forms |
+| [ISS-144](ISS-144.md) | open | 1 | task | codex | ISS-143 | ISS-145 | Remove residual opcode compatibility APIs |
+| [ISS-145](ISS-145.md) | open | 1 | task | codex | ISS-144 | none | Finalize the semantic opcode contract |
 
 ## Dependency Graph
 
@@ -153,6 +156,10 @@ graph TD
   ISS_139["ISS-139: Group scalar operations under ScalarOp"]
   ISS_140["ISS-140: Separate dialect-bearing IR from core lowering"]
   ISS_141["ISS-141: Contract the legacy opcode representation"]
+  ISS_142["ISS-142: Contract legacy scalar opcode forms"]
+  ISS_143["ISS-143: Contract legacy vector opcode forms"]
+  ISS_144["ISS-144: Remove residual opcode compatibility APIs"]
+  ISS_145["ISS-145: Finalize the semantic opcode contract"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
@@ -278,6 +285,10 @@ graph TD
   ISS_138 --> ISS_140
   ISS_139 --> ISS_140
   ISS_140 --> ISS_141
+  ISS_140 --> ISS_142
+  ISS_142 --> ISS_143
+  ISS_143 --> ISS_144
+  ISS_144 --> ISS_145
 ```
 
 ## Warnings

@@ -6,7 +6,11 @@ test "build and verify minimal MilkIR function" {
   func.add_result(I32)
   let sum = func.new_value(I32)
   let entry = func.new_block([])
-  let add = func.new_inst(Iadd, [lhs, rhs], [sum])
+  let add = func.new_inst(
+    Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)),
+    [lhs, rhs],
+    [sum],
+  )
   add.add_metadata(Comment("lowered from frontend add"))
   entry.append_inst(add)
   entry.set_terminator(Return([sum]))
@@ -198,7 +202,13 @@ test "verify catches undefined operands" {
   let entry = func.new_block([])
   let bogus = Value::Value(99, I32)
   let result = func.new_value(I32)
-  entry.append_inst(func.new_inst(Iadd, [bogus, bogus], [result]))
+  entry.append_inst(
+    func.new_inst(
+      Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)),
+      [bogus, bogus],
+      [result],
+    ),
+  )
   entry.set_terminator(Return([result]))
   try func.verify() catch {
     err => inspect(err, content="UndefinedValue(value_id=99)")
@@ -215,7 +225,7 @@ test "verify rejects a value whose type disagrees with its definition" {
   let forged = Value::Value(original.id, I64)
   let copied = func.new_value(I64)
   let entry = func.new_block([])
-  entry.append_inst(func.new_inst(Copy, [forged], [copied]))
+  entry.append_inst(func.new_inst(Scalar(ScalarOp::Copy), [forged], [copied]))
   entry.set_terminator(Return([copied]))
   try func.verify() catch {
     err =>
@@ -330,7 +340,13 @@ test "optimizer leaves trap-prone division unfused" {
   let lhs = builder.iconst_i32(10)
   let rhs = builder.iconst_i32(0)
   let result = builder.get_function().new_value(I32)
-  entry.append_inst(builder.get_function().new_inst(Sdiv, [lhs, rhs], [result]))
+  entry.append_inst(
+    builder
+    .get_function()
+    .new_inst(Scalar(ScalarOp::IntBinary(IntBinaryOp::SignedDiv)), [lhs, rhs], [
+      result,
+    ]),
+  )
   builder.return_([result])
   let func = builder.get_function()
   let opt = optimize_with_level(func, O2)
@@ -626,9 +642,11 @@ test "instruction identity includes result types and arity" {
   let i32_result = func.new_value(I32)
   let i64_result = func.new_value(I64)
   let second_i64_result = func.new_value(I64)
-  let i32_const = func.new_inst(Iconst(1L), [], [i32_result])
-  let i64_const = func.new_inst(Iconst(1L), [], [i64_result])
-  let i64_pair = func.new_inst(Iconst(1L), [], [i64_result, second_i64_result])
+  let i32_const = func.new_inst(Scalar(ScalarOp::IntConst(1L)), [], [i32_result])
+  let i64_const = func.new_inst(Scalar(ScalarOp::IntConst(1L)), [], [i64_result])
+  let i64_pair = func.new_inst(Scalar(ScalarOp::IntConst(1L)), [], [
+    i64_result, second_i64_result,
+  ])
   let expressions : @hashmap.HashMap[Inst, Unit] = HashMap([])
   expressions.set(i32_const, ())
   expressions.set(i64_const, ())
@@ -640,19 +658,29 @@ test "instruction identity includes result types and arity" {
 ///|
 test "instruction identity compares float constants by bit pattern" {
   let func = Function::new_empty("float_instruction_identity")
-  let positive_zero = func.new_inst(Fconst(0.0), [], [func.new_value(F64)])
-  let negative_zero = func.new_inst(Fconst(-0.0), [], [func.new_value(F64)])
+  let positive_zero = func.new_inst(Scalar(ScalarOp::FloatConst(0.0)), [], [
+    func.new_value(F64),
+  ])
+  let negative_zero = func.new_inst(Scalar(ScalarOp::FloatConst(-0.0)), [], [
+    func.new_value(F64),
+  ])
   let nan_bits = 0x7FF8000000000001UL
   let other_nan_bits = 0x7FF8000000000002UL
-  let nan0 = func.new_inst(Fconst(nan_bits.reinterpret_as_double()), [], [
-    func.new_value(F64),
-  ])
-  let nan0_again = func.new_inst(Fconst(nan_bits.reinterpret_as_double()), [], [
-    func.new_value(F64),
-  ])
-  let nan1 = func.new_inst(Fconst(other_nan_bits.reinterpret_as_double()), [], [
-    func.new_value(F64),
-  ])
+  let nan0 = func.new_inst(
+    Scalar(ScalarOp::FloatConst(nan_bits.reinterpret_as_double())),
+    [],
+    [func.new_value(F64)],
+  )
+  let nan0_again = func.new_inst(
+    Scalar(ScalarOp::FloatConst(nan_bits.reinterpret_as_double())),
+    [],
+    [func.new_value(F64)],
+  )
+  let nan1 = func.new_inst(
+    Scalar(ScalarOp::FloatConst(other_nan_bits.reinterpret_as_double())),
+    [],
+    [func.new_value(F64)],
+  )
   inspect(positive_zero == negative_zero, content="false")
   inspect(nan0 == nan0_again, content="true")
   inspect(nan0 == nan1, content="false")
@@ -673,7 +701,10 @@ test "GVN reuses float constants with identical NaN bits" {
   let func = builder.get_function()
   let result = cse_gvn_global(func)
   inspect(result.changed, content="true")
-  inspect(func.blocks[0].instructions[1].opcode is Copy, content="true")
+  inspect(
+    func.blocks[0].instructions[1].opcode is Scalar(ScalarOp::Copy),
+    content="true",
+  )
   inspect(func.verify(), content="()")
 }
 

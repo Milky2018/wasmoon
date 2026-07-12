@@ -268,46 +268,41 @@ fn verify_v128_store_lane(
 }
 
 ///|
-fn verify_opcode_contract(inst : Inst) -> Unit raise VerifyError {
-  match inst.opcode {
-    Iconst(_) => {
+fn verify_scalar_contract(
+  inst : Inst,
+  opcode : ScalarOp,
+) -> Unit raise VerifyError {
+  match opcode {
+    IntConst(_) => {
       require_arity(inst.args.length(), 0, "iconst")
       require_result_arity(inst, 1, "iconst")
       require_word_value(inst.results[0].ty, "iconst")
     }
-    Fconst(_) => {
+    FloatConst(_) => {
       require_arity(inst.args.length(), 0, "fconst")
       require_result_arity(inst, 1, "fconst")
       require_float(inst.results[0].ty, "fconst")
     }
-    Iadd
-    | Isub
-    | Imul
-    | Sdiv
-    | Udiv
-    | Srem
-    | Urem
-    | Ishl
-    | Sshr
-    | Ushr
-    | Rotl
-    | Rotr => {
-      require_arity(inst.args.length(), 2, "integer binary")
-      require_result_arity(inst, 1, "integer binary")
-      require_same_type(inst.args[0], inst.args[1], "integer binary")
-      require_integer(inst.args[0].ty, "integer binary")
-      require_result_type(inst, 0, inst.args[0].ty, "integer binary")
-    }
-    Band | Bor | Bxor => verify_bitwise_binary(inst)
-    Umulh | Smulh => {
-      require_operand_types(inst, [I64, I64], "multiply high")
-      require_result_types(inst, [I64], "multiply high")
-    }
-    Bnot | Clz | Ctz | Popcnt => {
+    IntBinary(op) =>
+      match op {
+        And | Or | Xor => verify_bitwise_binary(inst)
+        UnsignedMulHigh | SignedMulHigh => {
+          require_operand_types(inst, [I64, I64], "multiply high")
+          require_result_types(inst, [I64], "multiply high")
+        }
+        _ => {
+          require_arity(inst.args.length(), 2, "integer binary")
+          require_result_arity(inst, 1, "integer binary")
+          require_same_type(inst.args[0], inst.args[1], "integer binary")
+          require_integer(inst.args[0].ty, "integer binary")
+          require_result_type(inst, 0, inst.args[0].ty, "integer binary")
+        }
+      }
+    IntUnary(_) => {
       verify_same_type_unary(inst, "integer unary")
       require_integer(inst.args[0].ty, "integer unary")
     }
-    Icmp(condition) => {
+    IntCompare(condition) => {
       require_arity(inst.args.length(), 2, "integer compare")
       require_same_type(inst.args[0], inst.args[1], "integer compare")
       if condition is (Eq | Ne) {
@@ -317,69 +312,78 @@ fn verify_opcode_contract(inst : Inst) -> Unit raise VerifyError {
       }
       require_single_result(inst, I32, "integer compare")
     }
-    Fadd | Fsub | Fmul | Fdiv | Fmin | Fmax => {
+    FloatBinary(_) => {
       verify_same_type_binary(inst, "float binary")
       require_float(inst.args[0].ty, "float binary")
     }
-    Fcmp(_) => {
+    FloatCompare(_) => {
       require_arity(inst.args.length(), 2, "float compare")
       require_same_type(inst.args[0], inst.args[1], "float compare")
       require_float(inst.args[0].ty, "float compare")
       require_single_result(inst, I32, "float compare")
     }
-    Fneg | Fabs | Fsqrt | Fceil | Ffloor | Ftrunc | Fnearest => {
+    FloatUnary(_) => {
       verify_same_type_unary(inst, "float unary")
       require_float(inst.args[0].ty, "float unary")
     }
-    Ireduce => {
-      require_arity(inst.args.length(), 1, "ireduce")
-      require_integer(inst.args[0].ty, "ireduce")
-      require_result_types(inst, [I32], "ireduce")
-    }
-    Sextend | Uextend => {
-      require_operand_types(inst, [I32], "integer extend")
-      require_result_types(inst, [I64], "integer extend")
-    }
-    Fpromote => {
-      require_operand_types(inst, [F32], "fpromote")
-      require_result_types(inst, [F64], "fpromote")
-    }
-    Fdemote => {
-      require_operand_types(inst, [F64], "fdemote")
-      require_result_types(inst, [F32], "fdemote")
-    }
-    FcvtToSint | FcvtToUint | FcvtToSintSat | FcvtToUintSat => {
-      require_arity(inst.args.length(), 1, "float-to-int conversion")
-      require_result_arity(inst, 1, "float-to-int conversion")
-      require_float(inst.args[0].ty, "float-to-int conversion")
-      require_integer(inst.results[0].ty, "float-to-int conversion")
-    }
-    SintToFcvt | UintToFcvt => {
-      require_arity(inst.args.length(), 1, "int-to-float conversion")
-      require_result_arity(inst, 1, "int-to-float conversion")
-      require_integer(inst.args[0].ty, "int-to-float conversion")
-      require_float(inst.results[0].ty, "int-to-float conversion")
-    }
-    Bitcast => {
-      require_arity(inst.args.length(), 1, "bitcast")
-      require_result_arity(inst, 1, "bitcast")
-      let source = inst.args[0].ty
-      let target = inst.results[0].ty
-      let valid = same_representation_width(source, target)
-      if !valid {
+    Convert(conversion) =>
+      match conversion {
+        IntReduce => {
+          require_arity(inst.args.length(), 1, "ireduce")
+          require_integer(inst.args[0].ty, "ireduce")
+          require_result_types(inst, [I32], "ireduce")
+        }
+        SignedExtend | UnsignedExtend => {
+          require_operand_types(inst, [I32], "integer extend")
+          require_result_types(inst, [I64], "integer extend")
+        }
+        FloatPromote => {
+          require_operand_types(inst, [F32], "fpromote")
+          require_result_types(inst, [F64], "fpromote")
+        }
+        FloatDemote => {
+          require_operand_types(inst, [F64], "fdemote")
+          require_result_types(inst, [F32], "fdemote")
+        }
+        FloatToSignedInt
+        | FloatToUnsignedInt
+        | FloatToSignedIntSaturating
+        | FloatToUnsignedIntSaturating => {
+          require_arity(inst.args.length(), 1, "float-to-int conversion")
+          require_result_arity(inst, 1, "float-to-int conversion")
+          require_float(inst.args[0].ty, "float-to-int conversion")
+          require_integer(inst.results[0].ty, "float-to-int conversion")
+        }
+        SignedIntToFloat | UnsignedIntToFloat => {
+          require_arity(inst.args.length(), 1, "int-to-float conversion")
+          require_result_arity(inst, 1, "int-to-float conversion")
+          require_integer(inst.args[0].ty, "int-to-float conversion")
+          require_float(inst.results[0].ty, "int-to-float conversion")
+        }
+        Bitcast => {
+          require_arity(inst.args.length(), 1, "bitcast")
+          require_result_arity(inst, 1, "bitcast")
+          let source = inst.args[0].ty
+          let target = inst.results[0].ty
+          if !same_representation_width(source, target) {
+            raise TypeMismatch(
+              message="bitcast cannot convert \{source} to \{target}",
+            )
+          }
+        }
+      }
+    SignExtendFrom(bits) =>
+      if bits == 8 || bits == 16 {
+        verify_same_type_unary(inst, "in-place sign extension")
+        require_integer(inst.args[0].ty, "in-place sign extension")
+      } else if bits == 32 {
+        require_operand_types(inst, [I64], "sextend32")
+        require_result_types(inst, [I64], "sextend32")
+      } else {
         raise TypeMismatch(
-          message="bitcast cannot convert \{source} to \{target}",
+          message="in-place sign extension has invalid width \{bits}",
         )
       }
-    }
-    Sextend8 | Sextend16 => {
-      verify_same_type_unary(inst, "in-place sign extension")
-      require_integer(inst.args[0].ty, "in-place sign extension")
-    }
-    Sextend32 => {
-      require_operand_types(inst, [I64], "sextend32")
-      require_result_types(inst, [I64], "sextend32")
-    }
     Select => {
       require_arity(inst.args.length(), 3, "select")
       require_result_arity(inst, 1, "select")
@@ -388,6 +392,12 @@ fn verify_opcode_contract(inst : Inst) -> Unit raise VerifyError {
       require_result_type(inst, 0, inst.args[1].ty, "select")
     }
     Copy => verify_same_type_unary(inst, "copy")
+  }
+}
+
+///|
+fn verify_opcode_contract(inst : Inst) -> Unit raise VerifyError {
+  match inst.opcode {
     Call(call_op) =>
       match call_op {
         CallOp::Direct(_, signature) =>
@@ -488,12 +498,7 @@ fn verify_opcode_contract(inst : Inst) -> Unit raise VerifyError {
       }
       verify_signature(inst, signature, 0, "extension instruction")
     }
-    Scalar(scalar_op) => {
-      let original = inst.opcode
-      inst.opcode = scalar_op.to_legacy_opcode()
-      verify_opcode_contract(inst)
-      inst.opcode = original
-    }
+    Scalar(scalar_op) => verify_scalar_contract(inst, scalar_op)
     Vector(vector_op) => {
       let original = inst.opcode
       inst.opcode = vector_op.to_legacy_opcode()

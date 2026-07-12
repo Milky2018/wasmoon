@@ -41,7 +41,7 @@ test "verify rejects return value type mismatches" {
 test "verify rejects missing instruction results" {
   let func = Function::new_empty("missing_iconst_result")
   let entry = func.new_block([])
-  entry.append_inst(func.new_inst(Iconst(1L), [], []))
+  entry.append_inst(func.new_inst(Scalar(ScalarOp::IntConst(1L)), [], []))
   entry.set_terminator(Return([]))
   expect_verify_rejection(func, "iconst result arity")
 }
@@ -53,7 +53,11 @@ test "verify rejects instruction result type mismatches" {
   let rhs = func.add_param(I32)
   let result = func.new_value(I64)
   let entry = func.new_block([])
-  entry.append_inst(func.new_inst(Iadd, [lhs, rhs], [result]))
+  entry.append_inst(
+    func.new_inst(Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)), [lhs, rhs], [
+      result,
+    ]),
+  )
   entry.set_terminator(Return([]))
   expect_verify_rejection(func, "iadd result type")
 }
@@ -65,7 +69,11 @@ test "verify rejects reference-typed integer arithmetic" {
   let rhs = func.add_param(Ref)
   let result = func.new_value(Ref)
   let entry = func.new_block([])
-  entry.append_inst(func.new_inst(Iadd, [lhs, rhs], [result]))
+  entry.append_inst(
+    func.new_inst(Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)), [lhs, rhs], [
+      result,
+    ]),
+  )
   entry.set_terminator(Return([]))
   expect_verify_rejection(func, "integer arithmetic operand types")
 }
@@ -77,7 +85,9 @@ test "verify rejects floating-point integer equality" {
   let rhs = func.add_param(F64)
   let result = func.new_value(I32)
   let entry = func.new_block([])
-  entry.append_inst(func.new_inst(Icmp(Eq), [lhs, rhs], [result]))
+  entry.append_inst(
+    func.new_inst(Scalar(ScalarOp::IntCompare(Eq)), [lhs, rhs], [result]),
+  )
   entry.set_terminator(Return([]))
   expect_verify_rejection(func, "integer equality operand types")
 }
@@ -91,7 +101,9 @@ test "verify rejects malformed select types" {
   let result = func.new_value(I32)
   let entry = func.new_block([])
   entry.append_inst(
-    func.new_inst(Select, [condition, on_true, on_false], [result]),
+    func.new_inst(Scalar(ScalarOp::Select), [condition, on_true, on_false], [
+      result,
+    ]),
   )
   entry.set_terminator(Return([]))
   expect_verify_rejection(func, "select operand types")

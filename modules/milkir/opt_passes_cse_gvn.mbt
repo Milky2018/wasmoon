@@ -3,7 +3,7 @@
 ///|
 /// Check if an instruction reads from memory
 fn reads_memory(opcode : Opcode) -> Bool {
-  match opcode.for_legacy_consumers() {
+  match opcode {
     LoadPtr(_)
     | LoadPtrNarrow(_, _, _)
     | Memory(MemoryOp::Load(_) | MemoryOp::LoadNarrow(_, _, _))
@@ -23,7 +23,7 @@ fn reads_memory(opcode : Opcode) -> Bool {
 /// Check if an instruction may write to memory or have other side effects
 /// that could invalidate memory-based expressions
 fn may_write_memory(opcode : Opcode) -> Bool {
-  match opcode.for_legacy_consumers() {
+  match opcode {
     // Direct memory writes
     StorePtr(_)
     | StorePtrNarrow(_)
@@ -229,7 +229,7 @@ fn update_last_store_state(
   inst_version : StoreVersion,
   ptr_base_infos : @hashmap.HashMap[Int, PtrBaseInfo],
 ) -> Unit {
-  let is_store = match inst.opcode.for_legacy_consumers() {
+  let is_store = match inst.opcode {
     StorePtr(_)
     | StorePtrNarrow(_)
     | Memory(MemoryOp::Store(_) | MemoryOp::StoreNarrow(_))
@@ -315,9 +315,9 @@ fn collect_iconst_values(func : Function) -> @hashmap.HashMap[Int, Int64] {
   for block in func.blocks {
     for inst in block.instructions {
       if inst.first_result() is Some(v) {
-        match inst.opcode.for_legacy_consumers() {
-          Iconst(value) => result.set(v.id, value)
-          Copy =>
+        match inst.opcode {
+          Scalar(ScalarOp::IntConst(value)) => result.set(v.id, value)
+          Scalar(ScalarOp::Copy) =>
             if inst.operands.length() > 0 &&
               result.get(inst.operands[0].id) is Some(copied) {
               result.set(v.id, copied)
@@ -358,16 +358,19 @@ fn collect_ptr_base_infos(
     for block in func.blocks {
       for inst in block.instructions {
         if inst.first_result() is Some(v) && result.get(v.id) is None {
-          let inferred : PtrBaseInfo? = match
-            inst.opcode.for_legacy_consumers() {
+          let inferred : PtrBaseInfo? = match inst.opcode {
             Ext(_, _) => None
-            Copy | Bitcast | Uextend | Sextend | Ireduce =>
+            Scalar(ScalarOp::Copy)
+            | Scalar(ScalarOp::Convert(ConversionOp::Bitcast))
+            | Scalar(ScalarOp::Convert(ConversionOp::UnsignedExtend))
+            | Scalar(ScalarOp::Convert(ConversionOp::SignedExtend))
+            | Scalar(ScalarOp::Convert(ConversionOp::IntReduce)) =>
               if inst.operands.length() > 0 {
                 result.get(inst.operands[0].id)
               } else {
                 None
               }
-            Iadd =>
+            Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)) =>
               if inst.operands.length() >= 2 {
                 let lhs = inst.operands[0]
                 let rhs = inst.operands[1]
@@ -383,7 +386,7 @@ fn collect_ptr_base_infos(
               } else {
                 None
               }
-            Isub =>
+            Scalar(ScalarOp::IntBinary(IntBinaryOp::Sub)) =>
               if inst.operands.length() >= 2 {
                 let lhs = inst.operands[0]
                 let rhs = inst.operands[1]
@@ -396,7 +399,7 @@ fn collect_ptr_base_infos(
               } else {
                 None
               }
-            Select =>
+            Scalar(ScalarOp::Select) =>
               if inst.operands.length() >= 3 &&
                 result.get(inst.operands[1].id) is Some(lhs_base) &&
                 result.get(inst.operands[2].id) is Some(rhs_base) &&
@@ -423,7 +426,7 @@ fn ptr_access_from_inst(
   inst : Inst,
   ptr_base_infos : @hashmap.HashMap[Int, PtrBaseInfo],
 ) -> PtrAccess? {
-  match inst.opcode.for_legacy_consumers() {
+  match inst.opcode {
     LoadPtr(_) | Memory(MemoryOp::Load(_)) =>
       if inst.operands.length() >= 2 {
         let base = inst.operands[0]
@@ -532,11 +535,15 @@ fn is_gvn_candidate(inst : Inst) -> Bool {
   }
   // Instructions that write memory are handled by invalidation, not skipped
   // But we still need to skip them as candidates
-  match inst.opcode.for_legacy_consumers() {
+  match inst.opcode {
     // Division/remainder can trap, not suitable
-    Sdiv | Udiv | Srem | Urem => false
+    Scalar(ScalarOp::IntBinary(IntBinaryOp::SignedDiv))
+    | Scalar(ScalarOp::IntBinary(IntBinaryOp::UnsignedDiv))
+    | Scalar(ScalarOp::IntBinary(IntBinaryOp::SignedRem))
+    | Scalar(ScalarOp::IntBinary(IntBinaryOp::UnsignedRem)) => false
     // Float-to-int can trap
-    FcvtToSint | FcvtToUint => false
+    Scalar(ScalarOp::Convert(ConversionOp::FloatToSignedInt))
+    | Scalar(ScalarOp::Convert(ConversionOp::FloatToUnsignedInt)) => false
     // Memory writes are handled by may_write_memory, skip as candidates
     StorePtr(_)
     | StorePtrNarrow(_)
@@ -587,8 +594,7 @@ fn run_global_value_numbering(func : Function) -> OptResult {
     // Process instructions
     for inst_index, inst in block.instructions {
       let mut replaced_by_memory = false
-      if inst.opcode.for_legacy_consumers()
-        is (LoadPtr(load_ty) | Memory(MemoryOp::Load(load_ty))) &&
+      if inst.opcode is (LoadPtr(load_ty) | Memory(MemoryOp::Load(load_ty))) &&
         ptr_access_from_inst(inst, ptr_base_infos) is Some(load_access) {
         let key = memory_key_from_access(
           load_access,
@@ -603,15 +609,14 @@ fn run_global_value_numbering(func : Function) -> OptResult {
             inst_index,
             idom,
           ) {
-          inst.opcode = Copy
+          inst.opcode = Scalar(ScalarOp::Copy)
           inst.operands.clear()
           inst.operands.push(entry.value)
           result.mark_changed()
           replaced_by_memory = true
         }
       }
-      if inst.opcode.for_legacy_consumers()
-        is (StorePtr(store_ty) | Memory(MemoryOp::Store(store_ty))) &&
+      if inst.opcode is (StorePtr(store_ty) | Memory(MemoryOp::Store(store_ty))) &&
         ptr_access_from_inst(inst, ptr_base_infos) is Some(store_access) &&
         inst.operands.length() >= 2 {
         let key = memory_key_from_access(
@@ -658,7 +663,7 @@ fn run_global_value_numbering(func : Function) -> OptResult {
           // Already computed - replace with copy. The type check is defensive:
           // Inst identity includes result types, so a mismatch is not expected.
           if existing.ty == result_val.ty {
-            inst.opcode = Copy
+            inst.opcode = Scalar(ScalarOp::Copy)
             inst.operands.clear()
             inst.operands.push(existing)
             result.mark_changed()

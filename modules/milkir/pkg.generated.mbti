@@ -379,61 +379,6 @@ pub(all) enum Metadata {
 
 pub(all) enum Opcode {
   Scalar(ScalarOp)
-  Iconst(Int64)
-  Fconst(Double)
-  Iadd
-  Isub
-  Imul
-  Umulh
-  Smulh
-  Sdiv
-  Udiv
-  Srem
-  Urem
-  Band
-  Bor
-  Bxor
-  Bnot
-  Ishl
-  Sshr
-  Ushr
-  Rotl
-  Rotr
-  Clz
-  Ctz
-  Popcnt
-  Icmp(IntCC)
-  Fadd
-  Fsub
-  Fmul
-  Fdiv
-  Fmin
-  Fmax
-  Fcmp(FloatCC)
-  Fneg
-  Fabs
-  Fsqrt
-  Fceil
-  Ffloor
-  Ftrunc
-  Fnearest
-  Ireduce
-  Sextend
-  Uextend
-  Fpromote
-  Fdemote
-  FcvtToSint
-  FcvtToUint
-  FcvtToSintSat
-  FcvtToUintSat
-  SintToFcvt
-  UintToFcvt
-  Bitcast
-  Sextend8
-  Sextend16
-  Sextend32
-  Select
-  Copy
   Call(CallOp)
   LoadPtr(Type)
   StorePtr(Type)
@@ -698,7 +643,6 @@ pub(all) enum Opcode {
   V128RelaxedDot8to32AddS
 } derive(Eq, Hash, @debug.Debug)
 pub fn Opcode::canonicalize(Self) -> Self
-pub fn Opcode::for_legacy_consumers(Self) -> Self
 pub impl Show for Opcode
 
 pub(all) enum OptLevel {
@@ -727,7 +671,6 @@ pub(all) enum ScalarOp {
   Select
   Copy
 } derive(Eq, Hash, @debug.Debug)
-pub fn ScalarOp::to_legacy_opcode(Self) -> Opcode
 
 pub struct Signature {
   params : Array[Type]

@@ -778,8 +778,8 @@ fn try_collect_call_arg_const(
   }
   if @lower.find_defining_inst(ctx, value) is Some(inst) {
     match inst.opcode {
-      Iconst(v) => Some(Int(v))
-      Fconst(v) =>
+      Scalar(IntConst(v)) => Some(Int(v))
+      Scalar(FloatConst(v)) =>
         match value.ty {
           F32 => Some(F32(v.reinterpret_as_int64().to_int()))
           F64 => Some(F64(v.reinterpret_as_int64()))

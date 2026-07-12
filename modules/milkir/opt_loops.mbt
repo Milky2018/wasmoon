@@ -168,7 +168,7 @@ fn reduce_strength(func : Function) -> OptResult {
   let constants : @hashmap.HashMap[Int, ConstValue] = HashMap([])
   for block in func.blocks {
     for inst in block.instructions {
-      if inst.opcode.for_legacy_consumers() is Iconst(v) &&
+      if inst.opcode is Scalar(ScalarOp::IntConst(v)) &&
         inst.first_result() is Some(r) {
         if r.ty is I32 {
           constants.set(r.id, I32(v.to_int()))
@@ -183,9 +183,9 @@ fn reduce_strength(func : Function) -> OptResult {
   for block in func.blocks {
     let rewritten : Array[Inst] = []
     for inst in block.instructions {
-      match inst.opcode.for_legacy_consumers() {
+      match inst.opcode {
         // Multiplication by power of 2 -> left shift
-        Imul =>
+        Scalar(ScalarOp::IntBinary(IntBinaryOp::Mul)) =>
           if inst.operands.length() == 2 {
             let (const_idx, shift_amount) = find_power_of_two_operand(
               inst.operands,
@@ -211,7 +211,7 @@ fn reduce_strength(func : Function) -> OptResult {
             }
           }
         // Division by power of 2 -> right shift (for unsigned)
-        Udiv =>
+        Scalar(ScalarOp::IntBinary(IntBinaryOp::UnsignedDiv)) =>
           if inst.operands.length() == 2 {
             let (const_idx, shift_amount) = find_power_of_two_operand(
               inst.operands,
@@ -238,7 +238,7 @@ fn reduce_strength(func : Function) -> OptResult {
             }
           }
         // Modulo by power of 2 -> bitwise AND
-        Urem =>
+        Scalar(ScalarOp::IntBinary(IntBinaryOp::UnsignedRem)) =>
           if inst.operands.length() == 2 {
             let (const_idx, shift_amount) = find_power_of_two_operand(
               inst.operands,
@@ -283,7 +283,9 @@ fn append_iconst(
   value : Int64,
 ) -> Value {
   let result = func.new_value(ty)
-  instructions.push(func.new_inst(Iconst(value), [], [result]))
+  instructions.push(
+    func.new_inst(Scalar(ScalarOp::IntConst(value)), [], [result]),
+  )
   result
 }
 

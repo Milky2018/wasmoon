@@ -4,7 +4,9 @@ test "verify rejects duplicate value definitions" {
   let original = func.add_param(I32)
   let duplicate = Value::Value(original.id, I32)
   let entry = func.new_block([])
-  entry.append_inst(func.new_inst(Iconst(1L), [], [duplicate]))
+  entry.append_inst(
+    func.new_inst(Scalar(ScalarOp::IntConst(1L)), [], [duplicate]),
+  )
   entry.set_terminator(Return([]))
   try func.verify() catch {
     err => inspect(err, content="DuplicateValueDefinition(value_id=0)")
@@ -39,8 +41,12 @@ test "verify rejects same-block use before definition" {
   let defined_later = func.new_value(I32)
   let copied = func.new_value(I32)
   let entry = func.new_block([])
-  entry.append_inst(func.new_inst(Copy, [defined_later], [copied]))
-  entry.append_inst(func.new_inst(Iconst(1L), [], [defined_later]))
+  entry.append_inst(
+    func.new_inst(Scalar(ScalarOp::Copy), [defined_later], [copied]),
+  )
+  entry.append_inst(
+    func.new_inst(Scalar(ScalarOp::IntConst(1L)), [], [defined_later]),
+  )
   entry.set_terminator(Return([]))
   try func.verify() catch {
     err => inspect(err, content="UseBeforeDefinition(value_id=0)")
@@ -59,9 +65,13 @@ test "verify rejects cross-block non-dominating uses" {
   let left = func.new_block([])
   let right = func.new_block([])
   entry.set_terminator(Branch(cond, left.id, [], right.id, []))
-  left.append_inst(func.new_inst(Iconst(1L), [], [defined_on_left]))
+  left.append_inst(
+    func.new_inst(Scalar(ScalarOp::IntConst(1L)), [], [defined_on_left]),
+  )
   left.set_terminator(Return([]))
-  right.append_inst(func.new_inst(Copy, [defined_on_left], [copied_on_right]))
+  right.append_inst(
+    func.new_inst(Scalar(ScalarOp::Copy), [defined_on_left], [copied_on_right]),
+  )
   right.set_terminator(Return([]))
   try func.verify() catch {
     err =>
@@ -98,7 +108,7 @@ test "verify rejects divergent instruction operand views" {
   let malformed : Inst = {
     id: 0,
     results: [copied],
-    opcode: Copy,
+    opcode: Scalar(ScalarOp::Copy),
     args: [argument],
     operands: [],
     metadata: [],

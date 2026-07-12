@@ -282,7 +282,7 @@ pub impl Eq for Inst with fn equal(self, other) {
 ///|
 fn hash_opcode_identity(opcode : Opcode, hasher : Hasher) -> Unit {
   match opcode {
-    Fconst(value) | Scalar(ScalarOp::FloatConst(value)) => {
+    Scalar(ScalarOp::FloatConst(value)) => {
       "milkir.fconst.bits".hash_combine(hasher)
       value.reinterpret_as_uint64().hash_combine(hasher)
     }
@@ -293,14 +293,10 @@ fn hash_opcode_identity(opcode : Opcode, hasher : Hasher) -> Unit {
 ///|
 fn opcode_identity_equal(lhs : Opcode, rhs : Opcode) -> Bool {
   match (lhs, rhs) {
-    (
-      Fconst(a)
-      | Scalar(ScalarOp::FloatConst(a)),
-      Fconst(b)
-      | Scalar(ScalarOp::FloatConst(b)),
-    ) => a.reinterpret_as_uint64() == b.reinterpret_as_uint64()
-    (Fconst(_) | Scalar(ScalarOp::FloatConst(_)), _)
-    | (_, Fconst(_) | Scalar(ScalarOp::FloatConst(_))) => false
+    (Scalar(ScalarOp::FloatConst(a)), Scalar(ScalarOp::FloatConst(b))) =>
+      a.reinterpret_as_uint64() == b.reinterpret_as_uint64()
+    (Scalar(ScalarOp::FloatConst(_)), _)
+    | (_, Scalar(ScalarOp::FloatConst(_))) => false
     _ => lhs == rhs
   }
 }
@@ -1064,83 +1060,6 @@ pub(all) enum Opcode {
   // Language-neutral scalar operations.
   Scalar(ScalarOp)
 
-  // Constants
-  Iconst(Int64) // Integer constant
-  Fconst(Double) // Float constant
-
-  // Integer arithmetic
-  Iadd // Integer add
-  Isub // Integer subtract
-  Imul // Integer multiply
-  Umulh // Unsigned multiply high
-  Smulh // Signed multiply high
-  Sdiv // Signed divide
-  Udiv // Unsigned divide
-  Srem // Signed remainder
-  Urem // Unsigned remainder
-
-  // Bitwise operations
-  Band // Bitwise and
-  Bor // Bitwise or
-  Bxor // Bitwise xor
-  Bnot // Bitwise not
-  Ishl // Shift left
-  Sshr // Signed shift right
-  Ushr // Unsigned shift right
-  Rotl // Rotate left
-  Rotr // Rotate right
-
-  // Bit counting operations
-  Clz // Count leading zeros
-  Ctz // Count trailing zeros
-  Popcnt // Population count (number of 1 bits)
-
-  // Comparisons (return i32 0 or 1)
-  Icmp(IntCC) // Integer compare
-
-  // Floating point arithmetic
-  Fadd // Float add
-  Fsub // Float subtract
-  Fmul // Float multiply
-  Fdiv // Float divide
-  Fmin // Float minimum
-  Fmax // Float maximum
-
-  // Floating point comparisons
-  Fcmp(FloatCC) // Float compare
-
-  // Floating point unary
-  Fneg // Float negate
-  Fabs // Float absolute value
-  Fsqrt // Float square root
-  Fceil // Float ceiling
-  Ffloor // Float floor
-  Ftrunc // Float truncate
-  Fnearest // Float nearest
-
-  // Conversions
-  Ireduce // Reduce integer width (e.g., i64 -> i32)
-  Sextend // Sign extend (e.g., i32 -> i64)
-  Uextend // Zero extend (e.g., i32 -> i64)
-  Fpromote // Promote float (f32 -> f64)
-  Fdemote // Demote float (f64 -> f32)
-  FcvtToSint // Float to signed int (trapping)
-  FcvtToUint // Float to unsigned int (trapping)
-  FcvtToSintSat // Float to signed int (saturating)
-  FcvtToUintSat // Float to unsigned int (saturating)
-  SintToFcvt // Signed int to float
-  UintToFcvt // Unsigned int to float
-  Bitcast // Reinterpret bits
-
-  // In-place sign extension 
-  // These sign-extend the low N bits to fill the full register
-  Sextend8 // Sign extend from 8 bits (i32 or i64)
-  Sextend16 // Sign extend from 16 bits (i32 or i64)
-  Sextend32 // Sign extend from 32 bits (i64 only)
-
-  // Misc
-  Select // Conditional select (cond ? a : b)
-  Copy // Copy value (for register allocation)
   // Function calls
   Call(CallOp)
 
@@ -1517,163 +1436,6 @@ pub(all) enum FloatCC {
   Gt // Greater than (ordered)
   Ge // Greater than or equal (ordered)
 } derive(Debug, Eq, Hash)
-
-///|
-pub fn ScalarOp::to_legacy_opcode(self : ScalarOp) -> Opcode {
-  match self {
-    ScalarOp::IntConst(value) => Opcode::Iconst(value)
-    ScalarOp::FloatConst(value) => Opcode::Fconst(value)
-    ScalarOp::IntBinary(op) =>
-      match op {
-        IntBinaryOp::Add => Opcode::Iadd
-        IntBinaryOp::Sub => Opcode::Isub
-        IntBinaryOp::Mul => Opcode::Imul
-        IntBinaryOp::UnsignedMulHigh => Opcode::Umulh
-        IntBinaryOp::SignedMulHigh => Opcode::Smulh
-        IntBinaryOp::SignedDiv => Opcode::Sdiv
-        IntBinaryOp::UnsignedDiv => Opcode::Udiv
-        IntBinaryOp::SignedRem => Opcode::Srem
-        IntBinaryOp::UnsignedRem => Opcode::Urem
-        IntBinaryOp::And => Opcode::Band
-        IntBinaryOp::Or => Opcode::Bor
-        IntBinaryOp::Xor => Opcode::Bxor
-        IntBinaryOp::ShiftLeft => Opcode::Ishl
-        IntBinaryOp::SignedShiftRight => Opcode::Sshr
-        IntBinaryOp::UnsignedShiftRight => Opcode::Ushr
-        IntBinaryOp::RotateLeft => Opcode::Rotl
-        IntBinaryOp::RotateRight => Opcode::Rotr
-      }
-    ScalarOp::IntUnary(op) =>
-      match op {
-        IntUnaryOp::Not => Opcode::Bnot
-        IntUnaryOp::CountLeadingZeros => Opcode::Clz
-        IntUnaryOp::CountTrailingZeros => Opcode::Ctz
-        IntUnaryOp::PopulationCount => Opcode::Popcnt
-      }
-    ScalarOp::IntCompare(condition) => Opcode::Icmp(condition)
-    ScalarOp::FloatBinary(op) =>
-      match op {
-        FloatBinaryOp::Add => Opcode::Fadd
-        FloatBinaryOp::Sub => Opcode::Fsub
-        FloatBinaryOp::Mul => Opcode::Fmul
-        FloatBinaryOp::Div => Opcode::Fdiv
-        FloatBinaryOp::Min => Opcode::Fmin
-        FloatBinaryOp::Max => Opcode::Fmax
-      }
-    ScalarOp::FloatUnary(op) =>
-      match op {
-        FloatUnaryOp::Neg => Opcode::Fneg
-        FloatUnaryOp::Abs => Opcode::Fabs
-        FloatUnaryOp::Sqrt => Opcode::Fsqrt
-        FloatUnaryOp::Ceil => Opcode::Fceil
-        FloatUnaryOp::Floor => Opcode::Ffloor
-        FloatUnaryOp::Trunc => Opcode::Ftrunc
-        FloatUnaryOp::Nearest => Opcode::Fnearest
-      }
-    ScalarOp::FloatCompare(condition) => Opcode::Fcmp(condition)
-    ScalarOp::Convert(op) =>
-      match op {
-        ConversionOp::IntReduce => Opcode::Ireduce
-        ConversionOp::SignedExtend => Opcode::Sextend
-        ConversionOp::UnsignedExtend => Opcode::Uextend
-        ConversionOp::FloatPromote => Opcode::Fpromote
-        ConversionOp::FloatDemote => Opcode::Fdemote
-        ConversionOp::FloatToSignedInt => Opcode::FcvtToSint
-        ConversionOp::FloatToUnsignedInt => Opcode::FcvtToUint
-        ConversionOp::FloatToSignedIntSaturating => Opcode::FcvtToSintSat
-        ConversionOp::FloatToUnsignedIntSaturating => Opcode::FcvtToUintSat
-        ConversionOp::SignedIntToFloat => Opcode::SintToFcvt
-        ConversionOp::UnsignedIntToFloat => Opcode::UintToFcvt
-        ConversionOp::Bitcast => Opcode::Bitcast
-      }
-    ScalarOp::SignExtendFrom(bits) =>
-      match bits {
-        8 => Opcode::Sextend8
-        16 => Opcode::Sextend16
-        32 => Opcode::Sextend32
-        _ => abort("invalid scalar sign-extension width")
-      }
-    ScalarOp::Select => Opcode::Select
-    ScalarOp::Copy => Opcode::Copy
-  }
-}
-
-///|
-pub fn Opcode::for_legacy_consumers(self : Opcode) -> Opcode {
-  match self {
-    Opcode::Scalar(op) => op.to_legacy_opcode()
-    Opcode::Vector(op) => op.to_legacy_opcode()
-    _ => self
-  }
-}
-
-///|
-fn Opcode::to_scalar_op(self : Opcode) -> ScalarOp? {
-  match self {
-    Opcode::Iconst(value) => Some(ScalarOp::IntConst(value))
-    Opcode::Fconst(value) => Some(ScalarOp::FloatConst(value))
-    Opcode::Iadd => Some(ScalarOp::IntBinary(IntBinaryOp::Add))
-    Opcode::Isub => Some(ScalarOp::IntBinary(IntBinaryOp::Sub))
-    Opcode::Imul => Some(ScalarOp::IntBinary(IntBinaryOp::Mul))
-    Opcode::Umulh => Some(ScalarOp::IntBinary(IntBinaryOp::UnsignedMulHigh))
-    Opcode::Smulh => Some(ScalarOp::IntBinary(IntBinaryOp::SignedMulHigh))
-    Opcode::Sdiv => Some(ScalarOp::IntBinary(IntBinaryOp::SignedDiv))
-    Opcode::Udiv => Some(ScalarOp::IntBinary(IntBinaryOp::UnsignedDiv))
-    Opcode::Srem => Some(ScalarOp::IntBinary(IntBinaryOp::SignedRem))
-    Opcode::Urem => Some(ScalarOp::IntBinary(IntBinaryOp::UnsignedRem))
-    Opcode::Band => Some(ScalarOp::IntBinary(IntBinaryOp::And))
-    Opcode::Bor => Some(ScalarOp::IntBinary(IntBinaryOp::Or))
-    Opcode::Bxor => Some(ScalarOp::IntBinary(IntBinaryOp::Xor))
-    Opcode::Bnot => Some(ScalarOp::IntUnary(IntUnaryOp::Not))
-    Opcode::Ishl => Some(ScalarOp::IntBinary(IntBinaryOp::ShiftLeft))
-    Opcode::Sshr => Some(ScalarOp::IntBinary(IntBinaryOp::SignedShiftRight))
-    Opcode::Ushr => Some(ScalarOp::IntBinary(IntBinaryOp::UnsignedShiftRight))
-    Opcode::Rotl => Some(ScalarOp::IntBinary(IntBinaryOp::RotateLeft))
-    Opcode::Rotr => Some(ScalarOp::IntBinary(IntBinaryOp::RotateRight))
-    Opcode::Clz => Some(ScalarOp::IntUnary(IntUnaryOp::CountLeadingZeros))
-    Opcode::Ctz => Some(ScalarOp::IntUnary(IntUnaryOp::CountTrailingZeros))
-    Opcode::Popcnt => Some(ScalarOp::IntUnary(IntUnaryOp::PopulationCount))
-    Opcode::Icmp(condition) => Some(ScalarOp::IntCompare(condition))
-    Opcode::Fadd => Some(ScalarOp::FloatBinary(FloatBinaryOp::Add))
-    Opcode::Fsub => Some(ScalarOp::FloatBinary(FloatBinaryOp::Sub))
-    Opcode::Fmul => Some(ScalarOp::FloatBinary(FloatBinaryOp::Mul))
-    Opcode::Fdiv => Some(ScalarOp::FloatBinary(FloatBinaryOp::Div))
-    Opcode::Fmin => Some(ScalarOp::FloatBinary(FloatBinaryOp::Min))
-    Opcode::Fmax => Some(ScalarOp::FloatBinary(FloatBinaryOp::Max))
-    Opcode::Fcmp(condition) => Some(ScalarOp::FloatCompare(condition))
-    Opcode::Fneg => Some(ScalarOp::FloatUnary(FloatUnaryOp::Neg))
-    Opcode::Fabs => Some(ScalarOp::FloatUnary(FloatUnaryOp::Abs))
-    Opcode::Fsqrt => Some(ScalarOp::FloatUnary(FloatUnaryOp::Sqrt))
-    Opcode::Fceil => Some(ScalarOp::FloatUnary(FloatUnaryOp::Ceil))
-    Opcode::Ffloor => Some(ScalarOp::FloatUnary(FloatUnaryOp::Floor))
-    Opcode::Ftrunc => Some(ScalarOp::FloatUnary(FloatUnaryOp::Trunc))
-    Opcode::Fnearest => Some(ScalarOp::FloatUnary(FloatUnaryOp::Nearest))
-    Opcode::Ireduce => Some(ScalarOp::Convert(ConversionOp::IntReduce))
-    Opcode::Sextend => Some(ScalarOp::Convert(ConversionOp::SignedExtend))
-    Opcode::Uextend => Some(ScalarOp::Convert(ConversionOp::UnsignedExtend))
-    Opcode::Fpromote => Some(ScalarOp::Convert(ConversionOp::FloatPromote))
-    Opcode::Fdemote => Some(ScalarOp::Convert(ConversionOp::FloatDemote))
-    Opcode::FcvtToSint =>
-      Some(ScalarOp::Convert(ConversionOp::FloatToSignedInt))
-    Opcode::FcvtToUint =>
-      Some(ScalarOp::Convert(ConversionOp::FloatToUnsignedInt))
-    Opcode::FcvtToSintSat =>
-      Some(ScalarOp::Convert(ConversionOp::FloatToSignedIntSaturating))
-    Opcode::FcvtToUintSat =>
-      Some(ScalarOp::Convert(ConversionOp::FloatToUnsignedIntSaturating))
-    Opcode::SintToFcvt =>
-      Some(ScalarOp::Convert(ConversionOp::SignedIntToFloat))
-    Opcode::UintToFcvt =>
-      Some(ScalarOp::Convert(ConversionOp::UnsignedIntToFloat))
-    Opcode::Bitcast => Some(ScalarOp::Convert(ConversionOp::Bitcast))
-    Opcode::Sextend8 => Some(ScalarOp::SignExtendFrom(8))
-    Opcode::Sextend16 => Some(ScalarOp::SignExtendFrom(16))
-    Opcode::Sextend32 => Some(ScalarOp::SignExtendFrom(32))
-    Opcode::Select => Some(ScalarOp::Select)
-    Opcode::Copy => Some(ScalarOp::Copy)
-    _ => None
-  }
-}
 
 ///|
 fn Opcode::to_vector_op(self : Opcode) -> VectorOp? {
@@ -2090,13 +1852,9 @@ pub fn Function::new_block0(self : Function) -> Block {
 
 ///|
 pub fn Opcode::canonicalize(self : Opcode) -> Opcode {
-  match self.to_scalar_op() {
-    Some(scalar_op) => Scalar(scalar_op)
-    None =>
-      match self.to_vector_op() {
-        Some(vector_op) => Vector(vector_op)
-        None => self
-      }
+  match self.to_vector_op() {
+    Some(vector_op) => Vector(vector_op)
+    None => self
   }
 }
 
