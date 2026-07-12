@@ -126,6 +126,31 @@ test "lower bitwise operations on all 64-bit word carriers" {
 }
 
 ///|
+test "lower same-class carrier bitcasts as moves" {
+  let carrier_types : Array[@milkir.Type] = [Ptr, Ref, CallableRef, OpaqueRef]
+  for ty in carrier_types {
+    let builder = @milkir.FunctionBuilder::FunctionBuilder(
+      "bitcast_i64_to_\{ty}",
+    )
+    builder.add_result(ty)
+    let source = builder.add_param(I64)
+    let result = builder.bitcast(ty, source)
+    builder.return_([result])
+    let text = @lower.lower_function(
+      builder.finalize(),
+      isa=AArch64,
+      embedding_abi=Some(reference_width_test_abi()),
+      run_ir_opt=false,
+    ).print()
+    if text.contains("= bitcast ") {
+      fail(
+        "expected same-class bitcast lowering without bitcast for \{ty}:\n\{text}",
+      )
+    }
+  }
+}
+
+///|
 test "lower reference and pointer equality as 64-bit MachV comparisons" {
   let carrier_types : Array[@milkir.Type] = [Ptr, Ref, CallableRef, OpaqueRef]
   for ty in carrier_types {

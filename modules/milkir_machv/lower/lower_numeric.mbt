@@ -1716,7 +1716,11 @@ fn lower_bitcast(
   if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let src = ctx.get_vreg_for_use(inst.operands[0], block)
-    let machv_inst = @instr.Inst(Bitcast)
+    let machv_inst = if dst.class == src.class {
+      @instr.Inst(Move)
+    } else {
+      @instr.Inst(Bitcast)
+    }
     machv_inst.add_def({ reg: Virtual(dst) })
     machv_inst.add_use(Virtual(src))
     block.add_inst(machv_inst)
