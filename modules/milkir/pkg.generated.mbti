@@ -17,8 +17,16 @@ pub suberror VerifyError {
   MissingTerminator(block_id~ : Int)
   EmptyFunction
   UndefinedValue(value_id~ : Int)
+  DuplicateBlockId(block_id~ : Int)
+  DuplicateValueDefinition(value_id~ : Int)
+  DuplicateInstructionId(inst_id~ : Int)
+  UseBeforeDefinition(value_id~ : Int)
+  NonDominatingUse(value_id~ : Int, defining_block~ : Int, use_block~ : Int)
+  InstructionOperandMismatch(inst_id~ : Int)
+  InvalidBlockTarget(block_id~ : Int)
   ArityMismatch(message~ : String)
   TypeMismatch(message~ : String)
+  UnverifiableInstruction(message~ : String)
 } derive(Eq, @debug.Debug)
 pub impl Show for VerifyError
 
@@ -54,6 +62,26 @@ pub fn CFG::postorder(Self) -> Array[Int]
 pub fn CFG::reverse_postorder(Self) -> Array[Int]
 pub fn CFG::to_dot(Self, String) -> String
 
+pub(all) enum CallOp {
+  Direct(ExternalSymbol, Signature)
+  Pointer(Int, Int)
+} derive(Eq, Hash, @debug.Debug)
+
+pub(all) enum ConversionOp {
+  IntReduce
+  SignedExtend
+  UnsignedExtend
+  FloatPromote
+  FloatDemote
+  FloatToSignedInt
+  FloatToUnsignedInt
+  FloatToSignedIntSaturating
+  FloatToUnsignedIntSaturating
+  SignedIntToFloat
+  UnsignedIntToFloat
+  Bitcast
+} derive(Eq, Hash, @debug.Debug)
+
 pub struct ExtOp {
   dialect : String
   opcode : String
@@ -80,6 +108,15 @@ pub struct ExternalSymbol {
 } derive(Eq, Hash, @debug.Debug)
 pub fn ExternalSymbol::ExternalSymbol(String) -> Self
 
+pub(all) enum FloatBinaryOp {
+  Add
+  Sub
+  Mul
+  Div
+  Min
+  Max
+} derive(Eq, Hash, @debug.Debug)
+
 pub(all) enum FloatCC {
   Eq
   Ne
@@ -89,20 +126,26 @@ pub(all) enum FloatCC {
   Ge
 } derive(Eq, Hash, @debug.Debug)
 
+pub(all) enum FloatUnaryOp {
+  Neg
+  Abs
+  Sqrt
+  Ceil
+  Floor
+  Trunc
+  Nearest
+} derive(Eq, Hash, @debug.Debug)
+
 pub struct Function {
   name : String
-  signature : Signature
   params : Array[(Value, Type)]
   results : Array[Type]
   blocks : Array[Block]
-  stack_slots : Array[StackSlot]
   external_symbols : Array[ExternalSymbol]
   mut next_value_id : Int
   mut next_inst_id : Int
   mut next_block_id : Int
-  mut next_stack_slot_id : Int
 } derive(@debug.Debug)
-pub fn Function::Function(String, Signature) -> Self
 pub fn Function::add_param(Self, Type) -> Value
 pub fn Function::add_result(Self, Type) -> Unit
 pub fn Function::declare_external_symbol(Self, String) -> ExternalSymbol
@@ -110,10 +153,13 @@ pub fn Function::new_block(Self, Array[Value]) -> Block
 pub fn Function::new_block0(Self) -> Block
 pub fn Function::new_empty(String) -> Self
 pub fn Function::new_inst(Self, Opcode, Array[Value], Array[Value]) -> Inst
-pub fn Function::new_stack_slot(Self, Int, Int) -> StackSlot
 pub fn Function::new_value(Self, Type) -> Value
+pub fn Function::param(Self, Int) -> Value?
 pub fn Function::print(Self) -> String
+pub fn Function::signature(Self) -> Signature
 pub fn Function::verify(Self) -> Unit raise VerifyError
+pub fn Function::verify_core(Self) -> Unit raise VerifyError
+pub fn Function::with_signature(String, Signature) -> Self
 
 type FunctionBuilder
 pub fn FunctionBuilder::FunctionBuilder(String) -> Self
@@ -131,7 +177,7 @@ pub fn FunctionBuilder::br_table(Self, Value, Array[Block], Block) -> Unit
 pub fn FunctionBuilder::brnz(Self, Value, Block, Block) -> Unit
 pub fn FunctionBuilder::brz(Self, Value, Block, Block) -> Unit
 pub fn FunctionBuilder::bxor(Self, Value, Value) -> Value
-pub fn FunctionBuilder::call_ptr(Self, Value, Value, Array[Value], Array[Type]) -> Array[Value]
+pub fn FunctionBuilder::call_pointer(Self, Value, Array[Value], Array[Type]) -> Array[Value]
 pub fn FunctionBuilder::call_symbol(Self, ExternalSymbol, Type?, Array[Value]) -> Value?
 pub fn FunctionBuilder::call_symbol_multi(Self, ExternalSymbol, Array[Type], Array[Value]) -> Array[Value]
 pub fn FunctionBuilder::clz(Self, Value) -> Value
@@ -159,7 +205,7 @@ pub fn FunctionBuilder::fcvt_to_uint_sat(Self, Type, Value) -> Value
 pub fn FunctionBuilder::fdemote(Self, Value) -> Value
 pub fn FunctionBuilder::fdiv(Self, Value, Value) -> Value
 pub fn FunctionBuilder::ffloor(Self, Value) -> Value
-pub fn FunctionBuilder::finalize(Self) -> Function
+pub fn FunctionBuilder::finalize(Self) -> Function raise VerifyError
 pub fn FunctionBuilder::fmax(Self, Value, Value) -> Value
 pub fn FunctionBuilder::fmin(Self, Value, Value) -> Value
 pub fn FunctionBuilder::fmul(Self, Value, Value) -> Value
@@ -221,7 +267,7 @@ pub fn FunctionBuilder::ushr(Self, Value, Value) -> Value
 pub fn FunctionBuilder::v128_and(Self, Value, Value) -> Value
 pub fn FunctionBuilder::v128_andnot(Self, Value, Value) -> Value
 pub fn FunctionBuilder::v128_anytrue(Self, Value) -> Value
-pub fn FunctionBuilder::v128_binary(Self, Opcode, Value, Value) -> Value
+pub fn FunctionBuilder::v128_binary(Self, VectorOp, Value, Value) -> Value
 pub fn FunctionBuilder::v128_bitselect(Self, Value, Value, Value) -> Value
 pub fn FunctionBuilder::v128_const(Self, Bytes) -> Value
 pub fn FunctionBuilder::v128_extract16s(Self, Value, Int) -> Value
@@ -232,8 +278,8 @@ pub fn FunctionBuilder::v128_extract8s(Self, Value, Int) -> Value
 pub fn FunctionBuilder::v128_extract8u(Self, Value, Int) -> Value
 pub fn FunctionBuilder::v128_extract_f32(Self, Value, Int) -> Value
 pub fn FunctionBuilder::v128_extract_f64(Self, Value, Int) -> Value
-pub fn FunctionBuilder::v128_load_lane_with_addr(Self, Opcode, Value, Value) -> Value
-pub fn FunctionBuilder::v128_load_with_addr(Self, Opcode, Value) -> Value
+pub fn FunctionBuilder::v128_load_lane_with_addr(Self, VectorOp, Value, Value) -> Value
+pub fn FunctionBuilder::v128_load_with_addr(Self, VectorOp, Value) -> Value
 pub fn FunctionBuilder::v128_not(Self, Value) -> Value
 pub fn FunctionBuilder::v128_or(Self, Value, Value) -> Value
 pub fn FunctionBuilder::v128_replace16(Self, Value, Value, Int) -> Value
@@ -242,7 +288,7 @@ pub fn FunctionBuilder::v128_replace64(Self, Value, Value, Int) -> Value
 pub fn FunctionBuilder::v128_replace8(Self, Value, Value, Int) -> Value
 pub fn FunctionBuilder::v128_replace_f32(Self, Value, Value, Int) -> Value
 pub fn FunctionBuilder::v128_replace_f64(Self, Value, Value, Int) -> Value
-pub fn FunctionBuilder::v128_shift(Self, Opcode, Value, Value) -> Value
+pub fn FunctionBuilder::v128_shift(Self, VectorOp, Value, Value) -> Value
 pub fn FunctionBuilder::v128_shuffle(Self, Value, Value, FixedArray[Int]) -> Value
 pub fn FunctionBuilder::v128_splat16(Self, Value) -> Value
 pub fn FunctionBuilder::v128_splat32(Self, Value) -> Value
@@ -250,10 +296,10 @@ pub fn FunctionBuilder::v128_splat64(Self, Value) -> Value
 pub fn FunctionBuilder::v128_splat8(Self, Value) -> Value
 pub fn FunctionBuilder::v128_splat_f32(Self, Value) -> Value
 pub fn FunctionBuilder::v128_splat_f64(Self, Value) -> Value
-pub fn FunctionBuilder::v128_store_lane_with_addr(Self, Opcode, Value, Value) -> Unit
+pub fn FunctionBuilder::v128_store_lane_with_addr(Self, VectorOp, Value, Value) -> Unit
 pub fn FunctionBuilder::v128_swizzle(Self, Value, Value) -> Value
-pub fn FunctionBuilder::v128_to_i32(Self, Opcode, Value) -> Value
-pub fn FunctionBuilder::v128_unary(Self, Opcode, Value) -> Value
+pub fn FunctionBuilder::v128_to_i32(Self, VectorOp, Value) -> Value
+pub fn FunctionBuilder::v128_unary(Self, VectorOp, Value) -> Value
 pub fn FunctionBuilder::v128_xor(Self, Value, Value) -> Value
 
 pub struct Inst {
@@ -270,6 +316,26 @@ pub fn Inst::first_result(Self) -> Value?
 pub impl Eq for Inst
 pub impl Hash for Inst
 
+pub(all) enum IntBinaryOp {
+  Add
+  Sub
+  Mul
+  UnsignedMulHigh
+  SignedMulHigh
+  SignedDiv
+  UnsignedDiv
+  SignedRem
+  UnsignedRem
+  And
+  Or
+  Xor
+  ShiftLeft
+  SignedShiftRight
+  UnsignedShiftRight
+  RotateLeft
+  RotateRight
+} derive(Eq, Hash, @debug.Debug)
+
 pub(all) enum IntCC {
   Eq
   Ne
@@ -283,6 +349,13 @@ pub(all) enum IntCC {
   Uge
 } derive(Eq, Hash, @debug.Debug)
 
+pub(all) enum IntUnaryOp {
+  Not
+  CountLeadingZeros
+  CountTrailingZeros
+  PopulationCount
+} derive(Eq, Hash, @debug.Debug)
+
 pub struct Loop {
   header : Int
   blocks : Array[Int]
@@ -290,102 +363,110 @@ pub struct Loop {
 } derive(@debug.Debug)
 pub fn Loop::contains(Self, Int) -> Bool
 
+pub(all) enum MemoryOp {
+  Load(Type)
+  Store(Type)
+  LoadNarrow(Type, Int, Bool)
+  StoreNarrow(Int)
+} derive(Eq, Hash, @debug.Debug)
+
 pub(all) enum Metadata {
   SourceLoc(String)
   Comment(String)
 } derive(Eq, @debug.Debug)
 
 pub(all) enum Opcode {
-  Iconst(Int64)
-  Fconst(Double)
-  Iadd
-  Isub
-  Imul
-  Umulh
-  Smulh
-  Sdiv
-  Udiv
-  Srem
-  Urem
-  Band
-  Bor
-  Bxor
-  Bnot
-  Ishl
-  Sshr
-  Ushr
-  Rotl
-  Rotr
-  Clz
-  Ctz
-  Popcnt
-  Icmp(IntCC)
-  IcmpEq
-  Fadd
-  Fsub
-  Fmul
-  Fdiv
-  Fmin
-  Fmax
-  Fcmp(FloatCC)
-  Fneg
-  Fabs
-  Fsqrt
-  Fceil
-  Ffloor
-  Ftrunc
-  Fnearest
-  Ireduce
-  Sextend
-  Uextend
-  Fpromote
-  Fdemote
-  FcvtToSint
-  FcvtToUint
-  FcvtToSintSat
-  FcvtToUintSat
-  SintToFcvt
-  UintToFcvt
-  Bitcast
-  Sextend8
-  Sextend16
-  Sextend32
+  Scalar(ScalarOp)
+  Call(CallOp)
+  Memory(MemoryOp)
+  Ext(ExtOp, Signature)
+  Vector(VectorOp)
+} derive(Eq, Hash, @debug.Debug)
+pub impl Show for Opcode
+
+pub(all) enum OptLevel {
+  O0
+  O1
+  O2
+  O3
+}
+pub fn OptLevel::from_int(Int) -> Self
+
+pub struct OptResult {
+  mut changed : Bool
+} derive(Eq)
+
+pub(all) enum ScalarOp {
+  IntConst(Int64)
+  FloatConst(Double)
+  IntBinary(IntBinaryOp)
+  IntUnary(IntUnaryOp)
+  IntCompare(IntCC)
+  FloatBinary(FloatBinaryOp)
+  FloatUnary(FloatUnaryOp)
+  FloatCompare(FloatCC)
+  Convert(ConversionOp)
+  SignExtendFrom(Int)
   Select
   Copy
-  Load
-  Store
-  StackAddr(StackSlot)
-  Call(ExternalSymbol)
-  CallIndirect(Signature)
-  LoadPtr(Type)
-  StorePtr(Type)
-  LoadPtrNarrow(Type, Int, Bool)
-  StorePtrNarrow(Int)
-  CallPtr(Int, Int)
+} derive(Eq, Hash, @debug.Debug)
+
+pub struct Signature {
+  params : Array[Type]
+  results : Array[Type]
+} derive(Eq, Hash, @debug.Debug)
+pub fn Signature::Signature(Array[Type], Array[Type]) -> Self
+
+pub(all) enum Terminator {
+  Jump(Int, Array[Value])
+  Branch(Value, Int, Array[Value], Int, Array[Value])
+  Brz(Value, Int, Int)
+  Brnz(Value, Int, Int)
+  BrTable(Value, Array[Int], Int)
+  Return(Array[Value])
   Trap(String)
-  Custom(String)
-  Ext(ExtOp)
+  TrapExit(String)
+} derive(@debug.Debug)
+
+pub(all) enum Type {
+  I32
+  I64
+  F32
+  F64
+  V128
+  Ptr
+  Ref
+  CallableRef
+  OpaqueRef
+} derive(Eq, Hash, @debug.Debug)
+pub impl Show for Type
+
+pub struct Value {
+  id : Int
+  ty : Type
+} derive(Eq, Hash, @debug.Debug)
+pub fn Value::Value(Int, Type) -> Self
+
+pub(all) enum VectorExtension {
+  None
+  Signed
+  Unsigned
+} derive(Eq, Hash, @debug.Debug)
+
+pub(all) enum VectorLane {
+  I8
+  I16
+  I32
+  I64
+  F32
+  F64
+} derive(Eq, Hash, @debug.Debug)
+
+pub(all) enum VectorOp {
   V128Const(Bytes)
-  V128Splat8
-  V128Splat16
-  V128Splat32
-  V128Splat64
-  V128SplatF32
-  V128SplatF64
-  V128ExtractLane8S(Int)
-  V128ExtractLane8U(Int)
-  V128ExtractLane16S(Int)
-  V128ExtractLane16U(Int)
-  V128ExtractLane32(Int)
-  V128ExtractLane64(Int)
-  V128ExtractLaneF32(Int)
-  V128ExtractLaneF64(Int)
-  V128ReplaceLane8(Int)
-  V128ReplaceLane16(Int)
-  V128ReplaceLane32(Int)
-  V128ReplaceLane64(Int)
-  V128ReplaceLaneF32(Int)
-  V128ReplaceLaneF64(Int)
+  Splat(VectorLane)
+  ExtractLane(VectorLane, VectorExtension, Int)
+  ReplaceLane(VectorLane, Int)
   V128Shuffle(FixedArray[Int])
   V128Swizzle
   V128Not
@@ -579,26 +660,11 @@ pub(all) enum Opcode {
   V128ConvertLowI32toF64U
   V128DemoteF64toF32Zero
   V128PromoteLowF32toF64
-  V128Load8x8S(Int, Int, Int64)
-  V128Load8x8U(Int, Int, Int64)
-  V128Load16x4S(Int, Int, Int64)
-  V128Load16x4U(Int, Int, Int64)
-  V128Load32x2S(Int, Int, Int64)
-  V128Load32x2U(Int, Int, Int64)
-  V128Load8Splat(Int, Int, Int64)
-  V128Load16Splat(Int, Int, Int64)
-  V128Load32Splat(Int, Int, Int64)
-  V128Load64Splat(Int, Int, Int64)
-  V128Load32Zero(Int, Int, Int64)
-  V128Load64Zero(Int, Int, Int64)
-  V128Load8Lane(Int, Int, Int64, Int)
-  V128Load16Lane(Int, Int, Int64, Int)
-  V128Load32Lane(Int, Int, Int64, Int)
-  V128Load64Lane(Int, Int, Int64, Int)
-  V128Store8Lane(Int, Int, Int64, Int)
-  V128Store16Lane(Int, Int, Int64, Int)
-  V128Store32Lane(Int, Int, Int64, Int)
-  V128Store64Lane(Int, Int, Int64, Int)
+  LoadExtend(VectorLane, VectorExtension)
+  LoadSplat(VectorLane)
+  LoadZero(VectorLane)
+  LoadLane(VectorLane, Int)
+  StoreLane(VectorLane, Int)
   V128RelaxedSwizzle
   V128RelaxedTruncF32toI32S
   V128RelaxedTruncF32toI32U
@@ -620,61 +686,6 @@ pub(all) enum Opcode {
   V128RelaxedDot8to16S
   V128RelaxedDot8to32AddS
 } derive(Eq, Hash, @debug.Debug)
-pub impl Show for Opcode
-
-pub(all) enum OptLevel {
-  O0
-  O1
-  O2
-  O3
-}
-pub fn OptLevel::from_int(Int) -> Self
-
-pub struct OptResult {
-  mut changed : Bool
-} derive(Eq)
-
-pub struct Signature {
-  params : Array[Type]
-  results : Array[Type]
-} derive(Eq, Hash, @debug.Debug)
-pub fn Signature::Signature(Array[Type], Array[Type]) -> Self
-
-pub struct StackSlot {
-  id : Int
-  size : Int
-  align : Int
-} derive(Eq, Hash, @debug.Debug)
-
-pub(all) enum Terminator {
-  Jump(Int, Array[Value])
-  Branch(Value, Int, Array[Value], Int, Array[Value])
-  Brz(Value, Int, Int)
-  Brnz(Value, Int, Int)
-  BrTable(Value, Array[Int], Int)
-  Return(Array[Value])
-  Trap(String)
-  TrapExit(String)
-} derive(@debug.Debug)
-
-pub(all) enum Type {
-  I32
-  I64
-  F32
-  F64
-  V128
-  Ptr
-  Ref
-  CallableRef
-  OpaqueRef
-} derive(Eq, Hash, @debug.Debug)
-pub impl Show for Type
-
-pub struct Value {
-  id : Int
-  ty : Type
-} derive(Eq, Hash, @debug.Debug)
-pub fn Value::Value(Int, Type) -> Self
 
 // Type aliases
 

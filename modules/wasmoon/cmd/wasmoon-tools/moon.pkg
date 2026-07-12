@@ -12,6 +12,4 @@ import {
   "TheWaWaR/clap",
 }
 
-options(
-  "is-main": true,
-)
+pkgtype(kind: "executable")

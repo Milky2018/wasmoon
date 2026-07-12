@@ -24,7 +24,10 @@ pub fn FunctionBuilder::get_function(self : FunctionBuilder) -> Function {
 
 ///|
 /// Finish building and return the constructed function.
-pub fn FunctionBuilder::finalize(self : FunctionBuilder) -> Function {
+pub fn FunctionBuilder::finalize(
+  self : FunctionBuilder,
+) -> Function raise VerifyError {
+  self.func.verify()
   self.func
 }
 
@@ -119,7 +122,7 @@ pub fn FunctionBuilder::emit_inst(
 ) -> Value {
   let block = self.current_block
   let result = self.func.new_value(ty)
-  let inst = Inst(Some(result), opcode, operands)
+  let inst = self.func.new_inst(opcode, operands, [result])
   block.add_inst(inst)
   result
 }
@@ -132,7 +135,7 @@ pub fn FunctionBuilder::emit_void_inst(
   operands : Array[Value],
 ) -> Unit {
   let block = self.current_block
-  let inst = Inst(None, opcode, operands)
+  let inst = self.func.new_inst(opcode, operands, [])
   block.add_inst(inst)
 }
 
@@ -153,7 +156,7 @@ pub fn FunctionBuilder::emit_multi_inst(
   for ty in result_types {
     results.push(self.func.new_value(ty))
   }
-  let inst = Inst::new_multi(results, opcode, operands)
+  let inst = self.func.new_inst(opcode, operands, results)
   block.add_inst(inst)
   results
 }
@@ -165,7 +168,11 @@ pub fn FunctionBuilder::emit_ext_inst(
   opcode : ExtOp,
   operands : Array[Value],
 ) -> Value {
-  self.emit_inst(ty, Ext(opcode), operands)
+  self.emit_inst(
+    ty,
+    Ext(opcode, Signature(operands.map(value => value.ty), [ty])),
+    operands,
+  )
 }
 
 ///|
@@ -174,7 +181,10 @@ pub fn FunctionBuilder::emit_void_ext_inst(
   opcode : ExtOp,
   operands : Array[Value],
 ) -> Unit {
-  self.emit_void_inst(Ext(opcode), operands)
+  self.emit_void_inst(
+    Ext(opcode, Signature(operands.map(value => value.ty), [])),
+    operands,
+  )
 }
 
 ///|
@@ -184,7 +194,11 @@ pub fn FunctionBuilder::emit_multi_ext_inst(
   opcode : ExtOp,
   operands : Array[Value],
 ) -> Array[Value] {
-  self.emit_multi_inst(result_types, Ext(opcode), operands)
+  self.emit_multi_inst(
+    result_types,
+    Ext(opcode, Signature(operands.map(value => value.ty), result_types.copy())),
+    operands,
+  )
 }
 
 // ============ Constants ============
@@ -200,7 +214,7 @@ pub fn FunctionBuilder::get_const_value(
   for block in self.func.blocks {
     for inst in block.instructions {
       if inst.first_result() is Some(r) && r.id == v.id {
-        if inst.opcode is Iconst(c) {
+        if inst.opcode is Scalar(ScalarOp::IntConst(c)) {
           return Some(c)
         }
         return None // Found defining instruction but not a constant
@@ -217,7 +231,7 @@ pub fn FunctionBuilder::iconst(
   ty : Type,
   value : Int64,
 ) -> Value {
-  self.emit_inst(ty, Iconst(value), [])
+  self.emit_inst(ty, Scalar(ScalarOp::IntConst(value)), [])
 }
 
 ///|
@@ -245,7 +259,7 @@ pub fn FunctionBuilder::fconst(
   ty : Type,
   value : Double,
 ) -> Value {
-  self.emit_inst(ty, Fconst(value), [])
+  self.emit_inst(ty, Scalar(ScalarOp::FloatConst(value)), [])
 }
 
 ///|
@@ -279,7 +293,7 @@ pub fn FunctionBuilder::iadd(
   a : Value,
   b : Value,
 ) -> Value {
-  self.emit_inst(a.ty, Iadd, [a, b])
+  self.emit_inst(a.ty, Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)), [a, b])
 }
 
 ///|
@@ -289,7 +303,7 @@ pub fn FunctionBuilder::isub(
   a : Value,
   b : Value,
 ) -> Value {
-  self.emit_inst(a.ty, Isub, [a, b])
+  self.emit_inst(a.ty, Scalar(ScalarOp::IntBinary(IntBinaryOp::Sub)), [a, b])
 }
 
 ///|
@@ -299,7 +313,7 @@ pub fn FunctionBuilder::imul(
   a : Value,
   b : Value,
 ) -> Value {
-  self.emit_inst(a.ty, Imul, [a, b])
+  self.emit_inst(a.ty, Scalar(ScalarOp::IntBinary(IntBinaryOp::Mul)), [a, b])
 }
 
 ///|
@@ -309,7 +323,11 @@ pub fn FunctionBuilder::umulh(
   a : Value,
   b : Value,
 ) -> Value {
-  self.emit_inst(a.ty, Umulh, [a, b])
+  self.emit_inst(
+    a.ty,
+    Scalar(ScalarOp::IntBinary(IntBinaryOp::UnsignedMulHigh)),
+    [a, b],
+  )
 }
 
 ///|
@@ -319,7 +337,11 @@ pub fn FunctionBuilder::smulh(
   a : Value,
   b : Value,
 ) -> Value {
-  self.emit_inst(a.ty, Smulh, [a, b])
+  self.emit_inst(
+    a.ty,
+    Scalar(ScalarOp::IntBinary(IntBinaryOp::SignedMulHigh)),
+    [a, b],
+  )
 }
 
 ///|
@@ -329,7 +351,9 @@ pub fn FunctionBuilder::sdiv(
   a : Value,
   b : Value,
 ) -> Value {
-  self.emit_inst(a.ty, Sdiv, [a, b])
+  self.emit_inst(a.ty, Scalar(ScalarOp::IntBinary(IntBinaryOp::SignedDiv)), [
+    a, b,
+  ])
 }
 
 ///|
@@ -339,7 +363,9 @@ pub fn FunctionBuilder::udiv(
   a : Value,
   b : Value,
 ) -> Value {
-  self.emit_inst(a.ty, Udiv, [a, b])
+  self.emit_inst(a.ty, Scalar(ScalarOp::IntBinary(IntBinaryOp::UnsignedDiv)), [
+    a, b,
+  ])
 }
 
 ///|
@@ -349,7 +375,9 @@ pub fn FunctionBuilder::srem(
   a : Value,
   b : Value,
 ) -> Value {
-  self.emit_inst(a.ty, Srem, [a, b])
+  self.emit_inst(a.ty, Scalar(ScalarOp::IntBinary(IntBinaryOp::SignedRem)), [
+    a, b,
+  ])
 }
 
 ///|
@@ -359,7 +387,9 @@ pub fn FunctionBuilder::urem(
   a : Value,
   b : Value,
 ) -> Value {
-  self.emit_inst(a.ty, Urem, [a, b])
+  self.emit_inst(a.ty, Scalar(ScalarOp::IntBinary(IntBinaryOp::UnsignedRem)), [
+    a, b,
+  ])
 }
 
 // ============ Bitwise Operations ============
@@ -371,7 +401,7 @@ pub fn FunctionBuilder::band(
   a : Value,
   b : Value,
 ) -> Value {
-  self.emit_inst(a.ty, Band, [a, b])
+  self.emit_inst(a.ty, Scalar(ScalarOp::IntBinary(IntBinaryOp::And)), [a, b])
 }
 
 ///|
@@ -381,7 +411,7 @@ pub fn FunctionBuilder::bor(
   a : Value,
   b : Value,
 ) -> Value {
-  self.emit_inst(a.ty, Bor, [a, b])
+  self.emit_inst(a.ty, Scalar(ScalarOp::IntBinary(IntBinaryOp::Or)), [a, b])
 }
 
 ///|
@@ -391,13 +421,13 @@ pub fn FunctionBuilder::bxor(
   a : Value,
   b : Value,
 ) -> Value {
-  self.emit_inst(a.ty, Bxor, [a, b])
+  self.emit_inst(a.ty, Scalar(ScalarOp::IntBinary(IntBinaryOp::Xor)), [a, b])
 }
 
 ///|
 /// Bitwise not
 pub fn FunctionBuilder::bnot(self : FunctionBuilder, a : Value) -> Value {
-  self.emit_inst(a.ty, Bnot, [a])
+  self.emit_inst(a.ty, Scalar(ScalarOp::IntUnary(IntUnaryOp::Not)), [a])
 }
 
 ///|
@@ -407,7 +437,9 @@ pub fn FunctionBuilder::ishl(
   a : Value,
   b : Value,
 ) -> Value {
-  self.emit_inst(a.ty, Ishl, [a, b])
+  self.emit_inst(a.ty, Scalar(ScalarOp::IntBinary(IntBinaryOp::ShiftLeft)), [
+    a, b,
+  ])
 }
 
 ///|
@@ -417,7 +449,11 @@ pub fn FunctionBuilder::sshr(
   a : Value,
   b : Value,
 ) -> Value {
-  self.emit_inst(a.ty, Sshr, [a, b])
+  self.emit_inst(
+    a.ty,
+    Scalar(ScalarOp::IntBinary(IntBinaryOp::SignedShiftRight)),
+    [a, b],
+  )
 }
 
 ///|
@@ -427,7 +463,11 @@ pub fn FunctionBuilder::ushr(
   a : Value,
   b : Value,
 ) -> Value {
-  self.emit_inst(a.ty, Ushr, [a, b])
+  self.emit_inst(
+    a.ty,
+    Scalar(ScalarOp::IntBinary(IntBinaryOp::UnsignedShiftRight)),
+    [a, b],
+  )
 }
 
 ///|
@@ -437,7 +477,9 @@ pub fn FunctionBuilder::rotl(
   a : Value,
   b : Value,
 ) -> Value {
-  self.emit_inst(a.ty, Rotl, [a, b])
+  self.emit_inst(a.ty, Scalar(ScalarOp::IntBinary(IntBinaryOp::RotateLeft)), [
+    a, b,
+  ])
 }
 
 ///|
@@ -447,25 +489,39 @@ pub fn FunctionBuilder::rotr(
   a : Value,
   b : Value,
 ) -> Value {
-  self.emit_inst(a.ty, Rotr, [a, b])
+  self.emit_inst(a.ty, Scalar(ScalarOp::IntBinary(IntBinaryOp::RotateRight)), [
+    a, b,
+  ])
 }
 
 ///|
 /// Count leading zeros
 pub fn FunctionBuilder::clz(self : FunctionBuilder, a : Value) -> Value {
-  self.emit_inst(a.ty, Clz, [a])
+  self.emit_inst(
+    a.ty,
+    Scalar(ScalarOp::IntUnary(IntUnaryOp::CountLeadingZeros)),
+    [a],
+  )
 }
 
 ///|
 /// Count trailing zeros
 pub fn FunctionBuilder::ctz(self : FunctionBuilder, a : Value) -> Value {
-  self.emit_inst(a.ty, Ctz, [a])
+  self.emit_inst(
+    a.ty,
+    Scalar(ScalarOp::IntUnary(IntUnaryOp::CountTrailingZeros)),
+    [a],
+  )
 }
 
 ///|
 /// Population count (count number of 1 bits)
 pub fn FunctionBuilder::popcnt(self : FunctionBuilder, a : Value) -> Value {
-  self.emit_inst(a.ty, Popcnt, [a])
+  self.emit_inst(
+    a.ty,
+    Scalar(ScalarOp::IntUnary(IntUnaryOp::PopulationCount)),
+    [a],
+  )
 }
 
 // ============ Integer Comparisons ============
@@ -478,7 +534,7 @@ pub fn FunctionBuilder::icmp(
   a : Value,
   b : Value,
 ) -> Value {
-  self.emit_inst(I32, Icmp(cc), [a, b])
+  self.emit_inst(I32, Scalar(ScalarOp::IntCompare(cc)), [a, b])
 }
 
 ///|
@@ -590,7 +646,7 @@ pub fn FunctionBuilder::fadd(
   a : Value,
   b : Value,
 ) -> Value {
-  self.emit_inst(a.ty, Fadd, [a, b])
+  self.emit_inst(a.ty, Scalar(ScalarOp::FloatBinary(FloatBinaryOp::Add)), [a, b])
 }
 
 ///|
@@ -600,7 +656,7 @@ pub fn FunctionBuilder::fsub(
   a : Value,
   b : Value,
 ) -> Value {
-  self.emit_inst(a.ty, Fsub, [a, b])
+  self.emit_inst(a.ty, Scalar(ScalarOp::FloatBinary(FloatBinaryOp::Sub)), [a, b])
 }
 
 ///|
@@ -610,7 +666,7 @@ pub fn FunctionBuilder::fmul(
   a : Value,
   b : Value,
 ) -> Value {
-  self.emit_inst(a.ty, Fmul, [a, b])
+  self.emit_inst(a.ty, Scalar(ScalarOp::FloatBinary(FloatBinaryOp::Mul)), [a, b])
 }
 
 ///|
@@ -620,7 +676,7 @@ pub fn FunctionBuilder::fdiv(
   a : Value,
   b : Value,
 ) -> Value {
-  self.emit_inst(a.ty, Fdiv, [a, b])
+  self.emit_inst(a.ty, Scalar(ScalarOp::FloatBinary(FloatBinaryOp::Div)), [a, b])
 }
 
 ///|
@@ -630,7 +686,7 @@ pub fn FunctionBuilder::fmin(
   a : Value,
   b : Value,
 ) -> Value {
-  self.emit_inst(a.ty, Fmin, [a, b])
+  self.emit_inst(a.ty, Scalar(ScalarOp::FloatBinary(FloatBinaryOp::Min)), [a, b])
 }
 
 ///|
@@ -640,7 +696,7 @@ pub fn FunctionBuilder::fmax(
   a : Value,
   b : Value,
 ) -> Value {
-  self.emit_inst(a.ty, Fmax, [a, b])
+  self.emit_inst(a.ty, Scalar(ScalarOp::FloatBinary(FloatBinaryOp::Max)), [a, b])
 }
 
 // ============ Float Comparisons ============
@@ -653,7 +709,7 @@ pub fn FunctionBuilder::fcmp(
   a : Value,
   b : Value,
 ) -> Value {
-  self.emit_inst(I32, Fcmp(cc), [a, b])
+  self.emit_inst(I32, Scalar(ScalarOp::FloatCompare(cc)), [a, b])
 }
 
 // ============ Float Unary Operations ============
@@ -661,43 +717,43 @@ pub fn FunctionBuilder::fcmp(
 ///|
 /// Float negate
 pub fn FunctionBuilder::fneg(self : FunctionBuilder, a : Value) -> Value {
-  self.emit_inst(a.ty, Fneg, [a])
+  self.emit_inst(a.ty, Scalar(ScalarOp::FloatUnary(FloatUnaryOp::Neg)), [a])
 }
 
 ///|
 /// Float absolute value
 pub fn FunctionBuilder::fabs(self : FunctionBuilder, a : Value) -> Value {
-  self.emit_inst(a.ty, Fabs, [a])
+  self.emit_inst(a.ty, Scalar(ScalarOp::FloatUnary(FloatUnaryOp::Abs)), [a])
 }
 
 ///|
 /// Float square root
 pub fn FunctionBuilder::fsqrt(self : FunctionBuilder, a : Value) -> Value {
-  self.emit_inst(a.ty, Fsqrt, [a])
+  self.emit_inst(a.ty, Scalar(ScalarOp::FloatUnary(FloatUnaryOp::Sqrt)), [a])
 }
 
 ///|
 /// Float ceiling
 pub fn FunctionBuilder::fceil(self : FunctionBuilder, a : Value) -> Value {
-  self.emit_inst(a.ty, Fceil, [a])
+  self.emit_inst(a.ty, Scalar(ScalarOp::FloatUnary(FloatUnaryOp::Ceil)), [a])
 }
 
 ///|
 /// Float floor
 pub fn FunctionBuilder::ffloor(self : FunctionBuilder, a : Value) -> Value {
-  self.emit_inst(a.ty, Ffloor, [a])
+  self.emit_inst(a.ty, Scalar(ScalarOp::FloatUnary(FloatUnaryOp::Floor)), [a])
 }
 
 ///|
 /// Float truncate
 pub fn FunctionBuilder::ftrunc(self : FunctionBuilder, a : Value) -> Value {
-  self.emit_inst(a.ty, Ftrunc, [a])
+  self.emit_inst(a.ty, Scalar(ScalarOp::FloatUnary(FloatUnaryOp::Trunc)), [a])
 }
 
 ///|
 /// Float nearest (round to nearest even)
 pub fn FunctionBuilder::fnearest(self : FunctionBuilder, a : Value) -> Value {
-  self.emit_inst(a.ty, Fnearest, [a])
+  self.emit_inst(a.ty, Scalar(ScalarOp::FloatUnary(FloatUnaryOp::Nearest)), [a])
 }
 
 // ============ Conversions ============
@@ -709,7 +765,7 @@ pub fn FunctionBuilder::ireduce(
   ty : Type,
   a : Value,
 ) -> Value {
-  self.emit_inst(ty, Ireduce, [a])
+  self.emit_inst(ty, Scalar(ScalarOp::Convert(ConversionOp::IntReduce)), [a])
 }
 
 ///|
@@ -719,7 +775,7 @@ pub fn FunctionBuilder::sextend(
   ty : Type,
   a : Value,
 ) -> Value {
-  self.emit_inst(ty, Sextend, [a])
+  self.emit_inst(ty, Scalar(ScalarOp::Convert(ConversionOp::SignedExtend)), [a])
 }
 
 ///|
@@ -729,7 +785,9 @@ pub fn FunctionBuilder::uextend(
   ty : Type,
   a : Value,
 ) -> Value {
-  self.emit_inst(ty, Uextend, [a])
+  self.emit_inst(ty, Scalar(ScalarOp::Convert(ConversionOp::UnsignedExtend)), [
+    a,
+  ])
 }
 
 ///|
@@ -740,7 +798,7 @@ pub fn FunctionBuilder::sextend8(
   ty : Type,
   a : Value,
 ) -> Value {
-  self.emit_inst(ty, Sextend8, [a])
+  self.emit_inst(ty, Scalar(ScalarOp::SignExtendFrom(8)), [a])
 }
 
 ///|
@@ -751,26 +809,26 @@ pub fn FunctionBuilder::sextend16(
   ty : Type,
   a : Value,
 ) -> Value {
-  self.emit_inst(ty, Sextend16, [a])
+  self.emit_inst(ty, Scalar(ScalarOp::SignExtendFrom(16)), [a])
 }
 
 ///|
 /// Sign extend from 32 bits to 64 bits
 /// Similar to ireduce(I32) + sextend(I64)
 pub fn FunctionBuilder::sextend32(self : FunctionBuilder, a : Value) -> Value {
-  self.emit_inst(I64, Sextend32, [a])
+  self.emit_inst(I64, Scalar(ScalarOp::SignExtendFrom(32)), [a])
 }
 
 ///|
 /// Promote float (f32 -> f64)
 pub fn FunctionBuilder::fpromote(self : FunctionBuilder, a : Value) -> Value {
-  self.emit_inst(F64, Fpromote, [a])
+  self.emit_inst(F64, Scalar(ScalarOp::Convert(ConversionOp::FloatPromote)), [a])
 }
 
 ///|
 /// Demote float (f64 -> f32)
 pub fn FunctionBuilder::fdemote(self : FunctionBuilder, a : Value) -> Value {
-  self.emit_inst(F32, Fdemote, [a])
+  self.emit_inst(F32, Scalar(ScalarOp::Convert(ConversionOp::FloatDemote)), [a])
 }
 
 ///|
@@ -780,7 +838,11 @@ pub fn FunctionBuilder::fcvt_to_sint(
   ty : Type,
   a : Value,
 ) -> Value {
-  self.emit_inst(ty, FcvtToSint, [a])
+  self.emit_inst(
+    ty,
+    Scalar(ScalarOp::Convert(ConversionOp::FloatToSignedInt)),
+    [a],
+  )
 }
 
 ///|
@@ -790,7 +852,11 @@ pub fn FunctionBuilder::fcvt_to_uint(
   ty : Type,
   a : Value,
 ) -> Value {
-  self.emit_inst(ty, FcvtToUint, [a])
+  self.emit_inst(
+    ty,
+    Scalar(ScalarOp::Convert(ConversionOp::FloatToUnsignedInt)),
+    [a],
+  )
 }
 
 ///|
@@ -800,7 +866,11 @@ pub fn FunctionBuilder::fcvt_to_sint_sat(
   ty : Type,
   a : Value,
 ) -> Value {
-  self.emit_inst(ty, FcvtToSintSat, [a])
+  self.emit_inst(
+    ty,
+    Scalar(ScalarOp::Convert(ConversionOp::FloatToSignedIntSaturating)),
+    [a],
+  )
 }
 
 ///|
@@ -810,7 +880,11 @@ pub fn FunctionBuilder::fcvt_to_uint_sat(
   ty : Type,
   a : Value,
 ) -> Value {
-  self.emit_inst(ty, FcvtToUintSat, [a])
+  self.emit_inst(
+    ty,
+    Scalar(ScalarOp::Convert(ConversionOp::FloatToUnsignedIntSaturating)),
+    [a],
+  )
 }
 
 ///|
@@ -820,7 +894,11 @@ pub fn FunctionBuilder::sint_to_fcvt(
   ty : Type,
   a : Value,
 ) -> Value {
-  self.emit_inst(ty, SintToFcvt, [a])
+  self.emit_inst(
+    ty,
+    Scalar(ScalarOp::Convert(ConversionOp::SignedIntToFloat)),
+    [a],
+  )
 }
 
 ///|
@@ -830,7 +908,11 @@ pub fn FunctionBuilder::uint_to_fcvt(
   ty : Type,
   a : Value,
 ) -> Value {
-  self.emit_inst(ty, UintToFcvt, [a])
+  self.emit_inst(
+    ty,
+    Scalar(ScalarOp::Convert(ConversionOp::UnsignedIntToFloat)),
+    [a],
+  )
 }
 
 ///|
@@ -840,7 +922,7 @@ pub fn FunctionBuilder::bitcast(
   ty : Type,
   a : Value,
 ) -> Value {
-  self.emit_inst(ty, Bitcast, [a])
+  self.emit_inst(ty, Scalar(ScalarOp::Convert(ConversionOp::Bitcast)), [a])
 }
 
 // ============ Misc Operations ============
@@ -853,13 +935,13 @@ pub fn FunctionBuilder::select(
   a : Value,
   b : Value,
 ) -> Value {
-  self.emit_inst(a.ty, Select, [cond, a, b])
+  self.emit_inst(a.ty, Scalar(ScalarOp::Select), [cond, a, b])
 }
 
 ///|
 /// Copy value (for register allocation)
 pub fn FunctionBuilder::copy(self : FunctionBuilder, a : Value) -> Value {
-  self.emit_inst(a.ty, Copy, [a])
+  self.emit_inst(a.ty, Scalar(ScalarOp::Copy), [a])
 }
 
 // ============ Function Calls ============
@@ -871,10 +953,21 @@ pub fn FunctionBuilder::call_symbol(
   result_ty : Type?,
   args : Array[Value],
 ) -> Value? {
+  let param_types = args.map(value => value.ty)
   match result_ty {
-    Some(ty) => Some(self.emit_inst(ty, Call(symbol), args))
+    Some(ty) =>
+      Some(
+        self.emit_inst(
+          ty,
+          Call(CallOp::Direct(symbol, Signature(param_types, [ty]))),
+          args,
+        ),
+      )
     None => {
-      self.emit_void_inst(Call(symbol), args)
+      self.emit_void_inst(
+        Call(CallOp::Direct(symbol, Signature(param_types, []))),
+        args,
+      )
       None
     }
   }
@@ -887,7 +980,16 @@ pub fn FunctionBuilder::call_symbol_multi(
   result_types : Array[Type],
   args : Array[Value],
 ) -> Array[Value] {
-  self.emit_multi_inst(result_types, Call(symbol), args)
+  self.emit_multi_inst(
+    result_types,
+    Call(
+      CallOp::Direct(
+        symbol,
+        Signature(args.map(value => value.ty), result_types.copy()),
+      ),
+    ),
+    args,
+  )
 }
 
 // ============ Terminators ============
@@ -968,7 +1070,7 @@ pub fn FunctionBuilder::load_ptr(
   base : Value,
   offset : Value,
 ) -> Value {
-  self.emit_inst(ty, LoadPtr(ty), [base, offset])
+  self.emit_inst(ty, Memory(MemoryOp::Load(ty)), [base, offset])
 }
 
 ///|
@@ -981,7 +1083,7 @@ pub fn FunctionBuilder::store_ptr(
   value : Value,
   offset : Value,
 ) -> Unit {
-  self.emit_void_inst(StorePtr(ty), [base, value, offset])
+  self.emit_void_inst(Memory(MemoryOp::Store(ty)), [base, value, offset])
 }
 
 ///|
@@ -995,9 +1097,11 @@ pub fn FunctionBuilder::load_ptr_narrow(
   base : Value,
   offset : Value,
 ) -> Value {
-  self.emit_inst(result_ty, LoadPtrNarrow(result_ty, bits, signed), [
-    base, offset,
-  ])
+  self.emit_inst(
+    result_ty,
+    Memory(MemoryOp::LoadNarrow(result_ty, bits, signed)),
+    [base, offset],
+  )
 }
 
 ///|
@@ -1010,32 +1114,28 @@ pub fn FunctionBuilder::store_ptr_narrow(
   value : Value,
   offset : Value,
 ) -> Unit {
-  self.emit_void_inst(StorePtrNarrow(bits), [base, value, offset])
+  self.emit_void_inst(Memory(MemoryOp::StoreNarrow(bits)), [base, value, offset])
 }
 
 ///|
-/// Call via function pointer with multiple return values
-/// For calls through an indirect callee address.
-///
-/// Design: a callee environment operand is passed explicitly before user
-/// arguments; callers can provide a null/sentinel value when their convention
-/// does not use an environment.
-///
-/// Operand layout: [func_ptr, callee_env, user_args...]
-pub fn FunctionBuilder::call_ptr(
+/// Call a function pointer with ordinary arguments.
+pub fn FunctionBuilder::call_pointer(
   self : FunctionBuilder,
   func_ptr : Value,
-  callee_env : Value,
   args : Array[Value],
   result_types : Array[Type],
 ) -> Array[Value] {
-  let all_args : Array[Value] = [func_ptr, callee_env]
+  let operands : Array[Value] = [func_ptr]
   for arg in args {
-    all_args.push(arg)
+    operands.push(arg)
   }
   let num_args = args.length()
   let num_results = result_types.length()
-  self.emit_multi_inst(result_types, CallPtr(num_args, num_results), all_args)
+  self.emit_multi_inst(
+    result_types,
+    Call(CallOp::Pointer(num_args, num_results)),
+    operands,
+  )
 }
 
 // ============ SIMD Operations ============
@@ -1046,7 +1146,7 @@ pub fn FunctionBuilder::v128_const(
   self : FunctionBuilder,
   bytes : Bytes,
 ) -> Value {
-  self.emit_inst(V128, V128Const(bytes), [])
+  self.emit_inst(V128, Vector(VectorOp::V128Const(bytes)), [])
 }
 
 ///|
@@ -1055,7 +1155,7 @@ pub fn FunctionBuilder::v128_splat8(
   self : FunctionBuilder,
   val : Value,
 ) -> Value {
-  self.emit_inst(V128, V128Splat8, [val])
+  self.emit_inst(V128, Vector(VectorOp::Splat(VectorLane::I8)), [val])
 }
 
 ///|
@@ -1063,7 +1163,7 @@ pub fn FunctionBuilder::v128_splat16(
   self : FunctionBuilder,
   val : Value,
 ) -> Value {
-  self.emit_inst(V128, V128Splat16, [val])
+  self.emit_inst(V128, Vector(VectorOp::Splat(VectorLane::I16)), [val])
 }
 
 ///|
@@ -1071,7 +1171,7 @@ pub fn FunctionBuilder::v128_splat32(
   self : FunctionBuilder,
   val : Value,
 ) -> Value {
-  self.emit_inst(V128, V128Splat32, [val])
+  self.emit_inst(V128, Vector(VectorOp::Splat(VectorLane::I32)), [val])
 }
 
 ///|
@@ -1079,7 +1179,7 @@ pub fn FunctionBuilder::v128_splat64(
   self : FunctionBuilder,
   val : Value,
 ) -> Value {
-  self.emit_inst(V128, V128Splat64, [val])
+  self.emit_inst(V128, Vector(VectorOp::Splat(VectorLane::I64)), [val])
 }
 
 ///|
@@ -1087,7 +1187,7 @@ pub fn FunctionBuilder::v128_splat_f32(
   self : FunctionBuilder,
   val : Value,
 ) -> Value {
-  self.emit_inst(V128, V128SplatF32, [val])
+  self.emit_inst(V128, Vector(VectorOp::Splat(VectorLane::F32)), [val])
 }
 
 ///|
@@ -1095,7 +1195,7 @@ pub fn FunctionBuilder::v128_splat_f64(
   self : FunctionBuilder,
   val : Value,
 ) -> Value {
-  self.emit_inst(V128, V128SplatF64, [val])
+  self.emit_inst(V128, Vector(VectorOp::Splat(VectorLane::F64)), [val])
 }
 
 ///|
@@ -1105,7 +1205,11 @@ pub fn FunctionBuilder::v128_extract8s(
   vec : Value,
   lane : Int,
 ) -> Value {
-  self.emit_inst(I32, V128ExtractLane8S(lane), [vec])
+  self.emit_inst(
+    I32,
+    Vector(VectorOp::ExtractLane(VectorLane::I8, VectorExtension::Signed, lane)),
+    [vec],
+  )
 }
 
 ///|
@@ -1114,7 +1218,13 @@ pub fn FunctionBuilder::v128_extract8u(
   vec : Value,
   lane : Int,
 ) -> Value {
-  self.emit_inst(I32, V128ExtractLane8U(lane), [vec])
+  self.emit_inst(
+    I32,
+    Vector(
+      VectorOp::ExtractLane(VectorLane::I8, VectorExtension::Unsigned, lane),
+    ),
+    [vec],
+  )
 }
 
 ///|
@@ -1123,7 +1233,13 @@ pub fn FunctionBuilder::v128_extract16s(
   vec : Value,
   lane : Int,
 ) -> Value {
-  self.emit_inst(I32, V128ExtractLane16S(lane), [vec])
+  self.emit_inst(
+    I32,
+    Vector(
+      VectorOp::ExtractLane(VectorLane::I16, VectorExtension::Signed, lane),
+    ),
+    [vec],
+  )
 }
 
 ///|
@@ -1132,7 +1248,13 @@ pub fn FunctionBuilder::v128_extract16u(
   vec : Value,
   lane : Int,
 ) -> Value {
-  self.emit_inst(I32, V128ExtractLane16U(lane), [vec])
+  self.emit_inst(
+    I32,
+    Vector(
+      VectorOp::ExtractLane(VectorLane::I16, VectorExtension::Unsigned, lane),
+    ),
+    [vec],
+  )
 }
 
 ///|
@@ -1141,7 +1263,11 @@ pub fn FunctionBuilder::v128_extract32(
   vec : Value,
   lane : Int,
 ) -> Value {
-  self.emit_inst(I32, V128ExtractLane32(lane), [vec])
+  self.emit_inst(
+    I32,
+    Vector(VectorOp::ExtractLane(VectorLane::I32, VectorExtension::None, lane)),
+    [vec],
+  )
 }
 
 ///|
@@ -1150,7 +1276,11 @@ pub fn FunctionBuilder::v128_extract64(
   vec : Value,
   lane : Int,
 ) -> Value {
-  self.emit_inst(I64, V128ExtractLane64(lane), [vec])
+  self.emit_inst(
+    I64,
+    Vector(VectorOp::ExtractLane(VectorLane::I64, VectorExtension::None, lane)),
+    [vec],
+  )
 }
 
 ///|
@@ -1159,7 +1289,11 @@ pub fn FunctionBuilder::v128_extract_f32(
   vec : Value,
   lane : Int,
 ) -> Value {
-  self.emit_inst(F32, V128ExtractLaneF32(lane), [vec])
+  self.emit_inst(
+    F32,
+    Vector(VectorOp::ExtractLane(VectorLane::F32, VectorExtension::None, lane)),
+    [vec],
+  )
 }
 
 ///|
@@ -1168,7 +1302,11 @@ pub fn FunctionBuilder::v128_extract_f64(
   vec : Value,
   lane : Int,
 ) -> Value {
-  self.emit_inst(F64, V128ExtractLaneF64(lane), [vec])
+  self.emit_inst(
+    F64,
+    Vector(VectorOp::ExtractLane(VectorLane::F64, VectorExtension::None, lane)),
+    [vec],
+  )
 }
 
 ///|
@@ -1179,7 +1317,9 @@ pub fn FunctionBuilder::v128_replace8(
   val : Value,
   lane : Int,
 ) -> Value {
-  self.emit_inst(V128, V128ReplaceLane8(lane), [vec, val])
+  self.emit_inst(V128, Vector(VectorOp::ReplaceLane(VectorLane::I8, lane)), [
+    vec, val,
+  ])
 }
 
 ///|
@@ -1189,7 +1329,9 @@ pub fn FunctionBuilder::v128_replace16(
   val : Value,
   lane : Int,
 ) -> Value {
-  self.emit_inst(V128, V128ReplaceLane16(lane), [vec, val])
+  self.emit_inst(V128, Vector(VectorOp::ReplaceLane(VectorLane::I16, lane)), [
+    vec, val,
+  ])
 }
 
 ///|
@@ -1199,7 +1341,9 @@ pub fn FunctionBuilder::v128_replace32(
   val : Value,
   lane : Int,
 ) -> Value {
-  self.emit_inst(V128, V128ReplaceLane32(lane), [vec, val])
+  self.emit_inst(V128, Vector(VectorOp::ReplaceLane(VectorLane::I32, lane)), [
+    vec, val,
+  ])
 }
 
 ///|
@@ -1209,7 +1353,9 @@ pub fn FunctionBuilder::v128_replace64(
   val : Value,
   lane : Int,
 ) -> Value {
-  self.emit_inst(V128, V128ReplaceLane64(lane), [vec, val])
+  self.emit_inst(V128, Vector(VectorOp::ReplaceLane(VectorLane::I64, lane)), [
+    vec, val,
+  ])
 }
 
 ///|
@@ -1219,7 +1365,9 @@ pub fn FunctionBuilder::v128_replace_f32(
   val : Value,
   lane : Int,
 ) -> Value {
-  self.emit_inst(V128, V128ReplaceLaneF32(lane), [vec, val])
+  self.emit_inst(V128, Vector(VectorOp::ReplaceLane(VectorLane::F32, lane)), [
+    vec, val,
+  ])
 }
 
 ///|
@@ -1229,7 +1377,9 @@ pub fn FunctionBuilder::v128_replace_f64(
   val : Value,
   lane : Int,
 ) -> Value {
-  self.emit_inst(V128, V128ReplaceLaneF64(lane), [vec, val])
+  self.emit_inst(V128, Vector(VectorOp::ReplaceLane(VectorLane::F64, lane)), [
+    vec, val,
+  ])
 }
 
 ///|
@@ -1240,7 +1390,7 @@ pub fn FunctionBuilder::v128_shuffle(
   b : Value,
   lanes : FixedArray[Int],
 ) -> Value {
-  self.emit_inst(V128, V128Shuffle(lanes), [a, b])
+  self.emit_inst(V128, Vector(VectorOp::V128Shuffle(lanes)), [a, b])
 }
 
 ///|
@@ -1250,13 +1400,13 @@ pub fn FunctionBuilder::v128_swizzle(
   a : Value,
   b : Value,
 ) -> Value {
-  self.emit_inst(V128, V128Swizzle, [a, b])
+  self.emit_inst(V128, Vector(VectorOp::V128Swizzle), [a, b])
 }
 
 ///|
 /// Bitwise operations on v128
 pub fn FunctionBuilder::v128_not(self : FunctionBuilder, a : Value) -> Value {
-  self.emit_inst(V128, V128Not, [a])
+  self.emit_inst(V128, Vector(VectorOp::V128Not), [a])
 }
 
 ///|
@@ -1265,7 +1415,7 @@ pub fn FunctionBuilder::v128_and(
   a : Value,
   b : Value,
 ) -> Value {
-  self.emit_inst(V128, V128And, [a, b])
+  self.emit_inst(V128, Vector(VectorOp::V128And), [a, b])
 }
 
 ///|
@@ -1274,7 +1424,7 @@ pub fn FunctionBuilder::v128_andnot(
   a : Value,
   b : Value,
 ) -> Value {
-  self.emit_inst(V128, V128AndNot, [a, b])
+  self.emit_inst(V128, Vector(VectorOp::V128AndNot), [a, b])
 }
 
 ///|
@@ -1283,7 +1433,7 @@ pub fn FunctionBuilder::v128_or(
   a : Value,
   b : Value,
 ) -> Value {
-  self.emit_inst(V128, V128Or, [a, b])
+  self.emit_inst(V128, Vector(VectorOp::V128Or), [a, b])
 }
 
 ///|
@@ -1292,7 +1442,7 @@ pub fn FunctionBuilder::v128_xor(
   a : Value,
   b : Value,
 ) -> Value {
-  self.emit_inst(V128, V128Xor, [a, b])
+  self.emit_inst(V128, Vector(VectorOp::V128Xor), [a, b])
 }
 
 ///|
@@ -1302,7 +1452,7 @@ pub fn FunctionBuilder::v128_bitselect(
   b : Value,
   c : Value,
 ) -> Value {
-  self.emit_inst(V128, V128Bitselect, [a, b, c])
+  self.emit_inst(V128, Vector(VectorOp::V128Bitselect), [a, b, c])
 }
 
 ///|
@@ -1310,7 +1460,7 @@ pub fn FunctionBuilder::v128_anytrue(
   self : FunctionBuilder,
   a : Value,
 ) -> Value {
-  self.emit_inst(I32, V128AnyTrue, [a])
+  self.emit_inst(I32, Vector(VectorOp::V128AnyTrue), [a])
 }
 
 ///|
@@ -1318,69 +1468,69 @@ pub fn FunctionBuilder::v128_anytrue(
 /// Use this for operations that follow the pattern: opcode, operands -> V128/I32
 pub fn FunctionBuilder::v128_unary(
   self : FunctionBuilder,
-  opcode : Opcode,
+  opcode : VectorOp,
   a : Value,
 ) -> Value {
-  self.emit_inst(V128, opcode, [a])
+  self.emit_inst(V128, Vector(opcode), [a])
 }
 
 ///|
 pub fn FunctionBuilder::v128_binary(
   self : FunctionBuilder,
-  opcode : Opcode,
+  opcode : VectorOp,
   a : Value,
   b : Value,
 ) -> Value {
-  self.emit_inst(V128, opcode, [a, b])
+  self.emit_inst(V128, Vector(opcode), [a, b])
 }
 
 ///|
 pub fn FunctionBuilder::v128_to_i32(
   self : FunctionBuilder,
-  opcode : Opcode,
+  opcode : VectorOp,
   a : Value,
 ) -> Value {
-  self.emit_inst(I32, opcode, [a])
+  self.emit_inst(I32, Vector(opcode), [a])
 }
 
 ///|
 pub fn FunctionBuilder::v128_shift(
   self : FunctionBuilder,
-  opcode : Opcode,
+  opcode : VectorOp,
   vec : Value,
   shift : Value,
 ) -> Value {
-  self.emit_inst(V128, opcode, [vec, shift])
+  self.emit_inst(V128, Vector(opcode), [vec, shift])
 }
 
 ///|
 /// SIMD load with effective address (for complex SIMD loads)
 pub fn FunctionBuilder::v128_load_with_addr(
   self : FunctionBuilder,
-  opcode : Opcode,
+  opcode : VectorOp,
   effective_addr : Value,
 ) -> Value {
-  self.emit_inst(V128, opcode, [effective_addr])
+  self.emit_inst(V128, Vector(opcode), [effective_addr])
 }
 
 ///|
 /// SIMD load lane with effective address and existing vector
 pub fn FunctionBuilder::v128_load_lane_with_addr(
   self : FunctionBuilder,
-  opcode : Opcode,
+  opcode : VectorOp,
   effective_addr : Value,
   vec : Value,
 ) -> Value {
-  self.emit_inst(V128, opcode, [effective_addr, vec])
+  self.emit_inst(V128, Vector(opcode), [effective_addr, vec])
 }
 
 ///|
 /// SIMD store lane with effective address and vector (void)
 pub fn FunctionBuilder::v128_store_lane_with_addr(
   self : FunctionBuilder,
-  opcode : Opcode,
+  opcode : VectorOp,
   effective_addr : Value,
   vec : Value,
 ) -> Unit {
-  self.emit_void_inst(opcode, [effective_addr, vec])
+  self.emit_void_inst(Vector(opcode), [effective_addr, vec])
 }

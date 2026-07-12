@@ -155,100 +155,6 @@ fn hoist_from_loop(
   any_hoisted
 }
 
-// ============ Loop Unrolling ============
-
-///|
-/// Loop Unrolling
-/// Duplicates the loop body to reduce loop overhead and enable further optimizations
-/// This is a simple unrolling that only handles loops with known trip counts
-fn unroll_loops(func : Function, unroll_factor : Int) -> OptResult {
-  let result = OptResult::OptResult()
-  let cfg = CFG::build(func)
-  let loops = cfg.find_loops()
-  for loop_ in loops {
-    // Only unroll simple loops with a single back edge
-    if loop_.back_edges.length() != 1 {
-      continue
-    }
-
-    // Check if loop has a simple structure (single body block)
-    if loop_.blocks.length() > 2 {
-      continue // Too complex for simple unrolling
-    }
-
-    // Find the loop body block (not the header)
-    let mut body_block_id = -1
-    for block_id in loop_.blocks {
-      if block_id != loop_.header {
-        body_block_id = block_id
-        break
-      }
-    }
-    if body_block_id < 0 {
-      continue // No separate body block
-    }
-
-    // Find the body block
-    let mut body_block : Block? = None
-    for block in func.blocks {
-      if block.id == body_block_id {
-        body_block = Some(block)
-        break
-      }
-    }
-    if body_block is Some(body) {
-      // Duplicate the body instructions
-      let original_count = body.instructions.length()
-      if original_count == 0 {
-        continue
-      }
-
-      // Simple unrolling: duplicate instructions in-place
-      // This is a simplified version that works best with LICM
-      let original_insts : Array[Inst] = []
-      for inst in body.instructions {
-        original_insts.push(inst)
-      }
-
-      // Duplicate the instructions (unroll_factor - 1 times)
-      for _ in 1..<unroll_factor {
-        for inst in original_insts {
-          // Clone the instruction with new result value
-          let new_inst = clone_instruction(inst, func)
-          body.instructions.push(new_inst)
-        }
-      }
-      if body.instructions.length() > original_count {
-        result.mark_changed()
-      }
-    }
-  }
-  result
-}
-
-///|
-/// Clone an instruction with a fresh result value
-fn clone_instruction(inst : Inst, func : Function) -> Inst {
-  let new_results : Array[Value] = []
-  for v in inst.results {
-    let new_id = func.next_value_id
-    func.next_value_id = new_id + 1
-    new_results.push({ id: new_id, ty: v.ty })
-  }
-  let new_operands : Array[Value] = []
-  for op in inst.operands {
-    new_operands.push(op)
-  }
-  {
-    id: inst.id,
-    results: new_results,
-    opcode: inst.opcode,
-    args: new_operands,
-    operands: new_operands,
-    metadata: inst.metadata.copy(),
-  }
-}
-
 // ============ Strength Reduction ============
 
 ///|
@@ -262,7 +168,8 @@ fn reduce_strength(func : Function) -> OptResult {
   let constants : @hashmap.HashMap[Int, ConstValue] = HashMap([])
   for block in func.blocks {
     for inst in block.instructions {
-      if inst.opcode is Iconst(v) && inst.first_result() is Some(r) {
+      if inst.opcode is Scalar(ScalarOp::IntConst(v)) &&
+        inst.first_result() is Some(r) {
         if r.ty is I32 {
           constants.set(r.id, I32(v.to_int()))
         } else {
@@ -274,10 +181,11 @@ fn reduce_strength(func : Function) -> OptResult {
 
   // Apply strength reduction
   for block in func.blocks {
+    let rewritten : Array[Inst] = []
     for inst in block.instructions {
       match inst.opcode {
         // Multiplication by power of 2 -> left shift
-        Imul =>
+        Scalar(ScalarOp::IntBinary(IntBinaryOp::Mul)) =>
           if inst.operands.length() == 2 {
             let (const_idx, shift_amount) = find_power_of_two_operand(
               inst.operands,
@@ -288,47 +196,109 @@ fn reduce_strength(func : Function) -> OptResult {
               let other_idx = if const_idx == 0 { 1 } else { 0 }
               let other_operand = inst.operands[other_idx]
               let const_operand = inst.operands[const_idx]
+              let shift_operand = append_iconst(
+                rewritten,
+                func,
+                const_operand.ty,
+                shift_amount.to_int64(),
+              )
               // Replace imul with ishl
-              inst.opcode = Ishl
+              inst.opcode = Scalar(ScalarOp::IntBinary(IntBinaryOp::ShiftLeft))
               inst.operands.clear()
               inst.operands.push(other_operand)
-              inst.operands.push(const_operand) // Keep the constant, semantics change
+              inst.operands.push(shift_operand)
               result.mark_changed()
             }
           }
         // Division by power of 2 -> right shift (for unsigned)
-        Udiv =>
+        Scalar(ScalarOp::IntBinary(IntBinaryOp::UnsignedDiv)) =>
           if inst.operands.length() == 2 {
             let (const_idx, shift_amount) = find_power_of_two_operand(
               inst.operands,
               constants,
             )
             if const_idx == 1 && shift_amount >= 0 {
+              let dividend = inst.operands[0]
+              let divisor = inst.operands[1]
+              let shift_operand = append_iconst(
+                rewritten,
+                func,
+                divisor.ty,
+                shift_amount.to_int64(),
+              )
               // Only reduce if divisor is constant power of 2
               // Replace udiv with ushr (logical right shift)
-              inst.opcode = Ushr
+              inst.opcode = Scalar(
+                ScalarOp::IntBinary(IntBinaryOp::UnsignedShiftRight),
+              )
+              inst.operands.clear()
+              inst.operands.push(dividend)
+              inst.operands.push(shift_operand)
               result.mark_changed()
             }
           }
         // Modulo by power of 2 -> bitwise AND
-        Urem =>
+        Scalar(ScalarOp::IntBinary(IntBinaryOp::UnsignedRem)) =>
           if inst.operands.length() == 2 {
             let (const_idx, shift_amount) = find_power_of_two_operand(
               inst.operands,
               constants,
             )
-            if const_idx == 1 && shift_amount >= 0 {
+            if const_idx == 1 &&
+              shift_amount >= 0 &&
+              power_of_two_mask(inst.operands[1], constants) is Some(mask) {
+              let dividend = inst.operands[0]
+              let divisor = inst.operands[1]
+              let mask_operand = append_iconst(
+                rewritten,
+                func,
+                divisor.ty,
+                mask,
+              )
               // x % (2^n) == x & (2^n - 1)
-              inst.opcode = Band
-              // The mask should be 2^n - 1, but we need to update the constant
+              inst.opcode = Scalar(ScalarOp::IntBinary(IntBinaryOp::And))
+              inst.operands.clear()
+              inst.operands.push(dividend)
+              inst.operands.push(mask_operand)
               result.mark_changed()
             }
           }
         _ => ()
       }
+      rewritten.push(inst)
+    }
+    block.instructions.clear()
+    for inst in rewritten {
+      block.instructions.push(inst)
     }
   }
   result
+}
+
+///|
+fn append_iconst(
+  instructions : Array[Inst],
+  func : Function,
+  ty : Type,
+  value : Int64,
+) -> Value {
+  let result = func.new_value(ty)
+  instructions.push(
+    func.new_inst(Scalar(ScalarOp::IntConst(value)), [], [result]),
+  )
+  result
+}
+
+///|
+fn power_of_two_mask(
+  value : Value,
+  constants : @hashmap.HashMap[Int, ConstValue],
+) -> Int64? {
+  match constants.get(value.id) {
+    Some(I32(v)) => Some((v - 1).to_int64())
+    Some(I64(v)) => Some(v - 1L)
+    _ => None
+  }
 }
 
 ///|

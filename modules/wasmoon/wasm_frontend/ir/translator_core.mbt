@@ -59,6 +59,8 @@ priv struct Translator {
   // Table is 64-bit indexed (for table64 proposal)
   // table_is_64[i] = true if table i uses 64-bit indices
   table_is_64 : Array[Bool]
+  // MilkIR carrier type for each table element.
+  table_elem_types : Array[Type]
 }
 
 ///|
@@ -105,12 +107,14 @@ pub fn TranslationContext::from_module(
   let import_func_type_indices : Array[Int] = []
   let global_types : Array[@types.GlobalType] = []
   let tags : Array[@types.TagType] = []
+  let tables : Array[@types.Table] = []
   for imp in mod_.imports {
     match imp.desc {
       Func(type_idx) => {
         num_imports = num_imports + 1
         import_func_type_indices.push(type_idx)
       }
+      Table(table_type) => tables.push({ type_: table_type, init: None })
       Global(global_type) => global_types.push(global_type)
       Tag(tag_type_idx) => tags.push({ type_idx: tag_type_idx })
       _ => ()
@@ -121,6 +125,9 @@ pub fn TranslationContext::from_module(
   }
   for tag in mod_.tags {
     tags.push(tag)
+  }
+  for table in mod_.tables {
+    tables.push(table)
   }
   let memory_max : Int? = match memory_max_override {
     Some(_) => memory_max_override
@@ -140,7 +147,7 @@ pub fn TranslationContext::from_module(
     memory_max,
     memory_is_64: mod_.memories.map(fn(m) { m.is_memory64 }),
     memory_page_size_log2: mod_.memories.map(fn(m) { m.page_size_log2 }),
-    tables: mod_.tables,
+    tables,
     global_types,
     type_rec_groups: mod_.type_rec_groups,
     func_base,
@@ -269,10 +276,12 @@ fn Translator::Translator(
   // All tables are flattened into a single indirect_table at runtime
   let table_sizes : Array[Int] = []
   let table_is_64 : Array[Bool] = []
+  let table_elem_types : Array[Type] = []
   for table in tables {
     let size = table.type_.limits.min.to_int() // Tables always use 32-bit limits
     table_sizes.push(size)
     table_is_64.push(table.type_.is_table64)
+    table_elem_types.push(type_from_wasm(table.type_.elem_type))
   }
   {
     builder,
@@ -290,6 +299,7 @@ fn Translator::Translator(
     memory_is_64,
     table_sizes,
     table_is_64,
+    table_elem_types,
     num_wasm_params: func_type.params.length(),
     func_base,
     import_remap,
@@ -390,7 +400,8 @@ fn Translator::i64_bits_to_local(
 ) -> Value {
   match target_ty {
     I32 => self.builder.ireduce(I32, bits)
-    I64 | Ptr | Ref | CallableRef | OpaqueRef => bits // refs are already i64
+    I64 => bits
+    Ptr | Ref | CallableRef | OpaqueRef => self.builder.bitcast(target_ty, bits)
     F32 => {
       let bits32 = self.builder.ireduce(I32, bits)
       self.builder.bitcast(F32, bits32)
@@ -836,7 +847,7 @@ fn Translator::emit_catch_branch(
         self.builder.bitcast(F32, val_i32)
       }
       F64 => self.builder.bitcast(F64, val_i64)
-      _ => val_i64 // Reference types use i64 representation
+      _ => self.builder.bitcast(type_from_wasm(ty), val_i64)
     }
     args.push(val)
   }
@@ -887,15 +898,15 @@ fn Translator::emit_catch_ref_branch(
         self.builder.bitcast(F32, val_i32)
       }
       F64 => self.builder.bitcast(F64, val_i64)
-      _ => val_i64
+      _ => self.builder.bitcast(type_from_wasm(ty), val_i64)
     }
     args.push(val)
   }
 
   // Add exnref (placeholder - use exception tag as simple exnref)
   let exnref = @wasm_milkir.get_exception_tag(self.builder)
-  let exnref_i64 = self.builder.sextend32(exnref)
-  args.push(exnref_i64)
+  let exnref_i64 = self.builder.sextend(I64, exnref)
+  args.push(self.builder.bitcast(Ref, exnref_i64))
 
   // Pop the exception handler AFTER reading values
   @wasm_milkir.try_table_end(self.builder, handler_id)
@@ -960,8 +971,8 @@ fn Translator::emit_catch_all_ref_branch(
 
   // Add exnref (placeholder)
   let exnref = @wasm_milkir.get_exception_tag(self.builder)
-  let exnref_i64 = self.builder.sextend32(exnref)
-  args.push(exnref_i64)
+  let exnref_i64 = self.builder.sextend(I64, exnref)
+  args.push(self.builder.bitcast(Ref, exnref_i64))
 
   // Pass current local values
   for loc in self.locals {
@@ -1110,7 +1121,7 @@ fn Translator::translate_fcmp(self : Translator, cc : FloatCC) -> Unit {
 /// Helper for SIMD binary operations (v128, v128 -> v128)
 fn Translator::translate_simd_binary(
   self : Translator,
-  opcode : Opcode,
+  opcode : @milkir.VectorOp,
 ) -> Unit {
   let b = self.pop()
   let a = self.pop()
@@ -1120,7 +1131,10 @@ fn Translator::translate_simd_binary(
 
 ///|
 /// Helper for SIMD unary operations (v128 -> v128)
-fn Translator::translate_simd_unary(self : Translator, opcode : Opcode) -> Unit {
+fn Translator::translate_simd_unary(
+  self : Translator,
+  opcode : @milkir.VectorOp,
+) -> Unit {
   let a = self.pop()
   let result = self.builder.v128_unary(opcode, a)
   self.push(result)
@@ -1130,7 +1144,7 @@ fn Translator::translate_simd_unary(self : Translator, opcode : Opcode) -> Unit 
 /// Helper for SIMD to i32 operations (v128 -> i32)
 fn Translator::translate_simd_to_i32(
   self : Translator,
-  opcode : Opcode,
+  opcode : @milkir.VectorOp,
 ) -> Unit {
   let a = self.pop()
   let result = self.builder.v128_to_i32(opcode, a)
@@ -1139,7 +1153,10 @@ fn Translator::translate_simd_to_i32(
 
 ///|
 /// Helper for SIMD shift operations (v128, i32 -> v128)
-fn Translator::translate_simd_shift(self : Translator, opcode : Opcode) -> Unit {
+fn Translator::translate_simd_shift(
+  self : Translator,
+  opcode : @milkir.VectorOp,
+) -> Unit {
   let shift = self.pop()
   let vec = self.pop()
   let result = self.builder.v128_shift(opcode, vec, shift)
@@ -1154,21 +1171,14 @@ fn Translator::translate_simd_load(
   memidx : Int,
   offset : Int64,
   addr : Value,
-  opcode : Opcode,
+  opcode : @milkir.VectorOp,
 ) -> Value {
   // Determine access size based on opcode
   let access_size = match opcode {
-    V128Load8x8S(_, _, _)
-    | V128Load8x8U(_, _, _)
-    | V128Load16x4S(_, _, _)
-    | V128Load16x4U(_, _, _)
-    | V128Load32x2S(_, _, _)
-    | V128Load32x2U(_, _, _)
-    | V128Load64Splat(_, _, _)
-    | V128Load64Zero(_, _, _) => 8
-    V128Load32Splat(_, _, _) | V128Load32Zero(_, _, _) => 4
-    V128Load16Splat(_, _, _) => 2
-    V128Load8Splat(_, _, _) => 1
+    LoadExtend(_, _) | LoadSplat(I64) | LoadZero(I64) => 8
+    LoadSplat(I32) | LoadZero(I32) => 4
+    LoadSplat(I16) => 2
+    LoadSplat(I8) => 1
     _ => 16
   }
   // Emit bounds check
@@ -1192,15 +1202,15 @@ fn Translator::translate_simd_load_lane(
   offset : Int64,
   addr : Value,
   vec : Value,
-  opcode : Opcode,
+  opcode : @milkir.VectorOp,
 ) -> Value {
   // Emit bounds check
   let lane_size = match opcode {
-    V128Load8Lane(_, _, _, _) => 1
-    V128Load16Lane(_, _, _, _) => 2
-    V128Load32Lane(_, _, _, _) => 4
-    V128Load64Lane(_, _, _, _) => 8
-    _ => 1
+    LoadLane(I8, _) => 1
+    LoadLane(I16, _) => 2
+    LoadLane(I32, _) => 4
+    LoadLane(I64, _) => 8
+    _ => abort("invalid vector lane-load operation")
   }
   let effective_addr = self.func_env.emit_bounds_check(
     self.builder,
@@ -1222,15 +1232,15 @@ fn Translator::translate_simd_store_lane(
   offset : Int64,
   addr : Value,
   vec : Value,
-  opcode : Opcode,
+  opcode : @milkir.VectorOp,
 ) -> Unit {
   // Emit bounds check
   let lane_size = match opcode {
-    V128Store8Lane(_, _, _, _) => 1
-    V128Store16Lane(_, _, _, _) => 2
-    V128Store32Lane(_, _, _, _) => 4
-    V128Store64Lane(_, _, _, _) => 8
-    _ => 1
+    StoreLane(I8, _) => 1
+    StoreLane(I16, _) => 2
+    StoreLane(I32, _) => 4
+    StoreLane(I64, _) => 8
+    _ => abort("invalid vector lane-store operation")
   }
   let effective_addr = self.func_env.emit_bounds_check(
     self.builder,
@@ -1339,6 +1349,9 @@ fn Translator::translate_block(
   self.builder.switch_to_block(continuation)
 
   self.is_unreachable = outer_is_unreachable || !continuation_reachable
+  if !continuation_reachable {
+    self.builder.trap("unreachable block continuation")
+  }
 
   // Push block results onto stack
   if continuation_reachable {
@@ -1404,6 +1417,9 @@ fn Translator::translate_loop(
 
   // Switch to loop header
   self.builder.switch_to_block(loop_header)
+  if outer_is_unreachable {
+    self.builder.trap("unreachable loop header")
+  }
 
   // Push header params onto stack
   for i, _ty in param_types {
@@ -1447,6 +1463,8 @@ fn Translator::translate_loop(
     args.rev_in_place()
     loop_falls_through = true
     self.builder.jump(continuation, args)
+  } else if block.terminator is None {
+    self.builder.trap("unreachable loop body")
   }
 
   // Restore stack to entry height (for unreachable code cleanup)
@@ -1458,6 +1476,9 @@ fn Translator::translate_loop(
   self.builder.switch_to_block(continuation)
 
   self.is_unreachable = outer_is_unreachable || !loop_falls_through
+  if !loop_falls_through {
+    self.builder.trap("unreachable loop continuation")
+  }
 
   // Push results onto stack
   if loop_falls_through {

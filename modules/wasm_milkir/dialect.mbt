@@ -450,7 +450,7 @@ pub fn decode_or_abort(ext : @milkir.ExtOp) -> WasmOpcode {
 ///|
 pub fn decode_opcode(opcode : @milkir.Opcode) -> WasmOpcode? {
   match opcode {
-    Ext(ext) => decode(ext)
+    Ext(ext, _) => decode(ext)
     _ => None
   }
 }

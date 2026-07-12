@@ -6,12 +6,69 @@ test "build and verify minimal MilkIR function" {
   func.add_result(I32)
   let sum = func.new_value(I32)
   let entry = func.new_block([])
-  let add = func.new_inst(Iadd, [lhs, rhs], [sum])
+  let add = func.new_inst(
+    Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)),
+    [lhs, rhs],
+    [sum],
+  )
   add.add_metadata(Comment("lowered from frontend add"))
   entry.append_inst(add)
   entry.set_terminator(Return([sum]))
   inspect(func.blocks.length(), content="1")
   inspect(entry.instructions.length(), content="1")
+  inspect(func.verify(), content="()")
+}
+
+///|
+test "signature construction materializes canonical function parameters" {
+  let func = Function::with_signature(
+    "canonical_signature",
+    Signature([Type::I32, Type::I64], [Type::I64]),
+  )
+  inspect(
+    func.params.length(),
+    content=(
+      #|2
+    ),
+  )
+  debug_inspect(
+    func.param(0),
+    content=(
+      #|Some({ id: 0, ty: I32 })
+    ),
+  )
+  debug_inspect(
+    func.param(1),
+    content=(
+      #|Some({ id: 1, ty: I64 })
+    ),
+  )
+  debug_inspect(
+    func.param(2),
+    content=(
+      #|None
+    ),
+  )
+  debug_inspect(
+    func.new_value(Type::F32),
+    content=(
+      #|{ id: 2, ty: F32 }
+    ),
+  )
+  debug_inspect(
+    func.signature(),
+    content=(
+      #|{ params: [I32, I64], results: [I64] }
+    ),
+  )
+  let entry = func.new_block0()
+  entry.set_terminator(Return([func.param(1).unwrap()]))
+  inspect(
+    func.print().contains("function canonical_signature(v0:i32, v1:i64) -> i64"),
+    content=(
+      #|true
+    ),
+  )
   inspect(func.verify(), content="()")
 }
 
@@ -55,11 +112,11 @@ test "builder prints pointer operations" {
       #|function load_store(v0:ptr) -> i32 {
       #|block0:
       #|    v1:i64 = iconst 0
-      #|    v2:i32 = load_ptr.i32 v0, v1
+      #|    v2:i32 = load.i32 v0, v1
       #|    v3:i32 = iconst 1
       #|    v4:i32 = iadd v2, v3
       #|    v5:i64 = iconst 4
-      #|    store_ptr.i32 v0, v4, v5
+      #|    store.i32 v0, v4, v5
       #|    return v4
       #|}
       #|
@@ -83,9 +140,9 @@ test "builder prints narrow pointer operations" {
       #|function narrow_mem(v0:ptr) -> i32 {
       #|block0:
       #|    v1:i64 = iconst 2
-      #|    v2:i32 = load_ptr8_s.i32 v0, v1
+      #|    v2:i32 = load8_s.i32 v0, v1
       #|    v3:i64 = iconst 6
-      #|    store_ptr16 v0, v2, v3
+      #|    store16 v0, v2, v3
       #|    return v2
       #|}
       #|
@@ -130,7 +187,7 @@ test "builder and CFG support branches and block params" {
 
 ///|
 test "verify catches missing terminator" {
-  let func = Function("bad", Signature([], []))
+  let func = Function::new_empty("bad")
   func.new_block([]) |> ignore
   try func.verify() catch {
     err => inspect(err, content="MissingTerminator(block_id=0)")
@@ -141,17 +198,113 @@ test "verify catches missing terminator" {
 
 ///|
 test "verify catches undefined operands" {
-  let func = Function("bad_use", Signature([], []))
+  let func = Function::new_empty("bad_use")
   let entry = func.new_block([])
   let bogus = Value::Value(99, I32)
   let result = func.new_value(I32)
-  entry.append_inst(func.new_inst(Iadd, [bogus, bogus], [result]))
+  entry.append_inst(
+    func.new_inst(
+      Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)),
+      [bogus, bogus],
+      [result],
+    ),
+  )
   entry.set_terminator(Return([result]))
   try func.verify() catch {
     err => inspect(err, content="UndefinedValue(value_id=99)")
   } noraise {
     _ => fail("expected undefined value")
   }
+}
+
+///|
+test "verify rejects a value whose type disagrees with its definition" {
+  let func = Function::new_empty("bad_value_type")
+  let original = func.add_param(I32)
+  func.add_result(I64)
+  let forged = Value::Value(original.id, I64)
+  let copied = func.new_value(I64)
+  let entry = func.new_block([])
+  entry.append_inst(func.new_inst(Scalar(ScalarOp::Copy), [forged], [copied]))
+  entry.set_terminator(Return([copied]))
+  try func.verify() catch {
+    err =>
+      inspect(
+        err,
+        content=(
+          #|TypeMismatch(message="value 0 has type i64, but its definition has type i32")
+        ),
+      )
+  } noraise {
+    _ => fail("expected value type mismatch")
+  }
+}
+
+///|
+test "verify rejects a jump to a missing block" {
+  let func = Function::new_empty("bad_jump_target")
+  let entry = func.new_block([])
+  entry.set_terminator(Jump(99, []))
+  try func.verify() catch {
+    err => inspect(err, content="InvalidBlockTarget(block_id=99)")
+  } noraise {
+    _ => fail("expected invalid block target")
+  }
+}
+
+///|
+test "verify checks return values against the function signature" {
+  let func = Function::new_empty("bad_return")
+  func.add_result(I64)
+  let entry = func.new_block([])
+  entry.set_terminator(Return([]))
+  try func.verify() catch {
+    err =>
+      inspect(
+        err,
+        content="ArityMismatch(message=\"return expects 1 values, got 0\")",
+      )
+  } noraise {
+    _ => fail("expected return arity mismatch")
+  }
+}
+
+///|
+test "verify checks jump arguments against block parameters" {
+  let func = Function::new_empty("bad_jump_argument")
+  let argument = func.add_param(I32)
+  let entry = func.new_block([])
+  let target_param = func.new_value(I64)
+  let target = func.new_block([target_param])
+  entry.set_terminator(Jump(target.id, [argument]))
+  target.set_terminator(Return([]))
+  try func.verify() catch {
+    err =>
+      inspect(
+        err,
+        content=(
+          #|TypeMismatch(message="jump to block 1 argument 0 has type i32, expected i64")
+        ),
+      )
+  } noraise {
+    _ => fail("expected jump argument type mismatch")
+  }
+}
+
+///|
+test "optimizer preserves external calls with unused results" {
+  let func = Function::new_empty("external_effect")
+  let symbol = func.declare_external_symbol("effect")
+  let ignored = func.new_value(I32)
+  let entry = func.new_block([])
+  entry.append_inst(
+    func.new_inst(Call(CallOp::Direct(symbol, Signature([], [I32]))), [], [
+      ignored,
+    ]),
+  )
+  entry.set_terminator(Return([]))
+  optimize_with_level(func, O1) |> ignore
+  inspect(instruction_count(func), content="1")
 }
 
 ///|
@@ -187,7 +340,13 @@ test "optimizer leaves trap-prone division unfused" {
   let lhs = builder.iconst_i32(10)
   let rhs = builder.iconst_i32(0)
   let result = builder.get_function().new_value(I32)
-  entry.append_inst(builder.get_function().new_inst(Sdiv, [lhs, rhs], [result]))
+  entry.append_inst(
+    builder
+    .get_function()
+    .new_inst(Scalar(ScalarOp::IntBinary(IntBinaryOp::SignedDiv)), [lhs, rhs], [
+      result,
+    ]),
+  )
   builder.return_([result])
   let func = builder.get_function()
   let opt = optimize_with_level(func, O2)
@@ -274,6 +433,187 @@ test "dead code pass keeps unused loads without alias metadata" {
 }
 
 ///|
+test "memory operations use the semantic opcode family" {
+  let builder = FunctionBuilder::FunctionBuilder("memory_family")
+  let address = builder.add_param(Ptr)
+  let value = builder.add_param(I32)
+  builder.add_result(I32)
+  let offset = builder.iconst_i64(0L)
+  let loaded = builder.load_ptr(I32, address, offset)
+  builder.store_ptr(I32, address, value, offset)
+  builder.return_([loaded])
+  let func = builder.get_function()
+  inspect(
+    func.blocks[0].instructions[1].opcode is Memory(MemoryOp::Load(I32)),
+    content="true",
+  )
+  inspect(
+    func.blocks[0].instructions[2].opcode is Memory(MemoryOp::Store(I32)),
+    content="true",
+  )
+  inspect(func.verify(), content="()")
+}
+
+///|
+test "vector operations use the semantic opcode family" {
+  let builder = FunctionBuilder::FunctionBuilder("vector_family")
+  let scalar = builder.add_param(I32)
+  builder.add_result(V128)
+  let vector = builder.v128_splat32(scalar)
+  builder.return_([vector])
+  let func = builder.get_function()
+  inspect(
+    func.blocks[0].instructions[0].opcode
+    is Vector(VectorOp::Splat(VectorLane::I32)),
+    content="true",
+  )
+  inspect(func.verify(), content="()")
+}
+
+///|
+test "scalar operations use typed semantic families" {
+  let builder = FunctionBuilder::FunctionBuilder("scalar_family")
+  let lhs = builder.add_param(I64)
+  let rhs = builder.add_param(I64)
+  builder.add_result(I32)
+  let sum = builder.iadd(lhs, rhs)
+  let compared = builder.icmp(IntCC::Ult, sum, rhs)
+  builder.return_([compared])
+  let instructions = builder.get_function().blocks[0].instructions
+  inspect(
+    instructions[0].opcode is Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)),
+    content="true",
+  )
+  inspect(
+    instructions[1].opcode is Scalar(ScalarOp::IntCompare(IntCC::Ult)),
+    content="true",
+  )
+}
+
+///|
+test "vector memory operations discard Wasm memory arguments" {
+  let builder = FunctionBuilder::FunctionBuilder("vector_memory_family")
+  let address = builder.add_param(Ptr)
+  builder.add_result(V128)
+  let loaded = builder.v128_load_with_addr(
+    LoadExtend(VectorLane::I8, VectorExtension::Signed),
+    address,
+  )
+  builder.return_([loaded])
+  let func = builder.get_function()
+  inspect(
+    func.blocks[0].instructions[0].opcode
+    is Vector(VectorOp::LoadExtend(VectorLane::I8, VectorExtension::Signed)),
+    content="true",
+  )
+  let printed = func.print()
+  inspect(printed.contains("v128.load8x8_s"), content="true")
+  inspect(printed.contains("mem="), content="false")
+  inspect(printed.contains("offset="), content="false")
+  inspect(func.verify(), content="()")
+}
+
+///|
+test "strength reduction derives shift amounts and remainder masks" {
+  let builder = FunctionBuilder::FunctionBuilder("strength_reduce_pow2")
+  let value = builder.add_param(I32)
+  builder.add_result(I32)
+  builder.add_result(I32)
+  builder.add_result(I32)
+  let eight = builder.iconst_i32(8)
+  let product = builder.imul(value, eight)
+  let quotient = builder.udiv(value, eight)
+  let remainder = builder.urem(value, eight)
+  builder.return_([product, quotient, remainder])
+  let func = builder.get_function()
+  let result = reduce_strength(func)
+  inspect(result.changed, content="true")
+  inspect(
+    func.print(),
+    content=(
+      #|function strength_reduce_pow2(v0:i32) -> i32, i32, i32 {
+      #|block0:
+      #|    v1:i32 = iconst 8
+      #|    v5:i32 = iconst 3
+      #|    v2:i32 = ishl v0, v5
+      #|    v6:i32 = iconst 3
+      #|    v3:i32 = ushr v0, v6
+      #|    v7:i32 = iconst 7
+      #|    v4:i32 = band v0, v7
+      #|    return v2, v3, v4
+      #|}
+      #|
+    ),
+  )
+  inspect(func.verify(), content="()")
+}
+
+///|
+test "O3 derives power-of-two constants when the e-graph is skipped" {
+  let builder = FunctionBuilder::FunctionBuilder("o3_large_strength_reduce")
+  let value = builder.add_param(I32)
+  builder.add_result(I32)
+  builder.add_result(I32)
+  builder.add_result(I32)
+  for _ in 0..<296 {
+    builder.iconst_i32(0) |> ignore
+  }
+  let eight = builder.iconst_i32(8)
+  let product = builder.imul(value, eight)
+  let quotient = builder.udiv(value, eight)
+  let remainder = builder.urem(value, eight)
+  builder.return_([product, quotient, remainder])
+  let func = builder.get_function()
+  optimize_with_level(func, O3) |> ignore
+  let instructions = func.blocks[0].instructions
+  inspect(instructions.length(), content="303")
+  inspect(instructions[297].opcode, content="Scalar(IntConst(3))")
+  inspect(instructions[298].opcode, content="Scalar(IntBinary(ShiftLeft))")
+  inspect(instructions[299].opcode, content="Scalar(IntConst(3))")
+  inspect(
+    instructions[300].opcode,
+    content="Scalar(IntBinary(UnsignedShiftRight))",
+  )
+  inspect(instructions[301].opcode, content="Scalar(IntConst(7))")
+  inspect(instructions[302].opcode, content="Scalar(IntBinary(And))")
+  inspect(func.verify(), content="()")
+}
+
+///|
+test "O3 does not duplicate loop side effects without a safe unroll proof" {
+  let builder = FunctionBuilder::FunctionBuilder("o3_loop_side_effect")
+  let condition = builder.add_param(I32)
+  let header = builder.create_block()
+  let body = builder.create_block()
+  let exit = builder.create_block()
+  builder.jump(header, [])
+  builder.switch_to_block(header)
+  builder.brnz(condition, body, exit)
+  builder.switch_to_block(body)
+  let func = builder.get_function()
+  let symbol = func.declare_external_symbol("effect")
+  builder
+  .current_block()
+  .append_inst(
+    func.new_inst(Call(CallOp::Direct(symbol, Signature([], []))), [], []),
+  )
+  builder.jump(header, [])
+  builder.switch_to_block(exit)
+  builder.return_([])
+  optimize_with_level(func, O3) |> ignore
+  let mut external_calls = 0
+  for block in func.blocks {
+    for inst in block.instructions {
+      if inst.opcode is Call(_) {
+        external_calls = external_calls + 1
+      }
+    }
+  }
+  inspect(external_calls, content="1")
+  inspect(func.verify(), content="()")
+}
+
+///|
 test "optimizer CSE replaces duplicate pure expression with copy" {
   let builder = FunctionBuilder::FunctionBuilder("cse_local")
   let lhs = builder.add_param(I32)
@@ -297,6 +637,103 @@ test "optimizer CSE replaces duplicate pure expression with copy" {
       #|
     ),
   )
+}
+
+///|
+test "instruction identity includes result types and arity" {
+  let func = Function::new_empty("instruction_identity")
+  let i32_result = func.new_value(I32)
+  let i64_result = func.new_value(I64)
+  let second_i64_result = func.new_value(I64)
+  let i32_const = func.new_inst(Scalar(ScalarOp::IntConst(1L)), [], [i32_result])
+  let i64_const = func.new_inst(Scalar(ScalarOp::IntConst(1L)), [], [i64_result])
+  let i64_pair = func.new_inst(Scalar(ScalarOp::IntConst(1L)), [], [
+    i64_result, second_i64_result,
+  ])
+  let expressions : @hashmap.HashMap[Inst, Unit] = HashMap([])
+  expressions.set(i32_const, ())
+  expressions.set(i64_const, ())
+  expressions.set(i64_pair, ())
+  inspect(expressions.length(), content="3")
+  inspect(is_gvn_candidate(i64_pair), content="false")
+}
+
+///|
+test "instruction identity compares float constants by bit pattern" {
+  let func = Function::new_empty("float_instruction_identity")
+  let positive_zero = func.new_inst(Scalar(ScalarOp::FloatConst(0.0)), [], [
+    func.new_value(F64),
+  ])
+  let negative_zero = func.new_inst(Scalar(ScalarOp::FloatConst(-0.0)), [], [
+    func.new_value(F64),
+  ])
+  let nan_bits = 0x7FF8000000000001UL
+  let other_nan_bits = 0x7FF8000000000002UL
+  let nan0 = func.new_inst(
+    Scalar(ScalarOp::FloatConst(nan_bits.reinterpret_as_double())),
+    [],
+    [func.new_value(F64)],
+  )
+  let nan0_again = func.new_inst(
+    Scalar(ScalarOp::FloatConst(nan_bits.reinterpret_as_double())),
+    [],
+    [func.new_value(F64)],
+  )
+  let nan1 = func.new_inst(
+    Scalar(ScalarOp::FloatConst(other_nan_bits.reinterpret_as_double())),
+    [],
+    [func.new_value(F64)],
+  )
+  inspect(positive_zero == negative_zero, content="false")
+  inspect(nan0 == nan0_again, content="true")
+  inspect(nan0 == nan1, content="false")
+  inspect(nan0.hash() == nan0_again.hash(), content="true")
+  let expressions : @hashmap.HashMap[Inst, Int] = HashMap([])
+  expressions.set(nan0, 7)
+  inspect(expressions.get(nan0_again).unwrap_or(-1), content="7")
+}
+
+///|
+test "GVN reuses float constants with identical NaN bits" {
+  let builder = FunctionBuilder::FunctionBuilder("gvn_nan_bits")
+  builder.add_result(F64)
+  let nan = 0x7FF8000000000001UL.reinterpret_as_double()
+  let _first = builder.fconst(F64, nan)
+  let second = builder.fconst(F64, nan)
+  builder.return_([second])
+  let func = builder.get_function()
+  let result = cse_gvn_global(func)
+  inspect(result.changed, content="true")
+  inspect(
+    func.blocks[0].instructions[1].opcode is Scalar(ScalarOp::Copy),
+    content="true",
+  )
+  inspect(func.verify(), content="()")
+}
+
+///|
+test "GVN does not conflate integer constants with different widths" {
+  let builder = FunctionBuilder::FunctionBuilder("gvn_integer_widths")
+  builder.add_result(I64)
+  let _narrow = builder.iconst_i32(1)
+  let wide = builder.iconst_i64(1L)
+  builder.return_([wide])
+  let func = builder.get_function()
+  let result = cse_gvn_global(func)
+  inspect(result.changed, content="false")
+  inspect(
+    func.print(),
+    content=(
+      #|function gvn_integer_widths() -> i64 {
+      #|block0:
+      #|    v0:i32 = iconst 1
+      #|    v1:i64 = iconst 1
+      #|    return v1
+      #|}
+      #|
+    ),
+  )
+  inspect(func.verify(), content="()")
 }
 
 ///|
@@ -719,6 +1156,7 @@ test "optimizer threads trivial jump blocks" {
 ///|
 test "optimizer threads jump args through block params" {
   let builder = FunctionBuilder::FunctionBuilder("thread_jump_args")
+  builder.add_result(I32)
   let middle = builder.create_block()
   let exit = builder.create_block()
   let a = builder.iconst_i32(1)
@@ -739,7 +1177,7 @@ test "optimizer threads jump args through block params" {
   inspect(
     func.print(),
     content=(
-      #|function thread_jump_args() {
+      #|function thread_jump_args() -> i32 {
       #|block0:
       #|    v0:i32 = iconst 1
       #|    v1:i32 = iconst 2
@@ -816,8 +1254,8 @@ test "CSE keeps duplicate loads without alias metadata" {
       #|function no_load_cse(v0:ptr) -> i32 {
       #|block0:
       #|    v1:i64 = iconst 0
-      #|    v2:i32 = load_ptr.i32 v0, v1
-      #|    v3:i32 = load_ptr.i32 v0, v1
+      #|    v2:i32 = load.i32 v0, v1
+      #|    v3:i32 = load.i32 v0, v1
       #|    return v3
       #|}
       #|

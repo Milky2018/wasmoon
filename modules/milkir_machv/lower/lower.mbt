@@ -179,21 +179,6 @@ pub fn LoweringConfig::with_ir_optimization(
 }
 
 ///|
-fn function_params_for_lowering(
-  ir_func : @milkir.Function,
-) -> Array[(@milkir.Value, @milkir.Type)] {
-  if ir_func.params.length() > 0 {
-    return ir_func.params
-  }
-  let params : Array[(@milkir.Value, @milkir.Type)] = []
-  for i, ty in ir_func.signature.params {
-    let value = @milkir.Value::Value(i, ty)
-    params.push((value, ty))
-  }
-  params
-}
-
-///|
 pub fn LoweringContext::LoweringContext(
   ir_func : @milkir.Function,
   isa : @isa.ISA,
@@ -567,7 +552,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
   for block in ctx.ir_func.blocks {
     for inst in block.instructions {
       match inst.opcode {
-        LoadPtr(ty) => {
+        Memory(@milkir.MemoryOp::Load(ty)) => {
           guard inst.operands.length() >= 1 else { continue }
           let base_value = inst.operands[0]
           let access_size = match ty {
@@ -577,7 +562,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
           }
           let explicit_offset = if inst.operands.length() > 1 {
             if find_defining_inst(ctx, inst.operands[1]) is Some(def_inst) &&
-              def_inst.opcode is Iconst(off) {
+              def_inst.opcode is Scalar(IntConst(off)) {
               off
             } else {
               0L
@@ -610,7 +595,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
             }
           }
         }
-        StorePtr(ty) => {
+        Memory(@milkir.MemoryOp::Store(ty)) => {
           guard inst.operands.length() >= 2 else { continue }
           let base_value = inst.operands[0]
           let access_size = match ty {
@@ -620,7 +605,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
           }
           let explicit_offset = if inst.operands.length() > 2 {
             if find_defining_inst(ctx, inst.operands[2]) is Some(def_inst) &&
-              def_inst.opcode is Iconst(off) {
+              def_inst.opcode is Scalar(IntConst(off)) {
               off
             } else {
               0L
@@ -653,13 +638,13 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
             }
           }
         }
-        LoadPtrNarrow(_, bits, _) => {
+        Memory(@milkir.MemoryOp::LoadNarrow(_, bits, _)) => {
           guard inst.operands.length() >= 1 else { continue }
           let base_value = inst.operands[0]
           let access_size = bits / 8
           let explicit_offset = if inst.operands.length() > 1 {
             if find_defining_inst(ctx, inst.operands[1]) is Some(def_inst) &&
-              def_inst.opcode is Iconst(off) {
+              def_inst.opcode is Scalar(IntConst(off)) {
               off
             } else {
               0L
@@ -692,13 +677,13 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
             }
           }
         }
-        StorePtrNarrow(bits) => {
+        Memory(@milkir.MemoryOp::StoreNarrow(bits)) => {
           guard inst.operands.length() >= 2 else { continue }
           let base_value = inst.operands[0]
           let access_size = bits / 8
           let explicit_offset = if inst.operands.length() > 2 {
             if find_defining_inst(ctx, inst.operands[2]) is Some(def_inst) &&
-              def_inst.opcode is Iconst(off) {
+              def_inst.opcode is Scalar(IntConst(off)) {
               off
             } else {
               0L
@@ -751,7 +736,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
       let is_shift_fusable_int = inst.first_result() is Some(result) &&
         (result.ty is I64 || result.ty is I32)
       match inst.opcode {
-        Iadd => {
+        Scalar(IntBinary(Add)) => {
           if !is_shift_fusable_int {
             continue
           }
@@ -798,7 +783,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
             continue
           }
         }
-        Isub => {
+        Scalar(IntBinary(Sub)) => {
           if !is_shift_fusable_int {
             continue
           }
@@ -822,7 +807,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
             mark_skipped(rhs.id)
           }
         }
-        Band | Bor | Bxor => {
+        Scalar(IntBinary(And | Or | Xor)) => {
           if !is_shift_fusable_int {
             continue
           }
@@ -847,7 +832,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
           if lhs_is_imm || rhs_is_imm {
             continue
           }
-          if inst.opcode is Bor &&
+          if inst.opcode is Scalar(IntBinary(Or)) &&
             match_rotate_or_value(ctx, lhs, rhs, is_i64) is Some(_) {
             if use_count(ctx.use_counts, lhs.id) == 1 &&
               (
@@ -865,7 +850,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
             }
             continue
           }
-          if inst.opcode is Bor &&
+          if inst.opcode is Scalar(IntBinary(Or)) &&
             match_extr_or_value(ctx, lhs, rhs, is_i64) is Some(_) {
             if use_count(ctx.use_counts, lhs.id) == 1 &&
               (
@@ -995,7 +980,7 @@ fn compute_fused_icmps(
       return false
     }
     match def_inst_table[value.id] {
-      Some(def_inst) => def_inst.opcode is Icmp(_)
+      Some(def_inst) => def_inst.opcode is Scalar(IntCompare(_))
       None => false
     }
   }
@@ -1014,7 +999,7 @@ fn compute_fused_icmps(
   for block in ir_func.blocks {
     for inst in block.instructions {
       // Check if this is a Select instruction
-      if inst.opcode is Select {
+      if inst.opcode is Scalar(Select) {
         let cond = inst.operands[0]
         if is_single_use_icmp_result(use_counts, def_inst_table, cond) {
           mark_fused(cond.id)
@@ -1140,6 +1125,11 @@ pub fn ir_type_to_reg_class(ty : @milkir.Type) -> @abi.RegClass {
 }
 
 ///|
+fn is_64_bit_word_type(ty : @milkir.Type) -> Bool {
+  ty is (I64 | Ptr | Ref | CallableRef | OpaqueRef)
+}
+
+///|
 /// Convert IR Type to MachV result kind.
 fn ir_type_to_value_kind(ty : @milkir.Type) -> @machv.ValueKind {
   match ty {
@@ -1178,11 +1168,12 @@ fn match_shl_const_value(
   ctx : LoweringContext,
   value : @milkir.Value,
 ) -> (@milkir.Value, Int)? {
-  if find_defining_inst(ctx, value) is Some(inst) && inst.opcode is Ishl {
+  if find_defining_inst(ctx, value) is Some(inst) &&
+    inst.opcode is Scalar(IntBinary(ShiftLeft)) {
     // Check if shift amount is a constant
     let shift_operand = inst.operands[1]
     if find_defining_inst(ctx, shift_operand) is Some(shift_inst) &&
-      shift_inst.opcode is Iconst(amount) {
+      shift_inst.opcode is Scalar(IntConst(amount)) {
       // Determine mask based on value type (i32 uses 31, i64 uses 63)
       let is_64 = value.ty is I64
       let mask = if is_64 { 63 } else { 31 }
@@ -1204,10 +1195,11 @@ fn match_ushr_const_value(
   ctx : LoweringContext,
   value : @milkir.Value,
 ) -> (@milkir.Value, Int)? {
-  if find_defining_inst(ctx, value) is Some(inst) && inst.opcode is Ushr {
+  if find_defining_inst(ctx, value) is Some(inst) &&
+    inst.opcode is Scalar(IntBinary(UnsignedShiftRight)) {
     let shift_operand = inst.operands[1]
     if find_defining_inst(ctx, shift_operand) is Some(shift_inst) &&
-      shift_inst.opcode is Iconst(amount) {
+      shift_inst.opcode is Scalar(IntConst(amount)) {
       let is_64 = value.ty is I64
       let mask = if is_64 { 63 } else { 31 }
       let shift_val = amount.to_int() & mask
@@ -1301,7 +1293,8 @@ fn match_mul_value(
   ctx : LoweringContext,
   value : @milkir.Value,
 ) -> (@milkir.Value, @milkir.Value)? {
-  if find_defining_inst(ctx, value) is Some(inst) && inst.opcode is Imul {
+  if find_defining_inst(ctx, value) is Some(inst) &&
+    inst.opcode is Scalar(IntBinary(Mul)) {
     return Some((inst.operands[0], inst.operands[1]))
   }
   None
@@ -1314,7 +1307,8 @@ fn match_bnot_value(
   ctx : LoweringContext,
   value : @milkir.Value,
 ) -> @milkir.Value? {
-  if find_defining_inst(ctx, value) is Some(inst) && inst.opcode is Bnot {
+  if find_defining_inst(ctx, value) is Some(inst) &&
+    inst.opcode is Scalar(IntUnary(Not)) {
     return Some(inst.operands[0])
   }
   None
@@ -1342,8 +1336,8 @@ fn resolve_iconst_value(
   for _ in 0..<8 {
     if find_defining_inst(ctx, value) is Some(inst) {
       match inst.opcode {
-        Iconst(c) => return Some(c)
-        Copy =>
+        Scalar(IntConst(c)) => return Some(c)
+        Scalar(Copy) =>
           if inst.operands.length() > 0 {
             value = inst.operands[0]
             continue
@@ -1426,15 +1420,16 @@ fn match_iadd_const(
   ctx : LoweringContext,
   value : @milkir.Value,
 ) -> (@milkir.Value, Int64)? {
-  if find_defining_inst(ctx, value) is Some(inst) && inst.opcode is Iadd {
+  if find_defining_inst(ctx, value) is Some(inst) &&
+    inst.opcode is Scalar(IntBinary(Add)) {
     // Check if second operand is a constant
     if find_defining_inst(ctx, inst.operands[1]) is Some(const_inst) &&
-      const_inst.opcode is Iconst(offset) {
+      const_inst.opcode is Scalar(IntConst(offset)) {
       return Some((inst.operands[0], offset))
     }
     // Also check first operand (iadd is commutative)
     if find_defining_inst(ctx, inst.operands[0]) is Some(const_inst) &&
-      const_inst.opcode is Iconst(offset) {
+      const_inst.opcode is Scalar(IntConst(offset)) {
       return Some((inst.operands[1], offset))
     }
   }
@@ -1473,11 +1468,11 @@ fn match_extend_i32_to_i64(
 ) -> (@milkir.Value, @instr.IndexExtend)? {
   if find_defining_inst(ctx, value) is Some(inst) {
     match inst.opcode {
-      Uextend =>
+      Scalar(Convert(UnsignedExtend)) =>
         if value.ty is I64 && inst.operands[0].ty is I32 {
           return Some((inst.operands[0], Uxtw))
         }
-      Sextend =>
+      Scalar(Convert(SignedExtend)) =>
         if value.ty is I64 && inst.operands[0].ty is I32 {
           return Some((inst.operands[0], Sxtw))
         }
@@ -1523,7 +1518,7 @@ fn match_addr_reg_offset(
   Bool,
 )? {
   guard find_defining_inst(ctx, value) is Some(inst) else { return None }
-  guard inst.opcode is Iadd else { return None }
+  guard inst.opcode is Scalar(IntBinary(Add)) else { return None }
   let scale = log2_access_size(access_size)
   if scale is None {
     return None
@@ -1695,8 +1690,9 @@ fn match_icmp_value(
     depth = depth + 1
     if find_defining_inst(ctx, current) is Some(inst) {
       match inst.opcode {
-        Icmp(cc) => return Some((inst.operands[0], inst.operands[1], cc))
-        Copy =>
+        Scalar(IntCompare(cc)) =>
+          return Some((inst.operands[0], inst.operands[1], cc))
+        Scalar(Copy) =>
           if !inst.operands.is_empty() {
             current = inst.operands[0]
             continue
@@ -1731,7 +1727,7 @@ fn intcc_to_cond(cc : @milkir.IntCC) -> @instr.Cond {
 
 ///|
 /// Lower an entire IR function to MachV using a grouped lowering config.
-pub fn lower_function_with_config(
+fn lower_function_with_config_unchecked(
   ir_func : @milkir.Function,
   config : LoweringConfig,
 ) -> @machv.Function {
@@ -1788,7 +1784,7 @@ pub fn lower_function_with_config(
   let int_stack_values : Array[@milkir.Value] = []
   let float_stack_values : Array[(@milkir.Value, @abi.RegClass)] = []
   let float_stack_classes : Array[@abi.RegClass] = []
-  for param in function_params_for_lowering(ir_func) {
+  for param in ir_func.params {
     let (value, ty) = param
     let class = ir_type_to_reg_class(ty)
     if class is Int {
@@ -1885,18 +1881,44 @@ pub fn lower_function_with_config(
 ///
 /// This compatibility facade keeps the advanced keyword options available.
 /// Prefer `lower_function_with_config` for new user-facing code.
+pub fn lower_core_function_with_config(
+  ir_func : @milkir.Function,
+  config : LoweringConfig,
+) -> @machv.Function {
+  if config.extension_lowerer is Some(_) {
+    abort("core MilkIR lowering does not accept a dialect adapter")
+  }
+  try! ir_func.verify_core()
+  lower_function_with_config_unchecked(ir_func, config)
+}
+
+///|
+/// Lower dialect-bearing MilkIR with an explicit owning adapter.
+pub fn lower_dialect_function_with_config(
+  ir_func : @milkir.Function,
+  config : LoweringConfig,
+  extension_lowerer : (
+    LoweringContext,
+    @milkir.Inst,
+    @block.Block,
+    @milkir.ExtOp,
+  ) -> ExtensionLowerResult,
+) -> @machv.Function {
+  try! ir_func.verify()
+  lower_function_with_config_unchecked(
+    ir_func,
+    config.with_extension_lowerer(extension_lowerer),
+  )
+}
+
+///|
+/// Lower a self-contained core MilkIR function to MachV.
 pub fn lower_function(
   ir_func : @milkir.Function,
   isa? : @isa.ISA = AArch64,
   embedding_abi? : @abi.EmbeddingABI? = None,
   external_helper_symbols? : Map[String, String] = Map([]),
   trap_payload_resolver? : (String) -> Int = fn(_reason) { 0 },
-  extension_lowerer? : ((
-    LoweringContext,
-    @milkir.Inst,
-    @block.Block,
-    @milkir.ExtOp,
-  ) -> ExtensionLowerResult)? = None,
   num_imports? : Int = -1,
   run_ir_opt? : Bool = true,
 ) -> @machv.Function {
@@ -1905,11 +1927,40 @@ pub fn lower_function(
     embedding_abi,
     external_helper_symbols,
     trap_payload_resolver,
-    extension_lowerer,
+    extension_lowerer: None,
     num_imports,
     run_ir_opt,
   }
-  lower_function_with_config(ir_func, config)
+  lower_core_function_with_config(ir_func, config)
+}
+
+///|
+/// Lower dialect-bearing MilkIR to MachV with its required owning adapter.
+pub fn lower_dialect_function(
+  ir_func : @milkir.Function,
+  extension_lowerer : (
+    LoweringContext,
+    @milkir.Inst,
+    @block.Block,
+    @milkir.ExtOp,
+  ) -> ExtensionLowerResult,
+  isa? : @isa.ISA = AArch64,
+  embedding_abi? : @abi.EmbeddingABI? = None,
+  external_helper_symbols? : Map[String, String] = Map([]),
+  trap_payload_resolver? : (String) -> Int = fn(_reason) { 0 },
+  num_imports? : Int = -1,
+  run_ir_opt? : Bool = true,
+) -> @machv.Function {
+  let config : LoweringConfig = {
+    isa,
+    embedding_abi,
+    external_helper_symbols,
+    trap_payload_resolver,
+    extension_lowerer: None,
+    num_imports,
+    run_ir_opt,
+  }
+  lower_dialect_function_with_config(ir_func, config, extension_lowerer)
 }
 
 ///|
@@ -2009,7 +2060,7 @@ fn lower_inst(
   block : @block.Block,
 ) -> @block.Block {
   match inst.opcode {
-    Ext(ext) => return lower_extension(ctx, inst, block, ext)
+    Ext(ext, _) => return lower_extension(ctx, inst, block, ext)
     _ => ()
   }
   lower_inst_builtin(ctx, inst, block)
@@ -2017,146 +2068,134 @@ fn lower_inst(
 }
 
 ///|
-/// Lower a built-in IR instruction to MachV.
-fn lower_inst_builtin(
+fn lower_scalar_inst(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.Block,
+  opcode : @milkir.ScalarOp,
 ) -> Unit {
-  match inst.opcode {
-    // Constants
-    Iconst(val) => lower_iconst(ctx, inst, block, val)
-    Fconst(val) => lower_fconst(ctx, inst, block, val)
-
-    // Integer arithmetic - with pattern matching for AArch64
-    Iadd => lower_iadd(ctx, inst, block)
-    Isub => lower_isub(ctx, inst, block)
-    Imul => lower_imul(ctx, inst, block)
-    Umulh => lower_umulh(ctx, inst, block)
-    Smulh => lower_smulh(ctx, inst, block)
-    Sdiv => lower_div(ctx, inst, block, signed=true)
-    Udiv => lower_div(ctx, inst, block, signed=false)
-    Srem => lower_rem(ctx, inst, block, true)
-    Urem => lower_rem(ctx, inst, block, false)
-
-    // Bitwise operations - with pattern matching for shifted operands
-    Band => lower_band(ctx, inst, block)
-    Bor => lower_bor(ctx, inst, block)
-    Bxor => lower_bxor(ctx, inst, block)
-    Ishl =>
-      lower_shift(ctx, inst, block, fn(is_64) { Shl(is_64) }, fn(amt, is_64) {
-        ShlImm(amt, is_64)
-      })
-    Sshr =>
-      lower_shift(ctx, inst, block, fn(is_64) { AShr(is_64) }, fn(amt, is_64) {
-        AShrImm(amt, is_64)
-      })
-    Ushr =>
-      lower_shift(ctx, inst, block, fn(is_64) { LShr(is_64) }, fn(amt, is_64) {
-        LShrImm(amt, is_64)
-      })
-    Rotl => lower_rotl(ctx, inst, block)
-    Rotr =>
-      lower_shift(ctx, inst, block, fn(is_64) { Rotr(is_64) }, fn(amt, is_64) {
-        RotrImm(amt, is_64)
-      })
-    Bnot => lower_unary_int(ctx, inst, block, fn(is_64) { Not(is_64) })
-
-    // Integer comparisons
-    Icmp(cc) => lower_icmp(ctx, inst, block, cc)
-    IcmpEq => lower_unsupported_generic_opcode(inst, block)
-
-    // Floating point arithmetic
-    Fadd => lower_binary_float(ctx, inst, block)
-    Fsub => lower_binary_float(ctx, inst, block)
-    Fmul => lower_binary_float(ctx, inst, block)
-    Fdiv => lower_binary_float(ctx, inst, block)
-    Fmin => lower_binary_float(ctx, inst, block)
-    Fmax => lower_binary_float(ctx, inst, block)
-
-    // Floating point unary operations
-    Fsqrt => lower_unary_float(ctx, inst, block)
-    Fabs => lower_unary_float(ctx, inst, block)
-    Fneg => lower_unary_float(ctx, inst, block)
-    Fceil => lower_unary_float(ctx, inst, block)
-    Ffloor => lower_unary_float(ctx, inst, block)
-    Ftrunc => lower_unary_float(ctx, inst, block)
-    Fnearest => lower_unary_float(ctx, inst, block)
-
-    // Bit counting operations
-    Clz => lower_bitcount(ctx, inst, block, fn(is_64) { Clz(is_64) })
-    Ctz => lower_ctz(ctx, inst, block)
-    Popcnt => lower_bitcount(ctx, inst, block, fn(is_64) { Popcnt(is_64) })
-
-    // Floating point comparisons
-    Fcmp(cc) => lower_fcmp(ctx, inst, block, cc)
-
-    // Note: Load/Store opcodes removed - now desugared via FuncEnvironment to LoadPtr/StorePtr
-    Load | Store | StackAddr(_) => lower_unsupported_generic_opcode(inst, block)
-
-    // Conversions
-    Sextend => lower_extend(ctx, inst, block, signed=true)
-    Uextend => lower_extend(ctx, inst, block, signed=false)
-    Sextend8 => lower_sextend_inplace(ctx, inst, block, from_bits=8)
-    Sextend16 => lower_sextend_inplace(ctx, inst, block, from_bits=16)
-    Sextend32 => lower_sextend_inplace(ctx, inst, block, from_bits=32)
-    Ireduce => lower_truncate(ctx, inst, block)
-    FcvtToSint => lower_float_to_int(ctx, inst, block, signed=true)
-    FcvtToUint => lower_float_to_int(ctx, inst, block, signed=false)
-    FcvtToSintSat => lower_float_to_int_sat(ctx, inst, block, signed=true)
-    FcvtToUintSat => lower_float_to_int_sat(ctx, inst, block, signed=false)
-    SintToFcvt => lower_int_to_float(ctx, inst, block, signed=true)
-    UintToFcvt => lower_int_to_float(ctx, inst, block, signed=false)
-    Fpromote => lower_promote(ctx, inst, block)
-    Fdemote => lower_demote(ctx, inst, block)
-    Bitcast => lower_bitcast(ctx, inst, block)
-
-    // Misc
+  match opcode {
+    IntConst(value) => lower_iconst(ctx, inst, block, value)
+    FloatConst(value) => lower_fconst(ctx, inst, block, value)
+    IntBinary(op) =>
+      match op {
+        Add => lower_iadd(ctx, inst, block)
+        Sub => lower_isub(ctx, inst, block)
+        Mul => lower_imul(ctx, inst, block)
+        UnsignedMulHigh => lower_umulh(ctx, inst, block)
+        SignedMulHigh => lower_smulh(ctx, inst, block)
+        SignedDiv => lower_div(ctx, inst, block, signed=true)
+        UnsignedDiv => lower_div(ctx, inst, block, signed=false)
+        SignedRem => lower_rem(ctx, inst, block, true)
+        UnsignedRem => lower_rem(ctx, inst, block, false)
+        And => lower_band(ctx, inst, block)
+        Or => lower_bor(ctx, inst, block)
+        Xor => lower_bxor(ctx, inst, block)
+        ShiftLeft =>
+          lower_shift(ctx, inst, block, fn(is_64) { Shl(is_64) }, fn(
+            amt,
+            is_64,
+          ) {
+            ShlImm(amt, is_64)
+          })
+        SignedShiftRight =>
+          lower_shift(ctx, inst, block, fn(is_64) { AShr(is_64) }, fn(
+            amt,
+            is_64,
+          ) {
+            AShrImm(amt, is_64)
+          })
+        UnsignedShiftRight =>
+          lower_shift(ctx, inst, block, fn(is_64) { LShr(is_64) }, fn(
+            amt,
+            is_64,
+          ) {
+            LShrImm(amt, is_64)
+          })
+        RotateLeft => lower_rotl(ctx, inst, block)
+        RotateRight =>
+          lower_shift(ctx, inst, block, fn(is_64) { Rotr(is_64) }, fn(
+            amt,
+            is_64,
+          ) {
+            RotrImm(amt, is_64)
+          })
+      }
+    IntUnary(op) =>
+      match op {
+        Not => lower_unary_int(ctx, inst, block, fn(is_64) { Not(is_64) })
+        CountLeadingZeros =>
+          lower_bitcount(ctx, inst, block, fn(is_64) { Clz(is_64) })
+        CountTrailingZeros => lower_ctz(ctx, inst, block)
+        PopulationCount =>
+          lower_bitcount(ctx, inst, block, fn(is_64) { Popcnt(is_64) })
+      }
+    IntCompare(condition) => lower_icmp(ctx, inst, block, condition)
+    FloatBinary(op) => lower_binary_float(ctx, inst, block, op)
+    FloatUnary(op) => lower_unary_float(ctx, inst, block, op)
+    FloatCompare(condition) => lower_fcmp(ctx, inst, block, condition)
+    Convert(op) =>
+      match op {
+        IntReduce => lower_truncate(ctx, inst, block)
+        SignedExtend => lower_extend(ctx, inst, block, signed=true)
+        UnsignedExtend => lower_extend(ctx, inst, block, signed=false)
+        FloatPromote => lower_promote(ctx, inst, block)
+        FloatDemote => lower_demote(ctx, inst, block)
+        FloatToSignedInt => lower_float_to_int(ctx, inst, block, signed=true)
+        FloatToUnsignedInt => lower_float_to_int(ctx, inst, block, signed=false)
+        FloatToSignedIntSaturating =>
+          lower_float_to_int_sat(ctx, inst, block, signed=true)
+        FloatToUnsignedIntSaturating =>
+          lower_float_to_int_sat(ctx, inst, block, signed=false)
+        SignedIntToFloat => lower_int_to_float(ctx, inst, block, signed=true)
+        UnsignedIntToFloat => lower_int_to_float(ctx, inst, block, signed=false)
+        Bitcast => lower_bitcast(ctx, inst, block)
+      }
+    SignExtendFrom(bits) =>
+      lower_sextend_inplace(ctx, inst, block, from_bits=bits)
     Copy => lower_copy(ctx, inst, block)
     Select => lower_select(ctx, inst, block)
+  }
+}
 
-    // Function calls
-    Call(symbol) => lower_external_call(ctx, inst, block, symbol)
-    CallIndirect(_) => lower_unsupported_generic_opcode(inst, block)
-
-    // Raw pointer operations (for trampolines)
-    LoadPtr(ty) => lower_load_ptr(ctx, inst, block, ty)
-    StorePtr(ty) => lower_store_ptr(ctx, inst, block, ty)
-    LoadPtrNarrow(result_ty, bits, signed) =>
-      lower_load_ptr_narrow(ctx, inst, block, result_ty, bits, signed)
-    StorePtrNarrow(bits) => lower_store_ptr_narrow(ctx, inst, block, bits)
-    CallPtr(num_args, num_results) =>
-      lower_call_ptr(ctx, inst, block, num_args, num_results)
-    Trap(_) | Custom(_) => lower_unsupported_generic_opcode(inst, block)
-    Ext(_) => lower_unsupported_generic_opcode(inst, block)
-
-    // SIMD operations
+///|
+fn lower_vector_inst(
+  ctx : LoweringContext,
+  inst : @milkir.Inst,
+  block : @block.Block,
+  opcode : @milkir.VectorOp,
+) -> Unit {
+  match opcode {
     V128Const(bytes) => lower_v128_const(ctx, inst, block, bytes)
-    V128Splat8 => lower_v128_splat(ctx, inst, block, B8)
-    V128Splat16 => lower_v128_splat(ctx, inst, block, H16)
-    V128Splat32 => lower_v128_splat(ctx, inst, block, S32)
-    V128Splat64 => lower_v128_splat(ctx, inst, block, D64)
-    V128SplatF32 => lower_v128_splat_f(ctx, inst, block, true)
-    V128SplatF64 => lower_v128_splat_f(ctx, inst, block, false)
-    V128ExtractLane8S(lane) => lower_v128_extract_s(ctx, inst, block, B8, lane)
-    V128ExtractLane8U(lane) => lower_v128_extract_u(ctx, inst, block, B8, lane)
-    V128ExtractLane16S(lane) =>
+    Splat(I8) => lower_v128_splat(ctx, inst, block, B8)
+    Splat(I16) => lower_v128_splat(ctx, inst, block, H16)
+    Splat(I32) => lower_v128_splat(ctx, inst, block, S32)
+    Splat(I64) => lower_v128_splat(ctx, inst, block, D64)
+    Splat(F32) => lower_v128_splat_f(ctx, inst, block, true)
+    Splat(F64) => lower_v128_splat_f(ctx, inst, block, false)
+    ExtractLane(I8, Signed, lane) =>
+      lower_v128_extract_s(ctx, inst, block, B8, lane)
+    ExtractLane(I8, Unsigned, lane) =>
+      lower_v128_extract_u(ctx, inst, block, B8, lane)
+    ExtractLane(I16, Signed, lane) =>
       lower_v128_extract_s(ctx, inst, block, H16, lane)
-    V128ExtractLane16U(lane) =>
+    ExtractLane(I16, Unsigned, lane) =>
       lower_v128_extract_u(ctx, inst, block, H16, lane)
-    V128ExtractLane32(lane) => lower_v128_extract_u(ctx, inst, block, S32, lane)
-    V128ExtractLane64(lane) => lower_v128_extract_u(ctx, inst, block, D64, lane)
-    V128ExtractLaneF32(lane) =>
+    ExtractLane(I32, None, lane) =>
+      lower_v128_extract_u(ctx, inst, block, S32, lane)
+    ExtractLane(I64, None, lane) =>
+      lower_v128_extract_u(ctx, inst, block, D64, lane)
+    ExtractLane(F32, None, lane) =>
       lower_v128_extract_f(ctx, inst, block, true, lane)
-    V128ExtractLaneF64(lane) =>
+    ExtractLane(F64, None, lane) =>
       lower_v128_extract_f(ctx, inst, block, false, lane)
-    V128ReplaceLane8(lane) => lower_v128_replace(ctx, inst, block, B8, lane)
-    V128ReplaceLane16(lane) => lower_v128_replace(ctx, inst, block, H16, lane)
-    V128ReplaceLane32(lane) => lower_v128_replace(ctx, inst, block, S32, lane)
-    V128ReplaceLane64(lane) => lower_v128_replace(ctx, inst, block, D64, lane)
-    V128ReplaceLaneF32(lane) =>
-      lower_v128_replace_f(ctx, inst, block, true, lane)
-    V128ReplaceLaneF64(lane) =>
+    ExtractLane(_, _, _) => abort("invalid vector extract-lane semantics")
+    ReplaceLane(I8, lane) => lower_v128_replace(ctx, inst, block, B8, lane)
+    ReplaceLane(I16, lane) => lower_v128_replace(ctx, inst, block, H16, lane)
+    ReplaceLane(I32, lane) => lower_v128_replace(ctx, inst, block, S32, lane)
+    ReplaceLane(I64, lane) => lower_v128_replace(ctx, inst, block, D64, lane)
+    ReplaceLane(F32, lane) => lower_v128_replace_f(ctx, inst, block, true, lane)
+    ReplaceLane(F64, lane) =>
       lower_v128_replace_f(ctx, inst, block, false, lane)
     V128Shuffle(lanes) => lower_v128_shuffle(ctx, inst, block, lanes)
     V128Swizzle => lower_v128_swizzle(ctx, inst, block)
@@ -2433,47 +2472,41 @@ fn lower_inst_builtin(
     V128PromoteLowF32toF64 =>
       lower_v128_unary(ctx, inst, block, SIMDPromoteLowF32ToF64)
 
-    // Memory operations
-    V128Load8x8S(_, _, offset) =>
-      lower_v128_load_extend(ctx, inst, block, 8, true, offset.to_int())
-    V128Load8x8U(_, _, offset) =>
-      lower_v128_load_extend(ctx, inst, block, 8, false, offset.to_int())
-    V128Load16x4S(_, _, offset) =>
-      lower_v128_load_extend(ctx, inst, block, 16, true, offset.to_int())
-    V128Load16x4U(_, _, offset) =>
-      lower_v128_load_extend(ctx, inst, block, 16, false, offset.to_int())
-    V128Load32x2S(_, _, offset) =>
-      lower_v128_load_extend(ctx, inst, block, 32, true, offset.to_int())
-    V128Load32x2U(_, _, offset) =>
-      lower_v128_load_extend(ctx, inst, block, 32, false, offset.to_int())
-    V128Load8Splat(_, _, offset) =>
-      lower_v128_load_splat(ctx, inst, block, B8, offset.to_int())
-    V128Load16Splat(_, _, offset) =>
-      lower_v128_load_splat(ctx, inst, block, H16, offset.to_int())
-    V128Load32Splat(_, _, offset) =>
-      lower_v128_load_splat(ctx, inst, block, S32, offset.to_int())
-    V128Load64Splat(_, _, offset) =>
-      lower_v128_load_splat(ctx, inst, block, D64, offset.to_int())
-    V128Load32Zero(_, _, offset) =>
-      lower_v128_load_zero(ctx, inst, block, false, offset.to_int())
-    V128Load64Zero(_, _, offset) =>
-      lower_v128_load_zero(ctx, inst, block, true, offset.to_int())
-    V128Load8Lane(_, _, offset, lane) =>
-      lower_v128_load_lane(ctx, inst, block, B8, lane, offset.to_int())
-    V128Load16Lane(_, _, offset, lane) =>
-      lower_v128_load_lane(ctx, inst, block, H16, lane, offset.to_int())
-    V128Load32Lane(_, _, offset, lane) =>
-      lower_v128_load_lane(ctx, inst, block, S32, lane, offset.to_int())
-    V128Load64Lane(_, _, offset, lane) =>
-      lower_v128_load_lane(ctx, inst, block, D64, lane, offset.to_int())
-    V128Store8Lane(_, _, offset, lane) =>
-      lower_v128_store_lane(ctx, inst, block, B8, lane, offset.to_int())
-    V128Store16Lane(_, _, offset, lane) =>
-      lower_v128_store_lane(ctx, inst, block, H16, lane, offset.to_int())
-    V128Store32Lane(_, _, offset, lane) =>
-      lower_v128_store_lane(ctx, inst, block, S32, lane, offset.to_int())
-    V128Store64Lane(_, _, offset, lane) =>
-      lower_v128_store_lane(ctx, inst, block, D64, lane, offset.to_int())
+    // Memory operations consume a frontend-computed effective address.
+    LoadExtend(I8, Signed) =>
+      lower_v128_load_extend(ctx, inst, block, 8, true, 0)
+    LoadExtend(I8, Unsigned) =>
+      lower_v128_load_extend(ctx, inst, block, 8, false, 0)
+    LoadExtend(I16, Signed) =>
+      lower_v128_load_extend(ctx, inst, block, 16, true, 0)
+    LoadExtend(I16, Unsigned) =>
+      lower_v128_load_extend(ctx, inst, block, 16, false, 0)
+    LoadExtend(I32, Signed) =>
+      lower_v128_load_extend(ctx, inst, block, 32, true, 0)
+    LoadExtend(I32, Unsigned) =>
+      lower_v128_load_extend(ctx, inst, block, 32, false, 0)
+    LoadExtend(_, _) => abort("invalid vector extending-load semantics")
+    LoadSplat(I8) => lower_v128_load_splat(ctx, inst, block, B8, 0)
+    LoadSplat(I16) => lower_v128_load_splat(ctx, inst, block, H16, 0)
+    LoadSplat(I32) => lower_v128_load_splat(ctx, inst, block, S32, 0)
+    LoadSplat(I64) => lower_v128_load_splat(ctx, inst, block, D64, 0)
+    LoadSplat(_) => abort("invalid vector splat-load semantics")
+    LoadZero(I32) => lower_v128_load_zero(ctx, inst, block, false, 0)
+    LoadZero(I64) => lower_v128_load_zero(ctx, inst, block, true, 0)
+    LoadZero(_) => abort("invalid vector zero-load semantics")
+    LoadLane(I8, lane) => lower_v128_load_lane(ctx, inst, block, B8, lane, 0)
+    LoadLane(I16, lane) => lower_v128_load_lane(ctx, inst, block, H16, lane, 0)
+    LoadLane(I32, lane) => lower_v128_load_lane(ctx, inst, block, S32, lane, 0)
+    LoadLane(I64, lane) => lower_v128_load_lane(ctx, inst, block, D64, lane, 0)
+    LoadLane(_, _) => abort("invalid vector lane-load semantics")
+    StoreLane(I8, lane) => lower_v128_store_lane(ctx, inst, block, B8, lane, 0)
+    StoreLane(I16, lane) =>
+      lower_v128_store_lane(ctx, inst, block, H16, lane, 0)
+    StoreLane(I32, lane) =>
+      lower_v128_store_lane(ctx, inst, block, S32, lane, 0)
+    StoreLane(I64, lane) =>
+      lower_v128_store_lane(ctx, inst, block, D64, lane, 0)
+    StoreLane(_, _) => abort("invalid vector lane-store semantics")
 
     // ============ Relaxed SIMD ============
     // relaxed_swizzle: same as swizzle (TBL instruction, out-of-range gives 0)
@@ -2518,6 +2551,39 @@ fn lower_inst_builtin(
 }
 
 ///|
+
+///|
+/// Lower a built-in IR instruction to MachV.
+fn lower_inst_builtin(
+  ctx : LoweringContext,
+  inst : @milkir.Inst,
+  block : @block.Block,
+) -> Unit {
+  match inst.opcode {
+    // Function calls
+    Call(call_op) =>
+      match call_op {
+        @milkir.CallOp::Direct(symbol, _) =>
+          lower_external_call(ctx, inst, block, symbol)
+        @milkir.CallOp::Pointer(num_args, num_results) =>
+          lower_call_ptr(ctx, inst, block, num_args, num_results)
+      }
+    Memory(memory_op) =>
+      match memory_op {
+        @milkir.MemoryOp::Load(ty) => lower_load_ptr(ctx, inst, block, ty)
+        @milkir.MemoryOp::Store(ty) => lower_store_ptr(ctx, inst, block, ty)
+        @milkir.MemoryOp::LoadNarrow(result_ty, bits, signed) =>
+          lower_load_ptr_narrow(ctx, inst, block, result_ty, bits, signed)
+        @milkir.MemoryOp::StoreNarrow(bits) =>
+          lower_store_ptr_narrow(ctx, inst, block, bits)
+      }
+    Ext(_, _) => lower_unsupported_generic_opcode(inst, block)
+    Scalar(scalar_op) => lower_scalar_inst(ctx, inst, block, scalar_op)
+    Vector(vector_op) => lower_vector_inst(ctx, inst, block, vector_op)
+  }
+}
+
+///|
 /// Convert IR IntCC to MachV CmpKind
 fn ir_intcc_to_cmp_kind(cc : @milkir.IntCC) -> @instr.CmpKind {
   match cc {
@@ -2550,12 +2616,8 @@ fn lower_icmp(
     let dst = ctx.get_vreg(result)
     let lhs = ctx.get_vreg_for_use(inst.operands[0], block)
     let kind = ir_intcc_to_cmp_kind(cc)
-    // Determine is_64 from operand type, not result type (result is always i32)
-    // Reference types (CallableRef, OpaqueRef) are also 64-bit values
-    let is_64 = match inst.operands[0].ty {
-      I64 | CallableRef | OpaqueRef => true
-      _ => false
-    }
+    // Determine width from the operand type; the result is always i32.
+    let is_64 = is_64_bit_word_type(inst.operands[0].ty)
     let machv_inst = @instr.Inst(Cmp(kind, is_64))
     machv_inst.add_def({ reg: Virtual(dst) })
     machv_inst.add_use(Virtual(lhs))
@@ -2646,11 +2708,7 @@ fn lower_terminator(
         // So we need to branch to else_block if condition is true, then_block if false
         // This means: BranchCmp with swapped targets
         let machv_cond = intcc_to_cond(cc)
-        // Determine is_64 from operand type (same as lower_icmp)
-        let is_64 = match lhs.ty {
-          I64 | CallableRef | OpaqueRef => true
-          _ => false
-        }
+        let is_64 = is_64_bit_word_type(lhs.ty)
         // Try to use BranchCmpImm if RHS is a valid immediate
         if match_add_imm_value(ctx, rhs) is Some(imm) {
           let lhs_vreg = ctx.get_vreg_for_use(lhs, block)
@@ -2698,11 +2756,7 @@ fn lower_terminator(
       if match_icmp_value(ctx, cond) is Some((lhs, rhs, cc)) {
         // Brnz(icmp(cc, a, b)) = branch to then if icmp result is nonzero (i.e., condition is true)
         let machv_cond = intcc_to_cond(cc)
-        // Determine is_64 from operand type (same as lower_icmp)
-        let is_64 = match lhs.ty {
-          I64 | CallableRef | OpaqueRef => true
-          _ => false
-        }
+        let is_64 = is_64_bit_word_type(lhs.ty)
         // Try to use BranchCmpImm if RHS is a valid immediate
         if match_add_imm_value(ctx, rhs) is Some(imm) {
           let lhs_vreg = ctx.get_vreg_for_use(lhs, block)
@@ -2824,9 +2878,9 @@ fn lower_terminator(
 }
 
 // NOTE: lower_global_get, lower_global_set are removed
-// These operations are desugared via FuncEnvironment at IR level to LoadPtr/StorePtr
+// These operations are desugared via FuncEnvironment to MemoryOp instructions.
 
-// ============ Raw Pointer Operations (for trampolines) ============
+// ============ Memory Operations ============
 
 ///|
 /// Lower load_ptr instruction (raw pointer load without bounds checking)
@@ -2856,7 +2910,7 @@ fn lower_load_ptr(
   // Check if we have an offset from a second operand (must be an iconst)
   let explicit_offset = if inst.operands.length() > 1 {
     if find_defining_inst(ctx, inst.operands[1]) is Some(def_inst) &&
-      def_inst.opcode is Iconst(off) {
+      def_inst.opcode is Scalar(IntConst(off)) {
       off
     } else {
       0L
@@ -2971,7 +3025,7 @@ fn lower_store_ptr(
   // Check if we have an offset from a third operand
   let explicit_offset = if inst.operands.length() > 2 {
     if find_defining_inst(ctx, inst.operands[2]) is Some(def_inst) &&
-      def_inst.opcode is Iconst(off) {
+      def_inst.opcode is Scalar(IntConst(off)) {
       off
     } else {
       0L
@@ -3081,7 +3135,7 @@ fn lower_load_ptr_narrow(
   // Check if we have an offset from a second operand
   let explicit_offset = if inst.operands.length() > 1 {
     if find_defining_inst(ctx, inst.operands[1]) is Some(def_inst) &&
-      def_inst.opcode is Iconst(off) {
+      def_inst.opcode is Scalar(IntConst(off)) {
       off
     } else {
       0L
@@ -3188,7 +3242,7 @@ fn lower_store_ptr_narrow(
   // Check if we have an offset from a third operand
   let explicit_offset = if inst.operands.length() > 2 {
     if find_defining_inst(ctx, inst.operands[2]) is Some(def_inst) &&
-      def_inst.opcode is Iconst(off) {
+      def_inst.opcode is Scalar(IntConst(off)) {
       off
     } else {
       0L

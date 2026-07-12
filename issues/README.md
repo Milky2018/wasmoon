@@ -127,6 +127,34 @@ graph TD
   ISS_111["ISS-111: Unify the production Wasm frontend entry point"]
   ISS_112["ISS-112: Classify Wasmoon JIT integration as product-owned"]
   ISS_113["ISS-113: Refresh architecture and readiness documentation"]
+  ISS_119["ISS-119: Restore safe MilkIR loop unrolling"]
+  ISS_120["ISS-120: Strengthen MilkIR SSA verification"]
+  ISS_121["ISS-121: Fully unroll canonical constant-trip I32 loops"]
+  ISS_122["ISS-122: Preserve loop-carried SSA and effects during full unrolling"]
+  ISS_123["ISS-123: Add factor-two loop unrolling with remainder handling"]
+  ISS_124["ISS-124: Extend checked trip-count analysis to I64 and boundary cases"]
+  ISS_125["ISS-125: Enable safe O3 loop unrolling and differential validation"]
+  ISS_126["ISS-126: Complete MilkIR verifier instruction contracts"]
+  ISS_127["ISS-127: Preserve reference widths during MilkIR-to-MachV lowering"]
+  ISS_128["ISS-128: Accept I64 pointer carriers in CallPtr verification"]
+  ISS_129["ISS-129: Complete carrier-width regression matrices"]
+  ISS_130["ISS-130: Define canonical Function signature construction"]
+  ISS_131["ISS-131: Migrate implicit Function parameter producers"]
+  ISS_132["ISS-132: Remove duplicate Function signature state"]
+  ISS_133["ISS-133: Establish a semantic MilkIR opcode hierarchy"]
+  ISS_134["ISS-134: Remove unsupported and untyped core opcodes"]
+  ISS_135["ISS-135: Group generic memory operations under MemoryOp"]
+  ISS_136["ISS-136: Group calls under a generic CallOp contract"]
+  ISS_137["ISS-137: Group language-neutral vector operations under VectorOp"]
+  ISS_138["ISS-138: Consume Wasm SIMD memory arguments before MilkIR core"]
+  ISS_139["ISS-139: Group scalar operations under ScalarOp"]
+  ISS_140["ISS-140: Separate dialect-bearing IR from core lowering"]
+  ISS_141["ISS-141: Contract the legacy opcode representation"]
+  ISS_142["ISS-142: Contract legacy scalar opcode forms"]
+  ISS_143["ISS-143: Contract legacy vector opcode forms"]
+  ISS_144["ISS-144: Remove residual opcode compatibility APIs"]
+  ISS_145["ISS-145: Finalize the semantic opcode contract"]
+  ISS_146["ISS-146: Restore verifier-safe tail calls and reference carriers"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
@@ -229,6 +257,33 @@ graph TD
   ISS_110 --> ISS_113
   ISS_111 --> ISS_113
   ISS_112 --> ISS_113
+  ISS_120 --> ISS_119
+  ISS_121 --> ISS_119
+  ISS_122 --> ISS_119
+  ISS_123 --> ISS_119
+  ISS_124 --> ISS_119
+  ISS_125 --> ISS_119
+  ISS_120 --> ISS_121
+  ISS_121 --> ISS_122
+  ISS_122 --> ISS_123
+  ISS_123 --> ISS_124
+  ISS_124 --> ISS_125
+  ISS_130 --> ISS_131
+  ISS_131 --> ISS_132
+  ISS_134 --> ISS_135
+  ISS_134 --> ISS_136
+  ISS_134 --> ISS_137
+  ISS_137 --> ISS_138
+  ISS_135 --> ISS_139
+  ISS_136 --> ISS_139
+  ISS_137 --> ISS_139
+  ISS_138 --> ISS_140
+  ISS_139 --> ISS_140
+  ISS_140 --> ISS_141
+  ISS_140 --> ISS_142
+  ISS_142 --> ISS_143
+  ISS_143 --> ISS_144
+  ISS_144 --> ISS_145
 ```
 
 ## Warnings

@@ -5,7 +5,6 @@ using @milkir {
   type Function,
   type FunctionBuilder,
   type IntCC,
-  type Opcode,
   type Type,
   type Value,
 }

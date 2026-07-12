@@ -175,13 +175,6 @@ pub impl Hash for ExtOp with fn hash_combine(self, hasher) {
 }
 
 ///|
-pub struct StackSlot {
-  id : Int
-  size : Int
-  align : Int
-} derive(Eq, Debug, Hash)
-
-///|
 pub(all) enum Metadata {
   SourceLoc(String)
   Comment(String)
@@ -248,19 +241,32 @@ pub struct Inst {
 } derive(Debug)
 
 ///|
-/// Hash for CSE/GVN - based on opcode and operand IDs (not result)
+/// Hash for CSE/GVN - based on opcode, result types, and operand IDs.
+/// Result IDs are definitions rather than part of expression identity.
 pub impl Hash for Inst with fn hash_combine(self, hasher) {
-  self.opcode.hash_combine(hasher)
+  hash_opcode_identity(self.opcode, hasher)
+  self.results.length().hash_combine(hasher)
+  for result in self.results {
+    result.ty.hash_combine(hasher)
+  }
   for op in self.operands {
     op.id.hash_combine(hasher)
   }
 }
 
 ///|
-/// Eq for CSE/GVN - two instructions are equal if same opcode and operand IDs
+/// Eq for CSE/GVN - result types are part of expression identity.
 pub impl Eq for Inst with fn equal(self, other) {
-  if self.opcode != other.opcode {
+  if !opcode_identity_equal(self.opcode, other.opcode) {
     return false
+  }
+  if self.results.length() != other.results.length() {
+    return false
+  }
+  for i in 0..<self.results.length() {
+    if self.results[i].ty != other.results[i].ty {
+      return false
+    }
   }
   if self.operands.length() != other.operands.length() {
     return false
@@ -274,26 +280,25 @@ pub impl Eq for Inst with fn equal(self, other) {
 }
 
 ///|
-fn Inst::Inst(
-  result : Value?,
-  opcode : Opcode,
-  operands : Array[Value],
-) -> Inst {
-  let results = match result {
-    Some(v) => [v]
-    None => []
+fn hash_opcode_identity(opcode : Opcode, hasher : Hasher) -> Unit {
+  match opcode {
+    Scalar(ScalarOp::FloatConst(value)) => {
+      "milkir.fconst.bits".hash_combine(hasher)
+      value.reinterpret_as_uint64().hash_combine(hasher)
+    }
+    _ => opcode.hash_combine(hasher)
   }
-  { id: -1, results, opcode, args: operands, operands, metadata: [] }
 }
 
 ///|
-/// Create an instruction with multiple results (for multi-value call)
-fn Inst::new_multi(
-  results : Array[Value],
-  opcode : Opcode,
-  operands : Array[Value],
-) -> Inst {
-  { id: -1, results, opcode, args: operands, operands, metadata: [] }
+fn opcode_identity_equal(lhs : Opcode, rhs : Opcode) -> Bool {
+  match (lhs, rhs) {
+    (Scalar(ScalarOp::FloatConst(a)), Scalar(ScalarOp::FloatConst(b))) =>
+      a.reinterpret_as_uint64() == b.reinterpret_as_uint64()
+    (Scalar(ScalarOp::FloatConst(_)), _)
+    | (_, Scalar(ScalarOp::FloatConst(_))) => false
+    _ => lhs == rhs
+  }
 }
 
 ///|
@@ -328,114 +333,42 @@ pub fn Inst::all_results(self : Inst) -> Array[Value] {
 }
 
 ///|
-/// Opcode - the operation performed by an instruction
-pub(all) enum Opcode {
-  // Constants
-  Iconst(Int64) // Integer constant
-  Fconst(Double) // Float constant
+/// Generic memory semantics over an explicit address and offset operand.
+pub(all) enum MemoryOp {
+  Load(Type)
+  Store(Type)
+  LoadNarrow(Type, Int, Bool)
+  StoreNarrow(Int)
+} derive(Debug, Eq, Hash)
 
-  // Integer arithmetic
-  Iadd // Integer add
-  Isub // Integer subtract
-  Imul // Integer multiply
-  Umulh // Unsigned multiply high
-  Smulh // Signed multiply high
-  Sdiv // Signed divide
-  Udiv // Unsigned divide
-  Srem // Signed remainder
-  Urem // Unsigned remainder
+///|
+/// Generic call semantics. Pointer-call operands are laid out as the callee
+/// pointer followed by ordinary arguments.
+pub(all) enum CallOp {
+  Direct(ExternalSymbol, Signature)
+  Pointer(Int, Int)
+} derive(Debug, Eq, Hash)
 
-  // Bitwise operations
-  Band // Bitwise and
-  Bor // Bitwise or
-  Bxor // Bitwise xor
-  Bnot // Bitwise not
-  Ishl // Shift left
-  Sshr // Signed shift right
-  Ushr // Unsigned shift right
-  Rotl // Rotate left
-  Rotr // Rotate right
+///|
+pub(all) enum VectorLane {
+  I8
+  I16
+  I32
+  I64
+  F32
+  F64
+} derive(Debug, Eq, Hash)
 
-  // Bit counting operations
-  Clz // Count leading zeros
-  Ctz // Count trailing zeros
-  Popcnt // Population count (number of 1 bits)
+///|
+pub(all) enum VectorExtension {
+  None
+  Signed
+  Unsigned
+} derive(Debug, Eq, Hash)
 
-  // Comparisons (return i32 0 or 1)
-  Icmp(IntCC) // Integer compare
-  IcmpEq
-
-  // Floating point arithmetic
-  Fadd // Float add
-  Fsub // Float subtract
-  Fmul // Float multiply
-  Fdiv // Float divide
-  Fmin // Float minimum
-  Fmax // Float maximum
-
-  // Floating point comparisons
-  Fcmp(FloatCC) // Float compare
-
-  // Floating point unary
-  Fneg // Float negate
-  Fabs // Float absolute value
-  Fsqrt // Float square root
-  Fceil // Float ceiling
-  Ffloor // Float floor
-  Ftrunc // Float truncate
-  Fnearest // Float nearest
-
-  // Conversions
-  Ireduce // Reduce integer width (e.g., i64 -> i32)
-  Sextend // Sign extend (e.g., i32 -> i64)
-  Uextend // Zero extend (e.g., i32 -> i64)
-  Fpromote // Promote float (f32 -> f64)
-  Fdemote // Demote float (f64 -> f32)
-  FcvtToSint // Float to signed int (trapping)
-  FcvtToUint // Float to unsigned int (trapping)
-  FcvtToSintSat // Float to signed int (saturating)
-  FcvtToUintSat // Float to unsigned int (saturating)
-  SintToFcvt // Signed int to float
-  UintToFcvt // Unsigned int to float
-  Bitcast // Reinterpret bits
-
-  // In-place sign extension 
-  // These sign-extend the low N bits to fill the full register
-  Sextend8 // Sign extend from 8 bits (i32 or i64)
-  Sextend16 // Sign extend from 16 bits (i32 or i64)
-  Sextend32 // Sign extend from 32 bits (i64 only)
-
-  // Misc
-  Select // Conditional select (cond ? a : b)
-  Copy // Copy value (for register allocation)
-  Load
-  Store
-  StackAddr(StackSlot)
-
-  // Function calls
-  Call(ExternalSymbol)
-  CallIndirect(Signature)
-
-  // Raw pointer operations (for trampolines, no bounds checking)
-  // Used for host code generation
-  LoadPtr(Type) // Load from pointer+offset (operand 0 = base ptr)
-  StorePtr(Type) // Store to pointer+offset (operand 0 = base ptr, operand 1 = value)
-  // Narrow load/store from raw pointer (result_type, bits, signed)
-  LoadPtrNarrow(Type, Int, Bool) // Load narrow from pointer+offset, extend to result_type
-  StorePtrNarrow(Int) // Store narrow to pointer+offset (bits)
-
-  // Raw function pointer call (for trampolines)
-  // CallPtr(num_args, num_results) - call via function pointer
-  // operand 0 = function pointer, operands 1..n = context + args
-  CallPtr(Int, Int)
-  Trap(String)
-  Custom(String)
-
-  // Dialect extension operations. The core IR treats these conservatively;
-  // dialect-owned packages define the opcode set, builders, validation rules,
-  // and lowering behavior.
-  Ext(ExtOp)
-
+///|
+/// Language-neutral vector operations.
+pub(all) enum VectorOp {
   // ============================================
   // SIMD operations (V128)
   // ============================================
@@ -445,32 +378,15 @@ pub(all) enum Opcode {
 
   // Splat - replicate scalar to all lanes
   // operand: scalar value, result: v128
-  V128Splat8 // i8x16.splat (from i32)
-  V128Splat16 // i16x8.splat (from i32)
-  V128Splat32 // i32x4.splat (from i32)
-  V128Splat64 // i64x2.splat (from i64)
-  V128SplatF32 // f32x4.splat (from f32)
-  V128SplatF64 // f64x2.splat (from f64)
+  Splat(VectorLane)
 
   // Extract lane - extract scalar from vector
   // operand: v128, result: scalar
-  V128ExtractLane8S(Int) // i8x16.extract_lane_s (lane index)
-  V128ExtractLane8U(Int) // i8x16.extract_lane_u
-  V128ExtractLane16S(Int) // i16x8.extract_lane_s
-  V128ExtractLane16U(Int) // i16x8.extract_lane_u
-  V128ExtractLane32(Int) // i32x4.extract_lane
-  V128ExtractLane64(Int) // i64x2.extract_lane
-  V128ExtractLaneF32(Int) // f32x4.extract_lane
-  V128ExtractLaneF64(Int) // f64x2.extract_lane
+  ExtractLane(VectorLane, VectorExtension, Int)
 
   // Replace lane - replace scalar in vector
   // operands: v128, scalar, result: v128
-  V128ReplaceLane8(Int) // i8x16.replace_lane (lane index)
-  V128ReplaceLane16(Int) // i16x8.replace_lane
-  V128ReplaceLane32(Int) // i32x4.replace_lane
-  V128ReplaceLane64(Int) // i64x2.replace_lane
-  V128ReplaceLaneF32(Int) // f32x4.replace_lane
-  V128ReplaceLaneF64(Int) // f64x2.replace_lane
+  ReplaceLane(VectorLane, Int)
 
   // Shuffle - select lanes from two vectors
   // operands: v128, v128, result: v128
@@ -712,29 +628,13 @@ pub(all) enum Opcode {
   V128DemoteF64toF32Zero
   V128PromoteLowF32toF64
 
-  // Memory operations (memidx, align, offset)
-  V128Load8x8S(Int, Int, Int64)
-  V128Load8x8U(Int, Int, Int64)
-  V128Load16x4S(Int, Int, Int64)
-  V128Load16x4U(Int, Int, Int64)
-  V128Load32x2S(Int, Int, Int64)
-  V128Load32x2U(Int, Int, Int64)
-  V128Load8Splat(Int, Int, Int64)
-  V128Load16Splat(Int, Int, Int64)
-  V128Load32Splat(Int, Int, Int64)
-  V128Load64Splat(Int, Int, Int64)
-  V128Load32Zero(Int, Int, Int64)
-  V128Load64Zero(Int, Int, Int64)
-
-  // Lane memory operations (memidx, align, offset, lane)
-  V128Load8Lane(Int, Int, Int64, Int)
-  V128Load16Lane(Int, Int, Int64, Int)
-  V128Load32Lane(Int, Int, Int64, Int)
-  V128Load64Lane(Int, Int, Int64, Int)
-  V128Store8Lane(Int, Int, Int64, Int)
-  V128Store16Lane(Int, Int, Int64, Int)
-  V128Store32Lane(Int, Int, Int64, Int)
-  V128Store64Lane(Int, Int, Int64, Int)
+  // Memory operations consume an already checked effective address. Wasm
+  // memory indices, alignment hints, and offsets belong to the frontend.
+  LoadExtend(VectorLane, VectorExtension)
+  LoadSplat(VectorLane)
+  LoadZero(VectorLane)
+  LoadLane(VectorLane, Int)
+  StoreLane(VectorLane, Int)
 
   // Relaxed SIMD instructions
   V128RelaxedSwizzle // v128, v128 -> v128 (same as swizzle on ARM)
@@ -757,6 +657,109 @@ pub(all) enum Opcode {
   V128RelaxedQ15MulrS // v128, v128 -> v128
   V128RelaxedDot8to16S // v128, v128 -> v128
   V128RelaxedDot8to32AddS // v128, v128, v128 -> v128
+} derive(Debug, Eq, Hash)
+
+///|
+pub(all) enum IntBinaryOp {
+  Add
+  Sub
+  Mul
+  UnsignedMulHigh
+  SignedMulHigh
+  SignedDiv
+  UnsignedDiv
+  SignedRem
+  UnsignedRem
+  And
+  Or
+  Xor
+  ShiftLeft
+  SignedShiftRight
+  UnsignedShiftRight
+  RotateLeft
+  RotateRight
+} derive(Debug, Eq, Hash)
+
+///|
+pub(all) enum IntUnaryOp {
+  Not
+  CountLeadingZeros
+  CountTrailingZeros
+  PopulationCount
+} derive(Debug, Eq, Hash)
+
+///|
+pub(all) enum FloatBinaryOp {
+  Add
+  Sub
+  Mul
+  Div
+  Min
+  Max
+} derive(Debug, Eq, Hash)
+
+///|
+pub(all) enum FloatUnaryOp {
+  Neg
+  Abs
+  Sqrt
+  Ceil
+  Floor
+  Trunc
+  Nearest
+} derive(Debug, Eq, Hash)
+
+///|
+pub(all) enum ConversionOp {
+  IntReduce
+  SignedExtend
+  UnsignedExtend
+  FloatPromote
+  FloatDemote
+  FloatToSignedInt
+  FloatToUnsignedInt
+  FloatToSignedIntSaturating
+  FloatToUnsignedIntSaturating
+  SignedIntToFloat
+  UnsignedIntToFloat
+  Bitcast
+} derive(Debug, Eq, Hash)
+
+///|
+pub(all) enum ScalarOp {
+  IntConst(Int64)
+  FloatConst(Double)
+  IntBinary(IntBinaryOp)
+  IntUnary(IntUnaryOp)
+  IntCompare(IntCC)
+  FloatBinary(FloatBinaryOp)
+  FloatUnary(FloatUnaryOp)
+  FloatCompare(FloatCC)
+  Convert(ConversionOp)
+  SignExtendFrom(Int)
+  Select
+  Copy
+} derive(Debug, Eq, Hash)
+
+///|
+/// Opcode - the operation performed by an instruction
+pub(all) enum Opcode {
+  // Language-neutral scalar operations.
+  Scalar(ScalarOp)
+
+  // Function calls
+  Call(CallOp)
+
+  // Generic memory operations.
+  Memory(MemoryOp)
+
+  // Dialect extension operations. The core IR treats these conservatively;
+  // dialect-owned packages define the opcode set, builders, validation rules,
+  // and lowering behavior.
+  Ext(ExtOp, Signature)
+
+  // Language-neutral vector operations.
+  Vector(VectorOp)
 } derive(Debug, Eq, Hash)
 
 ///|
@@ -816,38 +819,60 @@ pub(all) enum Terminator {
 /// Function - a complete IR function
 pub struct Function {
   name : String
-  signature : Signature
   params : Array[(Value, Type)] // Function parameters
   results : Array[Type] // Return types
   blocks : Array[Block] // Basic blocks (block 0 is entry)
-  stack_slots : Array[StackSlot]
   external_symbols : Array[ExternalSymbol]
   mut next_value_id : Int // For generating unique value IDs
   mut next_inst_id : Int
   mut next_block_id : Int // For generating unique block IDs
-  mut next_stack_slot_id : Int
 } derive(Debug)
 
 ///|
-pub fn Function::Function(name : String, signature : Signature) -> Function {
+pub fn Function::new_empty(name : String) -> Function {
   {
     name,
-    signature,
     params: [],
-    results: signature.results.copy(),
+    results: [],
     blocks: [],
-    stack_slots: [],
     external_symbols: [],
     next_value_id: 0,
     next_inst_id: 0,
     next_block_id: 0,
-    next_stack_slot_id: 0,
   }
 }
 
 ///|
-pub fn Function::new_empty(name : String) -> Function {
-  Function(name, Signature([], []))
+/// Create a function whose declared signature is materialized as explicit
+/// parameter values and result types.
+pub fn Function::with_signature(
+  name : String,
+  signature : Signature,
+) -> Function {
+  let func = Function::new_empty(name)
+  for ty in signature.params {
+    func.add_param(ty) |> ignore
+  }
+  for ty in signature.results {
+    func.add_result(ty)
+  }
+  func
+}
+
+///|
+/// Return a declared function parameter by position.
+pub fn Function::param(self : Function, index : Int) -> Value? {
+  if index >= 0 && index < self.params.length() {
+    Some(self.params[index].0)
+  } else {
+    None
+  }
+}
+
+///|
+/// Return a signature snapshot derived from the explicit function contract.
+pub fn Function::signature(self : Function) -> Signature {
+  Signature([ for param in self.params => param.1 ], self.results.copy())
 }
 
 ///|
@@ -890,7 +915,6 @@ pub fn Function::new_inst(
 pub fn Function::add_param(self : Function, ty : Type) -> Value {
   let v = self.new_value(ty)
   self.params.push((v, ty))
-  self.signature.params.push(ty)
   v
 }
 
@@ -898,19 +922,6 @@ pub fn Function::add_param(self : Function, ty : Type) -> Value {
 /// Add a result type to the function
 pub fn Function::add_result(self : Function, ty : Type) -> Unit {
   self.results.push(ty)
-  self.signature.results.push(ty)
-}
-
-///|
-pub fn Function::new_stack_slot(
-  self : Function,
-  size : Int,
-  align : Int,
-) -> StackSlot {
-  let slot = { id: self.next_stack_slot_id, size, align }
-  self.next_stack_slot_id = self.next_stack_slot_id + 1
-  self.stack_slots.push(slot)
-  slot
 }
 
 ///|

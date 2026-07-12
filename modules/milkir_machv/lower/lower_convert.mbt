@@ -339,10 +339,7 @@ fn lower_select(
       let lhs_vreg = ctx.get_vreg_for_use(lhs, block)
       let kind = ir_intcc_to_cmp_kind(cc)
       // Determine is_64 from comparison operand type
-      let is_64 = match lhs.ty {
-        I64 | CallableRef | OpaqueRef => true
-        _ => false
-      }
+      let is_64 = is_64_bit_word_type(lhs.ty)
       let machv_inst = @instr.Inst(SelectCmp(kind, is_64))
       machv_inst.add_def({ reg: Virtual(dst) })
       machv_inst.add_use(Virtual(lhs_vreg))

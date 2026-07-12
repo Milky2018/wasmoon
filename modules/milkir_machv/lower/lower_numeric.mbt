@@ -81,7 +81,7 @@ fn resolve_copy_value(
   while depth < 8 {
     depth += 1
     if find_defining_inst(ctx, value) is Some(inst) &&
-      inst.opcode is Copy &&
+      inst.opcode is Scalar(Copy) &&
       !inst.operands.is_empty() {
       value = inst.operands[0]
       continue
@@ -111,7 +111,7 @@ fn match_sub_add_cancel_value(
   addend : @milkir.Value,
 ) -> @milkir.Value? {
   if find_defining_inst(ctx, maybe_sub) is Some(sub_inst) &&
-    sub_inst.opcode is Isub &&
+    sub_inst.opcode is Scalar(IntBinary(Sub)) &&
     sub_inst.operands.length() == 2 &&
     values_equivalent(ctx, sub_inst.operands[1], addend) {
     return Some(sub_inst.operands[0])
@@ -127,7 +127,7 @@ fn match_add_sub_cancel_value(
   subtrahend : @milkir.Value,
 ) -> @milkir.Value? {
   if find_defining_inst(ctx, maybe_add) is Some(add_inst) &&
-    add_inst.opcode is Iadd &&
+    add_inst.opcode is Scalar(IntBinary(Add)) &&
     add_inst.operands.length() == 2 {
     if values_equivalent(ctx, add_inst.operands[0], subtrahend) {
       return Some(add_inst.operands[1])
@@ -1053,7 +1053,7 @@ fn lower_band(
   let dst = ctx.get_vreg(result)
   let lhs_val = inst.operands[0]
   let rhs_val = inst.operands[1]
-  let is_64 = result.ty is I64
+  let is_64 = is_64_bit_word_type(result.ty)
   let isa = ctx.isa
 
   // Pattern: and(x, const) -> AndImm if const is encodable as a logical immediate.
@@ -1159,7 +1159,7 @@ fn lower_bor(
   let dst = ctx.get_vreg(result)
   let lhs_val = inst.operands[0]
   let rhs_val = inst.operands[1]
-  let is_64 = result.ty is I64
+  let is_64 = is_64_bit_word_type(result.ty)
   let isa = ctx.isa
 
   // Pattern: or(x, const) -> OrImm if const is encodable as a logical immediate.
@@ -1293,7 +1293,7 @@ fn lower_bxor(
   let dst = ctx.get_vreg(result)
   let lhs_val = inst.operands[0]
   let rhs_val = inst.operands[1]
-  let is_64 = result.ty is I64
+  let is_64 = is_64_bit_word_type(result.ty)
   let isa = ctx.isa
 
   // Pattern: xor(x, const) -> XorImm if const is encodable as a logical immediate.
@@ -1508,6 +1508,7 @@ fn lower_binary_float(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.Block,
+  scalar_op : @milkir.FloatBinaryOp,
 ) -> Unit {
   if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
@@ -1516,14 +1517,13 @@ fn lower_binary_float(
     // Determine if this is f32 based on result type
     let is_f32 = result.ty is F32
     // Select MachV opcode based on IR opcode
-    let opcode : @instr.Opcode = match inst.opcode {
-      Fadd => FAdd(is_f32)
-      Fsub => FSub(is_f32)
-      Fmul => FMul(is_f32)
-      Fdiv => FDiv(is_f32)
-      Fmin => FMin(is_f32)
-      Fmax => FMax(is_f32)
-      _ => FAdd(is_f32) // Fallback, should not happen
+    let opcode : @instr.Opcode = match scalar_op {
+      Add => FAdd(is_f32)
+      Sub => FSub(is_f32)
+      Mul => FMul(is_f32)
+      Div => FDiv(is_f32)
+      Min => FMin(is_f32)
+      Max => FMax(is_f32)
     }
     let machv_inst = @instr.Inst(opcode)
     machv_inst.add_def({ reg: Virtual(dst) })
@@ -1539,6 +1539,7 @@ fn lower_unary_float(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.Block,
+  scalar_op : @milkir.FloatUnaryOp,
 ) -> Unit {
   if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
@@ -1546,15 +1547,14 @@ fn lower_unary_float(
     // Determine if this is f32 based on result type
     let is_f32 = result.ty is F32
     // Select MachV opcode based on IR opcode
-    let opcode : @instr.Opcode = match inst.opcode {
-      Fsqrt => FSqrt(is_f32)
-      Fabs => FAbs(is_f32)
-      Fneg => FNeg(is_f32)
-      Fceil => FCeil(is_f32)
-      Ffloor => FFloor(is_f32)
-      Ftrunc => FTrunc(is_f32)
-      Fnearest => FNearest(is_f32)
-      _ => FSqrt(is_f32) // Fallback, should not happen
+    let opcode : @instr.Opcode = match scalar_op {
+      Sqrt => FSqrt(is_f32)
+      Abs => FAbs(is_f32)
+      Neg => FNeg(is_f32)
+      Ceil => FCeil(is_f32)
+      Floor => FFloor(is_f32)
+      Trunc => FTrunc(is_f32)
+      Nearest => FNearest(is_f32)
     }
     let machv_inst = @instr.Inst(opcode)
     machv_inst.add_def({ reg: Virtual(dst) })
@@ -1716,7 +1716,11 @@ fn lower_bitcast(
   if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
     let src = ctx.get_vreg_for_use(inst.operands[0], block)
-    let machv_inst = @instr.Inst(Bitcast)
+    let machv_inst = if dst.class == src.class {
+      @instr.Inst(Move)
+    } else {
+      @instr.Inst(Bitcast)
+    }
     machv_inst.add_def({ reg: Virtual(dst) })
     machv_inst.add_use(Virtual(src))
     block.add_inst(machv_inst)

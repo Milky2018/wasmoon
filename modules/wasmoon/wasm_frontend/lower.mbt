@@ -150,25 +150,5 @@ pub fn try_lower_native_function(
   mod_ : @types.Module,
   func_local_idx : Int,
 ) -> @milkir.Function? raise LowerError {
-  match try_lower_linear_function(env, mod_, func_local_idx) {
-    Some(func) =>
-      if function_contains_custom_opcode(func) {
-        None
-      } else {
-        Some(func)
-      }
-    None => None
-  }
-}
-
-///|
-fn function_contains_custom_opcode(func : @milkir.Function) -> Bool {
-  for block in func.blocks {
-    for inst in block.instructions {
-      if inst.opcode is Custom(_) {
-        return true
-      }
-    }
-  }
-  false
+  try_lower_linear_function(env, mod_, func_local_idx)
 }

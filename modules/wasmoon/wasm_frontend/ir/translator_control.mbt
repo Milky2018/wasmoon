@@ -115,6 +115,8 @@ fn Translator::translate_if(
     }
     self.block_stack[frame_idx].has_predecessor = true
     self.builder.jump(continuation, args)
+  } else if block.terminator is None {
+    self.builder.trap("unreachable if then branch")
   }
 
   // Restore stack to original height for else branch
@@ -153,6 +155,8 @@ fn Translator::translate_if(
     }
     self.block_stack[frame_idx].has_predecessor = true
     self.builder.jump(continuation, args)
+  } else if block.terminator is None {
+    self.builder.trap("unreachable if else branch")
   }
 
   let continuation_reachable = self.block_stack[frame_idx].has_predecessor
@@ -164,6 +168,9 @@ fn Translator::translate_if(
   self.builder.switch_to_block(continuation)
 
   self.is_unreachable = outer_is_unreachable || !continuation_reachable
+  if !continuation_reachable {
+    self.builder.trap("unreachable if continuation")
+  }
 
   // Push results onto stack
   if continuation_reachable {
@@ -463,6 +470,7 @@ fn Translator::translate_br_on_cast(
       type_idx,
       nullable,
       ref_val,
+      type_from_wasm(target_type),
     )
     let args : Array[Value] = []
     for v in stack_args {
@@ -495,6 +503,7 @@ fn Translator::translate_br_on_cast(
       type_idx,
       nullable,
       ref_val,
+      type_from_wasm(target_type),
     )
     let args : Array[Value] = []
     for v in stack_args {
@@ -562,6 +571,7 @@ fn Translator::translate_br_on_cast_fail(
       type_idx,
       nullable,
       ref_val,
+      type_from_wasm(target_type),
     )
     self.push(cast_val)
   } else if idx == -1 {
@@ -593,6 +603,7 @@ fn Translator::translate_br_on_cast_fail(
       type_idx,
       nullable,
       ref_val,
+      type_from_wasm(target_type),
     )
     self.push(cast_val)
   }
@@ -897,6 +908,7 @@ fn Translator::translate_return_call(self : Translator, func_idx : Int) -> Unit 
     // Emit return_call instruction (tail call - does not return to caller)
     // Note: emit a single ReturnCall IR instruction, not call + return
     @wasm_milkir.return_call_multi(self.builder, global_func_idx, args)
+    self.builder.trap("unreachable after return_call")
     // Mark as unreachable since this is a terminator (does not return to this function)
     self.is_unreachable = true
   }
@@ -932,6 +944,7 @@ fn Translator::translate_return_call_indirect(
       elem_idx,
       args,
     )
+    self.builder.trap("unreachable after return_call_indirect")
     // Mark as unreachable since this is a terminator (does not return to this function)
     self.is_unreachable = true
   }
@@ -976,6 +989,7 @@ fn Translator::translate_return_call_ref(
     // Emit return_call_ref instruction (tail call - does not return to caller)
     // Note: emit a single ReturnCallRef IR instruction, not call + return
     @wasm_milkir.return_call_ref_multi(self.builder, type_idx, func_ref, args)
+    self.builder.trap("unreachable after return_call_ref")
     // Mark as unreachable since this is a terminator (does not return to this function)
     self.is_unreachable = true
   }

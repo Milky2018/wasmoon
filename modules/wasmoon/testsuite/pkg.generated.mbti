@@ -13,6 +13,10 @@ import {
 // Values
 pub fn compare_jit_interp(String, String, Array[@types.Value]) -> CompareResult
 
+pub fn compare_jit_interp_with_opt_level(String, String, Array[@types.Value], Int) -> CompareResult
+
+pub fn compare_result_errors_contain(CompareResult, String) -> Bool
+
 pub fn compare_result_is_match(CompareResult) -> Bool
 
 pub fn current_target_arch() -> @cwasm.TargetArch

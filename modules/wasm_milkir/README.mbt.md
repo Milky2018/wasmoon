@@ -19,6 +19,11 @@ WebAssembly operations that need additional immediates or lowering semantics as
 typed MilkIR extensions. The extension descriptor lets a lowering pipeline
 validate the encoded operation before decoding it.
 
+Common arithmetic, calls, references, and SIMD operations use MilkIR's semantic
+opcode families directly. In particular, the Wasm frontend consumes SIMD
+`memidx`, alignment, and offset fields while constructing the effective address;
+the resulting MilkIR `VectorOp` carries only vector load/store semantics.
+
 ## Example: map Wasm reference types to MilkIR
 
 ```moonbit check
@@ -44,7 +49,8 @@ test "build a Wasm memory.size extension instruction" {
   inspect(func.blocks.length(), content="1")
   inspect(func.verify(), content="()")
   match func.blocks[0].instructions[1].opcode {
-    Call(symbol) => inspect(symbol.name, content="example.runtime.memory_size")
+    Call(@milkir.CallOp::Direct(symbol, _)) =>
+      inspect(symbol.name, content="example.runtime.memory_size")
     _ => inspect(false, content="true")
   }
 }

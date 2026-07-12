@@ -114,7 +114,9 @@ pub fn runtime_assembly() -> RuntimeAssembly {
 ///|
 pub fn compiler_infrastructure_assembly() -> CompilerInfrastructureAssembly {
   let signature = @milkir.Signature::Signature([], [])
-  let milk = @milkir.Function::Function("wasmoon_runtime_probe", signature)
+  let milk = @milkir.Function::with_signature(
+    "wasmoon_runtime_probe", signature,
+  )
   let entry = milk.new_block0()
   entry.set_terminator(Return([]))
   let embedding_abi = @wasmoon_jit.wasm_embedding_abi()

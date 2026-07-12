@@ -234,9 +234,7 @@ fn optimize_o3(func : Function) -> OptResult {
   if licm_result.changed {
     result.mark_changed()
   }
-  let unroll_result = run_opt_pass(func, "loop_unroll", fn(func) {
-    unroll_loops(func, 2)
-  }) // Unroll factor of 2
+  let unroll_result = run_opt_pass(func, "loop_unroll", unroll_counted_loops)
   if unroll_result.changed {
     result.mark_changed()
   }

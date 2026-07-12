@@ -525,3 +525,17 @@ test "simd: i32x4.bitmask" {
   let result = compare_jit_interp(source, "bitmask", [])
   inspect(result, content="matched")
 }
+
+///|
+test "simd: extending load consumes offset once" {
+  let source =
+    #|(module
+    #|  (memory 1)
+    #|  (data (i32.const 0)
+    #|    "\01\02\03\04\05\06\07\08\11\12\13\14\15\16\17\18\21\22\23\24\25\26\27\28")
+    #|  (func (export "load") (result v128)
+    #|    (v128.load8x8_s offset=8 (i32.const 0)))
+    #|)
+  let result = compare_jit_interp(source, "load", [])
+  inspect(result, content="matched")
+}

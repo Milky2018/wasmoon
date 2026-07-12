@@ -169,9 +169,12 @@ fn lower_call_ptr(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.Block,
-  num_args : Int,
+  argument_count : Int,
   _num_results : Int,
 ) -> Unit {
+  if argument_count < 1 {
+    abort("embedding pointer-call lowering requires a context argument")
+  }
   // Collect function pointer
   let func_ptr = ctx.get_vreg_for_use(inst.operands[0], block)
 
@@ -198,8 +201,15 @@ fn lower_call_ptr(
   let result_vregs = collect_call_result_vregs(ctx, inst)
 
   // Step 3: Create an internal call with fixed-register constraints.
+  // The embedding adapter assigns the first ordinary pointer-call argument to
+  // its context role. MachV's legacy count excludes that role.
+  let user_argument_count = argument_count - 1
   let call_inst = @instr.Inst(
-    CallPtr(num_args, @instr.result_classes_for_vregs(result_vregs), Internal),
+    CallPtr(
+      user_argument_count,
+      @instr.result_classes_for_vregs(result_vregs),
+      Internal,
+    ),
   )
 
   // Call target is constrained to SCRATCH_REG_2 (IP1).
@@ -277,7 +287,7 @@ fn lower_call_ptr(
 /// Lower a generic external-symbol call using the platform C ABI.
 ///
 /// Frontends that need embedding-specific runtime helpers should express them
-/// as MilkIR `Call(ExternalSymbol)` nodes before generic MilkIR-to-MachV lowering. The
+/// as MilkIR direct-call nodes before generic MilkIR-to-MachV lowering. The
 /// symbol resolver is owned by the embedding runtime, not by `milkir_machv`.
 fn lower_external_call(
   ctx : LoweringContext,

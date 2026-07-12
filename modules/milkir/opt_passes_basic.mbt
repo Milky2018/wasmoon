@@ -36,21 +36,20 @@ fn eliminate_dead_code(func : Function) -> OptResult {
       let mut i = block.instructions.length() - 1
       while i >= 0 {
         let inst = block.instructions[i]
-        if inst.first_result() is Some(v) {
-          // If the result is never used and the instruction has no side effects
-          if use_counts.get(v.id).unwrap_or(0) == 0 && !has_side_effects(inst) {
-            // Remove this instruction
-            block.instructions.remove(i) |> ignore
-            // Decrement use counts for operands
-            for op in inst.operands {
-              let count = use_counts.get(op.id).unwrap_or(0)
-              if count > 0 {
-                use_counts.set(op.id, count - 1)
-              }
+        let all_results_unused = inst.results.length() > 0 &&
+          inst.results.all(v => use_counts.get(v.id).unwrap_or(0) == 0)
+        if all_results_unused && !has_side_effects(inst) {
+          // Remove this instruction
+          block.instructions.remove(i) |> ignore
+          // Decrement use counts for operands
+          for op in inst.operands {
+            let count = use_counts.get(op.id).unwrap_or(0)
+            if count > 0 {
+              use_counts.set(op.id, count - 1)
             }
-            changed = true
-            result.mark_changed()
           }
+          changed = true
+          result.mark_changed()
         }
         i = i - 1
       }
@@ -108,21 +107,32 @@ fn get_terminator_uses(term : Terminator) -> Array[Value] {
 /// Check if an instruction has side effects
 fn has_side_effects(inst : Inst) -> Bool {
   match inst.opcode {
-    // StorePtr has side effects (modifies memory)
-    StorePtr(_) | StorePtrNarrow(_) => true
-    // LoadPtr has side effects (can trap on null pointer)
-    LoadPtr(_) | LoadPtrNarrow(_, _, _) => true
+    // Memory operations may trap or modify memory.
+    Memory(_) => true
+    // Vector memory operations consume checked effective addresses, but loads
+    // may still trap and stores modify memory.
+    Vector(
+      VectorOp::LoadExtend(_, _)
+      | VectorOp::LoadSplat(_)
+      | VectorOp::LoadZero(_)
+      | VectorOp::LoadLane(_, _)
+      | VectorOp::StoreLane(_, _)
+    ) => true
     // Dialect extension operations are conservatively effectful unless a
     // dialect-owned optimization pass proves otherwise.
-    Ext(_) => true
-    // NOTE: GlobalGet, GlobalSet are desugared via frontends to LoadPtr/StorePtr
+    Ext(_, _) => true
+    // NOTE: GlobalGet and GlobalSet are desugared to Memory operations.
     // Division/remainder can trap on divide-by-zero or overflow (INT_MIN / -1)
-    Sdiv | Udiv | Srem | Urem => true
+    Scalar(ScalarOp::IntBinary(IntBinaryOp::SignedDiv))
+    | Scalar(ScalarOp::IntBinary(IntBinaryOp::UnsignedDiv))
+    | Scalar(ScalarOp::IntBinary(IntBinaryOp::SignedRem))
+    | Scalar(ScalarOp::IntBinary(IntBinaryOp::UnsignedRem)) => true
     // Float-to-int conversion can trap on NaN or out-of-range values
-    FcvtToSint | FcvtToUint => true
+    Scalar(ScalarOp::Convert(ConversionOp::FloatToSignedInt))
+    | Scalar(ScalarOp::Convert(ConversionOp::FloatToUnsignedInt)) => true
     // External calls can have side effects and may interact with embedding
     // runtime state.
-    Call(_) | CallPtr(_, _) => true
+    Call(_) => true
     // Other instructions are pure
     _ => false
   }
@@ -141,7 +151,7 @@ fn fold_constants(func : Function) -> OptResult {
     for inst in block.instructions {
       // First, record any constant instruction
       match inst.opcode {
-        Iconst(v) =>
+        Scalar(ScalarOp::IntConst(v)) =>
           match inst.first_result() {
             Some(r) =>
               if r.ty is I32 {
@@ -151,7 +161,7 @@ fn fold_constants(func : Function) -> OptResult {
               }
             None => ()
           }
-        Fconst(v) =>
+        Scalar(ScalarOp::FloatConst(v)) =>
           match inst.first_result() {
             Some(r) =>
               if r.ty is F32 {
@@ -194,14 +204,14 @@ priv enum ConstValue {
 /// Convert constant value to opcode
 fn ConstValue::to_opcode(self : ConstValue) -> Opcode {
   match self {
-    I32(v) => Iconst(v.to_int64())
-    I64(v) => Iconst(v)
+    I32(v) => Scalar(ScalarOp::IntConst(v.to_int64()))
+    I64(v) => Scalar(ScalarOp::IntConst(v))
     F32(v) => {
       // Pack F32 bits into Double's bit representation to preserve NaN payloads
       let f32_bits = v.reinterpret_as_int().to_int64()
-      Fconst(f32_bits.reinterpret_as_double())
+      Scalar(ScalarOp::FloatConst(f32_bits.reinterpret_as_double()))
     }
-    F64(v) => Fconst(v)
+    F64(v) => Scalar(ScalarOp::FloatConst(v))
   }
 }
 
@@ -213,29 +223,46 @@ fn try_fold_constant(
 ) -> ConstValue? {
   match inst.opcode {
     // Constants are already folded
-    Iconst(_) | Fconst(_) => None
+    Scalar(ScalarOp::IntConst(_)) | Scalar(ScalarOp::FloatConst(_)) => None
     // Binary integer operations
-    Iadd => fold_binary_int(inst, constants, fn(a, b) { a + b })
-    Isub => fold_binary_int(inst, constants, fn(a, b) { a - b })
-    Imul => fold_binary_int(inst, constants, fn(a, b) { a * b })
-    Sdiv => fold_sdiv(inst, constants)
-    Udiv => fold_udiv(inst, constants)
+    Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)) =>
+      fold_binary_int(inst, constants, fn(a, b) { a + b })
+    Scalar(ScalarOp::IntBinary(IntBinaryOp::Sub)) =>
+      fold_binary_int(inst, constants, fn(a, b) { a - b })
+    Scalar(ScalarOp::IntBinary(IntBinaryOp::Mul)) =>
+      fold_binary_int(inst, constants, fn(a, b) { a * b })
+    Scalar(ScalarOp::IntBinary(IntBinaryOp::SignedDiv)) =>
+      fold_sdiv(inst, constants)
+    Scalar(ScalarOp::IntBinary(IntBinaryOp::UnsignedDiv)) =>
+      fold_udiv(inst, constants)
     // Bitwise operations
-    Band => fold_binary_int(inst, constants, fn(a, b) { a & b })
-    Bor => fold_binary_int(inst, constants, fn(a, b) { a | b })
-    Bxor => fold_binary_int(inst, constants, fn(a, b) { a ^ b })
-    Ishl => fold_ishl(inst, constants)
-    Sshr => fold_sshr(inst, constants)
-    Ushr => fold_ushr(inst, constants)
-    Srem => fold_srem(inst, constants)
-    Urem => fold_urem(inst, constants)
+    Scalar(ScalarOp::IntBinary(IntBinaryOp::And)) =>
+      fold_binary_int(inst, constants, fn(a, b) { a & b })
+    Scalar(ScalarOp::IntBinary(IntBinaryOp::Or)) =>
+      fold_binary_int(inst, constants, fn(a, b) { a | b })
+    Scalar(ScalarOp::IntBinary(IntBinaryOp::Xor)) =>
+      fold_binary_int(inst, constants, fn(a, b) { a ^ b })
+    Scalar(ScalarOp::IntBinary(IntBinaryOp::ShiftLeft)) =>
+      fold_ishl(inst, constants)
+    Scalar(ScalarOp::IntBinary(IntBinaryOp::SignedShiftRight)) =>
+      fold_sshr(inst, constants)
+    Scalar(ScalarOp::IntBinary(IntBinaryOp::UnsignedShiftRight)) =>
+      fold_ushr(inst, constants)
+    Scalar(ScalarOp::IntBinary(IntBinaryOp::SignedRem)) =>
+      fold_srem(inst, constants)
+    Scalar(ScalarOp::IntBinary(IntBinaryOp::UnsignedRem)) =>
+      fold_urem(inst, constants)
     // Float operations
-    Fadd => fold_binary_float(inst, constants, fn(a, b) { a + b })
-    Fsub => fold_binary_float(inst, constants, fn(a, b) { a - b })
-    Fmul => fold_binary_float(inst, constants, fn(a, b) { a * b })
-    Fdiv => fold_binary_float(inst, constants, fn(a, b) { a / b })
+    Scalar(ScalarOp::FloatBinary(FloatBinaryOp::Add)) =>
+      fold_binary_float(inst, constants, fn(a, b) { a + b })
+    Scalar(ScalarOp::FloatBinary(FloatBinaryOp::Sub)) =>
+      fold_binary_float(inst, constants, fn(a, b) { a - b })
+    Scalar(ScalarOp::FloatBinary(FloatBinaryOp::Mul)) =>
+      fold_binary_float(inst, constants, fn(a, b) { a * b })
+    Scalar(ScalarOp::FloatBinary(FloatBinaryOp::Div)) =>
+      fold_binary_float(inst, constants, fn(a, b) { a / b })
     // Comparisons
-    Icmp(cc) => fold_icmp(inst, constants, cc)
+    Scalar(ScalarOp::IntCompare(cc)) => fold_icmp(inst, constants, cc)
     _ => None
   }
 }
@@ -573,7 +600,7 @@ fn canonicalize_aliases(func : Function) -> OptResult {
         }
       }
       // If this instruction defines a copy, make its destination an alias.
-      if inst.opcode is Copy &&
+      if inst.opcode is Scalar(ScalarOp::Copy) &&
         inst.first_result() is Some(dest) &&
         inst.operands.length() > 0 {
         aliases.set(dest.id, inst.operands[0])

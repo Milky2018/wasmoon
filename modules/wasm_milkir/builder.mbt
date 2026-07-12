@@ -214,13 +214,19 @@ pub fn table_grow(
   table_idx : Int,
   delta : @milkir.Value,
   init_value : @milkir.Value,
+  is_table64? : Bool = false,
 ) -> @milkir.Value {
-  call_runtime(builder, runtime_symbols.table_grow, Some(I32), [
-    vmctx,
-    builder.iconst_i32(table_idx),
-    delta,
-    init_value,
-  ]).unwrap()
+  let call_result = call_runtime(
+    builder,
+    runtime_symbols.table_grow,
+    Some(I32),
+    [vmctx, builder.iconst_i32(table_idx), delta, init_value],
+  ).unwrap()
+  if is_table64 {
+    builder.sextend(I64, call_result)
+  } else {
+    call_result
+  }
 }
 
 ///|
@@ -403,7 +409,7 @@ pub fn struct_new(
   type_idx : Int,
   fields : Array[@milkir.Value],
 ) -> @milkir.Value {
-  emit_wasm_inst(builder, i64_type(), StructNew(type_idx), fields)
+  emit_wasm_inst(builder, Ref, StructNew(type_idx), fields)
 }
 
 ///|
@@ -411,7 +417,7 @@ pub fn struct_new_default(
   builder : @milkir.FunctionBuilder,
   type_idx : Int,
 ) -> @milkir.Value {
-  emit_wasm_inst(builder, i64_type(), StructNewDefault(type_idx), [])
+  emit_wasm_inst(builder, Ref, StructNewDefault(type_idx), [])
 }
 
 ///|
@@ -481,7 +487,7 @@ pub fn array_new(
   init_value : @milkir.Value,
   length : @milkir.Value,
 ) -> @milkir.Value {
-  emit_wasm_inst(builder, i64_type(), ArrayNew(type_idx), [init_value, length])
+  emit_wasm_inst(builder, Ref, ArrayNew(type_idx), [init_value, length])
 }
 
 ///|
@@ -490,7 +496,7 @@ pub fn array_new_default(
   type_idx : Int,
   length : @milkir.Value,
 ) -> @milkir.Value {
-  emit_wasm_inst(builder, i64_type(), ArrayNewDefault(type_idx), [length])
+  emit_wasm_inst(builder, Ref, ArrayNewDefault(type_idx), [length])
 }
 
 ///|
@@ -500,7 +506,7 @@ pub fn array_new_fixed(
   count : Int,
   elements : Array[@milkir.Value],
 ) -> @milkir.Value {
-  emit_wasm_inst(builder, i64_type(), ArrayNewFixed(type_idx, count), elements)
+  emit_wasm_inst(builder, Ref, ArrayNewFixed(type_idx, count), elements)
 }
 
 ///|
@@ -599,7 +605,7 @@ pub fn array_new_data(
   data_offset : @milkir.Value,
   length : @milkir.Value,
 ) -> @milkir.Value {
-  emit_wasm_inst(builder, i64_type(), ArrayNewData(type_idx, data_idx), [
+  emit_wasm_inst(builder, Ref, ArrayNewData(type_idx, data_idx), [
     data_offset, length,
   ])
 }
@@ -612,7 +618,7 @@ pub fn array_new_elem(
   elem_offset : @milkir.Value,
   length : @milkir.Value,
 ) -> @milkir.Value {
-  emit_wasm_inst(builder, i64_type(), ArrayNewElem(type_idx, elem_idx), [
+  emit_wasm_inst(builder, Ref, ArrayNewElem(type_idx, elem_idx), [
     elem_offset, length,
   ])
 }
@@ -652,7 +658,7 @@ pub fn i31_new(
   builder : @milkir.FunctionBuilder,
   value : @milkir.Value,
 ) -> @milkir.Value {
-  emit_wasm_inst(builder, i64_type(), I31New, [value])
+  emit_wasm_inst(builder, Ref, I31New, [value])
 }
 
 ///|
@@ -687,8 +693,9 @@ pub fn ref_cast(
   type_idx : Int,
   nullable : Bool,
   ref_val : @milkir.Value,
+  result_type : @milkir.Type,
 ) -> @milkir.Value {
-  emit_wasm_inst(builder, i64_type(), RefCast(type_idx, nullable), [ref_val])
+  emit_wasm_inst(builder, result_type, RefCast(type_idx, nullable), [ref_val])
 }
 
 ///|
@@ -696,7 +703,7 @@ pub fn any_convert_extern(
   builder : @milkir.FunctionBuilder,
   extern_ref : @milkir.Value,
 ) -> @milkir.Value {
-  emit_wasm_inst(builder, i64_type(), AnyConvertExtern, [extern_ref])
+  emit_wasm_inst(builder, Ref, AnyConvertExtern, [extern_ref])
 }
 
 ///|
@@ -704,7 +711,7 @@ pub fn extern_convert_any(
   builder : @milkir.FunctionBuilder,
   any_ref : @milkir.Value,
 ) -> @milkir.Value {
-  emit_wasm_inst(builder, i64_type(), ExternConvertAny, [any_ref])
+  emit_wasm_inst(builder, OpaqueRef, ExternConvertAny, [any_ref])
 }
 
 ///|

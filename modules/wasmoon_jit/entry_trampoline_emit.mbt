@@ -118,7 +118,11 @@ fn generate_trampoline_ir(
   }
 
   // Emit CallPtr instruction
-  let results = builder.call_ptr(func_ptr, vmctx, wasm_args, wasm_result_types)
+  let call_args : Array[@milkir.Value] = [vmctx]
+  for arg in wasm_args {
+    call_args.push(arg)
+  }
+  let results = builder.call_pointer(func_ptr, call_args, wasm_result_types)
 
   // Store results back to values_vec
   // V128 is stored as two I64 values (low then high) to avoid alignment issues

@@ -62,6 +62,8 @@ block0:                             execution starts in block0
 }
 ```
 
+`finalize()` verifies the current function before returning it and raises `VerifyError` for malformed SSA, CFG, or instruction contracts. `get_function()` remains the explicit escape hatch for in-progress construction and transformation code; callers that mutate a function after finalization must verify it again.
+
 The important detail is that `x`, `one`, and `answer` are not runtime integers in the MoonBit program that builds the IR. They are MilkIR `Value`s: typed handles that name values in the function being compiled.
 
 ## The six concepts to know
@@ -82,6 +84,22 @@ The important detail is that `x`, `one`, and `answer` are not runtime integers i
 3. Emit instructions.
 4. End the current block with `return_`, `jump`, a branch, or `trap`.
 5. Call `finalize`, then `verify` the function.
+
+Lower-level producers that already have a complete `Signature` can use `Function::with_signature`. It eagerly materializes every declared function parameter in `Function.params`; retrieve those values with `func.param(index)` before emitting instructions. `Function::signature()` returns a snapshot derived from the same explicit parameter and result arrays. Do not recreate parameters with `new_value()`: that method allocates instruction results, block values, and other values after the declared function parameters.
+
+## Opcode families
+
+Every instruction belongs to one semantic family. `Opcode` has no source-language instruction variants or target-machine operations of its own:
+
+| Family | Responsibility |
+| --- | --- |
+| `Scalar(ScalarOp)` | Constants, arithmetic, comparisons, conversions, selection, and copies. |
+| `Memory(MemoryOp)` | Full-width and narrow loads and stores over an explicit base and offset value. |
+| `Call(CallOp)` | Direct external-symbol calls and function-pointer calls with explicit contracts. |
+| `Vector(VectorOp)` | Language-neutral V128 lane, arithmetic, comparison, conversion, and effective-address memory operations. |
+| `Ext(ExtOp, Signature)` | Typed operations whose semantics belong to a separately owned dialect. |
+
+Frontends must consume source-only metadata before constructing a core instruction. For example, a WebAssembly frontend resolves a SIMD memory index, alignment hint, and immediate offset while computing the effective address; MilkIR receives that address and the vector load/store semantics. A frontend uses `Ext` only when the operation genuinely requires dialect-owned validation and lowering.
 
 ## Why values are called SSA values
 
@@ -262,37 +280,41 @@ The optimization levels are:
 | `O0` | Minimal pipeline: removes dead code plus constant and unused block parameters. |
 | `O1` | The standard Cranelift-style simplification pipeline. |
 | `O2` | The default level and an alias for the standard `O1` pass set. |
-| `O3` | The `O2` pipeline, loop-invariant code motion, loop unrolling, strength reduction, and a final `O2` cleanup. |
+| `O3` | The `O2` pipeline, loop-invariant code motion, checked counted-loop unrolling, strength reduction, and a final `O2` cleanup. |
 
 Use `optimize(func)` for the default pipeline or `optimize_with_level(func, level)` when the caller chooses the level explicitly. Optimizers assume a valid SSA and block-parameter structure. Verify before optimization when the input comes from a frontend, then verify again after developing a new transformation.
+
+### Counted-loop unrolling at O3
+
+O3 unrolls only natural loops for which analysis produces a complete plan. The supported form has one preheader, one header comparison, one body path, one latch/back edge, and one exit; body and latch blocks must not introduce additional block parameters. Initial values, bounds, and steps must resolve to constants through any loop-external copy chain. The induction value may be I32 or I64 and may use signed or unsigned `<`, `<=`, `>`, or `>=` comparisons. Reversed comparison operands and inverted conditional-branch polarity are normalized before analysis. Increasing and decreasing updates use checked arithmetic, so a loop whose final update would wrap is rejected.
+
+All header block parameters are treated as loop-carried state. Full unrolling is limited to at most eight source iterations, while larger proven loops use factor-two unrolling with one peeled iteration for odd trip counts. Both strategies cap newly cloned instructions at 64. Cloning assigns fresh instruction and value IDs, remaps zero-result and multi-result instructions, preserves metadata and effect order, and verifies correctly with calls, loads, stores, and traps.
+
+The pass leaves the function unchanged when the CFG shape is unsupported, a bound or step is dynamic, the trip count exceeds the analysis limit, an operand or latch edge cannot be mapped, arithmetic may wrap, or code growth exceeds the budget.
 
 ## Calls, memory, and traps
 
 The concepts below matter when a frontend moves beyond pure arithmetic into embedding and effect semantics.
 
-### Stack slots and pointers
-
-Stack slots are per-function abstract local storage objects. `StackAddr(slot)` produces an address-like value for lowering; MilkIR does not decide the final frame layout. Lower-level code can use pointer operations such as `LoadPtr`, `StorePtr`, narrow pointer loads and stores, and `CallPtr`.
-
 ### External calls
 
-`ExternalSymbol` names a symbol outside the IR function. `Call(symbol)`, `CallIndirect(signature)`, and `CallPtr(num_args, num_results)` are treated conservatively by core optimizations because calls may observe or change state.
+`ExternalSymbol` names a symbol outside the IR function. `CallOp::Direct(symbol, signature)` and `CallOp::Pointer(num_args, num_results)` are treated conservatively by core optimizations because calls may observe or change state. Direct calls carry operand/result signatures that the verifier checks; pointer calls carry explicit argument and result counts.
 
-`CallPtr` has a generic operand contract:
+`CallOp::Pointer` has a generic operand contract:
 
 1. operand 0 is the function pointer;
-2. operand 1 is an explicit callee environment;
-3. operands 2 and later are user arguments.
+2. operands 1 and later are ordinary arguments;
+3. `num_args` counts every operand after the callee pointer.
 
-An embedding that does not need an environment must still pass an explicit sentinel value. The embedding and lowering layer define the pointer meaning, sentinel, calling convention, and trap behavior.
+An embedding adapter may assign roles such as VMContext to those arguments when it chooses a calling convention, but that role is not part of the core opcode contract.
 
 ### Traps and effects
 
-`Trap(reason)` and `TrapExit(reason)` end execution without normal results. Stores, calls, pointer calls, traps, and unknown extension operations are observable or potentially observable. Optimizations must not delete or reorder them unless a stronger analysis proves that doing so preserves behavior.
+`Trap(reason)` and `TrapExit(reason)` terminators end execution without normal results. Stores, calls, traps, and unknown extension operations are observable or potentially observable. Optimizations must not delete or reorder them unless a stronger analysis proves that doing so preserves behavior.
 
 ## Dialect-specific operations
 
-`Ext(ExtOp)` represents dialect-specific operations. MilkIR stores a dialect name, opcode name, and integer immediates, while the dialect package provides builders, semantic validation, decoding, and lowering.
+`Ext(ExtOp, Signature)` represents dialect-specific operations. MilkIR stores a dialect name, opcode name, integer immediates, and an explicit operand/result contract, while the dialect package provides builders, semantic validation, decoding, and lowering.
 
 ```moonbit check
 ///|

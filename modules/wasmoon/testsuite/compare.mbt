@@ -68,6 +68,19 @@ pub fn compare_result_is_match(result : CompareResult) -> Bool {
 }
 
 ///|
+/// Return whether both execution paths failed with the expected trap text.
+pub fn compare_result_errors_contain(
+  result : CompareResult,
+  expected : String,
+) -> Bool {
+  match (result.jit_result, result.interp_result) {
+    (Err(jit_error), Err(interp_error)) =>
+      jit_error.contains(expected) && interp_error.contains(expected)
+    _ => false
+  }
+}
+
+///|
 pub impl Show for CompareResult with fn output(self, logger) {
   if self.match_ {
     logger.write_string("matched")
@@ -268,6 +281,17 @@ pub fn compare_jit_interp(
   func_name : String,
   args : Array[@types.Value],
 ) -> CompareResult {
+  compare_jit_interp_with_opt_level(source, func_name, args, 0)
+}
+
+///|
+/// Run the interpreter and a JIT compiled at the requested optimization level.
+pub fn compare_jit_interp_with_opt_level(
+  source : String,
+  func_name : String,
+  args : Array[@types.Value],
+  opt_level : Int,
+) -> CompareResult {
   // Parse the WAT source
   let mod_ = @wat.parse(source) catch {
     e => {
@@ -293,8 +317,8 @@ pub fn compare_jit_interp(
   let interp_result = run_interp(mod_, func_name, args)
 
   // Run JIT
-  let jit_result = run_jit(
-    mod_, func_name, idx, args, param_types, result_types,
+  let jit_result = run_jit_with_opt_level(
+    mod_, func_name, idx, args, param_types, result_types, opt_level,
   )
 
   // Compare results
@@ -343,13 +367,28 @@ pub fn run_jit(
   param_types : Array[@types.ValueType],
   result_types : Array[@types.ValueType],
 ) -> Result[Array[@types.Value], String] {
+  run_jit_with_opt_level(
+    mod_, func_name, func_idx, args, param_types, result_types, 0,
+  )
+}
+
+///|
+fn run_jit_with_opt_level(
+  mod_ : @types.Module,
+  func_name : String,
+  func_idx : Int,
+  args : Array[@types.Value],
+  param_types : Array[@types.ValueType],
+  result_types : Array[@types.ValueType],
+  opt_level : Int,
+) -> Result[Array[@types.Value], String] {
   func_name |> ignore
   let mut jm_opt : @jit.JITModule? = None
   try {
     let linker = @runtime.Linker::Linker()
     let store = linker.get_store()
     let instance = @executor.instantiate_with_linker(linker, "test", mod_)
-    guard @commands.compile_module_to_jit(mod_, false, false, 0, false)
+    guard @commands.compile_module_to_jit(mod_, false, false, opt_level, false)
       is Some((precompiled, debug_db)) else {
       return Err("JIT compile returned unsupported")
     }

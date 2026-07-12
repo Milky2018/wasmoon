@@ -50,7 +50,7 @@ pub enum PatternOpcode {
   // Comparisons
   Icmp
   Fcmp
-  // Note: Load/Store removed - use LoadPtr/StorePtr now
+  // Memory operations are not part of scalar expression patterns.
   // Misc
   Copy
   Select
@@ -60,28 +60,28 @@ pub enum PatternOpcode {
 /// Convert IR Opcode to Pattern Opcode for matching
 fn opcode_to_pattern(opcode : @milkir.Opcode) -> PatternOpcode? {
   match opcode {
-    Iadd => Some(Iadd)
-    Isub => Some(Isub)
-    Imul => Some(Imul)
-    Sdiv => Some(Sdiv)
-    Udiv => Some(Udiv)
-    Band => Some(Band)
-    Bor => Some(Bor)
-    Bxor => Some(Bxor)
-    Ishl => Some(Ishl)
-    Sshr => Some(Sshr)
-    Ushr => Some(Ushr)
-    Fadd => Some(Fadd)
-    Fsub => Some(Fsub)
-    Fmul => Some(Fmul)
-    Fdiv => Some(Fdiv)
-    Iconst(_) => Some(Iconst)
-    Fconst(_) => Some(Fconst)
-    Icmp(_) => Some(Icmp)
-    Fcmp(_) => Some(Fcmp)
-    // Note: Load/Store with memidx removed - use LoadPtr/StorePtr now
-    Copy => Some(Copy)
-    Select => Some(Select)
+    Scalar(IntBinary(Add)) => Some(Iadd)
+    Scalar(IntBinary(Sub)) => Some(Isub)
+    Scalar(IntBinary(Mul)) => Some(Imul)
+    Scalar(IntBinary(SignedDiv)) => Some(Sdiv)
+    Scalar(IntBinary(UnsignedDiv)) => Some(Udiv)
+    Scalar(IntBinary(And)) => Some(Band)
+    Scalar(IntBinary(Or)) => Some(Bor)
+    Scalar(IntBinary(Xor)) => Some(Bxor)
+    Scalar(IntBinary(ShiftLeft)) => Some(Ishl)
+    Scalar(IntBinary(SignedShiftRight)) => Some(Sshr)
+    Scalar(IntBinary(UnsignedShiftRight)) => Some(Ushr)
+    Scalar(FloatBinary(Add)) => Some(Fadd)
+    Scalar(FloatBinary(Sub)) => Some(Fsub)
+    Scalar(FloatBinary(Mul)) => Some(Fmul)
+    Scalar(FloatBinary(Div)) => Some(Fdiv)
+    Scalar(IntConst(_)) => Some(Iconst)
+    Scalar(FloatConst(_)) => Some(Fconst)
+    Scalar(IntCompare(_)) => Some(Icmp)
+    Scalar(FloatCompare(_)) => Some(Fcmp)
+    // Memory operations are handled by the memory lowering path.
+    Scalar(Copy) => Some(Copy)
+    Scalar(Select) => Some(Select)
     _ => None
   }
 }
@@ -152,14 +152,14 @@ fn match_pattern_impl(
     }
     ConstInt(expected) =>
       // Check if this is an iconst with the expected value
-      if inst.opcode is Iconst(val) {
+      if inst.opcode is Scalar(IntConst(val)) {
         val == expected
       } else {
         false
       }
     ConstFloat(expected) =>
       // Check if this is an fconst with the expected value
-      if inst.opcode is Fconst(val) {
+      if inst.opcode is Scalar(FloatConst(val)) {
         // For F32, bits are packed in the lower 32 bits of the Double
         // For F64, the Double is the actual value
         if inst.first_result() is Some(r) && r.ty is F32 {
@@ -174,7 +174,7 @@ fn match_pattern_impl(
       }
     AnyConstInt =>
       // Match any integer constant
-      if inst.opcode is Iconst(val) {
+      if inst.opcode is Scalar(IntConst(val)) {
         result.add_int_const(val)
         true
       } else {
@@ -188,9 +188,9 @@ fn match_pattern_impl(
         None => return false
       }
       // For iconst/fconst, capture the constant
-      if inst.opcode is Iconst(v) {
+      if inst.opcode is Scalar(IntConst(v)) {
         result.add_int_const(v)
-      } else if inst.opcode is Fconst(v) {
+      } else if inst.opcode is Scalar(FloatConst(v)) {
         result.add_float_const(v)
       }
       // Match sub-patterns against operands
@@ -207,7 +207,7 @@ fn match_pattern_impl(
             let def_inst = find_defining_inst(ctx, operand)
             match def_inst {
               Some(def) =>
-                if def.opcode is Iconst(val) {
+                if def.opcode is Scalar(IntConst(val)) {
                   if val != expected {
                     return false
                   }
@@ -222,7 +222,7 @@ fn match_pattern_impl(
             let def_inst = find_defining_inst(ctx, operand)
             match def_inst {
               Some(def) =>
-                if def.opcode is Fconst(val) {
+                if def.opcode is Scalar(FloatConst(val)) {
                   // For F32, bits are packed in the lower 32 bits of the Double
                   let matches = if def.first_result() is Some(r) && r.ty is F32 {
                     let stored_bits = val.reinterpret_as_int64().to_int()
@@ -246,7 +246,7 @@ fn match_pattern_impl(
             let def_inst = find_defining_inst(ctx, operand)
             match def_inst {
               Some(def) =>
-                if def.opcode is Iconst(val) {
+                if def.opcode is Scalar(IntConst(val)) {
                   result.add_int_const(val)
                 } else {
                   return false
@@ -608,7 +608,7 @@ pub fn lower_function_optimized(ir_func : @milkir.Function) -> @machv.Function {
   }
 
   // Phase 2: Lower function parameters
-  for param in function_params_for_lowering(ir_func) {
+  for param in ir_func.params {
     let (value, ty) = param
     let class = ir_type_to_reg_class(ty)
     let vreg = ctx.machv_func.add_param(class)
@@ -667,60 +667,7 @@ fn lower_inst_default(
   block : @block.Block,
 ) -> Unit {
   match inst.opcode {
-    // Constants
-    Iconst(val) => lower_iconst(ctx, inst, block, val)
-    Fconst(val) => lower_fconst(ctx, inst, block, val)
-
-    // Integer arithmetic
-    Iadd => lower_iadd(ctx, inst, block)
-    Isub => lower_isub(ctx, inst, block)
-    Imul => lower_imul(ctx, inst, block)
-    Sdiv => lower_div(ctx, inst, block, signed=true)
-    Udiv => lower_div(ctx, inst, block, signed=false)
-
-    // Bitwise operations
-    Band => lower_band(ctx, inst, block)
-    Bor => lower_bor(ctx, inst, block)
-    Bxor => lower_bxor(ctx, inst, block)
-    Ishl =>
-      lower_shift(ctx, inst, block, fn(is_64) { Shl(is_64) }, fn(amt, is_64) {
-        ShlImm(amt, is_64)
-      })
-    Sshr =>
-      lower_shift(ctx, inst, block, fn(is_64) { AShr(is_64) }, fn(amt, is_64) {
-        AShrImm(amt, is_64)
-      })
-    Ushr =>
-      lower_shift(ctx, inst, block, fn(is_64) { LShr(is_64) }, fn(amt, is_64) {
-        LShrImm(amt, is_64)
-      })
-
-    // Integer comparisons
-    Icmp(cc) => lower_icmp(ctx, inst, block, cc)
-
-    // Floating point arithmetic
-    Fadd => lower_binary_float(ctx, inst, block)
-    Fsub => lower_binary_float(ctx, inst, block)
-    Fmul => lower_binary_float(ctx, inst, block)
-    Fdiv => lower_binary_float(ctx, inst, block)
-
-    // Floating point comparisons
-    Fcmp(cc) => lower_fcmp(ctx, inst, block, cc)
-
-    // Note: Load/Store with memidx removed - use LoadPtr/StorePtr via FuncEnvironment
-
-    // Conversions
-    Sextend => lower_extend(ctx, inst, block, signed=true)
-    Uextend => lower_extend(ctx, inst, block, signed=false)
-    Ireduce => lower_truncate(ctx, inst, block)
-    FcvtToSint => lower_float_to_int(ctx, inst, block, signed=true)
-    FcvtToUint => lower_float_to_int(ctx, inst, block, signed=false)
-    SintToFcvt => lower_int_to_float(ctx, inst, block, signed=true)
-    UintToFcvt => lower_int_to_float(ctx, inst, block, signed=false)
-
-    // Misc
-    Copy => lower_copy(ctx, inst, block)
-    Select => lower_select(ctx, inst, block)
+    Scalar(scalar_op) => lower_scalar_inst(ctx, inst, block, scalar_op)
     opcode => abort("unimplemented machv lowering for opcode \{opcode}")
   }
 }
