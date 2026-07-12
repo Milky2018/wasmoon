@@ -1118,23 +1118,6 @@ pub fn FunctionBuilder::store_ptr_narrow(
 }
 
 ///|
-/// Embedding convenience wrapper for a pointer call whose first argument is a
-/// callee environment.
-pub fn FunctionBuilder::call_ptr(
-  self : FunctionBuilder,
-  func_ptr : Value,
-  callee_env : Value,
-  args : Array[Value],
-  result_types : Array[Type],
-) -> Array[Value] {
-  let args_with_env : Array[Value] = [callee_env]
-  for arg in args {
-    args_with_env.push(arg)
-  }
-  self.call_pointer(func_ptr, args_with_env, result_types)
-}
-
-///|
 /// Call a function pointer with ordinary arguments.
 pub fn FunctionBuilder::call_pointer(
   self : FunctionBuilder,

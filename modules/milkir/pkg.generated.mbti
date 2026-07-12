@@ -178,7 +178,6 @@ pub fn FunctionBuilder::brnz(Self, Value, Block, Block) -> Unit
 pub fn FunctionBuilder::brz(Self, Value, Block, Block) -> Unit
 pub fn FunctionBuilder::bxor(Self, Value, Value) -> Value
 pub fn FunctionBuilder::call_pointer(Self, Value, Array[Value], Array[Type]) -> Array[Value]
-pub fn FunctionBuilder::call_ptr(Self, Value, Value, Array[Value], Array[Type]) -> Array[Value]
 pub fn FunctionBuilder::call_symbol(Self, ExternalSymbol, Type?, Array[Value]) -> Value?
 pub fn FunctionBuilder::call_symbol_multi(Self, ExternalSymbol, Array[Type], Array[Value]) -> Array[Value]
 pub fn FunctionBuilder::clz(Self, Value) -> Value
@@ -314,7 +313,6 @@ pub struct Inst {
 pub fn Inst::add_metadata(Self, Metadata) -> Unit
 pub fn Inst::all_results(Self) -> Array[Value]
 pub fn Inst::first_result(Self) -> Value?
-pub fn Inst::with_opcode(Self, Opcode) -> Self
 pub impl Eq for Inst
 pub impl Hash for Inst
 
@@ -380,10 +378,6 @@ pub(all) enum Metadata {
 pub(all) enum Opcode {
   Scalar(ScalarOp)
   Call(CallOp)
-  LoadPtr(Type)
-  StorePtr(Type)
-  LoadPtrNarrow(Type, Int, Bool)
-  StorePtrNarrow(Int)
   Memory(MemoryOp)
   Ext(ExtOp, Signature)
   Vector(VectorOp)

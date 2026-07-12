@@ -107,11 +107,7 @@ fn get_terminator_uses(term : Terminator) -> Array[Value] {
 /// Check if an instruction has side effects
 fn has_side_effects(inst : Inst) -> Bool {
   match inst.opcode {
-    // StorePtr has side effects (modifies memory)
-    StorePtr(_) | StorePtrNarrow(_) => true
-    // LoadPtr has side effects (can trap on null pointer)
-    LoadPtr(_) | LoadPtrNarrow(_, _, _) => true
-    // Generic memory operations may trap or modify memory.
+    // Memory operations may trap or modify memory.
     Memory(_) => true
     // Vector memory operations consume checked effective addresses, but loads
     // may still trap and stores modify memory.
@@ -125,7 +121,7 @@ fn has_side_effects(inst : Inst) -> Bool {
     // Dialect extension operations are conservatively effectful unless a
     // dialect-owned optimization pass proves otherwise.
     Ext(_, _) => true
-    // NOTE: GlobalGet, GlobalSet are desugared via frontends to LoadPtr/StorePtr
+    // NOTE: GlobalGet and GlobalSet are desugared to Memory operations.
     // Division/remainder can trap on divide-by-zero or overflow (INT_MIN / -1)
     Scalar(ScalarOp::IntBinary(IntBinaryOp::SignedDiv))
     | Scalar(ScalarOp::IntBinary(IntBinaryOp::UnsignedDiv))

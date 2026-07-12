@@ -4,9 +4,7 @@
 /// Check if an instruction reads from memory
 fn reads_memory(opcode : Opcode) -> Bool {
   match opcode {
-    LoadPtr(_)
-    | LoadPtrNarrow(_, _, _)
-    | Memory(MemoryOp::Load(_) | MemoryOp::LoadNarrow(_, _, _))
+    Memory(MemoryOp::Load(_) | MemoryOp::LoadNarrow(_, _, _))
     | Vector(
       VectorOp::LoadExtend(_, _)
       | VectorOp::LoadSplat(_)
@@ -25,9 +23,7 @@ fn reads_memory(opcode : Opcode) -> Bool {
 fn may_write_memory(opcode : Opcode) -> Bool {
   match opcode {
     // Direct memory writes
-    StorePtr(_)
-    | StorePtrNarrow(_)
-    | Memory(MemoryOp::Store(_) | MemoryOp::StoreNarrow(_))
+    Memory(MemoryOp::Store(_) | MemoryOp::StoreNarrow(_))
     | Vector(VectorOp::StoreLane(_, _)) => true
     Call(_) => true
     Ext(_, _) => true
@@ -230,9 +226,7 @@ fn update_last_store_state(
   ptr_base_infos : @hashmap.HashMap[Int, PtrBaseInfo],
 ) -> Unit {
   let is_store = match inst.opcode {
-    StorePtr(_)
-    | StorePtrNarrow(_)
-    | Memory(MemoryOp::Store(_) | MemoryOp::StoreNarrow(_))
+    Memory(MemoryOp::Store(_) | MemoryOp::StoreNarrow(_))
     | Vector(VectorOp::StoreLane(_, _)) => true
     _ => false
   }
@@ -427,7 +421,7 @@ fn ptr_access_from_inst(
   ptr_base_infos : @hashmap.HashMap[Int, PtrBaseInfo],
 ) -> PtrAccess? {
   match inst.opcode {
-    LoadPtr(_) | Memory(MemoryOp::Load(_)) =>
+    Memory(MemoryOp::Load(_)) =>
       if inst.operands.length() >= 2 {
         let base = inst.operands[0]
         let offset = inst.operands[1]
@@ -439,7 +433,7 @@ fn ptr_access_from_inst(
       } else {
         None
       }
-    LoadPtrNarrow(_, _, _) | Memory(MemoryOp::LoadNarrow(_, _, _)) =>
+    Memory(MemoryOp::LoadNarrow(_, _, _)) =>
       if inst.operands.length() >= 2 {
         let base = inst.operands[0]
         let offset = inst.operands[1]
@@ -451,7 +445,7 @@ fn ptr_access_from_inst(
       } else {
         None
       }
-    StorePtr(_) | Memory(MemoryOp::Store(_)) =>
+    Memory(MemoryOp::Store(_)) =>
       if inst.operands.length() >= 3 {
         let base = inst.operands[0]
         let offset = inst.operands[2]
@@ -463,7 +457,7 @@ fn ptr_access_from_inst(
       } else {
         None
       }
-    StorePtrNarrow(_) | Memory(MemoryOp::StoreNarrow(_)) =>
+    Memory(MemoryOp::StoreNarrow(_)) =>
       if inst.operands.length() >= 3 {
         let base = inst.operands[0]
         let offset = inst.operands[2]
@@ -545,9 +539,7 @@ fn is_gvn_candidate(inst : Inst) -> Bool {
     Scalar(ScalarOp::Convert(ConversionOp::FloatToSignedInt))
     | Scalar(ScalarOp::Convert(ConversionOp::FloatToUnsignedInt)) => false
     // Memory writes are handled by may_write_memory, skip as candidates
-    StorePtr(_)
-    | StorePtrNarrow(_)
-    | Memory(MemoryOp::Store(_) | MemoryOp::StoreNarrow(_))
+    Memory(MemoryOp::Store(_) | MemoryOp::StoreNarrow(_))
     | Vector(VectorOp::StoreLane(_, _)) => false
     // All other non-side-effect instructions are candidates
     _ => true
@@ -594,7 +586,7 @@ fn run_global_value_numbering(func : Function) -> OptResult {
     // Process instructions
     for inst_index, inst in block.instructions {
       let mut replaced_by_memory = false
-      if inst.opcode is (LoadPtr(load_ty) | Memory(MemoryOp::Load(load_ty))) &&
+      if inst.opcode is Memory(MemoryOp::Load(load_ty)) &&
         ptr_access_from_inst(inst, ptr_base_infos) is Some(load_access) {
         let key = memory_key_from_access(
           load_access,
@@ -616,7 +608,7 @@ fn run_global_value_numbering(func : Function) -> OptResult {
           replaced_by_memory = true
         }
       }
-      if inst.opcode is (StorePtr(store_ty) | Memory(MemoryOp::Store(store_ty))) &&
+      if inst.opcode is Memory(MemoryOp::Store(store_ty)) &&
         ptr_access_from_inst(inst, ptr_base_infos) is Some(store_access) &&
         inst.operands.length() >= 2 {
         let key = memory_key_from_access(

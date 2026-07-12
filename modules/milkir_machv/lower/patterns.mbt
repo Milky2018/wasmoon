@@ -50,7 +50,7 @@ pub enum PatternOpcode {
   // Comparisons
   Icmp
   Fcmp
-  // Note: Load/Store removed - use LoadPtr/StorePtr now
+  // Memory operations are not part of scalar expression patterns.
   // Misc
   Copy
   Select
@@ -79,7 +79,7 @@ fn opcode_to_pattern(opcode : @milkir.Opcode) -> PatternOpcode? {
     Scalar(FloatConst(_)) => Some(Fconst)
     Scalar(IntCompare(_)) => Some(Icmp)
     Scalar(FloatCompare(_)) => Some(Fcmp)
-    // Note: Load/Store with memidx removed - use LoadPtr/StorePtr now
+    // Memory operations are handled by the memory lowering path.
     Scalar(Copy) => Some(Copy)
     Scalar(Select) => Some(Select)
     _ => None

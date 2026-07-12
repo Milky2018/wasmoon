@@ -2,7 +2,7 @@
 //
 // This module implements Standard desugaring where high-level Wasm operations
 // (global.get, table.get, etc.) are translated to lower-level IR primitives
-// (LoadPtr, StorePtr, CallPtr) during IR translation, not during lowering.
+// (MemoryOp and CallOp) during IR translation, not during lowering.
 //
 // Benefits:
 // - Simpler lowering phase (no special cases for these operations)

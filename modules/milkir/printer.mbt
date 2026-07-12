@@ -455,15 +455,6 @@ fn format_opcode(
         CallOp::Pointer(num_args, num_results) =>
           "call_ptr(\{num_args}) -> \{num_results} (\{ops})"
       }
-
-    // Raw pointer operations (for trampolines)
-    LoadPtr(ty) => "load_ptr.\{ty} \{ops}"
-    StorePtr(ty) => "store_ptr.\{ty} \{ops}"
-    LoadPtrNarrow(result_ty, bits, signed) => {
-      let sign_str = if signed { "s" } else { "u" }
-      "load_ptr\{bits}_\{sign_str}.\{result_ty} \{ops}"
-    }
-    StorePtrNarrow(bits) => "store_ptr\{bits} \{ops}"
     Memory(memory_op) =>
       match memory_op {
         MemoryOp::Load(ty) => "load.\{ty} \{ops}"

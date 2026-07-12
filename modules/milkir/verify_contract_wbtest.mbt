@@ -177,7 +177,7 @@ test "builder finalize accepts i64 pointer carriers for call_ptr" {
   let builder = FunctionBuilder::FunctionBuilder("i64_pointer_call")
   let func_ptr = builder.add_param(I64)
   let callee_context = builder.add_param(I64)
-  builder.call_ptr(func_ptr, callee_context, [], []) |> ignore
+  builder.call_pointer(func_ptr, [callee_context], []) |> ignore
   builder.return_([])
   builder.finalize() |> ignore
 }

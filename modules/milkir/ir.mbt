@@ -312,12 +312,6 @@ fn Inst::new_with_id(
 }
 
 ///|
-/// Return an instruction view with a different opcode and shared SSA data.
-pub fn Inst::with_opcode(self : Inst, opcode : Opcode) -> Inst {
-  { ..self, opcode, }
-}
-
-///|
 pub fn Inst::add_metadata(self : Inst, metadata : Metadata) -> Unit {
   self.metadata.push(metadata)
 }
@@ -756,16 +750,7 @@ pub(all) enum Opcode {
   // Function calls
   Call(CallOp)
 
-  // Raw pointer operations (for trampolines, no bounds checking)
-  // Used for host code generation
-  LoadPtr(Type) // Load from pointer+offset (operand 0 = base ptr)
-  StorePtr(Type) // Store to pointer+offset (operand 0 = base ptr, operand 1 = value)
-  // Narrow load/store from raw pointer (result_type, bits, signed)
-  LoadPtrNarrow(Type, Int, Bool) // Load narrow from pointer+offset, extend to result_type
-  StorePtrNarrow(Int) // Store narrow to pointer+offset (bits)
-
-  // Generic memory operations. Legacy raw-pointer variants remain during
-  // expand-contract migration and are removed after all callers move here.
+  // Generic memory operations.
   Memory(MemoryOp)
 
   // Dialect extension operations. The core IR treats these conservatively;

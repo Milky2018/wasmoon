@@ -727,39 +727,6 @@ fn verify_opcode_contract(inst : Inst) -> Unit raise VerifyError {
           require_pointer_value(inst.args[0].ty, "pointer call callee")
         }
       }
-    LoadPtr(result_type) => {
-      require_arity(inst.args.length(), 2, "load_ptr")
-      require_pointer_value(inst.args[0].ty, "load_ptr")
-      require_operand_type(inst, 1, I64, "load_ptr")
-      require_result_types(inst, [result_type], "load_ptr")
-    }
-    StorePtr(value_type) => {
-      require_arity(inst.args.length(), 3, "store_ptr")
-      require_pointer_value(inst.args[0].ty, "store_ptr")
-      require_operand_type(inst, 1, value_type, "store_ptr")
-      require_operand_type(inst, 2, I64, "store_ptr")
-      require_no_results(inst, "store_ptr")
-    }
-    LoadPtrNarrow(result_type, bits, _) => {
-      require_arity(inst.args.length(), 2, "load_ptr_narrow")
-      require_pointer_value(inst.args[0].ty, "load_ptr_narrow")
-      require_operand_type(inst, 1, I64, "load_ptr_narrow")
-      require_result_types(inst, [result_type], "load_ptr_narrow")
-      require_integer(result_type, "load_ptr_narrow")
-      if bits != 8 && bits != 16 && bits != 32 {
-        raise TypeMismatch(message="load_ptr_narrow has invalid width \{bits}")
-      }
-    }
-    StorePtrNarrow(bits) => {
-      require_arity(inst.args.length(), 3, "store_ptr_narrow")
-      require_pointer_value(inst.args[0].ty, "store_ptr_narrow")
-      require_integer(inst.args[1].ty, "store_ptr_narrow")
-      require_operand_type(inst, 2, I64, "store_ptr_narrow")
-      require_no_results(inst, "store_ptr_narrow")
-      if bits != 8 && bits != 16 && bits != 32 {
-        raise TypeMismatch(message="store_ptr_narrow has invalid width \{bits}")
-      }
-    }
     Memory(memory_op) =>
       match memory_op {
         MemoryOp::Load(result_type) => {

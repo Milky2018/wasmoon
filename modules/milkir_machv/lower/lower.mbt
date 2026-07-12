@@ -552,7 +552,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
   for block in ctx.ir_func.blocks {
     for inst in block.instructions {
       match inst.opcode {
-        LoadPtr(ty) | Memory(@milkir.MemoryOp::Load(ty)) => {
+        Memory(@milkir.MemoryOp::Load(ty)) => {
           guard inst.operands.length() >= 1 else { continue }
           let base_value = inst.operands[0]
           let access_size = match ty {
@@ -595,7 +595,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
             }
           }
         }
-        StorePtr(ty) | Memory(@milkir.MemoryOp::Store(ty)) => {
+        Memory(@milkir.MemoryOp::Store(ty)) => {
           guard inst.operands.length() >= 2 else { continue }
           let base_value = inst.operands[0]
           let access_size = match ty {
@@ -638,8 +638,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
             }
           }
         }
-        LoadPtrNarrow(_, bits, _)
-        | Memory(@milkir.MemoryOp::LoadNarrow(_, bits, _)) => {
+        Memory(@milkir.MemoryOp::LoadNarrow(_, bits, _)) => {
           guard inst.operands.length() >= 1 else { continue }
           let base_value = inst.operands[0]
           let access_size = bits / 8
@@ -678,7 +677,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
             }
           }
         }
-        StorePtrNarrow(bits) | Memory(@milkir.MemoryOp::StoreNarrow(bits)) => {
+        Memory(@milkir.MemoryOp::StoreNarrow(bits)) => {
           guard inst.operands.length() >= 2 else { continue }
           let base_value = inst.operands[0]
           let access_size = bits / 8
@@ -2569,12 +2568,6 @@ fn lower_inst_builtin(
         @milkir.CallOp::Pointer(num_args, num_results) =>
           lower_call_ptr(ctx, inst, block, num_args, num_results)
       }
-    // Raw pointer operations (for trampolines)
-    LoadPtr(ty) => lower_load_ptr(ctx, inst, block, ty)
-    StorePtr(ty) => lower_store_ptr(ctx, inst, block, ty)
-    LoadPtrNarrow(result_ty, bits, signed) =>
-      lower_load_ptr_narrow(ctx, inst, block, result_ty, bits, signed)
-    StorePtrNarrow(bits) => lower_store_ptr_narrow(ctx, inst, block, bits)
     Memory(memory_op) =>
       match memory_op {
         @milkir.MemoryOp::Load(ty) => lower_load_ptr(ctx, inst, block, ty)
@@ -2885,9 +2878,9 @@ fn lower_terminator(
 }
 
 // NOTE: lower_global_get, lower_global_set are removed
-// These operations are desugared via FuncEnvironment at IR level to LoadPtr/StorePtr
+// These operations are desugared via FuncEnvironment to MemoryOp instructions.
 
-// ============ Raw Pointer Operations (for trampolines) ============
+// ============ Memory Operations ============
 
 ///|
 /// Lower load_ptr instruction (raw pointer load without bounds checking)
