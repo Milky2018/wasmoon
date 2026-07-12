@@ -59,6 +59,8 @@ priv struct Translator {
   // Table is 64-bit indexed (for table64 proposal)
   // table_is_64[i] = true if table i uses 64-bit indices
   table_is_64 : Array[Bool]
+  // MilkIR carrier type for each table element.
+  table_elem_types : Array[Type]
 }
 
 ///|
@@ -105,12 +107,14 @@ pub fn TranslationContext::from_module(
   let import_func_type_indices : Array[Int] = []
   let global_types : Array[@types.GlobalType] = []
   let tags : Array[@types.TagType] = []
+  let tables : Array[@types.Table] = []
   for imp in mod_.imports {
     match imp.desc {
       Func(type_idx) => {
         num_imports = num_imports + 1
         import_func_type_indices.push(type_idx)
       }
+      Table(table_type) => tables.push({ type_: table_type, init: None })
       Global(global_type) => global_types.push(global_type)
       Tag(tag_type_idx) => tags.push({ type_idx: tag_type_idx })
       _ => ()
@@ -121,6 +125,9 @@ pub fn TranslationContext::from_module(
   }
   for tag in mod_.tags {
     tags.push(tag)
+  }
+  for table in mod_.tables {
+    tables.push(table)
   }
   let memory_max : Int? = match memory_max_override {
     Some(_) => memory_max_override
@@ -140,7 +147,7 @@ pub fn TranslationContext::from_module(
     memory_max,
     memory_is_64: mod_.memories.map(fn(m) { m.is_memory64 }),
     memory_page_size_log2: mod_.memories.map(fn(m) { m.page_size_log2 }),
-    tables: mod_.tables,
+    tables,
     global_types,
     type_rec_groups: mod_.type_rec_groups,
     func_base,
@@ -269,10 +276,12 @@ fn Translator::Translator(
   // All tables are flattened into a single indirect_table at runtime
   let table_sizes : Array[Int] = []
   let table_is_64 : Array[Bool] = []
+  let table_elem_types : Array[Type] = []
   for table in tables {
     let size = table.type_.limits.min.to_int() // Tables always use 32-bit limits
     table_sizes.push(size)
     table_is_64.push(table.type_.is_table64)
+    table_elem_types.push(type_from_wasm(table.type_.elem_type))
   }
   {
     builder,
@@ -290,6 +299,7 @@ fn Translator::Translator(
     memory_is_64,
     table_sizes,
     table_is_64,
+    table_elem_types,
     num_wasm_params: func_type.params.length(),
     func_base,
     import_remap,
@@ -390,7 +400,8 @@ fn Translator::i64_bits_to_local(
 ) -> Value {
   match target_ty {
     I32 => self.builder.ireduce(I32, bits)
-    I64 | Ptr | Ref | CallableRef | OpaqueRef => bits // refs are already i64
+    I64 => bits
+    Ptr | Ref | CallableRef | OpaqueRef => self.builder.bitcast(target_ty, bits)
     F32 => {
       let bits32 = self.builder.ireduce(I32, bits)
       self.builder.bitcast(F32, bits32)
@@ -836,7 +847,7 @@ fn Translator::emit_catch_branch(
         self.builder.bitcast(F32, val_i32)
       }
       F64 => self.builder.bitcast(F64, val_i64)
-      _ => val_i64 // Reference types use i64 representation
+      _ => self.builder.bitcast(type_from_wasm(ty), val_i64)
     }
     args.push(val)
   }
@@ -887,7 +898,7 @@ fn Translator::emit_catch_ref_branch(
         self.builder.bitcast(F32, val_i32)
       }
       F64 => self.builder.bitcast(F64, val_i64)
-      _ => val_i64
+      _ => self.builder.bitcast(type_from_wasm(ty), val_i64)
     }
     args.push(val)
   }
@@ -1406,6 +1417,9 @@ fn Translator::translate_loop(
 
   // Switch to loop header
   self.builder.switch_to_block(loop_header)
+  if outer_is_unreachable {
+    self.builder.trap("unreachable loop header")
+  }
 
   // Push header params onto stack
   for i, _ty in param_types {

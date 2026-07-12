@@ -964,11 +964,13 @@ fn Translator::translate_instruction(
       let elem_idx = self.pop()
       let is_table64 = table_idx < self.table_is_64.length() &&
         self.table_is_64[table_idx]
+      let result_type = self.table_elem_types[table_idx]
       let result = self.func_env.translate_table_get(
         self.builder,
         self.vmctx,
         table_idx,
         elem_idx,
+        result_type,
         is_table64~,
       )
       self.push(result)

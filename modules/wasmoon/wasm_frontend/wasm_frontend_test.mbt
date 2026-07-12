@@ -184,6 +184,7 @@ test "unreachable structured continuations remain verifier-safe" {
     [Block(Empty, [Return]), Unreachable],
     [I32Const(1), If(Empty, [Return], [Return]), Unreachable],
     [Loop(Empty, [Return]), Unreachable],
+    [Return, Loop(Empty, [Loop(Empty, [])])],
   ]
   for i, body in bodies {
     let mod_ = @types.Module::simple([], [], body, "unreachable_control_\{i}")
@@ -366,6 +367,36 @@ test "lower table size and get through native VMContext loads" {
   inspect(text.contains("trap \"table out of bounds\""), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
   inspect(func.verify(), content="()")
+}
+
+///|
+test "production table.get preserves the table element carrier" {
+  let table : @types.Table = {
+    type_: {
+      elem_type: FuncRef,
+      limits: { min: 1, max: None },
+      is_table64: false,
+    },
+    init: None,
+  }
+  let mod_ = {
+    ..@types.Module::simple(
+      [],
+      [FuncRef],
+      [I32Const(0), TableGet(0)],
+      "table_get_funcref",
+    ),
+    tables: [table],
+  }
+  let func = translate_function(native_test_env(), mod_, 0)
+  inspect(func.verify(), content="()")
+  let imported = {
+    ..mod_,
+    imports: [{ mod_name: "host", name: "table", desc: Table(table.type_) }],
+    tables: [],
+  }
+  let imported_func = translate_function(native_test_env(), imported, 0)
+  inspect(imported_func.verify(), content="()")
 }
 
 ///|

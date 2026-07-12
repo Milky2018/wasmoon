@@ -179,6 +179,7 @@ fn FuncEnvironment::translate_table_get(
   vmctx : Value,
   table_idx : Int,
   elem_idx : Value,
+  result_type : Type,
   is_table64? : Bool = false,
 ) -> Value {
   let layout = self.runtime_layout
@@ -236,7 +237,7 @@ fn FuncEnvironment::translate_table_get(
 
   // Load the funcref value (first 8 bytes of entry)
   let zero_offset = builder.iconst(I64, 0L)
-  builder.load_ptr(I64, addr, zero_offset)
+  builder.load_ptr(result_type, addr, zero_offset)
 }
 
 ///|
