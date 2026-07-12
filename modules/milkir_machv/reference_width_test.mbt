@@ -138,7 +138,7 @@ test "lower reference and pointer equality as 64-bit MachV comparisons" {
 
 ///|
 test "preserve reference comparison width when fusing branches and selects" {
-  for ty in ([Ptr, Ref] : Array[@milkir.Type]) {
+  for ty in ([Ptr, Ref, CallableRef, OpaqueRef] : Array[@milkir.Type]) {
     let lowered = lower_branch_equality(ty)
     guard lowered.get_blocks()[0].terminator()
       is Some(BranchCmp(_, _, _, is_64, _, _)) else {
