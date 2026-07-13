@@ -71,299 +71,181 @@ fn imm_bool(value : Int) -> Bool {
 }
 
 ///|
-fn ext_descriptor(name : String, count : Int) -> @milkir.ExtOpDescriptor {
-  ExtOpDescriptor(WASM_DIALECT, name, count)
+fn opcode_payload(opcode : WasmOpcode) -> (Int, FixedArray[Int]) {
+  match opcode {
+    LoadMemBase(memidx) => (0, imm([memidx]))
+    WasmCall(func_idx) => (1, imm([func_idx]))
+    WasmCallIndirect(type_idx, table_idx) => (2, imm([type_idx, table_idx]))
+    CallRef(type_idx) => (3, imm([type_idx]))
+    ReturnCall(func_idx) => (4, imm([func_idx]))
+    ReturnCallIndirect(type_idx, table_idx) => (5, imm([type_idx, table_idx]))
+    ReturnCallRef(type_idx) => (6, imm([type_idx]))
+    GetFuncRef(func_idx) => (7, imm([func_idx]))
+    StructNew(type_idx) => (8, imm([type_idx]))
+    StructNewDefault(type_idx) => (9, imm([type_idx]))
+    StructGet(type_idx, field_idx) => (10, imm([type_idx, field_idx]))
+    StructGetS(type_idx, field_idx, byte_width) =>
+      (11, imm([type_idx, field_idx, byte_width]))
+    StructGetU(type_idx, field_idx, byte_width) =>
+      (12, imm([type_idx, field_idx, byte_width]))
+    StructSet(type_idx, field_idx) => (13, imm([type_idx, field_idx]))
+    ArrayNew(type_idx) => (14, imm([type_idx]))
+    ArrayNewDefault(type_idx) => (15, imm([type_idx]))
+    ArrayNewFixed(type_idx, len) => (16, imm([type_idx, len]))
+    ArrayGet(type_idx) => (17, imm([type_idx]))
+    ArrayGetS(type_idx, byte_width) => (18, imm([type_idx, byte_width]))
+    ArrayGetU(type_idx, byte_width) => (19, imm([type_idx, byte_width]))
+    ArraySet(type_idx) => (20, imm([type_idx]))
+    ArrayLen => (21, imm([]))
+    ArrayFill(type_idx) => (22, imm([type_idx]))
+    ArrayCopy(dst_type_idx, src_type_idx) =>
+      (23, imm([dst_type_idx, src_type_idx]))
+    ArrayNewData(type_idx, data_idx) => (24, imm([type_idx, data_idx]))
+    ArrayNewElem(type_idx, elem_idx) => (25, imm([type_idx, elem_idx]))
+    ArrayInitData(type_idx, data_idx) => (26, imm([type_idx, data_idx]))
+    ArrayInitElem(type_idx, elem_idx) => (27, imm([type_idx, elem_idx]))
+    I31New => (28, imm([]))
+    I31GetS => (29, imm([]))
+    I31GetU => (30, imm([]))
+    RefTest(type_idx, nullable) => (31, imm([type_idx, bool_imm(nullable)]))
+    RefCast(type_idx, nullable) => (32, imm([type_idx, bool_imm(nullable)]))
+    AnyConvertExtern => (33, imm([]))
+    ExternConvertAny => (34, imm([]))
+    RefEq => (35, imm([]))
+    Throw(tag_idx) => (36, imm([tag_idx]))
+    ThrowRef => (37, imm([]))
+    TryTableBegin(handler_id) => (38, imm([handler_id]))
+    TryTableEnd(handler_id) => (39, imm([handler_id]))
+    GetExceptionTag => (40, imm([]))
+    GetExceptionValue(idx) => (41, imm([idx]))
+    GetExceptionValueCount => (42, imm([]))
+    Delegate(depth) => (43, imm([depth]))
+    SpillLocalsForThrow(count) => (44, imm([count]))
+    GetSpilledLocal(idx) => (45, imm([idx]))
+  }
+}
+
+///|
+fn opcode_from_payload(id : Int, imms : FixedArray[Int]) -> WasmOpcode? {
+  match id {
+    0 => Some(LoadMemBase(imms[0]))
+    1 => Some(WasmCall(imms[0]))
+    2 => Some(WasmCallIndirect(imms[0], imms[1]))
+    3 => Some(CallRef(imms[0]))
+    4 => Some(ReturnCall(imms[0]))
+    5 => Some(ReturnCallIndirect(imms[0], imms[1]))
+    6 => Some(ReturnCallRef(imms[0]))
+    7 => Some(GetFuncRef(imms[0]))
+    8 => Some(StructNew(imms[0]))
+    9 => Some(StructNewDefault(imms[0]))
+    10 => Some(StructGet(imms[0], imms[1]))
+    11 => Some(StructGetS(imms[0], imms[1], imms[2]))
+    12 => Some(StructGetU(imms[0], imms[1], imms[2]))
+    13 => Some(StructSet(imms[0], imms[1]))
+    14 => Some(ArrayNew(imms[0]))
+    15 => Some(ArrayNewDefault(imms[0]))
+    16 => Some(ArrayNewFixed(imms[0], imms[1]))
+    17 => Some(ArrayGet(imms[0]))
+    18 => Some(ArrayGetS(imms[0], imms[1]))
+    19 => Some(ArrayGetU(imms[0], imms[1]))
+    20 => Some(ArraySet(imms[0]))
+    21 => Some(ArrayLen)
+    22 => Some(ArrayFill(imms[0]))
+    23 => Some(ArrayCopy(imms[0], imms[1]))
+    24 => Some(ArrayNewData(imms[0], imms[1]))
+    25 => Some(ArrayNewElem(imms[0], imms[1]))
+    26 => Some(ArrayInitData(imms[0], imms[1]))
+    27 => Some(ArrayInitElem(imms[0], imms[1]))
+    28 => Some(I31New)
+    29 => Some(I31GetS)
+    30 => Some(I31GetU)
+    31 => Some(RefTest(imms[0], imm_bool(imms[1])))
+    32 => Some(RefCast(imms[0], imm_bool(imms[1])))
+    33 => Some(AnyConvertExtern)
+    34 => Some(ExternConvertAny)
+    35 => Some(RefEq)
+    36 => Some(Throw(imms[0]))
+    37 => Some(ThrowRef)
+    38 => Some(TryTableBegin(imms[0]))
+    39 => Some(TryTableEnd(imms[0]))
+    40 => Some(GetExceptionTag)
+    41 => Some(GetExceptionValue(imms[0]))
+    42 => Some(GetExceptionValueCount)
+    43 => Some(Delegate(imms[0]))
+    44 => Some(SpillLocalsForThrow(imms[0]))
+    45 => Some(GetSpilledLocal(imms[0]))
+    _ => None
+  }
+}
+
+///|
+fn descriptor_for_spec(spec : WasmOpcodeSpec) -> @milkir.ExtOpDescriptor {
+  ExtOpDescriptor(WASM_DIALECT, spec.wire_name, spec.immediate_kinds.length())
 }
 
 ///|
 pub fn descriptor(opcode : WasmOpcode) -> @milkir.ExtOpDescriptor {
-  match opcode {
-    LoadMemBase(_) => ext_descriptor("load_mem_base", 1)
-    WasmCall(_) => ext_descriptor("call", 1)
-    WasmCallIndirect(_, _) => ext_descriptor("call_indirect", 2)
-    CallRef(_) => ext_descriptor("call_ref", 1)
-    ReturnCall(_) => ext_descriptor("return_call", 1)
-    ReturnCallIndirect(_, _) => ext_descriptor("return_call_indirect", 2)
-    ReturnCallRef(_) => ext_descriptor("return_call_ref", 1)
-    GetFuncRef(_) => ext_descriptor("get_func_ref", 1)
-    StructNew(_) => ext_descriptor("struct_new", 1)
-    StructNewDefault(_) => ext_descriptor("struct_new_default", 1)
-    StructGet(_, _) => ext_descriptor("struct_get", 2)
-    StructGetS(_, _, _) => ext_descriptor("struct_get_s", 3)
-    StructGetU(_, _, _) => ext_descriptor("struct_get_u", 3)
-    StructSet(_, _) => ext_descriptor("struct_set", 2)
-    ArrayNew(_) => ext_descriptor("array_new", 1)
-    ArrayNewDefault(_) => ext_descriptor("array_new_default", 1)
-    ArrayNewFixed(_, _) => ext_descriptor("array_new_fixed", 2)
-    ArrayGet(_) => ext_descriptor("array_get", 1)
-    ArrayGetS(_, _) => ext_descriptor("array_get_s", 2)
-    ArrayGetU(_, _) => ext_descriptor("array_get_u", 2)
-    ArraySet(_) => ext_descriptor("array_set", 1)
-    ArrayLen => ext_descriptor("array_len", 0)
-    ArrayFill(_) => ext_descriptor("array_fill", 1)
-    ArrayCopy(_, _) => ext_descriptor("array_copy", 2)
-    ArrayNewData(_, _) => ext_descriptor("array_new_data", 2)
-    ArrayNewElem(_, _) => ext_descriptor("array_new_elem", 2)
-    ArrayInitData(_, _) => ext_descriptor("array_init_data", 2)
-    ArrayInitElem(_, _) => ext_descriptor("array_init_elem", 2)
-    I31New => ext_descriptor("i31_new", 0)
-    I31GetS => ext_descriptor("i31_get_s", 0)
-    I31GetU => ext_descriptor("i31_get_u", 0)
-    RefTest(_, _) => ext_descriptor("ref_test", 2)
-    RefCast(_, _) => ext_descriptor("ref_cast", 2)
-    AnyConvertExtern => ext_descriptor("any_convert_extern", 0)
-    ExternConvertAny => ext_descriptor("extern_convert_any", 0)
-    RefEq => ext_descriptor("ref_eq", 0)
-    Throw(_) => ext_descriptor("throw", 1)
-    ThrowRef => ext_descriptor("throw_ref", 0)
-    TryTableBegin(_) => ext_descriptor("try_table_begin", 1)
-    TryTableEnd(_) => ext_descriptor("try_table_end", 1)
-    GetExceptionTag => ext_descriptor("get_exception_tag", 0)
-    GetExceptionValue(_) => ext_descriptor("get_exception_value", 1)
-    GetExceptionValueCount => ext_descriptor("get_exception_value_count", 0)
-    Delegate(_) => ext_descriptor("delegate", 1)
-    SpillLocalsForThrow(_) => ext_descriptor("spill_locals_for_throw", 1)
-    GetSpilledLocal(_) => ext_descriptor("get_spilled_local", 1)
-  }
+  let (id, _) = opcode_payload(opcode)
+  descriptor_for_spec(wasm_opcode_spec(id))
 }
 
 ///|
 pub fn descriptor_by_name(name : String) -> @milkir.ExtOpDescriptor? {
-  match name {
-    "load_mem_base" => Some(ext_descriptor("load_mem_base", 1))
-    "call" => Some(ext_descriptor("call", 1))
-    "call_indirect" => Some(ext_descriptor("call_indirect", 2))
-    "call_ref" => Some(ext_descriptor("call_ref", 1))
-    "return_call" => Some(ext_descriptor("return_call", 1))
-    "return_call_indirect" => Some(ext_descriptor("return_call_indirect", 2))
-    "return_call_ref" => Some(ext_descriptor("return_call_ref", 1))
-    "get_func_ref" => Some(ext_descriptor("get_func_ref", 1))
-    "struct_new" => Some(ext_descriptor("struct_new", 1))
-    "struct_new_default" => Some(ext_descriptor("struct_new_default", 1))
-    "struct_get" => Some(ext_descriptor("struct_get", 2))
-    "struct_get_s" => Some(ext_descriptor("struct_get_s", 3))
-    "struct_get_u" => Some(ext_descriptor("struct_get_u", 3))
-    "struct_set" => Some(ext_descriptor("struct_set", 2))
-    "array_new" => Some(ext_descriptor("array_new", 1))
-    "array_new_default" => Some(ext_descriptor("array_new_default", 1))
-    "array_new_fixed" => Some(ext_descriptor("array_new_fixed", 2))
-    "array_get" => Some(ext_descriptor("array_get", 1))
-    "array_get_s" => Some(ext_descriptor("array_get_s", 2))
-    "array_get_u" => Some(ext_descriptor("array_get_u", 2))
-    "array_set" => Some(ext_descriptor("array_set", 1))
-    "array_len" => Some(ext_descriptor("array_len", 0))
-    "array_fill" => Some(ext_descriptor("array_fill", 1))
-    "array_copy" => Some(ext_descriptor("array_copy", 2))
-    "array_new_data" => Some(ext_descriptor("array_new_data", 2))
-    "array_new_elem" => Some(ext_descriptor("array_new_elem", 2))
-    "array_init_data" => Some(ext_descriptor("array_init_data", 2))
-    "array_init_elem" => Some(ext_descriptor("array_init_elem", 2))
-    "i31_new" => Some(ext_descriptor("i31_new", 0))
-    "i31_get_s" => Some(ext_descriptor("i31_get_s", 0))
-    "i31_get_u" => Some(ext_descriptor("i31_get_u", 0))
-    "ref_test" => Some(ext_descriptor("ref_test", 2))
-    "ref_cast" => Some(ext_descriptor("ref_cast", 2))
-    "any_convert_extern" => Some(ext_descriptor("any_convert_extern", 0))
-    "extern_convert_any" => Some(ext_descriptor("extern_convert_any", 0))
-    "ref_eq" => Some(ext_descriptor("ref_eq", 0))
-    "throw" => Some(ext_descriptor("throw", 1))
-    "throw_ref" => Some(ext_descriptor("throw_ref", 0))
-    "try_table_begin" => Some(ext_descriptor("try_table_begin", 1))
-    "try_table_end" => Some(ext_descriptor("try_table_end", 1))
-    "get_exception_tag" => Some(ext_descriptor("get_exception_tag", 0))
-    "get_exception_value" => Some(ext_descriptor("get_exception_value", 1))
-    "get_exception_value_count" =>
-      Some(ext_descriptor("get_exception_value_count", 0))
-    "delegate" => Some(ext_descriptor("delegate", 1))
-    "spill_locals_for_throw" =>
-      Some(ext_descriptor("spill_locals_for_throw", 1))
-    "get_spilled_local" => Some(ext_descriptor("get_spilled_local", 1))
-    _ => None
-  }
+  wasm_opcode_spec_by_wire_name(name).map(descriptor_for_spec)
 }
 
 ///|
 pub fn encode(opcode : WasmOpcode) -> @milkir.ExtOp {
-  let (name, immediates) = match opcode {
-    LoadMemBase(memidx) => ("load_mem_base", imm([memidx]))
-    WasmCall(func_idx) => ("call", imm([func_idx]))
-    WasmCallIndirect(type_idx, table_idx) =>
-      ("call_indirect", imm([type_idx, table_idx]))
-    CallRef(type_idx) => ("call_ref", imm([type_idx]))
-    ReturnCall(func_idx) => ("return_call", imm([func_idx]))
-    ReturnCallIndirect(type_idx, table_idx) =>
-      ("return_call_indirect", imm([type_idx, table_idx]))
-    ReturnCallRef(type_idx) => ("return_call_ref", imm([type_idx]))
-    GetFuncRef(func_idx) => ("get_func_ref", imm([func_idx]))
-    StructNew(type_idx) => ("struct_new", imm([type_idx]))
-    StructNewDefault(type_idx) => ("struct_new_default", imm([type_idx]))
-    StructGet(type_idx, field_idx) => ("struct_get", imm([type_idx, field_idx]))
-    StructGetS(type_idx, field_idx, byte_width) =>
-      ("struct_get_s", imm([type_idx, field_idx, byte_width]))
-    StructGetU(type_idx, field_idx, byte_width) =>
-      ("struct_get_u", imm([type_idx, field_idx, byte_width]))
-    StructSet(type_idx, field_idx) => ("struct_set", imm([type_idx, field_idx]))
-    ArrayNew(type_idx) => ("array_new", imm([type_idx]))
-    ArrayNewDefault(type_idx) => ("array_new_default", imm([type_idx]))
-    ArrayNewFixed(type_idx, len) => ("array_new_fixed", imm([type_idx, len]))
-    ArrayGet(type_idx) => ("array_get", imm([type_idx]))
-    ArrayGetS(type_idx, byte_width) =>
-      ("array_get_s", imm([type_idx, byte_width]))
-    ArrayGetU(type_idx, byte_width) =>
-      ("array_get_u", imm([type_idx, byte_width]))
-    ArraySet(type_idx) => ("array_set", imm([type_idx]))
-    ArrayLen => ("array_len", imm([]))
-    ArrayFill(type_idx) => ("array_fill", imm([type_idx]))
-    ArrayCopy(dst_type_idx, src_type_idx) =>
-      ("array_copy", imm([dst_type_idx, src_type_idx]))
-    ArrayNewData(type_idx, data_idx) =>
-      ("array_new_data", imm([type_idx, data_idx]))
-    ArrayNewElem(type_idx, elem_idx) =>
-      ("array_new_elem", imm([type_idx, elem_idx]))
-    ArrayInitData(type_idx, data_idx) =>
-      ("array_init_data", imm([type_idx, data_idx]))
-    ArrayInitElem(type_idx, elem_idx) =>
-      ("array_init_elem", imm([type_idx, elem_idx]))
-    I31New => ("i31_new", imm([]))
-    I31GetS => ("i31_get_s", imm([]))
-    I31GetU => ("i31_get_u", imm([]))
-    RefTest(type_idx, nullable) =>
-      ("ref_test", imm([type_idx, bool_imm(nullable)]))
-    RefCast(type_idx, nullable) =>
-      ("ref_cast", imm([type_idx, bool_imm(nullable)]))
-    AnyConvertExtern => ("any_convert_extern", imm([]))
-    ExternConvertAny => ("extern_convert_any", imm([]))
-    RefEq => ("ref_eq", imm([]))
-    Throw(tag_idx) => ("throw", imm([tag_idx]))
-    ThrowRef => ("throw_ref", imm([]))
-    TryTableBegin(handler_id) => ("try_table_begin", imm([handler_id]))
-    TryTableEnd(handler_id) => ("try_table_end", imm([handler_id]))
-    GetExceptionTag => ("get_exception_tag", imm([]))
-    GetExceptionValue(idx) => ("get_exception_value", imm([idx]))
-    GetExceptionValueCount => ("get_exception_value_count", imm([]))
-    Delegate(depth) => ("delegate", imm([depth]))
-    SpillLocalsForThrow(count) => ("spill_locals_for_throw", imm([count]))
-    GetSpilledLocal(idx) => ("get_spilled_local", imm([idx]))
+  let (id, immediates) = opcode_payload(opcode)
+  let spec = wasm_opcode_spec(id)
+  if validate_wasm_opcode_immediates(spec, immediates) is Some(message) {
+    abort("invalid \{spec.typed_constructor} encoding: \{message}")
   }
-  let desc = descriptor(opcode)
-  let ext = @milkir.ExtOp::ExtOp(WASM_DIALECT, name, immediates)
-  if !ext.matches_descriptor(desc) {
-    abort(
-      "invalid Wasm MilkIR descriptor for \{name}: expected \{desc.expected_immediate_count()} immediates, got \{immediates.length()}",
+  @milkir.ExtOp::ExtOp(WASM_DIALECT, spec.wire_name, immediates)
+}
+
+///|
+fn decode_result(ext : @milkir.ExtOp) -> Result[WasmOpcode, String] {
+  if ext.dialect != WASM_DIALECT {
+    return Err(
+      "expected Wasm MilkIR dialect '\{WASM_DIALECT}', got '\{ext.dialect}'",
     )
   }
-  ext
+  let spec = match wasm_opcode_spec_by_wire_name(ext.opcode) {
+    Some(spec) => spec
+    None => return Err("unknown Wasm MilkIR extension opcode '\{ext.opcode}'")
+  }
+  match validate_wasm_opcode_immediates(spec, ext.immediates) {
+    Some(message) => Err(message)
+    None =>
+      match opcode_from_payload(spec.id, ext.immediates) {
+        Some(opcode) => Ok(opcode)
+        None => Err("unsupported Wasm MilkIR extension opcode '\{ext.opcode}'")
+      }
+  }
 }
 
 ///|
 pub fn decode(ext : @milkir.ExtOp) -> WasmOpcode? {
-  guard ext.dialect == WASM_DIALECT else { return None }
-  let imms = ext.immediates
-  match ext.opcode {
-    "load_mem_base" if imms.length() == 1 => Some(LoadMemBase(imms[0]))
-    "call" if imms.length() == 1 => Some(WasmCall(imms[0]))
-    "call_indirect" if imms.length() == 2 =>
-      Some(WasmCallIndirect(imms[0], imms[1]))
-    "call_ref" if imms.length() == 1 => Some(CallRef(imms[0]))
-    "return_call" if imms.length() == 1 => Some(ReturnCall(imms[0]))
-    "return_call_indirect" if imms.length() == 2 =>
-      Some(ReturnCallIndirect(imms[0], imms[1]))
-    "return_call_ref" if imms.length() == 1 => Some(ReturnCallRef(imms[0]))
-    "get_func_ref" if imms.length() == 1 => Some(GetFuncRef(imms[0]))
-    "struct_new" if imms.length() == 1 => Some(StructNew(imms[0]))
-    "struct_new_default" if imms.length() == 1 =>
-      Some(StructNewDefault(imms[0]))
-    "struct_get" if imms.length() == 2 => Some(StructGet(imms[0], imms[1]))
-    "struct_get_s" if imms.length() == 3 =>
-      Some(StructGetS(imms[0], imms[1], imms[2]))
-    "struct_get_u" if imms.length() == 3 =>
-      Some(StructGetU(imms[0], imms[1], imms[2]))
-    "struct_set" if imms.length() == 2 => Some(StructSet(imms[0], imms[1]))
-    "array_new" if imms.length() == 1 => Some(ArrayNew(imms[0]))
-    "array_new_default" if imms.length() == 1 => Some(ArrayNewDefault(imms[0]))
-    "array_new_fixed" if imms.length() == 2 =>
-      Some(ArrayNewFixed(imms[0], imms[1]))
-    "array_get" if imms.length() == 1 => Some(ArrayGet(imms[0]))
-    "array_get_s" if imms.length() == 2 => Some(ArrayGetS(imms[0], imms[1]))
-    "array_get_u" if imms.length() == 2 => Some(ArrayGetU(imms[0], imms[1]))
-    "array_set" if imms.length() == 1 => Some(ArraySet(imms[0]))
-    "array_len" if imms.length() == 0 => Some(ArrayLen)
-    "array_fill" if imms.length() == 1 => Some(ArrayFill(imms[0]))
-    "array_copy" if imms.length() == 2 => Some(ArrayCopy(imms[0], imms[1]))
-    "array_new_data" if imms.length() == 2 =>
-      Some(ArrayNewData(imms[0], imms[1]))
-    "array_new_elem" if imms.length() == 2 =>
-      Some(ArrayNewElem(imms[0], imms[1]))
-    "array_init_data" if imms.length() == 2 =>
-      Some(ArrayInitData(imms[0], imms[1]))
-    "array_init_elem" if imms.length() == 2 =>
-      Some(ArrayInitElem(imms[0], imms[1]))
-    "i31_new" if imms.length() == 0 => Some(I31New)
-    "i31_get_s" if imms.length() == 0 => Some(I31GetS)
-    "i31_get_u" if imms.length() == 0 => Some(I31GetU)
-    "ref_test" if imms.length() == 2 =>
-      Some(RefTest(imms[0], imm_bool(imms[1])))
-    "ref_cast" if imms.length() == 2 =>
-      Some(RefCast(imms[0], imm_bool(imms[1])))
-    "any_convert_extern" if imms.length() == 0 => Some(AnyConvertExtern)
-    "extern_convert_any" if imms.length() == 0 => Some(ExternConvertAny)
-    "ref_eq" if imms.length() == 0 => Some(RefEq)
-    "throw" if imms.length() == 1 => Some(Throw(imms[0]))
-    "throw_ref" if imms.length() == 0 => Some(ThrowRef)
-    "try_table_begin" if imms.length() == 1 => Some(TryTableBegin(imms[0]))
-    "try_table_end" if imms.length() == 1 => Some(TryTableEnd(imms[0]))
-    "get_exception_tag" if imms.length() == 0 => Some(GetExceptionTag)
-    "get_exception_value" if imms.length() == 1 =>
-      Some(GetExceptionValue(imms[0]))
-    "get_exception_value_count" if imms.length() == 0 =>
-      Some(GetExceptionValueCount)
-    "delegate" if imms.length() == 1 => Some(Delegate(imms[0]))
-    "spill_locals_for_throw" if imms.length() == 1 =>
-      Some(SpillLocalsForThrow(imms[0]))
-    "get_spilled_local" if imms.length() == 1 => Some(GetSpilledLocal(imms[0]))
-    _ => None
+  match decode_result(ext) {
+    Ok(opcode) => Some(opcode)
+    Err(_) => None
   }
-}
-
-///|
-fn valid_bool_immediate(value : Int) -> Bool {
-  value == 0 || value == 1
 }
 
 ///|
 pub fn decode_error(ext : @milkir.ExtOp) -> String? {
-  if ext.dialect != WASM_DIALECT {
-    return Some(
-      "expected Wasm MilkIR dialect '\{WASM_DIALECT}', got '\{ext.dialect}'",
-    )
+  match decode_result(ext) {
+    Ok(_) => None
+    Err(message) => Some(message)
   }
-  let desc = match descriptor_by_name(ext.opcode) {
-    Some(desc) => desc
-    None => return Some("unknown Wasm MilkIR extension opcode '\{ext.opcode}'")
-  }
-  if !ext.matches_descriptor(desc) {
-    return Some(
-      "malformed Wasm MilkIR extension '\{ext.opcode}': expected \{desc.expected_immediate_count()} immediates, got \{ext.immediates.length()}",
-    )
-  }
-  if (ext.opcode == "ref_test" || ext.opcode == "ref_cast") &&
-    !valid_bool_immediate(ext.immediates[1]) {
-    return Some(
-      "malformed Wasm MilkIR extension '\{ext.opcode}': immediate 1 is a bool flag encoded as 0 or 1, got \{ext.immediates[1]}",
-    )
-  }
-  None
 }
 
 ///|
 pub fn decode_or_abort(ext : @milkir.ExtOp) -> WasmOpcode {
-  match decode_error(ext) {
-    Some(message) => abort(message)
-    None =>
-      match decode(ext) {
-        Some(opcode) => opcode
-        None => abort("malformed Wasm MilkIR extension '\{ext.opcode}'")
-      }
+  match decode_result(ext) {
+    Ok(opcode) => opcode
+    Err(message) => abort(message)
   }
 }
 

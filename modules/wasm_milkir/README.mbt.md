@@ -7,6 +7,8 @@ builder helpers used with MilkIR. Frontends encode Wasm operations through
 typed `WasmOpcode` constructors, then a lowering adapter checks and decodes
 those extensions before machine lowering.
 
+Serialized opcode names and immediate layouts are defined once in `internal/schema/wasm_opcodes.schema`. During package development, `dev_build` invokes the pinned public `moon runwasm moonbit-community/embed@0.1.1` tool to refresh the embedded MoonBit source. The generated source is committed and published, so downstream builds use it directly without executing development build rules.
+
 ## Packages
 
 - `Milky2018/wasm_milkir`: Wasm opcode encoding/decoding and builder helpers

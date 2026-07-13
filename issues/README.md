@@ -173,6 +173,7 @@ graph TD
   ISS_157["ISS-157: Derive GVN memory policy from opcode semantics"]
   ISS_158["ISS-158: Derive e-graph purity and enforce opcode completeness"]
   ISS_159["ISS-159: Cover every non-pure MilkIR opcode constructor"]
+  ISS_160["ISS-160: Centralize the Wasm extension wire protocol"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
@@ -307,6 +308,7 @@ graph TD
   ISS_156 --> ISS_157
   ISS_157 --> ISS_158
   ISS_155 --> ISS_159
+  ISS_153 --> ISS_160
 ```
 
 ## Warnings
