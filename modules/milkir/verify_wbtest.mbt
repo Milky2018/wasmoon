@@ -2,7 +2,7 @@
 test "verify rejects duplicate value definitions" {
   let func = Function::new_empty("duplicate_value")
   let original = func.add_param(I32)
-  let duplicate = Value::Value(original.id, I32)
+  let duplicate = Value::new(func.owner, original.id, I32)
   let entry = func.new_block([])
   entry.append_inst(
     func.new_inst(Scalar(ScalarOp::IntConst(1L)), [], [duplicate]),
@@ -106,6 +106,7 @@ test "verify rejects divergent instruction operand views" {
   let copied = func.new_value(I32)
   let entry = func.new_block([])
   let malformed : Inst = {
+    owner: func.owner,
     id: 0,
     results: [copied],
     opcode: Scalar(ScalarOp::Copy),

@@ -200,7 +200,7 @@ test "verify catches missing terminator" {
 test "verify catches undefined operands" {
   let func = Function::new_empty("bad_use")
   let entry = func.new_block([])
-  let bogus = Value::Value(99, I32)
+  let bogus = Value::new(func.owner, 99, I32)
   let result = func.new_value(I32)
   entry.append_inst(
     func.new_inst(
@@ -222,7 +222,7 @@ test "verify rejects a value whose type disagrees with its definition" {
   let func = Function::new_empty("bad_value_type")
   let original = func.add_param(I32)
   func.add_result(I64)
-  let forged = Value::Value(original.id, I64)
+  let forged = Value::new(func.owner, original.id, I64)
   let copied = func.new_value(I64)
   let entry = func.new_block([])
   entry.append_inst(func.new_inst(Scalar(ScalarOp::Copy), [forged], [copied]))

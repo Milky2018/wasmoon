@@ -17,6 +17,9 @@ pub suberror VerifyError {
   MissingTerminator(block_id~ : Int)
   EmptyFunction
   UndefinedValue(value_id~ : Int)
+  ForeignValue(value_id~ : Int)
+  ForeignBlock(block_id~ : Int)
+  ForeignInstruction(inst_id~ : Int)
   DuplicateBlockId(block_id~ : Int)
   DuplicateValueDefinition(value_id~ : Int)
   DuplicateInstructionId(inst_id~ : Int)
@@ -36,9 +39,11 @@ pub struct Block {
   params : Array[(Value, Type)]
   instructions : Array[Inst]
   mut terminator : Terminator?
-} derive(@debug.Debug)
+  // private fields
+}
 pub fn Block::append_inst(Self, Inst) -> Unit
 pub fn Block::set_terminator(Self, Terminator) -> Unit
+pub impl @debug.Debug for Block
 
 pub struct CFG {
   size : Int
@@ -145,7 +150,8 @@ pub struct Function {
   mut next_value_id : Int
   mut next_inst_id : Int
   mut next_block_id : Int
-} derive(@debug.Debug)
+  // private fields
+}
 pub fn Function::add_param(Self, Type) -> Value
 pub fn Function::add_result(Self, Type) -> Unit
 pub fn Function::declare_external_symbol(Self, String) -> ExternalSymbol
@@ -160,6 +166,7 @@ pub fn Function::signature(Self) -> Signature
 pub fn Function::verify(Self) -> Unit raise VerifyError
 pub fn Function::verify_core(Self) -> Unit raise VerifyError
 pub fn Function::with_signature(String, Signature) -> Self
+pub impl @debug.Debug for Function
 
 type FunctionBuilder
 pub fn FunctionBuilder::FunctionBuilder(String) -> Self
@@ -309,12 +316,14 @@ pub struct Inst {
   args : Array[Value]
   operands : Array[Value]
   metadata : Array[Metadata]
-} derive(@debug.Debug)
+  // private fields
+}
 pub fn Inst::add_metadata(Self, Metadata) -> Unit
 pub fn Inst::all_results(Self) -> Array[Value]
 pub fn Inst::first_result(Self) -> Value?
 pub impl Eq for Inst
 pub impl Hash for Inst
+pub impl @debug.Debug for Inst
 
 pub(all) enum IntBinaryOp {
   Add
@@ -444,8 +453,11 @@ pub impl Show for Type
 pub struct Value {
   id : Int
   ty : Type
-} derive(Eq, Hash, @debug.Debug)
-pub fn Value::Value(Int, Type) -> Self
+  // private fields
+}
+pub impl Eq for Value
+pub impl Hash for Value
+pub impl @debug.Debug for Value
 
 pub(all) enum VectorExtension {
   None

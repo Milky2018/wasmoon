@@ -5,13 +5,34 @@
 /// IR Value - represents a virtual register in SSA form
 /// Each value is defined exactly once and can be used multiple times
 pub struct Value {
+  priv owner : Ref[Unit]
   id : Int // Unique identifier within a function
   ty : Type // The type of this value
-} derive(Eq, Debug, Hash)
+}
 
 ///|
-pub fn Value::Value(id : Int, ty : Type) -> Value {
-  { id, ty }
+fn Value::new(owner : Ref[Unit], id : Int, ty : Type) -> Value {
+  { owner, id, ty }
+}
+
+///|
+pub impl Eq for Value with fn equal(self, other) {
+  physical_equal(self.owner, other.owner) &&
+  self.id == other.id &&
+  self.ty == other.ty
+}
+
+///|
+pub impl Hash for Value with fn hash_combine(self, hasher) {
+  // Owner identity deliberately does not contribute to the hash. Values from
+  // different functions may collide, but equal values always hash equally.
+  self.id.hash_combine(hasher)
+  self.ty.hash_combine(hasher)
+}
+
+///|
+pub impl Debug for Value with fn to_repr(self) {
+  Repr::record({ "id": to_repr(self.id), "ty": to_repr(self.ty) })
 }
 
 ///|
@@ -186,20 +207,35 @@ pub(all) enum Metadata {
 /// - One entry point (the first instruction)
 /// - One exit point (the last instruction, a terminator)
 pub struct Block {
+  priv owner : Ref[Unit]
   id : Int // Unique block identifier
   params : Array[(Value, Type)] // Block parameters (for phi nodes)
   instructions : Array[Inst] // Instructions in this block
   mut terminator : Terminator? // How this block ends
-} derive(Debug)
-
-///|
-fn Block::Block(id : Int) -> Block {
-  { id, params: [], instructions: [], terminator: None }
 }
 
 ///|
-fn Block::new_with_params(id : Int, params : Array[Value]) -> Block {
-  let block = Block(id)
+pub impl Debug for Block with fn to_repr(self) {
+  Repr::record({
+    "id": to_repr(self.id),
+    "params": to_repr(self.params),
+    "instructions": to_repr(self.instructions),
+    "terminator": to_repr(self.terminator),
+  })
+}
+
+///|
+fn Block::Block(owner : Ref[Unit], id : Int) -> Block {
+  { owner, id, params: [], instructions: [], terminator: None }
+}
+
+///|
+fn Block::new_with_params(
+  owner : Ref[Unit],
+  id : Int,
+  params : Array[Value],
+) -> Block {
+  let block = Block(owner, id)
   for param in params {
     block.add_param(param, param.ty)
   }
@@ -232,13 +268,26 @@ pub fn Block::set_terminator(self : Block, term : Terminator) -> Unit {
 ///|
 /// Instruction - an SSA instruction that produces a value
 pub struct Inst {
+  priv owner : Ref[Unit]
   id : Int
   results : Array[Value] // Values produced (empty for void instructions)
   mut opcode : Opcode // The operation
   args : Array[Value] // Generic MilkIR spelling for operands.
   operands : Array[Value] // Input values
   metadata : Array[Metadata]
-} derive(Debug)
+}
+
+///|
+pub impl Debug for Inst with fn to_repr(self) {
+  Repr::record({
+    "id": to_repr(self.id),
+    "results": to_repr(self.results),
+    "opcode": to_repr(self.opcode),
+    "args": to_repr(self.args),
+    "operands": to_repr(self.operands),
+    "metadata": to_repr(self.metadata),
+  })
+}
 
 ///|
 /// Hash for CSE/GVN - based on opcode, result types, and operand IDs.
@@ -257,6 +306,9 @@ pub impl Hash for Inst with fn hash_combine(self, hasher) {
 ///|
 /// Eq for CSE/GVN - result types are part of expression identity.
 pub impl Eq for Inst with fn equal(self, other) {
+  if !physical_equal(self.owner, other.owner) {
+    return false
+  }
   if !opcode_identity_equal(self.opcode, other.opcode) {
     return false
   }
@@ -303,12 +355,13 @@ fn opcode_identity_equal(lhs : Opcode, rhs : Opcode) -> Bool {
 
 ///|
 fn Inst::new_with_id(
+  owner : Ref[Unit],
   id : Int,
   opcode : Opcode,
   args : Array[Value],
   results : Array[Value],
 ) -> Inst {
-  { id, results, opcode, args, operands: args, metadata: [] }
+  { owner, id, results, opcode, args, operands: args, metadata: [] }
 }
 
 ///|
@@ -818,6 +871,8 @@ pub(all) enum Terminator {
 ///|
 /// Function - a complete IR function
 pub struct Function {
+  priv owner : Ref[Unit]
+  priv mut construction_error : VerifyError?
   name : String
   params : Array[(Value, Type)] // Function parameters
   results : Array[Type] // Return types
@@ -826,11 +881,27 @@ pub struct Function {
   mut next_value_id : Int // For generating unique value IDs
   mut next_inst_id : Int
   mut next_block_id : Int // For generating unique block IDs
-} derive(Debug)
+}
+
+///|
+pub impl Debug for Function with fn to_repr(self) {
+  Repr::record({
+    "name": to_repr(self.name),
+    "params": to_repr(self.params),
+    "results": to_repr(self.results),
+    "blocks": to_repr(self.blocks),
+    "external_symbols": to_repr(self.external_symbols),
+    "next_value_id": to_repr(self.next_value_id),
+    "next_inst_id": to_repr(self.next_inst_id),
+    "next_block_id": to_repr(self.next_block_id),
+  })
+}
 
 ///|
 pub fn Function::new_empty(name : String) -> Function {
   {
+    owner: Ref(()),
+    construction_error: None,
     name,
     params: [],
     results: [],
@@ -880,7 +951,7 @@ pub fn Function::signature(self : Function) -> Signature {
 pub fn Function::new_value(self : Function, ty : Type) -> Value {
   let id = self.next_value_id
   self.next_value_id = self.next_value_id + 1
-  Value(id, ty)
+  Value::new(self.owner, id, ty)
 }
 
 ///|
@@ -888,7 +959,7 @@ pub fn Function::new_value(self : Function, ty : Type) -> Value {
 pub fn Function::new_block(self : Function, params : Array[Value]) -> Block {
   let id = self.next_block_id
   self.next_block_id = self.next_block_id + 1
-  let block = Block::new_with_params(id, params)
+  let block = Block::new_with_params(self.owner, id, params)
   self.blocks.push(block)
   block
 }
@@ -905,9 +976,40 @@ pub fn Function::new_inst(
   args : Array[Value],
   results : Array[Value],
 ) -> Inst {
-  let inst = Inst::new_with_id(self.next_inst_id, opcode, args, results)
+  let inst = Inst::new_with_id(
+    self.owner,
+    self.next_inst_id,
+    opcode,
+    args,
+    results,
+  )
   self.next_inst_id = self.next_inst_id + 1
   inst
+}
+
+///|
+fn Function::owns_value(self : Function, value : Value) -> Bool {
+  physical_equal(self.owner, value.owner)
+}
+
+///|
+fn Function::owns_block(self : Function, block : Block) -> Bool {
+  physical_equal(self.owner, block.owner)
+}
+
+///|
+fn Function::owns_inst(self : Function, inst : Inst) -> Bool {
+  physical_equal(self.owner, inst.owner)
+}
+
+///|
+fn Function::record_construction_error(
+  self : Function,
+  error : VerifyError,
+) -> Unit {
+  if self.construction_error is None {
+    self.construction_error = Some(error)
+  }
 }
 
 ///|

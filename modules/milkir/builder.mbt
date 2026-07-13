@@ -51,11 +51,40 @@ pub fn FunctionBuilder::create_block(self : FunctionBuilder) -> Block {
 }
 
 ///|
+fn FunctionBuilder::require_block(
+  self : FunctionBuilder,
+  block : Block,
+) -> Bool {
+  if !self.func.owns_block(block) {
+    self.func.record_construction_error(ForeignBlock(block_id=block.id))
+    return false
+  }
+  true
+}
+
+///|
+fn FunctionBuilder::require_values(
+  self : FunctionBuilder,
+  values : Array[Value],
+) -> Bool {
+  for value in values {
+    if !self.func.owns_value(value) {
+      self.func.record_construction_error(ForeignValue(value_id=value.id))
+      return false
+    }
+  }
+  true
+}
+
+///|
 /// Switch to a different block for emitting instructions
 pub fn FunctionBuilder::switch_to_block(
   self : FunctionBuilder,
   block : Block,
 ) -> Unit {
+  if !self.require_block(block) {
+    return
+  }
   self.current_block = block
 }
 
@@ -72,6 +101,9 @@ pub fn FunctionBuilder::add_block_param(
   block : Block,
   ty : Type,
 ) -> Value {
+  if !self.require_block(block) {
+    return self.func.new_value(ty)
+  }
   let v = self.func.new_value(ty)
   block.add_param(v, ty)
   v
@@ -103,9 +135,12 @@ pub fn FunctionBuilder::append_block_params_for_function_returns(
 ///|
 /// Return the SSA values used as block parameters.
 pub fn FunctionBuilder::block_params(
-  _self : FunctionBuilder,
+  self : FunctionBuilder,
   block : Block,
 ) -> Array[Value] {
+  if !self.require_block(block) {
+    return []
+  }
   block.params.map(fn(item) {
     let (value, _) = item
     value
@@ -120,8 +155,11 @@ pub fn FunctionBuilder::emit_inst(
   opcode : Opcode,
   operands : Array[Value],
 ) -> Value {
-  let block = self.current_block
   let result = self.func.new_value(ty)
+  if !self.require_values(operands) {
+    return result
+  }
+  let block = self.current_block
   let inst = self.func.new_inst(opcode, operands, [result])
   block.add_inst(inst)
   result
@@ -134,6 +172,9 @@ pub fn FunctionBuilder::emit_void_inst(
   opcode : Opcode,
   operands : Array[Value],
 ) -> Unit {
+  if !self.require_values(operands) {
+    return
+  }
   let block = self.current_block
   let inst = self.func.new_inst(opcode, operands, [])
   block.add_inst(inst)
@@ -147,15 +188,18 @@ pub fn FunctionBuilder::emit_multi_inst(
   opcode : Opcode,
   operands : Array[Value],
 ) -> Array[Value] {
+  let results : Array[Value] = []
+  for ty in result_types {
+    results.push(self.func.new_value(ty))
+  }
+  if !self.require_values(operands) {
+    return results
+  }
   if result_types.length() == 0 {
     self.emit_void_inst(opcode, operands)
     return []
   }
   let block = self.current_block
-  let results : Array[Value] = []
-  for ty in result_types {
-    results.push(self.func.new_value(ty))
-  }
   let inst = self.func.new_inst(opcode, operands, results)
   block.add_inst(inst)
   results
@@ -211,6 +255,9 @@ pub fn FunctionBuilder::get_const_value(
   self : FunctionBuilder,
   v : Value,
 ) -> Int64? {
+  if !self.require_values([v]) {
+    return None
+  }
   for block in self.func.blocks {
     for inst in block.instructions {
       if inst.first_result() is Some(r) && r.id == v.id {
@@ -1001,6 +1048,9 @@ pub fn FunctionBuilder::jump(
   target : Block,
   args : Array[Value],
 ) -> Unit {
+  if !self.require_block(target) || !self.require_values(args) {
+    return
+  }
   let block = self.current_block
   block.set_terminator(Jump(target.id, args))
 }
@@ -1013,6 +1063,11 @@ pub fn FunctionBuilder::brz(
   then_block : Block,
   else_block : Block,
 ) -> Unit {
+  if !self.require_values([cond]) ||
+    !self.require_block(then_block) ||
+    !self.require_block(else_block) {
+    return
+  }
   let block = self.current_block
   block.set_terminator(Brz(cond, then_block.id, else_block.id))
 }
@@ -1025,6 +1080,11 @@ pub fn FunctionBuilder::brnz(
   then_block : Block,
   else_block : Block,
 ) -> Unit {
+  if !self.require_values([cond]) ||
+    !self.require_block(then_block) ||
+    !self.require_block(else_block) {
+    return
+  }
   let block = self.current_block
   block.set_terminator(Brnz(cond, then_block.id, else_block.id))
 }
@@ -1037,6 +1097,17 @@ pub fn FunctionBuilder::br_table(
   targets : Array[Block],
   default_target : Block,
 ) -> Unit {
+  if !self.require_values([index]) {
+    return
+  }
+  for target in targets {
+    if !self.require_block(target) {
+      return
+    }
+  }
+  if !self.require_block(default_target) {
+    return
+  }
   let target_ids = targets.map(fn(b) { b.id })
   let block = self.current_block
   block.set_terminator(BrTable(index, target_ids, default_target.id))
@@ -1048,6 +1119,9 @@ pub fn FunctionBuilder::return_(
   self : FunctionBuilder,
   values : Array[Value],
 ) -> Unit {
+  if !self.require_values(values) {
+    return
+  }
   let block = self.current_block
   block.set_terminator(Return(values))
 }
