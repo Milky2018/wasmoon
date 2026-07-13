@@ -1535,46 +1535,6 @@ pub fn FunctionBuilder::v128_anytrue(
 }
 
 ///|
-/// Generic SIMD instruction emitter
-/// Use this for operations that follow the pattern: opcode, operands -> V128/I32
-pub fn FunctionBuilder::v128_unary(
-  self : FunctionBuilder,
-  opcode : VectorOp,
-  a : Value,
-) -> Value {
-  self.emit_inst(V128, Vector(opcode), [a])
-}
-
-///|
-pub fn FunctionBuilder::v128_binary(
-  self : FunctionBuilder,
-  opcode : VectorOp,
-  a : Value,
-  b : Value,
-) -> Value {
-  self.emit_inst(V128, Vector(opcode), [a, b])
-}
-
-///|
-pub fn FunctionBuilder::v128_to_i32(
-  self : FunctionBuilder,
-  opcode : VectorOp,
-  a : Value,
-) -> Value {
-  self.emit_inst(I32, Vector(opcode), [a])
-}
-
-///|
-pub fn FunctionBuilder::v128_shift(
-  self : FunctionBuilder,
-  opcode : VectorOp,
-  vec : Value,
-  shift : Value,
-) -> Value {
-  self.emit_inst(V128, Vector(opcode), [vec, shift])
-}
-
-///|
 /// SIMD load with effective address (for complex SIMD loads)
 pub fn FunctionBuilder::v128_load_with_addr(
   self : FunctionBuilder,

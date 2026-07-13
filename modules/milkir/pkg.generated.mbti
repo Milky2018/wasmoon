@@ -277,7 +277,6 @@ pub fn FunctionBuilder::ushr(Self, Value, Value) -> Value
 pub fn FunctionBuilder::v128_and(Self, Value, Value) -> Value
 pub fn FunctionBuilder::v128_andnot(Self, Value, Value) -> Value
 pub fn FunctionBuilder::v128_anytrue(Self, Value) -> Value
-pub fn FunctionBuilder::v128_binary(Self, VectorOp, Value, Value) -> Value
 pub fn FunctionBuilder::v128_bitselect(Self, Value, Value, Value) -> Value
 pub fn FunctionBuilder::v128_const(Self, Bytes) -> Value
 pub fn FunctionBuilder::v128_extract16s(Self, Value, Int) -> Value
@@ -298,7 +297,6 @@ pub fn FunctionBuilder::v128_replace64(Self, Value, Value, Int) -> Value
 pub fn FunctionBuilder::v128_replace8(Self, Value, Value, Int) -> Value
 pub fn FunctionBuilder::v128_replace_f32(Self, Value, Value, Int) -> Value
 pub fn FunctionBuilder::v128_replace_f64(Self, Value, Value, Int) -> Value
-pub fn FunctionBuilder::v128_shift(Self, VectorOp, Value, Value) -> Value
 pub fn FunctionBuilder::v128_shuffle(Self, Value, Value, FixedArray[Int]) -> Value
 pub fn FunctionBuilder::v128_splat16(Self, Value) -> Value
 pub fn FunctionBuilder::v128_splat32(Self, Value) -> Value
@@ -308,8 +306,6 @@ pub fn FunctionBuilder::v128_splat_f32(Self, Value) -> Value
 pub fn FunctionBuilder::v128_splat_f64(Self, Value) -> Value
 pub fn FunctionBuilder::v128_store_lane_with_addr(Self, VectorMemoryOp, Value, Value) -> Unit
 pub fn FunctionBuilder::v128_swizzle(Self, Value, Value) -> Value
-pub fn FunctionBuilder::v128_to_i32(Self, VectorOp, Value) -> Value
-pub fn FunctionBuilder::v128_unary(Self, VectorOp, Value) -> Value
 pub fn FunctionBuilder::v128_xor(Self, Value, Value) -> Value
 
 pub struct Inst {

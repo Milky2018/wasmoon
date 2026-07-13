@@ -1125,7 +1125,7 @@ fn Translator::translate_simd_binary(
 ) -> Unit {
   let b = self.pop()
   let a = self.pop()
-  let result = self.builder.v128_binary(opcode, a, b)
+  let result = self.builder.emit_inst(V128, Vector(opcode), [a, b])
   self.push(result)
 }
 
@@ -1136,7 +1136,7 @@ fn Translator::translate_simd_unary(
   opcode : @milkir.VectorOp,
 ) -> Unit {
   let a = self.pop()
-  let result = self.builder.v128_unary(opcode, a)
+  let result = self.builder.emit_inst(V128, Vector(opcode), [a])
   self.push(result)
 }
 
@@ -1147,7 +1147,7 @@ fn Translator::translate_simd_to_i32(
   opcode : @milkir.VectorOp,
 ) -> Unit {
   let a = self.pop()
-  let result = self.builder.v128_to_i32(opcode, a)
+  let result = self.builder.emit_inst(I32, Vector(opcode), [a])
   self.push(result)
 }
 
@@ -1159,7 +1159,7 @@ fn Translator::translate_simd_shift(
 ) -> Unit {
   let shift = self.pop()
   let vec = self.pop()
-  let result = self.builder.v128_shift(opcode, vec, shift)
+  let result = self.builder.emit_inst(V128, Vector(opcode), [vec, shift])
   self.push(result)
 }
 
