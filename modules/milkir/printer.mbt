@@ -437,8 +437,6 @@ fn format_vector_opcode(opcode : VectorOp, operands : Array[Value]) -> String {
 }
 
 ///|
-
-///|
 /// Print an opcode with its operands.
 fn format_opcode(opcode : Opcode, operands : Array[Value]) -> String {
   let ops = operands.map(format_value).join(", ")

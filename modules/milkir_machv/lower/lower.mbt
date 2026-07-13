@@ -2478,8 +2478,6 @@ fn lower_vector_memory_inst(
 }
 
 ///|
-
-///|
 /// Lower a built-in IR instruction to MachV.
 fn lower_inst_builtin(
   ctx : LoweringContext,
