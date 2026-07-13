@@ -2,16 +2,24 @@
 test "public signature construction materializes canonical parameters" {
   let signature = @milkir.Signature::Signature([I32, I64], [I64])
   let func = @milkir.Function::with_signature("signature", signature)
-  inspect(func.params.length(), content="2")
-  guard func.param(0) is Some(first) else {
-    fail("expected first function parameter")
-  }
-  guard func.param(1) is Some(second) else {
-    fail("expected second function parameter")
-  }
-  inspect(first.ty, content="i32")
-  inspect(second.ty, content="i64")
-  inspect(func.signature() == signature, content="true")
+  debug_inspect(
+    func.param(0),
+    content=(
+      #|Some({ id: 0, ty: I32 })
+    ),
+  )
+  debug_inspect(
+    func.param(1),
+    content=(
+      #|Some({ id: 1, ty: I64 })
+    ),
+  )
+  debug_inspect(
+    func.signature(),
+    content=(
+      #|{ params: [I32, I64], results: [I64] }
+    ),
+  )
 }
 
 ///|
@@ -56,10 +64,22 @@ test "public builder passes values through block parameters" {
   builder.switch_to_block(join_block)
   builder.return_([selected])
   let func = builder.finalize()
-  inspect(func.blocks.length(), content="4")
-  inspect(func.print().contains("block3(v3:i64)"), content="true")
-  inspect(func.print().contains("jump block3(v1)"), content="true")
-  inspect(func.print().contains("jump block3(v2)"), content="true")
+  inspect(
+    func.print(),
+    content=(
+      #|function choose(v0:i32, v1:i64, v2:i64) -> i64 {
+      #|block0:
+      #|    brnz v0, block1, block2
+      #|block1:
+      #|    jump block3(v1)
+      #|block2:
+      #|    jump block3(v2)
+      #|block3(v3:i64):
+      #|    return v3
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|
@@ -71,14 +91,27 @@ test "public builder derives block parameters from function parameters" {
   let target = builder.create_block()
   builder.append_block_params_for_function_params(target)
   let params = builder.block_params(target)
-  inspect(params.length(), content="2")
+  debug_inspect(
+    params,
+    content=(
+      #|[{ id: 2, ty: I32 }, { id: 3, ty: I64 }]
+    ),
+  )
   builder.jump(target, [first, second])
   builder.switch_to_block(target)
   builder.return_([params[1]])
   let func = builder.finalize()
-  debug_inspect(
-    func.signature(),
-    content="{ params: [I32, I64], results: [I64] }",
+  inspect(
+    func.print(),
+    content=(
+      #|function forward_parameters(v0:i32, v1:i64) -> i64 {
+      #|block0:
+      #|    jump block1(v0, v1)
+      #|block1(v2:i32, v3:i64):
+      #|    return v3
+      #|}
+      #|
+    ),
   )
 }
 
@@ -107,7 +140,22 @@ test "public low-level construction retains instruction metadata" {
   entry.append_inst(inst)
   entry.set_terminator(Return([result]))
   func.verify()
-  inspect(inst.metadata.length(), content="2")
-  inspect(inst.first_result() == Some(result), content="true")
-  debug_inspect(inst.all_results(), content="[{ id: 0, ty: I32 }]")
+  debug_inspect(
+    inst.metadata,
+    content=(
+      #|[SourceLoc("input.mbt:1"), Comment("generated constant")]
+    ),
+  )
+  debug_inspect(
+    inst.first_result(),
+    content=(
+      #|Some({ id: 0, ty: I32 })
+    ),
+  )
+  debug_inspect(
+    inst.all_results(),
+    content=(
+      #|[{ id: 0, ty: I32 }]
+    ),
+  )
 }

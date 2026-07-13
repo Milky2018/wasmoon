@@ -18,30 +18,95 @@ fn build_public_diamond() -> @milkir.Function raise @milkir.VerifyError {
 ///|
 test "public CFG reports diamond edges" {
   let cfg = @milkir.CFG::build(build_public_diamond())
-  inspect(cfg.num_blocks, content="4")
-  debug_inspect(cfg.get_successors(0), content="[1, 2]")
-  debug_inspect(cfg.get_predecessors(3), content="[1, 2]")
-  inspect(cfg.is_exit_block(3), content="true")
-  inspect(cfg.is_valid(3), content="true")
+  debug_inspect(
+    cfg,
+    content=(
+      #|{
+      #|  size: 4,
+      #|  num_blocks: 4,
+      #|  successors: [[1, 2], [3], [3], []],
+      #|  predecessors: [[], [0], [0], [1, 2]],
+      #|  valid: [true, true, true, true],
+      #|}
+    ),
+  )
+  let valid_blocks : Array[Int] = []
+  let exit_blocks : Array[Int] = []
+  for block_id in -1..<=4 {
+    if cfg.is_valid(block_id) {
+      valid_blocks.push(block_id)
+    }
+    if cfg.is_valid(block_id) && cfg.is_exit_block(block_id) {
+      exit_blocks.push(block_id)
+    }
+  }
+  debug_inspect(
+    valid_blocks,
+    content=(
+      #|[0, 1, 2, 3]
+    ),
+  )
+  debug_inspect(
+    exit_blocks,
+    content=(
+      #|[3]
+    ),
+  )
 }
 
 ///|
 test "public CFG reports dominance and complete traversals" {
   let cfg = @milkir.CFG::build(build_public_diamond())
-  inspect(cfg.dominates(0, 3), content="true")
-  inspect(cfg.dominates(1, 3), content="false")
-  inspect(cfg.dominates(2, 3), content="false")
-  inspect(cfg.postorder().length(), content="4")
-  inspect(cfg.reverse_postorder().length(), content="4")
+  let dominance : Array[(Int, Int)] = []
+  for dominator in 0..<cfg.num_blocks {
+    for block_id in 0..<cfg.num_blocks {
+      if cfg.dominates(dominator, block_id) {
+        dominance.push((dominator, block_id))
+      }
+    }
+  }
+  debug_inspect(
+    dominance,
+    content=(
+      #|[(0, 0), (0, 1), (0, 2), (0, 3), (1, 1), (2, 2), (3, 3)]
+    ),
+  )
+  debug_inspect(
+    cfg.compute_dominators(),
+    content=(
+      #|[0, 0, 0, 0]
+    ),
+  )
+  debug_inspect(
+    cfg.postorder(),
+    content=(
+      #|[3, 1, 2, 0]
+    ),
+  )
+  debug_inspect(
+    cfg.reverse_postorder(),
+    content=(
+      #|[0, 2, 1, 3]
+    ),
+  )
 }
 
 ///|
 test "public CFG renders graphviz edges" {
   let dot = @milkir.CFG::build(build_public_diamond()).to_dot("diamond")
-  inspect(dot.contains("digraph diamond"), content="true")
-  inspect(dot.contains("block0 -> block1"), content="true")
-  inspect(dot.contains("block0 -> block2"), content="true")
-  inspect(dot.contains("block1 -> block3"), content="true")
+  inspect(
+    dot,
+    content=(
+      #|digraph diamond {
+      #|  node [shape=box];
+      #|  block0 -> block1;
+      #|  block0 -> block2;
+      #|  block1 -> block3;
+      #|  block2 -> block3;
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|
@@ -61,9 +126,16 @@ test "public CFG discovers a natural loop and its preheader" {
   let cfg = @milkir.CFG::build(builder.finalize())
   debug_inspect(cfg.find_back_edges(), content="[(2, 1)]")
   let loops = cfg.find_loops()
-  inspect(loops.length(), content="1")
-  inspect(loops[0].header, content="1")
-  inspect(loops[0].contains(1), content="true")
-  inspect(loops[0].contains(2), content="true")
-  debug_inspect(cfg.get_loop_preheader(loops[0]), content="Some(0)")
+  debug_inspect(
+    loops,
+    content=(
+      #|[{ header: 1, blocks: [1, 2], back_edges: [(2, 1)] }]
+    ),
+  )
+  debug_inspect(
+    cfg.get_loop_preheader(loops[0]),
+    content=(
+      #|Some(0)
+    ),
+  )
 }

@@ -12,11 +12,21 @@ test "public scalar builders compose integer and floating operations" {
   let widened = builder.fpromote(absolute)
   builder.return_([positive, widened])
   let func = builder.finalize()
-  let printed = func.print()
-  inspect(printed.contains("iadd"), content="true")
-  inspect(printed.contains("icmp.sgt"), content="true")
-  inspect(printed.contains("fabs"), content="true")
-  inspect(printed.contains("fpromote"), content="true")
+  inspect(
+    func.print(),
+    content=(
+      #|function scalar_operations(v0:i32, v1:f32) -> i32, f64 {
+      #|block0:
+      #|    v2:i32 = iconst 1
+      #|    v3:i32 = iadd v0, v2
+      #|    v4:i32 = icmp.sgt v3, v0
+      #|    v5:f32 = fabs v1
+      #|    v6:f64 = fpromote v5
+      #|    return v4, v6
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|
@@ -31,9 +41,18 @@ test "public call builders support direct and pointer multi-value calls" {
   let indirect = builder.call_pointer(function_pointer, [argument], [I32, I64])
   builder.return_([direct[0], indirect[1]])
   let func = builder.finalize()
-  let printed = func.print()
-  inspect(printed.contains("call host_pair(v0)"), content="true")
-  inspect(printed.contains("call_ptr(1) -> 2"), content="true")
+  inspect(
+    func.print(),
+    content=(
+      #|function calls(v0:i32, v1:i64) -> i32, i64 {
+      #|block0:
+      #|    (v2:i32, v3:i64) = call host_pair(v0)
+      #|    (v4:i32, v5:i64) = call_ptr(1) -> 2 (v1, v0)
+      #|    return v2, v5
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|
@@ -50,11 +69,20 @@ test "public memory builders cover full-width and narrow accesses" {
   builder.store_ptr_narrow(16, address, value, offset)
   builder.return_([loaded, narrow])
   let func = builder.finalize()
-  let printed = func.print()
-  inspect(printed.contains("load.i32"), content="true")
-  inspect(printed.contains("load8_s.i32"), content="true")
-  inspect(printed.contains("store.i32"), content="true")
-  inspect(printed.contains("store16"), content="true")
+  inspect(
+    func.print(),
+    content=(
+      #|function memory(v0:ptr, v1:i32, v2:i64) -> i32, i32 {
+      #|block0:
+      #|    v3:i32 = load.i32 v0, v2
+      #|    v4:i32 = load8_s.i32 v0, v2
+      #|    store.i32 v0, v1, v2
+      #|    store16 v0, v1, v2
+      #|    return v3, v4
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|
@@ -75,14 +103,12 @@ test "public vector builders cover lanes, bitwise ops, and memory" {
   builder.v128_store_lane_with_addr(StoreLane(I32, 1), address, loaded)
   builder.return_([extracted, loaded])
   let func = builder.finalize()
-  let printed = func.print()
-  inspect(printed.contains("v128.const"), content="true")
-  inspect(printed.contains("i32x4.splat"), content="true")
-  inspect(printed.contains("v128.xor"), content="true")
-  inspect(printed.contains("i32x4.replace_lane 2"), content="true")
-  inspect(printed.contains("i32x4.extract_lane 2"), content="true")
-  inspect(printed.contains("v128.load32_splat"), content="true")
-  inspect(printed.contains("v128.store32_lane lane=1"), content="true")
+  debug_inspect(
+    func.print(),
+    content=(
+      #|"function vectors(v0:i32, v1:ptr) -> i32, v128 {\nblock0:\n    v2:v128 = v128.const \n    v3:v128 = i32x4.splat v0\n    v4:v128 = v128.xor v2, v3\n    v5:v128 = i32x4.replace_lane 2 v4, v0\n    v6:i32 = i32x4.extract_lane 2 v5\n    v7:v128 = v128.load32_splat v1\n    v128.store32_lane lane=1 v1, v7\n    return v6, v7\n}\n"
+    ),
+  )
 }
 
 ///|
@@ -95,8 +121,23 @@ test "public extension builders preserve typed multi-value contracts" {
   let results = builder.emit_multi_ext_inst([I32, I64], opcode, [input])
   builder.return_(results)
   let func = builder.finalize()
-  inspect(results.length(), content="2")
-  inspect(func.print().contains("ext.demo.split [7] v0"), content="true")
+  debug_inspect(
+    results,
+    content=(
+      #|[{ id: 1, ty: I32 }, { id: 2, ty: I64 }]
+    ),
+  )
+  inspect(
+    func.print(),
+    content=(
+      #|function extension(v0:i32) -> i32, i64 {
+      #|block0:
+      #|    (v1:i32, v2:i64) = ext.demo.split [7] v0
+      #|    return v1, v2
+      #|}
+      #|
+    ),
+  )
 }
 
 ///|
@@ -104,13 +145,56 @@ test "public extension descriptors support bounded immediate counts" {
   let descriptor = @milkir.ExtOpDescriptor::with_immediate_range(
     "demo", "range", 1, 3,
   )
-  inspect(descriptor.accepts_immediate_count(0), content="false")
-  inspect(descriptor.accepts_immediate_count(1), content="true")
-  inspect(descriptor.accepts_immediate_count(3), content="true")
-  inspect(descriptor.accepts_immediate_count(4), content="false")
-  inspect(descriptor.expected_immediate_count(), content="1..3")
-  inspect(
-    @milkir.ExtOp::ExtOp("demo", "range", [1, 2]).matches_descriptor(descriptor),
-    content="true",
+  debug_inspect(
+    descriptor,
+    content=(
+      #|{
+      #|  dialect: "demo",
+      #|  opcode: "range",
+      #|  min_immediates: 1,
+      #|  max_immediates: 3,
+      #|}
+    ),
+  )
+  let accepted_counts : Array[Int] = []
+  for count in 0..<=4 {
+    if descriptor.accepts_immediate_count(count) {
+      accepted_counts.push(count)
+    }
+  }
+  debug_inspect(
+    accepted_counts,
+    content=(
+      #|[1, 2, 3]
+    ),
+  )
+  let candidates = [
+    @milkir.ExtOp::ExtOp("demo", "range", []),
+    ExtOp("demo", "range", [1]),
+    ExtOp("demo", "range", [1, 2]),
+    ExtOp("demo", "range", [1, 2, 3]),
+    ExtOp("demo", "range", [1, 2, 3, 4]),
+    ExtOp("other", "range", [1, 2]),
+    ExtOp("demo", "other", [1, 2]),
+  ]
+  let matches : Array[@milkir.ExtOp] = []
+  for candidate in candidates {
+    if candidate.matches_descriptor(descriptor) {
+      matches.push(candidate)
+    }
+  }
+  debug_inspect(
+    matches,
+    content=(
+      #|[
+      #|  { dialect: "demo", opcode: "range", immediates: <FixedArray: [1]> },
+      #|  { dialect: "demo", opcode: "range", immediates: <FixedArray: [1, 2]> },
+      #|  {
+      #|    dialect: "demo",
+      #|    opcode: "range",
+      #|    immediates: <FixedArray: [1, 2, 3]>,
+      #|  },
+      #|]
+    ),
   )
 }

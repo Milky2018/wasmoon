@@ -1,10 +1,55 @@
 ///|
-test "public optimization levels have stable integer defaults" {
-  inspect(@milkir.OptLevel::from_int(0) is O0, content="true")
-  inspect(@milkir.OptLevel::from_int(1) is O1, content="true")
-  inspect(@milkir.OptLevel::from_int(2) is O2, content="true")
-  inspect(@milkir.OptLevel::from_int(3) is O3, content="true")
-  inspect(@milkir.OptLevel::from_int(99) is O2, content="true")
+fn build_constant_expression(
+  name : String,
+) -> @milkir.Function raise @milkir.VerifyError {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder(name)
+  builder.add_result(I32)
+  let left = builder.iconst_i32(20)
+  let right = builder.iconst_i32(22)
+  let answer = builder.iadd(left, right)
+  builder.return_([answer])
+  builder.finalize()
+}
+
+///|
+test "public default optimizer folds a constant expression" {
+  let func = build_constant_expression("default_optimize")
+  @milkir.optimize(func) |> ignore
+  inspect(
+    func.print(),
+    content=(
+      #|function default_optimize() -> i32 {
+      #|block0:
+      #|    v2:i32 = iconst 42
+      #|    return v2
+      #|}
+      #|
+    ),
+  )
+  func.verify()
+}
+
+///|
+test "public integer optimization levels select complete pipelines" {
+  let outputs : Array[String] = []
+  for level in [0, 1, 2, 3, 99] {
+    let func = build_constant_expression("level_\{level}")
+    @milkir.optimize_with_level(func, @milkir.OptLevel::from_int(level))
+    |> ignore
+    outputs.push(func.print())
+  }
+  debug_inspect(
+    outputs,
+    content=(
+      #|[
+      #|  "function level_0() -> i32 {\nblock0:\n    v0:i32 = iconst 20\n    v1:i32 = iconst 22\n    v2:i32 = iadd v0, v1\n    return v2\n}\n",
+      #|  "function level_1() -> i32 {\nblock0:\n    v2:i32 = iconst 42\n    return v2\n}\n",
+      #|  "function level_2() -> i32 {\nblock0:\n    v2:i32 = iconst 42\n    return v2\n}\n",
+      #|  "function level_3() -> i32 {\nblock0:\n    v2:i32 = iconst 42\n    return v2\n}\n",
+      #|  "function level_99() -> i32 {\nblock0:\n    v2:i32 = iconst 42\n    return v2\n}\n",
+      #|]
+    ),
+  )
 }
 
 ///|
@@ -16,9 +61,18 @@ test "public O0 cleanup is mandatory for large functions" {
   builder.return_([])
   let func = builder.finalize()
   inspect(@milkir.instruction_count(func), content="300")
-  let result = @milkir.optimize_with_level(func, O0)
-  inspect(result.changed, content="true")
+  @milkir.optimize_with_level(func, O0) |> ignore
   inspect(@milkir.instruction_count(func), content="0")
+  inspect(
+    func.print(),
+    content=(
+      #|function large_dead_function() {
+      #|block0:
+      #|    return
+      #|}
+      #|
+    ),
+  )
   func.verify()
 }
 
@@ -31,9 +85,18 @@ test "public O1 folds a constant expression" {
   let answer = builder.iadd(left, right)
   builder.return_([answer])
   let func = builder.finalize()
-  inspect(@milkir.optimize_with_level(func, O1).changed, content="true")
-  inspect(@milkir.instruction_count(func), content="1")
-  inspect(func.print().contains("iconst 42"), content="true")
+  @milkir.optimize_with_level(func, O1) |> ignore
+  inspect(
+    func.print(),
+    content=(
+      #|function fold() -> i32 {
+      #|block0:
+      #|    v2:i32 = iconst 42
+      #|    return v2
+      #|}
+      #|
+    ),
+  )
   func.verify()
 }
 
@@ -48,8 +111,19 @@ test "public O2 eliminates a duplicate expression" {
   builder.return_([result])
   let func = builder.finalize()
   inspect(@milkir.instruction_count(func), content="2")
-  inspect(@milkir.optimize_with_level(func, O2).changed, content="true")
+  @milkir.optimize_with_level(func, O2) |> ignore
   inspect(@milkir.instruction_count(func), content="1")
+  inspect(
+    func.print(),
+    content=(
+      #|function common_subexpression(v0:i32, v1:i32) -> i32 {
+      #|block0:
+      #|    v3:i32 = iadd v0, v1
+      #|    return v3
+      #|}
+      #|
+    ),
+  )
   func.verify()
 }
 
@@ -67,12 +141,21 @@ test "public O3 derives power-of-two strength-reduction constants" {
   builder.return_([product, quotient, remainder])
   let func = builder.finalize()
   @milkir.optimize_with_level(func, O3) |> ignore
-  let printed = func.print()
-  inspect(printed.contains("iconst 3"), content="true")
-  inspect(printed.contains("ishl"), content="true")
-  inspect(printed.contains("ushr"), content="true")
-  inspect(printed.contains("iconst 7"), content="true")
-  inspect(printed.contains("band"), content="true")
+  inspect(
+    func.print(),
+    content=(
+      #|function strength_reduce(v0:i32) -> i32, i32, i32 {
+      #|block0:
+      #|    v5:i32 = iconst 3
+      #|    v2:i32 = ishl v0, v5
+      #|    v3:i32 = ushr v0, v5
+      #|    v7:i32 = iconst 7
+      #|    v4:i32 = band v0, v7
+      #|    return v2, v3, v4
+      #|}
+      #|
+    ),
+  )
   func.verify()
 }
 
@@ -90,10 +173,11 @@ test "public optimizer preserves observable and trapping operations" {
   builder.return_([])
   let func = builder.finalize()
   @milkir.optimize_with_level(func, O3) |> ignore
-  let printed = func.print()
-  inspect(printed.contains("load.i32"), content="true")
-  inspect(printed.contains("store.i32"), content="true")
-  inspect(printed.contains("call effect()"), content="true")
-  inspect(printed.contains("ext.demo.effect"), content="true")
+  debug_inspect(
+    func.print(),
+    content=(
+      #|"function effects(v0:ptr, v1:i32, v2:i64) {\nblock0:\n    v3:i32 = load.i32 v0, v2\n    store.i32 v0, v1, v2\n    call effect()\n    ext.demo.effect \n    return\n}\n"
+    ),
+  )
   func.verify()
 }
