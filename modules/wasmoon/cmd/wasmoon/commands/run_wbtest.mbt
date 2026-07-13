@@ -78,3 +78,11 @@ test "jit cache bytes/ints conversion keeps unsigned bytes" {
   inspect(ints[5], content="255")
   inspect(int_array_to_bytes(ints) == source, content="true")
 }
+
+///|
+test "compile metrics bypass the run JIT cache" {
+  inspect(should_use_run_jit_cache(false, false), content="true")
+  inspect(should_use_run_jit_cache(true, false), content="false")
+  inspect(should_use_run_jit_cache(false, true), content="false")
+  inspect(should_use_run_jit_cache(true, true), content="false")
+}

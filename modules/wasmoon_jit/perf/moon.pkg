@@ -1,4 +1,5 @@
 import {
+  "Milky2018/milkir",
   "moonbitlang/core/json",
   "moonbitlang/x/sys",
 }

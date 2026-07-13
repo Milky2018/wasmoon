@@ -4,6 +4,8 @@ package "Milky2018/wasmoon_jit/perf"
 // Values
 pub fn begin_function(Int, String, Int, Int) -> Unit
 
+pub fn clear_milkir_metrics_sink() -> Unit
+
 pub fn elapsed_us(Instant) -> Int64
 
 pub fn enabled() -> Bool
@@ -12,11 +14,13 @@ pub fn export_json() -> String
 
 pub fn finish_function(Int, Int) -> Unit
 
+pub fn install_milkir_metrics_sink() -> Unit
+
 pub fn instant_elapsed_as_secs_f64(Instant) -> Double
 
 pub fn instant_now() -> Instant
 
-pub fn record_ir_pass(String, Int, Int, Bool, Int64, egraph_classes? : Int?, egraph_nodes? : Int?, egraph_rule_apps? : Int?) -> Unit
+pub fn record_ir_pass(String, Int, Int, Bool, Int64, egraph_classes? : Int?, egraph_nodes? : Int?, egraph_rule_apps? : Int?, work_done? : Int?, budget_exhausted? : Bool?) -> Unit
 
 pub fn record_regalloc_phase_us(String, Int64) -> Unit
 
@@ -62,6 +66,8 @@ pub struct IRPassMetric {
   egraph_classes : Int?
   egraph_nodes : Int?
   egraph_rule_apps : Int?
+  work_done : Int?
+  budget_exhausted : Bool?
 } derive(ToJson)
 
 #alias(PerfTick)

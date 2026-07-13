@@ -199,3 +199,31 @@ test "GVN uses work units instead of a function-size switch" {
     content="[299, 300, 300, 300]",
   )
 }
+
+///|
+test "optimization metrics sink receives pass events and can be cleared" {
+  let events : Array[OptimizationPassMetric] = []
+  let mut now = 0L
+  install_optimization_metrics_sink(
+    OptimizationMetricsSink::new(
+      fn() {
+        now = now + 10L
+        now
+      },
+      fn(event) { events.push(event) },
+    ),
+  )
+  let func = dead_constant_function("metrics", 1)
+  run_opt_pass(func, "test_dce", eliminate_dead_code) |> ignore
+  clear_optimization_metrics_sink()
+  inspect(events.length(), content="1")
+  inspect(events[0].name, content="test_dce")
+  inspect(events[0].duration_us, content="10")
+  inspect(events[0].before_insts, content="1")
+  inspect(events[0].after_insts, content="0")
+  inspect(events[0].changed, content="true")
+
+  let after_clear = dead_constant_function("metrics_cleared", 1)
+  run_opt_pass(after_clear, "cleared_dce", eliminate_dead_code) |> ignore
+  inspect(events.length(), content="1")
+}

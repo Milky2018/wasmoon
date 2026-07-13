@@ -6,6 +6,10 @@ import {
 }
 
 // Values
+pub fn clear_optimization_metrics_sink() -> Unit
+
+pub fn install_optimization_metrics_sink(OptimizationMetricsSink) -> Unit
+
 pub fn instruction_count(Function) -> Int
 
 pub fn optimize(Function) -> OptResult
@@ -403,6 +407,22 @@ pub fn OptLevel::from_int(Int) -> Self
 pub struct OptResult {
   mut changed : Bool
 } derive(Eq)
+
+type OptimizationMetricsSink
+pub fn OptimizationMetricsSink::new(() -> Int64, (OptimizationPassMetric) -> Unit) -> Self
+
+pub struct OptimizationPassMetric {
+  name : String
+  duration_us : Int64
+  before_insts : Int
+  after_insts : Int
+  changed : Bool
+  egraph_classes : Int?
+  egraph_nodes : Int?
+  egraph_rule_apps : Int?
+  work_done : Int?
+  budget_exhausted : Bool?
+}
 
 pub(all) enum ScalarOp {
   IntConst(Int64)

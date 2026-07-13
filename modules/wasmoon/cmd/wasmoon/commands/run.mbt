@@ -936,6 +936,14 @@ fn save_run_jit_cache(
 }
 
 ///|
+fn should_use_run_jit_cache(
+  dump_on_trap : Bool,
+  perf_metrics_enabled : Bool,
+) -> Bool {
+  !dump_on_trap && !perf_metrics_enabled
+}
+
+///|
 /// Count function imports
 fn count_func_imports(imports : Array[@types.Import]) -> Int {
   let mut count = 0
@@ -1075,7 +1083,7 @@ fn run_with_jit(
   }
   let mut cache_path : String? = None
   let mut cache_precompiled : @cwasm.PrecompiledModule? = None
-  if !dump_on_trap {
+  if should_use_run_jit_cache(dump_on_trap, @perf.enabled()) {
     match wasm_binary {
       Some(binary) => {
         let cache_dir = run_jit_cache_dir()
@@ -1614,12 +1622,16 @@ pub fn compile_module_to_jit(
         normalized_opt_level,
         @milkir.instruction_count(ir_func),
       )
+      @perf.install_milkir_metrics_sink()
     }
     @milkir.optimize_with_level(
       ir_func,
       @milkir.OptLevel::from_int(normalized_opt_level),
     )
     |> ignore
+    if perf_on {
+      @perf.clear_milkir_metrics_sink()
+    }
     if optimize_tick is Some(tick) {
       @perf.record_stage_us("optimize", @perf.elapsed_us(tick))
     }
