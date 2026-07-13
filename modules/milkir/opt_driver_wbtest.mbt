@@ -201,6 +201,38 @@ test "GVN uses work units instead of a function-size switch" {
 }
 
 ///|
+test "GVN metrics count only instructions visited in reachable blocks" {
+  let builder = FunctionBuilder::FunctionBuilder("gvn_reachable_work")
+  builder.iconst_i32(1) |> ignore
+  builder.return_([])
+  let dead_block = builder.create_block()
+  builder.switch_to_block(dead_block)
+  let symbol = builder.get_function().declare_external_symbol("effect")
+  builder.call_symbol(symbol, None, []) |> ignore
+  builder.return_([])
+  let func = builder.get_function()
+  inspect(instruction_count(func), content="2")
+  inspect(func.verify(), content="()")
+
+  let events : Array[OptimizationPassMetric] = []
+  let mut now = 0L
+  install_optimization_metrics_sink(
+    OptimizationMetricsSink::new(
+      fn() {
+        now = now + 10L
+        now
+      },
+      fn(event) { events.push(event) },
+    ),
+  )
+  run_gvn_pass(func) |> ignore
+  clear_optimization_metrics_sink()
+  inspect(events.length(), content="1")
+  debug_inspect(events[0].work_done, content="Some(1)")
+  debug_inspect(events[0].budget_exhausted, content="Some(false)")
+}
+
+///|
 test "optimization metrics sink receives pass events and can be cleared" {
   let events : Array[OptimizationPassMetric] = []
   let mut now = 0L

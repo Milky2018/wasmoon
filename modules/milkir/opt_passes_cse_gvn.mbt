@@ -734,6 +734,6 @@ fn run_global_value_numbering_with_budget(
 ///|
 /// Unified global optimization pass that combines pure CSE and alias-aware GVN
 /// in a single dominator-tree walk.
-fn cse_gvn_global(func : Function) -> OptResult {
-  run_global_value_numbering_with_budget(func, instruction_count(func)).result
+fn cse_gvn_global(func : Function) -> GVNStats {
+  run_global_value_numbering_with_budget(func, instruction_count(func))
 }

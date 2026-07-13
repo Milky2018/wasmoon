@@ -696,8 +696,8 @@ test "GVN reuses float constants with identical NaN bits" {
   let second = builder.fconst_f64(nan)
   builder.return_([second])
   let func = builder.get_function()
-  let result = cse_gvn_global(func)
-  inspect(result.changed, content="true")
+  let stats = cse_gvn_global(func)
+  inspect(stats.result.changed, content="true")
   inspect(
     func.blocks[0].instructions[1].opcode is Scalar(ScalarOp::Copy),
     content="true",
@@ -713,8 +713,8 @@ test "GVN does not conflate integer constants with different widths" {
   let wide = builder.iconst_i64(1L)
   builder.return_([wide])
   let func = builder.get_function()
-  let result = cse_gvn_global(func)
-  inspect(result.changed, content="false")
+  let stats = cse_gvn_global(func)
+  inspect(stats.result.changed, content="false")
   inspect(
     func.print(),
     content=(
@@ -1239,8 +1239,8 @@ test "CSE keeps duplicate loads without alias metadata" {
   let loaded1 = builder.load_ptr(I32, ptr, offset)
   builder.return_([loaded1])
   let func = builder.get_function()
-  let result = cse_gvn_global(func)
-  inspect(result.changed, content="false")
+  let stats = cse_gvn_global(func)
+  inspect(stats.result.changed, content="false")
   inspect(
     func.print(),
     content=(
