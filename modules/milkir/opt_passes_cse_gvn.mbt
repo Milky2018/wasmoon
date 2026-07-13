@@ -195,8 +195,11 @@ fn update_last_store_state(
   ptr_base_infos : @hashmap.HashMap[Int, PtrBaseInfo],
 ) -> Unit {
   let is_store = match inst.opcode {
-    Memory(MemoryOp::Store(_) | MemoryOp::StoreNarrow(_))
-    | Vector(VectorOp::StoreLane(_, _)) => true
+    Memory(
+      MemoryOp::Store(_)
+      | MemoryOp::StoreNarrow(_)
+      | MemoryOp::Vector(VectorMemoryOp::StoreLane(_, _))
+    ) => true
     _ => false
   }
   if is_store && ptr_access_from_inst(inst, ptr_base_infos) is Some(access) {

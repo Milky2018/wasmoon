@@ -186,208 +186,250 @@ fn Translator::translate_instruction_simd(
     }
 
     // i8x16 operations
-    I8x16Eq => self.translate_simd_binary(V128Eq8)
-    I8x16Ne => self.translate_simd_binary(V128Ne8)
-    I8x16LtS => self.translate_simd_binary(V128Lt8S)
-    I8x16LtU => self.translate_simd_binary(V128Lt8U)
-    I8x16GtS => self.translate_simd_binary(V128Gt8S)
-    I8x16GtU => self.translate_simd_binary(V128Gt8U)
-    I8x16LeS => self.translate_simd_binary(V128Le8S)
-    I8x16LeU => self.translate_simd_binary(V128Le8U)
-    I8x16GeS => self.translate_simd_binary(V128Ge8S)
-    I8x16GeU => self.translate_simd_binary(V128Ge8U)
-    I8x16Abs => self.translate_simd_unary(V128Abs8)
-    I8x16Neg => self.translate_simd_unary(V128Neg8)
-    I8x16Popcnt => self.translate_simd_unary(V128Popcnt8)
-    I8x16AllTrue => self.translate_simd_to_i32(V128AllTrue8)
-    I8x16Bitmask => self.translate_simd_to_i32(V128Bitmask8)
-    I8x16NarrowI16x8S => self.translate_simd_binary(V128Narrow16to8S)
-    I8x16NarrowI16x8U => self.translate_simd_binary(V128Narrow16to8U)
-    I8x16Shl => self.translate_simd_shift(V128Shl8)
-    I8x16ShrS => self.translate_simd_shift(V128Shr8S)
-    I8x16ShrU => self.translate_simd_shift(V128Shr8U)
-    I8x16Add => self.translate_simd_binary(V128Add8)
-    I8x16AddSatS => self.translate_simd_binary(V128AddSat8S)
-    I8x16AddSatU => self.translate_simd_binary(V128AddSat8U)
-    I8x16Sub => self.translate_simd_binary(V128Sub8)
-    I8x16SubSatS => self.translate_simd_binary(V128SubSat8S)
-    I8x16SubSatU => self.translate_simd_binary(V128SubSat8U)
-    I8x16MinS => self.translate_simd_binary(V128Min8S)
-    I8x16MinU => self.translate_simd_binary(V128Min8U)
-    I8x16MaxS => self.translate_simd_binary(V128Max8S)
-    I8x16MaxU => self.translate_simd_binary(V128Max8U)
-    I8x16AvgrU => self.translate_simd_binary(V128Avgr8U)
+    I8x16Eq => self.translate_simd_binary(IntCompare(Eq, I8))
+    I8x16Ne => self.translate_simd_binary(IntCompare(Ne, I8))
+    I8x16LtS => self.translate_simd_binary(IntCompare(Lt(Signed), I8))
+    I8x16LtU => self.translate_simd_binary(IntCompare(Lt(Unsigned), I8))
+    I8x16GtS => self.translate_simd_binary(IntCompare(Gt(Signed), I8))
+    I8x16GtU => self.translate_simd_binary(IntCompare(Gt(Unsigned), I8))
+    I8x16LeS => self.translate_simd_binary(IntCompare(Le(Signed), I8))
+    I8x16LeU => self.translate_simd_binary(IntCompare(Le(Unsigned), I8))
+    I8x16GeS => self.translate_simd_binary(IntCompare(Ge(Signed), I8))
+    I8x16GeU => self.translate_simd_binary(IntCompare(Ge(Unsigned), I8))
+    I8x16Abs => self.translate_simd_unary(IntUnary(Abs, I8))
+    I8x16Neg => self.translate_simd_unary(IntUnary(Neg, I8))
+    I8x16Popcnt => self.translate_simd_unary(IntUnary(Popcnt, I8))
+    I8x16AllTrue => self.translate_simd_to_i32(Predicate(AllTrue(I8)))
+    I8x16Bitmask => self.translate_simd_to_i32(Predicate(Bitmask(I8)))
+    I8x16NarrowI16x8S => self.translate_simd_binary(Narrow(I8, Signed))
+    I8x16NarrowI16x8U => self.translate_simd_binary(Narrow(I8, Unsigned))
+    I8x16Shl => self.translate_simd_shift(IntShift(Left, I8))
+    I8x16ShrS => self.translate_simd_shift(IntShift(Right(Signed), I8))
+    I8x16ShrU => self.translate_simd_shift(IntShift(Right(Unsigned), I8))
+    I8x16Add => self.translate_simd_binary(IntBinary(Add, I8))
+    I8x16AddSatS =>
+      self.translate_simd_binary(IntBinary(AddSaturating(Signed), I8))
+    I8x16AddSatU =>
+      self.translate_simd_binary(IntBinary(AddSaturating(Unsigned), I8))
+    I8x16Sub => self.translate_simd_binary(IntBinary(Sub, I8))
+    I8x16SubSatS =>
+      self.translate_simd_binary(IntBinary(SubSaturating(Signed), I8))
+    I8x16SubSatU =>
+      self.translate_simd_binary(IntBinary(SubSaturating(Unsigned), I8))
+    I8x16MinS => self.translate_simd_binary(IntBinary(Min(Signed), I8))
+    I8x16MinU => self.translate_simd_binary(IntBinary(Min(Unsigned), I8))
+    I8x16MaxS => self.translate_simd_binary(IntBinary(Max(Signed), I8))
+    I8x16MaxU => self.translate_simd_binary(IntBinary(Max(Unsigned), I8))
+    I8x16AvgrU => self.translate_simd_binary(IntBinary(AverageUnsigned, I8))
 
     // i16x8 operations
     I16x8ExtAddPairwiseI8x16S =>
-      self.translate_simd_unary(V128ExtAddPairwise8to16S)
+      self.translate_simd_unary(IntUnary(ExtAddPairwise(Signed), I16))
     I16x8ExtAddPairwiseI8x16U =>
-      self.translate_simd_unary(V128ExtAddPairwise8to16U)
-    I16x8Eq => self.translate_simd_binary(V128Eq16)
-    I16x8Ne => self.translate_simd_binary(V128Ne16)
-    I16x8LtS => self.translate_simd_binary(V128Lt16S)
-    I16x8LtU => self.translate_simd_binary(V128Lt16U)
-    I16x8GtS => self.translate_simd_binary(V128Gt16S)
-    I16x8GtU => self.translate_simd_binary(V128Gt16U)
-    I16x8LeS => self.translate_simd_binary(V128Le16S)
-    I16x8LeU => self.translate_simd_binary(V128Le16U)
-    I16x8GeS => self.translate_simd_binary(V128Ge16S)
-    I16x8GeU => self.translate_simd_binary(V128Ge16U)
-    I16x8Abs => self.translate_simd_unary(V128Abs16)
-    I16x8Neg => self.translate_simd_unary(V128Neg16)
-    I16x8Q15MulrSatS => self.translate_simd_binary(V128Q15MulrSat16S)
-    I16x8AllTrue => self.translate_simd_to_i32(V128AllTrue16)
-    I16x8Bitmask => self.translate_simd_to_i32(V128Bitmask16)
-    I16x8NarrowI32x4S => self.translate_simd_binary(V128Narrow32to16S)
-    I16x8NarrowI32x4U => self.translate_simd_binary(V128Narrow32to16U)
-    I16x8ExtendLowI8x16S => self.translate_simd_unary(V128ExtendLow8to16S)
-    I16x8ExtendHighI8x16S => self.translate_simd_unary(V128ExtendHigh8to16S)
-    I16x8ExtendLowI8x16U => self.translate_simd_unary(V128ExtendLow8to16U)
-    I16x8ExtendHighI8x16U => self.translate_simd_unary(V128ExtendHigh8to16U)
-    I16x8Shl => self.translate_simd_shift(V128Shl16)
-    I16x8ShrS => self.translate_simd_shift(V128Shr16S)
-    I16x8ShrU => self.translate_simd_shift(V128Shr16U)
-    I16x8Add => self.translate_simd_binary(V128Add16)
-    I16x8AddSatS => self.translate_simd_binary(V128AddSat16S)
-    I16x8AddSatU => self.translate_simd_binary(V128AddSat16U)
-    I16x8Sub => self.translate_simd_binary(V128Sub16)
-    I16x8SubSatS => self.translate_simd_binary(V128SubSat16S)
-    I16x8SubSatU => self.translate_simd_binary(V128SubSat16U)
-    I16x8Mul => self.translate_simd_binary(V128Mul16)
-    I16x8MinS => self.translate_simd_binary(V128Min16S)
-    I16x8MinU => self.translate_simd_binary(V128Min16U)
-    I16x8MaxS => self.translate_simd_binary(V128Max16S)
-    I16x8MaxU => self.translate_simd_binary(V128Max16U)
-    I16x8AvgrU => self.translate_simd_binary(V128Avgr16U)
-    I16x8ExtMulLowI8x16S => self.translate_simd_binary(V128ExtMulLow8to16S)
-    I16x8ExtMulHighI8x16S => self.translate_simd_binary(V128ExtMulHigh8to16S)
-    I16x8ExtMulLowI8x16U => self.translate_simd_binary(V128ExtMulLow8to16U)
-    I16x8ExtMulHighI8x16U => self.translate_simd_binary(V128ExtMulHigh8to16U)
+      self.translate_simd_unary(IntUnary(ExtAddPairwise(Unsigned), I16))
+    I16x8Eq => self.translate_simd_binary(IntCompare(Eq, I16))
+    I16x8Ne => self.translate_simd_binary(IntCompare(Ne, I16))
+    I16x8LtS => self.translate_simd_binary(IntCompare(Lt(Signed), I16))
+    I16x8LtU => self.translate_simd_binary(IntCompare(Lt(Unsigned), I16))
+    I16x8GtS => self.translate_simd_binary(IntCompare(Gt(Signed), I16))
+    I16x8GtU => self.translate_simd_binary(IntCompare(Gt(Unsigned), I16))
+    I16x8LeS => self.translate_simd_binary(IntCompare(Le(Signed), I16))
+    I16x8LeU => self.translate_simd_binary(IntCompare(Le(Unsigned), I16))
+    I16x8GeS => self.translate_simd_binary(IntCompare(Ge(Signed), I16))
+    I16x8GeU => self.translate_simd_binary(IntCompare(Ge(Unsigned), I16))
+    I16x8Abs => self.translate_simd_unary(IntUnary(Abs, I16))
+    I16x8Neg => self.translate_simd_unary(IntUnary(Neg, I16))
+    I16x8Q15MulrSatS =>
+      self.translate_simd_binary(IntBinary(Q15MulrSaturating, I16))
+    I16x8AllTrue => self.translate_simd_to_i32(Predicate(AllTrue(I16)))
+    I16x8Bitmask => self.translate_simd_to_i32(Predicate(Bitmask(I16)))
+    I16x8NarrowI32x4S => self.translate_simd_binary(Narrow(I16, Signed))
+    I16x8NarrowI32x4U => self.translate_simd_binary(Narrow(I16, Unsigned))
+    I16x8ExtendLowI8x16S =>
+      self.translate_simd_unary(IntUnary(Extend(Low, Signed), I16))
+    I16x8ExtendHighI8x16S =>
+      self.translate_simd_unary(IntUnary(Extend(High, Signed), I16))
+    I16x8ExtendLowI8x16U =>
+      self.translate_simd_unary(IntUnary(Extend(Low, Unsigned), I16))
+    I16x8ExtendHighI8x16U =>
+      self.translate_simd_unary(IntUnary(Extend(High, Unsigned), I16))
+    I16x8Shl => self.translate_simd_shift(IntShift(Left, I16))
+    I16x8ShrS => self.translate_simd_shift(IntShift(Right(Signed), I16))
+    I16x8ShrU => self.translate_simd_shift(IntShift(Right(Unsigned), I16))
+    I16x8Add => self.translate_simd_binary(IntBinary(Add, I16))
+    I16x8AddSatS =>
+      self.translate_simd_binary(IntBinary(AddSaturating(Signed), I16))
+    I16x8AddSatU =>
+      self.translate_simd_binary(IntBinary(AddSaturating(Unsigned), I16))
+    I16x8Sub => self.translate_simd_binary(IntBinary(Sub, I16))
+    I16x8SubSatS =>
+      self.translate_simd_binary(IntBinary(SubSaturating(Signed), I16))
+    I16x8SubSatU =>
+      self.translate_simd_binary(IntBinary(SubSaturating(Unsigned), I16))
+    I16x8Mul => self.translate_simd_binary(IntBinary(Mul, I16))
+    I16x8MinS => self.translate_simd_binary(IntBinary(Min(Signed), I16))
+    I16x8MinU => self.translate_simd_binary(IntBinary(Min(Unsigned), I16))
+    I16x8MaxS => self.translate_simd_binary(IntBinary(Max(Signed), I16))
+    I16x8MaxU => self.translate_simd_binary(IntBinary(Max(Unsigned), I16))
+    I16x8AvgrU => self.translate_simd_binary(IntBinary(AverageUnsigned, I16))
+    I16x8ExtMulLowI8x16S =>
+      self.translate_simd_binary(IntBinary(ExtMul(Low, Signed), I16))
+    I16x8ExtMulHighI8x16S =>
+      self.translate_simd_binary(IntBinary(ExtMul(High, Signed), I16))
+    I16x8ExtMulLowI8x16U =>
+      self.translate_simd_binary(IntBinary(ExtMul(Low, Unsigned), I16))
+    I16x8ExtMulHighI8x16U =>
+      self.translate_simd_binary(IntBinary(ExtMul(High, Unsigned), I16))
 
     // i32x4 operations
     I32x4ExtAddPairwiseI16x8S =>
-      self.translate_simd_unary(V128ExtAddPairwise16to32S)
+      self.translate_simd_unary(IntUnary(ExtAddPairwise(Signed), I32))
     I32x4ExtAddPairwiseI16x8U =>
-      self.translate_simd_unary(V128ExtAddPairwise16to32U)
-    I32x4Eq => self.translate_simd_binary(V128Eq32)
-    I32x4Ne => self.translate_simd_binary(V128Ne32)
-    I32x4LtS => self.translate_simd_binary(V128Lt32S)
-    I32x4LtU => self.translate_simd_binary(V128Lt32U)
-    I32x4GtS => self.translate_simd_binary(V128Gt32S)
-    I32x4GtU => self.translate_simd_binary(V128Gt32U)
-    I32x4LeS => self.translate_simd_binary(V128Le32S)
-    I32x4LeU => self.translate_simd_binary(V128Le32U)
-    I32x4GeS => self.translate_simd_binary(V128Ge32S)
-    I32x4GeU => self.translate_simd_binary(V128Ge32U)
-    I32x4Abs => self.translate_simd_unary(V128Abs32)
-    I32x4Neg => self.translate_simd_unary(V128Neg32)
-    I32x4AllTrue => self.translate_simd_to_i32(V128AllTrue32)
-    I32x4Bitmask => self.translate_simd_to_i32(V128Bitmask32)
-    I32x4ExtendLowI16x8S => self.translate_simd_unary(V128ExtendLow16to32S)
-    I32x4ExtendHighI16x8S => self.translate_simd_unary(V128ExtendHigh16to32S)
-    I32x4ExtendLowI16x8U => self.translate_simd_unary(V128ExtendLow16to32U)
-    I32x4ExtendHighI16x8U => self.translate_simd_unary(V128ExtendHigh16to32U)
-    I32x4Shl => self.translate_simd_shift(V128Shl32)
-    I32x4ShrS => self.translate_simd_shift(V128Shr32S)
-    I32x4ShrU => self.translate_simd_shift(V128Shr32U)
-    I32x4Add => self.translate_simd_binary(V128Add32)
-    I32x4Sub => self.translate_simd_binary(V128Sub32)
-    I32x4Mul => self.translate_simd_binary(V128Mul32)
-    I32x4MinS => self.translate_simd_binary(V128Min32S)
-    I32x4MinU => self.translate_simd_binary(V128Min32U)
-    I32x4MaxS => self.translate_simd_binary(V128Max32S)
-    I32x4MaxU => self.translate_simd_binary(V128Max32U)
-    I32x4DotI16x8S => self.translate_simd_binary(V128Dot16to32S)
-    I32x4ExtMulLowI16x8S => self.translate_simd_binary(V128ExtMulLow16to32S)
-    I32x4ExtMulHighI16x8S => self.translate_simd_binary(V128ExtMulHigh16to32S)
-    I32x4ExtMulLowI16x8U => self.translate_simd_binary(V128ExtMulLow16to32U)
-    I32x4ExtMulHighI16x8U => self.translate_simd_binary(V128ExtMulHigh16to32U)
+      self.translate_simd_unary(IntUnary(ExtAddPairwise(Unsigned), I32))
+    I32x4Eq => self.translate_simd_binary(IntCompare(Eq, I32))
+    I32x4Ne => self.translate_simd_binary(IntCompare(Ne, I32))
+    I32x4LtS => self.translate_simd_binary(IntCompare(Lt(Signed), I32))
+    I32x4LtU => self.translate_simd_binary(IntCompare(Lt(Unsigned), I32))
+    I32x4GtS => self.translate_simd_binary(IntCompare(Gt(Signed), I32))
+    I32x4GtU => self.translate_simd_binary(IntCompare(Gt(Unsigned), I32))
+    I32x4LeS => self.translate_simd_binary(IntCompare(Le(Signed), I32))
+    I32x4LeU => self.translate_simd_binary(IntCompare(Le(Unsigned), I32))
+    I32x4GeS => self.translate_simd_binary(IntCompare(Ge(Signed), I32))
+    I32x4GeU => self.translate_simd_binary(IntCompare(Ge(Unsigned), I32))
+    I32x4Abs => self.translate_simd_unary(IntUnary(Abs, I32))
+    I32x4Neg => self.translate_simd_unary(IntUnary(Neg, I32))
+    I32x4AllTrue => self.translate_simd_to_i32(Predicate(AllTrue(I32)))
+    I32x4Bitmask => self.translate_simd_to_i32(Predicate(Bitmask(I32)))
+    I32x4ExtendLowI16x8S =>
+      self.translate_simd_unary(IntUnary(Extend(Low, Signed), I32))
+    I32x4ExtendHighI16x8S =>
+      self.translate_simd_unary(IntUnary(Extend(High, Signed), I32))
+    I32x4ExtendLowI16x8U =>
+      self.translate_simd_unary(IntUnary(Extend(Low, Unsigned), I32))
+    I32x4ExtendHighI16x8U =>
+      self.translate_simd_unary(IntUnary(Extend(High, Unsigned), I32))
+    I32x4Shl => self.translate_simd_shift(IntShift(Left, I32))
+    I32x4ShrS => self.translate_simd_shift(IntShift(Right(Signed), I32))
+    I32x4ShrU => self.translate_simd_shift(IntShift(Right(Unsigned), I32))
+    I32x4Add => self.translate_simd_binary(IntBinary(Add, I32))
+    I32x4Sub => self.translate_simd_binary(IntBinary(Sub, I32))
+    I32x4Mul => self.translate_simd_binary(IntBinary(Mul, I32))
+    I32x4MinS => self.translate_simd_binary(IntBinary(Min(Signed), I32))
+    I32x4MinU => self.translate_simd_binary(IntBinary(Min(Unsigned), I32))
+    I32x4MaxS => self.translate_simd_binary(IntBinary(Max(Signed), I32))
+    I32x4MaxU => self.translate_simd_binary(IntBinary(Max(Unsigned), I32))
+    I32x4DotI16x8S =>
+      self.translate_simd_binary(IntBinary(Dot16To32Signed, I32))
+    I32x4ExtMulLowI16x8S =>
+      self.translate_simd_binary(IntBinary(ExtMul(Low, Signed), I32))
+    I32x4ExtMulHighI16x8S =>
+      self.translate_simd_binary(IntBinary(ExtMul(High, Signed), I32))
+    I32x4ExtMulLowI16x8U =>
+      self.translate_simd_binary(IntBinary(ExtMul(Low, Unsigned), I32))
+    I32x4ExtMulHighI16x8U =>
+      self.translate_simd_binary(IntBinary(ExtMul(High, Unsigned), I32))
 
     // i64x2 operations
-    I64x2Eq => self.translate_simd_binary(V128Eq64)
-    I64x2Ne => self.translate_simd_binary(V128Ne64)
-    I64x2LtS => self.translate_simd_binary(V128Lt64S)
-    I64x2GtS => self.translate_simd_binary(V128Gt64S)
-    I64x2LeS => self.translate_simd_binary(V128Le64S)
-    I64x2GeS => self.translate_simd_binary(V128Ge64S)
-    I64x2Abs => self.translate_simd_unary(V128Abs64)
-    I64x2Neg => self.translate_simd_unary(V128Neg64)
-    I64x2AllTrue => self.translate_simd_to_i32(V128AllTrue64)
-    I64x2Bitmask => self.translate_simd_to_i32(V128Bitmask64)
-    I64x2ExtendLowI32x4S => self.translate_simd_unary(V128ExtendLow32to64S)
-    I64x2ExtendHighI32x4S => self.translate_simd_unary(V128ExtendHigh32to64S)
-    I64x2ExtendLowI32x4U => self.translate_simd_unary(V128ExtendLow32to64U)
-    I64x2ExtendHighI32x4U => self.translate_simd_unary(V128ExtendHigh32to64U)
-    I64x2Shl => self.translate_simd_shift(V128Shl64)
-    I64x2ShrS => self.translate_simd_shift(V128Shr64S)
-    I64x2ShrU => self.translate_simd_shift(V128Shr64U)
-    I64x2Add => self.translate_simd_binary(V128Add64)
-    I64x2Sub => self.translate_simd_binary(V128Sub64)
-    I64x2Mul => self.translate_simd_binary(V128Mul64)
-    I64x2ExtMulLowI32x4S => self.translate_simd_binary(V128ExtMulLow32to64S)
-    I64x2ExtMulHighI32x4S => self.translate_simd_binary(V128ExtMulHigh32to64S)
-    I64x2ExtMulLowI32x4U => self.translate_simd_binary(V128ExtMulLow32to64U)
-    I64x2ExtMulHighI32x4U => self.translate_simd_binary(V128ExtMulHigh32to64U)
+    I64x2Eq => self.translate_simd_binary(IntCompare(Eq, I64))
+    I64x2Ne => self.translate_simd_binary(IntCompare(Ne, I64))
+    I64x2LtS => self.translate_simd_binary(IntCompare(Lt(Signed), I64))
+    I64x2GtS => self.translate_simd_binary(IntCompare(Gt(Signed), I64))
+    I64x2LeS => self.translate_simd_binary(IntCompare(Le(Signed), I64))
+    I64x2GeS => self.translate_simd_binary(IntCompare(Ge(Signed), I64))
+    I64x2Abs => self.translate_simd_unary(IntUnary(Abs, I64))
+    I64x2Neg => self.translate_simd_unary(IntUnary(Neg, I64))
+    I64x2AllTrue => self.translate_simd_to_i32(Predicate(AllTrue(I64)))
+    I64x2Bitmask => self.translate_simd_to_i32(Predicate(Bitmask(I64)))
+    I64x2ExtendLowI32x4S =>
+      self.translate_simd_unary(IntUnary(Extend(Low, Signed), I64))
+    I64x2ExtendHighI32x4S =>
+      self.translate_simd_unary(IntUnary(Extend(High, Signed), I64))
+    I64x2ExtendLowI32x4U =>
+      self.translate_simd_unary(IntUnary(Extend(Low, Unsigned), I64))
+    I64x2ExtendHighI32x4U =>
+      self.translate_simd_unary(IntUnary(Extend(High, Unsigned), I64))
+    I64x2Shl => self.translate_simd_shift(IntShift(Left, I64))
+    I64x2ShrS => self.translate_simd_shift(IntShift(Right(Signed), I64))
+    I64x2ShrU => self.translate_simd_shift(IntShift(Right(Unsigned), I64))
+    I64x2Add => self.translate_simd_binary(IntBinary(Add, I64))
+    I64x2Sub => self.translate_simd_binary(IntBinary(Sub, I64))
+    I64x2Mul => self.translate_simd_binary(IntBinary(Mul, I64))
+    I64x2ExtMulLowI32x4S =>
+      self.translate_simd_binary(IntBinary(ExtMul(Low, Signed), I64))
+    I64x2ExtMulHighI32x4S =>
+      self.translate_simd_binary(IntBinary(ExtMul(High, Signed), I64))
+    I64x2ExtMulLowI32x4U =>
+      self.translate_simd_binary(IntBinary(ExtMul(Low, Unsigned), I64))
+    I64x2ExtMulHighI32x4U =>
+      self.translate_simd_binary(IntBinary(ExtMul(High, Unsigned), I64))
 
     // f32x4 operations
-    F32x4Eq => self.translate_simd_binary(V128EqF32)
-    F32x4Ne => self.translate_simd_binary(V128NeF32)
-    F32x4Lt => self.translate_simd_binary(V128LtF32)
-    F32x4Gt => self.translate_simd_binary(V128GtF32)
-    F32x4Le => self.translate_simd_binary(V128LeF32)
-    F32x4Ge => self.translate_simd_binary(V128GeF32)
-    F32x4Ceil => self.translate_simd_unary(V128CeilF32)
-    F32x4Floor => self.translate_simd_unary(V128FloorF32)
-    F32x4Trunc => self.translate_simd_unary(V128TruncF32)
-    F32x4Nearest => self.translate_simd_unary(V128NearestF32)
-    F32x4Abs => self.translate_simd_unary(V128AbsF32)
-    F32x4Neg => self.translate_simd_unary(V128NegF32)
-    F32x4Sqrt => self.translate_simd_unary(V128SqrtF32)
-    F32x4Add => self.translate_simd_binary(V128AddF32)
-    F32x4Sub => self.translate_simd_binary(V128SubF32)
-    F32x4Mul => self.translate_simd_binary(V128MulF32)
-    F32x4Div => self.translate_simd_binary(V128DivF32)
-    F32x4Min => self.translate_simd_binary(V128MinF32)
-    F32x4Max => self.translate_simd_binary(V128MaxF32)
-    F32x4Pmin => self.translate_simd_binary(V128PMinF32)
-    F32x4Pmax => self.translate_simd_binary(V128PMaxF32)
+    F32x4Eq => self.translate_simd_binary(FloatCompare(Eq, F32))
+    F32x4Ne => self.translate_simd_binary(FloatCompare(Ne, F32))
+    F32x4Lt => self.translate_simd_binary(FloatCompare(Lt, F32))
+    F32x4Gt => self.translate_simd_binary(FloatCompare(Gt, F32))
+    F32x4Le => self.translate_simd_binary(FloatCompare(Le, F32))
+    F32x4Ge => self.translate_simd_binary(FloatCompare(Ge, F32))
+    F32x4Ceil => self.translate_simd_unary(FloatUnary(Ceil, F32))
+    F32x4Floor => self.translate_simd_unary(FloatUnary(Floor, F32))
+    F32x4Trunc => self.translate_simd_unary(FloatUnary(Trunc, F32))
+    F32x4Nearest => self.translate_simd_unary(FloatUnary(Nearest, F32))
+    F32x4Abs => self.translate_simd_unary(FloatUnary(Abs, F32))
+    F32x4Neg => self.translate_simd_unary(FloatUnary(Neg, F32))
+    F32x4Sqrt => self.translate_simd_unary(FloatUnary(Sqrt, F32))
+    F32x4Add => self.translate_simd_binary(FloatBinary(Add, F32))
+    F32x4Sub => self.translate_simd_binary(FloatBinary(Sub, F32))
+    F32x4Mul => self.translate_simd_binary(FloatBinary(Mul, F32))
+    F32x4Div => self.translate_simd_binary(FloatBinary(Div, F32))
+    F32x4Min => self.translate_simd_binary(FloatBinary(Min, F32))
+    F32x4Max => self.translate_simd_binary(FloatBinary(Max, F32))
+    F32x4Pmin => self.translate_simd_binary(FloatBinary(PseudoMin, F32))
+    F32x4Pmax => self.translate_simd_binary(FloatBinary(PseudoMax, F32))
 
     // f64x2 operations
-    F64x2Eq => self.translate_simd_binary(V128EqF64)
-    F64x2Ne => self.translate_simd_binary(V128NeF64)
-    F64x2Lt => self.translate_simd_binary(V128LtF64)
-    F64x2Gt => self.translate_simd_binary(V128GtF64)
-    F64x2Le => self.translate_simd_binary(V128LeF64)
-    F64x2Ge => self.translate_simd_binary(V128GeF64)
-    F64x2Ceil => self.translate_simd_unary(V128CeilF64)
-    F64x2Floor => self.translate_simd_unary(V128FloorF64)
-    F64x2Trunc => self.translate_simd_unary(V128TruncF64)
-    F64x2Nearest => self.translate_simd_unary(V128NearestF64)
-    F64x2Abs => self.translate_simd_unary(V128AbsF64)
-    F64x2Neg => self.translate_simd_unary(V128NegF64)
-    F64x2Sqrt => self.translate_simd_unary(V128SqrtF64)
-    F64x2Add => self.translate_simd_binary(V128AddF64)
-    F64x2Sub => self.translate_simd_binary(V128SubF64)
-    F64x2Mul => self.translate_simd_binary(V128MulF64)
-    F64x2Div => self.translate_simd_binary(V128DivF64)
-    F64x2Min => self.translate_simd_binary(V128MinF64)
-    F64x2Max => self.translate_simd_binary(V128MaxF64)
-    F64x2Pmin => self.translate_simd_binary(V128PMinF64)
-    F64x2Pmax => self.translate_simd_binary(V128PMaxF64)
+    F64x2Eq => self.translate_simd_binary(FloatCompare(Eq, F64))
+    F64x2Ne => self.translate_simd_binary(FloatCompare(Ne, F64))
+    F64x2Lt => self.translate_simd_binary(FloatCompare(Lt, F64))
+    F64x2Gt => self.translate_simd_binary(FloatCompare(Gt, F64))
+    F64x2Le => self.translate_simd_binary(FloatCompare(Le, F64))
+    F64x2Ge => self.translate_simd_binary(FloatCompare(Ge, F64))
+    F64x2Ceil => self.translate_simd_unary(FloatUnary(Ceil, F64))
+    F64x2Floor => self.translate_simd_unary(FloatUnary(Floor, F64))
+    F64x2Trunc => self.translate_simd_unary(FloatUnary(Trunc, F64))
+    F64x2Nearest => self.translate_simd_unary(FloatUnary(Nearest, F64))
+    F64x2Abs => self.translate_simd_unary(FloatUnary(Abs, F64))
+    F64x2Neg => self.translate_simd_unary(FloatUnary(Neg, F64))
+    F64x2Sqrt => self.translate_simd_unary(FloatUnary(Sqrt, F64))
+    F64x2Add => self.translate_simd_binary(FloatBinary(Add, F64))
+    F64x2Sub => self.translate_simd_binary(FloatBinary(Sub, F64))
+    F64x2Mul => self.translate_simd_binary(FloatBinary(Mul, F64))
+    F64x2Div => self.translate_simd_binary(FloatBinary(Div, F64))
+    F64x2Min => self.translate_simd_binary(FloatBinary(Min, F64))
+    F64x2Max => self.translate_simd_binary(FloatBinary(Max, F64))
+    F64x2Pmin => self.translate_simd_binary(FloatBinary(PseudoMin, F64))
+    F64x2Pmax => self.translate_simd_binary(FloatBinary(PseudoMax, F64))
 
     // SIMD conversions
-    I32x4TruncSatF32x4S => self.translate_simd_unary(V128TruncSatF32toI32S)
-    I32x4TruncSatF32x4U => self.translate_simd_unary(V128TruncSatF32toI32U)
-    F32x4ConvertI32x4S => self.translate_simd_unary(V128ConvertI32toF32S)
-    F32x4ConvertI32x4U => self.translate_simd_unary(V128ConvertI32toF32U)
+    I32x4TruncSatF32x4S =>
+      self.translate_simd_unary(Convert(TruncSatF32ToI32(Signed)))
+    I32x4TruncSatF32x4U =>
+      self.translate_simd_unary(Convert(TruncSatF32ToI32(Unsigned)))
+    F32x4ConvertI32x4S =>
+      self.translate_simd_unary(Convert(ConvertI32ToF32(Signed)))
+    F32x4ConvertI32x4U =>
+      self.translate_simd_unary(Convert(ConvertI32ToF32(Unsigned)))
     I32x4TruncSatF64x2SZero =>
-      self.translate_simd_unary(V128TruncSatF64toI32SZero)
+      self.translate_simd_unary(Convert(TruncSatF64ToI32Zero(Signed)))
     I32x4TruncSatF64x2UZero =>
-      self.translate_simd_unary(V128TruncSatF64toI32UZero)
-    F64x2ConvertLowI32x4S => self.translate_simd_unary(V128ConvertLowI32toF64S)
-    F64x2ConvertLowI32x4U => self.translate_simd_unary(V128ConvertLowI32toF64U)
-    F32x4DemoteF64x2Zero => self.translate_simd_unary(V128DemoteF64toF32Zero)
-    F64x2PromoteLowF32x4 => self.translate_simd_unary(V128PromoteLowF32toF64)
+      self.translate_simd_unary(Convert(TruncSatF64ToI32Zero(Unsigned)))
+    F64x2ConvertLowI32x4S =>
+      self.translate_simd_unary(Convert(ConvertLowI32ToF64(Signed)))
+    F64x2ConvertLowI32x4U =>
+      self.translate_simd_unary(Convert(ConvertLowI32ToF64(Unsigned)))
+    F32x4DemoteF64x2Zero =>
+      self.translate_simd_unary(Convert(DemoteF64ToF32Zero))
+    F64x2PromoteLowF32x4 =>
+      self.translate_simd_unary(Convert(PromoteLowF32ToF64))
 
     // V128 load/store operations
     V128Load(memidx, _, offset) => {
@@ -618,53 +660,59 @@ fn Translator::translate_instruction_simd(
       // Same as regular swizzle on ARM
       let b = self.pop()
       let a = self.pop()
-      let result = self.builder.emit_inst(V128, Vector(V128RelaxedSwizzle), [
-        a, b,
-      ])
+      let result = self.builder.emit_inst(V128, Vector(Relaxed(Swizzle)), [a, b])
       self.push(result)
     }
     I32x4RelaxedTruncF32x4S =>
-      self.translate_simd_unary(V128RelaxedTruncF32toI32S)
+      self.translate_simd_unary(Relaxed(TruncF32ToI32(Signed)))
     I32x4RelaxedTruncF32x4U =>
-      self.translate_simd_unary(V128RelaxedTruncF32toI32U)
+      self.translate_simd_unary(Relaxed(TruncF32ToI32(Unsigned)))
     I32x4RelaxedTruncF64x2SZero =>
-      self.translate_simd_unary(V128RelaxedTruncF64toI32SZero)
+      self.translate_simd_unary(Relaxed(TruncF64ToI32Zero(Signed)))
     I32x4RelaxedTruncF64x2UZero =>
-      self.translate_simd_unary(V128RelaxedTruncF64toI32UZero)
+      self.translate_simd_unary(Relaxed(TruncF64ToI32Zero(Unsigned)))
     F32x4RelaxedMadd => {
       let c = self.pop()
       let b = self.pop()
       let a = self.pop()
-      let result = self.builder.emit_inst(V128, Vector(V128RelaxedMaddF32), [
-        a, b, c,
-      ])
+      let result = self.builder.emit_inst(
+        V128,
+        Vector(Relaxed(Fma(F32, Add))),
+        [a, b, c],
+      )
       self.push(result)
     }
     F32x4RelaxedNmadd => {
       let c = self.pop()
       let b = self.pop()
       let a = self.pop()
-      let result = self.builder.emit_inst(V128, Vector(V128RelaxedNmaddF32), [
-        a, b, c,
-      ])
+      let result = self.builder.emit_inst(
+        V128,
+        Vector(Relaxed(Fma(F32, NegatedAdd))),
+        [a, b, c],
+      )
       self.push(result)
     }
     F64x2RelaxedMadd => {
       let c = self.pop()
       let b = self.pop()
       let a = self.pop()
-      let result = self.builder.emit_inst(V128, Vector(V128RelaxedMaddF64), [
-        a, b, c,
-      ])
+      let result = self.builder.emit_inst(
+        V128,
+        Vector(Relaxed(Fma(F64, Add))),
+        [a, b, c],
+      )
       self.push(result)
     }
     F64x2RelaxedNmadd => {
       let c = self.pop()
       let b = self.pop()
       let a = self.pop()
-      let result = self.builder.emit_inst(V128, Vector(V128RelaxedNmaddF64), [
-        a, b, c,
-      ])
+      let result = self.builder.emit_inst(
+        V128,
+        Vector(Relaxed(Fma(F64, NegatedAdd))),
+        [a, b, c],
+      )
       self.push(result)
     }
     I8x16RelaxedLaneselect => {
@@ -673,7 +721,7 @@ fn Translator::translate_instruction_simd(
       let a = self.pop()
       let result = self.builder.emit_inst(
         V128,
-        Vector(V128RelaxedLaneselect8),
+        Vector(Relaxed(LaneSelect(I8))),
         [a, b, c],
       )
       self.push(result)
@@ -684,7 +732,7 @@ fn Translator::translate_instruction_simd(
       let a = self.pop()
       let result = self.builder.emit_inst(
         V128,
-        Vector(V128RelaxedLaneselect16),
+        Vector(Relaxed(LaneSelect(I16))),
         [a, b, c],
       )
       self.push(result)
@@ -695,7 +743,7 @@ fn Translator::translate_instruction_simd(
       let a = self.pop()
       let result = self.builder.emit_inst(
         V128,
-        Vector(V128RelaxedLaneselect32),
+        Vector(Relaxed(LaneSelect(I32))),
         [a, b, c],
       )
       self.push(result)
@@ -706,25 +754,25 @@ fn Translator::translate_instruction_simd(
       let a = self.pop()
       let result = self.builder.emit_inst(
         V128,
-        Vector(V128RelaxedLaneselect64),
+        Vector(Relaxed(LaneSelect(I64))),
         [a, b, c],
       )
       self.push(result)
     }
-    F32x4RelaxedMin => self.translate_simd_binary(V128RelaxedMinF32)
-    F32x4RelaxedMax => self.translate_simd_binary(V128RelaxedMaxF32)
-    F64x2RelaxedMin => self.translate_simd_binary(V128RelaxedMinF64)
-    F64x2RelaxedMax => self.translate_simd_binary(V128RelaxedMaxF64)
-    I16x8RelaxedQ15mulrS => self.translate_simd_binary(V128RelaxedQ15MulrS)
+    F32x4RelaxedMin => self.translate_simd_binary(Relaxed(Min(F32)))
+    F32x4RelaxedMax => self.translate_simd_binary(Relaxed(Max(F32)))
+    F64x2RelaxedMin => self.translate_simd_binary(Relaxed(Min(F64)))
+    F64x2RelaxedMax => self.translate_simd_binary(Relaxed(Max(F64)))
+    I16x8RelaxedQ15mulrS => self.translate_simd_binary(Relaxed(Q15MulrSigned))
     I16x8RelaxedDotI8x16I7x16S =>
-      self.translate_simd_binary(V128RelaxedDot8to16S)
+      self.translate_simd_binary(Relaxed(Dot8To16Signed))
     I32x4RelaxedDotI8x16I7x16AddS => {
       let c = self.pop()
       let b = self.pop()
       let a = self.pop()
       let result = self.builder.emit_inst(
         V128,
-        Vector(V128RelaxedDot8to32AddS),
+        Vector(Relaxed(Dot8To32AddSigned)),
         [a, b, c],
       )
       self.push(result)

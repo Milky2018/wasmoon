@@ -21,12 +21,31 @@ test "opcode semantics classify optimizer-visible behavior" {
     ("store narrow", Memory(MemoryOp::StoreNarrow(8))),
     (
       "vector load extend",
-      Vector(VectorOp::LoadExtend(VectorLane::I8, VectorExtension::Signed)),
+      Memory(
+        MemoryOp::Vector(
+          VectorMemoryOp::LoadExtend(
+            VectorIntLane::I8,
+            VectorSignedness::Signed,
+          ),
+        ),
+      ),
     ),
-    ("vector load splat", Vector(VectorOp::LoadSplat(VectorLane::I8))),
-    ("vector load zero", Vector(VectorOp::LoadZero(VectorLane::I32))),
-    ("vector load lane", Vector(VectorOp::LoadLane(VectorLane::I8, 0))),
-    ("vector store lane", Vector(VectorOp::StoreLane(VectorLane::I8, 0))),
+    (
+      "vector load splat",
+      Memory(MemoryOp::Vector(VectorMemoryOp::LoadSplat(VectorIntLane::I8))),
+    ),
+    (
+      "vector load zero",
+      Memory(MemoryOp::Vector(VectorMemoryOp::LoadZero(VectorIntLane::I32))),
+    ),
+    (
+      "vector load lane",
+      Memory(MemoryOp::Vector(VectorMemoryOp::LoadLane(VectorIntLane::I8, 0))),
+    ),
+    (
+      "vector store lane",
+      Memory(MemoryOp::Vector(VectorMemoryOp::StoreLane(VectorIntLane::I8, 0))),
+    ),
     (
       "direct call",
       Call(CallOp::Direct(ExternalSymbol::ExternalSymbol("callee"), signature)),

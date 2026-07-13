@@ -2167,7 +2167,7 @@ fn lower_vector_inst(
   opcode : @milkir.VectorOp,
 ) -> Unit {
   match opcode {
-    V128Const(bytes) => lower_v128_const(ctx, inst, block, bytes)
+    Const(bytes) => lower_v128_const(ctx, inst, block, bytes)
     Splat(I8) => lower_v128_splat(ctx, inst, block, B8)
     Splat(I16) => lower_v128_splat(ctx, inst, block, H16)
     Splat(I32) => lower_v128_splat(ctx, inst, block, S32)
@@ -2198,356 +2198,282 @@ fn lower_vector_inst(
     ReplaceLane(F32, lane) => lower_v128_replace_f(ctx, inst, block, true, lane)
     ReplaceLane(F64, lane) =>
       lower_v128_replace_f(ctx, inst, block, false, lane)
-    V128Shuffle(lanes) => lower_v128_shuffle(ctx, inst, block, lanes)
-    V128Swizzle => lower_v128_swizzle(ctx, inst, block)
+    Shuffle(lanes) => lower_v128_shuffle(ctx, inst, block, lanes)
+    Swizzle => lower_v128_swizzle(ctx, inst, block)
 
     // Bitwise operations
-    V128Not => lower_v128_unary(ctx, inst, block, SIMDNot)
-    V128And => lower_v128_binary(ctx, inst, block, SIMDAnd)
-    V128AndNot => lower_v128_binary(ctx, inst, block, SIMDBic)
-    V128Or => lower_v128_binary(ctx, inst, block, SIMDOr)
-    V128Xor => lower_v128_binary(ctx, inst, block, SIMDXor)
-    V128Bitselect => lower_v128_ternary(ctx, inst, block, SIMDBsl)
+    Bitwise(Not) => lower_v128_unary(ctx, inst, block, SIMDNot)
+    Bitwise(And) => lower_v128_binary(ctx, inst, block, SIMDAnd)
+    Bitwise(AndNot) => lower_v128_binary(ctx, inst, block, SIMDBic)
+    Bitwise(Or) => lower_v128_binary(ctx, inst, block, SIMDOr)
+    Bitwise(Xor) => lower_v128_binary(ctx, inst, block, SIMDXor)
+    Bitwise(Bitselect) => lower_v128_ternary(ctx, inst, block, SIMDBsl)
+    Predicate(AnyTrue) => lower_v128_to_i32(ctx, inst, block, SIMDAnyTrue)
+    Predicate(AllTrue(lane)) =>
+      lower_v128_to_i32(
+        ctx,
+        inst,
+        block,
+        SIMDAllTrue(vector_int_lane_to_machv(lane)),
+      )
+    Predicate(Bitmask(lane)) =>
+      lower_v128_to_i32(
+        ctx,
+        inst,
+        block,
+        SIMDBitmask(vector_int_lane_to_machv(lane)),
+      )
+    IntBinary(op, lane) => {
+      let lane_size = vector_int_lane_to_machv(lane)
+      let machv_opcode : @instr.Opcode = match op {
+        Add => SIMDAdd(lane_size)
+        Sub => SIMDSub(lane_size)
+        Mul => SIMDMul(lane_size)
+        AddSaturating(signedness) =>
+          if signedness is Signed {
+            SIMDSqadd(lane_size)
+          } else {
+            SIMDUqadd(lane_size)
+          }
+        SubSaturating(signedness) =>
+          if signedness is Signed {
+            SIMDSqsub(lane_size)
+          } else {
+            SIMDUqsub(lane_size)
+          }
+        Min(signedness) =>
+          if signedness is Signed {
+            SIMDSmin(lane_size)
+          } else {
+            SIMDUmin(lane_size)
+          }
+        Max(signedness) =>
+          if signedness is Signed {
+            SIMDSmax(lane_size)
+          } else {
+            SIMDUmax(lane_size)
+          }
+        AverageUnsigned => SIMDUrhadd(lane_size)
+        ExtMul(half, signedness) =>
+          if half is Low {
+            SIMDExtMulLow(lane_size, signedness is Signed)
+          } else {
+            SIMDExtMulHigh(lane_size, signedness is Signed)
+          }
+        Dot16To32Signed => SIMDDot
+        Q15MulrSaturating => SIMDQ15MulrSat
+      }
+      lower_v128_binary(ctx, inst, block, machv_opcode)
+    }
+    IntUnary(op, lane) => {
+      let lane_size = vector_int_lane_to_machv(lane)
+      let machv_opcode : @instr.Opcode = match op {
+        Abs => SIMDAbs(lane_size)
+        Neg => SIMDNeg(lane_size)
+        Popcnt => SIMDCnt
+        Extend(half, signedness) =>
+          if half is Low {
+            SIMDExtendLow(lane_size, signedness is Signed)
+          } else {
+            SIMDExtendHigh(lane_size, signedness is Signed)
+          }
+        ExtAddPairwise(signedness) =>
+          SIMDExtAddPairwise(lane_size, signedness is Signed)
+      }
+      lower_v128_unary(ctx, inst, block, machv_opcode)
+    }
+    IntShift(op, lane) => {
+      let (negate, use_unsigned_shift) = match op {
+        Left => (false, false)
+        Right(Signed) => (true, false)
+        Right(Unsigned) => (true, true)
+      }
+      lower_v128_shift(
+        ctx,
+        inst,
+        block,
+        vector_int_lane_to_machv(lane),
+        negate,
+        use_unsigned_shift,
+      )
+    }
+    IntCompare(op, lane) => {
+      let lane_size = vector_int_lane_to_machv(lane)
+      match op {
+        Eq => lower_v128_binary(ctx, inst, block, SIMDCmp(lane_size, Eq))
+        Ne => lower_v128_cmp_ne(ctx, inst, block, lane_size)
+        Lt(signedness) =>
+          lower_v128_cmp_lt(ctx, inst, block, lane_size, signedness is Signed)
+        Gt(signedness) =>
+          lower_v128_binary(
+            ctx,
+            inst,
+            block,
+            SIMDCmp(lane_size, if signedness is Signed { GtS } else { GtU }),
+          )
+        Le(signedness) =>
+          lower_v128_cmp_le(ctx, inst, block, lane_size, signedness is Signed)
+        Ge(signedness) =>
+          lower_v128_binary(
+            ctx,
+            inst,
+            block,
+            SIMDCmp(lane_size, if signedness is Signed { GeS } else { GeU }),
+          )
+      }
+    }
 
-    // Any/All true, Bitmask
-    V128AnyTrue => lower_v128_to_i32(ctx, inst, block, SIMDAnyTrue)
-    V128AllTrue8 => lower_v128_to_i32(ctx, inst, block, SIMDAllTrue(B8))
-    V128AllTrue16 => lower_v128_to_i32(ctx, inst, block, SIMDAllTrue(H16))
-    V128AllTrue32 => lower_v128_to_i32(ctx, inst, block, SIMDAllTrue(S32))
-    V128AllTrue64 => lower_v128_to_i32(ctx, inst, block, SIMDAllTrue(D64))
-    V128Bitmask8 => lower_v128_to_i32(ctx, inst, block, SIMDBitmask(B8))
-    V128Bitmask16 => lower_v128_to_i32(ctx, inst, block, SIMDBitmask(H16))
-    V128Bitmask32 => lower_v128_to_i32(ctx, inst, block, SIMDBitmask(S32))
-    V128Bitmask64 => lower_v128_to_i32(ctx, inst, block, SIMDBitmask(D64))
-
-    // Integer arithmetic
-    V128Add8 => lower_v128_binary(ctx, inst, block, SIMDAdd(B8))
-    V128Add16 => lower_v128_binary(ctx, inst, block, SIMDAdd(H16))
-    V128Add32 => lower_v128_binary(ctx, inst, block, SIMDAdd(S32))
-    V128Add64 => lower_v128_binary(ctx, inst, block, SIMDAdd(D64))
-    V128Sub8 => lower_v128_binary(ctx, inst, block, SIMDSub(B8))
-    V128Sub16 => lower_v128_binary(ctx, inst, block, SIMDSub(H16))
-    V128Sub32 => lower_v128_binary(ctx, inst, block, SIMDSub(S32))
-    V128Sub64 => lower_v128_binary(ctx, inst, block, SIMDSub(D64))
-    V128Mul16 => lower_v128_binary(ctx, inst, block, SIMDMul(H16))
-    V128Mul32 => lower_v128_binary(ctx, inst, block, SIMDMul(S32))
-    V128Mul64 => lower_v128_binary(ctx, inst, block, SIMDMul(D64))
-
-    // Saturating arithmetic
-    V128AddSat8S => lower_v128_binary(ctx, inst, block, SIMDSqadd(B8))
-    V128AddSat8U => lower_v128_binary(ctx, inst, block, SIMDUqadd(B8))
-    V128AddSat16S => lower_v128_binary(ctx, inst, block, SIMDSqadd(H16))
-    V128AddSat16U => lower_v128_binary(ctx, inst, block, SIMDUqadd(H16))
-    V128SubSat8S => lower_v128_binary(ctx, inst, block, SIMDSqsub(B8))
-    V128SubSat8U => lower_v128_binary(ctx, inst, block, SIMDUqsub(B8))
-    V128SubSat16S => lower_v128_binary(ctx, inst, block, SIMDSqsub(H16))
-    V128SubSat16U => lower_v128_binary(ctx, inst, block, SIMDUqsub(H16))
-
-    // Min/Max
-    V128Min8S => lower_v128_binary(ctx, inst, block, SIMDSmin(B8))
-    V128Min8U => lower_v128_binary(ctx, inst, block, SIMDUmin(B8))
-    V128Min16S => lower_v128_binary(ctx, inst, block, SIMDSmin(H16))
-    V128Min16U => lower_v128_binary(ctx, inst, block, SIMDUmin(H16))
-    V128Min32S => lower_v128_binary(ctx, inst, block, SIMDSmin(S32))
-    V128Min32U => lower_v128_binary(ctx, inst, block, SIMDUmin(S32))
-    V128Max8S => lower_v128_binary(ctx, inst, block, SIMDSmax(B8))
-    V128Max8U => lower_v128_binary(ctx, inst, block, SIMDUmax(B8))
-    V128Max16S => lower_v128_binary(ctx, inst, block, SIMDSmax(H16))
-    V128Max16U => lower_v128_binary(ctx, inst, block, SIMDUmax(H16))
-    V128Max32S => lower_v128_binary(ctx, inst, block, SIMDSmax(S32))
-    V128Max32U => lower_v128_binary(ctx, inst, block, SIMDUmax(S32))
-
-    // Average
-    V128Avgr8U => lower_v128_binary(ctx, inst, block, SIMDUrhadd(B8))
-    V128Avgr16U => lower_v128_binary(ctx, inst, block, SIMDUrhadd(H16))
-
-    // Unary operations
-    V128Abs8 => lower_v128_unary(ctx, inst, block, SIMDAbs(B8))
-    V128Abs16 => lower_v128_unary(ctx, inst, block, SIMDAbs(H16))
-    V128Abs32 => lower_v128_unary(ctx, inst, block, SIMDAbs(S32))
-    V128Abs64 => lower_v128_unary(ctx, inst, block, SIMDAbs(D64))
-    V128Neg8 => lower_v128_unary(ctx, inst, block, SIMDNeg(B8))
-    V128Neg16 => lower_v128_unary(ctx, inst, block, SIMDNeg(H16))
-    V128Neg32 => lower_v128_unary(ctx, inst, block, SIMDNeg(S32))
-    V128Neg64 => lower_v128_unary(ctx, inst, block, SIMDNeg(D64))
-    V128Popcnt8 => lower_v128_unary(ctx, inst, block, SIMDCnt)
-
-    // Shifts - split into SIMDBroadcastShift + SIMDShiftByVec
-    // lower_v128_shift(ctx, inst, block, lane_size, negate, use_ushl)
-    V128Shl8 => lower_v128_shift(ctx, inst, block, B8, false, false)
-    V128Shl16 => lower_v128_shift(ctx, inst, block, H16, false, false)
-    V128Shl32 => lower_v128_shift(ctx, inst, block, S32, false, false)
-    V128Shl64 => lower_v128_shift(ctx, inst, block, D64, false, false)
-    V128Shr8S => lower_v128_shift(ctx, inst, block, B8, true, false)
-    V128Shr8U => lower_v128_shift(ctx, inst, block, B8, true, true)
-    V128Shr16S => lower_v128_shift(ctx, inst, block, H16, true, false)
-    V128Shr16U => lower_v128_shift(ctx, inst, block, H16, true, true)
-    V128Shr32S => lower_v128_shift(ctx, inst, block, S32, true, false)
-    V128Shr32U => lower_v128_shift(ctx, inst, block, S32, true, true)
-    V128Shr64S => lower_v128_shift(ctx, inst, block, D64, true, false)
-    V128Shr64U => lower_v128_shift(ctx, inst, block, D64, true, true)
-
-    // Comparisons
-    V128Eq8 => lower_v128_binary(ctx, inst, block, SIMDCmp(B8, Eq))
-    V128Eq16 => lower_v128_binary(ctx, inst, block, SIMDCmp(H16, Eq))
-    V128Eq32 => lower_v128_binary(ctx, inst, block, SIMDCmp(S32, Eq))
-    V128Eq64 => lower_v128_binary(ctx, inst, block, SIMDCmp(D64, Eq))
-    V128Ne8 => lower_v128_cmp_ne(ctx, inst, block, B8)
-    V128Ne16 => lower_v128_cmp_ne(ctx, inst, block, H16)
-    V128Ne32 => lower_v128_cmp_ne(ctx, inst, block, S32)
-    V128Ne64 => lower_v128_cmp_ne(ctx, inst, block, D64)
-    V128Lt8S => lower_v128_cmp_lt(ctx, inst, block, B8, true)
-    V128Lt8U => lower_v128_cmp_lt(ctx, inst, block, B8, false)
-    V128Lt16S => lower_v128_cmp_lt(ctx, inst, block, H16, true)
-    V128Lt16U => lower_v128_cmp_lt(ctx, inst, block, H16, false)
-    V128Lt32S => lower_v128_cmp_lt(ctx, inst, block, S32, true)
-    V128Lt32U => lower_v128_cmp_lt(ctx, inst, block, S32, false)
-    V128Lt64S => lower_v128_cmp_lt(ctx, inst, block, D64, true)
-    V128Gt8S => lower_v128_binary(ctx, inst, block, SIMDCmp(B8, GtS))
-    V128Gt8U => lower_v128_binary(ctx, inst, block, SIMDCmp(B8, GtU))
-    V128Gt16S => lower_v128_binary(ctx, inst, block, SIMDCmp(H16, GtS))
-    V128Gt16U => lower_v128_binary(ctx, inst, block, SIMDCmp(H16, GtU))
-    V128Gt32S => lower_v128_binary(ctx, inst, block, SIMDCmp(S32, GtS))
-    V128Gt32U => lower_v128_binary(ctx, inst, block, SIMDCmp(S32, GtU))
-    V128Gt64S => lower_v128_binary(ctx, inst, block, SIMDCmp(D64, GtS))
-    V128Le8S => lower_v128_cmp_le(ctx, inst, block, B8, true)
-    V128Le8U => lower_v128_cmp_le(ctx, inst, block, B8, false)
-    V128Le16S => lower_v128_cmp_le(ctx, inst, block, H16, true)
-    V128Le16U => lower_v128_cmp_le(ctx, inst, block, H16, false)
-    V128Le32S => lower_v128_cmp_le(ctx, inst, block, S32, true)
-    V128Le32U => lower_v128_cmp_le(ctx, inst, block, S32, false)
-    V128Le64S => lower_v128_cmp_le(ctx, inst, block, D64, true)
-    V128Ge8S => lower_v128_binary(ctx, inst, block, SIMDCmp(B8, GeS))
-    V128Ge8U => lower_v128_binary(ctx, inst, block, SIMDCmp(B8, GeU))
-    V128Ge16S => lower_v128_binary(ctx, inst, block, SIMDCmp(H16, GeS))
-    V128Ge16U => lower_v128_binary(ctx, inst, block, SIMDCmp(H16, GeU))
-    V128Ge32S => lower_v128_binary(ctx, inst, block, SIMDCmp(S32, GeS))
-    V128Ge32U => lower_v128_binary(ctx, inst, block, SIMDCmp(S32, GeU))
-    V128Ge64S => lower_v128_binary(ctx, inst, block, SIMDCmp(D64, GeS))
-
-    // Narrow/Extend
-    V128Narrow16to8S =>
-      lower_v128_binary(ctx, inst, block, SIMDNarrow(B8, true))
-    V128Narrow16to8U =>
-      lower_v128_binary(ctx, inst, block, SIMDNarrow(B8, false))
-    V128Narrow32to16S =>
-      lower_v128_binary(ctx, inst, block, SIMDNarrow(H16, true))
-    V128Narrow32to16U =>
-      lower_v128_binary(ctx, inst, block, SIMDNarrow(H16, false))
-    V128ExtendLow8to16S =>
-      lower_v128_unary(ctx, inst, block, SIMDExtendLow(H16, true))
-    V128ExtendHigh8to16S =>
-      lower_v128_unary(ctx, inst, block, SIMDExtendHigh(H16, true))
-    V128ExtendLow8to16U =>
-      lower_v128_unary(ctx, inst, block, SIMDExtendLow(H16, false))
-    V128ExtendHigh8to16U =>
-      lower_v128_unary(ctx, inst, block, SIMDExtendHigh(H16, false))
-    V128ExtendLow16to32S =>
-      lower_v128_unary(ctx, inst, block, SIMDExtendLow(S32, true))
-    V128ExtendHigh16to32S =>
-      lower_v128_unary(ctx, inst, block, SIMDExtendHigh(S32, true))
-    V128ExtendLow16to32U =>
-      lower_v128_unary(ctx, inst, block, SIMDExtendLow(S32, false))
-    V128ExtendHigh16to32U =>
-      lower_v128_unary(ctx, inst, block, SIMDExtendHigh(S32, false))
-    V128ExtendLow32to64S =>
-      lower_v128_unary(ctx, inst, block, SIMDExtendLow(D64, true))
-    V128ExtendHigh32to64S =>
-      lower_v128_unary(ctx, inst, block, SIMDExtendHigh(D64, true))
-    V128ExtendLow32to64U =>
-      lower_v128_unary(ctx, inst, block, SIMDExtendLow(D64, false))
-    V128ExtendHigh32to64U =>
-      lower_v128_unary(ctx, inst, block, SIMDExtendHigh(D64, false))
-
-    // Extended multiply
-    V128ExtMulLow8to16S =>
-      lower_v128_binary(ctx, inst, block, SIMDExtMulLow(H16, true))
-    V128ExtMulHigh8to16S =>
-      lower_v128_binary(ctx, inst, block, SIMDExtMulHigh(H16, true))
-    V128ExtMulLow8to16U =>
-      lower_v128_binary(ctx, inst, block, SIMDExtMulLow(H16, false))
-    V128ExtMulHigh8to16U =>
-      lower_v128_binary(ctx, inst, block, SIMDExtMulHigh(H16, false))
-    V128ExtMulLow16to32S =>
-      lower_v128_binary(ctx, inst, block, SIMDExtMulLow(S32, true))
-    V128ExtMulHigh16to32S =>
-      lower_v128_binary(ctx, inst, block, SIMDExtMulHigh(S32, true))
-    V128ExtMulLow16to32U =>
-      lower_v128_binary(ctx, inst, block, SIMDExtMulLow(S32, false))
-    V128ExtMulHigh16to32U =>
-      lower_v128_binary(ctx, inst, block, SIMDExtMulHigh(S32, false))
-    V128ExtMulLow32to64S =>
-      lower_v128_binary(ctx, inst, block, SIMDExtMulLow(D64, true))
-    V128ExtMulHigh32to64S =>
-      lower_v128_binary(ctx, inst, block, SIMDExtMulHigh(D64, true))
-    V128ExtMulLow32to64U =>
-      lower_v128_binary(ctx, inst, block, SIMDExtMulLow(D64, false))
-    V128ExtMulHigh32to64U =>
-      lower_v128_binary(ctx, inst, block, SIMDExtMulHigh(D64, false))
-
-    // Extended add pairwise
-    V128ExtAddPairwise8to16S =>
-      lower_v128_unary(ctx, inst, block, SIMDExtAddPairwise(H16, true))
-    V128ExtAddPairwise8to16U =>
-      lower_v128_unary(ctx, inst, block, SIMDExtAddPairwise(H16, false))
-    V128ExtAddPairwise16to32S =>
-      lower_v128_unary(ctx, inst, block, SIMDExtAddPairwise(S32, true))
-    V128ExtAddPairwise16to32U =>
-      lower_v128_unary(ctx, inst, block, SIMDExtAddPairwise(S32, false))
-
-    // Dot product and Q15
-    V128Dot16to32S => lower_v128_binary(ctx, inst, block, SIMDDot)
-    V128Q15MulrSat16S => lower_v128_binary(ctx, inst, block, SIMDQ15MulrSat)
-
-    // Floating point arithmetic
-    V128AddF32 => lower_v128_binary(ctx, inst, block, SIMDFAdd(true))
-    V128AddF64 => lower_v128_binary(ctx, inst, block, SIMDFAdd(false))
-    V128SubF32 => lower_v128_binary(ctx, inst, block, SIMDFSub(true))
-    V128SubF64 => lower_v128_binary(ctx, inst, block, SIMDFSub(false))
-    V128MulF32 => lower_v128_binary(ctx, inst, block, SIMDFMul(true))
-    V128MulF64 => lower_v128_binary(ctx, inst, block, SIMDFMul(false))
-    V128DivF32 => lower_v128_binary(ctx, inst, block, SIMDFDiv(true))
-    V128DivF64 => lower_v128_binary(ctx, inst, block, SIMDFDiv(false))
-    V128MinF32 => lower_v128_binary(ctx, inst, block, SIMDFMin(true))
-    V128MinF64 => lower_v128_binary(ctx, inst, block, SIMDFMin(false))
-    V128MaxF32 => lower_v128_binary(ctx, inst, block, SIMDFMax(true))
-    V128MaxF64 => lower_v128_binary(ctx, inst, block, SIMDFMax(false))
-    V128PMinF32 => lower_v128_binary(ctx, inst, block, SIMDFPMin(true))
-    V128PMinF64 => lower_v128_binary(ctx, inst, block, SIMDFPMin(false))
-    V128PMaxF32 => lower_v128_binary(ctx, inst, block, SIMDFPMax(true))
-    V128PMaxF64 => lower_v128_binary(ctx, inst, block, SIMDFPMax(false))
-
-    // Floating point unary
-    V128AbsF32 => lower_v128_unary(ctx, inst, block, SIMDFAbs(true))
-    V128AbsF64 => lower_v128_unary(ctx, inst, block, SIMDFAbs(false))
-    V128NegF32 => lower_v128_unary(ctx, inst, block, SIMDFNeg(true))
-    V128NegF64 => lower_v128_unary(ctx, inst, block, SIMDFNeg(false))
-    V128SqrtF32 => lower_v128_unary(ctx, inst, block, SIMDFSqrt(true))
-    V128SqrtF64 => lower_v128_unary(ctx, inst, block, SIMDFSqrt(false))
-    V128CeilF32 => lower_v128_unary(ctx, inst, block, SIMDFCeil(true))
-    V128CeilF64 => lower_v128_unary(ctx, inst, block, SIMDFCeil(false))
-    V128FloorF32 => lower_v128_unary(ctx, inst, block, SIMDFFloor(true))
-    V128FloorF64 => lower_v128_unary(ctx, inst, block, SIMDFFloor(false))
-    V128TruncF32 => lower_v128_unary(ctx, inst, block, SIMDFTrunc(true))
-    V128TruncF64 => lower_v128_unary(ctx, inst, block, SIMDFTrunc(false))
-    V128NearestF32 => lower_v128_unary(ctx, inst, block, SIMDFNearest(true))
-    V128NearestF64 => lower_v128_unary(ctx, inst, block, SIMDFNearest(false))
-
-    // Floating point comparisons
-    V128EqF32 => lower_v128_binary(ctx, inst, block, SIMDFCmp(true, Eq))
-    V128EqF64 => lower_v128_binary(ctx, inst, block, SIMDFCmp(false, Eq))
-    V128NeF32 => lower_v128_fcmp_ne(ctx, inst, block, true)
-    V128NeF64 => lower_v128_fcmp_ne(ctx, inst, block, false)
-    V128LtF32 =>
-      // lt(a,b) = gt(b,a) - swap operands
-      lower_v128_binary_swap(ctx, inst, block, SIMDFCmp(true, Gt))
-    V128LtF64 => lower_v128_binary_swap(ctx, inst, block, SIMDFCmp(false, Gt))
-    V128GtF32 => lower_v128_binary(ctx, inst, block, SIMDFCmp(true, Gt))
-    V128GtF64 => lower_v128_binary(ctx, inst, block, SIMDFCmp(false, Gt))
-    V128LeF32 =>
-      // le(a,b) = ge(b,a) - swap operands
-      lower_v128_binary_swap(ctx, inst, block, SIMDFCmp(true, Ge))
-    V128LeF64 => lower_v128_binary_swap(ctx, inst, block, SIMDFCmp(false, Ge))
-    V128GeF32 => lower_v128_binary(ctx, inst, block, SIMDFCmp(true, Ge))
-    V128GeF64 => lower_v128_binary(ctx, inst, block, SIMDFCmp(false, Ge))
+    // Narrowing
+    Narrow(lane, signedness) =>
+      lower_v128_binary(
+        ctx,
+        inst,
+        block,
+        SIMDNarrow(vector_int_lane_to_machv(lane), signedness is Signed),
+      )
+    FloatBinary(op, lane) => {
+      let is_f32 = lane is F32
+      let machv_opcode : @instr.Opcode = match op {
+        Add => SIMDFAdd(is_f32)
+        Sub => SIMDFSub(is_f32)
+        Mul => SIMDFMul(is_f32)
+        Div => SIMDFDiv(is_f32)
+        Min => SIMDFMin(is_f32)
+        Max => SIMDFMax(is_f32)
+        PseudoMin => SIMDFPMin(is_f32)
+        PseudoMax => SIMDFPMax(is_f32)
+      }
+      lower_v128_binary(ctx, inst, block, machv_opcode)
+    }
+    FloatUnary(op, lane) => {
+      let is_f32 = lane is F32
+      let machv_opcode : @instr.Opcode = match op {
+        Abs => SIMDFAbs(is_f32)
+        Neg => SIMDFNeg(is_f32)
+        Sqrt => SIMDFSqrt(is_f32)
+        Ceil => SIMDFCeil(is_f32)
+        Floor => SIMDFFloor(is_f32)
+        Trunc => SIMDFTrunc(is_f32)
+        Nearest => SIMDFNearest(is_f32)
+      }
+      lower_v128_unary(ctx, inst, block, machv_opcode)
+    }
+    FloatCompare(op, lane) => {
+      let is_f32 = lane is F32
+      match op {
+        Eq => lower_v128_binary(ctx, inst, block, SIMDFCmp(is_f32, Eq))
+        Ne => lower_v128_fcmp_ne(ctx, inst, block, is_f32)
+        Lt => lower_v128_binary_swap(ctx, inst, block, SIMDFCmp(is_f32, Gt))
+        Gt => lower_v128_binary(ctx, inst, block, SIMDFCmp(is_f32, Gt))
+        Le => lower_v128_binary_swap(ctx, inst, block, SIMDFCmp(is_f32, Ge))
+        Ge => lower_v128_binary(ctx, inst, block, SIMDFCmp(is_f32, Ge))
+      }
+    }
 
     // Conversions
-    V128TruncSatF32toI32S =>
+    Convert(TruncSatF32ToI32(Signed)) =>
       lower_v128_unary(ctx, inst, block, SIMDFCvtToIntS(true))
-    V128TruncSatF32toI32U =>
+    Convert(TruncSatF32ToI32(Unsigned)) =>
       lower_v128_unary(ctx, inst, block, SIMDFCvtToIntU(true))
-    V128TruncSatF64toI32SZero =>
+    Convert(TruncSatF64ToI32Zero(Signed)) =>
       lower_v128_unary(ctx, inst, block, SIMDTruncSatF64ToI32SZero)
-    V128TruncSatF64toI32UZero =>
+    Convert(TruncSatF64ToI32Zero(Unsigned)) =>
       lower_v128_unary(ctx, inst, block, SIMDTruncSatF64ToI32UZero)
-    V128ConvertI32toF32S =>
+    Convert(ConvertI32ToF32(Signed)) =>
       lower_v128_unary(ctx, inst, block, SIMDIntToFloatS(true))
-    V128ConvertI32toF32U =>
+    Convert(ConvertI32ToF32(Unsigned)) =>
       lower_v128_unary(ctx, inst, block, SIMDIntToFloatU(true))
-    V128ConvertLowI32toF64S =>
+    Convert(ConvertLowI32ToF64(Signed)) =>
       lower_v128_unary(ctx, inst, block, SIMDConvertLowI32ToF64S)
-    V128ConvertLowI32toF64U =>
+    Convert(ConvertLowI32ToF64(Unsigned)) =>
       lower_v128_unary(ctx, inst, block, SIMDConvertLowI32ToF64U)
-    V128DemoteF64toF32Zero =>
+    Convert(DemoteF64ToF32Zero) =>
       lower_v128_unary(ctx, inst, block, SIMDDemoteF64ToF32Zero)
-    V128PromoteLowF32toF64 =>
+    Convert(PromoteLowF32ToF64) =>
       lower_v128_unary(ctx, inst, block, SIMDPromoteLowF32ToF64)
-
-    // Memory operations consume a frontend-computed effective address.
-    LoadExtend(I8, Signed) =>
-      lower_v128_load_extend(ctx, inst, block, 8, true, 0)
-    LoadExtend(I8, Unsigned) =>
-      lower_v128_load_extend(ctx, inst, block, 8, false, 0)
-    LoadExtend(I16, Signed) =>
-      lower_v128_load_extend(ctx, inst, block, 16, true, 0)
-    LoadExtend(I16, Unsigned) =>
-      lower_v128_load_extend(ctx, inst, block, 16, false, 0)
-    LoadExtend(I32, Signed) =>
-      lower_v128_load_extend(ctx, inst, block, 32, true, 0)
-    LoadExtend(I32, Unsigned) =>
-      lower_v128_load_extend(ctx, inst, block, 32, false, 0)
-    LoadExtend(_, _) => abort("invalid vector extending-load semantics")
-    LoadSplat(I8) => lower_v128_load_splat(ctx, inst, block, B8, 0)
-    LoadSplat(I16) => lower_v128_load_splat(ctx, inst, block, H16, 0)
-    LoadSplat(I32) => lower_v128_load_splat(ctx, inst, block, S32, 0)
-    LoadSplat(I64) => lower_v128_load_splat(ctx, inst, block, D64, 0)
-    LoadSplat(_) => abort("invalid vector splat-load semantics")
-    LoadZero(I32) => lower_v128_load_zero(ctx, inst, block, false, 0)
-    LoadZero(I64) => lower_v128_load_zero(ctx, inst, block, true, 0)
-    LoadZero(_) => abort("invalid vector zero-load semantics")
-    LoadLane(I8, lane) => lower_v128_load_lane(ctx, inst, block, B8, lane, 0)
-    LoadLane(I16, lane) => lower_v128_load_lane(ctx, inst, block, H16, lane, 0)
-    LoadLane(I32, lane) => lower_v128_load_lane(ctx, inst, block, S32, lane, 0)
-    LoadLane(I64, lane) => lower_v128_load_lane(ctx, inst, block, D64, lane, 0)
-    LoadLane(_, _) => abort("invalid vector lane-load semantics")
-    StoreLane(I8, lane) => lower_v128_store_lane(ctx, inst, block, B8, lane, 0)
-    StoreLane(I16, lane) =>
-      lower_v128_store_lane(ctx, inst, block, H16, lane, 0)
-    StoreLane(I32, lane) =>
-      lower_v128_store_lane(ctx, inst, block, S32, lane, 0)
-    StoreLane(I64, lane) =>
-      lower_v128_store_lane(ctx, inst, block, D64, lane, 0)
-    StoreLane(_, _) => abort("invalid vector lane-store semantics")
 
     // ============ Relaxed SIMD ============
     // relaxed_swizzle: same as swizzle (TBL instruction, out-of-range gives 0)
-    V128RelaxedSwizzle => lower_v128_swizzle(ctx, inst, block)
+    Relaxed(Swizzle) => lower_v128_swizzle(ctx, inst, block)
 
     // relaxed_trunc: same as trunc_sat (the relaxation is for NaN behavior)
-    V128RelaxedTruncF32toI32S =>
+    Relaxed(TruncF32ToI32(Signed)) =>
       lower_v128_unary(ctx, inst, block, SIMDFCvtToIntS(true))
-    V128RelaxedTruncF32toI32U =>
+    Relaxed(TruncF32ToI32(Unsigned)) =>
       lower_v128_unary(ctx, inst, block, SIMDFCvtToIntU(true))
-    V128RelaxedTruncF64toI32SZero =>
+    Relaxed(TruncF64ToI32Zero(Signed)) =>
       lower_v128_unary(ctx, inst, block, SIMDTruncSatF64ToI32SZero)
-    V128RelaxedTruncF64toI32UZero =>
+    Relaxed(TruncF64ToI32Zero(Unsigned)) =>
       lower_v128_unary(ctx, inst, block, SIMDTruncSatF64ToI32UZero)
-
-    // relaxed_madd/nmadd: fused multiply-add/subtract
-    V128RelaxedMaddF32 => lower_v128_fma(ctx, inst, block, true, false)
-    V128RelaxedNmaddF32 => lower_v128_fma(ctx, inst, block, true, true)
-    V128RelaxedMaddF64 => lower_v128_fma(ctx, inst, block, false, false)
-    V128RelaxedNmaddF64 => lower_v128_fma(ctx, inst, block, false, true)
-
-    // relaxed_laneselect: same as bitselect (BSL instruction)
-    V128RelaxedLaneselect8 => lower_v128_ternary(ctx, inst, block, SIMDBsl)
-    V128RelaxedLaneselect16 => lower_v128_ternary(ctx, inst, block, SIMDBsl)
-    V128RelaxedLaneselect32 => lower_v128_ternary(ctx, inst, block, SIMDBsl)
-    V128RelaxedLaneselect64 => lower_v128_ternary(ctx, inst, block, SIMDBsl)
-
-    // relaxed_min/max: use FMIN/FMAX (relaxation is for NaN propagation)
-    V128RelaxedMinF32 => lower_v128_binary(ctx, inst, block, SIMDFMin(true))
-    V128RelaxedMaxF32 => lower_v128_binary(ctx, inst, block, SIMDFMax(true))
-    V128RelaxedMinF64 => lower_v128_binary(ctx, inst, block, SIMDFMin(false))
-    V128RelaxedMaxF64 => lower_v128_binary(ctx, inst, block, SIMDFMax(false))
+    Relaxed(Fma(lane, op)) =>
+      lower_v128_fma(ctx, inst, block, lane is F32, op is NegatedAdd)
+    Relaxed(LaneSelect(_)) => lower_v128_ternary(ctx, inst, block, SIMDBsl)
+    Relaxed(Min(lane)) =>
+      lower_v128_binary(ctx, inst, block, SIMDFMin(lane is F32))
+    Relaxed(Max(lane)) =>
+      lower_v128_binary(ctx, inst, block, SIMDFMax(lane is F32))
 
     // relaxed_q15mulr_s: same as q15mulr_s (SQRDMULH instruction)
-    V128RelaxedQ15MulrS => lower_v128_binary(ctx, inst, block, SIMDQ15MulrSat)
+    Relaxed(Q15MulrSigned) =>
+      lower_v128_binary(ctx, inst, block, SIMDQ15MulrSat)
 
     // relaxed_dot products
-    V128RelaxedDot8to16S =>
+    Relaxed(Dot8To16Signed) =>
       lower_v128_binary(ctx, inst, block, SIMDRelaxedDot8to16)
-    V128RelaxedDot8to32AddS => lower_v128_relaxed_dot_add(ctx, inst, block)
+    Relaxed(Dot8To32AddSigned) => lower_v128_relaxed_dot_add(ctx, inst, block)
+  }
+}
+
+///|
+fn vector_int_lane_to_machv(lane : @milkir.VectorIntLane) -> @instr.LaneSize {
+  match lane {
+    I8 => B8
+    I16 => H16
+    I32 => S32
+    I64 => D64
+  }
+}
+
+///|
+fn lower_vector_memory_inst(
+  ctx : LoweringContext,
+  inst : @milkir.Inst,
+  block : @block.Block,
+  opcode : @milkir.VectorMemoryOp,
+) -> Unit {
+  match opcode {
+    LoadExtend(lane, signedness) => {
+      let bits = match lane {
+        I8 => 8
+        I16 => 16
+        I32 => 32
+        I64 => abort("invalid vector extending-load semantics")
+      }
+      lower_v128_load_extend(ctx, inst, block, bits, signedness is Signed, 0)
+    }
+    LoadSplat(lane) =>
+      lower_v128_load_splat(ctx, inst, block, vector_int_lane_to_machv(lane), 0)
+    LoadZero(I32) => lower_v128_load_zero(ctx, inst, block, false, 0)
+    LoadZero(I64) => lower_v128_load_zero(ctx, inst, block, true, 0)
+    LoadZero(_) => abort("invalid vector zero-load semantics")
+    LoadLane(lane, index) =>
+      lower_v128_load_lane(
+        ctx,
+        inst,
+        block,
+        vector_int_lane_to_machv(lane),
+        index,
+        0,
+      )
+    StoreLane(lane, index) =>
+      lower_v128_store_lane(
+        ctx,
+        inst,
+        block,
+        vector_int_lane_to_machv(lane),
+        index,
+        0,
+      )
   }
 }
 
@@ -2577,6 +2503,8 @@ fn lower_inst_builtin(
           lower_load_ptr_narrow(ctx, inst, block, result_ty, bits, signed)
         @milkir.MemoryOp::StoreNarrow(bits) =>
           lower_store_ptr_narrow(ctx, inst, block, bits)
+        @milkir.MemoryOp::Vector(opcode) =>
+          lower_vector_memory_inst(ctx, inst, block, opcode)
       }
     Ext(_, _) => lower_unsupported_generic_opcode(inst, block)
     Scalar(scalar_op) => lower_scalar_inst(ctx, inst, block, scalar_op)

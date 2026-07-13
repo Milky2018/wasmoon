@@ -133,9 +133,53 @@ test "verify rejects malformed SIMD operand arity" {
   let lhs = func.add_param(V128)
   let result = func.new_value(V128)
   let entry = func.new_block([])
-  entry.append_inst(func.new_inst(Vector(V128Add32), [lhs], [result]))
+  entry.append_inst(func.new_inst(Vector(IntBinary(Add, I32)), [lhs], [result]))
   entry.set_terminator(Return([]))
   expect_verify_rejection(func, "v128.add32 operand arity")
+}
+
+///|
+test "verify rejects unsupported normalized vector combinations" {
+  let func = Function::new_empty("unsupported_vector_combinations")
+  let lhs = func.add_param(V128)
+  let rhs = func.add_param(V128)
+  let result = func.new_value(V128)
+  let entry = func.new_block([])
+  entry.append_inst(
+    func.new_inst(Vector(IntBinary(Mul, I8)), [lhs, rhs], [result]),
+  )
+  entry.set_terminator(Return([]))
+  expect_verify_rejection(func, "i8 vector multiplication")
+
+  let narrow_func = Function::new_empty("unsupported_vector_narrow")
+  let narrow_lhs = narrow_func.add_param(V128)
+  let narrow_rhs = narrow_func.add_param(V128)
+  let narrow_result = narrow_func.new_value(V128)
+  let narrow_entry = narrow_func.new_block([])
+  narrow_entry.append_inst(
+    narrow_func.new_inst(
+      Vector(Narrow(I32, Signed)),
+      [narrow_lhs, narrow_rhs],
+      [narrow_result],
+    ),
+  )
+  narrow_entry.set_terminator(Return([]))
+  expect_verify_rejection(narrow_func, "i32 vector narrowing")
+
+  let compare_func = Function::new_empty("unsupported_vector_compare")
+  let compare_lhs = compare_func.add_param(V128)
+  let compare_rhs = compare_func.add_param(V128)
+  let compare_result = compare_func.new_value(V128)
+  let compare_entry = compare_func.new_block([])
+  compare_entry.append_inst(
+    compare_func.new_inst(
+      Vector(IntCompare(Lt(Unsigned), I64)),
+      [compare_lhs, compare_rhs],
+      [compare_result],
+    ),
+  )
+  compare_entry.set_terminator(Return([]))
+  expect_verify_rejection(compare_func, "unsigned i64 vector comparison")
 }
 
 ///|

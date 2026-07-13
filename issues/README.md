@@ -174,6 +174,11 @@ graph TD
   ISS_158["ISS-158: Derive e-graph purity and enforce opcode completeness"]
   ISS_159["ISS-159: Cover every non-pure MilkIR opcode constructor"]
   ISS_160["ISS-160: Centralize the Wasm extension wire protocol"]
+  ISS_161["ISS-161: Normalize MilkIR vector operation semantics"]
+  ISS_162["ISS-162: Define parameterized vector operation families"]
+  ISS_163["ISS-163: Migrate vector contracts and producers"]
+  ISS_164["ISS-164: Lower normalized vector operations to MachV"]
+  ISS_165["ISS-165: Remove the legacy VectorOp matrix and validate SIMD parity"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
@@ -309,6 +314,11 @@ graph TD
   ISS_157 --> ISS_158
   ISS_155 --> ISS_159
   ISS_153 --> ISS_160
+  ISS_145 --> ISS_161
+  ISS_155 --> ISS_161
+  ISS_162 --> ISS_163
+  ISS_163 --> ISS_164
+  ISS_164 --> ISS_165
 ```
 
 ## Warnings

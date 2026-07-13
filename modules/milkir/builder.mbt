@@ -1217,7 +1217,7 @@ pub fn FunctionBuilder::v128_const(
   self : FunctionBuilder,
   bytes : Bytes,
 ) -> Value {
-  self.emit_inst(V128, Vector(VectorOp::V128Const(bytes)), [])
+  self.emit_inst(V128, Vector(VectorOp::Const(bytes)), [])
 }
 
 ///|
@@ -1461,7 +1461,7 @@ pub fn FunctionBuilder::v128_shuffle(
   b : Value,
   lanes : FixedArray[Int],
 ) -> Value {
-  self.emit_inst(V128, Vector(VectorOp::V128Shuffle(lanes)), [a, b])
+  self.emit_inst(V128, Vector(VectorOp::Shuffle(lanes)), [a, b])
 }
 
 ///|
@@ -1471,13 +1471,13 @@ pub fn FunctionBuilder::v128_swizzle(
   a : Value,
   b : Value,
 ) -> Value {
-  self.emit_inst(V128, Vector(VectorOp::V128Swizzle), [a, b])
+  self.emit_inst(V128, Vector(VectorOp::Swizzle), [a, b])
 }
 
 ///|
 /// Bitwise operations on v128
 pub fn FunctionBuilder::v128_not(self : FunctionBuilder, a : Value) -> Value {
-  self.emit_inst(V128, Vector(VectorOp::V128Not), [a])
+  self.emit_inst(V128, Vector(VectorOp::Bitwise(Not)), [a])
 }
 
 ///|
@@ -1486,7 +1486,7 @@ pub fn FunctionBuilder::v128_and(
   a : Value,
   b : Value,
 ) -> Value {
-  self.emit_inst(V128, Vector(VectorOp::V128And), [a, b])
+  self.emit_inst(V128, Vector(VectorOp::Bitwise(And)), [a, b])
 }
 
 ///|
@@ -1495,7 +1495,7 @@ pub fn FunctionBuilder::v128_andnot(
   a : Value,
   b : Value,
 ) -> Value {
-  self.emit_inst(V128, Vector(VectorOp::V128AndNot), [a, b])
+  self.emit_inst(V128, Vector(VectorOp::Bitwise(AndNot)), [a, b])
 }
 
 ///|
@@ -1504,7 +1504,7 @@ pub fn FunctionBuilder::v128_or(
   a : Value,
   b : Value,
 ) -> Value {
-  self.emit_inst(V128, Vector(VectorOp::V128Or), [a, b])
+  self.emit_inst(V128, Vector(VectorOp::Bitwise(Or)), [a, b])
 }
 
 ///|
@@ -1513,7 +1513,7 @@ pub fn FunctionBuilder::v128_xor(
   a : Value,
   b : Value,
 ) -> Value {
-  self.emit_inst(V128, Vector(VectorOp::V128Xor), [a, b])
+  self.emit_inst(V128, Vector(VectorOp::Bitwise(Xor)), [a, b])
 }
 
 ///|
@@ -1523,7 +1523,7 @@ pub fn FunctionBuilder::v128_bitselect(
   b : Value,
   c : Value,
 ) -> Value {
-  self.emit_inst(V128, Vector(VectorOp::V128Bitselect), [a, b, c])
+  self.emit_inst(V128, Vector(VectorOp::Bitwise(Bitselect)), [a, b, c])
 }
 
 ///|
@@ -1531,7 +1531,7 @@ pub fn FunctionBuilder::v128_anytrue(
   self : FunctionBuilder,
   a : Value,
 ) -> Value {
-  self.emit_inst(I32, Vector(VectorOp::V128AnyTrue), [a])
+  self.emit_inst(I32, Vector(VectorOp::Predicate(AnyTrue)), [a])
 }
 
 ///|
@@ -1578,30 +1578,30 @@ pub fn FunctionBuilder::v128_shift(
 /// SIMD load with effective address (for complex SIMD loads)
 pub fn FunctionBuilder::v128_load_with_addr(
   self : FunctionBuilder,
-  opcode : VectorOp,
+  opcode : VectorMemoryOp,
   effective_addr : Value,
 ) -> Value {
-  self.emit_inst(V128, Vector(opcode), [effective_addr])
+  self.emit_inst(V128, Memory(MemoryOp::Vector(opcode)), [effective_addr])
 }
 
 ///|
 /// SIMD load lane with effective address and existing vector
 pub fn FunctionBuilder::v128_load_lane_with_addr(
   self : FunctionBuilder,
-  opcode : VectorOp,
+  opcode : VectorMemoryOp,
   effective_addr : Value,
   vec : Value,
 ) -> Value {
-  self.emit_inst(V128, Vector(opcode), [effective_addr, vec])
+  self.emit_inst(V128, Memory(MemoryOp::Vector(opcode)), [effective_addr, vec])
 }
 
 ///|
 /// SIMD store lane with effective address and vector (void)
 pub fn FunctionBuilder::v128_store_lane_with_addr(
   self : FunctionBuilder,
-  opcode : VectorOp,
+  opcode : VectorMemoryOp,
   effective_addr : Value,
   vec : Value,
 ) -> Unit {
-  self.emit_void_inst(Vector(opcode), [effective_addr, vec])
+  self.emit_void_inst(Memory(MemoryOp::Vector(opcode)), [effective_addr, vec])
 }

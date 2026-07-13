@@ -491,19 +491,84 @@ test "scalar operations use typed semantic families" {
 }
 
 ///|
+test "vector family identity includes every semantic axis" {
+  let add8 : Opcode = Vector(IntBinary(Add, I8))
+  let add8_again : Opcode = Vector(IntBinary(Add, I8))
+  let add16 : Opcode = Vector(IntBinary(Add, I16))
+  let unsigned_high_mul : Opcode = Vector(
+    IntBinary(ExtMul(High, Unsigned), I32),
+  )
+  inspect(add8 == add8_again, content="true")
+  inspect(add8 == add16, content="false")
+  inspect(add8.hash() == add8_again.hash(), content="true")
+  let identities : @hashmap.HashMap[Opcode, String] = HashMap([])
+  identities.set(add8, "i8")
+  identities.set(add16, "i16")
+  inspect(identities.get(add8_again).unwrap_or("missing"), content="i8")
+  inspect(identities.get(add16).unwrap_or("missing"), content="i16")
+  debug_inspect(
+    [add8, add16, unsigned_high_mul],
+    content=(
+      #|[
+      #|  Vector(IntBinary(Add, I8)),
+      #|  Vector(IntBinary(Add, I16)),
+      #|  Vector(IntBinary(ExtMul(High, Unsigned), I32)),
+      #|]
+    ),
+  )
+}
+
+///|
+test "normalized vector families preserve textual spelling" {
+  let func = Function::new_empty("vector_spelling")
+  let vector = func.add_param(V128)
+  let cases : Array[Opcode] = [
+    Vector(IntUnary(Extend(High, Unsigned), I32)),
+    Vector(IntBinary(AddSaturating(Signed), I16)),
+    Vector(IntShift(Right(Unsigned), I64)),
+    Vector(IntCompare(Lt(Unsigned), I32)),
+    Vector(Narrow(I8, Signed)),
+    Vector(FloatBinary(PseudoMax, F64)),
+    Vector(Convert(ConvertI32ToF32(Unsigned))),
+    Vector(Relaxed(Fma(F32, Add))),
+    Memory(MemoryOp::Vector(VectorMemoryOp::LoadLane(I16, 3))),
+  ]
+  debug_inspect(
+    cases.map(fn(opcode) { format_opcode(opcode, [vector]) }),
+    content=(
+      #|[
+      #|  "i32x4.extend_high_i16x8_u v0",
+      #|  "i16x8.add_sat_s v0",
+      #|  "i64x2.shr_u v0",
+      #|  "i32x4.lt_u v0",
+      #|  "i8x16.narrow_i16x8_s v0",
+      #|  "f64x2.pmax v0",
+      #|  "f32x4.convert_i32x4_u v0",
+      #|  "v128.relaxed_madd_f32 v0",
+      #|  "v128.load16_lane lane=3 v0",
+      #|]
+    ),
+  )
+}
+
+///|
 test "vector memory operations discard Wasm memory arguments" {
   let builder = FunctionBuilder::FunctionBuilder("vector_memory_family")
   let address = builder.add_param(Ptr)
   builder.add_result(V128)
   let loaded = builder.v128_load_with_addr(
-    LoadExtend(VectorLane::I8, VectorExtension::Signed),
+    LoadExtend(VectorIntLane::I8, VectorSignedness::Signed),
     address,
   )
   builder.return_([loaded])
   let func = builder.get_function()
   inspect(
     func.blocks[0].instructions[0].opcode
-    is Vector(VectorOp::LoadExtend(VectorLane::I8, VectorExtension::Signed)),
+    is Memory(
+      MemoryOp::Vector(
+        VectorMemoryOp::LoadExtend(VectorIntLane::I8, VectorSignedness::Signed)
+      )
+    ),
     content="true",
   )
   let printed = func.print()

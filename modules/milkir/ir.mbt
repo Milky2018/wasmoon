@@ -459,6 +459,7 @@ pub(all) enum MemoryOp {
   Store(Type)
   LoadNarrow(Type, Int, Bool)
   StoreNarrow(Int)
+  Vector(VectorMemoryOp)
 } derive(Debug, Eq, Hash)
 
 ///|
@@ -487,296 +488,184 @@ pub(all) enum VectorExtension {
 } derive(Debug, Eq, Hash)
 
 ///|
-/// Language-neutral vector operations.
+pub(all) enum VectorIntLane {
+  I8
+  I16
+  I32
+  I64
+} derive(Debug, Eq, Hash)
+
+///|
+pub(all) enum VectorFloatLane {
+  F32
+  F64
+} derive(Debug, Eq, Hash)
+
+///|
+pub(all) enum VectorSignedness {
+  Signed
+  Unsigned
+} derive(Debug, Eq, Hash)
+
+///|
+pub(all) enum VectorHalf {
+  Low
+  High
+} derive(Debug, Eq, Hash)
+
+///|
+pub(all) enum VectorBitwiseOp {
+  Not
+  And
+  AndNot
+  Or
+  Xor
+  Bitselect
+} derive(Debug, Eq, Hash)
+
+///|
+pub(all) enum VectorPredicateOp {
+  AnyTrue
+  AllTrue(VectorIntLane)
+  Bitmask(VectorIntLane)
+} derive(Debug, Eq, Hash)
+
+///|
+pub(all) enum VectorIntUnaryOp {
+  Abs
+  Neg
+  Popcnt
+  Extend(VectorHalf, VectorSignedness)
+  ExtAddPairwise(VectorSignedness)
+} derive(Debug, Eq, Hash)
+
+///|
+pub(all) enum VectorIntBinaryOp {
+  Add
+  Sub
+  Mul
+  AddSaturating(VectorSignedness)
+  SubSaturating(VectorSignedness)
+  Min(VectorSignedness)
+  Max(VectorSignedness)
+  AverageUnsigned
+  ExtMul(VectorHalf, VectorSignedness)
+  Dot16To32Signed
+  Q15MulrSaturating
+} derive(Debug, Eq, Hash)
+
+///|
+pub(all) enum VectorIntShiftOp {
+  Left
+  Right(VectorSignedness)
+} derive(Debug, Eq, Hash)
+
+///|
+pub(all) enum VectorIntCompareOp {
+  Eq
+  Ne
+  Lt(VectorSignedness)
+  Gt(VectorSignedness)
+  Le(VectorSignedness)
+  Ge(VectorSignedness)
+} derive(Debug, Eq, Hash)
+
+///|
+pub(all) enum VectorFloatUnaryOp {
+  Abs
+  Neg
+  Sqrt
+  Ceil
+  Floor
+  Trunc
+  Nearest
+} derive(Debug, Eq, Hash)
+
+///|
+pub(all) enum VectorFloatBinaryOp {
+  Add
+  Sub
+  Mul
+  Div
+  Min
+  Max
+  PseudoMin
+  PseudoMax
+} derive(Debug, Eq, Hash)
+
+///|
+pub(all) enum VectorFloatCompareOp {
+  Eq
+  Ne
+  Lt
+  Gt
+  Le
+  Ge
+} derive(Debug, Eq, Hash)
+
+///|
+pub(all) enum VectorConversionOp {
+  TruncSatF32ToI32(VectorSignedness)
+  TruncSatF64ToI32Zero(VectorSignedness)
+  ConvertI32ToF32(VectorSignedness)
+  ConvertLowI32ToF64(VectorSignedness)
+  DemoteF64ToF32Zero
+  PromoteLowF32ToF64
+} derive(Debug, Eq, Hash)
+
+///|
+/// Vector memory operations consume an already checked effective address.
+/// Source-language memory indices, alignment hints, and offsets belong to the
+/// frontend.
+pub(all) enum VectorMemoryOp {
+  LoadExtend(VectorIntLane, VectorSignedness)
+  LoadSplat(VectorIntLane)
+  LoadZero(VectorIntLane)
+  LoadLane(VectorIntLane, Int)
+  StoreLane(VectorIntLane, Int)
+} derive(Debug, Eq, Hash)
+
+///|
+pub(all) enum VectorFmaOp {
+  Add
+  NegatedAdd
+} derive(Debug, Eq, Hash)
+
+///|
+pub(all) enum VectorRelaxedOp {
+  Swizzle
+  TruncF32ToI32(VectorSignedness)
+  TruncF64ToI32Zero(VectorSignedness)
+  Fma(VectorFloatLane, VectorFmaOp)
+  LaneSelect(VectorIntLane)
+  Min(VectorFloatLane)
+  Max(VectorFloatLane)
+  Q15MulrSigned
+  Dot8To16Signed
+  Dot8To32AddSigned
+} derive(Debug, Eq, Hash)
+
+///|
+/// Language-neutral V128 operations normalized by semantic family.
 pub(all) enum VectorOp {
-  // ============================================
-  // SIMD operations (V128)
-  // ============================================
-
-  // V128 constant - 16 bytes stored as Bytes
-  V128Const(Bytes)
-
-  // Splat - replicate scalar to all lanes
-  // operand: scalar value, result: v128
+  Const(Bytes)
   Splat(VectorLane)
-
-  // Extract lane - extract scalar from vector
-  // operand: v128, result: scalar
   ExtractLane(VectorLane, VectorExtension, Int)
-
-  // Replace lane - replace scalar in vector
-  // operands: v128, scalar, result: v128
   ReplaceLane(VectorLane, Int)
-
-  // Shuffle - select lanes from two vectors
-  // operands: v128, v128, result: v128
-  V128Shuffle(FixedArray[Int]) // 16 lane indices (0-31)
-
-  // Swizzle - permute lanes based on indices vector
-  // operands: v128 (values), v128 (indices), result: v128
-  V128Swizzle
-
-  // Bitwise operations - v128 -> v128
-  V128Not
-  // Bitwise operations - v128, v128 -> v128
-  V128And
-  V128AndNot
-  V128Or
-  V128Xor
-  V128Bitselect // operands: v1, v2, mask
-
-  // Any true / All true
-  V128AnyTrue // v128 -> i32
-  V128AllTrue8 // i8x16.all_true: v128 -> i32
-  V128AllTrue16 // i16x8.all_true
-  V128AllTrue32 // i32x4.all_true
-  V128AllTrue64 // i64x2.all_true
-
-  // Bitmask - extract sign bits
-  V128Bitmask8 // i8x16.bitmask: v128 -> i32
-  V128Bitmask16 // i16x8.bitmask
-  V128Bitmask32 // i32x4.bitmask
-  V128Bitmask64 // i64x2.bitmask
-
-  // Integer arithmetic - v128, v128 -> v128
-  V128Add8
-  V128Add16
-  V128Add32
-  V128Add64
-  V128Sub8
-  V128Sub16
-  V128Sub32
-  V128Sub64
-  V128Mul16
-  V128Mul32
-  V128Mul64
-
-  // Saturating arithmetic
-  V128AddSat8S
-  V128AddSat8U
-  V128AddSat16S
-  V128AddSat16U
-  V128SubSat8S
-  V128SubSat8U
-  V128SubSat16S
-  V128SubSat16U
-
-  // Min/Max
-  V128Min8S
-  V128Min8U
-  V128Min16S
-  V128Min16U
-  V128Min32S
-  V128Min32U
-  V128Max8S
-  V128Max8U
-  V128Max16S
-  V128Max16U
-  V128Max32S
-  V128Max32U
-
-  // Average
-  V128Avgr8U
-  V128Avgr16U
-
-  // Unary - v128 -> v128
-  V128Abs8
-  V128Abs16
-  V128Abs32
-  V128Abs64
-  V128Neg8
-  V128Neg16
-  V128Neg32
-  V128Neg64
-  V128Popcnt8
-
-  // Shifts - v128, i32 -> v128
-  V128Shl8
-  V128Shl16
-  V128Shl32
-  V128Shl64
-  V128Shr8S
-  V128Shr8U
-  V128Shr16S
-  V128Shr16U
-  V128Shr32S
-  V128Shr32U
-  V128Shr64S
-  V128Shr64U
-
-  // Comparisons - v128, v128 -> v128 (all lanes compared)
-  V128Eq8
-  V128Eq16
-  V128Eq32
-  V128Eq64
-  V128Ne8
-  V128Ne16
-  V128Ne32
-  V128Ne64
-  V128Lt8S
-  V128Lt8U
-  V128Lt16S
-  V128Lt16U
-  V128Lt32S
-  V128Lt32U
-  V128Lt64S
-  V128Gt8S
-  V128Gt8U
-  V128Gt16S
-  V128Gt16U
-  V128Gt32S
-  V128Gt32U
-  V128Gt64S
-  V128Le8S
-  V128Le8U
-  V128Le16S
-  V128Le16U
-  V128Le32S
-  V128Le32U
-  V128Le64S
-  V128Ge8S
-  V128Ge8U
-  V128Ge16S
-  V128Ge16U
-  V128Ge32S
-  V128Ge32U
-  V128Ge64S
-
-  // Narrow - v128, v128 -> v128 (pack to smaller lanes)
-  V128Narrow16to8S
-  V128Narrow16to8U
-  V128Narrow32to16S
-  V128Narrow32to16U
-
-  // Extend - v128 -> v128 (widen from smaller lanes)
-  V128ExtendLow8to16S
-  V128ExtendHigh8to16S
-  V128ExtendLow8to16U
-  V128ExtendHigh8to16U
-  V128ExtendLow16to32S
-  V128ExtendHigh16to32S
-  V128ExtendLow16to32U
-  V128ExtendHigh16to32U
-  V128ExtendLow32to64S
-  V128ExtendHigh32to64S
-  V128ExtendLow32to64U
-  V128ExtendHigh32to64U
-
-  // Extended multiply - v128, v128 -> v128
-  V128ExtMulLow8to16S
-  V128ExtMulHigh8to16S
-  V128ExtMulLow8to16U
-  V128ExtMulHigh8to16U
-  V128ExtMulLow16to32S
-  V128ExtMulHigh16to32S
-  V128ExtMulLow16to32U
-  V128ExtMulHigh16to32U
-  V128ExtMulLow32to64S
-  V128ExtMulHigh32to64S
-  V128ExtMulLow32to64U
-  V128ExtMulHigh32to64U
-
-  // Extended add pairwise - v128 -> v128
-  V128ExtAddPairwise8to16S
-  V128ExtAddPairwise8to16U
-  V128ExtAddPairwise16to32S
-  V128ExtAddPairwise16to32U
-
-  // Dot product
-  V128Dot16to32S // i32x4.dot_i16x8_s
-
-  // Q15 multiply
-  V128Q15MulrSat16S
-
-  // Floating point arithmetic - v128, v128 -> v128
-  V128AddF32
-  V128AddF64
-  V128SubF32
-  V128SubF64
-  V128MulF32
-  V128MulF64
-  V128DivF32
-  V128DivF64
-  V128MinF32
-  V128MinF64
-  V128MaxF32
-  V128MaxF64
-  V128PMinF32
-  V128PMinF64
-  V128PMaxF32
-  V128PMaxF64
-
-  // Floating point unary - v128 -> v128
-  V128AbsF32
-  V128AbsF64
-  V128NegF32
-  V128NegF64
-  V128SqrtF32
-  V128SqrtF64
-  V128CeilF32
-  V128CeilF64
-  V128FloorF32
-  V128FloorF64
-  V128TruncF32
-  V128TruncF64
-  V128NearestF32
-  V128NearestF64
-
-  // Floating point comparisons - v128, v128 -> v128
-  V128EqF32
-  V128EqF64
-  V128NeF32
-  V128NeF64
-  V128LtF32
-  V128LtF64
-  V128GtF32
-  V128GtF64
-  V128LeF32
-  V128LeF64
-  V128GeF32
-  V128GeF64
-
-  // Conversions
-  V128TruncSatF32toI32S
-  V128TruncSatF32toI32U
-  V128TruncSatF64toI32SZero
-  V128TruncSatF64toI32UZero
-  V128ConvertI32toF32S
-  V128ConvertI32toF32U
-  V128ConvertLowI32toF64S
-  V128ConvertLowI32toF64U
-  V128DemoteF64toF32Zero
-  V128PromoteLowF32toF64
-
-  // Memory operations consume an already checked effective address. Wasm
-  // memory indices, alignment hints, and offsets belong to the frontend.
-  LoadExtend(VectorLane, VectorExtension)
-  LoadSplat(VectorLane)
-  LoadZero(VectorLane)
-  LoadLane(VectorLane, Int)
-  StoreLane(VectorLane, Int)
-
-  // Relaxed SIMD instructions
-  V128RelaxedSwizzle // v128, v128 -> v128 (same as swizzle on ARM)
-  V128RelaxedTruncF32toI32S // v128 -> v128
-  V128RelaxedTruncF32toI32U
-  V128RelaxedTruncF64toI32SZero
-  V128RelaxedTruncF64toI32UZero
-  V128RelaxedMaddF32 // v128, v128, v128 -> v128 (a * b + c)
-  V128RelaxedNmaddF32 // v128, v128, v128 -> v128 (-a * b + c)
-  V128RelaxedMaddF64
-  V128RelaxedNmaddF64
-  V128RelaxedLaneselect8 // v128, v128, v128 -> v128 (bitselect)
-  V128RelaxedLaneselect16
-  V128RelaxedLaneselect32
-  V128RelaxedLaneselect64
-  V128RelaxedMinF32 // v128, v128 -> v128
-  V128RelaxedMaxF32
-  V128RelaxedMinF64
-  V128RelaxedMaxF64
-  V128RelaxedQ15MulrS // v128, v128 -> v128
-  V128RelaxedDot8to16S // v128, v128 -> v128
-  V128RelaxedDot8to32AddS // v128, v128, v128 -> v128
+  Shuffle(FixedArray[Int])
+  Swizzle
+  Bitwise(VectorBitwiseOp)
+  Predicate(VectorPredicateOp)
+  IntUnary(VectorIntUnaryOp, VectorIntLane)
+  IntBinary(VectorIntBinaryOp, VectorIntLane)
+  IntShift(VectorIntShiftOp, VectorIntLane)
+  IntCompare(VectorIntCompareOp, VectorIntLane)
+  Narrow(VectorIntLane, VectorSignedness)
+  FloatUnary(VectorFloatUnaryOp, VectorFloatLane)
+  FloatBinary(VectorFloatBinaryOp, VectorFloatLane)
+  FloatCompare(VectorFloatCompareOp, VectorFloatLane)
+  Convert(VectorConversionOp)
+  Relaxed(VectorRelaxedOp)
 } derive(Debug, Eq, Hash)
 
 ///|
