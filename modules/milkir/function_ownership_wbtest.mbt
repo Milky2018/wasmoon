@@ -28,24 +28,71 @@ test "builder rejects a value owned by another function" {
 }
 
 ///|
-test "verify rejects a foreign value despite matching id and type" {
+test "block rejects an instruction with a foreign argument" {
   let first = Function::new_empty("first")
   let foreign = first.add_param(I32)
   let second = Function::new_empty("second")
   let own_value = second.add_param(I32)
-  second.add_result(I32)
   let result = second.new_value(I32)
   let entry = second.new_block([])
-  entry.append_inst(
-    second.new_inst(
-      Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)),
-      [foreign, own_value],
-      [result],
-    ),
-  )
-  entry.set_terminator(Return([result]))
+  let inst : Inst = {
+    owner: second.owner,
+    id: 0,
+    results: [result],
+    opcode: Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)),
+    args: [foreign, own_value],
+    operands: [own_value, own_value],
+    metadata: [],
+  }
+  entry.append_inst(inst)
+  inspect(entry.instructions.length(), content="0")
+  entry.set_terminator(Return([]))
   try second.verify() catch {
-    _ => ()
+    err => inspect(err, content="ForeignValue(value_id=0)")
+  } noraise {
+    _ => fail("expected a foreign value error")
+  }
+}
+
+///|
+test "block rejects an instruction with a foreign operand" {
+  let first = Function::new_empty("first")
+  let foreign = first.add_param(I32)
+  let second = Function::new_empty("second")
+  let own_value = second.add_param(I32)
+  let result = second.new_value(I32)
+  let entry = second.new_block([])
+  let inst : Inst = {
+    owner: second.owner,
+    id: 0,
+    results: [result],
+    opcode: Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)),
+    args: [own_value, own_value],
+    operands: [foreign, own_value],
+    metadata: [],
+  }
+  entry.append_inst(inst)
+  inspect(entry.instructions.length(), content="0")
+  entry.set_terminator(Return([]))
+  try second.verify() catch {
+    err => inspect(err, content="ForeignValue(value_id=0)")
+  } noraise {
+    _ => fail("expected a foreign value error")
+  }
+}
+
+///|
+test "block rejects an instruction with a foreign result" {
+  let first = Function::new_empty("first")
+  let foreign = first.new_value(I32)
+  let second = Function::new_empty("second")
+  let entry = second.new_block([])
+  let inst = second.new_inst(Scalar(ScalarOp::IntConst(1L)), [], [foreign])
+  entry.append_inst(inst)
+  inspect(entry.instructions.length(), content="0")
+  entry.set_terminator(Return([]))
+  try second.verify() catch {
+    err => inspect(err, content="ForeignValue(value_id=0)")
   } noraise {
     _ => fail("expected a foreign value error")
   }

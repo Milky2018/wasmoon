@@ -271,13 +271,23 @@ fn Block::add_param(self : Block, value : Value, ty : Type) -> Unit {
 ///|
 /// Add an instruction to this block
 fn Block::add_inst(self : Block, inst : Inst) -> Unit {
-  if physical_equal(self.owner, inst.owner) {
-    self.instructions.push(inst)
-  } else {
+  if !physical_equal(self.owner, inst.owner) {
     self.owner.val.record_construction_error(
       ForeignInstruction(inst_id=inst.id),
     )
+    return
   }
+  for values in [inst.args, inst.operands, inst.results] {
+    for value in values {
+      if !physical_equal(self.owner, value.owner) {
+        self.owner.val.record_construction_error(
+          ForeignValue(value_id=value.id),
+        )
+        return
+      }
+    }
+  }
+  self.instructions.push(inst)
 }
 
 ///|
