@@ -113,13 +113,14 @@ fn gvn_work_budget_for_function(func : Function) -> Int {
 fn run_gvn_pass(func : Function) -> OptResult {
   let before = instruction_count(func)
   let budget = gvn_work_budget_for_function(func)
-  let tick = perf_tick_now()
+  let perf_on = perf_enabled()
+  let tick = if perf_on { perf_tick_now() } else { 0L }
   let stats = if budget == before {
     cse_gvn_global(func)
   } else {
     run_global_value_numbering_with_budget(func, budget)
   }
-  if perf_enabled() {
+  if perf_on {
     perf_record_ir_pass(
       "cse_gvn_global",
       before,
