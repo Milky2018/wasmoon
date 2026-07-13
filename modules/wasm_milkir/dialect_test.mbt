@@ -1,27 +1,23 @@
 ///|
 test "Wasm extension descriptors validate immediate layout" {
-  let desc = descriptor(MemoryGrow(0, Some(10)))
+  let desc = descriptor(RefTest(3, true))
   inspect(desc.dialect, content="wasm")
-  inspect(desc.opcode, content="memory_grow")
-  inspect(desc.expected_immediate_count(), content="1..2")
-  inspect(encode(MemoryGrow(0, None)).matches_descriptor(desc), content="true")
-  inspect(
-    encode(MemoryGrow(0, Some(10))).matches_descriptor(desc),
-    content="true",
-  )
+  inspect(desc.opcode, content="ref_test")
+  inspect(desc.expected_immediate_count(), content="2")
+  inspect(encode(RefTest(3, true)).matches_descriptor(desc), content="true")
 }
 
 ///|
 test "Wasm extension decode reports malformed immediates" {
   let ext = @milkir.ExtOp(
     "wasm",
-    "memory_size",
-    FixedArray::makei(0, fn(_) { 0 }),
+    "struct_get",
+    FixedArray::makei(1, fn(_) { 0 }),
   )
   debug_inspect(
     decode_error(ext),
     content=(
-      #|Some("malformed Wasm MilkIR extension 'memory_size': expected 1 immediates, got 0")
+      #|Some("malformed Wasm MilkIR extension 'struct_get': expected 2 immediates, got 1")
     ),
   )
 }
@@ -54,6 +50,27 @@ test "Wasm extension decode validates bool immediates" {
       #|Some("malformed Wasm MilkIR extension 'ref_test': immediate 1 is a bool flag encoded as 0 or 1, got 2")
     ),
   )
+}
+
+///|
+test "Wasm extension decode rejects runtime-lowered operations" {
+  let extensions : Array[@milkir.ExtOp] = [
+    @milkir.ExtOp::ExtOp("wasm", "memory_grow", [0]),
+    @milkir.ExtOp::ExtOp("wasm", "memory_size", [0]),
+    @milkir.ExtOp::ExtOp("wasm", "memory_fill", [0]),
+    @milkir.ExtOp::ExtOp("wasm", "memory_copy", [0, 0]),
+    @milkir.ExtOp::ExtOp("wasm", "memory_init", [0, 0]),
+    @milkir.ExtOp::ExtOp("wasm", "data_drop", [0]),
+    @milkir.ExtOp::ExtOp("wasm", "table_grow", [0]),
+    @milkir.ExtOp::ExtOp("wasm", "table_fill", [0]),
+    @milkir.ExtOp::ExtOp("wasm", "table_copy", [0, 0]),
+    @milkir.ExtOp::ExtOp("wasm", "table_init", [0, 0]),
+    @milkir.ExtOp::ExtOp("wasm", "elem_drop", [0]),
+  ]
+  for ext in extensions {
+    assert_true(decode_error(ext) is Some(_))
+    assert_true(decode(ext) is None)
+  }
 }
 
 ///|

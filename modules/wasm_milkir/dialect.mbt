@@ -1,17 +1,6 @@
 ///|
 pub(all) enum WasmOpcode {
   LoadMemBase(Int)
-  MemoryGrow(Int, Int?)
-  MemorySize(Int)
-  MemoryFill(Int)
-  MemoryCopy(Int, Int)
-  MemoryInit(Int, Int)
-  DataDrop(Int)
-  TableGrow(Int)
-  TableFill(Int)
-  TableCopy(Int, Int)
-  TableInit(Int, Int)
-  ElemDrop(Int)
   WasmCall(Int)
   WasmCallIndirect(Int, Int)
   CallRef(Int)
@@ -87,34 +76,9 @@ fn ext_descriptor(name : String, count : Int) -> @milkir.ExtOpDescriptor {
 }
 
 ///|
-fn ext_descriptor_range(
-  name : String,
-  min_count : Int,
-  max_count : Int,
-) -> @milkir.ExtOpDescriptor {
-  @milkir.ExtOpDescriptor::with_immediate_range(
-    WASM_DIALECT,
-    name,
-    min_count,
-    max_count,
-  )
-}
-
-///|
 pub fn descriptor(opcode : WasmOpcode) -> @milkir.ExtOpDescriptor {
   match opcode {
     LoadMemBase(_) => ext_descriptor("load_mem_base", 1)
-    MemoryGrow(_, _) => ext_descriptor_range("memory_grow", 1, 2)
-    MemorySize(_) => ext_descriptor("memory_size", 1)
-    MemoryFill(_) => ext_descriptor("memory_fill", 1)
-    MemoryCopy(_, _) => ext_descriptor("memory_copy", 2)
-    MemoryInit(_, _) => ext_descriptor("memory_init", 2)
-    DataDrop(_) => ext_descriptor("data_drop", 1)
-    TableGrow(_) => ext_descriptor("table_grow", 1)
-    TableFill(_) => ext_descriptor("table_fill", 1)
-    TableCopy(_, _) => ext_descriptor("table_copy", 2)
-    TableInit(_, _) => ext_descriptor("table_init", 2)
-    ElemDrop(_) => ext_descriptor("elem_drop", 1)
     WasmCall(_) => ext_descriptor("call", 1)
     WasmCallIndirect(_, _) => ext_descriptor("call_indirect", 2)
     CallRef(_) => ext_descriptor("call_ref", 1)
@@ -167,17 +131,6 @@ pub fn descriptor(opcode : WasmOpcode) -> @milkir.ExtOpDescriptor {
 pub fn descriptor_by_name(name : String) -> @milkir.ExtOpDescriptor? {
   match name {
     "load_mem_base" => Some(ext_descriptor("load_mem_base", 1))
-    "memory_grow" => Some(ext_descriptor_range("memory_grow", 1, 2))
-    "memory_size" => Some(ext_descriptor("memory_size", 1))
-    "memory_fill" => Some(ext_descriptor("memory_fill", 1))
-    "memory_copy" => Some(ext_descriptor("memory_copy", 2))
-    "memory_init" => Some(ext_descriptor("memory_init", 2))
-    "data_drop" => Some(ext_descriptor("data_drop", 1))
-    "table_grow" => Some(ext_descriptor("table_grow", 1))
-    "table_fill" => Some(ext_descriptor("table_fill", 1))
-    "table_copy" => Some(ext_descriptor("table_copy", 2))
-    "table_init" => Some(ext_descriptor("table_init", 2))
-    "elem_drop" => Some(ext_descriptor("elem_drop", 1))
     "call" => Some(ext_descriptor("call", 1))
     "call_indirect" => Some(ext_descriptor("call_indirect", 2))
     "call_ref" => Some(ext_descriptor("call_ref", 1))
@@ -233,26 +186,6 @@ pub fn descriptor_by_name(name : String) -> @milkir.ExtOpDescriptor? {
 pub fn encode(opcode : WasmOpcode) -> @milkir.ExtOp {
   let (name, immediates) = match opcode {
     LoadMemBase(memidx) => ("load_mem_base", imm([memidx]))
-    MemoryGrow(memidx, max_pages) =>
-      (
-        "memory_grow",
-        match max_pages {
-          Some(max) => imm([memidx, max])
-          None => imm([memidx])
-        },
-      )
-    MemorySize(memidx) => ("memory_size", imm([memidx]))
-    MemoryFill(memidx) => ("memory_fill", imm([memidx]))
-    MemoryCopy(dst_memidx, src_memidx) =>
-      ("memory_copy", imm([dst_memidx, src_memidx]))
-    MemoryInit(memidx, data_idx) => ("memory_init", imm([memidx, data_idx]))
-    DataDrop(data_idx) => ("data_drop", imm([data_idx]))
-    TableGrow(table_idx) => ("table_grow", imm([table_idx]))
-    TableFill(table_idx) => ("table_fill", imm([table_idx]))
-    TableCopy(dst_table_idx, src_table_idx) =>
-      ("table_copy", imm([dst_table_idx, src_table_idx]))
-    TableInit(table_idx, elem_idx) => ("table_init", imm([table_idx, elem_idx]))
-    ElemDrop(elem_idx) => ("elem_drop", imm([elem_idx]))
     WasmCall(func_idx) => ("call", imm([func_idx]))
     WasmCallIndirect(type_idx, table_idx) =>
       ("call_indirect", imm([type_idx, table_idx]))
@@ -328,19 +261,6 @@ pub fn decode(ext : @milkir.ExtOp) -> WasmOpcode? {
   let imms = ext.immediates
   match ext.opcode {
     "load_mem_base" if imms.length() == 1 => Some(LoadMemBase(imms[0]))
-    "memory_grow" if imms.length() == 1 => Some(MemoryGrow(imms[0], None))
-    "memory_grow" if imms.length() == 2 =>
-      Some(MemoryGrow(imms[0], Some(imms[1])))
-    "memory_size" if imms.length() == 1 => Some(MemorySize(imms[0]))
-    "memory_fill" if imms.length() == 1 => Some(MemoryFill(imms[0]))
-    "memory_copy" if imms.length() == 2 => Some(MemoryCopy(imms[0], imms[1]))
-    "memory_init" if imms.length() == 2 => Some(MemoryInit(imms[0], imms[1]))
-    "data_drop" if imms.length() == 1 => Some(DataDrop(imms[0]))
-    "table_grow" if imms.length() == 1 => Some(TableGrow(imms[0]))
-    "table_fill" if imms.length() == 1 => Some(TableFill(imms[0]))
-    "table_copy" if imms.length() == 2 => Some(TableCopy(imms[0], imms[1]))
-    "table_init" if imms.length() == 2 => Some(TableInit(imms[0], imms[1]))
-    "elem_drop" if imms.length() == 1 => Some(ElemDrop(imms[0]))
     "call" if imms.length() == 1 => Some(WasmCall(imms[0]))
     "call_indirect" if imms.length() == 2 =>
       Some(WasmCallIndirect(imms[0], imms[1]))

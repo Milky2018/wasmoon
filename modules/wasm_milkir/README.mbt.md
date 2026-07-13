@@ -61,20 +61,20 @@ test "build a Wasm memory.size extension instruction" {
 ```moonbit check
 ///|
 test "validate and decode a typed Wasm extension operation" {
-  let opcode = WasmOpcode::MemoryGrow(0, Some(1024))
+  let opcode = WasmOpcode::RefTest(3, true)
   let ext = encode(opcode)
   let desc = descriptor(opcode)
   inspect(ext.matches_descriptor(desc), content="true")
-  inspect(decode_or_abort(ext) == opcode, content="true")
+  inspect(decode(ext) == Some(opcode), content="true")
   let malformed = @milkir.ExtOp(
     "wasm",
-    "memory_grow",
-    FixedArray::makei(0, fn(_) { 0 }),
+    "ref_test",
+    FixedArray::makei(2, fn(i) { if i == 0 { 3 } else { 2 } }),
   )
   debug_inspect(
     decode_error(malformed),
     content=(
-      #|Some("malformed Wasm MilkIR extension 'memory_grow': expected 1..2 immediates, got 0")
+      #|Some("malformed Wasm MilkIR extension 'ref_test': immediate 1 is a bool flag encoded as 0 or 1, got 2")
     ),
   )
 }
