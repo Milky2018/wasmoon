@@ -528,9 +528,7 @@ test "plan MilkIR CallPtr through reusable JIT pipeline" {
   let result = milk.new_value(I64)
   let entry = milk.new_block([])
   entry.append_inst(
-    milk.new_inst(Call(@milkir.CallOp::Pointer(2, 1)), [callee, vmctx, arg], [
-      result,
-    ]),
+    milk.new_inst(Call(Pointer(2, 1)), [callee, vmctx, arg], [result]),
   )
   entry.set_terminator(Return([result]))
   let plan = plan_milkir_integration_for_target(milk, X64)
@@ -1310,12 +1308,8 @@ test "plan MilkIR generic memory through reusable x64 JIT pipeline" {
   let offset = milk.new_value(I64)
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Scalar(IntConst(0L)), [], [offset]))
-  entry.append_inst(
-    milk.new_inst(Memory(@milkir.MemoryOp::Store(I32)), [ptr, value, offset], []),
-  )
-  entry.append_inst(
-    milk.new_inst(Memory(@milkir.MemoryOp::Load(I32)), [ptr, offset], [loaded]),
-  )
+  entry.append_inst(milk.new_inst(Memory(Store(I32)), [ptr, value, offset], []))
+  entry.append_inst(milk.new_inst(Memory(Load(I32)), [ptr, offset], [loaded]))
   entry.set_terminator(Return([loaded]))
   let plan = plan_milkir_integration_for_target(milk, X64)
   let mut has_store = false
@@ -1382,12 +1376,8 @@ test "plan MilkIR generic memory through reusable AArch64 JIT pipeline" {
   let offset = milk.new_value(I64)
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Scalar(IntConst(0L)), [], [offset]))
-  entry.append_inst(
-    milk.new_inst(Memory(@milkir.MemoryOp::Store(I32)), [ptr, value, offset], []),
-  )
-  entry.append_inst(
-    milk.new_inst(Memory(@milkir.MemoryOp::Load(I32)), [ptr, offset], [loaded]),
-  )
+  entry.append_inst(milk.new_inst(Memory(Store(I32)), [ptr, value, offset], []))
+  entry.append_inst(milk.new_inst(Memory(Load(I32)), [ptr, offset], [loaded]))
   entry.set_terminator(Return([loaded]))
   let plan = plan_milkir_integration_for_target(milk, AArch64)
   let mut has_str_w = false
@@ -1462,12 +1452,8 @@ test "plan MilkIR scalar float memory through reusable x64 JIT pipeline" {
   let offset = milk.new_value(I64)
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Scalar(IntConst(0L)), [], [offset]))
-  entry.append_inst(
-    milk.new_inst(Memory(@milkir.MemoryOp::Store(F64)), [ptr, value, offset], []),
-  )
-  entry.append_inst(
-    milk.new_inst(Memory(@milkir.MemoryOp::Load(F64)), [ptr, offset], [loaded]),
-  )
+  entry.append_inst(milk.new_inst(Memory(Store(F64)), [ptr, value, offset], []))
+  entry.append_inst(milk.new_inst(Memory(Load(F64)), [ptr, offset], [loaded]))
   entry.set_terminator(Return([loaded]))
   let plan = plan_milkir_integration_for_target(milk, X64)
   let mut has_movsd_store = false
@@ -1502,12 +1488,8 @@ test "plan MilkIR scalar float memory through reusable AArch64 JIT pipeline" {
   let offset = milk.new_value(I64)
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Scalar(IntConst(0L)), [], [offset]))
-  entry.append_inst(
-    milk.new_inst(Memory(@milkir.MemoryOp::Store(F64)), [ptr, value, offset], []),
-  )
-  entry.append_inst(
-    milk.new_inst(Memory(@milkir.MemoryOp::Load(F64)), [ptr, offset], [loaded]),
-  )
+  entry.append_inst(milk.new_inst(Memory(Store(F64)), [ptr, value, offset], []))
+  entry.append_inst(milk.new_inst(Memory(Load(F64)), [ptr, offset], [loaded]))
   entry.set_terminator(Return([loaded]))
   let plan = plan_milkir_integration_for_target(milk, AArch64)
   let mut has_str_d = false
@@ -1544,11 +1526,9 @@ test "plan MilkIR vector memory through reusable x64 JIT pipeline" {
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Scalar(IntConst(0L)), [], [offset]))
   entry.append_inst(
-    milk.new_inst(Memory(@milkir.MemoryOp::Store(V128)), [ptr, value, offset], []),
+    milk.new_inst(Memory(Store(V128)), [ptr, value, offset], []),
   )
-  entry.append_inst(
-    milk.new_inst(Memory(@milkir.MemoryOp::Load(V128)), [ptr, offset], [loaded]),
-  )
+  entry.append_inst(milk.new_inst(Memory(Load(V128)), [ptr, offset], [loaded]))
   entry.set_terminator(Return([]))
   let plan = plan_milkir_integration_for_target(milk, X64)
   let mut has_movdqu_store = false
@@ -1584,11 +1564,9 @@ test "plan MilkIR vector memory through reusable AArch64 JIT pipeline" {
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Scalar(IntConst(0L)), [], [offset]))
   entry.append_inst(
-    milk.new_inst(Memory(@milkir.MemoryOp::Store(V128)), [ptr, value, offset], []),
+    milk.new_inst(Memory(Store(V128)), [ptr, value, offset], []),
   )
-  entry.append_inst(
-    milk.new_inst(Memory(@milkir.MemoryOp::Load(V128)), [ptr, offset], [loaded]),
-  )
+  entry.append_inst(milk.new_inst(Memory(Load(V128)), [ptr, offset], [loaded]))
   entry.set_terminator(Return([]))
   let plan = plan_milkir_integration_for_target(milk, AArch64)
   let mut has_str_q = false

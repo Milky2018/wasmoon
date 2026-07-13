@@ -586,9 +586,9 @@ fn verify_opcode_contract(inst : Inst) -> Unit raise VerifyError {
   match inst.opcode {
     Call(call_op) =>
       match call_op {
-        CallOp::Direct(_, signature) =>
+        Direct(_, signature) =>
           verify_signature(inst, signature, 0, "direct call")
-        CallOp::Pointer(num_args, num_results) => {
+        Pointer(num_args, num_results) => {
           if num_args < 0 || num_results < 0 {
             raise ArityMismatch(
               message="pointer call argument and result counts must be non-negative",
@@ -605,20 +605,20 @@ fn verify_opcode_contract(inst : Inst) -> Unit raise VerifyError {
       }
     Memory(memory_op) =>
       match memory_op {
-        MemoryOp::Load(result_type) => {
+        Load(result_type) => {
           require_arity(inst.args.length(), 2, "memory load")
           require_pointer_value(inst.args[0].ty, "memory load")
           require_operand_type(inst, 1, I64, "memory load")
           require_result_types(inst, [result_type], "memory load")
         }
-        MemoryOp::Store(value_type) => {
+        Store(value_type) => {
           require_arity(inst.args.length(), 3, "memory store")
           require_pointer_value(inst.args[0].ty, "memory store")
           require_operand_type(inst, 1, value_type, "memory store")
           require_operand_type(inst, 2, I64, "memory store")
           require_no_results(inst, "memory store")
         }
-        MemoryOp::LoadNarrow(result_type, bits, _) => {
+        LoadNarrow(result_type, bits, _) => {
           require_arity(inst.args.length(), 2, "narrow memory load")
           require_pointer_value(inst.args[0].ty, "narrow memory load")
           require_operand_type(inst, 1, I64, "narrow memory load")
@@ -630,7 +630,7 @@ fn verify_opcode_contract(inst : Inst) -> Unit raise VerifyError {
             )
           }
         }
-        MemoryOp::StoreNarrow(bits) => {
+        StoreNarrow(bits) => {
           require_arity(inst.args.length(), 3, "narrow memory store")
           require_pointer_value(inst.args[0].ty, "narrow memory store")
           require_integer(inst.args[1].ty, "narrow memory store")
@@ -642,7 +642,7 @@ fn verify_opcode_contract(inst : Inst) -> Unit raise VerifyError {
             )
           }
         }
-        MemoryOp::Vector(opcode) => verify_vector_memory_contract(inst, opcode)
+        Vector(opcode) => verify_vector_memory_contract(inst, opcode)
       }
     Ext(ext, signature) => {
       if ext.dialect == "" || ext.opcode == "" {

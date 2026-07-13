@@ -2,56 +2,25 @@
 test "opcode semantics classify optimizer-visible behavior" {
   let signature = Signature([], [])
   let cases : Array[(String, Opcode)] = [
-    ("pure scalar", Scalar(ScalarOp::IntBinary(IntBinaryOp::Add))),
-    ("signed div", Scalar(ScalarOp::IntBinary(IntBinaryOp::SignedDiv))),
-    ("unsigned div", Scalar(ScalarOp::IntBinary(IntBinaryOp::UnsignedDiv))),
-    ("signed rem", Scalar(ScalarOp::IntBinary(IntBinaryOp::SignedRem))),
-    ("unsigned rem", Scalar(ScalarOp::IntBinary(IntBinaryOp::UnsignedRem))),
-    (
-      "float to signed int",
-      Scalar(ScalarOp::Convert(ConversionOp::FloatToSignedInt)),
-    ),
-    (
-      "float to unsigned int",
-      Scalar(ScalarOp::Convert(ConversionOp::FloatToUnsignedInt)),
-    ),
-    ("load", Memory(MemoryOp::Load(I32))),
-    ("load narrow", Memory(MemoryOp::LoadNarrow(I32, 8, false))),
-    ("store", Memory(MemoryOp::Store(I32))),
-    ("store narrow", Memory(MemoryOp::StoreNarrow(8))),
-    (
-      "vector load extend",
-      Memory(
-        MemoryOp::Vector(
-          VectorMemoryOp::LoadExtend(
-            VectorIntLane::I8,
-            VectorSignedness::Signed,
-          ),
-        ),
-      ),
-    ),
-    (
-      "vector load splat",
-      Memory(MemoryOp::Vector(VectorMemoryOp::LoadSplat(VectorIntLane::I8))),
-    ),
-    (
-      "vector load zero",
-      Memory(MemoryOp::Vector(VectorMemoryOp::LoadZero(VectorIntLane::I32))),
-    ),
-    (
-      "vector load lane",
-      Memory(MemoryOp::Vector(VectorMemoryOp::LoadLane(VectorIntLane::I8, 0))),
-    ),
-    (
-      "vector store lane",
-      Memory(MemoryOp::Vector(VectorMemoryOp::StoreLane(VectorIntLane::I8, 0))),
-    ),
-    (
-      "direct call",
-      Call(CallOp::Direct(ExternalSymbol::ExternalSymbol("callee"), signature)),
-    ),
-    ("pointer call", Call(CallOp::Pointer(0, 0))),
-    ("extension", Ext(ExtOp::ExtOp("test", "op", []), signature)),
+    ("pure scalar", Scalar(IntBinary(Add))),
+    ("signed div", Scalar(IntBinary(SignedDiv))),
+    ("unsigned div", Scalar(IntBinary(UnsignedDiv))),
+    ("signed rem", Scalar(IntBinary(SignedRem))),
+    ("unsigned rem", Scalar(IntBinary(UnsignedRem))),
+    ("float to signed int", Scalar(Convert(FloatToSignedInt))),
+    ("float to unsigned int", Scalar(Convert(FloatToUnsignedInt))),
+    ("load", Memory(Load(I32))),
+    ("load narrow", Memory(LoadNarrow(I32, 8, false))),
+    ("store", Memory(Store(I32))),
+    ("store narrow", Memory(StoreNarrow(8))),
+    ("vector load extend", Memory(Vector(LoadExtend(I8, Signed)))),
+    ("vector load splat", Memory(Vector(LoadSplat(I8)))),
+    ("vector load zero", Memory(Vector(LoadZero(I32)))),
+    ("vector load lane", Memory(Vector(LoadLane(I8, 0)))),
+    ("vector store lane", Memory(Vector(StoreLane(I8, 0)))),
+    ("direct call", Call(Direct(ExternalSymbol("callee"), signature))),
+    ("pointer call", Call(Pointer(0, 0))),
+    ("extension", Ext(ExtOp("test", "op", []), signature)),
   ]
   debug_inspect(
     cases.map(fn(entry) {
@@ -101,10 +70,8 @@ test "dead code preserves unused trapping and observable instructions" {
   builder.add_result(I32)
   builder.sdiv(lhs, rhs) |> ignore
   builder.fcvt_to_sint(I32, float) |> ignore
-  builder.call_symbol(ExternalSymbol::ExternalSymbol("callee"), Some(I32), [])
-  |> ignore
-  builder.emit_ext_inst(I32, ExtOp::ExtOp("test", "observable", []), [])
-  |> ignore
+  builder.call_symbol(ExternalSymbol("callee"), Some(I32), []) |> ignore
+  builder.emit_ext_inst(I32, ExtOp("test", "observable", []), []) |> ignore
   let result = builder.iconst_i32(0)
   builder.return_([result])
   let func = builder.get_function()
@@ -118,12 +85,12 @@ test "dead code preserves unused trapping and observable instructions" {
 test "GVN and egraph derive policy from opcode semantics" {
   let func = Function::new_empty("semantic_policy")
   let opcodes : Array[Opcode] = [
-    Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)),
-    Scalar(ScalarOp::FloatBinary(FloatBinaryOp::Add)),
-    Scalar(ScalarOp::IntBinary(IntBinaryOp::SignedDiv)),
-    Memory(MemoryOp::Load(I32)),
-    Call(CallOp::Pointer(0, 1)),
-    Ext(ExtOp::ExtOp("test", "op", []), Signature([], [I32])),
+    Scalar(IntBinary(Add)),
+    Scalar(FloatBinary(Add)),
+    Scalar(IntBinary(SignedDiv)),
+    Memory(Load(I32)),
+    Call(Pointer(0, 1)),
+    Ext(ExtOp("test", "op", []), Signature([], [I32])),
   ]
   let instructions = opcodes.map(fn(opcode) {
     func.new_inst(opcode, [], [func.new_value(I32)])

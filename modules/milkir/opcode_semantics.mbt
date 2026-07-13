@@ -15,16 +15,12 @@ priv struct OpcodeSemantics {
 
 ///|
 fn pure_opcode_semantics() -> OpcodeSemantics {
-  {
-    memory: MemoryEffect::None,
-    may_trap: false,
-    other_observable_effect: false,
-  }
+  { memory: None, may_trap: false, other_observable_effect: false }
 }
 
 ///|
 fn trapping_opcode_semantics() -> OpcodeSemantics {
-  { memory: MemoryEffect::None, may_trap: true, other_observable_effect: false }
+  { memory: None, may_trap: true, other_observable_effect: false }
 }
 
 ///|

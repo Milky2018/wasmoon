@@ -24,7 +24,7 @@ fn lower_fconst32(
 ) -> Unit {
   if inst.first_result() is Some(result) {
     let vreg = ctx.get_vreg(result)
-    let machv_inst = @instr.Inst(@instr.LoadConstF32(bits.reinterpret_as_int()))
+    let machv_inst = @instr.Inst(LoadConstF32(bits.reinterpret_as_int()))
     machv_inst.add_def({ reg: Virtual(vreg) })
     block.add_inst(machv_inst)
   }
@@ -1721,7 +1721,7 @@ fn lower_bitcast(
     let machv_inst = if dst.class == src.class {
       @instr.Inst(Move)
     } else {
-      @instr.Inst(Bitcast)
+      Inst(Bitcast)
     }
     machv_inst.add_def({ reg: Virtual(dst) })
     machv_inst.add_use(Virtual(src))

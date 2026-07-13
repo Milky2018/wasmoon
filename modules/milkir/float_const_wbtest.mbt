@@ -17,7 +17,7 @@ test "floating constants preserve zero signs and NaN payloads" {
   for index, bits in f32_bits {
     inspect(
       f32_builder.current_block().instructions[index].opcode ==
-      Scalar(ScalarOp::FloatConst32(bits)),
+      Scalar(FloatConst32(bits)),
       content="true",
     )
   }
@@ -31,7 +31,7 @@ test "floating constants preserve zero signs and NaN payloads" {
   for index, bits in f64_bits {
     inspect(
       f64_builder.current_block().instructions[index].opcode ==
-      Scalar(ScalarOp::FloatConst64(bits)),
+      Scalar(FloatConst64(bits)),
       content="true",
     )
   }
@@ -41,9 +41,7 @@ test "floating constants preserve zero signs and NaN payloads" {
 test "F32 instruction identity uses explicit bit patterns" {
   let func = Function::new_empty("f32_identity")
   let make = bits => {
-    func.new_inst(Scalar(ScalarOp::FloatConst32(bits)), [], [
-      func.new_value(F32),
-    ])
+    func.new_inst(Scalar(FloatConst32(bits)), [], [func.new_value(F32)])
   }
   let positive_zero = make(0U)
   let negative_zero = make(0x80000000U)
@@ -62,7 +60,7 @@ test "verify binds floating constant payload width to result type" {
   let narrow_result = narrow.new_value(F64)
   let narrow_entry = narrow.new_block([])
   narrow_entry.append_inst(
-    narrow.new_inst(Scalar(ScalarOp::FloatConst32(0U)), [], [narrow_result]),
+    narrow.new_inst(Scalar(FloatConst32(0U)), [], [narrow_result]),
   )
   narrow_entry.set_terminator(Return([]))
   try narrow.verify() catch {
@@ -75,7 +73,7 @@ test "verify binds floating constant payload width to result type" {
   let wide_result = wide.new_value(F32)
   let wide_entry = wide.new_block([])
   wide_entry.append_inst(
-    wide.new_inst(Scalar(ScalarOp::FloatConst64(0UL)), [], [wide_result]),
+    wide.new_inst(Scalar(FloatConst64(0UL)), [], [wide_result]),
   )
   wide_entry.set_terminator(Return([]))
   try wide.verify() catch {

@@ -117,7 +117,7 @@ fn fold_constants(func : Function) -> OptResult {
     for inst in block.instructions {
       // First, record any constant instruction
       match inst.opcode {
-        Scalar(ScalarOp::IntConst(v)) =>
+        Scalar(IntConst(v)) =>
           match inst.first_result() {
             Some(r) =>
               if r.ty is I32 {
@@ -127,13 +127,13 @@ fn fold_constants(func : Function) -> OptResult {
               }
             None => ()
           }
-        Scalar(ScalarOp::FloatConst32(bits)) =>
+        Scalar(FloatConst32(bits)) =>
           match inst.first_result() {
             Some(r) =>
               constants.set(r.id, F32(Float::reinterpret_from_uint(bits)))
             None => ()
           }
-        Scalar(ScalarOp::FloatConst64(bits)) =>
+        Scalar(FloatConst64(bits)) =>
           match inst.first_result() {
             Some(r) => constants.set(r.id, F64(bits.reinterpret_as_double()))
             None => ()
@@ -168,10 +168,10 @@ priv enum ConstValue {
 /// Convert constant value to opcode
 fn ConstValue::to_opcode(self : ConstValue) -> Opcode {
   match self {
-    I32(v) => Scalar(ScalarOp::IntConst(v.to_int64()))
-    I64(v) => Scalar(ScalarOp::IntConst(v))
-    F32(v) => Scalar(ScalarOp::FloatConst32(v.reinterpret_as_uint()))
-    F64(v) => Scalar(ScalarOp::FloatConst64(v.reinterpret_as_uint64()))
+    I32(v) => Scalar(IntConst(v.to_int64()))
+    I64(v) => Scalar(IntConst(v))
+    F32(v) => Scalar(FloatConst32(v.reinterpret_as_uint()))
+    F64(v) => Scalar(FloatConst64(v.reinterpret_as_uint64()))
   }
 }
 
@@ -183,48 +183,40 @@ fn try_fold_constant(
 ) -> ConstValue? {
   match inst.opcode {
     // Constants are already folded
-    Scalar(ScalarOp::IntConst(_))
-    | Scalar(ScalarOp::FloatConst32(_))
-    | Scalar(ScalarOp::FloatConst64(_)) => None
+    Scalar(IntConst(_)) | Scalar(FloatConst32(_)) | Scalar(FloatConst64(_)) =>
+      None
     // Binary integer operations
-    Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)) =>
+    Scalar(IntBinary(Add)) =>
       fold_binary_int(inst, constants, fn(a, b) { a + b })
-    Scalar(ScalarOp::IntBinary(IntBinaryOp::Sub)) =>
+    Scalar(IntBinary(Sub)) =>
       fold_binary_int(inst, constants, fn(a, b) { a - b })
-    Scalar(ScalarOp::IntBinary(IntBinaryOp::Mul)) =>
+    Scalar(IntBinary(Mul)) =>
       fold_binary_int(inst, constants, fn(a, b) { a * b })
-    Scalar(ScalarOp::IntBinary(IntBinaryOp::SignedDiv)) =>
-      fold_sdiv(inst, constants)
-    Scalar(ScalarOp::IntBinary(IntBinaryOp::UnsignedDiv)) =>
-      fold_udiv(inst, constants)
+    Scalar(IntBinary(SignedDiv)) => fold_sdiv(inst, constants)
+    Scalar(IntBinary(UnsignedDiv)) => fold_udiv(inst, constants)
     // Bitwise operations
-    Scalar(ScalarOp::IntBinary(IntBinaryOp::And)) =>
+    Scalar(IntBinary(And)) =>
       fold_binary_int(inst, constants, fn(a, b) { a & b })
-    Scalar(ScalarOp::IntBinary(IntBinaryOp::Or)) =>
+    Scalar(IntBinary(Or)) =>
       fold_binary_int(inst, constants, fn(a, b) { a | b })
-    Scalar(ScalarOp::IntBinary(IntBinaryOp::Xor)) =>
+    Scalar(IntBinary(Xor)) =>
       fold_binary_int(inst, constants, fn(a, b) { a ^ b })
-    Scalar(ScalarOp::IntBinary(IntBinaryOp::ShiftLeft)) =>
-      fold_ishl(inst, constants)
-    Scalar(ScalarOp::IntBinary(IntBinaryOp::SignedShiftRight)) =>
-      fold_sshr(inst, constants)
-    Scalar(ScalarOp::IntBinary(IntBinaryOp::UnsignedShiftRight)) =>
-      fold_ushr(inst, constants)
-    Scalar(ScalarOp::IntBinary(IntBinaryOp::SignedRem)) =>
-      fold_srem(inst, constants)
-    Scalar(ScalarOp::IntBinary(IntBinaryOp::UnsignedRem)) =>
-      fold_urem(inst, constants)
+    Scalar(IntBinary(ShiftLeft)) => fold_ishl(inst, constants)
+    Scalar(IntBinary(SignedShiftRight)) => fold_sshr(inst, constants)
+    Scalar(IntBinary(UnsignedShiftRight)) => fold_ushr(inst, constants)
+    Scalar(IntBinary(SignedRem)) => fold_srem(inst, constants)
+    Scalar(IntBinary(UnsignedRem)) => fold_urem(inst, constants)
     // Float operations
-    Scalar(ScalarOp::FloatBinary(FloatBinaryOp::Add)) =>
+    Scalar(FloatBinary(Add)) =>
       fold_binary_float(inst, constants, fn(a, b) { a + b })
-    Scalar(ScalarOp::FloatBinary(FloatBinaryOp::Sub)) =>
+    Scalar(FloatBinary(Sub)) =>
       fold_binary_float(inst, constants, fn(a, b) { a - b })
-    Scalar(ScalarOp::FloatBinary(FloatBinaryOp::Mul)) =>
+    Scalar(FloatBinary(Mul)) =>
       fold_binary_float(inst, constants, fn(a, b) { a * b })
-    Scalar(ScalarOp::FloatBinary(FloatBinaryOp::Div)) =>
+    Scalar(FloatBinary(Div)) =>
       fold_binary_float(inst, constants, fn(a, b) { a / b })
     // Comparisons
-    Scalar(ScalarOp::IntCompare(cc)) => fold_icmp(inst, constants, cc)
+    Scalar(IntCompare(cc)) => fold_icmp(inst, constants, cc)
     _ => None
   }
 }
@@ -562,7 +554,7 @@ fn canonicalize_aliases(func : Function) -> OptResult {
         }
       }
       // If this instruction defines a copy, make its destination an alias.
-      if inst.opcode is Scalar(ScalarOp::Copy) &&
+      if inst.opcode is Scalar(Copy) &&
         inst.first_result() is Some(dest) &&
         inst.operands.length() > 0 {
         aliases.set(dest.id, inst.operands[0])

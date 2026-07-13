@@ -179,6 +179,7 @@ graph TD
   ISS_163["ISS-163: Migrate vector contracts and producers"]
   ISS_164["ISS-164: Lower normalized vector operations to MachV"]
   ISS_165["ISS-165: Remove the legacy VectorOp matrix and validate SIMD parity"]
+  ISS_166["ISS-166: Eliminate MoonBit warning 73 annotations"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005

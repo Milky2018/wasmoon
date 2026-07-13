@@ -69,10 +69,10 @@ test "function rejects foreign instruction arguments before ID allocation" {
   let foreign = first.add_param(I32)
   let second = Function::new_empty("second")
   let result = second.new_value(I32)
-  let rejected = second.new_inst(Scalar(ScalarOp::Copy), [foreign], [result])
+  let rejected = second.new_inst(Scalar(Copy), [foreign], [result])
   inspect(rejected.args.length(), content="0")
   inspect(rejected.results.length(), content="0")
-  let valid = second.new_inst(Scalar(ScalarOp::IntConst(1L)), [], [result])
+  let valid = second.new_inst(Scalar(IntConst(1L)), [], [result])
   inspect(valid.id, content="0")
   let entry = second.new_block([])
   entry.append_inst(valid)
@@ -89,11 +89,11 @@ test "function rejects foreign instruction results before ID allocation" {
   let first = Function::new_empty("first")
   let foreign = first.new_value(I32)
   let second = Function::new_empty("second")
-  let rejected = second.new_inst(Scalar(ScalarOp::IntConst(1L)), [], [foreign])
+  let rejected = second.new_inst(Scalar(IntConst(1L)), [], [foreign])
   inspect(rejected.args.length(), content="0")
   inspect(rejected.results.length(), content="0")
   let result = second.new_value(I32)
-  let valid = second.new_inst(Scalar(ScalarOp::IntConst(1L)), [], [result])
+  let valid = second.new_inst(Scalar(IntConst(1L)), [], [result])
   inspect(valid.id, content="0")
   let entry = second.new_block([])
   entry.append_inst(valid)
@@ -133,7 +133,7 @@ test "block rejects an instruction with a foreign argument" {
     owner: second.owner,
     id: 0,
     results: [result],
-    opcode: Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)),
+    opcode: Scalar(IntBinary(Add)),
     args: [foreign, own_value],
     operands: [own_value, own_value],
     metadata: [],
@@ -160,7 +160,7 @@ test "block rejects an instruction with a foreign operand" {
     owner: second.owner,
     id: 0,
     results: [result],
-    opcode: Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)),
+    opcode: Scalar(IntBinary(Add)),
     args: [own_value, own_value],
     operands: [foreign, own_value],
     metadata: [],
@@ -185,7 +185,7 @@ test "block rejects an instruction with a foreign result" {
     owner: second.owner,
     id: 0,
     results: [foreign],
-    opcode: Scalar(ScalarOp::IntConst(1L)),
+    opcode: Scalar(IntConst(1L)),
     args: [],
     operands: [],
     metadata: [],
@@ -218,11 +218,7 @@ test "verify rejects a block owned by another function" {
 test "block rejects an instruction owned by another function" {
   let first = Function::new_empty("first")
   let symbol = first.declare_external_symbol("foreign")
-  let foreign = first.new_inst(
-    Call(CallOp::Direct(symbol, Signature([], []))),
-    [],
-    [],
-  )
+  let foreign = first.new_inst(Call(Direct(symbol, Signature([], []))), [], [])
   let second = Function::new_empty("second")
   let entry = second.new_block([])
   entry.append_inst(foreign)

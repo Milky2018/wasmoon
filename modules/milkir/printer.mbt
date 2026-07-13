@@ -447,21 +447,20 @@ fn format_opcode(opcode : Opcode, operands : Array[Value]) -> String {
     // Function calls
     Call(call_op) =>
       match call_op {
-        CallOp::Direct(symbol, _) => "call \{symbol.name}(\{ops})"
-        CallOp::Pointer(num_args, num_results) =>
+        Direct(symbol, _) => "call \{symbol.name}(\{ops})"
+        Pointer(num_args, num_results) =>
           "call_ptr(\{num_args}) -> \{num_results} (\{ops})"
       }
     Memory(memory_op) =>
       match memory_op {
-        MemoryOp::Load(ty) => "load.\{ty} \{ops}"
-        MemoryOp::Store(ty) => "store.\{ty} \{ops}"
-        MemoryOp::LoadNarrow(result_ty, bits, signed) => {
+        Load(ty) => "load.\{ty} \{ops}"
+        Store(ty) => "store.\{ty} \{ops}"
+        LoadNarrow(result_ty, bits, signed) => {
           let sign_str = if signed { "s" } else { "u" }
           "load\{bits}_\{sign_str}.\{result_ty} \{ops}"
         }
-        MemoryOp::StoreNarrow(bits) => "store\{bits} \{ops}"
-        MemoryOp::Vector(opcode) =>
-          format_vector_memory_opcode(opcode, operands)
+        StoreNarrow(bits) => "store\{bits} \{ops}"
+        Vector(opcode) => format_vector_memory_opcode(opcode, operands)
       }
     Ext(ext, _) => {
       let imms : Array[String] = []

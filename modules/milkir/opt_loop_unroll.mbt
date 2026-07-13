@@ -84,8 +84,8 @@ fn find_integer_constant_outside_loop_inner(
     for inst in block.instructions {
       guard inst.results.any(result => result.id == value.id) else { continue }
       match inst.opcode {
-        Scalar(ScalarOp::IntConst(constant)) => return Some(constant)
-        Scalar(ScalarOp::Copy) =>
+        Scalar(IntConst(constant)) => return Some(constant)
+        Scalar(Copy) =>
           if inst.operands.length() == 1 && inst.operands[0].ty == value.ty {
             return find_integer_constant_outside_loop_inner(
               func,
@@ -257,10 +257,8 @@ fn counted_step(
         return None
       }
       match opcode {
-        Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)) =>
-          Some((Increasing, magnitude))
-        Scalar(ScalarOp::IntBinary(IntBinaryOp::Sub)) =>
-          Some((Decreasing, magnitude))
+        Scalar(IntBinary(Add)) => Some((Increasing, magnitude))
+        Scalar(IntBinary(Sub)) => Some((Decreasing, magnitude))
         _ => None
       }
     }
@@ -275,13 +273,13 @@ fn counted_step(
         raw.reinterpret_as_uint64()
       }
       match opcode {
-        Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)) =>
+        Scalar(IntBinary(Add)) =>
           if negative {
             Some((Decreasing, magnitude))
           } else {
             Some((Increasing, magnitude))
           }
-        Scalar(ScalarOp::IntBinary(IntBinaryOp::Sub)) =>
+        Scalar(IntBinary(Sub)) =>
           if negative {
             Some((Increasing, magnitude))
           } else {
@@ -466,7 +464,7 @@ fn analyze_counted_loop(
     }
   }
   let original_condition = match comparison.opcode {
-    Scalar(ScalarOp::IntCompare(cc)) => cc
+    Scalar(IntCompare(cc)) => cc
     _ => return Skip("loop test must be an ordered integer comparison")
   }
   let operand_normalized_condition = if induction_operand == 1 {
@@ -595,14 +593,14 @@ fn analyze_counted_loop(
   }
   let update_opcode = update.opcode
   if (
-      update_opcode != Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)) &&
-      update_opcode != Scalar(ScalarOp::IntBinary(IntBinaryOp::Sub))
+      update_opcode != Scalar(IntBinary(Add)) &&
+      update_opcode != Scalar(IntBinary(Sub))
     ) ||
     update.operands.length() != 2 ||
     update.results.length() != 1 {
     return Skip("induction update must be iadd or isub")
   }
-  if update_opcode == Scalar(ScalarOp::IntBinary(IntBinaryOp::Sub)) &&
+  if update_opcode == Scalar(IntBinary(Sub)) &&
     update.operands[0].id != induction.id {
     return Skip("isub induction updates must subtract from the induction value")
   }

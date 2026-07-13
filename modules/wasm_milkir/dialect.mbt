@@ -43,7 +43,7 @@ pub fn encode(opcode : WasmOpcode) -> @milkir.ExtOp {
   if validate_wasm_opcode_immediates(spec, immediates) is Some(message) {
     abort("invalid \{spec.typed_constructor} encoding: \{message}")
   }
-  @milkir.ExtOp::ExtOp(WASM_DIALECT, spec.wire_name, immediates)
+  ExtOp(WASM_DIALECT, spec.wire_name, immediates)
 }
 
 ///|

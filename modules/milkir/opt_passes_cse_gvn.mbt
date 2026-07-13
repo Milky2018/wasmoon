@@ -195,11 +195,7 @@ fn update_last_store_state(
   ptr_base_infos : @hashmap.HashMap[Int, PtrBaseInfo],
 ) -> Unit {
   let is_store = match inst.opcode {
-    Memory(
-      MemoryOp::Store(_)
-      | MemoryOp::StoreNarrow(_)
-      | MemoryOp::Vector(VectorMemoryOp::StoreLane(_, _))
-    ) => true
+    Memory(Store(_) | StoreNarrow(_) | Vector(StoreLane(_, _))) => true
     _ => false
   }
   if is_store && ptr_access_from_inst(inst, ptr_base_infos) is Some(access) {
@@ -282,8 +278,8 @@ fn collect_iconst_values(func : Function) -> @hashmap.HashMap[Int, Int64] {
     for inst in block.instructions {
       if inst.first_result() is Some(v) {
         match inst.opcode {
-          Scalar(ScalarOp::IntConst(value)) => result.set(v.id, value)
-          Scalar(ScalarOp::Copy) =>
+          Scalar(IntConst(value)) => result.set(v.id, value)
+          Scalar(Copy) =>
             if inst.operands.length() > 0 &&
               result.get(inst.operands[0].id) is Some(copied) {
               result.set(v.id, copied)
@@ -326,17 +322,17 @@ fn collect_ptr_base_infos(
         if inst.first_result() is Some(v) && result.get(v.id) is None {
           let inferred : PtrBaseInfo? = match inst.opcode {
             Ext(_, _) => None
-            Scalar(ScalarOp::Copy)
-            | Scalar(ScalarOp::Convert(ConversionOp::Bitcast))
-            | Scalar(ScalarOp::Convert(ConversionOp::UnsignedExtend))
-            | Scalar(ScalarOp::Convert(ConversionOp::SignedExtend))
-            | Scalar(ScalarOp::Convert(ConversionOp::IntReduce)) =>
+            Scalar(Copy)
+            | Scalar(Convert(Bitcast))
+            | Scalar(Convert(UnsignedExtend))
+            | Scalar(Convert(SignedExtend))
+            | Scalar(Convert(IntReduce)) =>
               if inst.operands.length() > 0 {
                 result.get(inst.operands[0].id)
               } else {
                 None
               }
-            Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)) =>
+            Scalar(IntBinary(Add)) =>
               if inst.operands.length() >= 2 {
                 let lhs = inst.operands[0]
                 let rhs = inst.operands[1]
@@ -352,7 +348,7 @@ fn collect_ptr_base_infos(
               } else {
                 None
               }
-            Scalar(ScalarOp::IntBinary(IntBinaryOp::Sub)) =>
+            Scalar(IntBinary(Sub)) =>
               if inst.operands.length() >= 2 {
                 let lhs = inst.operands[0]
                 let rhs = inst.operands[1]
@@ -365,7 +361,7 @@ fn collect_ptr_base_infos(
               } else {
                 None
               }
-            Scalar(ScalarOp::Select) =>
+            Scalar(Select) =>
               if inst.operands.length() >= 3 &&
                 result.get(inst.operands[1].id) is Some(lhs_base) &&
                 result.get(inst.operands[2].id) is Some(rhs_base) &&
@@ -393,7 +389,7 @@ fn ptr_access_from_inst(
   ptr_base_infos : @hashmap.HashMap[Int, PtrBaseInfo],
 ) -> PtrAccess? {
   match inst.opcode {
-    Memory(MemoryOp::Load(_)) =>
+    Memory(Load(_)) =>
       if inst.operands.length() >= 2 {
         let base = inst.operands[0]
         let offset = inst.operands[1]
@@ -405,7 +401,7 @@ fn ptr_access_from_inst(
       } else {
         None
       }
-    Memory(MemoryOp::LoadNarrow(_, _, _)) =>
+    Memory(LoadNarrow(_, _, _)) =>
       if inst.operands.length() >= 2 {
         let base = inst.operands[0]
         let offset = inst.operands[1]
@@ -417,7 +413,7 @@ fn ptr_access_from_inst(
       } else {
         None
       }
-    Memory(MemoryOp::Store(_)) =>
+    Memory(Store(_)) =>
       if inst.operands.length() >= 3 {
         let base = inst.operands[0]
         let offset = inst.operands[2]
@@ -429,7 +425,7 @@ fn ptr_access_from_inst(
       } else {
         None
       }
-    Memory(MemoryOp::StoreNarrow(_)) =>
+    Memory(StoreNarrow(_)) =>
       if inst.operands.length() >= 3 {
         let base = inst.operands[0]
         let offset = inst.operands[2]
@@ -566,7 +562,7 @@ fn run_global_value_numbering_with_budget(
       }
       work_done.val = work_done.val + 1
       let mut replaced_by_memory = false
-      if inst.opcode is Memory(MemoryOp::Load(load_ty)) &&
+      if inst.opcode is Memory(Load(load_ty)) &&
         ptr_access_from_inst(inst, ptr_base_infos) is Some(load_access) {
         let key = memory_key_from_access(
           load_access,
@@ -581,14 +577,14 @@ fn run_global_value_numbering_with_budget(
             inst_index,
             idom,
           ) {
-          inst.opcode = Scalar(ScalarOp::Copy)
+          inst.opcode = Scalar(Copy)
           inst.operands.clear()
           inst.operands.push(entry.value)
           result.mark_changed()
           replaced_by_memory = true
         }
       }
-      if inst.opcode is Memory(MemoryOp::Store(store_ty)) &&
+      if inst.opcode is Memory(Store(store_ty)) &&
         ptr_access_from_inst(inst, ptr_base_infos) is Some(store_access) &&
         inst.operands.length() >= 2 {
         let key = memory_key_from_access(
@@ -635,7 +631,7 @@ fn run_global_value_numbering_with_budget(
           // Already computed - replace with copy. The type check is defensive:
           // Inst identity includes result types, so a mismatch is not expected.
           if existing.ty == result_val.ty {
-            inst.opcode = Scalar(ScalarOp::Copy)
+            inst.opcode = Scalar(Copy)
             inst.operands.clear()
             inst.operands.push(existing)
             result.mark_changed()

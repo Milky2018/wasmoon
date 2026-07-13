@@ -23,7 +23,7 @@ fn lowered_contains_f32_bits(bits : UInt) -> Bool raise {
   )
   for block in lowered.blocks {
     for inst in block.insts {
-      if inst.opcode is @machv.Opcode::LoadConstF32(actual) {
+      if inst.opcode is LoadConstF32(actual) {
         return actual.reinterpret_as_uint() == bits
       }
     }
@@ -45,7 +45,7 @@ fn lowered_contains_f64_bits(bits : UInt64) -> Bool raise {
   )
   for block in lowered.blocks {
     for inst in block.insts {
-      if inst.opcode is @machv.Opcode::LoadConstF64(actual) {
+      if inst.opcode is LoadConstF64(actual) {
         return actual.reinterpret_as_uint64() == bits
       }
     }

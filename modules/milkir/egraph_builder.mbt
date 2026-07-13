@@ -133,38 +133,27 @@ fn type_bits(ty : Type) -> Int {
 /// an explicit encoding in the e-graph node language.
 fn opcode_has_egraph_encoding(opcode : Opcode) -> Bool {
   match opcode {
-    Scalar(ScalarOp::IntConst(_)) => true
+    Scalar(IntConst(_)) => true
     Scalar(
-      ScalarOp::IntBinary(
-        IntBinaryOp::Add
-        | IntBinaryOp::Sub
-        | IntBinaryOp::Mul
-        | IntBinaryOp::And
-        | IntBinaryOp::Or
-        | IntBinaryOp::Xor
-        | IntBinaryOp::ShiftLeft
-        | IntBinaryOp::SignedShiftRight
-        | IntBinaryOp::UnsignedShiftRight
-        | IntBinaryOp::RotateLeft
-        | IntBinaryOp::RotateRight
+      IntBinary(
+        Add
+        | Sub
+        | Mul
+        | And
+        | Or
+        | Xor
+        | ShiftLeft
+        | SignedShiftRight
+        | UnsignedShiftRight
+        | RotateLeft
+        | RotateRight
       )
     ) => true
     Scalar(
-      ScalarOp::IntUnary(
-        IntUnaryOp::Not
-        | IntUnaryOp::CountLeadingZeros
-        | IntUnaryOp::CountTrailingZeros
-        | IntUnaryOp::PopulationCount
-      )
+      IntUnary(Not | CountLeadingZeros | CountTrailingZeros | PopulationCount)
     ) => true
-    Scalar(ScalarOp::IntCompare(_) | ScalarOp::Select) => true
-    Scalar(
-      ScalarOp::Convert(
-        ConversionOp::IntReduce
-        | ConversionOp::UnsignedExtend
-        | ConversionOp::SignedExtend
-      )
-    ) => true
+    Scalar(IntCompare(_) | Select) => true
+    Scalar(Convert(IntReduce | UnsignedExtend | SignedExtend)) => true
     _ => false
   }
 }
@@ -188,25 +177,25 @@ fn opcode_to_eopcode(inst : Inst) -> @egraph.EOpcode? {
     return None
   }
   match inst.opcode {
-    Scalar(ScalarOp::IntConst(c)) => Some(Const(c))
-    Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)) => Some(Add)
-    Scalar(ScalarOp::IntBinary(IntBinaryOp::Sub)) => Some(Sub)
-    Scalar(ScalarOp::IntBinary(IntBinaryOp::Mul)) => Some(Mul)
-    Scalar(ScalarOp::IntBinary(IntBinaryOp::And)) => Some(And)
-    Scalar(ScalarOp::IntBinary(IntBinaryOp::Or)) => Some(Or)
-    Scalar(ScalarOp::IntBinary(IntBinaryOp::Xor)) => Some(Xor)
-    Scalar(ScalarOp::IntUnary(IntUnaryOp::Not)) => Some(Bnot)
-    Scalar(ScalarOp::IntBinary(IntBinaryOp::ShiftLeft)) => Some(Shl)
-    Scalar(ScalarOp::IntBinary(IntBinaryOp::SignedShiftRight)) => Some(Sshr)
-    Scalar(ScalarOp::IntBinary(IntBinaryOp::UnsignedShiftRight)) => Some(Ushr)
-    Scalar(ScalarOp::IntBinary(IntBinaryOp::RotateLeft)) => Some(Rotl)
-    Scalar(ScalarOp::IntBinary(IntBinaryOp::RotateRight)) => Some(Rotr)
-    Scalar(ScalarOp::IntUnary(IntUnaryOp::CountLeadingZeros)) => Some(Clz)
-    Scalar(ScalarOp::IntUnary(IntUnaryOp::CountTrailingZeros)) => Some(Ctz)
-    Scalar(ScalarOp::IntUnary(IntUnaryOp::PopulationCount)) => Some(Popcnt)
-    Scalar(ScalarOp::IntCompare(cc)) => Some(Icmp(intcc_to_ordinal(cc)))
-    Scalar(ScalarOp::Select) => Some(Select)
-    Scalar(ScalarOp::Convert(ConversionOp::IntReduce)) => {
+    Scalar(IntConst(c)) => Some(Const(c))
+    Scalar(IntBinary(Add)) => Some(Add)
+    Scalar(IntBinary(Sub)) => Some(Sub)
+    Scalar(IntBinary(Mul)) => Some(Mul)
+    Scalar(IntBinary(And)) => Some(And)
+    Scalar(IntBinary(Or)) => Some(Or)
+    Scalar(IntBinary(Xor)) => Some(Xor)
+    Scalar(IntUnary(Not)) => Some(Bnot)
+    Scalar(IntBinary(ShiftLeft)) => Some(Shl)
+    Scalar(IntBinary(SignedShiftRight)) => Some(Sshr)
+    Scalar(IntBinary(UnsignedShiftRight)) => Some(Ushr)
+    Scalar(IntBinary(RotateLeft)) => Some(Rotl)
+    Scalar(IntBinary(RotateRight)) => Some(Rotr)
+    Scalar(IntUnary(CountLeadingZeros)) => Some(Clz)
+    Scalar(IntUnary(CountTrailingZeros)) => Some(Ctz)
+    Scalar(IntUnary(PopulationCount)) => Some(Popcnt)
+    Scalar(IntCompare(cc)) => Some(Icmp(intcc_to_ordinal(cc)))
+    Scalar(Select) => Some(Select)
+    Scalar(Convert(IntReduce)) => {
       // ireduce: from_bits = operand type, to_bits = result type
       let from_bits = if inst.operands.length() > 0 {
         type_bits(inst.operands[0].ty)
@@ -219,7 +208,7 @@ fn opcode_to_eopcode(inst : Inst) -> @egraph.EOpcode? {
       }
       Some(Ireduce(from_bits, to_bits))
     }
-    Scalar(ScalarOp::Convert(ConversionOp::UnsignedExtend)) => {
+    Scalar(Convert(UnsignedExtend)) => {
       // uextend: from_bits = operand type, to_bits = result type
       let from_bits = if inst.operands.length() > 0 {
         type_bits(inst.operands[0].ty)
@@ -232,7 +221,7 @@ fn opcode_to_eopcode(inst : Inst) -> @egraph.EOpcode? {
       }
       Some(Uextend(from_bits, to_bits))
     }
-    Scalar(ScalarOp::Convert(ConversionOp::SignedExtend)) => {
+    Scalar(Convert(SignedExtend)) => {
       // sextend: from_bits = operand type, to_bits = result type
       let from_bits = if inst.operands.length() > 0 {
         type_bits(inst.operands[0].ty)
@@ -342,7 +331,7 @@ fn EGraphBuilder::get_simplified_opcode(
     let (_, best_node) = self.egraph.extract(class_id)
     // Only handle constant folding - returns Iconst if the result is a constant
     match best_node.op {
-      Const(c) => Some(Scalar(ScalarOp::IntConst(c)))
+      Const(c) => Some(Scalar(IntConst(c)))
       // Don't change opcode for non-constant results - would need operand reconstruction
       _ => None
     }
@@ -490,14 +479,14 @@ fn optimize_function_with_stats_with_limits_and_ruleset(
           if op is Scalar(IntConst(c)) {
             let mut inst_changed = false
             match inst.opcode {
-              Scalar(ScalarOp::IntConst(old_c)) =>
+              Scalar(IntConst(old_c)) =>
                 if old_c != c || inst.operands.length() > 0 {
-                  inst.opcode = Scalar(ScalarOp::IntConst(c))
+                  inst.opcode = Scalar(IntConst(c))
                   inst.operands.clear()
                   inst_changed = true
                 }
               _ => {
-                inst.opcode = Scalar(ScalarOp::IntConst(c))
+                inst.opcode = Scalar(IntConst(c))
                 inst.operands.clear()
                 inst_changed = true
               }

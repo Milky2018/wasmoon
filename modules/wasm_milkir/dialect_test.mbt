@@ -55,17 +55,17 @@ test "Wasm extension decode validates bool immediates" {
 ///|
 test "Wasm extension decode rejects runtime-lowered operations" {
   let extensions : Array[@milkir.ExtOp] = [
-    @milkir.ExtOp::ExtOp("wasm", "memory_grow", [0]),
-    @milkir.ExtOp::ExtOp("wasm", "memory_size", [0]),
-    @milkir.ExtOp::ExtOp("wasm", "memory_fill", [0]),
-    @milkir.ExtOp::ExtOp("wasm", "memory_copy", [0, 0]),
-    @milkir.ExtOp::ExtOp("wasm", "memory_init", [0, 0]),
-    @milkir.ExtOp::ExtOp("wasm", "data_drop", [0]),
-    @milkir.ExtOp::ExtOp("wasm", "table_grow", [0]),
-    @milkir.ExtOp::ExtOp("wasm", "table_fill", [0]),
-    @milkir.ExtOp::ExtOp("wasm", "table_copy", [0, 0]),
-    @milkir.ExtOp::ExtOp("wasm", "table_init", [0, 0]),
-    @milkir.ExtOp::ExtOp("wasm", "elem_drop", [0]),
+    ExtOp("wasm", "memory_grow", [0]),
+    ExtOp("wasm", "memory_size", [0]),
+    ExtOp("wasm", "memory_fill", [0]),
+    ExtOp("wasm", "memory_copy", [0, 0]),
+    ExtOp("wasm", "memory_init", [0, 0]),
+    ExtOp("wasm", "data_drop", [0]),
+    ExtOp("wasm", "table_grow", [0]),
+    ExtOp("wasm", "table_fill", [0]),
+    ExtOp("wasm", "table_copy", [0, 0]),
+    ExtOp("wasm", "table_init", [0, 0]),
+    ExtOp("wasm", "elem_drop", [0]),
   ]
   for ext in extensions {
     assert_true(decode_error(ext) is Some(_))

@@ -6,11 +6,7 @@ test "build and verify minimal MilkIR function" {
   func.add_result(I32)
   let sum = func.new_value(I32)
   let entry = func.new_block([])
-  let add = func.new_inst(
-    Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)),
-    [lhs, rhs],
-    [sum],
-  )
+  let add = func.new_inst(Scalar(IntBinary(Add)), [lhs, rhs], [sum])
   add.add_metadata(Comment("lowered from frontend add"))
   entry.append_inst(add)
   entry.set_terminator(Return([sum]))
@@ -23,7 +19,7 @@ test "build and verify minimal MilkIR function" {
 test "signature construction materializes canonical function parameters" {
   let func = Function::with_signature(
     "canonical_signature",
-    Signature([Type::I32, Type::I64], [Type::I64]),
+    Signature([I32, I64], [I64]),
   )
   inspect(
     func.params.length(),
@@ -50,7 +46,7 @@ test "signature construction materializes canonical function parameters" {
     ),
   )
   debug_inspect(
-    func.new_value(Type::F32),
+    func.new_value(F32),
     content=(
       #|{ id: 2, ty: F32 }
     ),
@@ -203,11 +199,7 @@ test "verify catches undefined operands" {
   let bogus = Value::new(func.owner, 99, I32)
   let result = func.new_value(I32)
   entry.append_inst(
-    func.new_inst(
-      Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)),
-      [bogus, bogus],
-      [result],
-    ),
+    func.new_inst(Scalar(IntBinary(Add)), [bogus, bogus], [result]),
   )
   entry.set_terminator(Return([result]))
   try func.verify() catch {
@@ -225,7 +217,7 @@ test "verify rejects a value whose type disagrees with its definition" {
   let forged = Value::new(func.owner, original.id, I64)
   let copied = func.new_value(I64)
   let entry = func.new_block([])
-  entry.append_inst(func.new_inst(Scalar(ScalarOp::Copy), [forged], [copied]))
+  entry.append_inst(func.new_inst(Scalar(Copy), [forged], [copied]))
   entry.set_terminator(Return([copied]))
   try func.verify() catch {
     err =>
@@ -298,9 +290,7 @@ test "optimizer preserves external calls with unused results" {
   let ignored = func.new_value(I32)
   let entry = func.new_block([])
   entry.append_inst(
-    func.new_inst(Call(CallOp::Direct(symbol, Signature([], [I32]))), [], [
-      ignored,
-    ]),
+    func.new_inst(Call(Direct(symbol, Signature([], [I32]))), [], [ignored]),
   )
   entry.set_terminator(Return([]))
   optimize_with_level(func, O1) |> ignore
@@ -343,9 +333,7 @@ test "optimizer leaves trap-prone division unfused" {
   entry.append_inst(
     builder
     .get_function()
-    .new_inst(Scalar(ScalarOp::IntBinary(IntBinaryOp::SignedDiv)), [lhs, rhs], [
-      result,
-    ]),
+    .new_inst(Scalar(IntBinary(SignedDiv)), [lhs, rhs], [result]),
   )
   builder.return_([result])
   let func = builder.get_function()
@@ -444,11 +432,11 @@ test "memory operations use the semantic opcode family" {
   builder.return_([loaded])
   let func = builder.get_function()
   inspect(
-    func.blocks[0].instructions[1].opcode is Memory(MemoryOp::Load(I32)),
+    func.blocks[0].instructions[1].opcode is Memory(Load(I32)),
     content="true",
   )
   inspect(
-    func.blocks[0].instructions[2].opcode is Memory(MemoryOp::Store(I32)),
+    func.blocks[0].instructions[2].opcode is Memory(Store(I32)),
     content="true",
   )
   inspect(func.verify(), content="()")
@@ -463,8 +451,7 @@ test "vector operations use the semantic opcode family" {
   builder.return_([vector])
   let func = builder.get_function()
   inspect(
-    func.blocks[0].instructions[0].opcode
-    is Vector(VectorOp::Splat(VectorLane::I32)),
+    func.blocks[0].instructions[0].opcode is Vector(Splat(I32)),
     content="true",
   )
   inspect(func.verify(), content="()")
@@ -477,17 +464,11 @@ test "scalar operations use typed semantic families" {
   let rhs = builder.add_param(I64)
   builder.add_result(I32)
   let sum = builder.iadd(lhs, rhs)
-  let compared = builder.icmp(IntCC::Ult, sum, rhs)
+  let compared = builder.icmp(Ult, sum, rhs)
   builder.return_([compared])
   let instructions = builder.get_function().blocks[0].instructions
-  inspect(
-    instructions[0].opcode is Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)),
-    content="true",
-  )
-  inspect(
-    instructions[1].opcode is Scalar(ScalarOp::IntCompare(IntCC::Ult)),
-    content="true",
-  )
+  inspect(instructions[0].opcode is Scalar(IntBinary(Add)), content="true")
+  inspect(instructions[1].opcode is Scalar(IntCompare(Ult)), content="true")
 }
 
 ///|
@@ -531,7 +512,7 @@ test "normalized vector families preserve textual spelling" {
     Vector(FloatBinary(PseudoMax, F64)),
     Vector(Convert(ConvertI32ToF32(Unsigned))),
     Vector(Relaxed(Fma(F32, Add))),
-    Memory(MemoryOp::Vector(VectorMemoryOp::LoadLane(I16, 3))),
+    Memory(Vector(LoadLane(I16, 3))),
   ]
   debug_inspect(
     cases.map(fn(opcode) { format_opcode(opcode, [vector]) }),
@@ -556,19 +537,12 @@ test "vector memory operations discard Wasm memory arguments" {
   let builder = FunctionBuilder::FunctionBuilder("vector_memory_family")
   let address = builder.add_param(Ptr)
   builder.add_result(V128)
-  let loaded = builder.v128_load_with_addr(
-    LoadExtend(VectorIntLane::I8, VectorSignedness::Signed),
-    address,
-  )
+  let loaded = builder.v128_load_with_addr(LoadExtend(I8, Signed), address)
   builder.return_([loaded])
   let func = builder.get_function()
   inspect(
     func.blocks[0].instructions[0].opcode
-    is Memory(
-      MemoryOp::Vector(
-        VectorMemoryOp::LoadExtend(VectorIntLane::I8, VectorSignedness::Signed)
-      )
-    ),
+    is Memory(Vector(LoadExtend(I8, Signed))),
     content="true",
   )
   let printed = func.print()
@@ -658,9 +632,7 @@ test "O3 does not duplicate loop side effects without a safe unroll proof" {
   let symbol = func.declare_external_symbol("effect")
   builder
   .current_block()
-  .append_inst(
-    func.new_inst(Call(CallOp::Direct(symbol, Signature([], []))), [], []),
-  )
+  .append_inst(func.new_inst(Call(Direct(symbol, Signature([], []))), [], []))
   builder.jump(header, [])
   builder.switch_to_block(exit)
   builder.return_([])
@@ -708,9 +680,9 @@ test "instruction identity includes result types and arity" {
   let i32_result = func.new_value(I32)
   let i64_result = func.new_value(I64)
   let second_i64_result = func.new_value(I64)
-  let i32_const = func.new_inst(Scalar(ScalarOp::IntConst(1L)), [], [i32_result])
-  let i64_const = func.new_inst(Scalar(ScalarOp::IntConst(1L)), [], [i64_result])
-  let i64_pair = func.new_inst(Scalar(ScalarOp::IntConst(1L)), [], [
+  let i32_const = func.new_inst(Scalar(IntConst(1L)), [], [i32_result])
+  let i64_const = func.new_inst(Scalar(IntConst(1L)), [], [i64_result])
+  let i64_pair = func.new_inst(Scalar(IntConst(1L)), [], [
     i64_result, second_i64_result,
   ])
   let expressions : @hashmap.HashMap[Inst, Unit] = HashMap([])
@@ -724,23 +696,23 @@ test "instruction identity includes result types and arity" {
 ///|
 test "instruction identity compares float constants by bit pattern" {
   let func = Function::new_empty("float_instruction_identity")
-  let positive_zero = func.new_inst(Scalar(ScalarOp::FloatConst64(0UL)), [], [
+  let positive_zero = func.new_inst(Scalar(FloatConst64(0UL)), [], [
     func.new_value(F64),
   ])
   let negative_zero = func.new_inst(
-    Scalar(ScalarOp::FloatConst64(0x8000000000000000UL)),
+    Scalar(FloatConst64(0x8000000000000000UL)),
     [],
     [func.new_value(F64)],
   )
   let nan_bits = 0x7FF8000000000001UL
   let other_nan_bits = 0x7FF8000000000002UL
-  let nan0 = func.new_inst(Scalar(ScalarOp::FloatConst64(nan_bits)), [], [
+  let nan0 = func.new_inst(Scalar(FloatConst64(nan_bits)), [], [
     func.new_value(F64),
   ])
-  let nan0_again = func.new_inst(Scalar(ScalarOp::FloatConst64(nan_bits)), [], [
+  let nan0_again = func.new_inst(Scalar(FloatConst64(nan_bits)), [], [
     func.new_value(F64),
   ])
-  let nan1 = func.new_inst(Scalar(ScalarOp::FloatConst64(other_nan_bits)), [], [
+  let nan1 = func.new_inst(Scalar(FloatConst64(other_nan_bits)), [], [
     func.new_value(F64),
   ])
   inspect(positive_zero == negative_zero, content="false")
@@ -763,10 +735,7 @@ test "GVN reuses float constants with identical NaN bits" {
   let func = builder.get_function()
   let stats = cse_gvn_global(func)
   inspect(stats.result.changed, content="true")
-  inspect(
-    func.blocks[0].instructions[1].opcode is Scalar(ScalarOp::Copy),
-    content="true",
-  )
+  inspect(func.blocks[0].instructions[1].opcode is Scalar(Copy), content="true")
   inspect(func.verify(), content="()")
 }
 

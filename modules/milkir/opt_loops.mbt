@@ -168,8 +168,7 @@ fn reduce_strength(func : Function) -> OptResult {
   let constants : @hashmap.HashMap[Int, ConstValue] = HashMap([])
   for block in func.blocks {
     for inst in block.instructions {
-      if inst.opcode is Scalar(ScalarOp::IntConst(v)) &&
-        inst.first_result() is Some(r) {
+      if inst.opcode is Scalar(IntConst(v)) && inst.first_result() is Some(r) {
         if r.ty is I32 {
           constants.set(r.id, I32(v.to_int()))
         } else {
@@ -185,7 +184,7 @@ fn reduce_strength(func : Function) -> OptResult {
     for inst in block.instructions {
       match inst.opcode {
         // Multiplication by power of 2 -> left shift
-        Scalar(ScalarOp::IntBinary(IntBinaryOp::Mul)) =>
+        Scalar(IntBinary(Mul)) =>
           if inst.operands.length() == 2 {
             let (const_idx, shift_amount) = find_power_of_two_operand(
               inst.operands,
@@ -203,7 +202,7 @@ fn reduce_strength(func : Function) -> OptResult {
                 shift_amount.to_int64(),
               )
               // Replace imul with ishl
-              inst.opcode = Scalar(ScalarOp::IntBinary(IntBinaryOp::ShiftLeft))
+              inst.opcode = Scalar(IntBinary(ShiftLeft))
               inst.operands.clear()
               inst.operands.push(other_operand)
               inst.operands.push(shift_operand)
@@ -211,7 +210,7 @@ fn reduce_strength(func : Function) -> OptResult {
             }
           }
         // Division by power of 2 -> right shift (for unsigned)
-        Scalar(ScalarOp::IntBinary(IntBinaryOp::UnsignedDiv)) =>
+        Scalar(IntBinary(UnsignedDiv)) =>
           if inst.operands.length() == 2 {
             let (const_idx, shift_amount) = find_power_of_two_operand(
               inst.operands,
@@ -228,9 +227,7 @@ fn reduce_strength(func : Function) -> OptResult {
               )
               // Only reduce if divisor is constant power of 2
               // Replace udiv with ushr (logical right shift)
-              inst.opcode = Scalar(
-                ScalarOp::IntBinary(IntBinaryOp::UnsignedShiftRight),
-              )
+              inst.opcode = Scalar(IntBinary(UnsignedShiftRight))
               inst.operands.clear()
               inst.operands.push(dividend)
               inst.operands.push(shift_operand)
@@ -238,7 +235,7 @@ fn reduce_strength(func : Function) -> OptResult {
             }
           }
         // Modulo by power of 2 -> bitwise AND
-        Scalar(ScalarOp::IntBinary(IntBinaryOp::UnsignedRem)) =>
+        Scalar(IntBinary(UnsignedRem)) =>
           if inst.operands.length() == 2 {
             let (const_idx, shift_amount) = find_power_of_two_operand(
               inst.operands,
@@ -256,7 +253,7 @@ fn reduce_strength(func : Function) -> OptResult {
                 mask,
               )
               // x % (2^n) == x & (2^n - 1)
-              inst.opcode = Scalar(ScalarOp::IntBinary(IntBinaryOp::And))
+              inst.opcode = Scalar(IntBinary(And))
               inst.operands.clear()
               inst.operands.push(dividend)
               inst.operands.push(mask_operand)
@@ -283,9 +280,7 @@ fn append_iconst(
   value : Int64,
 ) -> Value {
   let result = func.new_value(ty)
-  instructions.push(
-    func.new_inst(Scalar(ScalarOp::IntConst(value)), [], [result]),
-  )
+  instructions.push(func.new_inst(Scalar(IntConst(value)), [], [result]))
   result
 }
 

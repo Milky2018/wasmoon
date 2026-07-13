@@ -552,7 +552,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
   for block in ctx.ir_func.blocks {
     for inst in block.instructions {
       match inst.opcode {
-        Memory(@milkir.MemoryOp::Load(ty)) => {
+        Memory(Load(ty)) => {
           guard inst.operands.length() >= 1 else { continue }
           let base_value = inst.operands[0]
           let access_size = match ty {
@@ -595,7 +595,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
             }
           }
         }
-        Memory(@milkir.MemoryOp::Store(ty)) => {
+        Memory(Store(ty)) => {
           guard inst.operands.length() >= 2 else { continue }
           let base_value = inst.operands[0]
           let access_size = match ty {
@@ -638,7 +638,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
             }
           }
         }
-        Memory(@milkir.MemoryOp::LoadNarrow(_, bits, _)) => {
+        Memory(LoadNarrow(_, bits, _)) => {
           guard inst.operands.length() >= 1 else { continue }
           let base_value = inst.operands[0]
           let access_size = bits / 8
@@ -677,7 +677,7 @@ fn compute_skipped_values(ctx : LoweringContext) -> Array[Bool] {
             }
           }
         }
-        Memory(@milkir.MemoryOp::StoreNarrow(bits)) => {
+        Memory(StoreNarrow(bits)) => {
           guard inst.operands.length() >= 2 else { continue }
           let base_value = inst.operands[0]
           let access_size = bits / 8
@@ -2490,21 +2490,18 @@ fn lower_inst_builtin(
     // Function calls
     Call(call_op) =>
       match call_op {
-        @milkir.CallOp::Direct(symbol, _) =>
-          lower_external_call(ctx, inst, block, symbol)
-        @milkir.CallOp::Pointer(num_args, num_results) =>
+        Direct(symbol, _) => lower_external_call(ctx, inst, block, symbol)
+        Pointer(num_args, num_results) =>
           lower_call_ptr(ctx, inst, block, num_args, num_results)
       }
     Memory(memory_op) =>
       match memory_op {
-        @milkir.MemoryOp::Load(ty) => lower_load_ptr(ctx, inst, block, ty)
-        @milkir.MemoryOp::Store(ty) => lower_store_ptr(ctx, inst, block, ty)
-        @milkir.MemoryOp::LoadNarrow(result_ty, bits, signed) =>
+        Load(ty) => lower_load_ptr(ctx, inst, block, ty)
+        Store(ty) => lower_store_ptr(ctx, inst, block, ty)
+        LoadNarrow(result_ty, bits, signed) =>
           lower_load_ptr_narrow(ctx, inst, block, result_ty, bits, signed)
-        @milkir.MemoryOp::StoreNarrow(bits) =>
-          lower_store_ptr_narrow(ctx, inst, block, bits)
-        @milkir.MemoryOp::Vector(opcode) =>
-          lower_vector_memory_inst(ctx, inst, block, opcode)
+        StoreNarrow(bits) => lower_store_ptr_narrow(ctx, inst, block, bits)
+        Vector(opcode) => lower_vector_memory_inst(ctx, inst, block, opcode)
       }
     Ext(_, _) => lower_unsupported_generic_opcode(inst, block)
     Scalar(scalar_op) => lower_scalar_inst(ctx, inst, block, scalar_op)

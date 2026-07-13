@@ -4,9 +4,7 @@ test "verify rejects duplicate value definitions" {
   let original = func.add_param(I32)
   let duplicate = Value::new(func.owner, original.id, I32)
   let entry = func.new_block([])
-  entry.append_inst(
-    func.new_inst(Scalar(ScalarOp::IntConst(1L)), [], [duplicate]),
-  )
+  entry.append_inst(func.new_inst(Scalar(IntConst(1L)), [], [duplicate]))
   entry.set_terminator(Return([]))
   try func.verify() catch {
     err => inspect(err, content="DuplicateValueDefinition(value_id=0)")
@@ -20,11 +18,7 @@ test "verify rejects duplicate instruction ids" {
   let func = Function::new_empty("duplicate_instruction")
   let symbol = func.declare_external_symbol("effect")
   let entry = func.new_block([])
-  let inst = func.new_inst(
-    Call(CallOp::Direct(symbol, Signature([], []))),
-    [],
-    [],
-  )
+  let inst = func.new_inst(Call(Direct(symbol, Signature([], []))), [], [])
   entry.append_inst(inst)
   entry.append_inst(inst)
   entry.set_terminator(Return([]))
@@ -41,12 +35,8 @@ test "verify rejects same-block use before definition" {
   let defined_later = func.new_value(I32)
   let copied = func.new_value(I32)
   let entry = func.new_block([])
-  entry.append_inst(
-    func.new_inst(Scalar(ScalarOp::Copy), [defined_later], [copied]),
-  )
-  entry.append_inst(
-    func.new_inst(Scalar(ScalarOp::IntConst(1L)), [], [defined_later]),
-  )
+  entry.append_inst(func.new_inst(Scalar(Copy), [defined_later], [copied]))
+  entry.append_inst(func.new_inst(Scalar(IntConst(1L)), [], [defined_later]))
   entry.set_terminator(Return([]))
   try func.verify() catch {
     err => inspect(err, content="UseBeforeDefinition(value_id=0)")
@@ -65,12 +55,10 @@ test "verify rejects cross-block non-dominating uses" {
   let left = func.new_block([])
   let right = func.new_block([])
   entry.set_terminator(Branch(cond, left.id, [], right.id, []))
-  left.append_inst(
-    func.new_inst(Scalar(ScalarOp::IntConst(1L)), [], [defined_on_left]),
-  )
+  left.append_inst(func.new_inst(Scalar(IntConst(1L)), [], [defined_on_left]))
   left.set_terminator(Return([]))
   right.append_inst(
-    func.new_inst(Scalar(ScalarOp::Copy), [defined_on_left], [copied_on_right]),
+    func.new_inst(Scalar(Copy), [defined_on_left], [copied_on_right]),
   )
   right.set_terminator(Return([]))
   try func.verify() catch {
@@ -109,7 +97,7 @@ test "verify rejects divergent instruction operand views" {
     owner: func.owner,
     id: 0,
     results: [copied],
-    opcode: Scalar(ScalarOp::Copy),
+    opcode: Scalar(Copy),
     args: [argument],
     operands: [],
     metadata: [],
