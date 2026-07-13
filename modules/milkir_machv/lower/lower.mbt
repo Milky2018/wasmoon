@@ -2076,7 +2076,8 @@ fn lower_scalar_inst(
 ) -> Unit {
   match opcode {
     IntConst(value) => lower_iconst(ctx, inst, block, value)
-    FloatConst(value) => lower_fconst(ctx, inst, block, value)
+    FloatConst32(bits) => lower_fconst32(ctx, inst, block, bits)
+    FloatConst64(bits) => lower_fconst64(ctx, inst, block, bits)
     IntBinary(op) =>
       match op {
         Add => lower_iadd(ctx, inst, block)

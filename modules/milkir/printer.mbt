@@ -54,21 +54,12 @@ fn format_floatcc(cc : FloatCC) -> String {
 }
 
 ///|
-fn format_scalar_opcode(
-  opcode : ScalarOp,
-  operands : Array[Value],
-  result_ty : Type?,
-) -> String {
+fn format_scalar_opcode(opcode : ScalarOp, operands : Array[Value]) -> String {
   let ops = operands.map(format_value).join(", ")
   match opcode {
     IntConst(value) => "iconst \{value}"
-    FloatConst(value) =>
-      if result_ty is Some(F32) {
-        let bits = value.reinterpret_as_int64().to_int()
-        "fconst \{Float::reinterpret_from_int(bits)}"
-      } else {
-        "fconst \{value}"
-      }
+    FloatConst32(bits) => "fconst \{Float::reinterpret_from_uint(bits)}"
+    FloatConst64(bits) => "fconst \{bits.reinterpret_as_double()}"
     IntBinary(op) =>
       match op {
         Add => "iadd \{ops}"
@@ -438,16 +429,11 @@ fn format_vector_opcode(opcode : VectorOp, operands : Array[Value]) -> String {
 ///|
 
 ///|
-/// Print an opcode with its operands
-/// result_ty is needed for Fconst to correctly decode F32 bit-packed constants
-fn format_opcode(
-  opcode : Opcode,
-  operands : Array[Value],
-  result_ty : Type?,
-) -> String {
+/// Print an opcode with its operands.
+fn format_opcode(opcode : Opcode, operands : Array[Value]) -> String {
   let ops = operands.map(format_value).join(", ")
   match opcode {
-    Scalar(scalar_op) => format_scalar_opcode(scalar_op, operands, result_ty)
+    Scalar(scalar_op) => format_scalar_opcode(scalar_op, operands)
     // Function calls
     Call(call_op) =>
       match call_op {
@@ -484,8 +470,7 @@ fn format_opcode(
 ///|
 /// Print an instruction
 fn format_inst(inst : Inst) -> String {
-  let result_ty = inst.first_result().map(fn(v) { v.ty })
-  let opcode_str = format_opcode(inst.opcode, inst.operands, result_ty)
+  let opcode_str = format_opcode(inst.opcode, inst.operands)
   if inst.results.length() == 0 {
     opcode_str
   } else if inst.results.length() == 1 {

@@ -202,7 +202,6 @@ pub fn FunctionBuilder::fabs(Self, Value) -> Value
 pub fn FunctionBuilder::fadd(Self, Value, Value) -> Value
 pub fn FunctionBuilder::fceil(Self, Value) -> Value
 pub fn FunctionBuilder::fcmp(Self, FloatCC, Value, Value) -> Value
-pub fn FunctionBuilder::fconst(Self, Type, Double) -> Value
 pub fn FunctionBuilder::fconst_f32(Self, Float) -> Value
 pub fn FunctionBuilder::fconst_f64(Self, Double) -> Value
 pub fn FunctionBuilder::fcvt_to_sint(Self, Type, Value) -> Value
@@ -407,7 +406,8 @@ pub struct OptResult {
 
 pub(all) enum ScalarOp {
   IntConst(Int64)
-  FloatConst(Double)
+  FloatConst32(UInt)
+  FloatConst64(UInt64)
   IntBinary(IntBinaryOp)
   IntUnary(IntUnaryOp)
   IntCompare(IntCC)

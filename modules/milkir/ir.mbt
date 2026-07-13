@@ -333,24 +333,12 @@ pub impl Eq for Inst with fn equal(self, other) {
 
 ///|
 fn hash_opcode_identity(opcode : Opcode, hasher : Hasher) -> Unit {
-  match opcode {
-    Scalar(ScalarOp::FloatConst(value)) => {
-      "milkir.fconst.bits".hash_combine(hasher)
-      value.reinterpret_as_uint64().hash_combine(hasher)
-    }
-    _ => opcode.hash_combine(hasher)
-  }
+  opcode.hash_combine(hasher)
 }
 
 ///|
 fn opcode_identity_equal(lhs : Opcode, rhs : Opcode) -> Bool {
-  match (lhs, rhs) {
-    (Scalar(ScalarOp::FloatConst(a)), Scalar(ScalarOp::FloatConst(b))) =>
-      a.reinterpret_as_uint64() == b.reinterpret_as_uint64()
-    (Scalar(ScalarOp::FloatConst(_)), _)
-    | (_, Scalar(ScalarOp::FloatConst(_))) => false
-    _ => lhs == rhs
-  }
+  lhs == rhs
 }
 
 ///|
@@ -781,7 +769,8 @@ pub(all) enum ConversionOp {
 ///|
 pub(all) enum ScalarOp {
   IntConst(Int64)
-  FloatConst(Double)
+  FloatConst32(UInt)
+  FloatConst64(UInt64)
   IntBinary(IntBinaryOp)
   IntUnary(IntUnaryOp)
   IntCompare(IntCC)

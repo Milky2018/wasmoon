@@ -161,17 +161,15 @@ fn fold_constants(func : Function) -> OptResult {
               }
             None => ()
           }
-        Scalar(ScalarOp::FloatConst(v)) =>
+        Scalar(ScalarOp::FloatConst32(bits)) =>
           match inst.first_result() {
             Some(r) =>
-              if r.ty is F32 {
-                // F32 bits are packed in the lower 32 bits of the Double's bit representation
-                // Extract them directly to preserve NaN payloads
-                let f32_bits = v.reinterpret_as_int64().to_int()
-                constants.set(r.id, F32(Float::reinterpret_from_int(f32_bits)))
-              } else {
-                constants.set(r.id, F64(v))
-              }
+              constants.set(r.id, F32(Float::reinterpret_from_uint(bits)))
+            None => ()
+          }
+        Scalar(ScalarOp::FloatConst64(bits)) =>
+          match inst.first_result() {
+            Some(r) => constants.set(r.id, F64(bits.reinterpret_as_double()))
             None => ()
           }
         _ => ()
@@ -206,12 +204,8 @@ fn ConstValue::to_opcode(self : ConstValue) -> Opcode {
   match self {
     I32(v) => Scalar(ScalarOp::IntConst(v.to_int64()))
     I64(v) => Scalar(ScalarOp::IntConst(v))
-    F32(v) => {
-      // Pack F32 bits into Double's bit representation to preserve NaN payloads
-      let f32_bits = v.reinterpret_as_int().to_int64()
-      Scalar(ScalarOp::FloatConst(f32_bits.reinterpret_as_double()))
-    }
-    F64(v) => Scalar(ScalarOp::FloatConst(v))
+    F32(v) => Scalar(ScalarOp::FloatConst32(v.reinterpret_as_uint()))
+    F64(v) => Scalar(ScalarOp::FloatConst64(v.reinterpret_as_uint64()))
   }
 }
 
@@ -223,7 +217,9 @@ fn try_fold_constant(
 ) -> ConstValue? {
   match inst.opcode {
     // Constants are already folded
-    Scalar(ScalarOp::IntConst(_)) | Scalar(ScalarOp::FloatConst(_)) => None
+    Scalar(ScalarOp::IntConst(_))
+    | Scalar(ScalarOp::FloatConst32(_))
+    | Scalar(ScalarOp::FloatConst64(_)) => None
     // Binary integer operations
     Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)) =>
       fold_binary_int(inst, constants, fn(a, b) { a + b })

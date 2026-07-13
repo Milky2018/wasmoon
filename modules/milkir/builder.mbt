@@ -300,16 +300,6 @@ pub fn FunctionBuilder::iconst_i64(
 }
 
 ///|
-/// Emit a float constant
-pub fn FunctionBuilder::fconst(
-  self : FunctionBuilder,
-  ty : Type,
-  value : Double,
-) -> Value {
-  self.emit_inst(ty, Scalar(ScalarOp::FloatConst(value)), [])
-}
-
-///|
 /// Emit an f32 constant
 /// Note: We pack the f32 bits into the Double's bit representation to preserve
 /// NaN payloads. Using value.to_double() would go through the FPU and convert
@@ -318,8 +308,11 @@ pub fn FunctionBuilder::fconst_f32(
   self : FunctionBuilder,
   value : Float,
 ) -> Value {
-  let f32_bits = value.reinterpret_as_int().to_int64()
-  self.fconst(F32, f32_bits.reinterpret_as_double())
+  self.emit_inst(
+    F32,
+    Scalar(ScalarOp::FloatConst32(value.reinterpret_as_uint())),
+    [],
+  )
 }
 
 ///|
@@ -328,7 +321,11 @@ pub fn FunctionBuilder::fconst_f64(
   self : FunctionBuilder,
   value : Double,
 ) -> Value {
-  self.fconst(F64, value)
+  self.emit_inst(
+    F64,
+    Scalar(ScalarOp::FloatConst64(value.reinterpret_as_uint64())),
+    [],
+  )
 }
 
 // ============ Integer Arithmetic ============

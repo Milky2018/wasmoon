@@ -156,6 +156,7 @@ graph TD
   ISS_145["ISS-145: Finalize the semantic opcode contract"]
   ISS_146["ISS-146: Restore verifier-safe tail calls and reference carriers"]
   ISS_147["ISS-147: Enforce MilkIR function ownership"]
+  ISS_148["ISS-148: Make floating constants explicitly typed by bits"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005

@@ -15,30 +15,32 @@ fn lower_iconst(
 }
 
 ///|
-/// Lower float constant
-fn lower_fconst(
+/// Lower an f32 constant from its IEEE 754 bit pattern.
+fn lower_fconst32(
   ctx : LoweringContext,
   inst : @milkir.Inst,
   block : @block.Block,
-  val : Double,
+  bits : UInt,
 ) -> Unit {
   if inst.first_result() is Some(result) {
     let vreg = ctx.get_vreg(result)
-    // Determine if this is an F32 or F64 constant based on the result type
-    let opcode = match result.ty {
-      F32 => {
-        // F32 bits are packed in the lower 32 bits of the Double's bit representation
-        // (see FunctionBuilder::fconst_f32). Extract them directly to preserve NaN payloads.
-        let bits = val.reinterpret_as_int64().to_int()
-        @instr.LoadConstF32(bits)
-      }
-      _ => {
-        // F64: get 64-bit representation
-        let bits = val.reinterpret_as_int64()
-        LoadConstF64(bits)
-      }
-    }
-    let machv_inst = @instr.Inst(opcode)
+    let machv_inst = @instr.Inst(@instr.LoadConstF32(bits.reinterpret_as_int()))
+    machv_inst.add_def({ reg: Virtual(vreg) })
+    block.add_inst(machv_inst)
+  }
+}
+
+///|
+/// Lower an f64 constant from its IEEE 754 bit pattern.
+fn lower_fconst64(
+  ctx : LoweringContext,
+  inst : @milkir.Inst,
+  block : @block.Block,
+  bits : UInt64,
+) -> Unit {
+  if inst.first_result() is Some(result) {
+    let vreg = ctx.get_vreg(result)
+    let machv_inst = @instr.Inst(LoadConstF64(bits.reinterpret_as_int64()))
     machv_inst.add_def({ reg: Virtual(vreg) })
     block.add_inst(machv_inst)
   }

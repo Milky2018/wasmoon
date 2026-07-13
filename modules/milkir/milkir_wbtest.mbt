@@ -661,29 +661,25 @@ test "instruction identity includes result types and arity" {
 ///|
 test "instruction identity compares float constants by bit pattern" {
   let func = Function::new_empty("float_instruction_identity")
-  let positive_zero = func.new_inst(Scalar(ScalarOp::FloatConst(0.0)), [], [
+  let positive_zero = func.new_inst(Scalar(ScalarOp::FloatConst64(0UL)), [], [
     func.new_value(F64),
   ])
-  let negative_zero = func.new_inst(Scalar(ScalarOp::FloatConst(-0.0)), [], [
-    func.new_value(F64),
-  ])
+  let negative_zero = func.new_inst(
+    Scalar(ScalarOp::FloatConst64(0x8000000000000000UL)),
+    [],
+    [func.new_value(F64)],
+  )
   let nan_bits = 0x7FF8000000000001UL
   let other_nan_bits = 0x7FF8000000000002UL
-  let nan0 = func.new_inst(
-    Scalar(ScalarOp::FloatConst(nan_bits.reinterpret_as_double())),
-    [],
-    [func.new_value(F64)],
-  )
-  let nan0_again = func.new_inst(
-    Scalar(ScalarOp::FloatConst(nan_bits.reinterpret_as_double())),
-    [],
-    [func.new_value(F64)],
-  )
-  let nan1 = func.new_inst(
-    Scalar(ScalarOp::FloatConst(other_nan_bits.reinterpret_as_double())),
-    [],
-    [func.new_value(F64)],
-  )
+  let nan0 = func.new_inst(Scalar(ScalarOp::FloatConst64(nan_bits)), [], [
+    func.new_value(F64),
+  ])
+  let nan0_again = func.new_inst(Scalar(ScalarOp::FloatConst64(nan_bits)), [], [
+    func.new_value(F64),
+  ])
+  let nan1 = func.new_inst(Scalar(ScalarOp::FloatConst64(other_nan_bits)), [], [
+    func.new_value(F64),
+  ])
   inspect(positive_zero == negative_zero, content="false")
   inspect(nan0 == nan0_again, content="true")
   inspect(nan0 == nan1, content="false")
@@ -698,8 +694,8 @@ test "GVN reuses float constants with identical NaN bits" {
   let builder = FunctionBuilder::FunctionBuilder("gvn_nan_bits")
   builder.add_result(F64)
   let nan = 0x7FF8000000000001UL.reinterpret_as_double()
-  let _first = builder.fconst(F64, nan)
-  let second = builder.fconst(F64, nan)
+  let _first = builder.fconst_f64(nan)
+  let second = builder.fconst_f64(nan)
   builder.return_([second])
   let func = builder.get_function()
   let result = cse_gvn_global(func)

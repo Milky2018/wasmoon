@@ -1071,7 +1071,13 @@ test "plan MilkIR f64 const through reusable x64 JIT pipeline" {
   let milk = @milkir.Function::with_signature("fconst64_x64", signature)
   let output = milk.new_value(F64)
   let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Scalar(FloatConst(1.5)), [], [output]))
+  entry.append_inst(
+    milk.new_inst(
+      Scalar(FloatConst64((1.5 : Double).reinterpret_as_uint64())),
+      [],
+      [output],
+    ),
+  )
   entry.set_terminator(Return([output]))
   let plan = plan_milkir_integration_for_target(milk, X64)
   let bytes = plan.object.get_bytes()
@@ -1085,10 +1091,8 @@ test "plan MilkIR f32 const through reusable AArch64 JIT pipeline" {
   let milk = @milkir.Function::with_signature("fconst32_aarch64", signature)
   let output = milk.new_value(F32)
   let entry = milk.new_block([])
-  let bits = (1.25 : Float).reinterpret_as_int().to_int64()
-  entry.append_inst(
-    milk.new_inst(Scalar(FloatConst(bits.reinterpret_as_double())), [], [output]),
-  )
+  let bits = (1.25 : Float).reinterpret_as_uint()
+  entry.append_inst(milk.new_inst(Scalar(FloatConst32(bits)), [], [output]))
   entry.set_terminator(Return([output]))
   let plan = plan_milkir_integration_for_target(milk, AArch64)
   let mut has_fmov_w_to_s = false

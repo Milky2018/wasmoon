@@ -278,10 +278,13 @@ fn verify_scalar_contract(
       require_result_arity(inst, 1, "iconst")
       require_word_value(inst.results[0].ty, "iconst")
     }
-    FloatConst(_) => {
-      require_arity(inst.args.length(), 0, "fconst")
-      require_result_arity(inst, 1, "fconst")
-      require_float(inst.results[0].ty, "fconst")
+    FloatConst32(_) => {
+      require_arity(inst.args.length(), 0, "fconst32")
+      require_result_types(inst, [F32], "fconst32")
+    }
+    FloatConst64(_) => {
+      require_arity(inst.args.length(), 0, "fconst64")
+      require_result_types(inst, [F64], "fconst64")
     }
     IntBinary(op) =>
       match op {
