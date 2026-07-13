@@ -22,6 +22,48 @@ fn FunctionOwnerContext::record_construction_error(
 }
 
 ///|
+fn reject_foreign_value(
+  owner : Ref[FunctionOwnerContext],
+  value : Value,
+) -> Bool {
+  if !physical_equal(owner, value.owner) {
+    owner.val.record_construction_error(ForeignValue(value_id=value.id))
+    return true
+  }
+  false
+}
+
+///|
+fn reject_foreign_values(
+  owner : Ref[FunctionOwnerContext],
+  values : Array[Value],
+) -> Bool {
+  for value in values {
+    if reject_foreign_value(owner, value) {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn reject_foreign_terminator_values(
+  owner : Ref[FunctionOwnerContext],
+  term : Terminator,
+) -> Bool {
+  match term {
+    Jump(_, values) | Return(values) => reject_foreign_values(owner, values)
+    Branch(cond, _, true_args, _, false_args) =>
+      reject_foreign_value(owner, cond) ||
+      reject_foreign_values(owner, true_args) ||
+      reject_foreign_values(owner, false_args)
+    Brz(cond, _, _) | Brnz(cond, _, _) | BrTable(cond, _, _) =>
+      reject_foreign_value(owner, cond)
+    Trap(_) | TrapExit(_) => false
+  }
+}
+
+///|
 /// IR Value - represents a virtual register in SSA form
 /// Each value is defined exactly once and can be used multiple times
 pub struct Value {
@@ -265,6 +307,9 @@ fn Block::new_with_params(
 ///|
 /// Add a parameter to this block (for SSA phi nodes)
 fn Block::add_param(self : Block, value : Value, ty : Type) -> Unit {
+  if reject_foreign_value(self.owner, value) {
+    return
+  }
   self.params.push((value, ty))
 }
 
@@ -277,15 +322,10 @@ fn Block::add_inst(self : Block, inst : Inst) -> Unit {
     )
     return
   }
-  for values in [inst.args, inst.operands, inst.results] {
-    for value in values {
-      if !physical_equal(self.owner, value.owner) {
-        self.owner.val.record_construction_error(
-          ForeignValue(value_id=value.id),
-        )
-        return
-      }
-    }
+  if reject_foreign_values(self.owner, inst.args) ||
+    reject_foreign_values(self.owner, inst.operands) ||
+    reject_foreign_values(self.owner, inst.results) {
+    return
   }
   self.instructions.push(inst)
 }
@@ -298,6 +338,9 @@ pub fn Block::append_inst(self : Block, inst : Inst) -> Unit {
 ///|
 /// Set the terminator for this block
 pub fn Block::set_terminator(self : Block, term : Terminator) -> Unit {
+  if reject_foreign_terminator_values(self.owner, term) {
+    return
+  }
   self.terminator = Some(term)
 }
 
@@ -980,6 +1023,9 @@ pub fn Function::new_value(self : Function, ty : Type) -> Value {
 ///|
 /// Create a new basic block
 pub fn Function::new_block(self : Function, params : Array[Value]) -> Block {
+  if reject_foreign_values(self.owner, params) {
+    return Block(self.owner, self.next_block_id)
+  }
   let id = self.next_block_id
   self.next_block_id = self.next_block_id + 1
   let block = Block::new_with_params(self.owner, id, params)
@@ -999,6 +1045,10 @@ pub fn Function::new_inst(
   args : Array[Value],
   results : Array[Value],
 ) -> Inst {
+  if reject_foreign_values(self.owner, args) ||
+    reject_foreign_values(self.owner, results) {
+    return Inst::new_with_id(self.owner, self.next_inst_id, opcode, [], [])
+  }
   let inst = Inst::new_with_id(
     self.owner,
     self.next_inst_id,
