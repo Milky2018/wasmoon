@@ -79,5 +79,9 @@ test "block rejects an instruction owned by another function" {
   entry.append_inst(foreign)
   inspect(entry.instructions.length(), content="0")
   entry.set_terminator(Return([]))
-  inspect(second.verify(), content="()")
+  try second.verify() catch {
+    err => inspect(err, content="ForeignInstruction(inst_id=0)")
+  } noraise {
+    _ => fail("expected a foreign instruction error")
+  }
 }

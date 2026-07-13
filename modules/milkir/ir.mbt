@@ -2,16 +2,36 @@
 // Based on SSA (Static Single Assignment) form
 
 ///|
+priv struct FunctionOwnerContext {
+  mut construction_error : VerifyError?
+}
+
+///|
+fn FunctionOwnerContext::new() -> Ref[FunctionOwnerContext] {
+  Ref({ construction_error: None })
+}
+
+///|
+fn FunctionOwnerContext::record_construction_error(
+  self : FunctionOwnerContext,
+  error : VerifyError,
+) -> Unit {
+  if self.construction_error is None {
+    self.construction_error = Some(error)
+  }
+}
+
+///|
 /// IR Value - represents a virtual register in SSA form
 /// Each value is defined exactly once and can be used multiple times
 pub struct Value {
-  priv owner : Ref[Unit]
+  priv owner : Ref[FunctionOwnerContext]
   id : Int // Unique identifier within a function
   ty : Type // The type of this value
 }
 
 ///|
-fn Value::new(owner : Ref[Unit], id : Int, ty : Type) -> Value {
+fn Value::new(owner : Ref[FunctionOwnerContext], id : Int, ty : Type) -> Value {
   { owner, id, ty }
 }
 
@@ -207,7 +227,7 @@ pub(all) enum Metadata {
 /// - One entry point (the first instruction)
 /// - One exit point (the last instruction, a terminator)
 pub struct Block {
-  priv owner : Ref[Unit]
+  priv owner : Ref[FunctionOwnerContext]
   id : Int // Unique block identifier
   params : Array[(Value, Type)] // Block parameters (for phi nodes)
   instructions : Array[Inst] // Instructions in this block
@@ -225,13 +245,13 @@ pub impl Debug for Block with fn to_repr(self) {
 }
 
 ///|
-fn Block::Block(owner : Ref[Unit], id : Int) -> Block {
+fn Block::Block(owner : Ref[FunctionOwnerContext], id : Int) -> Block {
   { owner, id, params: [], instructions: [], terminator: None }
 }
 
 ///|
 fn Block::new_with_params(
-  owner : Ref[Unit],
+  owner : Ref[FunctionOwnerContext],
   id : Int,
   params : Array[Value],
 ) -> Block {
@@ -253,6 +273,10 @@ fn Block::add_param(self : Block, value : Value, ty : Type) -> Unit {
 fn Block::add_inst(self : Block, inst : Inst) -> Unit {
   if physical_equal(self.owner, inst.owner) {
     self.instructions.push(inst)
+  } else {
+    self.owner.val.record_construction_error(
+      ForeignInstruction(inst_id=inst.id),
+    )
   }
 }
 
@@ -270,7 +294,7 @@ pub fn Block::set_terminator(self : Block, term : Terminator) -> Unit {
 ///|
 /// Instruction - an SSA instruction that produces a value
 pub struct Inst {
-  priv owner : Ref[Unit]
+  priv owner : Ref[FunctionOwnerContext]
   id : Int
   results : Array[Value] // Values produced (empty for void instructions)
   mut opcode : Opcode // The operation
@@ -345,7 +369,7 @@ fn opcode_identity_equal(lhs : Opcode, rhs : Opcode) -> Bool {
 
 ///|
 fn Inst::new_with_id(
-  owner : Ref[Unit],
+  owner : Ref[FunctionOwnerContext],
   id : Int,
   opcode : Opcode,
   args : Array[Value],
@@ -862,8 +886,7 @@ pub(all) enum Terminator {
 ///|
 /// Function - a complete IR function
 pub struct Function {
-  priv owner : Ref[Unit]
-  priv mut construction_error : VerifyError?
+  priv owner : Ref[FunctionOwnerContext]
   name : String
   params : Array[(Value, Type)] // Function parameters
   results : Array[Type] // Return types
@@ -891,8 +914,7 @@ pub impl Debug for Function with fn to_repr(self) {
 ///|
 pub fn Function::new_empty(name : String) -> Function {
   {
-    owner: Ref(()),
-    construction_error: None,
+    owner: FunctionOwnerContext::new(),
     name,
     params: [],
     results: [],
@@ -998,9 +1020,7 @@ fn Function::record_construction_error(
   self : Function,
   error : VerifyError,
 ) -> Unit {
-  if self.construction_error is None {
-    self.construction_error = Some(error)
-  }
+  self.owner.val.record_construction_error(error)
 }
 
 ///|

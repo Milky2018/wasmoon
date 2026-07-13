@@ -32,7 +32,7 @@ pub impl Show for VerifyError with fn output(self, logger) {
 
 ///|
 pub fn Function::verify(self : Function) -> Unit raise VerifyError {
-  if self.construction_error is Some(error) {
+  if self.owner.val.construction_error is Some(error) {
     raise error
   }
   if self.blocks.is_empty() {
