@@ -180,6 +180,7 @@ graph TD
   ISS_164["ISS-164: Lower normalized vector operations to MachV"]
   ISS_165["ISS-165: Remove the legacy VectorOp matrix and validate SIMD parity"]
   ISS_166["ISS-166: Eliminate MoonBit warning 73 annotations"]
+  ISS_167["ISS-167: Add comprehensive MilkIR black-box contract tests"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
@@ -320,6 +321,7 @@ graph TD
   ISS_162 --> ISS_163
   ISS_163 --> ISS_164
   ISS_164 --> ISS_165
+  ISS_166 --> ISS_167
 ```
 
 ## Warnings
