@@ -9,8 +9,5 @@ TODO.md
 _build
 tmp/
 
-# Internal generated asset package; its interface is not a supported API.
-/modules/wasm_milkir/internal/schema/pkg.generated.mbti
-
 # wasm-smith differential runs
 scripts/smith_diff/out/

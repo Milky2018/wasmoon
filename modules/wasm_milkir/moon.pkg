@@ -1,4 +1,14 @@
 import {
   "Milky2018/milkir",
-  "Milky2018/wasm_milkir/internal/schema" @opcode_schema,
 }
+
+rule(
+  name: "generate_wasm_opcodes",
+  command: "python3 tools/generate_wasm_opcodes.py $input $output",
+)
+
+dev_build(
+  rule: "generate_wasm_opcodes",
+  input: "wasm_opcodes.schema",
+  output: "dialect_generated.mbt",
+)
