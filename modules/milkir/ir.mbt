@@ -251,7 +251,9 @@ fn Block::add_param(self : Block, value : Value, ty : Type) -> Unit {
 ///|
 /// Add an instruction to this block
 fn Block::add_inst(self : Block, inst : Inst) -> Unit {
-  self.instructions.push(inst)
+  if physical_equal(self.owner, inst.owner) {
+    self.instructions.push(inst)
+  }
 }
 
 ///|

@@ -66,7 +66,7 @@ test "verify rejects a block owned by another function" {
 }
 
 ///|
-test "verify rejects an instruction owned by another function" {
+test "block rejects an instruction owned by another function" {
   let first = Function::new_empty("first")
   let symbol = first.declare_external_symbol("foreign")
   let foreign = first.new_inst(
@@ -77,10 +77,7 @@ test "verify rejects an instruction owned by another function" {
   let second = Function::new_empty("second")
   let entry = second.new_block([])
   entry.append_inst(foreign)
+  inspect(entry.instructions.length(), content="0")
   entry.set_terminator(Return([]))
-  try second.verify() catch {
-    err => inspect(err, content="ForeignInstruction(inst_id=0)")
-  } noraise {
-    _ => fail("expected a foreign instruction error")
-  }
+  inspect(second.verify(), content="()")
 }
