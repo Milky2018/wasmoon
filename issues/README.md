@@ -168,6 +168,10 @@ graph TD
   ISS_152["ISS-152: Encapsulate mutable MilkIR entity collections"]
   ISS_153["ISS-153: Remove unlowerable Wasm dialect opcodes"]
   ISS_154["ISS-154: Return typed Wasm dialect lowering errors"]
+  ISS_155["ISS-155: Centralize MilkIR opcode semantic facts"]
+  ISS_156["ISS-156: Derive dead-code and loop safety from opcode semantics"]
+  ISS_157["ISS-157: Derive GVN memory policy from opcode semantics"]
+  ISS_158["ISS-158: Derive e-graph purity and enforce opcode completeness"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
@@ -298,6 +302,9 @@ graph TD
   ISS_143 --> ISS_144
   ISS_144 --> ISS_145
   ISS_153 --> ISS_154
+  ISS_155 --> ISS_156
+  ISS_156 --> ISS_157
+  ISS_157 --> ISS_158
 ```
 
 ## Warnings

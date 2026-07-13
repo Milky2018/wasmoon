@@ -1,37 +1,6 @@
 // ============ Global Value Numbering with Load CSE ============
 
 ///|
-/// Check if an instruction reads from memory
-fn reads_memory(opcode : Opcode) -> Bool {
-  match opcode {
-    Memory(MemoryOp::Load(_) | MemoryOp::LoadNarrow(_, _, _))
-    | Vector(
-      VectorOp::LoadExtend(_, _)
-      | VectorOp::LoadSplat(_)
-      | VectorOp::LoadZero(_)
-      | VectorOp::LoadLane(_, _)
-    ) => true
-    Call(_) => true
-    Ext(_, _) => true
-    _ => false
-  }
-}
-
-///|
-/// Check if an instruction may write to memory or have other side effects
-/// that could invalidate memory-based expressions
-fn may_write_memory(opcode : Opcode) -> Bool {
-  match opcode {
-    // Direct memory writes
-    Memory(MemoryOp::Store(_) | MemoryOp::StoreNarrow(_))
-    | Vector(VectorOp::StoreLane(_, _)) => true
-    Call(_) => true
-    Ext(_, _) => true
-    _ => false
-  }
-}
-
-///|
 priv struct PtrAccess {
   base_id : Int
   offset_id : Int
@@ -234,7 +203,7 @@ fn update_last_store_state(
     state.set_region_token(access.region, inst_version)
     return
   }
-  if may_write_memory(inst.opcode) {
+  if inst.opcode.semantics().memory.may_write_memory() {
     state.set_all_tokens(inst_version)
   }
 }
@@ -516,34 +485,15 @@ fn inst_dominates(
 
 ///|
 /// Check if an instruction is suitable for GVN (can be CSE'd)
-/// This includes pure operations plus loads (which read but don't write)
+/// Trapping instructions and memory operations remain excluded. Load CSE is a
+/// separate correctness change even though this pass tracks memory versions.
 fn is_gvn_candidate(inst : Inst) -> Bool {
   // Replacement currently emits one copy, so only single-result instructions
   // can participate in GVN.
   if inst.results.length() != 1 {
     return false
   }
-  // Use the existing has_side_effects check - if it has side effects, skip it
-  if has_side_effects(inst) {
-    return false
-  }
-  // Instructions that write memory are handled by invalidation, not skipped
-  // But we still need to skip them as candidates
-  match inst.opcode {
-    // Division/remainder can trap, not suitable
-    Scalar(ScalarOp::IntBinary(IntBinaryOp::SignedDiv))
-    | Scalar(ScalarOp::IntBinary(IntBinaryOp::UnsignedDiv))
-    | Scalar(ScalarOp::IntBinary(IntBinaryOp::SignedRem))
-    | Scalar(ScalarOp::IntBinary(IntBinaryOp::UnsignedRem)) => false
-    // Float-to-int can trap
-    Scalar(ScalarOp::Convert(ConversionOp::FloatToSignedInt))
-    | Scalar(ScalarOp::Convert(ConversionOp::FloatToUnsignedInt)) => false
-    // Memory writes are handled by may_write_memory, skip as candidates
-    Memory(MemoryOp::Store(_) | MemoryOp::StoreNarrow(_))
-    | Vector(VectorOp::StoreLane(_, _)) => false
-    // All other non-side-effect instructions are candidates
-    _ => true
-  }
+  !inst.opcode.semantics().must_preserve_if_unused()
 }
 
 ///|
@@ -659,7 +609,7 @@ fn run_global_value_numbering_with_budget(
         continue
       }
       // Check if this instruction may invalidate memory-based expressions.
-      if may_write_memory(inst.opcode) {
+      if inst.opcode.semantics().memory.may_write_memory() {
         // Invalidate all memory-reading expressions using tracked set.
         for key in memory_keys {
           if value_table.get(key) is Some((v, _)) {
@@ -692,7 +642,7 @@ fn run_global_value_numbering_with_budget(
           let prev = value_table.get(key)
           local_entries.push((key, prev))
           // Add to value table with memory-read flag
-          let is_memory_read = reads_memory(inst.opcode)
+          let is_memory_read = inst.opcode.semantics().memory.reads_memory()
           value_table.set(key, (result_val, is_memory_read))
           if is_memory_read {
             memory_keys.add(key)

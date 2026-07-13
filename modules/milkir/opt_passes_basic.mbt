@@ -38,7 +38,8 @@ fn eliminate_dead_code(func : Function) -> OptResult {
         let inst = block.instructions[i]
         let all_results_unused = inst.results.length() > 0 &&
           inst.results.all(v => use_counts.get(v.id).unwrap_or(0) == 0)
-        if all_results_unused && !has_side_effects(inst) {
+        if all_results_unused &&
+          !inst.opcode.semantics().must_preserve_if_unused() {
           // Remove this instruction
           block.instructions.remove(i) |> ignore
           // Decrement use counts for operands
@@ -100,41 +101,6 @@ fn get_terminator_uses(term : Terminator) -> Array[Value] {
     BrTable(index, _, _) => [index]
     Return(values) => values
     Trap(_) | TrapExit(_) => []
-  }
-}
-
-///|
-/// Check if an instruction has side effects
-fn has_side_effects(inst : Inst) -> Bool {
-  match inst.opcode {
-    // Memory operations may trap or modify memory.
-    Memory(_) => true
-    // Vector memory operations consume checked effective addresses, but loads
-    // may still trap and stores modify memory.
-    Vector(
-      VectorOp::LoadExtend(_, _)
-      | VectorOp::LoadSplat(_)
-      | VectorOp::LoadZero(_)
-      | VectorOp::LoadLane(_, _)
-      | VectorOp::StoreLane(_, _)
-    ) => true
-    // Dialect extension operations are conservatively effectful unless a
-    // dialect-owned optimization pass proves otherwise.
-    Ext(_, _) => true
-    // NOTE: GlobalGet and GlobalSet are desugared to Memory operations.
-    // Division/remainder can trap on divide-by-zero or overflow (INT_MIN / -1)
-    Scalar(ScalarOp::IntBinary(IntBinaryOp::SignedDiv))
-    | Scalar(ScalarOp::IntBinary(IntBinaryOp::UnsignedDiv))
-    | Scalar(ScalarOp::IntBinary(IntBinaryOp::SignedRem))
-    | Scalar(ScalarOp::IntBinary(IntBinaryOp::UnsignedRem)) => true
-    // Float-to-int conversion can trap on NaN or out-of-range values
-    Scalar(ScalarOp::Convert(ConversionOp::FloatToSignedInt))
-    | Scalar(ScalarOp::Convert(ConversionOp::FloatToUnsignedInt)) => true
-    // External calls can have side effects and may interact with embedding
-    // runtime state.
-    Call(_) => true
-    // Other instructions are pure
-    _ => false
   }
 }
 

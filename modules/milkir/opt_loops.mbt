@@ -69,7 +69,7 @@ fn is_defined_outside_loop(
 ///|
 /// Check if an instruction is loop-invariant
 /// An instruction is loop-invariant if:
-/// 1. It has no side effects
+/// 1. It has no observable effects and cannot trap
 /// 2. All its operands are either defined outside the loop or are loop-invariant
 fn is_loop_invariant(
   inst : Inst,
@@ -77,8 +77,8 @@ fn is_loop_invariant(
   value_to_block : @hashmap.HashMap[Int, Int],
   invariant_values : @hashmap.HashMap[Int, Bool],
 ) -> Bool {
-  // Instructions with side effects cannot be hoisted
-  if has_side_effects(inst) {
+  // Instructions with observable effects or traps cannot be hoisted.
+  if inst.opcode.semantics().must_preserve_if_unused() {
     return false
   }
 

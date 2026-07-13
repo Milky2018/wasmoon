@@ -176,7 +176,7 @@ fn opcode_has_egraph_encoding(opcode : Opcode) -> Bool {
 /// - opcode has a representable e-graph encoding
 fn inst_is_egraph_pure(inst : Inst) -> Bool {
   inst.all_results().length() == 1 &&
-  !has_side_effects(inst) &&
+  !inst.opcode.semantics().must_preserve_if_unused() &&
   opcode_has_egraph_encoding(inst.opcode)
 }
 

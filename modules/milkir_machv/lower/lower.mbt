@@ -2061,7 +2061,7 @@ fn lower_inst(
 ) -> @block.Block {
   match inst.opcode {
     Ext(ext, _) => return lower_extension(ctx, inst, block, ext)
-    _ => ()
+    Scalar(_) | Call(_) | Memory(_) | Vector(_) => ()
   }
   lower_inst_builtin(ctx, inst, block)
   block
