@@ -549,7 +549,7 @@ test "strength reduction derives shift amounts and remainder masks" {
 }
 
 ///|
-test "O3 derives power-of-two constants when the e-graph is skipped" {
+test "O3 derives power-of-two constants with a bounded large-function egraph" {
   let builder = FunctionBuilder::FunctionBuilder("o3_large_strength_reduce")
   let value = builder.add_param(I32)
   builder.add_result(I32)
@@ -566,16 +566,15 @@ test "O3 derives power-of-two constants when the e-graph is skipped" {
   let func = builder.get_function()
   optimize_with_level(func, O3) |> ignore
   let instructions = func.blocks[0].instructions
-  inspect(instructions.length(), content="303")
-  inspect(instructions[297].opcode, content="Scalar(IntConst(3))")
-  inspect(instructions[298].opcode, content="Scalar(IntBinary(ShiftLeft))")
-  inspect(instructions[299].opcode, content="Scalar(IntConst(3))")
+  inspect(instructions.length(), content="5")
+  inspect(instructions[0].opcode, content="Scalar(IntConst(3))")
+  inspect(instructions[1].opcode, content="Scalar(IntBinary(ShiftLeft))")
   inspect(
-    instructions[300].opcode,
+    instructions[2].opcode,
     content="Scalar(IntBinary(UnsignedShiftRight))",
   )
-  inspect(instructions[301].opcode, content="Scalar(IntConst(7))")
-  inspect(instructions[302].opcode, content="Scalar(IntBinary(And))")
+  inspect(instructions[3].opcode, content="Scalar(IntConst(7))")
+  inspect(instructions[4].opcode, content="Scalar(IntBinary(And))")
   inspect(func.verify(), content="()")
 }
 
@@ -630,8 +629,7 @@ test "optimizer CSE replaces duplicate pure expression with copy" {
     content=(
       #|function cse_local(v0:i32, v1:i32) -> i32 {
       #|block0:
-      #|    v2:i32 = iadd v0, v1
-      #|    v3:i32 = copy v2
+      #|    v3:i32 = iadd v0, v1
       #|    return v3
       #|}
       #|
@@ -759,8 +757,7 @@ test "optimizer CSE reuses expressions from dominating blocks" {
       #|    v3:i32 = iadd v0, v1
       #|    brnz v2, block1, block2
       #|block1:
-      #|    v4:i32 = copy v3
-      #|    return v4
+      #|    return v3
       #|block2:
       #|    return v3
       #|}

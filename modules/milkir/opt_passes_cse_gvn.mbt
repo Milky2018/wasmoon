@@ -547,10 +547,27 @@ fn is_gvn_candidate(inst : Inst) -> Bool {
 }
 
 ///|
-fn run_global_value_numbering(func : Function) -> OptResult {
+priv struct GVNStats {
+  result : OptResult
+  work_done : Int
+  budget_exhausted : Bool
+}
+
+///|
+fn run_global_value_numbering_with_budget(
+  func : Function,
+  work_budget : Int,
+) -> GVNStats {
   let result = OptResult::OptResult()
   if func.blocks.length() == 0 {
-    return result
+    return { result, work_done: 0, budget_exhausted: false }
+  }
+  if work_budget <= 0 {
+    return {
+      result,
+      work_done: 0,
+      budget_exhausted: instruction_count(func) > 0,
+    }
   }
   let iconst_values = collect_iconst_values(func)
   let ptr_base_infos = collect_ptr_base_infos(func, iconst_values)
@@ -572,8 +589,13 @@ fn run_global_value_numbering(func : Function) -> OptResult {
   )
   let memory_values : @hashmap.HashMap[MemoryValueKey, MemoryValueEntry] = HashMap([],
   )
+  let work_done : Ref[Int] = { val: 0 }
+  let budget_exhausted : Ref[Bool] = { val: false }
   // DFS the dominator tree
   fn dfs(block_id : Int) {
+    if budget_exhausted.val {
+      return
+    }
     let idx = block_idx.get(block_id).unwrap()
     let block = func.blocks[idx]
     // Track expressions added/modified in this block (to restore later)
@@ -585,6 +607,11 @@ fn run_global_value_numbering(func : Function) -> OptResult {
     }
     // Process instructions
     for inst_index, inst in block.instructions {
+      if work_done.val >= work_budget {
+        budget_exhausted.val = true
+        break
+      }
+      work_done.val = work_done.val + 1
       let mut replaced_by_memory = false
       if inst.opcode is Memory(MemoryOp::Load(load_ty)) &&
         ptr_access_from_inst(inst, ptr_base_infos) is Some(load_access) {
@@ -674,7 +701,7 @@ fn run_global_value_numbering(func : Function) -> OptResult {
       }
     }
     // Recurse to dominated children
-    if block_id < domtree.length() {
+    if !budget_exhausted.val && block_id < domtree.length() {
       for child in domtree[block_id] {
         dfs(child)
       }
@@ -701,12 +728,12 @@ fn run_global_value_numbering(func : Function) -> OptResult {
   if cfg.is_valid(0) {
     dfs(0)
   }
-  result
+  { result, work_done: work_done.val, budget_exhausted: budget_exhausted.val }
 }
 
 ///|
 /// Unified global optimization pass that combines pure CSE and alias-aware GVN
 /// in a single dominator-tree walk.
 fn cse_gvn_global(func : Function) -> OptResult {
-  run_global_value_numbering(func)
+  run_global_value_numbering_with_budget(func, instruction_count(func)).result
 }

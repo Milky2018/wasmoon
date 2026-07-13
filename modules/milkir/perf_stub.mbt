@@ -23,8 +23,12 @@ fn perf_record_ir_pass(
   egraph_classes? : Int? = None,
   egraph_nodes? : Int? = None,
   egraph_rule_apps? : Int? = None,
+  work_done? : Int? = None,
+  budget_exhausted? : Bool? = None,
 ) -> Unit {
   ignore(egraph_classes)
   ignore(egraph_nodes)
   ignore(egraph_rule_apps)
+  ignore(work_done)
+  ignore(budget_exhausted)
 }
