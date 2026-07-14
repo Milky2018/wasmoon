@@ -7,6 +7,7 @@ priv enum WasmImmediateKind {
 ///|
 priv enum WasmTypePattern {
   ExactType(@milkir.Type)
+  IntegerType
   ReferenceLike
   PointerLike
   ContextualType
@@ -79,6 +80,7 @@ fn validate_wasm_opcode_immediates(
 fn type_pattern_matches(pattern : WasmTypePattern, ty : @milkir.Type) -> Bool {
   match pattern {
     ExactType(expected) => ty == expected
+    IntegerType => ty == I32 || ty == I64
     ReferenceLike =>
       match ty {
         Ref | CallableRef | OpaqueRef => true
@@ -93,6 +95,7 @@ fn type_pattern_matches(pattern : WasmTypePattern, ty : @milkir.Type) -> Bool {
 fn type_pattern_name(pattern : WasmTypePattern) -> String {
   match pattern {
     ExactType(ty) => ty.to_string()
+    IntegerType => "i32 | i64"
     ReferenceLike => "ref_like"
     PointerLike => "pointer"
     ContextualType => "contextual"

@@ -1,11 +1,12 @@
 # Typed constructor|wire name|immediate kinds|operands|results
-# `any` is one module-context-dependent type; `...` is a variadic contextual suffix.
+# `int` matches i32 or i64; `any` is one module-context-dependent type;
+# `...` is a variadic contextual suffix.
 LoadMemBase|load_mem_base|int|pointer|i64
 WasmCall|call|int|...|...
-WasmCallIndirect|call_indirect|int,int|i32,...|...
+WasmCallIndirect|call_indirect|int,int|int,...|...
 CallRef|call_ref|int|callable_ref,...|...
 ReturnCall|return_call|int|...|-
-ReturnCallIndirect|return_call_indirect|int,int|i32,...|-
+ReturnCallIndirect|return_call_indirect|int,int|int,...|-
 ReturnCallRef|return_call_ref|int|callable_ref,...|-
 GetFuncRef|get_func_ref|int|-|callable_ref
 StructNew|struct_new|int|...|ref

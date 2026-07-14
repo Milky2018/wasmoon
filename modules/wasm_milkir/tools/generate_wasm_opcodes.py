@@ -16,6 +16,7 @@ KIND_TO_MOONBIT = {"int": "IntegerImmediate", "bool": "BooleanImmediate"}
 TYPE_PATTERN_TO_MOONBIT = {
     "i32": "ExactType(I32)",
     "i64": "ExactType(I64)",
+    "int": "IntegerType",
     "ref": "ExactType(Ref)",
     "callable_ref": "ExactType(CallableRef)",
     "opaque_ref": "ExactType(OpaqueRef)",

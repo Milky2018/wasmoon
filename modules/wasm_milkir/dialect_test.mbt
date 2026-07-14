@@ -181,6 +181,65 @@ test "Wasm dialect validation rejects fixed operand and result types" {
 }
 
 ///|
+test "Wasm call_indirect accepts a table64 index" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder(
+    "table64_call_indirect",
+  )
+  let callee = builder.add_param(I64)
+  call_indirect_multi(builder, 0, 0, [], callee, []) |> ignore
+  builder.return_([])
+  builder.finalize() |> ignore
+}
+
+///|
+test "Wasm return_call_indirect accepts a table64 index" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder(
+    "table64_return_call_indirect",
+  )
+  let callee = builder.add_param(I64)
+  return_call_indirect_multi(builder, 0, 0, callee, [])
+  builder.trap("unreachable after return_call_indirect")
+  builder.finalize() |> ignore
+}
+
+///|
+test "Wasm indirect calls reject non-integer table indices" {
+  let rejected : Array[@milkir.VerifyError] = []
+  let call = @milkir.FunctionBuilder::FunctionBuilder(
+    "invalid_call_indirect_index",
+  )
+  let call_callee = call.add_param(F64)
+  call_indirect_multi(call, 0, 0, [], call_callee, []) |> ignore
+  call.return_([])
+  try call.finalize() catch {
+    err => rejected.push(err)
+  } noraise {
+    _ => fail("expected call_indirect to reject an f64 table index")
+  }
+
+  let return_call = @milkir.FunctionBuilder::FunctionBuilder(
+    "invalid_return_call_indirect_index",
+  )
+  let return_callee = return_call.add_param(F64)
+  return_call_indirect_multi(return_call, 0, 0, return_callee, [])
+  return_call.trap("unreachable after return_call_indirect")
+  try return_call.finalize() catch {
+    err => rejected.push(err)
+  } noraise {
+    _ => fail("expected return_call_indirect to reject an f64 table index")
+  }
+  debug_inspect(
+    rejected,
+    content=(
+      #|[
+      #|  UnverifiableInstruction(message="malformed Wasm MilkIR extension 'call_indirect': expected operands [i32 | i64, ...], got [f64]"),
+      #|  UnverifiableInstruction(message="malformed Wasm MilkIR extension 'return_call_indirect': expected operands [i32 | i64, ...], got [f64]"),
+      #|]
+    ),
+  )
+}
+
+///|
 test "Wasm extension decode rejects runtime-lowered operations" {
   let extensions : Array[@milkir.ExtOp] = [
     ExtOp("wasm", "memory_grow", [0]),
