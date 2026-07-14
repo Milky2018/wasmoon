@@ -29,9 +29,9 @@ pub fn call_clobbered_gprs() -> Array[@abi.PReg]
 
 pub fn int_reg_index(IntRegRole) -> Int
 
-pub fn lower_function(@milkir.Function, return_area_base_reg? : @abi.PReg?) -> @machv.Function
+pub fn lower_function(@milkir.Function, return_area_base_reg? : @abi.PReg?) -> @machv.Function raise @milkir.VerifyError
 
-pub fn lower_function_with_call_conv(@milkir.Function, @abi.CallConventionLayout, return_area_base_reg? : @abi.PReg?) -> @machv.Function
+pub fn lower_function_with_call_conv(@milkir.Function, @abi.CallConventionLayout, return_area_base_reg? : @abi.PReg?) -> @machv.Function raise @milkir.VerifyError
 
 pub fn sysv_arg_fprs() -> Array[@abi.PReg]
 

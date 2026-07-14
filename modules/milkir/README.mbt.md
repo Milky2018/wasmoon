@@ -64,7 +64,7 @@ block0:                             execution starts in block0
 }
 ```
 
-`finalize()` verifies the current function before returning it and raises `VerifyError` for malformed SSA, CFG, or instruction contracts. `get_function()` remains the explicit escape hatch for in-progress construction and transformation code; callers that mutate a function after finalization must verify it again.
+`finalize()` verifies the current function before returning it and raises `VerifyError` for malformed SSA, CFG, or instruction contracts. It is a validation checkpoint, not a freeze operation: the returned `Function` remains mutable and does not carry a persistent "verified" state. `get_function()` remains the explicit escape hatch for in-progress construction and transformation code. Callers may continue transforming either value, but every consuming adapter must verify the function after its final mutation and immediately before lowering it.
 
 The important detail is that `x`, `one`, and `answer` are not runtime integers in the MoonBit program that builds the IR. They are MilkIR `Value`s: typed handles that name values in the function being compiled.
 

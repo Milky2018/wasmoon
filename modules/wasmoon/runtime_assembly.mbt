@@ -124,7 +124,7 @@ pub fn compiler_infrastructure_assembly() -> CompilerInfrastructureAssembly {
   let entry = milk.new_block0()
   entry.set_terminator(Return([]))
   let embedding_abi = @wasmoon_jit.wasm_embedding_abi()
-  let machv_function = @lower.lower_function(
+  let machv_function = try! @lower.lower_function(
     milk,
     run_ir_opt=false,
     embedding_abi=Some(embedding_abi),
