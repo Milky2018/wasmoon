@@ -100,6 +100,87 @@ test "Wasm dialect validation rejects malformed immediates during finalize" {
 }
 
 ///|
+test "Wasm dialect validation rejects missing fixed results" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder(
+    "missing_wasm_extension_result",
+  )
+  get_exception_tag(builder) |> ignore
+  builder.emit_void_ext_inst(encode(GetExceptionTag), [])
+  builder.return_([])
+  try builder.finalize() catch {
+    err =>
+      inspect(
+        err,
+        content=(
+          #|UnverifiableInstruction(message="malformed Wasm MilkIR extension 'get_exception_tag': expected results [i32], got []")
+        ),
+      )
+  } noraise {
+    _ => fail("expected finalize to reject a missing Wasm extension result")
+  }
+}
+
+///|
+test "Wasm dialect validation rejects invalid fixed operand shapes" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder(
+    "invalid_wasm_extension_operands",
+  )
+  get_exception_tag(builder) |> ignore
+  builder.emit_ext_inst(I32, encode(RefEq), []) |> ignore
+  builder.return_([])
+  try builder.finalize() catch {
+    err =>
+      inspect(
+        err,
+        content=(
+          #|UnverifiableInstruction(message="malformed Wasm MilkIR extension 'ref_eq': expected operands [ref_like, ref_like], got []")
+        ),
+      )
+  } noraise {
+    _ => fail("expected finalize to reject invalid Wasm extension operands")
+  }
+}
+
+///|
+test "Wasm dialect validation rejects fixed operand and result types" {
+  let rejected : Array[@milkir.VerifyError] = []
+  let bad_result = @milkir.FunctionBuilder::FunctionBuilder(
+    "invalid_wasm_extension_result_type",
+  )
+  get_exception_tag(bad_result) |> ignore
+  bad_result.emit_ext_inst(F64, encode(GetExceptionTag), []) |> ignore
+  bad_result.return_([])
+  try bad_result.finalize() catch {
+    err => rejected.push(err)
+  } noraise {
+    _ => fail("expected finalize to reject a wrong Wasm extension result type")
+  }
+
+  let bad_operands = @milkir.FunctionBuilder::FunctionBuilder(
+    "invalid_wasm_extension_operand_types",
+  )
+  let lhs = bad_operands.add_param(I32)
+  let rhs = bad_operands.add_param(I32)
+  get_exception_tag(bad_operands) |> ignore
+  bad_operands.emit_ext_inst(I32, encode(RefEq), [lhs, rhs]) |> ignore
+  bad_operands.return_([])
+  try bad_operands.finalize() catch {
+    err => rejected.push(err)
+  } noraise {
+    _ => fail("expected finalize to reject wrong Wasm extension operand types")
+  }
+  debug_inspect(
+    rejected,
+    content=(
+      #|[
+      #|  UnverifiableInstruction(message="malformed Wasm MilkIR extension 'get_exception_tag': expected results [i32], got [f64]"),
+      #|  UnverifiableInstruction(message="malformed Wasm MilkIR extension 'ref_eq': expected operands [ref_like, ref_like], got [i32, i32]"),
+      #|]
+    ),
+  )
+}
+
+///|
 test "Wasm extension decode rejects runtime-lowered operations" {
   let extensions : Array[@milkir.ExtOp] = [
     ExtOp("wasm", "memory_grow", [0]),

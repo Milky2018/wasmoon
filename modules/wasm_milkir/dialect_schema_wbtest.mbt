@@ -71,3 +71,105 @@ test "generated schema validates every immediate layout" {
     }
   }
 }
+
+///|
+test "every schema row enforces its non-contextual minimum shape" {
+  let rejected : Array[String] = []
+  for spec in wasm_opcode_specs {
+    let builder = @milkir.FunctionBuilder::FunctionBuilder(
+      "schema_contract_\{spec.wire_name}",
+    )
+    get_exception_tag(builder) |> ignore
+    builder.emit_void_ext_inst(
+      ExtOp(WASM_DIALECT, spec.wire_name, valid_immediates(spec)),
+      [],
+    )
+    builder.return_([])
+    try builder.finalize() catch {
+      _ => rejected.push(spec.wire_name)
+    } noraise {
+      _ => ()
+    }
+  }
+  debug_inspect(
+    rejected,
+    content=(
+      #|[
+      #|  "load_mem_base",
+      #|  "call_indirect",
+      #|  "call_ref",
+      #|  "return_call_indirect",
+      #|  "return_call_ref",
+      #|  "get_func_ref",
+      #|  "struct_new",
+      #|  "struct_new_default",
+      #|  "struct_get",
+      #|  "struct_get_s",
+      #|  "struct_get_u",
+      #|  "struct_set",
+      #|  "array_new",
+      #|  "array_new_default",
+      #|  "array_new_fixed",
+      #|  "array_get",
+      #|  "array_get_s",
+      #|  "array_get_u",
+      #|  "array_set",
+      #|  "array_len",
+      #|  "array_fill",
+      #|  "array_copy",
+      #|  "array_new_data",
+      #|  "array_new_elem",
+      #|  "array_init_data",
+      #|  "array_init_elem",
+      #|  "i31_new",
+      #|  "i31_get_s",
+      #|  "i31_get_u",
+      #|  "ref_test",
+      #|  "ref_cast",
+      #|  "any_convert_extern",
+      #|  "extern_convert_any",
+      #|  "ref_eq",
+      #|  "throw_ref",
+      #|  "try_table_begin",
+      #|  "get_exception_tag",
+      #|  "get_exception_value",
+      #|  "get_exception_value_count",
+      #|  "spill_locals_for_throw",
+      #|  "get_spilled_local",
+      #|]
+    ),
+  )
+}
+
+///|
+test "immediate-dependent operand counts are enforced" {
+  let rejected : Array[@milkir.VerifyError] = []
+  let fixed = @milkir.FunctionBuilder::FunctionBuilder("array_new_fixed_count")
+  get_exception_tag(fixed) |> ignore
+  fixed.emit_ext_inst(Ref, encode(ArrayNewFixed(0, 2)), []) |> ignore
+  fixed.return_([])
+  try fixed.finalize() catch {
+    err => rejected.push(err)
+  } noraise {
+    _ => fail("expected array.new_fixed count mismatch to be rejected")
+  }
+
+  let spill = @milkir.FunctionBuilder::FunctionBuilder("spill_local_count")
+  get_exception_tag(spill) |> ignore
+  spill.emit_void_ext_inst(encode(SpillLocalsForThrow(2)), [])
+  spill.return_([])
+  try spill.finalize() catch {
+    err => rejected.push(err)
+  } noraise {
+    _ => fail("expected spill-locals count mismatch to be rejected")
+  }
+  debug_inspect(
+    rejected,
+    content=(
+      #|[
+      #|  UnverifiableInstruction(message="malformed Wasm MilkIR extension 'array_new_fixed': expected 2 operands, got 0"),
+      #|  UnverifiableInstruction(message="malformed Wasm MilkIR extension 'spill_locals_for_throw': expected 2 operands, got 0"),
+      #|]
+    ),
+  )
+}

@@ -77,6 +77,27 @@ test "Wasm lowering returns validation errors for malformed immediates" {
 }
 
 ///|
+test "Wasm lowering rejects missing fixed results before instruction selection" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder(
+    "missing_wasm_extension_result",
+  )
+  @wasm_milkir.get_exception_tag(builder) |> ignore
+  builder.emit_void_ext_inst(@wasm_milkir.encode(GetExceptionTag), [])
+  builder.return_([])
+  try lower_function(builder.get_function(), test_context_slots()) catch {
+    err =>
+      inspect(
+        err,
+        content=(
+          #|UnverifiableInstruction(message="malformed Wasm MilkIR extension 'get_exception_tag': expected results [i32], got []")
+        ),
+      )
+  } noraise {
+    _ => fail("expected Wasm lowering to reject a missing extension result")
+  }
+}
+
+///|
 test "Wasm lowering rejects removed memory and table extension names" {
   let rejected : Array[@milkir.VerifyError] = []
   let removed : Array[@milkir.ExtOp] = [

@@ -130,3 +130,32 @@ test "public vector constant rejects a payload with the wrong width" {
     _ => fail("expected verifier to reject the vector payload")
   }
 }
+
+///|
+test "extension validators receive the complete read-only instruction shape" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("extension_view")
+  let input = builder.add_param(I64)
+  builder.add_result(I32)
+  let views : Array[ExtensionInstView] = []
+  builder
+  .get_function()
+  .register_extension_validator("demo", view => {
+    views.push(view)
+    None
+  })
+  let result = builder.emit_ext_inst(I32, ExtOp("demo", "shape", []), [input])
+  builder.return_([result])
+  builder.finalize() |> ignore
+  debug_inspect(
+    views,
+    content=(
+      #|[
+      #|  {
+      #|    op: { dialect: "demo", opcode: "shape", immediates: <FixedArray: []> },
+      #|    operand_types: <ReadOnlyArray: [I64]>,
+      #|    result_types: <ReadOnlyArray: [I32]>,
+      #|  },
+      #|]
+    ),
+  )
+}

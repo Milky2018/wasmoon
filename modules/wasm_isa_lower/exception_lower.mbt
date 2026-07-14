@@ -111,8 +111,6 @@ pub fn lower_throw_ref(
   inst : @milkir.Inst,
   block : @block.Block,
 ) -> Unit {
-  guard inst.operands.length() > 0 else { return }
-
   // Get vmctx
   let vmctx_vreg = emit_load_vmctx(ctx, block)
 
@@ -148,7 +146,7 @@ pub fn lower_try_table_begin(
   block : @block.Block,
   handler_id : Int,
 ) -> Unit {
-  guard inst.first_result() is Some(result) else { return }
+  let result = inst.first_result().unwrap()
   let dst = ctx.get_vreg(result)
 
   // Get vmctx
@@ -245,7 +243,7 @@ pub fn lower_get_exception_tag(
   inst : @milkir.Inst,
   block : @block.Block,
 ) -> Unit {
-  guard inst.first_result() is Some(result) else { return }
+  let result = inst.first_result().unwrap()
   let dst = ctx.get_vreg(result)
 
   // Get vmctx
@@ -270,7 +268,7 @@ pub fn lower_get_exception_value(
   block : @block.Block,
   idx : Int,
 ) -> Unit {
-  guard inst.first_result() is Some(result) else { return }
+  let result = inst.first_result().unwrap()
   let dst = ctx.get_vreg(result)
 
   // Get vmctx
@@ -303,7 +301,7 @@ pub fn lower_get_exception_value_count(
   inst : @milkir.Inst,
   block : @block.Block,
 ) -> Unit {
-  guard inst.first_result() is Some(result) else { return }
+  let result = inst.first_result().unwrap()
   let dst = ctx.get_vreg(result)
 
   // Get vmctx
@@ -439,7 +437,7 @@ pub fn lower_get_spilled_local(
   block : @block.Block,
   idx : Int,
 ) -> Unit {
-  guard inst.first_result() is Some(result) else { return }
+  let result = inst.first_result().unwrap()
   let dst = ctx.get_vreg(result)
 
   // Get vmctx

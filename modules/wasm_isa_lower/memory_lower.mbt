@@ -69,7 +69,7 @@ pub fn lower_get_func_ref(
   func_idx : Int,
   context_slots : WasmContextSlots,
 ) -> Unit {
-  guard inst.first_result() is Some(result) else { return }
+  let result = inst.first_result().unwrap()
   let result_vreg = ctx.get_vreg(result)
 
   // Step 1: Load func_table pointer from vmctx
@@ -119,10 +119,7 @@ pub fn lower_load_mem_base(
   memidx : Int,
   context_slots : WasmContextSlots,
 ) -> Unit {
-  guard inst.first_result() is Some(result) else { return }
-  if inst.operands.length() != 1 {
-    return
-  }
+  let result = inst.first_result().unwrap()
   if ctx.cached_context_pointer(memidx) is Some(cached_vreg) {
     ctx.set_cached_vreg(result.id, cached_vreg)
     return

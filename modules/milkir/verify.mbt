@@ -179,16 +179,16 @@ pub fn Function::verify_core(self : Function) -> Unit raise VerifyError {
 
 ///|
 /// Verify the function and apply an owning adapter's validator to every
-/// extension operation before crossing the adapter boundary.
+/// extension operation before crossing the adapter seam.
 pub fn Function::verify_with_extension_validator(
   self : Function,
-  validate : (ExtOp) -> String?,
+  validate : (ExtensionInstView) -> String?,
 ) -> Unit raise VerifyError {
   self.verify()
   for block in self.blocks {
     for inst in block.instructions {
-      if inst.opcode is Ext(ext, _) {
-        if validate(ext) is Some(message) {
+      if inst.opcode is Ext(_, _) {
+        if validate(extension_inst_view(inst)) is Some(message) {
           raise UnverifiableInstruction(message~)
         }
       }
@@ -368,23 +368,39 @@ fn verify_inst(
     verify_defined(arg, definitions, use_block, use_position, idom)
   }
   verify_opcode_contract(inst)
-  if inst.opcode is Ext(ext, _) {
-    verify_extension(func, ext)
+  if inst.opcode is Ext(_, _) {
+    verify_extension(func, inst)
   }
 }
 
 ///|
-fn verify_extension(func : Function, ext : ExtOp) -> Unit raise VerifyError {
+fn extension_inst_view(inst : Inst) -> ExtensionInstView {
+  let op = match inst.opcode {
+    Ext(op, _) => op
+    _ => abort("extension_inst_view requires an extension instruction")
+  }
+  {
+    op,
+    operand_types: ReadOnlyArray::makei(inst.args.length(), i => inst.args[i].ty),
+    result_types: ReadOnlyArray::makei(inst.results.length(), i => {
+      inst.results[i].ty
+    }),
+  }
+}
+
+///|
+fn verify_extension(func : Function, inst : Inst) -> Unit raise VerifyError {
+  let view = extension_inst_view(inst)
   for registered in func.extension_validators {
-    if registered.dialect == ext.dialect {
-      if (registered.validate)(ext) is Some(message) {
+    if registered.dialect == view.op.dialect {
+      if (registered.validate)(view) is Some(message) {
         raise UnverifiableInstruction(message~)
       }
       return
     }
   }
   raise UnverifiableInstruction(
-    message="extension dialect '\{ext.dialect}' has no registered validator",
+    message="extension dialect '\{view.op.dialect}' has no registered validator",
   )
 }
 

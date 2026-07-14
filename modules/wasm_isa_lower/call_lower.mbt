@@ -375,7 +375,6 @@ pub fn lower_return_call_indirect(
   options : WasmLoweringOptions,
 ) -> Unit {
   // Get element index and load function pointer (similar to lower_call_indirect)
-  guard inst.operands.length() > 0 else { return }
   let elem_idx_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
 
   // Load table pointer
@@ -523,7 +522,6 @@ pub fn lower_return_call_ref(
   block : @block.Block,
   _type_idx : Int,
 ) -> Unit {
-  guard inst.operands.length() > 0 else { return }
   let func_ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
 
   // Strip FUNCREF_TAG (0x2000000000000000) to get raw function pointer
@@ -612,10 +610,6 @@ pub fn lower_call_indirect(
 ) -> Unit {
   // For call_indirect, the first operand is the element index within the table
   // which we need to convert to a function pointer
-  if inst.operands.length() == 0 {
-    return
-  }
-
   // First operand is the element index within the specific table
   let elem_idx_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
 
@@ -738,9 +732,6 @@ pub fn lower_call_ref(
   _type_idx : Int,
 ) -> Unit {
   // First operand is the function reference (tagged function pointer)
-  if inst.operands.length() == 0 {
-    return
-  }
   let func_ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
 
   // Arguments are all operands except the first one

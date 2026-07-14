@@ -84,18 +84,42 @@ pub fn decode_error(ext : @milkir.ExtOp) -> String? {
 }
 
 ///|
+fn validate_instruction(view : @milkir.ExtensionInstView) -> String? {
+  let opcode = match decode_result(view.op) {
+    Ok(opcode) => opcode
+    Err(message) => return Some(message)
+  }
+  let (id, _) = opcode_payload(opcode)
+  let spec = wasm_opcode_spec(id)
+  if validate_wasm_instruction_shape(spec, view) is Some(message) {
+    return Some(message)
+  }
+  match opcode {
+    ArrayNewFixed(_, count) if view.operand_types.length() != count =>
+      Some(
+        "malformed Wasm MilkIR extension 'array_new_fixed': expected \{count} operands, got \{view.operand_types.length()}",
+      )
+    SpillLocalsForThrow(count) if view.operand_types.length() != count =>
+      Some(
+        "malformed Wasm MilkIR extension 'spill_locals_for_throw': expected \{count} operands, got \{view.operand_types.length()}",
+      )
+    _ => None
+  }
+}
+
+///|
 /// Verify core MilkIR invariants and every extension against the Wasm schema.
 pub fn verify_function(
   func : @milkir.Function,
 ) -> Unit raise @milkir.VerifyError {
-  func.verify_with_extension_validator(decode_error)
+  func.verify_with_extension_validator(validate_instruction)
 }
 
 ///|
 fn register_wasm_validator(builder : @milkir.FunctionBuilder) -> Unit {
   builder
   .get_function()
-  .register_extension_validator(WASM_DIALECT, decode_error)
+  .register_extension_validator(WASM_DIALECT, validate_instruction)
 }
 
 ///|

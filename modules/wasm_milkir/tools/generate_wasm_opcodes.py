@@ -13,6 +13,16 @@ CONSTRUCTOR_RE = re.compile(r"[A-Z][A-Za-z0-9]*\Z")
 WIRE_NAME_RE = re.compile(r"[a-z][a-z0-9_]*\Z")
 KIND_TO_TYPE = {"int": "Int", "bool": "Bool"}
 KIND_TO_MOONBIT = {"int": "IntegerImmediate", "bool": "BooleanImmediate"}
+TYPE_PATTERN_TO_MOONBIT = {
+    "i32": "ExactType(I32)",
+    "i64": "ExactType(I64)",
+    "ref": "ExactType(Ref)",
+    "callable_ref": "ExactType(CallableRef)",
+    "opaque_ref": "ExactType(OpaqueRef)",
+    "ref_like": "ReferenceLike",
+    "pointer": "PointerLike",
+    "any": "ContextualType",
+}
 
 
 @dataclass(frozen=True)
@@ -20,6 +30,26 @@ class Opcode:
     constructor: str
     wire_name: str
     kinds: tuple[str, ...]
+    operand_types: tuple[str, ...]
+    result_types: tuple[str, ...]
+    variadic_operands: bool
+    variadic_results: bool
+
+
+def parse_type_patterns(
+    path: Path, line_number: int, encoded: str
+) -> tuple[tuple[str, ...], bool]:
+    if encoded == "-":
+        return (), False
+    patterns = encoded.split(",")
+    variadic = patterns[-1] == "..."
+    if "..." in patterns[:-1]:
+        fail(path, line_number, "variadic marker must be the final type pattern")
+    fixed = patterns[:-1] if variadic else patterns
+    for pattern in fixed:
+        if pattern not in TYPE_PATTERN_TO_MOONBIT:
+            fail(path, line_number, f"invalid type pattern {pattern!r}")
+    return tuple(fixed), variadic
 
 
 def fail(path: Path, line_number: int, message: str) -> None:
@@ -35,9 +65,13 @@ def parse_schema(path: Path) -> list[Opcode]:
         if not line or line.startswith("#"):
             continue
         fields = line.split("|")
-        if len(fields) != 3:
-            fail(path, line_number, "expected constructor|wire name|immediate kinds")
-        constructor, wire_name, encoded_kinds = fields
+        if len(fields) != 5:
+            fail(
+                path,
+                line_number,
+                "expected constructor|wire name|immediate kinds|operands|results",
+            )
+        constructor, wire_name, encoded_kinds, encoded_operands, encoded_results = fields
         if not CONSTRUCTOR_RE.fullmatch(constructor):
             fail(path, line_number, f"invalid constructor {constructor!r}")
         if constructor in constructors:
@@ -50,9 +84,25 @@ def parse_schema(path: Path) -> list[Opcode]:
         for kind in kinds:
             if kind not in KIND_TO_TYPE:
                 fail(path, line_number, f"invalid immediate kind {kind!r}")
+        operand_types, variadic_operands = parse_type_patterns(
+            path, line_number, encoded_operands
+        )
+        result_types, variadic_results = parse_type_patterns(
+            path, line_number, encoded_results
+        )
         constructors.add(constructor)
         wire_names.add(wire_name)
-        opcodes.append(Opcode(constructor, wire_name, kinds))
+        opcodes.append(
+            Opcode(
+                constructor,
+                wire_name,
+                kinds,
+                operand_types,
+                result_types,
+                variadic_operands,
+                variadic_results,
+            )
+        )
     if not opcodes:
         raise ValueError(f"{path}: schema contains no opcodes")
     return opcodes
@@ -67,6 +117,11 @@ def enum_variant(opcode: Opcode) -> str:
 
 def immediate_kinds(opcode: Opcode) -> str:
     values = ", ".join(KIND_TO_MOONBIT[kind] for kind in opcode.kinds)
+    return f"[{values}]"
+
+
+def type_patterns(patterns: tuple[str, ...]) -> str:
+    values = ", ".join(TYPE_PATTERN_TO_MOONBIT[pattern] for pattern in patterns)
     return f"[{values}]"
 
 
@@ -99,6 +154,10 @@ def spec_entry(opcode: Opcode, opcode_id: int) -> list[str]:
         f'    typed_constructor: "{opcode.constructor}",',
         f'    wire_name: "{opcode.wire_name}",',
         f"    immediate_kinds: {immediate_kinds(opcode)},",
+        f"    operand_types: {type_patterns(opcode.operand_types)},",
+        f"    result_types: {type_patterns(opcode.result_types)},",
+        f"    variadic_operands: {str(opcode.variadic_operands).lower()},",
+        f"    variadic_results: {str(opcode.variadic_results).lower()},",
         "  },",
     ]
 

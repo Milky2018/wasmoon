@@ -301,7 +301,7 @@ pub fn lower_i31_new(
   inst : @milkir.Inst,
   block : @block.Block,
 ) -> Unit {
-  guard inst.first_result() is Some(result) else { return }
+  let result = inst.first_result().unwrap()
   let dst = ctx.get_vreg(result)
   let src = ctx.get_vreg_for_use(inst.operands[0], block)
 
@@ -337,7 +337,7 @@ pub fn lower_i31_get_s(
   inst : @milkir.Inst,
   block : @block.Block,
 ) -> Unit {
-  guard inst.first_result() is Some(result) else { return }
+  let result = inst.first_result().unwrap()
   let dst = ctx.get_vreg(result)
   let src = ctx.get_vreg_for_use(inst.operands[0], block)
 
@@ -383,7 +383,7 @@ pub fn lower_i31_get_u(
   inst : @milkir.Inst,
   block : @block.Block,
 ) -> Unit {
-  guard inst.first_result() is Some(result) else { return }
+  let result = inst.first_result().unwrap()
   let dst = ctx.get_vreg(result)
   let src = ctx.get_vreg_for_use(inst.operands[0], block)
 
@@ -426,7 +426,7 @@ pub fn lower_gc_convert(
   inst : @milkir.Inst,
   block : @block.Block,
 ) -> Unit {
-  guard inst.first_result() is Some(result) else { return }
+  let result = inst.first_result().unwrap()
   let dst = ctx.get_vreg(result)
   let src = ctx.get_vreg_for_use(inst.operands[0], block)
   // Just move the value - the representation is the same
@@ -446,7 +446,7 @@ pub fn lower_ref_test(
   type_idx : Int,
   nullable : Bool,
 ) -> Unit {
-  guard inst.first_result() is Some(result) else { return }
+  let result = inst.first_result().unwrap()
   let dst = ctx.get_vreg(result)
   let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
   // Materialize immediate arguments
@@ -485,7 +485,7 @@ pub fn lower_ref_cast(
   type_idx : Int,
   nullable : Bool,
 ) -> Unit {
-  guard inst.first_result() is Some(result) else { return }
+  let result = inst.first_result().unwrap()
   let dst = ctx.get_vreg(result)
   let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
   // Materialize immediate arguments
@@ -522,7 +522,7 @@ pub fn lower_ref_eq(
   inst : @milkir.Inst,
   block : @block.Block,
 ) -> Unit {
-  guard inst.first_result() is Some(result) else { return }
+  let result = inst.first_result().unwrap()
   let dst = ctx.get_vreg(result)
   let ref1_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
   let ref2_vreg = ctx.get_vreg_for_use(inst.operands[1], block)
@@ -546,7 +546,7 @@ pub fn lower_struct_new(
   block : @block.Block,
   type_idx : Int,
 ) -> @block.Block {
-  guard inst.first_result() is Some(result) else { return block }
+  let result = inst.first_result().unwrap()
   let dst = ctx.get_vreg(result)
   let num_fields = inst.operands.length()
 
@@ -603,7 +603,7 @@ pub fn lower_struct_new_default(
   block : @block.Block,
   type_idx : Int,
 ) -> Unit {
-  guard inst.first_result() is Some(result) else { return }
+  let result = inst.first_result().unwrap()
   let dst = ctx.get_vreg(result)
 
   emit_gc_struct_slow_alloc(ctx, block, dst, type_idx, 0)
@@ -619,7 +619,7 @@ pub fn lower_struct_get(
   type_idx : Int,
   field_idx : Int,
 ) -> Unit {
-  guard inst.first_result() is Some(result) else { return }
+  let result = inst.first_result().unwrap()
   let dst = ctx.get_vreg(result)
   let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
   // Materialize immediate arguments
@@ -670,7 +670,7 @@ pub fn lower_struct_get_s(
   field_idx : Int,
   byte_width : Int,
 ) -> Unit {
-  guard inst.first_result() is Some(result) else { return }
+  let result = inst.first_result().unwrap()
   let dst = ctx.get_vreg(result)
   let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
   // Materialize immediate arguments
@@ -725,7 +725,7 @@ pub fn lower_struct_get_u(
   field_idx : Int,
   byte_width : Int,
 ) -> Unit {
-  guard inst.first_result() is Some(result) else { return }
+  let result = inst.first_result().unwrap()
   let dst = ctx.get_vreg(result)
   let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
   // Materialize immediate arguments
@@ -822,7 +822,7 @@ pub fn lower_array_new(
   block : @block.Block,
   type_idx : Int,
 ) -> Unit {
-  guard inst.first_result() is Some(result) else { return }
+  let result = inst.first_result().unwrap()
   let dst = ctx.get_vreg(result)
   let init_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
   let len_vreg = ctx.get_vreg_for_use(inst.operands[1], block)
@@ -854,7 +854,7 @@ pub fn lower_array_new_default(
   block : @block.Block,
   type_idx : Int,
 ) -> Unit {
-  guard inst.first_result() is Some(result) else { return }
+  let result = inst.first_result().unwrap()
   let dst = ctx.get_vreg(result)
   let len_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
 
@@ -873,7 +873,7 @@ pub fn lower_array_new_fixed(
   type_idx : Int,
   len : Int,
 ) -> @block.Block {
-  guard inst.first_result() is Some(result) else { return block }
+  let result = inst.first_result().unwrap()
   let dst = ctx.get_vreg(result)
 
   // Fast path: inline fixed-array allocation with slow-path fallback.
@@ -973,7 +973,7 @@ pub fn lower_array_get(
   block : @block.Block,
   type_idx : Int,
 ) -> Unit {
-  guard inst.first_result() is Some(result) else { return }
+  let result = inst.first_result().unwrap()
   let dst = ctx.get_vreg(result)
   let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
   let idx_vreg = ctx.get_vreg_for_use(inst.operands[1], block)
@@ -1023,7 +1023,7 @@ pub fn lower_array_get_s(
   type_idx : Int,
   byte_width : Int,
 ) -> Unit {
-  guard inst.first_result() is Some(result) else { return }
+  let result = inst.first_result().unwrap()
   let dst = ctx.get_vreg(result)
   let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
   let idx_vreg = ctx.get_vreg_for_use(inst.operands[1], block)
@@ -1072,7 +1072,7 @@ pub fn lower_array_get_u(
   type_idx : Int,
   byte_width : Int,
 ) -> Unit {
-  guard inst.first_result() is Some(result) else { return }
+  let result = inst.first_result().unwrap()
   let dst = ctx.get_vreg(result)
   let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
   let idx_vreg = ctx.get_vreg_for_use(inst.operands[1], block)
@@ -1161,7 +1161,7 @@ pub fn lower_array_len(
   inst : @milkir.Inst,
   block : @block.Block,
 ) -> Unit {
-  guard inst.first_result() is Some(result) else { return }
+  let result = inst.first_result().unwrap()
   let dst = ctx.get_vreg(result)
   let ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
   // Load function pointer
