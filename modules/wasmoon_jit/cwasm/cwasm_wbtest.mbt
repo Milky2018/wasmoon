@@ -35,9 +35,35 @@ test "compiled entry: creation" {
 ///|
 test "precompiled module: creation" {
   let mod = PrecompiledModule::PrecompiledModule(AArch64)
-  inspect(mod.version, content="7")
+  inspect(mod.version, content="8")
   inspect(mod.target.to_string(), content="aarch64")
   inspect(mod.function_count(), content="0")
+}
+
+///|
+test "precompiled module: reject incompatible cancellation metadata" {
+  let mod = PrecompiledModule::PrecompiledModule(AArch64)
+  let old_version = mod.serialize()
+  old_version[4] = 7
+  let old_version_error = try {
+    deserialize(old_version) |> ignore
+    "accepted"
+  } catch {
+    error => error.to_string()
+  }
+  inspect(old_version_error, content="Unsupported version: 7")
+  let unknown_features = mod.serialize()
+  unknown_features[9] = 2
+  let unknown_features_error = try {
+    deserialize(unknown_features) |> ignore
+    "accepted"
+  } catch {
+    error => error.to_string()
+  }
+  inspect(
+    unknown_features_error,
+    content="Unsupported compilation feature bits: 2",
+  )
 }
 
 ///|
@@ -117,7 +143,7 @@ test "serialize and deserialize: roundtrip" {
 
   // Deserialize
   let restored = deserialize(bytes) catch { _ => panic() }
-  inspect(restored.version, content="7")
+  inspect(restored.version, content="8")
   inspect(restored.target.to_string(), content="aarch64")
   inspect(restored.function_count(), content="1")
   inspect(restored.functions[0].func_idx, content="42")
@@ -340,7 +366,7 @@ test "complete module: memory + data + function roundtrip" {
   let restored = deserialize(bytes) catch { _ => panic() }
 
   // Check version
-  inspect(restored.version, content="7")
+  inspect(restored.version, content="8")
 
   // Check memory
   inspect(restored.memories.length(), content="1")

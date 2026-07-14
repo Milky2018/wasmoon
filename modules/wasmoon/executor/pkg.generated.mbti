@@ -40,6 +40,7 @@ pub struct CallExportFailure {
   message : String
   runtime_error : @runtime.RuntimeError?
 }
+pub impl @debug.Debug for CallExportFailure
 
 pub(all) enum CallExportFailureKind {
   ExportNotFound
@@ -48,7 +49,7 @@ pub(all) enum CallExportFailureKind {
   HostInvocation
   Cancelled
   UnsupportedOption
-}
+} derive(@debug.Debug)
 
 pub struct CallExportOptions {
   timeout_ms : Int?
@@ -61,7 +62,7 @@ pub fn CallExportOptions::CallExportOptions(timeout_ms? : Int?, fuel? : Int?, bu
 pub(all) enum CallExportResult {
   Ok(Array[@types.Value])
   Err(CallExportFailure)
-}
+} derive(@debug.Debug)
 
 type ExecContext derive(@debug.Debug)
 pub fn ExecContext::call_func(Self, Int, Array[@types.Value]) -> Array[@types.Value] raise

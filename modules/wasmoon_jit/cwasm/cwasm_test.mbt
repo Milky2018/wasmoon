@@ -20,11 +20,21 @@ test "PrecompiledModule serialize and deserialize roundtrip" {
   inspect(serialized.length() > 0, content="true")
   // Deserialize
   let pcm2 = @cwasm.deserialize(serialized)
-  inspect(pcm2.version, content="7")
+  inspect(pcm2.version, content="8")
   inspect(pcm2.target, content="aarch64")
   inspect(pcm2.function_count(), content="1")
   inspect(pcm2.functions[0].num_params, content="2")
   inspect(pcm2.functions[0].num_results, content="1")
+}
+
+///|
+test "PrecompiledModule preserves cancellation safepoints feature" {
+  let pcm = @cwasm.PrecompiledModule::PrecompiledModule(
+    AArch64,
+    features=CompilationFeatures(cancellation_safepoints=true),
+  )
+  let restored = @cwasm.deserialize(pcm.serialize())
+  debug_inspect(restored.features, content="{ cancellation_safepoints: true }")
 }
 
 ///|

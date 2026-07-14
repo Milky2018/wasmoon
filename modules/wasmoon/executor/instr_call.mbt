@@ -244,6 +244,7 @@ fn ExecContext::call_wasm_func_with_instance(
   let mut current_args = args
   let mut should_continue = true
   while should_continue {
+    self.check_cancellation()
     // Set the context to the target function's module
     self.instance = current_instance
 

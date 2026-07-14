@@ -1741,7 +1741,7 @@ pub(all) enum CallExportFailureKind {
   HostInvocation
   Cancelled
   UnsupportedOption
-}
+} derive(Debug)
 
 ///|
 /// Structured failure for controlled export invocation.
@@ -1752,17 +1752,31 @@ pub struct CallExportFailure {
 }
 
 ///|
+pub impl Debug for CallExportFailure with fn to_repr(self) {
+  Repr::record({
+    "kind": to_repr(self.kind),
+    "message": to_repr(self.message),
+    "runtime_error": match self.runtime_error {
+      Some(error) =>
+        Repr::ctor("Some", [(None, Repr::literal(error.to_string()))])
+      None => Repr::ctor("None", [])
+    },
+  })
+}
+
+///|
 /// Result type for controlled export invocation.
 pub(all) enum CallExportResult {
   Ok(Array[@types.Value])
   Err(CallExportFailure)
-}
+} derive(Debug)
 
 ///|
 /// Options for controlled export invocation.
 ///
 /// Current engine support:
-/// - `cancel` is checked before invocation.
+/// - `cancel` is checked before invocation and at Wasm function and loop
+///   safepoints. A blocking host function is not interrupted while it runs.
 /// - `timeout_ms`, `fuel`, and `budget` are parsed and surfaced as structured
 ///   `UnsupportedOption` errors for integration-time capability probing.
 pub struct CallExportOptions {
@@ -1842,7 +1856,11 @@ pub fn call_exported_func_with_options(
     Some(exp) =>
       match exp.desc {
         Func(func_idx) => {
-          let ctx = ExecContext::ExecContext(store, instance)
+          let ctx = ExecContext::ExecContext(
+            store,
+            instance,
+            cancel=options.cancel,
+          )
           let results = ctx.call_func(func_idx, args) catch {
             BranchWith(_, _) | Return =>
               return Err(
@@ -1862,6 +1880,13 @@ pub fn call_exported_func_with_options(
                 ),
               )
             }
+            InvocationSignal::Cancelled =>
+              return Err(
+                call_export_failure(
+                  Cancelled,
+                  "invocation cancelled at wasm safepoint",
+                ),
+              )
             e => {
               let runtime_err = normalize_runtime_error(e)
               return Err(
