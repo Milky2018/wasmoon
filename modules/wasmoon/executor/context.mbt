@@ -75,6 +75,16 @@ priv struct LabelInfo {
 } derive(Debug)
 
 ///|
+priv struct CancellationPoller {
+  callback : () -> Bool
+}
+
+///|
+impl Debug for CancellationPoller with fn to_repr(_self) {
+  Repr::literal("<callback>")
+}
+
+///|
 /// Execution context for running WASM code
 struct ExecContext {
   stack : @runtime.Stack
@@ -86,12 +96,14 @@ struct ExecContext {
   gc_stress : Bool
   gc_stress_every : Int
   mut gc_stress_alloc_count : Int
+  cancel : CancellationPoller?
 } derive(Debug)
 
 ///|
 fn ExecContext::ExecContext(
   store : @runtime.Store,
   instance : @runtime.ModuleInstance,
+  cancel? : (() -> Bool)? = None,
 ) -> ExecContext {
   {
     stack: Stack(),
@@ -103,6 +115,15 @@ fn ExecContext::ExecContext(
     gc_stress: gc_stress_enabled(),
     gc_stress_every: gc_stress_every(),
     gc_stress_alloc_count: 0,
+    cancel: cancel.map(fn(callback) { { callback, } }),
+  }
+}
+
+///|
+/// Poll the invocation-local cancellation callback at a Wasm safepoint.
+fn ExecContext::check_cancellation(self : ExecContext) -> Unit raise {
+  if self.cancel is Some(poller) && (poller.callback)() {
+    raise InvocationSignal::Cancelled
   }
 }
 

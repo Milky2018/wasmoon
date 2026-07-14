@@ -2,6 +2,8 @@
 
 MilkIR is a reusable, target-independent intermediate representation for compiler middle ends. A frontend translates source operations into MilkIR, optimization passes simplify the MilkIR function, and a lowering package such as `Milky2018/milkir_machv` turns it into machine-oriented IR.
 
+Target-independent means that MilkIR operations do not encode a particular instruction set or calling convention; it does not mean that every data width is target-configurable. MilkIR pointer/reference carriers are always 64-bit: `Ptr`, `Ref`, `CallableRef`, and `OpaqueRef` each have a fixed 64-bit representation. A backend for a non-64-bit target would require an explicit IR contract change rather than interpreting these types using the host pointer width.
+
 ```text
 frontend IR or bytecode
         |
@@ -131,7 +133,7 @@ v2:i32 = iadd v0, v1  new x
 
 This makes data dependencies explicit. An optimizer can see that `v2` depends on `v0` and `v1` without reconstructing the history of a mutable variable.
 
-Every value belongs to one function and has one `Type`. The core types are `I32`, `I64`, `F32`, `F64`, `V128`, `Ptr`, `Ref`, `CallableRef`, and `OpaqueRef`.
+Every value belongs to one function and has one `Type`. The core types are `I32`, `I64`, `F32`, `F64`, `V128`, `Ptr`, `Ref`, `CallableRef`, and `OpaqueRef`. The four pointer/reference carrier types are fixed-width 64-bit values, not aliases for the host's native pointer type.
 
 ## Comparisons do not require extra blocks
 

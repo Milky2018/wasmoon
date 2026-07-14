@@ -25,6 +25,7 @@ pub impl Show for JITModuleLoadError
 pub suberror JITTrap {
   JITTrap(String)
   JITExit(Int)
+  JITCancelled
 } derive(@debug.Debug)
 pub impl Show for JITTrap
 
@@ -36,6 +37,13 @@ pub suberror PolycallError {
 
 // Types and methods
 type AddressRange derive(@debug.Debug)
+
+pub(all) enum JITCallResult {
+  Completed(Array[Int64])
+  Cancelled
+  Failed(JITTrap)
+  UnsupportedCancellation
+} derive(@debug.Debug)
 
 pub struct JITFunction {
   func_idx : Int
@@ -50,6 +58,7 @@ pub fn JITModule::JITModule() -> Self
 pub fn JITModule::alloc_guarded_memory(Self, Int, Int?) -> Int64
 pub fn JITModule::alloc_wasm_stack(Self, Int64) -> Bool
 pub fn JITModule::call_with_context(Self, JITFunction, Array[Int64]) -> Array[Int64] raise JITTrap
+pub fn JITModule::call_with_context_controlled(Self, JITFunction, Array[Int64], cancel? : (() -> Bool)?) -> JITCallResult
 pub fn[Arg : DynamicArgs, Ret : DynamicReturn] JITModule::call_with_context_poly(Self, JITFunction, Arg) -> Ret raise PolycallError
 pub fn JITModule::clear_hostcall_callback(Self) -> Unit
 pub fn JITModule::clear_segments(Self) -> Unit

@@ -18,4 +18,5 @@ priv enum ExecBlockResult {
 /// Internal signal used to preserve host-call error provenance.
 priv suberror InvocationSignal {
   HostInvocation(Error)
+  Cancelled
 } derive(Debug)

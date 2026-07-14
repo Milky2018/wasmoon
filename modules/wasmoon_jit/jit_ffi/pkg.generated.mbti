@@ -108,6 +108,8 @@ pub fn c_jit_call_with_stack_switch(Int64, Int64, Int64, FixedArray[Int64], Int)
 
 pub fn c_jit_call_with_stack_switch_managed(JITContext, Int64, Int64, FixedArray[Int64], Int) -> Int
 
+pub fn c_jit_clear_cancellation_callback(Int64) -> Unit
+
 pub fn c_jit_clear_hostcall_callback(Int64) -> Unit
 
 pub fn c_jit_clear_trap() -> Unit
@@ -213,6 +215,8 @@ pub fn c_jit_gc_use_func_safepoints(Int64, Int) -> Unit
 pub fn c_jit_get_args_get_ptr() -> Int64
 
 pub fn c_jit_get_args_sizes_get_ptr() -> Int64
+
+pub fn c_jit_get_cancel_poll_ptr() -> Int64
 
 pub fn c_jit_get_clock_res_get_ptr() -> Int64
 
@@ -477,6 +481,8 @@ pub fn c_jit_memory_init_bytes(Int64, Int64, Bytes, Int) -> Int
 pub fn c_jit_memory_read(Int64, Int64, FixedArray[Byte], Int) -> Int
 
 pub fn c_jit_read_i64(Int64) -> Int64
+
+pub fn c_jit_set_cancellation_callback(Int64, FuncRef[(() -> Bool) -> Int], () -> Bool) -> Unit
 
 pub fn c_jit_set_hostcall_callback(Int64, FuncRef[(() -> Int) -> Int], () -> Int) -> Unit
 

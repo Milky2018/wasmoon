@@ -16,6 +16,7 @@ priv struct FuncEnvironment {
   runtime_layout : @embedding.RuntimeLayout
   memory_descriptor_layout : @embedding.MemoryDescriptorLayout
   runtime_symbols : @wasm_milkir.RuntimeSymbols
+  cancellation_symbol : @milkir.ExternalSymbol?
   // Global variable types (for determining load/store width)
   global_types : Array[@types.GlobalType]
   // Minimum guaranteed memory size in bytes for each memory index
@@ -61,6 +62,11 @@ fn FuncEnvironment::FuncEnvironment(
     runtime_layout,
     memory_descriptor_layout,
     runtime_symbols: embedding_env.wasm_runtime_symbols(),
+    cancellation_symbol: if embedding_env.cancellation_safepoints() {
+      Some(embedding_env.runtime_symbol("runtime.cancel_poll"))
+    } else {
+      None
+    },
     global_types,
     memory_mins,
     memory_is_64,
@@ -68,6 +74,17 @@ fn FuncEnvironment::FuncEnvironment(
     memory_trap_block: None,
     atomic_unaligned_trap_block: None,
     bounds_check_cache: HashMap([]),
+  }
+}
+
+///|
+fn FuncEnvironment::emit_cancellation_safepoint(
+  self : FuncEnvironment,
+  builder : FunctionBuilder,
+  vmctx : Value,
+) -> Unit {
+  if self.cancellation_symbol is Some(symbol) {
+    builder.call_symbol(symbol, None, [vmctx]) |> ignore
   }
 }
 

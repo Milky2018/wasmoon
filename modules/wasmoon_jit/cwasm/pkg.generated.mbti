@@ -24,6 +24,11 @@ pub(all) struct CallFixup {
   veneer_offset : Int
 }
 
+pub(all) struct CompilationFeatures {
+  cancellation_safepoints : Bool
+} derive(Eq, @debug.Debug)
+pub fn CompilationFeatures::CompilationFeatures(cancellation_safepoints? : Bool) -> Self
+
 pub(all) struct CompiledEntry {
   func_idx : Int
   name : String
@@ -96,6 +101,7 @@ pub impl Show for MemoryDef
 pub(all) struct PrecompiledModule {
   version : Int
   target : TargetArch
+  features : CompilationFeatures
   imports : Array[ImportEntry]
   functions : Array[CompiledEntry]
   memories : Array[MemoryDef]
@@ -106,7 +112,7 @@ pub(all) struct PrecompiledModule {
   elements : Array[ElemEntry]
   mut start_func : Int?
 }
-pub fn PrecompiledModule::PrecompiledModule(TargetArch) -> Self
+pub fn PrecompiledModule::PrecompiledModule(TargetArch, features? : CompilationFeatures) -> Self
 pub fn PrecompiledModule::add_data_segment(Self, Int, Int, Array[Int]) -> Unit
 pub fn PrecompiledModule::add_element(Self, Int, Int, Array[Int]) -> Unit
 pub fn PrecompiledModule::add_function(Self, CompiledEntry) -> Unit

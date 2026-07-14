@@ -9,6 +9,7 @@
 pub suberror JITTrap {
   JITTrap(String)
   JITExit(Int)
+  JITCancelled
 } derive(Debug)
 
 ///|
@@ -230,6 +231,19 @@ fn JITContext::clear_hostcall_callback(self : JITContext) -> Unit {
 }
 
 ///|
+fn JITContext::set_cancellation_callback(
+  self : JITContext,
+  callback : () -> Bool,
+) -> Unit {
+  self.ctx.set_cancellation_callback(callback)
+}
+
+///|
+fn JITContext::clear_cancellation_callback(self : JITContext) -> Unit {
+  self.ctx.clear_cancellation_callback()
+}
+
+///|
 /// Clear WASI stdin callback
 fn JITContext::clear_wasi_stdin_callback(self : JITContext) -> Unit {
   @wasmoon_jit.clear_wasi_stdin_callback(self.ptr())
@@ -334,6 +348,9 @@ fn JITContext::call_multi_return(
   if trap_code != 0 {
     if @wasmoon_jit.is_wasi_exit_trap_code(trap_code) {
       raise JITExit(@wasmoon_jit.take_wasi_exit_code(self.ptr()))
+    }
+    if @wasmoon_jit.is_cancelled_trap_code(trap_code) {
+      raise JITCancelled
     }
     raise JITTrap(@wasmoon_jit.jit_trap_message(trap_code))
   }

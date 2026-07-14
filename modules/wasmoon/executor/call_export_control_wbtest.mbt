@@ -120,6 +120,57 @@ test "call_exported_func_with_options: cancel before invocation" {
 }
 
 ///|
+test "call_exported_func_with_options: cancel at loop safepoint" {
+  let mod : @types.Module = {
+    ..@types.Module::empty(),
+    types: [@types.SubType::func([], [I32])],
+    type_rec_groups: [0],
+    funcs: [0],
+    codes: [
+      {
+        locals: [I32],
+        body: [
+          I32Const(0),
+          LocalSet(0),
+          Loop(Empty, [
+            LocalGet(0),
+            I32Const(1),
+            I32Add,
+            LocalTee(0),
+            I32Const(5),
+            I32LtS,
+            BrIf(0),
+          ]),
+          LocalGet(0),
+        ],
+      },
+    ],
+    exports: [{ name: "main", desc: Func(0) }],
+  }
+  let (store, instance) = instantiate_module(mod)
+  let polls = [0]
+  let options = CallExportOptions::CallExportOptions(
+    cancel=Some(fn() {
+      polls[0] = polls[0] + 1
+      polls[0] >= 4
+    }),
+  )
+  debug_inspect(
+    call_exported_func_with_options(store, instance, "main", [], options~),
+    content=(
+      #|Err(
+      #|  {
+      #|    kind: Cancelled,
+      #|    message: "invocation cancelled at wasm safepoint",
+      #|    runtime_error: None,
+      #|  },
+      #|)
+    ),
+  )
+  debug_inspect(polls, content="[4]")
+}
+
+///|
 test "call_exported_func_with_options: unsupported budget options are structured" {
   let mod = @types.Module::simple([], [I32], [I32Const(1)], "main")
   let (store, instance) = instantiate_module(mod)

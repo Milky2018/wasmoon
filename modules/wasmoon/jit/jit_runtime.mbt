@@ -78,6 +78,7 @@ struct JITModule {
   direct_call_targets : Map[Int, Int64]
   mut wasi_stdout_callback : ((Bytes) -> Unit)?
   mut wasi_stderr_callback : ((Bytes) -> Unit)?
+  mut cancellation_safepoints : Bool
 }
 
 ///|
@@ -94,6 +95,7 @@ pub fn JITModule::JITModule() -> JITModule {
     direct_call_targets: Map([]),
     wasi_stdout_callback: None,
     wasi_stderr_callback: None,
+    cancellation_safepoints: false,
   }
 }
 
@@ -210,6 +212,7 @@ pub fn JITModule::load_with_imports(
   debug_db? : @wasmoon_jit.JITDebugDB? = None,
 ) -> JITModule raise JITModuleLoadError {
   let jit_module = JITModule::JITModule()
+  jit_module.cancellation_safepoints = precompiled.features.cancellation_safepoints
   let total_funcs = @wasmoon_jit.required_context_function_count(
     precompiled,
     func_signatures.length(),
@@ -648,11 +651,54 @@ pub fn JITModule::call_with_context(
           raise JITTrap(@wasmoon_jit.format_trap_report_message(report))
         }
         Some(JITExit(code)) => raise JITExit(code)
+        Some(JITCancelled) => raise JITCancelled
         None => ()
       }
       results
     }
     None => [] // No context, cannot call
+  }
+}
+
+///|
+/// Structured result for a cooperative JIT invocation.
+pub(all) enum JITCallResult {
+  Completed(Array[Int64])
+  Cancelled
+  Failed(JITTrap)
+  UnsupportedCancellation
+} derive(Debug)
+
+///|
+/// Invoke JIT code with an invocation-local cooperative cancellation callback.
+/// Instrumented code polls at Wasm function entries and loop headers. Blocking
+/// host functions are not interrupted while they run.
+pub fn JITModule::call_with_context_controlled(
+  self : JITModule,
+  func : JITFunction,
+  args : Array[Int64],
+  cancel? : (() -> Bool)? = None,
+) -> JITCallResult {
+  if cancel is Some(_) && !self.cancellation_safepoints {
+    return UnsupportedCancellation
+  }
+  match self.context {
+    None => Completed([])
+    Some(ctx) => {
+      if cancel is Some(callback) {
+        ctx.set_cancellation_callback(callback)
+      }
+      let result = try self.call_with_context(func, args) catch {
+        JITCancelled => Cancelled
+        error => Failed(error)
+      } noraise {
+        values => Completed(values)
+      }
+      if cancel is Some(_) {
+        ctx.clear_cancellation_callback()
+      }
+      result
+    }
   }
 }
 
