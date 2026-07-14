@@ -84,6 +84,7 @@ fn ExecContext::exec_control(
       }
       self.push_label(true, param_arity) // Loop branches use param arity
       while true {
+        self.check_cancellation()
         let result = try self.exec_block(body) catch {
           e => ExecBlockRaised(e)
         } noraise {

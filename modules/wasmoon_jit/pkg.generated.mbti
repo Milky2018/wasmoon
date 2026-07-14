@@ -328,6 +328,8 @@ pub fn init_wasi_context(Int64, Array[String], Array[String], Array[(String, Str
 
 pub fn install_direct_call_stubs_for_target(@cwasm.TargetArch) -> DirectCallStubSet raise DirectCallStubInstallError
 
+pub fn is_cancelled_trap_code(Int) -> Bool
+
 pub fn is_funcref_ptr(Int64) -> Bool
 
 pub fn is_i31(Int64) -> Bool
@@ -864,12 +866,14 @@ pub fn NativeJITContext::alloc_guarded_memory(Self, Int, Int?) -> Int64
 pub fn NativeJITContext::alloc_indirect_table(Self, Int) -> Bool
 pub fn NativeJITContext::alloc_wasm_stack(Self, Int64) -> Bool
 pub fn NativeJITContext::call_trampoline(Self, Int64, Int64, FixedArray[Int64], Int, Bool) -> Int
+pub fn NativeJITContext::clear_cancellation_callback(Self) -> Unit
 pub fn NativeJITContext::clear_hostcall_callback(Self) -> Unit
 pub fn NativeJITContext::func_table_ptr(Self) -> Int64
 pub fn NativeJITContext::has_wasm_stack(Self) -> Bool
 pub fn NativeJITContext::memory_ptr(Self, Int) -> Int64
 pub fn NativeJITContext::memory_size(Self, Int) -> Int64
 pub fn NativeJITContext::ptr(Self) -> Int64
+pub fn NativeJITContext::set_cancellation_callback(Self, () -> Bool) -> Unit
 pub fn NativeJITContext::set_func(Self, Int, Int64) -> Unit
 pub fn NativeJITContext::set_globals(Self, Int64) -> Unit
 pub fn NativeJITContext::set_hostcall_callback(Self, () -> Int) -> Unit

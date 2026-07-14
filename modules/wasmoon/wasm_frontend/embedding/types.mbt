@@ -29,6 +29,7 @@ pub(all) struct EmbeddingEnvironment {
   runtime_layout : RuntimeLayout?
   memory_descriptor_layout : MemoryDescriptorLayout?
   wasm_runtime_symbols : @wasm_milkir.RuntimeSymbols
+  cancellation_safepoints : Bool
 } derive(Debug)
 
 ///|
@@ -38,6 +39,7 @@ pub fn EmbeddingEnvironment::EmbeddingEnvironment(
   runtime_layout? : RuntimeLayout? = None,
   memory_descriptor_layout? : MemoryDescriptorLayout? = None,
   wasm_runtime_symbols? : @wasm_milkir.RuntimeSymbols? = None,
+  cancellation_safepoints? : Bool = false,
 ) -> EmbeddingEnvironment {
   let wasm_runtime_symbols = wasm_runtime_symbols.unwrap_or(
     @wasm_milkir.RuntimeSymbols::with_runtime_prefix(
@@ -50,7 +52,15 @@ pub fn EmbeddingEnvironment::EmbeddingEnvironment(
     runtime_layout,
     memory_descriptor_layout,
     wasm_runtime_symbols,
+    cancellation_safepoints,
   }
+}
+
+///|
+pub fn EmbeddingEnvironment::cancellation_safepoints(
+  self : EmbeddingEnvironment,
+) -> Bool {
+  self.cancellation_safepoints
 }
 
 ///|

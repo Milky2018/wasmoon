@@ -54,6 +54,18 @@ test "compile api: emits stage progress and returns artifact" {
 }
 
 ///|
+test "compile api: records cancellation safepoints" {
+  guard compile_module(
+      minimal_i32_const_module_bytes(),
+      enable_cancellation=true,
+    )
+    is Some(compiled) else {
+    fail("compile returned unsupported")
+  }
+  debug_inspect(compiled.features, content="{ cancellation_safepoints: true }")
+}
+
+///|
 test "compile api: parse failure emits failed stage" {
   let events : Array[CompileProgress] = []
   let compiled = compile_module(Bytes::from_array([0x00, 0x01, 0x02]), on_progress=fn(

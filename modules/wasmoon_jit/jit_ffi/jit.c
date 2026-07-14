@@ -156,6 +156,52 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_hostcall_ptr(void) {
     return (int64_t)wasmoon_jit_hostcall;
 }
 
+// ============ Cooperative Cancellation ============
+
+typedef int32_t (*cancellation_callback_fn)(void *closure);
+
+static void clear_cancellation_callback(jit_context_t *ctx) {
+    if (!ctx) return;
+    if (ctx->cancellation_callback_data) {
+        moonbit_decref(ctx->cancellation_callback_data);
+        ctx->cancellation_callback_data = NULL;
+    }
+    ctx->cancellation_callback = NULL;
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_set_cancellation_callback(
+    int64_t ctx_ptr,
+    cancellation_callback_fn callback,
+    void *closure
+) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    if (!ctx) return;
+    clear_cancellation_callback(ctx);
+    ctx->cancellation_callback = (void *)callback;
+    if (closure) moonbit_incref(closure);
+    ctx->cancellation_callback_data = closure;
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_clear_cancellation_callback(int64_t ctx_ptr) {
+    clear_cancellation_callback((jit_context_t *)ctx_ptr);
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_cancel_poll(jit_context_t *ctx) {
+    if (!ctx || !ctx->cancellation_callback) return 0;
+    cancellation_callback_fn cb =
+        (cancellation_callback_fn)ctx->cancellation_callback;
+    if (cb(ctx->cancellation_callback_data) != 0) {
+        g_trap_code = 11;
+        if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+        return 11;
+    }
+    return 0;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_cancel_poll_ptr(void) {
+    return (int64_t)wasmoon_jit_cancel_poll;
+}
+
 MOONBIT_FFI_EXPORT int32_t wasmoon_jit_get_hostcall_func_idx(void) {
     return g_hostcall_func_idx;
 }

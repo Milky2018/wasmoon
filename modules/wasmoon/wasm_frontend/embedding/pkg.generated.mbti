@@ -18,8 +18,10 @@ pub(all) struct EmbeddingEnvironment {
   runtime_layout : RuntimeLayout?
   memory_descriptor_layout : MemoryDescriptorLayout?
   wasm_runtime_symbols : @wasm_milkir.RuntimeSymbols
+  cancellation_safepoints : Bool
 } derive(@debug.Debug)
-pub fn EmbeddingEnvironment::EmbeddingEnvironment(runtime_symbol_prefix? : String, hidden_context_type? : @milkir.Type?, runtime_layout? : RuntimeLayout?, memory_descriptor_layout? : MemoryDescriptorLayout?, wasm_runtime_symbols? : @wasm_milkir.RuntimeSymbols?) -> Self
+pub fn EmbeddingEnvironment::EmbeddingEnvironment(runtime_symbol_prefix? : String, hidden_context_type? : @milkir.Type?, runtime_layout? : RuntimeLayout?, memory_descriptor_layout? : MemoryDescriptorLayout?, wasm_runtime_symbols? : @wasm_milkir.RuntimeSymbols?, cancellation_safepoints? : Bool) -> Self
+pub fn EmbeddingEnvironment::cancellation_safepoints(Self) -> Bool
 pub fn EmbeddingEnvironment::hidden_context_param(Self) -> @milkir.Type?
 pub fn EmbeddingEnvironment::memory_descriptor_layout(Self) -> MemoryDescriptorLayout?
 pub fn EmbeddingEnvironment::runtime_layout(Self) -> RuntimeLayout?

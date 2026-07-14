@@ -40,6 +40,7 @@ pub impl Show for WasmCompilerPipelineError with fn output(self, logger) {
 pub fn wasm_frontend_embedding_environment(
   runtime_symbol_prefix? : String = "wasmoon",
   hidden_context_type? : @milkir.Type? = Some(Ptr),
+  cancellation_safepoints? : Bool = false,
 ) -> @wasm_frontend.EmbeddingEnvironment {
   let vm = @wasmoon_jit.vmcontext_layout()
   let memory = @wasmoon_jit.memory_descriptor_layout()
@@ -66,6 +67,7 @@ pub fn wasm_frontend_embedding_environment(
       base_offset: memory.base_offset,
       current_length_offset: memory.current_length_offset,
     }),
+    cancellation_safepoints~,
   )
 }
 
@@ -75,6 +77,7 @@ fn wasm_body_embedding_env(
 ) -> @wasm_frontend.EmbeddingEnvironment {
   let defaults = wasm_frontend_embedding_environment(
     runtime_symbol_prefix=env.runtime_symbol_prefix,
+    cancellation_safepoints=env.cancellation_safepoints(),
   )
   EmbeddingEnvironment(
     runtime_symbol_prefix=env.runtime_symbol_prefix,
@@ -88,6 +91,7 @@ fn wasm_body_embedding_env(
       None => defaults.memory_descriptor_layout()
     },
     wasm_runtime_symbols=Some(env.wasm_runtime_symbols()),
+    cancellation_safepoints=env.cancellation_safepoints(),
   )
 }
 

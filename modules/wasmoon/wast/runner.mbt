@@ -887,6 +887,16 @@ pub fn invoke_action(
                   sync_jit_tables_to_store(jit, ctx.store)
                   raise RuntimeError(msg)
                 }
+                JITCancelled => {
+                  @wasmoon_jit.gc_teardown(jit.jit_module.get_context_ptr())
+                  if temp_gc_func_table_ptr != 0L {
+                    @wasmoon_jit.free_memory(temp_gc_func_table_ptr)
+                    temp_gc_func_table_ptr = 0L
+                  }
+                  sync_jit_globals_to_store(jit, ctx.store)
+                  sync_jit_tables_to_store(jit, ctx.store)
+                  raise RuntimeError("invocation cancelled")
+                }
               }
               // Tear down GC context after JIT call
               @wasmoon_jit.gc_teardown(jit.jit_module.get_context_ptr())

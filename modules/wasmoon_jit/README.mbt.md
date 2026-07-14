@@ -11,6 +11,8 @@ bridge glue, and integration planning for loading generated code.
 - `Milky2018/wasmoon_jit`: runtime layout, JIT integration planning,
   trampolines, native glue, runtime symbols, and helper APIs.
 - `Milky2018/wasmoon_jit/cwasm`: serialized precompiled-code artifacts.
+
+The current CWASM format records machine-code compilation features, including whether cooperative cancellation safepoints were emitted. Readers accept only the current format version; this prevents callers from assuming cancellation support for older or otherwise incompatible artifacts.
 - `Milky2018/wasmoon_jit/perf`: optional JIT performance metrics.
 - `Milky2018/wasmoon_jit/jit_ffi`: native stubs used by the JIT runtime.
 
