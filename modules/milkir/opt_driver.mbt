@@ -3,8 +3,8 @@
 ///|
 /// Optimization level
 /// - 0: No optimization
-/// - 1: Basic optimizations (constant folding, copy propagation, CSE, DCE)
-/// - 2: Default optimizations (includes control flow optimizations)
+/// - 1: Inexpensive optimizations (constant folding, alias cleanup, DCE)
+/// - 2: Default optimizations (adds e-graph, global GVN, and CFG transforms)
 /// - 3: Aggressive optimizations (includes loop optimizations)
 pub(all) enum OptLevel {
   O0 // No optimization
@@ -211,10 +211,7 @@ fn run_mandatory_final_cleanup(func : Function) -> OptResult {
 }
 
 ///|
-fn optimize_cranelift_style(
-  func : Function,
-  run_egraph? : Bool = true,
-) -> OptResult {
+fn optimize_o2_pipeline(func : Function) -> OptResult {
   let result = OptResult::OptResult()
   // Mandatory passes are independent of function size and run before budgets
   // are selected, so dead and aliased IR does not consume expensive work.
@@ -222,7 +219,7 @@ fn optimize_cranelift_style(
   if pre_cleanup.changed {
     result.mark_changed()
   }
-  if run_egraph && run_egraph_pass(func) {
+  if run_egraph_pass(func) {
     result.mark_changed()
   }
   let gvn_result = run_gvn_pass(func)
@@ -258,15 +255,15 @@ pub fn optimize_with_level(func : Function, level : OptLevel) -> OptResult {
 }
 
 ///|
-/// O1: Basic optimizations only
+/// O1: Mandatory cleanup and inexpensive simplification only.
 fn optimize_o1(func : Function) -> OptResult {
-  optimize_cranelift_style(func, run_egraph=true)
+  run_optimized_mandatory_pre_cleanup(func)
 }
 
 ///|
 /// Run default optimizations (Cranelift-aligned O2 path).
 pub fn optimize(func : Function) -> OptResult {
-  optimize_cranelift_style(func, run_egraph=true)
+  optimize_o2_pipeline(func)
 }
 
 ///|
