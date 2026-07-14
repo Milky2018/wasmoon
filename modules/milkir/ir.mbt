@@ -225,9 +225,17 @@ pub fn ExtOp::ExtOp(
 }
 
 ///|
+/// Read-only instruction shape exposed to an extension dialect validator.
+pub struct ExtensionInstView {
+  op : ExtOp
+  operand_types : ReadOnlyArray[Type]
+  result_types : ReadOnlyArray[Type]
+} derive(Debug)
+
+///|
 priv struct ExtensionValidator {
   dialect : String
-  validate : (ExtOp) -> String?
+  validate : (ExtensionInstView) -> String?
 }
 
 ///|
@@ -884,7 +892,7 @@ pub fn Function::new_empty(name : String) -> Function {
 pub fn Function::register_extension_validator(
   self : Function,
   dialect : String,
-  validate : (ExtOp) -> String?,
+  validate : (ExtensionInstView) -> String?,
 ) -> Unit {
   for registered in self.extension_validators {
     if registered.dialect == dialect {

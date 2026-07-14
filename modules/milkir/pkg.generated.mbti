@@ -112,6 +112,12 @@ pub fn ExtOpDescriptor::accepts_immediate_count(Self, Int) -> Bool
 pub fn ExtOpDescriptor::expected_immediate_count(Self) -> String
 pub fn ExtOpDescriptor::with_immediate_range(String, String, Int, Int) -> Self
 
+pub struct ExtensionInstView {
+  op : ExtOp
+  operand_types : ReadOnlyArray[Type]
+  result_types : ReadOnlyArray[Type]
+} derive(@debug.Debug)
+
 pub struct ExternalSymbol {
   name : String
 } derive(Eq, Hash, @debug.Debug)
@@ -166,11 +172,11 @@ pub fn Function::new_inst(Self, Opcode, Array[Value], Array[Value]) -> Inst
 pub fn Function::new_value(Self, Type) -> Value
 pub fn Function::param(Self, Int) -> Value?
 pub fn Function::print(Self) -> String
-pub fn Function::register_extension_validator(Self, String, (ExtOp) -> String?) -> Unit
+pub fn Function::register_extension_validator(Self, String, (ExtensionInstView) -> String?) -> Unit
 pub fn Function::signature(Self) -> Signature
 pub fn Function::verify(Self) -> Unit raise VerifyError
 pub fn Function::verify_core(Self) -> Unit raise VerifyError
-pub fn Function::verify_with_extension_validator(Self, (ExtOp) -> String?) -> Unit raise VerifyError
+pub fn Function::verify_with_extension_validator(Self, (ExtensionInstView) -> String?) -> Unit raise VerifyError
 pub fn Function::with_signature(String, Signature) -> Self
 pub impl @debug.Debug for Function
 

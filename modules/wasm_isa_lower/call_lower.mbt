@@ -35,6 +35,30 @@ fn emit_exact_indirect_type_check(
 }
 
 ///|
+/// Emit the address of a 16-byte indirect-table entry without changing the
+/// WebAssembly table index width.
+fn emit_indirect_table_entry_address(
+  ctx : @lower.LoweringContext,
+  block : @block.Block,
+  table_ptr_vreg : @abi.VReg,
+  elem_idx_vreg : @abi.VReg,
+  elem_idx_type : @milkir.Type,
+) -> @abi.VReg {
+  let addr_vreg = ctx.machv_function().new_vreg(Int)
+  let opcode : @instr.Opcode = match elem_idx_type {
+    I32 => AddExtend(Uxtw, 4)
+    I64 => AddShifted(Lsl, 4)
+    _ => abort("indirect table index must be i32 or i64 after validation")
+  }
+  let add_inst = @instr.Inst(opcode)
+  add_inst.add_def({ reg: Virtual(addr_vreg) })
+  add_inst.add_use(Virtual(table_ptr_vreg))
+  add_inst.add_use(Virtual(elem_idx_vreg))
+  block.add_inst(add_inst)
+  addr_vreg
+}
+
+///|
 /// Emit a constant load for a call argument, optionally constrained to a register.
 fn emit_call_const(
   block : @block.Block,
@@ -375,7 +399,6 @@ pub fn lower_return_call_indirect(
   options : WasmLoweringOptions,
 ) -> Unit {
   // Get element index and load function pointer (similar to lower_call_indirect)
-  guard inst.operands.length() > 0 else { return }
   let elem_idx_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
 
   // Load table pointer
@@ -404,14 +427,13 @@ pub fn lower_return_call_indirect(
     ptr_vreg
   }
 
-  // Calculate address = table_ptr + (zext(elem_idx) << 4) (entry size = 16B).
-  // Match Cranelift-style folded add+shift shape.
-  let addr_vreg = ctx.machv_function().new_vreg(Int)
-  let add_inst = @instr.Inst(AddExtend(Uxtw, 4))
-  add_inst.add_def({ reg: Virtual(addr_vreg) })
-  add_inst.add_use(Virtual(table_ptr_vreg))
-  add_inst.add_use(Virtual(elem_idx_vreg))
-  block.add_inst(add_inst)
+  let addr_vreg = emit_indirect_table_entry_address(
+    ctx,
+    block,
+    table_ptr_vreg,
+    elem_idx_vreg,
+    inst.operands[0].ty,
+  )
   // Load raw function pointer
   let raw_func_ptr_vreg = ctx.machv_function().new_vreg(Int)
   let load_func_inst = @instr.Inst(Load(I64, 0))
@@ -523,7 +545,6 @@ pub fn lower_return_call_ref(
   block : @block.Block,
   _type_idx : Int,
 ) -> Unit {
-  guard inst.operands.length() > 0 else { return }
   let func_ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
 
   // Strip FUNCREF_TAG (0x2000000000000000) to get raw function pointer
@@ -612,10 +633,6 @@ pub fn lower_call_indirect(
 ) -> Unit {
   // For call_indirect, the first operand is the element index within the table
   // which we need to convert to a function pointer
-  if inst.operands.length() == 0 {
-    return
-  }
-
   // First operand is the element index within the specific table
   let elem_idx_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
 
@@ -666,14 +683,13 @@ pub fn lower_call_indirect(
   let func_ptr_vreg = ctx.machv_function().new_vreg(Int)
   let actual_type_vreg = ctx.machv_function().new_vreg(Int)
 
-  // Step 1: Calculate address = table_ptr + (zext(elem_idx) << 4)
-  // (entry size is 16 bytes).
-  let addr_vreg = ctx.machv_function().new_vreg(Int)
-  let add_inst = @instr.Inst(AddExtend(Uxtw, 4))
-  add_inst.add_def({ reg: Virtual(addr_vreg) })
-  add_inst.add_use(Virtual(table_ptr_vreg))
-  add_inst.add_use(Virtual(elem_idx_vreg))
-  block.add_inst(add_inst)
+  let addr_vreg = emit_indirect_table_entry_address(
+    ctx,
+    block,
+    table_ptr_vreg,
+    elem_idx_vreg,
+    inst.operands[0].ty,
+  )
 
   // Step 2: Load function pointer from address (offset 0)
   let raw_func_ptr_vreg = ctx.machv_function().new_vreg(Int)
@@ -738,9 +754,6 @@ pub fn lower_call_ref(
   _type_idx : Int,
 ) -> Unit {
   // First operand is the function reference (tagged function pointer)
-  if inst.operands.length() == 0 {
-    return
-  }
   let func_ref_vreg = ctx.get_vreg_for_use(inst.operands[0], block)
 
   // Arguments are all operands except the first one
