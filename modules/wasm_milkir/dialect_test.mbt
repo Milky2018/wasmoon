@@ -38,6 +38,25 @@ test "Wasm extension decode reports unknown opcodes" {
 }
 
 ///|
+test "Wasm dialect validation rejects unknown opcodes during finalize" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("unknown_wasm_opcode")
+  get_exception_tag(builder) |> ignore
+  builder.emit_void_ext_inst(ExtOp("wasm", "typo", []), [])
+  builder.return_([])
+  try builder.finalize() catch {
+    err =>
+      inspect(
+        err,
+        content=(
+          #|UnverifiableInstruction(message="unknown Wasm MilkIR extension opcode 'typo'")
+        ),
+      )
+  } noraise {
+    _ => fail("expected finalize to reject the unknown Wasm opcode")
+  }
+}
+
+///|
 test "Wasm extension decode validates bool immediates" {
   let ext = @milkir.ExtOp(
     "wasm",
@@ -50,6 +69,34 @@ test "Wasm extension decode validates bool immediates" {
       #|Some("malformed Wasm MilkIR extension 'ref_test': immediate 1 is a bool flag encoded as 0 or 1, got 2")
     ),
   )
+}
+
+///|
+test "Wasm dialect validation rejects malformed immediates during finalize" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder(
+    "malformed_wasm_opcode",
+  )
+  get_exception_tag(builder) |> ignore
+  builder.emit_void_ext_inst(
+    ExtOp(
+      "wasm",
+      "ref_test",
+      FixedArray::makei(2, fn(i) { if i == 0 { 3 } else { 2 } }),
+    ),
+    [],
+  )
+  builder.return_([])
+  try builder.finalize() catch {
+    err =>
+      inspect(
+        err,
+        content=(
+          #|UnverifiableInstruction(message="malformed Wasm MilkIR extension 'ref_test': immediate 1 is a bool flag encoded as 0 or 1, got 2")
+        ),
+      )
+  } noraise {
+    _ => fail("expected finalize to reject malformed Wasm immediates")
+  }
 }
 
 ///|

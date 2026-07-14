@@ -212,6 +212,7 @@ test "public O3 derives power-of-two strength-reduction constants" {
 ///|
 test "public optimizer preserves observable and trapping operations" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder("effects")
+  builder.get_function().register_extension_validator("demo", fn(_) { None })
   let address = builder.add_param(Ptr)
   let value = builder.add_param(I32)
   let offset = builder.add_param(I64)

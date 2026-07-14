@@ -334,6 +334,8 @@ An embedding adapter may assign roles such as VMContext to those arguments when 
 
 `Ext(ExtOp, Signature)` represents dialect-specific operations. MilkIR stores a dialect name, opcode name, integer immediates, and an explicit operand/result contract, while the dialect package provides builders, semantic validation, decoding, and lowering.
 
+A dialect-owned builder must register its validator on the `Function` before emitting extension operations. `Function::verify` and `FunctionBuilder::finalize` reject extension dialects without a registered validator and convert validator diagnostics into `VerifyError::UnverifiableInstruction`. An adapter should additionally call `Function::verify_with_extension_validator` with its own trusted validator before lowering, so the adapter boundary does not rely on a validator supplied by the IR producer.
+
 ```moonbit check
 ///|
 test "validate a dialect opcode descriptor" {

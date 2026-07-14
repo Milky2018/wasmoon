@@ -84,11 +84,18 @@ pub fn decode_error(ext : @milkir.ExtOp) -> String? {
 }
 
 ///|
-pub fn decode_or_abort(ext : @milkir.ExtOp) -> WasmOpcode {
-  match decode_result(ext) {
-    Ok(opcode) => opcode
-    Err(message) => abort(message)
-  }
+/// Verify core MilkIR invariants and every extension against the Wasm schema.
+pub fn verify_function(
+  func : @milkir.Function,
+) -> Unit raise @milkir.VerifyError {
+  func.verify_with_extension_validator(decode_error)
+}
+
+///|
+fn register_wasm_validator(builder : @milkir.FunctionBuilder) -> Unit {
+  builder
+  .get_function()
+  .register_extension_validator(WASM_DIALECT, decode_error)
 }
 
 ///|

@@ -34,6 +34,24 @@ test "public finalize rejects a return type mismatch" {
 }
 
 ///|
+test "public finalize rejects an unregistered extension dialect" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("unknown_dialect")
+  builder.emit_void_ext_inst(ExtOp("demo", "effect", []), [])
+  builder.return_([])
+  try builder.finalize() catch {
+    err =>
+      inspect(
+        err,
+        content=(
+          #|UnverifiableInstruction(message="extension dialect 'demo' has no registered validator")
+        ),
+      )
+  } noraise {
+    _ => fail("expected finalize to reject the unregistered dialect")
+  }
+}
+
+///|
 test "public finalize rejects missing jump arguments" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder("bad_jump")
   let target = builder.create_block()

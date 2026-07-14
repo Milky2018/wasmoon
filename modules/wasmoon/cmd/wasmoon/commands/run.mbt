@@ -1675,7 +1675,21 @@ pub fn compile_module_to_jit(
       trap_payload_resolver=@wasmoon_jit.wasm_trap_payload,
       use_subtype_indirect_check~,
       canonical_type_indices~,
-    )
+    ) catch {
+      err => {
+        emit_compile_progress(
+          on_progress,
+          Failed,
+          progress_start,
+          total_compile_funcs,
+          compiled_count,
+          func_idx=Some(func_idx),
+          func_name=Some(func_name),
+          message=Some(err.to_string()),
+        )
+        return None
+      }
+    }
     if lower_tick is Some(tick) {
       @perf.record_stage_us("lower", @perf.elapsed_us(tick))
     }

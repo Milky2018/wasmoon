@@ -249,6 +249,7 @@ test "verify rejects extension instructions that disagree with their contract" {
 ///|
 test "verify_core rejects unresolved dialect operations" {
   let func = Function::new_empty("dialect_is_not_core")
+  func.register_extension_validator("wasm", fn(_) { None })
   let entry = func.new_block([])
   let ext = ExtOp::ExtOp("wasm", "example", [])
   entry.append_inst(func.new_inst(Ext(ext, Signature([], [])), [], []))
