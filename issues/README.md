@@ -182,6 +182,7 @@ graph TD
   ISS_165["ISS-165: Remove the legacy VectorOp matrix and validate SIMD parity"]
   ISS_166["ISS-166: Eliminate MoonBit warning 73 annotations"]
   ISS_167["ISS-167: Add comprehensive MilkIR black-box contract tests"]
+  ISS_168["ISS-168: Separate MilkIR O1 and O2 optimization pipelines"]
   ISS_169["ISS-169: Stabilize natural-loop block ordering across backends"]
   ISS_170["ISS-170: Add cooperative cancellation safepoints to Wasm execution"]
   ISS_002 --> ISS_003
@@ -325,6 +326,7 @@ graph TD
   ISS_163 --> ISS_164
   ISS_164 --> ISS_165
   ISS_166 --> ISS_167
+  ISS_149 --> ISS_168
 ```
 
 ## Warnings

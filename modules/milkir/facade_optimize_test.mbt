@@ -101,6 +101,56 @@ test "public O1 folds a constant expression" {
 }
 
 ///|
+fn build_repeated_expression(
+  name : String,
+) -> @milkir.Function raise @milkir.VerifyError {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder(name)
+  let left = builder.add_param(I32)
+  let right = builder.add_param(I32)
+  builder.add_result(I32)
+  let first = builder.iadd(left, right)
+  let second = builder.iadd(left, right)
+  let product = builder.imul(first, second)
+  builder.return_([product])
+  builder.finalize()
+}
+
+///|
+test "public O1 and O2 select distinct optimization pipelines" {
+  let o1 = build_repeated_expression("repeated_o1")
+  let o2 = build_repeated_expression("repeated_o2")
+  @milkir.optimize_with_level(o1, O1) |> ignore
+  @milkir.optimize_with_level(o2, O2) |> ignore
+  inspect(
+    o1.print(),
+    content=(
+      #|function repeated_o1(v0:i32, v1:i32) -> i32 {
+      #|block0:
+      #|    v2:i32 = iadd v0, v1
+      #|    v3:i32 = iadd v0, v1
+      #|    v4:i32 = imul v2, v3
+      #|    return v4
+      #|}
+      #|
+    ),
+  )
+  inspect(
+    o2.print(),
+    content=(
+      #|function repeated_o2(v0:i32, v1:i32) -> i32 {
+      #|block0:
+      #|    v2:i32 = iadd v0, v1
+      #|    v4:i32 = imul v2, v2
+      #|    return v4
+      #|}
+      #|
+    ),
+  )
+  o1.verify()
+  o2.verify()
+}
+
+///|
 test "public O2 eliminates a duplicate expression" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder("common_subexpression")
   let left = builder.add_param(I32)

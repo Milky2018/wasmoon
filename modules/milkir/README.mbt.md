@@ -296,8 +296,8 @@ The optimization levels are:
 | Level | Intended use |
 | --- | --- |
 | `O0` | Minimal pipeline: removes dead code plus constant and unused block parameters. |
-| `O1` | The standard Cranelift-style simplification pipeline. |
-| `O2` | The default level and an alias for the standard `O1` pass set. |
+| `O1` | Inexpensive simplification: mandatory cleanup, constant folding, alias canonicalization, and dead-code elimination. |
+| `O2` | The default pipeline: O1-style cleanup plus e-graph rewriting, budgeted global value numbering, and CFG simplification. |
 | `O3` | The `O2` pipeline, loop-invariant code motion, checked counted-loop unrolling, strength reduction, and a final `O2` cleanup. |
 
 Use `optimize(func)` for the default pipeline or `optimize_with_level(func, level)` when the caller chooses the level explicitly. Optimizers assume a valid SSA and block-parameter structure. Verify before optimization when the input comes from a frontend, then verify again after developing a new transformation.
