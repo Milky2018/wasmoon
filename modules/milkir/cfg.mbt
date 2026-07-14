@@ -261,7 +261,8 @@ pub struct Loop {
 pub fn CFG::find_loops(self : CFG) -> Array[Loop] {
   let loops : Array[Loop] = []
   let back_edges = self.find_back_edges()
-  let grouped : @hashmap.HashMap[Int, Array[(Int, Int)]] = HashMap([])
+  // Preserve back-edge discovery order in the public loop array.
+  let grouped : Map[Int, Array[(Int, Int)]] = Map([])
   for edge in back_edges {
     let (_, header) = edge
     match grouped.get(header) {
@@ -285,7 +286,8 @@ fn CFG::find_loop_body(
   header : Int,
   back_edges : Array[(Int, Int)],
 ) -> Array[Int] {
-  let body : @hashmap.HashMap[Int, Bool] = HashMap([])
+  // Preserve the header-first reverse-CFG discovery order.
+  let body : Map[Int, Bool] = Map([])
   body.set(header, true)
   let worklist : Array[Int] = []
   for edge in back_edges {

@@ -139,3 +139,38 @@ test "public CFG discovers a natural loop and its preheader" {
     ),
   )
 }
+
+///|
+test "public CFG preserves discovery order for multiple natural loops" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("two_loops")
+  let condition = builder.add_param(I32)
+  let first_header = builder.create_block()
+  let first_body = builder.create_block()
+  let between = builder.create_block()
+  let second_header = builder.create_block()
+  let second_body = builder.create_block()
+  let exit = builder.create_block()
+  builder.jump(first_header, [])
+  builder.switch_to_block(first_header)
+  builder.brnz(condition, first_body, between)
+  builder.switch_to_block(first_body)
+  builder.jump(first_header, [])
+  builder.switch_to_block(between)
+  builder.jump(second_header, [])
+  builder.switch_to_block(second_header)
+  builder.brnz(condition, second_body, exit)
+  builder.switch_to_block(second_body)
+  builder.jump(second_header, [])
+  builder.switch_to_block(exit)
+  builder.return_([])
+  let cfg = @milkir.CFG::build(builder.finalize())
+  debug_inspect(
+    cfg.find_loops(),
+    content=(
+      #|[
+      #|  { header: 1, blocks: [1, 2], back_edges: [(2, 1)] },
+      #|  { header: 4, blocks: [4, 5], back_edges: [(5, 4)] },
+      #|]
+    ),
+  )
+}
