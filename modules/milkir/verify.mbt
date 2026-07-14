@@ -107,7 +107,7 @@ pub fn Function::verify(self : Function) -> Unit raise VerifyError {
   let idom = CFG::build(self).compute_dominators()
   for block in self.blocks {
     for inst_index, inst in block.instructions {
-      verify_inst(inst, definitions, block.id, inst_index, idom)
+      verify_inst(self, inst, definitions, block.id, inst_index, idom)
     }
     if block.terminator is Some(term) {
       verify_terminator(
@@ -172,6 +172,25 @@ pub fn Function::verify_core(self : Function) -> Unit raise VerifyError {
         raise UnverifiableInstruction(
           message="unresolved dialect operation \{ext.dialect}.\{ext.opcode} is not core MilkIR",
         )
+      }
+    }
+  }
+}
+
+///|
+/// Verify the function and apply an owning adapter's validator to every
+/// extension operation before crossing the adapter boundary.
+pub fn Function::verify_with_extension_validator(
+  self : Function,
+  validate : (ExtOp) -> String?,
+) -> Unit raise VerifyError {
+  self.verify()
+  for block in self.blocks {
+    for inst in block.instructions {
+      if inst.opcode is Ext(ext, _) {
+        if validate(ext) is Some(message) {
+          raise UnverifiableInstruction(message~)
+        }
       }
     }
   }
@@ -338,6 +357,7 @@ fn verify_i32(value : Value, context : String) -> Unit raise VerifyError {
 
 ///|
 fn verify_inst(
+  func : Function,
   inst : Inst,
   definitions : @hashmap.HashMap[Int, ValueDefinition],
   use_block : Int,
@@ -348,6 +368,24 @@ fn verify_inst(
     verify_defined(arg, definitions, use_block, use_position, idom)
   }
   verify_opcode_contract(inst)
+  if inst.opcode is Ext(ext, _) {
+    verify_extension(func, ext)
+  }
+}
+
+///|
+fn verify_extension(func : Function, ext : ExtOp) -> Unit raise VerifyError {
+  for registered in func.extension_validators {
+    if registered.dialect == ext.dialect {
+      if (registered.validate)(ext) is Some(message) {
+        raise UnverifiableInstruction(message~)
+      }
+      return
+    }
+  }
+  raise UnverifiableInstruction(
+    message="extension dialect '\{ext.dialect}' has no registered validator",
+  )
 }
 
 ///|

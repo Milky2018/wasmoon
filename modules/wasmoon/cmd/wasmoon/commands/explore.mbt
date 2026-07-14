@@ -178,7 +178,14 @@ pub fn run_explore(
     }
     let mach_result = @wasmoon_jit.lower_wasm_body_milkir_for_target(
       milk_result, target,
-    )
+    ) catch {
+      err => {
+        if !html_output {
+          println("MilkIR lowering error: \{err}")
+        }
+        continue
+      }
+    }
     let machv_text = mach_result.print()
     if !html_output && show_machv {
       println("")
@@ -195,7 +202,14 @@ pub fn run_explore(
 
     let plan = @wasmoon_jit.plan_wasm_body_milkir_integration_for_target(
       milk_result, target,
-    )
+    ) catch {
+      err => {
+        if !html_output {
+          println("MilkIR planning error: \{err}")
+        }
+        continue
+      }
+    }
     let mc_text = plan.object
       .get_bytes()
       .map(fn(b) { @types.to_hex_byte(b) })

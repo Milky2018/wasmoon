@@ -79,7 +79,11 @@ fn lower_extension_with_options(
   block : @block.Block,
   ext : @milkir.ExtOp,
 ) -> @lower.ExtensionLowerResult {
-  match @wasm_milkir.decode_or_abort(ext) {
+  let opcode = match @wasm_milkir.decode(ext) {
+    Some(opcode) => opcode
+    None => abort("Wasm extension changed after successful validation")
+  }
+  match opcode {
     StructNew(type_idx) =>
       return Handled(lower_struct_new(ctx, inst, block, type_idx))
     ArrayNewFixed(type_idx, len) =>
@@ -166,7 +170,8 @@ pub fn lower_function(
   trap_payload_resolver? : (String) -> Int = fn(_reason) { 0 },
   use_subtype_indirect_check? : Bool = true,
   canonical_type_indices? : Array[Int] = [],
-) -> @machv.Function {
+) -> @machv.Function raise @milkir.VerifyError {
+  @wasm_milkir.verify_function(func)
   let options : WasmLoweringOptions = {
     use_subtype_indirect_check,
     canonical_type_indices,

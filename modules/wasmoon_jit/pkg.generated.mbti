@@ -350,9 +350,9 @@ pub fn link_code_object(@machv_emit.MachineCode, RuntimeSymbolResolver) -> Linke
 
 pub fn link_machine_code(@machv_emit.MachineCode, RuntimeSymbolResolver) -> LinkedCode raise LinkError
 
-pub fn lower_milkir_for_target(@milkir.Function, @machv_emit.EmitTarget) -> @machv.Function
+pub fn lower_milkir_for_target(@milkir.Function, @machv_emit.EmitTarget) -> @machv.Function raise JitPipelineError
 
-pub fn lower_wasm_body_milkir_for_target(@milkir.Function, @machv_emit.EmitTarget) -> @machv.Function
+pub fn lower_wasm_body_milkir_for_target(@milkir.Function, @machv_emit.EmitTarget) -> @machv.Function raise JitPipelineError
 
 pub fn machv_reloc_target_to_cwasm_func_idx(@instr.RelocTarget) -> Int?
 
@@ -406,9 +406,9 @@ pub fn plan_hostcall_import_trampoline_layout(Array[@types.ValueType], Array[@ty
 
 pub fn plan_integration_for_target(@milkir.Function, @machv.Function, @machv_regalloc.Output, @machv_emit.EmitTarget) -> JitIntegrationPlan
 
-pub fn plan_milkir_integration_for_target(@milkir.Function, @machv_emit.EmitTarget) -> JitIntegrationPlan
+pub fn plan_milkir_integration_for_target(@milkir.Function, @machv_emit.EmitTarget) -> JitIntegrationPlan raise JitPipelineError
 
-pub fn plan_wasm_body_milkir_integration_for_target(@milkir.Function, @machv_emit.EmitTarget) -> JitIntegrationPlan
+pub fn plan_wasm_body_milkir_integration_for_target(@milkir.Function, @machv_emit.EmitTarget) -> JitIntegrationPlan raise JitPipelineError
 
 pub fn required_context_function_count(@cwasm.PrecompiledModule, Int) -> Int
 

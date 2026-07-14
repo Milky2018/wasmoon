@@ -114,6 +114,7 @@ test "public vector builders cover lanes, bitwise ops, and memory" {
 ///|
 test "public extension builders preserve typed multi-value contracts" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder("extension")
+  builder.get_function().register_extension_validator("demo", fn(_) { None })
   let input = builder.add_param(I32)
   builder.add_result(I32)
   builder.add_result(I64)

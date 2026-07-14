@@ -423,6 +423,27 @@ test "plan Wasmoon JIT integration without leaking into machv_emit" {
 }
 
 ///|
+test "JIT integration returns invalid Wasm dialect errors" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("invalid_wasm_dialect")
+  @wasm_milkir.get_exception_tag(builder) |> ignore
+  builder.emit_void_ext_inst(ExtOp("wasm", "typo", []), [])
+  builder.return_([])
+  try
+    plan_wasm_body_milkir_integration_for_target(builder.get_function(), X64)
+  catch {
+    err =>
+      inspect(
+        err,
+        content=(
+          #|PipelineFailure(message="UnverifiableInstruction(message=\"unknown Wasm MilkIR extension opcode 'typo'\")")
+        ),
+      )
+  } noraise {
+    _ => fail("expected JIT integration to return a pipeline error")
+  }
+}
+
+///|
 test "plan MilkIR through reusable JIT pipeline" {
   let signature = @milkir.Signature::Signature([I64, I64], [I64])
   let milk = @milkir.Function::with_signature("add64", signature)

@@ -148,7 +148,7 @@ pub fn emit_target_to_isa(target : @machv_emit.EmitTarget) -> @isa.ISA {
 pub fn lower_milkir_for_target(
   func : @milkir.Function,
   target : @machv_emit.EmitTarget,
-) -> @machv.Function {
+) -> @machv.Function raise JitPipelineError {
   let isa = emit_target_to_isa(target)
   let embedding_abi = wasm_embedding_abi_for_isa(isa)
   @wasm_isa_lower.lower_function(
@@ -158,14 +158,16 @@ pub fn lower_milkir_for_target(
     embedding_abi=Some(embedding_abi),
     runtime_symbols=wasm_runtime_symbols(),
     trap_payload_resolver=wasm_trap_payload,
-  )
+  ) catch {
+    err => raise PipelineFailure(message=err.to_string())
+  }
 }
 
 ///|
 pub fn lower_wasm_body_milkir_for_target(
   func : @milkir.Function,
   target : @machv_emit.EmitTarget,
-) -> @machv.Function {
+) -> @machv.Function raise JitPipelineError {
   let isa = emit_target_to_isa(target)
   let embedding_abi = wasm_embedding_abi_for_isa(isa)
   @wasm_isa_lower.lower_function(
@@ -176,14 +178,16 @@ pub fn lower_wasm_body_milkir_for_target(
     embedding_abi=Some(embedding_abi),
     runtime_symbols=wasm_runtime_symbols(),
     trap_payload_resolver=wasm_trap_payload,
-  )
+  ) catch {
+    err => raise PipelineFailure(message=err.to_string())
+  }
 }
 
 ///|
 pub fn plan_milkir_integration_for_target(
   func : @milkir.Function,
   target : @machv_emit.EmitTarget,
-) -> JitIntegrationPlan {
+) -> JitIntegrationPlan raise JitPipelineError {
   let isa = emit_target_to_isa(target)
   let embedding_abi = wasm_embedding_abi_for_isa(isa)
   let machv_func = @wasm_isa_lower.lower_function(
@@ -193,7 +197,9 @@ pub fn plan_milkir_integration_for_target(
     embedding_abi=Some(embedding_abi),
     runtime_symbols=wasm_runtime_symbols(),
     trap_payload_resolver=wasm_trap_payload,
-  )
+  ) catch {
+    err => raise PipelineFailure(message=err.to_string())
+  }
   let (allocated_func, output) = @machv_regalloc.allocate_registers_backtracking_output_with_isa(
     machv_func,
     isa,
@@ -206,7 +212,7 @@ pub fn plan_milkir_integration_for_target(
 pub fn plan_wasm_body_milkir_integration_for_target(
   func : @milkir.Function,
   target : @machv_emit.EmitTarget,
-) -> JitIntegrationPlan {
+) -> JitIntegrationPlan raise JitPipelineError {
   let isa = emit_target_to_isa(target)
   let embedding_abi = wasm_embedding_abi_for_isa(isa)
   let machv_func = @wasm_isa_lower.lower_function(
@@ -217,7 +223,9 @@ pub fn plan_wasm_body_milkir_integration_for_target(
     embedding_abi=Some(embedding_abi),
     runtime_symbols=wasm_runtime_symbols(),
     trap_payload_resolver=wasm_trap_payload,
-  )
+  ) catch {
+    err => raise PipelineFailure(message=err.to_string())
+  }
   let (allocated_func, output) = @machv_regalloc.allocate_registers_backtracking_output_with_isa(
     machv_func,
     isa,
