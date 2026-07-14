@@ -186,6 +186,11 @@ typedef struct {
     void *hostcall_callback;          // Function pointer for hostcall callback
     void *hostcall_callback_data;     // Closure data for hostcall callback
 
+    // Invocation-local cooperative cancellation callback. Generated code only
+    // passes the context to a C helper; these fields stay outside the fixed ABI.
+    void *cancellation_callback;
+    void *cancellation_callback_data;
+
     // ============ Bulk Memory/Table Segment State ============
     // Per-instance (per jit_context_t) storage for bulk memory/table operations:
     //   memory.init/data.drop/table.init/elem.drop and GC array.*_{data,elem}.

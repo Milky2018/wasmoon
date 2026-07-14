@@ -183,6 +183,7 @@ graph TD
   ISS_166["ISS-166: Eliminate MoonBit warning 73 annotations"]
   ISS_167["ISS-167: Add comprehensive MilkIR black-box contract tests"]
   ISS_169["ISS-169: Stabilize natural-loop block ordering across backends"]
+  ISS_170["ISS-170: Add cooperative cancellation safepoints to Wasm execution"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005

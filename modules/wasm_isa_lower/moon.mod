@@ -1,6 +1,6 @@
 name = "Milky2018/wasm_isa_lower"
 
-version = "0.2.1"
+version = "0.2.2"
 
 readme = "README.mbt.md"
 
@@ -14,10 +14,10 @@ description = "WebAssembly MilkIR dialect adapter for MachV lowering"
 
 import {
   "moonbitlang/x@0.4.38",
-  "Milky2018/wasm_milkir@0.1.1",
-  "Milky2018/milkir@0.1.1",
-  "Milky2018/machv@0.2.1",
-  "Milky2018/milkir_machv@0.2.1",
+  "Milky2018/wasm_milkir@0.2.0",
+  "Milky2018/milkir@0.2.0",
+  "Milky2018/machv@0.2.2",
+  "Milky2018/milkir_machv@0.3.0",
 }
 
 preferred_target = "wasm-gc"

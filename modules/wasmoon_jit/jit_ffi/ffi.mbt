@@ -77,6 +77,23 @@ pub extern "c" fn c_jit_set_hostcall_callback(
 pub extern "c" fn c_jit_clear_hostcall_callback(ctx_ptr : Int64) -> Unit = "wasmoon_jit_clear_hostcall_callback"
 
 ///|
+/// Get the cooperative cancellation poll helper pointer.
+pub extern "c" fn c_jit_get_cancel_poll_ptr() -> Int64 = "wasmoon_jit_get_cancel_poll_ptr"
+
+///|
+/// Set an invocation-local cooperative cancellation callback.
+#owned(closure)
+pub extern "c" fn c_jit_set_cancellation_callback(
+  ctx_ptr : Int64,
+  call_closure : FuncRef[(() -> Bool) -> Int],
+  closure : () -> Bool,
+) -> Unit = "wasmoon_jit_set_cancellation_callback"
+
+///|
+/// Clear the cooperative cancellation callback.
+pub extern "c" fn c_jit_clear_cancellation_callback(ctx_ptr : Int64) -> Unit = "wasmoon_jit_clear_cancellation_callback"
+
+///|
 /// Current hostcall func_idx (thread-local).
 pub extern "c" fn c_jit_get_hostcall_func_idx() -> Int = "wasmoon_jit_get_hostcall_func_idx"
 

@@ -127,8 +127,14 @@ pub fn jit_trap_message(code : Int) -> String {
     8 => "jit backend trap"
     9 => "out of memory"
     10 => "gc precise roots unavailable"
+    11 => "invocation cancelled"
     _ => "unknown trap"
   }
+}
+
+///|
+pub fn is_cancelled_trap_code(code : Int) -> Bool {
+  code == 11
 }
 
 ///|
@@ -581,6 +587,28 @@ pub fn NativeJITContext::clear_hostcall_callback(
   self : NativeJITContext,
 ) -> Unit {
   @jit_ffi.c_jit_clear_hostcall_callback(self.ptr())
+}
+
+///|
+pub fn NativeJITContext::set_cancellation_callback(
+  self : NativeJITContext,
+  callback : () -> Bool,
+) -> Unit {
+  let call_closure : FuncRef[(() -> Bool) -> Int] = fn(f : () -> Bool) {
+    if f() {
+      1
+    } else {
+      0
+    }
+  }
+  @jit_ffi.c_jit_set_cancellation_callback(self.ptr(), call_closure, callback)
+}
+
+///|
+pub fn NativeJITContext::clear_cancellation_callback(
+  self : NativeJITContext,
+) -> Unit {
+  @jit_ffi.c_jit_clear_cancellation_callback(self.ptr())
 }
 
 ///|

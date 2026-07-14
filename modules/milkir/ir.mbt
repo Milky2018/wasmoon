@@ -99,6 +99,9 @@ pub impl Debug for Value with fn to_repr(self) {
 
 ///|
 /// IR type system for scalar, vector, pointer, and reference-typed values.
+///
+/// `Ptr`, `Ref`, `CallableRef`, and `OpaqueRef` are fixed-width 64-bit
+/// carriers. Their representation does not vary with the host pointer width.
 pub(all) enum Type {
   I32
   I64

@@ -1282,6 +1282,12 @@ fn run_with_jit(
                   // NOTE: Memory and globals are now freed by JITContext finalizer (GC-managed)
                   return exit_failure()
                 }
+                JITCancelled => {
+                  @wasmoon_jit.gc_teardown(jm.get_context_ptr())
+                  @wast.sync_jit_globals_to_store(jit_ctx, store)
+                  @logger.error("JIT invocation cancelled")
+                  return exit_failure()
+                }
               }
               // Tear down GC context after JIT call
               @wasmoon_jit.gc_teardown(jm.get_context_ptr())
@@ -1342,6 +1348,7 @@ pub fn compile_module(
   opt_level? : Int = 2,
   enable_dwarf? : Bool = false,
   on_progress? : (CompileProgress) -> Unit? = fn(_event) { None },
+  enable_cancellation? : Bool = false,
 ) -> @cwasm.PrecompiledModule? {
   let compile_start = @perf.tick_now()
   emit_compile_progress(on_progress, Parse, compile_start, 0, 0)
@@ -1392,6 +1399,7 @@ pub fn compile_module(
     enable_dwarf,
     on_progress~,
     compile_start=Some(compile_start),
+    enable_cancellation~,
   )
   match compiled {
     Some((precompiled, _debug_db)) => Some(precompiled)
@@ -1488,6 +1496,7 @@ pub fn compile_module_to_jit(
   local_compile_mask? : Array[Bool]? = None,
   force_subtype_indirect_check? : Bool? = None,
   use_reusable_pipeline? : Bool = true,
+  enable_cancellation? : Bool = false,
 ) -> (@cwasm.PrecompiledModule, @wasmoon_jit.JITDebugDB?)? {
   use_reusable_pipeline |> ignore
   let progress_start = compile_start.unwrap_or(@perf.tick_now())
@@ -1495,7 +1504,10 @@ pub fn compile_module_to_jit(
   let module_tick = if perf_on { Some(@perf.tick_now()) } else { None }
   let target_arch = @wasmoon_jit.host_target_arch()
   let isa = @wasmoon_jit.target_arch_to_isa(target_arch)
-  let precompiled = @cwasm.PrecompiledModule::PrecompiledModule(target_arch)
+  let precompiled = @cwasm.PrecompiledModule::PrecompiledModule(
+    target_arch,
+    features=CompilationFeatures(cancellation_safepoints=enable_cancellation),
+  )
   let debug_db : @wasmoon_jit.JITDebugDB? = if dump_on_trap {
     Some(JITDebugDB())
   } else {
@@ -1558,7 +1570,9 @@ pub fn compile_module_to_jit(
   }
   let translation_ctx = @wasm_frontend.translation_context_from_module(
     mod_,
-    @wasmoon.wasm_frontend_embedding_environment(),
+    @wasmoon.wasm_frontend_embedding_environment(
+      cancellation_safepoints=enable_cancellation,
+    ),
     memory_max_override=actual_memory_max,
   )
   // Record imports in precompiled module

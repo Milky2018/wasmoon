@@ -43,7 +43,40 @@ const CWASM_MAGIC_3 : Int = 0x73 // 's'
 /// v5: Added type signatures, globals, tables, and element segments
 /// v6: Added direct-call fixups
 /// v7: Added per-function GC safepoint metadata and stackmap blob
-const CWASM_VERSION : Int = 7
+/// v8: Added compilation feature bits
+const CWASM_VERSION : Int = 8
+
+///|
+/// Compilation features that affect the generated machine-code contract.
+pub(all) struct CompilationFeatures {
+  cancellation_safepoints : Bool
+} derive(Debug, Eq)
+
+///|
+pub fn CompilationFeatures::CompilationFeatures(
+  cancellation_safepoints? : Bool = false,
+) -> CompilationFeatures {
+  { cancellation_safepoints, }
+}
+
+///|
+fn CompilationFeatures::to_bits(self : CompilationFeatures) -> Int {
+  if self.cancellation_safepoints {
+    1
+  } else {
+    0
+  }
+}
+
+///|
+fn compilation_features_from_bits(
+  bits : Int,
+) -> CompilationFeatures raise DeserializeError {
+  if (bits & 0xFFFF_FFFE) != 0 {
+    raise DeserializeError("Unsupported compilation feature bits: \{bits}")
+  }
+  CompilationFeatures(cancellation_safepoints=(bits & 1) != 0)
+}
 
 // ============ Target Architecture ============
 
@@ -430,6 +463,8 @@ pub(all) struct PrecompiledModule {
   version : Int
   // Target architecture
   target : TargetArch
+  // Machine-code features required by invocation APIs.
+  features : CompilationFeatures
   // Imported functions
   imports : Array[ImportEntry]
   // Compiled functions
@@ -453,10 +488,12 @@ pub(all) struct PrecompiledModule {
 ///|
 pub fn PrecompiledModule::PrecompiledModule(
   target : TargetArch,
+  features? : CompilationFeatures = CompilationFeatures(),
 ) -> PrecompiledModule {
   {
     version: CWASM_VERSION,
     target,
+    features,
     imports: [],
     functions: [],
     memories: [],
@@ -605,6 +642,9 @@ pub fn PrecompiledModule::serialize(self : PrecompiledModule) -> Array[Int] {
 
   // Write target architecture
   result.push(self.target.to_byte())
+
+  // Write compilation feature bits
+  write_u32(result, self.features.to_bits())
 
   // Write number of imports
   write_u32(result, self.imports.length())
@@ -887,6 +927,9 @@ pub fn deserialize(
   // Read target architecture
   let target = TargetArch::from_byte(reader.read_byte())
 
+  // Read compilation feature bits
+  let features = compilation_features_from_bits(reader.read_u32())
+
   // Read imports
   let imports : Array[ImportEntry] = []
   let import_count = reader.read_u32()
@@ -1066,6 +1109,7 @@ pub fn deserialize(
   {
     version: CWASM_VERSION,
     target,
+    features,
     imports,
     functions,
     memories,
