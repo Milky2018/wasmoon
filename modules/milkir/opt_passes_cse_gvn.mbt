@@ -1,37 +1,6 @@
 // ============ Global Value Numbering with Load CSE ============
 
 ///|
-/// Check if an instruction reads from memory
-fn reads_memory(opcode : Opcode) -> Bool {
-  match opcode {
-    Memory(MemoryOp::Load(_) | MemoryOp::LoadNarrow(_, _, _))
-    | Vector(
-      VectorOp::LoadExtend(_, _)
-      | VectorOp::LoadSplat(_)
-      | VectorOp::LoadZero(_)
-      | VectorOp::LoadLane(_, _)
-    ) => true
-    Call(_) => true
-    Ext(_, _) => true
-    _ => false
-  }
-}
-
-///|
-/// Check if an instruction may write to memory or have other side effects
-/// that could invalidate memory-based expressions
-fn may_write_memory(opcode : Opcode) -> Bool {
-  match opcode {
-    // Direct memory writes
-    Memory(MemoryOp::Store(_) | MemoryOp::StoreNarrow(_))
-    | Vector(VectorOp::StoreLane(_, _)) => true
-    Call(_) => true
-    Ext(_, _) => true
-    _ => false
-  }
-}
-
-///|
 priv struct PtrAccess {
   base_id : Int
   offset_id : Int
@@ -226,15 +195,14 @@ fn update_last_store_state(
   ptr_base_infos : @hashmap.HashMap[Int, PtrBaseInfo],
 ) -> Unit {
   let is_store = match inst.opcode {
-    Memory(MemoryOp::Store(_) | MemoryOp::StoreNarrow(_))
-    | Vector(VectorOp::StoreLane(_, _)) => true
+    Memory(Store(_) | StoreNarrow(_) | Vector(StoreLane(_, _))) => true
     _ => false
   }
   if is_store && ptr_access_from_inst(inst, ptr_base_infos) is Some(access) {
     state.set_region_token(access.region, inst_version)
     return
   }
-  if may_write_memory(inst.opcode) {
+  if inst.opcode.semantics().memory.may_write_memory() {
     state.set_all_tokens(inst_version)
   }
 }
@@ -310,8 +278,8 @@ fn collect_iconst_values(func : Function) -> @hashmap.HashMap[Int, Int64] {
     for inst in block.instructions {
       if inst.first_result() is Some(v) {
         match inst.opcode {
-          Scalar(ScalarOp::IntConst(value)) => result.set(v.id, value)
-          Scalar(ScalarOp::Copy) =>
+          Scalar(IntConst(value)) => result.set(v.id, value)
+          Scalar(Copy) =>
             if inst.operands.length() > 0 &&
               result.get(inst.operands[0].id) is Some(copied) {
               result.set(v.id, copied)
@@ -354,17 +322,17 @@ fn collect_ptr_base_infos(
         if inst.first_result() is Some(v) && result.get(v.id) is None {
           let inferred : PtrBaseInfo? = match inst.opcode {
             Ext(_, _) => None
-            Scalar(ScalarOp::Copy)
-            | Scalar(ScalarOp::Convert(ConversionOp::Bitcast))
-            | Scalar(ScalarOp::Convert(ConversionOp::UnsignedExtend))
-            | Scalar(ScalarOp::Convert(ConversionOp::SignedExtend))
-            | Scalar(ScalarOp::Convert(ConversionOp::IntReduce)) =>
+            Scalar(Copy)
+            | Scalar(Convert(Bitcast))
+            | Scalar(Convert(UnsignedExtend))
+            | Scalar(Convert(SignedExtend))
+            | Scalar(Convert(IntReduce)) =>
               if inst.operands.length() > 0 {
                 result.get(inst.operands[0].id)
               } else {
                 None
               }
-            Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)) =>
+            Scalar(IntBinary(Add)) =>
               if inst.operands.length() >= 2 {
                 let lhs = inst.operands[0]
                 let rhs = inst.operands[1]
@@ -380,7 +348,7 @@ fn collect_ptr_base_infos(
               } else {
                 None
               }
-            Scalar(ScalarOp::IntBinary(IntBinaryOp::Sub)) =>
+            Scalar(IntBinary(Sub)) =>
               if inst.operands.length() >= 2 {
                 let lhs = inst.operands[0]
                 let rhs = inst.operands[1]
@@ -393,7 +361,7 @@ fn collect_ptr_base_infos(
               } else {
                 None
               }
-            Scalar(ScalarOp::Select) =>
+            Scalar(Select) =>
               if inst.operands.length() >= 3 &&
                 result.get(inst.operands[1].id) is Some(lhs_base) &&
                 result.get(inst.operands[2].id) is Some(rhs_base) &&
@@ -421,7 +389,7 @@ fn ptr_access_from_inst(
   ptr_base_infos : @hashmap.HashMap[Int, PtrBaseInfo],
 ) -> PtrAccess? {
   match inst.opcode {
-    Memory(MemoryOp::Load(_)) =>
+    Memory(Load(_)) =>
       if inst.operands.length() >= 2 {
         let base = inst.operands[0]
         let offset = inst.operands[1]
@@ -433,7 +401,7 @@ fn ptr_access_from_inst(
       } else {
         None
       }
-    Memory(MemoryOp::LoadNarrow(_, _, _)) =>
+    Memory(LoadNarrow(_, _, _)) =>
       if inst.operands.length() >= 2 {
         let base = inst.operands[0]
         let offset = inst.operands[1]
@@ -445,7 +413,7 @@ fn ptr_access_from_inst(
       } else {
         None
       }
-    Memory(MemoryOp::Store(_)) =>
+    Memory(Store(_)) =>
       if inst.operands.length() >= 3 {
         let base = inst.operands[0]
         let offset = inst.operands[2]
@@ -457,7 +425,7 @@ fn ptr_access_from_inst(
       } else {
         None
       }
-    Memory(MemoryOp::StoreNarrow(_)) =>
+    Memory(StoreNarrow(_)) =>
       if inst.operands.length() >= 3 {
         let base = inst.operands[0]
         let offset = inst.operands[2]
@@ -516,41 +484,39 @@ fn inst_dominates(
 
 ///|
 /// Check if an instruction is suitable for GVN (can be CSE'd)
-/// This includes pure operations plus loads (which read but don't write)
+/// Trapping instructions and memory operations remain excluded. Load CSE is a
+/// separate correctness change even though this pass tracks memory versions.
 fn is_gvn_candidate(inst : Inst) -> Bool {
   // Replacement currently emits one copy, so only single-result instructions
   // can participate in GVN.
   if inst.results.length() != 1 {
     return false
   }
-  // Use the existing has_side_effects check - if it has side effects, skip it
-  if has_side_effects(inst) {
-    return false
-  }
-  // Instructions that write memory are handled by invalidation, not skipped
-  // But we still need to skip them as candidates
-  match inst.opcode {
-    // Division/remainder can trap, not suitable
-    Scalar(ScalarOp::IntBinary(IntBinaryOp::SignedDiv))
-    | Scalar(ScalarOp::IntBinary(IntBinaryOp::UnsignedDiv))
-    | Scalar(ScalarOp::IntBinary(IntBinaryOp::SignedRem))
-    | Scalar(ScalarOp::IntBinary(IntBinaryOp::UnsignedRem)) => false
-    // Float-to-int can trap
-    Scalar(ScalarOp::Convert(ConversionOp::FloatToSignedInt))
-    | Scalar(ScalarOp::Convert(ConversionOp::FloatToUnsignedInt)) => false
-    // Memory writes are handled by may_write_memory, skip as candidates
-    Memory(MemoryOp::Store(_) | MemoryOp::StoreNarrow(_))
-    | Vector(VectorOp::StoreLane(_, _)) => false
-    // All other non-side-effect instructions are candidates
-    _ => true
-  }
+  !inst.opcode.semantics().must_preserve_if_unused()
 }
 
 ///|
-fn run_global_value_numbering(func : Function) -> OptResult {
+priv struct GVNStats {
+  result : OptResult
+  work_done : Int
+  budget_exhausted : Bool
+}
+
+///|
+fn run_global_value_numbering_with_budget(
+  func : Function,
+  work_budget : Int,
+) -> GVNStats {
   let result = OptResult::OptResult()
   if func.blocks.length() == 0 {
-    return result
+    return { result, work_done: 0, budget_exhausted: false }
+  }
+  if work_budget <= 0 {
+    return {
+      result,
+      work_done: 0,
+      budget_exhausted: instruction_count(func) > 0,
+    }
   }
   let iconst_values = collect_iconst_values(func)
   let ptr_base_infos = collect_ptr_base_infos(func, iconst_values)
@@ -572,8 +538,13 @@ fn run_global_value_numbering(func : Function) -> OptResult {
   )
   let memory_values : @hashmap.HashMap[MemoryValueKey, MemoryValueEntry] = HashMap([],
   )
+  let work_done : Ref[Int] = { val: 0 }
+  let budget_exhausted : Ref[Bool] = { val: false }
   // DFS the dominator tree
   fn dfs(block_id : Int) {
+    if budget_exhausted.val {
+      return
+    }
     let idx = block_idx.get(block_id).unwrap()
     let block = func.blocks[idx]
     // Track expressions added/modified in this block (to restore later)
@@ -585,8 +556,13 @@ fn run_global_value_numbering(func : Function) -> OptResult {
     }
     // Process instructions
     for inst_index, inst in block.instructions {
+      if work_done.val >= work_budget {
+        budget_exhausted.val = true
+        break
+      }
+      work_done.val = work_done.val + 1
       let mut replaced_by_memory = false
-      if inst.opcode is Memory(MemoryOp::Load(load_ty)) &&
+      if inst.opcode is Memory(Load(load_ty)) &&
         ptr_access_from_inst(inst, ptr_base_infos) is Some(load_access) {
         let key = memory_key_from_access(
           load_access,
@@ -601,14 +577,14 @@ fn run_global_value_numbering(func : Function) -> OptResult {
             inst_index,
             idom,
           ) {
-          inst.opcode = Scalar(ScalarOp::Copy)
+          inst.opcode = Scalar(Copy)
           inst.operands.clear()
           inst.operands.push(entry.value)
           result.mark_changed()
           replaced_by_memory = true
         }
       }
-      if inst.opcode is Memory(MemoryOp::Store(store_ty)) &&
+      if inst.opcode is Memory(Store(store_ty)) &&
         ptr_access_from_inst(inst, ptr_base_infos) is Some(store_access) &&
         inst.operands.length() >= 2 {
         let key = memory_key_from_access(
@@ -632,7 +608,7 @@ fn run_global_value_numbering(func : Function) -> OptResult {
         continue
       }
       // Check if this instruction may invalidate memory-based expressions.
-      if may_write_memory(inst.opcode) {
+      if inst.opcode.semantics().memory.may_write_memory() {
         // Invalidate all memory-reading expressions using tracked set.
         for key in memory_keys {
           if value_table.get(key) is Some((v, _)) {
@@ -655,7 +631,7 @@ fn run_global_value_numbering(func : Function) -> OptResult {
           // Already computed - replace with copy. The type check is defensive:
           // Inst identity includes result types, so a mismatch is not expected.
           if existing.ty == result_val.ty {
-            inst.opcode = Scalar(ScalarOp::Copy)
+            inst.opcode = Scalar(Copy)
             inst.operands.clear()
             inst.operands.push(existing)
             result.mark_changed()
@@ -665,7 +641,7 @@ fn run_global_value_numbering(func : Function) -> OptResult {
           let prev = value_table.get(key)
           local_entries.push((key, prev))
           // Add to value table with memory-read flag
-          let is_memory_read = reads_memory(inst.opcode)
+          let is_memory_read = inst.opcode.semantics().memory.reads_memory()
           value_table.set(key, (result_val, is_memory_read))
           if is_memory_read {
             memory_keys.add(key)
@@ -674,7 +650,7 @@ fn run_global_value_numbering(func : Function) -> OptResult {
       }
     }
     // Recurse to dominated children
-    if block_id < domtree.length() {
+    if !budget_exhausted.val && block_id < domtree.length() {
       for child in domtree[block_id] {
         dfs(child)
       }
@@ -701,12 +677,12 @@ fn run_global_value_numbering(func : Function) -> OptResult {
   if cfg.is_valid(0) {
     dfs(0)
   }
-  result
+  { result, work_done: work_done.val, budget_exhausted: budget_exhausted.val }
 }
 
 ///|
 /// Unified global optimization pass that combines pure CSE and alias-aware GVN
 /// in a single dominator-tree walk.
-fn cse_gvn_global(func : Function) -> OptResult {
-  run_global_value_numbering(func)
+fn cse_gvn_global(func : Function) -> GVNStats {
+  run_global_value_numbering_with_budget(func, instruction_count(func))
 }

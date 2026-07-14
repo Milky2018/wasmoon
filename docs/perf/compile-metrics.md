@@ -7,7 +7,7 @@ performance work, and how to capture reproducible baselines.
 
 - Track compile-time behavior at module, function, and pass granularity.
 - Provide a stable JSON schema that CI and local scripts can consume.
-- Keep runtime overhead zero unless metrics are explicitly enabled.
+- Keep runtime overhead negligible unless metrics are explicitly enabled.
 
 ## Enabling Metrics
 
@@ -15,6 +15,9 @@ Metrics are opt-in via environment variables:
 
 - `WASMOON_PERF_METRICS=1`
   - Enables metrics collection in the JIT compile pipeline.
+  - Bypasses the run JIT cache so every report describes an actual compilation.
+- `WASMOON_PERF_METRICS_DETAIL=1`
+  - Adds per-pass optimization and register-allocation details.
 - `WASMOON_PERF_METRICS_FILE=<path>`
   - Optional output file path.
   - Default: `target/wasmoon-perf-metrics.json`.
@@ -57,6 +60,8 @@ Collection starts in `cmd/wasmoon/run.mbt` during `compile_module_to_jit(...)`.
 - `before_insts`, `after_insts`, `changed`
 - Optional e-graph stats:
   - `egraph_classes`, `egraph_nodes`, `egraph_rule_apps`
+- Optional bounded-work stats:
+  - `work_done`, `budget_exhausted`
 
 ## Baseline Capture Script
 

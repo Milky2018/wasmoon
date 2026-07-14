@@ -6,6 +6,10 @@ import {
 }
 
 // Values
+pub fn clear_optimization_metrics_sink() -> Unit
+
+pub fn install_optimization_metrics_sink(OptimizationMetricsSink) -> Unit
+
 pub fn instruction_count(Function) -> Int
 
 pub fn optimize(Function) -> OptResult
@@ -17,6 +21,9 @@ pub suberror VerifyError {
   MissingTerminator(block_id~ : Int)
   EmptyFunction
   UndefinedValue(value_id~ : Int)
+  ForeignValue(value_id~ : Int)
+  ForeignBlock(block_id~ : Int)
+  ForeignInstruction(inst_id~ : Int)
   DuplicateBlockId(block_id~ : Int)
   DuplicateValueDefinition(value_id~ : Int)
   DuplicateInstructionId(inst_id~ : Int)
@@ -36,9 +43,11 @@ pub struct Block {
   params : Array[(Value, Type)]
   instructions : Array[Inst]
   mut terminator : Terminator?
-} derive(@debug.Debug)
+  // private fields
+}
 pub fn Block::append_inst(Self, Inst) -> Unit
 pub fn Block::set_terminator(Self, Terminator) -> Unit
+pub impl @debug.Debug for Block
 
 pub struct CFG {
   size : Int
@@ -145,7 +154,8 @@ pub struct Function {
   mut next_value_id : Int
   mut next_inst_id : Int
   mut next_block_id : Int
-} derive(@debug.Debug)
+  // private fields
+}
 pub fn Function::add_param(Self, Type) -> Value
 pub fn Function::add_result(Self, Type) -> Unit
 pub fn Function::declare_external_symbol(Self, String) -> ExternalSymbol
@@ -160,6 +170,7 @@ pub fn Function::signature(Self) -> Signature
 pub fn Function::verify(Self) -> Unit raise VerifyError
 pub fn Function::verify_core(Self) -> Unit raise VerifyError
 pub fn Function::with_signature(String, Signature) -> Self
+pub impl @debug.Debug for Function
 
 type FunctionBuilder
 pub fn FunctionBuilder::FunctionBuilder(String) -> Self
@@ -195,7 +206,6 @@ pub fn FunctionBuilder::fabs(Self, Value) -> Value
 pub fn FunctionBuilder::fadd(Self, Value, Value) -> Value
 pub fn FunctionBuilder::fceil(Self, Value) -> Value
 pub fn FunctionBuilder::fcmp(Self, FloatCC, Value, Value) -> Value
-pub fn FunctionBuilder::fconst(Self, Type, Double) -> Value
 pub fn FunctionBuilder::fconst_f32(Self, Float) -> Value
 pub fn FunctionBuilder::fconst_f64(Self, Double) -> Value
 pub fn FunctionBuilder::fcvt_to_sint(Self, Type, Value) -> Value
@@ -267,7 +277,6 @@ pub fn FunctionBuilder::ushr(Self, Value, Value) -> Value
 pub fn FunctionBuilder::v128_and(Self, Value, Value) -> Value
 pub fn FunctionBuilder::v128_andnot(Self, Value, Value) -> Value
 pub fn FunctionBuilder::v128_anytrue(Self, Value) -> Value
-pub fn FunctionBuilder::v128_binary(Self, VectorOp, Value, Value) -> Value
 pub fn FunctionBuilder::v128_bitselect(Self, Value, Value, Value) -> Value
 pub fn FunctionBuilder::v128_const(Self, Bytes) -> Value
 pub fn FunctionBuilder::v128_extract16s(Self, Value, Int) -> Value
@@ -278,8 +287,8 @@ pub fn FunctionBuilder::v128_extract8s(Self, Value, Int) -> Value
 pub fn FunctionBuilder::v128_extract8u(Self, Value, Int) -> Value
 pub fn FunctionBuilder::v128_extract_f32(Self, Value, Int) -> Value
 pub fn FunctionBuilder::v128_extract_f64(Self, Value, Int) -> Value
-pub fn FunctionBuilder::v128_load_lane_with_addr(Self, VectorOp, Value, Value) -> Value
-pub fn FunctionBuilder::v128_load_with_addr(Self, VectorOp, Value) -> Value
+pub fn FunctionBuilder::v128_load_lane_with_addr(Self, VectorMemoryOp, Value, Value) -> Value
+pub fn FunctionBuilder::v128_load_with_addr(Self, VectorMemoryOp, Value) -> Value
 pub fn FunctionBuilder::v128_not(Self, Value) -> Value
 pub fn FunctionBuilder::v128_or(Self, Value, Value) -> Value
 pub fn FunctionBuilder::v128_replace16(Self, Value, Value, Int) -> Value
@@ -288,7 +297,6 @@ pub fn FunctionBuilder::v128_replace64(Self, Value, Value, Int) -> Value
 pub fn FunctionBuilder::v128_replace8(Self, Value, Value, Int) -> Value
 pub fn FunctionBuilder::v128_replace_f32(Self, Value, Value, Int) -> Value
 pub fn FunctionBuilder::v128_replace_f64(Self, Value, Value, Int) -> Value
-pub fn FunctionBuilder::v128_shift(Self, VectorOp, Value, Value) -> Value
 pub fn FunctionBuilder::v128_shuffle(Self, Value, Value, FixedArray[Int]) -> Value
 pub fn FunctionBuilder::v128_splat16(Self, Value) -> Value
 pub fn FunctionBuilder::v128_splat32(Self, Value) -> Value
@@ -296,10 +304,8 @@ pub fn FunctionBuilder::v128_splat64(Self, Value) -> Value
 pub fn FunctionBuilder::v128_splat8(Self, Value) -> Value
 pub fn FunctionBuilder::v128_splat_f32(Self, Value) -> Value
 pub fn FunctionBuilder::v128_splat_f64(Self, Value) -> Value
-pub fn FunctionBuilder::v128_store_lane_with_addr(Self, VectorOp, Value, Value) -> Unit
+pub fn FunctionBuilder::v128_store_lane_with_addr(Self, VectorMemoryOp, Value, Value) -> Unit
 pub fn FunctionBuilder::v128_swizzle(Self, Value, Value) -> Value
-pub fn FunctionBuilder::v128_to_i32(Self, VectorOp, Value) -> Value
-pub fn FunctionBuilder::v128_unary(Self, VectorOp, Value) -> Value
 pub fn FunctionBuilder::v128_xor(Self, Value, Value) -> Value
 
 pub struct Inst {
@@ -309,12 +315,14 @@ pub struct Inst {
   args : Array[Value]
   operands : Array[Value]
   metadata : Array[Metadata]
-} derive(@debug.Debug)
+  // private fields
+}
 pub fn Inst::add_metadata(Self, Metadata) -> Unit
 pub fn Inst::all_results(Self) -> Array[Value]
 pub fn Inst::first_result(Self) -> Value?
 pub impl Eq for Inst
 pub impl Hash for Inst
+pub impl @debug.Debug for Inst
 
 pub(all) enum IntBinaryOp {
   Add
@@ -368,6 +376,7 @@ pub(all) enum MemoryOp {
   Store(Type)
   LoadNarrow(Type, Int, Bool)
   StoreNarrow(Int)
+  Vector(VectorMemoryOp)
 } derive(Eq, Hash, @debug.Debug)
 
 pub(all) enum Metadata {
@@ -396,9 +405,26 @@ pub struct OptResult {
   mut changed : Bool
 } derive(Eq)
 
+type OptimizationMetricsSink
+pub fn OptimizationMetricsSink::new(() -> Int64, (OptimizationPassMetric) -> Unit) -> Self
+
+pub struct OptimizationPassMetric {
+  name : String
+  duration_us : Int64
+  before_insts : Int
+  after_insts : Int
+  changed : Bool
+  egraph_classes : Int?
+  egraph_nodes : Int?
+  egraph_rule_apps : Int?
+  work_done : Int?
+  budget_exhausted : Bool?
+}
+
 pub(all) enum ScalarOp {
   IntConst(Int64)
-  FloatConst(Double)
+  FloatConst32(UInt)
+  FloatConst64(UInt64)
   IntBinary(IntBinaryOp)
   IntUnary(IntUnaryOp)
   IntCompare(IntCC)
@@ -444,13 +470,122 @@ pub impl Show for Type
 pub struct Value {
   id : Int
   ty : Type
+  // private fields
+}
+pub impl Eq for Value
+pub impl Hash for Value
+pub impl @debug.Debug for Value
+
+pub(all) enum VectorBitwiseOp {
+  Not
+  And
+  AndNot
+  Or
+  Xor
+  Bitselect
 } derive(Eq, Hash, @debug.Debug)
-pub fn Value::Value(Int, Type) -> Self
+
+pub(all) enum VectorConversionOp {
+  TruncSatF32ToI32(VectorSignedness)
+  TruncSatF64ToI32Zero(VectorSignedness)
+  ConvertI32ToF32(VectorSignedness)
+  ConvertLowI32ToF64(VectorSignedness)
+  DemoteF64ToF32Zero
+  PromoteLowF32ToF64
+} derive(Eq, Hash, @debug.Debug)
 
 pub(all) enum VectorExtension {
   None
   Signed
   Unsigned
+} derive(Eq, Hash, @debug.Debug)
+
+pub(all) enum VectorFloatBinaryOp {
+  Add
+  Sub
+  Mul
+  Div
+  Min
+  Max
+  PseudoMin
+  PseudoMax
+} derive(Eq, Hash, @debug.Debug)
+
+pub(all) enum VectorFloatCompareOp {
+  Eq
+  Ne
+  Lt
+  Gt
+  Le
+  Ge
+} derive(Eq, Hash, @debug.Debug)
+
+pub(all) enum VectorFloatLane {
+  F32
+  F64
+} derive(Eq, Hash, @debug.Debug)
+
+pub(all) enum VectorFloatUnaryOp {
+  Abs
+  Neg
+  Sqrt
+  Ceil
+  Floor
+  Trunc
+  Nearest
+} derive(Eq, Hash, @debug.Debug)
+
+pub(all) enum VectorFmaOp {
+  Add
+  NegatedAdd
+} derive(Eq, Hash, @debug.Debug)
+
+pub(all) enum VectorHalf {
+  Low
+  High
+} derive(Eq, Hash, @debug.Debug)
+
+pub(all) enum VectorIntBinaryOp {
+  Add
+  Sub
+  Mul
+  AddSaturating(VectorSignedness)
+  SubSaturating(VectorSignedness)
+  Min(VectorSignedness)
+  Max(VectorSignedness)
+  AverageUnsigned
+  ExtMul(VectorHalf, VectorSignedness)
+  Dot16To32Signed
+  Q15MulrSaturating
+} derive(Eq, Hash, @debug.Debug)
+
+pub(all) enum VectorIntCompareOp {
+  Eq
+  Ne
+  Lt(VectorSignedness)
+  Gt(VectorSignedness)
+  Le(VectorSignedness)
+  Ge(VectorSignedness)
+} derive(Eq, Hash, @debug.Debug)
+
+pub(all) enum VectorIntLane {
+  I8
+  I16
+  I32
+  I64
+} derive(Eq, Hash, @debug.Debug)
+
+pub(all) enum VectorIntShiftOp {
+  Left
+  Right(VectorSignedness)
+} derive(Eq, Hash, @debug.Debug)
+
+pub(all) enum VectorIntUnaryOp {
+  Abs
+  Neg
+  Popcnt
+  Extend(VectorHalf, VectorSignedness)
+  ExtAddPairwise(VectorSignedness)
 } derive(Eq, Hash, @debug.Debug)
 
 pub(all) enum VectorLane {
@@ -462,229 +597,57 @@ pub(all) enum VectorLane {
   F64
 } derive(Eq, Hash, @debug.Debug)
 
+pub(all) enum VectorMemoryOp {
+  LoadExtend(VectorIntLane, VectorSignedness)
+  LoadSplat(VectorIntLane)
+  LoadZero(VectorIntLane)
+  LoadLane(VectorIntLane, Int)
+  StoreLane(VectorIntLane, Int)
+} derive(Eq, Hash, @debug.Debug)
+
 pub(all) enum VectorOp {
-  V128Const(Bytes)
+  Const(Bytes)
   Splat(VectorLane)
   ExtractLane(VectorLane, VectorExtension, Int)
   ReplaceLane(VectorLane, Int)
-  V128Shuffle(FixedArray[Int])
-  V128Swizzle
-  V128Not
-  V128And
-  V128AndNot
-  V128Or
-  V128Xor
-  V128Bitselect
-  V128AnyTrue
-  V128AllTrue8
-  V128AllTrue16
-  V128AllTrue32
-  V128AllTrue64
-  V128Bitmask8
-  V128Bitmask16
-  V128Bitmask32
-  V128Bitmask64
-  V128Add8
-  V128Add16
-  V128Add32
-  V128Add64
-  V128Sub8
-  V128Sub16
-  V128Sub32
-  V128Sub64
-  V128Mul16
-  V128Mul32
-  V128Mul64
-  V128AddSat8S
-  V128AddSat8U
-  V128AddSat16S
-  V128AddSat16U
-  V128SubSat8S
-  V128SubSat8U
-  V128SubSat16S
-  V128SubSat16U
-  V128Min8S
-  V128Min8U
-  V128Min16S
-  V128Min16U
-  V128Min32S
-  V128Min32U
-  V128Max8S
-  V128Max8U
-  V128Max16S
-  V128Max16U
-  V128Max32S
-  V128Max32U
-  V128Avgr8U
-  V128Avgr16U
-  V128Abs8
-  V128Abs16
-  V128Abs32
-  V128Abs64
-  V128Neg8
-  V128Neg16
-  V128Neg32
-  V128Neg64
-  V128Popcnt8
-  V128Shl8
-  V128Shl16
-  V128Shl32
-  V128Shl64
-  V128Shr8S
-  V128Shr8U
-  V128Shr16S
-  V128Shr16U
-  V128Shr32S
-  V128Shr32U
-  V128Shr64S
-  V128Shr64U
-  V128Eq8
-  V128Eq16
-  V128Eq32
-  V128Eq64
-  V128Ne8
-  V128Ne16
-  V128Ne32
-  V128Ne64
-  V128Lt8S
-  V128Lt8U
-  V128Lt16S
-  V128Lt16U
-  V128Lt32S
-  V128Lt32U
-  V128Lt64S
-  V128Gt8S
-  V128Gt8U
-  V128Gt16S
-  V128Gt16U
-  V128Gt32S
-  V128Gt32U
-  V128Gt64S
-  V128Le8S
-  V128Le8U
-  V128Le16S
-  V128Le16U
-  V128Le32S
-  V128Le32U
-  V128Le64S
-  V128Ge8S
-  V128Ge8U
-  V128Ge16S
-  V128Ge16U
-  V128Ge32S
-  V128Ge32U
-  V128Ge64S
-  V128Narrow16to8S
-  V128Narrow16to8U
-  V128Narrow32to16S
-  V128Narrow32to16U
-  V128ExtendLow8to16S
-  V128ExtendHigh8to16S
-  V128ExtendLow8to16U
-  V128ExtendHigh8to16U
-  V128ExtendLow16to32S
-  V128ExtendHigh16to32S
-  V128ExtendLow16to32U
-  V128ExtendHigh16to32U
-  V128ExtendLow32to64S
-  V128ExtendHigh32to64S
-  V128ExtendLow32to64U
-  V128ExtendHigh32to64U
-  V128ExtMulLow8to16S
-  V128ExtMulHigh8to16S
-  V128ExtMulLow8to16U
-  V128ExtMulHigh8to16U
-  V128ExtMulLow16to32S
-  V128ExtMulHigh16to32S
-  V128ExtMulLow16to32U
-  V128ExtMulHigh16to32U
-  V128ExtMulLow32to64S
-  V128ExtMulHigh32to64S
-  V128ExtMulLow32to64U
-  V128ExtMulHigh32to64U
-  V128ExtAddPairwise8to16S
-  V128ExtAddPairwise8to16U
-  V128ExtAddPairwise16to32S
-  V128ExtAddPairwise16to32U
-  V128Dot16to32S
-  V128Q15MulrSat16S
-  V128AddF32
-  V128AddF64
-  V128SubF32
-  V128SubF64
-  V128MulF32
-  V128MulF64
-  V128DivF32
-  V128DivF64
-  V128MinF32
-  V128MinF64
-  V128MaxF32
-  V128MaxF64
-  V128PMinF32
-  V128PMinF64
-  V128PMaxF32
-  V128PMaxF64
-  V128AbsF32
-  V128AbsF64
-  V128NegF32
-  V128NegF64
-  V128SqrtF32
-  V128SqrtF64
-  V128CeilF32
-  V128CeilF64
-  V128FloorF32
-  V128FloorF64
-  V128TruncF32
-  V128TruncF64
-  V128NearestF32
-  V128NearestF64
-  V128EqF32
-  V128EqF64
-  V128NeF32
-  V128NeF64
-  V128LtF32
-  V128LtF64
-  V128GtF32
-  V128GtF64
-  V128LeF32
-  V128LeF64
-  V128GeF32
-  V128GeF64
-  V128TruncSatF32toI32S
-  V128TruncSatF32toI32U
-  V128TruncSatF64toI32SZero
-  V128TruncSatF64toI32UZero
-  V128ConvertI32toF32S
-  V128ConvertI32toF32U
-  V128ConvertLowI32toF64S
-  V128ConvertLowI32toF64U
-  V128DemoteF64toF32Zero
-  V128PromoteLowF32toF64
-  LoadExtend(VectorLane, VectorExtension)
-  LoadSplat(VectorLane)
-  LoadZero(VectorLane)
-  LoadLane(VectorLane, Int)
-  StoreLane(VectorLane, Int)
-  V128RelaxedSwizzle
-  V128RelaxedTruncF32toI32S
-  V128RelaxedTruncF32toI32U
-  V128RelaxedTruncF64toI32SZero
-  V128RelaxedTruncF64toI32UZero
-  V128RelaxedMaddF32
-  V128RelaxedNmaddF32
-  V128RelaxedMaddF64
-  V128RelaxedNmaddF64
-  V128RelaxedLaneselect8
-  V128RelaxedLaneselect16
-  V128RelaxedLaneselect32
-  V128RelaxedLaneselect64
-  V128RelaxedMinF32
-  V128RelaxedMaxF32
-  V128RelaxedMinF64
-  V128RelaxedMaxF64
-  V128RelaxedQ15MulrS
-  V128RelaxedDot8to16S
-  V128RelaxedDot8to32AddS
+  Shuffle(FixedArray[Int])
+  Swizzle
+  Bitwise(VectorBitwiseOp)
+  Predicate(VectorPredicateOp)
+  IntUnary(VectorIntUnaryOp, VectorIntLane)
+  IntBinary(VectorIntBinaryOp, VectorIntLane)
+  IntShift(VectorIntShiftOp, VectorIntLane)
+  IntCompare(VectorIntCompareOp, VectorIntLane)
+  Narrow(VectorIntLane, VectorSignedness)
+  FloatUnary(VectorFloatUnaryOp, VectorFloatLane)
+  FloatBinary(VectorFloatBinaryOp, VectorFloatLane)
+  FloatCompare(VectorFloatCompareOp, VectorFloatLane)
+  Convert(VectorConversionOp)
+  Relaxed(VectorRelaxedOp)
+} derive(Eq, Hash, @debug.Debug)
+
+pub(all) enum VectorPredicateOp {
+  AnyTrue
+  AllTrue(VectorIntLane)
+  Bitmask(VectorIntLane)
+} derive(Eq, Hash, @debug.Debug)
+
+pub(all) enum VectorRelaxedOp {
+  Swizzle
+  TruncF32ToI32(VectorSignedness)
+  TruncF64ToI32Zero(VectorSignedness)
+  Fma(VectorFloatLane, VectorFmaOp)
+  LaneSelect(VectorIntLane)
+  Min(VectorFloatLane)
+  Max(VectorFloatLane)
+  Q15MulrSigned
+  Dot8To16Signed
+  Dot8To32AddSigned
+} derive(Eq, Hash, @debug.Debug)
+
+pub(all) enum VectorSignedness {
+  Signed
+  Unsigned
 } derive(Eq, Hash, @debug.Debug)
 
 // Type aliases

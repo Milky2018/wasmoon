@@ -54,21 +54,12 @@ fn format_floatcc(cc : FloatCC) -> String {
 }
 
 ///|
-fn format_scalar_opcode(
-  opcode : ScalarOp,
-  operands : Array[Value],
-  result_ty : Type?,
-) -> String {
+fn format_scalar_opcode(opcode : ScalarOp, operands : Array[Value]) -> String {
   let ops = operands.map(format_value).join(", ")
   match opcode {
     IntConst(value) => "iconst \{value}"
-    FloatConst(value) =>
-      if result_ty is Some(F32) {
-        let bits = value.reinterpret_as_int64().to_int()
-        "fconst \{Float::reinterpret_from_int(bits)}"
-      } else {
-        "fconst \{value}"
-      }
+    FloatConst32(bits) => "fconst \{Float::reinterpret_from_uint(bits)}"
+    FloatConst64(bits) => "fconst \{bits.reinterpret_as_double()}"
     IntBinary(op) =>
       match op {
         Add => "iadd \{ops}"
@@ -139,331 +130,335 @@ fn format_scalar_opcode(
 }
 
 ///|
-fn format_vector_opcode(opcode : VectorOp, operands : Array[Value]) -> String {
-  let ops = operands.map(format_value).join(", ")
-  match opcode {
-    V128Const(_) => "v128.const \{ops}"
-    Splat(I8) => "i8x16.splat \{ops}"
-    Splat(I16) => "i16x8.splat \{ops}"
-    Splat(I32) => "i32x4.splat \{ops}"
-    Splat(I64) => "i64x2.splat \{ops}"
-    Splat(F32) => "f32x4.splat \{ops}"
-    Splat(F64) => "f64x2.splat \{ops}"
-    ExtractLane(I8, Signed, lane) => "i8x16.extract_lane_s \{lane} \{ops}"
-    ExtractLane(I8, Unsigned, lane) => "i8x16.extract_lane_u \{lane} \{ops}"
-    ExtractLane(I16, Signed, lane) => "i16x8.extract_lane_s \{lane} \{ops}"
-    ExtractLane(I16, Unsigned, lane) => "i16x8.extract_lane_u \{lane} \{ops}"
-    ExtractLane(I32, None, lane) => "i32x4.extract_lane \{lane} \{ops}"
-    ExtractLane(I64, None, lane) => "i64x2.extract_lane \{lane} \{ops}"
-    ExtractLane(F32, None, lane) => "f32x4.extract_lane \{lane} \{ops}"
-    ExtractLane(F64, None, lane) => "f64x2.extract_lane \{lane} \{ops}"
-    ExtractLane(_, _, _) => abort("invalid vector extract-lane semantics")
-    ReplaceLane(I8, lane) => "i8x16.replace_lane \{lane} \{ops}"
-    ReplaceLane(I16, lane) => "i16x8.replace_lane \{lane} \{ops}"
-    ReplaceLane(I32, lane) => "i32x4.replace_lane \{lane} \{ops}"
-    ReplaceLane(I64, lane) => "i64x2.replace_lane \{lane} \{ops}"
-    ReplaceLane(F32, lane) => "f32x4.replace_lane \{lane} \{ops}"
-    ReplaceLane(F64, lane) => "f64x2.replace_lane \{lane} \{ops}"
-    V128Shuffle(_) => "i8x16.shuffle \{ops}"
-    V128Swizzle => "i8x16.swizzle \{ops}"
-    V128Not => "v128.not \{ops}"
-    V128And => "v128.and \{ops}"
-    V128AndNot => "v128.andnot \{ops}"
-    V128Or => "v128.or \{ops}"
-    V128Xor => "v128.xor \{ops}"
-    V128Bitselect => "v128.bitselect \{ops}"
-    V128AnyTrue => "v128.any_true \{ops}"
-    V128AllTrue8 => "i8x16.all_true \{ops}"
-    V128AllTrue16 => "i16x8.all_true \{ops}"
-    V128AllTrue32 => "i32x4.all_true \{ops}"
-    V128AllTrue64 => "i64x2.all_true \{ops}"
-    V128Bitmask8 => "i8x16.bitmask \{ops}"
-    V128Bitmask16 => "i16x8.bitmask \{ops}"
-    V128Bitmask32 => "i32x4.bitmask \{ops}"
-    V128Bitmask64 => "i64x2.bitmask \{ops}"
-    V128Add8 => "i8x16.add \{ops}"
-    V128Add16 => "i16x8.add \{ops}"
-    V128Add32 => "i32x4.add \{ops}"
-    V128Add64 => "i64x2.add \{ops}"
-    V128Sub8 => "i8x16.sub \{ops}"
-    V128Sub16 => "i16x8.sub \{ops}"
-    V128Sub32 => "i32x4.sub \{ops}"
-    V128Sub64 => "i64x2.sub \{ops}"
-    V128Mul16 => "i16x8.mul \{ops}"
-    V128Mul32 => "i32x4.mul \{ops}"
-    V128Mul64 => "i64x2.mul \{ops}"
-    V128AddSat8S => "i8x16.add_sat_s \{ops}"
-    V128AddSat8U => "i8x16.add_sat_u \{ops}"
-    V128AddSat16S => "i16x8.add_sat_s \{ops}"
-    V128AddSat16U => "i16x8.add_sat_u \{ops}"
-    V128SubSat8S => "i8x16.sub_sat_s \{ops}"
-    V128SubSat8U => "i8x16.sub_sat_u \{ops}"
-    V128SubSat16S => "i16x8.sub_sat_s \{ops}"
-    V128SubSat16U => "i16x8.sub_sat_u \{ops}"
-    V128Min8S => "i8x16.min_s \{ops}"
-    V128Min8U => "i8x16.min_u \{ops}"
-    V128Min16S => "i16x8.min_s \{ops}"
-    V128Min16U => "i16x8.min_u \{ops}"
-    V128Min32S => "i32x4.min_s \{ops}"
-    V128Min32U => "i32x4.min_u \{ops}"
-    V128Max8S => "i8x16.max_s \{ops}"
-    V128Max8U => "i8x16.max_u \{ops}"
-    V128Max16S => "i16x8.max_s \{ops}"
-    V128Max16U => "i16x8.max_u \{ops}"
-    V128Max32S => "i32x4.max_s \{ops}"
-    V128Max32U => "i32x4.max_u \{ops}"
-    V128Avgr8U => "i8x16.avgr_u \{ops}"
-    V128Avgr16U => "i16x8.avgr_u \{ops}"
-    V128Abs8 => "i8x16.abs \{ops}"
-    V128Abs16 => "i16x8.abs \{ops}"
-    V128Abs32 => "i32x4.abs \{ops}"
-    V128Abs64 => "i64x2.abs \{ops}"
-    V128Neg8 => "i8x16.neg \{ops}"
-    V128Neg16 => "i16x8.neg \{ops}"
-    V128Neg32 => "i32x4.neg \{ops}"
-    V128Neg64 => "i64x2.neg \{ops}"
-    V128Popcnt8 => "i8x16.popcnt \{ops}"
-    V128Shl8 => "i8x16.shl \{ops}"
-    V128Shl16 => "i16x8.shl \{ops}"
-    V128Shl32 => "i32x4.shl \{ops}"
-    V128Shl64 => "i64x2.shl \{ops}"
-    V128Shr8S => "i8x16.shr_s \{ops}"
-    V128Shr8U => "i8x16.shr_u \{ops}"
-    V128Shr16S => "i16x8.shr_s \{ops}"
-    V128Shr16U => "i16x8.shr_u \{ops}"
-    V128Shr32S => "i32x4.shr_s \{ops}"
-    V128Shr32U => "i32x4.shr_u \{ops}"
-    V128Shr64S => "i64x2.shr_s \{ops}"
-    V128Shr64U => "i64x2.shr_u \{ops}"
-    V128Eq8 => "i8x16.eq \{ops}"
-    V128Eq16 => "i16x8.eq \{ops}"
-    V128Eq32 => "i32x4.eq \{ops}"
-    V128Eq64 => "i64x2.eq \{ops}"
-    V128Ne8 => "i8x16.ne \{ops}"
-    V128Ne16 => "i16x8.ne \{ops}"
-    V128Ne32 => "i32x4.ne \{ops}"
-    V128Ne64 => "i64x2.ne \{ops}"
-    V128Lt8S => "i8x16.lt_s \{ops}"
-    V128Lt8U => "i8x16.lt_u \{ops}"
-    V128Lt16S => "i16x8.lt_s \{ops}"
-    V128Lt16U => "i16x8.lt_u \{ops}"
-    V128Lt32S => "i32x4.lt_s \{ops}"
-    V128Lt32U => "i32x4.lt_u \{ops}"
-    V128Lt64S => "i64x2.lt_s \{ops}"
-    V128Gt8S => "i8x16.gt_s \{ops}"
-    V128Gt8U => "i8x16.gt_u \{ops}"
-    V128Gt16S => "i16x8.gt_s \{ops}"
-    V128Gt16U => "i16x8.gt_u \{ops}"
-    V128Gt32S => "i32x4.gt_s \{ops}"
-    V128Gt32U => "i32x4.gt_u \{ops}"
-    V128Gt64S => "i64x2.gt_s \{ops}"
-    V128Le8S => "i8x16.le_s \{ops}"
-    V128Le8U => "i8x16.le_u \{ops}"
-    V128Le16S => "i16x8.le_s \{ops}"
-    V128Le16U => "i16x8.le_u \{ops}"
-    V128Le32S => "i32x4.le_s \{ops}"
-    V128Le32U => "i32x4.le_u \{ops}"
-    V128Le64S => "i64x2.le_s \{ops}"
-    V128Ge8S => "i8x16.ge_s \{ops}"
-    V128Ge8U => "i8x16.ge_u \{ops}"
-    V128Ge16S => "i16x8.ge_s \{ops}"
-    V128Ge16U => "i16x8.ge_u \{ops}"
-    V128Ge32S => "i32x4.ge_s \{ops}"
-    V128Ge32U => "i32x4.ge_u \{ops}"
-    V128Ge64S => "i64x2.ge_s \{ops}"
-    V128Narrow16to8S => "i8x16.narrow_i16x8_s \{ops}"
-    V128Narrow16to8U => "i8x16.narrow_i16x8_u \{ops}"
-    V128Narrow32to16S => "i16x8.narrow_i32x4_s \{ops}"
-    V128Narrow32to16U => "i16x8.narrow_i32x4_u \{ops}"
-    V128ExtendLow8to16S => "i16x8.extend_low_i8x16_s \{ops}"
-    V128ExtendHigh8to16S => "i16x8.extend_high_i8x16_s \{ops}"
-    V128ExtendLow8to16U => "i16x8.extend_low_i8x16_u \{ops}"
-    V128ExtendHigh8to16U => "i16x8.extend_high_i8x16_u \{ops}"
-    V128ExtendLow16to32S => "i32x4.extend_low_i16x8_s \{ops}"
-    V128ExtendHigh16to32S => "i32x4.extend_high_i16x8_s \{ops}"
-    V128ExtendLow16to32U => "i32x4.extend_low_i16x8_u \{ops}"
-    V128ExtendHigh16to32U => "i32x4.extend_high_i16x8_u \{ops}"
-    V128ExtendLow32to64S => "i64x2.extend_low_i32x4_s \{ops}"
-    V128ExtendHigh32to64S => "i64x2.extend_high_i32x4_s \{ops}"
-    V128ExtendLow32to64U => "i64x2.extend_low_i32x4_u \{ops}"
-    V128ExtendHigh32to64U => "i64x2.extend_high_i32x4_u \{ops}"
-    V128ExtMulLow8to16S => "i16x8.extmul_low_i8x16_s \{ops}"
-    V128ExtMulHigh8to16S => "i16x8.extmul_high_i8x16_s \{ops}"
-    V128ExtMulLow8to16U => "i16x8.extmul_low_i8x16_u \{ops}"
-    V128ExtMulHigh8to16U => "i16x8.extmul_high_i8x16_u \{ops}"
-    V128ExtMulLow16to32S => "i32x4.extmul_low_i16x8_s \{ops}"
-    V128ExtMulHigh16to32S => "i32x4.extmul_high_i16x8_s \{ops}"
-    V128ExtMulLow16to32U => "i32x4.extmul_low_i16x8_u \{ops}"
-    V128ExtMulHigh16to32U => "i32x4.extmul_high_i16x8_u \{ops}"
-    V128ExtMulLow32to64S => "i64x2.extmul_low_i32x4_s \{ops}"
-    V128ExtMulHigh32to64S => "i64x2.extmul_high_i32x4_s \{ops}"
-    V128ExtMulLow32to64U => "i64x2.extmul_low_i32x4_u \{ops}"
-    V128ExtMulHigh32to64U => "i64x2.extmul_high_i32x4_u \{ops}"
-    V128ExtAddPairwise8to16S => "i16x8.extadd_pairwise_i8x16_s \{ops}"
-    V128ExtAddPairwise8to16U => "i16x8.extadd_pairwise_i8x16_u \{ops}"
-    V128ExtAddPairwise16to32S => "i32x4.extadd_pairwise_i16x8_s \{ops}"
-    V128ExtAddPairwise16to32U => "i32x4.extadd_pairwise_i16x8_u \{ops}"
-    V128Dot16to32S => "i32x4.dot_i16x8_s \{ops}"
-    V128Q15MulrSat16S => "i16x8.q15mulr_sat_s \{ops}"
-    V128AddF32 => "f32x4.add \{ops}"
-    V128AddF64 => "f64x2.add \{ops}"
-    V128SubF32 => "f32x4.sub \{ops}"
-    V128SubF64 => "f64x2.sub \{ops}"
-    V128MulF32 => "f32x4.mul \{ops}"
-    V128MulF64 => "f64x2.mul \{ops}"
-    V128DivF32 => "f32x4.div \{ops}"
-    V128DivF64 => "f64x2.div \{ops}"
-    V128MinF32 => "f32x4.min \{ops}"
-    V128MinF64 => "f64x2.min \{ops}"
-    V128MaxF32 => "f32x4.max \{ops}"
-    V128MaxF64 => "f64x2.max \{ops}"
-    V128PMinF32 => "f32x4.pmin \{ops}"
-    V128PMinF64 => "f64x2.pmin \{ops}"
-    V128PMaxF32 => "f32x4.pmax \{ops}"
-    V128PMaxF64 => "f64x2.pmax \{ops}"
-    V128AbsF32 => "f32x4.abs \{ops}"
-    V128AbsF64 => "f64x2.abs \{ops}"
-    V128NegF32 => "f32x4.neg \{ops}"
-    V128NegF64 => "f64x2.neg \{ops}"
-    V128SqrtF32 => "f32x4.sqrt \{ops}"
-    V128SqrtF64 => "f64x2.sqrt \{ops}"
-    V128CeilF32 => "f32x4.ceil \{ops}"
-    V128CeilF64 => "f64x2.ceil \{ops}"
-    V128FloorF32 => "f32x4.floor \{ops}"
-    V128FloorF64 => "f64x2.floor \{ops}"
-    V128TruncF32 => "f32x4.trunc \{ops}"
-    V128TruncF64 => "f64x2.trunc \{ops}"
-    V128NearestF32 => "f32x4.nearest \{ops}"
-    V128NearestF64 => "f64x2.nearest \{ops}"
-    V128EqF32 => "f32x4.eq \{ops}"
-    V128EqF64 => "f64x2.eq \{ops}"
-    V128NeF32 => "f32x4.ne \{ops}"
-    V128NeF64 => "f64x2.ne \{ops}"
-    V128LtF32 => "f32x4.lt \{ops}"
-    V128LtF64 => "f64x2.lt \{ops}"
-    V128GtF32 => "f32x4.gt \{ops}"
-    V128GtF64 => "f64x2.gt \{ops}"
-    V128LeF32 => "f32x4.le \{ops}"
-    V128LeF64 => "f64x2.le \{ops}"
-    V128GeF32 => "f32x4.ge \{ops}"
-    V128GeF64 => "f64x2.ge \{ops}"
-    V128TruncSatF32toI32S => "i32x4.trunc_sat_f32x4_s \{ops}"
-    V128TruncSatF32toI32U => "i32x4.trunc_sat_f32x4_u \{ops}"
-    V128TruncSatF64toI32SZero => "i32x4.trunc_sat_f64x2_s_zero \{ops}"
-    V128TruncSatF64toI32UZero => "i32x4.trunc_sat_f64x2_u_zero \{ops}"
-    V128ConvertI32toF32S => "f32x4.convert_i32x4_s \{ops}"
-    V128ConvertI32toF32U => "f32x4.convert_i32x4_u \{ops}"
-    V128ConvertLowI32toF64S => "f64x2.convert_low_i32x4_s \{ops}"
-    V128ConvertLowI32toF64U => "f64x2.convert_low_i32x4_u \{ops}"
-    V128DemoteF64toF32Zero => "f32x4.demote_f64x2_zero \{ops}"
-    V128PromoteLowF32toF64 => "f64x2.promote_low_f32x4 \{ops}"
-    // Relaxed SIMD instructions
-    V128RelaxedSwizzle => "v128.relaxed_swizzle \{ops}"
-    V128RelaxedTruncF32toI32S => "v128.relaxed_trunc_f32_to_i32_s \{ops}"
-    V128RelaxedTruncF32toI32U => "v128.relaxed_trunc_f32_to_i32_u \{ops}"
-    V128RelaxedTruncF64toI32SZero =>
-      "v128.relaxed_trunc_f64_to_i32_s_zero \{ops}"
-    V128RelaxedTruncF64toI32UZero =>
-      "v128.relaxed_trunc_f64_to_i32_u_zero \{ops}"
-    V128RelaxedMaddF32 => "v128.relaxed_madd_f32 \{ops}"
-    V128RelaxedNmaddF32 => "v128.relaxed_nmadd_f32 \{ops}"
-    V128RelaxedMaddF64 => "v128.relaxed_madd_f64 \{ops}"
-    V128RelaxedNmaddF64 => "v128.relaxed_nmadd_f64 \{ops}"
-    V128RelaxedLaneselect8 => "v128.relaxed_laneselect8 \{ops}"
-    V128RelaxedLaneselect16 => "v128.relaxed_laneselect16 \{ops}"
-    V128RelaxedLaneselect32 => "v128.relaxed_laneselect32 \{ops}"
-    V128RelaxedLaneselect64 => "v128.relaxed_laneselect64 \{ops}"
-    V128RelaxedMinF32 => "v128.relaxed_min_f32 \{ops}"
-    V128RelaxedMaxF32 => "v128.relaxed_max_f32 \{ops}"
-    V128RelaxedMinF64 => "v128.relaxed_min_f64 \{ops}"
-    V128RelaxedMaxF64 => "v128.relaxed_max_f64 \{ops}"
-    V128RelaxedQ15MulrS => "v128.relaxed_q15mulr_s \{ops}"
-    V128RelaxedDot8to16S => "v128.relaxed_dot_8_to_16_s \{ops}"
-    V128RelaxedDot8to32AddS => "v128.relaxed_dot_8_to_32_add_s \{ops}"
-    LoadExtend(lane, extension) => {
-      let lane_name = match lane {
-        I8 => "8x8"
-        I16 => "16x4"
-        I32 => "32x2"
-        _ => abort("invalid vector extending-load semantics")
-      }
-      let extension_name = match extension {
-        Signed => "s"
-        Unsigned => "u"
-        None => abort("invalid vector extending-load semantics")
-      }
-      "v128.load\{lane_name}_\{extension_name} \{ops}"
-    }
-    LoadSplat(lane) => {
-      let bits = match lane {
-        I8 => 8
-        I16 => 16
-        I32 => 32
-        I64 => 64
-        _ => abort("invalid vector splat-load semantics")
-      }
-      "v128.load\{bits}_splat \{ops}"
-    }
-    LoadZero(lane) => {
-      let bits = match lane {
-        I32 => 32
-        I64 => 64
-        _ => abort("invalid vector zero-load semantics")
-      }
-      "v128.load\{bits}_zero \{ops}"
-    }
-    LoadLane(lane, index) => {
-      let bits = match lane {
-        I8 => 8
-        I16 => 16
-        I32 => 32
-        I64 => 64
-        _ => abort("invalid vector lane-load semantics")
-      }
-      "v128.load\{bits}_lane lane=\{index} \{ops}"
-    }
-    StoreLane(lane, index) => {
-      let bits = match lane {
-        I8 => 8
-        I16 => 16
-        I32 => 32
-        I64 => 64
-        _ => abort("invalid vector lane-store semantics")
-      }
-      "v128.store\{bits}_lane lane=\{index} \{ops}"
-    }
+fn VectorIntLane::ir_name(self : VectorIntLane) -> String {
+  match self {
+    I8 => "i8x16"
+    I16 => "i16x8"
+    I32 => "i32x4"
+    I64 => "i64x2"
   }
 }
 
 ///|
+fn VectorIntLane::bits(self : VectorIntLane) -> Int {
+  match self {
+    I8 => 8
+    I16 => 16
+    I32 => 32
+    I64 => 64
+  }
+}
 
 ///|
-/// Print an opcode with its operands
-/// result_ty is needed for Fconst to correctly decode F32 bit-packed constants
-fn format_opcode(
-  opcode : Opcode,
+fn VectorIntLane::narrower_name(self : VectorIntLane) -> String {
+  match self {
+    I8 => abort("i8 has no narrower vector lane")
+    I16 => "i8x16"
+    I32 => "i16x8"
+    I64 => "i32x4"
+  }
+}
+
+///|
+fn VectorIntLane::wider_name(self : VectorIntLane) -> String {
+  match self {
+    I8 => "i16x8"
+    I16 => "i32x4"
+    I32 => "i64x2"
+    I64 => abort("i64 has no wider vector lane")
+  }
+}
+
+///|
+fn VectorFloatLane::ir_name(self : VectorFloatLane) -> String {
+  match self {
+    F32 => "f32x4"
+    F64 => "f64x2"
+  }
+}
+
+///|
+fn VectorFloatLane::bits(self : VectorFloatLane) -> Int {
+  match self {
+    F32 => 32
+    F64 => 64
+  }
+}
+
+///|
+fn VectorLane::ir_name(self : VectorLane) -> String {
+  match self {
+    I8 => "i8x16"
+    I16 => "i16x8"
+    I32 => "i32x4"
+    I64 => "i64x2"
+    F32 => "f32x4"
+    F64 => "f64x2"
+  }
+}
+
+///|
+fn VectorSignedness::suffix(self : VectorSignedness) -> String {
+  match self {
+    Signed => "s"
+    Unsigned => "u"
+  }
+}
+
+///|
+fn VectorHalf::suffix(self : VectorHalf) -> String {
+  match self {
+    Low => "low"
+    High => "high"
+  }
+}
+
+///|
+fn format_vector_int_unary(
+  opcode : VectorIntUnaryOp,
+  lane : VectorIntLane,
+) -> String {
+  let prefix = lane.ir_name()
+  match opcode {
+    Abs => "\{prefix}.abs"
+    Neg => "\{prefix}.neg"
+    Popcnt => "\{prefix}.popcnt"
+    Extend(half, signedness) =>
+      "\{prefix}.extend_\{half.suffix()}_\{lane.narrower_name()}_\{signedness.suffix()}"
+    ExtAddPairwise(signedness) =>
+      "\{prefix}.extadd_pairwise_\{lane.narrower_name()}_\{signedness.suffix()}"
+  }
+}
+
+///|
+fn format_vector_int_binary(
+  opcode : VectorIntBinaryOp,
+  lane : VectorIntLane,
+) -> String {
+  let prefix = lane.ir_name()
+  match opcode {
+    Add => "\{prefix}.add"
+    Sub => "\{prefix}.sub"
+    Mul => "\{prefix}.mul"
+    AddSaturating(signedness) => "\{prefix}.add_sat_\{signedness.suffix()}"
+    SubSaturating(signedness) => "\{prefix}.sub_sat_\{signedness.suffix()}"
+    Min(signedness) => "\{prefix}.min_\{signedness.suffix()}"
+    Max(signedness) => "\{prefix}.max_\{signedness.suffix()}"
+    AverageUnsigned => "\{prefix}.avgr_u"
+    ExtMul(half, signedness) =>
+      "\{prefix}.extmul_\{half.suffix()}_\{lane.narrower_name()}_\{signedness.suffix()}"
+    Dot16To32Signed => "i32x4.dot_i16x8_s"
+    Q15MulrSaturating => "i16x8.q15mulr_sat_s"
+  }
+}
+
+///|
+fn format_vector_int_shift(
+  opcode : VectorIntShiftOp,
+  lane : VectorIntLane,
+) -> String {
+  match opcode {
+    Left => "\{lane.ir_name()}.shl"
+    Right(signedness) => "\{lane.ir_name()}.shr_\{signedness.suffix()}"
+  }
+}
+
+///|
+fn format_vector_int_compare(
+  opcode : VectorIntCompareOp,
+  lane : VectorIntLane,
+) -> String {
+  let name = match opcode {
+    Eq => "eq"
+    Ne => "ne"
+    Lt(signedness) => "lt_\{signedness.suffix()}"
+    Gt(signedness) => "gt_\{signedness.suffix()}"
+    Le(signedness) => "le_\{signedness.suffix()}"
+    Ge(signedness) => "ge_\{signedness.suffix()}"
+  }
+  "\{lane.ir_name()}.\{name}"
+}
+
+///|
+fn format_vector_float_unary(
+  opcode : VectorFloatUnaryOp,
+  lane : VectorFloatLane,
+) -> String {
+  let name = match opcode {
+    Abs => "abs"
+    Neg => "neg"
+    Sqrt => "sqrt"
+    Ceil => "ceil"
+    Floor => "floor"
+    Trunc => "trunc"
+    Nearest => "nearest"
+  }
+  "\{lane.ir_name()}.\{name}"
+}
+
+///|
+fn format_vector_float_binary(
+  opcode : VectorFloatBinaryOp,
+  lane : VectorFloatLane,
+) -> String {
+  let name = match opcode {
+    Add => "add"
+    Sub => "sub"
+    Mul => "mul"
+    Div => "div"
+    Min => "min"
+    Max => "max"
+    PseudoMin => "pmin"
+    PseudoMax => "pmax"
+  }
+  "\{lane.ir_name()}.\{name}"
+}
+
+///|
+fn format_vector_float_compare(
+  opcode : VectorFloatCompareOp,
+  lane : VectorFloatLane,
+) -> String {
+  let name = match opcode {
+    Eq => "eq"
+    Ne => "ne"
+    Lt => "lt"
+    Gt => "gt"
+    Le => "le"
+    Ge => "ge"
+  }
+  "\{lane.ir_name()}.\{name}"
+}
+
+///|
+fn format_vector_conversion(opcode : VectorConversionOp) -> String {
+  match opcode {
+    TruncSatF32ToI32(signedness) =>
+      "i32x4.trunc_sat_f32x4_\{signedness.suffix()}"
+    TruncSatF64ToI32Zero(signedness) =>
+      "i32x4.trunc_sat_f64x2_\{signedness.suffix()}_zero"
+    ConvertI32ToF32(signedness) => "f32x4.convert_i32x4_\{signedness.suffix()}"
+    ConvertLowI32ToF64(signedness) =>
+      "f64x2.convert_low_i32x4_\{signedness.suffix()}"
+    DemoteF64ToF32Zero => "f32x4.demote_f64x2_zero"
+    PromoteLowF32ToF64 => "f64x2.promote_low_f32x4"
+  }
+}
+
+///|
+fn format_vector_relaxed(opcode : VectorRelaxedOp) -> String {
+  match opcode {
+    Swizzle => "v128.relaxed_swizzle"
+    TruncF32ToI32(signedness) =>
+      "v128.relaxed_trunc_f32_to_i32_\{signedness.suffix()}"
+    TruncF64ToI32Zero(signedness) =>
+      "v128.relaxed_trunc_f64_to_i32_\{signedness.suffix()}_zero"
+    Fma(lane, Add) => "v128.relaxed_madd_f\{lane.bits()}"
+    Fma(lane, NegatedAdd) => "v128.relaxed_nmadd_f\{lane.bits()}"
+    LaneSelect(lane) => "v128.relaxed_laneselect\{lane.bits()}"
+    Min(lane) => "v128.relaxed_min_f\{lane.bits()}"
+    Max(lane) => "v128.relaxed_max_f\{lane.bits()}"
+    Q15MulrSigned => "v128.relaxed_q15mulr_s"
+    Dot8To16Signed => "v128.relaxed_dot_8_to_16_s"
+    Dot8To32AddSigned => "v128.relaxed_dot_8_to_32_add_s"
+  }
+}
+
+///|
+fn format_vector_memory_opcode(
+  opcode : VectorMemoryOp,
   operands : Array[Value],
-  result_ty : Type?,
 ) -> String {
   let ops = operands.map(format_value).join(", ")
   match opcode {
-    Scalar(scalar_op) => format_scalar_opcode(scalar_op, operands, result_ty)
+    LoadExtend(lane, signedness) => {
+      let lane_name = match lane {
+        I8 => "8x8"
+        I16 => "16x4"
+        I32 => "32x2"
+        I64 => abort("invalid vector extending-load semantics")
+      }
+      "v128.load\{lane_name}_\{signedness.suffix()} \{ops}"
+    }
+    LoadSplat(lane) => "v128.load\{lane.bits()}_splat \{ops}"
+    LoadZero(lane) => "v128.load\{lane.bits()}_zero \{ops}"
+    LoadLane(lane, index) => "v128.load\{lane.bits()}_lane lane=\{index} \{ops}"
+    StoreLane(lane, index) =>
+      "v128.store\{lane.bits()}_lane lane=\{index} \{ops}"
+  }
+}
+
+///|
+fn format_vector_opcode(opcode : VectorOp, operands : Array[Value]) -> String {
+  let ops = operands.map(format_value).join(", ")
+  let name = match opcode {
+    Const(_) => "v128.const"
+    Splat(lane) => "\{lane.ir_name()}.splat"
+    ExtractLane(lane, extension, index) => {
+      let suffix = match (lane, extension) {
+        (I8 | I16, Signed) => "_s"
+        (I8 | I16, Unsigned) => "_u"
+        (I32 | I64 | F32 | F64, None) => ""
+        _ => abort("invalid vector extract-lane semantics")
+      }
+      "\{lane.ir_name()}.extract_lane\{suffix} \{index}"
+    }
+    ReplaceLane(lane, index) => "\{lane.ir_name()}.replace_lane \{index}"
+    Shuffle(_) => "i8x16.shuffle"
+    Swizzle => "i8x16.swizzle"
+    Bitwise(bitwise) =>
+      match bitwise {
+        Not => "v128.not"
+        And => "v128.and"
+        AndNot => "v128.andnot"
+        Or => "v128.or"
+        Xor => "v128.xor"
+        Bitselect => "v128.bitselect"
+      }
+    Predicate(predicate) =>
+      match predicate {
+        AnyTrue => "v128.any_true"
+        AllTrue(lane) => "\{lane.ir_name()}.all_true"
+        Bitmask(lane) => "\{lane.ir_name()}.bitmask"
+      }
+    IntUnary(op, lane) => format_vector_int_unary(op, lane)
+    IntBinary(op, lane) => format_vector_int_binary(op, lane)
+    IntShift(op, lane) => format_vector_int_shift(op, lane)
+    IntCompare(op, lane) => format_vector_int_compare(op, lane)
+    Narrow(lane, signedness) =>
+      "\{lane.ir_name()}.narrow_\{lane.wider_name()}_\{signedness.suffix()}"
+    FloatUnary(op, lane) => format_vector_float_unary(op, lane)
+    FloatBinary(op, lane) => format_vector_float_binary(op, lane)
+    FloatCompare(op, lane) => format_vector_float_compare(op, lane)
+    Convert(op) => format_vector_conversion(op)
+    Relaxed(op) => format_vector_relaxed(op)
+  }
+  "\{name} \{ops}"
+}
+
+///|
+/// Print an opcode with its operands.
+fn format_opcode(opcode : Opcode, operands : Array[Value]) -> String {
+  let ops = operands.map(format_value).join(", ")
+  match opcode {
+    Scalar(scalar_op) => format_scalar_opcode(scalar_op, operands)
     // Function calls
     Call(call_op) =>
       match call_op {
-        CallOp::Direct(symbol, _) => "call \{symbol.name}(\{ops})"
-        CallOp::Pointer(num_args, num_results) =>
+        Direct(symbol, _) => "call \{symbol.name}(\{ops})"
+        Pointer(num_args, num_results) =>
           "call_ptr(\{num_args}) -> \{num_results} (\{ops})"
       }
     Memory(memory_op) =>
       match memory_op {
-        MemoryOp::Load(ty) => "load.\{ty} \{ops}"
-        MemoryOp::Store(ty) => "store.\{ty} \{ops}"
-        MemoryOp::LoadNarrow(result_ty, bits, signed) => {
+        Load(ty) => "load.\{ty} \{ops}"
+        Store(ty) => "store.\{ty} \{ops}"
+        LoadNarrow(result_ty, bits, signed) => {
           let sign_str = if signed { "s" } else { "u" }
           "load\{bits}_\{sign_str}.\{result_ty} \{ops}"
         }
-        MemoryOp::StoreNarrow(bits) => "store\{bits} \{ops}"
+        StoreNarrow(bits) => "store\{bits} \{ops}"
+        Vector(opcode) => format_vector_memory_opcode(opcode, operands)
       }
     Ext(ext, _) => {
       let imms : Array[String] = []
@@ -484,8 +479,7 @@ fn format_opcode(
 ///|
 /// Print an instruction
 fn format_inst(inst : Inst) -> String {
-  let result_ty = inst.first_result().map(fn(v) { v.ty })
-  let opcode_str = format_opcode(inst.opcode, inst.operands, result_ty)
+  let opcode_str = format_opcode(inst.opcode, inst.operands)
   if inst.results.length() == 0 {
     opcode_str
   } else if inst.results.length() == 1 {

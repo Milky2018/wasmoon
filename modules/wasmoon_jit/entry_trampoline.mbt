@@ -78,9 +78,7 @@ fn build_entry_trampoline_milkir(
     builder
     .get_function()
     .new_inst(
-      Call(
-        @milkir.CallOp::Pointer(wasm_args.length() + 1, result_values.length()),
-      ),
+      Call(Pointer(wasm_args.length() + 1, result_values.length())),
       call_args,
       result_values,
     ),

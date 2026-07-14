@@ -101,6 +101,22 @@ Every instruction belongs to one semantic family. `Opcode` has no source-languag
 
 Frontends must consume source-only metadata before constructing a core instruction. For example, a WebAssembly frontend resolves a SIMD memory index, alignment hint, and immediate offset while computing the effective address; MilkIR receives that address and the vector load/store semantics. A frontend uses `Ext` only when the operation genuinely requires dialect-owned validation and lowering.
 
+### Semantic ownership
+
+MilkIR records the optimizer-visible facts of each built-in opcode in one semantic summary: whether it may trap, whether it reads or writes memory, and whether it has another observable effect. Dead-code elimination, loop optimization, global value numbering, and e-graph admission derive their safety decisions from that summary instead of maintaining independent opcode lists. Unknown extension operations are conservatively treated as trapping and effectful.
+
+Other concerns remain with the adapter that implements them. The verifier owns operand and result contracts, the printer owns textual syntax, MilkIR-MachV Lowering owns instruction selection, and the e-graph adapter owns which operations have an e-graph encoding. These are different responsibilities rather than duplicate semantic facts.
+
+When adding a built-in opcode:
+
+1. Add its operand and result contract to the verifier.
+2. Classify its trap, memory, and observable-effect behavior in the opcode semantic summary.
+3. Add its textual representation to the printer.
+4. Add its instruction selection to MilkIR-MachV Lowering.
+5. Add an e-graph encoding only if the e-graph node language represents it.
+
+The built-in family matches in those stages are exhaustive, so adding a new family or operation leaves a compiler error until its required behavior is supplied. E-graph admission is intentionally conservative: an operation without an explicit encoding remains outside the e-graph.
+
 ## Why values are called SSA values
 
 SSA means *static single assignment*: each MilkIR `Value` is defined exactly once. An instruction never changes an existing value; it creates a new one.

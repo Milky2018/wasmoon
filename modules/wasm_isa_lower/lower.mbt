@@ -86,17 +86,6 @@ fn lower_extension_with_options(
       return Handled(lower_array_new_fixed(ctx, inst, block, type_idx, len))
     LoadMemBase(memidx) =>
       lower_load_mem_base(ctx, inst, block, memidx, options.context_slots)
-    MemoryGrow(_)
-    | MemorySize(_)
-    | MemoryFill(_)
-    | MemoryCopy(_, _)
-    | MemoryInit(_, _)
-    | DataDrop(_)
-    | TableGrow(_)
-    | TableFill(_)
-    | TableCopy(_, _)
-    | TableInit(_, _)
-    | ElemDrop(_) => @lower.lower_unsupported_extension_opcode(inst, block)
     WasmCall(func_idx) => lower_call(ctx, inst, block, func_idx)
     WasmCallIndirect(type_idx, table_idx) =>
       lower_call_indirect(ctx, inst, block, type_idx, table_idx, options)

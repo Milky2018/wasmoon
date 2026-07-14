@@ -1125,7 +1125,7 @@ fn Translator::translate_simd_binary(
 ) -> Unit {
   let b = self.pop()
   let a = self.pop()
-  let result = self.builder.v128_binary(opcode, a, b)
+  let result = self.builder.emit_inst(V128, Vector(opcode), [a, b])
   self.push(result)
 }
 
@@ -1136,7 +1136,7 @@ fn Translator::translate_simd_unary(
   opcode : @milkir.VectorOp,
 ) -> Unit {
   let a = self.pop()
-  let result = self.builder.v128_unary(opcode, a)
+  let result = self.builder.emit_inst(V128, Vector(opcode), [a])
   self.push(result)
 }
 
@@ -1147,7 +1147,7 @@ fn Translator::translate_simd_to_i32(
   opcode : @milkir.VectorOp,
 ) -> Unit {
   let a = self.pop()
-  let result = self.builder.v128_to_i32(opcode, a)
+  let result = self.builder.emit_inst(I32, Vector(opcode), [a])
   self.push(result)
 }
 
@@ -1159,7 +1159,7 @@ fn Translator::translate_simd_shift(
 ) -> Unit {
   let shift = self.pop()
   let vec = self.pop()
-  let result = self.builder.v128_shift(opcode, vec, shift)
+  let result = self.builder.emit_inst(V128, Vector(opcode), [vec, shift])
   self.push(result)
 }
 
@@ -1171,7 +1171,7 @@ fn Translator::translate_simd_load(
   memidx : Int,
   offset : Int64,
   addr : Value,
-  opcode : @milkir.VectorOp,
+  opcode : @milkir.VectorMemoryOp,
 ) -> Value {
   // Determine access size based on opcode
   let access_size = match opcode {
@@ -1202,7 +1202,7 @@ fn Translator::translate_simd_load_lane(
   offset : Int64,
   addr : Value,
   vec : Value,
-  opcode : @milkir.VectorOp,
+  opcode : @milkir.VectorMemoryOp,
 ) -> Value {
   // Emit bounds check
   let lane_size = match opcode {
@@ -1232,7 +1232,7 @@ fn Translator::translate_simd_store_lane(
   offset : Int64,
   addr : Value,
   vec : Value,
-  opcode : @milkir.VectorOp,
+  opcode : @milkir.VectorMemoryOp,
 ) -> Unit {
   // Emit bounds check
   let lane_size = match opcode {

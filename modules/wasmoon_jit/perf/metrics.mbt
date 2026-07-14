@@ -63,6 +63,8 @@ pub struct IRPassMetric {
   egraph_classes : Int?
   egraph_nodes : Int?
   egraph_rule_apps : Int?
+  work_done : Int?
+  budget_exhausted : Bool?
 } derive(ToJson)
 
 ///|
@@ -112,7 +114,7 @@ fn ensure_module_state() -> ModuleMetricsReport {
     Some(m) => m
     None => {
       let m = {
-        schema_version: 1,
+        schema_version: 2,
         expected_functions: 0,
         module_compile_us: 0L,
         functions: [],
@@ -135,7 +137,7 @@ fn flush_current_function_if_any() -> Unit {
 pub fn reset_module(expected_functions : Int) -> Unit {
   guard enabled() else { return }
   module_state.val = Some({
-    schema_version: 1,
+    schema_version: 2,
     expected_functions,
     module_compile_us: 0L,
     functions: [],
@@ -189,6 +191,8 @@ pub fn record_ir_pass(
   egraph_classes? : Int? = None,
   egraph_nodes? : Int? = None,
   egraph_rule_apps? : Int? = None,
+  work_done? : Int? = None,
+  budget_exhausted? : Bool? = None,
 ) -> Unit {
   guard enabled() else { return }
   guard detail_enabled() else { return }
@@ -202,8 +206,55 @@ pub fn record_ir_pass(
       egraph_classes,
       egraph_nodes,
       egraph_rule_apps,
+      work_done,
+      budget_exhausted,
     })
   }
+}
+
+///|
+let milkir_metrics_clock_origin : Ref[PerfTick?] = { val: None }
+
+///|
+fn milkir_metrics_now_us() -> Int64 {
+  let origin = match milkir_metrics_clock_origin.val {
+    Some(origin) => origin
+    None => {
+      let origin = tick_now()
+      milkir_metrics_clock_origin.val = Some(origin)
+      origin
+    }
+  }
+  elapsed_us(origin)
+}
+
+///|
+pub fn install_milkir_metrics_sink() -> Unit {
+  if enabled() && detail_enabled() {
+    @milkir.install_optimization_metrics_sink(
+      @milkir.OptimizationMetricsSink::new(milkir_metrics_now_us, fn(metric) {
+        record_ir_pass(
+          metric.name,
+          metric.before_insts,
+          metric.after_insts,
+          metric.changed,
+          metric.duration_us,
+          egraph_classes=metric.egraph_classes,
+          egraph_nodes=metric.egraph_nodes,
+          egraph_rule_apps=metric.egraph_rule_apps,
+          work_done=metric.work_done,
+          budget_exhausted=metric.budget_exhausted,
+        )
+      }),
+    )
+  } else {
+    @milkir.clear_optimization_metrics_sink()
+  }
+}
+
+///|
+pub fn clear_milkir_metrics_sink() -> Unit {
+  @milkir.clear_optimization_metrics_sink()
 }
 
 ///|

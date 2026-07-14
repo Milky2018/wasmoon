@@ -41,7 +41,7 @@ test "verify rejects return value type mismatches" {
 test "verify rejects missing instruction results" {
   let func = Function::new_empty("missing_iconst_result")
   let entry = func.new_block([])
-  entry.append_inst(func.new_inst(Scalar(ScalarOp::IntConst(1L)), [], []))
+  entry.append_inst(func.new_inst(Scalar(IntConst(1L)), [], []))
   entry.set_terminator(Return([]))
   expect_verify_rejection(func, "iconst result arity")
 }
@@ -53,11 +53,7 @@ test "verify rejects instruction result type mismatches" {
   let rhs = func.add_param(I32)
   let result = func.new_value(I64)
   let entry = func.new_block([])
-  entry.append_inst(
-    func.new_inst(Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)), [lhs, rhs], [
-      result,
-    ]),
-  )
+  entry.append_inst(func.new_inst(Scalar(IntBinary(Add)), [lhs, rhs], [result]))
   entry.set_terminator(Return([]))
   expect_verify_rejection(func, "iadd result type")
 }
@@ -69,11 +65,7 @@ test "verify rejects reference-typed integer arithmetic" {
   let rhs = func.add_param(Ref)
   let result = func.new_value(Ref)
   let entry = func.new_block([])
-  entry.append_inst(
-    func.new_inst(Scalar(ScalarOp::IntBinary(IntBinaryOp::Add)), [lhs, rhs], [
-      result,
-    ]),
-  )
+  entry.append_inst(func.new_inst(Scalar(IntBinary(Add)), [lhs, rhs], [result]))
   entry.set_terminator(Return([]))
   expect_verify_rejection(func, "integer arithmetic operand types")
 }
@@ -85,9 +77,7 @@ test "verify rejects floating-point integer equality" {
   let rhs = func.add_param(F64)
   let result = func.new_value(I32)
   let entry = func.new_block([])
-  entry.append_inst(
-    func.new_inst(Scalar(ScalarOp::IntCompare(Eq)), [lhs, rhs], [result]),
-  )
+  entry.append_inst(func.new_inst(Scalar(IntCompare(Eq)), [lhs, rhs], [result]))
   entry.set_terminator(Return([]))
   expect_verify_rejection(func, "integer equality operand types")
 }
@@ -101,9 +91,7 @@ test "verify rejects malformed select types" {
   let result = func.new_value(I32)
   let entry = func.new_block([])
   entry.append_inst(
-    func.new_inst(Scalar(ScalarOp::Select), [condition, on_true, on_false], [
-      result,
-    ]),
+    func.new_inst(Scalar(Select), [condition, on_true, on_false], [result]),
   )
   entry.set_terminator(Return([]))
   expect_verify_rejection(func, "select operand types")
@@ -117,11 +105,7 @@ test "verify rejects narrow loads with non-integer results" {
   let result = func.new_value(F64)
   let entry = func.new_block([])
   entry.append_inst(
-    func.new_inst(
-      Memory(MemoryOp::LoadNarrow(F64, 8, false)),
-      [address, offset],
-      [result],
-    ),
+    func.new_inst(Memory(LoadNarrow(F64, 8, false)), [address, offset], [result]),
   )
   entry.set_terminator(Return([]))
   expect_verify_rejection(func, "narrow load result type")
@@ -133,9 +117,53 @@ test "verify rejects malformed SIMD operand arity" {
   let lhs = func.add_param(V128)
   let result = func.new_value(V128)
   let entry = func.new_block([])
-  entry.append_inst(func.new_inst(Vector(V128Add32), [lhs], [result]))
+  entry.append_inst(func.new_inst(Vector(IntBinary(Add, I32)), [lhs], [result]))
   entry.set_terminator(Return([]))
   expect_verify_rejection(func, "v128.add32 operand arity")
+}
+
+///|
+test "verify rejects unsupported normalized vector combinations" {
+  let func = Function::new_empty("unsupported_vector_combinations")
+  let lhs = func.add_param(V128)
+  let rhs = func.add_param(V128)
+  let result = func.new_value(V128)
+  let entry = func.new_block([])
+  entry.append_inst(
+    func.new_inst(Vector(IntBinary(Mul, I8)), [lhs, rhs], [result]),
+  )
+  entry.set_terminator(Return([]))
+  expect_verify_rejection(func, "i8 vector multiplication")
+
+  let narrow_func = Function::new_empty("unsupported_vector_narrow")
+  let narrow_lhs = narrow_func.add_param(V128)
+  let narrow_rhs = narrow_func.add_param(V128)
+  let narrow_result = narrow_func.new_value(V128)
+  let narrow_entry = narrow_func.new_block([])
+  narrow_entry.append_inst(
+    narrow_func.new_inst(
+      Vector(Narrow(I32, Signed)),
+      [narrow_lhs, narrow_rhs],
+      [narrow_result],
+    ),
+  )
+  narrow_entry.set_terminator(Return([]))
+  expect_verify_rejection(narrow_func, "i32 vector narrowing")
+
+  let compare_func = Function::new_empty("unsupported_vector_compare")
+  let compare_lhs = compare_func.add_param(V128)
+  let compare_rhs = compare_func.add_param(V128)
+  let compare_result = compare_func.new_value(V128)
+  let compare_entry = compare_func.new_block([])
+  compare_entry.append_inst(
+    compare_func.new_inst(
+      Vector(IntCompare(Lt(Unsigned), I64)),
+      [compare_lhs, compare_rhs],
+      [compare_result],
+    ),
+  )
+  compare_entry.set_terminator(Return([]))
+  expect_verify_rejection(compare_func, "unsigned i64 vector comparison")
 }
 
 ///|
@@ -145,7 +173,7 @@ test "verify rejects direct calls that disagree with their signature" {
   let entry = func.new_block([])
   entry.append_inst(
     func.new_inst(
-      Call(CallOp::Direct(ExternalSymbol("callee"), Signature([I32], [I64]))),
+      Call(Direct(ExternalSymbol("callee"), Signature([I32], [I64]))),
       [],
       [result],
     ),
@@ -158,7 +186,7 @@ test "verify rejects direct calls that disagree with their signature" {
 test "verify rejects pointer calls that disagree with declared counts" {
   let func = Function::new_empty("bad_pointer_call")
   let entry = func.new_block([])
-  entry.append_inst(func.new_inst(Call(CallOp::Pointer(2, 1)), [], []))
+  entry.append_inst(func.new_inst(Call(Pointer(2, 1)), [], []))
   entry.set_terminator(Return([]))
   expect_verify_rejection(func, "call_ptr argument and result counts")
 }
@@ -167,7 +195,7 @@ test "verify rejects pointer calls that disagree with declared counts" {
 test "verify rejects negative pointer call counts" {
   let func = Function::new_empty("negative_pointer_call_counts")
   let entry = func.new_block([])
-  entry.append_inst(func.new_inst(Call(CallOp::Pointer(-2, 0)), [], []))
+  entry.append_inst(func.new_inst(Call(Pointer(-2, 0)), [], []))
   entry.set_terminator(Return([]))
   expect_verify_rejection(func, "negative call_ptr argument count")
 }
@@ -189,7 +217,7 @@ test "verify rejects a non-pointer call_ptr function carrier" {
   let callee_context = func.add_param(I64)
   let entry = func.new_block([])
   entry.append_inst(
-    func.new_inst(Call(CallOp::Pointer(1, 0)), [func_ptr, callee_context], []),
+    func.new_inst(Call(Pointer(1, 0)), [func_ptr, callee_context], []),
   )
   entry.set_terminator(Return([]))
   expect_verify_rejection(func, "non-pointer call_ptr function carrier")
@@ -202,7 +230,7 @@ test "verify treats pointer call operands after the callee as ordinary arguments
   let floating_argument = func.add_param(F64)
   let entry = func.new_block([])
   entry.append_inst(
-    func.new_inst(Call(CallOp::Pointer(1, 0)), [func_ptr, floating_argument], []),
+    func.new_inst(Call(Pointer(1, 0)), [func_ptr, floating_argument], []),
   )
   entry.set_terminator(Return([]))
   inspect(func.verify(), content="()")

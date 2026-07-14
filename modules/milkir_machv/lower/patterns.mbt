@@ -76,13 +76,33 @@ fn opcode_to_pattern(opcode : @milkir.Opcode) -> PatternOpcode? {
     Scalar(FloatBinary(Mul)) => Some(Fmul)
     Scalar(FloatBinary(Div)) => Some(Fdiv)
     Scalar(IntConst(_)) => Some(Iconst)
-    Scalar(FloatConst(_)) => Some(Fconst)
+    Scalar(FloatConst32(_)) | Scalar(FloatConst64(_)) => Some(Fconst)
     Scalar(IntCompare(_)) => Some(Icmp)
     Scalar(FloatCompare(_)) => Some(Fcmp)
     // Memory operations are handled by the memory lowering path.
     Scalar(Copy) => Some(Copy)
     Scalar(Select) => Some(Select)
     _ => None
+  }
+}
+
+///|
+fn float_const_value(opcode : @milkir.Opcode) -> Double? {
+  match opcode {
+    Scalar(FloatConst32(bits)) =>
+      Some(Float::reinterpret_from_uint(bits).to_double())
+    Scalar(FloatConst64(bits)) => Some(bits.reinterpret_as_double())
+    _ => None
+  }
+}
+
+///|
+fn float_const_matches(opcode : @milkir.Opcode, expected : Double) -> Bool {
+  match opcode {
+    Scalar(FloatConst32(bits)) =>
+      bits == Float::from_double(expected).reinterpret_as_uint()
+    Scalar(FloatConst64(bits)) => bits == expected.reinterpret_as_uint64()
+    _ => false
   }
 }
 
@@ -159,19 +179,7 @@ fn match_pattern_impl(
       }
     ConstFloat(expected) =>
       // Check if this is an fconst with the expected value
-      if inst.opcode is Scalar(FloatConst(val)) {
-        // For F32, bits are packed in the lower 32 bits of the Double
-        // For F64, the Double is the actual value
-        if inst.first_result() is Some(r) && r.ty is F32 {
-          let stored_bits = val.reinterpret_as_int64().to_int()
-          let expected_bits = Float::from_double(expected).reinterpret_as_int()
-          stored_bits == expected_bits
-        } else {
-          val == expected
-        }
-      } else {
-        false
-      }
+      float_const_matches(inst.opcode, expected)
     AnyConstInt =>
       // Match any integer constant
       if inst.opcode is Scalar(IntConst(val)) {
@@ -190,7 +198,7 @@ fn match_pattern_impl(
       // For iconst/fconst, capture the constant
       if inst.opcode is Scalar(IntConst(v)) {
         result.add_int_const(v)
-      } else if inst.opcode is Scalar(FloatConst(v)) {
+      } else if float_const_value(inst.opcode) is Some(v) {
         result.add_float_const(v)
       }
       // Match sub-patterns against operands
@@ -221,23 +229,14 @@ fn match_pattern_impl(
           ConstFloat(expected) => {
             let def_inst = find_defining_inst(ctx, operand)
             match def_inst {
-              Some(def) =>
-                if def.opcode is Scalar(FloatConst(val)) {
-                  // For F32, bits are packed in the lower 32 bits of the Double
-                  let matches = if def.first_result() is Some(r) && r.ty is F32 {
-                    let stored_bits = val.reinterpret_as_int64().to_int()
-                    let expected_bits = Float::from_double(expected).reinterpret_as_int()
-                    stored_bits == expected_bits
-                  } else {
-                    val == expected
-                  }
-                  if !matches {
-                    return false
-                  }
-                  result.add_float_const(val)
-                } else {
+              Some(def) => {
+                if !float_const_matches(def.opcode, expected) {
                   return false
                 }
+                if float_const_value(def.opcode) is Some(value) {
+                  result.add_float_const(value)
+                }
+              }
               None => return false
             }
           }

@@ -196,17 +196,6 @@ pub fn RuntimeSymbols::with_runtime_prefix(String) -> Self
 
 pub(all) enum WasmOpcode {
   LoadMemBase(Int)
-  MemoryGrow(Int, Int?)
-  MemorySize(Int)
-  MemoryFill(Int)
-  MemoryCopy(Int, Int)
-  MemoryInit(Int, Int)
-  DataDrop(Int)
-  TableGrow(Int)
-  TableFill(Int)
-  TableCopy(Int, Int)
-  TableInit(Int, Int)
-  ElemDrop(Int)
   WasmCall(Int)
   WasmCallIndirect(Int, Int)
   CallRef(Int)

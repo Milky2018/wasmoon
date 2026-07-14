@@ -7,6 +7,8 @@ builder helpers used with MilkIR. Frontends encode Wasm operations through
 typed `WasmOpcode` constructors, then a lowering adapter checks and decodes
 those extensions before machine lowering.
 
+Typed constructors, serialized opcode names, and immediate layouts are defined once in `wasm_opcodes.schema`. During development, `dev_build` runs the deterministic `tools/generate_wasm_opcodes.py` generator to refresh the committed `dialect_generated.mbt` source. Published packages include that generated MoonBit source, so downstream builds neither load the schema at runtime nor execute development build rules.
+
 ## Packages
 
 - `Milky2018/wasm_milkir`: Wasm opcode encoding/decoding and builder helpers
@@ -49,7 +51,7 @@ test "build a Wasm memory.size extension instruction" {
   inspect(func.blocks.length(), content="1")
   inspect(func.verify(), content="()")
   match func.blocks[0].instructions[1].opcode {
-    Call(@milkir.CallOp::Direct(symbol, _)) =>
+    Call(Direct(symbol, _)) =>
       inspect(symbol.name, content="example.runtime.memory_size")
     _ => inspect(false, content="true")
   }
@@ -61,20 +63,20 @@ test "build a Wasm memory.size extension instruction" {
 ```moonbit check
 ///|
 test "validate and decode a typed Wasm extension operation" {
-  let opcode = WasmOpcode::MemoryGrow(0, Some(1024))
+  let opcode = WasmOpcode::RefTest(3, true)
   let ext = encode(opcode)
   let desc = descriptor(opcode)
   inspect(ext.matches_descriptor(desc), content="true")
-  inspect(decode_or_abort(ext) == opcode, content="true")
+  inspect(decode(ext) == Some(opcode), content="true")
   let malformed = @milkir.ExtOp(
     "wasm",
-    "memory_grow",
-    FixedArray::makei(0, fn(_) { 0 }),
+    "ref_test",
+    FixedArray::makei(2, fn(i) { if i == 0 { 3 } else { 2 } }),
   )
   debug_inspect(
     decode_error(malformed),
     content=(
-      #|Some("malformed Wasm MilkIR extension 'memory_grow': expected 1..2 immediates, got 0")
+      #|Some("malformed Wasm MilkIR extension 'ref_test': immediate 1 is a bool flag encoded as 0 or 1, got 2")
     ),
   )
 }

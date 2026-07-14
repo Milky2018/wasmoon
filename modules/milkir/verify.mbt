@@ -3,6 +3,9 @@ pub suberror VerifyError {
   MissingTerminator(block_id~ : Int)
   EmptyFunction
   UndefinedValue(value_id~ : Int)
+  ForeignValue(value_id~ : Int)
+  ForeignBlock(block_id~ : Int)
+  ForeignInstruction(inst_id~ : Int)
   DuplicateBlockId(block_id~ : Int)
   DuplicateValueDefinition(value_id~ : Int)
   DuplicateInstructionId(inst_id~ : Int)
@@ -29,11 +32,17 @@ pub impl Show for VerifyError with fn output(self, logger) {
 
 ///|
 pub fn Function::verify(self : Function) -> Unit raise VerifyError {
+  if self.owner.val.construction_error is Some(error) {
+    raise error
+  }
   if self.blocks.is_empty() {
     raise EmptyFunction
   }
   let mut max_block_id = -1
   for block in self.blocks {
+    if !self.owns_block(block) {
+      raise ForeignBlock(block_id=block.id)
+    }
     if block.id < 0 {
       raise InvalidBlockTarget(block_id=block.id)
     }
@@ -54,15 +63,29 @@ pub fn Function::verify(self : Function) -> Unit raise VerifyError {
   let definitions : @hashmap.HashMap[Int, ValueDefinition] = HashMap([])
   for item in self.params {
     let (param, ty) = item
+    require_owned_value(self, param)
     record_definition(param, ty, FunctionParameter(ty), definitions)
   }
   let instruction_ids : @hashset.HashSet[Int] = HashSet([])
   for block in self.blocks {
     for item in block.params {
       let (param, ty) = item
+      require_owned_value(self, param)
       record_definition(param, ty, BlockParameter(ty, block.id), definitions)
     }
     for inst_index, inst in block.instructions {
+      if !self.owns_inst(inst) {
+        raise ForeignInstruction(inst_id=inst.id)
+      }
+      for operand in inst.args {
+        require_owned_value(self, operand)
+      }
+      for operand in inst.operands {
+        require_owned_value(self, operand)
+      }
+      for result in inst.results {
+        require_owned_value(self, result)
+      }
       if instruction_ids.contains(inst.id) {
         raise DuplicateInstructionId(inst_id=inst.id)
       }
@@ -76,6 +99,9 @@ pub fn Function::verify(self : Function) -> Unit raise VerifyError {
           definitions,
         )
       }
+    }
+    if block.terminator is Some(term) {
+      require_owned_terminator_values(self, term)
     }
   }
   let idom = CFG::build(self).compute_dominators()
@@ -94,6 +120,44 @@ pub fn Function::verify(self : Function) -> Unit raise VerifyError {
         idom,
       )
     }
+  }
+}
+
+///|
+fn require_owned_value(
+  func : Function,
+  value : Value,
+) -> Unit raise VerifyError {
+  if !func.owns_value(value) {
+    raise ForeignValue(value_id=value.id)
+  }
+}
+
+///|
+fn require_owned_values(
+  func : Function,
+  values : Array[Value],
+) -> Unit raise VerifyError {
+  for value in values {
+    require_owned_value(func, value)
+  }
+}
+
+///|
+fn require_owned_terminator_values(
+  func : Function,
+  term : Terminator,
+) -> Unit raise VerifyError {
+  match term {
+    Jump(_, values) | Return(values) => require_owned_values(func, values)
+    Branch(cond, _, true_args, _, false_args) => {
+      require_owned_value(func, cond)
+      require_owned_values(func, true_args)
+      require_owned_values(func, false_args)
+    }
+    Brz(cond, _, _) | Brnz(cond, _, _) | BrTable(cond, _, _) =>
+      require_owned_value(func, cond)
+    Trap(_) | TrapExit(_) => ()
   }
 }
 

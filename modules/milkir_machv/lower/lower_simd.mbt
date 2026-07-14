@@ -2,7 +2,7 @@
 // Converts SIMD IR opcodes to AArch64 NEON MachV instructions
 
 ///|
-/// Lower V128Const - load 128-bit constant
+/// Lower Const - load 128-bit constant
 fn lower_v128_const(
   ctx : LoweringContext,
   inst : @milkir.Inst,
