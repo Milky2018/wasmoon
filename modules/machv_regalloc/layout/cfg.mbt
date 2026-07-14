@@ -216,7 +216,8 @@ pub fn MachVCFG::find_loops(self : MachVCFG) -> Array[MachVLoop] {
   let back_edges = self.find_back_edges()
 
   // Group back edges by header
-  let header_to_latches : @hashmap.HashMap[Int, Array[Int]] = HashMap([])
+  // Preserve back-edge discovery order in the public loop array.
+  let header_to_latches : Map[Int, Array[Int]] = Map([])
   for edge in back_edges {
     let (latch, header) = edge
     match header_to_latches.get(header) {
@@ -242,7 +243,8 @@ fn MachVCFG::find_loop_body(
   header : Int,
   latches : Array[Int],
 ) -> Array[Int] {
-  let body : @hashmap.HashMap[Int, Bool] = HashMap([])
+  // Preserve the header-first reverse-CFG discovery order.
+  let body : Map[Int, Bool] = Map([])
   body.set(header, true)
 
   // Worklist for reverse DFS from latch blocks
