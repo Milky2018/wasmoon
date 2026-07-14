@@ -186,7 +186,7 @@ fn default_call_conv() -> @abi.CallConventionLayout {
 pub fn lower_function(
   func : @milkir.Function,
   return_area_base_reg? : @machv.PReg? = None,
-) -> @machv.Function {
+) -> @machv.Function raise @milkir.VerifyError {
   ignore(return_area_base_reg)
   lower_function_with_call_conv(func, default_call_conv())
 }
@@ -196,7 +196,7 @@ pub fn lower_function_with_call_conv(
   func : @milkir.Function,
   call_conv_layout : @abi.CallConventionLayout,
   return_area_base_reg? : @machv.PReg? = None,
-) -> @machv.Function {
+) -> @machv.Function raise @milkir.VerifyError {
   ignore(return_area_base_reg)
   @lower.lower_function(
     func,

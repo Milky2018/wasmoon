@@ -17,13 +17,20 @@ pub fn FunctionBuilder::FunctionBuilder(name : String) -> FunctionBuilder {
 }
 
 ///|
-/// Get the function being built
+/// Get the mutable function being built without validating it.
+///
+/// This is an explicit construction and transformation escape hatch. Consumers
+/// must verify the function after the final mutation and before lowering it.
 pub fn FunctionBuilder::get_function(self : FunctionBuilder) -> Function {
   self.func
 }
 
 ///|
-/// Finish building and return the constructed function.
+/// Verify the current function and return the same mutable function.
+///
+/// Finalization is a validation checkpoint, not a frozen or persistent
+/// validated state. Any later mutation requires validation at the next
+/// consuming seam.
 pub fn FunctionBuilder::finalize(
   self : FunctionBuilder,
 ) -> Function raise VerifyError {

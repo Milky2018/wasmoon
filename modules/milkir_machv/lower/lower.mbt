@@ -1884,11 +1884,11 @@ fn lower_function_with_config_unchecked(
 pub fn lower_core_function_with_config(
   ir_func : @milkir.Function,
   config : LoweringConfig,
-) -> @machv.Function {
+) -> @machv.Function raise @milkir.VerifyError {
   if config.extension_lowerer is Some(_) {
     abort("core MilkIR lowering does not accept a dialect adapter")
   }
-  try! ir_func.verify_core()
+  ir_func.verify_core()
   lower_function_with_config_unchecked(ir_func, config)
 }
 
@@ -1903,8 +1903,8 @@ pub fn lower_dialect_function_with_config(
     @block.Block,
     @milkir.ExtOp,
   ) -> ExtensionLowerResult,
-) -> @machv.Function {
-  try! ir_func.verify()
+) -> @machv.Function raise @milkir.VerifyError {
+  ir_func.verify()
   lower_function_with_config_unchecked(
     ir_func,
     config.with_extension_lowerer(extension_lowerer),
@@ -1921,7 +1921,7 @@ pub fn lower_function(
   trap_payload_resolver? : (String) -> Int = fn(_reason) { 0 },
   num_imports? : Int = -1,
   run_ir_opt? : Bool = true,
-) -> @machv.Function {
+) -> @machv.Function raise @milkir.VerifyError {
   let config : LoweringConfig = {
     isa,
     embedding_abi,
@@ -1950,7 +1950,7 @@ pub fn lower_dialect_function(
   trap_payload_resolver? : (String) -> Int = fn(_reason) { 0 },
   num_imports? : Int = -1,
   run_ir_opt? : Bool = true,
-) -> @machv.Function {
+) -> @machv.Function raise @milkir.VerifyError {
   let config : LoweringConfig = {
     isa,
     embedding_abi,

@@ -9,8 +9,9 @@
    - JIT path calls `@ir.optimize_with_level(..., O2)` in `cmd/wasmoon/commands/run.mbt:1366`
 
 2. **Pattern Matcher System (Exists but NOT Integrated)**
-   - `vcode/lower/patterns.mbt`: Table-driven rule matcher with priority system
-     - Has `lower_function_optimized()` - a complete alternative lowering path
+   - `modules/milkir_machv/lower/patterns.mbt`: Table-driven rule matcher with priority system
+     - Exposes rule matching helpers, but no parallel whole-function lowering entry
+     - The public MilkIR-MachV lowering seam owns verification before instruction selection
      - Generic rules: identity (add_zero, mul_one), strength reduction (mul_pow2→shl)
    - `vcode/lower/aarch64_patterns.mbt`: AArch64-specific patterns
      - MADD/MSUB/MNEG rules

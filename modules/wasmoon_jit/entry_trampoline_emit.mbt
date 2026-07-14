@@ -45,7 +45,7 @@ pub fn emit_entry_trampoline(
   )
 
   // Compile through the normal pipeline
-  let machv_func = @lower.lower_function(
+  let machv_func = try! @lower.lower_function(
     ir_func,
     isa~,
     embedding_abi=Some(embedding_abi),
