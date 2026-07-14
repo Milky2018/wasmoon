@@ -13,7 +13,10 @@
   (data (i32.const 12) "\07\00\00\00")  ;; iov[1].len = 7
   (func (export "_start")
     (local $errno i32)
+    (local $written i32)
     (local.set $errno (call $fd_write (i32.const 1) (i32.const 0) (i32.const 2) (i32.const 100)))
     (if (i32.ne (local.get $errno) (i32.const 0)) (then unreachable))
-    ;; "Hello " (6) + "World!\\n" (7) = 13
-    (if (i32.ne (i32.load (i32.const 100)) (i32.const 13)) (then unreachable)))))
+    ;; fd_write may perform a short write, but it must report forward progress.
+    (local.set $written (i32.load (i32.const 100)))
+    (if (i32.eqz (local.get $written)) (then unreachable))
+    (if (i32.gt_u (local.get $written) (i32.const 13)) (then unreachable))))

@@ -28,4 +28,4 @@
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $loop)))
     (if (i32.eqz (local.get $diff)) (then unreachable))
-    (drop (call $fd_write (i32.const 1) (i32.const 100) (i32.const 1) (i32.const 108))))))
+    (drop (call $fd_write (i32.const 1) (i32.const 100) (i32.const 1) (i32.const 108)))))

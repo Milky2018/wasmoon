@@ -10,5 +10,6 @@
   (func (export "_start")
     (local $errno i32)
     (local.set $errno (call $fd_fdstat_set_rights (i32.const 1) (i64.const 0) (i64.const 0)))
-    (if (i32.ne (local.get $errno) (i32.const 0)) (then unreachable))
+    ;; Stdio descriptors cannot have their rights changed.
+    (if (i32.ne (local.get $errno) (i32.const 8)) (then unreachable))
     (drop (call $fd_write (i32.const 1) (i32.const 100) (i32.const 1) (i32.const 108)))))

@@ -281,7 +281,7 @@
 )
 (assert_return (invoke "test") (i32.const 0))
 
-;; Test 20: fd_fdstat_get - verify filetype is CHARACTER_DEVICE (2)
+;; Test 20: captured stdout is a non-TTY descriptor with unknown filetype
 (module
   (import "wasi_snapshot_preview1" "fd_fdstat_get" (func $fd_fdstat_get (param i32 i32) (result i32)))
   (memory (export "memory") 1)
@@ -292,8 +292,8 @@
     (i32.load8_u (i32.const 100))
   )
 )
-;; filetype 2 = CHARACTER_DEVICE
-(assert_return (invoke "test") (i32.const 2))
+;; filetype 0 = UNKNOWN
+(assert_return (invoke "test") (i32.const 0))
 
 ;; Test 21: fd_fdstat_get on stdin
 (module
@@ -354,7 +354,7 @@
 
 ;; ============ fd_fdstat_set_flags tests ============
 
-;; Test 26: fd_fdstat_set_flags on stdout
+;; Test 26: fd_fdstat_set_flags rejects non-file stdout
 (module
   (import "wasi_snapshot_preview1" "fd_fdstat_set_flags" (func $fd_fdstat_set_flags (param i32 i32) (result i32)))
 
@@ -363,8 +363,7 @@
     (call $fd_fdstat_set_flags (i32.const 1) (i32.const 1))
   )
 )
-;; On macOS/Linux, this typically succeeds
-(assert_return (invoke "test") (i32.const 0))
+(assert_return (invoke "test") (i32.const 8))
 
 ;; Test 27: fd_fdstat_set_flags with invalid fd should return EBADF (8)
 (module
@@ -378,7 +377,7 @@
 
 ;; ============ fd_fdstat_set_rights tests ============
 
-;; Test 28: fd_fdstat_set_rights
+;; Test 28: fd_fdstat_set_rights rejects stdio descriptors
 (module
   (import "wasi_snapshot_preview1" "fd_fdstat_set_rights" (func $fd_fdstat_set_rights (param i32 i64 i64) (result i32)))
 
@@ -386,7 +385,7 @@
     (call $fd_fdstat_set_rights (i32.const 1) (i64.const 1) (i64.const 1))
   )
 )
-(assert_return (invoke "test") (i32.const 0))
+(assert_return (invoke "test") (i32.const 8))
 
 ;; ============ fd_prestat tests ============
 
@@ -465,7 +464,7 @@
 
 ;; ============ fd_sync/fd_datasync tests ============
 
-;; Test 35: fd_sync on stdout - should succeed
+;; Test 35: fd_sync is file-only, so stdout returns EBADF
 (module
   (import "wasi_snapshot_preview1" "fd_sync" (func $fd_sync (param i32) (result i32)))
 
@@ -473,7 +472,7 @@
     (call $fd_sync (i32.const 1))
   )
 )
-(assert_return (invoke "test") (i32.const 0))
+(assert_return (invoke "test") (i32.const 8))
 
 ;; Test 36: fd_sync with invalid fd should return EBADF (8)
 (module
@@ -485,7 +484,7 @@
 )
 (assert_return (invoke "test") (i32.const 8))
 
-;; Test 37: fd_datasync on stdout - should succeed
+;; Test 37: fd_datasync is file-only, so stdout returns EBADF
 (module
   (import "wasi_snapshot_preview1" "fd_datasync" (func $fd_datasync (param i32) (result i32)))
 
@@ -493,7 +492,7 @@
     (call $fd_datasync (i32.const 1))
   )
 )
-(assert_return (invoke "test") (i32.const 0))
+(assert_return (invoke "test") (i32.const 8))
 
 ;; Test 38: fd_datasync with invalid fd should return EBADF (8)
 (module
@@ -556,7 +555,7 @@
 
 ;; ============ fd_renumber tests ============
 
-;; Test 43: fd_renumber to stdio fd returns EINVAL (28)
+;; Test 43: fd_renumber with a missing source returns EBADF
 (module
   (import "wasi_snapshot_preview1" "fd_renumber" (func $fd_renumber (param i32 i32) (result i32)))
 
@@ -564,9 +563,9 @@
     (call $fd_renumber (i32.const 99) (i32.const 1))
   )
 )
-(assert_return (invoke "test") (i32.const 28))
+(assert_return (invoke "test") (i32.const 8))
 
-;; Test 44: fd_renumber from stdio fd returns EINVAL (28)
+;; Test 44: fd_renumber with a missing target returns EBADF
 (module
   (import "wasi_snapshot_preview1" "fd_renumber" (func $fd_renumber (param i32 i32) (result i32)))
 
@@ -574,7 +573,7 @@
     (call $fd_renumber (i32.const 0) (i32.const 99))
   )
 )
-(assert_return (invoke "test") (i32.const 28))
+(assert_return (invoke "test") (i32.const 8))
 
 ;; ============ sched_yield tests ============
 

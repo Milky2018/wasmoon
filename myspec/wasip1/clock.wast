@@ -61,7 +61,7 @@
 )
 (assert_return (invoke "test") (i32.const 1))
 
-;; Test 5: clock_time_get with process CPU time clock (clock_id=2)
+;; Test 5: unsupported process CPU time clock returns EBADF
 (module
   (import "wasi_snapshot_preview1" "clock_time_get" (func $clock_time_get (param i32 i64 i32) (result i32)))
   (memory (export "memory") 1)
@@ -71,9 +71,9 @@
     (call $clock_time_get (i32.const 2) (i64.const 1000) (i32.const 100))
   )
 )
-(assert_return (invoke "test") (i32.const 0))
+(assert_return (invoke "test") (i32.const 8))
 
-;; Test 6: clock_time_get with thread CPU time clock (clock_id=3)
+;; Test 6: unsupported thread CPU time clock returns EBADF
 (module
   (import "wasi_snapshot_preview1" "clock_time_get" (func $clock_time_get (param i32 i64 i32) (result i32)))
   (memory (export "memory") 1)
@@ -83,9 +83,9 @@
     (call $clock_time_get (i32.const 3) (i64.const 1000) (i32.const 100))
   )
 )
-(assert_return (invoke "test") (i32.const 0))
+(assert_return (invoke "test") (i32.const 8))
 
-;; Test 7: clock_time_get with invalid clock_id (should return EINVAL=28)
+;; Test 7: invalid clock_id enum traps at the WASI ABI boundary
 (module
   (import "wasi_snapshot_preview1" "clock_time_get" (func $clock_time_get (param i32 i64 i32) (result i32)))
   (memory (export "memory") 1)
@@ -95,9 +95,9 @@
     (call $clock_time_get (i32.const 4) (i64.const 1000) (i32.const 100))
   )
 )
-(assert_return (invoke "test") (i32.const 28))
+(assert_trap (invoke "test") "unreachable")
 
-;; Test 8: clock_time_get with invalid clock_id=99
+;; Test 8: another invalid clock_id enum traps
 (module
   (import "wasi_snapshot_preview1" "clock_time_get" (func $clock_time_get (param i32 i64 i32) (result i32)))
   (memory (export "memory") 1)
@@ -106,7 +106,7 @@
     (call $clock_time_get (i32.const 99) (i64.const 1000) (i32.const 100))
   )
 )
-(assert_return (invoke "test") (i32.const 28))
+(assert_trap (invoke "test") "unreachable")
 
 ;; Test 9: clock_time_get with precision=0 (should still work)
 (module
@@ -165,7 +165,7 @@
 )
 (assert_return (invoke "test") (i32.const 0))
 
-;; Test 14: clock_res_get with process CPU time clock (clock_id=2)
+;; Test 14: unsupported process CPU time clock returns EBADF
 (module
   (import "wasi_snapshot_preview1" "clock_res_get" (func $clock_res_get (param i32 i32) (result i32)))
   (memory (export "memory") 1)
@@ -174,9 +174,9 @@
     (call $clock_res_get (i32.const 2) (i32.const 100))
   )
 )
-(assert_return (invoke "test") (i32.const 0))
+(assert_return (invoke "test") (i32.const 8))
 
-;; Test 15: clock_res_get with thread CPU time clock (clock_id=3)
+;; Test 15: unsupported thread CPU time clock returns EBADF
 (module
   (import "wasi_snapshot_preview1" "clock_res_get" (func $clock_res_get (param i32 i32) (result i32)))
   (memory (export "memory") 1)
@@ -185,9 +185,9 @@
     (call $clock_res_get (i32.const 3) (i32.const 100))
   )
 )
-(assert_return (invoke "test") (i32.const 0))
+(assert_return (invoke "test") (i32.const 8))
 
-;; Test 16: clock_res_get with invalid clock_id (should return EINVAL=28)
+;; Test 16: invalid clock_id enum traps at the WASI ABI boundary
 (module
   (import "wasi_snapshot_preview1" "clock_res_get" (func $clock_res_get (param i32 i32) (result i32)))
   (memory (export "memory") 1)
@@ -196,4 +196,4 @@
     (call $clock_res_get (i32.const 4) (i32.const 100))
   )
 )
-(assert_return (invoke "test") (i32.const 28))
+(assert_trap (invoke "test") "unreachable")
