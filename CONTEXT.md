@@ -44,6 +44,10 @@ _Avoid_: target VCode, target-bound IR, portable execution target
 The exact target-neutral type of a **MachV** value, preserving semantic width and carrier kind without choosing a target register bank or location.
 _Avoid_: register class, ABI value location, MilkIR type
 
+**MachV Value**:
+An opaque function-owned handle to one single-definition value whose type and construction facts are held canonically by its **MachV** function.
+_Avoid_: raw value id, publicly constructed virtual register, duplicated typed tuple
+
 **MilkIR-MachV Lowering**:
 The target-neutral layer that lowers **MilkIR** into **MachV** without choosing host instructions, calling conventions, physical registers, or target constraints.
 _Avoid_: instruction selection, target backend, wasmoon JIT
@@ -131,6 +135,7 @@ _Avoid_: MachV emitter output, generic object format
 - A **Completeness TODO** documents an accepted limitation, but is not itself a correctness gate.
 - **MilkIR-MachV Lowering** lowers one **MilkIR** function into one **MachV** function.
 - Every function parameter, block parameter, and instruction result in **MachV** has a **MachV Value Type**; target lowering maps that type to a target register class.
+- A **MachV Value** is created through its function's interface, and all consumers resolve its **MachV Value Type** from that function's canonical value table.
 - **Semantic Legalization** completes during **MilkIR-MachV Lowering** without asking whether a host ISA has a matching instruction.
 - A **Semantic Superinstruction** belongs in **MachV** only when ordinary operations cannot reproduce its semantics without loss.
 - A **Semantic Memory Access** carries narrow-load extension semantics and memory effects, while target lowering selects an addressing mode.
@@ -166,6 +171,7 @@ _Avoid_: MachV emitter output, generic object format
 - TODO policy was ambiguous; resolved: **Completeness TODO** comments are required for known gaps but are not part of the current correctness gates.
 - "VCode" previously named both the current Wasmoon machine IR and the reusable machine layer; resolved: use **MachV** for the reusable virtual-register machine IR.
 - Value typing previously used target-like register classes inside **MachV**; resolved: **MachV Value Type** preserves exact semantics, while register classes begin in **Target VCode**.
+- Value identity previously duplicated ids and classes in public virtual-register records; resolved: a **MachV Value** is opaque and its function owns the sole value-type table.
 - Instruction selection ownership was previously unclear; resolved: **MilkIR-MachV Lowering** is target-neutral, while **MachV Target Lowering** owns host instruction selection.
 - Legalization ownership was previously unclear; resolved: **Semantic Legalization** produces target-neutral **MachV**, while **Target Legalization** expands its operations into legal **Target VCode**.
 - Fused-operation ownership was previously unclear; resolved: only a **Semantic Superinstruction** may enter **MachV**, while performance-only fusion belongs to target lowering.
