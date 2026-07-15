@@ -37,32 +37,32 @@ The source-language type model that must be checked and lowered before values en
 _Avoid_: IR type system when referring to WebAssembly heap types
 
 **MachV**:
-A reusable low-level virtual-register representation used after instruction selection and before machine-code emission.
-_Avoid_: VCode, Machine IR
+A reusable, target-neutral low-level virtual-register intermediate representation. Every native JIT path passes through **MachV** before target-specific lowering.
+_Avoid_: target VCode, target-bound IR, portable execution target
 
 **MilkIR-MachV Lowering**:
-The target-specific layer that lowers **MilkIR** into **MachV** and owns instruction selection, calling conventions, and target constraints.
-_Avoid_: backend, isa_backend, backend_common before duplication exists, MilkIR, MachV core, wasmoon JIT
+The target-neutral layer that lowers **MilkIR** into **MachV** without choosing host instructions, calling conventions, physical registers, or target constraints.
+_Avoid_: instruction selection, target backend, wasmoon JIT
+
+**MachV Target Lowering**:
+The target-owned translation from **MachV** into an AArch64- or AMD64-specific machine representation.
+_Avoid_: MachV opcode dialect, host-tagged MachV
 
 **ABI Policy**:
 The target and embedding-specific rules for argument registers, return registers, callee-saved registers, caller-saved registers, stack layout, and call clobbers.
 _Avoid_: MachV core policy
 
 **Register Allocation**:
-The target-independent allocation algorithm that assigns **MachV** virtual registers or spills through an abstract program model.
+The target-independent allocation algorithm that assigns virtual registers or spills through an abstract program model.
 _Avoid_: regalloc_core, VCode regalloc, machine regalloc
-
-**MachV Register Allocation Adapter**:
-The adapter that projects **MachV** functions into the **Register Allocation** model and applies allocation decisions back to **MachV**.
-_Avoid_: regalloc
 
 **Wasmoon Runtime**:
 The WebAssembly execution system that owns Wasm validation, instantiation, host integration, and runtime semantics.
 _Avoid_: compiler infrastructure, wasmoon_runtime as an implied module name
 
-**MachV Emitter**:
-The reusable machine-code emitter that lowers **MachV** into bytes, relocations, stack maps, and debug metadata.
-_Avoid_: x64_emit as a first split, aarch64_emit as a first split, machv_codegen, codegen, asm, wasmoon JIT emitter, runtime fixup emitter
+**Target Emitter**:
+The machine-target-owned encoder that turns a target-specific machine representation into bytes and generic metadata.
+_Avoid_: MachV emitter, wasmoon JIT emitter, runtime fixup emitter
 
 **Wasmoon JIT**:
 The Wasmoon-specific native execution integration that resolves runtime symbols, executable memory, host calls, VMContext state, traps, and helper bindings.
@@ -86,10 +86,10 @@ _Avoid_: MachV emitter output, generic object format
 - **MilkIR Core** starts as the smallest useful subset and uses **Completeness TODO** comments for known gaps.
 - A **Completeness TODO** documents an accepted limitation, but is not itself a correctness gate.
 - **MilkIR-MachV Lowering** lowers one **MilkIR** function into one **MachV** function.
-- **Machine Targets** own **ABI Policy**, while **MachV** only represents registers, constraints, calls, clobbers, and stack effects.
-- A **MachV Register Allocation Adapter** lets **Register Allocation** allocate **MachV** without depending on **MachV** instruction data structures.
-- A **MachV Emitter** produces generic relocation and metadata records; **Wasmoon JIT** resolves those records to Wasmoon runtime helpers and executable memory.
-- A **Cwasm Artifact** may wrap **MachV Emitter** output with Wasmoon function indices, imports, traps, debug mapping, and runtime metadata.
+- **MachV Target Lowering** lowers every **MachV** function into the selected machine target's representation.
+- **Machine Targets** own **ABI Policy**; **MachV** does not encode host instructions, physical registers, calling conventions, or target constraints.
+- A **Target Emitter** produces generic relocation and metadata records; **Wasmoon JIT** resolves those records to Wasmoon runtime helpers and executable memory.
+- A **Cwasm Artifact** may wrap **Target Emitter** output with Wasmoon function indices, imports, traps, debug mapping, and runtime metadata.
 - **JIT FFI** belongs to **Wasmoon JIT** until a small generic executable-memory API has proven reuse.
 - The **Wasmoon Runtime** depends on compiler infrastructure modules, but compiler infrastructure modules do not depend on the **Wasmoon Runtime**.
 
@@ -108,12 +108,11 @@ _Avoid_: MachV emitter output, generic object format
 - The reusable IR scope was previously ambiguous; resolved: **MilkIR Core** is intentionally minimal, and incomplete areas must be marked with **Completeness TODO** comments.
 - TODO policy was ambiguous; resolved: **Completeness TODO** comments are required for known gaps but are not part of the current correctness gates.
 - "VCode" previously named both the current Wasmoon machine IR and the reusable machine layer; resolved: use **MachV** for the reusable virtual-register machine IR.
-- Instruction selection ownership was previously unclear; resolved: **milkir_machv** bridges **MilkIR** and **MachV** instead of putting target lowering into either core module.
+- Instruction selection ownership was previously unclear; resolved: **MilkIR-MachV Lowering** is target-neutral, while **MachV Target Lowering** owns host instruction selection.
 - Target packaging was ambiguous; resolved: use ISA-specific modules such as `x64_target` and `aarch64_target`, not generic `backend` or `isa_backend` packages.
-- ABI ownership was previously mixed into the machine layer; resolved: **Machine Targets** own **ABI Policy** and **MachV** only expresses the policy's effects.
-- Register allocation previously depended on concrete VCode structures; resolved: keep **Register Allocation** independent and put **MachV**-specific projection and rewriting in a **MachV Register Allocation Adapter**.
-- Machine-code emission previously mixed byte encoding with Wasmoon runtime fixups; resolved: **MachV Emitter** emits generic relocation records and **Wasmoon JIT** owns runtime symbol resolution.
-- Emitter packaging was ambiguous; resolved: keep one `machv_emit` package with ISA-specific internals instead of first splitting `x64_emit` or `aarch64_emit`.
-- Precompiled output ownership was ambiguous; resolved: **Cwasm Artifact** belongs to **Wasmoon JIT**, not **MachV Emitter**.
+- ABI ownership was previously mixed into the machine layer; resolved: **Machine Targets** own **ABI Policy** and apply it after **MachV**.
+- Register-allocation placement has been reopened: decide whether allocation consumes **MachV** or the target-specific representation produced by **MachV Target Lowering**.
+- Machine-code-emission ownership has been reopened: decide the interface between target-specific representations, byte encoding, generic metadata, and **Wasmoon JIT** runtime resolution.
+- Precompiled output ownership was ambiguous; resolved: **Cwasm Artifact** belongs to **Wasmoon JIT**, not a **Target Emitter**.
 - Native JIT glue ownership was ambiguous; resolved: **JIT FFI** remains in **Wasmoon JIT** for the first split instead of creating a generic executable-memory module.
 - "Wasmoon Runtime" names an execution-system concept, not a required package named `wasmoon_runtime`; resolved: keep the package name decision separate from the concept.
