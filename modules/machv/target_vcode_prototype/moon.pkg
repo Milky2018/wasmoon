@@ -1,5 +1,0 @@
-pkgtype(kind: "executable")
-
-options(
-  "native-stub": [ "terminal.c" ],
-)
