@@ -34,21 +34,11 @@ test "public finalize rejects a return type mismatch" {
 }
 
 ///|
-test "public finalize rejects an unregistered extension dialect" {
+test "public finalize leaves extension semantics to an adapter" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder("unknown_dialect")
   builder.emit_void_ext_inst(ExtOp("demo", "effect", []), [])
   builder.return_([])
-  try builder.finalize() catch {
-    err =>
-      inspect(
-        err,
-        content=(
-          #|UnverifiableInstruction(message="extension dialect 'demo' has no registered validator")
-        ),
-      )
-  } noraise {
-    _ => fail("expected finalize to reject the unregistered dialect")
-  }
+  builder.finalize() |> ignore
 }
 
 ///|
@@ -137,15 +127,13 @@ test "extension validators receive the complete read-only instruction shape" {
   let input = builder.add_param(I64)
   builder.add_result(I32)
   let views : Array[ExtensionInstView] = []
-  builder
-  .get_function()
-  .register_extension_validator("demo", view => {
+  let result = builder.emit_ext_inst(I32, ExtOp("demo", "shape", []), [input])
+  builder.return_([result])
+  let func = builder.finalize()
+  func.verify_with_extension_validator("demo", view => {
     views.push(view)
     None
   })
-  let result = builder.emit_ext_inst(I32, ExtOp("demo", "shape", []), [input])
-  builder.return_([result])
-  builder.finalize() |> ignore
   debug_inspect(
     views,
     content=(
@@ -158,4 +146,23 @@ test "extension validators receive the complete read-only instruction shape" {
       #|]
     ),
   )
+}
+
+///|
+test "adapter validation rejects extensions owned by another dialect" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("foreign_dialect")
+  builder.emit_void_ext_inst(ExtOp("demo", "effect", []), [])
+  builder.return_([])
+  let func = builder.finalize()
+  try func.verify_with_extension_validator("wasm", fn(_) { None }) catch {
+    err =>
+      inspect(
+        err,
+        content=(
+          #|UnverifiableInstruction(message="extension dialect 'demo' is not owned by adapter 'wasm'")
+        ),
+      )
+  } noraise {
+    _ => fail("expected the adapter to reject a foreign dialect")
+  }
 }

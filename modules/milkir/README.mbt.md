@@ -64,7 +64,7 @@ block0:                             execution starts in block0
 }
 ```
 
-`finalize()` verifies the current function before returning it and raises `VerifyError` for malformed SSA, CFG, or instruction contracts. It is a validation checkpoint, not a freeze operation: the returned `Function` remains mutable and does not carry a persistent "verified" state. `get_function()` remains the explicit escape hatch for in-progress construction and transformation code. Callers may continue transforming either value, but every consuming adapter must verify the function after its final mutation and immediately before lowering it.
+`finalize()` verifies the current function before returning it and raises `VerifyError` for malformed SSA, CFG, or generic instruction contracts. For extension instructions, generic verification checks only the dialect/opcode envelope and the explicit operand/result signature; the owning adapter validates dialect semantics. Finalization is a validation checkpoint, not a freeze operation: the returned `Function` remains mutable and does not carry a persistent "verified" state. `get_function()` remains the explicit escape hatch for in-progress construction and transformation code. Callers may continue transforming either value, but every consuming adapter must verify the function after its final mutation and immediately before lowering it.
 
 The important detail is that `x`, `one`, and `answer` are not runtime integers in the MoonBit program that builds the IR. They are MilkIR `Value`s: typed handles that name values in the function being compiled.
 
@@ -332,9 +332,9 @@ An embedding adapter may assign roles such as VMContext to those arguments when 
 
 ## Dialect-specific operations
 
-`Ext(ExtOp, Signature)` represents dialect-specific operations. MilkIR stores a dialect name, opcode name, integer immediates, and an explicit operand/result contract, while the dialect package provides builders, semantic validation, decoding, and lowering.
+`Ext(ExtOp, Signature)` represents dialect-specific operations. MilkIR stores only a dialect name, opcode name, integer immediates, and an explicit operand/result contract. Validator closures are not part of `Function`; the dialect package owns builders, semantic validation, decoding, and lowering.
 
-A dialect-owned builder must register its validator on the `Function` before emitting extension operations. `Function::verify` and `FunctionBuilder::finalize` reject extension dialects without a registered validator and convert validator diagnostics into `VerifyError::UnverifiableInstruction`. An adapter should additionally call `Function::verify_with_extension_validator` with its own trusted validator before lowering, so the adapter boundary does not rely on a validator supplied by the IR producer.
+`Function::verify` and `FunctionBuilder::finalize` validate generic IR structure without interpreting dialect semantics. At the adapter seam, `Function::verify_with_extension_validator` receives the owned dialect name and validator explicitly, rejects extensions owned by another dialect, and converts diagnostics into `VerifyError::UnverifiableInstruction`. Dialect lowering likewise requires an explicit adapter verifier, so validation behavior depends only on the adapter selected by the consumer, never on function construction history.
 
 ```moonbit check
 ///|

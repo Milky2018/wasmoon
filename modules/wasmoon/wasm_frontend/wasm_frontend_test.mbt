@@ -30,7 +30,7 @@ test "lower empty wasm function through embedding environment" {
   inspect(func.signature().params.length(), content="1")
   inspect(func.signature().results.length(), content="0")
   inspect(func.blocks.length(), content="1")
-  inspect(func.verify(), content="()")
+  @wasm_milkir.verify_function(func)
 }
 
 ///|
@@ -49,7 +49,7 @@ test "lower simple wasm body into MilkIR operations" {
   inspect(func.print().contains("iadd"), content="true")
   inspect(func.print().contains("ireduce"), content="true")
   inspect(func.print().contains("TODO(wasm_frontend)"), content="false")
-  inspect(func.verify(), content="()")
+  @wasm_milkir.verify_function(func)
 }
 
 ///|
@@ -73,7 +73,7 @@ test "lower locals through native linear fast path" {
   inspect(text.contains("iadd"), content="true")
   inspect(text.contains("imul"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
-  inspect(func.verify(), content="()")
+  @wasm_milkir.verify_function(func)
 }
 
 ///|
@@ -89,7 +89,7 @@ test "lower nop and float locals through native linear fast path" {
   inspect(text.contains("fconst"), content="true")
   inspect(text.contains("fadd"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
-  inspect(func.verify(), content="()")
+  @wasm_milkir.verify_function(func)
 }
 
 ///|
@@ -106,7 +106,7 @@ test "lower branchless blocks through native linear fast path" {
   inspect(func.blocks.length(), content="1")
   inspect(text.contains("iadd"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
-  inspect(func.verify(), content="()")
+  @wasm_milkir.verify_function(func)
 }
 
 ///|
@@ -123,7 +123,7 @@ test "lower branchless loop through native linear fast path" {
   inspect(func.blocks.length(), content="1")
   inspect(text.contains("iadd"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
-  inspect(func.verify(), content="()")
+  @wasm_milkir.verify_function(func)
 }
 
 ///|
@@ -168,14 +168,14 @@ test "top-level frontend lowers structured if through production translator" {
   )
   let func = translate_function(native_test_env(), mod_, 0)
   inspect(func.blocks.length() > 1, content="true")
-  inspect(func.verify(), content="()")
+  @wasm_milkir.verify_function(func)
 }
 
 ///|
 test "return_call terminates the translated MilkIR block" {
   let mod_ = @types.Module::simple([], [], [ReturnCall(0)], "tail_recursive")
   let func = translate_function(native_test_env(), mod_, 0)
-  inspect(func.verify(), content="()")
+  @wasm_milkir.verify_function(func)
 }
 
 ///|
@@ -189,7 +189,7 @@ test "unreachable structured continuations remain verifier-safe" {
   for i, body in bodies {
     let mod_ = @types.Module::simple([], [], body, "unreachable_control_\{i}")
     let func = translate_function(native_test_env(), mod_, 0)
-    inspect(func.verify(), content="()")
+    @wasm_milkir.verify_function(func)
   }
 }
 
@@ -208,7 +208,7 @@ test "lower direct block branch through native linear fast path" {
   inspect(text.contains("iconst 7"), content="true")
   inspect(text.contains("iconst 9"), content="false")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
-  inspect(func.verify(), content="()")
+  @wasm_milkir.verify_function(func)
 }
 
 ///|
@@ -237,7 +237,7 @@ test "lower terminal block br_if through native linear fast path" {
   inspect(func.blocks.length(), content="1")
   inspect(text.contains("iconst 7"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
-  inspect(func.verify(), content="()")
+  @wasm_milkir.verify_function(func)
 }
 
 ///|
@@ -254,7 +254,7 @@ test "lower terminal current-block br_table through native linear fast path" {
   inspect(func.blocks.length(), content="1")
   inspect(text.contains("iconst 7"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
-  inspect(func.verify(), content="()")
+  @wasm_milkir.verify_function(func)
 }
 
 ///|
@@ -295,7 +295,7 @@ test "lower empty if through native linear fast path" {
   let text = func.print()
   inspect(text.contains("iconst 7"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
-  inspect(func.verify(), content="()")
+  @wasm_milkir.verify_function(func)
 }
 
 ///|
@@ -311,7 +311,7 @@ test "lower nop-only if through native linear fast path" {
   let text = func.print()
   inspect(text.contains("iconst 9"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
-  inspect(func.verify(), content="()")
+  @wasm_milkir.verify_function(func)
 }
 
 ///|
@@ -337,7 +337,7 @@ test "lower globals through native VMContext loads and stores" {
   inspect(text.contains("store.i32"), content="true")
   inspect(text.contains("load.i32"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
-  inspect(func.verify(), content="()")
+  @wasm_milkir.verify_function(func)
 }
 
 ///|
@@ -366,7 +366,7 @@ test "lower table size and get through native VMContext loads" {
   inspect(text.contains("ireduce"), content="true")
   inspect(text.contains("trap \"table out of bounds\""), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
-  inspect(func.verify(), content="()")
+  @wasm_milkir.verify_function(func)
 }
 
 ///|
@@ -389,14 +389,14 @@ test "production table.get preserves the table element carrier" {
     tables: [table],
   }
   let func = translate_function(native_test_env(), mod_, 0)
-  inspect(func.verify(), content="()")
+  @wasm_milkir.verify_function(func)
   let imported = {
     ..mod_,
     imports: [{ mod_name: "host", name: "table", desc: Table(table.type_) }],
     tables: [],
   }
   let imported_func = translate_function(native_test_env(), imported, 0)
-  inspect(imported_func.verify(), content="()")
+  @wasm_milkir.verify_function(imported_func)
 }
 
 ///|
@@ -424,7 +424,7 @@ test "lower table set through native table fill runtime call" {
   inspect(text.contains("wasmoon.TableFill"), content="false")
   inspect(text.contains("call wasmoon.runtime.table_fill"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
-  inspect(func.verify(), content="()")
+  @wasm_milkir.verify_function(func)
 }
 
 ///|
@@ -441,7 +441,7 @@ test "lower linear explicit return without legacy bridge" {
   inspect(func.blocks.length(), content="1")
   inspect(text.contains("iadd"), content="true")
   inspect(text.contains("return"), content="true")
-  inspect(func.verify(), content="()")
+  @wasm_milkir.verify_function(func)
 }
 
 ///|
@@ -458,7 +458,7 @@ test "lower return with dead tail without legacy bridge" {
   inspect(text.contains("return"), content="true")
   inspect(text.contains("iadd"), content="false")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
-  inspect(func.verify(), content="()")
+  @wasm_milkir.verify_function(func)
 }
 
 ///|
@@ -474,7 +474,7 @@ test "lower linear float arithmetic and drop without legacy bridge" {
   let text = func.print()
   inspect(func.blocks.length(), content="1")
   inspect(text.contains("fsub"), content="true")
-  inspect(func.verify(), content="()")
+  @wasm_milkir.verify_function(func)
 }
 
 ///|
@@ -518,7 +518,7 @@ test "lower linear integer bitops comparisons and select natively" {
   inspect(text.contains("ishl"), content="true")
   inspect(text.contains("icmp.eq"), content="true")
   inspect(text.contains("select"), content="true")
-  inspect(func.verify(), content="()")
+  @wasm_milkir.verify_function(func)
 }
 
 ///|
@@ -536,7 +536,7 @@ test "lower linear float compare and unary ops natively" {
   inspect(text.contains("fabs"), content="true")
   inspect(text.contains("fceil"), content="true")
   inspect(text.contains("fcmp.ge"), content="true")
-  inspect(func.verify(), content="()")
+  @wasm_milkir.verify_function(func)
 }
 
 ///|
@@ -553,7 +553,7 @@ test "lower linear integer extensions and reduction natively" {
   inspect(text.contains("ireduce"), content="true")
   inspect(text.contains("sextend8"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
-  inspect(func.verify(), content="()")
+  @wasm_milkir.verify_function(func)
 }
 
 ///|
@@ -570,7 +570,7 @@ test "lower linear i64 extensions natively" {
   inspect(text.contains("uextend"), content="true")
   inspect(text.contains("sextend32"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
-  inspect(func.verify(), content="()")
+  @wasm_milkir.verify_function(func)
 }
 
 ///|
@@ -587,7 +587,7 @@ test "lower linear float promotion and demotion natively" {
   inspect(text.contains("fdemote"), content="true")
   inspect(text.contains("fpromote"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
-  inspect(func.verify(), content="()")
+  @wasm_milkir.verify_function(func)
 }
 
 ///|
@@ -604,7 +604,7 @@ test "lower linear numeric conversions natively" {
   inspect(text.contains("fcvt_to_sint"), content="true")
   inspect(text.contains("uint_to_fcvt"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
-  inspect(func.verify(), content="()")
+  @wasm_milkir.verify_function(func)
 }
 
 ///|
@@ -621,7 +621,7 @@ test "lower linear saturating conversion and reinterpret natively" {
   inspect(text.contains("fcvt_to_uint_sat"), content="true")
   inspect(text.contains("bitcast"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
-  inspect(func.verify(), content="()")
+  @wasm_milkir.verify_function(func)
 }
 
 ///|
@@ -638,7 +638,7 @@ test "lower pure if into native MilkIR select" {
   inspect(func.blocks.length(), content="1")
   inspect(text.contains("select"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
-  inspect(func.verify(), content="()")
+  @wasm_milkir.verify_function(func)
 }
 
 ///|
@@ -664,7 +664,7 @@ test "lower pure if expression bodies into native MilkIR select" {
   inspect(text.contains("ishl"), content="true")
   inspect(text.contains("select"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
-  inspect(func.verify(), content="()")
+  @wasm_milkir.verify_function(func)
 }
 
 ///|
@@ -705,8 +705,8 @@ test "lower pure if copysign and wide multiply expression bodies" {
   inspect(wide_func.print().contains("smulh"), content="true")
   inspect(wide_func.print().contains("select"), content="true")
   inspect(wide_func.print().contains("TODO(wasm_frontend)"), content="false")
-  inspect(float_func.verify(), content="()")
-  inspect(wide_func.verify(), content="()")
+  @wasm_milkir.verify_function(float_func)
+  @wasm_milkir.verify_function(wide_func)
 }
 
 ///|
@@ -717,7 +717,7 @@ test "lower trap without wasm_frontend skeleton fallback" {
   let text = func.print()
   inspect(text.contains("unreachable"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
-  inspect(func.verify(), content="()")
+  @wasm_milkir.verify_function(func)
 }
 
 ///|
@@ -756,7 +756,7 @@ test "lower direct calls as generic MilkIR calls" {
   let text = func.print()
   inspect(text.contains("call_ptr(3) -> 1"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
-  inspect(func.verify(), content="()")
+  @wasm_milkir.verify_function(func)
 }
 
 ///|
@@ -786,7 +786,7 @@ test "lower memory operations through native MilkIR memory ops" {
   inspect(text.contains("load.i32"), content="true")
   inspect(text.contains("store.i32"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
-  inspect(func.verify(), content="()")
+  @wasm_milkir.verify_function(func)
 }
 
 ///|
@@ -811,7 +811,7 @@ test "lower copysign through native MilkIR bit operations" {
   inspect(text.contains("band"), content="true")
   inspect(text.contains("bor"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
-  inspect(func.verify(), content="()")
+  @wasm_milkir.verify_function(func)
 }
 
 ///|
@@ -835,7 +835,7 @@ test "lower wide i64 multiply through native MilkIR high-half ops" {
   inspect(text.contains("umulh"), content="true")
   inspect(text.contains("smulh"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
-  inspect(func.verify(), content="()")
+  @wasm_milkir.verify_function(func)
 }
 
 ///|
@@ -865,7 +865,7 @@ test "lower narrow memory operations through native MilkIR memory ops" {
   inspect(text.contains("store16"), content="true")
   inspect(text.contains("load8_s.i32"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
-  inspect(func.verify(), content="()")
+  @wasm_milkir.verify_function(func)
 }
 
 ///|
@@ -915,7 +915,7 @@ test "lower memory grow size and bulk helpers as native helper calls" {
   inspect(text.contains("call wasmoon.runtime.memory_init"), content="true")
   inspect(text.contains("call wasmoon.runtime.data_drop"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
-  inspect(func.verify(), content="()")
+  @wasm_milkir.verify_function(func)
 }
 
 ///|
@@ -934,7 +934,7 @@ test "lower non-zero memory.size through native descriptor loads" {
   inspect(text.contains("load.i64"), content="true")
   inspect(text.contains("ushr"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
-  inspect(func.verify(), content="()")
+  @wasm_milkir.verify_function(func)
 }
 
 ///|
@@ -965,7 +965,7 @@ test "lower non-zero memory load store with explicit bounds check" {
   inspect(text.contains("load.i32"), content="true")
   inspect(text.contains("store.i32"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
-  inspect(func.verify(), content="()")
+  @wasm_milkir.verify_function(func)
 }
 
 ///|
@@ -992,7 +992,7 @@ test "lower memory64 load with overflow-safe bounds check" {
   inspect(text.contains("icmp.uge"), content="true")
   inspect(text.contains("icmp.ule"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
-  inspect(func.verify(), content="()")
+  @wasm_milkir.verify_function(func)
 }
 
 ///|
@@ -1025,7 +1025,7 @@ test "lower memory64 narrow load store with overflow-safe bounds check" {
   inspect(text.contains("load8_u.i32"), content="true")
   inspect(text.contains("store8"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
-  inspect(func.verify(), content="()")
+  @wasm_milkir.verify_function(func)
 }
 
 ///|
@@ -1050,7 +1050,7 @@ test "lower v128 load store through native memory path" {
   inspect(text.contains("store.v128"), content="true")
   inspect(text.contains("wasmoon.LoadMemBase"), content="false")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
-  inspect(func.verify(), content="()")
+  @wasm_milkir.verify_function(func)
 }
 
 ///|
@@ -1105,7 +1105,7 @@ test "lower table bulk helpers as native helper calls" {
   inspect(text.contains("call wasmoon.runtime.table_init"), content="true")
   inspect(text.contains("call wasmoon.runtime.elem_drop"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
-  inspect(func.verify(), content="()")
+  @wasm_milkir.verify_function(func)
 }
 
 ///|
@@ -1122,7 +1122,7 @@ test "lower reference null and is_null natively" {
   inspect(text.contains("iconst"), content="true")
   inspect(text.contains("icmp.eq"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
-  inspect(func.verify(), content="()")
+  @wasm_milkir.verify_function(func)
 }
 
 ///|
@@ -1142,7 +1142,7 @@ test "lower reference func non-null and eq natively" {
   inspect(text.contains("trap \"null reference\""), content="true")
   inspect(text.contains("icmp.eq"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
-  inspect(func.verify(), content="()")
+  @wasm_milkir.verify_function(func)
 }
 
 ///|
@@ -1160,7 +1160,7 @@ test "lower i31 refs through native linear fast path" {
   inspect(text.contains("uextend"), content="true")
   inspect(text.contains("trap \"null i31 reference\""), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
-  inspect(func.verify(), content="()")
+  @wasm_milkir.verify_function(func)
 }
 
 ///|
@@ -1176,7 +1176,7 @@ test "lower ref conversion copies through native linear fast path" {
   let text = func.print()
   inspect(text.contains("copy"), content="true")
   inspect(text.contains("TODO(wasm_frontend)"), content="false")
-  inspect(func.verify(), content="()")
+  @wasm_milkir.verify_function(func)
 }
 
 ///|

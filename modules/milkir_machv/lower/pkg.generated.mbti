@@ -49,9 +49,9 @@ pub fn lower_c_libcall_direct(LoweringContext, @block.Block, @instr.ExternalName
 
 pub fn lower_core_function_with_config(@milkir.Function, LoweringConfig) -> @machv.Function raise @milkir.VerifyError
 
-pub fn lower_dialect_function(@milkir.Function, (LoweringContext, @milkir.Inst, @block.Block, @milkir.ExtOp) -> ExtensionLowerResult, isa? : @isa.ISA, embedding_abi? : @abi.EmbeddingABI?, external_helper_symbols? : Map[String, String], trap_payload_resolver? : (String) -> Int, num_imports? : Int, run_ir_opt? : Bool) -> @machv.Function raise @milkir.VerifyError
+pub fn lower_dialect_function(@milkir.Function, String, (@milkir.ExtensionInstView) -> String?, (LoweringContext, @milkir.Inst, @block.Block, @milkir.ExtOp) -> ExtensionLowerResult, isa? : @isa.ISA, embedding_abi? : @abi.EmbeddingABI?, external_helper_symbols? : Map[String, String], trap_payload_resolver? : (String) -> Int, num_imports? : Int, run_ir_opt? : Bool) -> @machv.Function raise @milkir.VerifyError
 
-pub fn lower_dialect_function_with_config(@milkir.Function, LoweringConfig, (LoweringContext, @milkir.Inst, @block.Block, @milkir.ExtOp) -> ExtensionLowerResult) -> @machv.Function raise @milkir.VerifyError
+pub fn lower_dialect_function_with_config(@milkir.Function, LoweringConfig, String, (@milkir.ExtensionInstView) -> String?, (LoweringContext, @milkir.Inst, @block.Block, @milkir.ExtOp) -> ExtensionLowerResult) -> @machv.Function raise @milkir.VerifyError
 
 pub fn lower_function(@milkir.Function, isa? : @isa.ISA, embedding_abi? : @abi.EmbeddingABI?, external_helper_symbols? : Map[String, String], trap_payload_resolver? : (String) -> Int, num_imports? : Int, run_ir_opt? : Bool) -> @machv.Function raise @milkir.VerifyError
 

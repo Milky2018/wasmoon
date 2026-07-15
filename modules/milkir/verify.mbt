@@ -107,7 +107,7 @@ pub fn Function::verify(self : Function) -> Unit raise VerifyError {
   let idom = CFG::build(self).compute_dominators()
   for block in self.blocks {
     for inst_index, inst in block.instructions {
-      verify_inst(self, inst, definitions, block.id, inst_index, idom)
+      verify_inst(inst, definitions, block.id, inst_index, idom)
     }
     if block.terminator is Some(term) {
       verify_terminator(
@@ -178,17 +178,24 @@ pub fn Function::verify_core(self : Function) -> Unit raise VerifyError {
 }
 
 ///|
-/// Verify the function and apply an owning adapter's validator to every
-/// extension operation before crossing the adapter seam.
+/// Verify generic MilkIR structure, require every extension to belong to the
+/// owning dialect, and apply that adapter's validator before crossing its seam.
 pub fn Function::verify_with_extension_validator(
   self : Function,
+  dialect : String,
   validate : (ExtensionInstView) -> String?,
 ) -> Unit raise VerifyError {
   self.verify()
   for block in self.blocks {
     for inst in block.instructions {
       if inst.opcode is Ext(_, _) {
-        if validate(extension_inst_view(inst)) is Some(message) {
+        let view = extension_inst_view(inst)
+        if view.op.dialect != dialect {
+          raise UnverifiableInstruction(
+            message="extension dialect '\{view.op.dialect}' is not owned by adapter '\{dialect}'",
+          )
+        }
+        if validate(view) is Some(message) {
           raise UnverifiableInstruction(message~)
         }
       }
@@ -357,7 +364,6 @@ fn verify_i32(value : Value, context : String) -> Unit raise VerifyError {
 
 ///|
 fn verify_inst(
-  func : Function,
   inst : Inst,
   definitions : @hashmap.HashMap[Int, ValueDefinition],
   use_block : Int,
@@ -368,9 +374,6 @@ fn verify_inst(
     verify_defined(arg, definitions, use_block, use_position, idom)
   }
   verify_opcode_contract(inst)
-  if inst.opcode is Ext(_, _) {
-    verify_extension(func, inst)
-  }
 }
 
 ///|
@@ -386,22 +389,6 @@ fn extension_inst_view(inst : Inst) -> ExtensionInstView {
       inst.results[i].ty
     }),
   }
-}
-
-///|
-fn verify_extension(func : Function, inst : Inst) -> Unit raise VerifyError {
-  let view = extension_inst_view(inst)
-  for registered in func.extension_validators {
-    if registered.dialect == view.op.dialect {
-      if (registered.validate)(view) is Some(message) {
-        raise UnverifiableInstruction(message~)
-      }
-      return
-    }
-  }
-  raise UnverifiableInstruction(
-    message="extension dialect '\{view.op.dialect}' has no registered validator",
-  )
 }
 
 ///|

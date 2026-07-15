@@ -1,5 +1,6 @@
 ///|
-const WASM_DIALECT : String = "wasm"
+/// Serialized dialect name used by Wasm MilkIR extension operations.
+pub const WASM_DIALECT : String = "wasm"
 
 ///|
 fn imm(values : Array[Int]) -> FixedArray[Int] {
@@ -84,7 +85,8 @@ pub fn decode_error(ext : @milkir.ExtOp) -> String? {
 }
 
 ///|
-fn validate_instruction(view : @milkir.ExtensionInstView) -> String? {
+/// Validate one read-only Wasm extension instruction at an adapter seam.
+pub fn validate_extension(view : @milkir.ExtensionInstView) -> String? {
   let opcode = match decode_result(view.op) {
     Ok(opcode) => opcode
     Err(message) => return Some(message)
@@ -112,14 +114,7 @@ fn validate_instruction(view : @milkir.ExtensionInstView) -> String? {
 pub fn verify_function(
   func : @milkir.Function,
 ) -> Unit raise @milkir.VerifyError {
-  func.verify_with_extension_validator(validate_instruction)
-}
-
-///|
-fn register_wasm_validator(builder : @milkir.FunctionBuilder) -> Unit {
-  builder
-  .get_function()
-  .register_extension_validator(WASM_DIALECT, validate_instruction)
+  func.verify_with_extension_validator(WASM_DIALECT, validate_extension)
 }
 
 ///|

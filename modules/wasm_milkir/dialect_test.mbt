@@ -38,12 +38,11 @@ test "Wasm extension decode reports unknown opcodes" {
 }
 
 ///|
-test "Wasm dialect validation rejects unknown opcodes during finalize" {
+test "Wasm adapter validation rejects unknown opcodes" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder("unknown_wasm_opcode")
-  get_exception_tag(builder) |> ignore
   builder.emit_void_ext_inst(ExtOp("wasm", "typo", []), [])
   builder.return_([])
-  try builder.finalize() catch {
+  try verify_function(builder.get_function()) catch {
     err =>
       inspect(
         err,
@@ -52,8 +51,16 @@ test "Wasm dialect validation rejects unknown opcodes during finalize" {
         ),
       )
   } noraise {
-    _ => fail("expected finalize to reject the unknown Wasm opcode")
+    _ => fail("expected Wasm validation to reject the unknown opcode")
   }
+}
+
+///|
+test "Wasm adapter validation accepts legal IR without producer metadata" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("legal_wasm_opcode")
+  builder.emit_ext_inst(I32, encode(GetExceptionTag), []) |> ignore
+  builder.return_([])
+  verify_function(builder.get_function())
 }
 
 ///|
@@ -72,11 +79,10 @@ test "Wasm extension decode validates bool immediates" {
 }
 
 ///|
-test "Wasm dialect validation rejects malformed immediates during finalize" {
+test "Wasm adapter validation rejects malformed immediates" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder(
     "malformed_wasm_opcode",
   )
-  get_exception_tag(builder) |> ignore
   builder.emit_void_ext_inst(
     ExtOp(
       "wasm",
@@ -86,7 +92,7 @@ test "Wasm dialect validation rejects malformed immediates during finalize" {
     [],
   )
   builder.return_([])
-  try builder.finalize() catch {
+  try verify_function(builder.get_function()) catch {
     err =>
       inspect(
         err,
@@ -95,7 +101,7 @@ test "Wasm dialect validation rejects malformed immediates during finalize" {
         ),
       )
   } noraise {
-    _ => fail("expected finalize to reject malformed Wasm immediates")
+    _ => fail("expected Wasm validation to reject malformed immediates")
   }
 }
 
@@ -104,10 +110,9 @@ test "Wasm dialect validation rejects missing fixed results" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder(
     "missing_wasm_extension_result",
   )
-  get_exception_tag(builder) |> ignore
   builder.emit_void_ext_inst(encode(GetExceptionTag), [])
   builder.return_([])
-  try builder.finalize() catch {
+  try verify_function(builder.get_function()) catch {
     err =>
       inspect(
         err,
@@ -116,7 +121,7 @@ test "Wasm dialect validation rejects missing fixed results" {
         ),
       )
   } noraise {
-    _ => fail("expected finalize to reject a missing Wasm extension result")
+    _ => fail("expected Wasm validation to reject a missing extension result")
   }
 }
 
@@ -125,10 +130,9 @@ test "Wasm dialect validation rejects invalid fixed operand shapes" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder(
     "invalid_wasm_extension_operands",
   )
-  get_exception_tag(builder) |> ignore
   builder.emit_ext_inst(I32, encode(RefEq), []) |> ignore
   builder.return_([])
-  try builder.finalize() catch {
+  try verify_function(builder.get_function()) catch {
     err =>
       inspect(
         err,
@@ -137,7 +141,7 @@ test "Wasm dialect validation rejects invalid fixed operand shapes" {
         ),
       )
   } noraise {
-    _ => fail("expected finalize to reject invalid Wasm extension operands")
+    _ => fail("expected Wasm validation to reject invalid extension operands")
   }
 }
 
@@ -147,13 +151,12 @@ test "Wasm dialect validation rejects fixed operand and result types" {
   let bad_result = @milkir.FunctionBuilder::FunctionBuilder(
     "invalid_wasm_extension_result_type",
   )
-  get_exception_tag(bad_result) |> ignore
   bad_result.emit_ext_inst(F64, encode(GetExceptionTag), []) |> ignore
   bad_result.return_([])
-  try bad_result.finalize() catch {
+  try verify_function(bad_result.get_function()) catch {
     err => rejected.push(err)
   } noraise {
-    _ => fail("expected finalize to reject a wrong Wasm extension result type")
+    _ => fail("expected Wasm validation to reject the wrong extension result")
   }
 
   let bad_operands = @milkir.FunctionBuilder::FunctionBuilder(
@@ -161,13 +164,12 @@ test "Wasm dialect validation rejects fixed operand and result types" {
   )
   let lhs = bad_operands.add_param(I32)
   let rhs = bad_operands.add_param(I32)
-  get_exception_tag(bad_operands) |> ignore
   bad_operands.emit_ext_inst(I32, encode(RefEq), [lhs, rhs]) |> ignore
   bad_operands.return_([])
-  try bad_operands.finalize() catch {
+  try verify_function(bad_operands.get_function()) catch {
     err => rejected.push(err)
   } noraise {
-    _ => fail("expected finalize to reject wrong Wasm extension operand types")
+    _ => fail("expected Wasm validation to reject wrong extension operands")
   }
   debug_inspect(
     rejected,
@@ -209,7 +211,6 @@ fn packed_get_verify_error(
   )
   let ref_value = builder.add_param(Ref)
   let index = builder.add_param(I32)
-  get_exception_tag(builder) |> ignore
   let immediates = match probe {
     StructGetSigned | StructGetUnsigned =>
       FixedArray::makei(3, fn(i) { if i == 2 { byte_width } else { 0 } })
@@ -227,7 +228,7 @@ fn packed_get_verify_error(
   )
   |> ignore
   builder.return_([])
-  try builder.finalize() catch {
+  try verify_function(builder.get_function()) catch {
     err => err
   } noraise {
     _ => abort("expected \{probe.wire_name()} verification to fail")
@@ -297,7 +298,7 @@ test "Wasm call_indirect accepts a table64 index" {
   let callee = builder.add_param(I64)
   call_indirect_multi(builder, 0, 0, [], callee, []) |> ignore
   builder.return_([])
-  builder.finalize() |> ignore
+  verify_function(builder.get_function())
 }
 
 ///|
@@ -308,7 +309,7 @@ test "Wasm return_call_indirect accepts a table64 index" {
   let callee = builder.add_param(I64)
   return_call_indirect_multi(builder, 0, 0, callee, [])
   builder.trap("unreachable after return_call_indirect")
-  builder.finalize() |> ignore
+  verify_function(builder.get_function())
 }
 
 ///|
@@ -320,7 +321,7 @@ test "Wasm indirect calls reject non-integer table indices" {
   let call_callee = call.add_param(F64)
   call_indirect_multi(call, 0, 0, [], call_callee, []) |> ignore
   call.return_([])
-  try call.finalize() catch {
+  try verify_function(call.get_function()) catch {
     err => rejected.push(err)
   } noraise {
     _ => fail("expected call_indirect to reject an f64 table index")
@@ -332,7 +333,7 @@ test "Wasm indirect calls reject non-integer table indices" {
   let return_callee = return_call.add_param(F64)
   return_call_indirect_multi(return_call, 0, 0, return_callee, [])
   return_call.trap("unreachable after return_call_indirect")
-  try return_call.finalize() catch {
+  try verify_function(return_call.get_function()) catch {
     err => rejected.push(err)
   } noraise {
     _ => fail("expected return_call_indirect to reject an f64 table index")

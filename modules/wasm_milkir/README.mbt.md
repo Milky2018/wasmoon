@@ -7,7 +7,7 @@ builder helpers used with MilkIR. Frontends encode Wasm operations through
 typed `WasmOpcode` constructors, then a lowering adapter checks and decodes
 those extensions before machine lowering.
 
-Typed Wasm builders automatically register the schema-derived validator on the MilkIR function. Finalization therefore rejects unknown opcode names, incorrect immediate counts, and malformed boolean immediates as structured MilkIR verification errors. The Wasm lowering adapter revalidates every extension with `verify_function` before decoding it.
+Typed Wasm builders only emit IR data; they do not attach validator closures to the MilkIR function. Generic MilkIR finalization checks the extension envelope and its explicit signature, while `verify_function` applies the schema-derived Wasm contracts at the adapter seam. Wasm lowering passes that verifier explicitly before decoding any extension.
 
 Typed constructors, serialized opcode names, and immediate layouts are defined once in `wasm_opcodes.schema`. During development, `dev_build` runs the deterministic `tools/generate_wasm_opcodes.py` generator to refresh the committed `dialect_generated.mbt` source. Published packages include that generated MoonBit source, so downstream builds neither load the schema at runtime nor execute development build rules.
 
@@ -51,7 +51,7 @@ test "build a Wasm memory.size extension instruction" {
   builder.return_([size])
   let func = builder.get_function()
   inspect(func.blocks.length(), content="1")
-  inspect(func.verify(), content="()")
+  verify_function(func)
   match func.blocks[0].instructions[1].opcode {
     Call(Direct(symbol, _)) =>
       inspect(symbol.name, content="example.runtime.memory_size")

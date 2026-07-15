@@ -171,7 +171,6 @@ pub fn lower_function(
   use_subtype_indirect_check? : Bool = true,
   canonical_type_indices? : Array[Int] = [],
 ) -> @machv.Function raise @milkir.VerifyError {
-  @wasm_milkir.verify_function(func)
   let options : WasmLoweringOptions = {
     use_subtype_indirect_check,
     canonical_type_indices,
@@ -187,6 +186,8 @@ pub fn lower_function(
   }
   @lower.lower_dialect_function(
     func,
+    @wasm_milkir.WASM_DIALECT,
+    @wasm_milkir.validate_extension,
     lower_extension,
     isa~,
     embedding_abi~,

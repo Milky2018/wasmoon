@@ -26,10 +26,11 @@ pub fn FunctionBuilder::get_function(self : FunctionBuilder) -> Function {
 }
 
 ///|
-/// Verify the current function and return the same mutable function.
+/// Verify generic MilkIR structure and return the same mutable function.
 ///
 /// Finalization is a validation checkpoint, not a frozen or persistent
-/// validated state. Any later mutation requires validation at the next
+/// validated state. Extension semantics remain the owning adapter's
+/// responsibility. Any later mutation requires validation at the next
 /// consuming seam.
 pub fn FunctionBuilder::finalize(
   self : FunctionBuilder,

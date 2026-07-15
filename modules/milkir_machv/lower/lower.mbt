@@ -1893,10 +1893,13 @@ pub fn lower_core_function_with_config(
 }
 
 ///|
-/// Lower dialect-bearing MilkIR with an explicit owning adapter.
+/// Lower dialect-bearing MilkIR with an explicit owning adapter verifier and
+/// instruction lowerer.
 pub fn lower_dialect_function_with_config(
   ir_func : @milkir.Function,
   config : LoweringConfig,
+  dialect : String,
+  validate_extension : (@milkir.ExtensionInstView) -> String?,
   extension_lowerer : (
     LoweringContext,
     @milkir.Inst,
@@ -1904,7 +1907,7 @@ pub fn lower_dialect_function_with_config(
     @milkir.ExtOp,
   ) -> ExtensionLowerResult,
 ) -> @machv.Function raise @milkir.VerifyError {
-  ir_func.verify()
+  ir_func.verify_with_extension_validator(dialect, validate_extension)
   lower_function_with_config_unchecked(
     ir_func,
     config.with_extension_lowerer(extension_lowerer),
@@ -1935,9 +1938,12 @@ pub fn lower_function(
 }
 
 ///|
-/// Lower dialect-bearing MilkIR to MachV with its required owning adapter.
+/// Lower dialect-bearing MilkIR to MachV with its required owning adapter
+/// verifier and instruction lowerer.
 pub fn lower_dialect_function(
   ir_func : @milkir.Function,
+  dialect : String,
+  validate_extension : (@milkir.ExtensionInstView) -> String?,
   extension_lowerer : (
     LoweringContext,
     @milkir.Inst,
@@ -1960,7 +1966,9 @@ pub fn lower_dialect_function(
     num_imports,
     run_ir_opt,
   }
-  lower_dialect_function_with_config(ir_func, config, extension_lowerer)
+  lower_dialect_function_with_config(
+    ir_func, config, dialect, validate_extension, extension_lowerer,
+  )
 }
 
 ///|

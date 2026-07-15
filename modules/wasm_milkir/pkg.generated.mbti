@@ -13,6 +13,8 @@ pub const FUNCREF_TAG : Int64 = 0x2000000000000000
 
 pub const NULL_REF : Int64 = 0
 
+pub const WASM_DIALECT : String = "wasm"
+
 pub fn any_convert_extern(@milkir.FunctionBuilder, @milkir.Value) -> @milkir.Value
 
 pub fn array_copy(@milkir.FunctionBuilder, Int, Int, @milkir.Value, @milkir.Value, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
@@ -138,6 +140,8 @@ pub fn table_init(@milkir.FunctionBuilder, RuntimeSymbols, @milkir.Value, Int, I
 pub fn try_table_begin(@milkir.FunctionBuilder, Int) -> @milkir.Value
 
 pub fn try_table_end(@milkir.FunctionBuilder, Int) -> Unit
+
+pub fn validate_extension(@milkir.ExtensionInstView) -> String?
 
 pub fn verify_function(@milkir.Function) -> Unit raise @milkir.VerifyError
 

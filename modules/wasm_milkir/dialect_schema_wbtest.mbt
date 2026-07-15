@@ -82,13 +82,12 @@ test "every schema row enforces its non-contextual minimum shape" {
     let builder = @milkir.FunctionBuilder::FunctionBuilder(
       "schema_contract_\{spec.wire_name}",
     )
-    get_exception_tag(builder) |> ignore
     builder.emit_void_ext_inst(
       ExtOp(WASM_DIALECT, spec.wire_name, valid_immediates(spec)),
       [],
     )
     builder.return_([])
-    try builder.finalize() catch {
+    try verify_function(builder.get_function()) catch {
       _ => rejected.push(spec.wire_name)
     } noraise {
       _ => ()
@@ -148,20 +147,18 @@ test "every schema row enforces its non-contextual minimum shape" {
 test "immediate-dependent operand counts are enforced" {
   let rejected : Array[@milkir.VerifyError] = []
   let fixed = @milkir.FunctionBuilder::FunctionBuilder("array_new_fixed_count")
-  get_exception_tag(fixed) |> ignore
   fixed.emit_ext_inst(Ref, encode(ArrayNewFixed(0, 2)), []) |> ignore
   fixed.return_([])
-  try fixed.finalize() catch {
+  try verify_function(fixed.get_function()) catch {
     err => rejected.push(err)
   } noraise {
     _ => fail("expected array.new_fixed count mismatch to be rejected")
   }
 
   let spill = @milkir.FunctionBuilder::FunctionBuilder("spill_local_count")
-  get_exception_tag(spill) |> ignore
   spill.emit_void_ext_inst(encode(SpillLocalsForThrow(2)), [])
   spill.return_([])
-  try spill.finalize() catch {
+  try verify_function(spill.get_function()) catch {
     err => rejected.push(err)
   } noraise {
     _ => fail("expected spill-locals count mismatch to be rejected")
