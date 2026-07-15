@@ -45,7 +45,6 @@ fn test_embedding_abi() -> @abi.EmbeddingABI {
 ///|
 test "Wasm lowering returns validation errors for unknown opcodes" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder("unknown_wasm_opcode")
-  @wasm_milkir.get_exception_tag(builder) |> ignore
   builder.emit_void_ext_inst(ExtOp("wasm", "typo", []), [])
   builder.return_([])
   try lower_function(builder.get_function(), test_context_slots()) catch {
@@ -62,30 +61,10 @@ test "Wasm lowering returns validation errors for unknown opcodes" {
 }
 
 ///|
-test "Wasm lowering does not trust a producer-provided validator" {
-  let builder = @milkir.FunctionBuilder::FunctionBuilder("untrusted_validator")
-  builder.get_function().register_extension_validator("wasm", fn(_) { None })
-  builder.emit_void_ext_inst(ExtOp("wasm", "typo", []), [])
-  builder.return_([])
-  try lower_function(builder.get_function(), test_context_slots()) catch {
-    err =>
-      inspect(
-        err,
-        content=(
-          #|UnverifiableInstruction(message="unknown Wasm MilkIR extension opcode 'typo'")
-        ),
-      )
-  } noraise {
-    _ => fail("expected Wasm lowering to apply its trusted validator")
-  }
-}
-
-///|
 test "Wasm lowering returns validation errors for malformed immediates" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder(
     "malformed_wasm_immediate",
   )
-  @wasm_milkir.get_exception_tag(builder) |> ignore
   builder.emit_void_ext_inst(
     ExtOp(
       "wasm",
@@ -113,7 +92,6 @@ test "Wasm lowering rejects missing fixed results before instruction selection" 
   let builder = @milkir.FunctionBuilder::FunctionBuilder(
     "missing_wasm_extension_result",
   )
-  @wasm_milkir.get_exception_tag(builder) |> ignore
   builder.emit_void_ext_inst(@wasm_milkir.encode(GetExceptionTag), [])
   builder.return_([])
   try lower_function(builder.get_function(), test_context_slots()) catch {
@@ -140,7 +118,6 @@ test "Wasm lowering rejects removed memory and table extension names" {
     let builder = @milkir.FunctionBuilder::FunctionBuilder(
       "removed_wasm_opcode",
     )
-    @wasm_milkir.get_exception_tag(builder) |> ignore
     builder.emit_void_ext_inst(ext, [])
     builder.return_([])
     try lower_function(builder.get_function(), test_context_slots()) catch {

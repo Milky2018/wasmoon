@@ -233,12 +233,6 @@ pub struct ExtensionInstView {
 } derive(Debug)
 
 ///|
-priv struct ExtensionValidator {
-  dialect : String
-  validate : (ExtensionInstView) -> String?
-}
-
-///|
 pub fn ExtOp::matches_descriptor(
   self : ExtOp,
   descriptor : ExtOpDescriptor,
@@ -846,7 +840,6 @@ pub(all) enum Terminator {
 /// Function - a complete IR function
 pub struct Function {
   priv owner : Ref[FunctionOwnerContext]
-  priv extension_validators : Array[ExtensionValidator]
   name : String
   params : Array[(Value, Type)] // Function parameters
   results : Array[Type] // Return types
@@ -875,7 +868,6 @@ pub impl Debug for Function with fn to_repr(self) {
 pub fn Function::new_empty(name : String) -> Function {
   {
     owner: FunctionOwnerContext::new(),
-    extension_validators: [],
     name,
     params: [],
     results: [],
@@ -885,21 +877,6 @@ pub fn Function::new_empty(name : String) -> Function {
     next_inst_id: 0,
     next_block_id: 0,
   }
-}
-
-///|
-/// Register the validator owned by an extension dialect used in this function.
-pub fn Function::register_extension_validator(
-  self : Function,
-  dialect : String,
-  validate : (ExtensionInstView) -> String?,
-) -> Unit {
-  for registered in self.extension_validators {
-    if registered.dialect == dialect {
-      return
-    }
-  }
-  self.extension_validators.push({ dialect, validate })
 }
 
 ///|

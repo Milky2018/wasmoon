@@ -43,7 +43,6 @@ fn emit_wasm_inst(
   opcode : WasmOpcode,
   operands : Array[@milkir.Value],
 ) -> @milkir.Value {
-  register_wasm_validator(builder)
   builder.emit_ext_inst(ty, encode(opcode), operands)
 }
 
@@ -53,7 +52,6 @@ fn emit_void_wasm_inst(
   opcode : WasmOpcode,
   operands : Array[@milkir.Value],
 ) -> Unit {
-  register_wasm_validator(builder)
   builder.emit_void_ext_inst(encode(opcode), operands)
 }
 
@@ -68,7 +66,6 @@ fn append_multi_result_inst(
     emit_void_wasm_inst(builder, opcode, args)
     return []
   }
-  register_wasm_validator(builder)
   builder.emit_multi_ext_inst(result_types, encode(opcode), args)
 }
 

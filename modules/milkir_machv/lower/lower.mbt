@@ -54,12 +54,6 @@ struct LoweringConfig {
   embedding_abi : @abi.EmbeddingABI?
   external_helper_symbols : Map[String, String]
   trap_payload_resolver : (String) -> Int
-  extension_lowerer : ((
-    LoweringContext,
-    @milkir.Inst,
-    @block.Block,
-    @milkir.ExtOp,
-  ) -> ExtensionLowerResult)?
   num_imports : Int
   run_ir_opt : Bool
 }
@@ -71,7 +65,6 @@ pub fn LoweringConfig::LoweringConfig(isa : @isa.ISA) -> LoweringConfig {
     embedding_abi: None,
     external_helper_symbols: Map([]),
     trap_payload_resolver: fn(_reason) { 0 },
-    extension_lowerer: None,
     num_imports: -1,
     run_ir_opt: true,
   }
@@ -87,7 +80,6 @@ pub fn LoweringConfig::with_embedding_abi(
     embedding_abi: Some(embedding_abi),
     external_helper_symbols: self.external_helper_symbols,
     trap_payload_resolver: self.trap_payload_resolver,
-    extension_lowerer: self.extension_lowerer,
     num_imports: self.num_imports,
     run_ir_opt: self.run_ir_opt,
   }
@@ -103,7 +95,6 @@ pub fn LoweringConfig::with_external_helper_symbols(
     embedding_abi: self.embedding_abi,
     external_helper_symbols,
     trap_payload_resolver: self.trap_payload_resolver,
-    extension_lowerer: self.extension_lowerer,
     num_imports: self.num_imports,
     run_ir_opt: self.run_ir_opt,
   }
@@ -119,28 +110,6 @@ pub fn LoweringConfig::with_trap_payload_resolver(
     embedding_abi: self.embedding_abi,
     external_helper_symbols: self.external_helper_symbols,
     trap_payload_resolver,
-    extension_lowerer: self.extension_lowerer,
-    num_imports: self.num_imports,
-    run_ir_opt: self.run_ir_opt,
-  }
-}
-
-///|
-pub fn LoweringConfig::with_extension_lowerer(
-  self : LoweringConfig,
-  extension_lowerer : (
-    LoweringContext,
-    @milkir.Inst,
-    @block.Block,
-    @milkir.ExtOp,
-  ) -> ExtensionLowerResult,
-) -> LoweringConfig {
-  {
-    isa: self.isa,
-    embedding_abi: self.embedding_abi,
-    external_helper_symbols: self.external_helper_symbols,
-    trap_payload_resolver: self.trap_payload_resolver,
-    extension_lowerer: Some(extension_lowerer),
     num_imports: self.num_imports,
     run_ir_opt: self.run_ir_opt,
   }
@@ -156,7 +125,6 @@ pub fn LoweringConfig::with_num_imports(
     embedding_abi: self.embedding_abi,
     external_helper_symbols: self.external_helper_symbols,
     trap_payload_resolver: self.trap_payload_resolver,
-    extension_lowerer: self.extension_lowerer,
     num_imports,
     run_ir_opt: self.run_ir_opt,
   }
@@ -172,7 +140,6 @@ pub fn LoweringConfig::with_ir_optimization(
     embedding_abi: self.embedding_abi,
     external_helper_symbols: self.external_helper_symbols,
     trap_payload_resolver: self.trap_payload_resolver,
-    extension_lowerer: self.extension_lowerer,
     num_imports: self.num_imports,
     run_ir_opt: enabled,
   }
@@ -1730,6 +1697,12 @@ fn intcc_to_cond(cc : @milkir.IntCC) -> @instr.Cond {
 fn lower_function_with_config_unchecked(
   ir_func : @milkir.Function,
   config : LoweringConfig,
+  extension_lowerer : ((
+    LoweringContext,
+    @milkir.Inst,
+    @block.Block,
+    @milkir.ExtOp,
+  ) -> ExtensionLowerResult)?,
 ) -> @machv.Function {
   // Keep this optional for call sites that already ran full IR optimization.
   if config.run_ir_opt {
@@ -1742,7 +1715,7 @@ fn lower_function_with_config_unchecked(
     config.embedding_abi,
     config.external_helper_symbols,
     config.trap_payload_resolver,
-    config.extension_lowerer,
+    extension_lowerer,
     config.num_imports,
   )
 
@@ -1885,18 +1858,18 @@ pub fn lower_core_function_with_config(
   ir_func : @milkir.Function,
   config : LoweringConfig,
 ) -> @machv.Function raise @milkir.VerifyError {
-  if config.extension_lowerer is Some(_) {
-    abort("core MilkIR lowering does not accept a dialect adapter")
-  }
   ir_func.verify_core()
-  lower_function_with_config_unchecked(ir_func, config)
+  lower_function_with_config_unchecked(ir_func, config, None)
 }
 
 ///|
-/// Lower dialect-bearing MilkIR with an explicit owning adapter.
+/// Lower dialect-bearing MilkIR with an explicit owning adapter verifier and
+/// instruction lowerer.
 pub fn lower_dialect_function_with_config(
   ir_func : @milkir.Function,
   config : LoweringConfig,
+  dialect : String,
+  validate_extension : (@milkir.ExtensionInstView) -> String?,
   extension_lowerer : (
     LoweringContext,
     @milkir.Inst,
@@ -1904,11 +1877,8 @@ pub fn lower_dialect_function_with_config(
     @milkir.ExtOp,
   ) -> ExtensionLowerResult,
 ) -> @machv.Function raise @milkir.VerifyError {
-  ir_func.verify()
-  lower_function_with_config_unchecked(
-    ir_func,
-    config.with_extension_lowerer(extension_lowerer),
-  )
+  ir_func.verify_with_extension_validator(dialect, validate_extension)
+  lower_function_with_config_unchecked(ir_func, config, Some(extension_lowerer))
 }
 
 ///|
@@ -1927,7 +1897,6 @@ pub fn lower_function(
     embedding_abi,
     external_helper_symbols,
     trap_payload_resolver,
-    extension_lowerer: None,
     num_imports,
     run_ir_opt,
   }
@@ -1935,9 +1904,12 @@ pub fn lower_function(
 }
 
 ///|
-/// Lower dialect-bearing MilkIR to MachV with its required owning adapter.
+/// Lower dialect-bearing MilkIR to MachV with its required owning adapter
+/// verifier and instruction lowerer.
 pub fn lower_dialect_function(
   ir_func : @milkir.Function,
+  dialect : String,
+  validate_extension : (@milkir.ExtensionInstView) -> String?,
   extension_lowerer : (
     LoweringContext,
     @milkir.Inst,
@@ -1956,11 +1928,12 @@ pub fn lower_dialect_function(
     embedding_abi,
     external_helper_symbols,
     trap_payload_resolver,
-    extension_lowerer: None,
     num_imports,
     run_ir_opt,
   }
-  lower_dialect_function_with_config(ir_func, config, extension_lowerer)
+  lower_dialect_function_with_config(
+    ir_func, config, dialect, validate_extension, extension_lowerer,
+  )
 }
 
 ///|

@@ -27,6 +27,8 @@ test "dialect lowering rejects a function mutated after finalization" {
   try
     @lower.lower_dialect_function(
       func,
+      "demo",
+      fn(_) { None },
       fn(_, _, block, _) { Handled(block) },
       run_ir_opt=false,
     )
@@ -34,5 +36,32 @@ test "dialect lowering rejects a function mutated after finalization" {
     err => inspect(err, content="UndefinedValue(value_id=0)")
   } noraise {
     _ => fail("expected dialect lowering to return the validation error")
+  }
+}
+
+///|
+test "dialect lowering applies its explicit adapter verifier" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("invalid_dialect")
+  builder.emit_void_ext_inst(ExtOp("demo", "invalid", []), [])
+  builder.return_([])
+  let func = builder.finalize()
+  try
+    @lower.lower_dialect_function(
+      func,
+      "demo",
+      fn(_) { Some("demo adapter rejected the extension") },
+      fn(_, _, block, _) { Handled(block) },
+      run_ir_opt=false,
+    )
+  catch {
+    err =>
+      inspect(
+        err,
+        content=(
+          #|UnverifiableInstruction(message="demo adapter rejected the extension")
+        ),
+      )
+  } noraise {
+    _ => fail("expected dialect lowering to apply adapter validation")
   }
 }
