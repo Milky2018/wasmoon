@@ -48,6 +48,10 @@ _Avoid_: register class, ABI value location, MilkIR type
 A `GcRef64` **MachV Value** that may be null and must remain identifiable as a GC root through target lowering and allocation.
 _Avoid_: ordinary pointer, opaque integer carrier, source-language reference type
 
+**MachV Constant**:
+A bit-exact, typed semantic definition of a **MachV Value**, including symbolic addresses and distinct null pointer or managed-reference values.
+_Avoid_: target immediate, raw process address, constant-pool entry
+
 **MachV Value**:
 An opaque function-owned handle to one single-definition value whose type and construction facts are held canonically by its **MachV** function.
 _Avoid_: raw value id, publicly constructed virtual register, duplicated typed tuple
@@ -142,6 +146,7 @@ _Avoid_: MachV emitter output, generic object format
 - A **MachV Value** is created through its function's interface, and all consumers resolve its **MachV Value Type** from that function's canonical value table.
 - A **MachV Value** has an in-memory function owner identity that rejects cross-function use but does not enter printing or serialization.
 - `Ptr64` and `GcRef64` are always 64-bit carriers; only `GcRef64` is a **MachV Managed Reference**.
+- A **MachV Constant** produces an ordinary SSA value; target lowering may select immediates, relocations, or constant-pool loads without changing its meaning.
 - **Semantic Legalization** completes during **MilkIR-MachV Lowering** without asking whether a host ISA has a matching instruction.
 - A **Semantic Superinstruction** belongs in **MachV** only when ordinary operations cannot reproduce its semantics without loss.
 - A **Semantic Memory Access** carries narrow-load extension semantics and memory effects, while target lowering selects an addressing mode.
@@ -180,6 +185,7 @@ _Avoid_: MachV emitter output, generic object format
 - Value identity previously duplicated ids and classes in public virtual-register records; resolved: a **MachV Value** is opaque and its function owns the sole value-type table.
 - Cross-function value identity was previously indistinguishable when dense ids collided; resolved: **MachV Value** handles carry a private function owner identity, and cloning or deserialization remaps values under a fresh owner.
 - Pointer and reference carriers previously collapsed into one register class; resolved: `Ptr64` denotes untraced addresses and handles, while `GcRef64` preserves managed-root identity without importing source-language reference kinds.
+- Constant representation previously mixed semantic values with target load and immediate forms; resolved: **MachV Constant** carries bit-exact typed meaning, while target encoding and storage belong downstream.
 - Instruction selection ownership was previously unclear; resolved: **MilkIR-MachV Lowering** is target-neutral, while **MachV Target Lowering** owns host instruction selection.
 - Legalization ownership was previously unclear; resolved: **Semantic Legalization** produces target-neutral **MachV**, while **Target Legalization** expands its operations into legal **Target VCode**.
 - Fused-operation ownership was previously unclear; resolved: only a **Semantic Superinstruction** may enter **MachV**, while performance-only fusion belongs to target lowering.
