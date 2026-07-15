@@ -28,6 +28,12 @@ pub suberror JITModuleLoadError {
     func_name~ : String,
     code_size~ : Int
   )
+  ImportTrampolineCompilationFailed(
+    import_idx~ : Int,
+    module_name~ : String,
+    func_name~ : String,
+    message~ : String
+  )
   FunctionCodeAllocationFailed(
     func_idx~ : Int,
     func_name~ : String,
@@ -259,7 +265,15 @@ pub fn JITModule::load_with_imports(
                 @wasmoon_jit.runtime_hostcall_symbol(),
                 @wasmoon_jit.wasm_calling_convention(isa~),
                 isa~,
-              )
+              ) catch {
+                err =>
+                  raise ImportTrampolineCompilationFailed(
+                    import_idx=i,
+                    module_name=imp.module_name,
+                    func_name=imp.func_name,
+                    message=err.to_string(),
+                  )
+              }
               let code_ints = mc.get_bytes()
               let exec = @wasmoon_jit.ExecCode::try_alloc(code_ints)
               match exec {

@@ -2,6 +2,7 @@
 test "build simple MachV function with FunctionBuilder" {
   let builder = FunctionBuilder::FunctionBuilder("copy")
   let src = builder.add_param(Int)
+  builder.add_result(I64)
   let dst = builder.new_vreg(Int)
   builder.append(Move, uses=[Virtual(src)], defs=[{ reg: Virtual(dst) }])
   |> ignore
@@ -42,7 +43,7 @@ test "print canonical MachV function" {
   inspect(
     builder.finish().print(),
     content=(
-      #|machv printed(v0:int) {
+      #|machv printed(v0:int) -> int {
       #|block0:
       #|    v1 = mov v0
       #|    ret v1

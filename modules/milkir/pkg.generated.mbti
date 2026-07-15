@@ -35,6 +35,7 @@ pub suberror VerifyError {
   TypeMismatch(message~ : String)
   UnverifiableInstruction(message~ : String)
 } derive(Eq, @debug.Debug)
+pub fn VerifyError::unverifiable_instruction(String) -> Self
 pub impl Show for VerifyError
 
 // Types and methods

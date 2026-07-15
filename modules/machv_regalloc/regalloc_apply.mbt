@@ -20,7 +20,8 @@ pub fn apply_allocation(
   alloc : RegAllocResult,
   isa : @isa.ISA,
   embedding_abi : @abi.EmbeddingABI,
-) -> @machv.Function {
+) -> @machv.Function raise @machv.VerifyError {
+  func.verify_for_regalloc_isa(isa)
   let new_func = func.clone_base()
   new_func.set_num_spill_slots(alloc.num_spill_slots)
   let block_id_to_index : Map[Int, Int] = Map([])
@@ -161,7 +162,7 @@ pub fn apply_allocation(
   }
 
   // Keep reload-coalescing pass disabled by default for Cranelift alignment.
-  let liveness = compute_liveness_for_regalloc(func)
+  let liveness = compute_liveness_with_options(func, false, false)
   let enable_reload_coalescing = false
   let reload_intervals : Map[(Int, Int), ReloadInterval] = if enable_reload_coalescing {
     let intervals = compute_reload_intervals(func, alloc)
@@ -295,11 +296,6 @@ pub fn apply_allocation(
         }
       }
     }
-  }
-
-  // Copy results
-  for r in func.results {
-    new_func.results.push(r)
   }
 
   // Copy result types for multi-value return support
@@ -887,7 +883,9 @@ pub fn apply_allocation(
       "unconsumed inst_edits entries: consumed=\{inst_edits_cursor} total=\{alloc.inst_edits.length()}",
     )
   }
-  eliminate_trivial_moves(new_func)
+  let result = eliminate_trivial_moves(new_func)
+  result.verify_for_regalloc_isa(isa)
+  result
 }
 
 ///|
@@ -909,9 +907,6 @@ fn eliminate_trivial_moves(func : @machv.Function) -> @machv.Function {
   }
   for preg in func.param_pregs {
     new_func.param_pregs.push(preg)
-  }
-  for result in func.results {
-    new_func.results.push(result)
   }
   for ty in func.result_kinds {
     new_func.result_kinds.push(ty)

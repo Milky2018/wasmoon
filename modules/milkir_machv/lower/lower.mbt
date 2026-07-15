@@ -1703,7 +1703,7 @@ fn lower_function_with_config_unchecked(
     @block.Block,
     @milkir.ExtOp,
   ) -> ExtensionLowerResult)?,
-) -> @machv.Function {
+) -> @machv.Function raise @milkir.VerifyError {
   // Keep this optional for call sites that already ran full IR optimization.
   if config.run_ir_opt {
     @milkir.optimize_with_level(ir_func, @milkir.OptLevel::from_int(0))
@@ -1806,8 +1806,6 @@ fn lower_function_with_config_unchecked(
 
   // Phase 3: Lower result types
   for ty in ir_func.results {
-    let class = ir_type_to_reg_class(ty)
-    ctx.machv_func.add_result(class)
     ctx.machv_func.add_result_kind(ir_type_to_value_kind(ty))
   }
 
@@ -1845,6 +1843,12 @@ fn lower_function_with_config_unchecked(
   // lowering site to set it correctly.
   if ctx.isa is AMD64 {
     fixup_amd64_shift_count_constraints(ctx.machv_func)
+  }
+  ctx.machv_func.verify() catch {
+    error =>
+      raise @milkir.VerifyError::unverifiable_instruction(
+        "invalid MachV produced by lowering: \{error}",
+      )
   }
   ctx.machv_func
 }
@@ -2584,16 +2588,36 @@ fn lower_terminator(
       }
       block.set_terminator(Jump(target_id, regs))
     }
-    Branch(cond, true_target, _true_args, false_target, _false_args) =>
-      // TODO(milkir): MachV MachV currently has no edge-argument branch
-      // terminator. Lower branch arguments through explicit block-param copies.
+    Branch(cond, true_target, true_args, false_target, false_args) => {
+      fn lower_edge(
+        ctx : LoweringContext,
+        source : @block.Block,
+        target : Int,
+        args : Array[@milkir.Value],
+      ) -> Int {
+        let target_id = ctx.get_block_id(target)
+        if args.is_empty() {
+          return target_id
+        }
+        let edge = ctx.machv_func.new_block()
+        let regs : Array[@abi.Reg] = []
+        for arg in args {
+          regs.push(Virtual(ctx.get_vreg_for_use(arg, source)))
+        }
+        edge.set_terminator(Jump(target_id, regs))
+        edge.id
+      }
+
+      let true_edge = lower_edge(ctx, block, true_target, true_args)
+      let false_edge = lower_edge(ctx, block, false_target, false_args)
       block.set_terminator(
         Branch(
           Virtual(ctx.get_vreg_for_use(cond, block)),
-          ctx.get_block_id(true_target),
-          ctx.get_block_id(false_target),
+          true_edge,
+          false_edge,
         ),
       )
+    }
     Brz(cond, then_block, else_block) => {
       let then_id = ctx.get_block_id(then_block)
       let else_id = ctx.get_block_id(else_block)

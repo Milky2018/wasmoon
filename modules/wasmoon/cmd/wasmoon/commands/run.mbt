@@ -1711,7 +1711,21 @@ pub fn compile_module_to_jit(
       machv_func,
       isa,
       embedding_abi=Some(embedding_abi),
-    )
+    ) catch {
+      err => {
+        emit_compile_progress(
+          on_progress,
+          Failed,
+          progress_start,
+          total_compile_funcs,
+          compiled_count,
+          func_idx=Some(func_idx),
+          func_name=Some(func_name),
+          message=Some(err.to_string()),
+        )
+        return None
+      }
+    }
     if regalloc_tick is Some(tick) {
       @perf.record_stage_us("regalloc", @perf.elapsed_us(tick))
       let (spills, reloads, reg_moves, spill_to_spill) = ra_output.spill_reload_stats()
@@ -1745,7 +1759,21 @@ pub fn compile_module_to_jit(
       force_frame_setup=enable_dwarf,
       embedding_abi=Some(embedding_abi),
       record_disasm=debug_db is Some(_),
-    )
+    ) catch {
+      err => {
+        emit_compile_progress(
+          on_progress,
+          Failed,
+          progress_start,
+          total_compile_funcs,
+          compiled_count,
+          func_idx=Some(func_idx),
+          func_name=Some(func_name),
+          message=Some(err.to_string()),
+        )
+        return None
+      }
+    }
     if emit_tick is Some(tick) {
       @perf.record_stage_us("emit", @perf.elapsed_us(tick))
     }

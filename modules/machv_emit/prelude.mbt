@@ -790,10 +790,12 @@ pub fn emit_function(
   force_frame_setup? : Bool = false,
   embedding_abi? : @abi.EmbeddingABI? = None,
   record_disasm? : Bool = true,
-) -> MachineCode {
+) -> MachineCode raise @machv.VerifyError {
+  func.verify_for_isa(isa)
   // Optimize block layout for better branch prediction
   // Loop rotation makes back edges fall through, reducing taken branches
   let func = @layout.optimize_layout(func)
+  func.verify_for_isa(isa)
   let mc = MachineCode::MachineCode(isa~, record_disasm~)
   let embedding_abi = require_embedding_abi(embedding_abi)
   let call_conv_layout = embedding_abi.call_conv
@@ -2076,10 +2078,13 @@ pub fn emit_function_with_regalloc(
   force_frame_setup? : Bool = false,
   embedding_abi? : @abi.EmbeddingABI? = None,
   record_disasm? : Bool = true,
-) -> MachineCode {
+) -> MachineCode raise @machv.VerifyError {
+  func.verify_for_isa(isa)
+  output.validate_for_isa(isa)
   // Regalloc output carries edge copies as edits keyed by original blocks.
   // Reorder blocks, but do not thread jumps across edge-copy blocks.
   let func = @layout.optimize_layout_preserving_edges(func)
+  func.verify_for_isa(isa)
   let mc = MachineCode::MachineCode(isa~, record_disasm~)
   let is_amd64 = isa is AMD64
   let embedding_abi = require_embedding_abi(embedding_abi)

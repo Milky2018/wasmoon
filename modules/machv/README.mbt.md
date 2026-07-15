@@ -44,7 +44,7 @@ test "build a 64-bit add function" {
   inspect(
     func.print(),
     content=(
-      #|machv add64(v0:int, v1:int) {
+      #|machv add64(v0:int, v1:int) -> int {
       #|block0:
       #|    v2 = add v0, v1
       #|    ret v2
@@ -59,10 +59,10 @@ test "build a 64-bit add function" {
 Read the generated MachV from top to bottom:
 
 ```text
-machv add64(v0:int, v1:int) {  two integer-register parameters
-block0:                        execution starts in block0
-    v2 = add v0, v1           read v0 and v1, then define v2
-    ret v2                     return the value in v2
+machv add64(v0:int, v1:int) -> int {  two integer-register parameters and one result
+block0:                               execution starts in block0
+    v2 = add v0, v1                  read v0 and v1, then define v2
+    ret v2                            return the value in v2
 }
 ```
 
@@ -140,7 +140,7 @@ The order of `uses` and `defs` follows the operand contract of the opcode. For e
 ```text
 Add(true)     uses [lhs, rhs]       defs [result]
 Load(I64, 8)  uses [base]           defs [loaded]
-Store(I64, 8) uses [value, base]    defs []
+Store(I64, 8) uses [base, value]    defs []
 Move          uses [source]         defs [destination]
 ```
 
@@ -155,6 +155,7 @@ Most operands use `Any`, allowing register allocation to choose a location. `Fix
 test "attach a fixed-register constraint" {
   let builder = FunctionBuilder::FunctionBuilder("fixed_result")
   let src = builder.add_param(Int)
+  builder.add_result(I64)
   let dst = builder.new_vreg(Int)
   let required : PReg = { index: 1, class: Int }
 
@@ -217,6 +218,12 @@ The main terminators are:
 
 Every block passed to register allocation or emission needs a terminator.
 
+## Verification boundaries
+
+`Function::verify()` checks the target-independent MachV contract: CFG targets and edge arguments, function returns, constraint-array alignment, exhaustive opcode operand contracts, virtual-register definition uniqueness, use-before-definition, and dominance. `Function::verify_for_isa(isa)` additionally rejects physical registers that are illegal for the selected target. Register allocation uses `verify_for_regalloc_isa(isa)`, which also requires dense block IDs because its tables address blocks by numeric ID.
+
+`FunctionBuilder::finish()` calls `verify()` before returning. The lowering, register-allocation, and emission seams verify again because `Function`, `Block`, and `Inst` expose mutable arrays; callers may legally transform a function after construction, but they cannot bypass validation before a backend consumer processes it. Failures are returned as structured `VerifyError` values.
+
 ## Calls, ABI data, and stack state
 
 MachV records the machine-level information needed around calls:
@@ -231,7 +238,7 @@ Call targets can remain symbolic through MachV and machine-code emission. The em
 
 ## Construction rules
 
-`FunctionBuilder` records the instruction shape supplied by the caller; it does not infer an opcode's operands. A lowering implementation should maintain these rules:
+`FunctionBuilder` records the instruction shape supplied by the caller; it does not infer an opcode's operands. `finish()` verifies that shape. A lowering implementation should maintain these rules:
 
 1. Give every block exactly one terminator.
 2. Supply `uses` and `defs` in the order required by the opcode.
@@ -239,7 +246,7 @@ Call targets can remain symbolic through MachV and machine-code emission. The em
 4. Keep constraint arrays aligned with their corresponding operands.
 5. Use `Function::print()` in lowering tests so instruction and control-flow mistakes are easy to inspect.
 
-Downstream register-allocation and emission tests provide the strongest end-to-end check that a constructed function satisfies the selected target's requirements.
+Call `verify()` after target-independent transformations and `verify_for_isa(isa)` when physical registers or fixed constraints are present. Register allocation and emission also enforce these checks at their public entry points.
 
 ## Packages
 

@@ -100,9 +100,9 @@ pub fn direct_call_idx_memory_fill_mem0() -> Int
 
 pub fn embedding_context_layout() -> @abi.EmbeddingContextLayout
 
-pub fn emit_entry_trampoline(Array[Int], Array[Int], @abi.CallConventionLayout, isa? : @isa.ISA) -> @machv_emit.MachineCode
+pub fn emit_entry_trampoline(Array[Int], Array[Int], @abi.CallConventionLayout, isa? : @isa.ISA) -> @machv_emit.MachineCode raise JitPipelineError
 
-pub fn emit_hostcall_import_trampoline(Array[@types.ValueType], Array[@types.ValueType], Int, @instr.ExternalName, @abi.CallConventionLayout, isa? : @isa.ISA) -> @machv_emit.MachineCode
+pub fn emit_hostcall_import_trampoline(Array[@types.ValueType], Array[@types.ValueType], Int, @instr.ExternalName, @abi.CallConventionLayout, isa? : @isa.ISA) -> @machv_emit.MachineCode raise JitPipelineError
 
 pub fn emit_target_to_isa(@machv_emit.EmitTarget) -> @isa.ISA
 
@@ -404,7 +404,7 @@ pub fn plan_entry_trampoline_for_target(Array[@types.ValueType], Array[@types.Va
 
 pub fn plan_hostcall_import_trampoline_layout(Array[@types.ValueType], Array[@types.ValueType], Int, Int) -> HostcallImportTrampolineLayout
 
-pub fn plan_integration_for_target(@milkir.Function, @machv.Function, @machv_regalloc.Output, @machv_emit.EmitTarget) -> JitIntegrationPlan
+pub fn plan_integration_for_target(@milkir.Function, @machv.Function, @machv_regalloc.Output, @machv_emit.EmitTarget) -> JitIntegrationPlan raise JitPipelineError
 
 pub fn plan_milkir_integration_for_target(@milkir.Function, @machv_emit.EmitTarget) -> JitIntegrationPlan raise JitPipelineError
 

@@ -14,7 +14,7 @@ import {
 }
 
 // Values
-pub fn compiler_infrastructure_assembly() -> CompilerInfrastructureAssembly
+pub fn compiler_infrastructure_assembly() -> CompilerInfrastructureAssembly raise WasmCompilerPipelineError
 
 pub fn plan_wasm_function_with_compiler_infra(@embedding.EmbeddingEnvironment, @types.Module, Int, @machv_emit.EmitTarget, opt_level? : Int) -> @wasmoon_jit.JitIntegrationPlan raise WasmCompilerPipelineError
 

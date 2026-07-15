@@ -168,12 +168,9 @@ pub fn eliminate_dead_code(func : @machv.Function) -> @machv.Function {
   // Step 2: Build new function without dead instructions
   let new_func = func.clone_base()
 
-  // Copy params and results
+  // Copy params and result types
   for param in func.params {
     new_func.params.push(param)
-  }
-  for result in func.results {
-    new_func.results.push(result)
   }
   // Copy result types for multi-value return support
   for ty in func.result_kinds {
@@ -321,7 +318,7 @@ fn build_reg_pools(
 pub fn allocate_registers_backtracking(
   func : @machv.Function,
   embedding_abi? : @abi.EmbeddingABI? = None,
-) -> @machv.Function {
+) -> @machv.Function raise @machv.VerifyError {
   allocate_registers_backtracking_with_isa(func, AArch64, embedding_abi~)
 }
 
@@ -331,12 +328,14 @@ pub fn allocate_registers_backtracking_with_isa(
   func : @machv.Function,
   isa : @isa.ISA,
   embedding_abi? : @abi.EmbeddingABI? = None,
-) -> @machv.Function {
+) -> @machv.Function raise @machv.VerifyError {
+  func.verify_for_regalloc_isa(isa)
   // Keep Cranelift-style cheap rematerialization before allocation to shorten
   // cross-block live ranges for constants/function pointers.
   let func = rematerialize_long_distance_constants(func)
   let func = rematerialize_cross_block_constants(func)
   let func = eliminate_dead_code(func)
+  func.verify_for_regalloc_isa(isa)
   let embedding_abi = require_embedding_abi(embedding_abi)
 
   // Build register pools
@@ -349,7 +348,7 @@ pub fn allocate_registers_backtracking_with_isa(
   ) = build_reg_pools(isa, func, embedding_abi)
 
   // Compute liveness (Phase 1)
-  let liveness = compute_liveness_for_regalloc(func)
+  let liveness = compute_liveness_with_options(func, false, false)
   let algorithm = selected_regalloc_algorithm()
 
   // Delegate allocator-core decisions to regalloc through the MachV adapter.
@@ -383,7 +382,7 @@ pub fn allocate_registers_backtracking_with_isa(
 pub fn allocate_registers_backtracking_output(
   func : @machv.Function,
   embedding_abi? : @abi.EmbeddingABI? = None,
-) -> (@machv.Function, Output) {
+) -> (@machv.Function, Output) raise @machv.VerifyError {
   allocate_registers_backtracking_output_with_isa(func, AArch64, embedding_abi~)
 }
 
@@ -394,12 +393,14 @@ pub fn allocate_registers_backtracking_output_with_isa(
   func : @machv.Function,
   isa : @isa.ISA,
   embedding_abi? : @abi.EmbeddingABI? = None,
-) -> (@machv.Function, Output) {
+) -> (@machv.Function, Output) raise @machv.VerifyError {
+  func.verify_for_regalloc_isa(isa)
   // Keep Cranelift-style cheap rematerialization before allocation to shorten
   // cross-block live ranges for constants/function pointers.
   let func = rematerialize_long_distance_constants(func)
   let func = rematerialize_cross_block_constants(func)
   let func = eliminate_dead_code(func)
+  func.verify_for_regalloc_isa(isa)
   let embedding_abi = require_embedding_abi(embedding_abi)
 
   // Build register pools.
@@ -414,7 +415,7 @@ pub fn allocate_registers_backtracking_output_with_isa(
   // Compute liveness (Phase 1).
   let perf_on = perf_enabled()
   let tick_liveness = if perf_on { Some(perf_tick_now()) } else { None }
-  let liveness = compute_liveness_for_regalloc(func)
+  let liveness = compute_liveness_with_options(func, false, false)
   let algorithm = selected_regalloc_algorithm()
   if tick_liveness is Some(tick) {
     perf_record_regalloc_phase_us(
@@ -448,9 +449,7 @@ pub fn allocate_registers_backtracking_output_with_isa(
   if tick_output is Some(tick) {
     perf_record_regalloc_phase_us("phase_build_output", perf_elapsed_us(tick))
   }
-  if regalloc_validation_enabled() {
-    output.validate_for_isa(isa)
-  }
+  output.validate_for_isa(isa)
   (func, output)
 }
 
@@ -509,7 +508,8 @@ pub fn get_alloc_stats(
   func : @machv.Function,
   isa? : @isa.ISA = AArch64,
   embedding_abi? : @abi.EmbeddingABI? = None,
-) -> AllocStats {
+) -> AllocStats raise @machv.VerifyError {
+  func.verify_for_regalloc_isa(isa)
   let func = eliminate_dead_code(func)
   let func = rematerialize_cross_block_constants(func)
   let func = eliminate_dead_code(func)
@@ -521,7 +521,7 @@ pub fn get_alloc_stats(
     callee_saved_int_regs,
     callee_saved_float_regs,
   ) = build_reg_pools(isa, func, embedding_abi)
-  let liveness = compute_liveness(func)
+  let liveness = compute_liveness_with_options(func, true, true)
 
   // Count vregs
   let num_vregs = liveness.intervals.length()

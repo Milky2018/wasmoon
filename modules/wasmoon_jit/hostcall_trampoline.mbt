@@ -72,7 +72,7 @@ pub fn emit_hostcall_import_trampoline(
   hostcall_symbol : @instr.ExternalName,
   call_conv_layout : @abi.CallConventionLayout,
   isa? : @isa.ISA = AArch64,
-) -> @machv_emit.MachineCode {
+) -> @machv_emit.MachineCode raise JitPipelineError {
   let func = @machv.Function::Function("host_import_trampoline")
   let roles = wasm_embedding_reg_roles(isa~)
 
@@ -134,7 +134,6 @@ pub fn emit_hostcall_import_trampoline(
 
   // Results.
   for ty in result_types {
-    func.add_result(value_type_to_reg_class(ty))
     func.add_result_kind(value_type_to_value_kind(ty))
   }
 
@@ -325,6 +324,10 @@ pub fn emit_hostcall_import_trampoline(
     func,
     isa,
     embedding_abi=Some(embedding_abi),
-  )
-  @machv_emit.emit_function(allocated, isa~, embedding_abi=Some(embedding_abi))
+  ) catch {
+    err => raise PipelineFailure(message=to_repr(err).to_string())
+  }
+  @machv_emit.emit_function(allocated, isa~, embedding_abi=Some(embedding_abi)) catch {
+    err => raise PipelineFailure(message=to_repr(err).to_string())
+  }
 }

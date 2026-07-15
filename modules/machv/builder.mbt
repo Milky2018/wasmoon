@@ -97,7 +97,10 @@ pub fn FunctionBuilder::terminate(
 }
 
 ///|
-pub fn FunctionBuilder::finish(self : FunctionBuilder) -> Function {
+pub fn FunctionBuilder::finish(
+  self : FunctionBuilder,
+) -> Function raise VerifyError {
+  self.func.verify()
   self.func
 }
 

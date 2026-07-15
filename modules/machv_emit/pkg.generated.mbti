@@ -11,9 +11,9 @@ import {
 }
 
 // Values
-pub fn emit_function(@machv.Function, isa? : @isa.ISA, debug_func_idx? : Int?, force_frame_setup? : Bool, embedding_abi? : @abi.EmbeddingABI?, record_disasm? : Bool) -> MachineCode
+pub fn emit_function(@machv.Function, isa? : @isa.ISA, debug_func_idx? : Int?, force_frame_setup? : Bool, embedding_abi? : @abi.EmbeddingABI?, record_disasm? : Bool) -> MachineCode raise @machv.VerifyError
 
-pub fn emit_function_with_regalloc(@machv.Function, @machv_regalloc.Output, isa? : @isa.ISA, debug_func_idx? : Int?, force_frame_setup? : Bool, embedding_abi? : @abi.EmbeddingABI?, record_disasm? : Bool) -> MachineCode
+pub fn emit_function_with_regalloc(@machv.Function, @machv_regalloc.Output, isa? : @isa.ISA, debug_func_idx? : Int?, force_frame_setup? : Bool, embedding_abi? : @abi.EmbeddingABI?, record_disasm? : Bool) -> MachineCode raise @machv.VerifyError
 
 pub fn fits_signed_i32(Int) -> Bool
 

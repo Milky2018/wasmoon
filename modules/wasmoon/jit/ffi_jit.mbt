@@ -312,7 +312,9 @@ fn JITContext::call_multi_return(
         result_codes_arr,
         @wasmoon_jit.wasm_calling_convention(isa~),
         isa~,
-      )
+      ) catch {
+        err => raise JITTrap("entry trampoline verification failed: \{err}")
+      }
       let code_ints = mc.get_bytes()
       let trampoline = @wasmoon_jit.ExecCode::try_alloc(code_ints)
       match trampoline {

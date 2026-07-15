@@ -31,6 +31,13 @@ pub impl Show for VerifyError with fn output(self, logger) {
 }
 
 ///|
+/// Construct a structured error for a consumer seam that cannot validate or
+/// lower an otherwise well-formed MilkIR function.
+pub fn VerifyError::unverifiable_instruction(message : String) -> VerifyError {
+  UnverifiableInstruction(message~)
+}
+
+///|
 pub fn Function::verify(self : Function) -> Unit raise VerifyError {
   if self.owner.val.construction_error is Some(error) {
     raise error
