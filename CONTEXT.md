@@ -60,6 +60,10 @@ _Avoid_: raw value id, publicly constructed virtual register, duplicated typed t
 The ordered parameter and result **MachV Value Type** contract of one function or semantic call, independent of host ABI placement and effects.
 _Avoid_: calling convention, ABI signature, register-class signature
 
+**MachV Edge**:
+A target-neutral control-flow connection from one terminator to a block, carrying ordered SSA arguments that match the target block parameters.
+_Avoid_: bare block id, synthetic edge block, implicit phi input
+
 **MilkIR-MachV Lowering**:
 The target-neutral layer that lowers **MilkIR** into **MachV** without choosing host instructions, calling conventions, physical registers, or target constraints.
 _Avoid_: instruction selection, target backend, wasmoon JIT
@@ -155,6 +159,7 @@ _Avoid_: MachV emitter output, generic object format
 - A **MachV Value** has an in-memory function owner identity that rejects cross-function use but does not enter printing or serialization.
 - Function parameters are the initial **MachV Values** declared by a **MachV Signature**; a hidden context, when needed, is an explicit `Ptr64` parameter.
 - Returns and **Semantic Calls** match their **MachV Signature** exactly, while effects, safepoints, and unwind behavior remain separate semantic summaries.
+- Every successor-bearing MachV terminator uses a **MachV Edge**, so jumps, conditional branches, and multi-way branches pass block arguments through the same interface.
 - `Ptr64` and `GcRef64` are always 64-bit carriers; only `GcRef64` is a **MachV Managed Reference**.
 - A **MachV Constant** produces an ordinary SSA value; target lowering may select immediates, relocations, or constant-pool loads without changing its meaning.
 - **Semantic Legalization** completes during **MilkIR-MachV Lowering** without asking whether a host ISA has a matching instruction.
@@ -212,6 +217,7 @@ _Avoid_: MachV emitter output, generic object format
 - Register-allocation placement was reopened; resolved: **Register Allocation** consumes the target-specific representation produced by **MachV Target Lowering**, never **MachV** itself.
 - Value-location ownership was previously mixed into **MachV**; resolved: MachV safepoints and operations reference values, while **Allocated Location** and frame layout belong downstream.
 - Function signatures previously carried ABI result locations, stack counts, and placement facts; resolved: a **MachV Signature** contains only ordered parameter and result types, while ABI facts belong downstream.
+- Conditional and multi-way branches previously carried only target ids, forcing producers to insert jump-only blocks for SSA arguments; resolved: every successor is a **MachV Edge** with explicit arguments.
 - Machine-code-emission ownership has been reopened: decide the interface between target-specific representations, byte encoding, generic metadata, and **Wasmoon JIT** runtime resolution.
 - Precompiled output ownership was ambiguous; resolved: **Cwasm Artifact** belongs to **Wasmoon JIT**, not a **Target Emitter**.
 - Native JIT glue ownership was ambiguous; resolved: **JIT FFI** remains in **Wasmoon JIT** for the first split instead of creating a generic executable-memory module.
