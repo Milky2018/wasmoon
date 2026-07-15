@@ -119,7 +119,13 @@ fn lower_float_to_int(
   block.add_inst(nan_check)
 
   // Step 2: TrapIf(Vs) - trap if NaN
-  let trap_nan_cond = ctx.isa.unordered_float_condition()
+  let trap_nan_cond = if ctx.isa is AMD64 {
+    // Cranelift x64 checks unorderedness via UCOMIS* parity (PF=1).
+    @instr.Cond::Ps
+  } else {
+    // AArch64 FCMP reports unorderedness via the V flag.
+    Vs
+  }
   let trap_nan = @instr.Inst(TrapIf(trap_nan_cond, 3))
   block.add_inst(trap_nan)
 

@@ -1,6 +1,5 @@
 import {
   "Milky2018/machv/abi",
-  "Milky2018/machv/instr",
   "Milky2018/machv/isa/spec",
   "Milky2018/machv/isa/aarch64",
   "Milky2018/machv/isa/amd64",

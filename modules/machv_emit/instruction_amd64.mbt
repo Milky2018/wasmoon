@@ -176,13 +176,13 @@ fn MachineCode::emit_instruction_x86_64(
       I32 | I64 => {
         match ext {
           None => if rt != index { self.x86_emit_mov_rr(rt, index) }
-          ZeroExtend32 =>
+          Uxtw =>
             if rt != index {
               self.x86_emit_mov_rr32(rt, index)
             } else {
               self.x86_emit_mov_rr32(rt, rt)
             }
-          SignExtend32 =>
+          Sxtw =>
             if rt != index {
               self.x86_emit_movsxd_r64_r32(rt, index)
             } else {
@@ -276,7 +276,7 @@ fn MachineCode::emit_instruction_x86_64(
     // If not equal, use native min/max.
     self.x86_emit_jcc_rel32(Ne, do_min_max) // JNZ
     // If unordered (NaN), propagate NaN via add.
-    self.x86_emit_jcc_rel32(AMD64(ParitySet), propagate_nan) // JP
+    self.x86_emit_jcc_rel32(Ps, propagate_nan) // JP
 
     // Ordered and equal: merge sign bits to handle -0 vs +0.
     if is_f32 {
@@ -298,7 +298,7 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_addsd_xmm_xmm(rd, lhs_reg)
     }
     // PF is still set from the UCOMIS* above, so JP is always taken here.
-    self.x86_emit_jcc_rel32(AMD64(ParitySet), done)
+    self.x86_emit_jcc_rel32(Ps, done)
     self.define_label(do_min_max)
     if is_f32 {
       if is_min {
@@ -994,12 +994,9 @@ fn MachineCode::emit_instruction_x86_64(
       let rm = reg_num(inst.uses[1])
       let tmp = pick_scratch_gpr(isa, rd, rn, rm, -1)
       match ext {
-        ZeroExtend32 => self.x86_emit_mov_rr32(tmp, rm)
-        SignExtend32 => self.x86_emit_movsxd_r64_r32(tmp, rm)
-        None =>
-          abort(
-            "x86_64 add_extend expects ZeroExtend32 or SignExtend32, got None",
-          )
+        Uxtw => self.x86_emit_mov_rr32(tmp, rm)
+        Sxtw => self.x86_emit_movsxd_r64_r32(tmp, rm)
+        None => abort("x86_64 add_extend expects Uxtw or Sxtw, got None")
       }
       let sh = amount & 63
       if sh != 0 {
@@ -1018,12 +1015,9 @@ fn MachineCode::emit_instruction_x86_64(
       let rm = reg_num(inst.uses[1])
       let tmp = pick_scratch_gpr(isa, rd, rn, rm, -1)
       match ext {
-        ZeroExtend32 => self.x86_emit_mov_rr32(tmp, rm)
-        SignExtend32 => self.x86_emit_movsxd_r64_r32(tmp, rm)
-        None =>
-          abort(
-            "x86_64 sub_extend expects ZeroExtend32 or SignExtend32, got None",
-          )
+        Uxtw => self.x86_emit_mov_rr32(tmp, rm)
+        Sxtw => self.x86_emit_movsxd_r64_r32(tmp, rm)
+        None => abort("x86_64 sub_extend expects Uxtw or Sxtw, got None")
       }
       let sh = amount & 63
       if sh != 0 {
@@ -1635,7 +1629,7 @@ fn MachineCode::emit_instruction_x86_64(
         Eq => {
           emit_ucomis(self, is_f32, lhs, rhs)
           self.x86_emit_setcc_r8(Eq, rd) // Z
-          self.x86_emit_setcc_r8(AMD64(ParityClear), scratch) // NP (parity clear)
+          self.x86_emit_setcc_r8(Pc, scratch) // NP (parity clear)
           self.x86_emit_movzx_r32_r8(rd, rd)
           self.x86_emit_movzx_r32_r8(scratch, scratch)
           self.x86_emit_and_rr32(rd, scratch)
@@ -1643,7 +1637,7 @@ fn MachineCode::emit_instruction_x86_64(
         Ne => {
           emit_ucomis(self, is_f32, lhs, rhs)
           self.x86_emit_setcc_r8(Ne, rd) // NZ
-          self.x86_emit_setcc_r8(AMD64(ParitySet), scratch) // P (parity set)
+          self.x86_emit_setcc_r8(Ps, scratch) // P (parity set)
           self.x86_emit_movzx_r32_r8(rd, rd)
           self.x86_emit_movzx_r32_r8(scratch, scratch)
           self.x86_emit_or_rr32(rd, scratch)
@@ -1929,7 +1923,7 @@ fn MachineCode::emit_instruction_x86_64(
 
         // NaN => 0
         emit_ucomis(self, is_f32, src_xmm, src_xmm)
-        self.x86_emit_jcc_rel32(AMD64(ParityClear), not_nan) // JNP
+        self.x86_emit_jcc_rel32(Pc, not_nan) // JNP
         emit_xor_self(self, is_i64, dst)
         self.x86_emit_jmp_rel32(done)
         self.define_label(not_nan)
@@ -1967,7 +1961,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_jcc_rel32(Hs, handle_large) // JAE/JNB
 
         // NaN => 0
-        self.x86_emit_jcc_rel32(AMD64(ParityClear), not_nan) // JNP
+        self.x86_emit_jcc_rel32(Pc, not_nan) // JNP
         emit_xor_self(self, is_i64, dst)
         self.x86_emit_jmp_rel32(done)
         self.define_label(not_nan)
@@ -2370,7 +2364,7 @@ fn MachineCode::emit_instruction_x86_64(
         self.x86_emit_mov_rr(rd, 0)
       }
     }
-    AMD64(SRem(is_64)) => {
+    SRem(is_64) => {
       // Match Cranelift x64 CheckedSRemSeq behavior: guard `divisor == -1` and
       // return 0 without executing IDIV (avoids INT_MIN/-1 overflow trap).
       let rd = wreg_num(inst.defs[0])
@@ -2427,7 +2421,7 @@ fn MachineCode::emit_instruction_x86_64(
       // Remainder is in rdx already.
       self.define_label(done)
     }
-    AMD64(URem(is_64)) => {
+    URem(is_64) => {
       let rd = wreg_num(inst.defs[0])
       let lhs = reg_num(inst.uses[0])
       let rhs = reg_num(inst.uses[1])
@@ -2586,8 +2580,8 @@ fn MachineCode::emit_instruction_x86_64(
         let idx = pick_scratch_gpr(isa, base, index, rt_gpr_avoid, -1)
         match ext {
           None => self.x86_emit_mov_rr(idx, index)
-          ZeroExtend32 => self.x86_emit_mov_rr32(idx, index)
-          SignExtend32 => self.x86_emit_movsxd_r64_r32(idx, index)
+          Uxtw => self.x86_emit_mov_rr32(idx, index)
+          Sxtw => self.x86_emit_movsxd_r64_r32(idx, index)
         }
         if (idx & 7) != 4 {
           match ty {
@@ -2619,8 +2613,8 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_mov_rr(idx, index)
       match ext {
         None => ()
-        ZeroExtend32 => self.x86_emit_mov_rr32(idx, idx)
-        SignExtend32 => self.x86_emit_movsxd_r64_r32(idx, idx)
+        Uxtw => self.x86_emit_mov_rr32(idx, idx)
+        Sxtw => self.x86_emit_movsxd_r64_r32(idx, idx)
       }
       if shift > 0 {
         self.x86_emit_shl_r_imm8(idx, shift)
@@ -2737,8 +2731,8 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_mov_rr(idx, index)
       match ext {
         None => ()
-        ZeroExtend32 => self.x86_emit_mov_rr32(idx, idx)
-        SignExtend32 => self.x86_emit_movsxd_r64_r32(idx, idx)
+        Uxtw => self.x86_emit_mov_rr32(idx, idx)
+        Sxtw => self.x86_emit_movsxd_r64_r32(idx, idx)
       }
       if can_use_scaled_amode && (idx & 7) != 4 {
         match (bits, signed) {
@@ -2904,8 +2898,8 @@ fn MachineCode::emit_instruction_x86_64(
         let idx = pick_scratch_gpr(isa, base, index, value_gpr_avoid, -1)
         match ext {
           None => self.x86_emit_mov_rr(idx, index)
-          ZeroExtend32 => self.x86_emit_mov_rr32(idx, index)
-          SignExtend32 => self.x86_emit_movsxd_r64_r32(idx, index)
+          Uxtw => self.x86_emit_mov_rr32(idx, index)
+          Sxtw => self.x86_emit_movsxd_r64_r32(idx, index)
         }
         if (idx & 7) != 4 {
           match ty {
@@ -2937,8 +2931,8 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_mov_rr(idx, index)
       match ext {
         None => ()
-        ZeroExtend32 => self.x86_emit_mov_rr32(idx, idx)
-        SignExtend32 => self.x86_emit_movsxd_r64_r32(idx, idx)
+        Uxtw => self.x86_emit_mov_rr32(idx, idx)
+        Sxtw => self.x86_emit_movsxd_r64_r32(idx, idx)
       }
       if shift > 0 {
         self.x86_emit_shl_r_imm8(idx, shift)
@@ -3027,8 +3021,8 @@ fn MachineCode::emit_instruction_x86_64(
       self.x86_emit_mov_rr(idx, index)
       match ext {
         None => ()
-        ZeroExtend32 => self.x86_emit_mov_rr32(idx, idx)
-        SignExtend32 => self.x86_emit_movsxd_r64_r32(idx, idx)
+        Uxtw => self.x86_emit_mov_rr32(idx, idx)
+        Sxtw => self.x86_emit_movsxd_r64_r32(idx, idx)
       }
       if can_use_scaled_amode && (idx & 7) != 4 {
         match bits {

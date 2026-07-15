@@ -187,7 +187,7 @@ test "table32 call_indirect zero-extends the index" {
       #|machv call_indirect_i32(v0:int) {
       #|block0:
       #|    v1 = load.i64 +0 x27
-      #|    v4 = add.zero_extend32 #4 v1, v0
+      #|    v4 = add.uxtw #4 v1, v0
       #|    v5 = load.i64 +0 v4
       #|    v2 = and #-2305843009213693953 v5
       #|    v3 = load.i32 +8 v4
@@ -252,7 +252,7 @@ test "table32 return_call_indirect zero-extends the index" {
       #|machv return_call_indirect_i32(v0:int) {
       #|block0:
       #|    v1 = load.i64 +0 x27
-      #|    v2 = add.zero_extend32 #4 v1, v0
+      #|    v2 = add.uxtw #4 v1, v0
       #|    v3 = load.i64 +0 v2
       #|    v4 = and #-2305843009213693953 v3
       #|    v5 = load.i32 +8 v2

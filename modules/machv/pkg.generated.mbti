@@ -31,7 +31,6 @@ pub impl Show for VerifyError
 
 // Types and methods
 pub struct Function {
-  target : @isa.ISA
   name : String
   params : Array[@abi.VReg]
   result_kinds : Array[ValueKind]
@@ -43,7 +42,7 @@ pub struct Function {
   mut max_outgoing_args_size : Int
   mut uses_context_cache_0_source : Bool
 }
-pub fn Function::Function(String, target? : @isa.ISA) -> Self
+pub fn Function::Function(String) -> Self
 pub fn Function::add_param(Self, @abi.RegClass) -> @abi.VReg
 pub fn Function::add_param_preg(Self, @abi.PReg?) -> Unit
 pub fn Function::add_result_kind(Self, ValueKind) -> Unit
@@ -69,7 +68,6 @@ pub fn Function::set_int_stack_params(Self, Int) -> Unit
 pub fn Function::set_num_spill_slots(Self, Int) -> Unit
 pub fn Function::should_reserve_context_cache_0(Self) -> Bool
 pub fn Function::should_reserve_context_cache_1(Self) -> Bool
-pub fn Function::target(Self) -> @isa.ISA
 pub fn Function::update_max_outgoing_args_size(Self, Int) -> Unit
 pub fn Function::uses_context_cache_0_source(Self) -> Bool
 pub fn Function::uses_context_cache_1(Self) -> Bool
@@ -83,7 +81,7 @@ pub struct FunctionBuilder {
   func : Function
   mut current_block : @block.Block
 }
-pub fn FunctionBuilder::FunctionBuilder(String, target? : @isa.ISA) -> Self
+pub fn FunctionBuilder::FunctionBuilder(String) -> Self
 pub fn FunctionBuilder::add_param(Self, @abi.RegClass) -> @abi.VReg
 pub fn FunctionBuilder::add_result(Self, ValueKind) -> Unit
 pub fn FunctionBuilder::append(Self, @instr.Opcode, uses? : Array[@abi.Reg], defs? : Array[@abi.Writable], use_constraints? : Array[@abi.OperandConstraint], def_constraints? : Array[@abi.OperandConstraint]) -> Int

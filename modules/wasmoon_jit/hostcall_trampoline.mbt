@@ -73,7 +73,7 @@ pub fn emit_hostcall_import_trampoline(
   call_conv_layout : @abi.CallConventionLayout,
   isa? : @isa.ISA = AArch64,
 ) -> @machv_emit.MachineCode raise JitPipelineError {
-  let func = @machv.Function::Function("host_import_trampoline", target=isa)
+  let func = @machv.Function::Function("host_import_trampoline")
   let roles = wasm_embedding_reg_roles(isa~)
 
   // Params: always include vmctx as the first parameter (ISA-specific ABI reg).

@@ -46,7 +46,7 @@ fn emit_indirect_table_entry_address(
 ) -> @abi.VReg {
   let addr_vreg = ctx.machv_function().new_vreg(Int)
   let opcode : @instr.Opcode = match elem_idx_type {
-    I32 => AddExtend(ZeroExtend32, 4)
+    I32 => AddExtend(Uxtw, 4)
     I64 => AddShifted(Lsl, 4)
     _ => abort("indirect table index must be i32 or i64 after validation")
   }

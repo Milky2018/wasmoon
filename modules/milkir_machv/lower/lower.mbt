@@ -5,7 +5,7 @@
 // 1. Maps IR values to virtual registers
 // 2. Converts IR opcodes to MachV opcodes
 // 3. Handles control flow translation
-// 4. Applies target policy for fused operations and fixed-register constraints
+// 4. Performs pattern matching for AArch64-specific instructions
 
 ///|
 /// Lowering context - tracks state during IR to MachV conversion
@@ -180,7 +180,7 @@ pub fn LoweringContext::LoweringContext(
   }
   {
     ir_func,
-    machv_func: Function(ir_func.name, target=isa),
+    machv_func: Function(ir_func.name),
     isa,
     embedding_abi,
     external_helper_symbols,
@@ -1437,11 +1437,11 @@ fn match_extend_i32_to_i64(
     match inst.opcode {
       Scalar(Convert(UnsignedExtend)) =>
         if value.ty is I64 && inst.operands[0].ty is I32 {
-          return Some((inst.operands[0], ZeroExtend32))
+          return Some((inst.operands[0], Uxtw))
         }
       Scalar(Convert(SignedExtend)) =>
         if value.ty is I64 && inst.operands[0].ty is I32 {
-          return Some((inst.operands[0], SignExtend32))
+          return Some((inst.operands[0], Sxtw))
         }
       _ => ()
     }
@@ -1467,7 +1467,7 @@ fn log2_access_size(access_size : Int) -> Int? {
 /// Returns:
 /// - base: base pointer value
 /// - index: index value (i32 if extended, otherwise i64)
-/// - ext: None/ZeroExtend32/SignExtend32
+/// - ext: None/Uxtw/Sxtw
 /// - shift: 0 or log2(access_size)
 /// - subsumed: intermediate SSA values that can be skipped (uextend/sextend/ishl)
 /// - has_extra: whether we fused something beyond plain iadd(base, index)
@@ -1841,7 +1841,9 @@ fn lower_function_with_config_unchecked(
   // On amd64, variable shifts/rotates use CL (rcx) as the implicit count
   // register. Enforce this constraint universally to avoid relying on each
   // lowering site to set it correctly.
-  fixup_shift_count_constraints(ctx.machv_func, ctx.isa)
+  if ctx.isa is AMD64 {
+    fixup_amd64_shift_count_constraints(ctx.machv_func)
+  }
   ctx.machv_func.verify() catch {
     error =>
       raise @milkir.VerifyError::unverifiable_instruction(
@@ -1939,11 +1941,7 @@ pub fn lower_dialect_function(
 }
 
 ///|
-fn fixup_shift_count_constraints(
-  func : @machv.Function,
-  isa : @isa.ISA,
-) -> Unit {
-  guard isa.shift_count_register() is Some(count_reg) else { return }
+fn fixup_amd64_shift_count_constraints(func : @machv.Function) -> Unit {
   for block in func.blocks {
     for inst in block.insts {
       if (
@@ -1955,7 +1953,7 @@ fn fixup_shift_count_constraints(
         inst.uses.length() >= 2 {
         match inst.use_constraints[1] {
           FixedReg(_) => ()
-          _ => inst.use_constraints[1] = FixedReg(count_reg)
+          _ => inst.use_constraints[1] = FixedReg({ index: 1, class: Int }) // rcx
         }
       }
     }

@@ -52,7 +52,6 @@ fn simple_add_function() -> @milkir.Function {
 ///|
 test "x64 wrapper lowers MilkIR through canonical MachV" {
   let lowered = lower_function(simple_add_function())
-  debug_inspect(lowered.target(), content="AMD64")
   inspect(lowered.name, content="add64")
   inspect(lowered.blocks.length(), content="1")
   inspect(

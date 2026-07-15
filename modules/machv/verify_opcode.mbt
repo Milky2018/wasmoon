@@ -199,7 +199,7 @@ fn verify_opcode_contract(
     | XorNot(_)
     | ExtrImm(_, _) =>
       verify_fixed_contract(inst, 2, 1, Int, Int, block_id, inst_index)
-    AMD64(SRem(_)) | AMD64(URem(_)) | Umulh | Smulh =>
+    SRem(_) | URem(_) | Umulh | Smulh =>
       verify_result_with_clobbers(inst, 2, Int, Int, block_id, inst_index)
     AddImm(_, _)
     | SubImm(_, _)

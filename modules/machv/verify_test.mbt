@@ -387,7 +387,7 @@ test "verifier checks vector-memory opcode classes" {
 
 ///|
 test "ISA verifier rejects out-of-range physical registers" {
-  let func = @machv.Function::Function("invalid_amd64_register", target=AMD64)
+  let func = @machv.Function::Function("invalid_amd64_register")
   let block = func.new_block()
   let inst = @machv.Inst::Inst(Move)
   inst.add_use(Physical({ index: 20, class: Int }))
@@ -405,114 +405,4 @@ test "ISA verifier rejects out-of-range physical registers" {
   } noraise {
     _ => fail("expected MachV ISA verification to fail")
   }
-}
-
-///|
-test "ISA verifier rejects consuming a target-bound function as another ISA" {
-  let func = @machv.Function::Function("wrong_target", target=AArch64)
-  func.new_block().set_terminator(Return([]))
-  try func.verify_for_isa(AMD64) catch {
-    err =>
-      inspect(
-        err,
-        content=(
-          #|InvalidInstruction(message="MachV function targets aarch64 but was consumed as amd64")
-        ),
-      )
-  } noraise {
-    _ => fail("expected target mismatch to be rejected")
-  }
-}
-
-///|
-test "AArch64 verifier rejects an AMD64 opcode dialect" {
-  let func = @machv.Function::Function("amd64_opcode", target=AArch64)
-  let lhs = func.add_param(Int)
-  let rhs = func.add_param(Int)
-  let result = func.new_vreg(Int)
-  let block = func.new_block()
-  let inst = @machv.Inst::Inst(AMD64(SRem(true)))
-  inst.add_use(Virtual(lhs))
-  inst.add_use(Virtual(rhs))
-  inst.add_def({ reg: Virtual(result) })
-  block.add_inst(inst)
-  block.set_terminator(Return([]))
-  try func.verify_for_isa(AArch64) catch {
-    err =>
-      inspect(
-        err,
-        content=(
-          #|InvalidInstruction(message="AMD64 opcode srem is not valid for aarch64 at block 0 instruction 0")
-        ),
-      )
-  } noraise {
-    _ => fail("expected AMD64 opcode dialect to be rejected")
-  }
-}
-
-///|
-test "AMD64 builder accepts its owned opcode dialect" {
-  let builder = @machv.FunctionBuilder::FunctionBuilder(
-    "amd64_remainder",
-    target=AMD64,
-  )
-  let lhs = builder.add_param(Int)
-  let rhs = builder.add_param(Int)
-  builder.add_result(I64)
-  let result = builder.new_vreg(Int)
-  builder.append(
-    AMD64(SRem(true)),
-    uses=[Virtual(lhs), Virtual(rhs)],
-    defs=[
-      { reg: Virtual(result) },
-      { reg: Physical({ index: 0, class: Int }) },
-      { reg: Physical({ index: 2, class: Int }) },
-    ],
-    use_constraints=[
-      FixedReg({ index: 0, class: Int }),
-      FixedReg({ index: 10, class: Int }),
-    ],
-    def_constraints=[FixedReg({ index: 2, class: Int })],
-  )
-  |> ignore
-  builder.terminate(Return([Virtual(result)]))
-  let func = builder.finish()
-  inspect(
-    func.print(),
-    content=(
-      #|machv amd64_remainder(v0:int, v1:int) -> int {
-      #|block0:
-      #|    v2, x0, x2 = srem v0, v1
-      #|    ret v2
-      #|}
-      #|
-    ),
-  )
-}
-
-///|
-test "AArch64 verifier rejects an AMD64 condition dialect" {
-  let builder = @machv.FunctionBuilder::FunctionBuilder(
-    "amd64_condition",
-    target=AArch64,
-  )
-  builder.append(TrapIf(AMD64(ParitySet), 3)) |> ignore
-  builder.terminate(Return([]))
-  try builder.finish() catch {
-    err =>
-      inspect(
-        err,
-        content=(
-          #|InvalidInstruction(message="AMD64 condition ps is not valid for aarch64 at block 0 instruction 0")
-        ),
-      )
-  } noraise {
-    _ => fail("expected AMD64 condition dialect to be rejected")
-  }
-}
-
-///|
-test "ISA link-register capability is not fabricated on AMD64" {
-  debug_inspect(@isa.ISA::AArch64.link_register_index(), content="Some(30)")
-  debug_inspect(@isa.ISA::AMD64.link_register_index(), content="None")
 }

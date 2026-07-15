@@ -14,6 +14,9 @@ pub fn int_reg_index(_role : @spec.IntRegRole) -> Int {
     Scratch2 => 11 // r11
     // Frame pointer (optional; we use rbp when enabled).
     FP => 5 // rbp
+    // amd64 has no link register; use a dummy value (rbp) to avoid
+    // accidentally introducing a real allocatable register dependency.
+    LR => 5
     // SysV uses RDI for sret (hidden first argument).
     SRet => 7 // rdi
   }

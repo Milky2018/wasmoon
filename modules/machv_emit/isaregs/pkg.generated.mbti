@@ -6,6 +6,8 @@ import {
 }
 
 // Values
+pub fn lr_index(isa? : @isa.ISA) -> Int
+
 pub fn scratch1_index(isa? : @isa.ISA) -> Int
 
 pub fn scratch2_index(isa? : @isa.ISA) -> Int

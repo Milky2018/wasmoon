@@ -61,6 +61,7 @@ pub(all) enum IntRegRole {
   Scratch1
   Scratch2
   FP
+  LR
   SRet
 } derive(Eq, @debug.Debug)
 

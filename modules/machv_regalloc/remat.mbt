@@ -25,12 +25,26 @@ priv struct RematDef {
 
 ///|
 fn is_long_distance_remat_candidate(opcode : @instr.Opcode) -> Bool {
-  opcode.is_rematerializable()
+  match opcode {
+    LoadConst(_)
+    | LoadConstF32(_)
+    | LoadConstF64(_)
+    | LoadExternalFuncAddr(_)
+    | LoadCodeAddr(_) => true
+    _ => false
+  }
 }
 
 ///|
 fn is_cross_block_remat_candidate(opcode : @instr.Opcode) -> Bool {
-  opcode.is_rematerializable()
+  match opcode {
+    LoadConst(_)
+    | LoadConstF32(_)
+    | LoadConstF64(_)
+    | LoadExternalFuncAddr(_)
+    | LoadCodeAddr(_) => true
+    _ => false
+  }
 }
 
 ///|

@@ -4681,8 +4681,8 @@ fn x86_cond_to_jcc_opcode(cond : @instr.Cond) -> Int {
     Vs => 0x80 // JO
     Vc => 0x81 // JNO
     // Parity conditions (x86_64-only; used after UCOMIS*).
-    AMD64(ParitySet) => 0x8A // JP/JPE (parity set)
-    AMD64(ParityClear) => 0x8B // JNP/JPO (parity clear)
+    Ps => 0x8A // JP/JPE (parity set)
+    Pc => 0x8B // JNP/JPO (parity clear)
     Hi => 0x87 // JA
     Ls => 0x86 // JBE
     Ge => 0x8D // JGE

@@ -596,77 +596,6 @@ fn verify_physical_register(
 }
 
 ///|
-fn require_target_matches(
-  func : Function,
-  isa : @isa.ISA,
-) -> Unit raise VerifyError {
-  match func.target() {
-    AArch64 if isa is AMD64 =>
-      raise InvalidInstruction(
-        message="MachV function targets aarch64 but was consumed as amd64",
-      )
-    AMD64 if isa is AArch64 =>
-      raise InvalidInstruction(
-        message="MachV function targets amd64 but was consumed as aarch64",
-      )
-    _ => ()
-  }
-}
-
-///|
-fn verify_condition_for_isa(
-  cond : @instr.Cond,
-  isa : @isa.ISA,
-  location : String,
-) -> Unit raise VerifyError {
-  if cond is AMD64(_) && isa is AArch64 {
-    raise InvalidInstruction(
-      message="AMD64 condition \{cond} is not valid for aarch64 at \{location}",
-    )
-  }
-}
-
-///|
-fn verify_opcode_for_isa(
-  opcode : @instr.Opcode,
-  isa : @isa.ISA,
-  location : String,
-) -> Unit raise VerifyError {
-  match opcode {
-    AMD64(op) if isa is AArch64 =>
-      raise InvalidInstruction(
-        message="AMD64 opcode \{op} is not valid for aarch64 at \{location}",
-      )
-    TrapIf(cond, _) | FpuSel(_, cond) =>
-      verify_condition_for_isa(cond, isa, location)
-    _ => ()
-  }
-}
-
-///|
-fn Function::verify_isa_dialect(
-  self : Function,
-  isa : @isa.ISA,
-) -> Unit raise VerifyError {
-  for block in self.blocks {
-    for inst_index, inst in block.insts {
-      verify_opcode_for_isa(
-        inst.opcode,
-        isa,
-        "block \{block.id} instruction \{inst_index}",
-      )
-    }
-    if block.terminator is Some(term) {
-      match term {
-        BranchCmp(_, _, cond, _, _, _) | BranchCmpImm(_, _, cond, _, _, _) =>
-          verify_condition_for_isa(cond, isa, "block \{block.id} terminator")
-        _ => ()
-      }
-    }
-  }
-}
-
-///|
 fn verify_reg_for_isa(
   reg : @abi.Reg,
   isa : @isa.ISA,
@@ -752,9 +681,7 @@ pub fn Function::verify_for_isa(
   self : Function,
   isa : @isa.ISA,
 ) -> Unit raise VerifyError {
-  require_target_matches(self, isa)
   self.verify()
-  self.verify_isa_dialect(isa)
   self.verify_isa_registers(isa)
 }
 
@@ -775,8 +702,6 @@ pub fn Function::verify_for_regalloc_isa(
   self : Function,
   isa : @isa.ISA,
 ) -> Unit raise VerifyError {
-  require_target_matches(self, isa)
   self.verify_for_regalloc()
-  self.verify_isa_dialect(isa)
   self.verify_isa_registers(isa)
 }

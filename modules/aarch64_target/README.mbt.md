@@ -34,8 +34,7 @@ test "inspect AArch64 ABI policy" {
 
 ## Example: lower MilkIR through the AArch64 target
 
-This convenience wrapper chooses AArch64 policy and returns a MachV function
-whose target identity is bound to AArch64.
+This convenience wrapper chooses AArch64 policy and returns MachV machine IR.
 
 ```moonbit check
 ///|
@@ -46,7 +45,6 @@ test "lower an integer add function for AArch64" {
   builder.add_result(I64)
   builder.return_([builder.iadd(lhs, rhs)])
   let lowered = lower_function(builder.get_function())
-  debug_inspect(lowered.target(), content="AArch64")
   inspect(lowered.name, content="add64")
   inspect(lowered.blocks.length(), content="1")
   inspect(

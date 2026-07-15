@@ -27,7 +27,6 @@ pub fn ValueKind::reg_class(self : ValueKind) -> @abi.RegClass {
 ///|
 /// MachV function - a complete machine-level function in virtual-register form.
 pub struct Function {
-  target : @isa.ISA
   name : String
   params : Array[@abi.VReg] // Function parameters
   result_kinds : Array[ValueKind] // Full return kind info for multi-value returns
@@ -82,12 +81,8 @@ pub fn Function::get_result_kinds(self : Function) -> Array[ValueKind] {
 }
 
 ///|
-pub fn Function::Function(
-  name : String,
-  target? : @isa.ISA = AArch64,
-) -> Function {
+pub fn Function::Function(name : String) -> Function {
   {
-    target,
     name,
     params: [],
     result_kinds: [],
@@ -109,7 +104,6 @@ pub fn Function::Function(
 /// Zero: num_spill_slots
 pub fn Function::clone_base(self : Function) -> Function {
   {
-    target: self.target,
     name: self.name,
     params: [],
     result_kinds: [],
@@ -121,12 +115,6 @@ pub fn Function::clone_base(self : Function) -> Function {
     max_outgoing_args_size: self.max_outgoing_args_size,
     uses_context_cache_0_source: self.uses_context_cache_0_source,
   }
-}
-
-///|
-/// Return the ISA selected when this machine function was constructed.
-pub fn Function::target(self : Function) -> @isa.ISA {
-  self.target
 }
 
 ///|

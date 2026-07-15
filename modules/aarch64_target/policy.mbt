@@ -3,6 +3,7 @@ pub(all) enum IntRegRole {
   Scratch1
   Scratch2
   FP
+  LR
   SRet
 } derive(Eq, Debug)
 
@@ -12,13 +13,9 @@ pub fn int_reg_index(role : IntRegRole) -> Int {
     Scratch1 => 16
     Scratch2 => 17
     FP => 29
+    LR => 30
     SRet => 8
   }
-}
-
-///|
-pub fn link_register_index() -> Int {
-  30
 }
 
 ///|
@@ -98,7 +95,7 @@ pub fn allocatable_scratch_regs() -> Array[@machv.PReg] {
 pub fn allocatable_callee_saved_regs() -> Array[@machv.PReg] {
   let regs : Array[@machv.PReg] = []
   let fp_idx = int_reg_index(FP)
-  let lr_idx = link_register_index()
+  let lr_idx = int_reg_index(LR)
   for r in aapcs64_callee_saved() {
     if r.index == fp_idx || r.index == lr_idx {
       continue

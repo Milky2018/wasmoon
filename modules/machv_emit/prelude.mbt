@@ -73,8 +73,8 @@ fn collect_used_callee_saved(
   // If the function makes any calls, we must save LR on AArch64.
   // Note: X20-X24 are no longer pre-loaded in prologue (on-demand)
   // They are loaded on-demand from context and only need saving if used by regalloc
-  if has_calls && isa.link_register_index() is Some(lr) {
-    used.add(lr)
+  if has_calls && isa is AArch64 {
+    used.add(isa.lr_reg_index())
   }
   // Sort the registers for consistent ordering
   let result : Array[Int] = []
@@ -1347,7 +1347,8 @@ fn collect_used_callee_saved_from_output(
       }
     }
   }
-  if func_has_calls(func) && isa.link_register_index() is Some(lr) {
+  if func_has_calls(func) && isa is AArch64 {
+    let lr = isa.lr_reg_index()
     if lr >= 0 && lr < used.length() {
       used[lr] = true
     }

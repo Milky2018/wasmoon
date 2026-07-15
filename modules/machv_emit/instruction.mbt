@@ -900,7 +900,7 @@ fn MachineCode::emit_instruction(
         Pl => 4 // MI
         Vs => 7 // VC
         Vc => 6 // VS
-        AMD64(_) => abort("aarch64 TrapIf received an AMD64 condition")
+        Ps | Pc => abort("aarch64 TrapIf: parity conditions are x86_64-only")
         Hi => 9 // LS
         Ls => 8 // HI
         Ge => 11 // LT
@@ -966,7 +966,7 @@ fn MachineCode::emit_instruction(
       let rd = wreg_num(inst.defs[0])
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
-      let cond_bits = aarch64_cond_bits(cond)
+      let cond_bits = cond.to_bits()
       if is_f32 {
         self.emit_fcsel_s(rd, rn, rm, cond_bits)
       } else {
@@ -1008,10 +1008,9 @@ fn MachineCode::emit_instruction(
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
       match ext {
-        ZeroExtend32 => self.emit_add_uxtw(rd, rn, rm, amount)
-        SignExtend32 => self.emit_add_sxtw(rd, rn, rm, amount)
-        None =>
-          abort("AddExtend expects ZeroExtend32 or SignExtend32, got None")
+        Uxtw => self.emit_add_uxtw(rd, rn, rm, amount)
+        Sxtw => self.emit_add_sxtw(rd, rn, rm, amount)
+        None => abort("AddExtend expects Uxtw or Sxtw, got None")
       }
     }
     SubExtend(ext, amount) => {
@@ -1019,10 +1018,9 @@ fn MachineCode::emit_instruction(
       let rn = reg_num(inst.uses[0])
       let rm = reg_num(inst.uses[1])
       match ext {
-        ZeroExtend32 => self.emit_sub_uxtw(rd, rn, rm, amount)
-        SignExtend32 => self.emit_sub_sxtw(rd, rn, rm, amount)
-        None =>
-          abort("SubExtend expects ZeroExtend32 or SignExtend32, got None")
+        Uxtw => self.emit_sub_uxtw(rd, rn, rm, amount)
+        Sxtw => self.emit_sub_sxtw(rd, rn, rm, amount)
+        None => abort("SubExtend expects Uxtw or Sxtw, got None")
       }
     }
     AddShifted32(shift, amount) => {
@@ -1192,7 +1190,7 @@ fn MachineCode::emit_instruction(
 
       // Branch to done if equal.
       let done_label = -self.current_pos() - 1
-      self.emit_b_cond(aarch64_cond_bits(Eq), done_label)
+      self.emit_b_cond(@instr.Cond::Eq.to_bits(), done_label)
 
       // Slow path helper args: x0 = actual, x1 = expected.
       self.emit_mov_reg(0, actual_value_reg)
@@ -1532,7 +1530,6 @@ fn MachineCode::emit_instruction(
       )
       self.emit_load_imm64(dst, safepoint_id.to_int64())
     }
-    AMD64(_) => abort("verified AArch64 emission received an AMD64 opcode")
     // ============ SIMD Instructions ============
     _ =>
       self.emit_instruction_simd(

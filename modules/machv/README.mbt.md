@@ -27,7 +27,7 @@ The following example builds a 64-bit integer addition:
 ```moonbit check
 ///|
 test "build a 64-bit add function" {
-  let builder = FunctionBuilder::FunctionBuilder("add64", target=AArch64)
+  let builder = FunctionBuilder::FunctionBuilder("add64")
 
   let lhs = builder.add_param(Int)
   let rhs = builder.add_param(Int)
@@ -73,7 +73,7 @@ The four builder operations correspond directly to the function shape:
 3. `append(...)` adds one machine instruction to the current block.
 4. `terminate(...)` gives the block its control-flow exit.
 
-`FunctionBuilder` binds the function to one ISA and creates `block0` automatically, so a straight-line function can emit instructions immediately. `AArch64` remains the constructor default for compatibility, but target adapters should pass their ISA explicitly.
+`FunctionBuilder` creates `block0` automatically, so a straight-line function can emit instructions immediately.
 
 ## How MachV differs from MilkIR
 
@@ -144,7 +144,7 @@ Store(I64, 8) uses [base, value]    defs []
 Move          uses [source]         defs [destination]
 ```
 
-MachV also contains comparisons, conversions, calls, traps, stack operations, SIMD operations, and fused semantic operations. Operations implemented by both emitters remain in the shared opcode set even when one target encodes them directly and another expands them. Truly target-only operations are namespaced, for example `Opcode::AMD64(AMD64Opcode::SRem(...))`; the verifier rejects such a dialect in a function bound to another ISA.
+MachV also contains comparisons, conversions, calls, traps, stack operations, SIMD operations, and target-oriented instruction forms used by the lowering packages.
 
 ## Operand constraints
 
@@ -153,7 +153,7 @@ Most operands use `Any`, allowing register allocation to choose a location. `Fix
 ```moonbit check
 ///|
 test "attach a fixed-register constraint" {
-  let builder = FunctionBuilder::FunctionBuilder("fixed_result", target=AArch64)
+  let builder = FunctionBuilder::FunctionBuilder("fixed_result")
   let src = builder.add_param(Int)
   builder.add_result(I64)
   let dst = builder.new_vreg(Int)
@@ -182,7 +182,7 @@ A MachV block contains instructions followed by one terminator. `create_block()`
 ```moonbit check
 ///|
 test "build conditional control flow" {
-  let builder = FunctionBuilder::FunctionBuilder("choose_path", target=AArch64)
+  let builder = FunctionBuilder::FunctionBuilder("choose_path")
   let condition = builder.add_param(Int)
   let then_block = builder.create_block()
   let else_block = builder.create_block()
@@ -220,9 +220,9 @@ Every block passed to register allocation or emission needs a terminator.
 
 ## Verification boundaries
 
-`Function::verify()` checks structural MachV contracts: CFG targets and edge arguments, function returns, constraint-array alignment, exhaustive opcode operand contracts, virtual-register definition uniqueness, use-before-definition, and dominance. Every function also records its selected ISA. `Function::verify_for_isa(isa)` rejects a consumer ISA that disagrees with the function, target-dialect operations and conditions owned by another ISA, and illegal physical registers. Register allocation uses `verify_for_regalloc_isa(isa)`, which additionally requires dense block IDs because its tables address blocks by numeric ID.
+`Function::verify()` checks the target-independent MachV contract: CFG targets and edge arguments, function returns, constraint-array alignment, exhaustive opcode operand contracts, virtual-register definition uniqueness, use-before-definition, and dominance. `Function::verify_for_isa(isa)` additionally rejects physical registers that are illegal for the selected target. Register allocation uses `verify_for_regalloc_isa(isa)`, which also requires dense block IDs because its tables address blocks by numeric ID.
 
-`FunctionBuilder::finish()` verifies against the builder's selected ISA before returning. The lowering, register-allocation, and emission seams verify again because `Function`, `Block`, and `Inst` expose mutable arrays; callers may legally transform a function after construction, but they cannot reinterpret it for another target or bypass validation before a backend consumer processes it. Failures are returned as structured `VerifyError` values.
+`FunctionBuilder::finish()` calls `verify()` before returning. The lowering, register-allocation, and emission seams verify again because `Function`, `Block`, and `Inst` expose mutable arrays; callers may legally transform a function after construction, but they cannot bypass validation before a backend consumer processes it. Failures are returned as structured `VerifyError` values.
 
 ## Calls, ABI data, and stack state
 
@@ -246,7 +246,7 @@ Call targets can remain symbolic through MachV and machine-code emission. The em
 4. Keep constraint arrays aligned with their corresponding operands.
 5. Use `Function::print()` in lowering tests so instruction and control-flow mistakes are easy to inspect.
 
-Call `verify()` after target-neutral structural transformations and `verify_for_isa(func.target())` after transformations that introduce target operations, physical registers, or fixed constraints. Register allocation and emission enforce the target check again at their public entry points.
+Call `verify()` after target-independent transformations and `verify_for_isa(isa)` when physical registers or fixed constraints are present. Register allocation and emission also enforce these checks at their public entry points.
 
 ## Packages
 
