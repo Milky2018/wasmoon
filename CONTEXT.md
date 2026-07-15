@@ -188,6 +188,10 @@ _Avoid_: callee stack object, MachV stack parameter, fixed frame offset
 A caller-owned target stack area sized for the function's maximum call-site requirement, including required shadow space, stack arguments, and return areas.
 _Avoid_: MachV outgoing size, per-call dynamic stack adjustment, fixed SP offset
 
+**Frame Layout**:
+The target-owned post-allocation placement of spills, stack objects, callee saves, outgoing areas, and frame metadata used to emit a function's stack frame.
+_Avoid_: MachV frame state, pre-allocation offset, prologue opcode
+
 **Register Allocation**:
 The target-independent allocation algorithm that assigns virtual registers or spills in **Target VCode** through a shared abstract program model.
 _Avoid_: regalloc_core, VCode regalloc, machine regalloc
@@ -272,6 +276,7 @@ _Avoid_: MachV emitter output, generic object format
 - **Machine Targets** own **ABI Policy**; **MachV** does not encode host instructions, physical registers, calling conventions, or target constraints.
 - Wasmoon JIT owns its **Internal ABI Contract**; each machine target validates and realizes it as a **Target ABI Convention**, while the target alone owns platform convention rules and ABI planning.
 - An **Internal ABI Contract** may request **Persistent ABI Roles** for execution-environment, cache, or return-area values; targets validate them, Target VCode precolors them on demand, and frame planning preserves them.
+- After register allocation, each target derives one **Frame Layout** and uses it during emission to generate prologues, epilogues, stack addressing, and unwind frame facts.
 - A **Target ABI Convention** derives a **Call Layout** containing exact argument, result, hidden return-area, stack, fixed-register, and clobber facts; target lowering materializes it without exposing placement orchestration to callers.
 - MachV multi-results remain logical SSA values; a **Call Layout** may transfer overflow results through a caller-owned **Return Area**, whose physical offset is chosen only during target frame layout.
 - Stack arguments enter Target VCode as symbolic **Incoming Argument Slots** and caller-owned **Outgoing Call Areas**; MachV contains no ABI stack-adjustment, outgoing-store, or stack-base operations.
@@ -319,6 +324,7 @@ _Avoid_: MachV emitter output, generic object format
 - ABI ownership was previously mixed into the machine layer; resolved: **Machine Targets** own **ABI Policy** and apply it after **MachV**.
 - Internal and platform ABI ownership was previously conflated; resolved: Wasmoon owns its cross-language **Internal ABI Contract**, while machine targets own validation, platform rules, and concrete **Target ABI Conventions**.
 - Runtime register roles previously leaked into MachV; resolved: semantic values remain ordinary MachV SSA, while target lowering introduces on-demand precolored **Persistent ABI Roles** backed only by validated callee-saved registers.
+- Frame state was previously accumulated in MachV and emission helpers; resolved: target-owned post-regalloc **Frame Layout** is the sole source for physical stack placement and prologue or epilogue generation.
 - ABI rules and per-call placement were previously represented by one layout object; resolved: a reusable **Target ABI Convention** privately derives a short-lived **Call Layout** for each logical signature.
 - Multi-result placement was previously mixed into MachV call opcodes and result classes; resolved: MachV preserves ordered logical results, while target lowering assigns registers or a typed caller-owned **Return Area**.
 - Stack argument placement was previously materialized in MachV; resolved: target lowering owns symbolic incoming slots and one reusable outgoing area, while frame layout chooses physical offsets.
