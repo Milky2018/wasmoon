@@ -92,7 +92,6 @@ pub(all) enum ExtensionLowerResult {
 type LoweringConfig
 pub fn LoweringConfig::LoweringConfig(@isa.ISA) -> Self
 pub fn LoweringConfig::with_embedding_abi(Self, @abi.EmbeddingABI) -> Self
-pub fn LoweringConfig::with_extension_lowerer(Self, (LoweringContext, @milkir.Inst, @block.Block, @milkir.ExtOp) -> ExtensionLowerResult) -> Self
 pub fn LoweringConfig::with_external_helper_symbols(Self, Map[String, String]) -> Self
 pub fn LoweringConfig::with_ir_optimization(Self, Bool) -> Self
 pub fn LoweringConfig::with_num_imports(Self, Int) -> Self
