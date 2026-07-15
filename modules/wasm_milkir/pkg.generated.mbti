@@ -21,9 +21,9 @@ pub fn array_fill(@milkir.FunctionBuilder, Int, @milkir.Value, @milkir.Value, @m
 
 pub fn array_get(@milkir.FunctionBuilder, Int, @milkir.Value, @milkir.Value, @milkir.Type) -> @milkir.Value
 
-pub fn array_get_s(@milkir.FunctionBuilder, Int, @milkir.Value, @milkir.Value, @milkir.Type, Int) -> @milkir.Value
+pub fn array_get_s(@milkir.FunctionBuilder, Int, @milkir.Value, @milkir.Value, Int) -> @milkir.Value
 
-pub fn array_get_u(@milkir.FunctionBuilder, Int, @milkir.Value, @milkir.Value, @milkir.Type, Int) -> @milkir.Value
+pub fn array_get_u(@milkir.FunctionBuilder, Int, @milkir.Value, @milkir.Value, Int) -> @milkir.Value
 
 pub fn array_init_data(@milkir.FunctionBuilder, Int, Int, @milkir.Value, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
 
@@ -117,9 +117,9 @@ pub fn spill_locals_for_throw(@milkir.FunctionBuilder, Array[@milkir.Value]) -> 
 
 pub fn struct_get(@milkir.FunctionBuilder, Int, Int, @milkir.Value, @milkir.Type) -> @milkir.Value
 
-pub fn struct_get_s(@milkir.FunctionBuilder, Int, Int, @milkir.Value, @milkir.Type, Int) -> @milkir.Value
+pub fn struct_get_s(@milkir.FunctionBuilder, Int, Int, @milkir.Value, Int) -> @milkir.Value
 
-pub fn struct_get_u(@milkir.FunctionBuilder, Int, Int, @milkir.Value, @milkir.Type, Int) -> @milkir.Value
+pub fn struct_get_u(@milkir.FunctionBuilder, Int, Int, @milkir.Value, Int) -> @milkir.Value
 
 pub fn struct_new(@milkir.FunctionBuilder, Int, Array[@milkir.Value]) -> @milkir.Value
 

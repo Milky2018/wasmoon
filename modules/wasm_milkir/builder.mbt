@@ -442,15 +442,11 @@ pub fn struct_get_s(
   type_idx : Int,
   field_idx : Int,
   struct_ref : @milkir.Value,
-  field_type : @milkir.Type,
   byte_width : Int,
 ) -> @milkir.Value {
-  emit_wasm_inst(
-    builder,
-    field_type,
-    StructGetS(type_idx, field_idx, byte_width),
-    [struct_ref],
-  )
+  emit_wasm_inst(builder, I32, StructGetS(type_idx, field_idx, byte_width), [
+    struct_ref,
+  ])
 }
 
 ///|
@@ -459,15 +455,11 @@ pub fn struct_get_u(
   type_idx : Int,
   field_idx : Int,
   struct_ref : @milkir.Value,
-  field_type : @milkir.Type,
   byte_width : Int,
 ) -> @milkir.Value {
-  emit_wasm_inst(
-    builder,
-    field_type,
-    StructGetU(type_idx, field_idx, byte_width),
-    [struct_ref],
-  )
+  emit_wasm_inst(builder, I32, StructGetU(type_idx, field_idx, byte_width), [
+    struct_ref,
+  ])
 }
 
 ///|
@@ -529,10 +521,9 @@ pub fn array_get_s(
   type_idx : Int,
   array_ref : @milkir.Value,
   index : @milkir.Value,
-  element_type : @milkir.Type,
   byte_width : Int,
 ) -> @milkir.Value {
-  emit_wasm_inst(builder, element_type, ArrayGetS(type_idx, byte_width), [
+  emit_wasm_inst(builder, I32, ArrayGetS(type_idx, byte_width), [
     array_ref, index,
   ])
 }
@@ -543,10 +534,9 @@ pub fn array_get_u(
   type_idx : Int,
   array_ref : @milkir.Value,
   index : @milkir.Value,
-  element_type : @milkir.Type,
   byte_width : Int,
 ) -> @milkir.Value {
-  emit_wasm_inst(builder, element_type, ArrayGetU(type_idx, byte_width), [
+  emit_wasm_inst(builder, I32, ArrayGetU(type_idx, byte_width), [
     array_ref, index,
   ])
 }

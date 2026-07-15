@@ -11,8 +11,12 @@ from pathlib import Path
 
 CONSTRUCTOR_RE = re.compile(r"[A-Z][A-Za-z0-9]*\Z")
 WIRE_NAME_RE = re.compile(r"[a-z][a-z0-9_]*\Z")
-KIND_TO_TYPE = {"int": "Int", "bool": "Bool"}
-KIND_TO_MOONBIT = {"int": "IntegerImmediate", "bool": "BooleanImmediate"}
+KIND_TO_TYPE = {"int": "Int", "bool": "Bool", "packed_width": "Int"}
+KIND_TO_MOONBIT = {
+    "int": "IntegerImmediate",
+    "bool": "BooleanImmediate",
+    "packed_width": "PackedWidthImmediate",
+}
 TYPE_PATTERN_TO_MOONBIT = {
     "i32": "ExactType(I32)",
     "i64": "ExactType(I64)",

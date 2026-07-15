@@ -4,6 +4,7 @@ fn valid_immediates(spec : WasmOpcodeSpec) -> FixedArray[Int] {
     match spec.immediate_kinds[i] {
       IntegerImmediate => spec.id + i + 1
       BooleanImmediate => 1
+      PackedWidthImmediate => 1
     }
   })
 }
@@ -52,21 +53,23 @@ test "generated schema validates every immediate layout" {
       wrong_count,
     )
     assert_true(decode_error(malformed_count) is Some(_))
-    for bool_index, kind in spec.immediate_kinds {
-      if kind is BooleanImmediate {
-        let invalid_bool = FixedArray::makei(spec.immediate_kinds.length(), i => {
-          if i == bool_index {
-            2
-          } else {
-            0
-          }
-        })
-        let malformed_bool = @milkir.ExtOp::ExtOp(
+    for immediate_index, kind in spec.immediate_kinds {
+      let invalid_values = match kind {
+        BooleanImmediate => [2]
+        PackedWidthImmediate => [-1, 0, 3]
+        IntegerImmediate => []
+      }
+      for invalid_value in invalid_values {
+        let invalid_immediate = FixedArray::makei(
+          spec.immediate_kinds.length(),
+          i => if i == immediate_index { invalid_value } else { 1 },
+        )
+        let malformed = @milkir.ExtOp::ExtOp(
           WASM_DIALECT,
           spec.wire_name,
-          invalid_bool,
+          invalid_immediate,
         )
-        assert_true(decode_error(malformed_bool) is Some(_))
+        assert_true(decode_error(malformed) is Some(_))
       }
     }
   }

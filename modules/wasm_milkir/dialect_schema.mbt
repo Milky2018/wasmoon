@@ -2,6 +2,7 @@
 priv enum WasmImmediateKind {
   IntegerImmediate
   BooleanImmediate
+  PackedWidthImmediate
 }
 
 ///|
@@ -68,6 +69,14 @@ fn validate_wasm_opcode_immediates(
         if value != 0 && value != 1 {
           return Some(
             "malformed Wasm MilkIR extension '\{spec.wire_name}': immediate \{i} is a bool flag encoded as 0 or 1, got \{value}",
+          )
+        }
+      }
+      PackedWidthImmediate => {
+        let value = immediates[i]
+        if value != 1 && value != 2 {
+          return Some(
+            "malformed Wasm MilkIR extension '\{spec.wire_name}': immediate \{i} is a packed byte width encoded as 1 or 2, got \{value}",
           )
         }
       }

@@ -181,6 +181,115 @@ test "Wasm dialect validation rejects fixed operand and result types" {
 }
 
 ///|
+priv enum PackedGetProbe {
+  StructGetSigned
+  StructGetUnsigned
+  ArrayGetSigned
+  ArrayGetUnsigned
+}
+
+///|
+fn PackedGetProbe::wire_name(self : PackedGetProbe) -> String {
+  match self {
+    StructGetSigned => "struct_get_s"
+    StructGetUnsigned => "struct_get_u"
+    ArrayGetSigned => "array_get_s"
+    ArrayGetUnsigned => "array_get_u"
+  }
+}
+
+///|
+fn packed_get_verify_error(
+  probe : PackedGetProbe,
+  result_type : @milkir.Type,
+  byte_width : Int,
+) -> @milkir.VerifyError {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder(
+    "invalid_\{probe.wire_name()}",
+  )
+  let ref_value = builder.add_param(Ref)
+  let index = builder.add_param(I32)
+  get_exception_tag(builder) |> ignore
+  let immediates = match probe {
+    StructGetSigned | StructGetUnsigned =>
+      FixedArray::makei(3, fn(i) { if i == 2 { byte_width } else { 0 } })
+    ArrayGetSigned | ArrayGetUnsigned =>
+      FixedArray::makei(2, fn(i) { if i == 1 { byte_width } else { 0 } })
+  }
+  let operands = match probe {
+    StructGetSigned | StructGetUnsigned => [ref_value]
+    ArrayGetSigned | ArrayGetUnsigned => [ref_value, index]
+  }
+  builder.emit_ext_inst(
+    result_type,
+    ExtOp("wasm", probe.wire_name(), immediates),
+    operands,
+  )
+  |> ignore
+  builder.return_([])
+  try builder.finalize() catch {
+    err => err
+  } noraise {
+    _ => abort("expected \{probe.wire_name()} verification to fail")
+  }
+}
+
+///|
+test "Wasm packed get results are fixed to i32" {
+  debug_inspect(
+    [
+      packed_get_verify_error(StructGetSigned, F64, 1),
+      packed_get_verify_error(StructGetUnsigned, F64, 2),
+      packed_get_verify_error(ArrayGetSigned, F64, 1),
+      packed_get_verify_error(ArrayGetUnsigned, F64, 2),
+    ],
+    content=(
+      #|[
+      #|  UnverifiableInstruction(message="malformed Wasm MilkIR extension 'struct_get_s': expected results [i32], got [f64]"),
+      #|  UnverifiableInstruction(message="malformed Wasm MilkIR extension 'struct_get_u': expected results [i32], got [f64]"),
+      #|  UnverifiableInstruction(message="malformed Wasm MilkIR extension 'array_get_s': expected results [i32], got [f64]"),
+      #|  UnverifiableInstruction(message="malformed Wasm MilkIR extension 'array_get_u': expected results [i32], got [f64]"),
+      #|]
+    ),
+  )
+}
+
+///|
+test "Wasm packed get widths are limited to one or two bytes" {
+  let errors : Array[@milkir.VerifyError] = []
+  for
+    probe in [
+      StructGetSigned,
+      StructGetUnsigned,
+      ArrayGetSigned,
+      ArrayGetUnsigned,
+    ] {
+    for byte_width in [-1, 0, 3] {
+      errors.push(packed_get_verify_error(probe, I32, byte_width))
+    }
+  }
+  debug_inspect(
+    errors,
+    content=(
+      #|[
+      #|  UnverifiableInstruction(message="malformed Wasm MilkIR extension 'struct_get_s': immediate 2 is a packed byte width encoded as 1 or 2, got -1"),
+      #|  UnverifiableInstruction(message="malformed Wasm MilkIR extension 'struct_get_s': immediate 2 is a packed byte width encoded as 1 or 2, got 0"),
+      #|  UnverifiableInstruction(message="malformed Wasm MilkIR extension 'struct_get_s': immediate 2 is a packed byte width encoded as 1 or 2, got 3"),
+      #|  UnverifiableInstruction(message="malformed Wasm MilkIR extension 'struct_get_u': immediate 2 is a packed byte width encoded as 1 or 2, got -1"),
+      #|  UnverifiableInstruction(message="malformed Wasm MilkIR extension 'struct_get_u': immediate 2 is a packed byte width encoded as 1 or 2, got 0"),
+      #|  UnverifiableInstruction(message="malformed Wasm MilkIR extension 'struct_get_u': immediate 2 is a packed byte width encoded as 1 or 2, got 3"),
+      #|  UnverifiableInstruction(message="malformed Wasm MilkIR extension 'array_get_s': immediate 1 is a packed byte width encoded as 1 or 2, got -1"),
+      #|  UnverifiableInstruction(message="malformed Wasm MilkIR extension 'array_get_s': immediate 1 is a packed byte width encoded as 1 or 2, got 0"),
+      #|  UnverifiableInstruction(message="malformed Wasm MilkIR extension 'array_get_s': immediate 1 is a packed byte width encoded as 1 or 2, got 3"),
+      #|  UnverifiableInstruction(message="malformed Wasm MilkIR extension 'array_get_u': immediate 1 is a packed byte width encoded as 1 or 2, got -1"),
+      #|  UnverifiableInstruction(message="malformed Wasm MilkIR extension 'array_get_u': immediate 1 is a packed byte width encoded as 1 or 2, got 0"),
+      #|  UnverifiableInstruction(message="malformed Wasm MilkIR extension 'array_get_u': immediate 1 is a packed byte width encoded as 1 or 2, got 3"),
+      #|]
+    ),
+  )
+}
+
+///|
 test "Wasm call_indirect accepts a table64 index" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder(
     "table64_call_indirect",
