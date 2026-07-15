@@ -88,6 +88,10 @@ _Avoid_: effect-token chain, target instruction schedule, array order without se
 The final semantic operation of a **MachV Block**, chosen from jump, conditional branch, integer switch, return, tail call, or structured trap.
 _Avoid_: compare-branch encoding, fallthrough marker, target jump form
 
+**MachV Mutation Boundary**:
+The function-owned editing seam that atomically rejects invalid local entities and shapes while permitting incomplete whole-function state until an explicit verifier checkpoint.
+_Avoid_: direct canonical-array mutation, silent construction failure, always-valid builder state
+
 **MilkIR-MachV Lowering**:
 The target-neutral layer that lowers **MilkIR** into **MachV** without choosing host instructions, calling conventions, physical registers, or target constraints.
 _Avoid_: instruction selection, target backend, wasmoon JIT
@@ -192,6 +196,7 @@ _Avoid_: MachV emitter output, generic object format
 - **MachV Program Order** permits reordering only when SSA, memory effects, traps, unwind behavior, safepoints, and all other observable behavior remain equivalent.
 - Every **MachV Block** has exactly one **MachV Terminator**; its successor-bearing forms use **MachV Edges**, and no instruction follows it.
 - A **MachV Terminator** expresses only semantic control flow; compare fusion, immediate branches, fallthrough, jump tables, and encoded labels belong to Target VCode or emission.
+- The **MachV Mutation Boundary** rejects foreign, deleted, duplicated, or locally ill-typed entities before changing state; reachability and dominance are whole-function verifier concerns.
 - **MachV Control-Flow Graph** order expresses semantics and SSA relationships; fallthrough selection, label offsets, branch relaxation, and final block layout belong downstream.
 - `Ptr64` and `GcRef64` are always 64-bit carriers; only `GcRef64` is a **MachV Managed Reference**.
 - A **MachV Constant** produces an ordinary SSA value; target lowering may select immediates, relocations, or constant-pool loads without changing its meaning.
@@ -257,6 +262,7 @@ _Avoid_: MachV emitter output, generic object format
 - SSA validity previously depended on partial register-id and block-order checks; resolved: **MachV SSA** requires one canonical definition per value and dominance at every instruction, edge, and terminator use.
 - Effect order previously depended on scattered opcode knowledge; resolved: **MachV Program Order** plus canonical operation summaries defines observable ordering without introducing effect-token values.
 - Terminators previously mixed semantic control flow with AArch64 and AMD64 branch forms; resolved: **MachV Terminator** has one minimal target-neutral vocabulary, while encoded branch selection belongs downstream.
+- Mutation safety previously depended on callers repairing directly mutable arrays; resolved: the **MachV Mutation Boundary** is locally atomic, while explicit verifier checkpoints validate cross-entity invariants.
 - Machine-code-emission ownership has been reopened: decide the interface between target-specific representations, byte encoding, generic metadata, and **Wasmoon JIT** runtime resolution.
 - Precompiled output ownership was ambiguous; resolved: **Cwasm Artifact** belongs to **Wasmoon JIT**, not a **Target Emitter**.
 - Native JIT glue ownership was ambiguous; resolved: **JIT FFI** remains in **Wasmoon JIT** for the first split instead of creating a generic executable-memory module.
