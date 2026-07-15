@@ -196,6 +196,8 @@ graph TD
   ISS_175["ISS-175: Preserve unsigned poll timeout semantics"]
   ISS_176["ISS-176: Enforce descriptor rights across WASIp1 operations"]
   ISS_177["ISS-177: Implement a Windows fd readiness backend for poll_oneoff"]
+  ISS_178["ISS-178: Fan out readiness for duplicate poll subscriptions"]
+  ISS_179["ISS-179: Interpret poll subscription counts as unsigned size values"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005

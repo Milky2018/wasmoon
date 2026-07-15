@@ -60,16 +60,16 @@ fn read_poll_u16(mem : @runtime.Memory, addr : Int) -> Int {
 fn check_poll_array_range(
   mem : @runtime.Memory,
   ptr : Int,
-  count : Int,
-  element_size : Int64,
+  count : UInt,
+  element_size : UInt64,
 ) -> Bool {
-  if ptr < 0 || count < 0 {
+  if ptr < 0 {
     return false
   }
-  let start = ptr.to_int64()
-  let bytes = count.to_int64() * element_size
+  let start = ptr.to_int64().reinterpret_as_uint64()
+  let bytes = count.to_uint64() * element_size
   let end = start + bytes
-  bytes >= 0L && end >= start && end <= mem.byte_len()
+  end >= start && end <= mem.byte_len().reinterpret_as_uint64()
 }
 
 ///|
@@ -480,33 +480,51 @@ pub fn poll_oneoff_impl(
   nsubscriptions : Int,
   nevents_ptr : Int,
 ) -> Int {
-  if nsubscriptions <= 0 {
+  let subscription_count = nsubscriptions.reinterpret_as_uint()
+  if subscription_count == 0U {
     return Errno::Inval.to_i32()
   }
   if !check_mem_range(mem, nevents_ptr, 4) {
     return Errno::Fault.to_i32()
   }
-  if !check_poll_array_range(mem, in_ptr, nsubscriptions, 48L) ||
-    !check_poll_array_range(mem, out_ptr, nsubscriptions, 32L) {
+  if !check_poll_array_range(mem, in_ptr, subscription_count, 48UL) ||
+    !check_poll_array_range(mem, out_ptr, subscription_count, 32UL) ||
+    subscription_count.to_uint64() > 2_147_483_647UL {
     return Errno::Fault.to_i32()
   }
+  let count = subscription_count.reinterpret_as_int()
   let descriptors = poll_descriptor_context(ctx)
   let subscriptions = match
-    decode_poll_subscriptions(descriptors, mem, in_ptr, nsubscriptions) {
+    decode_poll_subscriptions(descriptors, mem, in_ptr, count) {
     Ok(subscriptions) => subscriptions
     Err(errno) => return errno.to_i32()
   }
-  let ready : Array[PollEvent?] = Array::make(nsubscriptions, None)
+  let ready : Array[PollEvent?] = Array::make(count, None)
   let fds : Array[Int] = []
   let fd_events : Array[Int] = []
   let fd_subscription_indices : Array[Int] = []
+  let fd_subscription_poll_indices : Array[Int] = []
+  let poll_index_by_fd : Map[Int, Int] = Map([])
   for i, subscription in subscriptions {
     if subscription is FdPoll(fd_sub) {
       match fd_sub.source {
         Native(fd) => {
-          fds.push(fd)
-          fd_events.push(if fd_sub.event_type == 1 { 0x01 } else { 0x04 })
+          let requested = if fd_sub.event_type == 1 { 0x01 } else { 0x04 }
+          let poll_idx = match poll_index_by_fd.get(fd) {
+            Some(existing) => {
+              fd_events[existing] = fd_events[existing] | requested
+              existing
+            }
+            None => {
+              let new_idx = fds.length()
+              poll_index_by_fd.set(fd, new_idx)
+              fds.push(fd)
+              fd_events.push(requested)
+              new_idx
+            }
+          }
           fd_subscription_indices.push(i)
+          fd_subscription_poll_indices.push(poll_idx)
         }
         Immediate =>
           ready[i] = Some(immediate_poll_fd_event(descriptors, fd_sub))
@@ -532,9 +550,11 @@ pub fn poll_oneoff_impl(
         HostFailed(errno) => return errno
         HostReady(revents) =>
           for i, sub_idx in fd_subscription_indices {
+            let poll_idx = fd_subscription_poll_indices[i]
             if ready[sub_idx] is None &&
               subscriptions[sub_idx] is FdPoll(fd_sub) &&
-              poll_fd_event(descriptors, fd_sub, revents[i]) is Some(event) {
+              poll_fd_event(descriptors, fd_sub, revents[poll_idx])
+              is Some(event) {
               ready[sub_idx] = Some(event)
             }
           }

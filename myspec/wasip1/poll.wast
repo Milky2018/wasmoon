@@ -282,3 +282,39 @@
   )
 )
 (assert_return (invoke "test") (i64.const 0x2222))
+
+;; Test 12: duplicate subscriptions for one descriptor each produce an event
+(module
+  (import "wasi_snapshot_preview1" "poll_oneoff" (func $poll_oneoff (param i32 i32 i32 i32) (result i32)))
+  (memory (export "memory") 1)
+
+  (func (export "test") (result i32)
+    ;; Two fd_write subscriptions for stdout.
+    (i64.store (i32.const 0) (i64.const 0x1111))
+    (i32.store8 (i32.const 8) (i32.const 2))
+    (i32.store (i32.const 12) (i32.const 1))
+    (i64.store (i32.const 48) (i64.const 0x2222))
+    (i32.store8 (i32.const 56) (i32.const 2))
+    (i32.store (i32.const 60) (i32.const 1))
+
+    (drop (call $poll_oneoff
+      (i32.const 0) (i32.const 128) (i32.const 2) (i32.const 256)))
+    (i32.load (i32.const 256))
+  )
+)
+(assert_return (invoke "test") (i32.const 2))
+
+;; Test 13: size values use unsigned i32 interpretation
+(module
+  (import "wasi_snapshot_preview1" "poll_oneoff" (func $poll_oneoff (param i32 i32 i32 i32) (result i32)))
+  (memory (export "memory") 1)
+
+  (func (export "test_high_bit") (result i32)
+    (call $poll_oneoff
+      (i32.const 0) (i32.const 128) (i32.const -2147483648) (i32.const 256)))
+  (func (export "test_max") (result i32)
+    (call $poll_oneoff
+      (i32.const 0) (i32.const 128) (i32.const -1) (i32.const 256)))
+)
+(assert_return (invoke "test_high_bit") (i32.const 21))
+(assert_return (invoke "test_max") (i32.const 21))

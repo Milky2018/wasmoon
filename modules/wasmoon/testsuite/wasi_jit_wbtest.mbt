@@ -713,6 +713,78 @@ test "wasi jit: poll_oneoff fd_read reports remaining file bytes" {
 }
 
 ///|
+test "wasi jit: poll_oneoff fans out mixed subscriptions for one native fd" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "path_open"
+    #|    (func $path_open (param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "path_unlink_file"
+    #|    (func $path_unlink_file (param i32 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_write"
+    #|    (func $fd_write (param i32 i32 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_close"
+    #|    (func $fd_close (param i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "poll_oneoff"
+    #|    (func $poll_oneoff (param i32 i32 i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (data (i32.const 32) "abc")
+    #|  (data (i32.const 64) "wasmoon_poll_fanout.txt")
+    #|  (func (export "test") (result i32)
+    #|    (local $errno i32)
+    #|    (local $fd i32)
+    #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 64) (i32.const 23)))
+    #|    (local.set $errno
+    #|      (call $path_open
+    #|        (i32.const 3) (i32.const 0) (i32.const 64) (i32.const 23)
+    #|        (i32.const 9) (i64.const 64) (i64.const 0) (i32.const 0)
+    #|        (i32.const 200)))
+    #|    (if (i32.ne (local.get $errno) (i32.const 0))
+    #|      (then (return (local.get $errno))))
+    #|    (local.set $fd (i32.load (i32.const 200)))
+    #|    (i32.store (i32.const 128) (i32.const 32))
+    #|    (i32.store (i32.const 132) (i32.const 3))
+    #|    (local.set $errno
+    #|      (call $fd_write
+    #|        (local.get $fd) (i32.const 128) (i32.const 1) (i32.const 220)))
+    #|    (if (i32.ne (local.get $errno) (i32.const 0))
+    #|      (then (return (local.get $errno))))
+    #|    (drop (call $fd_close (local.get $fd)))
+    #|    (local.set $errno
+    #|      (call $path_open
+    #|        (i32.const 3) (i32.const 0) (i32.const 64) (i32.const 23)
+    #|        (i32.const 0) (i64.const 66) (i64.const 0) (i32.const 0)
+    #|        (i32.const 204)))
+    #|    (if (i32.ne (local.get $errno) (i32.const 0))
+    #|      (then (return (local.get $errno))))
+    #|    (local.set $fd (i32.load (i32.const 204)))
+    #|    ;; sub[0] = fd_read, sub[1] = fd_write for the same native fd
+    #|    (i64.store (i32.const 0) (i64.const 111))
+    #|    (i32.store8 (i32.const 8) (i32.const 1))
+    #|    (i32.store (i32.const 12) (local.get $fd))
+    #|    (i64.store (i32.const 48) (i64.const 222))
+    #|    (i32.store8 (i32.const 56) (i32.const 2))
+    #|    (i32.store (i32.const 60) (local.get $fd))
+    #|    (local.set $errno
+    #|      (call $poll_oneoff
+    #|        (i32.const 0) (i32.const 256) (i32.const 2) (i32.const 240)))
+    #|    (if (i32.ne (local.get $errno) (i32.const 0))
+    #|      (then (return (local.get $errno))))
+    #|    (drop (call $fd_close (local.get $fd)))
+    #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 64) (i32.const 23)))
+    #|    (i32.load (i32.const 240))))
+  let result = compare_wasi_with_options(source, "test", preopens=[
+    ("/tmp", "/"),
+  ])
+  debug_inspect(
+    (
+      wasi_i32_from_result(result.interp_result),
+      wasi_i32_from_result(result.jit_result),
+    ),
+    content="(2, 2)",
+  )
+}
+
+///|
 test "wasi jit: poll_oneoff keeps expired realtime clock when fd is ready" {
   let source =
     #|(module
