@@ -1067,28 +1067,24 @@ fn Translator::translate_instruction(
     }
     StructGetS(type_idx, field_idx) => {
       let struct_ref = self.pop()
-      let field_type = self.get_struct_field_ir_type(type_idx, field_idx)
       let byte_width = self.get_struct_field_byte_width(type_idx, field_idx)
       let result = @wasm_milkir.struct_get_s(
         self.builder,
         type_idx,
         field_idx,
         struct_ref,
-        field_type,
         byte_width,
       )
       self.push(result)
     }
     StructGetU(type_idx, field_idx) => {
       let struct_ref = self.pop()
-      let field_type = self.get_struct_field_ir_type(type_idx, field_idx)
       let byte_width = self.get_struct_field_byte_width(type_idx, field_idx)
       let result = @wasm_milkir.struct_get_u(
         self.builder,
         type_idx,
         field_idx,
         struct_ref,
-        field_type,
         byte_width,
       )
       self.push(result)
@@ -1161,14 +1157,12 @@ fn Translator::translate_instruction(
     ArrayGetS(type_idx) => {
       let index = self.pop()
       let array_ref = self.pop()
-      let elem_type = self.get_array_element_ir_type(type_idx)
       let byte_width = self.get_array_element_byte_width(type_idx)
       let result = @wasm_milkir.array_get_s(
         self.builder,
         type_idx,
         array_ref,
         index,
-        elem_type,
         byte_width,
       )
       self.push(result)
@@ -1176,14 +1170,12 @@ fn Translator::translate_instruction(
     ArrayGetU(type_idx) => {
       let index = self.pop()
       let array_ref = self.pop()
-      let elem_type = self.get_array_element_ir_type(type_idx)
       let byte_width = self.get_array_element_byte_width(type_idx)
       let result = @wasm_milkir.array_get_u(
         self.builder,
         type_idx,
         array_ref,
         index,
-        elem_type,
         byte_width,
       )
       self.push(result)

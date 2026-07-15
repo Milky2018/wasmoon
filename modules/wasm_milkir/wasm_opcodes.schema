@@ -1,6 +1,6 @@
 # Typed constructor|wire name|immediate kinds|operands|results
-# `int` matches i32 or i64; `any` is one module-context-dependent type;
-# `...` is a variadic contextual suffix.
+# `int` matches i32 or i64; `packed_width` is the integer value 1 or 2;
+# `any` is one module-context-dependent type; `...` is a variadic contextual suffix.
 LoadMemBase|load_mem_base|int|pointer|i64
 WasmCall|call|int|...|...
 WasmCallIndirect|call_indirect|int,int|int,...|...
@@ -12,15 +12,15 @@ GetFuncRef|get_func_ref|int|-|callable_ref
 StructNew|struct_new|int|...|ref
 StructNewDefault|struct_new_default|int|-|ref
 StructGet|struct_get|int,int|ref|any
-StructGetS|struct_get_s|int,int,int|ref|any
-StructGetU|struct_get_u|int,int,int|ref|any
+StructGetS|struct_get_s|int,int,packed_width|ref|i32
+StructGetU|struct_get_u|int,int,packed_width|ref|i32
 StructSet|struct_set|int,int|ref,any|-
 ArrayNew|array_new|int|any,i32|ref
 ArrayNewDefault|array_new_default|int|i32|ref
 ArrayNewFixed|array_new_fixed|int,int|...|ref
 ArrayGet|array_get|int|ref,i32|any
-ArrayGetS|array_get_s|int,int|ref,i32|any
-ArrayGetU|array_get_u|int,int|ref,i32|any
+ArrayGetS|array_get_s|int,packed_width|ref,i32|i32
+ArrayGetU|array_get_u|int,packed_width|ref,i32|i32
 ArraySet|array_set|int|ref,i32,any|-
 ArrayLen|array_len|-|ref|i32
 ArrayFill|array_fill|int|ref,i32,any,i32|-

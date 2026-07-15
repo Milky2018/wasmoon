@@ -706,11 +706,7 @@ pub fn lower_struct_get_s(
     ext.add_use(Virtual(raw_result))
     block.add_inst(ext)
   } else {
-    // No extension needed, just move
-    let mov = @instr.Inst(Move)
-    mov.add_def({ reg: Virtual(dst) })
-    mov.add_use(Virtual(raw_result))
-    block.add_inst(mov)
+    abort("validated struct_get_s has invalid packed byte width \{byte_width}")
   }
 }
 
@@ -761,11 +757,7 @@ pub fn lower_struct_get_u(
     ext.add_use(Virtual(raw_result))
     block.add_inst(ext)
   } else {
-    // No extension needed, just move
-    let mov = @instr.Inst(Move)
-    mov.add_def({ reg: Virtual(dst) })
-    mov.add_use(Virtual(raw_result))
-    block.add_inst(mov)
+    abort("validated struct_get_u has invalid packed byte width \{byte_width}")
   }
 }
 
@@ -1055,10 +1047,7 @@ pub fn lower_array_get_s(
     ext.add_use(Virtual(raw_result))
     block.add_inst(ext)
   } else {
-    let mov = @instr.Inst(Move)
-    mov.add_def({ reg: Virtual(dst) })
-    mov.add_use(Virtual(raw_result))
-    block.add_inst(mov)
+    abort("validated array_get_s has invalid packed byte width \{byte_width}")
   }
 }
 
@@ -1104,10 +1093,7 @@ pub fn lower_array_get_u(
     ext.add_use(Virtual(raw_result))
     block.add_inst(ext)
   } else {
-    let mov = @instr.Inst(Move)
-    mov.add_def({ reg: Virtual(dst) })
-    mov.add_use(Virtual(raw_result))
-    block.add_inst(mov)
+    abort("validated array_get_u has invalid packed byte width \{byte_width}")
   }
 }
 
