@@ -225,6 +225,7 @@ _Avoid_: MachV emitter output, generic object format
 - Target lowering preallocates from MachV function counts and uses dense constant-time mappings. Its common path remains near-linear, while extra target-owned analyses require a concrete optimization benefit.
 - Target lowering reports target-owned structured failures with a MachV source site and phase; its public interface never aborts the host, silently omits an operation, or emits placeholder code for a lowering failure.
 - AArch64 and AMD64 expose separate statically typed lowering entry points. Wasmoon JIT branches on the selected machine target once, then keeps lowering, allocation, and emission specialized without a runtime target union or target-lowering trait.
+- Target lowering borrows verified **MachV** through read-only dense-indexed queries without cloning or mutating it, and constructs independent **Target VCode** storage without retaining aliases into MachV-owned collections.
 - **Target Legalization** may expand one semantic **MachV** operation into multiple target instructions.
 - **Machine Targets** own **ABI Policy**; **MachV** does not encode host instructions, physical registers, calling conventions, or target constraints.
 - **Target VCode** shares function, block, control-flow, virtual-register, and allocation structure without sharing target instructions.
@@ -274,6 +275,7 @@ _Avoid_: MachV emitter output, generic object format
 - Target-lowering traversal ownership was unclear; resolved: each target controls its complete lowering and optimization traversal, while the shared layer owns only Target VCode storage and invariants.
 - Target-lowering failure ownership was unclear; resolved: each target owns a closed structured error type, and Wasmoon JIT maps it into a product pipeline error only at orchestration.
 - Target-lowering dispatch was unclear; resolved: use separate static target entry points and a single orchestration branch, not a runtime target union or dynamic target-lowering interface.
+- Target-lowering input ownership was unclear; resolved: borrow verified MachV read-only without cloning, build independent Target VCode privately, and require revalidation after later output mutation rather than introducing a frozen wrapper.
 - Value-location ownership was previously mixed into **MachV**; resolved: MachV safepoints and operations reference values, while **Allocated Location** and frame layout belong downstream.
 - Function signatures previously carried ABI result locations, stack counts, and placement facts; resolved: a **MachV Signature** contains only ordered parameter and result types, while ABI facts belong downstream.
 - Conditional and multi-way branches previously carried only target ids, forcing producers to insert jump-only blocks for SSA arguments; resolved: every successor is a **MachV Edge** with explicit arguments.
