@@ -168,6 +168,10 @@ _Avoid_: MachV context layout, platform ABI, target lowering implementation
 A machine-target-owned, validated physical realization of one **Call Protocol** used to derive concrete call layouts during target lowering.
 _Avoid_: MachV signature, runtime ABI registry, unvalidated embedding layout
 
+**Call Layout**:
+The target-owned physical placement derived for one logical function entry or **Semantic Call** from its signature and **Target ABI Convention**.
+_Avoid_: MachV call contract, caller-authored placement, persistent ABI registry entry
+
 **Register Allocation**:
 The target-independent allocation algorithm that assigns virtual registers or spills in **Target VCode** through a shared abstract program model.
 _Avoid_: regalloc_core, VCode regalloc, machine regalloc
@@ -251,6 +255,7 @@ _Avoid_: MachV emitter output, generic object format
 - **Target Legalization** may expand one semantic **MachV** operation into multiple target instructions.
 - **Machine Targets** own **ABI Policy**; **MachV** does not encode host instructions, physical registers, calling conventions, or target constraints.
 - Wasmoon JIT owns its **Internal ABI Contract**; each machine target validates and realizes it as a **Target ABI Convention**, while the target alone owns platform convention rules and ABI planning.
+- A **Target ABI Convention** derives a **Call Layout** containing exact argument, result, hidden return-area, stack, fixed-register, and clobber facts; target lowering materializes it without exposing placement orchestration to callers.
 - **Target VCode** shares function, block, control-flow, virtual-register, and allocation structure without sharing target instructions.
 - A **Portable Execution Target** may consume **MachV** without turning **MachV** itself into a stable bytecode or VM contract.
 - **Register Allocation** runs after **MachV Target Lowering** and before a **Target Emitter**.
@@ -293,6 +298,7 @@ _Avoid_: MachV emitter output, generic object format
 - Target packaging was ambiguous; resolved: use ISA-specific modules such as `x64_target` and `aarch64_target`, not generic `backend` or `isa_backend` packages.
 - ABI ownership was previously mixed into the machine layer; resolved: **Machine Targets** own **ABI Policy** and apply it after **MachV**.
 - Internal and platform ABI ownership was previously conflated; resolved: Wasmoon owns its cross-language **Internal ABI Contract**, while machine targets own validation, platform rules, and concrete **Target ABI Conventions**.
+- ABI rules and per-call placement were previously represented by one layout object; resolved: a reusable **Target ABI Convention** privately derives a short-lived **Call Layout** for each logical signature.
 - Register-allocation placement was reopened; resolved: **Register Allocation** consumes the target-specific representation produced by **MachV Target Lowering**, never **MachV** itself.
 - Target-lowering output atomicity was unclear; resolved: success returns complete, verified, target-owned **Target VCode**, while failure returns a structured error without exposing partial builder state.
 - Target-lowering context ownership was unclear; resolved: each target consumes its own immutable facts through static specialization, while runtime and downstream compiler services remain outside the lowering seam.
