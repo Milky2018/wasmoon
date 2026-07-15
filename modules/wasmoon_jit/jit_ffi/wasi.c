@@ -18,6 +18,7 @@
 #include <dirent.h>
 #include <poll.h>
 #include <sys/socket.h>
+#include <sys/ioctl.h>
 #include <sched.h>
 #ifdef __linux__
 #include <sys/random.h>
@@ -216,6 +217,94 @@ static int get_regular_file_native_fd(jit_context_t *ctx, int wasi_fd, int *nati
 #endif
     *native_fd_out = native_fd;
     return WASI_ESUCCESS;
+}
+
+// Descriptor adapter used by the shared MoonBit poll_oneoff implementation.
+// Return values from resolve_fd are native fd (>= 0), immediate readiness (-2),
+// or invalid descriptor/event pairing (-1).
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_active_context_ptr(void) {
+    return (int64_t)get_current_jit_context();
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_jit_poll_resolve_fd(
+    int64_t ctx_ptr,
+    int wasi_fd,
+    int event_type
+) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    if (!ctx || wasi_fd < 0) return -1;
+
+    int stdio_slot = stdio_slot_for_fd(ctx, wasi_fd);
+    if (stdio_slot >= 0) {
+        if ((stdio_slot == 0 && event_type != 1) ||
+            (stdio_slot != 0 && event_type != 2)) {
+            return -1;
+        }
+        if ((stdio_slot == 0 &&
+             (ctx->wasi_stdin_use_buffer || ctx->wasi_stdin_callback)) ||
+            (stdio_slot == 1 && ctx->wasi_stdout_capture) ||
+            (stdio_slot == 2 && ctx->wasi_stderr_capture)) {
+            return -2;
+        }
+        return get_native_fd(ctx, wasi_fd);
+    }
+
+    if (is_preopen_fd(ctx, wasi_fd) || get_open_dir_path(ctx, wasi_fd)) {
+        return -1;
+    }
+    return get_native_fd(ctx, wasi_fd);
+}
+
+static int64_t jit_poll_regular_file_remaining(int native_fd, int *is_eof) {
+#ifdef _WIN32
+    (void)native_fd;
+    if (is_eof) *is_eof = 0;
+    return 1;
+#else
+    struct stat st;
+    if (fstat(native_fd, &st) < 0 || !S_ISREG(st.st_mode)) return -1;
+    off_t position = lseek(native_fd, 0, SEEK_CUR);
+    if (position < 0) return -1;
+    if ((uint64_t)position >= (uint64_t)st.st_size) {
+        if (is_eof) *is_eof = 1;
+        return 0;
+    }
+    return (int64_t)((uint64_t)st.st_size - (uint64_t)position);
+#endif
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_poll_fd_read_nbytes(
+    int64_t ctx_ptr,
+    int wasi_fd
+) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    if (!ctx) return 0;
+    if (stdio_slot_for_fd(ctx, wasi_fd) >= 0) return 1;
+    int native_fd = get_native_fd(ctx, wasi_fd);
+    if (native_fd < 0) return 0;
+
+    int64_t remaining = jit_poll_regular_file_remaining(native_fd, NULL);
+    if (remaining >= 0) return remaining;
+#ifndef _WIN32
+    int available = 0;
+    if (ioctl(native_fd, FIONREAD, &available) == 0 && available >= 0) {
+        return available;
+    }
+#endif
+    return 1;
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_jit_poll_fd_read_flags(
+    int64_t ctx_ptr,
+    int wasi_fd
+) {
+    jit_context_t *ctx = (jit_context_t *)ctx_ptr;
+    if (!ctx || stdio_slot_for_fd(ctx, wasi_fd) >= 0) return 0;
+    int native_fd = get_native_fd(ctx, wasi_fd);
+    if (native_fd < 0) return 0;
+    int is_eof = 0;
+    jit_poll_regular_file_remaining(native_fd, &is_eof);
+    return is_eof ? 0x01 : 0;
 }
 
 static int ensure_fd_metadata_arrays(jit_context_t *ctx) {
@@ -2193,415 +2282,6 @@ static int64_t wasi_sched_yield_impl(
     return WASI_ESUCCESS;
 }
 
-typedef struct {
-    uint32_t sub_index;
-    int32_t clock_id;
-    int64_t timeout;
-    uint16_t flags;
-} wasi_clock_plan_t;
-
-typedef struct {
-    uint32_t sub_index;
-    int32_t wasi_fd;
-    uint8_t event_type;
-    int native_fd;
-    short poll_events;
-} wasi_fd_plan_t;
-
-static int64_t monotonic_now_ns(void) {
-#ifdef _WIN32
-    LARGE_INTEGER freq;
-    LARGE_INTEGER counter;
-    if (!QueryPerformanceFrequency(&freq) || !QueryPerformanceCounter(&counter) || freq.QuadPart == 0) {
-        return 0;
-    }
-    return (int64_t)((counter.QuadPart * 1000000000LL) / freq.QuadPart);
-#else
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (int64_t)ts.tv_sec * 1000000000LL + ts.tv_nsec;
-#endif
-}
-
-static int64_t realtime_now_ns(void) {
-#ifdef _WIN32
-    FILETIME ft;
-    GetSystemTimeAsFileTime(&ft);
-    uint64_t t = ((uint64_t)ft.dwHighDateTime << 32) | ft.dwLowDateTime;
-    return (int64_t)((t - 116444736000000000ULL) * 100);
-#else
-    struct timespec ts;
-    clock_gettime(CLOCK_REALTIME, &ts);
-    return (int64_t)ts.tv_sec * 1000000000LL + ts.tv_nsec;
-#endif
-}
-
-static int poll_clock_remaining_ns(int32_t clock_id, int64_t timeout, uint16_t flags, int64_t *remaining) {
-    if ((flags & ~0x01) != 0) {
-        return 0;
-    }
-    int absolute = (flags & 0x01) != 0;
-    if (absolute) {
-        int64_t now;
-        if (clock_id == 1) {
-            now = monotonic_now_ns();
-        } else if (clock_id == 0) {
-            now = realtime_now_ns();
-        } else {
-            return 0;
-        }
-        *remaining = timeout > now ? timeout - now : 0;
-        return 1;
-    }
-    if (clock_id == 0 || clock_id == 1) {
-        *remaining = timeout;
-        return 1;
-    }
-    return 0;
-}
-
-static int poll_clock_is_expired(
-    int32_t clock_id,
-    int64_t timeout,
-    uint16_t flags,
-    int64_t poll_elapsed_ns,
-    int64_t now_monotonic,
-    int64_t now_realtime
-) {
-    int absolute = (flags & 0x01) != 0;
-    if (absolute) {
-        if (clock_id == 1) return now_monotonic >= timeout;
-        if (clock_id == 0) return now_realtime >= timeout;
-        return 0;
-    }
-    return timeout <= poll_elapsed_ns;
-}
-
-static void poll_fd_read_nbytes_and_flags_for_event(
-    jit_context_t *ctx,
-    int32_t wasi_fd,
-    uint64_t *nbytes,
-    uint16_t *flags
-) {
-    *nbytes = 1;
-    *flags = 0;
-#ifdef _WIN32
-    (void)ctx;
-    (void)wasi_fd;
-    return;
-#else
-    int stdio_slot = stdio_slot_for_fd(ctx, wasi_fd);
-    if (stdio_slot == 0) return;
-    if (stdio_slot == 1 || stdio_slot == 2) return;
-    if (is_preopen_fd(ctx, wasi_fd) || get_open_dir_path(ctx, wasi_fd)) return;
-    int native_fd = get_native_fd(ctx, wasi_fd);
-    if (native_fd < 0) return;
-
-    struct stat st;
-    if (fstat(native_fd, &st) < 0 || !S_ISREG(st.st_mode)) return;
-
-    off_t pos = lseek(native_fd, 0, SEEK_CUR);
-    if (pos < 0) return;
-
-    uint64_t size = (uint64_t)st.st_size;
-    uint64_t position = (uint64_t)pos;
-    if (size <= position) {
-        *nbytes = 0;
-        *flags = 0x01; // WASI EVENTRWFLAGS_FD_READWRITE_HANGUP
-    } else {
-        *nbytes = size - position;
-        *flags = 0;
-    }
-    return;
-#endif
-}
-
-// poll_oneoff: (in, out, nsubscriptions, nevents) -> errno
-static int64_t wasi_poll_oneoff_impl(
-    jit_context_t *ctx,
-    int64_t in_ptr, int64_t out_ptr, int64_t nsubscriptions, int64_t nevents_ptr
-) {
-    if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
-    if (nsubscriptions < 0) return WASI_EINVAL;
-
-    uint32_t in_ptr_u = (uint32_t)in_ptr;
-    uint32_t out_ptr_u = (uint32_t)out_ptr;
-    uint32_t nevents_ptr_u = (uint32_t)nevents_ptr;
-    uint32_t nsubscriptions_u = (uint32_t)nsubscriptions;
-    if (!check_mem_range(ctx, in_ptr_u, (size_t)nsubscriptions_u * 48)) return WASI_EFAULT;
-    if (!check_mem_range(ctx, out_ptr_u, (size_t)nsubscriptions_u * 32)) return WASI_EFAULT;
-    if (!check_mem_range(ctx, nevents_ptr_u, 4)) return WASI_EFAULT;
-
-    uint8_t *mem = ctx->memory0->base;
-    if (nsubscriptions_u == 0) return WASI_EINVAL;
-
-    // Match wasmtime p1: special-case single relative clock sleep and emit
-    // clock event with nbytes=1.
-    if (nsubscriptions_u == 1) {
-        uint8_t tag = mem[in_ptr_u + 8];
-        if (tag == 0) {
-            uint16_t flags = *(uint16_t *)(mem + in_ptr_u + 40);
-            if ((flags & ~0x01) != 0) {
-                return WASI_EINVAL;
-            }
-            if ((flags & 0x01) == 0) {
-                int64_t timeout = *(int64_t *)(mem + in_ptr_u + 24);
-                if (timeout > 0) {
-#ifndef _WIN32
-                    struct timespec ts = {
-                        .tv_sec = timeout / 1000000000LL,
-                        .tv_nsec = timeout % 1000000000LL
-                    };
-                    nanosleep(&ts, NULL);
-#else
-                    DWORD sleep_ms = (DWORD)(timeout / 1000000LL);
-                    if (sleep_ms == 0 && timeout > 0) sleep_ms = 1;
-                    Sleep(sleep_ms);
-#endif
-                }
-                int64_t userdata = *(int64_t *)(mem + in_ptr_u);
-                *(int64_t *)(mem + out_ptr_u) = userdata;
-                *(uint16_t *)(mem + out_ptr_u + 8) = 0;
-                mem[out_ptr_u + 10] = 0;
-                memset(mem + out_ptr_u + 11, 0, 5);
-                *(uint64_t *)(mem + out_ptr_u + 16) = 1;
-                *(uint16_t *)(mem + out_ptr_u + 24) = 0;
-                memset(mem + out_ptr_u + 26, 0, 6);
-                *(uint32_t *)(mem + nevents_ptr_u) = 1;
-                return WASI_ESUCCESS;
-            }
-        }
-    }
-
-    int64_t retval = WASI_ESUCCESS;
-    int64_t min_timeout_ns = -1;
-    int64_t poll_start_monotonic = monotonic_now_ns();
-    int64_t poll_end_monotonic = poll_start_monotonic;
-    uint32_t events_written = 0;
-
-    wasi_clock_plan_t *clock_plans = calloc((size_t)nsubscriptions_u, sizeof(wasi_clock_plan_t));
-    wasi_fd_plan_t *fd_plans = calloc((size_t)nsubscriptions_u, sizeof(wasi_fd_plan_t));
-    uint8_t *ready_by_sub = calloc((size_t)nsubscriptions_u, sizeof(uint8_t));
-    uint8_t *ready_type_by_sub = calloc((size_t)nsubscriptions_u, sizeof(uint8_t));
-    uint64_t *ready_nbytes_by_sub = calloc((size_t)nsubscriptions_u, sizeof(uint64_t));
-    uint16_t *ready_flags_by_sub = calloc((size_t)nsubscriptions_u, sizeof(uint16_t));
-#ifndef _WIN32
-    struct pollfd *pfds = NULL;
-#endif
-    size_t clock_count = 0;
-    size_t fd_count = 0;
-
-    if (!clock_plans || !fd_plans || !ready_by_sub || !ready_type_by_sub || !ready_nbytes_by_sub || !ready_flags_by_sub) {
-        retval = WASI_ENOMEM;
-        goto cleanup;
-    }
-
-    for (uint32_t i = 0; i < nsubscriptions_u; i++) {
-        size_t sub = (size_t)in_ptr_u + (size_t)i * 48;
-        uint8_t tag = mem[sub + 8];
-        if (tag == 0) {
-            int32_t clock_id = *(int32_t *)(mem + sub + 16);
-            int64_t timeout = *(int64_t *)(mem + sub + 24);
-            uint16_t flags = *(uint16_t *)(mem + sub + 40);
-            int64_t remaining_ns = 0;
-            if (!poll_clock_remaining_ns(clock_id, timeout, flags, &remaining_ns)) {
-                retval = WASI_EINVAL;
-                goto cleanup;
-            }
-            if (min_timeout_ns < 0 || remaining_ns < min_timeout_ns) {
-                min_timeout_ns = remaining_ns;
-            }
-            clock_plans[clock_count++] = (wasi_clock_plan_t){
-                .sub_index = i,
-                .clock_id = clock_id,
-                .timeout = timeout,
-                .flags = flags,
-            };
-            continue;
-        }
-
-        if (tag == 1 || tag == 2) {
-            int32_t wasi_fd = *(int32_t *)(mem + sub + 12);
-            int native_fd = -1;
-            if (wasi_fd < 0) {
-                retval = WASI_EBADF;
-                goto cleanup;
-            }
-            int stdio_slot = stdio_slot_for_fd(ctx, wasi_fd);
-            if (stdio_slot == 0) {
-                if (tag != 1) {
-                    retval = WASI_EBADF;
-                    goto cleanup;
-                }
-                native_fd = get_native_fd(ctx, wasi_fd);
-                if (native_fd < 0) {
-                    retval = WASI_EBADF;
-                    goto cleanup;
-                }
-            } else if (stdio_slot == 1 || stdio_slot == 2) {
-                if (tag != 2) {
-                    retval = WASI_EBADF;
-                    goto cleanup;
-                }
-                native_fd = get_native_fd(ctx, wasi_fd);
-                if (native_fd < 0) {
-                    retval = WASI_EBADF;
-                    goto cleanup;
-                }
-            } else {
-                native_fd = get_native_fd(ctx, wasi_fd);
-                if (native_fd < 0) {
-                    retval = WASI_EBADF;
-                    goto cleanup;
-                }
-                if (is_preopen_fd(ctx, wasi_fd) || get_open_dir_path(ctx, wasi_fd)) {
-                    retval = WASI_EBADF;
-                    goto cleanup;
-                }
-#ifndef _WIN32
-                struct stat st;
-                if (fstat(native_fd, &st) < 0 || !S_ISREG(st.st_mode)) {
-                    retval = WASI_EBADF;
-                    goto cleanup;
-                }
-#endif
-            }
-            fd_plans[fd_count++] = (wasi_fd_plan_t){
-                .sub_index = i,
-                .wasi_fd = wasi_fd,
-                .event_type = tag,
-                .native_fd = native_fd,
-                .poll_events = (tag == 1) ? POLLIN : POLLOUT,
-            };
-            continue;
-        }
-
-        retval = WASI_EINVAL;
-        goto cleanup;
-    }
-
-    int timeout_ms = -1;
-    if (min_timeout_ns == 0) {
-        timeout_ms = 0;
-    } else if (min_timeout_ns > 0) {
-        int64_t ms = min_timeout_ns / 1000000LL;
-        timeout_ms = (ms == 0) ? 1 : (int)ms;
-    }
-
-    poll_start_monotonic = monotonic_now_ns();
-
-    if (fd_count > 0) {
-#ifndef _WIN32
-        pfds = calloc(fd_count, sizeof(struct pollfd));
-        if (!pfds) {
-            retval = WASI_ENOMEM;
-            goto cleanup;
-        }
-
-        for (size_t i = 0; i < fd_count; i++) {
-            pfds[i].fd = fd_plans[i].native_fd;
-            pfds[i].events = fd_plans[i].poll_events;
-            pfds[i].revents = 0;
-        }
-
-        int poll_result = poll(pfds, (nfds_t)fd_count, timeout_ms);
-        if (poll_result < 0) {
-            retval = errno_to_wasi(errno);
-            goto cleanup;
-        }
-
-        if (poll_result > 0) {
-            for (size_t i = 0; i < fd_count; i++) {
-                if (pfds[i].revents == 0) continue;
-                uint32_t sub_index = fd_plans[i].sub_index;
-                ready_by_sub[sub_index] = 1;
-                ready_type_by_sub[sub_index] = fd_plans[i].event_type;
-                if (fd_plans[i].event_type == 1) {
-                    poll_fd_read_nbytes_and_flags_for_event(
-                        ctx,
-                        fd_plans[i].wasi_fd,
-                        &ready_nbytes_by_sub[sub_index],
-                        &ready_flags_by_sub[sub_index]
-                    );
-                } else {
-                    ready_nbytes_by_sub[sub_index] = 1;
-                    ready_flags_by_sub[sub_index] = 0;
-                }
-            }
-        }
-#else
-        if (timeout_ms > 0) Sleep((DWORD)timeout_ms);
-#endif
-    } else if (min_timeout_ns >= 0) {
-#ifndef _WIN32
-        struct timespec ts = {
-            .tv_sec = min_timeout_ns / 1000000000LL,
-            .tv_nsec = min_timeout_ns % 1000000000LL
-        };
-        nanosleep(&ts, NULL);
-#else
-        DWORD sleep_ms = (DWORD)(min_timeout_ns / 1000000LL);
-        if (sleep_ms == 0 && min_timeout_ns > 0) sleep_ms = 1;
-        Sleep(sleep_ms);
-#endif
-    }
-
-    poll_end_monotonic = monotonic_now_ns();
-    int64_t poll_elapsed_ns =
-        (poll_end_monotonic > poll_start_monotonic) ? (poll_end_monotonic - poll_start_monotonic) : 0;
-    int64_t now_monotonic = poll_end_monotonic;
-    int64_t now_realtime = realtime_now_ns();
-
-    for (size_t i = 0; i < clock_count; i++) {
-        wasi_clock_plan_t plan = clock_plans[i];
-        if (poll_clock_is_expired(
-                plan.clock_id,
-                plan.timeout,
-                plan.flags,
-                poll_elapsed_ns,
-                now_monotonic,
-                now_realtime)) {
-            ready_by_sub[plan.sub_index] = 1;
-            ready_type_by_sub[plan.sub_index] = 0;
-            ready_nbytes_by_sub[plan.sub_index] = 0;
-            ready_flags_by_sub[plan.sub_index] = 0;
-        }
-    }
-
-    events_written = 0;
-    for (uint32_t i = 0; i < nsubscriptions_u && events_written < nsubscriptions_u; i++) {
-        if (!ready_by_sub[i]) continue;
-
-        size_t sub = (size_t)in_ptr_u + (size_t)i * 48;
-        size_t evt = (size_t)out_ptr_u + (size_t)events_written * 32;
-        int64_t userdata = *(int64_t *)(mem + sub);
-
-        *(int64_t *)(mem + evt) = userdata;
-        *(uint16_t *)(mem + evt + 8) = 0;
-        mem[evt + 10] = ready_type_by_sub[i];
-        memset(mem + evt + 11, 0, 5);
-        *(uint64_t *)(mem + evt + 16) = ready_nbytes_by_sub[i];
-        *(uint16_t *)(mem + evt + 24) = ready_flags_by_sub[i];
-        memset(mem + evt + 26, 0, 6);
-        events_written++;
-    }
-
-    *(uint32_t *)(mem + nevents_ptr_u) = events_written;
-    retval = WASI_ESUCCESS;
-
-cleanup:
-#ifndef _WIN32
-    free(pfds);
-#endif
-    free(clock_plans);
-    free(fd_plans);
-    free(ready_by_sub);
-    free(ready_type_by_sub);
-    free(ready_nbytes_by_sub);
-    free(ready_flags_by_sub);
-    return retval;
-}
-
 // ============ Additional File Operations ============
 
 // fd_pread: Read from fd at offset without changing position
@@ -3469,7 +3149,6 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_random_get_ptr(void) { return (int64_
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_proc_exit_ptr(void) { return (int64_t)wasi_proc_exit_impl; }
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_proc_raise_ptr(void) { return (int64_t)wasi_proc_raise_impl; }
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_sched_yield_ptr(void) { return (int64_t)wasi_sched_yield_impl; }
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_poll_oneoff_ptr(void) { return (int64_t)wasi_poll_oneoff_impl; }
 
 // Implemented functions
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_fd_advise_ptr(void) { return (int64_t)wasi_fd_advise_impl; }

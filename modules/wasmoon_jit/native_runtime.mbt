@@ -999,11 +999,6 @@ pub fn get_proc_raise_ptr() -> Int64 {
 }
 
 ///|
-pub fn get_poll_oneoff_ptr() -> Int64 {
-  @jit_ffi.c_jit_get_poll_oneoff_ptr()
-}
-
-///|
 pub fn get_fd_advise_ptr() -> Int64 {
   @jit_ffi.c_jit_get_fd_advise_ptr()
 }

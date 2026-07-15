@@ -47,7 +47,6 @@ let import_trampolines : Map[String, Map[String, () -> Int64]] = {
     "proc_exit": get_proc_exit_ptr,
     "proc_raise": get_proc_raise_ptr,
     "sched_yield": get_sched_yield_ptr,
-    "poll_oneoff": get_poll_oneoff_ptr,
     "sock_accept": get_sock_accept_ptr,
     "sock_recv": get_sock_recv_ptr,
     "sock_send": get_sock_send_ptr,
