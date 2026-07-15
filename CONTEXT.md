@@ -116,6 +116,10 @@ _Avoid_: target load form, Wasm memory instruction, encoded addressing mode
 A target-neutral **MachV** call described by its callee, signature, explicit arguments and results, call kind, and effects rather than native ABI placement.
 _Avoid_: ABI call sequence, fixed-register call, conditional helper fusion
 
+**Logical Call Contract**:
+The ordered typed parameters, explicit argument values, and logical results required to invoke a **Semantic Call**, independent of native register, stack, or hidden return-area placement.
+_Avoid_: native call sequence, argument-register layout, stack-call frame
+
 **Semantic Trap**:
 A target-neutral **MachV** termination carrying a structured reason; implicit trap conditions remain semantic properties of the operations that can trigger them.
 _Avoid_: conditional trap fusion, target trap payload, hardware trap instruction
@@ -195,6 +199,7 @@ _Avoid_: MachV emitter output, generic object format
 - A **MachV Value** has an in-memory function owner identity that rejects cross-function use but does not enter printing or serialization.
 - Function parameters are the initial **MachV Values** declared by a **MachV Signature**; a hidden context, when needed, is an explicit `Ptr64` parameter.
 - Returns and **Semantic Calls** match their **MachV Signature** exactly, while effects, safepoints, and unwind behavior remain separate semantic summaries.
+- A **Logical Call Contract** includes an explicit ordinary `Ptr64` execution-environment value when the callee requires one, but never names or describes a product VMContext; hidden return-area pointers remain ABI details.
 - Every successor-bearing MachV terminator uses a **MachV Edge**, so jumps, conditional branches, and multi-way branches pass block arguments through the same interface.
 - Every verified MachV function has one entry block with no incoming edge or block parameters, and every other block is reachable from it.
 - A **MachV Block** is created and resolved through its function, and every **MachV Edge** target must carry the same private function owner identity.
@@ -285,6 +290,7 @@ _Avoid_: MachV emitter output, generic object format
 - Target-lowering metadata ownership was unclear; resolved: preserve target-neutral observable metadata in Target VCode, map safepoint values through allocation, and leave physical encoding and runtime resolution downstream.
 - Value-location ownership was previously mixed into **MachV**; resolved: MachV safepoints and operations reference values, while **Allocated Location** and frame layout belong downstream.
 - Function signatures previously carried ABI result locations, stack counts, and placement facts; resolved: a **MachV Signature** contains only ordered parameter and result types, while ABI facts belong downstream.
+- Execution context and return-area parameters were previously both treated as hidden ABI state; resolved: a required execution environment is an explicit logical `Ptr64` value, while a native return-area pointer is introduced only by ABI lowering.
 - Conditional and multi-way branches previously carried only target ids, forcing producers to insert jump-only blocks for SSA arguments; resolved: every successor is a **MachV Edge** with explicit arguments.
 - Reachability and layout were previously conflated; resolved: a verified **MachV Control-Flow Graph** is rooted and fully reachable, while physical block layout is selected downstream.
 - Block identity previously used public integer ids and independently mutable block objects; resolved: a **MachV Block** is an opaque function-owned handle backed by the function's canonical dense block table.
