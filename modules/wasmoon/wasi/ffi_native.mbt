@@ -920,6 +920,25 @@ extern "c" fn c_poll(
 ) -> Int = "wasmoon_wasi_poll"
 
 ///|
+extern "c" fn c_socket_bytes_available(fd : Int) -> Int64 = "wasmoon_wasi_socket_bytes_available"
+
+///|
+extern "c" fn c_active_jit_context_ptr() -> Int64 = "wasmoon_jit_active_context_ptr"
+
+///|
+extern "c" fn c_jit_poll_resolve_fd(
+  context : Int64,
+  fd : Int,
+  event_type : Int,
+) -> Int = "wasmoon_jit_poll_resolve_fd"
+
+///|
+extern "c" fn c_jit_poll_fd_read_nbytes(context : Int64, fd : Int) -> Int64 = "wasmoon_jit_poll_fd_read_nbytes"
+
+///|
+extern "c" fn c_jit_poll_fd_read_flags(context : Int64, fd : Int) -> Int = "wasmoon_jit_poll_fd_read_flags"
+
+///|
 /// Socket recv
 #borrow(buf)
 extern "c" fn c_recv(
@@ -1026,6 +1045,36 @@ pub fn native_poll(
     }
     Some({ ready_count: result, revents })
   }
+}
+
+///|
+fn native_socket_bytes_available(fd : Int) -> Int64? {
+  let available = c_socket_bytes_available(fd)
+  if available < 0L {
+    None
+  } else {
+    Some(available)
+  }
+}
+
+///|
+fn active_jit_context_ptr() -> Int64 {
+  c_active_jit_context_ptr()
+}
+
+///|
+fn jit_poll_resolve_fd(context : Int64, fd : Int, event_type : Int) -> Int {
+  c_jit_poll_resolve_fd(context, fd, event_type)
+}
+
+///|
+fn jit_poll_fd_read_nbytes(context : Int64, fd : Int) -> Int64 {
+  c_jit_poll_fd_read_nbytes(context, fd)
+}
+
+///|
+fn jit_poll_fd_read_flags(context : Int64, fd : Int) -> Int {
+  c_jit_poll_fd_read_flags(context, fd)
 }
 
 ///|

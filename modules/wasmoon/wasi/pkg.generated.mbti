@@ -412,6 +412,8 @@ pub(all) struct OpenFile {
   host_path : String
   mut position : Int64
   flags : Int
+  mut rights_base : Int64
+  mut rights_inheriting : Int64
 }
 
 pub(all) enum OpenFlags {

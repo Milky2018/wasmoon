@@ -24,6 +24,10 @@ pub(all) struct OpenFile {
   mut position : Int64
   /// File access flags
   flags : Int
+  /// Effective WASIp1 base rights granted to this descriptor
+  mut rights_base : Int64
+  /// Effective WASIp1 inheriting rights granted to this descriptor
+  mut rights_inheriting : Int64
 }
 
 ///|
@@ -277,6 +281,8 @@ pub fn WasiContextBuilder::build(self : WasiContextBuilder) -> WasiContext {
         host_path: host,
         position: 0L,
         flags: 0, // Read-only
+        rights_base: fd_rights_for_preopen_directory_base(),
+        rights_inheriting: fd_rights_for_preopen_directory_inheriting(),
       })
     }
     fd = fd + 1

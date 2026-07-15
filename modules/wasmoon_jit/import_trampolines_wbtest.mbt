@@ -31,6 +31,14 @@ test "import trampolines: unsupported imports" {
 }
 
 ///|
+test "import trampolines: poll_oneoff requires the shared host implementation" {
+  debug_inspect(
+    get_import_trampoline("wasi_snapshot_preview1", "poll_oneoff"),
+    content="None",
+  )
+}
+
+///|
 test "import trampolines: external imports override builtin fallback" {
   let external : Map[String, Map[String, Int64]] = Map([])
   external.set("spectest", { "print": 1234L })

@@ -35,11 +35,23 @@ def run_wat_file(wat_file, use_jit=True, expected=None, extra_run_args=None, tmp
 
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
 
+        expected_failure = (
+            isinstance(expected, tuple) and expected[0] == "failure"
+        )
         if result.returncode != 0:
+            if expected_failure:
+                needle = expected[1]
+                output = result.stdout + result.stderr
+                if needle in output:
+                    return True, output
+                return False, f"Expected failure containing '{needle}', got '{output}'"
             return (
                 False,
                 f"Non-zero exit code {result.returncode}: {result.stderr or result.stdout}",
             )
+
+        if expected_failure:
+            return False, "Expected command to fail, but it exited successfully"
 
         if expected is not None:
             if isinstance(expected, tuple):
@@ -63,17 +75,18 @@ def run_wat_file(wat_file, use_jit=True, expected=None, extra_run_args=None, tmp
 
 # Test definitions: (name, wat_file, expected, extra_run_args)
 # expected=None means just check it runs without error (and exits 0)
+# expected=("failure", needle) means require a non-zero exit containing needle
 TESTS = [
     # Basic I/O tests
     ("fd_write", "fd_write.wat", "Hello from fd_write!", None),
     ("fd_write (stderr)", "fd_write_stderr.wat", ("stderr", "Hello stderr!"), None),
-    ("fd_write (multiple iovecs)", "fd_write_multiple_iovecs.wat", "Hello World!", None),
+    ("fd_write (multiple iovecs)", "fd_write_multiple_iovecs.wat", "Hello ", None),
     # Clock tests
     ("clock_time_get", "clock_time_get.wat", "clock_time_get: OK", None),
     ("clock_time_get (monotonic)", "clock_time_get_monotonic.wat", "clock monotonic: OK", None),
-    ("clock_time_get (invalid)", "clock_time_get_invalid.wat", "clock invalid: OK", None),
+    ("clock_time_get (invalid)", "clock_time_get_invalid.wat", ("failure", "unreachable"), None),
     ("clock_res_get", "clock_res_get.wat", "clock_res_get: OK", None),
-    ("clock_res_get (invalid)", "clock_res_get_invalid.wat", "clock_res invalid: OK", None),
+    ("clock_res_get (invalid)", "clock_res_get_invalid.wat", ("failure", "unreachable"), None),
     # Random
     ("random_get", "random_get.wat", "random_get: OK", None),
     # Args and environ

@@ -178,6 +178,8 @@ jit_context_t *alloc_context_internal(int func_count) {
     ctx->stderr_fd = -1;
     ctx->fd_host_paths = NULL;
     ctx->fd_is_dir = NULL;
+    ctx->fd_rights_base = NULL;
+    ctx->fd_rights_inheriting = NULL;
     ctx->preopen_paths = NULL;
     ctx->preopen_guest_paths = NULL;
     ctx->preopen_fds = NULL;

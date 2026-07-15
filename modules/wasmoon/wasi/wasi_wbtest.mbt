@@ -678,8 +678,10 @@ test "wasi: fd_fdstat_get" {
     mem.read_byte(0) == (if native_isatty(0) { b'\x02' } else { b'\x00' }),
     content="true",
   )
-  inspect(mem.read_i64(8) == right_fd_read, content="true")
-  inspect(mem.read_i64(16) == right_fd_read, content="true")
+  debug_inspect(
+    (mem.read_i64(8), mem.read_i64(16)),
+    content="(134217730, 134217730)",
+  )
   // Test stdout
   let result = fd_fdstat_get(ctx, mem, 1, 0)
   inspect(result, content="0")
@@ -687,8 +689,10 @@ test "wasi: fd_fdstat_get" {
     mem.read_byte(0) == (if native_isatty(1) { b'\x02' } else { b'\x00' }),
     content="true",
   )
-  inspect(mem.read_i64(8) == right_fd_write, content="true")
-  inspect(mem.read_i64(16) == right_fd_write, content="true")
+  debug_inspect(
+    (mem.read_i64(8), mem.read_i64(16)),
+    content="(134217792, 134217792)",
+  )
   // Test preopen directory
   let result = fd_fdstat_get(ctx, mem, 3, 0)
   inspect(result, content="0")
@@ -702,6 +706,12 @@ test "wasi: fd_fdstat_get" {
     host_path: "<socket>",
     position: 0L,
     flags: 0,
+    rights_base: right_fd_fdstat_set_flags |
+    right_sock_shutdown |
+    right_fd_read |
+    right_fd_write |
+    right_poll_fd_readwrite,
+    rights_inheriting: 0L,
   })
   let result = fd_fdstat_get(ctx, mem, socket_fd, 0)
   inspect(result, content="0")
@@ -769,7 +779,7 @@ test "wasi: path_open returns EFAULT on out-of-bounds path pointer" {
 }
 
 ///|
-test "wasi: path_open ignores unknown rights bits on valid dirfd" {
+test "wasi: path_open rejects rights outside parent inheriting set" {
   let ctx = WasiContextBuilder::WasiContextBuilder()
     .preopen_dir("/tmp", "/")
     .build()
@@ -792,11 +802,7 @@ test "wasi: path_open ignores unknown rights bits on valid dirfd" {
     0,
     2000,
   )
-  inspect(result, content="0")
-  if result == 0 {
-    fd_close(ctx, mem.read_i32(2000)) |> ignore
-    path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
-  }
+  inspect(result, content="76")
 }
 
 ///|
@@ -2423,7 +2429,7 @@ test "wasi: fd_renumber updates stdio descriptor routing" {
   // Move stdout to the old preopen slot and verify fdstat/write rights move too.
   inspect(fd_renumber_impl(ctx, 1, 3), content="0")
   inspect(fd_fdstat_get(ctx, mem, 3, 300), content="0")
-  inspect(mem.read_i64(308), content="64")
+  inspect(mem.read_i64(308), content="134217792")
   inspect(fd_fdstat_get(ctx, mem, 1, 300), content="8")
 }
 
@@ -2466,12 +2472,16 @@ test "wasi: fd_fdstat_set_rights returns EBADF for stdio" {
 }
 
 ///|
-test "wasi: fd_fdstat_set_rights returns ENOTSUP for preopen fd" {
+test "wasi: fd_fdstat_set_rights attenuates preopen rights" {
   let ctx = WasiContextBuilder::WasiContextBuilder()
     .preopen_dir("/tmp", "/")
     .build()
+  let mem = @runtime.Memory::Memory(1, None)
   let result = fd_fdstat_set_rights_impl(ctx, 3, 0L, 0L)
-  inspect(result, content="58")
+  inspect(result, content="0")
+  inspect(fd_fdstat_get(ctx, mem, 3, 0), content="0")
+  debug_inspect((mem.read_i64(8), mem.read_i64(16)), content="(0, 0)")
+  inspect(fd_fdstat_set_rights_impl(ctx, 3, right_fd_read, 0L), content="76")
 }
 
 ///|
@@ -2771,6 +2781,72 @@ test "wasi: poll_oneoff rejects unknown subclockflags bits with EINVAL" {
 }
 
 ///|
+test "wasi: poll_oneoff preserves unsigned timeout boundaries" {
+  let timeouts : Array[Int64] = [
+    0x7FFF_FFFF_FFFF_FFFFL,
+    0x8000_0000_0000_0000UL.reinterpret_as_int64(),
+    0xFFFF_FFFF_FFFF_FFFFUL.reinterpret_as_int64(),
+  ]
+  for timeout in timeouts {
+    let ctx = WasiContextBuilder::WasiContextBuilder().build()
+    let mem = @runtime.Memory::Memory(1, None)
+    // Subscription 0 is far in the future.
+    mem.write_i64(0, 111L)
+    mem.write_byte(8, b'\x00')
+    mem.write_i32(16, 1)
+    mem.write_i64(24, timeout)
+    mem.write_i64(32, 0L)
+    mem.write_byte(40, b'\x00')
+    // Subscription 1 is immediately ready.
+    mem.write_i64(48, 222L)
+    mem.write_byte(56, b'\x00')
+    mem.write_i32(64, 1)
+    mem.write_i64(72, 0L)
+    mem.write_i64(80, 0L)
+    mem.write_byte(88, b'\x00')
+
+    inspect(poll_oneoff_impl(ctx, mem, 0, 200, 2, 400), content="0")
+    inspect(mem.read_i32(400), content="1")
+    inspect(mem.read_i64(200), content="222")
+  }
+}
+
+///|
+test "wasi: poll timeout conversion rounds up and caps host waits" {
+  debug_inspect(
+    [
+      poll_timeout_ms(0UL),
+      poll_timeout_ms(1UL),
+      poll_timeout_ms(1_000_000UL),
+      poll_timeout_ms(1_000_001UL),
+      poll_timeout_ms(0xFFFF_FFFF_FFFF_FFFFUL),
+    ],
+    content="[0, 1, 1, 2, 2147483647]",
+  )
+}
+
+///|
+test "wasi: poll resolver accepts character devices" {
+  let ctx = WasiContextBuilder::WasiContextBuilder().build()
+  let fd = ctx.alloc_fd({
+    native_fd: 0,
+    file_type: CharacterDevice,
+    host_path: "<character-device>",
+    position: 0L,
+    flags: 0,
+    rights_base: right_fd_read | right_poll_fd_readwrite,
+    rights_inheriting: 0L,
+  })
+  let native_fd = match
+    resolve_poll_fd_source(InterpreterDescriptors(ctx), fd, 1) {
+    Ok(Native(native_fd)) => native_fd
+    Ok(Immediate) => -2
+    Err(errno) => -errno.to_i32()
+  }
+  inspect(native_fd, content="0")
+}
+
+///|
 test "wasi: poll_oneoff emits expired clock with ready fd" {
   let ctx = WasiContextBuilder::WasiContextBuilder()
     .preopen_dir("/tmp", "/")
@@ -2789,7 +2865,7 @@ test "wasi: poll_oneoff emits expired clock with ready fd" {
     100,
     test_path.length(),
     9,
-    right_fd_write,
+    right_fd_write | right_poll_fd_readwrite,
     0L,
     0,
     2000,
@@ -2876,7 +2952,7 @@ test "wasi: poll_oneoff fd_read reports remaining file bytes" {
     100,
     test_path.length(),
     0,
-    right_fd_read,
+    right_fd_read | right_poll_fd_readwrite,
     0L,
     0,
     2004,
@@ -2898,6 +2974,43 @@ test "wasi: poll_oneoff fd_read reports remaining file bytes" {
   inspect(mem.read_byte(1024).to_int(), content="0")
   inspect(mem.read_byte(1025).to_int(), content="0")
 
+  // Distinct descriptors exercise every entry in the native poll arrays.
+  let second_native_fd = match native_open_read("/tmp/" + test_path) {
+    Some(fd) => fd
+    None => {
+      fd_close(ctx, read_fd) |> ignore
+      path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
+      return
+    }
+  }
+  let second_read_fd = ctx.alloc_fd({
+    native_fd: second_native_fd,
+    file_type: RegularFile,
+    host_path: "/tmp/" + test_path,
+    position: 0L,
+    flags: native_o_rdonly(),
+    rights_base: right_fd_read | right_poll_fd_readwrite,
+    rights_inheriting: 0L,
+  })
+  mem.write_i64(0, 777L)
+  mem.write_byte(8, b'\x01')
+  mem.write_i32(12, read_fd)
+  mem.write_i64(48, 778L)
+  mem.write_byte(56, b'\x01')
+  mem.write_i32(60, second_read_fd)
+  inspect(poll_oneoff_impl(ctx, mem, 0, 1100, 2, 900), content="0")
+  debug_inspect(
+    (
+      mem.read_i32(900),
+      mem.read_i64(1100),
+      mem.read_i64(1116),
+      mem.read_i64(1132),
+      mem.read_i64(1148),
+    ),
+    content="(2, 777, 3, 778, 3)",
+  )
+
+  fd_close(ctx, second_read_fd) |> ignore
   fd_close(ctx, read_fd) |> ignore
   path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
 }

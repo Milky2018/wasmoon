@@ -677,10 +677,6 @@ pub extern "c" fn c_jit_get_sched_yield_ptr() -> Int64 = "wasmoon_jit_get_sched_
 pub extern "c" fn c_jit_get_proc_raise_ptr() -> Int64 = "wasmoon_jit_get_proc_raise_ptr"
 
 ///|
-/// Get poll_oneoff trampoline pointer
-pub extern "c" fn c_jit_get_poll_oneoff_ptr() -> Int64 = "wasmoon_jit_get_poll_oneoff_ptr"
-
-///|
 /// Get fd_advise trampoline pointer (stub)
 pub extern "c" fn c_jit_get_fd_advise_ptr() -> Int64 = "wasmoon_jit_get_fd_advise_ptr"
 

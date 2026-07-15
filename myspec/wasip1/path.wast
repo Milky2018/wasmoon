@@ -2,7 +2,7 @@
 ;; Tests path_open, fd_prestat_get, fd_prestat_dir_name
 
 ;; Mock WASI module that provides testable implementations
-(module $wasi_snapshot_preview1
+(module $mock_wasi
   (global $last_errno (mut i32) (i32.const 0))
 
   ;; Simulate preopened directory at fd 3
@@ -147,12 +147,12 @@
   )
 )
 
-;; Register the WASI module so subsequent modules can import from it
-(register "wasi_snapshot_preview1" $wasi_snapshot_preview1)
+;; Use a non-reserved namespace so both engines resolve this mock via the WAST registry.
+(register "mock_wasi" $mock_wasi)
 
 ;; Test 1: fd_prestat_get with valid fd
 (module
-  (import "wasi_snapshot_preview1" "fd_prestat_get" (func $fd_prestat_get (param i32 i32) (result i32)))
+  (import "mock_wasi" "fd_prestat_get" (func $fd_prestat_get (param i32 i32) (result i32)))
   (memory 1)
 
   (func (export "test") (result i32)
@@ -163,7 +163,7 @@
 
 ;; Test 2: fd_prestat_get with invalid fd (should return EBADF=8)
 (module
-  (import "wasi_snapshot_preview1" "fd_prestat_get" (func $fd_prestat_get (param i32 i32) (result i32)))
+  (import "mock_wasi" "fd_prestat_get" (func $fd_prestat_get (param i32 i32) (result i32)))
   (memory 1)
 
   (func (export "test") (result i32)
@@ -174,7 +174,7 @@
 
 ;; Test 3: fd_prestat_dir_name with valid fd
 (module
-  (import "wasi_snapshot_preview1" "fd_prestat_dir_name" (func $fd_prestat_dir_name (param i32 i32 i32) (result i32)))
+  (import "mock_wasi" "fd_prestat_dir_name" (func $fd_prestat_dir_name (param i32 i32 i32) (result i32)))
   (memory 1)
 
   (func (export "test") (result i32)
@@ -185,7 +185,7 @@
 
 ;; Test 4: fd_prestat_dir_name with invalid fd (should return EBADF=8)
 (module
-  (import "wasi_snapshot_preview1" "fd_prestat_dir_name" (func $fd_prestat_dir_name (param i32 i32 i32) (result i32)))
+  (import "mock_wasi" "fd_prestat_dir_name" (func $fd_prestat_dir_name (param i32 i32 i32) (result i32)))
   (memory 1)
 
   (func (export "test") (result i32)
@@ -196,7 +196,7 @@
 
 ;; Test 5: path_open with valid fd
 (module
-  (import "wasi_snapshot_preview1" "path_open" (func $path_open (param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)))
+  (import "mock_wasi" "path_open" (func $path_open (param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)))
   (memory 2)
   (data "test.txt")
 
@@ -218,7 +218,7 @@
 
 ;; Test 6: path_open with invalid fd (should return EBADF=8)
 (module
-  (import "wasi_snapshot_preview1" "path_open" (func $path_open (param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)))
+  (import "mock_wasi" "path_open" (func $path_open (param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)))
   (memory 2)
   (data "test.txt")
 
@@ -240,7 +240,7 @@
 
 ;; Test 7: path_create_directory with valid fd
 (module
-  (import "wasi_snapshot_preview1" "path_create_directory" (func $path_create_directory (param i32 i32 i32) (result i32)))
+  (import "mock_wasi" "path_create_directory" (func $path_create_directory (param i32 i32 i32) (result i32)))
   (memory 1)
   (data "test")
 
@@ -252,7 +252,7 @@
 
 ;; Test 8: path_create_directory with invalid fd (should return EBADF=8)
 (module
-  (import "wasi_snapshot_preview1" "path_create_directory" (func $path_create_directory (param i32 i32 i32) (result i32)))
+  (import "mock_wasi" "path_create_directory" (func $path_create_directory (param i32 i32 i32) (result i32)))
   (memory 1)
 
   (func (export "test") (result i32)
@@ -263,7 +263,7 @@
 
 ;; Test 9: path_unlink_file with valid fd
 (module
-  (import "wasi_snapshot_preview1" "path_unlink_file" (func $path_unlink_file (param i32 i32 i32) (result i32)))
+  (import "mock_wasi" "path_unlink_file" (func $path_unlink_file (param i32 i32 i32) (result i32)))
   (memory 1)
 
   (func (export "test") (result i32)
@@ -274,7 +274,7 @@
 
 ;; Test 10: path_unlink_file with invalid fd (should return EBADF=8)
 (module
-  (import "wasi_snapshot_preview1" "path_unlink_file" (func $path_unlink_file (param i32 i32 i32) (result i32)))
+  (import "mock_wasi" "path_unlink_file" (func $path_unlink_file (param i32 i32 i32) (result i32)))
   (memory 1)
 
   (func (export "test") (result i32)
@@ -285,7 +285,7 @@
 
 ;; Test 11: path_remove_directory with valid fd
 (module
-  (import "wasi_snapshot_preview1" "path_remove_directory" (func $path_remove_directory (param i32 i32 i32) (result i32)))
+  (import "mock_wasi" "path_remove_directory" (func $path_remove_directory (param i32 i32 i32) (result i32)))
   (memory 1)
 
   (func (export "test") (result i32)
@@ -296,7 +296,7 @@
 
 ;; Test 12: path_remove_directory with invalid fd (should return EBADF=8)
 (module
-  (import "wasi_snapshot_preview1" "path_remove_directory" (func $path_remove_directory (param i32 i32 i32) (result i32)))
+  (import "mock_wasi" "path_remove_directory" (func $path_remove_directory (param i32 i32 i32) (result i32)))
   (memory 1)
 
   (func (export "test") (result i32)
@@ -307,7 +307,7 @@
 
 ;; Test 13: path_rename with valid fd
 (module
-  (import "wasi_snapshot_preview1" "path_rename" (func $path_rename (param i32 i32 i32 i32 i32 i32) (result i32)))
+  (import "mock_wasi" "path_rename" (func $path_rename (param i32 i32 i32 i32 i32 i32) (result i32)))
   (memory 1)
 
   (func (export "test") (result i32)
@@ -318,7 +318,7 @@
 
 ;; Test 14: path_rename with invalid fd (should return EBADF=8)
 (module
-  (import "wasi_snapshot_preview1" "path_rename" (func $path_rename (param i32 i32 i32 i32 i32 i32) (result i32)))
+  (import "mock_wasi" "path_rename" (func $path_rename (param i32 i32 i32 i32 i32 i32) (result i32)))
   (memory 1)
 
   (func (export "test") (result i32)

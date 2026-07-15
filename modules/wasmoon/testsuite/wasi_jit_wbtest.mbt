@@ -686,7 +686,7 @@ test "wasi jit: poll_oneoff fd_read reports remaining file bytes" {
     #|    (local.set $errno
     #|      (call $path_open
     #|        (i32.const 3) (i32.const 0) (i32.const 64) (i32.const 23)
-    #|        (i32.const 0) (i64.const 2) (i64.const 0) (i32.const 0)
+    #|        (i32.const 0) (i64.const 134217730) (i64.const 0) (i32.const 0)
     #|        (i32.const 204)))
     #|    (if (i32.ne (local.get $errno) (i32.const 0))
     #|      (then (return (local.get $errno))))
@@ -710,6 +710,169 @@ test "wasi jit: poll_oneoff fd_read reports remaining file bytes" {
   inspect(result.match_, content="true")
   inspect(wasi_i32_from_result(result.interp_result), content="3")
   inspect(wasi_i32_from_result(result.jit_result), content="3")
+}
+
+///|
+test "wasi jit: poll_oneoff fans out mixed subscriptions for one native fd" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "path_open"
+    #|    (func $path_open (param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "path_unlink_file"
+    #|    (func $path_unlink_file (param i32 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_write"
+    #|    (func $fd_write (param i32 i32 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_close"
+    #|    (func $fd_close (param i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "poll_oneoff"
+    #|    (func $poll_oneoff (param i32 i32 i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (data (i32.const 32) "abc")
+    #|  (data (i32.const 64) "wasmoon_poll_fanout.txt")
+    #|  (func (export "test") (result i32)
+    #|    (local $errno i32)
+    #|    (local $fd i32)
+    #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 64) (i32.const 23)))
+    #|    (local.set $errno
+    #|      (call $path_open
+    #|        (i32.const 3) (i32.const 0) (i32.const 64) (i32.const 23)
+    #|        (i32.const 9) (i64.const 64) (i64.const 0) (i32.const 0)
+    #|        (i32.const 200)))
+    #|    (if (i32.ne (local.get $errno) (i32.const 0))
+    #|      (then (return (local.get $errno))))
+    #|    (local.set $fd (i32.load (i32.const 200)))
+    #|    (i32.store (i32.const 128) (i32.const 32))
+    #|    (i32.store (i32.const 132) (i32.const 3))
+    #|    (local.set $errno
+    #|      (call $fd_write
+    #|        (local.get $fd) (i32.const 128) (i32.const 1) (i32.const 220)))
+    #|    (if (i32.ne (local.get $errno) (i32.const 0))
+    #|      (then (return (local.get $errno))))
+    #|    (drop (call $fd_close (local.get $fd)))
+    #|    (local.set $errno
+    #|      (call $path_open
+    #|        (i32.const 3) (i32.const 0) (i32.const 64) (i32.const 23)
+    #|        (i32.const 0) (i64.const 134217794) (i64.const 0) (i32.const 0)
+    #|        (i32.const 204)))
+    #|    (if (i32.ne (local.get $errno) (i32.const 0))
+    #|      (then (return (local.get $errno))))
+    #|    (local.set $fd (i32.load (i32.const 204)))
+    #|    ;; sub[0] = fd_read, sub[1] = fd_write for the same native fd
+    #|    (i64.store (i32.const 0) (i64.const 111))
+    #|    (i32.store8 (i32.const 8) (i32.const 1))
+    #|    (i32.store (i32.const 12) (local.get $fd))
+    #|    (i64.store (i32.const 48) (i64.const 222))
+    #|    (i32.store8 (i32.const 56) (i32.const 2))
+    #|    (i32.store (i32.const 60) (local.get $fd))
+    #|    (local.set $errno
+    #|      (call $poll_oneoff
+    #|        (i32.const 0) (i32.const 256) (i32.const 2) (i32.const 240)))
+    #|    (if (i32.ne (local.get $errno) (i32.const 0))
+    #|      (then (return (local.get $errno))))
+    #|    (drop (call $fd_close (local.get $fd)))
+    #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 64) (i32.const 23)))
+    #|    (i32.load (i32.const 240))))
+  let result = compare_wasi_with_options(source, "test", preopens=[
+    ("/tmp", "/"),
+  ])
+  debug_inspect(
+    (
+      wasi_i32_from_result(result.interp_result),
+      wasi_i32_from_result(result.jit_result),
+    ),
+    content="(2, 2)",
+  )
+}
+
+///|
+test "wasi jit: poll_oneoff requires poll and direction rights" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "path_open"
+    #|    (func $path_open (param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "path_unlink_file"
+    #|    (func $path_unlink_file (param i32 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_close"
+    #|    (func $fd_close (param i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_fdstat_set_rights"
+    #|    (func $fd_fdstat_set_rights (param i32 i64 i64) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "poll_oneoff"
+    #|    (func $poll_oneoff (param i32 i32 i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (data (i32.const 64) "wasmoon_poll_rights.txt")
+    #|  (func $run (param $rights i64) (param $attenuate i32) (result i32)
+    #|    (local $errno i32)
+    #|    (local $fd i32)
+    #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 64) (i32.const 23)))
+    #|    ;; Create the file with write rights, then reopen it with the tested rights.
+    #|    (local.set $errno
+    #|      (call $path_open
+    #|        (i32.const 3) (i32.const 0) (i32.const 64) (i32.const 23)
+    #|        (i32.const 9) (i64.const 64) (i64.const 0) (i32.const 0)
+    #|        (i32.const 200)))
+    #|    (if (i32.ne (local.get $errno) (i32.const 0))
+    #|      (then (return (local.get $errno))))
+    #|    (drop (call $fd_close (i32.load (i32.const 200))))
+    #|    (local.set $errno
+    #|      (call $path_open
+    #|        (i32.const 3) (i32.const 0) (i32.const 64) (i32.const 23)
+    #|        (i32.const 0) (local.get $rights) (i64.const 0) (i32.const 0)
+    #|        (i32.const 204)))
+    #|    (if (i32.ne (local.get $errno) (i32.const 0))
+    #|      (then (return (local.get $errno))))
+    #|    (local.set $fd (i32.load (i32.const 204)))
+    #|    (if (local.get $attenuate)
+    #|      (then
+    #|        (local.set $errno
+    #|          (call $fd_fdstat_set_rights
+    #|            (local.get $fd) (i64.const 2) (i64.const 0)))
+    #|        (if (i32.ne (local.get $errno) (i32.const 0))
+    #|          (then (return (local.get $errno))))))
+    #|    (i64.store (i32.const 0) (i64.const 111))
+    #|    (i32.store8 (i32.const 8) (i32.const 1))
+    #|    (i32.store (i32.const 12) (local.get $fd))
+    #|    (local.set $errno
+    #|      (call $poll_oneoff
+    #|        (i32.const 0) (i32.const 256) (i32.const 1) (i32.const 240)))
+    #|    (drop (call $fd_close (local.get $fd)))
+    #|    (drop (call $path_unlink_file (i32.const 3) (i32.const 64) (i32.const 23)))
+    #|    (local.get $errno))
+    #|  (func (export "missing_poll_right") (result i32)
+    #|    (call $run (i64.const 2) (i32.const 0)))
+    #|  (func (export "missing_read_right") (result i32)
+    #|    (call $run (i64.const 134217728) (i32.const 0)))
+    #|  (func (export "attenuated_poll_right") (result i32)
+    #|    (call $run (i64.const 134217730) (i32.const 1)))
+    #|  (func (export "escalated_parent_right") (result i32)
+    #|    (call $path_open
+    #|      (i32.const 3) (i32.const 0) (i32.const 64) (i32.const 23)
+    #|      (i32.const 0) (i64.const 268435456) (i64.const 0) (i32.const 0)
+    #|      (i32.const 204))))
+  let missing_poll = compare_wasi_with_options(source, "missing_poll_right", preopens=[
+    ("/tmp", "/"),
+  ])
+  let missing_read = compare_wasi_with_options(source, "missing_read_right", preopens=[
+    ("/tmp", "/"),
+  ])
+  let attenuated = compare_wasi_with_options(source, "attenuated_poll_right", preopens=[
+    ("/tmp", "/"),
+  ])
+  let escalated = compare_wasi_with_options(source, "escalated_parent_right", preopens=[
+    ("/tmp", "/"),
+  ])
+  debug_inspect(
+    (
+      wasi_i32_from_result(missing_poll.interp_result),
+      wasi_i32_from_result(missing_poll.jit_result),
+      wasi_i32_from_result(missing_read.interp_result),
+      wasi_i32_from_result(missing_read.jit_result),
+      wasi_i32_from_result(attenuated.interp_result),
+      wasi_i32_from_result(attenuated.jit_result),
+      wasi_i32_from_result(escalated.interp_result),
+      wasi_i32_from_result(escalated.jit_result),
+    ),
+    content="(76, 76, 76, 76, 76, 76, 76, 76)",
+  )
 }
 
 ///|
@@ -2416,7 +2579,7 @@ test "wasi jit: fd_renumber remaps stdio routing semantics" {
     #|      (call $fd_fdstat_get (i32.const 3) (i32.const 300)))
     #|    (if (i32.ne (local.get $errno) (i32.const 0))
     #|      (then (return (i32.const 105))))
-    #|    (if (i64.ne (i64.load (i32.const 308)) (i64.const 64))
+    #|    (if (i64.ne (i64.load (i32.const 308)) (i64.const 134217792))
     #|      (then (return (i32.const 106))))
     #|    (local.set $errno
     #|      (call $fd_fdstat_get (i32.const 1) (i32.const 300)))
@@ -2526,7 +2689,7 @@ test "wasi jit: fd_fdstat_set_flags traps on unknown bits" {
 }
 
 ///|
-test "wasi jit: fd_fdstat_set_rights valid fd returns ENOTSUP (58)" {
+test "wasi jit: fd_fdstat_set_rights attenuates valid fd" {
   let source =
     #|(module
     #|  (import "wasi_snapshot_preview1" "path_open"
@@ -2547,9 +2710,14 @@ test "wasi jit: fd_fdstat_set_rights valid fd returns ENOTSUP (58)" {
   let result = compare_wasi_with_options(source, "test", preopens=[
     ("/tmp", "/"),
   ])
-  inspect(result.match_, content="true")
-  inspect(wasi_errno_from_result(result.interp_result), content="58")
-  inspect(wasi_errno_from_result(result.jit_result), content="58")
+  inspect(result, content="matched")
+  debug_inspect(
+    (
+      wasi_errno_from_result(result.interp_result),
+      wasi_errno_from_result(result.jit_result),
+    ),
+    content="(0, 0)",
+  )
 }
 
 ///|
@@ -2568,20 +2736,36 @@ test "wasi jit: fd_fdstat_set_rights stdio returns EBADF (8)" {
 }
 
 ///|
-test "wasi jit: fd_fdstat_set_rights preopen returns ENOTSUP (58)" {
+test "wasi jit: fd_fdstat_set_rights attenuates preopen rights" {
   let source =
     #|(module
     #|  (import "wasi_snapshot_preview1" "fd_fdstat_set_rights"
     #|    (func $fd_fdstat_set_rights (param i32 i64 i64) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_fdstat_get"
+    #|    (func $fd_fdstat_get (param i32 i32) (result i32)))
     #|  (memory (export "memory") 1)
     #|  (func (export "test") (result i32)
-    #|    (call $fd_fdstat_set_rights (i32.const 3) (i64.const 0) (i64.const 0))))
+    #|    (local $errno i32)
+    #|    (local.set $errno
+    #|      (call $fd_fdstat_set_rights
+    #|        (i32.const 3) (i64.const 0) (i64.const 0)))
+    #|    (if (i32.ne (local.get $errno) (i32.const 0))
+    #|      (then (return (local.get $errno))))
+    #|    (local.set $errno (call $fd_fdstat_get (i32.const 3) (i32.const 0)))
+    #|    (if (i32.ne (local.get $errno) (i32.const 0))
+    #|      (then (return (local.get $errno))))
+    #|    (i32.wrap_i64 (i64.load (i32.const 8)))))
   let result = compare_wasi_with_options(source, "test", preopens=[
     ("/tmp", "/"),
   ])
-  inspect(result.match_, content="true")
-  inspect(wasi_errno_from_result(result.interp_result), content="58")
-  inspect(wasi_errno_from_result(result.jit_result), content="58")
+  inspect(result, content="matched")
+  debug_inspect(
+    (
+      wasi_errno_from_result(result.interp_result),
+      wasi_errno_from_result(result.jit_result),
+    ),
+    content="(0, 0)",
+  )
 }
 
 ///|

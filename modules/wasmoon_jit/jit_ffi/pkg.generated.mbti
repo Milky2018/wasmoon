@@ -396,8 +396,6 @@ pub fn c_jit_get_path_symlink_ptr() -> Int64
 
 pub fn c_jit_get_path_unlink_file_ptr() -> Int64
 
-pub fn c_jit_get_poll_oneoff_ptr() -> Int64
-
 pub fn c_jit_get_proc_exit_ptr() -> Int64
 
 pub fn c_jit_get_proc_raise_ptr() -> Int64

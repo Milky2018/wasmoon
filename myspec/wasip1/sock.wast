@@ -2,7 +2,7 @@
 ;; Tests sock_accept, sock_send, sock_recv, sock_shutdown
 
 ;; Mock WASI module that provides testable implementations
-(module $wasi_snapshot_preview1
+(module $mock_wasi
   (global $last_errno (mut i32) (i32.const 0))
 
   (memory (export "memory") 2)
@@ -88,12 +88,12 @@
   )
 )
 
-;; Register the WASI module so subsequent modules can import from it
-(register "wasi_snapshot_preview1" $wasi_snapshot_preview1)
+;; Use a non-reserved namespace so both engines resolve this mock via the WAST registry.
+(register "mock_wasi" $mock_wasi)
 
 ;; Test 1: sock_accept with valid fd
 (module
-  (import "wasi_snapshot_preview1" "sock_accept" (func $sock_accept (param i32 i32 i32) (result i32)))
+  (import "mock_wasi" "sock_accept" (func $sock_accept (param i32 i32 i32) (result i32)))
   (memory 1)
 
   (func (export "test") (result i32)
@@ -104,7 +104,7 @@
 
 ;; Test 2: sock_accept with invalid fd (should return EBADF=8)
 (module
-  (import "wasi_snapshot_preview1" "sock_accept" (func $sock_accept (param i32 i32 i32) (result i32)))
+  (import "mock_wasi" "sock_accept" (func $sock_accept (param i32 i32 i32) (result i32)))
   (memory 1)
 
   (func (export "test") (result i32)
@@ -115,7 +115,7 @@
 
 ;; Test 3: sock_send with valid fd
 (module
-  (import "wasi_snapshot_preview1" "sock_send" (func $sock_send (param i32 i32 i32 i32 i32) (result i32)))
+  (import "mock_wasi" "sock_send" (func $sock_send (param i32 i32 i32 i32 i32) (result i32)))
   (memory 1)
 
   (func (export "test") (result i32)
@@ -126,7 +126,7 @@
 
 ;; Test 4: sock_send with invalid fd (should return EBADF=8)
 (module
-  (import "wasi_snapshot_preview1" "sock_send" (func $sock_send (param i32 i32 i32 i32 i32) (result i32)))
+  (import "mock_wasi" "sock_send" (func $sock_send (param i32 i32 i32 i32 i32) (result i32)))
   (memory 1)
 
   (func (export "test") (result i32)
@@ -137,7 +137,7 @@
 
 ;; Test 5: sock_recv with valid fd
 (module
-  (import "wasi_snapshot_preview1" "sock_recv" (func $sock_recv (param i32 i32 i32 i32 i32 i32) (result i32)))
+  (import "mock_wasi" "sock_recv" (func $sock_recv (param i32 i32 i32 i32 i32 i32) (result i32)))
   (memory 1)
 
   (func (export "test") (result i32)
@@ -148,7 +148,7 @@
 
 ;; Test 6: sock_recv with invalid fd (should return EBADF=8)
 (module
-  (import "wasi_snapshot_preview1" "sock_recv" (func $sock_recv (param i32 i32 i32 i32 i32 i32) (result i32)))
+  (import "mock_wasi" "sock_recv" (func $sock_recv (param i32 i32 i32 i32 i32 i32) (result i32)))
   (memory 1)
 
   (func (export "test") (result i32)
@@ -159,7 +159,7 @@
 
 ;; Test 7: sock_shutdown with valid fd
 (module
-  (import "wasi_snapshot_preview1" "sock_shutdown" (func $sock_shutdown (param i32 i32) (result i32)))
+  (import "mock_wasi" "sock_shutdown" (func $sock_shutdown (param i32 i32) (result i32)))
   (memory 1)
 
   (func (export "test") (result i32)
@@ -170,7 +170,7 @@
 
 ;; Test 8: sock_shutdown with invalid fd (should return EBADF=8)
 (module
-  (import "wasi_snapshot_preview1" "sock_shutdown" (func $sock_shutdown (param i32 i32) (result i32)))
+  (import "mock_wasi" "sock_shutdown" (func $sock_shutdown (param i32 i32) (result i32)))
   (memory 1)
 
   (func (export "test") (result i32)

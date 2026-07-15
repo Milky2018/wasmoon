@@ -9,4 +9,4 @@
     (local $errno i32)
     (local.set $errno (call $fd_write (i32.const 1) (i32.const 0) (i32.const 1) (i32.const 8)))
     (if (i32.ne (local.get $errno) (i32.const 0)) (then unreachable))
-    (if (i32.ne (i32.load (i32.const 8)) (i32.const 21)) (then unreachable)))))
+    (if (i32.ne (i32.load (i32.const 8)) (i32.const 21)) (then unreachable))))

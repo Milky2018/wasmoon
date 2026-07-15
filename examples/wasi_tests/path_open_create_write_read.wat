@@ -32,7 +32,7 @@
       (i32.const 0)    ;; path
       (i32.const 5)    ;; path_len ("a.txt")
       (i32.const 9)    ;; oflags = CREAT|TRUNC
-      (i64.const 0)    ;; rights_base
+      (i64.const 70)   ;; rights_base = FD_READ|FD_SEEK|FD_WRITE
       (i64.const 0)    ;; rights_inheriting
       (i32.const 0)    ;; fdflags
       (i32.const 20))) ;; opened_fd out
@@ -79,4 +79,3 @@
     (drop (call $fd_write (i32.const 1) (i32.const 400) (i32.const 1) (i32.const 408)))
   )
 )
-

@@ -949,6 +949,7 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_linkat(int olddirfd, moonbit_bytes_t oldpath
 
 #ifndef _WIN32
 #include <poll.h>
+#include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <signal.h>
 #include <time.h>
@@ -959,7 +960,8 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_linkat(int olddirfd, moonbit_bytes_t oldpath
 MOONBIT_FFI_EXPORT int wasmoon_wasi_nanosleep(int64_t ns) {
 #ifdef _WIN32
   // Windows: use Sleep (milliseconds)
-  Sleep((DWORD)(ns / 1000000));
+  DWORD millis = ns <= 0 ? 0 : (DWORD)(ns / 1000000 + (ns % 1000000 != 0));
+  Sleep(millis);
   return 0;
 #else
   struct timespec req;
@@ -1034,32 +1036,51 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_wasi_clock_getres_realtime(void) {
 // nfds: number of fds
 // timeout_ms: timeout in milliseconds (-1 for infinite)
 // Returns number of ready fds, or -1 on error
-MOONBIT_FFI_EXPORT int wasmoon_wasi_poll(int* fds_ptr, int16_t* events_ptr,
-    int16_t* revents_ptr, int nfds, int timeout_ms) {
+MOONBIT_FFI_EXPORT int wasmoon_wasi_poll(int* fds_ptr, int* events_ptr,
+    int* revents_ptr, int nfds, int timeout_ms) {
 #ifdef _WIN32
   (void)fds_ptr;
   (void)events_ptr;
   (void)revents_ptr;
   (void)nfds;
   (void)timeout_ms;
-  return -1;  // Not easily supported on Windows
+  errno = ENOSYS;
+  return -1;
 #else
-  if (nfds <= 0 || nfds > 256) return -1;
+  if (nfds <= 0) {
+    errno = EINVAL;
+    return -1;
+  }
 
-  struct pollfd pfds[256];
+  struct pollfd *pfds = calloc((size_t)nfds, sizeof(struct pollfd));
+  if (!pfds) return -1;
   for (int i = 0; i < nfds; i++) {
     pfds[i].fd = fds_ptr[i];
-    pfds[i].events = events_ptr[i];
+    pfds[i].events = (short)events_ptr[i];
     pfds[i].revents = 0;
   }
 
   int result = poll(pfds, nfds, timeout_ms);
 
   for (int i = 0; i < nfds; i++) {
-    revents_ptr[i] = pfds[i].revents;
+    revents_ptr[i] = (int)pfds[i].revents;
   }
 
+  free(pfds);
   return result;
+#endif
+}
+
+// Number of bytes currently readable from a socket, or -1 on error.
+MOONBIT_FFI_EXPORT int64_t wasmoon_wasi_socket_bytes_available(int fd) {
+#ifdef _WIN32
+  (void)fd;
+  errno = ENOSYS;
+  return -1;
+#else
+  int available = 0;
+  if (ioctl(fd, FIONREAD, &available) != 0) return -1;
+  return (int64_t)available;
 #endif
 }
 
