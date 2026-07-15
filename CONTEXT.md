@@ -52,6 +52,10 @@ _Avoid_: MachV opcode dialect, host-tagged MachV
 A shared virtual-register function and control-flow structure parameterized by a closed, target-owned instruction type such as `AArch64Inst` or `AMD64Inst`.
 _Avoid_: MachV, shared target opcode, union of machine dialects
 
+**Portable Execution Target**:
+An optional downstream target that lowers **MachV** into interpreter-oriented bytecode with its own instruction set and execution contract.
+_Avoid_: MachV bytecode, MachV VM, production MachV interpreter
+
 **ABI Policy**:
 The target and embedding-specific rules for argument registers, return registers, callee-saved registers, caller-saved registers, stack layout, and call clobbers.
 _Avoid_: MachV core policy
@@ -94,6 +98,7 @@ _Avoid_: MachV emitter output, generic object format
 - **MachV Target Lowering** lowers every **MachV** function into **Target VCode** parameterized by the selected target's instruction type.
 - **Machine Targets** own **ABI Policy**; **MachV** does not encode host instructions, physical registers, calling conventions, or target constraints.
 - **Target VCode** shares function, block, control-flow, virtual-register, and allocation structure without sharing target instructions.
+- A **Portable Execution Target** may consume **MachV** without turning **MachV** itself into a stable bytecode or VM contract.
 - **Register Allocation** runs after **MachV Target Lowering** and before a **Target Emitter**.
 - A **Target Emitter** produces generic relocation and metadata records; **Wasmoon JIT** resolves those records to Wasmoon runtime helpers and executable memory.
 - A **Cwasm Artifact** may wrap **Target Emitter** output with Wasmoon function indices, imports, traps, debug mapping, and runtime metadata.
@@ -117,6 +122,7 @@ _Avoid_: MachV emitter output, generic object format
 - "VCode" previously named both the current Wasmoon machine IR and the reusable machine layer; resolved: use **MachV** for the reusable virtual-register machine IR.
 - Instruction selection ownership was previously unclear; resolved: **MilkIR-MachV Lowering** is target-neutral, while **MachV Target Lowering** owns host instruction selection.
 - SSA destruction ownership was previously unclear; resolved: **MachV** retains single-definition virtual registers and block parameters, while target-specific constraints and copy insertion begin in **Target VCode**.
+- Portable execution ownership was previously unclear; resolved: **MachV** remains a compiler intermediate representation, while any production bytecode and interpreter belong to a separate **Portable Execution Target**.
 - Target packaging was ambiguous; resolved: use ISA-specific modules such as `x64_target` and `aarch64_target`, not generic `backend` or `isa_backend` packages.
 - ABI ownership was previously mixed into the machine layer; resolved: **Machine Targets** own **ABI Policy** and apply it after **MachV**.
 - Register-allocation placement was reopened; resolved: **Register Allocation** consumes the target-specific representation produced by **MachV Target Lowering**, never **MachV** itself.
