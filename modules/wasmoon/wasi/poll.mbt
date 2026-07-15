@@ -97,38 +97,50 @@ fn resolve_poll_fd_source(
   descriptors : PollDescriptorContext,
   fd : Int,
   event_type : Int,
-) -> PollFdSource? {
+) -> Result[PollFdSource, Errno] {
   match descriptors {
     JitDescriptors(jit_context) => {
       let source = jit_poll_resolve_fd(jit_context, fd, event_type)
       if source >= 0 {
-        Some(Native(source))
+        Ok(Native(source))
       } else if source == -2 {
-        Some(Immediate)
+        Ok(Immediate)
+      } else if source == -3 {
+        Err(NotCapable)
       } else {
-        None
+        Err(Badf)
       }
     }
     InterpreterDescriptors(ctx) => {
       if stdio_slot_for_fd(ctx, fd) is Some(slot) {
         if !is_stdio_open(ctx, fd) {
-          return None
+          return Err(Badf)
         }
         if (slot == 0 && event_type != 1) || (slot != 0 && event_type != 2) {
-          return None
+          return Err(Badf)
         }
         if poll_stdio_is_native(ctx, slot) {
-          return Some(Native(slot))
+          return Ok(Native(slot))
         }
-        return Some(Immediate)
+        return Ok(Immediate)
       }
       let file = match ctx.get_file(fd) {
         Some(file) => file
-        None => return None
+        None => return Err(Badf)
+      }
+      let direction_right = if event_type == 1 {
+        right_fd_read
+      } else {
+        right_fd_write
+      }
+      if (file.rights_base & right_poll_fd_readwrite) == 0L ||
+        (file.rights_base & direction_right) == 0L {
+        return Err(NotCapable)
       }
       match file.file_type {
-        RegularFile | SocketStream => Some(Native(file.native_fd))
-        Directory | CharacterDevice => None
+        RegularFile | CharacterDevice | SocketStream =>
+          Ok(Native(file.native_fd))
+        Directory => Err(Badf)
       }
     }
   }
@@ -180,8 +192,8 @@ fn decode_poll_subscriptions(
     } else if tag == 1 || tag == 2 {
       let wasi_fd = mem.read_i32(sub_ptr + 12)
       let source = match resolve_poll_fd_source(descriptors, wasi_fd, tag) {
-        Some(source) => source
-        None => return Err(Badf)
+        Ok(source) => source
+        Err(errno) => return Err(errno)
       }
       subscriptions.push(FdPoll({ userdata, wasi_fd, event_type: tag, source }))
     } else {

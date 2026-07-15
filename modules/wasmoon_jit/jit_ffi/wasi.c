@@ -112,7 +112,7 @@ static int get_native_fd(jit_context_t *ctx, int wasi_fd) {
         if (stdio_slot == 0) return 0;
         if (stdio_slot == 1) return 1;
         if (stdio_slot == 2) return 2;
-        return -1;
+        return -3;
     }
     return ctx->fd_table[wasi_fd];
 }
@@ -221,7 +221,7 @@ static int get_regular_file_native_fd(jit_context_t *ctx, int wasi_fd, int *nati
 
 // Descriptor adapter used by the shared MoonBit poll_oneoff implementation.
 // Return values from resolve_fd are native fd (>= 0), immediate readiness (-2),
-// or invalid descriptor/event pairing (-1).
+// missing descriptor rights (-3), or invalid descriptor/event pairing (-1).
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_active_context_ptr(void) {
     return (int64_t)get_current_jit_context();
 }
@@ -251,6 +251,15 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_poll_resolve_fd(
 
     if (is_preopen_fd(ctx, wasi_fd) || get_open_dir_path(ctx, wasi_fd)) {
         return -1;
+    }
+    if (!ctx->fd_rights_base || wasi_fd >= ctx->fd_table_size) return -1;
+    uint64_t direction_right = event_type == 1
+        ? WASI_RIGHT_FD_READ
+        : WASI_RIGHT_FD_WRITE;
+    uint64_t rights = ctx->fd_rights_base[wasi_fd];
+    if ((rights & WASI_RIGHT_POLL_FD_READWRITE) == 0 ||
+        (rights & direction_right) == 0) {
+        return -3;
     }
     return get_native_fd(ctx, wasi_fd);
 }
@@ -308,20 +317,30 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_poll_fd_read_flags(
 }
 
 static int ensure_fd_metadata_arrays(jit_context_t *ctx) {
-    if (ctx->fd_host_paths && ctx->fd_is_dir) return 1;
+    if (ctx->fd_host_paths && ctx->fd_is_dir &&
+        ctx->fd_rights_base && ctx->fd_rights_inheriting) return 1;
     if (!ctx->fd_table || ctx->fd_table_size <= 0) return 0;
     ctx->fd_host_paths = malloc(ctx->fd_table_size * sizeof(char*));
     ctx->fd_is_dir = malloc(ctx->fd_table_size * sizeof(uint8_t));
-    if (!ctx->fd_host_paths || !ctx->fd_is_dir) {
+    ctx->fd_rights_base = malloc(ctx->fd_table_size * sizeof(uint64_t));
+    ctx->fd_rights_inheriting = malloc(ctx->fd_table_size * sizeof(uint64_t));
+    if (!ctx->fd_host_paths || !ctx->fd_is_dir ||
+        !ctx->fd_rights_base || !ctx->fd_rights_inheriting) {
         free(ctx->fd_host_paths);
         free(ctx->fd_is_dir);
+        free(ctx->fd_rights_base);
+        free(ctx->fd_rights_inheriting);
         ctx->fd_host_paths = NULL;
         ctx->fd_is_dir = NULL;
+        ctx->fd_rights_base = NULL;
+        ctx->fd_rights_inheriting = NULL;
         return 0;
     }
     for (int i = 0; i < ctx->fd_table_size; i++) {
         ctx->fd_host_paths[i] = NULL;
         ctx->fd_is_dir[i] = 0;
+        ctx->fd_rights_base[i] = 0;
+        ctx->fd_rights_inheriting[i] = 0;
     }
     return 1;
 }
@@ -339,28 +358,41 @@ static int ensure_fd_capacity(jit_context_t *ctx, int target_fd) {
     int *new_table = malloc(new_size * sizeof(int));
     char **new_paths = malloc(new_size * sizeof(char*));
     uint8_t *new_is_dir = malloc(new_size * sizeof(uint8_t));
-    if (!new_table || !new_paths || !new_is_dir) {
+    uint64_t *new_rights_base = malloc(new_size * sizeof(uint64_t));
+    uint64_t *new_rights_inheriting = malloc(new_size * sizeof(uint64_t));
+    if (!new_table || !new_paths || !new_is_dir ||
+        !new_rights_base || !new_rights_inheriting) {
         free(new_table);
         free(new_paths);
         free(new_is_dir);
+        free(new_rights_base);
+        free(new_rights_inheriting);
         return 0;
     }
 
     memcpy(new_table, ctx->fd_table, ctx->fd_table_size * sizeof(int));
     memcpy(new_paths, ctx->fd_host_paths, ctx->fd_table_size * sizeof(char*));
     memcpy(new_is_dir, ctx->fd_is_dir, ctx->fd_table_size * sizeof(uint8_t));
+    memcpy(new_rights_base, ctx->fd_rights_base, ctx->fd_table_size * sizeof(uint64_t));
+    memcpy(new_rights_inheriting, ctx->fd_rights_inheriting, ctx->fd_table_size * sizeof(uint64_t));
     for (int i = ctx->fd_table_size; i < new_size; i++) {
         new_table[i] = -1;
         new_paths[i] = NULL;
         new_is_dir[i] = 0;
+        new_rights_base[i] = 0;
+        new_rights_inheriting[i] = 0;
     }
 
     free(ctx->fd_table);
     free(ctx->fd_host_paths);
     free(ctx->fd_is_dir);
+    free(ctx->fd_rights_base);
+    free(ctx->fd_rights_inheriting);
     ctx->fd_table = new_table;
     ctx->fd_host_paths = new_paths;
     ctx->fd_is_dir = new_is_dir;
+    ctx->fd_rights_base = new_rights_base;
+    ctx->fd_rights_inheriting = new_rights_inheriting;
     ctx->fd_table_size = new_size;
     return 1;
 }
@@ -388,13 +420,26 @@ static void clear_wasi_stdin_callback(jit_context_t *ctx) {
 }
 
 static void clear_fd_metadata(jit_context_t *ctx, int wasi_fd) {
-    if (!ctx->fd_host_paths || !ctx->fd_is_dir) return;
     if (wasi_fd < 0 || wasi_fd >= ctx->fd_table_size) return;
-    if (ctx->fd_host_paths[wasi_fd]) {
+    if (ctx->fd_host_paths && ctx->fd_host_paths[wasi_fd]) {
         free(ctx->fd_host_paths[wasi_fd]);
         ctx->fd_host_paths[wasi_fd] = NULL;
     }
-    ctx->fd_is_dir[wasi_fd] = 0;
+    if (ctx->fd_is_dir) ctx->fd_is_dir[wasi_fd] = 0;
+    if (ctx->fd_rights_base) ctx->fd_rights_base[wasi_fd] = 0;
+    if (ctx->fd_rights_inheriting) ctx->fd_rights_inheriting[wasi_fd] = 0;
+}
+
+static void set_fd_rights(
+    jit_context_t *ctx,
+    int wasi_fd,
+    uint64_t rights_base,
+    uint64_t rights_inheriting
+) {
+    if (!ctx || !ctx->fd_rights_base || !ctx->fd_rights_inheriting ||
+        wasi_fd < 0 || wasi_fd >= ctx->fd_table_size) return;
+    ctx->fd_rights_base[wasi_fd] = rights_base;
+    ctx->fd_rights_inheriting[wasi_fd] = rights_inheriting;
 }
 
 static void set_fd_metadata(jit_context_t *ctx, int wasi_fd, char *host_path, int is_dir) {
@@ -759,7 +804,8 @@ static int alloc_wasi_fd(jit_context_t *ctx, int native_fd) {
             return -1;
         }
         ctx->fd_next = 3 + ctx->preopen_count;
-    } else if (!ctx->fd_host_paths || !ctx->fd_is_dir) {
+    } else if (!ctx->fd_host_paths || !ctx->fd_is_dir ||
+               !ctx->fd_rights_base || !ctx->fd_rights_inheriting) {
         if (!ensure_fd_metadata_arrays(ctx)) return -1;
     }
 
@@ -778,27 +824,40 @@ static int alloc_wasi_fd(jit_context_t *ctx, int native_fd) {
     int *new_table = malloc(new_size * sizeof(int));
     char **new_paths = malloc(new_size * sizeof(char*));
     uint8_t *new_is_dir = malloc(new_size * sizeof(uint8_t));
-    if (!new_table || !new_paths || !new_is_dir) {
+    uint64_t *new_rights_base = malloc(new_size * sizeof(uint64_t));
+    uint64_t *new_rights_inheriting = malloc(new_size * sizeof(uint64_t));
+    if (!new_table || !new_paths || !new_is_dir ||
+        !new_rights_base || !new_rights_inheriting) {
         free(new_table);
         free(new_paths);
         free(new_is_dir);
+        free(new_rights_base);
+        free(new_rights_inheriting);
         return -1;
     }
 
     memcpy(new_table, ctx->fd_table, ctx->fd_table_size * sizeof(int));
     memcpy(new_paths, ctx->fd_host_paths, ctx->fd_table_size * sizeof(char*));
     memcpy(new_is_dir, ctx->fd_is_dir, ctx->fd_table_size * sizeof(uint8_t));
+    memcpy(new_rights_base, ctx->fd_rights_base, ctx->fd_table_size * sizeof(uint64_t));
+    memcpy(new_rights_inheriting, ctx->fd_rights_inheriting, ctx->fd_table_size * sizeof(uint64_t));
     for (int i = ctx->fd_table_size; i < new_size; i++) {
         new_table[i] = -1;
         new_paths[i] = NULL;
         new_is_dir[i] = 0;
+        new_rights_base[i] = 0;
+        new_rights_inheriting[i] = 0;
     }
     free(ctx->fd_table);
     free(ctx->fd_host_paths);
     free(ctx->fd_is_dir);
+    free(ctx->fd_rights_base);
+    free(ctx->fd_rights_inheriting);
     ctx->fd_table = new_table;
     ctx->fd_host_paths = new_paths;
     ctx->fd_is_dir = new_is_dir;
+    ctx->fd_rights_base = new_rights_base;
+    ctx->fd_rights_inheriting = new_rights_inheriting;
     ctx->fd_table_size = new_size;
     int fd = ctx->fd_table_size / 2;
     ctx->fd_table[fd] = native_fd;
@@ -1105,35 +1164,6 @@ static uint64_t preopen_directory_inheriting_rights(void) {
         WASI_RIGHT_POLL_FD_READWRITE;
 }
 
-static uint64_t socket_base_rights(int can_read, int can_write) {
-    uint64_t rights = WASI_RIGHT_FD_FDSTAT_SET_FLAGS | WASI_RIGHT_SOCK_SHUTDOWN;
-    if (can_read) rights |= WASI_RIGHT_FD_READ;
-    if (can_write) rights |= WASI_RIGHT_FD_WRITE;
-    if (can_read || can_write) rights |= WASI_RIGHT_POLL_FD_READWRITE;
-    return rights;
-}
-
-static uint64_t dynamic_descriptor_rights(uint8_t filetype, int can_read, int can_write) {
-    if (filetype == WASI_FILETYPE_SOCKET_STREAM) {
-        return socket_base_rights(can_read, can_write);
-    }
-
-    uint64_t rights = WASI_RIGHTS_ALL_VALID;
-    if (filetype == WASI_FILETYPE_DIRECTORY) {
-        rights &= ~WASI_RIGHT_FD_SEEK;
-        rights &= ~WASI_RIGHT_FD_FILESTAT_SET_SIZE;
-        rights &= ~WASI_RIGHT_PATH_FILESTAT_SET_SIZE;
-    }
-    if (!can_read) {
-        rights &= ~WASI_RIGHT_FD_READ;
-        rights &= ~WASI_RIGHT_FD_READDIR;
-    }
-    if (!can_write) {
-        rights &= ~WASI_RIGHT_FD_WRITE;
-    }
-    return rights;
-}
-
 #ifndef _WIN32
 static uint16_t wasi_fdflags_from_native(int native_fd) {
     uint16_t flags = 0;
@@ -1159,27 +1189,6 @@ static uint16_t wasi_fdflags_from_native(int native_fd) {
     return flags;
 }
 
-static void fd_access_mode_from_native(int native_fd, int *can_read, int *can_write) {
-    *can_read = 1;
-    *can_write = 1;
-
-    int native_flags = fcntl(native_fd, F_GETFL);
-    if (native_flags < 0) return;
-
-#if defined(O_ACCMODE) && defined(O_WRONLY) && defined(O_RDWR)
-    int acc_mode = native_flags & O_ACCMODE;
-    if (acc_mode == O_WRONLY) {
-        *can_read = 0;
-        *can_write = 1;
-    } else if (acc_mode == O_RDWR) {
-        *can_read = 1;
-        *can_write = 1;
-    } else {
-        *can_read = 1;
-        *can_write = 0;
-    }
-#endif
-}
 #endif
 
 static int append_output_buffer(
@@ -1574,27 +1583,29 @@ static int64_t wasi_fd_fdstat_get_impl(
         if (native_fd < 0) return WASI_EBADF;
         filetype = stdio_filetype_native(native_fd);
         rights_base = (stdio_slot == 0) ? WASI_RIGHT_FD_READ : WASI_RIGHT_FD_WRITE;
+        rights_base |= WASI_RIGHT_POLL_FD_READWRITE;
         rights_inheriting = rights_base;
     } else if (is_preopen_fd(ctx, wasi_fd)) {
         filetype = WASI_FILETYPE_DIRECTORY;
-        rights_base = preopen_directory_base_rights();
-        rights_inheriting = preopen_directory_inheriting_rights();
+        if (!ctx->fd_rights_base || !ctx->fd_rights_inheriting ||
+            wasi_fd >= ctx->fd_table_size) return WASI_EBADF;
+        rights_base = ctx->fd_rights_base[wasi_fd];
+        rights_inheriting = ctx->fd_rights_inheriting[wasi_fd];
     } else {
         int native_fd = get_native_fd(ctx, wasi_fd);
         if (native_fd < 0) return WASI_EBADF;
-        int can_read = 1;
-        int can_write = 1;
 #ifndef _WIN32
         struct stat st;
         if (fstat(native_fd, &st) < 0) return errno_to_wasi(errno);
         filetype = mode_to_filetype(st.st_mode);
         flags = wasi_fdflags_from_native(native_fd);
-        fd_access_mode_from_native(native_fd, &can_read, &can_write);
 #else
         filetype = WASI_FILETYPE_REGULAR_FILE;
 #endif
-        rights_base = dynamic_descriptor_rights(filetype, can_read, can_write);
-        rights_inheriting = rights_base;
+        if (!ctx->fd_rights_base || !ctx->fd_rights_inheriting ||
+            wasi_fd >= ctx->fd_table_size) return WASI_EBADF;
+        rights_base = ctx->fd_rights_base[wasi_fd];
+        rights_inheriting = ctx->fd_rights_inheriting[wasi_fd];
     }
 
     // fdstat: filetype(1) + pad(1) + flags(2) + pad(4) + rights_base(8) + rights_inheriting(8)
@@ -1667,7 +1678,6 @@ static int64_t wasi_path_open_impl(
     int64_t fdflags, int64_t opened_fd_ptr
 ) {
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
-    (void)rights_inh;
     if (invalid_lookupflags((int32_t)dirflags)) return trap_invalid_wasi_abi_arg();
     if ((oflags & ~0x0f) != 0) return trap_invalid_wasi_abi_arg();
     if ((fdflags & ~0x1f) != 0) return trap_invalid_wasi_abi_arg();
@@ -1696,6 +1706,15 @@ static int64_t wasi_path_open_impl(
     if (!is_preopen_fd(ctx, dirfd_i) && !get_open_dir_path(ctx, dirfd_i)) {
         if (get_native_fd(ctx, dirfd_i) >= 0) return WASI_ENOTDIR;
         return WASI_EBADF;
+    }
+    if (!ctx->fd_rights_inheriting || dirfd_i < 0 ||
+        dirfd_i >= ctx->fd_table_size) return WASI_EBADF;
+    uint64_t effective_rights_base = ((uint64_t)rights_base) & WASI_RIGHTS_ALL_VALID;
+    uint64_t effective_rights_inheriting = ((uint64_t)rights_inh) & WASI_RIGHTS_ALL_VALID;
+    uint64_t parent_rights_inheriting = ctx->fd_rights_inheriting[dirfd_i];
+    if ((effective_rights_base & parent_rights_inheriting) != effective_rights_base ||
+        (effective_rights_inheriting & parent_rights_inheriting) != effective_rights_inheriting) {
+        return WASI_ENOTCAPABLE;
     }
     if (((int64_t)fdflags & 0x1A) != 0) { // DSYNC/RSYNC/SYNC
         return WASI_ENOTSUP;
@@ -1780,6 +1799,12 @@ static int64_t wasi_path_open_impl(
     }
 
     set_fd_metadata(ctx, wasi_fd, full_path, is_dir);
+    set_fd_rights(
+        ctx,
+        wasi_fd,
+        effective_rights_base,
+        effective_rights_inheriting
+    );
     *(uint32_t *)(ctx->memory0->base + opened_fd_ptr_u) = (uint32_t)wasi_fd;
     return WASI_ESUCCESS;
 #else
@@ -2971,18 +2996,26 @@ static int32_t wasi_fd_advise_impl(
     return WASI_ESUCCESS;
 }
 
-// fd_fdstat_set_rights: No-op (rights system simplified)
+// fd_fdstat_set_rights: irrevocably reduce descriptor rights
 static int32_t wasi_fd_fdstat_set_rights_impl(
     jit_context_t *ctx,
     int32_t fd, int64_t rights_base, int64_t rights_inheriting
 ) {
-    (void)rights_base;
-    (void)rights_inheriting;
     if (!ctx) return WASI_EBADF;
     if (is_stdio_fd(ctx, fd)) return WASI_EBADF;
     int native_fd = get_native_fd(ctx, fd);
     if (native_fd < 0) return WASI_EBADF;
-    return WASI_ENOTSUP;
+    if (!ctx->fd_rights_base || !ctx->fd_rights_inheriting ||
+        fd < 0 || fd >= ctx->fd_table_size) return WASI_EBADF;
+    uint64_t new_base = (uint64_t)rights_base;
+    uint64_t new_inheriting = (uint64_t)rights_inheriting;
+    if ((new_base & ctx->fd_rights_base[fd]) != new_base ||
+        (new_inheriting & ctx->fd_rights_inheriting[fd]) != new_inheriting) {
+        return WASI_ENOTCAPABLE;
+    }
+    ctx->fd_rights_base[fd] = new_base;
+    ctx->fd_rights_inheriting[fd] = new_inheriting;
+    return WASI_ESUCCESS;
 }
 
 // fd_allocate: Allocate space for a file
@@ -3072,6 +3105,12 @@ static int32_t wasi_fd_renumber_impl(
             ctx->fd_is_dir[to_fd] = ctx->fd_is_dir[fd];
             ctx->fd_host_paths[fd] = NULL;
             ctx->fd_is_dir[fd] = 0;
+        }
+        if (ctx->fd_rights_base && ctx->fd_rights_inheriting) {
+            ctx->fd_rights_base[to_fd] = ctx->fd_rights_base[fd];
+            ctx->fd_rights_inheriting[to_fd] = ctx->fd_rights_inheriting[fd];
+            ctx->fd_rights_base[fd] = 0;
+            ctx->fd_rights_inheriting[fd] = 0;
         }
     }
 
@@ -3284,7 +3323,24 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_init_wasi_fds(int64_t ctx_ptr, int preopen_c
         ctx->fd_table[2] = 2;
     }
     if (ctx->fd_table && ensure_fd_metadata_arrays(ctx)) {
-        // keep arrays initialized
+        set_fd_rights(
+            ctx,
+            0,
+            WASI_RIGHT_FD_READ | WASI_RIGHT_POLL_FD_READWRITE,
+            0
+        );
+        set_fd_rights(
+            ctx,
+            1,
+            WASI_RIGHT_FD_WRITE | WASI_RIGHT_POLL_FD_READWRITE,
+            0
+        );
+        set_fd_rights(
+            ctx,
+            2,
+            WASI_RIGHT_FD_WRITE | WASI_RIGHT_POLL_FD_READWRITE,
+            0
+        );
     }
     ctx->fd_next = 3 + preopen_count;
 
@@ -3330,7 +3386,24 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_init_wasi_fds_quiet(int64_t ctx_ptr, int pre
 #endif
     }
     if (ctx->fd_table && ensure_fd_metadata_arrays(ctx)) {
-        // keep arrays initialized
+        set_fd_rights(
+            ctx,
+            0,
+            WASI_RIGHT_FD_READ | WASI_RIGHT_POLL_FD_READWRITE,
+            0
+        );
+        set_fd_rights(
+            ctx,
+            1,
+            WASI_RIGHT_FD_WRITE | WASI_RIGHT_POLL_FD_READWRITE,
+            0
+        );
+        set_fd_rights(
+            ctx,
+            2,
+            WASI_RIGHT_FD_WRITE | WASI_RIGHT_POLL_FD_READWRITE,
+            0
+        );
     }
     ctx->fd_next = 3 + preopen_count;
 
@@ -3463,6 +3536,12 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_add_preopen(int64_t ctx_ptr, int idx, const 
             if (native_fd >= 0) {
                 ctx->fd_table[wasi_fd] = native_fd;
                 set_fd_metadata(ctx, wasi_fd, strdup(host_path), 1);
+                set_fd_rights(
+                    ctx,
+                    wasi_fd,
+                    preopen_directory_base_rights(),
+                    preopen_directory_inheriting_rights()
+                );
             }
         }
     }
@@ -3605,6 +3684,14 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_free_wasi_fds(int64_t ctx_ptr) {
         if (ctx->fd_is_dir) {
             free(ctx->fd_is_dir);
             ctx->fd_is_dir = NULL;
+        }
+        if (ctx->fd_rights_base) {
+            free(ctx->fd_rights_base);
+            ctx->fd_rights_base = NULL;
+        }
+        if (ctx->fd_rights_inheriting) {
+            free(ctx->fd_rights_inheriting);
+            ctx->fd_rights_inheriting = NULL;
         }
         free(ctx->fd_table);
         ctx->fd_table = NULL;

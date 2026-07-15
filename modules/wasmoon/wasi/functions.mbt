@@ -665,7 +665,6 @@ pub fn path_open(
   if (fdflags & known_fdflags_mask.lnot()) != 0 {
     return Errno::Inval.to_i32()
   }
-  ignore(fs_rights_inheriting)
   // Read path from memory
   let path = match read_path_from_memory(mem, path_ptr, path_len) {
     Ok(path) => path
@@ -679,14 +678,23 @@ pub fn path_open(
     }
     return Errno::Badf.to_i32()
   }
-  match ctx.get_file(dir_fd) {
-    Some(file) =>
+  let parent_rights_inheriting = match ctx.get_file(dir_fd) {
+    Some(file) => {
       match file.file_type {
         Directory => ()
         RegularFile => return Errno::NotDir.to_i32()
         _ => return Errno::Badf.to_i32()
       }
+      file.rights_inheriting
+    }
     None => return Errno::Badf.to_i32()
+  }
+  let effective_rights_base = fs_rights_base & rights_all_valid
+  let effective_rights_inheriting = fs_rights_inheriting & rights_all_valid
+  if (effective_rights_base & parent_rights_inheriting) != effective_rights_base ||
+    (effective_rights_inheriting & parent_rights_inheriting) !=
+    effective_rights_inheriting {
+    return Errno::NotCapable.to_i32()
   }
   let follow_symlink = (dirflags & 0x01) != 0
   let resolved_path_result = if follow_symlink {
@@ -785,6 +793,8 @@ pub fn path_open(
     host_path: resolved_path,
     position: 0L,
     flags: fdflags,
+    rights_base: effective_rights_base,
+    rights_inheriting: effective_rights_inheriting,
   })
   // Write opened fd to memory
   mem.write_i32(opened_fd_ptr, wasi_fd)
@@ -1056,9 +1066,9 @@ pub fn fd_pwrite(
 ///|
 fn fd_rights_for_stdio_slot(slot : Int) -> Int64 {
   if slot == 0 {
-    right_fd_read
+    right_fd_read | right_poll_fd_readwrite
   } else if slot == 1 || slot == 2 {
-    right_fd_write
+    right_fd_write | right_poll_fd_readwrite
   } else {
     0L
   }
@@ -1101,73 +1111,6 @@ fn fd_rights_for_preopen_directory_inheriting() -> Int64 {
   right_fd_filestat_set_size |
   right_fd_filestat_set_times |
   right_poll_fd_readwrite
-}
-
-///|
-fn fd_rights_for_socket(can_read : Bool, can_write : Bool) -> Int64 {
-  let mut rights = right_fd_fdstat_set_flags | right_sock_shutdown
-  if can_read {
-    rights = rights | right_fd_read
-  }
-  if can_write {
-    rights = rights | right_fd_write
-  }
-  if can_read || can_write {
-    rights = rights | right_poll_fd_readwrite
-  }
-  rights
-}
-
-///|
-fn fd_rights_for_descriptor(
-  file_type : FileType,
-  can_read : Bool,
-  can_write : Bool,
-) -> Int64 {
-  if file_type is SocketStream {
-    return fd_rights_for_socket(can_read, can_write)
-  }
-  let mut rights = rights_all_valid
-  if file_type is Directory {
-    rights = rights & right_fd_seek.lnot()
-    rights = rights & right_fd_filestat_set_size.lnot()
-    rights = rights & right_path_filestat_set_size.lnot()
-  }
-  if !can_read {
-    rights = rights & right_fd_read.lnot()
-    rights = rights & right_fd_readdir.lnot()
-  }
-  if !can_write {
-    rights = rights & right_fd_write.lnot()
-  }
-  rights
-}
-
-///|
-fn fd_access_mode_from_native(
-  native_fd : Int,
-  file_type : FileType,
-) -> (Bool, Bool) {
-  if file_type is Directory {
-    return (true, true)
-  }
-  let flags = native_fcntl_getfl(native_fd)
-  match flags {
-    Some(native_flags) => {
-      let rdonly = native_o_rdonly()
-      let wronly = native_o_wronly()
-      let rdwr = native_o_rdwr()
-      let acc_mode = native_flags & (rdonly | wronly | rdwr)
-      if acc_mode == wronly {
-        (false, true)
-      } else if acc_mode == rdwr {
-        (true, true)
-      } else {
-        (true, false)
-      }
-    }
-    None => (true, true)
-  }
 }
 
 ///|
@@ -1214,16 +1157,15 @@ pub fn fd_fdstat_get(
     for preopen in ctx.preopens {
       let (preopen_fd, _, _) = preopen
       if preopen_fd.to_int() == fd && ctx.open_files.contains(fd) {
-        let rights_base = fd_rights_for_preopen_directory_base()
-        let rights_inheriting = fd_rights_for_preopen_directory_inheriting()
+        let file = ctx.open_files.get(fd).unwrap()
         return {
           mem.write_byte(fdstat_ptr, b'\x03') // fs_filetype = directory (3)
           mem.write_byte(fdstat_ptr + 1, b'\x00') // padding
           mem.write_byte(fdstat_ptr + 2, b'\x00') // fs_flags low byte
           mem.write_byte(fdstat_ptr + 3, b'\x00') // fs_flags high byte
           mem.write_i32(fdstat_ptr + 4, 0) // padding
-          mem.write_i64(fdstat_ptr + 8, rights_base)
-          mem.write_i64(fdstat_ptr + 16, rights_inheriting)
+          mem.write_i64(fdstat_ptr + 8, file.rights_base)
+          mem.write_i64(fdstat_ptr + 16, file.rights_inheriting)
           Errno::Success.to_i32()
         }
       }
@@ -1236,16 +1178,7 @@ pub fn fd_fdstat_get(
           CharacterDevice => 2 // character_device
           SocketStream => 6 // socket_stream
         }
-        let (can_read, can_write) = fd_access_mode_from_native(
-          file.native_fd,
-          file.file_type,
-        )
-        let rights = fd_rights_for_descriptor(
-          file.file_type,
-          can_read,
-          can_write,
-        )
-        (ft, file.flags & 0x1F, rights, rights)
+        (ft, file.flags & 0x1F, file.rights_base, file.rights_inheriting)
       }
       None => return Errno::Badf.to_i32()
     }
@@ -2250,20 +2183,27 @@ pub fn fd_fdstat_set_flags_impl(
 }
 
 ///|
-/// fd_fdstat_set_rights - Set file descriptor rights (no-op)
+/// fd_fdstat_set_rights - Irrevocably reduce descriptor rights
 pub fn fd_fdstat_set_rights_impl(
   ctx : WasiContext,
   fd : Int,
-  _fs_rights_base : Int64,
-  _fs_rights_inheriting : Int64,
+  fs_rights_base : Int64,
+  fs_rights_inheriting : Int64,
 ) -> Int {
   if is_stdio_descriptor(ctx, fd) {
     return Errno::Badf.to_i32()
   }
-  if !ctx.is_valid_fd(fd) {
-    return Errno::Badf.to_i32()
+  let file = match ctx.get_file(fd) {
+    Some(file) => file
+    None => return Errno::Badf.to_i32()
   }
-  Errno::NotSup.to_i32()
+  if (fs_rights_base & file.rights_base) != fs_rights_base ||
+    (fs_rights_inheriting & file.rights_inheriting) != fs_rights_inheriting {
+    return Errno::NotCapable.to_i32()
+  }
+  file.rights_base = fs_rights_base
+  file.rights_inheriting = fs_rights_inheriting
+  Errno::Success.to_i32()
 }
 
 ///|
