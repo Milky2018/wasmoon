@@ -132,6 +132,10 @@ _Avoid_: target SIMD intrinsic, opcode-per-lane-shape, speculative wide vector
 The all-or-nothing, target-owned translation from **MachV** into a complete, verified AArch64- or AMD64-specific **Target VCode**; failure exposes no partial output.
 _Avoid_: MachV opcode dialect, host-tagged MachV
 
+**Target Lowering Context**:
+An immutable, statically typed set of target facts and compilation policy used by one machine target during **MachV Target Lowering**.
+_Avoid_: service locator, runtime resolver, dynamic target interface
+
 **Target Legalization**:
 The target-owned expansion of a valid **MachV** operation into one or more legal instructions in **Target VCode**.
 _Avoid_: semantic legalization, MachV lowering
@@ -215,6 +219,8 @@ _Avoid_: MachV emitter output, generic object format
 - **MachV** preserves single-definition virtual registers and block parameters through target-neutral lowering.
 - **MachV Target Lowering** lowers every **MachV** function into **Target VCode** parameterized by the selected target's instruction type.
 - Successful **MachV Target Lowering** returns a complete target-owned function with no mutable aliases into **MachV**; its private partial builder is discarded on failure, and later output mutation requires revalidation.
+- Each target owns a statically typed **Target Lowering Context**; lowering uses no shared ISA union, arbitrary callbacks, service lookup, or per-instruction dynamic dispatch.
+- A **Target Lowering Context** may carry immutable CPU features, tuning policy, and code model, but not runtime address resolution, executable memory, register allocation, or emission services.
 - **Target Legalization** may expand one semantic **MachV** operation into multiple target instructions.
 - **Machine Targets** own **ABI Policy**; **MachV** does not encode host instructions, physical registers, calling conventions, or target constraints.
 - **Target VCode** shares function, block, control-flow, virtual-register, and allocation structure without sharing target instructions.
@@ -260,6 +266,7 @@ _Avoid_: MachV emitter output, generic object format
 - ABI ownership was previously mixed into the machine layer; resolved: **Machine Targets** own **ABI Policy** and apply it after **MachV**.
 - Register-allocation placement was reopened; resolved: **Register Allocation** consumes the target-specific representation produced by **MachV Target Lowering**, never **MachV** itself.
 - Target-lowering output atomicity was unclear; resolved: success returns complete, verified, target-owned **Target VCode**, while failure returns a structured error without exposing partial builder state.
+- Target-lowering context ownership was unclear; resolved: each target consumes its own immutable facts through static specialization, while runtime and downstream compiler services remain outside the lowering seam.
 - Value-location ownership was previously mixed into **MachV**; resolved: MachV safepoints and operations reference values, while **Allocated Location** and frame layout belong downstream.
 - Function signatures previously carried ABI result locations, stack counts, and placement facts; resolved: a **MachV Signature** contains only ordered parameter and result types, while ABI facts belong downstream.
 - Conditional and multi-way branches previously carried only target ids, forcing producers to insert jump-only blocks for SSA arguments; resolved: every successor is a **MachV Edge** with explicit arguments.
