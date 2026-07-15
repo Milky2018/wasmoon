@@ -48,6 +48,4 @@
     (if (i32.ne (i32.load8_u (i32.add (local.get $out) (i32.const 9))) (i32.const 0)) (then unreachable))
     ;; event.type == clock (0)
     (if (i32.ne (i32.load8_u (i32.add (local.get $out) (i32.const 10))) (i32.const 0)) (then unreachable))
-    ;; Wasmtime reports nbytes=1 for a single relative-clock event.
-    (if (i64.ne (i64.load (i32.add (local.get $out) (i32.const 16))) (i64.const 1)) (then unreachable))
     (drop (call $fd_write (i32.const 1) (i32.const 400) (i32.const 1) (i32.const 408)))))

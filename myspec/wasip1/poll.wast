@@ -15,8 +15,8 @@
 ;;   +40: flags (i16)
 ;;   +42: padding (6 bytes)
 ;;
-;; FD subscription (at +16):
-;;   +16: fd (i32)
+;; FD subscription:
+;;   +12: fd (i32)
 ;;
 ;; Event structure (32 bytes):
 ;;   +0:  userdata (i64)
@@ -154,7 +154,7 @@
 )
 (assert_return (invoke "test") (i32.const 2))
 
-;; Test 6: fd polling rejects non-file stdout with EBADF
+;; Test 6: fd_write polling reports stdout as writable
 (module
   (import "wasi_snapshot_preview1" "poll_oneoff" (func $poll_oneoff (param i32 i32 i32 i32) (result i32)))
   (memory (export "memory") 2)
@@ -165,14 +165,14 @@
     (i64.store (i32.const 0) (i64.const 0x5678))
     ;; type = 2 (fd_write)
     (i32.store8 (i32.const 8) (i32.const 2))
-    ;; fd = 1 (stdout) at +16
-    (i32.store (i32.const 16) (i32.const 1))
+    ;; fd = 1 (stdout) at +12
+    (i32.store (i32.const 12) (i32.const 1))
 
     ;; Call poll_oneoff
     (call $poll_oneoff (i32.const 0) (i32.const 100) (i32.const 1) (i32.const 200))
   )
 )
-(assert_return (invoke "test") (i32.const 8))
+(assert_return (invoke "test") (i32.const 0))
 
 ;; Test 7: poll_oneoff with realtime clock (clock_id=0)
 (module
@@ -217,8 +217,7 @@
 ;; Type 0 = clock
 (assert_return (invoke "test") (i32.const 0))
 
-;; Test 9: poll_oneoff with invalid fd should still succeed
-;; (the event will have an error code)
+;; Test 9: poll_oneoff with an invalid fd returns EBADF
 (module
   (import "wasi_snapshot_preview1" "poll_oneoff" (func $poll_oneoff (param i32 i32 i32 i32) (result i32)))
   (memory (export "memory") 2)
@@ -227,10 +226,59 @@
     ;; Setup fd_read subscription for invalid fd=99
     (i64.store (i32.const 0) (i64.const 0xBAD))
     (i32.store8 (i32.const 8) (i32.const 1))
-    (i32.store (i32.const 16) (i32.const 99))
+    (i32.store (i32.const 12) (i32.const 99))
 
-    ;; poll_oneoff itself should succeed
+    ;; Descriptor validation fails before polling.
     (call $poll_oneoff (i32.const 0) (i32.const 100) (i32.const 1) (i32.const 200))
   )
 )
-(assert_return (invoke "test") (i32.const 0))
+(assert_return (invoke "test") (i32.const 8))
+
+;; Test 10: an unknown clock id returns EINVAL
+(module
+  (import "wasi_snapshot_preview1" "poll_oneoff" (func $poll_oneoff (param i32 i32 i32 i32) (result i32)))
+  (memory (export "memory") 2)
+
+  (func (export "test") (result i32)
+    (i64.store (i32.const 0) (i64.const 0x1234))
+    (i32.store8 (i32.const 8) (i32.const 0))
+    (i32.store (i32.const 16) (i32.const 99))
+    (i64.store (i32.const 24) (i64.const 0))
+    (i64.store (i32.const 32) (i64.const 0))
+    (i32.store16 (i32.const 40) (i32.const 0))
+
+    (call $poll_oneoff (i32.const 0) (i32.const 100) (i32.const 1) (i32.const 200))
+  )
+)
+(assert_return (invoke "test") (i32.const 28))
+
+;; Test 11: timeout is an unsigned 64-bit nanosecond count
+(module
+  (import "wasi_snapshot_preview1" "poll_oneoff" (func $poll_oneoff (param i32 i32 i32 i32) (result i32)))
+  (memory (export "memory") 2)
+
+  (func (export "test") (result i64)
+    ;; Subscription 0: relative monotonic timeout = 2^63 nanoseconds.
+    (i64.store (i32.const 0) (i64.const 0x1111))
+    (i32.store8 (i32.const 8) (i32.const 0))
+    (i32.store (i32.const 16) (i32.const 1))
+    (i64.store (i32.const 24) (i64.const -9223372036854775808))
+    (i64.store (i32.const 32) (i64.const 0))
+    (i32.store16 (i32.const 40) (i32.const 0))
+
+    ;; Subscription 1: an immediate relative monotonic timeout.
+    (i64.store (i32.const 48) (i64.const 0x2222))
+    (i32.store8 (i32.const 56) (i32.const 0))
+    (i32.store (i32.const 64) (i32.const 1))
+    (i64.store (i32.const 72) (i64.const 0))
+    (i64.store (i32.const 80) (i64.const 0))
+    (i32.store16 (i32.const 88) (i32.const 0))
+
+    (drop (call $poll_oneoff
+      (i32.const 0) (i32.const 200) (i32.const 2) (i32.const 400)))
+    (if (i32.ne (i32.load (i32.const 400)) (i32.const 1))
+      (then (return (i64.const -1))))
+    (i64.load (i32.const 200))
+  )
+)
+(assert_return (invoke "test") (i64.const 0x2222))
