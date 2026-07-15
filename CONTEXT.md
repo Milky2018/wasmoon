@@ -68,6 +68,10 @@ _Avoid_: bare block id, synthetic edge block, implicit phi input
 The rooted, fully reachable graph of semantic MachV blocks connected by **MachV Edges**, independent of final machine-code layout.
 _Avoid_: block forest, physical block layout, bytecode offset graph
 
+**MachV Block**:
+An opaque function-owned handle to one basic block whose parameters, instructions, terminator, and order are held canonically by its MachV function.
+_Avoid_: raw block id, publicly mutable block object, target label
+
 **MilkIR-MachV Lowering**:
 The target-neutral layer that lowers **MilkIR** into **MachV** without choosing host instructions, calling conventions, physical registers, or target constraints.
 _Avoid_: instruction selection, target backend, wasmoon JIT
@@ -165,6 +169,7 @@ _Avoid_: MachV emitter output, generic object format
 - Returns and **Semantic Calls** match their **MachV Signature** exactly, while effects, safepoints, and unwind behavior remain separate semantic summaries.
 - Every successor-bearing MachV terminator uses a **MachV Edge**, so jumps, conditional branches, and multi-way branches pass block arguments through the same interface.
 - Every verified MachV function has one entry block with no incoming edge or block parameters, and every other block is reachable from it.
+- A **MachV Block** is created and resolved through its function, and every **MachV Edge** target must carry the same private function owner identity.
 - **MachV Control-Flow Graph** order expresses semantics and SSA relationships; fallthrough selection, label offsets, branch relaxation, and final block layout belong downstream.
 - `Ptr64` and `GcRef64` are always 64-bit carriers; only `GcRef64` is a **MachV Managed Reference**.
 - A **MachV Constant** produces an ordinary SSA value; target lowering may select immediates, relocations, or constant-pool loads without changing its meaning.
@@ -225,6 +230,7 @@ _Avoid_: MachV emitter output, generic object format
 - Function signatures previously carried ABI result locations, stack counts, and placement facts; resolved: a **MachV Signature** contains only ordered parameter and result types, while ABI facts belong downstream.
 - Conditional and multi-way branches previously carried only target ids, forcing producers to insert jump-only blocks for SSA arguments; resolved: every successor is a **MachV Edge** with explicit arguments.
 - Reachability and layout were previously conflated; resolved: a verified **MachV Control-Flow Graph** is rooted and fully reachable, while physical block layout is selected downstream.
+- Block identity previously used public integer ids and independently mutable block objects; resolved: a **MachV Block** is an opaque function-owned handle backed by the function's canonical dense block table.
 - Machine-code-emission ownership has been reopened: decide the interface between target-specific representations, byte encoding, generic metadata, and **Wasmoon JIT** runtime resolution.
 - Precompiled output ownership was ambiguous; resolved: **Cwasm Artifact** belongs to **Wasmoon JIT**, not a **Target Emitter**.
 - Native JIT glue ownership was ambiguous; resolved: **JIT FFI** remains in **Wasmoon JIT** for the first split instead of creating a generic executable-memory module.
