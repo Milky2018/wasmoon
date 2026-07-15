@@ -84,6 +84,10 @@ _Avoid_: phi instruction, target copy form, register-allocation SSA
 The observable baseline order defined by each block's ordered MachV Instructions followed by its terminator, constrained by canonical effect and trap summaries.
 _Avoid_: effect-token chain, target instruction schedule, array order without semantics
 
+**MachV Terminator**:
+The final semantic operation of a **MachV Block**, chosen from jump, conditional branch, integer switch, return, tail call, or structured trap.
+_Avoid_: compare-branch encoding, fallthrough marker, target jump form
+
 **MilkIR-MachV Lowering**:
 The target-neutral layer that lowers **MilkIR** into **MachV** without choosing host instructions, calling conventions, physical registers, or target constraints.
 _Avoid_: instruction selection, target backend, wasmoon JIT
@@ -186,6 +190,8 @@ _Avoid_: MachV emitter output, generic object format
 - In **MachV SSA**, function parameters are initial values, block parameters are defined at block entry, instruction results are defined after their instruction, and edge arguments are parallel uses at the source terminator.
 - **MachV SSA** admits critical edges but no phi instructions; Target VCode lowering may split edges and insert parallel copies when applying target constraints.
 - **MachV Program Order** permits reordering only when SSA, memory effects, traps, unwind behavior, safepoints, and all other observable behavior remain equivalent.
+- Every **MachV Block** has exactly one **MachV Terminator**; its successor-bearing forms use **MachV Edges**, and no instruction follows it.
+- A **MachV Terminator** expresses only semantic control flow; compare fusion, immediate branches, fallthrough, jump tables, and encoded labels belong to Target VCode or emission.
 - **MachV Control-Flow Graph** order expresses semantics and SSA relationships; fallthrough selection, label offsets, branch relaxation, and final block layout belong downstream.
 - `Ptr64` and `GcRef64` are always 64-bit carriers; only `GcRef64` is a **MachV Managed Reference**.
 - A **MachV Constant** produces an ordinary SSA value; target lowering may select immediates, relocations, or constant-pool loads without changing its meaning.
@@ -250,6 +256,7 @@ _Avoid_: MachV emitter output, generic object format
 - Instructions previously existed as independently mutable records whose identity was their array position; resolved: a **MachV Instruction** is an opaque function-owned handle backed by canonical instruction data and unique block membership.
 - SSA validity previously depended on partial register-id and block-order checks; resolved: **MachV SSA** requires one canonical definition per value and dominance at every instruction, edge, and terminator use.
 - Effect order previously depended on scattered opcode knowledge; resolved: **MachV Program Order** plus canonical operation summaries defines observable ordering without introducing effect-token values.
+- Terminators previously mixed semantic control flow with AArch64 and AMD64 branch forms; resolved: **MachV Terminator** has one minimal target-neutral vocabulary, while encoded branch selection belongs downstream.
 - Machine-code-emission ownership has been reopened: decide the interface between target-specific representations, byte encoding, generic metadata, and **Wasmoon JIT** runtime resolution.
 - Precompiled output ownership was ambiguous; resolved: **Cwasm Artifact** belongs to **Wasmoon JIT**, not a **Target Emitter**.
 - Native JIT glue ownership was ambiguous; resolved: **JIT FFI** remains in **Wasmoon JIT** for the first split instead of creating a generic executable-memory module.
