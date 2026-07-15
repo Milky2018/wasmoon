@@ -388,9 +388,22 @@ fn run_jit_with_opt_level(
     let linker = @runtime.Linker::Linker()
     let store = linker.get_store()
     let instance = @executor.instantiate_with_linker(linker, "test", mod_)
-    guard @commands.compile_module_to_jit(mod_, false, false, opt_level, false)
+    let mut compile_error : String? = None
+    guard @commands.compile_module_to_jit(
+        mod_,
+        false,
+        false,
+        opt_level,
+        false,
+        on_progress=fn(event) {
+          if event.stage is Failed {
+            compile_error = event.message
+          }
+          None
+        },
+      )
       is Some((precompiled, debug_db)) else {
-      return Err("JIT compile returned unsupported")
+      return Err(compile_error.unwrap_or("JIT compile returned unsupported"))
     }
     let func_signatures = @wast.build_func_signatures(mod_)
     let external_imports = @wast.build_external_imports_for_jit(

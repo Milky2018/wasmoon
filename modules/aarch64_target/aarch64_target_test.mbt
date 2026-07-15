@@ -62,7 +62,7 @@ test "AArch64 wrapper accepts an explicit call convention" {
     custom_test_call_conv(),
   )
   inspect(lowered.params.length(), content="2")
-  inspect(lowered.results.length(), content="1")
+  inspect(lowered.result_kinds.length(), content="1")
 }
 
 ///|

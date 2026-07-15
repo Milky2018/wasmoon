@@ -21,9 +21,10 @@ fn test_embedding_abi() -> @abi.EmbeddingABI {
 }
 
 ///|
-fn copy_function() -> @machv.Function {
+fn copy_function() -> @machv.Function raise @machv.VerifyError {
   let builder = @machv.FunctionBuilder::FunctionBuilder("copy")
   let src = builder.add_param(Int)
+  builder.add_result(I64)
   let dst = builder.new_vreg(Int)
   builder.append(Move, uses=[Virtual(src)], defs=[{ reg: Virtual(dst) }])
   |> ignore
@@ -60,6 +61,7 @@ test "output path keeps MachV virtual-register IR and reports allocations" {
 test "fixed constraints are consumed by canonical MachV regalloc" {
   let builder = @machv.FunctionBuilder::FunctionBuilder("fixed")
   let src = builder.add_param(Int)
+  builder.add_result(I64)
   let dst = builder.new_vreg(Int)
   let fixed : @abi.PReg = { index: 1, class: Int }
   builder.append(Move, uses=[Virtual(src)], defs=[{ reg: Virtual(dst) }], def_constraints=[
@@ -73,4 +75,46 @@ test "fixed constraints are consumed by canonical MachV regalloc" {
     embedding_abi=Some(test_embedding_abi()),
   )
   inspect(output.inst_def_loc(0, 0, false, 0), content="x1")
+}
+
+///|
+test "regalloc rejects invalid MachV before analysis" {
+  let func = @machv.Function::Function("invalid_regalloc_input")
+  func.new_block() |> ignore
+  try allocate_registers_backtracking_with_isa(func, AArch64) catch {
+    err => inspect(err, content="MissingTerminator(block_id=0)")
+  } noraise {
+    _ => fail("expected regalloc input verification to fail")
+  }
+}
+
+///|
+test "regalloc rejects non-canonical block id layout" {
+  let func = @machv.Function::Function("reordered_blocks")
+  func.new_block().set_terminator(Return([]))
+  func.new_block().set_terminator(Return([]))
+  func.get_blocks().rev_in_place()
+  try allocate_registers_backtracking_with_isa(func, AArch64) catch {
+    err =>
+      inspect(err, content="InvalidBlockLayout(block_id=1, expected_index=0)")
+  } noraise {
+    _ => fail("expected regalloc input verification to fail")
+  }
+}
+
+///|
+test "regalloc output verifier checks AArch64 physical registers" {
+  let output = Output::Output()
+  output.push_param_loc(Reg({ index: 32, class: Int }))
+  try output.validate_for_isa(AArch64) catch {
+    err =>
+      inspect(
+        err,
+        content=(
+          #|InvalidInstruction(message="aarch64 regalloc output contains invalid preg x32 at param_locs[0]")
+        ),
+      )
+  } noraise {
+    _ => fail("expected regalloc output verification to fail")
+  }
 }

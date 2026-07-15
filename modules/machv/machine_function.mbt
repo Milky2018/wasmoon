@@ -15,11 +15,20 @@ pub(all) enum ValueKind {
 } derive(Eq, Debug)
 
 ///|
+pub fn ValueKind::reg_class(self : ValueKind) -> @abi.RegClass {
+  match self {
+    I32 | I64 | Ptr => Int
+    F32 => Float32
+    F64 => Float64
+    V128 => Vector
+  }
+}
+
+///|
 /// MachV function - a complete machine-level function in virtual-register form.
 pub struct Function {
   name : String
   params : Array[@abi.VReg] // Function parameters
-  results : Array[@abi.RegClass] // Result types (for return value allocation)
   result_kinds : Array[ValueKind] // Full return kind info for multi-value returns
   blocks : Array[@block.Block]
   mut next_vreg_id : Int
@@ -76,7 +85,6 @@ pub fn Function::Function(name : String) -> Function {
   {
     name,
     params: [],
-    results: [],
     result_kinds: [],
     blocks: [],
     next_vreg_id: 0,
@@ -92,13 +100,12 @@ pub fn Function::Function(name : String) -> Function {
 /// Clone the base structure of a function for regalloc transformations.
 /// Copies: name, next_vreg_id, int_stack_params, max_outgoing_args_size,
 /// uses_context_cache_0_source
-/// Empty: params, results, result_kinds, blocks, param_pregs
+/// Empty: params, result_kinds, blocks, param_pregs
 /// Zero: num_spill_slots
 pub fn Function::clone_base(self : Function) -> Function {
   {
     name: self.name,
     params: [],
-    results: [],
     result_kinds: [],
     blocks: [],
     next_vreg_id: self.next_vreg_id,
@@ -170,11 +177,6 @@ pub fn Function::add_param(self : Function, class : @abi.RegClass) -> @abi.VReg 
 }
 
 ///|
-pub fn Function::add_result(self : Function, class : @abi.RegClass) -> Unit {
-  self.results.push(class)
-}
-
-///|
 /// Add a result kind with full kind information for multi-value returns
 pub fn Function::add_result_kind(self : Function, ty : ValueKind) -> Unit {
   self.result_kinds.push(ty)
@@ -185,7 +187,7 @@ fn Function::result_counts(self : Function) -> (Int, Int) {
   let mut int_count = 0
   let mut float_count = 0
   for ty in self.result_kinds {
-    if ty is (I32 | I64) {
+    if ty is (I32 | I64 | Ptr) {
       int_count = int_count + 1
     } else if ty is (F32 | F64 | V128) {
       float_count = float_count + 1
@@ -303,17 +305,17 @@ pub fn Function::print(self : Function) -> String {
   }
   result = result + ")"
   // Results
-  if self.results.length() > 0 {
+  if self.result_kinds.length() > 0 {
     result = result + " -> "
-    if self.results.length() == 1 {
-      result = result + self.results[0].to_string()
+    if self.result_kinds.length() == 1 {
+      result = result + self.result_kinds[0].reg_class().to_string()
     } else {
       result = result + "("
-      for i, r in self.results {
+      for i, kind in self.result_kinds {
         if i > 0 {
           result = result + ", "
         }
-        result = result + r.to_string()
+        result = result + kind.reg_class().to_string()
       }
       result = result + ")"
     }

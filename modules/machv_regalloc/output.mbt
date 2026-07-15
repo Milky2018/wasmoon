@@ -339,10 +339,10 @@ pub fn Output::spill_reload_stats(self : Output) -> (Int, Int, Int, Int) {
 ///
 /// This is a fail-fast guard: silent truncation in x86 encoders can clobber rsp/rbp
 /// if an out-of-range preg leaks into emission (e.g. x20 -> rsp).
-pub fn Output::validate_for_isa(self : Output, isa : @isa.ISA) -> Unit {
-  if !(isa is AMD64) {
-    return
-  }
+pub fn Output::validate_for_isa(
+  self : Output,
+  isa : @isa.ISA,
+) -> Unit raise @machv.VerifyError {
   fn alloc_context(self : Output, alloc_idx : Int) -> String {
     for range in self.operand_ranges {
       let (block_id, inst_idx, is_terminator, range_start, def_count, use_count) = range
@@ -361,32 +361,29 @@ pub fn Output::validate_for_isa(self : Output, isa : @isa.ISA) -> Unit {
     "unknown"
   }
 
-  fn validate_preg(p : @abi.PReg, ctx_desc_fn : () -> String) -> Unit {
-    match p.class {
-      Int => {
-        guard p.index >= 0 && p.index < 16 else {
-          abort(
-            "amd64 regalloc output contains invalid Int preg \{p} at \{ctx_desc_fn()}",
-          )
-        }
-        // rsp/rbp are never allocatable as value registers.
-        guard p.index != 4 && p.index != 5 else {
-          abort(
-            "amd64 regalloc output contains reserved Int preg \{p} at \{ctx_desc_fn()}",
-          )
-        }
-      }
-      Float32 | Float64 | Vector => {
-        guard p.index >= 0 && p.index < 16 else {
-          abort(
-            "amd64 regalloc output contains invalid FP/Vec preg \{p} at \{ctx_desc_fn()}",
-          )
-        }
-      }
+  fn validate_preg(
+    p : @abi.PReg,
+    ctx_desc_fn : () -> String,
+  ) -> Unit raise @machv.VerifyError {
+    let valid = match (isa, p.class) {
+      (AArch64, Int) => p.index >= 0 && p.index < 32
+      (AArch64, Float32 | Float64 | Vector) => p.index >= 0 && p.index < 32
+      (AMD64, Int) =>
+        p.index >= 0 && p.index < 16 && p.index != 4 && p.index != 5
+      (AMD64, Float32 | Float64 | Vector) => p.index >= 0 && p.index < 16
+    }
+    if !valid {
+      let isa_name = if isa is AArch64 { "aarch64" } else { "amd64" }
+      raise @machv.VerifyError::invalid_instruction(
+        "\{isa_name} regalloc output contains invalid preg \{p} at \{ctx_desc_fn()}",
+      )
     }
   }
 
-  fn validate_loc(loc : Loc, ctx_desc_fn : () -> String) -> Unit {
+  fn validate_loc(
+    loc : Loc,
+    ctx_desc_fn : () -> String,
+  ) -> Unit raise @machv.VerifyError {
     if loc is Reg(p) {
       validate_preg(p, ctx_desc_fn)
     }

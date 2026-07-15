@@ -12,15 +12,15 @@ import {
 }
 
 // Values
-pub fn allocate_registers_backtracking(@machv.Function, embedding_abi? : @abi.EmbeddingABI?) -> @machv.Function
+pub fn allocate_registers_backtracking(@machv.Function, embedding_abi? : @abi.EmbeddingABI?) -> @machv.Function raise @machv.VerifyError
 
-pub fn allocate_registers_backtracking_output(@machv.Function, embedding_abi? : @abi.EmbeddingABI?) -> (@machv.Function, Output)
+pub fn allocate_registers_backtracking_output(@machv.Function, embedding_abi? : @abi.EmbeddingABI?) -> (@machv.Function, Output) raise @machv.VerifyError
 
-pub fn allocate_registers_backtracking_output_with_isa(@machv.Function, @isa.ISA, embedding_abi? : @abi.EmbeddingABI?) -> (@machv.Function, Output)
+pub fn allocate_registers_backtracking_output_with_isa(@machv.Function, @isa.ISA, embedding_abi? : @abi.EmbeddingABI?) -> (@machv.Function, Output) raise @machv.VerifyError
 
-pub fn allocate_registers_backtracking_with_isa(@machv.Function, @isa.ISA, embedding_abi? : @abi.EmbeddingABI?) -> @machv.Function
+pub fn allocate_registers_backtracking_with_isa(@machv.Function, @isa.ISA, embedding_abi? : @abi.EmbeddingABI?) -> @machv.Function raise @machv.VerifyError
 
-pub fn apply_allocation(@machv.Function, RegAllocResult, @isa.ISA, @abi.EmbeddingABI) -> @machv.Function
+pub fn apply_allocation(@machv.Function, RegAllocResult, @isa.ISA, @abi.EmbeddingABI) -> @machv.Function raise @machv.VerifyError
 
 pub fn build_bundles_with_merging(@machv.Function, LiveRangeSet) -> BundleSet
 
@@ -30,9 +30,9 @@ pub fn build_live_ranges(@machv.Function, LivenessResult) -> LiveRangeSet
 
 pub fn build_stack_layout_aarch64(RegAllocResult, @machv.Function) -> AArch64StackFrame
 
-pub fn compute_liveness(@machv.Function) -> LivenessResult
+pub fn compute_liveness(@machv.Function) -> LivenessResult raise @machv.VerifyError
 
-pub fn compute_liveness_for_regalloc(@machv.Function) -> LivenessResult
+pub fn compute_liveness_for_regalloc(@machv.Function) -> LivenessResult raise @machv.VerifyError
 
 pub fn compute_loop_depths(@machv.Function) -> Array[Int]
 
@@ -42,7 +42,7 @@ pub fn debug_liveness(LivenessResult) -> String
 
 pub fn eliminate_dead_code(@machv.Function) -> @machv.Function
 
-pub fn get_alloc_stats(@machv.Function, isa? : @isa.ISA, embedding_abi? : @abi.EmbeddingABI?) -> AllocStats
+pub fn get_alloc_stats(@machv.Function, isa? : @isa.ISA, embedding_abi? : @abi.EmbeddingABI?) -> AllocStats raise @machv.VerifyError
 
 pub fn process_constraints(@machv.Function, RegAllocResult) -> Unit
 
@@ -186,7 +186,7 @@ pub fn Output::sort_edits(Self) -> Unit
 pub fn Output::spill_reload_stats(Self) -> (Int, Int, Int, Int)
 pub fn Output::summary(Self) -> String
 pub fn Output::uses_preg_index_any(Self, Int, Bool) -> Bool
-pub fn Output::validate_for_isa(Self, @isa.ISA) -> Unit
+pub fn Output::validate_for_isa(Self, @isa.ISA) -> Unit raise @machv.VerifyError
 
 pub struct ProgPoint {
   block : Int

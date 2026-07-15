@@ -44,6 +44,7 @@ fn example_abi() -> @abi.EmbeddingABI {
 test "allocate a MachV copy" {
   let builder = @machv.FunctionBuilder::FunctionBuilder("copy")
   let src = builder.add_param(Int)
+  builder.add_result(I64)
   let dst = builder.new_vreg(Int)
   builder.append(Move, uses=[Virtual(src)], defs=[{ reg: Virtual(dst) }])
   |> ignore
@@ -68,6 +69,7 @@ preferred path for emitters that materialize moves while encoding instructions.
 test "read operand locations from regalloc output" {
   let builder = @machv.FunctionBuilder::FunctionBuilder("rewrite")
   let src = builder.add_param(Int)
+  builder.add_result(I64)
   let dst = builder.new_vreg(Int)
   builder.append(Move, uses=[Virtual(src)], defs=[{ reg: Virtual(dst) }])
   |> ignore

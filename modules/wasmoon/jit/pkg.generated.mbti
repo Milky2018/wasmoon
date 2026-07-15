@@ -18,6 +18,7 @@ pub suberror JITModuleLoadError {
   ContextAllocationFailed(total_funcs~ : Int)
   UnsupportedImport(import_idx~ : Int, module_name~ : String, func_name~ : String)
   ImportTrampolineAllocationFailed(import_idx~ : Int, module_name~ : String, func_name~ : String, code_size~ : Int)
+  ImportTrampolineCompilationFailed(import_idx~ : Int, module_name~ : String, func_name~ : String, message~ : String)
   FunctionCodeAllocationFailed(func_idx~ : Int, func_name~ : String, code_size~ : Int)
 } derive(@debug.Debug)
 pub impl Show for JITModuleLoadError

@@ -120,19 +120,22 @@ pub fn plan_integration_for_target(
   machv_func : @machv.Function,
   regalloc_output : @machv_regalloc.Output,
   target : @machv_emit.EmitTarget,
-) -> JitIntegrationPlan {
+) -> JitIntegrationPlan raise JitPipelineError {
   let isa = emit_target_to_isa(target)
   let embedding_abi = wasm_embedding_abi_for_isa(isa)
+  let object = @machv_emit.emit_function_with_regalloc(
+    machv_func,
+    regalloc_output,
+    isa~,
+    embedding_abi=Some(embedding_abi),
+  ) catch {
+    err => raise PipelineFailure(message=err.to_string())
+  }
   {
     entry_symbol: func.name,
     target,
     native_glue: default_native_glue(),
-    object: @machv_emit.emit_function_with_regalloc(
-      machv_func,
-      regalloc_output,
-      isa~,
-      embedding_abi=Some(embedding_abi),
-    ),
+    object,
   }
 }
 
@@ -204,7 +207,9 @@ pub fn plan_milkir_integration_for_target(
     machv_func,
     isa,
     embedding_abi=Some(embedding_abi),
-  )
+  ) catch {
+    err => raise PipelineFailure(message=err.to_string())
+  }
   plan_integration_for_target(func, allocated_func, output, target)
 }
 
@@ -230,6 +235,8 @@ pub fn plan_wasm_body_milkir_integration_for_target(
     machv_func,
     isa,
     embedding_abi=Some(embedding_abi),
-  )
+  ) catch {
+    err => raise PipelineFailure(message=err.to_string())
+  }
   plan_integration_for_target(func, allocated_func, output, target)
 }

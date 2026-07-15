@@ -500,13 +500,19 @@ fn compute_liveness_with_options(
 
 ///|
 /// Compute full liveness information including interval maps.
-pub fn compute_liveness(func : @machv.Function) -> LivenessResult {
+pub fn compute_liveness(
+  func : @machv.Function,
+) -> LivenessResult raise @machv.VerifyError {
+  func.verify_for_regalloc()
   compute_liveness_with_options(func, true, true)
 }
 
 ///|
 /// Compute liveness for regalloc hot path (no interval map construction).
-pub fn compute_liveness_for_regalloc(func : @machv.Function) -> LivenessResult {
+pub fn compute_liveness_for_regalloc(
+  func : @machv.Function,
+) -> LivenessResult raise @machv.VerifyError {
+  func.verify_for_regalloc()
   compute_liveness_with_options(func, false, false)
 }
 

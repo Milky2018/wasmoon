@@ -35,7 +35,7 @@ pub fn emit_entry_trampoline(
   result_types : Array[Int],
   call_conv_layout : @abi.CallConventionLayout,
   isa? : @isa.ISA = AArch64,
-) -> @machv_emit.MachineCode {
+) -> @machv_emit.MachineCode raise JitPipelineError {
   // Generate trampoline as IR using FunctionBuilder
   let ir_func = generate_trampoline_ir(param_types, result_types)
   let embedding_abi = @abi.EmbeddingABI::EmbeddingABI(
@@ -54,10 +54,14 @@ pub fn emit_entry_trampoline(
     machv_func,
     isa,
     embedding_abi=Some(embedding_abi),
-  )
+  ) catch {
+    err => raise PipelineFailure(message=to_repr(err).to_string())
+  }
 
   // Emit machine code
-  @machv_emit.emit_function(allocated, isa~, embedding_abi=Some(embedding_abi))
+  @machv_emit.emit_function(allocated, isa~, embedding_abi=Some(embedding_abi)) catch {
+    err => raise PipelineFailure(message=to_repr(err).to_string())
+  }
 }
 
 ///|

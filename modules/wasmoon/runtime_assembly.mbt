@@ -116,7 +116,7 @@ pub fn runtime_assembly() -> RuntimeAssembly {
 }
 
 ///|
-pub fn compiler_infrastructure_assembly() -> CompilerInfrastructureAssembly {
+pub fn compiler_infrastructure_assembly() -> CompilerInfrastructureAssembly raise WasmCompilerPipelineError {
   let signature = @milkir.Signature::Signature([], [])
   let milk = @milkir.Function::with_signature(
     "wasmoon_runtime_probe", signature,
@@ -132,16 +132,21 @@ pub fn compiler_infrastructure_assembly() -> CompilerInfrastructureAssembly {
   let (allocated_function, output) = @machv_regalloc.allocate_registers_backtracking_output(
     machv_function,
     embedding_abi=Some(embedding_abi),
-  )
+  ) catch {
+    err => raise WasmCompilerPipelineFailure(message=to_repr(err).to_string())
+  }
+  let code_object = @machv_emit.emit_function_with_regalloc(
+    allocated_function,
+    output,
+    embedding_abi=Some(embedding_abi),
+  ) catch {
+    err => raise WasmCompilerPipelineFailure(message=to_repr(err).to_string())
+  }
   {
     signature,
     machv_function,
     allocated_function,
-    code_object: @machv_emit.emit_function_with_regalloc(
-      allocated_function,
-      output,
-      embedding_abi=Some(embedding_abi),
-    ),
+    code_object,
     x64_abi: @x64_target.abi_policy(),
     aarch64_abi: @aarch64_target.abi_policy(),
     jit_glue: @wasmoon_jit.default_native_glue(),
