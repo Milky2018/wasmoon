@@ -136,6 +136,7 @@ _Avoid_: MachV emitter output, generic object format
 - **MilkIR-MachV Lowering** lowers one **MilkIR** function into one **MachV** function.
 - Every function parameter, block parameter, and instruction result in **MachV** has a **MachV Value Type**; target lowering maps that type to a target register class.
 - A **MachV Value** is created through its function's interface, and all consumers resolve its **MachV Value Type** from that function's canonical value table.
+- A **MachV Value** has an in-memory function owner identity that rejects cross-function use but does not enter printing or serialization.
 - **Semantic Legalization** completes during **MilkIR-MachV Lowering** without asking whether a host ISA has a matching instruction.
 - A **Semantic Superinstruction** belongs in **MachV** only when ordinary operations cannot reproduce its semantics without loss.
 - A **Semantic Memory Access** carries narrow-load extension semantics and memory effects, while target lowering selects an addressing mode.
@@ -172,6 +173,7 @@ _Avoid_: MachV emitter output, generic object format
 - "VCode" previously named both the current Wasmoon machine IR and the reusable machine layer; resolved: use **MachV** for the reusable virtual-register machine IR.
 - Value typing previously used target-like register classes inside **MachV**; resolved: **MachV Value Type** preserves exact semantics, while register classes begin in **Target VCode**.
 - Value identity previously duplicated ids and classes in public virtual-register records; resolved: a **MachV Value** is opaque and its function owns the sole value-type table.
+- Cross-function value identity was previously indistinguishable when dense ids collided; resolved: **MachV Value** handles carry a private function owner identity, and cloning or deserialization remaps values under a fresh owner.
 - Instruction selection ownership was previously unclear; resolved: **MilkIR-MachV Lowering** is target-neutral, while **MachV Target Lowering** owns host instruction selection.
 - Legalization ownership was previously unclear; resolved: **Semantic Legalization** produces target-neutral **MachV**, while **Target Legalization** expands its operations into legal **Target VCode**.
 - Fused-operation ownership was previously unclear; resolved: only a **Semantic Superinstruction** may enter **MachV**, while performance-only fusion belongs to target lowering.
