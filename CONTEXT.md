@@ -227,6 +227,7 @@ _Avoid_: MachV emitter output, generic object format
 - AArch64 and AMD64 expose separate statically typed lowering entry points. Wasmoon JIT branches on the selected machine target once, then keeps lowering, allocation, and emission specialized without a runtime target union or target-lowering trait.
 - Target lowering borrows verified **MachV** through read-only dense-indexed queries without cloning or mutating it, and constructs independent **Target VCode** storage without retaining aliases into MachV-owned collections.
 - **Target VCode** stores allocation operands, constraints, timing, ties, and clobbers once in compact shared side tables. Register allocation reads those tables directly and never reconstructs facts by matching target instructions.
+- Register allocation leaves virtual **Target VCode** unchanged and returns a separate dense allocation result; the statically typed target emitter consumes both and interleaves allocation edits at stable program points.
 - **Target Legalization** may expand one semantic **MachV** operation into multiple target instructions.
 - **Machine Targets** own **ABI Policy**; **MachV** does not encode host instructions, physical registers, calling conventions, or target constraints.
 - **Target VCode** shares function, block, control-flow, virtual-register, and allocation structure without sharing target instructions.
@@ -278,6 +279,7 @@ _Avoid_: MachV emitter output, generic object format
 - Target-lowering dispatch was unclear; resolved: use separate static target entry points and a single orchestration branch, not a runtime target union or dynamic target-lowering interface.
 - Target-lowering input ownership was unclear; resolved: borrow verified MachV read-only without cloning, build independent Target VCode privately, and require revalidation after later output mutation rather than introducing a frozen wrapper.
 - Regalloc projection was previously modeled as a target-instruction trait returning operand arrays; resolved: lowering records compact allocation facts in the shared Target VCode shell once, avoiding target opcode inspection, repeated projection, and hot-path allocation.
+- Post-regalloc representation was unclear; resolved: keep Target VCode virtual and unchanged, return a separate dense allocation keyed by stable handles, and avoid rewriting or copying target instructions.
 - Value-location ownership was previously mixed into **MachV**; resolved: MachV safepoints and operations reference values, while **Allocated Location** and frame layout belong downstream.
 - Function signatures previously carried ABI result locations, stack counts, and placement facts; resolved: a **MachV Signature** contains only ordered parameter and result types, while ABI facts belong downstream.
 - Conditional and multi-way branches previously carried only target ids, forcing producers to insert jump-only blocks for SSA arguments; resolved: every successor is a **MachV Edge** with explicit arguments.
