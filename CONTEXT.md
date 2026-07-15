@@ -112,6 +112,10 @@ _Avoid_: MachV core policy
 The target-independent allocation algorithm that assigns virtual registers or spills in **Target VCode** through a shared abstract program model.
 _Avoid_: regalloc_core, VCode regalloc, machine regalloc
 
+**Allocated Location**:
+A target register or frame slot assigned to a **Target VCode** virtual value by **Register Allocation**.
+_Avoid_: MachV value location, semantic stack object, ABI signature fact
+
 **Wasmoon Runtime**:
 The WebAssembly execution system that owns Wasm validation, instantiation, host integration, and runtime semantics.
 _Avoid_: compiler infrastructure, wasmoon_runtime as an implied module name
@@ -161,6 +165,7 @@ _Avoid_: MachV emitter output, generic object format
 - **Target VCode** shares function, block, control-flow, virtual-register, and allocation structure without sharing target instructions.
 - A **Portable Execution Target** may consume **MachV** without turning **MachV** itself into a stable bytecode or VM contract.
 - **Register Allocation** runs after **MachV Target Lowering** and before a **Target Emitter**.
+- **MachV** values have no locations; **Allocated Location**, spill slots, ABI areas, and stack-pointer operations begin after **MachV Target Lowering**.
 - A **Target Emitter** produces generic relocation and metadata records; **Wasmoon JIT** resolves those records to Wasmoon runtime helpers and executable memory.
 - A **Cwasm Artifact** may wrap **Target Emitter** output with Wasmoon function indices, imports, traps, debug mapping, and runtime metadata.
 - **JIT FFI** belongs to **Wasmoon JIT** until a small generic executable-memory API has proven reuse.
@@ -199,6 +204,7 @@ _Avoid_: MachV emitter output, generic object format
 - Target packaging was ambiguous; resolved: use ISA-specific modules such as `x64_target` and `aarch64_target`, not generic `backend` or `isa_backend` packages.
 - ABI ownership was previously mixed into the machine layer; resolved: **Machine Targets** own **ABI Policy** and apply it after **MachV**.
 - Register-allocation placement was reopened; resolved: **Register Allocation** consumes the target-specific representation produced by **MachV Target Lowering**, never **MachV** itself.
+- Value-location ownership was previously mixed into **MachV**; resolved: MachV safepoints and operations reference values, while **Allocated Location** and frame layout belong downstream.
 - Machine-code-emission ownership has been reopened: decide the interface between target-specific representations, byte encoding, generic metadata, and **Wasmoon JIT** runtime resolution.
 - Precompiled output ownership was ambiguous; resolved: **Cwasm Artifact** belongs to **Wasmoon JIT**, not a **Target Emitter**.
 - Native JIT glue ownership was ambiguous; resolved: **JIT FFI** remains in **Wasmoon JIT** for the first split instead of creating a generic executable-memory module.
