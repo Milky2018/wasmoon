@@ -2,7 +2,7 @@
 
 Question: does a generic MoonBit VCode shell plus a small static `AllocatableInst` projection keep AArch64 and AMD64 instruction types separate while sharing CFG and regalloc traversal?
 
-Human verdict: pending.
+Human verdict: accepted. Keep the generic shared shell, statically typed AArch64/AMD64 pipelines, and operand-only allocation projection. The architecture may add one later RISC-V instruction adapter, but does not need an open-ended runtime target plugin system.
 
 Observed constraints:
 
@@ -13,3 +13,5 @@ Observed constraints:
 - MoonBit does not provide an implicit existential `VCodeFunction[Inst]` that can hold either target at runtime. Target selection must branch into statically typed AArch64 and AMD64 pipelines, or a later design must introduce an explicit orchestration adapter. It does not require a shared opcode union.
 - The prototype uses one target instruction type for body and terminator nodes, with successor edges stored by the shared shell. A production verifier must reject body-only instructions in terminator position and terminators in body position.
 - Owner tokens, complete CFG verification, allocation results, move/spill insertion, target lowering, and emission remain deliberately omitted.
+
+Deletion condition: remove this prototype package after [Define the MachV target-lowering interface](../../../issues/ISS-186.md) absorbs the accepted type relationships into its durable decision.
