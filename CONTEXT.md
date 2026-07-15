@@ -80,6 +80,10 @@ _Avoid_: inline mutable instruction object, block-index pair, reusable instructi
 The single-definition discipline in which function parameters, block parameters, and instruction results define MachV Values, and every use is dominated by its definition.
 _Avoid_: phi instruction, target copy form, register-allocation SSA
 
+**MachV Program Order**:
+The observable baseline order defined by each block's ordered MachV Instructions followed by its terminator, constrained by canonical effect and trap summaries.
+_Avoid_: effect-token chain, target instruction schedule, array order without semantics
+
 **MilkIR-MachV Lowering**:
 The target-neutral layer that lowers **MilkIR** into **MachV** without choosing host instructions, calling conventions, physical registers, or target constraints.
 _Avoid_: instruction selection, target backend, wasmoon JIT
@@ -181,6 +185,7 @@ _Avoid_: MachV emitter output, generic object format
 - A **MachV Instruction** is created and resolved through its function, has stable identity until deletion, and occupies exactly one ordered position in one **MachV Block**.
 - In **MachV SSA**, function parameters are initial values, block parameters are defined at block entry, instruction results are defined after their instruction, and edge arguments are parallel uses at the source terminator.
 - **MachV SSA** admits critical edges but no phi instructions; Target VCode lowering may split edges and insert parallel copies when applying target constraints.
+- **MachV Program Order** permits reordering only when SSA, memory effects, traps, unwind behavior, safepoints, and all other observable behavior remain equivalent.
 - **MachV Control-Flow Graph** order expresses semantics and SSA relationships; fallthrough selection, label offsets, branch relaxation, and final block layout belong downstream.
 - `Ptr64` and `GcRef64` are always 64-bit carriers; only `GcRef64` is a **MachV Managed Reference**.
 - A **MachV Constant** produces an ordinary SSA value; target lowering may select immediates, relocations, or constant-pool loads without changing its meaning.
@@ -244,6 +249,7 @@ _Avoid_: MachV emitter output, generic object format
 - Block identity previously used public integer ids and independently mutable block objects; resolved: a **MachV Block** is an opaque function-owned handle backed by the function's canonical dense block table.
 - Instructions previously existed as independently mutable records whose identity was their array position; resolved: a **MachV Instruction** is an opaque function-owned handle backed by canonical instruction data and unique block membership.
 - SSA validity previously depended on partial register-id and block-order checks; resolved: **MachV SSA** requires one canonical definition per value and dominance at every instruction, edge, and terminator use.
+- Effect order previously depended on scattered opcode knowledge; resolved: **MachV Program Order** plus canonical operation summaries defines observable ordering without introducing effect-token values.
 - Machine-code-emission ownership has been reopened: decide the interface between target-specific representations, byte encoding, generic metadata, and **Wasmoon JIT** runtime resolution.
 - Precompiled output ownership was ambiguous; resolved: **Cwasm Artifact** belongs to **Wasmoon JIT**, not a **Target Emitter**.
 - Native JIT glue ownership was ambiguous; resolved: **JIT FFI** remains in **Wasmoon JIT** for the first split instead of creating a generic executable-memory module.
