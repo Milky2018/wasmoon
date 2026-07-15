@@ -56,6 +56,10 @@ _Avoid_: target fusion, encoding shortcut, instruction-count optimization
 A target-neutral **MachV** load or store described by a computed address, access width, value behavior, byte offset, and endianness rather than a host addressing mode.
 _Avoid_: target load form, Wasm memory instruction, encoded addressing mode
 
+**Semantic Call**:
+A target-neutral **MachV** call described by its callee, signature, explicit arguments and results, call kind, and effects rather than native ABI placement.
+_Avoid_: ABI call sequence, fixed-register call, conditional helper fusion
+
 **MachV Target Lowering**:
 The target-owned translation from **MachV** into an AArch64- or AMD64-specific **Target VCode**.
 _Avoid_: MachV opcode dialect, host-tagged MachV
@@ -113,6 +117,7 @@ _Avoid_: MachV emitter output, generic object format
 - **Semantic Legalization** completes during **MilkIR-MachV Lowering** without asking whether a host ISA has a matching instruction.
 - A **Semantic Superinstruction** belongs in **MachV** only when ordinary operations cannot reproduce its semantics without loss.
 - A **Semantic Memory Access** carries narrow-load extension semantics and memory effects, while target lowering selects an addressing mode.
+- A **Semantic Call** preserves direct, external, or indirect callee identity and normal or tail-call meaning, while target lowering applies **ABI Policy**.
 - **MachV** preserves single-definition virtual registers and block parameters through target-neutral lowering.
 - **MachV Target Lowering** lowers every **MachV** function into **Target VCode** parameterized by the selected target's instruction type.
 - **Target Legalization** may expand one semantic **MachV** operation into multiple target instructions.
@@ -144,6 +149,7 @@ _Avoid_: MachV emitter output, generic object format
 - Legalization ownership was previously unclear; resolved: **Semantic Legalization** produces target-neutral **MachV**, while **Target Legalization** expands its operations into legal **Target VCode**.
 - Fused-operation ownership was previously unclear; resolved: only a **Semantic Superinstruction** may enter **MachV**, while performance-only fusion belongs to target lowering.
 - Memory-operation ownership was previously unclear; resolved: **MachV** uses parameterized **Semantic Memory Access** operations and a distinct atomic family, while target addressing modes belong to **Target VCode**.
+- Call ownership was previously unclear; resolved: **MachV** owns **Semantic Call** meaning and explicit values, while **Target VCode** owns ABI placement, physical clobbers, outgoing stack layout, and prologue or epilogue details.
 - SSA destruction ownership was previously unclear; resolved: **MachV** retains single-definition virtual registers and block parameters, while target-specific constraints and copy insertion begin in **Target VCode**.
 - Portable execution ownership was previously unclear; resolved: **MachV** remains a compiler intermediate representation, while any production bytecode and interpreter belong to a separate **Portable Execution Target**.
 - Target packaging was ambiguous; resolved: use ISA-specific modules such as `x64_target` and `aarch64_target`, not generic `backend` or `isa_backend` packages.
