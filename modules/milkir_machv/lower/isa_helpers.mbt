@@ -29,10 +29,3 @@ pub fn context_preg(ctx : LoweringContext) -> @abi.PReg {
 pub fn scratch2_index(ctx : LoweringContext) -> Int {
   current_isa(ctx).scratch_reg_2_index()
 }
-
-///|
-fn scratch1_index(ctx : LoweringContext) -> Int {
-  current_isa(ctx).scratch_reg_1_index()
-}
-
-///|

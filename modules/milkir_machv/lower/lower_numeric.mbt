@@ -510,8 +510,8 @@ fn lower_div(
   let lhs_val = inst.operands[1]
   let is_64 = inst.operands[0].ty is I64
 
-  // x86_64 backend is still incomplete; avoid magic-division lowering which
-  // currently relies on AArch64-specific opcodes and patterns.
+  // Keep magic-division selection AArch64-only until the AMD64 cost model and
+  // instruction sequence have dedicated coverage.
   let enable_magic_div = !(ctx.isa is AMD64)
 
   // Check if divisor is a constant suitable for magic division
@@ -1638,14 +1638,13 @@ fn lower_rem(
   let lhs = ctx.get_vreg_for_use(inst.operands[0], block) // a (dividend)
   let rhs = ctx.get_vreg_for_use(inst.operands[1], block) // b (divisor)
   let is_64 = inst.operands[0].ty is I64
-  let use_fixed_divisor = ctx.isa is AMD64
-  let divisor_preg : @abi.PReg = { index: scratch1_index(ctx), class: Int }
+  let direct_plan = ctx.isa.direct_remainder_plan(signed, is_64)
 
   // Trap if divisor is zero (trap_code 4 = integer divide by zero)
   // Must always emit even if result is unused (for side effect)
   let trap_zero = @instr.Inst(TrapIfZero(is_64, 4))
-  if use_fixed_divisor {
-    trap_zero.add_use_fixed(Virtual(rhs), divisor_preg)
+  if direct_plan is Some(plan) {
+    trap_zero.add_use_fixed(Virtual(rhs), plan.divisor)
   } else {
     trap_zero.add_use(Virtual(rhs))
   }
@@ -1654,18 +1653,14 @@ fn lower_rem(
   // Only emit remainder computation if result is used
   if inst.first_result() is Some(result) {
     let dst = ctx.get_vreg(result)
-    if ctx.isa is AMD64 {
-      // Match Cranelift x64: use IDIV/DIV remainder directly.
-      //
-      // Note: the remainder value is produced in RDX/EDX by the hardware.
-      let opcode = if signed { @instr.SRem(is_64) } else { URem(is_64) }
-      let rem_inst = @instr.Inst(opcode)
-      rem_inst.add_def_fixed({ reg: Virtual(dst) }, { index: 2, class: Int }) // rdx
-      rem_inst.add_use_fixed(Virtual(lhs), { index: 0, class: Int }) // rax
-      rem_inst.add_use_fixed(Virtual(rhs), divisor_preg)
-      // Clobbers: rax/rdx are implicit in div/idiv.
-      rem_inst.add_def({ reg: Physical({ index: 0, class: Int }) })
-      rem_inst.add_def({ reg: Physical({ index: 2, class: Int }) })
+    if direct_plan is Some(plan) {
+      let rem_inst = @instr.Inst(plan.opcode)
+      rem_inst.add_def_fixed({ reg: Virtual(dst) }, plan.result)
+      rem_inst.add_use_fixed(Virtual(lhs), plan.dividend)
+      rem_inst.add_use_fixed(Virtual(rhs), plan.divisor)
+      for clobber in plan.clobbers {
+        rem_inst.add_def({ reg: Physical(clobber) })
+      }
       block.add_inst(rem_inst)
       return
     }

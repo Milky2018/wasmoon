@@ -6,10 +6,9 @@
 // 2. Rewrite result types for AArch64 instruction selection
 // 3. Helper functions for immediate validation
 //
-// Note: AArch64-specific opcodes (Madd, Msub, Mneg, AddShifted, etc.) are
-// defined in machv.mbt as part of Opcode. This design choice keeps
-// MachV self-contained for a single target (AArch64). If multi-target support
-// is needed in the future, a separate AArch64Inst type should be introduced.
+// The selected fused operations have cross-target semantics. AArch64 encodes
+// them directly; other targets may expand them. Only the recognition policy in
+// this file is AArch64-specific.
 
 // ============ AArch64 Rule Application Results ============
 

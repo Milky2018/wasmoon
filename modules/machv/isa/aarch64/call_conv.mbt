@@ -78,7 +78,7 @@ pub fn allocatable_scratch_regs() -> Array[@abi.PReg] {
 /// Allocatable callee-saved registers.
 pub fn allocatable_callee_saved_regs() -> Array[@abi.PReg] {
   let fp_idx = int_reg_index(FP)
-  let lr_idx = int_reg_index(LR)
+  let lr_idx = link_register_index()
   let regs : Array[@abi.PReg] = []
   for r in aapcs64_callee_saved() {
     // x29/x30 are fp/lr: allocator never uses them; keep them out.

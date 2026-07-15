@@ -36,8 +36,8 @@ fn MachineCode::emit_store(
 fn index_extend_to_option(ext : @instr.IndexExtend) -> Int {
   match ext {
     None => 0b011 // LSL (X offset)
-    Uxtw => 0b010 // UXTW
-    Sxtw => 0b110 // SXTW
+    ZeroExtend32 => 0b010 // UXTW
+    SignExtend32 => 0b110 // SXTW
   }
 }
 
@@ -323,9 +323,9 @@ fn MachineCode::emit_terminator_with_epilogue(
       }
       // Branch inversion: if then_b is next block, invert condition and branch to else_b
       if next_block == Some(then_b) {
-        self.emit_b_cond(cond.invert().to_bits(), else_b)
+        self.emit_b_cond(aarch64_cond_bits(cond.invert()), else_b)
       } else {
-        self.emit_b_cond(cond.to_bits(), then_b)
+        self.emit_b_cond(aarch64_cond_bits(cond), then_b)
         if next_block != Some(else_b) {
           self.emit_b(else_b)
         }
@@ -414,10 +414,10 @@ fn MachineCode::emit_terminator_with_epilogue(
       // Branch inversion: if then_b is next block, invert condition and branch to else_b
       if next_block == Some(then_b) {
         // Invert: B.cond then_b becomes B.!cond else_b, fall through to then_b
-        self.emit_b_cond(cond.invert().to_bits(), else_b)
+        self.emit_b_cond(aarch64_cond_bits(cond.invert()), else_b)
       } else {
         // Normal: B.cond then_b, then handle else_b
-        self.emit_b_cond(cond.to_bits(), then_b)
+        self.emit_b_cond(aarch64_cond_bits(cond), then_b)
         // Skip else branch if it's the next block (fall-through)
         if next_block != Some(else_b) {
           self.emit_b(else_b)

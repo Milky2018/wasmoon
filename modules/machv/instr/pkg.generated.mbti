@@ -14,6 +14,18 @@ pub fn result_classes_for_vregs(Array[@abi.VReg]) -> Array[@abi.RegClass]
 // Errors
 
 // Types and methods
+pub(all) enum AMD64Cond {
+  ParitySet
+  ParityClear
+} derive(Eq, @debug.Debug)
+pub impl Show for AMD64Cond
+
+pub(all) enum AMD64Opcode {
+  SRem(Bool)
+  URem(Bool)
+} derive(@debug.Debug)
+pub impl Show for AMD64Opcode
+
 pub(all) enum CallClobberClass {
   Internal
   Foreign
@@ -56,8 +68,7 @@ pub(all) enum Cond {
   Pl
   Vs
   Vc
-  Ps
-  Pc
+  AMD64(AMD64Cond)
   Hi
   Ls
   Ge
@@ -67,7 +78,6 @@ pub(all) enum Cond {
   Al
 }
 pub fn Cond::invert(Self) -> Self
-pub fn Cond::to_bits(Self) -> Int
 pub impl Show for Cond
 
 pub(all) enum ExtendKind {
@@ -122,8 +132,8 @@ pub impl Show for FloatToIntKind
 
 pub(all) enum IndexExtend {
   None
-  Uxtw
-  Sxtw
+  ZeroExtend32
+  SignExtend32
 }
 pub impl Show for IndexExtend
 
@@ -178,8 +188,7 @@ pub(all) enum Opcode {
   Mul(Bool)
   SDiv(Bool)
   UDiv(Bool)
-  SRem(Bool)
-  URem(Bool)
+  AMD64(AMD64Opcode)
   And(Bool)
   AndImm(Int64, Bool)
   Or(Bool)
@@ -379,6 +388,8 @@ pub(all) enum Opcode {
 pub fn Opcode::call_result_classes(Self) -> Array[@abi.RegClass]?
 pub fn Opcode::call_result_count(Self) -> Int?
 pub fn Opcode::call_type(Self) -> CallType
+pub fn Opcode::has_observable_effect(Self) -> Bool
+pub fn Opcode::is_rematerializable(Self) -> Bool
 pub impl Show for Opcode
 
 pub(all) enum RelocTarget {

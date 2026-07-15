@@ -35,6 +35,8 @@ pub fn callee_saved_fprs() -> Array[@abi.PReg]
 
 pub fn int_reg_index(@spec.IntRegRole) -> Int
 
+pub fn link_register_index() -> Int
+
 // Errors
 
 // Types and methods

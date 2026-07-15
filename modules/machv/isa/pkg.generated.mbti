@@ -3,7 +3,9 @@ package "Milky2018/machv/isa"
 
 import {
   "Milky2018/machv/abi",
+  "Milky2018/machv/instr",
   "Milky2018/machv/isa/spec",
+  "moonbitlang/core/debug",
 }
 
 // Values
@@ -11,21 +13,32 @@ import {
 // Errors
 
 // Types and methods
+pub struct DirectRemainderPlan {
+  opcode : @instr.Opcode
+  dividend : @abi.PReg
+  divisor : @abi.PReg
+  result : @abi.PReg
+  clobbers : Array[@abi.PReg]
+}
+
 pub(all) enum ISA {
   AArch64
   AMD64
-}
+} derive(Eq, @debug.Debug)
 pub fn ISA::call_clobbered_fprs(Self) -> Array[@abi.PReg]
 pub fn ISA::call_clobbered_fprs_same_abi(Self) -> Array[@abi.PReg]
 pub fn ISA::call_clobbered_gprs(Self) -> Array[@abi.PReg]
+pub fn ISA::direct_remainder_plan(Self, Bool, Bool) -> DirectRemainderPlan?
 pub fn ISA::fp_reg_index(Self) -> Int
 pub fn ISA::int_reg(Self, @spec.IntRegRole) -> @abi.PReg
 pub fn ISA::int_reg_index(Self, @spec.IntRegRole) -> Int
-pub fn ISA::lr_reg_index(Self) -> Int
+pub fn ISA::link_register_index(Self) -> Int?
 pub fn ISA::machine_env(Self, reserved_int_regs? : Array[Int]) -> MachineEnv
 pub fn ISA::scratch_reg_1_index(Self) -> Int
 pub fn ISA::scratch_reg_2_index(Self) -> Int
+pub fn ISA::shift_count_register(Self) -> @abi.PReg?
 pub fn ISA::sret_reg_index(Self) -> Int
+pub fn ISA::unordered_float_condition(Self) -> @instr.Cond
 
 pub struct MachineEnv {
   preferred_int : Array[@abi.PReg]

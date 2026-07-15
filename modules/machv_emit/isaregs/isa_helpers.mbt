@@ -15,11 +15,6 @@ pub fn scratch2_index(isa? : @isa.ISA = AArch64) -> Int {
 }
 
 ///|
-pub fn lr_index(isa? : @isa.ISA = AArch64) -> Int {
-  isa.lr_reg_index()
-}
-
-///|
 pub fn sret_index(isa? : @isa.ISA = AArch64) -> Int {
   isa.sret_reg_index()
 }

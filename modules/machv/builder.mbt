@@ -5,8 +5,11 @@ pub struct FunctionBuilder {
 }
 
 ///|
-pub fn FunctionBuilder::FunctionBuilder(name : String) -> FunctionBuilder {
-  let func = Function(name)
+pub fn FunctionBuilder::FunctionBuilder(
+  name : String,
+  target? : @isa.ISA = AArch64,
+) -> FunctionBuilder {
+  let func = Function(name, target~)
   let entry = func.new_block()
   { func, current_block: entry }
 }
@@ -100,7 +103,7 @@ pub fn FunctionBuilder::terminate(
 pub fn FunctionBuilder::finish(
   self : FunctionBuilder,
 ) -> Function raise VerifyError {
-  self.func.verify()
+  self.func.verify_for_isa(self.func.target())
   self.func
 }
 

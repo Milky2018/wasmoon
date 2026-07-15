@@ -34,8 +34,8 @@ test "inspect x64 ABI policy" {
 
 ## Example: lower MilkIR through the x64 target
 
-The wrapper returns MachV with x64-specific instruction choices and ABI
-locations.
+The wrapper returns a MachV function whose target identity is bound to AMD64,
+with x64-specific instruction choices and ABI locations.
 
 ```moonbit check
 ///|
@@ -46,6 +46,7 @@ test "lower an integer add function for x64" {
   builder.add_result(I64)
   builder.return_([builder.iadd(lhs, rhs)])
   let lowered = lower_function(builder.get_function())
+  debug_inspect(lowered.target(), content="AMD64")
   inspect(lowered.name, content="add64")
   inspect(lowered.blocks.length(), content="1")
   inspect(

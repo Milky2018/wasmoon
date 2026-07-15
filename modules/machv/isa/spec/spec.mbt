@@ -25,9 +25,8 @@ pub(all) enum IntRegRole {
   /// Scratch temporaries reserved for emission/lowering.
   Scratch1
   Scratch2
-  /// Frame pointer / link register (when architecture has them).
+  /// Frame pointer.
   FP
-  LR
   /// Struct-return register (when used by ABI).
   SRet
 }

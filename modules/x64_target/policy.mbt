@@ -3,7 +3,6 @@ pub(all) enum IntRegRole {
   Scratch1
   Scratch2
   FP
-  LR
   SRet
 } derive(Eq, Debug)
 
@@ -13,7 +12,6 @@ pub fn int_reg_index(role : IntRegRole) -> Int {
     Scratch1 => 10
     Scratch2 => 11
     FP => 5
-    LR => 5
     SRet => 7
   }
 }

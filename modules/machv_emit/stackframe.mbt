@@ -296,7 +296,7 @@ pub fn EmitStackFrame::get_fpr_save_offset(
 /// saved/restored in prologues.
 fn build_gpr_save_list_v3(clobbered : Array[Int], isa : @isa.ISA) -> Array[Int] {
   let fp = isa.fp_reg_index()
-  let lr = isa.lr_reg_index()
+  let link = isa.link_register_index()
   let env = isa.machine_env()
   let callee : @hashset.HashSet[Int] = HashSet([])
   for r in env.callee_saved_int {
@@ -305,7 +305,7 @@ fn build_gpr_save_list_v3(clobbered : Array[Int], isa : @isa.ISA) -> Array[Int] 
   let result : Array[Int] = []
   for reg in clobbered {
     // FP/LR are handled separately in the setup area.
-    if reg == fp || reg == lr {
+    if reg == fp || (link is Some(lr) && reg == lr) {
       continue
     }
     if callee.contains(reg) && !result.contains(reg) {

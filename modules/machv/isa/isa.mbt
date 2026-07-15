@@ -7,6 +7,62 @@
 pub(all) enum ISA {
   AArch64
   AMD64
+} derive(Debug, Eq)
+
+///|
+/// Target-owned direct remainder instruction and its implicit register roles.
+pub struct DirectRemainderPlan {
+  opcode : @instr.Opcode
+  dividend : @abi.PReg
+  divisor : @abi.PReg
+  result : @abi.PReg
+  clobbers : Array[@abi.PReg]
+}
+
+///|
+/// Return a direct remainder plan when the target has an architectural form.
+/// Targets without one let lowering expand remainder through division and
+/// multiply-subtract.
+pub fn ISA::direct_remainder_plan(
+  self : ISA,
+  signed : Bool,
+  is_64 : Bool,
+) -> DirectRemainderPlan? {
+  match self {
+    AArch64 => None
+    AMD64 => {
+      let opcode : @instr.Opcode = if signed {
+        AMD64(SRem(is_64))
+      } else {
+        AMD64(URem(is_64))
+      }
+      Some({
+        opcode,
+        dividend: { index: 0, class: Int }, // rax
+        divisor: { index: 10, class: Int }, // reserved r10 scratch
+        result: { index: 2, class: Int }, // rdx
+        clobbers: [{ index: 0, class: Int }, { index: 2, class: Int }],
+      })
+    }
+  }
+}
+
+///|
+/// Condition set by an unordered floating-point comparison.
+pub fn ISA::unordered_float_condition(self : ISA) -> @instr.Cond {
+  match self {
+    AArch64 => Vs
+    AMD64 => AMD64(ParitySet)
+  }
+}
+
+///|
+/// Fixed register used by variable shifts when the target requires one.
+pub fn ISA::shift_count_register(self : ISA) -> @abi.PReg? {
+  match self {
+    AArch64 => None
+    AMD64 => Some({ index: 1, class: Int }) // rcx
+  }
 }
 
 ///|
@@ -112,8 +168,11 @@ pub fn ISA::fp_reg_index(self : ISA) -> Int {
 }
 
 ///|
-pub fn ISA::lr_reg_index(self : ISA) -> Int {
-  self.int_reg_index(LR)
+pub fn ISA::link_register_index(self : ISA) -> Int? {
+  match self {
+    AArch64 => Some(@aarch64.link_register_index())
+    AMD64 => None
+  }
 }
 
 ///|

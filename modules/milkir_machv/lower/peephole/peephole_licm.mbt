@@ -504,8 +504,8 @@ fn invert_cond(cond : @instr.Cond) -> @instr.Cond {
     Pl => Mi
     Vs => Vc
     Vc => Vs
-    Ps => Pc
-    Pc => Ps
+    AMD64(ParitySet) => AMD64(ParityClear)
+    AMD64(ParityClear) => AMD64(ParitySet)
     Hi => Ls
     Ls => Hi
     Ge => Lt

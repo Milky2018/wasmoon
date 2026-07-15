@@ -192,7 +192,7 @@ pub impl Show for Inst with fn output(self, logger) {
 }
 
 ///|
-/// MachV opcode - machine-level operation (target-independent subset)
+/// MachV opcode - cross-target machine semantics plus explicit target dialects.
 pub(all) enum Opcode {
   // Integer arithmetic (Bool = true for 64-bit, false for 32-bit)
   Add(Bool) // ADD with size: true = 64-bit, false = 32-bit
@@ -202,11 +202,9 @@ pub(all) enum Opcode {
   Mul(Bool) // MUL with size: true = 64-bit, false = 32-bit
   SDiv(Bool) // SDIV with size: true = 64-bit, false = 32-bit
   UDiv(Bool) // UDIV with size: true = 64-bit, false = 32-bit
-  // x86_64: explicit remainder opcodes (lowered only on x86_64).
-  // This matches Cranelift's checked remainder sequences to avoid x86 IDIV
-  // overflow traps for `INT_MIN % -1`.
-  SRem(Bool) // SREM with size: true = 64-bit, false = 32-bit
-  URem(Bool) // UREM with size: true = 64-bit, false = 32-bit
+  // Target-specific operations are explicitly namespaced so the verifier can
+  // reject an instruction dialect that does not match the function target.
+  AMD64(AMD64Opcode)
   // Bitwise operations (Bool = true for 64-bit, false for 32-bit)
   And(Bool)
   AndImm(Int64, Bool) // AND (immediate logical), value is the immediate pattern
@@ -349,8 +347,8 @@ pub(all) enum Opcode {
   // Returns the smaller value; if one is NaN, returns the other
   FpuMinnm(Bool)
 
-  // AArch64-specific: shifted operand instructions
-  // These combine an arithmetic/logical op with a shift in one instruction
+  // Cross-target fused operations. AArch64 encodes these directly while AMD64
+  // expands them to equivalent instruction sequences.
   AddShifted(ShiftType, Int) // ADD Xd, Xn, Xm, shift #amount
   AddExtend(IndexExtend, Int) // ADD Xd, Xn, Wm, {uxtw|sxtw} #amount
   SubExtend(IndexExtend, Int) // SUB Xd, Xn, Wm, {uxtw|sxtw} #amount
@@ -364,7 +362,7 @@ pub(all) enum Opcode {
   AndShifted32(ShiftType, Int) // AND Wd, Wn, Wm, shift #amount
   OrShifted32(ShiftType, Int) // ORR Wd, Wn, Wm, shift #amount
   XorShifted32(ShiftType, Int) // EOR Wd, Wn, Wm, shift #amount
-  // AArch64-specific: multiply-accumulate instructions
+  // Cross-target multiply-accumulate operations.
   Madd // Xd = Xa + Xn * Xm (3 uses: acc, src1, src2)
   Msub // Xd = Xa - Xn * Xm (3 uses: acc, src1, src2)
   Mneg // Xd = -(Xn * Xm) (2 uses: src1, src2)
@@ -372,7 +370,7 @@ pub(all) enum Opcode {
   Madd32 // Wd = Wa + Wn * Wm (3 uses: acc, src1, src2)
   Msub32 // Wd = Wa - Wn * Wm (3 uses: acc, src1, src2)
   Mneg32 // Wd = -(Wn * Wm) (2 uses: src1, src2)
-  // AArch64-specific: multiply high instructions
+  // Cross-target multiply-high and widening-multiply operations.
   Umulh // Xd = (Xn * Xm) >> 64 (unsigned multiply high, 64-bit only)
   Smulh // Xd = (Xn * Xm) >> 64 (signed multiply high, 64-bit only)
   Umull // Xd = Wn * Wm (unsigned 32x32->64 multiply)
@@ -419,7 +417,7 @@ pub(all) enum Opcode {
   // LoadPtrRegOffset(type, extend, shift, offset):
   // Load from [base + index{, extend}{, scale} + offset]
   // Uses: [base, index], Defs: [result]
-  // - extend: None uses X index; Uxtw/Sxtw use W index extended to X
+  // - extend: None uses a full-width index; the other forms extend 32 bits
   // - shift: 0 (no scale) or log2(access_size) (scaled register offset)
   // - offset: signed displacement in bytes
   LoadPtrRegOffset(MemType, IndexExtend, Int, Int)
@@ -921,8 +919,7 @@ fn Opcode::to_string(self : Opcode) -> String {
     Mul(is_64) => if is_64 { "mul" } else { "mul32" }
     SDiv(is_64) => if is_64 { "sdiv" } else { "sdiv32" }
     UDiv(is_64) => if is_64 { "udiv" } else { "udiv32" }
-    SRem(is_64) => if is_64 { "srem" } else { "srem32" }
-    URem(is_64) => if is_64 { "urem" } else { "urem32" }
+    AMD64(op) => op.to_string()
     And(is_64) => if is_64 { "and" } else { "and32" }
     AndImm(imm, is_64) => if is_64 { "and #\{imm}" } else { "and32 #\{imm}" }
     Or(is_64) => if is_64 { "or" } else { "or32" }
@@ -1025,7 +1022,7 @@ fn Opcode::to_string(self : Opcode) -> String {
       }
     FpuMaxnm(is_f32) => if is_f32 { "fmaxnm.s" } else { "fmaxnm.d" }
     FpuMinnm(is_f32) => if is_f32 { "fminnm.s" } else { "fminnm.d" }
-    // AArch64-specific
+    // Cross-target fused operations
     AddShifted(shift, amount) => "add.\{shift} #\{amount}"
     AddExtend(ext, amount) => "add.\{ext} #\{amount}"
     SubExtend(ext, amount) => "sub.\{ext} #\{amount}"
@@ -1478,8 +1475,8 @@ pub impl Show for IntToFloatKind with fn output(self, logger) {
 }
 
 ///|
-/// AArch64 condition codes (for conditional branches and traps)
-/// Condition codes for comparisons
+/// Cross-target condition codes for conditional branches and traps.
+/// Target-only flag conditions are explicitly namespaced.
 pub(all) enum Cond {
   Eq // Equal (Z=1)
   Ne // Not equal (Z=0)
@@ -1489,9 +1486,7 @@ pub(all) enum Cond {
   Pl // Plus/positive or zero (N=0)
   Vs // Overflow (V=1) - used for NaN check in float compare
   Vc // No overflow (V=0)
-  // x86_64-only: parity flag conditions (used after UCOMIS* for NaN/unordered checks).
-  Ps // Parity set (PF=1)
-  Pc // Parity clear (PF=0)
+  AMD64(AMD64Cond)
   Hi // Unsigned higher (C=1 && Z=0)
   Ls // Unsigned lower or same (C=0 || Z=1)
   Ge // Signed greater or equal (N=V)
@@ -1512,8 +1507,7 @@ fn Cond::to_string(self : Cond) -> String {
     Pl => "pl"
     Vs => "vs"
     Vc => "vc"
-    Ps => "ps"
-    Pc => "pc"
+    AMD64(cond) => cond.to_string()
     Hi => "hi"
     Ls => "ls"
     Ge => "ge"
@@ -1530,29 +1524,6 @@ pub impl Show for Cond with fn output(self, logger) {
 }
 
 ///|
-/// Get the condition code value for AArch64 encoding
-pub fn Cond::to_bits(self : Cond) -> Int {
-  match self {
-    Eq => 0
-    Ne => 1
-    Hs => 2
-    Lo => 3
-    Mi => 4
-    Pl => 5
-    Vs => 6
-    Vc => 7
-    Ps | Pc => abort("Cond::to_bits: parity conditions are x86_64-only")
-    Hi => 8
-    Ls => 9
-    Ge => 10
-    Lt => 11
-    Gt => 12
-    Le => 13
-    Al => 14
-  }
-}
-
-///|
 /// Invert condition code (for branch inversion optimization)
 /// E.g., Eq -> Ne, Hs -> Lo, Ge -> Lt
 pub fn Cond::invert(self : Cond) -> Cond {
@@ -1565,8 +1536,7 @@ pub fn Cond::invert(self : Cond) -> Cond {
     Pl => Mi
     Vs => Vc
     Vc => Vs
-    Ps => Pc
-    Pc => Ps
+    AMD64(cond) => AMD64(cond.invert())
     Hi => Ls
     Ls => Hi
     Ge => Lt
@@ -1690,23 +1660,23 @@ pub(all) enum ShiftType {
 }
 
 ///|
-/// AArch64 addressing-mode extend for register-offset loads/stores.
+/// Cross-target index extension for arithmetic and register-offset memory
+/// operations.
 ///
-/// Mirrors Cranelift's AMode.{RegExtended,RegScaledExtended} options:
-/// - None: use X register offset (LSL option)
-/// - Uxtw/Sxtw: extend Wm to X, optionally scaled by access size (S bit)
+/// `None` uses a full-width index. The other forms zero- or sign-extend a
+/// 32-bit index before applying an optional scale.
 pub(all) enum IndexExtend {
   None
-  Uxtw
-  Sxtw
+  ZeroExtend32
+  SignExtend32
 }
 
 ///|
 fn IndexExtend::to_string(self : IndexExtend) -> String {
   match self {
     None => "none"
-    Uxtw => "uxtw"
-    Sxtw => "sxtw"
+    ZeroExtend32 => "zero_extend32"
+    SignExtend32 => "sign_extend32"
   }
 }
 

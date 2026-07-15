@@ -1,41 +1,6 @@
 // ============ Dead Code Elimination ============
 
 ///|
-/// Check if an opcode has side effects (cannot be eliminated even if dead)
-fn has_side_effects(opcode : @instr.Opcode) -> Bool {
-  match opcode {
-    // Loads can trap (e.g. guard pages / invalid pointers), so must not be eliminated.
-    LoadPtr(_, _)
-    | LoadPtrRegOffset(_, _, _, _)
-    | LoadPtrNarrowRegOffset(_, _, _, _, _)
-    | LoadPtrNarrow(_, _, _) => true
-    // Memory stores have side effects
-    Store(_, _)
-    | StackStore(_)
-    | StorePtr(_, _)
-    | StorePtrRegOffset(_, _, _, _)
-    | StorePtrNarrowRegOffset(_, _, _, _) => true
-    // Conditional helpers may call foreign code on slow paths.
-    CallExternalIfI32NeImm(_, _) => true
-    // Function calls have side effects
-    ReturnCallIndirect(_, _)
-    | CallPtr(_, _, _)
-    | CallDirect(_, _, _, _)
-    | CallExternal(_, _, _, _) => true
-    // Traps must not be eliminated
-    TrapIfZero(_, _)
-    | TrapIfDivOverflow(_, _)
-    | TrapIfUge(_)
-    | TrapIfUgt(_)
-    | TrapIf(_, _) => true
-    // Flag-setting compares must stay paired with following flag consumers.
-    IntCmp(_) => true
-    // Everything else is pure computation
-    _ => false
-  }
-}
-
-///|
 fn is_truthy_env_flag(value : String) -> Bool {
   value == "1" ||
   value == "true" ||
@@ -188,7 +153,7 @@ pub fn eliminate_dead_code(func : @machv.Function) -> @machv.Function {
 
     // Filter instructions: keep if has side effects OR defines a used vreg
     for inst in block.insts {
-      let should_keep = if has_side_effects(inst.opcode) {
+      let should_keep = if inst.opcode.has_observable_effect() {
         true
       } else {
         // Keep if any defined vreg is used
