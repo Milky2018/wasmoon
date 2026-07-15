@@ -45,15 +45,19 @@ The target-neutral layer that lowers **MilkIR** into **MachV** without choosing 
 _Avoid_: instruction selection, target backend, wasmoon JIT
 
 **MachV Target Lowering**:
-The target-owned translation from **MachV** into an AArch64- or AMD64-specific machine representation.
+The target-owned translation from **MachV** into an AArch64- or AMD64-specific **Target VCode**.
 _Avoid_: MachV opcode dialect, host-tagged MachV
+
+**Target VCode**:
+A shared virtual-register function and control-flow structure parameterized by a closed, target-owned instruction type such as `AArch64Inst` or `AMD64Inst`.
+_Avoid_: MachV, shared target opcode, union of machine dialects
 
 **ABI Policy**:
 The target and embedding-specific rules for argument registers, return registers, callee-saved registers, caller-saved registers, stack layout, and call clobbers.
 _Avoid_: MachV core policy
 
 **Register Allocation**:
-The target-independent allocation algorithm that assigns virtual registers or spills in a target-specific machine representation produced by **MachV Target Lowering**.
+The target-independent allocation algorithm that assigns virtual registers or spills in **Target VCode** through a shared abstract program model.
 _Avoid_: regalloc_core, VCode regalloc, machine regalloc
 
 **Wasmoon Runtime**:
@@ -61,7 +65,7 @@ The WebAssembly execution system that owns Wasm validation, instantiation, host 
 _Avoid_: compiler infrastructure, wasmoon_runtime as an implied module name
 
 **Target Emitter**:
-The machine-target-owned encoder that turns a target-specific machine representation into bytes and generic metadata.
+The machine-target-owned encoder that turns allocated **Target VCode** into bytes and generic metadata.
 _Avoid_: MachV emitter, wasmoon JIT emitter, runtime fixup emitter
 
 **Wasmoon JIT**:
@@ -86,8 +90,9 @@ _Avoid_: MachV emitter output, generic object format
 - **MilkIR Core** starts as the smallest useful subset and uses **Completeness TODO** comments for known gaps.
 - A **Completeness TODO** documents an accepted limitation, but is not itself a correctness gate.
 - **MilkIR-MachV Lowering** lowers one **MilkIR** function into one **MachV** function.
-- **MachV Target Lowering** lowers every **MachV** function into the selected machine target's representation.
+- **MachV Target Lowering** lowers every **MachV** function into **Target VCode** parameterized by the selected target's instruction type.
 - **Machine Targets** own **ABI Policy**; **MachV** does not encode host instructions, physical registers, calling conventions, or target constraints.
+- **Target VCode** shares function, block, control-flow, virtual-register, and allocation structure without sharing target instructions.
 - **Register Allocation** runs after **MachV Target Lowering** and before a **Target Emitter**.
 - A **Target Emitter** produces generic relocation and metadata records; **Wasmoon JIT** resolves those records to Wasmoon runtime helpers and executable memory.
 - A **Cwasm Artifact** may wrap **Target Emitter** output with Wasmoon function indices, imports, traps, debug mapping, and runtime metadata.
