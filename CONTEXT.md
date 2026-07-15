@@ -44,9 +44,17 @@ _Avoid_: target VCode, target-bound IR, portable execution target
 The target-neutral layer that lowers **MilkIR** into **MachV** without choosing host instructions, calling conventions, physical registers, or target constraints.
 _Avoid_: instruction selection, target backend, wasmoon JIT
 
+**Semantic Legalization**:
+The target-neutral normalization that removes source or dialect concepts and makes value widths, effects, traps, memory behavior, and call semantics explicit before values enter **MachV**.
+_Avoid_: instruction selection, ABI lowering, target expansion
+
 **MachV Target Lowering**:
 The target-owned translation from **MachV** into an AArch64- or AMD64-specific **Target VCode**.
 _Avoid_: MachV opcode dialect, host-tagged MachV
+
+**Target Legalization**:
+The target-owned expansion of a valid **MachV** operation into one or more legal instructions in **Target VCode**.
+_Avoid_: semantic legalization, MachV lowering
 
 **Target VCode**:
 A shared virtual-register function and control-flow structure parameterized by a closed, target-owned instruction type such as `AArch64Inst` or `AMD64Inst`.
@@ -94,8 +102,10 @@ _Avoid_: MachV emitter output, generic object format
 - **MilkIR Core** starts as the smallest useful subset and uses **Completeness TODO** comments for known gaps.
 - A **Completeness TODO** documents an accepted limitation, but is not itself a correctness gate.
 - **MilkIR-MachV Lowering** lowers one **MilkIR** function into one **MachV** function.
+- **Semantic Legalization** completes during **MilkIR-MachV Lowering** without asking whether a host ISA has a matching instruction.
 - **MachV** preserves single-definition virtual registers and block parameters through target-neutral lowering.
 - **MachV Target Lowering** lowers every **MachV** function into **Target VCode** parameterized by the selected target's instruction type.
+- **Target Legalization** may expand one semantic **MachV** operation into multiple target instructions.
 - **Machine Targets** own **ABI Policy**; **MachV** does not encode host instructions, physical registers, calling conventions, or target constraints.
 - **Target VCode** shares function, block, control-flow, virtual-register, and allocation structure without sharing target instructions.
 - A **Portable Execution Target** may consume **MachV** without turning **MachV** itself into a stable bytecode or VM contract.
@@ -121,6 +131,7 @@ _Avoid_: MachV emitter output, generic object format
 - TODO policy was ambiguous; resolved: **Completeness TODO** comments are required for known gaps but are not part of the current correctness gates.
 - "VCode" previously named both the current Wasmoon machine IR and the reusable machine layer; resolved: use **MachV** for the reusable virtual-register machine IR.
 - Instruction selection ownership was previously unclear; resolved: **MilkIR-MachV Lowering** is target-neutral, while **MachV Target Lowering** owns host instruction selection.
+- Legalization ownership was previously unclear; resolved: **Semantic Legalization** produces target-neutral **MachV**, while **Target Legalization** expands its operations into legal **Target VCode**.
 - SSA destruction ownership was previously unclear; resolved: **MachV** retains single-definition virtual registers and block parameters, while target-specific constraints and copy insertion begin in **Target VCode**.
 - Portable execution ownership was previously unclear; resolved: **MachV** remains a compiler intermediate representation, while any production bytecode and interpreter belong to a separate **Portable Execution Target**.
 - Target packaging was ambiguous; resolved: use ISA-specific modules such as `x64_target` and `aarch64_target`, not generic `backend` or `isa_backend` packages.
