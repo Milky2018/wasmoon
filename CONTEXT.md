@@ -48,6 +48,10 @@ _Avoid_: instruction selection, target backend, wasmoon JIT
 The target-neutral normalization that removes source or dialect concepts and makes value widths, effects, traps, memory behavior, and call semantics explicit before values enter **MachV**.
 _Avoid_: instruction selection, ABI lowering, target expansion
 
+**Semantic Superinstruction**:
+A **MachV** operation whose decomposition would change observable rounding, atomicity, trap behavior, or effect boundaries.
+_Avoid_: target fusion, encoding shortcut, instruction-count optimization
+
 **MachV Target Lowering**:
 The target-owned translation from **MachV** into an AArch64- or AMD64-specific **Target VCode**.
 _Avoid_: MachV opcode dialect, host-tagged MachV
@@ -103,6 +107,7 @@ _Avoid_: MachV emitter output, generic object format
 - A **Completeness TODO** documents an accepted limitation, but is not itself a correctness gate.
 - **MilkIR-MachV Lowering** lowers one **MilkIR** function into one **MachV** function.
 - **Semantic Legalization** completes during **MilkIR-MachV Lowering** without asking whether a host ISA has a matching instruction.
+- A **Semantic Superinstruction** belongs in **MachV** only when ordinary operations cannot reproduce its semantics without loss.
 - **MachV** preserves single-definition virtual registers and block parameters through target-neutral lowering.
 - **MachV Target Lowering** lowers every **MachV** function into **Target VCode** parameterized by the selected target's instruction type.
 - **Target Legalization** may expand one semantic **MachV** operation into multiple target instructions.
@@ -132,6 +137,7 @@ _Avoid_: MachV emitter output, generic object format
 - "VCode" previously named both the current Wasmoon machine IR and the reusable machine layer; resolved: use **MachV** for the reusable virtual-register machine IR.
 - Instruction selection ownership was previously unclear; resolved: **MilkIR-MachV Lowering** is target-neutral, while **MachV Target Lowering** owns host instruction selection.
 - Legalization ownership was previously unclear; resolved: **Semantic Legalization** produces target-neutral **MachV**, while **Target Legalization** expands its operations into legal **Target VCode**.
+- Fused-operation ownership was previously unclear; resolved: only a **Semantic Superinstruction** may enter **MachV**, while performance-only fusion belongs to target lowering.
 - SSA destruction ownership was previously unclear; resolved: **MachV** retains single-definition virtual registers and block parameters, while target-specific constraints and copy insertion begin in **Target VCode**.
 - Portable execution ownership was previously unclear; resolved: **MachV** remains a compiler intermediate representation, while any production bytecode and interpreter belong to a separate **Portable Execution Target**.
 - Target packaging was ambiguous; resolved: use ISA-specific modules such as `x64_target` and `aarch64_target`, not generic `backend` or `isa_backend` packages.
