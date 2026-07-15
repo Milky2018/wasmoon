@@ -37,7 +37,7 @@ The source-language type model that must be checked and lowered before values en
 _Avoid_: IR type system when referring to WebAssembly heap types
 
 **MachV**:
-A reusable, target-neutral low-level virtual-register intermediate representation. Every native JIT path passes through **MachV** before target-specific lowering.
+A reusable, target-neutral low-level virtual-register intermediate representation with single-definition values and block parameters. Every native JIT path passes through **MachV** before target-specific lowering.
 _Avoid_: target VCode, target-bound IR, portable execution target
 
 **MilkIR-MachV Lowering**:
@@ -90,6 +90,7 @@ _Avoid_: MachV emitter output, generic object format
 - **MilkIR Core** starts as the smallest useful subset and uses **Completeness TODO** comments for known gaps.
 - A **Completeness TODO** documents an accepted limitation, but is not itself a correctness gate.
 - **MilkIR-MachV Lowering** lowers one **MilkIR** function into one **MachV** function.
+- **MachV** preserves single-definition virtual registers and block parameters through target-neutral lowering.
 - **MachV Target Lowering** lowers every **MachV** function into **Target VCode** parameterized by the selected target's instruction type.
 - **Machine Targets** own **ABI Policy**; **MachV** does not encode host instructions, physical registers, calling conventions, or target constraints.
 - **Target VCode** shares function, block, control-flow, virtual-register, and allocation structure without sharing target instructions.
@@ -115,6 +116,7 @@ _Avoid_: MachV emitter output, generic object format
 - TODO policy was ambiguous; resolved: **Completeness TODO** comments are required for known gaps but are not part of the current correctness gates.
 - "VCode" previously named both the current Wasmoon machine IR and the reusable machine layer; resolved: use **MachV** for the reusable virtual-register machine IR.
 - Instruction selection ownership was previously unclear; resolved: **MilkIR-MachV Lowering** is target-neutral, while **MachV Target Lowering** owns host instruction selection.
+- SSA destruction ownership was previously unclear; resolved: **MachV** retains single-definition virtual registers and block parameters, while target-specific constraints and copy insertion begin in **Target VCode**.
 - Target packaging was ambiguous; resolved: use ISA-specific modules such as `x64_target` and `aarch64_target`, not generic `backend` or `isa_backend` packages.
 - ABI ownership was previously mixed into the machine layer; resolved: **Machine Targets** own **ABI Policy** and apply it after **MachV**.
 - Register-allocation placement was reopened; resolved: **Register Allocation** consumes the target-specific representation produced by **MachV Target Lowering**, never **MachV** itself.
