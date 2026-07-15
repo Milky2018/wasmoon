@@ -270,6 +270,7 @@ _Avoid_: MachV emitter output, generic object format
 - A **Target ABI Convention** derives a **Call Layout** containing exact argument, result, hidden return-area, stack, fixed-register, and clobber facts; target lowering materializes it without exposing placement orchestration to callers.
 - MachV multi-results remain logical SSA values; a **Call Layout** may transfer overflow results through a caller-owned **Return Area**, whose physical offset is chosen only during target frame layout.
 - Stack arguments enter Target VCode as symbolic **Incoming Argument Slots** and caller-owned **Outgoing Call Areas**; MachV contains no ABI stack-adjustment, outgoing-store, or stack-base operations.
+- Target VCode call allocation facts use fixed or tied operands, explicit timing, and caller-saved clobber ranges; target call instructions do not duplicate argument counts, result classes, or clobber categories.
 - **Target VCode** shares function, block, control-flow, virtual-register, and allocation structure without sharing target instructions.
 - A **Portable Execution Target** may consume **MachV** without turning **MachV** itself into a stable bytecode or VM contract.
 - **Register Allocation** runs after **MachV Target Lowering** and before a **Target Emitter**.
@@ -315,6 +316,7 @@ _Avoid_: MachV emitter output, generic object format
 - ABI rules and per-call placement were previously represented by one layout object; resolved: a reusable **Target ABI Convention** privately derives a short-lived **Call Layout** for each logical signature.
 - Multi-result placement was previously mixed into MachV call opcodes and result classes; resolved: MachV preserves ordered logical results, while target lowering assigns registers or a typed caller-owned **Return Area**.
 - Stack argument placement was previously materialized in MachV; resolved: target lowering owns symbolic incoming slots and one reusable outgoing area, while frame layout chooses physical offsets.
+- Call allocation facts were previously duplicated between target opcodes and register operands; resolved: compact operand and clobber side tables are authoritative, and regalloc satisfies their fixed constraints.
 - Register-allocation placement was reopened; resolved: **Register Allocation** consumes the target-specific representation produced by **MachV Target Lowering**, never **MachV** itself.
 - Target-lowering output atomicity was unclear; resolved: success returns complete, verified, target-owned **Target VCode**, while failure returns a structured error without exposing partial builder state.
 - Target-lowering context ownership was unclear; resolved: each target consumes its own immutable facts through static specialization, while runtime and downstream compiler services remain outside the lowering seam.
