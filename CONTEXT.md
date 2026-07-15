@@ -223,6 +223,7 @@ _Avoid_: MachV emitter output, generic object format
 - A **Target Lowering Context** may carry immutable CPU features, tuning policy, and code model, but not runtime address resolution, executable memory, register allocation, or emission services.
 - Each machine target owns whole-function traversal, instruction selection, local pattern fusion, and **Target Legalization**; the shared Target VCode layer provides compact storage, dense handles, a typed builder, and invariant checks rather than a per-operation lowering framework.
 - Target lowering preallocates from MachV function counts and uses dense constant-time mappings. Its common path remains near-linear, while extra target-owned analyses require a concrete optimization benefit.
+- Target lowering reports target-owned structured failures with a MachV source site and phase; its public interface never aborts the host, silently omits an operation, or emits placeholder code for a lowering failure.
 - **Target Legalization** may expand one semantic **MachV** operation into multiple target instructions.
 - **Machine Targets** own **ABI Policy**; **MachV** does not encode host instructions, physical registers, calling conventions, or target constraints.
 - **Target VCode** shares function, block, control-flow, virtual-register, and allocation structure without sharing target instructions.
@@ -270,6 +271,7 @@ _Avoid_: MachV emitter output, generic object format
 - Target-lowering output atomicity was unclear; resolved: success returns complete, verified, target-owned **Target VCode**, while failure returns a structured error without exposing partial builder state.
 - Target-lowering context ownership was unclear; resolved: each target consumes its own immutable facts through static specialization, while runtime and downstream compiler services remain outside the lowering seam.
 - Target-lowering traversal ownership was unclear; resolved: each target controls its complete lowering and optimization traversal, while the shared layer owns only Target VCode storage and invariants.
+- Target-lowering failure ownership was unclear; resolved: each target owns a closed structured error type, and Wasmoon JIT maps it into a product pipeline error only at orchestration.
 - Value-location ownership was previously mixed into **MachV**; resolved: MachV safepoints and operations reference values, while **Allocated Location** and frame layout belong downstream.
 - Function signatures previously carried ABI result locations, stack counts, and placement facts; resolved: a **MachV Signature** contains only ordered parameter and result types, while ABI facts belong downstream.
 - Conditional and multi-way branches previously carried only target ids, forcing producers to insert jump-only blocks for SSA arguments; resolved: every successor is a **MachV Edge** with explicit arguments.
