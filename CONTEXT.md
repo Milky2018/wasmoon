@@ -68,6 +68,10 @@ _Avoid_: conditional trap fusion, target trap payload, hardware trap instruction
 A target-neutral **MachV** arithmetic, comparison, or conversion whose exact widths and behavior-changing modes are explicit and whose observable status outputs are ordinary values.
 _Avoid_: machine instruction form, flag-setting operation, immediate encoding variant
 
+**Semantic Vector Operation**:
+A target-neutral **MachV** `V128` operation whose lane interpretation is explicit only where it changes meaning and whose behavior is independent of a host SIMD instruction set.
+_Avoid_: target SIMD intrinsic, opcode-per-lane-shape, speculative wide vector
+
 **MachV Target Lowering**:
 The target-owned translation from **MachV** into an AArch64- or AMD64-specific **Target VCode**.
 _Avoid_: MachV opcode dialect, host-tagged MachV
@@ -128,6 +132,7 @@ _Avoid_: MachV emitter output, generic object format
 - A **Semantic Call** preserves direct, external, or indirect callee identity and normal or tail-call meaning, while target lowering applies **ABI Policy**.
 - A **Semantic Trap** ends its block unconditionally; conditional traps use ordinary control flow, while target lowering selects checks, hardware traps, or helper calls that preserve the reason.
 - A **Semantic Scalar Operation** preserves signedness, rounding, saturation, and trapping behavior where they affect meaning; target lowering chooses immediates, instruction forms, and machine flags.
+- A **Semantic Vector Operation** uses parameterized lane shapes and semantic shuffle or memory behavior, while target lowering chooses native SIMD instructions or expansions.
 - **MachV** preserves single-definition virtual registers and block parameters through target-neutral lowering.
 - **MachV Target Lowering** lowers every **MachV** function into **Target VCode** parameterized by the selected target's instruction type.
 - **Target Legalization** may expand one semantic **MachV** operation into multiple target instructions.
@@ -162,6 +167,7 @@ _Avoid_: MachV emitter output, generic object format
 - Call ownership was previously unclear; resolved: **MachV** owns **Semantic Call** meaning and explicit values, while **Target VCode** owns ABI placement, physical clobbers, outgoing stack layout, and prologue or epilogue details.
 - Trap ownership was previously unclear; resolved: **MachV** owns structured **Semantic Trap** reasons and operation-level trap conditions, while conditional trap fusion and target trap encoding belong to **Target VCode**.
 - Scalar-operation ownership was previously unclear; resolved: **MachV** owns precisely typed arithmetic and conversion meaning, while condition flags, fixed registers, shifted operands, and immediate encodings belong to **Target VCode**.
+- Vector-operation ownership was previously unclear; resolved: **MachV** currently owns only target-neutral `V128` meaning, while target SIMD forms and wider or scalable vectors remain outside the contract.
 - SSA destruction ownership was previously unclear; resolved: **MachV** retains single-definition virtual registers and block parameters, while target-specific constraints and copy insertion begin in **Target VCode**.
 - Portable execution ownership was previously unclear; resolved: **MachV** remains a compiler intermediate representation, while any production bytecode and interpreter belong to a separate **Portable Execution Target**.
 - Target packaging was ambiguous; resolved: use ISA-specific modules such as `x64_target` and `aarch64_target`, not generic `backend` or `isa_backend` packages.
