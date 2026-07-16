@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "workloads": [
+    {
+      "tier": "micro_codegen",
+      "path": "spec/const.wast",
+      "sha256": "b1a378d5b7ddb4d4acb5ae2959ac938dfe0d9e3c2864df457bc098d3f2e00f37",
+      "subcommand": "test",
+      "entry": "wast script",
+      "expected_output": "Failed:  0",
+      "internal_iterations": 1,
+      "metrics": [
+        "jit_compile_time",
+        "code_size",
+        "regalloc"
+      ]
+    },
+    {
+      "tier": "micro_codegen",
+      "path": "spec/int_exprs.wast",
+      "sha256": "e8b884e16bdbed0270e9b912eaa60a0e8688831e7574be98c00a60dcc667ed2b",
+      "subcommand": "test",
+      "entry": "wast script",
+      "expected_output": "Failed:  0",
+      "internal_iterations": 1,
+      "metrics": [
+        "jit_compile_time",
+        "code_size",
+        "regalloc"
+      ]
+    },
+    {
+      "tier": "micro_codegen",
+      "path": "spec/float_exprs.wast",
+      "sha256": "f1659759fc66b9d7d46738adaefd9d9ff6d6a433d3192c762aa32f052fe6d071",
+      "subcommand": "test",
+      "entry": "wast script",
+      "expected_output": "Failed:  0",
+      "internal_iterations": 1,
+      "metrics": [
+        "jit_compile_time",
+        "code_size",
+        "regalloc"
+      ]
+    },
+    {
+      "tier": "real_module",
+      "path": "examples/benchmark.wasm",
+      "sha256": "be52212afa2a1a2af82348104587913366f715bb8370adbccc4380c17bdf9a3f",
+      "subcommand": "run",
+      "entry": "_start",
+      "expected_output": "Benchmark complete!",
+      "internal_iterations": 10,
+      "metrics": [
+        "runtime",
+        "jit_compile_time",
+        "code_size",
+        "regalloc"
+      ]
+    },
+    {
+      "tier": "large_compile_stress",
+      "path": "spec/simd/simd_f32x4_arith.wast",
+      "sha256": "177b579abb1ea05c8b4a6c8b8b9e6770473334013b4f3e6c72cc9a414c03d1ef",
+      "subcommand": "test",
+      "entry": "wast script",
+      "expected_output": "Failed:  0",
+      "internal_iterations": 1,
+      "metrics": [
+        "jit_compile_time",
+        "code_size",
+        "regalloc"
+      ]
+    },
+    {
+      "tier": "large_compile_stress",
+      "path": "spec/memory64/memory_copy64.wast",
+      "sha256": "c97bf5fa7838ee06f71b4bb26f0fcb91adf25bb054e41f6b9c2051ddcdf701a7",
+      "subcommand": "test",
+      "entry": "wast script",
+      "expected_output": "Failed:  0",
+      "internal_iterations": 1,
+      "metrics": [
+        "jit_compile_time",
+        "code_size",
+        "regalloc"
+      ]
+    }
+  ]
+}
