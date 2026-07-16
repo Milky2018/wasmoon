@@ -91,10 +91,6 @@ fn lower_semantic_int_binary(
     Add => Add(is_64)
     Sub => Sub(is_64)
     Mul => Mul(is_64)
-    SignedDiv => SDiv(is_64)
-    UnsignedDiv => UDiv(is_64)
-    SignedRem => SRem(is_64)
-    UnsignedRem => URem(is_64)
     And => And(is_64)
     Or => Or(is_64)
     Xor => Xor(is_64)
@@ -102,11 +98,245 @@ fn lower_semantic_int_binary(
     SignedShiftRight => AShr(is_64)
     UnsignedShiftRight => LShr(is_64)
     RotateRight => Rotr(is_64)
+    SignedDiv | UnsignedDiv | SignedRem | UnsignedRem =>
+      raise UnsupportedOperation(
+        message="division and remainder require explicit trap legalization",
+      )
     RotateLeft =>
       raise UnsupportedOperation(
-        message="rotate-left requires target-aware legalization",
+        message="rotate-left requires explicit legalization",
       )
   }
+}
+
+///|
+fn semantic_operand_is_64(
+  function : @semantic.Function,
+  operands : Array[@semantic.Value],
+) -> Bool raise SemanticLegacyAdapterError {
+  if operands.is_empty() {
+    raise UnsupportedOperation(
+      message="operation has no width-carrying operand",
+    )
+  }
+  match function.value_type(operands[0]) {
+    Some(I32) => false
+    Some(I64 | Ptr64 | GcRef64) => true
+    Some(ty) =>
+      raise UnsupportedOperation(
+        message="operation has non-integer operand type \{ty}",
+      )
+    None => raise UnsupportedOperation(message="operand is not function-owned")
+  }
+}
+
+///|
+fn lower_semantic_int_unary(
+  function : @semantic.Function,
+  operation : @semantic.IntUnaryOp,
+  operands : Array[@semantic.Value],
+) -> @instr.Opcode raise SemanticLegacyAdapterError {
+  let is_64 = semantic_operand_is_64(function, operands)
+  match operation {
+    Not => Not(is_64)
+    CountLeadingZeros => Clz(is_64)
+    PopulationCount => Popcnt(is_64)
+    CountTrailingZeros =>
+      raise UnsupportedOperation(
+        message="count-trailing-zeros requires explicit legalization",
+      )
+  }
+}
+
+///|
+fn lower_semantic_int_comparison(
+  function : @semantic.Function,
+  comparison : @semantic.IntComparison,
+  operands : Array[@semantic.Value],
+) -> @instr.Opcode raise SemanticLegacyAdapterError {
+  let kind : @instr.CmpKind = match comparison {
+    Equal => Eq
+    NotEqual => Ne
+    SignedLessThan => Slt
+    SignedLessOrEqual => Sle
+    SignedGreaterThan => Sgt
+    SignedGreaterOrEqual => Sge
+    UnsignedLessThan => Ult
+    UnsignedLessOrEqual => Ule
+    UnsignedGreaterThan => Ugt
+    UnsignedGreaterOrEqual => Uge
+  }
+  Cmp(kind, semantic_operand_is_64(function, operands))
+}
+
+///|
+fn lower_semantic_float_unary(
+  function : @semantic.Function,
+  operation : @semantic.FloatUnaryOp,
+  results : Array[@semantic.Value],
+) -> @instr.Opcode raise SemanticLegacyAdapterError {
+  if results.length() != 1 {
+    raise UnsupportedOperation(
+      message="float unary operation must have exactly one result",
+    )
+  }
+  let is_f32 = function.value_type(results[0]) is Some(F32)
+  match operation {
+    Negate => FNeg(is_f32)
+    Absolute => FAbs(is_f32)
+    SquareRoot => FSqrt(is_f32)
+    Ceil => FCeil(is_f32)
+    Floor => FFloor(is_f32)
+    Truncate => FTrunc(is_f32)
+    Nearest => FNearest(is_f32)
+  }
+}
+
+///|
+fn lower_semantic_float_binary(
+  function : @semantic.Function,
+  operation : @semantic.FloatBinaryOp,
+  results : Array[@semantic.Value],
+) -> @instr.Opcode raise SemanticLegacyAdapterError {
+  if results.length() != 1 {
+    raise UnsupportedOperation(
+      message="float binary operation must have exactly one result",
+    )
+  }
+  let is_f32 = function.value_type(results[0]) is Some(F32)
+  match operation {
+    Add => FAdd(is_f32)
+    Sub => FSub(is_f32)
+    Mul => FMul(is_f32)
+    Div => FDiv(is_f32)
+    Min => FMin(is_f32)
+    Max => FMax(is_f32)
+    CopySign =>
+      raise UnsupportedOperation(
+        message="float copy-sign requires explicit legalization",
+      )
+  }
+}
+
+///|
+fn lower_semantic_float_comparison(
+  comparison : @semantic.FloatComparison,
+) -> @instr.Opcode raise SemanticLegacyAdapterError {
+  let kind : @instr.FCmpKind = match comparison {
+    Equal => Eq
+    NotEqual => Ne
+    LessThan => Lt
+    LessOrEqual => Le
+    GreaterThan => Gt
+    GreaterOrEqual => Ge
+    Ordered | Unordered =>
+      raise UnsupportedOperation(
+        message="ordered/unordered float comparison requires legalization",
+      )
+  }
+  FCmp(kind)
+}
+
+///|
+fn lower_semantic_conversion(
+  conversion : @semantic.ConversionOp,
+) -> @instr.Opcode raise SemanticLegacyAdapterError {
+  match conversion {
+    I32WrapI64 => Truncate
+    I64ExtendI32(Signed) => Extend(Signed32To64)
+    I64ExtendI32(Unsigned) => Extend(Unsigned32To64)
+    F32DemoteF64 => FDemote
+    F64PromoteF32 => FPromote
+    SignExtend(I32, W8) => Extend(Signed8To32)
+    SignExtend(I32, W16) => Extend(Signed16To32)
+    SignExtend(I64, W8) => Extend(Signed8To64)
+    SignExtend(I64, W16) => Extend(Signed16To64)
+    SignExtend(I64, W32) => Extend(Signed32To64)
+    Bitcast(_, _) => Bitcast
+    IntToFloat(I32, F32, Signed) => IntToFloat(I32SToF32)
+    IntToFloat(I32, F32, Unsigned) => IntToFloat(I32UToF32)
+    IntToFloat(I64, F32, Signed) => IntToFloat(I64SToF32)
+    IntToFloat(I64, F32, Unsigned) => IntToFloat(I64UToF32)
+    IntToFloat(I32, F64, Signed) => IntToFloat(I32SToF64)
+    IntToFloat(I32, F64, Unsigned) => IntToFloat(I32UToF64)
+    IntToFloat(I64, F64, Signed) => IntToFloat(I64SToF64)
+    IntToFloat(I64, F64, Unsigned) => IntToFloat(I64UToF64)
+    FloatToInt(_, _, _, _) =>
+      raise UnsupportedOperation(
+        message="float-to-int conversion requires trap or saturation legalization",
+      )
+    SignExtend(_, _) =>
+      raise UnsupportedOperation(message="invalid sign-extension shape")
+  }
+}
+
+///|
+fn legacy_memory_type(ty : @semantic.ValueType) -> @instr.MemType {
+  match ty {
+    I32 => I32
+    I64 | Ptr64 | GcRef64 => I64
+    F32 => F32
+    F64 => F64
+    V128 => V128
+  }
+}
+
+///|
+fn access_width_bits(width : @semantic.AccessWidth) -> Int {
+  match width {
+    W8 => 8
+    W16 => 16
+    W32 => 32
+    W64 => 64
+    W128 => 128
+  }
+}
+
+///|
+fn semantic_type_width(ty : @semantic.ValueType) -> @semantic.AccessWidth {
+  match ty {
+    I32 | F32 => W32
+    I64 | F64 | Ptr64 | GcRef64 => W64
+    V128 => W128
+  }
+}
+
+///|
+fn lower_semantic_load(
+  spec : @semantic.LoadSpec,
+) -> @instr.Opcode raise SemanticLegacyAdapterError {
+  if spec.endianness != Little || spec.trap is Some(_) {
+    raise UnsupportedOperation(
+      message="non-native-endian or trapping load requires legalization",
+    )
+  }
+  let offset = spec.offset.to_int()
+  if spec.width == semantic_type_width(spec.result_type) &&
+    spec.extension is None {
+    return LoadPtr(legacy_memory_type(spec.result_type), offset)
+  }
+  match spec.extension {
+    Signed => LoadPtrNarrow(access_width_bits(spec.width), true, offset)
+    Unsigned => LoadPtrNarrow(access_width_bits(spec.width), false, offset)
+    None =>
+      raise UnsupportedOperation(message="narrow load must define extension")
+  }
+}
+
+///|
+fn lower_semantic_store(
+  spec : @semantic.StoreSpec,
+) -> @instr.Opcode raise SemanticLegacyAdapterError {
+  if spec.endianness != Little || spec.trap is Some(_) {
+    raise UnsupportedOperation(
+      message="non-native-endian or trapping store requires legalization",
+    )
+  }
+  let offset = spec.offset.to_int()
+  if spec.width == semantic_type_width(spec.value_type) {
+    return StorePtr(legacy_memory_type(spec.value_type), offset)
+  }
+  StorePtrNarrow(access_width_bits(spec.width), offset)
 }
 
 ///|
@@ -135,9 +365,37 @@ fn append_semantic_instruction(
     I32Const(bits) =>
       @instr.LoadConst(bits.reinterpret_as_int().to_int64() & 0xFFFFFFFFL)
     I64Const(bits) => LoadConst(bits.reinterpret_as_int64())
+    F32Const(bits) => LoadConstF32(bits.reinterpret_as_int())
+    F64Const(bits) => LoadConstF64(bits.reinterpret_as_int64())
+    NullPtr | NullGcRef => LoadConst(0L)
     Copy => Move
+    Select => Select
+    PointerOffset => Add(true)
+    GcRefAddress | GcRefFromBits => Move
+    ReferenceCompare(Equal) => Cmp(Eq, true)
+    ReferenceCompare(NotEqual) => Cmp(Ne, true)
+    IntUnary(unary) =>
+      lower_semantic_int_unary(
+        function,
+        unary,
+        function.instruction_operands(instruction),
+      )
     IntBinary(binary) =>
       lower_semantic_int_binary(function, binary, semantic_results)
+    IntCompare(comparison) =>
+      lower_semantic_int_comparison(
+        function,
+        comparison,
+        function.instruction_operands(instruction),
+      )
+    FloatUnary(unary) =>
+      lower_semantic_float_unary(function, unary, semantic_results)
+    FloatBinary(binary) =>
+      lower_semantic_float_binary(function, binary, semantic_results)
+    FloatCompare(comparison) => lower_semantic_float_comparison(comparison)
+    Convert(conversion) => lower_semantic_conversion(conversion)
+    Load(spec) => lower_semantic_load(spec)
+    Store(spec) => lower_semantic_store(spec)
     _ =>
       raise UnsupportedOperation(
         message="semantic operation is not yet adapted: \{to_repr(operation)}",
@@ -336,4 +594,100 @@ test "semantic-to-legacy adapter preserves conditional edge arguments" {
       #|
     ),
   )
+}
+
+///|
+test "semantic-to-legacy adapter lowers nontrapping scalar families" {
+  let builder = @semantic.FunctionBuilder::new(
+    "semantic_adapter_scalars",
+    Internal,
+    [I32, F32, F32],
+    [I64, F32, I32],
+  )
+  let parameters = builder.parameters()
+  let extended = builder.emit(Convert(I64ExtendI32(Signed)), [parameters[0]], [
+      I64,
+    ])[0]
+  let float_sum = builder.emit(
+      FloatBinary(Add),
+      [parameters[1], parameters[2]],
+      [F32],
+    )[0]
+  let compared = builder.emit(
+      IntCompare(SignedGreaterThan),
+      [parameters[0], parameters[0]],
+      [I32],
+    )[0]
+  builder.return_([extended, float_sum, compared])
+  inspect(
+    adapt_semantic_to_legacy(builder.finish(), AMD64),
+    content=(
+      #|machv semantic_adapter_scalars(v0:int, f1:float, f2:float) -> (int, float, int) {
+      #|block0:
+      #|    v3 = extend.s32_64 v0
+      #|    f4 = fadd.s f1, f2
+      #|    v5 = cmp32.sgt v0, v0
+      #|    ret v3, f4, v5
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "semantic-to-legacy adapter lowers explicit pointer memory effects" {
+  let builder = @semantic.FunctionBuilder::new(
+    "semantic_adapter_memory",
+    Internal,
+    [Ptr64, I64],
+    [I64],
+  )
+  let parameters = builder.parameters()
+  builder.emit(
+    Store(@semantic.StoreSpec::new(W64, I64, 8UL, Little, None)),
+    parameters,
+    [],
+  )
+  |> ignore
+  let loaded = builder.emit(
+      Load(@semantic.LoadSpec::new(W64, None, I64, 8UL, Little, None)),
+      [parameters[0]],
+      [I64],
+    )[0]
+  builder.return_([loaded])
+  inspect(
+    adapt_semantic_to_legacy(builder.finish(), AArch64),
+    content=(
+      #|machv semantic_adapter_memory(v0:int, v1:int) -> int {
+      #|block0:
+      #|    store_ptr.i64 +8 v0, v1
+      #|    v2 = load_ptr.i64 +8 v0
+      #|    ret v2
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "semantic-to-legacy adapter rejects division before trap legalization" {
+  let builder = @semantic.FunctionBuilder::new(
+    "semantic_adapter_div",
+    Internal,
+    [I64, I64],
+    [I64],
+  )
+  let result = builder.emit(IntBinary(SignedDiv), builder.parameters(), [I64])[0]
+  builder.return_([result])
+  try adapt_semantic_to_legacy(builder.finish(), AMD64) |> ignore catch {
+    error =>
+      inspect(
+        error,
+        content=(
+          #|UnsupportedOperation(message="division and remainder require explicit trap legalization")
+        ),
+      )
+  } noraise {
+    _ => fail("expected trapping division to remain unsupported")
+  }
 }
