@@ -240,6 +240,275 @@ fn mapped_block(
 }
 
 ///|
+fn emit_one(
+  builder : @semantic.FunctionBuilder,
+  operation : @semantic.Operation,
+  operands : Array[@semantic.Value],
+  result_type : @semantic.ValueType,
+  instruction_id : Int,
+) -> @semantic.Value raise SemanticLowerError {
+  let results = builder.emit(operation, operands, [result_type])
+  if results.length() != 1 {
+    raise InvalidMachV(
+      message="instruction \{instruction_id} failed semantic MachV construction",
+    )
+  }
+  results[0]
+}
+
+///|
+fn lower_pointer_value(
+  builder : @semantic.FunctionBuilder,
+  values : Array[@semantic.Value?],
+  source : @milkir.Value,
+  instruction_id : Int,
+) -> @semantic.Value raise SemanticLowerError {
+  let mapped = mapped_value(values, source)
+  match source.ty {
+    Ptr => mapped
+    I64 =>
+      emit_one(
+        builder,
+        Convert(Bitcast(I64, Ptr64)),
+        [mapped],
+        Ptr64,
+        instruction_id,
+      )
+    _ =>
+      raise InvalidMilkIR(
+        message="memory address must be ptr or i64, got \{source.ty}",
+      )
+  }
+}
+
+///|
+fn lower_address(
+  builder : @semantic.FunctionBuilder,
+  values : Array[@semantic.Value?],
+  base : @milkir.Value,
+  offset : @milkir.Value,
+  instruction_id : Int,
+) -> @semantic.Value raise SemanticLowerError {
+  let pointer = lower_pointer_value(builder, values, base, instruction_id)
+  emit_one(
+    builder,
+    PointerOffset,
+    [pointer, mapped_value(values, offset)],
+    Ptr64,
+    instruction_id,
+  )
+}
+
+///|
+fn access_width_for_type(ty : @semantic.ValueType) -> @semantic.AccessWidth {
+  match ty {
+    I32 | F32 => W32
+    I64 | F64 | Ptr64 | GcRef64 => W64
+    V128 => W128
+  }
+}
+
+///|
+fn assign_instruction_results(
+  values : Array[@semantic.Value?],
+  instruction : @milkir.Inst,
+  lowered_results : Array[@semantic.Value],
+) -> Unit raise SemanticLowerError {
+  if lowered_results.length() != instruction.results.length() {
+    raise InvalidMachV(
+      message="instruction \{instruction.id} failed semantic MachV construction",
+    )
+  }
+  for index, result in instruction.results {
+    values[result.id] = Some(lowered_results[index])
+  }
+}
+
+///|
+fn lower_memory_instruction(
+  builder : @semantic.FunctionBuilder,
+  values : Array[@semantic.Value?],
+  instruction : @milkir.Inst,
+  memory : @milkir.MemoryOp,
+) -> Unit raise SemanticLowerError {
+  let results = match memory {
+    Load(result_type) => {
+      let lowered_type = lower_type(result_type)
+      let address = lower_address(
+        builder,
+        values,
+        instruction.args[0],
+        instruction.args[1],
+        instruction.id,
+      )
+      builder.emit(
+        Load(
+          @semantic.LoadSpec::new(
+            access_width_for_type(lowered_type),
+            None,
+            lowered_type,
+            0UL,
+            Little,
+            None,
+          ),
+        ),
+        [address],
+        [lowered_type],
+      )
+    }
+    Store(value_type) => {
+      let lowered_type = lower_type(value_type)
+      let address = lower_address(
+        builder,
+        values,
+        instruction.args[0],
+        instruction.args[2],
+        instruction.id,
+      )
+      builder.emit(
+        Store(
+          @semantic.StoreSpec::new(
+            access_width_for_type(lowered_type),
+            lowered_type,
+            0UL,
+            Little,
+            None,
+          ),
+        ),
+        [address, mapped_value(values, instruction.args[1])],
+        [],
+      )
+    }
+    LoadNarrow(result_type, bits, signed) => {
+      let width = match lower_width(bits) {
+        Some(width) => width
+        None =>
+          raise InvalidMilkIR(
+            message="invalid verified narrow load width \{bits}",
+          )
+      }
+      let lowered_type = lower_type(result_type)
+      let address = lower_address(
+        builder,
+        values,
+        instruction.args[0],
+        instruction.args[1],
+        instruction.id,
+      )
+      builder.emit(
+        Load(
+          @semantic.LoadSpec::new(
+            width,
+            if signed {
+              Signed
+            } else {
+              Unsigned
+            },
+            lowered_type,
+            0UL,
+            Little,
+            None,
+          ),
+        ),
+        [address],
+        [lowered_type],
+      )
+    }
+    StoreNarrow(bits) => {
+      let width = match lower_width(bits) {
+        Some(width) => width
+        None =>
+          raise InvalidMilkIR(
+            message="invalid verified narrow store width \{bits}",
+          )
+      }
+      let value_type = lower_type(instruction.args[1].ty)
+      let address = lower_address(
+        builder,
+        values,
+        instruction.args[0],
+        instruction.args[2],
+        instruction.id,
+      )
+      builder.emit(
+        Store(@semantic.StoreSpec::new(width, value_type, 0UL, Little, None)),
+        [address, mapped_value(values, instruction.args[1])],
+        [],
+      )
+    }
+    Vector(_) =>
+      raise UnsupportedOperation(
+        block_id=-1,
+        instruction_id=instruction.id,
+        message="vector memory lowering is not in the scalar memory slice",
+      )
+  }
+  assign_instruction_results(values, instruction, results)
+}
+
+///|
+fn lower_signature(signature : @milkir.Signature) -> @semantic.Signature {
+  @semantic.Signature::new(
+    signature.params.map(lower_type),
+    signature.results.map(lower_type),
+  )
+}
+
+///|
+fn lower_call_instruction(
+  builder : @semantic.FunctionBuilder,
+  values : Array[@semantic.Value?],
+  instruction : @milkir.Inst,
+  call : @milkir.CallOp,
+) -> Unit raise SemanticLowerError {
+  let (semantic_call, operands) = match call {
+    Direct(symbol, signature) =>
+      (
+        @semantic.SemanticCall::new(
+          External(@semantic.ExternalSymbol::new(symbol.name)),
+          lower_signature(signature),
+          Platform,
+          @semantic.CallBehavior::conservative(),
+        ),
+        mapped_values(values, instruction.args),
+      )
+    Pointer(_, _) => {
+      let parameter_types = instruction.args[1:].map(value => {
+        lower_type(value.ty)
+      })
+      let result_types = instruction.results.map(value => lower_type(value.ty))
+      let call_operands = [
+        lower_pointer_value(
+          builder,
+          values,
+          instruction.args[0],
+          instruction.id,
+        ),
+      ]
+      for argument in instruction.args[1:] {
+        call_operands.push(mapped_value(values, argument))
+      }
+      (
+        @semantic.SemanticCall::new(
+          Indirect,
+          @semantic.Signature::new(parameter_types, result_types),
+          Internal,
+          @semantic.CallBehavior::conservative(),
+        ),
+        call_operands,
+      )
+    }
+  }
+  let result_types = instruction.results.map(value => lower_type(value.ty))
+  let lowered_results = builder.emit(
+    Call(semantic_call),
+    operands,
+    result_types,
+  )
+  assign_instruction_results(values, instruction, lowered_results)
+}
+
+///|
 fn lower_scalar_operation(
   scalar : @milkir.ScalarOp,
   instruction : @milkir.Inst,
@@ -308,25 +577,28 @@ fn lower_instruction(
   instruction : @milkir.Inst,
   block_id : Int,
 ) -> Unit raise SemanticLowerError {
-  let operation = match instruction.opcode {
-    Scalar(scalar) => lower_scalar_operation(scalar, instruction, block_id)
-    Call(_) | Memory(_) | Vector(_) | Ext(_, _) =>
+  match instruction.opcode {
+    Call(call) => {
+      lower_call_instruction(builder, values, instruction, call)
+      return
+    }
+    Memory(memory) => {
+      lower_memory_instruction(builder, values, instruction, memory)
+      return
+    }
+    Scalar(scalar) => {
+      let operation = lower_scalar_operation(scalar, instruction, block_id)
+      let operands = mapped_values(values, instruction.args)
+      let result_types = instruction.results.map(result => lower_type(result.ty))
+      let lowered_results = builder.emit(operation, operands, result_types)
+      assign_instruction_results(values, instruction, lowered_results)
+    }
+    Vector(_) | Ext(_, _) =>
       raise UnsupportedOperation(
         block_id~,
         instruction_id=instruction.id,
-        message="operation family \{instruction.opcode} is not in the first semantic lowering slice",
+        message="operation family \{instruction.opcode} is not in the current semantic lowering slice",
       )
-  }
-  let operands = mapped_values(values, instruction.args)
-  let result_types = instruction.results.map(result => lower_type(result.ty))
-  let lowered_results = builder.emit(operation, operands, result_types)
-  if lowered_results.length() != instruction.results.length() {
-    raise InvalidMachV(
-      message="instruction \{instruction.id} failed semantic MachV construction",
-    )
-  }
-  for index, result in instruction.results {
-    values[result.id] = Some(lowered_results[index])
   }
 }
 
@@ -402,15 +674,16 @@ fn lower_terminator(
 /// This initial producer deliberately rejects operation families that still
 /// require an explicit semantic contract instead of consulting a target ISA or
 /// silently routing them through the legacy backend.
-pub fn lower_core_function(
+pub fn lower_core_function_with_protocol(
   function : @milkir.Function,
+  protocol : @semantic.CallProtocol,
 ) -> @semantic.Function raise SemanticLowerError {
   function.verify_core() catch {
     error => raise InvalidMilkIR(message=error.to_string())
   }
   let builder = @semantic.FunctionBuilder::new(
     function.name,
-    Internal,
+    protocol,
     function.params.map(param => lower_type(param.1)),
     function.results.map(lower_type),
   )
@@ -462,4 +735,12 @@ pub fn lower_core_function(
   builder.finish() catch {
     error => raise InvalidMachV(message=error.to_string())
   }
+}
+
+///|
+/// Lower an ordinary internally callable core MilkIR function.
+pub fn lower_core_function(
+  function : @milkir.Function,
+) -> @semantic.Function raise SemanticLowerError {
+  lower_core_function_with_protocol(function, Internal)
 }

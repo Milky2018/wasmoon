@@ -10,6 +10,8 @@ import {
 // Values
 pub fn lower_core_function(@milkir.Function) -> @machv.Function raise SemanticLowerError
 
+pub fn lower_core_function_with_protocol(@milkir.Function, @machv.CallProtocol) -> @machv.Function raise SemanticLowerError
+
 // Errors
 pub suberror SemanticLowerError {
   InvalidMilkIR(message~ : String)

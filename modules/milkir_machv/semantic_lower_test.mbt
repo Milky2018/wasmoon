@@ -71,3 +71,97 @@ test "core lowering rejects dialect operations structurally" {
       )
   }
 }
+
+///|
+test "core lowering makes pointer arithmetic and memory effects explicit" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("raw_memory")
+  let base = builder.add_param(Ptr)
+  let offset = builder.add_param(I64)
+  let stored = builder.add_param(I32)
+  builder.add_result(I64)
+  let loaded = builder.load_ptr(I64, base, offset)
+  builder.store_ptr_narrow(8, base, stored, offset)
+  builder.return_([loaded])
+  inspect(
+    lower_core_function(builder.finalize()),
+    content=(
+      #|machv raw_memory [internal](v0:ptr64, v1:i64, v2:i32) -> (i64) {
+      #|block0:
+      #|  v3:ptr64 = pointer.offset v0, v1
+      #|  v4:i64 = load {
+      #|  width: W64,
+      #|  extension: None,
+      #|  result_type: I64,
+      #|  offset: 0,
+      #|  endianness: Little,
+      #|  trap: None,
+      #|} v3 [memory=read]
+      #|  v5:ptr64 = pointer.offset v0, v1
+      #|  store {
+      #|  width: W8,
+      #|  value_type: I32,
+      #|  offset: 0,
+      #|  endianness: Little,
+      #|  trap: None,
+      #|} v5, v2 [memory=write]
+      #|  return v4
+      #|}
+    ),
+  )
+}
+
+///|
+test "core lowering preserves logical direct-call contracts" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("direct_call")
+  let argument = builder.add_param(I32)
+  builder.add_result(I64)
+  let symbol = builder.get_function().declare_external_symbol("host.convert")
+  let results = builder.call_symbol_multi(symbol, [I64], [argument])
+  builder.return_(results)
+  inspect(
+    lower_core_function(builder.finalize()),
+    content=(
+      #|machv direct_call [internal](v0:i32) -> (i64) {
+      #|block0:
+      #|  v1:i64 = call external @host.convert (i32) -> (i64) [platform] v0 [memory=read-write, trap, unwind, gc-safepoint, cancel-safepoint]
+      #|  return v1
+      #|}
+    ),
+  )
+}
+
+///|
+test "core lowering makes indirect callees explicit ptr64 values" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("indirect_call")
+  let callee = builder.add_param(I64)
+  let argument = builder.add_param(I32)
+  builder.add_result(I32)
+  let results = builder.call_pointer(callee, [argument], [I32])
+  builder.return_(results)
+  inspect(
+    lower_core_function(builder.finalize()),
+    content=(
+      #|machv indirect_call [internal](v0:i64, v1:i32) -> (i32) {
+      #|block0:
+      #|  v2:ptr64 = convert.Bitcast(I64, Ptr64) v0
+      #|  v3:i32 = call indirect (i32) -> (i32) [internal] v2, v1 [memory=read-write, trap, unwind, gc-safepoint, cancel-safepoint]
+      #|  return v3
+      #|}
+    ),
+  )
+}
+
+///|
+test "core lowering keeps the enclosing call protocol explicit" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("platform_entry")
+  builder.return_([])
+  inspect(
+    lower_core_function_with_protocol(builder.finalize(), Platform),
+    content=(
+      #|machv platform_entry [platform]() -> () {
+      #|block0:
+      #|  return
+      #|}
+    ),
+  )
+}
