@@ -352,6 +352,21 @@ pub fn InstructionContext::tail_call(
 }
 
 ///|
+pub fn InstructionContext::noreturn_call(
+  self : InstructionContext,
+  call : @machv.SemanticCall,
+  operands : Array[@machv.Value],
+) -> Unit {
+  self.builder.noreturn_call_with_metadata(
+    call,
+    operands,
+    self.terminator_metadata(),
+  )
+  self.terminates_block.val = true
+  self.finish_void()
+}
+
+///|
 pub fn InstructionContext::terminates_block(self : InstructionContext) -> Bool {
   self.terminates_block.val
 }

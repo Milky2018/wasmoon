@@ -76,6 +76,57 @@ test "stack object alignment must be a positive power of two" {
 }
 
 ///|
+test "noreturn calls are first-class control-flow terminators" {
+  let builder = @machv.FunctionBuilder::new("noreturn", Internal, [GcRef64], [])
+  builder.noreturn_call(
+    @machv.SemanticCall::new(
+      External(@machv.ExternalSymbol::new("runtime.throw")),
+      @machv.Signature::new([GcRef64], []),
+      Platform,
+      @machv.CallBehavior::new(ReadWrite, true, false, false, false),
+    ),
+    builder.parameters(),
+  )
+  inspect(
+    builder.finish(),
+    content=(
+      #|machv noreturn [internal](v0:gcref64) -> () {
+      #|block0:
+      #|  noreturn_call external @runtime.throw (gcref64) -> () [platform] (v0) [memory=read-write, trap]
+      #|}
+    ),
+  )
+}
+
+///|
+test "noreturn calls cannot declare results" {
+  let builder = @machv.FunctionBuilder::new("bad_noreturn", Internal, [], [])
+  builder.noreturn_call(
+    @machv.SemanticCall::new(
+      External(@machv.ExternalSymbol::new("runtime.bad")),
+      @machv.Signature::new([], [I32]),
+      Platform,
+      @machv.CallBehavior::conservative(),
+    ),
+    [],
+  )
+  try builder.finish() catch {
+    error =>
+      inspect(
+        error,
+        content=(
+          #|InvalidTerminator(
+          #|  block_id=0,
+          #|  message="noreturn call must not declare results",
+          #|)
+        ),
+      )
+  } noraise {
+    _ => fail("expected noreturn results to be rejected")
+  }
+}
+
+///|
 test "i64 switch carries typed edge arguments" {
   let builder = @machv.FunctionBuilder::new("switch64", Internal, [I64], [I64])
   let case_block = builder.create_block([I64])

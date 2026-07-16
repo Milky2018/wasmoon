@@ -53,7 +53,7 @@ fn terminator_edges(terminator : Terminator) -> Array[Edge] {
       edges.push(default_edge)
       edges
     }
-    Return(_) | TailCall(_, _) | Trap(_) => []
+    Return(_) | TailCall(_, _) | NoReturnCall(_, _) | Trap(_) => []
   }
 }
 
@@ -75,7 +75,8 @@ fn terminator_values(terminator : Terminator) -> Array[Value] {
       values.append(default_edge.arguments)
       values
     }
-    Return(values) | TailCall(_, values) => values.copy()
+    Return(values) | TailCall(_, values) | NoReturnCall(_, values) =>
+      values.copy()
     Trap(_) => []
   }
 }
@@ -396,9 +397,35 @@ fn Function::verify_terminator_shape(
         )
       }
     }
+    NoReturnCall(call, operands) => {
+      for operand in operands {
+        self.require_value(operand)
+      }
+      if !call.signature.results.is_empty() {
+        raise InvalidTerminator(
+          block_id~,
+          message="noreturn call must not declare results",
+        )
+      }
+      if verify_call_operands(
+          call,
+          operands.map(value => self.values[value.id].ty),
+          "noreturn_call",
+        )
+        is Some(message) {
+        raise InvalidTerminator(block_id~, message~)
+      }
+      let behavior = call.behavior.semantics()
+      if !behavior.gc_safepoint && !record.metadata.live_gc_roots.is_empty() {
+        raise InvalidSafepoint(
+          block_id~,
+          message="noreturn-call live GC roots require a GC safepoint",
+        )
+      }
+    }
   }
   let permits_gc_roots = match terminator {
-    TailCall(call, _) => call.behavior.gc_safepoint
+    TailCall(call, _) | NoReturnCall(call, _) => call.behavior.gc_safepoint
     Jump(_) | Branch(_, _, _) | Switch(_, _, _) | Return(_) | Trap(_) => false
   }
   if !permits_gc_roots && !record.metadata.live_gc_roots.is_empty() {
@@ -563,13 +590,26 @@ fn Function::verify_gc_safepoint_roots(
           live[value.id] = true
         }
       }
-      if record.kind is TailCall(call, _) && call.behavior.gc_safepoint {
-        self.require_gc_root_coverage(
-          block_id,
-          -1,
-          live,
-          record.metadata.live_gc_roots,
-        )
+      match record.kind {
+        TailCall(call, _) =>
+          if call.behavior.gc_safepoint {
+            self.require_gc_root_coverage(
+              block_id,
+              -1,
+              live,
+              record.metadata.live_gc_roots,
+            )
+          }
+        NoReturnCall(call, _) =>
+          if call.behavior.gc_safepoint {
+            self.require_gc_root_coverage(
+              block_id,
+              -1,
+              live,
+              record.metadata.live_gc_roots,
+            )
+          }
+        _ => ()
       }
     }
     let mut position = block.instructions.length() - 1

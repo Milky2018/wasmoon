@@ -176,6 +176,10 @@ fn format_terminator(record : TerminatorRecord) -> String {
       let operands = format_values(operands)
       "tail_call \{format_call(call)} (\{operands})\{format_semantics(call.behavior.semantics())}"
     }
+    NoReturnCall(call, operands) => {
+      let operands = format_values(operands)
+      "noreturn_call \{format_call(call)} (\{operands})\{format_semantics(call.behavior.semantics())}"
+    }
     Trap(reason) => "trap \{to_repr(reason)}"
   }
   "\{text}\{format_source(record.metadata.source)}\{format_roots(record.metadata.live_gc_roots)}"

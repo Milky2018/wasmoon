@@ -234,6 +234,8 @@ pub fn FunctionBuilder::entry_block(Self) -> Block
 pub fn FunctionBuilder::finish(Self) -> Function raise MachVVerifyError
 pub fn FunctionBuilder::jump(Self, Block, Array[Value]) -> Unit
 pub fn FunctionBuilder::new(String, CallProtocol, Array[ValueType], Array[ValueType]) -> Self
+pub fn FunctionBuilder::noreturn_call(Self, SemanticCall, Array[Value]) -> Unit
+pub fn FunctionBuilder::noreturn_call_with_metadata(Self, SemanticCall, Array[Value], TerminatorMetadata) -> Unit
 pub fn FunctionBuilder::parameters(Self) -> Array[Value]
 pub fn FunctionBuilder::return_(Self, Array[Value]) -> Unit
 pub fn FunctionBuilder::set_terminator_source(Self, SourceLocation) -> Unit
@@ -447,6 +449,7 @@ pub(all) enum Terminator {
   Switch(Value, Array[SwitchCase], Edge)
   Return(Array[Value])
   TailCall(SemanticCall, Array[Value])
+  NoReturnCall(SemanticCall, Array[Value])
   Trap(TrapReason)
 } derive(Eq, @debug.Debug)
 

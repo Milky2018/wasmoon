@@ -488,6 +488,77 @@ pub fn FunctionBuilder::tail_call_with_metadata(
 }
 
 ///|
+pub fn FunctionBuilder::noreturn_call(
+  self : FunctionBuilder,
+  call : SemanticCall,
+  operands : Array[Value],
+) -> Unit {
+  self.noreturn_call_with_metadata(call, operands, TerminatorMetadata::empty())
+}
+
+///|
+pub fn FunctionBuilder::noreturn_call_with_metadata(
+  self : FunctionBuilder,
+  call : SemanticCall,
+  operands : Array[Value],
+  metadata : TerminatorMetadata,
+) -> Unit {
+  if !self.require_block_open() ||
+    !self.require_values(operands) ||
+    !self.require_values(metadata.live_gc_roots) {
+    return
+  }
+  if metadata.source is Some(source) && !source.is_valid() {
+    self.record_error(
+      InvalidMetadata(
+        block_id=self.current_block.id,
+        message="source location requires a non-empty file and non-negative coordinates",
+      ),
+    )
+    return
+  }
+  if !call.signature.results.is_empty() {
+    self.record_error(
+      InvalidTerminator(
+        block_id=self.current_block.id,
+        message="noreturn call must not declare results",
+      ),
+    )
+    return
+  }
+  if verify_call_operands(call, self.value_types(operands), "noreturn_call")
+    is Some(message) {
+    self.record_error(
+      InvalidTerminator(block_id=self.current_block.id, message~),
+    )
+    return
+  }
+  if !call.behavior.gc_safepoint && !metadata.live_gc_roots.is_empty() {
+    self.record_error(
+      InvalidSafepoint(
+        block_id=self.current_block.id,
+        message="noreturn-call live GC roots require a GC safepoint",
+      ),
+    )
+    return
+  }
+  for root in metadata.live_gc_roots {
+    if self.function.values[root.id].ty != GcRef64 {
+      self.record_error(
+        InvalidSafepoint(
+          block_id=self.current_block.id,
+          message="noreturn-call live GC roots must have type gcref64",
+        ),
+      )
+      return
+    }
+  }
+  self.function.blocks[self.current_block.id].terminator = Some(
+    TerminatorRecord::new(NoReturnCall(call, operands.copy()), metadata),
+  )
+}
+
+///|
 pub fn FunctionBuilder::trap(
   self : FunctionBuilder,
   reason : TrapReason,

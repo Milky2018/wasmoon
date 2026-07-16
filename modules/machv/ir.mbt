@@ -145,6 +145,7 @@ pub(all) enum Terminator {
   Switch(Value, Array[SwitchCase], Edge)
   Return(Array[Value])
   TailCall(SemanticCall, Array[Value])
+  NoReturnCall(SemanticCall, Array[Value])
   Trap(TrapReason)
 } derive(Debug, Eq)
 
@@ -158,6 +159,7 @@ fn Terminator::copy(self : Terminator) -> Terminator {
       Switch(index, cases.map(case => case.copy()), default_edge.copy())
     Return(values) => Return(values.copy())
     TailCall(call, operands) => TailCall(call.copy(), operands.copy())
+    NoReturnCall(call, operands) => NoReturnCall(call.copy(), operands.copy())
     Trap(reason) => Trap(reason)
   }
 }

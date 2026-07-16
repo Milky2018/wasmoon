@@ -151,6 +151,11 @@ fn Function::rewrite_terminator(
       changed += self.rewrite_values(operands, aliases)
       TailCall(call, operands)
     }
+    NoReturnCall(call, operands) => {
+      let operands = operands.copy()
+      changed += self.rewrite_values(operands, aliases)
+      NoReturnCall(call, operands)
+    }
     Trap(reason) => Trap(reason)
   }
   let roots = record.metadata.live_gc_roots.copy()
