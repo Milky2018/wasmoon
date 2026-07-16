@@ -1,6 +1,7 @@
 import {
   "Milky2018/milkir",
   "Milky2018/machv" @semantic,
+  "moonbitlang/core/hashset",
 }
 
 import {

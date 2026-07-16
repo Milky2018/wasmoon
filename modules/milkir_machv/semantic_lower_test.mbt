@@ -165,3 +165,55 @@ test "core lowering keeps the enclosing call protocol explicit" {
     ),
   )
 }
+
+///|
+test "core lowering follows CFG order instead of physical block order" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("physical_order")
+  let input = builder.add_param(I32)
+  builder.add_result(I32)
+  let use_block = builder.create_block()
+  let defining_block = builder.create_block()
+  builder.jump(defining_block, [])
+  builder.switch_to_block(defining_block)
+  let one = builder.iconst_i32(1)
+  let defined = builder.iadd(input, one)
+  builder.jump(use_block, [])
+  builder.switch_to_block(use_block)
+  builder.return_([defined])
+  inspect(
+    lower_core_function(builder.finalize()),
+    content=(
+      #|machv physical_order [internal](v0:i32) -> (i32) {
+      #|block0:
+      #|  jump block2
+      #|block1:
+      #|  return v2
+      #|block2:
+      #|  v1:i32 = i32.const 1
+      #|  v2:i32 = int.binary.Add v0, v1
+      #|  jump block1
+      #|}
+    ),
+  )
+}
+
+///|
+test "core lowering reports only live managed references at calls" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("call_roots")
+  let live = builder.add_param(Ref)
+  builder.add_param(Ref) |> ignore
+  builder.add_result(Ref)
+  let symbol = builder.get_function().declare_external_symbol("host.observe")
+  builder.call_symbol_multi(symbol, [], [live]) |> ignore
+  builder.return_([live])
+  inspect(
+    lower_core_function(builder.finalize()),
+    content=(
+      #|machv call_roots [internal](v0:gcref64, v1:gcref64) -> (gcref64) {
+      #|block0:
+      #|  call external @host.observe (gcref64) -> () [platform] v0 [memory=read-write, trap, unwind, gc-safepoint, cancel-safepoint] roots=[v0]
+      #|  return v0
+      #|}
+    ),
+  )
+}

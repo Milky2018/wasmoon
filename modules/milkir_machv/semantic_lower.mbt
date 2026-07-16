@@ -455,11 +455,194 @@ fn lower_signature(signature : @milkir.Signature) -> @semantic.Signature {
 }
 
 ///|
+fn is_gc_reference_type(ty : @milkir.Type) -> Bool {
+  match ty {
+    Ref | CallableRef | OpaqueRef => true
+    I32 | I64 | F32 | F64 | V128 | Ptr => false
+  }
+}
+
+///|
+fn clone_int_set(source : @hashset.HashSet[Int]) -> @hashset.HashSet[Int] {
+  let result : @hashset.HashSet[Int] = HashSet([])
+  for value in source {
+    result.add(value)
+  }
+  result
+}
+
+///|
+fn int_sets_equal(
+  left : @hashset.HashSet[Int],
+  right : @hashset.HashSet[Int],
+) -> Bool {
+  for value in left {
+    if !right.contains(value) {
+      return false
+    }
+  }
+  for value in right {
+    if !left.contains(value) {
+      return false
+    }
+  }
+  true
+}
+
+///|
+fn add_gc_use(
+  value : @milkir.Value,
+  definitions : @hashset.HashSet[Int],
+  uses : @hashset.HashSet[Int],
+) -> Unit {
+  if is_gc_reference_type(value.ty) && !definitions.contains(value.id) {
+    uses.add(value.id)
+  }
+}
+
+///|
+fn terminator_values(terminator : @milkir.Terminator) -> Array[@milkir.Value] {
+  match terminator {
+    Jump(_, arguments) => arguments.copy()
+    Branch(condition, _, true_arguments, _, false_arguments) => {
+      let values = [condition]
+      values.append(true_arguments)
+      values.append(false_arguments)
+      values
+    }
+    Brz(condition, _, _) | Brnz(condition, _, _) | BrTable(condition, _, _) =>
+      [condition]
+    Return(values) => values.copy()
+    Trap(_) | TrapExit(_) => []
+  }
+}
+
+///|
+fn compute_gc_roots(
+  function : @milkir.Function,
+  cfg : @milkir.CFG,
+) -> Array[Array[Int]] {
+  let block_uses : Array[@hashset.HashSet[Int]] = []
+  let block_definitions : Array[@hashset.HashSet[Int]] = []
+  for block_index, block in function.blocks {
+    let definitions : @hashset.HashSet[Int] = HashSet([])
+    let uses : @hashset.HashSet[Int] = HashSet([])
+    if block_index == 0 {
+      for parameter in function.params {
+        if is_gc_reference_type(parameter.1) {
+          definitions.add(parameter.0.id)
+        }
+      }
+    }
+    for parameter in block.params {
+      if is_gc_reference_type(parameter.1) {
+        definitions.add(parameter.0.id)
+      }
+    }
+    for instruction in block.instructions {
+      for operand in instruction.args {
+        add_gc_use(operand, definitions, uses)
+      }
+      for result in instruction.results {
+        if is_gc_reference_type(result.ty) {
+          definitions.add(result.id)
+        }
+      }
+    }
+    if block.terminator is Some(terminator) {
+      for value in terminator_values(terminator) {
+        add_gc_use(value, definitions, uses)
+      }
+    }
+    block_uses.push(uses)
+    block_definitions.push(definitions)
+  }
+  let live_in : Array[@hashset.HashSet[Int]] = []
+  let live_out : Array[@hashset.HashSet[Int]] = []
+  for _ in function.blocks {
+    live_in.push(HashSet([]))
+    live_out.push(HashSet([]))
+  }
+  let worklist : Array[Int] = []
+  let queued = Array::make(function.blocks.length(), true)
+  let mut block_index = function.blocks.length() - 1
+  while block_index >= 0 {
+    worklist.push(function.blocks[block_index].id)
+    block_index -= 1
+  }
+  let mut cursor = 0
+  while cursor < worklist.length() {
+    let block_id = worklist[cursor]
+    cursor += 1
+    queued[block_id] = false
+    let output : @hashset.HashSet[Int] = HashSet([])
+    for successor in cfg.get_successors(block_id) {
+      for value in live_in[successor] {
+        output.add(value)
+      }
+    }
+    let input = clone_int_set(block_uses[block_id])
+    for value in output {
+      if !block_definitions[block_id].contains(value) {
+        input.add(value)
+      }
+    }
+    let changed = !int_sets_equal(input, live_in[block_id])
+    live_in[block_id] = input
+    live_out[block_id] = output
+    if changed {
+      for predecessor in cfg.get_predecessors(block_id) {
+        if !queued[predecessor] {
+          worklist.push(predecessor)
+          queued[predecessor] = true
+        }
+      }
+    }
+  }
+  let roots = Array::makei(function.next_inst_id, _ => [])
+  for block in function.blocks {
+    let live = clone_int_set(live_out[block.id])
+    if block.terminator is Some(terminator) {
+      for value in terminator_values(terminator) {
+        if is_gc_reference_type(value.ty) {
+          live.add(value.id)
+        }
+      }
+    }
+    let mut position = block.instructions.length() - 1
+    while position >= 0 {
+      let instruction = block.instructions[position]
+      for result in instruction.results {
+        if is_gc_reference_type(result.ty) {
+          live.remove(result.id)
+        }
+      }
+      for operand in instruction.args {
+        if is_gc_reference_type(operand.ty) {
+          live.add(operand.id)
+        }
+      }
+      if instruction.opcode is Call(_) {
+        let instruction_roots : Array[Int] = []
+        for value in live {
+          instruction_roots.push(value)
+        }
+        instruction_roots.sort()
+        roots[instruction.id] = instruction_roots
+      }
+      position -= 1
+    }
+  }
+  roots
+}
+
+///|
 fn lower_call_instruction(
   builder : @semantic.FunctionBuilder,
   values : Array[@semantic.Value?],
   instruction : @milkir.Inst,
   call : @milkir.CallOp,
+  root_ids : Array[Int],
 ) -> Unit raise SemanticLowerError {
   let (semantic_call, operands) = match call {
     Direct(symbol, signature) =>
@@ -500,10 +683,18 @@ fn lower_call_instruction(
     }
   }
   let result_types = instruction.results.map(value => lower_type(value.ty))
-  let lowered_results = builder.emit(
+  let live_gc_roots : Array[@semantic.Value] = []
+  for value_id in root_ids {
+    match values[value_id] {
+      Some(value) => live_gc_roots.push(value)
+      None => raise MissingValue(value_id~)
+    }
+  }
+  let lowered_results = builder.emit_with_metadata(
     Call(semantic_call),
     operands,
     result_types,
+    @semantic.InstructionMetadata::new(None, live_gc_roots),
   )
   assign_instruction_results(values, instruction, lowered_results)
 }
@@ -576,10 +767,17 @@ fn lower_instruction(
   values : Array[@semantic.Value?],
   instruction : @milkir.Inst,
   block_id : Int,
+  gc_roots : Array[Array[Int]],
 ) -> Unit raise SemanticLowerError {
   match instruction.opcode {
     Call(call) => {
-      lower_call_instruction(builder, values, instruction, call)
+      lower_call_instruction(
+        builder,
+        values,
+        instruction,
+        call,
+        gc_roots[instruction.id],
+      )
       return
     }
     Memory(memory) => {
@@ -718,10 +916,13 @@ pub fn lower_core_function_with_protocol(
       values[parameter.0.id] = Some(lowered_block_params[parameter_index])
     }
   }
-  for block in function.blocks {
+  let cfg = @milkir.CFG::build(function)
+  let gc_roots = compute_gc_roots(function, cfg)
+  for block_id in cfg.reverse_postorder() {
+    let block = function.blocks[block_id]
     builder.switch_to_block(mapped_block(blocks, block.id))
     for instruction in block.instructions {
-      lower_instruction(builder, values, instruction, block.id)
+      lower_instruction(builder, values, instruction, block.id, gc_roots)
     }
     match block.terminator {
       Some(terminator) =>
