@@ -277,8 +277,8 @@ The native C and assembly glue used by **Wasmoon JIT** for executable memory, tr
 _Avoid_: generic native runtime, exec_mem module before reuse exists
 
 **Cwasm Artifact**:
-The Wasmoon-owned precompiled module format for cached or ahead-of-time native execution metadata.
-_Avoid_: MachV emitter output, generic object format
+The Wasmoon-owned persistent form of **Unlinked Code Objects** plus module and compatibility metadata, without compiler IR, resolved process addresses, or executable memory.
+_Avoid_: linked code cache, serialized IR, process image
 
 ## Relationships
 
@@ -359,7 +359,7 @@ _Avoid_: MachV emitter output, generic object format
 - A **Target Emitter** produces generic relocation and metadata records; **Wasmoon JIT** resolves those records to Wasmoon runtime helpers and executable memory.
 - A **Target Emitter** builds bytes, relocations, pools, labels, and metadata in private storage and returns them only after the **Code Object Verifier** accepts the complete unlinked artifact; partial output and reachable emitter aborts are forbidden.
 - Each public native compiler stage deterministically returns its first structured failure; **Wasmoon JIT** preserves that typed cause as a **JIT Pipeline Error**, while cancellation remains a separate outcome and human-readable rendering belongs at the presentation boundary.
-- A **Cwasm Artifact** may wrap **Target Emitter** output with Wasmoon function indices, imports, traps, debug mapping, and runtime metadata.
+- Live JIT compilation and **Cwasm Artifact** loading converge at the **Unlinked Code Object** seam; persisted artifacts contain symbolic fixups and Wasmoon metadata but no MilkIR, MachV, Target VCode, resolved process address, or linked image.
 - **JIT FFI** belongs to **Wasmoon JIT** until a small generic executable-memory API has proven reuse.
 - The **Wasmoon Runtime** depends on compiler infrastructure modules, but compiler infrastructure modules do not depend on the **Wasmoon Runtime**.
 
@@ -436,6 +436,6 @@ _Avoid_: MachV emitter output, generic object format
 - Verification previously mixed partial SSA checks with target register policy; resolved: the **MachV Verifier** validates only the complete target-neutral MachV contract, while target representations have their own verifiers.
 - Native compilation failures were previously vulnerable to aborts or string flattening; resolved: stage-owned structured errors cross Wasmoon orchestration as **JIT Pipeline Errors**, while cancellation remains a distinct outcome.
 - Machine-code-emission ownership was previously unclear; resolved: target emitters privately build and verify complete unlinked code objects, while **Wasmoon JIT** owns relocation resolution, linking, and executable-memory installation.
-- Precompiled output ownership was ambiguous; resolved: **Cwasm Artifact** belongs to **Wasmoon JIT**, not a **Target Emitter**.
+- Precompiled output ownership was ambiguous; resolved: **Cwasm Artifact** belongs to **Wasmoon JIT** and persists only **Unlinked Code Objects** plus product metadata, never compiler IR or process-specific linked state.
 - Native JIT glue ownership was ambiguous; resolved: **JIT FFI** remains in **Wasmoon JIT** for the first split instead of creating a generic executable-memory module.
 - "Wasmoon Runtime" names an execution-system concept, not a required package named `wasmoon_runtime`; resolved: keep the package name decision separate from the concept.
