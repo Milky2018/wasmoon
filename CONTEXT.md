@@ -439,6 +439,7 @@ _Avoid_: trusted cache decoder, aborting deserializer, installer-owned format pa
 - Native execution and **JIT Code Installation** are initially mutually exclusive for one module; replacement occurs only at a quiescent point, so no concurrent publication or reclamation protocol belongs in the first architecture.
 - **JIT FFI** belongs to **Wasmoon JIT** until a small generic executable-memory API has proven reuse.
 - Runtime, instantiation, and CLI execution enter native compilation only through the **Wasmoon JIT Module**; only **Native Pipeline Diagnostics** may directly consume reusable stage interfaces, and production packages cannot import that tooling interface.
+- Public compiler representations remain ordinary mutable data behind function-owned handles and guarded mutation interfaces; every public transformation revalidates its input and output rather than relying on frozen wrappers or persistent verified state.
 - The **Wasmoon Runtime** depends on compiler infrastructure modules, but compiler infrastructure modules do not depend on the **Wasmoon Runtime**.
 
 ## Example dialogue
