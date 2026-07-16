@@ -511,7 +511,6 @@ fn verify_opcode_contract(
     | SIMDXor
     | SIMDAdd(_)
     | SIMDSub(_)
-    | SIMDMul(_)
     | SIMDSqadd(_)
     | SIMDUqadd(_)
     | SIMDSqsub(_)
@@ -538,6 +537,10 @@ fn verify_opcode_contract(
     | SIMDFPMax(_)
     | SIMDFCmp(_, _) =>
       verify_fixed_contract(inst, 2, 1, Vector, Vector, block_id, inst_index)
+    SIMDMul(D64) =>
+      verify_fixed_contract(inst, 2, 6, Vector, Vector, block_id, inst_index)
+    SIMDMul(_) =>
+      verify_fixed_contract(inst, 2, 1, Vector, Vector, block_id, inst_index)
     SIMDNot
     | SIMDAbs(_)
     | SIMDNeg(_)
@@ -556,13 +559,14 @@ fn verify_opcode_contract(
     | SIMDFCvtToIntU(_)
     | SIMDIntToFloatS(_)
     | SIMDIntToFloatU(_)
-    | SIMDTruncSatF64ToI32SZero
-    | SIMDTruncSatF64ToI32UZero
-    | SIMDConvertLowI32ToF64S
-    | SIMDConvertLowI32ToF64U
     | SIMDDemoteF64ToF32Zero
     | SIMDPromoteLowF32ToF64 =>
       verify_fixed_contract(inst, 1, 1, Vector, Vector, block_id, inst_index)
+    SIMDTruncSatF64ToI32SZero
+    | SIMDTruncSatF64ToI32UZero
+    | SIMDConvertLowI32ToF64S
+    | SIMDConvertLowI32ToF64U =>
+      verify_fixed_contract(inst, 1, 2, Vector, Vector, block_id, inst_index)
     SIMDBsl | SIMDFMla(_) | SIMDFMls(_) =>
       verify_fixed_contract(inst, 3, 1, Vector, Vector, block_id, inst_index)
     SIMDAnyTrue => {

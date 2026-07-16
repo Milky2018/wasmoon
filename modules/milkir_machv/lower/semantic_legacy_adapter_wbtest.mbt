@@ -1675,6 +1675,36 @@ fn append_semantic_instruction(
     )
     return
   }
+  if operation is V128Const(low, high) {
+    require_semantic_vector_shape(operands, definitions, 0, 1, "v128 constant")
+    append_semantic_vector_opcode(
+      legacy_function,
+      legacy_block,
+      LoadConstV128(semantic_v128_bytes(low, high)),
+      operands,
+      definitions,
+      0,
+    )
+    return
+  }
+  if operation is Vector(vector_operation) {
+    append_semantic_vector_operation(
+      legacy_function, legacy_block, vector_operation, operands, definitions,
+    )
+    return
+  }
+  if operation is VectorLoad(spec) {
+    append_semantic_vector_load(
+      legacy_function, legacy_block, spec, operands, definitions,
+    )
+    return
+  }
+  if operation is VectorStoreLane(spec) {
+    append_semantic_vector_store_lane(
+      legacy_function, legacy_block, spec, operands, definitions,
+    )
+    return
+  }
   let opcode = match operation {
     I32Const(bits) =>
       @instr.LoadConst(bits.reinterpret_as_int().to_int64() & 0xFFFFFFFFL)
