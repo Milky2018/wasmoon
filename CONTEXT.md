@@ -276,6 +276,10 @@ _Avoid_: generic emitter, compiler backend
 The product-owned compiler module configured once for a target and immutable policy that compiles verified MilkIR through every mandatory native stage into an **Unlinked Code Object**.
 _Avoid_: runtime linker, stage-by-stage controller, target plugin
 
+**Module Compilation**:
+The immutable Wasmoon compilation context that binds one validated module's identity, semantic features, function and import identities, signatures, and module layout while producing independent function code objects.
+_Avoid_: Store instance, compiler IR module, installed native module
+
 **JIT Pipeline Error**:
 The Wasmoon JIT failure that preserves one stage-owned structured compiler error and its precise site while remaining distinct from cooperative cancellation.
 _Avoid_: string-only diagnostic, backend abort, cancelled compilation
@@ -383,6 +387,7 @@ _Avoid_: best-effort loader, runtime-address table, implicit compatibility
 - Live JIT compilation and **Cwasm Artifact** loading converge at the **Unlinked Code Object** seam; persisted artifacts contain symbolic fixups and Wasmoon metadata but no MilkIR, MachV, Target VCode, resolved process address, or linked image.
 - A **Cwasm Artifact** is usable only when its **Artifact Compatibility Manifest** exactly matches the current runtime and request, except that the host CPU features may be a superset; cache mismatch recompiles, while explicit incompatible-artifact loading returns a structured failure.
 - The **Wasmoon JIT Compiler** owns one explicit target choice and the complete production compilation sequence; it supplies canonical Wasmoon ABI facts internally, branches to a static machine pipeline once, and owns neither Wasm validation nor runtime linking and installation.
+- One **Wasmoon JIT Compiler** may start many **Module Compilations**; each module context compiles functions independently, and lazy, tiered, eager, and Cwasm paths differ only in which function objects they request and aggregate.
 - **JIT Code Installation** resolves all symbols before allocation, performs patching and metadata registration before publication, commits function-table visibility last, and returns **Installed Code**; failure leaves the prior visible module unchanged.
 - **JIT FFI** belongs to **Wasmoon JIT** until a small generic executable-memory API has proven reuse.
 - The **Wasmoon Runtime** depends on compiler infrastructure modules, but compiler infrastructure modules do not depend on the **Wasmoon Runtime**.
@@ -463,6 +468,7 @@ _Avoid_: best-effort loader, runtime-address table, implicit compatibility
 - Precompiled output ownership was ambiguous; resolved: **Cwasm Artifact** belongs to **Wasmoon JIT** and persists only **Unlinked Code Objects** plus product metadata, never compiler IR or process-specific linked state.
 - Artifact compatibility was previously inferred from a format version and target architecture; resolved: a strict **Artifact Compatibility Manifest** covers every code, ABI, runtime, source-semantics, and compilation-policy dimension needed for safe reuse.
 - Production compilation orchestration was previously spread across callers and `EmitTarget` parameters; resolved: one deep **Wasmoon JIT Compiler** owns target selection and the mandatory pipeline through unlinked emission without absorbing frontend or installation responsibilities.
+- Live, tiered, eager, and Cwasm compilation previously risked becoming separate pipelines; resolved: an immutable **Module Compilation** exposes one function-granular compilation primitive and treats module compilation as aggregation.
 - Code installation previously exposed function pointers before all fixups and runtime metadata were ready; resolved: **JIT Code Installation** is one rollback-safe transaction whose final action publishes the complete **Installed Code**.
 - VMContext layout, runtime symbols, trap codes, and stack maps previously had multiple handwritten owners; resolved: one versioned **Wasmoon JIT ABI Contract** owns their cross-language representation, while runtime instances, installer actions, and platform primitives retain separate lifecycle responsibilities.
 - Native JIT glue ownership was ambiguous; resolved: **JIT FFI** remains in **Wasmoon JIT** for the first split instead of creating a generic executable-memory module.
