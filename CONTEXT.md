@@ -316,6 +316,10 @@ _Avoid_: linked code cache, serialized IR, process image
 The strict Wasmoon identity that binds a **Cwasm Artifact** to its format, target and required features, JIT ABI, code-generation revision, source module semantics, and compilation policy.
 _Avoid_: best-effort loader, runtime-address table, implicit compatibility
 
+**Artifact Loader**:
+The Wasmoon-owned module that safely decodes an untrusted **Cwasm Artifact**, validates its compatibility and resource bounds, reconstructs ordinary **Unlinked Code Objects**, and returns them only after the target-owned **Code Object Verifier** accepts them.
+_Avoid_: trusted cache decoder, aborting deserializer, installer-owned format parser
+
 ## Relationships
 
 - **Wasm Core** owns WebAssembly specification concepts but does not depend on **MilkIR**, **MachV**, JIT, or the **Wasmoon Runtime**.
@@ -398,6 +402,7 @@ _Avoid_: best-effort loader, runtime-address table, implicit compatibility
 - Each public native compiler stage deterministically returns its first structured failure; **Wasmoon JIT** preserves that typed cause as a **JIT Pipeline Error**, while cancellation remains a separate outcome and human-readable rendering belongs at the presentation boundary.
 - Live JIT compilation and **Cwasm Artifact** loading converge at the **Unlinked Code Object** seam; persisted artifacts contain symbolic fixups and Wasmoon metadata but no MilkIR, MachV, Target VCode, resolved process address, or linked image.
 - A **Cwasm Artifact** is usable only when its **Artifact Compatibility Manifest** exactly matches the current runtime and request, except that the host CPU features may be a superset; cache mismatch recompiles, while explicit incompatible-artifact loading returns a structured failure.
+- Every Cwasm file and cache entry is untrusted input. The **Artifact Loader** performs bounded, overflow-checked, non-aborting decoding, rejects absolute addresses and runtime symbols outside the selected JIT ABI, and validates every code range, relocation, fixup, entry, and metadata record before **JIT Code Installation**. Cache failure recompiles; explicit loading returns the structured decode, compatibility, or code-object verification error.
 - The **Wasmoon JIT Compiler** owns one explicit target choice and the complete production compilation sequence; it supplies canonical Wasmoon ABI facts internally, branches to a static machine pipeline once, and owns neither Wasm validation nor runtime linking and installation.
 - One **Wasmoon JIT Compiler** may start many **Module Compilations**; each module context compiles functions independently, and lazy, tiered, eager, and Cwasm paths differ only in which function objects they request and aggregate.
 - Every **Module Compilation** fixes one **Call Binding Policy**: lazy or tiered modules use **Stable Entry Binding**, while complete sealed eager or Cwasm modules may use **Direct Body Binding** for zero-stub internal calls.
@@ -481,6 +486,7 @@ _Avoid_: best-effort loader, runtime-address table, implicit compatibility
 - Machine-code-emission ownership was previously unclear; resolved: target emitters privately build and verify complete unlinked code objects, while **Wasmoon JIT** owns relocation resolution, linking, and executable-memory installation.
 - Precompiled output ownership was ambiguous; resolved: **Cwasm Artifact** belongs to **Wasmoon JIT** and persists only **Unlinked Code Objects** plus product metadata, never compiler IR or process-specific linked state.
 - Artifact compatibility was previously inferred from a format version and target architecture; resolved: a strict **Artifact Compatibility Manifest** covers every code, ABI, runtime, source-semantics, and compilation-policy dimension needed for safe reuse.
+- Persisted artifacts were previously liable to reach installation through trusting decoders or late failures; resolved: one **Artifact Loader** treats even local caches as untrusted, enforces bounded decoding and JIT ABI symbol identities, and returns only target-verified **Unlinked Code Objects**.
 - Production compilation orchestration was previously spread across callers and `EmitTarget` parameters; resolved: one deep **Wasmoon JIT Compiler** owns target selection and the mandatory pipeline through unlinked emission without absorbing frontend or installation responsibilities.
 - Live, tiered, eager, and Cwasm compilation previously risked becoming separate pipelines; resolved: an immutable **Module Compilation** exposes one function-granular compilation primitive and treats module compilation as aggregation.
 - Direct-call binding previously forced a choice between universal indirection and unrestricted replacement; resolved: one explicit module-wide **Call Binding Policy** separates replaceable **Stable Entry Binding** from sealed **Direct Body Binding**.
