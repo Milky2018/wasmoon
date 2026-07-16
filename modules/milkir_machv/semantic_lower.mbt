@@ -674,14 +674,12 @@ fn compute_gc_roots(
           live.add(operand.id)
         }
       }
-      if instruction.opcode is Call(_) {
-        let instruction_roots : Array[Int] = []
-        for value in live {
-          instruction_roots.push(value)
-        }
-        instruction_roots.sort()
-        roots[instruction.id] = instruction_roots
+      let instruction_roots : Array[Int] = []
+      for value in live {
+        instruction_roots.push(value)
       }
+      instruction_roots.sort()
+      roots[instruction.id] = instruction_roots
       position -= 1
     }
   }
@@ -773,11 +771,12 @@ fn lower_dialect_instruction(
   values : Array[@semantic.Value?],
   environment : Array[@semantic.Value],
   instruction : @milkir.Inst,
+  function_result_types : Array[@semantic.ValueType],
   ext : @milkir.ExtOp,
   block_id : Int,
   root_ids : Array[Int],
   lowering : DialectLowering,
-) -> Unit raise SemanticLowerError {
+) -> Bool raise SemanticLowerError {
   if ext.dialect != lowering.name {
     raise UnsupportedOperation(
       block_id~,
@@ -795,6 +794,7 @@ fn lower_dialect_instruction(
     mapped_values(values, instruction.args),
     instruction.args.map(operand => lower_type(operand.ty)),
     instruction.results.map(result => lower_type(result.ty)),
+    function_result_types,
     environment,
     instruction_source(instruction),
     mapped_gc_roots(values, root_ids),
@@ -816,6 +816,7 @@ fn lower_dialect_instruction(
       message~,
     )
   }
+  context.terminates_block()
 }
 
 ///|
@@ -887,9 +888,10 @@ fn lower_instruction(
   instruction : @milkir.Inst,
   block_id : Int,
   gc_roots : Array[Array[Int]],
+  function_result_types : Array[@semantic.ValueType],
   environment : Array[@semantic.Value],
   dialect : DialectLowering?,
-) -> Unit raise SemanticLowerError {
+) -> Bool raise SemanticLowerError {
   match instruction.opcode {
     Call(call) => {
       lower_call_instruction(
@@ -899,15 +901,15 @@ fn lower_instruction(
         call,
         gc_roots[instruction.id],
       )
-      return
+      return false
     }
     Memory(Vector(operation)) => {
       lower_vector_memory_instruction(builder, values, instruction, operation)
-      return
+      return false
     }
     Memory(memory) => {
       lower_memory_instruction(builder, values, instruction, memory)
-      return
+      return false
     }
     Scalar(scalar) => {
       let operation = lower_scalar_operation(scalar, instruction, block_id)
@@ -920,9 +922,12 @@ fn lower_instruction(
         instruction_metadata(instruction, []),
       )
       assign_instruction_results(values, instruction, lowered_results)
+      false
     }
-    Vector(operation) =>
+    Vector(operation) => {
       lower_vector_instruction(builder, values, instruction, operation)
+      false
+    }
     Ext(ext, _) =>
       match dialect {
         Some(lowering) =>
@@ -931,6 +936,7 @@ fn lower_instruction(
             values,
             environment,
             instruction,
+            function_result_types,
             ext,
             block_id,
             gc_roots[instruction.id],
@@ -1101,27 +1107,34 @@ fn lower_verified_function(
   }
   let cfg = @milkir.CFG::build(function)
   let gc_roots = compute_gc_roots(function, cfg)
+  let function_result_types = function.results.map(lower_type)
   for block_id in cfg.reverse_postorder() {
     let block = function.blocks[block_id]
     builder.switch_to_block(mapped_block(blocks, block.id))
+    let mut terminator_replaced = false
     for instruction in block.instructions {
-      lower_instruction(
-        builder,
-        values,
-        instruction,
-        block.id,
-        gc_roots,
-        environment,
-        dialect,
-      )
-    }
-    match block.terminator {
-      Some(terminator) =>
-        lower_terminator(builder, values, blocks, block.id, terminator)
-      None =>
-        raise InvalidMilkIR(
-          message="block \{block.id} has no terminator after verification",
+      if !terminator_replaced {
+        terminator_replaced = lower_instruction(
+          builder,
+          values,
+          instruction,
+          block.id,
+          gc_roots,
+          function_result_types,
+          environment,
+          dialect,
         )
+      }
+    }
+    if !terminator_replaced {
+      match block.terminator {
+        Some(terminator) =>
+          lower_terminator(builder, values, blocks, block.id, terminator)
+        None =>
+          raise InvalidMilkIR(
+            message="block \{block.id} has no terminator after verification",
+          )
+      }
     }
   }
   builder.finish() catch {

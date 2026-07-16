@@ -9,10 +9,12 @@ struct InstructionContext {
   operands : Array[@machv.Value]
   operand_types : Array[@machv.ValueType]
   result_types : Array[@machv.ValueType]
+  function_result_types : Array[@machv.ValueType]
   environment : Array[@machv.Value]
   source : @machv.SourceLocation?
   live_gc_roots : Array[@machv.Value]
   completed : Ref[Bool]
+  terminates_block : Ref[Bool]
   error : Ref[String?]
   complete : (Array[@machv.Value]) -> Unit
 }
@@ -23,6 +25,7 @@ pub fn InstructionContext::new(
   operands : Array[@machv.Value],
   operand_types : Array[@machv.ValueType],
   result_types : Array[@machv.ValueType],
+  function_result_types : Array[@machv.ValueType],
   environment : Array[@machv.Value],
   source : @machv.SourceLocation?,
   live_gc_roots : Array[@machv.Value],
@@ -33,10 +36,12 @@ pub fn InstructionContext::new(
     operands: operands.copy(),
     operand_types: operand_types.copy(),
     result_types: result_types.copy(),
+    function_result_types: function_result_types.copy(),
     environment: environment.copy(),
     source,
     live_gc_roots: live_gc_roots.copy(),
     completed: Ref(false),
+    terminates_block: Ref(false),
     error: Ref(None),
     complete,
   }
@@ -112,6 +117,13 @@ pub fn InstructionContext::operand_types(
   self : InstructionContext,
 ) -> Array[@machv.ValueType] {
   self.operand_types.copy()
+}
+
+///|
+pub fn InstructionContext::function_result_types(
+  self : InstructionContext,
+) -> Array[@machv.ValueType] {
+  self.function_result_types.copy()
 }
 
 ///|
@@ -272,6 +284,7 @@ pub fn InstructionContext::trap(
   if self.source is Some(source) {
     self.builder.set_terminator_source(source)
   }
+  self.terminates_block.val = true
   self.finish_void()
 }
 
@@ -286,7 +299,13 @@ pub fn InstructionContext::tail_call(
     operands,
     self.terminator_metadata(),
   )
+  self.terminates_block.val = true
   self.finish_void()
+}
+
+///|
+pub fn InstructionContext::terminates_block(self : InstructionContext) -> Bool {
+  self.terminates_block.val
 }
 
 ///|
