@@ -6,14 +6,16 @@
 struct Environment {
   function_symbol : (Int) -> @machv.CodeSymbol
   memory_base_field : (Int) -> @machv.EnvironmentField
+  function_table_field : @machv.EnvironmentField
 }
 
 ///|
 pub fn Environment::new(
   function_symbol : (Int) -> @machv.CodeSymbol,
   memory_base_field : (Int) -> @machv.EnvironmentField,
+  function_table_field : @machv.EnvironmentField,
 ) -> Environment {
-  { function_symbol, memory_base_field }
+  { function_symbol, memory_base_field, function_table_field }
 }
 
 ///|
@@ -189,6 +191,35 @@ fn lower_memory_base(
 }
 
 ///|
+fn lower_get_function_reference(
+  context : @adapter.InstructionContext,
+  function_index : Int,
+  environment : Environment,
+) -> Unit {
+  let execution_environment = context.environment()[0]
+  let function_table = context.emit(
+      EnvironmentField(environment.function_table_field),
+      [execution_environment],
+      [Ptr64],
+    )[0]
+  let offset = context.emit(I64Const((function_index * 8).to_uint64()), [], [
+      I64,
+    ])[0]
+  let entry = context.emit(PointerOffset, [function_table, offset], [Ptr64])[0]
+  let function_pointer = context.emit(
+      Load(@machv.LoadSpec::new(W64, None, Ptr64, 0UL, Little, None)),
+      [entry],
+      [Ptr64],
+    )[0]
+  let bits = context.emit(Convert(Bitcast(Ptr64, I64)), [function_pointer], [
+      I64,
+    ])[0]
+  let tag = context.emit(I64Const(0x2000000000000000UL), [], [I64])[0]
+  let tagged = context.emit(IntBinary(Or), [bits, tag], [I64])[0]
+  context.finish_operation(GcRefFromBits, [tagged])
+}
+
+///|
 fn lower_extension(
   context : @adapter.InstructionContext,
   extension : @milkir.ExtOp,
@@ -201,6 +232,10 @@ fn lower_extension(
   match opcode {
     LoadMemBase(memory_index) => {
       lower_memory_base(context, memory_index, environment)
+      None
+    }
+    GetFuncRef(function_index) => {
+      lower_get_function_reference(context, function_index, environment)
       None
     }
     WasmCall(function_index) => {

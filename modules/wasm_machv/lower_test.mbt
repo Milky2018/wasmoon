@@ -5,6 +5,7 @@ fn test_environment() -> Environment {
     fn(index) {
       @machv.EnvironmentField::new("wasm.memory.\{index}.base", Ptr64)
     },
+    @machv.EnvironmentField::new("wasm.function_table", Ptr64),
   )
 }
 
@@ -164,6 +165,43 @@ test "memory base access uses an opaque semantic environment field" {
       #|  v1:ptr64 = environment.field @wasm.memory.3.base v0 [memory=read]
       #|  v2:i64 = convert.Bitcast(Ptr64, I64) v1
       #|  return v2
+      #|}
+    ),
+  )
+}
+
+///|
+test "function references use explicit table access and tagging" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("function_reference")
+  builder.add_param(I64) |> ignore
+  builder.add_result(CallableRef)
+  let reference = builder.emit_ext_inst(
+    CallableRef,
+    @wasm_milkir.encode(GetFuncRef(5)),
+    [],
+  )
+  builder.return_([reference])
+  inspect(
+    lower_function(builder.finalize(), test_environment()),
+    content=(
+      #|machv function_reference [internal](v0:ptr64) -> (gcref64) {
+      #|block0:
+      #|  v1:ptr64 = environment.field @wasm.function_table v0 [memory=read]
+      #|  v2:i64 = i64.const 40
+      #|  v3:ptr64 = pointer.offset v1, v2
+      #|  v4:ptr64 = load {
+      #|  width: W64,
+      #|  extension: None,
+      #|  result_type: Ptr64,
+      #|  offset: 0,
+      #|  endianness: Little,
+      #|  trap: None,
+      #|} v3 [memory=read]
+      #|  v5:i64 = convert.Bitcast(Ptr64, I64) v4
+      #|  v6:i64 = i64.const 2305843009213693952
+      #|  v7:i64 = int.binary.Or v5, v6
+      #|  v8:gcref64 = gcref.from_bits v7
+      #|  return v8
       #|}
     ),
   )
