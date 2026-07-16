@@ -1002,6 +1002,50 @@ fn append_stack_address(
 }
 
 ///|
+fn append_environment_field(
+  legacy_function : @machv.Function,
+  block : @block.Block,
+  operands : Array[@abi.Reg],
+  definitions : Array[@abi.Writable],
+  field : @semantic.EnvironmentField,
+  offsets : Array[Int],
+) -> Unit raise SemanticLegacyAdapterError {
+  if operands.length() != 1 || definitions.length() != 1 {
+    raise UnsupportedOperation(
+      message="environment field requires one base and one result",
+    )
+  }
+  if offsets.is_empty() {
+    raise UnsupportedOperation(
+      message="environment field access path must not be empty",
+    )
+  }
+  let mut base = operands[0]
+  for index, offset in offsets {
+    let last = index == offsets.length() - 1
+    let destination = if last {
+      definitions[0]
+    } else {
+      legacy_def(legacy_function.new_vreg(Int))
+    }
+    let load = @instr.Inst(
+      Load(
+        if last {
+          legacy_memory_type(field.value_type)
+        } else {
+          I64
+        },
+        offset,
+      ),
+    )
+    load.add_def(destination)
+    load.add_use(base)
+    block.add_inst(load)
+    base = destination.reg
+  }
+}
+
+///|
 fn append_semantic_instruction(
   isa : @isa.ISA,
   embedding_abi : @abi.EmbeddingABI?,
@@ -1014,6 +1058,7 @@ fn append_semantic_instruction(
   stack_offsets : Array[Int],
   trap_payload : (@semantic.TrapReason) -> Int,
   requires_hidden_safepoint_id : ((@semantic.ExternalSymbol) -> Bool)?,
+  environment_field_path : ((@semantic.EnvironmentField) -> Array[Int]?)?,
   code_symbol_resolver : ((@semantic.CodeSymbol) -> @instr.CodeSymbol)?,
 ) -> Unit raise SemanticLegacyAdapterError {
   let operands : Array[@abi.Reg] = []
@@ -1030,6 +1075,26 @@ fn append_semantic_instruction(
     definitions.push(legacy_def(mapped))
   }
   let operation = function.instruction_operation(instruction).unwrap()
+  if operation is EnvironmentField(field) {
+    let offsets = match environment_field_path {
+      Some(environment_field_path) =>
+        match environment_field_path(field) {
+          Some(offsets) => offsets
+          None =>
+            raise UnsupportedOperation(
+              message="embedding did not resolve environment field '\{field.name}'",
+            )
+        }
+      None =>
+        raise UnsupportedOperation(
+          message="environment field requires an embedding resolver",
+        )
+    }
+    append_environment_field(
+      legacy_function, legacy_block, operands, definitions, field, offsets,
+    )
+    return
+  }
   if operation is StackAddress(object) {
     append_stack_address(
       legacy_function,
@@ -1199,6 +1264,7 @@ fn adapt_semantic_to_legacy(
   embedding_abi? : @abi.EmbeddingABI? = None,
   trap_payload? : (@semantic.TrapReason) -> Int = fn(_) { 0 },
   requires_hidden_safepoint_id? : ((@semantic.ExternalSymbol) -> Bool)? = None,
+  environment_field_path? : ((@semantic.EnvironmentField) -> Array[Int]?)? = None,
   code_symbol_resolver? : ((@semantic.CodeSymbol) -> @instr.CodeSymbol)? = None,
 ) -> @machv.Function raise SemanticLegacyAdapterError {
   function.verify() catch {
@@ -1241,7 +1307,7 @@ fn adapt_semantic_to_legacy(
       append_semantic_instruction(
         isa, embedding_abi, function, legacy_block, instruction, values, legacy,
         stack_objects, stack_offsets, trap_payload, requires_hidden_safepoint_id,
-        code_symbol_resolver,
+        environment_field_path, code_symbol_resolver,
       )
     }
     set_semantic_terminator(
@@ -1777,5 +1843,85 @@ test "semantic allocation roots reject overlapping Platform overflow arguments" 
       )
   } noraise {
     _ => fail("expected overlapping precise roots to be rejected")
+  }
+}
+
+///|
+test "semantic environment fields lower through embedding-owned access paths" {
+  let builder = @semantic.FunctionBuilder::new(
+    "semantic_adapter_environment_fields",
+    Internal,
+    [Ptr64],
+    [Ptr64, Ptr64],
+  )
+  let environment = builder.parameters()[0]
+  let function_table_field = @semantic.EnvironmentField::new(
+    "runtime.function_table",
+    Ptr64,
+  )
+  let memory_two_base_field = @semantic.EnvironmentField::new(
+    "runtime.memory.2.base",
+    Ptr64,
+  )
+  let function_table = builder.emit(
+      EnvironmentField(function_table_field),
+      [environment],
+      [Ptr64],
+    )[0]
+  let memory_two_base = builder.emit(
+      EnvironmentField(memory_two_base_field),
+      [environment],
+      [Ptr64],
+    )[0]
+  builder.return_([function_table, memory_two_base])
+  inspect(
+    adapt_semantic_to_legacy(
+      builder.finish(),
+      AArch64,
+      environment_field_path=Some(fn(field) {
+        match field.name {
+          "runtime.function_table" => Some([24])
+          "runtime.memory.2.base" => Some([88, 16, 0])
+          _ => None
+        }
+      }),
+    ),
+    content=(
+      #|machv semantic_adapter_environment_fields(v0:int) -> (int, int) {
+      #|block0:
+      #|    v1 = load.i64 +24 v0
+      #|    v3 = load.i64 +88 v0
+      #|    v4 = load.i64 +16 v3
+      #|    v2 = load.i64 +0 v4
+      #|    ret v1, v2
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "semantic environment fields require an embedding resolver" {
+  let builder = @semantic.FunctionBuilder::new(
+    "semantic_adapter_unresolved_environment",
+    Internal,
+    [Ptr64],
+    [Ptr64],
+  )
+  let field = @semantic.EnvironmentField::new("runtime.field", Ptr64)
+  let result = builder.emit(EnvironmentField(field), builder.parameters(), [
+      Ptr64,
+    ])[0]
+  builder.return_([result])
+  try adapt_semantic_to_legacy(builder.finish(), AMD64) |> ignore catch {
+    error =>
+      inspect(
+        error,
+        content=(
+          #|UnsupportedOperation(message="environment field requires an embedding resolver")
+        ),
+      )
+  } noraise {
+    _ => fail("expected unresolved environment field to be rejected")
   }
 }
