@@ -424,6 +424,7 @@ pub(all) enum Operation {
   ExternalAddress(ExternalSymbol)
   DataAddress(DataSymbol)
   EnvironmentField(EnvironmentField)
+  StackAddress(StackObject)
   Copy
   Select
   GcRefAddress
@@ -494,6 +495,7 @@ fn Operation::copy(self : Operation) -> Operation {
     | ExternalAddress(_)
     | DataAddress(_)
     | EnvironmentField(_)
+    | StackAddress(_)
     | Copy
     | Select
     | GcRefAddress
@@ -1141,6 +1143,8 @@ fn verify_operation_contract(
           "environment.field",
         )
       }
+    StackAddress(_) =>
+      require_shape(operands, results, [], [Ptr64], "stack.address")
     Copy => {
       if operands.length() != 1 || results.length() != 1 {
         return operation_error("copy expects one operand and one result")
@@ -1502,6 +1506,7 @@ pub fn Operation::semantics(self : Operation) -> OperationSemantics {
     | CodeAddress(_)
     | ExternalAddress(_)
     | DataAddress(_)
+    | StackAddress(_)
     | Copy
     | Select
     | GcRefAddress

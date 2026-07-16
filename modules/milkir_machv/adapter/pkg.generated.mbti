@@ -14,6 +14,7 @@ type InstructionContext
 pub fn InstructionContext::block_parameters(Self, @machv.Block) -> Array[@machv.Value]
 pub fn InstructionContext::branch(Self, @machv.Value, @machv.Block, Array[@machv.Value], @machv.Block, Array[@machv.Value]) -> Unit
 pub fn InstructionContext::create_block(Self, Array[@machv.ValueType]) -> @machv.Block
+pub fn InstructionContext::create_stack_object(Self, Int, Int) -> @machv.StackObject
 pub fn InstructionContext::emit(Self, @machv.Operation, Array[@machv.Value], Array[@machv.ValueType]) -> Array[@machv.Value]
 pub fn InstructionContext::emit_call(Self, @machv.SemanticCall, Array[@machv.Value], Array[@machv.ValueType]) -> Array[@machv.Value]
 pub fn InstructionContext::emit_call_without_roots(Self, @machv.SemanticCall, Array[@machv.Value], Array[@machv.ValueType]) -> Array[@machv.Value]

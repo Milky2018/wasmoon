@@ -7,6 +7,75 @@ fn single(values : Array[@machv.Value]) -> @machv.Value {
 }
 
 ///|
+test "address-visible stack objects retain target-neutral layout requirements" {
+  let builder = @machv.FunctionBuilder::new("stack_buffer", Internal, [I64], [])
+  let object = builder.create_stack_object(24, 16)
+  let address = single(builder.emit(StackAddress(object), [], [Ptr64]))
+  builder.emit(
+    Store(@machv.StoreSpec::new(W64, I64, 0UL, Little, None)),
+    [address, builder.parameters()[0]],
+    [],
+  )
+  |> ignore
+  builder.return_([])
+  inspect(
+    builder.finish(),
+    content=(
+      #|machv stack_buffer [internal](v0:i64) -> () {
+      #|stack0: size=24, alignment=16
+      #|block0:
+      #|  v1:ptr64 = stack.address stack0
+      #|  store {
+      #|  width: W64,
+      #|  value_type: I64,
+      #|  offset: 0,
+      #|  endianness: Little,
+      #|  trap: None,
+      #|} v1, v0 [memory=write]
+      #|  return
+      #|}
+    ),
+  )
+}
+
+///|
+test "stack objects cannot cross function ownership" {
+  let producer = @machv.FunctionBuilder::new("producer", Internal, [], [])
+  let foreign = producer.create_stack_object(8, 8)
+  producer.return_([])
+  producer.finish() |> ignore
+  let consumer = @machv.FunctionBuilder::new("consumer", Internal, [], [])
+  consumer.emit(StackAddress(foreign), [], [Ptr64]) |> ignore
+  consumer.return_([])
+  try consumer.finish() catch {
+    error => inspect(error, content="ForeignStackObject(object_id=0)")
+  } noraise {
+    _ => fail("expected a foreign stack object to be rejected")
+  }
+}
+
+///|
+test "stack object alignment must be a positive power of two" {
+  let builder = @machv.FunctionBuilder::new("bad_stack", Internal, [], [])
+  builder.create_stack_object(8, 3) |> ignore
+  builder.return_([])
+  try builder.finish() catch {
+    error =>
+      inspect(
+        error,
+        content=(
+          #|InvalidStackObject(
+          #|  object_id=0,
+          #|  message="stack object alignment must be a positive power of two",
+          #|)
+        ),
+      )
+  } noraise {
+    _ => fail("expected invalid stack object alignment to be rejected")
+  }
+}
+
+///|
 test "i64 switch carries typed edge arguments" {
   let builder = @machv.FunctionBuilder::new("switch64", Internal, [I64], [I64])
   let case_block = builder.create_block([I64])

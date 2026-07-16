@@ -56,6 +56,7 @@ fn format_operation(operation : Operation) -> String {
     ExternalAddress(symbol) => "external.address @\{symbol.name}"
     DataAddress(symbol) => "data.address @\{symbol.name}"
     EnvironmentField(field) => "environment.field @\{field.name}"
+    StackAddress(object) => "stack.address stack\{object.id}"
     Copy => "copy"
     Select => "select"
     GcRefAddress => "gcref.address"
@@ -192,6 +193,11 @@ pub fn Function::print(self : Function) -> String {
   let lines : Array[String] = [
     "machv \{self.name} [\{format_protocol(self.protocol)}](\{params}) -> (\{results}) {",
   ]
+  for object_id, object in self.stack_objects {
+    lines.push(
+      "stack\{object_id}: size=\{object.size}, alignment=\{object.alignment}",
+    )
+  }
   for block_id, block in self.blocks {
     let block_params = block.parameters
       .map(value => format_value_with_type(self, value))

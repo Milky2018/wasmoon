@@ -6,6 +6,8 @@ pub suberror MachVVerifyError {
   ForeignValue(value_id~ : Int)
   ForeignBlock(block_id~ : Int)
   ForeignInstruction(instruction_id~ : Int)
+  ForeignStackObject(object_id~ : Int)
+  InvalidStackObject(object_id~ : Int, message~ : String)
   TerminatorAlreadySet(block_id~ : Int)
   MissingTerminator(block_id~ : Int)
   EntryHasBlockParameters
@@ -34,6 +36,11 @@ pub suberror MachVVerifyError {
 ///|
 pub impl Show for MachVVerifyError with fn output(self, logger) {
   logger.write_string(to_repr(self).to_string())
+}
+
+///|
+fn is_power_of_two(value : Int) -> Bool {
+  value > 0 && (value & (value - 1)) == 0
 }
 
 ///|
@@ -207,6 +214,16 @@ fn Function::require_value(
 ) -> Unit raise MachVVerifyError {
   if !self.owns_value(value) {
     raise ForeignValue(value_id=value.id)
+  }
+}
+
+///|
+fn Function::require_stack_object(
+  self : Function,
+  object : StackObject,
+) -> Unit raise MachVVerifyError {
+  if !self.owns_stack_object(object) {
+    raise ForeignStackObject(object_id=object.id)
   }
 }
 
@@ -647,6 +664,20 @@ pub fn Function::verify(self : Function) -> Unit raise MachVVerifyError {
   if self.blocks.is_empty() {
     raise EmptyFunction
   }
+  for object_id, object in self.stack_objects {
+    if object.size <= 0 {
+      raise InvalidStackObject(
+        object_id~,
+        message="stack object size must be positive",
+      )
+    }
+    if !is_power_of_two(object.alignment) {
+      raise InvalidStackObject(
+        object_id~,
+        message="stack object alignment must be a positive power of two",
+      )
+    }
+  }
   if !self.blocks[0].parameters.is_empty() {
     raise EntryHasBlockParameters
   }
@@ -705,6 +736,9 @@ pub fn Function::verify(self : Function) -> Unit raise MachVVerifyError {
       }
       for operand in data.operands {
         self.require_value(operand)
+      }
+      if data.operation is StackAddress(object) {
+        self.require_stack_object(object)
       }
       for result_index, result in data.results {
         self.require_value(result)

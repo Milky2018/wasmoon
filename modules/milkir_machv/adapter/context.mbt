@@ -262,6 +262,15 @@ pub fn InstructionContext::create_block(
 }
 
 ///|
+pub fn InstructionContext::create_stack_object(
+  self : InstructionContext,
+  size : Int,
+  alignment : Int,
+) -> @machv.StackObject {
+  self.builder.create_stack_object(size, alignment)
+}
+
+///|
 pub fn InstructionContext::block_parameters(
   self : InstructionContext,
   block : @machv.Block,

@@ -80,6 +80,33 @@ pub impl Debug for Instruction with fn to_repr(self) {
 }
 
 ///|
+/// Opaque function-owned address-visible stack object handle.
+pub struct StackObject {
+  priv owner : Ref[Unit]
+  priv id : Int
+}
+
+///|
+fn StackObject::new(owner : Ref[Unit], id : Int) -> StackObject {
+  { owner, id }
+}
+
+///|
+pub impl Eq for StackObject with fn equal(self, other) {
+  physical_equal(self.owner, other.owner) && self.id == other.id
+}
+
+///|
+pub impl Hash for StackObject with fn hash_combine(self, hasher) {
+  self.id.hash_combine(hasher)
+}
+
+///|
+pub impl Debug for StackObject with fn to_repr(self) {
+  Repr::literal("stack\{self.id}")
+}
+
+///|
 pub struct Edge {
   target : Block
   arguments : Array[Value]
@@ -230,6 +257,12 @@ priv struct InstructionData {
 }
 
 ///|
+priv struct StackObjectData {
+  size : Int
+  alignment : Int
+}
+
+///|
 /// A target-neutral semantic machine function.
 ///
 /// Storage is private and canonical. Public queries return handles or
@@ -243,6 +276,7 @@ pub struct Function {
   priv values : Array[ValueData]
   priv blocks : Array[BlockData]
   priv instructions : Array[InstructionData]
+  priv stack_objects : Array[StackObjectData]
 }
 
 ///|
@@ -260,6 +294,7 @@ fn Function::new(
     values: [],
     blocks: [],
     instructions: [],
+    stack_objects: [],
   }
   for index, ty in signature.params {
     let value = function.allocate_value(ty, FunctionParameter(index))
@@ -291,6 +326,24 @@ fn Function::owns_instruction(
   physical_equal(self.owner, instruction.owner) &&
   instruction.id >= 0 &&
   instruction.id < self.instructions.length()
+}
+
+///|
+fn Function::owns_stack_object(self : Function, object : StackObject) -> Bool {
+  physical_equal(self.owner, object.owner) &&
+  object.id >= 0 &&
+  object.id < self.stack_objects.length()
+}
+
+///|
+fn Function::allocate_stack_object(
+  self : Function,
+  size : Int,
+  alignment : Int,
+) -> StackObject {
+  let object = StackObject::new(self.owner, self.stack_objects.length())
+  self.stack_objects.push({ size, alignment })
+  object
 }
 
 ///|
@@ -409,6 +462,37 @@ pub fn Function::instruction_count(self : Function) -> Int {
     }
   }
   count
+}
+
+///|
+pub fn Function::stack_objects(self : Function) -> Array[StackObject] {
+  Array::makei(self.stack_objects.length(), index => {
+    StackObject::new(self.owner, index)
+  })
+}
+
+///|
+pub fn Function::stack_object_size(
+  self : Function,
+  object : StackObject,
+) -> Int? {
+  if self.owns_stack_object(object) {
+    Some(self.stack_objects[object.id].size)
+  } else {
+    None
+  }
+}
+
+///|
+pub fn Function::stack_object_alignment(
+  self : Function,
+  object : StackObject,
+) -> Int? {
+  if self.owns_stack_object(object) {
+    Some(self.stack_objects[object.id].alignment)
+  } else {
+    None
+  }
 }
 
 ///|

@@ -61,6 +61,33 @@ pub fn FunctionBuilder::create_block(
 }
 
 ///|
+pub fn FunctionBuilder::create_stack_object(
+  self : FunctionBuilder,
+  size : Int,
+  alignment : Int,
+) -> StackObject {
+  if size <= 0 {
+    self.record_error(
+      InvalidStackObject(
+        object_id=self.function.stack_objects.length(),
+        message="stack object size must be positive",
+      ),
+    )
+    return StackObject::new(self.function.owner, -1)
+  }
+  if !is_power_of_two(alignment) {
+    self.record_error(
+      InvalidStackObject(
+        object_id=self.function.stack_objects.length(),
+        message="stack object alignment must be a positive power of two",
+      ),
+    )
+    return StackObject::new(self.function.owner, -1)
+  }
+  self.function.allocate_stack_object(size, alignment)
+}
+
+///|
 pub fn FunctionBuilder::block_parameters(
   self : FunctionBuilder,
   block : Block,
@@ -143,6 +170,11 @@ pub fn FunctionBuilder::emit_with_metadata(
   if !self.require_block_open() ||
     !self.require_values(operands) ||
     !self.require_values(metadata.live_gc_roots) {
+    return []
+  }
+  if operation is StackAddress(object) &&
+    !self.function.owns_stack_object(object) {
+    self.record_error(ForeignStackObject(object_id=object.id))
     return []
   }
   if metadata.source is Some(source) && !source.is_valid() {
