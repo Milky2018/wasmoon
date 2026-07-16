@@ -749,6 +749,18 @@ fn emit_internal_call(
 }
 
 ///|
+fn call_requires_hidden_safepoint_id(
+  call : @semantic.SemanticCall,
+  requires_hidden_safepoint_id : ((@semantic.ExternalSymbol) -> Bool)?,
+) -> Bool {
+  match (call.callee, requires_hidden_safepoint_id) {
+    (External(symbol), Some(requires_hidden_safepoint_id)) =>
+      requires_hidden_safepoint_id(symbol)
+    _ => false
+  }
+}
+
+///|
 fn append_semantic_call(
   isa : @isa.ISA,
   embedding_abi : @abi.EmbeddingABI?,
@@ -757,12 +769,45 @@ fn append_semantic_call(
   call : @semantic.SemanticCall,
   operands : Array[@abi.Reg],
   definitions : Array[@abi.Writable],
-  live_gc_roots : Int,
+  live_gc_roots : Array[@abi.Reg],
+  requires_hidden_safepoint_id : ((@semantic.ExternalSymbol) -> Bool)?,
   code_symbol_resolver : ((@semantic.CodeSymbol) -> @instr.CodeSymbol)?,
 ) -> Unit raise SemanticLegacyAdapterError {
-  if live_gc_roots > 0 {
+  let hidden_safepoint = call_requires_hidden_safepoint_id(
+    call, requires_hidden_safepoint_id,
+  )
+  if hidden_safepoint {
+    if call.protocol != Platform || !call.behavior.gc_safepoint {
+      raise UnsupportedOperation(
+        message="hidden safepoint ID requires a Platform GC-safepoint call",
+      )
+    }
+    let argument_register_count = adapter_c_argument_registers(isa).length()
+    if !live_gc_roots.is_empty() &&
+      operands.length() + 1 > argument_register_count {
+      raise UnsupportedOperation(
+        message="precise GC roots overlap Platform overflow arguments",
+      )
+    }
+    for index, root in live_gc_roots {
+      let store = @instr.Inst(StoreToStack(index * 8))
+      store.add_use(root)
+      block.add_inst(store)
+    }
+    let safepoint = legacy_function.new_vreg(Int)
+    let load = @instr.Inst(LoadSafepointId(live_gc_roots.length()))
+    load.add_def(legacy_def(safepoint))
+    block.add_inst(load)
+    let augmented_operands = operands.copy()
+    augmented_operands.push(Virtual(safepoint))
+    emit_platform_call(
+      isa, legacy_function, block, call, augmented_operands, definitions,
+    )
+    return
+  }
+  if !live_gc_roots.is_empty() {
     raise UnsupportedOperation(
-      message="precise GC roots require stack-slot adaptation",
+      message="precise GC roots require an embedding safepoint ABI",
     )
   }
   match call.protocol {
@@ -793,11 +838,14 @@ fn semantic_call_overflow_bytes(
   operands : Array[@semantic.Value],
   isa : @isa.ISA,
   embedding_abi : @abi.EmbeddingABI?,
+  hidden_safepoint : Bool,
 ) -> Int raise SemanticLegacyAdapterError {
   if call.protocol is Platform {
     let register_count = adapter_c_argument_registers(isa).length()
-    return if operands.length() > register_count {
-      (operands.length() - register_count) * 8
+    let argument_count = operands.length() +
+      (if hidden_safepoint { 1 } else { 0 })
+    return if argument_count > register_count {
+      (argument_count - register_count) * 8
     } else {
       0
     }
@@ -840,24 +888,41 @@ fn semantic_call_overflow_bytes(
 }
 
 ///|
-fn maximum_semantic_call_overflow(
+fn maximum_semantic_temporary_stack_bytes(
   function : @semantic.Function,
   isa : @isa.ISA,
   embedding_abi : @abi.EmbeddingABI?,
+  requires_hidden_safepoint_id : ((@semantic.ExternalSymbol) -> Bool)?,
 ) -> Int raise SemanticLegacyAdapterError {
   let mut maximum = 0
   for block in function.blocks() {
     for instruction in function.block_instructions(block) {
       if function.instruction_operation(instruction) is Some(Call(call)) {
+        let hidden_safepoint = call_requires_hidden_safepoint_id(
+          call, requires_hidden_safepoint_id,
+        )
         let bytes = semantic_call_overflow_bytes(
           function,
           call,
           function.instruction_operands(instruction),
           isa,
           embedding_abi,
+          hidden_safepoint,
         )
         if bytes > maximum {
           maximum = bytes
+        }
+        if hidden_safepoint {
+          let root_bytes = function.instruction_metadata(instruction).unwrap().live_gc_roots.length() *
+            8
+          if root_bytes > 0 && bytes > 0 {
+            raise UnsupportedOperation(
+              message="precise GC roots overlap Platform overflow arguments",
+            )
+          }
+          if root_bytes > maximum {
+            maximum = root_bytes
+          }
         }
       }
     }
@@ -948,6 +1013,7 @@ fn append_semantic_instruction(
   stack_objects : Array[@semantic.StackObject],
   stack_offsets : Array[Int],
   trap_payload : (@semantic.TrapReason) -> Int,
+  requires_hidden_safepoint_id : ((@semantic.ExternalSymbol) -> Bool)?,
   code_symbol_resolver : ((@semantic.CodeSymbol) -> @instr.CodeSymbol)?,
 ) -> Unit raise SemanticLegacyAdapterError {
   let operands : Array[@abi.Reg] = []
@@ -974,16 +1040,16 @@ fn append_semantic_instruction(
     return
   }
   if operation is Call(call) {
+    let live_gc_roots : Array[@abi.Reg] = []
+    for
+      root in function.instruction_metadata(instruction).unwrap().live_gc_roots {
+      live_gc_roots.push(
+        legacy_use(require_legacy_value(function, values, root)),
+      )
+    }
     append_semantic_call(
-      isa,
-      embedding_abi,
-      legacy_function,
-      legacy_block,
-      call,
-      operands,
-      definitions,
-      function.instruction_metadata(instruction).unwrap().live_gc_roots.length(),
-      code_symbol_resolver,
+      isa, embedding_abi, legacy_function, legacy_block, call, operands, definitions,
+      live_gc_roots, requires_hidden_safepoint_id, code_symbol_resolver,
     )
     return
   }
@@ -1132,13 +1198,16 @@ fn adapt_semantic_to_legacy(
   isa : @isa.ISA,
   embedding_abi? : @abi.EmbeddingABI? = None,
   trap_payload? : (@semantic.TrapReason) -> Int = fn(_) { 0 },
+  requires_hidden_safepoint_id? : ((@semantic.ExternalSymbol) -> Bool)? = None,
   code_symbol_resolver? : ((@semantic.CodeSymbol) -> @instr.CodeSymbol)? = None,
 ) -> @machv.Function raise SemanticLegacyAdapterError {
   function.verify() catch {
     error => raise InvalidLegacyFunction(message=error.to_string())
   }
   let legacy = @machv.Function(function.name())
-  let stack_base = maximum_semantic_call_overflow(function, isa, embedding_abi)
+  let stack_base = maximum_semantic_temporary_stack_bytes(
+    function, isa, embedding_abi, requires_hidden_safepoint_id,
+  )
   let (stack_objects, stack_offsets, outgoing_size) = plan_semantic_stack_objects(
     function, stack_base,
   )
@@ -1171,7 +1240,8 @@ fn adapt_semantic_to_legacy(
     for instruction in function.block_instructions(block) {
       append_semantic_instruction(
         isa, embedding_abi, function, legacy_block, instruction, values, legacy,
-        stack_objects, stack_offsets, trap_payload, code_symbol_resolver,
+        stack_objects, stack_offsets, trap_payload, requires_hidden_safepoint_id,
+        code_symbol_resolver,
       )
     }
     set_semantic_terminator(
@@ -1467,7 +1537,7 @@ test "semantic-to-legacy adapter rejects unadapted precise call roots" {
       inspect(
         error,
         content=(
-          #|UnsupportedOperation(message="precise GC roots require stack-slot adaptation")
+          #|UnsupportedOperation(message="precise GC roots require an embedding safepoint ABI")
         ),
       )
   } noraise {
@@ -1566,4 +1636,146 @@ test "semantic stack objects do not overlap internal call overflow arguments" {
     ),
   )
   inspect(legacy.get_max_outgoing_args_size(), content="32")
+}
+
+///|
+test "semantic allocation calls spill precise roots and append safepoint ID" {
+  let builder = @semantic.FunctionBuilder::new(
+    "semantic_adapter_allocation_safepoint",
+    Internal,
+    [Ptr64, GcRef64, GcRef64],
+    [I64],
+  )
+  let parameters = builder.parameters()
+  let fields = builder.create_stack_object(8, 8)
+  let type_index = builder.emit(I32Const(7U), [], [I32])[0]
+  let fields_address = builder.emit(StackAddress(fields), [], [Ptr64])[0]
+  let field_count = builder.emit(I32Const(1U), [], [I32])[0]
+  let call = @semantic.SemanticCall::new(
+    External(@semantic.ExternalSymbol::new("wasm.runtime.gc.alloc_struct_slow")),
+    @semantic.Signature::new([Ptr64, I32, Ptr64, I32], [I64]),
+    Platform,
+    @semantic.CallBehavior::new(ReadWrite, true, false, true, false),
+  )
+  let result = builder.emit_with_metadata(
+      Call(call),
+      [parameters[0], type_index, fields_address, field_count],
+      [I64],
+      @semantic.InstructionMetadata::new(None, [parameters[1], parameters[2]]),
+    )[0]
+  builder.return_([result])
+  let legacy = adapt_semantic_to_legacy(
+    builder.finish(),
+    AMD64,
+    requires_hidden_safepoint_id=Some(fn(symbol) {
+      symbol.name == "wasm.runtime.gc.alloc_struct_slow"
+    }),
+  )
+  inspect(
+    legacy,
+    content=(
+      #|machv semantic_adapter_allocation_safepoint(v0:int, v1:int, v2:int) -> int {
+      #|block0:
+      #|    v3 = ldi 7
+      #|    v5 = mov rd, outgoing_args_base
+      #|    v4 = add #16 v5
+      #|    v6 = ldi 1
+      #|    str [sp+0] v1
+      #|    str [sp+8] v2
+      #|    v8 = load_safepoint_id roots=2
+      #|    v7 = call_external[Foreign].wasm.runtime.gc.alloc_struct_slow(5) -> 1 results v0, v3, v4, v6, v8
+      #|    ret v7
+      #|}
+      #|
+    ),
+  )
+  inspect(legacy.get_max_outgoing_args_size(), content="32")
+}
+
+///|
+test "semantic allocation calls append safepoint ID without live roots" {
+  let builder = @semantic.FunctionBuilder::new(
+    "semantic_adapter_rootless_allocation",
+    Internal,
+    [Ptr64],
+    [I64],
+  )
+  let call = @semantic.SemanticCall::new(
+    External(@semantic.ExternalSymbol::new("runtime.alloc")),
+    @semantic.Signature::new([Ptr64], [I64]),
+    Platform,
+    @semantic.CallBehavior::new(ReadWrite, true, false, true, false),
+  )
+  let result = builder.emit(Call(call), builder.parameters(), [I64])[0]
+  builder.return_([result])
+  inspect(
+    adapt_semantic_to_legacy(
+      builder.finish(),
+      AMD64,
+      requires_hidden_safepoint_id=Some(fn(symbol) {
+        symbol.name == "runtime.alloc"
+      }),
+    ),
+    content=(
+      #|machv semantic_adapter_rootless_allocation(v0:int) -> int {
+      #|block0:
+      #|    v2 = load_safepoint_id roots=0
+      #|    v1 = call_external[Foreign].runtime.alloc(2) -> 1 results v0, v2
+      #|    ret v1
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "semantic allocation roots reject overlapping Platform overflow arguments" {
+  let builder = @semantic.FunctionBuilder::new(
+    "semantic_adapter_overlapping_roots",
+    Internal,
+    [I64, I64, I64, I64, I64, I64, GcRef64],
+    [],
+  )
+  let parameters = builder.parameters()
+  let call = @semantic.SemanticCall::new(
+    External(@semantic.ExternalSymbol::new("runtime.alloc")),
+    @semantic.Signature::new([I64, I64, I64, I64, I64, I64], []),
+    Platform,
+    @semantic.CallBehavior::new(ReadWrite, true, false, true, false),
+  )
+  builder.emit_with_metadata(
+    Call(call),
+    [
+      parameters[0],
+      parameters[1],
+      parameters[2],
+      parameters[3],
+      parameters[4],
+      parameters[5],
+    ],
+    [],
+    @semantic.InstructionMetadata::new(None, [parameters[6]]),
+  )
+  |> ignore
+  builder.return_([])
+  try
+    adapt_semantic_to_legacy(
+      builder.finish(),
+      AMD64,
+      requires_hidden_safepoint_id=Some(fn(symbol) {
+        symbol.name == "runtime.alloc"
+      }),
+    )
+    |> ignore
+  catch {
+    error =>
+      inspect(
+        error,
+        content=(
+          #|UnsupportedOperation(message="precise GC roots overlap Platform overflow arguments")
+        ),
+      )
+  } noraise {
+    _ => fail("expected overlapping precise roots to be rejected")
+  }
 }
