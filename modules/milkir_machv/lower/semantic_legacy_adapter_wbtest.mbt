@@ -850,6 +850,80 @@ fn call_requires_hidden_safepoint_id(
 }
 
 ///|
+fn internal_call_context(
+  call : @semantic.SemanticCall,
+  operands : Array[@abi.Reg],
+) -> @abi.Reg raise SemanticLegacyAdapterError {
+  let index = if call.callee is Indirect { 1 } else { 0 }
+  if operands.length() <= index {
+    raise UnsupportedOperation(
+      message="internal call is missing its execution environment",
+    )
+  }
+  operands[index]
+}
+
+///|
+fn append_caller_root_scope_push(
+  isa : @isa.ISA,
+  legacy_function : @machv.Function,
+  block : @block.Block,
+  context : @abi.Reg,
+  live_gc_roots : Array[@abi.Reg],
+  symbol : @semantic.ExternalSymbol,
+) -> Unit raise SemanticLegacyAdapterError {
+  for index, root in live_gc_roots {
+    let store = @instr.Inst(StoreToStack(index * 8))
+    store.add_use(root)
+    block.add_inst(store)
+  }
+  let root_buffer = legacy_function.new_vreg(Int)
+  let load_buffer = @instr.Inst(LoadSP)
+  load_buffer.add_def(legacy_def(root_buffer))
+  block.add_inst(load_buffer)
+  let root_count = legacy_function.new_vreg(Int)
+  let load_count = @instr.Inst(LoadConst(live_gc_roots.length().to_int64()))
+  load_count.add_def(legacy_def(root_count))
+  block.add_inst(load_count)
+  emit_platform_call(
+    isa,
+    legacy_function,
+    block,
+    @semantic.SemanticCall::new(
+      External(symbol),
+      @semantic.Signature::new([Ptr64, Ptr64, I32], []),
+      Platform,
+      @semantic.CallBehavior::new(ReadWrite, true, false, false, false),
+    ),
+    [context, Virtual(root_buffer), Virtual(root_count)],
+    [],
+  )
+}
+
+///|
+fn append_caller_root_scope_pop(
+  isa : @isa.ISA,
+  legacy_function : @machv.Function,
+  block : @block.Block,
+  context : @abi.Reg,
+  symbol : @semantic.ExternalSymbol,
+) -> Unit raise SemanticLegacyAdapterError {
+  emit_platform_call(
+    isa,
+    legacy_function,
+    block,
+    @semantic.SemanticCall::new(
+      External(symbol),
+      @semantic.Signature::new([Ptr64], []),
+      Platform,
+      @semantic.CallBehavior::new(ReadWrite, true, false, false, false),
+    ),
+    [context],
+    [],
+  )
+}
+
+///|
 fn append_semantic_call(
   isa : @isa.ISA,
   embedding_abi : @abi.EmbeddingABI?,
@@ -860,6 +934,10 @@ fn append_semantic_call(
   definitions : Array[@abi.Writable],
   live_gc_roots : Array[@abi.Reg],
   requires_hidden_safepoint_id : ((@semantic.ExternalSymbol) -> Bool)?,
+  caller_root_scope_symbols : (
+    @semantic.ExternalSymbol,
+    @semantic.ExternalSymbol,
+  )?,
   code_symbol_resolver : ((@semantic.CodeSymbol) -> @instr.CodeSymbol)?,
 ) -> Unit raise SemanticLegacyAdapterError {
   let hidden_safepoint = call_requires_hidden_safepoint_id(
@@ -895,9 +973,36 @@ fn append_semantic_call(
     return
   }
   if !live_gc_roots.is_empty() {
-    raise UnsupportedOperation(
-      message="precise GC roots require an embedding safepoint ABI",
+    if call.protocol != Internal {
+      raise UnsupportedOperation(
+        message="precise GC roots require an embedding safepoint ABI",
+      )
+    }
+    let (push_symbol, pop_symbol) = match caller_root_scope_symbols {
+      Some(symbols) => symbols
+      None =>
+        raise UnsupportedOperation(
+          message="precise GC roots require caller root-scope symbols",
+        )
+    }
+    let context = internal_call_context(call, operands)
+    append_caller_root_scope_push(
+      isa, legacy_function, block, context, live_gc_roots, push_symbol,
     )
+    let embedding_abi = match embedding_abi {
+      Some(embedding_abi) => embedding_abi
+      None =>
+        raise UnsupportedOperation(
+          message="internal call requires an embedding ABI",
+        )
+    }
+    emit_internal_call(
+      isa, embedding_abi, legacy_function, block, call, operands, definitions, code_symbol_resolver,
+    )
+    append_caller_root_scope_pop(
+      isa, legacy_function, block, context, pop_symbol,
+    )
+    return
   }
   match call.protocol {
     Platform =>
@@ -985,6 +1090,10 @@ fn semantic_call_temporary_stack_bytes(
   isa : @isa.ISA,
   embedding_abi : @abi.EmbeddingABI?,
   requires_hidden_safepoint_id : ((@semantic.ExternalSymbol) -> Bool)?,
+  caller_root_scope_symbols : (
+    @semantic.ExternalSymbol,
+    @semantic.ExternalSymbol,
+  )?,
 ) -> Int raise SemanticLegacyAdapterError {
   let hidden_safepoint = call_requires_hidden_safepoint_id(
     call, requires_hidden_safepoint_id,
@@ -992,14 +1101,26 @@ fn semantic_call_temporary_stack_bytes(
   let overflow_bytes = semantic_call_overflow_bytes(
     function, call, operands, isa, embedding_abi, hidden_safepoint,
   )
-  if !hidden_safepoint {
+  if !hidden_safepoint && root_count == 0 {
     return overflow_bytes
   }
   let root_bytes = root_count * 8
-  if root_bytes > 0 && overflow_bytes > 0 {
+  if hidden_safepoint && root_bytes > 0 && overflow_bytes > 0 {
     raise UnsupportedOperation(
       message="precise GC roots overlap Platform overflow arguments",
     )
+  }
+  if !hidden_safepoint {
+    if call.protocol != Internal {
+      raise UnsupportedOperation(
+        message="precise GC roots require an embedding safepoint ABI",
+      )
+    }
+    if caller_root_scope_symbols is None {
+      raise UnsupportedOperation(
+        message="precise GC roots require caller root-scope symbols",
+      )
+    }
   }
   if root_bytes > overflow_bytes {
     root_bytes
@@ -1014,6 +1135,10 @@ fn maximum_semantic_temporary_stack_bytes(
   isa : @isa.ISA,
   embedding_abi : @abi.EmbeddingABI?,
   requires_hidden_safepoint_id : ((@semantic.ExternalSymbol) -> Bool)?,
+  caller_root_scope_symbols : (
+    @semantic.ExternalSymbol,
+    @semantic.ExternalSymbol,
+  )?,
 ) -> Int raise SemanticLegacyAdapterError {
   let mut maximum = 0
   for block in function.blocks() {
@@ -1027,6 +1152,7 @@ fn maximum_semantic_temporary_stack_bytes(
           isa,
           embedding_abi,
           requires_hidden_safepoint_id,
+          caller_root_scope_symbols,
         )
         if bytes > maximum {
           maximum = bytes
@@ -1035,7 +1161,16 @@ fn maximum_semantic_temporary_stack_bytes(
     }
     let terminator = function.block_terminator(block).unwrap()
     match terminator.kind {
-      TailCall(call, operands) | NoReturnCall(call, operands) => {
+      TailCall(call, operands) => {
+        let bytes = semantic_call_temporary_stack_bytes(
+          function, call, operands, 0, isa, embedding_abi, requires_hidden_safepoint_id,
+          caller_root_scope_symbols,
+        )
+        if bytes > maximum {
+          maximum = bytes
+        }
+      }
+      NoReturnCall(call, operands) => {
         let bytes = semantic_call_temporary_stack_bytes(
           function,
           call,
@@ -1044,6 +1179,7 @@ fn maximum_semantic_temporary_stack_bytes(
           isa,
           embedding_abi,
           requires_hidden_safepoint_id,
+          caller_root_scope_symbols,
         )
         if bytes > maximum {
           maximum = bytes
@@ -1183,6 +1319,10 @@ fn append_semantic_instruction(
   stack_offsets : Array[Int],
   trap_payload : (@semantic.TrapReason) -> Int,
   requires_hidden_safepoint_id : ((@semantic.ExternalSymbol) -> Bool)?,
+  caller_root_scope_symbols : (
+    @semantic.ExternalSymbol,
+    @semantic.ExternalSymbol,
+  )?,
   environment_field_path : ((@semantic.EnvironmentField) -> Array[Int]?)?,
   code_symbol_resolver : ((@semantic.CodeSymbol) -> @instr.CodeSymbol)?,
 ) -> Unit raise SemanticLegacyAdapterError {
@@ -1239,7 +1379,7 @@ fn append_semantic_instruction(
     }
     append_semantic_call(
       isa, embedding_abi, legacy_function, legacy_block, call, operands, definitions,
-      live_gc_roots, requires_hidden_safepoint_id, code_symbol_resolver,
+      live_gc_roots, requires_hidden_safepoint_id, caller_root_scope_symbols, code_symbol_resolver,
     )
     return
   }
@@ -1352,6 +1492,10 @@ fn set_semantic_terminator(
   legacy_function : @machv.Function,
   trap_payload : (@semantic.TrapReason) -> Int,
   requires_hidden_safepoint_id : ((@semantic.ExternalSymbol) -> Bool)?,
+  caller_root_scope_symbols : (
+    @semantic.ExternalSymbol,
+    @semantic.ExternalSymbol,
+  )?,
   code_symbol_resolver : ((@semantic.CodeSymbol) -> @instr.CodeSymbol)?,
 ) -> Unit raise SemanticLegacyAdapterError {
   let record = function.block_terminator(semantic_block).unwrap()
@@ -1378,11 +1522,6 @@ fn set_semantic_terminator(
         }),
       )
     TailCall(call, semantic_operands) => {
-      if !record.metadata.live_gc_roots.is_empty() {
-        raise UnsupportedOperation(
-          message="tail-call precise roots require caller stackmaps",
-        )
-      }
       if call.protocol != Internal {
         raise UnsupportedOperation(
           message="only Internal tail calls are adapted",
@@ -1427,6 +1566,7 @@ fn set_semantic_terminator(
         [],
         roots,
         requires_hidden_safepoint_id,
+        caller_root_scope_symbols,
         code_symbol_resolver,
       )
       Trap(trap_payload(Unreachable))
@@ -1447,6 +1587,10 @@ fn adapt_semantic_to_legacy(
   embedding_abi? : @abi.EmbeddingABI? = None,
   trap_payload? : (@semantic.TrapReason) -> Int = fn(_) { 0 },
   requires_hidden_safepoint_id? : ((@semantic.ExternalSymbol) -> Bool)? = None,
+  caller_root_scope_symbols? : (
+    @semantic.ExternalSymbol,
+    @semantic.ExternalSymbol,
+  )? = None,
   environment_field_path? : ((@semantic.EnvironmentField) -> Array[Int]?)? = None,
   code_symbol_resolver? : ((@semantic.CodeSymbol) -> @instr.CodeSymbol)? = None,
 ) -> @machv.Function raise SemanticLegacyAdapterError {
@@ -1455,7 +1599,7 @@ fn adapt_semantic_to_legacy(
   }
   let legacy = @machv.Function(function.name())
   let stack_base = maximum_semantic_temporary_stack_bytes(
-    function, isa, embedding_abi, requires_hidden_safepoint_id,
+    function, isa, embedding_abi, requires_hidden_safepoint_id, caller_root_scope_symbols,
   )
   let (stack_objects, stack_offsets, outgoing_size) = plan_semantic_stack_objects(
     function, stack_base,
@@ -1490,12 +1634,12 @@ fn adapt_semantic_to_legacy(
       append_semantic_instruction(
         isa, embedding_abi, function, legacy_block, instruction, values, legacy,
         stack_objects, stack_offsets, trap_payload, requires_hidden_safepoint_id,
-        environment_field_path, code_symbol_resolver,
+        caller_root_scope_symbols, environment_field_path, code_symbol_resolver,
       )
     }
     set_semantic_terminator(
       isa, embedding_abi, function, block, legacy_block, values, block_ids, legacy,
-      trap_payload, requires_hidden_safepoint_id, code_symbol_resolver,
+      trap_payload, requires_hidden_safepoint_id, caller_root_scope_symbols, code_symbol_resolver,
     )
   }
   legacy.verify_for_isa(isa) catch {
@@ -1752,9 +1896,125 @@ test "semantic-to-legacy adapter lowers direct internal call ABI" {
 }
 
 ///|
-test "semantic-to-legacy adapter rejects unadapted precise call roots" {
+test "semantic-to-legacy adapter preserves precise roots across ordinary calls" {
   let builder = @semantic.FunctionBuilder::new(
     "semantic_adapter_roots",
+    Internal,
+    [Ptr64, GcRef64],
+    [I64],
+  )
+  let parameters = builder.parameters()
+  let call = @semantic.SemanticCall::new(
+    Internal(@semantic.CodeSymbol::new("wasm.func.7")),
+    @semantic.Signature::new([Ptr64], [I64]),
+    Internal,
+    @semantic.CallBehavior::conservative(),
+  )
+  let result = builder.emit_with_metadata(
+      Call(call),
+      [parameters[0]],
+      [I64],
+      @semantic.InstructionMetadata::new(None, [parameters[1]]),
+    )[0]
+  builder.return_([result])
+  let legacy = adapt_semantic_to_legacy(
+    builder.finish(),
+    AMD64,
+    embedding_abi=Some(adapter_test_embedding_abi(AMD64)),
+    caller_root_scope_symbols=Some(
+      (
+        @semantic.ExternalSymbol::new("wasmoon.runtime.gc.push_root_scope"),
+        @semantic.ExternalSymbol::new("wasmoon.runtime.gc.pop_root_scope"),
+      ),
+    ),
+    code_symbol_resolver=Some(fn(_) { CodeSymbol("wasm.func", 7) }),
+  )
+  inspect(
+    legacy,
+    content=(
+      #|machv semantic_adapter_roots(v0:int, v1:int) -> int {
+      #|block0:
+      #|    str [sp+0] v1
+      #|    v3 = mov rd, outgoing_args_base
+      #|    v4 = ldi 1
+      #|    call_external[Foreign].wasmoon.runtime.gc.push_root_scope(3) -> 0 results v0, v3, v4
+      #|    v2 = call_direct[Internal].wasm.func.7(0) -> 1 results v0
+      #|    call_external[Foreign].wasmoon.runtime.gc.pop_root_scope(1) -> 0 results v0
+      #|    ret v2
+      #|}
+      #|
+    ),
+  )
+  inspect(legacy.get_max_outgoing_args_size(), content="16")
+}
+
+///|
+test "semantic caller roots are copied before call overflow reuses the stack" {
+  let builder = @semantic.FunctionBuilder::new(
+    "semantic_adapter_roots_with_overflow",
+    Internal,
+    [Ptr64, GcRef64, I64, I64, I64, I64, I64, I64],
+    [],
+  )
+  let parameters = builder.parameters()
+  let call = @semantic.SemanticCall::new(
+    Internal(@semantic.CodeSymbol::new("wasm.func.8")),
+    @semantic.Signature::new([Ptr64, I64, I64, I64, I64, I64, I64], []),
+    Internal,
+    @semantic.CallBehavior::conservative(),
+  )
+  builder.emit_with_metadata(
+    Call(call),
+    [
+      parameters[0],
+      parameters[2],
+      parameters[3],
+      parameters[4],
+      parameters[5],
+      parameters[6],
+      parameters[7],
+    ],
+    [],
+    @semantic.InstructionMetadata::new(None, [parameters[1]]),
+  )
+  |> ignore
+  builder.return_([])
+  let legacy = adapt_semantic_to_legacy(
+    builder.finish(),
+    AMD64,
+    embedding_abi=Some(adapter_test_embedding_abi(AMD64)),
+    caller_root_scope_symbols=Some(
+      (
+        @semantic.ExternalSymbol::new("wasmoon.runtime.gc.push_root_scope"),
+        @semantic.ExternalSymbol::new("wasmoon.runtime.gc.pop_root_scope"),
+      ),
+    ),
+    code_symbol_resolver=Some(fn(_) { CodeSymbol("wasm.func", 8) }),
+  )
+  inspect(
+    legacy,
+    content=(
+      #|machv semantic_adapter_roots_with_overflow(v0:int, v1:int, v2:int, v3:int, v4:int, v5:int, v6:int, v7:int) {
+      #|block0:
+      #|    str [sp+0] v1
+      #|    v8 = mov rd, outgoing_args_base
+      #|    v9 = ldi 1
+      #|    call_external[Foreign].wasmoon.runtime.gc.push_root_scope(3) -> 0 results v0, v8, v9
+      #|    str [sp+0] v7
+      #|    call_direct[Internal].wasm.func.8(6) -> 0 results v0, v2, v3, v4, v5, v6
+      #|    call_external[Foreign].wasmoon.runtime.gc.pop_root_scope(1) -> 0 results v0
+      #|    ret
+      #|}
+      #|
+    ),
+  )
+  inspect(legacy.get_max_outgoing_args_size(), content="16")
+}
+
+///|
+test "semantic ordinary call roots require runtime scope symbols" {
+  let builder = @semantic.FunctionBuilder::new(
+    "semantic_adapter_missing_root_scope",
     Internal,
     [Ptr64, GcRef64],
     [],
@@ -1787,11 +2047,11 @@ test "semantic-to-legacy adapter rejects unadapted precise call roots" {
       inspect(
         error,
         content=(
-          #|UnsupportedOperation(message="precise GC roots require an embedding safepoint ABI")
+          #|UnsupportedOperation(message="precise GC roots require caller root-scope symbols")
         ),
       )
   } noraise {
-    _ => fail("expected precise roots to remain an explicit migration gap")
+    _ => fail("expected missing caller root-scope symbols to be rejected")
   }
 }
 
@@ -2227,7 +2487,7 @@ test "semantic noreturn calls trap if the helper unexpectedly returns" {
 }
 
 ///|
-test "semantic tail calls reject precise roots without caller stackmaps" {
+test "semantic tail calls do not retain dead caller roots" {
   let builder = @semantic.FunctionBuilder::new(
     "semantic_adapter_tail_roots",
     Internal,
@@ -2246,23 +2506,21 @@ test "semantic tail calls reject precise roots without caller stackmaps" {
     parameters,
     @semantic.TerminatorMetadata::new(None, [parameters[1]]),
   )
-  try
+  inspect(
     adapt_semantic_to_legacy(
       builder.finish(),
       AMD64,
       embedding_abi=Some(adapter_test_embedding_abi(AMD64)),
       code_symbol_resolver=Some(fn(_) { CodeSymbol("wasm.func", 5) }),
-    )
-    |> ignore
-  catch {
-    error =>
-      inspect(
-        error,
-        content=(
-          #|UnsupportedOperation(message="tail-call precise roots require caller stackmaps")
-        ),
-      )
-  } noraise {
-    _ => fail("expected tail-call roots to remain an explicit migration gap")
-  }
+    ),
+    content=(
+      #|machv semantic_adapter_tail_roots(v0:int, v1:int) {
+      #|block0:
+      #|    v2 = load_code_addr.wasm.func.5
+      #|    return_call_indirect(stack=0) -> 0 results v2
+      #|    trap #0
+      #|}
+      #|
+    ),
+  )
 }

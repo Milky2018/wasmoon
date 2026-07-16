@@ -1076,12 +1076,14 @@ pub extern "c" fn c_jit_get_gc_alloc_array_from_values_slow_ptr() -> Int64 = "wa
 
 ///|
 /// Get the copied caller-root scope push helper.
-/// Signature: int32_t push(jit_context_t *ctx, int64_t *roots, int32_t root_count)
+/// Signature: void push(jit_context_t *ctx, int64_t *roots, int32_t root_count)
+/// Traps if the runtime cannot copy the roots.
 pub extern "c" fn c_jit_get_gc_push_root_scope_ptr() -> Int64 = "wasmoon_jit_get_gc_push_root_scope_ptr"
 
 ///|
 /// Get the copied caller-root scope pop helper.
 /// Signature: void pop(jit_context_t *ctx)
+/// Traps if no matching scope exists.
 pub extern "c" fn c_jit_get_gc_pop_root_scope_ptr() -> Int64 = "wasmoon_jit_get_gc_pop_root_scope_ptr"
 
 ///|

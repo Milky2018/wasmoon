@@ -1422,12 +1422,33 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_alloc_array_from_values_slow_ptr(v
     return (int64_t)gc_alloc_array_from_values_slow;
 }
 
+static void wasmoon_jit_gc_push_root_scope_or_trap(
+    jit_context_t *ctx,
+    const int64_t *roots,
+    int32_t root_count
+) {
+    if (ctx_gc_push_root_scope_internal(ctx, roots, root_count) == 1) {
+        return;
+    }
+    g_trap_code = 99;
+    siglongjmp(g_trap_jmp_buf, 1);
+}
+
+static void wasmoon_jit_gc_pop_root_scope_or_trap(jit_context_t *ctx) {
+    if (ctx && ctx->gc_root_scope_head) {
+        ctx_gc_pop_root_scope_internal(ctx);
+        return;
+    }
+    g_trap_code = 99;
+    siglongjmp(g_trap_jmp_buf, 1);
+}
+
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_push_root_scope_ptr(void) {
-    return (int64_t)ctx_gc_push_root_scope_internal;
+    return (int64_t)wasmoon_jit_gc_push_root_scope_or_trap;
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_pop_root_scope_ptr(void) {
-    return (int64_t)ctx_gc_pop_root_scope_internal;
+    return (int64_t)wasmoon_jit_gc_pop_root_scope_or_trap;
 }
 
 // ============ Type Cache Management FFI Exports ============
