@@ -9,7 +9,7 @@ struct Environment {
   function_table_field : @machv.EnvironmentField
   table_base_field : (Int) -> @machv.EnvironmentField
   canonical_type_index : (Int) -> Int
-  subtype_check_symbol : @machv.ExternalSymbol
+  runtime_symbol : (String) -> @machv.ExternalSymbol
 }
 
 ///|
@@ -19,7 +19,7 @@ pub fn Environment::new(
   function_table_field : @machv.EnvironmentField,
   table_base_field : (Int) -> @machv.EnvironmentField,
   canonical_type_index : (Int) -> Int,
-  subtype_check_symbol : @machv.ExternalSymbol,
+  runtime_symbol : (String) -> @machv.ExternalSymbol,
 ) -> Environment {
   {
     function_symbol,
@@ -27,7 +27,7 @@ pub fn Environment::new(
     function_table_field,
     table_base_field,
     canonical_type_index,
-    subtype_check_symbol,
+    runtime_symbol,
   }
 }
 
@@ -280,7 +280,7 @@ fn check_indirect_type(
   context.switch_to_block(subtype_block)
   context.emit_call_without_roots(
     @machv.SemanticCall::new(
-      External(environment.subtype_check_symbol),
+      External((environment.runtime_symbol)("gc.type_check_subtype")),
       @machv.Signature::new([I32, I32], []),
       Platform,
       @machv.CallBehavior::new(Read, true, false, false, false),
@@ -346,6 +346,71 @@ fn lower_indirect_call(
 }
 
 ///|
+fn finish_runtime_call(
+  context : @adapter.InstructionContext,
+  environment : Environment,
+  capability : String,
+  operands : Array[@machv.Value],
+  parameter_types : Array[@machv.ValueType],
+  behavior : @machv.CallBehavior,
+) -> Unit {
+  context.finish_call_without_roots(
+    @machv.SemanticCall::new(
+      External((environment.runtime_symbol)(capability)),
+      @machv.Signature::new(parameter_types, context.result_types()),
+      Platform,
+      behavior,
+    ),
+    operands,
+  )
+}
+
+///|
+fn lower_exception_query(
+  context : @adapter.InstructionContext,
+  environment : Environment,
+  capability : String,
+  immediate : Int?,
+) -> Unit {
+  let operands = context.environment()
+  let parameter_types : Array[@machv.ValueType] = [Ptr64]
+  if immediate is Some(value) {
+    operands.push(
+      context.emit(I32Const(value.reinterpret_as_uint()), [], [I32])[0],
+    )
+    parameter_types.push(I32)
+  }
+  finish_runtime_call(
+    context,
+    environment,
+    capability,
+    operands,
+    parameter_types,
+    @machv.CallBehavior::new(Read, false, false, false, false),
+  )
+}
+
+///|
+fn lower_try_table_end(
+  context : @adapter.InstructionContext,
+  environment : Environment,
+  handler_id : Int,
+) -> Unit {
+  let operands = context.environment()
+  operands.push(
+    context.emit(I32Const(handler_id.reinterpret_as_uint()), [], [I32])[0],
+  )
+  finish_runtime_call(
+    context,
+    environment,
+    "exception.try_end",
+    operands,
+    [Ptr64, I32],
+    @machv.CallBehavior::new(ReadWrite, false, false, false, false),
+  )
+}
+
+///|
 fn lower_extension(
   context : @adapter.InstructionContext,
   extension : @milkir.ExtOp,
@@ -406,6 +471,41 @@ fn lower_extension(
     }
     RefEq => {
       context.finish_operation(ReferenceCompare(Equal), context.operands())
+      None
+    }
+    TryTableEnd(handler_id) => {
+      lower_try_table_end(context, environment, handler_id)
+      None
+    }
+    GetExceptionTag => {
+      lower_exception_query(context, environment, "exception.get_tag", None)
+      None
+    }
+    GetExceptionValue(index) => {
+      lower_exception_query(
+        context,
+        environment,
+        "exception.get_value",
+        Some(index),
+      )
+      None
+    }
+    GetExceptionValueCount => {
+      lower_exception_query(
+        context,
+        environment,
+        "exception.get_value_count",
+        None,
+      )
+      None
+    }
+    GetSpilledLocal(index) => {
+      lower_exception_query(
+        context,
+        environment,
+        "exception.get_spilled_local",
+        Some(index),
+      )
       None
     }
     _ =>

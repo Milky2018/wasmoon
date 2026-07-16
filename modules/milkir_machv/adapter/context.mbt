@@ -211,6 +211,16 @@ pub fn InstructionContext::finish_call(
 }
 
 ///|
+pub fn InstructionContext::finish_call_without_roots(
+  self : InstructionContext,
+  call : @machv.SemanticCall,
+  operands : Array[@machv.Value],
+) -> Unit {
+  let results = self.emit_call_without_roots(call, operands, self.result_types)
+  self.complete_once(results)
+}
+
+///|
 pub fn InstructionContext::forward_results(
   self : InstructionContext,
   values : Array[@machv.Value],

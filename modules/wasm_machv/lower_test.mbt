@@ -10,7 +10,7 @@ fn test_environment() -> Environment {
       @machv.EnvironmentField::new("wasm.table.\{index}.base", Ptr64)
     },
     fn(index) { index + 100 },
-    @machv.ExternalSymbol::new("wasm.runtime.gc.type_check_subtype"),
+    fn(name) { @machv.ExternalSymbol::new("wasm.runtime.\{name}") },
   )
 }
 
@@ -317,6 +317,40 @@ test "indirect tail calls preserve roots and replace placeholder traps" {
       #|  v14:i64 = int.binary.And v12, v13
       #|  v15:ptr64 = convert.Bitcast(I64, Ptr64) v14
       #|  tail_call indirect (ptr64, gcref64) -> (i64) [internal] (v15, v0, v2) [memory=read-write, trap, unwind, gc-safepoint, cancel-safepoint] roots=[v2]
+      #|}
+    ),
+  )
+}
+
+///|
+test "exception queries use typed runtime capabilities" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("exception_queries")
+  builder.add_param(I64) |> ignore
+  builder.add_result(I32)
+  builder.add_result(I64)
+  builder.add_result(I32)
+  let tag = builder.emit_ext_inst(I32, @wasm_milkir.encode(GetExceptionTag), [])
+  let value = builder.emit_ext_inst(
+    I64,
+    @wasm_milkir.encode(GetExceptionValue(2)),
+    [],
+  )
+  let count = builder.emit_ext_inst(
+    I32,
+    @wasm_milkir.encode(GetExceptionValueCount),
+    [],
+  )
+  builder.return_([tag, value, count])
+  inspect(
+    lower_function(builder.finalize(), test_environment()),
+    content=(
+      #|machv exception_queries [internal](v0:ptr64) -> (i32, i64, i32) {
+      #|block0:
+      #|  v1:i32 = call external @wasm.runtime.exception.get_tag (ptr64) -> (i32) [platform] v0 [memory=read]
+      #|  v2:i32 = i32.const 2
+      #|  v3:i64 = call external @wasm.runtime.exception.get_value (ptr64, i32) -> (i64) [platform] v0, v2 [memory=read]
+      #|  v4:i32 = call external @wasm.runtime.exception.get_value_count (ptr64) -> (i32) [platform] v0 [memory=read]
+      #|  return v1, v3, v4
       #|}
     ),
   )
