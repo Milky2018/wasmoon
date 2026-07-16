@@ -240,14 +240,44 @@ fn mapped_block(
 }
 
 ///|
+fn instruction_source(instruction : @milkir.Inst) -> @semantic.SourceLocation? {
+  for metadata in instruction.metadata {
+    if metadata is SourceLoc(source) {
+      // MilkIR stores an opaque source label rather than structured
+      // coordinates. Preserve that label verbatim and mark coordinates as
+      // unknown until the producer carries a structured location.
+      return Some(@semantic.SourceLocation::new(source, 0, 0))
+    }
+  }
+  None
+}
+
+///|
+fn instruction_metadata(
+  instruction : @milkir.Inst,
+  live_gc_roots : Array[@semantic.Value],
+) -> @semantic.InstructionMetadata {
+  @semantic.InstructionMetadata::new(
+    instruction_source(instruction),
+    live_gc_roots,
+  )
+}
+
+///|
 fn emit_one(
   builder : @semantic.FunctionBuilder,
   operation : @semantic.Operation,
   operands : Array[@semantic.Value],
   result_type : @semantic.ValueType,
+  source : @semantic.SourceLocation?,
   instruction_id : Int,
 ) -> @semantic.Value raise SemanticLowerError {
-  let results = builder.emit(operation, operands, [result_type])
+  let results = builder.emit_with_metadata(
+    operation,
+    operands,
+    [result_type],
+    @semantic.InstructionMetadata::new(source, []),
+  )
   if results.length() != 1 {
     raise InvalidMachV(
       message="instruction \{instruction_id} failed semantic MachV construction",
@@ -261,6 +291,7 @@ fn lower_pointer_value(
   builder : @semantic.FunctionBuilder,
   values : Array[@semantic.Value?],
   source : @milkir.Value,
+  location : @semantic.SourceLocation?,
   instruction_id : Int,
 ) -> @semantic.Value raise SemanticLowerError {
   let mapped = mapped_value(values, source)
@@ -272,6 +303,7 @@ fn lower_pointer_value(
         Convert(Bitcast(I64, Ptr64)),
         [mapped],
         Ptr64,
+        location,
         instruction_id,
       )
     _ =>
@@ -287,14 +319,18 @@ fn lower_address(
   values : Array[@semantic.Value?],
   base : @milkir.Value,
   offset : @milkir.Value,
+  source : @semantic.SourceLocation?,
   instruction_id : Int,
 ) -> @semantic.Value raise SemanticLowerError {
-  let pointer = lower_pointer_value(builder, values, base, instruction_id)
+  let pointer = lower_pointer_value(
+    builder, values, base, source, instruction_id,
+  )
   emit_one(
     builder,
     PointerOffset,
     [pointer, mapped_value(values, offset)],
     Ptr64,
+    source,
     instruction_id,
   )
 }
@@ -331,6 +367,7 @@ fn lower_memory_instruction(
   instruction : @milkir.Inst,
   memory : @milkir.MemoryOp,
 ) -> Unit raise SemanticLowerError {
+  let source = instruction_source(instruction)
   let results = match memory {
     Load(result_type) => {
       let lowered_type = lower_type(result_type)
@@ -339,9 +376,10 @@ fn lower_memory_instruction(
         values,
         instruction.args[0],
         instruction.args[1],
+        source,
         instruction.id,
       )
-      builder.emit(
+      builder.emit_with_metadata(
         Load(
           @semantic.LoadSpec::new(
             access_width_for_type(lowered_type),
@@ -354,6 +392,7 @@ fn lower_memory_instruction(
         ),
         [address],
         [lowered_type],
+        instruction_metadata(instruction, []),
       )
     }
     Store(value_type) => {
@@ -363,9 +402,10 @@ fn lower_memory_instruction(
         values,
         instruction.args[0],
         instruction.args[2],
+        source,
         instruction.id,
       )
-      builder.emit(
+      builder.emit_with_metadata(
         Store(
           @semantic.StoreSpec::new(
             access_width_for_type(lowered_type),
@@ -377,6 +417,7 @@ fn lower_memory_instruction(
         ),
         [address, mapped_value(values, instruction.args[1])],
         [],
+        instruction_metadata(instruction, []),
       )
     }
     LoadNarrow(result_type, bits, signed) => {
@@ -393,9 +434,10 @@ fn lower_memory_instruction(
         values,
         instruction.args[0],
         instruction.args[1],
+        source,
         instruction.id,
       )
-      builder.emit(
+      builder.emit_with_metadata(
         Load(
           @semantic.LoadSpec::new(
             width,
@@ -412,6 +454,7 @@ fn lower_memory_instruction(
         ),
         [address],
         [lowered_type],
+        instruction_metadata(instruction, []),
       )
     }
     StoreNarrow(bits) => {
@@ -428,12 +471,14 @@ fn lower_memory_instruction(
         values,
         instruction.args[0],
         instruction.args[2],
+        source,
         instruction.id,
       )
-      builder.emit(
+      builder.emit_with_metadata(
         Store(@semantic.StoreSpec::new(width, value_type, 0UL, Little, None)),
         [address, mapped_value(values, instruction.args[1])],
         [],
+        instruction_metadata(instruction, []),
       )
     }
     Vector(_) =>
@@ -665,6 +710,7 @@ fn lower_call_instruction(
           builder,
           values,
           instruction.args[0],
+          instruction_source(instruction),
           instruction.id,
         ),
       ]
@@ -694,7 +740,7 @@ fn lower_call_instruction(
     Call(semantic_call),
     operands,
     result_types,
-    @semantic.InstructionMetadata::new(None, live_gc_roots),
+    instruction_metadata(instruction, live_gc_roots),
   )
   assign_instruction_results(values, instruction, lowered_results)
 }
@@ -792,7 +838,12 @@ fn lower_instruction(
       let operation = lower_scalar_operation(scalar, instruction, block_id)
       let operands = mapped_values(values, instruction.args)
       let result_types = instruction.results.map(result => lower_type(result.ty))
-      let lowered_results = builder.emit(operation, operands, result_types)
+      let lowered_results = builder.emit_with_metadata(
+        operation,
+        operands,
+        result_types,
+        instruction_metadata(instruction, []),
+      )
       assign_instruction_results(values, instruction, lowered_results)
     }
     Vector(operation) =>

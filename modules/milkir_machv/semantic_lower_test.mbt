@@ -205,13 +205,16 @@ test "core lowering reports only live managed references at calls" {
   builder.add_result(Ref)
   let symbol = builder.get_function().declare_external_symbol("host.observe")
   builder.call_symbol_multi(symbol, [], [live]) |> ignore
+  builder.get_function().blocks[0].instructions[0].add_metadata(
+    SourceLoc("call.wat"),
+  )
   builder.return_([live])
   inspect(
     lower_core_function(builder.finalize()),
     content=(
       #|machv call_roots [internal](v0:gcref64, v1:gcref64) -> (gcref64) {
       #|block0:
-      #|  call external @host.observe (gcref64) -> () [platform] v0 [memory=read-write, trap, unwind, gc-safepoint, cancel-safepoint] roots=[v0]
+      #|  call external @host.observe (gcref64) -> () [platform] v0 [memory=read-write, trap, unwind, gc-safepoint, cancel-safepoint] source=call.wat:0:0 roots=[v0]
       #|  return v0
       #|}
     ),
@@ -338,4 +341,36 @@ test "core lowering rejects unknown textual trap reasons" {
         ),
       )
   }
+}
+
+///|
+test "core lowering preserves source metadata across semantic expansion" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("source_memory")
+  let base = builder.add_param(I64)
+  let offset = builder.add_param(I64)
+  builder.add_result(I32)
+  let loaded = builder.load_ptr(I32, base, offset)
+  builder.get_function().blocks[0].instructions[0].add_metadata(
+    SourceLoc("module.wat"),
+  )
+  builder.return_([loaded])
+  inspect(
+    lower_core_function(builder.finalize()),
+    content=(
+      #|machv source_memory [internal](v0:i64, v1:i64) -> (i32) {
+      #|block0:
+      #|  v2:ptr64 = convert.Bitcast(I64, Ptr64) v0 source=module.wat:0:0
+      #|  v3:ptr64 = pointer.offset v2, v1 source=module.wat:0:0
+      #|  v4:i32 = load {
+      #|  width: W32,
+      #|  extension: None,
+      #|  result_type: I32,
+      #|  offset: 0,
+      #|  endianness: Little,
+      #|  trap: None,
+      #|} v3 [memory=read] source=module.wat:0:0
+      #|  return v4
+      #|}
+    ),
+  )
 }

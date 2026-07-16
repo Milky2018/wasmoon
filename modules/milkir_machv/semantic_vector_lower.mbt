@@ -300,10 +300,11 @@ fn lower_vector_instruction(
   instruction : @milkir.Inst,
   operation : @milkir.VectorOp,
 ) -> Unit raise SemanticLowerError {
-  let lowered_results = builder.emit(
+  let lowered_results = builder.emit_with_metadata(
     lower_vector_operation(operation),
     mapped_values(values, instruction.args),
     instruction.results.map(value => lower_type(value.ty)),
+    instruction_metadata(instruction, []),
   )
   assign_instruction_results(values, instruction, lowered_results)
 }
@@ -329,6 +330,7 @@ fn lower_vector_memory_instruction(
     builder,
     values,
     instruction.args[0],
+    instruction_source(instruction),
     instruction.id,
   )
   let (operation, operands, result_types) : (
@@ -403,6 +405,11 @@ fn lower_vector_memory_instruction(
         [],
       )
   }
-  let lowered_results = builder.emit(operation, operands, result_types)
+  let lowered_results = builder.emit_with_metadata(
+    operation,
+    operands,
+    result_types,
+    instruction_metadata(instruction, []),
+  )
   assign_instruction_results(values, instruction, lowered_results)
 }
