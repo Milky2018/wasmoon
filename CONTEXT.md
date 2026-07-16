@@ -40,6 +40,10 @@ _Avoid_: IR type system when referring to WebAssembly heap types
 A reusable, target-neutral low-level virtual-register intermediate representation with single-definition values and block parameters. Every native JIT path passes through **MachV** before target-specific lowering.
 _Avoid_: target VCode, target-bound IR, portable execution target
 
+**MachV Function**:
+The function-scoped unit of target-neutral MachV structure, semantics, control flow, and SSA consumed by target lowering.
+_Avoid_: verified wrapper, target VCode function, machine-code function
+
 **MachV Value Type**:
 One of `I32`, `I64`, `F32`, `F64`, `V128`, `Ptr64`, or `GcRef64`, preserving exact target-neutral width and carrier meaning without choosing a target register bank or location.
 _Avoid_: register class, ABI value location, MilkIR type
@@ -176,6 +180,10 @@ _Avoid_: pre-allocation multiple definitions, physical-register form, edge-copy 
 The static target checkpoint that composes shared Target VCode structure and SSA validation with exhaustive target-owned instruction, feature, ABI, and emitter legality checks.
 _Avoid_: dynamic target callback, shared target opcode verifier, emitter abort
 
+**Allocated Function**:
+The checkpoint state consisting of one unchanged Target VCode function and its separate structurally bound Allocation.
+_Avoid_: rewritten physical VCode, allocated MachV, verified wrapper
+
 **Portable Execution Target**:
 An optional downstream target that lowers **MachV** into interpreter-oriented bytecode with its own instruction set and execution contract.
 _Avoid_: MachV bytecode, MachV VM, production MachV interpreter
@@ -223,6 +231,14 @@ _Avoid_: emitter stack assertion, unbound frame offsets, post-write validation
 **Code Object Verifier**:
 The target checkpoint that validates a complete unlinked machine-code artifact's labels, relocations, sections, instruction-boundary metadata, architecture, and feature contract before the artifact leaves emission.
 _Avoid_: linked-code verifier, production disassembly round trip, partial-buffer validation
+
+**Framed Function**:
+The checkpoint state consisting of an **Allocated Function** and its target-owned **Frame Layout**.
+_Avoid_: frame-bearing MachV, emitter state, verified wrapper
+
+**Unlinked Code Object**:
+The complete target-specific bytes and generic relocation and metadata records produced before Wasmoon JIT resolves runtime addresses or installs executable memory.
+_Avoid_: linked image, executable memory, partial emission buffer
 
 **Register Allocation**:
 The target-independent allocation algorithm that assigns virtual registers or spills in **Target VCode** through a shared abstract program model.
@@ -295,6 +311,7 @@ _Avoid_: MachV emitter output, generic object format
 - The **MachV Verifier** deterministically reports the first structured error without target or ABI context, mutation, repair, or abort.
 - The **MachV Verifier** covers function ownership, signatures and types, rooted CFG edges, strict SSA dominance, terminators, semantic operation contracts, and behavior summaries, but never target legality or ABI state.
 - Every public compiler transformation owns entry and exit **Verification Checkpoints**; ordinary mutable representations are revalidated at the next public seam without acquiring permanent verified state.
+- The native checkpoint sequence is **MachV Function**, Target VCode SSA, **Allocated Function**, **Framed Function**, then **Unlinked Code Object**; these names describe ordinary data at public seams rather than wrapper or frozen types.
 - **MachV Control-Flow Graph** order expresses semantics and SSA relationships; fallthrough selection, label offsets, branch relaxation, and final block layout belong downstream.
 - `Ptr64` and `GcRef64` are always 64-bit carriers; only `GcRef64` is a **MachV Managed Reference**.
 - A **MachV Constant** produces an ordinary SSA value; target lowering may select immediates, relocations, or constant-pool loads without changing its meaning.
