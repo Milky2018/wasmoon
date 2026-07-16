@@ -116,6 +116,9 @@ fn format_semantics(semantics : OperationSemantics) -> String {
   if semantics.cancellation_safepoint {
     facts.push("cancel-safepoint")
   }
+  if semantics.returns_twice {
+    facts.push("returns-twice")
+  }
   if facts.is_empty() {
     ""
   } else {

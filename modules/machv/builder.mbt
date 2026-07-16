@@ -455,6 +455,15 @@ pub fn FunctionBuilder::tail_call_with_metadata(
     )
     return
   }
+  if call.behavior.returns_twice {
+    self.record_error(
+      InvalidTerminator(
+        block_id=self.current_block.id,
+        message="tail call cannot return twice",
+      ),
+    )
+    return
+  }
   if verify_call_operands(call, self.value_types(operands), "tail_call")
     is Some(message) {
     self.record_error(
@@ -522,6 +531,15 @@ pub fn FunctionBuilder::noreturn_call_with_metadata(
       InvalidTerminator(
         block_id=self.current_block.id,
         message="noreturn call must not declare results",
+      ),
+    )
+    return
+  }
+  if call.behavior.returns_twice {
+    self.record_error(
+      InvalidTerminator(
+        block_id=self.current_block.id,
+        message="noreturn call cannot return twice",
       ),
     )
     return

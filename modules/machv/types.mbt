@@ -160,6 +160,7 @@ pub struct OperationSemantics {
   may_unwind : Bool
   gc_safepoint : Bool
   cancellation_safepoint : Bool
+  returns_twice : Bool
 } derive(Debug, Eq, Hash)
 
 ///|
@@ -170,6 +171,7 @@ pub fn OperationSemantics::pure() -> OperationSemantics {
     may_unwind: false,
     gc_safepoint: false,
     cancellation_safepoint: false,
+    returns_twice: false,
   }
 }
 
@@ -181,7 +183,8 @@ pub fn OperationSemantics::must_preserve_if_unused(
   self.may_trap ||
   self.may_unwind ||
   self.gc_safepoint ||
-  self.cancellation_safepoint
+  self.cancellation_safepoint ||
+  self.returns_twice
 }
 
 ///|
@@ -192,6 +195,7 @@ pub struct CallBehavior {
   may_unwind : Bool
   gc_safepoint : Bool
   cancellation_safepoint : Bool
+  returns_twice : Bool
 } derive(Debug, Eq, Hash)
 
 ///|
@@ -202,6 +206,7 @@ pub fn CallBehavior::conservative() -> CallBehavior {
     may_unwind: true,
     gc_safepoint: true,
     cancellation_safepoint: true,
+    returns_twice: false,
   }
 }
 
@@ -212,8 +217,16 @@ pub fn CallBehavior::new(
   may_unwind : Bool,
   gc_safepoint : Bool,
   cancellation_safepoint : Bool,
+  returns_twice? : Bool = false,
 ) -> CallBehavior {
-  { memory, may_trap, may_unwind, gc_safepoint, cancellation_safepoint }
+  {
+    memory,
+    may_trap,
+    may_unwind,
+    gc_safepoint,
+    cancellation_safepoint,
+    returns_twice,
+  }
 }
 
 ///|
@@ -224,6 +237,7 @@ pub fn CallBehavior::semantics(self : CallBehavior) -> OperationSemantics {
     may_unwind: self.may_unwind,
     gc_safepoint: self.gc_safepoint,
     cancellation_safepoint: self.cancellation_safepoint,
+    returns_twice: self.returns_twice,
   }
 }
 

@@ -157,6 +157,7 @@ test "operation summaries snapshot all observable families" {
       #|      may_unwind: false,
       #|      gc_safepoint: false,
       #|      cancellation_safepoint: false,
+      #|      returns_twice: false,
       #|    },
       #|  ),
       #|  (
@@ -167,6 +168,7 @@ test "operation summaries snapshot all observable families" {
       #|      may_unwind: false,
       #|      gc_safepoint: false,
       #|      cancellation_safepoint: false,
+      #|      returns_twice: false,
       #|    },
       #|  ),
       #|  (
@@ -177,6 +179,7 @@ test "operation summaries snapshot all observable families" {
       #|      may_unwind: false,
       #|      gc_safepoint: false,
       #|      cancellation_safepoint: false,
+      #|      returns_twice: false,
       #|    },
       #|  ),
       #|  (
@@ -187,6 +190,7 @@ test "operation summaries snapshot all observable families" {
       #|      may_unwind: false,
       #|      gc_safepoint: false,
       #|      cancellation_safepoint: false,
+      #|      returns_twice: false,
       #|    },
       #|  ),
       #|  (
@@ -206,6 +210,7 @@ test "operation summaries snapshot all observable families" {
       #|      may_unwind: false,
       #|      gc_safepoint: false,
       #|      cancellation_safepoint: false,
+      #|      returns_twice: false,
       #|    },
       #|  ),
       #|  (
@@ -224,6 +229,7 @@ test "operation summaries snapshot all observable families" {
       #|      may_unwind: false,
       #|      gc_safepoint: false,
       #|      cancellation_safepoint: false,
+      #|      returns_twice: false,
       #|    },
       #|  ),
       #|  (
@@ -243,6 +249,7 @@ test "operation summaries snapshot all observable families" {
       #|      may_unwind: false,
       #|      gc_safepoint: false,
       #|      cancellation_safepoint: false,
+      #|      returns_twice: false,
       #|    },
       #|  ),
       #|  (
@@ -257,6 +264,7 @@ test "operation summaries snapshot all observable families" {
       #|          may_unwind: true,
       #|          gc_safepoint: true,
       #|          cancellation_safepoint: true,
+      #|          returns_twice: false,
       #|        },
       #|      },
       #|    ),
@@ -266,6 +274,7 @@ test "operation summaries snapshot all observable families" {
       #|      may_unwind: true,
       #|      gc_safepoint: true,
       #|      cancellation_safepoint: true,
+      #|      returns_twice: false,
       #|    },
       #|  ),
       #|  (
@@ -276,6 +285,7 @@ test "operation summaries snapshot all observable families" {
       #|      may_unwind: false,
       #|      gc_safepoint: true,
       #|      cancellation_safepoint: true,
+      #|      returns_twice: false,
       #|    },
       #|  ),
       #|]

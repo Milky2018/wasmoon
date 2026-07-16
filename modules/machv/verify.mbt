@@ -381,6 +381,12 @@ fn Function::verify_terminator_shape(
           message="tail-call results must match the enclosing function",
         )
       }
+      if call.behavior.returns_twice {
+        raise InvalidTerminator(
+          block_id~,
+          message="tail call cannot return twice",
+        )
+      }
       if verify_call_operands(
           call,
           operands.map(value => self.values[value.id].ty),
@@ -405,6 +411,12 @@ fn Function::verify_terminator_shape(
         raise InvalidTerminator(
           block_id~,
           message="noreturn call must not declare results",
+        )
+      }
+      if call.behavior.returns_twice {
+        raise InvalidTerminator(
+          block_id~,
+          message="noreturn call cannot return twice",
         )
       }
       if verify_call_operands(

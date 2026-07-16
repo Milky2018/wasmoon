@@ -1017,6 +1017,41 @@ fn lower_try_table_end(
 }
 
 ///|
+fn lower_try_table_begin(
+  context : @adapter.InstructionContext,
+  environment : Environment,
+  handler_id : Int,
+) -> Unit {
+  let operands = context.environment()
+  operands.push(i32_immediate(context, handler_id))
+  let buffer = context.emit_call_without_roots(
+      @machv.SemanticCall::new(
+        External((environment.runtime_symbol)("exception.try_begin")),
+        @machv.Signature::new([Ptr64, I32], [Ptr64]),
+        Platform,
+        @machv.CallBehavior::new(ReadWrite, true, false, false, false),
+      ),
+      operands,
+      [Ptr64],
+    )[0]
+  finish_runtime_call(
+    context,
+    environment,
+    "exception.sigsetjmp",
+    [buffer, i32_immediate(context, 0)],
+    [Ptr64, I32],
+    @machv.CallBehavior::new(
+      ReadWrite,
+      false,
+      false,
+      false,
+      false,
+      returns_twice=true,
+    ),
+  )
+}
+
+///|
 fn lower_extension(
   context : @adapter.InstructionContext,
   extension : @milkir.ExtOp,
@@ -1226,6 +1261,10 @@ fn lower_extension(
       lower_delegate(context, environment, depth)
       None
     }
+    TryTableBegin(handler_id) => {
+      lower_try_table_begin(context, environment, handler_id)
+      None
+    }
     TryTableEnd(handler_id) => {
       lower_try_table_end(context, environment, handler_id)
       None
@@ -1261,8 +1300,6 @@ fn lower_extension(
       )
       None
     }
-    _ =>
-      Some("semantic Wasm lowering is not implemented for \{to_repr(opcode)}")
   }
 }
 

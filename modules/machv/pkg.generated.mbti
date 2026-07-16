@@ -78,9 +78,10 @@ pub struct CallBehavior {
   may_unwind : Bool
   gc_safepoint : Bool
   cancellation_safepoint : Bool
+  returns_twice : Bool
 } derive(Eq, Hash, @debug.Debug)
 pub fn CallBehavior::conservative() -> Self
-pub fn CallBehavior::new(MemoryEffect, Bool, Bool, Bool, Bool) -> Self
+pub fn CallBehavior::new(MemoryEffect, Bool, Bool, Bool, Bool, returns_twice? : Bool) -> Self
 pub fn CallBehavior::semantics(Self) -> OperationSemantics
 
 pub(all) enum CallProtocol {
@@ -381,6 +382,7 @@ pub struct OperationSemantics {
   may_unwind : Bool
   gc_safepoint : Bool
   cancellation_safepoint : Bool
+  returns_twice : Bool
 } derive(Eq, Hash, @debug.Debug)
 pub fn OperationSemantics::must_preserve_if_unused(Self) -> Bool
 pub fn OperationSemantics::pure() -> Self

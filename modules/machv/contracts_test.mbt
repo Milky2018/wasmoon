@@ -127,6 +127,83 @@ test "noreturn calls cannot declare results" {
 }
 
 ///|
+test "returns-twice calls preserve their exceptional control behavior" {
+  let builder = @machv.FunctionBuilder::new(
+    "returns_twice",
+    Internal,
+    [Ptr64],
+    [I32],
+  )
+  let result = single(
+    builder.emit(
+      Call(
+        @machv.SemanticCall::new(
+          External(@machv.ExternalSymbol::new("runtime.setjmp")),
+          @machv.Signature::new([Ptr64], [I32]),
+          Platform,
+          @machv.CallBehavior::new(
+            ReadWrite,
+            false,
+            false,
+            false,
+            false,
+            returns_twice=true,
+          ),
+        ),
+      ),
+      builder.parameters(),
+      [I32],
+    ),
+  )
+  builder.return_([result])
+  inspect(
+    builder.finish(),
+    content=(
+      #|machv returns_twice [internal](v0:ptr64) -> (i32) {
+      #|block0:
+      #|  v1:i32 = call external @runtime.setjmp (ptr64) -> (i32) [platform] v0 [memory=read-write, returns-twice]
+      #|  return v1
+      #|}
+    ),
+  )
+}
+
+///|
+test "tail calls cannot use returns-twice behavior" {
+  let builder = @machv.FunctionBuilder::new(
+    "tail_returns_twice",
+    Internal,
+    [],
+    [],
+  )
+  builder.tail_call(
+    @machv.SemanticCall::new(
+      External(@machv.ExternalSymbol::new("runtime.setjmp")),
+      @machv.Signature::new([], []),
+      Platform,
+      @machv.CallBehavior::new(
+        ReadWrite,
+        false,
+        false,
+        false,
+        false,
+        returns_twice=true,
+      ),
+    ),
+    [],
+  )
+  try builder.finish() catch {
+    error =>
+      inspect(
+        error,
+        content="InvalidTerminator(block_id=0, message=\"tail call cannot return twice\")",
+      )
+  } noraise {
+    _ => fail("expected returns-twice tail call to be rejected")
+  }
+}
+
+///|
 test "i64 switch carries typed edge arguments" {
   let builder = @machv.FunctionBuilder::new("switch64", Internal, [I64], [I64])
   let case_block = builder.create_block([I64])

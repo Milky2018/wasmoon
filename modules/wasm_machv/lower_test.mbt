@@ -688,6 +688,28 @@ test "exception queries use typed runtime capabilities" {
 }
 
 ///|
+test "try-table setup preserves the returns-twice setjmp contract" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("exception_try")
+  builder.add_param(I64) |> ignore
+  builder.add_result(I32)
+  let result = @wasm_milkir.try_table_begin(builder, 4)
+  builder.return_([result])
+  inspect(
+    lower_function(builder.finalize(), test_environment()),
+    content=(
+      #|machv exception_try [internal](v0:ptr64) -> (i32) {
+      #|block0:
+      #|  v1:i32 = i32.const 4
+      #|  v2:ptr64 = call external @wasm.runtime.exception.try_begin (ptr64, i32) -> (ptr64) [platform] v0, v1 [memory=read-write, trap]
+      #|  v3:i32 = i32.const 0
+      #|  v4:i32 = call external @wasm.runtime.exception.sigsetjmp (ptr64, i32) -> (i32) [platform] v2, v3 [memory=read-write, returns-twice]
+      #|  return v4
+      #|}
+    ),
+  )
+}
+
+///|
 test "exception local snapshots use address-visible runtime-word buffers" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder("exception_spill")
   builder.add_param(I64) |> ignore
