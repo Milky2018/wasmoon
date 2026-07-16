@@ -220,6 +220,10 @@ _Avoid_: MachV frame state, pre-allocation offset, prologue opcode
 The target-independent allocation algorithm that assigns virtual registers or spills in **Target VCode** through a shared abstract program model.
 _Avoid_: regalloc_core, VCode regalloc, machine regalloc
 
+**Allocation Binding**:
+The structural association between one Target VCode function and its allocation through private function ownership and stable instruction, operand, value, edge, and program-point identities.
+_Avoid_: raw array position, version stamp, cross-function allocation
+
 **Allocated Location**:
 A target register or frame slot assigned to a **Target VCode** virtual value by **Register Allocation**.
 _Avoid_: MachV value location, semantic stack object, ABI signature fact
@@ -299,6 +303,7 @@ _Avoid_: MachV emitter output, generic object format
 - Target lowering borrows verified **MachV** through read-only dense-indexed queries without cloning or mutating it, and constructs independent **Target VCode** storage without retaining aliases into MachV-owned collections.
 - **Target VCode** stores allocation operands, constraints, timing, ties, and clobbers once in compact shared side tables. Register allocation reads those tables directly and never reconstructs facts by matching target instructions.
 - Register allocation leaves virtual **Target VCode** unchanged and returns a separate dense allocation result; the statically typed target emitter consumes both and interleaves allocation edits at stable program points.
+- An **Allocation Binding** is verified as a complete structural bijection against the current Target VCode rather than inferred from raw indices, mutation history, or a version stamp.
 - Source locations, structured trap reasons, cancellation and GC safepoints, safepoint `GcRef64` values, and unresolved symbol identities cross target lowering as compact metadata keyed by stable Target VCode instruction handles.
 - Relocation encodings, constant-pool layout, branch relaxation, veneers, final code offsets, and runtime addresses do not enter the shared Target VCode shell; target emission and Wasmoon linking own them.
 - **Target Legalization** may expand one semantic **MachV** operation into multiple target instructions.
@@ -373,6 +378,7 @@ _Avoid_: MachV emitter output, generic object format
 - Target-lowering input ownership was unclear; resolved: borrow verified MachV read-only without cloning, build independent Target VCode privately, and require revalidation after later output mutation rather than introducing a frozen wrapper.
 - Regalloc projection was previously modeled as a target-instruction trait returning operand arrays; resolved: lowering records compact allocation facts in the shared Target VCode shell once, avoiding target opcode inspection, repeated projection, and hot-path allocation.
 - Post-regalloc representation was unclear; resolved: keep Target VCode virtual and unchanged, return a separate dense allocation keyed by stable handles, and avoid rewriting or copying target instructions.
+- Allocation freshness was previously implicit; resolved: owner-scoped stable identities and a complete structural bijection detect stale or cross-function results without persistent verification state.
 - Target-lowering metadata ownership was unclear; resolved: preserve target-neutral observable metadata in Target VCode, map safepoint values through allocation, and leave physical encoding and runtime resolution downstream.
 - Pipeline validation ownership was unclear; resolved: each public transformation validates both input and output through representation-owned **Verification Checkpoints**, with no caller-managed or disabled safe path.
 - Value-location ownership was previously mixed into **MachV**; resolved: MachV safepoints and operations reference values, while **Allocated Location** and frame layout belong downstream.
