@@ -17,6 +17,7 @@ REUSABLE_MODULES = [
     "modules/machv_regalloc",
     "modules/machv_emit",
     "modules/milkir_machv",
+    "modules/wasm_machv",
     "modules/aarch64_target",
     "modules/x64_target",
 ]

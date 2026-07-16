@@ -793,6 +793,7 @@ fn lower_dialect_instruction(
   let context = @adapter.InstructionContext::new(
     builder,
     mapped_values(values, instruction.args),
+    instruction.args.map(operand => lower_type(operand.ty)),
     instruction.results.map(result => lower_type(result.ty)),
     environment,
     instruction_source(instruction),

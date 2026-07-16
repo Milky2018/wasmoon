@@ -1,0 +1,7 @@
+import {
+  "Milky2018/wasm_milkir",
+  "Milky2018/milkir",
+  "Milky2018/machv",
+  "Milky2018/milkir_machv",
+  "Milky2018/milkir_machv/adapter",
+}

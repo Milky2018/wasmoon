@@ -1,0 +1,22 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasm_machv"
+
+import {
+  "Milky2018/machv",
+  "Milky2018/milkir",
+  "Milky2018/milkir_machv",
+}
+
+// Values
+pub fn lower_function(@milkir.Function, Environment) -> @machv.Function raise @milkir_machv.SemanticLowerError
+
+// Errors
+
+// Types and methods
+type Environment
+pub fn Environment::new((Int) -> @machv.CodeSymbol) -> Self
+
+// Type aliases
+
+// Traits
+

@@ -7,6 +7,7 @@
 struct InstructionContext {
   builder : @machv.FunctionBuilder
   operands : Array[@machv.Value]
+  operand_types : Array[@machv.ValueType]
   result_types : Array[@machv.ValueType]
   environment : Array[@machv.Value]
   source : @machv.SourceLocation?
@@ -20,6 +21,7 @@ struct InstructionContext {
 pub fn InstructionContext::new(
   builder : @machv.FunctionBuilder,
   operands : Array[@machv.Value],
+  operand_types : Array[@machv.ValueType],
   result_types : Array[@machv.ValueType],
   environment : Array[@machv.Value],
   source : @machv.SourceLocation?,
@@ -29,6 +31,7 @@ pub fn InstructionContext::new(
   {
     builder,
     operands: operands.copy(),
+    operand_types: operand_types.copy(),
     result_types: result_types.copy(),
     environment: environment.copy(),
     source,
@@ -102,6 +105,13 @@ pub fn InstructionContext::result_types(
   self : InstructionContext,
 ) -> Array[@machv.ValueType] {
   self.result_types.copy()
+}
+
+///|
+pub fn InstructionContext::operand_types(
+  self : InstructionContext,
+) -> Array[@machv.ValueType] {
+  self.operand_types.copy()
 }
 
 ///|

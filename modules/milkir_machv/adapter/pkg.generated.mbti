@@ -22,7 +22,8 @@ pub fn InstructionContext::finish_operation(Self, @machv.Operation, Array[@machv
 pub fn InstructionContext::finish_void(Self) -> Unit
 pub fn InstructionContext::forward_results(Self, Array[@machv.Value]) -> Unit
 pub fn InstructionContext::jump(Self, @machv.Block, Array[@machv.Value]) -> Unit
-pub fn InstructionContext::new(@machv.FunctionBuilder, Array[@machv.Value], Array[@machv.ValueType], Array[@machv.Value], @machv.SourceLocation?, Array[@machv.Value], (Array[@machv.Value]) -> Unit) -> Self
+pub fn InstructionContext::new(@machv.FunctionBuilder, Array[@machv.Value], Array[@machv.ValueType], Array[@machv.ValueType], Array[@machv.Value], @machv.SourceLocation?, Array[@machv.Value], (Array[@machv.Value]) -> Unit) -> Self
+pub fn InstructionContext::operand_types(Self) -> Array[@machv.ValueType]
 pub fn InstructionContext::operands(Self) -> Array[@machv.Value]
 pub fn InstructionContext::result_types(Self) -> Array[@machv.ValueType]
 pub fn InstructionContext::source(Self) -> @machv.SourceLocation?
