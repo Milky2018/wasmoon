@@ -1,6 +1,17 @@
 ///|
+fn test_environment() -> Environment {
+  Environment::new(
+    fn(index) { @machv.CodeSymbol::new("wasm.function.\{index}") },
+    fn(index) {
+      @machv.EnvironmentField::new("wasm.memory.\{index}.base", Ptr64)
+    },
+  )
+}
+
+///|
 test "direct Wasm calls carry the explicit execution environment" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder("caller")
+  builder.add_param(I64) |> ignore
   let argument = builder.add_param(I32)
   builder.add_result(I64)
   let results = builder.emit_multi_ext_inst(
@@ -9,11 +20,8 @@ test "direct Wasm calls carry the explicit execution environment" {
     [argument],
   )
   builder.return_(results)
-  let environment = Environment::new(fn(index) {
-    @machv.CodeSymbol::new("wasm.function.\{index}")
-  })
   inspect(
-    lower_function(builder.finalize(), environment),
+    lower_function(builder.finalize(), test_environment()),
     content=(
       #|machv caller [internal](v0:ptr64, v1:i32) -> (i64) {
       #|block0:
@@ -27,15 +35,13 @@ test "direct Wasm calls carry the explicit execution environment" {
 ///|
 test "direct Wasm tail calls replace the source placeholder terminator" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder("tail_caller")
+  builder.add_param(I64) |> ignore
   let argument = builder.add_param(Ref)
   builder.add_result(I64)
   builder.emit_void_ext_inst(@wasm_milkir.encode(ReturnCall(4)), [argument])
   builder.trap("unreachable after return_call")
-  let environment = Environment::new(fn(index) {
-    @machv.CodeSymbol::new("wasm.function.\{index}")
-  })
   inspect(
-    lower_function(builder.finalize(), environment),
+    lower_function(builder.finalize(), test_environment()),
     content=(
       #|machv tail_caller [internal](v0:ptr64, v1:gcref64) -> (i64) {
       #|block0:
@@ -48,6 +54,7 @@ test "direct Wasm tail calls replace the source placeholder terminator" {
 ///|
 test "call_ref exposes tagged-reference removal before an indirect call" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder("reference_caller")
+  builder.add_param(I64) |> ignore
   let callee = builder.add_param(CallableRef)
   let argument = builder.add_param(I32)
   builder.add_result(I32)
@@ -57,11 +64,8 @@ test "call_ref exposes tagged-reference removal before an indirect call" {
     [callee, argument],
   )
   builder.return_(results)
-  let environment = Environment::new(fn(index) {
-    @machv.CodeSymbol::new("wasm.function.\{index}")
-  })
   inspect(
-    lower_function(builder.finalize(), environment),
+    lower_function(builder.finalize(), test_environment()),
     content=(
       #|machv reference_caller [internal](v0:ptr64, v1:gcref64, v2:i32) -> (i32) {
       #|block0:
@@ -80,6 +84,7 @@ test "call_ref exposes tagged-reference removal before an indirect call" {
 ///|
 test "reference primitives preserve explicit target-neutral representation" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder("reference_primitives")
+  builder.add_param(I64) |> ignore
   let integer = builder.add_param(I32)
   let left = builder.add_param(Ref)
   let right = builder.add_param(Ref)
@@ -90,11 +95,8 @@ test "reference primitives preserve explicit target-neutral representation" {
     left, right,
   ])
   builder.return_([i31, equal])
-  let environment = Environment::new(fn(index) {
-    @machv.CodeSymbol::new("wasm.function.\{index}")
-  })
   inspect(
-    lower_function(builder.finalize(), environment),
+    lower_function(builder.finalize(), test_environment()),
     content=(
       #|machv reference_primitives [internal](v0:ptr64, v1:i32, v2:gcref64, v3:gcref64) -> (gcref64, i32) {
       #|block0:
@@ -113,17 +115,15 @@ test "reference primitives preserve explicit target-neutral representation" {
 ///|
 test "i31 get uses explicit null-trap control flow" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder("i31_get")
+  builder.add_param(I64) |> ignore
   let reference = builder.add_param(Ref)
   builder.add_result(I32)
   let result = builder.emit_ext_inst(I32, @wasm_milkir.encode(I31GetS), [
     reference,
   ])
   builder.return_([result])
-  let environment = Environment::new(fn(index) {
-    @machv.CodeSymbol::new("wasm.function.\{index}")
-  })
   inspect(
-    lower_function(builder.finalize(), environment),
+    lower_function(builder.finalize(), test_environment()),
     content=(
       #|machv i31_get [internal](v0:ptr64, v1:gcref64) -> (i32) {
       #|block0:
@@ -142,6 +142,28 @@ test "i31 get uses explicit null-trap control flow" {
       #|  v10:i32 = int.binary.ShiftLeft v8, v9
       #|  v11:i32 = int.binary.SignedShiftRight v10, v9
       #|  return v11
+      #|}
+    ),
+  )
+}
+
+///|
+test "memory base access uses an opaque semantic environment field" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("memory_base")
+  let vmctx = builder.add_param(I64)
+  builder.add_result(I64)
+  let base = builder.emit_ext_inst(I64, @wasm_milkir.encode(LoadMemBase(3)), [
+    vmctx,
+  ])
+  builder.return_([base])
+  inspect(
+    lower_function(builder.finalize(), test_environment()),
+    content=(
+      #|machv memory_base [internal](v0:ptr64) -> (i64) {
+      #|block0:
+      #|  v1:ptr64 = environment.field @wasm.memory.3.base v0 [memory=read]
+      #|  v2:i64 = convert.Bitcast(Ptr64, I64) v1
+      #|  return v2
       #|}
     ),
   )

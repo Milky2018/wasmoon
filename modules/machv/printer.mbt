@@ -55,6 +55,7 @@ fn format_operation(operation : Operation) -> String {
     CodeAddress(symbol) => "code.address @\{symbol.name}"
     ExternalAddress(symbol) => "external.address @\{symbol.name}"
     DataAddress(symbol) => "data.address @\{symbol.name}"
+    EnvironmentField(field) => "environment.field @\{field.name}"
     Copy => "copy"
     Select => "select"
     GcRefAddress => "gcref.address"

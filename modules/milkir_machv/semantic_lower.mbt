@@ -19,7 +19,7 @@ pub impl Show for SemanticLowerError with fn output(self, logger) {
 ///|
 priv struct DialectLowering {
   name : String
-  environment_types : Array[@semantic.ValueType]
+  environment_parameters : Array[(Int, @semantic.ValueType)]
   lower : (@adapter.InstructionContext, @milkir.ExtOp) -> String?
 }
 
@@ -1054,13 +1054,17 @@ fn lower_verified_function(
   protocol : @semantic.CallProtocol,
   dialect : DialectLowering?,
 ) -> @semantic.Function raise SemanticLowerError {
-  let environment_types = match dialect {
-    Some(lowering) => lowering.environment_types
-    None => []
-  }
-  let parameter_types = environment_types.copy()
-  for parameter in function.params {
-    parameter_types.push(lower_type(parameter.1))
+  let parameter_types : Array[@semantic.ValueType] = []
+  for parameter_index, parameter in function.params {
+    let mut parameter_type = lower_type(parameter.1)
+    if dialect is Some(lowering) {
+      for environment_parameter in lowering.environment_parameters {
+        if environment_parameter.0 == parameter_index {
+          parameter_type = environment_parameter.1
+        }
+      }
+    }
+    parameter_types.push(parameter_type)
   }
   let builder = @semantic.FunctionBuilder::new(
     function.name,
@@ -1074,13 +1078,19 @@ fn lower_verified_function(
   )
   let lowered_params = builder.parameters()
   let environment : Array[@semantic.Value] = []
-  for index in 0..<environment_types.length() {
-    environment.push(lowered_params[index])
+  if dialect is Some(lowering) {
+    for environment_parameter in lowering.environment_parameters {
+      let parameter_index = environment_parameter.0
+      if parameter_index < 0 || parameter_index >= lowered_params.length() {
+        raise InvalidMilkIR(
+          message="dialect environment parameter \{parameter_index} is outside the function signature",
+        )
+      }
+      environment.push(lowered_params[parameter_index])
+    }
   }
   for index, parameter in function.params {
-    values[parameter.0.id] = Some(
-      lowered_params[environment_types.length() + index],
-    )
+    values[parameter.0.id] = Some(lowered_params[index])
   }
   let blocks : Array[@semantic.Block?] = Array::make(
     function.next_block_id,
@@ -1173,7 +1183,7 @@ pub fn lower_dialect_function_with_protocol(
   protocol : @semantic.CallProtocol,
   dialect : String,
   validator : (@milkir.ExtensionInstView) -> String?,
-  environment_types : Array[@semantic.ValueType],
+  environment_parameters : Array[(Int, @semantic.ValueType)],
   lower : (@adapter.InstructionContext, @milkir.ExtOp) -> String?,
 ) -> @semantic.Function raise SemanticLowerError {
   function.verify_with_extension_validator(dialect, validator) catch {
@@ -1182,7 +1192,11 @@ pub fn lower_dialect_function_with_protocol(
   lower_verified_function(
     function,
     protocol,
-    Some({ name: dialect, environment_types: environment_types.copy(), lower }),
+    Some({
+      name: dialect,
+      environment_parameters: environment_parameters.copy(),
+      lower,
+    }),
   )
 }
 
@@ -1191,7 +1205,7 @@ pub fn lower_dialect_function(
   function : @milkir.Function,
   dialect : String,
   validator : (@milkir.ExtensionInstView) -> String?,
-  environment_types : Array[@semantic.ValueType],
+  environment_parameters : Array[(Int, @semantic.ValueType)],
   lower : (@adapter.InstructionContext, @milkir.ExtOp) -> String?,
 ) -> @semantic.Function raise SemanticLowerError {
   lower_dialect_function_with_protocol(
@@ -1199,7 +1213,7 @@ pub fn lower_dialect_function(
     Internal,
     dialect,
     validator,
-    environment_types,
+    environment_parameters,
     lower,
   )
 }

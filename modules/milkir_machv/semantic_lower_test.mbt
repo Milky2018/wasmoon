@@ -378,6 +378,7 @@ test "core lowering preserves source metadata across semantic expansion" {
 ///|
 test "dialect lowering uses the narrow semantic adapter" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder("dialect_adapter")
+  builder.add_param(I32) |> ignore
   let input = builder.add_param(I32)
   builder.add_result(I32)
   let result = builder.emit_ext_inst(
@@ -411,7 +412,13 @@ test "dialect lowering uses the narrow semantic adapter" {
     None
   }
   inspect(
-    lower_dialect_function(builder.finalize(), "demo", validate, [I32], lower),
+    lower_dialect_function(
+      builder.finalize(),
+      "demo",
+      validate,
+      [(0, I32)],
+      lower,
+    ),
     content=(
       #|machv dialect_adapter [internal](v0:i32, v1:i32) -> (i32) {
       #|block0:

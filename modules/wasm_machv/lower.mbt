@@ -5,13 +5,15 @@
 /// the embedding product after target emission.
 struct Environment {
   function_symbol : (Int) -> @machv.CodeSymbol
+  memory_base_field : (Int) -> @machv.EnvironmentField
 }
 
 ///|
 pub fn Environment::new(
   function_symbol : (Int) -> @machv.CodeSymbol,
+  memory_base_field : (Int) -> @machv.EnvironmentField,
 ) -> Environment {
-  { function_symbol, }
+  { function_symbol, memory_base_field }
 }
 
 ///|
@@ -173,6 +175,20 @@ fn lower_i31_get(context : @adapter.InstructionContext, signed : Bool) -> Unit {
 }
 
 ///|
+fn lower_memory_base(
+  context : @adapter.InstructionContext,
+  memory_index : Int,
+  environment : Environment,
+) -> Unit {
+  let pointer = context.emit(
+      EnvironmentField((environment.memory_base_field)(memory_index)),
+      context.operands(),
+      [Ptr64],
+    )[0]
+  context.finish_operation(Convert(Bitcast(Ptr64, I64)), [pointer])
+}
+
+///|
 fn lower_extension(
   context : @adapter.InstructionContext,
   extension : @milkir.ExtOp,
@@ -183,6 +199,10 @@ fn lower_extension(
     None => return Some("Wasm extension changed after successful validation")
   }
   match opcode {
+    LoadMemBase(memory_index) => {
+      lower_memory_base(context, memory_index, environment)
+      None
+    }
     WasmCall(function_index) => {
       lower_direct_call(context, function_index, environment)
       None
@@ -227,8 +247,8 @@ fn lower_extension(
 ///|
 /// Lower a verified WebAssembly MilkIR function into target-neutral MachV.
 ///
-/// The explicit leading `ptr64` parameter is the embedding execution
-/// environment required by the internal WebAssembly call protocol.
+/// MilkIR parameter zero is the explicit embedding execution environment. Its
+/// legacy `i64` carrier is contracted to `ptr64` in semantic MachV.
 pub fn lower_function(
   function : @milkir.Function,
   environment : Environment,
@@ -243,7 +263,7 @@ pub fn lower_function(
     function,
     @wasm_milkir.WASM_DIALECT,
     @wasm_milkir.validate_extension,
-    [Ptr64],
+    [(0, Ptr64)],
     lower,
   )
 }

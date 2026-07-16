@@ -81,6 +81,24 @@ pub fn DataSymbol::new(name : String) -> DataSymbol {
 }
 
 ///|
+/// Opaque embedding-context field identity with its semantic value type.
+///
+/// The identity carries no byte offset or target addressing mode. The
+/// embedding target environment resolves it during target lowering.
+pub struct EnvironmentField {
+  name : String
+  value_type : ValueType
+} derive(Debug, Eq, Hash)
+
+///|
+pub fn EnvironmentField::new(
+  name : String,
+  value_type : ValueType,
+) -> EnvironmentField {
+  { name, value_type }
+}
+
+///|
 pub(all) enum Signedness {
   Signed
   Unsigned

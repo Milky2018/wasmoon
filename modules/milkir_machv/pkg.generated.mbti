@@ -13,9 +13,9 @@ pub fn lower_core_function(@milkir.Function) -> @machv.Function raise SemanticLo
 
 pub fn lower_core_function_with_protocol(@milkir.Function, @machv.CallProtocol) -> @machv.Function raise SemanticLowerError
 
-pub fn lower_dialect_function(@milkir.Function, String, (@milkir.ExtensionInstView) -> String?, Array[@machv.ValueType], (@adapter.InstructionContext, @milkir.ExtOp) -> String?) -> @machv.Function raise SemanticLowerError
+pub fn lower_dialect_function(@milkir.Function, String, (@milkir.ExtensionInstView) -> String?, Array[(Int, @machv.ValueType)], (@adapter.InstructionContext, @milkir.ExtOp) -> String?) -> @machv.Function raise SemanticLowerError
 
-pub fn lower_dialect_function_with_protocol(@milkir.Function, @machv.CallProtocol, String, (@milkir.ExtensionInstView) -> String?, Array[@machv.ValueType], (@adapter.InstructionContext, @milkir.ExtOp) -> String?) -> @machv.Function raise SemanticLowerError
+pub fn lower_dialect_function_with_protocol(@milkir.Function, @machv.CallProtocol, String, (@milkir.ExtensionInstView) -> String?, Array[(Int, @machv.ValueType)], (@adapter.InstructionContext, @milkir.ExtOp) -> String?) -> @machv.Function raise SemanticLowerError
 
 // Errors
 pub suberror SemanticLowerError {

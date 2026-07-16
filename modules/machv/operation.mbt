@@ -423,6 +423,7 @@ pub(all) enum Operation {
   CodeAddress(CodeSymbol)
   ExternalAddress(ExternalSymbol)
   DataAddress(DataSymbol)
+  EnvironmentField(EnvironmentField)
   Copy
   Select
   GcRefAddress
@@ -492,6 +493,7 @@ fn Operation::copy(self : Operation) -> Operation {
     | CodeAddress(_)
     | ExternalAddress(_)
     | DataAddress(_)
+    | EnvironmentField(_)
     | Copy
     | Select
     | GcRefAddress
@@ -1127,6 +1129,18 @@ fn verify_operation_contract(
       } else {
         require_shape(operands, results, [], [Ptr64], "data.address")
       }
+    EnvironmentField(field) =>
+      if field.name.is_empty() {
+        operation_error("environment field identity must not be empty")
+      } else {
+        require_shape(
+          operands,
+          results,
+          [Ptr64],
+          [field.value_type],
+          "environment.field",
+        )
+      }
     Copy => {
       if operands.length() != 1 || results.length() != 1 {
         return operation_error("copy expects one operand and one result")
@@ -1467,6 +1481,7 @@ pub fn Operation::semantics(self : Operation) -> OperationSemantics {
         memory: Write,
         may_trap: spec.trap is Some(_),
       }
+    EnvironmentField(_) => { ..OperationSemantics::pure(), memory: Read }
     Call(call) => call.behavior.semantics()
     Safepoint(Gc) => { ..OperationSemantics::pure(), gc_safepoint: true }
     Safepoint(Cancellation) =>

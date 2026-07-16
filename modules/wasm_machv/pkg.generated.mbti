@@ -14,7 +14,7 @@ pub fn lower_function(@milkir.Function, Environment) -> @machv.Function raise @m
 
 // Types and methods
 type Environment
-pub fn Environment::new((Int) -> @machv.CodeSymbol) -> Self
+pub fn Environment::new((Int) -> @machv.CodeSymbol, (Int) -> @machv.EnvironmentField) -> Self
 
 // Type aliases
 
