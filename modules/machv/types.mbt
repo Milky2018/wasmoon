@@ -223,8 +223,11 @@ pub(all) enum TrapReason {
   IntegerOverflow
   InvalidConversionToInteger
   MemoryOutOfBounds
+  TableOutOfBounds
   IndirectCallTypeMismatch
   NullReference
+  UnalignedAtomic
+  UnsupportedOperation
   StackOverflow
   User(Int)
 } derive(Debug, Eq, Hash)

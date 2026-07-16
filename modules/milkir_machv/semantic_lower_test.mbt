@@ -217,3 +217,125 @@ test "core lowering reports only live managed references at calls" {
     ),
   )
 }
+
+///|
+test "core lowering preserves normalized vector operation families" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("vector_families")
+  let left = builder.add_param(V128)
+  let right = builder.add_param(V128)
+  let third = builder.add_param(V128)
+  builder.add_result(V128)
+  builder.add_result(V128)
+  builder.add_result(V128)
+  builder.add_result(V128)
+  builder.add_result(V128)
+  let pairwise = builder.emit_inst(
+    V128,
+    Vector(IntUnary(ExtAddPairwise(Signed), I16)),
+    [left],
+  )
+  let extended = builder.emit_inst(
+    V128,
+    Vector(IntBinary(ExtMul(High, Unsigned), I32)),
+    [left, right],
+  )
+  let converted = builder.emit_inst(
+    V128,
+    Vector(Convert(ConvertLowI32ToF64(Signed))),
+    [extended],
+  )
+  let fused = builder.emit_inst(V128, Vector(Relaxed(Fma(F64, NegatedAdd))), [
+    converted, right, third,
+  ])
+  let dotted = builder.emit_inst(V128, Vector(Relaxed(Dot8To32AddSigned)), [
+    left, right, third,
+  ])
+  builder.return_([pairwise, extended, converted, fused, dotted])
+  inspect(
+    lower_core_function(builder.finalize()),
+    content=(
+      #|machv vector_families [internal](v0:v128, v1:v128, v2:v128) -> (v128, v128, v128, v128, v128) {
+      #|block0:
+      #|  v3:v128 = vector.IntUnary(I16x8, ExtendAddPairwise(Signed)) v0
+      #|  v4:v128 = vector.IntBinary(I32x4, ExtendMultiply(High, Unsigned)) v0, v1
+      #|  v5:v128 = vector.Convert(IntToFloat(I32x4, F64x2, Signed)) v4
+      #|  v6:v128 = vector.Relaxed(FusedMultiplyAdd(F64x2, FusedNegatedMultiplyAdd)) v5, v1, v2
+      #|  v7:v128 = vector.Relaxed(Dot8To32AddSigned) v0, v1, v2
+      #|  return v3, v4, v5, v6, v7
+      #|}
+    ),
+  )
+}
+
+///|
+test "core lowering preserves target-neutral vector memory effects" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("vector_memory")
+  let address = builder.add_param(Ptr)
+  let vector = builder.add_param(V128)
+  builder.add_result(V128)
+  builder.add_result(V128)
+  builder.add_result(V128)
+  let extended = builder.v128_load_with_addr(LoadExtend(I16, Unsigned), address)
+  let zeroed = builder.v128_load_with_addr(LoadZero(I32), address)
+  let lane = builder.v128_load_lane_with_addr(LoadLane(I64, 1), address, vector)
+  builder.v128_store_lane_with_addr(StoreLane(I16, 3), address, lane)
+  builder.return_([extended, zeroed, lane])
+  inspect(
+    lower_core_function(builder.finalize()),
+    content=(
+      #|machv vector_memory [internal](v0:ptr64, v1:v128) -> (v128, v128, v128) {
+      #|block0:
+      #|  v2:v128 = vector.load {
+      #|  kind: Extend(I32x4, Unsigned),
+      #|  offset: 0,
+      #|  endianness: Little,
+      #|  trap: None,
+      #|} v0 [memory=read]
+      #|  v3:v128 = vector.load { kind: Zero(W32), offset: 0, endianness: Little, trap: None } v0 [memory=read]
+      #|  v4:v128 = vector.load { kind: Lane(I64x2, 1), offset: 0, endianness: Little, trap: None } v0, v1 [memory=read]
+      #|  vector.store_lane {
+      #|  lane: I16x8,
+      #|  lane_index: 3,
+      #|  offset: 0,
+      #|  endianness: Little,
+      #|  trap: None,
+      #|} v0, v4 [memory=write]
+      #|  return v2, v3, v4
+      #|}
+    ),
+  )
+}
+
+///|
+test "core lowering converts textual traps into structured reasons" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("table_trap")
+  builder.trap("table out of bounds")
+  inspect(
+    lower_core_function(builder.finalize()),
+    content=(
+      #|machv table_trap [internal]() -> () {
+      #|block0:
+      #|  trap TableOutOfBounds
+      #|}
+    ),
+  )
+}
+
+///|
+test "core lowering rejects unknown textual trap reasons" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("unknown_trap")
+  builder.trap("embedding-specific failure")
+  try lower_core_function(builder.finalize()) |> ignore catch {
+    error =>
+      inspect(
+        error,
+        content=(
+          #|UnsupportedOperation(
+          #|  block_id=-1,
+          #|  instruction_id=-1,
+          #|  message="unknown MilkIR trap reason 'embedding-specific failure'",
+          #|)
+        ),
+      )
+  }
+}

@@ -205,6 +205,13 @@ pub(all) enum VectorIntUnaryOp {
   Absolute
   Negate
   PopulationCount
+  ExtendAddPairwise(Signedness)
+} derive(Debug, Eq, Hash)
+
+///|
+pub(all) enum VectorHalf {
+  Low
+  High
 } derive(Debug, Eq, Hash)
 
 ///|
@@ -217,6 +224,9 @@ pub(all) enum VectorIntBinaryOp {
   AverageUnsigned
   SaturatingAdd(Signedness)
   SaturatingSub(Signedness)
+  ExtendMultiply(VectorHalf, Signedness)
+  Dot16To32Signed
+  Q15MultiplyRoundedSaturating
 } derive(Debug, Eq, Hash)
 
 ///|
@@ -280,10 +290,23 @@ pub(all) enum VectorConversionOp {
   ExtendLow(VectorLane, Signedness)
   ExtendHigh(VectorLane, Signedness)
   Narrow(VectorLane, Signedness)
-  FloatToInt(VectorLane, Signedness, ConversionMode)
-  IntToFloat(VectorLane, Signedness)
+  FloatToInt(VectorLane, VectorLane, Signedness, ConversionMode)
+  IntToFloat(VectorLane, VectorLane, Signedness)
   PromoteLowF32x4
   DemoteZeroF64x2
+} derive(Debug, Eq, Hash)
+
+///|
+pub(all) enum VectorRelaxedOp {
+  Swizzle
+  FloatToInt(VectorLane, VectorLane, Signedness)
+  FusedMultiplyAdd(VectorLane, FloatTernaryOp)
+  LaneSelect(VectorLane)
+  Min(VectorLane)
+  Max(VectorLane)
+  Q15MultiplyRoundedSigned
+  Dot8To16Signed
+  Dot8To32AddSigned
 } derive(Debug, Eq, Hash)
 
 ///|
@@ -350,6 +373,7 @@ pub(all) enum VectorOp {
   FloatCompare(VectorLane, VectorFloatComparison)
   Predicate(VectorPredicateOp)
   Convert(VectorConversionOp)
+  Relaxed(VectorRelaxedOp)
 } derive(Debug, Eq)
 
 ///|
@@ -447,7 +471,8 @@ fn VectorOp::copy(self : VectorOp) -> VectorOp {
     | FloatTernary(_, _)
     | FloatCompare(_, _)
     | Predicate(_)
-    | Convert(_) => self
+    | Convert(_)
+    | Relaxed(_) => self
   }
 }
 
@@ -550,6 +575,142 @@ fn lane_count(lane : VectorLane) -> Int {
     I16x8 => 8
     I32x4 | F32x4 => 4
     I64x2 | F64x2 => 2
+  }
+}
+
+///|
+fn is_widened_integer_lane(lane : VectorLane) -> Bool {
+  lane == I16x8 || lane == I32x4 || lane == I64x2
+}
+
+///|
+fn verify_vector_conversion(op : VectorConversionOp) -> String? {
+  match op {
+    ExtendLow(lane, _) | ExtendHigh(lane, _) =>
+      if is_widened_integer_lane(lane) {
+        None
+      } else {
+        operation_error(
+          "vector extension destination must be i16x8, i32x4, or i64x2",
+        )
+      }
+    Narrow(lane, _) =>
+      if lane == I8x16 || lane == I16x8 {
+        None
+      } else {
+        operation_error("vector narrowing destination must be i8x16 or i16x8")
+      }
+    FloatToInt(source, result, _, _) =>
+      if (source == F32x4 && result == I32x4) ||
+        (source == F64x2 && result == I32x4) {
+        None
+      } else {
+        operation_error(
+          "vector float-to-int conversion requires f32x4 or f64x2 source and i32x4 result",
+        )
+      }
+    IntToFloat(source, result, _) =>
+      if source == I32x4 && (result == F32x4 || result == F64x2) {
+        None
+      } else {
+        operation_error(
+          "vector int-to-float conversion requires i32x4 source and f32x4 or f64x2 result",
+        )
+      }
+    PromoteLowF32x4 | DemoteZeroF64x2 => None
+  }
+}
+
+///|
+fn verify_relaxed_vector_operation(
+  op : VectorRelaxedOp,
+  operands : Array[ValueType],
+  results : Array[ValueType],
+) -> String? {
+  match op {
+    Swizzle =>
+      require_shape(
+        operands,
+        results,
+        [V128, V128],
+        [V128],
+        "vector.relaxed_swizzle",
+      )
+    FloatToInt(source, result, _) =>
+      match
+        verify_vector_conversion(FloatToInt(source, result, Signed, Saturating)) {
+        Some(error) => Some(error)
+        None =>
+          require_shape(
+            operands,
+            results,
+            [V128],
+            [V128],
+            "vector.relaxed_float_to_int",
+          )
+      }
+    FusedMultiplyAdd(lane, _) => {
+      if !is_float_lane(lane) {
+        return operation_error(
+          "relaxed fused multiply-add requires floating lanes",
+        )
+      }
+      require_shape(
+        operands,
+        results,
+        [V128, V128, V128],
+        [V128],
+        "vector.relaxed_fma",
+      )
+    }
+    LaneSelect(lane) => {
+      if !is_integer_lane(lane) {
+        return operation_error("relaxed lane select requires integer lanes")
+      }
+      require_shape(
+        operands,
+        results,
+        [V128, V128, V128],
+        [V128],
+        "vector.relaxed_lane_select",
+      )
+    }
+    Min(lane) | Max(lane) => {
+      if !is_float_lane(lane) {
+        return operation_error("relaxed min/max requires floating lanes")
+      }
+      require_shape(
+        operands,
+        results,
+        [V128, V128],
+        [V128],
+        "vector.relaxed_minmax",
+      )
+    }
+    Q15MultiplyRoundedSigned =>
+      require_shape(
+        operands,
+        results,
+        [V128, V128],
+        [V128],
+        "vector.relaxed_q15mulr",
+      )
+    Dot8To16Signed =>
+      require_shape(
+        operands,
+        results,
+        [V128, V128],
+        [V128],
+        "vector.relaxed_dot8_to16",
+      )
+    Dot8To32AddSigned =>
+      require_shape(
+        operands,
+        results,
+        [V128, V128, V128],
+        [V128],
+        "vector.relaxed_dot8_to32_add",
+      )
   }
 }
 
@@ -740,19 +901,52 @@ fn verify_vector_operation(
         "vector.bitwise",
       )
     }
-    IntUnary(lane, _) => {
+    IntUnary(lane, operation) => {
       if !is_integer_lane(lane) {
         return operation_error(
           "vector integer unary operation requires integer lanes",
         )
       }
+      if operation is ExtendAddPairwise(_) && !is_widened_integer_lane(lane) {
+        return operation_error(
+          "pairwise extending add destination must be i16x8, i32x4, or i64x2",
+        )
+      }
       require_shape(operands, results, [V128], [V128], "vector.int_unary")
     }
-    IntBinary(lane, _) | IntCompare(lane, _) => {
+    IntBinary(lane, operation) => {
       if !is_integer_lane(lane) {
         return operation_error(
           "vector integer operation requires integer lanes",
         )
+      }
+      match operation {
+        ExtendMultiply(_, _) =>
+          if !is_widened_integer_lane(lane) {
+            return operation_error(
+              "extending multiply destination must be i16x8, i32x4, or i64x2",
+            )
+          }
+        Dot16To32Signed =>
+          if lane != I32x4 {
+            return operation_error(
+              "dot16-to32 requires i32x4 destination lanes",
+            )
+          }
+        Q15MultiplyRoundedSaturating =>
+          if lane != I16x8 {
+            return operation_error(
+              "q15 rounded saturating multiply requires i16x8 lanes",
+            )
+          }
+        Add
+        | Sub
+        | Mul
+        | Min(_)
+        | Max(_)
+        | AverageUnsigned
+        | SaturatingAdd(_)
+        | SaturatingSub(_) => ()
       }
       require_shape(
         operands,
@@ -760,6 +954,20 @@ fn verify_vector_operation(
         [V128, V128],
         [V128],
         "vector.int_binary",
+      )
+    }
+    IntCompare(lane, _) => {
+      if !is_integer_lane(lane) {
+        return operation_error(
+          "vector integer comparison requires integer lanes",
+        )
+      }
+      require_shape(
+        operands,
+        results,
+        [V128, V128],
+        [V128],
+        "vector.int_compare",
       )
     }
     IntShift(lane, _) => {
@@ -802,8 +1010,14 @@ fn verify_vector_operation(
     }
     Predicate(_) =>
       require_shape(operands, results, [V128], [I32], "vector.predicate")
-    Convert(_) =>
-      require_shape(operands, results, [V128], [V128], "vector.convert")
+    Convert(conversion) =>
+      match verify_vector_conversion(conversion) {
+        Some(error) => Some(error)
+        None =>
+          require_shape(operands, results, [V128], [V128], "vector.convert")
+      }
+    Relaxed(operation) =>
+      verify_relaxed_vector_operation(operation, operands, results)
   }
 }
 

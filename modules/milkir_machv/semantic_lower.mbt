@@ -780,6 +780,10 @@ fn lower_instruction(
       )
       return
     }
+    Memory(Vector(operation)) => {
+      lower_vector_memory_instruction(builder, values, instruction, operation)
+      return
+    }
     Memory(memory) => {
       lower_memory_instruction(builder, values, instruction, memory)
       return
@@ -791,11 +795,42 @@ fn lower_instruction(
       let lowered_results = builder.emit(operation, operands, result_types)
       assign_instruction_results(values, instruction, lowered_results)
     }
-    Vector(_) | Ext(_, _) =>
+    Vector(operation) =>
+      lower_vector_instruction(builder, values, instruction, operation)
+    Ext(_, _) =>
       raise UnsupportedOperation(
         block_id~,
         instruction_id=instruction.id,
         message="operation family \{instruction.opcode} is not in the current semantic lowering slice",
+      )
+  }
+}
+
+///|
+fn lower_trap_reason(
+  reason : String,
+) -> @semantic.TrapReason raise SemanticLowerError {
+  if reason.contains("unreachable") {
+    return Unreachable
+  }
+  match reason {
+    "integer divide by zero" | "integer division by zero" =>
+      IntegerDivisionByZero
+    "integer overflow" => IntegerOverflow
+    "invalid conversion to integer" => InvalidConversionToInteger
+    "memory out of bounds" => MemoryOutOfBounds
+    "table out of bounds" | "out of bounds table access" => TableOutOfBounds
+    "indirect call type mismatch" => IndirectCallTypeMismatch
+    "null reference" | "null function reference" | "null i31 reference" =>
+      NullReference
+    "unaligned atomic" => UnalignedAtomic
+    "unsupported atomic" => UnsupportedOperation
+    "stack overflow" => StackOverflow
+    _ =>
+      raise UnsupportedOperation(
+        block_id=-1,
+        instruction_id=-1,
+        message="unknown MilkIR trap reason '\{reason}'",
       )
   }
 }
@@ -857,11 +892,12 @@ fn lower_terminator(
       )
     }
     Return(results) => builder.return_(mapped_values(values, results))
-    Trap(reason) | TrapExit(reason) =>
+    Trap(reason) => builder.trap(lower_trap_reason(reason))
+    TrapExit(reason) =>
       raise UnsupportedOperation(
         block_id~,
         instruction_id=-1,
-        message="trap reason '\{reason}' requires an explicit lowering policy",
+        message="product-specific trap_exit '\{reason}' is not core semantic MachV",
       )
   }
 }
