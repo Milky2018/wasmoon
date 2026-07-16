@@ -437,6 +437,203 @@ fn lower_array_len(
 }
 
 ///|
+fn is_runtime_word_type(ty : @machv.ValueType) -> Bool {
+  ty != V128
+}
+
+///|
+fn encode_runtime_word(
+  context : @adapter.InstructionContext,
+  value : @machv.Value,
+  ty : @machv.ValueType,
+) -> @machv.Value {
+  match ty {
+    I32 => context.emit(Convert(I64ExtendI32(Unsigned)), [value], [I64])[0]
+    I64 => value
+    F32 => {
+      let bits = context.emit(Convert(Bitcast(F32, I32)), [value], [I32])[0]
+      context.emit(Convert(I64ExtendI32(Unsigned)), [bits], [I64])[0]
+    }
+    F64 => context.emit(Convert(Bitcast(F64, I64)), [value], [I64])[0]
+    Ptr64 => context.emit(Convert(Bitcast(Ptr64, I64)), [value], [I64])[0]
+    GcRef64 => {
+      let address = context.emit(GcRefAddress, [value], [Ptr64])[0]
+      context.emit(Convert(Bitcast(Ptr64, I64)), [address], [I64])[0]
+    }
+    V128 => abort("v128 is not a 64-bit runtime word")
+  }
+}
+
+///|
+fn finish_runtime_word(
+  context : @adapter.InstructionContext,
+  word : @machv.Value,
+) -> Unit {
+  match context.result_types()[0] {
+    I32 => context.finish_operation(Convert(I32WrapI64), [word])
+    I64 => context.finish_operation(Copy, [word])
+    F32 => {
+      let bits = context.emit(Convert(I32WrapI64), [word], [I32])[0]
+      context.finish_operation(Convert(Bitcast(I32, F32)), [bits])
+    }
+    F64 => context.finish_operation(Convert(Bitcast(I64, F64)), [word])
+    Ptr64 => context.finish_operation(Convert(Bitcast(I64, Ptr64)), [word])
+    GcRef64 => context.finish_operation(GcRefFromBits, [word])
+    V128 => abort("v128 is not a 64-bit runtime word")
+  }
+}
+
+///|
+fn emit_runtime_word_call(
+  context : @adapter.InstructionContext,
+  environment : Environment,
+  capability : String,
+  operands : Array[@machv.Value],
+  parameter_types : Array[@machv.ValueType],
+  memory : @machv.MemoryEffect,
+) -> @machv.Value {
+  context.emit_call_without_roots(
+    @machv.SemanticCall::new(
+      External((environment.runtime_symbol)(capability)),
+      @machv.Signature::new(parameter_types, [I64]),
+      Platform,
+      @machv.CallBehavior::new(memory, true, false, false, false),
+    ),
+    operands,
+    [I64],
+  )[0]
+}
+
+///|
+fn lower_aggregate_get(
+  context : @adapter.InstructionContext,
+  environment : Environment,
+  capability : String,
+  type_index : Int,
+  field_index : Int?,
+) -> String? {
+  if !is_runtime_word_type(context.result_types()[0]) {
+    return Some(
+      "the current Wasm GC runtime ABI cannot return a v128 aggregate value",
+    )
+  }
+  let source_operands = context.operands()
+  let operands : Array[@machv.Value] = [source_operands[0]]
+  let parameter_types : Array[@machv.ValueType] = [GcRef64, I32, I32]
+  operands.push(i32_immediate(context, type_index))
+  if field_index is Some(index) {
+    operands.push(i32_immediate(context, index))
+  } else {
+    operands.push(source_operands[1])
+  }
+  let word = emit_runtime_word_call(
+    context,
+    environment,
+    capability,
+    operands,
+    parameter_types,
+    Read,
+  )
+  finish_runtime_word(context, word)
+  None
+}
+
+///|
+fn finish_packed_runtime_word(
+  context : @adapter.InstructionContext,
+  word : @machv.Value,
+  byte_width : Int,
+  signed : Bool,
+) -> Unit {
+  let narrowed = context.emit(Convert(I32WrapI64), [word], [I32])[0]
+  if signed {
+    let width : @machv.AccessWidth = if byte_width == 1 { W8 } else { W16 }
+    context.finish_operation(Convert(SignExtend(I32, width)), [narrowed])
+  } else {
+    let mask = context.emit(
+        I32Const(if byte_width == 1 { 0xFFU } else { 0xFFFFU }),
+        [],
+        [I32],
+      )[0]
+    context.finish_operation(IntBinary(And), [narrowed, mask])
+  }
+}
+
+///|
+fn lower_packed_aggregate_get(
+  context : @adapter.InstructionContext,
+  environment : Environment,
+  capability : String,
+  type_index : Int,
+  field_index : Int?,
+  byte_width : Int,
+  signed : Bool,
+) -> Unit {
+  let source_operands = context.operands()
+  let operands : Array[@machv.Value] = [source_operands[0]]
+  let parameter_types : Array[@machv.ValueType] = [GcRef64, I32, I32]
+  operands.push(i32_immediate(context, type_index))
+  if field_index is Some(index) {
+    operands.push(i32_immediate(context, index))
+  } else {
+    operands.push(source_operands[1])
+  }
+  let word = emit_runtime_word_call(
+    context,
+    environment,
+    capability,
+    operands,
+    parameter_types,
+    Read,
+  )
+  finish_packed_runtime_word(context, word, byte_width, signed)
+}
+
+///|
+fn lower_aggregate_set(
+  context : @adapter.InstructionContext,
+  environment : Environment,
+  capability : String,
+  type_index : Int,
+  field_index : Int?,
+) -> String? {
+  let source_operands = context.operands()
+  let source_types = context.operand_types()
+  let value_index = source_operands.length() - 1
+  if !is_runtime_word_type(source_types[value_index]) {
+    return Some(
+      "the current Wasm GC runtime ABI cannot store a v128 aggregate value",
+    )
+  }
+  let value = encode_runtime_word(
+    context,
+    source_operands[value_index],
+    source_types[value_index],
+  )
+  let operands : Array[@machv.Value] = [source_operands[0]]
+  let parameter_types : Array[@machv.ValueType] = [GcRef64, I32]
+  operands.push(i32_immediate(context, type_index))
+  if field_index is Some(index) {
+    operands.push(i32_immediate(context, index))
+    parameter_types.push(I32)
+  } else {
+    operands.push(source_operands[1])
+    parameter_types.push(I32)
+  }
+  operands.push(value)
+  parameter_types.push(I64)
+  finish_runtime_call(
+    context,
+    environment,
+    capability,
+    operands,
+    parameter_types,
+    @machv.CallBehavior::new(ReadWrite, true, false, false, false),
+  )
+  None
+}
+
+///|
 fn lower_exception_query(
   context : @adapter.InstructionContext,
   environment : Environment,
@@ -556,6 +753,86 @@ fn lower_extension(
       lower_array_len(context, environment)
       None
     }
+    StructGet(type_index, field_index) =>
+      lower_aggregate_get(
+        context,
+        environment,
+        "gc.struct_get",
+        type_index,
+        Some(field_index),
+      )
+    StructGetS(type_index, field_index, byte_width) => {
+      lower_packed_aggregate_get(
+        context,
+        environment,
+        "gc.struct_get",
+        type_index,
+        Some(field_index),
+        byte_width,
+        true,
+      )
+      None
+    }
+    StructGetU(type_index, field_index, byte_width) => {
+      lower_packed_aggregate_get(
+        context,
+        environment,
+        "gc.struct_get",
+        type_index,
+        Some(field_index),
+        byte_width,
+        false,
+      )
+      None
+    }
+    StructSet(type_index, field_index) =>
+      lower_aggregate_set(
+        context,
+        environment,
+        "gc.struct_set",
+        type_index,
+        Some(field_index),
+      )
+    ArrayGet(type_index) =>
+      lower_aggregate_get(
+        context,
+        environment,
+        "gc.array_get",
+        type_index,
+        None,
+      )
+    ArrayGetS(type_index, byte_width) => {
+      lower_packed_aggregate_get(
+        context,
+        environment,
+        "gc.array_get",
+        type_index,
+        None,
+        byte_width,
+        true,
+      )
+      None
+    }
+    ArrayGetU(type_index, byte_width) => {
+      lower_packed_aggregate_get(
+        context,
+        environment,
+        "gc.array_get",
+        type_index,
+        None,
+        byte_width,
+        false,
+      )
+      None
+    }
+    ArraySet(type_index) =>
+      lower_aggregate_set(
+        context,
+        environment,
+        "gc.array_set",
+        type_index,
+        None,
+      )
     TryTableEnd(handler_id) => {
       lower_try_table_end(context, environment, handler_id)
       None

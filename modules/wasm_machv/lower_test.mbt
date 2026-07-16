@@ -149,6 +149,93 @@ test "GC reference queries use typed non-safepoint runtime calls" {
 }
 
 ///|
+test "GC aggregate access converts the explicit runtime word ABI" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("gc_aggregate_access")
+  builder.add_param(I64) |> ignore
+  let reference = builder.add_param(Ref)
+  let index = builder.add_param(I32)
+  let float_value = builder.add_param(F64)
+  let integer_value = builder.add_param(I32)
+  builder.add_result(F64)
+  builder.add_result(Ref)
+  builder.add_result(I32)
+  builder.add_result(I32)
+  builder.add_result(F32)
+  let float_field = @wasm_milkir.struct_get(builder, 2, 3, reference, F64)
+  let reference_field = @wasm_milkir.struct_get(builder, 2, 4, reference, Ref)
+  let signed_field = @wasm_milkir.struct_get_s(builder, 2, 5, reference, 1)
+  let unsigned_field = @wasm_milkir.struct_get_u(builder, 2, 6, reference, 2)
+  @wasm_milkir.struct_set(builder, 2, 3, reference, float_value)
+  let float_element = @wasm_milkir.array_get(builder, 9, reference, index, F32)
+  @wasm_milkir.array_set(builder, 9, reference, index, integer_value)
+  builder.return_([
+    float_field, reference_field, signed_field, unsigned_field, float_element,
+  ])
+  inspect(
+    lower_function(builder.finalize(), test_environment()),
+    content=(
+      #|machv gc_aggregate_access [internal](v0:ptr64, v1:gcref64, v2:i32, v3:f64, v4:i32) -> (f64, gcref64, i32, i32, f32) {
+      #|block0:
+      #|  v5:i32 = i32.const 2
+      #|  v6:i32 = i32.const 3
+      #|  v7:i64 = call external @wasm.runtime.gc.struct_get (gcref64, i32, i32) -> (i64) [platform] v1, v5, v6 [memory=read, trap]
+      #|  v8:f64 = convert.Bitcast(I64, F64) v7
+      #|  v9:i32 = i32.const 2
+      #|  v10:i32 = i32.const 4
+      #|  v11:i64 = call external @wasm.runtime.gc.struct_get (gcref64, i32, i32) -> (i64) [platform] v1, v9, v10 [memory=read, trap]
+      #|  v12:gcref64 = gcref.from_bits v11
+      #|  v13:i32 = i32.const 2
+      #|  v14:i32 = i32.const 5
+      #|  v15:i64 = call external @wasm.runtime.gc.struct_get (gcref64, i32, i32) -> (i64) [platform] v1, v13, v14 [memory=read, trap]
+      #|  v16:i32 = convert.I32WrapI64 v15
+      #|  v17:i32 = convert.SignExtend(I32, W8) v16
+      #|  v18:i32 = i32.const 2
+      #|  v19:i32 = i32.const 6
+      #|  v20:i64 = call external @wasm.runtime.gc.struct_get (gcref64, i32, i32) -> (i64) [platform] v1, v18, v19 [memory=read, trap]
+      #|  v21:i32 = convert.I32WrapI64 v20
+      #|  v22:i32 = i32.const 65535
+      #|  v23:i32 = int.binary.And v21, v22
+      #|  v24:i64 = convert.Bitcast(F64, I64) v3
+      #|  v25:i32 = i32.const 2
+      #|  v26:i32 = i32.const 3
+      #|  call external @wasm.runtime.gc.struct_set (gcref64, i32, i32, i64) -> () [platform] v1, v25, v26, v24 [memory=read-write, trap]
+      #|  v27:i32 = i32.const 9
+      #|  v28:i64 = call external @wasm.runtime.gc.array_get (gcref64, i32, i32) -> (i64) [platform] v1, v27, v2 [memory=read, trap]
+      #|  v29:i32 = convert.I32WrapI64 v28
+      #|  v30:f32 = convert.Bitcast(I32, F32) v29
+      #|  v31:i64 = convert.I64ExtendI32(Unsigned) v4
+      #|  v32:i32 = i32.const 9
+      #|  call external @wasm.runtime.gc.array_set (gcref64, i32, i32, i64) -> () [platform] v1, v32, v2, v31 [memory=read-write, trap]
+      #|  return v8, v12, v17, v23, v30
+      #|}
+    ),
+  )
+}
+
+///|
+test "GC aggregate access rejects values wider than the runtime ABI" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("gc_v128_field")
+  builder.add_param(I64) |> ignore
+  let reference = builder.add_param(Ref)
+  builder.add_result(V128)
+  let result = @wasm_milkir.struct_get(builder, 2, 3, reference, V128)
+  builder.return_([result])
+  try lower_function(builder.finalize(), test_environment()) |> ignore catch {
+    error =>
+      inspect(
+        error,
+        content=(
+          #|UnsupportedOperation(
+          #|  block_id=0,
+          #|  instruction_id=0,
+          #|  message="the current Wasm GC runtime ABI cannot return a v128 aggregate value",
+          #|)
+        ),
+      )
+  }
+}
+
+///|
 test "i31 get uses explicit null-trap control flow" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder("i31_get")
   builder.add_param(I64) |> ignore
