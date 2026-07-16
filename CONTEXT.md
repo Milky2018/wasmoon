@@ -265,6 +265,7 @@ _Avoid_: MachV emitter output, generic object format
 - A **MachV Terminator** expresses only semantic control flow; compare fusion, immediate branches, fallthrough, jump tables, and encoded labels belong to Target VCode or emission.
 - The **MachV Mutation Boundary** rejects foreign, deleted, duplicated, or locally ill-typed entities before changing state; reachability and dominance are whole-function verifier concerns.
 - The **MachV Verifier** deterministically reports the first structured error without target or ABI context, mutation, repair, or abort.
+- The **MachV Verifier** covers function ownership, signatures and types, rooted CFG edges, strict SSA dominance, terminators, semantic operation contracts, and behavior summaries, but never target legality or ABI state.
 - Every public compiler transformation owns entry and exit **Verification Checkpoints**; ordinary mutable representations are revalidated at the next public seam without acquiring permanent verified state.
 - **MachV Control-Flow Graph** order expresses semantics and SSA relationships; fallthrough selection, label offsets, branch relaxation, and final block layout belong downstream.
 - `Ptr64` and `GcRef64` are always 64-bit carriers; only `GcRef64` is a **MachV Managed Reference**.
