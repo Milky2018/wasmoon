@@ -112,6 +112,10 @@ _Avoid_: caller-managed validation, mutable validator closure, disabled safety c
 The target-neutral layer that lowers **MilkIR** into **MachV** without choosing host instructions, calling conventions, physical registers, or target constraints.
 _Avoid_: instruction selection, target backend, wasmoon JIT
 
+**Dialect Lowering Adapter**:
+The narrow semantic construction interface through which a source dialect translates validated extension operations into target-neutral **MachV** without observing its mutable storage or any machine target.
+_Avoid_: raw lowering context, target callback, physical-register helper
+
 **Semantic Legalization**:
 The target-neutral normalization that removes source or dialect concepts and makes value widths, effects, traps, memory behavior, and call semantics explicit before values enter **MachV**.
 _Avoid_: instruction selection, ABI lowering, target expansion
