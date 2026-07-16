@@ -252,6 +252,10 @@ _Avoid_: MachV emitter, wasmoon JIT emitter, runtime fixup emitter
 The Wasmoon-specific native execution integration that resolves runtime symbols, executable memory, host calls, VMContext state, traps, and helper bindings.
 _Avoid_: generic emitter, compiler backend
 
+**JIT Pipeline Error**:
+The Wasmoon JIT failure that preserves one stage-owned structured compiler error and its precise site while remaining distinct from cooperative cancellation.
+_Avoid_: string-only diagnostic, backend abort, cancelled compilation
+
 **JIT FFI**:
 The native C and assembly glue used by **Wasmoon JIT** for executable memory, traps, GC, WASI, stack switching, VMContext access, and host calls.
 _Avoid_: generic native runtime, exec_mem module before reuse exists
@@ -337,6 +341,7 @@ _Avoid_: MachV emitter output, generic object format
 - **MachV** values have no locations; **Allocated Location**, spill slots, ABI areas, and stack-pointer operations begin after **MachV Target Lowering**.
 - A **Target Emitter** produces generic relocation and metadata records; **Wasmoon JIT** resolves those records to Wasmoon runtime helpers and executable memory.
 - A **Target Emitter** builds bytes, relocations, pools, labels, and metadata in private storage and returns them only after the **Code Object Verifier** accepts the complete unlinked artifact; partial output and reachable emitter aborts are forbidden.
+- Each public native compiler stage deterministically returns its first structured failure; **Wasmoon JIT** preserves that typed cause as a **JIT Pipeline Error**, while cancellation remains a separate outcome and human-readable rendering belongs at the presentation boundary.
 - A **Cwasm Artifact** may wrap **Target Emitter** output with Wasmoon function indices, imports, traps, debug mapping, and runtime metadata.
 - **JIT FFI** belongs to **Wasmoon JIT** until a small generic executable-memory API has proven reuse.
 - The **Wasmoon Runtime** depends on compiler infrastructure modules, but compiler infrastructure modules do not depend on the **Wasmoon Runtime**.
@@ -412,6 +417,7 @@ _Avoid_: MachV emitter output, generic object format
 - Terminators previously mixed semantic control flow with AArch64 and AMD64 branch forms; resolved: **MachV Terminator** has one minimal target-neutral vocabulary, while encoded branch selection belongs downstream.
 - Mutation safety previously depended on callers repairing directly mutable arrays; resolved: the **MachV Mutation Boundary** is locally atomic, while explicit verifier checkpoints validate cross-entity invariants.
 - Verification previously mixed partial SSA checks with target register policy; resolved: the **MachV Verifier** validates only the complete target-neutral MachV contract, while target representations have their own verifiers.
+- Native compilation failures were previously vulnerable to aborts or string flattening; resolved: stage-owned structured errors cross Wasmoon orchestration as **JIT Pipeline Errors**, while cancellation remains a distinct outcome.
 - Machine-code-emission ownership was previously unclear; resolved: target emitters privately build and verify complete unlinked code objects, while **Wasmoon JIT** owns relocation resolution, linking, and executable-memory installation.
 - Precompiled output ownership was ambiguous; resolved: **Cwasm Artifact** belongs to **Wasmoon JIT**, not a **Target Emitter**.
 - Native JIT glue ownership was ambiguous; resolved: **JIT FFI** remains in **Wasmoon JIT** for the first split instead of creating a generic executable-memory module.
