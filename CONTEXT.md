@@ -252,6 +252,10 @@ _Avoid_: linked image, executable memory, partial emission buffer
 The target-independent allocation algorithm that assigns virtual registers or spills in **Target VCode** through a shared abstract program model.
 _Avoid_: regalloc_core, VCode regalloc, machine regalloc
 
+**MachV Regalloc Adapter**:
+The reusable module that translates generic **Target VCode** allocation facts into **Register Allocation** input and returns a structurally bound allocation without owning target or frame policy.
+_Avoid_: target allocator, frame planner, public liveness toolkit
+
 **Allocation Binding**:
 The structural association between one Target VCode function and its allocation through private function ownership and stable instruction, operand, value, edge, and program-point identities.
 _Avoid_: raw array position, version stamp, cross-function allocation
