@@ -130,6 +130,17 @@ void ctx_set_gc_heap_internal(jit_context_t *ctx, GcHeap *heap);
 void ctx_update_gc_heap_ptr_internal(jit_context_t *ctx);
 void ctx_gc_begin_frame_internal(jit_context_t *ctx, uintptr_t frame_id);
 void ctx_gc_end_frame_internal(jit_context_t *ctx);
+int32_t ctx_gc_push_root_scope_internal(
+    jit_context_t *ctx,
+    const int64_t *roots,
+    int32_t root_count
+);
+void ctx_gc_pop_root_scope_internal(jit_context_t *ctx);
+void ctx_gc_restore_root_scopes_internal(
+    jit_context_t *ctx,
+    wasmoon_gc_root_scope_t *marker
+);
+void ctx_gc_clear_root_scopes_internal(jit_context_t *ctx);
 void ctx_gc_set_safepoint_table_internal(
     jit_context_t *ctx,
     const wasmoon_gc_safepoint_table_t *table
@@ -211,6 +222,7 @@ typedef struct exception_handler {
     sigjmp_buf jmp_buf;               // longjmp target
     struct exception_handler *prev;    // Outer handler (linked list)
     int32_t handler_id;                // Unique ID for this handler
+    wasmoon_gc_root_scope_t *gc_root_scope_marker;
 } exception_handler_t;
 
 // Exception handling functions

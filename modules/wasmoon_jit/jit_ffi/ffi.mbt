@@ -1075,6 +1075,16 @@ pub extern "c" fn c_jit_get_gc_alloc_array_slow_ptr() -> Int64 = "wasmoon_jit_ge
 pub extern "c" fn c_jit_get_gc_alloc_array_from_values_slow_ptr() -> Int64 = "wasmoon_jit_get_gc_alloc_array_from_values_slow_ptr"
 
 ///|
+/// Get the copied caller-root scope push helper.
+/// Signature: int32_t push(jit_context_t *ctx, int64_t *roots, int32_t root_count)
+pub extern "c" fn c_jit_get_gc_push_root_scope_ptr() -> Int64 = "wasmoon_jit_get_gc_push_root_scope_ptr"
+
+///|
+/// Get the copied caller-root scope pop helper.
+/// Signature: void pop(jit_context_t *ctx)
+pub extern "c" fn c_jit_get_gc_pop_root_scope_ptr() -> Int64 = "wasmoon_jit_get_gc_pop_root_scope_ptr"
+
+///|
 /// Set type cache for GC operations
 /// types_data: array of [super_idx, kind] pairs per type
 #borrow(types_data)
@@ -1136,6 +1146,19 @@ pub extern "c" fn c_jit_gc_begin_frame(
 ///|
 /// Pop a JIT frame node for GC bookkeeping.
 pub extern "c" fn c_jit_gc_end_frame(ctx_ptr : Int64) -> Unit = "wasmoon_jit_gc_end_frame"
+
+///|
+/// Push a heap-owned copy of caller roots for a nested JIT/runtime call.
+#borrow(roots)
+pub extern "c" fn c_jit_gc_push_root_scope(
+  ctx_ptr : Int64,
+  roots : FixedArray[Int64],
+  root_count : Int,
+) -> Int = "wasmoon_jit_gc_push_root_scope"
+
+///|
+/// Pop the most recent copied caller-root scope.
+pub extern "c" fn c_jit_gc_pop_root_scope(ctx_ptr : Int64) -> Unit = "wasmoon_jit_gc_pop_root_scope"
 
 ///|
 /// Trigger GC for allocation retry with explicit roots.

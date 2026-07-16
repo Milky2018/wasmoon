@@ -52,10 +52,13 @@ test "resolve wasm function symbols into cwasm call fixups" {
 ///|
 test "resolve cwasm runtime helper fixup ids in wasmoon_jit" {
   inspect(gc_runtime_fixup_idx(0), content="-20000")
+  inspect(gc_runtime_fixup_idx(22), content="-20022")
   inspect(jit_runtime_fixup_idx(13), content="-21013")
   inspect(jit_runtime_fixup_idx(14), content="-21014")
   inspect(exception_runtime_fixup_idx(11), content="-22011")
   inspect(resolve_runtime_func_fixup_idx(-20000) is Some(_), content="true")
+  inspect(resolve_runtime_func_fixup_idx(-20021) is Some(_), content="true")
+  inspect(resolve_runtime_func_fixup_idx(-20022) is Some(_), content="true")
   inspect(resolve_runtime_func_fixup_idx(-21013) is Some(_), content="true")
   inspect(resolve_runtime_func_fixup_idx(-21014) is Some(_), content="true")
   inspect(resolve_runtime_func_fixup_idx(-22011) is Some(_), content="true")
@@ -141,6 +144,8 @@ test "default wasmoon runtime resolver maps segment and table fixups" {
     ("wasmoon.runtime.table_init", -21011),
     ("wasmoon.runtime.elem_drop", -21012),
     ("wasmoon.runtime.cancel_poll", -21014),
+    ("wasmoon.runtime.gc.push_root_scope", -20021),
+    ("wasmoon.runtime.gc.pop_root_scope", -20022),
   ]
   for item in names {
     let (name, fixup_idx) = item

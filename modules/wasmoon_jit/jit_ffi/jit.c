@@ -1422,6 +1422,14 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_alloc_array_from_values_slow_ptr(v
     return (int64_t)gc_alloc_array_from_values_slow;
 }
 
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_push_root_scope_ptr(void) {
+    return (int64_t)ctx_gc_push_root_scope_internal;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_pop_root_scope_ptr(void) {
+    return (int64_t)ctx_gc_pop_root_scope_internal;
+}
+
 // ============ Type Cache Management FFI Exports ============
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_gc_set_type_cache(
@@ -1492,6 +1500,20 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_gc_begin_frame(int64_t ctx_ptr, int64_t fram
 MOONBIT_FFI_EXPORT void wasmoon_jit_gc_end_frame(int64_t ctx_ptr) {
     jit_context_t *ctx = (jit_context_t *)(uintptr_t)ctx_ptr;
     ctx_gc_end_frame_internal(ctx);
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_gc_push_root_scope(
+    int64_t ctx_ptr,
+    int64_t *roots,
+    int32_t root_count
+) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)ctx_ptr;
+    return ctx_gc_push_root_scope_internal(ctx, roots, root_count);
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_gc_pop_root_scope(int64_t ctx_ptr) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)ctx_ptr;
+    ctx_gc_pop_root_scope_internal(ctx);
 }
 
 MOONBIT_FFI_EXPORT int32_t wasmoon_jit_gc_collect_for_alloc(

@@ -162,6 +162,16 @@ pub fn RuntimeSymbolResolver::with_wasmoon_runtime_symbols() -> RuntimeSymbolRes
     gc_runtime_fixup_idx(20),
   )
   resolver.add_symbol_fixup(
+    gc_push_root_scope_symbol(),
+    @jit_ffi.c_jit_get_gc_push_root_scope_ptr(),
+    gc_runtime_fixup_idx(21),
+  )
+  resolver.add_symbol_fixup(
+    gc_pop_root_scope_symbol(),
+    @jit_ffi.c_jit_get_gc_pop_root_scope_ptr(),
+    gc_runtime_fixup_idx(22),
+  )
+  resolver.add_symbol_fixup(
     "wasmoon.runtime.memory_grow",
     @jit_ffi.c_jit_get_memory_grow_ptr(),
     jit_runtime_fixup_idx(0),
@@ -403,6 +413,8 @@ pub fn resolve_runtime_func_fixup_idx(idx : Int) -> Int64? {
     -20018 => Some(@jit_ffi.c_jit_get_gc_alloc_struct_slow_ptr())
     -20019 => Some(@jit_ffi.c_jit_get_gc_alloc_array_slow_ptr())
     -20020 => Some(@jit_ffi.c_jit_get_gc_alloc_array_from_values_slow_ptr())
+    -20021 => Some(@jit_ffi.c_jit_get_gc_push_root_scope_ptr())
+    -20022 => Some(@jit_ffi.c_jit_get_gc_pop_root_scope_ptr())
     -21000 => Some(@jit_ffi.c_jit_get_memory_grow_ptr())
     -21001 => Some(@jit_ffi.c_jit_get_memory_size_ptr())
     -21002 => Some(@jit_ffi.c_jit_get_memory_fill_ptr())

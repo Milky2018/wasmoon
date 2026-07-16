@@ -194,6 +194,10 @@ pub fn c_jit_gc_end_frame(Int64) -> Unit
 
 pub fn c_jit_gc_get_heap(Int64) -> Int64
 
+pub fn c_jit_gc_pop_root_scope(Int64) -> Unit
+
+pub fn c_jit_gc_push_root_scope(Int64, FixedArray[Int64], Int) -> Int
+
 pub fn c_jit_gc_set_canonical_indices(Int64, FixedArray[Int], Int) -> Unit
 
 pub fn c_jit_gc_set_func_safepoints(Int64, Int, Bytes, Int, FixedArray[Int], Int) -> Int
@@ -319,6 +323,10 @@ pub fn c_jit_get_gc_array_new_elem_ptr() -> Int64
 pub fn c_jit_get_gc_array_new_ptr() -> Int64
 
 pub fn c_jit_get_gc_array_set_ptr() -> Int64
+
+pub fn c_jit_get_gc_pop_root_scope_ptr() -> Int64
+
+pub fn c_jit_get_gc_push_root_scope_ptr() -> Int64
 
 pub fn c_jit_get_gc_ref_cast_ptr() -> Int64
 

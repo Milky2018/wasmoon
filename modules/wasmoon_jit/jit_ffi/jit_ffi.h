@@ -49,6 +49,13 @@ typedef struct wasmoon_gc_frame {
     const wasmoon_gc_safepoint_table_t *table;
 } wasmoon_gc_frame_t;
 
+// Heap-owned copy of caller roots that must survive a nested JIT/runtime call.
+typedef struct wasmoon_gc_root_scope {
+    struct wasmoon_gc_root_scope *prev;
+    int64_t *roots;
+    int32_t root_count;
+} wasmoon_gc_root_scope_t;
+
 // VMContext v3 - layout MUST match vcode/abi/abi.mbt constants:
 //   +0:   memory0 (wasmoon_memory_t*)  - memory 0 descriptor pointer
 //   +8:   memory0_base (uint8_t*)      - cached memory 0 base pointer (hot)
@@ -222,6 +229,7 @@ typedef struct {
     int32_t gc_root_scratch_cap;
     const wasmoon_gc_safepoint_table_t *gc_safepoint_table;
     wasmoon_gc_frame_t *gc_frame_chain_head;
+    wasmoon_gc_root_scope_t *gc_root_scope_head;
     // Per-function safepoint tables owned by this context.
     wasmoon_gc_safepoint_table_t *gc_func_safepoint_tables;
     uint8_t **gc_func_stackmap_blobs;
