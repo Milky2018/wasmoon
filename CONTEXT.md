@@ -120,6 +120,10 @@ _Avoid_: ABI call sequence, fixed-register call, conditional helper fusion
 An embedding-provided stable opaque identity for a foreign callee or datum that reusable compiler infrastructure preserves without knowing its runtime name or address.
 _Avoid_: Wasmoon helper name, resolved address, lowering callback
 
+**Call Behavior Summary**:
+The target-neutral conservative facts describing a **Semantic Call**'s memory effects, trap and unwind behavior, and GC or cancellation safepoints independently of its **Call Protocol**.
+_Avoid_: ABI-derived behavior, symbol-name inference, emitter policy
+
 **Logical Call Contract**:
 The ordered typed parameters, explicit argument values, and logical results required to invoke a **Semantic Call**, independent of native register, stack, or hidden return-area placement.
 _Avoid_: native call sequence, argument-register layout, stack-call frame
@@ -265,6 +269,7 @@ _Avoid_: MachV emitter output, generic object format
 - A **Semantic Memory Access** carries narrow-load extension semantics and memory effects, while target lowering selects an addressing mode.
 - A **Semantic Call** preserves direct, external, or indirect callee identity and normal or tail-call meaning, while target lowering applies **ABI Policy**.
 - An **External Symbol Identity** remains unresolved through MachV, Target VCode, allocation, and target emission; Wasmoon JIT owns runtime naming, address resolution, and artifact compatibility.
+- A **Call Behavior Summary** is explicit and conservative by default; optimization, safepoint handling, and metadata preservation consume it without inferring behavior from protocol, callee form, or symbol identity.
 - A **Semantic Trap** ends its block unconditionally; conditional traps use ordinary control flow, while target lowering selects checks, hardware traps, or helper calls that preserve the reason.
 - A **Semantic Scalar Operation** preserves signedness, rounding, saturation, and trapping behavior where they affect meaning; target lowering chooses immediates, instruction forms, and machine flags.
 - A **Semantic Vector Operation** uses parameterized lane shapes and semantic shuffle or memory behavior, while target lowering chooses native SIMD instructions or expansions.
@@ -326,6 +331,7 @@ _Avoid_: MachV emitter output, generic object format
 - Memory-operation ownership was previously unclear; resolved: **MachV** uses parameterized **Semantic Memory Access** operations and a distinct atomic family, while target addressing modes belong to **Target VCode**.
 - Call ownership was previously unclear; resolved: **MachV** owns **Semantic Call** meaning and explicit values, while **Target VCode** owns ABI placement, physical clobbers, outgoing stack layout, and prologue or epilogue details.
 - Runtime symbol ownership was previously mixed into compiler infrastructure; resolved: reusable layers preserve opaque **External Symbol Identities** and generic relocations, while Wasmoon JIT owns helper names, addresses, and Cwasm mappings.
+- Call behavior was previously entangled with ABI and callee categories; resolved: canonical **Call Behavior Summaries** independently describe effects, traps, unwind, and safepoints.
 - Trap ownership was previously unclear; resolved: **MachV** owns structured **Semantic Trap** reasons and operation-level trap conditions, while conditional trap fusion and target trap encoding belong to **Target VCode**.
 - Scalar-operation ownership was previously unclear; resolved: **MachV** owns precisely typed arithmetic and conversion meaning, while condition flags, fixed registers, shifted operands, and immediate encodings belong to **Target VCode**.
 - Vector-operation ownership was previously unclear; resolved: **MachV** currently owns only target-neutral `V128` meaning, while target SIMD forms and wider or scalable vectors remain outside the contract.
