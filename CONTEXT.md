@@ -280,6 +280,10 @@ _Avoid_: MachV value location, semantic stack object, ABI signature fact
 The WebAssembly execution system that owns Wasm validation, instantiation, host integration, and runtime semantics.
 _Avoid_: compiler infrastructure, wasmoon_runtime as an implied module name
 
+**Native Pipeline Diagnostics**:
+The Wasmoon tooling-only interface that reads reusable compiler checkpoints for inspection without participating in runtime compilation, instantiation, or code installation.
+_Avoid_: production compiler facade, runtime backend, JIT bypass
+
 **Target Emitter**:
 The machine-target-owned encoder that turns allocated **Target VCode** into bytes and generic metadata.
 _Avoid_: MachV emitter, wasmoon JIT emitter, runtime fixup emitter
@@ -434,6 +438,7 @@ _Avoid_: trusted cache decoder, aborting deserializer, installer-owned format pa
 - **JIT Code Installation** resolves all symbols before allocation, performs patching and metadata registration before publication, commits function-table visibility last, and returns **Installed Code**; failure leaves the prior visible module unchanged.
 - Native execution and **JIT Code Installation** are initially mutually exclusive for one module; replacement occurs only at a quiescent point, so no concurrent publication or reclamation protocol belongs in the first architecture.
 - **JIT FFI** belongs to **Wasmoon JIT** until a small generic executable-memory API has proven reuse.
+- Runtime, instantiation, and CLI execution enter native compilation only through the **Wasmoon JIT Module**; only **Native Pipeline Diagnostics** may directly consume reusable stage interfaces, and production packages cannot import that tooling interface.
 - The **Wasmoon Runtime** depends on compiler infrastructure modules, but compiler infrastructure modules do not depend on the **Wasmoon Runtime**.
 
 ## Example dialogue
