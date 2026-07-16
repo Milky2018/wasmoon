@@ -27,6 +27,7 @@ pub fn InstructionContext::new(@machv.FunctionBuilder, Array[@machv.Value], Arra
 pub fn InstructionContext::operand_types(Self) -> Array[@machv.ValueType]
 pub fn InstructionContext::operands(Self) -> Array[@machv.Value]
 pub fn InstructionContext::result_types(Self) -> Array[@machv.ValueType]
+pub fn InstructionContext::set_trap_terminator(Self, @machv.TrapReason) -> Unit
 pub fn InstructionContext::source(Self) -> @machv.SourceLocation?
 pub fn InstructionContext::status(Self) -> String?
 pub fn InstructionContext::switch_to_block(Self, @machv.Block) -> Unit

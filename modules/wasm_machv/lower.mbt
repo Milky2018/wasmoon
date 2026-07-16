@@ -132,6 +132,47 @@ fn lower_tail_call_ref(context : @adapter.InstructionContext) -> Unit {
 }
 
 ///|
+fn lower_i31_new(context : @adapter.InstructionContext) -> Unit {
+  let source = context.operands()[0]
+  let extended = context.emit(Convert(I64ExtendI32(Unsigned)), [source], [I64])[0]
+  let one = context.emit(I64Const(1UL), [], [I64])[0]
+  let shifted = context.emit(IntBinary(ShiftLeft), [extended, one], [I64])[0]
+  let tagged = context.emit(IntBinary(Or), [shifted, one], [I64])[0]
+  context.finish_operation(GcRefFromBits, [tagged])
+}
+
+///|
+fn lower_i31_get(context : @adapter.InstructionContext, signed : Bool) -> Unit {
+  let source = context.operands()[0]
+  let null_reference = context.emit(NullGcRef, [], [GcRef64])[0]
+  let is_null = context.emit(
+      ReferenceCompare(Equal),
+      [source, null_reference],
+      [I32],
+    )[0]
+  let trap_block = context.create_block([])
+  let decode_block = context.create_block([])
+  context.branch(is_null, trap_block, [], decode_block, [])
+  context.switch_to_block(trap_block)
+  context.set_trap_terminator(NullReference)
+  context.switch_to_block(decode_block)
+  let address = context.emit(GcRefAddress, [source], [Ptr64])[0]
+  let bits = context.emit(Convert(Bitcast(Ptr64, I64)), [address], [I64])[0]
+  let one64 = context.emit(I64Const(1UL), [], [I64])[0]
+  let decoded = context.emit(IntBinary(UnsignedShiftRight), [bits, one64], [I64])[0]
+  let truncated = context.emit(Convert(I32WrapI64), [decoded], [I32])[0]
+  let result = if signed {
+    let one32 = context.emit(I32Const(1U), [], [I32])[0]
+    let shifted = context.emit(IntBinary(ShiftLeft), [truncated, one32], [I32])[0]
+    context.emit(IntBinary(SignedShiftRight), [shifted, one32], [I32])[0]
+  } else {
+    let mask = context.emit(I32Const(0x7FFFFFFFU), [], [I32])[0]
+    context.emit(IntBinary(And), [truncated, mask], [I32])[0]
+  }
+  context.forward_results([result])
+}
+
+///|
 fn lower_extension(
   context : @adapter.InstructionContext,
   extension : @milkir.ExtOp,
@@ -156,6 +197,26 @@ fn lower_extension(
     }
     ReturnCallRef(_) => {
       lower_tail_call_ref(context)
+      None
+    }
+    I31New => {
+      lower_i31_new(context)
+      None
+    }
+    I31GetS => {
+      lower_i31_get(context, true)
+      None
+    }
+    I31GetU => {
+      lower_i31_get(context, false)
+      None
+    }
+    AnyConvertExtern | ExternConvertAny => {
+      context.finish_operation(Copy, context.operands())
+      None
+    }
+    RefEq => {
+      context.finish_operation(ReferenceCompare(Equal), context.operands())
       None
     }
     _ =>

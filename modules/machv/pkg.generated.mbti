@@ -331,6 +331,7 @@ pub(all) enum Operation {
   Copy
   Select
   GcRefAddress
+  GcRefFromBits
   PointerOffset
   ReferenceCompare(ReferenceComparison)
   IntUnary(IntUnaryOp)

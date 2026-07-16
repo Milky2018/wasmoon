@@ -58,6 +58,7 @@ fn format_operation(operation : Operation) -> String {
     Copy => "copy"
     Select => "select"
     GcRefAddress => "gcref.address"
+    GcRefFromBits => "gcref.from_bits"
     PointerOffset => "pointer.offset"
     ReferenceCompare(op) => "reference.compare.\{to_repr(op)}"
     IntUnary(op) => "int.unary.\{to_repr(op)}"

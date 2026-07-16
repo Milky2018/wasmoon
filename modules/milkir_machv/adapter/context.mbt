@@ -289,6 +289,20 @@ pub fn InstructionContext::trap(
 }
 
 ///|
+/// Terminate an adapter-created side block without completing the source
+/// dialect instruction. The adapter must switch to a continuation block and
+/// complete the instruction there.
+pub fn InstructionContext::set_trap_terminator(
+  self : InstructionContext,
+  reason : @machv.TrapReason,
+) -> Unit {
+  self.builder.trap(reason)
+  if self.source is Some(source) {
+    self.builder.set_terminator_source(source)
+  }
+}
+
+///|
 pub fn InstructionContext::tail_call(
   self : InstructionContext,
   call : @machv.SemanticCall,

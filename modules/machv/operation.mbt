@@ -426,6 +426,7 @@ pub(all) enum Operation {
   Copy
   Select
   GcRefAddress
+  GcRefFromBits
   PointerOffset
   ReferenceCompare(ReferenceComparison)
   IntUnary(IntUnaryOp)
@@ -494,6 +495,7 @@ fn Operation::copy(self : Operation) -> Operation {
     | Copy
     | Select
     | GcRefAddress
+    | GcRefFromBits
     | PointerOffset
     | ReferenceCompare(_)
     | IntUnary(_)
@@ -1149,6 +1151,8 @@ fn verify_operation_contract(
     }
     GcRefAddress =>
       require_shape(operands, results, [GcRef64], [Ptr64], "gcref.address")
+    GcRefFromBits =>
+      require_shape(operands, results, [I64], [GcRef64], "gcref.from_bits")
     PointerOffset =>
       require_shape(operands, results, [Ptr64, I64], [Ptr64], "pointer.offset")
     ReferenceCompare(_) => {
@@ -1486,6 +1490,7 @@ pub fn Operation::semantics(self : Operation) -> OperationSemantics {
     | Copy
     | Select
     | GcRefAddress
+    | GcRefFromBits
     | PointerOffset
     | ReferenceCompare(_)
     | IntUnary(_)

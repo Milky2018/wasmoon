@@ -76,3 +76,73 @@ test "call_ref exposes tagged-reference removal before an indirect call" {
     ),
   )
 }
+
+///|
+test "reference primitives preserve explicit target-neutral representation" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("reference_primitives")
+  let integer = builder.add_param(I32)
+  let left = builder.add_param(Ref)
+  let right = builder.add_param(Ref)
+  builder.add_result(Ref)
+  builder.add_result(I32)
+  let i31 = builder.emit_ext_inst(Ref, @wasm_milkir.encode(I31New), [integer])
+  let equal = builder.emit_ext_inst(I32, @wasm_milkir.encode(RefEq), [
+    left, right,
+  ])
+  builder.return_([i31, equal])
+  let environment = Environment::new(fn(index) {
+    @machv.CodeSymbol::new("wasm.function.\{index}")
+  })
+  inspect(
+    lower_function(builder.finalize(), environment),
+    content=(
+      #|machv reference_primitives [internal](v0:ptr64, v1:i32, v2:gcref64, v3:gcref64) -> (gcref64, i32) {
+      #|block0:
+      #|  v4:i64 = convert.I64ExtendI32(Unsigned) v1
+      #|  v5:i64 = i64.const 1
+      #|  v6:i64 = int.binary.ShiftLeft v4, v5
+      #|  v7:i64 = int.binary.Or v6, v5
+      #|  v8:gcref64 = gcref.from_bits v7
+      #|  v9:i32 = reference.compare.Equal v2, v3
+      #|  return v8, v9
+      #|}
+    ),
+  )
+}
+
+///|
+test "i31 get uses explicit null-trap control flow" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("i31_get")
+  let reference = builder.add_param(Ref)
+  builder.add_result(I32)
+  let result = builder.emit_ext_inst(I32, @wasm_milkir.encode(I31GetS), [
+    reference,
+  ])
+  builder.return_([result])
+  let environment = Environment::new(fn(index) {
+    @machv.CodeSymbol::new("wasm.function.\{index}")
+  })
+  inspect(
+    lower_function(builder.finalize(), environment),
+    content=(
+      #|machv i31_get [internal](v0:ptr64, v1:gcref64) -> (i32) {
+      #|block0:
+      #|  v2:gcref64 = gcref.null
+      #|  v3:i32 = reference.compare.Equal v1, v2
+      #|  branch v3, block1, block2
+      #|block1:
+      #|  trap NullReference
+      #|block2:
+      #|  v4:ptr64 = gcref.address v1
+      #|  v5:i64 = convert.Bitcast(Ptr64, I64) v4
+      #|  v6:i64 = i64.const 1
+      #|  v7:i64 = int.binary.UnsignedShiftRight v5, v6
+      #|  v8:i32 = convert.I32WrapI64 v7
+      #|  v9:i32 = i32.const 1
+      #|  v10:i32 = int.binary.ShiftLeft v8, v9
+      #|  v11:i32 = int.binary.SignedShiftRight v10, v9
+      #|  return v11
+      #|}
+    ),
+  )
+}
