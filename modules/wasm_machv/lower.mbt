@@ -881,6 +881,97 @@ fn lower_spill_locals(
 }
 
 ///|
+fn finish_noreturn_runtime_call(
+  context : @adapter.InstructionContext,
+  environment : Environment,
+  capability : String,
+  operands : Array[@machv.Value],
+  parameter_types : Array[@machv.ValueType],
+) -> Unit {
+  context.noreturn_call(
+    @machv.SemanticCall::new(
+      External((environment.runtime_symbol)(capability)),
+      @machv.Signature::new(parameter_types, []),
+      Platform,
+      @machv.CallBehavior::new(ReadWrite, true, false, false, false),
+    ),
+    operands,
+  )
+}
+
+///|
+fn lower_throw(
+  context : @adapter.InstructionContext,
+  environment : Environment,
+  tag_index : Int,
+) -> String? {
+  let types = context.operand_types()
+  for ty in types {
+    if !is_runtime_word_type(ty) {
+      return Some(
+        "the current Wasm exception ABI cannot throw v128 as one runtime word",
+      )
+    }
+  }
+  let values = context.operands()
+  let operands = context.environment()
+  operands.push(i32_immediate(context, tag_index))
+  if values.is_empty() {
+    finish_noreturn_runtime_call(
+      context,
+      environment,
+      "exception.throw_tag",
+      operands,
+      [Ptr64, I32],
+    )
+  } else {
+    operands.push(emit_runtime_word_buffer(context, values, types))
+    operands.push(i32_immediate(context, values.length()))
+    finish_noreturn_runtime_call(
+      context,
+      environment,
+      "exception.throw",
+      operands,
+      [Ptr64, I32, Ptr64, I32],
+    )
+  }
+  None
+}
+
+///|
+fn lower_throw_ref(
+  context : @adapter.InstructionContext,
+  environment : Environment,
+) -> Unit {
+  let operands = context.environment()
+  operands.append(context.operands())
+  finish_noreturn_runtime_call(
+    context,
+    environment,
+    "exception.throw_ref",
+    operands,
+    [Ptr64, GcRef64],
+  )
+}
+
+///|
+fn lower_delegate(
+  context : @adapter.InstructionContext,
+  environment : Environment,
+  depth : Int,
+) -> Unit {
+  let operands = context.environment()
+  operands.push(i32_immediate(context, depth))
+  finish_noreturn_runtime_call(
+    context,
+    environment,
+    "exception.delegate",
+    operands,
+    [Ptr64, I32],
+  )
+}
+
+///|
 fn lower_exception_query(
   context : @adapter.InstructionContext,
   environment : Environment,
@@ -1126,6 +1217,15 @@ fn lower_extension(
       None
     }
     SpillLocalsForThrow(_) => lower_spill_locals(context, environment)
+    Throw(tag_index) => lower_throw(context, environment, tag_index)
+    ThrowRef => {
+      lower_throw_ref(context, environment)
+      None
+    }
+    Delegate(depth) => {
+      lower_delegate(context, environment, depth)
+      None
+    }
     TryTableEnd(handler_id) => {
       lower_try_table_end(context, environment, handler_id)
       None

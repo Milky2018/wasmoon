@@ -725,3 +725,78 @@ test "exception local snapshots use address-visible runtime-word buffers" {
     ),
   )
 }
+
+///|
+test "exception throws terminate control flow with typed value buffers" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("exception_throw")
+  builder.add_param(I64) |> ignore
+  let integer = builder.add_param(I64)
+  let reference = builder.add_param(Ref)
+  @wasm_milkir.emit_throw(builder, 9, [integer, reference])
+  builder.trap("unreachable after throw")
+  inspect(
+    lower_function(builder.finalize(), test_environment()),
+    content=(
+      #|machv exception_throw [internal](v0:ptr64, v1:i64, v2:gcref64) -> () {
+      #|stack0: size=16, alignment=16
+      #|block0:
+      #|  v3:i32 = i32.const 9
+      #|  v4:ptr64 = stack.address stack0
+      #|  store {
+      #|  width: W64,
+      #|  value_type: I64,
+      #|  offset: 0,
+      #|  endianness: Little,
+      #|  trap: None,
+      #|} v4, v1 [memory=write]
+      #|  v5:ptr64 = gcref.address v2
+      #|  v6:i64 = convert.Bitcast(Ptr64, I64) v5
+      #|  store {
+      #|  width: W64,
+      #|  value_type: I64,
+      #|  offset: 8,
+      #|  endianness: Little,
+      #|  trap: None,
+      #|} v4, v6 [memory=write]
+      #|  v7:i32 = i32.const 2
+      #|  noreturn_call external @wasm.runtime.exception.throw (ptr64, i32, ptr64, i32) -> () [platform] (v0, v3, v4, v7) [memory=read-write, trap]
+      #|}
+    ),
+  )
+}
+
+///|
+test "exception reference throws replace placeholder traps" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("exception_throw_ref")
+  builder.add_param(I64) |> ignore
+  let reference = builder.add_param(Ref)
+  @wasm_milkir.emit_throw_ref(builder, reference)
+  builder.trap("unreachable after throw_ref")
+  inspect(
+    lower_function(builder.finalize(), test_environment()),
+    content=(
+      #|machv exception_throw_ref [internal](v0:ptr64, v1:gcref64) -> () {
+      #|block0:
+      #|  noreturn_call external @wasm.runtime.exception.throw_ref (ptr64, gcref64) -> () [platform] (v0, v1) [memory=read-write, trap]
+      #|}
+    ),
+  )
+}
+
+///|
+test "exception delegation is an explicit noreturn runtime transfer" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("exception_delegate")
+  builder.add_param(I64) |> ignore
+  @wasm_milkir.delegate(builder, 3)
+  builder.trap("unreachable after delegate")
+  inspect(
+    lower_function(builder.finalize(), test_environment()),
+    content=(
+      #|machv exception_delegate [internal](v0:ptr64) -> () {
+      #|block0:
+      #|  v1:i32 = i32.const 3
+      #|  noreturn_call external @wasm.runtime.exception.delegate (ptr64, i32) -> () [platform] (v0, v1) [memory=read-write, trap]
+      #|}
+    ),
+  )
+}

@@ -357,11 +357,12 @@ pub fn InstructionContext::noreturn_call(
   call : @machv.SemanticCall,
   operands : Array[@machv.Value],
 ) -> Unit {
-  self.builder.noreturn_call_with_metadata(
-    call,
-    operands,
-    self.terminator_metadata(),
-  )
+  let metadata = if call.behavior.gc_safepoint {
+    self.terminator_metadata()
+  } else {
+    @machv.TerminatorMetadata::new(self.source, [])
+  }
+  self.builder.noreturn_call_with_metadata(call, operands, metadata)
   self.terminates_block.val = true
   self.finish_void()
 }
