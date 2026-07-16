@@ -1,9 +1,24 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "Milky2018/milkir_machv"
 
+import {
+  "Milky2018/machv",
+  "Milky2018/milkir",
+  "moonbitlang/core/debug",
+}
+
 // Values
+pub fn lower_core_function(@milkir.Function) -> @machv.Function raise SemanticLowerError
 
 // Errors
+pub suberror SemanticLowerError {
+  InvalidMilkIR(message~ : String)
+  UnsupportedOperation(block_id~ : Int, instruction_id~ : Int, message~ : String)
+  MissingValue(value_id~ : Int)
+  MissingBlock(block_id~ : Int)
+  InvalidMachV(message~ : String)
+} derive(Eq, @debug.Debug)
+pub impl Show for SemanticLowerError
 
 // Types and methods
 

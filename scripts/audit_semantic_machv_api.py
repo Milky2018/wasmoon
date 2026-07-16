@@ -56,6 +56,7 @@ EXPECTED_OPERATION_FAMILIES = {
     "ReferenceCompare",
     "IntUnary",
     "IntBinary",
+    "IntHighMultiply",
     "IntWithOverflow",
     "IntCompare",
     "FloatUnary",

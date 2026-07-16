@@ -1,4 +1,9 @@
 import {
+  "Milky2018/milkir",
+  "Milky2018/machv" @semantic,
+}
+
+import {
   "Milky2018/milkir_machv/lower",
   "Milky2018/machv_legacy" @machv,
   "Milky2018/machv_legacy/abi",

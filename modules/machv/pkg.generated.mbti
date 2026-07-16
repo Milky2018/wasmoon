@@ -335,6 +335,7 @@ pub(all) enum Operation {
   ReferenceCompare(ReferenceComparison)
   IntUnary(IntUnaryOp)
   IntBinary(IntBinaryOp)
+  IntHighMultiply(Signedness)
   IntWithOverflow(IntOverflowOp)
   IntCompare(IntComparison)
   FloatUnary(FloatUnaryOp)

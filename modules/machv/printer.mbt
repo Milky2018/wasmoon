@@ -62,6 +62,7 @@ fn format_operation(operation : Operation) -> String {
     ReferenceCompare(op) => "reference.compare.\{to_repr(op)}"
     IntUnary(op) => "int.unary.\{to_repr(op)}"
     IntBinary(op) => "int.binary.\{to_repr(op)}"
+    IntHighMultiply(signedness) => "int.high_multiply.\{to_repr(signedness)}"
     IntWithOverflow(op) => "int.with_overflow.\{to_repr(op)}"
     IntCompare(op) => "int.compare.\{to_repr(op)}"
     FloatUnary(op) => "float.unary.\{to_repr(op)}"

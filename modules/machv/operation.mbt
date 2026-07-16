@@ -406,6 +406,7 @@ pub(all) enum Operation {
   ReferenceCompare(ReferenceComparison)
   IntUnary(IntUnaryOp)
   IntBinary(IntBinaryOp)
+  IntHighMultiply(Signedness)
   IntWithOverflow(IntOverflowOp)
   IntCompare(IntComparison)
   FloatUnary(FloatUnaryOp)
@@ -472,6 +473,7 @@ fn Operation::copy(self : Operation) -> Operation {
     | ReferenceCompare(_)
     | IntUnary(_)
     | IntBinary(_)
+    | IntHighMultiply(_)
     | IntWithOverflow(_)
     | IntCompare(_)
     | FloatUnary(_)
@@ -969,6 +971,18 @@ fn verify_operation_contract(
       }
       None
     }
+    IntHighMultiply(_) => {
+      if operands.length() != 2 ||
+        results.length() != 1 ||
+        !is_integer_type(operands[0]) ||
+        operands[0] != operands[1] ||
+        operands[0] != results[0] {
+        return operation_error(
+          "high-half multiply expects matching i32 or i64 values",
+        )
+      }
+      None
+    }
     IntWithOverflow(_) => {
       if operands.length() != 2 ||
         results.length() != 2 ||
@@ -1262,6 +1276,7 @@ pub fn Operation::semantics(self : Operation) -> OperationSemantics {
     | ReferenceCompare(_)
     | IntUnary(_)
     | IntBinary(_)
+    | IntHighMultiply(_)
     | IntWithOverflow(_)
     | IntCompare(_)
     | FloatUnary(_)
