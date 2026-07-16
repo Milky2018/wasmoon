@@ -288,6 +288,10 @@ _Avoid_: cross-target ISA union, shared multi-ISA emitter, target plugin
 The Wasmoon-specific native execution integration that resolves runtime symbols, executable memory, host calls, VMContext state, traps, and helper bindings.
 _Avoid_: generic emitter, compiler backend
 
+**Wasmoon JIT Module**:
+The product-owned publication unit whose native root is the deep compilation and installation interface and whose portable artifact package owns only the untrusted Cwasm wire representation.
+_Avoid_: public raw FFI package, mixed Wasm encoder, runtime-helper catalog
+
 **Wasmoon JIT Compiler**:
 The product-owned compiler module configured once for a target and immutable policy that compiles verified MilkIR through every mandatory native stage into an **Unlinked Code Object**.
 _Avoid_: runtime linker, stage-by-stage controller, target plugin
