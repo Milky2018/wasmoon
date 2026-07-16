@@ -220,6 +220,10 @@ _Avoid_: MachV frame state, pre-allocation offset, prologue opcode
 The target checkpoint that proves one **Frame Layout** is complete, non-overlapping, ABI-aligned, metadata-consistent, and encodable for its structurally bound Target VCode and Allocation.
 _Avoid_: emitter stack assertion, unbound frame offsets, post-write validation
 
+**Code Object Verifier**:
+The target checkpoint that validates a complete unlinked machine-code artifact's labels, relocations, sections, instruction-boundary metadata, architecture, and feature contract before the artifact leaves emission.
+_Avoid_: linked-code verifier, production disassembly round trip, partial-buffer validation
+
 **Register Allocation**:
 The target-independent allocation algorithm that assigns virtual registers or spills in **Target VCode** through a shared abstract program model.
 _Avoid_: regalloc_core, VCode regalloc, machine regalloc
@@ -332,6 +336,7 @@ _Avoid_: MachV emitter output, generic object format
 - **Register Allocation** runs after **MachV Target Lowering** and before a **Target Emitter**.
 - **MachV** values have no locations; **Allocated Location**, spill slots, ABI areas, and stack-pointer operations begin after **MachV Target Lowering**.
 - A **Target Emitter** produces generic relocation and metadata records; **Wasmoon JIT** resolves those records to Wasmoon runtime helpers and executable memory.
+- A **Target Emitter** builds bytes, relocations, pools, labels, and metadata in private storage and returns them only after the **Code Object Verifier** accepts the complete unlinked artifact; partial output and reachable emitter aborts are forbidden.
 - A **Cwasm Artifact** may wrap **Target Emitter** output with Wasmoon function indices, imports, traps, debug mapping, and runtime metadata.
 - **JIT FFI** belongs to **Wasmoon JIT** until a small generic executable-memory API has proven reuse.
 - The **Wasmoon Runtime** depends on compiler infrastructure modules, but compiler infrastructure modules do not depend on the **Wasmoon Runtime**.
@@ -407,7 +412,7 @@ _Avoid_: MachV emitter output, generic object format
 - Terminators previously mixed semantic control flow with AArch64 and AMD64 branch forms; resolved: **MachV Terminator** has one minimal target-neutral vocabulary, while encoded branch selection belongs downstream.
 - Mutation safety previously depended on callers repairing directly mutable arrays; resolved: the **MachV Mutation Boundary** is locally atomic, while explicit verifier checkpoints validate cross-entity invariants.
 - Verification previously mixed partial SSA checks with target register policy; resolved: the **MachV Verifier** validates only the complete target-neutral MachV contract, while target representations have their own verifiers.
-- Machine-code-emission ownership has been reopened: decide the interface between target-specific representations, byte encoding, generic metadata, and **Wasmoon JIT** runtime resolution.
+- Machine-code-emission ownership was previously unclear; resolved: target emitters privately build and verify complete unlinked code objects, while **Wasmoon JIT** owns relocation resolution, linking, and executable-memory installation.
 - Precompiled output ownership was ambiguous; resolved: **Cwasm Artifact** belongs to **Wasmoon JIT**, not a **Target Emitter**.
 - Native JIT glue ownership was ambiguous; resolved: **JIT FFI** remains in **Wasmoon JIT** for the first split instead of creating a generic executable-memory module.
 - "Wasmoon Runtime" names an execution-system concept, not a required package named `wasmoon_runtime`; resolved: keep the package name decision separate from the concept.
