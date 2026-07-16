@@ -9,3 +9,7 @@ import {
   "Milky2018/milkir_machv/lower/peephole",
   "moonbitlang/core/hashset",
 }
+
+import {
+  "Milky2018/machv" @semantic,
+} for "wbtest"
