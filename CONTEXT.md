@@ -168,6 +168,10 @@ _Avoid_: semantic legalization, MachV lowering
 A shared virtual-register function and control-flow structure parameterized by a closed, target-owned instruction type such as `AArch64Inst` or `AMD64Inst`.
 _Avoid_: MachV, shared target opcode, union of machine dialects
 
+**Target VCode SSA**:
+The strict single-definition form retained by **Target VCode** through register-allocation input, including block parameters and typed edge arguments.
+_Avoid_: pre-allocation multiple definitions, physical-register form, edge-copy mutation
+
 **Portable Execution Target**:
 An optional downstream target that lowers **MachV** into interpreter-oriented bytecode with its own instruction set and execution contract.
 _Avoid_: MachV bytecode, MachV VM, production MachV interpreter
@@ -303,6 +307,7 @@ _Avoid_: MachV emitter output, generic object format
 - Stack arguments enter Target VCode as symbolic **Incoming Argument Slots** and caller-owned **Outgoing Call Areas**; MachV contains no ABI stack-adjustment, outgoing-store, or stack-base operations.
 - Target VCode call allocation facts use fixed or tied operands, explicit timing, and caller-saved clobber ranges; target call instructions do not duplicate argument counts, result classes, or clobber categories.
 - **Target VCode** shares function, block, control-flow, virtual-register, and allocation structure without sharing target instructions.
+- **Target VCode SSA** remains intact until register allocation returns edge parallel-move edits; target constraints use fixed or tied operands rather than redefining virtual values.
 - A **Portable Execution Target** may consume **MachV** without turning **MachV** itself into a stable bytecode or VM contract.
 - **Register Allocation** runs after **MachV Target Lowering** and before a **Target Emitter**.
 - **MachV** values have no locations; **Allocated Location**, spill slots, ABI areas, and stack-pointer operations begin after **MachV Target Lowering**.
@@ -342,6 +347,7 @@ _Avoid_: MachV emitter output, generic object format
 - Scalar-operation ownership was previously unclear; resolved: **MachV** owns precisely typed arithmetic and conversion meaning, while condition flags, fixed registers, shifted operands, and immediate encodings belong to **Target VCode**.
 - Vector-operation ownership was previously unclear; resolved: **MachV** currently owns only target-neutral `V128` meaning, while target SIMD forms and wider or scalable vectors remain outside the contract.
 - SSA destruction ownership was previously unclear; resolved: **MachV** retains single-definition virtual registers and block parameters, while target-specific constraints and copy insertion begin in **Target VCode**.
+- Target VCode's pre-allocation SSA state was previously open; resolved: Target VCode also remains strict SSA, and regalloc alone represents SSA destruction through separate allocation edits.
 - Portable execution ownership was previously unclear; resolved: **MachV** remains a compiler intermediate representation, while any production bytecode and interpreter belong to a separate **Portable Execution Target**.
 - Target packaging was ambiguous; resolved: use ISA-specific modules such as `x64_target` and `aarch64_target`, not generic `backend` or `isa_backend` packages.
 - ABI ownership was previously mixed into the machine layer; resolved: **Machine Targets** own **ABI Policy** and apply it after **MachV**.
