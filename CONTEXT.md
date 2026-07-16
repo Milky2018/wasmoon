@@ -268,6 +268,10 @@ _Avoid_: MachV emitter, wasmoon JIT emitter, runtime fixup emitter
 The Wasmoon-specific native execution integration that resolves runtime symbols, executable memory, host calls, VMContext state, traps, and helper bindings.
 _Avoid_: generic emitter, compiler backend
 
+**Wasmoon JIT Compiler**:
+The product-owned compiler module configured once for a target and immutable policy that compiles verified MilkIR through every mandatory native stage into an **Unlinked Code Object**.
+_Avoid_: runtime linker, stage-by-stage controller, target plugin
+
 **JIT Pipeline Error**:
 The Wasmoon JIT failure that preserves one stage-owned structured compiler error and its precise site while remaining distinct from cooperative cancellation.
 _Avoid_: string-only diagnostic, backend abort, cancelled compilation
@@ -365,6 +369,7 @@ _Avoid_: best-effort loader, runtime-address table, implicit compatibility
 - Each public native compiler stage deterministically returns its first structured failure; **Wasmoon JIT** preserves that typed cause as a **JIT Pipeline Error**, while cancellation remains a separate outcome and human-readable rendering belongs at the presentation boundary.
 - Live JIT compilation and **Cwasm Artifact** loading converge at the **Unlinked Code Object** seam; persisted artifacts contain symbolic fixups and Wasmoon metadata but no MilkIR, MachV, Target VCode, resolved process address, or linked image.
 - A **Cwasm Artifact** is usable only when its **Artifact Compatibility Manifest** exactly matches the current runtime and request, except that the host CPU features may be a superset; cache mismatch recompiles, while explicit incompatible-artifact loading returns a structured failure.
+- The **Wasmoon JIT Compiler** owns one explicit target choice and the complete production compilation sequence; it supplies canonical Wasmoon ABI facts internally, branches to a static machine pipeline once, and owns neither Wasm validation nor runtime linking and installation.
 - **JIT FFI** belongs to **Wasmoon JIT** until a small generic executable-memory API has proven reuse.
 - The **Wasmoon Runtime** depends on compiler infrastructure modules, but compiler infrastructure modules do not depend on the **Wasmoon Runtime**.
 
@@ -443,5 +448,6 @@ _Avoid_: best-effort loader, runtime-address table, implicit compatibility
 - Machine-code-emission ownership was previously unclear; resolved: target emitters privately build and verify complete unlinked code objects, while **Wasmoon JIT** owns relocation resolution, linking, and executable-memory installation.
 - Precompiled output ownership was ambiguous; resolved: **Cwasm Artifact** belongs to **Wasmoon JIT** and persists only **Unlinked Code Objects** plus product metadata, never compiler IR or process-specific linked state.
 - Artifact compatibility was previously inferred from a format version and target architecture; resolved: a strict **Artifact Compatibility Manifest** covers every code, ABI, runtime, source-semantics, and compilation-policy dimension needed for safe reuse.
+- Production compilation orchestration was previously spread across callers and `EmitTarget` parameters; resolved: one deep **Wasmoon JIT Compiler** owns target selection and the mandatory pipeline through unlinked emission without absorbing frontend or installation responsibilities.
 - Native JIT glue ownership was ambiguous; resolved: **JIT FFI** remains in **Wasmoon JIT** for the first split instead of creating a generic executable-memory module.
 - "Wasmoon Runtime" names an execution-system concept, not a required package named `wasmoon_runtime`; resolved: keep the package name decision separate from the concept.
