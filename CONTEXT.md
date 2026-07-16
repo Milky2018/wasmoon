@@ -280,6 +280,18 @@ _Avoid_: runtime linker, stage-by-stage controller, target plugin
 The immutable Wasmoon compilation context that binds one validated module's identity, semantic features, function and import identities, signatures, and module layout while producing independent function code objects.
 _Avoid_: Store instance, compiler IR module, installed native module
 
+**Call Binding Policy**:
+The module-wide Wasmoon compilation choice between replaceable **Stable Entry Binding** and sealed **Direct Body Binding** for internal function calls.
+_Avoid_: per-call policy, runtime guessing, mixed implicit binding
+
+**Stable Entry Binding**:
+The lazy or tiered call binding in which internal calls target stable function stubs whose slots can atomically select replacement bodies without caller patching.
+_Avoid_: direct body relocation, growing-stack tail stub, caller repatching
+
+**Direct Body Binding**:
+The sealed eager or Cwasm call binding in which a complete module installation links internal calls directly to immutable function bodies.
+_Avoid_: lazy callee, single-function replacement, stable entry stub
+
 **JIT Pipeline Error**:
 The Wasmoon JIT failure that preserves one stage-owned structured compiler error and its precise site while remaining distinct from cooperative cancellation.
 _Avoid_: string-only diagnostic, backend abort, cancelled compilation
@@ -388,6 +400,7 @@ _Avoid_: best-effort loader, runtime-address table, implicit compatibility
 - A **Cwasm Artifact** is usable only when its **Artifact Compatibility Manifest** exactly matches the current runtime and request, except that the host CPU features may be a superset; cache mismatch recompiles, while explicit incompatible-artifact loading returns a structured failure.
 - The **Wasmoon JIT Compiler** owns one explicit target choice and the complete production compilation sequence; it supplies canonical Wasmoon ABI facts internally, branches to a static machine pipeline once, and owns neither Wasm validation nor runtime linking and installation.
 - One **Wasmoon JIT Compiler** may start many **Module Compilations**; each module context compiles functions independently, and lazy, tiered, eager, and Cwasm paths differ only in which function objects they request and aggregate.
+- Every **Module Compilation** fixes one **Call Binding Policy**: lazy or tiered modules use **Stable Entry Binding**, while complete sealed eager or Cwasm modules may use **Direct Body Binding** for zero-stub internal calls.
 - **JIT Code Installation** resolves all symbols before allocation, performs patching and metadata registration before publication, commits function-table visibility last, and returns **Installed Code**; failure leaves the prior visible module unchanged.
 - **JIT FFI** belongs to **Wasmoon JIT** until a small generic executable-memory API has proven reuse.
 - The **Wasmoon Runtime** depends on compiler infrastructure modules, but compiler infrastructure modules do not depend on the **Wasmoon Runtime**.
@@ -469,6 +482,7 @@ _Avoid_: best-effort loader, runtime-address table, implicit compatibility
 - Artifact compatibility was previously inferred from a format version and target architecture; resolved: a strict **Artifact Compatibility Manifest** covers every code, ABI, runtime, source-semantics, and compilation-policy dimension needed for safe reuse.
 - Production compilation orchestration was previously spread across callers and `EmitTarget` parameters; resolved: one deep **Wasmoon JIT Compiler** owns target selection and the mandatory pipeline through unlinked emission without absorbing frontend or installation responsibilities.
 - Live, tiered, eager, and Cwasm compilation previously risked becoming separate pipelines; resolved: an immutable **Module Compilation** exposes one function-granular compilation primitive and treats module compilation as aggregation.
+- Direct-call binding previously forced a choice between universal indirection and unsafe hot replacement; resolved: one explicit module-wide **Call Binding Policy** separates replaceable **Stable Entry Binding** from sealed **Direct Body Binding**.
 - Code installation previously exposed function pointers before all fixups and runtime metadata were ready; resolved: **JIT Code Installation** is one rollback-safe transaction whose final action publishes the complete **Installed Code**.
 - VMContext layout, runtime symbols, trap codes, and stack maps previously had multiple handwritten owners; resolved: one versioned **Wasmoon JIT ABI Contract** owns their cross-language representation, while runtime instances, installer actions, and platform primitives retain separate lifecycle responsibilities.
 - Native JIT glue ownership was ambiguous; resolved: **JIT FFI** remains in **Wasmoon JIT** for the first split instead of creating a generic executable-memory module.
