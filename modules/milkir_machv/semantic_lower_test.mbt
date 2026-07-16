@@ -374,3 +374,83 @@ test "core lowering preserves source metadata across semantic expansion" {
     ),
   )
 }
+
+///|
+test "dialect lowering uses the narrow semantic adapter" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("dialect_adapter")
+  let input = builder.add_param(I32)
+  builder.add_result(I32)
+  let result = builder.emit_ext_inst(
+    I32,
+    ExtOp("demo", "add_environment", []),
+    [input],
+  )
+  builder.return_([result])
+  fn validate(view : @milkir.ExtensionInstView) -> String? {
+    if view.op.dialect != "demo" || view.op.opcode != "add_environment" {
+      return Some("unknown demo operation")
+    }
+    if view.operand_types.length() != 1 ||
+      view.operand_types[0] != I32 ||
+      view.result_types.length() != 1 ||
+      view.result_types[0] != I32 {
+      return Some("demo.add_environment expects (i32) -> i32")
+    }
+    None
+  }
+  fn lower(
+    context : @adapter.InstructionContext,
+    operation : @milkir.ExtOp,
+  ) -> String? {
+    if operation.opcode != "add_environment" {
+      return Some("unknown demo operation")
+    }
+    let operands = context.operands()
+    let environment = context.environment()
+    context.finish_operation(IntBinary(Add), [operands[0], environment[0]])
+    None
+  }
+  inspect(
+    lower_dialect_function(builder.finalize(), "demo", validate, [I32], lower),
+    content=(
+      #|machv dialect_adapter [internal](v0:i32, v1:i32) -> (i32) {
+      #|block0:
+      #|  v2:i32 = int.binary.Add v1, v0
+      #|  return v2
+      #|}
+    ),
+  )
+}
+
+///|
+test "dialect lowering rejects an adapter that omits completion" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("incomplete_adapter")
+  let result = builder.emit_ext_inst(I32, ExtOp("demo", "incomplete", []), [])
+  builder.add_result(I32)
+  builder.return_([result])
+  fn validate(_view : @milkir.ExtensionInstView) -> String? {
+    None
+  }
+  fn lower(
+    _context : @adapter.InstructionContext,
+    _operation : @milkir.ExtOp,
+  ) -> String? {
+    None
+  }
+  try
+    lower_dialect_function(builder.finalize(), "demo", validate, [], lower)
+    |> ignore
+  catch {
+    error =>
+      inspect(
+        error,
+        content=(
+          #|UnsupportedOperation(
+          #|  block_id=0,
+          #|  instruction_id=0,
+          #|  message="dialect instruction did not complete its result contract",
+          #|)
+        ),
+      )
+  }
+}

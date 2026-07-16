@@ -17,6 +17,13 @@ pub impl Show for SemanticLowerError with fn output(self, logger) {
 }
 
 ///|
+priv struct DialectLowering {
+  name : String
+  environment_types : Array[@semantic.ValueType]
+  lower : (@adapter.InstructionContext, @milkir.ExtOp) -> String?
+}
+
+///|
 fn lower_type(ty : @milkir.Type) -> @semantic.ValueType {
   match ty {
     I32 => I32
@@ -746,6 +753,71 @@ fn lower_call_instruction(
 }
 
 ///|
+fn mapped_gc_roots(
+  values : Array[@semantic.Value?],
+  root_ids : Array[Int],
+) -> Array[@semantic.Value] raise SemanticLowerError {
+  let roots : Array[@semantic.Value] = []
+  for value_id in root_ids {
+    match values[value_id] {
+      Some(value) => roots.push(value)
+      None => raise MissingValue(value_id~)
+    }
+  }
+  roots
+}
+
+///|
+fn lower_dialect_instruction(
+  builder : @semantic.FunctionBuilder,
+  values : Array[@semantic.Value?],
+  environment : Array[@semantic.Value],
+  instruction : @milkir.Inst,
+  ext : @milkir.ExtOp,
+  block_id : Int,
+  root_ids : Array[Int],
+  lowering : DialectLowering,
+) -> Unit raise SemanticLowerError {
+  if ext.dialect != lowering.name {
+    raise UnsupportedOperation(
+      block_id~,
+      instruction_id=instruction.id,
+      message="dialect '\{ext.dialect}' does not match adapter '\{lowering.name}'",
+    )
+  }
+  fn complete(results : Array[@semantic.Value]) -> Unit {
+    for index, result in instruction.results {
+      values[result.id] = Some(results[index])
+    }
+  }
+  let context = @adapter.InstructionContext::new(
+    builder,
+    mapped_values(values, instruction.args),
+    instruction.results.map(result => lower_type(result.ty)),
+    environment,
+    instruction_source(instruction),
+    mapped_gc_roots(values, root_ids),
+    complete,
+  )
+  match (lowering.lower)(context, ext) {
+    Some(message) =>
+      raise UnsupportedOperation(
+        block_id~,
+        instruction_id=instruction.id,
+        message~,
+      )
+    None => ()
+  }
+  if context.status() is Some(message) {
+    raise UnsupportedOperation(
+      block_id~,
+      instruction_id=instruction.id,
+      message~,
+    )
+  }
+}
+
+///|
 fn lower_scalar_operation(
   scalar : @milkir.ScalarOp,
   instruction : @milkir.Inst,
@@ -814,6 +886,8 @@ fn lower_instruction(
   instruction : @milkir.Inst,
   block_id : Int,
   gc_roots : Array[Array[Int]],
+  environment : Array[@semantic.Value],
+  dialect : DialectLowering?,
 ) -> Unit raise SemanticLowerError {
   match instruction.opcode {
     Call(call) => {
@@ -848,12 +922,26 @@ fn lower_instruction(
     }
     Vector(operation) =>
       lower_vector_instruction(builder, values, instruction, operation)
-    Ext(_, _) =>
-      raise UnsupportedOperation(
-        block_id~,
-        instruction_id=instruction.id,
-        message="operation family \{instruction.opcode} is not in the current semantic lowering slice",
-      )
+    Ext(ext, _) =>
+      match dialect {
+        Some(lowering) =>
+          lower_dialect_instruction(
+            builder,
+            values,
+            environment,
+            instruction,
+            ext,
+            block_id,
+            gc_roots[instruction.id],
+            lowering,
+          )
+        None =>
+          raise UnsupportedOperation(
+            block_id~,
+            instruction_id=instruction.id,
+            message="operation family \{instruction.opcode} requires a dialect adapter",
+          )
+      }
   }
 }
 
@@ -954,22 +1042,23 @@ fn lower_terminator(
 }
 
 ///|
-/// Lower verified core MilkIR into target-neutral semantic MachV.
-///
-/// This initial producer deliberately rejects operation families that still
-/// require an explicit semantic contract instead of consulting a target ISA or
-/// silently routing them through the legacy backend.
-pub fn lower_core_function_with_protocol(
+fn lower_verified_function(
   function : @milkir.Function,
   protocol : @semantic.CallProtocol,
+  dialect : DialectLowering?,
 ) -> @semantic.Function raise SemanticLowerError {
-  function.verify_core() catch {
-    error => raise InvalidMilkIR(message=error.to_string())
+  let environment_types = match dialect {
+    Some(lowering) => lowering.environment_types
+    None => []
+  }
+  let parameter_types = environment_types.copy()
+  for parameter in function.params {
+    parameter_types.push(lower_type(parameter.1))
   }
   let builder = @semantic.FunctionBuilder::new(
     function.name,
     protocol,
-    function.params.map(param => lower_type(param.1)),
+    parameter_types,
     function.results.map(lower_type),
   )
   let values : Array[@semantic.Value?] = Array::make(
@@ -977,8 +1066,14 @@ pub fn lower_core_function_with_protocol(
     None,
   )
   let lowered_params = builder.parameters()
+  let environment : Array[@semantic.Value] = []
+  for index in 0..<environment_types.length() {
+    environment.push(lowered_params[index])
+  }
   for index, parameter in function.params {
-    values[parameter.0.id] = Some(lowered_params[index])
+    values[parameter.0.id] = Some(
+      lowered_params[environment_types.length() + index],
+    )
   }
   let blocks : Array[@semantic.Block?] = Array::make(
     function.next_block_id,
@@ -1009,7 +1104,15 @@ pub fn lower_core_function_with_protocol(
     let block = function.blocks[block_id]
     builder.switch_to_block(mapped_block(blocks, block.id))
     for instruction in block.instructions {
-      lower_instruction(builder, values, instruction, block.id, gc_roots)
+      lower_instruction(
+        builder,
+        values,
+        instruction,
+        block.id,
+        gc_roots,
+        environment,
+        dialect,
+      )
     }
     match block.terminator {
       Some(terminator) =>
@@ -1026,9 +1129,63 @@ pub fn lower_core_function_with_protocol(
 }
 
 ///|
+/// Lower verified core MilkIR into target-neutral semantic MachV.
+///
+/// Core lowering deliberately rejects extension operations instead of
+/// consulting a target ISA or silently routing them through the legacy backend.
+pub fn lower_core_function_with_protocol(
+  function : @milkir.Function,
+  protocol : @semantic.CallProtocol,
+) -> @semantic.Function raise SemanticLowerError {
+  function.verify_core() catch {
+    error => raise InvalidMilkIR(message=error.to_string())
+  }
+  lower_verified_function(function, protocol, None)
+}
+
+///|
 /// Lower an ordinary internally callable core MilkIR function.
 pub fn lower_core_function(
   function : @milkir.Function,
 ) -> @semantic.Function raise SemanticLowerError {
   lower_core_function_with_protocol(function, Internal)
+}
+
+///|
+/// Validate and lower one explicit MilkIR dialect through the safe semantic
+/// construction adapter.
+pub fn lower_dialect_function_with_protocol(
+  function : @milkir.Function,
+  protocol : @semantic.CallProtocol,
+  dialect : String,
+  validator : (@milkir.ExtensionInstView) -> String?,
+  environment_types : Array[@semantic.ValueType],
+  lower : (@adapter.InstructionContext, @milkir.ExtOp) -> String?,
+) -> @semantic.Function raise SemanticLowerError {
+  function.verify_with_extension_validator(dialect, validator) catch {
+    error => raise InvalidMilkIR(message=error.to_string())
+  }
+  lower_verified_function(
+    function,
+    protocol,
+    Some({ name: dialect, environment_types: environment_types.copy(), lower }),
+  )
+}
+
+///|
+pub fn lower_dialect_function(
+  function : @milkir.Function,
+  dialect : String,
+  validator : (@milkir.ExtensionInstView) -> String?,
+  environment_types : Array[@semantic.ValueType],
+  lower : (@adapter.InstructionContext, @milkir.ExtOp) -> String?,
+) -> @semantic.Function raise SemanticLowerError {
+  lower_dialect_function_with_protocol(
+    function,
+    Internal,
+    dialect,
+    validator,
+    environment_types,
+    lower,
+  )
 }

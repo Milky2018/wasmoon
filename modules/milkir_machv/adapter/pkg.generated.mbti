@@ -1,0 +1,37 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/milkir_machv/adapter"
+
+import {
+  "Milky2018/machv",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+type InstructionContext
+pub fn InstructionContext::block_parameters(Self, @machv.Block) -> Array[@machv.Value]
+pub fn InstructionContext::branch(Self, @machv.Value, @machv.Block, Array[@machv.Value], @machv.Block, Array[@machv.Value]) -> Unit
+pub fn InstructionContext::create_block(Self, Array[@machv.ValueType]) -> @machv.Block
+pub fn InstructionContext::emit(Self, @machv.Operation, Array[@machv.Value], Array[@machv.ValueType]) -> Array[@machv.Value]
+pub fn InstructionContext::emit_call(Self, @machv.SemanticCall, Array[@machv.Value], Array[@machv.ValueType]) -> Array[@machv.Value]
+pub fn InstructionContext::environment(Self) -> Array[@machv.Value]
+pub fn InstructionContext::finish_call(Self, @machv.SemanticCall, Array[@machv.Value]) -> Unit
+pub fn InstructionContext::finish_operation(Self, @machv.Operation, Array[@machv.Value]) -> Unit
+pub fn InstructionContext::finish_void(Self) -> Unit
+pub fn InstructionContext::forward_results(Self, Array[@machv.Value]) -> Unit
+pub fn InstructionContext::jump(Self, @machv.Block, Array[@machv.Value]) -> Unit
+pub fn InstructionContext::new(@machv.FunctionBuilder, Array[@machv.Value], Array[@machv.ValueType], Array[@machv.Value], @machv.SourceLocation?, Array[@machv.Value], (Array[@machv.Value]) -> Unit) -> Self
+pub fn InstructionContext::operands(Self) -> Array[@machv.Value]
+pub fn InstructionContext::result_types(Self) -> Array[@machv.ValueType]
+pub fn InstructionContext::source(Self) -> @machv.SourceLocation?
+pub fn InstructionContext::status(Self) -> String?
+pub fn InstructionContext::switch_to_block(Self, @machv.Block) -> Unit
+pub fn InstructionContext::tail_call(Self, @machv.SemanticCall, Array[@machv.Value]) -> Unit
+pub fn InstructionContext::trap(Self, @machv.TrapReason) -> Unit
+
+// Type aliases
+
+// Traits
+

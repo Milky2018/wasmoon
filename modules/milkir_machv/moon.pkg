@@ -1,10 +1,12 @@
 import {
   "Milky2018/milkir",
   "Milky2018/machv" @semantic,
+  "Milky2018/milkir_machv/adapter",
   "moonbitlang/core/hashset",
 }
 
 import {
+  "Milky2018/milkir_machv/adapter",
   "Milky2018/milkir_machv/lower",
   "Milky2018/machv_legacy" @machv,
   "Milky2018/machv_legacy/abi",
