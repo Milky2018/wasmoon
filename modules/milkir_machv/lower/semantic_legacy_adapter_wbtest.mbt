@@ -787,6 +787,156 @@ fn append_semantic_call(
 }
 
 ///|
+fn semantic_call_overflow_bytes(
+  function : @semantic.Function,
+  call : @semantic.SemanticCall,
+  operands : Array[@semantic.Value],
+  isa : @isa.ISA,
+  embedding_abi : @abi.EmbeddingABI?,
+) -> Int raise SemanticLegacyAdapterError {
+  if call.protocol is Platform {
+    let register_count = adapter_c_argument_registers(isa).length()
+    return if operands.length() > register_count {
+      (operands.length() - register_count) * 8
+    } else {
+      0
+    }
+  }
+  let call_conv = match embedding_abi {
+    Some(embedding_abi) => embedding_abi.call_conv
+    None =>
+      raise UnsupportedOperation(
+        message="internal call requires an embedding ABI",
+      )
+  }
+  let argument_start = if call.callee is Indirect { 2 } else { 1 }
+  if operands.length() < argument_start {
+    raise UnsupportedOperation(
+      message="internal call is missing callee or context operands",
+    )
+  }
+  let mut integer_count = 0
+  let float_classes : Array[@abi.RegClass] = []
+  for index in argument_start..<operands.length() {
+    let ty = function.value_type(operands[index]).unwrap()
+    match legacy_reg_class(ty) {
+      Int => integer_count += 1
+      class => float_classes.push(class)
+    }
+  }
+  let integer_overflow = if integer_count > call_conv.user_arg_gprs.length() {
+    integer_count - call_conv.user_arg_gprs.length()
+  } else {
+    0
+  }
+  let float_overflow_classes : Array[@abi.RegClass] = []
+  for index in call_conv.arg_fprs.length()..<float_classes.length() {
+    float_overflow_classes.push(float_classes[index])
+  }
+  let (_, _, total_bytes) = call_conv.layout_overflow_stack(
+    integer_overflow, float_overflow_classes,
+  )
+  total_bytes
+}
+
+///|
+fn maximum_semantic_call_overflow(
+  function : @semantic.Function,
+  isa : @isa.ISA,
+  embedding_abi : @abi.EmbeddingABI?,
+) -> Int raise SemanticLegacyAdapterError {
+  let mut maximum = 0
+  for block in function.blocks() {
+    for instruction in function.block_instructions(block) {
+      if function.instruction_operation(instruction) is Some(Call(call)) {
+        let bytes = semantic_call_overflow_bytes(
+          function,
+          call,
+          function.instruction_operands(instruction),
+          isa,
+          embedding_abi,
+        )
+        if bytes > maximum {
+          maximum = bytes
+        }
+      }
+    }
+  }
+  maximum
+}
+
+///|
+fn plan_semantic_stack_objects(
+  function : @semantic.Function,
+  base : Int,
+) -> (Array[@semantic.StackObject], Array[Int], Int) {
+  let objects = function.stack_objects()
+  let offsets : Array[Int] = []
+  let mut cursor = base
+  for object in objects {
+    let alignment = function.stack_object_alignment(object).unwrap()
+    cursor = @abi.align_up(cursor, alignment)
+    offsets.push(cursor)
+    cursor += function.stack_object_size(object).unwrap()
+  }
+  (objects, offsets, @abi.align_up(cursor, 16))
+}
+
+///|
+fn semantic_stack_object_offset(
+  objects : Array[@semantic.StackObject],
+  offsets : Array[Int],
+  object : @semantic.StackObject,
+) -> Int raise SemanticLegacyAdapterError {
+  for index, candidate in objects {
+    if candidate == object {
+      return offsets[index]
+    }
+  }
+  raise UnsupportedOperation(message="stack object is not function-owned")
+}
+
+///|
+fn append_stack_address(
+  legacy_function : @machv.Function,
+  block : @block.Block,
+  definitions : Array[@abi.Writable],
+  offset : Int,
+) -> Unit raise SemanticLegacyAdapterError {
+  if definitions.length() != 1 {
+    raise UnsupportedOperation(
+      message="stack address must have exactly one result",
+    )
+  }
+  if offset == 0 {
+    let load = @instr.Inst(LoadSP)
+    load.add_def(definitions[0])
+    block.add_inst(load)
+    return
+  }
+  let base = legacy_function.new_vreg(Int)
+  let load = @instr.Inst(LoadSP)
+  load.add_def(legacy_def(base))
+  block.add_inst(load)
+  if offset <= 4095 || ((offset & 0xFFF) == 0 && offset >> 12 <= 4095) {
+    let add = @instr.Inst(AddImm(offset, true))
+    add.add_def(definitions[0])
+    add.add_use(Virtual(base))
+    block.add_inst(add)
+    return
+  }
+  let immediate = legacy_function.new_vreg(Int)
+  let materialize = @instr.Inst(LoadConst(offset.to_int64()))
+  materialize.add_def(legacy_def(immediate))
+  block.add_inst(materialize)
+  let add = @instr.Inst(Add(true))
+  add.add_def(definitions[0])
+  add.add_use(Virtual(base))
+  add.add_use(Virtual(immediate))
+  block.add_inst(add)
+}
+
+///|
 fn append_semantic_instruction(
   isa : @isa.ISA,
   embedding_abi : @abi.EmbeddingABI?,
@@ -795,6 +945,8 @@ fn append_semantic_instruction(
   instruction : @semantic.Instruction,
   values : Array[@abi.VReg?],
   legacy_function : @machv.Function,
+  stack_objects : Array[@semantic.StackObject],
+  stack_offsets : Array[Int],
   trap_payload : (@semantic.TrapReason) -> Int,
   code_symbol_resolver : ((@semantic.CodeSymbol) -> @instr.CodeSymbol)?,
 ) -> Unit raise SemanticLegacyAdapterError {
@@ -812,6 +964,15 @@ fn append_semantic_instruction(
     definitions.push(legacy_def(mapped))
   }
   let operation = function.instruction_operation(instruction).unwrap()
+  if operation is StackAddress(object) {
+    append_stack_address(
+      legacy_function,
+      legacy_block,
+      definitions,
+      semantic_stack_object_offset(stack_objects, stack_offsets, object),
+    )
+    return
+  }
   if operation is Call(call) {
     append_semantic_call(
       isa,
@@ -977,6 +1138,11 @@ fn adapt_semantic_to_legacy(
     error => raise InvalidLegacyFunction(message=error.to_string())
   }
   let legacy = @machv.Function(function.name())
+  let stack_base = maximum_semantic_call_overflow(function, isa, embedding_abi)
+  let (stack_objects, stack_offsets, outgoing_size) = plan_semantic_stack_objects(
+    function, stack_base,
+  )
+  legacy.update_max_outgoing_args_size(outgoing_size)
   let values : Array[@abi.VReg?] = Array::make(function.value_count(), None)
   for parameter in function.parameters() {
     let index = function.value_index(parameter).unwrap()
@@ -1005,7 +1171,7 @@ fn adapt_semantic_to_legacy(
     for instruction in function.block_instructions(block) {
       append_semantic_instruction(
         isa, embedding_abi, function, legacy_block, instruction, values, legacy,
-        trap_payload, code_symbol_resolver,
+        stack_objects, stack_offsets, trap_payload, code_symbol_resolver,
       )
     }
     set_semantic_terminator(
@@ -1307,4 +1473,97 @@ test "semantic-to-legacy adapter rejects unadapted precise call roots" {
   } noraise {
     _ => fail("expected precise roots to remain an explicit migration gap")
   }
+}
+
+///|
+test "semantic-to-legacy adapter lays out address-visible stack objects" {
+  let builder = @semantic.FunctionBuilder::new(
+    "semantic_adapter_stack_objects",
+    Internal,
+    [I64],
+    [],
+  )
+  let parameter = builder.parameters()[0]
+  let first = builder.create_stack_object(8, 8)
+  let second = builder.create_stack_object(16, 16)
+  let first_address = builder.emit(StackAddress(first), [], [Ptr64])[0]
+  builder.emit(
+    Store(@semantic.StoreSpec::new(W64, I64, 0UL, Little, None)),
+    [first_address, parameter],
+    [],
+  )
+  |> ignore
+  let second_address = builder.emit(StackAddress(second), [], [Ptr64])[0]
+  builder.emit(
+    Store(@semantic.StoreSpec::new(W64, I64, 0UL, Little, None)),
+    [second_address, parameter],
+    [],
+  )
+  |> ignore
+  builder.return_([])
+  let legacy = adapt_semantic_to_legacy(builder.finish(), AArch64)
+  inspect(
+    legacy,
+    content=(
+      #|machv semantic_adapter_stack_objects(v0:int) {
+      #|block0:
+      #|    v1 = mov rd, outgoing_args_base
+      #|    store_ptr.i64 +0 v1, v0
+      #|    v3 = mov rd, outgoing_args_base
+      #|    v2 = add #16 v3
+      #|    store_ptr.i64 +0 v2, v0
+      #|    ret
+      #|}
+      #|
+    ),
+  )
+  inspect(legacy.get_max_outgoing_args_size(), content="32")
+}
+
+///|
+test "semantic stack objects do not overlap internal call overflow arguments" {
+  let builder = @semantic.FunctionBuilder::new(
+    "semantic_adapter_stack_after_call",
+    Internal,
+    [Ptr64, I64, I64, I64, I64, I64, I64],
+    [],
+  )
+  let object = builder.create_stack_object(8, 8)
+  let call = @semantic.SemanticCall::new(
+    Internal(@semantic.CodeSymbol::new("wasm.func.9")),
+    @semantic.Signature::new([Ptr64, I64, I64, I64, I64, I64, I64], []),
+    Internal,
+    @semantic.CallBehavior::conservative(),
+  )
+  builder.emit(Call(call), builder.parameters(), []) |> ignore
+  let address = builder.emit(StackAddress(object), [], [Ptr64])[0]
+  builder.emit(
+    Store(@semantic.StoreSpec::new(W64, I64, 0UL, Little, None)),
+    [address, builder.parameters()[1]],
+    [],
+  )
+  |> ignore
+  builder.return_([])
+  let legacy = adapt_semantic_to_legacy(
+    builder.finish(),
+    AMD64,
+    embedding_abi=Some(adapter_test_embedding_abi(AMD64)),
+    code_symbol_resolver=Some(fn(_) { CodeSymbol("wasm.func", 9) }),
+  )
+  inspect(
+    legacy,
+    content=(
+      #|machv semantic_adapter_stack_after_call(v0:int, v1:int, v2:int, v3:int, v4:int, v5:int, v6:int) {
+      #|block0:
+      #|    str [sp+0] v6
+      #|    call_direct[Internal].wasm.func.9(6) -> 0 results v0, v1, v2, v3, v4, v5
+      #|    v8 = mov rd, outgoing_args_base
+      #|    v7 = add #16 v8
+      #|    store_ptr.i64 +0 v7, v1
+      #|    ret
+      #|}
+      #|
+    ),
+  )
+  inspect(legacy.get_max_outgoing_args_size(), content="32")
 }
