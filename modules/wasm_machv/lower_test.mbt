@@ -268,6 +268,44 @@ test "GC array bulk mutation preserves value encoding and effects" {
 }
 
 ///|
+test "GC allocation calls expose precise roots without a source-level safepoint id" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("gc_allocations")
+  builder.add_param(I64) |> ignore
+  let initial = builder.add_param(Ref)
+  let length = builder.add_param(I32)
+  builder.add_result(Ref)
+  builder.add_result(Ref)
+  builder.add_result(Ref)
+  let array = @wasm_milkir.array_new(builder, 4, initial, length)
+  let default_array = @wasm_milkir.array_new_default(builder, 5, length)
+  let structure = @wasm_milkir.struct_new_default(builder, 8)
+  builder.return_([array, default_array, structure])
+  inspect(
+    lower_function(builder.finalize(), test_environment()),
+    content=(
+      #|machv gc_allocations [internal](v0:ptr64, v1:gcref64, v2:i32) -> (gcref64, gcref64, gcref64) {
+      #|block0:
+      #|  v3:ptr64 = gcref.address v1
+      #|  v4:i64 = convert.Bitcast(Ptr64, I64) v3
+      #|  v5:i32 = i32.const 4
+      #|  v6:i64 = call external @wasm.runtime.gc.alloc_array_slow (ptr64, i32, i32, i64) -> (i64) [platform] v0, v5, v2, v4 [memory=read-write, trap, gc-safepoint] roots=[v1]
+      #|  v7:gcref64 = gcref.from_bits v6
+      #|  v8:i64 = i64.const 0
+      #|  v9:i32 = i32.const 5
+      #|  v10:i64 = call external @wasm.runtime.gc.alloc_array_slow (ptr64, i32, i32, i64) -> (i64) [platform] v0, v9, v2, v8 [memory=read-write, trap, gc-safepoint] roots=[v7]
+      #|  v11:gcref64 = gcref.from_bits v10
+      #|  v12:i32 = i32.const 8
+      #|  v13:ptr64 = ptr.null
+      #|  v14:i32 = i32.const 0
+      #|  v15:i64 = call external @wasm.runtime.gc.alloc_struct_slow (ptr64, i32, ptr64, i32) -> (i64) [platform] v0, v12, v13, v14 [memory=read-write, trap, gc-safepoint] roots=[v7, v11]
+      #|  v16:gcref64 = gcref.from_bits v15
+      #|  return v7, v11, v16
+      #|}
+    ),
+  )
+}
+
+///|
 test "i31 get uses explicit null-trap control flow" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder("i31_get")
   builder.add_param(I64) |> ignore

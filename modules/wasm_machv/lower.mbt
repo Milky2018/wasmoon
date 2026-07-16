@@ -673,6 +673,81 @@ fn lower_array_copy(
 }
 
 ///|
+fn emit_gc_allocation(
+  context : @adapter.InstructionContext,
+  environment : Environment,
+  capability : String,
+  operands : Array[@machv.Value],
+  parameter_types : Array[@machv.ValueType],
+) -> @machv.Value {
+  context.emit_call(
+    @machv.SemanticCall::new(
+      External((environment.runtime_symbol)(capability)),
+      @machv.Signature::new(parameter_types, [I64]),
+      Platform,
+      @machv.CallBehavior::new(ReadWrite, true, false, true, false),
+    ),
+    operands,
+    [I64],
+  )[0]
+}
+
+///|
+fn lower_array_new(
+  context : @adapter.InstructionContext,
+  environment : Environment,
+  type_index : Int,
+  use_default : Bool,
+) -> String? {
+  let source_operands = context.operands()
+  let source_types = context.operand_types()
+  let initial = if use_default {
+    context.emit(I64Const(0UL), [], [I64])[0]
+  } else {
+    if !is_runtime_word_type(source_types[0]) {
+      return Some(
+        "the current Wasm GC runtime ABI cannot initialize arrays with v128 values",
+      )
+    }
+    encode_runtime_word(context, source_operands[0], source_types[0])
+  }
+  let length = if use_default { source_operands[0] } else { source_operands[1] }
+  let operands = context.environment()
+  operands.push(i32_immediate(context, type_index))
+  operands.push(length)
+  operands.push(initial)
+  let word = emit_gc_allocation(
+    context,
+    environment,
+    "gc.alloc_array_slow",
+    operands,
+    [Ptr64, I32, I32, I64],
+  )
+  finish_runtime_word(context, word)
+  None
+}
+
+///|
+fn lower_struct_new_default(
+  context : @adapter.InstructionContext,
+  environment : Environment,
+  type_index : Int,
+) -> Unit {
+  let operands = context.environment()
+  operands.push(i32_immediate(context, type_index))
+  operands.push(context.emit(NullPtr, [], [Ptr64])[0])
+  operands.push(i32_immediate(context, 0))
+  let word = emit_gc_allocation(
+    context,
+    environment,
+    "gc.alloc_struct_slow",
+    operands,
+    [Ptr64, I32, Ptr64, I32],
+  )
+  finish_runtime_word(context, word)
+}
+
+///|
 fn lower_exception_query(
   context : @adapter.InstructionContext,
   environment : Environment,
@@ -875,6 +950,14 @@ fn lower_extension(
     ArrayFill(_) => lower_array_fill(context, environment)
     ArrayCopy(_, _) => {
       lower_array_copy(context, environment)
+      None
+    }
+    ArrayNew(type_index) =>
+      lower_array_new(context, environment, type_index, false)
+    ArrayNewDefault(type_index) =>
+      lower_array_new(context, environment, type_index, true)
+    StructNewDefault(type_index) => {
+      lower_struct_new_default(context, environment, type_index)
       None
     }
     TryTableEnd(handler_id) => {
