@@ -40,6 +40,10 @@ _Avoid_: IR type system when referring to WebAssembly heap types
 A reusable, target-neutral low-level virtual-register intermediate representation with single-definition values and block parameters. Every native JIT path passes through **MachV** before target-specific lowering.
 _Avoid_: target VCode, target-bound IR, portable execution target
 
+**MachV Module**:
+The reusable publication unit that owns semantic **MachV**, the generic **Target VCode** shell, and the generic **Unlinked Code Object** data contract as related but distinct package seams.
+_Avoid_: separate Target VCode release, target-owning MachV, mixed-ISA emitter
+
 **MachV Function**:
 The function-scoped unit of target-neutral MachV structure, semantics, control flow, and SSA consumed by target lowering.
 _Avoid_: verified wrapper, target VCode function, machine-code function
