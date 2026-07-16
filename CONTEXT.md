@@ -96,6 +96,10 @@ _Avoid_: direct canonical-array mutation, silent construction failure, always-va
 The target-neutral, read-only checkpoint that validates canonical entity integrity, semantic contracts, rooted control flow, and MachV SSA dominance.
 _Avoid_: target verifier, repairing validator, permanent verified state
 
+**Verification Checkpoint**:
+A representation-owned deterministic read-only validation performed by every public transformation on entry and before successful output, without persistent verified state or a caller-controlled bypass.
+_Avoid_: caller-managed validation, mutable validator closure, disabled safety check
+
 **MilkIR-MachV Lowering**:
 The target-neutral layer that lowers **MilkIR** into **MachV** without choosing host instructions, calling conventions, physical registers, or target constraints.
 _Avoid_: instruction selection, target backend, wasmoon JIT
@@ -261,6 +265,7 @@ _Avoid_: MachV emitter output, generic object format
 - A **MachV Terminator** expresses only semantic control flow; compare fusion, immediate branches, fallthrough, jump tables, and encoded labels belong to Target VCode or emission.
 - The **MachV Mutation Boundary** rejects foreign, deleted, duplicated, or locally ill-typed entities before changing state; reachability and dominance are whole-function verifier concerns.
 - The **MachV Verifier** deterministically reports the first structured error without target or ABI context, mutation, repair, or abort.
+- Every public compiler transformation owns entry and exit **Verification Checkpoints**; ordinary mutable representations are revalidated at the next public seam without acquiring permanent verified state.
 - **MachV Control-Flow Graph** order expresses semantics and SSA relationships; fallthrough selection, label offsets, branch relaxation, and final block layout belong downstream.
 - `Ptr64` and `GcRef64` are always 64-bit carriers; only `GcRef64` is a **MachV Managed Reference**.
 - A **MachV Constant** produces an ordinary SSA value; target lowering may select immediates, relocations, or constant-pool loads without changing its meaning.
@@ -356,6 +361,7 @@ _Avoid_: MachV emitter output, generic object format
 - Regalloc projection was previously modeled as a target-instruction trait returning operand arrays; resolved: lowering records compact allocation facts in the shared Target VCode shell once, avoiding target opcode inspection, repeated projection, and hot-path allocation.
 - Post-regalloc representation was unclear; resolved: keep Target VCode virtual and unchanged, return a separate dense allocation keyed by stable handles, and avoid rewriting or copying target instructions.
 - Target-lowering metadata ownership was unclear; resolved: preserve target-neutral observable metadata in Target VCode, map safepoint values through allocation, and leave physical encoding and runtime resolution downstream.
+- Pipeline validation ownership was unclear; resolved: each public transformation validates both input and output through representation-owned **Verification Checkpoints**, with no caller-managed or disabled safe path.
 - Value-location ownership was previously mixed into **MachV**; resolved: MachV safepoints and operations reference values, while **Allocated Location** and frame layout belong downstream.
 - Function signatures previously carried ABI result locations, stack counts, and placement facts; resolved: a **MachV Signature** contains only ordered parameter and result types, while ABI facts belong downstream.
 - Execution context and return-area parameters were previously both treated as hidden ABI state; resolved: a required execution environment is an explicit logical `Ptr64` value, while a native return-area pointer is introduced only by ABI lowering.
