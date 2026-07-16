@@ -196,6 +196,10 @@ _Avoid_: MachV core policy
 The embedding-owned cross-language agreement for its internal **Call Protocol**, including execution-environment and reserved runtime register roles that compiled code, native stubs, and host glue must share.
 _Avoid_: MachV context layout, platform ABI, target lowering implementation
 
+**Wasmoon JIT ABI Contract**:
+The versioned product contract that contains Wasmoon's **Internal ABI Contract** together with its VMContext layout, runtime-symbol identities, native trap and stack-map encodings, unwind agreement, and persistent runtime roles.
+_Avoid_: VMContext instance, target ABI convention, duplicated MoonBit and C constants
+
 **Target ABI Convention**:
 A machine-target-owned, validated physical realization of one **Call Protocol** used to derive concrete call layouts during target lowering.
 _Avoid_: MachV signature, runtime ABI registry, unvalidated embedding layout
@@ -359,6 +363,7 @@ _Avoid_: best-effort loader, runtime-address table, implicit compatibility
 - **Target Legalization** may expand one semantic **MachV** operation into multiple target instructions.
 - **Machine Targets** own **ABI Policy**; **MachV** does not encode host instructions, physical registers, calling conventions, or target constraints.
 - Wasmoon JIT owns its **Internal ABI Contract**; each machine target validates and realizes it as a **Target ABI Convention**, while the target alone owns platform convention rules and ABI planning.
+- The **Wasmoon JIT ABI Contract** is the single cross-language fact source for Wasmoon native compilation and installation; MoonBit and native glue derive or statically prove the same constants, while the **Wasmoon Runtime** owns only conforming runtime instances and semantic state.
 - An **Internal ABI Contract** may request **Persistent ABI Roles** for execution-environment, cache, or return-area values; targets validate them, Target VCode precolors them on demand, and frame planning preserves them.
 - After register allocation, each target derives one **Frame Layout** and uses it during emission to generate prologues, epilogues, stack addressing, and unwind frame facts.
 - The **Frame Layout Verifier** checks the complete VCode, Allocation, and Frame Layout triple both after planning and before emission writes bytes.
@@ -459,5 +464,6 @@ _Avoid_: best-effort loader, runtime-address table, implicit compatibility
 - Artifact compatibility was previously inferred from a format version and target architecture; resolved: a strict **Artifact Compatibility Manifest** covers every code, ABI, runtime, source-semantics, and compilation-policy dimension needed for safe reuse.
 - Production compilation orchestration was previously spread across callers and `EmitTarget` parameters; resolved: one deep **Wasmoon JIT Compiler** owns target selection and the mandatory pipeline through unlinked emission without absorbing frontend or installation responsibilities.
 - Code installation previously exposed function pointers before all fixups and runtime metadata were ready; resolved: **JIT Code Installation** is one rollback-safe transaction whose final action publishes the complete **Installed Code**.
+- VMContext layout, runtime symbols, trap codes, and stack maps previously had multiple handwritten owners; resolved: one versioned **Wasmoon JIT ABI Contract** owns their cross-language representation, while runtime instances, installer actions, and platform primitives retain separate lifecycle responsibilities.
 - Native JIT glue ownership was ambiguous; resolved: **JIT FFI** remains in **Wasmoon JIT** for the first split instead of creating a generic executable-memory module.
 - "Wasmoon Runtime" names an execution-system concept, not a required package named `wasmoon_runtime`; resolved: keep the package name decision separate from the concept.
