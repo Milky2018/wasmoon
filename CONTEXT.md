@@ -116,6 +116,10 @@ _Avoid_: instruction selection, target backend, wasmoon JIT
 The narrow semantic construction interface through which a source dialect translates validated extension operations into target-neutral **MachV** without observing its mutable storage or any machine target.
 _Avoid_: raw lowering context, target callback, physical-register helper
 
+**Wasm-MachV Lowering**:
+The reusable WebAssembly adapter that validates contextual Wasm operations and lowers them through a product-supplied semantic environment into target-neutral **MachV**.
+_Avoid_: Wasm ISA lowering, Wasmoon JIT lowering, target instruction selection
+
 **Semantic Legalization**:
 The target-neutral normalization that removes source or dialect concepts and makes value widths, effects, traps, memory behavior, and call semantics explicit before values enter **MachV**.
 _Avoid_: instruction selection, ABI lowering, target expansion
