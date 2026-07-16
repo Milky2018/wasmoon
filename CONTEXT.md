@@ -277,7 +277,7 @@ The machine-target-owned encoder that turns allocated **Target VCode** into byte
 _Avoid_: MachV emitter, wasmoon JIT emitter, runtime fixup emitter
 
 **Machine Target Module**:
-The reusable module that owns one machine target's instruction representation, ABI policy, Target VCode lowering, frame planning, emission, and target verification as one vertical slice.
+The reusable module whose single supported interface owns one machine target's instruction representation, ABI policy, Target VCode lowering, frame planning, emission, and target verification as one vertical slice.
 _Avoid_: cross-target ISA union, shared multi-ISA emitter, target plugin
 
 **Wasmoon JIT**:
