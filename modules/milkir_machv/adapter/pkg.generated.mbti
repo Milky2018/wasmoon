@@ -16,6 +16,7 @@ pub fn InstructionContext::branch(Self, @machv.Value, @machv.Block, Array[@machv
 pub fn InstructionContext::create_block(Self, Array[@machv.ValueType]) -> @machv.Block
 pub fn InstructionContext::emit(Self, @machv.Operation, Array[@machv.Value], Array[@machv.ValueType]) -> Array[@machv.Value]
 pub fn InstructionContext::emit_call(Self, @machv.SemanticCall, Array[@machv.Value], Array[@machv.ValueType]) -> Array[@machv.Value]
+pub fn InstructionContext::emit_call_without_roots(Self, @machv.SemanticCall, Array[@machv.Value], Array[@machv.ValueType]) -> Array[@machv.Value]
 pub fn InstructionContext::environment(Self) -> Array[@machv.Value]
 pub fn InstructionContext::finish_call(Self, @machv.SemanticCall, Array[@machv.Value]) -> Unit
 pub fn InstructionContext::finish_operation(Self, @machv.Operation, Array[@machv.Value]) -> Unit

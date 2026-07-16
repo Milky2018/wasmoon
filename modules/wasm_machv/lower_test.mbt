@@ -6,6 +6,11 @@ fn test_environment() -> Environment {
       @machv.EnvironmentField::new("wasm.memory.\{index}.base", Ptr64)
     },
     @machv.EnvironmentField::new("wasm.function_table", Ptr64),
+    fn(index) {
+      @machv.EnvironmentField::new("wasm.table.\{index}.base", Ptr64)
+    },
+    fn(index) { index + 100 },
+    @machv.ExternalSymbol::new("wasm.runtime.gc.type_check_subtype"),
   )
 }
 
@@ -202,6 +207,116 @@ test "function references use explicit table access and tagging" {
       #|  v7:i64 = int.binary.Or v5, v6
       #|  v8:gcref64 = gcref.from_bits v7
       #|  return v8
+      #|}
+    ),
+  )
+}
+
+///|
+test "table64 indirect calls preserve index width and subtype checks" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("indirect_table64")
+  builder.add_param(I64) |> ignore
+  let index = builder.add_param(I64)
+  let argument = builder.add_param(I32)
+  builder.add_result(I64)
+  let results = builder.emit_multi_ext_inst(
+    [I64],
+    @wasm_milkir.encode(WasmCallIndirect(3, 2)),
+    [index, argument],
+  )
+  builder.return_(results)
+  inspect(
+    lower_function(builder.finalize(), test_environment()),
+    content=(
+      #|machv indirect_table64 [internal](v0:ptr64, v1:i64, v2:i32) -> (i64) {
+      #|block0:
+      #|  v3:i64 = i64.const 4
+      #|  v4:i64 = int.binary.ShiftLeft v1, v3
+      #|  v5:ptr64 = environment.field @wasm.table.2.base v0 [memory=read]
+      #|  v6:ptr64 = pointer.offset v5, v4
+      #|  v7:ptr64 = load {
+      #|  width: W64,
+      #|  extension: None,
+      #|  result_type: Ptr64,
+      #|  offset: 0,
+      #|  endianness: Little,
+      #|  trap: None,
+      #|} v6 [memory=read]
+      #|  v8:i32 = load {
+      #|  width: W32,
+      #|  extension: None,
+      #|  result_type: I32,
+      #|  offset: 8,
+      #|  endianness: Little,
+      #|  trap: None,
+      #|} v6 [memory=read]
+      #|  v9:i32 = i32.const 103
+      #|  v10:i32 = int.compare.Equal v8, v9
+      #|  branch v10, block2, block1
+      #|block1:
+      #|  call external @wasm.runtime.gc.type_check_subtype (i32, i32) -> () [platform] v8, v9 [memory=read, trap]
+      #|  jump block2
+      #|block2:
+      #|  v11:i64 = convert.Bitcast(Ptr64, I64) v7
+      #|  v12:i64 = i64.const 16140901064495857663
+      #|  v13:i64 = int.binary.And v11, v12
+      #|  v14:ptr64 = convert.Bitcast(I64, Ptr64) v13
+      #|  v15:i64 = call indirect (ptr64, i32) -> (i64) [internal] v14, v0, v2 [memory=read-write, trap, unwind, gc-safepoint, cancel-safepoint]
+      #|  return v15
+      #|}
+    ),
+  )
+}
+
+///|
+test "indirect tail calls preserve roots and replace placeholder traps" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("indirect_tail")
+  builder.add_param(I64) |> ignore
+  let index = builder.add_param(I32)
+  let argument = builder.add_param(Ref)
+  builder.add_result(I64)
+  builder.emit_void_ext_inst(@wasm_milkir.encode(ReturnCallIndirect(1, 0)), [
+    index, argument,
+  ])
+  builder.trap("unreachable after return_call_indirect")
+  inspect(
+    lower_function(builder.finalize(), test_environment()),
+    content=(
+      #|machv indirect_tail [internal](v0:ptr64, v1:i32, v2:gcref64) -> (i64) {
+      #|block0:
+      #|  v3:i64 = convert.I64ExtendI32(Unsigned) v1
+      #|  v4:i64 = i64.const 4
+      #|  v5:i64 = int.binary.ShiftLeft v3, v4
+      #|  v6:ptr64 = environment.field @wasm.table.0.base v0 [memory=read]
+      #|  v7:ptr64 = pointer.offset v6, v5
+      #|  v8:ptr64 = load {
+      #|  width: W64,
+      #|  extension: None,
+      #|  result_type: Ptr64,
+      #|  offset: 0,
+      #|  endianness: Little,
+      #|  trap: None,
+      #|} v7 [memory=read]
+      #|  v9:i32 = load {
+      #|  width: W32,
+      #|  extension: None,
+      #|  result_type: I32,
+      #|  offset: 8,
+      #|  endianness: Little,
+      #|  trap: None,
+      #|} v7 [memory=read]
+      #|  v10:i32 = i32.const 101
+      #|  v11:i32 = int.compare.Equal v9, v10
+      #|  branch v11, block2, block1
+      #|block1:
+      #|  call external @wasm.runtime.gc.type_check_subtype (i32, i32) -> () [platform] v9, v10 [memory=read, trap]
+      #|  jump block2
+      #|block2:
+      #|  v12:i64 = convert.Bitcast(Ptr64, I64) v8
+      #|  v13:i64 = i64.const 16140901064495857663
+      #|  v14:i64 = int.binary.And v12, v13
+      #|  v15:ptr64 = convert.Bitcast(I64, Ptr64) v14
+      #|  tail_call indirect (ptr64, gcref64) -> (i64) [internal] (v15, v0, v2) [memory=read-write, trap, unwind, gc-safepoint, cancel-safepoint] roots=[v2]
       #|}
     ),
   )

@@ -186,6 +186,21 @@ pub fn InstructionContext::emit_call(
 }
 
 ///|
+pub fn InstructionContext::emit_call_without_roots(
+  self : InstructionContext,
+  call : @machv.SemanticCall,
+  operands : Array[@machv.Value],
+  result_types : Array[@machv.ValueType],
+) -> Array[@machv.Value] {
+  self.builder.emit_with_metadata(
+    Call(call),
+    operands,
+    result_types,
+    self.instruction_metadata(false),
+  )
+}
+
+///|
 pub fn InstructionContext::finish_call(
   self : InstructionContext,
   call : @machv.SemanticCall,

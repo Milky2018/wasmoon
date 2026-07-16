@@ -7,6 +7,9 @@ struct Environment {
   function_symbol : (Int) -> @machv.CodeSymbol
   memory_base_field : (Int) -> @machv.EnvironmentField
   function_table_field : @machv.EnvironmentField
+  table_base_field : (Int) -> @machv.EnvironmentField
+  canonical_type_index : (Int) -> Int
+  subtype_check_symbol : @machv.ExternalSymbol
 }
 
 ///|
@@ -14,8 +17,18 @@ pub fn Environment::new(
   function_symbol : (Int) -> @machv.CodeSymbol,
   memory_base_field : (Int) -> @machv.EnvironmentField,
   function_table_field : @machv.EnvironmentField,
+  table_base_field : (Int) -> @machv.EnvironmentField,
+  canonical_type_index : (Int) -> Int,
+  subtype_check_symbol : @machv.ExternalSymbol,
 ) -> Environment {
-  { function_symbol, memory_base_field, function_table_field }
+  {
+    function_symbol,
+    memory_base_field,
+    function_table_field,
+    table_base_field,
+    canonical_type_index,
+    subtype_check_symbol,
+  }
 }
 
 ///|
@@ -220,6 +233,119 @@ fn lower_get_function_reference(
 }
 
 ///|
+fn table_entry_address(
+  context : @adapter.InstructionContext,
+  table_index : Int,
+  environment : Environment,
+) -> @machv.Value {
+  let source_index = context.operands()[0]
+  let index = if context.operand_types()[0] == I32 {
+    context.emit(Convert(I64ExtendI32(Unsigned)), [source_index], [I64])[0]
+  } else {
+    source_index
+  }
+  let shift = context.emit(I64Const(4UL), [], [I64])[0]
+  let byte_offset = context.emit(IntBinary(ShiftLeft), [index, shift], [I64])[0]
+  let table = context.emit(
+      EnvironmentField((environment.table_base_field)(table_index)),
+      context.environment(),
+      [Ptr64],
+    )[0]
+  context.emit(PointerOffset, [table, byte_offset], [Ptr64])[0]
+}
+
+///|
+fn check_indirect_type(
+  context : @adapter.InstructionContext,
+  entry : @machv.Value,
+  type_index : Int,
+  environment : Environment,
+) -> Unit {
+  let actual = context.emit(
+      Load(@machv.LoadSpec::new(W32, None, I32, 8UL, Little, None)),
+      [entry],
+      [I32],
+    )[0]
+  let expected = context.emit(
+      I32Const(
+        (environment.canonical_type_index)(type_index).reinterpret_as_uint(),
+      ),
+      [],
+      [I32],
+    )[0]
+  let exact = context.emit(IntCompare(Equal), [actual, expected], [I32])[0]
+  let subtype_block = context.create_block([])
+  let continuation = context.create_block([])
+  context.branch(exact, continuation, [], subtype_block, [])
+  context.switch_to_block(subtype_block)
+  context.emit_call_without_roots(
+    @machv.SemanticCall::new(
+      External(environment.subtype_check_symbol),
+      @machv.Signature::new([I32, I32], []),
+      Platform,
+      @machv.CallBehavior::new(Read, true, false, false, false),
+    ),
+    [actual, expected],
+    [],
+  )
+  |> ignore
+  context.jump(continuation, [])
+  context.switch_to_block(continuation)
+}
+
+///|
+fn lower_indirect_call(
+  context : @adapter.InstructionContext,
+  type_index : Int,
+  table_index : Int,
+  environment : Environment,
+  tail : Bool,
+) -> Unit {
+  let entry = table_entry_address(context, table_index, environment)
+  let raw_pointer = context.emit(
+      Load(@machv.LoadSpec::new(W64, None, Ptr64, 0UL, Little, None)),
+      [entry],
+      [Ptr64],
+    )[0]
+  check_indirect_type(context, entry, type_index, environment)
+  let bits = context.emit(Convert(Bitcast(Ptr64, I64)), [raw_pointer], [I64])[0]
+  let mask = context.emit(I64Const(0xDFFFFFFFFFFFFFFFUL), [], [I64])[0]
+  let untagged = context.emit(IntBinary(And), [bits, mask], [I64])[0]
+  let function_pointer = context.emit(
+      Convert(Bitcast(I64, Ptr64)),
+      [untagged],
+      [Ptr64],
+    )[0]
+  let source_operands = context.operands()
+  let source_types = context.operand_types()
+  let parameter_types : Array[@machv.ValueType] = [Ptr64]
+  let call_operands : Array[@machv.Value] = [function_pointer]
+  for value in context.environment() {
+    call_operands.push(value)
+  }
+  for index in 1..<source_operands.length() {
+    parameter_types.push(source_types[index])
+    call_operands.push(source_operands[index])
+  }
+  let result_types = if tail {
+    context.function_result_types()
+  } else {
+    context.result_types()
+  }
+  let call = @machv.SemanticCall::new(
+    Indirect,
+    @machv.Signature::new(parameter_types, result_types),
+    Internal,
+    @machv.CallBehavior::conservative(),
+  )
+  if tail {
+    context.tail_call(call, call_operands)
+  } else {
+    context.finish_call(call, call_operands)
+  }
+}
+
+///|
 fn lower_extension(
   context : @adapter.InstructionContext,
   extension : @milkir.ExtOp,
@@ -240,6 +366,14 @@ fn lower_extension(
     }
     WasmCall(function_index) => {
       lower_direct_call(context, function_index, environment)
+      None
+    }
+    WasmCallIndirect(type_index, table_index) => {
+      lower_indirect_call(context, type_index, table_index, environment, false)
+      None
+    }
+    ReturnCallIndirect(type_index, table_index) => {
+      lower_indirect_call(context, type_index, table_index, environment, true)
       None
     }
     ReturnCall(function_index) => {
