@@ -16,3 +16,8 @@ import {
   "moonbitlang/core/cmp",
   "moonbitlang/core/hashset",
 }
+
+import {
+  "Milky2018/machv" @semantic_machv,
+  "Milky2018/wasm_machv",
+} for "wbtest"
