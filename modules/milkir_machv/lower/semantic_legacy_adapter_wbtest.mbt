@@ -340,12 +340,106 @@ fn lower_semantic_store(
 }
 
 ///|
+fn append_semantic_division_or_remainder(
+  isa : @isa.ISA,
+  legacy_function : @machv.Function,
+  block : @block.Block,
+  operation : @semantic.IntBinaryOp,
+  operands : Array[@abi.Reg],
+  definitions : Array[@abi.Writable],
+  is_64 : Bool,
+  trap_payload : (@semantic.TrapReason) -> Int,
+) -> Unit raise SemanticLegacyAdapterError {
+  if operands.length() != 2 || definitions.length() != 1 {
+    raise UnsupportedOperation(
+      message="division and remainder require two operands and one result",
+    )
+  }
+  let lhs = operands[0]
+  let rhs = operands[1]
+  let destination = definitions[0]
+  let signed = operation is (SignedDiv | SignedRem)
+  let remainder = operation is (SignedRem | UnsignedRem)
+  let zero_trap = @instr.Inst(
+    TrapIfZero(is_64, trap_payload(IntegerDivisionByZero)),
+  )
+  if remainder && isa is AMD64 {
+    zero_trap.add_use_fixed(rhs, {
+      index: isa.scratch_reg_1_index(),
+      class: Int,
+    })
+  } else {
+    zero_trap.add_use(rhs)
+  }
+  block.add_inst(zero_trap)
+  if operation is SignedDiv {
+    let overflow_trap = @instr.Inst(
+      TrapIfDivOverflow(is_64, trap_payload(IntegerOverflow)),
+    )
+    overflow_trap.add_use(lhs)
+    overflow_trap.add_use(rhs)
+    block.add_inst(overflow_trap)
+  }
+  if !remainder {
+    let opcode : @instr.Opcode = if signed { SDiv(is_64) } else { UDiv(is_64) }
+    let division = @instr.Inst(opcode)
+    division.add_def(destination)
+    division.add_use(lhs)
+    division.add_use(rhs)
+    block.add_inst(division)
+    return
+  }
+  if isa is AMD64 {
+    let opcode : @instr.Opcode = if signed { SRem(is_64) } else { URem(is_64) }
+    let remainder_instruction = @instr.Inst(opcode)
+    remainder_instruction.add_def_fixed(destination, { index: 2, class: Int })
+    remainder_instruction.add_use_fixed(lhs, { index: 0, class: Int })
+    remainder_instruction.add_use_fixed(rhs, {
+      index: isa.scratch_reg_1_index(),
+      class: Int,
+    })
+    remainder_instruction.add_def({ reg: Physical({ index: 0, class: Int }) })
+    remainder_instruction.add_def({ reg: Physical({ index: 2, class: Int }) })
+    block.add_inst(remainder_instruction)
+    return
+  }
+  let quotient = legacy_function.new_vreg(Int)
+  let division = @instr.Inst(if signed { SDiv(is_64) } else { UDiv(is_64) })
+  division.add_def(legacy_def(quotient))
+  division.add_use(lhs)
+  division.add_use(rhs)
+  block.add_inst(division)
+  if is_64 {
+    let remainder_instruction = @instr.Inst(Msub)
+    remainder_instruction.add_def(destination)
+    remainder_instruction.add_use(lhs)
+    remainder_instruction.add_use(Virtual(quotient))
+    remainder_instruction.add_use(rhs)
+    block.add_inst(remainder_instruction)
+  } else {
+    let product = legacy_function.new_vreg(Int)
+    let multiply = @instr.Inst(Mul(false))
+    multiply.add_def(legacy_def(product))
+    multiply.add_use(Virtual(quotient))
+    multiply.add_use(rhs)
+    block.add_inst(multiply)
+    let subtract = @instr.Inst(Sub(false))
+    subtract.add_def(destination)
+    subtract.add_use(lhs)
+    subtract.add_use(Virtual(product))
+    block.add_inst(subtract)
+  }
+}
+
+///|
 fn append_semantic_instruction(
+  isa : @isa.ISA,
   function : @semantic.Function,
   legacy_block : @block.Block,
   instruction : @semantic.Instruction,
   values : Array[@abi.VReg?],
   legacy_function : @machv.Function,
+  trap_payload : (@semantic.TrapReason) -> Int,
 ) -> Unit raise SemanticLegacyAdapterError {
   let operands : Array[@abi.Reg] = []
   for operand in function.instruction_operands(instruction) {
@@ -361,6 +455,22 @@ fn append_semantic_instruction(
     definitions.push(legacy_def(mapped))
   }
   let operation = function.instruction_operation(instruction).unwrap()
+  if operation is IntBinary(SignedDiv | UnsignedDiv | SignedRem | UnsignedRem) {
+    append_semantic_division_or_remainder(
+      isa,
+      legacy_function,
+      legacy_block,
+      match operation {
+        IntBinary(binary) => binary
+        _ => abort("matched integer division above")
+      },
+      operands,
+      definitions,
+      semantic_integer_width(function, semantic_results),
+      trap_payload,
+    )
+    return
+  }
   let opcode = match operation {
     I32Const(bits) =>
       @instr.LoadConst(bits.reinterpret_as_int().to_int64() & 0xFFFFFFFFL)
@@ -521,7 +631,7 @@ fn adapt_semantic_to_legacy(
     let legacy_block = legacy.get_blocks()[block_ids[block_index]]
     for instruction in function.block_instructions(block) {
       append_semantic_instruction(
-        function, legacy_block, instruction, values, legacy,
+        isa, function, legacy_block, instruction, values, legacy, trap_payload,
       )
     }
     set_semantic_terminator(
@@ -670,7 +780,7 @@ test "semantic-to-legacy adapter lowers explicit pointer memory effects" {
 }
 
 ///|
-test "semantic-to-legacy adapter rejects division before trap legalization" {
+test "semantic-to-legacy adapter preserves division traps" {
   let builder = @semantic.FunctionBuilder::new(
     "semantic_adapter_div",
     Internal,
@@ -679,15 +789,23 @@ test "semantic-to-legacy adapter rejects division before trap legalization" {
   )
   let result = builder.emit(IntBinary(SignedDiv), builder.parameters(), [I64])[0]
   builder.return_([result])
-  try adapt_semantic_to_legacy(builder.finish(), AMD64) |> ignore catch {
-    error =>
-      inspect(
-        error,
-        content=(
-          #|UnsupportedOperation(message="division and remainder require explicit trap legalization")
-        ),
-      )
-  } noraise {
-    _ => fail("expected trapping division to remain unsupported")
-  }
+  inspect(
+    adapt_semantic_to_legacy(builder.finish(), AMD64, trap_payload=fn(reason) {
+      match reason {
+        IntegerDivisionByZero => 4
+        IntegerOverflow => 5
+        _ => 0
+      }
+    }),
+    content=(
+      #|machv semantic_adapter_div(v0:int, v1:int) -> int {
+      #|block0:
+      #|    trap_if_zero #4 v1
+      #|    trap_if_div_overflow #5 v0, v1
+      #|    v2 = sdiv v0, v1
+      #|    ret v2
+      #|}
+      #|
+    ),
+  )
 }
