@@ -2,13 +2,13 @@
 package "Milky2018/milkir_machv/lower/peephole"
 
 import {
-  "Milky2018/machv",
-  "Milky2018/machv/abi",
-  "Milky2018/machv/isa",
+  "Milky2018/machv_legacy",
+  "Milky2018/machv_legacy/abi",
+  "Milky2018/machv_legacy/isa",
 }
 
 // Values
-pub fn optimize_machv(@machv.Function, isa? : @isa.ISA, profile? : PeepholeProfile, embedding_abi? : @abi.EmbeddingABI?) -> Unit
+pub fn optimize_machv(@machv_legacy.Function, isa? : @isa.ISA, profile? : PeepholeProfile, embedding_abi? : @abi.EmbeddingABI?) -> Unit
 
 // Errors
 

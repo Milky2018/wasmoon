@@ -3,8 +3,8 @@ package "Milky2018/wasmoon"
 
 import {
   "Milky2018/aarch64_target",
-  "Milky2018/machv",
   "Milky2018/machv_emit",
+  "Milky2018/machv_legacy",
   "Milky2018/milkir",
   "Milky2018/wasm_core/types",
   "Milky2018/wasmoon/wasm_frontend/embedding",
@@ -31,8 +31,8 @@ pub impl Show for WasmCompilerPipelineError
 // Types and methods
 pub(all) struct CompilerInfrastructureAssembly {
   signature : @milkir.Signature
-  machv_function : @machv.Function
-  allocated_function : @machv.Function
+  machv_function : @machv_legacy.Function
+  allocated_function : @machv_legacy.Function
   code_object : @machv_emit.MachineCode
   x64_abi : @x64_target.AbiPolicy
   aarch64_abi : @aarch64_target.AbiPolicy

@@ -1,9 +1,9 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "Milky2018/machv/isa/aarch64"
+package "Milky2018/machv_legacy/isa/aarch64"
 
 import {
-  "Milky2018/machv/abi",
-  "Milky2018/machv/isa/spec",
+  "Milky2018/machv_legacy/abi",
+  "Milky2018/machv_legacy/isa/spec",
 }
 
 // Values

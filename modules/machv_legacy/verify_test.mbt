@@ -1,6 +1,6 @@
 ///|
 test "public verifier rejects a missing terminator" {
-  let func = @machv.Function::Function("missing_terminator")
+  let func = @machv_legacy.Function::Function("missing_terminator")
   func.new_block() |> ignore
   try func.verify() catch {
     err => inspect(err, content="MissingTerminator(block_id=0)")
@@ -11,7 +11,7 @@ test "public verifier rejects a missing terminator" {
 
 ///|
 test "public verifier rejects an empty function" {
-  let func = @machv.Function::Function("empty")
+  let func = @machv_legacy.Function::Function("empty")
   try func.verify() catch {
     err => inspect(err, content="EmptyFunction")
   } noraise {
@@ -21,7 +21,7 @@ test "public verifier rejects an empty function" {
 
 ///|
 test "public builder finish rejects a missing terminator" {
-  let builder = @machv.FunctionBuilder::FunctionBuilder("unfinished")
+  let builder = @machv_legacy.FunctionBuilder::FunctionBuilder("unfinished")
   try builder.finish() catch {
     err => inspect(err, content="MissingTerminator(block_id=0)")
   } noraise {
@@ -31,7 +31,7 @@ test "public builder finish rejects a missing terminator" {
 
 ///|
 test "verifier rejects an invalid jump target" {
-  let func = @machv.Function::Function("invalid_target")
+  let func = @machv_legacy.Function::Function("invalid_target")
   let entry = func.new_block()
   entry.set_terminator(Jump(7, []))
   try func.verify() catch {
@@ -43,7 +43,7 @@ test "verifier rejects an invalid jump target" {
 
 ///|
 test "verifier checks jump argument arity" {
-  let func = @machv.Function::Function("jump_arity")
+  let func = @machv_legacy.Function::Function("jump_arity")
   let entry = func.new_block()
   let target = func.new_block()
   target.params.push(func.new_vreg(Int))
@@ -64,7 +64,7 @@ test "verifier checks jump argument arity" {
 
 ///|
 test "verifier checks jump argument register classes" {
-  let func = @machv.Function::Function("jump_class")
+  let func = @machv_legacy.Function::Function("jump_class")
   let entry = func.new_block()
   let target = func.new_block()
   let argument = func.add_param(Int)
@@ -86,7 +86,7 @@ test "verifier checks jump argument register classes" {
 
 ///|
 test "verifier rejects parameterized targets for branches without arguments" {
-  let func = @machv.Function::Function("branch_parameter")
+  let func = @machv_legacy.Function::Function("branch_parameter")
   let entry = func.new_block()
   let target = func.new_block()
   let fallback = func.new_block()
@@ -110,7 +110,7 @@ test "verifier rejects parameterized targets for branches without arguments" {
 
 ///|
 test "verifier checks return arity" {
-  let func = @machv.Function::Function("return_arity")
+  let func = @machv_legacy.Function::Function("return_arity")
   func.add_result_kind(I64)
   func.new_block().set_terminator(Return([]))
   try func.verify() catch {
@@ -128,7 +128,7 @@ test "verifier checks return arity" {
 
 ///|
 test "verifier checks return register classes" {
-  let func = @machv.Function::Function("return_class")
+  let func = @machv_legacy.Function::Function("return_class")
   func.add_result_kind(F64)
   let value = func.add_param(Int)
   func.new_block().set_terminator(Return([Virtual(value)]))
@@ -147,7 +147,7 @@ test "verifier checks return register classes" {
 
 ///|
 test "verifier rejects undefined virtual registers" {
-  let func = @machv.Function::Function("undefined_vreg")
+  let func = @machv_legacy.Function::Function("undefined_vreg")
   func.add_result_kind(I64)
   func.new_block().set_terminator(Return([Virtual({ id: 99, class: Int })]))
   try func.verify() catch {
@@ -159,13 +159,13 @@ test "verifier rejects undefined virtual registers" {
 
 ///|
 test "verifier rejects duplicate virtual register definitions" {
-  let func = @machv.Function::Function("duplicate_definition")
+  let func = @machv_legacy.Function::Function("duplicate_definition")
   let block = func.new_block()
   let value = func.new_vreg(Int)
-  let first = @machv.Inst::Inst(LoadConst(1L))
+  let first = @machv_legacy.Inst::Inst(LoadConst(1L))
   first.add_def({ reg: Virtual(value) })
   block.add_inst(first)
-  let second = @machv.Inst::Inst(LoadConst(2L))
+  let second = @machv_legacy.Inst::Inst(LoadConst(2L))
   second.add_def({ reg: Virtual(value) })
   block.add_inst(second)
   block.set_terminator(Return([]))
@@ -178,15 +178,15 @@ test "verifier rejects duplicate virtual register definitions" {
 
 ///|
 test "verifier rejects use before definition" {
-  let func = @machv.Function::Function("use_before_definition")
+  let func = @machv_legacy.Function::Function("use_before_definition")
   let block = func.new_block()
   let source = func.new_vreg(Int)
   let result = func.new_vreg(Int)
-  let copy = @machv.Inst::Inst(Move)
+  let copy = @machv_legacy.Inst::Inst(Move)
   copy.add_use(Virtual(source))
   copy.add_def({ reg: Virtual(result) })
   block.add_inst(copy)
-  let constant = @machv.Inst::Inst(LoadConst(1L))
+  let constant = @machv_legacy.Inst::Inst(LoadConst(1L))
   constant.add_def({ reg: Virtual(source) })
   block.add_inst(constant)
   block.set_terminator(Return([]))
@@ -199,7 +199,7 @@ test "verifier rejects use before definition" {
 
 ///|
 test "verifier rejects non-dominating definitions" {
-  let func = @machv.Function::Function("non_dominating_definition")
+  let func = @machv_legacy.Function::Function("non_dominating_definition")
   let entry = func.new_block()
   let then_block = func.new_block()
   let else_block = func.new_block()
@@ -207,11 +207,11 @@ test "verifier rejects non-dominating definitions" {
   let value = func.new_vreg(Int)
   let copy = func.new_vreg(Int)
   entry.set_terminator(Branch(Virtual(cond), then_block.id, else_block.id))
-  let constant = @machv.Inst::Inst(LoadConst(1L))
+  let constant = @machv_legacy.Inst::Inst(LoadConst(1L))
   constant.add_def({ reg: Virtual(value) })
   then_block.add_inst(constant)
   then_block.set_terminator(Return([]))
-  let copy_inst = @machv.Inst::Inst(Move)
+  let copy_inst = @machv_legacy.Inst::Inst(Move)
   copy_inst.add_use(Virtual(value))
   copy_inst.add_def({ reg: Virtual(copy) })
   else_block.add_inst(copy_inst)
@@ -231,10 +231,10 @@ test "verifier rejects non-dominating definitions" {
 
 ///|
 test "verifier checks operand constraint arrays" {
-  let func = @machv.Function::Function("constraint_arity")
+  let func = @machv_legacy.Function::Function("constraint_arity")
   let block = func.new_block()
   let value = func.new_vreg(Int)
-  let inst = @machv.Inst::Inst(LoadConst(1L))
+  let inst = @machv_legacy.Inst::Inst(LoadConst(1L))
   inst.add_def({ reg: Virtual(value) })
   inst.def_constraints.clear()
   block.add_inst(inst)
@@ -254,7 +254,7 @@ test "verifier checks operand constraint arrays" {
 
 ///|
 test "verifier rejects duplicate block ids through mutable block arrays" {
-  let func = @machv.Function::Function("duplicate_blocks")
+  let func = @machv_legacy.Function::Function("duplicate_blocks")
   let block = func.new_block()
   block.set_terminator(Return([]))
   func.get_blocks().push(block)
@@ -267,10 +267,10 @@ test "verifier rejects duplicate block ids through mutable block arrays" {
 
 ///|
 test "verifier checks opcode operand arity" {
-  let func = @machv.Function::Function("move_arity")
+  let func = @machv_legacy.Function::Function("move_arity")
   let block = func.new_block()
   let result = func.new_vreg(Int)
-  let inst = @machv.Inst::Inst(Move)
+  let inst = @machv_legacy.Inst::Inst(Move)
   inst.add_def({ reg: Virtual(result) })
   block.add_inst(inst)
   block.set_terminator(Return([]))
@@ -289,12 +289,12 @@ test "verifier checks opcode operand arity" {
 
 ///|
 test "verifier checks scalar opcode register classes" {
-  let func = @machv.Function::Function("add_classes")
+  let func = @machv_legacy.Function::Function("add_classes")
   let block = func.new_block()
   let lhs = func.add_param(Float64)
   let rhs = func.add_param(Float64)
   let result = func.new_vreg(Float64)
-  let inst = @machv.Inst::Inst(Add(true))
+  let inst = @machv_legacy.Inst::Inst(Add(true))
   inst.add_use(Virtual(lhs))
   inst.add_use(Virtual(rhs))
   inst.add_def({ reg: Virtual(result) })
@@ -315,11 +315,11 @@ test "verifier checks scalar opcode register classes" {
 
 ///|
 test "verifier checks call result classes" {
-  let func = @machv.Function::Function("call_result_class")
+  let func = @machv_legacy.Function::Function("call_result_class")
   let block = func.new_block()
   let callee = func.add_param(Int)
   let result = func.new_vreg(Int)
-  let inst = @machv.Inst::Inst(CallPtr(0, [Float64], Foreign))
+  let inst = @machv_legacy.Inst::Inst(CallPtr(0, [Float64], Foreign))
   inst.add_use(Virtual(callee))
   inst.add_def({ reg: Virtual(result) })
   block.add_inst(inst)
@@ -339,11 +339,11 @@ test "verifier checks call result classes" {
 
 ///|
 test "verifier checks call argument metadata" {
-  let func = @machv.Function::Function("call_argument_count")
+  let func = @machv_legacy.Function::Function("call_argument_count")
   let block = func.new_block()
   let callee = func.add_param(Int)
   let argument = func.add_param(Int)
-  let inst = @machv.Inst::Inst(CallPtr(0, [], Foreign))
+  let inst = @machv_legacy.Inst::Inst(CallPtr(0, [], Foreign))
   inst.add_use(Virtual(callee))
   inst.add_use(Virtual(argument))
   block.add_inst(inst)
@@ -363,11 +363,11 @@ test "verifier checks call argument metadata" {
 
 ///|
 test "verifier checks vector-memory opcode classes" {
-  let func = @machv.Function::Function("vector_load_class")
+  let func = @machv_legacy.Function::Function("vector_load_class")
   let block = func.new_block()
   let base = func.add_param(Int)
   let result = func.new_vreg(Int)
-  let inst = @machv.Inst::Inst(SIMDLoad(0))
+  let inst = @machv_legacy.Inst::Inst(SIMDLoad(0))
   inst.add_use(Virtual(base))
   inst.add_def({ reg: Virtual(result) })
   block.add_inst(inst)
@@ -387,9 +387,9 @@ test "verifier checks vector-memory opcode classes" {
 
 ///|
 test "ISA verifier rejects out-of-range physical registers" {
-  let func = @machv.Function::Function("invalid_amd64_register")
+  let func = @machv_legacy.Function::Function("invalid_amd64_register")
   let block = func.new_block()
-  let inst = @machv.Inst::Inst(Move)
+  let inst = @machv_legacy.Inst::Inst(Move)
   inst.add_use(Physical({ index: 20, class: Int }))
   inst.add_def({ reg: Physical({ index: 0, class: Int }) })
   block.add_inst(inst)

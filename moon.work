@@ -3,6 +3,7 @@ members = [
   "./modules/wasm_milkir",
   "./modules/wasm_isa_lower",
   "./modules/milkir",
+  "./modules/machv_legacy",
   "./modules/machv",
   "./modules/milkir_machv",
   "./modules/regalloc",

@@ -1,9 +1,9 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "Milky2018/machv/block"
+package "Milky2018/machv_legacy/block"
 
 import {
-  "Milky2018/machv/abi",
-  "Milky2018/machv/instr",
+  "Milky2018/machv_legacy/abi",
+  "Milky2018/machv_legacy/instr",
 }
 
 // Values

@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "Milky2018/machv/abi"
+package "Milky2018/machv_legacy/abi"
 
 import {
   "moonbitlang/core/debug",

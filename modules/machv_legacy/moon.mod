@@ -1,6 +1,6 @@
-name = "Milky2018/machv"
+name = "Milky2018/machv_legacy"
 
-version = "0.3.0"
+version = "0.2.2"
 
 repository = "https://github.com/Milky2018/wasmoon.git"
 
@@ -8,7 +8,7 @@ license = "Apache-2.0"
 
 keywords = [ "compiler", "machine-ir", "codegen", "jit" ]
 
-description = "Target-neutral semantic machine IR"
+description = "Reusable virtual-register machine IR"
 
 preferred_target = "wasm-gc"
 

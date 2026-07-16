@@ -2,55 +2,55 @@
 package "Milky2018/machv_regalloc"
 
 import {
-  "Milky2018/machv",
-  "Milky2018/machv/abi",
-  "Milky2018/machv/instr",
-  "Milky2018/machv/isa",
+  "Milky2018/machv_legacy",
+  "Milky2018/machv_legacy/abi",
+  "Milky2018/machv_legacy/instr",
+  "Milky2018/machv_legacy/isa",
   "Milky2018/regalloc/backtracking",
   "moonbitlang/core/debug",
   "moonbitlang/core/set",
 }
 
 // Values
-pub fn allocate_registers_backtracking(@machv.Function, embedding_abi? : @abi.EmbeddingABI?) -> @machv.Function raise @machv.VerifyError
+pub fn allocate_registers_backtracking(@machv_legacy.Function, embedding_abi? : @abi.EmbeddingABI?) -> @machv_legacy.Function raise @machv_legacy.VerifyError
 
-pub fn allocate_registers_backtracking_output(@machv.Function, embedding_abi? : @abi.EmbeddingABI?) -> (@machv.Function, Output) raise @machv.VerifyError
+pub fn allocate_registers_backtracking_output(@machv_legacy.Function, embedding_abi? : @abi.EmbeddingABI?) -> (@machv_legacy.Function, Output) raise @machv_legacy.VerifyError
 
-pub fn allocate_registers_backtracking_output_with_isa(@machv.Function, @isa.ISA, embedding_abi? : @abi.EmbeddingABI?) -> (@machv.Function, Output) raise @machv.VerifyError
+pub fn allocate_registers_backtracking_output_with_isa(@machv_legacy.Function, @isa.ISA, embedding_abi? : @abi.EmbeddingABI?) -> (@machv_legacy.Function, Output) raise @machv_legacy.VerifyError
 
-pub fn allocate_registers_backtracking_with_isa(@machv.Function, @isa.ISA, embedding_abi? : @abi.EmbeddingABI?) -> @machv.Function raise @machv.VerifyError
+pub fn allocate_registers_backtracking_with_isa(@machv_legacy.Function, @isa.ISA, embedding_abi? : @abi.EmbeddingABI?) -> @machv_legacy.Function raise @machv_legacy.VerifyError
 
-pub fn apply_allocation(@machv.Function, RegAllocResult, @isa.ISA, @abi.EmbeddingABI) -> @machv.Function raise @machv.VerifyError
+pub fn apply_allocation(@machv_legacy.Function, RegAllocResult, @isa.ISA, @abi.EmbeddingABI) -> @machv_legacy.Function raise @machv_legacy.VerifyError
 
-pub fn build_bundles_with_merging(@machv.Function, LiveRangeSet) -> BundleSet
+pub fn build_bundles_with_merging(@machv_legacy.Function, LiveRangeSet) -> BundleSet
 
 pub fn build_initial_bundles(LiveRangeSet) -> BundleSet
 
-pub fn build_live_ranges(@machv.Function, LivenessResult) -> LiveRangeSet
+pub fn build_live_ranges(@machv_legacy.Function, LivenessResult) -> LiveRangeSet
 
-pub fn build_stack_layout_aarch64(RegAllocResult, @machv.Function) -> AArch64StackFrame
+pub fn build_stack_layout_aarch64(RegAllocResult, @machv_legacy.Function) -> AArch64StackFrame
 
-pub fn compute_liveness(@machv.Function) -> LivenessResult raise @machv.VerifyError
+pub fn compute_liveness(@machv_legacy.Function) -> LivenessResult raise @machv_legacy.VerifyError
 
-pub fn compute_liveness_for_regalloc(@machv.Function) -> LivenessResult raise @machv.VerifyError
+pub fn compute_liveness_for_regalloc(@machv_legacy.Function) -> LivenessResult raise @machv_legacy.VerifyError
 
-pub fn compute_loop_depths(@machv.Function) -> Array[Int]
+pub fn compute_loop_depths(@machv_legacy.Function) -> Array[Int]
 
 pub fn compute_spill_weight(Bundle, LiveRangeSet, Array[Int]) -> Int
 
 pub fn debug_liveness(LivenessResult) -> String
 
-pub fn eliminate_dead_code(@machv.Function) -> @machv.Function
+pub fn eliminate_dead_code(@machv_legacy.Function) -> @machv_legacy.Function
 
-pub fn get_alloc_stats(@machv.Function, isa? : @isa.ISA, embedding_abi? : @abi.EmbeddingABI?) -> AllocStats raise @machv.VerifyError
+pub fn get_alloc_stats(@machv_legacy.Function, isa? : @isa.ISA, embedding_abi? : @abi.EmbeddingABI?) -> AllocStats raise @machv_legacy.VerifyError
 
-pub fn process_constraints(@machv.Function, RegAllocResult) -> Unit
+pub fn process_constraints(@machv_legacy.Function, RegAllocResult) -> Unit
 
-pub fn rematerialize_cross_block_constants(@machv.Function) -> @machv.Function
+pub fn rematerialize_cross_block_constants(@machv_legacy.Function) -> @machv_legacy.Function
 
-pub fn rematerialize_long_distance_constants(@machv.Function) -> @machv.Function
+pub fn rematerialize_long_distance_constants(@machv_legacy.Function) -> @machv_legacy.Function
 
-pub fn verify_allocation(@machv.Function, LivenessResult, RegAllocResult, @isa.ISA, @abi.EmbeddingABI) -> Unit
+pub fn verify_allocation(@machv_legacy.Function, LivenessResult, RegAllocResult, @isa.ISA, @abi.EmbeddingABI) -> Unit
 
 // Errors
 
@@ -186,7 +186,7 @@ pub fn Output::sort_edits(Self) -> Unit
 pub fn Output::spill_reload_stats(Self) -> (Int, Int, Int, Int)
 pub fn Output::summary(Self) -> String
 pub fn Output::uses_preg_index_any(Self, Int, Bool) -> Bool
-pub fn Output::validate_for_isa(Self, @isa.ISA) -> Unit raise @machv.VerifyError
+pub fn Output::validate_for_isa(Self, @isa.ISA) -> Unit raise @machv_legacy.VerifyError
 
 pub struct ProgPoint {
   block : Int

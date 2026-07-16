@@ -2,11 +2,11 @@
 package "Milky2018/milkir_machv/lower"
 
 import {
-  "Milky2018/machv",
-  "Milky2018/machv/abi",
-  "Milky2018/machv/block",
-  "Milky2018/machv/instr",
-  "Milky2018/machv/isa",
+  "Milky2018/machv_legacy",
+  "Milky2018/machv_legacy/abi",
+  "Milky2018/machv_legacy/block",
+  "Milky2018/machv_legacy/instr",
+  "Milky2018/machv_legacy/isa",
   "Milky2018/milkir",
 }
 
@@ -47,13 +47,13 @@ pub fn lower_c_libcall(LoweringContext, @block.Block, @abi.VReg, Array[@abi.VReg
 
 pub fn lower_c_libcall_direct(LoweringContext, @block.Block, @instr.ExternalName, Array[@abi.VReg], @abi.VReg?) -> Unit
 
-pub fn lower_core_function_with_config(@milkir.Function, LoweringConfig) -> @machv.Function raise @milkir.VerifyError
+pub fn lower_core_function_with_config(@milkir.Function, LoweringConfig) -> @machv_legacy.Function raise @milkir.VerifyError
 
-pub fn lower_dialect_function(@milkir.Function, String, (@milkir.ExtensionInstView) -> String?, (LoweringContext, @milkir.Inst, @block.Block, @milkir.ExtOp) -> ExtensionLowerResult, isa? : @isa.ISA, embedding_abi? : @abi.EmbeddingABI?, external_helper_symbols? : Map[String, String], trap_payload_resolver? : (String) -> Int, num_imports? : Int, run_ir_opt? : Bool) -> @machv.Function raise @milkir.VerifyError
+pub fn lower_dialect_function(@milkir.Function, String, (@milkir.ExtensionInstView) -> String?, (LoweringContext, @milkir.Inst, @block.Block, @milkir.ExtOp) -> ExtensionLowerResult, isa? : @isa.ISA, embedding_abi? : @abi.EmbeddingABI?, external_helper_symbols? : Map[String, String], trap_payload_resolver? : (String) -> Int, num_imports? : Int, run_ir_opt? : Bool) -> @machv_legacy.Function raise @milkir.VerifyError
 
-pub fn lower_dialect_function_with_config(@milkir.Function, LoweringConfig, String, (@milkir.ExtensionInstView) -> String?, (LoweringContext, @milkir.Inst, @block.Block, @milkir.ExtOp) -> ExtensionLowerResult) -> @machv.Function raise @milkir.VerifyError
+pub fn lower_dialect_function_with_config(@milkir.Function, LoweringConfig, String, (@milkir.ExtensionInstView) -> String?, (LoweringContext, @milkir.Inst, @block.Block, @milkir.ExtOp) -> ExtensionLowerResult) -> @machv_legacy.Function raise @milkir.VerifyError
 
-pub fn lower_function(@milkir.Function, isa? : @isa.ISA, embedding_abi? : @abi.EmbeddingABI?, external_helper_symbols? : Map[String, String], trap_payload_resolver? : (String) -> Int, num_imports? : Int, run_ir_opt? : Bool) -> @machv.Function raise @milkir.VerifyError
+pub fn lower_function(@milkir.Function, isa? : @isa.ISA, embedding_abi? : @abi.EmbeddingABI?, external_helper_symbols? : Map[String, String], trap_payload_resolver? : (String) -> Int, num_imports? : Int, run_ir_opt? : Bool) -> @machv_legacy.Function raise @milkir.VerifyError
 
 pub fn lower_inst_with_patterns(LoweringContext, @milkir.Inst, @block.Block, Array[RewriteRule]) -> Bool
 
@@ -63,9 +63,9 @@ pub fn match_pattern(Pattern, @milkir.Inst, LoweringContext) -> MatchResult?
 
 pub fn materialize_imm(LoweringContext, @block.Block, Int64) -> @abi.VReg
 
-pub fn optimize_machv(@machv.Function, isa? : @isa.ISA) -> Unit
+pub fn optimize_machv(@machv_legacy.Function, isa? : @isa.ISA) -> Unit
 
-pub fn optimize_machv_for_lowering(@machv.Function, isa? : @isa.ISA, embedding_abi? : @abi.EmbeddingABI?) -> Unit
+pub fn optimize_machv_for_lowering(@machv_legacy.Function, isa? : @isa.ISA, embedding_abi? : @abi.EmbeddingABI?) -> Unit
 
 pub fn scratch2_index(LoweringContext) -> Int
 
@@ -106,7 +106,7 @@ pub fn LoweringContext::embedding_abi(Self) -> @abi.EmbeddingABI
 pub fn LoweringContext::embedding_context_layout(Self) -> @abi.EmbeddingContextLayout
 pub fn LoweringContext::get_vreg(Self, @milkir.Value) -> @abi.VReg
 pub fn LoweringContext::get_vreg_for_use(Self, @milkir.Value, @block.Block) -> @abi.VReg
-pub fn LoweringContext::machv_function(Self) -> @machv.Function
+pub fn LoweringContext::machv_function(Self) -> @machv_legacy.Function
 pub fn LoweringContext::new_vreg(Self, @abi.RegClass) -> @abi.VReg
 pub fn LoweringContext::num_imports(Self) -> Int
 pub fn LoweringContext::set_cached_vreg(Self, Int, @abi.VReg) -> Unit

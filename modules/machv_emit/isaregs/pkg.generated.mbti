@@ -2,7 +2,7 @@
 package "Milky2018/machv_emit/isaregs"
 
 import {
-  "Milky2018/machv/isa",
+  "Milky2018/machv_legacy/isa",
 }
 
 // Values

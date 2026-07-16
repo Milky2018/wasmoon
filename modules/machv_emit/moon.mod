@@ -14,7 +14,7 @@ description = "Reusable MachV machine-code emitter"
 
 import {
   "moonbitlang/x@0.4.38",
-  "Milky2018/machv@0.2.2",
+  "Milky2018/machv_legacy@0.2.2",
   "Milky2018/machv_regalloc@0.2.2",
 }
 

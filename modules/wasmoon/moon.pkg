@@ -1,7 +1,7 @@
 import {
   "Milky2018/aarch64_target",
   "Milky2018/milkir_machv/lower",
-  "Milky2018/machv",
+  "Milky2018/machv_legacy" @machv,
   "Milky2018/machv_emit",
   "Milky2018/machv_regalloc",
   "Milky2018/milkir",

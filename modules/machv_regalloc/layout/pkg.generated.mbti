@@ -2,17 +2,17 @@
 package "Milky2018/machv_regalloc/layout"
 
 import {
-  "Milky2018/machv",
+  "Milky2018/machv_legacy",
 }
 
 // Values
-pub fn layout_blocks(@machv.Function) -> Array[Int]
+pub fn layout_blocks(@machv_legacy.Function) -> Array[Int]
 
-pub fn optimize_layout(@machv.Function) -> @machv.Function
+pub fn optimize_layout(@machv_legacy.Function) -> @machv_legacy.Function
 
-pub fn optimize_layout_preserving_edges(@machv.Function) -> @machv.Function
+pub fn optimize_layout_preserving_edges(@machv_legacy.Function) -> @machv_legacy.Function
 
-pub fn reorder_blocks(@machv.Function, Array[Int]) -> @machv.Function
+pub fn reorder_blocks(@machv_legacy.Function, Array[Int]) -> @machv_legacy.Function
 
 // Errors
 
@@ -22,7 +22,7 @@ pub struct MachVCFG {
   preds : Array[Array[Int]]
   succs : Array[Array[Int]]
 }
-pub fn MachVCFG::build(@machv.Function) -> Self
+pub fn MachVCFG::build(@machv_legacy.Function) -> Self
 pub fn MachVCFG::compute_dominators(Self) -> Array[Int]
 pub fn MachVCFG::find_back_edges(Self) -> Array[(Int, Int)]
 pub fn MachVCFG::find_loops(Self) -> Array[MachVLoop]

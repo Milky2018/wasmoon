@@ -1,8 +1,6 @@
 import {
-  "Milky2018/machv_legacy" @machv,
   "Milky2018/machv_legacy/abi",
-  "Milky2018/machv_legacy/isa",
   "Milky2018/machv_legacy/block",
   "Milky2018/machv_legacy/instr",
-  "moonbitlang/core/hashset",
+  "Milky2018/machv_legacy/isa",
 }

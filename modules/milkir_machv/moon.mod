@@ -15,7 +15,7 @@ description = "MilkIR-to-MachV lowering"
 import {
   "moonbitlang/x@0.4.38",
   "Milky2018/milkir@0.2.0",
-  "Milky2018/machv@0.2.2",
+  "Milky2018/machv_legacy@0.2.2",
 }
 
 preferred_target = "wasm-gc"
