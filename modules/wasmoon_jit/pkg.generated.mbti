@@ -352,7 +352,9 @@ pub fn link_machine_code(@machv_emit.MachineCode, RuntimeSymbolResolver) -> Link
 
 pub fn lower_milkir_for_target(@milkir.Function, @machv_emit.EmitTarget) -> @machv_legacy.Function raise JitPipelineError
 
-pub fn lower_wasm_body_milkir_for_target(@milkir.Function, @machv_emit.EmitTarget) -> @machv_legacy.Function raise JitPipelineError
+pub fn lower_wasm_body_milkir_for_target(@milkir.Function, @machv_emit.EmitTarget, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @machv_legacy.Function raise JitPipelineError
+
+pub fn lower_wasm_body_milkir_with_isa(@milkir.Function, @isa.ISA, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @machv_legacy.Function raise JitPipelineError
 
 pub fn machv_reloc_target_to_cwasm_func_idx(@instr.RelocTarget) -> Int?
 
@@ -518,6 +520,8 @@ pub suberror LinkError {
   UnknownRuntimeSymbol(String)
 } derive(Eq, @debug.Debug)
 pub impl Show for LinkError
+
+type SemanticLegacyAdapterError derive(Eq, @debug.Debug)
 
 // Types and methods
 pub struct BacktraceFrame {

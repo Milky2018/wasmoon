@@ -152,6 +152,29 @@ test "core lowering makes indirect callees explicit ptr64 values" {
 }
 
 ///|
+test "core lowering makes GC reference carrier conversions explicit" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("reference_carriers")
+  let bits = builder.add_param(I64)
+  let reference = builder.bitcast(Ref, bits)
+  let roundtrip = builder.bitcast(I64, reference)
+  builder.add_result(Ref)
+  builder.add_result(I64)
+  builder.return_([reference, roundtrip])
+  inspect(
+    lower_core_function(builder.finalize()),
+    content=(
+      #|machv reference_carriers [internal](v0:i64) -> (gcref64, i64) {
+      #|block0:
+      #|  v1:gcref64 = gcref.from_bits v0
+      #|  v2:ptr64 = gcref.address v1
+      #|  v3:i64 = convert.Bitcast(Ptr64, I64) v2
+      #|  return v1, v3
+      #|}
+    ),
+  )
+}
+
+///|
 test "core lowering keeps the enclosing call protocol explicit" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder("platform_entry")
   builder.return_([])
@@ -460,4 +483,49 @@ test "dialect lowering rejects an adapter that omits completion" {
         ),
       )
   }
+}
+
+///|
+test "semantic liveness accepts sparse MilkIR block IDs" {
+  let function = @milkir.Function::new_empty("sparse_blocks")
+  let entry = function.new_block([])
+  let removed = function.new_block([])
+  let exit = function.new_block([])
+  entry.set_terminator(Jump(exit.id, []))
+  removed.set_terminator(Trap("unreachable"))
+  exit.set_terminator(Return([]))
+  function.blocks.remove(1) |> ignore
+  inspect(
+    lower_core_function(function),
+    content=(
+      #|machv sparse_blocks [internal]() -> () {
+      #|block0:
+      #|  jump block1
+      #|block1:
+      #|  return
+      #|}
+    ),
+  )
+}
+
+///|
+test "semantic lowering omits source blocks unreachable from entry" {
+  let function = @milkir.Function::new_empty("omit_unreachable")
+  let entry = function.new_block([])
+  let dead = function.new_block([])
+  let exit = function.new_block([])
+  entry.set_terminator(Jump(exit.id, []))
+  dead.set_terminator(Return([]))
+  exit.set_terminator(Return([]))
+  inspect(
+    lower_core_function(function),
+    content=(
+      #|machv omit_unreachable [internal]() -> () {
+      #|block0:
+      #|  jump block1
+      #|block1:
+      #|  return
+      #|}
+    ),
+  )
 }

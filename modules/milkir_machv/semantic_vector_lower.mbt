@@ -323,12 +323,14 @@ fn widened_lane(lane : @milkir.VectorIntLane) -> @semantic.VectorLane {
 fn lower_vector_memory_instruction(
   builder : @semantic.FunctionBuilder,
   values : Array[@semantic.Value?],
+  value_types : Array[@semantic.ValueType?],
   instruction : @milkir.Inst,
   operation : @milkir.VectorMemoryOp,
 ) -> Unit raise SemanticLowerError {
   let address = lower_pointer_value(
     builder,
     values,
+    value_types,
     instruction.args[0],
     instruction_source(instruction),
     instruction.id,

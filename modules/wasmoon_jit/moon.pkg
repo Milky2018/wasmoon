@@ -1,8 +1,11 @@
 import {
-  "Milky2018/milkir_machv/lower",
+  "Milky2018/milkir_machv",
   "Milky2018/wasm_isa_lower",
+  "Milky2018/machv" @semantic_machv,
+  "Milky2018/wasm_machv",
   "Milky2018/machv_legacy" @machv,
   "Milky2018/machv_legacy/abi",
+  "Milky2018/machv_legacy/block",
   "Milky2018/machv_legacy/instr",
   "Milky2018/machv_legacy/isa",
   "Milky2018/machv_legacy/isa/aarch64",
@@ -16,8 +19,3 @@ import {
   "moonbitlang/core/cmp",
   "moonbitlang/core/hashset",
 }
-
-import {
-  "Milky2018/machv" @semantic_machv,
-  "Milky2018/wasm_machv",
-} for "wbtest"

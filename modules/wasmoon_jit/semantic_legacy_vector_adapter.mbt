@@ -1,5 +1,7 @@
 ///|
-fn semantic_vector_lane_size(lane : @semantic.VectorLane) -> @instr.LaneSize {
+fn semantic_vector_lane_size(
+  lane : @semantic_machv.VectorLane,
+) -> @instr.LaneSize {
   match lane {
     I8x16 => B8
     I16x8 => H16
@@ -10,7 +12,7 @@ fn semantic_vector_lane_size(lane : @semantic.VectorLane) -> @instr.LaneSize {
 
 ///|
 fn semantic_vector_float_is_f32(
-  lane : @semantic.VectorLane,
+  lane : @semantic_machv.VectorLane,
 ) -> Bool raise SemanticLegacyAdapterError {
   match lane {
     F32x4 => true
@@ -178,8 +180,8 @@ fn append_semantic_vector_not_equal(
 fn append_semantic_vector_shift(
   legacy_function : @machv.Function,
   block : @block.Block,
-  lane : @semantic.VectorLane,
-  operation : @semantic.VectorIntShiftOp,
+  lane : @semantic_machv.VectorLane,
+  operation : @semantic_machv.VectorIntShiftOp,
   operands : Array[@abi.Reg],
   definitions : Array[@abi.Writable],
 ) -> Unit raise SemanticLegacyAdapterError {
@@ -233,8 +235,8 @@ fn append_semantic_vector_predicate(
 fn append_semantic_vector_float_ternary(
   legacy_function : @machv.Function,
   block : @block.Block,
-  lane : @semantic.VectorLane,
-  operation : @semantic.FloatTernaryOp,
+  lane : @semantic_machv.VectorLane,
+  operation : @semantic_machv.FloatTernaryOp,
   operands : Array[@abi.Reg],
   definitions : Array[@abi.Writable],
 ) -> Unit raise SemanticLegacyAdapterError {
@@ -279,7 +281,7 @@ fn append_semantic_vector_float_ternary(
 fn append_semantic_vector_operation(
   legacy_function : @machv.Function,
   block : @block.Block,
-  operation : @semantic.VectorOp,
+  operation : @semantic_machv.VectorOp,
   operands : Array[@abi.Reg],
   definitions : Array[@abi.Writable],
 ) -> Unit raise SemanticLegacyAdapterError {
@@ -744,8 +746,8 @@ fn append_semantic_vector_operation(
 
 ///|
 fn require_native_vector_memory(
-  endianness : @semantic.Endianness,
-  trap : @semantic.TrapReason?,
+  endianness : @semantic_machv.Endianness,
+  trap : @semantic_machv.TrapReason?,
 ) -> Unit raise SemanticLegacyAdapterError {
   if endianness != Little || trap is Some(_) {
     raise UnsupportedOperation(
@@ -758,7 +760,7 @@ fn require_native_vector_memory(
 fn append_semantic_vector_load(
   legacy_function : @machv.Function,
   block : @block.Block,
-  spec : @semantic.VectorLoadSpec,
+  spec : @semantic_machv.VectorLoadSpec,
   operands : Array[@abi.Reg],
   definitions : Array[@abi.Writable],
 ) -> Unit raise SemanticLegacyAdapterError {
@@ -800,7 +802,7 @@ fn append_semantic_vector_load(
 fn append_semantic_vector_store_lane(
   legacy_function : @machv.Function,
   block : @block.Block,
-  spec : @semantic.VectorStoreLaneSpec,
+  spec : @semantic_machv.VectorStoreLaneSpec,
   operands : Array[@abi.Reg],
   definitions : Array[@abi.Writable],
 ) -> Unit raise SemanticLegacyAdapterError {
@@ -824,7 +826,7 @@ fn append_semantic_vector_store_lane(
 
 ///|
 test "semantic-to-legacy adapter lowers vector integer families" {
-  let builder = @semantic.FunctionBuilder::new(
+  let builder = @semantic_machv.FunctionBuilder::new(
     "semantic_adapter_vector_integer",
     Internal,
     [I32, V128, V128],
@@ -880,16 +882,16 @@ test "semantic-to-legacy adapter lowers vector integer families" {
       #|    vec3 = ldi.v128
       #|    vec4 = dup.4s v0
       #|    vec5 = ins.4s[1] vec4, v0
-      #|    vec6, vec7, vec8 = tbl1x2.16b vec3, vec5
-      #|    vec9, vec10, vec11, vec12, vec13, vec14 = mul.2d vec6, vec2
-      #|    v16, vec17 = dup_shift.neg.2d v0
-      #|    vec15 = ushl.2d vec9, vec17
-      #|    vec19 = cmp.eq.4s vec15, vec1
-      #|    vec18 = not.16b vec19
-      #|    v20, vec21 = v128.any_true vec18
-      #|    v22, vec23, vec24, vec25 = bitmask.8b vec18
-      #|    v26 = smov.8h[3] vec18
-      #|    ret vec15, vec18, v20, v22, v26
+      #|    vec6, vec13, vec14 = tbl1x2.16b vec3, vec5
+      #|    vec7, vec15, vec16, vec17, vec18, vec19 = mul.2d vec6, vec2
+      #|    v20, vec21 = dup_shift.neg.2d v0
+      #|    vec8 = ushl.2d vec7, vec21
+      #|    vec22 = cmp.eq.4s vec8, vec1
+      #|    vec9 = not.16b vec22
+      #|    v10, vec23 = v128.any_true vec9
+      #|    v11, vec24, vec25, vec26 = bitmask.8b vec9
+      #|    v12 = smov.8h[3] vec9
+      #|    ret vec8, vec9, v10, v11, v12
       #|}
       #|
     ),
@@ -898,7 +900,7 @@ test "semantic-to-legacy adapter lowers vector integer families" {
 
 ///|
 test "semantic-to-legacy adapter lowers vector float and relaxed families" {
-  let builder = @semantic.FunctionBuilder::new(
+  let builder = @semantic_machv.FunctionBuilder::new(
     "semantic_adapter_vector_float",
     Internal,
     [V128, V128, V128],
@@ -947,14 +949,14 @@ test "semantic-to-legacy adapter lowers vector float and relaxed families" {
       #|machv semantic_adapter_vector_float(vec0:vector, vec1:vector, vec2:vector) -> (vector, vector, vector, vector, vector, vector) {
       #|block0:
       #|    vec3 = fadd.4s vec0, vec1
-      #|    vec5 = fcmp.eq.2d vec0, vec1
-      #|    vec4 = not.16b vec5
-      #|    vec6, vec7 = fcvtzs.f64_i32_zero vec0
-      #|    vec8, vec9 = ucvtf.i32_f64_low vec6
-      #|    vec10 = fmls.4s vec2, vec3, vec1
-      #|    vec11, vec12 = relaxed_dot.8to16 vec0, vec1
-      #|    vec13, vec14 = relaxed_dot.8to32_add vec0, vec1, vec2
-      #|    ret vec4, vec6, vec8, vec10, vec11, vec13
+      #|    vec10 = fcmp.eq.2d vec0, vec1
+      #|    vec4 = not.16b vec10
+      #|    vec5, vec11 = fcvtzs.f64_i32_zero vec0
+      #|    vec6, vec12 = ucvtf.i32_f64_low vec5
+      #|    vec7 = fmls.4s vec2, vec3, vec1
+      #|    vec8, vec13 = relaxed_dot.8to16 vec0, vec1
+      #|    vec9, vec14 = relaxed_dot.8to32_add vec0, vec1, vec2
+      #|    ret vec4, vec5, vec6, vec7, vec8, vec9
       #|}
       #|
     ),
@@ -963,7 +965,7 @@ test "semantic-to-legacy adapter lowers vector float and relaxed families" {
 
 ///|
 test "semantic-to-legacy adapter lowers vector memory families" {
-  let builder = @semantic.FunctionBuilder::new(
+  let builder = @semantic_machv.FunctionBuilder::new(
     "semantic_adapter_vector_memory",
     Internal,
     [Ptr64, V128],
@@ -971,32 +973,41 @@ test "semantic-to-legacy adapter lowers vector memory families" {
   )
   let parameters = builder.parameters()
   let splat = builder.emit(
-      VectorLoad(@semantic.VectorLoadSpec::new(Splat(I16x8), 4UL, Little, None)),
+      VectorLoad(
+        @semantic_machv.VectorLoadSpec::new(Splat(I16x8), 4UL, Little, None),
+      ),
       [parameters[0]],
       [V128],
     )[0]
   let extended = builder.emit(
       VectorLoad(
-        @semantic.VectorLoadSpec::new(Extend(I32x4, Signed), 8UL, Little, None),
+        @semantic_machv.VectorLoadSpec::new(
+          Extend(I32x4, Signed),
+          8UL,
+          Little,
+          None,
+        ),
       ),
       [parameters[0]],
       [V128],
     )[0]
   let zeroed = builder.emit(
-      VectorLoad(@semantic.VectorLoadSpec::new(Zero(W64), 16UL, Little, None)),
+      VectorLoad(
+        @semantic_machv.VectorLoadSpec::new(Zero(W64), 16UL, Little, None),
+      ),
       [parameters[0]],
       [V128],
     )[0]
   let lane = builder.emit(
       VectorLoad(
-        @semantic.VectorLoadSpec::new(Lane(I8x16, 3), 20UL, Little, None),
+        @semantic_machv.VectorLoadSpec::new(Lane(I8x16, 3), 20UL, Little, None),
       ),
       [parameters[0], parameters[1]],
       [V128],
     )[0]
   builder.emit(
     VectorStoreLane(
-      @semantic.VectorStoreLaneSpec::new(I16x8, 2, 24UL, Little, None),
+      @semantic_machv.VectorStoreLaneSpec::new(I16x8, 2, 24UL, Little, None),
     ),
     [parameters[0], lane],
     [],

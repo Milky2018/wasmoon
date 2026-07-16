@@ -124,11 +124,9 @@ pub fn compiler_infrastructure_assembly() -> CompilerInfrastructureAssembly rais
   let entry = milk.new_block0()
   entry.set_terminator(Return([]))
   let embedding_abi = @wasmoon_jit.wasm_embedding_abi()
-  let machv_function = try! @lower.lower_function(
-    milk,
-    run_ir_opt=false,
-    embedding_abi=Some(embedding_abi),
-  )
+  let machv_function = @wasmoon_jit.lower_milkir_for_target(milk, AArch64) catch {
+    err => raise WasmCompilerPipelineFailure(message=err.to_string())
+  }
   let (allocated_function, output) = @machv_regalloc.allocate_registers_backtracking_output(
     machv_function,
     embedding_abi=Some(embedding_abi),

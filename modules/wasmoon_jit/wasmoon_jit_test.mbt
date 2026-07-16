@@ -472,7 +472,7 @@ test "JIT integration returns invalid Wasm dialect errors" {
       inspect(
         err,
         content=(
-          #|PipelineFailure(message="UnverifiableInstruction(message=\"unknown Wasm MilkIR extension opcode 'typo'\")")
+          #|PipelineFailure(message="invalid_wasm_dialect: InvalidMilkIR(message=\"UnverifiableInstruction(message=\\\"unknown Wasm MilkIR extension opcode 'typo'\\\")\")")
         ),
       )
   } noraise {

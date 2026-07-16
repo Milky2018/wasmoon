@@ -45,11 +45,9 @@ pub fn emit_entry_trampoline(
   )
 
   // Compile through the normal pipeline
-  let machv_func = try! @lower.lower_function(
-    ir_func,
-    isa~,
-    embedding_abi=Some(embedding_abi),
-  )
+  let machv_func = lower_semantic_core_with_isa(ir_func, isa, embedding_abi) catch {
+    err => raise PipelineFailure(message=err.to_string())
+  }
   let allocated = @machv_regalloc.allocate_registers_backtracking_with_isa(
     machv_func,
     isa,

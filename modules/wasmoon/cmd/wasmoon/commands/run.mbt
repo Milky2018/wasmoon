@@ -1664,15 +1664,9 @@ pub fn compile_module_to_jit(
       func_name=Some(func_name),
     )
     let embedding_abi = @wasmoon_jit.wasm_embedding_abi(isa~)
-    let machv_func = @wasm_isa_lower.lower_function(
+    let machv_func = @wasmoon_jit.lower_wasm_body_milkir_with_isa(
       ir_func,
-      @wasmoon_jit.wasm_context_slots(),
-      isa~,
-      num_imports=mod_.imports.length(),
-      run_ir_opt=false,
-      embedding_abi=Some(embedding_abi),
-      runtime_symbols=@wasmoon_jit.wasm_runtime_symbols(),
-      trap_payload_resolver=@wasmoon_jit.wasm_trap_payload,
+      isa,
       use_subtype_indirect_check~,
       canonical_type_indices~,
     ) catch {

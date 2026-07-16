@@ -294,17 +294,96 @@ fn emit_one(
 }
 
 ///|
+fn lower_bitcast_value(
+  builder : @semantic.FunctionBuilder,
+  operand : @semantic.Value,
+  source_type : @milkir.Type,
+  result_type : @milkir.Type,
+  source : @semantic.SourceLocation?,
+  instruction_id : Int,
+) -> @semantic.Value raise SemanticLowerError {
+  let from = lower_type(source_type)
+  let to = lower_type(result_type)
+  if from == to {
+    return emit_one(builder, Copy, [operand], to, source, instruction_id)
+  }
+  if from == GcRef64 {
+    let address = emit_one(
+      builder,
+      GcRefAddress,
+      [operand],
+      Ptr64,
+      source,
+      instruction_id,
+    )
+    if to == Ptr64 {
+      return address
+    }
+    let bits = emit_one(
+      builder,
+      Convert(Bitcast(Ptr64, I64)),
+      [address],
+      I64,
+      source,
+      instruction_id,
+    )
+    if to == I64 {
+      return bits
+    }
+    return emit_one(
+      builder,
+      Convert(Bitcast(I64, to)),
+      [bits],
+      to,
+      source,
+      instruction_id,
+    )
+  }
+  if to == GcRef64 {
+    let bits = if from == I64 {
+      operand
+    } else {
+      emit_one(
+        builder,
+        Convert(Bitcast(from, I64)),
+        [operand],
+        I64,
+        source,
+        instruction_id,
+      )
+    }
+    return emit_one(
+      builder,
+      GcRefFromBits,
+      [bits],
+      GcRef64,
+      source,
+      instruction_id,
+    )
+  }
+  emit_one(
+    builder,
+    Convert(Bitcast(from, to)),
+    [operand],
+    to,
+    source,
+    instruction_id,
+  )
+}
+
+///|
 fn lower_pointer_value(
   builder : @semantic.FunctionBuilder,
   values : Array[@semantic.Value?],
+  value_types : Array[@semantic.ValueType?],
   source : @milkir.Value,
   location : @semantic.SourceLocation?,
   instruction_id : Int,
 ) -> @semantic.Value raise SemanticLowerError {
   let mapped = mapped_value(values, source)
-  match source.ty {
-    Ptr => mapped
-    I64 =>
+  match value_types[source.id] {
+    Some(Ptr64) => mapped
+    Some(I64) =>
       emit_one(
         builder,
         Convert(Bitcast(I64, Ptr64)),
@@ -313,10 +392,11 @@ fn lower_pointer_value(
         location,
         instruction_id,
       )
-    _ =>
+    Some(ty) =>
       raise InvalidMilkIR(
-        message="memory address must be ptr or i64, got \{source.ty}",
+        message="memory address must be ptr64 or i64, got \{ty}",
       )
+    None => raise MissingValue(value_id=source.id)
   }
 }
 
@@ -324,13 +404,14 @@ fn lower_pointer_value(
 fn lower_address(
   builder : @semantic.FunctionBuilder,
   values : Array[@semantic.Value?],
+  value_types : Array[@semantic.ValueType?],
   base : @milkir.Value,
   offset : @milkir.Value,
   source : @semantic.SourceLocation?,
   instruction_id : Int,
 ) -> @semantic.Value raise SemanticLowerError {
   let pointer = lower_pointer_value(
-    builder, values, base, source, instruction_id,
+    builder, values, value_types, base, source, instruction_id,
   )
   emit_one(
     builder,
@@ -359,7 +440,7 @@ fn assign_instruction_results(
 ) -> Unit raise SemanticLowerError {
   if lowered_results.length() != instruction.results.length() {
     raise InvalidMachV(
-      message="instruction \{instruction.id} failed semantic MachV construction",
+      message="instruction \{instruction.id} (\{instruction.opcode}) produced \{lowered_results.length()} results, expected \{instruction.results.length()}",
     )
   }
   for index, result in instruction.results {
@@ -371,6 +452,7 @@ fn assign_instruction_results(
 fn lower_memory_instruction(
   builder : @semantic.FunctionBuilder,
   values : Array[@semantic.Value?],
+  value_types : Array[@semantic.ValueType?],
   instruction : @milkir.Inst,
   memory : @milkir.MemoryOp,
 ) -> Unit raise SemanticLowerError {
@@ -381,6 +463,7 @@ fn lower_memory_instruction(
       let address = lower_address(
         builder,
         values,
+        value_types,
         instruction.args[0],
         instruction.args[1],
         source,
@@ -407,6 +490,7 @@ fn lower_memory_instruction(
       let address = lower_address(
         builder,
         values,
+        value_types,
         instruction.args[0],
         instruction.args[2],
         source,
@@ -439,6 +523,7 @@ fn lower_memory_instruction(
       let address = lower_address(
         builder,
         values,
+        value_types,
         instruction.args[0],
         instruction.args[1],
         source,
@@ -476,6 +561,7 @@ fn lower_memory_instruction(
       let address = lower_address(
         builder,
         values,
+        value_types,
         instruction.args[0],
         instruction.args[2],
         source,
@@ -496,14 +582,6 @@ fn lower_memory_instruction(
       )
   }
   assign_instruction_results(values, instruction, results)
-}
-
-///|
-fn lower_signature(signature : @milkir.Signature) -> @semantic.Signature {
-  @semantic.Signature::new(
-    signature.params.map(lower_type),
-    signature.results.map(lower_type),
-  )
 }
 
 ///|
@@ -574,8 +652,14 @@ fn compute_gc_roots(
   function : @milkir.Function,
   cfg : @milkir.CFG,
 ) -> Array[Array[Int]] {
-  let block_uses : Array[@hashset.HashSet[Int]] = []
-  let block_definitions : Array[@hashset.HashSet[Int]] = []
+  let block_uses : Array[@hashset.HashSet[Int]] = Array::makei(
+    function.next_block_id,
+    _ => HashSet([]),
+  )
+  let block_definitions : Array[@hashset.HashSet[Int]] = Array::makei(
+    function.next_block_id,
+    _ => HashSet([]),
+  )
   for block_index, block in function.blocks {
     let definitions : @hashset.HashSet[Int] = HashSet([])
     let uses : @hashset.HashSet[Int] = HashSet([])
@@ -606,20 +690,24 @@ fn compute_gc_roots(
         add_gc_use(value, definitions, uses)
       }
     }
-    block_uses.push(uses)
-    block_definitions.push(definitions)
+    block_uses[block.id] = uses
+    block_definitions[block.id] = definitions
   }
-  let live_in : Array[@hashset.HashSet[Int]] = []
-  let live_out : Array[@hashset.HashSet[Int]] = []
-  for _ in function.blocks {
-    live_in.push(HashSet([]))
-    live_out.push(HashSet([]))
-  }
+  let live_in : Array[@hashset.HashSet[Int]] = Array::makei(
+    function.next_block_id,
+    _ => HashSet([]),
+  )
+  let live_out : Array[@hashset.HashSet[Int]] = Array::makei(
+    function.next_block_id,
+    _ => HashSet([]),
+  )
   let worklist : Array[Int] = []
-  let queued = Array::make(function.blocks.length(), true)
+  let queued = Array::make(function.next_block_id, false)
   let mut block_index = function.blocks.length() - 1
   while block_index >= 0 {
-    worklist.push(function.blocks[block_index].id)
+    let block_id = function.blocks[block_index].id
+    worklist.push(block_id)
+    queued[block_id] = true
     block_index -= 1
   }
   let mut cursor = 0
@@ -690,6 +778,7 @@ fn compute_gc_roots(
 fn lower_call_instruction(
   builder : @semantic.FunctionBuilder,
   values : Array[@semantic.Value?],
+  value_types : Array[@semantic.ValueType?],
   instruction : @milkir.Inst,
   call : @milkir.CallOp,
   root_ids : Array[Int],
@@ -699,7 +788,10 @@ fn lower_call_instruction(
       (
         @semantic.SemanticCall::new(
           External(@semantic.ExternalSymbol::new(symbol.name)),
-          lower_signature(signature),
+          @semantic.Signature::new(
+            instruction.args.map(argument => value_types[argument.id].unwrap()),
+            signature.results.map(lower_type),
+          ),
           Platform,
           @semantic.CallBehavior::conservative(),
         ),
@@ -707,13 +799,14 @@ fn lower_call_instruction(
       )
     Pointer(_, _) => {
       let parameter_types = instruction.args[1:].map(value => {
-        lower_type(value.ty)
+        value_types[value.id].unwrap()
       })
       let result_types = instruction.results.map(value => lower_type(value.ty))
       let call_operands = [
         lower_pointer_value(
           builder,
           values,
+          value_types,
           instruction.args[0],
           instruction_source(instruction),
           instruction.id,
@@ -769,6 +862,7 @@ fn mapped_gc_roots(
 fn lower_dialect_instruction(
   builder : @semantic.FunctionBuilder,
   values : Array[@semantic.Value?],
+  value_types : Array[@semantic.ValueType?],
   environment : Array[@semantic.Value],
   instruction : @milkir.Inst,
   function_result_types : Array[@semantic.ValueType],
@@ -792,7 +886,7 @@ fn lower_dialect_instruction(
   let context = @adapter.InstructionContext::new(
     builder,
     mapped_values(values, instruction.args),
-    instruction.args.map(operand => lower_type(operand.ty)),
+    instruction.args.map(operand => value_types[operand.id].unwrap()),
     instruction.results.map(result => lower_type(result.ty)),
     function_result_types,
     environment,
@@ -885,6 +979,7 @@ fn lower_scalar_operation(
 fn lower_instruction(
   builder : @semantic.FunctionBuilder,
   values : Array[@semantic.Value?],
+  value_types : Array[@semantic.ValueType?],
   instruction : @milkir.Inst,
   block_id : Int,
   gc_roots : Array[Array[Int]],
@@ -897,6 +992,7 @@ fn lower_instruction(
       lower_call_instruction(
         builder,
         values,
+        value_types,
         instruction,
         call,
         gc_roots[instruction.id],
@@ -904,14 +1000,87 @@ fn lower_instruction(
       return false
     }
     Memory(Vector(operation)) => {
-      lower_vector_memory_instruction(builder, values, instruction, operation)
+      lower_vector_memory_instruction(
+        builder, values, value_types, instruction, operation,
+      )
       return false
     }
     Memory(memory) => {
-      lower_memory_instruction(builder, values, instruction, memory)
+      lower_memory_instruction(
+        builder, values, value_types, instruction, memory,
+      )
       return false
     }
     Scalar(scalar) => {
+      if scalar is Convert(Bitcast) &&
+        instruction.args is [argument] &&
+        instruction.results is [result] {
+        values[result.id] = Some(
+          lower_bitcast_value(
+            builder,
+            mapped_value(values, argument),
+            argument.ty,
+            result.ty,
+            instruction_source(instruction),
+            instruction.id,
+          ),
+        )
+        return false
+      }
+      if scalar is IntConst(bits) &&
+        instruction.results is [result] &&
+        (
+          result.ty is Ptr ||
+          result.ty is Ref ||
+          result.ty is CallableRef ||
+          result.ty is OpaqueRef
+        ) {
+        let source = instruction_source(instruction)
+        let lowered = match result.ty {
+          Ptr => {
+            let raw = emit_one(
+              builder,
+              I64Const(bits.reinterpret_as_uint64()),
+              [],
+              I64,
+              source,
+              instruction.id,
+            )
+            emit_one(
+              builder,
+              Convert(Bitcast(I64, Ptr64)),
+              [raw],
+              Ptr64,
+              source,
+              instruction.id,
+            )
+          }
+          Ref | CallableRef | OpaqueRef =>
+            if bits == 0L {
+              emit_one(builder, NullGcRef, [], GcRef64, source, instruction.id)
+            } else {
+              let raw = emit_one(
+                builder,
+                I64Const(bits.reinterpret_as_uint64()),
+                [],
+                I64,
+                source,
+                instruction.id,
+              )
+              emit_one(
+                builder,
+                GcRefFromBits,
+                [raw],
+                GcRef64,
+                source,
+                instruction.id,
+              )
+            }
+          _ => abort("matched pointer or reference carrier above")
+        }
+        values[result.id] = Some(lowered)
+        return false
+      }
       let operation = lower_scalar_operation(scalar, instruction, block_id)
       let operands = mapped_values(values, instruction.args)
       let result_types = instruction.results.map(result => lower_type(result.ty))
@@ -934,6 +1103,7 @@ fn lower_instruction(
           lower_dialect_instruction(
             builder,
             values,
+            value_types,
             environment,
             instruction,
             function_result_types,
@@ -1076,7 +1246,24 @@ fn lower_verified_function(
     function.next_value_id,
     None,
   )
+  let value_types : Array[@semantic.ValueType?] = Array::make(
+    function.next_value_id,
+    None,
+  )
   let lowered_params = builder.parameters()
+  for index, parameter in function.params {
+    value_types[parameter.0.id] = Some(parameter_types[index])
+  }
+  for block in function.blocks {
+    for parameter in block.params {
+      value_types[parameter.0.id] = Some(lower_type(parameter.1))
+    }
+    for instruction in block.instructions {
+      for result in instruction.results {
+        value_types[result.id] = Some(lower_type(result.ty))
+      }
+    }
+  }
   let environment : Array[@semantic.Value] = []
   if dialect is Some(lowering) {
     for environment_parameter in lowering.environment_parameters {
@@ -1096,8 +1283,26 @@ fn lower_verified_function(
     function.next_block_id,
     None,
   )
-  for index, block in function.blocks {
-    let lowered_block = if index == 0 {
+  let source_blocks : Array[@milkir.Block?] = Array::make(
+    function.next_block_id,
+    None,
+  )
+  for block in function.blocks {
+    source_blocks[block.id] = Some(block)
+  }
+  let cfg = @milkir.CFG::build(function)
+  let gc_roots = compute_gc_roots(function, cfg)
+  let function_result_types = function.results.map(lower_type)
+  let block_order = cfg.reverse_postorder()
+  let reachable = Array::make(function.next_block_id, false)
+  for block_id in block_order {
+    reachable[block_id] = true
+  }
+  for block in function.blocks {
+    if !reachable[block.id] {
+      continue
+    }
+    let lowered_block = if block.id == function.blocks[0].id {
       if !block.params.is_empty() {
         raise InvalidMilkIR(
           message="entry block must not declare block parameters",
@@ -1115,11 +1320,8 @@ fn lower_verified_function(
       values[parameter.0.id] = Some(lowered_block_params[parameter_index])
     }
   }
-  let cfg = @milkir.CFG::build(function)
-  let gc_roots = compute_gc_roots(function, cfg)
-  let function_result_types = function.results.map(lower_type)
-  for block_id in cfg.reverse_postorder() {
-    let block = function.blocks[block_id]
+  for block_id in block_order {
+    let block = source_blocks[block_id].unwrap()
     builder.switch_to_block(mapped_block(blocks, block.id))
     let mut terminator_replaced = false
     for instruction in block.instructions {
@@ -1127,6 +1329,7 @@ fn lower_verified_function(
         terminator_replaced = lower_instruction(
           builder,
           values,
+          value_types,
           instruction,
           block.id,
           gc_roots,

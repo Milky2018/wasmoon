@@ -154,36 +154,37 @@ pub fn lower_milkir_for_target(
 ) -> @machv.Function raise JitPipelineError {
   let isa = emit_target_to_isa(target)
   let embedding_abi = wasm_embedding_abi_for_isa(isa)
-  @wasm_isa_lower.lower_function(
-    func,
-    wasm_context_slots(),
-    isa~,
-    embedding_abi=Some(embedding_abi),
-    runtime_symbols=wasm_runtime_symbols(),
-    trap_payload_resolver=wasm_trap_payload,
-  ) catch {
-    err => raise PipelineFailure(message=err.to_string())
-  }
+  lower_semantic_core_with_isa(func, isa, embedding_abi)
 }
 
 ///|
 pub fn lower_wasm_body_milkir_for_target(
   func : @milkir.Function,
   target : @machv_emit.EmitTarget,
+  use_subtype_indirect_check? : Bool = true,
+  canonical_type_indices? : Array[Int] = [],
 ) -> @machv.Function raise JitPipelineError {
   let isa = emit_target_to_isa(target)
   let embedding_abi = wasm_embedding_abi_for_isa(isa)
-  @wasm_isa_lower.lower_function(
+  lower_semantic_wasm_with_isa(
+    func, isa, embedding_abi, use_subtype_indirect_check, canonical_type_indices,
+  )
+}
+
+///|
+pub fn lower_wasm_body_milkir_with_isa(
+  func : @milkir.Function,
+  isa : @isa.ISA,
+  use_subtype_indirect_check? : Bool = true,
+  canonical_type_indices? : Array[Int] = [],
+) -> @machv.Function raise JitPipelineError {
+  lower_semantic_wasm_with_isa(
     func,
-    wasm_context_slots(),
-    isa~,
-    run_ir_opt=false,
-    embedding_abi=Some(embedding_abi),
-    runtime_symbols=wasm_runtime_symbols(),
-    trap_payload_resolver=wasm_trap_payload,
-  ) catch {
-    err => raise PipelineFailure(message=err.to_string())
-  }
+    isa,
+    wasm_embedding_abi_for_isa(isa),
+    use_subtype_indirect_check,
+    canonical_type_indices,
+  )
 }
 
 ///|
@@ -193,16 +194,7 @@ pub fn plan_milkir_integration_for_target(
 ) -> JitIntegrationPlan raise JitPipelineError {
   let isa = emit_target_to_isa(target)
   let embedding_abi = wasm_embedding_abi_for_isa(isa)
-  let machv_func = @wasm_isa_lower.lower_function(
-    func,
-    wasm_context_slots(),
-    isa~,
-    embedding_abi=Some(embedding_abi),
-    runtime_symbols=wasm_runtime_symbols(),
-    trap_payload_resolver=wasm_trap_payload,
-  ) catch {
-    err => raise PipelineFailure(message=err.to_string())
-  }
+  let machv_func = lower_semantic_core_with_isa(func, isa, embedding_abi)
   let (allocated_func, output) = @machv_regalloc.allocate_registers_backtracking_output_with_isa(
     machv_func,
     isa,
@@ -220,17 +212,13 @@ pub fn plan_wasm_body_milkir_integration_for_target(
 ) -> JitIntegrationPlan raise JitPipelineError {
   let isa = emit_target_to_isa(target)
   let embedding_abi = wasm_embedding_abi_for_isa(isa)
-  let machv_func = @wasm_isa_lower.lower_function(
+  let machv_func = lower_semantic_wasm_with_isa(
     func,
-    wasm_context_slots(),
-    isa~,
-    run_ir_opt=false,
-    embedding_abi=Some(embedding_abi),
-    runtime_symbols=wasm_runtime_symbols(),
-    trap_payload_resolver=wasm_trap_payload,
-  ) catch {
-    err => raise PipelineFailure(message=err.to_string())
-  }
+    isa,
+    embedding_abi,
+    true,
+    [],
+  )
   let (allocated_func, output) = @machv_regalloc.allocate_registers_backtracking_output_with_isa(
     machv_func,
     isa,
