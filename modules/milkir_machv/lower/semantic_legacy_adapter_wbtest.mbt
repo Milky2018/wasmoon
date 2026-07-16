@@ -432,14 +432,371 @@ fn append_semantic_division_or_remainder(
 }
 
 ///|
+fn add_adapter_call_clobbers(
+  isa : @isa.ISA,
+  call : @instr.Inst,
+  foreign : Bool,
+) -> Unit {
+  for register in isa.call_clobbered_gprs() {
+    call.add_def({ reg: Physical(register) })
+  }
+  let float_registers = if foreign {
+    isa.call_clobbered_fprs()
+  } else {
+    isa.call_clobbered_fprs_same_abi()
+  }
+  for register in float_registers {
+    call.add_def({ reg: Physical(register) })
+  }
+}
+
+///|
+fn adapter_c_argument_registers(isa : @isa.ISA) -> Array[Int] {
+  match isa {
+    AArch64 => [0, 1, 2, 3, 4, 5, 6, 7]
+    AMD64 => [7, 6, 2, 1, 8, 9]
+  }
+}
+
+///|
+fn call_result_vregs(
+  definitions : Array[@abi.Writable],
+) -> Array[@abi.VReg] raise SemanticLegacyAdapterError {
+  let results : Array[@abi.VReg] = []
+  for definition in definitions {
+    match definition.reg {
+      Virtual(result) => results.push(result)
+      Physical(_) =>
+        raise UnsupportedOperation(
+          message="semantic call result mapped to a physical register",
+        )
+    }
+  }
+  results
+}
+
+///|
+fn emit_platform_call(
+  isa : @isa.ISA,
+  legacy_function : @machv.Function,
+  block : @block.Block,
+  call : @semantic.SemanticCall,
+  operands : Array[@abi.Reg],
+  definitions : Array[@abi.Writable],
+) -> Unit raise SemanticLegacyAdapterError {
+  let symbol = match call.callee {
+    External(symbol) => @instr.ExternalName(symbol.name)
+    _ =>
+      raise UnsupportedOperation(
+        message="platform call requires a known external symbol",
+      )
+  }
+  for operand in operands {
+    match operand {
+      Virtual(vreg) =>
+        if vreg.class != Int {
+          raise UnsupportedOperation(
+            message="legacy platform call requires integer carriers",
+          )
+        }
+      Physical(_) =>
+        raise UnsupportedOperation(
+          message="semantic platform argument mapped to a physical register",
+        )
+    }
+  }
+  let results = call_result_vregs(definitions)
+  if results.length() > 1 || (results.length() == 1 && results[0].class != Int) {
+    raise UnsupportedOperation(
+      message="legacy platform call supports at most one integer result",
+    )
+  }
+  let argument_registers = adapter_c_argument_registers(isa)
+  if operands.length() > argument_registers.length() {
+    let overflow_count = operands.length() - argument_registers.length()
+    legacy_function.update_max_outgoing_args_size(overflow_count * 8)
+    for index in 0..<overflow_count {
+      let store = @instr.Inst(StoreToStack(index * 8))
+      store.add_use(operands[argument_registers.length() + index])
+      block.add_inst(store)
+    }
+  }
+  let instruction = @instr.Inst(
+    CallExternal(
+      symbol,
+      operands.length(),
+      results.map(result => result.class),
+      Foreign,
+    ),
+  )
+  let register_argument_count = if operands.length() <
+    argument_registers.length() {
+    operands.length()
+  } else {
+    argument_registers.length()
+  }
+  for index in 0..<register_argument_count {
+    instruction.add_use_fixed(operands[index], {
+      index: argument_registers[index],
+      class: Int,
+    })
+  }
+  if results is [result] {
+    instruction.add_def_fixed(legacy_def(result), { index: 0, class: Int })
+  }
+  add_adapter_call_clobbers(isa, instruction, true)
+  block.add_inst(instruction)
+}
+
+///|
+fn classify_internal_arguments(
+  arguments : Array[@abi.Reg],
+) -> (Array[@abi.VReg], Array[@abi.VReg]) raise SemanticLegacyAdapterError {
+  let integers : Array[@abi.VReg] = []
+  let floats : Array[@abi.VReg] = []
+  for argument in arguments {
+    match argument {
+      Virtual(vreg) =>
+        match vreg.class {
+          Int => integers.push(vreg)
+          Float32 | Float64 | Vector => floats.push(vreg)
+        }
+      Physical(_) =>
+        raise UnsupportedOperation(
+          message="semantic internal argument mapped to a physical register",
+        )
+    }
+  }
+  (integers, floats)
+}
+
+///|
+fn adapter_reg_slice(values : Array[@abi.Reg], start : Int) -> Array[@abi.Reg] {
+  let result : Array[@abi.Reg] = []
+  for index in start..<values.length() {
+    result.push(values[index])
+  }
+  result
+}
+
+///|
+fn emit_internal_overflow_arguments(
+  legacy_function : @machv.Function,
+  block : @block.Block,
+  call_conv : @abi.CallConventionLayout,
+  integer_arguments : Array[@abi.VReg],
+  float_arguments : Array[@abi.VReg],
+) -> Unit {
+  let integer_overflow = if integer_arguments.length() >
+    call_conv.user_arg_gprs.length() {
+    integer_arguments.length() - call_conv.user_arg_gprs.length()
+  } else {
+    0
+  }
+  let float_overflow_classes : Array[@abi.RegClass] = []
+  for index in call_conv.arg_fprs.length()..<float_arguments.length() {
+    float_overflow_classes.push(float_arguments[index].class)
+  }
+  let (integer_offsets, float_offsets, total_bytes) = call_conv.layout_overflow_stack(
+    integer_overflow, float_overflow_classes,
+  )
+  legacy_function.update_max_outgoing_args_size(total_bytes)
+  for index in 0..<integer_overflow {
+    let store = @instr.Inst(StoreToStack(integer_offsets[index]))
+    store.add_use(
+      Virtual(integer_arguments[call_conv.user_arg_gprs.length() + index]),
+    )
+    block.add_inst(store)
+  }
+  for index in 0..<float_offsets.length() {
+    let store = @instr.Inst(StoreToStack(float_offsets[index]))
+    store.add_use(Virtual(float_arguments[call_conv.arg_fprs.length() + index]))
+    block.add_inst(store)
+  }
+}
+
+///|
+fn emit_internal_call(
+  isa : @isa.ISA,
+  embedding_abi : @abi.EmbeddingABI,
+  legacy_function : @machv.Function,
+  block : @block.Block,
+  call : @semantic.SemanticCall,
+  operands : Array[@abi.Reg],
+  definitions : Array[@abi.Writable],
+  code_symbol_resolver : ((@semantic.CodeSymbol) -> @instr.CodeSymbol)?,
+) -> Unit raise SemanticLegacyAdapterError {
+  let indirect = call.callee is Indirect
+  let (callee, arguments) = if indirect {
+    if operands.length() < 2 {
+      raise UnsupportedOperation(
+        message="indirect call requires callee and context operands",
+      )
+    }
+    (Some(operands[0]), adapter_reg_slice(operands, 1))
+  } else {
+    (None, operands.copy())
+  }
+  if arguments.is_empty() {
+    raise UnsupportedOperation(
+      message="internal call requires an execution environment",
+    )
+  }
+  let context = arguments[0]
+  let user_arguments = adapter_reg_slice(arguments, 1)
+  let (integer_arguments, float_arguments) = classify_internal_arguments(
+    user_arguments,
+  )
+  let call_conv = embedding_abi.call_conv
+  emit_internal_overflow_arguments(
+    legacy_function, block, call_conv, integer_arguments, float_arguments,
+  )
+  let results = call_result_vregs(definitions)
+  let instruction : @instr.Inst = match call.callee {
+    Internal(symbol) => {
+      let resolver = match code_symbol_resolver {
+        Some(resolver) => resolver
+        None =>
+          raise UnsupportedOperation(
+            message="direct internal call requires a code-symbol resolver",
+          )
+      }
+      Inst(
+        CallDirect(
+          resolver(symbol),
+          user_arguments.length(),
+          results.map(result => result.class),
+          Internal,
+        ),
+      )
+    }
+    Indirect =>
+      Inst(
+        CallPtr(
+          user_arguments.length(),
+          results.map(result => result.class),
+          Internal,
+        ),
+      )
+    External(_) =>
+      raise UnsupportedOperation(
+        message="internal protocol cannot target an external symbol",
+      )
+  }
+  if callee is Some(callee) {
+    instruction.add_use_fixed(callee, {
+      index: isa.scratch_reg_2_index(),
+      class: Int,
+    })
+  }
+  instruction.add_use_fixed(context, call_conv.context_arg)
+  let integer_register_count = if integer_arguments.length() <
+    call_conv.user_arg_gprs.length() {
+    integer_arguments.length()
+  } else {
+    call_conv.user_arg_gprs.length()
+  }
+  for index in 0..<integer_register_count {
+    instruction.add_use_fixed(
+      Virtual(integer_arguments[index]),
+      call_conv.user_arg_gprs[index],
+    )
+  }
+  let float_register_count = if float_arguments.length() <
+    call_conv.arg_fprs.length() {
+    float_arguments.length()
+  } else {
+    call_conv.arg_fprs.length()
+  }
+  for index in 0..<float_register_count {
+    instruction.add_use_fixed(Virtual(float_arguments[index]), {
+      index: call_conv.arg_fprs[index].index,
+      class: float_arguments[index].class,
+    })
+  }
+  let mut integer_result_index = 0
+  let mut float_result_index = 0
+  for result in results {
+    match result.class {
+      Int => {
+        if integer_result_index >= call_conv.ret_gprs.length() {
+          raise UnsupportedOperation(
+            message="internal call requires an extra-results area",
+          )
+        }
+        instruction.add_def_fixed(legacy_def(result), {
+          index: call_conv.ret_gprs[integer_result_index].index,
+          class: Int,
+        })
+        integer_result_index += 1
+      }
+      Float32 | Float64 | Vector => {
+        if float_result_index >= call_conv.ret_fprs.length() {
+          raise UnsupportedOperation(
+            message="internal call requires an extra-results area",
+          )
+        }
+        instruction.add_def_fixed(legacy_def(result), {
+          index: call_conv.ret_fprs[float_result_index].index,
+          class: result.class,
+        })
+        float_result_index += 1
+      }
+    }
+  }
+  add_adapter_call_clobbers(isa, instruction, false)
+  block.add_inst(instruction)
+}
+
+///|
+fn append_semantic_call(
+  isa : @isa.ISA,
+  embedding_abi : @abi.EmbeddingABI?,
+  legacy_function : @machv.Function,
+  block : @block.Block,
+  call : @semantic.SemanticCall,
+  operands : Array[@abi.Reg],
+  definitions : Array[@abi.Writable],
+  live_gc_roots : Int,
+  code_symbol_resolver : ((@semantic.CodeSymbol) -> @instr.CodeSymbol)?,
+) -> Unit raise SemanticLegacyAdapterError {
+  if live_gc_roots > 0 {
+    raise UnsupportedOperation(
+      message="precise GC roots require stack-slot adaptation",
+    )
+  }
+  match call.protocol {
+    Platform =>
+      emit_platform_call(
+        isa, legacy_function, block, call, operands, definitions,
+      )
+    Internal => {
+      let embedding_abi = match embedding_abi {
+        Some(embedding_abi) => embedding_abi
+        None =>
+          raise UnsupportedOperation(
+            message="internal call requires an embedding ABI",
+          )
+      }
+      emit_internal_call(
+        isa, embedding_abi, legacy_function, block, call, operands, definitions,
+        code_symbol_resolver,
+      )
+    }
+  }
+}
+
+///|
 fn append_semantic_instruction(
   isa : @isa.ISA,
+  embedding_abi : @abi.EmbeddingABI?,
   function : @semantic.Function,
   legacy_block : @block.Block,
   instruction : @semantic.Instruction,
   values : Array[@abi.VReg?],
   legacy_function : @machv.Function,
   trap_payload : (@semantic.TrapReason) -> Int,
+  code_symbol_resolver : ((@semantic.CodeSymbol) -> @instr.CodeSymbol)?,
 ) -> Unit raise SemanticLegacyAdapterError {
   let operands : Array[@abi.Reg] = []
   for operand in function.instruction_operands(instruction) {
@@ -455,6 +812,20 @@ fn append_semantic_instruction(
     definitions.push(legacy_def(mapped))
   }
   let operation = function.instruction_operation(instruction).unwrap()
+  if operation is Call(call) {
+    append_semantic_call(
+      isa,
+      embedding_abi,
+      legacy_function,
+      legacy_block,
+      call,
+      operands,
+      definitions,
+      function.instruction_metadata(instruction).unwrap().live_gc_roots.length(),
+      code_symbol_resolver,
+    )
+    return
+  }
   if operation is IntBinary(SignedDiv | UnsignedDiv | SignedRem | UnsignedRem) {
     append_semantic_division_or_remainder(
       isa,
@@ -598,7 +969,9 @@ fn set_semantic_terminator(
 fn adapt_semantic_to_legacy(
   function : @semantic.Function,
   isa : @isa.ISA,
+  embedding_abi? : @abi.EmbeddingABI? = None,
   trap_payload? : (@semantic.TrapReason) -> Int = fn(_) { 0 },
+  code_symbol_resolver? : ((@semantic.CodeSymbol) -> @instr.CodeSymbol)? = None,
 ) -> @machv.Function raise SemanticLegacyAdapterError {
   function.verify() catch {
     error => raise InvalidLegacyFunction(message=error.to_string())
@@ -631,7 +1004,8 @@ fn adapt_semantic_to_legacy(
     let legacy_block = legacy.get_blocks()[block_ids[block_index]]
     for instruction in function.block_instructions(block) {
       append_semantic_instruction(
-        isa, function, legacy_block, instruction, values, legacy, trap_payload,
+        isa, embedding_abi, function, legacy_block, instruction, values, legacy,
+        trap_payload, code_symbol_resolver,
       )
     }
     set_semantic_terminator(
@@ -642,6 +1016,24 @@ fn adapt_semantic_to_legacy(
     error => raise InvalidLegacyFunction(message=error.to_string())
   }
   legacy
+}
+
+///|
+fn adapter_test_embedding_abi(isa : @isa.ISA) -> @abi.EmbeddingABI {
+  let (context_index, user_indices) = match isa {
+    AArch64 => (0, [1, 2, 3, 4, 5, 6, 7])
+    AMD64 => (7, [6, 2, 1, 8, 9])
+  }
+  EmbeddingABI(
+    {
+      context_arg: { index: context_index, class: Int },
+      user_arg_gprs: user_indices.map(index => { index, class: Int }),
+      arg_fprs: Array::makei(8, index => { index, class: Float64 }),
+      ret_gprs: [{ index: 0, class: Int }, { index: 2, class: Int }],
+      ret_fprs: [{ index: 0, class: Float64 }, { index: 1, class: Float64 }],
+    },
+    reserve_context_role=false,
+  )
 }
 
 ///|
@@ -808,4 +1200,111 @@ test "semantic-to-legacy adapter preserves division traps" {
       #|
     ),
   )
+}
+
+///|
+test "semantic-to-legacy adapter lowers platform call ABI" {
+  let builder = @semantic.FunctionBuilder::new(
+    "semantic_adapter_platform_call",
+    Internal,
+    [GcRef64],
+    [I32],
+  )
+  let call = @semantic.SemanticCall::new(
+    External(@semantic.ExternalSymbol::new("runtime.array_len")),
+    @semantic.Signature::new([GcRef64], [I32]),
+    Platform,
+    @semantic.CallBehavior::new(Read, true, false, false, false),
+  )
+  let result = builder.emit(Call(call), builder.parameters(), [I32])[0]
+  builder.return_([result])
+  inspect(
+    adapt_semantic_to_legacy(builder.finish(), AMD64),
+    content=(
+      #|machv semantic_adapter_platform_call(v0:int) -> int {
+      #|block0:
+      #|    v1 = call_external[Foreign].runtime.array_len(1) -> 1 results v0
+      #|    ret v1
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "semantic-to-legacy adapter lowers direct internal call ABI" {
+  let builder = @semantic.FunctionBuilder::new(
+    "semantic_adapter_internal_call",
+    Internal,
+    [Ptr64, I32],
+    [I64],
+  )
+  let call = @semantic.SemanticCall::new(
+    Internal(@semantic.CodeSymbol::new("wasm.func.7")),
+    @semantic.Signature::new([Ptr64, I32], [I64]),
+    Internal,
+    @semantic.CallBehavior::conservative(),
+  )
+  let result = builder.emit(Call(call), builder.parameters(), [I64])[0]
+  builder.return_([result])
+  inspect(
+    adapt_semantic_to_legacy(
+      builder.finish(),
+      AMD64,
+      embedding_abi=Some(adapter_test_embedding_abi(AMD64)),
+      code_symbol_resolver=Some(fn(_) { CodeSymbol("wasm.func", 7) }),
+    ),
+    content=(
+      #|machv semantic_adapter_internal_call(v0:int, v1:int) -> int {
+      #|block0:
+      #|    v2 = call_direct[Internal].wasm.func.7(1) -> 1 results v0, v1
+      #|    ret v2
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "semantic-to-legacy adapter rejects unadapted precise call roots" {
+  let builder = @semantic.FunctionBuilder::new(
+    "semantic_adapter_roots",
+    Internal,
+    [Ptr64, GcRef64],
+    [],
+  )
+  let parameters = builder.parameters()
+  let call = @semantic.SemanticCall::new(
+    Internal(@semantic.CodeSymbol::new("wasm.func.7")),
+    @semantic.Signature::new([Ptr64], []),
+    Internal,
+    @semantic.CallBehavior::conservative(),
+  )
+  builder.emit_with_metadata(
+    Call(call),
+    [parameters[0]],
+    [],
+    @semantic.InstructionMetadata::new(None, [parameters[1]]),
+  )
+  |> ignore
+  builder.return_([])
+  try
+    adapt_semantic_to_legacy(
+      builder.finish(),
+      AMD64,
+      embedding_abi=Some(adapter_test_embedding_abi(AMD64)),
+      code_symbol_resolver=Some(fn(_) { CodeSymbol("wasm.func", 7) }),
+    )
+    |> ignore
+  catch {
+    error =>
+      inspect(
+        error,
+        content=(
+          #|UnsupportedOperation(message="precise GC roots require stack-slot adaptation")
+        ),
+      )
+  } noraise {
+    _ => fail("expected precise roots to remain an explicit migration gap")
+  }
 }
