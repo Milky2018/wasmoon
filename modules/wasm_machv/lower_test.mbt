@@ -236,6 +236,38 @@ test "GC aggregate access rejects values wider than the runtime ABI" {
 }
 
 ///|
+test "GC array bulk mutation preserves value encoding and effects" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("gc_array_bulk")
+  builder.add_param(I64) |> ignore
+  let destination = builder.add_param(Ref)
+  let source = builder.add_param(Ref)
+  let destination_offset = builder.add_param(I32)
+  let source_offset = builder.add_param(I32)
+  let count = builder.add_param(I32)
+  let fill_value = builder.add_param(F32)
+  @wasm_milkir.array_fill(
+    builder, 3, destination, destination_offset, fill_value, count,
+  )
+  @wasm_milkir.array_copy(
+    builder, 3, 4, destination, destination_offset, source, source_offset, count,
+  )
+  builder.return_([])
+  inspect(
+    lower_function(builder.finalize(), test_environment()),
+    content=(
+      #|machv gc_array_bulk [internal](v0:ptr64, v1:gcref64, v2:gcref64, v3:i32, v4:i32, v5:i32, v6:f32) -> () {
+      #|block0:
+      #|  v7:i32 = convert.Bitcast(F32, I32) v6
+      #|  v8:i64 = convert.I64ExtendI32(Unsigned) v7
+      #|  call external @wasm.runtime.gc.array_fill (gcref64, i32, i64, i32) -> () [platform] v1, v3, v8, v5 [memory=read-write, trap]
+      #|  call external @wasm.runtime.gc.array_copy (gcref64, i32, gcref64, i32, i32) -> () [platform] v1, v3, v2, v4, v5 [memory=read-write, trap]
+      #|  return
+      #|}
+    ),
+  )
+}
+
+///|
 test "i31 get uses explicit null-trap control flow" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder("i31_get")
   builder.add_param(I64) |> ignore

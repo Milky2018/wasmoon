@@ -634,6 +634,45 @@ fn lower_aggregate_set(
 }
 
 ///|
+fn lower_array_fill(
+  context : @adapter.InstructionContext,
+  environment : Environment,
+) -> String? {
+  let source_operands = context.operands()
+  let source_types = context.operand_types()
+  if !is_runtime_word_type(source_types[2]) {
+    return Some(
+      "the current Wasm GC runtime ABI cannot fill arrays with v128 values",
+    )
+  }
+  let value = encode_runtime_word(context, source_operands[2], source_types[2])
+  finish_runtime_call(
+    context,
+    environment,
+    "gc.array_fill",
+    [source_operands[0], source_operands[1], value, source_operands[3]],
+    [GcRef64, I32, I64, I32],
+    @machv.CallBehavior::new(ReadWrite, true, false, false, false),
+  )
+  None
+}
+
+///|
+fn lower_array_copy(
+  context : @adapter.InstructionContext,
+  environment : Environment,
+) -> Unit {
+  finish_runtime_call(
+    context,
+    environment,
+    "gc.array_copy",
+    context.operands(),
+    [GcRef64, I32, GcRef64, I32, I32],
+    @machv.CallBehavior::new(ReadWrite, true, false, false, false),
+  )
+}
+
+///|
 fn lower_exception_query(
   context : @adapter.InstructionContext,
   environment : Environment,
@@ -833,6 +872,11 @@ fn lower_extension(
         type_index,
         None,
       )
+    ArrayFill(_) => lower_array_fill(context, environment)
+    ArrayCopy(_, _) => {
+      lower_array_copy(context, environment)
+      None
+    }
     TryTableEnd(handler_id) => {
       lower_try_table_end(context, environment, handler_id)
       None
