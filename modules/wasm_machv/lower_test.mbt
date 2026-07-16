@@ -119,6 +119,36 @@ test "reference primitives preserve explicit target-neutral representation" {
 }
 
 ///|
+test "GC reference queries use typed non-safepoint runtime calls" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("gc_reference_queries")
+  builder.add_param(I64) |> ignore
+  let reference = builder.add_param(Ref)
+  builder.add_result(I32)
+  builder.add_result(Ref)
+  builder.add_result(I32)
+  let matches = @wasm_milkir.ref_test(builder, 7, true, reference)
+  let cast = @wasm_milkir.ref_cast(builder, 7, false, reference, Ref)
+  let length = @wasm_milkir.array_len(builder, reference)
+  builder.return_([matches, cast, length])
+  inspect(
+    lower_function(builder.finalize(), test_environment()),
+    content=(
+      #|machv gc_reference_queries [internal](v0:ptr64, v1:gcref64) -> (i32, gcref64, i32) {
+      #|block0:
+      #|  v2:i32 = i32.const 7
+      #|  v3:i32 = i32.const 1
+      #|  v4:i32 = call external @wasm.runtime.gc.ref_test (gcref64, i32, i32) -> (i32) [platform] v1, v2, v3 [memory=read]
+      #|  v5:i32 = i32.const 7
+      #|  v6:i32 = i32.const 0
+      #|  v7:gcref64 = call external @wasm.runtime.gc.ref_cast (gcref64, i32, i32) -> (gcref64) [platform] v1, v5, v6 [memory=read, trap]
+      #|  v8:i32 = call external @wasm.runtime.gc.array_len (gcref64) -> (i32) [platform] v1 [memory=read, trap]
+      #|  return v4, v7, v8
+      #|}
+    ),
+  )
+}
+
+///|
 test "i31 get uses explicit null-trap control flow" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder("i31_get")
   builder.add_param(I64) |> ignore

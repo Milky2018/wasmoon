@@ -366,6 +366,77 @@ fn finish_runtime_call(
 }
 
 ///|
+fn i32_immediate(
+  context : @adapter.InstructionContext,
+  value : Int,
+) -> @machv.Value {
+  context.emit(I32Const(value.reinterpret_as_uint()), [], [I32])[0]
+}
+
+///|
+fn bool_immediate(
+  context : @adapter.InstructionContext,
+  value : Bool,
+) -> @machv.Value {
+  i32_immediate(context, if value { 1 } else { 0 })
+}
+
+///|
+fn lower_ref_test(
+  context : @adapter.InstructionContext,
+  environment : Environment,
+  type_index : Int,
+  nullable : Bool,
+) -> Unit {
+  let operands = context.operands()
+  operands.push(i32_immediate(context, type_index))
+  operands.push(bool_immediate(context, nullable))
+  finish_runtime_call(
+    context,
+    environment,
+    "gc.ref_test",
+    operands,
+    [GcRef64, I32, I32],
+    @machv.CallBehavior::new(Read, false, false, false, false),
+  )
+}
+
+///|
+fn lower_ref_cast(
+  context : @adapter.InstructionContext,
+  environment : Environment,
+  type_index : Int,
+  nullable : Bool,
+) -> Unit {
+  let operands = context.operands()
+  operands.push(i32_immediate(context, type_index))
+  operands.push(bool_immediate(context, nullable))
+  finish_runtime_call(
+    context,
+    environment,
+    "gc.ref_cast",
+    operands,
+    [GcRef64, I32, I32],
+    @machv.CallBehavior::new(Read, true, false, false, false),
+  )
+}
+
+///|
+fn lower_array_len(
+  context : @adapter.InstructionContext,
+  environment : Environment,
+) -> Unit {
+  finish_runtime_call(
+    context,
+    environment,
+    "gc.array_len",
+    context.operands(),
+    [GcRef64],
+    @machv.CallBehavior::new(Read, true, false, false, false),
+  )
+}
+
+///|
 fn lower_exception_query(
   context : @adapter.InstructionContext,
   environment : Environment,
@@ -471,6 +542,18 @@ fn lower_extension(
     }
     RefEq => {
       context.finish_operation(ReferenceCompare(Equal), context.operands())
+      None
+    }
+    RefTest(type_index, nullable) => {
+      lower_ref_test(context, environment, type_index, nullable)
+      None
+    }
+    RefCast(type_index, nullable) => {
+      lower_ref_cast(context, environment, type_index, nullable)
+      None
+    }
+    ArrayLen => {
+      lower_array_len(context, environment)
       None
     }
     TryTableEnd(handler_id) => {
