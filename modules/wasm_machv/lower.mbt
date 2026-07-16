@@ -748,6 +748,54 @@ fn lower_struct_new_default(
 }
 
 ///|
+fn lower_array_segment_new(
+  context : @adapter.InstructionContext,
+  environment : Environment,
+  capability : String,
+  type_index : Int,
+  segment_index : Int,
+) -> Unit {
+  let operands = context.environment()
+  operands.push(i32_immediate(context, type_index))
+  operands.push(i32_immediate(context, segment_index))
+  for operand in context.operands() {
+    operands.push(operand)
+  }
+  let word = emit_gc_allocation(context, environment, capability, operands, [
+    Ptr64,
+    I32,
+    I32,
+    I32,
+    I32,
+  ])
+  finish_runtime_word(context, word)
+}
+
+///|
+fn lower_array_segment_init(
+  context : @adapter.InstructionContext,
+  environment : Environment,
+  capability : String,
+  type_index : Int,
+  segment_index : Int,
+) -> Unit {
+  let operands = context.environment()
+  operands.push(i32_immediate(context, type_index))
+  operands.push(i32_immediate(context, segment_index))
+  for operand in context.operands() {
+    operands.push(operand)
+  }
+  finish_runtime_call(
+    context,
+    environment,
+    capability,
+    operands,
+    [Ptr64, I32, I32, GcRef64, I32, I32, I32],
+    @machv.CallBehavior::new(ReadWrite, true, false, false, false),
+  )
+}
+
+///|
 fn lower_exception_query(
   context : @adapter.InstructionContext,
   environment : Environment,
@@ -958,6 +1006,30 @@ fn lower_extension(
       lower_array_new(context, environment, type_index, true)
     StructNewDefault(type_index) => {
       lower_struct_new_default(context, environment, type_index)
+      None
+    }
+    ArrayNewData(type_index, data_index) => {
+      lower_array_segment_new(
+        context, environment, "gc.array_new_data", type_index, data_index,
+      )
+      None
+    }
+    ArrayNewElem(type_index, element_index) => {
+      lower_array_segment_new(
+        context, environment, "gc.array_new_elem", type_index, element_index,
+      )
+      None
+    }
+    ArrayInitData(type_index, data_index) => {
+      lower_array_segment_init(
+        context, environment, "gc.array_init_data", type_index, data_index,
+      )
+      None
+    }
+    ArrayInitElem(type_index, element_index) => {
+      lower_array_segment_init(
+        context, environment, "gc.array_init_elem", type_index, element_index,
+      )
       None
     }
     TryTableEnd(handler_id) => {

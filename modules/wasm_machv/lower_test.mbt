@@ -306,6 +306,48 @@ test "GC allocation calls expose precise roots without a source-level safepoint 
 }
 
 ///|
+test "GC segment array operations keep segment identities and allocation roots" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("gc_segments")
+  builder.add_param(I64) |> ignore
+  let offset = builder.add_param(I32)
+  let length = builder.add_param(I32)
+  builder.add_result(Ref)
+  builder.add_result(Ref)
+  let data_array = @wasm_milkir.array_new_data(builder, 2, 3, offset, length)
+  let elem_array = @wasm_milkir.array_new_elem(builder, 4, 5, offset, length)
+  @wasm_milkir.array_init_data(
+    builder, 2, 3, data_array, offset, offset, length,
+  )
+  @wasm_milkir.array_init_elem(
+    builder, 4, 5, elem_array, offset, offset, length,
+  )
+  builder.return_([data_array, elem_array])
+  inspect(
+    lower_function(builder.finalize(), test_environment()),
+    content=(
+      #|machv gc_segments [internal](v0:ptr64, v1:i32, v2:i32) -> (gcref64, gcref64) {
+      #|block0:
+      #|  v3:i32 = i32.const 2
+      #|  v4:i32 = i32.const 3
+      #|  v5:i64 = call external @wasm.runtime.gc.array_new_data (ptr64, i32, i32, i32, i32) -> (i64) [platform] v0, v3, v4, v1, v2 [memory=read-write, trap, gc-safepoint]
+      #|  v6:gcref64 = gcref.from_bits v5
+      #|  v7:i32 = i32.const 4
+      #|  v8:i32 = i32.const 5
+      #|  v9:i64 = call external @wasm.runtime.gc.array_new_elem (ptr64, i32, i32, i32, i32) -> (i64) [platform] v0, v7, v8, v1, v2 [memory=read-write, trap, gc-safepoint] roots=[v6]
+      #|  v10:gcref64 = gcref.from_bits v9
+      #|  v11:i32 = i32.const 2
+      #|  v12:i32 = i32.const 3
+      #|  call external @wasm.runtime.gc.array_init_data (ptr64, i32, i32, gcref64, i32, i32, i32) -> () [platform] v0, v11, v12, v6, v1, v1, v2 [memory=read-write, trap]
+      #|  v13:i32 = i32.const 4
+      #|  v14:i32 = i32.const 5
+      #|  call external @wasm.runtime.gc.array_init_elem (ptr64, i32, i32, gcref64, i32, i32, i32) -> () [platform] v0, v13, v14, v10, v1, v1, v2 [memory=read-write, trap]
+      #|  return v6, v10
+      #|}
+    ),
+  )
+}
+
+///|
 test "i31 get uses explicit null-trap control flow" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder("i31_get")
   builder.add_param(I64) |> ignore
