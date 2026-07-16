@@ -432,6 +432,226 @@ fn append_semantic_division_or_remainder(
 }
 
 ///|
+fn append_semantic_rotate_left(
+  isa : @isa.ISA,
+  legacy_function : @machv.Function,
+  block : @block.Block,
+  operands : Array[@abi.Reg],
+  definitions : Array[@abi.Writable],
+  is_64 : Bool,
+  constant_amount : Int64?,
+) -> Unit raise SemanticLegacyAdapterError {
+  if operands.length() != 2 || definitions.length() != 1 {
+    raise UnsupportedOperation(
+      message="rotate-left requires two operands and one result",
+    )
+  }
+  if constant_amount is Some(amount) {
+    let mask = if is_64 { 63 } else { 31 }
+    let left_amount = amount.to_int() & mask
+    if left_amount == 0 {
+      let copy = @instr.Inst(Move)
+      copy.add_def(definitions[0])
+      copy.add_use(operands[0])
+      block.add_inst(copy)
+      return
+    }
+    let width = if is_64 { 64 } else { 32 }
+    let rotate = @instr.Inst(RotrImm((width - left_amount) & mask, is_64))
+    rotate.add_def(definitions[0])
+    rotate.add_use(operands[0])
+    block.add_inst(rotate)
+    return
+  }
+  let negated_amount = legacy_function.new_vreg(Int)
+  let negate = @instr.Inst(Sub(is_64))
+  negate.add_def(legacy_def(negated_amount))
+  if isa is AArch64 {
+    negate.add_use(Physical({ index: 31, class: Int }))
+  } else {
+    let zero = legacy_function.new_vreg(Int)
+    let load_zero = @instr.Inst(LoadConst(0L))
+    load_zero.add_def(legacy_def(zero))
+    block.add_inst(load_zero)
+    negate.add_use(Virtual(zero))
+  }
+  negate.add_use(operands[1])
+  block.add_inst(negate)
+  let rotate = @instr.Inst(Rotr(is_64))
+  if isa is AMD64 {
+    let data_register : @abi.PReg = {
+      index: isa.scratch_reg_1_index(),
+      class: Int,
+    }
+    rotate.add_def_fixed(definitions[0], data_register)
+    rotate.add_use_fixed(operands[0], data_register)
+    rotate.add_use_fixed(Virtual(negated_amount), { index: 1, class: Int })
+  } else {
+    rotate.add_def(definitions[0])
+    rotate.add_use(operands[0])
+    rotate.add_use(Virtual(negated_amount))
+  }
+  block.add_inst(rotate)
+}
+
+///|
+fn append_semantic_count_trailing_zeros(
+  legacy_function : @machv.Function,
+  block : @block.Block,
+  operands : Array[@abi.Reg],
+  definitions : Array[@abi.Writable],
+  is_64 : Bool,
+) -> Unit raise SemanticLegacyAdapterError {
+  if operands.length() != 1 || definitions.length() != 1 {
+    raise UnsupportedOperation(
+      message="count-trailing-zeros requires one operand and one result",
+    )
+  }
+  let reversed = legacy_function.new_vreg(Int)
+  let reverse = @instr.Inst(Rbit(is_64))
+  reverse.add_def(legacy_def(reversed))
+  reverse.add_use(operands[0])
+  block.add_inst(reverse)
+  let count = @instr.Inst(Clz(is_64))
+  count.add_def(definitions[0])
+  count.add_use(Virtual(reversed))
+  block.add_inst(count)
+}
+
+///|
+fn append_semantic_high_multiply(
+  isa : @isa.ISA,
+  block : @block.Block,
+  signedness : @semantic.Signedness,
+  operands : Array[@abi.Reg],
+  definitions : Array[@abi.Writable],
+) -> Unit raise SemanticLegacyAdapterError {
+  if operands.length() != 2 || definitions.length() != 1 {
+    raise UnsupportedOperation(
+      message="high multiply requires two operands and one result",
+    )
+  }
+  let multiply = @instr.Inst(if signedness is Signed { Smulh } else { Umulh })
+  if isa is AMD64 {
+    multiply.add_def_fixed(definitions[0], { index: 2, class: Int })
+    multiply.add_def({ reg: Physical({ index: 0, class: Int }) })
+  } else {
+    multiply.add_def(definitions[0])
+  }
+  multiply.add_use(operands[0])
+  multiply.add_use(operands[1])
+  block.add_inst(multiply)
+}
+
+///|
+fn append_semantic_float_to_int(
+  isa : @isa.ISA,
+  legacy_function : @machv.Function,
+  block : @block.Block,
+  source_type : @semantic.FloatType,
+  result_type : @semantic.IntegerType,
+  signedness : @semantic.Signedness,
+  mode : @semantic.ConversionMode,
+  operands : Array[@abi.Reg],
+  definitions : Array[@abi.Writable],
+  trap_payload : (@semantic.TrapReason) -> Int,
+) -> Unit raise SemanticLegacyAdapterError {
+  if operands.length() != 1 || definitions.length() != 1 {
+    raise UnsupportedOperation(
+      message="float-to-int requires one operand and one result",
+    )
+  }
+  let is_f32 = source_type is F32
+  let is_i64 = result_type is I64
+  let signed = signedness is Signed
+  if mode is Saturating {
+    let convert = @instr.Inst(FcvtToInt(is_f32, is_i64, signed))
+    convert.add_def(definitions[0])
+    convert.add_use(operands[0])
+    block.add_inst(convert)
+    return
+  }
+  let compare_nan = @instr.Inst(FpuCmp(is_f32))
+  compare_nan.add_use(operands[0])
+  compare_nan.add_use(operands[0])
+  block.add_inst(compare_nan)
+  block.add_inst(
+    Inst(
+      TrapIf(
+        if isa is AMD64 {
+          Ps
+        } else {
+          Vs
+        },
+        trap_payload(InvalidConversionToInteger),
+      ),
+    ),
+  )
+  let (minimum_bits, maximum_bits, inclusive_minimum) = get_float_to_int_bounds(
+    is_f32, is_i64, signed,
+  )
+  let float_class = if is_f32 { @abi.RegClass::Float32 } else { Float64 }
+  let minimum = legacy_function.new_vreg(float_class)
+  let load_minimum = if is_f32 {
+    @instr.Inst(LoadConstF32(minimum_bits.to_int()))
+  } else {
+    Inst(LoadConstF64(minimum_bits))
+  }
+  load_minimum.add_def(legacy_def(minimum))
+  block.add_inst(load_minimum)
+  let compare_minimum = @instr.Inst(FpuCmp(is_f32))
+  compare_minimum.add_use(operands[0])
+  compare_minimum.add_use(Virtual(minimum))
+  block.add_inst(compare_minimum)
+  block.add_inst(
+    Inst(
+      TrapIf(
+        if isa is AMD64 {
+          if inclusive_minimum {
+            Ls
+          } else {
+            Lo
+          }
+        } else if inclusive_minimum {
+          Le
+        } else {
+          Lt
+        },
+        trap_payload(InvalidConversionToInteger),
+      ),
+    ),
+  )
+  let maximum = legacy_function.new_vreg(float_class)
+  let load_maximum = if is_f32 {
+    @instr.Inst(LoadConstF32(maximum_bits.to_int()))
+  } else {
+    Inst(LoadConstF64(maximum_bits))
+  }
+  load_maximum.add_def(legacy_def(maximum))
+  block.add_inst(load_maximum)
+  let compare_maximum = @instr.Inst(FpuCmp(is_f32))
+  compare_maximum.add_use(operands[0])
+  compare_maximum.add_use(Virtual(maximum))
+  block.add_inst(compare_maximum)
+  block.add_inst(
+    Inst(
+      TrapIf(
+        if isa is AMD64 {
+          Hs
+        } else {
+          Ge
+        },
+        trap_payload(InvalidConversionToInteger),
+      ),
+    ),
+  )
+  let convert = @instr.Inst(FcvtToInt(is_f32, is_i64, signed))
+  convert.add_def(definitions[0])
+  convert.add_use(operands[0])
+  block.add_inst(convert)
+}
+
+///|
 fn add_adapter_call_clobbers(
   isa : @isa.ISA,
   call : @instr.Inst,
@@ -1314,6 +1534,7 @@ fn append_semantic_instruction(
   legacy_block : @block.Block,
   instruction : @semantic.Instruction,
   values : Array[@abi.VReg?],
+  integer_constants : Array[Int64?],
   legacy_function : @machv.Function,
   stack_objects : Array[@semantic.StackObject],
   stack_offsets : Array[Int],
@@ -1340,6 +1561,19 @@ fn append_semantic_instruction(
     definitions.push(legacy_def(mapped))
   }
   let operation = function.instruction_operation(instruction).unwrap()
+  if semantic_results is [result] {
+    let result_index = function.value_index(result).unwrap()
+    integer_constants[result_index] = match operation {
+      I32Const(bits) => Some(bits.reinterpret_as_int().to_int64() & 0xFFFFFFFFL)
+      I64Const(bits) => Some(bits.reinterpret_as_int64())
+      Copy =>
+        match function.instruction_operands(instruction) {
+          [source] => integer_constants[function.value_index(source).unwrap()]
+          _ => None
+        }
+      _ => None
+    }
+  }
   if operation is EnvironmentField(field) {
     let offsets = match environment_field_path {
       Some(environment_field_path) =>
@@ -1396,6 +1630,48 @@ fn append_semantic_instruction(
       definitions,
       semantic_integer_width(function, semantic_results),
       trap_payload,
+    )
+    return
+  }
+  if operation is IntBinary(RotateLeft) {
+    append_semantic_rotate_left(
+      isa,
+      legacy_function,
+      legacy_block,
+      operands,
+      definitions,
+      semantic_integer_width(function, semantic_results),
+      match function.instruction_operands(instruction) {
+        [_, amount] => integer_constants[function.value_index(amount).unwrap()]
+        _ => None
+      },
+    )
+    return
+  }
+  if operation is IntUnary(CountTrailingZeros) {
+    append_semantic_count_trailing_zeros(
+      legacy_function,
+      legacy_block,
+      operands,
+      definitions,
+      semantic_operand_is_64(
+        function,
+        function.instruction_operands(instruction),
+      ),
+    )
+    return
+  }
+  if operation is IntHighMultiply(signedness) {
+    append_semantic_high_multiply(
+      isa, legacy_block, signedness, operands, definitions,
+    )
+    return
+  }
+  if operation
+    is Convert(FloatToInt(source_type, result_type, signedness, mode)) {
+    append_semantic_float_to_int(
+      isa, legacy_function, legacy_block, source_type, result_type, signedness, mode,
+      operands, definitions, trap_payload,
     )
     return
   }
@@ -1515,6 +1791,32 @@ fn set_semantic_terminator(
           function, values, false_edge, block_ids, legacy_function,
         ),
       )
+    Switch(index, cases, default_edge) => {
+      let targets : Array[Int] = []
+      for case_index, case in cases {
+        if case.bits != case_index.to_uint64() {
+          raise UnsupportedOperation(
+            message="legacy branch tables require dense zero-based cases",
+          )
+        }
+        targets.push(
+          branch_edge_target(
+            function,
+            values,
+            case.edge,
+            block_ids,
+            legacy_function,
+          ),
+        )
+      }
+      BrTable(
+        legacy_use(require_legacy_value(function, values, index)),
+        targets,
+        branch_edge_target(
+          function, values, default_edge, block_ids, legacy_function,
+        ),
+      )
+    }
     Return(results) =>
       Return(
         results.map(result => {
@@ -1572,10 +1874,6 @@ fn set_semantic_terminator(
       Trap(trap_payload(Unreachable))
     }
     Trap(reason) => Trap(trap_payload(reason))
-    _ =>
-      raise UnsupportedOperation(
-        message="semantic terminator is not yet adapted: \{to_repr(record.kind)}",
-      )
   }
   legacy_block.set_terminator(terminator)
 }
@@ -1606,6 +1904,10 @@ fn adapt_semantic_to_legacy(
   )
   legacy.update_max_outgoing_args_size(outgoing_size)
   let values : Array[@abi.VReg?] = Array::make(function.value_count(), None)
+  let integer_constants : Array[Int64?] = Array::make(
+    function.value_count(),
+    None,
+  )
   for parameter in function.parameters() {
     let index = function.value_index(parameter).unwrap()
     let ty = function.value_type(parameter).unwrap()
@@ -1632,8 +1934,8 @@ fn adapt_semantic_to_legacy(
     let legacy_block = legacy.get_blocks()[block_ids[block_index]]
     for instruction in function.block_instructions(block) {
       append_semantic_instruction(
-        isa, embedding_abi, function, legacy_block, instruction, values, legacy,
-        stack_objects, stack_offsets, trap_payload, requires_hidden_safepoint_id,
+        isa, embedding_abi, function, legacy_block, instruction, values, integer_constants,
+        legacy, stack_objects, stack_offsets, trap_payload, requires_hidden_safepoint_id,
         caller_root_scope_symbols, environment_field_path, code_symbol_resolver,
       )
     }
@@ -1760,6 +2062,192 @@ test "semantic-to-legacy adapter lowers nontrapping scalar families" {
       #|    f4 = fadd.s f1, f2
       #|    v5 = cmp32.sgt v0, v0
       #|    ret v3, f4, v5
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "semantic-to-legacy adapter legalizes remaining producer integers" {
+  let builder = @semantic.FunctionBuilder::new(
+    "semantic_adapter_integer_legalizations",
+    Internal,
+    [I64, I64],
+    [I64, I64, I64, I64, I64],
+  )
+  let parameters = builder.parameters()
+  let rotated = builder.emit(IntBinary(RotateLeft), parameters, [I64])[0]
+  let trailing = builder.emit(IntUnary(CountTrailingZeros), [parameters[0]], [
+      I64,
+    ])[0]
+  let signed_high = builder.emit(IntHighMultiply(Signed), parameters, [I64])[0]
+  let unsigned_high = builder.emit(IntHighMultiply(Unsigned), parameters, [I64])[0]
+  let constant_amount = builder.emit(I64Const(8UL), [], [I64])[0]
+  let constant_rotated = builder.emit(
+      IntBinary(RotateLeft),
+      [parameters[0], constant_amount],
+      [I64],
+    )[0]
+  builder.return_([
+    rotated, trailing, signed_high, unsigned_high, constant_rotated,
+  ])
+  let function = builder.finish()
+  inspect(
+    adapt_semantic_to_legacy(function, AMD64),
+    content=(
+      #|machv semantic_adapter_integer_legalizations(v0:int, v1:int) -> (int, int, int, int, int) {
+      #|block0:
+      #|    v4 = ldi 0
+      #|    v3 = sub v4, v1
+      #|    v2 = rotr v0, v3
+      #|    v6 = rbit v0
+      #|    v5 = clz v6
+      #|    v7, x0 = smulh v0, v1
+      #|    v8, x0 = umulh v0, v1
+      #|    v9 = ldi 8
+      #|    v10 = rotr #56 v0
+      #|    ret v2, v5, v7, v8, v10
+      #|}
+      #|
+    ),
+  )
+  inspect(
+    adapt_semantic_to_legacy(function, AArch64),
+    content=(
+      #|machv semantic_adapter_integer_legalizations(v0:int, v1:int) -> (int, int, int, int, int) {
+      #|block0:
+      #|    v3 = sub x31, v1
+      #|    v2 = rotr v0, v3
+      #|    v5 = rbit v0
+      #|    v4 = clz v5
+      #|    v6 = smulh v0, v1
+      #|    v7 = umulh v0, v1
+      #|    v8 = ldi 8
+      #|    v9 = rotr #56 v0
+      #|    ret v2, v4, v6, v7, v9
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "semantic-to-legacy adapter legalizes trapping and saturating float conversion" {
+  let builder = @semantic.FunctionBuilder::new(
+    "semantic_adapter_float_to_int",
+    Internal,
+    [F64, F32],
+    [I32, I64],
+  )
+  let parameters = builder.parameters()
+  let trapping = builder.emit(
+      Convert(FloatToInt(F64, I32, Signed, Trapping)),
+      [parameters[0]],
+      [I32],
+    )[0]
+  let saturating = builder.emit(
+      Convert(FloatToInt(F32, I64, Unsigned, Saturating)),
+      [parameters[1]],
+      [I64],
+    )[0]
+  builder.return_([trapping, saturating])
+  let function = builder.finish()
+  inspect(
+    adapt_semantic_to_legacy(function, AMD64, trap_payload=fn(reason) {
+      if reason is InvalidConversionToInteger {
+        37
+      } else {
+        0
+      }
+    }),
+    content=(
+      #|machv semantic_adapter_float_to_int(f0:double, f1:float) -> (int, int) {
+      #|block0:
+      #|    fcmp.d f0, f0
+      #|    trap_if.ps #37
+      #|    f3 = ldf -2147483649
+      #|    fcmp.d f0, f3
+      #|    trap_if.ls #37
+      #|    f4 = ldf 2147483648
+      #|    fcmp.d f0, f4
+      #|    trap_if.hs #37
+      #|    v2 = fcvt.f64_i32_s f0
+      #|    v5 = fcvt.f32_i64_u f1
+      #|    ret v2, v5
+      #|}
+      #|
+    ),
+  )
+  inspect(
+    adapt_semantic_to_legacy(function, AArch64, trap_payload=fn(reason) {
+      if reason is InvalidConversionToInteger {
+        37
+      } else {
+        0
+      }
+    }),
+    content=(
+      #|machv semantic_adapter_float_to_int(f0:double, f1:float) -> (int, int) {
+      #|block0:
+      #|    fcmp.d f0, f0
+      #|    trap_if.vs #37
+      #|    f3 = ldf -2147483649
+      #|    fcmp.d f0, f3
+      #|    trap_if.le #37
+      #|    f4 = ldf 2147483648
+      #|    fcmp.d f0, f4
+      #|    trap_if.ge #37
+      #|    v2 = fcvt.f64_i32_s f0
+      #|    v5 = fcvt.f32_i64_u f1
+      #|    ret v2, v5
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "semantic-to-legacy adapter lowers dense switches" {
+  let builder = @semantic.FunctionBuilder::new(
+    "semantic_adapter_switch",
+    Internal,
+    [I32],
+    [I64],
+  )
+  let zero = builder.create_block([])
+  let one = builder.create_block([])
+  let fallback = builder.create_block([])
+  builder.switch(
+    builder.parameters()[0],
+    [(0UL, zero, []), (1UL, one, [])],
+    fallback,
+    [],
+  )
+  builder.switch_to_block(zero)
+  let zero_value = builder.emit(I64Const(10UL), [], [I64])[0]
+  builder.return_([zero_value])
+  builder.switch_to_block(one)
+  let one_value = builder.emit(I64Const(20UL), [], [I64])[0]
+  builder.return_([one_value])
+  builder.switch_to_block(fallback)
+  let fallback_value = builder.emit(I64Const(30UL), [], [I64])[0]
+  builder.return_([fallback_value])
+  inspect(
+    adapt_semantic_to_legacy(builder.finish(), AArch64),
+    content=(
+      #|machv semantic_adapter_switch(v0:int) -> int {
+      #|block0:
+      #|    br_table v0, [block1, block2], default block3
+      #|block1:
+      #|    v1 = ldi 10
+      #|    ret v1
+      #|block2:
+      #|    v2 = ldi 20
+      #|    ret v2
+      #|block3:
+      #|    v3 = ldi 30
+      #|    ret v3
       #|}
       #|
     ),
