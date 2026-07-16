@@ -348,6 +348,108 @@ test "GC segment array operations keep segment identities and allocation roots" 
 }
 
 ///|
+test "GC fixed allocations use typed address-visible value buffers" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("gc_fixed_allocations")
+  builder.add_param(I64) |> ignore
+  let integer = builder.add_param(I32)
+  let float = builder.add_param(F64)
+  let reference = builder.add_param(Ref)
+  builder.add_result(Ref)
+  builder.add_result(Ref)
+  let structure = @wasm_milkir.struct_new(builder, 6, [
+    integer, float, reference,
+  ])
+  let array = @wasm_milkir.array_new_fixed(builder, 7, 2, [reference, integer])
+  builder.return_([structure, array])
+  inspect(
+    lower_function(builder.finalize(), test_environment()),
+    content=(
+      #|machv gc_fixed_allocations [internal](v0:ptr64, v1:i32, v2:f64, v3:gcref64) -> (gcref64, gcref64) {
+      #|stack0: size=24, alignment=16
+      #|stack1: size=16, alignment=16
+      #|block0:
+      #|  v4:ptr64 = stack.address stack0
+      #|  v5:i64 = convert.I64ExtendI32(Unsigned) v1
+      #|  store {
+      #|  width: W64,
+      #|  value_type: I64,
+      #|  offset: 0,
+      #|  endianness: Little,
+      #|  trap: None,
+      #|} v4, v5 [memory=write]
+      #|  v6:i64 = convert.Bitcast(F64, I64) v2
+      #|  store {
+      #|  width: W64,
+      #|  value_type: I64,
+      #|  offset: 8,
+      #|  endianness: Little,
+      #|  trap: None,
+      #|} v4, v6 [memory=write]
+      #|  v7:ptr64 = gcref.address v3
+      #|  v8:i64 = convert.Bitcast(Ptr64, I64) v7
+      #|  store {
+      #|  width: W64,
+      #|  value_type: I64,
+      #|  offset: 16,
+      #|  endianness: Little,
+      #|  trap: None,
+      #|} v4, v8 [memory=write]
+      #|  v9:i32 = i32.const 6
+      #|  v10:i32 = i32.const 3
+      #|  v11:i64 = call external @wasm.runtime.gc.alloc_struct_slow (ptr64, i32, ptr64, i32) -> (i64) [platform] v0, v9, v4, v10 [memory=read-write, trap, gc-safepoint] roots=[v3]
+      #|  v12:gcref64 = gcref.from_bits v11
+      #|  v13:ptr64 = stack.address stack1
+      #|  v14:ptr64 = gcref.address v3
+      #|  v15:i64 = convert.Bitcast(Ptr64, I64) v14
+      #|  store {
+      #|  width: W64,
+      #|  value_type: I64,
+      #|  offset: 0,
+      #|  endianness: Little,
+      #|  trap: None,
+      #|} v13, v15 [memory=write]
+      #|  v16:i64 = convert.I64ExtendI32(Unsigned) v1
+      #|  store {
+      #|  width: W64,
+      #|  value_type: I64,
+      #|  offset: 8,
+      #|  endianness: Little,
+      #|  trap: None,
+      #|} v13, v16 [memory=write]
+      #|  v17:i32 = i32.const 7
+      #|  v18:i32 = i32.const 2
+      #|  v19:i64 = call external @wasm.runtime.gc.alloc_array_from_values_slow (ptr64, i32, ptr64, i32) -> (i64) [platform] v0, v17, v13, v18 [memory=read-write, trap, gc-safepoint] roots=[v3, v12]
+      #|  v20:gcref64 = gcref.from_bits v19
+      #|  return v12, v20
+      #|}
+    ),
+  )
+}
+
+///|
+test "GC fixed allocation rejects values wider than one runtime word" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("gc_v128_allocation")
+  builder.add_param(I64) |> ignore
+  let vector = builder.add_param(V128)
+  builder.add_result(Ref)
+  let result = @wasm_milkir.struct_new(builder, 1, [vector])
+  builder.return_([result])
+  try lower_function(builder.finalize(), test_environment()) |> ignore catch {
+    error =>
+      inspect(
+        error,
+        content=(
+          #|UnsupportedOperation(
+          #|  block_id=0,
+          #|  instruction_id=0,
+          #|  message="the current Wasm GC runtime ABI cannot allocate v128 aggregate values",
+          #|)
+        ),
+      )
+  }
+}
+
+///|
 test "i31 get uses explicit null-trap control flow" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder("i31_get")
   builder.add_param(I64) |> ignore

@@ -796,6 +796,62 @@ fn lower_array_segment_init(
 }
 
 ///|
+fn emit_runtime_word_buffer(
+  context : @adapter.InstructionContext,
+  values : Array[@machv.Value],
+  types : Array[@machv.ValueType],
+) -> @machv.Value {
+  if values.is_empty() {
+    return context.emit(NullPtr, [], [Ptr64])[0]
+  }
+  let object = context.create_stack_object(values.length() * 8, 16)
+  let address = context.emit(StackAddress(object), [], [Ptr64])[0]
+  for index, value in values {
+    let word = encode_runtime_word(context, value, types[index])
+    context.emit(
+      Store(
+        @machv.StoreSpec::new(W64, I64, (index * 8).to_uint64(), Little, None),
+      ),
+      [address, word],
+      [],
+    )
+    |> ignore
+  }
+  address
+}
+
+///|
+fn lower_fixed_allocation(
+  context : @adapter.InstructionContext,
+  environment : Environment,
+  capability : String,
+  type_index : Int,
+) -> String? {
+  let types = context.operand_types()
+  for ty in types {
+    if !is_runtime_word_type(ty) {
+      return Some(
+        "the current Wasm GC runtime ABI cannot allocate v128 aggregate values",
+      )
+    }
+  }
+  let values = context.operands()
+  let buffer = emit_runtime_word_buffer(context, values, types)
+  let operands = context.environment()
+  operands.push(i32_immediate(context, type_index))
+  operands.push(buffer)
+  operands.push(i32_immediate(context, values.length()))
+  let word = emit_gc_allocation(context, environment, capability, operands, [
+    Ptr64,
+    I32,
+    Ptr64,
+    I32,
+  ])
+  finish_runtime_word(context, word)
+  None
+}
+
+///|
 fn lower_exception_query(
   context : @adapter.InstructionContext,
   environment : Environment,
@@ -1008,6 +1064,14 @@ fn lower_extension(
       lower_struct_new_default(context, environment, type_index)
       None
     }
+    StructNew(type_index) =>
+      lower_fixed_allocation(
+        context, environment, "gc.alloc_struct_slow", type_index,
+      )
+    ArrayNewFixed(type_index, _) =>
+      lower_fixed_allocation(
+        context, environment, "gc.alloc_array_from_values_slow", type_index,
+      )
     ArrayNewData(type_index, data_index) => {
       lower_array_segment_new(
         context, environment, "gc.array_new_data", type_index, data_index,
