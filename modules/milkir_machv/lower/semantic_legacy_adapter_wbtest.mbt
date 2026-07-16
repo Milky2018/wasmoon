@@ -586,7 +586,7 @@ fn emit_internal_overflow_arguments(
   call_conv : @abi.CallConventionLayout,
   integer_arguments : Array[@abi.VReg],
   float_arguments : Array[@abi.VReg],
-) -> Unit {
+) -> Int {
   let integer_overflow = if integer_arguments.length() >
     call_conv.user_arg_gprs.length() {
     integer_arguments.length() - call_conv.user_arg_gprs.length()
@@ -613,6 +613,7 @@ fn emit_internal_overflow_arguments(
     store.add_use(Virtual(float_arguments[call_conv.arg_fprs.length() + index]))
     block.add_inst(store)
   }
+  total_bytes
 }
 
 ///|
@@ -651,6 +652,7 @@ fn emit_internal_call(
   emit_internal_overflow_arguments(
     legacy_function, block, call_conv, integer_arguments, float_arguments,
   )
+  |> ignore
   let results = call_result_vregs(definitions)
   let instruction : @instr.Inst = match call.callee {
     Internal(symbol) => {
@@ -743,6 +745,93 @@ fn emit_internal_call(
         float_result_index += 1
       }
     }
+  }
+  add_adapter_call_clobbers(isa, instruction, false)
+  block.add_inst(instruction)
+}
+
+///|
+fn emit_internal_tail_call(
+  isa : @isa.ISA,
+  embedding_abi : @abi.EmbeddingABI,
+  legacy_function : @machv.Function,
+  block : @block.Block,
+  call : @semantic.SemanticCall,
+  operands : Array[@abi.Reg],
+  code_symbol_resolver : ((@semantic.CodeSymbol) -> @instr.CodeSymbol)?,
+) -> Unit raise SemanticLegacyAdapterError {
+  let indirect = call.callee is Indirect
+  let (callee, arguments) = if indirect {
+    if operands.length() < 2 {
+      raise UnsupportedOperation(
+        message="indirect tail call requires callee and context operands",
+      )
+    }
+    (operands[0], adapter_reg_slice(operands, 1))
+  } else {
+    let resolver = match code_symbol_resolver {
+      Some(resolver) => resolver
+      None =>
+        raise UnsupportedOperation(
+          message="direct internal tail call requires a code-symbol resolver",
+        )
+    }
+    let symbol = match call.callee {
+      Internal(symbol) => symbol
+      _ =>
+        raise UnsupportedOperation(
+          message="internal tail call requires an internal or indirect callee",
+        )
+    }
+    let target = legacy_function.new_vreg(Int)
+    let load = @instr.Inst(LoadCodeAddr(resolver(symbol)))
+    load.add_def(legacy_def(target))
+    block.add_inst(load)
+    (Virtual(target), operands.copy())
+  }
+  if arguments.is_empty() {
+    raise UnsupportedOperation(
+      message="internal tail call requires an execution environment",
+    )
+  }
+  let context = arguments[0]
+  let user_arguments = adapter_reg_slice(arguments, 1)
+  let (integer_arguments, float_arguments) = classify_internal_arguments(
+    user_arguments,
+  )
+  let call_conv = embedding_abi.call_conv
+  let stack_arg_bytes = emit_internal_overflow_arguments(
+    legacy_function, block, call_conv, integer_arguments, float_arguments,
+  )
+  let instruction = @instr.Inst(ReturnCallIndirect(stack_arg_bytes, 0))
+  instruction.add_use_fixed(callee, {
+    index: isa.scratch_reg_2_index(),
+    class: Int,
+  })
+  instruction.add_use_fixed(context, call_conv.context_arg)
+  let integer_register_count = if integer_arguments.length() <
+    call_conv.user_arg_gprs.length() {
+    integer_arguments.length()
+  } else {
+    call_conv.user_arg_gprs.length()
+  }
+  for index in 0..<integer_register_count {
+    instruction.add_use_fixed(
+      Virtual(integer_arguments[index]),
+      call_conv.user_arg_gprs[index],
+    )
+  }
+  let float_register_count = if float_arguments.length() <
+    call_conv.arg_fprs.length() {
+    float_arguments.length()
+  } else {
+    call_conv.arg_fprs.length()
+  }
+  for index in 0..<float_register_count {
+    instruction.add_use_fixed(Virtual(float_arguments[index]), {
+      index: call_conv.arg_fprs[index].index,
+      class: float_arguments[index].class,
+    })
   }
   add_adapter_call_clobbers(isa, instruction, false)
   block.add_inst(instruction)
@@ -888,6 +977,38 @@ fn semantic_call_overflow_bytes(
 }
 
 ///|
+fn semantic_call_temporary_stack_bytes(
+  function : @semantic.Function,
+  call : @semantic.SemanticCall,
+  operands : Array[@semantic.Value],
+  root_count : Int,
+  isa : @isa.ISA,
+  embedding_abi : @abi.EmbeddingABI?,
+  requires_hidden_safepoint_id : ((@semantic.ExternalSymbol) -> Bool)?,
+) -> Int raise SemanticLegacyAdapterError {
+  let hidden_safepoint = call_requires_hidden_safepoint_id(
+    call, requires_hidden_safepoint_id,
+  )
+  let overflow_bytes = semantic_call_overflow_bytes(
+    function, call, operands, isa, embedding_abi, hidden_safepoint,
+  )
+  if !hidden_safepoint {
+    return overflow_bytes
+  }
+  let root_bytes = root_count * 8
+  if root_bytes > 0 && overflow_bytes > 0 {
+    raise UnsupportedOperation(
+      message="precise GC roots overlap Platform overflow arguments",
+    )
+  }
+  if root_bytes > overflow_bytes {
+    root_bytes
+  } else {
+    overflow_bytes
+  }
+}
+
+///|
 fn maximum_semantic_temporary_stack_bytes(
   function : @semantic.Function,
   isa : @isa.ISA,
@@ -898,33 +1019,37 @@ fn maximum_semantic_temporary_stack_bytes(
   for block in function.blocks() {
     for instruction in function.block_instructions(block) {
       if function.instruction_operation(instruction) is Some(Call(call)) {
-        let hidden_safepoint = call_requires_hidden_safepoint_id(
-          call, requires_hidden_safepoint_id,
-        )
-        let bytes = semantic_call_overflow_bytes(
+        let bytes = semantic_call_temporary_stack_bytes(
           function,
           call,
           function.instruction_operands(instruction),
+          function.instruction_metadata(instruction).unwrap().live_gc_roots.length(),
           isa,
           embedding_abi,
-          hidden_safepoint,
+          requires_hidden_safepoint_id,
         )
         if bytes > maximum {
           maximum = bytes
         }
-        if hidden_safepoint {
-          let root_bytes = function.instruction_metadata(instruction).unwrap().live_gc_roots.length() *
-            8
-          if root_bytes > 0 && bytes > 0 {
-            raise UnsupportedOperation(
-              message="precise GC roots overlap Platform overflow arguments",
-            )
-          }
-          if root_bytes > maximum {
-            maximum = root_bytes
-          }
+      }
+    }
+    let terminator = function.block_terminator(block).unwrap()
+    match terminator.kind {
+      TailCall(call, operands) | NoReturnCall(call, operands) => {
+        let bytes = semantic_call_temporary_stack_bytes(
+          function,
+          call,
+          operands,
+          terminator.metadata.live_gc_roots.length(),
+          isa,
+          embedding_abi,
+          requires_hidden_safepoint_id,
+        )
+        if bytes > maximum {
+          maximum = bytes
         }
       }
+      _ => ()
     }
   }
   maximum
@@ -1217,6 +1342,8 @@ fn branch_edge_target(
 
 ///|
 fn set_semantic_terminator(
+  isa : @isa.ISA,
+  embedding_abi : @abi.EmbeddingABI?,
   function : @semantic.Function,
   semantic_block : @semantic.Block,
   legacy_block : @block.Block,
@@ -1224,6 +1351,8 @@ fn set_semantic_terminator(
   block_ids : Array[Int],
   legacy_function : @machv.Function,
   trap_payload : (@semantic.TrapReason) -> Int,
+  requires_hidden_safepoint_id : ((@semantic.ExternalSymbol) -> Bool)?,
+  code_symbol_resolver : ((@semantic.CodeSymbol) -> @instr.CodeSymbol)?,
 ) -> Unit raise SemanticLegacyAdapterError {
   let record = function.block_terminator(semantic_block).unwrap()
   let terminator = match record.kind {
@@ -1248,6 +1377,60 @@ fn set_semantic_terminator(
           legacy_use(require_legacy_value(function, values, result))
         }),
       )
+    TailCall(call, semantic_operands) => {
+      if !record.metadata.live_gc_roots.is_empty() {
+        raise UnsupportedOperation(
+          message="tail-call precise roots require caller stackmaps",
+        )
+      }
+      if call.protocol != Internal {
+        raise UnsupportedOperation(
+          message="only Internal tail calls are adapted",
+        )
+      }
+      let embedding_abi = match embedding_abi {
+        Some(embedding_abi) => embedding_abi
+        None =>
+          raise UnsupportedOperation(
+            message="internal tail call requires an embedding ABI",
+          )
+      }
+      let operands : Array[@abi.Reg] = []
+      for operand in semantic_operands {
+        operands.push(
+          legacy_use(require_legacy_value(function, values, operand)),
+        )
+      }
+      emit_internal_tail_call(
+        isa, embedding_abi, legacy_function, legacy_block, call, operands, code_symbol_resolver,
+      )
+      Trap(trap_payload(Unreachable))
+    }
+    NoReturnCall(call, semantic_operands) => {
+      let operands : Array[@abi.Reg] = []
+      for operand in semantic_operands {
+        operands.push(
+          legacy_use(require_legacy_value(function, values, operand)),
+        )
+      }
+      let roots : Array[@abi.Reg] = []
+      for root in record.metadata.live_gc_roots {
+        roots.push(legacy_use(require_legacy_value(function, values, root)))
+      }
+      append_semantic_call(
+        isa,
+        embedding_abi,
+        legacy_function,
+        legacy_block,
+        call,
+        operands,
+        [],
+        roots,
+        requires_hidden_safepoint_id,
+        code_symbol_resolver,
+      )
+      Trap(trap_payload(Unreachable))
+    }
     Trap(reason) => Trap(trap_payload(reason))
     _ =>
       raise UnsupportedOperation(
@@ -1311,7 +1494,8 @@ fn adapt_semantic_to_legacy(
       )
     }
     set_semantic_terminator(
-      function, block, legacy_block, values, block_ids, legacy, trap_payload,
+      isa, embedding_abi, function, block, legacy_block, values, block_ids, legacy,
+      trap_payload, requires_hidden_safepoint_id, code_symbol_resolver,
     )
   }
   legacy.verify_for_isa(isa) catch {
@@ -1923,5 +2107,162 @@ test "semantic environment fields require an embedding resolver" {
       )
   } noraise {
     _ => fail("expected unresolved environment field to be rejected")
+  }
+}
+
+///|
+test "semantic direct tail calls lower to legacy tail-call control" {
+  let builder = @semantic.FunctionBuilder::new(
+    "semantic_adapter_direct_tail",
+    Internal,
+    [Ptr64, I32],
+    [I64],
+  )
+  let call = @semantic.SemanticCall::new(
+    Internal(@semantic.CodeSymbol::new("wasm.func.4")),
+    @semantic.Signature::new([Ptr64, I32], [I64]),
+    Internal,
+    @semantic.CallBehavior::conservative(),
+  )
+  builder.tail_call(call, builder.parameters())
+  inspect(
+    adapt_semantic_to_legacy(
+      builder.finish(),
+      AMD64,
+      embedding_abi=Some(adapter_test_embedding_abi(AMD64)),
+      code_symbol_resolver=Some(fn(_) { CodeSymbol("wasm.func", 4) }),
+    ),
+    content=(
+      #|machv semantic_adapter_direct_tail(v0:int, v1:int) -> int {
+      #|block0:
+      #|    v2 = load_code_addr.wasm.func.4
+      #|    return_call_indirect(stack=0) -> 0 results v2
+      #|    trap #0
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "semantic indirect tail overflow precedes address-visible stack objects" {
+  let builder = @semantic.FunctionBuilder::new(
+    "semantic_adapter_indirect_tail",
+    Internal,
+    [Ptr64, Ptr64, I64, I64, I64, I64, I64, I64],
+    [],
+  )
+  let object = builder.create_stack_object(8, 8)
+  let object_address = builder.emit(StackAddress(object), [], [Ptr64])[0]
+  builder.emit(
+    Store(@semantic.StoreSpec::new(W64, I64, 0UL, Little, None)),
+    [object_address, builder.parameters()[2]],
+    [],
+  )
+  |> ignore
+  let call = @semantic.SemanticCall::new(
+    Indirect,
+    @semantic.Signature::new([Ptr64, I64, I64, I64, I64, I64, I64], []),
+    Internal,
+    @semantic.CallBehavior::conservative(),
+  )
+  builder.tail_call(call, builder.parameters())
+  let legacy = adapt_semantic_to_legacy(
+    builder.finish(),
+    AMD64,
+    embedding_abi=Some(adapter_test_embedding_abi(AMD64)),
+  )
+  inspect(
+    legacy,
+    content=(
+      #|machv semantic_adapter_indirect_tail(v0:int, v1:int, v2:int, v3:int, v4:int, v5:int, v6:int, v7:int) {
+      #|block0:
+      #|    v9 = mov rd, outgoing_args_base
+      #|    v8 = add #16 v9
+      #|    store_ptr.i64 +0 v8, v2
+      #|    str [sp+0] v7
+      #|    return_call_indirect(stack=16) -> 0 results v0
+      #|    trap #0
+      #|}
+      #|
+    ),
+  )
+  inspect(legacy.get_max_outgoing_args_size(), content="32")
+}
+
+///|
+test "semantic noreturn calls trap if the helper unexpectedly returns" {
+  let builder = @semantic.FunctionBuilder::new(
+    "semantic_adapter_noreturn",
+    Internal,
+    [Ptr64, I32],
+    [],
+  )
+  let call = @semantic.SemanticCall::new(
+    External(@semantic.ExternalSymbol::new("runtime.throw")),
+    @semantic.Signature::new([Ptr64, I32], []),
+    Platform,
+    @semantic.CallBehavior::new(ReadWrite, true, false, false, false),
+  )
+  builder.noreturn_call(call, builder.parameters())
+  inspect(
+    adapt_semantic_to_legacy(builder.finish(), AArch64, trap_payload=fn(
+      reason,
+    ) {
+      if reason is Unreachable {
+        99
+      } else {
+        0
+      }
+    }),
+    content=(
+      #|machv semantic_adapter_noreturn(v0:int, v1:int) {
+      #|block0:
+      #|    call_external[Foreign].runtime.throw(2) -> 0 results v0, v1
+      #|    trap #99
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+test "semantic tail calls reject precise roots without caller stackmaps" {
+  let builder = @semantic.FunctionBuilder::new(
+    "semantic_adapter_tail_roots",
+    Internal,
+    [Ptr64, GcRef64],
+    [],
+  )
+  let parameters = builder.parameters()
+  let call = @semantic.SemanticCall::new(
+    Internal(@semantic.CodeSymbol::new("wasm.func.5")),
+    @semantic.Signature::new([Ptr64, GcRef64], []),
+    Internal,
+    @semantic.CallBehavior::conservative(),
+  )
+  builder.tail_call_with_metadata(
+    call,
+    parameters,
+    @semantic.TerminatorMetadata::new(None, [parameters[1]]),
+  )
+  try
+    adapt_semantic_to_legacy(
+      builder.finish(),
+      AMD64,
+      embedding_abi=Some(adapter_test_embedding_abi(AMD64)),
+      code_symbol_resolver=Some(fn(_) { CodeSymbol("wasm.func", 5) }),
+    )
+    |> ignore
+  catch {
+    error =>
+      inspect(
+        error,
+        content=(
+          #|UnsupportedOperation(message="tail-call precise roots require caller stackmaps")
+        ),
+      )
+  } noraise {
+    _ => fail("expected tail-call roots to remain an explicit migration gap")
   }
 }
