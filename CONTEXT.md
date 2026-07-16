@@ -268,6 +268,10 @@ _Avoid_: compiler infrastructure, wasmoon_runtime as an implied module name
 The machine-target-owned encoder that turns allocated **Target VCode** into bytes and generic metadata.
 _Avoid_: MachV emitter, wasmoon JIT emitter, runtime fixup emitter
 
+**Machine Target Module**:
+The reusable module that owns one machine target's instruction representation, ABI policy, Target VCode lowering, frame planning, emission, and target verification as one vertical slice.
+_Avoid_: cross-target ISA union, shared multi-ISA emitter, target plugin
+
 **Wasmoon JIT**:
 The Wasmoon-specific native execution integration that resolves runtime symbols, executable memory, host calls, VMContext state, traps, and helper bindings.
 _Avoid_: generic emitter, compiler backend
@@ -399,6 +403,7 @@ _Avoid_: trusted cache decoder, aborting deserializer, installer-owned format pa
 - **MachV** values have no locations; **Allocated Location**, spill slots, ABI areas, and stack-pointer operations begin after **MachV Target Lowering**.
 - A **Target Emitter** produces generic relocation and metadata records; **Wasmoon JIT** resolves those records to Wasmoon runtime helpers and executable memory.
 - A **Target Emitter** builds bytes, relocations, pools, labels, and metadata in private storage and returns them only after the **Code Object Verifier** accepts the complete unlinked artifact; partial output and reachable emitter aborts are forbidden.
+- Each **Machine Target Module** is a vertical reusable slice; shared MachV, Target VCode, and register-allocation modules never import AArch64, AMD64, or any later concrete target.
 - Each public native compiler stage deterministically returns its first structured failure; **Wasmoon JIT** preserves that typed cause as a **JIT Pipeline Error**, while cancellation remains a separate outcome and human-readable rendering belongs at the presentation boundary.
 - Live JIT compilation and **Cwasm Artifact** loading converge at the **Unlinked Code Object** seam; persisted artifacts contain symbolic fixups and Wasmoon metadata but no MilkIR, MachV, Target VCode, resolved process address, or linked image.
 - A **Cwasm Artifact** is usable only when its **Artifact Compatibility Manifest** exactly matches the current runtime and request, except that the host CPU features may be a superset; cache mismatch recompiles, while explicit incompatible-artifact loading returns a structured failure.
