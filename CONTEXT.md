@@ -120,6 +120,10 @@ _Avoid_: ABI call sequence, fixed-register call, conditional helper fusion
 The ordered typed parameters, explicit argument values, and logical results required to invoke a **Semantic Call**, independent of native register, stack, or hidden return-area placement.
 _Avoid_: native call sequence, argument-register layout, stack-call frame
 
+**True Tail Call**:
+An internal **Semantic Call** that transfers control without growing the logical call stack, forwarding the current return contract directly to its callee.
+_Avoid_: call followed by return, platform tail-call promise, fresh return area
+
 **Call Protocol**:
 The target-neutral choice between an embedding-defined internal calling convention and the host platform calling convention for a MachV function entry or **Semantic Call**.
 _Avoid_: callee identity, physical ABI layout, opaque convention registry
@@ -237,6 +241,7 @@ _Avoid_: MachV emitter output, generic object format
 - Returns and **Semantic Calls** match their **MachV Signature** exactly, while effects, safepoints, and unwind behavior remain separate semantic summaries.
 - A **Logical Call Contract** includes an explicit ordinary `Ptr64` execution-environment value when the callee requires one, but never names or describes a product VMContext; hidden return-area pointers remain ABI details.
 - Every MachV function entry and **Semantic Call** explicitly selects `Internal` or `Platform` **Call Protocol**, independently of whether its callee is direct, indirect, or external.
+- A **True Tail Call** is an `Internal`-protocol MachV terminator whose logical results exactly match its enclosing function; target lowering must preserve bounded-stack behavior and forward the existing return area rather than falling back to a normal call.
 - Every successor-bearing MachV terminator uses a **MachV Edge**, so jumps, conditional branches, and multi-way branches pass block arguments through the same interface.
 - Every verified MachV function has one entry block with no incoming edge or block parameters, and every other block is reachable from it.
 - A **MachV Block** is created and resolved through its function, and every **MachV Edge** target must carry the same private function owner identity.
@@ -343,6 +348,7 @@ _Avoid_: MachV emitter output, generic object format
 - Function signatures previously carried ABI result locations, stack counts, and placement facts; resolved: a **MachV Signature** contains only ordered parameter and result types, while ABI facts belong downstream.
 - Execution context and return-area parameters were previously both treated as hidden ABI state; resolved: a required execution environment is an explicit logical `Ptr64` value, while a native return-area pointer is introduced only by ABI lowering.
 - Call ABI selection was previously inferred from call opcode or clobber class; resolved: function entries and calls carry an explicit finite **Call Protocol** without physical layout or runtime registry lookup.
+- Tail calls previously mixed stack byte counts with semantic termination; resolved: MachV preserves a strict **True Tail Call**, while target lowering proves ABI compatibility and rejects layouts it cannot implement without stack growth.
 - Conditional and multi-way branches previously carried only target ids, forcing producers to insert jump-only blocks for SSA arguments; resolved: every successor is a **MachV Edge** with explicit arguments.
 - Reachability and layout were previously conflated; resolved: a verified **MachV Control-Flow Graph** is rooted and fully reachable, while physical block layout is selected downstream.
 - Block identity previously used public integer ids and independently mutable block objects; resolved: a **MachV Block** is an opaque function-owned handle backed by the function's canonical dense block table.
