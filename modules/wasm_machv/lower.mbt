@@ -852,6 +852,35 @@ fn lower_fixed_allocation(
 }
 
 ///|
+fn lower_spill_locals(
+  context : @adapter.InstructionContext,
+  environment : Environment,
+) -> String? {
+  let types = context.operand_types()
+  for ty in types {
+    if !is_runtime_word_type(ty) {
+      return Some(
+        "the current Wasm exception ABI cannot spill v128 as one runtime word",
+      )
+    }
+  }
+  let values = context.operands()
+  let buffer = emit_runtime_word_buffer(context, values, types)
+  let operands = context.environment()
+  operands.push(buffer)
+  operands.push(i32_immediate(context, values.length()))
+  finish_runtime_call(
+    context,
+    environment,
+    "exception.spill_locals",
+    operands,
+    [Ptr64, Ptr64, I32],
+    @machv.CallBehavior::new(ReadWrite, false, false, false, false),
+  )
+  None
+}
+
+///|
 fn lower_exception_query(
   context : @adapter.InstructionContext,
   environment : Environment,
@@ -1096,6 +1125,7 @@ fn lower_extension(
       )
       None
     }
+    SpillLocalsForThrow(_) => lower_spill_locals(context, environment)
     TryTableEnd(handler_id) => {
       lower_try_table_end(context, environment, handler_id)
       None

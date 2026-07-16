@@ -686,3 +686,42 @@ test "exception queries use typed runtime capabilities" {
     ),
   )
 }
+
+///|
+test "exception local snapshots use address-visible runtime-word buffers" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("exception_spill")
+  builder.add_param(I64) |> ignore
+  let integer = builder.add_param(I64)
+  let reference = builder.add_param(Ref)
+  @wasm_milkir.spill_locals_for_throw(builder, [integer, reference])
+  builder.return_([])
+  inspect(
+    lower_function(builder.finalize(), test_environment()),
+    content=(
+      #|machv exception_spill [internal](v0:ptr64, v1:i64, v2:gcref64) -> () {
+      #|stack0: size=16, alignment=16
+      #|block0:
+      #|  v3:ptr64 = stack.address stack0
+      #|  store {
+      #|  width: W64,
+      #|  value_type: I64,
+      #|  offset: 0,
+      #|  endianness: Little,
+      #|  trap: None,
+      #|} v3, v1 [memory=write]
+      #|  v4:ptr64 = gcref.address v2
+      #|  v5:i64 = convert.Bitcast(Ptr64, I64) v4
+      #|  store {
+      #|  width: W64,
+      #|  value_type: I64,
+      #|  offset: 8,
+      #|  endianness: Little,
+      #|  trap: None,
+      #|} v3, v5 [memory=write]
+      #|  v6:i32 = i32.const 2
+      #|  call external @wasm.runtime.exception.spill_locals (ptr64, ptr64, i32) -> () [platform] v0, v3, v6 [memory=read-write]
+      #|  return
+      #|}
+    ),
+  )
+}
