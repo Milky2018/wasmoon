@@ -29,6 +29,17 @@ FORBIDDEN_IMPORT_PREFIXES = [
 
 LEGACY_MODULE = "Milky2018/machv_legacy"
 
+SEMANTIC_MACHV_FORBIDDEN_IMPORT_PREFIXES = [
+    "Milky2018/machv_legacy",
+    "Milky2018/regalloc",
+    "Milky2018/machv_regalloc",
+    "Milky2018/machv_emit",
+    "Milky2018/aarch64_target",
+    "Milky2018/x64_target",
+    "Milky2018/wasmoon",
+    "Milky2018/wasmoon_jit",
+]
+
 ALLOWED_LEGACY_IMPORT_MANIFESTS = {
     "modules/aarch64_target/moon.mod",
     "modules/aarch64_target/moon.pkg",
@@ -78,6 +89,14 @@ def is_forbidden_import(package: str) -> bool:
 def is_legacy_import(package: str) -> bool:
     module_name = package.split("@", 1)[0]
     return module_name == LEGACY_MODULE or module_name.startswith(LEGACY_MODULE + "/")
+
+
+def is_semantic_machv_forbidden_import(package: str) -> bool:
+    module_name = package.split("@", 1)[0]
+    return any(
+        module_name == prefix or module_name.startswith(prefix + "/")
+        for prefix in SEMANTIC_MACHV_FORBIDDEN_IMPORT_PREFIXES
+    )
 
 
 def legacy_import_is_allowed(path: Path) -> bool:
@@ -130,6 +149,26 @@ def main() -> int:
 
     for rel in sorted(ALLOWED_LEGACY_IMPORT_MANIFESTS - legacy_import_manifests):
         failures.append((ROOT / rel, 0, "stale legacy import allowlist entry"))
+
+    semantic_machv = ROOT / "modules/machv"
+    semantic_manifests = [semantic_machv / "moon.mod"]
+    semantic_manifests.extend(iter_package_manifests(semantic_machv))
+    for path in semantic_manifests:
+        text = path.read_text(encoding="utf-8")
+        for lineno, line in enumerate(text.splitlines(), start=1):
+            package = parse_imported_package(line)
+            if (
+                package is not None
+                and is_semantic_machv_forbidden_import(package)
+            ):
+                failures.append(
+                    (
+                        path,
+                        lineno,
+                        "semantic MachV forbidden dependency "
+                        f"{package}",
+                    )
+                )
 
     if failures:
         print("module boundary audit failed:", file=sys.stderr)

@@ -1,11 +1,611 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "Milky2018/machv"
 
+import {
+  "moonbitlang/core/debug",
+}
+
 // Values
 
 // Errors
+pub suberror MachVVerifyError {
+  EmptyFunction
+  InvalidFunction(message~ : String)
+  ForeignValue(value_id~ : Int)
+  ForeignBlock(block_id~ : Int)
+  ForeignInstruction(instruction_id~ : Int)
+  TerminatorAlreadySet(block_id~ : Int)
+  MissingTerminator(block_id~ : Int)
+  EntryHasBlockParameters
+  EntryHasPredecessor(block_id~ : Int)
+  UnreachableBlock(block_id~ : Int)
+  InvalidValueDefinition(value_id~ : Int)
+  DuplicateValueDefinition(value_id~ : Int)
+  DuplicateInstructionMembership(instruction_id~ : Int)
+  OrphanInstruction(instruction_id~ : Int)
+  RemovedValueUse(value_id~ : Int)
+  UseBeforeDefinition(value_id~ : Int, block_id~ : Int, instruction_id~ : Int)
+  NonDominatingUse(value_id~ : Int, defining_block_id~ : Int, use_block_id~ : Int)
+  InvalidOperation(block_id~ : Int, message~ : String)
+  InvalidInstruction(block_id~ : Int, instruction_id~ : Int, message~ : String)
+  InvalidEdge(block_id~ : Int, target_id~ : Int, message~ : String)
+  InvalidTerminator(block_id~ : Int, message~ : String)
+  InvalidSafepoint(block_id~ : Int, message~ : String)
+  MissingGcRoot(block_id~ : Int, instruction_id~ : Int, value_id~ : Int)
+  InvalidMetadata(block_id~ : Int, message~ : String)
+} derive(Eq, @debug.Debug)
+pub impl Show for MachVVerifyError
 
 // Types and methods
+pub(all) enum AccessWidth {
+  W8
+  W16
+  W32
+  W64
+  W128
+} derive(Eq, Hash, @debug.Debug)
+
+pub(all) enum AtomicRmwOp {
+  Add
+  Sub
+  And
+  Or
+  Xor
+  Exchange
+} derive(Eq, Hash, @debug.Debug)
+
+pub struct AtomicSpec {
+  width : AccessWidth
+  value_type : ValueType
+  offset : UInt64
+  endianness : Endianness
+  trap : TrapReason?
+} derive(Eq, Hash, @debug.Debug)
+pub fn AtomicSpec::new(AccessWidth, ValueType, UInt64, Endianness, TrapReason?) -> Self
+
+pub struct Block {
+  // private fields
+}
+pub impl Eq for Block
+pub impl Hash for Block
+pub impl @debug.Debug for Block
+
+pub struct CallBehavior {
+  memory : MemoryEffect
+  may_trap : Bool
+  may_unwind : Bool
+  gc_safepoint : Bool
+  cancellation_safepoint : Bool
+} derive(Eq, Hash, @debug.Debug)
+pub fn CallBehavior::conservative() -> Self
+pub fn CallBehavior::new(MemoryEffect, Bool, Bool, Bool, Bool) -> Self
+pub fn CallBehavior::semantics(Self) -> OperationSemantics
+
+pub(all) enum CallProtocol {
+  Internal
+  Platform
+} derive(Eq, Hash, @debug.Debug)
+
+pub(all) enum Callee {
+  Internal(CodeSymbol)
+  External(ExternalSymbol)
+  Indirect
+} derive(Eq, Hash, @debug.Debug)
+
+pub struct CleanupStats {
+  aliases_rewritten : Int
+  instructions_removed : Int
+} derive(Eq, @debug.Debug)
+
+pub struct CodeSymbol {
+  name : String
+} derive(Eq, Hash, @debug.Debug)
+pub fn CodeSymbol::new(String) -> Self
+
+pub(all) enum ConversionMode {
+  Trapping
+  Saturating
+} derive(Eq, Hash, @debug.Debug)
+
+pub(all) enum ConversionOp {
+  I32WrapI64
+  I64ExtendI32(Signedness)
+  F32DemoteF64
+  F64PromoteF32
+  FloatToInt(FloatType, IntegerType, Signedness, ConversionMode)
+  IntToFloat(IntegerType, FloatType, Signedness)
+  SignExtend(IntegerType, AccessWidth)
+  Bitcast(ValueType, ValueType)
+} derive(Eq, Hash, @debug.Debug)
+
+pub struct DataSymbol {
+  name : String
+} derive(Eq, Hash, @debug.Debug)
+pub fn DataSymbol::new(String) -> Self
+
+pub struct Edge {
+  target : Block
+  arguments : Array[Value]
+} derive(Eq, @debug.Debug)
+
+pub(all) enum Endianness {
+  Little
+  Big
+} derive(Eq, Hash, @debug.Debug)
+
+pub struct ExternalSymbol {
+  name : String
+} derive(Eq, Hash, @debug.Debug)
+pub fn ExternalSymbol::new(String) -> Self
+
+pub(all) enum FloatBinaryOp {
+  Add
+  Sub
+  Mul
+  Div
+  Min
+  Max
+  CopySign
+} derive(Eq, Hash, @debug.Debug)
+
+pub(all) enum FloatComparison {
+  Equal
+  NotEqual
+  LessThan
+  LessOrEqual
+  GreaterThan
+  GreaterOrEqual
+  Ordered
+  Unordered
+} derive(Eq, Hash, @debug.Debug)
+
+pub(all) enum FloatTernaryOp {
+  FusedMultiplyAdd
+  FusedNegatedMultiplyAdd
+  FusedMultiplySubtract
+  FusedNegatedMultiplySubtract
+} derive(Eq, Hash, @debug.Debug)
+
+pub(all) enum FloatType {
+  F32
+  F64
+} derive(Eq, Hash, @debug.Debug)
+
+pub(all) enum FloatUnaryOp {
+  Negate
+  Absolute
+  SquareRoot
+  Ceil
+  Floor
+  Truncate
+  Nearest
+} derive(Eq, Hash, @debug.Debug)
+
+pub struct Function {
+  // private fields
+}
+pub fn Function::block_count(Self) -> Int
+pub fn Function::block_index(Self, Block) -> Int?
+pub fn Function::block_instructions(Self, Block) -> Array[Instruction]
+pub fn Function::block_parameters(Self, Block) -> Array[Value]
+pub fn Function::block_terminator(Self, Block) -> TerminatorRecord?
+pub fn Function::blocks(Self) -> Array[Block]
+pub fn Function::instruction_count(Self) -> Int
+pub fn Function::instruction_index(Self, Instruction) -> Int?
+pub fn Function::instruction_metadata(Self, Instruction) -> InstructionMetadata?
+pub fn Function::instruction_operands(Self, Instruction) -> Array[Value]
+pub fn Function::instruction_operation(Self, Instruction) -> Operation?
+pub fn Function::instruction_results(Self, Instruction) -> Array[Value]
+pub fn Function::name(Self) -> String
+pub fn Function::parameters(Self) -> Array[Value]
+pub fn Function::print(Self) -> String
+pub fn Function::protocol(Self) -> CallProtocol
+pub fn Function::run_mandatory_cleanup(Self) -> CleanupStats raise MachVVerifyError
+pub fn Function::signature(Self) -> Signature
+pub fn Function::value_count(Self) -> Int
+pub fn Function::value_index(Self, Value) -> Int?
+pub fn Function::value_type(Self, Value) -> ValueType?
+pub fn Function::verify(Self) -> Unit raise MachVVerifyError
+pub impl Show for Function
+pub impl @debug.Debug for Function
+
+pub struct FunctionBuilder {
+  // private fields
+}
+pub fn FunctionBuilder::block_parameters(Self, Block) -> Array[Value]
+pub fn FunctionBuilder::branch(Self, Value, Block, Array[Value], Block, Array[Value]) -> Unit
+pub fn FunctionBuilder::create_block(Self, Array[ValueType]) -> Block
+pub fn FunctionBuilder::current_block(Self) -> Block
+pub fn FunctionBuilder::emit(Self, Operation, Array[Value], Array[ValueType]) -> Array[Value]
+pub fn FunctionBuilder::emit_with_metadata(Self, Operation, Array[Value], Array[ValueType], InstructionMetadata) -> Array[Value]
+pub fn FunctionBuilder::entry_block(Self) -> Block
+pub fn FunctionBuilder::finish(Self) -> Function raise MachVVerifyError
+pub fn FunctionBuilder::jump(Self, Block, Array[Value]) -> Unit
+pub fn FunctionBuilder::new(String, CallProtocol, Array[ValueType], Array[ValueType]) -> Self
+pub fn FunctionBuilder::parameters(Self) -> Array[Value]
+pub fn FunctionBuilder::return_(Self, Array[Value]) -> Unit
+pub fn FunctionBuilder::set_terminator_source(Self, SourceLocation) -> Unit
+pub fn FunctionBuilder::switch(Self, Value, Array[(UInt64, Block, Array[Value])], Block, Array[Value]) -> Unit
+pub fn FunctionBuilder::switch_to_block(Self, Block) -> Unit
+pub fn FunctionBuilder::tail_call(Self, SemanticCall, Array[Value]) -> Unit
+pub fn FunctionBuilder::tail_call_with_metadata(Self, SemanticCall, Array[Value], TerminatorMetadata) -> Unit
+pub fn FunctionBuilder::trap(Self, TrapReason) -> Unit
+
+pub struct Instruction {
+  // private fields
+}
+pub impl Eq for Instruction
+pub impl Hash for Instruction
+pub impl @debug.Debug for Instruction
+
+pub struct InstructionMetadata {
+  source : SourceLocation?
+  live_gc_roots : Array[Value]
+} derive(Eq, @debug.Debug)
+pub fn InstructionMetadata::empty() -> Self
+pub fn InstructionMetadata::new(SourceLocation?, Array[Value]) -> Self
+
+pub(all) enum IntBinaryOp {
+  Add
+  Sub
+  Mul
+  SignedDiv
+  UnsignedDiv
+  SignedRem
+  UnsignedRem
+  And
+  Or
+  Xor
+  ShiftLeft
+  SignedShiftRight
+  UnsignedShiftRight
+  RotateLeft
+  RotateRight
+} derive(Eq, Hash, @debug.Debug)
+
+pub(all) enum IntComparison {
+  Equal
+  NotEqual
+  SignedLessThan
+  SignedLessOrEqual
+  SignedGreaterThan
+  SignedGreaterOrEqual
+  UnsignedLessThan
+  UnsignedLessOrEqual
+  UnsignedGreaterThan
+  UnsignedGreaterOrEqual
+} derive(Eq, Hash, @debug.Debug)
+
+pub(all) enum IntOverflowOp {
+  Add(Signedness)
+  Sub(Signedness)
+  Mul(Signedness)
+} derive(Eq, Hash, @debug.Debug)
+
+pub(all) enum IntUnaryOp {
+  Not
+  CountLeadingZeros
+  CountTrailingZeros
+  PopulationCount
+} derive(Eq, Hash, @debug.Debug)
+
+pub(all) enum IntegerType {
+  I32
+  I64
+} derive(Eq, Hash, @debug.Debug)
+
+pub(all) enum LoadExtension {
+  None
+  Signed
+  Unsigned
+} derive(Eq, Hash, @debug.Debug)
+
+pub struct LoadSpec {
+  width : AccessWidth
+  extension : LoadExtension
+  result_type : ValueType
+  offset : UInt64
+  endianness : Endianness
+  trap : TrapReason?
+} derive(Eq, Hash, @debug.Debug)
+pub fn LoadSpec::new(AccessWidth, LoadExtension, ValueType, UInt64, Endianness, TrapReason?) -> Self
+
+pub(all) enum MemoryEffect {
+  None
+  Read
+  Write
+  ReadWrite
+} derive(Eq, Hash, @debug.Debug)
+
+pub(all) enum Operation {
+  I32Const(UInt)
+  I64Const(UInt64)
+  F32Const(UInt)
+  F64Const(UInt64)
+  V128Const(UInt64, UInt64)
+  NullPtr
+  NullGcRef
+  CodeAddress(CodeSymbol)
+  ExternalAddress(ExternalSymbol)
+  DataAddress(DataSymbol)
+  Copy
+  Select
+  GcRefAddress
+  PointerOffset
+  ReferenceCompare(ReferenceComparison)
+  IntUnary(IntUnaryOp)
+  IntBinary(IntBinaryOp)
+  IntWithOverflow(IntOverflowOp)
+  IntCompare(IntComparison)
+  FloatUnary(FloatUnaryOp)
+  FloatBinary(FloatBinaryOp)
+  FloatTernary(FloatTernaryOp)
+  FloatCompare(FloatComparison)
+  Convert(ConversionOp)
+  Load(LoadSpec)
+  Store(StoreSpec)
+  AtomicLoad(AtomicSpec)
+  AtomicStore(AtomicSpec)
+  AtomicRmw(AtomicSpec, AtomicRmwOp)
+  AtomicCompareExchange(AtomicSpec)
+  AtomicFence
+  Vector(VectorOp)
+  VectorLoad(VectorLoadSpec)
+  VectorStoreLane(VectorStoreLaneSpec)
+  Call(SemanticCall)
+  Safepoint(SafepointKind)
+} derive(Eq, @debug.Debug)
+pub fn Operation::semantics(Self) -> OperationSemantics
+
+pub struct OperationSemantics {
+  memory : MemoryEffect
+  may_trap : Bool
+  may_unwind : Bool
+  gc_safepoint : Bool
+  cancellation_safepoint : Bool
+} derive(Eq, Hash, @debug.Debug)
+pub fn OperationSemantics::must_preserve_if_unused(Self) -> Bool
+pub fn OperationSemantics::pure() -> Self
+
+pub(all) enum ReferenceComparison {
+  Equal
+  NotEqual
+} derive(Eq, Hash, @debug.Debug)
+
+pub(all) enum SafepointKind {
+  Gc
+  Cancellation
+  GcAndCancellation
+} derive(Eq, Hash, @debug.Debug)
+
+pub struct SemanticCall {
+  callee : Callee
+  signature : Signature
+  protocol : CallProtocol
+  behavior : CallBehavior
+} derive(Eq, Hash, @debug.Debug)
+pub fn SemanticCall::new(Callee, Signature, CallProtocol, CallBehavior) -> Self
+
+pub struct Signature {
+  params : Array[ValueType]
+  results : Array[ValueType]
+} derive(Eq, Hash, @debug.Debug)
+pub fn Signature::new(Array[ValueType], Array[ValueType]) -> Self
+
+pub(all) enum Signedness {
+  Signed
+  Unsigned
+} derive(Eq, Hash, @debug.Debug)
+
+pub struct SourceLocation {
+  file : String
+  line : Int
+  column : Int
+} derive(Eq, Hash, @debug.Debug)
+pub fn SourceLocation::new(String, Int, Int) -> Self
+
+pub struct StoreSpec {
+  width : AccessWidth
+  value_type : ValueType
+  offset : UInt64
+  endianness : Endianness
+  trap : TrapReason?
+} derive(Eq, Hash, @debug.Debug)
+pub fn StoreSpec::new(AccessWidth, ValueType, UInt64, Endianness, TrapReason?) -> Self
+
+pub struct SwitchCase {
+  bits : UInt64
+  edge : Edge
+} derive(Eq, @debug.Debug)
+
+pub(all) enum Terminator {
+  Jump(Edge)
+  Branch(Value, Edge, Edge)
+  Switch(Value, Array[SwitchCase], Edge)
+  Return(Array[Value])
+  TailCall(SemanticCall, Array[Value])
+  Trap(TrapReason)
+} derive(Eq, @debug.Debug)
+
+pub struct TerminatorMetadata {
+  source : SourceLocation?
+  live_gc_roots : Array[Value]
+} derive(Eq, @debug.Debug)
+pub fn TerminatorMetadata::empty() -> Self
+pub fn TerminatorMetadata::new(SourceLocation?, Array[Value]) -> Self
+
+pub struct TerminatorRecord {
+  kind : Terminator
+  metadata : TerminatorMetadata
+} derive(Eq, @debug.Debug)
+
+pub(all) enum TrapReason {
+  Unreachable
+  IntegerDivisionByZero
+  IntegerOverflow
+  InvalidConversionToInteger
+  MemoryOutOfBounds
+  IndirectCallTypeMismatch
+  NullReference
+  StackOverflow
+  User(Int)
+} derive(Eq, Hash, @debug.Debug)
+
+pub struct Value {
+  // private fields
+}
+pub impl Eq for Value
+pub impl Hash for Value
+pub impl @debug.Debug for Value
+
+pub(all) enum ValueType {
+  I32
+  I64
+  F32
+  F64
+  V128
+  Ptr64
+  GcRef64
+} derive(Eq, Hash, @debug.Debug)
+pub impl Show for ValueType
+
+pub(all) enum VectorBitwiseOp {
+  Not
+  And
+  Or
+  Xor
+  AndNot
+  BitSelect
+} derive(Eq, Hash, @debug.Debug)
+
+pub(all) enum VectorConversionOp {
+  ExtendLow(VectorLane, Signedness)
+  ExtendHigh(VectorLane, Signedness)
+  Narrow(VectorLane, Signedness)
+  FloatToInt(VectorLane, Signedness, ConversionMode)
+  IntToFloat(VectorLane, Signedness)
+  PromoteLowF32x4
+  DemoteZeroF64x2
+} derive(Eq, Hash, @debug.Debug)
+
+pub(all) enum VectorFloatBinaryOp {
+  Add
+  Sub
+  Mul
+  Div
+  Min
+  Max
+  PseudoMin
+  PseudoMax
+} derive(Eq, Hash, @debug.Debug)
+
+pub(all) enum VectorFloatComparison {
+  Equal
+  NotEqual
+  LessThan
+  LessOrEqual
+  GreaterThan
+  GreaterOrEqual
+} derive(Eq, Hash, @debug.Debug)
+
+pub(all) enum VectorFloatUnaryOp {
+  Absolute
+  Negate
+  SquareRoot
+  Ceil
+  Floor
+  Truncate
+  Nearest
+} derive(Eq, Hash, @debug.Debug)
+
+pub(all) enum VectorIntBinaryOp {
+  Add
+  Sub
+  Mul
+  Min(Signedness)
+  Max(Signedness)
+  AverageUnsigned
+  SaturatingAdd(Signedness)
+  SaturatingSub(Signedness)
+} derive(Eq, Hash, @debug.Debug)
+
+pub(all) enum VectorIntComparison {
+  Equal
+  NotEqual
+  LessThan(Signedness)
+  LessOrEqual(Signedness)
+  GreaterThan(Signedness)
+  GreaterOrEqual(Signedness)
+} derive(Eq, Hash, @debug.Debug)
+
+pub(all) enum VectorIntShiftOp {
+  Left
+  Right(Signedness)
+} derive(Eq, Hash, @debug.Debug)
+
+pub(all) enum VectorIntUnaryOp {
+  Absolute
+  Negate
+  PopulationCount
+} derive(Eq, Hash, @debug.Debug)
+
+pub(all) enum VectorLane {
+  I8x16
+  I16x8
+  I32x4
+  I64x2
+  F32x4
+  F64x2
+} derive(Eq, Hash, @debug.Debug)
+
+pub(all) enum VectorLoadKind {
+  Splat(VectorLane)
+  Extend(VectorLane, Signedness)
+  Zero(AccessWidth)
+  Lane(VectorLane, Int)
+} derive(Eq, Hash, @debug.Debug)
+
+pub struct VectorLoadSpec {
+  kind : VectorLoadKind
+  offset : UInt64
+  endianness : Endianness
+  trap : TrapReason?
+} derive(Eq, Hash, @debug.Debug)
+pub fn VectorLoadSpec::new(VectorLoadKind, UInt64, Endianness, TrapReason?) -> Self
+
+pub(all) enum VectorOp {
+  Splat(VectorLane)
+  ExtractLane(VectorLane, Int, Signedness?)
+  ReplaceLane(VectorLane, Int)
+  Shuffle(FixedArray[Int])
+  Swizzle
+  Bitwise(VectorBitwiseOp)
+  IntUnary(VectorLane, VectorIntUnaryOp)
+  IntBinary(VectorLane, VectorIntBinaryOp)
+  IntShift(VectorLane, VectorIntShiftOp)
+  IntCompare(VectorLane, VectorIntComparison)
+  FloatUnary(VectorLane, VectorFloatUnaryOp)
+  FloatBinary(VectorLane, VectorFloatBinaryOp)
+  FloatTernary(VectorLane, FloatTernaryOp)
+  FloatCompare(VectorLane, VectorFloatComparison)
+  Predicate(VectorPredicateOp)
+  Convert(VectorConversionOp)
+} derive(Eq, @debug.Debug)
+
+pub(all) enum VectorPredicateOp {
+  AnyTrue
+  AllTrue(VectorLane)
+  BitMask(VectorLane)
+} derive(Eq, Hash, @debug.Debug)
+
+pub struct VectorStoreLaneSpec {
+  lane : VectorLane
+  lane_index : Int
+  offset : UInt64
+  endianness : Endianness
+  trap : TrapReason?
+} derive(Eq, Hash, @debug.Debug)
+pub fn VectorStoreLaneSpec::new(VectorLane, Int, UInt64, Endianness, TrapReason?) -> Self
 
 // Type aliases
 
