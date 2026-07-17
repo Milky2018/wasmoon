@@ -754,6 +754,7 @@ fn lower_instruction(
   let selected = match operation {
     I32Const(bits) => Some(LoadConstant(W32, bits.to_uint64()))
     I64Const(bits) => Some(LoadConstant(W64, bits))
+    V128Const(low, high) => Some(LoadVectorConstant(low, high))
     NullPtr => Some(LoadNull(Ptr64))
     NullGcRef => Some(LoadNull(GcRef64))
     CodeAddress(symbol) => Some(LoadAddress(Code(symbol)))
@@ -766,7 +767,10 @@ fn lower_instruction(
     Copy if result_types.length() == 1 => Some(Move(result_types[0]))
     GcRefAddress => Some(CarrierMove(GcRef64, Ptr64))
     GcRefFromBits => Some(CarrierMove(I64, GcRef64))
-    Select if result_types.get(0) is Some(ty) && ty != V128 => Some(Select(ty))
+    Select if result_types.get(0) is Some(V128) => Some(VectorSelect)
+    Select if result_types.get(0) is Some(ty) => Some(Select(ty))
+    Vector(Splat(lane)) => Some(VectorSplat(lane))
+    Vector(Bitwise(operation)) => Some(VectorBitwise(operation))
     ReferenceCompare(comparison) => {
       let operand_type = match semantic_operands.get(0) {
         Some(value) => function.value_type(value)

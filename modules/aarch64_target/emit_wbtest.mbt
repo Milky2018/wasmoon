@@ -226,6 +226,203 @@ test "AArch64 overflow arithmetic encodes every width and signedness" {
 }
 
 ///|
+test "AArch64 vector foundation encodings preserve lanes and aliases" {
+  let buffer = CodeBuffer::new()
+  let int0 = @vcode.PhysicalReg::new(0, Int)
+  let int1 = @vcode.PhysicalReg::new(1, Int)
+  let vector0 = @vcode.PhysicalReg::new(0, FpVector)
+  let vector1 = @vcode.PhysicalReg::new(1, FpVector)
+  let vector2 = @vcode.PhysicalReg::new(2, FpVector)
+  let vector3 = @vcode.PhysicalReg::new(3, FpVector)
+  emit_vector_constant(buffer, vector3, 0UL, 0UL)
+  emit_vector_constant(
+    buffer, vector3, 0x0706050403020100UL, 0x0F0E0D0C0B0A0908UL,
+  )
+  let integer_lanes : Array[@semantic.VectorLane] = [I8x16, I16x8, I32x4, I64x2]
+  for lane in integer_lanes {
+    emit_vector_splat(buffer, lane, int0, vector1)
+  }
+  let float_lanes : Array[@semantic.VectorLane] = [F32x4, F64x2]
+  for lane in float_lanes {
+    emit_vector_splat(buffer, lane, vector0, vector1)
+  }
+  emit_vector_bitwise(buffer, Not, vector0, vector0, vector0, vector3)
+  emit_vector_bitwise(buffer, And, vector0, vector1, vector1, vector3)
+  emit_vector_bitwise(buffer, Or, vector0, vector1, vector1, vector3)
+  emit_vector_bitwise(buffer, Xor, vector0, vector1, vector1, vector3)
+  emit_vector_bitwise(buffer, AndNot, vector0, vector1, vector1, vector3)
+  emit_vector_bitwise(buffer, BitSelect, vector0, vector1, vector2, vector2)
+  emit_vector_bitwise(buffer, BitSelect, vector0, vector1, vector2, vector1)
+  emit_vector_bitwise(buffer, BitSelect, vector0, vector1, vector2, vector3)
+  emit_vector_select(buffer, int0, vector1, vector2, vector1)
+  emit_vector_select(buffer, int1, vector1, vector2, vector2)
+  emit_vector_select(buffer, int0, vector1, vector2, vector3)
+  debug_inspect(
+    buffer.code,
+    content=(
+      #|[
+      #|  0x03,
+      #|  0xe4,
+      #|  0x00,
+      #|  0x6f,
+      #|  0x03,
+      #|  0xe4,
+      #|  0x00,
+      #|  0x6f,
+      #|  0x10,
+      #|  0x20,
+      #|  0x80,
+      #|  0xd2,
+      #|  0x50,
+      #|  0x60,
+      #|  0xa0,
+      #|  0xf2,
+      #|  0x90,
+      #|  0xa0,
+      #|  0xc0,
+      #|  0xf2,
+      #|  0xd0,
+      #|  0xe0,
+      #|  0xe0,
+      #|  0xf2,
+      #|  0x03,
+      #|  0x1e,
+      #|  0x08,
+      #|  0x4e,
+      #|  0x10,
+      #|  0x21,
+      #|  0x81,
+      #|  0xd2,
+      #|  0x50,
+      #|  0x61,
+      #|  0xa1,
+      #|  0xf2,
+      #|  0x90,
+      #|  0xa1,
+      #|  0xc1,
+      #|  0xf2,
+      #|  0xd0,
+      #|  0xe1,
+      #|  0xe1,
+      #|  0xf2,
+      #|  0x03,
+      #|  0x1e,
+      #|  0x18,
+      #|  0x4e,
+      #|  0x01,
+      #|  0x0c,
+      #|  0x01,
+      #|  0x4e,
+      #|  0x01,
+      #|  0x0c,
+      #|  0x02,
+      #|  0x4e,
+      #|  0x01,
+      #|  0x0c,
+      #|  0x04,
+      #|  0x4e,
+      #|  0x01,
+      #|  0x0c,
+      #|  0x08,
+      #|  0x4e,
+      #|  0x01,
+      #|  0x04,
+      #|  0x04,
+      #|  0x4e,
+      #|  0x01,
+      #|  0x04,
+      #|  0x08,
+      #|  0x4e,
+      #|  0x03,
+      #|  0x58,
+      #|  0x20,
+      #|  0x6e,
+      #|  0x03,
+      #|  0x1c,
+      #|  0x21,
+      #|  0x4e,
+      #|  0x03,
+      #|  0x1c,
+      #|  0xa1,
+      #|  0x4e,
+      #|  0x03,
+      #|  0x1c,
+      #|  0x21,
+      #|  0x6e,
+      #|  0x03,
+      #|  0x1c,
+      #|  0x61,
+      #|  0x4e,
+      #|  0x02,
+      #|  0x1c,
+      #|  0x61,
+      #|  0x6e,
+      #|  0x01,
+      #|  0x1c,
+      #|  0x21,
+      #|  0x6e,
+      #|  0x21,
+      #|  0x1c,
+      #|  0x62,
+      #|  0x4e,
+      #|  0x21,
+      #|  0x1c,
+      #|  0x20,
+      #|  0x6e,
+      #|  0x03,
+      #|  0x1c,
+      #|  0x21,
+      #|  0x6e,
+      #|  0x63,
+      #|  0x1c,
+      #|  0x22,
+      #|  0x4e,
+      #|  0x63,
+      #|  0x1c,
+      #|  0x21,
+      #|  0x6e,
+      #|  0x21,
+      #|  0x1c,
+      #|  0xa1,
+      #|  0x4e,
+      #|  0x40,
+      #|  0x00,
+      #|  0x00,
+      #|  0x35,
+      #|  0x41,
+      #|  0x1c,
+      #|  0xa2,
+      #|  0x4e,
+      #|  0x42,
+      #|  0x1c,
+      #|  0xa2,
+      #|  0x4e,
+      #|  0x41,
+      #|  0x00,
+      #|  0x00,
+      #|  0x34,
+      #|  0x22,
+      #|  0x1c,
+      #|  0xa1,
+      #|  0x4e,
+      #|  0x43,
+      #|  0x1c,
+      #|  0xa2,
+      #|  0x4e,
+      #|  0x40,
+      #|  0x00,
+      #|  0x00,
+      #|  0x34,
+      #|  0x23,
+      #|  0x1c,
+      #|  0xa1,
+      #|  0x4e,
+      #|]
+    ),
+  )
+}
+
+///|
 test "AAPCS64 platform call layout preserves mixed overflow order" {
   let layout = platform_call_layout([
     I64,

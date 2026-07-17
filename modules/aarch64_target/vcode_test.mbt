@@ -87,6 +87,42 @@ test "AArch64 verifier rejects an invalid 32-bit constant" {
 }
 
 ///|
+test "AArch64 verifier rejects a vector splat with the wrong scalar bank" {
+  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
+    "bad_vector_splat",
+    [I64],
+  )
+  let entry = builder.entry_block()
+  builder.append_body(
+    entry,
+    VectorSplat(F64x2),
+    [@vcode.Input::any(builder.parameter(0))],
+    [@vcode.Output::any(V128)],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  builder.set_terminator(
+    entry,
+    Return,
+    [],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  try verify_vcode(builder.finish()) catch {
+    error =>
+      inspect(
+        error,
+        content="InvalidInstruction(instruction=i0, message=\"invalid use value type\")",
+      )
+  } noraise {
+    _ => fail("expected the invalid vector splat to be rejected")
+  }
+}
+
+///|
 fn test_platform_call_clobbers() -> Array[@vcode.PhysicalReg] {
   let clobbers : Array[@vcode.PhysicalReg] = []
   for index in 0..<18 {

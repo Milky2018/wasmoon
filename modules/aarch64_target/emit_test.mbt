@@ -115,6 +115,139 @@ test "AArch64 pipeline emits multi-result overflow arithmetic" {
 }
 
 ///|
+test "AArch64 pipeline emits allocated vector foundation operations" {
+  let builder = @semantic.FunctionBuilder::new(
+    "emitted_vector_foundation",
+    Platform,
+    [I32, V128, V128, V128],
+    [V128],
+  )
+  let parameters = builder.parameters()
+  let constant = builder.emit(
+      V128Const(0x0706050403020100UL, 0x0F0E0D0C0B0A0908UL),
+      [],
+      [V128],
+    )[0]
+  let selected_bits = builder.emit(
+      Vector(Bitwise(BitSelect)),
+      [parameters[1], parameters[2], constant],
+      [V128],
+    )[0]
+  let selected = builder.emit(
+      Select,
+      [parameters[0], selected_bits, parameters[3]],
+      [V128],
+    )[0]
+  builder.return_([selected])
+  let function = lower(builder.finish(), test_lowering_context())
+  let allocation = allocate(function)
+  let frame = plan_frame(function, allocation)
+  debug_inspect(
+    emit(function, allocation, frame),
+    content=(
+      #|{
+      #|  architecture: AArch64,
+      #|  code: [
+      #|    0xe1,
+      #|    0x03,
+      #|    0x00,
+      #|    0x2a,
+      #|    0x03,
+      #|    0x1c,
+      #|    0xa0,
+      #|    0x4e,
+      #|    0x20,
+      #|    0x1c,
+      #|    0xa1,
+      #|    0x4e,
+      #|    0x41,
+      #|    0x1c,
+      #|    0xa2,
+      #|    0x4e,
+      #|    0x02,
+      #|    0xe4,
+      #|    0x00,
+      #|    0x6f,
+      #|    0x10,
+      #|    0x20,
+      #|    0x80,
+      #|    0xd2,
+      #|    0x50,
+      #|    0x60,
+      #|    0xa0,
+      #|    0xf2,
+      #|    0x90,
+      #|    0xa0,
+      #|    0xc0,
+      #|    0xf2,
+      #|    0xd0,
+      #|    0xe0,
+      #|    0xe0,
+      #|    0xf2,
+      #|    0x02,
+      #|    0x1e,
+      #|    0x08,
+      #|    0x4e,
+      #|    0x10,
+      #|    0x21,
+      #|    0x81,
+      #|    0xd2,
+      #|    0x50,
+      #|    0x61,
+      #|    0xa1,
+      #|    0xf2,
+      #|    0x90,
+      #|    0xa1,
+      #|    0xc1,
+      #|    0xf2,
+      #|    0xd0,
+      #|    0xe1,
+      #|    0xe1,
+      #|    0xf2,
+      #|    0x02,
+      #|    0x1e,
+      #|    0x18,
+      #|    0x4e,
+      #|    0x64,
+      #|    0x1c,
+      #|    0x20,
+      #|    0x6e,
+      #|    0x84,
+      #|    0x1c,
+      #|    0x22,
+      #|    0x4e,
+      #|    0x84,
+      #|    0x1c,
+      #|    0x20,
+      #|    0x6e,
+      #|    0x20,
+      #|    0x1c,
+      #|    0xa1,
+      #|    0x4e,
+      #|    0x41,
+      #|    0x00,
+      #|    0x00,
+      #|    0x34,
+      #|    0x80,
+      #|    0x1c,
+      #|    0xa4,
+      #|    0x4e,
+      #|    0xc0,
+      #|    0x03,
+      #|    0x5f,
+      #|    0xd6,
+      #|  ],
+      #|  relocations: [],
+      #|  sources: [],
+      #|  traps: [],
+      #|  safepoints: [],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
 test "AArch64 pipeline emits addresses inside the semantic stack-object area" {
   let builder = @semantic.FunctionBuilder::new(
     "emitted_stack_addresses",

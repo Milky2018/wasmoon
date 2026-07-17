@@ -156,6 +156,7 @@ pub(all) enum AArch64Inst {
   OutgoingReg(@semantic.ValueType, @vcode.PhysicalReg)
   KeepAlive(@semantic.ValueType)
   LoadConstant(GprWidth, UInt64)
+  LoadVectorConstant(UInt64, UInt64)
   LoadNull(@semantic.ValueType)
   LoadAddress(AArch64Address)
   StackAddress(AArch64StackObject)
@@ -163,6 +164,9 @@ pub(all) enum AArch64Inst {
   Move(@semantic.ValueType)
   CarrierMove(@semantic.ValueType, @semantic.ValueType)
   Select(@semantic.ValueType)
+  VectorSelect
+  VectorSplat(@semantic.VectorLane)
+  VectorBitwise(@semantic.VectorBitwiseOp)
   IntUnary(GprWidth, AArch64IntUnary)
   IntBinary(GprWidth, AArch64IntBinary)
   PopulationCount(GprWidth)
@@ -445,6 +449,16 @@ fn valid_scalar_store(
 }
 
 ///|
+fn vector_lane_scalar_type(lane : @semantic.VectorLane) -> @semantic.ValueType {
+  match lane {
+    I8x16 | I16x8 | I32x4 => I32
+    I64x2 => I64
+    F32x4 => F32
+    F64x2 => F64
+  }
+}
+
+///|
 fn valid_scalar_bitcast(
   from : @semantic.ValueType,
   to : @semantic.ValueType,
@@ -541,6 +555,8 @@ pub fn verify_vcode(
           0,
         )
       }
+      LoadVectorConstant(_, _) =>
+        require_instruction_shape(function, instruction, [], [V128], false, 0)
       LoadNull(ty) => {
         if ty != Ptr64 && ty != GcRef64 {
           raise InvalidInstruction(
@@ -604,6 +620,39 @@ pub fn verify_vcode(
           instruction,
           [I32, ty, ty],
           [ty],
+          false,
+          0,
+        )
+      }
+      VectorSelect =>
+        require_instruction_shape(
+          function,
+          instruction,
+          [I32, V128, V128],
+          [V128],
+          false,
+          0,
+        )
+      VectorSplat(lane) =>
+        require_instruction_shape(
+          function,
+          instruction,
+          [vector_lane_scalar_type(lane)],
+          [V128],
+          false,
+          0,
+        )
+      VectorBitwise(operation) => {
+        let arity = match operation {
+          Not => 1
+          And | Or | Xor | AndNot => 2
+          BitSelect => 3
+        }
+        require_instruction_shape(
+          function,
+          instruction,
+          Array::make(arity, V128),
+          [V128],
           false,
           0,
         )

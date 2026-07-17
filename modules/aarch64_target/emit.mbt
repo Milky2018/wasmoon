@@ -464,6 +464,129 @@ fn emit_int_with_overflow(
 }
 
 ///|
+fn encode_vector_move(
+  destination : @vcode.PhysicalReg,
+  source : @vcode.PhysicalReg,
+) -> UInt {
+  0x4EA01C00U |
+  (reg_bits(source) << 16) |
+  (reg_bits(source) << 5) |
+  reg_bits(destination)
+}
+
+///|
+fn emit_vector_constant(
+  buffer : CodeBuffer,
+  destination : @vcode.PhysicalReg,
+  low : UInt64,
+  high : UInt64,
+) -> Unit {
+  buffer.emit_word(0x6F00E400U | reg_bits(destination))
+  let scratch = @vcode.PhysicalReg::new(16, Int)
+  if low != 0UL {
+    emit_constant(buffer, W64, scratch, low)
+    buffer.emit_word(
+      0x4E081C00U | (reg_bits(scratch) << 5) | reg_bits(destination),
+    )
+  }
+  if high != 0UL {
+    emit_constant(buffer, W64, scratch, high)
+    buffer.emit_word(
+      0x4E181C00U | (reg_bits(scratch) << 5) | reg_bits(destination),
+    )
+  }
+}
+
+///|
+fn emit_vector_select(
+  buffer : CodeBuffer,
+  condition : @vcode.PhysicalReg,
+  when_true : @vcode.PhysicalReg,
+  when_false : @vcode.PhysicalReg,
+  destination : @vcode.PhysicalReg,
+) -> Unit {
+  if destination == when_true {
+    buffer.emit_word(encode_vector_move(destination, when_true))
+    buffer.emit_word(0x35000000U | (2U << 5) | reg_bits(condition))
+    buffer.emit_word(encode_vector_move(destination, when_false))
+  } else {
+    buffer.emit_word(encode_vector_move(destination, when_false))
+    buffer.emit_word(0x34000000U | (2U << 5) | reg_bits(condition))
+    buffer.emit_word(encode_vector_move(destination, when_true))
+  }
+}
+
+///|
+fn emit_vector_splat(
+  buffer : CodeBuffer,
+  lane : @semantic.VectorLane,
+  source : @vcode.PhysicalReg,
+  destination : @vcode.PhysicalReg,
+) -> Unit {
+  let base : UInt = match lane {
+    I8x16 => 0x4E010C00U
+    I16x8 => 0x4E020C00U
+    I32x4 => 0x4E040C00U
+    I64x2 => 0x4E080C00U
+    F32x4 => 0x4E040400U
+    F64x2 => 0x4E080400U
+  }
+  buffer.emit_word(base | (reg_bits(source) << 5) | reg_bits(destination))
+}
+
+///|
+fn emit_vector_binary(
+  buffer : CodeBuffer,
+  base : UInt,
+  left : @vcode.PhysicalReg,
+  right : @vcode.PhysicalReg,
+  destination : @vcode.PhysicalReg,
+) -> Unit {
+  buffer.emit_word(
+    base |
+    (reg_bits(right) << 16) |
+    (reg_bits(left) << 5) |
+    reg_bits(destination),
+  )
+}
+
+///|
+fn emit_vector_bitwise(
+  buffer : CodeBuffer,
+  operation : @semantic.VectorBitwiseOp,
+  first : @vcode.PhysicalReg,
+  second : @vcode.PhysicalReg,
+  mask : @vcode.PhysicalReg,
+  destination : @vcode.PhysicalReg,
+) -> Unit {
+  match operation {
+    Not =>
+      buffer.emit_word(
+        0x6E205800U | (reg_bits(first) << 5) | reg_bits(destination),
+      )
+    And => emit_vector_binary(buffer, 0x4E201C00U, first, second, destination)
+    Or => emit_vector_binary(buffer, 0x4EA01C00U, first, second, destination)
+    Xor => emit_vector_binary(buffer, 0x6E201C00U, first, second, destination)
+    AndNot =>
+      emit_vector_binary(buffer, 0x4E601C00U, first, second, destination)
+    BitSelect =>
+      if destination == mask {
+        emit_vector_binary(buffer, 0x6E601C00U, first, second, destination)
+      } else if destination == second {
+        emit_vector_binary(buffer, 0x6E201C00U, first, second, destination)
+        emit_vector_binary(buffer, 0x4E601C00U, destination, mask, destination)
+        emit_vector_binary(buffer, 0x6E201C00U, destination, first, destination)
+      } else {
+        emit_vector_binary(buffer, 0x6E201C00U, first, second, destination)
+        emit_vector_binary(buffer, 0x4E201C00U, destination, mask, destination)
+        emit_vector_binary(
+          buffer, 0x6E201C00U, destination, second, destination,
+        )
+      }
+  }
+}
+
+///|
 fn float_unary_base(
   ty : @semantic.ValueType,
   operation : AArch64FloatUnary,
@@ -846,6 +969,8 @@ fn emit_instruction(
     OutgoingReg(ty, destination) => emit_move(buffer, ty, destination, reg(0))
     KeepAlive(_) => ()
     LoadConstant(width, bits) => emit_constant(buffer, width, reg(0), bits)
+    LoadVectorConstant(low, high) =>
+      emit_vector_constant(buffer, reg(0), low, high)
     LoadNull(_) => emit_constant(buffer, W64, reg(0), 0UL)
     LoadAddress(address) => {
       let target : @code_object.RelocationTarget = match address {
@@ -904,6 +1029,16 @@ fn emit_instruction(
         reg_bits(reg(3)),
       )
     }
+    VectorSelect => emit_vector_select(buffer, reg(0), reg(1), reg(2), reg(3))
+    VectorSplat(lane) => emit_vector_splat(buffer, lane, reg(0), reg(1))
+    VectorBitwise(operation) =>
+      match operation {
+        Not => emit_vector_bitwise(buffer, Not, reg(0), reg(0), reg(0), reg(1))
+        And | Or | Xor | AndNot =>
+          emit_vector_bitwise(buffer, operation, reg(0), reg(1), reg(1), reg(2))
+        BitSelect =>
+          emit_vector_bitwise(buffer, BitSelect, reg(0), reg(1), reg(2), reg(3))
+      }
     IntUnary(width, operation) =>
       buffer.emit_word(encode_int_unary(width, operation, reg(1), reg(0)))
     IntBinary(width, operation) =>

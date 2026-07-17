@@ -61,6 +61,84 @@ test "AArch64 lowering rejects unsupported valid operations structurally" {
 }
 
 ///|
+test "AArch64 lowering selects the vector foundation" {
+  let builder = @semantic.FunctionBuilder::new(
+    "vector_foundation",
+    Internal,
+    [Ptr64, I32, I64, F32, F64, V128, V128, V128],
+    [V128],
+  )
+  let parameters = builder.parameters()
+  let constant = builder.emit(
+      V128Const(0x0706050403020100UL, 0x0F0E0D0C0B0A0908UL),
+      [],
+      [V128],
+    )[0]
+  let splats = [
+    builder.emit(Vector(Splat(I8x16)), [parameters[1]], [V128])[0],
+    builder.emit(Vector(Splat(I16x8)), [parameters[1]], [V128])[0],
+    builder.emit(Vector(Splat(I32x4)), [parameters[1]], [V128])[0],
+    builder.emit(Vector(Splat(I64x2)), [parameters[2]], [V128])[0],
+    builder.emit(Vector(Splat(F32x4)), [parameters[3]], [V128])[0],
+    builder.emit(Vector(Splat(F64x2)), [parameters[4]], [V128])[0],
+  ]
+  let mut value = constant
+  for splat in splats {
+    value = builder.emit(Vector(Bitwise(Xor)), [value, splat], [V128])[0]
+  }
+  value = builder.emit(Vector(Bitwise(Not)), [value], [V128])[0]
+  value = builder.emit(Vector(Bitwise(And)), [value, parameters[5]], [V128])[0]
+  value = builder.emit(Vector(Bitwise(Or)), [value, parameters[6]], [V128])[0]
+  value = builder.emit(Vector(Bitwise(Xor)), [value, parameters[7]], [V128])[0]
+  value = builder.emit(Vector(Bitwise(AndNot)), [value, constant], [V128])[0]
+  value = builder.emit(
+      Vector(Bitwise(BitSelect)),
+      [value, parameters[5], parameters[6]],
+      [V128],
+    )[0]
+  value = builder.emit(Select, [parameters[1], value, parameters[7]], [V128])[0]
+  builder.return_([value])
+  inspect(
+    lower(builder.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode vector_foundation(v0:ptr64, v1:i32, v2:i64, v3:f32, v4:f64, v5:v128, v6:v128, v7:v128) -> (v128)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v8:any@late]
+      #|  i1 IncomingReg(I32, p1:int) uses=[v1:fixed(p1:int)@early] defs=[v9:any@late]
+      #|  i2 IncomingReg(I64, p2:int) uses=[v2:fixed(p2:int)@early] defs=[v10:any@late]
+      #|  i3 IncomingReg(F32, p0:fpvec) uses=[v3:fixed(p0:fpvec)@early] defs=[v11:any@late]
+      #|  i4 IncomingReg(F64, p1:fpvec) uses=[v4:fixed(p1:fpvec)@early] defs=[v12:any@late]
+      #|  i5 IncomingReg(V128, p2:fpvec) uses=[v5:fixed(p2:fpvec)@early] defs=[v13:any@late]
+      #|  i6 IncomingReg(V128, p3:fpvec) uses=[v6:fixed(p3:fpvec)@early] defs=[v14:any@late]
+      #|  i7 IncomingReg(V128, p4:fpvec) uses=[v7:fixed(p4:fpvec)@early] defs=[v15:any@late]
+      #|  i8 LoadVectorConstant(506097522914230528, 1084818905618843912) defs=[v16:any@late]
+      #|  i9 VectorSplat(I8x16) uses=[v9:any@early] defs=[v17:any@late]
+      #|  i10 VectorSplat(I16x8) uses=[v9:any@early] defs=[v18:any@late]
+      #|  i11 VectorSplat(I32x4) uses=[v9:any@early] defs=[v19:any@late]
+      #|  i12 VectorSplat(I64x2) uses=[v10:any@early] defs=[v20:any@late]
+      #|  i13 VectorSplat(F32x4) uses=[v11:any@early] defs=[v21:any@late]
+      #|  i14 VectorSplat(F64x2) uses=[v12:any@early] defs=[v22:any@late]
+      #|  i15 VectorBitwise(Xor) uses=[v16:any@early, v17:any@early] defs=[v23:any@late]
+      #|  i16 VectorBitwise(Xor) uses=[v23:any@early, v18:any@early] defs=[v24:any@late]
+      #|  i17 VectorBitwise(Xor) uses=[v24:any@early, v19:any@early] defs=[v25:any@late]
+      #|  i18 VectorBitwise(Xor) uses=[v25:any@early, v20:any@early] defs=[v26:any@late]
+      #|  i19 VectorBitwise(Xor) uses=[v26:any@early, v21:any@early] defs=[v27:any@late]
+      #|  i20 VectorBitwise(Xor) uses=[v27:any@early, v22:any@early] defs=[v28:any@late]
+      #|  i21 VectorBitwise(Not) uses=[v28:any@early] defs=[v29:any@late]
+      #|  i22 VectorBitwise(And) uses=[v29:any@early, v13:any@early] defs=[v30:any@late]
+      #|  i23 VectorBitwise(Or) uses=[v30:any@early, v14:any@early] defs=[v31:any@late]
+      #|  i24 VectorBitwise(Xor) uses=[v31:any@early, v15:any@early] defs=[v32:any@late]
+      #|  i25 VectorBitwise(AndNot) uses=[v32:any@early, v16:any@early] defs=[v33:any@late]
+      #|  i26 VectorBitwise(BitSelect) uses=[v33:any@early, v13:any@early, v14:any@early] defs=[v34:any@late]
+      #|  i27 VectorSelect uses=[v9:any@early, v34:any@early, v15:any@early] defs=[v35:any@late]
+      #|  i28 OutgoingReg(V128, p0:fpvec) uses=[v35:any@early]
+      #|  i29 Return
+      #|
+    ),
+  )
+}
+
+///|
 test "AArch64 lowering assigns one aligned semantic stack-object area" {
   let builder = @semantic.FunctionBuilder::new(
     "stack_object_layout",
