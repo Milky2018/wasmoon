@@ -54,6 +54,8 @@ pub fn build_x64_direct_call_stub(Int64) -> Array[Int]
 
 pub fn c_jit_read_i64(Int64) -> Int64
 
+pub fn c_jit_read_u32(Int64) -> UInt
+
 pub fn c_jit_write_i64(Int64, Int64) -> Unit
 
 pub fn c_jit_write_u32(Int64, Int) -> Unit
@@ -69,6 +71,8 @@ pub fn clear_wasi_stdin_buffer(Int64) -> Unit
 pub fn clear_wasi_stdin_callback(Int64) -> Unit
 
 pub fn collect_gc_root_args(Array[Int64], Array[@types.ValueType]) -> Array[Int64]
+
+pub fn compile_wasm_body_aarch64_cwasm_entry(@milkir.Function, Int, String, Int, Int, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @cwasm.CompiledEntry raise JitPipelineError
 
 pub fn context_func_count(Int64) -> Int
 

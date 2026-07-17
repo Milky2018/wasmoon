@@ -7,7 +7,12 @@
 /// trampoline planner.
 
 ///|
-pub using @jit_ffi {c_jit_write_i64, c_jit_write_u32, c_jit_read_i64}
+pub using @jit_ffi {
+  c_jit_write_i64,
+  c_jit_write_u32,
+  c_jit_read_i64,
+  c_jit_read_u32,
+}
 
 ///|
 pub fn host_target_arch() -> @cwasm.TargetArch {
@@ -1486,6 +1491,15 @@ pub fn patch_func_addr_fixups_for_target(
 
 ///|
 pub fn encode_aarch64_bl_imm26(pc : Int64, target_ptr : Int64) -> Int? {
+  encode_aarch64_branch_imm26(pc, target_ptr, 0x94000000U)
+}
+
+///|
+fn encode_aarch64_branch_imm26(
+  pc : Int64,
+  target_ptr : Int64,
+  opcode : UInt,
+) -> Int? {
   let diff = target_ptr - pc
   if diff % 4L != 0L {
     return None
@@ -1494,7 +1508,9 @@ pub fn encode_aarch64_bl_imm26(pc : Int64, target_ptr : Int64) -> Int? {
   if imm26 < -0x2000000L || imm26 > 0x1FFFFFFL {
     return None
   }
-  Some((0x94000000L | (imm26 & 0x3FFFFFFL)).to_int())
+  Some(
+    (opcode | (imm26.to_int() & 0x3FFFFFF).reinterpret_as_uint()).reinterpret_as_int(),
+  )
 }
 
 ///|
@@ -1526,13 +1542,17 @@ pub fn patch_aarch64_direct_call(
   target_ptr : Int64,
 ) -> Unit {
   let pc = exec_ptr + fixup.offset.to_int64()
-  if encode_aarch64_bl_imm26(pc, target_ptr) is Some(encoded) {
+  let opcode = c_jit_read_u32(pc) & 0xFC000000U
+  if opcode != 0x14000000U && opcode != 0x94000000U {
+    abort("AArch64 call fixup does not point at B or BL")
+  }
+  if encode_aarch64_branch_imm26(pc, target_ptr, opcode) is Some(encoded) {
     c_jit_write_u32(pc, encoded)
     return
   }
   if fixup.veneer_offset >= 0 {
     let veneer_pc = exec_ptr + fixup.veneer_offset.to_int64()
-    if encode_aarch64_bl_imm26(pc, veneer_pc) is Some(encoded) {
+    if encode_aarch64_branch_imm26(pc, veneer_pc, opcode) is Some(encoded) {
       patch_aarch64_call_veneer_target(exec_ptr, fixup, target_ptr)
       c_jit_write_u32(pc, encoded)
       return

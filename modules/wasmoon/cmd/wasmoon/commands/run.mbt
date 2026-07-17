@@ -1668,6 +1668,90 @@ pub fn compile_module_to_jit(
       func_idx=Some(func_idx),
       func_name=Some(func_name),
     )
+    if isa is AArch64 {
+      let num_params = func_type.params.length()
+      let num_results = func_type.results.length()
+      let entry = @wasmoon_jit.compile_wasm_body_aarch64_cwasm_entry(
+        ir_func,
+        func_idx,
+        func_name,
+        num_params,
+        num_results,
+        use_subtype_indirect_check~,
+        canonical_type_indices~,
+      ) catch {
+        err => {
+          emit_compile_progress(
+            on_progress,
+            Failed,
+            progress_start,
+            total_compile_funcs,
+            compiled_count,
+            func_idx=Some(func_idx),
+            func_name=Some(func_name),
+            message=Some(err.to_string()),
+          )
+          return None
+        }
+      }
+      if lower_tick is Some(tick) {
+        @perf.record_stage_us("lower", @perf.elapsed_us(tick))
+      }
+      emit_compile_progress(
+        on_progress,
+        Regalloc,
+        progress_start,
+        total_compile_funcs,
+        compiled_count,
+        func_idx=Some(func_idx),
+        func_name=Some(func_name),
+      )
+      emit_compile_progress(
+        on_progress,
+        Codegen,
+        progress_start,
+        total_compile_funcs,
+        compiled_count,
+        func_idx=Some(func_idx),
+        func_name=Some(func_name),
+      )
+      precompiled.add_function(entry)
+      emit_compile_progress(
+        on_progress,
+        Link,
+        progress_start,
+        total_compile_funcs,
+        compiled_count + 1,
+        func_idx=Some(func_idx),
+        func_name=Some(func_name),
+      )
+      if perf_on {
+        @perf.finish_function(
+          @milkir.instruction_count(ir_func),
+          entry.code.length(),
+        )
+      }
+      if debug_db is Some(db) {
+        db.set(
+          func_idx,
+          JITFunctionDebug(
+            ir_dump.unwrap_or(""),
+            "",
+            "",
+            entry.code.map(fn(byte) { @types.to_hex_byte(byte) }).join(" "),
+          ),
+        )
+      }
+      compiled_count = compiled_count + 1
+      if @logger.is_debug_enabled() &&
+        total_compile_funcs > 10 &&
+        (compiled_count % 10 == 0 || compiled_count == total_compile_funcs) {
+        @logger.debug(
+          "JIT: Compiled \{compiled_count}/\{total_compile_funcs} functions",
+        )
+      }
+      continue
+    }
     let embedding_abi = @wasmoon_jit.wasm_embedding_abi(isa~)
     let machv_func = @wasmoon_jit.lower_wasm_body_milkir_with_isa(
       ir_func,

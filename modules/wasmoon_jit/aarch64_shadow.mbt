@@ -4,7 +4,13 @@ fn aarch64_shadow_enabled() -> Bool {
 }
 
 ///|
-fn aarch64_shadow_context(
+priv struct AArch64TargetCompilation {
+  object : @code_object.UnlinkedCodeObject
+  frame_size : Int
+}
+
+///|
+fn aarch64_target_context(
   function : @semantic_machv.Function,
   environment_field_path : ((@semantic_machv.EnvironmentField) -> Array[Int]?)?,
 ) -> @aarch64_target.LoweringContext raise JitPipelineError {
@@ -18,7 +24,7 @@ fn aarch64_shadow_context(
   ) catch {
     error =>
       raise PipelineFailure(
-        message="\{function.name()}: invalid AArch64 shadow ABI: \{error.to_string()}",
+        message="\{function.name()}: invalid AArch64 ABI: \{error.to_string()}",
       )
   }
   let mut context = @aarch64_target.LoweringContext::new(abi)
@@ -29,7 +35,7 @@ fn aarch64_shadow_context(
         guard environment_field_path is Some(resolve) &&
           resolve(field) is Some(offsets) else {
           raise PipelineFailure(
-            message="\{function.name()}: missing AArch64 shadow binding for environment field '\{field.name}'",
+            message="\{function.name()}: missing AArch64 binding for environment field '\{field.name}'",
           )
         }
         context = context.with_environment_field(field, offsets)
@@ -40,7 +46,7 @@ fn aarch64_shadow_context(
 }
 
 ///|
-fn build_aarch64_shadow(
+fn build_aarch64_target(
   function : @semantic_machv.Function,
   environment_field_path? : (@semantic_machv.EnvironmentField) -> Array[Int]?,
   allocation_symbols? : Array[@semantic_machv.ExternalSymbol] = [],
@@ -48,35 +54,36 @@ fn build_aarch64_shadow(
     @semantic_machv.ExternalSymbol,
     @semantic_machv.ExternalSymbol,
   ),
-) -> @code_object.UnlinkedCodeObject raise JitPipelineError {
+) -> AArch64TargetCompilation raise JitPipelineError {
   let elaborated = match root_scope_symbols {
     Some(symbols) =>
       elaborate_wasmoon_runtime_abi(function, allocation_symbols, symbols)
     None => function
   }
-  let context = aarch64_shadow_context(elaborated, environment_field_path)
+  let context = aarch64_target_context(elaborated, environment_field_path)
   let selected = @aarch64_target.lower(elaborated, context) catch {
     error =>
       raise PipelineFailure(
-        message="\{function.name()}: AArch64 shadow selection failed: \{error.to_string()}",
+        message="\{function.name()}: AArch64 selection failed: \{error.to_string()}",
       )
   }
   let allocation = @aarch64_target.allocate(selected) catch {
     error =>
       raise PipelineFailure(
-        message="\{function.name()}: AArch64 shadow allocation failed: \{error.to_string()}",
+        message="\{function.name()}: AArch64 allocation failed: \{error.to_string()}",
       )
   }
   let frame = @aarch64_target.plan_frame(selected, allocation) catch {
     error =>
       raise PipelineFailure(
-        message="\{function.name()}: AArch64 shadow frame planning failed: \{error.to_string()}",
+        message="\{function.name()}: AArch64 frame planning failed: \{error.to_string()}",
       )
   }
-  @aarch64_target.emit(selected, allocation, frame) catch {
+  let object = @aarch64_target.emit(selected, allocation, frame) catch {
     error =>
       raise PipelineFailure(
-        message="\{function.name()}: AArch64 shadow emission failed: \{error.to_string()}",
+        message="\{function.name()}: AArch64 emission failed: \{error.to_string()}",
       )
   }
+  { object, frame_size: frame.frame_size() }
 }

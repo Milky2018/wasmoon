@@ -488,6 +488,8 @@ pub fn c_jit_memory_read(Int64, Int64, FixedArray[Byte], Int) -> Int
 
 pub fn c_jit_read_i64(Int64) -> Int64
 
+pub fn c_jit_read_u32(Int64) -> UInt
+
 pub fn c_jit_set_cancellation_callback(Int64, FuncRef[(() -> Bool) -> Int], () -> Bool) -> Unit
 
 pub fn c_jit_set_hostcall_callback(Int64, FuncRef[(() -> Int) -> Int], () -> Int) -> Unit

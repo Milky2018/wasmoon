@@ -1344,6 +1344,14 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_write_u32(int64_t addr, uint32_t value) {
     }
 }
 
+MOONBIT_FFI_EXPORT uint32_t wasmoon_jit_read_u32(int64_t addr) {
+    uint32_t value = 0;
+    if (addr != 0) {
+        memcpy(&value, (const void *)addr, sizeof(value));
+    }
+    return value;
+}
+
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_read_i64(int64_t addr) {
     if (addr != 0) {
         return *((int64_t *)addr);

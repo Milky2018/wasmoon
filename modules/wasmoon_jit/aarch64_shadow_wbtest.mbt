@@ -12,7 +12,7 @@ test "AArch64 shadow compiles semantic MachV through the final target seams" {
     ])[0]
   builder.return_([result])
   debug_inspect(
-    build_aarch64_shadow(builder.finish()),
+    build_aarch64_target(builder.finish()).object,
     content=(
       #|{
       #|  architecture: AArch64,
@@ -71,7 +71,7 @@ test "AArch64 shadow binds product environment fields explicitly" {
     )[0]
   builder.return_([result])
   debug_inspect(
-    build_aarch64_shadow(builder.finish(), environment_field_path=fn(
+    build_aarch64_target(builder.finish(), environment_field_path=fn(
       candidate,
     ) {
       if candidate == field {
@@ -79,7 +79,7 @@ test "AArch64 shadow binds product environment fields explicitly" {
       } else {
         None
       }
-    }),
+    }).object,
     content=(
       #|{
       #|  architecture: AArch64,
@@ -243,7 +243,7 @@ test "AArch64 shadow code executes through the production entry ABI" {
       I64,
     ])[0]
   builder.return_([result])
-  let object = build_aarch64_shadow(builder.finish())
+  let object = build_aarch64_target(builder.finish()).object
   let candidate_bytes = object.code().map(byte => byte.to_int())
   guard ExecCode::try_alloc(candidate_bytes) is Some(candidate) else {
     fail("failed to allocate executable candidate code")
@@ -353,12 +353,12 @@ test "AArch64 shadow executes internal and external relocations" {
   caller.return_([called])
 
   let callee_plan = @aarch64_target.prepare_aarch64_link(
-    build_aarch64_shadow(callee.finish()),
+    build_aarch64_target(callee.finish()).object,
   ) catch {
     error => fail("failed to prepare callee link plan: \{error}")
   }
   let caller_plan = @aarch64_target.prepare_aarch64_link(
-    build_aarch64_shadow(caller.finish()),
+    build_aarch64_target(caller.finish()).object,
   ) catch {
     error => fail("failed to prepare caller link plan: \{error}")
   }

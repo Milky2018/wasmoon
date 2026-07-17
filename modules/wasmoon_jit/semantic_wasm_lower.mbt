@@ -169,11 +169,11 @@ fn wasmoon_allocation_symbols(
 }
 
 ///|
-fn build_wasmoon_aarch64_code_object(
+fn build_wasmoon_aarch64_target(
   semantic : @semantic_machv.Function,
   environment : WasmoonSemanticEnvironment,
-) -> @code_object.UnlinkedCodeObject raise JitPipelineError {
-  build_aarch64_shadow(
+) -> AArch64TargetCompilation raise JitPipelineError {
+  build_aarch64_target(
     semantic,
     environment_field_path=fn(field : @semantic_machv.EnvironmentField) {
       environment.field_paths.get(field.name)
@@ -187,11 +187,11 @@ fn build_wasmoon_aarch64_code_object(
 }
 
 ///|
-pub fn plan_wasm_body_aarch64_code_object(
+fn compile_wasm_body_aarch64_target(
   function : @milkir.Function,
-  use_subtype_indirect_check? : Bool = true,
-  canonical_type_indices? : Array[Int] = [],
-) -> @code_object.UnlinkedCodeObject raise JitPipelineError {
+  use_subtype_indirect_check : Bool,
+  canonical_type_indices : Array[Int],
+) -> AArch64TargetCompilation raise JitPipelineError {
   let environment = wasmoon_semantic_environment(
     use_subtype_indirect_check, canonical_type_indices,
   )
@@ -199,7 +199,18 @@ pub fn plan_wasm_body_aarch64_code_object(
     error =>
       raise PipelineFailure(message="\{function.name}: \{error.to_string()}")
   }
-  build_wasmoon_aarch64_code_object(semantic, environment)
+  build_wasmoon_aarch64_target(semantic, environment)
+}
+
+///|
+pub fn plan_wasm_body_aarch64_code_object(
+  function : @milkir.Function,
+  use_subtype_indirect_check? : Bool = true,
+  canonical_type_indices? : Array[Int] = [],
+) -> @code_object.UnlinkedCodeObject raise JitPipelineError {
+  compile_wasm_body_aarch64_target(
+    function, use_subtype_indirect_check, canonical_type_indices,
+  ).object
 }
 
 ///|
@@ -222,7 +233,7 @@ fn lower_semantic_wasm_with_isa(
   }
   match isa {
     AArch64 if aarch64_shadow_enabled() =>
-      build_wasmoon_aarch64_code_object(semantic, environment) |> ignore
+      build_wasmoon_aarch64_target(semantic, environment) |> ignore
     _ => ()
   }
   let legacy = adapt_semantic_to_legacy(
