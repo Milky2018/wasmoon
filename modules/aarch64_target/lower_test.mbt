@@ -915,6 +915,128 @@ test "AArch64 lowering selects vector integer bitmasks" {
 }
 
 ///|
+test "AArch64 lowering selects every non-fused vector float operation" {
+  let builder = @semantic.FunctionBuilder::new(
+    "vector_float_operations",
+    Internal,
+    [Ptr64, V128, V128],
+    [V128, V128, V128, V128],
+  )
+  let parameters = builder.parameters()
+  let unary_operations : Array[@semantic.VectorFloatUnaryOp] = [
+    Absolute,
+    Negate,
+    SquareRoot,
+    Ceil,
+    Floor,
+    Truncate,
+    Nearest,
+  ]
+  let binary_operations : Array[@semantic.VectorFloatBinaryOp] = [
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Min,
+    Max,
+    PseudoMin,
+    PseudoMax,
+  ]
+  let comparisons : Array[@semantic.VectorFloatComparison] = [
+    Equal,
+    NotEqual,
+    LessThan,
+    LessOrEqual,
+    GreaterThan,
+    GreaterOrEqual,
+  ]
+  let results : Array[@semantic.Value] = []
+  let lanes : Array[@semantic.VectorLane] = [F32x4, F64x2]
+  for lane in lanes {
+    let mut value = parameters[1]
+    for operation in unary_operations {
+      value = builder.emit(Vector(FloatUnary(lane, operation)), [value], [V128])[0]
+    }
+    for operation in binary_operations {
+      value = builder.emit(
+          Vector(FloatBinary(lane, operation)),
+          [value, parameters[2]],
+          [V128],
+        )[0]
+    }
+    results.push(value)
+    let mut comparison = parameters[1]
+    for operation in comparisons {
+      comparison = builder.emit(
+          Vector(FloatCompare(lane, operation)),
+          [comparison, parameters[2]],
+          [V128],
+        )[0]
+    }
+    results.push(comparison)
+  }
+  builder.return_(results)
+  inspect(
+    lower(builder.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode vector_float_operations(v0:ptr64, v1:v128, v2:v128) -> (v128, v128, v128, v128)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v3:any@late]
+      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v4:any@late]
+      #|  i2 IncomingReg(V128, p1:fpvec) uses=[v2:fixed(p1:fpvec)@early] defs=[v5:any@late]
+      #|  i3 VectorFloatUnary(F32x4, Absolute) uses=[v4:any@early] defs=[v6:any@late]
+      #|  i4 VectorFloatUnary(F32x4, Negate) uses=[v6:any@early] defs=[v7:any@late]
+      #|  i5 VectorFloatUnary(F32x4, SquareRoot) uses=[v7:any@early] defs=[v8:any@late]
+      #|  i6 VectorFloatUnary(F32x4, Ceil) uses=[v8:any@early] defs=[v9:any@late]
+      #|  i7 VectorFloatUnary(F32x4, Floor) uses=[v9:any@early] defs=[v10:any@late]
+      #|  i8 VectorFloatUnary(F32x4, Truncate) uses=[v10:any@early] defs=[v11:any@late]
+      #|  i9 VectorFloatUnary(F32x4, Nearest) uses=[v11:any@early] defs=[v12:any@late]
+      #|  i10 VectorFloatBinary(F32x4, Add) uses=[v12:any@early, v5:any@early] defs=[v13:any@late]
+      #|  i11 VectorFloatBinary(F32x4, Sub) uses=[v13:any@early, v5:any@early] defs=[v14:any@late]
+      #|  i12 VectorFloatBinary(F32x4, Mul) uses=[v14:any@early, v5:any@early] defs=[v15:any@late]
+      #|  i13 VectorFloatBinary(F32x4, Div) uses=[v15:any@early, v5:any@early] defs=[v16:any@late]
+      #|  i14 VectorFloatBinary(F32x4, Min) uses=[v16:any@early, v5:any@early] defs=[v17:any@late]
+      #|  i15 VectorFloatBinary(F32x4, Max) uses=[v17:any@early, v5:any@early] defs=[v18:any@late]
+      #|  i16 VectorFloatBinary(F32x4, PseudoMin) uses=[v18:any@early, v5:any@early] defs=[v19:any@late]
+      #|  i17 VectorFloatBinary(F32x4, PseudoMax) uses=[v19:any@early, v5:any@early] defs=[v20:any@late]
+      #|  i18 VectorFloatCompare(F32x4, Equal) uses=[v4:any@early, v5:any@early] defs=[v21:any@late]
+      #|  i19 VectorFloatCompare(F32x4, NotEqual) uses=[v21:any@early, v5:any@early] defs=[v22:any@late]
+      #|  i20 VectorFloatCompare(F32x4, LessThan) uses=[v22:any@early, v5:any@early] defs=[v23:any@late]
+      #|  i21 VectorFloatCompare(F32x4, LessOrEqual) uses=[v23:any@early, v5:any@early] defs=[v24:any@late]
+      #|  i22 VectorFloatCompare(F32x4, GreaterThan) uses=[v24:any@early, v5:any@early] defs=[v25:any@late]
+      #|  i23 VectorFloatCompare(F32x4, GreaterOrEqual) uses=[v25:any@early, v5:any@early] defs=[v26:any@late]
+      #|  i24 VectorFloatUnary(F64x2, Absolute) uses=[v4:any@early] defs=[v27:any@late]
+      #|  i25 VectorFloatUnary(F64x2, Negate) uses=[v27:any@early] defs=[v28:any@late]
+      #|  i26 VectorFloatUnary(F64x2, SquareRoot) uses=[v28:any@early] defs=[v29:any@late]
+      #|  i27 VectorFloatUnary(F64x2, Ceil) uses=[v29:any@early] defs=[v30:any@late]
+      #|  i28 VectorFloatUnary(F64x2, Floor) uses=[v30:any@early] defs=[v31:any@late]
+      #|  i29 VectorFloatUnary(F64x2, Truncate) uses=[v31:any@early] defs=[v32:any@late]
+      #|  i30 VectorFloatUnary(F64x2, Nearest) uses=[v32:any@early] defs=[v33:any@late]
+      #|  i31 VectorFloatBinary(F64x2, Add) uses=[v33:any@early, v5:any@early] defs=[v34:any@late]
+      #|  i32 VectorFloatBinary(F64x2, Sub) uses=[v34:any@early, v5:any@early] defs=[v35:any@late]
+      #|  i33 VectorFloatBinary(F64x2, Mul) uses=[v35:any@early, v5:any@early] defs=[v36:any@late]
+      #|  i34 VectorFloatBinary(F64x2, Div) uses=[v36:any@early, v5:any@early] defs=[v37:any@late]
+      #|  i35 VectorFloatBinary(F64x2, Min) uses=[v37:any@early, v5:any@early] defs=[v38:any@late]
+      #|  i36 VectorFloatBinary(F64x2, Max) uses=[v38:any@early, v5:any@early] defs=[v39:any@late]
+      #|  i37 VectorFloatBinary(F64x2, PseudoMin) uses=[v39:any@early, v5:any@early] defs=[v40:any@late]
+      #|  i38 VectorFloatBinary(F64x2, PseudoMax) uses=[v40:any@early, v5:any@early] defs=[v41:any@late]
+      #|  i39 VectorFloatCompare(F64x2, Equal) uses=[v4:any@early, v5:any@early] defs=[v42:any@late]
+      #|  i40 VectorFloatCompare(F64x2, NotEqual) uses=[v42:any@early, v5:any@early] defs=[v43:any@late]
+      #|  i41 VectorFloatCompare(F64x2, LessThan) uses=[v43:any@early, v5:any@early] defs=[v44:any@late]
+      #|  i42 VectorFloatCompare(F64x2, LessOrEqual) uses=[v44:any@early, v5:any@early] defs=[v45:any@late]
+      #|  i43 VectorFloatCompare(F64x2, GreaterThan) uses=[v45:any@early, v5:any@early] defs=[v46:any@late]
+      #|  i44 VectorFloatCompare(F64x2, GreaterOrEqual) uses=[v46:any@early, v5:any@early] defs=[v47:any@late]
+      #|  i45 OutgoingReg(V128, p0:fpvec) uses=[v20:any@early]
+      #|  i46 OutgoingReg(V128, p1:fpvec) uses=[v26:any@early]
+      #|  i47 OutgoingReg(V128, p2:fpvec) uses=[v41:any@early]
+      #|  i48 OutgoingReg(V128, p3:fpvec) uses=[v47:any@early]
+      #|  i49 Return
+      #|
+    ),
+  )
+}
+
+///|
 test "AArch64 lowering assigns one aligned semantic stack-object area" {
   let builder = @semantic.FunctionBuilder::new(
     "stack_object_layout",

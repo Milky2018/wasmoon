@@ -1494,6 +1494,87 @@ test "AArch64 pipeline emits vector integer bitmasks" {
 }
 
 ///|
+test "AArch64 pipeline emits representative vector float operations" {
+  let builder = @semantic.FunctionBuilder::new(
+    "emitted_vector_float_operations",
+    Platform,
+    [V128, V128],
+    [V128],
+  )
+  let parameters = builder.parameters()
+  let rounded = builder.emit(
+      Vector(FloatUnary(F32x4, Nearest)),
+      [parameters[0]],
+      [V128],
+    )[0]
+  let pseudo_min = builder.emit(
+      Vector(FloatBinary(F64x2, PseudoMin)),
+      [rounded, parameters[1]],
+      [V128],
+    )[0]
+  let not_equal = builder.emit(
+      Vector(FloatCompare(F32x4, NotEqual)),
+      [pseudo_min, parameters[0]],
+      [V128],
+    )[0]
+  builder.return_([not_equal])
+  let function = lower(builder.finish(), test_lowering_context())
+  let allocation = allocate(function)
+  let frame = plan_frame(function, allocation)
+  debug_inspect(
+    emit(function, allocation, frame),
+    content=(
+      #|{
+      #|  architecture: AArch64,
+      #|  code: [
+      #|    0x02,
+      #|    0x1c,
+      #|    0xa0,
+      #|    0x4e,
+      #|    0x20,
+      #|    0x1c,
+      #|    0xa1,
+      #|    0x4e,
+      #|    0x41,
+      #|    0x88,
+      #|    0x21,
+      #|    0x4e,
+      #|    0x30,
+      #|    0xe4,
+      #|    0xe0,
+      #|    0x6e,
+      #|    0x10,
+      #|    0x1c,
+      #|    0x61,
+      #|    0x6e,
+      #|    0x03,
+      #|    0x1e,
+      #|    0xb0,
+      #|    0x4e,
+      #|    0x60,
+      #|    0xe4,
+      #|    0x22,
+      #|    0x4e,
+      #|    0x00,
+      #|    0x58,
+      #|    0x20,
+      #|    0x6e,
+      #|    0xc0,
+      #|    0x03,
+      #|    0x5f,
+      #|    0xd6,
+      #|  ],
+      #|  relocations: [],
+      #|  sources: [],
+      #|  traps: [],
+      #|  safepoints: [],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
 test "AArch64 pipeline emits addresses inside the semantic stack-object area" {
   let builder = @semantic.FunctionBuilder::new(
     "emitted_stack_addresses",

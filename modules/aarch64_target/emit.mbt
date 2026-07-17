@@ -1186,6 +1186,104 @@ fn emit_vector_binary(
 }
 
 ///|
+fn vector_float_lane_encoding(
+  lane : @semantic.VectorLane,
+  f32_base : UInt,
+  f64_base : UInt,
+) -> UInt raise AArch64EmitError {
+  match lane {
+    F32x4 => f32_base
+    F64x2 => f64_base
+    I8x16 | I16x8 | I32x4 | I64x2 => raise InvalidVectorInstruction
+  }
+}
+
+///|
+fn emit_vector_float_unary(
+  buffer : CodeBuffer,
+  lane : @semantic.VectorLane,
+  operation : @semantic.VectorFloatUnaryOp,
+  source : @vcode.PhysicalReg,
+  destination : @vcode.PhysicalReg,
+) -> Unit raise AArch64EmitError {
+  let base = match operation {
+    Absolute => vector_float_lane_encoding(lane, 0x4EA0F800U, 0x4EE0F800U)
+    Negate => vector_float_lane_encoding(lane, 0x6EA0F800U, 0x6EE0F800U)
+    SquareRoot => vector_float_lane_encoding(lane, 0x6EA1F800U, 0x6EE1F800U)
+    Ceil => vector_float_lane_encoding(lane, 0x4EA18800U, 0x4EE18800U)
+    Floor => vector_float_lane_encoding(lane, 0x4E219800U, 0x4E619800U)
+    Truncate => vector_float_lane_encoding(lane, 0x4EA19800U, 0x4EE19800U)
+    Nearest => vector_float_lane_encoding(lane, 0x4E218800U, 0x4E618800U)
+  }
+  buffer.emit_word(base | (reg_bits(source) << 5) | reg_bits(destination))
+}
+
+///|
+fn emit_vector_float_binary(
+  buffer : CodeBuffer,
+  lane : @semantic.VectorLane,
+  operation : @semantic.VectorFloatBinaryOp,
+  left : @vcode.PhysicalReg,
+  right : @vcode.PhysicalReg,
+  destination : @vcode.PhysicalReg,
+) -> Unit raise AArch64EmitError {
+  let base = match operation {
+    Add => Some(vector_float_lane_encoding(lane, 0x4E20D400U, 0x4E60D400U))
+    Sub => Some(vector_float_lane_encoding(lane, 0x4EA0D400U, 0x4EE0D400U))
+    Mul => Some(vector_float_lane_encoding(lane, 0x6E20DC00U, 0x6E60DC00U))
+    Div => Some(vector_float_lane_encoding(lane, 0x6E20FC00U, 0x6E60FC00U))
+    Min => Some(vector_float_lane_encoding(lane, 0x4EA0F400U, 0x4EE0F400U))
+    Max => Some(vector_float_lane_encoding(lane, 0x4E20F400U, 0x4E60F400U))
+    PseudoMin | PseudoMax => None
+  }
+  if base is Some(base) {
+    emit_vector_binary(buffer, base, left, right, destination)
+    return
+  }
+  let mask = @vcode.PhysicalReg::new(16, FpVector)
+  let (first, second) = match operation {
+    PseudoMin => (left, right)
+    PseudoMax => (right, left)
+    Add | Sub | Mul | Div | Min | Max => raise InvalidVectorInstruction
+  }
+  let compare_base = vector_float_lane_encoding(lane, 0x6EA0E400U, 0x6EE0E400U)
+  emit_vector_binary(buffer, compare_base, first, second, mask)
+  emit_vector_binary(buffer, 0x6E601C00U, right, left, mask)
+  emit_move(buffer, V128, destination, mask)
+}
+
+///|
+fn emit_vector_float_compare(
+  buffer : CodeBuffer,
+  lane : @semantic.VectorLane,
+  comparison : @semantic.VectorFloatComparison,
+  left : @vcode.PhysicalReg,
+  right : @vcode.PhysicalReg,
+  destination : @vcode.PhysicalReg,
+) -> Unit raise AArch64EmitError {
+  let (base, first, second, invert) = match comparison {
+    Equal => (0x4E20E400U, left, right, false)
+    NotEqual => (0x4E20E400U, left, right, true)
+    LessThan => (0x6EA0E400U, right, left, false)
+    LessOrEqual => (0x6E20E400U, right, left, false)
+    GreaterThan => (0x6EA0E400U, left, right, false)
+    GreaterOrEqual => (0x6E20E400U, left, right, false)
+  }
+  emit_vector_binary(
+    buffer,
+    vector_float_lane_encoding(lane, base, base | 0x00400000U),
+    first,
+    second,
+    destination,
+  )
+  if invert {
+    buffer.emit_word(
+      0x6E205800U | (reg_bits(destination) << 5) | reg_bits(destination),
+    )
+  }
+}
+
+///|
 fn emit_vector_bitwise(
   buffer : CodeBuffer,
   operation : @semantic.VectorBitwiseOp,
@@ -1696,6 +1794,19 @@ fn emit_instruction(
       }
     VectorPredicate(predicate) =>
       emit_vector_predicate(buffer, predicate, reg(0), reg(1))
+    VectorFloatUnary(lane, operation) =>
+      emit_vector_float_unary(buffer, lane, operation, reg(0), reg(1))
+    VectorFloatBinary(lane, operation) =>
+      emit_vector_float_binary(buffer, lane, operation, reg(0), reg(1), reg(2))
+    VectorFloatCompare(lane, comparison) =>
+      emit_vector_float_compare(
+        buffer,
+        lane,
+        comparison,
+        reg(0),
+        reg(1),
+        reg(2),
+      )
     VectorBitwise(operation) =>
       match operation {
         Not => emit_vector_bitwise(buffer, Not, reg(0), reg(0), reg(0), reg(1))

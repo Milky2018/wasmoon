@@ -629,3 +629,70 @@ test "AArch64 verifier rejects floating lanes for bitmask" {
     _ => fail("expected floating bitmask predicate to be rejected")
   }
 }
+
+///|
+test "AArch64 verifier rejects integer lanes for vector float operations" {
+  let operations : Array[AArch64Inst] = [
+    VectorFloatUnary(I32x4, Absolute),
+    VectorFloatBinary(I64x2, Add),
+    VectorFloatCompare(I16x8, Equal),
+  ]
+  let errors : Array[TargetVCodeVerifyError] = []
+  for operation in operations {
+    let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
+      "bad_vector_float_lane",
+      [V128, V128],
+    )
+    let entry = builder.entry_block()
+    let operands = match operation {
+      VectorFloatUnary(_, _) => [@vcode.Input::any(builder.parameter(0))]
+      _ =>
+        [
+          @vcode.Input::any(builder.parameter(0)),
+          @vcode.Input::any(builder.parameter(1)),
+        ]
+    }
+    builder.append_body(
+      entry,
+      operation,
+      operands,
+      [@vcode.Output::any(V128)],
+      [],
+      @vcode.InstructionMetadata::empty(),
+    )
+    |> ignore
+    builder.set_terminator(
+      entry,
+      Return,
+      [],
+      [],
+      [],
+      @vcode.InstructionMetadata::empty(),
+    )
+    |> ignore
+    try verify_vcode(builder.finish()) catch {
+      error => errors.push(error)
+    } noraise {
+      _ => fail("expected integer vector float operation to be rejected")
+    }
+  }
+  debug_inspect(
+    errors,
+    content=(
+      #|[
+      #|  InvalidInstruction(
+      #|    instruction=i0,
+      #|    message="vector float unary operation requires floating lanes",
+      #|  ),
+      #|  InvalidInstruction(
+      #|    instruction=i0,
+      #|    message="vector float operation requires floating lanes",
+      #|  ),
+      #|  InvalidInstruction(
+      #|    instruction=i0,
+      #|    message="vector float operation requires floating lanes",
+      #|  ),
+      #|]
+    ),
+  )
+}

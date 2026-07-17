@@ -830,6 +830,12 @@ fn lower_instruction(
     Vector(Predicate(AnyTrue)) => Some(VectorPredicate(AnyTrue))
     Vector(Predicate(AllTrue(lane))) => Some(VectorPredicate(AllTrue(lane)))
     Vector(Predicate(BitMask(lane))) => Some(VectorPredicate(BitMask(lane)))
+    Vector(FloatUnary(lane, operation)) =>
+      Some(VectorFloatUnary(lane, operation))
+    Vector(FloatBinary(lane, operation)) =>
+      Some(VectorFloatBinary(lane, operation))
+    Vector(FloatCompare(lane, comparison)) =>
+      Some(VectorFloatCompare(lane, comparison))
     ReferenceCompare(comparison) => {
       let operand_type = match semantic_operands.get(0) {
         Some(value) => function.value_type(value)
