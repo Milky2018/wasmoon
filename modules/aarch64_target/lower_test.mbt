@@ -86,3 +86,46 @@ test "AArch64 lowering does not silently select non-trapping hardware divide" {
     _ => fail("expected unchecked hardware division selection to fail")
   }
 }
+
+///|
+test "AArch64 lowering selects a direct platform call with explicit ABI facts" {
+  let builder = @semantic.FunctionBuilder::new(
+    "direct_platform_call",
+    Internal,
+    [I64, F64],
+    [I64],
+  )
+  let call = @semantic.SemanticCall::new(
+    External(@semantic.ExternalSymbol::new("runtime.helper")),
+    @semantic.Signature::new([I64, F64], [I64]),
+    Platform,
+    @semantic.CallBehavior::new(ReadWrite, true, true, true, true),
+  )
+  let result = builder.emit_with_metadata(
+      Call(call),
+      builder.parameters(),
+      [I64],
+      @semantic.InstructionMetadata::new(
+        Some(@semantic.SourceLocation::new("call.wat", 7, 11)),
+        [],
+      ),
+    )[0]
+  builder.return_([result])
+  inspect(
+    lower(builder.finish()).summary(),
+    content=(
+      #|vcode direct_platform_call(v0:i64, v1:f64) -> (i64)
+      #|block0:
+      #|  i0 IncomingReg(I64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v2:any@late]
+      #|  i1 IncomingReg(F64, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v3:any@late]
+      #|  i2 PlatformCall(
+      #|  { name: "runtime.helper" },
+      #|  { params: [I64, F64], results: [I64] },
+      #|) uses=[v2:any@early, v3:any@early] clobbers=[p0:int, p1:int, p2:int, p3:int, p4:int, p5:int, p6:int, p7:int, p8:int, p9:int, p10:int, p11:int, p12:int, p13:int, p14:int, p15:int, p16:int, p17:int, p0:fpvec, p1:fpvec, p2:fpvec, p3:fpvec, p4:fpvec, p5:fpvec, p6:fpvec, p7:fpvec, p8:fpvec, p9:fpvec, p10:fpvec, p11:fpvec, p12:fpvec, p13:fpvec, p14:fpvec, p15:fpvec, p16:fpvec, p17:fpvec, p18:fpvec, p19:fpvec, p20:fpvec, p21:fpvec, p22:fpvec, p23:fpvec, p24:fpvec, p25:fpvec, p26:fpvec, p27:fpvec, p28:fpvec, p29:fpvec, p30:fpvec, p31:fpvec] source={ file: "call.wat", line: 7, column: 11 } safepoint=GcAndCancellation
+      #|  i3 IncomingCallResult(I64, p0:int) defs=[v4:any@late]
+      #|  i4 OutgoingReg(I64, p0:int) uses=[v4:any@early]
+      #|  i5 Return
+      #|
+    ),
+  )
+}

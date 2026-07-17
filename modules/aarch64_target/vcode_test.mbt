@@ -85,3 +85,99 @@ test "AArch64 verifier rejects an invalid 32-bit constant" {
       )
   }
 }
+
+///|
+fn test_platform_call_clobbers() -> Array[@vcode.PhysicalReg] {
+  let clobbers : Array[@vcode.PhysicalReg] = []
+  for index in 0..<18 {
+    clobbers.push(@vcode.PhysicalReg::new(index, Int))
+  }
+  for index in 0..<32 {
+    clobbers.push(@vcode.PhysicalReg::new(index, FpVector))
+  }
+  clobbers
+}
+
+///|
+test "AArch64 verifier rejects a call with missing ABI results" {
+  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
+    "missing_call_result",
+    [],
+  )
+  let entry = builder.entry_block()
+  builder.append_body(
+    entry,
+    PlatformCall(
+      @semantic.ExternalSymbol::new("runtime.value"),
+      @semantic.Signature::new([], [I64]),
+    ),
+    [],
+    [],
+    test_platform_call_clobbers(),
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  builder.set_terminator(
+    entry,
+    Return,
+    [],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  verify_vcode(builder.finish()) catch {
+    error =>
+      inspect(
+        error,
+        content=(
+          #|InvalidInstruction(
+          #|  instruction=i0,
+          #|  message="direct call results are not materialized in ABI order",
+          #|)
+        ),
+      )
+  }
+}
+
+///|
+test "AArch64 verifier rejects an incomplete call clobber set" {
+  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
+    "bad_call_clobbers",
+    [],
+  )
+  let entry = builder.entry_block()
+  builder.append_body(
+    entry,
+    PlatformCall(
+      @semantic.ExternalSymbol::new("runtime.effect"),
+      @semantic.Signature::new([], []),
+    ),
+    [],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  builder.set_terminator(
+    entry,
+    Return,
+    [],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  verify_vcode(builder.finish()) catch {
+    error =>
+      inspect(
+        error,
+        content=(
+          #|InvalidInstruction(
+          #|  instruction=i0,
+          #|  message="platform call has an invalid caller-saved clobber set",
+          #|)
+        ),
+      )
+  }
+}

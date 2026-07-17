@@ -135,17 +135,126 @@ fn append_body(
 fn source_metadata(
   metadata : @semantic.InstructionMetadata,
   values : Array[@vcode.Value],
+  semantics : @semantic.OperationSemantics,
 ) -> @vcode.InstructionMetadata {
-  let safepoint = if values.is_empty() {
-    None
-  } else {
-    Some(@semantic.SafepointKind::Gc)
+  let safepoint : @semantic.SafepointKind? = match
+    (semantics.gc_safepoint, semantics.cancellation_safepoint) {
+    (true, true) => Some(GcAndCancellation)
+    (true, false) => Some(Gc)
+    (false, true) => Some(Cancellation)
+    (false, false) => None
   }
   match metadata.source {
     Some(source) =>
       @vcode.InstructionMetadata::new(source~, safepoint?, live_gc_roots=values)
     None => @vcode.InstructionMetadata::new(safepoint?, live_gc_roots=values)
   }
+}
+
+///|
+fn call_abi_registers(
+  types : Array[@semantic.ValueType],
+  kind : String,
+) -> Array[@vcode.PhysicalReg] raise AArch64LowerError {
+  let registers : Array[@vcode.PhysicalReg] = []
+  let mut int_index = 0
+  let mut fp_index = 0
+  for ty in types {
+    let class = abi_bank(ty)
+    let index = if class == Int {
+      let current = int_index
+      int_index += 1
+      current
+    } else {
+      let current = fp_index
+      fp_index += 1
+      current
+    }
+    if index >= 8 {
+      raise UnsupportedAbi(
+        message="stack platform call \{kind}s are not selected yet",
+      )
+    }
+    registers.push(@vcode.PhysicalReg::new(index, class))
+  }
+  registers
+}
+
+///|
+fn lower_direct_platform_call(
+  builder : @vcode.Builder[AArch64Inst],
+  block : @vcode.Block,
+  call : @semantic.SemanticCall,
+  operands : Array[@vcode.Value],
+  result_types : Array[@semantic.ValueType],
+  metadata : @vcode.InstructionMetadata,
+) -> Array[@vcode.Value] raise AArch64LowerError {
+  if call.protocol != Platform {
+    raise UnsupportedAbi(message="direct internal call ABI is not selected yet")
+  }
+  if call.behavior.returns_twice {
+    raise UnsupportedAbi(
+      message="returns-twice platform calls are not supported",
+    )
+  }
+  if result_types.length() > 1 {
+    raise UnsupportedAbi(
+      message="platform calls support at most one direct result",
+    )
+  }
+  let target = match call.callee {
+    External(symbol) => symbol
+    _ =>
+      raise UnsupportedAbi(
+        message="platform calls require a direct external symbol",
+      )
+  }
+  let argument_registers = call_abi_registers(call.signature.params, "argument")
+  let result_registers = call_abi_registers(call.signature.results, "result")
+  ignore(argument_registers)
+  let inputs = operands.map(@vcode.Input::any)
+  let outputs = Array::makei(result_types.length(), index => {
+    @vcode.Output::any(result_types[index])
+  })
+  (builder.append_body(
+    block,
+    PlatformCall(target, call.signature),
+    inputs,
+    [],
+    platform_call_clobbers(),
+    metadata,
+  ) catch {
+    error => raise BuildFailure(cause=error)
+  })
+  |> ignore
+  let results : Array[@vcode.Value] = []
+  for index, ty in result_types {
+    let (_, materialized) = builder.append_body(
+      block,
+      IncomingCallResult(ty, result_registers[index]),
+      [],
+      [outputs[index]],
+      [],
+      @vcode.InstructionMetadata::empty(),
+    ) catch {
+      error => raise BuildFailure(cause=error)
+    }
+    results.push(materialized[0])
+  }
+  for root in metadata.live_gc_roots {
+    (builder.append_body(
+      block,
+      KeepAlive(GcRef64),
+      [@vcode.Input::any(root)],
+      [],
+      [],
+      @vcode.InstructionMetadata::empty(),
+    ) catch {
+      error => raise BuildFailure(cause=error)
+    })
+    |> ignore
+  }
+  results
 }
 
 ///|
@@ -165,6 +274,29 @@ fn lower_instruction(
   let result_types = semantic_results.map(value => {
     function.value_type(value).unwrap()
   })
+  let roots = map_values(
+    function,
+    values,
+    function.instruction_metadata(instruction).unwrap().live_gc_roots,
+  )
+  if operation is Call(call) {
+    let results = lower_direct_platform_call(
+      builder,
+      block,
+      call,
+      operands,
+      result_types,
+      source_metadata(
+        function.instruction_metadata(instruction).unwrap(),
+        roots,
+        operation.semantics(),
+      ),
+    )
+    for index, result in semantic_results {
+      values[function.value_index(result).unwrap()] = Some(results[index])
+    }
+    return
+  }
   let selected = match operation {
     I32Const(bits) => Some(LoadConstant(W32, bits.to_uint64()))
     I64Const(bits) => Some(LoadConstant(W64, bits))
@@ -202,18 +334,17 @@ fn lower_instruction(
     None =>
       raise UnsupportedOperation(block_index~, instruction_index~, operation~)
   }
-  let roots = map_values(
-    function,
-    values,
-    function.instruction_metadata(instruction).unwrap().live_gc_roots,
-  )
   let results = append_body(
     builder,
     block,
     selected,
     operands.map(@vcode.Input::any),
     result_types.map(@vcode.Output::any),
-    source_metadata(function.instruction_metadata(instruction).unwrap(), roots),
+    source_metadata(
+      function.instruction_metadata(instruction).unwrap(),
+      roots,
+      operation.semantics(),
+    ),
   )
   for index, result in semantic_results {
     values[function.value_index(result).unwrap()] = Some(results[index])

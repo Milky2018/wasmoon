@@ -9,6 +9,7 @@ priv struct BranchFixup {
 priv struct CodeBuffer {
   code : Array[Byte]
   fixups : Array[BranchFixup]
+  relocations : Array[@code_object.Relocation]
 }
 
 ///|
@@ -29,7 +30,7 @@ pub impl Show for AArch64EmitError with fn output(self, logger) {
 
 ///|
 fn CodeBuffer::new() -> CodeBuffer {
-  { code: [], fixups: [] }
+  { code: [], fixups: [], relocations: [] }
 }
 
 ///|
@@ -348,15 +349,18 @@ fn emit_instruction(
   frame : AArch64Frame,
   block : @vcode.Block,
   instruction : @vcode.Instruction,
-) -> Unit raise AArch64EmitError {
+) -> Int raise AArch64EmitError {
   let reg = fn(index) {
     allocation.operand_location(instruction, index).unwrap()
   }
+  let mut metadata_offset = buffer.position()
   match function.instruction(instruction).unwrap() {
     IncomingReg(ty, _) => emit_move(buffer, ty, reg(1), reg(0))
     IncomingStack(ty, offset) =>
       emit_stack_access(buffer, true, ty, reg(0), frame.frame_size() + offset)
+    IncomingCallResult(ty, source) => emit_move(buffer, ty, reg(0), source)
     OutgoingReg(ty, destination) => emit_move(buffer, ty, destination, reg(0))
+    KeepAlive(_) => ()
     LoadConstant(width, bits) => emit_constant(buffer, width, reg(0), bits)
     Move(ty) => emit_move(buffer, ty, reg(1), reg(0))
     IntUnary(width, operation) =>
@@ -377,6 +381,39 @@ fn emit_instruction(
       buffer.emit_word(
         encode_three_register(0x8B000000U, reg(2), reg(0), reg(1)),
       )
+    PlatformCall(target, signature) => {
+      let destinations = abi_registers(signature.params).unwrap()
+      let moves : Array[@vcode.ParallelMove] = []
+      for index, ty in signature.params {
+        moves.push(
+          @vcode.ParallelMove::new(
+            ty,
+            Register(reg(index)),
+            Register(destinations[index]),
+          ),
+        )
+      }
+      let resolved = @vcode.resolve_parallel_moves(
+        moves,
+        [@vcode.PhysicalReg::new(16, Int), @vcode.PhysicalReg::new(17, Int)],
+        [
+          @vcode.PhysicalReg::new(16, FpVector),
+          @vcode.PhysicalReg::new(17, FpVector),
+        ],
+      ) catch {
+        error => raise InvalidParallelMove(cause=error)
+      }
+      emit_resolved_moves(buffer, frame, resolved)
+      metadata_offset = buffer.position()
+      buffer.emit_word(0x94000000U)
+      buffer.relocations.push(
+        @code_object.Relocation::new(
+          metadata_offset,
+          AArch64Call26,
+          External(target),
+        ),
+      )
+    }
     Jump => {
       emit_edge_moves(buffer, function, allocation, frame, block, 0)
       buffer.emit_branch(
@@ -400,6 +437,7 @@ fn emit_instruction(
       buffer.emit_word(0xD65F03C0U)
     }
   }
+  metadata_offset
 }
 
 ///|
@@ -465,8 +503,9 @@ pub fn emit(
     block_offsets[function.block_index(block).unwrap()] = buffer.position()
     for instruction in function.block_body(block) {
       emit_edits_at(buffer, function, frame, edits, instruction, Before)
-      let instruction_offset = buffer.position()
-      emit_instruction(buffer, function, allocation, frame, block, instruction)
+      let instruction_offset = emit_instruction(
+        buffer, function, allocation, frame, block, instruction,
+      )
       record_instruction_metadata(
         buffer, function, allocation, frame, instruction, instruction_offset, sources,
         traps, safepoints,
@@ -475,8 +514,9 @@ pub fn emit(
     }
     let terminator = function.block_terminator(block).unwrap()
     emit_edits_at(buffer, function, frame, edits, terminator, Before)
-    let terminator_offset = buffer.position()
-    emit_instruction(buffer, function, allocation, frame, block, terminator)
+    let terminator_offset = emit_instruction(
+      buffer, function, allocation, frame, block, terminator,
+    )
     record_instruction_metadata(
       buffer, function, allocation, frame, terminator, terminator_offset, sources,
       traps, safepoints,
@@ -484,7 +524,15 @@ pub fn emit(
     emit_edits_at(buffer, function, frame, edits, terminator, After)
   }
   patch_branches(buffer, function, block_offsets)
-  @code_object.build(AArch64, buffer.code, sources~, traps~, safepoints~) catch {
+  let relocations = buffer.relocations
+  @code_object.build(
+    AArch64,
+    buffer.code,
+    relocations~,
+    sources~,
+    traps~,
+    safepoints~,
+  ) catch {
     error => raise InvalidCodeObject(cause=error)
   }
 }

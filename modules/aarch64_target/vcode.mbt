@@ -44,13 +44,16 @@ pub(all) enum AArch64Condition {
 pub(all) enum AArch64Inst {
   IncomingReg(@semantic.ValueType, @vcode.PhysicalReg)
   IncomingStack(@semantic.ValueType, Int)
+  IncomingCallResult(@semantic.ValueType, @vcode.PhysicalReg)
   OutgoingReg(@semantic.ValueType, @vcode.PhysicalReg)
+  KeepAlive(@semantic.ValueType)
   LoadConstant(GprWidth, UInt64)
   Move(@semantic.ValueType)
   IntUnary(GprWidth, AArch64IntUnary)
   IntBinary(GprWidth, AArch64IntBinary)
   CompareSet(GprWidth, AArch64Condition)
   AddAddress
+  PlatformCall(@semantic.ExternalSymbol, @semantic.Signature)
   Jump
   BranchNonZero32
   Return
@@ -83,6 +86,46 @@ fn require_fixed_use(
       message="operand does not use the required ABI register",
     )
   }
+}
+
+///|
+fn abi_registers(
+  types : Array[@semantic.ValueType],
+) -> Array[@vcode.PhysicalReg]? {
+  let registers : Array[@vcode.PhysicalReg] = []
+  let mut int_index = 0
+  let mut fp_index = 0
+  for ty in types {
+    let class = @vcode.reg_class_for_value_type(ty)
+    let index = if class == Int {
+      let current = int_index
+      int_index += 1
+      current
+    } else {
+      let current = fp_index
+      fp_index += 1
+      current
+    }
+    if index >= 8 {
+      return None
+    }
+    registers.push(@vcode.PhysicalReg::new(index, class))
+  }
+  Some(registers)
+}
+
+///|
+fn platform_call_clobbers() -> Array[@vcode.PhysicalReg] {
+  let clobbers : Array[@vcode.PhysicalReg] = []
+  for index in 0..<18 {
+    clobbers.push(@vcode.PhysicalReg::new(index, Int))
+  }
+  // The unified FP/vector bank must conservatively treat v8-v15 as clobbered:
+  // AAPCS64 preserves only their low 64 bits, not a complete V128 value.
+  for index in 0..<32 {
+    clobbers.push(@vcode.PhysicalReg::new(index, FpVector))
+  }
+  clobbers
 }
 
 ///|
@@ -155,6 +198,15 @@ pub fn verify_vcode(
         }
         require_instruction_shape(function, instruction, [], [ty], false, 0)
       }
+      IncomingCallResult(ty, reg) => {
+        if reg.class != @vcode.reg_class_for_value_type(ty) {
+          raise InvalidInstruction(
+            instruction~,
+            message="call result register class does not match value type",
+          )
+        }
+        require_instruction_shape(function, instruction, [], [ty], false, 0)
+      }
       LoadConstant(width, bits) => {
         if width == W32 && bits > 0xFFFFFFFFUL {
           raise InvalidInstruction(
@@ -180,6 +232,8 @@ pub fn verify_vcode(
         }
         require_instruction_shape(function, instruction, [ty], [], false, 0)
       }
+      KeepAlive(ty) =>
+        require_instruction_shape(function, instruction, [ty], [], false, 0)
       Move(ty) =>
         require_instruction_shape(function, instruction, [ty], [ty], false, 0)
       IntUnary(width, _) => {
@@ -217,6 +271,55 @@ pub fn verify_vcode(
           false,
           0,
         )
+      PlatformCall(_, signature) => {
+        if signature.results.length() > 1 {
+          raise InvalidInstruction(
+            instruction~,
+            message="platform call supports at most one direct result",
+          )
+        }
+        let argument_registers = match abi_registers(signature.params) {
+          Some(registers) => registers
+          None =>
+            raise InvalidInstruction(
+              instruction~,
+              message="stack call arguments are not selected yet",
+            )
+        }
+        let result_registers = match abi_registers(signature.results) {
+          Some(registers) => registers
+          None =>
+            raise InvalidInstruction(
+              instruction~,
+              message="stack call results are not supported",
+            )
+        }
+        require_instruction_shape(
+          function,
+          instruction,
+          signature.params,
+          [],
+          false,
+          0,
+        )
+        ignore(argument_registers)
+        for operand in function.instruction_operands(instruction) {
+          if operand.constraint != Any {
+            raise InvalidInstruction(
+              instruction~,
+              message="direct call arguments must remain allocatable before ABI moves",
+            )
+          }
+        }
+        ignore(result_registers)
+        if function.instruction_clobbers(instruction) !=
+          platform_call_clobbers() {
+          raise InvalidInstruction(
+            instruction~,
+            message="platform call has an invalid caller-saved clobber set",
+          )
+        }
+      }
       Jump => require_instruction_shape(function, instruction, [], [], true, 1)
       BranchNonZero32 =>
         require_instruction_shape(function, instruction, [I32], [], true, 2)
@@ -227,6 +330,36 @@ pub fn verify_vcode(
           !operands.is_empty() {
           raise InvalidInstruction(instruction~, message="invalid return shape")
         }
+      }
+    }
+  }
+  for block in function.layout() {
+    let body = function.block_body(block)
+    let consumed_results = Array::make(body.length(), false)
+    for index, instruction in body {
+      if function.instruction(instruction) is Some(PlatformCall(_, signature)) {
+        let registers = abi_registers(signature.results).unwrap()
+        for result_index, ty in signature.results {
+          let body_index = index + result_index + 1
+          if body_index >= body.length() ||
+            function.instruction(body[body_index]) !=
+            Some(IncomingCallResult(ty, registers[result_index])) {
+            raise InvalidInstruction(
+              instruction~,
+              message="direct call results are not materialized in ABI order",
+            )
+          }
+          consumed_results[body_index] = true
+        }
+      }
+    }
+    for index, instruction in body {
+      if function.instruction(instruction) is Some(IncomingCallResult(_, _)) &&
+        !consumed_results[index] {
+        raise InvalidInstruction(
+          instruction~,
+          message="call result is not attached to a preceding direct call",
+        )
       }
     }
   }

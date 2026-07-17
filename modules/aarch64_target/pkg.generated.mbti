@@ -130,13 +130,16 @@ pub fn AArch64Frame::summary(Self) -> String
 pub(all) enum AArch64Inst {
   IncomingReg(@machv.ValueType, @vcode.PhysicalReg)
   IncomingStack(@machv.ValueType, Int)
+  IncomingCallResult(@machv.ValueType, @vcode.PhysicalReg)
   OutgoingReg(@machv.ValueType, @vcode.PhysicalReg)
+  KeepAlive(@machv.ValueType)
   LoadConstant(GprWidth, UInt64)
   Move(@machv.ValueType)
   IntUnary(GprWidth, AArch64IntUnary)
   IntBinary(GprWidth, AArch64IntBinary)
   CompareSet(GprWidth, AArch64Condition)
   AddAddress
+  PlatformCall(@machv.ExternalSymbol, @machv.Signature)
   Jump
   BranchNonZero32
   Return

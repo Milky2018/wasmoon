@@ -72,7 +72,7 @@ fn emit_location_move(
 }
 
 ///|
-fn emit_resolved_edge_moves(
+fn emit_resolved_moves(
   buffer : CodeBuffer,
   frame : AArch64Frame,
   transfers : Array[@vcode.ParallelMove],
@@ -91,7 +91,7 @@ fn emit_edge_moves(
   block : @vcode.Block,
   successor_index : Int,
 ) -> Unit raise AArch64EmitError {
-  emit_resolved_edge_moves(
+  emit_resolved_moves(
     buffer,
     frame,
     resolve_edge_moves(function, allocation, block, successor_index),
@@ -114,15 +114,15 @@ fn emit_conditional_edges(
   let false_moves = resolve_edge_moves(function, allocation, block, 1)
   if true_moves.is_empty() {
     buffer.emit_branch(when_true, 19, 0x35000000U | reg_bits(condition))
-    emit_resolved_edge_moves(buffer, frame, false_moves)
+    emit_resolved_moves(buffer, frame, false_moves)
     buffer.emit_branch(when_false, 26, 0x14000000U)
   } else {
     let local_true_branch = buffer.position()
     buffer.emit_word(0x35000000U | reg_bits(condition))
-    emit_resolved_edge_moves(buffer, frame, false_moves)
+    emit_resolved_moves(buffer, frame, false_moves)
     buffer.emit_branch(when_false, 26, 0x14000000U)
     patch_relative_branch(buffer, local_true_branch, buffer.position(), 19)
-    emit_resolved_edge_moves(buffer, frame, true_moves)
+    emit_resolved_moves(buffer, frame, true_moves)
     buffer.emit_branch(when_true, 26, 0x14000000U)
   }
 }

@@ -83,3 +83,53 @@ test "AArch64 frame plans spills and callee-saved registers" {
     ),
   )
 }
+
+///|
+test "AArch64 allocation keeps values live across a direct call out of clobbers" {
+  let builder = @semantic.FunctionBuilder::new(
+    "call_clobber",
+    Internal,
+    [I64],
+    [I64],
+  )
+  let call = @semantic.SemanticCall::new(
+    External(@semantic.ExternalSymbol::new("runtime.value")),
+    @semantic.Signature::new([], [I64]),
+    Platform,
+    @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
+  )
+  let called = builder.emit(Call(call), [], [I64])[0]
+  let result = builder.emit(IntBinary(Add), [builder.parameters()[0], called], [
+      I64,
+    ])[0]
+  builder.return_([result])
+  let function = lower(builder.finish())
+  let allocation = allocate(function)
+  inspect(
+    allocation.summary(),
+    content=(
+      #|allocation call_clobber
+      #|  v0:i64 -> p0:int
+      #|  v1:i64 -> p19:int
+      #|  v2:i64 -> p0:int
+      #|  v3:i64 -> p1:int
+      #|  i0 operand0 -> p0:int
+      #|  i0 operand1 -> p19:int
+      #|  i2 operand0 -> p0:int
+      #|  i3 operand0 -> p19:int
+      #|  i3 operand1 -> p0:int
+      #|  i3 operand2 -> p1:int
+      #|  i4 operand0 -> p1:int
+      #|
+    ),
+  )
+  inspect(
+    plan_frame(function, allocation).summary(),
+    content=(
+      #|aarch64 frame size=16 align=16
+      #|  save p19:int at sp+0
+      #|  save p30:int at sp+8
+      #|
+    ),
+  )
+}

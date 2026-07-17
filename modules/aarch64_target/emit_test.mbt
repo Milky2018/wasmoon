@@ -375,6 +375,110 @@ test "AArch64 code objects retain safepoints and allocated GC roots" {
 }
 
 ///|
+test "AArch64 direct calls preserve LR and emit typed call relocations" {
+  let builder = @semantic.FunctionBuilder::new(
+    "emitted_direct_call",
+    Internal,
+    [GcRef64],
+    [],
+  )
+  let call = @semantic.SemanticCall::new(
+    External(@semantic.ExternalSymbol::new("runtime.poll")),
+    @semantic.Signature::new([], []),
+    Platform,
+    @semantic.CallBehavior::new(ReadWrite, true, true, true, true),
+  )
+  builder.emit_with_metadata(
+    Call(call),
+    [],
+    [],
+    @semantic.InstructionMetadata::new(
+      Some(@semantic.SourceLocation::new("poll.wat", 5, 2)),
+      [builder.parameters()[0]],
+    ),
+  )
+  |> ignore
+  builder.return_([])
+  let function = lower(builder.finish())
+  let allocation = allocate(function)
+  let frame = plan_frame(function, allocation)
+  inspect(
+    frame.summary(),
+    content=(
+      #|aarch64 frame size=16 align=16
+      #|  save p19:int at sp+0
+      #|  save p30:int at sp+8
+      #|
+    ),
+  )
+  debug_inspect(
+    emit(function, allocation, frame),
+    content=(
+      #|{
+      #|  architecture: AArch64,
+      #|  code: [
+      #|    0xff,
+      #|    0x43,
+      #|    0x00,
+      #|    0xd1,
+      #|    0xf3,
+      #|    0x03,
+      #|    0x00,
+      #|    0xf9,
+      #|    0xfe,
+      #|    0x07,
+      #|    0x00,
+      #|    0xf9,
+      #|    0xf3,
+      #|    0x03,
+      #|    0x00,
+      #|    0xaa,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x94,
+      #|    0xfe,
+      #|    0x07,
+      #|    0x40,
+      #|    0xf9,
+      #|    0xf3,
+      #|    0x03,
+      #|    0x40,
+      #|    0xf9,
+      #|    0xff,
+      #|    0x43,
+      #|    0x00,
+      #|    0x91,
+      #|    0xc0,
+      #|    0x03,
+      #|    0x5f,
+      #|    0xd6,
+      #|  ],
+      #|  relocations: [
+      #|    {
+      #|      offset: 16,
+      #|      kind: AArch64Call26,
+      #|      target: External({ name: "runtime.poll" }),
+      #|      addend: 0,
+      #|    },
+      #|  ],
+      #|  sources: [{ offset: 16, source: { file: "poll.wat", line: 5, column: 2 } }],
+      #|  traps: [],
+      #|  safepoints: [
+      #|    {
+      #|      offset: 16,
+      #|      kind: GcAndCancellation,
+      #|      roots: [Register(Int, 19)],
+      #|      source: Some({ file: "poll.wat", line: 5, column: 2 }),
+      #|    },
+      #|  ],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
 test "AArch64 edge emission resolves register cycles through reserved scratch" {
   let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new_with_results(
     "edge_cycle",

@@ -52,6 +52,13 @@ fn used_callee_saved_registers(
       regs.push(reg)
     }
   }
+  for index in 0..<function.instruction_count() {
+    let instruction = function.instruction_at(index).unwrap()
+    if function.instruction(instruction) is Some(PlatformCall(_, _)) {
+      regs.push(@vcode.PhysicalReg::new(30, Int))
+      break
+    }
+  }
   regs.sort_by(fn(left, right) {
     let class_order = match (left.class, right.class) {
       (Int, FpVector) => -1
