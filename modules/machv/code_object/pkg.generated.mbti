@@ -7,7 +7,7 @@ import {
 }
 
 // Values
-pub fn build(Architecture, Array[Byte], relocations? : Array[Relocation], traps? : Array[TrapSite], safepoints? : Array[SafepointSite], unwind? : Array[Byte]) -> UnlinkedCodeObject raise CodeObjectVerifyError
+pub fn build(Architecture, Array[Byte], relocations? : Array[Relocation], sources? : Array[SourceSite], traps? : Array[TrapSite], safepoints? : Array[SafepointSite], unwind? : Array[Byte]) -> UnlinkedCodeObject raise CodeObjectVerifyError
 
 // Errors
 pub suberror CodeObjectVerifyError {
@@ -15,6 +15,7 @@ pub suberror CodeObjectVerifyError {
   MisalignedCodeSize(size~ : Int)
   InvalidRelocation(index~ : Int, message~ : String)
   DuplicateRelocationOffset(offset~ : Int)
+  InvalidSourceSite(index~ : Int, offset~ : Int)
   InvalidTrapSite(index~ : Int, offset~ : Int)
   InvalidSafepointSite(index~ : Int, offset~ : Int)
   InvalidRootLocation(safepoint~ : Int, root~ : Int)
@@ -67,6 +68,12 @@ pub struct SafepointSite {
 } derive(Eq, @debug.Debug)
 pub fn SafepointSite::new(Int, @machv.SafepointKind, Array[RootLocation], source? : @machv.SourceLocation) -> Self
 
+pub struct SourceSite {
+  offset : Int
+  source : @machv.SourceLocation
+} derive(Eq, @debug.Debug)
+pub fn SourceSite::new(Int, @machv.SourceLocation) -> Self
+
 pub struct TrapSite {
   offset : Int
   reason : @machv.TrapReason
@@ -81,6 +88,7 @@ pub fn UnlinkedCodeObject::architecture(Self) -> Architecture
 pub fn UnlinkedCodeObject::code(Self) -> Array[Byte]
 pub fn UnlinkedCodeObject::relocations(Self) -> Array[Relocation]
 pub fn UnlinkedCodeObject::safepoints(Self) -> Array[SafepointSite]
+pub fn UnlinkedCodeObject::sources(Self) -> Array[SourceSite]
 pub fn UnlinkedCodeObject::traps(Self) -> Array[TrapSite]
 pub fn UnlinkedCodeObject::unwind(Self) -> Array[Byte]
 pub fn UnlinkedCodeObject::verify(Self) -> Unit raise CodeObjectVerifyError

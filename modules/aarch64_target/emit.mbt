@@ -15,8 +15,8 @@ priv struct CodeBuffer {
 pub suberror AArch64EmitError {
   InvalidFrame(cause~ : AArch64FrameError)
   InvalidCodeObject(cause~ : @code_object.CodeObjectVerifyError)
-  UnsupportedValueType(ty~ : @semantic.ValueType)
-  UnsupportedEdgeMove
+  InvalidParallelMove(cause~ : @vcode.MoveResolveError)
+  UnresolvedStackMove
   FrameOffsetOutOfRange(offset~ : Int)
   BranchTargetMissing(block~ : @vcode.Block)
   BranchOutOfRange(offset~ : Int, bits~ : Int)
@@ -86,7 +86,7 @@ fn emit_move(
   ty : @semantic.ValueType,
   to : @vcode.PhysicalReg,
   from : @vcode.PhysicalReg,
-) -> Unit raise AArch64EmitError {
+) -> Unit {
   if to == from {
     return
   }
@@ -94,7 +94,13 @@ fn emit_move(
     I32 => buffer.emit_word(0x2A0003E0U | (reg_bits(from) << 16) | reg_bits(to))
     I64 | Ptr64 | GcRef64 =>
       buffer.emit_word(0xAA0003E0U | (reg_bits(from) << 16) | reg_bits(to))
-    _ => raise UnsupportedValueType(ty~)
+    F32 | F64 | V128 =>
+      buffer.emit_word(
+        0x4EA01C00U |
+        (reg_bits(from) << 16) |
+        (reg_bits(from) << 5) |
+        reg_bits(to),
+      )
   }
 }
 
@@ -135,7 +141,9 @@ fn emit_stack_access(
   let (scale, load_base, store_base) = match ty {
     I32 => (4, 0xB9400000U, 0xB9000000U)
     I64 | Ptr64 | GcRef64 => (8, 0xF9400000U, 0xF9000000U)
-    _ => raise UnsupportedValueType(ty~)
+    F32 => (4, 0xBD400000U, 0xBD000000U)
+    F64 => (8, 0xFD400000U, 0xFD000000U)
+    V128 => (16, 0x3DC00000U, 0x3D800000U)
   }
   if offset < 0 || offset % scale != 0 || offset / scale > 4095 {
     raise FrameOffsetOutOfRange(offset~)
@@ -310,7 +318,7 @@ fn[Inst] emit_edit(
       )
     Move(value~, from~, to~) =>
       emit_move(buffer, function.value_type(value).unwrap(), to, from)
-    EdgeMove(..) => raise UnsupportedEdgeMove
+    EdgeMove(..) => ()
   }
 }
 
@@ -338,6 +346,7 @@ fn emit_instruction(
   function : @vcode.Function[AArch64Inst],
   allocation : @vcode.Allocation,
   frame : AArch64Frame,
+  block : @vcode.Block,
   instruction : @vcode.Instruction,
 ) -> Unit raise AArch64EmitError {
   let reg = fn(index) {
@@ -368,24 +377,24 @@ fn emit_instruction(
       buffer.emit_word(
         encode_three_register(0x8B000000U, reg(2), reg(0), reg(1)),
       )
-    Jump =>
+    Jump => {
+      emit_edge_moves(buffer, function, allocation, frame, block, 0)
       buffer.emit_branch(
         function.instruction_successor_at(instruction, 0).unwrap().target,
-        26,
-        0x14000000U,
-      )
-    BranchNonZero32 => {
-      buffer.emit_branch(
-        function.instruction_successor_at(instruction, 0).unwrap().target,
-        19,
-        0x35000000U | reg_bits(reg(0)),
-      )
-      buffer.emit_branch(
-        function.instruction_successor_at(instruction, 1).unwrap().target,
         26,
         0x14000000U,
       )
     }
+    BranchNonZero32 =>
+      emit_conditional_edges(
+        buffer,
+        function,
+        allocation,
+        frame,
+        block,
+        instruction,
+        reg(0),
+      )
     Return => {
       emit_epilogue(buffer, frame)
       buffer.emit_word(0xD65F03C0U)
@@ -405,27 +414,35 @@ fn patch_branches(
     if target < 0 {
       raise BranchTargetMissing(block=fixup.target)
     }
-    let delta = target - fixup.offset
-    let words = delta / 4
-    let minimum = -(1 << (fixup.bits - 1))
-    let maximum = (1 << (fixup.bits - 1)) - 1
-    if delta % 4 != 0 || words < minimum || words > maximum {
-      raise BranchOutOfRange(offset=delta, bits=fixup.bits)
-    }
-    let base = if fixup.bits == 26 {
-      0x14000000U
-    } else {
-      let old = buffer.code[fixup.offset].to_uint()
-      0x35000000U | (old & 31U)
-    }
-    let mask = if fixup.bits == 26 { 0x03FFFFFFU } else { 0x7FFFFU }
-    let encoded = base |
-      (
-        (words.reinterpret_as_uint() & mask) <<
-        (if fixup.bits == 19 { 5 } else { 0 })
-      )
-    buffer.patch_word(fixup.offset, encoded)
+    patch_relative_branch(buffer, fixup.offset, target, fixup.bits)
   }
+}
+
+///|
+fn patch_relative_branch(
+  buffer : CodeBuffer,
+  offset : Int,
+  target : Int,
+  bits : Int,
+) -> Unit raise AArch64EmitError {
+  let delta = target - offset
+  let words = delta / 4
+  let minimum = -(1 << (bits - 1))
+  let maximum = (1 << (bits - 1)) - 1
+  if delta % 4 != 0 || words < minimum || words > maximum {
+    raise BranchOutOfRange(offset=delta, bits~)
+  }
+  let base = if bits == 26 {
+    0x14000000U
+  } else {
+    0x35000000U | (buffer.code[offset].to_uint() & 31U)
+  }
+  let mask = if bits == 26 { 0x03FFFFFFU } else { 0x7FFFFU }
+  buffer.patch_word(
+    offset,
+    base |
+    ((words.reinterpret_as_uint() & mask) << (if bits == 19 { 5 } else { 0 })),
+  )
 }
 
 ///|
@@ -440,21 +457,34 @@ pub fn emit(
   let buffer = CodeBuffer::new()
   let block_offsets = Array::make(function.block_count(), -1)
   let edits = allocation.edits()
+  let sources : Array[@code_object.SourceSite] = []
+  let traps : Array[@code_object.TrapSite] = []
+  let safepoints : Array[@code_object.SafepointSite] = []
   emit_prologue(buffer, frame)
   for block in function.layout() {
     block_offsets[function.block_index(block).unwrap()] = buffer.position()
     for instruction in function.block_body(block) {
       emit_edits_at(buffer, function, frame, edits, instruction, Before)
-      emit_instruction(buffer, function, allocation, frame, instruction)
+      let instruction_offset = buffer.position()
+      emit_instruction(buffer, function, allocation, frame, block, instruction)
+      record_instruction_metadata(
+        buffer, function, allocation, frame, instruction, instruction_offset, sources,
+        traps, safepoints,
+      )
       emit_edits_at(buffer, function, frame, edits, instruction, After)
     }
     let terminator = function.block_terminator(block).unwrap()
     emit_edits_at(buffer, function, frame, edits, terminator, Before)
-    emit_instruction(buffer, function, allocation, frame, terminator)
+    let terminator_offset = buffer.position()
+    emit_instruction(buffer, function, allocation, frame, block, terminator)
+    record_instruction_metadata(
+      buffer, function, allocation, frame, terminator, terminator_offset, sources,
+      traps, safepoints,
+    )
     emit_edits_at(buffer, function, frame, edits, terminator, After)
   }
   patch_branches(buffer, function, block_offsets)
-  @code_object.build(AArch64, buffer.code) catch {
+  @code_object.build(AArch64, buffer.code, sources~, traps~, safepoints~) catch {
     error => raise InvalidCodeObject(cause=error)
   }
 }

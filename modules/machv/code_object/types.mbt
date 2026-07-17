@@ -67,6 +67,20 @@ pub fn TrapSite::new(
 }
 
 ///|
+pub struct SourceSite {
+  offset : Int
+  source : @semantic.SourceLocation
+} derive(Eq, Debug)
+
+///|
+pub fn SourceSite::new(
+  offset : Int,
+  source : @semantic.SourceLocation,
+) -> SourceSite {
+  { offset, source }
+}
+
+///|
 pub struct SafepointSite {
   offset : Int
   kind : @semantic.SafepointKind
@@ -89,6 +103,7 @@ pub struct UnlinkedCodeObject {
   priv architecture : Architecture
   priv code : Array[Byte]
   priv relocations : Array[Relocation]
+  priv sources : Array[SourceSite]
   priv traps : Array[TrapSite]
   priv safepoints : Array[SafepointSite]
   priv unwind : Array[Byte]
@@ -99,6 +114,13 @@ pub fn UnlinkedCodeObject::architecture(
   self : UnlinkedCodeObject,
 ) -> Architecture {
   self.architecture
+}
+
+///|
+pub fn UnlinkedCodeObject::sources(
+  self : UnlinkedCodeObject,
+) -> Array[SourceSite] {
+  self.sources.copy()
 }
 
 ///|

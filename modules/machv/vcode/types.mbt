@@ -292,11 +292,7 @@ fn Edge::copy(self : Edge) -> Edge {
 }
 
 ///|
-pub(all) enum SafepointKind {
-  Gc
-  Cancellation
-  GcAndCancellation
-} derive(Eq, Debug)
+pub type SafepointKind = @semantic.SafepointKind
 
 ///|
 pub(all) enum SymbolReference {

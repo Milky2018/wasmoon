@@ -136,10 +136,15 @@ fn source_metadata(
   metadata : @semantic.InstructionMetadata,
   values : Array[@vcode.Value],
 ) -> @vcode.InstructionMetadata {
+  let safepoint = if values.is_empty() {
+    None
+  } else {
+    Some(@semantic.SafepointKind::Gc)
+  }
   match metadata.source {
     Some(source) =>
-      @vcode.InstructionMetadata::new(source~, live_gc_roots=values)
-    None => @vcode.InstructionMetadata::new(live_gc_roots=values)
+      @vcode.InstructionMetadata::new(source~, safepoint?, live_gc_roots=values)
+    None => @vcode.InstructionMetadata::new(safepoint?, live_gc_roots=values)
   }
 }
 

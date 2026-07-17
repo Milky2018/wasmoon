@@ -9,6 +9,8 @@ import {
 // Values
 pub fn reg_class_for_value_type(@machv.ValueType) -> RegClass
 
+pub fn resolve_parallel_moves(Array[ParallelMove], Array[PhysicalReg], Array[PhysicalReg]) -> Array[ParallelMove] raise MoveResolveError
+
 pub fn[Inst] verify_allocated(Function[Inst], Allocation) -> Unit raise AllocationVerifyError
 
 pub fn[Inst] verify_emission_input(Function[Inst], Allocation, FrameLayout) -> Unit raise EmissionVerifyError
@@ -56,6 +58,14 @@ pub suberror FrameVerifyError {
   StackSlotOutOfFrame(slot~ : StackSlot)
 } derive(Eq, @debug.Debug)
 pub impl Show for FrameVerifyError
+
+pub suberror MoveResolveError {
+  MissingScratch(class~ : RegClass)
+  InvalidScratch(reg~ : PhysicalReg, expected~ : RegClass)
+  NoSafeCycleScratch(class~ : RegClass)
+  BrokenCycle
+} derive(Eq, @debug.Debug)
+pub impl Show for MoveResolveError
 
 pub suberror VCodeBuildError {
   InvalidParameter(index~ : Int)
@@ -222,12 +232,12 @@ pub impl @debug.Debug for Instruction
 pub struct InstructionMetadata {
   source : @machv.SourceLocation?
   trap : @machv.TrapReason?
-  safepoint : SafepointKind?
+  safepoint : @machv.SafepointKind?
   live_gc_roots : Array[Value]
   symbol : SymbolReference?
 }
 pub fn InstructionMetadata::empty() -> Self
-pub fn InstructionMetadata::new(source? : @machv.SourceLocation, trap? : @machv.TrapReason, safepoint? : SafepointKind, live_gc_roots? : Array[Value], symbol? : SymbolReference) -> Self
+pub fn InstructionMetadata::new(source? : @machv.SourceLocation, trap? : @machv.TrapReason, safepoint? : @machv.SafepointKind, live_gc_roots? : Array[Value], symbol? : SymbolReference) -> Self
 pub fn InstructionMetadata::safepoint(Array[Value]) -> Self
 
 pub(all) enum Location {
@@ -270,6 +280,13 @@ pub fn Output::fixed(@machv.ValueType, PhysicalReg) -> Self
 pub fn Output::tied(@machv.ValueType, Int) -> Self
 pub fn Output::with_timing(Self, OperandTiming) -> Self
 
+pub struct ParallelMove {
+  ty : @machv.ValueType
+  from : Location
+  to : Location
+} derive(Eq, @debug.Debug)
+pub fn ParallelMove::new(@machv.ValueType, Location, Location) -> Self
+
 pub struct PhysicalReg {
   id : Int
   class : RegClass
@@ -295,12 +312,6 @@ pub(all) enum RegClass {
   FpVector
 } derive(Eq, Hash, @debug.Debug)
 
-pub(all) enum SafepointKind {
-  Gc
-  Cancellation
-  GcAndCancellation
-} derive(Eq, @debug.Debug)
-
 pub struct StackSlot {
   // private fields
 }
@@ -321,6 +332,8 @@ pub impl Show for Value
 pub impl @debug.Debug for Value
 
 // Type aliases
+pub using @machv {type SafepointKind}
+
 pub using @machv {type ValueType}
 
 // Traits

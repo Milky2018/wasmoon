@@ -10,6 +10,9 @@ test "verified code object snapshots complete typed metadata" {
         External(@semantic.ExternalSymbol::new("runtime.poll")),
       ),
     ],
+    sources=[
+      SourceSite::new(0, @semantic.SourceLocation::new("fixture.wat", 8, 3)),
+    ],
     traps=[TrapSite::new(0, MemoryOutOfBounds)],
     safepoints=[
       SafepointSite::new(0, Gc, [Register(Int, 0), Stack(offset=16, ty=GcRef64)]),
@@ -29,6 +32,7 @@ test "verified code object snapshots complete typed metadata" {
       #|      addend: 0,
       #|    },
       #|  ],
+      #|  sources: [{ offset: 0, source: { file: "fixture.wat", line: 8, column: 3 } }],
       #|  traps: [{ offset: 0, reason: MemoryOutOfBounds, source: None }],
       #|  safepoints: [
       #|    {

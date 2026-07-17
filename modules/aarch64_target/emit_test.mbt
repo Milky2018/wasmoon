@@ -39,6 +39,7 @@ test "AArch64 pipeline emits an allocated scalar function" {
       #|    0xd6,
       #|  ],
       #|  relocations: [],
+      #|  sources: [],
       #|  traps: [],
       #|  safepoints: [],
       #|  unwind: [],
@@ -104,6 +105,365 @@ test "AArch64 pipeline patches conditional control flow" {
       #|    0xd6,
       #|  ],
       #|  relocations: [],
+      #|  sources: [],
+      #|  traps: [],
+      #|  safepoints: [],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
+test "AArch64 pipeline materializes block arguments on their selected edges" {
+  let builder = @semantic.FunctionBuilder::new(
+    "emitted_phi",
+    Internal,
+    [I32, I64, I64],
+    [I64],
+  )
+  let parameters = builder.parameters()
+  let when_true = builder.create_block([])
+  let when_false = builder.create_block([])
+  let merge = builder.create_block([I64])
+  builder.branch(parameters[0], when_true, [], when_false, [])
+  builder.switch_to_block(when_true)
+  builder.jump(merge, [parameters[1]])
+  builder.switch_to_block(when_false)
+  builder.jump(merge, [parameters[2]])
+  builder.switch_to_block(merge)
+  builder.return_([builder.block_parameters(merge)[0]])
+  let function = lower(builder.finish())
+  let allocation = allocate(function)
+  let frame = plan_frame(function, allocation)
+  inspect(
+    allocation.summary(),
+    content=(
+      #|allocation emitted_phi
+      #|  v0:i32 -> p0:int
+      #|  v1:i64 -> p1:int
+      #|  v2:i64 -> p2:int
+      #|  v3:i32 -> p3:int
+      #|  v4:i64 -> p0:int
+      #|  v5:i64 -> p1:int
+      #|  v6:i64 -> p4:int
+      #|  i0 operand0 -> p0:int
+      #|  i0 operand1 -> p3:int
+      #|  i1 operand0 -> p1:int
+      #|  i1 operand1 -> p0:int
+      #|  i2 operand0 -> p2:int
+      #|  i2 operand1 -> p1:int
+      #|  i3 operand0 -> p3:int
+      #|  i6 operand0 -> p4:int
+      #|  edge(block1, 0): move v4 p0:int -> p4:int
+      #|  edge(block2, 0): move v5 p1:int -> p4:int
+      #|
+    ),
+  )
+  debug_inspect(
+    emit(function, allocation, frame),
+    content=(
+      #|{
+      #|  architecture: AArch64,
+      #|  code: [
+      #|    0xe3,
+      #|    0x03,
+      #|    0x00,
+      #|    0x2a,
+      #|    0xe0,
+      #|    0x03,
+      #|    0x01,
+      #|    0xaa,
+      #|    0xe1,
+      #|    0x03,
+      #|    0x02,
+      #|    0xaa,
+      #|    0x43,
+      #|    0x00,
+      #|    0x00,
+      #|    0x35,
+      #|    0x03,
+      #|    0x00,
+      #|    0x00,
+      #|    0x14,
+      #|    0xe4,
+      #|    0x03,
+      #|    0x00,
+      #|    0xaa,
+      #|    0x03,
+      #|    0x00,
+      #|    0x00,
+      #|    0x14,
+      #|    0xe4,
+      #|    0x03,
+      #|    0x01,
+      #|    0xaa,
+      #|    0x01,
+      #|    0x00,
+      #|    0x00,
+      #|    0x14,
+      #|    0xe0,
+      #|    0x03,
+      #|    0x04,
+      #|    0xaa,
+      #|    0xc0,
+      #|    0x03,
+      #|    0x5f,
+      #|    0xd6,
+      #|  ],
+      #|  relocations: [],
+      #|  sources: [],
+      #|  traps: [],
+      #|  safepoints: [],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
+test "AArch64 conditional edges isolate their parallel copies" {
+  let builder = @semantic.FunctionBuilder::new(
+    "conditional_phi",
+    Internal,
+    [I32, I64, I64],
+    [I64],
+  )
+  let parameters = builder.parameters()
+  let merge = builder.create_block([I64])
+  builder.branch(parameters[0], merge, [parameters[1]], merge, [parameters[2]])
+  builder.switch_to_block(merge)
+  builder.return_([builder.block_parameters(merge)[0]])
+  let function = lower(builder.finish())
+  let allocation = allocate(function)
+  let frame = plan_frame(function, allocation)
+  inspect(
+    allocation.summary(),
+    content=(
+      #|allocation conditional_phi
+      #|  v0:i32 -> p0:int
+      #|  v1:i64 -> p1:int
+      #|  v2:i64 -> p2:int
+      #|  v3:i32 -> p3:int
+      #|  v4:i64 -> p0:int
+      #|  v5:i64 -> p1:int
+      #|  v6:i64 -> p4:int
+      #|  i0 operand0 -> p0:int
+      #|  i0 operand1 -> p3:int
+      #|  i1 operand0 -> p1:int
+      #|  i1 operand1 -> p0:int
+      #|  i2 operand0 -> p2:int
+      #|  i2 operand1 -> p1:int
+      #|  i3 operand0 -> p3:int
+      #|  i4 operand0 -> p4:int
+      #|  edge(block0, 0): move v4 p0:int -> p4:int
+      #|  edge(block0, 1): move v5 p1:int -> p4:int
+      #|
+    ),
+  )
+  debug_inspect(
+    emit(function, allocation, frame),
+    content=(
+      #|{
+      #|  architecture: AArch64,
+      #|  code: [
+      #|    0xe3,
+      #|    0x03,
+      #|    0x00,
+      #|    0x2a,
+      #|    0xe0,
+      #|    0x03,
+      #|    0x01,
+      #|    0xaa,
+      #|    0xe1,
+      #|    0x03,
+      #|    0x02,
+      #|    0xaa,
+      #|    0x63,
+      #|    0x00,
+      #|    0x00,
+      #|    0x35,
+      #|    0xe4,
+      #|    0x03,
+      #|    0x01,
+      #|    0xaa,
+      #|    0x03,
+      #|    0x00,
+      #|    0x00,
+      #|    0x14,
+      #|    0xe4,
+      #|    0x03,
+      #|    0x00,
+      #|    0xaa,
+      #|    0x01,
+      #|    0x00,
+      #|    0x00,
+      #|    0x14,
+      #|    0xe0,
+      #|    0x03,
+      #|    0x04,
+      #|    0xaa,
+      #|    0xc0,
+      #|    0x03,
+      #|    0x5f,
+      #|    0xd6,
+      #|  ],
+      #|  relocations: [],
+      #|  sources: [],
+      #|  traps: [],
+      #|  safepoints: [],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
+test "AArch64 code objects retain safepoints and allocated GC roots" {
+  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
+    "metadata_root",
+    [GcRef64],
+  )
+  let entry = builder.entry_block()
+  let root = builder.parameter(0)
+  builder.append_body(
+    entry,
+    Move(GcRef64),
+    [@vcode.Input::any(root)],
+    [@vcode.Output::any(GcRef64)],
+    [],
+    @vcode.InstructionMetadata::new(
+      source=@semantic.SourceLocation::new("metadata.wat", 4, 12),
+      safepoint=Gc,
+      live_gc_roots=[root],
+    ),
+  )
+  |> ignore
+  builder.set_terminator(
+    entry,
+    Return,
+    [],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  let function = builder.finish()
+  let allocation = allocate(function)
+  let frame = plan_frame(function, allocation)
+  debug_inspect(
+    emit(function, allocation, frame),
+    content=(
+      #|{
+      #|  architecture: AArch64,
+      #|  code: [0xe1, 0x03, 0x00, 0xaa, 0xc0, 0x03, 0x5f, 0xd6],
+      #|  relocations: [],
+      #|  sources: [{ offset: 0, source: { file: "metadata.wat", line: 4, column: 12 } }],
+      #|  traps: [],
+      #|  safepoints: [
+      #|    {
+      #|      offset: 0,
+      #|      kind: Gc,
+      #|      roots: [Register(Int, 0)],
+      #|      source: Some({ file: "metadata.wat", line: 4, column: 12 }),
+      #|    },
+      #|  ],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
+test "AArch64 edge emission resolves register cycles through reserved scratch" {
+  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new_with_results(
+    "edge_cycle",
+    [I64, I64],
+    [I64],
+  )
+  let entry = builder.entry_block()
+  let exit = builder.create_block([I64, I64])
+  let first = builder.parameter(0)
+  let second = builder.parameter(1)
+  builder.set_terminator(
+    entry,
+    Jump,
+    [],
+    [@vcode.Edge::new(exit, [first, second])],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  let exit_first = builder.block_parameter(exit, 0)
+  let exit_second = builder.block_parameter(exit, 1)
+  let (outgoing, _) = builder.append_body(
+    exit,
+    OutgoingReg(I64, @vcode.PhysicalReg::new(0, Int)),
+    [@vcode.Input::any(exit_first)],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  builder.set_terminator(
+    exit,
+    Return,
+    [],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  let function = builder.finish()
+  let allocation = @vcode.Allocation::for_function(function)
+  let int0 = @vcode.PhysicalReg::new(0, Int)
+  let int1 = @vcode.PhysicalReg::new(1, Int)
+  allocation.assign_value(first, Register(int0)) |> ignore
+  allocation.assign_value(second, Register(int1)) |> ignore
+  allocation.assign_value(exit_first, Register(int1)) |> ignore
+  allocation.assign_value(exit_second, Register(int0)) |> ignore
+  allocation.assign_operand(outgoing, 0, int1) |> ignore
+  allocation.add_edit(
+    @vcode.Edit::edge_move(entry, 0, first, Register(int0), Register(int1)),
+  )
+  |> ignore
+  allocation.add_edit(
+    @vcode.Edit::edge_move(entry, 0, second, Register(int1), Register(int0)),
+  )
+  |> ignore
+  let frame = plan_frame(function, allocation)
+  debug_inspect(
+    emit(function, allocation, frame),
+    content=(
+      #|{
+      #|  architecture: AArch64,
+      #|  code: [
+      #|    0xf0,
+      #|    0x03,
+      #|    0x01,
+      #|    0xaa,
+      #|    0xe1,
+      #|    0x03,
+      #|    0x00,
+      #|    0xaa,
+      #|    0xe0,
+      #|    0x03,
+      #|    0x10,
+      #|    0xaa,
+      #|    0x01,
+      #|    0x00,
+      #|    0x00,
+      #|    0x14,
+      #|    0xe0,
+      #|    0x03,
+      #|    0x01,
+      #|    0xaa,
+      #|    0xc0,
+      #|    0x03,
+      #|    0x5f,
+      #|    0xd6,
+      #|  ],
+      #|  relocations: [],
+      #|  sources: [],
       #|  traps: [],
       #|  safepoints: [],
       #|  unwind: [],

@@ -71,8 +71,8 @@ pub impl Show for AArch64AllocationError
 pub suberror AArch64EmitError {
   InvalidFrame(cause~ : AArch64FrameError)
   InvalidCodeObject(cause~ : @code_object.CodeObjectVerifyError)
-  UnsupportedValueType(ty~ : @machv.ValueType)
-  UnsupportedEdgeMove
+  InvalidParallelMove(cause~ : @vcode.MoveResolveError)
+  UnresolvedStackMove
   FrameOffsetOutOfRange(offset~ : Int)
   BranchTargetMissing(block~ : @vcode.Block)
   BranchOutOfRange(offset~ : Int, bits~ : Int)

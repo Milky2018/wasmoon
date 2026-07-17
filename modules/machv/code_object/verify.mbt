@@ -4,6 +4,7 @@ pub suberror CodeObjectVerifyError {
   MisalignedCodeSize(size~ : Int)
   InvalidRelocation(index~ : Int, message~ : String)
   DuplicateRelocationOffset(offset~ : Int)
+  InvalidSourceSite(index~ : Int, offset~ : Int)
   InvalidTrapSite(index~ : Int, offset~ : Int)
   InvalidSafepointSite(index~ : Int, offset~ : Int)
   InvalidRootLocation(safepoint~ : Int, root~ : Int)
@@ -103,6 +104,11 @@ pub fn UnlinkedCodeObject::verify(
     }
     relocation_offsets.push(relocation.offset)
   }
+  for index, source in self.sources {
+    if !valid_code_offset(self.architecture, code_size, source.offset) {
+      raise InvalidSourceSite(index~, offset=source.offset)
+    }
+  }
   for index, trap in self.traps {
     if !valid_code_offset(self.architecture, code_size, trap.offset) {
       raise InvalidTrapSite(index~, offset=trap.offset)
@@ -131,6 +137,7 @@ pub fn build(
   architecture : Architecture,
   code : Array[Byte],
   relocations? : Array[Relocation] = [],
+  sources? : Array[SourceSite] = [],
   traps? : Array[TrapSite] = [],
   safepoints? : Array[SafepointSite] = [],
   unwind? : Array[Byte] = [],
@@ -139,6 +146,7 @@ pub fn build(
     architecture,
     code: code.copy(),
     relocations: relocations.copy(),
+    sources: sources.copy(),
     traps: traps.copy(),
     safepoints: safepoints.map(site => {
       SafepointSite::new(
