@@ -112,8 +112,11 @@ pub(all) enum AArch64Inst {
   OutgoingReg(@semantic.ValueType, @vcode.PhysicalReg)
   KeepAlive(@semantic.ValueType)
   LoadConstant(GprWidth, UInt64)
+  LoadNull(@semantic.ValueType)
   LoadFloatConstant(@semantic.ValueType, UInt64)
   Move(@semantic.ValueType)
+  CarrierMove(@semantic.ValueType, @semantic.ValueType)
+  Select(@semantic.ValueType)
   IntUnary(GprWidth, AArch64IntUnary)
   IntBinary(GprWidth, AArch64IntBinary)
   PopulationCount(GprWidth)
@@ -122,6 +125,7 @@ pub(all) enum AArch64Inst {
   TrapIfZero(GprWidth)
   TrapIfSignedDivOverflow(GprWidth)
   CompareSet(GprWidth, AArch64Condition)
+  ReferenceCompareSet(@semantic.ValueType, AArch64Condition)
   FloatUnary(@semantic.ValueType, AArch64FloatUnary)
   FloatBinary(@semantic.ValueType, AArch64FloatBinary)
   FloatTernary(@semantic.ValueType, AArch64FloatTernary)
@@ -490,6 +494,15 @@ pub fn verify_vcode(
           0,
         )
       }
+      LoadNull(ty) => {
+        if ty != Ptr64 && ty != GcRef64 {
+          raise InvalidInstruction(
+            instruction~,
+            message="null materialization requires ptr64 or gcref64",
+          )
+        }
+        require_instruction_shape(function, instruction, [], [ty], false, 0)
+      }
       LoadFloatConstant(ty, bits) => {
         if (ty != F32 && ty != F64) || (ty == F32 && bits > 0xFFFFFFFFUL) {
           raise InvalidInstruction(
@@ -512,6 +525,31 @@ pub fn verify_vcode(
         require_instruction_shape(function, instruction, [ty], [], false, 0)
       Move(ty) =>
         require_instruction_shape(function, instruction, [ty], [ty], false, 0)
+      CarrierMove(from, to) => {
+        if !((from == GcRef64 && to == Ptr64) || (from == I64 && to == GcRef64)) {
+          raise InvalidInstruction(
+            instruction~,
+            message="carrier move requires gcref64-to-ptr64 or i64-to-gcref64",
+          )
+        }
+        require_instruction_shape(function, instruction, [from], [to], false, 0)
+      }
+      Select(ty) => {
+        if ty == V128 {
+          raise InvalidInstruction(
+            instruction~,
+            message="scalar select does not accept v128",
+          )
+        }
+        require_instruction_shape(
+          function,
+          instruction,
+          [I32, ty, ty],
+          [ty],
+          false,
+          0,
+        )
+      }
       IntUnary(width, _) => {
         let ty = integer_type(width)
         require_instruction_shape(function, instruction, [ty], [ty], false, 0)
@@ -577,6 +615,22 @@ pub fn verify_vcode(
       }
       CompareSet(width, _) => {
         let ty = integer_type(width)
+        require_instruction_shape(
+          function,
+          instruction,
+          [ty, ty],
+          [I32],
+          false,
+          0,
+        )
+      }
+      ReferenceCompareSet(ty, _) => {
+        if ty != Ptr64 && ty != GcRef64 {
+          raise InvalidInstruction(
+            instruction~,
+            message="reference comparison requires ptr64 or gcref64",
+          )
+        }
         require_instruction_shape(
           function,
           instruction,

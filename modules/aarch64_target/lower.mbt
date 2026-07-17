@@ -74,6 +74,16 @@ fn lower_condition(comparison : @semantic.IntComparison) -> AArch64Condition {
 }
 
 ///|
+fn lower_reference_condition(
+  comparison : @semantic.ReferenceComparison,
+) -> AArch64Condition {
+  match comparison {
+    Equal => Eq
+    NotEqual => Ne
+  }
+}
+
+///|
 fn lower_float_unary(operation : @semantic.FloatUnaryOp) -> AArch64FloatUnary? {
   match operation {
     Negate => Some(Negate)
@@ -661,9 +671,31 @@ fn lower_instruction(
   let selected = match operation {
     I32Const(bits) => Some(LoadConstant(W32, bits.to_uint64()))
     I64Const(bits) => Some(LoadConstant(W64, bits))
+    NullPtr => Some(LoadNull(Ptr64))
+    NullGcRef => Some(LoadNull(GcRef64))
     F32Const(bits) => Some(LoadFloatConstant(F32, bits.to_uint64()))
     F64Const(bits) => Some(LoadFloatConstant(F64, bits))
     Copy if result_types.length() == 1 => Some(Move(result_types[0]))
+    GcRefAddress => Some(CarrierMove(GcRef64, Ptr64))
+    GcRefFromBits => Some(CarrierMove(I64, GcRef64))
+    Select if result_types.get(0) is Some(ty) && ty != V128 => Some(Select(ty))
+    ReferenceCompare(comparison) => {
+      let operand_type = match semantic_operands.get(0) {
+        Some(value) => function.value_type(value)
+        None => None
+      }
+      match operand_type {
+        Some(Ptr64) =>
+          Some(
+            ReferenceCompareSet(Ptr64, lower_reference_condition(comparison)),
+          )
+        Some(GcRef64) =>
+          Some(
+            ReferenceCompareSet(GcRef64, lower_reference_condition(comparison)),
+          )
+        _ => None
+      }
+    }
     IntUnary(Not) =>
       match optional_gpr_width(result_types.get(0)) {
         Some(width) => Some(IntUnary(width, Mvn))

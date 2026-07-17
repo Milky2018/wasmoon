@@ -713,6 +713,7 @@ fn emit_instruction(
     OutgoingReg(ty, destination) => emit_move(buffer, ty, destination, reg(0))
     KeepAlive(_) => ()
     LoadConstant(width, bits) => emit_constant(buffer, width, reg(0), bits)
+    LoadNull(_) => emit_constant(buffer, W64, reg(0), 0UL)
     LoadFloatConstant(ty, bits) => {
       let scratch = @vcode.PhysicalReg::new(16, Int)
       if ty == F32 {
@@ -730,6 +731,24 @@ fn emit_instruction(
       }
     }
     Move(ty) => emit_move(buffer, ty, reg(1), reg(0))
+    CarrierMove(_, to) => emit_move(buffer, to, reg(1), reg(0))
+    Select(ty) => {
+      buffer.emit_word(0x7100001FU | (reg_bits(reg(0)) << 5))
+      let base : UInt = match ty {
+        I32 => 0x1A800000U
+        I64 | Ptr64 | GcRef64 => 0x9A800000U
+        F32 => 0x1E200C00U
+        F64 => 0x1E600C00U
+        V128 => raise InvalidFloatInstruction
+      }
+      buffer.emit_word(
+        base |
+        (reg_bits(reg(2)) << 16) |
+        (1U << 12) |
+        (reg_bits(reg(1)) << 5) |
+        reg_bits(reg(3)),
+      )
+    }
     IntUnary(width, operation) =>
       buffer.emit_word(encode_int_unary(width, operation, reg(1), reg(0)))
     IntBinary(width, operation) =>
@@ -798,6 +817,13 @@ fn emit_instruction(
       let compare_base = if width == W32 { 0x6B00001FU } else { 0xEB00001FU }
       buffer.emit_word(
         compare_base | (reg_bits(reg(1)) << 16) | (reg_bits(reg(0)) << 5),
+      )
+      let inverse = condition_code(condition) ^ 1U
+      buffer.emit_word(0x9A9F07E0U | (inverse << 12) | reg_bits(reg(2)))
+    }
+    ReferenceCompareSet(_, condition) => {
+      buffer.emit_word(
+        0xEB00001FU | (reg_bits(reg(1)) << 16) | (reg_bits(reg(0)) << 5),
       )
       let inverse = condition_code(condition) ^ 1U
       buffer.emit_word(0x9A9F07E0U | (inverse << 12) | reg_bits(reg(2)))

@@ -172,6 +172,103 @@ test "AArch64 lowering legalizes remaining pure scalar integer operations" {
 }
 
 ///|
+test "AArch64 lowering selects null carriers references and scalar values" {
+  let builder = @semantic.FunctionBuilder::new(
+    "scalar_carriers_and_select",
+    Internal,
+    [Ptr64, I32, I32, I64, I64, F32, F32, F64, F64],
+    [I32, I32, I32, I64, Ptr64, GcRef64, F32, F64],
+  )
+  let parameters = builder.parameters()
+  let null_pointer = builder.emit(NullPtr, [], [Ptr64])[0]
+  let null_reference = builder.emit(NullGcRef, [], [GcRef64])[0]
+  let reference = builder.emit(GcRefFromBits, [parameters[3]], [GcRef64])[0]
+  let address = builder.emit(GcRefAddress, [reference], [Ptr64])[0]
+  let pointer_equal = builder.emit(
+      ReferenceCompare(Equal),
+      [null_pointer, address],
+      [I32],
+    )[0]
+  let reference_not_equal = builder.emit(
+      ReferenceCompare(NotEqual),
+      [null_reference, reference],
+      [I32],
+    )[0]
+  let selected32 = builder.emit(
+      Select,
+      [parameters[1], parameters[1], parameters[2]],
+      [I32],
+    )[0]
+  let selected64 = builder.emit(
+      Select,
+      [parameters[1], parameters[3], parameters[4]],
+      [I64],
+    )[0]
+  let selected_pointer = builder.emit(
+      Select,
+      [parameters[1], null_pointer, address],
+      [Ptr64],
+    )[0]
+  let selected_reference = builder.emit(
+      Select,
+      [parameters[1], null_reference, reference],
+      [GcRef64],
+    )[0]
+  let selected32_float = builder.emit(
+      Select,
+      [parameters[1], parameters[5], parameters[6]],
+      [F32],
+    )[0]
+  let selected64_float = builder.emit(
+      Select,
+      [parameters[1], parameters[7], parameters[8]],
+      [F64],
+    )[0]
+  builder.return_([
+    pointer_equal, reference_not_equal, selected32, selected64, selected_pointer,
+    selected_reference, selected32_float, selected64_float,
+  ])
+  inspect(
+    lower(builder.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode scalar_carriers_and_select(v0:ptr64, v1:i32, v2:i32, v3:i64, v4:i64, v5:f32, v6:f32, v7:f64, v8:f64) -> (i32, i32, i32, i64, ptr64, gcref64, f32, f64)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v9:any@late]
+      #|  i1 IncomingReg(I32, p1:int) uses=[v1:fixed(p1:int)@early] defs=[v10:any@late]
+      #|  i2 IncomingReg(I32, p2:int) uses=[v2:fixed(p2:int)@early] defs=[v11:any@late]
+      #|  i3 IncomingReg(I64, p3:int) uses=[v3:fixed(p3:int)@early] defs=[v12:any@late]
+      #|  i4 IncomingReg(I64, p4:int) uses=[v4:fixed(p4:int)@early] defs=[v13:any@late]
+      #|  i5 IncomingReg(F32, p0:fpvec) uses=[v5:fixed(p0:fpvec)@early] defs=[v14:any@late]
+      #|  i6 IncomingReg(F32, p1:fpvec) uses=[v6:fixed(p1:fpvec)@early] defs=[v15:any@late]
+      #|  i7 IncomingReg(F64, p2:fpvec) uses=[v7:fixed(p2:fpvec)@early] defs=[v16:any@late]
+      #|  i8 IncomingReg(F64, p3:fpvec) uses=[v8:fixed(p3:fpvec)@early] defs=[v17:any@late]
+      #|  i9 LoadNull(Ptr64) defs=[v18:any@late]
+      #|  i10 LoadNull(GcRef64) defs=[v19:any@late]
+      #|  i11 CarrierMove(I64, GcRef64) uses=[v12:any@early] defs=[v20:any@late]
+      #|  i12 CarrierMove(GcRef64, Ptr64) uses=[v20:any@early] defs=[v21:any@late]
+      #|  i13 ReferenceCompareSet(Ptr64, Eq) uses=[v18:any@early, v21:any@early] defs=[v22:any@late]
+      #|  i14 ReferenceCompareSet(GcRef64, Ne) uses=[v19:any@early, v20:any@early] defs=[v23:any@late]
+      #|  i15 Select(I32) uses=[v10:any@early, v10:any@early, v11:any@early] defs=[v24:any@late]
+      #|  i16 Select(I64) uses=[v10:any@early, v12:any@early, v13:any@early] defs=[v25:any@late]
+      #|  i17 Select(Ptr64) uses=[v10:any@early, v18:any@early, v21:any@early] defs=[v26:any@late]
+      #|  i18 Select(GcRef64) uses=[v10:any@early, v19:any@early, v20:any@early] defs=[v27:any@late]
+      #|  i19 Select(F32) uses=[v10:any@early, v14:any@early, v15:any@early] defs=[v28:any@late]
+      #|  i20 Select(F64) uses=[v10:any@early, v16:any@early, v17:any@early] defs=[v29:any@late]
+      #|  i21 OutgoingReg(I32, p0:int) uses=[v22:any@early]
+      #|  i22 OutgoingReg(I32, p1:int) uses=[v23:any@early]
+      #|  i23 OutgoingReg(I32, p2:int) uses=[v24:any@early]
+      #|  i24 OutgoingReg(I64, p3:int) uses=[v25:any@early]
+      #|  i25 OutgoingReg(Ptr64, p4:int) uses=[v26:any@early]
+      #|  i26 OutgoingReg(GcRef64, p5:int) uses=[v27:any@early]
+      #|  i27 OutgoingReg(F32, p0:fpvec) uses=[v28:any@early]
+      #|  i28 OutgoingReg(F64, p1:fpvec) uses=[v29:any@early]
+      #|  i29 Return
+      #|
+    ),
+  )
+}
+
+///|
 test "AArch64 lowering selects a direct platform call with explicit ABI facts" {
   let builder = @semantic.FunctionBuilder::new(
     "direct_platform_call",
