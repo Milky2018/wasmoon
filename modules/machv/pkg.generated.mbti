@@ -199,6 +199,7 @@ pub fn Function::block_instructions(Self, Block) -> Array[Instruction]
 pub fn Function::block_parameters(Self, Block) -> Array[Value]
 pub fn Function::block_terminator(Self, Block) -> TerminatorRecord?
 pub fn Function::blocks(Self) -> Array[Block]
+pub fn Function::blocks_in_cfg_order(Self) -> Array[Block]
 pub fn Function::instruction_count(Self) -> Int
 pub fn Function::instruction_index(Self, Instruction) -> Int?
 pub fn Function::instruction_metadata(Self, Instruction) -> InstructionMetadata?

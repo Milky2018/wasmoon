@@ -1279,7 +1279,8 @@ pub fn lower(
       )
     }
   }
-  for block_index, semantic_block in semantic_blocks {
+  for semantic_block in function.blocks_in_cfg_order() {
+    let block_index = function.block_index(semantic_block).unwrap()
     let block = blocks[block_index]
     for instruction in function.block_instructions(semantic_block) {
       lower_instruction(

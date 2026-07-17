@@ -169,6 +169,11 @@ fn lower_semantic_wasm_with_isa(
     error =>
       raise PipelineFailure(message="\{function.name}: \{error.to_string()}")
   }
+  maybe_compile_aarch64_shadow(semantic, isa, environment_field_path=fn(
+    field : @semantic_machv.EnvironmentField,
+  ) {
+    environment.field_paths.get(field.name)
+  })
   let legacy = adapt_semantic_to_legacy(
     semantic,
     isa,

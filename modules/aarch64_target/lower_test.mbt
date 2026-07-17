@@ -2161,14 +2161,14 @@ test "AArch64 lowers dense and sparse switches with edge arguments" {
       #|  i1 IncomingReg(I32, p1:int) uses=[v1:fixed(p1:int)@early] defs=[v3:any@late]
       #|  i2 Switch(W32, [1, 0]) uses=[v3:any@early] -> block2(v3) -> block1(v3) -> block3(v3)
       #|block1(v4:i32):
-      #|  i3 OutgoingReg(I32, p0:int) uses=[v4:any@early]
-      #|  i4 Return
-      #|block2(v5:i32):
-      #|  i5 OutgoingReg(I32, p0:int) uses=[v5:any@early]
+      #|  i5 OutgoingReg(I32, p0:int) uses=[v4:any@early]
       #|  i6 Return
-      #|block3(v6:i32):
-      #|  i7 OutgoingReg(I32, p0:int) uses=[v6:any@early]
+      #|block2(v5:i32):
+      #|  i7 OutgoingReg(I32, p0:int) uses=[v5:any@early]
       #|  i8 Return
+      #|block3(v6:i32):
+      #|  i3 OutgoingReg(I32, p0:int) uses=[v6:any@early]
+      #|  i4 Return
       #|
     ),
   )
@@ -2181,14 +2181,14 @@ test "AArch64 lowers dense and sparse switches with edge arguments" {
       #|  i1 IncomingReg(I64, p1:int) uses=[v1:fixed(p1:int)@early] defs=[v3:any@late]
       #|  i2 Switch(W64, [7, 65536]) uses=[v3:any@early] -> block1(v3) -> block2(v3) -> block3(v3)
       #|block1(v4:i64):
-      #|  i3 OutgoingReg(I64, p0:int) uses=[v4:any@early]
-      #|  i4 Return
+      #|  i7 OutgoingReg(I64, p0:int) uses=[v4:any@early]
+      #|  i8 Return
       #|block2(v5:i64):
       #|  i5 OutgoingReg(I64, p0:int) uses=[v5:any@early]
       #|  i6 Return
       #|block3(v6:i64):
-      #|  i7 OutgoingReg(I64, p0:int) uses=[v6:any@early]
-      #|  i8 Return
+      #|  i3 OutgoingReg(I64, p0:int) uses=[v6:any@early]
+      #|  i4 Return
       #|
     ),
   )

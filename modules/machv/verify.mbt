@@ -131,6 +131,28 @@ fn reverse_postorder(successors : Array[Array[Int]]) -> Array[Int] {
 }
 
 ///|
+/// Return reachable blocks in reverse postorder, followed by any unreachable
+/// blocks in stable storage order. Target selectors use this order so every
+/// reachable SSA definition is materialized before its dominated uses without
+/// making physical block allocation order part of the semantic contract.
+pub fn Function::blocks_in_cfg_order(self : Function) -> Array[Block] {
+  let (successors, _) = build_cfg(self)
+  let order = reverse_postorder(successors)
+  let seen = Array::make(self.blocks.length(), false)
+  let blocks : Array[Block] = []
+  for block_id in order {
+    seen[block_id] = true
+    blocks.push(Block::new(self.owner, block_id))
+  }
+  for block_id in 0..<self.blocks.length() {
+    if !seen[block_id] {
+      blocks.push(Block::new(self.owner, block_id))
+    }
+  }
+  blocks
+}
+
+///|
 fn intersect_dominators(
   idom : Array[Int],
   rpo_number : Array[Int],

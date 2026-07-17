@@ -23,6 +23,7 @@ import {
   "Milky2018/milkir_machv@0.3.0",
   "Milky2018/machv_regalloc@0.2.2",
   "Milky2018/machv_emit@0.2.2",
+  "Milky2018/aarch64_target@0.1.2",
 }
 
 preferred_target = "native"

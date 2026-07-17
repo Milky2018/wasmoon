@@ -1,6 +1,7 @@
 import {
   "Milky2018/milkir_machv",
   "Milky2018/machv" @semantic_machv,
+  "Milky2018/machv/code_object",
   "Milky2018/wasm_machv",
   "Milky2018/machv_legacy" @machv,
   "Milky2018/machv_legacy/abi",
@@ -10,6 +11,7 @@ import {
   "Milky2018/machv_legacy/isa/aarch64",
   "Milky2018/machv_emit",
   "Milky2018/machv_regalloc",
+  "Milky2018/aarch64_target",
   "Milky2018/milkir",
   "Milky2018/wasm_milkir",
   "Milky2018/wasm_core/types",
@@ -17,4 +19,5 @@ import {
   "Milky2018/wasmoon_jit/cwasm",
   "moonbitlang/core/cmp",
   "moonbitlang/core/hashset",
+  "moonbitlang/x/sys",
 }

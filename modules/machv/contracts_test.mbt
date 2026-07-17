@@ -328,6 +328,22 @@ test "i32 switch rejects case bits wider than its index" {
 }
 
 ///|
+test "semantic MachV exposes definition-safe CFG lowering order" {
+  let builder = @machv.FunctionBuilder::new("cfg_order", Internal, [], [])
+  let physically_first = builder.create_block([])
+  let dominating = builder.create_block([])
+  builder.jump(dominating, [])
+  builder.switch_to_block(physically_first)
+  builder.return_([])
+  builder.switch_to_block(dominating)
+  builder.jump(physically_first, [])
+  debug_inspect(
+    builder.finish().blocks_in_cfg_order(),
+    content="[block0, block2, block1]",
+  )
+}
+
+///|
 test "indirect calls use an explicit ptr64 callee" {
   let builder = @machv.FunctionBuilder::new(
     "indirect",
