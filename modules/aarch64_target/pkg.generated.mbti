@@ -51,6 +51,8 @@ pub fn lower(@machv.Function, LoweringContext) -> @vcode.Function[AArch64Inst] r
 
 pub fn plan_frame(@vcode.Function[AArch64Inst], @vcode.Allocation) -> AArch64Frame raise AArch64FrameError
 
+pub fn prepare_aarch64_link(@code_object.UnlinkedCodeObject) -> AArch64LinkPlan raise AArch64LinkError
+
 pub fn target() -> Target
 
 pub fn verify_allocation(@vcode.Function[AArch64Inst], @vcode.Allocation) -> Unit raise AArch64AllocationError
@@ -98,6 +100,15 @@ pub suberror AArch64FrameError {
   SavedRegisterSetMismatch
 } derive(@debug.Debug)
 pub impl Show for AArch64FrameError
+
+pub suberror AArch64LinkError {
+  InvalidCodeObject(message~ : String)
+  InvalidCodeBase(address~ : Int64)
+  UnresolvedRelocation(index~ : Int)
+  RelocationOutOfRange(index~ : Int)
+  UnsupportedRelocation(index~ : Int)
+} derive(Eq, @debug.Debug)
+pub impl Show for AArch64LinkError
 
 pub suberror AArch64LowerError {
   InvalidSemantic(cause~ : @machv.MachVVerifyError)
@@ -316,6 +327,13 @@ pub(all) enum AArch64IntUnary {
   Rbit
   Neg
 } derive(Eq, @debug.Debug)
+
+pub struct AArch64LinkPlan {
+  // private fields
+} derive(@debug.Debug)
+pub fn AArch64LinkPlan::code(Self) -> Array[Byte]
+pub fn AArch64LinkPlan::link(Self, Int64, (@code_object.RelocationTarget) -> Int64?) -> Array[Byte] raise AArch64LinkError
+pub fn AArch64LinkPlan::veneer_offsets(Self) -> Array[Int]
 
 pub struct AArch64StackObject {
   offset : Int

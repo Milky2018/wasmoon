@@ -274,3 +274,149 @@ test "AArch64 shadow code executes through the production entry ABI" {
     content="(0, 20, 22, 42)",
   )
 }
+
+///|
+fn install_aarch64_link_plan(
+  plan : @aarch64_target.AArch64LinkPlan,
+  executable : ExecCode,
+  resolve : (@code_object.RelocationTarget) -> Int64?,
+) -> Bool raise @aarch64_target.AArch64LinkError {
+  let linked = plan.link(executable.ptr(), resolve)
+  let bytes = FixedArray::make(linked.length(), b'\x00')
+  for index, byte in linked {
+    bytes[index] = byte
+  }
+  @jit_ffi.c_jit_copy_code(executable.ptr(), bytes, bytes.length()) == 0
+}
+
+///|
+test "AArch64 shadow executes internal and external relocations" {
+  match host_target_arch() {
+    AArch64 => ()
+    _ => return
+  }
+  let callee_symbol = @semantic_machv.CodeSymbol::new("shadow.callee")
+  let poll_symbol = @semantic_machv.ExternalSymbol::new(
+    "wasmoon.runtime.cancel_poll",
+  )
+  let callee = @semantic_machv.FunctionBuilder::new(
+    "shadow_linked_callee",
+    Internal,
+    [Ptr64, I64],
+    [I64],
+  )
+  let callee_parameters = callee.parameters()
+  callee.emit(
+    Call(
+      @semantic_machv.SemanticCall::new(
+        External(poll_symbol),
+        @semantic_machv.Signature::new([Ptr64], [I32]),
+        Platform,
+        @semantic_machv.CallBehavior::new(ReadWrite, true, false, false, true),
+      ),
+    ),
+    [callee_parameters[0]],
+    [I32],
+  )
+  |> ignore
+  let one = callee.emit(I64Const(1UL), [], [I64])[0]
+  let incremented = callee.emit(IntBinary(Add), [callee_parameters[1], one], [
+      I64,
+    ])[0]
+  callee.return_([incremented])
+
+  let caller = @semantic_machv.FunctionBuilder::new(
+    "shadow_linked_caller",
+    Internal,
+    [Ptr64, I64],
+    [I64],
+  )
+  let caller_parameters = caller.parameters()
+  let called = caller.emit(
+      Call(
+        @semantic_machv.SemanticCall::new(
+          Internal(callee_symbol),
+          @semantic_machv.Signature::new([Ptr64, I64], [I64]),
+          Internal,
+          @semantic_machv.CallBehavior::new(
+            ReadWrite,
+            true,
+            false,
+            false,
+            false,
+          ),
+        ),
+      ),
+      caller_parameters,
+      [I64],
+    )[0]
+  caller.return_([called])
+
+  let callee_plan = @aarch64_target.prepare_aarch64_link(
+    build_aarch64_shadow(callee.finish()),
+  ) catch {
+    error => fail("failed to prepare callee link plan: \{error}")
+  }
+  let caller_plan = @aarch64_target.prepare_aarch64_link(
+    build_aarch64_shadow(caller.finish()),
+  ) catch {
+    error => fail("failed to prepare caller link plan: \{error}")
+  }
+  guard ExecCode::try_alloc(callee_plan.code().map(byte => byte.to_int()))
+    is Some(callee_code) else {
+    fail("failed to allocate linked callee")
+  }
+  guard ExecCode::try_alloc(caller_plan.code().map(byte => byte.to_int()))
+    is Some(caller_code) else {
+    fail("failed to allocate linked caller")
+  }
+  let runtime = RuntimeSymbolResolver::with_wasmoon_runtime_symbols()
+  let callee_installed = install_aarch64_link_plan(callee_plan, callee_code, fn(
+    target,
+  ) {
+    match target {
+      External(symbol) => runtime.resolve(symbol.name)
+      _ => None
+    }
+  }) catch {
+    error => fail("failed to link AArch64 callee: \{error}")
+  }
+  if !callee_installed {
+    fail("failed to install linked AArch64 callee")
+  }
+  let caller_installed = install_aarch64_link_plan(caller_plan, caller_code, fn(
+    target,
+  ) {
+    match target {
+      Code(symbol) if symbol == callee_symbol => Some(callee_code.ptr())
+      _ => None
+    }
+  }) catch {
+    error => fail("failed to link AArch64 caller: \{error}")
+  }
+  if !caller_installed {
+    fail("failed to install linked AArch64 caller")
+  }
+  let trampoline_bytes = build_entry_trampoline_for_target(
+    [I64],
+    [I64],
+    AArch64,
+  ) catch {
+    error => fail("failed to build linked-call trampoline: \{error}")
+  }
+  guard ExecCode::try_alloc(trampoline_bytes) is Some(trampoline) else {
+    fail("failed to allocate linked-call trampoline")
+  }
+  guard NativeJITContext::try_alloc(2) is Some(context) else {
+    fail("failed to allocate linked-call JIT context")
+  }
+  let values = FixedArray::from_array([41L, 0L])
+  let trap = context.call_trampoline(
+    trampoline.ptr(),
+    caller_code.ptr(),
+    values,
+    values.length(),
+    false,
+  )
+  debug_inspect((trap, values[0], values[1]), content="(0, 41, 42)")
+}
