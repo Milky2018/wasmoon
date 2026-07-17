@@ -51,3 +51,11 @@ Use this package for the complete AArch64 target pipeline after semantic
 MachV. It produces a verified `Milky2018/machv/code_object` value. Runtime
 symbol resolution, relocation application, and executable-memory ownership
 remain responsibilities of the embedding application.
+
+Internal functions use the tail-call convention: an ordinary internal caller
+places stack arguments in its reserved outgoing area, the callee pops that
+incoming area on return, and the call pseudo immediately restores the caller's
+frame-base SP. A function containing true tail calls enlarges its incoming area
+in the prologue to the maximum tail-callee requirement, then reuses that area
+when transferring control. Platform calls continue to use ordinary AAPCS64
+caller-owned stack arguments.

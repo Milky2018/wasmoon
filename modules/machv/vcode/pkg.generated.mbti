@@ -139,6 +139,7 @@ pub fn[Inst] Builder::create_block(Self[Inst], Array[@machv.ValueType]) -> Block
 pub fn[Inst] Builder::entry_block(Self[Inst]) -> Block
 pub fn[Inst] Builder::finish(Self[Inst]) -> Function[Inst]
 pub fn[Inst] Builder::new(String, Array[@machv.ValueType]) -> Self[Inst]
+pub fn[Inst] Builder::new_with_protocol(String, @machv.CallProtocol, Array[@machv.ValueType], Array[@machv.ValueType]) -> Self[Inst]
 pub fn[Inst] Builder::new_with_results(String, Array[@machv.ValueType], Array[@machv.ValueType]) -> Self[Inst]
 pub fn[Inst] Builder::parameter(Self[Inst], Int) -> Value raise VCodeBuildError
 pub fn[Inst] Builder::set_terminator(Self[Inst], Block, Inst, Array[Input], Array[Edge], Array[PhysicalReg], InstructionMetadata) -> Instruction raise VCodeBuildError
@@ -209,6 +210,7 @@ pub fn[Inst] Function::name(Self[Inst]) -> String
 pub fn[Inst] Function::parameter_at(Self[Inst], Int) -> Value?
 pub fn[Inst] Function::parameter_count(Self[Inst]) -> Int
 pub fn[Inst] Function::program_point_instruction(Self[Inst], ProgramPoint) -> Instruction?
+pub fn[Inst] Function::protocol(Self[Inst]) -> @machv.CallProtocol
 pub fn[Inst] Function::result_types(Self[Inst]) -> Array[@machv.ValueType]
 pub fn[Inst] Function::set_layout(Self[Inst], Array[Block]) -> Unit raise VCodeBuildError
 pub fn[Inst : @debug.Debug] Function::summary(Self[Inst]) -> String

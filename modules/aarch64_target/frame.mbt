@@ -20,6 +20,9 @@ priv struct ResultArea {
 ///|
 pub struct AArch64Frame {
   priv layout : @vcode.FrameLayout
+  priv local_size : Int
+  priv incoming_args_size : Int
+  priv tail_args_size : Int
   priv outgoing_args_size : Int
   priv result_area : ResultArea?
   priv stack_objects : StackObjectArea?
@@ -32,8 +35,15 @@ pub suberror AArch64FrameError {
   InvalidAllocation(cause~ : AArch64AllocationError)
   InvalidGenericFrame(cause~ : @vcode.FrameVerifyError)
   InvalidSavedRegister(reg~ : @vcode.PhysicalReg, offset~ : Int)
+  InvalidStackSlot(slot~ : @vcode.StackSlot)
   OutgoingAreaMismatch(expected~ : Int, actual~ : Int)
   ResultAreaMismatch(expected~ : Int, actual~ : Int)
+  TailAreaMismatch(
+    expected_incoming~ : Int,
+    actual_incoming~ : Int,
+    expected_tail~ : Int,
+    actual_tail~ : Int
+  )
   InvalidStackObjectArea(message~ : String)
   SavedRegisterSetMismatch
 } derive(Debug)
@@ -122,6 +132,23 @@ fn maximum_outgoing_args_size(function : @vcode.Function[AArch64Inst]) -> Int {
 }
 
 ///|
+fn maximum_tail_args_size(function : @vcode.Function[AArch64Inst]) -> Int {
+  let mut maximum = incoming_stack_capacity(function)
+  for index in 0..<function.instruction_count() {
+    let instruction = function.instruction_at(index).unwrap()
+    let size = match function.instruction(instruction) {
+      Some(TailCallDirect(_, _, plan) | TailCallIndirect(_, plan)) =>
+        plan.stack_size
+      _ => 0
+    }
+    if size > maximum {
+      maximum = size
+    }
+  }
+  maximum
+}
+
+///|
 fn maximum_result_area_size(function : @vcode.Function[AArch64Inst]) -> Int {
   let mut maximum = 0
   for index in 0..<function.instruction_count() {
@@ -183,6 +210,24 @@ pub fn AArch64Frame::frame_size(self : AArch64Frame) -> Int {
 }
 
 ///|
+pub fn AArch64Frame::incoming_args_size(self : AArch64Frame) -> Int {
+  self.incoming_args_size
+}
+
+///|
+pub fn AArch64Frame::tail_args_size(self : AArch64Frame) -> Int {
+  self.tail_args_size
+}
+
+///|
+fn AArch64Frame::tail_call_stack_base(
+  self : AArch64Frame,
+  callee_args_size : Int,
+) -> Int {
+  self.frame_size() + self.incoming_args_size - callee_args_size
+}
+
+///|
 pub fn AArch64Frame::alignment(self : AArch64Frame) -> Int {
   self.layout.alignment()
 }
@@ -229,6 +274,9 @@ pub fn AArch64Frame::saved_registers(
 ///|
 pub fn AArch64Frame::summary(self : AArch64Frame) -> String {
   let mut output = "aarch64 frame size=\{self.frame_size()} align=\{self.alignment()}\n"
+  if self.tail_args_size > self.incoming_args_size {
+    output += "  tail-args \{self.tail_args_size} bytes at sp+\{self.local_size} (incoming \{self.incoming_args_size})\n"
+  }
   if self.outgoing_args_size > 0 {
     output += "  outgoing \{self.outgoing_args_size} bytes at sp+0\n"
   }
@@ -267,6 +315,22 @@ pub fn verify_frame(
       actual=frame.outgoing_args_size,
     )
   }
+  let expected_incoming = incoming_stack_capacity(function)
+  let expected_tail = if function.protocol() == Internal {
+    maximum_tail_args_size(function)
+  } else {
+    expected_incoming
+  }
+  if frame.incoming_args_size != expected_incoming ||
+    frame.tail_args_size != expected_tail ||
+    frame.local_size + expected_tail - expected_incoming != frame.frame_size() {
+    raise TailAreaMismatch(
+      expected_incoming~,
+      actual_incoming=frame.incoming_args_size,
+      expected_tail~,
+      actual_tail=frame.tail_args_size,
+    )
+  }
   let expected_result_area = maximum_result_area_size(function)
   let actual_result_area = frame.result_area.map(area => area.size).unwrap_or(0)
   if actual_result_area != expected_result_area {
@@ -279,7 +343,7 @@ pub fn verify_frame(
     (
       area.offset < frame.outgoing_args_size ||
       area.offset % 16 != 0 ||
-      area.offset + area.size > frame.frame_size()
+      area.offset + area.size > frame.local_size
     ) {
     raise ResultAreaMismatch(expected=expected_result_area, actual=area.size)
   }
@@ -295,7 +359,7 @@ pub fn verify_frame(
         area.alignment != alignment ||
         area.offset < reserved_call_area_end ||
         area.offset % alignment != 0 ||
-        area.offset + size > frame.frame_size() {
+        area.offset + size > frame.local_size {
         raise InvalidStackObjectArea(
           message="planned stack-object area does not satisfy target requirements",
         )
@@ -322,13 +386,16 @@ pub fn verify_frame(
   for index in 0..<allocation.stack_slot_count() {
     let slot = allocation.stack_slot_at(index).unwrap()
     let offset = frame.slot_offset(slot).unwrap()
+    if offset + allocation.stack_slot_size(slot).unwrap() > frame.local_size {
+      raise InvalidStackSlot(slot~)
+    }
     occupied.push((offset, offset + allocation.stack_slot_size(slot).unwrap()))
   }
   for saved in frame.saved_registers {
     let size = register_save_size(saved.reg)
     if saved.offset < 0 ||
       saved.offset % size != 0 ||
-      saved.offset + size > frame.frame_size() {
+      saved.offset + size > frame.local_size {
       raise InvalidSavedRegister(reg=saved.reg, offset=saved.offset)
     }
     for range in occupied {
@@ -383,10 +450,17 @@ pub fn plan_frame(
     saved_registers.push({ reg, offset })
     offset += size
   }
+  let local_size = align_up(offset, 16)
+  let incoming_args_size = incoming_stack_capacity(function)
+  let tail_args_size = if function.protocol() == Internal {
+    maximum_tail_args_size(function)
+  } else {
+    incoming_args_size
+  }
   let layout = @vcode.FrameLayout::new(
     function,
     allocation,
-    align_up(offset, 16),
+    local_size + tail_args_size - incoming_args_size,
     16,
   )
   for index, slot_offset in slot_offsets {
@@ -398,6 +472,9 @@ pub fn plan_frame(
   })
   let frame = {
     layout,
+    local_size,
+    incoming_args_size,
+    tail_args_size,
     outgoing_args_size,
     result_area,
     stack_objects,

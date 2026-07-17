@@ -507,7 +507,7 @@ fn require_tail_call_plan(
     !valid_result_plan(signature.results, plan) ||
     plan.stack_size < 0 ||
     plan.stack_size % 16 != 0 ||
-    plan.stack_size > incoming_stack_capacity(function) ||
+    function.protocol() != Internal ||
     signature.results != function.result_types() {
     raise InvalidInstruction(
       instruction~,

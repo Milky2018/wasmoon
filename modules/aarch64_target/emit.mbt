@@ -2090,6 +2090,18 @@ fn emit_call_arguments(
 }
 
 ///|
+fn emit_signed_sp_adjust(
+  buffer : CodeBuffer,
+  delta : Int,
+) -> Unit raise AArch64EmitError {
+  if delta > 0 {
+    emit_sp_adjust(buffer, false, delta)
+  } else if delta < 0 {
+    emit_sp_adjust(buffer, true, -delta)
+  }
+}
+
+///|
 fn emit_instruction(
   buffer : CodeBuffer,
   function : @vcode.Function[AArch64Inst],
@@ -2610,6 +2622,7 @@ fn emit_instruction(
           Code(target),
         ),
       )
+      emit_sp_adjust(buffer, true, plan.stack_size)
     }
     InternalCallIndirect(signature, plan) => {
       let callee_register = @vcode.PhysicalReg::new(17, Int)
@@ -2631,6 +2644,7 @@ fn emit_instruction(
       }
       metadata_offset = buffer.position()
       buffer.emit_word(0xD63F0000U | (reg_bits(callee_register) << 5))
+      emit_sp_adjust(buffer, true, plan.stack_size)
     }
     TailCallDirect(target, signature, plan) => {
       let result_area = result_area_register(plan).map(destination => {
@@ -2643,10 +2657,14 @@ fn emit_instruction(
         instruction,
         signature.params,
         plan.arguments,
-        stack_base=frame.frame_size(),
+        stack_base=frame.tail_call_stack_base(plan.stack_size),
         result_area?,
       )
       emit_epilogue(buffer, frame)
+      emit_signed_sp_adjust(
+        buffer,
+        frame.incoming_args_size() - plan.stack_size,
+      )
       metadata_offset = buffer.position()
       buffer.emit_word(0x14000000U)
       buffer.relocations.push(
@@ -2670,11 +2688,15 @@ fn emit_instruction(
         signature.params,
         plan.arguments,
         operand_start=1,
-        stack_base=frame.frame_size(),
+        stack_base=frame.tail_call_stack_base(plan.stack_size),
         callee=(0, callee_register),
         result_area?,
       )
       emit_epilogue(buffer, frame)
+      emit_signed_sp_adjust(
+        buffer,
+        frame.incoming_args_size() - plan.stack_size,
+      )
       metadata_offset = buffer.position()
       buffer.emit_word(0xD61F0000U | (reg_bits(callee_register) << 5))
     }
@@ -2714,6 +2736,9 @@ fn emit_instruction(
     }
     Return => {
       emit_epilogue(buffer, frame)
+      if function.protocol() == Internal {
+        emit_sp_adjust(buffer, false, frame.incoming_args_size())
+      }
       buffer.emit_word(0xD65F03C0U)
     }
   }

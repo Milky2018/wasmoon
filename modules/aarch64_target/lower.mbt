@@ -1251,8 +1251,9 @@ pub fn lower(
     error => raise InvalidSemantic(cause=error)
   }
   let signature = function.signature()
-  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new_with_results(
+  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new_with_protocol(
     function.name(),
+    function.protocol(),
     signature.params,
     signature.results,
   )

@@ -90,8 +90,10 @@ pub suberror AArch64FrameError {
   InvalidAllocation(cause~ : AArch64AllocationError)
   InvalidGenericFrame(cause~ : @vcode.FrameVerifyError)
   InvalidSavedRegister(reg~ : @vcode.PhysicalReg, offset~ : Int)
+  InvalidStackSlot(slot~ : @vcode.StackSlot)
   OutgoingAreaMismatch(expected~ : Int, actual~ : Int)
   ResultAreaMismatch(expected~ : Int, actual~ : Int)
+  TailAreaMismatch(expected_incoming~ : Int, actual_incoming~ : Int, expected_tail~ : Int, actual_tail~ : Int)
   InvalidStackObjectArea(message~ : String)
   SavedRegisterSetMismatch
 } derive(@debug.Debug)
@@ -203,11 +205,13 @@ pub struct AArch64Frame {
 }
 pub fn AArch64Frame::alignment(Self) -> Int
 pub fn AArch64Frame::frame_size(Self) -> Int
+pub fn AArch64Frame::incoming_args_size(Self) -> Int
 pub fn AArch64Frame::outgoing_args_size(Self) -> Int
 pub fn AArch64Frame::saved_registers(Self) -> Array[(@vcode.PhysicalReg, Int)]
 pub fn AArch64Frame::slot_offset(Self, @vcode.StackSlot) -> Int?
 pub fn AArch64Frame::stack_object_offset(Self, AArch64StackObject) -> Int?
 pub fn AArch64Frame::summary(Self) -> String
+pub fn AArch64Frame::tail_args_size(Self) -> Int
 
 pub(all) enum AArch64Inst {
   IncomingReg(@machv.ValueType, @vcode.PhysicalReg)

@@ -3784,6 +3784,153 @@ test "AArch64 internal calls emit code-symbol relocations" {
 }
 
 ///|
+test "AArch64 internal callees pop dynamically allocated stack arguments" {
+  let callee_parameter_types : Array[@semantic.ValueType] = [
+    Ptr64,
+    I64,
+    I64,
+    I64,
+    I64,
+    I64,
+    I64,
+    I64,
+    I64,
+  ]
+  let builder = @semantic.FunctionBuilder::new(
+    "emitted_internal_stack_call",
+    Internal,
+    [Ptr64],
+    [],
+  )
+  let operands = [builder.parameters()[0]]
+  for index in 0..<8 {
+    operands.push(builder.emit(I64Const(index.to_uint64()), [], [I64])[0])
+  }
+  let call = @semantic.SemanticCall::new(
+    Internal(@semantic.CodeSymbol::new("wasm.func.stack")),
+    @semantic.Signature::new(callee_parameter_types, []),
+    Internal,
+    @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
+  )
+  builder.emit(Call(call), operands, []) |> ignore
+  builder.return_([])
+  let function = lower(builder.finish(), test_lowering_context())
+  let allocation = allocate(function)
+  let frame = plan_frame(function, allocation)
+  inspect(
+    frame.summary(),
+    content=(
+      #|aarch64 frame size=32 align=16
+      #|  outgoing 16 bytes at sp+0
+      #|  save p30:int at sp+16
+      #|
+    ),
+  )
+  debug_inspect(
+    emit(function, allocation, frame),
+    content=(
+      #|{
+      #|  architecture: AArch64,
+      #|  code: [
+      #|    0xff,
+      #|    0x83,
+      #|    0x00,
+      #|    0xd1,
+      #|    0xfe,
+      #|    0x0b,
+      #|    0x00,
+      #|    0xf9,
+      #|    0xe1,
+      #|    0x03,
+      #|    0x00,
+      #|    0xaa,
+      #|    0x00,
+      #|    0x00,
+      #|    0xe0,
+      #|    0xd2,
+      #|    0x22,
+      #|    0x00,
+      #|    0x80,
+      #|    0xd2,
+      #|    0x43,
+      #|    0x00,
+      #|    0x80,
+      #|    0xd2,
+      #|    0x64,
+      #|    0x00,
+      #|    0x80,
+      #|    0xd2,
+      #|    0x85,
+      #|    0x00,
+      #|    0x80,
+      #|    0xd2,
+      #|    0xa6,
+      #|    0x00,
+      #|    0x80,
+      #|    0xd2,
+      #|    0xc7,
+      #|    0x00,
+      #|    0x80,
+      #|    0xd2,
+      #|    0xe8,
+      #|    0x00,
+      #|    0x80,
+      #|    0xd2,
+      #|    0xe8,
+      #|    0x03,
+      #|    0x00,
+      #|    0xf9,
+      #|    0xf0,
+      #|    0x03,
+      #|    0x00,
+      #|    0xaa,
+      #|    0xe0,
+      #|    0x03,
+      #|    0x01,
+      #|    0xaa,
+      #|    0xe1,
+      #|    0x03,
+      #|    0x10,
+      #|    0xaa,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x94,
+      #|    0xff,
+      #|    0x43,
+      #|    0x00,
+      #|    0xd1,
+      #|    0xfe,
+      #|    0x0b,
+      #|    0x40,
+      #|    0xf9,
+      #|    0xff,
+      #|    0x83,
+      #|    0x00,
+      #|    0x91,
+      #|    0xc0,
+      #|    0x03,
+      #|    0x5f,
+      #|    0xd6,
+      #|  ],
+      #|  relocations: [
+      #|    {
+      #|      offset: 60,
+      #|      kind: AArch64Call26,
+      #|      target: Code({ name: "wasm.func.stack" }),
+      #|      addend: 0,
+      #|    },
+      #|  ],
+      #|  sources: [],
+      #|  traps: [],
+      #|  safepoints: [],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
 test "AArch64 indirect calls resolve callee and arguments before BLR" {
   let builder = @semantic.FunctionBuilder::new(
     "emitted_indirect_call",
@@ -3979,8 +4126,8 @@ test "AArch64 indirect true tail calls resolve the callee before BR" {
 }
 
 ///|
-test "AArch64 true tail calls forward compatible incoming stack arguments" {
-  let parameter_types : Array[@semantic.ValueType] = [
+test "AArch64 true tail calls resize the incoming stack argument area" {
+  let callee_parameter_types : Array[@semantic.ValueType] = [
     Ptr64,
     I64,
     I64,
@@ -3994,28 +4141,84 @@ test "AArch64 true tail calls forward compatible incoming stack arguments" {
   let builder = @semantic.FunctionBuilder::new(
     "emitted_stack_tail_call",
     Internal,
-    parameter_types,
+    [Ptr64],
     [],
   )
+  let operands = [builder.parameters()[0]]
+  for index in 0..<8 {
+    operands.push(builder.emit(I64Const(index.to_uint64()), [], [I64])[0])
+  }
   let call = @semantic.SemanticCall::new(
     Internal(@semantic.CodeSymbol::new("wasm.func.12")),
-    @semantic.Signature::new(parameter_types, []),
+    @semantic.Signature::new(callee_parameter_types, []),
     Internal,
     @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
   )
-  builder.tail_call(call, builder.parameters())
+  builder.tail_call(call, operands)
   let function = lower(builder.finish(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
+  inspect(
+    frame.summary(),
+    content=(
+      #|aarch64 frame size=16 align=16
+      #|  tail-args 16 bytes at sp+0 (incoming 0)
+      #|
+    ),
+  )
   debug_inspect(
     emit(function, allocation, frame),
     content=(
       #|{
       #|  architecture: AArch64,
       #|  code: [
+      #|    0xff,
+      #|    0x43,
+      #|    0x00,
+      #|    0xd1,
+      #|    0xe1,
+      #|    0x03,
+      #|    0x00,
+      #|    0xaa,
+      #|    0x00,
+      #|    0x00,
+      #|    0xe0,
+      #|    0xd2,
+      #|    0x22,
+      #|    0x00,
+      #|    0x80,
+      #|    0xd2,
+      #|    0x43,
+      #|    0x00,
+      #|    0x80,
+      #|    0xd2,
+      #|    0x64,
+      #|    0x00,
+      #|    0x80,
+      #|    0xd2,
+      #|    0x85,
+      #|    0x00,
+      #|    0x80,
+      #|    0xd2,
+      #|    0xa6,
+      #|    0x00,
+      #|    0x80,
+      #|    0xd2,
+      #|    0xc7,
+      #|    0x00,
+      #|    0x80,
+      #|    0xd2,
+      #|    0xe8,
+      #|    0x00,
+      #|    0x80,
+      #|    0xd2,
       #|    0xe8,
       #|    0x03,
       #|    0x00,
+      #|    0xf9,
+      #|    0xf0,
+      #|    0x03,
+      #|    0x00,
       #|    0xaa,
       #|    0xe0,
       #|    0x03,
@@ -4023,68 +4226,16 @@ test "AArch64 true tail calls forward compatible incoming stack arguments" {
       #|    0xaa,
       #|    0xe1,
       #|    0x03,
-      #|    0x02,
+      #|    0x10,
       #|    0xaa,
-      #|    0xe2,
-      #|    0x03,
-      #|    0x03,
-      #|    0xaa,
-      #|    0xe3,
-      #|    0x03,
-      #|    0x04,
-      #|    0xaa,
-      #|    0xe4,
-      #|    0x03,
-      #|    0x05,
-      #|    0xaa,
-      #|    0xe5,
-      #|    0x03,
-      #|    0x06,
-      #|    0xaa,
-      #|    0xe6,
-      #|    0x03,
-      #|    0x07,
-      #|    0xaa,
-      #|    0xe7,
-      #|    0x03,
-      #|    0x40,
-      #|    0xf9,
-      #|    0xe7,
-      #|    0x03,
+      #|    0xff,
+      #|    0x43,
       #|    0x00,
-      #|    0xf9,
-      #|    0xe7,
-      #|    0x03,
-      #|    0x06,
-      #|    0xaa,
-      #|    0xe6,
-      #|    0x03,
-      #|    0x05,
-      #|    0xaa,
-      #|    0xe5,
-      #|    0x03,
-      #|    0x04,
-      #|    0xaa,
-      #|    0xe4,
-      #|    0x03,
-      #|    0x03,
-      #|    0xaa,
-      #|    0xe3,
-      #|    0x03,
-      #|    0x02,
-      #|    0xaa,
-      #|    0xe2,
-      #|    0x03,
-      #|    0x01,
-      #|    0xaa,
-      #|    0xe1,
-      #|    0x03,
+      #|    0x91,
+      #|    0xff,
+      #|    0x43,
       #|    0x00,
-      #|    0xaa,
-      #|    0xe0,
-      #|    0x03,
-      #|    0x08,
-      #|    0xaa,
+      #|    0xd1,
       #|    0x00,
       #|    0x00,
       #|    0x00,
@@ -4092,7 +4243,7 @@ test "AArch64 true tail calls forward compatible incoming stack arguments" {
       #|  ],
       #|  relocations: [
       #|    {
-      #|      offset: 72,
+      #|      offset: 64,
       #|      kind: AArch64Jump26,
       #|      target: Code({ name: "wasm.func.12" }),
       #|      addend: 0,

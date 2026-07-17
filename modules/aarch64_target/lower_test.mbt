@@ -2249,7 +2249,7 @@ test "AArch64 lowers noreturn calls and explicit traps" {
 }
 
 ///|
-test "AArch64 rejects tail stack arguments that cannot replace the incoming area" {
+test "AArch64 selects tail calls larger than the incoming argument area" {
   let builder = @semantic.FunctionBuilder::new(
     "oversized_tail_call",
     Internal,
@@ -2267,22 +2267,46 @@ test "AArch64 rejects tail stack arguments that cannot replace the incoming area
     @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
   )
   builder.tail_call(call, operands)
-  try lower(builder.finish(), test_lowering_context()) |> ignore catch {
-    error =>
-      inspect(
-        error,
-        content=(
-          #|InvalidTarget(
-          #|  cause=InvalidInstruction(
-          #|    instruction=i9,
-          #|    message="tail-call plan is not compatible with the current function",
-          #|  ),
-          #|)
-        ),
-      )
-  } noraise {
-    _ => fail("expected an oversized true tail call to be rejected")
-  }
+  inspect(
+    lower(builder.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode oversized_tail_call(v0:ptr64)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v1:any@late]
+      #|  i1 LoadConstant(W64, 0) defs=[v2:any@late]
+      #|  i2 LoadConstant(W64, 1) defs=[v3:any@late]
+      #|  i3 LoadConstant(W64, 2) defs=[v4:any@late]
+      #|  i4 LoadConstant(W64, 3) defs=[v5:any@late]
+      #|  i5 LoadConstant(W64, 4) defs=[v6:any@late]
+      #|  i6 LoadConstant(W64, 5) defs=[v7:any@late]
+      #|  i7 LoadConstant(W64, 6) defs=[v8:any@late]
+      #|  i8 LoadConstant(W64, 7) defs=[v9:any@late]
+      #|  i9 TailCallDirect(
+      #|  { name: "wasm.func.10" },
+      #|  {
+      #|    params: [Ptr64, I64, I64, I64, I64, I64, I64, I64, I64],
+      #|    results: [],
+      #|  },
+      #|  {
+      #|    arguments: [
+      #|      CallRegister(p0:int),
+      #|      CallRegister(p1:int),
+      #|      CallRegister(p2:int),
+      #|      CallRegister(p3:int),
+      #|      CallRegister(p4:int),
+      #|      CallRegister(p5:int),
+      #|      CallRegister(p6:int),
+      #|      CallRegister(p7:int),
+      #|      CallStack(0),
+      #|    ],
+      #|    results: [],
+      #|    stack_size: 16,
+      #|    result_area_size: 0,
+      #|  },
+      #|) uses=[v1:any-location@early, v2:any-location@early, v3:any-location@early, v4:any-location@early, v5:any-location@early, v6:any-location@early, v7:any-location@early, v8:any-location@early, v9:any-location@early] clobbers=[p0:int, p1:int, p2:int, p3:int, p4:int, p5:int, p6:int, p7:int, p8:int, p9:int, p10:int, p11:int, p12:int, p13:int, p14:int, p15:int, p16:int, p17:int, p0:fpvec, p1:fpvec, p2:fpvec, p3:fpvec, p4:fpvec, p5:fpvec, p6:fpvec, p7:fpvec, p8:fpvec, p9:fpvec, p10:fpvec, p11:fpvec, p12:fpvec, p13:fpvec, p14:fpvec, p15:fpvec, p16:fpvec, p17:fpvec, p18:fpvec, p19:fpvec, p20:fpvec, p21:fpvec, p22:fpvec, p23:fpvec, p24:fpvec, p25:fpvec, p26:fpvec, p27:fpvec, p28:fpvec, p29:fpvec, p30:fpvec, p31:fpvec]
+      #|
+    ),
+  )
 }
 
 ///|

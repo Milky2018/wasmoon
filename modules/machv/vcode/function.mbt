@@ -42,6 +42,7 @@ priv struct InstructionData[Inst] {
 pub struct Function[Inst] {
   priv owner : Ref[Unit]
   priv name : String
+  priv protocol : @semantic.CallProtocol
   priv parameters : Array[Value]
   priv result_types : Array[ValueType]
   priv values : Array[ValueData]
@@ -55,12 +56,14 @@ pub struct Function[Inst] {
 ///|
 fn[Inst] Function::new(
   name : String,
+  protocol : @semantic.CallProtocol,
   parameter_types : Array[ValueType],
   result_types : Array[ValueType],
 ) -> Function[Inst] {
   let function : Function[Inst] = {
     owner: Ref(()),
     name,
+    protocol,
     parameters: [],
     result_types: result_types.copy(),
     values: [],
@@ -77,6 +80,13 @@ fn[Inst] Function::new(
   let entry = function.allocate_block([])
   function.layout.push(entry)
   function
+}
+
+///|
+pub fn[Inst] Function::protocol(
+  self : Function[Inst],
+) -> @semantic.CallProtocol {
+  self.protocol
 }
 
 ///|
