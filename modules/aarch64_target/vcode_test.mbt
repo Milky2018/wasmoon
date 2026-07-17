@@ -696,3 +696,48 @@ test "AArch64 verifier rejects integer lanes for vector float operations" {
     ),
   )
 }
+
+///|
+test "AArch64 verifier rejects integer lanes for vector float ternary" {
+  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
+    "bad_vector_float_ternary_lane",
+    [V128, V128, V128],
+  )
+  let entry = builder.entry_block()
+  builder.append_body(
+    entry,
+    VectorFloatTernary(I32x4, FusedMultiplyAdd),
+    [
+      @vcode.Input::any(builder.parameter(0)),
+      @vcode.Input::any(builder.parameter(1)),
+      @vcode.Input::any(builder.parameter(2)),
+    ],
+    [@vcode.Output::any(V128)],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  builder.set_terminator(
+    entry,
+    Return,
+    [],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  try verify_vcode(builder.finish()) catch {
+    error =>
+      inspect(
+        error,
+        content=(
+          #|InvalidInstruction(
+          #|  instruction=i0,
+          #|  message="vector float ternary operation requires floating lanes",
+          #|)
+        ),
+      )
+  } noraise {
+    _ => fail("expected integer vector float ternary to be rejected")
+  }
+}

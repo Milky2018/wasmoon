@@ -1284,6 +1284,40 @@ fn emit_vector_float_compare(
 }
 
 ///|
+fn emit_vector_float_ternary(
+  buffer : CodeBuffer,
+  lane : @semantic.VectorLane,
+  operation : @semantic.FloatTernaryOp,
+  left : @vcode.PhysicalReg,
+  right : @vcode.PhysicalReg,
+  addend : @vcode.PhysicalReg,
+  destination : @vcode.PhysicalReg,
+) -> Unit raise AArch64EmitError {
+  let left_copy = @vcode.PhysicalReg::new(16, FpVector)
+  let right_copy = @vcode.PhysicalReg::new(17, FpVector)
+  emit_move(buffer, V128, left_copy, left)
+  emit_move(buffer, V128, right_copy, right)
+  emit_move(buffer, V128, destination, addend)
+  let subtract_addend = match operation {
+    FusedMultiplySubtract | FusedNegatedMultiplySubtract => true
+    FusedMultiplyAdd | FusedNegatedMultiplyAdd => false
+  }
+  if subtract_addend {
+    emit_vector_float_unary(buffer, lane, Negate, destination, destination)
+  }
+  let subtract_product = match operation {
+    FusedNegatedMultiplyAdd | FusedNegatedMultiplySubtract => true
+    FusedMultiplyAdd | FusedMultiplySubtract => false
+  }
+  let base = if subtract_product {
+    vector_float_lane_encoding(lane, 0x4EA0CC00U, 0x4EE0CC00U)
+  } else {
+    vector_float_lane_encoding(lane, 0x4E20CC00U, 0x4E60CC00U)
+  }
+  emit_vector_binary(buffer, base, left_copy, right_copy, destination)
+}
+
+///|
 fn emit_vector_bitwise(
   buffer : CodeBuffer,
   operation : @semantic.VectorBitwiseOp,
@@ -1798,6 +1832,16 @@ fn emit_instruction(
       emit_vector_float_unary(buffer, lane, operation, reg(0), reg(1))
     VectorFloatBinary(lane, operation) =>
       emit_vector_float_binary(buffer, lane, operation, reg(0), reg(1), reg(2))
+    VectorFloatTernary(lane, operation) =>
+      emit_vector_float_ternary(
+        buffer,
+        lane,
+        operation,
+        reg(0),
+        reg(1),
+        reg(2),
+        reg(3),
+      )
     VectorFloatCompare(lane, comparison) =>
       emit_vector_float_compare(
         buffer,

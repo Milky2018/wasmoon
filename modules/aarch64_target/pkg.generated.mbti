@@ -237,6 +237,7 @@ pub(all) enum AArch64Inst {
   VectorPredicate(AArch64VectorPredicate)
   VectorFloatUnary(@machv.VectorLane, @machv.VectorFloatUnaryOp)
   VectorFloatBinary(@machv.VectorLane, @machv.VectorFloatBinaryOp)
+  VectorFloatTernary(@machv.VectorLane, @machv.FloatTernaryOp)
   VectorFloatCompare(@machv.VectorLane, @machv.VectorFloatComparison)
   IntUnary(GprWidth, AArch64IntUnary)
   IntBinary(GprWidth, AArch64IntBinary)

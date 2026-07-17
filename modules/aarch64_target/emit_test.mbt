@@ -1575,6 +1575,81 @@ test "AArch64 pipeline emits representative vector float operations" {
 }
 
 ///|
+test "AArch64 pipeline emits vector fused operations without tied operands" {
+  let builder = @semantic.FunctionBuilder::new(
+    "emitted_vector_float_fused",
+    Platform,
+    [V128, V128, V128],
+    [V128],
+  )
+  let parameters = builder.parameters()
+  let result = builder.emit(
+      Vector(FloatTernary(F64x2, FusedNegatedMultiplySubtract)),
+      parameters,
+      [V128],
+    )[0]
+  builder.return_([result])
+  let function = lower(builder.finish(), test_lowering_context())
+  let allocation = allocate(function)
+  let frame = plan_frame(function, allocation)
+  debug_inspect(
+    emit(function, allocation, frame),
+    content=(
+      #|{
+      #|  architecture: AArch64,
+      #|  code: [
+      #|    0x03,
+      #|    0x1c,
+      #|    0xa0,
+      #|    0x4e,
+      #|    0x20,
+      #|    0x1c,
+      #|    0xa1,
+      #|    0x4e,
+      #|    0x41,
+      #|    0x1c,
+      #|    0xa2,
+      #|    0x4e,
+      #|    0x70,
+      #|    0x1c,
+      #|    0xa3,
+      #|    0x4e,
+      #|    0x11,
+      #|    0x1c,
+      #|    0xa0,
+      #|    0x4e,
+      #|    0x22,
+      #|    0x1c,
+      #|    0xa1,
+      #|    0x4e,
+      #|    0x42,
+      #|    0xf8,
+      #|    0xe0,
+      #|    0x6e,
+      #|    0x02,
+      #|    0xce,
+      #|    0xf1,
+      #|    0x4e,
+      #|    0x40,
+      #|    0x1c,
+      #|    0xa2,
+      #|    0x4e,
+      #|    0xc0,
+      #|    0x03,
+      #|    0x5f,
+      #|    0xd6,
+      #|  ],
+      #|  relocations: [],
+      #|  sources: [],
+      #|  traps: [],
+      #|  safepoints: [],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
 test "AArch64 pipeline emits addresses inside the semantic stack-object area" {
   let builder = @semantic.FunctionBuilder::new(
     "emitted_stack_addresses",

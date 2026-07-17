@@ -216,6 +216,7 @@ pub(all) enum AArch64Inst {
   VectorPredicate(AArch64VectorPredicate)
   VectorFloatUnary(@semantic.VectorLane, @semantic.VectorFloatUnaryOp)
   VectorFloatBinary(@semantic.VectorLane, @semantic.VectorFloatBinaryOp)
+  VectorFloatTernary(@semantic.VectorLane, @semantic.FloatTernaryOp)
   VectorFloatCompare(@semantic.VectorLane, @semantic.VectorFloatComparison)
   IntUnary(GprWidth, AArch64IntUnary)
   IntBinary(GprWidth, AArch64IntBinary)
@@ -977,6 +978,22 @@ pub fn verify_vcode(
           function,
           instruction,
           [V128, V128],
+          [V128],
+          false,
+          0,
+        )
+      }
+      VectorFloatTernary(lane, _) => {
+        if lane != F32x4 && lane != F64x2 {
+          raise InvalidInstruction(
+            instruction~,
+            message="vector float ternary operation requires floating lanes",
+          )
+        }
+        require_instruction_shape(
+          function,
+          instruction,
+          [V128, V128, V128],
           [V128],
           false,
           0,

@@ -834,8 +834,12 @@ fn lower_instruction(
       Some(VectorFloatUnary(lane, operation))
     Vector(FloatBinary(lane, operation)) =>
       Some(VectorFloatBinary(lane, operation))
+    Vector(FloatTernary(lane, operation)) =>
+      Some(VectorFloatTernary(lane, operation))
     Vector(FloatCompare(lane, comparison)) =>
       Some(VectorFloatCompare(lane, comparison))
+    Vector(Relaxed(FusedMultiplyAdd(lane, operation))) =>
+      Some(VectorFloatTernary(lane, operation))
     ReferenceCompare(comparison) => {
       let operand_type = match semantic_operands.get(0) {
         Some(value) => function.value_type(value)
