@@ -102,6 +102,18 @@ fn lower_float_binary(
 }
 
 ///|
+fn lower_float_ternary(
+  operation : @semantic.FloatTernaryOp,
+) -> AArch64FloatTernary {
+  match operation {
+    FusedMultiplyAdd => Fmadd
+    FusedNegatedMultiplyAdd => Fmsub
+    FusedMultiplySubtract => Fnmsub
+    FusedNegatedMultiplySubtract => Fnmadd
+  }
+}
+
+///|
 fn lower_float_condition(
   comparison : @semantic.FloatComparison,
 ) -> AArch64FloatCondition? {
@@ -625,6 +637,12 @@ fn lower_instruction(
       match (result_types.get(0), lower_float_binary(binary)) {
         (Some(F32), Some(binary)) => Some(FloatBinary(F32, binary))
         (Some(F64), Some(binary)) => Some(FloatBinary(F64, binary))
+        _ => None
+      }
+    FloatTernary(ternary) =>
+      match result_types.get(0) {
+        Some(F32) => Some(FloatTernary(F32, lower_float_ternary(ternary)))
+        Some(F64) => Some(FloatTernary(F64, lower_float_ternary(ternary)))
         _ => None
       }
     FloatCompare(comparison) => {

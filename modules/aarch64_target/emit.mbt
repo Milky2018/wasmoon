@@ -407,6 +407,24 @@ fn emit_float_copy_sign(
 }
 
 ///|
+fn float_ternary_base(
+  ty : @semantic.ValueType,
+  operation : AArch64FloatTernary,
+) -> UInt? {
+  match (ty, operation) {
+    (F32, Fmadd) => Some(0x1F000000U)
+    (F64, Fmadd) => Some(0x1F400000U)
+    (F32, Fmsub) => Some(0x1F008000U)
+    (F64, Fmsub) => Some(0x1F408000U)
+    (F32, Fnmadd) => Some(0x1F200000U)
+    (F64, Fnmadd) => Some(0x1F600000U)
+    (F32, Fnmsub) => Some(0x1F208000U)
+    (F64, Fnmsub) => Some(0x1F608000U)
+    _ => None
+  }
+}
+
+///|
 fn float_condition_code(condition : AArch64FloatCondition) -> UInt {
   match condition {
     Equal => 0U
@@ -772,6 +790,18 @@ fn emit_instruction(
           reg_bits(reg(2)),
         )
       }
+    FloatTernary(ty, operation) => {
+      guard float_ternary_base(ty, operation) is Some(base) else {
+        raise InvalidFloatInstruction
+      }
+      buffer.emit_word(
+        base |
+        (reg_bits(reg(1)) << 16) |
+        (reg_bits(reg(2)) << 10) |
+        (reg_bits(reg(0)) << 5) |
+        reg_bits(reg(3)),
+      )
+    }
     FloatCompareSet(ty, condition) => {
       let base = if ty == F32 {
         0x1E202000U

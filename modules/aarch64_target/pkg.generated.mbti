@@ -163,6 +163,13 @@ pub(all) enum AArch64FloatCondition {
   Unordered
 } derive(Eq, @debug.Debug)
 
+pub(all) enum AArch64FloatTernary {
+  Fmadd
+  Fmsub
+  Fnmadd
+  Fnmsub
+} derive(Eq, @debug.Debug)
+
 pub(all) enum AArch64FloatTrapCondition {
   Unordered
   LessThan
@@ -207,6 +214,7 @@ pub(all) enum AArch64Inst {
   CompareSet(GprWidth, AArch64Condition)
   FloatUnary(@machv.ValueType, AArch64FloatUnary)
   FloatBinary(@machv.ValueType, AArch64FloatBinary)
+  FloatTernary(@machv.ValueType, AArch64FloatTernary)
   FloatCompareSet(@machv.ValueType, AArch64FloatCondition)
   TrapIfFloat(@machv.ValueType, AArch64FloatTrapCondition)
   Convert(AArch64Conversion)

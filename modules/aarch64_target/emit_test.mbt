@@ -1809,6 +1809,148 @@ test "AArch64 emits scalar min max and bit-exact copy-sign" {
 }
 
 ///|
+test "AArch64 emits every scalar fused operation" {
+  let builder = @semantic.FunctionBuilder::new(
+    "emitted_float_fused",
+    Internal,
+    [Ptr64, F32, F32, F32, F64, F64, F64],
+    [F32, F64],
+  )
+  let parameters = builder.parameters()
+  let add32 = builder.emit(
+      FloatTernary(FusedMultiplyAdd),
+      [parameters[1], parameters[2], parameters[3]],
+      [F32],
+    )[0]
+  let negated_add32 = builder.emit(
+      FloatTernary(FusedNegatedMultiplyAdd),
+      [parameters[1], parameters[2], add32],
+      [F32],
+    )[0]
+  let subtract32 = builder.emit(
+      FloatTernary(FusedMultiplySubtract),
+      [parameters[1], parameters[2], negated_add32],
+      [F32],
+    )[0]
+  let negated_subtract32 = builder.emit(
+      FloatTernary(FusedNegatedMultiplySubtract),
+      [parameters[1], parameters[2], subtract32],
+      [F32],
+    )[0]
+  let add64 = builder.emit(
+      FloatTernary(FusedMultiplyAdd),
+      [parameters[4], parameters[5], parameters[6]],
+      [F64],
+    )[0]
+  let negated_add64 = builder.emit(
+      FloatTernary(FusedNegatedMultiplyAdd),
+      [parameters[4], parameters[5], add64],
+      [F64],
+    )[0]
+  let subtract64 = builder.emit(
+      FloatTernary(FusedMultiplySubtract),
+      [parameters[4], parameters[5], negated_add64],
+      [F64],
+    )[0]
+  let negated_subtract64 = builder.emit(
+      FloatTernary(FusedNegatedMultiplySubtract),
+      [parameters[4], parameters[5], subtract64],
+      [F64],
+    )[0]
+  builder.return_([negated_subtract32, negated_subtract64])
+  let function = lower(builder.finish(), test_lowering_context())
+  let allocation = allocate(function)
+  let frame = plan_frame(function, allocation)
+  debug_inspect(
+    emit(function, allocation, frame),
+    content=(
+      #|{
+      #|  architecture: AArch64,
+      #|  code: [
+      #|    0xe1,
+      #|    0x03,
+      #|    0x00,
+      #|    0xaa,
+      #|    0x06,
+      #|    0x1c,
+      #|    0xa0,
+      #|    0x4e,
+      #|    0x20,
+      #|    0x1c,
+      #|    0xa1,
+      #|    0x4e,
+      #|    0x41,
+      #|    0x1c,
+      #|    0xa2,
+      #|    0x4e,
+      #|    0x62,
+      #|    0x1c,
+      #|    0xa3,
+      #|    0x4e,
+      #|    0x83,
+      #|    0x1c,
+      #|    0xa4,
+      #|    0x4e,
+      #|    0xa4,
+      #|    0x1c,
+      #|    0xa5,
+      #|    0x4e,
+      #|    0xc5,
+      #|    0x04,
+      #|    0x00,
+      #|    0x1f,
+      #|    0xc1,
+      #|    0x94,
+      #|    0x00,
+      #|    0x1f,
+      #|    0xc5,
+      #|    0x84,
+      #|    0x20,
+      #|    0x1f,
+      #|    0xc1,
+      #|    0x14,
+      #|    0x20,
+      #|    0x1f,
+      #|    0x40,
+      #|    0x10,
+      #|    0x43,
+      #|    0x1f,
+      #|    0x44,
+      #|    0x80,
+      #|    0x43,
+      #|    0x1f,
+      #|    0x40,
+      #|    0x90,
+      #|    0x63,
+      #|    0x1f,
+      #|    0x44,
+      #|    0x00,
+      #|    0x63,
+      #|    0x1f,
+      #|    0x20,
+      #|    0x1c,
+      #|    0xa1,
+      #|    0x4e,
+      #|    0x81,
+      #|    0x1c,
+      #|    0xa4,
+      #|    0x4e,
+      #|    0xc0,
+      #|    0x03,
+      #|    0x5f,
+      #|    0xd6,
+      #|  ],
+      #|  relocations: [],
+      #|  sources: [],
+      #|  traps: [],
+      #|  safepoints: [],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
 test "AArch64 trapping float-to-int emits three precise trap sites" {
   let builder = @semantic.FunctionBuilder::new(
     "emitted_float_to_int",

@@ -63,6 +63,14 @@ pub(all) enum AArch64FloatBinary {
 } derive(Eq, Debug)
 
 ///|
+pub(all) enum AArch64FloatTernary {
+  Fmadd
+  Fmsub
+  Fnmadd
+  Fnmsub
+} derive(Eq, Debug)
+
+///|
 pub(all) enum AArch64FloatCondition {
   Equal
   NotEqual
@@ -112,6 +120,7 @@ pub(all) enum AArch64Inst {
   CompareSet(GprWidth, AArch64Condition)
   FloatUnary(@semantic.ValueType, AArch64FloatUnary)
   FloatBinary(@semantic.ValueType, AArch64FloatBinary)
+  FloatTernary(@semantic.ValueType, AArch64FloatTernary)
   FloatCompareSet(@semantic.ValueType, AArch64FloatCondition)
   TrapIfFloat(@semantic.ValueType, AArch64FloatTrapCondition)
   Convert(AArch64Conversion)
@@ -578,6 +587,22 @@ pub fn verify_vcode(
           function,
           instruction,
           [ty, ty],
+          [ty],
+          false,
+          0,
+        )
+      }
+      FloatTernary(ty, _) => {
+        if ty != F32 && ty != F64 {
+          raise InvalidInstruction(
+            instruction~,
+            message="scalar floating-point ternary operation requires f32 or f64",
+          )
+        }
+        require_instruction_shape(
+          function,
+          instruction,
+          [ty, ty, ty],
           [ty],
           false,
           0,

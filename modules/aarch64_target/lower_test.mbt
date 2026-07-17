@@ -36,17 +36,13 @@ test "AArch64 lowering selects scalar SSA and preserves source metadata" {
 ///|
 test "AArch64 lowering rejects unsupported valid operations structurally" {
   let builder = @semantic.FunctionBuilder::new(
-    "unsupported_float",
+    "unsupported_atomic_fence",
     Platform,
-    [F32, F32, F32],
-    [F32],
+    [],
+    [],
   )
-  let value = builder.emit(
-      FloatTernary(FusedMultiplyAdd),
-      builder.parameters(),
-      [F32],
-    )[0]
-  builder.return_([value])
+  builder.emit(AtomicFence, [], []) |> ignore
+  builder.return_([])
   try lower(builder.finish(), test_lowering_context()) |> ignore catch {
     error =>
       inspect(
@@ -55,7 +51,7 @@ test "AArch64 lowering rejects unsupported valid operations structurally" {
           #|UnsupportedOperation(
           #|  block_index=0,
           #|  instruction_index=0,
-          #|  operation=FloatTernary(FusedMultiplyAdd),
+          #|  operation=AtomicFence,
           #|)
         ),
       )
@@ -617,6 +613,84 @@ test "AArch64 lowering selects scalar min max and bit-exact copy-sign" {
       #|  i13 OutgoingReg(F32, p2:fpvec) uses=[v9:any@early]
       #|  i14 OutgoingReg(F64, p3:fpvec) uses=[v11:any@early]
       #|  i15 Return
+      #|
+    ),
+  )
+}
+
+///|
+test "AArch64 lowering maps all scalar fused operations explicitly" {
+  let builder = @semantic.FunctionBuilder::new(
+    "scalar_float_fused",
+    Internal,
+    [Ptr64, F32, F32, F32, F64, F64, F64],
+    [F32, F64],
+  )
+  let parameters = builder.parameters()
+  let add32 = builder.emit(
+      FloatTernary(FusedMultiplyAdd),
+      [parameters[1], parameters[2], parameters[3]],
+      [F32],
+    )[0]
+  let negated_add32 = builder.emit(
+      FloatTernary(FusedNegatedMultiplyAdd),
+      [parameters[1], parameters[2], add32],
+      [F32],
+    )[0]
+  let subtract32 = builder.emit(
+      FloatTernary(FusedMultiplySubtract),
+      [parameters[1], parameters[2], negated_add32],
+      [F32],
+    )[0]
+  let negated_subtract32 = builder.emit(
+      FloatTernary(FusedNegatedMultiplySubtract),
+      [parameters[1], parameters[2], subtract32],
+      [F32],
+    )[0]
+  let add64 = builder.emit(
+      FloatTernary(FusedMultiplyAdd),
+      [parameters[4], parameters[5], parameters[6]],
+      [F64],
+    )[0]
+  let negated_add64 = builder.emit(
+      FloatTernary(FusedNegatedMultiplyAdd),
+      [parameters[4], parameters[5], add64],
+      [F64],
+    )[0]
+  let subtract64 = builder.emit(
+      FloatTernary(FusedMultiplySubtract),
+      [parameters[4], parameters[5], negated_add64],
+      [F64],
+    )[0]
+  let negated_subtract64 = builder.emit(
+      FloatTernary(FusedNegatedMultiplySubtract),
+      [parameters[4], parameters[5], subtract64],
+      [F64],
+    )[0]
+  builder.return_([negated_subtract32, negated_subtract64])
+  inspect(
+    lower(builder.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode scalar_float_fused(v0:ptr64, v1:f32, v2:f32, v3:f32, v4:f64, v5:f64, v6:f64) -> (f32, f64)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v7:any@late]
+      #|  i1 IncomingReg(F32, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v8:any@late]
+      #|  i2 IncomingReg(F32, p1:fpvec) uses=[v2:fixed(p1:fpvec)@early] defs=[v9:any@late]
+      #|  i3 IncomingReg(F32, p2:fpvec) uses=[v3:fixed(p2:fpvec)@early] defs=[v10:any@late]
+      #|  i4 IncomingReg(F64, p3:fpvec) uses=[v4:fixed(p3:fpvec)@early] defs=[v11:any@late]
+      #|  i5 IncomingReg(F64, p4:fpvec) uses=[v5:fixed(p4:fpvec)@early] defs=[v12:any@late]
+      #|  i6 IncomingReg(F64, p5:fpvec) uses=[v6:fixed(p5:fpvec)@early] defs=[v13:any@late]
+      #|  i7 FloatTernary(F32, Fmadd) uses=[v8:any@early, v9:any@early, v10:any@early] defs=[v14:any@late]
+      #|  i8 FloatTernary(F32, Fmsub) uses=[v8:any@early, v9:any@early, v14:any@early] defs=[v15:any@late]
+      #|  i9 FloatTernary(F32, Fnmsub) uses=[v8:any@early, v9:any@early, v15:any@early] defs=[v16:any@late]
+      #|  i10 FloatTernary(F32, Fnmadd) uses=[v8:any@early, v9:any@early, v16:any@early] defs=[v17:any@late]
+      #|  i11 FloatTernary(F64, Fmadd) uses=[v11:any@early, v12:any@early, v13:any@early] defs=[v18:any@late]
+      #|  i12 FloatTernary(F64, Fmsub) uses=[v11:any@early, v12:any@early, v18:any@early] defs=[v19:any@late]
+      #|  i13 FloatTernary(F64, Fnmsub) uses=[v11:any@early, v12:any@early, v19:any@early] defs=[v20:any@late]
+      #|  i14 FloatTernary(F64, Fnmadd) uses=[v11:any@early, v12:any@early, v20:any@early] defs=[v21:any@late]
+      #|  i15 OutgoingReg(F32, p0:fpvec) uses=[v17:any@early]
+      #|  i16 OutgoingReg(F64, p1:fpvec) uses=[v21:any@early]
+      #|  i17 Return
       #|
     ),
   )
