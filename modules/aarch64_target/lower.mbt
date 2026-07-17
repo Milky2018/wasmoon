@@ -95,7 +95,9 @@ fn lower_float_binary(
     Sub => Some(Sub)
     Mul => Some(Mul)
     Div => Some(Div)
-    Min | Max | CopySign => None
+    Min => Some(Min)
+    Max => Some(Max)
+    CopySign => Some(CopySign)
   }
 }
 

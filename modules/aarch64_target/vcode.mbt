@@ -57,6 +57,9 @@ pub(all) enum AArch64FloatBinary {
   Sub
   Mul
   Div
+  Min
+  Max
+  CopySign
 } derive(Eq, Debug)
 
 ///|

@@ -364,8 +364,46 @@ fn float_binary_base(
     (F64, Mul) => Some(0x1E600800U)
     (F32, Div) => Some(0x1E201800U)
     (F64, Div) => Some(0x1E601800U)
+    (F32, Min) => Some(0x1E205800U)
+    (F64, Min) => Some(0x1E605800U)
+    (F32, Max) => Some(0x1E204800U)
+    (F64, Max) => Some(0x1E604800U)
     _ => None
   }
+}
+
+///|
+fn emit_float_copy_sign(
+  buffer : CodeBuffer,
+  ty : @semantic.ValueType,
+  magnitude : @vcode.PhysicalReg,
+  sign : @vcode.PhysicalReg,
+  destination : @vcode.PhysicalReg,
+) -> Unit raise AArch64EmitError {
+  let int_scratch = @vcode.PhysicalReg::new(16, Int)
+  let fp_scratch = @vcode.PhysicalReg::new(16, FpVector)
+  match ty {
+    F32 => {
+      emit_constant(buffer, W32, int_scratch, 0x80000000UL)
+      buffer.emit_word(
+        0x1E270000U | (reg_bits(int_scratch) << 5) | reg_bits(fp_scratch),
+      )
+    }
+    F64 => {
+      emit_constant(buffer, W64, int_scratch, 0x8000000000000000UL)
+      buffer.emit_word(
+        0x9E670000U | (reg_bits(int_scratch) << 5) | reg_bits(fp_scratch),
+      )
+    }
+    _ => raise InvalidFloatInstruction
+  }
+  buffer.emit_word(
+    0x6E601C00U |
+    (reg_bits(magnitude) << 16) |
+    (reg_bits(sign) << 5) |
+    reg_bits(fp_scratch),
+  )
+  emit_move(buffer, ty, destination, fp_scratch)
 }
 
 ///|
@@ -720,17 +758,20 @@ fn emit_instruction(
       }
       buffer.emit_word(base | (reg_bits(reg(0)) << 5) | reg_bits(reg(1)))
     }
-    FloatBinary(ty, operation) => {
-      guard float_binary_base(ty, operation) is Some(base) else {
-        raise InvalidFloatInstruction
+    FloatBinary(ty, operation) =>
+      if operation == CopySign {
+        emit_float_copy_sign(buffer, ty, reg(0), reg(1), reg(2))
+      } else {
+        guard float_binary_base(ty, operation) is Some(base) else {
+          raise InvalidFloatInstruction
+        }
+        buffer.emit_word(
+          base |
+          (reg_bits(reg(1)) << 16) |
+          (reg_bits(reg(0)) << 5) |
+          reg_bits(reg(2)),
+        )
       }
-      buffer.emit_word(
-        base |
-        (reg_bits(reg(1)) << 16) |
-        (reg_bits(reg(0)) << 5) |
-        reg_bits(reg(2)),
-      )
-    }
     FloatCompareSet(ty, condition) => {
       let base = if ty == F32 {
         0x1E202000U

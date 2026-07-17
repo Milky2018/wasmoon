@@ -1634,6 +1634,181 @@ test "AArch64 emits scalar rounding and NaN predicates" {
 }
 
 ///|
+test "AArch64 emits scalar min max and bit-exact copy-sign" {
+  let builder = @semantic.FunctionBuilder::new(
+    "emitted_float_minmax_copysign",
+    Internal,
+    [Ptr64],
+    [F32, F64, F32, F64],
+  )
+  let positive_zero32 = builder.emit(F32Const(0U), [], [F32])[0]
+  let negative_zero32 = builder.emit(F32Const(0x80000000U), [], [F32])[0]
+  let positive_zero64 = builder.emit(F64Const(0UL), [], [F64])[0]
+  let negative_zero64 = builder.emit(F64Const(0x8000000000000000UL), [], [F64])[0]
+  let minimum = builder.emit(
+      FloatBinary(Min),
+      [positive_zero32, negative_zero32],
+      [F32],
+    )[0]
+  let maximum = builder.emit(
+      FloatBinary(Max),
+      [negative_zero64, positive_zero64],
+      [F64],
+    )[0]
+  let nan32 = builder.emit(F32Const(0x7FC12345U), [], [F32])[0]
+  let copied32 = builder.emit(FloatBinary(CopySign), [nan32, negative_zero32], [
+      F32,
+    ])[0]
+  let nan64 = builder.emit(F64Const(0xFFF8123456789ABCUL), [], [F64])[0]
+  let copied64 = builder.emit(FloatBinary(CopySign), [nan64, positive_zero64], [
+      F64,
+    ])[0]
+  builder.return_([minimum, maximum, copied32, copied64])
+  let function = lower(builder.finish(), test_lowering_context())
+  let allocation = allocate(function)
+  let frame = plan_frame(function, allocation)
+  debug_inspect(
+    emit(function, allocation, frame),
+    content=(
+      #|{
+      #|  architecture: AArch64,
+      #|  code: [
+      #|    0xe1,
+      #|    0x03,
+      #|    0x00,
+      #|    0xaa,
+      #|    0x10,
+      #|    0x00,
+      #|    0xa0,
+      #|    0x52,
+      #|    0x00,
+      #|    0x02,
+      #|    0x27,
+      #|    0x1e,
+      #|    0x10,
+      #|    0x00,
+      #|    0xb0,
+      #|    0x52,
+      #|    0x01,
+      #|    0x02,
+      #|    0x27,
+      #|    0x1e,
+      #|    0x10,
+      #|    0x00,
+      #|    0xe0,
+      #|    0xd2,
+      #|    0x02,
+      #|    0x02,
+      #|    0x67,
+      #|    0x9e,
+      #|    0x10,
+      #|    0x00,
+      #|    0xf0,
+      #|    0xd2,
+      #|    0x03,
+      #|    0x02,
+      #|    0x67,
+      #|    0x9e,
+      #|    0x04,
+      #|    0x58,
+      #|    0x21,
+      #|    0x1e,
+      #|    0x60,
+      #|    0x48,
+      #|    0x62,
+      #|    0x1e,
+      #|    0xb0,
+      #|    0x68,
+      #|    0x84,
+      #|    0x52,
+      #|    0x30,
+      #|    0xf8,
+      #|    0xaf,
+      #|    0x72,
+      #|    0x03,
+      #|    0x02,
+      #|    0x27,
+      #|    0x1e,
+      #|    0x10,
+      #|    0x00,
+      #|    0xb0,
+      #|    0x52,
+      #|    0x10,
+      #|    0x02,
+      #|    0x27,
+      #|    0x1e,
+      #|    0x30,
+      #|    0x1c,
+      #|    0x63,
+      #|    0x6e,
+      #|    0x05,
+      #|    0x1e,
+      #|    0xb0,
+      #|    0x4e,
+      #|    0x90,
+      #|    0x57,
+      #|    0x93,
+      #|    0xd2,
+      #|    0x10,
+      #|    0xcf,
+      #|    0xaa,
+      #|    0xf2,
+      #|    0x90,
+      #|    0x46,
+      #|    0xc2,
+      #|    0xf2,
+      #|    0x10,
+      #|    0xff,
+      #|    0xff,
+      #|    0xf2,
+      #|    0x01,
+      #|    0x02,
+      #|    0x67,
+      #|    0x9e,
+      #|    0x10,
+      #|    0x00,
+      #|    0xf0,
+      #|    0xd2,
+      #|    0x10,
+      #|    0x02,
+      #|    0x67,
+      #|    0x9e,
+      #|    0x50,
+      #|    0x1c,
+      #|    0x61,
+      #|    0x6e,
+      #|    0x03,
+      #|    0x1e,
+      #|    0xb0,
+      #|    0x4e,
+      #|    0x80,
+      #|    0x1c,
+      #|    0xa4,
+      #|    0x4e,
+      #|    0x01,
+      #|    0x1c,
+      #|    0xa0,
+      #|    0x4e,
+      #|    0xa2,
+      #|    0x1c,
+      #|    0xa5,
+      #|    0x4e,
+      #|    0xc0,
+      #|    0x03,
+      #|    0x5f,
+      #|    0xd6,
+      #|  ],
+      #|  relocations: [],
+      #|  sources: [],
+      #|  traps: [],
+      #|  safepoints: [],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
 test "AArch64 trapping float-to-int emits three precise trap sites" {
   let builder = @semantic.FunctionBuilder::new(
     "emitted_float_to_int",

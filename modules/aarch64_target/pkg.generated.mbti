@@ -147,6 +147,9 @@ pub(all) enum AArch64FloatBinary {
   Sub
   Mul
   Div
+  Min
+  Max
+  CopySign
 } derive(Eq, @debug.Debug)
 
 pub(all) enum AArch64FloatCondition {

@@ -38,10 +38,14 @@ test "AArch64 lowering rejects unsupported valid operations structurally" {
   let builder = @semantic.FunctionBuilder::new(
     "unsupported_float",
     Platform,
-    [F32, F32],
+    [F32, F32, F32],
     [F32],
   )
-  let value = builder.emit(FloatBinary(Min), builder.parameters(), [F32])[0]
+  let value = builder.emit(
+      FloatTernary(FusedMultiplyAdd),
+      builder.parameters(),
+      [F32],
+    )[0]
   builder.return_([value])
   try lower(builder.finish(), test_lowering_context()) |> ignore catch {
     error =>
@@ -51,7 +55,7 @@ test "AArch64 lowering rejects unsupported valid operations structurally" {
           #|UnsupportedOperation(
           #|  block_index=0,
           #|  instruction_index=0,
-          #|  operation=FloatBinary(Min),
+          #|  operation=FloatTernary(FusedMultiplyAdd),
           #|)
         ),
       )
@@ -556,6 +560,63 @@ test "AArch64 lowering selects scalar rounding and NaN predicates" {
       #|  i17 OutgoingReg(I32, p0:int) uses=[v18:any@early]
       #|  i18 OutgoingReg(I32, p1:int) uses=[v19:any@early]
       #|  i19 Return
+      #|
+    ),
+  )
+}
+
+///|
+test "AArch64 lowering selects scalar min max and bit-exact copy-sign" {
+  let builder = @semantic.FunctionBuilder::new(
+    "scalar_float_minmax_copysign",
+    Internal,
+    [Ptr64],
+    [F32, F64, F32, F64],
+  )
+  let positive_zero32 = builder.emit(F32Const(0U), [], [F32])[0]
+  let negative_zero32 = builder.emit(F32Const(0x80000000U), [], [F32])[0]
+  let positive_zero64 = builder.emit(F64Const(0UL), [], [F64])[0]
+  let negative_zero64 = builder.emit(F64Const(0x8000000000000000UL), [], [F64])[0]
+  let minimum = builder.emit(
+      FloatBinary(Min),
+      [positive_zero32, negative_zero32],
+      [F32],
+    )[0]
+  let maximum = builder.emit(
+      FloatBinary(Max),
+      [negative_zero64, positive_zero64],
+      [F64],
+    )[0]
+  let nan32 = builder.emit(F32Const(0x7FC12345U), [], [F32])[0]
+  let copied32 = builder.emit(FloatBinary(CopySign), [nan32, negative_zero32], [
+      F32,
+    ])[0]
+  let nan64 = builder.emit(F64Const(0xFFF8123456789ABCUL), [], [F64])[0]
+  let copied64 = builder.emit(FloatBinary(CopySign), [nan64, positive_zero64], [
+      F64,
+    ])[0]
+  builder.return_([minimum, maximum, copied32, copied64])
+  inspect(
+    lower(builder.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode scalar_float_minmax_copysign(v0:ptr64) -> (f32, f64, f32, f64)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v1:any@late]
+      #|  i1 LoadFloatConstant(F32, 0) defs=[v2:any@late]
+      #|  i2 LoadFloatConstant(F32, 2147483648) defs=[v3:any@late]
+      #|  i3 LoadFloatConstant(F64, 0) defs=[v4:any@late]
+      #|  i4 LoadFloatConstant(F64, 9223372036854775808) defs=[v5:any@late]
+      #|  i5 FloatBinary(F32, Min) uses=[v2:any@early, v3:any@early] defs=[v6:any@late]
+      #|  i6 FloatBinary(F64, Max) uses=[v5:any@early, v4:any@early] defs=[v7:any@late]
+      #|  i7 LoadFloatConstant(F32, 2143363909) defs=[v8:any@late]
+      #|  i8 FloatBinary(F32, CopySign) uses=[v8:any@early, v3:any@early] defs=[v9:any@late]
+      #|  i9 LoadFloatConstant(F64, 18444512289894210236) defs=[v10:any@late]
+      #|  i10 FloatBinary(F64, CopySign) uses=[v10:any@early, v4:any@early] defs=[v11:any@late]
+      #|  i11 OutgoingReg(F32, p0:fpvec) uses=[v6:any@early]
+      #|  i12 OutgoingReg(F64, p1:fpvec) uses=[v7:any@early]
+      #|  i13 OutgoingReg(F32, p2:fpvec) uses=[v9:any@early]
+      #|  i14 OutgoingReg(F64, p3:fpvec) uses=[v11:any@early]
+      #|  i15 Return
       #|
     ),
   )
