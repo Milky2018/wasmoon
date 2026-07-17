@@ -297,6 +297,8 @@ pub(all) enum AArch64VectorIntBinary {
   Add
   Sub
   Mul
+  Min(@machv.Signedness)
+  Max(@machv.Signedness)
   SaturatingAdd(@machv.Signedness)
   SaturatingSub(@machv.Signedness)
 } derive(Eq, @debug.Debug)

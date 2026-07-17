@@ -726,6 +726,32 @@ fn emit_vector_int_binary(
     }
     return
   }
+  if lane == I64x2 && operation is Min(signedness) {
+    let mask = @vcode.PhysicalReg::new(16, FpVector)
+    emit_vector_int_compare(
+      buffer,
+      I64x2,
+      GreaterThan(signedness),
+      left,
+      right,
+      mask,
+    )
+    emit_vector_bitwise(buffer, BitSelect, right, left, mask, destination)
+    return
+  }
+  if lane == I64x2 && operation is Max(signedness) {
+    let mask = @vcode.PhysicalReg::new(16, FpVector)
+    emit_vector_int_compare(
+      buffer,
+      I64x2,
+      GreaterThan(signedness),
+      left,
+      right,
+      mask,
+    )
+    emit_vector_bitwise(buffer, BitSelect, left, right, mask, destination)
+    return
+  }
   let base = match operation {
     Add =>
       vector_lane_encoding(
@@ -741,6 +767,38 @@ fn emit_vector_int_binary(
         I16x8 => 0x4E609C00U
         I32x4 => 0x4EA09C00U
         I64x2 | F32x4 | F64x2 => raise InvalidVectorInstruction
+      }
+    Min(signedness) =>
+      if signedness is Signed {
+        match lane {
+          I8x16 => 0x4E206C00U
+          I16x8 => 0x4E606C00U
+          I32x4 => 0x4EA06C00U
+          I64x2 | F32x4 | F64x2 => raise InvalidVectorInstruction
+        }
+      } else {
+        match lane {
+          I8x16 => 0x6E206C00U
+          I16x8 => 0x6E606C00U
+          I32x4 => 0x6EA06C00U
+          I64x2 | F32x4 | F64x2 => raise InvalidVectorInstruction
+        }
+      }
+    Max(signedness) =>
+      if signedness is Signed {
+        match lane {
+          I8x16 => 0x4E206400U
+          I16x8 => 0x4E606400U
+          I32x4 => 0x4EA06400U
+          I64x2 | F32x4 | F64x2 => raise InvalidVectorInstruction
+        }
+      } else {
+        match lane {
+          I8x16 => 0x6E206400U
+          I16x8 => 0x6E606400U
+          I32x4 => 0x6EA06400U
+          I64x2 | F32x4 | F64x2 => raise InvalidVectorInstruction
+        }
       }
     SaturatingAdd(signedness) =>
       if signedness is Signed {

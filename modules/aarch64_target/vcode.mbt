@@ -83,6 +83,8 @@ pub(all) enum AArch64VectorIntBinary {
   Add
   Sub
   Mul
+  Min(@semantic.Signedness)
+  Max(@semantic.Signedness)
   SaturatingAdd(@semantic.Signedness)
   SaturatingSub(@semantic.Signedness)
 } derive(Eq, Debug)
