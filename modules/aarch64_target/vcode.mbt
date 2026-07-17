@@ -82,6 +82,7 @@ pub(all) enum AArch64VectorIntUnary {
 pub(all) enum AArch64VectorIntBinary {
   Add
   Sub
+  Mul
 } derive(Eq, Debug)
 
 ///|

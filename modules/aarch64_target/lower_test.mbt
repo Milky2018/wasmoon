@@ -296,6 +296,11 @@ test "AArch64 lowering selects basic vector integer arithmetic" {
         [result, parameters[2]],
         [V128],
       )[0]
+    result = builder.emit(
+        Vector(IntBinary(lane, Mul)),
+        [result, parameters[2]],
+        [V128],
+      )[0]
   }
   builder.return_([result])
   inspect(
@@ -310,20 +315,24 @@ test "AArch64 lowering selects basic vector integer arithmetic" {
       #|  i4 VectorIntUnary(I8x16, Negate) uses=[v6:any@early] defs=[v7:any@late]
       #|  i5 VectorIntBinary(I8x16, Add) uses=[v7:any@early, v5:any@early] defs=[v8:any@late]
       #|  i6 VectorIntBinary(I8x16, Sub) uses=[v8:any@early, v5:any@early] defs=[v9:any@late]
-      #|  i7 VectorIntUnary(I16x8, Absolute) uses=[v9:any@early] defs=[v10:any@late]
-      #|  i8 VectorIntUnary(I16x8, Negate) uses=[v10:any@early] defs=[v11:any@late]
-      #|  i9 VectorIntBinary(I16x8, Add) uses=[v11:any@early, v5:any@early] defs=[v12:any@late]
-      #|  i10 VectorIntBinary(I16x8, Sub) uses=[v12:any@early, v5:any@early] defs=[v13:any@late]
-      #|  i11 VectorIntUnary(I32x4, Absolute) uses=[v13:any@early] defs=[v14:any@late]
-      #|  i12 VectorIntUnary(I32x4, Negate) uses=[v14:any@early] defs=[v15:any@late]
-      #|  i13 VectorIntBinary(I32x4, Add) uses=[v15:any@early, v5:any@early] defs=[v16:any@late]
-      #|  i14 VectorIntBinary(I32x4, Sub) uses=[v16:any@early, v5:any@early] defs=[v17:any@late]
-      #|  i15 VectorIntUnary(I64x2, Absolute) uses=[v17:any@early] defs=[v18:any@late]
-      #|  i16 VectorIntUnary(I64x2, Negate) uses=[v18:any@early] defs=[v19:any@late]
-      #|  i17 VectorIntBinary(I64x2, Add) uses=[v19:any@early, v5:any@early] defs=[v20:any@late]
-      #|  i18 VectorIntBinary(I64x2, Sub) uses=[v20:any@early, v5:any@early] defs=[v21:any@late]
-      #|  i19 OutgoingReg(V128, p0:fpvec) uses=[v21:any@early]
-      #|  i20 Return
+      #|  i7 VectorIntBinary(I8x16, Mul) uses=[v9:any@early, v5:any@early] defs=[v10:any@late]
+      #|  i8 VectorIntUnary(I16x8, Absolute) uses=[v10:any@early] defs=[v11:any@late]
+      #|  i9 VectorIntUnary(I16x8, Negate) uses=[v11:any@early] defs=[v12:any@late]
+      #|  i10 VectorIntBinary(I16x8, Add) uses=[v12:any@early, v5:any@early] defs=[v13:any@late]
+      #|  i11 VectorIntBinary(I16x8, Sub) uses=[v13:any@early, v5:any@early] defs=[v14:any@late]
+      #|  i12 VectorIntBinary(I16x8, Mul) uses=[v14:any@early, v5:any@early] defs=[v15:any@late]
+      #|  i13 VectorIntUnary(I32x4, Absolute) uses=[v15:any@early] defs=[v16:any@late]
+      #|  i14 VectorIntUnary(I32x4, Negate) uses=[v16:any@early] defs=[v17:any@late]
+      #|  i15 VectorIntBinary(I32x4, Add) uses=[v17:any@early, v5:any@early] defs=[v18:any@late]
+      #|  i16 VectorIntBinary(I32x4, Sub) uses=[v18:any@early, v5:any@early] defs=[v19:any@late]
+      #|  i17 VectorIntBinary(I32x4, Mul) uses=[v19:any@early, v5:any@early] defs=[v20:any@late]
+      #|  i18 VectorIntUnary(I64x2, Absolute) uses=[v20:any@early] defs=[v21:any@late]
+      #|  i19 VectorIntUnary(I64x2, Negate) uses=[v21:any@early] defs=[v22:any@late]
+      #|  i20 VectorIntBinary(I64x2, Add) uses=[v22:any@early, v5:any@early] defs=[v23:any@late]
+      #|  i21 VectorIntBinary(I64x2, Sub) uses=[v23:any@early, v5:any@early] defs=[v24:any@late]
+      #|  i22 VectorIntBinary(I64x2, Mul) uses=[v24:any@early, v5:any@early] defs=[v25:any@late]
+      #|  i23 OutgoingReg(V128, p0:fpvec) uses=[v25:any@early]
+      #|  i24 Return
       #|
     ),
   )

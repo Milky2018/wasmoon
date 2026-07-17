@@ -695,6 +695,37 @@ fn emit_vector_int_binary(
   right : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
 ) -> Unit raise AArch64EmitError {
+  if operation == Mul && lane == I64x2 {
+    let left_copy = @vcode.PhysicalReg::new(16, FpVector)
+    let right_copy = @vcode.PhysicalReg::new(17, FpVector)
+    let left_scalar = @vcode.PhysicalReg::new(16, Int)
+    let right_scalar = @vcode.PhysicalReg::new(17, Int)
+    emit_move(buffer, V128, left_copy, left)
+    emit_move(buffer, V128, right_copy, right)
+    for index in 0..<2 {
+      emit_vector_extract_lane(
+        buffer,
+        I64x2,
+        index,
+        None,
+        left_copy,
+        left_scalar,
+      )
+      emit_vector_extract_lane(
+        buffer,
+        I64x2,
+        index,
+        None,
+        right_copy,
+        right_scalar,
+      )
+      buffer.emit_word(
+        encode_int_binary(W64, Mul, left_scalar, left_scalar, right_scalar),
+      )
+      emit_vector_replace_lane(buffer, I64x2, index, left_scalar, destination)
+    }
+    return
+  }
   let base = match operation {
     Add =>
       vector_lane_encoding(
@@ -704,6 +735,13 @@ fn emit_vector_int_binary(
       vector_lane_encoding(
         lane, 0x6E208400U, 0x6E608400U, 0x6EA08400U, 0x6EE08400U,
       )
+    Mul =>
+      match lane {
+        I8x16 => 0x4E209C00U
+        I16x8 => 0x4E609C00U
+        I32x4 => 0x4EA09C00U
+        I64x2 | F32x4 | F64x2 => raise InvalidVectorInstruction
+      }
   }
   buffer.emit_word(
     base |

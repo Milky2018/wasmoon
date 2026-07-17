@@ -296,6 +296,7 @@ pub fn AArch64StackObject::new(Int, Int, Int, Int, Int) -> Self
 pub(all) enum AArch64VectorIntBinary {
   Add
   Sub
+  Mul
 } derive(Eq, @debug.Debug)
 
 pub(all) enum AArch64VectorIntUnary {
