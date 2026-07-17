@@ -19,6 +19,7 @@ pub suberror AArch64EmitError {
   InvalidParallelMove(cause~ : @vcode.MoveResolveError)
   UnresolvedStackMove
   FrameOffsetOutOfRange(offset~ : Int)
+  InvalidScalarMemoryAccess
   BranchTargetMissing(block~ : @vcode.Block)
   BranchOutOfRange(offset~ : Int, bits~ : Int)
 } derive(Debug)
@@ -156,6 +157,76 @@ fn emit_stack_access(
     (31U << 5) |
     reg_bits(reg),
   )
+}
+
+///|
+fn scalar_memory_scale(width : @semantic.AccessWidth) -> UInt64? {
+  match width {
+    W8 => Some(1UL)
+    W16 => Some(2UL)
+    W32 => Some(4UL)
+    W64 => Some(8UL)
+    W128 => None
+  }
+}
+
+///|
+fn scalar_memory_address(
+  buffer : CodeBuffer,
+  address : @vcode.PhysicalReg,
+  width : @semantic.AccessWidth,
+  offset : UInt64,
+) -> (@vcode.PhysicalReg, UInt) raise AArch64EmitError {
+  guard scalar_memory_scale(width) is Some(scale) else {
+    raise InvalidScalarMemoryAccess
+  }
+  if offset % scale == 0UL && offset / scale <= 4095UL {
+    return (address, (offset / scale).to_uint())
+  }
+  let scratch = @vcode.PhysicalReg::new(16, Int)
+  emit_constant(buffer, W64, scratch, offset)
+  buffer.emit_word(
+    encode_three_register(0x8B000000U, scratch, address, scratch),
+  )
+  (scratch, 0U)
+}
+
+///|
+fn scalar_load_base(
+  width : @semantic.AccessWidth,
+  extension : @semantic.LoadExtension,
+  result_type : @semantic.ValueType,
+) -> UInt? {
+  match (result_type, width, extension) {
+    (I32 | I64, W8, Unsigned) => Some(0x39400000U)
+    (I32, W8, Signed) => Some(0x39C00000U)
+    (I64, W8, Signed) => Some(0x39800000U)
+    (I32 | I64, W16, Unsigned) => Some(0x79400000U)
+    (I32, W16, Signed) => Some(0x79C00000U)
+    (I64, W16, Signed) => Some(0x79800000U)
+    (I32, W32, None) | (I64, W32, Unsigned) => Some(0xB9400000U)
+    (I64, W32, Signed) => Some(0xB9800000U)
+    (I64 | Ptr64 | GcRef64, W64, None) => Some(0xF9400000U)
+    (F32, W32, None) => Some(0xBD400000U)
+    (F64, W64, None) => Some(0xFD400000U)
+    _ => None
+  }
+}
+
+///|
+fn scalar_store_base(
+  width : @semantic.AccessWidth,
+  value_type : @semantic.ValueType,
+) -> UInt? {
+  match (value_type, width) {
+    (I32 | I64, W8) => Some(0x39000000U)
+    (I32 | I64, W16) => Some(0x79000000U)
+    (I32 | I64, W32) => Some(0xB9000000U)
+    (I64 | Ptr64 | GcRef64, W64) => Some(0xF9000000U)
+    (F32, W32) => Some(0xBD000000U)
+    (F64, W64) => Some(0xFD000000U)
+    _ => None
+  }
 }
 
 ///|
@@ -432,6 +503,36 @@ fn emit_instruction(
       buffer.emit_word(
         encode_three_register(0x8B000000U, reg(2), reg(0), reg(1)),
       )
+    ScalarLoad(width, extension, result_type, offset) => {
+      guard scalar_load_base(width, extension, result_type) is Some(base) else {
+        raise InvalidScalarMemoryAccess
+      }
+      let (address, immediate) = scalar_memory_address(
+        buffer,
+        reg(0),
+        width,
+        offset,
+      )
+      metadata_offset = buffer.position()
+      buffer.emit_word(
+        base | (immediate << 10) | (reg_bits(address) << 5) | reg_bits(reg(1)),
+      )
+    }
+    ScalarStore(width, value_type, offset) => {
+      guard scalar_store_base(width, value_type) is Some(base) else {
+        raise InvalidScalarMemoryAccess
+      }
+      let (address, immediate) = scalar_memory_address(
+        buffer,
+        reg(0),
+        width,
+        offset,
+      )
+      metadata_offset = buffer.position()
+      buffer.emit_word(
+        base | (immediate << 10) | (reg_bits(address) << 5) | reg_bits(reg(1)),
+      )
+    }
     PlatformCall(target, signature) => {
       let layout = platform_call_layout(signature.params)
       emit_call_arguments(

@@ -122,6 +122,7 @@ fn source_metadata(
   metadata : @semantic.InstructionMetadata,
   values : Array[@vcode.Value],
   semantics : @semantic.OperationSemantics,
+  trap? : @semantic.TrapReason,
 ) -> @vcode.InstructionMetadata {
   let safepoint : @semantic.SafepointKind? = match
     (semantics.gc_safepoint, semantics.cancellation_safepoint) {
@@ -132,8 +133,14 @@ fn source_metadata(
   }
   match metadata.source {
     Some(source) =>
-      @vcode.InstructionMetadata::new(source~, safepoint?, live_gc_roots=values)
-    None => @vcode.InstructionMetadata::new(safepoint?, live_gc_roots=values)
+      @vcode.InstructionMetadata::new(
+        source~,
+        trap?,
+        safepoint?,
+        live_gc_roots=values,
+      )
+    None =>
+      @vcode.InstructionMetadata::new(trap?, safepoint?, live_gc_roots=values)
   }
 }
 
@@ -377,6 +384,12 @@ fn lower_instruction(
       }
     }
     PointerOffset => Some(AddAddress)
+    Load(spec) if spec.endianness == Little && spec.width != W128 =>
+      Some(
+        ScalarLoad(spec.width, spec.extension, spec.result_type, spec.offset),
+      )
+    Store(spec) if spec.endianness == Little && spec.width != W128 =>
+      Some(ScalarStore(spec.width, spec.value_type, spec.offset))
     _ => None
   }
   let selected = match selected {
@@ -394,6 +407,11 @@ fn lower_instruction(
       function.instruction_metadata(instruction).unwrap(),
       roots,
       operation.semantics(),
+      trap?=match operation {
+        Load(spec) => spec.trap
+        Store(spec) => spec.trap
+        _ => None
+      },
     ),
   )
   for index, result in semantic_results {

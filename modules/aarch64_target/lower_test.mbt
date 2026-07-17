@@ -288,3 +288,163 @@ test "AArch64 rejects tail stack arguments that cannot replace the incoming area
     _ => fail("expected an oversized true tail call to be rejected")
   }
 }
+
+///|
+test "AArch64 lowering selects typed scalar memory operations and traps" {
+  let builder = @semantic.FunctionBuilder::new(
+    "scalar_memory",
+    Internal,
+    [Ptr64, I32, I64, F32, F64],
+    [I64],
+  )
+  let parameters = builder.parameters()
+  builder.emit_with_metadata(
+    Load(
+      @semantic.LoadSpec::new(
+        W8,
+        Signed,
+        I32,
+        3UL,
+        Little,
+        Some(MemoryOutOfBounds),
+      ),
+    ),
+    [parameters[0]],
+    [I32],
+    @semantic.InstructionMetadata::new(
+      Some(@semantic.SourceLocation::new("memory.wat", 4, 7)),
+      [],
+    ),
+  )
+  |> ignore
+  let loaded = builder.emit(
+      Load(
+        @semantic.LoadSpec::new(
+          W32,
+          Unsigned,
+          I64,
+          12UL,
+          Little,
+          Some(MemoryOutOfBounds),
+        ),
+      ),
+      [parameters[0]],
+      [I64],
+    )[0]
+  builder.emit(
+    Load(@semantic.LoadSpec::new(W64, None, Ptr64, 16UL, Little, None)),
+    [parameters[0]],
+    [Ptr64],
+  )
+  |> ignore
+  builder.emit(
+    Load(@semantic.LoadSpec::new(W32, None, F32, 20UL, Little, None)),
+    [parameters[0]],
+    [F32],
+  )
+  |> ignore
+  builder.emit(
+    Load(@semantic.LoadSpec::new(W64, None, F64, 24UL, Little, None)),
+    [parameters[0]],
+    [F64],
+  )
+  |> ignore
+  builder.emit(
+    Store(@semantic.StoreSpec::new(W16, I32, 6UL, Little, None)),
+    [parameters[0], parameters[1]],
+    [],
+  )
+  |> ignore
+  builder.emit(
+    Store(@semantic.StoreSpec::new(W64, I64, 32UL, Little, None)),
+    [parameters[0], parameters[2]],
+    [],
+  )
+  |> ignore
+  builder.emit(
+    Store(@semantic.StoreSpec::new(W32, F32, 40UL, Little, None)),
+    [parameters[0], parameters[3]],
+    [],
+  )
+  |> ignore
+  builder.emit(
+    Store(@semantic.StoreSpec::new(W64, F64, 48UL, Little, None)),
+    [parameters[0], parameters[4]],
+    [],
+  )
+  |> ignore
+  builder.return_([loaded])
+  inspect(
+    lower(builder.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode scalar_memory(v0:ptr64, v1:i32, v2:i64, v3:f32, v4:f64) -> (i64)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v5:any@late]
+      #|  i1 IncomingReg(I32, p1:int) uses=[v1:fixed(p1:int)@early] defs=[v6:any@late]
+      #|  i2 IncomingReg(I64, p2:int) uses=[v2:fixed(p2:int)@early] defs=[v7:any@late]
+      #|  i3 IncomingReg(F32, p0:fpvec) uses=[v3:fixed(p0:fpvec)@early] defs=[v8:any@late]
+      #|  i4 IncomingReg(F64, p1:fpvec) uses=[v4:fixed(p1:fpvec)@early] defs=[v9:any@late]
+      #|  i5 ScalarLoad(W8, Signed, I32, 3) uses=[v5:any@early] defs=[v10:any@late] source={ file: "memory.wat", line: 4, column: 7 } trap=MemoryOutOfBounds
+      #|  i6 ScalarLoad(W32, Unsigned, I64, 12) uses=[v5:any@early] defs=[v11:any@late] trap=MemoryOutOfBounds
+      #|  i7 ScalarLoad(W64, None, Ptr64, 16) uses=[v5:any@early] defs=[v12:any@late]
+      #|  i8 ScalarLoad(W32, None, F32, 20) uses=[v5:any@early] defs=[v13:any@late]
+      #|  i9 ScalarLoad(W64, None, F64, 24) uses=[v5:any@early] defs=[v14:any@late]
+      #|  i10 ScalarStore(W16, I32, 6) uses=[v5:any@early, v6:any@early]
+      #|  i11 ScalarStore(W64, I64, 32) uses=[v5:any@early, v7:any@early]
+      #|  i12 ScalarStore(W32, F32, 40) uses=[v5:any@early, v8:any@early]
+      #|  i13 ScalarStore(W64, F64, 48) uses=[v5:any@early, v9:any@early]
+      #|  i14 OutgoingReg(I64, p0:int) uses=[v11:any@early]
+      #|  i15 Return
+      #|
+    ),
+  )
+}
+
+///|
+test "AArch64 lowering rejects non-native scalar memory endianness" {
+  let builder = @semantic.FunctionBuilder::new(
+    "big_endian_load",
+    Internal,
+    [Ptr64],
+    [I32],
+  )
+  let loaded = builder.emit(
+      Load(
+        @semantic.LoadSpec::new(
+          W32,
+          None,
+          I32,
+          0UL,
+          Big,
+          Some(MemoryOutOfBounds),
+        ),
+      ),
+      builder.parameters(),
+      [I32],
+    )[0]
+  builder.return_([loaded])
+  try lower(builder.finish(), test_lowering_context()) |> ignore catch {
+    error =>
+      inspect(
+        error,
+        content=(
+          #|UnsupportedOperation(
+          #|  block_index=0,
+          #|  instruction_index=0,
+          #|  operation=Load(
+          #|    {
+          #|      width: W32,
+          #|      extension: None,
+          #|      result_type: I32,
+          #|      offset: 0,
+          #|      endianness: Big,
+          #|      trap: Some(MemoryOutOfBounds),
+          #|    },
+          #|  ),
+          #|)
+        ),
+      )
+  } noraise {
+    _ => fail("expected big-endian scalar memory lowering to fail")
+  }
+}

@@ -1018,6 +1018,124 @@ test "AArch64 true tail calls forward compatible incoming stack arguments" {
 }
 
 ///|
+test "AArch64 scalar memory emission records faulting instructions and legalizes offsets" {
+  let builder = @semantic.FunctionBuilder::new(
+    "emitted_scalar_memory",
+    Internal,
+    [Ptr64, I64, F64],
+    [I64],
+  )
+  let parameters = builder.parameters()
+  let loaded = builder.emit_with_metadata(
+      Load(
+        @semantic.LoadSpec::new(
+          W8,
+          Signed,
+          I64,
+          3UL,
+          Little,
+          Some(MemoryOutOfBounds),
+        ),
+      ),
+      [parameters[0]],
+      [I64],
+      @semantic.InstructionMetadata::new(
+        Some(@semantic.SourceLocation::new("memory.wat", 8, 13)),
+        [],
+      ),
+    )[0]
+  builder.emit(
+    Store(
+      @semantic.StoreSpec::new(W16, I64, 6UL, Little, Some(MemoryOutOfBounds)),
+    ),
+    [parameters[0], parameters[1]],
+    [],
+  )
+  |> ignore
+  builder.emit(
+    Store(
+      @semantic.StoreSpec::new(
+        W64,
+        F64,
+        0x100000000UL,
+        Little,
+        Some(MemoryOutOfBounds),
+      ),
+    ),
+    [parameters[0], parameters[2]],
+    [],
+  )
+  |> ignore
+  builder.return_([loaded])
+  let function = lower(builder.finish(), test_lowering_context())
+  let allocation = allocate(function)
+  let frame = plan_frame(function, allocation)
+  debug_inspect(
+    emit(function, allocation, frame),
+    content=(
+      #|{
+      #|  architecture: AArch64,
+      #|  code: [
+      #|    0xe2,
+      #|    0x03,
+      #|    0x00,
+      #|    0xaa,
+      #|    0xe0,
+      #|    0x03,
+      #|    0x01,
+      #|    0xaa,
+      #|    0x01,
+      #|    0x1c,
+      #|    0xa0,
+      #|    0x4e,
+      #|    0x41,
+      #|    0x0c,
+      #|    0x80,
+      #|    0x39,
+      #|    0x40,
+      #|    0x0c,
+      #|    0x00,
+      #|    0x79,
+      #|    0x30,
+      #|    0x00,
+      #|    0xc0,
+      #|    0xd2,
+      #|    0x50,
+      #|    0x00,
+      #|    0x10,
+      #|    0x8b,
+      #|    0x01,
+      #|    0x02,
+      #|    0x00,
+      #|    0xfd,
+      #|    0xe0,
+      #|    0x03,
+      #|    0x01,
+      #|    0xaa,
+      #|    0xc0,
+      #|    0x03,
+      #|    0x5f,
+      #|    0xd6,
+      #|  ],
+      #|  relocations: [],
+      #|  sources: [{ offset: 12, source: { file: "memory.wat", line: 8, column: 13 } }],
+      #|  traps: [
+      #|    {
+      #|      offset: 12,
+      #|      reason: MemoryOutOfBounds,
+      #|      source: Some({ file: "memory.wat", line: 8, column: 13 }),
+      #|    },
+      #|    { offset: 16, reason: MemoryOutOfBounds, source: None },
+      #|    { offset: 28, reason: MemoryOutOfBounds, source: None },
+      #|  ],
+      #|  safepoints: [],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
 test "AArch64 edge emission resolves register cycles through reserved scratch" {
   let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new_with_results(
     "edge_cycle",

@@ -53,6 +53,13 @@ pub(all) enum AArch64Inst {
   IntBinary(GprWidth, AArch64IntBinary)
   CompareSet(GprWidth, AArch64Condition)
   AddAddress
+  ScalarLoad(
+    @semantic.AccessWidth,
+    @semantic.LoadExtension,
+    @semantic.ValueType,
+    UInt64
+  )
+  ScalarStore(@semantic.AccessWidth, @semantic.ValueType, UInt64)
   PlatformCall(@semantic.ExternalSymbol, @semantic.Signature)
   InternalCall(@semantic.CodeSymbol, @semantic.Signature, InternalCallPlan)
   InternalCallIndirect(@semantic.Signature, InternalCallPlan)
@@ -282,6 +289,35 @@ fn integer_type(width : GprWidth) -> @semantic.ValueType {
 }
 
 ///|
+fn valid_scalar_load(
+  width : @semantic.AccessWidth,
+  extension : @semantic.LoadExtension,
+  result_type : @semantic.ValueType,
+) -> Bool {
+  match (result_type, width, extension) {
+    (I32, W8 | W16, Signed | Unsigned) | (I32, W32, None) => true
+    (I64, W8 | W16 | W32, Signed | Unsigned) | (I64, W64, None) => true
+    (Ptr64 | GcRef64, W64, None) => true
+    (F32, W32, None) | (F64, W64, None) => true
+    _ => false
+  }
+}
+
+///|
+fn valid_scalar_store(
+  width : @semantic.AccessWidth,
+  value_type : @semantic.ValueType,
+) -> Bool {
+  match (value_type, width) {
+    (I32, W8 | W16 | W32) => true
+    (I64, W8 | W16 | W32 | W64) => true
+    (Ptr64 | GcRef64, W64) => true
+    (F32, W32) | (F64, W64) => true
+    _ => false
+  }
+}
+
+///|
 pub fn verify_vcode(
   function : @vcode.Function[AArch64Inst],
 ) -> Unit raise TargetVCodeVerifyError {
@@ -383,6 +419,38 @@ pub fn verify_vcode(
           false,
           0,
         )
+      ScalarLoad(width, extension, result_type, _) => {
+        if !valid_scalar_load(width, extension, result_type) {
+          raise InvalidInstruction(
+            instruction~,
+            message="invalid AArch64 scalar load type or extension",
+          )
+        }
+        require_instruction_shape(
+          function,
+          instruction,
+          [Ptr64],
+          [result_type],
+          false,
+          0,
+        )
+      }
+      ScalarStore(width, value_type, _) => {
+        if !valid_scalar_store(width, value_type) {
+          raise InvalidInstruction(
+            instruction~,
+            message="invalid AArch64 scalar store type or width",
+          )
+        }
+        require_instruction_shape(
+          function,
+          instruction,
+          [Ptr64, value_type],
+          [],
+          false,
+          0,
+        )
+      }
       PlatformCall(_, signature) => {
         if signature.results.length() > 1 {
           raise InvalidInstruction(
