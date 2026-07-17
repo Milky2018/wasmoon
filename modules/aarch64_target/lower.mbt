@@ -130,6 +130,32 @@ fn lower_conversion(conversion : @semantic.ConversionOp) -> AArch64Conversion? {
 }
 
 ///|
+fn float_value_type(ty : @semantic.FloatType) -> @semantic.ValueType {
+  match ty {
+    F32 => F32
+    F64 => F64
+  }
+}
+
+///|
+fn float_to_int_bounds(
+  source : @semantic.FloatType,
+  result : @semantic.IntegerType,
+  signedness : @semantic.Signedness,
+) -> (UInt64, UInt64, Bool) {
+  match (source, result, signedness) {
+    (F32, I32, Signed) => (0xCF000000UL, 0x4F000000UL, false)
+    (F32, I32, Unsigned) => (0xBF800000UL, 0x4F800000UL, true)
+    (F32, I64, Signed) => (0xDF000000UL, 0x5F000000UL, false)
+    (F32, I64, Unsigned) => (0xBF800000UL, 0x5F800000UL, true)
+    (F64, I32, Signed) => (0xC1E0000000200000UL, 0x41E0000000000000UL, true)
+    (F64, I32, Unsigned) => (0xBFF0000000000000UL, 0x41F0000000000000UL, true)
+    (F64, I64, Signed) => (0xC3E0000000000000UL, 0x43E0000000000000UL, false)
+    (F64, I64, Unsigned) => (0xBFF0000000000000UL, 0x43F0000000000000UL, true)
+  }
+}
+
+///|
 fn map_value(
   function : @semantic.Function,
   values : Array[@vcode.Value?],
@@ -463,6 +489,92 @@ fn lower_instruction(
     )
     for index, result in semantic_results {
       values[function.value_index(result).unwrap()] = Some(results[index])
+    }
+    return
+  }
+  if operation is Convert(FloatToInt(source, result, signedness, mode)) {
+    let source_type = float_value_type(source)
+    let semantic_metadata = function.instruction_metadata(instruction).unwrap()
+    if mode == Trapping {
+      append_body(
+        builder,
+        block,
+        TrapIfFloat(source_type, Unordered),
+        [@vcode.Input::any(operands[0])],
+        [],
+        source_metadata(
+          semantic_metadata,
+          roots,
+          operation.semantics(),
+          trap=InvalidConversionToInteger,
+        ),
+      )
+      |> ignore
+      let (minimum_bits, maximum_bits, inclusive_minimum) = float_to_int_bounds(
+        source, result, signedness,
+      )
+      let minimum = append_body(
+          builder,
+          block,
+          LoadFloatConstant(source_type, minimum_bits),
+          [],
+          [@vcode.Output::any(source_type)],
+          @vcode.InstructionMetadata::empty(),
+        )[0]
+      let lower_condition : AArch64FloatTrapCondition = if inclusive_minimum {
+        LessOrEqual
+      } else {
+        LessThan
+      }
+      append_body(
+        builder,
+        block,
+        TrapIfFloat(source_type, lower_condition),
+        [@vcode.Input::any(operands[0]), @vcode.Input::any(minimum)],
+        [],
+        source_metadata(
+          semantic_metadata,
+          roots,
+          operation.semantics(),
+          trap=InvalidConversionToInteger,
+        ),
+      )
+      |> ignore
+      let maximum = append_body(
+          builder,
+          block,
+          LoadFloatConstant(source_type, maximum_bits),
+          [],
+          [@vcode.Output::any(source_type)],
+          @vcode.InstructionMetadata::empty(),
+        )[0]
+      append_body(
+        builder,
+        block,
+        TrapIfFloat(source_type, GreaterOrEqual),
+        [@vcode.Input::any(operands[0]), @vcode.Input::any(maximum)],
+        [],
+        source_metadata(
+          semantic_metadata,
+          roots,
+          operation.semantics(),
+          trap=InvalidConversionToInteger,
+        ),
+      )
+      |> ignore
+    }
+    let results = append_body(
+      builder,
+      block,
+      Convert(FloatToInt(source, result, signedness)),
+      operands.map(@vcode.Input::any),
+      result_types.map(@vcode.Output::any),
+      source_metadata(semantic_metadata, roots, operation.semantics()),
+    )
+    for index, semantic_result in semantic_results {
+      values[function.value_index(semantic_result).unwrap()] = Some(
+        results[index],
+      )
     }
     return
   }

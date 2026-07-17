@@ -5,6 +5,9 @@ const AARCH64_DIVISION_BY_ZERO_BRK : UInt = 4U
 const AARCH64_INTEGER_OVERFLOW_BRK : UInt = 5U
 
 ///|
+const AARCH64_INVALID_CONVERSION_BRK : UInt = 3U
+
+///|
 priv struct BranchFixup {
   offset : Int
   target : @vcode.Block
@@ -370,6 +373,16 @@ fn float_condition_code(condition : AArch64FloatCondition) -> UInt {
 }
 
 ///|
+fn float_trap_condition_code(condition : AArch64FloatTrapCondition) -> UInt {
+  match condition {
+    Unordered => 6U
+    LessThan => 4U
+    LessOrEqual => 9U
+    GreaterOrEqual => 10U
+  }
+}
+
+///|
 fn emit_conversion(
   buffer : CodeBuffer,
   conversion : AArch64Conversion,
@@ -442,6 +455,19 @@ fn emit_conversion(
         (I32, F64, Unsigned) => 0x1E630000U
         (I64, F64, Signed) => 0x9E620000U
         (I64, F64, Unsigned) => 0x9E630000U
+      }
+      buffer.emit_word(base | (reg_bits(source) << 5) | reg_bits(destination))
+    }
+    FloatToInt(float, integer, signedness) => {
+      let base : UInt = match (float, integer, signedness) {
+        (F32, I32, Signed) => 0x1E380000U
+        (F32, I32, Unsigned) => 0x1E390000U
+        (F32, I64, Signed) => 0x9E380000U
+        (F32, I64, Unsigned) => 0x9E390000U
+        (F64, I32, Signed) => 0x1E780000U
+        (F64, I32, Unsigned) => 0x1E790000U
+        (F64, I64, Signed) => 0x9E780000U
+        (F64, I64, Unsigned) => 0x9E790000U
       }
       buffer.emit_word(base | (reg_bits(source) << 5) | reg_bits(destination))
     }
@@ -708,6 +734,21 @@ fn emit_instruction(
       )
       let inverse = float_condition_code(condition) ^ 1U
       buffer.emit_word(0x9A9F07E0U | (inverse << 12) | reg_bits(reg(2)))
+    }
+    TrapIfFloat(ty, condition) => {
+      let base = if ty == F32 {
+        0x1E202000U
+      } else if ty == F64 {
+        0x1E602000U
+      } else {
+        raise InvalidFloatInstruction
+      }
+      let right = if condition == Unordered { reg(0) } else { reg(1) }
+      buffer.emit_word(base | (reg_bits(right) << 16) | (reg_bits(reg(0)) << 5))
+      let skip = float_trap_condition_code(condition) ^ 1U
+      buffer.emit_word(0x54000000U | (2U << 5) | skip)
+      metadata_offset = buffer.position()
+      buffer.emit_word(0xD4200000U | (AARCH64_INVALID_CONVERSION_BRK << 5))
     }
     Convert(conversion) => emit_conversion(buffer, conversion, reg(0), reg(1))
     AddAddress =>

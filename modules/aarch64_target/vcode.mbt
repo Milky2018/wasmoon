@@ -66,6 +66,14 @@ pub(all) enum AArch64FloatCondition {
 } derive(Eq, Debug)
 
 ///|
+pub(all) enum AArch64FloatTrapCondition {
+  Unordered
+  LessThan
+  LessOrEqual
+  GreaterOrEqual
+} derive(Eq, Debug)
+
+///|
 pub(all) enum AArch64Conversion {
   WrapI64ToI32
   ExtendI32ToI64(@semantic.Signedness)
@@ -74,6 +82,7 @@ pub(all) enum AArch64Conversion {
   PromoteF32ToF64
   Bitcast(@semantic.ValueType, @semantic.ValueType)
   IntToFloat(@semantic.IntegerType, @semantic.FloatType, @semantic.Signedness)
+  FloatToInt(@semantic.FloatType, @semantic.IntegerType, @semantic.Signedness)
 } derive(Eq, Debug)
 
 ///|
@@ -95,6 +104,7 @@ pub(all) enum AArch64Inst {
   FloatUnary(@semantic.ValueType, AArch64FloatUnary)
   FloatBinary(@semantic.ValueType, AArch64FloatBinary)
   FloatCompareSet(@semantic.ValueType, AArch64FloatCondition)
+  TrapIfFloat(@semantic.ValueType, AArch64FloatTrapCondition)
   Convert(AArch64Conversion)
   AddAddress
   ScalarLoad(
@@ -396,6 +406,10 @@ fn conversion_shape(
     IntToFloat(I32, F64, _) => Some((I32, F64))
     IntToFloat(I64, F32, _) => Some((I64, F32))
     IntToFloat(I64, F64, _) => Some((I64, F64))
+    FloatToInt(F32, I32, _) => Some((F32, I32))
+    FloatToInt(F32, I64, _) => Some((F32, I64))
+    FloatToInt(F64, I32, _) => Some((F64, I32))
+    FloatToInt(F64, I64, _) => Some((F64, I64))
     _ => None
   }
 }
@@ -575,6 +589,18 @@ pub fn verify_vcode(
           false,
           0,
         )
+      }
+      TrapIfFloat(ty, condition) => {
+        if (ty != F32 && ty != F64) ||
+          function.instruction_metadata(instruction).unwrap().trap !=
+          Some(InvalidConversionToInteger) {
+          raise InvalidInstruction(
+            instruction~,
+            message="float trap check requires a scalar float and invalid-conversion metadata",
+          )
+        }
+        let uses = if condition == Unordered { [ty] } else { [ty, ty] }
+        require_instruction_shape(function, instruction, uses, [], false, 0)
       }
       Convert(conversion) => {
         guard conversion_shape(conversion) is Some((source, result)) else {

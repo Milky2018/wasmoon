@@ -1506,6 +1506,147 @@ test "AArch64 scalar conversion emission preserves register-bank transfers" {
 }
 
 ///|
+test "AArch64 trapping float-to-int emits three precise trap sites" {
+  let builder = @semantic.FunctionBuilder::new(
+    "emitted_float_to_int",
+    Internal,
+    [Ptr64, F32, F64],
+    [I32, I64],
+  )
+  let parameters = builder.parameters()
+  let trapping = builder.emit_with_metadata(
+      Convert(FloatToInt(F32, I32, Signed, Trapping)),
+      [parameters[1]],
+      [I32],
+      @semantic.InstructionMetadata::new(
+        Some(@semantic.SourceLocation::new("convert.wat", 6, 9)),
+        [],
+      ),
+    )[0]
+  let saturating = builder.emit(
+      Convert(FloatToInt(F64, I64, Unsigned, Saturating)),
+      [parameters[2]],
+      [I64],
+    )[0]
+  builder.return_([trapping, saturating])
+  let function = lower(builder.finish(), test_lowering_context())
+  let allocation = allocate(function)
+  let frame = plan_frame(function, allocation)
+  debug_inspect(
+    emit(function, allocation, frame),
+    content=(
+      #|{
+      #|  architecture: AArch64,
+      #|  code: [
+      #|    0xe1,
+      #|    0x03,
+      #|    0x00,
+      #|    0xaa,
+      #|    0x02,
+      #|    0x1c,
+      #|    0xa0,
+      #|    0x4e,
+      #|    0x20,
+      #|    0x1c,
+      #|    0xa1,
+      #|    0x4e,
+      #|    0x40,
+      #|    0x20,
+      #|    0x22,
+      #|    0x1e,
+      #|    0x47,
+      #|    0x00,
+      #|    0x00,
+      #|    0x54,
+      #|    0x60,
+      #|    0x00,
+      #|    0x20,
+      #|    0xd4,
+      #|    0x10,
+      #|    0xe0,
+      #|    0xb9,
+      #|    0x52,
+      #|    0x01,
+      #|    0x02,
+      #|    0x27,
+      #|    0x1e,
+      #|    0x40,
+      #|    0x20,
+      #|    0x21,
+      #|    0x1e,
+      #|    0x45,
+      #|    0x00,
+      #|    0x00,
+      #|    0x54,
+      #|    0x60,
+      #|    0x00,
+      #|    0x20,
+      #|    0xd4,
+      #|    0x10,
+      #|    0xe0,
+      #|    0xa9,
+      #|    0x52,
+      #|    0x01,
+      #|    0x02,
+      #|    0x27,
+      #|    0x1e,
+      #|    0x40,
+      #|    0x20,
+      #|    0x21,
+      #|    0x1e,
+      #|    0x4b,
+      #|    0x00,
+      #|    0x00,
+      #|    0x54,
+      #|    0x60,
+      #|    0x00,
+      #|    0x20,
+      #|    0xd4,
+      #|    0x40,
+      #|    0x00,
+      #|    0x38,
+      #|    0x1e,
+      #|    0x01,
+      #|    0x00,
+      #|    0x79,
+      #|    0x9e,
+      #|    0xc0,
+      #|    0x03,
+      #|    0x5f,
+      #|    0xd6,
+      #|  ],
+      #|  relocations: [],
+      #|  sources: [
+      #|    { offset: 20, source: { file: "convert.wat", line: 6, column: 9 } },
+      #|    { offset: 40, source: { file: "convert.wat", line: 6, column: 9 } },
+      #|    { offset: 60, source: { file: "convert.wat", line: 6, column: 9 } },
+      #|    { offset: 64, source: { file: "convert.wat", line: 6, column: 9 } },
+      #|  ],
+      #|  traps: [
+      #|    {
+      #|      offset: 20,
+      #|      reason: InvalidConversionToInteger,
+      #|      source: Some({ file: "convert.wat", line: 6, column: 9 }),
+      #|    },
+      #|    {
+      #|      offset: 40,
+      #|      reason: InvalidConversionToInteger,
+      #|      source: Some({ file: "convert.wat", line: 6, column: 9 }),
+      #|    },
+      #|    {
+      #|      offset: 60,
+      #|      reason: InvalidConversionToInteger,
+      #|      source: Some({ file: "convert.wat", line: 6, column: 9 }),
+      #|    },
+      #|  ],
+      #|  safepoints: [],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
 test "AArch64 edge emission resolves register cycles through reserved scratch" {
   let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new_with_results(
     "edge_cycle",

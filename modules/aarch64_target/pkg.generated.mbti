@@ -139,6 +139,7 @@ pub(all) enum AArch64Conversion {
   PromoteF32ToF64
   Bitcast(@machv.ValueType, @machv.ValueType)
   IntToFloat(@machv.IntegerType, @machv.FloatType, @machv.Signedness)
+  FloatToInt(@machv.FloatType, @machv.IntegerType, @machv.Signedness)
 } derive(Eq, @debug.Debug)
 
 pub(all) enum AArch64FloatBinary {
@@ -154,6 +155,13 @@ pub(all) enum AArch64FloatCondition {
   LessThan
   LessOrEqual
   GreaterThan
+  GreaterOrEqual
+} derive(Eq, @debug.Debug)
+
+pub(all) enum AArch64FloatTrapCondition {
+  Unordered
+  LessThan
+  LessOrEqual
   GreaterOrEqual
 } derive(Eq, @debug.Debug)
 
@@ -191,6 +199,7 @@ pub(all) enum AArch64Inst {
   FloatUnary(@machv.ValueType, AArch64FloatUnary)
   FloatBinary(@machv.ValueType, AArch64FloatBinary)
   FloatCompareSet(@machv.ValueType, AArch64FloatCondition)
+  TrapIfFloat(@machv.ValueType, AArch64FloatTrapCondition)
   Convert(AArch64Conversion)
   AddAddress
   ScalarLoad(@machv.AccessWidth, @machv.LoadExtension, @machv.ValueType, UInt64)

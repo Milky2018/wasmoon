@@ -578,3 +578,46 @@ test "AArch64 lowering selects non-trapping scalar conversions" {
     ),
   )
 }
+
+///|
+test "AArch64 lowering legalizes trapping and saturating float-to-int" {
+  let builder = @semantic.FunctionBuilder::new(
+    "float_to_int",
+    Internal,
+    [Ptr64, F32, F64],
+    [I32, I64],
+  )
+  let parameters = builder.parameters()
+  let trapping = builder.emit(
+      Convert(FloatToInt(F32, I32, Signed, Trapping)),
+      [parameters[1]],
+      [I32],
+    )[0]
+  let saturating = builder.emit(
+      Convert(FloatToInt(F64, I64, Unsigned, Saturating)),
+      [parameters[2]],
+      [I64],
+    )[0]
+  builder.return_([trapping, saturating])
+  inspect(
+    lower(builder.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode float_to_int(v0:ptr64, v1:f32, v2:f64) -> (i32, i64)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v3:any@late]
+      #|  i1 IncomingReg(F32, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v4:any@late]
+      #|  i2 IncomingReg(F64, p1:fpvec) uses=[v2:fixed(p1:fpvec)@early] defs=[v5:any@late]
+      #|  i3 TrapIfFloat(F32, Unordered) uses=[v4:any@early] trap=InvalidConversionToInteger
+      #|  i4 LoadFloatConstant(F32, 3472883712) defs=[v6:any@late]
+      #|  i5 TrapIfFloat(F32, LessThan) uses=[v4:any@early, v6:any@early] trap=InvalidConversionToInteger
+      #|  i6 LoadFloatConstant(F32, 1325400064) defs=[v7:any@late]
+      #|  i7 TrapIfFloat(F32, GreaterOrEqual) uses=[v4:any@early, v7:any@early] trap=InvalidConversionToInteger
+      #|  i8 Convert(FloatToInt(F32, I32, Signed)) uses=[v4:any@early] defs=[v8:any@late]
+      #|  i9 Convert(FloatToInt(F64, I64, Unsigned)) uses=[v5:any@early] defs=[v9:any@late]
+      #|  i10 OutgoingReg(I32, p0:int) uses=[v8:any@early]
+      #|  i11 OutgoingReg(I64, p1:int) uses=[v9:any@early]
+      #|  i12 Return
+      #|
+    ),
+  )
+}
