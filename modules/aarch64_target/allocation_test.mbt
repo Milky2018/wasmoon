@@ -163,3 +163,65 @@ test "AArch64 frame reserves one aligned outgoing stack-argument area" {
     ),
   )
 }
+
+///|
+test "AArch64 frame separates semantic objects from outgoing spills and saves" {
+  let parameter_types : Array[@semantic.ValueType] = Array::make(9, I64)
+  let builder = @semantic.FunctionBuilder::new(
+    "stack_object_frame",
+    Platform,
+    parameter_types,
+    [Ptr64],
+  )
+  builder.create_stack_object(3, 1) |> ignore
+  builder.create_stack_object(16, 16) |> ignore
+  let object = builder.create_stack_object(24, 8)
+  let call = @semantic.SemanticCall::new(
+    External(@semantic.ExternalSymbol::new("runtime.many")),
+    @semantic.Signature::new(parameter_types, []),
+    Platform,
+    @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
+  )
+  builder.emit(Call(call), builder.parameters(), []) |> ignore
+  let address = builder.emit(StackAddress(object), [], [Ptr64])[0]
+  let values : Array[@semantic.Value] = []
+  for index in 0..<32 {
+    values.push(builder.emit(I64Const(index.to_uint64()), [], [I64])[0])
+  }
+  let mut sum = values[0]
+  for index in 1..<values.length() {
+    sum = builder.emit(IntBinary(Add), [sum, values[index]], [I64])[0]
+  }
+  let result = builder.emit(PointerOffset, [address, sum], [Ptr64])[0]
+  builder.return_([result])
+  let function = lower(builder.finish(), test_lowering_context())
+  let allocation = allocate(function)
+  inspect(
+    plan_frame(function, allocation).summary(),
+    content=(
+      #|aarch64 frame size=240 align=16
+      #|  outgoing 16 bytes at sp+0
+      #|  stack-objects 64 bytes at sp+16
+      #|  place stack0 at sp+80
+      #|  place stack1 at sp+88
+      #|  place stack2 at sp+96
+      #|  place stack3 at sp+104
+      #|  place stack4 at sp+112
+      #|  place stack5 at sp+120
+      #|  place stack6 at sp+128
+      #|  place stack7 at sp+136
+      #|  save p19:int at sp+144
+      #|  save p20:int at sp+152
+      #|  save p21:int at sp+160
+      #|  save p22:int at sp+168
+      #|  save p23:int at sp+176
+      #|  save p24:int at sp+184
+      #|  save p25:int at sp+192
+      #|  save p26:int at sp+200
+      #|  save p27:int at sp+208
+      #|  save p28:int at sp+216
+      #|  save p30:int at sp+224
+      #|
+    ),
+  )
+}

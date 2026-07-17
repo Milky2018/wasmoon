@@ -27,6 +27,7 @@ pub suberror AArch64EmitError {
   InvalidCodeObject(cause~ : @code_object.CodeObjectVerifyError)
   InvalidParallelMove(cause~ : @vcode.MoveResolveError)
   UnresolvedStackMove
+  MissingStackObjectArea
   FrameOffsetOutOfRange(offset~ : Int)
   InvalidScalarMemoryAccess
   InvalidFloatInstruction
@@ -249,13 +250,53 @@ fn emit_sp_adjust(
   if amount == 0 {
     return
   }
-  if amount < 0 || amount > 4095 {
+  if amount < 0 {
     raise FrameOffsetOutOfRange(offset=amount)
   }
   let base = if subtract { 0xD1000000U } else { 0x91000000U }
-  buffer.emit_word(
-    base | (amount.reinterpret_as_uint() << 10) | (31U << 5) | 31U,
-  )
+  let mut remaining = amount
+  while remaining >= 4096 {
+    let pages = Int::min(remaining / 4096, 4095)
+    buffer.emit_word(
+      base | (1U << 22) | (pages.reinterpret_as_uint() << 10) | (31U << 5) | 31U,
+    )
+    remaining -= pages * 4096
+  }
+  if remaining > 0 {
+    buffer.emit_word(
+      base | (remaining.reinterpret_as_uint() << 10) | (31U << 5) | 31U,
+    )
+  }
+}
+
+///|
+fn emit_stack_address(
+  buffer : CodeBuffer,
+  destination : @vcode.PhysicalReg,
+  offset : Int,
+) -> Unit {
+  if offset <= 4095 {
+    buffer.emit_word(
+      0x91000000U |
+      (offset.reinterpret_as_uint() << 10) |
+      (31U << 5) |
+      reg_bits(destination),
+    )
+  } else if offset % 4096 == 0 && offset / 4096 <= 4095 {
+    buffer.emit_word(
+      0x91400000U |
+      ((offset / 4096).reinterpret_as_uint() << 10) |
+      (31U << 5) |
+      reg_bits(destination),
+    )
+  } else {
+    buffer.emit_word(0x910003E0U | reg_bits(destination))
+    let scratch = @vcode.PhysicalReg::new(16, Int)
+    emit_constant(buffer, W64, scratch, offset.to_uint64())
+    buffer.emit_word(
+      encode_three_register(0x8B000000U, destination, destination, scratch),
+    )
+  }
 }
 
 ///|
@@ -731,6 +772,11 @@ fn emit_instruction(
         @code_object.Relocation::new(add_offset, AArch64PageOffset12, target),
       )
     }
+    StackAddress(object) =>
+      match frame.stack_object_offset(object) {
+        Some(offset) => emit_stack_address(buffer, reg(0), offset)
+        None => raise MissingStackObjectArea
+      }
     LoadFloatConstant(ty, bits) => {
       let scratch = @vcode.PhysicalReg::new(16, Int)
       if ty == F32 {

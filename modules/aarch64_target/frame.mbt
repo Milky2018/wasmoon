@@ -5,9 +5,17 @@ priv struct SavedRegister {
 }
 
 ///|
+priv struct StackObjectArea {
+  offset : Int
+  size : Int
+  alignment : Int
+}
+
+///|
 pub struct AArch64Frame {
   priv layout : @vcode.FrameLayout
   priv outgoing_args_size : Int
+  priv stack_objects : StackObjectArea?
   priv slots : Array[(@vcode.StackSlot, Int)]
   priv saved_registers : Array[SavedRegister]
 }
@@ -18,6 +26,7 @@ pub suberror AArch64FrameError {
   InvalidGenericFrame(cause~ : @vcode.FrameVerifyError)
   InvalidSavedRegister(reg~ : @vcode.PhysicalReg, offset~ : Int)
   OutgoingAreaMismatch(expected~ : Int, actual~ : Int)
+  InvalidStackObjectArea(message~ : String)
   SavedRegisterSetMismatch
 } derive(Debug)
 
@@ -105,6 +114,45 @@ fn maximum_outgoing_args_size(function : @vcode.Function[AArch64Inst]) -> Int {
 }
 
 ///|
+fn stack_object_area_requirements(
+  function : @vcode.Function[AArch64Inst],
+) -> (Int, Int)? raise AArch64FrameError {
+  let mut requirements : (Int, Int)? = None
+  let objects : Array[AArch64StackObject] = []
+  for index in 0..<function.instruction_count() {
+    let instruction = function.instruction_at(index).unwrap()
+    if function.instruction(instruction) is Some(StackAddress(object)) {
+      if !object.is_valid() {
+        raise InvalidStackObjectArea(
+          message="invalid stack-object descriptor in target VCode",
+        )
+      }
+      let current = (object.area_size, object.area_alignment)
+      match requirements {
+        Some(expected) if expected != current =>
+          raise InvalidStackObjectArea(
+            message="stack-address instructions disagree about the object area",
+          )
+        None => requirements = Some(current)
+        _ => ()
+      }
+      if !objects.contains(object) {
+        for existing in objects {
+          if object.offset < existing.offset + existing.size &&
+            existing.offset < object.offset + object.size {
+            raise InvalidStackObjectArea(
+              message="stack objects overlap in the target frame",
+            )
+          }
+        }
+        objects.push(object)
+      }
+    }
+  }
+  requirements
+}
+
+///|
 pub fn AArch64Frame::frame_size(self : AArch64Frame) -> Int {
   self.layout.frame_size()
 }
@@ -117,6 +165,20 @@ pub fn AArch64Frame::alignment(self : AArch64Frame) -> Int {
 ///|
 pub fn AArch64Frame::outgoing_args_size(self : AArch64Frame) -> Int {
   self.outgoing_args_size
+}
+
+///|
+pub fn AArch64Frame::stack_object_offset(
+  self : AArch64Frame,
+  object : AArch64StackObject,
+) -> Int? {
+  match self.stack_objects {
+    Some(area) if object.is_valid() &&
+      area.size == object.area_size &&
+      area.alignment == object.area_alignment =>
+      Some(area.offset + object.offset)
+    _ => None
+  }
 }
 
 ///|
@@ -139,6 +201,9 @@ pub fn AArch64Frame::summary(self : AArch64Frame) -> String {
   let mut output = "aarch64 frame size=\{self.frame_size()} align=\{self.alignment()}\n"
   if self.outgoing_args_size > 0 {
     output += "  outgoing \{self.outgoing_args_size} bytes at sp+0\n"
+  }
+  if self.stack_objects is Some(area) {
+    output += "  stack-objects \{area.size} bytes at sp+\{area.offset}\n"
   }
   for entry in self.slots {
     let (slot, offset) = entry
@@ -169,6 +234,24 @@ pub fn verify_frame(
       actual=frame.outgoing_args_size,
     )
   }
+  let expected_stack_objects = stack_object_area_requirements(function)
+  match (expected_stack_objects, frame.stack_objects) {
+    (None, None) => ()
+    (Some((size, alignment)), Some(area)) =>
+      if area.size != size ||
+        area.alignment != alignment ||
+        area.offset < frame.outgoing_args_size ||
+        area.offset % alignment != 0 ||
+        area.offset + size > frame.frame_size() {
+        raise InvalidStackObjectArea(
+          message="planned stack-object area does not satisfy target requirements",
+        )
+      }
+    _ =>
+      raise InvalidStackObjectArea(
+        message="planned stack-object area presence does not match target VCode",
+      )
+  }
   let expected = used_callee_saved_registers(function, allocation)
   if frame.saved_registers.map(saved => saved.reg) != expected {
     raise SavedRegisterSetMismatch
@@ -176,6 +259,9 @@ pub fn verify_frame(
   let occupied : Array[(Int, Int)] = []
   if frame.outgoing_args_size > 0 {
     occupied.push((0, frame.outgoing_args_size))
+  }
+  if frame.stack_objects is Some(area) {
+    occupied.push((area.offset, area.offset + area.size))
   }
   for index in 0..<allocation.stack_slot_count() {
     let slot = allocation.stack_slot_at(index).unwrap()
@@ -208,6 +294,15 @@ pub fn plan_frame(
   }
   let outgoing_args_size = maximum_outgoing_args_size(function)
   let mut offset = outgoing_args_size
+  let stack_objects = match stack_object_area_requirements(function) {
+    Some((size, alignment)) => {
+      offset = align_up(offset, alignment)
+      let area = { offset, size, alignment }
+      offset += size
+      Some(area)
+    }
+    None => None
+  }
   let slot_offsets : Array[Int] = []
   for index in 0..<allocation.stack_slot_count() {
     let slot = allocation.stack_slot_at(index).unwrap()
@@ -236,7 +331,13 @@ pub fn plan_frame(
   let slots = Array::makei(slot_offsets.length(), index => {
     (allocation.stack_slot_at(index).unwrap(), slot_offsets[index])
   })
-  let frame = { layout, outgoing_args_size, slots, saved_registers }
+  let frame = {
+    layout,
+    outgoing_args_size,
+    stack_objects,
+    slots,
+    saved_registers,
+  }
   verify_frame(function, allocation, frame)
   frame
 }

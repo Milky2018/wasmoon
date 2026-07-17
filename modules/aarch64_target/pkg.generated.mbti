@@ -73,6 +73,7 @@ pub suberror AArch64EmitError {
   InvalidCodeObject(cause~ : @code_object.CodeObjectVerifyError)
   InvalidParallelMove(cause~ : @vcode.MoveResolveError)
   UnresolvedStackMove
+  MissingStackObjectArea
   FrameOffsetOutOfRange(offset~ : Int)
   InvalidScalarMemoryAccess
   InvalidFloatInstruction
@@ -87,6 +88,7 @@ pub suberror AArch64FrameError {
   InvalidGenericFrame(cause~ : @vcode.FrameVerifyError)
   InvalidSavedRegister(reg~ : @vcode.PhysicalReg, offset~ : Int)
   OutgoingAreaMismatch(expected~ : Int, actual~ : Int)
+  InvalidStackObjectArea(message~ : String)
   SavedRegisterSetMismatch
 } derive(@debug.Debug)
 pub impl Show for AArch64FrameError
@@ -201,6 +203,7 @@ pub fn AArch64Frame::frame_size(Self) -> Int
 pub fn AArch64Frame::outgoing_args_size(Self) -> Int
 pub fn AArch64Frame::saved_registers(Self) -> Array[(@vcode.PhysicalReg, Int)]
 pub fn AArch64Frame::slot_offset(Self, @vcode.StackSlot) -> Int?
+pub fn AArch64Frame::stack_object_offset(Self, AArch64StackObject) -> Int?
 pub fn AArch64Frame::summary(Self) -> String
 
 pub(all) enum AArch64Inst {
@@ -212,6 +215,7 @@ pub(all) enum AArch64Inst {
   LoadConstant(GprWidth, UInt64)
   LoadNull(@machv.ValueType)
   LoadAddress(AArch64Address)
+  StackAddress(AArch64StackObject)
   LoadFloatConstant(@machv.ValueType, UInt64)
   Move(@machv.ValueType)
   CarrierMove(@machv.ValueType, @machv.ValueType)
@@ -265,6 +269,15 @@ pub(all) enum AArch64IntUnary {
   Rbit
   Neg
 } derive(Eq, @debug.Debug)
+
+pub struct AArch64StackObject {
+  offset : Int
+  size : Int
+  alignment : Int
+  area_size : Int
+  area_alignment : Int
+} derive(Eq, @debug.Debug)
+pub fn AArch64StackObject::new(Int, Int, Int, Int, Int) -> Self
 
 pub(all) struct AbiPolicy {
   pointer_size : Int

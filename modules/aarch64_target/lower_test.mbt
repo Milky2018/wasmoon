@@ -61,6 +61,52 @@ test "AArch64 lowering rejects unsupported valid operations structurally" {
 }
 
 ///|
+test "AArch64 lowering assigns one aligned semantic stack-object area" {
+  let builder = @semantic.FunctionBuilder::new(
+    "stack_object_layout",
+    Internal,
+    [Ptr64],
+    [Ptr64, Ptr64],
+  )
+  let first = builder.create_stack_object(3, 1)
+  builder.create_stack_object(16, 16) |> ignore
+  let last = builder.create_stack_object(24, 8)
+  let first_address = builder.emit(StackAddress(first), [], [Ptr64])[0]
+  let last_address = builder.emit(StackAddress(last), [], [Ptr64])[0]
+  builder.return_([first_address, last_address])
+  inspect(
+    lower(builder.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode stack_object_layout(v0:ptr64) -> (ptr64, ptr64)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v1:any@late]
+      #|  i1 StackAddress(
+      #|  {
+      #|    offset: 0,
+      #|    size: 3,
+      #|    alignment: 1,
+      #|    area_size: 64,
+      #|    area_alignment: 16,
+      #|  },
+      #|) defs=[v2:any@late]
+      #|  i2 StackAddress(
+      #|  {
+      #|    offset: 32,
+      #|    size: 24,
+      #|    alignment: 8,
+      #|    area_size: 64,
+      #|    area_alignment: 16,
+      #|  },
+      #|) defs=[v3:any@late]
+      #|  i3 OutgoingReg(Ptr64, p0:int) uses=[v2:any@early]
+      #|  i4 OutgoingReg(Ptr64, p1:int) uses=[v3:any@early]
+      #|  i5 Return
+      #|
+    ),
+  )
+}
+
+///|
 test "AArch64 lowering inserts explicit traps before signed division" {
   let builder = @semantic.FunctionBuilder::new(
     "checked_divide",

@@ -112,6 +112,43 @@ pub(all) enum AArch64Conversion {
 } derive(Eq, Debug)
 
 ///|
+pub struct AArch64StackObject {
+  offset : Int
+  size : Int
+  alignment : Int
+  area_size : Int
+  area_alignment : Int
+} derive(Eq, Debug)
+
+///|
+pub fn AArch64StackObject::new(
+  offset : Int,
+  size : Int,
+  alignment : Int,
+  area_size : Int,
+  area_alignment : Int,
+) -> AArch64StackObject {
+  { offset, size, alignment, area_size, area_alignment }
+}
+
+///|
+fn is_power_of_two(value : Int) -> Bool {
+  value > 0 && (value & (value - 1)) == 0
+}
+
+///|
+fn AArch64StackObject::is_valid(self : AArch64StackObject) -> Bool {
+  self.offset >= 0 &&
+  self.size > 0 &&
+  is_power_of_two(self.alignment) &&
+  self.offset % self.alignment == 0 &&
+  self.area_size >= self.offset + self.size &&
+  is_power_of_two(self.area_alignment) &&
+  self.area_alignment >= self.alignment &&
+  self.area_size % self.area_alignment == 0
+}
+
+///|
 pub(all) enum AArch64Inst {
   IncomingReg(@semantic.ValueType, @vcode.PhysicalReg)
   IncomingStack(@semantic.ValueType, Int)
@@ -121,6 +158,7 @@ pub(all) enum AArch64Inst {
   LoadConstant(GprWidth, UInt64)
   LoadNull(@semantic.ValueType)
   LoadAddress(AArch64Address)
+  StackAddress(AArch64StackObject)
   LoadFloatConstant(@semantic.ValueType, UInt64)
   Move(@semantic.ValueType)
   CarrierMove(@semantic.ValueType, @semantic.ValueType)
@@ -513,6 +551,15 @@ pub fn verify_vcode(
       }
       LoadAddress(_) =>
         require_instruction_shape(function, instruction, [], [Ptr64], false, 0)
+      StackAddress(object) => {
+        if !object.is_valid() {
+          raise InvalidInstruction(
+            instruction~,
+            message="invalid target stack-object descriptor",
+          )
+        }
+        require_instruction_shape(function, instruction, [], [Ptr64], false, 0)
+      }
       LoadFloatConstant(ty, bits) => {
         if (ty != F32 && ty != F64) || (ty == F32 && bits > 0xFFFFFFFFUL) {
           raise InvalidInstruction(

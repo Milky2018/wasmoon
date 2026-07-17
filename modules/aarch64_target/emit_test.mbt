@@ -49,6 +49,121 @@ test "AArch64 pipeline emits an allocated scalar function" {
 }
 
 ///|
+test "AArch64 pipeline emits addresses inside the semantic stack-object area" {
+  let builder = @semantic.FunctionBuilder::new(
+    "emitted_stack_addresses",
+    Platform,
+    [],
+    [Ptr64],
+  )
+  let first = builder.create_stack_object(3, 1)
+  builder.create_stack_object(16, 16) |> ignore
+  let last = builder.create_stack_object(24, 8)
+  let first_address = builder.emit(StackAddress(first), [], [Ptr64])[0]
+  let last_address = builder.emit(StackAddress(last), [], [Ptr64])[0]
+  ignore(first_address)
+  builder.return_([last_address])
+  let function = lower(builder.finish(), test_lowering_context())
+  let allocation = allocate(function)
+  let frame = plan_frame(function, allocation)
+  debug_inspect(
+    emit(function, allocation, frame),
+    content=(
+      #|{
+      #|  architecture: AArch64,
+      #|  code: [
+      #|    0xff,
+      #|    0x03,
+      #|    0x01,
+      #|    0xd1,
+      #|    0xe0,
+      #|    0x83,
+      #|    0x00,
+      #|    0x91,
+      #|    0xff,
+      #|    0x03,
+      #|    0x01,
+      #|    0x91,
+      #|    0xc0,
+      #|    0x03,
+      #|    0x5f,
+      #|    0xd6,
+      #|  ],
+      #|  relocations: [],
+      #|  sources: [],
+      #|  traps: [],
+      #|  safepoints: [],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
+test "AArch64 pipeline materializes a large semantic stack-object offset" {
+  let builder = @semantic.FunctionBuilder::new(
+    "emitted_large_stack_address",
+    Platform,
+    [],
+    [Ptr64],
+  )
+  builder.create_stack_object(5000, 1) |> ignore
+  let object = builder.create_stack_object(8, 8)
+  let address = builder.emit(StackAddress(object), [], [Ptr64])[0]
+  builder.return_([address])
+  let function = lower(builder.finish(), test_lowering_context())
+  let allocation = allocate(function)
+  let frame = plan_frame(function, allocation)
+  debug_inspect(
+    emit(function, allocation, frame),
+    content=(
+      #|{
+      #|  architecture: AArch64,
+      #|  code: [
+      #|    0xff,
+      #|    0x07,
+      #|    0x40,
+      #|    0xd1,
+      #|    0xff,
+      #|    0x43,
+      #|    0x0e,
+      #|    0xd1,
+      #|    0xe0,
+      #|    0x03,
+      #|    0x00,
+      #|    0x91,
+      #|    0x10,
+      #|    0x71,
+      #|    0x82,
+      #|    0xd2,
+      #|    0x00,
+      #|    0x00,
+      #|    0x10,
+      #|    0x8b,
+      #|    0xff,
+      #|    0x07,
+      #|    0x40,
+      #|    0x91,
+      #|    0xff,
+      #|    0x43,
+      #|    0x0e,
+      #|    0x91,
+      #|    0xc0,
+      #|    0x03,
+      #|    0x5f,
+      #|    0xd6,
+      #|  ],
+      #|  relocations: [],
+      #|  sources: [],
+      #|  traps: [],
+      #|  safepoints: [],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
 test "AArch64 pipeline patches conditional control flow" {
   let builder = @semantic.FunctionBuilder::new(
     "emitted_branch",

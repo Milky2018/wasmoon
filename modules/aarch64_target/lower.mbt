@@ -50,6 +50,40 @@ fn scalar_access_width(ty : @semantic.ValueType) -> @semantic.AccessWidth? {
 }
 
 ///|
+fn lower_stack_object(
+  function : @semantic.Function,
+  requested : @semantic.StackObject,
+) -> AArch64StackObject raise AArch64LowerError {
+  let objects = function.stack_objects()
+  let offsets : Array[Int] = []
+  let mut cursor = 0
+  let mut area_alignment = 1
+  for object in objects {
+    let alignment = function.stack_object_alignment(object).unwrap()
+    let size = function.stack_object_size(object).unwrap()
+    cursor = align_up(cursor, alignment)
+    offsets.push(cursor)
+    cursor += size
+    if alignment > area_alignment {
+      area_alignment = alignment
+    }
+  }
+  let area_size = align_up(cursor, area_alignment)
+  for index, object in objects {
+    if object == requested {
+      return AArch64StackObject::new(
+        offsets[index],
+        function.stack_object_size(object).unwrap(),
+        function.stack_object_alignment(object).unwrap(),
+        area_size,
+        area_alignment,
+      )
+    }
+  }
+  raise UnsupportedAbi(message="stack object is not function-owned")
+}
+
+///|
 fn lower_binary(operation : @semantic.IntBinaryOp) -> AArch64IntBinary? {
   match operation {
     Add => Some(Add)
@@ -725,6 +759,8 @@ fn lower_instruction(
     CodeAddress(symbol) => Some(LoadAddress(Code(symbol)))
     ExternalAddress(symbol) => Some(LoadAddress(External(symbol)))
     DataAddress(symbol) => Some(LoadAddress(Data(symbol)))
+    StackAddress(object) =>
+      Some(StackAddress(lower_stack_object(function, object)))
     F32Const(bits) => Some(LoadFloatConstant(F32, bits.to_uint64()))
     F64Const(bits) => Some(LoadFloatConstant(F64, bits))
     Copy if result_types.length() == 1 => Some(Move(result_types[0]))
