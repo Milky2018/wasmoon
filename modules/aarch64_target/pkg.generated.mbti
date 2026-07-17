@@ -2,6 +2,7 @@
 package "Milky2018/aarch64_target"
 
 import {
+  "Milky2018/machv/vcode",
   "Milky2018/machv_legacy/abi",
   "moonbitlang/core/debug",
 }
@@ -41,9 +42,25 @@ pub fn int_reg_index(IntRegRole) -> Int
 
 pub fn target() -> Target
 
+pub fn verify_vcode(@vcode.Function[AArch64Inst]) -> Unit raise TargetVCodeVerifyError
+
 // Errors
+pub suberror TargetVCodeVerifyError {
+  CommonFailure(cause~ : @vcode.VCodeVerifyError)
+  InvalidInstruction(instruction~ : @vcode.Instruction, message~ : String)
+} derive(Eq, @debug.Debug)
+pub impl Show for TargetVCodeVerifyError
 
 // Types and methods
+pub(all) enum AArch64Inst {
+  Nop
+  Move64
+  Add64
+  AddShifted64(Int)
+  BranchNonZero
+  Return
+} derive(Eq, @debug.Debug)
+
 pub(all) struct AbiPolicy {
   pointer_size : Int
   stack_alignment : Int

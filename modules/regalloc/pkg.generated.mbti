@@ -25,7 +25,7 @@ pub suberror VerifyError {
   ClobberedRegister(vreg~ : VirtualReg, preg~ : PhysicalReg)
   TiedConstraintViolation(left~ : VirtualReg, right~ : VirtualReg, left_location~ : Location, right_location~ : Location)
   ScratchRegisterUnavailable(message~ : String)
-}
+} derive(@debug.Debug)
 
 // Types and methods
 type Allocation derive(@debug.Debug)

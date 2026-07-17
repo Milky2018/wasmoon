@@ -20,7 +20,7 @@ pub suberror VerifyError {
     right_location~ : Location
   )
   ScratchRegisterUnavailable(message~ : String)
-}
+} derive(Debug)
 
 ///|
 pub fn raise_scratch_register_unavailable(

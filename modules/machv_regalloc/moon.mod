@@ -14,6 +14,7 @@ description = "MachV adapter for the reusable register allocator"
 
 import {
   "moonbitlang/x@0.4.38",
+  "Milky2018/machv@0.3.0",
   "Milky2018/machv_legacy@0.2.2",
   "Milky2018/regalloc@0.2.0",
 }

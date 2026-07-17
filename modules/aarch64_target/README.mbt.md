@@ -8,8 +8,8 @@ does not lower MilkIR; verified MilkIR first becomes target-neutral MachV.
 
 ## Package
 
-- `Milky2018/aarch64_target`: AArch64 target descriptor, ABI policy, register
-  sets, and machine environment.
+- `Milky2018/aarch64_target`: AArch64 Target VCode instructions and verifier,
+  target descriptor, ABI policy, register sets, and machine environment.
 
 ## When to use it
 

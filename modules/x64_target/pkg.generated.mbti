@@ -2,6 +2,7 @@
 package "Milky2018/x64_target"
 
 import {
+  "Milky2018/machv/vcode",
   "Milky2018/machv_legacy/abi",
   "moonbitlang/core/debug",
 }
@@ -33,7 +34,14 @@ pub fn sysv_callee_saved() -> Array[@abi.PReg]
 
 pub fn target() -> Target
 
+pub fn verify_vcode(@vcode.Function[X64Inst]) -> Unit raise TargetVCodeVerifyError
+
 // Errors
+pub suberror TargetVCodeVerifyError {
+  CommonFailure(cause~ : @vcode.VCodeVerifyError)
+  InvalidInstruction(instruction~ : @vcode.Instruction, message~ : String)
+} derive(Eq, @debug.Debug)
+pub impl Show for TargetVCodeVerifyError
 
 // Types and methods
 pub(all) struct AbiPolicy {
@@ -77,6 +85,15 @@ pub(all) struct Target {
   calling_convention : CallingConvention
   abi : AbiPolicy
 } derive(@debug.Debug)
+
+pub(all) enum X64Inst {
+  Nop
+  Move64
+  Lea64(Int)
+  SetParity
+  BranchNonZero
+  Return
+} derive(Eq, @debug.Debug)
 
 // Type aliases
 
