@@ -2,6 +2,7 @@
 package "Milky2018/wasmoon_jit"
 
 import {
+  "Milky2018/machv/code_object",
   "Milky2018/machv_emit",
   "Milky2018/machv_legacy",
   "Milky2018/machv_legacy/abi",
@@ -408,6 +409,8 @@ pub fn plan_hostcall_import_trampoline_layout(Array[@types.ValueType], Array[@ty
 pub fn plan_integration_for_target(@milkir.Function, @machv_legacy.Function, @machv_regalloc.Output, @machv_emit.EmitTarget) -> JitIntegrationPlan raise JitPipelineError
 
 pub fn plan_milkir_integration_for_target(@milkir.Function, @machv_emit.EmitTarget) -> JitIntegrationPlan raise JitPipelineError
+
+pub fn plan_wasm_body_aarch64_code_object(@milkir.Function, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @code_object.UnlinkedCodeObject raise JitPipelineError
 
 pub fn plan_wasm_body_milkir_integration_for_target(@milkir.Function, @machv_emit.EmitTarget) -> JitIntegrationPlan raise JitPipelineError
 

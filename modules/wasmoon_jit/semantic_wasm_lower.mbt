@@ -152,6 +152,57 @@ fn has_wasm_extension(function : @milkir.Function) -> Bool {
 }
 
 ///|
+fn wasmoon_allocation_symbols(
+  environment : WasmoonSemanticEnvironment,
+) -> Array[@semantic_machv.ExternalSymbol] {
+  [
+    @semantic_machv.ExternalSymbol::new(
+      environment.runtime_symbols.gc_alloc_struct_slow,
+    ),
+    @semantic_machv.ExternalSymbol::new(
+      environment.runtime_symbols.gc_alloc_array_from_values_slow,
+    ),
+    @semantic_machv.ExternalSymbol::new(
+      environment.runtime_symbols.gc_alloc_array_slow,
+    ),
+  ]
+}
+
+///|
+fn build_wasmoon_aarch64_code_object(
+  semantic : @semantic_machv.Function,
+  environment : WasmoonSemanticEnvironment,
+) -> @code_object.UnlinkedCodeObject raise JitPipelineError {
+  build_aarch64_shadow(
+    semantic,
+    environment_field_path=fn(field : @semantic_machv.EnvironmentField) {
+      environment.field_paths.get(field.name)
+    },
+    allocation_symbols=wasmoon_allocation_symbols(environment),
+    root_scope_symbols=(
+      @semantic_machv.ExternalSymbol::new(gc_push_root_scope_symbol()),
+      @semantic_machv.ExternalSymbol::new(gc_pop_root_scope_symbol()),
+    ),
+  )
+}
+
+///|
+pub fn plan_wasm_body_aarch64_code_object(
+  function : @milkir.Function,
+  use_subtype_indirect_check? : Bool = true,
+  canonical_type_indices? : Array[Int] = [],
+) -> @code_object.UnlinkedCodeObject raise JitPipelineError {
+  let environment = wasmoon_semantic_environment(
+    use_subtype_indirect_check, canonical_type_indices,
+  )
+  let semantic = @wasm_machv.lower_function(function, environment.wasm) catch {
+    error =>
+      raise PipelineFailure(message="\{function.name}: \{error.to_string()}")
+  }
+  build_wasmoon_aarch64_code_object(semantic, environment)
+}
+
+///|
 fn lower_semantic_wasm_with_isa(
   function : @milkir.Function,
   isa : @isa.ISA,
@@ -169,28 +220,11 @@ fn lower_semantic_wasm_with_isa(
     error =>
       raise PipelineFailure(message="\{function.name}: \{error.to_string()}")
   }
-  maybe_compile_aarch64_shadow(
-    semantic,
-    isa,
-    environment_field_path=fn(field : @semantic_machv.EnvironmentField) {
-      environment.field_paths.get(field.name)
-    },
-    allocation_symbols=[
-      @semantic_machv.ExternalSymbol::new(
-        environment.runtime_symbols.gc_alloc_struct_slow,
-      ),
-      @semantic_machv.ExternalSymbol::new(
-        environment.runtime_symbols.gc_alloc_array_from_values_slow,
-      ),
-      @semantic_machv.ExternalSymbol::new(
-        environment.runtime_symbols.gc_alloc_array_slow,
-      ),
-    ],
-    root_scope_symbols=(
-      @semantic_machv.ExternalSymbol::new(gc_push_root_scope_symbol()),
-      @semantic_machv.ExternalSymbol::new(gc_pop_root_scope_symbol()),
-    ),
-  )
+  match isa {
+    AArch64 if aarch64_shadow_enabled() =>
+      build_wasmoon_aarch64_code_object(semantic, environment) |> ignore
+    _ => ()
+  }
   let legacy = adapt_semantic_to_legacy(
     semantic,
     isa,
