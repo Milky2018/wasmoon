@@ -1606,11 +1606,14 @@ test "AArch64 vector integer extension encodings cover every legal form" {
   for lane in lanes {
     for half in halves {
       for signedness in signednesses {
-        let conversion = match half {
-          Low => AArch64VectorConversion::ExtendLow(lane, signedness)
-          High => ExtendHigh(lane, signedness)
-        }
-        emit_vector_conversion(buffer, conversion, source, destination)
+        emit_vector_extension(
+          buffer,
+          lane,
+          half is High,
+          signedness,
+          source,
+          destination,
+        )
       }
     }
   }
@@ -1666,6 +1669,73 @@ test "AArch64 vector integer extension encodings cover every legal form" {
       #|  0xa4,
       #|  0x20,
       #|  0x6f,
+      #|]
+    ),
+  )
+}
+
+///|
+test "AArch64 saturating vector narrowing handles every form and alias" {
+  let buffer = CodeBuffer::new()
+  let low = @vcode.PhysicalReg::new(3, FpVector)
+  let high = @vcode.PhysicalReg::new(5, FpVector)
+  let destination = @vcode.PhysicalReg::new(7, FpVector)
+  let lanes : Array[@semantic.VectorLane] = [I8x16, I16x8]
+  let signednesses : Array[@semantic.Signedness] = [Signed, Unsigned]
+  for lane in lanes {
+    for signedness in signednesses {
+      emit_vector_narrow(buffer, lane, signedness, low, high, destination)
+    }
+  }
+  emit_vector_narrow(buffer, I8x16, Signed, low, high, high)
+  debug_inspect(
+    buffer.code,
+    content=(
+      #|[
+      #|  0x67,
+      #|  0x48,
+      #|  0x21,
+      #|  0x0e,
+      #|  0xa7,
+      #|  0x48,
+      #|  0x21,
+      #|  0x4e,
+      #|  0x67,
+      #|  0x28,
+      #|  0x21,
+      #|  0x2e,
+      #|  0xa7,
+      #|  0x28,
+      #|  0x21,
+      #|  0x6e,
+      #|  0x67,
+      #|  0x48,
+      #|  0x61,
+      #|  0x0e,
+      #|  0xa7,
+      #|  0x48,
+      #|  0x61,
+      #|  0x4e,
+      #|  0x67,
+      #|  0x28,
+      #|  0x61,
+      #|  0x2e,
+      #|  0xa7,
+      #|  0x28,
+      #|  0x61,
+      #|  0x6e,
+      #|  0xb0,
+      #|  0x1c,
+      #|  0xa5,
+      #|  0x4e,
+      #|  0x65,
+      #|  0x48,
+      #|  0x21,
+      #|  0x0e,
+      #|  0x05,
+      #|  0x4a,
+      #|  0x21,
+      #|  0x4e,
       #|]
     ),
   )

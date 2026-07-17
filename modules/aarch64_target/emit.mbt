@@ -899,16 +899,14 @@ fn emit_vector_int_binary(
 }
 
 ///|
-fn emit_vector_conversion(
+fn emit_vector_extension(
   buffer : CodeBuffer,
-  conversion : AArch64VectorConversion,
+  lane : @semantic.VectorLane,
+  high : Bool,
+  signedness : @semantic.Signedness,
   source : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
 ) -> Unit raise AArch64EmitError {
-  let (lane, high, signedness) = match conversion {
-    ExtendLow(lane, signedness) => (lane, false, signedness)
-    ExtendHigh(lane, signedness) => (lane, true, signedness)
-  }
   let signed = signedness is Signed
   let prefix = match (high, signed) {
     (false, true) => 0x0F000000U
@@ -924,6 +922,35 @@ fn emit_vector_conversion(
   }
   buffer.emit_word(
     prefix | body | (reg_bits(source) << 5) | reg_bits(destination),
+  )
+}
+
+///|
+fn emit_vector_narrow(
+  buffer : CodeBuffer,
+  lane : @semantic.VectorLane,
+  signedness : @semantic.Signedness,
+  low : @vcode.PhysicalReg,
+  high : @vcode.PhysicalReg,
+  destination : @vcode.PhysicalReg,
+) -> Unit raise AArch64EmitError {
+  let high_source = if destination == high {
+    let scratch = @vcode.PhysicalReg::new(16, FpVector)
+    emit_move(buffer, V128, scratch, high)
+    scratch
+  } else {
+    high
+  }
+  let (low_base, high_base) = match (lane, signedness) {
+    (I8x16, Signed) => (0x0E214800U, 0x4E214800U)
+    (I8x16, Unsigned) => (0x2E212800U, 0x6E212800U)
+    (I16x8, Signed) => (0x0E614800U, 0x4E614800U)
+    (I16x8, Unsigned) => (0x2E612800U, 0x6E612800U)
+    (I32x4 | I64x2 | F32x4 | F64x2, _) => raise InvalidVectorInstruction
+  }
+  buffer.emit_word(low_base | (reg_bits(low) << 5) | reg_bits(destination))
+  buffer.emit_word(
+    high_base | (reg_bits(high_source) << 5) | reg_bits(destination),
   )
 }
 
@@ -1553,7 +1580,14 @@ fn emit_instruction(
     VectorIntCompare(lane, comparison) =>
       emit_vector_int_compare(buffer, lane, comparison, reg(0), reg(1), reg(2))
     VectorConvert(conversion) =>
-      emit_vector_conversion(buffer, conversion, reg(0), reg(1))
+      match conversion {
+        ExtendLow(lane, signedness) =>
+          emit_vector_extension(buffer, lane, false, signedness, reg(0), reg(1))
+        ExtendHigh(lane, signedness) =>
+          emit_vector_extension(buffer, lane, true, signedness, reg(0), reg(1))
+        Narrow(lane, signedness) =>
+          emit_vector_narrow(buffer, lane, signedness, reg(0), reg(1), reg(2))
+      }
     VectorBitwise(operation) =>
       match operation {
         Not => emit_vector_bitwise(buffer, Not, reg(0), reg(0), reg(0), reg(1))

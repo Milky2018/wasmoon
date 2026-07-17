@@ -99,6 +99,7 @@ pub(all) enum AArch64VectorIntBinary {
 pub(all) enum AArch64VectorConversion {
   ExtendLow(@semantic.VectorLane, @semantic.Signedness)
   ExtendHigh(@semantic.VectorLane, @semantic.Signedness)
+  Narrow(@semantic.VectorLane, @semantic.Signedness)
 } derive(Eq, Debug)
 
 ///|
@@ -880,25 +881,41 @@ pub fn verify_vcode(
           0,
         )
       }
-      VectorConvert(conversion) => {
-        let lane = match conversion {
-          ExtendLow(lane, _) | ExtendHigh(lane, _) => lane
+      VectorConvert(conversion) =>
+        match conversion {
+          ExtendLow(lane, _) | ExtendHigh(lane, _) => {
+            if lane != I16x8 && lane != I32x4 && lane != I64x2 {
+              raise InvalidInstruction(
+                instruction~,
+                message="vector extension requires widened integer lanes",
+              )
+            }
+            require_instruction_shape(
+              function,
+              instruction,
+              [V128],
+              [V128],
+              false,
+              0,
+            )
+          }
+          Narrow(lane, _) => {
+            if lane != I8x16 && lane != I16x8 {
+              raise InvalidInstruction(
+                instruction~,
+                message="vector narrowing requires i8x16 or i16x8 lanes",
+              )
+            }
+            require_instruction_shape(
+              function,
+              instruction,
+              [V128, V128],
+              [V128],
+              false,
+              0,
+            )
+          }
         }
-        if lane != I16x8 && lane != I32x4 && lane != I64x2 {
-          raise InvalidInstruction(
-            instruction~,
-            message="vector extension requires widened integer lanes",
-          )
-        }
-        require_instruction_shape(
-          function,
-          instruction,
-          [V128],
-          [V128],
-          false,
-          0,
-        )
-      }
       VectorBitwise(operation) => {
         let arity = match operation {
           Not => 1

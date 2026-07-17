@@ -1226,6 +1226,64 @@ test "AArch64 pipeline emits vector integer extension" {
 }
 
 ///|
+test "AArch64 pipeline emits saturating vector narrowing" {
+  let builder = @semantic.FunctionBuilder::new(
+    "emitted_vector_narrowing",
+    Platform,
+    [V128, V128],
+    [V128],
+  )
+  let result = builder.emit(
+      Vector(Convert(Narrow(I8x16, Unsigned))),
+      builder.parameters(),
+      [V128],
+    )[0]
+  builder.return_([result])
+  let function = lower(builder.finish(), test_lowering_context())
+  let allocation = allocate(function)
+  let frame = plan_frame(function, allocation)
+  debug_inspect(
+    emit(function, allocation, frame),
+    content=(
+      #|{
+      #|  architecture: AArch64,
+      #|  code: [
+      #|    0x02,
+      #|    0x1c,
+      #|    0xa0,
+      #|    0x4e,
+      #|    0x20,
+      #|    0x1c,
+      #|    0xa1,
+      #|    0x4e,
+      #|    0x41,
+      #|    0x28,
+      #|    0x21,
+      #|    0x2e,
+      #|    0x01,
+      #|    0x28,
+      #|    0x21,
+      #|    0x6e,
+      #|    0x20,
+      #|    0x1c,
+      #|    0xa1,
+      #|    0x4e,
+      #|    0xc0,
+      #|    0x03,
+      #|    0x5f,
+      #|    0xd6,
+      #|  ],
+      #|  relocations: [],
+      #|  sources: [],
+      #|  traps: [],
+      #|  safepoints: [],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
 test "AArch64 pipeline emits addresses inside the semantic stack-object area" {
   let builder = @semantic.FunctionBuilder::new(
     "emitted_stack_addresses",
