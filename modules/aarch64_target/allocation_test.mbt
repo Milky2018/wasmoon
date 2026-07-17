@@ -133,3 +133,33 @@ test "AArch64 allocation keeps values live across a direct call out of clobbers"
     ),
   )
 }
+
+///|
+test "AArch64 frame reserves one aligned outgoing stack-argument area" {
+  let parameter_types : Array[@semantic.ValueType] = Array::make(9, I64)
+  let builder = @semantic.FunctionBuilder::new(
+    "stack_call_frame",
+    Internal,
+    parameter_types,
+    [],
+  )
+  let call = @semantic.SemanticCall::new(
+    External(@semantic.ExternalSymbol::new("runtime.many")),
+    @semantic.Signature::new(parameter_types, []),
+    Platform,
+    @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
+  )
+  builder.emit(Call(call), builder.parameters(), []) |> ignore
+  builder.return_([])
+  let function = lower(builder.finish())
+  let allocation = allocate(function)
+  inspect(
+    plan_frame(function, allocation).summary(),
+    content=(
+      #|aarch64 frame size=32 align=16
+      #|  outgoing 16 bytes at sp+0
+      #|  save p30:int at sp+16
+      #|
+    ),
+  )
+}

@@ -7,6 +7,7 @@ priv struct SavedRegister {
 ///|
 pub struct AArch64Frame {
   priv layout : @vcode.FrameLayout
+  priv outgoing_args_size : Int
   priv slots : Array[(@vcode.StackSlot, Int)]
   priv saved_registers : Array[SavedRegister]
 }
@@ -16,6 +17,7 @@ pub suberror AArch64FrameError {
   InvalidAllocation(cause~ : AArch64AllocationError)
   InvalidGenericFrame(cause~ : @vcode.FrameVerifyError)
   InvalidSavedRegister(reg~ : @vcode.PhysicalReg, offset~ : Int)
+  OutgoingAreaMismatch(expected~ : Int, actual~ : Int)
   SavedRegisterSetMismatch
 } derive(Debug)
 
@@ -75,6 +77,21 @@ fn used_callee_saved_registers(
 }
 
 ///|
+fn maximum_outgoing_args_size(function : @vcode.Function[AArch64Inst]) -> Int {
+  let mut maximum = 0
+  for index in 0..<function.instruction_count() {
+    let instruction = function.instruction_at(index).unwrap()
+    if function.instruction(instruction) is Some(PlatformCall(_, signature)) {
+      let size = platform_call_layout(signature.params).stack_size
+      if size > maximum {
+        maximum = size
+      }
+    }
+  }
+  maximum
+}
+
+///|
 pub fn AArch64Frame::frame_size(self : AArch64Frame) -> Int {
   self.layout.frame_size()
 }
@@ -82,6 +99,11 @@ pub fn AArch64Frame::frame_size(self : AArch64Frame) -> Int {
 ///|
 pub fn AArch64Frame::alignment(self : AArch64Frame) -> Int {
   self.layout.alignment()
+}
+
+///|
+pub fn AArch64Frame::outgoing_args_size(self : AArch64Frame) -> Int {
+  self.outgoing_args_size
 }
 
 ///|
@@ -102,6 +124,9 @@ pub fn AArch64Frame::saved_registers(
 ///|
 pub fn AArch64Frame::summary(self : AArch64Frame) -> String {
   let mut output = "aarch64 frame size=\{self.frame_size()} align=\{self.alignment()}\n"
+  if self.outgoing_args_size > 0 {
+    output += "  outgoing \{self.outgoing_args_size} bytes at sp+0\n"
+  }
   for entry in self.slots {
     let (slot, offset) = entry
     output += "  place \{to_repr(slot)} at sp+\{offset}\n"
@@ -124,11 +149,21 @@ pub fn verify_frame(
   @vcode.verify_framed(function, allocation, frame.layout) catch {
     error => raise InvalidGenericFrame(cause=error)
   }
+  let expected_outgoing = maximum_outgoing_args_size(function)
+  if frame.outgoing_args_size != expected_outgoing {
+    raise OutgoingAreaMismatch(
+      expected=expected_outgoing,
+      actual=frame.outgoing_args_size,
+    )
+  }
   let expected = used_callee_saved_registers(function, allocation)
   if frame.saved_registers.map(saved => saved.reg) != expected {
     raise SavedRegisterSetMismatch
   }
   let occupied : Array[(Int, Int)] = []
+  if frame.outgoing_args_size > 0 {
+    occupied.push((0, frame.outgoing_args_size))
+  }
   for index in 0..<allocation.stack_slot_count() {
     let slot = allocation.stack_slot_at(index).unwrap()
     let offset = frame.slot_offset(slot).unwrap()
@@ -158,7 +193,8 @@ pub fn plan_frame(
   verify_allocation(function, allocation) catch {
     error => raise InvalidAllocation(cause=error)
   }
-  let mut offset = 0
+  let outgoing_args_size = maximum_outgoing_args_size(function)
+  let mut offset = outgoing_args_size
   let slot_offsets : Array[Int] = []
   for index in 0..<allocation.stack_slot_count() {
     let slot = allocation.stack_slot_at(index).unwrap()
@@ -187,7 +223,7 @@ pub fn plan_frame(
   let slots = Array::makei(slot_offsets.length(), index => {
     (allocation.stack_slot_at(index).unwrap(), slot_offsets[index])
   })
-  let frame = { layout, slots, saved_registers }
+  let frame = { layout, outgoing_args_size, slots, saved_registers }
   verify_frame(function, allocation, frame)
   frame
 }

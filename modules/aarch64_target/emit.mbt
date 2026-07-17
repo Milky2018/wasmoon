@@ -382,16 +382,21 @@ fn emit_instruction(
         encode_three_register(0x8B000000U, reg(2), reg(0), reg(1)),
       )
     PlatformCall(target, signature) => {
-      let destinations = abi_registers(signature.params).unwrap()
+      let layout = platform_call_layout(signature.params)
       let moves : Array[@vcode.ParallelMove] = []
       for index, ty in signature.params {
-        moves.push(
-          @vcode.ParallelMove::new(
-            ty,
-            Register(reg(index)),
-            Register(destinations[index]),
-          ),
-        )
+        match layout.arguments[index] {
+          CallRegister(destination) =>
+            moves.push(
+              @vcode.ParallelMove::new(
+                ty,
+                Register(reg(index)),
+                Register(destination),
+              ),
+            )
+          CallStack(offset) =>
+            emit_stack_access(buffer, false, ty, reg(index), offset)
+        }
       }
       let resolved = @vcode.resolve_parallel_moves(
         moves,

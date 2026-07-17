@@ -83,6 +83,7 @@ pub suberror AArch64FrameError {
   InvalidAllocation(cause~ : AArch64AllocationError)
   InvalidGenericFrame(cause~ : @vcode.FrameVerifyError)
   InvalidSavedRegister(reg~ : @vcode.PhysicalReg, offset~ : Int)
+  OutgoingAreaMismatch(expected~ : Int, actual~ : Int)
   SavedRegisterSetMismatch
 } derive(@debug.Debug)
 pub impl Show for AArch64FrameError
@@ -123,6 +124,7 @@ pub struct AArch64Frame {
 }
 pub fn AArch64Frame::alignment(Self) -> Int
 pub fn AArch64Frame::frame_size(Self) -> Int
+pub fn AArch64Frame::outgoing_args_size(Self) -> Int
 pub fn AArch64Frame::saved_registers(Self) -> Array[(@vcode.PhysicalReg, Int)]
 pub fn AArch64Frame::slot_offset(Self, @vcode.StackSlot) -> Int?
 pub fn AArch64Frame::summary(Self) -> String
@@ -205,6 +207,10 @@ pub(all) struct MachineEnvData {
   scratch_int : Array[Int]
   scratch_float : Array[Int]
 } derive(@debug.Debug)
+
+type PlatformArgumentLocation derive(Eq, @debug.Debug)
+
+type PlatformCallLayout derive(Eq, @debug.Debug)
 
 pub(all) struct Target {
   triple : String

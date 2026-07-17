@@ -89,9 +89,66 @@ fn require_fixed_use(
 }
 
 ///|
-fn abi_registers(
+enum PlatformArgumentLocation {
+  CallRegister(@vcode.PhysicalReg)
+  CallStack(Int)
+} derive(Eq, Debug)
+
+///|
+struct PlatformCallLayout {
+  arguments : Array[PlatformArgumentLocation]
+  stack_size : Int
+} derive(Eq, Debug)
+
+///|
+fn call_align_up(value : Int, alignment : Int) -> Int {
+  (value + alignment - 1) / alignment * alignment
+}
+
+///|
+fn call_stack_size(ty : @semantic.ValueType) -> Int {
+  if ty == V128 {
+    16
+  } else {
+    8
+  }
+}
+
+///|
+fn platform_call_layout(
   types : Array[@semantic.ValueType],
-) -> Array[@vcode.PhysicalReg]? {
+) -> PlatformCallLayout {
+  let arguments : Array[PlatformArgumentLocation] = []
+  let mut int_index = 0
+  let mut fp_index = 0
+  let mut stack_size = 0
+  for ty in types {
+    let class = @vcode.reg_class_for_value_type(ty)
+    let index = if class == Int {
+      let current = int_index
+      int_index += 1
+      current
+    } else {
+      let current = fp_index
+      fp_index += 1
+      current
+    }
+    if index < 8 {
+      arguments.push(CallRegister(@vcode.PhysicalReg::new(index, class)))
+    } else {
+      let alignment = call_stack_size(ty)
+      stack_size = call_align_up(stack_size, alignment)
+      arguments.push(CallStack(stack_size))
+      stack_size += alignment
+    }
+  }
+  { arguments, stack_size: call_align_up(stack_size, 16) }
+}
+
+///|
+fn platform_result_registers(
+  types : Array[@semantic.ValueType],
+) -> Array[@vcode.PhysicalReg] {
   let registers : Array[@vcode.PhysicalReg] = []
   let mut int_index = 0
   let mut fp_index = 0
@@ -106,12 +163,9 @@ fn abi_registers(
       fp_index += 1
       current
     }
-    if index >= 8 {
-      return None
-    }
     registers.push(@vcode.PhysicalReg::new(index, class))
   }
-  Some(registers)
+  registers
 }
 
 ///|
@@ -278,22 +332,8 @@ pub fn verify_vcode(
             message="platform call supports at most one direct result",
           )
         }
-        let argument_registers = match abi_registers(signature.params) {
-          Some(registers) => registers
-          None =>
-            raise InvalidInstruction(
-              instruction~,
-              message="stack call arguments are not selected yet",
-            )
-        }
-        let result_registers = match abi_registers(signature.results) {
-          Some(registers) => registers
-          None =>
-            raise InvalidInstruction(
-              instruction~,
-              message="stack call results are not supported",
-            )
-        }
+        let argument_layout = platform_call_layout(signature.params)
+        let result_registers = platform_result_registers(signature.results)
         require_instruction_shape(
           function,
           instruction,
@@ -302,7 +342,7 @@ pub fn verify_vcode(
           false,
           0,
         )
-        ignore(argument_registers)
+        ignore(argument_layout)
         for operand in function.instruction_operands(instruction) {
           if operand.constraint != Any {
             raise InvalidInstruction(
@@ -338,7 +378,7 @@ pub fn verify_vcode(
     let consumed_results = Array::make(body.length(), false)
     for index, instruction in body {
       if function.instruction(instruction) is Some(PlatformCall(_, signature)) {
-        let registers = abi_registers(signature.results).unwrap()
+        let registers = platform_result_registers(signature.results)
         for result_index, ty in signature.results {
           let body_index = index + result_index + 1
           if body_index >= body.length() ||

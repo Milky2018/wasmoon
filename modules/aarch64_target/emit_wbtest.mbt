@@ -63,3 +63,59 @@ test "AArch64 integer unary encodings place source in the correct field" {
     ),
   )
 }
+
+///|
+test "AAPCS64 platform call layout preserves mixed overflow order" {
+  let layout = platform_call_layout([
+    I64,
+    I64,
+    I64,
+    I64,
+    I64,
+    I64,
+    I64,
+    I64,
+    F64,
+    F64,
+    F64,
+    F64,
+    F64,
+    F64,
+    F64,
+    F64,
+    I64,
+    V128,
+    I32,
+    F32,
+  ])
+  debug_inspect(
+    layout,
+    content=(
+      #|{
+      #|  arguments: [
+      #|    CallRegister(p0:int),
+      #|    CallRegister(p1:int),
+      #|    CallRegister(p2:int),
+      #|    CallRegister(p3:int),
+      #|    CallRegister(p4:int),
+      #|    CallRegister(p5:int),
+      #|    CallRegister(p6:int),
+      #|    CallRegister(p7:int),
+      #|    CallRegister(p0:fpvec),
+      #|    CallRegister(p1:fpvec),
+      #|    CallRegister(p2:fpvec),
+      #|    CallRegister(p3:fpvec),
+      #|    CallRegister(p4:fpvec),
+      #|    CallRegister(p5:fpvec),
+      #|    CallRegister(p6:fpvec),
+      #|    CallRegister(p7:fpvec),
+      #|    CallStack(0),
+      #|    CallStack(16),
+      #|    CallStack(32),
+      #|    CallStack(40),
+      #|  ],
+      #|  stack_size: 48,
+      #|}
+    ),
+  )
+}

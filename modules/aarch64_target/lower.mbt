@@ -152,35 +152,6 @@ fn source_metadata(
 }
 
 ///|
-fn call_abi_registers(
-  types : Array[@semantic.ValueType],
-  kind : String,
-) -> Array[@vcode.PhysicalReg] raise AArch64LowerError {
-  let registers : Array[@vcode.PhysicalReg] = []
-  let mut int_index = 0
-  let mut fp_index = 0
-  for ty in types {
-    let class = abi_bank(ty)
-    let index = if class == Int {
-      let current = int_index
-      int_index += 1
-      current
-    } else {
-      let current = fp_index
-      fp_index += 1
-      current
-    }
-    if index >= 8 {
-      raise UnsupportedAbi(
-        message="stack platform call \{kind}s are not selected yet",
-      )
-    }
-    registers.push(@vcode.PhysicalReg::new(index, class))
-  }
-  registers
-}
-
-///|
 fn lower_direct_platform_call(
   builder : @vcode.Builder[AArch64Inst],
   block : @vcode.Block,
@@ -209,9 +180,7 @@ fn lower_direct_platform_call(
         message="platform calls require a direct external symbol",
       )
   }
-  let argument_registers = call_abi_registers(call.signature.params, "argument")
-  let result_registers = call_abi_registers(call.signature.results, "result")
-  ignore(argument_registers)
+  let result_registers = platform_result_registers(call.signature.results)
   let inputs = operands.map(@vcode.Input::any)
   let outputs = Array::makei(result_types.length(), index => {
     @vcode.Output::any(result_types[index])
