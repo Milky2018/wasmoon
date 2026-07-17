@@ -599,6 +599,43 @@ test "AArch64 lowering selects vector integer min and max" {
 }
 
 ///|
+test "AArch64 lowering selects legal vector unsigned averages" {
+  let builder = @semantic.FunctionBuilder::new(
+    "vector_unsigned_average",
+    Internal,
+    [Ptr64, V128, V128],
+    [V128],
+  )
+  let parameters = builder.parameters()
+  let bytes = builder.emit(
+      Vector(IntBinary(I8x16, AverageUnsigned)),
+      [parameters[1], parameters[2]],
+      [V128],
+    )[0]
+  let halfwords = builder.emit(
+      Vector(IntBinary(I16x8, AverageUnsigned)),
+      [bytes, parameters[2]],
+      [V128],
+    )[0]
+  builder.return_([halfwords])
+  inspect(
+    lower(builder.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode vector_unsigned_average(v0:ptr64, v1:v128, v2:v128) -> (v128)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v3:any@late]
+      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v4:any@late]
+      #|  i2 IncomingReg(V128, p1:fpvec) uses=[v2:fixed(p1:fpvec)@early] defs=[v5:any@late]
+      #|  i3 VectorIntBinary(I8x16, AverageUnsigned) uses=[v4:any@early, v5:any@early] defs=[v6:any@late]
+      #|  i4 VectorIntBinary(I16x8, AverageUnsigned) uses=[v6:any@early, v5:any@early] defs=[v7:any@late]
+      #|  i5 OutgoingReg(V128, p0:fpvec) uses=[v7:any@early]
+      #|  i6 Return
+      #|
+    ),
+  )
+}
+
+///|
 test "AArch64 lowering assigns one aligned semantic stack-object area" {
   let builder = @semantic.FunctionBuilder::new(
     "stack_object_layout",

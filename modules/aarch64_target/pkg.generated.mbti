@@ -297,6 +297,7 @@ pub(all) enum AArch64VectorIntBinary {
   Add
   Sub
   Mul
+  AverageUnsigned
   Min(@machv.Signedness)
   Max(@machv.Signedness)
   SaturatingAdd(@machv.Signedness)

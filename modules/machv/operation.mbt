@@ -945,12 +945,17 @@ fn verify_vector_operation(
               "q15 rounded saturating multiply requires i16x8 lanes",
             )
           }
+        AverageUnsigned =>
+          if lane != I8x16 && lane != I16x8 {
+            return operation_error(
+              "vector unsigned average requires i8x16 or i16x8 lanes",
+            )
+          }
         Add
         | Sub
         | Mul
         | Min(_)
         | Max(_)
-        | AverageUnsigned
         | SaturatingAdd(_)
         | SaturatingSub(_) => ()
       }

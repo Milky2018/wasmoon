@@ -411,6 +411,37 @@ test "vector shuffle validates all semantic lane indices" {
 }
 
 ///|
+test "vector average rejects unsupported lane widths" {
+  let builder = @machv.FunctionBuilder::new(
+    "bad_vector_average",
+    Internal,
+    [V128, V128],
+    [],
+  )
+  builder.emit(
+    Vector(IntBinary(I32x4, AverageUnsigned)),
+    builder.parameters(),
+    [V128],
+  )
+  |> ignore
+  builder.return_([])
+  try builder.finish() catch {
+    error =>
+      inspect(
+        error,
+        content=(
+          #|InvalidOperation(
+          #|  block_id=0,
+          #|  message="vector unsigned average requires i8x16 or i16x8 lanes",
+          #|)
+        ),
+      )
+  } noraise {
+    _ => fail("expected an invalid vector average lane to be rejected")
+  }
+}
+
+///|
 test "narrow loads require an explicit extension" {
   let builder = @machv.FunctionBuilder::new("bad_load", Internal, [Ptr64], [])
   builder.emit(

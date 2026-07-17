@@ -980,6 +980,70 @@ test "AArch64 pipeline emits vector integer min and max" {
 }
 
 ///|
+test "AArch64 pipeline emits vector unsigned averages" {
+  let builder = @semantic.FunctionBuilder::new(
+    "emitted_vector_unsigned_average",
+    Platform,
+    [V128, V128],
+    [V128],
+  )
+  let parameters = builder.parameters()
+  let bytes = builder.emit(
+      Vector(IntBinary(I8x16, AverageUnsigned)),
+      parameters,
+      [V128],
+    )[0]
+  let halfwords = builder.emit(
+      Vector(IntBinary(I16x8, AverageUnsigned)),
+      [bytes, parameters[1]],
+      [V128],
+    )[0]
+  builder.return_([halfwords])
+  let function = lower(builder.finish(), test_lowering_context())
+  let allocation = allocate(function)
+  let frame = plan_frame(function, allocation)
+  debug_inspect(
+    emit(function, allocation, frame),
+    content=(
+      #|{
+      #|  architecture: AArch64,
+      #|  code: [
+      #|    0x02,
+      #|    0x1c,
+      #|    0xa0,
+      #|    0x4e,
+      #|    0x20,
+      #|    0x1c,
+      #|    0xa1,
+      #|    0x4e,
+      #|    0x41,
+      #|    0x14,
+      #|    0x20,
+      #|    0x6e,
+      #|    0x22,
+      #|    0x14,
+      #|    0x60,
+      #|    0x6e,
+      #|    0x40,
+      #|    0x1c,
+      #|    0xa2,
+      #|    0x4e,
+      #|    0xc0,
+      #|    0x03,
+      #|    0x5f,
+      #|    0xd6,
+      #|  ],
+      #|  relocations: [],
+      #|  sources: [],
+      #|  traps: [],
+      #|  safepoints: [],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
 test "AArch64 pipeline emits addresses inside the semantic stack-object area" {
   let builder = @semantic.FunctionBuilder::new(
     "emitted_stack_addresses",

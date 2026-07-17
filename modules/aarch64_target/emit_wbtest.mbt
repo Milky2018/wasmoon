@@ -1412,6 +1412,34 @@ test "AArch64 vector integer min and max cover direct and legalized lanes" {
 }
 
 ///|
+test "AArch64 vector unsigned average uses URHADD for legal lanes" {
+  let buffer = CodeBuffer::new()
+  let left = @vcode.PhysicalReg::new(3, FpVector)
+  let right = @vcode.PhysicalReg::new(5, FpVector)
+  let destination = @vcode.PhysicalReg::new(7, FpVector)
+  emit_vector_int_binary(
+    buffer,
+    I8x16,
+    AverageUnsigned,
+    left,
+    right,
+    destination,
+  )
+  emit_vector_int_binary(
+    buffer,
+    I16x8,
+    AverageUnsigned,
+    left,
+    right,
+    destination,
+  )
+  debug_inspect(
+    buffer.code,
+    content="[0x67, 0x14, 0x25, 0x6e, 0x67, 0x14, 0x65, 0x6e]",
+  )
+}
+
+///|
 test "AAPCS64 platform call layout preserves mixed overflow order" {
   let layout = platform_call_layout([
     I64,

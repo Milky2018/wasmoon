@@ -768,6 +768,12 @@ fn emit_vector_int_binary(
         I32x4 => 0x4EA09C00U
         I64x2 | F32x4 | F64x2 => raise InvalidVectorInstruction
       }
+    AverageUnsigned =>
+      match lane {
+        I8x16 => 0x6E201400U
+        I16x8 => 0x6E601400U
+        I32x4 | I64x2 | F32x4 | F64x2 => raise InvalidVectorInstruction
+      }
     Min(signedness) =>
       if signedness is Signed {
         match lane {

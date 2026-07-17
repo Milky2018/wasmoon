@@ -798,6 +798,8 @@ fn lower_instruction(
     Vector(IntBinary(lane, Add)) => Some(VectorIntBinary(lane, Add))
     Vector(IntBinary(lane, Sub)) => Some(VectorIntBinary(lane, Sub))
     Vector(IntBinary(lane, Mul)) => Some(VectorIntBinary(lane, Mul))
+    Vector(IntBinary(lane, AverageUnsigned)) =>
+      Some(VectorIntBinary(lane, AverageUnsigned))
     Vector(IntBinary(lane, Min(signedness))) =>
       Some(VectorIntBinary(lane, Min(signedness)))
     Vector(IntBinary(lane, Max(signedness))) =>

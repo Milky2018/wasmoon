@@ -83,6 +83,7 @@ pub(all) enum AArch64VectorIntBinary {
   Add
   Sub
   Mul
+  AverageUnsigned
   Min(@semantic.Signedness)
   Max(@semantic.Signedness)
   SaturatingAdd(@semantic.Signedness)
@@ -777,11 +778,17 @@ pub fn verify_vcode(
           0,
         )
       }
-      VectorIntBinary(lane, _) => {
+      VectorIntBinary(lane, operation) => {
         if !is_integer_vector_lane(lane) {
           raise InvalidInstruction(
             instruction~,
             message="vector integer binary operation requires integer lanes",
+          )
+        }
+        if operation == AverageUnsigned && lane != I8x16 && lane != I16x8 {
+          raise InvalidInstruction(
+            instruction~,
+            message="vector unsigned average requires i8x16 or i16x8 lanes",
           )
         }
         require_instruction_shape(
