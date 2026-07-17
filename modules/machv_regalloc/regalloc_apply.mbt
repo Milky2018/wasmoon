@@ -272,7 +272,10 @@ pub fn apply_allocation(
               }
             Float32 | Float64 =>
               if float_idx < call_arg_fprs.length() {
-                Some({ index: call_arg_fprs[float_idx].index, class: Float64 })
+                Some({
+                  index: call_arg_fprs[float_idx].index,
+                  class: param.class,
+                })
               } else {
                 None
               }
@@ -390,10 +393,7 @@ pub fn apply_allocation(
         if use_reg is Virtual(vreg) && alloc.assignments.get(vreg.id) is None {
           // This vreg is spilled, need to reload
           if alloc.spill_slots.get(vreg.id) is Some(slot) {
-            let scratch_class = match vreg.class {
-              Float32 | Float64 => @abi.Float64
-              _ => vreg.class
-            }
+            let scratch_class = vreg.class
 
             // Determine how to handle this spilled use
             // Check FixedReg constraint first - constraint edits will handle the reload
@@ -487,10 +487,7 @@ pub fn apply_allocation(
                   Some(preg) => new_inst.add_def({ reg: Physical(preg) })
                   None => {
                     // Spilled without constraint: use X16, X17 as scratch registers
-                    let scratch_class = match vreg.class {
-                      Float32 | Float64 => @abi.Float64
-                      _ => vreg.class
-                    }
+                    let scratch_class = vreg.class
                     let scratch_indices = scratch_indices_for_class(
                       scratch_class,
                     )
@@ -551,10 +548,7 @@ pub fn apply_allocation(
                     }
                   None => {
                     // Fallback: use the first reserved scratch reg for this bank.
-                    let scratch_class = match vreg.class {
-                      Float32 | Float64 => @abi.Float64
-                      _ => vreg.class
-                    }
+                    let scratch_class = vreg.class
                     let scratch_indices = scratch_indices_for_class(
                       scratch_class,
                     )
@@ -599,10 +593,7 @@ pub fn apply_allocation(
                 new_block.add_inst(store_inst)
                 invalidate_reload_slot(active_reloads, to_slot)
               } else {
-                let scratch_class = match mv.class {
-                  Float32 | Float64 => @abi.Float64
-                  _ => mv.class
-                }
+                let scratch_class = mv.class
                 let scratch_indices = scratch_indices_for_class(scratch_class)
                 let scratch_preg : @abi.PReg = {
                   index: scratch_indices[0],
@@ -742,10 +733,7 @@ pub fn apply_allocation(
           for mv in resolved_moves {
             match (mv.from, mv.to) {
               (Spill(from_slot), Spill(to_slot)) => {
-                let scratch_class = match mv.class {
-                  Float32 | Float64 => @abi.Float64
-                  _ => mv.class
-                }
+                let scratch_class = mv.class
                 let scratch_indices = scratch_indices_for_class(scratch_class)
                 let scratch_preg : @abi.PReg = {
                   index: scratch_indices[0],
@@ -852,10 +840,7 @@ pub fn apply_allocation(
               alloc.spill_slots.get(vreg.id) is Some(slot) {
               // Use X16, X17 as scratch registers
               // These are the only safe scratch registers
-              let scratch_class = match vreg.class {
-                Float32 | Float64 => @abi.Float64
-                _ => vreg.class
-              }
+              let scratch_class = vreg.class
               let scratch_indices = scratch_indices_for_class(scratch_class)
               let scratch_preg : @abi.PReg = {
                 index: scratch_indices[block_scratch_idx % 2],
@@ -953,10 +938,7 @@ fn rewrite_reg_with_spill(
           // Spilled: insert reload and use scratch register
           match alloc.spill_slots.get(vreg.id) {
             Some(slot) => {
-              let scratch_class = match vreg.class {
-                Float32 | Float64 => @abi.Float64
-                _ => vreg.class
-              }
+              let scratch_class = vreg.class
               let scratch_preg : @abi.PReg = {
                 index: scratch_idx,
                 class: scratch_class,

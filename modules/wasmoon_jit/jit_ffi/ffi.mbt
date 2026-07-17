@@ -297,7 +297,7 @@ pub extern "c" fn c_jit_free_memory(mem_ptr : Int64) -> Unit = "wasmoon_jit_free
 
 ///|
 /// Get table_grow function pointer for JIT
-/// Signature: table_grow(ctx: *jit_context_t, table_idx: i32, delta: i64, init_value: i64) -> i32
+/// Signature: table_grow(ctx: *jit_context_t, table_idx: i32, delta: i64, init_value: i64) -> i64
 pub extern "c" fn c_jit_get_table_grow_ptr() -> Int64 = "wasmoon_jit_get_table_grow_ptr"
 
 // ============ Multi-Memory Operations (with memidx) ============

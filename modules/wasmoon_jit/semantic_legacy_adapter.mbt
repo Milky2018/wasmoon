@@ -1,9 +1,9 @@
 ///|
-suberror SemanticLegacyAdapterError {
+priv suberror SemanticLegacyAdapterError {
   MissingValue(value_id~ : Int)
   UnsupportedOperation(message~ : String)
   InvalidLegacyFunction(message~ : String)
-} derive(Debug, Eq)
+} derive(Debug)
 
 ///|
 impl Show for SemanticLegacyAdapterError with fn output(self, logger) {

@@ -889,6 +889,43 @@ test "GC safepoints reject duplicate root entries" {
 }
 
 ///|
+test "mandatory cleanup deduplicates roots collapsed by alias rewriting" {
+  let builder = @machv.FunctionBuilder::new(
+    "canonical_gc_roots",
+    Internal,
+    [GcRef64],
+    [GcRef64],
+  )
+  let root = builder.parameters()[0]
+  let first_alias = single(builder.emit(Copy, [root], [GcRef64]))
+  let second_alias = single(builder.emit(Copy, [first_alias], [GcRef64]))
+  let call = SemanticCall::new(
+    External(ExternalSymbol::new("collect")),
+    Signature::new([], []),
+    Platform,
+    CallBehavior::new(ReadWrite, false, false, true, false),
+  )
+  builder.emit_with_metadata(
+    Call(call),
+    [],
+    [],
+    InstructionMetadata::new(None, [first_alias, second_alias]),
+  )
+  |> ignore
+  builder.return_([second_alias])
+  inspect(
+    builder.finish(),
+    content=(
+      #|machv canonical_gc_roots [internal](v0:gcref64) -> (gcref64) {
+      #|block0:
+      #|  call external @collect () -> () [platform] [memory=read-write, gc-safepoint] roots=[v0]
+      #|  return v0
+      #|}
+    ),
+  )
+}
+
+///|
 test "terminator source metadata is preserved" {
   let builder = @machv.FunctionBuilder::new("trap_source", Internal, [], [])
   builder.trap(User(7))

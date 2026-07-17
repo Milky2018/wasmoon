@@ -90,18 +90,6 @@ const WASMOON_CONTEXT_SLOT_GC_ALLOCATION_CURSOR : Int = 8
 const WASMOON_CONTEXT_SLOT_GC_ALLOCATION_LIMIT : Int = 9
 
 ///|
-pub fn wasm_context_slots() -> @wasm_isa_lower.WasmContextSlots {
-  {
-    memory0_base: WASMOON_CONTEXT_SLOT_MEMORY0_BASE,
-    function_table: WASMOON_CONTEXT_SLOT_FUNCTION_TABLE,
-    table0_base: WASMOON_CONTEXT_SLOT_TABLE0_BASE,
-    table_directory: WASMOON_CONTEXT_SLOT_TABLE_DIRECTORY,
-    memory_directory: WASMOON_CONTEXT_SLOT_MEMORY_DIRECTORY,
-    pointer_stride: vmcontext_layout().pointer_stride,
-  }
-}
-
-///|
 /// Translate Wasmoon's concrete VMContext prefix into the generic machine-level
 /// embedding context layout consumed by reusable code.
 pub fn VMContextLayout::to_embedding_context_layout(

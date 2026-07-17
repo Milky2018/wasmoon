@@ -57,6 +57,27 @@ test "core lowering preserves high-half multiplication semantics" {
 }
 
 ///|
+test "core lowering preserves floating constant bit patterns" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("float_bits")
+  let f32 = builder.fconst_f32(Float::reinterpret_from_uint(0x7FC00001U))
+  let f64 = builder.fconst_f64(0x7FF8000000000001UL.reinterpret_as_double())
+  builder.add_result(F32)
+  builder.add_result(F64)
+  builder.return_([f32, f64])
+  inspect(
+    lower_core_function(builder.finalize()),
+    content=(
+      #|machv float_bits [internal]() -> (f32, f64) {
+      #|block0:
+      #|  v0:f32 = f32.const_bits 2143289345
+      #|  v1:f64 = f64.const_bits 9221120237041090561
+      #|  return v0, v1
+      #|}
+    ),
+  )
+}
+
+///|
 test "core lowering rejects dialect operations structurally" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder("dialect_op")
   builder.emit_void_ext_inst(ExtOp("demo", "effect", []), [])
@@ -67,6 +88,27 @@ test "core lowering rejects dialect operations structurally" {
         error,
         content=(
           #|InvalidMilkIR(message="UnverifiableInstruction(message=\"unresolved dialect operation demo.effect is not core MilkIR\")")
+        ),
+      )
+  }
+}
+
+///|
+test "core lowering rejects a function mutated after finalization" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder(
+    "mutated_after_finalize",
+  )
+  builder.add_result(I32)
+  let result = builder.iconst_i32(1)
+  builder.return_([result])
+  let function = builder.finalize()
+  function.blocks[0].instructions.clear()
+  try lower_core_function(function) |> ignore catch {
+    error =>
+      inspect(
+        error,
+        content=(
+          #|InvalidMilkIR(message="UndefinedValue(value_id=0)")
         ),
       )
   }
@@ -288,6 +330,26 @@ test "core lowering preserves normalized vector operation families" {
       #|  v6:v128 = vector.Relaxed(FusedMultiplyAdd(F64x2, FusedNegatedMultiplyAdd)) v5, v1, v2
       #|  v7:v128 = vector.Relaxed(Dot8To32AddSigned) v0, v1, v2
       #|  return v3, v4, v5, v6, v7
+      #|}
+    ),
+  )
+}
+
+///|
+test "core lowering preserves binary vector narrow operands" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("vector_narrow")
+  let low = builder.add_param(V128)
+  let high = builder.add_param(V128)
+  builder.add_result(V128)
+  let narrowed = builder.emit_inst(V128, Vector(Narrow(I8, Signed)), [low, high])
+  builder.return_([narrowed])
+  inspect(
+    lower_core_function(builder.finalize()),
+    content=(
+      #|machv vector_narrow [internal](v0:v128, v1:v128) -> (v128) {
+      #|block0:
+      #|  v2:v128 = vector.Convert(Narrow(I8x16, Signed)) v0, v1
+      #|  return v2
       #|}
     ),
   )

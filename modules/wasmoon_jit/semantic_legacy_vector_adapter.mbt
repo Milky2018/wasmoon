@@ -637,9 +637,16 @@ fn append_semantic_vector_operation(
             message="unsupported vector conversion \{to_repr(operation)}",
           )
       }
-      append_semantic_vector_unary(
-        legacy_function, block, opcode, operands, definitions,
-      )
+      match operation {
+        Narrow(_, _) =>
+          append_semantic_vector_binary(
+            legacy_function, block, opcode, operands, definitions,
+          )
+        _ =>
+          append_semantic_vector_unary(
+            legacy_function, block, opcode, operands, definitions,
+          )
+      }
     }
     Relaxed(operation) =>
       match operation {

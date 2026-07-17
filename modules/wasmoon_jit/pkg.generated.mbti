@@ -10,7 +10,6 @@ import {
   "Milky2018/machv_regalloc",
   "Milky2018/milkir",
   "Milky2018/wasm_core/types",
-  "Milky2018/wasm_isa_lower",
   "Milky2018/wasm_milkir",
   "Milky2018/wasmoon_jit/cwasm",
   "moonbitlang/core/debug",
@@ -472,8 +471,6 @@ pub fn wasm_calling_convention(isa? : @isa.ISA) -> @abi.CallConventionLayout
 
 pub fn wasm_calling_convention_for_isa(@isa.ISA) -> @abi.CallConventionLayout
 
-pub fn wasm_context_slots() -> @wasm_isa_lower.WasmContextSlots
-
 pub fn wasm_embedding_abi(isa? : @isa.ISA) -> @abi.EmbeddingABI
 
 pub fn wasm_embedding_abi_for_isa(@isa.ISA) -> @abi.EmbeddingABI
@@ -520,8 +517,6 @@ pub suberror LinkError {
   UnknownRuntimeSymbol(String)
 } derive(Eq, @debug.Debug)
 pub impl Show for LinkError
-
-type SemanticLegacyAdapterError derive(Eq, @debug.Debug)
 
 // Types and methods
 pub struct BacktraceFrame {

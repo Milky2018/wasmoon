@@ -1019,8 +1019,19 @@ fn verify_vector_operation(
     Convert(conversion) =>
       match verify_vector_conversion(conversion) {
         Some(error) => Some(error)
-        None =>
-          require_shape(operands, results, [V128], [V128], "vector.convert")
+        None => {
+          let operand_types = match conversion {
+            Narrow(_, _) => [V128, V128]
+            _ => [V128]
+          }
+          require_shape(
+            operands,
+            results,
+            operand_types,
+            [V128],
+            "vector.convert",
+          )
+        }
       }
     Relaxed(operation) =>
       verify_relaxed_vector_operation(operation, operands, results)

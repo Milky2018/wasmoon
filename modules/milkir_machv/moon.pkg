@@ -7,9 +7,5 @@ import {
 
 import {
   "Milky2018/milkir_machv/adapter",
-  "Milky2018/milkir_machv/lower",
-  "Milky2018/machv_legacy" @machv,
-  "Milky2018/machv_legacy/abi",
-  "Milky2018/machv_legacy/isa",
   "Milky2018/milkir",
 } for "test"

@@ -91,6 +91,24 @@ fn Function::rewrite_values(
 }
 
 ///|
+fn Function::deduplicate_values(self : Function, values : Array[Value]) -> Int {
+  let seen = Array::make(self.values.length(), false)
+  let unique : Array[Value] = []
+  for value in values {
+    if !seen[value.id] {
+      seen[value.id] = true
+      unique.push(value)
+    }
+  }
+  let removed = values.length() - unique.length()
+  if removed > 0 {
+    values.clear()
+    values.append(unique)
+  }
+  removed
+}
+
+///|
 fn Function::rewrite_edge(
   self : Function,
   edge : Edge,
@@ -160,6 +178,7 @@ fn Function::rewrite_terminator(
   }
   let roots = record.metadata.live_gc_roots.copy()
   changed += self.rewrite_values(roots, aliases)
+  changed += self.deduplicate_values(roots)
   (
     TerminatorRecord::new(
       kind,
@@ -176,6 +195,7 @@ fn Function::rewrite_aliases(self : Function, aliases : Array[Int]) -> Int {
     if data.alive {
       changed += self.rewrite_values(data.operands, aliases)
       changed += self.rewrite_values(data.metadata.live_gc_roots, aliases)
+      changed += self.deduplicate_values(data.metadata.live_gc_roots)
     }
   }
   for block_id, block in self.blocks {

@@ -567,7 +567,7 @@ void memory_copy_ctx_internal(jit_context_t *ctx, int32_t dst, int32_t src, int3
 
 // ============ Table Operations ============
 
-int32_t table_grow_ctx_internal(
+int64_t table_grow_ctx_internal(
     jit_context_t *ctx,
     int32_t table_idx,
     int64_t delta,
@@ -582,6 +582,11 @@ int32_t table_grow_ctx_internal(
 
     // Check for overflow
     if (new_size < old_size) return -1;
+
+    // The current host table metadata interchange is bounded to UINT32_MAX.
+    // table64 keeps its 64-bit Wasm ABI, but larger growth is an implementation
+    // resource limit and must fail before allocation.
+    if (new_size > UINT32_MAX) return -1;
 
     // Check against max size limit
     if (ctx->table_max_sizes) {
@@ -622,5 +627,5 @@ int32_t table_grow_ctx_internal(
         free(old_table);
     }
 
-    return (int32_t)old_size;
+    return (int64_t)old_size;
 }

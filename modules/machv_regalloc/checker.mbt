@@ -103,6 +103,13 @@ pub fn verify_allocation(
       param_ids.add(p.id) |> ignore
     }
   }
+  let mut context_param_id : Int? = None
+  for p in func.params {
+    if context_param_id is None && p.class is Int {
+      context_param_id = Some(p.id)
+    }
+  }
+  let pinned_context_reg = embedding_abi.reg_roles.context
   let call_int_arg_regs : @hashset.HashSet[Int] = HashSet([])
   call_int_arg_regs.add(call_conv_layout.context_arg.index) |> ignore
   for preg in call_conv_layout.user_arg_gprs {
@@ -170,7 +177,12 @@ pub fn verify_allocation(
           if !allowed_int.contains(preg.index) {
             // Allow parameters in ABI argument registers.
             let is_arg_gpr = call_int_arg_regs.contains(preg.index)
+            let is_pinned_context = context_param_id == Some(vreg_id) &&
+              pinned_context_reg is Some(context_reg) &&
+              context_reg.class is Int &&
+              context_reg.index == preg.index
             if !(param_ids.contains(vreg_id) && is_arg_gpr) &&
+              !is_pinned_context &&
               !(is_arg_gpr && !lr.crosses_call) &&
               !(fixed_reg is Some(fr) && fr.index == preg.index) &&
               !has_any_fixed_constraint_to(lr, preg) {

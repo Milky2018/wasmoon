@@ -437,7 +437,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_shared_table_set(int64_t table_ptr, int tabl
 
 // ============ Table Operations ============
 
-MOONBIT_FFI_EXPORT int32_t wasmoon_jit_table_grow(
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_table_grow(
     jit_context_t *ctx,
     int32_t table_idx,
     int64_t delta,

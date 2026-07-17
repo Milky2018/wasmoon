@@ -1,84 +1,48 @@
 # milkir_machv
 
-Generic MilkIR-to-MachV lowering.
+Verified lowering from MilkIR into target-neutral semantic MachV.
 
-This module contains reusable lowering infrastructure shared by concrete
-machine targets. It translates `Milky2018/milkir` functions into
-`Milky2018/machv` virtual-register machine functions, with target-specific
-details supplied by target modules. Generic entry points accept only verified
-core MilkIR; dialect-bearing functions use a separately named adapter entry.
-Core lowering dispatches exhaustively on MilkIR's `ScalarOp`, `MemoryOp`,
-`CallOp`, and `VectorOp` families. It does not decode source-language memory
-arguments or reinterpret an instruction through a second opcode spelling.
+The package preserves typed SSA values, block parameters and edge arguments,
+semantic calls, memory effects, traps, safepoints, and source locations. It
+does not choose AArch64 or x64 instructions, assign physical registers, lay out
+stack frames, or resolve embedding runtime addresses.
 
-## Packages
+## Core lowering
 
-- `Milky2018/milkir_machv/lower`: core lowering pipeline from MilkIR to MachV.
-- `Milky2018/milkir_machv/lower/peephole`: post-lowering machine-level cleanup
-  and peephole utilities.
-
-## Example: lower MilkIR with an explicit config
-
-`LoweringConfig` groups the target and lowering policy for user-facing code.
-Passing the target ISA explicitly supports cross-target compilation and makes
-tests independent of the host architecture. Config methods provide additional
-hooks for embedding-specific lowering.
+Use `lower_core_function` for MilkIR without extension operations.
 
 ```moonbit check
 ///|
-fn readme_call_conv() -> @abi.CallConventionLayout {
-  {
-    context_arg: { index: 0, class: Int },
-    user_arg_gprs: [{ index: 1, class: Int }, { index: 2, class: Int }],
-    arg_fprs: [],
-    ret_gprs: [{ index: 0, class: Int }],
-    ret_fprs: [],
-  }
-}
-
-///|
-test "lower a leaf MilkIR function to AArch64 MachV" {
-  let builder = @milkir.FunctionBuilder::FunctionBuilder("leaf")
-  builder.return_([])
-  let config = @lower.LoweringConfig(AArch64).with_embedding_abi(
-    EmbeddingABI(readme_call_conv()),
+test "lower core MilkIR into semantic MachV" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("add64")
+  let left = builder.add_param(I64)
+  let right = builder.add_param(I64)
+  builder.add_result(I64)
+  builder.return_([builder.iadd(left, right)])
+  inspect(
+    lower_core_function(builder.finalize()),
+    content=(
+      #|machv add64 [internal](v0:i64, v1:i64) -> (i64) {
+      #|block0:
+      #|  v2:i64 = int.binary.Add v0, v1
+      #|  return v2
+      #|}
+    ),
   )
-  let lowered = @lower.lower_core_function_with_config(
-    builder.get_function(),
-    config,
-  )
-  inspect(lowered.get_name(), content="leaf")
-  inspect(lowered.get_blocks().length(), content="1")
-  inspect(lowered.has_calls(), content="false")
 }
 ```
 
-## Example: run post-lowering cleanup
+Core lowering verifies its input and rejects unresolved extension operations.
+`lower_core_function_with_protocol` additionally lets an embedding state
+whether the enclosing function uses the internal or platform call protocol.
 
-The lowering package also exposes peephole cleanup for callers that construct or
-modify MachV directly.
+## Dialect lowering
 
-```moonbit check
-///|
-test "optimize an explicitly targeted MachV function" {
-  let builder = @milkir.FunctionBuilder::FunctionBuilder("empty_return")
-  builder.return_([])
-  let config = @lower.LoweringConfig(AMD64).with_embedding_abi(
-    EmbeddingABI(readme_call_conv()),
-  )
-  let lowered = @lower.lower_core_function_with_config(
-    builder.get_function(),
-    config,
-  )
-  @lower.optimize_machv(lowered, isa=AMD64)
-  inspect(lowered.get_blocks().length(), content="1")
-  inspect(lowered.print().contains("return"), content="true")
-}
-```
+`lower_dialect_function` accepts one named dialect, its instruction validator,
+explicit environment parameters, and a narrow `InstructionContext` adapter.
+The adapter can only construct verified semantic MachV operations and must
+complete the declared result contract for every extension instruction.
 
-## Extension lowering
-
-Dialect-specific `ExtOp` lowering must use `lower_dialect_function` or
-`lower_dialect_function_with_config`, both of which require an adapter argument.
-WebAssembly callers use the `Milky2018/wasm_isa_lower` adapter; generic core
-lowering rejects unresolved extensions before instruction selection.
+WebAssembly uses the separate `Milky2018/wasm_machv` package. Product-specific
+VMContext offsets, runtime helper names, trap payloads, and executable-memory
+integration remain outside this reusable module.

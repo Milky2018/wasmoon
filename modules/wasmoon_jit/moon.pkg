@@ -1,6 +1,5 @@
 import {
   "Milky2018/milkir_machv",
-  "Milky2018/wasm_isa_lower",
   "Milky2018/machv" @semantic_machv,
   "Milky2018/wasm_machv",
   "Milky2018/machv_legacy" @machv,

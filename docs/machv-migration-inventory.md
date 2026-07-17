@@ -1,6 +1,8 @@
 # MachV Migration Inventory
 
-This document records the current repository state that constrains the planned move from the union-style MachV pipeline to target-neutral MachV followed by target-specific VCode. It is a fact-finding artifact for [Inventory current MachV coupling and migration hazards](../issues/ISS-184.md), not an implementation plan. The inventory was taken on 2026-07-15 from branch `milky/improve-machv` after commit `9653a834`.
+This document records the repository state that constrained the planned move from the union-style MachV pipeline to target-neutral MachV followed by target-specific VCode. It is a fact-finding artifact for [Inventory current MachV coupling and migration hazards](../issues/ISS-184.md), not an implementation plan. The inventory was taken on 2026-07-15 from branch `milky/improve-machv` after commit `9653a834`.
+
+Status update: ISS-196 subsequently introduced verified target-neutral producers, cut production over through a product-private transition adapter, and deleted the former target-aware MilkIR and Wasm direct-lowering packages. Sections that describe those deleted packages are retained as historical coupling evidence rather than current API guidance.
 
 ## Executive finding
 
@@ -14,8 +16,10 @@ The production CLI path is:
 
 ```text
 Wasm frontend / MilkIR
-  -> wasm_isa_lower + milkir_machv/lower(ISA, EmbeddingABI, runtime symbols)
-  -> MachV Function containing target-shaped Opcode and ABI state
+  -> milkir_machv + wasm_machv
+  -> verified target-neutral semantic MachV
+  -> Wasmoon-private transition adapter
+  -> legacy backend Function containing target-shaped Opcode and ABI state
   -> machv_regalloc returning both a rewritten MachV Function and Output side tables
   -> machv_emit(ISA, EmbeddingABI)
   -> MachineCode bytes, fixups, safepoints and disassembly
@@ -30,8 +34,8 @@ All packages that define or directly import the current MachV pipeline are group
 | Role | Direct packages | Current dependency |
 |---|---|---|
 | MachV data model | `machv`, `machv/block`, `machv/instr`, `machv/abi`, `machv/isa`, `machv/isa/spec`, `machv/isa/aarch64`, `machv/isa/amd64` | One function representation depends on the shared opcode union, physical registers, ABI records, and a closed ISA enum. |
-| Semantic producers | `milkir_machv`, `milkir_machv/lower`, `milkir_machv/lower/peephole`, `wasm_isa_lower` | MilkIR and Wasm dialect lowering directly produce target-shaped MachV and require ISA/embedding configuration. |
-| Target facades | `aarch64_target`, `x64_target` | Own target policy, but both call the same target-aware `milkir_machv/lower`; neither owns an independent VCode type yet. |
+| Semantic producers | `milkir_machv`, `wasm_machv` | MilkIR and Wasm dialect lowering produce verified target-neutral MachV without ISA or concrete embedding layout input. |
+| Target facades | `aarch64_target`, `x64_target` | Own ABI and register policy; neither owns an independent VCode type yet. |
 | Register allocation and layout | `machv_regalloc`, `machv_regalloc/layout` | Read and rewrite MachV instructions, introduce physical registers and spill operations, and reorder the same MachV blocks. |
 | Emission | `machv_emit`, `machv_emit/isaregs` | Dispatch the same opcode union to AArch64 or AMD64 encoders and consume both MachV function metadata and regalloc side tables. |
 | Product orchestration | `wasmoon_jit`, `wasmoon`, `wasmoon/jit`, `wasmoon/preflight`, `wasmoon/cmd/wasmoon/commands` | Select the target, provide Wasmoon ABI/runtime data, persist Cwasm, allocate executable memory, patch symbols, and install code. |
@@ -46,7 +50,7 @@ The package-level hard dependency direction remains clean: reusable compiler pac
 | AArch64 shifted/extended forms, `ExtrImm`, multiply-accumulate/high forms, AArch64 conditions and addressing modes | Shared [`Opcode`](../modules/machv/instr/instr.mbt), especially lines 195-446 | AArch64 VCode instruction type and AArch64 lowering/legalization. |
 | AMD64 parity conditions, x86 addressing/encoding choices and target-only legality | Shared `Cond`/`Opcode`, ISA checks in verifier and emitter | AMD64 VCode instruction type and AMD64 lowering/legalization. |
 | `RegClass`, `PReg`, `Reg::Physical`, fixed operand constraints, machine environments and allocatable/callee-saved sets | [`machv/abi`](../modules/machv/abi) and [`machv/isa`](../modules/machv/isa) | Generic Target VCode/regalloc shell plus target-owned register universe and machine environment. None belongs in target-neutral MachV. |
-| Call argument/result placement, clobber sets, outgoing stack area, incoming stack parameters, return-area pointer, prologue/epilogue requirements and frame layout | `machv/abi`, call opcodes, [`lower_call.mbt`](../modules/milkir_machv/lower/lower_call.mbt), `machv.Function`, [`stackframe.mbt`](../modules/machv_emit/stackframe.mbt) | Native ABI lowering and target frame lowering. MachV retains only semantic call and return signatures. |
+| Call argument/result placement, clobber sets, outgoing stack area, incoming stack parameters, return-area pointer, prologue/epilogue requirements and frame layout | legacy backend ABI adaptation, call opcodes, legacy backend Function, [`stackframe.mbt`](../modules/machv_emit/stackframe.mbt) | Native ABI lowering and target frame lowering. Semantic MachV retains only call signatures, protocol, behavior, effects, and roots. |
 | Spill/reload/move instructions, assigned physical registers, edge-copy edits and spill-slot counts | Rewritten MachV plus [`machv_regalloc.Output`](../modules/machv_regalloc/output.mbt) | One allocated Target VCode state with stable instruction/program-point identity. It must not create a second post-regalloc MachV dialect. |
 | Block order, fallthrough selection, branch threading, synthetic exit labels and target peepholes | `machv_regalloc/layout`, `machv_emit` and target-aware MilkIR peepholes | Target VCode layout, branch relaxation and target emitter passes. |
 | Machine bytes, target branch fixups, constant pools, generic code-symbol/external-symbol relocations, stack maps and disassembly | [`machv_emit.MachineCode`](../modules/machv_emit/machinecode.mbt) | Target emitter output. Generic relocation and stack-map records may remain reusable. |
@@ -67,11 +71,11 @@ The package-level hard dependency direction remains clean: reusable compiler pac
 
 The current `ValueKind` also maps directly to a register class, so pointer/reference semantic types and target register-bank selection are already collapsed before target lowering. This conflicts with the decided MachV value contract, which has function-owned typed SSA values and no target register or location facts.
 
-### MilkIR-to-MachV lowering already performs target lowering
+### The former MilkIR-to-backend lowering performed target lowering
 
-[`lower.mbt`](../modules/milkir_machv/lower/lower.mbt) stores `ISA`, `EmbeddingABI`, runtime-symbol callbacks, trap-payload resolution, stack-parameter state, and target fusion selections in `LoweringContext` and `LoweringConfig` at lines 18-59. It assigns ABI registers and stack locations while creating MachV parameters at lines 1741-1846, and it performs AMD64 shift-count register fixups before returning the function.
+Before ISS-196, the direct lowering package stored `ISA`, `EmbeddingABI`, runtime-symbol callbacks, trap-payload resolution, stack-parameter state, and target fusion selections in one lowering context. It assigned ABI registers and stack locations while creating function parameters and performed AMD64 shift-count register fixups before returning the function.
 
-[`aarch64_patterns.mbt`](../modules/milkir_machv/lower/aarch64_patterns.mbt) contains AArch64 immediate and fused-instruction selection inside the nominally shared MilkIR-to-MachV package. [`lower_call.mbt`](../modules/milkir_machv/lower/lower_call.mbt) emits outgoing stack stores, physical argument/result registers, target clobbers, and fixed-register constraints. This means the current producer cannot serve as the future target-neutral MachV producer by deleting a few enum variants; its input and output contracts must both narrow.
+That package also contained AArch64 immediate and fused-instruction selection, while its call lowering emitted outgoing stack stores, physical argument/result registers, target clobbers, and fixed-register constraints. ISS-196 removed this producer after replacing it with the target-neutral `milkir_machv` and `wasm_machv` seams.
 
 ### Register allocation has two post-allocation representations
 
@@ -108,15 +112,15 @@ These responsibilities do not need to move into MachV or target packages. The mi
 | Medium | Debug output and CLI stages name pre/post-regalloc objects as MachV | Tests, `explore`, diagnostics and performance tooling may depend on current text even if machine behavior is unchanged. | Define replacement stage names and deliberately update snapshots/diagnostics at a named milestone. |
 | Medium | Cwasm persists emitted bytes plus target-specific fixup and GC metadata | IR refactoring can change bytes, veneers, offsets or stack maps without changing Wasm results. | Keep the Cwasm schema product-owned and compare serialized artifacts/fixups where stability is required. |
 
-The generated interfaces most directly affected are `machv/pkg.generated.mbti`, `machv/abi/pkg.generated.mbti`, `machv/instr/pkg.generated.mbti`, `machv_regalloc/pkg.generated.mbti`, `machv_emit/pkg.generated.mbti`, and `milkir_machv/lower/pkg.generated.mbti`. Repository consumers also directly import these packages from `wasm_isa_lower`, both target packages, `wasmoon_jit`, `wasmoon`, `wasmoon/preflight`, and the CLI commands package.
+The generated interfaces most directly affected are the semantic `machv` and `milkir_machv` interfaces, the legacy backend interfaces, `machv_regalloc`, `machv_emit`, and both target-policy packages. Product consumers include `wasmoon_jit`, `wasmoon`, `wasmoon/preflight`, and the CLI commands package.
 
 ## Existing behavior tests to preserve
 
 | Layer | Current protection | Migration relevance |
 |---|---|---|
 | MachV structure and verifier | [`machv_test.mbt`](../modules/machv/machv_test.mbt), [`verify_test.mbt`](../modules/machv/verify_test.mbt) | Builder/printing, terminators, edge arguments, SSA dominance, duplicate ids, opcode arity/classes, call metadata, vector memory and ISA physical-register rejection. These tests encode both desired semantic invariants and legacy target leakage; they must be split rather than copied wholesale. |
-| MilkIR and Wasm lowering | [`validation_seam_test.mbt`](../modules/milkir_machv/validation_seam_test.mbt), [`reference_width_test.mbt`](../modules/milkir_machv/reference_width_test.mbt), [`float_const_test.mbt`](../modules/milkir_machv/float_const_test.mbt), [`wasm_isa_lower/lower_test.mbt`](../modules/wasm_isa_lower/lower_test.mbt) | Protect verified-input seams, edge arguments, 64-bit carriers, float bit identity, dialect errors and table32/table64 indirect calls. |
-| Target policy | [`aarch64_target_test.mbt`](../modules/aarch64_target/aarch64_target_test.mbt), [`x64_target_test.mbt`](../modules/x64_target/x64_target_test.mbt) | Protect current ABI/machine-environment policy and prove both wrappers currently lower through canonical MachV. They should become target-VCode boundary tests. |
+| MilkIR and Wasm lowering | [`semantic_lower_test.mbt`](../modules/milkir_machv/semantic_lower_test.mbt), [`lower_test.mbt`](../modules/wasm_machv/lower_test.mbt) | Protect verified-input seams, edge arguments, 64-bit carriers, float bit identity, dialect errors, semantic calls, roots, and table32/table64 indirect calls. |
+| Target policy | [`aarch64_target_test.mbt`](../modules/aarch64_target/aarch64_target_test.mbt), [`x64_target_test.mbt`](../modules/x64_target/x64_target_test.mbt) | Protect ABI and machine-environment policy. They should become target-VCode boundary tests. |
 | Regalloc and layout | [`machv_regalloc_test.mbt`](../modules/machv_regalloc/machv_regalloc_test.mbt), [`layout_wbtest.mbt`](../modules/machv_regalloc/layout/layout_wbtest.mbt) | Protect fixed constraints, allocation locations, invalid-input rejection, block-id assumptions, edge-copy preservation and loop/layout ordering. |
 | Emitter | [`machv_emit/verify_test.mbt`](../modules/machv_emit/verify_test.mbt) and documentation tests in [`machv_emit/README.mbt.md`](../modules/machv_emit/README.mbt.md) | Only a small direct seam suite exists: invalid MachV rejection and basic AArch64 bytes/fixups. Target VCode migration needs per-target legality and allocated-form negative tests before the legacy union disappears. |
 | Wasmoon JIT integration | [`wasmoon_jit_test.mbt`](../modules/wasmoon_jit/wasmoon_jit_test.mbt), trampoline white-box tests, and [`cwasm_wbtest.mbt`](../modules/wasmoon_jit/cwasm/cwasm_wbtest.mbt) | Broad coverage of target fixups, runtime-symbol ownership, Cwasm metadata, AArch64/X64 integration, calls, memory, SIMD, entry/hostcall trampolines, stack arguments and multi-value results. |

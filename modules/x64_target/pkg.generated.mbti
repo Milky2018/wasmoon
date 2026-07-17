@@ -2,9 +2,7 @@
 package "Milky2018/x64_target"
 
 import {
-  "Milky2018/machv_legacy",
   "Milky2018/machv_legacy/abi",
-  "Milky2018/milkir",
   "moonbitlang/core/debug",
 }
 
@@ -28,10 +26,6 @@ pub fn call_clobbered_fprs_same_abi() -> Array[@abi.PReg]
 pub fn call_clobbered_gprs() -> Array[@abi.PReg]
 
 pub fn int_reg_index(IntRegRole) -> Int
-
-pub fn lower_function(@milkir.Function, return_area_base_reg? : @abi.PReg?) -> @machv_legacy.Function raise @milkir.VerifyError
-
-pub fn lower_function_with_call_conv(@milkir.Function, @abi.CallConventionLayout, return_area_base_reg? : @abi.PReg?) -> @machv_legacy.Function raise @milkir.VerifyError
 
 pub fn sysv_arg_fprs() -> Array[@abi.PReg]
 

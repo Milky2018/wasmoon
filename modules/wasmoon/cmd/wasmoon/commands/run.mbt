@@ -1601,6 +1601,11 @@ pub fn compile_module_to_jit(
     let type_idx = mod_.funcs[i]
     let func_type = mod_.get_func_type(type_idx)
     let func_name = get_func_name(mod_, func_idx)
+    let compiler_name = if func_name.is_empty() {
+      "func_\{func_idx}"
+    } else {
+      func_name
+    }
     emit_compile_progress(
       on_progress,
       Translate,
@@ -1614,7 +1619,7 @@ pub fn compile_module_to_jit(
     let code = mod_.codes[i]
     let ir_func = @wasm_frontend.translate_function_body(
       translation_ctx,
-      func_name,
+      compiler_name,
       func_type,
       code.locals,
       code.body,

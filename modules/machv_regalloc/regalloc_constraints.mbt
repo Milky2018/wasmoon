@@ -269,12 +269,28 @@ fn resolve_parallel_moves(
         // All remaining moves form cycles. Break the cycle by saving one
         // destination register to a reserved scratch register, then continue.
         let mv = pending.remove(0)
+        let mut saved_class = mv.class
+        for candidate in pending {
+          if aliases(candidate.from, candidate.class, mv.to, mv.class) {
+            saved_class = candidate.class
+            break
+          }
+        }
         // Select a scratch register in the right bank that doesn't alias mv.to
         // and doesn't clobber any pending source.
-        let temp_loc = pick_cycle_scratch_loc(mv.class, src_set, mv.from, mv.to)
+        let temp_loc = pick_cycle_scratch_loc(
+          saved_class,
+          src_set,
+          mv.from,
+          mv.to,
+        )
+        let saved_source = match mv.to {
+          Reg(preg) => Loc::Reg({ index: preg.index, class: saved_class })
+          Spill(_) => mv.to
+        }
 
         // Save the destination's original value: temp <- dst
-        result.push({ from: mv.to, to: temp_loc, class: mv.class })
+        result.push({ from: saved_source, to: temp_loc, class: saved_class })
 
         // Redirect all uses of the saved destination as a source to read from temp.
         for i in 0..<pending.length() {
