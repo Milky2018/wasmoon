@@ -36,13 +36,19 @@ test "AArch64 lowering selects scalar SSA and preserves source metadata" {
 ///|
 test "AArch64 lowering rejects unsupported valid operations structurally" {
   let builder = @semantic.FunctionBuilder::new(
-    "unsupported_atomic_fence",
+    "unsupported_big_endian_atomic",
     Platform,
-    [],
-    [],
+    [Ptr64],
+    [I32],
   )
-  builder.emit(AtomicFence, [], []) |> ignore
-  builder.return_([])
+  let loaded = builder.emit(
+      AtomicLoad(
+        @semantic.AtomicSpec::new(W32, I32, 0UL, Big, Some(MemoryOutOfBounds)),
+      ),
+      builder.parameters(),
+      [I32],
+    )[0]
+  builder.return_([loaded])
   try lower(builder.finish(), test_lowering_context()) |> ignore catch {
     error =>
       inspect(
@@ -51,13 +57,108 @@ test "AArch64 lowering rejects unsupported valid operations structurally" {
           #|UnsupportedOperation(
           #|  block_index=0,
           #|  instruction_index=0,
-          #|  operation=AtomicFence,
+          #|  operation=AtomicLoad(
+          #|    {
+          #|      width: W32,
+          #|      value_type: I32,
+          #|      offset: 0,
+          #|      endianness: Big,
+          #|      trap: Some(MemoryOutOfBounds),
+          #|    },
+          #|  ),
           #|)
         ),
       )
   } noraise {
-    _ => fail("expected unsupported float selection to fail")
+    _ => fail("expected big-endian atomic selection to fail")
   }
+}
+
+///|
+test "AArch64 lowering selects sequentially consistent atomic families" {
+  let builder = @semantic.FunctionBuilder::new(
+    "atomic_families",
+    Internal,
+    [Ptr64, I32, I64],
+    [I32],
+  )
+  let parameters = builder.parameters()
+  builder.emit(
+    AtomicLoad(
+      @semantic.AtomicSpec::new(W8, I32, 0UL, Little, Some(MemoryOutOfBounds)),
+    ),
+    [parameters[0]],
+    [I32],
+  )
+  |> ignore
+  builder.emit(
+    AtomicStore(
+      @semantic.AtomicSpec::new(W16, I32, 2UL, Little, Some(MemoryOutOfBounds)),
+    ),
+    [parameters[0], parameters[1]],
+    [],
+  )
+  |> ignore
+  builder.emit(
+    AtomicRmw(
+      @semantic.AtomicSpec::new(W32, I32, 4UL, Little, Some(MemoryOutOfBounds)),
+      Add,
+    ),
+    [parameters[0], parameters[1]],
+    [I32],
+  )
+  |> ignore
+  builder.emit(
+    AtomicRmw(
+      @semantic.AtomicSpec::new(W64, I64, 8UL, Little, Some(MemoryOutOfBounds)),
+      Exchange,
+    ),
+    [parameters[0], parameters[2]],
+    [I64],
+  )
+  |> ignore
+  let exchanged = builder.emit(
+      AtomicCompareExchange(
+        @semantic.AtomicSpec::new(
+          W8,
+          I32,
+          16UL,
+          Little,
+          Some(MemoryOutOfBounds),
+        ),
+      ),
+      [parameters[0], parameters[1], parameters[1]],
+      [I32],
+    )[0]
+  builder.emit(AtomicFence, [], []) |> ignore
+  builder.return_([exchanged])
+  inspect(
+    lower(builder.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode atomic_families(v0:ptr64, v1:i32, v2:i64) -> (i32)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v3:any@late]
+      #|  i1 IncomingReg(I32, p1:int) uses=[v1:fixed(p1:int)@early] defs=[v4:any@late]
+      #|  i2 IncomingReg(I64, p2:int) uses=[v2:fixed(p2:int)@early] defs=[v5:any@late]
+      #|  i3 AtomicLoad(W8, I32) uses=[v3:any@early] defs=[v6:any@late] trap=MemoryOutOfBounds
+      #|  i4 LoadConstant(W64, 2) defs=[v7:any@late]
+      #|  i5 AddAddress uses=[v3:any@early, v7:any@early] defs=[v8:any@late]
+      #|  i6 AtomicStore(W16, I32) uses=[v8:any@early, v4:any@early] trap=MemoryOutOfBounds
+      #|  i7 LoadConstant(W64, 4) defs=[v9:any@late]
+      #|  i8 AddAddress uses=[v3:any@early, v9:any@early] defs=[v10:any@late]
+      #|  i9 AtomicRmw(W32, I32, Add) uses=[v10:any@early, v4:any@early] defs=[v11:any@early] trap=MemoryOutOfBounds
+      #|  i10 LoadConstant(W64, 8) defs=[v12:any@late]
+      #|  i11 AddAddress uses=[v3:any@early, v12:any@early] defs=[v13:any@late]
+      #|  i12 AtomicRmw(W64, I64, Exchange) uses=[v13:any@early, v5:any@early] defs=[v14:any@early] trap=MemoryOutOfBounds
+      #|  i13 LoadConstant(W64, 16) defs=[v15:any@late]
+      #|  i14 AddAddress uses=[v3:any@early, v15:any@early] defs=[v16:any@late]
+      #|  i15 AtomicCompareExchange(W8, I32) uses=[v16:any@early, v4:any@early, v4:any@early] defs=[v17:any@early] trap=MemoryOutOfBounds
+      #|  i16 AtomicFence
+      #|  i17 OutgoingReg(I32, p0:int) uses=[v17:any@early]
+      #|  i18 Return
+      #|
+    ),
+  )
 }
 
 ///|

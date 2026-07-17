@@ -267,6 +267,11 @@ pub(all) enum AArch64Inst {
   VectorLoadZero(@machv.AccessWidth, UInt64)
   VectorLoadLane(@machv.VectorLane, Int, UInt64)
   VectorStoreLane(@machv.VectorLane, Int, UInt64)
+  AtomicLoad(@machv.AccessWidth, @machv.ValueType)
+  AtomicStore(@machv.AccessWidth, @machv.ValueType)
+  AtomicRmw(@machv.AccessWidth, @machv.ValueType, @machv.AtomicRmwOp)
+  AtomicCompareExchange(@machv.AccessWidth, @machv.ValueType)
+  AtomicFence
   PlatformCall(@machv.ExternalSymbol, @machv.Signature)
   InternalCall(@machv.CodeSymbol, @machv.Signature, InternalCallPlan)
   InternalCallIndirect(@machv.Signature, InternalCallPlan)

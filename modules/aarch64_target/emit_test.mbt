@@ -2068,6 +2068,227 @@ test "AArch64 pipeline emits vector memory at the faulting instruction" {
 }
 
 ///|
+test "AArch64 pipeline emits sequentially consistent atomic loops" {
+  let builder = @semantic.FunctionBuilder::new(
+    "emitted_atomics",
+    Platform,
+    [Ptr64, I32],
+    [I32],
+  )
+  let parameters = builder.parameters()
+  builder.emit(
+    AtomicLoad(
+      @semantic.AtomicSpec::new(W32, I32, 0UL, Little, Some(MemoryOutOfBounds)),
+    ),
+    [parameters[0]],
+    [I32],
+  )
+  |> ignore
+  builder.emit(
+    AtomicStore(
+      @semantic.AtomicSpec::new(W16, I32, 2UL, Little, Some(MemoryOutOfBounds)),
+    ),
+    parameters,
+    [],
+  )
+  |> ignore
+  let old = builder.emit(
+      AtomicRmw(
+        @semantic.AtomicSpec::new(
+          W32,
+          I32,
+          4UL,
+          Little,
+          Some(MemoryOutOfBounds),
+        ),
+        Add,
+      ),
+      parameters,
+      [I32],
+    )[0]
+  let exchanged = builder.emit(
+      AtomicCompareExchange(
+        @semantic.AtomicSpec::new(W8, I32, 8UL, Little, Some(MemoryOutOfBounds)),
+      ),
+      [parameters[0], old, parameters[1]],
+      [I32],
+    )[0]
+  builder.emit(AtomicFence, [], []) |> ignore
+  builder.return_([exchanged])
+  let function = lower(builder.finish(), test_lowering_context())
+  let allocation = allocate(function)
+  let frame = plan_frame(function, allocation)
+  inspect(
+    allocation.summary(),
+    content=(
+      #|allocation emitted_atomics
+      #|  v0:ptr64 -> p0:int
+      #|  v1:i32 -> p1:int
+      #|  v2:ptr64 -> p2:int
+      #|  v3:i32 -> p0:int
+      #|  v4:i32 -> p1:int
+      #|  v5:i64 -> p1:int
+      #|  v6:ptr64 -> p3:int
+      #|  v7:i64 -> p1:int
+      #|  v8:ptr64 -> p3:int
+      #|  v9:i32 -> p1:int
+      #|  v10:i64 -> p3:int
+      #|  v11:ptr64 -> p4:int
+      #|  v12:i32 -> p2:int
+      #|  i0 operand0 -> p0:int
+      #|  i0 operand1 -> p2:int
+      #|  i1 operand0 -> p1:int
+      #|  i1 operand1 -> p0:int
+      #|  i2 operand0 -> p2:int
+      #|  i2 operand1 -> p1:int
+      #|  i3 operand0 -> p1:int
+      #|  i4 operand0 -> p2:int
+      #|  i4 operand1 -> p1:int
+      #|  i4 operand2 -> p3:int
+      #|  i5 operand0 -> p3:int
+      #|  i5 operand1 -> p0:int
+      #|  i6 operand0 -> p1:int
+      #|  i7 operand0 -> p2:int
+      #|  i7 operand1 -> p1:int
+      #|  i7 operand2 -> p3:int
+      #|  i8 operand0 -> p3:int
+      #|  i8 operand1 -> p0:int
+      #|  i8 operand2 -> p1:int
+      #|  i9 operand0 -> p3:int
+      #|  i10 operand0 -> p2:int
+      #|  i10 operand1 -> p3:int
+      #|  i10 operand2 -> p4:int
+      #|  i11 operand0 -> p4:int
+      #|  i11 operand1 -> p1:int
+      #|  i11 operand2 -> p0:int
+      #|  i11 operand3 -> p2:int
+      #|  i13 operand0 -> p2:int
+      #|
+    ),
+  )
+  debug_inspect(
+    emit(function, allocation, frame),
+    content=(
+      #|{
+      #|  architecture: AArch64,
+      #|  code: [
+      #|    0xe2,
+      #|    0x03,
+      #|    0x00,
+      #|    0xaa,
+      #|    0xe0,
+      #|    0x03,
+      #|    0x01,
+      #|    0x2a,
+      #|    0x41,
+      #|    0xfc,
+      #|    0xdf,
+      #|    0x88,
+      #|    0x41,
+      #|    0x00,
+      #|    0x80,
+      #|    0xd2,
+      #|    0x43,
+      #|    0x00,
+      #|    0x01,
+      #|    0x8b,
+      #|    0x60,
+      #|    0xfc,
+      #|    0x9f,
+      #|    0x48,
+      #|    0x81,
+      #|    0x00,
+      #|    0x80,
+      #|    0xd2,
+      #|    0x43,
+      #|    0x00,
+      #|    0x01,
+      #|    0x8b,
+      #|    0x61,
+      #|    0xfc,
+      #|    0x5f,
+      #|    0x88,
+      #|    0x30,
+      #|    0x00,
+      #|    0x00,
+      #|    0x0b,
+      #|    0x70,
+      #|    0xfc,
+      #|    0x11,
+      #|    0x88,
+      #|    0xb1,
+      #|    0xff,
+      #|    0xff,
+      #|    0x35,
+      #|    0x03,
+      #|    0x01,
+      #|    0x80,
+      #|    0xd2,
+      #|    0x44,
+      #|    0x00,
+      #|    0x03,
+      #|    0x8b,
+      #|    0x30,
+      #|    0x1c,
+      #|    0x00,
+      #|    0x53,
+      #|    0x82,
+      #|    0xfc,
+      #|    0x5f,
+      #|    0x08,
+      #|    0x5f,
+      #|    0x00,
+      #|    0x10,
+      #|    0x6b,
+      #|    0x60,
+      #|    0x00,
+      #|    0x00,
+      #|    0x54,
+      #|    0x5f,
+      #|    0x3f,
+      #|    0x03,
+      #|    0xd5,
+      #|    0x03,
+      #|    0x00,
+      #|    0x00,
+      #|    0x14,
+      #|    0x80,
+      #|    0xfc,
+      #|    0x11,
+      #|    0x08,
+      #|    0x51,
+      #|    0xff,
+      #|    0xff,
+      #|    0x35,
+      #|    0xbf,
+      #|    0x3b,
+      #|    0x03,
+      #|    0xd5,
+      #|    0xe0,
+      #|    0x03,
+      #|    0x02,
+      #|    0x2a,
+      #|    0xc0,
+      #|    0x03,
+      #|    0x5f,
+      #|    0xd6,
+      #|  ],
+      #|  relocations: [],
+      #|  sources: [],
+      #|  traps: [
+      #|    { offset: 8, reason: MemoryOutOfBounds, source: None },
+      #|    { offset: 20, reason: MemoryOutOfBounds, source: None },
+      #|    { offset: 32, reason: MemoryOutOfBounds, source: None },
+      #|    { offset: 60, reason: MemoryOutOfBounds, source: None },
+      #|  ],
+      #|  safepoints: [],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
 test "AArch64 pipeline emits addresses inside the semantic stack-object area" {
   let builder = @semantic.FunctionBuilder::new(
     "emitted_stack_addresses",

@@ -255,6 +255,11 @@ pub(all) enum AArch64Inst {
   VectorLoadZero(@semantic.AccessWidth, UInt64)
   VectorLoadLane(@semantic.VectorLane, Int, UInt64)
   VectorStoreLane(@semantic.VectorLane, Int, UInt64)
+  AtomicLoad(@semantic.AccessWidth, @semantic.ValueType)
+  AtomicStore(@semantic.AccessWidth, @semantic.ValueType)
+  AtomicRmw(@semantic.AccessWidth, @semantic.ValueType, @semantic.AtomicRmwOp)
+  AtomicCompareExchange(@semantic.AccessWidth, @semantic.ValueType)
+  AtomicFence
   PlatformCall(@semantic.ExternalSymbol, @semantic.Signature)
   InternalCall(@semantic.CodeSymbol, @semantic.Signature, InternalCallPlan)
   InternalCallIndirect(@semantic.Signature, InternalCallPlan)
@@ -537,6 +542,18 @@ fn is_integer_vector_lane(lane : @semantic.VectorLane) -> Bool {
   match lane {
     I8x16 | I16x8 | I32x4 | I64x2 => true
     F32x4 | F64x2 => false
+  }
+}
+
+///|
+fn valid_atomic_access(
+  width : @semantic.AccessWidth,
+  ty : @semantic.ValueType,
+) -> Bool {
+  match (ty, width) {
+    (I32, W8 | W16 | W32) => true
+    (I64, W8 | W16 | W32 | W64) => true
+    _ => false
   }
 }
 
@@ -1404,6 +1421,90 @@ pub fn verify_vcode(
           0,
         )
       }
+      AtomicLoad(width, ty) => {
+        if !valid_atomic_access(width, ty) {
+          raise InvalidInstruction(
+            instruction~,
+            message="invalid AArch64 atomic load width or type",
+          )
+        }
+        require_instruction_shape(
+          function,
+          instruction,
+          [Ptr64],
+          [ty],
+          false,
+          0,
+        )
+      }
+      AtomicStore(width, ty) => {
+        if !valid_atomic_access(width, ty) {
+          raise InvalidInstruction(
+            instruction~,
+            message="invalid AArch64 atomic store width or type",
+          )
+        }
+        require_instruction_shape(
+          function,
+          instruction,
+          [Ptr64, ty],
+          [],
+          false,
+          0,
+        )
+      }
+      AtomicRmw(width, ty, _) => {
+        if !valid_atomic_access(width, ty) {
+          raise InvalidInstruction(
+            instruction~,
+            message="invalid AArch64 atomic RMW width or type",
+          )
+        }
+        require_instruction_shape(
+          function,
+          instruction,
+          [Ptr64, ty],
+          [ty],
+          false,
+          0,
+        )
+        let result = function
+          .instruction_operands(instruction)
+          .filter(operand => operand.role == Def)[0]
+        if result.timing != Early {
+          raise InvalidInstruction(
+            instruction~,
+            message="atomic RMW result must be an early definition",
+          )
+        }
+      }
+      AtomicCompareExchange(width, ty) => {
+        if !valid_atomic_access(width, ty) {
+          raise InvalidInstruction(
+            instruction~,
+            message="invalid AArch64 atomic compare-exchange width or type",
+          )
+        }
+        require_instruction_shape(
+          function,
+          instruction,
+          [Ptr64, ty, ty],
+          [ty],
+          false,
+          0,
+        )
+        let result = function
+          .instruction_operands(instruction)
+          .filter(operand => operand.role == Def)[0]
+        if result.timing != Early {
+          raise InvalidInstruction(
+            instruction~,
+            message="atomic compare-exchange result must be an early definition",
+          )
+        }
+      }
+      AtomicFence =>
+        require_instruction_shape(function, instruction, [], [], false, 0)
       PlatformCall(_, signature) => {
         if signature.results.length() > 1 {
           raise InvalidInstruction(

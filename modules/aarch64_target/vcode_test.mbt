@@ -879,3 +879,47 @@ test "AArch64 verifier rejects malformed vector memory operations" {
     ),
   )
 }
+
+///|
+test "AArch64 verifier requires early-clobber atomic loop results" {
+  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
+    "late_atomic_result",
+    [Ptr64, I32],
+  )
+  let entry = builder.entry_block()
+  builder.append_body(
+    entry,
+    AtomicRmw(W32, I32, Add),
+    [
+      @vcode.Input::any(builder.parameter(0)),
+      @vcode.Input::any(builder.parameter(1)),
+    ],
+    [@vcode.Output::any(I32)],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  builder.set_terminator(
+    entry,
+    Return,
+    [],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  try verify_vcode(builder.finish()) catch {
+    error =>
+      inspect(
+        error,
+        content=(
+          #|InvalidInstruction(
+          #|  instruction=i0,
+          #|  message="atomic RMW result must be an early definition",
+          #|)
+        ),
+      )
+  } noraise {
+    _ => fail("expected late atomic loop result to be rejected")
+  }
+}

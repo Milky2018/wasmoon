@@ -276,6 +276,153 @@ fn vector_splat_load_base(lane : @semantic.VectorLane) -> UInt {
 }
 
 ///|
+fn atomic_load_base(width : @semantic.AccessWidth, exclusive : Bool) -> UInt {
+  match (width, exclusive) {
+    (W8, false) => 0x08DFFC00U
+    (W16, false) => 0x48DFFC00U
+    (W32, false) => 0x88DFFC00U
+    (W64, false) => 0xC8DFFC00U
+    (W8, true) => 0x085FFC00U
+    (W16, true) => 0x485FFC00U
+    (W32, true) => 0x885FFC00U
+    (W64, true) => 0xC85FFC00U
+    (W128, _) => 0U
+  }
+}
+
+///|
+fn atomic_store_base(width : @semantic.AccessWidth, exclusive : Bool) -> UInt {
+  match (width, exclusive) {
+    (W8, false) => 0x089FFC00U
+    (W16, false) => 0x489FFC00U
+    (W32, false) => 0x889FFC00U
+    (W64, false) => 0xC89FFC00U
+    (W8, true) => 0x0800FC00U
+    (W16, true) => 0x4800FC00U
+    (W32, true) => 0x8800FC00U
+    (W64, true) => 0xC800FC00U
+    (W128, _) => 0U
+  }
+}
+
+///|
+fn atomic_operation_width(width : @semantic.AccessWidth) -> GprWidth {
+  if width == W64 {
+    W64
+  } else {
+    W32
+  }
+}
+
+///|
+fn emit_atomic_rmw(
+  buffer : CodeBuffer,
+  width : @semantic.AccessWidth,
+  operation : @semantic.AtomicRmwOp,
+  address : @vcode.PhysicalReg,
+  value : @vcode.PhysicalReg,
+  result : @vcode.PhysicalReg,
+) -> Int raise AArch64EmitError {
+  if width == W128 {
+    raise InvalidScalarMemoryAccess
+  }
+  let scratch = @vcode.PhysicalReg::new(16, Int)
+  let status = @vcode.PhysicalReg::new(17, Int)
+  let loop_offset = buffer.position()
+  buffer.emit_word(
+    atomic_load_base(width, true) | (reg_bits(address) << 5) | reg_bits(result),
+  )
+  let operation_width = atomic_operation_width(width)
+  match operation {
+    Add =>
+      buffer.emit_word(
+        encode_int_binary(operation_width, Add, scratch, result, value),
+      )
+    Sub =>
+      buffer.emit_word(
+        encode_int_binary(operation_width, Sub, scratch, result, value),
+      )
+    And =>
+      buffer.emit_word(
+        encode_int_binary(operation_width, And, scratch, result, value),
+      )
+    Or =>
+      buffer.emit_word(
+        encode_int_binary(operation_width, Orr, scratch, result, value),
+      )
+    Xor =>
+      buffer.emit_word(
+        encode_int_binary(operation_width, Eor, scratch, result, value),
+      )
+    Exchange =>
+      emit_move(
+        buffer,
+        if operation_width == W64 {
+          I64
+        } else {
+          I32
+        },
+        scratch,
+        value,
+      )
+  }
+  buffer.emit_word(
+    atomic_store_base(width, true) |
+    (reg_bits(status) << 16) |
+    (reg_bits(address) << 5) |
+    reg_bits(scratch),
+  )
+  let retry = buffer.position()
+  buffer.emit_word(0x35000000U | reg_bits(status))
+  patch_relative_branch(buffer, retry, loop_offset, 19)
+  loop_offset
+}
+
+///|
+fn emit_atomic_compare_exchange(
+  buffer : CodeBuffer,
+  width : @semantic.AccessWidth,
+  address : @vcode.PhysicalReg,
+  expected : @vcode.PhysicalReg,
+  replacement : @vcode.PhysicalReg,
+  result : @vcode.PhysicalReg,
+) -> Int raise AArch64EmitError {
+  if width == W128 {
+    raise InvalidScalarMemoryAccess
+  }
+  let expected_value = if width == W8 || width == W16 {
+    let scratch = @vcode.PhysicalReg::new(16, Int)
+    let base = if width == W8 { 0x53001C00U } else { 0x53003C00U }
+    buffer.emit_word(base | (reg_bits(expected) << 5) | reg_bits(scratch))
+    scratch
+  } else {
+    expected
+  }
+  let status = @vcode.PhysicalReg::new(17, Int)
+  let loop_offset = buffer.position()
+  buffer.emit_word(
+    atomic_load_base(width, true) | (reg_bits(address) << 5) | reg_bits(result),
+  )
+  let compare_base = if width == W64 { 0xEB00001FU } else { 0x6B00001FU }
+  buffer.emit_word(
+    compare_base | (reg_bits(expected_value) << 16) | (reg_bits(result) << 5),
+  )
+  buffer.emit_word(0x54000000U | (3U << 5))
+  buffer.emit_word(0xD5033F5FU)
+  buffer.emit_word(0x14000000U | 3U)
+  buffer.emit_word(
+    atomic_store_base(width, true) |
+    (reg_bits(status) << 16) |
+    (reg_bits(address) << 5) |
+    reg_bits(replacement),
+  )
+  let retry = buffer.position()
+  buffer.emit_word(0x35000000U | reg_bits(status))
+  patch_relative_branch(buffer, retry, loop_offset, 19)
+  loop_offset
+}
+
+///|
 fn scalar_load_base(
   width : @semantic.AccessWidth,
   extension : @semantic.LoadExtension,
@@ -2284,6 +2431,41 @@ fn emit_instruction(
         vector_lane_memory_word(false, lane, index, address, reg(1)),
       )
     }
+    AtomicLoad(width, _) => {
+      metadata_offset = buffer.position()
+      buffer.emit_word(
+        atomic_load_base(width, false) |
+        (reg_bits(reg(0)) << 5) |
+        reg_bits(reg(1)),
+      )
+    }
+    AtomicStore(width, _) => {
+      metadata_offset = buffer.position()
+      buffer.emit_word(
+        atomic_store_base(width, false) |
+        (reg_bits(reg(0)) << 5) |
+        reg_bits(reg(1)),
+      )
+    }
+    AtomicRmw(width, _, operation) =>
+      metadata_offset = emit_atomic_rmw(
+        buffer,
+        width,
+        operation,
+        reg(0),
+        reg(1),
+        reg(2),
+      )
+    AtomicCompareExchange(width, _) =>
+      metadata_offset = emit_atomic_compare_exchange(
+        buffer,
+        width,
+        reg(0),
+        reg(1),
+        reg(2),
+        reg(3),
+      )
+    AtomicFence => buffer.emit_word(0xD5033BBFU)
     PlatformCall(target, signature) => {
       let layout = platform_call_layout(signature.params)
       emit_call_arguments(

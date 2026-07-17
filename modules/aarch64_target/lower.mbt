@@ -1015,6 +1015,15 @@ fn lower_instruction(
       }
     VectorStoreLane(spec) if spec.endianness == Little =>
       Some(VectorStoreLane(spec.lane, spec.lane_index, spec.offset))
+    AtomicLoad(spec) if spec.endianness == Little =>
+      Some(AtomicLoad(spec.width, spec.value_type))
+    AtomicStore(spec) if spec.endianness == Little =>
+      Some(AtomicStore(spec.width, spec.value_type))
+    AtomicRmw(spec, rmw_operation) if spec.endianness == Little =>
+      Some(AtomicRmw(spec.width, spec.value_type, rmw_operation))
+    AtomicCompareExchange(spec) if spec.endianness == Little =>
+      Some(AtomicCompareExchange(spec.width, spec.value_type))
+    AtomicFence => Some(AtomicFence)
     _ => None
   }
   let selected = match selected {
@@ -1022,12 +1031,47 @@ fn lower_instruction(
     None =>
       raise UnsupportedOperation(block_index~, instruction_index~, operation~)
   }
+  let selected_operands = match operation {
+    AtomicLoad(spec)
+    | AtomicStore(spec)
+    | AtomicRmw(spec, _)
+    | AtomicCompareExchange(spec) =>
+      if spec.offset == 0UL {
+        operands
+      } else {
+        let offset = append_body(
+            builder,
+            block,
+            LoadConstant(W64, spec.offset),
+            [],
+            [@vcode.Output::any(I64)],
+            @vcode.InstructionMetadata::empty(),
+          )[0]
+        let address = append_body(
+            builder,
+            block,
+            AddAddress,
+            [@vcode.Input::any(operands[0]), @vcode.Input::any(offset)],
+            [@vcode.Output::any(Ptr64)],
+            @vcode.InstructionMetadata::empty(),
+          )[0]
+        let selected_operands = operands.copy()
+        selected_operands[0] = address
+        selected_operands
+      }
+    _ => operands
+  }
+  let outputs = match operation {
+    AtomicRmw(_, _) | AtomicCompareExchange(_) =>
+      result_types.map(ty => @vcode.Output::any(ty).with_timing(Early))
+    _ => result_types.map(@vcode.Output::any)
+  }
   let results = append_body(
     builder,
     block,
     selected,
-    operands.map(@vcode.Input::any),
-    result_types.map(@vcode.Output::any),
+    selected_operands.map(@vcode.Input::any),
+    outputs,
     source_metadata(
       function.instruction_metadata(instruction).unwrap(),
       roots,
@@ -1037,6 +1081,10 @@ fn lower_instruction(
         Store(spec) => spec.trap
         VectorLoad(spec) => spec.trap
         VectorStoreLane(spec) => spec.trap
+        AtomicLoad(spec) => spec.trap
+        AtomicStore(spec) => spec.trap
+        AtomicRmw(spec, _) => spec.trap
+        AtomicCompareExchange(spec) => spec.trap
         _ => None
       },
     ),
