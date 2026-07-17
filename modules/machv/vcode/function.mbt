@@ -43,6 +43,7 @@ pub struct Function[Inst] {
   priv owner : Ref[Unit]
   priv name : String
   priv parameters : Array[Value]
+  priv result_types : Array[ValueType]
   priv values : Array[ValueData]
   priv blocks : Array[BlockData]
   priv instructions : Array[InstructionData[Inst]]
@@ -55,11 +56,13 @@ pub struct Function[Inst] {
 fn[Inst] Function::new(
   name : String,
   parameter_types : Array[ValueType],
+  result_types : Array[ValueType],
 ) -> Function[Inst] {
   let function : Function[Inst] = {
     owner: Ref(()),
     name,
     parameters: [],
+    result_types: result_types.copy(),
     values: [],
     blocks: [],
     instructions: [],
@@ -74,6 +77,11 @@ fn[Inst] Function::new(
   let entry = function.allocate_block([])
   function.layout.push(entry)
   function
+}
+
+///|
+pub fn[Inst] Function::result_types(self : Function[Inst]) -> Array[ValueType] {
+  self.result_types.copy()
 }
 
 ///|

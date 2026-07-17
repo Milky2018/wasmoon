@@ -2,6 +2,7 @@
 package "Milky2018/aarch64_target"
 
 import {
+  "Milky2018/machv",
   "Milky2018/machv/vcode",
   "Milky2018/machv_legacy/abi",
   "moonbitlang/core/debug",
@@ -40,11 +41,23 @@ pub fn callee_saved_fprs() -> Array[@abi.PReg]
 
 pub fn int_reg_index(IntRegRole) -> Int
 
+pub fn lower(@machv.Function) -> @vcode.Function[AArch64Inst] raise AArch64LowerError
+
 pub fn target() -> Target
 
 pub fn verify_vcode(@vcode.Function[AArch64Inst]) -> Unit raise TargetVCodeVerifyError
 
 // Errors
+pub suberror AArch64LowerError {
+  InvalidSemantic(cause~ : @machv.MachVVerifyError)
+  MissingMappedValue(value_index~ : Int)
+  UnsupportedOperation(block_index~ : Int, instruction_index~ : Int, operation~ : @machv.Operation)
+  UnsupportedTerminator(block_index~ : Int, terminator~ : @machv.Terminator)
+  BuildFailure(cause~ : @vcode.VCodeBuildError)
+  InvalidTarget(cause~ : TargetVCodeVerifyError)
+} derive(@debug.Debug)
+pub impl Show for AArch64LowerError
+
 pub suberror TargetVCodeVerifyError {
   CommonFailure(cause~ : @vcode.VCodeVerifyError)
   InvalidInstruction(instruction~ : @vcode.Instruction, message~ : String)
@@ -52,13 +65,49 @@ pub suberror TargetVCodeVerifyError {
 pub impl Show for TargetVCodeVerifyError
 
 // Types and methods
+pub(all) enum AArch64Condition {
+  Eq
+  Ne
+  Lt
+  Le
+  Gt
+  Ge
+  Lo
+  Ls
+  Hi
+  Hs
+} derive(Eq, @debug.Debug)
+
 pub(all) enum AArch64Inst {
-  Nop
-  Move64
-  Add64
-  AddShifted64(Int)
-  BranchNonZero
+  LoadConstant(GprWidth, UInt64)
+  Move(@machv.ValueType)
+  IntUnary(GprWidth, AArch64IntUnary)
+  IntBinary(GprWidth, AArch64IntBinary)
+  CompareSet(GprWidth, AArch64Condition)
+  AddAddress
+  Jump
+  BranchNonZero32
   Return
+} derive(Eq, @debug.Debug)
+
+pub(all) enum AArch64IntBinary {
+  Add
+  Sub
+  Mul
+  And
+  Orr
+  Eor
+  Lsl
+  Asr
+  Lsr
+  Ror
+  Sdiv
+  Udiv
+} derive(Eq, @debug.Debug)
+
+pub(all) enum AArch64IntUnary {
+  Mvn
+  Clz
 } derive(Eq, @debug.Debug)
 
 pub(all) struct AbiPolicy {
@@ -74,6 +123,11 @@ pub(all) struct AbiPolicy {
 
 pub(all) enum CallingConvention {
   Aapcs64
+} derive(Eq, @debug.Debug)
+
+pub(all) enum GprWidth {
+  W32
+  W64
 } derive(Eq, @debug.Debug)
 
 pub(all) enum IntRegRole {

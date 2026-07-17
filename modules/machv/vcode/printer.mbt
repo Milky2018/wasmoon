@@ -29,7 +29,19 @@ pub fn[Inst : Debug] Function::summary(self : Function[Inst]) -> String {
     }
     output += "\{to_repr(parameter)}:\{value_type_text(self.values[parameter.id].ty)}"
   }
-  output += ")\n"
+  output += ")"
+  let result_types = self.result_types()
+  if !result_types.is_empty() {
+    output += " -> ("
+    for index, ty in result_types {
+      if index > 0 {
+        output += ", "
+      }
+      output += value_type_text(ty)
+    }
+    output += ")"
+  }
+  output += "\n"
   for block in self.layout {
     output += "block\{block.id}"
     let parameters = self.blocks[block.id].parameters

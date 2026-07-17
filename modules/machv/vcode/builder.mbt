@@ -8,7 +8,16 @@ pub fn[Inst] Builder::new(
   name : String,
   parameter_types : Array[ValueType],
 ) -> Builder[Inst] {
-  { function: Function::new(name, parameter_types) }
+  { function: Function::new(name, parameter_types, []) }
+}
+
+///|
+pub fn[Inst] Builder::new_with_results(
+  name : String,
+  parameter_types : Array[ValueType],
+  result_types : Array[ValueType],
+) -> Builder[Inst] {
+  { function: Function::new(name, parameter_types, result_types) }
 }
 
 ///|
