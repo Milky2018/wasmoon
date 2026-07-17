@@ -123,6 +123,50 @@ test "AArch64 verifier rejects a vector splat with the wrong scalar bank" {
 }
 
 ///|
+test "AArch64 verifier rejects an untied vector lane replacement" {
+  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
+    "untied_vector_lane_replacement",
+    [V128, I32],
+  )
+  let entry = builder.entry_block()
+  builder.append_body(
+    entry,
+    VectorReplaceLane(I32x4, 0),
+    [
+      @vcode.Input::any(builder.parameter(0)),
+      @vcode.Input::any(builder.parameter(1)),
+    ],
+    [@vcode.Output::any(V128)],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  builder.set_terminator(
+    entry,
+    Return,
+    [],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  try verify_vcode(builder.finish()) catch {
+    error =>
+      inspect(
+        error,
+        content=(
+          #|InvalidInstruction(
+          #|  instruction=i0,
+          #|  message="vector lane replacement result must be tied to its source vector",
+          #|)
+        ),
+      )
+  } noraise {
+    _ => fail("expected the untied vector lane replacement to be rejected")
+  }
+}
+
+///|
 fn test_platform_call_clobbers() -> Array[@vcode.PhysicalReg] {
   let clobbers : Array[@vcode.PhysicalReg] = []
   for index in 0..<18 {

@@ -31,6 +31,7 @@ pub suberror AArch64EmitError {
   FrameOffsetOutOfRange(offset~ : Int)
   InvalidScalarMemoryAccess
   InvalidFloatInstruction
+  InvalidVectorInstruction
   InvalidConversionInstruction
   BranchTargetMissing(block~ : @vcode.Block)
   BranchOutOfRange(offset~ : Int, bits~ : Int)
@@ -535,6 +536,65 @@ fn emit_vector_splat(
 }
 
 ///|
+fn emit_vector_extract_lane(
+  buffer : CodeBuffer,
+  lane : @semantic.VectorLane,
+  index : Int,
+  extension : @semantic.Signedness?,
+  source : @vcode.PhysicalReg,
+  destination : @vcode.PhysicalReg,
+) -> Unit {
+  let base : UInt = match lane {
+    I8x16 => if extension is Some(Signed) { 0x0E012C00U } else { 0x0E013C00U }
+    I16x8 => if extension is Some(Signed) { 0x0E022C00U } else { 0x0E023C00U }
+    I32x4 => 0x0E043C00U
+    I64x2 => 0x4E083C00U
+    F32x4 => 0x5E040400U
+    F64x2 => 0x5E080400U
+  }
+  let shift = match lane {
+    I8x16 => 17
+    I16x8 => 18
+    I32x4 | F32x4 => 19
+    I64x2 | F64x2 => 20
+  }
+  buffer.emit_word(
+    base |
+    (index.reinterpret_as_uint() << shift) |
+    (reg_bits(source) << 5) |
+    reg_bits(destination),
+  )
+}
+
+///|
+fn emit_vector_replace_lane(
+  buffer : CodeBuffer,
+  lane : @semantic.VectorLane,
+  index : Int,
+  source : @vcode.PhysicalReg,
+  destination : @vcode.PhysicalReg,
+) -> Unit {
+  let (lane_shift, lane_code) = match lane {
+    I8x16 => (1, 1)
+    I16x8 => (2, 2)
+    I32x4 | F32x4 => (3, 4)
+    I64x2 | F64x2 => (4, 8)
+  }
+  let immediate = (index << lane_shift) | lane_code
+  let base = if lane == F32x4 || lane == F64x2 {
+    0x6E000400U
+  } else {
+    0x4E001C00U
+  }
+  buffer.emit_word(
+    base |
+    (immediate.reinterpret_as_uint() << 16) |
+    (reg_bits(source) << 5) |
+    reg_bits(destination),
+  )
+}
+
+///|
 fn emit_vector_binary(
   buffer : CodeBuffer,
   base : UInt,
@@ -1031,6 +1091,14 @@ fn emit_instruction(
     }
     VectorSelect => emit_vector_select(buffer, reg(0), reg(1), reg(2), reg(3))
     VectorSplat(lane) => emit_vector_splat(buffer, lane, reg(0), reg(1))
+    VectorExtractLane(lane, index, extension) =>
+      emit_vector_extract_lane(buffer, lane, index, extension, reg(0), reg(1))
+    VectorReplaceLane(lane, index) => {
+      if reg(0) != reg(2) {
+        raise InvalidVectorInstruction
+      }
+      emit_vector_replace_lane(buffer, lane, index, reg(1), reg(2))
+    }
     VectorBitwise(operation) =>
       match operation {
         Not => emit_vector_bitwise(buffer, Not, reg(0), reg(0), reg(0), reg(1))

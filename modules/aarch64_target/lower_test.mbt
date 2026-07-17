@@ -139,6 +139,100 @@ test "AArch64 lowering selects the vector foundation" {
 }
 
 ///|
+test "AArch64 lowering selects vector lane movement" {
+  let builder = @semantic.FunctionBuilder::new(
+    "vector_lane_movement",
+    Internal,
+    [Ptr64, V128],
+    [V128, I32, I64, F32, F64],
+  )
+  let vector = builder.parameters()[1]
+  let narrow_extractions = [
+    builder.emit(Vector(ExtractLane(I8x16, 15, Some(Signed))), [vector], [I32])[0],
+    builder.emit(Vector(ExtractLane(I8x16, 0, Some(Unsigned))), [vector], [I32])[0],
+    builder.emit(Vector(ExtractLane(I16x8, 7, Some(Signed))), [vector], [I32])[0],
+    builder.emit(Vector(ExtractLane(I16x8, 0, Some(Unsigned))), [vector], [I32])[0],
+    builder.emit(Vector(ExtractLane(I32x4, 3, None)), [vector], [I32])[0],
+  ]
+  let mut scalar32 = narrow_extractions[0]
+  for index in 1..<narrow_extractions.length() {
+    scalar32 = builder.emit(
+        IntBinary(Xor),
+        [scalar32, narrow_extractions[index]],
+        [I32],
+      )[0]
+  }
+  let scalar64 = builder.emit(Vector(ExtractLane(I64x2, 1, None)), [vector], [
+      I64,
+    ])[0]
+  let scalar_f32 = builder.emit(Vector(ExtractLane(F32x4, 2, None)), [vector], [
+      F32,
+    ])[0]
+  let scalar_f64 = builder.emit(Vector(ExtractLane(F64x2, 1, None)), [vector], [
+      F64,
+    ])[0]
+  let mut replaced = builder.emit(
+      Vector(ReplaceLane(I8x16, 15)),
+      [vector, scalar32],
+      [V128],
+    )[0]
+  replaced = builder.emit(Vector(ReplaceLane(I16x8, 7)), [replaced, scalar32], [
+      V128,
+    ])[0]
+  replaced = builder.emit(Vector(ReplaceLane(I32x4, 3)), [replaced, scalar32], [
+      V128,
+    ])[0]
+  replaced = builder.emit(Vector(ReplaceLane(I64x2, 1)), [replaced, scalar64], [
+      V128,
+    ])[0]
+  replaced = builder.emit(
+      Vector(ReplaceLane(F32x4, 2)),
+      [replaced, scalar_f32],
+      [V128],
+    )[0]
+  replaced = builder.emit(
+      Vector(ReplaceLane(F64x2, 1)),
+      [replaced, scalar_f64],
+      [V128],
+    )[0]
+  builder.return_([replaced, scalar32, scalar64, scalar_f32, scalar_f64])
+  inspect(
+    lower(builder.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode vector_lane_movement(v0:ptr64, v1:v128) -> (v128, i32, i64, f32, f64)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v2:any@late]
+      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v3:any@late]
+      #|  i2 VectorExtractLane(I8x16, 15, Some(Signed)) uses=[v3:any@early] defs=[v4:any@late]
+      #|  i3 VectorExtractLane(I8x16, 0, Some(Unsigned)) uses=[v3:any@early] defs=[v5:any@late]
+      #|  i4 VectorExtractLane(I16x8, 7, Some(Signed)) uses=[v3:any@early] defs=[v6:any@late]
+      #|  i5 VectorExtractLane(I16x8, 0, Some(Unsigned)) uses=[v3:any@early] defs=[v7:any@late]
+      #|  i6 VectorExtractLane(I32x4, 3, None) uses=[v3:any@early] defs=[v8:any@late]
+      #|  i7 IntBinary(W32, Eor) uses=[v4:any@early, v5:any@early] defs=[v9:any@late]
+      #|  i8 IntBinary(W32, Eor) uses=[v9:any@early, v6:any@early] defs=[v10:any@late]
+      #|  i9 IntBinary(W32, Eor) uses=[v10:any@early, v7:any@early] defs=[v11:any@late]
+      #|  i10 IntBinary(W32, Eor) uses=[v11:any@early, v8:any@early] defs=[v12:any@late]
+      #|  i11 VectorExtractLane(I64x2, 1, None) uses=[v3:any@early] defs=[v13:any@late]
+      #|  i12 VectorExtractLane(F32x4, 2, None) uses=[v3:any@early] defs=[v14:any@late]
+      #|  i13 VectorExtractLane(F64x2, 1, None) uses=[v3:any@early] defs=[v15:any@late]
+      #|  i14 VectorReplaceLane(I8x16, 15) uses=[v3:any@early, v12:any@early] defs=[v16:tied(0)@late]
+      #|  i15 VectorReplaceLane(I16x8, 7) uses=[v16:any@early, v12:any@early] defs=[v17:tied(0)@late]
+      #|  i16 VectorReplaceLane(I32x4, 3) uses=[v17:any@early, v12:any@early] defs=[v18:tied(0)@late]
+      #|  i17 VectorReplaceLane(I64x2, 1) uses=[v18:any@early, v13:any@early] defs=[v19:tied(0)@late]
+      #|  i18 VectorReplaceLane(F32x4, 2) uses=[v19:any@early, v14:any@early] defs=[v20:tied(0)@late]
+      #|  i19 VectorReplaceLane(F64x2, 1) uses=[v20:any@early, v15:any@early] defs=[v21:tied(0)@late]
+      #|  i20 OutgoingReg(V128, p0:fpvec) uses=[v21:any@early]
+      #|  i21 OutgoingReg(I32, p0:int) uses=[v12:any@early]
+      #|  i22 OutgoingReg(I64, p1:int) uses=[v13:any@early]
+      #|  i23 OutgoingReg(F32, p1:fpvec) uses=[v14:any@early]
+      #|  i24 OutgoingReg(F64, p2:fpvec) uses=[v15:any@early]
+      #|  i25 Return
+      #|
+    ),
+  )
+}
+
+///|
 test "AArch64 lowering assigns one aligned semantic stack-object area" {
   let builder = @semantic.FunctionBuilder::new(
     "stack_object_layout",

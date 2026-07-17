@@ -751,6 +751,24 @@ fn lower_instruction(
     values[function.value_index(semantic_results[0]).unwrap()] = Some(current)
     return
   }
+  if operation is Vector(ReplaceLane(lane, index)) {
+    let results = append_body(
+      builder,
+      block,
+      VectorReplaceLane(lane, index),
+      operands.map(@vcode.Input::any),
+      [@vcode.Output::tied(V128, 0)],
+      source_metadata(
+        function.instruction_metadata(instruction).unwrap(),
+        roots,
+        operation.semantics(),
+      ),
+    )
+    values[function.value_index(semantic_results[0]).unwrap()] = Some(
+      results[0],
+    )
+    return
+  }
   let selected = match operation {
     I32Const(bits) => Some(LoadConstant(W32, bits.to_uint64()))
     I64Const(bits) => Some(LoadConstant(W64, bits))
@@ -770,6 +788,8 @@ fn lower_instruction(
     Select if result_types.get(0) is Some(V128) => Some(VectorSelect)
     Select if result_types.get(0) is Some(ty) => Some(Select(ty))
     Vector(Splat(lane)) => Some(VectorSplat(lane))
+    Vector(ExtractLane(lane, index, extension)) =>
+      Some(VectorExtractLane(lane, index, extension))
     Vector(Bitwise(operation)) => Some(VectorBitwise(operation))
     ReferenceCompare(comparison) => {
       let operand_type = match semantic_operands.get(0) {

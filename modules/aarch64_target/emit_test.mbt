@@ -248,6 +248,83 @@ test "AArch64 pipeline emits allocated vector foundation operations" {
 }
 
 ///|
+test "AArch64 pipeline preserves vector lane replacement ties" {
+  let builder = @semantic.FunctionBuilder::new(
+    "emitted_vector_lane_movement",
+    Platform,
+    [V128],
+    [V128],
+  )
+  let vector = builder.parameters()[0]
+  let scalar = builder.emit(
+      Vector(ExtractLane(I8x16, 15, Some(Signed))),
+      [vector],
+      [I32],
+    )[0]
+  let replaced = builder.emit(Vector(ReplaceLane(I16x8, 7)), [vector, scalar], [
+      V128,
+    ])[0]
+  builder.return_([replaced])
+  let function = lower(builder.finish(), test_lowering_context())
+  let allocation = allocate(function)
+  let frame = plan_frame(function, allocation)
+  inspect(
+    allocation.summary(),
+    content=(
+      #|allocation emitted_vector_lane_movement
+      #|  v0:v128 -> p0:fpvec
+      #|  v1:v128 -> p1:fpvec
+      #|  v2:i32 -> p0:int
+      #|  v3:v128 -> p1:fpvec
+      #|  i0 operand0 -> p0:fpvec
+      #|  i0 operand1 -> p1:fpvec
+      #|  i1 operand0 -> p1:fpvec
+      #|  i1 operand1 -> p0:int
+      #|  i2 operand0 -> p1:fpvec
+      #|  i2 operand1 -> p0:int
+      #|  i2 operand2 -> p1:fpvec
+      #|  i3 operand0 -> p1:fpvec
+      #|
+    ),
+  )
+  debug_inspect(
+    emit(function, allocation, frame),
+    content=(
+      #|{
+      #|  architecture: AArch64,
+      #|  code: [
+      #|    0x01,
+      #|    0x1c,
+      #|    0xa0,
+      #|    0x4e,
+      #|    0x20,
+      #|    0x2c,
+      #|    0x1f,
+      #|    0x0e,
+      #|    0x01,
+      #|    0x1c,
+      #|    0x1e,
+      #|    0x4e,
+      #|    0x20,
+      #|    0x1c,
+      #|    0xa1,
+      #|    0x4e,
+      #|    0xc0,
+      #|    0x03,
+      #|    0x5f,
+      #|    0xd6,
+      #|  ],
+      #|  relocations: [],
+      #|  sources: [],
+      #|  traps: [],
+      #|  safepoints: [],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
 test "AArch64 pipeline emits addresses inside the semantic stack-object area" {
   let builder = @semantic.FunctionBuilder::new(
     "emitted_stack_addresses",

@@ -423,6 +423,94 @@ test "AArch64 vector foundation encodings preserve lanes and aliases" {
 }
 
 ///|
+test "AArch64 vector lane movement encodings preserve lane kind and index" {
+  let buffer = CodeBuffer::new()
+  let vector3 = @vcode.PhysicalReg::new(3, FpVector)
+  let vector6 = @vcode.PhysicalReg::new(6, FpVector)
+  let int5 = @vcode.PhysicalReg::new(5, Int)
+  let int7 = @vcode.PhysicalReg::new(7, Int)
+  let vector7 = @vcode.PhysicalReg::new(7, FpVector)
+  let vector9 = @vcode.PhysicalReg::new(9, FpVector)
+  emit_vector_extract_lane(buffer, I8x16, 15, Some(Signed), vector3, int7)
+  emit_vector_extract_lane(buffer, I8x16, 15, Some(Unsigned), vector3, int7)
+  emit_vector_extract_lane(buffer, I16x8, 7, Some(Signed), vector3, int7)
+  emit_vector_extract_lane(buffer, I16x8, 7, Some(Unsigned), vector3, int7)
+  emit_vector_extract_lane(buffer, I32x4, 3, None, vector3, int7)
+  emit_vector_extract_lane(buffer, I64x2, 1, None, vector3, int7)
+  emit_vector_extract_lane(buffer, F32x4, 2, None, vector3, vector7)
+  emit_vector_extract_lane(buffer, F64x2, 1, None, vector3, vector7)
+  emit_vector_replace_lane(buffer, I8x16, 15, int5, vector9)
+  emit_vector_replace_lane(buffer, I16x8, 7, int5, vector9)
+  emit_vector_replace_lane(buffer, I32x4, 3, int5, vector9)
+  emit_vector_replace_lane(buffer, I64x2, 1, int5, vector9)
+  emit_vector_replace_lane(buffer, F32x4, 2, vector6, vector9)
+  emit_vector_replace_lane(buffer, F64x2, 1, vector6, vector9)
+  debug_inspect(
+    buffer.code,
+    content=(
+      #|[
+      #|  0x67,
+      #|  0x2c,
+      #|  0x1f,
+      #|  0x0e,
+      #|  0x67,
+      #|  0x3c,
+      #|  0x1f,
+      #|  0x0e,
+      #|  0x67,
+      #|  0x2c,
+      #|  0x1e,
+      #|  0x0e,
+      #|  0x67,
+      #|  0x3c,
+      #|  0x1e,
+      #|  0x0e,
+      #|  0x67,
+      #|  0x3c,
+      #|  0x1c,
+      #|  0x0e,
+      #|  0x67,
+      #|  0x3c,
+      #|  0x18,
+      #|  0x4e,
+      #|  0x67,
+      #|  0x04,
+      #|  0x14,
+      #|  0x5e,
+      #|  0x67,
+      #|  0x04,
+      #|  0x18,
+      #|  0x5e,
+      #|  0xa9,
+      #|  0x1c,
+      #|  0x1f,
+      #|  0x4e,
+      #|  0xa9,
+      #|  0x1c,
+      #|  0x1e,
+      #|  0x4e,
+      #|  0xa9,
+      #|  0x1c,
+      #|  0x1c,
+      #|  0x4e,
+      #|  0xa9,
+      #|  0x1c,
+      #|  0x18,
+      #|  0x4e,
+      #|  0xc9,
+      #|  0x04,
+      #|  0x14,
+      #|  0x6e,
+      #|  0xc9,
+      #|  0x04,
+      #|  0x18,
+      #|  0x6e,
+      #|]
+    ),
+  )
+}
+
+///|
 test "AAPCS64 platform call layout preserves mixed overflow order" {
   let layout = platform_call_layout([
     I64,

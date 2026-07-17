@@ -166,6 +166,8 @@ pub(all) enum AArch64Inst {
   Select(@semantic.ValueType)
   VectorSelect
   VectorSplat(@semantic.VectorLane)
+  VectorExtractLane(@semantic.VectorLane, Int, @semantic.Signedness?)
+  VectorReplaceLane(@semantic.VectorLane, Int)
   VectorBitwise(@semantic.VectorBitwiseOp)
   IntUnary(GprWidth, AArch64IntUnary)
   IntBinary(GprWidth, AArch64IntBinary)
@@ -459,6 +461,16 @@ fn vector_lane_scalar_type(lane : @semantic.VectorLane) -> @semantic.ValueType {
 }
 
 ///|
+fn vector_lane_count(lane : @semantic.VectorLane) -> Int {
+  match lane {
+    I8x16 => 16
+    I16x8 => 8
+    I32x4 | F32x4 => 4
+    I64x2 | F64x2 => 2
+  }
+}
+
+///|
 fn valid_scalar_bitcast(
   from : @semantic.ValueType,
   to : @semantic.ValueType,
@@ -642,6 +654,49 @@ pub fn verify_vcode(
           false,
           0,
         )
+      VectorExtractLane(lane, index, extension) => {
+        let requires_extension = lane == I8x16 || lane == I16x8
+        let has_extension = extension is Some(_)
+        if index < 0 ||
+          index >= vector_lane_count(lane) ||
+          requires_extension != has_extension {
+          raise InvalidInstruction(
+            instruction~,
+            message="invalid vector lane extraction contract",
+          )
+        }
+        require_instruction_shape(
+          function,
+          instruction,
+          [V128],
+          [vector_lane_scalar_type(lane)],
+          false,
+          0,
+        )
+      }
+      VectorReplaceLane(lane, index) => {
+        if index < 0 || index >= vector_lane_count(lane) {
+          raise InvalidInstruction(
+            instruction~,
+            message="invalid vector lane replacement index",
+          )
+        }
+        require_instruction_shape(
+          function,
+          instruction,
+          [V128, vector_lane_scalar_type(lane)],
+          [V128],
+          false,
+          0,
+        )
+        if function.instruction_operand_at(instruction, 2).unwrap().constraint !=
+          TiedTo(0) {
+          raise InvalidInstruction(
+            instruction~,
+            message="vector lane replacement result must be tied to its source vector",
+          )
+        }
+      }
       VectorBitwise(operation) => {
         let arity = match operation {
           Not => 1

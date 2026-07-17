@@ -77,6 +77,7 @@ pub suberror AArch64EmitError {
   FrameOffsetOutOfRange(offset~ : Int)
   InvalidScalarMemoryAccess
   InvalidFloatInstruction
+  InvalidVectorInstruction
   InvalidConversionInstruction
   BranchTargetMissing(block~ : @vcode.Block)
   BranchOutOfRange(offset~ : Int, bits~ : Int)
@@ -223,6 +224,8 @@ pub(all) enum AArch64Inst {
   Select(@machv.ValueType)
   VectorSelect
   VectorSplat(@machv.VectorLane)
+  VectorExtractLane(@machv.VectorLane, Int, @machv.Signedness?)
+  VectorReplaceLane(@machv.VectorLane, Int)
   VectorBitwise(@machv.VectorBitwiseOp)
   IntUnary(GprWidth, AArch64IntUnary)
   IntBinary(GprWidth, AArch64IntBinary)
