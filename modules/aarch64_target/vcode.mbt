@@ -100,6 +100,10 @@ pub(all) enum AArch64VectorConversion {
   ExtendLow(@semantic.VectorLane, @semantic.Signedness)
   ExtendHigh(@semantic.VectorLane, @semantic.Signedness)
   Narrow(@semantic.VectorLane, @semantic.Signedness)
+  FloatToInt(@semantic.VectorLane, @semantic.Signedness)
+  IntToFloat(@semantic.VectorLane, @semantic.Signedness)
+  PromoteLowF32x4
+  DemoteZeroF64x2
 } derive(Eq, Debug)
 
 ///|
@@ -927,6 +931,47 @@ pub fn verify_vcode(
               0,
             )
           }
+          FloatToInt(source, _) => {
+            if source != F32x4 && source != F64x2 {
+              raise InvalidInstruction(
+                instruction~,
+                message="vector float-to-int requires f32x4 or f64x2 source lanes",
+              )
+            }
+            require_instruction_shape(
+              function,
+              instruction,
+              [V128],
+              [V128],
+              false,
+              0,
+            )
+          }
+          IntToFloat(result, _) => {
+            if result != F32x4 && result != F64x2 {
+              raise InvalidInstruction(
+                instruction~,
+                message="vector int-to-float requires f32x4 or f64x2 result lanes",
+              )
+            }
+            require_instruction_shape(
+              function,
+              instruction,
+              [V128],
+              [V128],
+              false,
+              0,
+            )
+          }
+          PromoteLowF32x4 | DemoteZeroF64x2 =>
+            require_instruction_shape(
+              function,
+              instruction,
+              [V128],
+              [V128],
+              false,
+              0,
+            )
         }
       VectorPredicate(predicate) => {
         match predicate {

@@ -741,3 +741,57 @@ test "AArch64 verifier rejects integer lanes for vector float ternary" {
     _ => fail("expected integer vector float ternary to be rejected")
   }
 }
+
+///|
+test "AArch64 verifier rejects malformed vector numeric conversions" {
+  let conversions : Array[AArch64VectorConversion] = [
+    FloatToInt(I32x4, Signed),
+    IntToFloat(I64x2, Unsigned),
+  ]
+  let errors : Array[TargetVCodeVerifyError] = []
+  for conversion in conversions {
+    let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
+      "bad_vector_numeric_conversion",
+      [V128],
+    )
+    let entry = builder.entry_block()
+    builder.append_body(
+      entry,
+      VectorConvert(conversion),
+      [@vcode.Input::any(builder.parameter(0))],
+      [@vcode.Output::any(V128)],
+      [],
+      @vcode.InstructionMetadata::empty(),
+    )
+    |> ignore
+    builder.set_terminator(
+      entry,
+      Return,
+      [],
+      [],
+      [],
+      @vcode.InstructionMetadata::empty(),
+    )
+    |> ignore
+    try verify_vcode(builder.finish()) catch {
+      error => errors.push(error)
+    } noraise {
+      _ => fail("expected malformed vector numeric conversion to be rejected")
+    }
+  }
+  debug_inspect(
+    errors,
+    content=(
+      #|[
+      #|  InvalidInstruction(
+      #|    instruction=i0,
+      #|    message="vector float-to-int requires f32x4 or f64x2 source lanes",
+      #|  ),
+      #|  InvalidInstruction(
+      #|    instruction=i0,
+      #|    message="vector int-to-float requires f32x4 or f64x2 result lanes",
+      #|  ),
+      #|]
+    ),
+  )
+}

@@ -1650,6 +1650,75 @@ test "AArch64 pipeline emits vector fused operations without tied operands" {
 }
 
 ///|
+test "AArch64 pipeline emits representative vector numeric conversions" {
+  let builder = @semantic.FunctionBuilder::new(
+    "emitted_vector_conversions",
+    Platform,
+    [V128],
+    [V128],
+  )
+  let source = builder.parameters()[0]
+  let integer = builder.emit(
+      Vector(Convert(FloatToInt(F64x2, I32x4, Unsigned, Saturating))),
+      [source],
+      [V128],
+    )[0]
+  let float = builder.emit(
+      Vector(Convert(IntToFloat(I32x4, F64x2, Signed))),
+      [integer],
+      [V128],
+    )[0]
+  let result = builder.emit(Vector(Convert(DemoteZeroF64x2)), [float], [V128])[0]
+  builder.return_([result])
+  let function = lower(builder.finish(), test_lowering_context())
+  let allocation = allocate(function)
+  let frame = plan_frame(function, allocation)
+  debug_inspect(
+    emit(function, allocation, frame),
+    content=(
+      #|{
+      #|  architecture: AArch64,
+      #|  code: [
+      #|    0x01,
+      #|    0x1c,
+      #|    0xa0,
+      #|    0x4e,
+      #|    0x30,
+      #|    0xb8,
+      #|    0xe1,
+      #|    0x6e,
+      #|    0x00,
+      #|    0x4a,
+      #|    0xa1,
+      #|    0x2e,
+      #|    0x10,
+      #|    0xa4,
+      #|    0x20,
+      #|    0x0f,
+      #|    0x01,
+      #|    0xda,
+      #|    0x61,
+      #|    0x4e,
+      #|    0x20,
+      #|    0x68,
+      #|    0x61,
+      #|    0x0e,
+      #|    0xc0,
+      #|    0x03,
+      #|    0x5f,
+      #|    0xd6,
+      #|  ],
+      #|  relocations: [],
+      #|  sources: [],
+      #|  traps: [],
+      #|  safepoints: [],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
 test "AArch64 pipeline emits addresses inside the semantic stack-object area" {
   let builder = @semantic.FunctionBuilder::new(
     "emitted_stack_addresses",

@@ -955,6 +955,61 @@ fn emit_vector_narrow(
 }
 
 ///|
+fn emit_vector_conversion(
+  buffer : CodeBuffer,
+  conversion : AArch64VectorConversion,
+  source : @vcode.PhysicalReg,
+  destination : @vcode.PhysicalReg,
+) -> Unit raise AArch64EmitError {
+  let scratch = @vcode.PhysicalReg::new(16, FpVector)
+  match conversion {
+    FloatToInt(F32x4, signedness) => {
+      let base = if signedness is Signed { 0x4EA1B800U } else { 0x6EA1B800U }
+      buffer.emit_word(base | (reg_bits(source) << 5) | reg_bits(destination))
+    }
+    FloatToInt(F64x2, signedness) => {
+      let convert = if signedness is Signed { 0x4EE1B800U } else { 0x6EE1B800U }
+      buffer.emit_word(convert | (reg_bits(source) << 5) | reg_bits(scratch))
+      let narrow = if signedness is Signed { 0x0EA14800U } else { 0x2EA14800U }
+      buffer.emit_word(
+        narrow | (reg_bits(scratch) << 5) | reg_bits(destination),
+      )
+    }
+    IntToFloat(F32x4, signedness) => {
+      let base = if signedness is Signed { 0x4E21D800U } else { 0x6E21D800U }
+      buffer.emit_word(base | (reg_bits(source) << 5) | reg_bits(destination))
+    }
+    IntToFloat(F64x2, signedness) => {
+      let extend_base = if signedness is Signed {
+        0x0F20A400U
+      } else {
+        0x2F20A400U
+      }
+      buffer.emit_word(
+        extend_base | (reg_bits(source) << 5) | reg_bits(scratch),
+      )
+      let convert = if signedness is Signed { 0x4E61D800U } else { 0x6E61D800U }
+      buffer.emit_word(
+        convert | (reg_bits(scratch) << 5) | reg_bits(destination),
+      )
+    }
+    PromoteLowF32x4 =>
+      buffer.emit_word(
+        0x0E617800U | (reg_bits(source) << 5) | reg_bits(destination),
+      )
+    DemoteZeroF64x2 =>
+      buffer.emit_word(
+        0x0E616800U | (reg_bits(source) << 5) | reg_bits(destination),
+      )
+    ExtendLow(_, _) | ExtendHigh(_, _) | Narrow(_, _) =>
+      raise InvalidVectorInstruction
+    FloatToInt(I8x16 | I16x8 | I32x4 | I64x2, _)
+    | IntToFloat(I8x16 | I16x8 | I32x4 | I64x2, _) =>
+      raise InvalidVectorInstruction
+  }
+}
+
+///|
 fn emit_vector_predicate(
   buffer : CodeBuffer,
   predicate : AArch64VectorPredicate,
@@ -1825,6 +1880,11 @@ fn emit_instruction(
           emit_vector_extension(buffer, lane, true, signedness, reg(0), reg(1))
         Narrow(lane, signedness) =>
           emit_vector_narrow(buffer, lane, signedness, reg(0), reg(1), reg(2))
+        FloatToInt(_, _)
+        | IntToFloat(_, _)
+        | PromoteLowF32x4
+        | DemoteZeroF64x2 =>
+          emit_vector_conversion(buffer, conversion, reg(0), reg(1))
       }
     VectorPredicate(predicate) =>
       emit_vector_predicate(buffer, predicate, reg(0), reg(1))

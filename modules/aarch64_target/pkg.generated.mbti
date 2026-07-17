@@ -303,6 +303,10 @@ pub(all) enum AArch64VectorConversion {
   ExtendLow(@machv.VectorLane, @machv.Signedness)
   ExtendHigh(@machv.VectorLane, @machv.Signedness)
   Narrow(@machv.VectorLane, @machv.Signedness)
+  FloatToInt(@machv.VectorLane, @machv.Signedness)
+  IntToFloat(@machv.VectorLane, @machv.Signedness)
+  PromoteLowF32x4
+  DemoteZeroF64x2
 } derive(Eq, @debug.Debug)
 
 pub(all) enum AArch64VectorIntBinary {

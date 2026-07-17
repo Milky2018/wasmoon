@@ -827,6 +827,12 @@ fn lower_instruction(
       Some(VectorConvert(ExtendHigh(lane, signedness)))
     Vector(Convert(Narrow(lane, signedness))) =>
       Some(VectorConvert(Narrow(lane, signedness)))
+    Vector(Convert(FloatToInt(source, I32x4, signedness, Saturating))) =>
+      Some(VectorConvert(FloatToInt(source, signedness)))
+    Vector(Convert(IntToFloat(I32x4, result, signedness))) =>
+      Some(VectorConvert(IntToFloat(result, signedness)))
+    Vector(Convert(PromoteLowF32x4)) => Some(VectorConvert(PromoteLowF32x4))
+    Vector(Convert(DemoteZeroF64x2)) => Some(VectorConvert(DemoteZeroF64x2))
     Vector(Predicate(AnyTrue)) => Some(VectorPredicate(AnyTrue))
     Vector(Predicate(AllTrue(lane))) => Some(VectorPredicate(AllTrue(lane)))
     Vector(Predicate(BitMask(lane))) => Some(VectorPredicate(BitMask(lane)))
@@ -840,6 +846,8 @@ fn lower_instruction(
       Some(VectorFloatCompare(lane, comparison))
     Vector(Relaxed(FusedMultiplyAdd(lane, operation))) =>
       Some(VectorFloatTernary(lane, operation))
+    Vector(Relaxed(FloatToInt(source, I32x4, signedness))) =>
+      Some(VectorConvert(FloatToInt(source, signedness)))
     ReferenceCompare(comparison) => {
       let operand_type = match semantic_operands.get(0) {
         Some(value) => function.value_type(value)

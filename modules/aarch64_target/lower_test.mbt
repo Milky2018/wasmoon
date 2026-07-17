@@ -1092,6 +1092,71 @@ test "AArch64 lowering selects vector fused operations and relaxed producers" {
 }
 
 ///|
+test "AArch64 lowering selects every remaining vector conversion" {
+  let builder = @semantic.FunctionBuilder::new(
+    "vector_conversions",
+    Internal,
+    [Ptr64, V128],
+    [V128],
+  )
+  let mut value = builder.parameters()[1]
+  let signednesses : Array[@semantic.Signedness] = [Signed, Unsigned]
+  for signedness in signednesses {
+    value = builder.emit(
+        Vector(Convert(FloatToInt(F32x4, I32x4, signedness, Saturating))),
+        [value],
+        [V128],
+      )[0]
+    value = builder.emit(
+        Vector(Convert(FloatToInt(F64x2, I32x4, signedness, Saturating))),
+        [value],
+        [V128],
+      )[0]
+    value = builder.emit(
+        Vector(Convert(IntToFloat(I32x4, F32x4, signedness))),
+        [value],
+        [V128],
+      )[0]
+    value = builder.emit(
+        Vector(Convert(IntToFloat(I32x4, F64x2, signedness))),
+        [value],
+        [V128],
+      )[0]
+  }
+  value = builder.emit(Vector(Convert(PromoteLowF32x4)), [value], [V128])[0]
+  value = builder.emit(Vector(Convert(DemoteZeroF64x2)), [value], [V128])[0]
+  value = builder.emit(
+      Vector(Relaxed(FloatToInt(F64x2, I32x4, Unsigned))),
+      [value],
+      [V128],
+    )[0]
+  builder.return_([value])
+  inspect(
+    lower(builder.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode vector_conversions(v0:ptr64, v1:v128) -> (v128)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v2:any@late]
+      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v3:any@late]
+      #|  i2 VectorConvert(FloatToInt(F32x4, Signed)) uses=[v3:any@early] defs=[v4:any@late]
+      #|  i3 VectorConvert(FloatToInt(F64x2, Signed)) uses=[v4:any@early] defs=[v5:any@late]
+      #|  i4 VectorConvert(IntToFloat(F32x4, Signed)) uses=[v5:any@early] defs=[v6:any@late]
+      #|  i5 VectorConvert(IntToFloat(F64x2, Signed)) uses=[v6:any@early] defs=[v7:any@late]
+      #|  i6 VectorConvert(FloatToInt(F32x4, Unsigned)) uses=[v7:any@early] defs=[v8:any@late]
+      #|  i7 VectorConvert(FloatToInt(F64x2, Unsigned)) uses=[v8:any@early] defs=[v9:any@late]
+      #|  i8 VectorConvert(IntToFloat(F32x4, Unsigned)) uses=[v9:any@early] defs=[v10:any@late]
+      #|  i9 VectorConvert(IntToFloat(F64x2, Unsigned)) uses=[v10:any@early] defs=[v11:any@late]
+      #|  i10 VectorConvert(PromoteLowF32x4) uses=[v11:any@early] defs=[v12:any@late]
+      #|  i11 VectorConvert(DemoteZeroF64x2) uses=[v12:any@early] defs=[v13:any@late]
+      #|  i12 VectorConvert(FloatToInt(F64x2, Unsigned)) uses=[v13:any@early] defs=[v14:any@late]
+      #|  i13 OutgoingReg(V128, p0:fpvec) uses=[v14:any@early]
+      #|  i14 Return
+      #|
+    ),
+  )
+}
+
+///|
 test "AArch64 lowering assigns one aligned semantic stack-object area" {
   let builder = @semantic.FunctionBuilder::new(
     "stack_object_layout",

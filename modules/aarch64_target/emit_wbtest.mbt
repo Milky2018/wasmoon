@@ -2515,6 +2515,91 @@ test "AArch64 vector fused encodings cover both lanes and every sign form" {
 }
 
 ///|
+test "AArch64 vector numeric conversion encodings cover every form" {
+  let buffer = CodeBuffer::new()
+  let source = @vcode.PhysicalReg::new(3, FpVector)
+  let destination = @vcode.PhysicalReg::new(7, FpVector)
+  let conversions : Array[AArch64VectorConversion] = [
+    FloatToInt(F32x4, Signed),
+    FloatToInt(F32x4, Unsigned),
+    FloatToInt(F64x2, Signed),
+    FloatToInt(F64x2, Unsigned),
+    IntToFloat(F32x4, Signed),
+    IntToFloat(F32x4, Unsigned),
+    IntToFloat(F64x2, Signed),
+    IntToFloat(F64x2, Unsigned),
+    PromoteLowF32x4,
+    DemoteZeroF64x2,
+  ]
+  for conversion in conversions {
+    emit_vector_conversion(buffer, conversion, source, destination)
+  }
+  debug_inspect(
+    buffer.code,
+    content=(
+      #|[
+      #|  0x67,
+      #|  0xb8,
+      #|  0xa1,
+      #|  0x4e,
+      #|  0x67,
+      #|  0xb8,
+      #|  0xa1,
+      #|  0x6e,
+      #|  0x70,
+      #|  0xb8,
+      #|  0xe1,
+      #|  0x4e,
+      #|  0x07,
+      #|  0x4a,
+      #|  0xa1,
+      #|  0x0e,
+      #|  0x70,
+      #|  0xb8,
+      #|  0xe1,
+      #|  0x6e,
+      #|  0x07,
+      #|  0x4a,
+      #|  0xa1,
+      #|  0x2e,
+      #|  0x67,
+      #|  0xd8,
+      #|  0x21,
+      #|  0x4e,
+      #|  0x67,
+      #|  0xd8,
+      #|  0x21,
+      #|  0x6e,
+      #|  0x70,
+      #|  0xa4,
+      #|  0x20,
+      #|  0x0f,
+      #|  0x07,
+      #|  0xda,
+      #|  0x61,
+      #|  0x4e,
+      #|  0x70,
+      #|  0xa4,
+      #|  0x20,
+      #|  0x2f,
+      #|  0x07,
+      #|  0xda,
+      #|  0x61,
+      #|  0x6e,
+      #|  0x67,
+      #|  0x78,
+      #|  0x61,
+      #|  0x0e,
+      #|  0x67,
+      #|  0x68,
+      #|  0x61,
+      #|  0x0e,
+      #|]
+    ),
+  )
+}
+
+///|
 test "AAPCS64 platform call layout preserves mixed overflow order" {
   let layout = platform_call_layout([
     I64,
