@@ -1,12 +1,12 @@
 ///|
 fn test_embedding_abi() -> @abi.EmbeddingABI {
   let call_conv : @abi.CallConventionLayout = {
-    context_arg: { index: 27, class: Int },
+    context_arg: { index: 12, class: Int },
     user_arg_gprs: [
-      { index: 0, class: Int },
-      { index: 1, class: Int },
+      { index: 7, class: Int },
+      { index: 6, class: Int },
       { index: 2, class: Int },
-      { index: 3, class: Int },
+      { index: 1, class: Int },
     ],
     arg_fprs: [
       { index: 0, class: Float64 },
@@ -14,7 +14,7 @@ fn test_embedding_abi() -> @abi.EmbeddingABI {
       { index: 2, class: Float64 },
       { index: 3, class: Float64 },
     ],
-    ret_gprs: [{ index: 0, class: Int }, { index: 1, class: Int }],
+    ret_gprs: [{ index: 0, class: Int }, { index: 2, class: Int }],
     ret_fprs: [{ index: 0, class: Float64 }, { index: 1, class: Float64 }],
   }
   EmbeddingABI(call_conv, reserve_context_role=false)
@@ -36,7 +36,7 @@ fn copy_function() -> @machv.Function raise @machv.VerifyError {
 test "allocate canonical MachV function through backtracking path" {
   let allocated = allocate_registers_backtracking_with_isa(
     copy_function(),
-    AArch64,
+    AMD64,
     embedding_abi=Some(test_embedding_abi()),
   )
   inspect(allocated.name, content="copy")
@@ -48,7 +48,7 @@ test "allocate canonical MachV function through backtracking path" {
 test "output path keeps MachV virtual-register IR and reports allocations" {
   let (func, output) = allocate_registers_backtracking_output_with_isa(
     copy_function(),
-    AArch64,
+    AMD64,
     embedding_abi=Some(test_embedding_abi()),
   )
   inspect(func.blocks[0].insts.length(), content="1")
@@ -71,7 +71,7 @@ test "fixed constraints are consumed by canonical MachV regalloc" {
   builder.terminate(Return([Virtual(dst)]))
   let (_func, output) = allocate_registers_backtracking_output_with_isa(
     builder.finish(),
-    AArch64,
+    AMD64,
     embedding_abi=Some(test_embedding_abi()),
   )
   inspect(output.inst_def_loc(0, 0, false, 0), content="x1")
@@ -81,7 +81,7 @@ test "fixed constraints are consumed by canonical MachV regalloc" {
 test "regalloc rejects invalid MachV before analysis" {
   let func = @machv.Function::Function("invalid_regalloc_input")
   func.new_block() |> ignore
-  try allocate_registers_backtracking_with_isa(func, AArch64) catch {
+  try allocate_registers_backtracking_with_isa(func, AMD64) catch {
     err => inspect(err, content="MissingTerminator(block_id=0)")
   } noraise {
     _ => fail("expected regalloc input verification to fail")
@@ -94,7 +94,7 @@ test "regalloc rejects non-canonical block id layout" {
   func.new_block().set_terminator(Return([]))
   func.new_block().set_terminator(Return([]))
   func.get_blocks().rev_in_place()
-  try allocate_registers_backtracking_with_isa(func, AArch64) catch {
+  try allocate_registers_backtracking_with_isa(func, AMD64) catch {
     err =>
       inspect(err, content="InvalidBlockLayout(block_id=1, expected_index=0)")
   } noraise {
@@ -103,15 +103,14 @@ test "regalloc rejects non-canonical block id layout" {
 }
 
 ///|
-test "regalloc output verifier checks AArch64 physical registers" {
+test "regalloc rejects the removed legacy AArch64 target" {
   let output = Output::Output()
-  output.push_param_loc(Reg({ index: 32, class: Int }))
   try output.validate_for_isa(AArch64) catch {
     err =>
       inspect(
         err,
         content=(
-          #|InvalidInstruction(message="aarch64 regalloc output contains invalid preg x32 at param_locs[0]")
+          #|InvalidInstruction(message="legacy AArch64 register allocation has been removed")
         ),
       )
   } noraise {

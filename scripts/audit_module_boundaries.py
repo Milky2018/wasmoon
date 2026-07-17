@@ -44,7 +44,6 @@ SEMANTIC_MACHV_FORBIDDEN_IMPORT_PREFIXES = [
 ALLOWED_LEGACY_IMPORT_MANIFESTS = {
     "modules/aarch64_target/moon.mod",
     "modules/aarch64_target/moon.pkg",
-    "modules/machv_emit/isaregs/moon.pkg",
     "modules/machv_emit/moon.mod",
     "modules/machv_emit/moon.pkg",
     "modules/machv_regalloc/layout/moon.pkg",

@@ -654,11 +654,15 @@ fn build_aarch64_hostcall_import_trampoline(
   let layout = plan_hostcall_import_trampoline_layout(
     param_types, result_types, 7, 8,
   )
-  let frame_size = align_to(layout.values_vec_bytes + 8, 16)
+  // Preserve x23 while using it to keep the incoming x8 result-area pointer
+  // alive across the platform C call. LR occupies the final eight bytes.
+  let frame_size = align_to(layout.values_vec_bytes + 16, 16)
   if frame_size > 0 {
     a64_emit_sub_imm(code, 31, 31, frame_size)
+    a64_emit_str_x(code, 23, 31, frame_size - 16)
     a64_emit_str_x(code, 30, 31, frame_size - 8)
   }
+  a64_emit_add_imm(code, 23, 8, 0)
   let mut offset = 0
   for i, ty in param_types {
     a64_emit_store_arg_to_values_vec(
@@ -670,7 +674,6 @@ fn build_aarch64_hostcall_import_trampoline(
     )
     offset = offset + hostcall_value_byte_count(ty)
   }
-  a64_emit_add_imm(code, 0, 21, 0)
   a64_emit_load_imm64_fixed(code, 1, bridge.bridge_arg())
   a64_emit_add_imm(code, 2, 31, 0)
   a64_emit_load_imm64_fixed(code, 3, layout.arg_slots.to_int64())
@@ -689,6 +692,7 @@ fn build_aarch64_hostcall_import_trampoline(
     result_offset = result_offset + hostcall_value_byte_count(ty)
   }
   if frame_size > 0 {
+    a64_emit_ldr_x(code, 23, 31, frame_size - 16)
     a64_emit_ldr_x(code, 30, 31, frame_size - 8)
     a64_emit_add_imm(code, 31, 31, frame_size)
   }
@@ -1110,6 +1114,7 @@ fn build_aarch64_entry_trampoline(
   a64_emit_add_imm(code, 20, 2, 0)
   if return_area_size > 0 {
     a64_emit_add_imm(code, 23, 31, return_area_offset)
+    a64_emit_add_imm(code, 8, 23, 0)
   }
   let mut value_offset = 0
   for i, ty in param_types {

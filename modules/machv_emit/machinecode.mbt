@@ -1,10 +1,5 @@
-// Code Emission
-// Generates machine code from MachV representation
-//
-// This module provides:
-// 1. Machine code buffer for accumulating bytes
-// 2. AArch64 instruction encoding
-// 3. MachV to machine code translation
+// Machine-code byte and relocation container used by legacy AMD64 emission and
+// target-pipeline integration.
 
 // ============ Machine Code Buffer ============
 
@@ -21,8 +16,6 @@ pub struct MachineCode {
   labels : Map[Int, Int] // block_id -> offset
   // Internal labels are always negative and do not overlap with block ids.
   mut next_internal_label : Int
-  // Pending fixups for forward branches
-  fixups : Array[Fixup]
   // Pending x86_64 rel32 fixups for forward branches (disp32 patched at end).
   x86_rel32_fixups : Array[X86Rel32Fixup]
   // Pending fixups for direct function addresses (offset -> func_idx)
@@ -53,17 +46,6 @@ struct Amd64ConstEntry {
   label : Int
   align : Int
   data : Bytes
-}
-
-///|
-/// A fixup for a forward branch
-struct Fixup {
-  // Offset in the code buffer where the fixup is needed
-  offset : Int
-  // Target block id
-  target_block : Int
-  // Kind of fixup
-  kind : FixupKind
 }
 
 ///|
@@ -100,15 +82,8 @@ pub(all) struct CallFixup {
 } derive(Eq, Debug)
 
 ///|
-/// Kind of fixup
-pub(all) enum FixupKind {
-  Branch26 // 26-bit PC-relative branch (B, BL)
-  Branch19 // 19-bit PC-relative branch (B.cond, CBZ, CBNZ)
-}
-
-///|
 pub fn MachineCode::MachineCode(
-  isa? : @isa.ISA = AArch64,
+  isa? : @isa.ISA = AMD64,
   record_disasm? : Bool = true,
 ) -> MachineCode {
   {
@@ -117,7 +92,6 @@ pub fn MachineCode::MachineCode(
     pos: 0,
     labels: Map([]),
     next_internal_label: -1,
-    fixups: [],
     x86_rel32_fixups: [],
     func_addr_fixups: [],
     call_fixups: [],
@@ -170,38 +144,6 @@ pub fn MachineCode::emit_inst(
 }
 
 ///|
-/// Emit a direct BL with a relocation fixup.
-pub fn MachineCode::emit_bl_target(
-  self : MachineCode,
-  target : @instr.RelocTarget,
-) -> Unit {
-  let offset = self.current_pos()
-  self.annotate("bl \{target}")
-  // BL with imm=0; patched later using CallFixup.
-  self.emit_inst(0, 0, 0, 148)
-  self.add_call_target_fixup(offset, target)
-}
-
-///|
-/// Emit a direct BL with a relocation fixup to an embedding-owned code symbol.
-pub fn MachineCode::emit_bl_code(
-  self : MachineCode,
-  symbol : @instr.CodeSymbol,
-) -> Unit {
-  self.emit_bl_target(Code(symbol))
-}
-
-///|
-/// Emit a direct BL with a relocation fixup to an external symbol.
-pub fn MachineCode::emit_bl_external(
-  self : MachineCode,
-  symbol : @instr.ExternalName,
-) -> Unit {
-  self.emit_bl_target(External(symbol))
-}
-
-///|
-/// Current position in the buffer
 pub fn MachineCode::current_pos(self : MachineCode) -> Int {
   self.pos
 }
@@ -300,17 +242,6 @@ fn to_hex_offset(n : Int, width : Int) -> String {
 /// Define a label at the current position
 pub fn MachineCode::define_label(self : MachineCode, block_id : Int) -> Unit {
   self.labels.set(block_id, self.pos)
-}
-
-///|
-/// Add a fixup for a forward branch
-pub fn MachineCode::add_fixup(
-  self : MachineCode,
-  target_block : Int,
-  kind : FixupKind,
-) -> Unit {
-  // Fixup is at current position - 4 (since we already emitted the instruction)
-  self.fixups.push({ offset: self.pos - 4, target_block, kind })
 }
 
 ///|
@@ -418,101 +349,7 @@ pub fn MachineCode::record_gc_safepoint(
 }
 
 ///|
-/// Emit a local veneer for out-of-range direct calls.
-///
-/// Veneer sequence:
-///   ldr x16, #8             (load 64-bit literal placed right after BR)
-///   br x16
-///   .quad target_ptr        (patched at JIT load time)
-///
-/// Callers branch to this veneer with BL; BR preserves LR so the callee returns
-/// to the original callsite.
-fn MachineCode::emit_call_veneer(
-  self : MachineCode,
-  target : @instr.RelocTarget,
-) -> Int {
-  let veneer_offset = self.current_pos()
-  self.annotate("call_veneer.\{target}")
-  // LDR (literal, 64-bit), Rt=x16, imm19=2 => literal at PC+8.
-  self.annotate("ldr x16, #8")
-  self.emit_inst(0x50, 0x00, 0x00, 0x58)
-  self.emit_br(16)
-  // 64-bit target pointer literal (patched during call fixup application).
-  self.emit_byte(0)
-  self.emit_byte(0)
-  self.emit_byte(0)
-  self.emit_byte(0)
-  self.emit_byte(0)
-  self.emit_byte(0)
-  self.emit_byte(0)
-  self.emit_byte(0)
-  veneer_offset
-}
-
-///|
-/// Materialize local veneers for all direct-call fixups.
-///
-/// Veneers are emitted once per relocation target at function end; each
-/// callsite fixup records the corresponding veneer offset as fallback.
-fn MachineCode::materialize_call_veneers(self : MachineCode) -> Unit {
-  if self.call_fixups.length() == 0 {
-    return
-  }
-  let veneers_by_target : Map[String, Int] = Map([])
-  for i in 0..<self.call_fixups.length() {
-    let fixup = self.call_fixups[i]
-    let key = fixup.target.key()
-    let veneer_offset = match veneers_by_target.get(key) {
-      Some(offset) => offset
-      None => {
-        let offset = self.emit_call_veneer(fixup.target)
-        veneers_by_target.set(key, offset)
-        offset
-      }
-    }
-    self.call_fixups[i] = {
-      offset: fixup.offset,
-      target: fixup.target,
-      veneer_offset,
-    }
-  }
-}
-
-///|
-/// Resolve all pending fixups
 pub fn MachineCode::resolve_fixups(self : MachineCode) -> Unit {
-  for fixup in self.fixups {
-    if self.labels.get(fixup.target_block) is Some(target_offset) {
-      let pc_offset = (target_offset - fixup.offset) / 4 // Instructions are 4 bytes
-      match fixup.kind {
-        Branch26 => {
-          // Patch bits [25:0] with the 26-bit offset
-          // Keep opcode bits in byte 3
-          let imm26 = pc_offset & 0x3FFFFFF
-          self.bytes[fixup.offset] = imm26 & 255
-          self.bytes[fixup.offset + 1] = (imm26 >> 8) & 255
-          self.bytes[fixup.offset + 2] = (imm26 >> 16) & 255
-          // Keep upper bits of byte 3 (opcode)
-          let old_b3 = self.bytes[fixup.offset + 3]
-          self.bytes[fixup.offset + 3] = (old_b3 & 252) | ((imm26 >> 24) & 3)
-        }
-        Branch19 => {
-          // Patch bits [23:5] with the 19-bit offset
-          let imm19 = pc_offset & 0x7FFFF
-          // imm19 goes into bits [23:5], so bytes 0-2 primarily
-          // Byte 0: bits [7:5] from imm19 bits [2:0], keep bits [4:0] (Rt)
-          let old_b0 = self.bytes[fixup.offset]
-          self.bytes[fixup.offset] = (old_b0 & 31) | ((imm19 << 5) & 224)
-          self.bytes[fixup.offset + 1] = (imm19 >> 3) & 255
-          self.bytes[fixup.offset + 2] = (imm19 >> 11) & 255
-          // Byte 3: keep opcode, add top bits of imm19
-          let old_b3 = self.bytes[fixup.offset + 3]
-          self.bytes[fixup.offset + 3] = (old_b3 & 255) | 0
-        }
-      } // imm19 high bits already covered
-    }
-  }
-
   // x86_64 rel32 fixups (byte offsets).
   for fixup in self.x86_rel32_fixups {
     if self.labels.get(fixup.target_block) is Some(target_offset) {
@@ -644,72 +481,6 @@ pub fn MachineCode::size(self : MachineCode) -> Int {
 }
 
 ///|
-/// Align the code buffer to a given boundary
-/// Pads with NOP instructions (AArch64 NOP = 0xD503201F)
-pub fn MachineCode::align(self : MachineCode, alignment : Int) -> Unit {
-  // alignment must be a power of 2
-  guard alignment > 0 && (alignment & (alignment - 1)) == 0 else { return }
-  // Use AlignTo instruction to emit NOPs until aligned
-  AlignTo(alignment).emit(self)
-}
-
-///|
-/// Align to function boundary (typically 16 bytes on AArch64)
-pub fn MachineCode::align_function(self : MachineCode) -> Unit {
-  self.align(16)
-}
-
-///|
-/// Align to basic block boundary (typically 4 bytes for AArch64 instructions)
-pub fn MachineCode::align_block(self : MachineCode) -> Unit {
-  self.align(4)
-}
-
-// ============ Condition Codes ============
-
-///|
-/// AArch64 condition codes
-pub(all) enum CondCode {
-  EQ // Equal (Z=1)
-  NE // Not equal (Z=0)
-  HS // Unsigned higher or same (C=1), also CS
-  LO // Unsigned lower (C=0), also CC
-  MI // Minus/negative (N=1)
-  PL // Plus/positive or zero (N=0)
-  VS // Overflow (V=1)
-  VC // No overflow (V=0)
-  HI // Unsigned higher (C=1 & Z=0)
-  LS // Unsigned lower or same (C=0 | Z=1)
-  GE // Signed greater or equal (N=V)
-  LT // Signed less than (N!=V)
-  GT // Signed greater than (Z=0 & N=V)
-  LE // Signed less or equal (Z=1 | N!=V)
-  AL // Always
-}
-
-///|
-pub fn CondCode::to_int(self : CondCode) -> Int {
-  match self {
-    EQ => 0
-    NE => 1
-    HS => 2
-    LO => 3
-    MI => 4
-    PL => 5
-    VS => 6
-    VC => 7
-    HI => 8
-    LS => 9
-    GE => 10
-    LT => 11
-    GT => 12
-    LE => 13
-    AL => 14
-  }
-}
-
-///|
-/// Print machine code as hex dump
 pub fn MachineCode::hex_dump(self : MachineCode) -> String {
   let mut result = ""
   for i, b in self.bytes {

@@ -84,6 +84,14 @@ fn aarch64_cwasm_gc_metadata(
 }
 
 ///|
+fn aarch64_cwasm_stackmap_blob(
+  safepoints : Array[@cwasm.GcSafepoint],
+  root_counts : Array[Int],
+) -> Bytes {
+  build_gc_stackmap_blob_v2(safepoints, root_counts)
+}
+
+///|
 pub fn compile_wasm_body_aarch64_cwasm_entry(
   function : @milkir.Function,
   func_idx : Int,
@@ -120,5 +128,6 @@ pub fn compile_wasm_body_aarch64_cwasm_entry(
     call_fixups~,
     gc_safepoints~,
     gc_safepoint_root_counts=gc_root_counts,
+    gc_stackmap_blob=aarch64_cwasm_stackmap_blob(gc_safepoints, gc_root_counts),
   )
 }

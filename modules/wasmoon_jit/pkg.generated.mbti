@@ -106,8 +106,6 @@ pub fn embedding_context_layout() -> @abi.EmbeddingContextLayout
 
 pub fn emit_entry_trampoline(Array[Int], Array[Int], @abi.CallConventionLayout, isa? : @isa.ISA) -> @machv_emit.MachineCode raise JitPipelineError
 
-pub fn emit_hostcall_import_trampoline(Array[@types.ValueType], Array[@types.ValueType], Int, @instr.ExternalName, @abi.CallConventionLayout, isa? : @isa.ISA) -> @machv_emit.MachineCode raise JitPipelineError
-
 pub fn emit_target_to_isa(@machv_emit.EmitTarget) -> @isa.ISA
 
 pub fn encode_aarch64_bl_imm26(Int64, Int64) -> Int?

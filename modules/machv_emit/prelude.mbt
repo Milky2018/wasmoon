@@ -12,27 +12,6 @@ fn require_embedding_abi(
 }
 
 ///|
-/// Convert 8 bytes from Bytes at given offset to Int64 (little-endian)
-fn bytes_to_int64_le(bytes : Bytes, offset : Int) -> Int64 {
-  let b0 = bytes[offset].to_int64() & 0xFFL
-  let b1 = bytes[offset + 1].to_int64() & 0xFFL
-  let b2 = bytes[offset + 2].to_int64() & 0xFFL
-  let b3 = bytes[offset + 3].to_int64() & 0xFFL
-  let b4 = bytes[offset + 4].to_int64() & 0xFFL
-  let b5 = bytes[offset + 5].to_int64() & 0xFFL
-  let b6 = bytes[offset + 6].to_int64() & 0xFFL
-  let b7 = bytes[offset + 7].to_int64() & 0xFFL
-  b0 |
-  (b1 << 8) |
-  (b2 << 16) |
-  (b3 << 24) |
-  (b4 << 32) |
-  (b5 << 40) |
-  (b6 << 48) |
-  (b7 << 56)
-}
-
-///|
 fn collect_used_callee_saved(
   func : @machv.Function,
   _needs_sret : Bool,
@@ -40,7 +19,6 @@ fn collect_used_callee_saved(
 ) -> Array[Int] {
   // ABI: SRET uses a caller-saved register, so no special exclusion needed here.
   let used : @hashset.HashSet[Int] = HashSet([])
-  let mut has_calls = false
   let env = isa.machine_env()
   let callee_saved_int : @hashset.HashSet[Int] = HashSet([])
   for r in env.callee_saved_int {
@@ -58,9 +36,6 @@ fn collect_used_callee_saved(
       // Check if this instruction is a function call
       // Design: use call_type() to determine if an instruction
       // behaves like a call (clobbers caller-saved registers)
-      if inst.opcode.call_type() is Regular {
-        has_calls = true
-      }
       for def in inst.defs {
         if def.reg is Physical(preg) &&
           preg.class is Int &&
@@ -69,12 +44,6 @@ fn collect_used_callee_saved(
         }
       }
     }
-  }
-  // If the function makes any calls, we must save LR on AArch64.
-  // Note: X20-X24 are no longer pre-loaded in prologue (on-demand)
-  // They are loaded on-demand from context and only need saving if used by regalloc
-  if has_calls && isa is AArch64 {
-    used.add(isa.lr_reg_index())
   }
   // Sort the registers for consistent ordering
   let result : Array[Int] = []
@@ -224,88 +193,41 @@ fn MachineCode::emit_sp_adjust(self : MachineCode, amount : Int) -> Unit {
   if amount == 0 {
     return
   }
-  if self.isa is AMD64 {
-    let (abs_amount, is_sub) = if amount < 0 {
-      (-amount, true)
-    } else {
-      (amount, false)
-    }
-    let step = 4096
-    let scratch = self.isa.scratch_reg_1_index()
-    if is_sub {
-      // Probe only when crossing at least one full page, matching Cranelift's
-      // inline-probestack rule (probe_count = frame_size / guard_size).
-      if abs_amount < step {
-        self.x86_emit_sub_rsp_imm32(abs_amount)
-        return
-      }
-      // Probe in 4KB steps to avoid skipping over a stack guard page.
-      let mut remaining = abs_amount
-      while remaining >= step {
-        self.x86_emit_sub_rsp_imm32(step)
-        self.x86_emit_mov_m64_r64(4, 0, scratch)
-        remaining = remaining - step
-      }
-      if remaining > 0 {
-        self.x86_emit_sub_rsp_imm32(remaining)
-        self.x86_emit_mov_m64_r64(4, 0, scratch)
-      }
-      return
-    }
-    // Stack deallocation (or other upward adjustment): no probing needed.
-    let mut remaining = abs_amount
-    while remaining >= step {
-      self.x86_emit_add_rsp_imm32(step)
-      remaining = remaining - step
-    }
-    if remaining > 0 {
-      self.x86_emit_add_rsp_imm32(remaining)
-    }
-    return
-  }
   let (abs_amount, is_sub) = if amount < 0 {
     (-amount, true)
   } else {
     (amount, false)
   }
   let step = 4096
+  let scratch = self.isa.scratch_reg_1_index()
   if is_sub {
-    // Stack allocation: touch stack pages so a guard page can't be skipped by a
-    // single large SP adjustment (e.g. large frames on an embedding-managed stack).
-    //
-    // We probe in 4KB steps only when crossing at least one full page.
-    // This follows Cranelift's `probe_count = frame_size / guard_size` behavior
-    // and avoids an extra store for small stack frames.
+    // Probe only when crossing at least one full page, matching Cranelift's
+    // inline-probestack rule (probe_count = frame_size / guard_size).
     if abs_amount < step {
-      self.emit_sub_imm(31, 31, abs_amount)
+      self.x86_emit_sub_rsp_imm32(abs_amount)
       return
     }
-    // abs_amount >= 4096
+    // Probe in 4KB steps to avoid skipping over a stack guard page.
     let mut remaining = abs_amount
     while remaining >= step {
-      self.emit_sub_imm_shifted12(31, 31, 1)
-      self.emit_str_imm(31, 31, 0)
+      self.x86_emit_sub_rsp_imm32(step)
+      self.x86_emit_mov_m64_r64(4, 0, scratch)
       remaining = remaining - step
     }
     if remaining > 0 {
-      // remaining < step, so it fits in imm12
-      self.emit_sub_imm(31, 31, remaining)
-      self.emit_str_imm(31, 31, 0)
+      self.x86_emit_sub_rsp_imm32(remaining)
+      self.x86_emit_mov_m64_r64(4, 0, scratch)
     }
     return
   }
   // Stack deallocation (or other upward adjustment): no probing needed.
-  if abs_amount <= 4095 {
-    self.emit_add_imm(31, 31, abs_amount)
-  } else {
-    let mut remaining = abs_amount
-    while remaining >= step {
-      self.emit_add_imm_shifted12(31, 31, 1)
-      remaining = remaining - step
-    }
-    if remaining > 0 {
-      self.emit_add_imm(31, 31, remaining)
-    }
+  let mut remaining = abs_amount
+  while remaining >= step {
+    self.x86_emit_add_rsp_imm32(step)
+    remaining = remaining - step
+  }
+  if remaining > 0 {
+    self.x86_emit_add_rsp_imm32(remaining)
   }
 }
 
@@ -317,346 +239,35 @@ fn MachineCode::emit_prologue(
   param_pregs : Array[@abi.PReg?],
   debug_func_idx : Int?,
 ) -> Unit {
-  if self.isa is AMD64 {
-    let isa = self.isa
-    let saved_gprs = stack_frame.saved_gprs
-
-    // Setup area: push rbp so the stack is 16-byte aligned after the prologue
-    // (SysV ABI requires 16-byte alignment at call sites).
-    if stack_frame.has_setup_area {
-      self.x86_emit_push_r64(isa.fp_reg_index())
-      // rbp = rsp
-      self.x86_emit_mov_rr(isa.fp_reg_index(), 4)
-      // Setup area size is ISA-dependent; on amd64 this is typically 8.
-      self.x86_emit_sub_rsp_imm32(stack_frame.setup_area_size - 8)
-    }
-
-    // Save callee-saved GPRs.
-    for r in saved_gprs {
-      self.x86_emit_push_r64(r)
-    }
-    // Padding for 16-byte alignment when saving an odd number of 8-byte regs.
-    let gpr_padding = stack_frame.gpr_save_size - saved_gprs.length() * 8
-    if gpr_padding > 0 {
-      self.x86_emit_sub_rsp_imm32(gpr_padding)
-    }
-
-    // SysV has no callee-saved XMM regs. Keep the stack layout plumbing generic.
-    if stack_frame.saved_fprs.length() > 0 {
-      abort("x86_64 prologue: unexpected callee-saved fprs")
-    }
-
-    // Allocate spill slots + outgoing args (with stack probing for large frames).
-    let remaining_size = stack_frame.spill_size + stack_frame.outgoing_args_size
-    if remaining_size > 0 {
-      self.emit_sp_adjust(-remaining_size)
-    }
-
-    if debug_func_idx is Some(idx) {
-      let call_conv = stack_frame.require_call_conv_layout()
-      let context_src = call_conv.context_arg.index
-      let layout = stack_frame.require_embedding_context_layout()
-      let scratch = 11
-      if self.debug_prev_func_idx_spill_offset >= 0 {
-        self.x86_emit_mov_r32_m32(
-          scratch,
-          context_src,
-          layout.require_active_function_index_offset(),
-        )
-        self.x86_emit_mov_m32_r32(
-          4,
-          self.debug_prev_func_idx_spill_offset,
-          scratch,
-        )
-      }
-      self.x86_emit_mov_imm64(scratch, idx.to_int64())
-      self.x86_emit_mov_m32_r32(
-        context_src,
-        layout.require_active_function_index_offset(),
-        scratch,
-      )
-    }
-
-    // Cache embedding context and optional context-derived pointers.
-    if stack_frame.needs_context_reg {
-      if !stack_frame.require_embedding_abi().reserve_context_role {
-        abort("unpinned embedding context ABI not implemented yet")
-      }
-      let call_conv = stack_frame.require_call_conv_layout()
-      let context_src = call_conv.context_arg.index
-      let context = stack_frame.context_reg_index()
-      if context != context_src {
-        self.x86_emit_mov_rr(context, context_src)
-      }
-      if stack_frame.cache_context_0 {
-        let layout = stack_frame.require_embedding_context_layout()
-        guard stack_frame.context_cache_0_index() is Some(cache_reg) else {
-          abort("embedding context cache 0 register role is required")
-        }
-        self.x86_emit_mov_r64_m64(
-          cache_reg,
-          context,
-          layout.require_cache_role_offset(ContextCache0Descriptor),
-        )
-      }
-      if stack_frame.cache_context_1 {
-        let layout = stack_frame.require_embedding_context_layout()
-        guard stack_frame.context_cache_1_index() is Some(cache_reg) else {
-          abort("embedding context cache 1 register role is required")
-        }
-        self.x86_emit_mov_r64_m64(
-          cache_reg,
-          context,
-          layout.require_cache_role_offset(ContextCache1),
-        )
-      }
-    }
-
-    // Move arguments from ABI registers to allocated registers (if any).
-    // Use parallel-move resolution to avoid source clobbering when registers
-    // form cycles (e.g. rdi->rsi and rsi->rdx).
-    fn emit_parallel_moves_gpr(
-      self : MachineCode,
-      scratch : Int,
-      moves : Array[(Int, Int)],
-    ) -> Unit {
-      let pending = moves.copy()
-      fn dst_is_used_as_src(pending : Array[(Int, Int)], dst : Int) -> Bool {
-        for mv in pending {
-          let (src, _) = mv
-          if src == dst {
-            return true
-          }
-        }
-        false
-      }
-
-      while !pending.is_empty() {
-        let mut idx_opt : Int? = None
-        for i in 0..<pending.length() {
-          let (_, dst) = pending[i]
-          if !dst_is_used_as_src(pending, dst) {
-            idx_opt = Some(i)
-            break
-          }
-        }
-        match idx_opt {
-          Some(i) => {
-            let (src, dst) = pending.remove(i)
-            if src != dst {
-              self.x86_emit_mov_rr(dst, src)
-            }
-          }
-          None => {
-            let (saved_src, hole_dst) = pending.remove(0)
-            self.x86_emit_mov_rr(scratch, saved_src)
-            let mut cur_dst = saved_src
-            while cur_dst != hole_dst {
-              let mut found = -1
-              for i in 0..<pending.length() {
-                let (_, dst) = pending[i]
-                if dst == cur_dst {
-                  found = i
-                  break
-                }
-              }
-              guard found >= 0 else {
-                abort("prologue parallel move (x86 gpr): cycle")
-              }
-              let (next_src, _) = pending.remove(found)
-              if next_src != cur_dst {
-                self.x86_emit_mov_rr(cur_dst, next_src)
-              }
-              cur_dst = next_src
-            }
-            self.x86_emit_mov_rr(hole_dst, scratch)
-          }
-        }
-      }
-    }
-
-    fn emit_parallel_moves_xmm(
-      self : MachineCode,
-      scratch : Int,
-      moves : Array[(Int, Int)],
-    ) -> Unit {
-      let pending = moves.copy()
-      fn dst_is_used_as_src(pending : Array[(Int, Int)], dst : Int) -> Bool {
-        for mv in pending {
-          let (src, _) = mv
-          if src == dst {
-            return true
-          }
-        }
-        false
-      }
-
-      while !pending.is_empty() {
-        let mut idx_opt : Int? = None
-        for i in 0..<pending.length() {
-          let (_, dst) = pending[i]
-          if !dst_is_used_as_src(pending, dst) {
-            idx_opt = Some(i)
-            break
-          }
-        }
-        match idx_opt {
-          Some(i) => {
-            let (src, dst) = pending.remove(i)
-            if src != dst {
-              self.x86_emit_movaps_xmm_xmm(dst, src)
-            }
-          }
-          None => {
-            let (saved_src, hole_dst) = pending.remove(0)
-            self.x86_emit_movaps_xmm_xmm(scratch, saved_src)
-            let mut cur_dst = saved_src
-            while cur_dst != hole_dst {
-              let mut found = -1
-              for i in 0..<pending.length() {
-                let (_, dst) = pending[i]
-                if dst == cur_dst {
-                  found = i
-                  break
-                }
-              }
-              guard found >= 0 else {
-                abort("prologue parallel move (x86 xmm): cycle")
-              }
-              let (next_src, _) = pending.remove(found)
-              if next_src != cur_dst {
-                self.x86_emit_movaps_xmm_xmm(cur_dst, next_src)
-              }
-              cur_dst = next_src
-            }
-            self.x86_emit_movaps_xmm_xmm(hole_dst, scratch)
-          }
-        }
-      }
-    }
-
-    let call_conv = stack_frame.require_call_conv_layout()
-    let user_gprs = call_conv.user_arg_gprs
-    let float_regs = call_conv.arg_fprs
-    let int_moves : Array[(Int, Int)] = []
-    let fp_moves : Array[(Int, Int)] = []
-    let mut int_idx = 0
-    let mut float_idx = 0
-    for param_idx, param in params {
-      let dest_preg = if param_idx < param_pregs.length() {
-        param_pregs[param_idx]
-      } else {
-        None
-      }
-      match param.class {
-        Int =>
-          if int_idx < 1 + user_gprs.length() {
-            let src = if int_idx == 0 {
-              call_conv.context_arg.index
-            } else {
-              user_gprs[int_idx - 1].index
-            }
-            match dest_preg {
-              Some(preg) =>
-                if preg.index != src {
-                  let context_dst = stack_frame.context_reg_index()
-                  let is_redundant_context_move = int_idx == 0 &&
-                    stack_frame.needs_context_reg &&
-                    preg.index == context_dst
-                  if !is_redundant_context_move {
-                    int_moves.push((src, preg.index))
-                  }
-                }
-              None => ()
-            }
-            int_idx += 1
-          }
-        Float32 | Float64 | Vector =>
-          if float_idx < float_regs.length() {
-            let src = float_regs[float_idx].index
-            match dest_preg {
-              Some(preg) =>
-                if preg.index != src {
-                  fp_moves.push((src, preg.index))
-                }
-              None => ()
-            }
-            float_idx += 1
-          }
-      }
-    }
-    emit_parallel_moves_gpr(self, isa.scratch_reg_1_index(), int_moves)
-    emit_parallel_moves_xmm(self, 15, fp_moves)
-    return
-  }
+  let isa = self.isa
   let saved_gprs = stack_frame.saved_gprs
-  let saved_fprs = stack_frame.saved_fprs
 
-  // Standard prologue:
-  // 1. Save FP/LR with fixed -16 pre-indexed (avoids SImm7 overflow)
-  // 2. Save clobbered GPRs with -16 pre-indexed pushes
-  // 3. Save clobbered FPRs with -16 pre-indexed pushes
-  // 4. Allocate remaining stack (spill + outgoing) with emit_sp_adjust
-
-  // Step 1: Save FP/LR with fixed -16 pre-indexed
-  // stp x29, x30, [sp, #-16]!
+  // Setup area: push rbp so the stack is 16-byte aligned after the prologue
+  // (SysV ABI requires 16-byte alignment at call sites).
   if stack_frame.has_setup_area {
-    self.emit_stp_pre(29, 30, 31, -16)
-    // mov x29, sp (set frame pointer)
-    // Use ADD X29, SP, #0 because MOV with SP register has encoding issues
-    // (x31 as source is XZR, not SP, in ORR-based MOV)
-    self.emit_add_imm(29, 31, 0)
+    self.x86_emit_push_r64(isa.fp_reg_index())
+    // rbp = rsp
+    self.x86_emit_mov_rr(isa.fp_reg_index(), 4)
+    // Setup area size is ISA-dependent; on amd64 this is typically 8.
+    self.x86_emit_sub_rsp_imm32(stack_frame.setup_area_size - 8)
   }
 
-  // Step 2: Save callee-saved GPRs with pre-indexed pushes (Standard style)
-  // Approach: handle remainder first, then reverse iterate pairs
-  // This ensures save/restore order matches perfectly
-  let num_gprs = saved_gprs.length()
-  if num_gprs > 0 {
-    // Handle remainder first (if odd number of registers)
-    if num_gprs % 2 == 1 {
-      let last_reg = saved_gprs[num_gprs - 1]
-      // str last_reg, [sp, #-16]!
-      self.emit_str_pre(last_reg, 31, -16)
-    }
-
-    // Reverse iterate pairs: from the last pair to the first
-    let num_pairs = num_gprs / 2
-    let mut pi = num_pairs - 1
-    while pi >= 0 {
-      let reg1 = saved_gprs[pi * 2]
-      let reg2 = saved_gprs[pi * 2 + 1]
-      // stp reg1, reg2, [sp, #-16]!
-      self.emit_stp_pre(reg1, reg2, 31, -16)
-      pi = pi - 1
-    }
+  // Save callee-saved GPRs.
+  for r in saved_gprs {
+    self.x86_emit_push_r64(r)
+  }
+  // Padding for 16-byte alignment when saving an odd number of 8-byte regs.
+  let gpr_padding = stack_frame.gpr_save_size - saved_gprs.length() * 8
+  if gpr_padding > 0 {
+    self.x86_emit_sub_rsp_imm32(gpr_padding)
   }
 
-  // Step 3: Save callee-saved FPRs with pre-indexed pushes (Standard style)
-  // Approach: handle remainder first, then reverse iterate pairs
-  let num_fprs = saved_fprs.length()
-  if num_fprs > 0 {
-    // Handle remainder first (if odd number of registers)
-    if num_fprs % 2 == 1 {
-      let last_reg = saved_fprs[num_fprs - 1]
-      // str d_reg, [sp, #-16]!
-      self.emit_str_d_pre(last_reg, 31, -16)
-    }
-
-    // Reverse iterate pairs: from the last pair to the first
-    let num_pairs = num_fprs / 2
-    let mut pi = num_pairs - 1
-    while pi >= 0 {
-      let reg1 = saved_fprs[pi * 2]
-      let reg2 = saved_fprs[pi * 2 + 1]
-      // stp d_reg1, d_reg2, [sp, #-16]!
-      self.emit_stp_d_pre(reg1, reg2, 31, -16)
-      pi = pi - 1
-    }
+  // SysV has no callee-saved XMM regs. Keep the stack layout plumbing generic.
+  if stack_frame.saved_fprs.length() > 0 {
+    abort("x86_64 prologue: unexpected callee-saved fprs")
   }
 
-  // Step 4: Allocate remaining stack space (spill slots + outgoing args)
-  // This uses emit_sp_adjust which handles any size correctly
+  // Allocate spill slots + outgoing args (with stack probing for large frames).
   let remaining_size = stack_frame.spill_size + stack_frame.outgoing_args_size
   if remaining_size > 0 {
     self.emit_sp_adjust(-remaining_size)
@@ -664,60 +275,57 @@ fn MachineCode::emit_prologue(
 
   if debug_func_idx is Some(idx) {
     let call_conv = stack_frame.require_call_conv_layout()
-    let context_reg = call_conv.context_arg.index
+    let context_src = call_conv.context_arg.index
     let layout = stack_frame.require_embedding_context_layout()
+    let scratch = 11
     if self.debug_prev_func_idx_spill_offset >= 0 {
-      self.emit_ldr_w_imm(
-        16,
-        context_reg,
+      self.x86_emit_mov_r32_m32(
+        scratch,
+        context_src,
         layout.require_active_function_index_offset(),
       )
-      if self.debug_prev_func_idx_spill_offset <= 16380 {
-        self.emit_str_w_imm(16, 31, self.debug_prev_func_idx_spill_offset)
-      } else {
-        self.emit_load_imm64(
-          17,
-          self.debug_prev_func_idx_spill_offset.to_int64(),
-        )
-        self.emit_add_reg(17, 31, 17)
-        self.emit_str_w_imm(16, 17, 0)
-      }
+      self.x86_emit_mov_m32_r32(
+        4,
+        self.debug_prev_func_idx_spill_offset,
+        scratch,
+      )
     }
-    self.emit_load_imm64(16, idx.to_int64())
-    self.emit_str_w_imm(
-      16,
-      context_reg,
+    self.x86_emit_mov_imm64(scratch, idx.to_int64())
+    self.x86_emit_mov_m32_r32(
+      context_src,
       layout.require_active_function_index_offset(),
+      scratch,
     )
   }
 
-  // Step 5: Cache the embedding context when needed.
+  // Cache embedding context and optional context-derived pointers.
   if stack_frame.needs_context_reg {
     if !stack_frame.require_embedding_abi().reserve_context_role {
       abort("unpinned embedding context ABI not implemented yet")
     }
-    let context = stack_frame.context_reg_index()
     let call_conv = stack_frame.require_call_conv_layout()
-    self.emit_mov_reg(context, call_conv.context_arg.index)
-    // Optionally cache embedding context-derived pointer 0.
+    let context_src = call_conv.context_arg.index
+    let context = stack_frame.context_reg_index()
+    if context != context_src {
+      self.x86_emit_mov_rr(context, context_src)
+    }
     if stack_frame.cache_context_0 {
       let layout = stack_frame.require_embedding_context_layout()
       guard stack_frame.context_cache_0_index() is Some(cache_reg) else {
         abort("embedding context cache 0 register role is required")
       }
-      self.emit_ldr_imm(
+      self.x86_emit_mov_r64_m64(
         cache_reg,
         context,
-        layout.require_cache_role_offset(ContextCache0Source),
+        layout.require_cache_role_offset(ContextCache0Descriptor),
       )
     }
-    // Optionally cache embedding context-derived pointer 1.
     if stack_frame.cache_context_1 {
       let layout = stack_frame.require_embedding_context_layout()
       guard stack_frame.context_cache_1_index() is Some(cache_reg) else {
         abort("embedding context cache 1 register role is required")
       }
-      self.emit_ldr_imm(
+      self.x86_emit_mov_r64_m64(
         cache_reg,
         context,
         layout.require_cache_role_offset(ContextCache1),
@@ -725,10 +333,134 @@ fn MachineCode::emit_prologue(
     }
   }
 
-  // Step 6: Move arguments from ABI registers to allocated registers
+  // Move arguments from ABI registers to allocated registers (if any).
+  // Use parallel-move resolution to avoid source clobbering when registers
+  // form cycles (e.g. rdi->rsi and rsi->rdx).
+  fn emit_parallel_moves_gpr(
+    self : MachineCode,
+    scratch : Int,
+    moves : Array[(Int, Int)],
+  ) -> Unit {
+    let pending = moves.copy()
+    fn dst_is_used_as_src(pending : Array[(Int, Int)], dst : Int) -> Bool {
+      for mv in pending {
+        let (src, _) = mv
+        if src == dst {
+          return true
+        }
+      }
+      false
+    }
+
+    while !pending.is_empty() {
+      let mut idx_opt : Int? = None
+      for i in 0..<pending.length() {
+        let (_, dst) = pending[i]
+        if !dst_is_used_as_src(pending, dst) {
+          idx_opt = Some(i)
+          break
+        }
+      }
+      match idx_opt {
+        Some(i) => {
+          let (src, dst) = pending.remove(i)
+          if src != dst {
+            self.x86_emit_mov_rr(dst, src)
+          }
+        }
+        None => {
+          let (saved_src, hole_dst) = pending.remove(0)
+          self.x86_emit_mov_rr(scratch, saved_src)
+          let mut cur_dst = saved_src
+          while cur_dst != hole_dst {
+            let mut found = -1
+            for i in 0..<pending.length() {
+              let (_, dst) = pending[i]
+              if dst == cur_dst {
+                found = i
+                break
+              }
+            }
+            guard found >= 0 else {
+              abort("prologue parallel move (x86 gpr): cycle")
+            }
+            let (next_src, _) = pending.remove(found)
+            if next_src != cur_dst {
+              self.x86_emit_mov_rr(cur_dst, next_src)
+            }
+            cur_dst = next_src
+          }
+          self.x86_emit_mov_rr(hole_dst, scratch)
+        }
+      }
+    }
+  }
+
+  fn emit_parallel_moves_xmm(
+    self : MachineCode,
+    scratch : Int,
+    moves : Array[(Int, Int)],
+  ) -> Unit {
+    let pending = moves.copy()
+    fn dst_is_used_as_src(pending : Array[(Int, Int)], dst : Int) -> Bool {
+      for mv in pending {
+        let (src, _) = mv
+        if src == dst {
+          return true
+        }
+      }
+      false
+    }
+
+    while !pending.is_empty() {
+      let mut idx_opt : Int? = None
+      for i in 0..<pending.length() {
+        let (_, dst) = pending[i]
+        if !dst_is_used_as_src(pending, dst) {
+          idx_opt = Some(i)
+          break
+        }
+      }
+      match idx_opt {
+        Some(i) => {
+          let (src, dst) = pending.remove(i)
+          if src != dst {
+            self.x86_emit_movaps_xmm_xmm(dst, src)
+          }
+        }
+        None => {
+          let (saved_src, hole_dst) = pending.remove(0)
+          self.x86_emit_movaps_xmm_xmm(scratch, saved_src)
+          let mut cur_dst = saved_src
+          while cur_dst != hole_dst {
+            let mut found = -1
+            for i in 0..<pending.length() {
+              let (_, dst) = pending[i]
+              if dst == cur_dst {
+                found = i
+                break
+              }
+            }
+            guard found >= 0 else {
+              abort("prologue parallel move (x86 xmm): cycle")
+            }
+            let (next_src, _) = pending.remove(found)
+            if next_src != cur_dst {
+              self.x86_emit_movaps_xmm_xmm(cur_dst, next_src)
+            }
+            cur_dst = next_src
+          }
+          self.x86_emit_movaps_xmm_xmm(hole_dst, scratch)
+        }
+      }
+    }
+  }
+
   let call_conv = stack_frame.require_call_conv_layout()
-  let int_arg_regs = [call_conv.context_arg, ..call_conv.user_arg_gprs]
-  let float_arg_regs = call_conv.arg_fprs
+  let user_gprs = call_conv.user_arg_gprs
+  let float_regs = call_conv.arg_fprs
+  let int_moves : Array[(Int, Int)] = []
+  let fp_moves : Array[(Int, Int)] = []
   let mut int_idx = 0
   let mut float_idx = 0
   for param_idx, param in params {
@@ -738,59 +470,61 @@ fn MachineCode::emit_prologue(
       None
     }
     match param.class {
-      Float32 | Float64 =>
-        if float_idx < float_arg_regs.length() {
-          let v_src = float_arg_regs[float_idx].index
+      Int =>
+        if int_idx < 1 + user_gprs.length() {
+          let src = if int_idx == 0 {
+            call_conv.context_arg.index
+          } else {
+            user_gprs[int_idx - 1].index
+          }
           match dest_preg {
             Some(preg) =>
-              if preg.index != v_src {
-                match param.class {
-                  Float32 => self.emit_fmov_s(preg.index, v_src)
-                  _ => self.emit_fmov_d(preg.index, v_src)
+              if preg.index != src {
+                let context_dst = stack_frame.context_reg_index()
+                let is_redundant_context_move = int_idx == 0 &&
+                  stack_frame.needs_context_reg &&
+                  preg.index == context_dst
+                if !is_redundant_context_move {
+                  int_moves.push((src, preg.index))
                 }
               }
             None => ()
           }
-          float_idx = float_idx + 1
+          int_idx += 1
         }
-      Vector =>
-        if float_idx < float_arg_regs.length() {
-          let v_src = float_arg_regs[float_idx].index
+      Float32 | Float64 | Vector =>
+        if float_idx < float_regs.length() {
+          let src = float_regs[float_idx].index
           match dest_preg {
             Some(preg) =>
-              if preg.index != v_src {
-                OrrVec(preg.index, v_src).emit(self)
+              if preg.index != src {
+                fp_moves.push((src, preg.index))
               }
             None => ()
           }
-          float_idx = float_idx + 1
-        }
-      Int =>
-        if int_idx < int_arg_regs.length() {
-          let x_src = int_arg_regs[int_idx].index
-          match dest_preg {
-            Some(preg) =>
-              if preg.index != x_src {
-                self.emit_mov_reg(preg.index, x_src)
-              }
-            None => ()
-          }
-          int_idx = int_idx + 1
+          float_idx += 1
         }
     }
   }
+  emit_parallel_moves_gpr(self, isa.scratch_reg_1_index(), int_moves)
+  emit_parallel_moves_xmm(self, 15, fp_moves)
 }
 
 ///|
 /// Emit machine code for a MachV function
 pub fn emit_function(
   func : @machv.Function,
-  isa? : @isa.ISA = AArch64,
+  isa? : @isa.ISA = AMD64,
   debug_func_idx? : Int? = None,
   force_frame_setup? : Bool = false,
   embedding_abi? : @abi.EmbeddingABI? = None,
   record_disasm? : Bool = true,
 ) -> MachineCode raise @machv.VerifyError {
+  if isa is AArch64 {
+    raise @machv.VerifyError::invalid_instruction(
+      "legacy AArch64 emission has been removed",
+    )
+  }
   func.verify_for_isa(isa)
   // Optimize block layout for better branch prediction
   // Loop rotation makes back edges fall through, reducing taken branches
@@ -1058,7 +792,6 @@ pub fn emit_function(
       }
     }
   }
-  let is_amd64 = mc.isa is AMD64
   for i, block in blocks {
     mc.define_label(block.id)
     let mut inst_idx = 0
@@ -1071,174 +804,13 @@ pub fn emit_function(
       //   load/store [addr + 0]
       //
       // Emit as a single reg-offset load/store: [base + off].
-      if !is_amd64 &&
-        inst.opcode is Add(true) &&
-        inst.defs.length() == 1 &&
-        inst.uses.length() == 2 &&
-        inst_idx + 1 < block.insts.length() {
-        let next = block.insts[inst_idx + 1]
-        let add_dst = wreg_num(inst.defs[0])
-        let add_rn = reg_num(inst.uses[0])
-        let add_rm = reg_num(inst.uses[1])
-
-        // Only safe to skip the add if its result is not used elsewhere.
-        let mut add_used_later = false
-        let mut killed_in_block = false
-        for j in (inst_idx + 2)..<block.insts.length() {
-          let later = block.insts[j]
-          for use_ in later.uses {
-            if reg_num(use_) == add_dst {
-              add_used_later = true
-              break
-            }
-          }
-          if add_used_later {
-            break
-          }
-          for def in later.defs {
-            if wreg_num(def) == add_dst {
-              killed_in_block = true
-              break
-            }
-          }
-          if killed_in_block {
-            break
-          }
-        }
-        if !add_used_later && !killed_in_block {
-          let bit = 1L << add_dst
-          if (live_out_int[i] & bit) != 0L {
-            add_used_later = true
-          }
-        }
-        if !add_used_later {
-          let mut fused = false
-          match next.opcode {
-            LoadPtr(ty, 0) => {
-              let base_reg = reg_num(next.uses[0])
-              if base_reg == add_dst {
-                let dst = wreg_num(next.defs[0])
-                match ty {
-                  I32 => {
-                    mc.emit_ldr_w_reg_scaled(dst, add_rn, add_rm, 0)
-                    fused = true
-                  }
-                  I64 => {
-                    mc.emit_ldr_reg_scaled(dst, add_rn, add_rm, 0)
-                    fused = true
-                  }
-                  _ => ()
-                }
-              }
-            }
-            StorePtr(ty, 0) => {
-              let base_reg = reg_num(next.uses[0])
-              if base_reg == add_dst {
-                let value = reg_num(next.uses[1])
-                match ty {
-                  I32 => {
-                    mc.emit_str_w_reg_scaled(value, add_rn, add_rm, 0)
-                    fused = true
-                  }
-                  I64 => {
-                    mc.emit_str_reg_scaled(value, add_rn, add_rm, 0)
-                    fused = true
-                  }
-                  _ => ()
-                }
-              }
-            }
-            LoadPtrNarrow(bits, signed, 0) => {
-              let base_reg = reg_num(next.uses[0])
-              if base_reg == add_dst && !signed {
-                let dst = wreg_num(next.defs[0])
-                match bits {
-                  8 => mc.emit_ldrb_reg(dst, add_rn, add_rm)
-                  16 => mc.emit_ldrh_reg(dst, add_rn, add_rm)
-                  32 => mc.emit_ldr_w_reg_scaled(dst, add_rn, add_rm, 0)
-                  _ => ()
-                }
-                fused = bits == 8 || bits == 16 || bits == 32
-              }
-            }
-            StorePtrNarrow(bits, 0) => {
-              let base_reg = reg_num(next.uses[0])
-              if base_reg == add_dst {
-                let value = reg_num(next.uses[1])
-                match bits {
-                  8 => mc.emit_strb_reg(value, add_rn, add_rm)
-                  16 => mc.emit_strh_reg(value, add_rn, add_rm)
-                  32 => mc.emit_str_w_reg_scaled(value, add_rn, add_rm, 0)
-                  _ => ()
-                }
-                fused = bits == 8 || bits == 16 || bits == 32
-              }
-            }
-            _ => ()
-          }
-          if fused {
-            inst_idx = inst_idx + 2
-            continue
-          }
-        }
-      }
       // Peephole: fold u32->u64 zero-extend into following 64-bit add.
       //   extend.u32_64 r = x  ; (mov wR, wX)
       //   add r = add base, r ; => add r, base, wX, uxtw
       // IMPORTANT: Only apply if the extend result is not used by any other
       // instruction. Otherwise we'd skip the extend and later uses would
       // read garbage.
-      if !is_amd64 &&
-        inst.opcode is Extend(Unsigned32To64) &&
-        inst.defs.length() == 1 &&
-        inst.uses.length() == 1 &&
-        inst_idx + 1 < block.insts.length() {
-        let next = block.insts[inst_idx + 1]
-        if next.opcode is Add(true) &&
-          next.defs.length() == 1 &&
-          next.uses.length() == 2 {
-          let ext_dst = wreg_num(inst.defs[0])
-          let ext_src = reg_num(inst.uses[0])
-          let add_dst = wreg_num(next.defs[0])
-          let add_op0 = reg_num(next.uses[0])
-          let add_op1 = reg_num(next.uses[1])
-          if add_dst == ext_dst {
-            // Check that ext_dst is used exactly once (only in the Add)
-            // If both operands are ext_dst (ext + ext), don't apply peephole
-            let ext_use_count = (if add_op0 == ext_dst { 1 } else { 0 }) +
-              (if add_op1 == ext_dst { 1 } else { 0 })
-            // Also check that ext_dst is not used in remaining instructions
-            let mut has_other_use = ext_use_count != 1
-            if !has_other_use {
-              for j in (inst_idx + 2)..<block.insts.length() {
-                let later_inst = block.insts[j]
-                for use_ in later_inst.uses {
-                  if reg_num(use_) == ext_dst {
-                    has_other_use = true
-                    break
-                  }
-                }
-                if has_other_use {
-                  break
-                }
-              }
-            }
-            if !has_other_use {
-              let base = if add_op0 == ext_dst {
-                Some(add_op1)
-              } else {
-                Some(add_op0)
-              }
-              if base is Some(rn) {
-                mc.emit_add_uxtw(add_dst, rn, ext_src, 0)
-                inst_idx = inst_idx + 2
-                continue
-              }
-            }
-          }
-        }
-      }
-      mc.emit_instruction(inst, stack_frame)
+      mc.emit_instruction_x86_64(inst, stack_frame)
       inst_idx = inst_idx + 1
     }
     if block.terminator is Some(term) {
@@ -1248,7 +820,7 @@ pub fn emit_function(
       } else {
         None
       }
-      mc.emit_terminator_with_epilogue(
+      mc.emit_terminator_with_epilogue_x86_64(
         term,
         stack_frame,
         func.get_result_kinds(),
@@ -1261,17 +833,9 @@ pub fn emit_function(
   if shared_exit_block is Some(exit_block) {
     mc.define_label(exit_block)
     mc.emit_epilogue(stack_frame)
-    if is_amd64 {
-      mc.x86_emit_ret()
-    } else {
-      mc.emit_ret(30)
-    }
+    mc.x86_emit_ret()
   }
-  if !is_amd64 {
-    mc.materialize_call_veneers()
-  } else {
-    mc.emit_amd64_const_pool()
-  }
+  mc.emit_amd64_const_pool()
   mc.resolve_fixups()
   mc
 }
@@ -1345,12 +909,6 @@ fn collect_used_callee_saved_from_output(
           used[p.index] = true
         }
       }
-    }
-  }
-  if func_has_calls(func) && isa is AArch64 {
-    let lr = isa.lr_reg_index()
-    if lr >= 0 && lr < used.length() {
-      used[lr] = true
     }
   }
   let result : Array[Int] = []
@@ -1491,7 +1049,7 @@ fn emit_edit_move_with_cache(
           let inst = @instr.Inst(Move)
           inst.add_def({ reg: Physical(dst_preg) })
           inst.add_use(Physical({ index: src.index, class }))
-          mc.emit_instruction(inst, stack_frame)
+          mc.emit_instruction_x86_64(inst, stack_frame)
         }
         (Spill(slot), Reg(dst)) => {
           let dst_preg : @abi.PReg = { index: dst.index, class }
@@ -1499,14 +1057,14 @@ fn emit_edit_move_with_cache(
           invalidate_edit_slot_cache_range(slot_cache, slot, class)
           let inst = @instr.Inst(StackLoad(slot * 8))
           inst.add_def({ reg: Physical(dst_preg) })
-          mc.emit_instruction(inst, stack_frame)
+          mc.emit_instruction_x86_64(inst, stack_frame)
         }
         (Reg(src), Spill(slot)) => {
           let src_preg : @abi.PReg = { index: src.index, class }
           invalidate_edit_slot_cache_range(slot_cache, slot, class)
           let inst = @instr.Inst(StackStore(slot * 8))
           inst.add_use(Physical(src_preg))
-          mc.emit_instruction(inst, stack_frame)
+          mc.emit_instruction_x86_64(inst, stack_frame)
         }
         (Spill(from_slot), Spill(to_slot)) =>
           abort(
@@ -1606,299 +1164,69 @@ fn MachineCode::emit_prologue_with_output(
   output : @machv_regalloc.Output,
   debug_func_idx : Int?,
 ) -> Unit {
-  if self.isa is AMD64 {
-    let isa = self.isa
-    // Reuse the existing prologue structure (save regs, allocate frame, cache context),
-    // then do a Cranelift-style "param moves + param spills" stage.
-    //
-    // We must spill any spilled params *before* we clobber their incoming ABI regs.
-
-    // Emit the prologue without param moves.
-    let dummy_param_pregs : Array[@abi.PReg?] = []
-    for _ in 0..<params.length() {
-      dummy_param_pregs.push(None)
-    }
-    self.emit_prologue(stack_frame, params, dummy_param_pregs, debug_func_idx)
-    let call_conv = stack_frame.require_call_conv_layout()
-    let user_gprs = call_conv.user_arg_gprs
-    let float_regs = call_conv.arg_fprs
-
-    // Store spilled params from incoming ABI regs to spill slots.
-    let mut int_idx = 0
-    let mut float_idx = 0
-    for param_idx, param in params {
-      let loc = output.get_param_loc(param_idx)
-      match param.class {
-        Int =>
-          if int_idx < 1 + user_gprs.length() {
-            let src = if int_idx == 0 {
-              call_conv.context_arg.index
-            } else {
-              user_gprs[int_idx - 1].index
-            }
-            match loc {
-              Spill(slot) =>
-                self.x86_emit_mov_m64_r64(
-                  4,
-                  stack_frame.spill_offset + slot * 8,
-                  src,
-                )
-              _ => ()
-            }
-            int_idx += 1
-          }
-        Float32 | Float64 =>
-          if float_idx < float_regs.length() {
-            let src = float_regs[float_idx].index
-            match loc {
-              Spill(slot) =>
-                self.x86_emit_movsd_m64_xmm(
-                  4,
-                  stack_frame.spill_offset + slot * 8,
-                  src,
-                )
-              _ => ()
-            }
-            float_idx += 1
-          }
-        Vector =>
-          if float_idx < float_regs.length() {
-            let src = float_regs[float_idx].index
-            match loc {
-              Spill(slot) =>
-                self.x86_emit_movdqu_m128_xmm(
-                  4,
-                  stack_frame.spill_offset + slot * 8,
-                  src,
-                )
-              _ => ()
-            }
-            float_idx += 1
-          }
-      }
-    }
-    fn emit_parallel_moves_gpr(
-      self : MachineCode,
-      scratch : Int,
-      moves : Array[(Int, Int)],
-    ) -> Unit {
-      let pending = moves.copy()
-      fn dst_is_used_as_src(pending : Array[(Int, Int)], dst : Int) -> Bool {
-        for mv in pending {
-          let (src, _) = mv
-          if src == dst {
-            return true
-          }
-        }
-        false
-      }
-
-      while !pending.is_empty() {
-        let mut idx_opt : Int? = None
-        for i in 0..<pending.length() {
-          let (_, dst) = pending[i]
-          if !dst_is_used_as_src(pending, dst) {
-            idx_opt = Some(i)
-            break
-          }
-        }
-        match idx_opt {
-          Some(i) => {
-            let (src, dst) = pending.remove(i)
-            if src != dst {
-              self.x86_emit_mov_rr(dst, src)
-            }
-          }
-          None => {
-            let (saved_src, hole_dst) = pending.remove(0)
-            self.x86_emit_mov_rr(scratch, saved_src)
-            let mut cur_dst = saved_src
-            while cur_dst != hole_dst {
-              let mut found = -1
-              for i in 0..<pending.length() {
-                let (_, dst) = pending[i]
-                if dst == cur_dst {
-                  found = i
-                  break
-                }
-              }
-              guard found >= 0 else {
-                abort("prologue parallel move (x86 gpr): cycle")
-              }
-              let (next_src, _) = pending.remove(found)
-              if next_src != cur_dst {
-                self.x86_emit_mov_rr(cur_dst, next_src)
-              }
-              cur_dst = next_src
-            }
-            self.x86_emit_mov_rr(hole_dst, scratch)
-          }
-        }
-      }
-    }
-
-    fn emit_parallel_moves_xmm(
-      self : MachineCode,
-      scratch : Int,
-      moves : Array[(Int, Int)],
-    ) -> Unit {
-      let pending = moves.copy()
-      fn dst_is_used_as_src(pending : Array[(Int, Int)], dst : Int) -> Bool {
-        for mv in pending {
-          let (src, _) = mv
-          if src == dst {
-            return true
-          }
-        }
-        false
-      }
-
-      while !pending.is_empty() {
-        let mut idx_opt : Int? = None
-        for i in 0..<pending.length() {
-          let (_, dst) = pending[i]
-          if !dst_is_used_as_src(pending, dst) {
-            idx_opt = Some(i)
-            break
-          }
-        }
-        match idx_opt {
-          Some(i) => {
-            let (src, dst) = pending.remove(i)
-            if src != dst {
-              self.x86_emit_movaps_xmm_xmm(dst, src)
-            }
-          }
-          None => {
-            let (saved_src, hole_dst) = pending.remove(0)
-            self.x86_emit_movaps_xmm_xmm(scratch, saved_src)
-            let mut cur_dst = saved_src
-            while cur_dst != hole_dst {
-              let mut found = -1
-              for i in 0..<pending.length() {
-                let (_, dst) = pending[i]
-                if dst == cur_dst {
-                  found = i
-                  break
-                }
-              }
-              guard found >= 0 else {
-                abort("prologue parallel move (x86 xmm): cycle")
-              }
-              let (next_src, _) = pending.remove(found)
-              if next_src != cur_dst {
-                self.x86_emit_movaps_xmm_xmm(cur_dst, next_src)
-              }
-              cur_dst = next_src
-            }
-            self.x86_emit_movaps_xmm_xmm(hole_dst, scratch)
-          }
-        }
-      }
-    }
-
-    // Collect moves from ABI incoming regs to allocated regs.
-    let int_moves : Array[(Int, Int)] = []
-    let fp_moves : Array[(Int, Int)] = []
-    int_idx = 0
-    float_idx = 0
-    for param_idx, param in params {
-      let loc = output.get_param_loc(param_idx)
-      match param.class {
-        Int =>
-          if int_idx < 1 + user_gprs.length() {
-            let src = if int_idx == 0 {
-              call_conv.context_arg.index
-            } else {
-              user_gprs[int_idx - 1].index
-            }
-            match loc {
-              Reg(dst) =>
-                if dst.index != src {
-                  let context_dst = stack_frame.context_reg_index()
-                  let is_redundant_context_move = int_idx == 0 &&
-                    stack_frame.needs_context_reg &&
-                    dst.index == context_dst
-                  if !is_redundant_context_move {
-                    int_moves.push((src, dst.index))
-                  }
-                }
-              _ => ()
-            }
-            int_idx += 1
-          }
-        Float32 | Float64 | Vector =>
-          if float_idx < float_regs.length() {
-            let src = float_regs[float_idx].index
-            match loc {
-              Reg(dst) =>
-                if dst.index != src {
-                  fp_moves.push((src, dst.index))
-                }
-              _ => ()
-            }
-            float_idx += 1
-          }
-      }
-    }
-    emit_parallel_moves_gpr(self, isa.scratch_reg_1_index(), int_moves)
-    emit_parallel_moves_xmm(self, 15, fp_moves)
-    return
-  }
+  let isa = self.isa
   // Reuse the existing prologue structure (save regs, allocate frame, cache context),
   // then do a Cranelift-style "param moves + param spills" stage.
   //
   // We must spill any spilled params *before* we clobber their incoming ABI regs.
 
-  // Emit the "standard" prologue without param moves by passing `None` for all params.
+  // Emit the prologue without param moves.
   let dummy_param_pregs : Array[@abi.PReg?] = []
   for _ in 0..<params.length() {
     dummy_param_pregs.push(None)
   }
   self.emit_prologue(stack_frame, params, dummy_param_pregs, debug_func_idx)
+  let call_conv = stack_frame.require_call_conv_layout()
+  let user_gprs = call_conv.user_arg_gprs
+  let float_regs = call_conv.arg_fprs
 
   // Store spilled params from incoming ABI regs to spill slots.
-  let call_conv = stack_frame.require_call_conv_layout()
-  let int_arg_regs = [call_conv.context_arg, ..call_conv.user_arg_gprs]
-  let float_arg_regs = call_conv.arg_fprs
   let mut int_idx = 0
   let mut float_idx = 0
   for param_idx, param in params {
     let loc = output.get_param_loc(param_idx)
     match param.class {
       Int =>
-        if int_idx < int_arg_regs.length() {
-          let x_src = int_arg_regs[int_idx].index
+        if int_idx < 1 + user_gprs.length() {
+          let src = if int_idx == 0 {
+            call_conv.context_arg.index
+          } else {
+            user_gprs[int_idx - 1].index
+          }
           match loc {
             Spill(slot) =>
-              self.emit_str_imm(x_src, 31, stack_frame.spill_offset + slot * 8)
+              self.x86_emit_mov_m64_r64(
+                4,
+                stack_frame.spill_offset + slot * 8,
+                src,
+              )
             _ => ()
           }
           int_idx += 1
         }
       Float32 | Float64 =>
-        if float_idx < float_arg_regs.length() {
-          let v_src = float_arg_regs[float_idx].index
+        if float_idx < float_regs.length() {
+          let src = float_regs[float_idx].index
           match loc {
             Spill(slot) =>
-              self.emit_str_d_imm(
-                v_src,
-                31,
+              self.x86_emit_movsd_m64_xmm(
+                4,
                 stack_frame.spill_offset + slot * 8,
+                src,
               )
             _ => ()
           }
           float_idx += 1
         }
       Vector =>
-        if float_idx < float_arg_regs.length() {
-          let v_src = float_arg_regs[float_idx].index
+        if float_idx < float_regs.length() {
+          let src = float_regs[float_idx].index
           match loc {
             Spill(slot) =>
-              self.emit_str_q_imm(
-                v_src,
-                31,
+              self.x86_emit_movdqu_m128_xmm(
+                4,
                 stack_frame.spill_offset + slot * 8,
+                src,
               )
             _ => ()
           }
@@ -1906,10 +1234,9 @@ fn MachineCode::emit_prologue_with_output(
         }
     }
   }
-
-  // Now move register params to their assigned registers, using a parallel move resolver.
-  fn emit_parallel_moves_x(
+  fn emit_parallel_moves_gpr(
     self : MachineCode,
+    scratch : Int,
     moves : Array[(Int, Int)],
   ) -> Unit {
     let pending = moves.copy()
@@ -1936,13 +1263,12 @@ fn MachineCode::emit_prologue_with_output(
         Some(i) => {
           let (src, dst) = pending.remove(i)
           if src != dst {
-            self.emit_mov_reg(dst, src)
+            self.x86_emit_mov_rr(dst, src)
           }
         }
         None => {
-          let scratch = 16
           let (saved_src, hole_dst) = pending.remove(0)
-          self.emit_mov_reg(scratch, saved_src)
+          self.x86_emit_mov_rr(scratch, saved_src)
           let mut cur_dst = saved_src
           while cur_dst != hole_dst {
             let mut found = -1
@@ -1953,21 +1279,24 @@ fn MachineCode::emit_prologue_with_output(
                 break
               }
             }
-            guard found >= 0 else { abort("prologue parallel move (x): cycle") }
+            guard found >= 0 else {
+              abort("prologue parallel move (x86 gpr): cycle")
+            }
             let (next_src, _) = pending.remove(found)
             if next_src != cur_dst {
-              self.emit_mov_reg(cur_dst, next_src)
+              self.x86_emit_mov_rr(cur_dst, next_src)
             }
             cur_dst = next_src
           }
-          self.emit_mov_reg(hole_dst, scratch)
+          self.x86_emit_mov_rr(hole_dst, scratch)
         }
       }
     }
   }
 
-  fn emit_parallel_moves_v(
+  fn emit_parallel_moves_xmm(
     self : MachineCode,
+    scratch : Int,
     moves : Array[(Int, Int)],
   ) -> Unit {
     let pending = moves.copy()
@@ -1994,13 +1323,12 @@ fn MachineCode::emit_prologue_with_output(
         Some(i) => {
           let (src, dst) = pending.remove(i)
           if src != dst {
-            OrrVec(dst, src).emit(self)
+            self.x86_emit_movaps_xmm_xmm(dst, src)
           }
         }
         None => {
-          let scratch = 16
           let (saved_src, hole_dst) = pending.remove(0)
-          OrrVec(scratch, saved_src).emit(self)
+          self.x86_emit_movaps_xmm_xmm(scratch, saved_src)
           let mut cur_dst = saved_src
           while cur_dst != hole_dst {
             let mut found = -1
@@ -2011,14 +1339,16 @@ fn MachineCode::emit_prologue_with_output(
                 break
               }
             }
-            guard found >= 0 else { abort("prologue parallel move (v): cycle") }
+            guard found >= 0 else {
+              abort("prologue parallel move (x86 xmm): cycle")
+            }
             let (next_src, _) = pending.remove(found)
             if next_src != cur_dst {
-              OrrVec(cur_dst, next_src).emit(self)
+              self.x86_emit_movaps_xmm_xmm(cur_dst, next_src)
             }
             cur_dst = next_src
           }
-          OrrVec(hole_dst, scratch).emit(self)
+          self.x86_emit_movaps_xmm_xmm(hole_dst, scratch)
         }
       }
     }
@@ -2033,17 +1363,21 @@ fn MachineCode::emit_prologue_with_output(
     let loc = output.get_param_loc(param_idx)
     match param.class {
       Int =>
-        if int_idx < int_arg_regs.length() {
-          let x_src = int_arg_regs[int_idx].index
+        if int_idx < 1 + user_gprs.length() {
+          let src = if int_idx == 0 {
+            call_conv.context_arg.index
+          } else {
+            user_gprs[int_idx - 1].index
+          }
           match loc {
             Reg(dst) =>
-              if dst.index != x_src {
+              if dst.index != src {
                 let context_dst = stack_frame.context_reg_index()
                 let is_redundant_context_move = int_idx == 0 &&
                   stack_frame.needs_context_reg &&
                   dst.index == context_dst
                 if !is_redundant_context_move {
-                  int_moves.push((x_src, dst.index))
+                  int_moves.push((src, dst.index))
                 }
               }
             _ => ()
@@ -2051,21 +1385,18 @@ fn MachineCode::emit_prologue_with_output(
           int_idx += 1
         }
       Float32 | Float64 | Vector =>
-        if float_idx < float_arg_regs.length() {
-          let v_src = float_arg_regs[float_idx].index
+        if float_idx < float_regs.length() {
+          let src = float_regs[float_idx].index
           match loc {
-            Reg(dst) =>
-              if dst.index != v_src {
-                fp_moves.push((v_src, dst.index))
-              }
+            Reg(dst) => if dst.index != src { fp_moves.push((src, dst.index)) }
             _ => ()
           }
           float_idx += 1
         }
     }
   }
-  emit_parallel_moves_x(self, int_moves)
-  emit_parallel_moves_v(self, fp_moves)
+  emit_parallel_moves_gpr(self, isa.scratch_reg_1_index(), int_moves)
+  emit_parallel_moves_xmm(self, 15, fp_moves)
 }
 
 ///|
@@ -2073,12 +1404,17 @@ fn MachineCode::emit_prologue_with_output(
 pub fn emit_function_with_regalloc(
   func : @machv.Function,
   output : @machv_regalloc.Output,
-  isa? : @isa.ISA = AArch64,
+  isa? : @isa.ISA = AMD64,
   debug_func_idx? : Int? = None,
   force_frame_setup? : Bool = false,
   embedding_abi? : @abi.EmbeddingABI? = None,
   record_disasm? : Bool = true,
 ) -> MachineCode raise @machv.VerifyError {
+  if isa is AArch64 {
+    raise @machv.VerifyError::invalid_instruction(
+      "legacy AArch64 emission has been removed",
+    )
+  }
   func.verify_for_isa(isa)
   output.validate_for_isa(isa)
   // Regalloc output carries edge copies as edits keyed by original blocks.
@@ -2086,7 +1422,6 @@ pub fn emit_function_with_regalloc(
   let func = @layout.optimize_layout_preserving_edges(func)
   func.verify_for_isa(isa)
   let mc = MachineCode::MachineCode(isa~, record_disasm~)
-  let is_amd64 = isa is AMD64
   let embedding_abi = require_embedding_abi(embedding_abi)
 
   // Compute clobbers from regalloc output.
@@ -2205,7 +1540,7 @@ pub fn emit_function_with_regalloc(
         edit_slot_cache,
       )
       let mapped = map_inst_for_emission(block.id, inst_idx, inst, output)
-      mc.emit_instruction(mapped, stack_frame)
+      mc.emit_instruction_x86_64(mapped, stack_frame)
       invalidate_edit_slot_cache_defs(edit_slot_cache, mapped)
 
       // Edits after instruction.
@@ -2237,7 +1572,7 @@ pub fn emit_function_with_regalloc(
         None
       }
       let mapped_term = map_term_for_emission(block.id, term_inst, term, output)
-      mc.emit_terminator_with_epilogue(
+      mc.emit_terminator_with_epilogue_x86_64(
         mapped_term,
         stack_frame,
         func.get_result_kinds(),
@@ -2249,17 +1584,9 @@ pub fn emit_function_with_regalloc(
   if shared_exit_block is Some(exit_block) {
     mc.define_label(exit_block)
     mc.emit_epilogue(stack_frame)
-    if is_amd64 {
-      mc.x86_emit_ret()
-    } else {
-      mc.emit_ret(30)
-    }
+    mc.x86_emit_ret()
   }
-  if !is_amd64 {
-    mc.materialize_call_veneers()
-  } else {
-    mc.emit_amd64_const_pool()
-  }
+  mc.emit_amd64_const_pool()
   mc.resolve_fixups()
   mc
 }

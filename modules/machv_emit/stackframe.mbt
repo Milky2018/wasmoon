@@ -1,5 +1,4 @@
-// JIT Stack Frame Layout (Standard style)
-// Encapsulates stack frame layout computation for JIT-compiled functions
+// Legacy AMD64 JIT stack-frame layout.
 //
 // Standard Stack Frame Layout (from high to low address):
 // ┌───────────────────────────┐
@@ -34,10 +33,6 @@ const SPILL_ALIGNMENT : Int = 16
 const MIN_SPILL_SIZE : Int = 16
 
 ///|
-/// Size of setup area (FP + LR)
-const SETUP_AREA_SIZE : Int = 16
-
-///|
 // amd64 has no link register; reserve 8 bytes when frame setup is needed
 // (push rbp) so that, starting from a SysV entry SP of 16n+8, the stack is
 // 16-byte aligned (16n) after the prologue and therefore aligned at call sites.
@@ -49,7 +44,7 @@ const X86_SETUP_AREA_SIZE : Int = 8
 /// Encapsulates the stack frame layout for a JIT-compiled function
 pub struct EmitStackFrame {
   // Size of each region (in bytes)
-  setup_area_size : Int // ISA-dependent setup (AArch64: FP+LR=16, amd64: push rbp=8)
+  setup_area_size : Int // push rbp when frame setup is needed
   gpr_save_size : Int // Callee-saved GPRs (excluding FP/LR)
   fpr_save_size : Int // Callee-saved FPRs
   spill_size : Int // Spill slots
@@ -61,8 +56,7 @@ pub struct EmitStackFrame {
   spill_offset : Int
   outgoing_args_offset : Int
   // Total frame size:
-  // - AArch64: 16-byte aligned (SP must remain aligned at all times)
-  // - amd64: chosen so SP is 16-byte aligned after the prologue (SysV call ABI)
+  // Chosen so SP is 16-byte aligned after the prologue (SysV call ABI).
   total_size : Int
   // Size of frame excluding setup area (for sub sp, sp, #size)
   frame_size : Int
@@ -100,7 +94,7 @@ pub fn EmitStackFrame::build(
   force_frame_setup? : Bool = false,
   has_incoming_stack_args? : Bool = false,
   embedding_abi? : @abi.EmbeddingABI? = None,
-  isa? : @isa.ISA = AArch64,
+  isa? : @isa.ISA = AMD64,
 ) -> EmitStackFrame {
   let isa = isa
   // Build the list of GPRs to save
@@ -121,14 +115,7 @@ pub fn EmitStackFrame::build(
     num_spill_slots > 0
 
   // Calculate size of each region
-  let setup_area_size = if has_setup_area {
-    match isa {
-      AArch64 => SETUP_AREA_SIZE
-      AMD64 => X86_SETUP_AREA_SIZE
-    }
-  } else {
-    0
-  }
+  let setup_area_size = if has_setup_area { X86_SETUP_AREA_SIZE } else { 0 }
   let gpr_save_size = calc_gpr_save_size(saved_gprs.length())
   let fpr_save_size = calc_fpr_save_size(clobbered_fprs.length())
   let spill_size = calc_spill_size(num_spill_slots)
@@ -296,7 +283,6 @@ pub fn EmitStackFrame::get_fpr_save_offset(
 /// saved/restored in prologues.
 fn build_gpr_save_list_v3(clobbered : Array[Int], isa : @isa.ISA) -> Array[Int] {
   let fp = isa.fp_reg_index()
-  let lr = isa.lr_reg_index()
   let env = isa.machine_env()
   let callee : @hashset.HashSet[Int] = HashSet([])
   for r in env.callee_saved_int {
@@ -304,8 +290,8 @@ fn build_gpr_save_list_v3(clobbered : Array[Int], isa : @isa.ISA) -> Array[Int] 
   }
   let result : Array[Int] = []
   for reg in clobbered {
-    // FP/LR are handled separately in the setup area.
-    if reg == fp || reg == lr {
+    // The frame pointer is handled separately in the setup area.
+    if reg == fp {
       continue
     }
     if callee.contains(reg) && !result.contains(reg) {

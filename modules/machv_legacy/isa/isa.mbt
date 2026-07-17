@@ -51,8 +51,7 @@ pub fn ISA::machine_env(
   reserved_int_regs? : Array[Int] = [],
 ) -> MachineEnv {
   match self {
-    AArch64 =>
-      MachineEnv::from_data(@aarch64.build_machine_env(reserved_int_regs))
+    AArch64 => abort("legacy AArch64 ISA policy has been removed")
     AMD64 => MachineEnv::from_data(@amd64.build_machine_env(reserved_int_regs))
   }
 }
@@ -60,7 +59,7 @@ pub fn ISA::machine_env(
 ///|
 pub fn ISA::call_clobbered_gprs(self : ISA) -> Array[@abi.PReg] {
   match self {
-    AArch64 => @aarch64.call_clobbered_gprs()
+    AArch64 => abort("legacy AArch64 ISA policy has been removed")
     AMD64 => @amd64.call_clobbered_gprs()
   }
 }
@@ -68,7 +67,7 @@ pub fn ISA::call_clobbered_gprs(self : ISA) -> Array[@abi.PReg] {
 ///|
 pub fn ISA::call_clobbered_fprs(self : ISA) -> Array[@abi.PReg] {
   match self {
-    AArch64 => @aarch64.call_clobbered_fprs()
+    AArch64 => abort("legacy AArch64 ISA policy has been removed")
     AMD64 => @amd64.call_clobbered_fprs()
   }
 }
@@ -76,7 +75,7 @@ pub fn ISA::call_clobbered_fprs(self : ISA) -> Array[@abi.PReg] {
 ///|
 pub fn ISA::call_clobbered_fprs_same_abi(self : ISA) -> Array[@abi.PReg] {
   match self {
-    AArch64 => @aarch64.call_clobbered_fprs_same_abi()
+    AArch64 => abort("legacy AArch64 ISA policy has been removed")
     AMD64 => @amd64.call_clobbered_fprs_same_abi()
   }
 }
@@ -85,7 +84,7 @@ pub fn ISA::call_clobbered_fprs_same_abi(self : ISA) -> Array[@abi.PReg] {
 /// Query an ISA-dependent integer register index for a given role.
 pub fn ISA::int_reg_index(self : ISA, role : @spec.IntRegRole) -> Int {
   match self {
-    AArch64 => @aarch64.int_reg_index(role)
+    AArch64 => abort("legacy AArch64 ISA policy has been removed")
     AMD64 => @amd64.int_reg_index(role)
   }
 }

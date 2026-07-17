@@ -252,19 +252,16 @@ pub fn JITModule::load_with_imports(
               // This allows callers to pass host funcs through `external_imports` without
               // exposing raw function pointers.
               let host_func_addr = (-(ptr + 1L)).to_int()
-              let isa = @wasmoon_jit.target_arch_to_isa(precompiled.target)
               let (param_types, result_types) = if i < func_signatures.length() {
                 func_signatures[i]
               } else {
                 ([], [])
               }
-              let mc = @wasmoon_jit.emit_hostcall_import_trampoline(
+              let trampoline = @wasmoon_jit.build_hostcall_import_trampoline_for_target(
                 param_types,
                 result_types,
                 host_func_addr,
-                @wasmoon_jit.runtime_hostcall_symbol(),
-                @wasmoon_jit.wasm_calling_convention(isa~),
-                isa~,
+                precompiled.target,
               ) catch {
                 err =>
                   raise ImportTrampolineCompilationFailed(
@@ -274,30 +271,20 @@ pub fn JITModule::load_with_imports(
                     message=err.to_string(),
                   )
               }
-              let code_ints = mc.get_bytes()
+              let code_ints = trampoline.code
               let exec = @wasmoon_jit.ExecCode::try_alloc(code_ints)
               match exec {
                 Some(ec) => {
                   // AArch64 hostcall trampolines may carry runtime func-address
                   // fixups (LoadJITFuncPtr). Patch them before first execution.
                   let func_table_ptr = ctx.get_func_table_ptr()
-                  for fixup in mc.get_func_addr_fixups() {
-                    let func_idx = match
-                      @wasmoon_jit.machv_reloc_target_to_cwasm_func_idx(
-                        fixup.target,
-                      ) {
-                      Some(idx) => idx
-                      None =>
-                        abort(
-                          "cannot patch hostcall trampoline target: \{fixup.target}",
-                        )
-                    }
+                  for fixup in trampoline.func_addr_fixups {
                     @wasmoon_jit.patch_func_addr_fixup_raw_for_target(
                       precompiled.target,
                       ec.ptr(),
                       fixup.offset,
                       fixup.reg,
-                      func_idx,
+                      fixup.func_idx,
                       func_table_ptr,
                     )
                   }

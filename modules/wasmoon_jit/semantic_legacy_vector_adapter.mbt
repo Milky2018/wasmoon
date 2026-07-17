@@ -882,7 +882,7 @@ test "semantic-to-legacy adapter lowers vector integer families" {
     )[0]
   builder.return_([shifted, compared, any_true, bitmask, extracted])
   inspect(
-    adapt_semantic_to_legacy(builder.finish(), AArch64),
+    adapt_semantic_to_legacy(builder.finish(), AMD64),
     content=(
       #|machv semantic_adapter_vector_integer(v0:int, vec1:vector, vec2:vector) -> (vector, vector, int, int, int) {
       #|block0:
@@ -1022,7 +1022,7 @@ test "semantic-to-legacy adapter lowers vector memory families" {
   |> ignore
   builder.return_([splat, extended, zeroed, lane])
   inspect(
-    adapt_semantic_to_legacy(builder.finish(), AArch64),
+    adapt_semantic_to_legacy(builder.finish(), AMD64),
     content=(
       #|machv semantic_adapter_vector_memory(v0:int, vec1:vector) -> (vector, vector, vector, vector) {
       #|block0:

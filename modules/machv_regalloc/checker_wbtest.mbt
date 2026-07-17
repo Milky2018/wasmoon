@@ -8,7 +8,7 @@ test "allocation verifier accepts the pinned embedding context parameter" {
   builder.terminate(Return([Virtual(context)]))
   let function = builder.finish()
   let liveness = compute_liveness(function)
-  let pinned : @abi.PReg = { index: 21, class: Int }
+  let pinned : @abi.PReg = { index: 12, class: Int }
   let allocation : RegAllocResult = {
     assignments: Map([(context.id, pinned)]),
     spill_slots: Map([]),
@@ -28,6 +28,6 @@ test "allocation verifier accepts the pinned embedding context parameter" {
     context_cache_1: None,
     extra_results_ptr: None,
   })
-  verify_allocation(function, liveness, allocation, AArch64, embedding_abi)
-  inspect(allocation.assignments.get(context.id).unwrap(), content="x21")
+  verify_allocation(function, liveness, allocation, AMD64, embedding_abi)
+  inspect(allocation.assignments.get(context.id).unwrap(), content="x12")
 }

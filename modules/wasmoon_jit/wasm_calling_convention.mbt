@@ -16,9 +16,9 @@ pub fn wasm_calling_convention_for_isa(
           { index: 6, class: Int },
           { index: 7, class: Int },
         ],
-        arg_fprs: @aarch64.aapcs64_arg_fprs(),
-        ret_gprs: @aarch64.aapcs64_ret_gprs(),
-        ret_fprs: @aarch64.aapcs64_ret_fprs(),
+        arg_fprs: aapcs64_fprs(),
+        ret_gprs: aapcs64_ret_gprs(),
+        ret_fprs: aapcs64_fprs(),
       }
     AMD64 => {
       let arg_fprs : Array[@abi.PReg] = []
@@ -51,6 +51,24 @@ pub fn wasm_calling_convention_for_isa(
       }
     }
   }
+}
+
+///|
+fn aapcs64_ret_gprs() -> Array[@abi.PReg] {
+  let regs : Array[@abi.PReg] = []
+  for i in 0..<8 {
+    regs.push({ index: i, class: Int })
+  }
+  regs
+}
+
+///|
+fn aapcs64_fprs() -> Array[@abi.PReg] {
+  let regs : Array[@abi.PReg] = []
+  for i in 0..<8 {
+    regs.push({ index: i, class: Float64 })
+  }
+  regs
 }
 
 ///|

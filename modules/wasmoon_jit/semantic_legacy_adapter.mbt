@@ -362,7 +362,6 @@ fn lower_semantic_store(
 ///|
 fn append_semantic_division_or_remainder(
   isa : @isa.ISA,
-  legacy_function : @machv.Function,
   block : @block.Block,
   operation : @semantic_machv.IntBinaryOp,
   operands : Array[@abi.Reg],
@@ -383,7 +382,7 @@ fn append_semantic_division_or_remainder(
   let zero_trap = @instr.Inst(
     TrapIfZero(is_64, trap_payload(IntegerDivisionByZero)),
   )
-  if remainder && isa is AMD64 {
+  if remainder {
     zero_trap.add_use_fixed(rhs, {
       index: isa.scratch_reg_1_index(),
       class: Int,
@@ -409,46 +408,17 @@ fn append_semantic_division_or_remainder(
     block.add_inst(division)
     return
   }
-  if isa is AMD64 {
-    let opcode : @instr.Opcode = if signed { SRem(is_64) } else { URem(is_64) }
-    let remainder_instruction = @instr.Inst(opcode)
-    remainder_instruction.add_def_fixed(destination, { index: 2, class: Int })
-    remainder_instruction.add_use_fixed(lhs, { index: 0, class: Int })
-    remainder_instruction.add_use_fixed(rhs, {
-      index: isa.scratch_reg_1_index(),
-      class: Int,
-    })
-    remainder_instruction.add_def({ reg: Physical({ index: 0, class: Int }) })
-    remainder_instruction.add_def({ reg: Physical({ index: 2, class: Int }) })
-    block.add_inst(remainder_instruction)
-    return
-  }
-  let quotient = legacy_function.new_vreg(Int)
-  let division = @instr.Inst(if signed { SDiv(is_64) } else { UDiv(is_64) })
-  division.add_def(legacy_def(quotient))
-  division.add_use(lhs)
-  division.add_use(rhs)
-  block.add_inst(division)
-  if is_64 {
-    let remainder_instruction = @instr.Inst(Msub)
-    remainder_instruction.add_def(destination)
-    remainder_instruction.add_use(lhs)
-    remainder_instruction.add_use(Virtual(quotient))
-    remainder_instruction.add_use(rhs)
-    block.add_inst(remainder_instruction)
-  } else {
-    let product = legacy_function.new_vreg(Int)
-    let multiply = @instr.Inst(Mul(false))
-    multiply.add_def(legacy_def(product))
-    multiply.add_use(Virtual(quotient))
-    multiply.add_use(rhs)
-    block.add_inst(multiply)
-    let subtract = @instr.Inst(Sub(false))
-    subtract.add_def(destination)
-    subtract.add_use(lhs)
-    subtract.add_use(Virtual(product))
-    block.add_inst(subtract)
-  }
+  let opcode : @instr.Opcode = if signed { SRem(is_64) } else { URem(is_64) }
+  let remainder_instruction = @instr.Inst(opcode)
+  remainder_instruction.add_def_fixed(destination, { index: 2, class: Int })
+  remainder_instruction.add_use_fixed(lhs, { index: 0, class: Int })
+  remainder_instruction.add_use_fixed(rhs, {
+    index: isa.scratch_reg_1_index(),
+    class: Int,
+  })
+  remainder_instruction.add_def({ reg: Physical({ index: 0, class: Int }) })
+  remainder_instruction.add_def({ reg: Physical({ index: 2, class: Int }) })
+  block.add_inst(remainder_instruction)
 }
 
 ///|
@@ -486,31 +456,21 @@ fn append_semantic_rotate_left(
   let negated_amount = legacy_function.new_vreg(Int)
   let negate = @instr.Inst(Sub(is_64))
   negate.add_def(legacy_def(negated_amount))
-  if isa is AArch64 {
-    negate.add_use(Physical({ index: 31, class: Int }))
-  } else {
-    let zero = legacy_function.new_vreg(Int)
-    let load_zero = @instr.Inst(LoadConst(0L))
-    load_zero.add_def(legacy_def(zero))
-    block.add_inst(load_zero)
-    negate.add_use(Virtual(zero))
-  }
+  let zero = legacy_function.new_vreg(Int)
+  let load_zero = @instr.Inst(LoadConst(0L))
+  load_zero.add_def(legacy_def(zero))
+  block.add_inst(load_zero)
+  negate.add_use(Virtual(zero))
   negate.add_use(operands[1])
   block.add_inst(negate)
   let rotate = @instr.Inst(Rotr(is_64))
-  if isa is AMD64 {
-    let data_register : @abi.PReg = {
-      index: isa.scratch_reg_1_index(),
-      class: Int,
-    }
-    rotate.add_def_fixed(definitions[0], data_register)
-    rotate.add_use_fixed(operands[0], data_register)
-    rotate.add_use_fixed(Virtual(negated_amount), { index: 1, class: Int })
-  } else {
-    rotate.add_def(definitions[0])
-    rotate.add_use(operands[0])
-    rotate.add_use(Virtual(negated_amount))
+  let data_register : @abi.PReg = {
+    index: isa.scratch_reg_1_index(),
+    class: Int,
   }
+  rotate.add_def_fixed(definitions[0], data_register)
+  rotate.add_use_fixed(operands[0], data_register)
+  rotate.add_use_fixed(Virtual(negated_amount), { index: 1, class: Int })
   block.add_inst(rotate)
 }
 
@@ -558,19 +518,13 @@ fn append_semantic_shift_or_rotate_right(
       )
   }
   let instruction = @instr.Inst(opcode)
-  if isa is AMD64 {
-    let data_register : @abi.PReg = {
-      index: isa.scratch_reg_1_index(),
-      class: Int,
-    }
-    instruction.add_def_fixed(definitions[0], data_register)
-    instruction.add_use_fixed(operands[0], data_register)
-    instruction.add_use_fixed(operands[1], { index: 1, class: Int })
-  } else {
-    instruction.add_def(definitions[0])
-    instruction.add_use(operands[0])
-    instruction.add_use(operands[1])
+  let data_register : @abi.PReg = {
+    index: isa.scratch_reg_1_index(),
+    class: Int,
   }
+  instruction.add_def_fixed(definitions[0], data_register)
+  instruction.add_use_fixed(operands[0], data_register)
+  instruction.add_use_fixed(operands[1], { index: 1, class: Int })
   block.add_inst(instruction)
 }
 
@@ -600,7 +554,6 @@ fn append_semantic_count_trailing_zeros(
 
 ///|
 fn append_semantic_high_multiply(
-  isa : @isa.ISA,
   block : @block.Block,
   signedness : @semantic_machv.Signedness,
   operands : Array[@abi.Reg],
@@ -612,12 +565,8 @@ fn append_semantic_high_multiply(
     )
   }
   let multiply = @instr.Inst(if signedness is Signed { Smulh } else { Umulh })
-  if isa is AMD64 {
-    multiply.add_def_fixed(definitions[0], { index: 2, class: Int })
-    multiply.add_def({ reg: Physical({ index: 0, class: Int }) })
-  } else {
-    multiply.add_def(definitions[0])
-  }
+  multiply.add_def_fixed(definitions[0], { index: 2, class: Int })
+  multiply.add_def({ reg: Physical({ index: 0, class: Int }) })
   multiply.add_use(operands[0])
   multiply.add_use(operands[1])
   block.add_inst(multiply)
@@ -625,7 +574,6 @@ fn append_semantic_high_multiply(
 
 ///|
 fn append_semantic_float_to_int(
-  isa : @isa.ISA,
   legacy_function : @machv.Function,
   block : @block.Block,
   source_type : @semantic_machv.FloatType,
@@ -655,18 +603,7 @@ fn append_semantic_float_to_int(
   compare_nan.add_use(operands[0])
   compare_nan.add_use(operands[0])
   block.add_inst(compare_nan)
-  block.add_inst(
-    Inst(
-      TrapIf(
-        if isa is AMD64 {
-          Ps
-        } else {
-          Vs
-        },
-        trap_payload(InvalidConversionToInteger),
-      ),
-    ),
-  )
+  block.add_inst(Inst(TrapIf(Ps, trap_payload(InvalidConversionToInteger))))
   let (minimum_bits, maximum_bits, inclusive_minimum) = semantic_float_to_int_bounds(
     is_f32, is_i64, signed,
   )
@@ -686,16 +623,10 @@ fn append_semantic_float_to_int(
   block.add_inst(
     Inst(
       TrapIf(
-        if isa is AMD64 {
-          if inclusive_minimum {
-            Ls
-          } else {
-            Lo
-          }
-        } else if inclusive_minimum {
-          Le
+        if inclusive_minimum {
+          Ls
         } else {
-          Lt
+          Lo
         },
         trap_payload(InvalidConversionToInteger),
       ),
@@ -713,18 +644,7 @@ fn append_semantic_float_to_int(
   compare_maximum.add_use(operands[0])
   compare_maximum.add_use(Virtual(maximum))
   block.add_inst(compare_maximum)
-  block.add_inst(
-    Inst(
-      TrapIf(
-        if isa is AMD64 {
-          Hs
-        } else {
-          Ge
-        },
-        trap_payload(InvalidConversionToInteger),
-      ),
-    ),
-  )
+  block.add_inst(Inst(TrapIf(Hs, trap_payload(InvalidConversionToInteger))))
   let convert = @instr.Inst(FcvtToInt(is_f32, is_i64, signed))
   convert.add_def(definitions[0])
   convert.add_use(operands[0])
@@ -751,11 +671,8 @@ fn add_adapter_call_clobbers(
 }
 
 ///|
-fn adapter_c_argument_registers(isa : @isa.ISA) -> Array[Int] {
-  match isa {
-    AArch64 => [0, 1, 2, 3, 4, 5, 6, 7]
-    AMD64 => [7, 6, 2, 1, 8, 9]
-  }
+fn adapter_c_argument_registers() -> Array[Int] {
+  [7, 6, 2, 1, 8, 9]
 }
 
 ///|
@@ -811,7 +728,7 @@ fn emit_platform_call(
       message="legacy platform call supports at most one integer result",
     )
   }
-  let argument_registers = adapter_c_argument_registers(isa)
+  let argument_registers = adapter_c_argument_registers()
   if operands.length() > argument_registers.length() {
     let overflow_count = operands.length() - argument_registers.length()
     legacy_function.update_max_outgoing_args_size(overflow_count * 8)
@@ -1388,12 +1305,11 @@ fn semantic_call_overflow_bytes(
   function : @semantic_machv.Function,
   call : @semantic_machv.SemanticCall,
   operands : Array[@semantic_machv.Value],
-  isa : @isa.ISA,
   embedding_abi : @abi.EmbeddingABI?,
   hidden_safepoint : Bool,
 ) -> Int raise SemanticLegacyAdapterError {
   if call.protocol is Platform {
-    let register_count = adapter_c_argument_registers(isa).length()
+    let register_count = adapter_c_argument_registers().length()
     let argument_count = operands.length() +
       (if hidden_safepoint { 1 } else { 0 })
     return if argument_count > register_count {
@@ -1445,7 +1361,6 @@ fn semantic_call_temporary_stack_bytes(
   call : @semantic_machv.SemanticCall,
   operands : Array[@semantic_machv.Value],
   root_count : Int,
-  isa : @isa.ISA,
   embedding_abi : @abi.EmbeddingABI?,
   requires_hidden_safepoint_id : ((@semantic_machv.ExternalSymbol) -> Bool)?,
   caller_root_scope_symbols : (
@@ -1457,7 +1372,7 @@ fn semantic_call_temporary_stack_bytes(
     call, requires_hidden_safepoint_id,
   )
   let overflow_bytes = semantic_call_overflow_bytes(
-    function, call, operands, isa, embedding_abi, hidden_safepoint,
+    function, call, operands, embedding_abi, hidden_safepoint,
   )
   if !hidden_safepoint && root_count == 0 {
     return overflow_bytes
@@ -1480,7 +1395,6 @@ fn semantic_call_temporary_stack_bytes(
 ///|
 fn maximum_semantic_temporary_stack_bytes(
   function : @semantic_machv.Function,
-  isa : @isa.ISA,
   embedding_abi : @abi.EmbeddingABI?,
   requires_hidden_safepoint_id : ((@semantic_machv.ExternalSymbol) -> Bool)?,
   caller_root_scope_symbols : (
@@ -1497,7 +1411,6 @@ fn maximum_semantic_temporary_stack_bytes(
           call,
           function.instruction_operands(instruction),
           function.instruction_metadata(instruction).unwrap().live_gc_roots.length(),
-          isa,
           embedding_abi,
           requires_hidden_safepoint_id,
           caller_root_scope_symbols,
@@ -1511,7 +1424,7 @@ fn maximum_semantic_temporary_stack_bytes(
     match terminator.kind {
       TailCall(call, operands) => {
         let bytes = semantic_call_temporary_stack_bytes(
-          function, call, operands, 0, isa, embedding_abi, requires_hidden_safepoint_id,
+          function, call, operands, 0, embedding_abi, requires_hidden_safepoint_id,
           caller_root_scope_symbols,
         )
         if bytes > maximum {
@@ -1524,7 +1437,6 @@ fn maximum_semantic_temporary_stack_bytes(
           call,
           operands,
           terminator.metadata.live_gc_roots.length(),
-          isa,
           embedding_abi,
           requires_hidden_safepoint_id,
           caller_root_scope_symbols,
@@ -1751,7 +1663,6 @@ fn append_semantic_instruction(
   if operation is IntBinary(SignedDiv | UnsignedDiv | SignedRem | UnsignedRem) {
     append_semantic_division_or_remainder(
       isa,
-      legacy_function,
       legacy_block,
       match operation {
         IntBinary(binary) => binary
@@ -1818,14 +1729,14 @@ fn append_semantic_instruction(
   }
   if operation is IntHighMultiply(signedness) {
     append_semantic_high_multiply(
-      isa, legacy_block, signedness, operands, definitions,
+      legacy_block, signedness, operands, definitions,
     )
     return
   }
   if operation
     is Convert(FloatToInt(source_type, result_type, signedness, mode)) {
     append_semantic_float_to_int(
-      isa, legacy_function, legacy_block, source_type, result_type, signedness, mode,
+      legacy_function, legacy_block, source_type, result_type, signedness, mode,
       operands, definitions, trap_payload,
     )
     return
@@ -2106,12 +2017,17 @@ fn adapt_semantic_to_legacy(
   environment_field_path? : ((@semantic_machv.EnvironmentField) -> Array[Int]?)? = None,
   code_symbol_resolver? : ((@semantic_machv.CodeSymbol) -> @instr.CodeSymbol)? = None,
 ) -> @machv.Function raise SemanticLegacyAdapterError {
+  if isa is AArch64 {
+    raise UnsupportedOperation(
+      message="legacy AArch64 semantic adaptation has been removed",
+    )
+  }
   function.verify() catch {
     error => raise InvalidLegacyFunction(message=error.to_string())
   }
   let legacy = @machv.Function(function.name())
   let stack_base = maximum_semantic_temporary_stack_bytes(
-    function, isa, embedding_abi, requires_hidden_safepoint_id, caller_root_scope_symbols,
+    function, embedding_abi, requires_hidden_safepoint_id, caller_root_scope_symbols,
   )
   let (stack_objects, stack_offsets, outgoing_size) = plan_semantic_stack_objects(
     function, stack_base,
@@ -2183,7 +2099,7 @@ fn adapt_semantic_to_legacy(
       integer_stack_parameters.length(),
       float_stack_classes,
     )
-    let stack_argument_base = if isa is AMD64 { 8 } else { 0 }
+    let stack_argument_base = 8
     let entry = legacy.get_blocks()[block_ids[0]]
     for index, parameter in integer_stack_parameters {
       let load = @instr.Inst(
@@ -2233,15 +2149,11 @@ fn adapt_semantic_to_legacy(
 }
 
 ///|
-fn adapter_test_embedding_abi(isa : @isa.ISA) -> @abi.EmbeddingABI {
-  let (context_index, user_indices) = match isa {
-    AArch64 => (0, [1, 2, 3, 4, 5, 6, 7])
-    AMD64 => (7, [6, 2, 1, 8, 9])
-  }
+fn adapter_test_embedding_abi() -> @abi.EmbeddingABI {
   EmbeddingABI(
     {
-      context_arg: { index: context_index, class: Int },
-      user_arg_gprs: user_indices.map(index => { index, class: Int }),
+      context_arg: { index: 7, class: Int },
+      user_arg_gprs: [6, 2, 1, 8, 9].map(index => { index, class: Int }),
       arg_fprs: Array::makei(8, index => { index, class: Float64 }),
       ret_gprs: [{ index: 0, class: Int }, { index: 2, class: Int }],
       ret_fprs: [{ index: 0, class: Float64 }, { index: 1, class: Float64 }],
@@ -2394,24 +2306,6 @@ test "semantic-to-legacy adapter legalizes remaining producer integers" {
       #|
     ),
   )
-  inspect(
-    adapt_semantic_to_legacy(function, AArch64),
-    content=(
-      #|machv semantic_adapter_integer_legalizations(v0:int, v1:int) -> (int, int, int, int, int) {
-      #|block0:
-      #|    v8 = sub x31, v1
-      #|    v2 = rotr v0, v8
-      #|    v9 = rbit v0
-      #|    v3 = clz v9
-      #|    v4 = smulh v0, v1
-      #|    v5 = umulh v0, v1
-      #|    v6 = ldi 8
-      #|    v7 = rotr #56 v0
-      #|    ret v2, v3, v4, v5, v7
-      #|}
-      #|
-    ),
-  )
 }
 
 ///|
@@ -2462,7 +2356,7 @@ test "semantic-to-legacy adapter legalizes trapping and saturating float convers
     ),
   )
   inspect(
-    adapt_semantic_to_legacy(function, AArch64, trap_payload=fn(reason) {
+    adapt_semantic_to_legacy(function, AMD64, trap_payload=fn(reason) {
       if reason is InvalidConversionToInteger {
         37
       } else {
@@ -2473,13 +2367,13 @@ test "semantic-to-legacy adapter legalizes trapping and saturating float convers
       #|machv semantic_adapter_float_to_int(f0:double, f1:float) -> (int, int) {
       #|block0:
       #|    fcmp.d f0, f0
-      #|    trap_if.vs #37
+      #|    trap_if.ps #37
       #|    f4 = ldf -2147483649
       #|    fcmp.d f0, f4
-      #|    trap_if.le #37
+      #|    trap_if.ls #37
       #|    f5 = ldf 2147483648
       #|    fcmp.d f0, f5
-      #|    trap_if.ge #37
+      #|    trap_if.hs #37
       #|    v2 = fcvt.f64_i32_s f0
       #|    v3 = fcvt.f32_i64_u f1
       #|    ret v2, v3
@@ -2516,7 +2410,7 @@ test "semantic-to-legacy adapter lowers dense switches" {
   let fallback_value = builder.emit(I64Const(30UL), [], [I64])[0]
   builder.return_([fallback_value])
   inspect(
-    adapt_semantic_to_legacy(builder.finish(), AArch64),
+    adapt_semantic_to_legacy(builder.finish(), AMD64),
     content=(
       #|machv semantic_adapter_switch(v0:int) -> int {
       #|block0:
@@ -2558,7 +2452,7 @@ test "semantic-to-legacy adapter lowers explicit pointer memory effects" {
     )[0]
   builder.return_([loaded])
   inspect(
-    adapt_semantic_to_legacy(builder.finish(), AArch64),
+    adapt_semantic_to_legacy(builder.finish(), AMD64),
     content=(
       #|machv semantic_adapter_memory(v0:int, v1:int) -> int {
       #|block0:
@@ -2651,7 +2545,7 @@ test "semantic-to-legacy adapter lowers direct internal call ABI" {
     adapt_semantic_to_legacy(
       builder.finish(),
       AMD64,
-      embedding_abi=Some(adapter_test_embedding_abi(AMD64)),
+      embedding_abi=Some(adapter_test_embedding_abi()),
       code_symbol_resolver=Some(fn(_) { CodeSymbol("wasm.func", 7) }),
     ),
     content=(
@@ -2690,7 +2584,7 @@ test "semantic-to-legacy adapter preserves precise roots across ordinary calls" 
   let legacy = adapt_semantic_to_legacy(
     builder.finish(),
     AMD64,
-    embedding_abi=Some(adapter_test_embedding_abi(AMD64)),
+    embedding_abi=Some(adapter_test_embedding_abi()),
     caller_root_scope_symbols=Some(
       (
         @semantic_machv.ExternalSymbol::new(
@@ -2754,7 +2648,7 @@ test "semantic caller roots are copied before call overflow reuses the stack" {
   let legacy = adapt_semantic_to_legacy(
     builder.finish(),
     AMD64,
-    embedding_abi=Some(adapter_test_embedding_abi(AMD64)),
+    embedding_abi=Some(adapter_test_embedding_abi()),
     caller_root_scope_symbols=Some(
       (
         @semantic_machv.ExternalSymbol::new(
@@ -2814,7 +2708,7 @@ test "semantic ordinary call roots require runtime scope symbols" {
     adapt_semantic_to_legacy(
       builder.finish(),
       AMD64,
-      embedding_abi=Some(adapter_test_embedding_abi(AMD64)),
+      embedding_abi=Some(adapter_test_embedding_abi()),
       code_symbol_resolver=Some(fn(_) { CodeSymbol("wasm.func", 7) }),
     )
     |> ignore
@@ -2857,7 +2751,7 @@ test "semantic-to-legacy adapter lays out address-visible stack objects" {
   )
   |> ignore
   builder.return_([])
-  let legacy = adapt_semantic_to_legacy(builder.finish(), AArch64)
+  let legacy = adapt_semantic_to_legacy(builder.finish(), AMD64)
   inspect(
     legacy,
     content=(
@@ -2903,7 +2797,7 @@ test "semantic stack objects do not overlap internal call overflow arguments" {
   let legacy = adapt_semantic_to_legacy(
     builder.finish(),
     AMD64,
-    embedding_abi=Some(adapter_test_embedding_abi(AMD64)),
+    embedding_abi=Some(adapter_test_embedding_abi()),
     code_symbol_resolver=Some(fn(_) { CodeSymbol("wasm.func", 9) }),
   )
   inspect(
@@ -3137,7 +3031,7 @@ test "semantic environment fields lower through embedding-owned access paths" {
   inspect(
     adapt_semantic_to_legacy(
       builder.finish(),
-      AArch64,
+      AMD64,
       environment_field_path=Some(fn(field) {
         match field.name {
           "runtime.function_table" => Some([24])
@@ -3205,7 +3099,7 @@ test "semantic direct tail calls lower to legacy tail-call control" {
     adapt_semantic_to_legacy(
       builder.finish(),
       AMD64,
-      embedding_abi=Some(adapter_test_embedding_abi(AMD64)),
+      embedding_abi=Some(adapter_test_embedding_abi()),
       code_symbol_resolver=Some(fn(_) { CodeSymbol("wasm.func", 4) }),
     ),
     content=(
@@ -3246,7 +3140,7 @@ test "semantic indirect tail overflow precedes address-visible stack objects" {
   let legacy = adapt_semantic_to_legacy(
     builder.finish(),
     AMD64,
-    embedding_abi=Some(adapter_test_embedding_abi(AMD64)),
+    embedding_abi=Some(adapter_test_embedding_abi()),
   )
   inspect(
     legacy,
@@ -3284,9 +3178,7 @@ test "semantic noreturn calls trap if the helper unexpectedly returns" {
   )
   builder.noreturn_call(call, builder.parameters())
   inspect(
-    adapt_semantic_to_legacy(builder.finish(), AArch64, trap_payload=fn(
-      reason,
-    ) {
+    adapt_semantic_to_legacy(builder.finish(), AMD64, trap_payload=fn(reason) {
       if reason is Unreachable {
         99
       } else {
@@ -3328,7 +3220,7 @@ test "semantic tail calls do not retain dead caller roots" {
     adapt_semantic_to_legacy(
       builder.finish(),
       AMD64,
-      embedding_abi=Some(adapter_test_embedding_abi(AMD64)),
+      embedding_abi=Some(adapter_test_embedding_abi()),
       code_symbol_resolver=Some(fn(_) { CodeSymbol("wasm.func", 5) }),
     ),
     content=(

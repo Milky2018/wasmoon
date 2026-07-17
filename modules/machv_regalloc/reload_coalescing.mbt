@@ -126,32 +126,13 @@ fn allocate_reload_registers(
   let reload_int_regs : Array[Int] = []
   let reload_float_regs : Array[Int] = []
   let reload_int_regs_callfree_extra : Array[Int] = []
-  match isa {
-    AArch64 => {
-      // AArch64: use a subset of callee-saved regs that are not used by embedding ABI roles.
-      for idx in [19, 20, 22, 23, 24, 25, 26, 27, 28] {
-        reload_int_regs.push(idx)
-      }
-      // In call-free blocks, allow the full caller-saved allocatable set.
-      // This matches Cranelift/regalloc2's ability to use arg/result regs when
-      // liveness allows and helps reduce stack reload churn in tight loops.
-      for idx in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] {
-        reload_int_regs_callfree_extra.push(idx)
-      }
-      for idx in [8, 9, 10, 11, 12, 13, 14, 15] {
-        reload_float_regs.push(idx)
-      }
+  let env = isa.machine_env(reserved_int_regs=reserved_indices)
+  for r in env.callee_saved_int {
+    // rbp is already excluded from MachineEnv; still, keep it out here too.
+    if r.index == isa.fp_reg_index() {
+      continue
     }
-    AMD64 => {
-      let env = isa.machine_env(reserved_int_regs=reserved_indices)
-      for r in env.callee_saved_int {
-        // rbp is already excluded from MachineEnv; still, keep it out here too.
-        if r.index == isa.fp_reg_index() {
-          continue
-        }
-        reload_int_regs.push(r.index)
-      }
-    }
+    reload_int_regs.push(r.index)
   }
 
   fn mark_used_preg(

@@ -343,6 +343,11 @@ pub fn Output::validate_for_isa(
   self : Output,
   isa : @isa.ISA,
 ) -> Unit raise @machv.VerifyError {
+  if isa is AArch64 {
+    raise @machv.VerifyError::invalid_instruction(
+      "legacy AArch64 register allocation has been removed",
+    )
+  }
   fn alloc_context(self : Output, alloc_idx : Int) -> String {
     for range in self.operand_ranges {
       let (block_id, inst_idx, is_terminator, range_start, def_count, use_count) = range
@@ -365,17 +370,13 @@ pub fn Output::validate_for_isa(
     p : @abi.PReg,
     ctx_desc_fn : () -> String,
   ) -> Unit raise @machv.VerifyError {
-    let valid = match (isa, p.class) {
-      (AArch64, Int) => p.index >= 0 && p.index < 32
-      (AArch64, Float32 | Float64 | Vector) => p.index >= 0 && p.index < 32
-      (AMD64, Int) =>
-        p.index >= 0 && p.index < 16 && p.index != 4 && p.index != 5
-      (AMD64, Float32 | Float64 | Vector) => p.index >= 0 && p.index < 16
+    let valid = match p.class {
+      Int => p.index >= 0 && p.index < 16 && p.index != 4 && p.index != 5
+      Float32 | Float64 | Vector => p.index >= 0 && p.index < 16
     }
     if !valid {
-      let isa_name = if isa is AArch64 { "aarch64" } else { "amd64" }
       raise @machv.VerifyError::invalid_instruction(
-        "\{isa_name} regalloc output contains invalid preg \{p} at \{ctx_desc_fn()}",
+        "amd64 regalloc output contains invalid preg \{p} at \{ctx_desc_fn()}",
       )
     }
   }

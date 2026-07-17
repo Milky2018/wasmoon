@@ -63,6 +63,34 @@ test "AArch64 code-object stack maps survive the cwasm v8 adapter" {
 }
 
 ///|
+test "AArch64 cwasm adapter emits stackmap v2 for zero-root safepoints" {
+  let safepoints = [@cwasm.GcSafepoint::GcSafepoint(4, [], 0L)]
+  debug_inspect(
+    aarch64_cwasm_stackmap_blob(safepoints, [0]).to_array(),
+    content=(
+      #|[
+      #|  0x02,
+      #|  0x00,
+      #|  0x00,
+      #|  0x00,
+      #|  0x01,
+      #|  0x00,
+      #|  0x00,
+      #|  0x00,
+      #|  0x00,
+      #|  0x00,
+      #|  0x00,
+      #|  0x00,
+      #|  0x00,
+      #|  0x00,
+      #|  0x00,
+      #|  0x00,
+      #|]
+    ),
+  )
+}
+
+///|
 test "AArch64 cwasm fixups preserve B and BL branch kinds" {
   guard ExecCode::try_alloc([0x00, 0x00, 0x00, 0x14, 0x00, 0x00, 0x00, 0x94])
     is Some(code) else {

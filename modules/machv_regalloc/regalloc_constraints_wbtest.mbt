@@ -12,7 +12,7 @@ test "parallel moves preserve the saved value class in a mixed float cycle" {
       class: Float32,
     },
   ]
-  let resolved = resolve_parallel_moves(moves, AArch64)
+  let resolved = resolve_parallel_moves(moves, AMD64)
   fn describe_class(class : @abi.RegClass) -> String {
     match class {
       Int => "int"
@@ -35,9 +35,9 @@ test "parallel moves preserve the saved value class in a mixed float cycle" {
     })
     .join("\n"),
     content=(
-      #|reg(index=2, class=float) -> reg(index=16, class=float), class=float
+      #|reg(index=2, class=float) -> reg(index=14, class=float), class=float
       #|reg(index=4, class=double) -> reg(index=2, class=double), class=double
-      #|reg(index=16, class=float) -> reg(index=4, class=float), class=float
+      #|reg(index=14, class=float) -> reg(index=4, class=float), class=float
     ),
   )
 }

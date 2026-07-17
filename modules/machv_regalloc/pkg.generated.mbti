@@ -32,8 +32,6 @@ pub fn build_initial_bundles(LiveRangeSet) -> BundleSet
 
 pub fn build_live_ranges(@machv_legacy.Function, LivenessResult) -> LiveRangeSet
 
-pub fn build_stack_layout_aarch64(RegAllocResult, @machv_legacy.Function) -> AArch64StackFrame
-
 pub fn compute_liveness(@machv_legacy.Function) -> LivenessResult raise @machv_legacy.VerifyError
 
 pub fn compute_liveness_for_regalloc(@machv_legacy.Function) -> LivenessResult raise @machv_legacy.VerifyError
@@ -68,17 +66,6 @@ pub suberror VCodeAllocationError {
 pub impl Show for VCodeAllocationError
 
 // Types and methods
-type AArch64StackFrame
-pub fn AArch64StackFrame::AArch64StackFrame() -> Self
-pub fn AArch64StackFrame::alloc_spill(Self, @abi.VReg) -> Int
-pub fn AArch64StackFrame::finalize(Self) -> Unit
-pub fn AArch64StackFrame::gen_epilogue(Self) -> Array[@instr.Inst]
-pub fn AArch64StackFrame::gen_prologue(Self) -> Array[@instr.Inst]
-pub fn AArch64StackFrame::save_callee_reg(Self, @abi.PReg) -> Int
-pub fn AArch64StackFrame::setup(Self) -> Unit
-pub fn AArch64StackFrame::size(Self) -> Int
-pub impl Show for AArch64StackFrame
-
 type AllocStats
 pub impl Show for AllocStats
 
@@ -229,29 +216,6 @@ pub impl Show for RegMove
 
 type SpillBundle
 pub fn SpillBundle::SpillBundle(Int, Int) -> Self
-
-type StackFrame
-pub fn StackFrame::StackFrame(Int) -> Self
-pub fn StackFrame::add_callee_saved(Self, @abi.PReg) -> Int
-pub fn StackFrame::alloc_local(Self, Int, Int, Int) -> Int
-pub fn StackFrame::alloc_outgoing_arg(Self, Int, Int, Int) -> Int
-pub fn StackFrame::alloc_spill_slot(Self, @abi.VReg, Int, Int) -> Int
-pub fn StackFrame::finalize(Self) -> Unit
-pub fn StackFrame::get_callee_saved(Self) -> Array[@abi.PReg]
-pub fn StackFrame::print(Self) -> String
-pub fn StackFrame::size(Self) -> Int
-pub impl Show for StackFrame
-
-type StackSlot
-pub impl Show for StackSlot
-
-pub enum StackSlotKind {
-  Spill(@abi.VReg)
-  Local(Int)
-  OutgoingArg(Int)
-  CalleeSaved(@abi.PReg)
-}
-pub impl Show for StackSlotKind
 
 type UseDefInfo
 

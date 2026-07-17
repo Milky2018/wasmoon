@@ -123,7 +123,7 @@ pub fn compiler_infrastructure_assembly() -> CompilerInfrastructureAssembly rais
   )
   let entry = milk.new_block0()
   entry.set_terminator(Return([]))
-  let embedding_abi = @wasmoon_jit.wasm_embedding_abi()
+  let embedding_abi = @wasmoon_jit.wasm_embedding_abi(isa=AMD64)
   let machv_function = @wasmoon_jit.lower_milkir_for_target(milk, X64) catch {
     err => raise WasmCompilerPipelineFailure(message=err.to_string())
   }
@@ -136,6 +136,7 @@ pub fn compiler_infrastructure_assembly() -> CompilerInfrastructureAssembly rais
   let code_object = @machv_emit.emit_function_with_regalloc(
     allocated_function,
     output,
+    isa=AMD64,
     embedding_abi=Some(embedding_abi),
   ) catch {
     err => raise WasmCompilerPipelineFailure(message=to_repr(err).to_string())

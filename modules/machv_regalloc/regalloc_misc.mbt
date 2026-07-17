@@ -221,7 +221,7 @@ pub fn eliminate_dead_code(func : @machv.Function) -> @machv.Function {
 // ============ Convenience API ============
 
 ///|
-/// Build the register pools for AArch64 allocation
+/// Build the register pools for legacy AMD64 allocation.
 fn build_reg_pools(
   isa : @isa.ISA,
   func : @machv.Function,
@@ -319,7 +319,7 @@ pub fn allocate_registers_backtracking(
   func : @machv.Function,
   embedding_abi? : @abi.EmbeddingABI? = None,
 ) -> @machv.Function raise @machv.VerifyError {
-  allocate_registers_backtracking_with_isa(func, AArch64, embedding_abi~)
+  allocate_registers_backtracking_with_isa(func, AMD64, embedding_abi~)
 }
 
 ///|
@@ -329,6 +329,11 @@ pub fn allocate_registers_backtracking_with_isa(
   isa : @isa.ISA,
   embedding_abi? : @abi.EmbeddingABI? = None,
 ) -> @machv.Function raise @machv.VerifyError {
+  if isa is AArch64 {
+    raise @machv.VerifyError::invalid_instruction(
+      "legacy AArch64 register allocation has been removed",
+    )
+  }
   func.verify_for_regalloc_isa(isa)
   // Keep Cranelift-style cheap rematerialization before allocation to shorten
   // cross-block live ranges for constants/function pointers.
@@ -383,7 +388,7 @@ pub fn allocate_registers_backtracking_output(
   func : @machv.Function,
   embedding_abi? : @abi.EmbeddingABI? = None,
 ) -> (@machv.Function, Output) raise @machv.VerifyError {
-  allocate_registers_backtracking_output_with_isa(func, AArch64, embedding_abi~)
+  allocate_registers_backtracking_output_with_isa(func, AMD64, embedding_abi~)
 }
 
 ///|
@@ -394,6 +399,11 @@ pub fn allocate_registers_backtracking_output_with_isa(
   isa : @isa.ISA,
   embedding_abi? : @abi.EmbeddingABI? = None,
 ) -> (@machv.Function, Output) raise @machv.VerifyError {
+  if isa is AArch64 {
+    raise @machv.VerifyError::invalid_instruction(
+      "legacy AArch64 register allocation has been removed",
+    )
+  }
   func.verify_for_regalloc_isa(isa)
   // Keep Cranelift-style cheap rematerialization before allocation to shorten
   // cross-block live ranges for constants/function pointers.
@@ -506,9 +516,14 @@ fn count_instructions(func : @machv.Function) -> AllocStats {
 /// Get allocation statistics
 pub fn get_alloc_stats(
   func : @machv.Function,
-  isa? : @isa.ISA = AArch64,
+  isa? : @isa.ISA = AMD64,
   embedding_abi? : @abi.EmbeddingABI? = None,
 ) -> AllocStats raise @machv.VerifyError {
+  if isa is AArch64 {
+    raise @machv.VerifyError::invalid_instruction(
+      "legacy AArch64 register allocation has been removed",
+    )
+  }
   func.verify_for_regalloc_isa(isa)
   let func = eliminate_dead_code(func)
   let func = rematerialize_cross_block_constants(func)

@@ -8,7 +8,6 @@ import {
   "Milky2018/machv_legacy/block",
   "Milky2018/machv_legacy/instr",
   "Milky2018/machv_legacy/isa",
-  "Milky2018/machv_legacy/isa/aarch64",
   "Milky2018/machv_emit",
   "Milky2018/machv_regalloc",
   "Milky2018/aarch64_target",
