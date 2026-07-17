@@ -248,6 +248,13 @@ pub(all) enum AArch64Inst {
     UInt64
   )
   ScalarStore(@semantic.AccessWidth, @semantic.ValueType, UInt64)
+  VectorLoad128(UInt64)
+  VectorStore128(UInt64)
+  VectorLoadSplat(@semantic.VectorLane, UInt64)
+  VectorLoadExtend(@semantic.VectorLane, @semantic.Signedness, UInt64)
+  VectorLoadZero(@semantic.AccessWidth, UInt64)
+  VectorLoadLane(@semantic.VectorLane, Int, UInt64)
+  VectorStoreLane(@semantic.VectorLane, Int, UInt64)
   PlatformCall(@semantic.ExternalSymbol, @semantic.Signature)
   InternalCall(@semantic.CodeSymbol, @semantic.Signature, InternalCallPlan)
   InternalCallIndirect(@semantic.Signature, InternalCallPlan)
@@ -1301,6 +1308,97 @@ pub fn verify_vcode(
           function,
           instruction,
           [Ptr64, value_type],
+          [],
+          false,
+          0,
+        )
+      }
+      VectorLoad128(_) =>
+        require_instruction_shape(
+          function,
+          instruction,
+          [Ptr64],
+          [V128],
+          false,
+          0,
+        )
+      VectorStore128(_) =>
+        require_instruction_shape(
+          function,
+          instruction,
+          [Ptr64, V128],
+          [],
+          false,
+          0,
+        )
+      VectorLoadSplat(_, _) =>
+        require_instruction_shape(
+          function,
+          instruction,
+          [Ptr64],
+          [V128],
+          false,
+          0,
+        )
+      VectorLoadZero(width, _) => {
+        if width != W32 && width != W64 {
+          raise InvalidInstruction(
+            instruction~,
+            message="vector load-zero requires width 32 or 64",
+          )
+        }
+        require_instruction_shape(
+          function,
+          instruction,
+          [Ptr64],
+          [V128],
+          false,
+          0,
+        )
+      }
+      VectorLoadExtend(lane, _, _) => {
+        if lane != I16x8 && lane != I32x4 && lane != I64x2 {
+          raise InvalidInstruction(
+            instruction~,
+            message="vector load-extend requires widened integer lanes",
+          )
+        }
+        require_instruction_shape(
+          function,
+          instruction,
+          [Ptr64],
+          [V128],
+          false,
+          0,
+        )
+      }
+      VectorLoadLane(lane, index, _) => {
+        if index < 0 || index >= vector_lane_count(lane) {
+          raise InvalidInstruction(
+            instruction~,
+            message="vector load-lane index is out of range",
+          )
+        }
+        require_instruction_shape(
+          function,
+          instruction,
+          [Ptr64, V128],
+          [V128],
+          false,
+          0,
+        )
+      }
+      VectorStoreLane(lane, index, _) => {
+        if index < 0 || index >= vector_lane_count(lane) {
+          raise InvalidInstruction(
+            instruction~,
+            message="vector store-lane index is out of range",
+          )
+        }
+        require_instruction_shape(
+          function,
+          instruction,
+          [Ptr64, V128],
           [],
           false,
           0,

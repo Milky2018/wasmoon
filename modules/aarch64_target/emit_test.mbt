@@ -1861,6 +1861,213 @@ test "AArch64 pipeline emits relaxed dot8-to32-add with allocated temporaries" {
 }
 
 ///|
+test "AArch64 pipeline emits vector memory at the faulting instruction" {
+  let builder = @semantic.FunctionBuilder::new(
+    "emitted_vector_memory",
+    Platform,
+    [Ptr64, V128],
+    [V128],
+  )
+  let parameters = builder.parameters()
+  let loaded = builder.emit(
+      Load(
+        @semantic.LoadSpec::new(
+          W128,
+          None,
+          V128,
+          16UL,
+          Little,
+          Some(MemoryOutOfBounds),
+        ),
+      ),
+      [parameters[0]],
+      [V128],
+    )[0]
+  builder.emit(
+    Store(
+      @semantic.StoreSpec::new(
+        W128,
+        V128,
+        32UL,
+        Little,
+        Some(MemoryOutOfBounds),
+      ),
+    ),
+    [parameters[0], loaded],
+    [],
+  )
+  |> ignore
+  builder.emit(
+    VectorLoad(
+      @semantic.VectorLoadSpec::new(
+        Splat(I16x8),
+        4UL,
+        Little,
+        Some(MemoryOutOfBounds),
+      ),
+    ),
+    [parameters[0]],
+    [V128],
+  )
+  |> ignore
+  builder.emit(
+    VectorLoad(
+      @semantic.VectorLoadSpec::new(
+        Extend(I32x4, Signed),
+        8UL,
+        Little,
+        Some(MemoryOutOfBounds),
+      ),
+    ),
+    [parameters[0]],
+    [V128],
+  )
+  |> ignore
+  builder.emit(
+    VectorLoad(
+      @semantic.VectorLoadSpec::new(
+        Zero(W64),
+        24UL,
+        Little,
+        Some(MemoryOutOfBounds),
+      ),
+    ),
+    [parameters[0]],
+    [V128],
+  )
+  |> ignore
+  let lane = builder.emit(
+      VectorLoad(
+        @semantic.VectorLoadSpec::new(
+          Lane(I32x4, 2),
+          7UL,
+          Little,
+          Some(MemoryOutOfBounds),
+        ),
+      ),
+      [parameters[0], loaded],
+      [V128],
+    )[0]
+  builder.emit(
+    VectorStoreLane(
+      @semantic.VectorStoreLaneSpec::new(
+        I64x2,
+        1,
+        9UL,
+        Little,
+        Some(MemoryOutOfBounds),
+      ),
+    ),
+    [parameters[0], lane],
+    [],
+  )
+  |> ignore
+  builder.return_([lane])
+  let function = lower(builder.finish(), test_lowering_context())
+  let allocation = allocate(function)
+  let frame = plan_frame(function, allocation)
+  debug_inspect(
+    emit(function, allocation, frame),
+    content=(
+      #|{
+      #|  architecture: AArch64,
+      #|  code: [
+      #|    0xe1,
+      #|    0x03,
+      #|    0x00,
+      #|    0xaa,
+      #|    0x01,
+      #|    0x1c,
+      #|    0xa0,
+      #|    0x4e,
+      #|    0x20,
+      #|    0x04,
+      #|    0xc0,
+      #|    0x3d,
+      #|    0x20,
+      #|    0x08,
+      #|    0x80,
+      #|    0x3d,
+      #|    0x90,
+      #|    0x00,
+      #|    0x80,
+      #|    0xd2,
+      #|    0x30,
+      #|    0x00,
+      #|    0x10,
+      #|    0x8b,
+      #|    0x01,
+      #|    0xc6,
+      #|    0x40,
+      #|    0x4d,
+      #|    0x21,
+      #|    0x04,
+      #|    0x40,
+      #|    0xfd,
+      #|    0x21,
+      #|    0xa4,
+      #|    0x10,
+      #|    0x0f,
+      #|    0x21,
+      #|    0x0c,
+      #|    0x40,
+      #|    0xfd,
+      #|    0x01,
+      #|    0x1c,
+      #|    0xa0,
+      #|    0x4e,
+      #|    0xf0,
+      #|    0x00,
+      #|    0x80,
+      #|    0xd2,
+      #|    0x30,
+      #|    0x00,
+      #|    0x10,
+      #|    0x8b,
+      #|    0x01,
+      #|    0x82,
+      #|    0x40,
+      #|    0x4d,
+      #|    0x30,
+      #|    0x01,
+      #|    0x80,
+      #|    0xd2,
+      #|    0x30,
+      #|    0x00,
+      #|    0x10,
+      #|    0x8b,
+      #|    0x01,
+      #|    0x86,
+      #|    0x00,
+      #|    0x4d,
+      #|    0x20,
+      #|    0x1c,
+      #|    0xa1,
+      #|    0x4e,
+      #|    0xc0,
+      #|    0x03,
+      #|    0x5f,
+      #|    0xd6,
+      #|  ],
+      #|  relocations: [],
+      #|  sources: [],
+      #|  traps: [
+      #|    { offset: 8, reason: MemoryOutOfBounds, source: None },
+      #|    { offset: 12, reason: MemoryOutOfBounds, source: None },
+      #|    { offset: 24, reason: MemoryOutOfBounds, source: None },
+      #|    { offset: 28, reason: MemoryOutOfBounds, source: None },
+      #|    { offset: 36, reason: MemoryOutOfBounds, source: None },
+      #|    { offset: 52, reason: MemoryOutOfBounds, source: None },
+      #|    { offset: 64, reason: MemoryOutOfBounds, source: None },
+      #|  ],
+      #|  safepoints: [],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
 test "AArch64 pipeline emits addresses inside the semantic stack-object area" {
   let builder = @semantic.FunctionBuilder::new(
     "emitted_stack_addresses",

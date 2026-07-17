@@ -795,3 +795,87 @@ test "AArch64 verifier rejects malformed vector numeric conversions" {
     ),
   )
 }
+
+///|
+test "AArch64 verifier rejects malformed vector memory operations" {
+  let operations : Array[AArch64Inst] = [
+    VectorLoadZero(W16, 0UL),
+    VectorLoadExtend(I8x16, Signed, 0UL),
+    VectorLoadLane(I32x4, 4, 0UL),
+    VectorStoreLane(I64x2, 2, 0UL),
+  ]
+  let errors : Array[TargetVCodeVerifyError] = []
+  for operation in operations {
+    let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
+      "bad_vector_memory",
+      [Ptr64, V128],
+    )
+    let entry = builder.entry_block()
+    let (inputs, outputs) = match operation {
+      VectorStoreLane(_, _, _) =>
+        (
+          [
+            @vcode.Input::any(builder.parameter(0)),
+            @vcode.Input::any(builder.parameter(1)),
+          ],
+          [],
+        )
+      VectorLoadLane(_, _, _) =>
+        (
+          [
+            @vcode.Input::any(builder.parameter(0)),
+            @vcode.Input::any(builder.parameter(1)),
+          ],
+          [@vcode.Output::any(V128)],
+        )
+      _ =>
+        ([@vcode.Input::any(builder.parameter(0))], [@vcode.Output::any(V128)])
+    }
+    builder.append_body(
+      entry,
+      operation,
+      inputs,
+      outputs,
+      [],
+      @vcode.InstructionMetadata::empty(),
+    )
+    |> ignore
+    builder.set_terminator(
+      entry,
+      Return,
+      [],
+      [],
+      [],
+      @vcode.InstructionMetadata::empty(),
+    )
+    |> ignore
+    try verify_vcode(builder.finish()) catch {
+      error => errors.push(error)
+    } noraise {
+      _ => fail("expected malformed vector memory to be rejected")
+    }
+  }
+  debug_inspect(
+    errors,
+    content=(
+      #|[
+      #|  InvalidInstruction(
+      #|    instruction=i0,
+      #|    message="vector load-zero requires width 32 or 64",
+      #|  ),
+      #|  InvalidInstruction(
+      #|    instruction=i0,
+      #|    message="vector load-extend requires widened integer lanes",
+      #|  ),
+      #|  InvalidInstruction(
+      #|    instruction=i0,
+      #|    message="vector load-lane index is out of range",
+      #|  ),
+      #|  InvalidInstruction(
+      #|    instruction=i0,
+      #|    message="vector store-lane index is out of range",
+      #|  ),
+      #|]
+    ),
+  )
+}

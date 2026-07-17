@@ -260,6 +260,13 @@ pub(all) enum AArch64Inst {
   AddAddress
   ScalarLoad(@machv.AccessWidth, @machv.LoadExtension, @machv.ValueType, UInt64)
   ScalarStore(@machv.AccessWidth, @machv.ValueType, UInt64)
+  VectorLoad128(UInt64)
+  VectorStore128(UInt64)
+  VectorLoadSplat(@machv.VectorLane, UInt64)
+  VectorLoadExtend(@machv.VectorLane, @machv.Signedness, UInt64)
+  VectorLoadZero(@machv.AccessWidth, UInt64)
+  VectorLoadLane(@machv.VectorLane, Int, UInt64)
+  VectorStoreLane(@machv.VectorLane, Int, UInt64)
   PlatformCall(@machv.ExternalSymbol, @machv.Signature)
   InternalCall(@machv.CodeSymbol, @machv.Signature, InternalCallPlan)
   InternalCallIndirect(@machv.Signature, InternalCallPlan)

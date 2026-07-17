@@ -2031,6 +2031,130 @@ test "AArch64 lowering rejects non-native scalar memory endianness" {
 }
 
 ///|
+test "AArch64 lowering selects complete vector memory families" {
+  let builder = @semantic.FunctionBuilder::new(
+    "vector_memory",
+    Internal,
+    [Ptr64, V128],
+    [V128],
+  )
+  let parameters = builder.parameters()
+  let loaded = builder.emit(
+      Load(
+        @semantic.LoadSpec::new(
+          W128,
+          None,
+          V128,
+          16UL,
+          Little,
+          Some(MemoryOutOfBounds),
+        ),
+      ),
+      [parameters[0]],
+      [V128],
+    )[0]
+  builder.emit(
+    Store(
+      @semantic.StoreSpec::new(
+        W128,
+        V128,
+        32UL,
+        Little,
+        Some(MemoryOutOfBounds),
+      ),
+    ),
+    [parameters[0], loaded],
+    [],
+  )
+  |> ignore
+  builder.emit(
+    VectorLoad(
+      @semantic.VectorLoadSpec::new(
+        Splat(I16x8),
+        4UL,
+        Little,
+        Some(MemoryOutOfBounds),
+      ),
+    ),
+    [parameters[0]],
+    [V128],
+  )
+  |> ignore
+  builder.emit(
+    VectorLoad(
+      @semantic.VectorLoadSpec::new(
+        Extend(I32x4, Signed),
+        8UL,
+        Little,
+        Some(MemoryOutOfBounds),
+      ),
+    ),
+    [parameters[0]],
+    [V128],
+  )
+  |> ignore
+  builder.emit(
+    VectorLoad(
+      @semantic.VectorLoadSpec::new(
+        Zero(W64),
+        24UL,
+        Little,
+        Some(MemoryOutOfBounds),
+      ),
+    ),
+    [parameters[0]],
+    [V128],
+  )
+  |> ignore
+  let lane = builder.emit(
+      VectorLoad(
+        @semantic.VectorLoadSpec::new(
+          Lane(I8x16, 3),
+          40UL,
+          Little,
+          Some(MemoryOutOfBounds),
+        ),
+      ),
+      parameters,
+      [V128],
+    )[0]
+  builder.emit(
+    VectorStoreLane(
+      @semantic.VectorStoreLaneSpec::new(
+        I16x8,
+        2,
+        48UL,
+        Little,
+        Some(MemoryOutOfBounds),
+      ),
+    ),
+    [parameters[0], lane],
+    [],
+  )
+  |> ignore
+  builder.return_([lane])
+  inspect(
+    lower(builder.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode vector_memory(v0:ptr64, v1:v128) -> (v128)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v2:any@late]
+      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v3:any@late]
+      #|  i2 VectorLoad128(16) uses=[v2:any@early] defs=[v4:any@late] trap=MemoryOutOfBounds
+      #|  i3 VectorStore128(32) uses=[v2:any@early, v4:any@early] trap=MemoryOutOfBounds
+      #|  i4 VectorLoadSplat(I16x8, 4) uses=[v2:any@early] defs=[v5:any@late] trap=MemoryOutOfBounds
+      #|  i5 VectorLoadExtend(I32x4, Signed, 8) uses=[v2:any@early] defs=[v6:any@late] trap=MemoryOutOfBounds
+      #|  i6 VectorLoadZero(W64, 24) uses=[v2:any@early] defs=[v7:any@late] trap=MemoryOutOfBounds
+      #|  i7 VectorLoadLane(I8x16, 3, 40) uses=[v2:any@early, v3:any@early] defs=[v8:any@late] trap=MemoryOutOfBounds
+      #|  i8 VectorStoreLane(I16x8, 2, 48) uses=[v2:any@early, v8:any@early] trap=MemoryOutOfBounds
+      #|  i9 OutgoingReg(V128, p0:fpvec) uses=[v8:any@early]
+      #|  i10 Return
+      #|
+    ),
+  )
+}
+
+///|
 test "AArch64 lowering selects non-trapping scalar floating-point operations" {
   let builder = @semantic.FunctionBuilder::new(
     "scalar_float",

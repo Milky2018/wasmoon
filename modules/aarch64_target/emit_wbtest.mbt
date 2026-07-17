@@ -2638,6 +2638,68 @@ test "AArch64 relaxed dot8-to16 uses baseline NEON" {
 }
 
 ///|
+test "AArch64 vector memory encodings cover every lane arrangement" {
+  let address = @vcode.PhysicalReg::new(3, Int)
+  let vector = @vcode.PhysicalReg::new(5, FpVector)
+  debug_inspect(
+    (
+      [
+        vector_splat_load_base(I8x16),
+        vector_splat_load_base(I16x8),
+        vector_splat_load_base(I32x4),
+        vector_splat_load_base(I64x2),
+        vector_splat_load_base(F32x4),
+        vector_splat_load_base(F64x2),
+      ],
+      [
+        vector_lane_memory_word(true, I8x16, 15, address, vector),
+        vector_lane_memory_word(true, I16x8, 7, address, vector),
+        vector_lane_memory_word(true, I32x4, 3, address, vector),
+        vector_lane_memory_word(true, I64x2, 1, address, vector),
+        vector_lane_memory_word(true, F32x4, 3, address, vector),
+        vector_lane_memory_word(true, F64x2, 1, address, vector),
+      ],
+      [
+        vector_lane_memory_word(false, I8x16, 15, address, vector),
+        vector_lane_memory_word(false, I16x8, 7, address, vector),
+        vector_lane_memory_word(false, I32x4, 3, address, vector),
+        vector_lane_memory_word(false, I64x2, 1, address, vector),
+        vector_lane_memory_word(false, F32x4, 3, address, vector),
+        vector_lane_memory_word(false, F64x2, 1, address, vector),
+      ],
+    ),
+    content=(
+      #|(
+      #|  [
+      #|    1296089088,
+      #|    1296090112,
+      #|    1296091136,
+      #|    1296092160,
+      #|    1296091136,
+      #|    1296092160,
+      #|  ],
+      #|  [
+      #|    1296047205,
+      #|    1296062565,
+      #|    1296076901,
+      #|    1296073829,
+      #|    1296076901,
+      #|    1296073829,
+      #|  ],
+      #|  [
+      #|    1291852901,
+      #|    1291868261,
+      #|    1291882597,
+      #|    1291879525,
+      #|    1291882597,
+      #|    1291879525,
+      #|  ],
+      #|)
+    ),
+  )
+}
+
+///|
 test "AAPCS64 platform call layout preserves mixed overflow order" {
   let layout = platform_call_layout([
     I64,

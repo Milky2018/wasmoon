@@ -179,7 +179,7 @@ fn scalar_memory_scale(width : @semantic.AccessWidth) -> UInt64? {
     W16 => Some(2UL)
     W32 => Some(4UL)
     W64 => Some(8UL)
-    W128 => None
+    W128 => Some(16UL)
   }
 }
 
@@ -202,6 +202,77 @@ fn scalar_memory_address(
     encode_three_register(0x8B000000U, scratch, address, scratch),
   )
   (scratch, 0U)
+}
+
+///|
+fn vector_structure_address(
+  buffer : CodeBuffer,
+  address : @vcode.PhysicalReg,
+  offset : UInt64,
+) -> @vcode.PhysicalReg {
+  if offset == 0UL {
+    return address
+  }
+  let scratch = @vcode.PhysicalReg::new(16, Int)
+  emit_constant(buffer, W64, scratch, offset)
+  buffer.emit_word(
+    encode_three_register(0x8B000000U, scratch, address, scratch),
+  )
+  scratch
+}
+
+///|
+fn vector_lane_memory_word(
+  load : Bool,
+  lane : @semantic.VectorLane,
+  index : Int,
+  address : @vcode.PhysicalReg,
+  vector : @vcode.PhysicalReg,
+) -> UInt raise AArch64EmitError {
+  let load_bit = if load { 0x00400000U } else { 0U }
+  let (base, lane_bits) = match lane {
+    I8x16 =>
+      (
+        0x0D000000U,
+        ((index >> 3).reinterpret_as_uint() << 30) |
+        (((index >> 2) & 1).reinterpret_as_uint() << 12) |
+        ((index & 3).reinterpret_as_uint() << 10),
+      )
+    I16x8 =>
+      (
+        0x0D004000U,
+        ((index >> 2).reinterpret_as_uint() << 30) |
+        (((index >> 1) & 1).reinterpret_as_uint() << 12) |
+        ((index & 1).reinterpret_as_uint() << 11),
+      )
+    I32x4 | F32x4 =>
+      (
+        0x0D008000U,
+        ((index >> 1).reinterpret_as_uint() << 30) |
+        ((index & 1).reinterpret_as_uint() << 12),
+      )
+    I64x2 | F64x2 => (0x0D008400U, (index & 1).reinterpret_as_uint() << 30)
+  }
+  let lane_count = match lane {
+    I8x16 => 16
+    I16x8 => 8
+    I32x4 | F32x4 => 4
+    I64x2 | F64x2 => 2
+  }
+  if index < 0 || index >= lane_count {
+    raise InvalidVectorInstruction
+  }
+  base | load_bit | lane_bits | (reg_bits(address) << 5) | reg_bits(vector)
+}
+
+///|
+fn vector_splat_load_base(lane : @semantic.VectorLane) -> UInt {
+  match lane {
+    I8x16 => 0x4D40C000U
+    I16x8 => 0x4D40C400U
+    I32x4 | F32x4 => 0x4D40C800U
+    I64x2 | F64x2 => 0x4D40CC00U
+  }
 }
 
 ///|
@@ -2122,6 +2193,95 @@ fn emit_instruction(
       metadata_offset = buffer.position()
       buffer.emit_word(
         base | (immediate << 10) | (reg_bits(address) << 5) | reg_bits(reg(1)),
+      )
+    }
+    VectorLoad128(offset) => {
+      let (address, immediate) = scalar_memory_address(
+        buffer,
+        reg(0),
+        W128,
+        offset,
+      )
+      metadata_offset = buffer.position()
+      buffer.emit_word(
+        0x3DC00000U |
+        (immediate << 10) |
+        (reg_bits(address) << 5) |
+        reg_bits(reg(1)),
+      )
+    }
+    VectorStore128(offset) => {
+      let (address, immediate) = scalar_memory_address(
+        buffer,
+        reg(0),
+        W128,
+        offset,
+      )
+      metadata_offset = buffer.position()
+      buffer.emit_word(
+        0x3D800000U |
+        (immediate << 10) |
+        (reg_bits(address) << 5) |
+        reg_bits(reg(1)),
+      )
+    }
+    VectorLoadSplat(lane, offset) => {
+      let address = vector_structure_address(buffer, reg(0), offset)
+      metadata_offset = buffer.position()
+      buffer.emit_word(
+        vector_splat_load_base(lane) |
+        (reg_bits(address) << 5) |
+        reg_bits(reg(1)),
+      )
+    }
+    VectorLoadExtend(lane, signedness, offset) => {
+      let (address, immediate) = scalar_memory_address(
+        buffer,
+        reg(0),
+        W64,
+        offset,
+      )
+      metadata_offset = buffer.position()
+      buffer.emit_word(
+        0xFD400000U |
+        (immediate << 10) |
+        (reg_bits(address) << 5) |
+        reg_bits(reg(1)),
+      )
+      emit_vector_extension(buffer, lane, false, signedness, reg(1), reg(1))
+    }
+    VectorLoadZero(width, offset) => {
+      let (address, immediate) = scalar_memory_address(
+        buffer,
+        reg(0),
+        width,
+        offset,
+      )
+      let base = if width == W32 {
+        0xBD400000U
+      } else if width == W64 {
+        0xFD400000U
+      } else {
+        raise InvalidVectorInstruction
+      }
+      metadata_offset = buffer.position()
+      buffer.emit_word(
+        base | (immediate << 10) | (reg_bits(address) << 5) | reg_bits(reg(1)),
+      )
+    }
+    VectorLoadLane(lane, index, offset) => {
+      emit_move(buffer, V128, reg(2), reg(1))
+      let address = vector_structure_address(buffer, reg(0), offset)
+      metadata_offset = buffer.position()
+      buffer.emit_word(
+        vector_lane_memory_word(true, lane, index, address, reg(2)),
+      )
+    }
+    VectorStoreLane(lane, index, offset) => {
+      let address = vector_structure_address(buffer, reg(0), offset)
+      metadata_offset = buffer.position()
+      buffer.emit_word(
+        vector_lane_memory_word(false, lane, index, address, reg(1)),
       )
     }
     PlatformCall(target, signature) => {

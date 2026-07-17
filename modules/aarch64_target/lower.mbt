@@ -995,12 +995,26 @@ fn lower_instruction(
         None => None
       }
     PointerOffset => Some(AddAddress)
-    Load(spec) if spec.endianness == Little && spec.width != W128 =>
+    Load(spec) if spec.endianness == Little && spec.width == W128 =>
+      Some(VectorLoad128(spec.offset))
+    Load(spec) if spec.endianness == Little =>
       Some(
         ScalarLoad(spec.width, spec.extension, spec.result_type, spec.offset),
       )
-    Store(spec) if spec.endianness == Little && spec.width != W128 =>
+    Store(spec) if spec.endianness == Little && spec.width == W128 =>
+      Some(VectorStore128(spec.offset))
+    Store(spec) if spec.endianness == Little =>
       Some(ScalarStore(spec.width, spec.value_type, spec.offset))
+    VectorLoad(spec) if spec.endianness == Little =>
+      match spec.kind {
+        Splat(lane) => Some(VectorLoadSplat(lane, spec.offset))
+        Extend(lane, signedness) =>
+          Some(VectorLoadExtend(lane, signedness, spec.offset))
+        Zero(width) => Some(VectorLoadZero(width, spec.offset))
+        Lane(lane, index) => Some(VectorLoadLane(lane, index, spec.offset))
+      }
+    VectorStoreLane(spec) if spec.endianness == Little =>
+      Some(VectorStoreLane(spec.lane, spec.lane_index, spec.offset))
     _ => None
   }
   let selected = match selected {
@@ -1021,6 +1035,8 @@ fn lower_instruction(
       trap?=match operation {
         Load(spec) => spec.trap
         Store(spec) => spec.trap
+        VectorLoad(spec) => spec.trap
+        VectorStoreLane(spec) => spec.trap
         _ => None
       },
     ),
