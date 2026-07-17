@@ -649,6 +649,71 @@ fn emit_vector_shuffle(
 }
 
 ///|
+fn vector_lane_encoding(
+  lane : @semantic.VectorLane,
+  byte_base : UInt,
+  half_base : UInt,
+  word_base : UInt,
+  double_base : UInt,
+) -> UInt raise AArch64EmitError {
+  match lane {
+    I8x16 => byte_base
+    I16x8 => half_base
+    I32x4 => word_base
+    I64x2 => double_base
+    F32x4 | F64x2 => raise InvalidVectorInstruction
+  }
+}
+
+///|
+fn emit_vector_int_unary(
+  buffer : CodeBuffer,
+  lane : @semantic.VectorLane,
+  operation : AArch64VectorIntUnary,
+  source : @vcode.PhysicalReg,
+  destination : @vcode.PhysicalReg,
+) -> Unit raise AArch64EmitError {
+  let base = match operation {
+    Absolute =>
+      vector_lane_encoding(
+        lane, 0x4E20B800U, 0x4E60B800U, 0x4EA0B800U, 0x4EE0B800U,
+      )
+    Negate =>
+      vector_lane_encoding(
+        lane, 0x6E20B800U, 0x6E60B800U, 0x6EA0B800U, 0x6EE0B800U,
+      )
+  }
+  buffer.emit_word(base | (reg_bits(source) << 5) | reg_bits(destination))
+}
+
+///|
+fn emit_vector_int_binary(
+  buffer : CodeBuffer,
+  lane : @semantic.VectorLane,
+  operation : AArch64VectorIntBinary,
+  left : @vcode.PhysicalReg,
+  right : @vcode.PhysicalReg,
+  destination : @vcode.PhysicalReg,
+) -> Unit raise AArch64EmitError {
+  let base = match operation {
+    Add =>
+      vector_lane_encoding(
+        lane, 0x4E208400U, 0x4E608400U, 0x4EA08400U, 0x4EE08400U,
+      )
+    Sub =>
+      vector_lane_encoding(
+        lane, 0x6E208400U, 0x6E608400U, 0x6EA08400U, 0x6EE08400U,
+      )
+  }
+  buffer.emit_word(
+    base |
+    (reg_bits(right) << 16) |
+    (reg_bits(left) << 5) |
+    reg_bits(destination),
+  )
+}
+
+///|
 fn emit_vector_binary(
   buffer : CodeBuffer,
   base : UInt,
@@ -1156,6 +1221,10 @@ fn emit_instruction(
     VectorShuffle(mask) =>
       emit_vector_shuffle(buffer, mask, reg(0), reg(1), reg(2))
     VectorSwizzle => emit_vector_table_lookup(buffer, reg(0), reg(1), reg(2))
+    VectorIntUnary(lane, operation) =>
+      emit_vector_int_unary(buffer, lane, operation, reg(0), reg(1))
+    VectorIntBinary(lane, operation) =>
+      emit_vector_int_binary(buffer, lane, operation, reg(0), reg(1), reg(2))
     VectorBitwise(operation) =>
       match operation {
         Not => emit_vector_bitwise(buffer, Not, reg(0), reg(0), reg(0), reg(1))

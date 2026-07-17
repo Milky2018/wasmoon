@@ -635,6 +635,92 @@ test "AArch64 vector permutation encodings use table lookup" {
 }
 
 ///|
+test "AArch64 basic vector integer encodings preserve every lane width" {
+  let buffer = CodeBuffer::new()
+  let left = @vcode.PhysicalReg::new(3, FpVector)
+  let right = @vcode.PhysicalReg::new(5, FpVector)
+  let destination = @vcode.PhysicalReg::new(7, FpVector)
+  let lanes : Array[@semantic.VectorLane] = [I8x16, I16x8, I32x4, I64x2]
+  for lane in lanes {
+    emit_vector_int_unary(buffer, lane, Absolute, left, destination)
+    emit_vector_int_unary(buffer, lane, Negate, left, destination)
+    emit_vector_int_binary(buffer, lane, Add, left, right, destination)
+    emit_vector_int_binary(buffer, lane, Sub, left, right, destination)
+  }
+  debug_inspect(
+    buffer.code,
+    content=(
+      #|[
+      #|  0x67,
+      #|  0xb8,
+      #|  0x20,
+      #|  0x4e,
+      #|  0x67,
+      #|  0xb8,
+      #|  0x20,
+      #|  0x6e,
+      #|  0x67,
+      #|  0x84,
+      #|  0x25,
+      #|  0x4e,
+      #|  0x67,
+      #|  0x84,
+      #|  0x25,
+      #|  0x6e,
+      #|  0x67,
+      #|  0xb8,
+      #|  0x60,
+      #|  0x4e,
+      #|  0x67,
+      #|  0xb8,
+      #|  0x60,
+      #|  0x6e,
+      #|  0x67,
+      #|  0x84,
+      #|  0x65,
+      #|  0x4e,
+      #|  0x67,
+      #|  0x84,
+      #|  0x65,
+      #|  0x6e,
+      #|  0x67,
+      #|  0xb8,
+      #|  0xa0,
+      #|  0x4e,
+      #|  0x67,
+      #|  0xb8,
+      #|  0xa0,
+      #|  0x6e,
+      #|  0x67,
+      #|  0x84,
+      #|  0xa5,
+      #|  0x4e,
+      #|  0x67,
+      #|  0x84,
+      #|  0xa5,
+      #|  0x6e,
+      #|  0x67,
+      #|  0xb8,
+      #|  0xe0,
+      #|  0x4e,
+      #|  0x67,
+      #|  0xb8,
+      #|  0xe0,
+      #|  0x6e,
+      #|  0x67,
+      #|  0x84,
+      #|  0xe5,
+      #|  0x4e,
+      #|  0x67,
+      #|  0x84,
+      #|  0xe5,
+      #|  0x6e,
+      #|]
+    ),
+  )
+}
+
+///|
 test "AAPCS64 platform call layout preserves mixed overflow order" {
   let layout = platform_call_layout([
     I64,

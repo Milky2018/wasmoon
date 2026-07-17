@@ -793,6 +793,10 @@ fn lower_instruction(
     Vector(Shuffle(mask)) => Some(VectorShuffle(mask))
     Vector(Swizzle) => Some(VectorSwizzle)
     Vector(Bitwise(operation)) => Some(VectorBitwise(operation))
+    Vector(IntUnary(lane, Absolute)) => Some(VectorIntUnary(lane, Absolute))
+    Vector(IntUnary(lane, Negate)) => Some(VectorIntUnary(lane, Negate))
+    Vector(IntBinary(lane, Add)) => Some(VectorIntBinary(lane, Add))
+    Vector(IntBinary(lane, Sub)) => Some(VectorIntBinary(lane, Sub))
     ReferenceCompare(comparison) => {
       let operand_type = match semantic_operands.get(0) {
         Some(value) => function.value_type(value)

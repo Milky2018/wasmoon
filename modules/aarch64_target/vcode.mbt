@@ -73,6 +73,18 @@ pub(all) enum AArch64FloatTernary {
 } derive(Eq, Debug)
 
 ///|
+pub(all) enum AArch64VectorIntUnary {
+  Absolute
+  Negate
+} derive(Eq, Debug)
+
+///|
+pub(all) enum AArch64VectorIntBinary {
+  Add
+  Sub
+} derive(Eq, Debug)
+
+///|
 pub(all) enum AArch64FloatCondition {
   Equal
   NotEqual
@@ -171,6 +183,8 @@ pub(all) enum AArch64Inst {
   VectorShuffle(FixedArray[Int])
   VectorSwizzle
   VectorBitwise(@semantic.VectorBitwiseOp)
+  VectorIntUnary(@semantic.VectorLane, AArch64VectorIntUnary)
+  VectorIntBinary(@semantic.VectorLane, AArch64VectorIntBinary)
   IntUnary(GprWidth, AArch64IntUnary)
   IntBinary(GprWidth, AArch64IntBinary)
   PopulationCount(GprWidth)
@@ -473,6 +487,14 @@ fn vector_lane_count(lane : @semantic.VectorLane) -> Int {
 }
 
 ///|
+fn is_integer_vector_lane(lane : @semantic.VectorLane) -> Bool {
+  match lane {
+    I8x16 | I16x8 | I32x4 | I64x2 => true
+    F32x4 | F64x2 => false
+  }
+}
+
+///|
 fn valid_scalar_bitcast(
   from : @semantic.ValueType,
   to : @semantic.ValueType,
@@ -732,6 +754,38 @@ pub fn verify_vcode(
           false,
           0,
         )
+      VectorIntUnary(lane, _) => {
+        if !is_integer_vector_lane(lane) {
+          raise InvalidInstruction(
+            instruction~,
+            message="vector integer unary operation requires integer lanes",
+          )
+        }
+        require_instruction_shape(
+          function,
+          instruction,
+          [V128],
+          [V128],
+          false,
+          0,
+        )
+      }
+      VectorIntBinary(lane, _) => {
+        if !is_integer_vector_lane(lane) {
+          raise InvalidInstruction(
+            instruction~,
+            message="vector integer binary operation requires integer lanes",
+          )
+        }
+        require_instruction_shape(
+          function,
+          instruction,
+          [V128, V128],
+          [V128],
+          false,
+          0,
+        )
+      }
       VectorBitwise(operation) => {
         let arity = match operation {
           Not => 1

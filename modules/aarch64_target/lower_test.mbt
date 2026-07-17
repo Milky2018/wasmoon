@@ -273,6 +273,63 @@ test "AArch64 lowering selects vector shuffle and swizzle" {
 }
 
 ///|
+test "AArch64 lowering selects basic vector integer arithmetic" {
+  let builder = @semantic.FunctionBuilder::new(
+    "vector_integer_arithmetic",
+    Internal,
+    [Ptr64, V128, V128],
+    [V128],
+  )
+  let parameters = builder.parameters()
+  let mut result = parameters[1]
+  let lanes : Array[@semantic.VectorLane] = [I8x16, I16x8, I32x4, I64x2]
+  for lane in lanes {
+    result = builder.emit(Vector(IntUnary(lane, Absolute)), [result], [V128])[0]
+    result = builder.emit(Vector(IntUnary(lane, Negate)), [result], [V128])[0]
+    result = builder.emit(
+        Vector(IntBinary(lane, Add)),
+        [result, parameters[2]],
+        [V128],
+      )[0]
+    result = builder.emit(
+        Vector(IntBinary(lane, Sub)),
+        [result, parameters[2]],
+        [V128],
+      )[0]
+  }
+  builder.return_([result])
+  inspect(
+    lower(builder.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode vector_integer_arithmetic(v0:ptr64, v1:v128, v2:v128) -> (v128)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v3:any@late]
+      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v4:any@late]
+      #|  i2 IncomingReg(V128, p1:fpvec) uses=[v2:fixed(p1:fpvec)@early] defs=[v5:any@late]
+      #|  i3 VectorIntUnary(I8x16, Absolute) uses=[v4:any@early] defs=[v6:any@late]
+      #|  i4 VectorIntUnary(I8x16, Negate) uses=[v6:any@early] defs=[v7:any@late]
+      #|  i5 VectorIntBinary(I8x16, Add) uses=[v7:any@early, v5:any@early] defs=[v8:any@late]
+      #|  i6 VectorIntBinary(I8x16, Sub) uses=[v8:any@early, v5:any@early] defs=[v9:any@late]
+      #|  i7 VectorIntUnary(I16x8, Absolute) uses=[v9:any@early] defs=[v10:any@late]
+      #|  i8 VectorIntUnary(I16x8, Negate) uses=[v10:any@early] defs=[v11:any@late]
+      #|  i9 VectorIntBinary(I16x8, Add) uses=[v11:any@early, v5:any@early] defs=[v12:any@late]
+      #|  i10 VectorIntBinary(I16x8, Sub) uses=[v12:any@early, v5:any@early] defs=[v13:any@late]
+      #|  i11 VectorIntUnary(I32x4, Absolute) uses=[v13:any@early] defs=[v14:any@late]
+      #|  i12 VectorIntUnary(I32x4, Negate) uses=[v14:any@early] defs=[v15:any@late]
+      #|  i13 VectorIntBinary(I32x4, Add) uses=[v15:any@early, v5:any@early] defs=[v16:any@late]
+      #|  i14 VectorIntBinary(I32x4, Sub) uses=[v16:any@early, v5:any@early] defs=[v17:any@late]
+      #|  i15 VectorIntUnary(I64x2, Absolute) uses=[v17:any@early] defs=[v18:any@late]
+      #|  i16 VectorIntUnary(I64x2, Negate) uses=[v18:any@early] defs=[v19:any@late]
+      #|  i17 VectorIntBinary(I64x2, Add) uses=[v19:any@early, v5:any@early] defs=[v20:any@late]
+      #|  i18 VectorIntBinary(I64x2, Sub) uses=[v20:any@early, v5:any@early] defs=[v21:any@late]
+      #|  i19 OutgoingReg(V128, p0:fpvec) uses=[v21:any@early]
+      #|  i20 Return
+      #|
+    ),
+  )
+}
+
+///|
 test "AArch64 lowering assigns one aligned semantic stack-object area" {
   let builder = @semantic.FunctionBuilder::new(
     "stack_object_layout",

@@ -229,6 +229,8 @@ pub(all) enum AArch64Inst {
   VectorShuffle(FixedArray[Int])
   VectorSwizzle
   VectorBitwise(@machv.VectorBitwiseOp)
+  VectorIntUnary(@machv.VectorLane, AArch64VectorIntUnary)
+  VectorIntBinary(@machv.VectorLane, AArch64VectorIntBinary)
   IntUnary(GprWidth, AArch64IntUnary)
   IntBinary(GprWidth, AArch64IntBinary)
   PopulationCount(GprWidth)
@@ -288,6 +290,16 @@ pub struct AArch64StackObject {
   area_alignment : Int
 } derive(Eq, @debug.Debug)
 pub fn AArch64StackObject::new(Int, Int, Int, Int, Int) -> Self
+
+pub(all) enum AArch64VectorIntBinary {
+  Add
+  Sub
+} derive(Eq, @debug.Debug)
+
+pub(all) enum AArch64VectorIntUnary {
+  Absolute
+  Negate
+} derive(Eq, @debug.Debug)
 
 pub(all) struct AbiPolicy {
   pointer_size : Int

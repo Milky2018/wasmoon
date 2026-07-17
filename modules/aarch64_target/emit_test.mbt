@@ -484,6 +484,84 @@ test "AArch64 pipeline emits vector permutation operations" {
 }
 
 ///|
+test "AArch64 pipeline emits basic vector integer arithmetic" {
+  let builder = @semantic.FunctionBuilder::new(
+    "emitted_vector_integer_arithmetic",
+    Platform,
+    [V128, V128],
+    [V128],
+  )
+  let parameters = builder.parameters()
+  let absolute = builder.emit(
+      Vector(IntUnary(I8x16, Absolute)),
+      [parameters[0]],
+      [V128],
+    )[0]
+  let negated = builder.emit(Vector(IntUnary(I64x2, Negate)), [absolute], [V128])[0]
+  let added = builder.emit(
+      Vector(IntBinary(I16x8, Add)),
+      [negated, parameters[1]],
+      [V128],
+    )[0]
+  let subtracted = builder.emit(
+      Vector(IntBinary(I32x4, Sub)),
+      [added, parameters[1]],
+      [V128],
+    )[0]
+  builder.return_([subtracted])
+  let function = lower(builder.finish(), test_lowering_context())
+  let allocation = allocate(function)
+  let frame = plan_frame(function, allocation)
+  debug_inspect(
+    emit(function, allocation, frame),
+    content=(
+      #|{
+      #|  architecture: AArch64,
+      #|  code: [
+      #|    0x02,
+      #|    0x1c,
+      #|    0xa0,
+      #|    0x4e,
+      #|    0x20,
+      #|    0x1c,
+      #|    0xa1,
+      #|    0x4e,
+      #|    0x41,
+      #|    0xb8,
+      #|    0x20,
+      #|    0x4e,
+      #|    0x22,
+      #|    0xb8,
+      #|    0xe0,
+      #|    0x6e,
+      #|    0x41,
+      #|    0x84,
+      #|    0x60,
+      #|    0x4e,
+      #|    0x22,
+      #|    0x84,
+      #|    0xa0,
+      #|    0x6e,
+      #|    0x40,
+      #|    0x1c,
+      #|    0xa2,
+      #|    0x4e,
+      #|    0xc0,
+      #|    0x03,
+      #|    0x5f,
+      #|    0xd6,
+      #|  ],
+      #|  relocations: [],
+      #|  sources: [],
+      #|  traps: [],
+      #|  safepoints: [],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
 test "AArch64 pipeline emits addresses inside the semantic stack-object area" {
   let builder = @semantic.FunctionBuilder::new(
     "emitted_stack_addresses",
