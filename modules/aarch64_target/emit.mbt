@@ -955,6 +955,43 @@ fn emit_vector_narrow(
 }
 
 ///|
+fn emit_vector_predicate(
+  buffer : CodeBuffer,
+  predicate : AArch64VectorPredicate,
+  source : @vcode.PhysicalReg,
+  destination : @vcode.PhysicalReg,
+) -> Unit raise AArch64EmitError {
+  let vector_scratch = @vcode.PhysicalReg::new(16, FpVector)
+  let int_scratch = @vcode.PhysicalReg::new(16, Int)
+  let reduction_base = match predicate {
+    AnyTrue => 0x6E30A800U
+    AllTrue(I8x16) => 0x6E31A800U
+    AllTrue(I16x8) => 0x6E71A800U
+    AllTrue(I32x4) => 0x6EB1A800U
+    AllTrue(I64x2) => {
+      let second = @vcode.PhysicalReg::new(17, Int)
+      emit_vector_extract_lane(buffer, I64x2, 0, None, source, int_scratch)
+      emit_vector_extract_lane(buffer, I64x2, 1, None, source, second)
+      buffer.emit_word(0xF100001FU | (reg_bits(int_scratch) << 5))
+      buffer.emit_word(
+        0xFA400800U | (condition_code(Ne) << 12) | (reg_bits(second) << 5) | 4U,
+      )
+      emit_overflow_flag(buffer, destination, condition_code(Ne))
+      return
+    }
+    AllTrue(F32x4 | F64x2) => raise InvalidVectorInstruction
+  }
+  buffer.emit_word(
+    reduction_base | (reg_bits(source) << 5) | reg_bits(vector_scratch),
+  )
+  buffer.emit_word(
+    0x9E660000U | (reg_bits(vector_scratch) << 5) | reg_bits(int_scratch),
+  )
+  buffer.emit_word(0xF100001FU | (reg_bits(int_scratch) << 5))
+  emit_overflow_flag(buffer, destination, condition_code(Ne))
+}
+
+///|
 fn emit_vector_int_shift(
   buffer : CodeBuffer,
   lane : @semantic.VectorLane,
@@ -1588,6 +1625,8 @@ fn emit_instruction(
         Narrow(lane, signedness) =>
           emit_vector_narrow(buffer, lane, signedness, reg(0), reg(1), reg(2))
       }
+    VectorPredicate(predicate) =>
+      emit_vector_predicate(buffer, predicate, reg(0), reg(1))
     VectorBitwise(operation) =>
       match operation {
         Not => emit_vector_bitwise(buffer, Not, reg(0), reg(0), reg(0), reg(1))

@@ -837,6 +837,49 @@ test "AArch64 lowering selects saturating vector narrowing" {
 }
 
 ///|
+test "AArch64 lowering selects vector truth predicates" {
+  let builder = @semantic.FunctionBuilder::new(
+    "vector_truth_predicates",
+    Internal,
+    [Ptr64, V128],
+    [I32, I32, I32, I32, I32],
+  )
+  let source = builder.parameters()[1]
+  let results = [builder.emit(Vector(Predicate(AnyTrue)), [source], [I32])[0]]
+  let mut result = builder.emit(Vector(Predicate(AllTrue(I8x16))), [source], [
+      I32,
+    ])[0]
+  results.push(result)
+  let lanes : Array[@semantic.VectorLane] = [I16x8, I32x4, I64x2]
+  for lane in lanes {
+    result = builder.emit(Vector(Predicate(AllTrue(lane))), [source], [I32])[0]
+    results.push(result)
+  }
+  builder.return_(results)
+  inspect(
+    lower(builder.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode vector_truth_predicates(v0:ptr64, v1:v128) -> (i32, i32, i32, i32, i32)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v2:any@late]
+      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v3:any@late]
+      #|  i2 VectorPredicate(AnyTrue) uses=[v3:any@early] defs=[v4:any@late]
+      #|  i3 VectorPredicate(AllTrue(I8x16)) uses=[v3:any@early] defs=[v5:any@late]
+      #|  i4 VectorPredicate(AllTrue(I16x8)) uses=[v3:any@early] defs=[v6:any@late]
+      #|  i5 VectorPredicate(AllTrue(I32x4)) uses=[v3:any@early] defs=[v7:any@late]
+      #|  i6 VectorPredicate(AllTrue(I64x2)) uses=[v3:any@early] defs=[v8:any@late]
+      #|  i7 OutgoingReg(I32, p0:int) uses=[v4:any@early]
+      #|  i8 OutgoingReg(I32, p1:int) uses=[v5:any@early]
+      #|  i9 OutgoingReg(I32, p2:int) uses=[v6:any@early]
+      #|  i10 OutgoingReg(I32, p3:int) uses=[v7:any@early]
+      #|  i11 OutgoingReg(I32, p4:int) uses=[v8:any@early]
+      #|  i12 Return
+      #|
+    ),
+  )
+}
+
+///|
 test "AArch64 lowering assigns one aligned semantic stack-object area" {
   let builder = @semantic.FunctionBuilder::new(
     "stack_object_layout",

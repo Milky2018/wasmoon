@@ -1284,6 +1284,91 @@ test "AArch64 pipeline emits saturating vector narrowing" {
 }
 
 ///|
+test "AArch64 pipeline emits vector truth predicates" {
+  let builder = @semantic.FunctionBuilder::new(
+    "emitted_vector_truth_predicates",
+    Platform,
+    [V128],
+    [I32],
+  )
+  let source = builder.parameters()[0]
+  let any = builder.emit(Vector(Predicate(AnyTrue)), [source], [I32])[0]
+  let all = builder.emit(Vector(Predicate(AllTrue(I64x2))), [source], [I32])[0]
+  let result = builder.emit(IntBinary(Add), [any, all], [I32])[0]
+  builder.return_([result])
+  let function = lower(builder.finish(), test_lowering_context())
+  let allocation = allocate(function)
+  let frame = plan_frame(function, allocation)
+  debug_inspect(
+    emit(function, allocation, frame),
+    content=(
+      #|{
+      #|  architecture: AArch64,
+      #|  code: [
+      #|    0x01,
+      #|    0x1c,
+      #|    0xa0,
+      #|    0x4e,
+      #|    0x30,
+      #|    0xa8,
+      #|    0x30,
+      #|    0x6e,
+      #|    0x10,
+      #|    0x02,
+      #|    0x66,
+      #|    0x9e,
+      #|    0x1f,
+      #|    0x02,
+      #|    0x00,
+      #|    0xf1,
+      #|    0xe0,
+      #|    0x07,
+      #|    0x9f,
+      #|    0x9a,
+      #|    0x30,
+      #|    0x3c,
+      #|    0x08,
+      #|    0x4e,
+      #|    0x31,
+      #|    0x3c,
+      #|    0x18,
+      #|    0x4e,
+      #|    0x1f,
+      #|    0x02,
+      #|    0x00,
+      #|    0xf1,
+      #|    0x24,
+      #|    0x1a,
+      #|    0x40,
+      #|    0xfa,
+      #|    0xe1,
+      #|    0x07,
+      #|    0x9f,
+      #|    0x9a,
+      #|    0x02,
+      #|    0x00,
+      #|    0x01,
+      #|    0x0b,
+      #|    0xe0,
+      #|    0x03,
+      #|    0x02,
+      #|    0x2a,
+      #|    0xc0,
+      #|    0x03,
+      #|    0x5f,
+      #|    0xd6,
+      #|  ],
+      #|  relocations: [],
+      #|  sources: [],
+      #|  traps: [],
+      #|  safepoints: [],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
 test "AArch64 pipeline emits addresses inside the semantic stack-object area" {
   let builder = @semantic.FunctionBuilder::new(
     "emitted_stack_addresses",

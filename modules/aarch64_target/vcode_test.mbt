@@ -547,3 +547,44 @@ test "AArch64 verifier rejects an invalid vector narrowing destination" {
     _ => fail("expected invalid vector narrowing to be rejected")
   }
 }
+
+///|
+test "AArch64 verifier rejects floating lanes for all-true" {
+  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
+    "bad_vector_all_true",
+    [V128],
+  )
+  let entry = builder.entry_block()
+  builder.append_body(
+    entry,
+    VectorPredicate(AllTrue(F32x4)),
+    [@vcode.Input::any(builder.parameter(0))],
+    [@vcode.Output::any(I32)],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  builder.set_terminator(
+    entry,
+    Return,
+    [],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  try verify_vcode(builder.finish()) catch {
+    error =>
+      inspect(
+        error,
+        content=(
+          #|InvalidInstruction(
+          #|  instruction=i0,
+          #|  message="vector all-true predicate requires integer lanes",
+          #|)
+        ),
+      )
+  } noraise {
+    _ => fail("expected floating all-true predicate to be rejected")
+  }
+}

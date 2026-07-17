@@ -827,6 +827,8 @@ fn lower_instruction(
       Some(VectorConvert(ExtendHigh(lane, signedness)))
     Vector(Convert(Narrow(lane, signedness))) =>
       Some(VectorConvert(Narrow(lane, signedness)))
+    Vector(Predicate(AnyTrue)) => Some(VectorPredicate(AnyTrue))
+    Vector(Predicate(AllTrue(lane))) => Some(VectorPredicate(AllTrue(lane)))
     ReferenceCompare(comparison) => {
       let operand_type = match semantic_operands.get(0) {
         Some(value) => function.value_type(value)

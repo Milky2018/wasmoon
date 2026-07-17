@@ -234,6 +234,7 @@ pub(all) enum AArch64Inst {
   VectorIntShift(@machv.VectorLane, @machv.VectorIntShiftOp)
   VectorIntCompare(@machv.VectorLane, @machv.VectorIntComparison)
   VectorConvert(AArch64VectorConversion)
+  VectorPredicate(AArch64VectorPredicate)
   IntUnary(GprWidth, AArch64IntUnary)
   IntBinary(GprWidth, AArch64IntBinary)
   PopulationCount(GprWidth)
@@ -319,6 +320,11 @@ pub(all) enum AArch64VectorIntUnary {
   Negate
   PopulationCount
   ExtendAddPairwise(@machv.Signedness)
+} derive(Eq, @debug.Debug)
+
+pub(all) enum AArch64VectorPredicate {
+  AnyTrue
+  AllTrue(@machv.VectorLane)
 } derive(Eq, @debug.Debug)
 
 pub(all) struct AbiPolicy {

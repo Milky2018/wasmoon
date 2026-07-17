@@ -1742,6 +1742,109 @@ test "AArch64 saturating vector narrowing handles every form and alias" {
 }
 
 ///|
+test "AArch64 vector truth predicate encodings cover every lane" {
+  let buffer = CodeBuffer::new()
+  let source = @vcode.PhysicalReg::new(3, FpVector)
+  let destination = @vcode.PhysicalReg::new(7, Int)
+  emit_vector_predicate(buffer, AnyTrue, source, destination)
+  let lanes : Array[@semantic.VectorLane] = [I8x16, I16x8, I32x4, I64x2]
+  for lane in lanes {
+    emit_vector_predicate(buffer, AllTrue(lane), source, destination)
+  }
+  debug_inspect(
+    buffer.code,
+    content=(
+      #|[
+      #|  0x70,
+      #|  0xa8,
+      #|  0x30,
+      #|  0x6e,
+      #|  0x10,
+      #|  0x02,
+      #|  0x66,
+      #|  0x9e,
+      #|  0x1f,
+      #|  0x02,
+      #|  0x00,
+      #|  0xf1,
+      #|  0xe7,
+      #|  0x07,
+      #|  0x9f,
+      #|  0x9a,
+      #|  0x70,
+      #|  0xa8,
+      #|  0x31,
+      #|  0x6e,
+      #|  0x10,
+      #|  0x02,
+      #|  0x66,
+      #|  0x9e,
+      #|  0x1f,
+      #|  0x02,
+      #|  0x00,
+      #|  0xf1,
+      #|  0xe7,
+      #|  0x07,
+      #|  0x9f,
+      #|  0x9a,
+      #|  0x70,
+      #|  0xa8,
+      #|  0x71,
+      #|  0x6e,
+      #|  0x10,
+      #|  0x02,
+      #|  0x66,
+      #|  0x9e,
+      #|  0x1f,
+      #|  0x02,
+      #|  0x00,
+      #|  0xf1,
+      #|  0xe7,
+      #|  0x07,
+      #|  0x9f,
+      #|  0x9a,
+      #|  0x70,
+      #|  0xa8,
+      #|  0xb1,
+      #|  0x6e,
+      #|  0x10,
+      #|  0x02,
+      #|  0x66,
+      #|  0x9e,
+      #|  0x1f,
+      #|  0x02,
+      #|  0x00,
+      #|  0xf1,
+      #|  0xe7,
+      #|  0x07,
+      #|  0x9f,
+      #|  0x9a,
+      #|  0x70,
+      #|  0x3c,
+      #|  0x08,
+      #|  0x4e,
+      #|  0x71,
+      #|  0x3c,
+      #|  0x18,
+      #|  0x4e,
+      #|  0x1f,
+      #|  0x02,
+      #|  0x00,
+      #|  0xf1,
+      #|  0x24,
+      #|  0x1a,
+      #|  0x40,
+      #|  0xfa,
+      #|  0xe7,
+      #|  0x07,
+      #|  0x9f,
+      #|  0x9a,
+      #|]
+    ),
+  )
+}
+
+///|
 test "AAPCS64 platform call layout preserves mixed overflow order" {
   let layout = platform_call_layout([
     I64,

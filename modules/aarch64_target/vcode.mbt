@@ -103,6 +103,12 @@ pub(all) enum AArch64VectorConversion {
 } derive(Eq, Debug)
 
 ///|
+pub(all) enum AArch64VectorPredicate {
+  AnyTrue
+  AllTrue(@semantic.VectorLane)
+} derive(Eq, Debug)
+
+///|
 pub(all) enum AArch64FloatCondition {
   Equal
   NotEqual
@@ -206,6 +212,7 @@ pub(all) enum AArch64Inst {
   VectorIntShift(@semantic.VectorLane, @semantic.VectorIntShiftOp)
   VectorIntCompare(@semantic.VectorLane, @semantic.VectorIntComparison)
   VectorConvert(AArch64VectorConversion)
+  VectorPredicate(AArch64VectorPredicate)
   IntUnary(GprWidth, AArch64IntUnary)
   IntBinary(GprWidth, AArch64IntBinary)
   PopulationCount(GprWidth)
@@ -916,6 +923,22 @@ pub fn verify_vcode(
             )
           }
         }
+      VectorPredicate(predicate) => {
+        if predicate is AllTrue(lane) && !is_integer_vector_lane(lane) {
+          raise InvalidInstruction(
+            instruction~,
+            message="vector all-true predicate requires integer lanes",
+          )
+        }
+        require_instruction_shape(
+          function,
+          instruction,
+          [V128],
+          [I32],
+          false,
+          0,
+        )
+      }
       VectorBitwise(operation) => {
         let arity = match operation {
           Not => 1
