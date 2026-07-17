@@ -8,6 +8,8 @@ pub(all) enum GprWidth {
 pub(all) enum AArch64IntUnary {
   Mvn
   Clz
+  Rbit
+  Neg
 } derive(Eq, Debug)
 
 ///|
@@ -114,6 +116,8 @@ pub(all) enum AArch64Inst {
   Move(@semantic.ValueType)
   IntUnary(GprWidth, AArch64IntUnary)
   IntBinary(GprWidth, AArch64IntBinary)
+  PopulationCount(GprWidth)
+  IntHighMultiply(GprWidth, @semantic.Signedness)
   IntRemainder(GprWidth, @semantic.Signedness)
   TrapIfZero(GprWidth)
   TrapIfSignedDivOverflow(GprWidth)
@@ -513,6 +517,21 @@ pub fn verify_vcode(
         require_instruction_shape(function, instruction, [ty], [ty], false, 0)
       }
       IntBinary(width, _) => {
+        let ty = integer_type(width)
+        require_instruction_shape(
+          function,
+          instruction,
+          [ty, ty],
+          [ty],
+          false,
+          0,
+        )
+      }
+      PopulationCount(width) => {
+        let ty = integer_type(width)
+        require_instruction_shape(function, instruction, [ty], [ty], false, 0)
+      }
+      IntHighMultiply(width, _) => {
         let ty = integer_type(width)
         require_instruction_shape(
           function,

@@ -88,6 +88,90 @@ test "AArch64 lowering inserts explicit traps before signed division" {
 }
 
 ///|
+test "AArch64 lowering legalizes remaining pure scalar integer operations" {
+  let builder = @semantic.FunctionBuilder::new(
+    "pure_integer_operations",
+    Internal,
+    [Ptr64, I32, I32, I64, I64],
+    [I32, I64],
+  )
+  let parameters = builder.parameters()
+  let trailing32 = builder.emit(IntUnary(CountTrailingZeros), [parameters[1]], [
+      I32,
+    ])[0]
+  let population32 = builder.emit(IntUnary(PopulationCount), [parameters[1]], [
+      I32,
+    ])[0]
+  let rotated32 = builder.emit(
+      IntBinary(RotateLeft),
+      [trailing32, population32],
+      [I32],
+    )[0]
+  let signed_high32 = builder.emit(
+      IntHighMultiply(Signed),
+      [rotated32, parameters[2]],
+      [I32],
+    )[0]
+  let unsigned_high32 = builder.emit(
+      IntHighMultiply(Unsigned),
+      [signed_high32, population32],
+      [I32],
+    )[0]
+  let trailing64 = builder.emit(IntUnary(CountTrailingZeros), [parameters[3]], [
+      I64,
+    ])[0]
+  let population64 = builder.emit(IntUnary(PopulationCount), [parameters[3]], [
+      I64,
+    ])[0]
+  let rotated64 = builder.emit(
+      IntBinary(RotateLeft),
+      [trailing64, population64],
+      [I64],
+    )[0]
+  let signed_high64 = builder.emit(
+      IntHighMultiply(Signed),
+      [rotated64, parameters[4]],
+      [I64],
+    )[0]
+  let unsigned_high64 = builder.emit(
+      IntHighMultiply(Unsigned),
+      [signed_high64, population64],
+      [I64],
+    )[0]
+  builder.return_([unsigned_high32, unsigned_high64])
+  inspect(
+    lower(builder.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode pure_integer_operations(v0:ptr64, v1:i32, v2:i32, v3:i64, v4:i64) -> (i32, i64)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v5:any@late]
+      #|  i1 IncomingReg(I32, p1:int) uses=[v1:fixed(p1:int)@early] defs=[v6:any@late]
+      #|  i2 IncomingReg(I32, p2:int) uses=[v2:fixed(p2:int)@early] defs=[v7:any@late]
+      #|  i3 IncomingReg(I64, p3:int) uses=[v3:fixed(p3:int)@early] defs=[v8:any@late]
+      #|  i4 IncomingReg(I64, p4:int) uses=[v4:fixed(p4:int)@early] defs=[v9:any@late]
+      #|  i5 IntUnary(W32, Rbit) uses=[v6:any@early] defs=[v10:any@late]
+      #|  i6 IntUnary(W32, Clz) uses=[v10:any@early] defs=[v11:any@late]
+      #|  i7 PopulationCount(W32) uses=[v6:any@early] defs=[v12:any@late]
+      #|  i8 IntUnary(W32, Neg) uses=[v12:any@early] defs=[v13:any@late]
+      #|  i9 IntBinary(W32, Ror) uses=[v11:any@early, v13:any@early] defs=[v14:any@late]
+      #|  i10 IntHighMultiply(W32, Signed) uses=[v14:any@early, v7:any@early] defs=[v15:any@late]
+      #|  i11 IntHighMultiply(W32, Unsigned) uses=[v15:any@early, v12:any@early] defs=[v16:any@late]
+      #|  i12 IntUnary(W64, Rbit) uses=[v8:any@early] defs=[v17:any@late]
+      #|  i13 IntUnary(W64, Clz) uses=[v17:any@early] defs=[v18:any@late]
+      #|  i14 PopulationCount(W64) uses=[v8:any@early] defs=[v19:any@late]
+      #|  i15 IntUnary(W64, Neg) uses=[v19:any@early] defs=[v20:any@late]
+      #|  i16 IntBinary(W64, Ror) uses=[v18:any@early, v20:any@early] defs=[v21:any@late]
+      #|  i17 IntHighMultiply(W64, Signed) uses=[v21:any@early, v9:any@early] defs=[v22:any@late]
+      #|  i18 IntHighMultiply(W64, Unsigned) uses=[v22:any@early, v19:any@early] defs=[v23:any@late]
+      #|  i19 OutgoingReg(I32, p0:int) uses=[v16:any@early]
+      #|  i20 OutgoingReg(I64, p1:int) uses=[v23:any@early]
+      #|  i21 Return
+      #|
+    ),
+  )
+}
+
+///|
 test "AArch64 lowering selects a direct platform call with explicit ABI facts" {
   let builder = @semantic.FunctionBuilder::new(
     "direct_platform_call",

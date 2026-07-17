@@ -208,6 +208,8 @@ pub(all) enum AArch64Inst {
   Move(@machv.ValueType)
   IntUnary(GprWidth, AArch64IntUnary)
   IntBinary(GprWidth, AArch64IntBinary)
+  PopulationCount(GprWidth)
+  IntHighMultiply(GprWidth, @machv.Signedness)
   IntRemainder(GprWidth, @machv.Signedness)
   TrapIfZero(GprWidth)
   TrapIfSignedDivOverflow(GprWidth)
@@ -249,6 +251,8 @@ pub(all) enum AArch64IntBinary {
 pub(all) enum AArch64IntUnary {
   Mvn
   Clz
+  Rbit
+  Neg
 } derive(Eq, @debug.Debug)
 
 pub(all) struct AbiPolicy {

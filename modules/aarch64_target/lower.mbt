@@ -596,6 +596,68 @@ fn lower_instruction(
     }
     return
   }
+  if operation is IntUnary(CountTrailingZeros) {
+    guard optional_gpr_width(result_types.get(0)) is Some(width) else {
+      raise UnsupportedOperation(block_index~, instruction_index~, operation~)
+    }
+    let reversed = append_body(
+        builder,
+        block,
+        IntUnary(width, Rbit),
+        operands.map(@vcode.Input::any),
+        result_types.map(@vcode.Output::any),
+        @vcode.InstructionMetadata::empty(),
+      )[0]
+    let results = append_body(
+      builder,
+      block,
+      IntUnary(width, Clz),
+      [@vcode.Input::any(reversed)],
+      result_types.map(@vcode.Output::any),
+      source_metadata(
+        function.instruction_metadata(instruction).unwrap(),
+        roots,
+        operation.semantics(),
+      ),
+    )
+    for index, semantic_result in semantic_results {
+      values[function.value_index(semantic_result).unwrap()] = Some(
+        results[index],
+      )
+    }
+    return
+  }
+  if operation is IntBinary(RotateLeft) {
+    guard optional_gpr_width(result_types.get(0)) is Some(width) else {
+      raise UnsupportedOperation(block_index~, instruction_index~, operation~)
+    }
+    let negated_shift = append_body(
+        builder,
+        block,
+        IntUnary(width, Neg),
+        [@vcode.Input::any(operands[1])],
+        result_types.map(@vcode.Output::any),
+        @vcode.InstructionMetadata::empty(),
+      )[0]
+    let results = append_body(
+      builder,
+      block,
+      IntBinary(width, Ror),
+      [@vcode.Input::any(operands[0]), @vcode.Input::any(negated_shift)],
+      result_types.map(@vcode.Output::any),
+      source_metadata(
+        function.instruction_metadata(instruction).unwrap(),
+        roots,
+        operation.semantics(),
+      ),
+    )
+    for index, semantic_result in semantic_results {
+      values[function.value_index(semantic_result).unwrap()] = Some(
+        results[index],
+      )
+    }
+    return
+  }
   let selected = match operation {
     I32Const(bits) => Some(LoadConstant(W32, bits.to_uint64()))
     I64Const(bits) => Some(LoadConstant(W64, bits))
@@ -610,6 +672,11 @@ fn lower_instruction(
     IntUnary(CountLeadingZeros) =>
       match optional_gpr_width(result_types.get(0)) {
         Some(width) => Some(IntUnary(width, Clz))
+        None => None
+      }
+    IntUnary(PopulationCount) =>
+      match optional_gpr_width(result_types.get(0)) {
+        Some(width) => Some(PopulationCount(width))
         None => None
       }
     IntBinary(binary) =>
@@ -627,6 +694,11 @@ fn lower_instruction(
         None => None
       }
     }
+    IntHighMultiply(signedness) =>
+      match optional_gpr_width(result_types.get(0)) {
+        Some(width) => Some(IntHighMultiply(width, signedness))
+        None => None
+      }
     FloatUnary(unary) =>
       match (result_types.get(0), lower_float_unary(unary)) {
         (Some(F32), Some(unary)) => Some(FloatUnary(F32, unary))

@@ -286,6 +286,10 @@ fn encode_int_unary(
     (W64, Mvn) => 0xAA2003E0U | (reg_bits(source) << 16) | reg_bits(destination)
     (W32, Clz) => 0x5AC01000U | (reg_bits(source) << 5) | reg_bits(destination)
     (W64, Clz) => 0xDAC01000U | (reg_bits(source) << 5) | reg_bits(destination)
+    (W32, Rbit) => 0x5AC00000U | (reg_bits(source) << 5) | reg_bits(destination)
+    (W64, Rbit) => 0xDAC00000U | (reg_bits(source) << 5) | reg_bits(destination)
+    (W32, Neg) => 0x4B0003E0U | (reg_bits(source) << 16) | reg_bits(destination)
+    (W64, Neg) => 0xCB0003E0U | (reg_bits(source) << 16) | reg_bits(destination)
   }
 }
 
@@ -732,6 +736,34 @@ fn emit_instruction(
       buffer.emit_word(
         encode_int_binary(width, operation, reg(2), reg(0), reg(1)),
       )
+    PopulationCount(width) => {
+      let scratch = @vcode.PhysicalReg::new(16, FpVector)
+      let move_to_vector = if width == W32 { 0x1E270000U } else { 0x9E670000U }
+      buffer.emit_word(
+        move_to_vector | (reg_bits(reg(0)) << 5) | reg_bits(scratch),
+      )
+      buffer.emit_word(
+        0x0E205800U | (reg_bits(scratch) << 5) | reg_bits(scratch),
+      )
+      buffer.emit_word(
+        0x0E31B800U | (reg_bits(scratch) << 5) | reg_bits(scratch),
+      )
+      buffer.emit_word(
+        0x1E260000U | (reg_bits(scratch) << 5) | reg_bits(reg(1)),
+      )
+    }
+    IntHighMultiply(width, signedness) =>
+      if width == W64 {
+        let base = if signedness == Signed { 0x9B407C00U } else { 0x9BC07C00U }
+        buffer.emit_word(encode_three_register(base, reg(2), reg(0), reg(1)))
+      } else {
+        let scratch = @vcode.PhysicalReg::new(16, Int)
+        let base = if signedness == Signed { 0x9B207C00U } else { 0x9BA07C00U }
+        buffer.emit_word(encode_three_register(base, scratch, reg(0), reg(1)))
+        buffer.emit_word(
+          0xD360FC00U | (reg_bits(scratch) << 5) | reg_bits(reg(2)),
+        )
+      }
     IntRemainder(width, signedness) => {
       let quotient = @vcode.PhysicalReg::new(16, Int)
       let division = if signedness == Signed { Sdiv } else { Udiv }

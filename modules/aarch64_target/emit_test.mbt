@@ -1309,6 +1309,198 @@ test "AArch64 signed remainder skips the division overflow trap" {
 }
 
 ///|
+test "AArch64 emits remaining pure scalar integer operations" {
+  let builder = @semantic.FunctionBuilder::new(
+    "emitted_pure_integer_operations",
+    Internal,
+    [Ptr64, I32, I32, I64, I64],
+    [I32, I64],
+  )
+  let parameters = builder.parameters()
+  let trailing32 = builder.emit(IntUnary(CountTrailingZeros), [parameters[1]], [
+      I32,
+    ])[0]
+  let population32 = builder.emit(IntUnary(PopulationCount), [parameters[1]], [
+      I32,
+    ])[0]
+  let rotated32 = builder.emit(
+      IntBinary(RotateLeft),
+      [trailing32, population32],
+      [I32],
+    )[0]
+  let signed_high32 = builder.emit(
+      IntHighMultiply(Signed),
+      [rotated32, parameters[2]],
+      [I32],
+    )[0]
+  let unsigned_high32 = builder.emit(
+      IntHighMultiply(Unsigned),
+      [signed_high32, population32],
+      [I32],
+    )[0]
+  let trailing64 = builder.emit(IntUnary(CountTrailingZeros), [parameters[3]], [
+      I64,
+    ])[0]
+  let population64 = builder.emit(IntUnary(PopulationCount), [parameters[3]], [
+      I64,
+    ])[0]
+  let rotated64 = builder.emit(
+      IntBinary(RotateLeft),
+      [trailing64, population64],
+      [I64],
+    )[0]
+  let signed_high64 = builder.emit(
+      IntHighMultiply(Signed),
+      [rotated64, parameters[4]],
+      [I64],
+    )[0]
+  let unsigned_high64 = builder.emit(
+      IntHighMultiply(Unsigned),
+      [signed_high64, population64],
+      [I64],
+    )[0]
+  builder.return_([unsigned_high32, unsigned_high64])
+  let function = lower(builder.finish(), test_lowering_context())
+  let allocation = allocate(function)
+  let frame = plan_frame(function, allocation)
+  debug_inspect(
+    emit(function, allocation, frame),
+    content=(
+      #|{
+      #|  architecture: AArch64,
+      #|  code: [
+      #|    0xe5,
+      #|    0x03,
+      #|    0x00,
+      #|    0xaa,
+      #|    0xe0,
+      #|    0x03,
+      #|    0x01,
+      #|    0x2a,
+      #|    0xe1,
+      #|    0x03,
+      #|    0x02,
+      #|    0x2a,
+      #|    0xe2,
+      #|    0x03,
+      #|    0x03,
+      #|    0xaa,
+      #|    0xe3,
+      #|    0x03,
+      #|    0x04,
+      #|    0xaa,
+      #|    0x04,
+      #|    0x00,
+      #|    0xc0,
+      #|    0x5a,
+      #|    0x85,
+      #|    0x10,
+      #|    0xc0,
+      #|    0x5a,
+      #|    0x10,
+      #|    0x00,
+      #|    0x27,
+      #|    0x1e,
+      #|    0x10,
+      #|    0x5a,
+      #|    0x20,
+      #|    0x0e,
+      #|    0x10,
+      #|    0xba,
+      #|    0x31,
+      #|    0x0e,
+      #|    0x04,
+      #|    0x02,
+      #|    0x26,
+      #|    0x1e,
+      #|    0xe0,
+      #|    0x03,
+      #|    0x04,
+      #|    0x4b,
+      #|    0xa6,
+      #|    0x2c,
+      #|    0xc0,
+      #|    0x1a,
+      #|    0xd0,
+      #|    0x7c,
+      #|    0x21,
+      #|    0x9b,
+      #|    0x00,
+      #|    0xfe,
+      #|    0x60,
+      #|    0xd3,
+      #|    0x10,
+      #|    0x7c,
+      #|    0xa4,
+      #|    0x9b,
+      #|    0x01,
+      #|    0xfe,
+      #|    0x60,
+      #|    0xd3,
+      #|    0x40,
+      #|    0x00,
+      #|    0xc0,
+      #|    0xda,
+      #|    0x04,
+      #|    0x10,
+      #|    0xc0,
+      #|    0xda,
+      #|    0x50,
+      #|    0x00,
+      #|    0x67,
+      #|    0x9e,
+      #|    0x10,
+      #|    0x5a,
+      #|    0x20,
+      #|    0x0e,
+      #|    0x10,
+      #|    0xba,
+      #|    0x31,
+      #|    0x0e,
+      #|    0x00,
+      #|    0x02,
+      #|    0x26,
+      #|    0x1e,
+      #|    0xe2,
+      #|    0x03,
+      #|    0x00,
+      #|    0xcb,
+      #|    0x85,
+      #|    0x2c,
+      #|    0xc2,
+      #|    0x9a,
+      #|    0xa2,
+      #|    0x7c,
+      #|    0x43,
+      #|    0x9b,
+      #|    0x43,
+      #|    0x7c,
+      #|    0xc0,
+      #|    0x9b,
+      #|    0xe0,
+      #|    0x03,
+      #|    0x01,
+      #|    0x2a,
+      #|    0xe1,
+      #|    0x03,
+      #|    0x03,
+      #|    0xaa,
+      #|    0xc0,
+      #|    0x03,
+      #|    0x5f,
+      #|    0xd6,
+      #|  ],
+      #|  relocations: [],
+      #|  sources: [],
+      #|  traps: [],
+      #|  safepoints: [],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
 test "AArch64 scalar floating-point emission preserves constant bits" {
   let builder = @semantic.FunctionBuilder::new(
     "emitted_scalar_float",
