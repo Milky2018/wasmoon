@@ -292,23 +292,24 @@ pub(all) enum SafepointKind {
 } derive(Eq, Debug)
 
 ///|
+pub(all) enum SymbolReference {
+  Code(@semantic.CodeSymbol)
+  External(@semantic.ExternalSymbol)
+  Data(@semantic.DataSymbol)
+} derive(Eq, Debug)
+
+///|
 pub struct InstructionMetadata {
-  source_id : Int?
-  trap_id : Int?
+  source : @semantic.SourceLocation?
+  trap : @semantic.TrapReason?
   safepoint : SafepointKind?
   live_gc_roots : Array[Value]
-  symbol : String?
+  symbol : SymbolReference?
 }
 
 ///|
 pub fn InstructionMetadata::empty() -> InstructionMetadata {
-  {
-    source_id: None,
-    trap_id: None,
-    safepoint: None,
-    live_gc_roots: [],
-    symbol: None,
-  }
+  { source: None, trap: None, safepoint: None, live_gc_roots: [], symbol: None }
 }
 
 ///|
@@ -316,8 +317,8 @@ pub fn InstructionMetadata::safepoint(
   live_gc_roots : Array[Value],
 ) -> InstructionMetadata {
   {
-    source_id: None,
-    trap_id: None,
+    source: None,
+    trap: None,
     safepoint: Some(Gc),
     live_gc_roots: live_gc_roots.copy(),
     symbol: None,
@@ -326,20 +327,20 @@ pub fn InstructionMetadata::safepoint(
 
 ///|
 pub fn InstructionMetadata::new(
-  source_id? : Int,
-  trap_id? : Int,
+  source? : @semantic.SourceLocation,
+  trap? : @semantic.TrapReason,
   safepoint? : SafepointKind,
   live_gc_roots? : Array[Value] = [],
-  symbol? : String,
+  symbol? : SymbolReference,
 ) -> InstructionMetadata {
-  { source_id, trap_id, safepoint, live_gc_roots: live_gc_roots.copy(), symbol }
+  { source, trap, safepoint, live_gc_roots: live_gc_roots.copy(), symbol }
 }
 
 ///|
 fn InstructionMetadata::copy(self : InstructionMetadata) -> InstructionMetadata {
   {
-    source_id: self.source_id,
-    trap_id: self.trap_id,
+    source: self.source,
+    trap: self.trap,
     safepoint: self.safepoint,
     live_gc_roots: self.live_gc_roots.copy(),
     symbol: self.symbol,

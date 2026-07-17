@@ -1,6 +1,7 @@
 ///|
 priv enum TestInst {
   Add
+  Call
   Jump
   Return
 } derive(Debug)
@@ -364,6 +365,49 @@ test "Builder rejects body instructions after a terminator without mutation" {
       #|vcode terminated()
       #|block0:
       #|  i0 Return
+      #|
+    ),
+  )
+}
+
+///|
+test "VCode preserves typed source trap safepoint and symbol metadata" {
+  let builder : Builder[TestInst] = Builder::new("metadata", [GcRef64])
+  let entry = builder.entry_block()
+  let root = builder.parameter(0)
+  builder.append_body(
+    entry,
+    Call,
+    [Input::any(root)],
+    [],
+    [],
+    InstructionMetadata::new(
+      source=@semantic.SourceLocation::new("fixture.wat", 7, 11),
+      trap=MemoryOutOfBounds,
+      safepoint=GcAndCancellation,
+      live_gc_roots=[root],
+      symbol=External(@semantic.ExternalSymbol::new("runtime.grow")),
+    ),
+  )
+  |> ignore
+  builder.set_terminator(
+    entry,
+    Return,
+    [],
+    [],
+    [],
+    InstructionMetadata::empty(),
+  )
+  |> ignore
+  let function = builder.finish()
+  verify_selected(function)
+  inspect(
+    function.summary(),
+    content=(
+      #|vcode metadata(v0:gcref64)
+      #|block0:
+      #|  i0 Call uses=[v0:any@early] source={ file: "fixture.wat", line: 7, column: 11 } trap=MemoryOutOfBounds safepoint=GcAndCancellation roots=[v0] symbol=External({ name: "runtime.grow" })
+      #|  i1 Return
       #|
     ),
   )

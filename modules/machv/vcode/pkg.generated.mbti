@@ -215,14 +215,14 @@ pub impl Show for Instruction
 pub impl @debug.Debug for Instruction
 
 pub struct InstructionMetadata {
-  source_id : Int?
-  trap_id : Int?
+  source : @machv.SourceLocation?
+  trap : @machv.TrapReason?
   safepoint : SafepointKind?
   live_gc_roots : Array[Value]
-  symbol : String?
+  symbol : SymbolReference?
 }
 pub fn InstructionMetadata::empty() -> Self
-pub fn InstructionMetadata::new(source_id? : Int, trap_id? : Int, safepoint? : SafepointKind, live_gc_roots? : Array[Value], symbol? : String) -> Self
+pub fn InstructionMetadata::new(source? : @machv.SourceLocation, trap? : @machv.TrapReason, safepoint? : SafepointKind, live_gc_roots? : Array[Value], symbol? : SymbolReference) -> Self
 pub fn InstructionMetadata::safepoint(Array[Value]) -> Self
 
 pub(all) enum Location {
@@ -300,6 +300,12 @@ pub struct StackSlot {
 }
 pub impl Eq for StackSlot
 pub impl @debug.Debug for StackSlot
+
+pub(all) enum SymbolReference {
+  Code(@machv.CodeSymbol)
+  External(@machv.ExternalSymbol)
+  Data(@machv.DataSymbol)
+} derive(Eq, @debug.Debug)
 
 pub struct Value {
   // private fields

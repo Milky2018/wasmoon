@@ -96,6 +96,22 @@ pub fn[Inst : Debug] Function::summary(self : Function[Inst]) -> String {
         }
         output += ")"
       }
+      let metadata = data.metadata
+      if metadata.source is Some(source) {
+        output += " source=\{to_repr(source)}"
+      }
+      if metadata.trap is Some(trap) {
+        output += " trap=\{to_repr(trap)}"
+      }
+      if metadata.safepoint is Some(safepoint) {
+        output += " safepoint=\{to_repr(safepoint)}"
+      }
+      if !metadata.live_gc_roots.is_empty() {
+        output += " roots=\{to_repr(metadata.live_gc_roots)}"
+      }
+      if metadata.symbol is Some(symbol) {
+        output += " symbol=\{to_repr(symbol)}"
+      }
       output += "\n"
     }
   }
