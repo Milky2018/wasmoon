@@ -961,6 +961,10 @@ fn emit_vector_predicate(
   source : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
 ) -> Unit raise AArch64EmitError {
+  if predicate is BitMask(lane) {
+    emit_vector_bitmask(buffer, lane, source, destination)
+    return
+  }
   let vector_scratch = @vcode.PhysicalReg::new(16, FpVector)
   let int_scratch = @vcode.PhysicalReg::new(16, Int)
   let reduction_base = match predicate {
@@ -980,6 +984,7 @@ fn emit_vector_predicate(
       return
     }
     AllTrue(F32x4 | F64x2) => raise InvalidVectorInstruction
+    BitMask(_) => raise InvalidVectorInstruction
   }
   buffer.emit_word(
     reduction_base | (reg_bits(source) << 5) | reg_bits(vector_scratch),
@@ -989,6 +994,70 @@ fn emit_vector_predicate(
   )
   buffer.emit_word(0xF100001FU | (reg_bits(int_scratch) << 5))
   emit_overflow_flag(buffer, destination, condition_code(Ne))
+}
+
+///|
+fn emit_vector_bitmask(
+  buffer : CodeBuffer,
+  lane : @semantic.VectorLane,
+  source : @vcode.PhysicalReg,
+  destination : @vcode.PhysicalReg,
+) -> Unit raise AArch64EmitError {
+  if lane == I8x16 {
+    let weights = @vcode.PhysicalReg::new(16, FpVector)
+    let work = @vcode.PhysicalReg::new(17, FpVector)
+    let low = @vcode.PhysicalReg::new(16, Int)
+    let high = @vcode.PhysicalReg::new(17, Int)
+    buffer.emit_word(0x6F090400U | (reg_bits(source) << 5) | reg_bits(work))
+    emit_constant(buffer, W64, low, 0x8040201008040201UL)
+    buffer.emit_word(0x9E670000U | (reg_bits(low) << 5) | reg_bits(weights))
+    buffer.emit_word(0x4E080400U | (reg_bits(weights) << 5) | reg_bits(weights))
+    buffer.emit_word(
+      0x4E209C00U |
+      (reg_bits(weights) << 16) |
+      (reg_bits(work) << 5) |
+      reg_bits(work),
+    )
+    buffer.emit_word(0x6E202800U | (reg_bits(work) << 5) | reg_bits(work))
+    buffer.emit_word(0x6E602800U | (reg_bits(work) << 5) | reg_bits(work))
+    buffer.emit_word(0x6EA02800U | (reg_bits(work) << 5) | reg_bits(work))
+    emit_vector_extract_lane(buffer, I64x2, 0, None, work, low)
+    emit_vector_extract_lane(buffer, I64x2, 1, None, work, high)
+    buffer.emit_word(
+      0x2A000000U |
+      (reg_bits(high) << 16) |
+      (8U << 10) |
+      (reg_bits(low) << 5) |
+      reg_bits(destination),
+    )
+    return
+  }
+  let (lane_count, sign_shift, lsr_base) = match lane {
+    I16x8 => (8, 15U, 0x53007C00U)
+    I32x4 => (4, 31U, 0x53007C00U)
+    I64x2 => (2, 63U, 0xD340FC00U)
+    I8x16 | F32x4 | F64x2 => raise InvalidVectorInstruction
+  }
+  let scratch = @vcode.PhysicalReg::new(16, Int)
+  for index in 0..<lane_count {
+    let lane_result = if index == 0 { destination } else { scratch }
+    emit_vector_extract_lane(buffer, lane, index, None, source, lane_result)
+    buffer.emit_word(
+      lsr_base |
+      (sign_shift << 16) |
+      (reg_bits(lane_result) << 5) |
+      reg_bits(lane_result),
+    )
+    if index > 0 {
+      buffer.emit_word(
+        0x2A000000U |
+        (reg_bits(scratch) << 16) |
+        (index.reinterpret_as_uint() << 10) |
+        (reg_bits(destination) << 5) |
+        reg_bits(destination),
+      )
+    }
+  }
 }
 
 ///|

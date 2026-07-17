@@ -325,6 +325,7 @@ pub(all) enum AArch64VectorIntUnary {
 pub(all) enum AArch64VectorPredicate {
   AnyTrue
   AllTrue(@machv.VectorLane)
+  BitMask(@machv.VectorLane)
 } derive(Eq, @debug.Debug)
 
 pub(all) struct AbiPolicy {

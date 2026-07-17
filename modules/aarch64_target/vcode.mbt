@@ -106,6 +106,7 @@ pub(all) enum AArch64VectorConversion {
 pub(all) enum AArch64VectorPredicate {
   AnyTrue
   AllTrue(@semantic.VectorLane)
+  BitMask(@semantic.VectorLane)
 } derive(Eq, Debug)
 
 ///|
@@ -924,11 +925,18 @@ pub fn verify_vcode(
           }
         }
       VectorPredicate(predicate) => {
-        if predicate is AllTrue(lane) && !is_integer_vector_lane(lane) {
-          raise InvalidInstruction(
-            instruction~,
-            message="vector all-true predicate requires integer lanes",
-          )
+        match predicate {
+          AllTrue(lane) if !is_integer_vector_lane(lane) =>
+            raise InvalidInstruction(
+              instruction~,
+              message="vector all-true predicate requires integer lanes",
+            )
+          BitMask(lane) if !is_integer_vector_lane(lane) =>
+            raise InvalidInstruction(
+              instruction~,
+              message="vector bitmask predicate requires integer lanes",
+            )
+          _ => ()
         }
         require_instruction_shape(
           function,

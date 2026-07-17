@@ -880,6 +880,41 @@ test "AArch64 lowering selects vector truth predicates" {
 }
 
 ///|
+test "AArch64 lowering selects vector integer bitmasks" {
+  let builder = @semantic.FunctionBuilder::new(
+    "vector_integer_bitmasks",
+    Internal,
+    [Ptr64, V128],
+    [I32, I32, I32, I32],
+  )
+  let source = builder.parameters()[1]
+  let lanes : Array[@semantic.VectorLane] = [I8x16, I16x8, I32x4, I64x2]
+  let results = lanes.map(lane => {
+    builder.emit(Vector(Predicate(BitMask(lane))), [source], [I32])[0]
+  })
+  builder.return_(results)
+  inspect(
+    lower(builder.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode vector_integer_bitmasks(v0:ptr64, v1:v128) -> (i32, i32, i32, i32)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v2:any@late]
+      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v3:any@late]
+      #|  i2 VectorPredicate(BitMask(I8x16)) uses=[v3:any@early] defs=[v4:any@late]
+      #|  i3 VectorPredicate(BitMask(I16x8)) uses=[v3:any@early] defs=[v5:any@late]
+      #|  i4 VectorPredicate(BitMask(I32x4)) uses=[v3:any@early] defs=[v6:any@late]
+      #|  i5 VectorPredicate(BitMask(I64x2)) uses=[v3:any@early] defs=[v7:any@late]
+      #|  i6 OutgoingReg(I32, p0:int) uses=[v4:any@early]
+      #|  i7 OutgoingReg(I32, p1:int) uses=[v5:any@early]
+      #|  i8 OutgoingReg(I32, p2:int) uses=[v6:any@early]
+      #|  i9 OutgoingReg(I32, p3:int) uses=[v7:any@early]
+      #|  i10 Return
+      #|
+    ),
+  )
+}
+
+///|
 test "AArch64 lowering assigns one aligned semantic stack-object area" {
   let builder = @semantic.FunctionBuilder::new(
     "stack_object_layout",
