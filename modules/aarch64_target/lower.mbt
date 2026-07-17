@@ -769,6 +769,54 @@ fn lower_instruction(
     )
     return
   }
+  if operation is Vector(Relaxed(Dot8To32AddSigned)) {
+    let low_products = append_body(
+        builder,
+        block,
+        VectorIntBinary(I16x8, ExtendMultiply(Low, Signed)),
+        [@vcode.Input::any(operands[0]), @vcode.Input::any(operands[1])],
+        [@vcode.Output::any(V128)],
+        @vcode.InstructionMetadata::empty(),
+      )[0]
+    let high_products = append_body(
+        builder,
+        block,
+        VectorIntBinary(I16x8, ExtendMultiply(High, Signed)),
+        [@vcode.Input::any(operands[0]), @vcode.Input::any(operands[1])],
+        [@vcode.Output::any(V128)],
+        @vcode.InstructionMetadata::empty(),
+      )[0]
+    let paired_products = append_body(
+        builder,
+        block,
+        VectorPairwiseAddI16x8,
+        [@vcode.Input::any(low_products), @vcode.Input::any(high_products)],
+        [@vcode.Output::any(V128)],
+        @vcode.InstructionMetadata::empty(),
+      )[0]
+    let dot_products = append_body(
+        builder,
+        block,
+        VectorIntUnary(I32x4, ExtendAddPairwise(Signed)),
+        [@vcode.Input::any(paired_products)],
+        [@vcode.Output::any(V128)],
+        @vcode.InstructionMetadata::empty(),
+      )[0]
+    let result = append_body(
+        builder,
+        block,
+        VectorIntBinary(I32x4, Add),
+        [@vcode.Input::any(dot_products), @vcode.Input::any(operands[2])],
+        [@vcode.Output::any(V128)],
+        source_metadata(
+          function.instruction_metadata(instruction).unwrap(),
+          roots,
+          operation.semantics(),
+        ),
+      )[0]
+    values[function.value_index(semantic_results[0]).unwrap()] = Some(result)
+    return
+  }
   let selected = match operation {
     I32Const(bits) => Some(LoadConstant(W32, bits.to_uint64()))
     I64Const(bits) => Some(LoadConstant(W64, bits))

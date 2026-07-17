@@ -1927,6 +1927,8 @@ fn emit_instruction(
         reg(1),
         reg(2),
       )
+    VectorPairwiseAddI16x8 =>
+      emit_vector_binary(buffer, 0x4E60BC00U, reg(0), reg(1), reg(2))
     VectorRelaxedDot8To16 =>
       emit_vector_relaxed_dot8_to16(buffer, reg(0), reg(1), reg(2))
     VectorBitwise(operation) =>
