@@ -257,28 +257,57 @@ pub fn JITModule::load_with_imports(
               } else {
                 ([], [])
               }
-              let trampoline = @wasmoon_jit.build_hostcall_import_trampoline_for_target(
-                param_types,
-                result_types,
-                host_func_addr,
-                precompiled.target,
-              ) catch {
-                err =>
+              let (code_ints, func_addr_fixups) = match precompiled.target {
+                AArch64 => {
+                  let trampoline = @wasmoon_jit.build_hostcall_import_trampoline_for_target(
+                    param_types,
+                    result_types,
+                    host_func_addr,
+                    precompiled.target,
+                  ) catch {
+                    err =>
+                      raise ImportTrampolineCompilationFailed(
+                        import_idx=i,
+                        module_name=imp.module_name,
+                        func_name=imp.func_name,
+                        message=err.to_string(),
+                      )
+                  }
+                  (trampoline.code, trampoline.func_addr_fixups)
+                }
+                X86_64 => {
+                  let mc = @wasmoon_jit.emit_legacy_amd64_hostcall_import_trampoline(
+                    param_types,
+                    result_types,
+                    host_func_addr,
+                    @wasmoon_jit.runtime_hostcall_symbol(),
+                    @wasmoon_jit.wasm_calling_convention(isa=AMD64),
+                  ) catch {
+                    err =>
+                      raise ImportTrampolineCompilationFailed(
+                        import_idx=i,
+                        module_name=imp.module_name,
+                        func_name=imp.func_name,
+                        message=err.to_string(),
+                      )
+                  }
+                  (mc.get_bytes(), [])
+                }
+                Unknown =>
                   raise ImportTrampolineCompilationFailed(
                     import_idx=i,
                     module_name=imp.module_name,
                     func_name=imp.func_name,
-                    message=err.to_string(),
+                    message="hostcall import trampoline needs a concrete target architecture",
                   )
               }
-              let code_ints = trampoline.code
               let exec = @wasmoon_jit.ExecCode::try_alloc(code_ints)
               match exec {
                 Some(ec) => {
                   // AArch64 hostcall trampolines may carry runtime func-address
                   // fixups (LoadJITFuncPtr). Patch them before first execution.
                   let func_table_ptr = ctx.get_func_table_ptr()
-                  for fixup in trampoline.func_addr_fixups {
+                  for fixup in func_addr_fixups {
                     @wasmoon_jit.patch_func_addr_fixup_raw_for_target(
                       precompiled.target,
                       ec.ptr(),
