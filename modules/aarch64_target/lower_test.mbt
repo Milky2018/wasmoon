@@ -233,6 +233,46 @@ test "AArch64 lowering selects vector lane movement" {
 }
 
 ///|
+test "AArch64 lowering selects vector shuffle and swizzle" {
+  let builder = @semantic.FunctionBuilder::new(
+    "vector_permute",
+    Internal,
+    [Ptr64, V128, V128, V128],
+    [V128],
+  )
+  let parameters = builder.parameters()
+  let mask : FixedArray[Int] = [
+    0, 17, 2, 19, 4, 21, 6, 23, 8, 25, 10, 27, 12, 29, 14, 31,
+  ]
+  let shuffled = builder.emit(
+      Vector(Shuffle(mask)),
+      [parameters[1], parameters[2]],
+      [V128],
+    )[0]
+  let swizzled = builder.emit(Vector(Swizzle), [shuffled, parameters[3]], [V128])[0]
+  builder.return_([swizzled])
+  inspect(
+    lower(builder.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode vector_permute(v0:ptr64, v1:v128, v2:v128, v3:v128) -> (v128)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v4:any@late]
+      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v5:any@late]
+      #|  i2 IncomingReg(V128, p1:fpvec) uses=[v2:fixed(p1:fpvec)@early] defs=[v6:any@late]
+      #|  i3 IncomingReg(V128, p2:fpvec) uses=[v3:fixed(p2:fpvec)@early] defs=[v7:any@late]
+      #|  i4 VectorShuffle(
+      #|  <FixedArray:
+      #|    [0, 17, 2, 19, 4, 21, 6, 23, 8, 25, 10, 27, 12, 29, 14, 31]>,
+      #|) uses=[v5:any@early, v6:any@early] defs=[v8:any@late]
+      #|  i5 VectorSwizzle uses=[v8:any@early, v7:any@early] defs=[v9:any@late]
+      #|  i6 OutgoingReg(V128, p0:fpvec) uses=[v9:any@early]
+      #|  i7 Return
+      #|
+    ),
+  )
+}
+
+///|
 test "AArch64 lowering assigns one aligned semantic stack-object area" {
   let builder = @semantic.FunctionBuilder::new(
     "stack_object_layout",

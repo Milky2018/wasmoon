@@ -595,6 +595,60 @@ fn emit_vector_replace_lane(
 }
 
 ///|
+fn emit_vector_table_lookup(
+  buffer : CodeBuffer,
+  table : @vcode.PhysicalReg,
+  indices : @vcode.PhysicalReg,
+  destination : @vcode.PhysicalReg,
+) -> Unit {
+  buffer.emit_word(
+    0x4E000000U |
+    (reg_bits(indices) << 16) |
+    (reg_bits(table) << 5) |
+    reg_bits(destination),
+  )
+}
+
+///|
+fn emit_vector_shuffle(
+  buffer : CodeBuffer,
+  mask : FixedArray[Int],
+  first : @vcode.PhysicalReg,
+  second : @vcode.PhysicalReg,
+  destination : @vcode.PhysicalReg,
+) -> Unit {
+  let mut first_low = 0UL
+  let mut first_high = 0UL
+  let mut second_low = 0UL
+  let mut second_high = 0UL
+  for index in 0..<16 {
+    let lane = mask[index]
+    let shift = index % 8 * 8
+    let first_index = if lane < 16 { lane } else { 0x80 }
+    let second_index = if lane >= 16 { lane - 16 } else { 0x80 }
+    if index < 8 {
+      first_low = first_low | (first_index.to_uint64() << shift)
+      second_low = second_low | (second_index.to_uint64() << shift)
+    } else {
+      first_high = first_high | (first_index.to_uint64() << shift)
+      second_high = second_high | (second_index.to_uint64() << shift)
+    }
+  }
+  let first_indices = @vcode.PhysicalReg::new(16, FpVector)
+  let second_indices = @vcode.PhysicalReg::new(17, FpVector)
+  emit_vector_constant(buffer, first_indices, first_low, first_high)
+  emit_vector_table_lookup(buffer, first, first_indices, first_indices)
+  emit_vector_constant(buffer, second_indices, second_low, second_high)
+  emit_vector_table_lookup(buffer, second, second_indices, second_indices)
+  buffer.emit_word(
+    0x4EA01C00U |
+    (reg_bits(second_indices) << 16) |
+    (reg_bits(first_indices) << 5) |
+    reg_bits(destination),
+  )
+}
+
+///|
 fn emit_vector_binary(
   buffer : CodeBuffer,
   base : UInt,
@@ -1099,6 +1153,9 @@ fn emit_instruction(
       }
       emit_vector_replace_lane(buffer, lane, index, reg(1), reg(2))
     }
+    VectorShuffle(mask) =>
+      emit_vector_shuffle(buffer, mask, reg(0), reg(1), reg(2))
+    VectorSwizzle => emit_vector_table_lookup(buffer, reg(0), reg(1), reg(2))
     VectorBitwise(operation) =>
       match operation {
         Not => emit_vector_bitwise(buffer, Not, reg(0), reg(0), reg(0), reg(1))

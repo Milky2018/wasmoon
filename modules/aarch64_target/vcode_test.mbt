@@ -167,6 +167,53 @@ test "AArch64 verifier rejects an untied vector lane replacement" {
 }
 
 ///|
+test "AArch64 verifier rejects an out-of-range vector shuffle lane" {
+  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
+    "invalid_vector_shuffle",
+    [V128, V128],
+  )
+  let entry = builder.entry_block()
+  let mask : FixedArray[Int] = [
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 32,
+  ]
+  builder.append_body(
+    entry,
+    VectorShuffle(mask),
+    [
+      @vcode.Input::any(builder.parameter(0)),
+      @vcode.Input::any(builder.parameter(1)),
+    ],
+    [@vcode.Output::any(V128)],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  builder.set_terminator(
+    entry,
+    Return,
+    [],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  try verify_vcode(builder.finish()) catch {
+    error =>
+      inspect(
+        error,
+        content=(
+          #|InvalidInstruction(
+          #|  instruction=i0,
+          #|  message="vector shuffle lane index is out of range",
+          #|)
+        ),
+      )
+  } noraise {
+    _ => fail("expected the invalid vector shuffle to be rejected")
+  }
+}
+
+///|
 fn test_platform_call_clobbers() -> Array[@vcode.PhysicalReg] {
   let clobbers : Array[@vcode.PhysicalReg] = []
   for index in 0..<18 {

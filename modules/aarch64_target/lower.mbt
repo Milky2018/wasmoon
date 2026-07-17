@@ -790,6 +790,8 @@ fn lower_instruction(
     Vector(Splat(lane)) => Some(VectorSplat(lane))
     Vector(ExtractLane(lane, index, extension)) =>
       Some(VectorExtractLane(lane, index, extension))
+    Vector(Shuffle(mask)) => Some(VectorShuffle(mask))
+    Vector(Swizzle) => Some(VectorSwizzle)
     Vector(Bitwise(operation)) => Some(VectorBitwise(operation))
     ReferenceCompare(comparison) => {
       let operand_type = match semantic_operands.get(0) {

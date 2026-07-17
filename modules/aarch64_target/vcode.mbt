@@ -168,6 +168,8 @@ pub(all) enum AArch64Inst {
   VectorSplat(@semantic.VectorLane)
   VectorExtractLane(@semantic.VectorLane, Int, @semantic.Signedness?)
   VectorReplaceLane(@semantic.VectorLane, Int)
+  VectorShuffle(FixedArray[Int])
+  VectorSwizzle
   VectorBitwise(@semantic.VectorBitwiseOp)
   IntUnary(GprWidth, AArch64IntUnary)
   IntBinary(GprWidth, AArch64IntBinary)
@@ -697,6 +699,39 @@ pub fn verify_vcode(
           )
         }
       }
+      VectorShuffle(mask) => {
+        if mask.length() != 16 {
+          raise InvalidInstruction(
+            instruction~,
+            message="vector shuffle requires exactly 16 lane indices",
+          )
+        }
+        for lane in mask {
+          if lane < 0 || lane >= 32 {
+            raise InvalidInstruction(
+              instruction~,
+              message="vector shuffle lane index is out of range",
+            )
+          }
+        }
+        require_instruction_shape(
+          function,
+          instruction,
+          [V128, V128],
+          [V128],
+          false,
+          0,
+        )
+      }
+      VectorSwizzle =>
+        require_instruction_shape(
+          function,
+          instruction,
+          [V128, V128],
+          [V128],
+          false,
+          0,
+        )
       VectorBitwise(operation) => {
         let arity = match operation {
           Not => 1

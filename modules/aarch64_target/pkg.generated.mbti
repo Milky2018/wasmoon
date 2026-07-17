@@ -226,6 +226,8 @@ pub(all) enum AArch64Inst {
   VectorSplat(@machv.VectorLane)
   VectorExtractLane(@machv.VectorLane, Int, @machv.Signedness?)
   VectorReplaceLane(@machv.VectorLane, Int)
+  VectorShuffle(FixedArray[Int])
+  VectorSwizzle
   VectorBitwise(@machv.VectorBitwiseOp)
   IntUnary(GprWidth, AArch64IntUnary)
   IntBinary(GprWidth, AArch64IntBinary)
