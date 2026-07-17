@@ -96,6 +96,12 @@ pub(all) enum AArch64VectorIntBinary {
 } derive(Eq, Debug)
 
 ///|
+pub(all) enum AArch64VectorConversion {
+  ExtendLow(@semantic.VectorLane, @semantic.Signedness)
+  ExtendHigh(@semantic.VectorLane, @semantic.Signedness)
+} derive(Eq, Debug)
+
+///|
 pub(all) enum AArch64FloatCondition {
   Equal
   NotEqual
@@ -198,6 +204,7 @@ pub(all) enum AArch64Inst {
   VectorIntBinary(@semantic.VectorLane, AArch64VectorIntBinary)
   VectorIntShift(@semantic.VectorLane, @semantic.VectorIntShiftOp)
   VectorIntCompare(@semantic.VectorLane, @semantic.VectorIntComparison)
+  VectorConvert(AArch64VectorConversion)
   IntUnary(GprWidth, AArch64IntUnary)
   IntBinary(GprWidth, AArch64IntBinary)
   PopulationCount(GprWidth)
@@ -868,6 +875,25 @@ pub fn verify_vcode(
           function,
           instruction,
           [V128, V128],
+          [V128],
+          false,
+          0,
+        )
+      }
+      VectorConvert(conversion) => {
+        let lane = match conversion {
+          ExtendLow(lane, _) | ExtendHigh(lane, _) => lane
+        }
+        if lane != I16x8 && lane != I32x4 && lane != I64x2 {
+          raise InvalidInstruction(
+            instruction~,
+            message="vector extension requires widened integer lanes",
+          )
+        }
+        require_instruction_shape(
+          function,
+          instruction,
+          [V128],
           [V128],
           false,
           0,

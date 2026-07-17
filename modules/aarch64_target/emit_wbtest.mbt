@@ -1596,6 +1596,82 @@ test "AArch64 widening vector integer encodings cover every legal form" {
 }
 
 ///|
+test "AArch64 vector integer extension encodings cover every legal form" {
+  let buffer = CodeBuffer::new()
+  let source = @vcode.PhysicalReg::new(3, FpVector)
+  let destination = @vcode.PhysicalReg::new(7, FpVector)
+  let lanes : Array[@semantic.VectorLane] = [I16x8, I32x4, I64x2]
+  let halves : Array[@semantic.VectorHalf] = [Low, High]
+  let signednesses : Array[@semantic.Signedness] = [Signed, Unsigned]
+  for lane in lanes {
+    for half in halves {
+      for signedness in signednesses {
+        let conversion = match half {
+          Low => AArch64VectorConversion::ExtendLow(lane, signedness)
+          High => ExtendHigh(lane, signedness)
+        }
+        emit_vector_conversion(buffer, conversion, source, destination)
+      }
+    }
+  }
+  debug_inspect(
+    buffer.code,
+    content=(
+      #|[
+      #|  0x67,
+      #|  0xa4,
+      #|  0x08,
+      #|  0x0f,
+      #|  0x67,
+      #|  0xa4,
+      #|  0x08,
+      #|  0x2f,
+      #|  0x67,
+      #|  0xa4,
+      #|  0x08,
+      #|  0x4f,
+      #|  0x67,
+      #|  0xa4,
+      #|  0x08,
+      #|  0x6f,
+      #|  0x67,
+      #|  0xa4,
+      #|  0x10,
+      #|  0x0f,
+      #|  0x67,
+      #|  0xa4,
+      #|  0x10,
+      #|  0x2f,
+      #|  0x67,
+      #|  0xa4,
+      #|  0x10,
+      #|  0x4f,
+      #|  0x67,
+      #|  0xa4,
+      #|  0x10,
+      #|  0x6f,
+      #|  0x67,
+      #|  0xa4,
+      #|  0x20,
+      #|  0x0f,
+      #|  0x67,
+      #|  0xa4,
+      #|  0x20,
+      #|  0x2f,
+      #|  0x67,
+      #|  0xa4,
+      #|  0x20,
+      #|  0x4f,
+      #|  0x67,
+      #|  0xa4,
+      #|  0x20,
+      #|  0x6f,
+      #|]
+    ),
+  )
+}
+
+///|
 test "AAPCS64 platform call layout preserves mixed overflow order" {
   let layout = platform_call_layout([
     I64,

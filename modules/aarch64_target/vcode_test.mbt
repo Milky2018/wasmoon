@@ -462,3 +462,44 @@ test "AArch64 verifier rejects malformed widening vector operations" {
     ),
   )
 }
+
+///|
+test "AArch64 verifier rejects a non-widened vector extension destination" {
+  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
+    "bad_vector_extension",
+    [V128],
+  )
+  let entry = builder.entry_block()
+  builder.append_body(
+    entry,
+    VectorConvert(ExtendLow(I8x16, Signed)),
+    [@vcode.Input::any(builder.parameter(0))],
+    [@vcode.Output::any(V128)],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  builder.set_terminator(
+    entry,
+    Return,
+    [],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  try verify_vcode(builder.finish()) catch {
+    error =>
+      inspect(
+        error,
+        content=(
+          #|InvalidInstruction(
+          #|  instruction=i0,
+          #|  message="vector extension requires widened integer lanes",
+          #|)
+        ),
+      )
+  } noraise {
+    _ => fail("expected non-widened vector extension to be rejected")
+  }
+}

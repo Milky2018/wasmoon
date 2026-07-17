@@ -899,6 +899,35 @@ fn emit_vector_int_binary(
 }
 
 ///|
+fn emit_vector_conversion(
+  buffer : CodeBuffer,
+  conversion : AArch64VectorConversion,
+  source : @vcode.PhysicalReg,
+  destination : @vcode.PhysicalReg,
+) -> Unit raise AArch64EmitError {
+  let (lane, high, signedness) = match conversion {
+    ExtendLow(lane, signedness) => (lane, false, signedness)
+    ExtendHigh(lane, signedness) => (lane, true, signedness)
+  }
+  let signed = signedness is Signed
+  let prefix = match (high, signed) {
+    (false, true) => 0x0F000000U
+    (false, false) => 0x2F000000U
+    (true, true) => 0x4F000000U
+    (true, false) => 0x6F000000U
+  }
+  let body = match lane {
+    I16x8 => 0x0008A400U
+    I32x4 => 0x0010A400U
+    I64x2 => 0x0020A400U
+    I8x16 | F32x4 | F64x2 => raise InvalidVectorInstruction
+  }
+  buffer.emit_word(
+    prefix | body | (reg_bits(source) << 5) | reg_bits(destination),
+  )
+}
+
+///|
 fn emit_vector_int_shift(
   buffer : CodeBuffer,
   lane : @semantic.VectorLane,
@@ -1523,6 +1552,8 @@ fn emit_instruction(
       emit_vector_int_shift(buffer, lane, operation, reg(0), reg(1), reg(2))
     VectorIntCompare(lane, comparison) =>
       emit_vector_int_compare(buffer, lane, comparison, reg(0), reg(1), reg(2))
+    VectorConvert(conversion) =>
+      emit_vector_conversion(buffer, conversion, reg(0), reg(1))
     VectorBitwise(operation) =>
       match operation {
         Not => emit_vector_bitwise(buffer, Not, reg(0), reg(0), reg(0), reg(1))

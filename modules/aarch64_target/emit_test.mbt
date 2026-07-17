@@ -1180,6 +1180,52 @@ test "AArch64 pipeline emits widening vector integer arithmetic" {
 }
 
 ///|
+test "AArch64 pipeline emits vector integer extension" {
+  let builder = @semantic.FunctionBuilder::new(
+    "emitted_vector_integer_extension",
+    Platform,
+    [V128],
+    [V128],
+  )
+  let result = builder.emit(
+      Vector(Convert(ExtendHigh(I64x2, Unsigned))),
+      builder.parameters(),
+      [V128],
+    )[0]
+  builder.return_([result])
+  let function = lower(builder.finish(), test_lowering_context())
+  let allocation = allocate(function)
+  let frame = plan_frame(function, allocation)
+  debug_inspect(
+    emit(function, allocation, frame),
+    content=(
+      #|{
+      #|  architecture: AArch64,
+      #|  code: [
+      #|    0x01,
+      #|    0x1c,
+      #|    0xa0,
+      #|    0x4e,
+      #|    0x20,
+      #|    0xa4,
+      #|    0x20,
+      #|    0x6f,
+      #|    0xc0,
+      #|    0x03,
+      #|    0x5f,
+      #|    0xd6,
+      #|  ],
+      #|  relocations: [],
+      #|  sources: [],
+      #|  traps: [],
+      #|  safepoints: [],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
 test "AArch64 pipeline emits addresses inside the semantic stack-object area" {
   let builder = @semantic.FunctionBuilder::new(
     "emitted_stack_addresses",

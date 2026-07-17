@@ -745,6 +745,57 @@ test "AArch64 lowering selects widening vector integer arithmetic" {
 }
 
 ///|
+test "AArch64 lowering selects vector integer extension" {
+  let builder = @semantic.FunctionBuilder::new(
+    "vector_integer_extension",
+    Internal,
+    [Ptr64, V128],
+    [V128],
+  )
+  let parameters = builder.parameters()
+  let mut result = parameters[1]
+  let lanes : Array[@semantic.VectorLane] = [I16x8, I32x4, I64x2]
+  let halves : Array[@semantic.VectorHalf] = [Low, High]
+  let signednesses : Array[@semantic.Signedness] = [Signed, Unsigned]
+  for lane in lanes {
+    for half in halves {
+      for signedness in signednesses {
+        let conversion = match half {
+          Low => @semantic.VectorConversionOp::ExtendLow(lane, signedness)
+          High => ExtendHigh(lane, signedness)
+        }
+        result = builder.emit(Vector(Convert(conversion)), [result], [V128])[0]
+      }
+    }
+  }
+  builder.return_([result])
+  inspect(
+    lower(builder.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode vector_integer_extension(v0:ptr64, v1:v128) -> (v128)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v2:any@late]
+      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v3:any@late]
+      #|  i2 VectorConvert(ExtendLow(I16x8, Signed)) uses=[v3:any@early] defs=[v4:any@late]
+      #|  i3 VectorConvert(ExtendLow(I16x8, Unsigned)) uses=[v4:any@early] defs=[v5:any@late]
+      #|  i4 VectorConvert(ExtendHigh(I16x8, Signed)) uses=[v5:any@early] defs=[v6:any@late]
+      #|  i5 VectorConvert(ExtendHigh(I16x8, Unsigned)) uses=[v6:any@early] defs=[v7:any@late]
+      #|  i6 VectorConvert(ExtendLow(I32x4, Signed)) uses=[v7:any@early] defs=[v8:any@late]
+      #|  i7 VectorConvert(ExtendLow(I32x4, Unsigned)) uses=[v8:any@early] defs=[v9:any@late]
+      #|  i8 VectorConvert(ExtendHigh(I32x4, Signed)) uses=[v9:any@early] defs=[v10:any@late]
+      #|  i9 VectorConvert(ExtendHigh(I32x4, Unsigned)) uses=[v10:any@early] defs=[v11:any@late]
+      #|  i10 VectorConvert(ExtendLow(I64x2, Signed)) uses=[v11:any@early] defs=[v12:any@late]
+      #|  i11 VectorConvert(ExtendLow(I64x2, Unsigned)) uses=[v12:any@early] defs=[v13:any@late]
+      #|  i12 VectorConvert(ExtendHigh(I64x2, Signed)) uses=[v13:any@early] defs=[v14:any@late]
+      #|  i13 VectorConvert(ExtendHigh(I64x2, Unsigned)) uses=[v14:any@early] defs=[v15:any@late]
+      #|  i14 OutgoingReg(V128, p0:fpvec) uses=[v15:any@early]
+      #|  i15 Return
+      #|
+    ),
+  )
+}
+
+///|
 test "AArch64 lowering assigns one aligned semantic stack-object area" {
   let builder = @semantic.FunctionBuilder::new(
     "stack_object_layout",

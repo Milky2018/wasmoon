@@ -821,6 +821,10 @@ fn lower_instruction(
     Vector(IntShift(lane, operation)) => Some(VectorIntShift(lane, operation))
     Vector(IntCompare(lane, comparison)) =>
       Some(VectorIntCompare(lane, comparison))
+    Vector(Convert(ExtendLow(lane, signedness))) =>
+      Some(VectorConvert(ExtendLow(lane, signedness)))
+    Vector(Convert(ExtendHigh(lane, signedness))) =>
+      Some(VectorConvert(ExtendHigh(lane, signedness)))
     ReferenceCompare(comparison) => {
       let operand_type = match semantic_operands.get(0) {
         Some(value) => function.value_type(value)

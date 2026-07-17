@@ -233,6 +233,7 @@ pub(all) enum AArch64Inst {
   VectorIntBinary(@machv.VectorLane, AArch64VectorIntBinary)
   VectorIntShift(@machv.VectorLane, @machv.VectorIntShiftOp)
   VectorIntCompare(@machv.VectorLane, @machv.VectorIntComparison)
+  VectorConvert(AArch64VectorConversion)
   IntUnary(GprWidth, AArch64IntUnary)
   IntBinary(GprWidth, AArch64IntBinary)
   PopulationCount(GprWidth)
@@ -292,6 +293,11 @@ pub struct AArch64StackObject {
   area_alignment : Int
 } derive(Eq, @debug.Debug)
 pub fn AArch64StackObject::new(Int, Int, Int, Int, Int) -> Self
+
+pub(all) enum AArch64VectorConversion {
+  ExtendLow(@machv.VectorLane, @machv.Signedness)
+  ExtendHigh(@machv.VectorLane, @machv.Signedness)
+} derive(Eq, @debug.Debug)
 
 pub(all) enum AArch64VectorIntBinary {
   Add
