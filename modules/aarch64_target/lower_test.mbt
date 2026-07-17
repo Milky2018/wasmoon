@@ -215,3 +215,76 @@ test "AArch64 lowering keeps the indirect callee outside the logical signature" 
     ),
   )
 }
+
+///|
+test "AArch64 lowering selects a compatible true internal tail call" {
+  let builder = @semantic.FunctionBuilder::new(
+    "direct_tail_call",
+    Internal,
+    [Ptr64, I64],
+    [I64],
+  )
+  let call = @semantic.SemanticCall::new(
+    Internal(@semantic.CodeSymbol::new("wasm.func.9")),
+    @semantic.Signature::new([Ptr64, I64], [I64]),
+    Internal,
+    @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
+  )
+  builder.tail_call(call, builder.parameters())
+  inspect(
+    lower(builder.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode direct_tail_call(v0:ptr64, v1:i64) -> (i64)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v2:any@late]
+      #|  i1 IncomingReg(I64, p1:int) uses=[v1:fixed(p1:int)@early] defs=[v3:any@late]
+      #|  i2 TailCallDirect(
+      #|  { name: "wasm.func.9" },
+      #|  { params: [Ptr64, I64], results: [I64] },
+      #|  {
+      #|    arguments: [CallRegister(p0:int), CallRegister(p1:int)],
+      #|    results: [p0:int],
+      #|    stack_size: 0,
+      #|  },
+      #|) uses=[v2:any@early, v3:any@early] clobbers=[p0:int, p1:int, p2:int, p3:int, p4:int, p5:int, p6:int, p7:int, p8:int, p9:int, p10:int, p11:int, p12:int, p13:int, p14:int, p15:int, p16:int, p17:int, p0:fpvec, p1:fpvec, p2:fpvec, p3:fpvec, p4:fpvec, p5:fpvec, p6:fpvec, p7:fpvec, p8:fpvec, p9:fpvec, p10:fpvec, p11:fpvec, p12:fpvec, p13:fpvec, p14:fpvec, p15:fpvec, p16:fpvec, p17:fpvec, p18:fpvec, p19:fpvec, p20:fpvec, p21:fpvec, p22:fpvec, p23:fpvec, p24:fpvec, p25:fpvec, p26:fpvec, p27:fpvec, p28:fpvec, p29:fpvec, p30:fpvec, p31:fpvec]
+      #|
+    ),
+  )
+}
+
+///|
+test "AArch64 rejects tail stack arguments that cannot replace the incoming area" {
+  let builder = @semantic.FunctionBuilder::new(
+    "oversized_tail_call",
+    Internal,
+    [Ptr64],
+    [],
+  )
+  let operands = [builder.parameters()[0]]
+  for index in 0..<8 {
+    operands.push(builder.emit(I64Const(index.to_uint64()), [], [I64])[0])
+  }
+  let call = @semantic.SemanticCall::new(
+    Internal(@semantic.CodeSymbol::new("wasm.func.10")),
+    @semantic.Signature::new([Ptr64, I64, I64, I64, I64, I64, I64, I64, I64], []),
+    Internal,
+    @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
+  )
+  builder.tail_call(call, operands)
+  try lower(builder.finish(), test_lowering_context()) |> ignore catch {
+    error =>
+      inspect(
+        error,
+        content=(
+          #|InvalidTarget(
+          #|  cause=InvalidInstruction(
+          #|    instruction=i9,
+          #|    message="tail-call plan is not compatible with the current function",
+          #|  ),
+          #|)
+        ),
+      )
+  } noraise {
+    _ => fail("expected an oversized true tail call to be rejected")
+  }
+}

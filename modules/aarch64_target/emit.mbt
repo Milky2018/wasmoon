@@ -350,6 +350,7 @@ fn emit_call_arguments(
   types : Array[@semantic.ValueType],
   locations : Array[CallArgumentLocation],
   operand_start? : Int = 0,
+  stack_base? : Int = 0,
   callee? : (Int, @vcode.PhysicalReg),
 ) -> Unit raise AArch64EmitError {
   let moves : Array[@vcode.ParallelMove] = []
@@ -362,7 +363,8 @@ fn emit_call_arguments(
         moves.push(
           @vcode.ParallelMove::new(ty, Register(source), Register(destination)),
         )
-      CallStack(offset) => emit_stack_access(buffer, false, ty, source, offset)
+      CallStack(offset) =>
+        emit_stack_access(buffer, false, ty, source, stack_base + offset)
     }
   }
   if callee is Some((operand_index, destination)) {
@@ -483,6 +485,44 @@ fn emit_instruction(
       )
       metadata_offset = buffer.position()
       buffer.emit_word(0xD63F0000U | (reg_bits(callee_register) << 5))
+    }
+    TailCallDirect(target, signature, plan) => {
+      emit_call_arguments(
+        buffer,
+        allocation,
+        frame,
+        instruction,
+        signature.params,
+        plan.arguments,
+        stack_base=frame.frame_size(),
+      )
+      emit_epilogue(buffer, frame)
+      metadata_offset = buffer.position()
+      buffer.emit_word(0x14000000U)
+      buffer.relocations.push(
+        @code_object.Relocation::new(
+          metadata_offset,
+          AArch64Jump26,
+          Code(target),
+        ),
+      )
+    }
+    TailCallIndirect(signature, plan) => {
+      let callee_register = @vcode.PhysicalReg::new(17, Int)
+      emit_call_arguments(
+        buffer,
+        allocation,
+        frame,
+        instruction,
+        signature.params,
+        plan.arguments,
+        operand_start=1,
+        stack_base=frame.frame_size(),
+        callee=(0, callee_register),
+      )
+      emit_epilogue(buffer, frame)
+      metadata_offset = buffer.position()
+      buffer.emit_word(0xD61F0000U | (reg_bits(callee_register) << 5))
     }
     Jump => {
       emit_edge_moves(buffer, function, allocation, frame, block, 0)

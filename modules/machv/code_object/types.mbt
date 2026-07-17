@@ -26,6 +26,7 @@ pub(all) enum RelocationTarget {
 ///|
 pub(all) enum RelocationKind {
   AArch64Call26
+  AArch64Jump26
   AArch64Page21
   AArch64PageOffset12
   X64PcRelative32

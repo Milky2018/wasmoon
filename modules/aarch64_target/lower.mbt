@@ -138,6 +138,24 @@ fn source_metadata(
 }
 
 ///|
+fn terminator_call_metadata(
+  metadata : @semantic.TerminatorMetadata,
+  semantics : @semantic.OperationSemantics,
+) -> @vcode.InstructionMetadata {
+  let safepoint : @semantic.SafepointKind? = match
+    (semantics.gc_safepoint, semantics.cancellation_safepoint) {
+    (true, true) => Some(GcAndCancellation)
+    (true, false) => Some(Gc)
+    (false, true) => Some(Cancellation)
+    (false, false) => None
+  }
+  match metadata.source {
+    Some(source) => @vcode.InstructionMetadata::new(source~, safepoint?)
+    None => @vcode.InstructionMetadata::new(safepoint?)
+  }
+}
+
+///|
 fn lower_direct_platform_call(
   builder : @vcode.Builder[AArch64Inst],
   block : @vcode.Block,
@@ -474,8 +492,11 @@ fn set_terminator(
   inputs : Array[@vcode.Input],
   successors : Array[@vcode.Edge],
   metadata : @vcode.InstructionMetadata,
+  clobbers? : Array[@vcode.PhysicalReg] = [],
 ) -> Unit raise AArch64LowerError {
-  (builder.set_terminator(block, instruction, inputs, successors, [], metadata)
+  (builder.set_terminator(
+    block, instruction, inputs, successors, clobbers, metadata,
+  )
   |> ignore) catch {
     error => raise BuildFailure(cause=error)
   }
@@ -574,6 +595,39 @@ pub fn lower(
           signature.results,
         )
         set_terminator(builder, block, Return, [], [], metadata)
+      }
+      TailCall(call, semantic_operands) => {
+        if function.protocol() != Internal || call.protocol != Internal {
+          raise UnsupportedAbi(
+            message="true tail calls require Internal caller and callee protocols",
+          )
+        }
+        if !record.metadata.live_gc_roots.is_empty() {
+          raise UnsupportedAbi(
+            message="tail-call roots require post-epilogue stack-map support",
+          )
+        }
+        let plan = context.internal_abi.call_plan(call.signature) catch {
+          error => raise UnsupportedAbi(message=error.to_string())
+        }
+        let operands = map_values(function, values, semantic_operands)
+        let target = match call.callee {
+          Internal(symbol) => TailCallDirect(symbol, call.signature, plan)
+          Indirect => TailCallIndirect(call.signature, plan)
+          External(_) =>
+            raise UnsupportedAbi(
+              message="internal tail calls cannot target an external symbol",
+            )
+        }
+        set_terminator(
+          builder,
+          block,
+          target,
+          operands.map(@vcode.Input::any),
+          [],
+          terminator_call_metadata(record.metadata, call.behavior.semantics()),
+          clobbers=platform_call_clobbers(),
+        )
       }
       terminator => raise UnsupportedTerminator(block_index~, terminator~)
     }

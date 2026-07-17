@@ -153,6 +153,8 @@ pub(all) enum AArch64Inst {
   PlatformCall(@machv.ExternalSymbol, @machv.Signature)
   InternalCall(@machv.CodeSymbol, @machv.Signature, InternalCallPlan)
   InternalCallIndirect(@machv.Signature, InternalCallPlan)
+  TailCallDirect(@machv.CodeSymbol, @machv.Signature, InternalCallPlan)
+  TailCallIndirect(@machv.Signature, InternalCallPlan)
   Jump
   BranchNonZero32
   Return

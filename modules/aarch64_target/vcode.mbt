@@ -56,6 +56,8 @@ pub(all) enum AArch64Inst {
   PlatformCall(@semantic.ExternalSymbol, @semantic.Signature)
   InternalCall(@semantic.CodeSymbol, @semantic.Signature, InternalCallPlan)
   InternalCallIndirect(@semantic.Signature, InternalCallPlan)
+  TailCallDirect(@semantic.CodeSymbol, @semantic.Signature, InternalCallPlan)
+  TailCallIndirect(@semantic.Signature, InternalCallPlan)
   Jump
   BranchNonZero32
   Return
@@ -212,6 +214,62 @@ fn require_instruction_shape(
     if function.value_type(operand.value) != Some(def_types[index]) {
       raise InvalidInstruction(instruction~, message="invalid def value type")
     }
+  }
+}
+
+///|
+fn incoming_stack_capacity(function : @vcode.Function[AArch64Inst]) -> Int {
+  let mut size = 0
+  for index in 0..<function.instruction_count() {
+    let instruction = function.instruction_at(index).unwrap()
+    if function.instruction(instruction) is Some(IncomingStack(ty, offset)) {
+      let end = offset + call_stack_size(ty)
+      if end > size {
+        size = end
+      }
+    }
+  }
+  call_align_up(size, 16)
+}
+
+///|
+fn require_tail_call_plan(
+  function : @vcode.Function[AArch64Inst],
+  instruction : @vcode.Instruction,
+  signature : @semantic.Signature,
+  plan : InternalCallPlan,
+  indirect : Bool,
+) -> Unit raise TargetVCodeVerifyError {
+  if plan.arguments.length() != signature.params.length() ||
+    plan.results.length() != signature.results.length() ||
+    plan.stack_size < 0 ||
+    plan.stack_size % 16 != 0 ||
+    plan.stack_size > incoming_stack_capacity(function) ||
+    signature.results != function.result_types() {
+    raise InvalidInstruction(
+      instruction~,
+      message="tail-call plan is not compatible with the current function",
+    )
+  }
+  let use_types : Array[@semantic.ValueType] = if indirect {
+    [Ptr64, ..signature.params]
+  } else {
+    signature.params.copy()
+  }
+  require_instruction_shape(function, instruction, use_types, [], true, 0)
+  for operand in function.instruction_operands(instruction) {
+    if operand.constraint != Any {
+      raise InvalidInstruction(
+        instruction~,
+        message="tail-call operands must remain allocatable before ABI moves",
+      )
+    }
+  }
+  if function.instruction_clobbers(instruction) != platform_call_clobbers() {
+    raise InvalidInstruction(
+      instruction~,
+      message="tail call has an invalid caller-saved clobber set",
+    )
   }
 }
 
@@ -498,6 +556,10 @@ pub fn verify_vcode(
           )
         }
       }
+      TailCallDirect(_, signature, plan) =>
+        require_tail_call_plan(function, instruction, signature, plan, false)
+      TailCallIndirect(signature, plan) =>
+        require_tail_call_plan(function, instruction, signature, plan, true)
       Jump => require_instruction_shape(function, instruction, [], [], true, 1)
       BranchNonZero32 =>
         require_instruction_shape(function, instruction, [I32], [], true, 2)

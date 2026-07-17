@@ -26,7 +26,11 @@ fn instruction_alignment(architecture : Architecture) -> Int {
 ///|
 fn relocation_width(kind : RelocationKind) -> Int {
   match kind {
-    AArch64Call26 | AArch64Page21 | AArch64PageOffset12 | X64PcRelative32 => 4
+    AArch64Call26
+    | AArch64Jump26
+    | AArch64Page21
+    | AArch64PageOffset12
+    | X64PcRelative32 => 4
     Absolute64 => 8
   }
 }
@@ -37,8 +41,14 @@ fn relocation_matches_architecture(
   kind : RelocationKind,
 ) -> Bool {
   match (architecture, kind) {
-    (AArch64, AArch64Call26 | AArch64Page21 | AArch64PageOffset12 | Absolute64) =>
-      true
+    (
+      AArch64,
+      AArch64Call26
+      | AArch64Jump26
+      | AArch64Page21
+      | AArch64PageOffset12
+      | Absolute64,
+    ) => true
     (X64, X64PcRelative32 | Absolute64) => true
     _ => false
   }
@@ -71,6 +81,8 @@ fn relocation_matches_encoding(
   match relocation.kind {
     AArch64Call26 =>
       (read_u32_le(code, relocation.offset) & 0xFC000000U) == 0x94000000U
+    AArch64Jump26 =>
+      (read_u32_le(code, relocation.offset) & 0xFC000000U) == 0x14000000U
     _ => true
   }
 }

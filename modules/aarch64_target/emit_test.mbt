@@ -771,6 +771,253 @@ test "AArch64 indirect calls resolve callee and arguments before BLR" {
 }
 
 ///|
+test "AArch64 true tail calls tear down the frame and emit jump relocations" {
+  let builder = @semantic.FunctionBuilder::new(
+    "emitted_tail_call",
+    Internal,
+    [Ptr64, I64],
+    [I64],
+  )
+  let call = @semantic.SemanticCall::new(
+    Internal(@semantic.CodeSymbol::new("wasm.func.11")),
+    @semantic.Signature::new([Ptr64, I64], [I64]),
+    Internal,
+    @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
+  )
+  builder.tail_call(call, builder.parameters())
+  let function = lower(builder.finish(), test_lowering_context())
+  let allocation = allocate(function)
+  let frame = plan_frame(function, allocation)
+  debug_inspect(
+    emit(function, allocation, frame),
+    content=(
+      #|{
+      #|  architecture: AArch64,
+      #|  code: [
+      #|    0xe2,
+      #|    0x03,
+      #|    0x00,
+      #|    0xaa,
+      #|    0xe0,
+      #|    0x03,
+      #|    0x01,
+      #|    0xaa,
+      #|    0xe1,
+      #|    0x03,
+      #|    0x00,
+      #|    0xaa,
+      #|    0xe0,
+      #|    0x03,
+      #|    0x02,
+      #|    0xaa,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x14,
+      #|  ],
+      #|  relocations: [
+      #|    {
+      #|      offset: 16,
+      #|      kind: AArch64Jump26,
+      #|      target: Code({ name: "wasm.func.11" }),
+      #|      addend: 0,
+      #|    },
+      #|  ],
+      #|  sources: [],
+      #|  traps: [],
+      #|  safepoints: [],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
+test "AArch64 indirect true tail calls resolve the callee before BR" {
+  let builder = @semantic.FunctionBuilder::new(
+    "emitted_indirect_tail_call",
+    Internal,
+    [Ptr64, Ptr64],
+    [],
+  )
+  let parameters = builder.parameters()
+  let call = @semantic.SemanticCall::new(
+    Indirect,
+    @semantic.Signature::new([Ptr64], []),
+    Internal,
+    @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
+  )
+  builder.tail_call(call, [parameters[1], parameters[0]])
+  let function = lower(builder.finish(), test_lowering_context())
+  let allocation = allocate(function)
+  let frame = plan_frame(function, allocation)
+  debug_inspect(
+    emit(function, allocation, frame),
+    content=(
+      #|{
+      #|  architecture: AArch64,
+      #|  code: [
+      #|    0xe2,
+      #|    0x03,
+      #|    0x00,
+      #|    0xaa,
+      #|    0xe0,
+      #|    0x03,
+      #|    0x01,
+      #|    0xaa,
+      #|    0xf1,
+      #|    0x03,
+      #|    0x00,
+      #|    0xaa,
+      #|    0xe0,
+      #|    0x03,
+      #|    0x02,
+      #|    0xaa,
+      #|    0x20,
+      #|    0x02,
+      #|    0x1f,
+      #|    0xd6,
+      #|  ],
+      #|  relocations: [],
+      #|  sources: [],
+      #|  traps: [],
+      #|  safepoints: [],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
+test "AArch64 true tail calls forward compatible incoming stack arguments" {
+  let parameter_types : Array[@semantic.ValueType] = [
+    Ptr64,
+    I64,
+    I64,
+    I64,
+    I64,
+    I64,
+    I64,
+    I64,
+    I64,
+  ]
+  let builder = @semantic.FunctionBuilder::new(
+    "emitted_stack_tail_call",
+    Internal,
+    parameter_types,
+    [],
+  )
+  let call = @semantic.SemanticCall::new(
+    Internal(@semantic.CodeSymbol::new("wasm.func.12")),
+    @semantic.Signature::new(parameter_types, []),
+    Internal,
+    @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
+  )
+  builder.tail_call(call, builder.parameters())
+  let function = lower(builder.finish(), test_lowering_context())
+  let allocation = allocate(function)
+  let frame = plan_frame(function, allocation)
+  debug_inspect(
+    emit(function, allocation, frame),
+    content=(
+      #|{
+      #|  architecture: AArch64,
+      #|  code: [
+      #|    0xe8,
+      #|    0x03,
+      #|    0x00,
+      #|    0xaa,
+      #|    0xe0,
+      #|    0x03,
+      #|    0x01,
+      #|    0xaa,
+      #|    0xe1,
+      #|    0x03,
+      #|    0x02,
+      #|    0xaa,
+      #|    0xe2,
+      #|    0x03,
+      #|    0x03,
+      #|    0xaa,
+      #|    0xe3,
+      #|    0x03,
+      #|    0x04,
+      #|    0xaa,
+      #|    0xe4,
+      #|    0x03,
+      #|    0x05,
+      #|    0xaa,
+      #|    0xe5,
+      #|    0x03,
+      #|    0x06,
+      #|    0xaa,
+      #|    0xe6,
+      #|    0x03,
+      #|    0x07,
+      #|    0xaa,
+      #|    0xe7,
+      #|    0x03,
+      #|    0x40,
+      #|    0xf9,
+      #|    0xe7,
+      #|    0x03,
+      #|    0x00,
+      #|    0xf9,
+      #|    0xe7,
+      #|    0x03,
+      #|    0x06,
+      #|    0xaa,
+      #|    0xe6,
+      #|    0x03,
+      #|    0x05,
+      #|    0xaa,
+      #|    0xe5,
+      #|    0x03,
+      #|    0x04,
+      #|    0xaa,
+      #|    0xe4,
+      #|    0x03,
+      #|    0x03,
+      #|    0xaa,
+      #|    0xe3,
+      #|    0x03,
+      #|    0x02,
+      #|    0xaa,
+      #|    0xe2,
+      #|    0x03,
+      #|    0x01,
+      #|    0xaa,
+      #|    0xe1,
+      #|    0x03,
+      #|    0x00,
+      #|    0xaa,
+      #|    0xe0,
+      #|    0x03,
+      #|    0x08,
+      #|    0xaa,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x14,
+      #|  ],
+      #|  relocations: [
+      #|    {
+      #|      offset: 72,
+      #|      kind: AArch64Jump26,
+      #|      target: Code({ name: "wasm.func.12" }),
+      #|      addend: 0,
+      #|    },
+      #|  ],
+      #|  sources: [],
+      #|  traps: [],
+      #|  safepoints: [],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
 test "AArch64 edge emission resolves register cycles through reserved scratch" {
   let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new_with_results(
     "edge_cycle",
