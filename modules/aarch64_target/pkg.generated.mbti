@@ -224,6 +224,7 @@ pub(all) enum AArch64Inst {
   IntBinary(GprWidth, AArch64IntBinary)
   PopulationCount(GprWidth)
   IntHighMultiply(GprWidth, @machv.Signedness)
+  IntWithOverflow(GprWidth, @machv.IntOverflowOp)
   IntRemainder(GprWidth, @machv.Signedness)
   TrapIfZero(GprWidth)
   TrapIfSignedDivOverflow(GprWidth)

@@ -819,6 +819,11 @@ fn lower_instruction(
         Some(width) => Some(IntHighMultiply(width, signedness))
         None => None
       }
+    IntWithOverflow(operation) =>
+      match optional_gpr_width(result_types.get(0)) {
+        Some(width) => Some(IntWithOverflow(width, operation))
+        None => None
+      }
     FloatUnary(unary) =>
       match (result_types.get(0), lower_float_unary(unary)) {
         (Some(F32), Some(unary)) => Some(FloatUnary(F32, unary))

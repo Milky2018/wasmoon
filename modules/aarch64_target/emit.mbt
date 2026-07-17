@@ -372,6 +372,98 @@ fn encode_int_binary(
 }
 
 ///|
+fn emit_overflow_flag(
+  buffer : CodeBuffer,
+  destination : @vcode.PhysicalReg,
+  condition : UInt,
+) -> Unit {
+  buffer.emit_word(
+    0x9A9F07E0U | ((condition ^ 1U) << 12) | reg_bits(destination),
+  )
+}
+
+///|
+fn emit_int_with_overflow(
+  buffer : CodeBuffer,
+  width : GprWidth,
+  operation : @semantic.IntOverflowOp,
+  left : @vcode.PhysicalReg,
+  right : @vcode.PhysicalReg,
+  result : @vcode.PhysicalReg,
+  overflow : @vcode.PhysicalReg,
+) -> Unit {
+  match operation {
+    Add(signedness) => {
+      let base = if width == W32 { 0x2B000000U } else { 0xAB000000U }
+      buffer.emit_word(encode_three_register(base, result, left, right))
+      emit_overflow_flag(
+        buffer,
+        overflow,
+        if signedness == Signed {
+          6U
+        } else {
+          2U
+        },
+      )
+    }
+    Sub(signedness) => {
+      let base = if width == W32 { 0x6B000000U } else { 0xEB000000U }
+      buffer.emit_word(encode_three_register(base, result, left, right))
+      emit_overflow_flag(
+        buffer,
+        overflow,
+        if signedness == Signed {
+          6U
+        } else {
+          3U
+        },
+      )
+    }
+    Mul(signedness) => {
+      let scratch = @vcode.PhysicalReg::new(16, Int)
+      if width == W64 {
+        buffer.emit_word(encode_int_binary(W64, Mul, result, left, right))
+        let high_base = if signedness == Signed {
+          0x9B407C00U
+        } else {
+          0x9BC07C00U
+        }
+        buffer.emit_word(encode_three_register(high_base, scratch, left, right))
+        if signedness == Signed {
+          buffer.emit_word(
+            0xEB00001FU |
+            (2U << 22) |
+            (reg_bits(result) << 16) |
+            (63U << 10) |
+            (reg_bits(scratch) << 5),
+          )
+        } else {
+          buffer.emit_word(0xF100001FU | (reg_bits(scratch) << 5))
+        }
+      } else {
+        let wide_base = if signedness == Signed {
+          0x9B207C00U
+        } else {
+          0x9BA07C00U
+        }
+        buffer.emit_word(encode_three_register(wide_base, scratch, left, right))
+        if signedness == Signed {
+          buffer.emit_word(
+            0x93407C00U | (reg_bits(scratch) << 5) | reg_bits(result),
+          )
+        } else {
+          emit_move(buffer, I32, result, scratch)
+        }
+        buffer.emit_word(
+          0xEB00001FU | (reg_bits(result) << 16) | (reg_bits(scratch) << 5),
+        )
+      }
+      emit_overflow_flag(buffer, overflow, 1U)
+    }
+  }
+}
+
+///|
 fn float_unary_base(
   ty : @semantic.ValueType,
   operation : AArch64FloatUnary,
@@ -846,6 +938,16 @@ fn emit_instruction(
           0xD360FC00U | (reg_bits(scratch) << 5) | reg_bits(reg(2)),
         )
       }
+    IntWithOverflow(width, operation) =>
+      emit_int_with_overflow(
+        buffer,
+        width,
+        operation,
+        reg(0),
+        reg(1),
+        reg(2),
+        reg(3),
+      )
     IntRemainder(width, signedness) => {
       let quotient = @vcode.PhysicalReg::new(16, Int)
       let division = if signedness == Signed { Sdiv } else { Udiv }

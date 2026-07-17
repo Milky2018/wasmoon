@@ -218,6 +218,89 @@ test "AArch64 lowering legalizes remaining pure scalar integer operations" {
 }
 
 ///|
+test "AArch64 lowering selects every scalar overflow arithmetic contract" {
+  let builder = @semantic.FunctionBuilder::new(
+    "overflow_arithmetic",
+    Internal,
+    [Ptr64, I32, I32, I64, I64],
+    [I32, I64, I32],
+  )
+  let parameters = builder.parameters()
+  let operations : Array[@semantic.IntOverflowOp] = [
+    Add(Signed),
+    Add(Unsigned),
+    Sub(Signed),
+    Sub(Unsigned),
+    Mul(Signed),
+    Mul(Unsigned),
+  ]
+  let mut value32 = parameters[1]
+  let mut overflow = builder.emit(I32Const(0U), [], [I32])[0]
+  for operation in operations {
+    let results = builder.emit(
+      IntWithOverflow(operation),
+      [value32, parameters[2]],
+      [I32, I32],
+    )
+    value32 = results[0]
+    overflow = builder.emit(IntBinary(Or), [overflow, results[1]], [I32])[0]
+  }
+  let mut value64 = parameters[3]
+  for operation in operations {
+    let results = builder.emit(
+      IntWithOverflow(operation),
+      [value64, parameters[4]],
+      [I64, I32],
+    )
+    value64 = results[0]
+    overflow = builder.emit(IntBinary(Or), [overflow, results[1]], [I32])[0]
+  }
+  builder.return_([value32, value64, overflow])
+  inspect(
+    lower(builder.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode overflow_arithmetic(v0:ptr64, v1:i32, v2:i32, v3:i64, v4:i64) -> (i32, i64, i32)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v5:any@late]
+      #|  i1 IncomingReg(I32, p1:int) uses=[v1:fixed(p1:int)@early] defs=[v6:any@late]
+      #|  i2 IncomingReg(I32, p2:int) uses=[v2:fixed(p2:int)@early] defs=[v7:any@late]
+      #|  i3 IncomingReg(I64, p3:int) uses=[v3:fixed(p3:int)@early] defs=[v8:any@late]
+      #|  i4 IncomingReg(I64, p4:int) uses=[v4:fixed(p4:int)@early] defs=[v9:any@late]
+      #|  i5 LoadConstant(W32, 0) defs=[v10:any@late]
+      #|  i6 IntWithOverflow(W32, Add(Signed)) uses=[v6:any@early, v7:any@early] defs=[v11:any@late, v12:any@late]
+      #|  i7 IntBinary(W32, Orr) uses=[v10:any@early, v12:any@early] defs=[v13:any@late]
+      #|  i8 IntWithOverflow(W32, Add(Unsigned)) uses=[v11:any@early, v7:any@early] defs=[v14:any@late, v15:any@late]
+      #|  i9 IntBinary(W32, Orr) uses=[v13:any@early, v15:any@early] defs=[v16:any@late]
+      #|  i10 IntWithOverflow(W32, Sub(Signed)) uses=[v14:any@early, v7:any@early] defs=[v17:any@late, v18:any@late]
+      #|  i11 IntBinary(W32, Orr) uses=[v16:any@early, v18:any@early] defs=[v19:any@late]
+      #|  i12 IntWithOverflow(W32, Sub(Unsigned)) uses=[v17:any@early, v7:any@early] defs=[v20:any@late, v21:any@late]
+      #|  i13 IntBinary(W32, Orr) uses=[v19:any@early, v21:any@early] defs=[v22:any@late]
+      #|  i14 IntWithOverflow(W32, Mul(Signed)) uses=[v20:any@early, v7:any@early] defs=[v23:any@late, v24:any@late]
+      #|  i15 IntBinary(W32, Orr) uses=[v22:any@early, v24:any@early] defs=[v25:any@late]
+      #|  i16 IntWithOverflow(W32, Mul(Unsigned)) uses=[v23:any@early, v7:any@early] defs=[v26:any@late, v27:any@late]
+      #|  i17 IntBinary(W32, Orr) uses=[v25:any@early, v27:any@early] defs=[v28:any@late]
+      #|  i18 IntWithOverflow(W64, Add(Signed)) uses=[v8:any@early, v9:any@early] defs=[v29:any@late, v30:any@late]
+      #|  i19 IntBinary(W32, Orr) uses=[v28:any@early, v30:any@early] defs=[v31:any@late]
+      #|  i20 IntWithOverflow(W64, Add(Unsigned)) uses=[v29:any@early, v9:any@early] defs=[v32:any@late, v33:any@late]
+      #|  i21 IntBinary(W32, Orr) uses=[v31:any@early, v33:any@early] defs=[v34:any@late]
+      #|  i22 IntWithOverflow(W64, Sub(Signed)) uses=[v32:any@early, v9:any@early] defs=[v35:any@late, v36:any@late]
+      #|  i23 IntBinary(W32, Orr) uses=[v34:any@early, v36:any@early] defs=[v37:any@late]
+      #|  i24 IntWithOverflow(W64, Sub(Unsigned)) uses=[v35:any@early, v9:any@early] defs=[v38:any@late, v39:any@late]
+      #|  i25 IntBinary(W32, Orr) uses=[v37:any@early, v39:any@early] defs=[v40:any@late]
+      #|  i26 IntWithOverflow(W64, Mul(Signed)) uses=[v38:any@early, v9:any@early] defs=[v41:any@late, v42:any@late]
+      #|  i27 IntBinary(W32, Orr) uses=[v40:any@early, v42:any@early] defs=[v43:any@late]
+      #|  i28 IntWithOverflow(W64, Mul(Unsigned)) uses=[v41:any@early, v9:any@early] defs=[v44:any@late, v45:any@late]
+      #|  i29 IntBinary(W32, Orr) uses=[v43:any@early, v45:any@early] defs=[v46:any@late]
+      #|  i30 OutgoingReg(I32, p0:int) uses=[v26:any@early]
+      #|  i31 OutgoingReg(I64, p1:int) uses=[v44:any@early]
+      #|  i32 OutgoingReg(I32, p2:int) uses=[v46:any@early]
+      #|  i33 Return
+      #|
+    ),
+  )
+}
+
+///|
 test "AArch64 lowering selects null carriers references and scalar values" {
   let builder = @semantic.FunctionBuilder::new(
     "scalar_carriers_and_select",

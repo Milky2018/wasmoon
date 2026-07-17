@@ -167,6 +167,7 @@ pub(all) enum AArch64Inst {
   IntBinary(GprWidth, AArch64IntBinary)
   PopulationCount(GprWidth)
   IntHighMultiply(GprWidth, @semantic.Signedness)
+  IntWithOverflow(GprWidth, @semantic.IntOverflowOp)
   IntRemainder(GprWidth, @semantic.Signedness)
   TrapIfZero(GprWidth)
   TrapIfSignedDivOverflow(GprWidth)
@@ -633,6 +634,17 @@ pub fn verify_vcode(
           instruction,
           [ty, ty],
           [ty],
+          false,
+          0,
+        )
+      }
+      IntWithOverflow(width, _) => {
+        let ty = integer_type(width)
+        require_instruction_shape(
+          function,
+          instruction,
+          [ty, ty],
+          [ty, I32],
           false,
           0,
         )

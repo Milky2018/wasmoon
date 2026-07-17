@@ -49,6 +49,72 @@ test "AArch64 pipeline emits an allocated scalar function" {
 }
 
 ///|
+test "AArch64 pipeline emits multi-result overflow arithmetic" {
+  let builder = @semantic.FunctionBuilder::new(
+    "emitted_overflow_multiply",
+    Platform,
+    [I64, I64],
+    [I64],
+  )
+  let results = builder.emit(
+    IntWithOverflow(Mul(Signed)),
+    builder.parameters(),
+    [I64, I32],
+  )
+  builder.return_([results[0]])
+  let function = lower(builder.finish(), test_lowering_context())
+  let allocation = allocate(function)
+  let frame = plan_frame(function, allocation)
+  debug_inspect(
+    emit(function, allocation, frame),
+    content=(
+      #|{
+      #|  architecture: AArch64,
+      #|  code: [
+      #|    0xe2,
+      #|    0x03,
+      #|    0x00,
+      #|    0xaa,
+      #|    0xe0,
+      #|    0x03,
+      #|    0x01,
+      #|    0xaa,
+      #|    0x41,
+      #|    0x7c,
+      #|    0x00,
+      #|    0x9b,
+      #|    0x50,
+      #|    0x7c,
+      #|    0x40,
+      #|    0x9b,
+      #|    0x1f,
+      #|    0xfe,
+      #|    0x81,
+      #|    0xeb,
+      #|    0xe3,
+      #|    0x07,
+      #|    0x9f,
+      #|    0x9a,
+      #|    0xe0,
+      #|    0x03,
+      #|    0x01,
+      #|    0xaa,
+      #|    0xc0,
+      #|    0x03,
+      #|    0x5f,
+      #|    0xd6,
+      #|  ],
+      #|  relocations: [],
+      #|  sources: [],
+      #|  traps: [],
+      #|  safepoints: [],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
 test "AArch64 pipeline emits addresses inside the semantic stack-object area" {
   let builder = @semantic.FunctionBuilder::new(
     "emitted_stack_addresses",
