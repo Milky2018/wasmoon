@@ -2578,7 +2578,8 @@ fn emit_instruction(
       metadata_offset = buffer.position()
       buffer.emit_word(0xD503201FU)
     }
-    PlatformCall(target, signature) => {
+    PlatformCall(target, signature)
+    | ReturnsTwicePlatformCall(target, signature) => {
       let layout = platform_call_layout(signature.params)
       emit_call_arguments(
         buffer,

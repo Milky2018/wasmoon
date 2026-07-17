@@ -135,6 +135,76 @@ test "AArch64 allocation keeps values live across a direct call out of clobbers"
 }
 
 ///|
+test "AArch64 allocation preserves state across both returns from setjmp" {
+  let builder = @semantic.FunctionBuilder::new(
+    "allocated_returns_twice",
+    Platform,
+    [Ptr64, I32, I64],
+    [I64],
+  )
+  let parameters = builder.parameters()
+  let call = @semantic.SemanticCall::new(
+    External(@semantic.ExternalSymbol::new("runtime.sigsetjmp")),
+    @semantic.Signature::new([Ptr64, I32], [I32]),
+    Platform,
+    @semantic.CallBehavior::new(
+      ReadWrite,
+      false,
+      false,
+      false,
+      false,
+      returns_twice=true,
+    ),
+  )
+  let result = builder.emit(Call(call), [parameters[0], parameters[1]], [I32])[0]
+  let widened = builder.emit(Convert(I64ExtendI32(Unsigned)), [result], [I64])[0]
+  let sum = builder.emit(IntBinary(Add), [parameters[2], widened], [I64])[0]
+  builder.return_([sum])
+  let function = lower(builder.finish(), test_lowering_context())
+  let allocation = allocate(function)
+  inspect(
+    allocation.summary(),
+    content=(
+      #|allocation allocated_returns_twice
+      #|  v0:ptr64 -> p0:int
+      #|  v1:i32 -> p1:int
+      #|  v2:i64 -> p2:int
+      #|  v3:ptr64 -> p3:int
+      #|  v4:i32 -> p0:int
+      #|  v5:i64 -> p19:int
+      #|  v6:i32 -> p0:int
+      #|  v7:i64 -> p1:int
+      #|  v8:i64 -> p0:int
+      #|  i0 operand0 -> p0:int
+      #|  i0 operand1 -> p3:int
+      #|  i1 operand0 -> p1:int
+      #|  i1 operand1 -> p0:int
+      #|  i2 operand0 -> p2:int
+      #|  i2 operand1 -> p19:int
+      #|  i3 operand0 -> p3:int
+      #|  i3 operand1 -> p0:int
+      #|  i4 operand0 -> p0:int
+      #|  i5 operand0 -> p0:int
+      #|  i5 operand1 -> p1:int
+      #|  i6 operand0 -> p19:int
+      #|  i6 operand1 -> p1:int
+      #|  i6 operand2 -> p0:int
+      #|  i7 operand0 -> p0:int
+      #|
+    ),
+  )
+  inspect(
+    plan_frame(function, allocation).summary(),
+    content=(
+      #|aarch64 frame size=16 align=16
+      #|  save p19:int at sp+0
+      #|  save p30:int at sp+8
+      #|
+    ),
+  )
+}
+
+///|
 test "AArch64 call inputs may remain in spill slots" {
   let parameter_types : Array[@semantic.ValueType] = Array::make(32, I64)
   let builder = @semantic.FunctionBuilder::new(

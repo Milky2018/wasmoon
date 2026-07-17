@@ -265,6 +265,7 @@ pub(all) enum AArch64Inst {
   AtomicFence
   SafepointMarker
   PlatformCall(@semantic.ExternalSymbol, @semantic.Signature)
+  ReturnsTwicePlatformCall(@semantic.ExternalSymbol, @semantic.Signature)
   InternalCall(@semantic.CodeSymbol, @semantic.Signature, InternalCallPlan)
   InternalCallIndirect(@semantic.Signature, InternalCallPlan)
   TailCallDirect(@semantic.CodeSymbol, @semantic.Signature, InternalCallPlan)
@@ -1609,7 +1610,7 @@ pub fn verify_vcode(
         }
         require_instruction_shape(function, instruction, [], [], false, 0)
       }
-      PlatformCall(_, signature) => {
+      PlatformCall(_, signature) | ReturnsTwicePlatformCall(_, signature) => {
         if signature.results.length() > 1 {
           raise InvalidInstruction(
             instruction~,
@@ -1874,7 +1875,10 @@ pub fn verify_vcode(
     let consumed_results = Array::make(body.length(), false)
     for index, instruction in body {
       let call_results = match function.instruction(instruction) {
-        Some(PlatformCall(_, signature)) =>
+        Some(
+          PlatformCall(_, signature)
+          | ReturnsTwicePlatformCall(_, signature)
+        ) =>
           Some(
             (
               signature,

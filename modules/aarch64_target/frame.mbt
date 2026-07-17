@@ -86,6 +86,7 @@ fn used_callee_saved_registers(
     if function.instruction(instruction)
       is Some(
         PlatformCall(_, _)
+        | ReturnsTwicePlatformCall(_, _)
         | InternalCall(_, _, _)
         | InternalCallIndirect(_, _)
       ) {
@@ -113,7 +114,11 @@ fn maximum_outgoing_args_size(function : @vcode.Function[AArch64Inst]) -> Int {
   let mut maximum = 0
   for index in 0..<function.instruction_count() {
     let instruction = function.instruction_at(index).unwrap()
-    if function.instruction(instruction) is Some(PlatformCall(_, signature)) {
+    if function.instruction(instruction)
+      is Some(
+        PlatformCall(_, signature)
+        | ReturnsTwicePlatformCall(_, signature)
+      ) {
       let size = platform_call_layout(signature.params).stack_size
       if size > maximum {
         maximum = size

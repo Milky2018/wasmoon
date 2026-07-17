@@ -337,11 +337,6 @@ fn lower_direct_platform_call(
   if call.protocol != Platform {
     raise UnsupportedAbi(message="direct internal call ABI is not selected yet")
   }
-  if call.behavior.returns_twice {
-    raise UnsupportedAbi(
-      message="returns-twice platform calls are not supported",
-    )
-  }
   if result_types.length() > 1 {
     raise UnsupportedAbi(
       message="platform calls support at most one direct result",
@@ -361,7 +356,11 @@ fn lower_direct_platform_call(
   })
   (builder.append_body(
     block,
-    PlatformCall(target, call.signature),
+    if call.behavior.returns_twice {
+      ReturnsTwicePlatformCall(target, call.signature)
+    } else {
+      PlatformCall(target, call.signature)
+    },
     inputs,
     [],
     platform_call_clobbers(),

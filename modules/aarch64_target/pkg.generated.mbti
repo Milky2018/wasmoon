@@ -283,6 +283,7 @@ pub(all) enum AArch64Inst {
   AtomicFence
   SafepointMarker
   PlatformCall(@machv.ExternalSymbol, @machv.Signature)
+  ReturnsTwicePlatformCall(@machv.ExternalSymbol, @machv.Signature)
   InternalCall(@machv.CodeSymbol, @machv.Signature, InternalCallPlan)
   InternalCallIndirect(@machv.Signature, InternalCallPlan)
   TailCallDirect(@machv.CodeSymbol, @machv.Signature, InternalCallPlan)

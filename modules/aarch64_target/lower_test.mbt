@@ -1847,6 +1847,54 @@ test "AArch64 lowering selects a direct platform call with explicit ABI facts" {
 }
 
 ///|
+test "AArch64 lowering preserves returns-twice platform calls" {
+  let builder = @semantic.FunctionBuilder::new(
+    "returns_twice_platform_call",
+    Platform,
+    [Ptr64, I32, I64],
+    [I64],
+  )
+  let call = @semantic.SemanticCall::new(
+    External(@semantic.ExternalSymbol::new("runtime.sigsetjmp")),
+    @semantic.Signature::new([Ptr64, I32], [I32]),
+    Platform,
+    @semantic.CallBehavior::new(
+      ReadWrite,
+      false,
+      false,
+      false,
+      false,
+      returns_twice=true,
+    ),
+  )
+  let parameters = builder.parameters()
+  let result = builder.emit(Call(call), [parameters[0], parameters[1]], [I32])[0]
+  let widened = builder.emit(Convert(I64ExtendI32(Unsigned)), [result], [I64])[0]
+  let preserved = builder.emit(IntBinary(Add), [parameters[2], widened], [I64])[0]
+  builder.return_([preserved])
+  inspect(
+    lower(builder.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode returns_twice_platform_call(v0:ptr64, v1:i32, v2:i64) -> (i64)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v3:any@late]
+      #|  i1 IncomingReg(I32, p1:int) uses=[v1:fixed(p1:int)@early] defs=[v4:any@late]
+      #|  i2 IncomingReg(I64, p2:int) uses=[v2:fixed(p2:int)@early] defs=[v5:any@late]
+      #|  i3 ReturnsTwicePlatformCall(
+      #|  { name: "runtime.sigsetjmp" },
+      #|  { params: [Ptr64, I32], results: [I32] },
+      #|) uses=[v3:any-location@early, v4:any-location@early] clobbers=[p0:int, p1:int, p2:int, p3:int, p4:int, p5:int, p6:int, p7:int, p8:int, p9:int, p10:int, p11:int, p12:int, p13:int, p14:int, p15:int, p16:int, p17:int, p0:fpvec, p1:fpvec, p2:fpvec, p3:fpvec, p4:fpvec, p5:fpvec, p6:fpvec, p7:fpvec, p8:fpvec, p9:fpvec, p10:fpvec, p11:fpvec, p12:fpvec, p13:fpvec, p14:fpvec, p15:fpvec, p16:fpvec, p17:fpvec, p18:fpvec, p19:fpvec, p20:fpvec, p21:fpvec, p22:fpvec, p23:fpvec, p24:fpvec, p25:fpvec, p26:fpvec, p27:fpvec, p28:fpvec, p29:fpvec, p30:fpvec, p31:fpvec]
+      #|  i4 IncomingCallResult(I32, p0:int) defs=[v6:any@late]
+      #|  i5 Convert(ExtendI32ToI64(Unsigned)) uses=[v6:any@early] defs=[v7:any@late]
+      #|  i6 IntBinary(W64, Add) uses=[v5:any@early, v7:any@early] defs=[v8:any@late]
+      #|  i7 OutgoingReg(I64, p0:int) uses=[v8:any@early]
+      #|  i8 Return
+      #|
+    ),
+  )
+}
+
+///|
 test "AArch64 lowering derives internal entry and direct-call layouts" {
   let builder = @semantic.FunctionBuilder::new(
     "direct_internal_call",
