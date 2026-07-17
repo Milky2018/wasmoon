@@ -24,20 +24,6 @@ fn align_up(value : Int, alignment : Int) -> Int {
 }
 
 ///|
-fn value_size(ty : @semantic.ValueType) -> Int {
-  match ty {
-    I32 | F32 => 4
-    I64 | F64 | Ptr64 | GcRef64 => 8
-    V128 => 16
-  }
-}
-
-///|
-fn abi_bank(ty : @semantic.ValueType) -> @vcode.RegClass {
-  @vcode.reg_class_for_value_type(ty)
-}
-
-///|
 fn gpr_width(ty : @semantic.ValueType) -> GprWidth? {
   match ty {
     I32 => Some(W32)
@@ -227,8 +213,78 @@ fn lower_direct_platform_call(
 }
 
 ///|
+fn lower_direct_internal_call(
+  context : LoweringContext,
+  builder : @vcode.Builder[AArch64Inst],
+  block : @vcode.Block,
+  call : @semantic.SemanticCall,
+  operands : Array[@vcode.Value],
+  result_types : Array[@semantic.ValueType],
+  metadata : @vcode.InstructionMetadata,
+) -> Array[@vcode.Value] raise AArch64LowerError {
+  if call.protocol != Internal {
+    raise UnsupportedAbi(message="internal call requires the internal protocol")
+  }
+  if call.behavior.returns_twice {
+    raise UnsupportedAbi(
+      message="returns-twice internal calls are not supported",
+    )
+  }
+  let target = match call.callee {
+    Internal(symbol) => symbol
+    _ =>
+      raise UnsupportedAbi(
+        message="direct internal call requires an internal code symbol",
+      )
+  }
+  let plan = context.internal_abi.call_plan(call.signature) catch {
+    error => raise UnsupportedAbi(message=error.to_string())
+  }
+  (builder.append_body(
+    block,
+    InternalCall(target, call.signature, plan),
+    operands.map(@vcode.Input::any),
+    [],
+    platform_call_clobbers(),
+    metadata,
+  ) catch {
+    error => raise BuildFailure(cause=error)
+  })
+  |> ignore
+  let results : Array[@vcode.Value] = []
+  for index, ty in result_types {
+    let (_, materialized) = builder.append_body(
+      block,
+      IncomingCallResult(ty, plan.results[index]),
+      [],
+      [@vcode.Output::any(ty)],
+      [],
+      @vcode.InstructionMetadata::empty(),
+    ) catch {
+      error => raise BuildFailure(cause=error)
+    }
+    results.push(materialized[0])
+  }
+  for root in metadata.live_gc_roots {
+    (builder.append_body(
+      block,
+      KeepAlive(GcRef64),
+      [@vcode.Input::any(root)],
+      [],
+      [],
+      @vcode.InstructionMetadata::empty(),
+    ) catch {
+      error => raise BuildFailure(cause=error)
+    })
+    |> ignore
+  }
+  results
+}
+
+///|
 fn lower_instruction(
   function : @semantic.Function,
+  context : LoweringContext,
   builder : @vcode.Builder[AArch64Inst],
   block : @vcode.Block,
   block_index : Int,
@@ -249,18 +305,21 @@ fn lower_instruction(
     function.instruction_metadata(instruction).unwrap().live_gc_roots,
   )
   if operation is Call(call) {
-    let results = lower_direct_platform_call(
-      builder,
-      block,
-      call,
-      operands,
-      result_types,
-      source_metadata(
-        function.instruction_metadata(instruction).unwrap(),
-        roots,
-        operation.semantics(),
-      ),
+    let metadata = source_metadata(
+      function.instruction_metadata(instruction).unwrap(),
+      roots,
+      operation.semantics(),
     )
+    let results = match call.protocol {
+      Platform =>
+        lower_direct_platform_call(
+          builder, block, call, operands, result_types, metadata,
+        )
+      Internal =>
+        lower_direct_internal_call(
+          context, builder, block, call, operands, result_types, metadata,
+        )
+    }
     for index, result in semantic_results {
       values[function.value_index(result).unwrap()] = Some(results[index])
     }
@@ -323,51 +382,43 @@ fn lower_instruction(
 ///|
 fn lower_parameters(
   function : @semantic.Function,
+  context : LoweringContext,
   builder : @vcode.Builder[AArch64Inst],
   values : Array[@vcode.Value?],
 ) -> Unit raise AArch64LowerError {
   let entry = builder.entry_block()
-  let mut int_index = 0
-  let mut float_index = 0
-  let mut stack_offset = 0
+  let signature = function.signature()
+  let layout = match function.protocol() {
+    Platform => platform_call_layout(signature.params)
+    Internal =>
+      context.internal_abi.call_layout(signature) catch {
+        error => raise UnsupportedAbi(message=error.to_string())
+      }
+  }
   for index, parameter in function.parameters() {
     let ty = function.value_type(parameter).unwrap()
     let raw = builder.parameter(index) catch {
       error => raise BuildFailure(cause=error)
     }
-    let class = abi_bank(ty)
-    let register_index = if class == Int {
-      let current = int_index
-      int_index += 1
-      current
-    } else {
-      let current = float_index
-      float_index += 1
-      current
-    }
-    let selected = if register_index < 8 {
-      let reg = @vcode.PhysicalReg::new(register_index, class)
-      append_body(
-        builder,
-        entry,
-        IncomingReg(ty, reg),
-        [@vcode.Input::fixed(raw, reg)],
-        [@vcode.Output::any(ty)],
-        @vcode.InstructionMetadata::empty(),
-      )[0]
-    } else {
-      let alignment = if ty == V128 { 16 } else { 8 }
-      stack_offset = align_up(stack_offset, alignment)
-      let offset = stack_offset
-      stack_offset += align_up(value_size(ty), 8)
-      append_body(
-        builder,
-        entry,
-        IncomingStack(ty, offset),
-        [],
-        [@vcode.Output::any(ty)],
-        @vcode.InstructionMetadata::empty(),
-      )[0]
+    let selected = match layout.arguments[index] {
+      CallRegister(reg) =>
+        append_body(
+          builder,
+          entry,
+          IncomingReg(ty, reg),
+          [@vcode.Input::fixed(raw, reg)],
+          [@vcode.Output::any(ty)],
+          @vcode.InstructionMetadata::empty(),
+        )[0]
+      CallStack(offset) =>
+        append_body(
+          builder,
+          entry,
+          IncomingStack(ty, offset),
+          [],
+          [@vcode.Output::any(ty)],
+          @vcode.InstructionMetadata::empty(),
+        )[0]
     }
     values[function.value_index(parameter).unwrap()] = Some(selected)
   }
@@ -375,31 +426,30 @@ fn lower_parameters(
 
 ///|
 fn lower_return_values(
+  function : @semantic.Function,
+  context : LoweringContext,
   builder : @vcode.Builder[AArch64Inst],
   block : @vcode.Block,
   values : Array[@vcode.Value],
   result_types : Array[@semantic.ValueType],
 ) -> Unit raise AArch64LowerError {
-  let mut int_index = 0
-  let mut float_index = 0
+  let registers = match function.protocol() {
+    Platform => {
+      if result_types.length() > 1 {
+        raise UnsupportedAbi(
+          message="platform functions support at most one direct result",
+        )
+      }
+      platform_result_registers(result_types)
+    }
+    Internal =>
+      context.internal_abi.result_registers(result_types) catch {
+        error => raise UnsupportedAbi(message=error.to_string())
+      }
+  }
   for index, value in values {
     let ty = result_types[index]
-    let class = abi_bank(ty)
-    let register_index = if class == Int {
-      let current = int_index
-      int_index += 1
-      current
-    } else {
-      let current = float_index
-      float_index += 1
-      current
-    }
-    if register_index >= 8 {
-      raise UnsupportedAbi(
-        message="more than eight results in one register bank require a return area",
-      )
-    }
-    let reg = @vcode.PhysicalReg::new(register_index, class)
+    let reg = registers[index]
     append_body(
       builder,
       block,
@@ -430,6 +480,7 @@ fn set_terminator(
 ///|
 pub fn lower(
   function : @semantic.Function,
+  context : LoweringContext,
 ) -> @vcode.Function[AArch64Inst] raise AArch64LowerError {
   function.verify() catch {
     error => raise InvalidSemantic(cause=error)
@@ -441,7 +492,7 @@ pub fn lower(
     signature.results,
   )
   let values : Array[@vcode.Value?] = Array::make(function.value_count(), None)
-  lower_parameters(function, builder, values)
+  lower_parameters(function, context, builder, values)
   let semantic_blocks = function.blocks()
   let blocks : Array[@vcode.Block] = []
   for index, semantic_block in semantic_blocks {
@@ -467,7 +518,7 @@ pub fn lower(
     let block = blocks[block_index]
     for instruction in function.block_instructions(semantic_block) {
       lower_instruction(
-        function, builder, block, block_index, instruction, values,
+        function, context, builder, block, block_index, instruction, values,
       )
     }
     let record = function.block_terminator(semantic_block).unwrap()
@@ -510,7 +561,14 @@ pub fn lower(
         )
       Return(return_values) => {
         let mapped = map_values(function, values, return_values)
-        lower_return_values(builder, block, mapped, signature.results)
+        lower_return_values(
+          function,
+          context,
+          builder,
+          block,
+          mapped,
+          signature.results,
+        )
         set_terminator(builder, block, Return, [], [], metadata)
       }
       terminator => raise UnsupportedTerminator(block_index~, terminator~)

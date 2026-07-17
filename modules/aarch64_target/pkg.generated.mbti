@@ -47,7 +47,7 @@ pub fn emit(@vcode.Function[AArch64Inst], @vcode.Allocation, AArch64Frame) -> @c
 
 pub fn int_reg_index(IntRegRole) -> Int
 
-pub fn lower(@machv.Function) -> @vcode.Function[AArch64Inst] raise AArch64LowerError
+pub fn lower(@machv.Function, LoweringContext) -> @vcode.Function[AArch64Inst] raise AArch64LowerError
 
 pub fn plan_frame(@vcode.Function[AArch64Inst], @vcode.Allocation) -> AArch64Frame raise AArch64FrameError
 
@@ -99,6 +99,15 @@ pub suberror AArch64LowerError {
 } derive(@debug.Debug)
 pub impl Show for AArch64LowerError
 
+pub suberror InternalAbiError {
+  InvalidRegister(role~ : String, index~ : Int)
+  DuplicateRegister(role~ : String, index~ : Int)
+  ContextRegisterReused(index~ : Int)
+  InvalidSignature(message~ : String)
+  ResultAreaRequired(integer_count~ : Int, fp_count~ : Int)
+} derive(Eq, @debug.Debug)
+pub impl Show for InternalAbiError
+
 pub suberror TargetVCodeVerifyError {
   CommonFailure(cause~ : @vcode.VCodeVerifyError)
   InvalidInstruction(instruction~ : @vcode.Instruction, message~ : String)
@@ -142,6 +151,7 @@ pub(all) enum AArch64Inst {
   CompareSet(GprWidth, AArch64Condition)
   AddAddress
   PlatformCall(@machv.ExternalSymbol, @machv.Signature)
+  InternalCall(@machv.CodeSymbol, @machv.Signature, InternalCallPlan)
   Jump
   BranchNonZero32
   Return
@@ -178,6 +188,10 @@ pub(all) struct AbiPolicy {
   callee_saved_regs : Array[@abi.PReg]
 } derive(@debug.Debug)
 
+type CallArgumentLocation derive(Eq, @debug.Debug)
+
+type CallLayout derive(Eq, @debug.Debug)
+
 pub(all) enum CallingConvention {
   Aapcs64
 } derive(Eq, @debug.Debug)
@@ -195,6 +209,20 @@ pub(all) enum IntRegRole {
   SRet
 } derive(Eq, @debug.Debug)
 
+pub struct InternalAbi {
+  // private fields
+}
+pub fn InternalAbi::new(Int, Array[Int], Array[Int], Array[Int], Array[Int]) -> Self raise InternalAbiError
+
+pub struct InternalCallPlan {
+  // private fields
+} derive(Eq, @debug.Debug)
+
+pub struct LoweringContext {
+  // private fields
+}
+pub fn LoweringContext::new(InternalAbi) -> Self
+
 pub(all) struct MachineEnvData {
   preferred_int : Array[@abi.PReg]
   nonpreferred_int : Array[@abi.PReg]
@@ -207,10 +235,6 @@ pub(all) struct MachineEnvData {
   scratch_int : Array[Int]
   scratch_float : Array[Int]
 } derive(@debug.Debug)
-
-type PlatformArgumentLocation derive(Eq, @debug.Debug)
-
-type PlatformCallLayout derive(Eq, @debug.Debug)
 
 pub(all) struct Target {
   triple : String

@@ -54,6 +54,7 @@ pub(all) enum AArch64Inst {
   CompareSet(GprWidth, AArch64Condition)
   AddAddress
   PlatformCall(@semantic.ExternalSymbol, @semantic.Signature)
+  InternalCall(@semantic.CodeSymbol, @semantic.Signature, InternalCallPlan)
   Jump
   BranchNonZero32
   Return
@@ -89,14 +90,14 @@ fn require_fixed_use(
 }
 
 ///|
-enum PlatformArgumentLocation {
+enum CallArgumentLocation {
   CallRegister(@vcode.PhysicalReg)
   CallStack(Int)
 } derive(Eq, Debug)
 
 ///|
-struct PlatformCallLayout {
-  arguments : Array[PlatformArgumentLocation]
+struct CallLayout {
+  arguments : Array[CallArgumentLocation]
   stack_size : Int
 } derive(Eq, Debug)
 
@@ -115,10 +116,8 @@ fn call_stack_size(ty : @semantic.ValueType) -> Int {
 }
 
 ///|
-fn platform_call_layout(
-  types : Array[@semantic.ValueType],
-) -> PlatformCallLayout {
-  let arguments : Array[PlatformArgumentLocation] = []
+fn platform_call_layout(types : Array[@semantic.ValueType]) -> CallLayout {
+  let arguments : Array[CallArgumentLocation] = []
   let mut int_index = 0
   let mut fp_index = 0
   let mut stack_size = 0
@@ -360,6 +359,75 @@ pub fn verify_vcode(
           )
         }
       }
+      InternalCall(_, signature, plan) => {
+        if plan.arguments.length() != signature.params.length() ||
+          plan.results.length() != signature.results.length() ||
+          plan.stack_size < 0 ||
+          plan.stack_size % 16 != 0 {
+          raise InvalidInstruction(
+            instruction~,
+            message="internal call plan does not match its signature",
+          )
+        }
+        require_instruction_shape(
+          function,
+          instruction,
+          signature.params,
+          [],
+          false,
+          0,
+        )
+        for index, ty in signature.params {
+          match plan.arguments[index] {
+            CallRegister(reg) =>
+              if reg.id < 0 ||
+                reg.id >= 16 ||
+                reg.class != @vcode.reg_class_for_value_type(ty) {
+                raise InvalidInstruction(
+                  instruction~,
+                  message="internal call has an invalid argument register",
+                )
+              }
+            CallStack(offset) => {
+              let size = call_stack_size(ty)
+              if offset < 0 ||
+                offset % size != 0 ||
+                offset + size > plan.stack_size {
+                raise InvalidInstruction(
+                  instruction~,
+                  message="internal call has an invalid stack argument",
+                )
+              }
+            }
+          }
+        }
+        for index, ty in signature.results {
+          let reg = plan.results[index]
+          if reg.id < 0 ||
+            reg.id >= 16 ||
+            reg.class != @vcode.reg_class_for_value_type(ty) {
+            raise InvalidInstruction(
+              instruction~,
+              message="internal call has an invalid result register",
+            )
+          }
+        }
+        for operand in function.instruction_operands(instruction) {
+          if operand.constraint != Any {
+            raise InvalidInstruction(
+              instruction~,
+              message="internal call arguments must remain allocatable before ABI moves",
+            )
+          }
+        }
+        if function.instruction_clobbers(instruction) !=
+          platform_call_clobbers() {
+          raise InvalidInstruction(
+            instruction~,
+            message="internal call has an invalid caller-saved clobber set",
+          )
+        }
+      }
       Jump => require_instruction_shape(function, instruction, [], [], true, 1)
       BranchNonZero32 =>
         require_instruction_shape(function, instruction, [I32], [], true, 2)
@@ -377,8 +445,14 @@ pub fn verify_vcode(
     let body = function.block_body(block)
     let consumed_results = Array::make(body.length(), false)
     for index, instruction in body {
-      if function.instruction(instruction) is Some(PlatformCall(_, signature)) {
-        let registers = platform_result_registers(signature.results)
+      let call_results = match function.instruction(instruction) {
+        Some(PlatformCall(_, signature)) =>
+          Some((signature, platform_result_registers(signature.results)))
+        Some(InternalCall(_, signature, plan)) =>
+          Some((signature, plan.results))
+        _ => None
+      }
+      if call_results is Some((signature, registers)) {
         for result_index, ty in signature.results {
           let body_index = index + result_index + 1
           if body_index >= body.length() ||
@@ -414,27 +488,13 @@ pub fn verify_vcode(
           message="return is missing ABI result materialization",
         )
       }
-      let mut int_index = 0
-      let mut fp_index = 0
       let start = body.length() - result_types.length()
       for result_index, ty in result_types {
-        let expected_id = if @vcode.reg_class_for_value_type(ty) == Int {
-          let index = int_index
-          int_index += 1
-          index
-        } else {
-          let index = fp_index
-          fp_index += 1
-          index
+        let valid = match function.instruction(body[start + result_index]) {
+          Some(OutgoingReg(actual_ty, _)) => actual_ty == ty
+          _ => false
         }
-        let expected = OutgoingReg(
-          ty,
-          @vcode.PhysicalReg::new(
-            expected_id,
-            @vcode.reg_class_for_value_type(ty),
-          ),
-        )
-        if function.instruction(body[start + result_index]) != Some(expected) {
+        if !valid {
           raise InvalidInstruction(
             instruction=terminator,
             message="return ABI materialization does not match function signature",

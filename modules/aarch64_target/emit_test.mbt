@@ -2,13 +2,13 @@
 test "AArch64 pipeline emits an allocated scalar function" {
   let builder = @semantic.FunctionBuilder::new(
     "emitted_add",
-    Internal,
+    Platform,
     [I64, I64],
     [I64],
   )
   let sum = builder.emit(IntBinary(Add), builder.parameters(), [I64])[0]
   builder.return_([sum])
-  let function = lower(builder.finish())
+  let function = lower(builder.finish(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -52,7 +52,7 @@ test "AArch64 pipeline emits an allocated scalar function" {
 test "AArch64 pipeline patches conditional control flow" {
   let builder = @semantic.FunctionBuilder::new(
     "emitted_branch",
-    Internal,
+    Platform,
     [I32],
     [I32],
   )
@@ -66,7 +66,7 @@ test "AArch64 pipeline patches conditional control flow" {
   builder.switch_to_block(when_false)
   let zero = builder.emit(I32Const(0U), [], [I32])[0]
   builder.return_([zero])
-  let function = lower(builder.finish())
+  let function = lower(builder.finish(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -118,7 +118,7 @@ test "AArch64 pipeline patches conditional control flow" {
 test "AArch64 pipeline materializes block arguments on their selected edges" {
   let builder = @semantic.FunctionBuilder::new(
     "emitted_phi",
-    Internal,
+    Platform,
     [I32, I64, I64],
     [I64],
   )
@@ -133,7 +133,7 @@ test "AArch64 pipeline materializes block arguments on their selected edges" {
   builder.jump(merge, [parameters[2]])
   builder.switch_to_block(merge)
   builder.return_([builder.block_parameters(merge)[0]])
-  let function = lower(builder.finish())
+  let function = lower(builder.finish(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   inspect(
@@ -225,7 +225,7 @@ test "AArch64 pipeline materializes block arguments on their selected edges" {
 test "AArch64 conditional edges isolate their parallel copies" {
   let builder = @semantic.FunctionBuilder::new(
     "conditional_phi",
-    Internal,
+    Platform,
     [I32, I64, I64],
     [I64],
   )
@@ -234,7 +234,7 @@ test "AArch64 conditional edges isolate their parallel copies" {
   builder.branch(parameters[0], merge, [parameters[1]], merge, [parameters[2]])
   builder.switch_to_block(merge)
   builder.return_([builder.block_parameters(merge)[0]])
-  let function = lower(builder.finish())
+  let function = lower(builder.finish(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   inspect(
@@ -378,7 +378,7 @@ test "AArch64 code objects retain safepoints and allocated GC roots" {
 test "AArch64 direct calls preserve LR and emit typed call relocations" {
   let builder = @semantic.FunctionBuilder::new(
     "emitted_direct_call",
-    Internal,
+    Platform,
     [GcRef64],
     [],
   )
@@ -399,7 +399,7 @@ test "AArch64 direct calls preserve LR and emit typed call relocations" {
   )
   |> ignore
   builder.return_([])
-  let function = lower(builder.finish())
+  let function = lower(builder.finish(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   inspect(
@@ -483,7 +483,7 @@ test "AArch64 platform calls store overflow arguments in the outgoing area" {
   let parameter_types : Array[@semantic.ValueType] = Array::make(9, I64)
   let builder = @semantic.FunctionBuilder::new(
     "emitted_stack_call",
-    Internal,
+    Platform,
     parameter_types,
     [],
   )
@@ -495,7 +495,7 @@ test "AArch64 platform calls store overflow arguments in the outgoing area" {
   )
   builder.emit(Call(call), builder.parameters(), []) |> ignore
   builder.return_([])
-  let function = lower(builder.finish())
+  let function = lower(builder.finish(), test_lowering_context())
   let allocation = allocate(function)
   let frame = plan_frame(function, allocation)
   debug_inspect(
@@ -606,6 +606,81 @@ test "AArch64 platform calls store overflow arguments in the outgoing area" {
       #|      offset: 80,
       #|      kind: AArch64Call26,
       #|      target: External({ name: "runtime.many" }),
+      #|      addend: 0,
+      #|    },
+      #|  ],
+      #|  sources: [],
+      #|  traps: [],
+      #|  safepoints: [],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
+test "AArch64 internal calls emit code-symbol relocations" {
+  let builder = @semantic.FunctionBuilder::new(
+    "emitted_internal_call",
+    Internal,
+    [Ptr64],
+    [],
+  )
+  let call = @semantic.SemanticCall::new(
+    Internal(@semantic.CodeSymbol::new("wasm.func.8")),
+    @semantic.Signature::new([Ptr64], []),
+    Internal,
+    @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
+  )
+  builder.emit(Call(call), builder.parameters(), []) |> ignore
+  builder.return_([])
+  let function = lower(builder.finish(), test_lowering_context())
+  let allocation = allocate(function)
+  let frame = plan_frame(function, allocation)
+  debug_inspect(
+    emit(function, allocation, frame),
+    content=(
+      #|{
+      #|  architecture: AArch64,
+      #|  code: [
+      #|    0xff,
+      #|    0x43,
+      #|    0x00,
+      #|    0xd1,
+      #|    0xfe,
+      #|    0x03,
+      #|    0x00,
+      #|    0xf9,
+      #|    0xe1,
+      #|    0x03,
+      #|    0x00,
+      #|    0xaa,
+      #|    0xe0,
+      #|    0x03,
+      #|    0x01,
+      #|    0xaa,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x94,
+      #|    0xfe,
+      #|    0x03,
+      #|    0x40,
+      #|    0xf9,
+      #|    0xff,
+      #|    0x43,
+      #|    0x00,
+      #|    0x91,
+      #|    0xc0,
+      #|    0x03,
+      #|    0x5f,
+      #|    0xd6,
+      #|  ],
+      #|  relocations: [
+      #|    {
+      #|      offset: 16,
+      #|      kind: AArch64Call26,
+      #|      target: Code({ name: "wasm.func.8" }),
       #|      addend: 0,
       #|    },
       #|  ],

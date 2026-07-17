@@ -342,6 +342,39 @@ fn[Inst] emit_edits_at(
 }
 
 ///|
+fn emit_call_arguments(
+  buffer : CodeBuffer,
+  allocation : @vcode.Allocation,
+  frame : AArch64Frame,
+  instruction : @vcode.Instruction,
+  types : Array[@semantic.ValueType],
+  locations : Array[CallArgumentLocation],
+) -> Unit raise AArch64EmitError {
+  let moves : Array[@vcode.ParallelMove] = []
+  for index, ty in types {
+    let source = allocation.operand_location(instruction, index).unwrap()
+    match locations[index] {
+      CallRegister(destination) =>
+        moves.push(
+          @vcode.ParallelMove::new(ty, Register(source), Register(destination)),
+        )
+      CallStack(offset) => emit_stack_access(buffer, false, ty, source, offset)
+    }
+  }
+  let resolved = @vcode.resolve_parallel_moves(
+    moves,
+    [@vcode.PhysicalReg::new(16, Int), @vcode.PhysicalReg::new(17, Int)],
+    [
+      @vcode.PhysicalReg::new(16, FpVector),
+      @vcode.PhysicalReg::new(17, FpVector),
+    ],
+  ) catch {
+    error => raise InvalidParallelMove(cause=error)
+  }
+  emit_resolved_moves(buffer, frame, resolved)
+}
+
+///|
 fn emit_instruction(
   buffer : CodeBuffer,
   function : @vcode.Function[AArch64Inst],
@@ -383,32 +416,14 @@ fn emit_instruction(
       )
     PlatformCall(target, signature) => {
       let layout = platform_call_layout(signature.params)
-      let moves : Array[@vcode.ParallelMove] = []
-      for index, ty in signature.params {
-        match layout.arguments[index] {
-          CallRegister(destination) =>
-            moves.push(
-              @vcode.ParallelMove::new(
-                ty,
-                Register(reg(index)),
-                Register(destination),
-              ),
-            )
-          CallStack(offset) =>
-            emit_stack_access(buffer, false, ty, reg(index), offset)
-        }
-      }
-      let resolved = @vcode.resolve_parallel_moves(
-        moves,
-        [@vcode.PhysicalReg::new(16, Int), @vcode.PhysicalReg::new(17, Int)],
-        [
-          @vcode.PhysicalReg::new(16, FpVector),
-          @vcode.PhysicalReg::new(17, FpVector),
-        ],
-      ) catch {
-        error => raise InvalidParallelMove(cause=error)
-      }
-      emit_resolved_moves(buffer, frame, resolved)
+      emit_call_arguments(
+        buffer,
+        allocation,
+        frame,
+        instruction,
+        signature.params,
+        layout.arguments,
+      )
       metadata_offset = buffer.position()
       buffer.emit_word(0x94000000U)
       buffer.relocations.push(
@@ -416,6 +431,25 @@ fn emit_instruction(
           metadata_offset,
           AArch64Call26,
           External(target),
+        ),
+      )
+    }
+    InternalCall(target, signature, plan) => {
+      emit_call_arguments(
+        buffer,
+        allocation,
+        frame,
+        instruction,
+        signature.params,
+        plan.arguments,
+      )
+      metadata_offset = buffer.position()
+      buffer.emit_word(0x94000000U)
+      buffer.relocations.push(
+        @code_object.Relocation::new(
+          metadata_offset,
+          AArch64Call26,
+          Code(target),
         ),
       )
     }

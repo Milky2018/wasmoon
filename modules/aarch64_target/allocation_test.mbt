@@ -2,13 +2,13 @@
 test "AArch64 allocation honors incoming and return ABI constraints" {
   let builder = @semantic.FunctionBuilder::new(
     "allocated_add",
-    Internal,
+    Platform,
     [I64, I64],
     [I64],
   )
   let sum = builder.emit(IntBinary(Add), builder.parameters(), [I64])[0]
   builder.return_([sum])
-  let function = lower(builder.finish())
+  let function = lower(builder.finish(), test_lowering_context())
   let allocation = allocate(function)
   inspect(
     allocation.summary(),
@@ -43,7 +43,7 @@ test "AArch64 allocation honors incoming and return ABI constraints" {
 test "AArch64 frame plans spills and callee-saved registers" {
   let builder = @semantic.FunctionBuilder::new(
     "register_pressure",
-    Internal,
+    Platform,
     [],
     [I64],
   )
@@ -56,7 +56,7 @@ test "AArch64 frame plans spills and callee-saved registers" {
     sum = builder.emit(IntBinary(Add), [sum, values[index]], [I64])[0]
   }
   builder.return_([sum])
-  let function = lower(builder.finish())
+  let function = lower(builder.finish(), test_lowering_context())
   let allocation = allocate(function)
   inspect(
     plan_frame(function, allocation).summary(),
@@ -88,7 +88,7 @@ test "AArch64 frame plans spills and callee-saved registers" {
 test "AArch64 allocation keeps values live across a direct call out of clobbers" {
   let builder = @semantic.FunctionBuilder::new(
     "call_clobber",
-    Internal,
+    Platform,
     [I64],
     [I64],
   )
@@ -103,7 +103,7 @@ test "AArch64 allocation keeps values live across a direct call out of clobbers"
       I64,
     ])[0]
   builder.return_([result])
-  let function = lower(builder.finish())
+  let function = lower(builder.finish(), test_lowering_context())
   let allocation = allocate(function)
   inspect(
     allocation.summary(),
@@ -139,7 +139,7 @@ test "AArch64 frame reserves one aligned outgoing stack-argument area" {
   let parameter_types : Array[@semantic.ValueType] = Array::make(9, I64)
   let builder = @semantic.FunctionBuilder::new(
     "stack_call_frame",
-    Internal,
+    Platform,
     parameter_types,
     [],
   )
@@ -151,7 +151,7 @@ test "AArch64 frame reserves one aligned outgoing stack-argument area" {
   )
   builder.emit(Call(call), builder.parameters(), []) |> ignore
   builder.return_([])
-  let function = lower(builder.finish())
+  let function = lower(builder.finish(), test_lowering_context())
   let allocation = allocate(function)
   inspect(
     plan_frame(function, allocation).summary(),

@@ -2,7 +2,7 @@
 test "AArch64 lowering selects scalar SSA and preserves source metadata" {
   let builder = @semantic.FunctionBuilder::new(
     "selected_add",
-    Internal,
+    Platform,
     [I64, I64],
     [I64],
   )
@@ -17,7 +17,7 @@ test "AArch64 lowering selects scalar SSA and preserves source metadata" {
       ),
     )[0]
   builder.return_([sum])
-  let selected = lower(builder.finish())
+  let selected = lower(builder.finish(), test_lowering_context())
   inspect(
     selected.summary(),
     content=(
@@ -37,13 +37,13 @@ test "AArch64 lowering selects scalar SSA and preserves source metadata" {
 test "AArch64 lowering rejects unsupported valid operations structurally" {
   let builder = @semantic.FunctionBuilder::new(
     "unsupported_float",
-    Internal,
+    Platform,
     [],
     [F32],
   )
   let value = builder.emit(F32Const(0x3F800000U), [], [F32])[0]
   builder.return_([value])
-  try lower(builder.finish()) |> ignore catch {
+  try lower(builder.finish(), test_lowering_context()) |> ignore catch {
     error =>
       inspect(
         error,
@@ -64,13 +64,13 @@ test "AArch64 lowering rejects unsupported valid operations structurally" {
 test "AArch64 lowering does not silently select non-trapping hardware divide" {
   let builder = @semantic.FunctionBuilder::new(
     "checked_divide",
-    Internal,
+    Platform,
     [I64, I64],
     [I64],
   )
   let value = builder.emit(IntBinary(SignedDiv), builder.parameters(), [I64])[0]
   builder.return_([value])
-  try lower(builder.finish()) |> ignore catch {
+  try lower(builder.finish(), test_lowering_context()) |> ignore catch {
     error =>
       inspect(
         error,
@@ -91,7 +91,7 @@ test "AArch64 lowering does not silently select non-trapping hardware divide" {
 test "AArch64 lowering selects a direct platform call with explicit ABI facts" {
   let builder = @semantic.FunctionBuilder::new(
     "direct_platform_call",
-    Internal,
+    Platform,
     [I64, F64],
     [I64],
   )
@@ -112,7 +112,7 @@ test "AArch64 lowering selects a direct platform call with explicit ABI facts" {
     )[0]
   builder.return_([result])
   inspect(
-    lower(builder.finish()).summary(),
+    lower(builder.finish(), test_lowering_context()).summary(),
     content=(
       #|vcode direct_platform_call(v0:i64, v1:f64) -> (i64)
       #|block0:
@@ -125,6 +125,47 @@ test "AArch64 lowering selects a direct platform call with explicit ABI facts" {
       #|  i3 IncomingCallResult(I64, p0:int) defs=[v4:any@late]
       #|  i4 OutgoingReg(I64, p0:int) uses=[v4:any@early]
       #|  i5 Return
+      #|
+    ),
+  )
+}
+
+///|
+test "AArch64 lowering derives internal entry and direct-call layouts" {
+  let builder = @semantic.FunctionBuilder::new(
+    "direct_internal_call",
+    Internal,
+    [Ptr64, I64, F64],
+    [I64],
+  )
+  let call = @semantic.SemanticCall::new(
+    Internal(@semantic.CodeSymbol::new("wasm.func.7")),
+    @semantic.Signature::new([Ptr64, I64, F64], [I64]),
+    Internal,
+    @semantic.CallBehavior::new(ReadWrite, true, true, true, true),
+  )
+  let result = builder.emit(Call(call), builder.parameters(), [I64])[0]
+  builder.return_([result])
+  inspect(
+    lower(builder.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode direct_internal_call(v0:ptr64, v1:i64, v2:f64) -> (i64)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v3:any@late]
+      #|  i1 IncomingReg(I64, p1:int) uses=[v1:fixed(p1:int)@early] defs=[v4:any@late]
+      #|  i2 IncomingReg(F64, p0:fpvec) uses=[v2:fixed(p0:fpvec)@early] defs=[v5:any@late]
+      #|  i3 InternalCall(
+      #|  { name: "wasm.func.7" },
+      #|  { params: [Ptr64, I64, F64], results: [I64] },
+      #|  {
+      #|    arguments: [CallRegister(p0:int), CallRegister(p1:int), CallRegister(p0:fpvec)],
+      #|    results: [p0:int],
+      #|    stack_size: 0,
+      #|  },
+      #|) uses=[v3:any@early, v4:any@early, v5:any@early] clobbers=[p0:int, p1:int, p2:int, p3:int, p4:int, p5:int, p6:int, p7:int, p8:int, p9:int, p10:int, p11:int, p12:int, p13:int, p14:int, p15:int, p16:int, p17:int, p0:fpvec, p1:fpvec, p2:fpvec, p3:fpvec, p4:fpvec, p5:fpvec, p6:fpvec, p7:fpvec, p8:fpvec, p9:fpvec, p10:fpvec, p11:fpvec, p12:fpvec, p13:fpvec, p14:fpvec, p15:fpvec, p16:fpvec, p17:fpvec, p18:fpvec, p19:fpvec, p20:fpvec, p21:fpvec, p22:fpvec, p23:fpvec, p24:fpvec, p25:fpvec, p26:fpvec, p27:fpvec, p28:fpvec, p29:fpvec, p30:fpvec, p31:fpvec] safepoint=GcAndCancellation
+      #|  i4 IncomingCallResult(I64, p0:int) defs=[v6:any@late]
+      #|  i5 OutgoingReg(I64, p0:int) uses=[v6:any@early]
+      #|  i6 Return
       #|
     ),
   )

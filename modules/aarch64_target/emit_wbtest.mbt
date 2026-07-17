@@ -119,3 +119,71 @@ test "AAPCS64 platform call layout preserves mixed overflow order" {
     ),
   )
 }
+
+///|
+test "validated internal ABI derives context, overflow, and result locations" {
+  let abi = InternalAbi::new(
+    0,
+    [1, 2, 3, 4, 5, 6, 7],
+    [0, 1, 2, 3, 4, 5, 6, 7],
+    [0, 1, 2, 3, 4, 5, 6, 7],
+    [0, 1, 2, 3, 4, 5, 6, 7],
+  )
+  let layout = abi.call_layout(
+    @semantic.Signature::new(
+      [
+        Ptr64,
+        I64,
+        I64,
+        I64,
+        I64,
+        I64,
+        I64,
+        I64,
+        I64,
+        F64,
+        F64,
+        F64,
+        F64,
+        F64,
+        F64,
+        F64,
+        F64,
+        V128,
+      ],
+      [I64, F64],
+    ),
+  )
+  let results = abi.result_registers([I64, F64])
+  debug_inspect(
+    (layout, results),
+    content=(
+      #|(
+      #|  {
+      #|    arguments: [
+      #|      CallRegister(p0:int),
+      #|      CallRegister(p1:int),
+      #|      CallRegister(p2:int),
+      #|      CallRegister(p3:int),
+      #|      CallRegister(p4:int),
+      #|      CallRegister(p5:int),
+      #|      CallRegister(p6:int),
+      #|      CallRegister(p7:int),
+      #|      CallStack(0),
+      #|      CallRegister(p0:fpvec),
+      #|      CallRegister(p1:fpvec),
+      #|      CallRegister(p2:fpvec),
+      #|      CallRegister(p3:fpvec),
+      #|      CallRegister(p4:fpvec),
+      #|      CallRegister(p5:fpvec),
+      #|      CallRegister(p6:fpvec),
+      #|      CallRegister(p7:fpvec),
+      #|      CallStack(16),
+      #|    ],
+      #|    stack_size: 32,
+      #|  },
+      #|  [p0:int, p0:fpvec],
+      #|)
+    ),
+  )
+}
