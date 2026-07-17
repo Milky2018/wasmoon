@@ -232,6 +232,7 @@ pub(all) enum AArch64Inst {
   VectorIntUnary(@machv.VectorLane, AArch64VectorIntUnary)
   VectorIntBinary(@machv.VectorLane, AArch64VectorIntBinary)
   VectorIntShift(@machv.VectorLane, @machv.VectorIntShiftOp)
+  VectorIntCompare(@machv.VectorLane, @machv.VectorIntComparison)
   IntUnary(GprWidth, AArch64IntUnary)
   IntBinary(GprWidth, AArch64IntBinary)
   PopulationCount(GprWidth)

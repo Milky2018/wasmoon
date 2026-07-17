@@ -768,6 +768,61 @@ fn emit_vector_int_shift(
 }
 
 ///|
+fn emit_vector_int_compare(
+  buffer : CodeBuffer,
+  lane : @semantic.VectorLane,
+  comparison : @semantic.VectorIntComparison,
+  left : @vcode.PhysicalReg,
+  right : @vcode.PhysicalReg,
+  destination : @vcode.PhysicalReg,
+) -> Unit raise AArch64EmitError {
+  let default_signedness : @semantic.Signedness = Signed
+  let (kind, signedness, swap, invert) = match comparison {
+    Equal => (0, default_signedness, false, false)
+    NotEqual => (0, default_signedness, false, true)
+    LessThan(signedness) => (1, signedness, true, false)
+    LessOrEqual(signedness) => (2, signedness, true, false)
+    GreaterThan(signedness) => (1, signedness, false, false)
+    GreaterOrEqual(signedness) => (2, signedness, false, false)
+  }
+  let (first, second) = if swap { (right, left) } else { (left, right) }
+  let base = match kind {
+    0 =>
+      vector_lane_encoding(
+        lane, 0x6E208C00U, 0x6E608C00U, 0x6EA08C00U, 0x6EE08C00U,
+      )
+    1 if signedness is Signed =>
+      vector_lane_encoding(
+        lane, 0x4E203400U, 0x4E603400U, 0x4EA03400U, 0x4EE03400U,
+      )
+    1 =>
+      vector_lane_encoding(
+        lane, 0x6E203400U, 0x6E603400U, 0x6EA03400U, 0x6EE03400U,
+      )
+    2 if signedness is Signed =>
+      vector_lane_encoding(
+        lane, 0x4E203C00U, 0x4E603C00U, 0x4EA03C00U, 0x4EE03C00U,
+      )
+    2 =>
+      vector_lane_encoding(
+        lane, 0x6E203C00U, 0x6E603C00U, 0x6EA03C00U, 0x6EE03C00U,
+      )
+    _ => raise InvalidVectorInstruction
+  }
+  buffer.emit_word(
+    base |
+    (reg_bits(second) << 16) |
+    (reg_bits(first) << 5) |
+    reg_bits(destination),
+  )
+  if invert {
+    buffer.emit_word(
+      0x6E205800U | (reg_bits(destination) << 5) | reg_bits(destination),
+    )
+  }
+}
+
+///|
 fn emit_vector_binary(
   buffer : CodeBuffer,
   base : UInt,
@@ -1281,6 +1336,8 @@ fn emit_instruction(
       emit_vector_int_binary(buffer, lane, operation, reg(0), reg(1), reg(2))
     VectorIntShift(lane, operation) =>
       emit_vector_int_shift(buffer, lane, operation, reg(0), reg(1), reg(2))
+    VectorIntCompare(lane, comparison) =>
+      emit_vector_int_compare(buffer, lane, comparison, reg(0), reg(1), reg(2))
     VectorBitwise(operation) =>
       match operation {
         Not => emit_vector_bitwise(buffer, Not, reg(0), reg(0), reg(0), reg(1))

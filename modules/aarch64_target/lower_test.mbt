@@ -386,6 +386,94 @@ test "AArch64 lowering selects vector integer shifts" {
 }
 
 ///|
+test "AArch64 lowering selects vector integer comparisons" {
+  let builder = @semantic.FunctionBuilder::new(
+    "vector_integer_comparisons",
+    Internal,
+    [Ptr64, V128, V128],
+    [V128],
+  )
+  let parameters = builder.parameters()
+  let mut result = parameters[1]
+  let lanes : Array[@semantic.VectorLane] = [I8x16, I16x8, I32x4, I64x2]
+  let comparisons : Array[@semantic.VectorIntComparison] = [
+    Equal,
+    NotEqual,
+    LessThan(Signed),
+    LessThan(Unsigned),
+    LessOrEqual(Signed),
+    LessOrEqual(Unsigned),
+    GreaterThan(Signed),
+    GreaterThan(Unsigned),
+    GreaterOrEqual(Signed),
+    GreaterOrEqual(Unsigned),
+  ]
+  for lane in lanes {
+    for comparison in comparisons {
+      result = builder.emit(
+          Vector(IntCompare(lane, comparison)),
+          [result, parameters[2]],
+          [V128],
+        )[0]
+    }
+  }
+  builder.return_([result])
+  inspect(
+    lower(builder.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode vector_integer_comparisons(v0:ptr64, v1:v128, v2:v128) -> (v128)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v3:any@late]
+      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v4:any@late]
+      #|  i2 IncomingReg(V128, p1:fpvec) uses=[v2:fixed(p1:fpvec)@early] defs=[v5:any@late]
+      #|  i3 VectorIntCompare(I8x16, Equal) uses=[v4:any@early, v5:any@early] defs=[v6:any@late]
+      #|  i4 VectorIntCompare(I8x16, NotEqual) uses=[v6:any@early, v5:any@early] defs=[v7:any@late]
+      #|  i5 VectorIntCompare(I8x16, LessThan(Signed)) uses=[v7:any@early, v5:any@early] defs=[v8:any@late]
+      #|  i6 VectorIntCompare(I8x16, LessThan(Unsigned)) uses=[v8:any@early, v5:any@early] defs=[v9:any@late]
+      #|  i7 VectorIntCompare(I8x16, LessOrEqual(Signed)) uses=[v9:any@early, v5:any@early] defs=[v10:any@late]
+      #|  i8 VectorIntCompare(I8x16, LessOrEqual(Unsigned)) uses=[v10:any@early, v5:any@early] defs=[v11:any@late]
+      #|  i9 VectorIntCompare(I8x16, GreaterThan(Signed)) uses=[v11:any@early, v5:any@early] defs=[v12:any@late]
+      #|  i10 VectorIntCompare(I8x16, GreaterThan(Unsigned)) uses=[v12:any@early, v5:any@early] defs=[v13:any@late]
+      #|  i11 VectorIntCompare(I8x16, GreaterOrEqual(Signed)) uses=[v13:any@early, v5:any@early] defs=[v14:any@late]
+      #|  i12 VectorIntCompare(I8x16, GreaterOrEqual(Unsigned)) uses=[v14:any@early, v5:any@early] defs=[v15:any@late]
+      #|  i13 VectorIntCompare(I16x8, Equal) uses=[v15:any@early, v5:any@early] defs=[v16:any@late]
+      #|  i14 VectorIntCompare(I16x8, NotEqual) uses=[v16:any@early, v5:any@early] defs=[v17:any@late]
+      #|  i15 VectorIntCompare(I16x8, LessThan(Signed)) uses=[v17:any@early, v5:any@early] defs=[v18:any@late]
+      #|  i16 VectorIntCompare(I16x8, LessThan(Unsigned)) uses=[v18:any@early, v5:any@early] defs=[v19:any@late]
+      #|  i17 VectorIntCompare(I16x8, LessOrEqual(Signed)) uses=[v19:any@early, v5:any@early] defs=[v20:any@late]
+      #|  i18 VectorIntCompare(I16x8, LessOrEqual(Unsigned)) uses=[v20:any@early, v5:any@early] defs=[v21:any@late]
+      #|  i19 VectorIntCompare(I16x8, GreaterThan(Signed)) uses=[v21:any@early, v5:any@early] defs=[v22:any@late]
+      #|  i20 VectorIntCompare(I16x8, GreaterThan(Unsigned)) uses=[v22:any@early, v5:any@early] defs=[v23:any@late]
+      #|  i21 VectorIntCompare(I16x8, GreaterOrEqual(Signed)) uses=[v23:any@early, v5:any@early] defs=[v24:any@late]
+      #|  i22 VectorIntCompare(I16x8, GreaterOrEqual(Unsigned)) uses=[v24:any@early, v5:any@early] defs=[v25:any@late]
+      #|  i23 VectorIntCompare(I32x4, Equal) uses=[v25:any@early, v5:any@early] defs=[v26:any@late]
+      #|  i24 VectorIntCompare(I32x4, NotEqual) uses=[v26:any@early, v5:any@early] defs=[v27:any@late]
+      #|  i25 VectorIntCompare(I32x4, LessThan(Signed)) uses=[v27:any@early, v5:any@early] defs=[v28:any@late]
+      #|  i26 VectorIntCompare(I32x4, LessThan(Unsigned)) uses=[v28:any@early, v5:any@early] defs=[v29:any@late]
+      #|  i27 VectorIntCompare(I32x4, LessOrEqual(Signed)) uses=[v29:any@early, v5:any@early] defs=[v30:any@late]
+      #|  i28 VectorIntCompare(I32x4, LessOrEqual(Unsigned)) uses=[v30:any@early, v5:any@early] defs=[v31:any@late]
+      #|  i29 VectorIntCompare(I32x4, GreaterThan(Signed)) uses=[v31:any@early, v5:any@early] defs=[v32:any@late]
+      #|  i30 VectorIntCompare(I32x4, GreaterThan(Unsigned)) uses=[v32:any@early, v5:any@early] defs=[v33:any@late]
+      #|  i31 VectorIntCompare(I32x4, GreaterOrEqual(Signed)) uses=[v33:any@early, v5:any@early] defs=[v34:any@late]
+      #|  i32 VectorIntCompare(I32x4, GreaterOrEqual(Unsigned)) uses=[v34:any@early, v5:any@early] defs=[v35:any@late]
+      #|  i33 VectorIntCompare(I64x2, Equal) uses=[v35:any@early, v5:any@early] defs=[v36:any@late]
+      #|  i34 VectorIntCompare(I64x2, NotEqual) uses=[v36:any@early, v5:any@early] defs=[v37:any@late]
+      #|  i35 VectorIntCompare(I64x2, LessThan(Signed)) uses=[v37:any@early, v5:any@early] defs=[v38:any@late]
+      #|  i36 VectorIntCompare(I64x2, LessThan(Unsigned)) uses=[v38:any@early, v5:any@early] defs=[v39:any@late]
+      #|  i37 VectorIntCompare(I64x2, LessOrEqual(Signed)) uses=[v39:any@early, v5:any@early] defs=[v40:any@late]
+      #|  i38 VectorIntCompare(I64x2, LessOrEqual(Unsigned)) uses=[v40:any@early, v5:any@early] defs=[v41:any@late]
+      #|  i39 VectorIntCompare(I64x2, GreaterThan(Signed)) uses=[v41:any@early, v5:any@early] defs=[v42:any@late]
+      #|  i40 VectorIntCompare(I64x2, GreaterThan(Unsigned)) uses=[v42:any@early, v5:any@early] defs=[v43:any@late]
+      #|  i41 VectorIntCompare(I64x2, GreaterOrEqual(Signed)) uses=[v43:any@early, v5:any@early] defs=[v44:any@late]
+      #|  i42 VectorIntCompare(I64x2, GreaterOrEqual(Unsigned)) uses=[v44:any@early, v5:any@early] defs=[v45:any@late]
+      #|  i43 OutgoingReg(V128, p0:fpvec) uses=[v45:any@early]
+      #|  i44 Return
+      #|
+    ),
+  )
+}
+
+///|
 test "AArch64 lowering assigns one aligned semantic stack-object area" {
   let builder = @semantic.FunctionBuilder::new(
     "stack_object_layout",
