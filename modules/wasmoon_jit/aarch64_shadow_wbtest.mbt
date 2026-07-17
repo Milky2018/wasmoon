@@ -225,3 +225,52 @@ test "runtime ABI elaboration follows CFG order instead of block storage order" 
     ),
   )
 }
+
+///|
+test "AArch64 shadow code executes through the production entry ABI" {
+  match host_target_arch() {
+    AArch64 => ()
+    _ => return
+  }
+  let builder = @semantic_machv.FunctionBuilder::new(
+    "shadow_executable_add",
+    Internal,
+    [Ptr64, I64, I64],
+    [I64],
+  )
+  let parameters = builder.parameters()
+  let result = builder.emit(IntBinary(Add), [parameters[1], parameters[2]], [
+      I64,
+    ])[0]
+  builder.return_([result])
+  let object = build_aarch64_shadow(builder.finish())
+  let candidate_bytes = object.code().map(byte => byte.to_int())
+  guard ExecCode::try_alloc(candidate_bytes) is Some(candidate) else {
+    fail("failed to allocate executable candidate code")
+  }
+  let trampoline_bytes = build_entry_trampoline_for_target(
+    [I64, I64],
+    [I64],
+    AArch64,
+  ) catch {
+    error => fail("failed to build AArch64 entry trampoline: \{error}")
+  }
+  guard ExecCode::try_alloc(trampoline_bytes) is Some(trampoline) else {
+    fail("failed to allocate executable entry trampoline")
+  }
+  guard NativeJITContext::try_alloc(1) is Some(context) else {
+    fail("failed to allocate native JIT context")
+  }
+  let values = FixedArray::from_array([20L, 22L, 0L])
+  let trap = context.call_trampoline(
+    trampoline.ptr(),
+    candidate.ptr(),
+    values,
+    values.length(),
+    false,
+  )
+  debug_inspect(
+    (trap, values[0], values[1], values[2]),
+    content="(0, 20, 22, 42)",
+  )
+}
