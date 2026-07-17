@@ -19,5 +19,4 @@ import {
   "Milky2018/wasmoon_jit/cwasm",
   "moonbitlang/core/cmp",
   "moonbitlang/core/hashset",
-  "moonbitlang/x/sys",
 }

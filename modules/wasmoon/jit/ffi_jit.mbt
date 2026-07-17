@@ -306,16 +306,26 @@ fn JITContext::call_multi_return(
         )
       }
       let target_arch = @wasmoon_jit.host_target_arch()
-      let isa = @wasmoon_jit.target_arch_to_isa(target_arch)
-      let mc = @wasmoon_jit.emit_entry_trampoline(
-        param_codes_arr,
-        result_codes_arr,
-        @wasmoon_jit.wasm_calling_convention(isa~),
-        isa~,
-      ) catch {
-        err => raise JITTrap("entry trampoline verification failed: \{err}")
+      let code_ints = match target_arch {
+        AArch64 =>
+          @wasmoon_jit.build_entry_trampoline_for_target(
+            param_types, result_types, target_arch,
+          ) catch {
+            err => raise JITTrap("entry trampoline generation failed: \{err}")
+          }
+        _ => {
+          let isa = @wasmoon_jit.target_arch_to_isa(target_arch)
+          let mc = @wasmoon_jit.emit_entry_trampoline(
+            param_codes_arr,
+            result_codes_arr,
+            @wasmoon_jit.wasm_calling_convention(isa~),
+            isa~,
+          ) catch {
+            err => raise JITTrap("entry trampoline verification failed: \{err}")
+          }
+          mc.get_bytes()
+        }
       }
-      let code_ints = mc.get_bytes()
       let trampoline = @wasmoon_jit.ExecCode::try_alloc(code_ints)
       match trampoline {
         Some(t) => {

@@ -231,11 +231,6 @@ fn lower_semantic_wasm_with_isa(
     error =>
       raise PipelineFailure(message="\{function.name}: \{error.to_string()}")
   }
-  match isa {
-    AArch64 if aarch64_shadow_enabled() =>
-      build_wasmoon_aarch64_target(semantic, environment) |> ignore
-    _ => ()
-  }
   let legacy = adapt_semantic_to_legacy(
     semantic,
     isa,

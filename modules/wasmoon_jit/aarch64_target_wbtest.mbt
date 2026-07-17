@@ -1,5 +1,5 @@
 ///|
-test "AArch64 shadow compiles semantic MachV through the final target seams" {
+test "AArch64 target compiles semantic MachV through the final target seams" {
   let builder = @semantic_machv.FunctionBuilder::new(
     "shadow_integer_add",
     Internal,
@@ -53,7 +53,7 @@ test "AArch64 shadow compiles semantic MachV through the final target seams" {
 }
 
 ///|
-test "AArch64 shadow binds product environment fields explicitly" {
+test "AArch64 target binds product environment fields explicitly" {
   let field = @semantic_machv.EnvironmentField::new(
     "wasmoon.test.pointer",
     Ptr64,
@@ -227,7 +227,7 @@ test "runtime ABI elaboration follows CFG order instead of block storage order" 
 }
 
 ///|
-test "AArch64 shadow code executes through the production entry ABI" {
+test "AArch64 target code executes through the production entry ABI" {
   match host_target_arch() {
     AArch64 => ()
     _ => return
@@ -290,7 +290,7 @@ fn install_aarch64_link_plan(
 }
 
 ///|
-test "AArch64 shadow executes internal and external relocations" {
+test "AArch64 target executes internal and external relocations" {
   match host_target_arch() {
     AArch64 => ()
     _ => return

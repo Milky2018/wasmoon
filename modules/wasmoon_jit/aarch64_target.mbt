@@ -1,9 +1,4 @@
 ///|
-fn aarch64_shadow_enabled() -> Bool {
-  @sys.get_env_var("WASMOON_AARCH64_SHADOW") == Some("1")
-}
-
-///|
 priv struct AArch64TargetCompilation {
   object : @code_object.UnlinkedCodeObject
   frame_size : Int
