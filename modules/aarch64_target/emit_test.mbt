@@ -1506,6 +1506,134 @@ test "AArch64 scalar conversion emission preserves register-bank transfers" {
 }
 
 ///|
+test "AArch64 emits scalar rounding and NaN predicates" {
+  let builder = @semantic.FunctionBuilder::new(
+    "emitted_float_rounding",
+    Internal,
+    [Ptr64, F32, F32, F64, F64],
+    [F32, F64, I32, I32],
+  )
+  let parameters = builder.parameters()
+  let ceil32 = builder.emit(FloatUnary(Ceil), [parameters[1]], [F32])[0]
+  let floor32 = builder.emit(FloatUnary(Floor), [ceil32], [F32])[0]
+  let truncate32 = builder.emit(FloatUnary(Truncate), [floor32], [F32])[0]
+  let nearest32 = builder.emit(FloatUnary(Nearest), [truncate32], [F32])[0]
+  let ceil64 = builder.emit(FloatUnary(Ceil), [parameters[3]], [F64])[0]
+  let floor64 = builder.emit(FloatUnary(Floor), [ceil64], [F64])[0]
+  let truncate64 = builder.emit(FloatUnary(Truncate), [floor64], [F64])[0]
+  let nearest64 = builder.emit(FloatUnary(Nearest), [truncate64], [F64])[0]
+  let ordered = builder.emit(
+      FloatCompare(Ordered),
+      [parameters[1], parameters[2]],
+      [I32],
+    )[0]
+  let unordered = builder.emit(
+      FloatCompare(Unordered),
+      [parameters[3], parameters[4]],
+      [I32],
+    )[0]
+  builder.return_([nearest32, nearest64, ordered, unordered])
+  let function = lower(builder.finish(), test_lowering_context())
+  let allocation = allocate(function)
+  let frame = plan_frame(function, allocation)
+  debug_inspect(
+    emit(function, allocation, frame),
+    content=(
+      #|{
+      #|  architecture: AArch64,
+      #|  code: [
+      #|    0xe1,
+      #|    0x03,
+      #|    0x00,
+      #|    0xaa,
+      #|    0x04,
+      #|    0x1c,
+      #|    0xa0,
+      #|    0x4e,
+      #|    0x20,
+      #|    0x1c,
+      #|    0xa1,
+      #|    0x4e,
+      #|    0x41,
+      #|    0x1c,
+      #|    0xa2,
+      #|    0x4e,
+      #|    0x62,
+      #|    0x1c,
+      #|    0xa3,
+      #|    0x4e,
+      #|    0x83,
+      #|    0xc0,
+      #|    0x24,
+      #|    0x1e,
+      #|    0x65,
+      #|    0x40,
+      #|    0x25,
+      #|    0x1e,
+      #|    0xa3,
+      #|    0xc0,
+      #|    0x25,
+      #|    0x1e,
+      #|    0x65,
+      #|    0x40,
+      #|    0x24,
+      #|    0x1e,
+      #|    0x23,
+      #|    0xc0,
+      #|    0x64,
+      #|    0x1e,
+      #|    0x66,
+      #|    0x40,
+      #|    0x65,
+      #|    0x1e,
+      #|    0xc3,
+      #|    0xc0,
+      #|    0x65,
+      #|    0x1e,
+      #|    0x66,
+      #|    0x40,
+      #|    0x64,
+      #|    0x1e,
+      #|    0x80,
+      #|    0x20,
+      #|    0x20,
+      #|    0x1e,
+      #|    0xe0,
+      #|    0x67,
+      #|    0x9f,
+      #|    0x9a,
+      #|    0x20,
+      #|    0x20,
+      #|    0x62,
+      #|    0x1e,
+      #|    0xe1,
+      #|    0x77,
+      #|    0x9f,
+      #|    0x9a,
+      #|    0xa0,
+      #|    0x1c,
+      #|    0xa5,
+      #|    0x4e,
+      #|    0xc1,
+      #|    0x1c,
+      #|    0xa6,
+      #|    0x4e,
+      #|    0xc0,
+      #|    0x03,
+      #|    0x5f,
+      #|    0xd6,
+      #|  ],
+      #|  relocations: [],
+      #|  sources: [],
+      #|  traps: [],
+      #|  safepoints: [],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
 test "AArch64 trapping float-to-int emits three precise trap sites" {
   let builder = @semantic.FunctionBuilder::new(
     "emitted_float_to_int",

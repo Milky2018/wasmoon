@@ -338,6 +338,14 @@ fn float_unary_base(
     (F64, Absolute) => Some(0x1E60C000U)
     (F32, SquareRoot) => Some(0x1E21C000U)
     (F64, SquareRoot) => Some(0x1E61C000U)
+    (F32, Ceil) => Some(0x1E24C000U)
+    (F64, Ceil) => Some(0x1E64C000U)
+    (F32, Floor) => Some(0x1E254000U)
+    (F64, Floor) => Some(0x1E654000U)
+    (F32, Truncate) => Some(0x1E25C000U)
+    (F64, Truncate) => Some(0x1E65C000U)
+    (F32, Nearest) => Some(0x1E244000U)
+    (F64, Nearest) => Some(0x1E644000U)
     _ => None
   }
 }
@@ -369,6 +377,8 @@ fn float_condition_code(condition : AArch64FloatCondition) -> UInt {
     LessOrEqual => 9U
     GreaterThan => 12U
     GreaterOrEqual => 10U
+    Ordered => 7U
+    Unordered => 6U
   }
 }
 

@@ -45,6 +45,10 @@ pub(all) enum AArch64FloatUnary {
   Negate
   Absolute
   SquareRoot
+  Ceil
+  Floor
+  Truncate
+  Nearest
 } derive(Eq, Debug)
 
 ///|
@@ -63,6 +67,8 @@ pub(all) enum AArch64FloatCondition {
   LessOrEqual
   GreaterThan
   GreaterOrEqual
+  Ordered
+  Unordered
 } derive(Eq, Debug)
 
 ///|

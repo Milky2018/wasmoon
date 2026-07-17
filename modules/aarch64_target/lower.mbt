@@ -79,7 +79,10 @@ fn lower_float_unary(operation : @semantic.FloatUnaryOp) -> AArch64FloatUnary? {
     Negate => Some(Negate)
     Absolute => Some(Absolute)
     SquareRoot => Some(SquareRoot)
-    Ceil | Floor | Truncate | Nearest => None
+    Ceil => Some(Ceil)
+    Floor => Some(Floor)
+    Truncate => Some(Truncate)
+    Nearest => Some(Nearest)
   }
 }
 
@@ -107,7 +110,8 @@ fn lower_float_condition(
     LessOrEqual => Some(LessOrEqual)
     GreaterThan => Some(GreaterThan)
     GreaterOrEqual => Some(GreaterOrEqual)
-    Ordered | Unordered => None
+    Ordered => Some(Ordered)
+    Unordered => Some(Unordered)
   }
 }
 

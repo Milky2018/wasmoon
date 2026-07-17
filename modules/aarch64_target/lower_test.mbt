@@ -504,6 +504,64 @@ test "AArch64 lowering selects non-trapping scalar floating-point operations" {
 }
 
 ///|
+test "AArch64 lowering selects scalar rounding and NaN predicates" {
+  let builder = @semantic.FunctionBuilder::new(
+    "scalar_float_rounding",
+    Internal,
+    [Ptr64, F32, F32, F64, F64],
+    [F32, F64, I32, I32],
+  )
+  let parameters = builder.parameters()
+  let ceil32 = builder.emit(FloatUnary(Ceil), [parameters[1]], [F32])[0]
+  let floor32 = builder.emit(FloatUnary(Floor), [ceil32], [F32])[0]
+  let truncate32 = builder.emit(FloatUnary(Truncate), [floor32], [F32])[0]
+  let nearest32 = builder.emit(FloatUnary(Nearest), [truncate32], [F32])[0]
+  let ceil64 = builder.emit(FloatUnary(Ceil), [parameters[3]], [F64])[0]
+  let floor64 = builder.emit(FloatUnary(Floor), [ceil64], [F64])[0]
+  let truncate64 = builder.emit(FloatUnary(Truncate), [floor64], [F64])[0]
+  let nearest64 = builder.emit(FloatUnary(Nearest), [truncate64], [F64])[0]
+  let ordered = builder.emit(
+      FloatCompare(Ordered),
+      [parameters[1], parameters[2]],
+      [I32],
+    )[0]
+  let unordered = builder.emit(
+      FloatCompare(Unordered),
+      [parameters[3], parameters[4]],
+      [I32],
+    )[0]
+  builder.return_([nearest32, nearest64, ordered, unordered])
+  inspect(
+    lower(builder.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode scalar_float_rounding(v0:ptr64, v1:f32, v2:f32, v3:f64, v4:f64) -> (f32, f64, i32, i32)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v5:any@late]
+      #|  i1 IncomingReg(F32, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v6:any@late]
+      #|  i2 IncomingReg(F32, p1:fpvec) uses=[v2:fixed(p1:fpvec)@early] defs=[v7:any@late]
+      #|  i3 IncomingReg(F64, p2:fpvec) uses=[v3:fixed(p2:fpvec)@early] defs=[v8:any@late]
+      #|  i4 IncomingReg(F64, p3:fpvec) uses=[v4:fixed(p3:fpvec)@early] defs=[v9:any@late]
+      #|  i5 FloatUnary(F32, Ceil) uses=[v6:any@early] defs=[v10:any@late]
+      #|  i6 FloatUnary(F32, Floor) uses=[v10:any@early] defs=[v11:any@late]
+      #|  i7 FloatUnary(F32, Truncate) uses=[v11:any@early] defs=[v12:any@late]
+      #|  i8 FloatUnary(F32, Nearest) uses=[v12:any@early] defs=[v13:any@late]
+      #|  i9 FloatUnary(F64, Ceil) uses=[v8:any@early] defs=[v14:any@late]
+      #|  i10 FloatUnary(F64, Floor) uses=[v14:any@early] defs=[v15:any@late]
+      #|  i11 FloatUnary(F64, Truncate) uses=[v15:any@early] defs=[v16:any@late]
+      #|  i12 FloatUnary(F64, Nearest) uses=[v16:any@early] defs=[v17:any@late]
+      #|  i13 FloatCompareSet(F32, Ordered) uses=[v6:any@early, v7:any@early] defs=[v18:any@late]
+      #|  i14 FloatCompareSet(F64, Unordered) uses=[v8:any@early, v9:any@early] defs=[v19:any@late]
+      #|  i15 OutgoingReg(F32, p0:fpvec) uses=[v13:any@early]
+      #|  i16 OutgoingReg(F64, p1:fpvec) uses=[v17:any@early]
+      #|  i17 OutgoingReg(I32, p0:int) uses=[v18:any@early]
+      #|  i18 OutgoingReg(I32, p1:int) uses=[v19:any@early]
+      #|  i19 Return
+      #|
+    ),
+  )
+}
+
+///|
 test "AArch64 lowering selects non-trapping scalar conversions" {
   let builder = @semantic.FunctionBuilder::new(
     "scalar_conversions",

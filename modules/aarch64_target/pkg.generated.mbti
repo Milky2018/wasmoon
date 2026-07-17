@@ -156,6 +156,8 @@ pub(all) enum AArch64FloatCondition {
   LessOrEqual
   GreaterThan
   GreaterOrEqual
+  Ordered
+  Unordered
 } derive(Eq, @debug.Debug)
 
 pub(all) enum AArch64FloatTrapCondition {
@@ -169,6 +171,10 @@ pub(all) enum AArch64FloatUnary {
   Negate
   Absolute
   SquareRoot
+  Ceil
+  Floor
+  Truncate
+  Nearest
 } derive(Eq, @debug.Debug)
 
 pub struct AArch64Frame {
