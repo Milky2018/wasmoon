@@ -170,3 +170,48 @@ test "AArch64 lowering derives internal entry and direct-call layouts" {
     ),
   )
 }
+
+///|
+test "AArch64 lowering keeps the indirect callee outside the logical signature" {
+  let builder = @semantic.FunctionBuilder::new(
+    "indirect_internal_call",
+    Internal,
+    [Ptr64, Ptr64, I64],
+    [I64],
+  )
+  let parameters = builder.parameters()
+  let call = @semantic.SemanticCall::new(
+    Indirect,
+    @semantic.Signature::new([Ptr64, I64], [I64]),
+    Internal,
+    @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
+  )
+  let result = builder.emit(
+      Call(call),
+      [parameters[1], parameters[0], parameters[2]],
+      [I64],
+    )[0]
+  builder.return_([result])
+  inspect(
+    lower(builder.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode indirect_internal_call(v0:ptr64, v1:ptr64, v2:i64) -> (i64)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v3:any@late]
+      #|  i1 IncomingReg(Ptr64, p1:int) uses=[v1:fixed(p1:int)@early] defs=[v4:any@late]
+      #|  i2 IncomingReg(I64, p2:int) uses=[v2:fixed(p2:int)@early] defs=[v5:any@late]
+      #|  i3 InternalCallIndirect(
+      #|  { params: [Ptr64, I64], results: [I64] },
+      #|  {
+      #|    arguments: [CallRegister(p0:int), CallRegister(p1:int)],
+      #|    results: [p0:int],
+      #|    stack_size: 0,
+      #|  },
+      #|) uses=[v4:any@early, v3:any@early, v5:any@early] clobbers=[p0:int, p1:int, p2:int, p3:int, p4:int, p5:int, p6:int, p7:int, p8:int, p9:int, p10:int, p11:int, p12:int, p13:int, p14:int, p15:int, p16:int, p17:int, p0:fpvec, p1:fpvec, p2:fpvec, p3:fpvec, p4:fpvec, p5:fpvec, p6:fpvec, p7:fpvec, p8:fpvec, p9:fpvec, p10:fpvec, p11:fpvec, p12:fpvec, p13:fpvec, p14:fpvec, p15:fpvec, p16:fpvec, p17:fpvec, p18:fpvec, p19:fpvec, p20:fpvec, p21:fpvec, p22:fpvec, p23:fpvec, p24:fpvec, p25:fpvec, p26:fpvec, p27:fpvec, p28:fpvec, p29:fpvec, p30:fpvec, p31:fpvec]
+      #|  i4 IncomingCallResult(I64, p0:int) defs=[v6:any@late]
+      #|  i5 OutgoingReg(I64, p0:int) uses=[v6:any@early]
+      #|  i6 Return
+      #|
+    ),
+  )
+}

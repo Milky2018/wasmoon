@@ -349,10 +349,14 @@ fn emit_call_arguments(
   instruction : @vcode.Instruction,
   types : Array[@semantic.ValueType],
   locations : Array[CallArgumentLocation],
+  operand_start? : Int = 0,
+  callee? : (Int, @vcode.PhysicalReg),
 ) -> Unit raise AArch64EmitError {
   let moves : Array[@vcode.ParallelMove] = []
   for index, ty in types {
-    let source = allocation.operand_location(instruction, index).unwrap()
+    let source = allocation
+      .operand_location(instruction, operand_start + index)
+      .unwrap()
     match locations[index] {
       CallRegister(destination) =>
         moves.push(
@@ -361,14 +365,26 @@ fn emit_call_arguments(
       CallStack(offset) => emit_stack_access(buffer, false, ty, source, offset)
     }
   }
-  let resolved = @vcode.resolve_parallel_moves(
-    moves,
-    [@vcode.PhysicalReg::new(16, Int), @vcode.PhysicalReg::new(17, Int)],
-    [
-      @vcode.PhysicalReg::new(16, FpVector),
-      @vcode.PhysicalReg::new(17, FpVector),
-    ],
-  ) catch {
+  if callee is Some((operand_index, destination)) {
+    moves.push(
+      @vcode.ParallelMove::new(
+        Ptr64,
+        Register(
+          allocation.operand_location(instruction, operand_index).unwrap(),
+        ),
+        Register(destination),
+      ),
+    )
+  }
+  let int_scratch = if callee is Some(_) {
+    [@vcode.PhysicalReg::new(16, Int)]
+  } else {
+    [@vcode.PhysicalReg::new(16, Int), @vcode.PhysicalReg::new(17, Int)]
+  }
+  let resolved = @vcode.resolve_parallel_moves(moves, int_scratch, [
+    @vcode.PhysicalReg::new(16, FpVector),
+    @vcode.PhysicalReg::new(17, FpVector),
+  ]) catch {
     error => raise InvalidParallelMove(cause=error)
   }
   emit_resolved_moves(buffer, frame, resolved)
@@ -452,6 +468,21 @@ fn emit_instruction(
           Code(target),
         ),
       )
+    }
+    InternalCallIndirect(signature, plan) => {
+      let callee_register = @vcode.PhysicalReg::new(17, Int)
+      emit_call_arguments(
+        buffer,
+        allocation,
+        frame,
+        instruction,
+        signature.params,
+        plan.arguments,
+        operand_start=1,
+        callee=(0, callee_register),
+      )
+      metadata_offset = buffer.position()
+      buffer.emit_word(0xD63F0000U | (reg_bits(callee_register) << 5))
     }
     Jump => {
       emit_edge_moves(buffer, function, allocation, frame, block, 0)

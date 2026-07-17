@@ -152,6 +152,7 @@ pub(all) enum AArch64Inst {
   AddAddress
   PlatformCall(@machv.ExternalSymbol, @machv.Signature)
   InternalCall(@machv.CodeSymbol, @machv.Signature, InternalCallPlan)
+  InternalCallIndirect(@machv.Signature, InternalCallPlan)
   Jump
   BranchNonZero32
   Return

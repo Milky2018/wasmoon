@@ -57,7 +57,11 @@ fn used_callee_saved_registers(
   for index in 0..<function.instruction_count() {
     let instruction = function.instruction_at(index).unwrap()
     if function.instruction(instruction)
-      is Some(PlatformCall(_, _) | InternalCall(_, _, _)) {
+      is Some(
+        PlatformCall(_, _)
+        | InternalCall(_, _, _)
+        | InternalCallIndirect(_, _)
+      ) {
       regs.push(@vcode.PhysicalReg::new(30, Int))
       break
     }
@@ -89,6 +93,10 @@ fn maximum_outgoing_args_size(function : @vcode.Function[AArch64Inst]) -> Int {
       }
     } else if function.instruction(instruction)
       is Some(InternalCall(_, _, plan)) &&
+      plan.stack_size > maximum {
+      maximum = plan.stack_size
+    } else if function.instruction(instruction)
+      is Some(InternalCallIndirect(_, plan)) &&
       plan.stack_size > maximum {
       maximum = plan.stack_size
     }

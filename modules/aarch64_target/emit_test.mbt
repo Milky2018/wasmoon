@@ -694,6 +694,83 @@ test "AArch64 internal calls emit code-symbol relocations" {
 }
 
 ///|
+test "AArch64 indirect calls resolve callee and arguments before BLR" {
+  let builder = @semantic.FunctionBuilder::new(
+    "emitted_indirect_call",
+    Internal,
+    [Ptr64, Ptr64],
+    [],
+  )
+  let parameters = builder.parameters()
+  let call = @semantic.SemanticCall::new(
+    Indirect,
+    @semantic.Signature::new([Ptr64], []),
+    Internal,
+    @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
+  )
+  builder.emit(Call(call), [parameters[1], parameters[0]], []) |> ignore
+  builder.return_([])
+  let function = lower(builder.finish(), test_lowering_context())
+  let allocation = allocate(function)
+  let frame = plan_frame(function, allocation)
+  debug_inspect(
+    emit(function, allocation, frame),
+    content=(
+      #|{
+      #|  architecture: AArch64,
+      #|  code: [
+      #|    0xff,
+      #|    0x43,
+      #|    0x00,
+      #|    0xd1,
+      #|    0xfe,
+      #|    0x03,
+      #|    0x00,
+      #|    0xf9,
+      #|    0xe2,
+      #|    0x03,
+      #|    0x00,
+      #|    0xaa,
+      #|    0xe0,
+      #|    0x03,
+      #|    0x01,
+      #|    0xaa,
+      #|    0xf1,
+      #|    0x03,
+      #|    0x00,
+      #|    0xaa,
+      #|    0xe0,
+      #|    0x03,
+      #|    0x02,
+      #|    0xaa,
+      #|    0x20,
+      #|    0x02,
+      #|    0x3f,
+      #|    0xd6,
+      #|    0xfe,
+      #|    0x03,
+      #|    0x40,
+      #|    0xf9,
+      #|    0xff,
+      #|    0x43,
+      #|    0x00,
+      #|    0x91,
+      #|    0xc0,
+      #|    0x03,
+      #|    0x5f,
+      #|    0xd6,
+      #|  ],
+      #|  relocations: [],
+      #|  sources: [],
+      #|  traps: [],
+      #|  safepoints: [],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
 test "AArch64 edge emission resolves register cycles through reserved scratch" {
   let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new_with_results(
     "edge_cycle",

@@ -213,7 +213,7 @@ fn lower_direct_platform_call(
 }
 
 ///|
-fn lower_direct_internal_call(
+fn lower_internal_call(
   context : LoweringContext,
   builder : @vcode.Builder[AArch64Inst],
   block : @vcode.Block,
@@ -231,10 +231,11 @@ fn lower_direct_internal_call(
     )
   }
   let target = match call.callee {
-    Internal(symbol) => symbol
-    _ =>
+    Internal(symbol) => Some(symbol)
+    Indirect => None
+    External(_) =>
       raise UnsupportedAbi(
-        message="direct internal call requires an internal code symbol",
+        message="internal calls require a code symbol or function pointer",
       )
   }
   let plan = context.internal_abi.call_plan(call.signature) catch {
@@ -242,7 +243,10 @@ fn lower_direct_internal_call(
   }
   (builder.append_body(
     block,
-    InternalCall(target, call.signature, plan),
+    match target {
+      Some(target) => InternalCall(target, call.signature, plan)
+      None => InternalCallIndirect(call.signature, plan)
+    },
     operands.map(@vcode.Input::any),
     [],
     platform_call_clobbers(),
@@ -316,7 +320,7 @@ fn lower_instruction(
           builder, block, call, operands, result_types, metadata,
         )
       Internal =>
-        lower_direct_internal_call(
+        lower_internal_call(
           context, builder, block, call, operands, result_types, metadata,
         )
     }
