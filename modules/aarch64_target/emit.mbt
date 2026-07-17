@@ -26,6 +26,7 @@ pub suberror AArch64EmitError {
   UnresolvedStackMove
   FrameOffsetOutOfRange(offset~ : Int)
   InvalidScalarMemoryAccess
+  InvalidFloatInstruction
   BranchTargetMissing(block~ : @vcode.Block)
   BranchOutOfRange(offset~ : Int, bits~ : Int)
 } derive(Debug)
@@ -322,6 +323,52 @@ fn encode_int_binary(
 }
 
 ///|
+fn float_unary_base(
+  ty : @semantic.ValueType,
+  operation : AArch64FloatUnary,
+) -> UInt? {
+  match (ty, operation) {
+    (F32, Negate) => Some(0x1E214000U)
+    (F64, Negate) => Some(0x1E614000U)
+    (F32, Absolute) => Some(0x1E20C000U)
+    (F64, Absolute) => Some(0x1E60C000U)
+    (F32, SquareRoot) => Some(0x1E21C000U)
+    (F64, SquareRoot) => Some(0x1E61C000U)
+    _ => None
+  }
+}
+
+///|
+fn float_binary_base(
+  ty : @semantic.ValueType,
+  operation : AArch64FloatBinary,
+) -> UInt? {
+  match (ty, operation) {
+    (F32, Add) => Some(0x1E202800U)
+    (F64, Add) => Some(0x1E602800U)
+    (F32, Sub) => Some(0x1E203800U)
+    (F64, Sub) => Some(0x1E603800U)
+    (F32, Mul) => Some(0x1E200800U)
+    (F64, Mul) => Some(0x1E600800U)
+    (F32, Div) => Some(0x1E201800U)
+    (F64, Div) => Some(0x1E601800U)
+    _ => None
+  }
+}
+
+///|
+fn float_condition_code(condition : AArch64FloatCondition) -> UInt {
+  match condition {
+    Equal => 0U
+    NotEqual => 1U
+    LessThan => 4U
+    LessOrEqual => 9U
+    GreaterThan => 12U
+    GreaterOrEqual => 10U
+  }
+}
+
+///|
 fn emit_register_save_or_restore(
   buffer : CodeBuffer,
   load : Bool,
@@ -490,6 +537,22 @@ fn emit_instruction(
     OutgoingReg(ty, destination) => emit_move(buffer, ty, destination, reg(0))
     KeepAlive(_) => ()
     LoadConstant(width, bits) => emit_constant(buffer, width, reg(0), bits)
+    LoadFloatConstant(ty, bits) => {
+      let scratch = @vcode.PhysicalReg::new(16, Int)
+      if ty == F32 {
+        emit_constant(buffer, W32, scratch, bits)
+        buffer.emit_word(
+          0x1E270000U | (reg_bits(scratch) << 5) | reg_bits(reg(0)),
+        )
+      } else if ty == F64 {
+        emit_constant(buffer, W64, scratch, bits)
+        buffer.emit_word(
+          0x9E670000U | (reg_bits(scratch) << 5) | reg_bits(reg(0)),
+        )
+      } else {
+        raise InvalidFloatInstruction
+      }
+    }
     Move(ty) => emit_move(buffer, ty, reg(1), reg(0))
     IntUnary(width, operation) =>
       buffer.emit_word(encode_int_unary(width, operation, reg(1), reg(0)))
@@ -533,6 +596,37 @@ fn emit_instruction(
         compare_base | (reg_bits(reg(1)) << 16) | (reg_bits(reg(0)) << 5),
       )
       let inverse = condition_code(condition) ^ 1U
+      buffer.emit_word(0x9A9F07E0U | (inverse << 12) | reg_bits(reg(2)))
+    }
+    FloatUnary(ty, operation) => {
+      guard float_unary_base(ty, operation) is Some(base) else {
+        raise InvalidFloatInstruction
+      }
+      buffer.emit_word(base | (reg_bits(reg(0)) << 5) | reg_bits(reg(1)))
+    }
+    FloatBinary(ty, operation) => {
+      guard float_binary_base(ty, operation) is Some(base) else {
+        raise InvalidFloatInstruction
+      }
+      buffer.emit_word(
+        base |
+        (reg_bits(reg(1)) << 16) |
+        (reg_bits(reg(0)) << 5) |
+        reg_bits(reg(2)),
+      )
+    }
+    FloatCompareSet(ty, condition) => {
+      let base = if ty == F32 {
+        0x1E202000U
+      } else if ty == F64 {
+        0x1E602000U
+      } else {
+        raise InvalidFloatInstruction
+      }
+      buffer.emit_word(
+        base | (reg_bits(reg(1)) << 16) | (reg_bits(reg(0)) << 5),
+      )
+      let inverse = float_condition_code(condition) ^ 1U
       buffer.emit_word(0x9A9F07E0U | (inverse << 12) | reg_bits(reg(2)))
     }
     AddAddress =>

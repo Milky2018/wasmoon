@@ -75,6 +75,7 @@ pub suberror AArch64EmitError {
   UnresolvedStackMove
   FrameOffsetOutOfRange(offset~ : Int)
   InvalidScalarMemoryAccess
+  InvalidFloatInstruction
   BranchTargetMissing(block~ : @vcode.Block)
   BranchOutOfRange(offset~ : Int, bits~ : Int)
 } derive(@debug.Debug)
@@ -129,6 +130,28 @@ pub(all) enum AArch64Condition {
   Hs
 } derive(Eq, @debug.Debug)
 
+pub(all) enum AArch64FloatBinary {
+  Add
+  Sub
+  Mul
+  Div
+} derive(Eq, @debug.Debug)
+
+pub(all) enum AArch64FloatCondition {
+  Equal
+  NotEqual
+  LessThan
+  LessOrEqual
+  GreaterThan
+  GreaterOrEqual
+} derive(Eq, @debug.Debug)
+
+pub(all) enum AArch64FloatUnary {
+  Negate
+  Absolute
+  SquareRoot
+} derive(Eq, @debug.Debug)
+
 pub struct AArch64Frame {
   // private fields
 }
@@ -146,6 +169,7 @@ pub(all) enum AArch64Inst {
   OutgoingReg(@machv.ValueType, @vcode.PhysicalReg)
   KeepAlive(@machv.ValueType)
   LoadConstant(GprWidth, UInt64)
+  LoadFloatConstant(@machv.ValueType, UInt64)
   Move(@machv.ValueType)
   IntUnary(GprWidth, AArch64IntUnary)
   IntBinary(GprWidth, AArch64IntBinary)
@@ -153,6 +177,9 @@ pub(all) enum AArch64Inst {
   TrapIfZero(GprWidth)
   TrapIfSignedDivOverflow(GprWidth)
   CompareSet(GprWidth, AArch64Condition)
+  FloatUnary(@machv.ValueType, AArch64FloatUnary)
+  FloatBinary(@machv.ValueType, AArch64FloatBinary)
+  FloatCompareSet(@machv.ValueType, AArch64FloatCondition)
   AddAddress
   ScalarLoad(@machv.AccessWidth, @machv.LoadExtension, @machv.ValueType, UInt64)
   ScalarStore(@machv.AccessWidth, @machv.ValueType, UInt64)

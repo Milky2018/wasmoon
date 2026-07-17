@@ -41,6 +41,31 @@ pub(all) enum AArch64Condition {
 } derive(Eq, Debug)
 
 ///|
+pub(all) enum AArch64FloatUnary {
+  Negate
+  Absolute
+  SquareRoot
+} derive(Eq, Debug)
+
+///|
+pub(all) enum AArch64FloatBinary {
+  Add
+  Sub
+  Mul
+  Div
+} derive(Eq, Debug)
+
+///|
+pub(all) enum AArch64FloatCondition {
+  Equal
+  NotEqual
+  LessThan
+  LessOrEqual
+  GreaterThan
+  GreaterOrEqual
+} derive(Eq, Debug)
+
+///|
 pub(all) enum AArch64Inst {
   IncomingReg(@semantic.ValueType, @vcode.PhysicalReg)
   IncomingStack(@semantic.ValueType, Int)
@@ -48,6 +73,7 @@ pub(all) enum AArch64Inst {
   OutgoingReg(@semantic.ValueType, @vcode.PhysicalReg)
   KeepAlive(@semantic.ValueType)
   LoadConstant(GprWidth, UInt64)
+  LoadFloatConstant(@semantic.ValueType, UInt64)
   Move(@semantic.ValueType)
   IntUnary(GprWidth, AArch64IntUnary)
   IntBinary(GprWidth, AArch64IntBinary)
@@ -55,6 +81,9 @@ pub(all) enum AArch64Inst {
   TrapIfZero(GprWidth)
   TrapIfSignedDivOverflow(GprWidth)
   CompareSet(GprWidth, AArch64Condition)
+  FloatUnary(@semantic.ValueType, AArch64FloatUnary)
+  FloatBinary(@semantic.ValueType, AArch64FloatBinary)
+  FloatCompareSet(@semantic.ValueType, AArch64FloatCondition)
   AddAddress
   ScalarLoad(
     @semantic.AccessWidth,
@@ -374,6 +403,15 @@ pub fn verify_vcode(
           0,
         )
       }
+      LoadFloatConstant(ty, bits) => {
+        if (ty != F32 && ty != F64) || (ty == F32 && bits > 0xFFFFFFFFUL) {
+          raise InvalidInstruction(
+            instruction~,
+            message="invalid scalar floating-point constant",
+          )
+        }
+        require_instruction_shape(function, instruction, [], [ty], false, 0)
+      }
       OutgoingReg(ty, reg) => {
         if reg.class != @vcode.reg_class_for_value_type(ty) {
           raise InvalidInstruction(
@@ -437,6 +475,47 @@ pub fn verify_vcode(
       }
       CompareSet(width, _) => {
         let ty = integer_type(width)
+        require_instruction_shape(
+          function,
+          instruction,
+          [ty, ty],
+          [I32],
+          false,
+          0,
+        )
+      }
+      FloatUnary(ty, _) => {
+        if ty != F32 && ty != F64 {
+          raise InvalidInstruction(
+            instruction~,
+            message="scalar floating-point unary operation requires f32 or f64",
+          )
+        }
+        require_instruction_shape(function, instruction, [ty], [ty], false, 0)
+      }
+      FloatBinary(ty, _) => {
+        if ty != F32 && ty != F64 {
+          raise InvalidInstruction(
+            instruction~,
+            message="scalar floating-point binary operation requires f32 or f64",
+          )
+        }
+        require_instruction_shape(
+          function,
+          instruction,
+          [ty, ty],
+          [ty],
+          false,
+          0,
+        )
+      }
+      FloatCompareSet(ty, _) => {
+        if ty != F32 && ty != F64 {
+          raise InvalidInstruction(
+            instruction~,
+            message="scalar floating-point comparison requires f32 or f64",
+          )
+        }
         require_instruction_shape(
           function,
           instruction,

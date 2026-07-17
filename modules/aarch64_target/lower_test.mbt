@@ -38,10 +38,10 @@ test "AArch64 lowering rejects unsupported valid operations structurally" {
   let builder = @semantic.FunctionBuilder::new(
     "unsupported_float",
     Platform,
-    [],
+    [F32, F32],
     [F32],
   )
-  let value = builder.emit(F32Const(0x3F800000U), [], [F32])[0]
+  let value = builder.emit(FloatBinary(Min), builder.parameters(), [F32])[0]
   builder.return_([value])
   try lower(builder.finish(), test_lowering_context()) |> ignore catch {
     error =>
@@ -51,7 +51,7 @@ test "AArch64 lowering rejects unsupported valid operations structurally" {
           #|UnsupportedOperation(
           #|  block_index=0,
           #|  instruction_index=0,
-          #|  operation=F32Const(1065353216),
+          #|  operation=FloatBinary(Min),
           #|)
         ),
       )
@@ -447,4 +447,58 @@ test "AArch64 lowering rejects non-native scalar memory endianness" {
   } noraise {
     _ => fail("expected big-endian scalar memory lowering to fail")
   }
+}
+
+///|
+test "AArch64 lowering selects non-trapping scalar floating-point operations" {
+  let builder = @semantic.FunctionBuilder::new(
+    "scalar_float",
+    Internal,
+    [Ptr64, F32, F32, F64, F64],
+    [F32, F64, I32, I32],
+  )
+  let parameters = builder.parameters()
+  let one = builder.emit(F32Const(0x3F800000U), [], [F32])[0]
+  let negated = builder.emit(FloatUnary(Negate), [parameters[1]], [F32])[0]
+  let sum = builder.emit(FloatBinary(Add), [negated, one], [F32])[0]
+  let two = builder.emit(F64Const(0x4000000000000000UL), [], [F64])[0]
+  let rooted = builder.emit(FloatUnary(SquareRoot), [parameters[3]], [F64])[0]
+  let quotient = builder.emit(FloatBinary(Div), [rooted, two], [F64])[0]
+  let less = builder.emit(
+      FloatCompare(LessThan),
+      [parameters[1], parameters[2]],
+      [I32],
+    )[0]
+  let not_equal = builder.emit(
+      FloatCompare(NotEqual),
+      [parameters[3], parameters[4]],
+      [I32],
+    )[0]
+  builder.return_([sum, quotient, less, not_equal])
+  inspect(
+    lower(builder.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode scalar_float(v0:ptr64, v1:f32, v2:f32, v3:f64, v4:f64) -> (f32, f64, i32, i32)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v5:any@late]
+      #|  i1 IncomingReg(F32, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v6:any@late]
+      #|  i2 IncomingReg(F32, p1:fpvec) uses=[v2:fixed(p1:fpvec)@early] defs=[v7:any@late]
+      #|  i3 IncomingReg(F64, p2:fpvec) uses=[v3:fixed(p2:fpvec)@early] defs=[v8:any@late]
+      #|  i4 IncomingReg(F64, p3:fpvec) uses=[v4:fixed(p3:fpvec)@early] defs=[v9:any@late]
+      #|  i5 LoadFloatConstant(F32, 1065353216) defs=[v10:any@late]
+      #|  i6 FloatUnary(F32, Negate) uses=[v6:any@early] defs=[v11:any@late]
+      #|  i7 FloatBinary(F32, Add) uses=[v11:any@early, v10:any@early] defs=[v12:any@late]
+      #|  i8 LoadFloatConstant(F64, 4611686018427387904) defs=[v13:any@late]
+      #|  i9 FloatUnary(F64, SquareRoot) uses=[v8:any@early] defs=[v14:any@late]
+      #|  i10 FloatBinary(F64, Div) uses=[v14:any@early, v13:any@early] defs=[v15:any@late]
+      #|  i11 FloatCompareSet(F32, LessThan) uses=[v6:any@early, v7:any@early] defs=[v16:any@late]
+      #|  i12 FloatCompareSet(F64, NotEqual) uses=[v8:any@early, v9:any@early] defs=[v17:any@late]
+      #|  i13 OutgoingReg(F32, p0:fpvec) uses=[v12:any@early]
+      #|  i14 OutgoingReg(F64, p1:fpvec) uses=[v15:any@early]
+      #|  i15 OutgoingReg(I32, p0:int) uses=[v16:any@early]
+      #|  i16 OutgoingReg(I32, p1:int) uses=[v17:any@early]
+      #|  i17 Return
+      #|
+    ),
+  )
 }

@@ -74,6 +74,44 @@ fn lower_condition(comparison : @semantic.IntComparison) -> AArch64Condition {
 }
 
 ///|
+fn lower_float_unary(operation : @semantic.FloatUnaryOp) -> AArch64FloatUnary? {
+  match operation {
+    Negate => Some(Negate)
+    Absolute => Some(Absolute)
+    SquareRoot => Some(SquareRoot)
+    Ceil | Floor | Truncate | Nearest => None
+  }
+}
+
+///|
+fn lower_float_binary(
+  operation : @semantic.FloatBinaryOp,
+) -> AArch64FloatBinary? {
+  match operation {
+    Add => Some(Add)
+    Sub => Some(Sub)
+    Mul => Some(Mul)
+    Div => Some(Div)
+    Min | Max | CopySign => None
+  }
+}
+
+///|
+fn lower_float_condition(
+  comparison : @semantic.FloatComparison,
+) -> AArch64FloatCondition? {
+  match comparison {
+    Equal => Some(Equal)
+    NotEqual => Some(NotEqual)
+    LessThan => Some(LessThan)
+    LessOrEqual => Some(LessOrEqual)
+    GreaterThan => Some(GreaterThan)
+    GreaterOrEqual => Some(GreaterOrEqual)
+    Ordered | Unordered => None
+  }
+}
+
+///|
 fn map_value(
   function : @semantic.Function,
   values : Array[@vcode.Value?],
@@ -413,6 +451,8 @@ fn lower_instruction(
   let selected = match operation {
     I32Const(bits) => Some(LoadConstant(W32, bits.to_uint64()))
     I64Const(bits) => Some(LoadConstant(W64, bits))
+    F32Const(bits) => Some(LoadFloatConstant(F32, bits.to_uint64()))
+    F64Const(bits) => Some(LoadFloatConstant(F64, bits))
     Copy if result_types.length() == 1 => Some(Move(result_types[0]))
     IntUnary(Not) =>
       match optional_gpr_width(result_types.get(0)) {
@@ -437,6 +477,29 @@ fn lower_instruction(
       match optional_gpr_width(operand_type) {
         Some(width) => Some(CompareSet(width, lower_condition(comparison)))
         None => None
+      }
+    }
+    FloatUnary(unary) =>
+      match (result_types.get(0), lower_float_unary(unary)) {
+        (Some(F32), Some(unary)) => Some(FloatUnary(F32, unary))
+        (Some(F64), Some(unary)) => Some(FloatUnary(F64, unary))
+        _ => None
+      }
+    FloatBinary(binary) =>
+      match (result_types.get(0), lower_float_binary(binary)) {
+        (Some(F32), Some(binary)) => Some(FloatBinary(F32, binary))
+        (Some(F64), Some(binary)) => Some(FloatBinary(F64, binary))
+        _ => None
+      }
+    FloatCompare(comparison) => {
+      let operand_type = match semantic_operands.get(0) {
+        Some(value) => function.value_type(value)
+        None => None
+      }
+      match (operand_type, lower_float_condition(comparison)) {
+        (Some(F32), Some(condition)) => Some(FloatCompareSet(F32, condition))
+        (Some(F64), Some(condition)) => Some(FloatCompareSet(F64, condition))
+        _ => None
       }
     }
     PointerOffset => Some(AddAddress)
