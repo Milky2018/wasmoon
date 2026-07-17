@@ -10,11 +10,17 @@ contracts used after target instruction selection.
 - `Milky2018/machv/vcode`: generic dense Target VCode storage parameterized by
   a target-owned instruction type, plus allocation, frame, and final-emission
   input contracts.
+- `Milky2018/machv/code_object`: verified, unlinked machine code plus typed
+  relocations, traps, safepoints, roots, and unwind bytes.
 
 The VCode package does not define a union of AArch64 and x64 instructions.
 Each target supplies its own closed instruction type, while the shared package
 stores CFG edges, SSA values, stable instruction handles, operand constraints,
 clobbers, safepoints, and allocation edits.
+
+VCode models AArch64/x64 hardware aliasing directly: scalar floating-point and
+SIMD values share one `FpVector` register bank. They can never be allocated to
+the same physical register as if the hardware exposed independent banks.
 
 ## Pipeline boundary
 
@@ -29,6 +35,6 @@ The public checkpoints are:
 1. selected Target VCode SSA;
 2. Target VCode plus Allocation;
 3. Target VCode, Allocation, and FrameLayout;
-4. final emission input.
+4. verified unlinked code object.
 
 Every checkpoint returns a structured error for malformed input.

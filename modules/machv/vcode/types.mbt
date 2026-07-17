@@ -1,16 +1,14 @@
 ///|
 pub(all) enum RegClass {
   Int
-  Float
-  Vector
+  FpVector
 } derive(Eq, Debug, Hash)
 
 ///|
 fn RegClass::text(self : RegClass) -> String {
   match self {
     Int => "int"
-    Float => "float"
-    Vector => "vector"
+    FpVector => "fpvec"
   }
 }
 
@@ -21,8 +19,7 @@ pub type ValueType = @semantic.ValueType
 pub fn reg_class_for_value_type(ty : ValueType) -> RegClass {
   match ty {
     I32 | I64 | Ptr64 | GcRef64 => Int
-    F32 | F64 => Float
-    V128 => Vector
+    F32 | F64 | V128 => FpVector
   }
 }
 
@@ -169,6 +166,16 @@ pub impl Debug for ProgramPoint with fn to_repr(self) {
     After => "after"
   }
   Repr::literal("\{placement}(\{to_repr(self.instruction)})")
+}
+
+///|
+pub fn ProgramPoint::instruction(self : ProgramPoint) -> Instruction {
+  self.instruction
+}
+
+///|
+pub fn ProgramPoint::placement(self : ProgramPoint) -> PointPlacement {
+  self.placement
 }
 
 ///|

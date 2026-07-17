@@ -3,8 +3,10 @@ package "Milky2018/aarch64_target"
 
 import {
   "Milky2018/machv",
+  "Milky2018/machv/code_object",
   "Milky2018/machv/vcode",
   "Milky2018/machv_legacy/abi",
+  "Milky2018/machv_regalloc",
   "moonbitlang/core/debug",
 }
 
@@ -29,6 +31,8 @@ pub fn allocatable_scratch_fprs() -> Array[@abi.PReg]
 
 pub fn allocatable_scratch_regs() -> Array[@abi.PReg]
 
+pub fn allocate(@vcode.Function[AArch64Inst]) -> @vcode.Allocation raise AArch64AllocationError
+
 pub fn build_machine_env(reserved_int_regs? : Array[Int]) -> MachineEnvData
 
 pub fn call_clobbered_fprs() -> Array[@abi.PReg]
@@ -39,20 +43,56 @@ pub fn call_clobbered_gprs() -> Array[@abi.PReg]
 
 pub fn callee_saved_fprs() -> Array[@abi.PReg]
 
+pub fn emit(@vcode.Function[AArch64Inst], @vcode.Allocation, AArch64Frame) -> @code_object.UnlinkedCodeObject raise AArch64EmitError
+
 pub fn int_reg_index(IntRegRole) -> Int
 
 pub fn lower(@machv.Function) -> @vcode.Function[AArch64Inst] raise AArch64LowerError
 
+pub fn plan_frame(@vcode.Function[AArch64Inst], @vcode.Allocation) -> AArch64Frame raise AArch64FrameError
+
 pub fn target() -> Target
+
+pub fn verify_allocation(@vcode.Function[AArch64Inst], @vcode.Allocation) -> Unit raise AArch64AllocationError
+
+pub fn verify_frame(@vcode.Function[AArch64Inst], @vcode.Allocation, AArch64Frame) -> Unit raise AArch64FrameError
 
 pub fn verify_vcode(@vcode.Function[AArch64Inst]) -> Unit raise TargetVCodeVerifyError
 
 // Errors
+pub suberror AArch64AllocationError {
+  InvalidVCode(cause~ : TargetVCodeVerifyError)
+  AllocatorFailure(cause~ : @machv_regalloc.VCodeAllocationError)
+  InvalidAllocation(cause~ : @vcode.AllocationVerifyError)
+  IllegalRegister(reg~ : @vcode.PhysicalReg)
+} derive(@debug.Debug)
+pub impl Show for AArch64AllocationError
+
+pub suberror AArch64EmitError {
+  InvalidFrame(cause~ : AArch64FrameError)
+  InvalidCodeObject(cause~ : @code_object.CodeObjectVerifyError)
+  UnsupportedValueType(ty~ : @machv.ValueType)
+  UnsupportedEdgeMove
+  FrameOffsetOutOfRange(offset~ : Int)
+  BranchTargetMissing(block~ : @vcode.Block)
+  BranchOutOfRange(offset~ : Int, bits~ : Int)
+} derive(@debug.Debug)
+pub impl Show for AArch64EmitError
+
+pub suberror AArch64FrameError {
+  InvalidAllocation(cause~ : AArch64AllocationError)
+  InvalidGenericFrame(cause~ : @vcode.FrameVerifyError)
+  InvalidSavedRegister(reg~ : @vcode.PhysicalReg, offset~ : Int)
+  SavedRegisterSetMismatch
+} derive(@debug.Debug)
+pub impl Show for AArch64FrameError
+
 pub suberror AArch64LowerError {
   InvalidSemantic(cause~ : @machv.MachVVerifyError)
   MissingMappedValue(value_index~ : Int)
   UnsupportedOperation(block_index~ : Int, instruction_index~ : Int, operation~ : @machv.Operation)
   UnsupportedTerminator(block_index~ : Int, terminator~ : @machv.Terminator)
+  UnsupportedAbi(message~ : String)
   BuildFailure(cause~ : @vcode.VCodeBuildError)
   InvalidTarget(cause~ : TargetVCodeVerifyError)
 } derive(@debug.Debug)
@@ -78,7 +118,19 @@ pub(all) enum AArch64Condition {
   Hs
 } derive(Eq, @debug.Debug)
 
+pub struct AArch64Frame {
+  // private fields
+}
+pub fn AArch64Frame::alignment(Self) -> Int
+pub fn AArch64Frame::frame_size(Self) -> Int
+pub fn AArch64Frame::saved_registers(Self) -> Array[(@vcode.PhysicalReg, Int)]
+pub fn AArch64Frame::slot_offset(Self, @vcode.StackSlot) -> Int?
+pub fn AArch64Frame::summary(Self) -> String
+
 pub(all) enum AArch64Inst {
+  IncomingReg(@machv.ValueType, @vcode.PhysicalReg)
+  IncomingStack(@machv.ValueType, Int)
+  OutgoingReg(@machv.ValueType, @vcode.PhysicalReg)
   LoadConstant(GprWidth, UInt64)
   Move(@machv.ValueType)
   IntUnary(GprWidth, AArch64IntUnary)

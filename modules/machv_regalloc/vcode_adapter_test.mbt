@@ -42,3 +42,51 @@ test "generic adapter allocates Target VCode without reading target instructions
     ),
   )
 }
+
+///|
+test "floating-point and SIMD values share one physical register bank" {
+  let builder : @vcode.Builder[Unit] = @vcode.Builder::new("fp_vector_alias", [
+    F64,
+    V128,
+  ])
+  let entry = builder.entry_block()
+  builder.append_body(
+    entry,
+    (),
+    [
+      @vcode.Input::any(builder.parameter(0)),
+      @vcode.Input::any(builder.parameter(1)),
+    ],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  builder.set_terminator(
+    entry,
+    (),
+    [],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  let allocation = allocate_vcode(
+    builder.finish(),
+    VCodeAllocationEnvironment::new([@vcode.PhysicalReg::new(0, FpVector)], [
+      @vcode.PhysicalReg::new(1, FpVector),
+    ]),
+  )
+  inspect(
+    allocation.summary(),
+    content=(
+      #|allocation fp_vector_alias
+      #|  v0:f64 -> p0:fpvec
+      #|  v1:v128 -> stack0:v128(size=16, align=16)
+      #|  i0 operand0 -> p0:fpvec
+      #|  i0 operand1 -> p1:fpvec
+      #|  before(i0): reload v1 stack0 -> p1:fpvec
+      #|
+    ),
+  )
+}

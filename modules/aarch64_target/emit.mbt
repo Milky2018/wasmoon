@@ -1,0 +1,460 @@
+///|
+priv struct BranchFixup {
+  offset : Int
+  target : @vcode.Block
+  bits : Int
+}
+
+///|
+priv struct CodeBuffer {
+  code : Array[Byte]
+  fixups : Array[BranchFixup]
+}
+
+///|
+pub suberror AArch64EmitError {
+  InvalidFrame(cause~ : AArch64FrameError)
+  InvalidCodeObject(cause~ : @code_object.CodeObjectVerifyError)
+  UnsupportedValueType(ty~ : @semantic.ValueType)
+  UnsupportedEdgeMove
+  FrameOffsetOutOfRange(offset~ : Int)
+  BranchTargetMissing(block~ : @vcode.Block)
+  BranchOutOfRange(offset~ : Int, bits~ : Int)
+} derive(Debug)
+
+///|
+pub impl Show for AArch64EmitError with fn output(self, logger) {
+  logger.write_string(to_repr(self).to_string())
+}
+
+///|
+fn CodeBuffer::new() -> CodeBuffer {
+  { code: [], fixups: [] }
+}
+
+///|
+fn CodeBuffer::position(self : CodeBuffer) -> Int {
+  self.code.length()
+}
+
+///|
+fn CodeBuffer::emit_word(self : CodeBuffer, word : UInt) -> Unit {
+  self.code.push((word & 0xFFU).to_byte())
+  self.code.push(((word >> 8) & 0xFFU).to_byte())
+  self.code.push(((word >> 16) & 0xFFU).to_byte())
+  self.code.push(((word >> 24) & 0xFFU).to_byte())
+}
+
+///|
+fn CodeBuffer::patch_word(self : CodeBuffer, offset : Int, word : UInt) -> Unit {
+  self.code[offset] = (word & 0xFFU).to_byte()
+  self.code[offset + 1] = ((word >> 8) & 0xFFU).to_byte()
+  self.code[offset + 2] = ((word >> 16) & 0xFFU).to_byte()
+  self.code[offset + 3] = ((word >> 24) & 0xFFU).to_byte()
+}
+
+///|
+fn CodeBuffer::emit_branch(
+  self : CodeBuffer,
+  target : @vcode.Block,
+  bits : Int,
+  base : UInt,
+) -> Unit {
+  let offset = self.position()
+  self.emit_word(base)
+  self.fixups.push({ offset, target, bits })
+}
+
+///|
+fn reg_bits(reg : @vcode.PhysicalReg) -> UInt {
+  reg.id.reinterpret_as_uint() & 31U
+}
+
+///|
+fn encode_three_register(
+  base : UInt,
+  rd : @vcode.PhysicalReg,
+  rn : @vcode.PhysicalReg,
+  rm : @vcode.PhysicalReg,
+) -> UInt {
+  base | (reg_bits(rm) << 16) | (reg_bits(rn) << 5) | reg_bits(rd)
+}
+
+///|
+fn emit_move(
+  buffer : CodeBuffer,
+  ty : @semantic.ValueType,
+  to : @vcode.PhysicalReg,
+  from : @vcode.PhysicalReg,
+) -> Unit raise AArch64EmitError {
+  if to == from {
+    return
+  }
+  match ty {
+    I32 => buffer.emit_word(0x2A0003E0U | (reg_bits(from) << 16) | reg_bits(to))
+    I64 | Ptr64 | GcRef64 =>
+      buffer.emit_word(0xAA0003E0U | (reg_bits(from) << 16) | reg_bits(to))
+    _ => raise UnsupportedValueType(ty~)
+  }
+}
+
+///|
+fn emit_constant(
+  buffer : CodeBuffer,
+  width : GprWidth,
+  destination : @vcode.PhysicalReg,
+  bits : UInt64,
+) -> Unit {
+  let halfword_count = if width == W32 { 2 } else { 4 }
+  let movz_base = if width == W32 { 0x52800000U } else { 0xD2800000U }
+  let movk_base = if width == W32 { 0x72800000U } else { 0xF2800000U }
+  let mut first = true
+  for index in 0..<halfword_count {
+    let halfword = ((bits >> (index * 16)) & 0xFFFFUL).to_uint()
+    if halfword != 0U || (first && index == halfword_count - 1) {
+      let base = if first { movz_base } else { movk_base }
+      buffer.emit_word(
+        base |
+        (index.reinterpret_as_uint() << 21) |
+        (halfword << 5) |
+        reg_bits(destination),
+      )
+      first = false
+    }
+  }
+}
+
+///|
+fn emit_stack_access(
+  buffer : CodeBuffer,
+  load : Bool,
+  ty : @semantic.ValueType,
+  reg : @vcode.PhysicalReg,
+  offset : Int,
+) -> Unit raise AArch64EmitError {
+  let (scale, load_base, store_base) = match ty {
+    I32 => (4, 0xB9400000U, 0xB9000000U)
+    I64 | Ptr64 | GcRef64 => (8, 0xF9400000U, 0xF9000000U)
+    _ => raise UnsupportedValueType(ty~)
+  }
+  if offset < 0 || offset % scale != 0 || offset / scale > 4095 {
+    raise FrameOffsetOutOfRange(offset~)
+  }
+  let base = if load { load_base } else { store_base }
+  buffer.emit_word(
+    base |
+    ((offset / scale).reinterpret_as_uint() << 10) |
+    (31U << 5) |
+    reg_bits(reg),
+  )
+}
+
+///|
+fn emit_sp_adjust(
+  buffer : CodeBuffer,
+  subtract : Bool,
+  amount : Int,
+) -> Unit raise AArch64EmitError {
+  if amount == 0 {
+    return
+  }
+  if amount < 0 || amount > 4095 {
+    raise FrameOffsetOutOfRange(offset=amount)
+  }
+  let base = if subtract { 0xD1000000U } else { 0x91000000U }
+  buffer.emit_word(
+    base | (amount.reinterpret_as_uint() << 10) | (31U << 5) | 31U,
+  )
+}
+
+///|
+fn condition_code(condition : AArch64Condition) -> UInt {
+  match condition {
+    Eq => 0U
+    Ne => 1U
+    Hs => 2U
+    Lo => 3U
+    Hi => 8U
+    Ls => 9U
+    Ge => 10U
+    Lt => 11U
+    Gt => 12U
+    Le => 13U
+  }
+}
+
+///|
+fn encode_int_unary(
+  width : GprWidth,
+  operation : AArch64IntUnary,
+  destination : @vcode.PhysicalReg,
+  source : @vcode.PhysicalReg,
+) -> UInt {
+  match (width, operation) {
+    (W32, Mvn) => 0x2A2003E0U | (reg_bits(source) << 16) | reg_bits(destination)
+    (W64, Mvn) => 0xAA2003E0U | (reg_bits(source) << 16) | reg_bits(destination)
+    (W32, Clz) => 0x5AC01000U | (reg_bits(source) << 5) | reg_bits(destination)
+    (W64, Clz) => 0xDAC01000U | (reg_bits(source) << 5) | reg_bits(destination)
+  }
+}
+
+///|
+fn encode_int_binary(
+  width : GprWidth,
+  operation : AArch64IntBinary,
+  destination : @vcode.PhysicalReg,
+  left : @vcode.PhysicalReg,
+  right : @vcode.PhysicalReg,
+) -> UInt {
+  let base = match (width, operation) {
+    (W32, Add) => 0x0B000000U
+    (W64, Add) => 0x8B000000U
+    (W32, Sub) => 0x4B000000U
+    (W64, Sub) => 0xCB000000U
+    (W32, Mul) => 0x1B007C00U
+    (W64, Mul) => 0x9B007C00U
+    (W32, And) => 0x0A000000U
+    (W64, And) => 0x8A000000U
+    (W32, Orr) => 0x2A000000U
+    (W64, Orr) => 0xAA000000U
+    (W32, Eor) => 0x4A000000U
+    (W64, Eor) => 0xCA000000U
+    (W32, Lsl) => 0x1AC02000U
+    (W64, Lsl) => 0x9AC02000U
+    (W32, Lsr) => 0x1AC02400U
+    (W64, Lsr) => 0x9AC02400U
+    (W32, Asr) => 0x1AC02800U
+    (W64, Asr) => 0x9AC02800U
+    (W32, Ror) => 0x1AC02C00U
+    (W64, Ror) => 0x9AC02C00U
+    (W32, Sdiv) => 0x1AC00C00U
+    (W64, Sdiv) => 0x9AC00C00U
+    (W32, Udiv) => 0x1AC00800U
+    (W64, Udiv) => 0x9AC00800U
+  }
+  encode_three_register(base, destination, left, right)
+}
+
+///|
+fn emit_register_save_or_restore(
+  buffer : CodeBuffer,
+  load : Bool,
+  reg : @vcode.PhysicalReg,
+  offset : Int,
+) -> Unit raise AArch64EmitError {
+  match reg.class {
+    Int => emit_stack_access(buffer, load, I64, reg, offset)
+    FpVector => {
+      if offset < 0 || offset % 8 != 0 || offset / 8 > 4095 {
+        raise FrameOffsetOutOfRange(offset~)
+      }
+      let base = if load { 0xFD400000U } else { 0xFD000000U }
+      buffer.emit_word(
+        base |
+        ((offset / 8).reinterpret_as_uint() << 10) |
+        (31U << 5) |
+        reg_bits(reg),
+      )
+    }
+  }
+}
+
+///|
+fn emit_prologue(
+  buffer : CodeBuffer,
+  frame : AArch64Frame,
+) -> Unit raise AArch64EmitError {
+  emit_sp_adjust(buffer, true, frame.frame_size())
+  for saved in frame.saved_registers() {
+    let (reg, offset) = saved
+    emit_register_save_or_restore(buffer, false, reg, offset)
+  }
+}
+
+///|
+fn emit_epilogue(
+  buffer : CodeBuffer,
+  frame : AArch64Frame,
+) -> Unit raise AArch64EmitError {
+  let saved = frame.saved_registers()
+  for reverse_index in 0..<saved.length() {
+    let (reg, offset) = saved[saved.length() - reverse_index - 1]
+    emit_register_save_or_restore(buffer, true, reg, offset)
+  }
+  emit_sp_adjust(buffer, false, frame.frame_size())
+}
+
+///|
+fn[Inst] emit_edit(
+  buffer : CodeBuffer,
+  function : @vcode.Function[Inst],
+  frame : AArch64Frame,
+  edit : @vcode.Edit,
+) -> Unit raise AArch64EmitError {
+  match edit.kind() {
+    Spill(value~, reg~, slot~) =>
+      emit_stack_access(
+        buffer,
+        false,
+        function.value_type(value).unwrap(),
+        reg,
+        frame.slot_offset(slot).unwrap(),
+      )
+    Reload(value~, slot~, reg~) =>
+      emit_stack_access(
+        buffer,
+        true,
+        function.value_type(value).unwrap(),
+        reg,
+        frame.slot_offset(slot).unwrap(),
+      )
+    Move(value~, from~, to~) =>
+      emit_move(buffer, function.value_type(value).unwrap(), to, from)
+    EdgeMove(..) => raise UnsupportedEdgeMove
+  }
+}
+
+///|
+fn[Inst] emit_edits_at(
+  buffer : CodeBuffer,
+  function : @vcode.Function[Inst],
+  frame : AArch64Frame,
+  edits : Array[@vcode.Edit],
+  instruction : @vcode.Instruction,
+  placement : @vcode.PointPlacement,
+) -> Unit raise AArch64EmitError {
+  for edit in edits {
+    if edit.point() is Some(point) &&
+      point.instruction() == instruction &&
+      point.placement() == placement {
+      emit_edit(buffer, function, frame, edit)
+    }
+  }
+}
+
+///|
+fn emit_instruction(
+  buffer : CodeBuffer,
+  function : @vcode.Function[AArch64Inst],
+  allocation : @vcode.Allocation,
+  frame : AArch64Frame,
+  instruction : @vcode.Instruction,
+) -> Unit raise AArch64EmitError {
+  let reg = fn(index) {
+    allocation.operand_location(instruction, index).unwrap()
+  }
+  match function.instruction(instruction).unwrap() {
+    IncomingReg(ty, _) => emit_move(buffer, ty, reg(1), reg(0))
+    IncomingStack(ty, offset) =>
+      emit_stack_access(buffer, true, ty, reg(0), frame.frame_size() + offset)
+    OutgoingReg(ty, destination) => emit_move(buffer, ty, destination, reg(0))
+    LoadConstant(width, bits) => emit_constant(buffer, width, reg(0), bits)
+    Move(ty) => emit_move(buffer, ty, reg(1), reg(0))
+    IntUnary(width, operation) =>
+      buffer.emit_word(encode_int_unary(width, operation, reg(1), reg(0)))
+    IntBinary(width, operation) =>
+      buffer.emit_word(
+        encode_int_binary(width, operation, reg(2), reg(0), reg(1)),
+      )
+    CompareSet(width, condition) => {
+      let compare_base = if width == W32 { 0x6B00001FU } else { 0xEB00001FU }
+      buffer.emit_word(
+        compare_base | (reg_bits(reg(1)) << 16) | (reg_bits(reg(0)) << 5),
+      )
+      let inverse = condition_code(condition) ^ 1U
+      buffer.emit_word(0x9A9F07E0U | (inverse << 12) | reg_bits(reg(2)))
+    }
+    AddAddress =>
+      buffer.emit_word(
+        encode_three_register(0x8B000000U, reg(2), reg(0), reg(1)),
+      )
+    Jump =>
+      buffer.emit_branch(
+        function.instruction_successor_at(instruction, 0).unwrap().target,
+        26,
+        0x14000000U,
+      )
+    BranchNonZero32 => {
+      buffer.emit_branch(
+        function.instruction_successor_at(instruction, 0).unwrap().target,
+        19,
+        0x35000000U | reg_bits(reg(0)),
+      )
+      buffer.emit_branch(
+        function.instruction_successor_at(instruction, 1).unwrap().target,
+        26,
+        0x14000000U,
+      )
+    }
+    Return => {
+      emit_epilogue(buffer, frame)
+      buffer.emit_word(0xD65F03C0U)
+    }
+  }
+}
+
+///|
+fn patch_branches(
+  buffer : CodeBuffer,
+  function : @vcode.Function[AArch64Inst],
+  block_offsets : Array[Int],
+) -> Unit raise AArch64EmitError {
+  for fixup in buffer.fixups {
+    let block_index = function.block_index(fixup.target).unwrap()
+    let target = block_offsets[block_index]
+    if target < 0 {
+      raise BranchTargetMissing(block=fixup.target)
+    }
+    let delta = target - fixup.offset
+    let words = delta / 4
+    let minimum = -(1 << (fixup.bits - 1))
+    let maximum = (1 << (fixup.bits - 1)) - 1
+    if delta % 4 != 0 || words < minimum || words > maximum {
+      raise BranchOutOfRange(offset=delta, bits=fixup.bits)
+    }
+    let base = if fixup.bits == 26 {
+      0x14000000U
+    } else {
+      let old = buffer.code[fixup.offset].to_uint()
+      0x35000000U | (old & 31U)
+    }
+    let mask = if fixup.bits == 26 { 0x03FFFFFFU } else { 0x7FFFFU }
+    let encoded = base |
+      (
+        (words.reinterpret_as_uint() & mask) <<
+        (if fixup.bits == 19 { 5 } else { 0 })
+      )
+    buffer.patch_word(fixup.offset, encoded)
+  }
+}
+
+///|
+pub fn emit(
+  function : @vcode.Function[AArch64Inst],
+  allocation : @vcode.Allocation,
+  frame : AArch64Frame,
+) -> @code_object.UnlinkedCodeObject raise AArch64EmitError {
+  verify_frame(function, allocation, frame) catch {
+    error => raise InvalidFrame(cause=error)
+  }
+  let buffer = CodeBuffer::new()
+  let block_offsets = Array::make(function.block_count(), -1)
+  let edits = allocation.edits()
+  emit_prologue(buffer, frame)
+  for block in function.layout() {
+    block_offsets[function.block_index(block).unwrap()] = buffer.position()
+    for instruction in function.block_body(block) {
+      emit_edits_at(buffer, function, frame, edits, instruction, Before)
+      emit_instruction(buffer, function, allocation, frame, instruction)
+      emit_edits_at(buffer, function, frame, edits, instruction, After)
+    }
+    let terminator = function.block_terminator(block).unwrap()
+    emit_edits_at(buffer, function, frame, edits, terminator, Before)
+    emit_instruction(buffer, function, allocation, frame, terminator)
+    emit_edits_at(buffer, function, frame, edits, terminator, After)
+  }
+  patch_branches(buffer, function, block_offsets)
+  @code_object.build(AArch64, buffer.code) catch {
+    error => raise InvalidCodeObject(cause=error)
+  }
+}

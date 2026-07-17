@@ -9,7 +9,8 @@ does not lower MilkIR; verified MilkIR first becomes target-neutral MachV.
 ## Package
 
 - `Milky2018/aarch64_target`: AArch64 Target VCode instructions and verifier,
-  target descriptor, ABI policy, register sets, and machine environment.
+  ABI lowering, allocation, frame planning, machine-code emission, target
+  descriptor, and register policy.
 
 ## When to use it
 
@@ -46,7 +47,7 @@ test "inspect AArch64 machine environment" {
 
 ## Integration
 
-Use this package from the AArch64 Target VCode and allocation pipeline.
-Machine-code emission remains in `Milky2018/machv_emit`; runtime symbols and
-executable-memory allocation are supplied by the embedding application after
-emission.
+Use this package for the complete AArch64 target pipeline after semantic
+MachV. It produces a verified `Milky2018/machv/code_object` value. Runtime
+symbol resolution, relocation application, and executable-memory ownership
+remain responsibilities of the embedding application.

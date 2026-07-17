@@ -61,6 +61,16 @@ pub struct Edit {
 }
 
 ///|
+pub fn Edit::point(self : Edit) -> ProgramPoint? {
+  self.point
+}
+
+///|
+pub fn Edit::kind(self : Edit) -> EditKind {
+  self.kind
+}
+
+///|
 pub fn Edit::spill(
   point : ProgramPoint,
   value : Value,
@@ -205,6 +215,15 @@ pub fn Allocation::create_stack_slot(
 ///|
 pub fn Allocation::stack_slot_count(self : Allocation) -> Int {
   self.stack_slots.length()
+}
+
+///|
+pub fn Allocation::stack_slot_at(self : Allocation, index : Int) -> StackSlot? {
+  if index >= 0 && index < self.stack_slots.length() {
+    Some(StackSlot::new(self.owner, index))
+  } else {
+    None
+  }
 }
 
 ///|

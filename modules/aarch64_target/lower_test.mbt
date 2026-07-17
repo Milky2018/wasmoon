@@ -23,8 +23,11 @@ test "AArch64 lowering selects scalar SSA and preserves source metadata" {
     content=(
       #|vcode selected_add(v0:i64, v1:i64) -> (i64)
       #|block0:
-      #|  i0 IntBinary(W64, Add) uses=[v0:any@early, v1:any@early] defs=[v2:any@late] source={ file: "selected.wat", line: 3, column: 9 }
-      #|  i1 Return uses=[v2:fixed(p0:int)@early]
+      #|  i0 IncomingReg(I64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v2:any@late]
+      #|  i1 IncomingReg(I64, p1:int) uses=[v1:fixed(p1:int)@early] defs=[v3:any@late]
+      #|  i2 IntBinary(W64, Add) uses=[v2:any@early, v3:any@early] defs=[v4:any@late] source={ file: "selected.wat", line: 3, column: 9 }
+      #|  i3 OutgoingReg(I64, p0:int) uses=[v4:any@early]
+      #|  i4 Return
       #|
     ),
   )

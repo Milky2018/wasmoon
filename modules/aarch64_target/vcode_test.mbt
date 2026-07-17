@@ -17,10 +17,19 @@ test "AArch64 owns a statically typed Target VCode checkpoint" {
     [],
     @vcode.InstructionMetadata::empty(),
   )
+  builder.append_body(
+    entry,
+    OutgoingReg(I64, @vcode.PhysicalReg::new(0, Int)),
+    [@vcode.Input::any(result[0])],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
   builder.set_terminator(
     entry,
     Return,
-    [@vcode.Input::any(result[0])],
+    [],
     [],
     [],
     @vcode.InstructionMetadata::empty(),
@@ -34,7 +43,8 @@ test "AArch64 owns a statically typed Target VCode checkpoint" {
       #|vcode a64_add(v0:i64, v1:i64) -> (i64)
       #|block0:
       #|  i0 IntBinary(W64, Add) uses=[v0:any@early, v1:any@early] defs=[v2:any@late]
-      #|  i1 Return uses=[v2:any@early]
+      #|  i1 OutgoingReg(I64, p0:int) uses=[v2:any@early]
+      #|  i2 Return
       #|
     ),
   )
