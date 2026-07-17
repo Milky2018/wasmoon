@@ -918,6 +918,9 @@ fn verify_vector_operation(
           "pairwise extending add destination must be i16x8, i32x4, or i64x2",
         )
       }
+      if operation == PopulationCount && lane != I8x16 {
+        return operation_error("vector population count requires i8x16 lanes")
+      }
       require_shape(operands, results, [V128], [V128], "vector.int_unary")
     }
     IntBinary(lane, operation) => {

@@ -682,6 +682,11 @@ fn emit_vector_int_unary(
       vector_lane_encoding(
         lane, 0x6E20B800U, 0x6E60B800U, 0x6EA0B800U, 0x6EE0B800U,
       )
+    PopulationCount =>
+      match lane {
+        I8x16 => 0x4E205800U
+        I16x8 | I32x4 | I64x2 | F32x4 | F64x2 => raise InvalidVectorInstruction
+      }
   }
   buffer.emit_word(base | (reg_bits(source) << 5) | reg_bits(destination))
 }

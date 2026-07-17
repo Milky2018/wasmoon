@@ -442,6 +442,35 @@ test "vector average rejects unsupported lane widths" {
 }
 
 ///|
+test "vector population count rejects non-byte lanes" {
+  let builder = @machv.FunctionBuilder::new(
+    "bad_vector_population_count",
+    Internal,
+    [V128],
+    [],
+  )
+  builder.emit(Vector(IntUnary(I16x8, PopulationCount)), builder.parameters(), [
+    V128,
+  ])
+  |> ignore
+  builder.return_([])
+  try builder.finish() catch {
+    error =>
+      inspect(
+        error,
+        content=(
+          #|InvalidOperation(
+          #|  block_id=0,
+          #|  message="vector population count requires i8x16 lanes",
+          #|)
+        ),
+      )
+  } noraise {
+    _ => fail("expected an invalid vector population-count lane to be rejected")
+  }
+}
+
+///|
 test "narrow loads require an explicit extension" {
   let builder = @machv.FunctionBuilder::new("bad_load", Internal, [Ptr64], [])
   builder.emit(

@@ -349,3 +349,44 @@ test "AArch64 verifier rejects an incomplete call clobber set" {
       )
   }
 }
+
+///|
+test "AArch64 verifier rejects non-byte vector population count" {
+  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
+    "bad_vector_population_count",
+    [V128],
+  )
+  let entry = builder.entry_block()
+  builder.append_body(
+    entry,
+    VectorIntUnary(I16x8, PopulationCount),
+    [@vcode.Input::any(builder.parameter(0))],
+    [@vcode.Output::any(V128)],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  builder.set_terminator(
+    entry,
+    Return,
+    [],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  try verify_vcode(builder.finish()) catch {
+    error =>
+      inspect(
+        error,
+        content=(
+          #|InvalidInstruction(
+          #|  instruction=i0,
+          #|  message="vector population count requires i8x16 lanes",
+          #|)
+        ),
+      )
+  } noraise {
+    _ => fail("expected non-byte vector population count to be rejected")
+  }
+}

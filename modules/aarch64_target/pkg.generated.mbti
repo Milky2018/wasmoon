@@ -307,6 +307,7 @@ pub(all) enum AArch64VectorIntBinary {
 pub(all) enum AArch64VectorIntUnary {
   Absolute
   Negate
+  PopulationCount
 } derive(Eq, @debug.Debug)
 
 pub(all) struct AbiPolicy {

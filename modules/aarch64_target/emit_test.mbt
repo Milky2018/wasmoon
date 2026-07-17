@@ -1044,6 +1044,52 @@ test "AArch64 pipeline emits vector unsigned averages" {
 }
 
 ///|
+test "AArch64 pipeline emits vector byte population count" {
+  let builder = @semantic.FunctionBuilder::new(
+    "emitted_vector_population_count",
+    Platform,
+    [V128],
+    [V128],
+  )
+  let result = builder.emit(
+      Vector(IntUnary(I8x16, PopulationCount)),
+      builder.parameters(),
+      [V128],
+    )[0]
+  builder.return_([result])
+  let function = lower(builder.finish(), test_lowering_context())
+  let allocation = allocate(function)
+  let frame = plan_frame(function, allocation)
+  debug_inspect(
+    emit(function, allocation, frame),
+    content=(
+      #|{
+      #|  architecture: AArch64,
+      #|  code: [
+      #|    0x01,
+      #|    0x1c,
+      #|    0xa0,
+      #|    0x4e,
+      #|    0x20,
+      #|    0x58,
+      #|    0x20,
+      #|    0x4e,
+      #|    0xc0,
+      #|    0x03,
+      #|    0x5f,
+      #|    0xd6,
+      #|  ],
+      #|  relocations: [],
+      #|  sources: [],
+      #|  traps: [],
+      #|  safepoints: [],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
 test "AArch64 pipeline emits addresses inside the semantic stack-object area" {
   let builder = @semantic.FunctionBuilder::new(
     "emitted_stack_addresses",

@@ -1440,6 +1440,15 @@ test "AArch64 vector unsigned average uses URHADD for legal lanes" {
 }
 
 ///|
+test "AArch64 vector byte population count uses CNT" {
+  let buffer = CodeBuffer::new()
+  let source = @vcode.PhysicalReg::new(3, FpVector)
+  let destination = @vcode.PhysicalReg::new(7, FpVector)
+  emit_vector_int_unary(buffer, I8x16, PopulationCount, source, destination)
+  debug_inspect(buffer.code, content="[0x67, 0x58, 0x20, 0x4e]")
+}
+
+///|
 test "AAPCS64 platform call layout preserves mixed overflow order" {
   let layout = platform_call_layout([
     I64,

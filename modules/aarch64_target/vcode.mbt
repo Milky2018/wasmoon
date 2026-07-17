@@ -76,6 +76,7 @@ pub(all) enum AArch64FloatTernary {
 pub(all) enum AArch64VectorIntUnary {
   Absolute
   Negate
+  PopulationCount
 } derive(Eq, Debug)
 
 ///|
@@ -762,11 +763,17 @@ pub fn verify_vcode(
           false,
           0,
         )
-      VectorIntUnary(lane, _) => {
+      VectorIntUnary(lane, operation) => {
         if !is_integer_vector_lane(lane) {
           raise InvalidInstruction(
             instruction~,
             message="vector integer unary operation requires integer lanes",
+          )
+        }
+        if operation == PopulationCount && lane != I8x16 {
+          raise InvalidInstruction(
+            instruction~,
+            message="vector population count requires i8x16 lanes",
           )
         }
         require_instruction_shape(
