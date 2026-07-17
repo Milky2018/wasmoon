@@ -260,6 +260,7 @@ pub(all) enum AArch64Inst {
   AtomicRmw(@semantic.AccessWidth, @semantic.ValueType, @semantic.AtomicRmwOp)
   AtomicCompareExchange(@semantic.AccessWidth, @semantic.ValueType)
   AtomicFence
+  SafepointMarker
   PlatformCall(@semantic.ExternalSymbol, @semantic.Signature)
   InternalCall(@semantic.CodeSymbol, @semantic.Signature, InternalCallPlan)
   InternalCallIndirect(@semantic.Signature, InternalCallPlan)
@@ -1505,6 +1506,15 @@ pub fn verify_vcode(
       }
       AtomicFence =>
         require_instruction_shape(function, instruction, [], [], false, 0)
+      SafepointMarker => {
+        if function.instruction_metadata(instruction).unwrap().safepoint is None {
+          raise InvalidInstruction(
+            instruction~,
+            message="safepoint marker requires safepoint metadata",
+          )
+        }
+        require_instruction_shape(function, instruction, [], [], false, 0)
+      }
       PlatformCall(_, signature) => {
         if signature.results.length() > 1 {
           raise InvalidInstruction(

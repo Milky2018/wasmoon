@@ -1024,6 +1024,7 @@ fn lower_instruction(
     AtomicCompareExchange(spec) if spec.endianness == Little =>
       Some(AtomicCompareExchange(spec.width, spec.value_type))
     AtomicFence => Some(AtomicFence)
+    Safepoint(_) => Some(SafepointMarker)
     _ => None
   }
   let selected = match selected {

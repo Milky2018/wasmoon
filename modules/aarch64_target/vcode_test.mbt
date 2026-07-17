@@ -923,3 +923,44 @@ test "AArch64 verifier requires early-clobber atomic loop results" {
     _ => fail("expected late atomic loop result to be rejected")
   }
 }
+
+///|
+test "AArch64 verifier rejects a safepoint marker without metadata" {
+  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
+    "unmarked_safepoint",
+    [],
+  )
+  let entry = builder.entry_block()
+  builder.append_body(
+    entry,
+    SafepointMarker,
+    [],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  builder.set_terminator(
+    entry,
+    Return,
+    [],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  try verify_vcode(builder.finish()) catch {
+    error =>
+      inspect(
+        error,
+        content=(
+          #|InvalidInstruction(
+          #|  instruction=i0,
+          #|  message="safepoint marker requires safepoint metadata",
+          #|)
+        ),
+      )
+  } noraise {
+    _ => fail("expected unmarked safepoint to be rejected")
+  }
+}

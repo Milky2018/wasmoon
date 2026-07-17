@@ -162,6 +162,40 @@ test "AArch64 lowering selects sequentially consistent atomic families" {
 }
 
 ///|
+test "AArch64 lowering selects standalone safepoint metadata markers" {
+  let builder = @semantic.FunctionBuilder::new(
+    "safepoint_marker",
+    Internal,
+    [Ptr64, GcRef64],
+    [],
+  )
+  let root = builder.parameters()[1]
+  builder.emit_with_metadata(
+    Safepoint(GcAndCancellation),
+    [],
+    [],
+    @semantic.InstructionMetadata::new(
+      Some(@semantic.SourceLocation::new("safepoint.wat", 3, 5)),
+      [root],
+    ),
+  )
+  |> ignore
+  builder.return_([])
+  inspect(
+    lower(builder.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode safepoint_marker(v0:ptr64, v1:gcref64)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v2:any@late]
+      #|  i1 IncomingReg(GcRef64, p1:int) uses=[v1:fixed(p1:int)@early] defs=[v3:any@late]
+      #|  i2 SafepointMarker source={ file: "safepoint.wat", line: 3, column: 5 } safepoint=GcAndCancellation roots=[v3]
+      #|  i3 Return
+      #|
+    ),
+  )
+}
+
+///|
 test "AArch64 lowering selects the vector foundation" {
   let builder = @semantic.FunctionBuilder::new(
     "vector_foundation",

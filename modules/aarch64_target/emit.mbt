@@ -2466,6 +2466,10 @@ fn emit_instruction(
         reg(3),
       )
     AtomicFence => buffer.emit_word(0xD5033BBFU)
+    SafepointMarker => {
+      metadata_offset = buffer.position()
+      buffer.emit_word(0xD503201FU)
+    }
     PlatformCall(target, signature) => {
       let layout = platform_call_layout(signature.params)
       emit_call_arguments(

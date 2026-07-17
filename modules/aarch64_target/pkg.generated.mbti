@@ -272,6 +272,7 @@ pub(all) enum AArch64Inst {
   AtomicRmw(@machv.AccessWidth, @machv.ValueType, @machv.AtomicRmwOp)
   AtomicCompareExchange(@machv.AccessWidth, @machv.ValueType)
   AtomicFence
+  SafepointMarker
   PlatformCall(@machv.ExternalSymbol, @machv.Signature)
   InternalCall(@machv.CodeSymbol, @machv.Signature, InternalCallPlan)
   InternalCallIndirect(@machv.Signature, InternalCallPlan)

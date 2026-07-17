@@ -2289,6 +2289,62 @@ test "AArch64 pipeline emits sequentially consistent atomic loops" {
 }
 
 ///|
+test "AArch64 pipeline emits standalone safepoint roots at a NOP marker" {
+  let builder = @semantic.FunctionBuilder::new(
+    "emitted_safepoint_marker",
+    Platform,
+    [GcRef64],
+    [],
+  )
+  let root = builder.parameters()[0]
+  builder.emit_with_metadata(
+    Safepoint(GcAndCancellation),
+    [],
+    [],
+    @semantic.InstructionMetadata::new(None, [root]),
+  )
+  |> ignore
+  builder.return_([])
+  let function = lower(builder.finish(), test_lowering_context())
+  let allocation = allocate(function)
+  let frame = plan_frame(function, allocation)
+  debug_inspect(
+    emit(function, allocation, frame),
+    content=(
+      #|{
+      #|  architecture: AArch64,
+      #|  code: [
+      #|    0xe1,
+      #|    0x03,
+      #|    0x00,
+      #|    0xaa,
+      #|    0x1f,
+      #|    0x20,
+      #|    0x03,
+      #|    0xd5,
+      #|    0xc0,
+      #|    0x03,
+      #|    0x5f,
+      #|    0xd6,
+      #|  ],
+      #|  relocations: [],
+      #|  sources: [],
+      #|  traps: [],
+      #|  safepoints: [
+      #|    {
+      #|      offset: 4,
+      #|      kind: GcAndCancellation,
+      #|      roots: [Register(Int, 1)],
+      #|      source: None,
+      #|    },
+      #|  ],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
 test "AArch64 pipeline emits addresses inside the semantic stack-object area" {
   let builder = @semantic.FunctionBuilder::new(
     "emitted_stack_addresses",
