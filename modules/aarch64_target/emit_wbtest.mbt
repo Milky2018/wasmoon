@@ -1182,6 +1182,97 @@ test "AArch64 vector integer comparison encodings cover the full relation matrix
 }
 
 ///|
+test "AArch64 saturating vector arithmetic encodings cover every lane width" {
+  let buffer = CodeBuffer::new()
+  let left = @vcode.PhysicalReg::new(3, FpVector)
+  let right = @vcode.PhysicalReg::new(5, FpVector)
+  let destination = @vcode.PhysicalReg::new(7, FpVector)
+  let lanes : Array[@semantic.VectorLane] = [I8x16, I16x8, I32x4, I64x2]
+  let operations : Array[AArch64VectorIntBinary] = [
+    SaturatingAdd(Signed),
+    SaturatingAdd(Unsigned),
+    SaturatingSub(Signed),
+    SaturatingSub(Unsigned),
+  ]
+  for lane in lanes {
+    for operation in operations {
+      emit_vector_int_binary(buffer, lane, operation, left, right, destination)
+    }
+  }
+  debug_inspect(
+    buffer.code,
+    content=(
+      #|[
+      #|  0x67,
+      #|  0x0c,
+      #|  0x25,
+      #|  0x4e,
+      #|  0x67,
+      #|  0x0c,
+      #|  0x25,
+      #|  0x6e,
+      #|  0x67,
+      #|  0x2c,
+      #|  0x25,
+      #|  0x4e,
+      #|  0x67,
+      #|  0x2c,
+      #|  0x25,
+      #|  0x6e,
+      #|  0x67,
+      #|  0x0c,
+      #|  0x65,
+      #|  0x4e,
+      #|  0x67,
+      #|  0x0c,
+      #|  0x65,
+      #|  0x6e,
+      #|  0x67,
+      #|  0x2c,
+      #|  0x65,
+      #|  0x4e,
+      #|  0x67,
+      #|  0x2c,
+      #|  0x65,
+      #|  0x6e,
+      #|  0x67,
+      #|  0x0c,
+      #|  0xa5,
+      #|  0x4e,
+      #|  0x67,
+      #|  0x0c,
+      #|  0xa5,
+      #|  0x6e,
+      #|  0x67,
+      #|  0x2c,
+      #|  0xa5,
+      #|  0x4e,
+      #|  0x67,
+      #|  0x2c,
+      #|  0xa5,
+      #|  0x6e,
+      #|  0x67,
+      #|  0x0c,
+      #|  0xe5,
+      #|  0x4e,
+      #|  0x67,
+      #|  0x0c,
+      #|  0xe5,
+      #|  0x6e,
+      #|  0x67,
+      #|  0x2c,
+      #|  0xe5,
+      #|  0x4e,
+      #|  0x67,
+      #|  0x2c,
+      #|  0xe5,
+      #|  0x6e,
+      #|]
+    ),
+  )
+}
+
+///|
 test "AAPCS64 platform call layout preserves mixed overflow order" {
   let layout = platform_call_layout([
     I64,

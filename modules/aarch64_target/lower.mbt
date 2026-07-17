@@ -798,6 +798,10 @@ fn lower_instruction(
     Vector(IntBinary(lane, Add)) => Some(VectorIntBinary(lane, Add))
     Vector(IntBinary(lane, Sub)) => Some(VectorIntBinary(lane, Sub))
     Vector(IntBinary(lane, Mul)) => Some(VectorIntBinary(lane, Mul))
+    Vector(IntBinary(lane, SaturatingAdd(signedness))) =>
+      Some(VectorIntBinary(lane, SaturatingAdd(signedness)))
+    Vector(IntBinary(lane, SaturatingSub(signedness))) =>
+      Some(VectorIntBinary(lane, SaturatingSub(signedness)))
     Vector(IntShift(lane, operation)) => Some(VectorIntShift(lane, operation))
     Vector(IntCompare(lane, comparison)) =>
       Some(VectorIntCompare(lane, comparison))

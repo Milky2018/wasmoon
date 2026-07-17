@@ -742,6 +742,26 @@ fn emit_vector_int_binary(
         I32x4 => 0x4EA09C00U
         I64x2 | F32x4 | F64x2 => raise InvalidVectorInstruction
       }
+    SaturatingAdd(signedness) =>
+      if signedness is Signed {
+        vector_lane_encoding(
+          lane, 0x4E200C00U, 0x4E600C00U, 0x4EA00C00U, 0x4EE00C00U,
+        )
+      } else {
+        vector_lane_encoding(
+          lane, 0x6E200C00U, 0x6E600C00U, 0x6EA00C00U, 0x6EE00C00U,
+        )
+      }
+    SaturatingSub(signedness) =>
+      if signedness is Signed {
+        vector_lane_encoding(
+          lane, 0x4E202C00U, 0x4E602C00U, 0x4EA02C00U, 0x4EE02C00U,
+        )
+      } else {
+        vector_lane_encoding(
+          lane, 0x6E202C00U, 0x6E602C00U, 0x6EA02C00U, 0x6EE02C00U,
+        )
+      }
   }
   buffer.emit_word(
     base |
