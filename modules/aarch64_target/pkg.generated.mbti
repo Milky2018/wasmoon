@@ -118,6 +118,12 @@ pub suberror TargetVCodeVerifyError {
 pub impl Show for TargetVCodeVerifyError
 
 // Types and methods
+pub(all) enum AArch64Address {
+  Code(@machv.CodeSymbol)
+  External(@machv.ExternalSymbol)
+  Data(@machv.DataSymbol)
+} derive(Eq, @debug.Debug)
+
 pub(all) enum AArch64Condition {
   Eq
   Ne
@@ -205,6 +211,7 @@ pub(all) enum AArch64Inst {
   KeepAlive(@machv.ValueType)
   LoadConstant(GprWidth, UInt64)
   LoadNull(@machv.ValueType)
+  LoadAddress(AArch64Address)
   LoadFloatConstant(@machv.ValueType, UInt64)
   Move(@machv.ValueType)
   CarrierMove(@machv.ValueType, @machv.ValueType)
@@ -304,6 +311,7 @@ pub struct LoweringContext {
   // private fields
 }
 pub fn LoweringContext::new(InternalAbi) -> Self
+pub fn LoweringContext::with_environment_field(Self, @machv.EnvironmentField, Array[Int]) -> Self
 
 pub(all) struct MachineEnvData {
   preferred_int : Array[@abi.PReg]

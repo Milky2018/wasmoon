@@ -93,6 +93,13 @@ pub(all) enum AArch64FloatTrapCondition {
 } derive(Eq, Debug)
 
 ///|
+pub(all) enum AArch64Address {
+  Code(@semantic.CodeSymbol)
+  External(@semantic.ExternalSymbol)
+  Data(@semantic.DataSymbol)
+} derive(Eq, Debug)
+
+///|
 pub(all) enum AArch64Conversion {
   WrapI64ToI32
   ExtendI32ToI64(@semantic.Signedness)
@@ -113,6 +120,7 @@ pub(all) enum AArch64Inst {
   KeepAlive(@semantic.ValueType)
   LoadConstant(GprWidth, UInt64)
   LoadNull(@semantic.ValueType)
+  LoadAddress(AArch64Address)
   LoadFloatConstant(@semantic.ValueType, UInt64)
   Move(@semantic.ValueType)
   CarrierMove(@semantic.ValueType, @semantic.ValueType)
@@ -503,6 +511,8 @@ pub fn verify_vcode(
         }
         require_instruction_shape(function, instruction, [], [ty], false, 0)
       }
+      LoadAddress(_) =>
+        require_instruction_shape(function, instruction, [], [Ptr64], false, 0)
       LoadFloatConstant(ty, bits) => {
         if (ty != F32 && ty != F64) || (ty == F32 && bits > 0xFFFFFFFFUL) {
           raise InvalidInstruction(

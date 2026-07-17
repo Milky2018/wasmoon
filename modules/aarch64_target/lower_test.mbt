@@ -269,6 +269,58 @@ test "AArch64 lowering selects null carriers references and scalar values" {
 }
 
 ///|
+test "AArch64 lowering resolves environment paths and typed symbol addresses" {
+  let field = @semantic.EnvironmentField::new("runtime.memory.base", I64)
+  let builder = @semantic.FunctionBuilder::new(
+    "addresses_and_environment",
+    Internal,
+    [Ptr64],
+    [Ptr64, Ptr64, Ptr64, I64],
+  )
+  let code = builder.emit(
+      CodeAddress(@semantic.CodeSymbol::new("callee")),
+      [],
+      [Ptr64],
+    )[0]
+  let external = builder.emit(
+      ExternalAddress(@semantic.ExternalSymbol::new("runtime.helper")),
+      [],
+      [Ptr64],
+    )[0]
+  let data = builder.emit(
+      DataAddress(@semantic.DataSymbol::new("constant.pool")),
+      [],
+      [Ptr64],
+    )[0]
+  let environment = builder.emit(
+      EnvironmentField(field),
+      [builder.parameters()[0]],
+      [I64],
+    )[0]
+  builder.return_([code, external, data, environment])
+  let context = test_lowering_context().with_environment_field(field, [8, 24])
+  inspect(
+    lower(builder.finish(), context).summary(),
+    content=(
+      #|vcode addresses_and_environment(v0:ptr64) -> (ptr64, ptr64, ptr64, i64)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v1:any@late]
+      #|  i1 LoadAddress(Code({ name: "callee" })) defs=[v2:any@late]
+      #|  i2 LoadAddress(External({ name: "runtime.helper" })) defs=[v3:any@late]
+      #|  i3 LoadAddress(Data({ name: "constant.pool" })) defs=[v4:any@late]
+      #|  i4 ScalarLoad(W64, None, Ptr64, 8) uses=[v1:any@early] defs=[v5:any@late]
+      #|  i5 ScalarLoad(W64, None, I64, 24) uses=[v5:any@early] defs=[v6:any@late]
+      #|  i6 OutgoingReg(Ptr64, p0:int) uses=[v2:any@early]
+      #|  i7 OutgoingReg(Ptr64, p1:int) uses=[v3:any@early]
+      #|  i8 OutgoingReg(Ptr64, p2:int) uses=[v4:any@early]
+      #|  i9 OutgoingReg(I64, p3:int) uses=[v6:any@early]
+      #|  i10 Return
+      #|
+    ),
+  )
+}
+
+///|
 test "AArch64 lowering selects a direct platform call with explicit ABI facts" {
   let builder = @semantic.FunctionBuilder::new(
     "direct_platform_call",

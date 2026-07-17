@@ -1730,6 +1730,146 @@ test "AArch64 emits null carriers references and scalar values" {
 }
 
 ///|
+test "AArch64 emits environment paths and typed symbol relocations" {
+  let field = @semantic.EnvironmentField::new("runtime.memory.base", I64)
+  let builder = @semantic.FunctionBuilder::new(
+    "emitted_addresses_and_environment",
+    Internal,
+    [Ptr64],
+    [Ptr64, Ptr64, Ptr64, I64],
+  )
+  let code = builder.emit(
+      CodeAddress(@semantic.CodeSymbol::new("callee")),
+      [],
+      [Ptr64],
+    )[0]
+  let external = builder.emit(
+      ExternalAddress(@semantic.ExternalSymbol::new("runtime.helper")),
+      [],
+      [Ptr64],
+    )[0]
+  let data = builder.emit(
+      DataAddress(@semantic.DataSymbol::new("constant.pool")),
+      [],
+      [Ptr64],
+    )[0]
+  let environment = builder.emit(
+      EnvironmentField(field),
+      [builder.parameters()[0]],
+      [I64],
+    )[0]
+  builder.return_([code, external, data, environment])
+  let context = test_lowering_context().with_environment_field(field, [8, 24])
+  let function = lower(builder.finish(), context)
+  let allocation = allocate(function)
+  let frame = plan_frame(function, allocation)
+  debug_inspect(
+    emit(function, allocation, frame),
+    content=(
+      #|{
+      #|  architecture: AArch64,
+      #|  code: [
+      #|    0xe1,
+      #|    0x03,
+      #|    0x00,
+      #|    0xaa,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x90,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x91,
+      #|    0x02,
+      #|    0x00,
+      #|    0x00,
+      #|    0x90,
+      #|    0x42,
+      #|    0x00,
+      #|    0x00,
+      #|    0x91,
+      #|    0x03,
+      #|    0x00,
+      #|    0x00,
+      #|    0x90,
+      #|    0x63,
+      #|    0x00,
+      #|    0x00,
+      #|    0x91,
+      #|    0x24,
+      #|    0x04,
+      #|    0x40,
+      #|    0xf9,
+      #|    0x81,
+      #|    0x0c,
+      #|    0x40,
+      #|    0xf9,
+      #|    0xe1,
+      #|    0x03,
+      #|    0x02,
+      #|    0xaa,
+      #|    0xe2,
+      #|    0x03,
+      #|    0x03,
+      #|    0xaa,
+      #|    0xe3,
+      #|    0x03,
+      #|    0x01,
+      #|    0xaa,
+      #|    0xc0,
+      #|    0x03,
+      #|    0x5f,
+      #|    0xd6,
+      #|  ],
+      #|  relocations: [
+      #|    {
+      #|      offset: 4,
+      #|      kind: AArch64Page21,
+      #|      target: Code({ name: "callee" }),
+      #|      addend: 0,
+      #|    },
+      #|    {
+      #|      offset: 8,
+      #|      kind: AArch64PageOffset12,
+      #|      target: Code({ name: "callee" }),
+      #|      addend: 0,
+      #|    },
+      #|    {
+      #|      offset: 12,
+      #|      kind: AArch64Page21,
+      #|      target: External({ name: "runtime.helper" }),
+      #|      addend: 0,
+      #|    },
+      #|    {
+      #|      offset: 16,
+      #|      kind: AArch64PageOffset12,
+      #|      target: External({ name: "runtime.helper" }),
+      #|      addend: 0,
+      #|    },
+      #|    {
+      #|      offset: 20,
+      #|      kind: AArch64Page21,
+      #|      target: Data({ name: "constant.pool" }),
+      #|      addend: 0,
+      #|    },
+      #|    {
+      #|      offset: 24,
+      #|      kind: AArch64PageOffset12,
+      #|      target: Data({ name: "constant.pool" }),
+      #|      addend: 0,
+      #|    },
+      #|  ],
+      #|  sources: [],
+      #|  traps: [],
+      #|  safepoints: [],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
 test "AArch64 scalar floating-point emission preserves constant bits" {
   let builder = @semantic.FunctionBuilder::new(
     "emitted_scalar_float",

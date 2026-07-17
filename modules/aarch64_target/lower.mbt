@@ -41,6 +41,15 @@ fn optional_gpr_width(ty : @semantic.ValueType?) -> GprWidth? {
 }
 
 ///|
+fn scalar_access_width(ty : @semantic.ValueType) -> @semantic.AccessWidth? {
+  match ty {
+    I32 | F32 => Some(W32)
+    I64 | Ptr64 | GcRef64 | F64 => Some(W64)
+    V128 => None
+  }
+}
+
+///|
 fn lower_binary(operation : @semantic.IntBinaryOp) -> AArch64IntBinary? {
   match operation {
     Add => Some(Add)
@@ -668,11 +677,54 @@ fn lower_instruction(
     }
     return
   }
+  if operation is EnvironmentField(field) {
+    let offsets = match context.environment_field_offsets(field) {
+      Some(offsets) if !offsets.is_empty() => offsets
+      _ =>
+        raise UnsupportedAbi(
+          message="embedding did not bind environment field '{field.name}'",
+        )
+    }
+    let mut current = operands[0]
+    for index, offset in offsets {
+      if offset < 0 {
+        raise UnsupportedAbi(
+          message="environment field '{field.name}' has a negative offset",
+        )
+      }
+      let last = index == offsets.length() - 1
+      let ty = if last { result_types[0] } else { Ptr64 }
+      guard scalar_access_width(ty) is Some(width) else {
+        raise UnsupportedOperation(block_index~, instruction_index~, operation~)
+      }
+      current = append_body(
+          builder,
+          block,
+          ScalarLoad(width, None, ty, offset.to_uint64()),
+          [@vcode.Input::any(current)],
+          [@vcode.Output::any(ty)],
+          if last {
+            source_metadata(
+              function.instruction_metadata(instruction).unwrap(),
+              roots,
+              operation.semantics(),
+            )
+          } else {
+            @vcode.InstructionMetadata::empty()
+          },
+        )[0]
+    }
+    values[function.value_index(semantic_results[0]).unwrap()] = Some(current)
+    return
+  }
   let selected = match operation {
     I32Const(bits) => Some(LoadConstant(W32, bits.to_uint64()))
     I64Const(bits) => Some(LoadConstant(W64, bits))
     NullPtr => Some(LoadNull(Ptr64))
     NullGcRef => Some(LoadNull(GcRef64))
+    CodeAddress(symbol) => Some(LoadAddress(Code(symbol)))
+    ExternalAddress(symbol) => Some(LoadAddress(External(symbol)))
+    DataAddress(symbol) => Some(LoadAddress(Data(symbol)))
     F32Const(bits) => Some(LoadFloatConstant(F32, bits.to_uint64()))
     F64Const(bits) => Some(LoadFloatConstant(F64, bits))
     Copy if result_types.length() == 1 => Some(Move(result_types[0]))

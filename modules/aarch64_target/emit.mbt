@@ -714,6 +714,23 @@ fn emit_instruction(
     KeepAlive(_) => ()
     LoadConstant(width, bits) => emit_constant(buffer, width, reg(0), bits)
     LoadNull(_) => emit_constant(buffer, W64, reg(0), 0UL)
+    LoadAddress(address) => {
+      let target : @code_object.RelocationTarget = match address {
+        Code(symbol) => Code(symbol)
+        External(symbol) => External(symbol)
+        Data(symbol) => Data(symbol)
+      }
+      let page_offset = buffer.position()
+      buffer.emit_word(0x90000000U | reg_bits(reg(0)))
+      buffer.relocations.push(
+        @code_object.Relocation::new(page_offset, AArch64Page21, target),
+      )
+      let add_offset = buffer.position()
+      buffer.emit_word(0x91000000U | (reg_bits(reg(0)) << 5) | reg_bits(reg(0)))
+      buffer.relocations.push(
+        @code_object.Relocation::new(add_offset, AArch64PageOffset12, target),
+      )
+    }
     LoadFloatConstant(ty, bits) => {
       let scratch = @vcode.PhysicalReg::new(16, Int)
       if ty == F32 {
