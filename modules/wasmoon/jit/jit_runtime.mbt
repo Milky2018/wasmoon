@@ -291,7 +291,28 @@ pub fn JITModule::load_with_imports(
                         message=err.to_string(),
                       )
                   }
-                  (mc.get_bytes(), [])
+                  let fixups : Array[@cwasm.FuncAddrFixup] = []
+                  for fixup in mc.get_func_addr_fixups() {
+                    let func_idx = match
+                      @wasmoon_jit.machv_reloc_target_to_cwasm_func_idx(
+                        fixup.target,
+                      ) {
+                      Some(idx) => idx
+                      None =>
+                        raise ImportTrampolineCompilationFailed(
+                          import_idx=i,
+                          module_name=imp.module_name,
+                          func_name=imp.func_name,
+                          message="cannot patch hostcall trampoline target: {fixup.target}",
+                        )
+                    }
+                    fixups.push({
+                      offset: fixup.offset,
+                      func_idx,
+                      reg: fixup.reg,
+                    })
+                  }
+                  (mc.get_bytes(), fixups)
                 }
                 Unknown =>
                   raise ImportTrampolineCompilationFailed(

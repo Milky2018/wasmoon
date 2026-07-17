@@ -1066,6 +1066,23 @@ test "hostcall trampolines support overflow result areas" {
 }
 
 ///|
+test "legacy AMD64 hostcall trampoline preserves its runtime fixup" {
+  let mc = try! emit_legacy_amd64_hostcall_import_trampoline(
+    [I32, I32, I32, I32],
+    [I32],
+    7,
+    runtime_hostcall_symbol(),
+    wasm_calling_convention(isa=AMD64),
+  )
+  let fixups = mc.get_func_addr_fixups()
+  inspect(fixups.length(), content="1")
+  debug_inspect(
+    machv_reloc_target_to_cwasm_func_idx(fixups[0].target),
+    content="Some(-21013)",
+  )
+}
+
+///|
 test "entry trampolines support overflow result areas" {
   let params : Array[@types.ValueType] = []
   let results : Array[@types.ValueType] = [
