@@ -714,6 +714,60 @@ fn emit_vector_int_binary(
 }
 
 ///|
+fn emit_vector_int_shift(
+  buffer : CodeBuffer,
+  lane : @semantic.VectorLane,
+  operation : @semantic.VectorIntShiftOp,
+  source : @vcode.PhysicalReg,
+  amount : @vcode.PhysicalReg,
+  destination : @vcode.PhysicalReg,
+) -> Unit raise AArch64EmitError {
+  let width_bits = match lane {
+    I8x16 => 3
+    I16x8 => 4
+    I32x4 => 5
+    I64x2 => 6
+    F32x4 | F64x2 => raise InvalidVectorInstruction
+  }
+  let int_scratch = @vcode.PhysicalReg::new(16, Int)
+  let vector_scratch = @vcode.PhysicalReg::new(16, FpVector)
+  buffer.emit_word(
+    0xD3400000U |
+    ((width_bits - 1).reinterpret_as_uint() << 10) |
+    (reg_bits(amount) << 5) |
+    reg_bits(int_scratch),
+  )
+  let right_shift = operation is Right(_)
+  if right_shift {
+    buffer.emit_word(
+      0xCB0003E0U | (reg_bits(int_scratch) << 16) | reg_bits(int_scratch),
+    )
+  }
+  let duplicate_base = vector_lane_encoding(
+    lane, 0x4E010C00U, 0x4E020C00U, 0x4E040C00U, 0x4E080C00U,
+  )
+  buffer.emit_word(
+    duplicate_base | (reg_bits(int_scratch) << 5) | reg_bits(vector_scratch),
+  )
+  let unsigned_right = operation is Right(Unsigned)
+  let shift_base = if unsigned_right {
+    vector_lane_encoding(
+      lane, 0x6E204400U, 0x6E604400U, 0x6EA04400U, 0x6EE04400U,
+    )
+  } else {
+    vector_lane_encoding(
+      lane, 0x4E204400U, 0x4E604400U, 0x4EA04400U, 0x4EE04400U,
+    )
+  }
+  buffer.emit_word(
+    shift_base |
+    (reg_bits(vector_scratch) << 16) |
+    (reg_bits(source) << 5) |
+    reg_bits(destination),
+  )
+}
+
+///|
 fn emit_vector_binary(
   buffer : CodeBuffer,
   base : UInt,
@@ -1225,6 +1279,8 @@ fn emit_instruction(
       emit_vector_int_unary(buffer, lane, operation, reg(0), reg(1))
     VectorIntBinary(lane, operation) =>
       emit_vector_int_binary(buffer, lane, operation, reg(0), reg(1), reg(2))
+    VectorIntShift(lane, operation) =>
+      emit_vector_int_shift(buffer, lane, operation, reg(0), reg(1), reg(2))
     VectorBitwise(operation) =>
       match operation {
         Not => emit_vector_bitwise(buffer, Not, reg(0), reg(0), reg(0), reg(1))

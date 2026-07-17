@@ -185,6 +185,7 @@ pub(all) enum AArch64Inst {
   VectorBitwise(@semantic.VectorBitwiseOp)
   VectorIntUnary(@semantic.VectorLane, AArch64VectorIntUnary)
   VectorIntBinary(@semantic.VectorLane, AArch64VectorIntBinary)
+  VectorIntShift(@semantic.VectorLane, @semantic.VectorIntShiftOp)
   IntUnary(GprWidth, AArch64IntUnary)
   IntBinary(GprWidth, AArch64IntBinary)
   PopulationCount(GprWidth)
@@ -781,6 +782,22 @@ pub fn verify_vcode(
           function,
           instruction,
           [V128, V128],
+          [V128],
+          false,
+          0,
+        )
+      }
+      VectorIntShift(lane, _) => {
+        if !is_integer_vector_lane(lane) {
+          raise InvalidInstruction(
+            instruction~,
+            message="vector integer shift requires integer lanes",
+          )
+        }
+        require_instruction_shape(
+          function,
+          instruction,
+          [V128, I32],
           [V128],
           false,
           0,

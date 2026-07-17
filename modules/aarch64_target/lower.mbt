@@ -797,6 +797,7 @@ fn lower_instruction(
     Vector(IntUnary(lane, Negate)) => Some(VectorIntUnary(lane, Negate))
     Vector(IntBinary(lane, Add)) => Some(VectorIntBinary(lane, Add))
     Vector(IntBinary(lane, Sub)) => Some(VectorIntBinary(lane, Sub))
+    Vector(IntShift(lane, operation)) => Some(VectorIntShift(lane, operation))
     ReferenceCompare(comparison) => {
       let operand_type = match semantic_operands.get(0) {
         Some(value) => function.value_type(value)
