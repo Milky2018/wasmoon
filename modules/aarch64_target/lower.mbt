@@ -848,6 +848,12 @@ fn lower_instruction(
       Some(VectorFloatTernary(lane, operation))
     Vector(Relaxed(FloatToInt(source, I32x4, signedness))) =>
       Some(VectorConvert(FloatToInt(source, signedness)))
+    Vector(Relaxed(Swizzle)) => Some(VectorSwizzle)
+    Vector(Relaxed(LaneSelect(_))) => Some(VectorBitwise(BitSelect))
+    Vector(Relaxed(Min(lane))) => Some(VectorFloatBinary(lane, Min))
+    Vector(Relaxed(Max(lane))) => Some(VectorFloatBinary(lane, Max))
+    Vector(Relaxed(Q15MultiplyRoundedSigned)) =>
+      Some(VectorIntBinary(I16x8, Q15MultiplyRoundedSaturating))
     ReferenceCompare(comparison) => {
       let operand_type = match semantic_operands.get(0) {
         Some(value) => function.value_type(value)

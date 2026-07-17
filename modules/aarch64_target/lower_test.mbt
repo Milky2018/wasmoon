@@ -1157,6 +1157,62 @@ test "AArch64 lowering selects every remaining vector conversion" {
 }
 
 ///|
+test "AArch64 lowering reuses exact target operations for relaxed SIMD" {
+  let builder = @semantic.FunctionBuilder::new(
+    "relaxed_vector_reuse",
+    Internal,
+    [Ptr64, V128, V128, V128],
+    [V128],
+  )
+  let parameters = builder.parameters()
+  let swizzled = builder.emit(
+      Vector(Relaxed(Swizzle)),
+      [parameters[1], parameters[2]],
+      [V128],
+    )[0]
+  let selected = builder.emit(
+      Vector(Relaxed(LaneSelect(I64x2))),
+      [swizzled, parameters[2], parameters[3]],
+      [V128],
+    )[0]
+  let minimum = builder.emit(
+      Vector(Relaxed(Min(F32x4))),
+      [selected, parameters[2]],
+      [V128],
+    )[0]
+  let maximum = builder.emit(
+      Vector(Relaxed(Max(F64x2))),
+      [minimum, parameters[2]],
+      [V128],
+    )[0]
+  let result = builder.emit(
+      Vector(Relaxed(Q15MultiplyRoundedSigned)),
+      [maximum, parameters[2]],
+      [V128],
+    )[0]
+  builder.return_([result])
+  inspect(
+    lower(builder.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode relaxed_vector_reuse(v0:ptr64, v1:v128, v2:v128, v3:v128) -> (v128)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v4:any@late]
+      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v5:any@late]
+      #|  i2 IncomingReg(V128, p1:fpvec) uses=[v2:fixed(p1:fpvec)@early] defs=[v6:any@late]
+      #|  i3 IncomingReg(V128, p2:fpvec) uses=[v3:fixed(p2:fpvec)@early] defs=[v7:any@late]
+      #|  i4 VectorSwizzle uses=[v5:any@early, v6:any@early] defs=[v8:any@late]
+      #|  i5 VectorBitwise(BitSelect) uses=[v8:any@early, v6:any@early, v7:any@early] defs=[v9:any@late]
+      #|  i6 VectorFloatBinary(F32x4, Min) uses=[v9:any@early, v6:any@early] defs=[v10:any@late]
+      #|  i7 VectorFloatBinary(F64x2, Max) uses=[v10:any@early, v6:any@early] defs=[v11:any@late]
+      #|  i8 VectorIntBinary(I16x8, Q15MultiplyRoundedSaturating) uses=[v11:any@early, v6:any@early] defs=[v12:any@late]
+      #|  i9 OutgoingReg(V128, p0:fpvec) uses=[v12:any@early]
+      #|  i10 Return
+      #|
+    ),
+  )
+}
+
+///|
 test "AArch64 lowering assigns one aligned semantic stack-object area" {
   let builder = @semantic.FunctionBuilder::new(
     "stack_object_layout",
