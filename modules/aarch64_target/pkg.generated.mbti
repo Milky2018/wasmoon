@@ -100,7 +100,6 @@ pub suberror AArch64LowerError {
   InvalidSemantic(cause~ : @machv.MachVVerifyError)
   MissingMappedValue(value_index~ : Int)
   UnsupportedOperation(block_index~ : Int, instruction_index~ : Int, operation~ : @machv.Operation)
-  UnsupportedTerminator(block_index~ : Int, terminator~ : @machv.Terminator)
   UnsupportedAbi(message~ : String)
   BuildFailure(cause~ : @vcode.VCodeBuildError)
   InvalidTarget(cause~ : TargetVCodeVerifyError)
@@ -285,6 +284,8 @@ pub(all) enum AArch64Inst {
   TailCallIndirect(@machv.Signature, InternalCallPlan)
   Jump
   BranchNonZero32
+  Switch(GprWidth, Array[UInt64])
+  Trap(@machv.TrapReason)
   Return
 } derive(Eq, @debug.Debug)
 

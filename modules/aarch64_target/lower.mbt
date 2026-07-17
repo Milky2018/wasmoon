@@ -7,7 +7,6 @@ pub suberror AArch64LowerError {
     instruction_index~ : Int,
     operation~ : @semantic.Operation
   )
-  UnsupportedTerminator(block_index~ : Int, terminator~ : @semantic.Terminator)
   UnsupportedAbi(message~ : String)
   BuildFailure(cause~ : @vcode.VCodeBuildError)
   InvalidTarget(cause~ : TargetVCodeVerifyError)
@@ -312,6 +311,17 @@ fn terminator_call_metadata(
   match metadata.source {
     Some(source) => @vcode.InstructionMetadata::new(source~, safepoint?)
     None => @vcode.InstructionMetadata::new(safepoint?)
+  }
+}
+
+///|
+fn terminator_trap_metadata(
+  metadata : @semantic.TerminatorMetadata,
+  reason : @semantic.TrapReason,
+) -> @vcode.InstructionMetadata {
+  match metadata.source {
+    Some(source) => @vcode.InstructionMetadata::new(source~, trap=reason)
+    None => @vcode.InstructionMetadata::new(trap=reason)
   }
 }
 
@@ -1314,6 +1324,30 @@ pub fn lower(
           ],
           metadata,
         )
+      Switch(index, cases, default_edge) => {
+        let index_type = function.value_type(index).unwrap()
+        let width = if index_type == I32 { W32 } else { W64 }
+        let successors : Array[@vcode.Edge] = cases.map(case => {
+          @vcode.Edge::new(
+            blocks[function.block_index(case.edge.target).unwrap()],
+            map_values(function, values, case.edge.arguments),
+          )
+        })
+        successors.push(
+          @vcode.Edge::new(
+            blocks[function.block_index(default_edge.target).unwrap()],
+            map_values(function, values, default_edge.arguments),
+          ),
+        )
+        set_terminator(
+          builder,
+          block,
+          Switch(width, cases.map(case => case.bits)),
+          [@vcode.Input::any(map_value(function, values, index))],
+          successors,
+          metadata,
+        )
+      }
       Return(return_values) => {
         let mapped = map_values(function, values, return_values)
         lower_return_values(
@@ -1366,7 +1400,59 @@ pub fn lower(
           clobbers=platform_call_clobbers(),
         )
       }
-      terminator => raise UnsupportedTerminator(block_index~, terminator~)
+      NoReturnCall(call, semantic_operands) => {
+        let operands = map_values(function, values, semantic_operands)
+        let roots = map_values(function, values, record.metadata.live_gc_roots)
+        let call_metadata = terminator_call_metadata(
+          record.metadata,
+          call.behavior.semantics(),
+        )
+        let call_metadata = @vcode.InstructionMetadata::new(
+          source?=call_metadata.source,
+          safepoint?=call_metadata.safepoint,
+          live_gc_roots=roots,
+        )
+        match call.protocol {
+          Platform =>
+            lower_direct_platform_call(
+              builder,
+              block,
+              call,
+              operands,
+              [],
+              call_metadata,
+            )
+            |> ignore
+          Internal =>
+            lower_internal_call(
+              context,
+              builder,
+              block,
+              call,
+              operands,
+              [],
+              call_metadata,
+            )
+            |> ignore
+        }
+        set_terminator(
+          builder,
+          block,
+          Trap(Unreachable),
+          [],
+          [],
+          terminator_trap_metadata(record.metadata, Unreachable),
+        )
+      }
+      Trap(reason) =>
+        set_terminator(
+          builder,
+          block,
+          Trap(reason),
+          [],
+          [],
+          terminator_trap_metadata(record.metadata, reason),
+        )
     }
   }
   let lowered = builder.finish()

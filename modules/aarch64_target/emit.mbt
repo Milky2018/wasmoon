@@ -8,6 +8,20 @@ const AARCH64_INTEGER_OVERFLOW_BRK : UInt = 5U
 const AARCH64_INVALID_CONVERSION_BRK : UInt = 3U
 
 ///|
+fn trap_brk_payload(reason : @semantic.TrapReason) -> UInt {
+  match reason {
+    Unreachable => 0U
+    MemoryOutOfBounds | TableOutOfBounds => 1U
+    IndirectCallTypeMismatch => 2U
+    InvalidConversionToInteger => 3U
+    IntegerDivisionByZero => 4U
+    IntegerOverflow => 5U
+    NullReference | UnalignedAtomic | UnsupportedOperation | StackOverflow => 6U
+    User(payload) => payload.reinterpret_as_uint() & 0xFFFFU
+  }
+}
+
+///|
 priv struct BranchFixup {
   offset : Int
   target : @vcode.Block
@@ -2666,6 +2680,22 @@ fn emit_instruction(
         instruction,
         reg(0),
       )
+    Switch(width, cases) =>
+      emit_switch_edges(
+        buffer,
+        function,
+        allocation,
+        frame,
+        block,
+        instruction,
+        width,
+        cases,
+        reg(0),
+      )
+    Trap(reason) => {
+      metadata_offset = buffer.position()
+      buffer.emit_word(0xD4200000U | (trap_brk_payload(reason) << 5))
+    }
     Return => {
       emit_epilogue(buffer, frame)
       buffer.emit_word(0xD65F03C0U)
@@ -2704,16 +2734,16 @@ fn patch_relative_branch(
   if delta % 4 != 0 || words < minimum || words > maximum {
     raise BranchOutOfRange(offset=delta, bits~)
   }
-  let base = if bits == 26 {
-    0x14000000U
-  } else {
-    0x35000000U | (buffer.code[offset].to_uint() & 31U)
-  }
   let mask = if bits == 26 { 0x03FFFFFFU } else { 0x7FFFFU }
+  let shift = if bits == 19 { 5 } else { 0 }
+  let original = buffer.code[offset].to_uint() |
+    (buffer.code[offset + 1].to_uint() << 8) |
+    (buffer.code[offset + 2].to_uint() << 16) |
+    (buffer.code[offset + 3].to_uint() << 24)
+  let base = original & (mask << shift).lnot()
   buffer.patch_word(
     offset,
-    base |
-    ((words.reinterpret_as_uint() & mask) << (if bits == 19 { 5 } else { 0 })),
+    base | ((words.reinterpret_as_uint() & mask) << shift),
   )
 }
 

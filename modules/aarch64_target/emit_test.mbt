@@ -3142,6 +3142,433 @@ test "AArch64 emits result-area forwarding for internal tail calls" {
 }
 
 ///|
+test "AArch64 emits jump-table and sparse switches" {
+  let dense = @semantic.FunctionBuilder::new(
+    "emitted_dense_switch",
+    Internal,
+    [Ptr64, I32],
+    [],
+  )
+  let dense_zero = dense.create_block([])
+  let dense_one = dense.create_block([])
+  let dense_default = dense.create_block([])
+  dense.switch(
+    dense.parameters()[1],
+    [(1UL, dense_one, []), (0UL, dense_zero, [])],
+    dense_default,
+    [],
+  )
+  for target in [dense_zero, dense_one, dense_default] {
+    dense.switch_to_block(target)
+    dense.return_([])
+  }
+  let dense_function = lower(dense.finish(), test_lowering_context())
+  let dense_allocation = allocate(dense_function)
+  debug_inspect(
+    emit(
+      dense_function,
+      dense_allocation,
+      plan_frame(dense_function, dense_allocation),
+    ),
+    content=(
+      #|{
+      #|  architecture: AArch64,
+      #|  code: [
+      #|    0xe2,
+      #|    0x03,
+      #|    0x00,
+      #|    0xaa,
+      #|    0xe0,
+      #|    0x03,
+      #|    0x01,
+      #|    0x2a,
+      #|    0x1f,
+      #|    0x08,
+      #|    0x00,
+      #|    0x71,
+      #|    0x02,
+      #|    0x01,
+      #|    0x00,
+      #|    0x54,
+      #|    0x70,
+      #|    0x00,
+      #|    0x00,
+      #|    0x10,
+      #|    0x10,
+      #|    0x4a,
+      #|    0x20,
+      #|    0x8b,
+      #|    0x00,
+      #|    0x02,
+      #|    0x1f,
+      #|    0xd6,
+      #|    0x02,
+      #|    0x00,
+      #|    0x00,
+      #|    0x14,
+      #|    0x02,
+      #|    0x00,
+      #|    0x00,
+      #|    0x14,
+      #|    0xc0,
+      #|    0x03,
+      #|    0x5f,
+      #|    0xd6,
+      #|    0xc0,
+      #|    0x03,
+      #|    0x5f,
+      #|    0xd6,
+      #|    0xc0,
+      #|    0x03,
+      #|    0x5f,
+      #|    0xd6,
+      #|  ],
+      #|  relocations: [],
+      #|  sources: [],
+      #|  traps: [],
+      #|  safepoints: [],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+  let sparse = @semantic.FunctionBuilder::new(
+    "emitted_sparse_switch",
+    Internal,
+    [Ptr64, I64],
+    [],
+  )
+  let sparse_low = sparse.create_block([])
+  let sparse_high = sparse.create_block([])
+  let sparse_default = sparse.create_block([])
+  sparse.switch(
+    sparse.parameters()[1],
+    [(7UL, sparse_low, []), (0x10000UL, sparse_high, [])],
+    sparse_default,
+    [],
+  )
+  for target in [sparse_low, sparse_high, sparse_default] {
+    sparse.switch_to_block(target)
+    sparse.return_([])
+  }
+  let sparse_function = lower(sparse.finish(), test_lowering_context())
+  let sparse_allocation = allocate(sparse_function)
+  debug_inspect(
+    emit(
+      sparse_function,
+      sparse_allocation,
+      plan_frame(sparse_function, sparse_allocation),
+    ),
+    content=(
+      #|{
+      #|  architecture: AArch64,
+      #|  code: [
+      #|    0xe2,
+      #|    0x03,
+      #|    0x00,
+      #|    0xaa,
+      #|    0xe0,
+      #|    0x03,
+      #|    0x01,
+      #|    0xaa,
+      #|    0x1f,
+      #|    0x1c,
+      #|    0x00,
+      #|    0xf1,
+      #|    0xa0,
+      #|    0x00,
+      #|    0x00,
+      #|    0x54,
+      #|    0x31,
+      #|    0x00,
+      #|    0xa0,
+      #|    0xd2,
+      #|    0x1f,
+      #|    0x00,
+      #|    0x11,
+      #|    0xeb,
+      #|    0x60,
+      #|    0x00,
+      #|    0x00,
+      #|    0x54,
+      #|    0x03,
+      #|    0x00,
+      #|    0x00,
+      #|    0x14,
+      #|    0xc0,
+      #|    0x03,
+      #|    0x5f,
+      #|    0xd6,
+      #|    0xc0,
+      #|    0x03,
+      #|    0x5f,
+      #|    0xd6,
+      #|    0xc0,
+      #|    0x03,
+      #|    0x5f,
+      #|    0xd6,
+      #|  ],
+      #|  relocations: [],
+      #|  sources: [],
+      #|  traps: [],
+      #|  safepoints: [],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+  let edge_switch = @semantic.FunctionBuilder::new(
+    "emitted_switch_edges",
+    Internal,
+    [Ptr64, I32],
+    [I32],
+  )
+  let edge_zero = edge_switch.create_block([I32])
+  let edge_one = edge_switch.create_block([I32])
+  let edge_default = edge_switch.create_block([I32])
+  let edge_value = edge_switch.parameters()[1]
+  edge_switch.switch(
+    edge_value,
+    [(0UL, edge_zero, [edge_value]), (1UL, edge_one, [edge_value])],
+    edge_default,
+    [edge_value],
+  )
+  for target in [edge_zero, edge_one, edge_default] {
+    edge_switch.switch_to_block(target)
+    edge_switch.return_(edge_switch.block_parameters(target))
+  }
+  let edge_function = lower(edge_switch.finish(), test_lowering_context())
+  let edge_allocation = allocate(edge_function)
+  debug_inspect(
+    emit(
+      edge_function,
+      edge_allocation,
+      plan_frame(edge_function, edge_allocation),
+    ),
+    content=(
+      #|{
+      #|  architecture: AArch64,
+      #|  code: [
+      #|    0xe2,
+      #|    0x03,
+      #|    0x00,
+      #|    0xaa,
+      #|    0xe0,
+      #|    0x03,
+      #|    0x01,
+      #|    0x2a,
+      #|    0x1f,
+      #|    0x08,
+      #|    0x00,
+      #|    0x71,
+      #|    0x42,
+      #|    0x01,
+      #|    0x00,
+      #|    0x54,
+      #|    0x70,
+      #|    0x00,
+      #|    0x00,
+      #|    0x10,
+      #|    0x10,
+      #|    0x4a,
+      #|    0x20,
+      #|    0x8b,
+      #|    0x00,
+      #|    0x02,
+      #|    0x1f,
+      #|    0xd6,
+      #|    0x02,
+      #|    0x00,
+      #|    0x00,
+      #|    0x14,
+      #|    0x03,
+      #|    0x00,
+      #|    0x00,
+      #|    0x14,
+      #|    0xe3,
+      #|    0x03,
+      #|    0x00,
+      #|    0x2a,
+      #|    0x05,
+      #|    0x00,
+      #|    0x00,
+      #|    0x14,
+      #|    0xe4,
+      #|    0x03,
+      #|    0x00,
+      #|    0x2a,
+      #|    0x05,
+      #|    0x00,
+      #|    0x00,
+      #|    0x14,
+      #|    0xe5,
+      #|    0x03,
+      #|    0x00,
+      #|    0x2a,
+      #|    0x05,
+      #|    0x00,
+      #|    0x00,
+      #|    0x14,
+      #|    0xe0,
+      #|    0x03,
+      #|    0x03,
+      #|    0x2a,
+      #|    0xc0,
+      #|    0x03,
+      #|    0x5f,
+      #|    0xd6,
+      #|    0xe0,
+      #|    0x03,
+      #|    0x04,
+      #|    0x2a,
+      #|    0xc0,
+      #|    0x03,
+      #|    0x5f,
+      #|    0xd6,
+      #|    0xe0,
+      #|    0x03,
+      #|    0x05,
+      #|    0x2a,
+      #|    0xc0,
+      #|    0x03,
+      #|    0x5f,
+      #|    0xd6,
+      #|  ],
+      #|  relocations: [],
+      #|  sources: [],
+      #|  traps: [],
+      #|  safepoints: [],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
+test "AArch64 emits noreturn calls and typed traps" {
+  let noreturn = @semantic.FunctionBuilder::new(
+    "emitted_noreturn_call",
+    Platform,
+    [GcRef64],
+    [],
+  )
+  let call = @semantic.SemanticCall::new(
+    External(@semantic.ExternalSymbol::new("runtime.abort")),
+    @semantic.Signature::new([], []),
+    Platform,
+    @semantic.CallBehavior::new(ReadWrite, true, true, true, true),
+  )
+  noreturn.noreturn_call_with_metadata(
+    call,
+    [],
+    @semantic.TerminatorMetadata::new(
+      Some(@semantic.SourceLocation::new("trap.wat", 9, 4)),
+      [noreturn.parameters()[0]],
+    ),
+  )
+  let noreturn_function = lower(noreturn.finish(), test_lowering_context())
+  let noreturn_allocation = allocate(noreturn_function)
+  debug_inspect(
+    emit(
+      noreturn_function,
+      noreturn_allocation,
+      plan_frame(noreturn_function, noreturn_allocation),
+    ),
+    content=(
+      #|{
+      #|  architecture: AArch64,
+      #|  code: [
+      #|    0xff,
+      #|    0x43,
+      #|    0x00,
+      #|    0xd1,
+      #|    0xf3,
+      #|    0x03,
+      #|    0x00,
+      #|    0xf9,
+      #|    0xfe,
+      #|    0x07,
+      #|    0x00,
+      #|    0xf9,
+      #|    0xf3,
+      #|    0x03,
+      #|    0x00,
+      #|    0xaa,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x94,
+      #|    0x00,
+      #|    0x00,
+      #|    0x20,
+      #|    0xd4,
+      #|  ],
+      #|  relocations: [
+      #|    {
+      #|      offset: 16,
+      #|      kind: AArch64Call26,
+      #|      target: External({ name: "runtime.abort" }),
+      #|      addend: 0,
+      #|    },
+      #|  ],
+      #|  sources: [
+      #|    { offset: 16, source: { file: "trap.wat", line: 9, column: 4 } },
+      #|    { offset: 20, source: { file: "trap.wat", line: 9, column: 4 } },
+      #|  ],
+      #|  traps: [
+      #|    {
+      #|      offset: 20,
+      #|      reason: Unreachable,
+      #|      source: Some({ file: "trap.wat", line: 9, column: 4 }),
+      #|    },
+      #|  ],
+      #|  safepoints: [
+      #|    {
+      #|      offset: 16,
+      #|      kind: GcAndCancellation,
+      #|      roots: [Register(Int, 19)],
+      #|      source: Some({ file: "trap.wat", line: 9, column: 4 }),
+      #|    },
+      #|  ],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+  let trapped = @semantic.FunctionBuilder::new(
+    "emitted_explicit_trap",
+    Internal,
+    [Ptr64],
+    [],
+  )
+  trapped.trap(User(7))
+  trapped.set_terminator_source(@semantic.SourceLocation::new("trap.wat", 3, 9))
+  let trap_function = lower(trapped.finish(), test_lowering_context())
+  let trap_allocation = allocate(trap_function)
+  debug_inspect(
+    emit(
+      trap_function,
+      trap_allocation,
+      plan_frame(trap_function, trap_allocation),
+    ),
+    content=(
+      #|{
+      #|  architecture: AArch64,
+      #|  code: [0xe1, 0x03, 0x00, 0xaa, 0xe0, 0x00, 0x20, 0xd4],
+      #|  relocations: [],
+      #|  sources: [{ offset: 4, source: { file: "trap.wat", line: 3, column: 9 } }],
+      #|  traps: [
+      #|    {
+      #|      offset: 4,
+      #|      reason: User(7),
+      #|      source: Some({ file: "trap.wat", line: 3, column: 9 }),
+      #|    },
+      #|  ],
+      #|  safepoints: [],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
 test "AArch64 platform calls store overflow arguments in the outgoing area" {
   let parameter_types : Array[@semantic.ValueType] = Array::make(9, I64)
   let builder = @semantic.FunctionBuilder::new(

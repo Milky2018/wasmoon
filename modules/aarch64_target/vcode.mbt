@@ -271,6 +271,8 @@ pub(all) enum AArch64Inst {
   TailCallIndirect(@semantic.Signature, InternalCallPlan)
   Jump
   BranchNonZero32
+  Switch(GprWidth, Array[UInt64])
+  Trap(@semantic.TrapReason)
   Return
 } derive(Eq, Debug)
 
@@ -1765,6 +1767,48 @@ pub fn verify_vcode(
       Jump => require_instruction_shape(function, instruction, [], [], true, 1)
       BranchNonZero32 =>
         require_instruction_shape(function, instruction, [I32], [], true, 2)
+      Switch(width, cases) => {
+        let expected_type = integer_type(width)
+        if function.instruction_successor_count(instruction) !=
+          cases.length() + 1 {
+          raise InvalidInstruction(
+            instruction~,
+            message="switch successor count does not match its cases",
+          )
+        }
+        for index, bits in cases {
+          let mut duplicate = false
+          for previous in 0..<index {
+            if cases[previous] == bits {
+              duplicate = true
+            }
+          }
+          if (width == W32 && bits > 0xFFFFFFFFUL) || duplicate {
+            raise InvalidInstruction(
+              instruction~,
+              message="switch cases must be unique values of the index width",
+            )
+          }
+        }
+        require_instruction_shape(
+          function,
+          instruction,
+          [expected_type],
+          [],
+          true,
+          cases.length() + 1,
+        )
+      }
+      Trap(reason) => {
+        if function.instruction_metadata(instruction).unwrap().trap !=
+          Some(reason) {
+          raise InvalidInstruction(
+            instruction~,
+            message="trap terminator metadata does not match its reason",
+          )
+        }
+        require_instruction_shape(function, instruction, [], [], true, 0)
+      }
       Return => {
         let operands = function.instruction_operands(instruction)
         if !function.instruction_is_terminator(instruction) ||

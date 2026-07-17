@@ -126,3 +126,163 @@ fn emit_conditional_edges(
     buffer.emit_branch(when_true, 26, 0x14000000U)
   }
 }
+
+///|
+fn emit_switch_compare(
+  buffer : CodeBuffer,
+  width : GprWidth,
+  index : @vcode.PhysicalReg,
+  bits : UInt64,
+) -> Unit {
+  let width_bit = if width == W32 { 0U } else { 0x80000000U }
+  if bits <= 4095UL {
+    buffer.emit_word(
+      0x7100001FU | width_bit | (bits.to_uint() << 10) | (reg_bits(index) << 5),
+    )
+  } else {
+    let scratch = @vcode.PhysicalReg::new(17, Int)
+    emit_constant(buffer, width, scratch, bits)
+    buffer.emit_word(
+      0x6B00001FU |
+      width_bit |
+      (reg_bits(scratch) << 16) |
+      (reg_bits(index) << 5),
+    )
+  }
+}
+
+///|
+fn emit_switch_edges(
+  buffer : CodeBuffer,
+  function : @vcode.Function[AArch64Inst],
+  allocation : @vcode.Allocation,
+  frame : AArch64Frame,
+  block : @vcode.Block,
+  instruction : @vcode.Instruction,
+  width : GprWidth,
+  cases : Array[UInt64],
+  index : @vcode.PhysicalReg,
+) -> Unit raise AArch64EmitError {
+  if cases.is_empty() {
+    emit_edge_moves(buffer, function, allocation, frame, block, 0)
+    buffer.emit_branch(
+      function.instruction_successor_at(instruction, 0).unwrap().target,
+      26,
+      0x14000000U,
+    )
+    return
+  }
+  let mut dense_zero_based = true
+  for expected in 0..<cases.length() {
+    if !cases.contains(expected.to_uint64()) {
+      dense_zero_based = false
+      break
+    }
+  }
+  if dense_zero_based {
+    emit_switch_compare(buffer, width, index, cases.length().to_uint64())
+    let default_index = cases.length()
+    let default_moves = resolve_edge_moves(
+      function, allocation, block, default_index,
+    )
+    let default_branch : Int? = if default_moves.is_empty() {
+      buffer.emit_branch(
+        function.instruction_successor_at(instruction, default_index).unwrap().target,
+        19,
+        0x54000002U,
+      )
+      None
+    } else {
+      let branch = buffer.position()
+      buffer.emit_word(0x54000002U)
+      Some(branch)
+    }
+    // The table begins three instructions after ADR. UXTW is required for an
+    // I32 index so stale upper register bits cannot escape the bounds check.
+    buffer.emit_word(0x10000070U)
+    let add_base = if width == W32 { 0x8B204000U } else { 0x8B000000U }
+    buffer.emit_word(
+      add_base | (reg_bits(index) << 16) | (2U << 10) | (16U << 5) | 16U,
+    )
+    buffer.emit_word(0xD61F0200U)
+    let stubs : Array[(Int, Int)] = []
+    for key in 0..<cases.length() {
+      let mut successor_index = 0
+      for index, bits in cases {
+        if bits == key.to_uint64() {
+          successor_index = index
+        }
+      }
+      if edge_parallel_moves(function, allocation, block, successor_index).is_empty() {
+        buffer.emit_branch(
+          function
+          .instruction_successor_at(instruction, successor_index)
+          .unwrap().target,
+          26,
+          0x14000000U,
+        )
+      } else {
+        stubs.push((buffer.position(), successor_index))
+        buffer.emit_word(0x14000000U)
+      }
+    }
+    for stub in stubs {
+      let (branch, successor_index) = stub
+      patch_relative_branch(buffer, branch, buffer.position(), 26)
+      emit_edge_moves(
+        buffer, function, allocation, frame, block, successor_index,
+      )
+      buffer.emit_branch(
+        function.instruction_successor_at(instruction, successor_index).unwrap().target,
+        26,
+        0x14000000U,
+      )
+    }
+    if default_branch is Some(branch) {
+      patch_relative_branch(buffer, branch, buffer.position(), 19)
+      emit_resolved_moves(buffer, frame, default_moves)
+      buffer.emit_branch(
+        function.instruction_successor_at(instruction, default_index).unwrap().target,
+        26,
+        0x14000000U,
+      )
+    }
+    return
+  } else {
+    let case_branches : Array[(Int, Int)] = []
+    for successor_index, bits in cases {
+      emit_switch_compare(buffer, width, index, bits)
+      if edge_parallel_moves(function, allocation, block, successor_index).is_empty() {
+        buffer.emit_branch(
+          function
+          .instruction_successor_at(instruction, successor_index)
+          .unwrap().target,
+          19,
+          0x54000000U,
+        )
+      } else {
+        case_branches.push((buffer.position(), successor_index))
+        buffer.emit_word(0x54000000U)
+      }
+    }
+    emit_edge_moves(buffer, function, allocation, frame, block, cases.length())
+    buffer.emit_branch(
+      function.instruction_successor_at(instruction, cases.length()).unwrap().target,
+      26,
+      0x14000000U,
+    )
+    for entry in case_branches {
+      let (branch, successor_index) = entry
+      patch_relative_branch(buffer, branch, buffer.position(), 19)
+      emit_edge_moves(
+        buffer, function, allocation, frame, block, successor_index,
+      )
+      buffer.emit_branch(
+        function.instruction_successor_at(instruction, successor_index).unwrap().target,
+        26,
+        0x14000000U,
+      )
+    }
+    return
+  }
+}

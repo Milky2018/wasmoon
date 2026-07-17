@@ -2108,6 +2108,147 @@ test "AArch64 internal tail calls forward the incoming result area" {
 }
 
 ///|
+test "AArch64 lowers dense and sparse switches with edge arguments" {
+  let dense = @semantic.FunctionBuilder::new(
+    "dense_switch",
+    Internal,
+    [Ptr64, I32],
+    [I32],
+  )
+  let dense_zero = dense.create_block([I32])
+  let dense_one = dense.create_block([I32])
+  let dense_default = dense.create_block([I32])
+  let dense_index = dense.parameters()[1]
+  dense.switch(
+    dense_index,
+    [(1UL, dense_one, [dense_index]), (0UL, dense_zero, [dense_index])],
+    dense_default,
+    [dense_index],
+  )
+  for target in [dense_zero, dense_one, dense_default] {
+    dense.switch_to_block(target)
+    dense.return_(dense.block_parameters(target))
+  }
+  let sparse = @semantic.FunctionBuilder::new(
+    "sparse_switch",
+    Internal,
+    [Ptr64, I64],
+    [I64],
+  )
+  let sparse_low = sparse.create_block([I64])
+  let sparse_high = sparse.create_block([I64])
+  let sparse_default = sparse.create_block([I64])
+  let sparse_index = sparse.parameters()[1]
+  sparse.switch(
+    sparse_index,
+    [
+      (7UL, sparse_low, [sparse_index]),
+      (0x10000UL, sparse_high, [sparse_index]),
+    ],
+    sparse_default,
+    [sparse_index],
+  )
+  for target in [sparse_low, sparse_high, sparse_default] {
+    sparse.switch_to_block(target)
+    sparse.return_(sparse.block_parameters(target))
+  }
+  inspect(
+    lower(dense.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode dense_switch(v0:ptr64, v1:i32) -> (i32)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v2:any@late]
+      #|  i1 IncomingReg(I32, p1:int) uses=[v1:fixed(p1:int)@early] defs=[v3:any@late]
+      #|  i2 Switch(W32, [1, 0]) uses=[v3:any@early] -> block2(v3) -> block1(v3) -> block3(v3)
+      #|block1(v4:i32):
+      #|  i3 OutgoingReg(I32, p0:int) uses=[v4:any@early]
+      #|  i4 Return
+      #|block2(v5:i32):
+      #|  i5 OutgoingReg(I32, p0:int) uses=[v5:any@early]
+      #|  i6 Return
+      #|block3(v6:i32):
+      #|  i7 OutgoingReg(I32, p0:int) uses=[v6:any@early]
+      #|  i8 Return
+      #|
+    ),
+  )
+  inspect(
+    lower(sparse.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode sparse_switch(v0:ptr64, v1:i64) -> (i64)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v2:any@late]
+      #|  i1 IncomingReg(I64, p1:int) uses=[v1:fixed(p1:int)@early] defs=[v3:any@late]
+      #|  i2 Switch(W64, [7, 65536]) uses=[v3:any@early] -> block1(v3) -> block2(v3) -> block3(v3)
+      #|block1(v4:i64):
+      #|  i3 OutgoingReg(I64, p0:int) uses=[v4:any@early]
+      #|  i4 Return
+      #|block2(v5:i64):
+      #|  i5 OutgoingReg(I64, p0:int) uses=[v5:any@early]
+      #|  i6 Return
+      #|block3(v6:i64):
+      #|  i7 OutgoingReg(I64, p0:int) uses=[v6:any@early]
+      #|  i8 Return
+      #|
+    ),
+  )
+}
+
+///|
+test "AArch64 lowers noreturn calls and explicit traps" {
+  let noreturn = @semantic.FunctionBuilder::new(
+    "noreturn_call",
+    Platform,
+    [GcRef64],
+    [],
+  )
+  let call = @semantic.SemanticCall::new(
+    External(@semantic.ExternalSymbol::new("runtime.abort")),
+    @semantic.Signature::new([], []),
+    Platform,
+    @semantic.CallBehavior::new(ReadWrite, true, true, true, true),
+  )
+  noreturn.noreturn_call_with_metadata(
+    call,
+    [],
+    @semantic.TerminatorMetadata::new(
+      Some(@semantic.SourceLocation::new("trap.wat", 9, 4)),
+      [noreturn.parameters()[0]],
+    ),
+  )
+  let trapped = @semantic.FunctionBuilder::new(
+    "explicit_trap",
+    Internal,
+    [Ptr64],
+    [],
+  )
+  trapped.trap(User(7))
+  trapped.set_terminator_source(@semantic.SourceLocation::new("trap.wat", 3, 9))
+  inspect(
+    lower(noreturn.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode noreturn_call(v0:gcref64)
+      #|block0:
+      #|  i0 IncomingReg(GcRef64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v1:any@late]
+      #|  i1 PlatformCall({ name: "runtime.abort" }, { params: [], results: [] }) clobbers=[p0:int, p1:int, p2:int, p3:int, p4:int, p5:int, p6:int, p7:int, p8:int, p9:int, p10:int, p11:int, p12:int, p13:int, p14:int, p15:int, p16:int, p17:int, p0:fpvec, p1:fpvec, p2:fpvec, p3:fpvec, p4:fpvec, p5:fpvec, p6:fpvec, p7:fpvec, p8:fpvec, p9:fpvec, p10:fpvec, p11:fpvec, p12:fpvec, p13:fpvec, p14:fpvec, p15:fpvec, p16:fpvec, p17:fpvec, p18:fpvec, p19:fpvec, p20:fpvec, p21:fpvec, p22:fpvec, p23:fpvec, p24:fpvec, p25:fpvec, p26:fpvec, p27:fpvec, p28:fpvec, p29:fpvec, p30:fpvec, p31:fpvec] source={ file: "trap.wat", line: 9, column: 4 } safepoint=GcAndCancellation roots=[v1]
+      #|  i2 KeepAlive(GcRef64) uses=[v1:any@early]
+      #|  i3 Trap(Unreachable) source={ file: "trap.wat", line: 9, column: 4 } trap=Unreachable
+      #|
+    ),
+  )
+  inspect(
+    lower(trapped.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode explicit_trap(v0:ptr64)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v1:any@late]
+      #|  i1 Trap(User(7)) source={ file: "trap.wat", line: 3, column: 9 } trap=User(7)
+      #|
+    ),
+  )
+}
+
+///|
 test "AArch64 rejects tail stack arguments that cannot replace the incoming area" {
   let builder = @semantic.FunctionBuilder::new(
     "oversized_tail_call",

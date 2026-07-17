@@ -87,6 +87,80 @@ test "AArch64 verifier rejects an invalid 32-bit constant" {
 }
 
 ///|
+test "AArch64 verifier rejects duplicate switch cases" {
+  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
+    "bad_switch",
+    [I32],
+  )
+  let entry = builder.entry_block()
+  let target = builder.create_block([])
+  builder.set_terminator(
+    entry,
+    Switch(W32, [1UL, 1UL]),
+    [@vcode.Input::any(builder.parameter(0))],
+    [
+      @vcode.Edge::new(target, []),
+      @vcode.Edge::new(target, []),
+      @vcode.Edge::new(target, []),
+    ],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  builder.set_terminator(
+    target,
+    Return,
+    [],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  try verify_vcode(builder.finish()) catch {
+    error =>
+      inspect(
+        error,
+        content=(
+          #|InvalidInstruction(
+          #|  instruction=i0,
+          #|  message="switch cases must be unique values of the index width",
+          #|)
+        ),
+      )
+  } noraise {
+    _ => fail("expected duplicate switch cases to be rejected")
+  }
+}
+
+///|
+test "AArch64 verifier requires typed trap metadata" {
+  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new("bad_trap", [])
+  builder.set_terminator(
+    builder.entry_block(),
+    Trap(Unreachable),
+    [],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  try verify_vcode(builder.finish()) catch {
+    error =>
+      inspect(
+        error,
+        content=(
+          #|InvalidInstruction(
+          #|  instruction=i0,
+          #|  message="trap terminator metadata does not match its reason",
+          #|)
+        ),
+      )
+  } noraise {
+    _ => fail("expected an untyped trap terminator to be rejected")
+  }
+}
+
+///|
 test "AArch64 verifier rejects a vector splat with the wrong scalar bank" {
   let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
     "bad_vector_splat",
