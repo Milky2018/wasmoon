@@ -28,6 +28,7 @@ pub suberror AArch64EmitError {
   InvalidParallelMove(cause~ : @vcode.MoveResolveError)
   UnresolvedStackMove
   MissingStackObjectArea
+  MissingResultArea
   FrameOffsetOutOfRange(offset~ : Int)
   InvalidScalarMemoryAccess
   InvalidFloatInstruction
@@ -170,6 +171,51 @@ fn emit_stack_access(
     (31U << 5) |
     reg_bits(reg),
   )
+}
+
+///|
+fn emit_result_area_access(
+  buffer : CodeBuffer,
+  load : Bool,
+  ty : @semantic.ValueType,
+  address : @vcode.PhysicalReg,
+  value : @vcode.PhysicalReg,
+  offset : Int,
+) -> Unit raise AArch64EmitError {
+  let width : @semantic.AccessWidth = match ty {
+    I32 | F32 => W32
+    I64 | Ptr64 | GcRef64 | F64 => W64
+    V128 => W128
+  }
+  let (load_base, store_base) = match ty {
+    I32 => (0xB9400000U, 0xB9000000U)
+    I64 | Ptr64 | GcRef64 => (0xF9400000U, 0xF9000000U)
+    F32 => (0xBD400000U, 0xBD000000U)
+    F64 => (0xFD400000U, 0xFD000000U)
+    V128 => (0x3DC00000U, 0x3D800000U)
+  }
+  let (base, immediate) = scalar_memory_address(
+    buffer,
+    address,
+    width,
+    offset.to_uint64(),
+  )
+  buffer.emit_word(
+    (if load { load_base } else { store_base }) |
+    (immediate << 10) |
+    (reg_bits(base) << 5) |
+    reg_bits(value),
+  )
+}
+
+///|
+fn result_area_register(plan : InternalCallPlan) -> @vcode.PhysicalReg? {
+  for result in plan.results {
+    if result is CallResultArea(_, reg) {
+      return Some(reg)
+    }
+  }
+  None
 }
 
 ///|
@@ -1964,6 +2010,7 @@ fn emit_call_arguments(
   operand_start? : Int = 0,
   stack_base? : Int = 0,
   callee? : (Int, @vcode.PhysicalReg),
+  result_area? : (Int, @vcode.PhysicalReg),
 ) -> Unit raise AArch64EmitError {
   let moves : Array[@vcode.ParallelMove] = []
   for index, ty in types {
@@ -1990,7 +2037,18 @@ fn emit_call_arguments(
       ),
     )
   }
-  let int_scratch = if callee is Some(_) {
+  if result_area is Some((operand_index, destination)) {
+    moves.push(
+      @vcode.ParallelMove::new(
+        Ptr64,
+        Register(
+          allocation.operand_location(instruction, operand_index).unwrap(),
+        ),
+        Register(destination),
+      ),
+    )
+  }
+  let int_scratch = if callee is Some(_) || result_area is Some(_) {
     [@vcode.PhysicalReg::new(16, Int)]
   } else {
     [@vcode.PhysicalReg::new(16, Int), @vcode.PhysicalReg::new(17, Int)]
@@ -2021,8 +2079,16 @@ fn emit_instruction(
     IncomingReg(ty, _) => emit_move(buffer, ty, reg(1), reg(0))
     IncomingStack(ty, offset) =>
       emit_stack_access(buffer, true, ty, reg(0), frame.frame_size() + offset)
+    IncomingResultArea(source) => emit_move(buffer, Ptr64, reg(0), source)
     IncomingCallResult(ty, source) => emit_move(buffer, ty, reg(0), source)
+    IncomingCallAreaResult(ty, offset) =>
+      match frame.result_area_offset() {
+        Some(base) => emit_stack_access(buffer, true, ty, reg(0), base + offset)
+        None => raise MissingResultArea
+      }
     OutgoingReg(ty, destination) => emit_move(buffer, ty, destination, reg(0))
+    OutgoingAreaResult(ty, offset) =>
+      emit_result_area_access(buffer, false, ty, reg(0), reg(1), offset)
     KeepAlive(_) => ()
     LoadConstant(width, bits) => emit_constant(buffer, width, reg(0), bits)
     LoadVectorConstant(low, high) =>
@@ -2499,6 +2565,12 @@ fn emit_instruction(
         signature.params,
         plan.arguments,
       )
+      if result_area_register(plan) is Some(destination) {
+        guard frame.result_area_offset() is Some(offset) else {
+          raise MissingResultArea
+        }
+        emit_stack_address(buffer, destination, offset)
+      }
       metadata_offset = buffer.position()
       buffer.emit_word(0x94000000U)
       buffer.relocations.push(
@@ -2521,10 +2593,19 @@ fn emit_instruction(
         operand_start=1,
         callee=(0, callee_register),
       )
+      if result_area_register(plan) is Some(destination) {
+        guard frame.result_area_offset() is Some(offset) else {
+          raise MissingResultArea
+        }
+        emit_stack_address(buffer, destination, offset)
+      }
       metadata_offset = buffer.position()
       buffer.emit_word(0xD63F0000U | (reg_bits(callee_register) << 5))
     }
     TailCallDirect(target, signature, plan) => {
+      let result_area = result_area_register(plan).map(destination => {
+        (signature.params.length(), destination)
+      })
       emit_call_arguments(
         buffer,
         allocation,
@@ -2533,6 +2614,7 @@ fn emit_instruction(
         signature.params,
         plan.arguments,
         stack_base=frame.frame_size(),
+        result_area?,
       )
       emit_epilogue(buffer, frame)
       metadata_offset = buffer.position()
@@ -2547,6 +2629,9 @@ fn emit_instruction(
     }
     TailCallIndirect(signature, plan) => {
       let callee_register = @vcode.PhysicalReg::new(17, Int)
+      let result_area = result_area_register(plan).map(destination => {
+        (signature.params.length() + 1, destination)
+      })
       emit_call_arguments(
         buffer,
         allocation,
@@ -2557,6 +2642,7 @@ fn emit_instruction(
         operand_start=1,
         stack_base=frame.frame_size(),
         callee=(0, callee_register),
+        result_area?,
       )
       emit_epilogue(buffer, frame)
       metadata_offset = buffer.position()

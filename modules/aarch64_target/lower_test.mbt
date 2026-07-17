@@ -1875,8 +1875,9 @@ test "AArch64 lowering derives internal entry and direct-call layouts" {
       #|  { params: [Ptr64, I64, F64], results: [I64] },
       #|  {
       #|    arguments: [CallRegister(p0:int), CallRegister(p1:int), CallRegister(p0:fpvec)],
-      #|    results: [p0:int],
+      #|    results: [CallResultRegister(p0:int)],
       #|    stack_size: 0,
+      #|    result_area_size: 0,
       #|  },
       #|) uses=[v3:any@early, v4:any@early, v5:any@early] clobbers=[p0:int, p1:int, p2:int, p3:int, p4:int, p5:int, p6:int, p7:int, p8:int, p9:int, p10:int, p11:int, p12:int, p13:int, p14:int, p15:int, p16:int, p17:int, p0:fpvec, p1:fpvec, p2:fpvec, p3:fpvec, p4:fpvec, p5:fpvec, p6:fpvec, p7:fpvec, p8:fpvec, p9:fpvec, p10:fpvec, p11:fpvec, p12:fpvec, p13:fpvec, p14:fpvec, p15:fpvec, p16:fpvec, p17:fpvec, p18:fpvec, p19:fpvec, p20:fpvec, p21:fpvec, p22:fpvec, p23:fpvec, p24:fpvec, p25:fpvec, p26:fpvec, p27:fpvec, p28:fpvec, p29:fpvec, p30:fpvec, p31:fpvec] safepoint=GcAndCancellation
       #|  i4 IncomingCallResult(I64, p0:int) defs=[v6:any@late]
@@ -1920,8 +1921,9 @@ test "AArch64 lowering keeps the indirect callee outside the logical signature" 
       #|  { params: [Ptr64, I64], results: [I64] },
       #|  {
       #|    arguments: [CallRegister(p0:int), CallRegister(p1:int)],
-      #|    results: [p0:int],
+      #|    results: [CallResultRegister(p0:int)],
       #|    stack_size: 0,
+      #|    result_area_size: 0,
       #|  },
       #|) uses=[v4:any@early, v3:any@early, v5:any@early] clobbers=[p0:int, p1:int, p2:int, p3:int, p4:int, p5:int, p6:int, p7:int, p8:int, p9:int, p10:int, p11:int, p12:int, p13:int, p14:int, p15:int, p16:int, p17:int, p0:fpvec, p1:fpvec, p2:fpvec, p3:fpvec, p4:fpvec, p5:fpvec, p6:fpvec, p7:fpvec, p8:fpvec, p9:fpvec, p10:fpvec, p11:fpvec, p12:fpvec, p13:fpvec, p14:fpvec, p15:fpvec, p16:fpvec, p17:fpvec, p18:fpvec, p19:fpvec, p20:fpvec, p21:fpvec, p22:fpvec, p23:fpvec, p24:fpvec, p25:fpvec, p26:fpvec, p27:fpvec, p28:fpvec, p29:fpvec, p30:fpvec, p31:fpvec]
       #|  i4 IncomingCallResult(I64, p0:int) defs=[v6:any@late]
@@ -1959,10 +1961,147 @@ test "AArch64 lowering selects a compatible true internal tail call" {
       #|  { params: [Ptr64, I64], results: [I64] },
       #|  {
       #|    arguments: [CallRegister(p0:int), CallRegister(p1:int)],
-      #|    results: [p0:int],
+      #|    results: [CallResultRegister(p0:int)],
       #|    stack_size: 0,
+      #|    result_area_size: 0,
       #|  },
       #|) uses=[v2:any@early, v3:any@early] clobbers=[p0:int, p1:int, p2:int, p3:int, p4:int, p5:int, p6:int, p7:int, p8:int, p9:int, p10:int, p11:int, p12:int, p13:int, p14:int, p15:int, p16:int, p17:int, p0:fpvec, p1:fpvec, p2:fpvec, p3:fpvec, p4:fpvec, p5:fpvec, p6:fpvec, p7:fpvec, p8:fpvec, p9:fpvec, p10:fpvec, p11:fpvec, p12:fpvec, p13:fpvec, p14:fpvec, p15:fpvec, p16:fpvec, p17:fpvec, p18:fpvec, p19:fpvec, p20:fpvec, p21:fpvec, p22:fpvec, p23:fpvec, p24:fpvec, p25:fpvec, p26:fpvec, p27:fpvec, p28:fpvec, p29:fpvec, p30:fpvec, p31:fpvec]
+      #|
+    ),
+  )
+}
+
+///|
+fn compact_result_context() -> LoweringContext {
+  LoweringContext::new(
+    try! InternalAbi::new(
+      0,
+      8,
+      [1, 2, 3, 4, 5, 6, 7],
+      [0, 1, 2, 3, 4, 5, 6, 7],
+      [0],
+      [0],
+    ),
+  )
+}
+
+///|
+test "AArch64 internal calls materialize register and result-area returns" {
+  let types : Array[@semantic.ValueType] = [I64, I64, F32, V128]
+  let builder = @semantic.FunctionBuilder::new(
+    "internal_result_area_call",
+    Internal,
+    [Ptr64, ..types],
+    types,
+  )
+  let call = @semantic.SemanticCall::new(
+    Internal(@semantic.CodeSymbol::new("wasm.func.result_area")),
+    @semantic.Signature::new([Ptr64, ..types], types),
+    Internal,
+    @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
+  )
+  let results = builder.emit(Call(call), builder.parameters(), types)
+  builder.return_(results)
+  inspect(
+    lower(builder.finish(), compact_result_context()).summary(),
+    content=(
+      #|vcode internal_result_area_call(v0:ptr64, v1:i64, v2:i64, v3:f32, v4:v128) -> (i64, i64, f32, v128)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v5:any@late]
+      #|  i1 IncomingReg(I64, p1:int) uses=[v1:fixed(p1:int)@early] defs=[v6:any@late]
+      #|  i2 IncomingReg(I64, p2:int) uses=[v2:fixed(p2:int)@early] defs=[v7:any@late]
+      #|  i3 IncomingReg(F32, p0:fpvec) uses=[v3:fixed(p0:fpvec)@early] defs=[v8:any@late]
+      #|  i4 IncomingReg(V128, p1:fpvec) uses=[v4:fixed(p1:fpvec)@early] defs=[v9:any@late]
+      #|  i5 IncomingResultArea(p8:int) defs=[v10:any@late]
+      #|  i6 InternalCall(
+      #|  { name: "wasm.func.result_area" },
+      #|  {
+      #|    params: [Ptr64, I64, I64, F32, V128],
+      #|    results: [I64, I64, F32, V128],
+      #|  },
+      #|  {
+      #|    arguments: [
+      #|      CallRegister(p0:int),
+      #|      CallRegister(p1:int),
+      #|      CallRegister(p2:int),
+      #|      CallRegister(p0:fpvec),
+      #|      CallRegister(p1:fpvec),
+      #|    ],
+      #|    results: [
+      #|      CallResultRegister(p0:int),
+      #|      CallResultArea(0, p8:int),
+      #|      CallResultRegister(p0:fpvec),
+      #|      CallResultArea(16, p8:int),
+      #|    ],
+      #|    stack_size: 0,
+      #|    result_area_size: 32,
+      #|  },
+      #|) uses=[v5:any@early, v6:any@early, v7:any@early, v8:any@early, v9:any@early] clobbers=[p0:int, p1:int, p2:int, p3:int, p4:int, p5:int, p6:int, p7:int, p8:int, p9:int, p10:int, p11:int, p12:int, p13:int, p14:int, p15:int, p16:int, p17:int, p0:fpvec, p1:fpvec, p2:fpvec, p3:fpvec, p4:fpvec, p5:fpvec, p6:fpvec, p7:fpvec, p8:fpvec, p9:fpvec, p10:fpvec, p11:fpvec, p12:fpvec, p13:fpvec, p14:fpvec, p15:fpvec, p16:fpvec, p17:fpvec, p18:fpvec, p19:fpvec, p20:fpvec, p21:fpvec, p22:fpvec, p23:fpvec, p24:fpvec, p25:fpvec, p26:fpvec, p27:fpvec, p28:fpvec, p29:fpvec, p30:fpvec, p31:fpvec]
+      #|  i7 IncomingCallResult(I64, p0:int) defs=[v11:any@late]
+      #|  i8 IncomingCallAreaResult(I64, 0) defs=[v12:any@late]
+      #|  i9 IncomingCallResult(F32, p0:fpvec) defs=[v13:any@late]
+      #|  i10 IncomingCallAreaResult(V128, 16) defs=[v14:any@late]
+      #|  i11 OutgoingReg(I64, p0:int) uses=[v11:any@early]
+      #|  i12 OutgoingAreaResult(I64, 0) uses=[v10:any@early, v12:any@early]
+      #|  i13 OutgoingReg(F32, p0:fpvec) uses=[v13:any@early]
+      #|  i14 OutgoingAreaResult(V128, 16) uses=[v10:any@early, v14:any@early]
+      #|  i15 Return
+      #|
+    ),
+  )
+}
+
+///|
+test "AArch64 internal tail calls forward the incoming result area" {
+  let types : Array[@semantic.ValueType] = [I64, I64, F32, V128]
+  let builder = @semantic.FunctionBuilder::new(
+    "internal_result_area_tail_call",
+    Internal,
+    [Ptr64, ..types],
+    types,
+  )
+  let call = @semantic.SemanticCall::new(
+    Internal(@semantic.CodeSymbol::new("wasm.func.result_area_tail")),
+    @semantic.Signature::new([Ptr64, ..types], types),
+    Internal,
+    @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
+  )
+  builder.tail_call(call, builder.parameters())
+  inspect(
+    lower(builder.finish(), compact_result_context()).summary(),
+    content=(
+      #|vcode internal_result_area_tail_call(v0:ptr64, v1:i64, v2:i64, v3:f32, v4:v128) -> (i64, i64, f32, v128)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v5:any@late]
+      #|  i1 IncomingReg(I64, p1:int) uses=[v1:fixed(p1:int)@early] defs=[v6:any@late]
+      #|  i2 IncomingReg(I64, p2:int) uses=[v2:fixed(p2:int)@early] defs=[v7:any@late]
+      #|  i3 IncomingReg(F32, p0:fpvec) uses=[v3:fixed(p0:fpvec)@early] defs=[v8:any@late]
+      #|  i4 IncomingReg(V128, p1:fpvec) uses=[v4:fixed(p1:fpvec)@early] defs=[v9:any@late]
+      #|  i5 IncomingResultArea(p8:int) defs=[v10:any@late]
+      #|  i6 TailCallDirect(
+      #|  { name: "wasm.func.result_area_tail" },
+      #|  {
+      #|    params: [Ptr64, I64, I64, F32, V128],
+      #|    results: [I64, I64, F32, V128],
+      #|  },
+      #|  {
+      #|    arguments: [
+      #|      CallRegister(p0:int),
+      #|      CallRegister(p1:int),
+      #|      CallRegister(p2:int),
+      #|      CallRegister(p0:fpvec),
+      #|      CallRegister(p1:fpvec),
+      #|    ],
+      #|    results: [
+      #|      CallResultRegister(p0:int),
+      #|      CallResultArea(0, p8:int),
+      #|      CallResultRegister(p0:fpvec),
+      #|      CallResultArea(16, p8:int),
+      #|    ],
+      #|    stack_size: 0,
+      #|    result_area_size: 32,
+      #|  },
+      #|) uses=[v5:any@early, v6:any@early, v7:any@early, v8:any@early, v9:any@early, v10:any@early] clobbers=[p0:int, p1:int, p2:int, p3:int, p4:int, p5:int, p6:int, p7:int, p8:int, p9:int, p10:int, p11:int, p12:int, p13:int, p14:int, p15:int, p16:int, p17:int, p0:fpvec, p1:fpvec, p2:fpvec, p3:fpvec, p4:fpvec, p5:fpvec, p6:fpvec, p7:fpvec, p8:fpvec, p9:fpvec, p10:fpvec, p11:fpvec, p12:fpvec, p13:fpvec, p14:fpvec, p15:fpvec, p16:fpvec, p17:fpvec, p18:fpvec, p19:fpvec, p20:fpvec, p21:fpvec, p22:fpvec, p23:fpvec, p24:fpvec, p25:fpvec, p26:fpvec, p27:fpvec, p28:fpvec, p29:fpvec, p30:fpvec, p31:fpvec]
       #|
     ),
   )

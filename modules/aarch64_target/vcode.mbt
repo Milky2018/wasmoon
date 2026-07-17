@@ -193,8 +193,11 @@ fn AArch64StackObject::is_valid(self : AArch64StackObject) -> Bool {
 pub(all) enum AArch64Inst {
   IncomingReg(@semantic.ValueType, @vcode.PhysicalReg)
   IncomingStack(@semantic.ValueType, Int)
+  IncomingResultArea(@vcode.PhysicalReg)
   IncomingCallResult(@semantic.ValueType, @vcode.PhysicalReg)
+  IncomingCallAreaResult(@semantic.ValueType, Int)
   OutgoingReg(@semantic.ValueType, @vcode.PhysicalReg)
+  OutgoingAreaResult(@semantic.ValueType, Int)
   KeepAlive(@semantic.ValueType)
   LoadConstant(GprWidth, UInt64)
   LoadVectorConstant(UInt64, UInt64)
@@ -316,6 +319,12 @@ struct CallLayout {
 fn call_align_up(value : Int, alignment : Int) -> Int {
   (value + alignment - 1) / alignment * alignment
 }
+
+///|
+enum CallResultLocation {
+  CallResultRegister(@vcode.PhysicalReg)
+  CallResultArea(Int, @vcode.PhysicalReg)
+} derive(Eq, Debug)
 
 ///|
 fn call_stack_size(ty : @semantic.ValueType) -> Int {
@@ -441,6 +450,50 @@ fn incoming_stack_capacity(function : @vcode.Function[AArch64Inst]) -> Int {
 }
 
 ///|
+fn valid_result_plan(
+  types : Array[@semantic.ValueType],
+  plan : InternalCallPlan,
+) -> Bool {
+  if plan.results.length() != types.length() ||
+    plan.result_area_size < 0 ||
+    plan.result_area_size % 16 != 0 {
+    return false
+  }
+  let mut area_end = 0
+  let mut area_register : @vcode.PhysicalReg? = None
+  for index, ty in types {
+    match plan.results[index] {
+      CallResultRegister(reg) =>
+        if reg.id < 0 ||
+          reg.id >= 16 ||
+          reg.class != @vcode.reg_class_for_value_type(ty) {
+          return false
+        }
+      CallResultArea(offset, reg) => {
+        let size = call_stack_size(ty)
+        if offset < 0 ||
+          offset % size != 0 ||
+          reg.id < 0 ||
+          reg.id >= 16 ||
+          reg.class != Int {
+          return false
+        }
+        match area_register {
+          Some(expected) if expected != reg => return false
+          None => area_register = Some(reg)
+          _ => ()
+        }
+        let end = offset + size
+        if end > area_end {
+          area_end = end
+        }
+      }
+    }
+  }
+  call_align_up(area_end, 16) == plan.result_area_size
+}
+
+///|
 fn require_tail_call_plan(
   function : @vcode.Function[AArch64Inst],
   instruction : @vcode.Instruction,
@@ -449,7 +502,7 @@ fn require_tail_call_plan(
   indirect : Bool,
 ) -> Unit raise TargetVCodeVerifyError {
   if plan.arguments.length() != signature.params.length() ||
-    plan.results.length() != signature.results.length() ||
+    !valid_result_plan(signature.results, plan) ||
     plan.stack_size < 0 ||
     plan.stack_size % 16 != 0 ||
     plan.stack_size > incoming_stack_capacity(function) ||
@@ -463,6 +516,9 @@ fn require_tail_call_plan(
     [Ptr64, ..signature.params]
   } else {
     signature.params.copy()
+  }
+  if plan.result_area_size > 0 {
+    use_types.push(Ptr64)
   }
   require_instruction_shape(function, instruction, use_types, [], true, 0)
   for operand in function.instruction_operands(instruction) {
@@ -630,11 +686,30 @@ pub fn verify_vcode(
         }
         require_instruction_shape(function, instruction, [], [ty], false, 0)
       }
+      IncomingResultArea(reg) => {
+        if reg.id < 0 || reg.id >= 16 || reg.class != Int {
+          raise InvalidInstruction(
+            instruction~,
+            message="incoming result-area register must be an integer ABI register",
+          )
+        }
+        require_instruction_shape(function, instruction, [], [Ptr64], false, 0)
+      }
       IncomingCallResult(ty, reg) => {
         if reg.class != @vcode.reg_class_for_value_type(ty) {
           raise InvalidInstruction(
             instruction~,
             message="call result register class does not match value type",
+          )
+        }
+        require_instruction_shape(function, instruction, [], [ty], false, 0)
+      }
+      IncomingCallAreaResult(ty, offset) => {
+        let size = call_stack_size(ty)
+        if offset < 0 || offset % size != 0 {
+          raise InvalidInstruction(
+            instruction~,
+            message="call result-area offset is invalid for its value type",
           )
         }
         require_instruction_shape(function, instruction, [], [ty], false, 0)
@@ -694,6 +769,23 @@ pub fn verify_vcode(
           )
         }
         require_instruction_shape(function, instruction, [ty], [], false, 0)
+      }
+      OutgoingAreaResult(ty, offset) => {
+        let size = call_stack_size(ty)
+        if offset < 0 || offset % size != 0 {
+          raise InvalidInstruction(
+            instruction~,
+            message="outgoing result-area offset is invalid for its value type",
+          )
+        }
+        require_instruction_shape(
+          function,
+          instruction,
+          [Ptr64, ty],
+          [],
+          false,
+          0,
+        )
       }
       KeepAlive(ty) =>
         require_instruction_shape(function, instruction, [ty], [], false, 0)
@@ -1552,7 +1644,7 @@ pub fn verify_vcode(
       }
       InternalCall(_, signature, plan) => {
         if plan.arguments.length() != signature.params.length() ||
-          plan.results.length() != signature.results.length() ||
+          !valid_result_plan(signature.results, plan) ||
           plan.stack_size < 0 ||
           plan.stack_size % 16 != 0 {
           raise InvalidInstruction(
@@ -1592,17 +1684,6 @@ pub fn verify_vcode(
             }
           }
         }
-        for index, ty in signature.results {
-          let reg = plan.results[index]
-          if reg.id < 0 ||
-            reg.id >= 16 ||
-            reg.class != @vcode.reg_class_for_value_type(ty) {
-            raise InvalidInstruction(
-              instruction~,
-              message="internal call has an invalid result register",
-            )
-          }
-        }
         for operand in function.instruction_operands(instruction) {
           if operand.constraint != Any {
             raise InvalidInstruction(
@@ -1621,7 +1702,7 @@ pub fn verify_vcode(
       }
       InternalCallIndirect(signature, plan) => {
         if plan.arguments.length() != signature.params.length() ||
-          plan.results.length() != signature.results.length() ||
+          !valid_result_plan(signature.results, plan) ||
           plan.stack_size < 0 ||
           plan.stack_size % 16 != 0 {
           raise InvalidInstruction(
@@ -1661,17 +1742,6 @@ pub fn verify_vcode(
             }
           }
         }
-        for index, ty in signature.results {
-          let reg = plan.results[index]
-          if reg.id < 0 ||
-            reg.id >= 16 ||
-            reg.class != @vcode.reg_class_for_value_type(ty) {
-            raise InvalidInstruction(
-              instruction~,
-              message="indirect call has an invalid result register",
-            )
-          }
-        }
         for operand in function.instruction_operands(instruction) {
           if operand.constraint != Any {
             raise InvalidInstruction(
@@ -1705,25 +1775,85 @@ pub fn verify_vcode(
       }
     }
   }
+  let mut incoming_result_area : @vcode.Value? = None
+  for index in 0..<function.instruction_count() {
+    let instruction = function.instruction_at(index).unwrap()
+    match function.instruction(instruction).unwrap() {
+      IncomingResultArea(_) => {
+        let value = function.instruction_operand_at(instruction, 0).unwrap().value
+        if incoming_result_area is Some(_) {
+          raise InvalidInstruction(
+            instruction~,
+            message="function has more than one incoming result area",
+          )
+        }
+        incoming_result_area = Some(value)
+      }
+      OutgoingAreaResult(_, _) => {
+        let address = function.instruction_operand_at(instruction, 0).unwrap().value
+        if incoming_result_area != Some(address) {
+          raise InvalidInstruction(
+            instruction~,
+            message="outgoing area result does not use the incoming result area",
+          )
+        }
+      }
+      TailCallDirect(_, signature, plan) =>
+        if plan.result_area_size > 0 {
+          let address = function
+            .instruction_operand_at(instruction, signature.params.length())
+            .unwrap().value
+          if incoming_result_area != Some(address) {
+            raise InvalidInstruction(
+              instruction~,
+              message="tail call does not forward the incoming result area",
+            )
+          }
+        }
+      TailCallIndirect(signature, plan) =>
+        if plan.result_area_size > 0 {
+          let address = function
+            .instruction_operand_at(instruction, signature.params.length() + 1)
+            .unwrap().value
+          if incoming_result_area != Some(address) {
+            raise InvalidInstruction(
+              instruction~,
+              message="indirect tail call does not forward the incoming result area",
+            )
+          }
+        }
+      _ => ()
+    }
+  }
   for block in function.layout() {
     let body = function.block_body(block)
     let consumed_results = Array::make(body.length(), false)
     for index, instruction in body {
       let call_results = match function.instruction(instruction) {
         Some(PlatformCall(_, signature)) =>
-          Some((signature, platform_result_registers(signature.results)))
+          Some(
+            (
+              signature,
+              platform_result_registers(signature.results).map(reg => {
+                CallResultRegister(reg)
+              }),
+            ),
+          )
         Some(InternalCall(_, signature, plan)) =>
           Some((signature, plan.results))
         Some(InternalCallIndirect(signature, plan)) =>
           Some((signature, plan.results))
         _ => None
       }
-      if call_results is Some((signature, registers)) {
+      if call_results is Some((signature, locations)) {
         for result_index, ty in signature.results {
           let body_index = index + result_index + 1
+          let expected = match locations[result_index] {
+            CallResultRegister(reg) => IncomingCallResult(ty, reg)
+            CallResultArea(offset, _) => IncomingCallAreaResult(ty, offset)
+          }
           if body_index >= body.length() ||
-            function.instruction(body[body_index]) !=
-            Some(IncomingCallResult(ty, registers[result_index])) {
+            function.instruction(body[body_index]) != Some(expected) {
             raise InvalidInstruction(
               instruction~,
               message="direct call results are not materialized in ABI order",
@@ -1734,7 +1864,8 @@ pub fn verify_vcode(
       }
     }
     for index, instruction in body {
-      if function.instruction(instruction) is Some(IncomingCallResult(_, _)) &&
+      if function.instruction(instruction)
+        is Some(IncomingCallResult(_, _) | IncomingCallAreaResult(_, _)) &&
         !consumed_results[index] {
         raise InvalidInstruction(
           instruction~,
@@ -1757,7 +1888,8 @@ pub fn verify_vcode(
       let start = body.length() - result_types.length()
       for result_index, ty in result_types {
         let valid = match function.instruction(body[start + result_index]) {
-          Some(OutgoingReg(actual_ty, _)) => actual_ty == ty
+          Some(OutgoingReg(actual_ty, _) | OutgoingAreaResult(actual_ty, _)) =>
+            actual_ty == ty
           _ => false
         }
         if !valid {

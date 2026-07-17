@@ -2890,6 +2890,258 @@ test "AArch64 direct calls preserve LR and emit typed call relocations" {
 }
 
 ///|
+test "AArch64 emits the internal result-area ABI" {
+  let types : Array[@semantic.ValueType] = [I64, I64, F32, V128]
+  let builder = @semantic.FunctionBuilder::new(
+    "emitted_internal_result_area",
+    Internal,
+    [Ptr64, ..types],
+    types,
+  )
+  let call = @semantic.SemanticCall::new(
+    Internal(@semantic.CodeSymbol::new("wasm.func.result_area")),
+    @semantic.Signature::new([Ptr64, ..types], types),
+    Internal,
+    @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
+  )
+  let results = builder.emit(Call(call), builder.parameters(), types)
+  builder.return_(results)
+  let function = lower(builder.finish(), compact_result_context())
+  let allocation = allocate(function)
+  let frame = plan_frame(function, allocation)
+  inspect(
+    frame.summary(),
+    content=(
+      #|aarch64 frame size=48 align=16
+      #|  call-results 32 bytes at sp+0
+      #|  save p19:int at sp+32
+      #|  save p30:int at sp+40
+      #|
+    ),
+  )
+  debug_inspect(
+    emit(function, allocation, frame),
+    content=(
+      #|{
+      #|  architecture: AArch64,
+      #|  code: [
+      #|    0xff,
+      #|    0xc3,
+      #|    0x00,
+      #|    0xd1,
+      #|    0xf3,
+      #|    0x13,
+      #|    0x00,
+      #|    0xf9,
+      #|    0xfe,
+      #|    0x17,
+      #|    0x00,
+      #|    0xf9,
+      #|    0xe3,
+      #|    0x03,
+      #|    0x00,
+      #|    0xaa,
+      #|    0xe0,
+      #|    0x03,
+      #|    0x01,
+      #|    0xaa,
+      #|    0xe1,
+      #|    0x03,
+      #|    0x02,
+      #|    0xaa,
+      #|    0x02,
+      #|    0x1c,
+      #|    0xa0,
+      #|    0x4e,
+      #|    0x20,
+      #|    0x1c,
+      #|    0xa1,
+      #|    0x4e,
+      #|    0xf3,
+      #|    0x03,
+      #|    0x08,
+      #|    0xaa,
+      #|    0xe2,
+      #|    0x03,
+      #|    0x01,
+      #|    0xaa,
+      #|    0xe1,
+      #|    0x03,
+      #|    0x00,
+      #|    0xaa,
+      #|    0xe0,
+      #|    0x03,
+      #|    0x03,
+      #|    0xaa,
+      #|    0x01,
+      #|    0x1c,
+      #|    0xa0,
+      #|    0x4e,
+      #|    0x40,
+      #|    0x1c,
+      #|    0xa2,
+      #|    0x4e,
+      #|    0xe8,
+      #|    0x03,
+      #|    0x00,
+      #|    0x91,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x94,
+      #|    0xe1,
+      #|    0x03,
+      #|    0x40,
+      #|    0xf9,
+      #|    0xe1,
+      #|    0x07,
+      #|    0xc0,
+      #|    0x3d,
+      #|    0x61,
+      #|    0x02,
+      #|    0x00,
+      #|    0xf9,
+      #|    0x61,
+      #|    0x06,
+      #|    0x80,
+      #|    0x3d,
+      #|    0xfe,
+      #|    0x17,
+      #|    0x40,
+      #|    0xf9,
+      #|    0xf3,
+      #|    0x13,
+      #|    0x40,
+      #|    0xf9,
+      #|    0xff,
+      #|    0xc3,
+      #|    0x00,
+      #|    0x91,
+      #|    0xc0,
+      #|    0x03,
+      #|    0x5f,
+      #|    0xd6,
+      #|  ],
+      #|  relocations: [
+      #|    {
+      #|      offset: 60,
+      #|      kind: AArch64Call26,
+      #|      target: Code({ name: "wasm.func.result_area" }),
+      #|      addend: 0,
+      #|    },
+      #|  ],
+      #|  sources: [],
+      #|  traps: [],
+      #|  safepoints: [],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
+test "AArch64 emits result-area forwarding for internal tail calls" {
+  let types : Array[@semantic.ValueType] = [I64, I64, F32, V128]
+  let builder = @semantic.FunctionBuilder::new(
+    "emitted_internal_result_area_tail",
+    Internal,
+    [Ptr64, ..types],
+    types,
+  )
+  let call = @semantic.SemanticCall::new(
+    Internal(@semantic.CodeSymbol::new("wasm.func.result_area_tail")),
+    @semantic.Signature::new([Ptr64, ..types], types),
+    Internal,
+    @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
+  )
+  builder.tail_call(call, builder.parameters())
+  let function = lower(builder.finish(), compact_result_context())
+  let allocation = allocate(function)
+  let frame = plan_frame(function, allocation)
+  inspect(
+    frame.summary(),
+    content=(
+      #|aarch64 frame size=0 align=16
+      #|
+    ),
+  )
+  debug_inspect(
+    emit(function, allocation, frame),
+    content=(
+      #|{
+      #|  architecture: AArch64,
+      #|  code: [
+      #|    0xe3,
+      #|    0x03,
+      #|    0x00,
+      #|    0xaa,
+      #|    0xe0,
+      #|    0x03,
+      #|    0x01,
+      #|    0xaa,
+      #|    0xe1,
+      #|    0x03,
+      #|    0x02,
+      #|    0xaa,
+      #|    0x02,
+      #|    0x1c,
+      #|    0xa0,
+      #|    0x4e,
+      #|    0x20,
+      #|    0x1c,
+      #|    0xa1,
+      #|    0x4e,
+      #|    0xe2,
+      #|    0x03,
+      #|    0x08,
+      #|    0xaa,
+      #|    0xe8,
+      #|    0x03,
+      #|    0x02,
+      #|    0xaa,
+      #|    0xe2,
+      #|    0x03,
+      #|    0x01,
+      #|    0xaa,
+      #|    0xe1,
+      #|    0x03,
+      #|    0x00,
+      #|    0xaa,
+      #|    0xe0,
+      #|    0x03,
+      #|    0x03,
+      #|    0xaa,
+      #|    0x01,
+      #|    0x1c,
+      #|    0xa0,
+      #|    0x4e,
+      #|    0x40,
+      #|    0x1c,
+      #|    0xa2,
+      #|    0x4e,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x14,
+      #|  ],
+      #|  relocations: [
+      #|    {
+      #|      offset: 48,
+      #|      kind: AArch64Jump26,
+      #|      target: Code({ name: "wasm.func.result_area_tail" }),
+      #|      addend: 0,
+      #|    },
+      #|  ],
+      #|  sources: [],
+      #|  traps: [],
+      #|  safepoints: [],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
 test "AArch64 platform calls store overflow arguments in the outgoing area" {
   let parameter_types : Array[@semantic.ValueType] = Array::make(9, I64)
   let builder = @semantic.FunctionBuilder::new(

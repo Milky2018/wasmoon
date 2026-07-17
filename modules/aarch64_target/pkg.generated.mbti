@@ -74,6 +74,7 @@ pub suberror AArch64EmitError {
   InvalidParallelMove(cause~ : @vcode.MoveResolveError)
   UnresolvedStackMove
   MissingStackObjectArea
+  MissingResultArea
   FrameOffsetOutOfRange(offset~ : Int)
   InvalidScalarMemoryAccess
   InvalidFloatInstruction
@@ -89,6 +90,7 @@ pub suberror AArch64FrameError {
   InvalidGenericFrame(cause~ : @vcode.FrameVerifyError)
   InvalidSavedRegister(reg~ : @vcode.PhysicalReg, offset~ : Int)
   OutgoingAreaMismatch(expected~ : Int, actual~ : Int)
+  ResultAreaMismatch(expected~ : Int, actual~ : Int)
   InvalidStackObjectArea(message~ : String)
   SavedRegisterSetMismatch
 } derive(@debug.Debug)
@@ -109,8 +111,8 @@ pub suberror InternalAbiError {
   InvalidRegister(role~ : String, index~ : Int)
   DuplicateRegister(role~ : String, index~ : Int)
   ContextRegisterReused(index~ : Int)
+  ResultAreaRegisterReused(index~ : Int)
   InvalidSignature(message~ : String)
-  ResultAreaRequired(integer_count~ : Int, fp_count~ : Int)
 } derive(Eq, @debug.Debug)
 pub impl Show for InternalAbiError
 
@@ -210,8 +212,11 @@ pub fn AArch64Frame::summary(Self) -> String
 pub(all) enum AArch64Inst {
   IncomingReg(@machv.ValueType, @vcode.PhysicalReg)
   IncomingStack(@machv.ValueType, Int)
+  IncomingResultArea(@vcode.PhysicalReg)
   IncomingCallResult(@machv.ValueType, @vcode.PhysicalReg)
+  IncomingCallAreaResult(@machv.ValueType, Int)
   OutgoingReg(@machv.ValueType, @vcode.PhysicalReg)
+  OutgoingAreaResult(@machv.ValueType, Int)
   KeepAlive(@machv.ValueType)
   LoadConstant(GprWidth, UInt64)
   LoadVectorConstant(UInt64, UInt64)
@@ -366,6 +371,8 @@ type CallArgumentLocation derive(Eq, @debug.Debug)
 
 type CallLayout derive(Eq, @debug.Debug)
 
+type CallResultLocation derive(Eq, @debug.Debug)
+
 pub(all) enum CallingConvention {
   Aapcs64
 } derive(Eq, @debug.Debug)
@@ -386,7 +393,7 @@ pub(all) enum IntRegRole {
 pub struct InternalAbi {
   // private fields
 }
-pub fn InternalAbi::new(Int, Array[Int], Array[Int], Array[Int], Array[Int]) -> Self raise InternalAbiError
+pub fn InternalAbi::new(Int, Int, Array[Int], Array[Int], Array[Int], Array[Int]) -> Self raise InternalAbiError
 
 pub struct InternalCallPlan {
   // private fields

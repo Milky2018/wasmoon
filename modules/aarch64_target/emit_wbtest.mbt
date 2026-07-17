@@ -3065,6 +3065,7 @@ test "AAPCS64 platform call layout preserves mixed overflow order" {
 test "validated internal ABI derives context, overflow, and result locations" {
   let abi = InternalAbi::new(
     0,
+    8,
     [1, 2, 3, 4, 5, 6, 7],
     [0, 1, 2, 3, 4, 5, 6, 7],
     [0, 1, 2, 3, 4, 5, 6, 7],
@@ -3095,7 +3096,7 @@ test "validated internal ABI derives context, overflow, and result locations" {
       [I64, F64],
     ),
   )
-  let results = abi.result_registers([I64, F64])
+  let results = abi.result_layout([I64, F64])
   debug_inspect(
     (layout, results),
     content=(
@@ -3123,7 +3124,7 @@ test "validated internal ABI derives context, overflow, and result locations" {
       #|    ],
       #|    stack_size: 32,
       #|  },
-      #|  [p0:int, p0:fpvec],
+      #|  ([CallResultRegister(p0:int), CallResultRegister(p0:fpvec)], 0),
       #|)
     ),
   )

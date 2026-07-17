@@ -1,6 +1,7 @@
 ///|
 pub struct InternalAbi {
   priv context_argument : @vcode.PhysicalReg
+  priv result_area_argument : @vcode.PhysicalReg
   priv integer_arguments : Array[@vcode.PhysicalReg]
   priv fp_arguments : Array[@vcode.PhysicalReg]
   priv integer_results : Array[@vcode.PhysicalReg]
@@ -10,8 +11,9 @@ pub struct InternalAbi {
 ///|
 pub struct InternalCallPlan {
   priv arguments : Array[CallArgumentLocation]
-  priv results : Array[@vcode.PhysicalReg]
+  priv results : Array[CallResultLocation]
   priv stack_size : Int
+  priv result_area_size : Int
 } derive(Eq, Debug)
 
 ///|
@@ -19,8 +21,8 @@ pub suberror InternalAbiError {
   InvalidRegister(role~ : String, index~ : Int)
   DuplicateRegister(role~ : String, index~ : Int)
   ContextRegisterReused(index~ : Int)
+  ResultAreaRegisterReused(index~ : Int)
   InvalidSignature(message~ : String)
-  ResultAreaRequired(integer_count~ : Int, fp_count~ : Int)
 } derive(Eq, Debug)
 
 ///|
@@ -50,6 +52,7 @@ fn checked_registers(
 ///|
 pub fn InternalAbi::new(
   context_argument : Int,
+  result_area_argument : Int,
   integer_arguments : Array[Int],
   fp_arguments : Array[Int],
   integer_results : Array[Int],
@@ -59,6 +62,13 @@ pub fn InternalAbi::new(
     raise InvalidRegister(role="context argument", index=context_argument)
   }
   let context = @vcode.PhysicalReg::new(context_argument, Int)
+  if result_area_argument < 0 || result_area_argument >= 16 {
+    raise InvalidRegister(
+      role="result area argument",
+      index=result_area_argument,
+    )
+  }
+  let result_area = @vcode.PhysicalReg::new(result_area_argument, Int)
   let integer_arguments = checked_registers(
     "integer argument",
     integer_arguments,
@@ -67,11 +77,23 @@ pub fn InternalAbi::new(
   if integer_arguments.contains(context) {
     raise ContextRegisterReused(index=context_argument)
   }
+  if result_area == context || integer_arguments.contains(result_area) {
+    raise ResultAreaRegisterReused(index=result_area_argument)
+  }
+  let integer_results = checked_registers(
+    "integer result",
+    integer_results,
+    Int,
+  )
+  if integer_results.contains(result_area) {
+    raise ResultAreaRegisterReused(index=result_area_argument)
+  }
   {
     context_argument: context,
+    result_area_argument: result_area,
     integer_arguments,
     fp_arguments: checked_registers("FP argument", fp_arguments, FpVector),
-    integer_results: checked_registers("integer result", integer_results, Int),
+    integer_results,
     fp_results: checked_registers("FP result", fp_results, FpVector),
   }
 }
@@ -80,6 +102,7 @@ pub fn InternalAbi::new(
 fn InternalAbi::copy(self : InternalAbi) -> InternalAbi {
   {
     context_argument: self.context_argument,
+    result_area_argument: self.result_area_argument,
     integer_arguments: self.integer_arguments.copy(),
     fp_arguments: self.fp_arguments.copy(),
     integer_results: self.integer_results.copy(),
@@ -141,40 +164,60 @@ fn InternalAbi::call_layout(
 }
 
 ///|
-fn InternalAbi::result_registers(
+fn InternalAbi::result_layout(
   self : InternalAbi,
   result_types : Array[@semantic.ValueType],
-) -> Array[@vcode.PhysicalReg] raise InternalAbiError {
-  let registers : Array[@vcode.PhysicalReg] = []
+) -> (Array[CallResultLocation], Int) {
+  let locations : Array[CallResultLocation] = []
   let mut integer_index = 0
   let mut fp_index = 0
+  let mut integer_area_offset = 0
+  for ty in result_types {
+    if @vcode.reg_class_for_value_type(ty) == Int &&
+      integer_index >= self.integer_results.length() {
+      integer_area_offset += 8
+    }
+    if @vcode.reg_class_for_value_type(ty) == Int {
+      integer_index += 1
+    }
+  }
+  integer_index = 0
+  let mut fp_area_offset = integer_area_offset
   for ty in result_types {
     if @vcode.reg_class_for_value_type(ty) == Int {
-      if integer_index >= self.integer_results.length() {
-        raise ResultAreaRequired(
-          integer_count=integer_index + 1,
-          fp_count=fp_index,
+      if integer_index < self.integer_results.length() {
+        locations.push(CallResultRegister(self.integer_results[integer_index]))
+      } else {
+        locations.push(
+          CallResultArea(
+            (integer_index - self.integer_results.length()) * 8,
+            self.result_area_argument,
+          ),
         )
       }
-      registers.push(self.integer_results[integer_index])
       integer_index += 1
     } else {
-      if fp_index >= self.fp_results.length() {
-        raise ResultAreaRequired(
-          integer_count=integer_index,
-          fp_count=fp_index + 1,
+      if fp_index < self.fp_results.length() {
+        locations.push(
+          CallResultRegister(
+            @vcode.PhysicalReg::new(
+              self.fp_results[fp_index].id,
+              @vcode.reg_class_for_value_type(ty),
+            ),
+          ),
         )
+      } else {
+        let size = call_stack_size(ty)
+        fp_area_offset = call_align_up(fp_area_offset, size)
+        locations.push(
+          CallResultArea(fp_area_offset, self.result_area_argument),
+        )
+        fp_area_offset += size
       }
-      registers.push(
-        @vcode.PhysicalReg::new(
-          self.fp_results[fp_index].id,
-          @vcode.reg_class_for_value_type(ty),
-        ),
-      )
       fp_index += 1
     }
   }
-  registers
+  (locations, call_align_up(fp_area_offset, 16))
 }
 
 ///|
@@ -183,9 +226,11 @@ fn InternalAbi::call_plan(
   signature : @semantic.Signature,
 ) -> InternalCallPlan raise InternalAbiError {
   let layout = self.call_layout(signature)
+  let (results, result_area_size) = self.result_layout(signature.results)
   {
     arguments: layout.arguments,
-    results: self.result_registers(signature.results),
+    results,
     stack_size: layout.stack_size,
+    result_area_size,
   }
 }

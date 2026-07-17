@@ -435,9 +435,13 @@ fn lower_internal_call(
   |> ignore
   let results : Array[@vcode.Value] = []
   for index, ty in result_types {
+    let operation = match plan.results[index] {
+      CallResultRegister(reg) => IncomingCallResult(ty, reg)
+      CallResultArea(offset, _) => IncomingCallAreaResult(ty, offset)
+    }
     let (_, materialized) = builder.append_body(
       block,
-      IncomingCallResult(ty, plan.results[index]),
+      operation,
       [],
       [@vcode.Output::any(ty)],
       [],
@@ -1101,7 +1105,7 @@ fn lower_parameters(
   context : LoweringContext,
   builder : @vcode.Builder[AArch64Inst],
   values : Array[@vcode.Value?],
-) -> Unit raise AArch64LowerError {
+) -> @vcode.Value? raise AArch64LowerError {
   let entry = builder.entry_block()
   let signature = function.signature()
   let layout = match function.protocol() {
@@ -1138,6 +1142,24 @@ fn lower_parameters(
     }
     values[function.value_index(parameter).unwrap()] = Some(selected)
   }
+  if function.protocol() == Internal {
+    let plan = context.internal_abi.call_plan(signature) catch {
+      error => raise UnsupportedAbi(message=error.to_string())
+    }
+    if plan.result_area_size > 0 {
+      return Some(
+        append_body(
+          builder,
+          entry,
+          IncomingResultArea(context.internal_abi.result_area_argument),
+          [],
+          [@vcode.Output::any(Ptr64)],
+          @vcode.InstructionMetadata::empty(),
+        )[0],
+      )
+    }
+  }
+  None
 }
 
 ///|
@@ -1148,33 +1170,47 @@ fn lower_return_values(
   block : @vcode.Block,
   values : Array[@vcode.Value],
   result_types : Array[@semantic.ValueType],
+  result_area : @vcode.Value?,
 ) -> Unit raise AArch64LowerError {
-  let registers = match function.protocol() {
+  let locations : Array[CallResultLocation] = match function.protocol() {
     Platform => {
       if result_types.length() > 1 {
         raise UnsupportedAbi(
           message="platform functions support at most one direct result",
         )
       }
-      platform_result_registers(result_types)
+      platform_result_registers(result_types).map(reg => CallResultRegister(reg))
     }
-    Internal =>
-      context.internal_abi.result_registers(result_types) catch {
-        error => raise UnsupportedAbi(message=error.to_string())
-      }
+    Internal => context.internal_abi.result_layout(result_types).0
   }
   for index, value in values {
     let ty = result_types[index]
-    let reg = registers[index]
-    append_body(
-      builder,
-      block,
-      OutgoingReg(ty, reg),
-      [@vcode.Input::any(value)],
-      [],
-      @vcode.InstructionMetadata::empty(),
-    )
-    |> ignore
+    match locations[index] {
+      CallResultRegister(reg) =>
+        append_body(
+          builder,
+          block,
+          OutgoingReg(ty, reg),
+          [@vcode.Input::any(value)],
+          [],
+          @vcode.InstructionMetadata::empty(),
+        )
+        |> ignore
+      CallResultArea(offset, _) => {
+        guard result_area is Some(address) else {
+          raise UnsupportedAbi(message="internal result area is unavailable")
+        }
+        append_body(
+          builder,
+          block,
+          OutgoingAreaResult(ty, offset),
+          [@vcode.Input::any(address), @vcode.Input::any(value)],
+          [],
+          @vcode.InstructionMetadata::empty(),
+        )
+        |> ignore
+      }
+    }
   }
 }
 
@@ -1211,7 +1247,7 @@ pub fn lower(
     signature.results,
   )
   let values : Array[@vcode.Value?] = Array::make(function.value_count(), None)
-  lower_parameters(function, context, builder, values)
+  let result_area = lower_parameters(function, context, builder, values)
   let semantic_blocks = function.blocks()
   let blocks : Array[@vcode.Block] = []
   for index, semantic_block in semantic_blocks {
@@ -1287,6 +1323,7 @@ pub fn lower(
           block,
           mapped,
           signature.results,
+          result_area,
         )
         set_terminator(builder, block, Return, [], [], metadata)
       }
@@ -1305,6 +1342,12 @@ pub fn lower(
           error => raise UnsupportedAbi(message=error.to_string())
         }
         let operands = map_values(function, values, semantic_operands)
+        if plan.result_area_size > 0 {
+          guard result_area is Some(address) else {
+            raise UnsupportedAbi(message="tail-call result area is unavailable")
+          }
+          operands.push(address)
+        }
         let target = match call.callee {
           Internal(symbol) => TailCallDirect(symbol, call.signature, plan)
           Indirect => TailCallIndirect(call.signature, plan)

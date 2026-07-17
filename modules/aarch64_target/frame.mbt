@@ -12,9 +12,16 @@ priv struct StackObjectArea {
 }
 
 ///|
+priv struct ResultArea {
+  offset : Int
+  size : Int
+}
+
+///|
 pub struct AArch64Frame {
   priv layout : @vcode.FrameLayout
   priv outgoing_args_size : Int
+  priv result_area : ResultArea?
   priv stack_objects : StackObjectArea?
   priv slots : Array[(@vcode.StackSlot, Int)]
   priv saved_registers : Array[SavedRegister]
@@ -26,6 +33,7 @@ pub suberror AArch64FrameError {
   InvalidGenericFrame(cause~ : @vcode.FrameVerifyError)
   InvalidSavedRegister(reg~ : @vcode.PhysicalReg, offset~ : Int)
   OutgoingAreaMismatch(expected~ : Int, actual~ : Int)
+  ResultAreaMismatch(expected~ : Int, actual~ : Int)
   InvalidStackObjectArea(message~ : String)
   SavedRegisterSetMismatch
 } derive(Debug)
@@ -114,6 +122,23 @@ fn maximum_outgoing_args_size(function : @vcode.Function[AArch64Inst]) -> Int {
 }
 
 ///|
+fn maximum_result_area_size(function : @vcode.Function[AArch64Inst]) -> Int {
+  let mut maximum = 0
+  for index in 0..<function.instruction_count() {
+    let instruction = function.instruction_at(index).unwrap()
+    let size = match function.instruction(instruction) {
+      Some(InternalCall(_, _, plan) | InternalCallIndirect(_, plan)) =>
+        plan.result_area_size
+      _ => 0
+    }
+    if size > maximum {
+      maximum = size
+    }
+  }
+  maximum
+}
+
+///|
 fn stack_object_area_requirements(
   function : @vcode.Function[AArch64Inst],
 ) -> (Int, Int)? raise AArch64FrameError {
@@ -168,6 +193,11 @@ pub fn AArch64Frame::outgoing_args_size(self : AArch64Frame) -> Int {
 }
 
 ///|
+fn AArch64Frame::result_area_offset(self : AArch64Frame) -> Int? {
+  self.result_area.map(area => area.offset)
+}
+
+///|
 pub fn AArch64Frame::stack_object_offset(
   self : AArch64Frame,
   object : AArch64StackObject,
@@ -202,6 +232,9 @@ pub fn AArch64Frame::summary(self : AArch64Frame) -> String {
   if self.outgoing_args_size > 0 {
     output += "  outgoing \{self.outgoing_args_size} bytes at sp+0\n"
   }
+  if self.result_area is Some(area) {
+    output += "  call-results \{area.size} bytes at sp+\{area.offset}\n"
+  }
   if self.stack_objects is Some(area) {
     output += "  stack-objects \{area.size} bytes at sp+\{area.offset}\n"
   }
@@ -234,13 +267,33 @@ pub fn verify_frame(
       actual=frame.outgoing_args_size,
     )
   }
+  let expected_result_area = maximum_result_area_size(function)
+  let actual_result_area = frame.result_area.map(area => area.size).unwrap_or(0)
+  if actual_result_area != expected_result_area {
+    raise ResultAreaMismatch(
+      expected=expected_result_area,
+      actual=actual_result_area,
+    )
+  }
+  if frame.result_area is Some(area) &&
+    (
+      area.offset < frame.outgoing_args_size ||
+      area.offset % 16 != 0 ||
+      area.offset + area.size > frame.frame_size()
+    ) {
+    raise ResultAreaMismatch(expected=expected_result_area, actual=area.size)
+  }
   let expected_stack_objects = stack_object_area_requirements(function)
+  let reserved_call_area_end = match frame.result_area {
+    Some(area) => area.offset + area.size
+    None => frame.outgoing_args_size
+  }
   match (expected_stack_objects, frame.stack_objects) {
     (None, None) => ()
     (Some((size, alignment)), Some(area)) =>
       if area.size != size ||
         area.alignment != alignment ||
-        area.offset < frame.outgoing_args_size ||
+        area.offset < reserved_call_area_end ||
         area.offset % alignment != 0 ||
         area.offset + size > frame.frame_size() {
         raise InvalidStackObjectArea(
@@ -259,6 +312,9 @@ pub fn verify_frame(
   let occupied : Array[(Int, Int)] = []
   if frame.outgoing_args_size > 0 {
     occupied.push((0, frame.outgoing_args_size))
+  }
+  if frame.result_area is Some(area) {
+    occupied.push((area.offset, area.offset + area.size))
   }
   if frame.stack_objects is Some(area) {
     occupied.push((area.offset, area.offset + area.size))
@@ -294,6 +350,15 @@ pub fn plan_frame(
   }
   let outgoing_args_size = maximum_outgoing_args_size(function)
   let mut offset = outgoing_args_size
+  let result_area_size = maximum_result_area_size(function)
+  let result_area = if result_area_size > 0 {
+    offset = align_up(offset, 16)
+    let area = { offset, size: result_area_size }
+    offset += result_area_size
+    Some(area)
+  } else {
+    None
+  }
   let stack_objects = match stack_object_area_requirements(function) {
     Some((size, alignment)) => {
       offset = align_up(offset, alignment)
@@ -334,6 +399,7 @@ pub fn plan_frame(
   let frame = {
     layout,
     outgoing_args_size,
+    result_area,
     stack_objects,
     slots,
     saved_registers,
