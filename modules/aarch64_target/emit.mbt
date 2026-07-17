@@ -1,4 +1,10 @@
 ///|
+const AARCH64_DIVISION_BY_ZERO_BRK : UInt = 4U
+
+///|
+const AARCH64_INTEGER_OVERFLOW_BRK : UInt = 5U
+
+///|
 priv struct BranchFixup {
   offset : Int
   target : @vcode.Block
@@ -491,6 +497,36 @@ fn emit_instruction(
       buffer.emit_word(
         encode_int_binary(width, operation, reg(2), reg(0), reg(1)),
       )
+    IntRemainder(width, signedness) => {
+      let quotient = @vcode.PhysicalReg::new(16, Int)
+      let division = if signedness == Signed { Sdiv } else { Udiv }
+      buffer.emit_word(
+        encode_int_binary(width, division, quotient, reg(0), reg(1)),
+      )
+      let base = if width == W32 { 0x1B008000U } else { 0x9B008000U }
+      buffer.emit_word(
+        base |
+        (reg_bits(reg(1)) << 16) |
+        (reg_bits(reg(0)) << 10) |
+        (reg_bits(quotient) << 5) |
+        reg_bits(reg(2)),
+      )
+    }
+    TrapIfZero(width) => {
+      let base = if width == W32 { 0x35000000U } else { 0xB5000000U }
+      buffer.emit_word(base | (2U << 5) | reg_bits(reg(0)))
+      metadata_offset = buffer.position()
+      buffer.emit_word(0xD4200000U | (AARCH64_DIVISION_BY_ZERO_BRK << 5))
+    }
+    TrapIfSignedDivOverflow(width) => {
+      let adds_base = if width == W32 { 0x31000000U } else { 0xB1000000U }
+      buffer.emit_word(adds_base | (1U << 10) | (reg_bits(reg(1)) << 5) | 31U)
+      let ccmp_base = if width == W32 { 0x7A400800U } else { 0xFA400800U }
+      buffer.emit_word(ccmp_base | (1U << 16) | (reg_bits(reg(0)) << 5))
+      buffer.emit_word(0x54000000U | (2U << 5) | 7U)
+      metadata_offset = buffer.position()
+      buffer.emit_word(0xD4200000U | (AARCH64_INTEGER_OVERFLOW_BRK << 5))
+    }
     CompareSet(width, condition) => {
       let compare_base = if width == W32 { 0x6B00001FU } else { 0xEB00001FU }
       buffer.emit_word(

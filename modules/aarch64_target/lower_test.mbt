@@ -61,7 +61,7 @@ test "AArch64 lowering rejects unsupported valid operations structurally" {
 }
 
 ///|
-test "AArch64 lowering does not silently select non-trapping hardware divide" {
+test "AArch64 lowering inserts explicit traps before signed division" {
   let builder = @semantic.FunctionBuilder::new(
     "checked_divide",
     Platform,
@@ -70,21 +70,21 @@ test "AArch64 lowering does not silently select non-trapping hardware divide" {
   )
   let value = builder.emit(IntBinary(SignedDiv), builder.parameters(), [I64])[0]
   builder.return_([value])
-  try lower(builder.finish(), test_lowering_context()) |> ignore catch {
-    error =>
-      inspect(
-        error,
-        content=(
-          #|UnsupportedOperation(
-          #|  block_index=0,
-          #|  instruction_index=0,
-          #|  operation=IntBinary(SignedDiv),
-          #|)
-        ),
-      )
-  } noraise {
-    _ => fail("expected unchecked hardware division selection to fail")
-  }
+  inspect(
+    lower(builder.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode checked_divide(v0:i64, v1:i64) -> (i64)
+      #|block0:
+      #|  i0 IncomingReg(I64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v2:any@late]
+      #|  i1 IncomingReg(I64, p1:int) uses=[v1:fixed(p1:int)@early] defs=[v3:any@late]
+      #|  i2 TrapIfZero(W64) uses=[v3:any@early] trap=IntegerDivisionByZero
+      #|  i3 TrapIfSignedDivOverflow(W64) uses=[v2:any@early, v3:any@early] trap=IntegerOverflow
+      #|  i4 IntBinary(W64, Sdiv) uses=[v2:any@early, v3:any@early] defs=[v4:any@late]
+      #|  i5 OutgoingReg(I64, p0:int) uses=[v4:any@early]
+      #|  i6 Return
+      #|
+    ),
+  )
 }
 
 ///|

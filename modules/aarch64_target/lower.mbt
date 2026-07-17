@@ -354,6 +354,62 @@ fn lower_instruction(
     }
     return
   }
+  if operation is IntBinary(binary) &&
+    binary is (SignedDiv | UnsignedDiv | SignedRem | UnsignedRem) {
+    guard optional_gpr_width(result_types.get(0)) is Some(width) else {
+      raise UnsupportedOperation(block_index~, instruction_index~, operation~)
+    }
+    let semantic_metadata = function.instruction_metadata(instruction).unwrap()
+    append_body(
+      builder,
+      block,
+      TrapIfZero(width),
+      [@vcode.Input::any(operands[1])],
+      [],
+      source_metadata(
+        semantic_metadata,
+        roots,
+        operation.semantics(),
+        trap=IntegerDivisionByZero,
+      ),
+    )
+    |> ignore
+    if binary == SignedDiv {
+      append_body(
+        builder,
+        block,
+        TrapIfSignedDivOverflow(width),
+        operands.map(@vcode.Input::any),
+        [],
+        source_metadata(
+          semantic_metadata,
+          roots,
+          operation.semantics(),
+          trap=IntegerOverflow,
+        ),
+      )
+      |> ignore
+    }
+    let selected = match binary {
+      SignedDiv => IntBinary(width, Sdiv)
+      UnsignedDiv => IntBinary(width, Udiv)
+      SignedRem => IntRemainder(width, Signed)
+      UnsignedRem => IntRemainder(width, Unsigned)
+      _ => abort("matched checked integer arithmetic above")
+    }
+    let results = append_body(
+      builder,
+      block,
+      selected,
+      operands.map(@vcode.Input::any),
+      result_types.map(@vcode.Output::any),
+      source_metadata(semantic_metadata, roots, operation.semantics()),
+    )
+    for index, result in semantic_results {
+      values[function.value_index(result).unwrap()] = Some(results[index])
+    }
+    return
+  }
   let selected = match operation {
     I32Const(bits) => Some(LoadConstant(W32, bits.to_uint64()))
     I64Const(bits) => Some(LoadConstant(W64, bits))

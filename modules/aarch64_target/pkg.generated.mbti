@@ -149,6 +149,9 @@ pub(all) enum AArch64Inst {
   Move(@machv.ValueType)
   IntUnary(GprWidth, AArch64IntUnary)
   IntBinary(GprWidth, AArch64IntBinary)
+  IntRemainder(GprWidth, @machv.Signedness)
+  TrapIfZero(GprWidth)
+  TrapIfSignedDivOverflow(GprWidth)
   CompareSet(GprWidth, AArch64Condition)
   AddAddress
   ScalarLoad(@machv.AccessWidth, @machv.LoadExtension, @machv.ValueType, UInt64)

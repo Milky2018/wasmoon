@@ -51,6 +51,9 @@ pub(all) enum AArch64Inst {
   Move(@semantic.ValueType)
   IntUnary(GprWidth, AArch64IntUnary)
   IntBinary(GprWidth, AArch64IntBinary)
+  IntRemainder(GprWidth, @semantic.Signedness)
+  TrapIfZero(GprWidth)
+  TrapIfSignedDivOverflow(GprWidth)
   CompareSet(GprWidth, AArch64Condition)
   AddAddress
   ScalarLoad(
@@ -398,6 +401,39 @@ pub fn verify_vcode(
           false,
           0,
         )
+      }
+      IntRemainder(width, _) => {
+        let ty = integer_type(width)
+        require_instruction_shape(
+          function,
+          instruction,
+          [ty, ty],
+          [ty],
+          false,
+          0,
+        )
+      }
+      TrapIfZero(width) => {
+        let ty = integer_type(width)
+        if function.instruction_metadata(instruction).unwrap().trap !=
+          Some(IntegerDivisionByZero) {
+          raise InvalidInstruction(
+            instruction~,
+            message="zero-divisor check requires division-by-zero trap metadata",
+          )
+        }
+        require_instruction_shape(function, instruction, [ty], [], false, 0)
+      }
+      TrapIfSignedDivOverflow(width) => {
+        let ty = integer_type(width)
+        if function.instruction_metadata(instruction).unwrap().trap !=
+          Some(IntegerOverflow) {
+          raise InvalidInstruction(
+            instruction~,
+            message="signed-division check requires overflow trap metadata",
+          )
+        }
+        require_instruction_shape(function, instruction, [ty, ty], [], false, 0)
       }
       CompareSet(width, _) => {
         let ty = integer_type(width)

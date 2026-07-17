@@ -1136,6 +1136,179 @@ test "AArch64 scalar memory emission records faulting instructions and legalizes
 }
 
 ///|
+test "AArch64 checked division emits distinct trap sites" {
+  let builder = @semantic.FunctionBuilder::new(
+    "emitted_checked_divide",
+    Internal,
+    [Ptr64, I64, I64],
+    [I64],
+  )
+  let parameters = builder.parameters()
+  let result = builder.emit_with_metadata(
+      IntBinary(SignedDiv),
+      [parameters[1], parameters[2]],
+      [I64],
+      @semantic.InstructionMetadata::new(
+        Some(@semantic.SourceLocation::new("divide.wat", 2, 5)),
+        [],
+      ),
+    )[0]
+  builder.return_([result])
+  let function = lower(builder.finish(), test_lowering_context())
+  let allocation = allocate(function)
+  let frame = plan_frame(function, allocation)
+  debug_inspect(
+    emit(function, allocation, frame),
+    content=(
+      #|{
+      #|  architecture: AArch64,
+      #|  code: [
+      #|    0xe3,
+      #|    0x03,
+      #|    0x00,
+      #|    0xaa,
+      #|    0xe0,
+      #|    0x03,
+      #|    0x01,
+      #|    0xaa,
+      #|    0xe1,
+      #|    0x03,
+      #|    0x02,
+      #|    0xaa,
+      #|    0x41,
+      #|    0x00,
+      #|    0x00,
+      #|    0xb5,
+      #|    0x80,
+      #|    0x00,
+      #|    0x20,
+      #|    0xd4,
+      #|    0x3f,
+      #|    0x04,
+      #|    0x00,
+      #|    0xb1,
+      #|    0x00,
+      #|    0x08,
+      #|    0x41,
+      #|    0xfa,
+      #|    0x47,
+      #|    0x00,
+      #|    0x00,
+      #|    0x54,
+      #|    0xa0,
+      #|    0x00,
+      #|    0x20,
+      #|    0xd4,
+      #|    0x02,
+      #|    0x0c,
+      #|    0xc1,
+      #|    0x9a,
+      #|    0xe0,
+      #|    0x03,
+      #|    0x02,
+      #|    0xaa,
+      #|    0xc0,
+      #|    0x03,
+      #|    0x5f,
+      #|    0xd6,
+      #|  ],
+      #|  relocations: [],
+      #|  sources: [
+      #|    { offset: 16, source: { file: "divide.wat", line: 2, column: 5 } },
+      #|    { offset: 32, source: { file: "divide.wat", line: 2, column: 5 } },
+      #|    { offset: 36, source: { file: "divide.wat", line: 2, column: 5 } },
+      #|  ],
+      #|  traps: [
+      #|    {
+      #|      offset: 16,
+      #|      reason: IntegerDivisionByZero,
+      #|      source: Some({ file: "divide.wat", line: 2, column: 5 }),
+      #|    },
+      #|    {
+      #|      offset: 32,
+      #|      reason: IntegerOverflow,
+      #|      source: Some({ file: "divide.wat", line: 2, column: 5 }),
+      #|    },
+      #|  ],
+      #|  safepoints: [],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
+test "AArch64 signed remainder skips the division overflow trap" {
+  let builder = @semantic.FunctionBuilder::new(
+    "emitted_signed_remainder",
+    Internal,
+    [Ptr64, I32, I32],
+    [I32],
+  )
+  let parameters = builder.parameters()
+  let result = builder.emit(
+      IntBinary(SignedRem),
+      [parameters[1], parameters[2]],
+      [I32],
+    )[0]
+  builder.return_([result])
+  let function = lower(builder.finish(), test_lowering_context())
+  let allocation = allocate(function)
+  let frame = plan_frame(function, allocation)
+  debug_inspect(
+    emit(function, allocation, frame),
+    content=(
+      #|{
+      #|  architecture: AArch64,
+      #|  code: [
+      #|    0xe3,
+      #|    0x03,
+      #|    0x00,
+      #|    0xaa,
+      #|    0xe0,
+      #|    0x03,
+      #|    0x01,
+      #|    0x2a,
+      #|    0xe1,
+      #|    0x03,
+      #|    0x02,
+      #|    0x2a,
+      #|    0x41,
+      #|    0x00,
+      #|    0x00,
+      #|    0x35,
+      #|    0x80,
+      #|    0x00,
+      #|    0x20,
+      #|    0xd4,
+      #|    0x10,
+      #|    0x0c,
+      #|    0xc1,
+      #|    0x1a,
+      #|    0x02,
+      #|    0x82,
+      #|    0x01,
+      #|    0x1b,
+      #|    0xe0,
+      #|    0x03,
+      #|    0x02,
+      #|    0x2a,
+      #|    0xc0,
+      #|    0x03,
+      #|    0x5f,
+      #|    0xd6,
+      #|  ],
+      #|  relocations: [],
+      #|  sources: [],
+      #|  traps: [{ offset: 16, reason: IntegerDivisionByZero, source: None }],
+      #|  safepoints: [],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
 test "AArch64 edge emission resolves register cycles through reserved scratch" {
   let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new_with_results(
     "edge_cycle",
