@@ -44,6 +44,42 @@ test "generic adapter allocates Target VCode without reading target instructions
 }
 
 ///|
+test "location-aware inputs remain in spill slots without scratch reloads" {
+  let builder : @vcode.Builder[Unit] = @vcode.Builder::new(
+    "location_aware_inputs",
+    [I64, I64],
+  )
+  let entry = builder.entry_block()
+  builder.set_terminator(
+    entry,
+    (),
+    [
+      @vcode.Input::any_location(builder.parameter(0)),
+      @vcode.Input::any_location(builder.parameter(1)),
+    ],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  let allocation = allocate_vcode(
+    builder.finish(),
+    VCodeAllocationEnvironment::new([@vcode.PhysicalReg::new(0, Int)], []),
+  )
+  inspect(
+    allocation.summary(),
+    content=(
+      #|allocation location_aware_inputs
+      #|  v0:i64 -> p0:int
+      #|  v1:i64 -> stack0:i64(size=8, align=8)
+      #|  i0 operand0 -> p0:int
+      #|  i0 operand1 -> stack0
+      #|
+    ),
+  )
+}
+
+///|
 test "floating-point and SIMD values share one physical register bank" {
   let builder : @vcode.Builder[Unit] = @vcode.Builder::new("fp_vector_alias", [
     F64,

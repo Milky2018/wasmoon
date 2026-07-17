@@ -75,6 +75,7 @@ pub suberror AArch64EmitError {
   UnresolvedStackMove
   MissingStackObjectArea
   MissingResultArea
+  UnexpectedStackOperand(instruction~ : @vcode.Instruction, operand~ : Int)
   FrameOffsetOutOfRange(offset~ : Int)
   InvalidScalarMemoryAccess
   InvalidFloatInstruction

@@ -114,6 +114,7 @@ fn[Inst] Builder::append_instruction(
           self.function.value_type(inputs[tied_to].value) != Some(output.ty) {
           raise InvalidOperandConstraint
         }
+      AnyLocation => raise InvalidOperandConstraint
       Any => ()
     }
   }

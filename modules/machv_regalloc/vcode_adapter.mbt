@@ -67,7 +67,7 @@ fn[Inst] project_operand(
     Def => @regalloc.Operand::def(vreg)
   }
   match operand.constraint {
-    Any | TiedTo(_) => projected
+    Any | AnyLocation | TiedTo(_) => projected
     Fixed(reg) => projected.with_constraint(FixedReg(to_regalloc_preg(reg)))
   }
 }
@@ -257,10 +257,7 @@ pub fn[Inst] allocate_vcode(
     instructions.push(function.block_terminator(block).unwrap())
     for instruction in instructions {
       let operand_count = function.instruction_operand_count(instruction)
-      let assigned : Array[@vcode.PhysicalReg?] = Array::make(
-        operand_count,
-        None,
-      )
+      let assigned : Array[@vcode.Location?] = Array::make(operand_count, None)
       let used_scratch : Array[@vcode.PhysicalReg] = []
       for operand_index in 0..<operand_count {
         let operand = function
@@ -269,26 +266,35 @@ pub fn[Inst] allocate_vcode(
         let class = @vcode.reg_class_for_value_type(
           function.value_type(operand.value).unwrap(),
         )
-        let reg = match operand.constraint {
-          Fixed(required) => required
+        let location = match operand.constraint {
+          Fixed(required) => @vcode.Location::Register(required)
           TiedTo(tied_to) => assigned[tied_to].unwrap()
+          AnyLocation => allocation.value_location(operand.value).unwrap()
           Any =>
             match allocation.value_location(operand.value).unwrap() {
-              Register(home) => home
+              Register(home) => Register(home)
               Stack(_) =>
                 match find_spill_scratch(environment, class, used_scratch) {
                   Some(scratch) => {
                     used_scratch.push(scratch)
-                    scratch
+                    Register(scratch)
                   }
                   None => raise MissingSpillScratch(class~)
                 }
             }
         }
-        assigned[operand_index] = Some(reg)
+        assigned[operand_index] = Some(location)
         require_allocation_mutation(
-          allocation.assign_operand(instruction, operand_index, reg),
+          allocation.assign_operand_location(
+            instruction, operand_index, location,
+          ),
         )
+        if operand.constraint == AnyLocation {
+          continue
+        }
+        guard location is Register(reg) else {
+          raise AllocationConstructionRejected
+        }
         match allocation.value_location(operand.value).unwrap() {
           Stack(slot) =>
             if operand.role == Use {

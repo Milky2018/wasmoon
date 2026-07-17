@@ -2,6 +2,7 @@
 fn constraint_text(constraint : OperandConstraint) -> String {
   match constraint {
     Any => "any"
+    AnyLocation => "any-location"
     Fixed(reg) => "fixed(\{to_repr(reg)})"
     TiedTo(index) => "tied(\{index})"
   }

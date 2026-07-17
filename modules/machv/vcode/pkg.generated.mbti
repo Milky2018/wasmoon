@@ -28,6 +28,8 @@ pub suberror AllocationVerifyError {
   LocationClassMismatch(value~ : Value)
   MissingOperandLocation(instruction~ : Instruction, operand~ : Int)
   OperandClassMismatch(instruction~ : Instruction, operand~ : Int)
+  RegisterConstraintViolation(instruction~ : Instruction, operand~ : Int)
+  AnyLocationConstraintViolation(instruction~ : Instruction, operand~ : Int)
   FixedConstraintViolation(instruction~ : Instruction, operand~ : Int)
   TiedConstraintViolation(instruction~ : Instruction, operand~ : Int)
   Interference(left~ : Value, right~ : Value, location~ : Location)
@@ -87,6 +89,7 @@ pub suberror VCodeVerifyError {
   InvalidEdgeArity(instruction~ : Instruction, block~ : Block)
   EdgeClassMismatch(instruction~ : Instruction, block~ : Block, index~ : Int)
   InvalidTie(instruction~ : Instruction, operand~ : Int, tied_to~ : Int)
+  InvalidAnyLocationConstraint(instruction~ : Instruction, operand~ : Int)
   FixedRegisterClassMismatch(instruction~ : Instruction, operand~ : Int)
   DuplicateClobber(instruction~ : Instruction, reg~ : PhysicalReg)
   InvalidSafepointRoot(instruction~ : Instruction, value~ : Value)
@@ -104,11 +107,12 @@ pub struct Allocation {
 pub fn Allocation::add_edit(Self, Edit) -> Bool
 pub fn Allocation::add_safepoint_root(Self, Instruction, Value, Location) -> Bool
 pub fn Allocation::assign_operand(Self, Instruction, Int, PhysicalReg) -> Bool
+pub fn Allocation::assign_operand_location(Self, Instruction, Int, Location) -> Bool
 pub fn Allocation::assign_value(Self, Value, Location) -> Bool
 pub fn Allocation::create_stack_slot(Self, @machv.ValueType, Int, Int) -> StackSlot
 pub fn Allocation::edits(Self) -> Array[Edit]
 pub fn[Inst] Allocation::for_function(Function[Inst]) -> Self
-pub fn Allocation::operand_location(Self, Instruction, Int) -> PhysicalReg?
+pub fn Allocation::operand_location(Self, Instruction, Int) -> Location?
 pub fn Allocation::safepoint_roots(Self, Instruction) -> Array[(Value, Location)]
 pub fn Allocation::source_instruction_count(Self) -> Int
 pub fn Allocation::stack_slot_alignment(Self, StackSlot) -> Int?
@@ -219,6 +223,7 @@ pub struct Input {
   timing : OperandTiming
 }
 pub fn Input::any(Value) -> Self
+pub fn Input::any_location(Value) -> Self
 pub fn Input::fixed(Value, PhysicalReg) -> Self
 pub fn Input::with_timing(Self, OperandTiming) -> Self
 
@@ -256,6 +261,7 @@ pub struct Operand {
 
 pub(all) enum OperandConstraint {
   Any
+  AnyLocation
   Fixed(PhysicalReg)
   TiedTo(Int)
 } derive(Eq, @debug.Debug)

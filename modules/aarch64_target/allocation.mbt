@@ -88,10 +88,10 @@ pub fn verify_allocation(
   for instruction_index in 0..<function.instruction_count() {
     let instruction = function.instruction_at(instruction_index).unwrap()
     for operand_index in 0..<function.instruction_operand_count(instruction) {
-      require_legal_register(
-        allocation.operand_location(instruction, operand_index).unwrap(),
-        true,
-      )
+      if allocation.operand_location(instruction, operand_index).unwrap()
+        is Register(reg) {
+        require_legal_register(reg, true)
+      }
     }
   }
   for edit in allocation.edits() {

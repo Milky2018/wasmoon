@@ -137,6 +137,10 @@ fn[Inst] Function::verify_instruction(
           raise InvalidTie(instruction~, operand=index, tied_to~)
         }
       }
+      AnyLocation =>
+        if operand.role != Use {
+          raise InvalidAnyLocationConstraint(instruction~, operand=index)
+        }
       Any => ()
     }
     if operand.role == Use &&
@@ -247,7 +251,7 @@ fn Allocation::assignment_for(
   self : Allocation,
   instruction : Instruction,
   operand_index : Int,
-) -> PhysicalReg? {
+) -> Location? {
   self.operand_location(instruction, operand_index)
 }
 
@@ -624,13 +628,13 @@ pub fn[Inst] verify_allocated(
         None =>
           raise MissingOperandLocation(instruction~, operand=operand_index)
       }
-      if assignment.class !=
-        reg_class_for_value_type(function.values[operand.value.id].ty) {
+      if allocation.location_class(assignment) !=
+        Some(reg_class_for_value_type(function.values[operand.value.id].ty)) {
         raise OperandClassMismatch(instruction~, operand=operand_index)
       }
       match operand.constraint {
         Fixed(required) =>
-          if assignment != required {
+          if assignment != Register(required) {
             raise FixedConstraintViolation(instruction~, operand=operand_index)
           }
         TiedTo(tied_to) => {
@@ -639,28 +643,46 @@ pub fn[Inst] verify_allocated(
             raise TiedConstraintViolation(instruction~, operand=operand_index)
           }
         }
-        Any => ()
+        Any =>
+          if assignment is Stack(_) {
+            raise RegisterConstraintViolation(
+              instruction~,
+              operand=operand_index,
+            )
+          }
+        AnyLocation =>
+          if operand.role != Use ||
+            assignment != allocation.value_locations[operand.value.id].unwrap() {
+            raise AnyLocationConstraintViolation(
+              instruction~,
+              operand=operand_index,
+            )
+          }
       }
       match allocation.value_locations[operand.value.id].unwrap() {
         Stack(slot) =>
-          if operand.role == Use {
-            if !allocation.has_reload(
-                function.owner,
-                instruction,
-                operand.value,
-                slot,
-                assignment,
-              ) {
-              raise MissingReload(instruction~, operand=operand_index)
-            }
-          } else if !allocation.has_spill(
-              function.owner,
-              instruction,
-              operand.value,
-              assignment,
-              slot,
-            ) {
-            raise MissingSpill(instruction~, operand=operand_index)
+          match assignment {
+            Stack(_) => ()
+            Register(reg) =>
+              if operand.role == Use {
+                if !allocation.has_reload(
+                    function.owner,
+                    instruction,
+                    operand.value,
+                    slot,
+                    reg,
+                  ) {
+                  raise MissingReload(instruction~, operand=operand_index)
+                }
+              } else if !allocation.has_spill(
+                  function.owner,
+                  instruction,
+                  operand.value,
+                  reg,
+                  slot,
+                ) {
+                raise MissingSpill(instruction~, operand=operand_index)
+              }
           }
         Register(_) => ()
       }

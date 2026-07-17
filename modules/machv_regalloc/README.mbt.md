@@ -22,6 +22,11 @@ explicit set of allocatable registers and spill scratch registers. The result
 is verified against fixed and tied operands, clobbers, stack slots, insertion
 edits, edge moves, and safepoint roots before it is returned.
 
+Ordinary `Input::any` operands require a register at the instruction. A target
+operation that can consume a register or spill slot directly uses
+`Input::any_location`; its emitter then reads the allocated `Location` without
+forcing every such input through a simultaneous scratch-register reload.
+
 ## Example
 
 The instruction payload stays opaque to the allocator. In this small example

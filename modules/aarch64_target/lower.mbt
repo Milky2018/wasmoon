@@ -355,7 +355,7 @@ fn lower_direct_platform_call(
       )
   }
   let result_registers = platform_result_registers(call.signature.results)
-  let inputs = operands.map(@vcode.Input::any)
+  let inputs = operands.map(@vcode.Input::any_location)
   let outputs = Array::makei(result_types.length(), index => {
     @vcode.Output::any(result_types[index])
   })
@@ -435,7 +435,7 @@ fn lower_internal_call(
       Some(target) => InternalCall(target, call.signature, plan)
       None => InternalCallIndirect(call.signature, plan)
     },
-    operands.map(@vcode.Input::any),
+    operands.map(@vcode.Input::any_location),
     [],
     platform_call_clobbers(),
     metadata,
@@ -1395,7 +1395,7 @@ pub fn lower(
           builder,
           block,
           target,
-          operands.map(@vcode.Input::any),
+          operands.map(@vcode.Input::any_location),
           [],
           terminator_call_metadata(record.metadata, call.behavior.semantics()),
           clobbers=platform_call_clobbers(),

@@ -238,6 +238,36 @@ test "Allocation checker rejects interfering values in one location" {
 }
 
 ///|
+test "Allocation checker keeps register-only and location-aware inputs distinct" {
+  let builder : Builder[TestInst] = Builder::new("operand_location", [I64])
+  let entry = builder.entry_block()
+  let value = builder.parameter(0)
+  let return_inst = builder.set_terminator(
+    entry,
+    Return,
+    [Input::any(value)],
+    [],
+    [],
+    InstructionMetadata::empty(),
+  )
+  let function = builder.finish()
+  let allocation = Allocation::for_function(function)
+  let slot = allocation.create_stack_slot(I64, 8, 8)
+  allocation.assign_value(value, Stack(slot)) |> ignore
+  allocation.assign_operand_location(return_inst, 0, Stack(slot)) |> ignore
+  let error = try {
+    verify_allocated(function, allocation)
+    "accepted"
+  } catch {
+    error => error.to_string()
+  }
+  inspect(
+    error,
+    content="RegisterConstraintViolation(instruction=i0, operand=0)",
+  )
+}
+
+///|
 test "Allocation checker requires and validates edge parallel moves" {
   let builder : Builder[TestInst] = Builder::new("edge_move", [I64])
   let entry = builder.entry_block()

@@ -130,7 +130,7 @@ pub struct Allocation {
   priv operand_counts : Array[Int]
   priv operand_values : Array[Array[Value]]
   priv value_locations : Array[Location?]
-  priv operand_locations : Array[Array[PhysicalReg?]]
+  priv operand_locations : Array[Array[Location?]]
   priv stack_slots : Array[StackSlotData]
   priv edits : Array[Edit]
   priv safepoint_roots : Array[SafepointRootLocation]
@@ -286,11 +286,11 @@ pub fn Allocation::value_location(
 }
 
 ///|
-pub fn Allocation::assign_operand(
+pub fn Allocation::assign_operand_location(
   self : Allocation,
   instruction : Instruction,
   operand_index : Int,
-  reg : PhysicalReg,
+  location : Location,
 ) -> Bool {
   if !self.owns_instruction(instruction) ||
     operand_index < 0 ||
@@ -298,11 +298,21 @@ pub fn Allocation::assign_operand(
     return false
   }
   let value = self.operand_values[instruction.id][operand_index]
-  if reg.class != reg_class_for_value_type(self.value_types[value.id]) {
+  if !self.location_matches(location, self.value_types[value.id]) {
     return false
   }
-  self.operand_locations[instruction.id][operand_index] = Some(reg)
+  self.operand_locations[instruction.id][operand_index] = Some(location)
   true
+}
+
+///|
+pub fn Allocation::assign_operand(
+  self : Allocation,
+  instruction : Instruction,
+  operand_index : Int,
+  reg : PhysicalReg,
+) -> Bool {
+  self.assign_operand_location(instruction, operand_index, Register(reg))
 }
 
 ///|
@@ -310,7 +320,7 @@ pub fn Allocation::operand_location(
   self : Allocation,
   instruction : Instruction,
   operand_index : Int,
-) -> PhysicalReg? {
+) -> Location? {
   if !self.owns_instruction(instruction) ||
     operand_index < 0 ||
     operand_index >= self.operand_counts[instruction.id] {
@@ -400,6 +410,8 @@ pub suberror AllocationVerifyError {
   LocationClassMismatch(value~ : Value)
   MissingOperandLocation(instruction~ : Instruction, operand~ : Int)
   OperandClassMismatch(instruction~ : Instruction, operand~ : Int)
+  RegisterConstraintViolation(instruction~ : Instruction, operand~ : Int)
+  AnyLocationConstraintViolation(instruction~ : Instruction, operand~ : Int)
   FixedConstraintViolation(instruction~ : Instruction, operand~ : Int)
   TiedConstraintViolation(instruction~ : Instruction, operand~ : Int)
   Interference(left~ : Value, right~ : Value, location~ : Location)

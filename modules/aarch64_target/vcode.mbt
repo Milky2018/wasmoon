@@ -524,7 +524,7 @@ fn require_tail_call_plan(
   }
   require_instruction_shape(function, instruction, use_types, [], true, 0)
   for operand in function.instruction_operands(instruction) {
-    if operand.constraint != Any {
+    if operand.constraint != AnyLocation {
       raise InvalidInstruction(
         instruction~,
         message="tail-call operands must remain allocatable before ABI moves",
@@ -1628,7 +1628,7 @@ pub fn verify_vcode(
         )
         ignore(argument_layout)
         for operand in function.instruction_operands(instruction) {
-          if operand.constraint != Any {
+          if operand.constraint != AnyLocation {
             raise InvalidInstruction(
               instruction~,
               message="direct call arguments must remain allocatable before ABI moves",
@@ -1687,7 +1687,7 @@ pub fn verify_vcode(
           }
         }
         for operand in function.instruction_operands(instruction) {
-          if operand.constraint != Any {
+          if operand.constraint != AnyLocation {
             raise InvalidInstruction(
               instruction~,
               message="internal call arguments must remain allocatable before ABI moves",
@@ -1745,7 +1745,7 @@ pub fn verify_vcode(
           }
         }
         for operand in function.instruction_operands(instruction) {
-          if operand.constraint != Any {
+          if operand.constraint != AnyLocation {
             raise InvalidInstruction(
               instruction~,
               message="indirect call operands must remain allocatable before ABI moves",

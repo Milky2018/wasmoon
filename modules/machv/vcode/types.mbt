@@ -187,6 +187,7 @@ pub(all) enum OperandTiming {
 ///|
 pub(all) enum OperandConstraint {
   Any
+  AnyLocation
   Fixed(PhysicalReg)
   TiedTo(Int)
 } derive(Eq, Debug)
@@ -207,6 +208,15 @@ pub struct Input {
 ///|
 pub fn Input::any(value : Value) -> Input {
   { value, constraint: Any, timing: Early }
+}
+
+///|
+/// Keep an input in its allocated register or spill slot. This is intended for
+/// target operations, such as ABI argument setup, whose emitter can consume a
+/// stack-resident value directly instead of requiring every input in a register
+/// at the same program point.
+pub fn Input::any_location(value : Value) -> Input {
+  { value, constraint: AnyLocation, timing: Early }
 }
 
 ///|
@@ -376,6 +386,7 @@ pub suberror VCodeVerifyError {
   InvalidEdgeArity(instruction~ : Instruction, block~ : Block)
   EdgeClassMismatch(instruction~ : Instruction, block~ : Block, index~ : Int)
   InvalidTie(instruction~ : Instruction, operand~ : Int, tied_to~ : Int)
+  InvalidAnyLocationConstraint(instruction~ : Instruction, operand~ : Int)
   FixedRegisterClassMismatch(instruction~ : Instruction, operand~ : Int)
   DuplicateClobber(instruction~ : Instruction, reg~ : PhysicalReg)
   InvalidSafepointRoot(instruction~ : Instruction, value~ : Value)

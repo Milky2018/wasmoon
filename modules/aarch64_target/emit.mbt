@@ -43,6 +43,7 @@ pub suberror AArch64EmitError {
   UnresolvedStackMove
   MissingStackObjectArea
   MissingResultArea
+  UnexpectedStackOperand(instruction~ : @vcode.Instruction, operand~ : Int)
   FrameOffsetOutOfRange(offset~ : Int)
   InvalidScalarMemoryAccess
   InvalidFloatInstruction
@@ -2033,20 +2034,34 @@ fn emit_call_arguments(
       .unwrap()
     match locations[index] {
       CallRegister(destination) =>
-        moves.push(
-          @vcode.ParallelMove::new(ty, Register(source), Register(destination)),
-        )
-      CallStack(offset) =>
-        emit_stack_access(buffer, false, ty, source, stack_base + offset)
+        moves.push(@vcode.ParallelMove::new(ty, source, Register(destination)))
+      CallStack(offset) => {
+        let source_reg = match source {
+          Register(reg) => reg
+          Stack(slot) => {
+            let scratch = @vcode.PhysicalReg::new(
+              16,
+              @vcode.reg_class_for_value_type(ty),
+            )
+            emit_stack_access(
+              buffer,
+              true,
+              ty,
+              scratch,
+              frame.slot_offset(slot).unwrap(),
+            )
+            scratch
+          }
+        }
+        emit_stack_access(buffer, false, ty, source_reg, stack_base + offset)
+      }
     }
   }
   if callee is Some((operand_index, destination)) {
     moves.push(
       @vcode.ParallelMove::new(
         Ptr64,
-        Register(
-          allocation.operand_location(instruction, operand_index).unwrap(),
-        ),
+        allocation.operand_location(instruction, operand_index).unwrap(),
         Register(destination),
       ),
     )
@@ -2055,9 +2070,7 @@ fn emit_call_arguments(
     moves.push(
       @vcode.ParallelMove::new(
         Ptr64,
-        Register(
-          allocation.operand_location(instruction, operand_index).unwrap(),
-        ),
+        allocation.operand_location(instruction, operand_index).unwrap(),
         Register(destination),
       ),
     )
@@ -2085,8 +2098,11 @@ fn emit_instruction(
   block : @vcode.Block,
   instruction : @vcode.Instruction,
 ) -> Int raise AArch64EmitError {
-  let reg = fn(index) {
-    allocation.operand_location(instruction, index).unwrap()
+  let reg = fn(index : Int) -> @vcode.PhysicalReg raise AArch64EmitError {
+    match allocation.operand_location(instruction, index).unwrap() {
+      Register(reg) => reg
+      Stack(_) => raise UnexpectedStackOperand(instruction~, operand=index)
+    }
   }
   let mut metadata_offset = buffer.position()
   match function.instruction(instruction).unwrap() {
