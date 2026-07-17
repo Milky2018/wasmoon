@@ -23,43 +23,71 @@ fn contains_reg(regs : Array[PhysicalReg], preg : PhysicalReg) -> Bool {
 }
 
 ///|
-fn is_clobbered_while_live(
+fn physical_reg_key(reg : PhysicalReg) -> (Int, Int) {
+  let class = match reg.class {
+    Int => 0
+    Float => 1
+    Vector => 2
+  }
+  (class, reg.id)
+}
+
+///|
+fn collect_register_clobber_points(
   program : Program,
+) -> Map[(Int, Int), Array[ProgramPoint]] {
+  let points_by_reg : Map[(Int, Int), Array[ProgramPoint]] = Map([])
+  for block in program.blocks {
+    for inst_index, inst in block.instructions {
+      let point = ProgramPoint::ProgramPoint(block.id, inst_index)
+      for clobber in inst.clobbers {
+        let key = physical_reg_key(clobber)
+        match points_by_reg.get(key) {
+          Some(points) => points.push(point)
+          None => points_by_reg[key] = [point]
+        }
+      }
+    }
+  }
+  points_by_reg
+}
+
+///|
+fn is_clobbered_while_live(
+  clobber_points : Map[(Int, Int), Array[ProgramPoint]],
   range : LiveRange,
   preg : PhysicalReg,
   block_order : Array[Int],
 ) -> Bool {
-  for block in program.blocks {
-    for inst_index, inst in block.instructions {
-      let point = ProgramPoint::ProgramPoint(block.id, inst_index)
-      if range.is_live_across(point, block_order) {
-        for clobber in inst.clobbers {
-          if clobber == preg {
-            return true
-          }
+  match clobber_points.get(physical_reg_key(preg)) {
+    Some(points) =>
+      for point in points {
+        if range.is_live_across(point, block_order) {
+          return true
         }
       }
-    }
+    None => ()
   }
   false
 }
 
 ///|
 fn available_regs_for_range(
-  program : Program,
+  physical_regs : Array[PhysicalReg],
+  clobber_points : Map[(Int, Int), Array[ProgramPoint]],
   range : LiveRange,
   block_order : Array[Int],
 ) -> Array[PhysicalReg] {
   let out : Array[PhysicalReg] = []
-  for preg in compatible_regs(program.physical_regs, range.vreg.class) {
-    if !is_clobbered_while_live(program, range, preg, block_order) {
+  for preg in compatible_regs(physical_regs, range.vreg.class) {
+    if !is_clobbered_while_live(clobber_points, range, preg, block_order) {
       out.push(preg)
     }
   }
   if range.get_fixed_reg() is Some(fixed) &&
     fixed.class == range.vreg.class &&
     !contains_reg(out, fixed) &&
-    !is_clobbered_while_live(program, range, fixed, block_order) {
+    !is_clobbered_while_live(clobber_points, range, fixed, block_order) {
     out.push(fixed)
   }
   out
@@ -214,10 +242,16 @@ fn choose_spill_candidate(
 pub fn allocate_linear_scan(program : Program) -> Allocation {
   let allocation = Allocation::Allocation()
   let ranges = build_live_ranges(program)
+  let clobber_points = collect_register_clobber_points(program)
   let active : Array[(LiveRange, PhysicalReg)] = []
   for interval in ranges.ranges {
     expire_old_intervals(active, interval, ranges.block_order)
-    let regs = available_regs_for_range(program, interval, ranges.block_order)
+    let regs = available_regs_for_range(
+      program.physical_regs,
+      clobber_points,
+      interval,
+      ranges.block_order,
+    )
     match
       choose_free_reg(
         regs,

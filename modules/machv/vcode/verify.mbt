@@ -1,24 +1,10 @@
 ///|
-fn[Inst] Function::instruction_position(
-  self : Function[Inst],
-  instruction : Instruction,
-) -> Int {
-  let data = self.instructions[instruction.id]
-  let body = self.blocks[data.parent.id].body
-  for index, candidate in body {
-    if candidate == instruction {
-      return index
-    }
-  }
-  body.length()
-}
-
-///|
 fn[Inst] Function::definition_dominates(
   self : Function[Inst],
   value : Value,
   use_instruction : Instruction,
   dominators : Array[Array[Bool]],
+  instruction_positions : Array[Int],
 ) -> Bool {
   let use_data = self.instructions[use_instruction.id]
   match self.values[value.id].definition {
@@ -27,8 +13,8 @@ fn[Inst] Function::definition_dominates(
     InstructionResult(definition) => {
       let definition_data = self.instructions[definition.id]
       if definition_data.parent == use_data.parent {
-        self.instruction_position(definition) <
-        self.instruction_position(use_instruction)
+        instruction_positions[definition.id] <
+        instruction_positions[use_instruction.id]
       } else {
         dominators[use_data.parent.id][definition_data.parent.id]
       }
@@ -112,6 +98,7 @@ fn[Inst] Function::verify_instruction(
   self : Function[Inst],
   instruction : Instruction,
   dominators : Array[Array[Bool]],
+  instruction_positions : Array[Int],
 ) -> Unit raise VCodeVerifyError {
   let data = self.instructions[instruction.id]
   let operands = self.instruction_operands(instruction)
@@ -144,7 +131,12 @@ fn[Inst] Function::verify_instruction(
       Any => ()
     }
     if operand.role == Use &&
-      !self.definition_dominates(operand.value, instruction, dominators) {
+      !self.definition_dominates(
+        operand.value,
+        instruction,
+        dominators,
+        instruction_positions,
+      ) {
       let definition = self.values[operand.value.id].definition
       match definition {
         InstructionResult(definition) => {
@@ -179,7 +171,9 @@ fn[Inst] Function::verify_instruction(
   for root in metadata.live_gc_roots {
     if !self.owns_value(root) ||
       self.values[root.id].ty != GcRef64 ||
-      !self.definition_dominates(root, instruction, dominators) {
+      !self.definition_dominates(
+        root, instruction, dominators, instruction_positions,
+      ) {
       raise InvalidSafepointRoot(instruction~, value=root)
     }
   }
@@ -199,7 +193,9 @@ fn[Inst] Function::verify_instruction(
         if self.values[argument.id].ty != self.values[parameters[index].id].ty {
           raise EdgeClassMismatch(instruction~, block=edge.target, index~)
         }
-        if !self.definition_dominates(argument, instruction, dominators) {
+        if !self.definition_dominates(
+            argument, instruction, dominators, instruction_positions,
+          ) {
           raise DefinitionDoesNotDominate(instruction~, value=argument)
         }
       }
@@ -240,10 +236,18 @@ pub fn[Inst] verify_selected(
     }
   }
   let dominators = function.compute_dominators(predecessors)
+  let instruction_positions = Array::make(function.instructions.length(), -1)
+  for block in function.blocks {
+    for position, instruction in block.body {
+      instruction_positions[instruction.id] = position
+    }
+    let terminator = block.terminator.unwrap()
+    instruction_positions[terminator.id] = block.body.length()
+  }
   let stack_map_ids : Array[Int] = []
   for index in 0..<function.instructions.length() {
     let instruction = Instruction::new(function.owner, index)
-    function.verify_instruction(instruction, dominators)
+    function.verify_instruction(instruction, dominators, instruction_positions)
     if function.instructions[index].metadata.stack_map is Some(stack_map) {
       if stack_map_ids.contains(stack_map.id) {
         raise InvalidStackMap(instruction~)
@@ -449,7 +453,7 @@ fn[Inst] verify_allocation_edits(
 }
 
 ///|
-fn[Inst] Function::allocation_live_after(
+fn[Inst] Function::allocation_block_live_out(
   self : Function[Inst],
 ) -> Array[Array[Bool]] {
   let value_count = self.value_count()
@@ -501,65 +505,88 @@ fn[Inst] Function::allocation_live_after(
       }
     }
   }
-  let after = Array::makei(self.instruction_count(), _ => {
-    Array::make(value_count, false)
-  })
-  for block_index in 0..<block_count {
-    let live = live_out[block_index].copy()
-    let terminator = self.blocks[block_index].terminator.unwrap()
-    let instructions = self.blocks[block_index].body.copy()
-    instructions.push(terminator)
-    for reverse_inst in 0..<instructions.length() {
-      let instruction = instructions[instructions.length() - reverse_inst - 1]
-      after[instruction.id] = live.copy()
-      let data = self.instructions[instruction.id]
-      for result in data.results {
-        live[result.id] = false
-      }
-      for operand in self.instruction_operands(instruction) {
-        if operand.role == Use {
-          live[operand.value.id] = true
-        }
-      }
-      for root in data.metadata.live_gc_roots {
-        live[root.id] = true
-      }
-    }
-  }
-  after
+  live_out
 }
 
 ///|
-priv enum LocationKey {
-  RegisterKey(Int, RegClass)
-  StackKey(Int)
-} derive(Eq, Hash)
-
-///|
-fn location_key(location : Location) -> LocationKey {
-  match location {
-    Register(reg) => RegisterKey(reg.id, reg.class)
-    Stack(slot) => StackKey(slot.id)
-  }
-}
-
-///|
-fn[Inst] verify_live_locations(
+fn[Inst] allocation_location_ids(
   function : Function[Inst],
   allocation : Allocation,
-  live : Array[Bool],
-) -> Unit raise AllocationVerifyError {
-  let occupied : Map[LocationKey, Value] = Map([])
-  for index, is_live in live {
-    if !is_live {
-      continue
+) -> (Array[Int], Int, Map[(Int, Int), Int]) {
+  let ids = Array::make(function.value_count(), -1)
+  let ids_by_location : Map[(Int, Int), Int] = Map([])
+  let mut location_count = 0
+  for index in 0..<function.value_count() {
+    let location = allocation.value_locations[index].unwrap()
+    let key = match location {
+      Register(reg) =>
+        match reg.class {
+          Int => (0, reg.id)
+          FpVector => (1, reg.id)
+        }
+      Stack(slot) => (2, slot.id)
     }
-    let value = function.value_at(index).unwrap()
-    let location = allocation.value_location(value).unwrap()
-    let key = location_key(location)
-    match occupied.get(key) {
-      Some(left) => raise Interference(left~, right=value, location~)
-      None => occupied.set(key, value)
+    match ids_by_location.get(key) {
+      Some(id) => ids[index] = id
+      None => {
+        ids_by_location[key] = location_count
+        ids[index] = location_count
+        location_count += 1
+      }
+    }
+  }
+  (ids, location_count, ids_by_location)
+}
+
+///|
+fn find_or_add_affected_value(
+  value_index : Int,
+  live : Array[Bool],
+  affected_values : Array[Int],
+  before_states : Array[Bool],
+  middle_states : Array[Bool],
+) -> Int {
+  for index, affected in affected_values {
+    if affected == value_index {
+      return index
+    }
+  }
+  affected_values.push(value_index)
+  before_states.push(live[value_index])
+  middle_states.push(live[value_index])
+  affected_values.length() - 1
+}
+
+///|
+fn[Inst] transition_live_locations(
+  function : Function[Inst],
+  allocation : Allocation,
+  location_ids : Array[Int],
+  live : Array[Bool],
+  occupants : Array[Int],
+  affected_values : Array[Int],
+  desired_states : Array[Bool],
+) -> Unit raise AllocationVerifyError {
+  for index, value_index in affected_values {
+    if live[value_index] && !desired_states[index] {
+      occupants[location_ids[value_index]] = -1
+      live[value_index] = false
+    }
+  }
+  for index, value_index in affected_values {
+    if !live[value_index] && desired_states[index] {
+      let location_id = location_ids[value_index]
+      let earlier = occupants[location_id]
+      if earlier >= 0 {
+        let earlier_value = function.value_at(earlier).unwrap()
+        raise Interference(
+          left=earlier_value,
+          right=function.value_at(value_index).unwrap(),
+          location=allocation.value_location(earlier_value).unwrap(),
+        )
+      }
+      occupants[location_id] = value_index
+      live[value_index] = true
     }
   }
 }
@@ -568,38 +595,102 @@ fn[Inst] verify_live_locations(
 fn[Inst] verify_allocation_interference(
   function : Function[Inst],
   allocation : Allocation,
-  live_after : Array[Array[Bool]],
+  block_live_out : Array[Array[Bool]],
 ) -> Unit raise AllocationVerifyError {
-  for instruction_index in 0..<function.instruction_count() {
-    let instruction = function.instruction_at(instruction_index).unwrap()
-    verify_live_locations(function, allocation, live_after[instruction_index])
-    let before = live_after[instruction_index].copy()
-    let middle = live_after[instruction_index].copy()
-    for operand in function.instruction_operands(instruction) {
-      if operand.role == Def {
-        before[operand.value.id] = false
-        if operand.timing == Late {
-          middle[operand.value.id] = false
+  let (location_ids, location_count, ids_by_location) = allocation_location_ids(
+    function, allocation,
+  )
+  for block_index in 0..<function.block_count() {
+    let live = block_live_out[block_index].copy()
+    let occupants = Array::make(location_count, -1)
+    for value_index, is_live in live {
+      if is_live {
+        let location_id = location_ids[value_index]
+        let earlier = occupants[location_id]
+        if earlier >= 0 {
+          let earlier_value = function.value_at(earlier).unwrap()
+          raise Interference(
+            left=earlier_value,
+            right=function.value_at(value_index).unwrap(),
+            location=allocation.value_location(earlier_value).unwrap(),
+          )
         }
-      } else {
-        before[operand.value.id] = true
-        if operand.timing == Late {
-          middle[operand.value.id] = true
-        }
+        occupants[location_id] = value_index
       }
     }
-    let metadata = function.instruction_metadata(instruction).unwrap()
-    for root in metadata.live_gc_roots {
-      before[root.id] = true
-      middle[root.id] = true
-    }
-    for edge in function.instruction_successors(instruction) {
-      for argument in edge.arguments {
-        before[argument.id] = true
+    let terminator = function.blocks[block_index].terminator.unwrap()
+    let instructions = function.blocks[block_index].body.copy()
+    instructions.push(terminator)
+    for reverse_index in 0..<instructions.length() {
+      let instruction = instructions[instructions.length() - reverse_index - 1]
+      let clobbers = function.instruction_clobbers(instruction)
+      for reg in clobbers {
+        let class = match reg.class {
+          Int => 0
+          FpVector => 1
+        }
+        if ids_by_location.get((class, reg.id)) is Some(location_id) &&
+          occupants[location_id] >= 0 {
+          raise ClobberViolation(
+            instruction~,
+            value=function.value_at(occupants[location_id]).unwrap(),
+          )
+        }
       }
+      let affected_values : Array[Int] = []
+      let before_states : Array[Bool] = []
+      let middle_states : Array[Bool] = []
+      for operand in function.instruction_operands(instruction) {
+        let index = find_or_add_affected_value(
+          operand.value.id,
+          live,
+          affected_values,
+          before_states,
+          middle_states,
+        )
+        if operand.role == Def {
+          before_states[index] = false
+          if operand.timing == Late {
+            middle_states[index] = false
+          }
+        } else {
+          before_states[index] = true
+          if operand.timing == Late {
+            middle_states[index] = true
+          }
+        }
+      }
+      let metadata = function.instruction_metadata(instruction).unwrap()
+      for root in metadata.live_gc_roots {
+        let index = find_or_add_affected_value(
+          root.id,
+          live,
+          affected_values,
+          before_states,
+          middle_states,
+        )
+        before_states[index] = true
+        middle_states[index] = true
+      }
+      for edge in function.instruction_successors(instruction) {
+        for argument in edge.arguments {
+          let index = find_or_add_affected_value(
+            argument.id,
+            live,
+            affected_values,
+            before_states,
+            middle_states,
+          )
+          before_states[index] = true
+        }
+      }
+      transition_live_locations(
+        function, allocation, location_ids, live, occupants, affected_values, middle_states,
+      )
+      transition_live_locations(
+        function, allocation, location_ids, live, occupants, affected_values, before_states,
+      )
     }
-    verify_live_locations(function, allocation, before)
-    verify_live_locations(function, allocation, middle)
   }
 }
 
@@ -720,27 +811,8 @@ pub fn[Inst] verify_allocated(
       }
     }
   }
-  let live_after = function.allocation_live_after()
-  verify_allocation_interference(function, allocation, live_after)
-  for instruction_index in 0..<function.instruction_count() {
-    let instruction = function.instruction_at(instruction_index).unwrap()
-    let clobbers = function.instruction_clobbers(instruction)
-    for value_index in 0..<function.value_count() {
-      if !live_after[instruction_index][value_index] {
-        continue
-      }
-      match allocation.value_locations[value_index].unwrap() {
-        Register(reg) =>
-          if clobbers.contains(reg) {
-            raise ClobberViolation(
-              instruction~,
-              value=function.value_at(value_index).unwrap(),
-            )
-          }
-        Stack(_) => ()
-      }
-    }
-  }
+  let block_live_out = function.allocation_block_live_out()
+  verify_allocation_interference(function, allocation, block_live_out)
   for instruction_index in 0..<function.instruction_count() {
     let instruction = function.instruction_at(instruction_index).unwrap()
     let metadata = function.instructions[instruction_index].metadata

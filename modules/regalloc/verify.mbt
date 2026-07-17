@@ -30,8 +30,21 @@ pub fn raise_scratch_register_unavailable(
 }
 
 ///|
-fn same_location(lhs : Location, rhs : Location) -> Bool {
-  lhs == rhs
+fn virtual_reg_key(reg : VirtualReg) -> (Int, Int) {
+  let class = match reg.class {
+    Int => 0
+    Float => 1
+    Vector => 2
+  }
+  (class, reg.id)
+}
+
+///|
+fn location_key(location : Location) -> (Int, Int) {
+  match location {
+    Reg(reg) => physical_reg_key(reg)
+    Spill(slot) => (3, slot)
+  }
 }
 
 ///|
@@ -65,29 +78,26 @@ fn verify_range_assignment(
 
 ///|
 fn verify_clobber_safety(
-  program : Program,
+  clobber_points : Map[(Int, Int), Array[ProgramPoint]],
   range : LiveRange,
   preg : PhysicalReg,
   block_order : Array[Int],
 ) -> Unit raise VerifyError {
-  for block in program.blocks {
-    for inst_index, inst in block.instructions {
-      let point = ProgramPoint::ProgramPoint(block.id, inst_index)
-      if range.is_live_across(point, block_order) {
-        for clobber in inst.clobbers {
-          if clobber == preg {
-            raise ClobberedRegister(vreg=range.vreg, preg~)
-          }
+  match clobber_points.get(physical_reg_key(preg)) {
+    Some(points) =>
+      for point in points {
+        if range.is_live_across(point, block_order) {
+          raise ClobberedRegister(vreg=range.vreg, preg~)
         }
       }
-    }
+    None => ()
   }
 }
 
 ///|
 fn verify_tied_operands(
   program : Program,
-  allocation : Allocation,
+  locations : Map[(Int, Int), Location],
 ) -> Unit raise VerifyError {
   for block in program.blocks {
     for inst in block.instructions {
@@ -95,7 +105,7 @@ fn verify_tied_operands(
         if lhs.tie_id < 0 {
           continue
         }
-        guard allocation.location_of(lhs.vreg) is Some(lhs_location) else {
+        guard locations.get(virtual_reg_key(lhs.vreg)) is Some(lhs_location) else {
           raise Unassigned(vreg=lhs.vreg)
         }
         for j in (i + 1)..<inst.operands.length() {
@@ -103,7 +113,7 @@ fn verify_tied_operands(
           if rhs.tie_id != lhs.tie_id {
             continue
           }
-          guard allocation.location_of(rhs.vreg) is Some(rhs_location) else {
+          guard locations.get(virtual_reg_key(rhs.vreg)) is Some(rhs_location) else {
             raise Unassigned(vreg=rhs.vreg)
           }
           if lhs_location != rhs_location {
@@ -126,32 +136,42 @@ pub fn verify_allocation(
   allocation : Allocation,
 ) -> Unit raise VerifyError {
   let ranges = build_live_ranges(program)
+  let locations : Map[(Int, Int), Location] = Map([])
+  for assignment in allocation.assignments {
+    locations[virtual_reg_key(assignment.vreg)] = assignment.location
+  }
+  let clobber_points = collect_register_clobber_points(program)
+  let ranges_by_location : Map[(Int, Int), Array[(LiveRange, Location)]] = Map([])
   for range in ranges.ranges {
-    match allocation.location_of(range.vreg) {
+    match locations.get(virtual_reg_key(range.vreg)) {
       Some(location) => {
         verify_range_assignment(range, location)
         if location is Reg(preg) {
-          verify_clobber_safety(program, range, preg, ranges.block_order)
+          verify_clobber_safety(clobber_points, range, preg, ranges.block_order)
+        }
+        let key = location_key(location)
+        match ranges_by_location.get(key) {
+          Some(assigned) => assigned.push((range, location))
+          None => ranges_by_location[key] = [(range, location)]
         }
       }
       None => raise Unassigned(vreg=range.vreg)
     }
   }
-  verify_tied_operands(program, allocation)
-  for i in 0..<allocation.assignments.length() {
-    let lhs = allocation.assignments[i]
-    guard ranges.get_by_vreg(lhs.vreg) is Some(lhs_range) else { continue }
-    for j in (i + 1)..<allocation.assignments.length() {
-      let rhs = allocation.assignments[j]
-      if same_location(lhs.location, rhs.location) &&
-        ranges.get_by_vreg(rhs.vreg) is Some(rhs_range) &&
-        lhs_range.overlaps(rhs_range, ranges.block_order) &&
-        !lhs_range.overlap_allowed_by_tie(rhs_range, ranges.block_order) {
-        raise OverlappingAllocation(
-          left=lhs.vreg,
-          right=rhs.vreg,
-          location=lhs.location,
-        )
+  verify_tied_operands(program, locations)
+  for _, assigned_ranges in ranges_by_location {
+    for i in 0..<assigned_ranges.length() {
+      let (lhs_range, lhs_location) = assigned_ranges[i]
+      for j in (i + 1)..<assigned_ranges.length() {
+        let (rhs_range, _) = assigned_ranges[j]
+        if lhs_range.overlaps(rhs_range, ranges.block_order) &&
+          !lhs_range.overlap_allowed_by_tie(rhs_range, ranges.block_order) {
+          raise OverlappingAllocation(
+            left=lhs_range.vreg,
+            right=rhs_range.vreg,
+            location=lhs_location,
+          )
+        }
       }
     }
   }
