@@ -27,6 +27,7 @@ pub suberror AArch64EmitError {
   FrameOffsetOutOfRange(offset~ : Int)
   InvalidScalarMemoryAccess
   InvalidFloatInstruction
+  InvalidConversionInstruction
   BranchTargetMissing(block~ : @vcode.Block)
   BranchOutOfRange(offset~ : Int, bits~ : Int)
 } derive(Debug)
@@ -369,6 +370,85 @@ fn float_condition_code(condition : AArch64FloatCondition) -> UInt {
 }
 
 ///|
+fn emit_conversion(
+  buffer : CodeBuffer,
+  conversion : AArch64Conversion,
+  source : @vcode.PhysicalReg,
+  destination : @vcode.PhysicalReg,
+) -> Unit raise AArch64EmitError {
+  match conversion {
+    WrapI64ToI32 | ExtendI32ToI64(Unsigned) =>
+      emit_move(buffer, I32, destination, source)
+    ExtendI32ToI64(Signed) =>
+      buffer.emit_word(
+        0x93407C00U | (reg_bits(source) << 5) | reg_bits(destination),
+      )
+    SignExtend(integer, width) => {
+      let base = if integer == I32 { 0x13000000U } else { 0x93400000U }
+      let highest_bit : UInt = match width {
+        W8 => 7U
+        W16 => 15U
+        W32 => 31U
+        _ => raise InvalidConversionInstruction
+      }
+      buffer.emit_word(
+        base |
+        (highest_bit << 10) |
+        (reg_bits(source) << 5) |
+        reg_bits(destination),
+      )
+    }
+    DemoteF64ToF32 =>
+      buffer.emit_word(
+        0x1E624000U | (reg_bits(source) << 5) | reg_bits(destination),
+      )
+    PromoteF32ToF64 =>
+      buffer.emit_word(
+        0x1E22C000U | (reg_bits(source) << 5) | reg_bits(destination),
+      )
+    Bitcast(from, to) =>
+      match (from, to) {
+        (I32, F32) =>
+          buffer.emit_word(
+            0x1E270000U | (reg_bits(source) << 5) | reg_bits(destination),
+          )
+        (F32, I32) =>
+          buffer.emit_word(
+            0x1E260000U | (reg_bits(source) << 5) | reg_bits(destination),
+          )
+        (I64 | Ptr64, F64) =>
+          buffer.emit_word(
+            0x9E670000U | (reg_bits(source) << 5) | reg_bits(destination),
+          )
+        (F64, I64 | Ptr64) =>
+          buffer.emit_word(
+            0x9E660000U | (reg_bits(source) << 5) | reg_bits(destination),
+          )
+        _ =>
+          if @vcode.reg_class_for_value_type(from) ==
+            @vcode.reg_class_for_value_type(to) {
+            emit_move(buffer, to, destination, source)
+          } else {
+            raise InvalidConversionInstruction
+          }
+      }
+    IntToFloat(integer, float, signedness) => {
+      let base : UInt = match (integer, float, signedness) {
+        (I32, F32, Signed) => 0x1E220000U
+        (I32, F32, Unsigned) => 0x1E230000U
+        (I64, F32, Signed) => 0x9E220000U
+        (I64, F32, Unsigned) => 0x9E230000U
+        (I32, F64, Signed) => 0x1E620000U
+        (I32, F64, Unsigned) => 0x1E630000U
+        (I64, F64, Signed) => 0x9E620000U
+        (I64, F64, Unsigned) => 0x9E630000U
+      }
+      buffer.emit_word(base | (reg_bits(source) << 5) | reg_bits(destination))
+    }
+  }
+}
+
+///|
 fn emit_register_save_or_restore(
   buffer : CodeBuffer,
   load : Bool,
@@ -629,6 +709,7 @@ fn emit_instruction(
       let inverse = float_condition_code(condition) ^ 1U
       buffer.emit_word(0x9A9F07E0U | (inverse << 12) | reg_bits(reg(2)))
     }
+    Convert(conversion) => emit_conversion(buffer, conversion, reg(0), reg(1))
     AddAddress =>
       buffer.emit_word(
         encode_three_register(0x8B000000U, reg(2), reg(0), reg(1)),

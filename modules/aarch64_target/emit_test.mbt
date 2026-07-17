@@ -1404,6 +1404,108 @@ test "AArch64 scalar floating-point emission preserves constant bits" {
 }
 
 ///|
+test "AArch64 scalar conversion emission preserves register-bank transfers" {
+  let builder = @semantic.FunctionBuilder::new(
+    "emitted_scalar_conversions",
+    Internal,
+    [Ptr64, I32, I64, F32, F64],
+    [I64, F64],
+  )
+  let parameters = builder.parameters()
+  let extended = builder.emit(Convert(I64ExtendI32(Signed)), [parameters[1]], [
+      I64,
+    ])[0]
+  let float_bits = builder.emit(Convert(Bitcast(F64, I64)), [parameters[4]], [
+      I64,
+    ])[0]
+  let integer_result = builder.emit(IntBinary(Add), [extended, float_bits], [
+      I64,
+    ])[0]
+  let converted = builder.emit(
+      Convert(IntToFloat(I64, F64, Unsigned)),
+      [parameters[2]],
+      [F64],
+    )[0]
+  let promoted = builder.emit(Convert(F64PromoteF32), [parameters[3]], [F64])[0]
+  let float_result = builder.emit(FloatBinary(Add), [converted, promoted], [F64])[0]
+  builder.return_([integer_result, float_result])
+  let function = lower(builder.finish(), test_lowering_context())
+  let allocation = allocate(function)
+  let frame = plan_frame(function, allocation)
+  debug_inspect(
+    emit(function, allocation, frame),
+    content=(
+      #|{
+      #|  architecture: AArch64,
+      #|  code: [
+      #|    0xe3,
+      #|    0x03,
+      #|    0x00,
+      #|    0xaa,
+      #|    0xe0,
+      #|    0x03,
+      #|    0x01,
+      #|    0x2a,
+      #|    0xe1,
+      #|    0x03,
+      #|    0x02,
+      #|    0xaa,
+      #|    0x02,
+      #|    0x1c,
+      #|    0xa0,
+      #|    0x4e,
+      #|    0x20,
+      #|    0x1c,
+      #|    0xa1,
+      #|    0x4e,
+      #|    0x02,
+      #|    0x7c,
+      #|    0x40,
+      #|    0x93,
+      #|    0x00,
+      #|    0x00,
+      #|    0x66,
+      #|    0x9e,
+      #|    0x43,
+      #|    0x00,
+      #|    0x00,
+      #|    0x8b,
+      #|    0x20,
+      #|    0x00,
+      #|    0x63,
+      #|    0x9e,
+      #|    0x41,
+      #|    0xc0,
+      #|    0x22,
+      #|    0x1e,
+      #|    0x02,
+      #|    0x28,
+      #|    0x61,
+      #|    0x1e,
+      #|    0xe0,
+      #|    0x03,
+      #|    0x03,
+      #|    0xaa,
+      #|    0x40,
+      #|    0x1c,
+      #|    0xa2,
+      #|    0x4e,
+      #|    0xc0,
+      #|    0x03,
+      #|    0x5f,
+      #|    0xd6,
+      #|  ],
+      #|  relocations: [],
+      #|  sources: [],
+      #|  traps: [],
+      #|  safepoints: [],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
 test "AArch64 edge emission resolves register cycles through reserved scratch" {
   let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new_with_results(
     "edge_cycle",

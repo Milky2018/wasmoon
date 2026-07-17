@@ -502,3 +502,79 @@ test "AArch64 lowering selects non-trapping scalar floating-point operations" {
     ),
   )
 }
+
+///|
+test "AArch64 lowering selects non-trapping scalar conversions" {
+  let builder = @semantic.FunctionBuilder::new(
+    "scalar_conversions",
+    Internal,
+    [Ptr64, I32, I64, F32, F64],
+    [I32, I64, F32, F64],
+  )
+  let parameters = builder.parameters()
+  let wrapped0 = builder.emit(Convert(I32WrapI64), [parameters[2]], [I32])[0]
+  let signed8 = builder.emit(Convert(SignExtend(I32, W8)), [wrapped0], [I32])[0]
+  let bits32 = builder.emit(Convert(Bitcast(I32, F32)), [signed8], [F32])[0]
+  let wrapped = builder.emit(Convert(Bitcast(F32, I32)), [bits32], [I32])[0]
+  let signed = builder.emit(Convert(I64ExtendI32(Signed)), [parameters[1]], [
+      I64,
+    ])[0]
+  let unsigned = builder.emit(
+      Convert(I64ExtendI32(Unsigned)),
+      [parameters[1]],
+      [I64],
+    )[0]
+  let combined = builder.emit(IntBinary(Add), [signed, unsigned], [I64])[0]
+  let signed16 = builder.emit(Convert(SignExtend(I64, W16)), [combined], [I64])[0]
+  let bits64 = builder.emit(Convert(Bitcast(I64, F64)), [signed16], [F64])[0]
+  let extended = builder.emit(Convert(Bitcast(F64, I64)), [bits64], [I64])[0]
+  let demoted = builder.emit(Convert(F32DemoteF64), [parameters[4]], [F32])[0]
+  let int_float32 = builder.emit(
+      Convert(IntToFloat(I32, F32, Signed)),
+      [parameters[1]],
+      [F32],
+    )[0]
+  let float32 = builder.emit(FloatBinary(Add), [demoted, int_float32], [F32])[0]
+  let promoted = builder.emit(Convert(F64PromoteF32), [parameters[3]], [F64])[0]
+  let int_float64 = builder.emit(
+      Convert(IntToFloat(I64, F64, Unsigned)),
+      [parameters[2]],
+      [F64],
+    )[0]
+  let float64 = builder.emit(FloatBinary(Add), [promoted, int_float64], [F64])[0]
+  builder.return_([wrapped, extended, float32, float64])
+  inspect(
+    lower(builder.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode scalar_conversions(v0:ptr64, v1:i32, v2:i64, v3:f32, v4:f64) -> (i32, i64, f32, f64)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v5:any@late]
+      #|  i1 IncomingReg(I32, p1:int) uses=[v1:fixed(p1:int)@early] defs=[v6:any@late]
+      #|  i2 IncomingReg(I64, p2:int) uses=[v2:fixed(p2:int)@early] defs=[v7:any@late]
+      #|  i3 IncomingReg(F32, p0:fpvec) uses=[v3:fixed(p0:fpvec)@early] defs=[v8:any@late]
+      #|  i4 IncomingReg(F64, p1:fpvec) uses=[v4:fixed(p1:fpvec)@early] defs=[v9:any@late]
+      #|  i5 Convert(WrapI64ToI32) uses=[v7:any@early] defs=[v10:any@late]
+      #|  i6 Convert(SignExtend(I32, W8)) uses=[v10:any@early] defs=[v11:any@late]
+      #|  i7 Convert(Bitcast(I32, F32)) uses=[v11:any@early] defs=[v12:any@late]
+      #|  i8 Convert(Bitcast(F32, I32)) uses=[v12:any@early] defs=[v13:any@late]
+      #|  i9 Convert(ExtendI32ToI64(Signed)) uses=[v6:any@early] defs=[v14:any@late]
+      #|  i10 Convert(ExtendI32ToI64(Unsigned)) uses=[v6:any@early] defs=[v15:any@late]
+      #|  i11 IntBinary(W64, Add) uses=[v14:any@early, v15:any@early] defs=[v16:any@late]
+      #|  i12 Convert(SignExtend(I64, W16)) uses=[v16:any@early] defs=[v17:any@late]
+      #|  i13 Convert(Bitcast(I64, F64)) uses=[v17:any@early] defs=[v18:any@late]
+      #|  i14 Convert(Bitcast(F64, I64)) uses=[v18:any@early] defs=[v19:any@late]
+      #|  i15 Convert(DemoteF64ToF32) uses=[v9:any@early] defs=[v20:any@late]
+      #|  i16 Convert(IntToFloat(I32, F32, Signed)) uses=[v6:any@early] defs=[v21:any@late]
+      #|  i17 FloatBinary(F32, Add) uses=[v20:any@early, v21:any@early] defs=[v22:any@late]
+      #|  i18 Convert(PromoteF32ToF64) uses=[v8:any@early] defs=[v23:any@late]
+      #|  i19 Convert(IntToFloat(I64, F64, Unsigned)) uses=[v7:any@early] defs=[v24:any@late]
+      #|  i20 FloatBinary(F64, Add) uses=[v23:any@early, v24:any@early] defs=[v25:any@late]
+      #|  i21 OutgoingReg(I32, p0:int) uses=[v13:any@early]
+      #|  i22 OutgoingReg(I64, p1:int) uses=[v19:any@early]
+      #|  i23 OutgoingReg(F32, p0:fpvec) uses=[v22:any@early]
+      #|  i24 OutgoingReg(F64, p1:fpvec) uses=[v25:any@early]
+      #|  i25 Return
+      #|
+    ),
+  )
+}

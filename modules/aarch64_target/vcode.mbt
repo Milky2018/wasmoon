@@ -66,6 +66,17 @@ pub(all) enum AArch64FloatCondition {
 } derive(Eq, Debug)
 
 ///|
+pub(all) enum AArch64Conversion {
+  WrapI64ToI32
+  ExtendI32ToI64(@semantic.Signedness)
+  SignExtend(@semantic.IntegerType, @semantic.AccessWidth)
+  DemoteF64ToF32
+  PromoteF32ToF64
+  Bitcast(@semantic.ValueType, @semantic.ValueType)
+  IntToFloat(@semantic.IntegerType, @semantic.FloatType, @semantic.Signedness)
+} derive(Eq, Debug)
+
+///|
 pub(all) enum AArch64Inst {
   IncomingReg(@semantic.ValueType, @vcode.PhysicalReg)
   IncomingStack(@semantic.ValueType, Int)
@@ -84,6 +95,7 @@ pub(all) enum AArch64Inst {
   FloatUnary(@semantic.ValueType, AArch64FloatUnary)
   FloatBinary(@semantic.ValueType, AArch64FloatBinary)
   FloatCompareSet(@semantic.ValueType, AArch64FloatCondition)
+  Convert(AArch64Conversion)
   AddAddress
   ScalarLoad(
     @semantic.AccessWidth,
@@ -350,6 +362,45 @@ fn valid_scalar_store(
 }
 
 ///|
+fn valid_scalar_bitcast(
+  from : @semantic.ValueType,
+  to : @semantic.ValueType,
+) -> Bool {
+  match (from, to) {
+    (I32, I32 | F32) | (F32, I32 | F32) => true
+    (I64, I64 | Ptr64 | F64)
+    | (Ptr64, I64 | Ptr64 | F64)
+    | (F64, I64 | Ptr64 | F64) => true
+    _ => false
+  }
+}
+
+///|
+fn conversion_shape(
+  conversion : AArch64Conversion,
+) -> (@semantic.ValueType, @semantic.ValueType)? {
+  match conversion {
+    WrapI64ToI32 => Some((I64, I32))
+    ExtendI32ToI64(_) => Some((I32, I64))
+    SignExtend(I32, W8 | W16) => Some((I32, I32))
+    SignExtend(I64, W8 | W16 | W32) => Some((I64, I64))
+    DemoteF64ToF32 => Some((F64, F32))
+    PromoteF32ToF64 => Some((F32, F64))
+    Bitcast(from, to) =>
+      if valid_scalar_bitcast(from, to) {
+        Some((from, to))
+      } else {
+        None
+      }
+    IntToFloat(I32, F32, _) => Some((I32, F32))
+    IntToFloat(I32, F64, _) => Some((I32, F64))
+    IntToFloat(I64, F32, _) => Some((I64, F32))
+    IntToFloat(I64, F64, _) => Some((I64, F64))
+    _ => None
+  }
+}
+
+///|
 pub fn verify_vcode(
   function : @vcode.Function[AArch64Inst],
 ) -> Unit raise TargetVCodeVerifyError {
@@ -521,6 +572,22 @@ pub fn verify_vcode(
           instruction,
           [ty, ty],
           [I32],
+          false,
+          0,
+        )
+      }
+      Convert(conversion) => {
+        guard conversion_shape(conversion) is Some((source, result)) else {
+          raise InvalidInstruction(
+            instruction~,
+            message="invalid AArch64 scalar conversion",
+          )
+        }
+        require_instruction_shape(
+          function,
+          instruction,
+          [source],
+          [result],
           false,
           0,
         )

@@ -76,6 +76,7 @@ pub suberror AArch64EmitError {
   FrameOffsetOutOfRange(offset~ : Int)
   InvalidScalarMemoryAccess
   InvalidFloatInstruction
+  InvalidConversionInstruction
   BranchTargetMissing(block~ : @vcode.Block)
   BranchOutOfRange(offset~ : Int, bits~ : Int)
 } derive(@debug.Debug)
@@ -130,6 +131,16 @@ pub(all) enum AArch64Condition {
   Hs
 } derive(Eq, @debug.Debug)
 
+pub(all) enum AArch64Conversion {
+  WrapI64ToI32
+  ExtendI32ToI64(@machv.Signedness)
+  SignExtend(@machv.IntegerType, @machv.AccessWidth)
+  DemoteF64ToF32
+  PromoteF32ToF64
+  Bitcast(@machv.ValueType, @machv.ValueType)
+  IntToFloat(@machv.IntegerType, @machv.FloatType, @machv.Signedness)
+} derive(Eq, @debug.Debug)
+
 pub(all) enum AArch64FloatBinary {
   Add
   Sub
@@ -180,6 +191,7 @@ pub(all) enum AArch64Inst {
   FloatUnary(@machv.ValueType, AArch64FloatUnary)
   FloatBinary(@machv.ValueType, AArch64FloatBinary)
   FloatCompareSet(@machv.ValueType, AArch64FloatCondition)
+  Convert(AArch64Conversion)
   AddAddress
   ScalarLoad(@machv.AccessWidth, @machv.LoadExtension, @machv.ValueType, UInt64)
   ScalarStore(@machv.AccessWidth, @machv.ValueType, UInt64)

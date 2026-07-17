@@ -112,6 +112,24 @@ fn lower_float_condition(
 }
 
 ///|
+fn lower_conversion(conversion : @semantic.ConversionOp) -> AArch64Conversion? {
+  match conversion {
+    I32WrapI64 => Some(WrapI64ToI32)
+    I64ExtendI32(signedness) => Some(ExtendI32ToI64(signedness))
+    SignExtend(I32, W8) => Some(SignExtend(I32, W8))
+    SignExtend(I32, W16) => Some(SignExtend(I32, W16))
+    SignExtend(I64, W8) => Some(SignExtend(I64, W8))
+    SignExtend(I64, W16) => Some(SignExtend(I64, W16))
+    SignExtend(I64, W32) => Some(SignExtend(I64, W32))
+    F32DemoteF64 => Some(DemoteF64ToF32)
+    F64PromoteF32 => Some(PromoteF32ToF64)
+    Bitcast(from, to) => Some(Bitcast(from, to))
+    IntToFloat(from, to, signedness) => Some(IntToFloat(from, to, signedness))
+    FloatToInt(_, _, _, _) | SignExtend(_, _) => None
+  }
+}
+
+///|
 fn map_value(
   function : @semantic.Function,
   values : Array[@vcode.Value?],
@@ -502,6 +520,11 @@ fn lower_instruction(
         _ => None
       }
     }
+    Convert(conversion) =>
+      match lower_conversion(conversion) {
+        Some(conversion) => Some(Convert(conversion))
+        None => None
+      }
     PointerOffset => Some(AddAddress)
     Load(spec) if spec.endianness == Little && spec.width != W128 =>
       Some(
