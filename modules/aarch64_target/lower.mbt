@@ -797,6 +797,8 @@ fn lower_instruction(
     Vector(IntUnary(lane, Negate)) => Some(VectorIntUnary(lane, Negate))
     Vector(IntUnary(lane, PopulationCount)) =>
       Some(VectorIntUnary(lane, PopulationCount))
+    Vector(IntUnary(lane, ExtendAddPairwise(signedness))) =>
+      Some(VectorIntUnary(lane, ExtendAddPairwise(signedness)))
     Vector(IntBinary(lane, Add)) => Some(VectorIntBinary(lane, Add))
     Vector(IntBinary(lane, Sub)) => Some(VectorIntBinary(lane, Sub))
     Vector(IntBinary(lane, Mul)) => Some(VectorIntBinary(lane, Mul))
@@ -810,6 +812,12 @@ fn lower_instruction(
       Some(VectorIntBinary(lane, SaturatingAdd(signedness)))
     Vector(IntBinary(lane, SaturatingSub(signedness))) =>
       Some(VectorIntBinary(lane, SaturatingSub(signedness)))
+    Vector(IntBinary(lane, ExtendMultiply(half, signedness))) =>
+      Some(VectorIntBinary(lane, ExtendMultiply(half, signedness)))
+    Vector(IntBinary(lane, Dot16To32Signed)) =>
+      Some(VectorIntBinary(lane, Dot16To32Signed))
+    Vector(IntBinary(lane, Q15MultiplyRoundedSaturating)) =>
+      Some(VectorIntBinary(lane, Q15MultiplyRoundedSaturating))
     Vector(IntShift(lane, operation)) => Some(VectorIntShift(lane, operation))
     Vector(IntCompare(lane, comparison)) =>
       Some(VectorIntCompare(lane, comparison))

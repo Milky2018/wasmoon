@@ -390,3 +390,75 @@ test "AArch64 verifier rejects non-byte vector population count" {
     _ => fail("expected non-byte vector population count to be rejected")
   }
 }
+
+///|
+test "AArch64 verifier rejects malformed widening vector operations" {
+  let operations : Array[AArch64Inst] = [
+    VectorIntUnary(I8x16, ExtendAddPairwise(Signed)),
+    VectorIntBinary(I8x16, ExtendMultiply(Low, Signed)),
+    VectorIntBinary(I16x8, Dot16To32Signed),
+    VectorIntBinary(I32x4, Q15MultiplyRoundedSaturating),
+  ]
+  let errors : Array[TargetVCodeVerifyError] = []
+  for operation in operations {
+    let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
+      "bad_vector_widening",
+      [V128, V128],
+    )
+    let entry = builder.entry_block()
+    let uses = match operation {
+      VectorIntUnary(_, _) => [@vcode.Input::any(builder.parameter(0))]
+      _ =>
+        [
+          @vcode.Input::any(builder.parameter(0)),
+          @vcode.Input::any(builder.parameter(1)),
+        ]
+    }
+    builder.append_body(
+      entry,
+      operation,
+      uses,
+      [@vcode.Output::any(V128)],
+      [],
+      @vcode.InstructionMetadata::empty(),
+    )
+    |> ignore
+    builder.set_terminator(
+      entry,
+      Return,
+      [],
+      [],
+      [],
+      @vcode.InstructionMetadata::empty(),
+    )
+    |> ignore
+    try verify_vcode(builder.finish()) catch {
+      error => errors.push(error)
+    } noraise {
+      _ => fail("expected malformed widening vector operation to be rejected")
+    }
+  }
+  debug_inspect(
+    errors,
+    content=(
+      #|[
+      #|  InvalidInstruction(
+      #|    instruction=i0,
+      #|    message="pairwise extending add requires widened integer lanes",
+      #|  ),
+      #|  InvalidInstruction(
+      #|    instruction=i0,
+      #|    message="extending multiply requires widened integer lanes",
+      #|  ),
+      #|  InvalidInstruction(
+      #|    instruction=i0,
+      #|    message="dot16-to32 requires i32x4 destination lanes",
+      #|  ),
+      #|  InvalidInstruction(
+      #|    instruction=i0,
+      #|    message="q15 rounded saturating multiply requires i16x8 lanes",
+      #|  ),
+      #|]
+    ),
+  )
+}

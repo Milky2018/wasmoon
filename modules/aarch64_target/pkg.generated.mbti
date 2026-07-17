@@ -302,12 +302,16 @@ pub(all) enum AArch64VectorIntBinary {
   Max(@machv.Signedness)
   SaturatingAdd(@machv.Signedness)
   SaturatingSub(@machv.Signedness)
+  ExtendMultiply(@machv.VectorHalf, @machv.Signedness)
+  Dot16To32Signed
+  Q15MultiplyRoundedSaturating
 } derive(Eq, @debug.Debug)
 
 pub(all) enum AArch64VectorIntUnary {
   Absolute
   Negate
   PopulationCount
+  ExtendAddPairwise(@machv.Signedness)
 } derive(Eq, @debug.Debug)
 
 pub(all) struct AbiPolicy {

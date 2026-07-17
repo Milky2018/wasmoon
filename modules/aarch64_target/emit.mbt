@@ -687,6 +687,15 @@ fn emit_vector_int_unary(
         I8x16 => 0x4E205800U
         I16x8 | I32x4 | I64x2 | F32x4 | F64x2 => raise InvalidVectorInstruction
       }
+    ExtendAddPairwise(signedness) => {
+      let signed = signedness is Signed
+      match lane {
+        I16x8 => if signed { 0x4E202800U } else { 0x6E202800U }
+        I32x4 => if signed { 0x4E602800U } else { 0x6E602800U }
+        I64x2 => if signed { 0x4EA02800U } else { 0x6EA02800U }
+        I8x16 | F32x4 | F64x2 => raise InvalidVectorInstruction
+      }
+    }
   }
   buffer.emit_word(base | (reg_bits(source) << 5) | reg_bits(destination))
 }
@@ -779,6 +788,55 @@ fn emit_vector_int_binary(
         I16x8 => 0x6E601400U
         I32x4 | I64x2 | F32x4 | F64x2 => raise InvalidVectorInstruction
       }
+    ExtendMultiply(half, signedness) => {
+      let high = half is High
+      let signed = signedness is Signed
+      let prefix = match (high, signed) {
+        (false, true) => 0x0E000000U
+        (false, false) => 0x2E000000U
+        (true, true) => 0x4E000000U
+        (true, false) => 0x6E000000U
+      }
+      let body = match lane {
+        I16x8 => 0x0020C000U
+        I32x4 => 0x0060C000U
+        I64x2 => 0x00A0C000U
+        I8x16 | F32x4 | F64x2 => raise InvalidVectorInstruction
+      }
+      prefix | body
+    }
+    Dot16To32Signed => {
+      if lane != I32x4 {
+        raise InvalidVectorInstruction
+      }
+      let low = @vcode.PhysicalReg::new(16, FpVector)
+      let high = @vcode.PhysicalReg::new(17, FpVector)
+      buffer.emit_word(
+        0x0E60C000U |
+        (reg_bits(right) << 16) |
+        (reg_bits(left) << 5) |
+        reg_bits(low),
+      )
+      buffer.emit_word(
+        0x4E60C000U |
+        (reg_bits(right) << 16) |
+        (reg_bits(left) << 5) |
+        reg_bits(high),
+      )
+      buffer.emit_word(
+        0x4EA0BC00U |
+        (reg_bits(high) << 16) |
+        (reg_bits(low) << 5) |
+        reg_bits(destination),
+      )
+      return
+    }
+    Q15MultiplyRoundedSaturating => {
+      if lane != I16x8 {
+        raise InvalidVectorInstruction
+      }
+      0x6E60B400U
+    }
     Min(signedness) =>
       if signedness is Signed {
         match lane {

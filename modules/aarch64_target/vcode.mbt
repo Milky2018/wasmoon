@@ -77,6 +77,7 @@ pub(all) enum AArch64VectorIntUnary {
   Absolute
   Negate
   PopulationCount
+  ExtendAddPairwise(@semantic.Signedness)
 } derive(Eq, Debug)
 
 ///|
@@ -89,6 +90,9 @@ pub(all) enum AArch64VectorIntBinary {
   Max(@semantic.Signedness)
   SaturatingAdd(@semantic.Signedness)
   SaturatingSub(@semantic.Signedness)
+  ExtendMultiply(@semantic.VectorHalf, @semantic.Signedness)
+  Dot16To32Signed
+  Q15MultiplyRoundedSaturating
 } derive(Eq, Debug)
 
 ///|
@@ -776,6 +780,15 @@ pub fn verify_vcode(
             message="vector population count requires i8x16 lanes",
           )
         }
+        if operation is ExtendAddPairwise(_) &&
+          lane != I16x8 &&
+          lane != I32x4 &&
+          lane != I64x2 {
+          raise InvalidInstruction(
+            instruction~,
+            message="pairwise extending add requires widened integer lanes",
+          )
+        }
         require_instruction_shape(
           function,
           instruction,
@@ -796,6 +809,27 @@ pub fn verify_vcode(
           raise InvalidInstruction(
             instruction~,
             message="vector unsigned average requires i8x16 or i16x8 lanes",
+          )
+        }
+        if operation is ExtendMultiply(_, _) &&
+          lane != I16x8 &&
+          lane != I32x4 &&
+          lane != I64x2 {
+          raise InvalidInstruction(
+            instruction~,
+            message="extending multiply requires widened integer lanes",
+          )
+        }
+        if operation == Dot16To32Signed && lane != I32x4 {
+          raise InvalidInstruction(
+            instruction~,
+            message="dot16-to32 requires i32x4 destination lanes",
+          )
+        }
+        if operation == Q15MultiplyRoundedSaturating && lane != I16x8 {
+          raise InvalidInstruction(
+            instruction~,
+            message="q15 rounded saturating multiply requires i16x8 lanes",
           )
         }
         require_instruction_shape(

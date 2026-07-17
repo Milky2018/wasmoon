@@ -1449,6 +1449,153 @@ test "AArch64 vector byte population count uses CNT" {
 }
 
 ///|
+test "AArch64 widening vector integer encodings cover every legal form" {
+  let buffer = CodeBuffer::new()
+  let left = @vcode.PhysicalReg::new(3, FpVector)
+  let right = @vcode.PhysicalReg::new(5, FpVector)
+  let destination = @vcode.PhysicalReg::new(7, FpVector)
+  let lanes : Array[@semantic.VectorLane] = [I16x8, I32x4, I64x2]
+  let signednesses : Array[@semantic.Signedness] = [Signed, Unsigned]
+  for lane in lanes {
+    for signedness in signednesses {
+      emit_vector_int_unary(
+        buffer,
+        lane,
+        ExtendAddPairwise(signedness),
+        left,
+        destination,
+      )
+    }
+  }
+  let halves : Array[@semantic.VectorHalf] = [Low, High]
+  for lane in lanes {
+    for half in halves {
+      for signedness in signednesses {
+        emit_vector_int_binary(
+          buffer,
+          lane,
+          ExtendMultiply(half, signedness),
+          left,
+          right,
+          destination,
+        )
+      }
+    }
+  }
+  emit_vector_int_binary(
+    buffer,
+    I32x4,
+    Dot16To32Signed,
+    left,
+    right,
+    destination,
+  )
+  emit_vector_int_binary(
+    buffer,
+    I16x8,
+    Q15MultiplyRoundedSaturating,
+    left,
+    right,
+    destination,
+  )
+  debug_inspect(
+    buffer.code,
+    content=(
+      #|[
+      #|  0x67,
+      #|  0x28,
+      #|  0x20,
+      #|  0x4e,
+      #|  0x67,
+      #|  0x28,
+      #|  0x20,
+      #|  0x6e,
+      #|  0x67,
+      #|  0x28,
+      #|  0x60,
+      #|  0x4e,
+      #|  0x67,
+      #|  0x28,
+      #|  0x60,
+      #|  0x6e,
+      #|  0x67,
+      #|  0x28,
+      #|  0xa0,
+      #|  0x4e,
+      #|  0x67,
+      #|  0x28,
+      #|  0xa0,
+      #|  0x6e,
+      #|  0x67,
+      #|  0xc0,
+      #|  0x25,
+      #|  0x0e,
+      #|  0x67,
+      #|  0xc0,
+      #|  0x25,
+      #|  0x2e,
+      #|  0x67,
+      #|  0xc0,
+      #|  0x25,
+      #|  0x4e,
+      #|  0x67,
+      #|  0xc0,
+      #|  0x25,
+      #|  0x6e,
+      #|  0x67,
+      #|  0xc0,
+      #|  0x65,
+      #|  0x0e,
+      #|  0x67,
+      #|  0xc0,
+      #|  0x65,
+      #|  0x2e,
+      #|  0x67,
+      #|  0xc0,
+      #|  0x65,
+      #|  0x4e,
+      #|  0x67,
+      #|  0xc0,
+      #|  0x65,
+      #|  0x6e,
+      #|  0x67,
+      #|  0xc0,
+      #|  0xa5,
+      #|  0x0e,
+      #|  0x67,
+      #|  0xc0,
+      #|  0xa5,
+      #|  0x2e,
+      #|  0x67,
+      #|  0xc0,
+      #|  0xa5,
+      #|  0x4e,
+      #|  0x67,
+      #|  0xc0,
+      #|  0xa5,
+      #|  0x6e,
+      #|  0x70,
+      #|  0xc0,
+      #|  0x65,
+      #|  0x0e,
+      #|  0x71,
+      #|  0xc0,
+      #|  0x65,
+      #|  0x4e,
+      #|  0x07,
+      #|  0xbe,
+      #|  0xb1,
+      #|  0x4e,
+      #|  0x67,
+      #|  0xb4,
+      #|  0x65,
+      #|  0x6e,
+      #|]
+    ),
+  )
+}
+
+///|
 test "AAPCS64 platform call layout preserves mixed overflow order" {
   let layout = platform_call_layout([
     I64,

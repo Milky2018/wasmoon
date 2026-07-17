@@ -666,6 +666,85 @@ test "AArch64 lowering selects vector byte population count" {
 }
 
 ///|
+test "AArch64 lowering selects widening vector integer arithmetic" {
+  let builder = @semantic.FunctionBuilder::new(
+    "vector_widening_arithmetic",
+    Internal,
+    [Ptr64, V128, V128],
+    [V128],
+  )
+  let parameters = builder.parameters()
+  let mut result = parameters[1]
+  let lanes : Array[@semantic.VectorLane] = [I16x8, I32x4, I64x2]
+  let signednesses : Array[@semantic.Signedness] = [Signed, Unsigned]
+  for lane in lanes {
+    for signedness in signednesses {
+      result = builder.emit(
+          Vector(IntUnary(lane, ExtendAddPairwise(signedness))),
+          [result],
+          [V128],
+        )[0]
+    }
+  }
+  let halves : Array[@semantic.VectorHalf] = [Low, High]
+  for lane in lanes {
+    for half in halves {
+      for signedness in signednesses {
+        result = builder.emit(
+            Vector(IntBinary(lane, ExtendMultiply(half, signedness))),
+            [result, parameters[2]],
+            [V128],
+          )[0]
+      }
+    }
+  }
+  result = builder.emit(
+      Vector(IntBinary(I32x4, Dot16To32Signed)),
+      [result, parameters[2]],
+      [V128],
+    )[0]
+  result = builder.emit(
+      Vector(IntBinary(I16x8, Q15MultiplyRoundedSaturating)),
+      [result, parameters[2]],
+      [V128],
+    )[0]
+  builder.return_([result])
+  inspect(
+    lower(builder.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode vector_widening_arithmetic(v0:ptr64, v1:v128, v2:v128) -> (v128)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v3:any@late]
+      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v4:any@late]
+      #|  i2 IncomingReg(V128, p1:fpvec) uses=[v2:fixed(p1:fpvec)@early] defs=[v5:any@late]
+      #|  i3 VectorIntUnary(I16x8, ExtendAddPairwise(Signed)) uses=[v4:any@early] defs=[v6:any@late]
+      #|  i4 VectorIntUnary(I16x8, ExtendAddPairwise(Unsigned)) uses=[v6:any@early] defs=[v7:any@late]
+      #|  i5 VectorIntUnary(I32x4, ExtendAddPairwise(Signed)) uses=[v7:any@early] defs=[v8:any@late]
+      #|  i6 VectorIntUnary(I32x4, ExtendAddPairwise(Unsigned)) uses=[v8:any@early] defs=[v9:any@late]
+      #|  i7 VectorIntUnary(I64x2, ExtendAddPairwise(Signed)) uses=[v9:any@early] defs=[v10:any@late]
+      #|  i8 VectorIntUnary(I64x2, ExtendAddPairwise(Unsigned)) uses=[v10:any@early] defs=[v11:any@late]
+      #|  i9 VectorIntBinary(I16x8, ExtendMultiply(Low, Signed)) uses=[v11:any@early, v5:any@early] defs=[v12:any@late]
+      #|  i10 VectorIntBinary(I16x8, ExtendMultiply(Low, Unsigned)) uses=[v12:any@early, v5:any@early] defs=[v13:any@late]
+      #|  i11 VectorIntBinary(I16x8, ExtendMultiply(High, Signed)) uses=[v13:any@early, v5:any@early] defs=[v14:any@late]
+      #|  i12 VectorIntBinary(I16x8, ExtendMultiply(High, Unsigned)) uses=[v14:any@early, v5:any@early] defs=[v15:any@late]
+      #|  i13 VectorIntBinary(I32x4, ExtendMultiply(Low, Signed)) uses=[v15:any@early, v5:any@early] defs=[v16:any@late]
+      #|  i14 VectorIntBinary(I32x4, ExtendMultiply(Low, Unsigned)) uses=[v16:any@early, v5:any@early] defs=[v17:any@late]
+      #|  i15 VectorIntBinary(I32x4, ExtendMultiply(High, Signed)) uses=[v17:any@early, v5:any@early] defs=[v18:any@late]
+      #|  i16 VectorIntBinary(I32x4, ExtendMultiply(High, Unsigned)) uses=[v18:any@early, v5:any@early] defs=[v19:any@late]
+      #|  i17 VectorIntBinary(I64x2, ExtendMultiply(Low, Signed)) uses=[v19:any@early, v5:any@early] defs=[v20:any@late]
+      #|  i18 VectorIntBinary(I64x2, ExtendMultiply(Low, Unsigned)) uses=[v20:any@early, v5:any@early] defs=[v21:any@late]
+      #|  i19 VectorIntBinary(I64x2, ExtendMultiply(High, Signed)) uses=[v21:any@early, v5:any@early] defs=[v22:any@late]
+      #|  i20 VectorIntBinary(I64x2, ExtendMultiply(High, Unsigned)) uses=[v22:any@early, v5:any@early] defs=[v23:any@late]
+      #|  i21 VectorIntBinary(I32x4, Dot16To32Signed) uses=[v23:any@early, v5:any@early] defs=[v24:any@late]
+      #|  i22 VectorIntBinary(I16x8, Q15MultiplyRoundedSaturating) uses=[v24:any@early, v5:any@early] defs=[v25:any@late]
+      #|  i23 OutgoingReg(V128, p0:fpvec) uses=[v25:any@early]
+      #|  i24 Return
+      #|
+    ),
+  )
+}
+
+///|
 test "AArch64 lowering assigns one aligned semantic stack-object area" {
   let builder = @semantic.FunctionBuilder::new(
     "stack_object_layout",
