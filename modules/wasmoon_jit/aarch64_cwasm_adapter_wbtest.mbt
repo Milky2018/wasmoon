@@ -53,7 +53,7 @@ test "AArch64 code-object stack maps survive the cwasm v8 adapter" {
     content=(
       #|(
       #|  [
-      #|    { code_offset: 0, live_refs: [], metadata: 2 },
+      #|    { code_offset: 0, live_refs: [0, 1], metadata: 2 },
       #|    { code_offset: 4, live_refs: [], metadata: 0 },
       #|  ],
       #|  [2, 0],

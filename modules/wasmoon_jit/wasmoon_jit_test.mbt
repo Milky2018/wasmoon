@@ -460,6 +460,22 @@ test "plan Wasmoon JIT integration without leaking into machv_emit" {
 }
 
 ///|
+test "legacy lowering rejects AArch64 selection" {
+  let milk = @milkir.Function::with_signature(
+    "removed_aarch64",
+    Signature([], []),
+  )
+  milk.new_block0().set_terminator(Return([]))
+  try lower_milkir_for_target(milk, AArch64) |> ignore catch {
+    PipelineFailure(message~) =>
+      inspect(
+        message,
+        content="legacy AArch64 lowering has been removed; use the AArch64 target pipeline",
+      )
+  }
+}
+
+///|
 test "JIT integration returns invalid Wasm dialect errors" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder("invalid_wasm_dialect")
   @wasm_milkir.get_exception_tag(builder) |> ignore
@@ -1462,45 +1478,6 @@ test "plan MilkIR generic memory through reusable AArch64 JIT pipeline" {
 }
 
 ///|
-test "plan MilkIR narrow memory through reusable AArch64 JIT pipeline" {
-  let builder = @milkir.FunctionBuilder::FunctionBuilder("narrow_mem_aarch64")
-  let ptr = builder.add_param(Ptr)
-  let value = builder.add_param(I32)
-  builder.add_result(I32)
-  builder.store_ptr_narrow(16, ptr, value, builder.iconst_i64(8L))
-  let loaded = builder.load_ptr_narrow(
-    I32,
-    8,
-    true,
-    ptr,
-    builder.iconst_i64(4L),
-  )
-  builder.return_([loaded])
-  let plan = plan_milkir_integration_for_target(builder.get_function(), AArch64)
-  let mut has_store16 = false
-  let mut has_load8s = false
-  for i in 0..<(plan.object.get_bytes().length() - 3) {
-    if plan.object.get_bytes()[i + 3] == 0x79 {
-      has_store16 = true
-    }
-    if plan.object.get_bytes()[i + 2] == 0x80 &&
-      plan.object.get_bytes()[i + 3] == 0x39 {
-      has_load8s = true
-    }
-  }
-  inspect(has_store16, content="true")
-  inspect(has_load8s, content="true")
-  inspect(
-    plan.object.get_bytes()[plan.object.get_bytes().length() - 4],
-    content="192",
-  )
-  inspect(
-    plan.object.get_bytes()[plan.object.get_bytes().length() - 1],
-    content="214",
-  )
-}
-
-///|
 test "plan MilkIR scalar float memory through reusable x64 JIT pipeline" {
   let signature = @milkir.Signature::Signature([Ptr, F64], [F64])
   let milk = @milkir.Function::with_signature("float_mem_x64", signature)
@@ -1668,6 +1645,7 @@ test "emit MachV regalloc through reusable x64 pipeline" {
 ///|
 test "plan Wasm body return area through reusable JIT pipeline" {
   let milk = @milkir.Function::new_empty("wasm_return_area")
+  milk.add_param(Ptr) |> ignore
   let values : Array[@milkir.Value] = []
   let entry = milk.new_block([])
   for i in 0..<9 {

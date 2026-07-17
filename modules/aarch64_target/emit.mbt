@@ -2090,15 +2090,370 @@ fn emit_call_arguments(
 }
 
 ///|
-fn emit_signed_sp_adjust(
+fn emit_tail_return_thunk_setup(
   buffer : CodeBuffer,
-  delta : Int,
+  frame : AArch64Frame,
+  callee_args_size : Int,
 ) -> Unit raise AArch64EmitError {
-  if delta > 0 {
-    emit_sp_adjust(buffer, false, delta)
-  } else if delta < 0 {
-    emit_sp_adjust(buffer, true, -delta)
+  if callee_args_size > frame.incoming_args_size() {
+    emit_sp_adjust(buffer, true, callee_args_size + 16)
+    emit_stack_access(
+      buffer,
+      false,
+      I64,
+      @vcode.PhysicalReg::new(30, Int),
+      callee_args_size,
+    )
+    // ADR X30, +8: the branch is the next instruction and the cleanup thunk
+    // starts immediately after it.
+    buffer.emit_word(0x1000005EU)
   }
+}
+
+///|
+fn emit_tail_return_thunk(
+  buffer : CodeBuffer,
+  frame : AArch64Frame,
+  callee_args_size : Int,
+) -> Unit raise AArch64EmitError {
+  if callee_args_size > frame.incoming_args_size() {
+    let return_address = @vcode.PhysicalReg::new(16, Int)
+    emit_stack_access(buffer, true, I64, return_address, callee_args_size)
+    emit_sp_adjust(buffer, false, callee_args_size + 16)
+    buffer.emit_word(0xD61F0000U | (reg_bits(return_address) << 5))
+  }
+}
+
+///|
+fn is_incoming_call_result(instruction : AArch64Inst) -> Bool {
+  match instruction {
+    IncomingCallResult(_, _) | IncomingCallAreaResult(_, _) => true
+    _ => false
+  }
+}
+
+///|
+fn is_function_input(instruction : AArch64Inst) -> Bool {
+  match instruction {
+    IncomingReg(_, _) | IncomingStack(_, _) | IncomingResultArea(_) => true
+    _ => false
+  }
+}
+
+///|
+fn value_home(
+  function : @vcode.Function[AArch64Inst],
+  allocation : @vcode.Allocation,
+  instruction : @vcode.Instruction,
+  operand_index : Int,
+) -> @vcode.Location {
+  let value = function
+    .instruction_operand_at(instruction, operand_index)
+    .unwrap().value
+  allocation.value_location(value).unwrap()
+}
+
+///|
+fn emit_function_inputs(
+  buffer : CodeBuffer,
+  function : @vcode.Function[AArch64Inst],
+  allocation : @vcode.Allocation,
+  frame : AArch64Frame,
+  block : @vcode.Block,
+  instruction : @vcode.Instruction,
+) -> Unit raise AArch64EmitError {
+  let body = function.block_body(block)
+  let mut current_index = -1
+  for index, candidate in body {
+    if candidate == instruction {
+      current_index = index
+      break
+    }
+  }
+  if current_index < 0 {
+    return
+  }
+  if current_index > 0 &&
+    is_function_input(function.instruction(body[current_index - 1]).unwrap()) {
+    return
+  }
+  let register_moves : Array[@vcode.ParallelMove] = []
+  let stack_inputs : Array[(@vcode.Instruction, @semantic.ValueType, Int)] = []
+  let mut index = current_index
+  while index < body.length() {
+    let input_instruction = body[index]
+    match function.instruction(input_instruction).unwrap() {
+      IncomingReg(ty, source) =>
+        register_moves.push(
+          @vcode.ParallelMove::new(
+            ty,
+            Register(source),
+            value_home(function, allocation, input_instruction, 1),
+          ),
+        )
+      IncomingStack(ty, offset) =>
+        stack_inputs.push((input_instruction, ty, offset))
+      IncomingResultArea(source) =>
+        register_moves.push(
+          @vcode.ParallelMove::new(
+            Ptr64,
+            Register(source),
+            value_home(function, allocation, input_instruction, 0),
+          ),
+        )
+      _ => break
+    }
+    index += 1
+  }
+  let resolved = @vcode.resolve_parallel_moves(
+    register_moves,
+    [@vcode.PhysicalReg::new(16, Int), @vcode.PhysicalReg::new(17, Int)],
+    [
+      @vcode.PhysicalReg::new(16, FpVector),
+      @vcode.PhysicalReg::new(17, FpVector),
+    ],
+  ) catch {
+    error => raise InvalidParallelMove(cause=error)
+  }
+  emit_resolved_moves(buffer, frame, resolved)
+  for input in stack_inputs {
+    let (input_instruction, ty, offset) = input
+    match value_home(function, allocation, input_instruction, 0) {
+      Register(destination) =>
+        emit_stack_access(
+          buffer,
+          true,
+          ty,
+          destination,
+          frame.frame_size() + offset,
+        )
+      Stack(slot) => {
+        let scratch = @vcode.PhysicalReg::new(
+          16,
+          @vcode.reg_class_for_value_type(ty),
+        )
+        emit_stack_access(
+          buffer,
+          true,
+          ty,
+          scratch,
+          frame.frame_size() + offset,
+        )
+        emit_stack_access(
+          buffer,
+          false,
+          ty,
+          scratch,
+          frame.slot_offset(slot).unwrap(),
+        )
+      }
+    }
+  }
+}
+
+///|
+fn emit_incoming_call_results(
+  buffer : CodeBuffer,
+  function : @vcode.Function[AArch64Inst],
+  allocation : @vcode.Allocation,
+  frame : AArch64Frame,
+  block : @vcode.Block,
+  instruction : @vcode.Instruction,
+) -> Unit raise AArch64EmitError {
+  let body = function.block_body(block)
+  let mut current_index = -1
+  for index, candidate in body {
+    if candidate == instruction {
+      current_index = index
+      break
+    }
+  }
+  if current_index < 0 {
+    return
+  }
+  if current_index > 0 &&
+    is_incoming_call_result(
+      function.instruction(body[current_index - 1]).unwrap(),
+    ) {
+    return
+  }
+  let register_moves : Array[@vcode.ParallelMove] = []
+  let area_results : Array[(@vcode.Instruction, @semantic.ValueType, Int)] = []
+  let mut index = current_index
+  while index < body.length() {
+    let result_instruction = body[index]
+    match function.instruction(result_instruction).unwrap() {
+      IncomingCallResult(ty, source) =>
+        register_moves.push(
+          @vcode.ParallelMove::new(
+            ty,
+            Register(source),
+            value_home(function, allocation, result_instruction, 0),
+          ),
+        )
+      IncomingCallAreaResult(ty, offset) =>
+        area_results.push((result_instruction, ty, offset))
+      _ => break
+    }
+    index += 1
+  }
+  let resolved = @vcode.resolve_parallel_moves(
+    register_moves,
+    [@vcode.PhysicalReg::new(16, Int), @vcode.PhysicalReg::new(17, Int)],
+    [
+      @vcode.PhysicalReg::new(16, FpVector),
+      @vcode.PhysicalReg::new(17, FpVector),
+    ],
+  ) catch {
+    error => raise InvalidParallelMove(cause=error)
+  }
+  emit_resolved_moves(buffer, frame, resolved)
+  guard frame.result_area_offset() is Some(result_area_base) else {
+    if !area_results.is_empty() {
+      raise MissingResultArea
+    }
+    return
+  }
+  for result in area_results {
+    let (result_instruction, ty, offset) = result
+    match value_home(function, allocation, result_instruction, 0) {
+      Register(destination) =>
+        emit_stack_access(
+          buffer,
+          true,
+          ty,
+          destination,
+          result_area_base + offset,
+        )
+      Stack(slot) => {
+        let scratch = @vcode.PhysicalReg::new(
+          16,
+          @vcode.reg_class_for_value_type(ty),
+        )
+        emit_stack_access(buffer, true, ty, scratch, result_area_base + offset)
+        emit_stack_access(
+          buffer,
+          false,
+          ty,
+          scratch,
+          frame.slot_offset(slot).unwrap(),
+        )
+      }
+    }
+  }
+}
+
+///|
+fn is_function_output(instruction : AArch64Inst) -> Bool {
+  match instruction {
+    OutgoingReg(_, _) | OutgoingAreaResult(_, _) => true
+    _ => false
+  }
+}
+
+///|
+fn is_abi_materialization(instruction : AArch64Inst) -> Bool {
+  is_function_input(instruction) ||
+  is_incoming_call_result(instruction) ||
+  is_function_output(instruction)
+}
+
+///|
+fn emit_function_outputs(
+  buffer : CodeBuffer,
+  function : @vcode.Function[AArch64Inst],
+  allocation : @vcode.Allocation,
+  frame : AArch64Frame,
+  block : @vcode.Block,
+  instruction : @vcode.Instruction,
+) -> Unit raise AArch64EmitError {
+  let body = function.block_body(block)
+  let mut current_index = -1
+  for index, candidate in body {
+    if candidate == instruction {
+      current_index = index
+      break
+    }
+  }
+  if current_index < 0 {
+    return
+  }
+  if current_index > 0 &&
+    is_function_output(function.instruction(body[current_index - 1]).unwrap()) {
+    return
+  }
+  let register_moves : Array[@vcode.ParallelMove] = []
+  let area_results : Array[(@vcode.Instruction, @semantic.ValueType, Int)] = []
+  let mut index = current_index
+  while index < body.length() {
+    let output_instruction = body[index]
+    match function.instruction(output_instruction).unwrap() {
+      OutgoingReg(ty, destination) =>
+        register_moves.push(
+          @vcode.ParallelMove::new(
+            ty,
+            value_home(function, allocation, output_instruction, 0),
+            Register(destination),
+          ),
+        )
+      OutgoingAreaResult(ty, offset) =>
+        area_results.push((output_instruction, ty, offset))
+      _ => break
+    }
+    index += 1
+  }
+  for result in area_results {
+    let (output_instruction, ty, offset) = result
+    let address = match
+      value_home(function, allocation, output_instruction, 0) {
+      Register(address) => address
+      Stack(slot) => {
+        let scratch = @vcode.PhysicalReg::new(16, Int)
+        emit_stack_access(
+          buffer,
+          true,
+          Ptr64,
+          scratch,
+          frame.slot_offset(slot).unwrap(),
+        )
+        scratch
+      }
+    }
+    let value = match value_home(function, allocation, output_instruction, 1) {
+      Register(value) => value
+      Stack(slot) => {
+        let scratch_id = if @vcode.reg_class_for_value_type(ty) == Int {
+          17
+        } else {
+          16
+        }
+        let scratch = @vcode.PhysicalReg::new(
+          scratch_id,
+          @vcode.reg_class_for_value_type(ty),
+        )
+        emit_stack_access(
+          buffer,
+          true,
+          ty,
+          scratch,
+          frame.slot_offset(slot).unwrap(),
+        )
+        scratch
+      }
+    }
+    emit_result_area_access(buffer, false, ty, value, address, offset)
+  }
+  let resolved = @vcode.resolve_parallel_moves(
+    register_moves,
+    [@vcode.PhysicalReg::new(16, Int), @vcode.PhysicalReg::new(17, Int)],
+    [
+      @vcode.PhysicalReg::new(16, FpVector),
+      @vcode.PhysicalReg::new(17, FpVector),
+    ],
+  ) catch {
+    error => raise InvalidParallelMove(cause=error)
+  }
+  emit_resolved_moves(buffer, frame, resolved)
 }
 
 ///|
@@ -2118,19 +2473,18 @@ fn emit_instruction(
   }
   let mut metadata_offset = buffer.position()
   match function.instruction(instruction).unwrap() {
-    IncomingReg(ty, _) => emit_move(buffer, ty, reg(1), reg(0))
-    IncomingStack(ty, offset) =>
-      emit_stack_access(buffer, true, ty, reg(0), frame.frame_size() + offset)
-    IncomingResultArea(source) => emit_move(buffer, Ptr64, reg(0), source)
-    IncomingCallResult(ty, source) => emit_move(buffer, ty, reg(0), source)
-    IncomingCallAreaResult(ty, offset) =>
-      match frame.result_area_offset() {
-        Some(base) => emit_stack_access(buffer, true, ty, reg(0), base + offset)
-        None => raise MissingResultArea
-      }
-    OutgoingReg(ty, destination) => emit_move(buffer, ty, destination, reg(0))
-    OutgoingAreaResult(ty, offset) =>
-      emit_result_area_access(buffer, false, ty, reg(0), reg(1), offset)
+    IncomingReg(_, _) | IncomingStack(_, _) | IncomingResultArea(_) =>
+      emit_function_inputs(
+        buffer, function, allocation, frame, block, instruction,
+      )
+    IncomingCallResult(_, _) | IncomingCallAreaResult(_, _) =>
+      emit_incoming_call_results(
+        buffer, function, allocation, frame, block, instruction,
+      )
+    OutgoingReg(_, _) | OutgoingAreaResult(_, _) =>
+      emit_function_outputs(
+        buffer, function, allocation, frame, block, instruction,
+      )
     KeepAlive(_) => ()
     LoadConstant(width, bits) => emit_constant(buffer, width, reg(0), bits)
     LoadVectorConstant(low, high) =>
@@ -2623,7 +2977,6 @@ fn emit_instruction(
           Code(target),
         ),
       )
-      emit_sp_adjust(buffer, true, plan.stack_size)
     }
     InternalCallIndirect(signature, plan) => {
       let callee_register = @vcode.PhysicalReg::new(17, Int)
@@ -2645,7 +2998,6 @@ fn emit_instruction(
       }
       metadata_offset = buffer.position()
       buffer.emit_word(0xD63F0000U | (reg_bits(callee_register) << 5))
-      emit_sp_adjust(buffer, true, plan.stack_size)
     }
     TailCallDirect(target, signature, plan) => {
       let result_area = result_area_register(plan).map(destination => {
@@ -2662,10 +3014,7 @@ fn emit_instruction(
         result_area?,
       )
       emit_epilogue(buffer, frame)
-      emit_signed_sp_adjust(
-        buffer,
-        frame.incoming_args_size() - plan.stack_size,
-      )
+      emit_tail_return_thunk_setup(buffer, frame, plan.stack_size)
       metadata_offset = buffer.position()
       buffer.emit_word(0x14000000U)
       buffer.relocations.push(
@@ -2675,6 +3024,7 @@ fn emit_instruction(
           Code(target),
         ),
       )
+      emit_tail_return_thunk(buffer, frame, plan.stack_size)
     }
     TailCallIndirect(signature, plan) => {
       let callee_register = @vcode.PhysicalReg::new(17, Int)
@@ -2694,12 +3044,10 @@ fn emit_instruction(
         result_area?,
       )
       emit_epilogue(buffer, frame)
-      emit_signed_sp_adjust(
-        buffer,
-        frame.incoming_args_size() - plan.stack_size,
-      )
+      emit_tail_return_thunk_setup(buffer, frame, plan.stack_size)
       metadata_offset = buffer.position()
       buffer.emit_word(0xD61F0000U | (reg_bits(callee_register) << 5))
+      emit_tail_return_thunk(buffer, frame, plan.stack_size)
     }
     Jump => {
       emit_edge_moves(buffer, function, allocation, frame, block, 0)
@@ -2737,9 +3085,6 @@ fn emit_instruction(
     }
     Return => {
       emit_epilogue(buffer, frame)
-      if function.protocol() == Internal {
-        emit_sp_adjust(buffer, false, frame.incoming_args_size())
-      }
       buffer.emit_word(0xD65F03C0U)
     }
   }
@@ -2808,7 +3153,12 @@ pub fn emit(
   for block in function.layout() {
     block_offsets[function.block_index(block).unwrap()] = buffer.position()
     for instruction in function.block_body(block) {
-      emit_edits_at(buffer, function, frame, edits, instruction, Before)
+      let abi_materialization = is_abi_materialization(
+        function.instruction(instruction).unwrap(),
+      )
+      if !abi_materialization {
+        emit_edits_at(buffer, function, frame, edits, instruction, Before)
+      }
       let instruction_offset = emit_instruction(
         buffer, function, allocation, frame, block, instruction,
       )
@@ -2816,7 +3166,9 @@ pub fn emit(
         buffer, function, allocation, frame, instruction, instruction_offset, sources,
         traps, safepoints,
       )
-      emit_edits_at(buffer, function, frame, edits, instruction, After)
+      if !abi_materialization {
+        emit_edits_at(buffer, function, frame, edits, instruction, After)
+      }
     }
     let terminator = function.block_terminator(block).unwrap()
     emit_edits_at(buffer, function, frame, edits, terminator, Before)

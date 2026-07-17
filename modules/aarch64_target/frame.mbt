@@ -229,7 +229,23 @@ fn AArch64Frame::tail_call_stack_base(
   self : AArch64Frame,
   callee_args_size : Int,
 ) -> Int {
-  self.frame_size() + self.incoming_args_size - callee_args_size
+  if callee_args_size <= self.incoming_args_size {
+    self.frame_size()
+  } else {
+    self.frame_size() - callee_args_size - 16
+  }
+}
+
+///|
+fn tail_cleanup_area_size(
+  incoming_args_size : Int,
+  tail_args_size : Int,
+) -> Int {
+  if tail_args_size > incoming_args_size {
+    tail_args_size + 16
+  } else {
+    0
+  }
 }
 
 ///|
@@ -326,9 +342,12 @@ pub fn verify_frame(
   } else {
     expected_incoming
   }
+  let expected_tail_area = tail_cleanup_area_size(
+    expected_incoming, expected_tail,
+  )
   if frame.incoming_args_size != expected_incoming ||
     frame.tail_args_size != expected_tail ||
-    frame.local_size + expected_tail - expected_incoming != frame.frame_size() {
+    frame.local_size + expected_tail_area != frame.frame_size() {
     raise TailAreaMismatch(
       expected_incoming~,
       actual_incoming=frame.incoming_args_size,
@@ -462,10 +481,13 @@ pub fn plan_frame(
   } else {
     incoming_args_size
   }
+  let tail_area_size = tail_cleanup_area_size(
+    incoming_args_size, tail_args_size,
+  )
   let layout = @vcode.FrameLayout::new(
     function,
     allocation,
-    local_size + tail_args_size - incoming_args_size,
+    local_size + tail_area_size,
     16,
   )
   for index, slot_offset in slot_offsets {

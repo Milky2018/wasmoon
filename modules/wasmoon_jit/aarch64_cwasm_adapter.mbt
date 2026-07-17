@@ -74,7 +74,10 @@ fn aarch64_cwasm_gc_metadata(
       Some(stack_map) => stack_map.argument_root_count
       None => 0
     }
-    safepoints.push(GcSafepoint(site.offset, [], root_count.to_int64()))
+    let root_indices = Array::makei(root_count, index => index)
+    safepoints.push(
+      GcSafepoint(site.offset, root_indices, root_count.to_int64()),
+    )
     root_counts.push(root_count)
   }
   (safepoints, root_counts)

@@ -221,6 +221,11 @@ fn lower_semantic_wasm_with_isa(
   use_subtype_indirect_check : Bool,
   canonical_type_indices : Array[Int],
 ) -> @machv.Function raise JitPipelineError {
+  if isa is AArch64 {
+    raise PipelineFailure(
+      message="legacy AArch64 lowering has been removed; use the AArch64 target pipeline",
+    )
+  }
   if function.params.is_empty() && !has_wasm_extension(function) {
     return lower_semantic_core_with_isa(function, isa, embedding_abi)
   }
@@ -269,6 +274,11 @@ fn lower_semantic_core_with_isa(
   isa : @isa.ISA,
   embedding_abi : @abi.EmbeddingABI,
 ) -> @machv.Function raise JitPipelineError {
+  if isa is AArch64 {
+    raise PipelineFailure(
+      message="legacy AArch64 lowering has been removed; use the AArch64 target pipeline",
+    )
+  }
   let semantic = @milkir_machv.lower_core_function(function) catch {
     error =>
       raise PipelineFailure(message="\{function.name}: \{error.to_string()}")
