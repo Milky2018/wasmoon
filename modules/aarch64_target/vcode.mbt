@@ -222,6 +222,7 @@ pub(all) enum AArch64Inst {
   VectorFloatBinary(@semantic.VectorLane, @semantic.VectorFloatBinaryOp)
   VectorFloatTernary(@semantic.VectorLane, @semantic.FloatTernaryOp)
   VectorFloatCompare(@semantic.VectorLane, @semantic.VectorFloatComparison)
+  VectorRelaxedDot8To16
   IntUnary(GprWidth, AArch64IntUnary)
   IntBinary(GprWidth, AArch64IntBinary)
   PopulationCount(GprWidth)
@@ -1044,6 +1045,15 @@ pub fn verify_vcode(
           0,
         )
       }
+      VectorRelaxedDot8To16 =>
+        require_instruction_shape(
+          function,
+          instruction,
+          [V128, V128],
+          [V128],
+          false,
+          0,
+        )
       VectorBitwise(operation) => {
         let arity = match operation {
           Not => 1

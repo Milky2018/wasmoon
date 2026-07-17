@@ -2600,6 +2600,44 @@ test "AArch64 vector numeric conversion encodings cover every form" {
 }
 
 ///|
+test "AArch64 relaxed dot8-to16 uses baseline NEON" {
+  let buffer = CodeBuffer::new()
+  emit_vector_relaxed_dot8_to16(
+    buffer,
+    @vcode.PhysicalReg::new(3, FpVector),
+    @vcode.PhysicalReg::new(5, FpVector),
+    @vcode.PhysicalReg::new(7, FpVector),
+  )
+  debug_inspect(
+    buffer.code,
+    content=(
+      #|[
+      #|  0x70,
+      #|  0x1c,
+      #|  0xa3,
+      #|  0x4e,
+      #|  0xb1,
+      #|  0x1c,
+      #|  0xa5,
+      #|  0x4e,
+      #|  0x07,
+      #|  0xc2,
+      #|  0x31,
+      #|  0x0e,
+      #|  0x10,
+      #|  0xc2,
+      #|  0x31,
+      #|  0x4e,
+      #|  0xe7,
+      #|  0xbc,
+      #|  0x70,
+      #|  0x4e,
+      #|]
+    ),
+  )
+}
+
+///|
 test "AAPCS64 platform call layout preserves mixed overflow order" {
   let layout = platform_call_layout([
     I64,

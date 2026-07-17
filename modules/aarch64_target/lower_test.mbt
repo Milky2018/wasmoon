@@ -1213,6 +1213,37 @@ test "AArch64 lowering reuses exact target operations for relaxed SIMD" {
 }
 
 ///|
+test "AArch64 lowering selects relaxed dot8-to16" {
+  let builder = @semantic.FunctionBuilder::new(
+    "relaxed_dot8_to16",
+    Internal,
+    [Ptr64, V128, V128],
+    [V128],
+  )
+  let parameters = builder.parameters()
+  let result = builder.emit(
+      Vector(Relaxed(Dot8To16Signed)),
+      [parameters[1], parameters[2]],
+      [V128],
+    )[0]
+  builder.return_([result])
+  inspect(
+    lower(builder.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode relaxed_dot8_to16(v0:ptr64, v1:v128, v2:v128) -> (v128)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v3:any@late]
+      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v4:any@late]
+      #|  i2 IncomingReg(V128, p1:fpvec) uses=[v2:fixed(p1:fpvec)@early] defs=[v5:any@late]
+      #|  i3 VectorRelaxedDot8To16 uses=[v4:any@early, v5:any@early] defs=[v6:any@late]
+      #|  i4 OutgoingReg(V128, p0:fpvec) uses=[v6:any@early]
+      #|  i5 Return
+      #|
+    ),
+  )
+}
+
+///|
 test "AArch64 lowering assigns one aligned semantic stack-object area" {
   let builder = @semantic.FunctionBuilder::new(
     "stack_object_layout",

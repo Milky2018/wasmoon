@@ -854,6 +854,7 @@ fn lower_instruction(
     Vector(Relaxed(Max(lane))) => Some(VectorFloatBinary(lane, Max))
     Vector(Relaxed(Q15MultiplyRoundedSigned)) =>
       Some(VectorIntBinary(I16x8, Q15MultiplyRoundedSaturating))
+    Vector(Relaxed(Dot8To16Signed)) => Some(VectorRelaxedDot8To16)
     ReferenceCompare(comparison) => {
       let operand_type = match semantic_operands.get(0) {
         Some(value) => function.value_type(value)

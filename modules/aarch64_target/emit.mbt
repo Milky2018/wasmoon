@@ -1373,6 +1373,22 @@ fn emit_vector_float_ternary(
 }
 
 ///|
+fn emit_vector_relaxed_dot8_to16(
+  buffer : CodeBuffer,
+  left : @vcode.PhysicalReg,
+  right : @vcode.PhysicalReg,
+  destination : @vcode.PhysicalReg,
+) -> Unit {
+  let left_copy = @vcode.PhysicalReg::new(16, FpVector)
+  let right_copy = @vcode.PhysicalReg::new(17, FpVector)
+  emit_move(buffer, V128, left_copy, left)
+  emit_move(buffer, V128, right_copy, right)
+  emit_vector_binary(buffer, 0x0E20C000U, left_copy, right_copy, destination)
+  emit_vector_binary(buffer, 0x4E20C000U, left_copy, right_copy, left_copy)
+  emit_vector_binary(buffer, 0x4E60BC00U, destination, left_copy, destination)
+}
+
+///|
 fn emit_vector_bitwise(
   buffer : CodeBuffer,
   operation : @semantic.VectorBitwiseOp,
@@ -1911,6 +1927,8 @@ fn emit_instruction(
         reg(1),
         reg(2),
       )
+    VectorRelaxedDot8To16 =>
+      emit_vector_relaxed_dot8_to16(buffer, reg(0), reg(1), reg(2))
     VectorBitwise(operation) =>
       match operation {
         Not => emit_vector_bitwise(buffer, Not, reg(0), reg(0), reg(0), reg(1))

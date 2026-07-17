@@ -1719,6 +1719,77 @@ test "AArch64 pipeline emits representative vector numeric conversions" {
 }
 
 ///|
+test "AArch64 pipeline emits relaxed dot8-to16 across allocation aliases" {
+  let builder = @semantic.FunctionBuilder::new(
+    "emitted_relaxed_dot8_to16",
+    Platform,
+    [V128, V128],
+    [V128],
+  )
+  let parameters = builder.parameters()
+  let result = builder.emit(
+      Vector(Relaxed(Dot8To16Signed)),
+      [parameters[0], parameters[1]],
+      [V128],
+    )[0]
+  builder.return_([result])
+  let function = lower(builder.finish(), test_lowering_context())
+  let allocation = allocate(function)
+  let frame = plan_frame(function, allocation)
+  debug_inspect(
+    emit(function, allocation, frame),
+    content=(
+      #|{
+      #|  architecture: AArch64,
+      #|  code: [
+      #|    0x02,
+      #|    0x1c,
+      #|    0xa0,
+      #|    0x4e,
+      #|    0x20,
+      #|    0x1c,
+      #|    0xa1,
+      #|    0x4e,
+      #|    0x50,
+      #|    0x1c,
+      #|    0xa2,
+      #|    0x4e,
+      #|    0x11,
+      #|    0x1c,
+      #|    0xa0,
+      #|    0x4e,
+      #|    0x01,
+      #|    0xc2,
+      #|    0x31,
+      #|    0x0e,
+      #|    0x10,
+      #|    0xc2,
+      #|    0x31,
+      #|    0x4e,
+      #|    0x21,
+      #|    0xbc,
+      #|    0x70,
+      #|    0x4e,
+      #|    0x20,
+      #|    0x1c,
+      #|    0xa1,
+      #|    0x4e,
+      #|    0xc0,
+      #|    0x03,
+      #|    0x5f,
+      #|    0xd6,
+      #|  ],
+      #|  relocations: [],
+      #|  sources: [],
+      #|  traps: [],
+      #|  safepoints: [],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
 test "AArch64 pipeline emits addresses inside the semantic stack-object area" {
   let builder = @semantic.FunctionBuilder::new(
     "emitted_stack_addresses",
