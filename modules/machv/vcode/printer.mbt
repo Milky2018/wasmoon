@@ -125,6 +125,9 @@ pub fn[Inst : Debug] Function::summary(self : Function[Inst]) -> String {
       if metadata.symbol is Some(symbol) {
         output += " symbol=\{to_repr(symbol)}"
       }
+      if metadata.stack_map is Some(stack_map) {
+        output += " stack-map=\{stack_map.id}:\{stack_map.argument_root_count}"
+      }
       output += "\n"
     }
   }

@@ -93,6 +93,7 @@ pub suberror VCodeVerifyError {
   FixedRegisterClassMismatch(instruction~ : Instruction, operand~ : Int)
   DuplicateClobber(instruction~ : Instruction, reg~ : PhysicalReg)
   InvalidSafepointRoot(instruction~ : Instruction, value~ : Value)
+  InvalidStackMap(instruction~ : Instruction)
   UnreachableBlock(block~ : Block)
   UseBeforeDefinition(instruction~ : Instruction, value~ : Value)
   DefinitionDoesNotDominate(instruction~ : Instruction, value~ : Value)
@@ -242,9 +243,10 @@ pub struct InstructionMetadata {
   safepoint : @machv.SafepointKind?
   live_gc_roots : Array[Value]
   symbol : SymbolReference?
+  stack_map : @machv.StackMapMetadata?
 }
 pub fn InstructionMetadata::empty() -> Self
-pub fn InstructionMetadata::new(source? : @machv.SourceLocation, trap? : @machv.TrapReason, safepoint? : @machv.SafepointKind, live_gc_roots? : Array[Value], symbol? : SymbolReference) -> Self
+pub fn InstructionMetadata::new(source? : @machv.SourceLocation, trap? : @machv.TrapReason, safepoint? : @machv.SafepointKind, live_gc_roots? : Array[Value], symbol? : SymbolReference, stack_map? : @machv.StackMapMetadata) -> Self
 pub fn InstructionMetadata::safepoint(Array[Value]) -> Self
 
 pub(all) enum Location {

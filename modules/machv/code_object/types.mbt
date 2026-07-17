@@ -87,6 +87,7 @@ pub struct SafepointSite {
   kind : @semantic.SafepointKind
   roots : Array[RootLocation]
   source : @semantic.SourceLocation?
+  stack_map : @semantic.StackMapMetadata?
 } derive(Eq, Debug)
 
 ///|
@@ -95,8 +96,9 @@ pub fn SafepointSite::new(
   kind : @semantic.SafepointKind,
   roots : Array[RootLocation],
   source? : @semantic.SourceLocation,
+  stack_map? : @semantic.StackMapMetadata,
 ) -> SafepointSite {
-  { offset, kind, roots: roots.copy(), source }
+  { offset, kind, roots: roots.copy(), source, stack_map }
 }
 
 ///|
@@ -146,7 +148,13 @@ pub fn UnlinkedCodeObject::safepoints(
   self : UnlinkedCodeObject,
 ) -> Array[SafepointSite] {
   self.safepoints.map(site => {
-    SafepointSite::new(site.offset, site.kind, site.roots, source?=site.source)
+    SafepointSite::new(
+      site.offset,
+      site.kind,
+      site.roots,
+      source?=site.source,
+      stack_map?=site.stack_map,
+    )
   })
 }
 

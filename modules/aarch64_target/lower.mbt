@@ -290,9 +290,15 @@ fn source_metadata(
         trap?,
         safepoint?,
         live_gc_roots=values,
+        stack_map?=metadata.stack_map,
       )
     None =>
-      @vcode.InstructionMetadata::new(trap?, safepoint?, live_gc_roots=values)
+      @vcode.InstructionMetadata::new(
+        trap?,
+        safepoint?,
+        live_gc_roots=values,
+        stack_map?=metadata.stack_map,
+      )
   }
 }
 

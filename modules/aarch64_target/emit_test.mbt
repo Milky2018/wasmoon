@@ -2336,6 +2336,7 @@ test "AArch64 pipeline emits standalone safepoint roots at a NOP marker" {
       #|      kind: GcAndCancellation,
       #|      roots: [Register(Int, 1)],
       #|      source: None,
+      #|      stack_map: None,
       #|    },
       #|  ],
       #|  unwind: [],
@@ -2777,6 +2778,7 @@ test "AArch64 code objects retain safepoints and allocated GC roots" {
       #|      kind: Gc,
       #|      roots: [Register(Int, 0)],
       #|      source: Some({ file: "metadata.wat", line: 4, column: 12 }),
+      #|      stack_map: None,
       #|    },
       #|  ],
       #|  unwind: [],
@@ -2806,6 +2808,7 @@ test "AArch64 direct calls preserve LR and emit typed call relocations" {
     @semantic.InstructionMetadata::new(
       Some(@semantic.SourceLocation::new("poll.wat", 5, 2)),
       [builder.parameters()[0]],
+      stack_map=@semantic.StackMapMetadata::new(0, argument_root_count=1),
     ),
   )
   |> ignore
@@ -2881,6 +2884,7 @@ test "AArch64 direct calls preserve LR and emit typed call relocations" {
       #|      kind: GcAndCancellation,
       #|      roots: [Register(Int, 19)],
       #|      source: Some({ file: "poll.wat", line: 5, column: 2 }),
+      #|      stack_map: Some({ id: 0, argument_root_count: 1 }),
       #|    },
       #|  ],
       #|  unwind: [],
@@ -3526,6 +3530,7 @@ test "AArch64 emits noreturn calls and typed traps" {
       #|      kind: GcAndCancellation,
       #|      roots: [Register(Int, 19)],
       #|      source: Some({ file: "trap.wat", line: 9, column: 4 }),
+      #|      stack_map: None,
       #|    },
       #|  ],
       #|  unwind: [],

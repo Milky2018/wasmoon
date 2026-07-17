@@ -15,7 +15,12 @@ test "verified code object snapshots complete typed metadata" {
     ],
     traps=[TrapSite::new(0, MemoryOutOfBounds)],
     safepoints=[
-      SafepointSite::new(0, Gc, [Register(Int, 0), Stack(offset=16, ty=GcRef64)]),
+      SafepointSite::new(
+        0,
+        Gc,
+        [Register(Int, 0), Stack(offset=16, ty=GcRef64)],
+        stack_map=@semantic.StackMapMetadata::new(0, argument_root_count=1),
+      ),
     ],
   )
   debug_inspect(
@@ -40,12 +45,42 @@ test "verified code object snapshots complete typed metadata" {
       #|      kind: Gc,
       #|      roots: [Register(Int, 0), Stack(offset=16, ty=GcRef64)],
       #|      source: None,
+      #|      stack_map: Some({ id: 0, argument_root_count: 1 }),
       #|    },
       #|  ],
       #|  unwind: [],
       #|}
     ),
   )
+}
+
+///|
+test "code object rejects duplicate or non-dense stack-map ids" {
+  try
+    build(
+      AArch64,
+      [b'\x00', b'\x00', b'\x00', b'\x94', b'\x00', b'\x00', b'\x00', b'\x94'],
+      safepoints=[
+        SafepointSite::new(
+          0,
+          Gc,
+          [],
+          stack_map=@semantic.StackMapMetadata::new(0, argument_root_count=0),
+        ),
+        SafepointSite::new(
+          4,
+          Gc,
+          [],
+          stack_map=@semantic.StackMapMetadata::new(0, argument_root_count=0),
+        ),
+      ],
+    )
+    |> ignore
+  catch {
+    error => inspect(error, content="InvalidStackMap(safepoint=1)")
+  } noraise {
+    _ => fail("expected duplicate stack-map ids to fail")
+  }
 }
 
 ///|

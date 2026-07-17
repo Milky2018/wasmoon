@@ -318,11 +318,19 @@ pub struct InstructionMetadata {
   safepoint : SafepointKind?
   live_gc_roots : Array[Value]
   symbol : SymbolReference?
+  stack_map : @semantic.StackMapMetadata?
 }
 
 ///|
 pub fn InstructionMetadata::empty() -> InstructionMetadata {
-  { source: None, trap: None, safepoint: None, live_gc_roots: [], symbol: None }
+  {
+    source: None,
+    trap: None,
+    safepoint: None,
+    live_gc_roots: [],
+    symbol: None,
+    stack_map: None,
+  }
 }
 
 ///|
@@ -335,6 +343,7 @@ pub fn InstructionMetadata::safepoint(
     safepoint: Some(Gc),
     live_gc_roots: live_gc_roots.copy(),
     symbol: None,
+    stack_map: None,
   }
 }
 
@@ -345,8 +354,16 @@ pub fn InstructionMetadata::new(
   safepoint? : SafepointKind,
   live_gc_roots? : Array[Value] = [],
   symbol? : SymbolReference,
+  stack_map? : @semantic.StackMapMetadata,
 ) -> InstructionMetadata {
-  { source, trap, safepoint, live_gc_roots: live_gc_roots.copy(), symbol }
+  {
+    source,
+    trap,
+    safepoint,
+    live_gc_roots: live_gc_roots.copy(),
+    symbol,
+    stack_map,
+  }
 }
 
 ///|
@@ -357,6 +374,7 @@ fn InstructionMetadata::copy(self : InstructionMetadata) -> InstructionMetadata 
     safepoint: self.safepoint,
     live_gc_roots: self.live_gc_roots.copy(),
     symbol: self.symbol,
+    stack_map: self.stack_map,
   }
 }
 
@@ -390,6 +408,7 @@ pub suberror VCodeVerifyError {
   FixedRegisterClassMismatch(instruction~ : Instruction, operand~ : Int)
   DuplicateClobber(instruction~ : Instruction, reg~ : PhysicalReg)
   InvalidSafepointRoot(instruction~ : Instruction, value~ : Value)
+  InvalidStackMap(instruction~ : Instruction)
   UnreachableBlock(block~ : Block)
   UseBeforeDefinition(instruction~ : Instruction, value~ : Value)
   DefinitionDoesNotDominate(instruction~ : Instruction, value~ : Value)

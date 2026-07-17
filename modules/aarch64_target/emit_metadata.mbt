@@ -59,6 +59,7 @@ fn record_instruction_metadata(
         kind,
         roots,
         source?=metadata.source,
+        stack_map?=metadata.stack_map,
       ),
     )
   }

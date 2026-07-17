@@ -223,7 +223,7 @@ pub fn Function::print(self : Function) -> String {
       let assignment = if results.is_empty() { "" } else { "\{results} = " }
       let operand_suffix = if operands.is_empty() { "" } else { " \{operands}" }
       lines.push(
-        "  \{assignment}\{format_operation(data.operation)}\{operand_suffix}\{format_semantics(data.operation.semantics())}\{format_source(data.metadata.source)}\{format_roots(data.metadata.live_gc_roots)}",
+        "  \{assignment}\{format_operation(data.operation)}\{operand_suffix}\{format_semantics(data.operation.semantics())}\{format_source(data.metadata.source)}\{format_roots(data.metadata.live_gc_roots)}\{format_stack_map(data.metadata.stack_map)}",
       )
     }
     match block.terminator {
@@ -233,6 +233,15 @@ pub fn Function::print(self : Function) -> String {
   }
   lines.push("}")
   lines.join("\n")
+}
+
+///|
+fn format_stack_map(stack_map : StackMapMetadata?) -> String {
+  match stack_map {
+    Some(metadata) =>
+      " stack-map=\{metadata.id}:\{metadata.argument_root_count}"
+    None => ""
+  }
 }
 
 ///|

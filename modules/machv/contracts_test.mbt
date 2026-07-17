@@ -598,6 +598,72 @@ test "source locations reject invalid coordinates" {
 }
 
 ///|
+test "stack maps require GC safepoints and dense unique ids" {
+  let builder = @machv.FunctionBuilder::new("bad_stack_map", Internal, [], [])
+  builder.emit_with_metadata(
+    Safepoint(Cancellation),
+    [],
+    [],
+    InstructionMetadata::new(
+      None,
+      [],
+      stack_map=StackMapMetadata::new(0, argument_root_count=1),
+    ),
+  )
+  |> ignore
+  builder.return_([])
+  try builder.finish() catch {
+    error =>
+      inspect(
+        error,
+        content=(
+          #|InvalidMetadata(
+          #|  block_id=0,
+          #|  message="stack-map metadata requires a GC safepoint operation",
+          #|)
+        ),
+      )
+  } noraise {
+    _ => fail("expected stack-map metadata on a non-GC safepoint to fail")
+  }
+
+  let duplicate = @machv.FunctionBuilder::new(
+    "duplicate_stack_map",
+    Internal,
+    [],
+    [],
+  )
+  for _ in 0..<2 {
+    duplicate.emit_with_metadata(
+      Safepoint(Gc),
+      [],
+      [],
+      InstructionMetadata::new(
+        None,
+        [],
+        stack_map=StackMapMetadata::new(0, argument_root_count=0),
+      ),
+    )
+    |> ignore
+  }
+  duplicate.return_([])
+  try duplicate.finish() catch {
+    error =>
+      inspect(
+        error,
+        content=(
+          #|InvalidMetadata(
+          #|  block_id=0,
+          #|  message="stack-map ids must be unique and dense from zero",
+          #|)
+        ),
+      )
+  } noraise {
+    _ => fail("expected duplicate stack-map ids to fail")
+  }
+}
+
+///|
 test "entry block cannot acquire a predecessor" {
   let builder = @machv.FunctionBuilder::new("entry_predecessor", Internal, [], [])
   let loop_block = builder.create_block([])

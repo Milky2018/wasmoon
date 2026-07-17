@@ -166,6 +166,13 @@ fn[Inst] Function::verify_instruction(
     }
   }
   let metadata = data.metadata
+  if metadata.stack_map is Some(stack_map) {
+    if metadata.safepoint is None ||
+      stack_map.id < 0 ||
+      stack_map.argument_root_count < 0 {
+      raise InvalidStackMap(instruction~)
+    }
+  }
   if metadata.live_gc_roots.length() > 0 && metadata.safepoint is None {
     raise InvalidSafepointRoot(instruction~, value=metadata.live_gc_roots[0])
   }
@@ -233,11 +240,21 @@ pub fn[Inst] verify_selected(
     }
   }
   let dominators = function.compute_dominators(predecessors)
+  let stack_map_ids : Array[Int] = []
   for index in 0..<function.instructions.length() {
-    function.verify_instruction(
-      Instruction::new(function.owner, index),
-      dominators,
-    )
+    let instruction = Instruction::new(function.owner, index)
+    function.verify_instruction(instruction, dominators)
+    if function.instructions[index].metadata.stack_map is Some(stack_map) {
+      if stack_map_ids.contains(stack_map.id) {
+        raise InvalidStackMap(instruction~)
+      }
+      stack_map_ids.push(stack_map.id)
+    }
+  }
+  for id in 0..<stack_map_ids.length() {
+    if !stack_map_ids.contains(id) {
+      raise InvalidLayout
+    }
   }
 }
 

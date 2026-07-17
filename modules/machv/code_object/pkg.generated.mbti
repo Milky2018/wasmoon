@@ -19,6 +19,7 @@ pub suberror CodeObjectVerifyError {
   InvalidTrapSite(index~ : Int, offset~ : Int)
   InvalidSafepointSite(index~ : Int, offset~ : Int)
   InvalidRootLocation(safepoint~ : Int, root~ : Int)
+  InvalidStackMap(safepoint~ : Int)
 } derive(Eq, @debug.Debug)
 pub impl Show for CodeObjectVerifyError
 
@@ -66,8 +67,9 @@ pub struct SafepointSite {
   kind : @machv.SafepointKind
   roots : Array[RootLocation]
   source : @machv.SourceLocation?
+  stack_map : @machv.StackMapMetadata?
 } derive(Eq, @debug.Debug)
-pub fn SafepointSite::new(Int, @machv.SafepointKind, Array[RootLocation], source? : @machv.SourceLocation) -> Self
+pub fn SafepointSite::new(Int, @machv.SafepointKind, Array[RootLocation], source? : @machv.SourceLocation, stack_map? : @machv.StackMapMetadata) -> Self
 
 pub struct SourceSite {
   offset : Int

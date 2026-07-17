@@ -8,6 +8,7 @@ pub suberror CodeObjectVerifyError {
   InvalidTrapSite(index~ : Int, offset~ : Int)
   InvalidSafepointSite(index~ : Int, offset~ : Int)
   InvalidRootLocation(safepoint~ : Int, root~ : Int)
+  InvalidStackMap(safepoint~ : Int)
 } derive(Eq, Debug)
 
 ///|
@@ -141,6 +142,24 @@ pub fn UnlinkedCodeObject::verify(
         raise InvalidRootLocation(safepoint=index, root=root_index)
       }
     }
+    if safepoint.stack_map is Some(stack_map) &&
+      (stack_map.id < 0 || stack_map.argument_root_count < 0) {
+      raise InvalidStackMap(safepoint=index)
+    }
+  }
+  let stack_map_ids : Array[Int] = []
+  for index, safepoint in self.safepoints {
+    if safepoint.stack_map is Some(stack_map) {
+      if stack_map_ids.contains(stack_map.id) {
+        raise InvalidStackMap(safepoint=index)
+      }
+      stack_map_ids.push(stack_map.id)
+    }
+  }
+  for id in 0..<stack_map_ids.length() {
+    if !stack_map_ids.contains(id) {
+      raise InvalidStackMap(safepoint=0)
+    }
   }
 }
 
@@ -166,6 +185,7 @@ pub fn build(
         site.kind,
         site.roots,
         source?=site.source,
+        stack_map?=site.stack_map,
       )
     }),
     unwind: unwind.copy(),

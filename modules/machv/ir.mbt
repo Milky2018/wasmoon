@@ -212,19 +212,35 @@ fn TerminatorRecord::copy(self : TerminatorRecord) -> TerminatorRecord {
 pub struct InstructionMetadata {
   source : SourceLocation?
   live_gc_roots : Array[Value]
+  stack_map : StackMapMetadata?
 } derive(Debug, Eq)
 
 ///|
 pub fn InstructionMetadata::empty() -> InstructionMetadata {
-  { source: None, live_gc_roots: [] }
+  { source: None, live_gc_roots: [], stack_map: None }
+}
+
+///|
+pub struct StackMapMetadata {
+  id : Int
+  argument_root_count : Int
+} derive(Debug, Eq)
+
+///|
+pub fn StackMapMetadata::new(
+  id : Int,
+  argument_root_count~ : Int,
+) -> StackMapMetadata {
+  { id, argument_root_count }
 }
 
 ///|
 pub fn InstructionMetadata::new(
   source : SourceLocation?,
   live_gc_roots : Array[Value],
+  stack_map? : StackMapMetadata,
 ) -> InstructionMetadata {
-  { source, live_gc_roots: live_gc_roots.copy() }
+  { source, live_gc_roots: live_gc_roots.copy(), stack_map }
 }
 
 ///|
@@ -394,6 +410,7 @@ fn Function::append_instruction(
     metadata: {
       source: metadata.source,
       live_gc_roots: metadata.live_gc_roots.copy(),
+      stack_map: metadata.stack_map,
     },
     alive: true,
     parent: Some(block),
@@ -608,6 +625,7 @@ pub fn Function::instruction_metadata(
     Some({
       source: metadata.source,
       live_gc_roots: metadata.live_gc_roots.copy(),
+      stack_map: metadata.stack_map,
     })
   } else {
     None

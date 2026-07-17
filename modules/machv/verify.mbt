@@ -300,6 +300,20 @@ fn Function::verify_metadata(
       message="live GC roots require a GC safepoint operation",
     )
   }
+  if metadata.stack_map is Some(stack_map) {
+    if !semantics.gc_safepoint {
+      raise InvalidMetadata(
+        block_id~,
+        message="stack-map metadata requires a GC safepoint operation",
+      )
+    }
+    if stack_map.id < 0 || stack_map.argument_root_count < 0 {
+      raise InvalidMetadata(
+        block_id~,
+        message="stack-map id and argument root count must be non-negative",
+      )
+    }
+  }
   for index, root in metadata.live_gc_roots {
     self.require_value(root)
     if self.values[root.id].ty != GcRef64 {
@@ -776,6 +790,7 @@ pub fn Function::verify(self : Function) -> Unit raise MachVVerifyError {
   let instruction_blocks = Array::make(self.instructions.length(), -1)
   let instruction_positions = Array::make(self.instructions.length(), -1)
   let instruction_membership = Array::make(self.instructions.length(), false)
+  let stack_map_ids : Array[Int] = []
   for block_id, block in self.blocks {
     if block.terminator is None {
       raise MissingTerminator(block_id~)
@@ -842,6 +857,15 @@ pub fn Function::verify(self : Function) -> Unit raise MachVVerifyError {
         )
       }
       self.verify_metadata(block_id, data.operation.semantics(), data.metadata)
+      if data.metadata.stack_map is Some(stack_map) {
+        if stack_map_ids.contains(stack_map.id) {
+          raise InvalidMetadata(
+            block_id~,
+            message="stack-map ids must be unique and dense from zero",
+          )
+        }
+        stack_map_ids.push(stack_map.id)
+      }
     }
     if block.terminator is Some(record) {
       self.verify_terminator_shape(block_id, record)
@@ -850,6 +874,14 @@ pub fn Function::verify(self : Function) -> Unit raise MachVVerifyError {
   for instruction_id, data in self.instructions {
     if data.alive && !instruction_membership[instruction_id] {
       raise OrphanInstruction(instruction_id~)
+    }
+  }
+  for id in 0..<stack_map_ids.length() {
+    if !stack_map_ids.contains(id) {
+      raise InvalidMetadata(
+        block_id=0,
+        message="stack-map ids must be unique and dense from zero",
+      )
     }
   }
   for value_id, data in self.values {

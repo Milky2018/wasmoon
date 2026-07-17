@@ -257,9 +257,10 @@ pub impl @debug.Debug for Instruction
 pub struct InstructionMetadata {
   source : SourceLocation?
   live_gc_roots : Array[Value]
+  stack_map : StackMapMetadata?
 } derive(Eq, @debug.Debug)
 pub fn InstructionMetadata::empty() -> Self
-pub fn InstructionMetadata::new(SourceLocation?, Array[Value]) -> Self
+pub fn InstructionMetadata::new(SourceLocation?, Array[Value], stack_map? : StackMapMetadata) -> Self
 
 pub(all) enum IntBinaryOp {
   Add
@@ -424,6 +425,12 @@ pub struct SourceLocation {
   column : Int
 } derive(Eq, Hash, @debug.Debug)
 pub fn SourceLocation::new(String, Int, Int) -> Self
+
+pub struct StackMapMetadata {
+  id : Int
+  argument_root_count : Int
+} derive(Eq, @debug.Debug)
+pub fn StackMapMetadata::new(Int, argument_root_count~ : Int) -> Self
 
 pub struct StackObject {
   // private fields

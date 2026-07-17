@@ -195,6 +195,26 @@ pub fn FunctionBuilder::emit_with_metadata(
     return []
   }
   let semantics = operation.semantics()
+  if metadata.stack_map is Some(stack_map) {
+    if !semantics.gc_safepoint {
+      self.record_error(
+        InvalidMetadata(
+          block_id=self.current_block.id,
+          message="stack-map metadata requires a GC safepoint operation",
+        ),
+      )
+      return []
+    }
+    if stack_map.id < 0 || stack_map.argument_root_count < 0 {
+      self.record_error(
+        InvalidMetadata(
+          block_id=self.current_block.id,
+          message="stack-map id and argument root count must be non-negative",
+        ),
+      )
+      return []
+    }
+  }
   if !semantics.gc_safepoint && !metadata.live_gc_roots.is_empty() {
     self.record_error(
       InvalidSafepoint(
