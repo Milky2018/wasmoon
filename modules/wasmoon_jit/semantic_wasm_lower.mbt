@@ -169,11 +169,28 @@ fn lower_semantic_wasm_with_isa(
     error =>
       raise PipelineFailure(message="\{function.name}: \{error.to_string()}")
   }
-  maybe_compile_aarch64_shadow(semantic, isa, environment_field_path=fn(
-    field : @semantic_machv.EnvironmentField,
-  ) {
-    environment.field_paths.get(field.name)
-  })
+  maybe_compile_aarch64_shadow(
+    semantic,
+    isa,
+    environment_field_path=fn(field : @semantic_machv.EnvironmentField) {
+      environment.field_paths.get(field.name)
+    },
+    allocation_symbols=[
+      @semantic_machv.ExternalSymbol::new(
+        environment.runtime_symbols.gc_alloc_struct_slow,
+      ),
+      @semantic_machv.ExternalSymbol::new(
+        environment.runtime_symbols.gc_alloc_array_from_values_slow,
+      ),
+      @semantic_machv.ExternalSymbol::new(
+        environment.runtime_symbols.gc_alloc_array_slow,
+      ),
+    ],
+    root_scope_symbols=(
+      @semantic_machv.ExternalSymbol::new(gc_push_root_scope_symbol()),
+      @semantic_machv.ExternalSymbol::new(gc_pop_root_scope_symbol()),
+    ),
+  )
   let legacy = adapt_semantic_to_legacy(
     semantic,
     isa,

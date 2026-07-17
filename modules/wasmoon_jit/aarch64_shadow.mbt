@@ -43,9 +43,19 @@ fn aarch64_shadow_context(
 fn build_aarch64_shadow(
   function : @semantic_machv.Function,
   environment_field_path? : (@semantic_machv.EnvironmentField) -> Array[Int]?,
+  allocation_symbols? : Array[@semantic_machv.ExternalSymbol] = [],
+  root_scope_symbols? : (
+    @semantic_machv.ExternalSymbol,
+    @semantic_machv.ExternalSymbol,
+  ),
 ) -> @code_object.UnlinkedCodeObject raise JitPipelineError {
-  let context = aarch64_shadow_context(function, environment_field_path)
-  let selected = @aarch64_target.lower(function, context) catch {
+  let elaborated = match root_scope_symbols {
+    Some(symbols) =>
+      elaborate_wasmoon_runtime_abi(function, allocation_symbols, symbols)
+    None => function
+  }
+  let context = aarch64_shadow_context(elaborated, environment_field_path)
+  let selected = @aarch64_target.lower(elaborated, context) catch {
     error =>
       raise PipelineFailure(
         message="\{function.name()}: AArch64 shadow selection failed: \{error.to_string()}",
@@ -75,8 +85,19 @@ fn build_aarch64_shadow(
 fn compile_aarch64_shadow(
   function : @semantic_machv.Function,
   environment_field_path? : (@semantic_machv.EnvironmentField) -> Array[Int]?,
+  allocation_symbols? : Array[@semantic_machv.ExternalSymbol] = [],
+  root_scope_symbols? : (
+    @semantic_machv.ExternalSymbol,
+    @semantic_machv.ExternalSymbol,
+  ),
 ) -> Unit raise JitPipelineError {
-  build_aarch64_shadow(function, environment_field_path?) |> ignore
+  build_aarch64_shadow(
+    function,
+    environment_field_path?,
+    allocation_symbols~,
+    root_scope_symbols?,
+  )
+  |> ignore
 }
 
 ///|
@@ -84,10 +105,20 @@ fn maybe_compile_aarch64_shadow(
   function : @semantic_machv.Function,
   isa : @isa.ISA,
   environment_field_path? : (@semantic_machv.EnvironmentField) -> Array[Int]?,
+  allocation_symbols? : Array[@semantic_machv.ExternalSymbol] = [],
+  root_scope_symbols? : (
+    @semantic_machv.ExternalSymbol,
+    @semantic_machv.ExternalSymbol,
+  ),
 ) -> Unit raise JitPipelineError {
   match isa {
     AArch64 if aarch64_shadow_enabled() =>
-      compile_aarch64_shadow(function, environment_field_path?)
+      compile_aarch64_shadow(
+        function,
+        environment_field_path?,
+        allocation_symbols~,
+        root_scope_symbols?,
+      )
     _ => ()
   }
 }
