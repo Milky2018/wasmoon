@@ -2020,6 +2020,48 @@ test "AArch64 lowering selects a compatible true internal tail call" {
 }
 
 ///|
+test "AArch64 tail calls transfer GC references without a caller safepoint" {
+  let builder = @semantic.FunctionBuilder::new(
+    "tail_call_gc_argument",
+    Internal,
+    [Ptr64, GcRef64],
+    [],
+  )
+  let parameters = builder.parameters()
+  let call = @semantic.SemanticCall::new(
+    Internal(@semantic.CodeSymbol::new("wasm.func.gc_argument")),
+    @semantic.Signature::new([Ptr64, GcRef64], []),
+    Internal,
+    @semantic.CallBehavior::new(ReadWrite, true, true, true, false),
+  )
+  builder.tail_call_with_metadata(
+    call,
+    parameters,
+    @semantic.TerminatorMetadata::new(None, [parameters[1]]),
+  )
+  inspect(
+    lower(builder.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode tail_call_gc_argument(v0:ptr64, v1:gcref64)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v2:any@late]
+      #|  i1 IncomingReg(GcRef64, p1:int) uses=[v1:fixed(p1:int)@early] defs=[v3:any@late]
+      #|  i2 TailCallDirect(
+      #|  { name: "wasm.func.gc_argument" },
+      #|  { params: [Ptr64, GcRef64], results: [] },
+      #|  {
+      #|    arguments: [CallRegister(p0:int), CallRegister(p1:int)],
+      #|    results: [],
+      #|    stack_size: 0,
+      #|    result_area_size: 0,
+      #|  },
+      #|) uses=[v2:any-location@early, v3:any-location@early] clobbers=[p0:int, p1:int, p2:int, p3:int, p4:int, p5:int, p6:int, p7:int, p8:int, p9:int, p10:int, p11:int, p12:int, p13:int, p14:int, p15:int, p16:int, p17:int, p0:fpvec, p1:fpvec, p2:fpvec, p3:fpvec, p4:fpvec, p5:fpvec, p6:fpvec, p7:fpvec, p8:fpvec, p9:fpvec, p10:fpvec, p11:fpvec, p12:fpvec, p13:fpvec, p14:fpvec, p15:fpvec, p16:fpvec, p17:fpvec, p18:fpvec, p19:fpvec, p20:fpvec, p21:fpvec, p22:fpvec, p23:fpvec, p24:fpvec, p25:fpvec, p26:fpvec, p27:fpvec, p28:fpvec, p29:fpvec, p30:fpvec, p31:fpvec]
+      #|
+    ),
+  )
+}
+
+///|
 fn compact_result_context() -> LoweringContext {
   LoweringContext::new(
     try! InternalAbi::new(

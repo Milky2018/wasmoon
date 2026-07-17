@@ -1374,11 +1374,6 @@ pub fn lower(
             message="true tail calls require Internal caller and callee protocols",
           )
         }
-        if !record.metadata.live_gc_roots.is_empty() {
-          raise UnsupportedAbi(
-            message="tail-call roots require post-epilogue stack-map support",
-          )
-        }
         let plan = context.internal_abi.call_plan(call.signature) catch {
           error => raise UnsupportedAbi(message=error.to_string())
         }
@@ -1403,7 +1398,7 @@ pub fn lower(
           target,
           operands.map(@vcode.Input::any_location),
           [],
-          terminator_call_metadata(record.metadata, call.behavior.semantics()),
+          metadata,
           clobbers=platform_call_clobbers(),
         )
       }
