@@ -906,13 +906,6 @@ pub fn verify_vcode(
           false,
           0,
         )
-        if function.instruction_operand_at(instruction, 2).unwrap().constraint !=
-          TiedTo(0) {
-          raise InvalidInstruction(
-            instruction~,
-            message="vector lane replacement result must be tied to its source vector",
-          )
-        }
       }
       VectorShuffle(mask) => {
         if mask.length() != 16 {
@@ -1237,7 +1230,7 @@ pub fn verify_vcode(
         let ty = integer_type(width)
         require_instruction_shape(function, instruction, [ty], [ty], false, 0)
       }
-      IntBinary(width, operation) => {
+      IntBinary(width, _) => {
         let ty = integer_type(width)
         require_instruction_shape(
           function,
@@ -1247,15 +1240,6 @@ pub fn verify_vcode(
           false,
           0,
         )
-        if operation != Sdiv &&
-          operation != Udiv &&
-          function.instruction_operand_at(instruction, 2).unwrap().constraint !=
-          TiedTo(0) {
-          raise InvalidInstruction(
-            instruction~,
-            message="integer binary result must be tied to its left operand",
-          )
-        }
       }
       PopulationCount(width) => {
         let ty = integer_type(width)
@@ -1272,7 +1256,7 @@ pub fn verify_vcode(
           0,
         )
       }
-      IntWithOverflow(width, operation) => {
+      IntWithOverflow(width, _) => {
         let ty = integer_type(width)
         require_instruction_shape(
           function,
@@ -1282,14 +1266,6 @@ pub fn verify_vcode(
           false,
           0,
         )
-        if operation is (Add(_) | Sub(_)) &&
-          function.instruction_operand_at(instruction, 2).unwrap().constraint !=
-          TiedTo(0) {
-          raise InvalidInstruction(
-            instruction~,
-            message="overflowing add/sub result must be tied to its left operand",
-          )
-        }
       }
       IntRemainder(width, _) => {
         let ty = integer_type(width)
@@ -1436,7 +1412,7 @@ pub fn verify_vcode(
           0,
         )
       }
-      AddAddress => {
+      AddAddress =>
         require_instruction_shape(
           function,
           instruction,
@@ -1445,14 +1421,6 @@ pub fn verify_vcode(
           false,
           0,
         )
-        if function.instruction_operand_at(instruction, 2).unwrap().constraint !=
-          TiedTo(0) {
-          raise InvalidInstruction(
-            instruction~,
-            message="address-add result must be tied to its base operand",
-          )
-        }
-      }
       ScalarLoad(width, extension, result_type, _) => {
         if !valid_scalar_load(width, extension, result_type) {
           raise InvalidInstruction(
@@ -1608,7 +1576,7 @@ pub fn verify_vcode(
           0,
         )
       }
-      AtomicRmw(width, ty, _) => {
+      AtomicRmw(width, ty, operation) => {
         if !valid_atomic_access(width, ty) {
           raise InvalidInstruction(
             instruction~,
@@ -1626,10 +1594,10 @@ pub fn verify_vcode(
         let result = function
           .instruction_operands(instruction)
           .filter(operand => operand.role == Def)[0]
-        if result.timing != Early {
+        if operation is (And | Or | Xor) && result.timing != Early {
           raise InvalidInstruction(
             instruction~,
-            message="atomic RMW result must be an early definition",
+            message="compare-exchange atomic RMW result must be an early definition",
           )
         }
       }

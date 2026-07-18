@@ -296,19 +296,45 @@ fn emit_atomic_rmw(
   let operation_width = atomic_operation_width(width)
   match operation {
     Add | Sub | Exchange => {
+      let working = if result == value {
+        value
+      } else {
+        let scratch = @vcode.PhysicalReg::new(10, Int)
+        emit_move(
+          buffer,
+          if operation_width == W64 {
+            I64
+          } else {
+            I32
+          },
+          scratch,
+          value,
+        )
+        scratch
+      }
       if operation == Sub {
         if operation_width == W64 {
-          buffer.x86_emit_neg_r64(value.id)
+          buffer.x86_emit_neg_r64(working.id)
         } else {
-          buffer.x86_emit_neg_r32(value.id)
+          buffer.x86_emit_neg_r32(working.id)
         }
       }
       let offset = buffer.position()
       if operation == Exchange {
-        buffer.x86_emit_xchg_memory(width, address.id, value.id)
+        buffer.x86_emit_xchg_memory(width, address.id, working.id)
       } else {
-        buffer.x86_emit_lock_xadd(width, address.id, value.id)
+        buffer.x86_emit_lock_xadd(width, address.id, working.id)
       }
+      emit_move(
+        buffer,
+        if operation_width == W64 {
+          I64
+        } else {
+          I32
+        },
+        result,
+        working,
+      )
       offset
     }
     And | Or | Xor => {
@@ -644,30 +670,36 @@ fn emit_int_binary(
     }
     return
   }
-  emit_move(buffer, integer_type(width), destination, left)
+  let working = if destination == right && destination != left {
+    @vcode.PhysicalReg::new(10, Int)
+  } else {
+    destination
+  }
+  emit_move(buffer, integer_type(width), working, left)
   match (width, operation) {
-    (W32, Add) => buffer.x86_emit_add_rr32(destination.id, right.id)
-    (W64, Add) => buffer.x86_emit_add_rr(destination.id, right.id)
-    (W32, Sub) => buffer.x86_emit_sub_rr32(destination.id, right.id)
-    (W64, Sub) => buffer.x86_emit_sub_rr(destination.id, right.id)
-    (W32, Mul) => buffer.x86_emit_imul_rr32(destination.id, right.id)
-    (W64, Mul) => buffer.x86_emit_imul_rr(destination.id, right.id)
-    (W32, And) => buffer.x86_emit_and_rr32(destination.id, right.id)
-    (W64, And) => buffer.x86_emit_and_rr(destination.id, right.id)
-    (W32, Orr) => buffer.x86_emit_or_rr32(destination.id, right.id)
-    (W64, Orr) => buffer.x86_emit_or_rr(destination.id, right.id)
-    (W32, Eor) => buffer.x86_emit_xor_rr32(destination.id, right.id)
-    (W64, Eor) => buffer.x86_emit_xor_rr(destination.id, right.id)
-    (W32, Lsl) => buffer.x86_emit_shl_r32_cl(destination.id)
-    (W64, Lsl) => buffer.x86_emit_shl_r_cl(destination.id)
-    (W32, Asr) => buffer.x86_emit_sar_r32_cl(destination.id)
-    (W64, Asr) => buffer.x86_emit_sar_r_cl(destination.id)
-    (W32, Lsr) => buffer.x86_emit_shr_r32_cl(destination.id)
-    (W64, Lsr) => buffer.x86_emit_shr_r_cl(destination.id)
-    (W32, Ror) => buffer.x86_emit_ror_r32_cl(destination.id)
-    (W64, Ror) => buffer.x86_emit_ror_r_cl(destination.id)
+    (W32, Add) => buffer.x86_emit_add_rr32(working.id, right.id)
+    (W64, Add) => buffer.x86_emit_add_rr(working.id, right.id)
+    (W32, Sub) => buffer.x86_emit_sub_rr32(working.id, right.id)
+    (W64, Sub) => buffer.x86_emit_sub_rr(working.id, right.id)
+    (W32, Mul) => buffer.x86_emit_imul_rr32(working.id, right.id)
+    (W64, Mul) => buffer.x86_emit_imul_rr(working.id, right.id)
+    (W32, And) => buffer.x86_emit_and_rr32(working.id, right.id)
+    (W64, And) => buffer.x86_emit_and_rr(working.id, right.id)
+    (W32, Orr) => buffer.x86_emit_or_rr32(working.id, right.id)
+    (W64, Orr) => buffer.x86_emit_or_rr(working.id, right.id)
+    (W32, Eor) => buffer.x86_emit_xor_rr32(working.id, right.id)
+    (W64, Eor) => buffer.x86_emit_xor_rr(working.id, right.id)
+    (W32, Lsl) => buffer.x86_emit_shl_r32_cl(working.id)
+    (W64, Lsl) => buffer.x86_emit_shl_r_cl(working.id)
+    (W32, Asr) => buffer.x86_emit_sar_r32_cl(working.id)
+    (W64, Asr) => buffer.x86_emit_sar_r_cl(working.id)
+    (W32, Lsr) => buffer.x86_emit_shr_r32_cl(working.id)
+    (W64, Lsr) => buffer.x86_emit_shr_r_cl(working.id)
+    (W32, Ror) => buffer.x86_emit_ror_r32_cl(working.id)
+    (W64, Ror) => buffer.x86_emit_ror_r_cl(working.id)
     (_, Sdiv | Udiv) => ()
   }
+  emit_move(buffer, integer_type(width), destination, working)
 }
 
 ///|
@@ -682,11 +714,16 @@ fn emit_int_with_overflow(
 ) -> Unit {
   match operation {
     Add(signedness) => {
-      emit_move(buffer, integer_type(width), result, left)
-      if width == W32 {
-        buffer.x86_emit_add_rr32(result.id, right.id)
+      let working = if result == right && result != left {
+        @vcode.PhysicalReg::new(10, Int)
       } else {
-        buffer.x86_emit_add_rr(result.id, right.id)
+        result
+      }
+      emit_move(buffer, integer_type(width), working, left)
+      if width == W32 {
+        buffer.x86_emit_add_rr32(working.id, right.id)
+      } else {
+        buffer.x86_emit_add_rr(working.id, right.id)
       }
       buffer.x86_emit_setcc_r8(
         if signedness == Signed {
@@ -697,13 +734,19 @@ fn emit_int_with_overflow(
         overflow.id,
       )
       buffer.x86_emit_movzx_r32_r8(overflow.id, overflow.id)
+      emit_move(buffer, integer_type(width), result, working)
     }
     Sub(signedness) => {
-      emit_move(buffer, integer_type(width), result, left)
-      if width == W32 {
-        buffer.x86_emit_sub_rr32(result.id, right.id)
+      let working = if result == right && result != left {
+        @vcode.PhysicalReg::new(10, Int)
       } else {
-        buffer.x86_emit_sub_rr(result.id, right.id)
+        result
+      }
+      emit_move(buffer, integer_type(width), working, left)
+      if width == W32 {
+        buffer.x86_emit_sub_rr32(working.id, right.id)
+      } else {
+        buffer.x86_emit_sub_rr(working.id, right.id)
       }
       buffer.x86_emit_setcc_r8(
         if signedness == Signed {
@@ -714,6 +757,7 @@ fn emit_int_with_overflow(
         overflow.id,
       )
       buffer.x86_emit_movzx_r32_r8(overflow.id, overflow.id)
+      emit_move(buffer, integer_type(width), result, working)
     }
     Mul(signedness) => {
       ignore(left)
@@ -3188,9 +3232,7 @@ fn emit_instruction(
     VectorExtractLane(lane, index, extension) =>
       emit_vector_extract_lane(buffer, lane, index, extension, reg(0), reg(1))
     VectorReplaceLane(lane, index) => {
-      if reg(0) != reg(2) {
-        raise InvalidVectorInstruction
-      }
+      emit_move(buffer, V128, reg(2), reg(0))
       emit_vector_replace_lane(buffer, lane, index, reg(1), reg(2))
     }
     VectorShuffle(mask) =>
@@ -3384,10 +3426,7 @@ fn emit_instruction(
       metadata_offset = emit_float_trap(buffer, ty, condition, left, right)
     }
     Convert(conversion) => emit_conversion(buffer, conversion, reg(0), reg(1))
-    AddAddress => {
-      buffer.x86_emit_mov_rr(reg(2).id, reg(0).id)
-      buffer.x86_emit_add_rr(reg(2).id, reg(1).id)
-    }
+    AddAddress => emit_int_binary(buffer, W64, Add, reg(2), reg(0), reg(1))
     ScalarLoad(width, extension, result_type, offset) => {
       let (address, immediate) = scalar_memory_address(
         buffer,

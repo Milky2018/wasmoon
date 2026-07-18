@@ -13,7 +13,7 @@ test "X64 owns a statically typed Target VCode checkpoint" {
       @vcode.Input::any(builder.parameter(0)),
       @vcode.Input::any(builder.parameter(1)),
     ],
-    [@vcode.Output::tied(I64, 0)],
+    [@vcode.Output::any(I64)],
     [],
     @vcode.InstructionMetadata::empty(),
   )
@@ -42,7 +42,7 @@ test "X64 owns a statically typed Target VCode checkpoint" {
     content=(
       #|vcode x64_add(v0:i64, v1:i64) -> (i64)
       #|block0:
-      #|  i0 IntBinary(W64, Add) uses=[v0:any@early, v1:any@early] defs=[v2:tied(0)@late]
+      #|  i0 IntBinary(W64, Add) uses=[v0:any@early, v1:any@early] defs=[v2:any@late]
       #|  i1 OutgoingReg(I64, p0:int) uses=[v2:any@early]
       #|  i2 Return
       #|
@@ -192,50 +192,6 @@ test "X64 verifier rejects a vector splat with the wrong scalar bank" {
       )
   } noraise {
     _ => fail("expected the invalid vector splat to be rejected")
-  }
-}
-
-///|
-test "X64 verifier rejects an untied vector lane replacement" {
-  let builder : @vcode.Builder[X64Inst] = @vcode.Builder::new(
-    "untied_vector_lane_replacement",
-    [V128, I32],
-  )
-  let entry = builder.entry_block()
-  builder.append_body(
-    entry,
-    VectorReplaceLane(I32x4, 0),
-    [
-      @vcode.Input::any(builder.parameter(0)),
-      @vcode.Input::any(builder.parameter(1)),
-    ],
-    [@vcode.Output::any(V128)],
-    [],
-    @vcode.InstructionMetadata::empty(),
-  )
-  |> ignore
-  builder.set_terminator(
-    entry,
-    Return,
-    [],
-    [],
-    [],
-    @vcode.InstructionMetadata::empty(),
-  )
-  |> ignore
-  try verify_vcode(builder.finish()) catch {
-    error =>
-      inspect(
-        error,
-        content=(
-          #|InvalidInstruction(
-          #|  instruction=i0,
-          #|  message="vector lane replacement result must be tied to its source vector",
-          #|)
-        ),
-      )
-  } noraise {
-    _ => fail("expected the untied vector lane replacement to be rejected")
   }
 }
 
@@ -962,7 +918,7 @@ test "X64 verifier requires early-clobber atomic loop results" {
   let entry = builder.entry_block()
   builder.append_body(
     entry,
-    AtomicRmw(W32, I32, Add),
+    AtomicRmw(W32, I32, And),
     [
       @vcode.Input::any(builder.parameter(0)),
       @vcode.Input::any(builder.parameter(1)),
@@ -988,7 +944,7 @@ test "X64 verifier requires early-clobber atomic loop results" {
         content=(
           #|InvalidInstruction(
           #|  instruction=i0,
-          #|  message="atomic RMW result must be an early definition",
+          #|  message="compare-exchange atomic RMW result must be an early definition",
           #|)
         ),
       )
