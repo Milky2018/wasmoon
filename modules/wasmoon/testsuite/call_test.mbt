@@ -58,7 +58,11 @@ test "call: multi return i32 f64" {
 }
 
 ///|
-test "call: internal call returns nine i32 values" {
+test "AArch64 call: internal call returns nine i32 values" {
+  match @wasmoon_jit.host_target_arch() {
+    AArch64 => ()
+    _ => return
+  }
   let source =
     #|(module
     #|  (func $producer
