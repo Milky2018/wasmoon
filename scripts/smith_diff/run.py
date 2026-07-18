@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import shutil
@@ -16,6 +17,16 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SMITH_DIR = Path(__file__).resolve().parent
 DEFAULT_CONFIG = SMITH_DIR / "wasm_smith_all.json"
 TEMPLATE_WAT = SMITH_DIR / "template_run.wat"
+
+
+def _deterministic_seed(corpus_seed: int, case_index: int, size: int) -> bytes:
+    result = bytearray()
+    block = 0
+    while len(result) < size:
+        material = f"wasmoon-smith-v1:{corpus_seed}:{case_index}:{block}".encode()
+        result.extend(hashlib.sha256(material).digest())
+        block += 1
+    return bytes(result[:size])
 
 
 @dataclass(frozen=True)
@@ -297,6 +308,11 @@ def main() -> int:
     run_p = sub.add_parser("run", help="generate N cases and run diffs")
     run_p.add_argument("--count", type=int, default=1000)
     run_p.add_argument("--seed-size", type=int, default=256)
+    run_p.add_argument(
+        "--seed",
+        type=int,
+        help="Generate the corpus deterministically from this integer seed",
+    )
     run_p.add_argument("--timeout", type=float, default=3.0)
     run_p.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     run_p.add_argument("--out", type=Path, default=SMITH_DIR / "out")
@@ -368,6 +384,7 @@ def main() -> int:
     stats = {
         "count": args.count,
         "seed_size": args.seed_size,
+        "seed": args.seed,
         "timeout": args.timeout,
         "ensure_termination": ensure_termination,
         "failures": 0,
@@ -376,7 +393,11 @@ def main() -> int:
     }
 
     for i in range(args.count):
-        seed = os.urandom(args.seed_size)
+        seed = (
+            _deterministic_seed(args.seed, i, args.seed_size)
+            if args.seed is not None
+            else os.urandom(args.seed_size)
+        )
         seed_path = seeds_dir / f"seed-{i:04d}.bin"
         seed_path.write_bytes(seed)
 

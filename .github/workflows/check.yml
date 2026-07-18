@@ -1,5 +1,6 @@
 name: Check and Test
 on:
+  workflow_dispatch:
   pull_request:
   push:
     branches:
@@ -10,6 +11,38 @@ env:
   MOONBIT_INSTALL_VERSION: "nightly"
 
 jobs:
+  detect-machv-cutover:
+    runs-on: ubuntu-latest
+    outputs:
+      required: ${{ steps.detect.outputs.required }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: detect a cutover closing change
+        id: detect
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = workflow_dispatch ]; then
+            echo "required=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ -z "$BASE_SHA" ] || ! git cat-file -e "$BASE_SHA^{commit}"; then
+            echo "required=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if git diff --name-only "$BASE_SHA" "$HEAD_SHA" | grep -Eq \
+            '^(issues/ISS-(19[3-9]|20[0-3])\.md|docs/perf/machv-migration/|scripts/(assert_target_identity|cutover_gate_manifest|run_fixed_smith_gate|run_machv_cutover_perf)\.py|scripts/smith_diff/run\.py|scripts/tests/test_cutover_gate\.py|\.github/workflows/check\.yml)$'
+          then
+            echo "required=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "required=false" >> "$GITHUB_OUTPUT"
+          fi
+
   build-macos:
     runs-on: macos-latest
     steps:
@@ -241,6 +274,9 @@ jobs:
       UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: install system deps
         run: |
@@ -257,17 +293,192 @@ jobs:
           moon version --all
           moon update
 
+      - name: initialize sanitizer evidence manifest
+        run: |
+          mkdir -p target/cutover-gate/linux-amd64-sanitizer/logs
+          python3 scripts/cutover_gate_manifest.py init \
+            --manifest target/cutover-gate/linux-amd64-sanitizer/manifest.json \
+            --baseline docs/perf/machv-migration/baseline.json \
+            --kind sanitizer \
+            --target linux-amd64
+
       - name: build wasmoon (sanitizer)
         run: |
-          moon build --target native --release
-          ./install.sh
+          python3 scripts/cutover_gate_manifest.py run \
+            --manifest target/cutover-gate/linux-amd64-sanitizer/manifest.json \
+            --name build-sanitizer \
+            --log target/cutover-gate/linux-amd64-sanitizer/logs/build.log \
+            -- bash -lc 'moon build --target native --release && ./install.sh'
 
       - name: run GC differential stress matrix (sanitizer)
+        if: always()
         timeout-minutes: 10
         run: |
-          python3 scripts/find_gc_bugs.py --dir spec/gc --timeout 30
+          python3 scripts/cutover_gate_manifest.py run \
+            --manifest target/cutover-gate/linux-amd64-sanitizer/manifest.json \
+            --name gc-stress \
+            --log target/cutover-gate/linux-amd64-sanitizer/logs/gc-stress.log \
+            -- python3 scripts/find_gc_bugs.py --dir spec/gc --timeout 30
 
       - name: run GC differential fault-injection lane (sanitizer)
+        if: always()
         timeout-minutes: 10
         run: |
-          python3 scripts/find_gc_bugs.py --dir spec/gc --timeout 30 --max-files 64 --fault-alloc-every 7
+          python3 scripts/cutover_gate_manifest.py run \
+            --manifest target/cutover-gate/linux-amd64-sanitizer/manifest.json \
+            --name gc-fault-injection \
+            --log target/cutover-gate/linux-amd64-sanitizer/logs/gc-fault-injection.log \
+            -- python3 scripts/find_gc_bugs.py --dir spec/gc --timeout 30 --max-files 64 --fault-alloc-every 7
+
+      - name: finalize sanitizer evidence manifest
+        if: always()
+        run: |
+          python3 scripts/cutover_gate_manifest.py finalize \
+            --manifest target/cutover-gate/linux-amd64-sanitizer/manifest.json \
+            --required build-sanitizer,gc-stress,gc-fault-injection
+
+      - name: upload sanitizer evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: machv-cutover-linux-amd64-sanitizer
+          path: target/cutover-gate/linux-amd64-sanitizer
+          if-no-files-found: error
+          retention-days: 30
+
+  machv-cutover:
+    needs: detect-machv-cutover
+    if: needs.detect-machv-cutover.outputs.required == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-latest
+            target: darwin-arm64
+          - runner: ubuntu-latest
+            target: linux-amd64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: install system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl clang lld python3
+
+      - name: install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+
+      - name: install gate toolchain
+        run: |
+          moon version --all
+          moon update
+          cargo install wasm-tools --version "$WASM_TOOLS_VERSION" --locked
+          curl -fsSL https://wasmtime.dev/install.sh | bash
+          echo "$HOME/.wasmtime/bin" >> "$GITHUB_PATH"
+
+      - name: initialize cutover evidence manifest
+        run: |
+          mkdir -p "target/cutover-gate/${{ matrix.target }}/logs"
+          python3 scripts/cutover_gate_manifest.py init \
+            --manifest "target/cutover-gate/${{ matrix.target }}/manifest.json" \
+            --baseline docs/perf/machv-migration/baseline.json \
+            --kind target-cutover \
+            --target "${{ matrix.target }}"
+
+      - name: assert target identity
+        run: |
+          python3 scripts/cutover_gate_manifest.py run \
+            --manifest "target/cutover-gate/${{ matrix.target }}/manifest.json" \
+            --name target-identity \
+            --log "target/cutover-gate/${{ matrix.target }}/logs/target-identity.log" \
+            -- python3 scripts/assert_target_identity.py "${{ matrix.target }}" \
+              --baseline docs/perf/machv-migration/baseline.json \
+              --out "target/cutover-gate/${{ matrix.target }}/target-identity.json"
+
+      - name: run cutover quality and correctness matrix
+        if: always()
+        run: |
+          set +e
+          status=0
+          MANIFEST="target/cutover-gate/${{ matrix.target }}/manifest.json"
+          LOGS="target/cutover-gate/${{ matrix.target }}/logs"
+          run_gate() {
+            python3 scripts/cutover_gate_manifest.py run \
+              --manifest "$MANIFEST" --name "$1" --log "$LOGS/$1.log" \
+              -- bash -lc "$2" || status=$?
+          }
+          run_gate moon-check 'moon check --target native --warn-list +73'
+          run_gate moon-test 'MACHV_REGALLOC_VALIDATION=1 moon test --target native --no-parallelize'
+          run_gate boundary-audits 'python3 scripts/audit_module_boundaries.py && python3 scripts/audit_semantic_machv_api.py && python3 scripts/audit_internal_compatibility.py'
+          run_gate python-gate-tests 'python3 -m unittest scripts.tests.test_cutover_gate'
+          run_gate build-install 'moon build --target native --release && ./install.sh'
+          run_gate component 'python3 scripts/run_component_wast.py --dir component-spec --rec --dump-failures'
+          run_gate wast 'python3 scripts/run_all_wast.py --dir spec --rec'
+          run_gate wasi 'python3 examples/wasi_tests/wasi_test.py'
+          run_gate smith 'python3 scripts/run_fixed_smith_gate.py --out target/cutover-gate/${{ matrix.target }}/smith'
+          exit "$status"
+
+      - name: run paired fixed-legacy performance gate
+        if: always()
+        timeout-minutes: 90
+        run: |
+          python3 scripts/cutover_gate_manifest.py run \
+            --manifest "target/cutover-gate/${{ matrix.target }}/manifest.json" \
+            --name paired-performance \
+            --log "target/cutover-gate/${{ matrix.target }}/logs/paired-performance.log" \
+            -- python3 scripts/run_machv_cutover_perf.py \
+              --baseline docs/perf/machv-migration/baseline.json \
+              --out-dir "target/cutover-gate/${{ matrix.target }}/performance" \
+              --candidate-binary ./wasmoon
+
+      - name: finalize cutover evidence manifest
+        if: always()
+        run: |
+          python3 scripts/cutover_gate_manifest.py finalize \
+            --manifest "target/cutover-gate/${{ matrix.target }}/manifest.json" \
+            --required target-identity,moon-check,moon-test,boundary-audits,python-gate-tests,build-install,component,wast,wasi,smith,paired-performance \
+            --perf-report "target/cutover-gate/${{ matrix.target }}/performance/perf-report.json"
+
+      - name: upload cutover evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: machv-cutover-${{ matrix.target }}
+          path: target/cutover-gate/${{ matrix.target }}
+          if-no-files-found: error
+          retention-days: 30
+
+  machv-cutover-manifest:
+    needs: [detect-machv-cutover, machv-cutover, build-ubuntu-sanitizer]
+    if: always() && needs.detect-machv-cutover.outputs.required == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: machv-cutover-*
+          path: target/cutover-evidence
+      - name: combine target evidence
+        run: |
+          mapfile -t manifests < <(find target/cutover-evidence -name manifest.json -type f | sort)
+          test "${#manifests[@]}" -eq 3
+          python3 scripts/cutover_gate_manifest.py combine \
+            --out target/cutover-evidence/gate-manifest.json \
+            "${manifests[@]}"
+      - name: upload combined closing-commit manifest
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: machv-cutover-gate-manifest
+          path: target/cutover-evidence
+          if-no-files-found: error
+          retention-days: 90

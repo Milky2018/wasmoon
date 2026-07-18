@@ -1,96 +1,49 @@
-name: Perf Benchmarks
+name: MachV Cutover Performance
 
 on:
   workflow_dispatch:
   schedule:
     - cron: "0 3 * * *"
 
+env:
+  MOONBIT_INSTALL_VERSION: "nightly"
+
 jobs:
-  perf-ubuntu-amd64:
+  paired-legacy-ubuntu-amd64:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: install system deps
+      - name: install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y curl clang lld python3
 
-      - name: install moon
+      - name: install MoonBit
         run: |
           curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
-          echo "$HOME/.moon/bin" >> $GITHUB_PATH
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
 
-      - name: post install
+      - name: assert AMD64 target identity
         run: |
-          moon version --all
-          moon update
+          python3 scripts/assert_target_identity.py linux-amd64 \
+            --baseline docs/perf/machv-migration/baseline.json \
+            --out target/machv-cutover-perf/target-identity.json
 
-      - name: build wasmoon
+      - name: run blocking paired fixed-legacy gate
+        timeout-minutes: 90
         run: |
-          moon build --target native --release
-          ./install.sh
+          python3 scripts/run_machv_cutover_perf.py \
+            --baseline docs/perf/machv-migration/baseline.json \
+            --out-dir target/machv-cutover-perf
 
-      - name: install wasmtime
-        run: |
-          curl -fsSL https://wasmtime.dev/install.sh | bash
-          echo "$HOME/.wasmtime/bin" >> $GITHUB_PATH
-          "$HOME/.wasmtime/bin/wasmtime" --version
-
-      - name: run perf benchmark runner
-        id: perf_runner
-        continue-on-error: true
-        run: |
-          set -euxo pipefail
-          BASELINE="docs/perf/baselines/linux-amd64/perf-summary.json"
-          if [ -f "$BASELINE" ]; then
-            python3 scripts/run_perf_benchmarks.py \
-              --out-dir target/perf-benchmarks/latest \
-              --iterations 3 \
-              --warmup 1 \
-              --timeout-sec 240 \
-              --baseline "$BASELINE" \
-              --threshold-elapsed-pct 15 \
-              --threshold-compile-pct 15 \
-              --threshold-code-size-pct 5
-          else
-            python3 scripts/run_perf_benchmarks.py \
-              --out-dir target/perf-benchmarks/latest \
-              --iterations 3 \
-              --warmup 1 \
-              --timeout-sec 240
-          fi
-
-      - name: warn if perf benchmark runner regressed
-        if: steps.perf_runner.outcome != 'success'
-        run: |
-          echo "::warning title=Perf benchmark runner::Regression threshold exceeded; see perf artifacts for details."
-
-      - name: check wasmtime parity guardrail
-        id: parity_guardrail
-        continue-on-error: true
-        run: |
-          set -euxo pipefail
-          python3 scripts/check_wasmtime_parity.py \
-            --wasmoon ./wasmoon \
-            --wasmtime wasmtime \
-            --iterations 3 \
-            --warmup 1 \
-            --timeout-sec 240 \
-            --out-dir target/perf-benchmarks/parity \
-            --threshold examples/aead_aegis128l.wasm=6.0 \
-            --threshold examples/benchmark.wasm=1.5
-
-      - name: warn if wasmtime parity guardrail regressed
-        if: steps.parity_guardrail.outcome != 'success'
-        run: |
-          echo "::warning title=Wasmtime parity guardrail::Threshold exceeded; see parity artifacts for details."
-
-      - name: upload perf artifacts
+      - name: upload paired samples and decision
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: perf-benchmarks-ubuntu-amd64
-          path: |
-            target/perf-benchmarks/latest
-            target/perf-benchmarks/parity
+          name: machv-cutover-perf-linux-amd64
+          path: target/machv-cutover-perf
           if-no-files-found: error
+          retention-days: 30
