@@ -435,6 +435,15 @@ fn platform_call_clobbers() -> Array[@vcode.PhysicalReg] {
 }
 
 ///|
+fn internal_call_clobbers(plan : InternalCallPlan) -> Array[@vcode.PhysicalReg] {
+  let clobbers = platform_call_clobbers()
+  if result_area_register(plan) is Some(reg) && !clobbers.contains(reg) {
+    clobbers.push(reg)
+  }
+  clobbers
+}
+
+///|
 fn require_instruction_shape(
   function : @vcode.Function[X64Inst],
   instruction : @vcode.Instruction,
@@ -1723,7 +1732,7 @@ pub fn verify_vcode(
           }
         }
         if function.instruction_clobbers(instruction) !=
-          platform_call_clobbers() {
+          internal_call_clobbers(plan) {
           raise InvalidInstruction(
             instruction~,
             message="internal call has an invalid caller-saved clobber set",
@@ -1781,7 +1790,7 @@ pub fn verify_vcode(
           }
         }
         if function.instruction_clobbers(instruction) !=
-          platform_call_clobbers() {
+          internal_call_clobbers(plan) {
           raise InvalidInstruction(
             instruction~,
             message="indirect call has an invalid caller-saved clobber set",

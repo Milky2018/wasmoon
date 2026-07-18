@@ -200,6 +200,35 @@ test "Allocation checker rejects a live reference in a clobbered integer registe
 }
 
 ///|
+test "Allocation checker permits a late definition in a clobbered register" {
+  let builder : Builder[TestInst] = Builder::new("late_clobber_def", [])
+  let entry = builder.entry_block()
+  let (instruction, results) = builder.append_body(
+    entry,
+    Add,
+    [],
+    [Output::fixed(I64, PhysicalReg::new(0, Int))],
+    [PhysicalReg::new(0, Int)],
+    InstructionMetadata::empty(),
+  )
+  let return_inst = builder.set_terminator(
+    entry,
+    Return,
+    [Input::any(results[0])],
+    [],
+    [],
+    InstructionMetadata::empty(),
+  )
+  let function = builder.finish()
+  let allocation = Allocation::for_function(function)
+  allocation.assign_value(results[0], Register(PhysicalReg::new(0, Int)))
+  |> ignore
+  allocation.assign_operand(instruction, 0, PhysicalReg::new(0, Int)) |> ignore
+  allocation.assign_operand(return_inst, 0, PhysicalReg::new(0, Int)) |> ignore
+  inspect(verify_allocated(function, allocation), content="()")
+}
+
+///|
 test "Allocation checker rejects interfering values in one location" {
   let builder : Builder[TestInst] = Builder::new("interference", [I64, I64])
   let entry = builder.entry_block()

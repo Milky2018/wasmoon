@@ -434,7 +434,7 @@ fn lower_internal_call(
     },
     operands.map(@vcode.Input::any_location),
     [],
-    platform_call_clobbers(),
+    internal_call_clobbers(plan),
     metadata,
   ) catch {
     error => raise BuildFailure(cause=error)
@@ -1148,6 +1148,7 @@ fn lower_instruction(
     _ => result_types.map(@vcode.Output::any)
   }
   let clobbers = match selected {
+    IntBinary(_, Lsl | Asr | Lsr | Ror) => [@vcode.PhysicalReg::new(1, Int)]
     IntHighMultiply(_, _) => [accumulator]
     IntWithOverflow(_, Mul(_)) => [high]
     AtomicRmw(_, _, And | Or | Xor) => [high]

@@ -168,6 +168,174 @@ test "X64 pipeline preserves constant i32 shift operands" {
 }
 
 ///|
+test "X64 pipeline preserves wrapped i32 branch conditions" {
+  let builder = @semantic.FunctionBuilder::new(
+    "emitted_wrapped_i32_branch",
+    Platform,
+    [],
+    [I32],
+  )
+  let when_true = builder.create_block([])
+  let when_false = builder.create_block([])
+  let high = builder.emit(I32Const(0x80000000U), [], [I32])[0]
+  let one = builder.emit(I32Const(1U), [], [I32])[0]
+  let count = builder.emit(I32Const(31U), [], [I32])[0]
+  let shifted = builder.emit(IntBinary(ShiftLeft), [one, count], [I32])[0]
+  let condition = builder.emit(IntBinary(Add), [high, shifted], [I32])[0]
+  builder.branch(condition, when_true, [], when_false, [])
+  builder.switch_to_block(when_true)
+  let taken = builder.emit(I32Const(1U), [], [I32])[0]
+  builder.return_([taken])
+  builder.switch_to_block(when_false)
+  let not_taken = builder.emit(I32Const(42U), [], [I32])[0]
+  builder.return_([not_taken])
+  let function = lower(builder.finish(), test_lowering_context())
+  let allocation = allocate(function)
+  let frame = plan_frame(function, allocation)
+  debug_inspect(
+    emit(function, allocation, frame),
+    content=(
+      #|{
+      #|  architecture: X64,
+      #|  code: [
+      #|    0x55,
+      #|    0x48,
+      #|    0x89,
+      #|    0xe5,
+      #|    0x48,
+      #|    0x81,
+      #|    0xec,
+      #|    0x10,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x48,
+      #|    0x89,
+      #|    0x9c,
+      #|    0x24,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x48,
+      #|    0xb8,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x80,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x48,
+      #|    0xb9,
+      #|    0x01,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x48,
+      #|    0xba,
+      #|    0x1f,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x89,
+      #|    0xcb,
+      #|    0x89,
+      #|    0xd1,
+      #|    0xd3,
+      #|    0xe3,
+      #|    0x89,
+      #|    0xc1,
+      #|    0x01,
+      #|    0xd9,
+      #|    0x85,
+      #|    0xc9,
+      #|    0x0f,
+      #|    0x85,
+      #|    0x05,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0xe9,
+      #|    0x1b,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x48,
+      #|    0xb8,
+      #|    0x01,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x48,
+      #|    0x8b,
+      #|    0x9c,
+      #|    0x24,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x48,
+      #|    0x81,
+      #|    0xc4,
+      #|    0x10,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x5d,
+      #|    0xc3,
+      #|    0x48,
+      #|    0xb8,
+      #|    0x2a,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x48,
+      #|    0x8b,
+      #|    0x9c,
+      #|    0x24,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x48,
+      #|    0x81,
+      #|    0xc4,
+      #|    0x10,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x5d,
+      #|    0xc3,
+      #|  ],
+      #|  relocations: [],
+      #|  sources: [],
+      #|  traps: [],
+      #|  safepoints: [],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
 test "X64 pipeline emits chained scalar conversions" {
   let builder = @semantic.FunctionBuilder::new(
     "emitted_scalar_conversions",
@@ -1613,6 +1781,118 @@ test "X64 pipeline emits internal result-area calls" {
       #|      addend: 0,
       #|    },
       #|  ],
+      #|  sources: [],
+      #|  traps: [],
+      #|  safepoints: [],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
+test "X64 pipeline emits indirect internal result-area calls" {
+  let result_types : Array[@semantic.ValueType] = [I32, I32, I32]
+  let builder = @semantic.FunctionBuilder::new(
+    "emitted_indirect_internal_result_area",
+    Internal,
+    [Ptr64, Ptr64],
+    result_types,
+  )
+  let parameters = builder.parameters()
+  let call = @semantic.SemanticCall::new(
+    Indirect,
+    @semantic.Signature::new([Ptr64], result_types),
+    Internal,
+    @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
+  )
+  let results = builder.emit(
+    Call(call),
+    [parameters[1], parameters[0]],
+    result_types,
+  )
+  builder.return_(results)
+  let function = lower(builder.finish(), test_lowering_context())
+  let allocation = allocate(function)
+  let frame = plan_frame(function, allocation)
+  debug_inspect(
+    emit(function, allocation, frame),
+    content=(
+      #|{
+      #|  architecture: X64,
+      #|  code: [
+      #|    0x55,
+      #|    0x48,
+      #|    0x89,
+      #|    0xe5,
+      #|    0x48,
+      #|    0x81,
+      #|    0xec,
+      #|    0x20,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x48,
+      #|    0x89,
+      #|    0x9c,
+      #|    0x24,
+      #|    0x10,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x48,
+      #|    0x89,
+      #|    0xfa,
+      #|    0x48,
+      #|    0x89,
+      #|    0xf0,
+      #|    0x4c,
+      #|    0x89,
+      #|    0xd3,
+      #|    0x48,
+      #|    0x89,
+      #|    0xd7,
+      #|    0x49,
+      #|    0x89,
+      #|    0xe2,
+      #|    0xff,
+      #|    0xd0,
+      #|    0x89,
+      #|    0xd1,
+      #|    0x8b,
+      #|    0x94,
+      #|    0x24,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x89,
+      #|    0x93,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x89,
+      #|    0xca,
+      #|    0x48,
+      #|    0x8b,
+      #|    0x9c,
+      #|    0x24,
+      #|    0x10,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x48,
+      #|    0x81,
+      #|    0xc4,
+      #|    0x20,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x5d,
+      #|    0xc3,
+      #|  ],
+      #|  relocations: [],
       #|  sources: [],
       #|  traps: [],
       #|  safepoints: [],

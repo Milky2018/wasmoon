@@ -188,16 +188,6 @@ fn emit_result_area_access(
 }
 
 ///|
-fn result_area_register(plan : InternalCallPlan) -> @vcode.PhysicalReg? {
-  for result in plan.results {
-    if result is CallResultArea(_, reg) {
-      return Some(reg)
-    }
-  }
-  None
-}
-
-///|
 fn scalar_memory_address(
   buffer : CodeBuffer,
   address : @vcode.PhysicalReg,

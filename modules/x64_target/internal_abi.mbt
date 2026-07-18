@@ -31,6 +31,16 @@ pub impl Show for InternalAbiError with fn output(self, logger) {
 }
 
 ///|
+fn result_area_register(plan : InternalCallPlan) -> @vcode.PhysicalReg? {
+  for result in plan.results {
+    if result is CallResultArea(_, reg) {
+      return Some(reg)
+    }
+  }
+  None
+}
+
+///|
 fn checked_registers(
   role : String,
   indices : Array[Int],

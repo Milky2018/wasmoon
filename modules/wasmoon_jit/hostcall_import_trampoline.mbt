@@ -1056,7 +1056,6 @@ fn build_x64_hostcall_import_trampoline(
     )
     offset = offset + hostcall_value_byte_count(ty)
   }
-  x64_mov_rr(code, 7, 15)
   x64_mov_imm64(code, 6, bridge.bridge_arg())
   x64_mov_rr(code, 2, 4)
   x64_mov_imm64(code, 1, layout.arg_slots.to_int64())

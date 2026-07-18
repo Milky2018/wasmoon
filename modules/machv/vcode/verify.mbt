@@ -623,20 +623,6 @@ fn[Inst] verify_allocation_interference(
     instructions.push(terminator)
     for reverse_index in 0..<instructions.length() {
       let instruction = instructions[instructions.length() - reverse_index - 1]
-      let clobbers = function.instruction_clobbers(instruction)
-      for reg in clobbers {
-        let class = match reg.class {
-          Int => 0
-          FpVector => 1
-        }
-        if ids_by_location.get((class, reg.id)) is Some(location_id) &&
-          occupants[location_id] >= 0 {
-          raise ClobberViolation(
-            instruction~,
-            value=function.value_at(occupants[location_id]).unwrap(),
-          )
-        }
-      }
       let affected_values : Array[Int] = []
       let before_states : Array[Bool] = []
       let middle_states : Array[Bool] = []
@@ -687,6 +673,20 @@ fn[Inst] verify_allocation_interference(
       transition_live_locations(
         function, allocation, location_ids, live, occupants, affected_values, middle_states,
       )
+      let clobbers = function.instruction_clobbers(instruction)
+      for reg in clobbers {
+        let class = match reg.class {
+          Int => 0
+          FpVector => 1
+        }
+        if ids_by_location.get((class, reg.id)) is Some(location_id) &&
+          occupants[location_id] >= 0 {
+          raise ClobberViolation(
+            instruction~,
+            value=function.value_at(occupants[location_id]).unwrap(),
+          )
+        }
+      }
       transition_live_locations(
         function, allocation, location_ids, live, occupants, affected_values, before_states,
       )
