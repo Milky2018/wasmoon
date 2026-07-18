@@ -3279,8 +3279,11 @@ fn emit_instruction(
     }
     FloatCompareSet(ty, condition) =>
       emit_float_compare(buffer, ty, condition, reg(0), reg(1), reg(2))
-    TrapIfFloat(ty, condition) =>
-      metadata_offset = emit_float_trap(buffer, ty, condition, reg(0), reg(1))
+    TrapIfFloat(ty, condition) => {
+      let left = reg(0)
+      let right = if condition == Unordered { left } else { reg(1) }
+      metadata_offset = emit_float_trap(buffer, ty, condition, left, right)
+    }
     Convert(conversion) => emit_conversion(buffer, conversion, reg(0), reg(1))
     AddAddress => {
       buffer.x86_emit_mov_rr(reg(2).id, reg(0).id)

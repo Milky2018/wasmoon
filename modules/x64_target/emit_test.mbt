@@ -45,6 +45,126 @@ test "X64 pipeline emits an allocated scalar function" {
 }
 
 ///|
+test "X64 pipeline emits chained scalar conversions" {
+  let builder = @semantic.FunctionBuilder::new(
+    "emitted_scalar_conversions",
+    Platform,
+    [I32],
+    [I32],
+  )
+  let as_float = builder.emit(
+      Convert(IntToFloat(I32, F32, Signed)),
+      builder.parameters(),
+      [F32],
+    )[0]
+  let as_integer = builder.emit(
+      Convert(FloatToInt(F32, I32, Signed, Trapping)),
+      [as_float],
+      [I32],
+    )[0]
+  builder.return_([as_integer])
+  let function = lower(builder.finish(), test_lowering_context())
+  let allocation = allocate(function)
+  let frame = plan_frame(function, allocation)
+  debug_inspect(
+    emit(function, allocation, frame),
+    content=(
+      #|{
+      #|  architecture: X64,
+      #|  code: [
+      #|    0x89,
+      #|    0xf9,
+      #|    0xf3,
+      #|    0x0f,
+      #|    0x2a,
+      #|    0xc1,
+      #|    0x0f,
+      #|    0x2e,
+      #|    0xc0,
+      #|    0x0f,
+      #|    0x8b,
+      #|    0x03,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0xcc,
+      #|    0x03,
+      #|    0x00,
+      #|    0x49,
+      #|    0xba,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0xcf,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x66,
+      #|    0x41,
+      #|    0x0f,
+      #|    0x6e,
+      #|    0xca,
+      #|    0x0f,
+      #|    0x2e,
+      #|    0xc1,
+      #|    0x0f,
+      #|    0x83,
+      #|    0x03,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0xcc,
+      #|    0x03,
+      #|    0x00,
+      #|    0x49,
+      #|    0xba,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x4f,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x66,
+      #|    0x41,
+      #|    0x0f,
+      #|    0x6e,
+      #|    0xca,
+      #|    0x0f,
+      #|    0x2e,
+      #|    0xc1,
+      #|    0x0f,
+      #|    0x82,
+      #|    0x03,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0xcc,
+      #|    0x03,
+      #|    0x00,
+      #|    0xf3,
+      #|    0x0f,
+      #|    0x2c,
+      #|    0xc0,
+      #|    0xc3,
+      #|  ],
+      #|  relocations: [],
+      #|  sources: [],
+      #|  traps: [
+      #|    { offset: 15, reason: InvalidConversionToInteger, source: None },
+      #|    { offset: 42, reason: InvalidConversionToInteger, source: None },
+      #|    { offset: 69, reason: InvalidConversionToInteger, source: None },
+      #|  ],
+      #|  safepoints: [],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
 test "X64 pipeline emits scalar float and vector operations" {
   let builder = @semantic.FunctionBuilder::new(
     "emitted_float_vector",
