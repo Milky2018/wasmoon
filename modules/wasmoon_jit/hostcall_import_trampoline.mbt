@@ -1026,6 +1026,13 @@ fn x64_emit_store_result_to_values_vec(
 }
 
 ///|
+fn x64_hostcall_stack_adjust(values_vec_bytes : Int) -> Int {
+  // SysV x64 enters a function with rsp % 16 == 8. Keep the adjustment at
+  // 8 modulo 16 so rsp is 16-byte aligned before calling the C bridge.
+  align_to(values_vec_bytes, 16) + 8
+}
+
+///|
 fn build_x64_hostcall_import_trampoline(
   param_types : Array[@types.ValueType],
   result_types : Array[@types.ValueType],
@@ -1043,7 +1050,7 @@ fn build_x64_hostcall_import_trampoline(
   let layout = plan_hostcall_import_trampoline_layout(
     param_types, result_types, 5, 8,
   )
-  let frame_size = align_to(layout.values_vec_bytes + 8, 16)
+  let frame_size = x64_hostcall_stack_adjust(layout.values_vec_bytes)
   x64_sub_rsp(code, frame_size)
   let mut offset = 0
   for i, ty in param_types {

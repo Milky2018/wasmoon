@@ -20,3 +20,11 @@ test "hostcall import trampoline AArch64 helpers handle general offsets" {
     content="61",
   )
 }
+
+///|
+test "x64 hostcall trampolines align the stack before C bridge calls" {
+  inspect(x64_hostcall_stack_adjust(0), content="8")
+  inspect(x64_hostcall_stack_adjust(8), content="24")
+  inspect(x64_hostcall_stack_adjust(16), content="24")
+  inspect(x64_hostcall_stack_adjust(17), content="40")
+}
