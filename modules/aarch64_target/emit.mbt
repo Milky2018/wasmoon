@@ -193,8 +193,8 @@ fn emit_result_area_access(
   buffer : CodeBuffer,
   load : Bool,
   ty : @semantic.ValueType,
-  address : @vcode.PhysicalReg,
-  value : @vcode.PhysicalReg,
+  address~ : @vcode.PhysicalReg,
+  value~ : @vcode.PhysicalReg,
   offset : Int,
 ) -> Unit raise AArch64EmitError {
   let width : @semantic.AccessWidth = match ty {
@@ -2441,7 +2441,7 @@ fn emit_function_outputs(
         scratch
       }
     }
-    emit_result_area_access(buffer, false, ty, value, address, offset)
+    emit_result_area_access(buffer, false, ty, address~, value~, offset)
   }
   let resolved = @vcode.resolve_parallel_moves(
     register_moves,
