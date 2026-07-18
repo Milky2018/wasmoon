@@ -262,6 +262,179 @@ fn append_body(
 }
 
 ///|
+fn append_two_address_copy(
+  builder : @vcode.Builder[X64Inst],
+  block : @vcode.Block,
+  ty : @semantic.ValueType,
+  value : @vcode.Value,
+) -> @vcode.Value raise X64LowerError {
+  append_body(
+    builder,
+    block,
+    Move(ty),
+    [@vcode.Input::any(value)],
+    [@vcode.Output::any(ty)],
+    @vcode.InstructionMetadata::empty(),
+  )[0]
+}
+
+///|
+fn preserve_two_address_input(
+  builder : @vcode.Builder[X64Inst],
+  block : @vcode.Block,
+  ty : @semantic.ValueType,
+  value : @vcode.Value,
+  live_after : Bool,
+) -> @vcode.Value raise X64LowerError {
+  if live_after {
+    append_two_address_copy(builder, block, ty, value)
+  } else {
+    value
+  }
+}
+
+///|
+fn semantic_terminator_values(
+  terminator : @semantic.Terminator,
+) -> Array[@semantic.Value] {
+  match terminator {
+    Jump(edge) => edge.arguments.copy()
+    Branch(condition, true_edge, false_edge) => {
+      let values = [condition]
+      values.append(true_edge.arguments)
+      values.append(false_edge.arguments)
+      values
+    }
+    Switch(index, cases, default_edge) => {
+      let values = [index]
+      for case in cases {
+        values.append(case.edge.arguments)
+      }
+      values.append(default_edge.arguments)
+      values
+    }
+    Return(values) | TailCall(_, values) | NoReturnCall(_, values) =>
+      values.copy()
+    Trap(_) => []
+  }
+}
+
+///|
+fn semantic_terminator_successors(
+  terminator : @semantic.Terminator,
+) -> Array[@semantic.Block] {
+  match terminator {
+    Jump(edge) => [edge.target]
+    Branch(_, true_edge, false_edge) => [true_edge.target, false_edge.target]
+    Switch(_, cases, default_edge) => {
+      let successors = cases.map(case => case.edge.target)
+      successors.push(default_edge.target)
+      successors
+    }
+    Return(_) | TailCall(_, _) | NoReturnCall(_, _) | Trap(_) => []
+  }
+}
+
+///|
+fn semantic_live_after(function : @semantic.Function) -> Array[Array[Bool]] {
+  let blocks = function.blocks()
+  let value_count = function.value_count()
+  let live_in = Array::makei(blocks.length(), _ => {
+    Array::make(value_count, false)
+  })
+  let live_out = Array::makei(blocks.length(), _ => {
+    Array::make(value_count, false)
+  })
+  let mut changed = true
+  while changed {
+    changed = false
+    for reverse_index in 0..<blocks.length() {
+      let block_index = blocks.length() - reverse_index - 1
+      let block = blocks[block_index]
+      let record = function.block_terminator(block).unwrap()
+      let next_out = Array::make(value_count, false)
+      for successor in semantic_terminator_successors(record.kind) {
+        let successor_index = function.block_index(successor).unwrap()
+        for value_index in 0..<value_count {
+          if live_in[successor_index][value_index] {
+            next_out[value_index] = true
+          }
+        }
+      }
+      let next_in = next_out.copy()
+      for value in semantic_terminator_values(record.kind) {
+        next_in[function.value_index(value).unwrap()] = true
+      }
+      for root in record.metadata.live_gc_roots {
+        next_in[function.value_index(root).unwrap()] = true
+      }
+      let instructions = function.block_instructions(block)
+      for reverse_instruction in 0..<instructions.length() {
+        let instruction = instructions[instructions.length() -
+          reverse_instruction -
+          1]
+        for result in function.instruction_results(instruction) {
+          next_in[function.value_index(result).unwrap()] = false
+        }
+        for operand in function.instruction_operands(instruction) {
+          next_in[function.value_index(operand).unwrap()] = true
+        }
+        for
+          root in function.instruction_metadata(instruction).unwrap().live_gc_roots {
+          next_in[function.value_index(root).unwrap()] = true
+        }
+      }
+      for parameter in function.block_parameters(block) {
+        next_in[function.value_index(parameter).unwrap()] = false
+      }
+      if block_index == 0 {
+        for parameter in function.parameters() {
+          next_in[function.value_index(parameter).unwrap()] = false
+        }
+      }
+      if next_out != live_out[block_index] || next_in != live_in[block_index] {
+        live_out[block_index] = next_out
+        live_in[block_index] = next_in
+        changed = true
+      }
+    }
+  }
+  let live_after : Array[Array[Bool]] = []
+  for block_index, block in blocks {
+    let record = function.block_terminator(block).unwrap()
+    let live = live_out[block_index].copy()
+    for value in semantic_terminator_values(record.kind) {
+      live[function.value_index(value).unwrap()] = true
+    }
+    for root in record.metadata.live_gc_roots {
+      live[function.value_index(root).unwrap()] = true
+    }
+    let instructions = function.block_instructions(block)
+    for reverse_instruction in 0..<instructions.length() {
+      let instruction = instructions[instructions.length() -
+        reverse_instruction -
+        1]
+      let instruction_index = function.instruction_index(instruction).unwrap()
+      while instruction_index >= live_after.length() {
+        live_after.push(Array::make(value_count, false))
+      }
+      live_after[instruction_index] = live.copy()
+      for result in function.instruction_results(instruction) {
+        live[function.value_index(result).unwrap()] = false
+      }
+      for operand in function.instruction_operands(instruction) {
+        live[function.value_index(operand).unwrap()] = true
+      }
+      for
+        root in function.instruction_metadata(instruction).unwrap().live_gc_roots {
+        live[function.value_index(root).unwrap()] = true
+      }
+    }
+  }
+  live_after
+}
+
+///|
 fn source_metadata(
   metadata : @semantic.InstructionMetadata,
   values : Array[@vcode.Value],
@@ -483,6 +656,7 @@ fn lower_instruction(
   block_index : Int,
   instruction : @semantic.Instruction,
   values : Array[@vcode.Value?],
+  live_after : Array[Bool],
 ) -> Unit raise X64LowerError {
   let instruction_index = function.instruction_index(instruction).unwrap()
   let operation = function.instruction_operation(instruction).unwrap()
@@ -663,7 +837,13 @@ fn lower_instruction(
     let results = append_body(
       builder,
       block,
-      Convert(FloatToInt(source, result, signedness)),
+      Convert(
+        if mode == Saturating {
+          FloatToIntSaturating(source, result, signedness)
+        } else {
+          FloatToInt(source, result, signedness)
+        },
+      ),
       operands.map(@vcode.Input::any),
       result_types.map(@vcode.Output::any),
       source_metadata(semantic_metadata, roots, operation.semantics()),
@@ -718,12 +898,19 @@ fn lower_instruction(
         result_types.map(@vcode.Output::any),
         @vcode.InstructionMetadata::empty(),
       )[0]
+    let left = preserve_two_address_input(
+      builder,
+      block,
+      result_types[0],
+      operands[0],
+      live_after[function.value_index(semantic_operands[0]).unwrap()],
+    )
     let results = append_body(
       builder,
       block,
       IntBinary(width, Ror),
-      [@vcode.Input::any(operands[0]), @vcode.Input::any(negated_shift)],
-      result_types.map(@vcode.Output::any),
+      [@vcode.Input::any(left), @vcode.Input::any(negated_shift)],
+      [@vcode.Output::tied(result_types[0], 0)],
       source_metadata(
         function.instruction_metadata(instruction).unwrap(),
         roots,
@@ -778,11 +965,18 @@ fn lower_instruction(
     return
   }
   if operation is Vector(ReplaceLane(lane, index)) {
+    let vector = preserve_two_address_input(
+      builder,
+      block,
+      V128,
+      operands[0],
+      live_after[function.value_index(semantic_operands[0]).unwrap()],
+    )
     let results = append_body(
       builder,
       block,
       VectorReplaceLane(lane, index),
-      operands.map(@vcode.Input::any),
+      [@vcode.Input::any(vector), @vcode.Input::any(operands[1])],
       [@vcode.Output::tied(V128, 0)],
       source_metadata(
         function.instruction_metadata(instruction).unwrap(),
@@ -1074,12 +1268,19 @@ fn lower_instruction(
             [@vcode.Output::any(I64)],
             @vcode.InstructionMetadata::empty(),
           )[0]
+        let base = preserve_two_address_input(
+          builder,
+          block,
+          Ptr64,
+          operands[0],
+          live_after[function.value_index(semantic_operands[0]).unwrap()],
+        )
         let address = append_body(
             builder,
             block,
             AddAddress,
-            [@vcode.Input::any(operands[0]), @vcode.Input::any(offset)],
-            [@vcode.Output::any(Ptr64)],
+            [@vcode.Input::any(base), @vcode.Input::any(offset)],
+            [@vcode.Output::tied(Ptr64, 0)],
             @vcode.InstructionMetadata::empty(),
           )[0]
         let selected_operands = operands.copy()
@@ -1087,6 +1288,27 @@ fn lower_instruction(
         selected_operands
       }
     _ => operands
+  }
+  match selected {
+    IntBinary(_, Add | Sub | Mul | And | Orr | Eor | Lsl | Asr | Lsr | Ror)
+    | AddAddress
+    | IntWithOverflow(_, Add(_) | Sub(_)) =>
+      selected_operands[0] = preserve_two_address_input(
+        builder,
+        block,
+        result_types[0],
+        selected_operands[0],
+        live_after[function.value_index(semantic_operands[0]).unwrap()],
+      )
+    AtomicRmw(_, _, Add | Sub | Exchange) =>
+      selected_operands[1] = preserve_two_address_input(
+        builder,
+        block,
+        result_types[0],
+        selected_operands[1],
+        live_after[function.value_index(semantic_operands[1]).unwrap()],
+      )
+    _ => ()
   }
   let accumulator = @vcode.PhysicalReg::new(0, Int)
   let high = @vcode.PhysicalReg::new(2, Int)
@@ -1133,10 +1355,17 @@ fn lower_instruction(
     _ => selected_operands.map(@vcode.Input::any)
   }
   let outputs = match selected {
+    IntBinary(_, Add | Sub | Mul | And | Orr | Eor | Lsl | Asr | Lsr | Ror)
+    | AddAddress => [@vcode.Output::tied(result_types[0], 0)]
     IntHighMultiply(_, _) => [@vcode.Output::fixed(result_types[0], high)]
     IntWithOverflow(_, Mul(_)) =>
       [
         @vcode.Output::fixed(result_types[0], accumulator),
+        @vcode.Output::any(result_types[1]),
+      ]
+    IntWithOverflow(_, Add(_) | Sub(_)) =>
+      [
+        @vcode.Output::tied(result_types[0], 0),
         @vcode.Output::any(result_types[1]),
       ]
     AtomicRmw(_, _, Add | Sub | Exchange) =>
@@ -1331,6 +1560,7 @@ pub fn lower(
     signature.results,
   )
   let values : Array[@vcode.Value?] = Array::make(function.value_count(), None)
+  let live_after = semantic_live_after(function)
   let result_area = lower_parameters(function, context, builder, values)
   let semantic_blocks = function.blocks()
   let blocks : Array[@vcode.Block] = []
@@ -1358,7 +1588,14 @@ pub fn lower(
     let block = blocks[block_index]
     for instruction in function.block_instructions(semantic_block) {
       lower_instruction(
-        function, context, builder, block, block_index, instruction, values,
+        function,
+        context,
+        builder,
+        block,
+        block_index,
+        instruction,
+        values,
+        live_after[function.instruction_index(instruction).unwrap()],
       )
     }
     let record = function.block_terminator(semantic_block).unwrap()

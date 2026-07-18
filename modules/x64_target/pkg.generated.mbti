@@ -155,6 +155,7 @@ pub(all) enum X64Conversion {
   Bitcast(@machv.ValueType, @machv.ValueType)
   IntToFloat(@machv.IntegerType, @machv.FloatType, @machv.Signedness)
   FloatToInt(@machv.FloatType, @machv.IntegerType, @machv.Signedness)
+  FloatToIntSaturating(@machv.FloatType, @machv.IntegerType, @machv.Signedness)
 } derive(Eq, @debug.Debug)
 
 pub(all) enum X64FloatBinary {

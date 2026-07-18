@@ -13,7 +13,7 @@ test "X64 owns a statically typed Target VCode checkpoint" {
       @vcode.Input::any(builder.parameter(0)),
       @vcode.Input::any(builder.parameter(1)),
     ],
-    [@vcode.Output::any(I64)],
+    [@vcode.Output::tied(I64, 0)],
     [],
     @vcode.InstructionMetadata::empty(),
   )
@@ -42,7 +42,7 @@ test "X64 owns a statically typed Target VCode checkpoint" {
     content=(
       #|vcode x64_add(v0:i64, v1:i64) -> (i64)
       #|block0:
-      #|  i0 IntBinary(W64, Add) uses=[v0:any@early, v1:any@early] defs=[v2:any@late]
+      #|  i0 IntBinary(W64, Add) uses=[v0:any@early, v1:any@early] defs=[v2:tied(0)@late]
       #|  i1 OutgoingReg(I64, p0:int) uses=[v2:any@early]
       #|  i2 Return
       #|

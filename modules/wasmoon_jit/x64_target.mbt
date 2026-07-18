@@ -11,11 +11,11 @@ fn x64_target_context(
 ) -> @x64_target.LoweringContext raise JitPipelineError {
   let abi = @x64_target.InternalAbi::new(
     7,
-    10,
+    12,
     [6, 2, 1, 8, 9],
     [0, 1, 2, 3, 4, 5, 6, 7],
-    [0, 2],
-    [0, 1],
+    [0, 2, 1, 8, 9, 6, 7, 10],
+    [0, 1, 2, 3, 4, 5, 6, 7],
   ) catch {
     error =>
       raise PipelineFailure(

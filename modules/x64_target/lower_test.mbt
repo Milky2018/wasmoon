@@ -25,7 +25,7 @@ test "X64 lowering selects scalar SSA and preserves source metadata" {
       #|block0:
       #|  i0 IncomingReg(I64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v2:any@late]
       #|  i1 IncomingReg(I64, p6:int) uses=[v1:fixed(p6:int)@early] defs=[v3:any@late]
-      #|  i2 IntBinary(W64, Add) uses=[v2:any@early, v3:any@early] defs=[v4:any@late] source={ file: "selected.wat", line: 3, column: 9 }
+      #|  i2 IntBinary(W64, Add) uses=[v2:any@early, v3:any@early] defs=[v4:tied(0)@late] source={ file: "selected.wat", line: 3, column: 9 }
       #|  i3 OutgoingReg(I64, p0:int) uses=[v4:any@early]
       #|  i4 Return
       #|
@@ -142,20 +142,24 @@ test "X64 lowering selects sequentially consistent atomic families" {
       #|  i2 IncomingReg(I64, p2:int) uses=[v2:fixed(p2:int)@early] defs=[v5:any@late]
       #|  i3 AtomicLoad(W8, I32) uses=[v3:any@early] defs=[v6:any@late] trap=MemoryOutOfBounds
       #|  i4 LoadConstant(W64, 2) defs=[v7:any@late]
-      #|  i5 AddAddress uses=[v3:any@early, v7:any@early] defs=[v8:any@late]
-      #|  i6 AtomicStore(W16, I32) uses=[v8:any@early, v4:fixed(p10:int)@early] trap=MemoryOutOfBounds
-      #|  i7 LoadConstant(W64, 4) defs=[v9:any@late]
-      #|  i8 AddAddress uses=[v3:any@early, v9:any@early] defs=[v10:any@late]
-      #|  i9 AtomicRmw(W32, I32, Add) uses=[v10:any@early, v4:any@early] defs=[v11:tied(1)@early] trap=MemoryOutOfBounds
-      #|  i10 LoadConstant(W64, 8) defs=[v12:any@late]
-      #|  i11 AddAddress uses=[v3:any@early, v12:any@early] defs=[v13:any@late]
-      #|  i12 AtomicRmw(W64, I64, Exchange) uses=[v13:any@early, v5:any@early] defs=[v14:tied(1)@early] trap=MemoryOutOfBounds
-      #|  i13 LoadConstant(W64, 16) defs=[v15:any@late]
-      #|  i14 AddAddress uses=[v3:any@early, v15:any@early] defs=[v16:any@late]
-      #|  i15 AtomicCompareExchange(W8, I32) uses=[v16:any@early, v4:fixed(p0:int)@early, v4:any@early] defs=[v17:fixed(p0:int)@early] trap=MemoryOutOfBounds
-      #|  i16 AtomicFence
-      #|  i17 OutgoingReg(I32, p0:int) uses=[v17:any@early]
-      #|  i18 Return
+      #|  i5 Move(Ptr64) uses=[v3:any@early] defs=[v8:any@late]
+      #|  i6 AddAddress uses=[v8:any@early, v7:any@early] defs=[v9:tied(0)@late]
+      #|  i7 AtomicStore(W16, I32) uses=[v9:any@early, v4:fixed(p10:int)@early] trap=MemoryOutOfBounds
+      #|  i8 LoadConstant(W64, 4) defs=[v10:any@late]
+      #|  i9 Move(Ptr64) uses=[v3:any@early] defs=[v11:any@late]
+      #|  i10 AddAddress uses=[v11:any@early, v10:any@early] defs=[v12:tied(0)@late]
+      #|  i11 Move(I32) uses=[v4:any@early] defs=[v13:any@late]
+      #|  i12 AtomicRmw(W32, I32, Add) uses=[v12:any@early, v13:any@early] defs=[v14:tied(1)@early] trap=MemoryOutOfBounds
+      #|  i13 LoadConstant(W64, 8) defs=[v15:any@late]
+      #|  i14 Move(Ptr64) uses=[v3:any@early] defs=[v16:any@late]
+      #|  i15 AddAddress uses=[v16:any@early, v15:any@early] defs=[v17:tied(0)@late]
+      #|  i16 AtomicRmw(W64, I64, Exchange) uses=[v17:any@early, v5:any@early] defs=[v18:tied(1)@early] trap=MemoryOutOfBounds
+      #|  i17 LoadConstant(W64, 16) defs=[v19:any@late]
+      #|  i18 AddAddress uses=[v3:any@early, v19:any@early] defs=[v20:tied(0)@late]
+      #|  i19 AtomicCompareExchange(W8, I32) uses=[v20:any@early, v4:fixed(p0:int)@early, v4:any@early] defs=[v21:fixed(p0:int)@early] trap=MemoryOutOfBounds
+      #|  i20 AtomicFence
+      #|  i21 OutgoingReg(I32, p0:int) uses=[v21:any@early]
+      #|  i22 Return
       #|
     ),
   )
@@ -344,10 +348,10 @@ test "X64 lowering selects vector lane movement" {
       #|  i5 VectorExtractLane(I16x8, 7, Some(Signed)) uses=[v3:any@early] defs=[v7:any@late]
       #|  i6 VectorExtractLane(I16x8, 0, Some(Unsigned)) uses=[v3:any@early] defs=[v8:any@late]
       #|  i7 VectorExtractLane(I32x4, 3, None) uses=[v3:any@early] defs=[v9:any@late]
-      #|  i8 IntBinary(W32, Eor) uses=[v5:any@early, v6:any@early] defs=[v10:any@late]
-      #|  i9 IntBinary(W32, Eor) uses=[v10:any@early, v7:any@early] defs=[v11:any@late]
-      #|  i10 IntBinary(W32, Eor) uses=[v11:any@early, v8:any@early] defs=[v12:any@late]
-      #|  i11 IntBinary(W32, Eor) uses=[v12:any@early, v9:any@early] defs=[v13:any@late]
+      #|  i8 IntBinary(W32, Eor) uses=[v5:any@early, v6:any@early] defs=[v10:tied(0)@late]
+      #|  i9 IntBinary(W32, Eor) uses=[v10:any@early, v7:any@early] defs=[v11:tied(0)@late]
+      #|  i10 IntBinary(W32, Eor) uses=[v11:any@early, v8:any@early] defs=[v12:tied(0)@late]
+      #|  i11 IntBinary(W32, Eor) uses=[v12:any@early, v9:any@early] defs=[v13:tied(0)@late]
       #|  i12 VectorExtractLane(I64x2, 1, None) uses=[v3:any@early] defs=[v14:any@late]
       #|  i13 VectorExtractLane(F32x4, 2, None) uses=[v3:any@early] defs=[v15:any@late]
       #|  i14 VectorExtractLane(F64x2, 1, None) uses=[v3:any@early] defs=[v16:any@late]
@@ -1557,14 +1561,14 @@ test "X64 lowering legalizes remaining pure scalar integer operations" {
       #|  i6 IntUnary(W32, Clz) uses=[v10:any@early] defs=[v11:any@late]
       #|  i7 PopulationCount(W32) uses=[v6:any@early] defs=[v12:any@late]
       #|  i8 IntUnary(W32, Neg) uses=[v12:any@early] defs=[v13:any@late]
-      #|  i9 IntBinary(W32, Ror) uses=[v11:any@early, v13:any@early] defs=[v14:any@late]
+      #|  i9 IntBinary(W32, Ror) uses=[v11:any@early, v13:any@early] defs=[v14:tied(0)@late]
       #|  i10 IntHighMultiply(W32, Signed) uses=[v14:fixed(p0:int)@early, v7:fixed(p11:int)@early] defs=[v15:fixed(p2:int)@late] clobbers=[p0:int]
       #|  i11 IntHighMultiply(W32, Unsigned) uses=[v15:fixed(p0:int)@early, v12:fixed(p11:int)@early] defs=[v16:fixed(p2:int)@late] clobbers=[p0:int]
       #|  i12 IntUnary(W64, Rbit) uses=[v8:any@early] defs=[v17:any@late]
       #|  i13 IntUnary(W64, Clz) uses=[v17:any@early] defs=[v18:any@late]
       #|  i14 PopulationCount(W64) uses=[v8:any@early] defs=[v19:any@late]
       #|  i15 IntUnary(W64, Neg) uses=[v19:any@early] defs=[v20:any@late]
-      #|  i16 IntBinary(W64, Ror) uses=[v18:any@early, v20:any@early] defs=[v21:any@late]
+      #|  i16 IntBinary(W64, Ror) uses=[v18:any@early, v20:any@early] defs=[v21:tied(0)@late]
       #|  i17 IntHighMultiply(W64, Signed) uses=[v21:fixed(p0:int)@early, v9:fixed(p11:int)@early] defs=[v22:fixed(p2:int)@late] clobbers=[p0:int]
       #|  i18 IntHighMultiply(W64, Unsigned) uses=[v22:fixed(p0:int)@early, v19:fixed(p11:int)@early] defs=[v23:fixed(p2:int)@late] clobbers=[p0:int]
       #|  i19 OutgoingReg(I32, p0:int) uses=[v16:any@early]
@@ -1626,30 +1630,30 @@ test "X64 lowering selects every scalar overflow arithmetic contract" {
       #|  i4 IncomingReg(I64, p8:int) uses=[v4:fixed(p8:int)@early] defs=[v9:any@late]
       #|  i5 IncomingResultArea(p10:int) defs=[v10:any@late]
       #|  i6 LoadConstant(W32, 0) defs=[v11:any@late]
-      #|  i7 IntWithOverflow(W32, Add(Signed)) uses=[v6:any@early, v7:any@early] defs=[v12:any@late, v13:any@late]
-      #|  i8 IntBinary(W32, Orr) uses=[v11:any@early, v13:any@early] defs=[v14:any@late]
-      #|  i9 IntWithOverflow(W32, Add(Unsigned)) uses=[v12:any@early, v7:any@early] defs=[v15:any@late, v16:any@late]
-      #|  i10 IntBinary(W32, Orr) uses=[v14:any@early, v16:any@early] defs=[v17:any@late]
-      #|  i11 IntWithOverflow(W32, Sub(Signed)) uses=[v15:any@early, v7:any@early] defs=[v18:any@late, v19:any@late]
-      #|  i12 IntBinary(W32, Orr) uses=[v17:any@early, v19:any@early] defs=[v20:any@late]
-      #|  i13 IntWithOverflow(W32, Sub(Unsigned)) uses=[v18:any@early, v7:any@early] defs=[v21:any@late, v22:any@late]
-      #|  i14 IntBinary(W32, Orr) uses=[v20:any@early, v22:any@early] defs=[v23:any@late]
+      #|  i7 IntWithOverflow(W32, Add(Signed)) uses=[v6:any@early, v7:any@early] defs=[v12:tied(0)@late, v13:any@late]
+      #|  i8 IntBinary(W32, Orr) uses=[v11:any@early, v13:any@early] defs=[v14:tied(0)@late]
+      #|  i9 IntWithOverflow(W32, Add(Unsigned)) uses=[v12:any@early, v7:any@early] defs=[v15:tied(0)@late, v16:any@late]
+      #|  i10 IntBinary(W32, Orr) uses=[v14:any@early, v16:any@early] defs=[v17:tied(0)@late]
+      #|  i11 IntWithOverflow(W32, Sub(Signed)) uses=[v15:any@early, v7:any@early] defs=[v18:tied(0)@late, v19:any@late]
+      #|  i12 IntBinary(W32, Orr) uses=[v17:any@early, v19:any@early] defs=[v20:tied(0)@late]
+      #|  i13 IntWithOverflow(W32, Sub(Unsigned)) uses=[v18:any@early, v7:any@early] defs=[v21:tied(0)@late, v22:any@late]
+      #|  i14 IntBinary(W32, Orr) uses=[v20:any@early, v22:any@early] defs=[v23:tied(0)@late]
       #|  i15 IntWithOverflow(W32, Mul(Signed)) uses=[v21:fixed(p0:int)@early, v7:fixed(p11:int)@early] defs=[v24:fixed(p0:int)@late, v25:any@late] clobbers=[p2:int]
-      #|  i16 IntBinary(W32, Orr) uses=[v23:any@early, v25:any@early] defs=[v26:any@late]
+      #|  i16 IntBinary(W32, Orr) uses=[v23:any@early, v25:any@early] defs=[v26:tied(0)@late]
       #|  i17 IntWithOverflow(W32, Mul(Unsigned)) uses=[v24:fixed(p0:int)@early, v7:fixed(p11:int)@early] defs=[v27:fixed(p0:int)@late, v28:any@late] clobbers=[p2:int]
-      #|  i18 IntBinary(W32, Orr) uses=[v26:any@early, v28:any@early] defs=[v29:any@late]
-      #|  i19 IntWithOverflow(W64, Add(Signed)) uses=[v8:any@early, v9:any@early] defs=[v30:any@late, v31:any@late]
-      #|  i20 IntBinary(W32, Orr) uses=[v29:any@early, v31:any@early] defs=[v32:any@late]
-      #|  i21 IntWithOverflow(W64, Add(Unsigned)) uses=[v30:any@early, v9:any@early] defs=[v33:any@late, v34:any@late]
-      #|  i22 IntBinary(W32, Orr) uses=[v32:any@early, v34:any@early] defs=[v35:any@late]
-      #|  i23 IntWithOverflow(W64, Sub(Signed)) uses=[v33:any@early, v9:any@early] defs=[v36:any@late, v37:any@late]
-      #|  i24 IntBinary(W32, Orr) uses=[v35:any@early, v37:any@early] defs=[v38:any@late]
-      #|  i25 IntWithOverflow(W64, Sub(Unsigned)) uses=[v36:any@early, v9:any@early] defs=[v39:any@late, v40:any@late]
-      #|  i26 IntBinary(W32, Orr) uses=[v38:any@early, v40:any@early] defs=[v41:any@late]
+      #|  i18 IntBinary(W32, Orr) uses=[v26:any@early, v28:any@early] defs=[v29:tied(0)@late]
+      #|  i19 IntWithOverflow(W64, Add(Signed)) uses=[v8:any@early, v9:any@early] defs=[v30:tied(0)@late, v31:any@late]
+      #|  i20 IntBinary(W32, Orr) uses=[v29:any@early, v31:any@early] defs=[v32:tied(0)@late]
+      #|  i21 IntWithOverflow(W64, Add(Unsigned)) uses=[v30:any@early, v9:any@early] defs=[v33:tied(0)@late, v34:any@late]
+      #|  i22 IntBinary(W32, Orr) uses=[v32:any@early, v34:any@early] defs=[v35:tied(0)@late]
+      #|  i23 IntWithOverflow(W64, Sub(Signed)) uses=[v33:any@early, v9:any@early] defs=[v36:tied(0)@late, v37:any@late]
+      #|  i24 IntBinary(W32, Orr) uses=[v35:any@early, v37:any@early] defs=[v38:tied(0)@late]
+      #|  i25 IntWithOverflow(W64, Sub(Unsigned)) uses=[v36:any@early, v9:any@early] defs=[v39:tied(0)@late, v40:any@late]
+      #|  i26 IntBinary(W32, Orr) uses=[v38:any@early, v40:any@early] defs=[v41:tied(0)@late]
       #|  i27 IntWithOverflow(W64, Mul(Signed)) uses=[v39:fixed(p0:int)@early, v9:fixed(p11:int)@early] defs=[v42:fixed(p0:int)@late, v43:any@late] clobbers=[p2:int]
-      #|  i28 IntBinary(W32, Orr) uses=[v41:any@early, v43:any@early] defs=[v44:any@late]
+      #|  i28 IntBinary(W32, Orr) uses=[v41:any@early, v43:any@early] defs=[v44:tied(0)@late]
       #|  i29 IntWithOverflow(W64, Mul(Unsigned)) uses=[v42:fixed(p0:int)@early, v9:fixed(p11:int)@early] defs=[v45:fixed(p0:int)@late, v46:any@late] clobbers=[p2:int]
-      #|  i30 IntBinary(W32, Orr) uses=[v44:any@early, v46:any@early] defs=[v47:any@late]
+      #|  i30 IntBinary(W32, Orr) uses=[v44:any@early, v46:any@early] defs=[v47:tied(0)@late]
       #|  i31 OutgoingReg(I32, p0:int) uses=[v27:any@early]
       #|  i32 OutgoingReg(I64, p2:int) uses=[v45:any@early]
       #|  i33 OutgoingAreaResult(I32, 0) uses=[v10:any@early, v47:any@early]
@@ -1893,7 +1897,7 @@ test "X64 lowering preserves returns-twice platform calls" {
       #|) uses=[v3:any-location@early, v4:any-location@early] clobbers=[p0:int, p1:int, p2:int, p6:int, p7:int, p8:int, p9:int, p10:int, p11:int, p0:fpvec, p1:fpvec, p2:fpvec, p3:fpvec, p4:fpvec, p5:fpvec, p6:fpvec, p7:fpvec, p8:fpvec, p9:fpvec, p10:fpvec, p11:fpvec, p12:fpvec, p13:fpvec, p14:fpvec, p15:fpvec]
       #|  i4 IncomingCallResult(I32, p0:int) defs=[v6:any@late]
       #|  i5 Convert(ExtendI32ToI64(Unsigned)) uses=[v6:any@early] defs=[v7:any@late]
-      #|  i6 IntBinary(W64, Add) uses=[v5:any@early, v7:any@early] defs=[v8:any@late]
+      #|  i6 IntBinary(W64, Add) uses=[v5:any@early, v7:any@early] defs=[v8:tied(0)@late]
       #|  i7 OutgoingReg(I64, p0:int) uses=[v8:any@early]
       #|  i8 Return
       #|
@@ -2994,7 +2998,7 @@ test "X64 lowering selects non-trapping scalar conversions" {
       #|  i8 Convert(Bitcast(F32, I32)) uses=[v12:any@early] defs=[v13:any@late]
       #|  i9 Convert(ExtendI32ToI64(Signed)) uses=[v6:any@early] defs=[v14:any@late]
       #|  i10 Convert(ExtendI32ToI64(Unsigned)) uses=[v6:any@early] defs=[v15:any@late]
-      #|  i11 IntBinary(W64, Add) uses=[v14:any@early, v15:any@early] defs=[v16:any@late]
+      #|  i11 IntBinary(W64, Add) uses=[v14:any@early, v15:any@early] defs=[v16:tied(0)@late]
       #|  i12 Convert(SignExtend(I64, W16)) uses=[v16:any@early] defs=[v17:any@late]
       #|  i13 Convert(Bitcast(I64, F64)) uses=[v17:any@early] defs=[v18:any@late]
       #|  i14 Convert(Bitcast(F64, I64)) uses=[v18:any@early] defs=[v19:any@late]
@@ -3048,7 +3052,7 @@ test "X64 lowering legalizes trapping and saturating float-to-int" {
       #|  i6 LoadFloatConstant(F32, 1325400064) defs=[v7:any@late]
       #|  i7 TrapIfFloat(F32, GreaterOrEqual) uses=[v4:any@early, v7:any@early] trap=InvalidConversionToInteger
       #|  i8 Convert(FloatToInt(F32, I32, Signed)) uses=[v4:any@early] defs=[v8:any@late]
-      #|  i9 Convert(FloatToInt(F64, I64, Unsigned)) uses=[v5:any@early] defs=[v9:any@late]
+      #|  i9 Convert(FloatToIntSaturating(F64, I64, Unsigned)) uses=[v5:any@early] defs=[v9:any@late]
       #|  i10 OutgoingReg(I32, p0:int) uses=[v8:any@early]
       #|  i11 OutgoingReg(I64, p2:int) uses=[v9:any@early]
       #|  i12 Return

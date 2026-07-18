@@ -150,6 +150,11 @@ pub(all) enum X64Conversion {
   Bitcast(@semantic.ValueType, @semantic.ValueType)
   IntToFloat(@semantic.IntegerType, @semantic.FloatType, @semantic.Signedness)
   FloatToInt(@semantic.FloatType, @semantic.IntegerType, @semantic.Signedness)
+  FloatToIntSaturating(
+    @semantic.FloatType,
+    @semantic.IntegerType,
+    @semantic.Signedness
+  )
 } derive(Eq, Debug)
 
 ///|
@@ -677,10 +682,14 @@ fn conversion_shape(
     IntToFloat(I32, F64, _) => Some((I32, F64))
     IntToFloat(I64, F32, _) => Some((I64, F32))
     IntToFloat(I64, F64, _) => Some((I64, F64))
-    FloatToInt(F32, I32, _) => Some((F32, I32))
-    FloatToInt(F32, I64, _) => Some((F32, I64))
-    FloatToInt(F64, I32, _) => Some((F64, I32))
-    FloatToInt(F64, I64, _) => Some((F64, I64))
+    FloatToInt(F32, I32, _) | FloatToIntSaturating(F32, I32, _) =>
+      Some((F32, I32))
+    FloatToInt(F32, I64, _) | FloatToIntSaturating(F32, I64, _) =>
+      Some((F32, I64))
+    FloatToInt(F64, I32, _) | FloatToIntSaturating(F64, I32, _) =>
+      Some((F64, I32))
+    FloatToInt(F64, I64, _) | FloatToIntSaturating(F64, I64, _) =>
+      Some((F64, I64))
     _ => None
   }
 }
@@ -1228,7 +1237,7 @@ pub fn verify_vcode(
         let ty = integer_type(width)
         require_instruction_shape(function, instruction, [ty], [ty], false, 0)
       }
-      IntBinary(width, _) => {
+      IntBinary(width, operation) => {
         let ty = integer_type(width)
         require_instruction_shape(
           function,
@@ -1238,6 +1247,15 @@ pub fn verify_vcode(
           false,
           0,
         )
+        if operation != Sdiv &&
+          operation != Udiv &&
+          function.instruction_operand_at(instruction, 2).unwrap().constraint !=
+          TiedTo(0) {
+          raise InvalidInstruction(
+            instruction~,
+            message="integer binary result must be tied to its left operand",
+          )
+        }
       }
       PopulationCount(width) => {
         let ty = integer_type(width)
@@ -1254,7 +1272,7 @@ pub fn verify_vcode(
           0,
         )
       }
-      IntWithOverflow(width, _) => {
+      IntWithOverflow(width, operation) => {
         let ty = integer_type(width)
         require_instruction_shape(
           function,
@@ -1264,6 +1282,14 @@ pub fn verify_vcode(
           false,
           0,
         )
+        if operation is (Add(_) | Sub(_)) &&
+          function.instruction_operand_at(instruction, 2).unwrap().constraint !=
+          TiedTo(0) {
+          raise InvalidInstruction(
+            instruction~,
+            message="overflowing add/sub result must be tied to its left operand",
+          )
+        }
       }
       IntRemainder(width, _) => {
         let ty = integer_type(width)
@@ -1410,7 +1436,7 @@ pub fn verify_vcode(
           0,
         )
       }
-      AddAddress =>
+      AddAddress => {
         require_instruction_shape(
           function,
           instruction,
@@ -1419,6 +1445,14 @@ pub fn verify_vcode(
           false,
           0,
         )
+        if function.instruction_operand_at(instruction, 2).unwrap().constraint !=
+          TiedTo(0) {
+          raise InvalidInstruction(
+            instruction~,
+            message="address-add result must be tied to its base operand",
+          )
+        }
+      }
       ScalarLoad(width, extension, result_type, _) => {
         if !valid_scalar_load(width, extension, result_type) {
           raise InvalidInstruction(

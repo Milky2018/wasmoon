@@ -2297,6 +2297,157 @@ fn emit_float_trap(
 }
 
 ///|
+fn emit_unchecked_float_to_int(
+  buffer : CodeBuffer,
+  float : @semantic.FloatType,
+  integer : @semantic.IntegerType,
+  signedness : @semantic.Signedness,
+  source : @vcode.PhysicalReg,
+  destination : @vcode.PhysicalReg,
+) -> Unit raise X64EmitError {
+  if signedness == Signed {
+    match (float, integer) {
+      (F32, I32) => buffer.x86_emit_cvttss2si_r32_xmm(destination.id, source.id)
+      (F32, I64) => buffer.x86_emit_cvttss2si_r64_xmm(destination.id, source.id)
+      (F64, I32) => buffer.x86_emit_cvttsd2si_r32_xmm(destination.id, source.id)
+      (F64, I64) => buffer.x86_emit_cvttsd2si_r64_xmm(destination.id, source.id)
+    }
+  } else if integer == I32 {
+    if float == F32 {
+      buffer.x86_emit_cvttss2si_r64_xmm(destination.id, source.id)
+    } else {
+      buffer.x86_emit_cvttsd2si_r64_xmm(destination.id, source.id)
+    }
+  } else {
+    let scalar_type : @semantic.ValueType = if float == F32 { F32 } else { F64 }
+    let threshold = @vcode.PhysicalReg::new(15, FpVector)
+    let adjusted = @vcode.PhysicalReg::new(14, FpVector)
+    materialize_scalar_mask(
+      buffer,
+      scalar_type,
+      if float == F32 {
+        0x5F000000UL
+      } else {
+        0x43E0000000000000UL
+      },
+      threshold,
+    )
+    if float == F32 {
+      buffer.x86_emit_ucomiss_xmm_xmm(source.id, threshold.id)
+    } else {
+      buffer.x86_emit_ucomisd_xmm_xmm(source.id, threshold.id)
+    }
+    let below = buffer.emit_local_jcc(RawLo)
+    emit_move(buffer, scalar_type, adjusted, source)
+    if float == F32 {
+      buffer.x86_emit_subss_xmm_xmm(adjusted.id, threshold.id)
+      buffer.x86_emit_cvttss2si_r64_xmm(destination.id, adjusted.id)
+    } else {
+      buffer.x86_emit_subsd_xmm_xmm(adjusted.id, threshold.id)
+      buffer.x86_emit_cvttsd2si_r64_xmm(destination.id, adjusted.id)
+    }
+    emit_constant(
+      buffer,
+      W64,
+      @vcode.PhysicalReg::new(10, Int),
+      0x8000000000000000UL,
+    )
+    buffer.x86_emit_or_rr(destination.id, 10)
+    let done = buffer.emit_local_jmp()
+    buffer.patch_local_rel32(below, buffer.position())
+    if float == F32 {
+      buffer.x86_emit_cvttss2si_r64_xmm(destination.id, source.id)
+    } else {
+      buffer.x86_emit_cvttsd2si_r64_xmm(destination.id, source.id)
+    }
+    buffer.patch_local_rel32(done, buffer.position())
+  }
+}
+
+///|
+fn emit_saturating_float_to_int(
+  buffer : CodeBuffer,
+  float : @semantic.FloatType,
+  integer : @semantic.IntegerType,
+  signedness : @semantic.Signedness,
+  source : @vcode.PhysicalReg,
+  destination : @vcode.PhysicalReg,
+) -> Unit raise X64EmitError {
+  let scalar_type : @semantic.ValueType = if float == F32 { F32 } else { F64 }
+  let width = if integer == I32 { W32 } else { W64 }
+  let (lower_bits, upper_bits, minimum, maximum) = match
+    (float, integer, signedness) {
+    (F32, I32, Signed) =>
+      (0xCF000000UL, 0x4F000000UL, 0x80000000UL, 0x7FFFFFFFUL)
+    (F32, I32, Unsigned) => (0UL, 0x4F800000UL, 0UL, 0xFFFFFFFFUL)
+    (F32, I64, Signed) =>
+      (0xDF000000UL, 0x5F000000UL, 0x8000000000000000UL, 0x7FFFFFFFFFFFFFFFUL)
+    (F32, I64, Unsigned) => (0UL, 0x5F800000UL, 0UL, 0xFFFFFFFFFFFFFFFFUL)
+    (F64, I32, Signed) =>
+      (0xC1E0000000000000UL, 0x41E0000000000000UL, 0x80000000UL, 0x7FFFFFFFUL)
+    (F64, I32, Unsigned) => (0UL, 0x41F0000000000000UL, 0UL, 0xFFFFFFFFUL)
+    (F64, I64, Signed) =>
+      (
+        0xC3E0000000000000UL, 0x43E0000000000000UL, 0x8000000000000000UL, 0x7FFFFFFFFFFFFFFFUL,
+      )
+    (F64, I64, Unsigned) =>
+      (0UL, 0x43F0000000000000UL, 0UL, 0xFFFFFFFFFFFFFFFFUL)
+  }
+  if float == F32 {
+    buffer.x86_emit_ucomiss_xmm_xmm(source.id, source.id)
+  } else {
+    buffer.x86_emit_ucomisd_xmm_xmm(source.id, source.id)
+  }
+  let nan = buffer.emit_local_jcc(RawPs)
+  let threshold = @vcode.PhysicalReg::new(15, FpVector)
+  materialize_scalar_mask(buffer, scalar_type, lower_bits, threshold)
+  if float == F32 {
+    buffer.x86_emit_ucomiss_xmm_xmm(source.id, threshold.id)
+  } else {
+    buffer.x86_emit_ucomisd_xmm_xmm(source.id, threshold.id)
+  }
+  let below = buffer.emit_local_jcc(
+    if signedness == Signed {
+      RawLo
+    } else {
+      RawLs
+    },
+  )
+  materialize_scalar_mask(buffer, scalar_type, upper_bits, threshold)
+  if float == F32 {
+    buffer.x86_emit_ucomiss_xmm_xmm(source.id, threshold.id)
+  } else {
+    buffer.x86_emit_ucomisd_xmm_xmm(source.id, threshold.id)
+  }
+  let above = buffer.emit_local_jcc(RawHs)
+  emit_unchecked_float_to_int(
+    buffer, float, integer, signedness, source, destination,
+  )
+  let normal_done = buffer.emit_local_jmp()
+  let zero_label = buffer.position()
+  buffer.patch_local_rel32(nan, zero_label)
+  if signedness == Unsigned {
+    buffer.patch_local_rel32(below, zero_label)
+  }
+  emit_constant(buffer, width, destination, 0UL)
+  let zero_done = buffer.emit_local_jmp()
+  let mut minimum_done : Int? = None
+  if signedness == Signed {
+    buffer.patch_local_rel32(below, buffer.position())
+    emit_constant(buffer, width, destination, minimum)
+    minimum_done = Some(buffer.emit_local_jmp())
+  }
+  buffer.patch_local_rel32(above, buffer.position())
+  emit_constant(buffer, width, destination, maximum)
+  let done = buffer.position()
+  buffer.patch_local_rel32(normal_done, done)
+  buffer.patch_local_rel32(zero_done, done)
+  if minimum_done is Some(branch) {
+    buffer.patch_local_rel32(branch, done)
+  }
+}
+
+///|
 fn emit_conversion(
   buffer : CodeBuffer,
   conversion : X64Conversion,
@@ -2379,71 +2530,13 @@ fn emit_conversion(
         }
       }
     FloatToInt(float, integer, signedness) =>
-      if signedness == Signed {
-        match (float, integer) {
-          (F32, I32) =>
-            buffer.x86_emit_cvttss2si_r32_xmm(destination.id, source.id)
-          (F32, I64) =>
-            buffer.x86_emit_cvttss2si_r64_xmm(destination.id, source.id)
-          (F64, I32) =>
-            buffer.x86_emit_cvttsd2si_r32_xmm(destination.id, source.id)
-          (F64, I64) =>
-            buffer.x86_emit_cvttsd2si_r64_xmm(destination.id, source.id)
-        }
-      } else if integer == I32 {
-        if float == F32 {
-          buffer.x86_emit_cvttss2si_r64_xmm(destination.id, source.id)
-        } else {
-          buffer.x86_emit_cvttsd2si_r64_xmm(destination.id, source.id)
-        }
-      } else {
-        let scalar_type : @semantic.ValueType = if float == F32 {
-          F32
-        } else {
-          F64
-        }
-        let threshold = @vcode.PhysicalReg::new(15, FpVector)
-        let adjusted = @vcode.PhysicalReg::new(14, FpVector)
-        materialize_scalar_mask(
-          buffer,
-          scalar_type,
-          if float == F32 {
-            0x5F000000UL
-          } else {
-            0x43E0000000000000UL
-          },
-          threshold,
-        )
-        if float == F32 {
-          buffer.x86_emit_ucomiss_xmm_xmm(source.id, threshold.id)
-        } else {
-          buffer.x86_emit_ucomisd_xmm_xmm(source.id, threshold.id)
-        }
-        let below = buffer.emit_local_jcc(RawLo)
-        emit_move(buffer, scalar_type, adjusted, source)
-        if float == F32 {
-          buffer.x86_emit_subss_xmm_xmm(adjusted.id, threshold.id)
-          buffer.x86_emit_cvttss2si_r64_xmm(destination.id, adjusted.id)
-        } else {
-          buffer.x86_emit_subsd_xmm_xmm(adjusted.id, threshold.id)
-          buffer.x86_emit_cvttsd2si_r64_xmm(destination.id, adjusted.id)
-        }
-        emit_constant(
-          buffer,
-          W64,
-          @vcode.PhysicalReg::new(10, Int),
-          0x8000000000000000UL,
-        )
-        buffer.x86_emit_or_rr(destination.id, 10)
-        let done = buffer.emit_local_jmp()
-        buffer.patch_local_rel32(below, buffer.position())
-        if float == F32 {
-          buffer.x86_emit_cvttss2si_r64_xmm(destination.id, source.id)
-        } else {
-          buffer.x86_emit_cvttsd2si_r64_xmm(destination.id, source.id)
-        }
-        buffer.patch_local_rel32(done, buffer.position())
-      }
+      emit_unchecked_float_to_int(
+        buffer, float, integer, signedness, source, destination,
+      )
+    FloatToIntSaturating(float, integer, signedness) =>
+      emit_saturating_float_to_int(
+        buffer, float, integer, signedness, source, destination,
+      )
   }
 }
 
@@ -3061,14 +3154,20 @@ fn emit_instruction(
     Select(ty) => {
       buffer.x86_emit_test_rr32(reg(0).id, reg(0).id)
       match ty {
-        I32 => {
-          buffer.x86_emit_mov_rr32(reg(3).id, reg(2).id)
-          buffer.x86_emit_cmovcc_rr32(RawNe, reg(3).id, reg(1).id)
-        }
-        I64 | Ptr64 | GcRef64 => {
-          buffer.x86_emit_mov_rr(reg(3).id, reg(2).id)
-          buffer.x86_emit_cmovcc_rr(RawNe, reg(3).id, reg(1).id)
-        }
+        I32 =>
+          if reg(3) == reg(1) {
+            buffer.x86_emit_cmovcc_rr32(RawEq, reg(3).id, reg(2).id)
+          } else {
+            buffer.x86_emit_mov_rr32(reg(3).id, reg(2).id)
+            buffer.x86_emit_cmovcc_rr32(RawNe, reg(3).id, reg(1).id)
+          }
+        I64 | Ptr64 | GcRef64 =>
+          if reg(3) == reg(1) {
+            buffer.x86_emit_cmovcc_rr(RawEq, reg(3).id, reg(2).id)
+          } else {
+            buffer.x86_emit_mov_rr(reg(3).id, reg(2).id)
+            buffer.x86_emit_cmovcc_rr(RawNe, reg(3).id, reg(1).id)
+          }
         F32 => {
           buffer.x86_emit_movd_r32_xmm(10, reg(1).id)
           buffer.x86_emit_movd_r32_xmm(11, reg(2).id)
