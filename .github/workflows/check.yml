@@ -308,7 +308,7 @@ jobs:
             --manifest target/cutover-gate/linux-amd64-sanitizer/manifest.json \
             --name build-sanitizer \
             --log target/cutover-gate/linux-amd64-sanitizer/logs/build.log \
-            -- bash -lc 'moon build --target native --release && ./install.sh'
+            -- bash -c 'moon build --target native --release && ./install.sh'
 
       - name: run GC differential stress matrix (sanitizer)
         if: always()
@@ -412,7 +412,7 @@ jobs:
           run_gate() {
             python3 scripts/cutover_gate_manifest.py run \
               --manifest "$MANIFEST" --name "$1" --log "$LOGS/$1.log" \
-              -- bash -lc "$2" || status=$?
+              -- bash -c "$2" || status=$?
           }
           run_gate moon-check 'moon check --target native --warn-list +73'
           run_gate moon-test 'MACHV_REGALLOC_VALIDATION=1 moon test --target native --no-parallelize'
