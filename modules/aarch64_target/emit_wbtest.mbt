@@ -31,6 +31,35 @@ test "AArch64 stack access encodings preserve width and scaled offset" {
 }
 
 ///|
+test "AArch64 stack allocation probes every guard-page interval" {
+  let buffer = CodeBuffer::new()
+  emit_sp_adjust(buffer, true, 8192)
+  debug_inspect(
+    buffer.code,
+    content=(
+      #|[
+      #|  0xff,
+      #|  0x07,
+      #|  0x40,
+      #|  0xd1,
+      #|  0xf0,
+      #|  0x03,
+      #|  0x40,
+      #|  0xf9,
+      #|  0xff,
+      #|  0x07,
+      #|  0x40,
+      #|  0xd1,
+      #|  0xf0,
+      #|  0x03,
+      #|  0x40,
+      #|  0xf9,
+      #|]
+    ),
+  )
+}
+
+///|
 test "AArch64 integer unary encodings place source in the correct field" {
   let source = @vcode.PhysicalReg::new(3, Int)
   let destination = @vcode.PhysicalReg::new(5, Int)

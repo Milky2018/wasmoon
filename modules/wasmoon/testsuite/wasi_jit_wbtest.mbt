@@ -2068,6 +2068,23 @@ test "wasi jit: clock_time_get returns 0" {
 }
 
 ///|
+test "wasi jit: clock_time_get writes a plausible realtime timestamp" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "clock_time_get"
+    #|    (func $clock_time_get (param i32 i64 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (func (export "test") (result i32)
+    #|    (drop (call $clock_time_get (i32.const 0) (i64.const 1000) (i32.const 0)))
+    #|    (i64.ge_u
+    #|      (i64.div_u
+    #|        (i64.load (i32.const 0))
+    #|        (i64.const 1000000000))
+    #|      (i64.const 1577836800))))
+  inspect(compare_wasi(source, "test"), content="matched")
+}
+
+///|
 test "wasi jit: clock_time_get process/thread cpu clocks return EBADF (8)" {
   let source =
     #|(module

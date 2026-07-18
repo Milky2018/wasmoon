@@ -400,7 +400,15 @@ fn emit_sp_adjust(
     raise FrameOffsetOutOfRange(offset=amount)
   }
   if subtract {
-    buffer.x86_emit_sub_rsp_imm32(amount)
+    let mut remaining = amount
+    while remaining >= 4096 {
+      buffer.x86_emit_sub_rsp_imm32(4096)
+      buffer.x86_emit_mov_r64_m64(10, 4, 0)
+      remaining -= 4096
+    }
+    if remaining > 0 {
+      buffer.x86_emit_sub_rsp_imm32(remaining)
+    }
   } else {
     buffer.x86_emit_add_rsp_imm32(amount)
   }
@@ -1573,27 +1581,39 @@ fn emit_vector_int_shift(
   match operation {
     Left =>
       if lane == I8x16 {
+        let low = @vcode.PhysicalReg::new(14, FpVector)
+        emit_move(buffer, V128, low, source)
+        buffer.x86_emit_pxor_xmm_xmm(15, 15)
+        buffer.x86_emit_punpcklbw_xmm_xmm(low.id, 15)
+        buffer.x86_emit_punpckhbw_xmm_xmm(destination.id, 15)
+        buffer.x86_emit_movd_xmm_r32(15, 10)
+        buffer.x86_emit_psll_xmm_xmm(H16, low.id, 15)
         buffer.x86_emit_psll_xmm_xmm(H16, destination.id, 15)
         emit_vector_constant(
           buffer,
-          @vcode.PhysicalReg::new(14, FpVector),
+          @vcode.PhysicalReg::new(15, FpVector),
           0x00FF00FF00FF00FFUL,
           0x00FF00FF00FF00FFUL,
         )
-        buffer.x86_emit_pand_xmm_xmm(destination.id, 14)
+        buffer.x86_emit_pand_xmm_xmm(low.id, 15)
+        buffer.x86_emit_pand_xmm_xmm(destination.id, 15)
+        buffer.x86_emit_packuswb_xmm_xmm(low.id, destination.id)
+        emit_move(buffer, V128, destination, low)
       } else {
         buffer.x86_emit_psll_xmm_xmm(raw_lane, destination.id, 15)
       }
     Right(Unsigned) =>
       if lane == I8x16 {
+        let low = @vcode.PhysicalReg::new(14, FpVector)
+        emit_move(buffer, V128, low, source)
+        buffer.x86_emit_pxor_xmm_xmm(15, 15)
+        buffer.x86_emit_punpcklbw_xmm_xmm(low.id, 15)
+        buffer.x86_emit_punpckhbw_xmm_xmm(destination.id, 15)
+        buffer.x86_emit_movd_xmm_r32(15, 10)
+        buffer.x86_emit_psrl_xmm_xmm(H16, low.id, 15)
         buffer.x86_emit_psrl_xmm_xmm(H16, destination.id, 15)
-        emit_vector_constant(
-          buffer,
-          @vcode.PhysicalReg::new(14, FpVector),
-          0x00FF00FF00FF00FFUL,
-          0x00FF00FF00FF00FFUL,
-        )
-        buffer.x86_emit_pand_xmm_xmm(destination.id, 14)
+        buffer.x86_emit_packuswb_xmm_xmm(low.id, destination.id)
+        emit_move(buffer, V128, destination, low)
       } else {
         buffer.x86_emit_psrl_xmm_xmm(raw_lane, destination.id, 15)
       }
@@ -2640,36 +2660,6 @@ fn emit_epilogue(
 }
 
 ///|
-fn[Inst] emit_edit(
-  buffer : CodeBuffer,
-  function : @vcode.Function[Inst],
-  frame : X64Frame,
-  edit : @vcode.Edit,
-) -> Unit raise X64EmitError {
-  match edit.kind() {
-    Spill(value~, reg~, slot~) =>
-      emit_stack_access(
-        buffer,
-        false,
-        function.value_type(value).unwrap(),
-        reg,
-        frame.slot_offset(slot).unwrap(),
-      )
-    Reload(value~, slot~, reg~) =>
-      emit_stack_access(
-        buffer,
-        true,
-        function.value_type(value).unwrap(),
-        reg,
-        frame.slot_offset(slot).unwrap(),
-      )
-    Move(value~, from~, to~) =>
-      emit_move(buffer, function.value_type(value).unwrap(), to, from)
-    EdgeMove(..) => ()
-  }
-}
-
-///|
 fn[Inst] emit_edits_at(
   buffer : CodeBuffer,
   function : @vcode.Function[Inst],
@@ -2678,13 +2668,51 @@ fn[Inst] emit_edits_at(
   instruction : @vcode.Instruction,
   placement : @vcode.PointPlacement,
 ) -> Unit raise X64EmitError {
+  let moves : Array[@vcode.ParallelMove] = []
   for edit in edits {
     if edit.point() is Some(point) &&
       point.instruction() == instruction &&
       point.placement() == placement {
-      emit_edit(buffer, function, frame, edit)
+      match edit.kind() {
+        Spill(value~, reg~, slot~) =>
+          moves.push(
+            @vcode.ParallelMove::new(
+              function.value_type(value).unwrap(),
+              Register(reg),
+              Stack(slot),
+            ),
+          )
+        Reload(value~, slot~, reg~) =>
+          moves.push(
+            @vcode.ParallelMove::new(
+              function.value_type(value).unwrap(),
+              Stack(slot),
+              Register(reg),
+            ),
+          )
+        Move(value~, from~, to~) =>
+          moves.push(
+            @vcode.ParallelMove::new(
+              function.value_type(value).unwrap(),
+              Register(from),
+              Register(to),
+            ),
+          )
+        EdgeMove(..) => ()
+      }
     }
   }
+  let resolved = @vcode.resolve_parallel_moves(
+    moves,
+    [@vcode.PhysicalReg::new(10, Int), @vcode.PhysicalReg::new(11, Int)],
+    [
+      @vcode.PhysicalReg::new(14, FpVector),
+      @vcode.PhysicalReg::new(15, FpVector),
+    ],
+  ) catch {
+    error => raise InvalidParallelMove(cause=error)
+  }
+  emit_resolved_moves(buffer, frame, resolved)
 }
 
 ///|
@@ -3337,10 +3365,26 @@ fn emit_instruction(
         reg(2),
         reg(3),
       )
-    IntRemainder(width, signedness) => {
-      let division = if signedness == Signed { Sdiv } else { Udiv }
-      emit_int_binary(buffer, width, division, reg(0), reg(0), reg(1))
-    }
+    IntRemainder(width, signedness) =>
+      if signedness == Signed {
+        if width == W32 {
+          buffer.x86_emit_cmp_r32_imm32(reg(1).id, -1)
+        } else {
+          buffer.x86_emit_cmp_r_imm32(reg(1).id, -1)
+        }
+        let divide = buffer.emit_local_jcc(RawNe)
+        if width == W32 {
+          buffer.x86_emit_xor_rr32(reg(2).id, reg(2).id)
+        } else {
+          buffer.x86_emit_xor_rr(reg(2).id, reg(2).id)
+        }
+        let done = buffer.emit_local_jmp()
+        buffer.patch_local_rel32(divide, buffer.position())
+        emit_int_binary(buffer, width, Sdiv, reg(0), reg(0), reg(1))
+        buffer.patch_local_rel32(done, buffer.position())
+      } else {
+        emit_int_binary(buffer, width, Udiv, reg(0), reg(0), reg(1))
+      }
     TrapIfZero(width) => {
       if width == W32 {
         buffer.x86_emit_test_rr32(reg(0).id, reg(0).id)

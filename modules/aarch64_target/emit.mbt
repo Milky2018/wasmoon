@@ -536,11 +536,21 @@ fn emit_sp_adjust(
   let base = if subtract { 0xD1000000U } else { 0x91000000U }
   let mut remaining = amount
   while remaining >= 4096 {
-    let pages = Int::min(remaining / 4096, 4095)
-    buffer.emit_word(
-      base | (1U << 22) | (pages.reinterpret_as_uint() << 10) | (31U << 5) | 31U,
-    )
-    remaining -= pages * 4096
+    if subtract {
+      buffer.emit_word(base | (1U << 22) | (1U << 10) | (31U << 5) | 31U)
+      emit_stack_access(buffer, true, I64, @vcode.PhysicalReg::new(16, Int), 0)
+      remaining -= 4096
+    } else {
+      let pages = Int::min(remaining / 4096, 4095)
+      buffer.emit_word(
+        base |
+        (1U << 22) |
+        (pages.reinterpret_as_uint() << 10) |
+        (31U << 5) |
+        31U,
+      )
+      remaining -= pages * 4096
+    }
   }
   if remaining > 0 {
     buffer.emit_word(
@@ -1967,36 +1977,6 @@ fn emit_epilogue(
 }
 
 ///|
-fn[Inst] emit_edit(
-  buffer : CodeBuffer,
-  function : @vcode.Function[Inst],
-  frame : AArch64Frame,
-  edit : @vcode.Edit,
-) -> Unit raise AArch64EmitError {
-  match edit.kind() {
-    Spill(value~, reg~, slot~) =>
-      emit_stack_access(
-        buffer,
-        false,
-        function.value_type(value).unwrap(),
-        reg,
-        frame.slot_offset(slot).unwrap(),
-      )
-    Reload(value~, slot~, reg~) =>
-      emit_stack_access(
-        buffer,
-        true,
-        function.value_type(value).unwrap(),
-        reg,
-        frame.slot_offset(slot).unwrap(),
-      )
-    Move(value~, from~, to~) =>
-      emit_move(buffer, function.value_type(value).unwrap(), to, from)
-    EdgeMove(..) => ()
-  }
-}
-
-///|
 fn[Inst] emit_edits_at(
   buffer : CodeBuffer,
   function : @vcode.Function[Inst],
@@ -2005,13 +1985,51 @@ fn[Inst] emit_edits_at(
   instruction : @vcode.Instruction,
   placement : @vcode.PointPlacement,
 ) -> Unit raise AArch64EmitError {
+  let moves : Array[@vcode.ParallelMove] = []
   for edit in edits {
     if edit.point() is Some(point) &&
       point.instruction() == instruction &&
       point.placement() == placement {
-      emit_edit(buffer, function, frame, edit)
+      match edit.kind() {
+        Spill(value~, reg~, slot~) =>
+          moves.push(
+            @vcode.ParallelMove::new(
+              function.value_type(value).unwrap(),
+              Register(reg),
+              Stack(slot),
+            ),
+          )
+        Reload(value~, slot~, reg~) =>
+          moves.push(
+            @vcode.ParallelMove::new(
+              function.value_type(value).unwrap(),
+              Stack(slot),
+              Register(reg),
+            ),
+          )
+        Move(value~, from~, to~) =>
+          moves.push(
+            @vcode.ParallelMove::new(
+              function.value_type(value).unwrap(),
+              Register(from),
+              Register(to),
+            ),
+          )
+        EdgeMove(..) => ()
+      }
     }
   }
+  let resolved = @vcode.resolve_parallel_moves(
+    moves,
+    [@vcode.PhysicalReg::new(16, Int), @vcode.PhysicalReg::new(17, Int)],
+    [
+      @vcode.PhysicalReg::new(16, FpVector),
+      @vcode.PhysicalReg::new(17, FpVector),
+    ],
+  ) catch {
+    error => raise InvalidParallelMove(cause=error)
+  }
+  emit_resolved_moves(buffer, frame, resolved)
 }
 
 ///|

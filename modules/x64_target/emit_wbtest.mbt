@@ -9,3 +9,46 @@ test "x64 pairwise i16 add uses horizontal lane semantics" {
     ),
   )
 }
+
+///|
+test "x64 stack allocation probes every guard-page interval" {
+  let buffer = CodeBuffer::new()
+  emit_sp_adjust(buffer, true, 8192)
+  debug_inspect(
+    buffer.code,
+    content=(
+      #|[
+      #|  0x48,
+      #|  0x81,
+      #|  0xec,
+      #|  0x00,
+      #|  0x10,
+      #|  0x00,
+      #|  0x00,
+      #|  0x4c,
+      #|  0x8b,
+      #|  0x94,
+      #|  0x24,
+      #|  0x00,
+      #|  0x00,
+      #|  0x00,
+      #|  0x00,
+      #|  0x48,
+      #|  0x81,
+      #|  0xec,
+      #|  0x00,
+      #|  0x10,
+      #|  0x00,
+      #|  0x00,
+      #|  0x4c,
+      #|  0x8b,
+      #|  0x94,
+      #|  0x24,
+      #|  0x00,
+      #|  0x00,
+      #|  0x00,
+      #|  0x00,
+      #|]
+    ),
+  )
+}
