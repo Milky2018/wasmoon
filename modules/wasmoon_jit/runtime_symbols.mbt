@@ -182,19 +182,9 @@ pub fn RuntimeSymbolResolver::with_wasmoon_runtime_symbols() -> RuntimeSymbolRes
     jit_runtime_fixup_idx(2),
   )
   resolver.add_symbol_fixup(
-    "wasmoon.runtime.memory_fill_mem0",
-    @jit_ffi.c_jit_get_memory_fill_mem0_ptr(),
-    jit_runtime_fixup_idx(3),
-  )
-  resolver.add_symbol_fixup(
     "wasmoon.runtime.memory_copy",
     @jit_ffi.c_jit_get_memory_copy_ptr(),
     jit_runtime_fixup_idx(4),
-  )
-  resolver.add_symbol_fixup(
-    "wasmoon.runtime.memory_copy_mem0",
-    @jit_ffi.c_jit_get_memory_copy_mem0_ptr(),
-    jit_runtime_fixup_idx(5),
   )
   resolver.add_symbol_fixup(
     "wasmoon.runtime.memory_init",
@@ -404,9 +394,7 @@ pub fn resolve_runtime_func_fixup_idx(idx : Int) -> Int64? {
     -21000 => Some(@jit_ffi.c_jit_get_memory_grow_ptr())
     -21001 => Some(@jit_ffi.c_jit_get_memory_size_ptr())
     -21002 => Some(@jit_ffi.c_jit_get_memory_fill_ptr())
-    -21003 => Some(@jit_ffi.c_jit_get_memory_fill_mem0_ptr())
     -21004 => Some(@jit_ffi.c_jit_get_memory_copy_ptr())
-    -21005 => Some(@jit_ffi.c_jit_get_memory_copy_mem0_ptr())
     -21006 => Some(@jit_ffi.c_jit_get_memory_init_ptr())
     -21007 => Some(@jit_ffi.c_jit_get_data_drop_ptr())
     -21008 => Some(@jit_ffi.c_jit_get_table_grow_ptr())

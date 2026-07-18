@@ -760,11 +760,6 @@ fn ExecContext::eval_elem_init_expr(
       FuncRef(store_addr)
     }
     [RefNull(_)] => Null
-    [I32Const(idx)] => {
-      // Legacy format: function index as i32
-      let store_addr = self.instance.func_addrs[idx]
-      FuncRef(store_addr)
-    }
     _ => {
       // For complex expressions, execute them through the interpreter
       // Save the current stack state

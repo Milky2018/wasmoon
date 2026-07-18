@@ -220,11 +220,6 @@ fn ExecContext::exec_instr(
               FuncRef | ExternRef => Null
               _ => Null
             }
-          [I32Const(idx)] => {
-            // Legacy format: function index as i32
-            let store_addr = self.instance.func_addrs[idx]
-            FuncRef(store_addr)
-          }
           // GC: handle ref.i31 expressions
           [I32Const(n), RefI31] => {
             let i31_val = n & 0x7FFFFFFF

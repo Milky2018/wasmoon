@@ -323,27 +323,3 @@ fn rule_remat_fconst() -> RewriteRule {
     },
   }
 }
-
-// ============================================================================
-// Get all rematerialization rules
-// ============================================================================
-
-///|
-/// Get all rematerialization rules
-pub fn remat_rules() -> Array[RewriteRule] {
-  [
-    rule_remat_iadd_iconst_left(),
-    rule_remat_iadd_iconst_right(),
-    rule_remat_isub_iconst_left(),
-    rule_remat_isub_iconst_right(),
-    rule_remat_band_iconst_left(),
-    rule_remat_band_iconst_right(),
-    rule_remat_bor_iconst_left(),
-    rule_remat_bor_iconst_right(),
-    rule_remat_bxor_iconst_left(),
-    rule_remat_bxor_iconst_right(),
-    rule_remat_bnot(),
-    rule_remat_iconst(),
-    rule_remat_fconst(),
-  ]
-}

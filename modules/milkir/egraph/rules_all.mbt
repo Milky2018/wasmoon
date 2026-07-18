@@ -35,30 +35,22 @@ pub fn get_compact_ruleset() -> IndexedRuleSet {
 }
 
 ///|
-/// Get all standard rewrite rules indexed by their matching opcodes
-/// Note: For production code, prefer get_global_ruleset() which caches the result.
-/// This function is kept for backwards compatibility with tests.
-pub fn standard_rules_indexed() -> IndexedRuleSet {
-  build_indexed_ruleset()
-}
-
-///|
 /// Rules that require frontend- or target-provided definedness facts.
 ///
-/// These are intentionally not part of `standard_rules_indexed` because generic
+/// These are intentionally not part of `get_global_ruleset` because generic
 /// MilkIR does not yet model whether division/remainder operations are total,
 /// trapping, or poison-producing. A frontend adapter may use this collection
 /// only after proving the required non-zero and overflow preconditions.
-pub fn legality_sensitive_rules() -> Array[RewriteRule] {
-  [
-    rule_udiv_pow2(),
-    rule_urem_pow2(),
-    rule_sdiv_neg_one(),
-    rule_srem_neg_one(),
-    rule_div_one(),
-    rule_rem_one(),
-    rule_udiv_select_pow2(),
-  ]
+pub fn legality_sensitive_rules() -> IndexedRuleSet {
+  let rs = IndexedRuleSet::IndexedRuleSet()
+  rs.add_rule(rule_udiv_pow2(), [TUdiv])
+  rs.add_rule(rule_urem_pow2(), [TUrem])
+  rs.add_rule(rule_sdiv_neg_one(), [TSdiv])
+  rs.add_rule(rule_srem_neg_one(), [TSrem])
+  rs.add_rule(rule_div_one(), [TSdiv, TUdiv])
+  rs.add_rule(rule_rem_one(), [TSrem, TUrem])
+  rs.add_rule(rule_udiv_select_pow2(), [TUdiv])
+  rs
 }
 
 ///|

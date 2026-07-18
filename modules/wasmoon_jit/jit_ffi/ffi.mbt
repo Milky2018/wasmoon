@@ -318,19 +318,9 @@ pub extern "c" fn c_jit_get_memory_size_ptr() -> Int64 = "wasmoon_jit_get_memory
 pub extern "c" fn c_jit_get_memory_fill_ptr() -> Int64 = "wasmoon_jit_get_memory_fill_ptr"
 
 ///|
-/// Get memory_fill function pointer specialized for memory 0
-/// Signature: memory_fill_mem0(ctx: *jit_context_t, dst: i32, val: i32, size: i32) -> void
-pub extern "c" fn c_jit_get_memory_fill_mem0_ptr() -> Int64 = "wasmoon_jit_get_memory_fill_mem0_ptr"
-
-///|
 /// Get memory_copy function pointer for JIT (multi-memory)
 /// Signature: memory_copy(ctx: *jit_context_t, dst_memidx: i32, src_memidx: i32, dst: i32, src: i32, size: i32) -> void
 pub extern "c" fn c_jit_get_memory_copy_ptr() -> Int64 = "wasmoon_jit_get_memory_copy_ptr"
-
-///|
-/// Get memory_copy function pointer specialized for memory 0
-/// Signature: memory_copy_mem0(ctx: *jit_context_t, dst: i32, src: i32, size: i32) -> void
-pub extern "c" fn c_jit_get_memory_copy_mem0_ptr() -> Int64 = "wasmoon_jit_get_memory_copy_mem0_ptr"
 
 // ============ Integer div/rem helpers (x86_64 bootstrap) ============
 
@@ -1615,18 +1605,6 @@ pub extern "c" fn c_dwarf_lookup_address(
   func_idx_out : FixedArray[Int],
   offset_out : FixedArray[Int64],
 ) -> Int = "wasmoon_dwarf_lookup_address"
-
-///|
-/// Capture a backtrace starting from the given PC and FP
-/// Returns the number of frames captured
-/// frames_out contains alternating (pc, fp) pairs
-#borrow(frames_out)
-pub extern "c" fn c_dwarf_capture_backtrace(
-  initial_pc : Int64,
-  initial_fp : Int64,
-  frames_out : FixedArray[Int64],
-  max_frames : Int,
-) -> Int = "wasmoon_dwarf_capture_backtrace"
 
 ///|
 /// Capture a backtrace with LR fallback (for when FP is 0)

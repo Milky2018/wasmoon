@@ -475,15 +475,6 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_memory_fill(
     memory_fill_indexed_internal(ctx, memidx, dst, val, size);
 }
 
-MOONBIT_FFI_EXPORT void wasmoon_jit_memory_fill_mem0(
-    jit_context_t *ctx,
-    int32_t dst,
-    int32_t val,
-    int32_t size
-) {
-    memory_fill_ctx_internal(ctx, dst, val, size);
-}
-
 MOONBIT_FFI_EXPORT void wasmoon_jit_memory_copy(
     jit_context_t *ctx,
     int32_t dst_memidx,
@@ -493,15 +484,6 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_memory_copy(
     int32_t size
 ) {
     memory_copy_indexed_internal(ctx, dst_memidx, src_memidx, dst, src, size);
-}
-
-MOONBIT_FFI_EXPORT void wasmoon_jit_memory_copy_mem0(
-    jit_context_t *ctx,
-    int32_t dst,
-    int32_t src,
-    int32_t size
-) {
-    memory_copy_ctx_internal(ctx, dst, src, size);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_grow_ptr(void) {
@@ -516,16 +498,8 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_fill_ptr(void) {
     return (int64_t)memory_fill_indexed_internal;
 }
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_fill_mem0_ptr(void) {
-    return (int64_t)memory_fill_ctx_internal;
-}
-
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_copy_ptr(void) {
     return (int64_t)memory_copy_indexed_internal;
-}
-
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_copy_mem0_ptr(void) {
-    return (int64_t)memory_copy_ctx_internal;
 }
 
 // ============ Integer div/rem helpers ============

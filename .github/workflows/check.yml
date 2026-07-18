@@ -49,6 +49,9 @@ jobs:
         run: |
           moon fmt && git diff --exit-code
           moon info && git diff --exit-code
+          python3 scripts/audit_module_boundaries.py
+          python3 scripts/audit_semantic_machv_api.py
+          python3 scripts/audit_internal_compatibility.py
 
       - name: build wasmoon
         run: |
@@ -175,6 +178,9 @@ jobs:
         run: |
           moon fmt && git diff --exit-code
           moon info && git diff --exit-code
+          python3 scripts/audit_module_boundaries.py
+          python3 scripts/audit_semantic_machv_api.py
+          python3 scripts/audit_internal_compatibility.py
 
       - name: build wasmoon
         run: |

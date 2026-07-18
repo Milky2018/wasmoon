@@ -59,9 +59,3 @@ fn rule_udiv_select_pow2() -> RewriteRule {
     },
   }
 }
-
-///|
-/// Collect all skeleton rules
-pub fn skeleton_rules() -> Array[RewriteRule] {
-  [rule_udiv_select_pow2()]
-}

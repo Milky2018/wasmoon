@@ -80,7 +80,7 @@ struct JITModule {
   mut last_trap_report : @wasmoon_jit.TrapReport?
   // Keep generated import trampolines alive (GC-managed executable memory).
   import_exec_codes : Array[@wasmoon_jit.ExecCode]
-  // Pseudo direct-call function indices -> near stub entry points.
+  // Negative runtime fixup indices -> runtime helper entry points.
   direct_call_targets : Map[Int, Int64]
   mut wasi_stdout_callback : ((Bytes) -> Unit)?
   mut wasi_stderr_callback : ((Bytes) -> Unit)?
@@ -102,36 +102,6 @@ pub fn JITModule::JITModule() -> JITModule {
     wasi_stdout_callback: None,
     wasi_stderr_callback: None,
     cancellation_safepoints: false,
-  }
-}
-
-///|
-fn install_direct_call_stubs(
-  jit_module : JITModule,
-  target : @cwasm.TargetArch,
-) -> Unit raise JITModuleLoadError {
-  let stubs = @wasmoon_jit.install_direct_call_stubs_for_target(target) catch {
-    UnsupportedDirectCallStubTarget(pseudo_idx~, code_size~) =>
-      raise ImportTrampolineAllocationFailed(
-        import_idx=-1,
-        module_name="__jit_direct_call",
-        func_name="idx_\{pseudo_idx}",
-        code_size~,
-      )
-    DirectCallStubAllocationFailed(pseudo_idx~, code_size~) =>
-      raise ImportTrampolineAllocationFailed(
-        import_idx=-1,
-        module_name="__jit_direct_call",
-        func_name="idx_\{pseudo_idx}",
-        code_size~,
-      )
-  }
-  for exec_code in stubs.exec_codes {
-    jit_module.import_exec_codes.push(exec_code)
-  }
-  for entry in stubs.targets.iter() {
-    let (pseudo_idx, ptr) = entry
-    jit_module.direct_call_targets.set(pseudo_idx, ptr)
   }
 }
 
@@ -233,9 +203,6 @@ pub fn JITModule::load_with_imports(
       // Context pointer must be visible before loading functions because
       // gc_set_func_safepoints() installs per-function tables during this phase.
       jit_module.context_ptr = context_ptr
-
-      // Install near stubs used by pseudo direct-call fixups.
-      install_direct_call_stubs(jit_module, precompiled.target)
 
       // Step 1: Populate import trampolines into function table
       for i, imp in precompiled.imports {

@@ -4,8 +4,6 @@ package "Milky2018/wasmoon_jit/jit_ffi"
 // Values
 pub fn c_dwarf_add_function(Int64, Bytes, Int64, Int, Int) -> Unit
 
-pub fn c_dwarf_capture_backtrace(Int64, Int64, FixedArray[Int64], Int) -> Int
-
 pub fn c_dwarf_capture_backtrace_ex(Int64, Int64, Int64, FixedArray[Int64], Int) -> Int
 
 pub fn c_dwarf_create() -> Int64
@@ -370,11 +368,7 @@ pub fn c_jit_get_i64_udiv_ptr() -> Int64
 
 pub fn c_jit_get_i64_urem_ptr() -> Int64
 
-pub fn c_jit_get_memory_copy_mem0_ptr() -> Int64
-
 pub fn c_jit_get_memory_copy_ptr() -> Int64
-
-pub fn c_jit_get_memory_fill_mem0_ptr() -> Int64
 
 pub fn c_jit_get_memory_fill_ptr() -> Int64
 

@@ -947,16 +947,6 @@ MOONBIT_FFI_EXPORT int wasmoon_dwarf_capture_backtrace_ex(
     return count;
 }
 
-// Backward compatible wrapper
-MOONBIT_FFI_EXPORT int wasmoon_dwarf_capture_backtrace(
-    uint64_t initial_pc,
-    uint64_t initial_fp,
-    int64_t *frames_out,
-    int max_frames
-) {
-    return wasmoon_dwarf_capture_backtrace_ex(initial_pc, initial_fp, 0, frames_out, max_frames);
-}
-
 // Format a backtrace as a string
 // Returns the number of bytes written (excluding null terminator)
 MOONBIT_FFI_EXPORT int wasmoon_dwarf_format_backtrace(

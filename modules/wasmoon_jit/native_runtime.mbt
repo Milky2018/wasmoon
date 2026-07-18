@@ -1152,10 +1152,7 @@ fn pack_u64_le(bytes : Array[Int], start : Int) -> Int64 {
 }
 
 ///|
-pub fn build_aarch64_load_imm64_fixed_bytes(
-  reg : Int,
-  imm : Int64,
-) -> Array[Int] {
+fn build_aarch64_load_imm64_fixed_bytes(reg : Int, imm : Int64) -> Array[Int] {
   let bytes : Array[Int] = []
   let v0 = (imm & 0xffffL).to_int()
   let v1 = ((imm >> 16) & 0xffffL).to_int()
@@ -1175,108 +1172,6 @@ pub fn build_aarch64_load_imm64_fixed_bytes(
     0xf2800000 | (3 << 21) | ((v3 & 0xffff) << 5) | (reg & 0x1f),
   )
   bytes
-}
-
-///|
-pub fn build_aarch64_direct_call_stub(target_ptr : Int64) -> Array[Int] {
-  let bytes = build_aarch64_load_imm64_fixed_bytes(16, target_ptr)
-  push_u32_le(bytes, 0xd61f0000 | ((16 & 0x1f) << 5))
-  bytes
-}
-
-///|
-pub fn build_x64_direct_call_stub(target_ptr : Int64) -> Array[Int] {
-  let bytes : Array[Int] = []
-  bytes.push(0x49)
-  bytes.push(0xbb)
-  let mut value = target_ptr
-  for _ in 0..<8 {
-    bytes.push((value & 0xffL).to_int())
-    value = value >> 8
-  }
-  bytes.push(0x41)
-  bytes.push(0xff)
-  bytes.push(0xe3)
-  bytes
-}
-
-///|
-pub fn direct_call_idx_memory_fill_mem0() -> Int {
-  -1001
-}
-
-///|
-pub fn direct_call_idx_memory_copy_mem0() -> Int {
-  -1002
-}
-
-///|
-pub struct DirectCallStubSet {
-  exec_codes : Array[ExecCode]
-  targets : Map[Int, Int64]
-}
-
-///|
-pub suberror DirectCallStubInstallError {
-  UnsupportedDirectCallStubTarget(pseudo_idx~ : Int, code_size~ : Int)
-  DirectCallStubAllocationFailed(pseudo_idx~ : Int, code_size~ : Int)
-} derive(Debug, Eq)
-
-///|
-fn direct_call_stub_code_for_target(
-  target : @cwasm.TargetArch,
-  target_ptr : Int64,
-) -> Array[Int] {
-  match target {
-    AArch64 => build_aarch64_direct_call_stub(target_ptr)
-    X86_64 => build_x64_direct_call_stub(target_ptr)
-    Unknown => []
-  }
-}
-
-///|
-fn DirectCallStubSet::install_one(
-  self : DirectCallStubSet,
-  target : @cwasm.TargetArch,
-  pseudo_idx : Int,
-  target_ptr : Int64,
-) -> Unit raise DirectCallStubInstallError {
-  let stub_code = direct_call_stub_code_for_target(target, target_ptr)
-  if stub_code.length() == 0 {
-    raise UnsupportedDirectCallStubTarget(
-      pseudo_idx~,
-      code_size=stub_code.length(),
-    )
-  }
-  match ExecCode::try_alloc(stub_code) {
-    Some(ec) => {
-      self.exec_codes.push(ec)
-      self.targets.set(pseudo_idx, ec.ptr())
-    }
-    None =>
-      raise DirectCallStubAllocationFailed(
-        pseudo_idx~,
-        code_size=stub_code.length(),
-      )
-  }
-}
-
-///|
-pub fn install_direct_call_stubs_for_target(
-  target : @cwasm.TargetArch,
-) -> DirectCallStubSet raise DirectCallStubInstallError {
-  let stubs : DirectCallStubSet = { exec_codes: [], targets: Map([]) }
-  stubs.install_one(
-    target,
-    direct_call_idx_memory_fill_mem0(),
-    @jit_ffi.c_jit_get_memory_fill_mem0_ptr(),
-  )
-  stubs.install_one(
-    target,
-    direct_call_idx_memory_copy_mem0(),
-    @jit_ffi.c_jit_get_memory_copy_mem0_ptr(),
-  )
-  stubs
 }
 
 ///|

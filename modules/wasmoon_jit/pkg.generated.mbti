@@ -19,10 +19,6 @@ pub fn alloc_memory(Int64) -> Int64
 
 pub fn alloc_memory_desc(Int64, Int?, is_memory64? : Bool, page_size_log2? : Int, is_shared? : Bool) -> Int64
 
-pub fn build_aarch64_direct_call_stub(Int64) -> Array[Int]
-
-pub fn build_aarch64_load_imm64_fixed_bytes(Int, Int64) -> Array[Int]
-
 pub fn build_cwasm_entry_from_code(Int, String, Array[Int], Int, Int, Int, Int, func_addr_fixups? : Array[@cwasm.FuncAddrFixup], call_fixups? : Array[@cwasm.CallFixup], gc_safepoint_offsets? : Array[Int], gc_safepoint_root_counts? : Array[Int], gc_safepoint_root_indices? : Array[Array[Int]], gc_safepoints? : Array[@cwasm.GcSafepoint], gc_stackmap_blob? : Bytes) -> @cwasm.CompiledEntry
 
 pub fn build_entry_trampoline_for_target(Array[@types.ValueType], Array[@types.ValueType], @cwasm.TargetArch) -> Array[Int] raise HostcallImportTrampolineError
@@ -34,8 +30,6 @@ pub fn build_gc_stackmap_blob_for_safepoints(Array[@cwasm.GcSafepoint], Array[In
 pub fn build_gc_stackmap_blob_v2(Array[@cwasm.GcSafepoint], Array[Int]) -> Bytes
 
 pub fn build_hostcall_import_trampoline_for_target(Array[@types.ValueType], Array[@types.ValueType], Int, @cwasm.TargetArch) -> HostcallImportTrampolineCode raise HostcallImportTrampolineError
-
-pub fn build_x64_direct_call_stub(Int64) -> Array[Int]
 
 pub fn c_jit_read_i64(Int64) -> Int64
 
@@ -84,10 +78,6 @@ pub fn decode_i31(Int64) -> Int
 pub fn default_native_glue() -> Array[NativeGlueBinding]
 
 pub fn derive_gc_safepoints(Array[Int], Array[Int], Array[Array[Int]]) -> Array[@cwasm.GcSafepoint]
-
-pub fn direct_call_idx_memory_copy_mem0() -> Int
-
-pub fn direct_call_idx_memory_fill_mem0() -> Int
 
 pub fn encode_aarch64_bl_imm26(Int64, Int64) -> Int?
 
@@ -307,8 +297,6 @@ pub fn i64_to_value(Int64, @types.ValueType) -> @types.Value
 
 pub fn init_wasi_context(Int64, Array[String], Array[String], Array[(String, String)], quiet? : Bool) -> Unit
 
-pub fn install_direct_call_stubs_for_target(@cwasm.TargetArch) -> DirectCallStubSet raise DirectCallStubInstallError
-
 pub fn is_cancelled_trap_code(Int) -> Bool
 
 pub fn is_funcref_ptr(Int64) -> Bool
@@ -453,11 +441,6 @@ pub(all) suberror CHeapError {
   NullReference
   OutOfMemory
 }
-
-pub suberror DirectCallStubInstallError {
-  UnsupportedDirectCallStubTarget(pseudo_idx~ : Int, code_size~ : Int)
-  DirectCallStubAllocationFailed(pseudo_idx~ : Int, code_size~ : Int)
-} derive(Eq, @debug.Debug)
 
 pub suberror GCSetupError {
   MissingJITContext
@@ -665,11 +648,6 @@ pub fn DWARFBuilder::format_backtrace(Self, Array[BacktraceFrame]) -> String
 pub fn DWARFBuilder::lookup_address(Self, Int64) -> FunctionInfo?
 pub fn DWARFBuilder::register(Self, verbose? : Bool) -> Unit
 pub fn DWARFBuilder::unregister(Self) -> Unit
-
-pub struct DirectCallStubSet {
-  exec_codes : Array[ExecCode]
-  targets : Map[Int, Int64]
-}
 
 type ExecCode
 pub fn ExecCode::ptr(Self) -> Int64
