@@ -1096,14 +1096,8 @@ fn lower_instruction(
   }
   let accumulator = @vcode.PhysicalReg::new(0, Int)
   let high = @vcode.PhysicalReg::new(2, Int)
-  let shift_count = @vcode.PhysicalReg::new(1, Int)
   let scratch = @vcode.PhysicalReg::new(11, Int)
   let inputs = match selected {
-    IntBinary(_, Lsl | Asr | Lsr | Ror) =>
-      [
-        @vcode.Input::any(selected_operands[0]),
-        @vcode.Input::fixed(selected_operands[1], shift_count),
-      ]
     IntHighMultiply(_, _) =>
       [
         @vcode.Input::fixed(selected_operands[0], accumulator),

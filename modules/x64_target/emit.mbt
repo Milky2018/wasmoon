@@ -670,6 +670,34 @@ fn emit_int_binary(
     }
     return
   }
+  if operation is (Lsl | Asr | Lsr | Ror) {
+    let working = if destination.id == 1 ||
+      (destination == right && destination != left) {
+      @vcode.PhysicalReg::new(10, Int)
+    } else {
+      destination
+    }
+    emit_move(buffer, integer_type(width), working, left)
+    emit_move(
+      buffer,
+      integer_type(width),
+      @vcode.PhysicalReg::new(1, Int),
+      right,
+    )
+    match (width, operation) {
+      (W32, Lsl) => buffer.x86_emit_shl_r32_cl(working.id)
+      (W64, Lsl) => buffer.x86_emit_shl_r_cl(working.id)
+      (W32, Asr) => buffer.x86_emit_sar_r32_cl(working.id)
+      (W64, Asr) => buffer.x86_emit_sar_r_cl(working.id)
+      (W32, Lsr) => buffer.x86_emit_shr_r32_cl(working.id)
+      (W64, Lsr) => buffer.x86_emit_shr_r_cl(working.id)
+      (W32, Ror) => buffer.x86_emit_ror_r32_cl(working.id)
+      (W64, Ror) => buffer.x86_emit_ror_r_cl(working.id)
+      _ => ()
+    }
+    emit_move(buffer, integer_type(width), destination, working)
+    return
+  }
   let working = if destination == right && destination != left {
     @vcode.PhysicalReg::new(10, Int)
   } else {
@@ -689,15 +717,7 @@ fn emit_int_binary(
     (W64, Orr) => buffer.x86_emit_or_rr(working.id, right.id)
     (W32, Eor) => buffer.x86_emit_xor_rr32(working.id, right.id)
     (W64, Eor) => buffer.x86_emit_xor_rr(working.id, right.id)
-    (W32, Lsl) => buffer.x86_emit_shl_r32_cl(working.id)
-    (W64, Lsl) => buffer.x86_emit_shl_r_cl(working.id)
-    (W32, Asr) => buffer.x86_emit_sar_r32_cl(working.id)
-    (W64, Asr) => buffer.x86_emit_sar_r_cl(working.id)
-    (W32, Lsr) => buffer.x86_emit_shr_r32_cl(working.id)
-    (W64, Lsr) => buffer.x86_emit_shr_r_cl(working.id)
-    (W32, Ror) => buffer.x86_emit_ror_r32_cl(working.id)
-    (W64, Ror) => buffer.x86_emit_ror_r_cl(working.id)
-    (_, Sdiv | Udiv) => ()
+    (_, Lsl | Asr | Lsr | Ror | Sdiv | Udiv) => ()
   }
   emit_move(buffer, integer_type(width), destination, working)
 }

@@ -67,16 +67,91 @@ test "X64 pipeline emits masked scalar shifts" {
       #|    0xfa,
       #|    0x89,
       #|    0xf0,
-      #|    0x89,
-      #|    0xc1,
       #|    0x41,
       #|    0x89,
       #|    0xd2,
+      #|    0x89,
+      #|    0xc1,
       #|    0x41,
       #|    0xd3,
       #|    0xe2,
       #|    0x44,
       #|    0x89,
+      #|    0xd1,
+      #|    0x89,
+      #|    0xc8,
+      #|    0xc3,
+      #|  ],
+      #|  relocations: [],
+      #|  sources: [],
+      #|  traps: [],
+      #|  safepoints: [],
+      #|  unwind: [],
+      #|}
+    ),
+  )
+}
+
+///|
+test "X64 pipeline preserves constant i32 shift operands" {
+  let builder = @semantic.FunctionBuilder::new(
+    "emitted_constant_i32_shift",
+    Platform,
+    [],
+    [I32],
+  )
+  let one = builder.emit(I32Const(1U), [], [I32])[0]
+  let count = builder.emit(I32Const(32U), [], [I32])[0]
+  let shifted = builder.emit(IntBinary(ShiftLeft), [one, count], [I32])[0]
+  let ten = builder.emit(I32Const(10U), [], [I32])[0]
+  let result = builder.emit(IntBinary(Add), [ten, shifted], [I32])[0]
+  builder.return_([result])
+  let function = lower(builder.finish(), test_lowering_context())
+  let allocation = allocate(function)
+  let frame = plan_frame(function, allocation)
+  debug_inspect(
+    emit(function, allocation, frame),
+    content=(
+      #|{
+      #|  architecture: X64,
+      #|  code: [
+      #|    0x48,
+      #|    0xb8,
+      #|    0x01,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x48,
+      #|    0xb9,
+      #|    0x20,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x89,
+      #|    0xc2,
+      #|    0xd3,
+      #|    0xe2,
+      #|    0x48,
+      #|    0xb8,
+      #|    0x0a,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x89,
+      #|    0xc1,
+      #|    0x01,
       #|    0xd1,
       #|    0x89,
       #|    0xc8,

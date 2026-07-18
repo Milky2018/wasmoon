@@ -55,8 +55,15 @@ fn pick_scratch(
   class : RegClass,
   scratch_int : Array[PhysicalReg],
   scratch_fp : Array[PhysicalReg],
+  reserved_locations : Array[Location],
 ) -> Location raise MoveResolveError {
-  Register(scratch_for_bank(class, scratch_int, scratch_fp)[0])
+  for reg in scratch_for_bank(class, scratch_int, scratch_fp) {
+    let candidate : Location = Register(reg)
+    if !reserved_locations.contains(candidate) {
+      return candidate
+    }
+  }
+  raise NoSafeCycleScratch(class~)
 }
 
 ///|
@@ -76,12 +83,16 @@ fn pick_cycle_scratch(
   scratch_int : Array[PhysicalReg],
   scratch_fp : Array[PhysicalReg],
   sources : Array[Location],
+  reserved_locations : Array[Location],
   from : Location,
   to : Location,
 ) -> Location raise MoveResolveError {
   for reg in scratch_for_bank(class, scratch_int, scratch_fp) {
     let candidate : Location = Register(reg)
-    if !sources.contains(candidate) && candidate != from && candidate != to {
+    if !sources.contains(candidate) &&
+      !reserved_locations.contains(candidate) &&
+      candidate != from &&
+      candidate != to {
       return candidate
     }
   }
@@ -94,8 +105,14 @@ fn emit_stack_to_stack(
   result : Array[ParallelMove],
   scratch_int : Array[PhysicalReg],
   scratch_fp : Array[PhysicalReg],
+  reserved_locations : Array[Location],
 ) -> Unit raise MoveResolveError {
-  let temporary = pick_scratch(move_bank(transfer.ty), scratch_int, scratch_fp)
+  let temporary = pick_scratch(
+    move_bank(transfer.ty),
+    scratch_int,
+    scratch_fp,
+    reserved_locations,
+  )
   result.push(ParallelMove::new(transfer.ty, transfer.from, temporary))
   result.push(ParallelMove::new(transfer.ty, temporary, transfer.to))
 }
@@ -108,15 +125,24 @@ fn resolve_single_bank(
 ) -> Array[ParallelMove] raise MoveResolveError {
   let result : Array[ParallelMove] = []
   let pending : Array[ParallelMove] = []
+  let reserved_locations : Array[Location] = []
   for transfer in moves {
     if transfer.from != transfer.to && !pending.contains(transfer) {
       pending.push(transfer)
+      if !reserved_locations.contains(transfer.from) {
+        reserved_locations.push(transfer.from)
+      }
+      if !reserved_locations.contains(transfer.to) {
+        reserved_locations.push(transfer.to)
+      }
     }
   }
   if pending.length() == 1 {
     let transfer = pending[0]
     if transfer.from is Stack(_) && transfer.to is Stack(_) {
-      emit_stack_to_stack(transfer, result, scratch_int, scratch_fp)
+      emit_stack_to_stack(
+        transfer, result, scratch_int, scratch_fp, reserved_locations,
+      )
       return result
     }
     return pending
@@ -134,7 +160,9 @@ fn resolve_single_bank(
       Some(index) => {
         let transfer = pending.remove(index)
         if transfer.from is Stack(_) && transfer.to is Stack(_) {
-          emit_stack_to_stack(transfer, result, scratch_int, scratch_fp)
+          emit_stack_to_stack(
+            transfer, result, scratch_int, scratch_fp, reserved_locations,
+          )
         } else {
           result.push(transfer)
         }
@@ -147,6 +175,7 @@ fn resolve_single_bank(
           scratch_int,
           scratch_fp,
           sources,
+          reserved_locations,
           transfer.from,
           transfer.to,
         )

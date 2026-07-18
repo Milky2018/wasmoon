@@ -52,3 +52,31 @@ test "parallel move resolver shares the physical FP and SIMD bank" {
     ),
   )
 }
+
+///|
+test "parallel move resolver never reuses a final destination as scratch" {
+  let int0 = PhysicalReg::new(0, Int)
+  let int1 = PhysicalReg::new(1, Int)
+  let int2 = PhysicalReg::new(2, Int)
+  let int16 = PhysicalReg::new(16, Int)
+  let int17 = PhysicalReg::new(17, Int)
+  debug_inspect(
+    resolve_parallel_moves(
+      [
+        ParallelMove::new(I64, Register(int0), Register(int1)),
+        ParallelMove::new(I64, Register(int1), Register(int0)),
+        ParallelMove::new(I64, Register(int2), Register(int16)),
+      ],
+      [int16, int17],
+      [PhysicalReg::new(16, FpVector)],
+    ),
+    content=(
+      #|[
+      #|  { ty: I64, from: p2:int, to: p16:int },
+      #|  { ty: I64, from: p1:int, to: p17:int },
+      #|  { ty: I64, from: p0:int, to: p1:int },
+      #|  { ty: I64, from: p17:int, to: p0:int },
+      #|]
+    ),
+  )
+}
