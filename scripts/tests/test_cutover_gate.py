@@ -32,6 +32,17 @@ class CutoverPerfTests(unittest.TestCase):
         self.assertNotEqual(first, SMITH._deterministic_seed(7, 4, 65))
         self.assertEqual(len(first), 65)
 
+    def test_interpreter_oracle_ignores_shared_frontend_rejections(self) -> None:
+        wasmtime = ("ok", "1")
+        rejected = ("error",)
+        self.assertFalse(
+            SMITH._is_mismatch(wasmtime, rejected, rejected, "interpreter")
+        )
+        self.assertTrue(SMITH._is_mismatch(wasmtime, rejected, rejected, "wasmtime"))
+        self.assertTrue(
+            SMITH._is_mismatch(wasmtime, rejected, ("ok", "1"), "interpreter")
+        )
+
     def test_ratio_stats_are_geometric_and_report_noise(self) -> None:
         stats = PERF.ratio_stats([1.0, 1.21])
         self.assertAlmostEqual(stats["geometric_mean_ratio"], 1.1)

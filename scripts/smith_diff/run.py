@@ -266,6 +266,12 @@ def _signature(out: Outcome) -> tuple:
     return (out.kind,)
 
 
+def _is_mismatch(oracle: tuple, interpreter: tuple, jit: tuple, authority: str) -> bool:
+    if authority == "interpreter":
+        return jit != interpreter
+    return interpreter != oracle or jit != oracle
+
+
 def check_one(wasm: Path, *, timeout_s: float) -> int:
     """Exit 0 if mismatch exists, 1 otherwise.
 
@@ -314,6 +320,12 @@ def main() -> int:
         help="Generate the corpus deterministically from this integer seed",
     )
     run_p.add_argument("--timeout", type=float, default=3.0)
+    run_p.add_argument(
+        "--oracle",
+        choices=["wasmtime", "interpreter"],
+        default="wasmtime",
+        help="Comparison authority; interpreter checks the JIT differential only",
+    )
     run_p.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     run_p.add_argument("--out", type=Path, default=SMITH_DIR / "out")
     run_p.add_argument("--keep-passing", action="store_true")
@@ -386,6 +398,7 @@ def main() -> int:
         "seed_size": args.seed_size,
         "seed": args.seed,
         "timeout": args.timeout,
+        "oracle": args.oracle,
         "ensure_termination": ensure_termination,
         "failures": 0,
         "generated_errors": 0,
@@ -425,7 +438,7 @@ def main() -> int:
         interp_sig = _signature(interp)
         jit_sig = _signature(jit)
 
-        mismatch = (interp_sig != oracle_sig) or (jit_sig != oracle_sig)
+        mismatch = _is_mismatch(oracle_sig, interp_sig, jit_sig, args.oracle)
 
         if mismatch:
             stats["failures"] += 1

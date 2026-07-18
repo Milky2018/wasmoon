@@ -45,6 +45,8 @@ def main() -> int:
         str(manifest["seed_size"]),
         "--timeout",
         str(manifest["timeout_seconds"]),
+        "--oracle",
+        manifest["oracle"],
         "--config",
         str(config),
         "--no-shrink",
