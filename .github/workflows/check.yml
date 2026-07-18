@@ -381,7 +381,10 @@ jobs:
           moon update
           cargo install wasm-tools --version "$WASM_TOOLS_VERSION" --locked
           curl -fsSL https://wasmtime.dev/install.sh | bash
-          echo "$HOME/.wasmtime/bin" >> "$GITHUB_PATH"
+          WASMTIME_BIN_DIR="${WASMTIME_HOME:-$HOME/.wasmtime}/bin"
+          test -x "$WASMTIME_BIN_DIR/wasmtime"
+          "$WASMTIME_BIN_DIR/wasmtime" --version
+          echo "$WASMTIME_BIN_DIR" >> "$GITHUB_PATH"
 
       - name: initialize cutover evidence manifest
         run: |
