@@ -2,6 +2,7 @@
 package "Milky2018/wasmoon_jit"
 
 import {
+  "Milky2018/machv",
   "Milky2018/machv/code_object",
   "Milky2018/machv_emit",
   "Milky2018/machv_legacy",
@@ -359,6 +360,8 @@ pub fn lower_milkir_for_target(@milkir.Function, @machv_emit.EmitTarget) -> @mac
 pub fn lower_wasm_body_milkir_for_target(@milkir.Function, @machv_emit.EmitTarget, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @machv_legacy.Function raise JitPipelineError
 
 pub fn lower_wasm_body_milkir_with_isa(@milkir.Function, @isa.ISA, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @machv_legacy.Function raise JitPipelineError
+
+pub fn lower_wasm_body_semantic_machv(@milkir.Function, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @machv.Function raise JitPipelineError
 
 pub fn machv_reloc_target_to_cwasm_func_idx(@instr.RelocTarget) -> Int?
 

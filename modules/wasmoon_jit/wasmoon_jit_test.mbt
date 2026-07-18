@@ -476,6 +476,27 @@ test "legacy lowering rejects AArch64 selection" {
 }
 
 ///|
+test "semantic Wasm lowering is inspectable without legacy AArch64" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder(
+    "inspect_semantic_wasm",
+  )
+  builder.add_param(Ptr) |> ignore
+  builder.add_result(I32)
+  let tag = @wasm_milkir.get_exception_tag(builder)
+  builder.return_([tag])
+  inspect(
+    lower_wasm_body_semantic_machv(builder.finalize()).print(),
+    content=(
+      #|machv inspect_semantic_wasm [internal](v0:ptr64) -> (i32) {
+      #|block0:
+      #|  v1:i32 = call external @wasmoon.runtime.exception.get_tag (ptr64) -> (i32) [platform] v0 [memory=read]
+      #|  return v1
+      #|}
+    ),
+  )
+}
+
+///|
 test "JIT integration returns invalid Wasm dialect errors" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder("invalid_wasm_dialect")
   @wasm_milkir.get_exception_tag(builder) |> ignore

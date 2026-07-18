@@ -187,6 +187,29 @@ fn build_wasmoon_aarch64_target(
 }
 
 ///|
+fn lower_wasm_body_semantic_with_environment(
+  function : @milkir.Function,
+  environment : WasmoonSemanticEnvironment,
+) -> @semantic_machv.Function raise JitPipelineError {
+  @wasm_machv.lower_function(function, environment.wasm) catch {
+    error =>
+      raise PipelineFailure(message="\{function.name}: \{error.to_string()}")
+  }
+}
+
+///|
+pub fn lower_wasm_body_semantic_machv(
+  function : @milkir.Function,
+  use_subtype_indirect_check? : Bool = true,
+  canonical_type_indices? : Array[Int] = [],
+) -> @semantic_machv.Function raise JitPipelineError {
+  let environment = wasmoon_semantic_environment(
+    use_subtype_indirect_check, canonical_type_indices,
+  )
+  lower_wasm_body_semantic_with_environment(function, environment)
+}
+
+///|
 fn compile_wasm_body_aarch64_target(
   function : @milkir.Function,
   use_subtype_indirect_check : Bool,
@@ -195,10 +218,9 @@ fn compile_wasm_body_aarch64_target(
   let environment = wasmoon_semantic_environment(
     use_subtype_indirect_check, canonical_type_indices,
   )
-  let semantic = @wasm_machv.lower_function(function, environment.wasm) catch {
-    error =>
-      raise PipelineFailure(message="\{function.name}: \{error.to_string()}")
-  }
+  let semantic = lower_wasm_body_semantic_with_environment(
+    function, environment,
+  )
   build_wasmoon_aarch64_target(semantic, environment)
 }
 
@@ -232,10 +254,9 @@ fn lower_semantic_wasm_with_isa(
   let environment = wasmoon_semantic_environment(
     use_subtype_indirect_check, canonical_type_indices,
   )
-  let semantic = @wasm_machv.lower_function(function, environment.wasm) catch {
-    error =>
-      raise PipelineFailure(message="\{function.name}: \{error.to_string()}")
-  }
+  let semantic = lower_wasm_body_semantic_with_environment(
+    function, environment,
+  )
   let legacy = adapt_semantic_to_legacy(
     semantic,
     isa,

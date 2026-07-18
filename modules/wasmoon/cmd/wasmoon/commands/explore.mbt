@@ -176,9 +176,7 @@ pub fn run_explore(
       X86_64 => X64
       Unknown => X64
     }
-    let mach_result = @wasmoon_jit.lower_wasm_body_milkir_for_target(
-      milk_result, target,
-    ) catch {
+    let mach_result = @wasmoon_jit.lower_wasm_body_semantic_machv(milk_result) catch {
       err => {
         if !html_output {
           println("MilkIR lowering error: \{err}")
@@ -187,11 +185,6 @@ pub fn run_explore(
       }
     }
     let machv_text = mach_result.print()
-    if !html_output && show_machv {
-      println("")
-      println("── MachV ──")
-      println(machv_text)
-    }
 
     let allocated_text = "MachV register allocation is integrated into the wasmoon_jit planning pipeline."
     if !html_output && show_regalloc {
