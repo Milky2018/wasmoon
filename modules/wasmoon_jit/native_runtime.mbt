@@ -24,9 +24,9 @@ pub fn host_target_arch() -> @cwasm.TargetArch {
 }
 
 ///|
-pub fn target_arch_to_isa(target : @cwasm.TargetArch) -> @isa.ISA {
+pub fn target_arch_to_native_target(target : @cwasm.TargetArch) -> NativeTarget {
   match target {
-    X86_64 => AMD64
+    X86_64 => X64
     AArch64 => AArch64
     Unknown => AArch64
   }

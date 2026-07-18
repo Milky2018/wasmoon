@@ -39,11 +39,6 @@ pub fn exception_runtime_fixup_idx(ordinal : Int) -> Int {
 }
 
 ///|
-pub fn runtime_hostcall_symbol() -> @instr.ExternalName {
-  ExternalName("wasmoon.runtime.hostcall")
-}
-
-///|
 pub fn wasm_runtime_symbols() -> @wasm_milkir.RuntimeSymbols {
   @wasm_milkir.RuntimeSymbols::with_runtime_prefix("wasmoon.runtime")
 }
@@ -377,15 +372,6 @@ pub fn resolve_wasm_func_symbol(name : String) -> Int? {
 }
 
 ///|
-pub fn resolve_wasm_func_code_symbol(symbol : @instr.CodeSymbol) -> Int? {
-  if symbol.scope == "wasm.func" {
-    Some(symbol.ordinal)
-  } else {
-    None
-  }
-}
-
-///|
 /// Resolve the negative cwasm runtime-helper function index used by Wasmoon
 /// JIT call fixups. MachV emission uses named external-symbol relocations, and
 /// the cwasm artifact stores those runtime helper targets as negative function
@@ -448,10 +434,10 @@ pub fn resolve_runtime_func_fixup_idx(idx : Int) -> Int64? {
 
 ///|
 pub fn machv_reloc_target_to_cwasm_func_idx(
-  target : @instr.RelocTarget,
+  target : @code_object.RelocationTarget,
 ) -> Int? {
   match target {
-    Code(symbol) => resolve_wasm_func_code_symbol(symbol)
+    Code(symbol) => resolve_wasm_func_symbol(symbol.name)
     External(symbol) => {
       let resolver = RuntimeSymbolResolver::with_wasmoon_runtime_symbols()
       match resolver.resolve_symbol(symbol.name) {
@@ -459,21 +445,22 @@ pub fn machv_reloc_target_to_cwasm_func_idx(
         None => None
       }
     }
+    Data(_) => None
   }
 }
 
 ///|
 fn resolve_machv_reloc_target(
-  target : @instr.RelocTarget,
+  target : @code_object.RelocationTarget,
   resolver : RuntimeSymbolResolver,
 ) -> ResolvedRuntimeRelocation? {
   match target {
     Code(symbol) =>
-      match resolve_wasm_func_code_symbol(symbol) {
+      match resolve_wasm_func_symbol(symbol.name) {
         Some(func_idx) =>
           Some({
             offset: 0,
-            symbol: symbol.to_string(),
+            symbol: symbol.name,
             address: 0L,
             fixup_idx: Some(func_idx),
           })
@@ -490,6 +477,7 @@ fn resolve_machv_reloc_target(
           })
         None => None
       }
+    Data(_) => None
   }
 }
 
@@ -506,15 +494,15 @@ pub(all) struct LinkedCode {
   code : Array[Int]
   frame_size : Int
   runtime_relocations : Array[ResolvedRuntimeRelocation]
-  func_addr_fixups : Array[@machv_emit.FuncAddrFixup]
-  call_fixups : Array[@machv_emit.CallFixup]
+  func_addr_fixups : Array[JitFuncAddrFixup]
+  call_fixups : Array[JitCallFixup]
   gc_safepoints : Array[GcSafepoint]
   gc_stackmap_blob : Bytes
 } derive(Debug)
 
 ///|
 fn runtime_relocations_from_machine_code(
-  object : @machv_emit.MachineCode,
+  object : JitCodeObject,
   resolver : RuntimeSymbolResolver,
 ) -> Array[ResolvedRuntimeRelocation] raise LinkError {
   let runtime_relocations : Array[ResolvedRuntimeRelocation] = []
@@ -529,8 +517,9 @@ fn runtime_relocations_from_machine_code(
         })
       None => {
         let name = match fixup.target {
-          Code(symbol) => symbol.to_string()
+          Code(symbol) => symbol.name
           External(symbol) => symbol.name
+          Data(symbol) => symbol.name
         }
         raise UnknownRuntimeSymbol(name)
       }
@@ -540,25 +529,22 @@ fn runtime_relocations_from_machine_code(
 }
 
 ///|
-pub fn link_machine_code(
-  object : @machv_emit.MachineCode,
+pub fn link_code_object(
+  object : JitCodeObject,
   resolver : RuntimeSymbolResolver,
 ) -> LinkedCode raise LinkError {
   {
     code: object.get_bytes(),
-    frame_size: 0,
+    frame_size: object.frame_size(),
     runtime_relocations: runtime_relocations_from_machine_code(object, resolver),
     func_addr_fixups: object.get_func_addr_fixups(),
     call_fixups: object.get_call_fixups(),
-    gc_safepoints: CompiledFunction::CompiledFunction("", object, 0).get_gc_safepoints(),
-    gc_stackmap_blob: CompiledFunction::CompiledFunction("", object, 0).get_gc_stackmap_blob(),
+    gc_safepoints: object.get_gc_safepoints(),
+    gc_stackmap_blob: compiled_build_gc_stackmap_blob_v2(
+      object.get_gc_safepoints(),
+      object
+      .get_gc_safepoints()
+      .map(safepoint => safepoint_metadata_to_root_count(safepoint.metadata)),
+    ),
   }
-}
-
-///|
-pub fn link_code_object(
-  object : @machv_emit.MachineCode,
-  resolver : RuntimeSymbolResolver,
-) -> LinkedCode raise LinkError {
-  link_machine_code(object, resolver)
 }

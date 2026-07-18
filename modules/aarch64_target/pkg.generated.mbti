@@ -5,55 +5,20 @@ import {
   "Milky2018/machv",
   "Milky2018/machv/code_object",
   "Milky2018/machv/vcode",
-  "Milky2018/machv_legacy/abi",
   "Milky2018/machv_regalloc",
   "moonbitlang/core/debug",
 }
 
 // Values
-pub fn aapcs64_arg_fprs() -> Array[@abi.PReg]
-
-pub fn aapcs64_arg_gprs() -> Array[@abi.PReg]
-
-pub fn aapcs64_callee_saved() -> Array[@abi.PReg]
-
-pub fn aapcs64_ret_fprs() -> Array[@abi.PReg]
-
-pub fn aapcs64_ret_gprs() -> Array[@abi.PReg]
-
-pub fn abi_policy() -> AbiPolicy
-
-pub fn allocatable_callee_saved_regs() -> Array[@abi.PReg]
-
-pub fn allocatable_regs(reserved_int_regs? : Array[Int]) -> Array[@abi.PReg]
-
-pub fn allocatable_scratch_fprs() -> Array[@abi.PReg]
-
-pub fn allocatable_scratch_regs() -> Array[@abi.PReg]
-
 pub fn allocate(@vcode.Function[AArch64Inst]) -> @vcode.Allocation raise AArch64AllocationError
 
-pub fn build_machine_env(reserved_int_regs? : Array[Int]) -> MachineEnvData
-
-pub fn call_clobbered_fprs() -> Array[@abi.PReg]
-
-pub fn call_clobbered_fprs_same_abi() -> Array[@abi.PReg]
-
-pub fn call_clobbered_gprs() -> Array[@abi.PReg]
-
-pub fn callee_saved_fprs() -> Array[@abi.PReg]
-
 pub fn emit(@vcode.Function[AArch64Inst], @vcode.Allocation, AArch64Frame) -> @code_object.UnlinkedCodeObject raise AArch64EmitError
-
-pub fn int_reg_index(IntRegRole) -> Int
 
 pub fn lower(@machv.Function, LoweringContext) -> @vcode.Function[AArch64Inst] raise AArch64LowerError
 
 pub fn plan_frame(@vcode.Function[AArch64Inst], @vcode.Allocation) -> AArch64Frame raise AArch64FrameError
 
 pub fn prepare_aarch64_link(@code_object.UnlinkedCodeObject) -> AArch64LinkPlan raise AArch64LinkError
-
-pub fn target() -> Target
 
 pub fn verify_allocation(@vcode.Function[AArch64Inst], @vcode.Allocation) -> Unit raise AArch64AllocationError
 
@@ -381,38 +346,15 @@ pub(all) enum AArch64VectorPredicate {
   BitMask(@machv.VectorLane)
 } derive(Eq, @debug.Debug)
 
-pub(all) struct AbiPolicy {
-  pointer_size : Int
-  stack_alignment : Int
-  int_argument_regs : Array[@abi.PReg]
-  float_argument_regs : Array[@abi.PReg]
-  int_return_regs : Array[@abi.PReg]
-  float_return_regs : Array[@abi.PReg]
-  caller_saved_regs : Array[@abi.PReg]
-  callee_saved_regs : Array[@abi.PReg]
-} derive(@debug.Debug)
-
 type CallArgumentLocation derive(Eq, @debug.Debug)
 
 type CallLayout derive(Eq, @debug.Debug)
 
 type CallResultLocation derive(Eq, @debug.Debug)
 
-pub(all) enum CallingConvention {
-  Aapcs64
-} derive(Eq, @debug.Debug)
-
 pub(all) enum GprWidth {
   W32
   W64
-} derive(Eq, @debug.Debug)
-
-pub(all) enum IntRegRole {
-  Scratch1
-  Scratch2
-  FP
-  LR
-  SRet
 } derive(Eq, @debug.Debug)
 
 pub struct InternalAbi {
@@ -429,25 +371,6 @@ pub struct LoweringContext {
 }
 pub fn LoweringContext::new(InternalAbi) -> Self
 pub fn LoweringContext::with_environment_field(Self, @machv.EnvironmentField, Array[Int]) -> Self
-
-pub(all) struct MachineEnvData {
-  preferred_int : Array[@abi.PReg]
-  nonpreferred_int : Array[@abi.PReg]
-  preferred_float : Array[@abi.PReg]
-  nonpreferred_float : Array[@abi.PReg]
-  preferred_vector : Array[@abi.PReg]
-  nonpreferred_vector : Array[@abi.PReg]
-  callee_saved_int : Array[@abi.PReg]
-  callee_saved_float : Array[@abi.PReg]
-  scratch_int : Array[Int]
-  scratch_float : Array[Int]
-} derive(@debug.Debug)
-
-pub(all) struct Target {
-  triple : String
-  calling_convention : CallingConvention
-  abi : AbiPolicy
-} derive(@debug.Debug)
 
 // Type aliases
 

@@ -1,17 +1,5 @@
 import {
   "Milky2018/machv" @semantic,
   "Milky2018/machv/vcode",
-  "Milky2018/machv_legacy" @machv,
-  "Milky2018/machv_legacy/abi",
-  "Milky2018/machv_legacy/block",
-  "Milky2018/machv_legacy/instr",
-  "Milky2018/machv_legacy/isa",
   "Milky2018/regalloc",
-  "Milky2018/regalloc/backtracking",
-  "Milky2018/regalloc/planning",
-  "moonbitlang/core/debug",
-  "moonbitlang/core/hashset",
-  "moonbitlang/core/math",
-  "moonbitlang/core/string",
-  "moonbitlang/x/sys",
 }

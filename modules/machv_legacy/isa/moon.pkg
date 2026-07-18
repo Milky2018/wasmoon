@@ -1,5 +1,0 @@
-import {
-  "Milky2018/machv_legacy/abi",
-  "Milky2018/machv_legacy/isa/spec",
-  "Milky2018/machv_legacy/isa/amd64",
-}

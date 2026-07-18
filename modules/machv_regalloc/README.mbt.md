@@ -12,8 +12,6 @@ spill and reload edits, edge moves, stack slots, and safepoint root locations.
 
 - `Milky2018/machv_regalloc`: Target VCode projection, allocation entry points,
   validation, spill handling, and output construction.
-- `Milky2018/machv_regalloc/layout`: block layout utilities for MachV
-  functions.
 
 ## When to use it
 

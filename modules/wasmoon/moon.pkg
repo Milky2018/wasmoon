@@ -1,13 +1,10 @@
 import {
-  "Milky2018/aarch64_target",
-  "Milky2018/machv_legacy" @machv,
-  "Milky2018/machv_emit",
-  "Milky2018/machv_regalloc",
+  "Milky2018/machv",
+  "Milky2018/milkir_machv",
   "Milky2018/milkir",
   "Milky2018/wasm_core/types",
   "Milky2018/wasmoon_jit",
   "Milky2018/wasmoon/wasm_frontend",
-  "Milky2018/x64_target",
 }
 
 import {

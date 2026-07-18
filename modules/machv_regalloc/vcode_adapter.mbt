@@ -66,10 +66,7 @@ fn[Inst] project_operand(
     Use => @regalloc.Operand::use_reg(vreg)
     Def => @regalloc.Operand::def(vreg)
   }
-  match operand.constraint {
-    Any | AnyLocation | TiedTo(_) => projected
-    Fixed(reg) => projected.with_constraint(FixedReg(to_regalloc_preg(reg)))
-  }
+  projected
 }
 
 ///|
@@ -106,6 +103,12 @@ fn[Inst] project_instruction(
         function.instruction_clobber_at(instruction, index).unwrap(),
       ),
     )
+  }
+  for index in 0..<operand_count {
+    let operand = function.instruction_operand_at(instruction, index).unwrap()
+    if operand.constraint is Fixed(reg) {
+      projected.add_clobber(to_regalloc_preg(reg))
+    }
   }
   projected
 }

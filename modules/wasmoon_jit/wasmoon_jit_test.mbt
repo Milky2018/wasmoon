@@ -1,21 +1,22 @@
 ///|
-fn test_wasm_func_symbol(func_idx : Int) -> @instr.CodeSymbol {
-  CodeSymbol("wasm.func", func_idx)
+fn test_wasm_func_symbol(func_idx : Int) -> @semantic_machv.CodeSymbol {
+  @semantic_machv.CodeSymbol::new("wasm.func.\{func_idx}")
 }
 
 ///|
-fn test_runtime_target(name : String) -> @instr.RelocTarget {
-  External(ExternalName(name))
+fn test_runtime_target(name : String) -> @code_object.RelocationTarget {
+  External(@semantic_machv.ExternalSymbol::new(name))
 }
 
 ///|
 test "resolve runtime helper relocations into linked code" {
-  let object = @machv_emit.MachineCode::MachineCode()
-  object.emit_byte(0)
-  object.add_call_target_fixup(
-    0,
-    test_runtime_target("wasmoon.runtime.memory_grow"),
-  )
+  let object = JitCodeObject::new([0], 0, call_fixups=[
+    {
+      offset: 0,
+      target: test_runtime_target("wasmoon.runtime.memory_grow"),
+      veneer_offset: -1,
+    },
+  ])
   let linked = try! link_code_object(
     object,
     RuntimeSymbolResolver::with_wasmoon_runtime_symbols(),
@@ -30,9 +31,9 @@ test "resolve wasm function symbols into cwasm call fixups" {
   debug_inspect(resolve_wasm_func_symbol("wasm.func.12"), content="Some(12)")
   debug_inspect(resolve_wasm_func_symbol("wasm.func.x"), content="None")
   debug_inspect(resolve_wasm_func_symbol("runtime.func.12"), content="None")
-  let object = @machv_emit.MachineCode::MachineCode()
-  object.emit_byte(0)
-  object.add_call_fixup(0, test_wasm_func_symbol(3))
+  let object = JitCodeObject::new([0], 0, call_fixups=[
+    { offset: 0, target: Code(test_wasm_func_symbol(3)), veneer_offset: -1 },
+  ])
   let linked = try! link_code_object(object, RuntimeSymbolResolver())
   inspect(linked.runtime_relocations.length(), content="1")
   debug_inspect(linked.runtime_relocations[0].fixup_idx, content="Some(3)")
@@ -74,7 +75,7 @@ test "emit cancellation poll relocations for both JIT targets" {
   ])
   |> ignore
   builder.return_([])
-  for target in [@machv_emit.EmitTarget::X64, AArch64] {
+  for target in [NativeTarget::X64, AArch64] {
     let plan = plan_wasm_body_milkir_integration_for_target(
       builder.get_function(),
       target,
@@ -96,12 +97,13 @@ test "emit cancellation poll relocations for both JIT targets" {
 
 ///|
 test "default wasmoon runtime resolver maps memory.grow fixup" {
-  let object = @machv_emit.MachineCode::MachineCode()
-  object.emit_byte(0)
-  object.add_call_target_fixup(
-    0,
-    test_runtime_target("wasmoon.runtime.memory_grow"),
-  )
+  let object = JitCodeObject::new([0], 0, call_fixups=[
+    {
+      offset: 0,
+      target: test_runtime_target("wasmoon.runtime.memory_grow"),
+      veneer_offset: -1,
+    },
+  ])
   let linked = try! link_code_object(
     object,
     RuntimeSymbolResolver::with_wasmoon_runtime_symbols(),
@@ -208,8 +210,7 @@ test "trap report message formatting lives in wasmoon_jit" {
 
 ///|
 test "wrap linked code as cwasm artifact" {
-  let object = @machv_emit.MachineCode::MachineCode()
-  object.emit_byte(0)
+  let object = JitCodeObject::new([0], 0)
   let resolver = RuntimeSymbolResolver::RuntimeSymbolResolver()
   let linked = try! link_code_object(object, resolver)
   let artifact = CwasmArtifact::from_linked_code_for_target(
@@ -228,9 +229,7 @@ test "wrap linked code as cwasm artifact" {
 
 ///|
 test "cwasm artifact preserves reusable stack map offsets" {
-  let object = @machv_emit.MachineCode::MachineCode()
-  object.emit_byte(0)
-  object.record_gc_safepoint(0, root_count=0) |> ignore
+  let object = JitCodeObject::new([0], 0, gc_safepoints=[GcSafepoint(0, [], 0L)])
   let linked = try! link_code_object(object, RuntimeSymbolResolver())
   let artifact = CwasmArtifact::from_linked_code_for_target(
     linked,
@@ -243,17 +242,41 @@ test "cwasm artifact preserves reusable stack map offsets" {
   inspect(restored.functions[0].gc_safepoints.length(), content="1")
   inspect(restored.functions[0].gc_safepoints[0].code_offset, content="0")
   inspect(restored.functions[0].gc_safepoints[0].metadata, content="0")
-  inspect(restored.functions[0].gc_stackmap_blob.length(), content="12")
+  debug_inspect(
+    restored.functions[0].gc_stackmap_blob,
+    content=(
+      #|<Bytes:
+      #|  [
+      #|    0x02,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x01,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|  ]>
+    ),
+  )
 }
 
 ///|
 test "cwasm artifact preserves runtime call fixup metadata" {
-  let object = @machv_emit.MachineCode::MachineCode()
-  object.emit_byte(0)
-  object.add_call_target_fixup(
-    0,
-    test_runtime_target("wasmoon.runtime.hostcall"),
-  )
+  let object = JitCodeObject::new([0], 0, call_fixups=[
+    {
+      offset: 0,
+      target: test_runtime_target("wasmoon.runtime.hostcall"),
+      veneer_offset: -1,
+    },
+  ])
   let resolver = RuntimeSymbolResolver::with_wasmoon_runtime_symbols()
   let linked = try! link_code_object(object, resolver)
   let artifact = CwasmArtifact::from_linked_code_for_target(
@@ -271,15 +294,13 @@ test "cwasm artifact preserves runtime call fixup metadata" {
 
 ///|
 test "aarch64 cwasm artifact materializes runtime call veneers" {
-  let object = @machv_emit.MachineCode::MachineCode()
-  for _ in 0..<40 {
-    object.emit_byte(0)
-  }
-  object.add_call_target_fixup(
-    8,
-    test_runtime_target("wasmoon.runtime.hostcall"),
-    veneer_offset=24,
-  )
+  let object = JitCodeObject::new(Array::make(40, 0), 0, call_fixups=[
+    {
+      offset: 8,
+      target: test_runtime_target("wasmoon.runtime.hostcall"),
+      veneer_offset: 24,
+    },
+  ])
   let resolver = RuntimeSymbolResolver::with_wasmoon_runtime_symbols()
   let linked = try! link_code_object(object, resolver)
   let artifact = CwasmArtifact::from_linked_code_for_target(
@@ -435,7 +456,7 @@ test "encode X64 call rel32 displacement for direct-call fixups" {
 }
 
 ///|
-test "plan Wasmoon JIT integration without leaking into machv_emit" {
+test "plan Wasmoon JIT integration through a target-owned code object" {
   let milk = @milkir.Function::with_signature("entry", Signature([], []))
   let entry = milk.new_block0()
   entry.set_terminator(Return([]))
@@ -452,31 +473,36 @@ test "plan Wasmoon JIT integration without leaking into machv_emit" {
     native_glue_covers_source(x64_plan.native_glue, "dwarf.c"),
     content="true",
   )
-  inspect(x64_plan.object.dump_disasm().length() > 0, content="true")
-  inspect(x64_plan.object.get_bytes().length() > 0, content="true")
+  debug_inspect(
+    x64_plan.object,
+    content=(
+      #|{
+      #|  code: [195],
+      #|  frame_size: 0,
+      #|  func_addr_fixups: [],
+      #|  call_fixups: [],
+      #|  gc_safepoints: [],
+      #|}
+    ),
+  )
   let aarch64_plan = plan_milkir_integration_for_target(milk, AArch64)
   debug_inspect(aarch64_plan.target, content="AArch64")
-  inspect(aarch64_plan.object.get_bytes().length() > 0, content="true")
-}
-
-///|
-test "legacy lowering rejects AArch64 selection" {
-  let milk = @milkir.Function::with_signature(
-    "removed_aarch64",
-    Signature([], []),
+  debug_inspect(
+    aarch64_plan.object,
+    content=(
+      #|{
+      #|  code: [192, 3, 95, 214],
+      #|  frame_size: 0,
+      #|  func_addr_fixups: [],
+      #|  call_fixups: [],
+      #|  gc_safepoints: [],
+      #|}
+    ),
   )
-  milk.new_block0().set_terminator(Return([]))
-  try lower_milkir_for_target(milk, AArch64) |> ignore catch {
-    PipelineFailure(message~) =>
-      inspect(
-        message,
-        content="legacy AArch64 lowering has been removed; use the AArch64 target pipeline",
-      )
-  }
 }
 
 ///|
-test "semantic Wasm lowering is inspectable without legacy AArch64" {
+test "semantic Wasm lowering is inspectable before target selection" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder(
     "inspect_semantic_wasm",
   )
@@ -530,32 +556,35 @@ test "plan MilkIR through reusable JIT pipeline" {
   let plan = plan_milkir_integration_for_target(milk, X64)
   debug_inspect(plan.target, content="X64")
   inspect(plan.entry_symbol, content="add64")
-  let bytes = plan.object.get_bytes()
-  inspect(bytes.length() > 0, content="true")
-  inspect(code_contains_byte(bytes, 0xc3), content="true")
-  inspect(
-    code_contains_pair(bytes, 0x48, 0x01) ||
-    code_contains_pair(bytes, 0x48, 0x8d),
-    content="true",
+  debug_inspect(
+    plan.object,
+    content=(
+      #|{
+      #|  code: [
+      #|    72,
+      #|    137,
+      #|    250,
+      #|    72,
+      #|    137,
+      #|    240,
+      #|    72,
+      #|    137,
+      #|    209,
+      #|    72,
+      #|    1,
+      #|    193,
+      #|    72,
+      #|    137,
+      #|    200,
+      #|    195,
+      #|  ],
+      #|  frame_size: 0,
+      #|  func_addr_fixups: [],
+      #|  call_fixups: [],
+      #|  gc_safepoints: [],
+      #|}
+    ),
   )
-  inspect(plan.object.dump_disasm().length() > 0, content="true")
-}
-
-///|
-test "Wasmoon JIT can request Wasm body ABI lowering" {
-  let signature = @milkir.Signature::Signature([Ptr, I64, I64], [I64, I64])
-  let milk = @milkir.Function::with_signature("wasm_body", signature)
-  let vmctx = milk.param(0).unwrap()
-  let lhs = milk.param(1).unwrap()
-  let rhs = milk.param(2).unwrap()
-  let entry = milk.new_block([])
-  entry.set_terminator(Return([lhs, rhs]))
-  let lowered = lower_wasm_body_milkir_for_target(milk, X64)
-  inspect(lowered.get_params().length(), content="3")
-  inspect(lowered.get_params()[0].class.to_string(), content="int")
-  inspect(lowered.get_params()[1].class.to_string(), content="int")
-  inspect(lowered.get_blocks().length() > 0, content="true")
-  inspect(vmctx.id < lhs.id && lhs.id < rhs.id, content="true")
 }
 
 ///|
@@ -572,12 +601,73 @@ test "plan Wasm body MilkIR through reusable JIT pipeline" {
   let plan = plan_wasm_body_milkir_integration_for_target(milk, X64)
   debug_inspect(plan.target, content="X64")
   inspect(plan.entry_symbol, content="wasm_body_add64")
-  inspect(plan.object.get_bytes().length() > 0, content="true")
-  inspect(plan.object.dump_disasm().length() > 0, content="true")
-  let lowered = lower_wasm_body_milkir_for_target(milk, X64)
-  inspect(lowered.get_params().length(), content="3")
-  inspect(lowered.get_params()[0].class.to_string(), content="int")
-  inspect(lowered.get_params()[1].class.to_string(), content="int")
+  debug_inspect(
+    plan.object,
+    content=(
+      #|{
+      #|  code: [
+      #|    85,
+      #|    72,
+      #|    137,
+      #|    229,
+      #|    72,
+      #|    129,
+      #|    236,
+      #|    16,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    72,
+      #|    137,
+      #|    156,
+      #|    36,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    72,
+      #|    137,
+      #|    251,
+      #|    72,
+      #|    137,
+      #|    240,
+      #|    72,
+      #|    137,
+      #|    209,
+      #|    72,
+      #|    137,
+      #|    194,
+      #|    72,
+      #|    1,
+      #|    202,
+      #|    72,
+      #|    137,
+      #|    208,
+      #|    72,
+      #|    139,
+      #|    156,
+      #|    36,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    72,
+      #|    129,
+      #|    196,
+      #|    16,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    93,
+      #|    195,
+      #|  ],
+      #|  frame_size: 24,
+      #|  func_addr_fixups: [],
+      #|  call_fixups: [],
+      #|  gc_safepoints: [],
+      #|}
+    ),
+  )
   inspect(vmctx.id < lhs.id && lhs.id < rhs.id, content="true")
 }
 
@@ -602,15 +692,129 @@ test "plan MilkIR branch block params through reusable JIT pipeline" {
   then_block.set_terminator(Return([true_param]))
   else_block.set_terminator(Return([false_param]))
   let plan = plan_milkir_integration_for_target(milk, X64)
-  inspect(plan.object.get_bytes().length() > 0, content="true")
-  inspect(plan.object.dump_disasm().length() > 0, content="true")
-  let mut has_ret = false
-  for byte in plan.object.get_bytes() {
-    if byte == 195 {
-      has_ret = true
-    }
-  }
-  inspect(has_ret, content="true")
+  debug_inspect(
+    plan.object,
+    content=(
+      #|{
+      #|  code: [
+      #|    85,
+      #|    72,
+      #|    137,
+      #|    229,
+      #|    72,
+      #|    129,
+      #|    236,
+      #|    16,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    72,
+      #|    137,
+      #|    156,
+      #|    36,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    72,
+      #|    186,
+      #|    1,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    72,
+      #|    187,
+      #|    42,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    72,
+      #|    190,
+      #|    7,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    133,
+      #|    210,
+      #|    15,
+      #|    132,
+      #|    8,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    72,
+      #|    137,
+      #|    216,
+      #|    233,
+      #|    8,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    72,
+      #|    137,
+      #|    241,
+      #|    233,
+      #|    17,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    72,
+      #|    139,
+      #|    156,
+      #|    36,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    72,
+      #|    129,
+      #|    196,
+      #|    16,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    93,
+      #|    195,
+      #|    72,
+      #|    137,
+      #|    200,
+      #|    72,
+      #|    139,
+      #|    156,
+      #|    36,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    72,
+      #|    129,
+      #|    196,
+      #|    16,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    93,
+      #|    195,
+      #|  ],
+      #|  frame_size: 24,
+      #|  func_addr_fixups: [],
+      #|  call_fixups: [],
+      #|  gc_safepoints: [],
+      #|}
+    ),
+  )
 }
 
 ///|
@@ -630,10 +834,69 @@ test "plan MilkIR CallPtr through reusable JIT pipeline" {
   debug_inspect(plan.target, content="X64")
   inspect(plan.entry_symbol, content="callptr64")
   let bytes = plan.object.get_bytes()
-  inspect(bytes.length() > 0, content="true")
-  inspect(code_contains_pair(bytes, 0xff, 0xd3), content="true")
-  inspect(code_contains_byte(bytes, 0xc3), content="true")
-  inspect(plan.object.dump_disasm().length() > 0, content="true")
+  debug_inspect(
+    bytes,
+    content=(
+      #|[
+      #|  85,
+      #|  72,
+      #|  137,
+      #|  229,
+      #|  72,
+      #|  129,
+      #|  236,
+      #|  16,
+      #|  0,
+      #|  0,
+      #|  0,
+      #|  72,
+      #|  137,
+      #|  156,
+      #|  36,
+      #|  0,
+      #|  0,
+      #|  0,
+      #|  0,
+      #|  72,
+      #|  137,
+      #|  251,
+      #|  72,
+      #|  137,
+      #|  240,
+      #|  72,
+      #|  137,
+      #|  209,
+      #|  72,
+      #|  137,
+      #|  199,
+      #|  72,
+      #|  137,
+      #|  206,
+      #|  72,
+      #|  137,
+      #|  216,
+      #|  255,
+      #|  208,
+      #|  72,
+      #|  139,
+      #|  156,
+      #|  36,
+      #|  0,
+      #|  0,
+      #|  0,
+      #|  0,
+      #|  72,
+      #|  129,
+      #|  196,
+      #|  16,
+      #|  0,
+      #|  0,
+      #|  0,
+      #|  93,
+      #|  195,
+      #|]
+    ),
+  )
 }
 
 ///|
@@ -863,24 +1126,6 @@ fn code_contains_pair(code : Array[Int], b0 : Int, b1 : Int) -> Bool {
 }
 
 ///|
-fn code_contains_triple(
-  code : Array[Int],
-  b0 : Int,
-  b1 : Int,
-  b2 : Int,
-) -> Bool {
-  if code.length() < 3 {
-    return false
-  }
-  for i in 0..<(code.length() - 2) {
-    if code[i] == b0 && code[i + 1] == b1 && code[i + 2] == b2 {
-      return true
-    }
-  }
-  false
-}
-
-///|
 fn code_contains_x64_rsp_int_store(code : Array[Int]) -> Bool {
   if code.length() < 4 {
     return false
@@ -1087,23 +1332,6 @@ test "hostcall trampolines support overflow result areas" {
 }
 
 ///|
-test "legacy AMD64 hostcall trampoline preserves its runtime fixup" {
-  let mc = try! emit_legacy_amd64_hostcall_import_trampoline(
-    [I32, I32, I32, I32],
-    [I32],
-    7,
-    runtime_hostcall_symbol(),
-    wasm_calling_convention(isa=AMD64),
-  )
-  let fixups = mc.get_func_addr_fixups()
-  inspect(fixups.length(), content="1")
-  debug_inspect(
-    machv_reloc_target_to_cwasm_func_idx(fixups[0].target),
-    content="Some(-21013)",
-  )
-}
-
-///|
 test "entry trampolines support overflow result areas" {
   let params : Array[@types.ValueType] = []
   let results : Array[@types.ValueType] = [
@@ -1142,10 +1370,39 @@ test "plan MilkIR floating point through reusable JIT pipeline" {
   let plan = plan_milkir_integration_for_target(milk, X64)
   debug_inspect(plan.target, content="X64")
   inspect(plan.entry_symbol, content="fadd64")
-  let bytes = plan.object.get_bytes()
-  inspect(code_contains_triple(bytes, 0xf2, 0x0f, 0x58), content="true")
-  inspect(code_contains_byte(bytes, 0xc3), content="true")
-  inspect(plan.object.dump_disasm().length() > 0, content="true")
+  debug_inspect(
+    plan.object,
+    content=(
+      #|{
+      #|  code: [
+      #|    242,
+      #|    15,
+      #|    16,
+      #|    208,
+      #|    242,
+      #|    15,
+      #|    16,
+      #|    193,
+      #|    15,
+      #|    40,
+      #|    202,
+      #|    242,
+      #|    15,
+      #|    88,
+      #|    200,
+      #|    242,
+      #|    15,
+      #|    16,
+      #|    193,
+      #|    195,
+      #|  ],
+      #|  frame_size: 0,
+      #|  func_addr_fixups: [],
+      #|  call_fixups: [],
+      #|  gc_safepoints: [],
+      #|}
+    ),
+  )
 }
 
 ///|
@@ -1676,8 +1933,35 @@ test "emit MachV regalloc through reusable x64 pipeline" {
   entry.append_inst(milk.new_inst(Scalar(IntBinary(Add)), [lhs, rhs], [sum]))
   entry.set_terminator(Return([sum]))
   let plan = plan_milkir_integration_for_target(milk, X64)
-  inspect(plan.object.get_bytes().length() > 0, content="true")
-  inspect(plan.object.dump_disasm().length() > 0, content="true")
+  debug_inspect(
+    plan.object,
+    content=(
+      #|{
+      #|  code: [
+      #|    72,
+      #|    137,
+      #|    250,
+      #|    72,
+      #|    137,
+      #|    240,
+      #|    72,
+      #|    137,
+      #|    209,
+      #|    72,
+      #|    1,
+      #|    193,
+      #|    72,
+      #|    137,
+      #|    200,
+      #|    195,
+      #|  ],
+      #|  frame_size: 0,
+      #|  func_addr_fixups: [],
+      #|  call_fixups: [],
+      #|  gc_safepoints: [],
+      #|}
+    ),
+  )
 }
 
 ///|
@@ -1918,12 +2202,49 @@ test "plan MilkIR floating point select through reusable x64 JIT pipeline" {
   entry.set_terminator(Return([output]))
   let plan = plan_milkir_integration_for_target(milk, X64)
   let bytes = plan.object.get_bytes()
-  inspect(
-    code_contains_pair(bytes, 0x0f, 0x84) ||
-    code_contains_pair(bytes, 0x0f, 0x85),
-    content="true",
+  debug_inspect(
+    bytes,
+    content=(
+      #|[
+      #|  137,
+      #|  249,
+      #|  242,
+      #|  15,
+      #|  16,
+      #|  208,
+      #|  242,
+      #|  15,
+      #|  16,
+      #|  193,
+      #|  133,
+      #|  201,
+      #|  102,
+      #|  73,
+      #|  15,
+      #|  126,
+      #|  210,
+      #|  102,
+      #|  73,
+      #|  15,
+      #|  126,
+      #|  195,
+      #|  77,
+      #|  15,
+      #|  69,
+      #|  218,
+      #|  102,
+      #|  73,
+      #|  15,
+      #|  110,
+      #|  203,
+      #|  242,
+      #|  15,
+      #|  16,
+      #|  193,
+      #|  195,
+      #|]
+    ),
   )
-  inspect(code_contains_byte(bytes, 0xc3), content="true")
 }
 
 ///|

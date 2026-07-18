@@ -126,3 +126,56 @@ test "floating-point and SIMD values share one physical register bank" {
     ),
   )
 }
+
+///|
+test "fixed operands are instruction-point constraints rather than value homes" {
+  let builder : @vcode.Builder[Unit] = @vcode.Builder::new("fixed_point", [
+    I64,
+    I64,
+  ])
+  let entry = builder.entry_block()
+  let (_, results) = builder.append_body(
+    entry,
+    (),
+    [
+      @vcode.Input::fixed(builder.parameter(0), @vcode.PhysicalReg::new(0, Int)),
+      @vcode.Input::fixed(builder.parameter(1), @vcode.PhysicalReg::new(2, Int)),
+    ],
+    [@vcode.Output::fixed(I64, @vcode.PhysicalReg::new(0, Int))],
+    [@vcode.PhysicalReg::new(1, Int)],
+    @vcode.InstructionMetadata::empty(),
+  )
+  builder.set_terminator(
+    entry,
+    (),
+    [@vcode.Input::any(results[0])],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  let allocation = allocate_vcode(
+    builder.finish(),
+    VCodeAllocationEnvironment::new(
+      [@vcode.PhysicalReg::new(0, Int), @vcode.PhysicalReg::new(1, Int)],
+      [@vcode.PhysicalReg::new(2, Int)],
+    ),
+  )
+  inspect(
+    allocation.summary(),
+    content=(
+      #|allocation fixed_point
+      #|  v0:i64 -> p0:int
+      #|  v1:i64 -> p1:int
+      #|  v2:i64 -> stack0:i64(size=8, align=8)
+      #|  i0 operand0 -> p0:int
+      #|  i0 operand1 -> p2:int
+      #|  i0 operand2 -> p0:int
+      #|  i1 operand0 -> p2:int
+      #|  before(i0): move v1 p1:int -> p2:int
+      #|  after(i0): spill v2 p0:int -> stack0
+      #|  before(i1): reload v2 stack0 -> p2:int
+      #|
+    ),
+  )
+}

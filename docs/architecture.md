@@ -12,8 +12,8 @@ WAST test script ───────→ wasmoon/wast ──┘                
                                                                                  └─→ Wasm frontend
                                                                                       → MilkIR
                                                                                       → MachV
-                                                                                      → register allocation
-                                                                                      → machine-code emission
+                                                                                      → target VCode
+                                                                                      → target allocation/emission
                                                                                       → wasmoon_jit
 ```
 
@@ -34,9 +34,8 @@ The repository is a `moon.work` workspace containing several independently versi
 | `wasm_milkir` | WebAssembly dialect definitions and extension contracts for MilkIR. |
 | `milkir_machv` | Verified lowering from core MilkIR into target-neutral MachV. |
 | `wasm_machv` | WebAssembly dialect lowering into target-neutral MachV through an embedding environment. |
-| `machv_regalloc` | Physical-register allocation for the current private downstream backend. |
-| `machv_emit` | Machine-code bytes plus symbolic relocation, stack-map, and debug metadata for that backend. |
-| `x64_target`, `aarch64_target` | AMD64 and AArch64 ABI and register policy. |
+| `machv_regalloc` | Narrow adapter from generic Target VCode to the reusable register allocator. |
+| `x64_target`, `aarch64_target` | Complete AMD64 and AArch64 target pipelines: instruction selection, ABI legalization, allocation policy, frame layout, emission, relocations, and linking. |
 
 Reusable modules must not import `Milky2018/wasmoon`, `Milky2018/wasmoon_jit`, or Wasmoon-native FFI packages. `scripts/audit_module_boundaries.py` enforces that hard dependency direction.
 
@@ -78,9 +77,9 @@ Core modules pass through `wasmoon/validator` before the CLI instantiates or com
 2. Build a canonical `wasmoon/wasm_frontend` translation context.
 3. Translate each selected function into MilkIR and run the requested optimization level.
 4. Lower verified MilkIR through `milkir_machv` and `wasm_machv` into target-neutral MachV.
-5. Let the product-private transition layer legalize semantic MachV for the current AArch64 or AMD64 backend.
-6. Allocate physical registers through `machv_regalloc` and `regalloc`.
-7. Emit machine code and symbolic metadata through `machv_emit`.
+5. Lower semantic MachV into verified AArch64 or x64 Target VCode.
+6. Allocate physical registers through `machv_regalloc` and `regalloc`, then construct a verified target frame.
+7. Let the selected target emit machine code, relocations, traps, and safepoint metadata into an unlinked code object.
 8. Package compiled functions as an in-memory or serialized CWASM artifact.
 9. Let `wasmoon_jit` resolve runtime symbols, install code, initialize VMContext state, and enter native code through Wasmoon-owned trampolines.
 
@@ -92,9 +91,9 @@ The top-level `wasmoon/wasm_frontend` package is the product API boundary. Produ
 
 MilkIR uses SSA values and block parameters rather than WebAssembly operand-stack state. Its core opcode contract consists of five semantic families: scalar, memory, call, vector, and typed extension operations. WebAssembly-specific operations are represented through the `wasm_milkir` dialect or lowered into ordinary MilkIR operations by the frontend. Source-only fields such as WebAssembly SIMD memory indices, alignment hints, and immediate offsets are consumed before core IR construction.
 
-Semantic MachV represents function-owned typed values, blocks, explicit edge arguments, calls, effects, traps, safepoints, and target-neutral operations. The existing union backend remains an internal downstream implementation detail while target-specific VCode is introduced; it is not a supported MilkIR lowering API. Target modules and the embedding ABI supply calling-convention policy, while Wasmoon-specific VMContext meanings and pinned-register roles remain owned by `wasmoon_jit`.
+Semantic MachV represents function-owned typed values, blocks, explicit edge arguments, calls, effects, traps, safepoints, and target-neutral operations. Target-specific operations exist only inside `aarch64_target` or `x64_target` VCode, so an instruction from one architecture cannot be represented in the other target function. Each target module owns calling-convention legalization and physical-register policy, while Wasmoon-specific VMContext meanings remain owned by `wasmoon_jit`.
 
-The emitter produces machine code and symbolic metadata. Resolving Wasmoon runtime helpers, allocating executable memory, installing signal/trap integration, and constructing VMContext state occur after emission in `wasmoon_jit`. See [JIT ABI](jit-abi.md) for the AArch64 contract and the target modules for executable policy definitions.
+Each target emitter produces machine code and symbolic metadata. Resolving Wasmoon runtime helpers, allocating executable memory, installing signal/trap integration, and constructing VMContext state occur after emission in `wasmoon_jit`. See [JIT ABI](jit-abi.md) for the embedding contract and the target modules for executable policy definitions.
 
 ## Capability Coverage and Readiness
 

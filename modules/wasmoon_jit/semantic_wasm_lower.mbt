@@ -2,7 +2,6 @@
 priv struct WasmoonSemanticEnvironment {
   wasm : @wasm_machv.Environment
   field_paths : Map[String, Array[Int]]
-  code_symbols : Map[String, @instr.CodeSymbol]
   runtime_symbols : @wasm_milkir.RuntimeSymbols
 }
 
@@ -65,7 +64,6 @@ fn wasmoon_semantic_environment(
 ) -> WasmoonSemanticEnvironment {
   let layout = vmcontext_layout()
   let field_paths : Map[String, Array[Int]] = Map([])
-  let code_symbols : Map[String, @instr.CodeSymbol] = Map([])
   let runtime_symbols = wasm_runtime_symbols()
   let function_table_field = @semantic_machv.EnvironmentField::new(
     "wasmoon.vmctx.function_table",
@@ -76,7 +74,6 @@ fn wasmoon_semantic_environment(
   let wasm = @wasm_machv.Environment::new(
     fn(index) {
       let name = "wasm.func.\{index}"
-      code_symbols.set(name, CodeSymbol("wasm.func", index))
       @semantic_machv.CodeSymbol::new(name)
     },
     fn(index) {
@@ -122,33 +119,7 @@ fn wasmoon_semantic_environment(
       )
     },
   )
-  { wasm, field_paths, code_symbols, runtime_symbols }
-}
-
-///|
-fn semantic_trap_payload(reason : @semantic_machv.TrapReason) -> Int {
-  match reason {
-    Unreachable => 0
-    MemoryOutOfBounds | TableOutOfBounds => 1
-    IndirectCallTypeMismatch => 2
-    InvalidConversionToInteger => 3
-    IntegerDivisionByZero => 4
-    IntegerOverflow => 5
-    User(payload) => payload
-    NullReference | UnalignedAtomic | UnsupportedOperation | StackOverflow => 6
-  }
-}
-
-///|
-fn has_wasm_extension(function : @milkir.Function) -> Bool {
-  for block in function.blocks {
-    for instruction in block.instructions {
-      if instruction.opcode is Ext(_, _) {
-        return true
-      }
-    }
-  }
-  false
+  { wasm, field_paths, runtime_symbols }
 }
 
 ///|
@@ -174,6 +145,24 @@ fn build_wasmoon_aarch64_target(
   environment : WasmoonSemanticEnvironment,
 ) -> AArch64TargetCompilation raise JitPipelineError {
   build_aarch64_target(
+    semantic,
+    environment_field_path=fn(field : @semantic_machv.EnvironmentField) {
+      environment.field_paths.get(field.name)
+    },
+    allocation_symbols=wasmoon_allocation_symbols(environment),
+    root_scope_symbols=(
+      @semantic_machv.ExternalSymbol::new(gc_push_root_scope_symbol()),
+      @semantic_machv.ExternalSymbol::new(gc_pop_root_scope_symbol()),
+    ),
+  )
+}
+
+///|
+fn build_wasmoon_x64_target(
+  semantic : @semantic_machv.Function,
+  environment : WasmoonSemanticEnvironment,
+) -> X64TargetCompilation raise JitPipelineError {
+  build_x64_target(
     semantic,
     environment_field_path=fn(field : @semantic_machv.EnvironmentField) {
       environment.field_paths.get(field.name)
@@ -225,6 +214,21 @@ fn compile_wasm_body_aarch64_target(
 }
 
 ///|
+fn compile_wasm_body_x64_target(
+  function : @milkir.Function,
+  use_subtype_indirect_check : Bool,
+  canonical_type_indices : Array[Int],
+) -> X64TargetCompilation raise JitPipelineError {
+  let environment = wasmoon_semantic_environment(
+    use_subtype_indirect_check, canonical_type_indices,
+  )
+  let semantic = lower_wasm_body_semantic_with_environment(
+    function, environment,
+  )
+  build_wasmoon_x64_target(semantic, environment)
+}
+
+///|
 pub fn plan_wasm_body_aarch64_code_object(
   function : @milkir.Function,
   use_subtype_indirect_check? : Bool = true,
@@ -236,81 +240,12 @@ pub fn plan_wasm_body_aarch64_code_object(
 }
 
 ///|
-fn lower_semantic_wasm_with_isa(
+pub fn plan_wasm_body_x64_code_object(
   function : @milkir.Function,
-  isa : @isa.ISA,
-  embedding_abi : @abi.EmbeddingABI,
-  use_subtype_indirect_check : Bool,
-  canonical_type_indices : Array[Int],
-) -> @machv.Function raise JitPipelineError {
-  if isa is AArch64 {
-    raise PipelineFailure(
-      message="legacy AArch64 lowering has been removed; use the AArch64 target pipeline",
-    )
-  }
-  if function.params.is_empty() && !has_wasm_extension(function) {
-    return lower_semantic_core_with_isa(function, isa, embedding_abi)
-  }
-  let environment = wasmoon_semantic_environment(
-    use_subtype_indirect_check, canonical_type_indices,
-  )
-  let semantic = lower_wasm_body_semantic_with_environment(
-    function, environment,
-  )
-  let legacy = adapt_semantic_to_legacy(
-    semantic,
-    isa,
-    embedding_abi=Some(embedding_abi),
-    trap_payload=semantic_trap_payload,
-    requires_hidden_safepoint_id=Some(fn(symbol) {
-      symbol.name == environment.runtime_symbols.gc_alloc_struct_slow ||
-      symbol.name == environment.runtime_symbols.gc_alloc_array_from_values_slow ||
-      symbol.name == environment.runtime_symbols.gc_alloc_array_slow
-    }),
-    caller_root_scope_symbols=Some(
-      (
-        @semantic_machv.ExternalSymbol::new(gc_push_root_scope_symbol()),
-        @semantic_machv.ExternalSymbol::new(gc_pop_root_scope_symbol()),
-      ),
-    ),
-    environment_field_path=Some(fn(field) {
-      environment.field_paths.get(field.name)
-    }),
-    code_symbol_resolver=Some(fn(symbol) {
-      match environment.code_symbols.get(symbol.name) {
-        Some(resolved) => resolved
-        None => abort("unresolved Wasmoon code symbol '\{symbol.name}'")
-      }
-    }),
-  ) catch {
-    error =>
-      raise PipelineFailure(message="\{function.name}: \{error.to_string()}")
-  }
-  legacy
-}
-
-///|
-fn lower_semantic_core_with_isa(
-  function : @milkir.Function,
-  isa : @isa.ISA,
-  embedding_abi : @abi.EmbeddingABI,
-) -> @machv.Function raise JitPipelineError {
-  if isa is AArch64 {
-    raise PipelineFailure(
-      message="legacy AArch64 lowering has been removed; use the AArch64 target pipeline",
-    )
-  }
-  let semantic = @milkir_machv.lower_core_function(function) catch {
-    error =>
-      raise PipelineFailure(message="\{function.name}: \{error.to_string()}")
-  }
-  adapt_semantic_to_legacy(
-    semantic,
-    isa,
-    embedding_abi=Some(embedding_abi),
-    trap_payload=semantic_trap_payload,
-  ) catch {
-    error =>
-      raise PipelineFailure(message="\{function.name}: \{error.to_string()}")
-  }
+  use_subtype_indirect_check? : Bool = true,
+  canonical_type_indices? : Array[Int] = [],
+) -> @code_object.UnlinkedCodeObject raise JitPipelineError {
+  compile_wasm_body_x64_target(
+    function, use_subtype_indirect_check, canonical_type_indices,
+  ).object
 }

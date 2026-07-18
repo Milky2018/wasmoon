@@ -19,10 +19,7 @@ pub(all) struct RuntimeAssembly {
 pub(all) struct CompilerInfrastructureAssembly {
   signature : @milkir.Signature
   machv_function : @machv.Function
-  allocated_function : @machv.Function
-  code_object : @machv_emit.MachineCode
-  x64_abi : @x64_target.AbiPolicy
-  aarch64_abi : @aarch64_target.AbiPolicy
+  code_object : @wasmoon_jit.JitCodeObject
   jit_glue : Array[@wasmoon_jit.NativeGlueBinding]
 }
 
@@ -109,8 +106,7 @@ pub fn runtime_assembly() -> RuntimeAssembly {
     product_support_modules: ["Milky2018/wasmoon_jit"],
     reusable_modules: [
       "Milky2018/wasm_core", "Milky2018/milkir", "Milky2018/machv", "Milky2018/regalloc",
-      "Milky2018/machv_regalloc", "Milky2018/machv_emit", "Milky2018/x64_target",
-      "Milky2018/aarch64_target",
+      "Milky2018/machv_regalloc", "Milky2018/x64_target", "Milky2018/aarch64_target",
     ],
   }
 }
@@ -123,31 +119,19 @@ pub fn compiler_infrastructure_assembly() -> CompilerInfrastructureAssembly rais
   )
   let entry = milk.new_block0()
   entry.set_terminator(Return([]))
-  let embedding_abi = @wasmoon_jit.wasm_embedding_abi(isa=AMD64)
-  let machv_function = @wasmoon_jit.lower_milkir_for_target(milk, X64) catch {
+  let machv_function = @milkir_machv.lower_core_function_with_protocol(
+    milk,
+    Platform,
+  ) catch {
+    err => raise WasmCompilerPipelineFailure(message=to_repr(err).to_string())
+  }
+  let plan = @wasmoon_jit.plan_milkir_integration_for_target(milk, X64) catch {
     err => raise WasmCompilerPipelineFailure(message=err.to_string())
-  }
-  let (allocated_function, output) = @machv_regalloc.allocate_registers_backtracking_output(
-    machv_function,
-    embedding_abi=Some(embedding_abi),
-  ) catch {
-    err => raise WasmCompilerPipelineFailure(message=to_repr(err).to_string())
-  }
-  let code_object = @machv_emit.emit_function_with_regalloc(
-    allocated_function,
-    output,
-    isa=AMD64,
-    embedding_abi=Some(embedding_abi),
-  ) catch {
-    err => raise WasmCompilerPipelineFailure(message=to_repr(err).to_string())
   }
   {
     signature,
     machv_function,
-    allocated_function,
-    code_object,
-    x64_abi: @x64_target.abi_policy(),
-    aarch64_abi: @aarch64_target.abi_policy(),
+    code_object: plan.object,
     jit_glue: @wasmoon_jit.default_native_glue(),
   }
 }
@@ -157,7 +141,7 @@ pub fn plan_wasm_function_with_compiler_infra(
   env : @wasm_frontend.EmbeddingEnvironment,
   mod_ : @types.Module,
   func_local_idx : Int,
-  target : @machv_emit.EmitTarget,
+  target : @wasmoon_jit.NativeTarget,
   opt_level? : Int = 2,
 ) -> @wasmoon_jit.JitIntegrationPlan raise WasmCompilerPipelineError {
   try {

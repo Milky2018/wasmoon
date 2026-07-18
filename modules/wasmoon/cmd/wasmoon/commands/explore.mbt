@@ -170,7 +170,7 @@ pub fn run_explore(
       println(ir_optimized)
     }
 
-    let target : @machv_emit.EmitTarget = match
+    let target : @wasmoon_jit.NativeTarget = match
       @wasmoon_jit.host_target_arch() {
       AArch64 => AArch64
       X86_64 => X64

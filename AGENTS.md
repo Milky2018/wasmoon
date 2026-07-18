@@ -4,7 +4,7 @@
 
 Wasmoon is a WebAssembly runtime written in MoonBit. Module metadata lives in `moon.mod.json`; each package directory has a `moon.pkg.json`.
 
-- Pipeline: parsers (`wat/`, `wast/`, `cwasm/`, `parser/`) → `validator/` → `runtime/` → `executor/` or JIT (`milkir` → `machv` → `machv_regalloc` → `machv_emit`).
+- Pipeline: parsers (`wat/`, `wast/`, `cwasm/`, `parser/`) → `validator/` → `runtime/` → `executor/` or JIT (`milkir` → semantic `machv` → target VCode → `machv_regalloc` → target emitter).
 - CLI entry point: `cmd/wasmoon/` (builds the `wasmoon` binary).
 - WASI Preview 1 support: `wasi/`.
 - Tests: `testsuite/` (MoonBit tests) and `spec/` (upstream WAST scripts used by the CLI runner).
@@ -58,7 +58,7 @@ lldb -- ./wasmoon test path/to/test.wast
 
 ## Compiler Infrastructure Boundaries
 
-Reusable compiler-infrastructure modules include `wasm_core`, `milkir`, `machv`, `regalloc`, `machv_regalloc`, `machv_emit`, `milkir_machv`, `aarch64_target`, and `x64_target`.
+Reusable compiler-infrastructure modules include `wasm_core`, `milkir`, `machv`, `regalloc`, `machv_regalloc`, `milkir_machv`, `aarch64_target`, and `x64_target`.
 
 - Hard boundary: reusable modules must not import Wasmoon-owned packages such as `Milky2018/wasmoon`, `Milky2018/wasmoon_jit`, or Wasmoon native FFI packages. `scripts/audit_module_boundaries.py` enforces this at `moon.pkg` import level.
 - Soft convention: avoid product-specific runtime names such as `wasmoon_jit_*`, `c_jit_*`, and `wasmoon.runtime.*` in reusable module code, comments, tests, and public APIs. Prefer generic terms such as external symbol, runtime helper, `wasm.runtime.*`, or embedding runtime.

@@ -3,5 +3,4 @@ import {
   "Milky2018/machv/vcode",
   "Milky2018/machv/code_object",
   "Milky2018/machv_regalloc" @vcode_regalloc,
-  "Milky2018/machv_legacy" @machv,
 }

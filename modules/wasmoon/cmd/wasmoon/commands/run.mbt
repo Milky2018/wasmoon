@@ -1429,59 +1429,6 @@ fn normalize_opt_level(opt_level : Int) -> Int {
 }
 
 ///|
-fn machv_func_addr_fixups_to_cwasm(
-  fixups : Array[@machv_emit.FuncAddrFixup],
-) -> Array[@cwasm.FuncAddrFixup] {
-  let out : Array[@cwasm.FuncAddrFixup] = []
-  for fixup in fixups {
-    let func_idx = match
-      @wasmoon_jit.machv_reloc_target_to_cwasm_func_idx(fixup.target) {
-      Some(idx) => idx
-      None => abort("cannot encode external func-addr target: \{fixup.target}")
-    }
-    out.push({ offset: fixup.offset, func_idx, reg: fixup.reg })
-  }
-  out
-}
-
-///|
-fn machv_call_fixups_to_cwasm(
-  fixups : Array[@machv_emit.CallFixup],
-) -> Array[@cwasm.CallFixup] {
-  let out : Array[@cwasm.CallFixup] = []
-  for fixup in fixups {
-    let func_idx = match
-      @wasmoon_jit.machv_reloc_target_to_cwasm_func_idx(fixup.target) {
-      Some(idx) => idx
-      None => abort("cannot encode external call target: \{fixup.target}")
-    }
-    out.push({
-      offset: fixup.offset,
-      func_idx,
-      veneer_offset: fixup.veneer_offset,
-    })
-  }
-  out
-}
-
-///|
-fn machv_gc_safepoints_to_cwasm(
-  safepoints : Array[@wasmoon_jit.GcSafepoint],
-) -> Array[@cwasm.GcSafepoint] {
-  let out : Array[@cwasm.GcSafepoint] = []
-  for safepoint in safepoints {
-    out.push(
-      GcSafepoint(
-        safepoint.code_offset,
-        safepoint.live_refs,
-        safepoint.metadata,
-      ),
-    )
-  }
-  out
-}
-
-///|
 /// Compile a WASM module to precompiled format in memory
 /// actual_memory_max: Override for memory max limit (used for imported memories)
 pub fn compile_module_to_jit(
@@ -1499,11 +1446,14 @@ pub fn compile_module_to_jit(
   enable_cancellation? : Bool = false,
 ) -> (@cwasm.PrecompiledModule, @wasmoon_jit.JITDebugDB?)? {
   use_reusable_pipeline |> ignore
+  // DWARF registration consumes the completed artifact when the JIT module is
+  // loaded; target compilation itself has no separate debug path.
+  enable_dwarf |> ignore
   let progress_start = compile_start.unwrap_or(@perf.tick_now())
   let perf_on = @perf.enabled()
   let module_tick = if perf_on { Some(@perf.tick_now()) } else { None }
   let target_arch = @wasmoon_jit.host_target_arch()
-  let isa = @wasmoon_jit.target_arch_to_isa(target_arch)
+  let native_target = @wasmoon_jit.target_arch_to_native_target(target_arch)
   let precompiled = @cwasm.PrecompiledModule::PrecompiledModule(
     target_arch,
     features=CompilationFeatures(cancellation_safepoints=enable_cancellation),
@@ -1668,97 +1618,32 @@ pub fn compile_module_to_jit(
       func_idx=Some(func_idx),
       func_name=Some(func_name),
     )
-    if isa is AArch64 {
-      let num_params = func_type.params.length()
-      let num_results = func_type.results.length()
-      let entry = @wasmoon_jit.compile_wasm_body_aarch64_cwasm_entry(
-        ir_func,
-        func_idx,
-        func_name,
-        num_params,
-        num_results,
-        use_subtype_indirect_check~,
-        canonical_type_indices~,
-      ) catch {
-        err => {
-          emit_compile_progress(
-            on_progress,
-            Failed,
-            progress_start,
-            total_compile_funcs,
-            compiled_count,
-            func_idx=Some(func_idx),
-            func_name=Some(func_name),
-            message=Some(err.to_string()),
+    let num_params = func_type.params.length()
+    let num_results = func_type.results.length()
+    let entry = try {
+      match native_target {
+        AArch64 =>
+          @wasmoon_jit.compile_wasm_body_aarch64_cwasm_entry(
+            ir_func,
+            func_idx,
+            func_name,
+            num_params,
+            num_results,
+            use_subtype_indirect_check~,
+            canonical_type_indices~,
           )
-          return None
-        }
+        X64 =>
+          @wasmoon_jit.compile_wasm_body_x64_cwasm_entry(
+            ir_func,
+            func_idx,
+            func_name,
+            num_params,
+            num_results,
+            use_subtype_indirect_check~,
+            canonical_type_indices~,
+          )
       }
-      if lower_tick is Some(tick) {
-        @perf.record_stage_us("lower", @perf.elapsed_us(tick))
-      }
-      emit_compile_progress(
-        on_progress,
-        Regalloc,
-        progress_start,
-        total_compile_funcs,
-        compiled_count,
-        func_idx=Some(func_idx),
-        func_name=Some(func_name),
-      )
-      emit_compile_progress(
-        on_progress,
-        Codegen,
-        progress_start,
-        total_compile_funcs,
-        compiled_count,
-        func_idx=Some(func_idx),
-        func_name=Some(func_name),
-      )
-      precompiled.add_function(entry)
-      emit_compile_progress(
-        on_progress,
-        Link,
-        progress_start,
-        total_compile_funcs,
-        compiled_count + 1,
-        func_idx=Some(func_idx),
-        func_name=Some(func_name),
-      )
-      if perf_on {
-        @perf.finish_function(
-          @milkir.instruction_count(ir_func),
-          entry.code.length(),
-        )
-      }
-      if debug_db is Some(db) {
-        db.set(
-          func_idx,
-          JITFunctionDebug(
-            ir_dump.unwrap_or(""),
-            "",
-            "",
-            entry.code.map(fn(byte) { @types.to_hex_byte(byte) }).join(" "),
-          ),
-        )
-      }
-      compiled_count = compiled_count + 1
-      if @logger.is_debug_enabled() &&
-        total_compile_funcs > 10 &&
-        (compiled_count % 10 == 0 || compiled_count == total_compile_funcs) {
-        @logger.debug(
-          "JIT: Compiled \{compiled_count}/\{total_compile_funcs} functions",
-        )
-      }
-      continue
-    }
-    let embedding_abi = @wasmoon_jit.wasm_embedding_abi(isa~)
-    let machv_func = @wasmoon_jit.lower_wasm_body_milkir_with_isa(
-      ir_func,
-      isa,
-      use_subtype_indirect_check~,
-      canonical_type_indices~,
-    ) catch {
+    } catch {
       err => {
         emit_compile_progress(
           on_progress,
@@ -1776,11 +1661,6 @@ pub fn compile_module_to_jit(
     if lower_tick is Some(tick) {
       @perf.record_stage_us("lower", @perf.elapsed_us(tick))
     }
-    let regalloc_tick = if perf_on { Some(@perf.tick_now()) } else { None }
-    let mut machv_before_dump : String? = None
-    if debug_db is Some(_) {
-      machv_before_dump = Some(machv_func.print())
-    }
     emit_compile_progress(
       on_progress,
       Regalloc,
@@ -1790,41 +1670,6 @@ pub fn compile_module_to_jit(
       func_idx=Some(func_idx),
       func_name=Some(func_name),
     )
-    let (machv_ra, ra_output) = @machv_regalloc.allocate_registers_backtracking_output_with_isa(
-      machv_func,
-      isa,
-      embedding_abi=Some(embedding_abi),
-    ) catch {
-      err => {
-        emit_compile_progress(
-          on_progress,
-          Failed,
-          progress_start,
-          total_compile_funcs,
-          compiled_count,
-          func_idx=Some(func_idx),
-          func_name=Some(func_name),
-          message=Some(err.to_string()),
-        )
-        return None
-      }
-    }
-    if regalloc_tick is Some(tick) {
-      @perf.record_stage_us("regalloc", @perf.elapsed_us(tick))
-      let (spills, reloads, reg_moves, spill_to_spill) = ra_output.spill_reload_stats()
-      @perf.record_regalloc_stats(
-        ra_output.get_num_spillslots(),
-        spills,
-        reloads,
-        reg_moves,
-        spill_to_spill,
-      )
-    }
-    let emit_tick = if perf_on { Some(@perf.tick_now()) } else { None }
-    let mut machv_after_dump : String? = None
-    if debug_db is Some(_) {
-      machv_after_dump = Some(machv_ra.print())
-    }
     emit_compile_progress(
       on_progress,
       Codegen,
@@ -1834,58 +1679,7 @@ pub fn compile_module_to_jit(
       func_idx=Some(func_idx),
       func_name=Some(func_name),
     )
-    let mc = @machv_emit.emit_function_with_regalloc(
-      machv_ra,
-      ra_output,
-      isa~,
-      debug_func_idx=Some(func_idx),
-      force_frame_setup=enable_dwarf,
-      embedding_abi=Some(embedding_abi),
-      record_disasm=debug_db is Some(_),
-    ) catch {
-      err => {
-        emit_compile_progress(
-          on_progress,
-          Failed,
-          progress_start,
-          total_compile_funcs,
-          compiled_count,
-          func_idx=Some(func_idx),
-          func_name=Some(func_name),
-          message=Some(err.to_string()),
-        )
-        return None
-      }
-    }
-    if emit_tick is Some(tick) {
-      @perf.record_stage_us("emit", @perf.elapsed_us(tick))
-    }
-    let mut mc_dump : String? = None
-    if debug_db is Some(_) {
-      mc_dump = Some(mc.dump_disasm())
-    }
-    let compiled = @wasmoon_jit.CompiledFunction::CompiledFunction(
-      func_name, mc, 0,
-    )
-    let num_params = func_type.params.length()
-    let num_results = func_type.results.length()
-    precompiled.add_function(
-      @wasmoon_jit.build_cwasm_entry_from_code(
-        func_idx,
-        func_name,
-        compiled.get_code(),
-        compiled.frame_size,
-        compiled.entry_offset,
-        num_params,
-        num_results,
-        func_addr_fixups=machv_func_addr_fixups_to_cwasm(
-          compiled.get_func_addr_fixups(),
-        ),
-        call_fixups=machv_call_fixups_to_cwasm(compiled.get_call_fixups()),
-        gc_safepoints=machv_gc_safepoints_to_cwasm(compiled.get_gc_safepoints()),
-        gc_stackmap_blob=compiled.get_gc_stackmap_blob(),
-      ),
-    )
+    precompiled.add_function(entry)
     emit_compile_progress(
       on_progress,
       Link,
@@ -1898,7 +1692,7 @@ pub fn compile_module_to_jit(
     if perf_on {
       @perf.finish_function(
         @milkir.instruction_count(ir_func),
-        compiled.code_size,
+        entry.code.length(),
       )
     }
     if debug_db is Some(db) {
@@ -1906,9 +1700,9 @@ pub fn compile_module_to_jit(
         func_idx,
         JITFunctionDebug(
           ir_dump.unwrap_or(""),
-          machv_before_dump.unwrap_or(""),
-          machv_after_dump.unwrap_or(""),
-          mc_dump.unwrap_or(""),
+          "",
+          "",
+          entry.code.map(fn(byte) { @types.to_hex_byte(byte) }).join(" "),
         ),
       )
     }

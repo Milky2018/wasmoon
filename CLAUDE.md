@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Wasmoon is a WebAssembly runtime written in MoonBit with JIT compilation support for AArch64. It features a WAT/WASM parser, validator, interpreter, and an SSA-based JIT compiler.
+Wasmoon is a WebAssembly runtime written in MoonBit with JIT compilation support for AArch64 and x64. It features a WAT/WASM parser, validator, interpreter, and an SSA-based JIT compiler.
 
 ## Architecture
 
@@ -29,10 +29,10 @@ Wasmoon is a WebAssembly runtime written in MoonBit with JIT compilation support
 - `runtime/` - Runtime structures (Module, Instance, Store, Memory, Table, Global)
 - `executor/` - Stack-based interpreter
 - `modules/milkir/` - SSA-based intermediate representation
-- `modules/machv/` - Virtual-register machine IR
+- `modules/machv/` - Target-neutral semantic machine IR and Target VCode substrate
 - `modules/milkir_machv/` - Lowering from MilkIR to MachV
-- `modules/machv_regalloc/` - MachV-specific register allocation adapter
-- `modules/machv_emit/` - Machine code emission
+- `modules/machv_regalloc/` - Target VCode register allocation adapter
+- `modules/aarch64_target/`, `modules/x64_target/` - Target lowering, allocation policy, frame layout, and machine-code emission
 - `modules/wasmoon_jit/` - Wasmoon-specific native runtime and JIT integration
 
 ## Development Commands

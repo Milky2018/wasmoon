@@ -17,6 +17,34 @@ priv enum RuntimeValueBridge {
 }
 
 ///|
+priv enum HostcallRegClass {
+  Int
+  Float32
+  Float64
+  Vector
+}
+
+///|
+priv struct HostcallPReg {
+  index : Int
+}
+
+///|
+priv enum HostcallAbiValueLocation {
+  Reg(HostcallPReg)
+  Stack(offset~ : Int, size~ : Int)
+  ReturnArea(offset~ : Int, size~ : Int)
+}
+
+///|
+fn hostcall_abi_location_stack_size(location : HostcallAbiValueLocation) -> Int {
+  match location {
+    Reg(_) => 0
+    Stack(size~, ..) | ReturnArea(size~, ..) => size
+  }
+}
+
+///|
 fn RuntimeValueBridge::bridge_arg(self : RuntimeValueBridge) -> Int64 {
   match self {
     Hostcall(host_func_addr) => host_func_addr.to_int64()
@@ -50,7 +78,7 @@ fn unsupported_hostcall_import(
 }
 
 ///|
-fn hostcall_scalar_class(ty : @types.ValueType) -> @machv.RegClass {
+fn hostcall_scalar_class(ty : @types.ValueType) -> HostcallRegClass {
   match ty {
     I32 | I64 => Int
     F32 => Float32
@@ -72,10 +100,11 @@ fn hostcall_abi_stack_align(ty : @types.ValueType) -> Int {
 fn hostcall_abi_stack_location(
   ty : @types.ValueType,
   offset : Int,
-) -> @abi.AbiValueLocation {
+) -> HostcallAbiValueLocation {
   let size = hostcall_value_byte_count(ty)
   let align = hostcall_abi_stack_align(ty)
-  Stack(offset~, size~, align~)
+  align |> ignore
+  Stack(offset~, size~)
 }
 
 ///|
@@ -83,8 +112,8 @@ fn hostcall_param_locations(
   param_types : Array[@types.ValueType],
   int_arg_regs : Array[Int],
   float_arg_reg_count : Int,
-) -> Array[@abi.AbiValueLocation] {
-  let locations : Array[@abi.AbiValueLocation] = []
+) -> Array[HostcallAbiValueLocation] {
+  let locations : Array[HostcallAbiValueLocation] = []
   let mut int_seen = 0
   let mut float_seen = 0
   let mut stack_offset = 0
@@ -92,28 +121,26 @@ fn hostcall_param_locations(
     match hostcall_scalar_class(ty) {
       Int =>
         if int_seen < int_arg_regs.length() {
-          locations.push(Reg({ index: int_arg_regs[int_seen], class: Int }))
+          locations.push(Reg({ index: int_arg_regs[int_seen] }))
           int_seen = int_seen + 1
         } else {
           let align = hostcall_abi_stack_align(ty)
           let offset = align_to(stack_offset, align)
           let location = hostcall_abi_stack_location(ty, offset)
           locations.push(location)
-          stack_offset = offset + @abi.abi_location_stack_size(location)
+          stack_offset = offset + hostcall_abi_location_stack_size(location)
           int_seen = int_seen + 1
         }
       Float32 | Float64 | Vector =>
         if float_seen < float_arg_reg_count {
-          locations.push(
-            Reg({ index: float_seen, class: hostcall_scalar_class(ty) }),
-          )
+          locations.push(Reg({ index: float_seen }))
           float_seen = float_seen + 1
         } else {
           let align = hostcall_abi_stack_align(ty)
           let offset = align_to(stack_offset, align)
           let location = hostcall_abi_stack_location(ty, offset)
           locations.push(location)
-          stack_offset = offset + @abi.abi_location_stack_size(location)
+          stack_offset = offset + hostcall_abi_location_stack_size(location)
           float_seen = float_seen + 1
         }
     }
@@ -125,10 +152,11 @@ fn hostcall_param_locations(
 fn hostcall_abi_return_area_location(
   ty : @types.ValueType,
   offset : Int,
-) -> @abi.AbiValueLocation {
+) -> HostcallAbiValueLocation {
   let size = hostcall_value_byte_count(ty)
   let align = hostcall_abi_stack_align(ty)
-  ReturnArea(offset~, size~, align~)
+  align |> ignore
+  ReturnArea(offset~, size~)
 }
 
 ///|
@@ -136,8 +164,8 @@ fn hostcall_result_locations(
   result_types : Array[@types.ValueType],
   int_result_regs : Array[Int],
   float_result_reg_count : Int,
-) -> Array[@abi.AbiValueLocation] {
-  let locations : Array[@abi.AbiValueLocation] = []
+) -> Array[HostcallAbiValueLocation] {
+  let locations : Array[HostcallAbiValueLocation] = []
   let mut int_seen = 0
   let mut float_seen = 0
   let mut return_area_offset = 0
@@ -145,28 +173,28 @@ fn hostcall_result_locations(
     match hostcall_scalar_class(ty) {
       Int =>
         if int_seen < int_result_regs.length() {
-          locations.push(Reg({ index: int_result_regs[int_seen], class: Int }))
+          locations.push(Reg({ index: int_result_regs[int_seen] }))
           int_seen = int_seen + 1
         } else {
           let align = hostcall_abi_stack_align(ty)
           let offset = align_to(return_area_offset, align)
           let location = hostcall_abi_return_area_location(ty, offset)
           locations.push(location)
-          return_area_offset = offset + @abi.abi_location_stack_size(location)
+          return_area_offset = offset +
+            hostcall_abi_location_stack_size(location)
           int_seen = int_seen + 1
         }
       Float32 | Float64 | Vector =>
         if float_seen < float_result_reg_count {
-          locations.push(
-            Reg({ index: float_seen, class: hostcall_scalar_class(ty) }),
-          )
+          locations.push(Reg({ index: float_seen }))
           float_seen = float_seen + 1
         } else {
           let align = hostcall_abi_stack_align(ty)
           let offset = align_to(return_area_offset, align)
           let location = hostcall_abi_return_area_location(ty, offset)
           locations.push(location)
-          return_area_offset = offset + @abi.abi_location_stack_size(location)
+          return_area_offset = offset +
+            hostcall_abi_location_stack_size(location)
           float_seen = float_seen + 1
         }
     }
@@ -175,11 +203,11 @@ fn hostcall_result_locations(
 }
 
 ///|
-fn hostcall_stack_arg_size(locations : Array[@abi.AbiValueLocation]) -> Int {
+fn hostcall_stack_arg_size(locations : Array[HostcallAbiValueLocation]) -> Int {
   let mut size = 0
   for location in locations {
     if location is Stack(offset~, ..) {
-      let end = offset + @abi.abi_location_stack_size(location)
+      let end = offset + hostcall_abi_location_stack_size(location)
       if end > size {
         size = end
       }
@@ -189,11 +217,13 @@ fn hostcall_stack_arg_size(locations : Array[@abi.AbiValueLocation]) -> Int {
 }
 
 ///|
-fn hostcall_return_area_size(locations : Array[@abi.AbiValueLocation]) -> Int {
+fn hostcall_return_area_size(
+  locations : Array[HostcallAbiValueLocation],
+) -> Int {
   let mut size = 0
   for location in locations {
     if location is ReturnArea(offset~, ..) {
-      let end = offset + @abi.abi_location_stack_size(location)
+      let end = offset + hostcall_abi_location_stack_size(location)
       if end > size {
         size = end
       }
@@ -562,7 +592,7 @@ fn a64_emit_load_slot_base(
 fn a64_emit_store_arg_to_values_vec(
   code : Array[Int],
   ty : @types.ValueType,
-  location : @abi.AbiValueLocation,
+  location : HostcallAbiValueLocation,
   values_offset : Int,
   caller_stack_base_offset : Int,
 ) -> Unit raise HostcallImportTrampolineError {
@@ -587,7 +617,7 @@ fn a64_emit_store_arg_to_values_vec(
 fn a64_emit_load_result_from_values_vec(
   code : Array[Int],
   ty : @types.ValueType,
-  location : @abi.AbiValueLocation,
+  location : HostcallAbiValueLocation,
   values_offset : Int,
 ) -> Unit raise HostcallImportTrampolineError {
   match location {
@@ -611,7 +641,7 @@ fn a64_emit_load_result_from_values_vec(
 fn a64_emit_store_result_to_values_vec(
   code : Array[Int],
   ty : @types.ValueType,
-  location : @abi.AbiValueLocation,
+  location : HostcallAbiValueLocation,
   values_offset : Int,
   return_area_offset : Int,
 ) -> Unit raise HostcallImportTrampolineError {
@@ -924,7 +954,7 @@ fn x64_emit_load_slot_base(
 fn x64_emit_store_arg_to_values_vec(
   code : Array[Int],
   ty : @types.ValueType,
-  location : @abi.AbiValueLocation,
+  location : HostcallAbiValueLocation,
   values_offset : Int,
   caller_stack_base_offset : Int,
 ) -> Unit raise HostcallImportTrampolineError {
@@ -949,7 +979,7 @@ fn x64_emit_store_arg_to_values_vec(
 fn x64_emit_load_result_from_values_vec(
   code : Array[Int],
   ty : @types.ValueType,
-  location : @abi.AbiValueLocation,
+  location : HostcallAbiValueLocation,
   values_offset : Int,
 ) -> Unit raise HostcallImportTrampolineError {
   match location {
@@ -973,7 +1003,7 @@ fn x64_emit_load_result_from_values_vec(
 fn x64_emit_store_result_to_values_vec(
   code : Array[Int],
   ty : @types.ValueType,
-  location : @abi.AbiValueLocation,
+  location : HostcallAbiValueLocation,
   values_offset : Int,
   return_area_offset : Int,
 ) -> Unit raise HostcallImportTrampolineError {
