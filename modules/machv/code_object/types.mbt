@@ -17,6 +17,27 @@ pub(all) enum RootLocation {
 } derive(Eq, Debug)
 
 ///|
+pub(all) enum UnwindOperation {
+  StackAlloc(size~ : Int)
+  SetFramePointer(RegisterBank, Int, cfa_offset~ : Int)
+  SaveRegister(RegisterBank, Int, cfa_offset~ : Int)
+} derive(Eq, Debug)
+
+///|
+pub struct UnwindDirective {
+  offset : Int
+  operation : UnwindOperation
+} derive(Eq, Debug)
+
+///|
+pub fn UnwindDirective::new(
+  offset : Int,
+  operation : UnwindOperation,
+) -> UnwindDirective {
+  { offset, operation }
+}
+
+///|
 pub(all) enum RelocationTarget {
   Code(@semantic.CodeSymbol)
   External(@semantic.ExternalSymbol)
@@ -109,7 +130,7 @@ pub struct UnlinkedCodeObject {
   priv sources : Array[SourceSite]
   priv traps : Array[TrapSite]
   priv safepoints : Array[SafepointSite]
-  priv unwind : Array[Byte]
+  priv unwind : Array[UnwindDirective]
 } derive(Debug)
 
 ///|
@@ -159,6 +180,8 @@ pub fn UnlinkedCodeObject::safepoints(
 }
 
 ///|
-pub fn UnlinkedCodeObject::unwind(self : UnlinkedCodeObject) -> Array[Byte] {
+pub fn UnlinkedCodeObject::unwind(
+  self : UnlinkedCodeObject,
+) -> Array[UnwindDirective] {
   self.unwind.copy()
 }

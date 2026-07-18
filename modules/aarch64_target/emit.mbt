@@ -526,6 +526,7 @@ fn emit_sp_adjust(
   buffer : CodeBuffer,
   subtract : Bool,
   amount : Int,
+  unwind? : Array[@code_object.UnwindDirective],
 ) -> Unit raise AArch64EmitError {
   if amount == 0 {
     return
@@ -538,6 +539,14 @@ fn emit_sp_adjust(
   while remaining >= 4096 {
     if subtract {
       buffer.emit_word(base | (1U << 22) | (1U << 10) | (31U << 5) | 31U)
+      if unwind is Some(directives) {
+        directives.push(
+          @code_object.UnwindDirective::new(
+            buffer.position(),
+            StackAlloc(size=4096),
+          ),
+        )
+      }
       emit_stack_access(buffer, true, I64, @vcode.PhysicalReg::new(16, Int), 0)
       remaining -= 4096
     } else {
@@ -556,6 +565,14 @@ fn emit_sp_adjust(
     buffer.emit_word(
       base | (remaining.reinterpret_as_uint() << 10) | (31U << 5) | 31U,
     )
+    if subtract && unwind is Some(directives) {
+      directives.push(
+        @code_object.UnwindDirective::new(
+          buffer.position(),
+          StackAlloc(size=remaining),
+        ),
+      )
+    }
   }
 }
 
@@ -1955,11 +1972,22 @@ fn emit_register_save_or_restore(
 fn emit_prologue(
   buffer : CodeBuffer,
   frame : AArch64Frame,
+  unwind : Array[@code_object.UnwindDirective],
 ) -> Unit raise AArch64EmitError {
-  emit_sp_adjust(buffer, true, frame.frame_size())
+  emit_sp_adjust(buffer, true, frame.frame_size(), unwind~)
   for saved in frame.saved_registers() {
     let (reg, offset) = saved
     emit_register_save_or_restore(buffer, false, reg, offset)
+    let bank : @code_object.RegisterBank = match reg.class {
+      Int => Int
+      FpVector => FpVector
+    }
+    unwind.push(
+      @code_object.UnwindDirective::new(
+        buffer.position(),
+        SaveRegister(bank, reg.id, cfa_offset=offset - frame.frame_size()),
+      ),
+    )
   }
 }
 
@@ -3167,7 +3195,8 @@ pub fn emit(
   let sources : Array[@code_object.SourceSite] = []
   let traps : Array[@code_object.TrapSite] = []
   let safepoints : Array[@code_object.SafepointSite] = []
-  emit_prologue(buffer, frame)
+  let unwind : Array[@code_object.UnwindDirective] = []
+  emit_prologue(buffer, frame, unwind)
   for block in function.layout() {
     block_offsets[function.block_index(block).unwrap()] = buffer.position()
     for instruction in function.block_body(block) {
@@ -3208,6 +3237,7 @@ pub fn emit(
     sources~,
     traps~,
     safepoints~,
+    unwind~,
   ) catch {
     error => raise InvalidCodeObject(cause=error)
   }

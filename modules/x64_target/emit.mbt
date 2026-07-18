@@ -389,6 +389,7 @@ fn emit_sp_adjust(
   buffer : CodeBuffer,
   subtract : Bool,
   amount : Int,
+  unwind? : Array[@code_object.UnwindDirective],
 ) -> Unit raise X64EmitError {
   if amount == 0 {
     return
@@ -403,11 +404,27 @@ fn emit_sp_adjust(
     let mut remaining = amount
     while remaining >= 4096 {
       buffer.x86_emit_sub_rsp_imm32(4096)
+      if unwind is Some(directives) {
+        directives.push(
+          @code_object.UnwindDirective::new(
+            buffer.position(),
+            StackAlloc(size=4096),
+          ),
+        )
+      }
       buffer.x86_emit_mov_r64_m64(10, 4, 0)
       remaining -= 4096
     }
     if remaining > 0 {
       buffer.x86_emit_sub_rsp_imm32(remaining)
+      if unwind is Some(directives) {
+        directives.push(
+          @code_object.UnwindDirective::new(
+            buffer.position(),
+            StackAlloc(size=remaining),
+          ),
+        )
+      }
     }
   } else {
     buffer.x86_emit_add_rsp_imm32(amount)
@@ -2631,15 +2648,45 @@ fn emit_register_save_or_restore(
 fn emit_prologue(
   buffer : CodeBuffer,
   frame : X64Frame,
+  unwind : Array[@code_object.UnwindDirective],
 ) -> Unit raise X64EmitError {
   if frame.has_setup_area() {
     buffer.x86_emit_push_r64(5)
+    unwind.push(
+      @code_object.UnwindDirective::new(buffer.position(), StackAlloc(size=8)),
+    )
+    unwind.push(
+      @code_object.UnwindDirective::new(
+        buffer.position(),
+        SaveRegister(Int, 5, cfa_offset=-16),
+      ),
+    )
     buffer.x86_emit_mov_rr(5, 4)
+    unwind.push(
+      @code_object.UnwindDirective::new(
+        buffer.position(),
+        SetFramePointer(Int, 5, cfa_offset=16),
+      ),
+    )
   }
-  emit_sp_adjust(buffer, true, frame.allocation_size())
+  emit_sp_adjust(buffer, true, frame.allocation_size(), unwind~)
   for saved in frame.saved_registers() {
     let (reg, offset) = saved
     emit_register_save_or_restore(buffer, false, reg, offset)
+    let bank : @code_object.RegisterBank = match reg.class {
+      Int => Int
+      FpVector => FpVector
+    }
+    unwind.push(
+      @code_object.UnwindDirective::new(
+        buffer.position(),
+        SaveRegister(
+          bank,
+          reg.id,
+          cfa_offset=offset - frame.allocation_size() - 16,
+        ),
+      ),
+    )
   }
 }
 
@@ -3937,7 +3984,8 @@ pub fn emit(
   let sources : Array[@code_object.SourceSite] = []
   let traps : Array[@code_object.TrapSite] = []
   let safepoints : Array[@code_object.SafepointSite] = []
-  emit_prologue(buffer, frame)
+  let unwind : Array[@code_object.UnwindDirective] = []
+  emit_prologue(buffer, frame, unwind)
   for block in function.layout() {
     block_offsets[function.block_index(block).unwrap()] = buffer.position()
     for instruction in function.block_body(block) {
@@ -3978,6 +4026,7 @@ pub fn emit(
     sources~,
     traps~,
     safepoints~,
+    unwind~,
   ) catch {
     error => raise InvalidCodeObject(cause=error)
   }

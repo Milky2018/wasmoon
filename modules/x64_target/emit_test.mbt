@@ -329,7 +329,13 @@ test "X64 pipeline preserves wrapped i32 branch conditions" {
       #|  sources: [],
       #|  traps: [],
       #|  safepoints: [],
-      #|  unwind: [],
+      #|  unwind: [
+      #|    { offset: 1, operation: StackAlloc(size=8) },
+      #|    { offset: 1, operation: SaveRegister(Int, 5, cfa_offset=-16) },
+      #|    { offset: 4, operation: SetFramePointer(Int, 5, cfa_offset=16) },
+      #|    { offset: 11, operation: StackAlloc(size=16) },
+      #|    { offset: 19, operation: SaveRegister(Int, 3, cfa_offset=-32) },
+      #|  ],
       #|}
     ),
   )
@@ -1784,7 +1790,13 @@ test "X64 pipeline emits internal result-area calls" {
       #|  sources: [],
       #|  traps: [],
       #|  safepoints: [],
-      #|  unwind: [],
+      #|  unwind: [
+      #|    { offset: 1, operation: StackAlloc(size=8) },
+      #|    { offset: 1, operation: SaveRegister(Int, 5, cfa_offset=-16) },
+      #|    { offset: 4, operation: SetFramePointer(Int, 5, cfa_offset=16) },
+      #|    { offset: 11, operation: StackAlloc(size=48) },
+      #|    { offset: 19, operation: SaveRegister(Int, 3, cfa_offset=-32) },
+      #|  ],
       #|}
     ),
   )
@@ -1896,7 +1908,13 @@ test "X64 pipeline emits indirect internal result-area calls" {
       #|  sources: [],
       #|  traps: [],
       #|  safepoints: [],
-      #|  unwind: [],
+      #|  unwind: [
+      #|    { offset: 1, operation: StackAlloc(size=8) },
+      #|    { offset: 1, operation: SaveRegister(Int, 5, cfa_offset=-16) },
+      #|    { offset: 4, operation: SetFramePointer(Int, 5, cfa_offset=16) },
+      #|    { offset: 11, operation: StackAlloc(size=32) },
+      #|    { offset: 19, operation: SaveRegister(Int, 3, cfa_offset=-32) },
+      #|  ],
       #|}
     ),
   )
@@ -2019,7 +2037,13 @@ test "X64 pipeline forwards result areas through internal tail calls" {
       #|  sources: [],
       #|  traps: [],
       #|  safepoints: [],
-      #|  unwind: [],
+      #|  unwind: [
+      #|    { offset: 1, operation: StackAlloc(size=8) },
+      #|    { offset: 1, operation: SaveRegister(Int, 5, cfa_offset=-16) },
+      #|    { offset: 4, operation: SetFramePointer(Int, 5, cfa_offset=16) },
+      #|    { offset: 11, operation: StackAlloc(size=16) },
+      #|    { offset: 19, operation: SaveRegister(Int, 3, cfa_offset=-32) },
+      #|  ],
       #|}
     ),
   )

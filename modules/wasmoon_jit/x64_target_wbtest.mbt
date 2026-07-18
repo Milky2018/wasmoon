@@ -231,7 +231,15 @@ test "x64 target preserves the Wasmoon overflow-result ABI" {
       #|  sources: [],
       #|  traps: [],
       #|  safepoints: [],
-      #|  unwind: [],
+      #|  unwind: [
+      #|    { offset: 1, operation: StackAlloc(size=8) },
+      #|    { offset: 1, operation: SaveRegister(Int, 5, cfa_offset=-16) },
+      #|    { offset: 4, operation: SetFramePointer(Int, 5, cfa_offset=16) },
+      #|    { offset: 11, operation: StackAlloc(size=32) },
+      #|    { offset: 19, operation: SaveRegister(Int, 3, cfa_offset=-48) },
+      #|    { offset: 27, operation: SaveRegister(Int, 12, cfa_offset=-40) },
+      #|    { offset: 35, operation: SaveRegister(Int, 13, cfa_offset=-32) },
+      #|  ],
       #|}
     ),
   )
@@ -438,7 +446,15 @@ test "x64 target preserves an incoming result area across indirect calls" {
       #|  sources: [],
       #|  traps: [],
       #|  safepoints: [],
-      #|  unwind: [],
+      #|  unwind: [
+      #|    { offset: 1, operation: StackAlloc(size=8) },
+      #|    { offset: 1, operation: SaveRegister(Int, 5, cfa_offset=-16) },
+      #|    { offset: 4, operation: SetFramePointer(Int, 5, cfa_offset=16) },
+      #|    { offset: 11, operation: StackAlloc(size=48) },
+      #|    { offset: 19, operation: SaveRegister(Int, 3, cfa_offset=-48) },
+      #|    { offset: 27, operation: SaveRegister(Int, 12, cfa_offset=-40) },
+      #|    { offset: 35, operation: SaveRegister(Int, 13, cfa_offset=-32) },
+      #|  ],
       #|}
     ),
   )

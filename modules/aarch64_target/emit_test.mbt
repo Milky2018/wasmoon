@@ -2390,7 +2390,7 @@ test "AArch64 pipeline emits addresses inside the semantic stack-object area" {
       #|  sources: [],
       #|  traps: [],
       #|  safepoints: [],
-      #|  unwind: [],
+      #|  unwind: [{ offset: 4, operation: StackAlloc(size=64) }],
       #|}
     ),
   )
@@ -2458,7 +2458,10 @@ test "AArch64 pipeline materializes a large semantic stack-object offset" {
       #|  sources: [],
       #|  traps: [],
       #|  safepoints: [],
-      #|  unwind: [],
+      #|  unwind: [
+      #|    { offset: 4, operation: StackAlloc(size=4096) },
+      #|    { offset: 12, operation: StackAlloc(size=912) },
+      #|  ],
       #|}
     ),
   )
@@ -2891,7 +2894,11 @@ test "AArch64 direct calls preserve LR and emit typed call relocations" {
       #|      stack_map: Some({ id: 0, argument_root_count: 1 }),
       #|    },
       #|  ],
-      #|  unwind: [],
+      #|  unwind: [
+      #|    { offset: 4, operation: StackAlloc(size=16) },
+      #|    { offset: 8, operation: SaveRegister(Int, 19, cfa_offset=-16) },
+      #|    { offset: 12, operation: SaveRegister(Int, 30, cfa_offset=-8) },
+      #|  ],
       #|}
     ),
   )
@@ -3041,7 +3048,11 @@ test "AArch64 emits the internal result-area ABI" {
       #|  sources: [],
       #|  traps: [],
       #|  safepoints: [],
-      #|  unwind: [],
+      #|  unwind: [
+      #|    { offset: 4, operation: StackAlloc(size=48) },
+      #|    { offset: 8, operation: SaveRegister(Int, 19, cfa_offset=-16) },
+      #|    { offset: 12, operation: SaveRegister(Int, 30, cfa_offset=-8) },
+      #|  ],
       #|}
     ),
   )
@@ -3537,7 +3548,11 @@ test "AArch64 emits noreturn calls and typed traps" {
       #|      stack_map: None,
       #|    },
       #|  ],
-      #|  unwind: [],
+      #|  unwind: [
+      #|    { offset: 4, operation: StackAlloc(size=16) },
+      #|    { offset: 8, operation: SaveRegister(Int, 19, cfa_offset=-16) },
+      #|    { offset: 12, operation: SaveRegister(Int, 30, cfa_offset=-8) },
+      #|  ],
       #|}
     ),
   )
@@ -3711,7 +3726,10 @@ test "AArch64 platform calls store overflow arguments in the outgoing area" {
       #|  sources: [],
       #|  traps: [],
       #|  safepoints: [],
-      #|  unwind: [],
+      #|  unwind: [
+      #|    { offset: 4, operation: StackAlloc(size=32) },
+      #|    { offset: 8, operation: SaveRegister(Int, 30, cfa_offset=-16) },
+      #|  ],
       #|}
     ),
   )
@@ -3786,7 +3804,10 @@ test "AArch64 internal calls emit code-symbol relocations" {
       #|  sources: [],
       #|  traps: [],
       #|  safepoints: [],
-      #|  unwind: [],
+      #|  unwind: [
+      #|    { offset: 4, operation: StackAlloc(size=16) },
+      #|    { offset: 8, operation: SaveRegister(Int, 30, cfa_offset=-16) },
+      #|  ],
       #|}
     ),
   )
@@ -3929,7 +3950,10 @@ test "AArch64 internal calls keep caller-owned outgoing stack arguments" {
       #|  sources: [],
       #|  traps: [],
       #|  safepoints: [],
-      #|  unwind: [],
+      #|  unwind: [
+      #|    { offset: 4, operation: StackAlloc(size=32) },
+      #|    { offset: 8, operation: SaveRegister(Int, 30, cfa_offset=-16) },
+      #|  ],
       #|}
     ),
   )
@@ -4006,7 +4030,10 @@ test "AArch64 indirect calls resolve callee and arguments before BLR" {
       #|  sources: [],
       #|  traps: [],
       #|  safepoints: [],
-      #|  unwind: [],
+      #|  unwind: [
+      #|    { offset: 4, operation: StackAlloc(size=16) },
+      #|    { offset: 8, operation: SaveRegister(Int, 30, cfa_offset=-16) },
+      #|  ],
       #|}
     ),
   )
@@ -4277,7 +4304,7 @@ test "AArch64 true tail calls preserve caller SP with stack arguments" {
       #|  sources: [],
       #|  traps: [],
       #|  safepoints: [],
-      #|  unwind: [],
+      #|  unwind: [{ offset: 4, operation: StackAlloc(size=32) }],
       #|}
     ),
   )

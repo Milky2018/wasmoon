@@ -9,6 +9,7 @@ pub suberror CodeObjectVerifyError {
   InvalidSafepointSite(index~ : Int, offset~ : Int)
   InvalidRootLocation(safepoint~ : Int, root~ : Int)
   InvalidStackMap(safepoint~ : Int)
+  InvalidUnwindDirective(index~ : Int, message~ : String)
 } derive(Eq, Debug)
 
 ///|
@@ -64,6 +65,87 @@ fn valid_code_offset(
   offset >= 0 &&
   offset < code_size &&
   offset % instruction_alignment(architecture) == 0
+}
+
+///|
+fn valid_unwind_register(
+  architecture : Architecture,
+  bank : RegisterBank,
+  id : Int,
+) -> Bool {
+  match (architecture, bank) {
+    (AArch64, Int) => id >= 0 && id < 31
+    (AArch64, FpVector) => id >= 0 && id < 32
+    (X64, Int | FpVector) => id >= 0 && id < 16
+  }
+}
+
+///|
+fn verify_unwind(
+  architecture : Architecture,
+  code_size : Int,
+  unwind : Array[UnwindDirective],
+) -> Unit raise CodeObjectVerifyError {
+  let mut previous_offset = 0
+  let mut stack_depth = 0
+  let cfa_bias = if architecture == X64 { 8 } else { 0 }
+  let saved_registers : Array[(RegisterBank, Int)] = []
+  let saved_locations : Array[Int] = []
+  let mut frame_pointer_defined = false
+  for index, directive in unwind {
+    if directive.offset <= 0 ||
+      directive.offset > code_size ||
+      directive.offset % instruction_alignment(architecture) != 0 ||
+      directive.offset < previous_offset {
+      raise InvalidUnwindDirective(
+        index~,
+        message="offset is out of range, misaligned, or not monotonic",
+      )
+    }
+    previous_offset = directive.offset
+    match directive.operation {
+      StackAlloc(size~) => {
+        let stack_alignment = if architecture == AArch64 { 16 } else { 8 }
+        if size <= 0 || size % stack_alignment != 0 {
+          raise InvalidUnwindDirective(
+            index~,
+            message="stack allocation violates the target stack alignment",
+          )
+        }
+        stack_depth += size
+      }
+      SetFramePointer(bank, id, cfa_offset~) => {
+        if frame_pointer_defined ||
+          stack_depth == 0 ||
+          bank != Int ||
+          !valid_unwind_register(architecture, bank, id) ||
+          cfa_offset != stack_depth + cfa_bias {
+          raise InvalidUnwindDirective(
+            index~,
+            message="frame pointer register or CFA offset is invalid",
+          )
+        }
+        frame_pointer_defined = true
+      }
+      SaveRegister(bank, id, cfa_offset~) => {
+        let register = (bank, id)
+        if stack_depth == 0 ||
+          !valid_unwind_register(architecture, bank, id) ||
+          cfa_offset >= 0 ||
+          cfa_offset < -(stack_depth + cfa_bias) ||
+          cfa_offset % 8 != 0 ||
+          saved_registers.contains(register) ||
+          saved_locations.contains(cfa_offset) {
+          raise InvalidUnwindDirective(
+            index~,
+            message="saved register or CFA-relative location is invalid",
+          )
+        }
+        saved_registers.push(register)
+        saved_locations.push(cfa_offset)
+      }
+    }
+  }
 }
 
 ///|
@@ -161,6 +243,7 @@ pub fn UnlinkedCodeObject::verify(
       raise InvalidStackMap(safepoint=0)
     }
   }
+  verify_unwind(self.architecture, code_size, self.unwind)
 }
 
 ///|
@@ -171,7 +254,7 @@ pub fn build(
   sources? : Array[SourceSite] = [],
   traps? : Array[TrapSite] = [],
   safepoints? : Array[SafepointSite] = [],
-  unwind? : Array[Byte] = [],
+  unwind? : Array[UnwindDirective] = [],
 ) -> UnlinkedCodeObject raise CodeObjectVerifyError {
   let object = {
     architecture,

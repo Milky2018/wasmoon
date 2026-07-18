@@ -22,6 +22,7 @@ test "verified code object snapshots complete typed metadata" {
         stack_map=@semantic.StackMapMetadata::new(0, argument_root_count=1),
       ),
     ],
+    unwind=[UnwindDirective::new(4, StackAlloc(size=16))],
   )
   debug_inspect(
     object,
@@ -48,7 +49,7 @@ test "verified code object snapshots complete typed metadata" {
       #|      stack_map: Some({ id: 0, argument_root_count: 1 }),
       #|    },
       #|  ],
-      #|  unwind: [],
+      #|  unwind: [{ offset: 4, operation: StackAlloc(size=16) }],
       #|}
     ),
   )
@@ -134,5 +135,104 @@ test "code object rejects a call relocation on a non-call instruction" {
       )
   } noraise {
     _ => fail("expected a relocation/encoding mismatch to fail")
+  }
+}
+
+///|
+test "code object rejects malformed unwind directives" {
+  try
+    build(AArch64, [b'\x1f', b'\x20', b'\x03', b'\xd5'], unwind=[
+      UnwindDirective::new(4, StackAlloc(size=3)),
+    ])
+    |> ignore
+  catch {
+    error =>
+      inspect(
+        error,
+        content=(
+          #|InvalidUnwindDirective(
+          #|  index=0,
+          #|  message="stack allocation violates the target stack alignment",
+          #|)
+        ),
+      )
+  } noraise {
+    _ => fail("expected malformed unwind directives to fail verification")
+  }
+}
+
+///|
+test "code object rejects non-monotonic unwind offsets" {
+  try
+    build(
+      AArch64,
+      [b'\x1f', b'\x20', b'\x03', b'\xd5', b'\x1f', b'\x20', b'\x03', b'\xd5'],
+      unwind=[
+        UnwindDirective::new(8, StackAlloc(size=16)),
+        UnwindDirective::new(4, SaveRegister(Int, 19, cfa_offset=-8)),
+      ],
+    )
+    |> ignore
+  catch {
+    error =>
+      inspect(
+        error,
+        content=(
+          #|InvalidUnwindDirective(
+          #|  index=1,
+          #|  message="offset is out of range, misaligned, or not monotonic",
+          #|)
+        ),
+      )
+  } noraise {
+    _ => fail("expected non-monotonic unwind offsets to fail verification")
+  }
+}
+
+///|
+test "code object rejects invalid unwind register locations" {
+  try
+    build(X64, [b'\x50', b'\xc3'], unwind=[
+      UnwindDirective::new(1, StackAlloc(size=8)),
+      UnwindDirective::new(1, SaveRegister(Int, 16, cfa_offset=-16)),
+    ])
+    |> ignore
+  catch {
+    error =>
+      inspect(
+        error,
+        content=(
+          #|InvalidUnwindDirective(
+          #|  index=1,
+          #|  message="saved register or CFA-relative location is invalid",
+          #|)
+        ),
+      )
+  } noraise {
+    _ => fail("expected invalid unwind register locations to fail verification")
+  }
+}
+
+///|
+test "code object rejects an inconsistent frame pointer" {
+  try
+    build(X64, [b'\x50', b'\x48', b'\x89', b'\xe5', b'\xc3'], unwind=[
+      UnwindDirective::new(1, StackAlloc(size=8)),
+      UnwindDirective::new(4, SetFramePointer(Int, 5, cfa_offset=8)),
+    ])
+    |> ignore
+  catch {
+    error =>
+      inspect(
+        error,
+        content=(
+          #|InvalidUnwindDirective(
+          #|  index=1,
+          #|  message="frame pointer register or CFA offset is invalid",
+          #|)
+        ),
+      )
+  } noraise {
+    _ => fail("expected an inconsistent frame pointer to fail verification")
   }
 }
