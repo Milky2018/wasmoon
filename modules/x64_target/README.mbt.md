@@ -2,10 +2,11 @@
 
 x64 backend for target-neutral MachV.
 
-This module owns x64 instruction selection, the Wasmoon internal ABI contract,
-register allocation policy, frame layout, machine-code emission, relocations,
-and final linking. Verified MilkIR first becomes target-neutral MachV; this
-package then lowers that semantic function into x64 Target VCode.
+This module owns x64 instruction selection, validation and lowering of an
+embedding-provided internal ABI contract, register allocation policy, frame
+layout, machine-code emission, relocations, and final linking. Verified MilkIR
+first becomes target-neutral MachV; this package then lowers that semantic
+function into x64 Target VCode.
 
 ## Package
 

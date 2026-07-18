@@ -2,9 +2,9 @@
 
 AArch64 backend for target-neutral MachV.
 
-This module owns AArch64 instruction selection, the Wasmoon internal ABI
-contract, register allocation policy, frame layout, machine-code emission,
-relocations, veneers, and final linking.
+This module owns AArch64 instruction selection, validation and lowering of an
+embedding-provided internal ABI contract, register allocation policy, frame
+layout, machine-code emission, relocations, veneers, and final linking.
 
 ## Package
 
