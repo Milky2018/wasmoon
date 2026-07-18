@@ -38,7 +38,11 @@ fn x64_cwasm_target_index(
 ///|
 fn x64_cwasm_fixups(
   object : @code_object.UnlinkedCodeObject,
+  veneer_offsets : Array[Int],
 ) -> (Array[@cwasm.FuncAddrFixup], Array[@cwasm.CallFixup]) raise JitPipelineError {
+  if veneer_offsets.length() != object.relocations().length() {
+    raise PipelineFailure(message="x64 veneer table length mismatch")
+  }
   let addresses : Array[@cwasm.FuncAddrFixup] = []
   let calls : Array[@cwasm.CallFixup] = []
   for index, relocation in object.relocations() {
@@ -57,7 +61,7 @@ fn x64_cwasm_fixups(
         calls.push({
           offset: relocation.offset - 1,
           func_idx: x64_cwasm_target_index(relocation.target),
-          veneer_offset: -1,
+          veneer_offset: veneer_offsets[index],
         })
       }
       Absolute64 => {
@@ -123,7 +127,10 @@ pub fn compile_wasm_body_x64_cwasm_entry(
         message="\{function.name}: x64 link preparation failed: \{error.to_string()}",
       )
   }
-  let (func_addr_fixups, call_fixups) = x64_cwasm_fixups(compiled.object)
+  let (func_addr_fixups, call_fixups) = x64_cwasm_fixups(
+    compiled.object,
+    link_plan.veneer_offsets(),
+  )
   let (gc_safepoints, gc_root_counts) = x64_cwasm_gc_metadata(compiled.object)
   build_cwasm_entry_from_code(
     func_idx,

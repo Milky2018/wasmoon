@@ -38,22 +38,108 @@ test "X64 linker applies relative and absolute relocations" {
       #|  0x45,
       #|  0x23,
       #|  0x01,
+      #|  0xff,
+      #|  0x25,
+      #|  0x00,
+      #|  0x00,
+      #|  0x00,
+      #|  0x00,
+      #|  0x00,
+      #|  0x00,
+      #|  0x00,
+      #|  0x00,
+      #|  0x00,
+      #|  0x00,
+      #|  0x00,
+      #|  0x00,
       #|]
     ),
   )
 }
 
 ///|
-test "X64 linker rejects out-of-range relative targets" {
+test "X64 linker routes out-of-range relative targets through a veneer" {
   let target = @code_object.External(@semantic.ExternalSymbol::new("far"))
   let object = @code_object.build(
     X64,
     [b'\xe8', b'\x00', b'\x00', b'\x00', b'\x00'],
     relocations=[@code_object.Relocation::new(1, X64PcRelative32, target)],
   )
-  try prepare_x64_link(object).link(0L, fn(_) { Some(0x100000000L) }) catch {
-    error => debug_inspect(error, content="RelocationOutOfRange(index=0)")
-  } noraise {
-    _ => fail("expected out-of-range relocation to be rejected")
-  }
+  debug_inspect(
+    prepare_x64_link(object).link(0L, fn(_) { Some(0x100000000L) }),
+    content=(
+      #|[
+      #|  0xe8,
+      #|  0x00,
+      #|  0x00,
+      #|  0x00,
+      #|  0x00,
+      #|  0xff,
+      #|  0x25,
+      #|  0x00,
+      #|  0x00,
+      #|  0x00,
+      #|  0x00,
+      #|  0x00,
+      #|  0x00,
+      #|  0x00,
+      #|  0x00,
+      #|  0x01,
+      #|  0x00,
+      #|  0x00,
+      #|  0x00,
+      #|]
+    ),
+  )
+}
+
+///|
+test "X64 linker deduplicates call veneers by target and addend" {
+  let target = @code_object.External(@semantic.ExternalSymbol::new("callee"))
+  let object = @code_object.build(
+    X64,
+    [
+      b'\xe8', b'\x00', b'\x00', b'\x00', b'\x00', b'\xe8', b'\x00', b'\x00', b'\x00',
+      b'\x00',
+    ],
+    relocations=[
+      @code_object.Relocation::new(1, X64PcRelative32, target),
+      @code_object.Relocation::new(6, X64PcRelative32, target),
+    ],
+  )
+  let plan = prepare_x64_link(object)
+  debug_inspect(
+    (plan.code(), plan.veneer_offsets()),
+    content=(
+      #|(
+      #|  [
+      #|    0xe8,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0xe8,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0xff,
+      #|    0x25,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|  ],
+      #|  [10, 10],
+      #|)
+    ),
+  )
 }

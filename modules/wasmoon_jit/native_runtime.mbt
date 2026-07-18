@@ -1572,10 +1572,22 @@ pub fn patch_x64_direct_call(
   let pc = exec_ptr + fixup.offset.to_int64()
   match encode_x64_call_rel32_disp(pc, target_ptr) {
     Some(encoded) => c_jit_write_u32(pc + 1L, encoded)
-    None =>
+    None => {
+      if fixup.veneer_offset >= 0 {
+        let veneer_pc = exec_ptr + fixup.veneer_offset.to_int64()
+        if encode_x64_call_rel32_disp(pc, veneer_pc) is Some(encoded) {
+          // Veneer layout (14 bytes):
+          //   +0:  jmp qword ptr [rip + 0]
+          //   +6:  target_ptr literal (u64)
+          c_jit_write_i64(veneer_pc + 6L, target_ptr)
+          c_jit_write_u32(pc + 1L, encoded)
+          return
+        }
+      }
       abort(
-        "direct call target out of rel32 range (func_idx=\{fixup.func_idx})",
+        "direct call target out of rel32 range (func_idx=\{fixup.func_idx}, veneer_offset=\{fixup.veneer_offset})",
       )
+    }
   }
 }
 

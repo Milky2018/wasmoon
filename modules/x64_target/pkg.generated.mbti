@@ -324,6 +324,7 @@ pub struct X64LinkPlan {
 } derive(@debug.Debug)
 pub fn X64LinkPlan::code(Self) -> Array[Byte]
 pub fn X64LinkPlan::link(Self, Int64, (@code_object.RelocationTarget) -> Int64?) -> Array[Byte] raise X64LinkError
+pub fn X64LinkPlan::veneer_offsets(Self) -> Array[Int]
 
 pub struct X64StackObject {
   offset : Int

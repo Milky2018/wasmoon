@@ -21,12 +21,13 @@ test "x64 code-object relocations retain cwasm patch coordinates" {
       ),
     ],
   )
-  let (addresses, calls) = x64_cwasm_fixups(object)
+  let plan = @x64_target.prepare_x64_link(object)
+  let (addresses, calls) = x64_cwasm_fixups(object, plan.veneer_offsets())
   debug_inspect(
     (
       addresses.map(fixup => (fixup.offset, fixup.func_idx, fixup.reg)),
       calls.map(fixup => (fixup.offset, fixup.func_idx, fixup.veneer_offset)),
     ),
-    content="([(5, -21014, 0)], [(0, 3, -1)])",
+    content="([(5, -21014, 0)], [(0, 3, 16)])",
   )
 }

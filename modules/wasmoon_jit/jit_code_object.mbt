@@ -112,6 +112,7 @@ fn jit_code_object_from_x64(
   }
   let addresses : Array[JitFuncAddrFixup] = []
   let calls : Array[JitCallFixup] = []
+  let veneer_offsets = plan.veneer_offsets()
   for index, relocation in object.relocations() {
     if relocation.addend != 0L {
       raise PipelineFailure(
@@ -128,7 +129,7 @@ fn jit_code_object_from_x64(
         calls.push({
           offset: relocation.offset - 1,
           target: relocation.target,
-          veneer_offset: -1,
+          veneer_offset: veneer_offsets[index],
         })
       }
       Absolute64 => {
