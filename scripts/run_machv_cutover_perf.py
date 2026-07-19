@@ -9,7 +9,6 @@ import json
 import math
 import os
 import platform
-import shutil
 import statistics
 import subprocess
 import tempfile
