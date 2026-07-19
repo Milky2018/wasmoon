@@ -39,6 +39,15 @@ def command_output(command: list[str]) -> str:
         return f"unavailable: {error}"
 
 
+def required_job(value: str) -> tuple[str, str]:
+    name, separator, result = value.partition("=")
+    if not separator or not name or not result:
+        raise argparse.ArgumentTypeError(
+            "required job must have the form NAME=RESULT"
+        )
+    return name, result
+
+
 def init(args: argparse.Namespace) -> int:
     baseline = load(args.baseline)
     workload = Path(baseline["workload_manifest"])
@@ -179,6 +188,10 @@ def finalize(args: argparse.Namespace) -> int:
 def combine(args: argparse.Namespace) -> int:
     manifests = [load(path) for path in args.inputs]
     failures: list[str] = []
+    required_jobs = dict(args.required_job)
+    for name, result in sorted(required_jobs.items()):
+        if result != "success":
+            failures.append(f"required job {name!r} result is {result!r}")
     commits = {manifest.get("candidate_commit") for manifest in manifests}
     if len(commits) != 1:
         failures.append(f"candidate commits disagree: {sorted(commits)}")
@@ -190,6 +203,7 @@ def combine(args: argparse.Namespace) -> int:
         "kind": "machv-cutover-combined",
         "candidate_commit": next(iter(commits)) if len(commits) == 1 else None,
         "generated_at_unix_sec": int(time.time()),
+        "required_jobs": required_jobs,
         "manifests": [
             {
                 "path": str(path),
@@ -239,6 +253,9 @@ def main() -> int:
 
     combine_parser = subparsers.add_parser("combine")
     combine_parser.add_argument("--out", type=Path, required=True)
+    combine_parser.add_argument(
+        "--required-job", action="append", default=[], type=required_job
+    )
     combine_parser.add_argument("inputs", nargs="+", type=Path)
     combine_parser.set_defaults(function=combine)
 

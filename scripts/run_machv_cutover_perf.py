@@ -264,10 +264,38 @@ def run_sample(
     }
 
 
-def geometric_mean(values: list[float]) -> float:
-    if not values or any(value <= 0 for value in values):
-        raise RuntimeError("geometric mean requires positive samples")
-    return math.exp(sum(math.log(value) for value in values) / len(values))
+def two_sided_95_t_critical(degrees_of_freedom: float) -> float:
+    # Selecting the next lower tabulated degree of freedom is conservative.
+    # The cutover gate normally uses 9 or 21 pairs, but corpus aggregation can
+    # produce fractional Welch-Satterthwaite degrees of freedom.
+    critical_values = (
+        (1, 12.706),
+        (2, 4.303),
+        (3, 3.182),
+        (4, 2.776),
+        (5, 2.571),
+        (6, 2.447),
+        (7, 2.365),
+        (8, 2.306),
+        (9, 2.262),
+        (10, 2.228),
+        (12, 2.179),
+        (15, 2.131),
+        (20, 2.086),
+        (25, 2.060),
+        (30, 2.042),
+        (40, 2.021),
+        (60, 2.000),
+        (120, 1.980),
+    )
+    if degrees_of_freedom < 1:
+        raise RuntimeError("confidence bound requires positive degrees of freedom")
+    selected = critical_values[0][1]
+    for tabulated_df, critical in critical_values:
+        if tabulated_df > degrees_of_freedom:
+            break
+        selected = critical
+    return selected if degrees_of_freedom < 120 else 1.980
 
 
 def ratio_stats(values: list[float]) -> dict[str, float]:
@@ -277,7 +305,7 @@ def ratio_stats(values: list[float]) -> dict[str, float]:
         upper = mean
         cv = 0.0
     else:
-        critical = 2.306 if len(logs) <= 9 else 2.086 if len(logs) <= 21 else 1.96
+        critical = two_sided_95_t_critical(len(logs) - 1)
         # Use the paired log-ratio confidence bound. A threshold-crossing upper
         # bound is deliberately treated as inconclusive rather than accepted.
         upper = mean + critical * statistics.stdev(logs) / math.sqrt(len(logs))
@@ -286,6 +314,37 @@ def ratio_stats(values: list[float]) -> dict[str, float]:
         "geometric_mean_ratio": math.exp(mean),
         "upper_95_ratio": math.exp(upper),
         "coefficient_of_variation": cv,
+    }
+
+
+def corpus_ratio_stats(groups: list[list[float]]) -> dict[str, float]:
+    if not groups or any(len(group) < 2 for group in groups):
+        raise RuntimeError("corpus confidence bound requires paired samples")
+    if any(value <= 0 for group in groups for value in group):
+        raise RuntimeError("corpus ratios must be positive")
+
+    log_groups = [[math.log(value) for value in group] for group in groups]
+    mean = statistics.mean(statistics.mean(group) for group in log_groups)
+    mean_variances = [statistics.variance(group) / len(group) for group in log_groups]
+    variance = sum(mean_variances) / len(log_groups) ** 2
+    if variance == 0.0:
+        upper = mean
+        degrees_of_freedom = float(sum(len(group) - 1 for group in log_groups))
+    else:
+        numerator = sum(mean_variances) ** 2
+        denominator = sum(
+            component**2 / (len(group) - 1)
+            for component, group in zip(mean_variances, log_groups)
+        )
+        degrees_of_freedom = numerator / denominator
+        upper = mean + two_sided_95_t_critical(degrees_of_freedom) * math.sqrt(
+            variance
+        )
+    return {
+        "geometric_mean_ratio": math.exp(mean),
+        "upper_95_ratio": math.exp(upper),
+        "standard_error_log_ratio": math.sqrt(variance),
+        "degrees_of_freedom": degrees_of_freedom,
     }
 
 
@@ -526,23 +585,35 @@ def main() -> int:
                     f"{row['code_size']['ratio']:.6f} exceeds {CODE_SIZE_WORKLOAD_LIMIT:.6f}"
                 )
 
-        runtime_corpus = geometric_mean(
-            [row["runtime"]["geometric_mean_ratio"] for row in runtime_rows]
+        runtime_corpus = corpus_ratio_stats(
+            [
+                [
+                    sample["candidate"]["execution_ns"]
+                    / sample["legacy"]["execution_ns"]
+                    for sample in row["samples"]
+                ]
+                for row in runtime_rows
+            ]
         )
-        compile_corpus = geometric_mean(
-            [row["compile"]["geometric_mean_ratio"] for row in rows]
+        compile_corpus = corpus_ratio_stats(
+            [
+                [
+                    sample["candidate"]["module_compile_us"]
+                    / sample["legacy"]["module_compile_us"]
+                    for sample in row["samples"]
+                ]
+                for row in rows
+            ]
         )
         legacy_total = sum(row["code_size"]["legacy_median"] for row in rows)
         candidate_total = sum(row["code_size"]["candidate_median"] for row in rows)
         size_total_ratio = candidate_total / legacy_total
-        if runtime_corpus > RUNTIME_CORPUS_LIMIT:
-            failures.append(
-                f"runtime corpus ratio {runtime_corpus:.6f} exceeds {RUNTIME_CORPUS_LIMIT:.6f}"
-            )
-        if compile_corpus > COMPILE_CORPUS_LIMIT:
-            failures.append(
-                f"compile corpus ratio {compile_corpus:.6f} exceeds {COMPILE_CORPUS_LIMIT:.6f}"
-            )
+        record_failure(
+            failures, "runtime corpus", runtime_corpus, RUNTIME_CORPUS_LIMIT
+        )
+        record_failure(
+            failures, "compile corpus", compile_corpus, COMPILE_CORPUS_LIMIT
+        )
         if size_total_ratio > CODE_SIZE_TOTAL_LIMIT:
             failures.append(
                 f"total code-size ratio {size_total_ratio:.6f} exceeds {CODE_SIZE_TOTAL_LIMIT:.6f}"
@@ -574,8 +645,22 @@ def main() -> int:
             "startup_calibration": startup,
             "expanded_for_noise": needs_expansion,
             "aggregates": {
-                "runtime_corpus_ratio": runtime_corpus,
-                "compile_corpus_ratio": compile_corpus,
+                "runtime_corpus_ratio": runtime_corpus["geometric_mean_ratio"],
+                "runtime_corpus_upper_95_ratio": runtime_corpus["upper_95_ratio"],
+                "runtime_corpus_standard_error_log_ratio": runtime_corpus[
+                    "standard_error_log_ratio"
+                ],
+                "runtime_corpus_degrees_of_freedom": runtime_corpus[
+                    "degrees_of_freedom"
+                ],
+                "compile_corpus_ratio": compile_corpus["geometric_mean_ratio"],
+                "compile_corpus_upper_95_ratio": compile_corpus["upper_95_ratio"],
+                "compile_corpus_standard_error_log_ratio": compile_corpus[
+                    "standard_error_log_ratio"
+                ],
+                "compile_corpus_degrees_of_freedom": compile_corpus[
+                    "degrees_of_freedom"
+                ],
                 "legacy_code_size_total": legacy_total,
                 "candidate_code_size_total": candidate_total,
                 "code_size_total_ratio": size_total_ratio,

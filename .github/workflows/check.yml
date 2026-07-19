@@ -417,6 +417,9 @@ jobs:
               --manifest "$MANIFEST" --name "$1" --log "$LOGS/$1.log" \
               -- bash -c "$2" || status=$?
           }
+          run_gate moon-fmt 'moon fmt && git diff --exit-code'
+          run_gate moon-info 'moon info && git diff --exit-code'
+          run_gate git-diff-check 'git diff --check'
           run_gate moon-check 'moon check --target native --warn-list +73'
           run_gate moon-test 'MACHV_REGALLOC_VALIDATION=1 moon test --target native --no-parallelize'
           run_gate boundary-audits 'python3 scripts/audit_module_boundaries.py && python3 scripts/audit_semantic_machv_api.py && python3 scripts/audit_internal_compatibility.py'
@@ -446,7 +449,7 @@ jobs:
         run: |
           python3 scripts/cutover_gate_manifest.py finalize \
             --manifest "target/cutover-gate/${{ matrix.target }}/manifest.json" \
-            --required target-identity,moon-check,moon-test,boundary-audits,python-gate-tests,build-install,component,wast,wasi,smith,paired-performance \
+            --required target-identity,moon-fmt,moon-info,git-diff-check,moon-check,moon-test,boundary-audits,python-gate-tests,build-install,component,wast,wasi,smith,paired-performance \
             --perf-report "target/cutover-gate/${{ matrix.target }}/performance/perf-report.json"
 
       - name: upload cutover evidence
@@ -459,7 +462,7 @@ jobs:
           retention-days: 30
 
   machv-cutover-manifest:
-    needs: [detect-machv-cutover, machv-cutover, build-ubuntu-sanitizer]
+    needs: [detect-machv-cutover, machv-cutover, build-ubuntu-sanitizer, build-macos, build-ubuntu-amd64]
     if: always() && needs.detect-machv-cutover.outputs.required == 'true'
     runs-on: ubuntu-latest
     steps:
@@ -476,6 +479,8 @@ jobs:
           test "${#manifests[@]}" -eq 3
           python3 scripts/cutover_gate_manifest.py combine \
             --out target/cutover-evidence/gate-manifest.json \
+            --required-job build-macos=${{ needs.build-macos.result }} \
+            --required-job build-ubuntu-amd64=${{ needs.build-ubuntu-amd64.result }} \
             "${manifests[@]}"
       - name: upload combined closing-commit manifest
         if: always()

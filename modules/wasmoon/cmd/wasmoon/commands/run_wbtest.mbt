@@ -21,7 +21,7 @@ test "run validation seam rejects invalid decoded module" {
     validate_module_for_execution(invalid)
     None
   } catch {
-    err => Some(err.to_string())
+    err => Some(Show::to_string(err))
   }
   guard error is Some(message) else {
     fail("invalid module unexpectedly passed run validation")

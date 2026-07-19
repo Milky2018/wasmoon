@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -100,6 +101,102 @@ class CutoverPerfTests(unittest.TestCase):
             ["runtime fixture: inconclusive upper 95% ratio 1.060000 exceeds 1.050000"],
         )
 
+    def test_corpus_confidence_bound_preserves_equal_workload_weighting(self) -> None:
+        stats = PERF.corpus_ratio_stats(
+            [
+                [1.00, 1.00],
+                [1.21, 1.21, 1.21, 1.21],
+            ]
+        )
+        self.assertAlmostEqual(stats["geometric_mean_ratio"], 1.10)
+        self.assertAlmostEqual(stats["upper_95_ratio"], 1.10)
+
+    def test_corpus_threshold_uses_confidence_bound(self) -> None:
+        stats = PERF.corpus_ratio_stats(
+            [
+                [1.00, 1.02],
+                [1.00, 1.02, 1.00, 1.02],
+            ]
+        )
+        self.assertLess(stats["geometric_mean_ratio"], 1.03)
+        self.assertGreater(stats["upper_95_ratio"], 1.03)
+
+        failures: list[str] = []
+        PERF.record_failure(failures, "runtime corpus", stats, 1.03)
+        self.assertEqual(len(failures), 1)
+        self.assertIn("inconclusive upper 95% ratio", failures[0])
+
+
+class SmithGateTests(unittest.TestCase):
+    def test_run_rejects_an_empty_generated_corpus(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            with (
+                mock.patch.object(
+                    sys,
+                    "argv",
+                    [
+                        "smith-diff",
+                        "run",
+                        "--count",
+                        "0",
+                        "--out",
+                        directory,
+                    ],
+                ),
+                mock.patch.object(SMITH, "_ensure_tools"),
+                mock.patch.object(
+                    SMITH,
+                    "_build_template_wasm",
+                    return_value=Path(directory) / "template.wasm",
+                ),
+                mock.patch.object(
+                    SMITH,
+                    "_smith_config_for_run",
+                    return_value=Path(directory) / "smith_config.json",
+                ),
+            ):
+                self.assertEqual(SMITH.main(), 2)
+
+    def test_run_rejects_generation_errors(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            generation_error = SMITH.Outcome(
+                kind="error",
+                rc=1,
+                stdout="",
+                stderr="failed to generate module",
+            )
+            with (
+                mock.patch.object(
+                    sys,
+                    "argv",
+                    [
+                        "smith-diff",
+                        "run",
+                        "--count",
+                        "1",
+                        "--out",
+                        directory,
+                    ],
+                ),
+                mock.patch.object(SMITH, "_ensure_tools"),
+                mock.patch.object(
+                    SMITH,
+                    "_build_template_wasm",
+                    return_value=Path(directory) / "template.wasm",
+                ),
+                mock.patch.object(
+                    SMITH,
+                    "_smith_config_for_run",
+                    return_value=Path(directory) / "smith_config.json",
+                ),
+                mock.patch.object(
+                    SMITH,
+                    "_generate_module",
+                    return_value=generation_error,
+                ),
+            ):
+                self.assertEqual(SMITH.main(), 2)
+
 
 class GateManifestTests(unittest.TestCase):
     def test_finalize_rejects_a_missing_required_command(self) -> None:
@@ -138,6 +235,77 @@ class GateManifestTests(unittest.TestCase):
                 payload["failures"],
                 ["missing required commands: target-identity"],
             )
+
+    def test_combine_rejects_a_failed_required_job(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source.json"
+            combined = root / "combined.json"
+            source.write_text(
+                json.dumps(
+                    {
+                        "candidate_commit": "abc123",
+                        "kind": "target-cutover",
+                        "target": "linux-amd64",
+                        "decision": "pass",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(ROOT / "scripts/cutover_gate_manifest.py"),
+                    "combine",
+                    "--out",
+                    str(combined),
+                    "--required-job",
+                    "build-macos=failure",
+                    str(source),
+                ],
+                check=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 2)
+            payload = json.loads(combined.read_text(encoding="utf-8"))
+            self.assertEqual(payload["decision"], "fail")
+            self.assertEqual(payload["required_jobs"], {"build-macos": "failure"})
+            self.assertEqual(
+                payload["failures"],
+                ["required job 'build-macos' result is 'failure'"],
+            )
+
+    def test_closing_workflow_records_common_quality_commands(self) -> None:
+        workflow = (ROOT / ".github/workflows/check.yml").read_text(
+            encoding="utf-8"
+        )
+        for command in ("moon-fmt", "moon-info", "git-diff-check"):
+            self.assertIn(f"run_gate {command}", workflow)
+        self.assertIn(
+            "--required target-identity,moon-fmt,moon-info,git-diff-check,",
+            workflow,
+        )
+
+    def test_closing_workflow_requires_common_build_jobs(self) -> None:
+        workflow = (ROOT / ".github/workflows/check.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(
+            "needs: [detect-machv-cutover, machv-cutover, "
+            "build-ubuntu-sanitizer, build-macos, build-ubuntu-amd64]",
+            workflow,
+        )
+        self.assertIn(
+            "--required-job build-macos=${{ needs.build-macos.result }}",
+            workflow,
+        )
+        self.assertIn(
+            "--required-job build-ubuntu-amd64=${{ "
+            "needs.build-ubuntu-amd64.result }}",
+            workflow,
+        )
 
 
 if __name__ == "__main__":

@@ -511,7 +511,13 @@ def main() -> int:
 
     summary_path.write_text(json.dumps({"stats": stats}, indent=2) + "\n")
     print(json.dumps({"work_dir": str(work_dir), "stats": stats}, indent=2))
-    return 0 if stats["failures"] == 0 else 2
+    generated_cases = stats["passes"] + stats["failures"]
+    gate_failed = (
+        stats["failures"] > 0
+        or stats["generated_errors"] > 0
+        or generated_cases == 0
+    )
+    return 2 if gate_failed else 0
 
 
 if __name__ == "__main__":
