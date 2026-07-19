@@ -26,6 +26,40 @@ SMITH = load_module("smith_diff_run", ROOT / "scripts/smith_diff/run.py")
 
 
 class CutoverPerfTests(unittest.TestCase):
+    def test_checked_in_workload_manifest_satisfies_coverage_contract(self) -> None:
+        manifest = json.loads(
+            (ROOT / "docs/perf/machv-migration/workloads.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        workloads = PERF.validate_workload_manifest(manifest)
+        PERF.validate_workload_files(ROOT, workloads)
+        self.assertGreaterEqual(
+            sum(workload["tier"] == "real_module" for workload in workloads), 3
+        )
+        self.assertGreaterEqual(
+            sum(
+                workload["tier"] == "large_compile_stress"
+                for workload in workloads
+            ),
+            2,
+        )
+
+    def test_workload_manifest_rejects_missing_required_feature(self) -> None:
+        manifest = json.loads(
+            (ROOT / "docs/perf/machv-migration/workloads.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        for workload in manifest["workloads"]:
+            workload["features"] = [
+                feature
+                for feature in workload["features"]
+                if feature != "tail_call"
+            ]
+        with self.assertRaisesRegex(RuntimeError, "tail_call"):
+            PERF.validate_workload_manifest(manifest)
+
     def test_smith_seed_is_reproducible_and_case_specific(self) -> None:
         first = SMITH._deterministic_seed(7, 3, 65)
         self.assertEqual(first, SMITH._deterministic_seed(7, 3, 65))

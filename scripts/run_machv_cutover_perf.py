@@ -23,6 +23,27 @@ COMPILE_CORPUS_LIMIT = 1.05
 COMPILE_WORKLOAD_LIMIT = 1.10
 CODE_SIZE_TOTAL_LIMIT = 1.00
 CODE_SIZE_WORKLOAD_LIMIT = 1.05
+WORKLOAD_SCHEMA_VERSION = 2
+WORKLOAD_TIERS = {"micro_codegen", "real_module", "large_compile_stress"}
+REQUIRED_WORKLOAD_FEATURES = {
+    "scalar_integer",
+    "scalar_float",
+    "control_flow",
+    "direct_call",
+    "indirect_call",
+    "tail_call",
+    "stack_arguments",
+    "multi_value",
+    "simd",
+    "memory64",
+    "gc",
+    "exceptions",
+    "references",
+    "large_function",
+    "complex_cfg",
+    "register_pressure",
+    "dense_metadata",
+}
 
 
 def sha256(path: Path) -> str:
@@ -31,6 +52,97 @@ def sha256(path: Path) -> str:
         for chunk in iter(lambda: source.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def validate_workload_manifest(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    if payload.get("schema_version") != WORKLOAD_SCHEMA_VERSION:
+        raise RuntimeError(
+            f"workload manifest schema must be {WORKLOAD_SCHEMA_VERSION}"
+        )
+    workloads = payload.get("workloads")
+    if not isinstance(workloads, list) or not workloads:
+        raise RuntimeError("workload manifest must contain workloads")
+
+    required_fields = {
+        "tier",
+        "path",
+        "sha256",
+        "subcommand",
+        "entry",
+        "expected_output",
+        "internal_iterations",
+        "metrics",
+        "features",
+    }
+    paths: set[str] = set()
+    covered_features: set[str] = set()
+    tier_counts = {tier: 0 for tier in WORKLOAD_TIERS}
+    for index, workload in enumerate(workloads):
+        if not isinstance(workload, dict):
+            raise RuntimeError(f"workload {index} must be an object")
+        missing_fields = sorted(required_fields - workload.keys())
+        if missing_fields:
+            raise RuntimeError(f"workload {index} missing fields: {missing_fields}")
+        tier = workload["tier"]
+        if tier not in WORKLOAD_TIERS:
+            raise RuntimeError(f"workload {index} has unknown tier {tier!r}")
+        tier_counts[tier] += 1
+        path = workload["path"]
+        if not isinstance(path, str) or not path or path in paths:
+            raise RuntimeError(f"workload {index} has invalid or duplicate path {path!r}")
+        paths.add(path)
+        checksum = workload["sha256"]
+        if not isinstance(checksum, str) or len(checksum) != 64:
+            raise RuntimeError(f"workload {path} has invalid sha256")
+        try:
+            int(checksum, 16)
+        except ValueError as error:
+            raise RuntimeError(f"workload {path} has invalid sha256") from error
+        if workload["subcommand"] not in ("run", "test"):
+            raise RuntimeError(f"workload {path} has invalid subcommand")
+        if not isinstance(workload["expected_output"], str) or not workload[
+            "expected_output"
+        ]:
+            raise RuntimeError(f"workload {path} has no output oracle")
+        if not isinstance(workload["internal_iterations"], int) or workload[
+            "internal_iterations"
+        ] <= 0:
+            raise RuntimeError(f"workload {path} has invalid internal_iterations")
+        metrics = workload["metrics"]
+        if not isinstance(metrics, list) or not metrics:
+            raise RuntimeError(f"workload {path} has no metrics")
+        if tier == "real_module" and "runtime" not in metrics:
+            raise RuntimeError(f"real workload {path} must measure runtime")
+        features = workload["features"]
+        if (
+            not isinstance(features, list)
+            or not features
+            or any(not isinstance(feature, str) or not feature for feature in features)
+        ):
+            raise RuntimeError(f"workload {path} has invalid features")
+        covered_features.update(features)
+
+    missing_features = sorted(REQUIRED_WORKLOAD_FEATURES - covered_features)
+    if missing_features:
+        raise RuntimeError(f"workload manifest misses features: {missing_features}")
+    if tier_counts["real_module"] < 3:
+        raise RuntimeError("workload manifest requires at least three real modules")
+    if tier_counts["large_compile_stress"] < 2:
+        raise RuntimeError("workload manifest requires at least two compile-stress modules")
+    return workloads
+
+
+def validate_workload_files(repo: Path, workloads: list[dict[str, Any]]) -> None:
+    for workload in workloads:
+        path = repo / workload["path"]
+        if not path.is_file():
+            raise RuntimeError(f"workload file does not exist: {workload['path']}")
+        actual = sha256(path)
+        if actual != workload["sha256"]:
+            raise RuntimeError(
+                f"workload checksum mismatch for {workload['path']}: "
+                f"expected {workload['sha256']}, got {actual}"
+            )
 
 
 def run_logged(
@@ -237,17 +349,12 @@ def main() -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
     baseline = json.loads(args.baseline.read_text(encoding="utf-8"))
     workloads_path = repo / baseline["workload_manifest"]
-    workloads = json.loads(workloads_path.read_text(encoding="utf-8"))["workloads"]
+    workloads = validate_workload_manifest(
+        json.loads(workloads_path.read_text(encoding="utf-8"))
+    )
     target = target_name(baseline)
 
-    for workload in workloads:
-        path = repo / workload["path"]
-        actual = sha256(path)
-        if actual != workload["sha256"]:
-            raise SystemExit(
-                f"workload checksum mismatch for {workload['path']}: "
-                f"expected {workload['sha256']}, got {actual}"
-            )
+    validate_workload_files(repo, workloads)
 
     temporary: tempfile.TemporaryDirectory[str] | None = None
     legacy_repo = args.legacy_repo.resolve() if args.legacy_repo else None
@@ -383,6 +490,7 @@ def main() -> int:
                     "workload": workload["path"],
                     "tier": workload["tier"],
                     "metrics": workload["metrics"],
+                    "features": workload["features"],
                     "pairs": len(samples),
                     "runtime": ratio_stats(runtime_ratios),
                     "compile": ratio_stats(compile_ratios),
