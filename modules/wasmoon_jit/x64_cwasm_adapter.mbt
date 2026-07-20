@@ -111,6 +111,7 @@ fn x64_cwasm_gc_metadata(
 ///|
 pub fn compile_wasm_body_x64_cwasm_entry(
   function : @milkir.Function,
+  validation_context : @wasm_milkir.WasmValidationContext,
   func_idx : Int,
   name : String,
   num_params : Int,
@@ -119,7 +120,7 @@ pub fn compile_wasm_body_x64_cwasm_entry(
   canonical_type_indices? : Array[Int] = [],
 ) -> @cwasm.CompiledEntry raise JitPipelineError {
   let compiled = compile_wasm_body_x64_target(
-    function, use_subtype_indirect_check, canonical_type_indices,
+    function, validation_context, use_subtype_indirect_check, canonical_type_indices,
   )
   let link_plan = @x64_target.prepare_x64_link(compiled.object) catch {
     error =>

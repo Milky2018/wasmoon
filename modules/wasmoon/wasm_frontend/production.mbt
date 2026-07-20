@@ -41,6 +41,14 @@ pub fn translation_context_from_module(
 }
 
 ///|
+/// Build contextual contracts for validating the MilkIR emitted by `ctx`.
+pub fn wasm_validation_context(
+  ctx : TranslationContext,
+) -> @wasm_milkir.WasmValidationContext {
+  ctx.wasm_validation_context()
+}
+
+///|
 /// Translate one decoded function body through the production Wasm frontend.
 pub fn translate_function_body(
   ctx : TranslationContext,

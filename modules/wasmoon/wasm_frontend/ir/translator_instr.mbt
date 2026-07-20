@@ -927,7 +927,10 @@ fn Translator::translate_instruction(
     RefFunc(func_idx) => {
       // Create a function reference - use GetFuncRef to get tagged function pointer
       // The pointer is tagged with FUNCREF_TAG (bit 61) for ref.test detection
-      let result = @wasm_milkir.get_func_ref(self.builder, func_idx)
+      let result = @wasm_milkir.get_func_ref(
+        self.builder,
+        self.remap_func_idx(func_idx),
+      )
       self.push(result)
     }
     RefAsNonNull => {

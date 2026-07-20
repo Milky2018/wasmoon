@@ -154,7 +154,15 @@ pub fn plan_wasm_function_with_compiler_infra(
     )
     @milkir.optimize_with_level(milk, @milkir.OptLevel::from_int(opt_level))
     |> ignore
-    @wasmoon_jit.plan_wasm_body_milkir_integration_for_target(milk, target)
+    let translation_context = @wasm_frontend.translation_context_from_module(
+      mod_, body_env,
+    )
+    let validation_context = @wasm_frontend.wasm_validation_context(
+      translation_context,
+    )
+    @wasmoon_jit.plan_wasm_body_milkir_integration_for_target(
+      milk, validation_context, target,
+    )
   } catch {
     err => raise WasmCompilerPipelineFailure(message=to_repr(err).to_string())
   }

@@ -178,9 +178,10 @@ fn build_wasmoon_x64_target(
 ///|
 fn lower_wasm_body_semantic_with_environment(
   function : @milkir.Function,
+  validation_context : @wasm_milkir.WasmValidationContext,
   environment : WasmoonSemanticEnvironment,
 ) -> @semantic_machv.Function raise JitPipelineError {
-  @wasm_machv.lower_function(function, environment.wasm) catch {
+  @wasm_machv.lower_function(function, validation_context, environment.wasm) catch {
     error =>
       raise PipelineFailure(message="\{function.name}: \{error.to_string()}")
   }
@@ -189,18 +190,22 @@ fn lower_wasm_body_semantic_with_environment(
 ///|
 pub fn lower_wasm_body_semantic_machv(
   function : @milkir.Function,
+  validation_context : @wasm_milkir.WasmValidationContext,
   use_subtype_indirect_check? : Bool = true,
   canonical_type_indices? : Array[Int] = [],
 ) -> @semantic_machv.Function raise JitPipelineError {
   let environment = wasmoon_semantic_environment(
     use_subtype_indirect_check, canonical_type_indices,
   )
-  lower_wasm_body_semantic_with_environment(function, environment)
+  lower_wasm_body_semantic_with_environment(
+    function, validation_context, environment,
+  )
 }
 
 ///|
 fn compile_wasm_body_aarch64_target(
   function : @milkir.Function,
+  validation_context : @wasm_milkir.WasmValidationContext,
   use_subtype_indirect_check : Bool,
   canonical_type_indices : Array[Int],
 ) -> AArch64TargetCompilation raise JitPipelineError {
@@ -208,7 +213,7 @@ fn compile_wasm_body_aarch64_target(
     use_subtype_indirect_check, canonical_type_indices,
   )
   let semantic = lower_wasm_body_semantic_with_environment(
-    function, environment,
+    function, validation_context, environment,
   )
   build_wasmoon_aarch64_target(semantic, environment)
 }
@@ -216,6 +221,7 @@ fn compile_wasm_body_aarch64_target(
 ///|
 fn compile_wasm_body_x64_target(
   function : @milkir.Function,
+  validation_context : @wasm_milkir.WasmValidationContext,
   use_subtype_indirect_check : Bool,
   canonical_type_indices : Array[Int],
 ) -> X64TargetCompilation raise JitPipelineError {
@@ -223,7 +229,7 @@ fn compile_wasm_body_x64_target(
     use_subtype_indirect_check, canonical_type_indices,
   )
   let semantic = lower_wasm_body_semantic_with_environment(
-    function, environment,
+    function, validation_context, environment,
   )
   build_wasmoon_x64_target(semantic, environment)
 }
@@ -231,21 +237,23 @@ fn compile_wasm_body_x64_target(
 ///|
 pub fn plan_wasm_body_aarch64_code_object(
   function : @milkir.Function,
+  validation_context : @wasm_milkir.WasmValidationContext,
   use_subtype_indirect_check? : Bool = true,
   canonical_type_indices? : Array[Int] = [],
 ) -> @code_object.UnlinkedCodeObject raise JitPipelineError {
   compile_wasm_body_aarch64_target(
-    function, use_subtype_indirect_check, canonical_type_indices,
+    function, validation_context, use_subtype_indirect_check, canonical_type_indices,
   ).object
 }
 
 ///|
 pub fn plan_wasm_body_x64_code_object(
   function : @milkir.Function,
+  validation_context : @wasm_milkir.WasmValidationContext,
   use_subtype_indirect_check? : Bool = true,
   canonical_type_indices? : Array[Int] = [],
 ) -> @code_object.UnlinkedCodeObject raise JitPipelineError {
   compile_wasm_body_x64_target(
-    function, use_subtype_indirect_check, canonical_type_indices,
+    function, validation_context, use_subtype_indirect_check, canonical_type_indices,
   ).object
 }

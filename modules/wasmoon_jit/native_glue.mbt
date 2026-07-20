@@ -150,10 +150,16 @@ pub fn plan_milkir_integration_for_target(
 ///|
 pub fn plan_wasm_body_milkir_integration_for_target(
   func : @milkir.Function,
+  validation_context : @wasm_milkir.WasmValidationContext,
   target : NativeTarget,
 ) -> JitIntegrationPlan raise JitPipelineError {
   if target is AArch64 {
-    let compiled = compile_wasm_body_aarch64_target(func, true, [])
+    let compiled = compile_wasm_body_aarch64_target(
+      func,
+      validation_context,
+      true,
+      [],
+    )
     return {
       entry_symbol: func.name,
       target,
@@ -161,7 +167,7 @@ pub fn plan_wasm_body_milkir_integration_for_target(
       object: jit_code_object_from_aarch64(compiled.object, compiled.frame_size),
     }
   }
-  let compiled = compile_wasm_body_x64_target(func, true, [])
+  let compiled = compile_wasm_body_x64_target(func, validation_context, true, [])
   {
     entry_symbol: func.name,
     target,

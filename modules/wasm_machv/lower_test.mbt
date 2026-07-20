@@ -15,6 +15,116 @@ fn test_environment() -> Environment {
 }
 
 ///|
+fn test_field(
+  storage : @wasm_milkir.WasmStorageContract,
+  mutable_? : Bool = true,
+) -> @wasm_milkir.WasmFieldContract {
+  { storage, mutable_, defaultable: true }
+}
+
+///|
+fn test_validation_context(name : String) -> @wasm_milkir.WasmValidationContext {
+  @wasm_milkir.WasmValidationContext::new({
+    function_contract: fn(index) {
+      match (name, index) {
+        ("caller", 7) => Some({ params: [I32], results: [I64] })
+        ("tail_caller", 4) => Some({ params: [Ref], results: [I64] })
+        ("function_reference", 5) => Some({ params: [], results: [] })
+        _ => None
+      }
+    },
+    defined_type_contract: fn(index) {
+      match (name, index) {
+        ("reference_caller", 2) =>
+          Some(Function({ params: [I32], results: [I32] }))
+        ("gc_reference_queries", 7) => Some(Array(test_field(Value(Ref))))
+        ("gc_aggregate_access", 2) =>
+          Some(
+            Struct([
+              test_field(Value(I32)),
+              test_field(Value(I32)),
+              test_field(Value(I32)),
+              test_field(Value(F64)),
+              test_field(Value(Ref)),
+              test_field(Packed8),
+              test_field(Packed16),
+            ]),
+          )
+        ("gc_aggregate_access", 9) => Some(Array(test_field(Value(F32))))
+        ("gc_aggregate_access", 10) => Some(Array(test_field(Value(I32))))
+        ("gc_v128_field", 2) =>
+          Some(
+            Struct([
+              test_field(Value(I32)),
+              test_field(Value(I32)),
+              test_field(Value(I32)),
+              test_field(Value(V128)),
+            ]),
+          )
+        ("gc_array_bulk", 3) | ("gc_array_bulk", 4) =>
+          Some(Array(test_field(Value(F32))))
+        ("gc_allocations", 4) => Some(Array(test_field(Value(Ref))))
+        ("gc_allocations", 5) => Some(Array(test_field(Value(I32))))
+        ("gc_allocations", 8) => Some(Struct([]))
+        ("gc_segments", 2) => Some(Array(test_field(Value(I32))))
+        ("gc_segments", 4) => Some(Array(test_field(Value(Ref))))
+        ("gc_fixed_allocations", 6) =>
+          Some(
+            Struct([
+              test_field(Value(I32)),
+              test_field(Value(F64)),
+              test_field(Value(Ref)),
+            ]),
+          )
+        ("gc_fixed_allocations", 7) => Some(Array(test_field(Value(Ref))))
+        ("gc_v128_allocation", 1) => Some(Struct([test_field(Value(V128))]))
+        ("indirect_table64", 3) =>
+          Some(Function({ params: [I32], results: [I64] }))
+        ("indirect_tail", 1) =>
+          Some(Function({ params: [Ref], results: [I64] }))
+        _ => None
+      }
+    },
+    table_contract: fn(index) {
+      match (name, index) {
+        ("indirect_table64", 2) =>
+          Some({ index_type: I64, element_type: CallableRef })
+        ("indirect_tail", 0) =>
+          Some({ index_type: I32, element_type: CallableRef })
+        _ => None
+      }
+    },
+    tag_contract: fn(index) {
+      if name == "exception_throw" && index == 9 {
+        Some({ params: [I64, Ref], results: [] })
+      } else {
+        None
+      }
+    },
+    memory_exists: fn(index) { name == "memory_base" && index == 3 },
+    data_segment_exists: fn(index) { name == "gc_segments" && index == 3 },
+    element_segment_type: fn(index) {
+      if name == "gc_segments" && index == 5 {
+        Some(Ref)
+      } else {
+        None
+      }
+    },
+  })
+}
+
+///|
+fn lower_test_function(
+  function : @milkir.Function,
+) -> @machv.Function raise @milkir_machv.SemanticLowerError {
+  lower_function(
+    function,
+    test_validation_context(function.name),
+    test_environment(),
+  )
+}
+
+///|
 test "direct Wasm calls carry the explicit execution environment" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder("caller")
   builder.add_param(I64) |> ignore
@@ -27,7 +137,7 @@ test "direct Wasm calls carry the explicit execution environment" {
   )
   builder.return_(results)
   inspect(
-    lower_function(builder.finalize(), test_environment()),
+    lower_test_function(builder.finalize()),
     content=(
       #|machv caller [internal](v0:ptr64, v1:i32) -> (i64) {
       #|block0:
@@ -39,6 +149,38 @@ test "direct Wasm calls carry the explicit execution environment" {
 }
 
 ///|
+test "contextual Wasm errors stop lowering before instruction selection" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder("caller")
+  builder.add_param(I64) |> ignore
+  let argument = builder.add_param(I32)
+  builder.add_result(F64)
+  let results = builder.emit_multi_ext_inst(
+    [F64],
+    @wasm_milkir.encode(WasmCall(7)),
+    [argument],
+  )
+  builder.return_(results)
+  try
+    lower_function(
+      builder.finalize(),
+      test_validation_context("caller"),
+      test_environment(),
+    )
+    |> ignore
+  catch {
+    error =>
+      debug_inspect(
+        error,
+        content=(
+          #|InvalidMilkIR(message="UnverifiableInstruction(message=\"malformed contextual Wasm MilkIR extension 'call': expected call results [i64], got [f64]\")")
+        ),
+      )
+  } noraise {
+    _ => fail("expected contextual validation to stop Wasm lowering")
+  }
+}
+
+///|
 test "direct Wasm tail calls replace the source placeholder terminator" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder("tail_caller")
   builder.add_param(I64) |> ignore
@@ -47,7 +189,7 @@ test "direct Wasm tail calls replace the source placeholder terminator" {
   builder.emit_void_ext_inst(@wasm_milkir.encode(ReturnCall(4)), [argument])
   builder.trap("unreachable after return_call")
   inspect(
-    lower_function(builder.finalize(), test_environment()),
+    lower_test_function(builder.finalize()),
     content=(
       #|machv tail_caller [internal](v0:ptr64, v1:gcref64) -> (i64) {
       #|block0:
@@ -71,7 +213,7 @@ test "call_ref exposes tagged-reference removal before an indirect call" {
   )
   builder.return_(results)
   inspect(
-    lower_function(builder.finalize(), test_environment()),
+    lower_test_function(builder.finalize()),
     content=(
       #|machv reference_caller [internal](v0:ptr64, v1:gcref64, v2:i32) -> (i32) {
       #|block0:
@@ -102,7 +244,7 @@ test "reference primitives preserve explicit target-neutral representation" {
   ])
   builder.return_([i31, equal])
   inspect(
-    lower_function(builder.finalize(), test_environment()),
+    lower_test_function(builder.finalize()),
     content=(
       #|machv reference_primitives [internal](v0:ptr64, v1:i32, v2:gcref64, v3:gcref64) -> (gcref64, i32) {
       #|block0:
@@ -131,7 +273,7 @@ test "GC reference queries use typed non-safepoint runtime calls" {
   let length = @wasm_milkir.array_len(builder, reference)
   builder.return_([matches, cast, length])
   inspect(
-    lower_function(builder.finalize(), test_environment()),
+    lower_test_function(builder.finalize()),
     content=(
       #|machv gc_reference_queries [internal](v0:ptr64, v1:gcref64) -> (i32, gcref64, i32) {
       #|block0:
@@ -167,12 +309,12 @@ test "GC aggregate access converts the explicit runtime word ABI" {
   let unsigned_field = @wasm_milkir.struct_get_u(builder, 2, 6, reference, 2)
   @wasm_milkir.struct_set(builder, 2, 3, reference, float_value)
   let float_element = @wasm_milkir.array_get(builder, 9, reference, index, F32)
-  @wasm_milkir.array_set(builder, 9, reference, index, integer_value)
+  @wasm_milkir.array_set(builder, 10, reference, index, integer_value)
   builder.return_([
     float_field, reference_field, signed_field, unsigned_field, float_element,
   ])
   inspect(
-    lower_function(builder.finalize(), test_environment()),
+    lower_test_function(builder.finalize()),
     content=(
       #|machv gc_aggregate_access [internal](v0:ptr64, v1:gcref64, v2:i32, v3:f64, v4:i32) -> (f64, gcref64, i32, i32, f32) {
       #|block0:
@@ -204,7 +346,7 @@ test "GC aggregate access converts the explicit runtime word ABI" {
       #|  v29:i32 = convert.I32WrapI64 v28
       #|  v30:f32 = convert.Bitcast(I32, F32) v29
       #|  v31:i64 = convert.I64ExtendI32(Unsigned) v4
-      #|  v32:i32 = i32.const 9
+      #|  v32:i32 = i32.const 10
       #|  call external @wasm.runtime.gc.array_set (gcref64, i32, i32, i64) -> () [platform] v1, v32, v2, v31 [memory=read-write, trap]
       #|  return v8, v12, v17, v23, v30
       #|}
@@ -220,7 +362,7 @@ test "GC aggregate access rejects values wider than the runtime ABI" {
   builder.add_result(V128)
   let result = @wasm_milkir.struct_get(builder, 2, 3, reference, V128)
   builder.return_([result])
-  try lower_function(builder.finalize(), test_environment()) |> ignore catch {
+  try lower_test_function(builder.finalize()) |> ignore catch {
     error =>
       inspect(
         error,
@@ -253,7 +395,7 @@ test "GC array bulk mutation preserves value encoding and effects" {
   )
   builder.return_([])
   inspect(
-    lower_function(builder.finalize(), test_environment()),
+    lower_test_function(builder.finalize()),
     content=(
       #|machv gc_array_bulk [internal](v0:ptr64, v1:gcref64, v2:gcref64, v3:i32, v4:i32, v5:i32, v6:f32) -> () {
       #|block0:
@@ -281,7 +423,7 @@ test "GC allocation calls expose precise roots without a source-level safepoint 
   let structure = @wasm_milkir.struct_new_default(builder, 8)
   builder.return_([array, default_array, structure])
   inspect(
-    lower_function(builder.finalize(), test_environment()),
+    lower_test_function(builder.finalize()),
     content=(
       #|machv gc_allocations [internal](v0:ptr64, v1:gcref64, v2:i32) -> (gcref64, gcref64, gcref64) {
       #|block0:
@@ -323,7 +465,7 @@ test "GC segment array operations keep segment identities and allocation roots" 
   )
   builder.return_([data_array, elem_array])
   inspect(
-    lower_function(builder.finalize(), test_environment()),
+    lower_test_function(builder.finalize()),
     content=(
       #|machv gc_segments [internal](v0:ptr64, v1:i32, v2:i32) -> (gcref64, gcref64) {
       #|block0:
@@ -359,10 +501,10 @@ test "GC fixed allocations use typed address-visible value buffers" {
   let structure = @wasm_milkir.struct_new(builder, 6, [
     integer, float, reference,
   ])
-  let array = @wasm_milkir.array_new_fixed(builder, 7, 2, [reference, integer])
+  let array = @wasm_milkir.array_new_fixed(builder, 7, 2, [reference, reference])
   builder.return_([structure, array])
   inspect(
-    lower_function(builder.finalize(), test_environment()),
+    lower_test_function(builder.finalize()),
     content=(
       #|machv gc_fixed_allocations [internal](v0:ptr64, v1:i32, v2:f64, v3:gcref64) -> (gcref64, gcref64) {
       #|stack0: size=24, alignment=16
@@ -408,19 +550,20 @@ test "GC fixed allocations use typed address-visible value buffers" {
       #|  endianness: Little,
       #|  trap: None,
       #|} v13, v15 [memory=write]
-      #|  v16:i64 = convert.I64ExtendI32(Unsigned) v1
+      #|  v16:ptr64 = gcref.address v3
+      #|  v17:i64 = convert.Bitcast(Ptr64, I64) v16
       #|  store {
       #|  width: W64,
       #|  value_type: I64,
       #|  offset: 8,
       #|  endianness: Little,
       #|  trap: None,
-      #|} v13, v16 [memory=write]
-      #|  v17:i32 = i32.const 7
-      #|  v18:i32 = i32.const 2
-      #|  v19:i64 = call external @wasm.runtime.gc.alloc_array_from_values_slow (ptr64, i32, ptr64, i32) -> (i64) [platform] v0, v17, v13, v18 [memory=read-write, trap, gc-safepoint] roots=[v3, v12]
-      #|  v20:gcref64 = gcref.from_bits v19
-      #|  return v12, v20
+      #|} v13, v17 [memory=write]
+      #|  v18:i32 = i32.const 7
+      #|  v19:i32 = i32.const 2
+      #|  v20:i64 = call external @wasm.runtime.gc.alloc_array_from_values_slow (ptr64, i32, ptr64, i32) -> (i64) [platform] v0, v18, v13, v19 [memory=read-write, trap, gc-safepoint] roots=[v3, v12]
+      #|  v21:gcref64 = gcref.from_bits v20
+      #|  return v12, v21
       #|}
     ),
   )
@@ -434,7 +577,7 @@ test "GC fixed allocation rejects values wider than one runtime word" {
   builder.add_result(Ref)
   let result = @wasm_milkir.struct_new(builder, 1, [vector])
   builder.return_([result])
-  try lower_function(builder.finalize(), test_environment()) |> ignore catch {
+  try lower_test_function(builder.finalize()) |> ignore catch {
     error =>
       inspect(
         error,
@@ -460,7 +603,7 @@ test "i31 get uses explicit null-trap control flow" {
   ])
   builder.return_([result])
   inspect(
-    lower_function(builder.finalize(), test_environment()),
+    lower_test_function(builder.finalize()),
     content=(
       #|machv i31_get [internal](v0:ptr64, v1:gcref64) -> (i32) {
       #|block0:
@@ -494,7 +637,7 @@ test "memory base access uses an opaque semantic environment field" {
   ])
   builder.return_([base])
   inspect(
-    lower_function(builder.finalize(), test_environment()),
+    lower_test_function(builder.finalize()),
     content=(
       #|machv memory_base [internal](v0:ptr64) -> (i64) {
       #|block0:
@@ -518,7 +661,7 @@ test "function references use explicit table access and tagging" {
   )
   builder.return_([reference])
   inspect(
-    lower_function(builder.finalize(), test_environment()),
+    lower_test_function(builder.finalize()),
     content=(
       #|machv function_reference [internal](v0:ptr64) -> (gcref64) {
       #|block0:
@@ -557,7 +700,7 @@ test "table64 indirect calls preserve index width and subtype checks" {
   )
   builder.return_(results)
   inspect(
-    lower_function(builder.finalize(), test_environment()),
+    lower_test_function(builder.finalize()),
     content=(
       #|machv indirect_table64 [internal](v0:ptr64, v1:i64, v2:i32) -> (i64) {
       #|block0:
@@ -611,7 +754,7 @@ test "indirect tail calls preserve roots and replace placeholder traps" {
   ])
   builder.trap("unreachable after return_call_indirect")
   inspect(
-    lower_function(builder.finalize(), test_environment()),
+    lower_test_function(builder.finalize()),
     content=(
       #|machv indirect_tail [internal](v0:ptr64, v1:i32, v2:gcref64) -> (i64) {
       #|block0:
@@ -673,7 +816,7 @@ test "exception queries use typed runtime capabilities" {
   )
   builder.return_([tag, value, count])
   inspect(
-    lower_function(builder.finalize(), test_environment()),
+    lower_test_function(builder.finalize()),
     content=(
       #|machv exception_queries [internal](v0:ptr64) -> (i32, i64, i32) {
       #|block0:
@@ -695,7 +838,7 @@ test "try-table setup preserves the returns-twice setjmp contract" {
   let result = @wasm_milkir.try_table_begin(builder, 4)
   builder.return_([result])
   inspect(
-    lower_function(builder.finalize(), test_environment()),
+    lower_test_function(builder.finalize()),
     content=(
       #|machv exception_try [internal](v0:ptr64) -> (i32) {
       #|block0:
@@ -718,7 +861,7 @@ test "exception local snapshots use address-visible runtime-word buffers" {
   @wasm_milkir.spill_locals_for_throw(builder, [integer, reference])
   builder.return_([])
   inspect(
-    lower_function(builder.finalize(), test_environment()),
+    lower_test_function(builder.finalize()),
     content=(
       #|machv exception_spill [internal](v0:ptr64, v1:i64, v2:gcref64) -> () {
       #|stack0: size=16, alignment=16
@@ -757,7 +900,7 @@ test "exception throws terminate control flow with typed value buffers" {
   @wasm_milkir.emit_throw(builder, 9, [integer, reference])
   builder.trap("unreachable after throw")
   inspect(
-    lower_function(builder.finalize(), test_environment()),
+    lower_test_function(builder.finalize()),
     content=(
       #|machv exception_throw [internal](v0:ptr64, v1:i64, v2:gcref64) -> () {
       #|stack0: size=16, alignment=16
@@ -795,7 +938,7 @@ test "exception reference throws replace placeholder traps" {
   @wasm_milkir.emit_throw_ref(builder, reference)
   builder.trap("unreachable after throw_ref")
   inspect(
-    lower_function(builder.finalize(), test_environment()),
+    lower_test_function(builder.finalize()),
     content=(
       #|machv exception_throw_ref [internal](v0:ptr64, v1:gcref64) -> () {
       #|block0:
@@ -812,7 +955,7 @@ test "exception delegation is an explicit noreturn runtime transfer" {
   @wasm_milkir.delegate(builder, 3)
   builder.trap("unreachable after delegate")
   inspect(
-    lower_function(builder.finalize(), test_environment()),
+    lower_test_function(builder.finalize()),
     content=(
       #|machv exception_delegate [internal](v0:ptr64) -> () {
       #|block0:

@@ -51,9 +51,9 @@ pub fn clear_wasi_stdin_callback(Int64) -> Unit
 
 pub fn collect_gc_root_args(Array[Int64], Array[@types.ValueType]) -> Array[Int64]
 
-pub fn compile_wasm_body_aarch64_cwasm_entry(@milkir.Function, Int, String, Int, Int, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @cwasm.CompiledEntry raise JitPipelineError
+pub fn compile_wasm_body_aarch64_cwasm_entry(@milkir.Function, @wasm_milkir.WasmValidationContext, Int, String, Int, Int, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @cwasm.CompiledEntry raise JitPipelineError
 
-pub fn compile_wasm_body_x64_cwasm_entry(@milkir.Function, Int, String, Int, Int, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @cwasm.CompiledEntry raise JitPipelineError
+pub fn compile_wasm_body_x64_cwasm_entry(@milkir.Function, @wasm_milkir.WasmValidationContext, Int, String, Int, Int, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @cwasm.CompiledEntry raise JitPipelineError
 
 pub fn context_func_count(Int64) -> Int
 
@@ -319,7 +319,7 @@ pub fn jit_trap_message(Int) -> String
 
 pub fn link_code_object(JitCodeObject, RuntimeSymbolResolver) -> LinkedCode raise LinkError
 
-pub fn lower_wasm_body_semantic_machv(@milkir.Function, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @machv.Function raise JitPipelineError
+pub fn lower_wasm_body_semantic_machv(@milkir.Function, @wasm_milkir.WasmValidationContext, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @machv.Function raise JitPipelineError
 
 pub fn machv_reloc_target_to_cwasm_func_idx(@code_object.RelocationTarget) -> Int?
 
@@ -373,11 +373,11 @@ pub fn plan_hostcall_import_trampoline_layout(Array[@types.ValueType], Array[@ty
 
 pub fn plan_milkir_integration_for_target(@milkir.Function, NativeTarget) -> JitIntegrationPlan raise JitPipelineError
 
-pub fn plan_wasm_body_aarch64_code_object(@milkir.Function, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @code_object.UnlinkedCodeObject raise JitPipelineError
+pub fn plan_wasm_body_aarch64_code_object(@milkir.Function, @wasm_milkir.WasmValidationContext, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @code_object.UnlinkedCodeObject raise JitPipelineError
 
-pub fn plan_wasm_body_milkir_integration_for_target(@milkir.Function, NativeTarget) -> JitIntegrationPlan raise JitPipelineError
+pub fn plan_wasm_body_milkir_integration_for_target(@milkir.Function, @wasm_milkir.WasmValidationContext, NativeTarget) -> JitIntegrationPlan raise JitPipelineError
 
-pub fn plan_wasm_body_x64_code_object(@milkir.Function, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @code_object.UnlinkedCodeObject raise JitPipelineError
+pub fn plan_wasm_body_x64_code_object(@milkir.Function, @wasm_milkir.WasmValidationContext, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @code_object.UnlinkedCodeObject raise JitPipelineError
 
 pub fn required_context_function_count(@cwasm.PrecompiledModule, Int) -> Int
 

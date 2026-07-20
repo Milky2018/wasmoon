@@ -56,6 +56,13 @@ pub fn run_explore(
   // Count imports to convert between absolute and local function indices
   // Absolute index = num_imports + local_index (matches JIT error messages)
   let num_imports = count_func_imports(mod_.imports)
+  let translation_context = @wasm_frontend.translation_context_from_module(
+    mod_,
+    @wasmoon.wasm_frontend_embedding_environment(),
+  )
+  let wasm_validation_context = @wasm_frontend.wasm_validation_context(
+    translation_context,
+  )
   if !html_output {
     println("Module loaded: \{mod_.codes.length()} functions")
     println("")
@@ -176,7 +183,9 @@ pub fn run_explore(
       X86_64 => X64
       Unknown => X64
     }
-    let mach_result = @wasmoon_jit.lower_wasm_body_semantic_machv(milk_result) catch {
+    let mach_result = @wasmoon_jit.lower_wasm_body_semantic_machv(
+      milk_result, wasm_validation_context,
+    ) catch {
       err => {
         if !html_output {
           println("MilkIR lowering error: \{err}")
@@ -194,7 +203,7 @@ pub fn run_explore(
     }
 
     let plan = @wasmoon_jit.plan_wasm_body_milkir_integration_for_target(
-      milk_result, target,
+      milk_result, wasm_validation_context, target,
     ) catch {
       err => {
         if !html_output {

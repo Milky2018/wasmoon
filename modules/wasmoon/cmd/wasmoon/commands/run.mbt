@@ -1105,7 +1105,7 @@ fn run_with_jit(
   let compiled = match cache_precompiled {
     Some(precompiled) => Some((precompiled, None))
     None =>
-      compile_module_to_jit(
+      compile_validated_module_to_jit(
         mod_,
         debug,
         dump_on_trap,
@@ -1390,7 +1390,7 @@ pub fn compile_module(
       return None
     }
   }
-  let compiled = compile_module_to_jit(
+  let compiled = compile_validated_module_to_jit(
     wasm_module,
     false,
     false,
@@ -1429,9 +1429,62 @@ fn normalize_opt_level(opt_level : Int) -> Int {
 }
 
 ///|
-/// Compile a WASM module to precompiled format in memory
-/// actual_memory_max: Override for memory max limit (used for imported memories)
+/// Compile a WASM module to precompiled format in memory.
+///
+/// Decoded modules are untrusted at this public seam and are fully validated
+/// before frontend translation. `actual_memory_max` overrides the memory limit
+/// used for imported memories.
 pub fn compile_module_to_jit(
+  mod_ : @types.Module,
+  debug : Bool,
+  dump_on_trap : Bool,
+  actual_memory_max? : Int? = None,
+  opt_level : Int,
+  enable_dwarf : Bool,
+  on_progress? : (CompileProgress) -> Unit? = fn(_event) { None },
+  compile_start? : @perf.PerfTick? = None,
+  local_compile_mask? : Array[Bool]? = None,
+  force_subtype_indirect_check? : Bool? = None,
+  use_reusable_pipeline? : Bool = true,
+  enable_cancellation? : Bool = false,
+) -> (@cwasm.PrecompiledModule, @wasmoon_jit.JITDebugDB?)? {
+  let progress_start = compile_start.unwrap_or(@perf.tick_now())
+  @validator.validate_module(mod_) catch {
+    error => {
+      let message = match error {
+        WithContext(context) => context.format()
+        _ => @validator.format_validation_error(error)
+      }
+      emit_compile_progress(
+        on_progress,
+        Failed,
+        progress_start,
+        mod_.codes.length(),
+        0,
+        message=Some(message),
+      )
+      return None
+    }
+  }
+  compile_validated_module_to_jit(
+    mod_,
+    debug,
+    dump_on_trap,
+    actual_memory_max~,
+    opt_level,
+    enable_dwarf,
+    on_progress~,
+    compile_start=Some(progress_start),
+    local_compile_mask~,
+    force_subtype_indirect_check~,
+    use_reusable_pipeline~,
+    enable_cancellation~,
+  )
+}
+
+///|
+/// Compile a decoded module through the trusted post-validation path.
+fn compile_validated_module_to_jit(
   mod_ : @types.Module,
   debug : Bool,
   dump_on_trap : Bool,
@@ -1524,6 +1577,9 @@ pub fn compile_module_to_jit(
       cancellation_safepoints=enable_cancellation,
     ),
     memory_max_override=actual_memory_max,
+  )
+  let wasm_validation_context = @wasm_frontend.wasm_validation_context(
+    translation_ctx,
   )
   // Record imports in precompiled module
   for imp in mod_.imports {
@@ -1625,6 +1681,7 @@ pub fn compile_module_to_jit(
         AArch64 =>
           @wasmoon_jit.compile_wasm_body_aarch64_cwasm_entry(
             ir_func,
+            wasm_validation_context,
             func_idx,
             func_name,
             num_params,
@@ -1635,6 +1692,7 @@ pub fn compile_module_to_jit(
         X64 =>
           @wasmoon_jit.compile_wasm_body_x64_cwasm_entry(
             ir_func,
+            wasm_validation_context,
             func_idx,
             func_name,
             num_params,

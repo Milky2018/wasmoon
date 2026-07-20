@@ -14,12 +14,12 @@ test "typed block params: do not leak to outer stack" {
     #|    ;; Block param: f32, should be consumed by the block and not affect return.
     #|    f32.const 0x1p-63
     #|    (block (type $t) (param f32)
-    #|      ;; empty
+    #|      drop
     #|    )
     #|  )
     #|)
   let interp = run_interp_only(source, "test", [])
   debug_inspect(interp, content="Ok([I32(8)])")
   let result = compare_jit_interp(source, "test", [])
-  inspect(compare_result_is_match(result), content="true")
+  inspect(result, content="matched")
 }

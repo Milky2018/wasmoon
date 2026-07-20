@@ -4,6 +4,7 @@ package "Milky2018/wasmoon/wasm_frontend/ir"
 import {
   "Milky2018/milkir",
   "Milky2018/wasm_core/types",
+  "Milky2018/wasm_milkir",
   "Milky2018/wasmoon/wasm_frontend/embedding",
 }
 
@@ -17,6 +18,7 @@ pub fn translate_function_body(TranslationContext, String, @types.FuncType, Arra
 // Types and methods
 type TranslationContext
 pub fn TranslationContext::from_module(@types.Module, @embedding.EmbeddingEnvironment, memory_max_override? : Int?, func_base? : Int, import_remap? : Array[Int]) -> Self
+pub fn TranslationContext::wasm_validation_context(Self) -> @wasm_milkir.WasmValidationContext
 
 // Type aliases
 

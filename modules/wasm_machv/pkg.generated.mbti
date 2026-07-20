@@ -5,10 +5,11 @@ import {
   "Milky2018/machv",
   "Milky2018/milkir",
   "Milky2018/milkir_machv",
+  "Milky2018/wasm_milkir",
 }
 
 // Values
-pub fn lower_function(@milkir.Function, Environment) -> @machv.Function raise @milkir_machv.SemanticLowerError
+pub fn lower_function(@milkir.Function, @wasm_milkir.WasmValidationContext, Environment) -> @machv.Function raise @milkir_machv.SemanticLowerError
 
 // Errors
 

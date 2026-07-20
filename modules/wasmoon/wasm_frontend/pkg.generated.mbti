@@ -4,6 +4,7 @@ package "Milky2018/wasmoon/wasm_frontend"
 import {
   "Milky2018/milkir",
   "Milky2018/wasm_core/types",
+  "Milky2018/wasm_milkir",
   "Milky2018/wasmoon/wasm_frontend/embedding",
   "Milky2018/wasmoon/wasm_frontend/ir",
   "moonbitlang/core/debug",
@@ -19,6 +20,8 @@ pub fn translate_function_body(@ir.TranslationContext, String, @types.FuncType, 
 pub fn translation_context_from_module(@types.Module, @embedding.EmbeddingEnvironment, memory_max_override? : Int?, func_base? : Int, import_remap? : Array[Int]) -> @ir.TranslationContext
 
 pub fn try_lower_native_function(@embedding.EmbeddingEnvironment, @types.Module, Int) -> @milkir.Function? raise LowerError
+
+pub fn wasm_validation_context(@ir.TranslationContext) -> @wasm_milkir.WasmValidationContext
 
 // Errors
 pub suberror LowerError {

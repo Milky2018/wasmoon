@@ -78,6 +78,7 @@ test "emit cancellation poll relocations for both JIT targets" {
   for target in [NativeTarget::X64, AArch64] {
     let plan = plan_wasm_body_milkir_integration_for_target(
       builder.get_function(),
+      @wasm_milkir.WasmValidationContext::empty(),
       target,
     )
     let fixup_ids : Array[Int] = []
@@ -439,7 +440,10 @@ test "semantic Wasm lowering is inspectable before target selection" {
   let tag = @wasm_milkir.get_exception_tag(builder)
   builder.return_([tag])
   inspect(
-    lower_wasm_body_semantic_machv(builder.finalize()).print(),
+    lower_wasm_body_semantic_machv(
+      builder.finalize(),
+      @wasm_milkir.WasmValidationContext::empty(),
+    ).print(),
     content=(
       #|machv inspect_semantic_wasm [internal](v0:ptr64) -> (i32) {
       #|block0:
@@ -457,7 +461,11 @@ test "JIT integration returns invalid Wasm dialect errors" {
   builder.emit_void_ext_inst(ExtOp("wasm", "typo", []), [])
   builder.return_([])
   try
-    plan_wasm_body_milkir_integration_for_target(builder.get_function(), X64)
+    plan_wasm_body_milkir_integration_for_target(
+      builder.get_function(),
+      @wasm_milkir.WasmValidationContext::empty(),
+      X64,
+    )
   catch {
     err =>
       inspect(
@@ -526,7 +534,11 @@ test "plan Wasm body MilkIR through reusable JIT pipeline" {
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Scalar(IntBinary(Add)), [lhs, rhs], [sum]))
   entry.set_terminator(Return([sum]))
-  let plan = plan_wasm_body_milkir_integration_for_target(milk, X64)
+  let plan = plan_wasm_body_milkir_integration_for_target(
+    milk,
+    @wasm_milkir.WasmValidationContext::empty(),
+    X64,
+  )
   debug_inspect(plan.target, content="X64")
   inspect(plan.entry_symbol, content="wasm_body_add64")
   debug_inspect(
@@ -1907,9 +1919,17 @@ test "plan Wasm body return area through reusable JIT pipeline" {
     values.push(value)
   }
   entry.set_terminator(Return(values))
-  let x64_plan = plan_wasm_body_milkir_integration_for_target(milk, X64)
+  let x64_plan = plan_wasm_body_milkir_integration_for_target(
+    milk,
+    @wasm_milkir.WasmValidationContext::empty(),
+    X64,
+  )
   inspect(x64_plan.object.get_bytes().length() > 0, content="true")
-  let a64_plan = plan_wasm_body_milkir_integration_for_target(milk, AArch64)
+  let a64_plan = plan_wasm_body_milkir_integration_for_target(
+    milk,
+    @wasm_milkir.WasmValidationContext::empty(),
+    AArch64,
+  )
   inspect(a64_plan.object.get_bytes().length() > 0, content="true")
 }
 

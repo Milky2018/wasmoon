@@ -145,6 +145,8 @@ pub fn validate_extension(@milkir.ExtensionInstView) -> String?
 
 pub fn verify_function(@milkir.Function) -> Unit raise @milkir.VerifyError
 
+pub fn verify_function_with_context(@milkir.Function, WasmValidationContext) -> Unit raise @milkir.VerifyError
+
 pub fn wasm_externref_type() -> @milkir.Type
 
 pub fn wasm_funcref_type() -> @milkir.Type
@@ -198,6 +200,23 @@ pub(all) struct RuntimeSymbols {
 } derive(Eq, @debug.Debug)
 pub fn RuntimeSymbols::with_runtime_prefix(String) -> Self
 
+pub(all) enum WasmDefinedTypeContract {
+  Function(WasmFunctionContract)
+  Struct(Array[WasmFieldContract])
+  Array(WasmFieldContract)
+} derive(Eq, @debug.Debug)
+
+pub(all) struct WasmFieldContract {
+  storage : WasmStorageContract
+  mutable_ : Bool
+  defaultable : Bool
+} derive(Eq, @debug.Debug)
+
+pub(all) struct WasmFunctionContract {
+  params : Array[@milkir.Type]
+  results : Array[@milkir.Type]
+} derive(Eq, @debug.Debug)
+
 pub(all) enum WasmOpcode {
   LoadMemBase(Int)
   WasmCall(Int)
@@ -246,6 +265,32 @@ pub(all) enum WasmOpcode {
   SpillLocalsForThrow(Int)
   GetSpilledLocal(Int)
 } derive(Eq, Hash, @debug.Debug)
+
+pub(all) enum WasmStorageContract {
+  Value(@milkir.Type)
+  Packed8
+  Packed16
+} derive(Eq, @debug.Debug)
+
+pub(all) struct WasmTableContract {
+  index_type : @milkir.Type
+  element_type : @milkir.Type
+} derive(Eq, @debug.Debug)
+
+type WasmValidationContext
+pub fn WasmValidationContext::empty() -> Self
+pub fn WasmValidationContext::new(WasmValidationResolvers) -> Self
+pub fn WasmValidationContext::validate_extension(Self, @milkir.ExtensionInstView, Array[@milkir.Type]) -> String?
+
+pub(all) struct WasmValidationResolvers {
+  function_contract : (Int) -> WasmFunctionContract?
+  defined_type_contract : (Int) -> WasmDefinedTypeContract?
+  table_contract : (Int) -> WasmTableContract?
+  tag_contract : (Int) -> WasmFunctionContract?
+  memory_exists : (Int) -> Bool
+  data_segment_exists : (Int) -> Bool
+  element_segment_type : (Int) -> @milkir.Type?
+}
 
 // Type aliases
 

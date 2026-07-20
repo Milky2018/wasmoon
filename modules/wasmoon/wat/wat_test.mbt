@@ -785,7 +785,7 @@ test "parse struct with reference field" {
   inspect(st.fields.length(), content="2")
   inspect(st.fields[0].storage_type, content="Val(I32)")
   // The second field is a nullable reference to type 0
-  inspect(st.fields[1].storage_type, content="Val(RefNullFuncTyped(0))")
+  inspect(st.fields[1].storage_type, content="Val(RefNullStruct(0))")
 }
 
 ///|

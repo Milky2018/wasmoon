@@ -1310,8 +1310,12 @@ fn lower_extension(
 /// legacy `i64` carrier is contracted to `ptr64` in semantic MachV.
 pub fn lower_function(
   function : @milkir.Function,
+  validation_context : @wasm_milkir.WasmValidationContext,
   environment : Environment,
 ) -> @machv.Function raise @milkir_machv.SemanticLowerError {
+  fn validate(view : @milkir.ExtensionInstView) -> String? {
+    validation_context.validate_extension(view, function.results)
+  }
   fn lower(
     context : @adapter.InstructionContext,
     extension : @milkir.ExtOp,
@@ -1321,7 +1325,7 @@ pub fn lower_function(
   @milkir_machv.lower_dialect_function(
     function,
     @wasm_milkir.WASM_DIALECT,
-    @wasm_milkir.validate_extension,
+    validate,
     [(0, Ptr64)],
     lower,
   )

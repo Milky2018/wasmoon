@@ -92,6 +92,9 @@ struct TranslationContext {
   module_types : Array[@types.SubType]
   tags : Array[@types.TagType]
   memory_mins : Array[Int64]
+  memory_count : Int
+  data_count : Int
+  element_types : Array[@types.ValueType]
 }
 
 ///|
@@ -108,6 +111,7 @@ pub fn TranslationContext::from_module(
   let global_types : Array[@types.GlobalType] = []
   let tags : Array[@types.TagType] = []
   let tables : Array[@types.Table] = []
+  let mut memory_count = mod_.memories.length()
   for imp in mod_.imports {
     match imp.desc {
       Func(type_idx) => {
@@ -117,7 +121,7 @@ pub fn TranslationContext::from_module(
       Table(table_type) => tables.push({ type_: table_type, init: None })
       Global(global_type) => global_types.push(global_type)
       Tag(tag_type_idx) => tags.push({ type_idx: tag_type_idx })
-      _ => ()
+      Memory(_) => memory_count = memory_count + 1
     }
   }
   for global in mod_.globals {
@@ -157,6 +161,9 @@ pub fn TranslationContext::from_module(
     memory_mins: mod_.memories.map(fn(m) {
       m.limits.min * (1L << m.page_size_log2)
     }),
+    memory_count,
+    data_count: mod_.datas.length(),
+    element_types: mod_.elems.map(fn(element) { element.type_ }),
   }
 }
 
