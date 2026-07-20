@@ -56,7 +56,7 @@ test "wasi: fd_write writes all non-empty iovecs" {
     1000,
     test_path.length(),
     9,
-    right_fd_read | right_fd_write,
+    right_fd_read | right_fd_write | right_fd_seek,
     0L,
     0,
     2000,
@@ -295,7 +295,7 @@ test "wasi: fd_read from opened file" {
     1000,
     test_path.length(),
     0,
-    0L,
+    right_fd_read,
     0L,
     0,
     2000,
@@ -446,7 +446,7 @@ test "wasi: fd_seek and fd_tell" {
     1000,
     test_path.length(),
     9,
-    right_fd_read | right_fd_write,
+    right_fd_read | right_fd_write | right_fd_seek | right_fd_tell,
     0L,
     0,
     2000,
@@ -514,7 +514,7 @@ test "wasi: fd_pread and fd_pwrite" {
     1000,
     test_path.length(),
     9,
-    right_fd_read | right_fd_write,
+    right_fd_read | right_fd_write | right_fd_seek | right_fd_tell,
     0L,
     0,
     2000,
@@ -573,7 +573,7 @@ test "wasi: fd_pread/fd_pwrite use first non-empty iovec only" {
     1000,
     test_path.length(),
     9,
-    right_fd_read | right_fd_write,
+    right_fd_read | right_fd_write | right_fd_seek,
     0L,
     0,
     2000,
@@ -844,7 +844,7 @@ test "wasi: path_open honors write-only rights without create flags" {
     100,
     test_path.length(),
     0,
-    right_fd_write,
+    right_fd_write | right_fd_seek,
     0L,
     0,
     2004,
@@ -1858,7 +1858,7 @@ test "wasi: fd_readdir" {
     100,
     dir_path.length(),
     2,
-    0L,
+    right_fd_readdir,
     0L,
     0,
     2000,
@@ -1898,7 +1898,7 @@ test "wasi: fd_readdir includes dot entries and supports truncated dirent writes
     100,
     dir_path.length(),
     2,
-    0L,
+    right_fd_readdir,
     0L,
     0,
     2000,
@@ -1997,7 +1997,7 @@ test "wasi: fd_sync and fd_datasync use file-only descriptor gating" {
     100,
     test_path.length(),
     9,
-    0L,
+    right_fd_sync | right_fd_datasync,
     0L,
     0,
     200,
@@ -2131,7 +2131,7 @@ test "wasi: fd_filestat_get" {
     100,
     test_path.length(),
     9,
-    0L,
+    right_fd_write | right_fd_filestat_get,
     0L,
     0,
     200,
@@ -2174,7 +2174,7 @@ test "wasi: path_filestat_get" {
     100,
     test_path.length(),
     9,
-    0L,
+    right_fd_write | right_fd_sync | right_fd_filestat_get,
     0L,
     0,
     200,
@@ -2219,7 +2219,7 @@ test "wasi: fd_filestat_set_size" {
     100,
     test_path.length(),
     9,
-    0L,
+    right_fd_write | right_fd_filestat_get | right_fd_filestat_set_size,
     0L,
     0,
     200,
@@ -2269,7 +2269,7 @@ test "wasi: fd_advise is file-only" {
     100,
     test_path.length(),
     9,
-    right_fd_read | right_fd_write,
+    right_fd_read | right_fd_write | right_fd_advise,
     0L,
     0,
     200,
@@ -2306,7 +2306,7 @@ test "wasi: fd_allocate returns ENOTSUP for files and BADF otherwise" {
     100,
     test_path.length(),
     9,
-    right_fd_read | right_fd_write,
+    right_fd_read | right_fd_write | right_fd_allocate,
     0L,
     0,
     200,
@@ -2342,7 +2342,7 @@ test "wasi: fd_filestat_set_size uses file-only gating" {
     100,
     test_path.length(),
     9,
-    right_fd_read | right_fd_write,
+    right_fd_read | right_fd_write | right_fd_filestat_set_size,
     0L,
     0,
     200,
@@ -2532,6 +2532,110 @@ test "wasi: rights ABI rejects unknown bits" {
     ),
     content="(28, 28)",
   )
+}
+
+///|
+test "wasi: descriptor operations honor rights attenuation" {
+  let ctx = WasiContextBuilder::WasiContextBuilder()
+    .preopen_dir("/tmp", "/")
+    .build()
+  let mem = @runtime.Memory::Memory(1, None)
+  let test_path = "wasmoon_rights_attenuation.txt"
+  for i, c in test_path {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
+  let descriptor_rights = right_fd_datasync |
+    right_fd_read |
+    right_fd_seek |
+    right_fd_fdstat_set_flags |
+    right_fd_sync |
+    right_fd_tell |
+    right_fd_write |
+    right_fd_advise |
+    right_fd_allocate |
+    right_fd_filestat_get |
+    right_fd_filestat_set_size |
+    right_fd_filestat_set_times
+  let open_result = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    100,
+    test_path.length(),
+    9,
+    descriptor_rights,
+    0L,
+    0,
+    200,
+  )
+  inspect(open_result, content="0")
+  if open_result != 0 {
+    return
+  }
+  let fd = mem.read_i32(200)
+  mem.write_i32(0, 300)
+  mem.write_i32(4, 1)
+  mem.write_byte(300, b'X')
+  inspect(fd_fdstat_set_rights_impl(ctx, fd, 0L, 0L), content="0")
+  debug_inspect(
+    [
+      fd_write(ctx, mem, fd, 0, 1, 400),
+      fd_read(ctx, mem, fd, 0, 1, 400),
+      fd_seek(ctx, mem, fd, 0L, 0, 408),
+      fd_tell(ctx, mem, fd, 408),
+      fd_pread(ctx, mem, fd, 0, 1, 0L, 400),
+      fd_pwrite(ctx, mem, fd, 0, 1, 0L, 400),
+      fd_sync_impl(ctx, fd),
+      fd_datasync_impl(ctx, fd),
+      fd_filestat_get_impl(ctx, mem, fd, 500),
+      fd_filestat_set_size_impl(ctx, fd, 0L),
+      fd_filestat_set_times_impl(ctx, fd, 0L, 0L, 0),
+      fd_advise_impl(ctx, fd, 0L, 1L, 0),
+      fd_allocate_impl(ctx, fd, 0L, 1L),
+      fd_fdstat_set_flags_impl(ctx, fd, 0),
+    ],
+    content="[76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76, 76]",
+  )
+  fd_close(ctx, fd) |> ignore
+  path_unlink_file_impl(ctx, mem, 3, 100, test_path.length()) |> ignore
+}
+
+///|
+test "wasi: fd_readdir honors rights attenuation" {
+  let ctx = WasiContextBuilder::WasiContextBuilder()
+    .preopen_dir("/tmp", "/")
+    .build()
+  let mem = @runtime.Memory::Memory(1, None)
+  let dir_path = "wasmoon_readdir_attenuation"
+  for i, c in dir_path {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  path_remove_directory_impl(ctx, mem, 3, 100, dir_path.length()) |> ignore
+  path_create_directory(ctx, mem, 3, 100, dir_path.length()) |> ignore
+  let open_result = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    100,
+    dir_path.length(),
+    2,
+    right_fd_readdir,
+    0L,
+    0,
+    200,
+  )
+  inspect(open_result, content="0")
+  if open_result != 0 {
+    return
+  }
+  let fd = mem.read_i32(200)
+  inspect(fd_fdstat_set_rights_impl(ctx, fd, 0L, 0L), content="0")
+  inspect(fd_readdir(ctx, mem, fd, 300, 64, 0L, 400), content="76")
+  fd_close(ctx, fd) |> ignore
+  path_remove_directory_impl(ctx, mem, 3, 100, dir_path.length()) |> ignore
 }
 
 ///|

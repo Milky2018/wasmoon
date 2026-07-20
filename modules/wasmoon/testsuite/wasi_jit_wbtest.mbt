@@ -981,6 +981,69 @@ test "wasi jit: rights ABI rejects unknown bits" {
 }
 
 ///|
+test "wasi jit: descriptor operations honor rights attenuation" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "path_open"
+    #|    (func $path_open (param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_fdstat_set_rights"
+    #|    (func $set_rights (param i32 i64 i64) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_write"
+    #|    (func $fd_write (param i32 i32 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_read"
+    #|    (func $fd_read (param i32 i32 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_seek"
+    #|    (func $fd_seek (param i32 i64 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_filestat_get"
+    #|    (func $fd_filestat_get (param i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_fdstat_set_flags"
+    #|    (func $set_flags (param i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (data (i32.const 1024) "wasmoon_jit_rights_attenuation")
+    #|  (func $attenuated_fd (result i32)
+    #|    (drop (call $path_open
+    #|      (i32.const 3) (i32.const 0) (i32.const 1024) (i32.const 30)
+    #|      (i32.const 9) (i64.const 2097230) (i64.const 0) (i32.const 0)
+    #|      (i32.const 200)))
+    #|    (drop (call $set_rights
+    #|      (i32.load (i32.const 200)) (i64.const 0) (i64.const 0)))
+    #|    (i32.load (i32.const 200)))
+    #|  (func (export "write") (result i32)
+    #|    (i32.store (i32.const 0) (i32.const 300))
+    #|    (i32.store (i32.const 4) (i32.const 1))
+    #|    (call $fd_write
+    #|      (call $attenuated_fd) (i32.const 0) (i32.const 1) (i32.const 400)))
+    #|  (func (export "read") (result i32)
+    #|    (i32.store (i32.const 0) (i32.const 300))
+    #|    (i32.store (i32.const 4) (i32.const 1))
+    #|    (call $fd_read
+    #|      (call $attenuated_fd) (i32.const 0) (i32.const 1) (i32.const 400)))
+    #|  (func (export "seek") (result i32)
+    #|    (call $fd_seek
+    #|      (call $attenuated_fd) (i64.const 0) (i32.const 0) (i32.const 408)))
+    #|  (func (export "filestat") (result i32)
+    #|    (call $fd_filestat_get (call $attenuated_fd) (i32.const 500)))
+    #|  (func (export "set_flags") (result i32)
+    #|    (call $set_flags (call $attenuated_fd) (i32.const 0))))
+  let results : Array[(Int, Int)] = []
+  for name in ["write", "read", "seek", "filestat", "set_flags"] {
+    let result = compare_wasi_with_options(source, name, preopens=[
+      ("/tmp", "/"),
+    ])
+    results.push(
+      (
+        wasi_errno_from_result(result.interp_result),
+        wasi_errno_from_result(result.jit_result),
+      ),
+    )
+  }
+  debug_inspect(
+    results,
+    content="[(76, 76), (76, 76), (76, 76), (76, 76), (76, 76)]",
+  )
+}
+
+///|
 test "wasi jit: path_open rejects sync fdflags with ENOTSUP" {
   let source =
     #|(module
@@ -1758,7 +1821,7 @@ test "wasi jit: fd_readdir works on path_open directory" {
     #|    (drop (call $path_create_directory (i32.const 3) (i32.const 0) (i32.const 19)))
     #|    (drop (call $path_open
     #|      (i32.const 3) (i32.const 0) (i32.const 0) (i32.const 19)
-    #|      (i32.const 2) (i64.const 0) (i64.const 0) (i32.const 0)
+    #|      (i32.const 2) (i64.const 16384) (i64.const 0) (i32.const 0)
     #|      (i32.const 100)))
     #|    (call $fd_readdir
     #|      (i32.load (i32.const 100))
@@ -1791,7 +1854,7 @@ test "wasi jit: fd_readdir writes truncated dirent header" {
     #|    (drop (call $path_create_directory (i32.const 3) (i32.const 0) (i32.const 24)))
     #|    (drop (call $path_open
     #|      (i32.const 3) (i32.const 0) (i32.const 0) (i32.const 24)
-    #|      (i32.const 2) (i64.const 0) (i64.const 0) (i32.const 0)
+    #|      (i32.const 2) (i64.const 16384) (i64.const 0) (i32.const 0)
     #|      (i32.const 100)))
     #|    (local.set $fd (i32.load (i32.const 100)))
     #|    (drop (call $fd_readdir
@@ -2499,7 +2562,7 @@ test "wasi jit: fd_allocate regular file returns ENOTSUP (58)" {
     #|  (func (export "test") (result i32)
     #|    (drop (call $path_open
     #|      (i32.const 3) (i32.const 0) (i32.const 0) (i32.const 21)
-    #|      (i32.const 9) (i64.const 2) (i64.const 0) (i32.const 0)
+    #|      (i32.const 9) (i64.const 258) (i64.const 0) (i32.const 0)
     #|      (i32.const 100)))
     #|    (call $fd_allocate (i32.load (i32.const 100)) (i64.const 0) (i64.const 32))))
   let result = compare_wasi_with_options(source, "test", preopens=[
@@ -2671,7 +2734,7 @@ test "wasi jit: fd_fdstat_set_flags rejects DSYNC with EINVAL (28)" {
     #|  (func (export "test") (result i32)
     #|    (drop (call $path_open
     #|      (i32.const 3) (i32.const 0) (i32.const 0) (i32.const 20)
-    #|      (i32.const 9) (i64.const 0) (i64.const 0) (i32.const 0)
+    #|      (i32.const 9) (i64.const 8) (i64.const 0) (i32.const 0)
     #|      (i32.const 100)))
     #|    (call $fd_fdstat_set_flags (i32.load (i32.const 100)) (i32.const 2))))
   let result = compare_wasi_with_options(source, "test", preopens=[

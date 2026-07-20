@@ -221,6 +221,9 @@ pub fn fd_write(
         RegularFile => ()
         _ => return Errno::Badf.to_i32()
       }
+      if file_entry.require_base_rights(right_fd_write) is Err(errno) {
+        return errno.to_i32()
+      }
       let mut total_written = 0
       for i in 0..<iovs_len {
         let iov_offset = iovs + i * 8
@@ -303,6 +306,9 @@ pub fn fd_read(
       match file_entry.file_type {
         RegularFile => ()
         _ => return Errno::Badf.to_i32()
+      }
+      if file_entry.require_base_rights(right_fd_read) is Err(errno) {
+        return errno.to_i32()
       }
       let mut total_read = 0
       if first_non_empty_iov(mem, iovs, iovs_len) is Some(entry) {
@@ -832,14 +838,16 @@ pub fn fd_seek(
     }
     return Errno::SPipe.to_i32()
   }
-  let file = ctx.get_file(fd)
-  if file is None {
-    return Errno::Badf.to_i32()
+  let f = match ctx.get_file(fd) {
+    Some(file) => file
+    None => return Errno::Badf.to_i32()
   }
-  let f = file.unwrap()
   match f.file_type {
     RegularFile => ()
     _ => return Errno::Badf.to_i32()
+  }
+  if f.require_base_rights(right_fd_seek) is Err(errno) {
+    return errno.to_i32()
   }
   // Convert WASI whence to native
   let native_whence : Whence = match whence {
@@ -882,14 +890,16 @@ pub fn fd_tell(
     }
     return Errno::SPipe.to_i32()
   }
-  let file = ctx.get_file(fd)
-  if file is None {
-    return Errno::Badf.to_i32()
+  let f = match ctx.get_file(fd) {
+    Some(file) => file
+    None => return Errno::Badf.to_i32()
   }
-  let f = file.unwrap()
   match f.file_type {
     RegularFile => ()
     _ => return Errno::Badf.to_i32()
+  }
+  if f.require_base_rights(right_fd_tell) is Err(errno) {
+    return errno.to_i32()
   }
   let pos = native_tell(f.native_fd)
   if pos is None {
@@ -936,14 +946,16 @@ pub fn fd_pread(
     }
     return Errno::Badf.to_i32()
   }
-  let file = ctx.get_file(fd)
-  if file is None {
-    return Errno::Badf.to_i32()
+  let f = match ctx.get_file(fd) {
+    Some(file) => file
+    None => return Errno::Badf.to_i32()
   }
-  let f = file.unwrap()
   match f.file_type {
     RegularFile => ()
     _ => return Errno::Badf.to_i32()
+  }
+  if f.require_base_rights(right_fd_read | right_fd_seek) is Err(errno) {
+    return errno.to_i32()
   }
   // Save current position
   let saved_pos = native_tell(f.native_fd)
@@ -1019,14 +1031,16 @@ pub fn fd_pwrite(
     }
     return Errno::SPipe.to_i32()
   }
-  let file = ctx.get_file(fd)
-  if file is None {
-    return Errno::Badf.to_i32()
+  let f = match ctx.get_file(fd) {
+    Some(file) => file
+    None => return Errno::Badf.to_i32()
   }
-  let f = file.unwrap()
   match f.file_type {
     RegularFile => ()
     _ => return Errno::Badf.to_i32()
+  }
+  if f.require_base_rights(right_fd_write | right_fd_seek) is Err(errno) {
+    return errno.to_i32()
   }
   // Save current position
   let saved_pos = native_tell(f.native_fd)
@@ -1316,6 +1330,9 @@ pub fn fd_readdir(
   }
   let f = file.unwrap()
   if f.file_type is Directory {
+    if f.require_base_rights(right_fd_readdir) is Err(errno) {
+      return errno.to_i32()
+    }
     readdir_impl(mem, f.native_fd, buf_ptr, buf_len, cookie, bufused_ptr)
   } else {
     Errno::Badf.to_i32()
@@ -1669,18 +1686,25 @@ fn resolve_host_path_nofollow_leaf(
 /// Return the native fd for file-only operations (preview1 `get_file_fd`-like).
 ///
 /// Returns `None` for stdio, directories, sockets, and invalid fds.
-fn regular_file_native_fd(ctx : WasiContext, fd : Int) -> Int? {
+fn regular_file_native_fd_with_rights(
+  ctx : WasiContext,
+  fd : Int,
+  required : Int64,
+) -> Result[Int, Errno] {
   if is_stdio_descriptor(ctx, fd) {
-    return None
+    return Err(Badf)
   }
   match ctx.get_file(fd) {
     Some(file) =>
       if file.file_type is RegularFile {
-        Some(file.native_fd)
+        match file.require_base_rights(required) {
+          Ok(_) => Ok(file.native_fd)
+          Err(errno) => Err(errno)
+        }
       } else {
-        None
+        Err(Badf)
       }
-    None => None
+    None => Err(Badf)
   }
 }
 
@@ -1688,13 +1712,21 @@ fn regular_file_native_fd(ctx : WasiContext, fd : Int) -> Int? {
 /// Return the native fd for non-stdio descriptor operations (preview1 `get_fd`-like).
 ///
 /// Returns `None` for stdio and invalid fds.
-fn non_stdio_descriptor_native_fd(ctx : WasiContext, fd : Int) -> Int? {
+fn non_stdio_descriptor_native_fd_with_rights(
+  ctx : WasiContext,
+  fd : Int,
+  required : Int64,
+) -> Result[Int, Errno] {
   if is_stdio_descriptor(ctx, fd) {
-    return None
+    return Err(Badf)
   }
   match ctx.get_file(fd) {
-    Some(file) => Some(file.native_fd)
-    None => None
+    Some(file) =>
+      match file.require_base_rights(required) {
+        Ok(_) => Ok(file.native_fd)
+        Err(errno) => Err(errno)
+      }
+    None => Err(Badf)
   }
 }
 
@@ -1710,9 +1742,10 @@ fn is_valid_descriptor_for_sock(ctx : WasiContext, fd : Int) -> Bool {
 ///|
 /// fd_sync - Synchronize file to disk
 pub fn fd_sync_impl(ctx : WasiContext, fd : Int) -> Int {
-  let native_fd = match regular_file_native_fd(ctx, fd) {
-    Some(native_fd) => native_fd
-    None => return Errno::Badf.to_i32()
+  let native_fd = match
+    regular_file_native_fd_with_rights(ctx, fd, right_fd_sync) {
+    Ok(native_fd) => native_fd
+    Err(errno) => return errno.to_i32()
   }
   if native_fsync(native_fd) {
     Errno::Success.to_i32()
@@ -1724,9 +1757,10 @@ pub fn fd_sync_impl(ctx : WasiContext, fd : Int) -> Int {
 ///|
 /// fd_datasync - Synchronize file data to disk
 pub fn fd_datasync_impl(ctx : WasiContext, fd : Int) -> Int {
-  let native_fd = match regular_file_native_fd(ctx, fd) {
-    Some(native_fd) => native_fd
-    None => return Errno::Badf.to_i32()
+  let native_fd = match
+    regular_file_native_fd_with_rights(ctx, fd, right_fd_datasync) {
+    Ok(native_fd) => native_fd
+    Err(errno) => return errno.to_i32()
   }
   if native_fdatasync(native_fd) {
     Errno::Success.to_i32()
@@ -1856,6 +1890,9 @@ pub fn fd_filestat_get_impl(
   }
   match ctx.get_file(fd) {
     Some(file) => {
+      if file.require_base_rights(right_fd_filestat_get) is Err(errno) {
+        return errno.to_i32()
+      }
       let stat = native_fstat(file.native_fd)
       match stat {
         Some(s) => {
@@ -1975,9 +2012,10 @@ pub fn fd_filestat_set_size_impl(
   fd : Int,
   size : Int64,
 ) -> Int {
-  let native_fd = match regular_file_native_fd(ctx, fd) {
-    Some(native_fd) => native_fd
-    None => return Errno::Badf.to_i32()
+  let native_fd = match
+    regular_file_native_fd_with_rights(ctx, fd, right_fd_filestat_set_size) {
+    Ok(native_fd) => native_fd
+    Err(errno) => return errno.to_i32()
   }
   if native_ftruncate(native_fd, size) {
     Errno::Success.to_i32()
@@ -2014,9 +2052,12 @@ pub fn fd_filestat_set_times_impl(
   if fst_flags_check != Errno::Success.to_i32() {
     return fst_flags_check
   }
-  let native_fd = match non_stdio_descriptor_native_fd(ctx, fd) {
-    Some(native_fd) => native_fd
-    None => return Errno::Badf.to_i32()
+  let native_fd = match
+    non_stdio_descriptor_native_fd_with_rights(
+      ctx, fd, right_fd_filestat_set_times,
+    ) {
+    Ok(native_fd) => native_fd
+    Err(errno) => return errno.to_i32()
   }
   if native_futimens(native_fd, atim, mtim, fst_flags) {
     Errno::Success.to_i32()
@@ -2108,8 +2149,9 @@ pub fn fd_advise_impl(
   if advice < 0 || advice > 5 {
     return Errno::Inval.to_i32()
   }
-  if regular_file_native_fd(ctx, fd) is None {
-    return Errno::Badf.to_i32()
+  match regular_file_native_fd_with_rights(ctx, fd, right_fd_advise) {
+    Ok(_) => ()
+    Err(errno) => return errno.to_i32()
   }
   Errno::Success.to_i32()
 }
@@ -2122,8 +2164,9 @@ pub fn fd_allocate_impl(
   _offset : Int64,
   _len : Int64,
 ) -> Int {
-  if regular_file_native_fd(ctx, fd) is None {
-    return Errno::Badf.to_i32()
+  match regular_file_native_fd_with_rights(ctx, fd, right_fd_allocate) {
+    Ok(_) => ()
+    Err(errno) => return errno.to_i32()
   }
   Errno::NotSup.to_i32()
 }
@@ -2142,14 +2185,17 @@ pub fn fd_fdstat_set_flags_impl(
   if is_stdio_descriptor(ctx, fd) {
     return Errno::Badf.to_i32()
   }
-  let native_fd = match ctx.get_file(fd) {
-    Some(file) =>
-      if file.file_type is Directory {
-        return Errno::Badf.to_i32()
-      } else {
-        file.native_fd
-      }
+  let file = match ctx.get_file(fd) {
+    Some(file) => file
     None => return Errno::Badf.to_i32()
+  }
+  let native_fd = if file.file_type is Directory {
+    return Errno::Badf.to_i32()
+  } else {
+    file.native_fd
+  }
+  if file.require_base_rights(right_fd_fdstat_set_flags) is Err(errno) {
+    return errno.to_i32()
   }
   // Match wasmtime behavior:
   // - unknown fdflags bits are rejected before descriptor lookup

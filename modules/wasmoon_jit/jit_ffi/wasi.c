@@ -210,17 +210,29 @@ static uint8_t stdio_filetype_native(int native_fd) {
 #endif
 }
 
-static int get_non_stdio_native_fd(jit_context_t *ctx, int wasi_fd, int *native_fd_out) {
+static int get_non_stdio_native_fd_with_rights(
+    jit_context_t *ctx,
+    int wasi_fd,
+    uint64_t required,
+    int *native_fd_out
+) {
     if (!ctx || !native_fd_out) return WASI_EBADF;
     if (is_stdio_fd(ctx, wasi_fd)) return WASI_EBADF;
     int native_fd = get_native_fd(ctx, wasi_fd);
     if (native_fd < 0) return WASI_EBADF;
     if (!ctx->fd_table || wasi_fd >= ctx->fd_table_size) return WASI_EBADF;
+    int rights_err = require_base_rights(ctx, wasi_fd, required);
+    if (rights_err != WASI_ESUCCESS) return rights_err;
     *native_fd_out = native_fd;
     return WASI_ESUCCESS;
 }
 
-static int get_regular_file_native_fd(jit_context_t *ctx, int wasi_fd, int *native_fd_out) {
+static int get_regular_file_native_fd_with_rights(
+    jit_context_t *ctx,
+    int wasi_fd,
+    uint64_t required,
+    int *native_fd_out
+) {
     if (!ctx || !native_fd_out) return WASI_EBADF;
     if (is_stdio_fd(ctx, wasi_fd)) return WASI_EBADF;
     if (is_preopen_fd(ctx, wasi_fd) || get_open_dir_path(ctx, wasi_fd)) return WASI_EBADF;
@@ -231,6 +243,8 @@ static int get_regular_file_native_fd(jit_context_t *ctx, int wasi_fd, int *nati
     if (fstat(native_fd, &st) < 0) return WASI_EBADF;
     if (!S_ISREG(st.st_mode)) return WASI_EBADF;
 #endif
+    int rights_err = require_base_rights(ctx, wasi_fd, required);
+    if (rights_err != WASI_ESUCCESS) return rights_err;
     *native_fd_out = native_fd;
     return WASI_ESUCCESS;
 }
@@ -1315,6 +1329,9 @@ static int64_t wasi_fd_write_impl(
         if (get_native_fd(ctx, wasi_fd) < 0) return WASI_EBADF;
     } else if (is_preopen_fd(ctx, wasi_fd) || get_open_dir_path(ctx, wasi_fd)) {
         return WASI_EBADF;
+    } else {
+        int rights_err = require_base_rights(ctx, wasi_fd, WASI_RIGHT_FD_WRITE);
+        if (rights_err != WASI_ESUCCESS) return rights_err;
     }
     int use_stdout_capture = (stdio_slot == 1 && ctx->wasi_stdout_capture);
     int use_stderr_capture = (stdio_slot == 2 && ctx->wasi_stderr_capture);
@@ -1388,6 +1405,10 @@ static int64_t wasi_fd_read_impl(
     if (stdio_slot == 1 || stdio_slot == 2) return WASI_EBADF;
     if (stdio_slot < 0 && (is_preopen_fd(ctx, wasi_fd) || get_open_dir_path(ctx, wasi_fd))) {
         return WASI_EBADF;
+    }
+    if (stdio_slot < 0) {
+        int rights_err = require_base_rights(ctx, wasi_fd, WASI_RIGHT_FD_READ);
+        if (rights_err != WASI_ESUCCESS) return rights_err;
     }
     uint32_t iovs_u = (uint32_t)iovs;
     uint32_t iovs_len_u = (uint32_t)iovs_len;
@@ -1501,9 +1522,10 @@ static int64_t wasi_fd_close_impl(
 }
 
 // fd_seek: (fd, offset, whence, newoffset) -> errno
-static int64_t wasi_fd_seek_impl(
+static int64_t wasi_fd_seek_with_right(
     jit_context_t *ctx,
-    int64_t fd, int64_t offset, int64_t whence, int64_t newoffset_ptr
+    int64_t fd, int64_t offset, int64_t whence, int64_t newoffset_ptr,
+    uint64_t required
 ) {
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
     if (whence < 0 || whence > 2) return trap_invalid_wasi_abi_arg();
@@ -1518,6 +1540,8 @@ static int64_t wasi_fd_seek_impl(
     if (is_preopen_fd(ctx, wasi_fd) || get_open_dir_path(ctx, wasi_fd)) return WASI_EBADF;
     int native_fd = get_native_fd(ctx, wasi_fd);
     if (native_fd < 0) return WASI_EBADF;
+    int rights_err = require_base_rights(ctx, wasi_fd, required);
+    if (rights_err != WASI_ESUCCESS) return rights_err;
     uint32_t newoffset_ptr_u = (uint32_t)newoffset_ptr;
     if (!check_mem_range(ctx, newoffset_ptr_u, 8)) return WASI_EFAULT;
     uint32_t whence_u = (uint32_t)whence;
@@ -1533,12 +1557,23 @@ static int64_t wasi_fd_seek_impl(
     return WASI_ESUCCESS;
 }
 
+static int64_t wasi_fd_seek_impl(
+    jit_context_t *ctx,
+    int64_t fd, int64_t offset, int64_t whence, int64_t newoffset_ptr
+) {
+    return wasi_fd_seek_with_right(
+        ctx, fd, offset, whence, newoffset_ptr, WASI_RIGHT_FD_SEEK
+    );
+}
+
 // fd_tell: (fd, offset) -> errno
 static int64_t wasi_fd_tell_impl(
     jit_context_t *ctx,
     int64_t fd, int64_t offset_ptr
 ) {
-    return wasi_fd_seek_impl(ctx, fd, 0, 1 /* SEEK_CUR */, offset_ptr);
+    return wasi_fd_seek_with_right(
+        ctx, fd, 0, 1 /* SEEK_CUR */, offset_ptr, WASI_RIGHT_FD_TELL
+    );
 }
 
 // fd_sync: (fd) -> errno
@@ -1547,7 +1582,9 @@ static int64_t wasi_fd_sync_impl(
 ) {
     if (!ctx) return WASI_EBADF;
     int native_fd = -1;
-    int err = get_regular_file_native_fd(ctx, (int32_t)fd, &native_fd);
+    int err = get_regular_file_native_fd_with_rights(
+        ctx, (int32_t)fd, WASI_RIGHT_FD_SYNC, &native_fd
+    );
     if (err != WASI_ESUCCESS) return err;
 
 #ifdef _WIN32
@@ -1564,7 +1601,9 @@ static int64_t wasi_fd_datasync_impl(
 ) {
     if (!ctx) return WASI_EBADF;
     int native_fd = -1;
-    int err = get_regular_file_native_fd(ctx, (int32_t)fd, &native_fd);
+    int err = get_regular_file_native_fd_with_rights(
+        ctx, (int32_t)fd, WASI_RIGHT_FD_DATASYNC, &native_fd
+    );
     if (err != WASI_ESUCCESS) return err;
 
 #ifdef _WIN32
@@ -2040,6 +2079,11 @@ static int64_t wasi_fd_filestat_get_impl(
         return WASI_ESUCCESS;
     }
 
+    int rights_err = require_base_rights(
+        ctx, wasi_fd, WASI_RIGHT_FD_FILESTAT_GET
+    );
+    if (rights_err != WASI_ESUCCESS) return rights_err;
+
     // Handle preopens
     if (is_preopen_fd(ctx, wasi_fd)) {
         memset(mem + buf_ptr_u, 0, 64);
@@ -2083,7 +2127,9 @@ static int64_t wasi_fd_filestat_set_size_impl(
 ) {
     if (!ctx) return WASI_EBADF;
     int native_fd = -1;
-    int err = get_regular_file_native_fd(ctx, (int32_t)fd, &native_fd);
+    int err = get_regular_file_native_fd_with_rights(
+        ctx, (int32_t)fd, WASI_RIGHT_FD_FILESTAT_SET_SIZE, &native_fd
+    );
     if (err != WASI_ESUCCESS) return err;
 
 #ifndef _WIN32
@@ -2357,6 +2403,11 @@ static int32_t wasi_fd_pread_impl(
     }
     if (is_preopen_fd(ctx, fd) || get_open_dir_path(ctx, fd)) return WASI_EBADF;
 
+    int rights_err = require_base_rights(
+        ctx, fd, WASI_RIGHT_FD_READ | WASI_RIGHT_FD_SEEK
+    );
+    if (rights_err != WASI_ESUCCESS) return rights_err;
+
     int native_fd = get_native_fd(ctx, fd);
     if (native_fd < 0) return WASI_EBADF;
 
@@ -2404,6 +2455,11 @@ static int32_t wasi_fd_pwrite_impl(
         return WASI_EBADF;
     }
     if (is_preopen_fd(ctx, fd) || get_open_dir_path(ctx, fd)) return WASI_EBADF;
+
+    int rights_err = require_base_rights(
+        ctx, fd, WASI_RIGHT_FD_WRITE | WASI_RIGHT_FD_SEEK
+    );
+    if (rights_err != WASI_ESUCCESS) return rights_err;
 
     int native_fd = get_native_fd(ctx, fd);
     if (native_fd < 0) return WASI_EBADF;
@@ -2482,6 +2538,9 @@ static int32_t wasi_fd_readdir_impl(
 #ifndef _WIN32
     DIR *dir = NULL;
     if (!is_preopen_fd(ctx, fd) && !get_open_dir_path(ctx, fd)) return WASI_EBADF;
+
+    int rights_err = require_base_rights(ctx, fd, WASI_RIGHT_FD_READDIR);
+    if (rights_err != WASI_ESUCCESS) return rights_err;
 
     int native_fd = get_native_fd(ctx, fd);
     if (native_fd < 0) return WASI_EBADF;
@@ -2857,7 +2916,9 @@ static int32_t wasi_fd_filestat_set_times_impl(
     if (unknown_fst_flags_for_set_times(fst_flags)) return trap_invalid_wasi_abi_arg();
     if (conflicting_fst_flags_for_set_times(fst_flags)) return WASI_EINVAL;
     int native_fd = -1;
-    int err = get_non_stdio_native_fd(ctx, fd, &native_fd);
+    int err = get_non_stdio_native_fd_with_rights(
+        ctx, fd, WASI_RIGHT_FD_FILESTAT_SET_TIMES, &native_fd
+    );
     if (err != WASI_ESUCCESS) return err;
 
 #ifndef _WIN32
@@ -3010,7 +3071,9 @@ static int32_t wasi_fd_advise_impl(
     (void)len;
     if (advice < 0 || advice > 5) return trap_invalid_wasi_abi_arg();
     int native_fd = -1;
-    int err = get_regular_file_native_fd(ctx, fd, &native_fd);
+    int err = get_regular_file_native_fd_with_rights(
+        ctx, fd, WASI_RIGHT_FD_ADVISE, &native_fd
+    );
     if (err != WASI_ESUCCESS) return err;
     (void)native_fd;
     // Advisory only, always succeed
@@ -3051,7 +3114,9 @@ static int32_t wasi_fd_allocate_impl(
     (void)offset;
     (void)len;
     int native_fd = -1;
-    int err = get_regular_file_native_fd(ctx, fd, &native_fd);
+    int err = get_regular_file_native_fd_with_rights(
+        ctx, fd, WASI_RIGHT_FD_ALLOCATE, &native_fd
+    );
     if (err != WASI_ESUCCESS) return err;
     (void)native_fd;
     return WASI_ENOTSUP;
@@ -3159,6 +3224,10 @@ static int32_t wasi_fd_fdstat_set_flags_impl(
 
     int native_fd = get_native_fd(ctx, fd);
     if (native_fd < 0) return WASI_EBADF;
+    int rights_err = require_base_rights(
+        ctx, fd, WASI_RIGHT_FD_FDSTAT_SET_FLAGS
+    );
+    if (rights_err != WASI_ESUCCESS) return rights_err;
     // Match wasmtime behavior:
     // - unknown fdflags bits are rejected before descriptor lookup
     // - DSYNC/RSYNC/SYNC are rejected with EINVAL only for valid file descriptors

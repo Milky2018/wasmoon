@@ -31,6 +31,18 @@ pub(all) struct OpenFile {
 }
 
 ///|
+fn OpenFile::require_base_rights(
+  self : OpenFile,
+  required : Int64,
+) -> Result[Unit, Errno] {
+  if (self.rights_base & required) == required {
+    Ok(())
+  } else {
+    Err(NotCapable)
+  }
+}
+
+///|
 /// WASI execution context
 /// Maintains state for WASI function calls
 pub(all) struct WasiContext {
@@ -347,10 +359,9 @@ fn WasiContext::get_file_with_base_rights(
   match self.open_files.get(fd) {
     None => Err(Badf)
     Some(file) =>
-      if (file.rights_base & required) == required {
-        Ok(file)
-      } else {
-        Err(NotCapable)
+      match file.require_base_rights(required) {
+        Ok(_) => Ok(file)
+        Err(errno) => Err(errno)
       }
   }
 }
