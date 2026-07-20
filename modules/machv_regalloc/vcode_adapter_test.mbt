@@ -32,12 +32,10 @@ test "generic adapter allocates Target VCode without reading target instructions
     content=(
       #|allocation adapter
       #|  v0:i64 -> p0:int
-      #|  v1:i64 -> stack0:i64(size=8, align=8)
+      #|  v1:i64 -> p0:int
       #|  i0 operand0 -> p0:int
-      #|  i0 operand1 -> p1:int
-      #|  i1 operand0 -> p1:int
-      #|  after(i0): spill v1 p1:int -> stack0
-      #|  before(i1): reload v1 stack0 -> p1:int
+      #|  i0 operand1 -> p0:int
+      #|  i1 operand0 -> p0:int
       #|
     ),
   )
@@ -167,14 +165,12 @@ test "fixed operands are instruction-point constraints rather than value homes" 
       #|allocation fixed_point
       #|  v0:i64 -> p0:int
       #|  v1:i64 -> p1:int
-      #|  v2:i64 -> stack0:i64(size=8, align=8)
+      #|  v2:i64 -> p0:int
       #|  i0 operand0 -> p0:int
       #|  i0 operand1 -> p2:int
       #|  i0 operand2 -> p0:int
-      #|  i1 operand0 -> p2:int
+      #|  i1 operand0 -> p0:int
       #|  before(i0): move v1 p1:int -> p2:int
-      #|  after(i0): spill v2 p0:int -> stack0
-      #|  before(i1): reload v2 stack0 -> p2:int
       #|
     ),
   )

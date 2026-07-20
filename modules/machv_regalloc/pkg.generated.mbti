@@ -14,8 +14,6 @@ pub fn[Inst] allocate_vcode(@vcode.Function[Inst], VCodeAllocationEnvironment) -
 pub suberror VCodeAllocationError {
   InvalidSelected(cause~ : @vcode.VCodeVerifyError)
   RegallocFailure(cause~ : @regalloc.VerifyError)
-  MissingRegisterClass(class~ : @vcode.RegClass)
-  MissingSpillScratch(class~ : @vcode.RegClass)
   AllocationConstructionRejected
   InvalidAllocation(cause~ : @vcode.AllocationVerifyError)
 } derive(@debug.Debug)

@@ -16,17 +16,17 @@ test "AArch64 allocation honors incoming and return ABI constraints" {
       #|allocation allocated_add
       #|  v0:i64 -> p0:int
       #|  v1:i64 -> p1:int
-      #|  v2:i64 -> p2:int
-      #|  v3:i64 -> p0:int
-      #|  v4:i64 -> p1:int
+      #|  v2:i64 -> p0:int
+      #|  v3:i64 -> p1:int
+      #|  v4:i64 -> p0:int
       #|  i0 operand0 -> p0:int
-      #|  i0 operand1 -> p2:int
+      #|  i0 operand1 -> p0:int
       #|  i1 operand0 -> p1:int
-      #|  i1 operand1 -> p0:int
-      #|  i2 operand0 -> p2:int
-      #|  i2 operand1 -> p0:int
-      #|  i2 operand2 -> p1:int
-      #|  i3 operand0 -> p1:int
+      #|  i1 operand1 -> p1:int
+      #|  i2 operand0 -> p0:int
+      #|  i2 operand1 -> p1:int
+      #|  i2 operand2 -> p0:int
+      #|  i3 operand0 -> p0:int
       #|
     ),
   )
@@ -61,24 +61,23 @@ test "AArch64 frame plans spills and callee-saved registers" {
   inspect(
     plan_frame(function, allocation).summary(),
     content=(
-      #|aarch64 frame size=144 align=16
+      #|aarch64 frame size=128 align=16
       #|  place stack0 at sp+0
       #|  place stack1 at sp+8
       #|  place stack2 at sp+16
       #|  place stack3 at sp+24
       #|  place stack4 at sp+32
       #|  place stack5 at sp+40
-      #|  place stack6 at sp+48
-      #|  save p19:int at sp+56
-      #|  save p20:int at sp+64
-      #|  save p21:int at sp+72
-      #|  save p22:int at sp+80
-      #|  save p23:int at sp+88
-      #|  save p24:int at sp+96
-      #|  save p25:int at sp+104
-      #|  save p26:int at sp+112
-      #|  save p27:int at sp+120
-      #|  save p28:int at sp+128
+      #|  save p19:int at sp+48
+      #|  save p20:int at sp+56
+      #|  save p21:int at sp+64
+      #|  save p22:int at sp+72
+      #|  save p23:int at sp+80
+      #|  save p24:int at sp+88
+      #|  save p25:int at sp+96
+      #|  save p26:int at sp+104
+      #|  save p27:int at sp+112
+      #|  save p28:int at sp+120
       #|
     ),
   )
@@ -112,14 +111,14 @@ test "AArch64 allocation keeps values live across a direct call out of clobbers"
       #|  v0:i64 -> p0:int
       #|  v1:i64 -> p19:int
       #|  v2:i64 -> p0:int
-      #|  v3:i64 -> p1:int
+      #|  v3:i64 -> p0:int
       #|  i0 operand0 -> p0:int
       #|  i0 operand1 -> p19:int
       #|  i2 operand0 -> p0:int
       #|  i3 operand0 -> p19:int
       #|  i3 operand1 -> p0:int
-      #|  i3 operand2 -> p1:int
-      #|  i4 operand0 -> p1:int
+      #|  i3 operand2 -> p0:int
+      #|  i4 operand0 -> p0:int
       #|
     ),
   )
@@ -169,25 +168,25 @@ test "AArch64 allocation preserves state across both returns from setjmp" {
       #|  v0:ptr64 -> p0:int
       #|  v1:i32 -> p1:int
       #|  v2:i64 -> p2:int
-      #|  v3:ptr64 -> p3:int
-      #|  v4:i32 -> p0:int
+      #|  v3:ptr64 -> p0:int
+      #|  v4:i32 -> p1:int
       #|  v5:i64 -> p19:int
       #|  v6:i32 -> p0:int
-      #|  v7:i64 -> p1:int
+      #|  v7:i64 -> p0:int
       #|  v8:i64 -> p0:int
       #|  i0 operand0 -> p0:int
-      #|  i0 operand1 -> p3:int
+      #|  i0 operand1 -> p0:int
       #|  i1 operand0 -> p1:int
-      #|  i1 operand1 -> p0:int
+      #|  i1 operand1 -> p1:int
       #|  i2 operand0 -> p2:int
       #|  i2 operand1 -> p19:int
-      #|  i3 operand0 -> p3:int
-      #|  i3 operand1 -> p0:int
+      #|  i3 operand0 -> p0:int
+      #|  i3 operand1 -> p1:int
       #|  i4 operand0 -> p0:int
       #|  i5 operand0 -> p0:int
-      #|  i5 operand1 -> p1:int
+      #|  i5 operand1 -> p0:int
       #|  i6 operand0 -> p19:int
-      #|  i6 operand1 -> p1:int
+      #|  i6 operand1 -> p0:int
       #|  i6 operand2 -> p0:int
       #|  i7 operand0 -> p0:int
       #|
@@ -235,39 +234,39 @@ test "AArch64 call inputs may remain in spill slots" {
       #|  v5:i64 -> p5:int
       #|  v6:i64 -> p6:int
       #|  v7:i64 -> p7:int
-      #|  v8:i64 -> p0:int
-      #|  v9:i64 -> p0:int
-      #|  v10:i64 -> p0:int
-      #|  v11:i64 -> p0:int
-      #|  v12:i64 -> p0:int
-      #|  v13:i64 -> p0:int
-      #|  v14:i64 -> p0:int
-      #|  v15:i64 -> p0:int
-      #|  v16:i64 -> p0:int
-      #|  v17:i64 -> p0:int
-      #|  v18:i64 -> p0:int
-      #|  v19:i64 -> p0:int
-      #|  v20:i64 -> p0:int
-      #|  v21:i64 -> p0:int
-      #|  v22:i64 -> p0:int
-      #|  v23:i64 -> p0:int
-      #|  v24:i64 -> p0:int
-      #|  v25:i64 -> p0:int
-      #|  v26:i64 -> p0:int
-      #|  v27:i64 -> p0:int
-      #|  v28:i64 -> p0:int
-      #|  v29:i64 -> p0:int
-      #|  v30:i64 -> p0:int
-      #|  v31:i64 -> p0:int
-      #|  v32:i64 -> p8:int
-      #|  v33:i64 -> p0:int
-      #|  v34:i64 -> p1:int
-      #|  v35:i64 -> p2:int
-      #|  v36:i64 -> p3:int
-      #|  v37:i64 -> p4:int
-      #|  v38:i64 -> p5:int
-      #|  v39:i64 -> p6:int
-      #|  v40:i64 -> p7:int
+      #|  v8:i64 -> p8:int
+      #|  v9:i64 -> p9:int
+      #|  v10:i64 -> p10:int
+      #|  v11:i64 -> p11:int
+      #|  v12:i64 -> p12:int
+      #|  v13:i64 -> p13:int
+      #|  v14:i64 -> p14:int
+      #|  v15:i64 -> p15:int
+      #|  v16:i64 -> p19:int
+      #|  v17:i64 -> p20:int
+      #|  v18:i64 -> p21:int
+      #|  v19:i64 -> p22:int
+      #|  v20:i64 -> p23:int
+      #|  v21:i64 -> p24:int
+      #|  v22:i64 -> p25:int
+      #|  v23:i64 -> p26:int
+      #|  v24:i64 -> p27:int
+      #|  v25:i64 -> p28:int
+      #|  v26:i64 -> stack0:i64(size=8, align=8)
+      #|  v27:i64 -> stack1:i64(size=8, align=8)
+      #|  v28:i64 -> stack2:i64(size=8, align=8)
+      #|  v29:i64 -> stack3:i64(size=8, align=8)
+      #|  v30:i64 -> stack4:i64(size=8, align=8)
+      #|  v31:i64 -> stack5:i64(size=8, align=8)
+      #|  v32:i64 -> p0:int
+      #|  v33:i64 -> p1:int
+      #|  v34:i64 -> p2:int
+      #|  v35:i64 -> p3:int
+      #|  v36:i64 -> p4:int
+      #|  v37:i64 -> p5:int
+      #|  v38:i64 -> p6:int
+      #|  v39:i64 -> p7:int
+      #|  v40:i64 -> p8:int
       #|  v41:i64 -> p9:int
       #|  v42:i64 -> p10:int
       #|  v43:i64 -> p11:int
@@ -292,22 +291,22 @@ test "AArch64 call inputs may remain in spill slots" {
       #|  v62:i64 -> stack4:i64(size=8, align=8)
       #|  v63:i64 -> stack5:i64(size=8, align=8)
       #|  i0 operand0 -> p0:int
-      #|  i0 operand1 -> p8:int
+      #|  i0 operand1 -> p0:int
       #|  i1 operand0 -> p1:int
-      #|  i1 operand1 -> p0:int
+      #|  i1 operand1 -> p1:int
       #|  i2 operand0 -> p2:int
-      #|  i2 operand1 -> p1:int
+      #|  i2 operand1 -> p2:int
       #|  i3 operand0 -> p3:int
-      #|  i3 operand1 -> p2:int
+      #|  i3 operand1 -> p3:int
       #|  i4 operand0 -> p4:int
-      #|  i4 operand1 -> p3:int
+      #|  i4 operand1 -> p4:int
       #|  i5 operand0 -> p5:int
-      #|  i5 operand1 -> p4:int
+      #|  i5 operand1 -> p5:int
       #|  i6 operand0 -> p6:int
-      #|  i6 operand1 -> p5:int
+      #|  i6 operand1 -> p6:int
       #|  i7 operand0 -> p7:int
-      #|  i7 operand1 -> p6:int
-      #|  i8 operand0 -> p7:int
+      #|  i7 operand1 -> p7:int
+      #|  i8 operand0 -> p8:int
       #|  i9 operand0 -> p9:int
       #|  i10 operand0 -> p10:int
       #|  i11 operand0 -> p11:int
@@ -331,15 +330,15 @@ test "AArch64 call inputs may remain in spill slots" {
       #|  i29 operand0 -> p16:int
       #|  i30 operand0 -> p16:int
       #|  i31 operand0 -> p16:int
-      #|  i32 operand0 -> p8:int
-      #|  i32 operand1 -> p0:int
-      #|  i32 operand2 -> p1:int
-      #|  i32 operand3 -> p2:int
-      #|  i32 operand4 -> p3:int
-      #|  i32 operand5 -> p4:int
-      #|  i32 operand6 -> p5:int
-      #|  i32 operand7 -> p6:int
-      #|  i32 operand8 -> p7:int
+      #|  i32 operand0 -> p0:int
+      #|  i32 operand1 -> p1:int
+      #|  i32 operand2 -> p2:int
+      #|  i32 operand3 -> p3:int
+      #|  i32 operand4 -> p4:int
+      #|  i32 operand5 -> p5:int
+      #|  i32 operand6 -> p6:int
+      #|  i32 operand7 -> p7:int
+      #|  i32 operand8 -> p8:int
       #|  i32 operand9 -> p9:int
       #|  i32 operand10 -> p10:int
       #|  i32 operand11 -> p11:int
@@ -440,7 +439,7 @@ test "AArch64 frame separates semantic objects from outgoing spills and saves" {
   inspect(
     plan_frame(function, allocation).summary(),
     content=(
-      #|aarch64 frame size=240 align=16
+      #|aarch64 frame size=224 align=16
       #|  outgoing 16 bytes at sp+0
       #|  stack-objects 64 bytes at sp+16
       #|  place stack0 at sp+80
@@ -450,18 +449,17 @@ test "AArch64 frame separates semantic objects from outgoing spills and saves" {
       #|  place stack4 at sp+112
       #|  place stack5 at sp+120
       #|  place stack6 at sp+128
-      #|  place stack7 at sp+136
-      #|  save p19:int at sp+144
-      #|  save p20:int at sp+152
-      #|  save p21:int at sp+160
-      #|  save p22:int at sp+168
-      #|  save p23:int at sp+176
-      #|  save p24:int at sp+184
-      #|  save p25:int at sp+192
-      #|  save p26:int at sp+200
-      #|  save p27:int at sp+208
-      #|  save p28:int at sp+216
-      #|  save p30:int at sp+224
+      #|  save p19:int at sp+136
+      #|  save p20:int at sp+144
+      #|  save p21:int at sp+152
+      #|  save p22:int at sp+160
+      #|  save p23:int at sp+168
+      #|  save p24:int at sp+176
+      #|  save p25:int at sp+184
+      #|  save p26:int at sp+192
+      #|  save p27:int at sp+200
+      #|  save p28:int at sp+208
+      #|  save p30:int at sp+216
       #|
     ),
   )

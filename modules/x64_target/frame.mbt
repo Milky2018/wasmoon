@@ -74,12 +74,44 @@ fn used_callee_saved_registers(
   allocation : @vcode.Allocation,
 ) -> Array[@vcode.PhysicalReg] {
   let regs : Array[@vcode.PhysicalReg] = []
+  fn record(
+    regs : Array[@vcode.PhysicalReg],
+    reg : @vcode.PhysicalReg,
+  ) -> Unit {
+    if is_callee_saved(reg) && !regs.contains(reg) {
+      regs.push(reg)
+    }
+  }
   for index in 0..<function.value_count() {
     let value = function.value_at(index).unwrap()
-    if allocation.value_location(value) is Some(Register(reg)) &&
-      is_callee_saved(reg) &&
-      !regs.contains(reg) {
-      regs.push(reg)
+    if allocation.value_location(value) is Some(Register(reg)) {
+      record(regs, reg)
+    }
+  }
+  for index in 0..<function.instruction_count() {
+    let instruction = function.instruction_at(index).unwrap()
+    for operand in 0..<function.instruction_operand_count(instruction) {
+      if allocation.operand_location(instruction, operand)
+        is Some(Register(reg)) {
+        record(regs, reg)
+      }
+    }
+  }
+  for edit in allocation.edits() {
+    match edit.kind() {
+      Spill(reg~, ..) | Reload(reg~, ..) => record(regs, reg)
+      Move(from~, to~, ..) => {
+        record(regs, from)
+        record(regs, to)
+      }
+      EdgeMove(from~, to~, ..) => {
+        if from is Register(reg) {
+          record(regs, reg)
+        }
+        if to is Register(reg) {
+          record(regs, reg)
+        }
+      }
     }
   }
   regs.sort_by(fn(left, right) {

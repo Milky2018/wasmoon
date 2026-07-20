@@ -27,6 +27,7 @@ pub fn compute_spill_weight(
     }
     let constraint_bonus = match use_pos.constraint {
       AnyReg => 1000
+      AnyLocation => 0
       FixedReg(_) => 2000
     }
     weight = weight + hot_bonus + def_bonus + constraint_bonus

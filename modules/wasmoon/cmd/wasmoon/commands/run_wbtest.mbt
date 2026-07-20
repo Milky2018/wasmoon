@@ -92,6 +92,11 @@ test "jit cache bytes/ints conversion keeps unsigned bytes" {
 }
 
 ///|
+test "run JIT cache version tracks machine-code semantics" {
+  inspect(run_jit_cache_version, content="v4")
+}
+
+///|
 test "compile metrics bypass the run JIT cache" {
   inspect(should_use_run_jit_cache(false, false), content="true")
   inspect(should_use_run_jit_cache(true, false), content="false")

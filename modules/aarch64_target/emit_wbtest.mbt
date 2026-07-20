@@ -60,6 +60,14 @@ test "AArch64 stack allocation probes every guard-page interval" {
 }
 
 ///|
+test "AArch64 unsigned i32 extension writes the register when coalesced" {
+  let buffer = CodeBuffer::new()
+  let register = @vcode.PhysicalReg::new(3, Int)
+  emit_conversion(buffer, ExtendI32ToI64(Unsigned), register, register)
+  debug_inspect(buffer.code, content="[0xe3, 0x03, 0x03, 0x2a]")
+}
+
+///|
 test "AArch64 integer unary encodings place source in the correct field" {
   let source = @vcode.PhysicalReg::new(3, Int)
   let destination = @vcode.PhysicalReg::new(5, Int)

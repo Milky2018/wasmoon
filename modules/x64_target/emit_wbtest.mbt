@@ -52,3 +52,11 @@ test "x64 stack allocation probes every guard-page interval" {
     ),
   )
 }
+
+///|
+test "x64 unsigned i32 extension writes the register when coalesced" {
+  let buffer = CodeBuffer::new()
+  let register = @vcode.PhysicalReg::new(0, Int)
+  emit_conversion(buffer, ExtendI32ToI64(Unsigned), register, register)
+  debug_inspect(buffer.code, content="[0x89, 0xc0]")
+}

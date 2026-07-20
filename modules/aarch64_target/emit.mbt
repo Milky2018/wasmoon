@@ -1860,8 +1860,11 @@ fn emit_conversion(
   destination : @vcode.PhysicalReg,
 ) -> Unit raise AArch64EmitError {
   match conversion {
-    WrapI64ToI32 | ExtendI32ToI64(Unsigned) =>
-      emit_move(buffer, I32, destination, source)
+    WrapI64ToI32 => emit_move(buffer, I32, destination, source)
+    ExtendI32ToI64(Unsigned) =>
+      buffer.emit_word(
+        0x2A0003E0U | (reg_bits(source) << 16) | reg_bits(destination),
+      )
     ExtendI32ToI64(Signed) =>
       buffer.emit_word(
         0x93407C00U | (reg_bits(source) << 5) | reg_bits(destination),

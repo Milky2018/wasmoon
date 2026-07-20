@@ -2546,8 +2546,9 @@ fn emit_conversion(
   destination : @vcode.PhysicalReg,
 ) -> Unit raise X64EmitError {
   match conversion {
-    WrapI64ToI32 | ExtendI32ToI64(Unsigned) =>
-      emit_move(buffer, I32, destination, source)
+    WrapI64ToI32 => emit_move(buffer, I32, destination, source)
+    ExtendI32ToI64(Unsigned) =>
+      buffer.x86_emit_mov_rr32(destination.id, source.id)
     ExtendI32ToI64(Signed) =>
       buffer.x86_emit_movsxd_r64_r32(destination.id, source.id)
     SignExtend(integer, width) =>

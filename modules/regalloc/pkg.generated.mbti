@@ -6,69 +6,53 @@ import {
 }
 
 // Values
-pub fn allocate(Program, config? : RegallocConfig) -> Allocation raise VerifyError
-
-pub fn allocate_linear_scan(Program) -> Allocation
-
-pub fn raise_scratch_register_unavailable(message~ : String) -> Unit raise VerifyError
+pub fn[F : FunctionView] allocate_function(F, MachineEnv, config? : RegallocConfig) -> AllocationPlan raise VerifyError
 
 pub fn reserve_spill_slot(Int, RegClass) -> SpillSlotReservation
-
-pub fn verify_allocation(Program, Allocation) -> Unit raise VerifyError
 
 // Errors
 pub suberror VerifyError {
   Unassigned(vreg~ : VirtualReg)
   FixedConstraintViolation(vreg~ : VirtualReg, required~ : PhysicalReg, actual~ : Location)
-  OverlappingAllocation(left~ : VirtualReg, right~ : VirtualReg, location~ : Location)
-  RegisterClassMismatch(vreg~ : VirtualReg, preg~ : PhysicalReg)
-  ClobberedRegister(vreg~ : VirtualReg, preg~ : PhysicalReg)
-  TiedConstraintViolation(left~ : VirtualReg, right~ : VirtualReg, left_location~ : Location, right_location~ : Location)
+  IncorrectValue(vreg~ : VirtualReg, location~ : Location)
   ScratchRegisterUnavailable(message~ : String)
+  InvalidPlan(message~ : String)
 } derive(@debug.Debug)
 
 // Types and methods
-type Allocation derive(@debug.Debug)
-pub fn Allocation::Allocation() -> Self
-pub fn Allocation::assign(Self, VirtualReg, Location) -> Unit
-pub fn Allocation::assignment_at(Self, Int) -> Assignment?
-pub fn Allocation::assignment_count(Self) -> Int
-pub fn Allocation::assignments(Self) -> Array[Assignment]
-pub fn Allocation::location_of(Self, VirtualReg) -> Location?
-pub fn Allocation::spill_count(Self) -> Int
+pub(all) struct AllocationEdit {
+  value : VirtualReg
+  from : Location
+  to : Location
+  position : EditPosition
+} derive(Eq, @debug.Debug)
+
+pub struct AllocationPlan {
+  // private fields
+} derive(@debug.Debug)
+pub fn AllocationPlan::edits(Self) -> Array[AllocationEdit]
+pub fn AllocationPlan::operand_assignments(Self) -> Array[OperandAssignment]
+pub fn AllocationPlan::operand_location(Self, Int, Int) -> Location?
+pub fn AllocationPlan::spill_count(Self) -> Int
+pub fn AllocationPlan::spill_slot(Self, Int) -> SpillSlotSpec?
+pub fn AllocationPlan::value_location(Self, Int) -> Location?
+pub impl Show for AllocationPlan
 
 pub(all) enum AllocatorStrategy {
-  LinearScan
+  Backtracking
+  SinglePass
 } derive(Eq, @debug.Debug)
-
-pub struct Assignment {
-  vreg : VirtualReg
-  location : Location
-} derive(Eq, @debug.Debug)
-
-type Block derive(@debug.Debug)
-pub fn Block::Block(Int) -> Self
-pub fn Block::add_successor(Self, Int) -> Unit
-pub fn Block::append(Self, Instruction) -> Unit
-pub fn Block::id(Self) -> Int
-pub fn Block::instruction_at(Self, Int) -> Instruction?
-pub fn Block::instruction_count(Self) -> Int
-pub fn Block::successor_at(Self, Int) -> Int?
-pub fn Block::successor_count(Self) -> Int
+pub impl Show for AllocatorStrategy
 
 type DenseCfgEdges derive(@debug.Debug)
 
 type DenseLiveSets derive(@debug.Debug)
 
-type Instruction derive(@debug.Debug)
-pub fn Instruction::Instruction(Int) -> Self
-pub fn Instruction::add_clobber(Self, PhysicalReg) -> Unit
-pub fn Instruction::add_operand(Self, Operand) -> Unit
-pub fn Instruction::clobber_at(Self, Int) -> PhysicalReg?
-pub fn Instruction::clobber_count(Self) -> Int
-pub fn Instruction::id(Self) -> Int
-pub fn Instruction::operand_at(Self, Int) -> Operand?
-pub fn Instruction::operand_count(Self) -> Int
+pub(all) enum EditPosition {
+  Before(Int)
+  After(Int)
+  Edge(source_block~ : Int, successor_index~ : Int)
+} derive(Eq, @debug.Debug)
 
 type LiveRange derive(@debug.Debug)
 pub fn LiveRange::LiveRange(Int, VirtualReg) -> Self
@@ -109,19 +93,36 @@ pub(all) enum Location {
   Spill(Int)
 } derive(Eq, @debug.Debug)
 
+pub struct MachineEnv {
+  allocatable_regs : Array[PhysicalReg]
+  scratch_regs : Array[PhysicalReg]
+}
+pub fn MachineEnv::allocatable_regs(Self) -> Array[PhysicalReg]
+pub fn MachineEnv::new(Array[PhysicalReg], Array[PhysicalReg]) -> Self
+pub fn MachineEnv::scratch_regs(Self) -> Array[PhysicalReg]
+
 pub(all) struct Operand {
   vreg : VirtualReg
   role : OperandRole
   constraint : OperandConstraint
   tie_id : Int
+  timing : OperandTiming
 } derive(Eq, @debug.Debug)
 pub fn Operand::def(VirtualReg) -> Self
 pub fn Operand::use_reg(VirtualReg) -> Self
 pub fn Operand::with_constraint(Self, OperandConstraint) -> Self
 pub fn Operand::with_tie(Self, Int) -> Self
+pub fn Operand::with_timing(Self, OperandTiming) -> Self
+
+pub struct OperandAssignment {
+  instruction : Int
+  operand : Int
+  location : Location
+} derive(Eq, @debug.Debug)
 
 pub(all) enum OperandConstraint {
   AnyReg
+  AnyLocation
   FixedReg(PhysicalReg)
 } derive(Eq, @debug.Debug)
 
@@ -131,18 +132,15 @@ pub(all) enum OperandRole {
   UseDef
 } derive(Eq, @debug.Debug)
 
+pub(all) enum OperandTiming {
+  Early
+  Late
+} derive(Eq, @debug.Debug)
+
 pub(all) struct PhysicalReg {
   id : Int
   class : RegClass
 } derive(Eq, @debug.Debug)
-
-type Program derive(@debug.Debug)
-pub fn Program::Program(Array[PhysicalReg]) -> Self
-pub fn Program::add_block(Self, Block) -> Unit
-pub fn Program::block_at(Self, Int) -> Block?
-pub fn Program::block_count(Self) -> Int
-pub fn Program::physical_reg_at(Self, Int) -> PhysicalReg?
-pub fn Program::physical_reg_count(Self) -> Int
 
 pub(all) struct ProgramPoint {
   block : Int
@@ -179,6 +177,11 @@ pub(all) struct SpillSlotReservation {
   slots_used : Int
 } derive(Eq, @debug.Debug)
 
+pub struct SpillSlotSpec {
+  size : Int
+  alignment : Int
+} derive(Eq, @debug.Debug)
+
 pub(all) enum UseKind {
   LiveDef
   LiveUse
@@ -202,4 +205,20 @@ pub(all) struct VirtualReg {
 // Type aliases
 
 // Traits
+pub(open) trait FunctionView {
+  fn value_count(Self) -> Int
+  fn value_class(Self, Int) -> RegClass
+  fn value_spill_size(Self, Int) -> Int
+  fn value_spill_alignment(Self, Int) -> Int
+  fn values_share_spill_slot(Self, Int, Int) -> Bool
+  fn entry_values(Self) -> Array[VirtualReg]
+  fn block_count(Self) -> Int
+  fn block_id_at(Self, Int) -> Int
+  fn block_parameters(Self, Int) -> Array[VirtualReg]
+  fn block_instructions(Self, Int) -> Array[Int]
+  fn block_successors(Self, Int) -> Array[Int]
+  fn edge_arguments(Self, Int, Int) -> Array[VirtualReg]
+  fn instruction_operands(Self, Int) -> Array[Operand]
+  fn instruction_clobbers(Self, Int) -> Array[PhysicalReg]
+}
 

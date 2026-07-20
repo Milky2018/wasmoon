@@ -80,6 +80,7 @@ pub(all) enum UseKind {
 ///|
 pub(all) enum OperandConstraint {
   AnyReg
+  AnyLocation
   FixedReg(PhysicalReg)
 } derive(Eq, Debug)
 
@@ -111,12 +112,11 @@ struct LiveRange {
   vreg : VirtualReg
   ranges : Array[ProgramRange]
   uses : Array[UsePosition]
-  mut allocation : Location?
 } derive(Debug)
 
 ///|
 pub fn LiveRange::LiveRange(id : Int, vreg : VirtualReg) -> LiveRange {
-  { id, vreg, ranges: [], uses: [], allocation: None }
+  { id, vreg, ranges: [], uses: [] }
 }
 
 ///|
@@ -142,6 +142,18 @@ pub fn LiveRange::range_at(self : LiveRange, index : Int) -> ProgramRange? {
 ///|
 pub fn LiveRange::add_range(self : LiveRange, range : ProgramRange) -> Unit {
   self.ranges.push(range)
+}
+
+///|
+fn LiveRange::sort_ranges(self : LiveRange, block_order : Array[Int]) -> Unit {
+  self.ranges.sort_by(fn(a, b) {
+    let by_start = a.start.compare_with_order(b.start, block_order)
+    if by_start != 0 {
+      by_start
+    } else {
+      a.end.compare_with_order(b.end, block_order)
+    }
+  })
 }
 
 ///|
@@ -298,12 +310,13 @@ pub fn LiveRange::is_live_across(
   point : ProgramPoint,
   block_order : Array[Int],
 ) -> Bool {
-  match (self.start(), self.end()) {
-    (Some(start), Some(end)) =>
-      start.compare_with_order(point, block_order) < 0 &&
-      point.compare_with_order(end, block_order) < 0
-    _ => false
+  for range in self.ranges {
+    if range.start.compare_with_order(point, block_order) < 0 &&
+      point.compare_with_order(range.end, block_order) < 0 {
+      return true
+    }
   }
+  false
 }
 
 ///|
@@ -348,11 +361,32 @@ pub fn LiveRange::total_length(self : LiveRange) -> Int {
 struct LiveRangeSet {
   ranges : Array[LiveRange]
   block_order : Array[Int]
+  int_ranges_by_id : Array[LiveRange?]
+  float_ranges_by_id : Array[LiveRange?]
+  vector_ranges_by_id : Array[LiveRange?]
 } derive(Debug)
 
 ///|
 pub fn LiveRangeSet::LiveRangeSet(block_order : Array[Int]) -> LiveRangeSet {
-  { ranges: [], block_order }
+  {
+    ranges: [],
+    block_order,
+    int_ranges_by_id: [],
+    float_ranges_by_id: [],
+    vector_ranges_by_id: [],
+  }
+}
+
+///|
+fn LiveRangeSet::ranges_by_id_for_class(
+  self : LiveRangeSet,
+  class : RegClass,
+) -> Array[LiveRange?] {
+  match class {
+    Int => self.int_ranges_by_id
+    Float => self.float_ranges_by_id
+    Vector => self.vector_ranges_by_id
+  }
 }
 
 ///|
@@ -373,6 +407,13 @@ pub fn LiveRangeSet::block_order_at(self : LiveRangeSet, index : Int) -> Int? {
 ///|
 pub fn LiveRangeSet::add_range(self : LiveRangeSet, range : LiveRange) -> Unit {
   self.ranges.push(range)
+  if range.vreg.id >= 0 {
+    let ranges_by_id = self.ranges_by_id_for_class(range.vreg.class)
+    while range.vreg.id >= ranges_by_id.length() {
+      ranges_by_id.push(None)
+    }
+    ranges_by_id[range.vreg.id] = Some(range)
+  }
 }
 
 ///|
@@ -390,12 +431,10 @@ pub fn LiveRangeSet::get_by_vreg(
   self : LiveRangeSet,
   vreg : VirtualReg,
 ) -> LiveRange? {
-  for range in self.ranges {
-    if range.vreg == vreg {
-      return Some(range)
-    }
+  if vreg.id < 0 {
+    return None
   }
-  None
+  self.ranges_by_id_for_class(vreg.class).get(vreg.id).bind(range => range)
 }
 
 ///|
@@ -440,205 +479,11 @@ fn add_vreg(values : Array[VirtualReg], vreg : VirtualReg) -> Unit {
 }
 
 ///|
-fn collect_block_uses_defs(
-  block : Block,
-) -> (Array[VirtualReg], Array[VirtualReg]) {
-  let uses : Array[VirtualReg] = []
-  let defs : Array[VirtualReg] = []
-  for inst in block.instructions {
-    for operand in inst.operands {
-      match operand.role {
-        Use =>
-          if !contains_vreg(defs, operand.vreg) {
-            add_vreg(uses, operand.vreg)
-          }
-        Def => add_vreg(defs, operand.vreg)
-        UseDef => {
-          if !contains_vreg(defs, operand.vreg) {
-            add_vreg(uses, operand.vreg)
-          }
-          add_vreg(defs, operand.vreg)
-        }
-      }
-    }
-  }
-  (uses, defs)
-}
-
-///|
-fn compute_live_sets(
-  program : Program,
-) -> (Array[Array[VirtualReg]], Array[Array[VirtualReg]]) {
-  let uses_by_block : Array[Array[VirtualReg]] = []
-  let defs_by_block : Array[Array[VirtualReg]] = []
-  let block_ids : Array[Int] = []
-  let block_successor_ids : Array[Array[Int]] = []
-  let mut max_vreg_id = -1
-  for block in program.blocks {
-    let (uses, defs) = collect_block_uses_defs(block)
-    for vreg in uses {
-      if vreg.id > max_vreg_id {
-        max_vreg_id = vreg.id
-      }
-    }
-    for vreg in defs {
-      if vreg.id > max_vreg_id {
-        max_vreg_id = vreg.id
-      }
-    }
-    uses_by_block.push(uses)
-    defs_by_block.push(defs)
-    block_ids.push(block.id)
-    block_successor_ids.push(block.successors)
-  }
-  if max_vreg_id < 0 {
-    let empty_live_in : Array[Array[VirtualReg]] = []
-    let empty_live_out : Array[Array[VirtualReg]] = []
-    for _ in program.blocks {
-      empty_live_in.push([])
-      empty_live_out.push([])
-    }
-    return (empty_live_in, empty_live_out)
-  }
-
-  let vregs_by_id : Array[VirtualReg?] = Array::make(max_vreg_id + 1, None)
-  let def_points : Array[ProgramPoint?] = Array::make(max_vreg_id + 1, None)
-  let use_points_by_vreg : Array[Array[ProgramPoint]] = []
-  for _ in 0..<=max_vreg_id {
-    use_points_by_vreg.push([])
-  }
-  for block_index, block in program.blocks {
-    for vreg in uses_by_block[block_index] {
-      if vreg.id >= 0 && vreg.id < vregs_by_id.length() {
-        vregs_by_id[vreg.id] = Some(vreg)
-        use_points_by_vreg[vreg.id].push(ProgramPoint(block.id, 0))
-      }
-    }
-    for vreg in defs_by_block[block_index] {
-      if vreg.id >= 0 && vreg.id < vregs_by_id.length() {
-        vregs_by_id[vreg.id] = Some(vreg)
-        if def_points[vreg.id] is None {
-          def_points[vreg.id] = Some(ProgramPoint(block.id, 0))
-        }
-      }
-    }
-  }
-
-  let use_defs : Array[LiveSetUseDef] = []
-  for vreg_id in 0..<=max_vreg_id {
-    if vregs_by_id[vreg_id] is Some(_) {
-      use_defs.push({
-        vreg_id,
-        def_point: def_points[vreg_id],
-        is_entry_param_def: false,
-        use_points: use_points_by_vreg[vreg_id],
-      })
-    }
-  }
-  let dense = compute_dense_live_sets(
-    program.blocks.length(),
-    max_vreg_id + 1,
-    build_dense_successor_edges(block_ids, block_successor_ids),
-    use_defs,
-  )
-
-  fn materialize(
-    dense_sets : Array[Array[Int]],
-    vregs_by_id : Array[VirtualReg?],
-  ) -> Array[Array[VirtualReg]] {
-    let out : Array[Array[VirtualReg]] = []
-    for dense_row in dense_sets {
-      let row : Array[VirtualReg] = []
-      for vreg_id in dense_row {
-        if vreg_id >= 0 &&
-          vreg_id < vregs_by_id.length() &&
-          vregs_by_id[vreg_id] is Some(vreg) {
-          row.push(vreg)
-        }
-      }
-      out.push(row)
-    }
-    out
-  }
-
-  (
-    materialize(dense.live_in, vregs_by_id),
-    materialize(dense.live_out, vregs_by_id),
-  )
-}
-
-///|
-fn block_end_point(block : Block) -> ProgramPoint {
-  let inst = if block.instructions.length() == 0 {
-    0
-  } else {
-    block.instructions.length() - 1
-  }
-  ProgramPoint(block.id, inst)
-}
-
-///|
-fn extend_ranges_for_block_liveness(
+fn add_live_range_fragment(
   ranges : LiveRangeSet,
-  program : Program,
-  live_in : Array[Array[VirtualReg]],
-  live_out : Array[Array[VirtualReg]],
+  vreg : VirtualReg,
+  start : ProgramPoint,
+  end : ProgramPoint,
 ) -> Unit {
-  for block_index, block in program.blocks {
-    let start = ProgramPoint::ProgramPoint(block.id, 0)
-    let end = block_end_point(block)
-    for vreg in live_in[block_index] {
-      let range = find_or_create_live_range(ranges, vreg)
-      range.touch_with_order(start, ranges.block_order)
-    }
-    for vreg in live_out[block_index] {
-      let range = find_or_create_live_range(ranges, vreg)
-      range.touch_with_order(end, ranges.block_order)
-    }
-  }
-}
-
-///|
-fn build_live_ranges(program : Program) -> LiveRangeSet {
-  let block_order : Array[Int] = []
-  for order, block in program.blocks {
-    while block.id >= block_order.length() {
-      block_order.push(block_order.length())
-    }
-    block_order[block.id] = order
-  }
-  let ranges = LiveRangeSet::LiveRangeSet(block_order)
-  for block in program.blocks {
-    for inst_index, inst in block.instructions {
-      let point = ProgramPoint::ProgramPoint(block.id, inst_index)
-      for operand in inst.operands {
-        let range = find_or_create_live_range(ranges, operand.vreg)
-        range.touch_with_order(point, ranges.block_order)
-        let use_pos = UsePosition::UsePosition(
-          point,
-          use_kind_of_role(operand.role),
-          operand.constraint,
-        ).with_tie(operand.tie_id)
-        range.add_use(use_pos)
-      }
-    }
-  }
-  let (live_in, live_out) = compute_live_sets(program)
-  extend_ranges_for_block_liveness(ranges, program, live_in, live_out)
-  ranges.ranges.sort_by(fn(a, b) {
-    match (a.start(), b.start()) {
-      (Some(lhs), Some(rhs)) => {
-        let by_point = lhs.compare_with_order(rhs, ranges.block_order)
-        if by_point != 0 {
-          by_point
-        } else {
-          a.vreg.id - b.vreg.id
-        }
-      }
-      (None, Some(_)) => 1
-      (Some(_), None) => -1
-      (None, None) => a.vreg.id - b.vreg.id
-    }
-  })
-  ranges
+  find_or_create_live_range(ranges, vreg).add_range(ProgramRange(start, end))
 }

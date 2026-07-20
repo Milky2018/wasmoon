@@ -45,26 +45,19 @@ fn LivenessWorklist::pop(self : LivenessWorklist) -> Int? {
 }
 
 ///|
-fn live_set_mask_index(block_idx : Int, vreg_id : Int, row_width : Int) -> Int {
-  block_idx * row_width + vreg_id
-}
-
-///|
-fn compute_dense_live_sets(
+fn compute_live_sets_from_use_defs(
   num_blocks : Int,
   num_vregs : Int,
   cfg : DenseCfgEdges,
   use_defs : Array[LiveSetUseDef],
 ) -> DenseLiveSets {
-  let matrix_size = num_blocks * num_vregs
-  let block_def_mask : FixedArray[Bool] = FixedArray::make(matrix_size, false)
-  let live_in_mask : FixedArray[Bool] = FixedArray::make(matrix_size, false)
-  let live_out_mask : FixedArray[Bool] = FixedArray::make(matrix_size, false)
-  let live_in_list : Array[Array[Int]] = []
-  let live_out_list : Array[Array[Int]] = []
+  let block_defs : Array[SparseVRegSet] = []
+  let live_in : Array[SparseVRegSet] = []
+  let live_out : Array[SparseVRegSet] = []
   for _ in 0..<num_blocks {
-    live_in_list.push([])
-    live_out_list.push([])
+    block_defs.push(SparseVRegSet::new())
+    live_in.push(SparseVRegSet::new())
+    live_out.push(SparseVRegSet::new())
   }
 
   for info in use_defs {
@@ -78,10 +71,7 @@ fn compute_dense_live_sets(
         def_point = Some(def)
       }
       if !info.is_entry_param_def && def.block >= 0 && def.block < num_blocks {
-        let idx = live_set_mask_index(def.block, vreg_id, num_vregs)
-        if idx >= 0 && idx < block_def_mask.length() {
-          block_def_mask[idx] = true
-        }
+        block_defs[def.block].set(vreg_id, true)
       }
     }
     for use_point in info.use_points {
@@ -99,11 +89,7 @@ fn compute_dense_live_sets(
         None => true
       }
       if include_use {
-        let idx = live_set_mask_index(block_idx, vreg_id, num_vregs)
-        if idx >= 0 && idx < live_in_mask.length() && !live_in_mask[idx] {
-          live_in_mask[idx] = true
-          live_in_list[block_idx].push(vreg_id)
-        }
+        live_in[block_idx].set(vreg_id, true)
       }
     }
   }
@@ -113,42 +99,29 @@ fn compute_dense_live_sets(
     worklist.push(i)
   }
   while worklist.pop() is Some(block_idx) {
-    let old_live_in_size = live_in_list[block_idx].length()
-    let row_base = block_idx * num_vregs
-
+    let mut changed = false
     for succ in cfg.succs[block_idx] {
-      if succ < 0 || succ >= live_in_list.length() {
+      if succ < 0 || succ >= live_in.length() {
         continue
       }
-      for vreg_id in live_in_list[succ] {
-        let out_idx = row_base + vreg_id
-        if out_idx < 0 || out_idx >= live_out_mask.length() {
-          continue
-        }
-        if !live_out_mask[out_idx] {
-          live_out_mask[out_idx] = true
-          live_out_list[block_idx].push(vreg_id)
-          let def_idx = row_base + vreg_id
-          let in_idx = row_base + vreg_id
-          if def_idx >= 0 &&
-            def_idx < block_def_mask.length() &&
-            !block_def_mask[def_idx] &&
-            in_idx >= 0 &&
-            in_idx < live_in_mask.length() &&
-            !live_in_mask[in_idx] {
-            live_in_mask[in_idx] = true
-            live_in_list[block_idx].push(vreg_id)
-          }
-        }
+      if live_out[block_idx].union_with(live_in[succ]) {
+        changed = true
       }
     }
-
-    if live_in_list[block_idx].length() > old_live_in_size {
+    if live_in[block_idx].union_without(
+        live_out[block_idx],
+        block_defs[block_idx],
+      ) {
+      changed = true
+    }
+    if changed {
       for pred in cfg.preds[block_idx] {
         worklist.push(pred)
       }
     }
   }
-
-  { live_in: live_in_list, live_out: live_out_list }
+  {
+    live_in: live_in.map(set => set.to_sorted_array()),
+    live_out: live_out.map(set => set.to_sorted_array()),
+  }
 }
