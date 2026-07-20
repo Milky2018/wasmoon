@@ -279,6 +279,11 @@ pub(all) enum Metadata {
 /// A basic block is a sequence of instructions with:
 /// - One entry point (the first instruction)
 /// - One exit point (the last instruction, a terminator)
+///
+/// The public fields are exposed for zero-copy inspection. Callers must not
+/// mutate `params`, `instructions`, or `terminator` directly. Use
+/// `FunctionBuilder`, `append_inst`, and `set_terminator` so ownership checks
+/// run, then verify the containing function before optimization or lowering.
 pub struct Block {
   priv owner : Ref[FunctionOwnerContext]
   id : Int // Unique block identifier
@@ -356,7 +361,12 @@ pub fn Block::set_terminator(self : Block, term : Terminator) -> Unit {
 }
 
 ///|
-/// Instruction - an SSA instruction that produces a value
+/// Instruction - an SSA instruction that produces a value.
+///
+/// The public fields are exposed for zero-copy inspection. Callers must not
+/// mutate `results`, `opcode`, `args`, `operands`, or `metadata` directly.
+/// Construct instructions through `FunctionBuilder` or `Function::new_inst`
+/// and add metadata through `add_metadata`.
 pub struct Inst {
   priv owner : Ref[FunctionOwnerContext]
   id : Int
@@ -837,7 +847,13 @@ pub(all) enum Terminator {
 } derive(Debug)
 
 ///|
-/// Function - a complete IR function
+/// Function - a complete mutable IR function.
+///
+/// The public fields are exposed for zero-copy inspection. Callers must not
+/// mutate `params`, `results`, `blocks`, `external_symbols`, or the ID counters
+/// directly. Use `FunctionBuilder` and the checked `Function`/`Block` methods
+/// for structural changes. A function must be verified after its final
+/// mutation and immediately before optimization or lowering.
 pub struct Function {
   priv owner : Ref[FunctionOwnerContext]
   name : String
