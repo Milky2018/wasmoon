@@ -1008,6 +1008,31 @@ test "wasi jit: descriptor operations honor rights attenuation" {
     #|    (drop (call $set_rights
     #|      (i32.load (i32.const 200)) (i64.const 0) (i64.const 0)))
     #|    (i32.load (i32.const 200)))
+    #|  (func $write_case (param $rights i64) (param $attenuate i32) (result i32)
+    #|    (local $fd i32)
+    #|    (local $errno i32)
+    #|    (local.set $errno (call $path_open
+    #|      (i32.const 3) (i32.const 0) (i32.const 1024) (i32.const 30)
+    #|      (i32.const 9) (local.get $rights) (i64.const 0) (i32.const 0)
+    #|      (i32.const 200)))
+    #|    (if (i32.ne (local.get $errno) (i32.const 0))
+    #|      (then (return (local.get $errno))))
+    #|    (local.set $fd (i32.load (i32.const 200)))
+    #|    (if (local.get $attenuate)
+    #|      (then (drop (call $set_rights
+    #|        (local.get $fd) (i64.const 0) (i64.const 0)))))
+    #|    (i32.store (i32.const 0) (i32.const 300))
+    #|    (i32.store (i32.const 4) (i32.const 1))
+    #|    (call $fd_write
+    #|      (local.get $fd) (i32.const 0) (i32.const 1) (i32.const 400)))
+    #|  (func (export "write_allowed") (result i32)
+    #|    (call $write_case (i64.const 64) (i32.const 0)))
+    #|  (func (export "write_missing") (result i32)
+    #|    (call $write_case (i64.const 0) (i32.const 0)))
+    #|  (func (export "write_unrelated") (result i32)
+    #|    (call $write_case (i64.const 2) (i32.const 0)))
+    #|  (func (export "write_attenuated") (result i32)
+    #|    (call $write_case (i64.const 64) (i32.const 1)))
     #|  (func (export "write") (result i32)
     #|    (i32.store (i32.const 0) (i32.const 300))
     #|    (i32.store (i32.const 4) (i32.const 1))
@@ -1041,6 +1066,22 @@ test "wasi jit: descriptor operations honor rights attenuation" {
     results,
     content="[(76, 76), (76, 76), (76, 76), (76, 76), (76, 76)]",
   )
+  let matrix : Array[(Int, Int)] = []
+  for
+    name in [
+      "write_allowed", "write_missing", "write_unrelated", "write_attenuated",
+    ] {
+    let result = compare_wasi_with_options(source, name, preopens=[
+      ("/tmp", "/"),
+    ])
+    matrix.push(
+      (
+        wasi_errno_from_result(result.interp_result),
+        wasi_errno_from_result(result.jit_result),
+      ),
+    )
+  }
+  debug_inspect(matrix, content="[(0, 0), (76, 76), (76, 76), (76, 76)]")
 }
 
 ///|
@@ -1109,6 +1150,53 @@ test "wasi jit: path_open checks truncate rights before host effects" {
     ),
     content="(19544, 19544)",
   )
+}
+
+///|
+test "wasi jit: path rights differential matrix" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "path_create_directory"
+    #|    (func $mkdir (param i32 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "path_remove_directory"
+    #|    (func $rmdir (param i32 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_fdstat_set_rights"
+    #|    (func $set_rights (param i32 i64 i64) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (data (i32.const 1024) "wasmoon_jit_path_matrix")
+    #|  (func $run (param $attenuate i32) (param $rights i64) (result i32)
+    #|    (local $errno i32)
+    #|    (drop (call $rmdir (i32.const 3) (i32.const 1024) (i32.const 23)))
+    #|    (if (local.get $attenuate)
+    #|      (then (drop (call $set_rights
+    #|        (i32.const 3) (local.get $rights) (i64.const 150994943)))))
+    #|    (local.set $errno
+    #|      (call $mkdir (i32.const 3) (i32.const 1024) (i32.const 23)))
+    #|    (if (i32.eq (local.get $errno) (i32.const 0))
+    #|      (then (drop (call $rmdir
+    #|        (i32.const 3) (i32.const 1024) (i32.const 23)))))
+    #|    (local.get $errno))
+    #|  (func (export "allowed") (result i32)
+    #|    (call $run (i32.const 0) (i64.const 0)))
+    #|  (func (export "missing") (result i32)
+    #|    (call $run (i32.const 1) (i64.const 0)))
+    #|  (func (export "unrelated") (result i32)
+    #|    (call $run (i32.const 1) (i64.const 8192)))
+    #|  (func (export "attenuated") (result i32)
+    #|    (call $run (i32.const 1) (i64.const 12581888))))
+  let matrix : Array[(Int, Int)] = []
+  for name in ["allowed", "missing", "unrelated", "attenuated"] {
+    let result = compare_wasi_with_options(source, name, preopens=[
+      ("/tmp", "/"),
+    ])
+    matrix.push(
+      (
+        wasi_errno_from_result(result.interp_result),
+        wasi_errno_from_result(result.jit_result),
+      ),
+    )
+  }
+  debug_inspect(matrix, content="[(0, 0), (76, 76), (76, 76), (76, 76)]")
 }
 
 ///|
