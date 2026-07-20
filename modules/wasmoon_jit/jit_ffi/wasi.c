@@ -66,8 +66,8 @@
 #define WASI_FILETYPE_SOCKET_STREAM    6
 #define WASI_FILETYPE_SYMBOLIC_LINK    7
 
-// WASI rights: valid bits are 0-28
-#define WASI_RIGHTS_ALL_VALID ((uint64_t)((1ULL << 29) - 1))
+// WASI rights: valid bits are 0-29
+#define WASI_RIGHTS_ALL_VALID ((uint64_t)((1ULL << 30) - 1))
 #define WASI_RIGHT_FD_DATASYNC          (1ULL << 0)
 #define WASI_RIGHT_FD_READ              (1ULL << 1)
 #define WASI_RIGHT_FD_SEEK              (1ULL << 2)
@@ -97,6 +97,7 @@
 #define WASI_RIGHT_PATH_UNLINK_FILE      (1ULL << 26)
 #define WASI_RIGHT_POLL_FD_READWRITE     (1ULL << 27)
 #define WASI_RIGHT_SOCK_SHUTDOWN         (1ULL << 28)
+#define WASI_RIGHT_SOCK_ACCEPT           (1ULL << 29)
 
 // ============ Helper Functions ============
 
@@ -115,6 +116,21 @@ static int get_native_fd(jit_context_t *ctx, int wasi_fd) {
         return -3;
     }
     return ctx->fd_table[wasi_fd];
+}
+
+static int require_base_rights(
+    jit_context_t *ctx,
+    int wasi_fd,
+    uint64_t required
+) {
+    if (!ctx || wasi_fd < 0 || !ctx->fd_table ||
+        wasi_fd >= ctx->fd_table_size || ctx->fd_table[wasi_fd] < 0 ||
+        !ctx->fd_rights_base) {
+        return WASI_EBADF;
+    }
+    return (ctx->fd_rights_base[wasi_fd] & required) == required
+        ? WASI_ESUCCESS
+        : WASI_ENOTCAPABLE;
 }
 
 static int stdio_slot_for_fd(jit_context_t *ctx, int wasi_fd) {
@@ -252,15 +268,16 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_poll_resolve_fd(
     if (is_preopen_fd(ctx, wasi_fd) || get_open_dir_path(ctx, wasi_fd)) {
         return -1;
     }
-    if (!ctx->fd_rights_base || wasi_fd >= ctx->fd_table_size) return -1;
     uint64_t direction_right = event_type == 1
         ? WASI_RIGHT_FD_READ
         : WASI_RIGHT_FD_WRITE;
-    uint64_t rights = ctx->fd_rights_base[wasi_fd];
-    if ((rights & WASI_RIGHT_POLL_FD_READWRITE) == 0 ||
-        (rights & direction_right) == 0) {
-        return -3;
-    }
+    int rights_err = require_base_rights(
+        ctx,
+        wasi_fd,
+        WASI_RIGHT_POLL_FD_READWRITE | direction_right
+    );
+    if (rights_err == WASI_ENOTCAPABLE) return -3;
+    if (rights_err != WASI_ESUCCESS) return -1;
     return get_native_fd(ctx, wasi_fd);
 }
 
@@ -1709,8 +1726,12 @@ static int64_t wasi_path_open_impl(
     }
     if (!ctx->fd_rights_inheriting || dirfd_i < 0 ||
         dirfd_i >= ctx->fd_table_size) return WASI_EBADF;
-    uint64_t effective_rights_base = ((uint64_t)rights_base) & WASI_RIGHTS_ALL_VALID;
-    uint64_t effective_rights_inheriting = ((uint64_t)rights_inh) & WASI_RIGHTS_ALL_VALID;
+    uint64_t effective_rights_base = (uint64_t)rights_base;
+    uint64_t effective_rights_inheriting = (uint64_t)rights_inh;
+    if ((effective_rights_base & ~WASI_RIGHTS_ALL_VALID) != 0 ||
+        (effective_rights_inheriting & ~WASI_RIGHTS_ALL_VALID) != 0) {
+        return WASI_EINVAL;
+    }
     uint64_t parent_rights_inheriting = ctx->fd_rights_inheriting[dirfd_i];
     if ((effective_rights_base & parent_rights_inheriting) != effective_rights_base ||
         (effective_rights_inheriting & parent_rights_inheriting) != effective_rights_inheriting) {
@@ -3009,6 +3030,10 @@ static int32_t wasi_fd_fdstat_set_rights_impl(
         fd < 0 || fd >= ctx->fd_table_size) return WASI_EBADF;
     uint64_t new_base = (uint64_t)rights_base;
     uint64_t new_inheriting = (uint64_t)rights_inheriting;
+    if ((new_base & ~WASI_RIGHTS_ALL_VALID) != 0 ||
+        (new_inheriting & ~WASI_RIGHTS_ALL_VALID) != 0) {
+        return WASI_EINVAL;
+    }
     if ((new_base & ctx->fd_rights_base[fd]) != new_base ||
         (new_inheriting & ctx->fd_rights_inheriting[fd]) != new_inheriting) {
         return WASI_ENOTCAPABLE;

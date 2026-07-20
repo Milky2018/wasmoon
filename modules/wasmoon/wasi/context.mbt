@@ -337,6 +337,25 @@ pub fn WasiContext::get_file(self : WasiContext, fd : Int) -> OpenFile? {
 }
 
 ///|
+/// Get a tracked descriptor after proving that it carries every required base
+/// right. Stdio descriptors are handled separately by their dedicated paths.
+fn WasiContext::get_file_with_base_rights(
+  self : WasiContext,
+  fd : Int,
+  required : Int64,
+) -> Result[OpenFile, Errno] {
+  match self.open_files.get(fd) {
+    None => Err(Badf)
+    Some(file) =>
+      if (file.rights_base & required) == required {
+        Ok(file)
+      } else {
+        Err(NotCapable)
+      }
+  }
+}
+
+///|
 /// Close a file descriptor and remove it from tracking
 pub fn WasiContext::close_fd(self : WasiContext, fd : Int) -> Bool {
   match self.open_files.get(fd) {

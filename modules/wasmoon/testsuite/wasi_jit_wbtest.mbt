@@ -940,21 +940,44 @@ test "wasi jit: stdin callback supplies multiple reads" {
 }
 
 ///|
-test "wasi jit: path_open ignores unknown rights bits and still validates dirfd" {
+test "wasi jit: rights ABI rejects unknown bits" {
   let source =
     #|(module
     #|  (import "wasi_snapshot_preview1" "path_open"
     #|    (func $path_open (param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_fdstat_set_rights"
+    #|    (func $set_rights (param i32 i64 i64) (result i32)))
     #|  (memory (export "memory") 1)
-    #|  (func (export "test") (result i32)
+    #|  (func (export "path_open") (result i32)
     #|    (call $path_open
     #|      (i32.const 3) (i32.const 0) (i32.const 0) (i32.const 0)
-    #|      (i32.const 0) (i64.const -1) (i64.const 0) (i32.const 0)
-    #|      (i32.const 8))))
-  let result = compare_wasi(source, "test")
-  inspect(result.match_, content="true")
-  inspect(wasi_errno_from_result(result.interp_result), content="8")
-  inspect(wasi_errno_from_result(result.jit_result), content="8")
+    #|      (i32.const 0) (i64.const 1073741824) (i64.const 0) (i32.const 0)
+    #|      (i32.const 8)))
+    #|  (func (export "set_rights") (result i32)
+    #|    (call $set_rights
+    #|      (i32.const 3) (i64.const 1073741824) (i64.const 0))))
+  let path_result = compare_wasi_with_options(source, "path_open", preopens=[
+    ("/tmp", "/"),
+  ])
+  debug_inspect(
+    (
+      path_result.match_,
+      wasi_errno_from_result(path_result.interp_result),
+      wasi_errno_from_result(path_result.jit_result),
+    ),
+    content="(true, 28, 28)",
+  )
+  let set_result = compare_wasi_with_options(source, "set_rights", preopens=[
+    ("/tmp", "/"),
+  ])
+  debug_inspect(
+    (
+      set_result.match_,
+      wasi_errno_from_result(set_result.interp_result),
+      wasi_errno_from_result(set_result.jit_result),
+    ),
+    content="(true, 28, 28)",
+  )
 }
 
 ///|

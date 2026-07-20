@@ -339,7 +339,7 @@ pub(all) struct CIoVec {
 /// Reference: https://github.com/WebAssembly/WASI/blob/main/legacy/preview1/docs.md#-rights-flags
 ///
 /// Each right represents a permission for file descriptor operations.
-/// Rights are 64-bit flags, but only the lower 29 bits are valid (0-28).
+/// Rights are 64-bit flags, but only the lower 30 bits are valid (0-29).
 
 ///|
 /// Right to invoke fd_datasync
@@ -458,8 +458,12 @@ pub let right_poll_fd_readwrite : Int64 = 1L << 27
 pub let right_sock_shutdown : Int64 = 1L << 28
 
 ///|
-/// Mask of all valid rights (bits 0-28)
-pub let rights_all_valid : Int64 = (1L << 29) - 1L
+/// Right to invoke sock_accept
+pub let right_sock_accept : Int64 = 1L << 29
+
+///|
+/// Mask of all valid rights (bits 0-29)
+pub let rights_all_valid : Int64 = (1L << 30) - 1L
 
 ///|
 /// Check if a rights value contains only valid bits

@@ -665,6 +665,9 @@ pub fn path_open(
   if (fdflags & known_fdflags_mask.lnot()) != 0 {
     return Errno::Inval.to_i32()
   }
+  if !is_valid_rights(fs_rights_base) || !is_valid_rights(fs_rights_inheriting) {
+    return Errno::Inval.to_i32()
+  }
   // Read path from memory
   let path = match read_path_from_memory(mem, path_ptr, path_len) {
     Ok(path) => path
@@ -689,8 +692,8 @@ pub fn path_open(
     }
     None => return Errno::Badf.to_i32()
   }
-  let effective_rights_base = fs_rights_base & rights_all_valid
-  let effective_rights_inheriting = fs_rights_inheriting & rights_all_valid
+  let effective_rights_base = fs_rights_base
+  let effective_rights_inheriting = fs_rights_inheriting
   if (effective_rights_base & parent_rights_inheriting) != effective_rights_base ||
     (effective_rights_inheriting & parent_rights_inheriting) !=
     effective_rights_inheriting {
@@ -2196,6 +2199,9 @@ pub fn fd_fdstat_set_rights_impl(
   let file = match ctx.get_file(fd) {
     Some(file) => file
     None => return Errno::Badf.to_i32()
+  }
+  if !is_valid_rights(fs_rights_base) || !is_valid_rights(fs_rights_inheriting) {
+    return Errno::Inval.to_i32()
   }
   if (fs_rights_base & file.rights_base) != fs_rights_base ||
     (fs_rights_inheriting & file.rights_inheriting) != fs_rights_inheriting {

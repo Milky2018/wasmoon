@@ -124,18 +124,18 @@ fn resolve_poll_fd_source(
         }
         return Ok(Immediate)
       }
-      let file = match ctx.get_file(fd) {
-        Some(file) => file
-        None => return Err(Badf)
-      }
       let direction_right = if event_type == 1 {
         right_fd_read
       } else {
         right_fd_write
       }
-      if (file.rights_base & right_poll_fd_readwrite) == 0L ||
-        (file.rights_base & direction_right) == 0L {
-        return Err(NotCapable)
+      let file = match
+        ctx.get_file_with_base_rights(
+          fd,
+          right_poll_fd_readwrite | direction_right,
+        ) {
+        Ok(file) => file
+        Err(errno) => return Err(errno)
       }
       match file.file_type {
         RegularFile | CharacterDevice | SocketStream =>

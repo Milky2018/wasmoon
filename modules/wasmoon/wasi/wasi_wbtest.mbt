@@ -779,7 +779,7 @@ test "wasi: path_open returns EFAULT on out-of-bounds path pointer" {
 }
 
 ///|
-test "wasi: path_open rejects rights outside parent inheriting set" {
+test "wasi: path_open rejects unknown rights bits" {
   let ctx = WasiContextBuilder::WasiContextBuilder()
     .preopen_dir("/tmp", "/")
     .build()
@@ -802,7 +802,7 @@ test "wasi: path_open rejects rights outside parent inheriting set" {
     0,
     2000,
   )
-  inspect(result, content="76")
+  inspect(result, content="28")
 }
 
 ///|
@@ -2485,6 +2485,56 @@ test "wasi: fd_fdstat_set_rights attenuates preopen rights" {
 }
 
 ///|
+test "wasi: Preview1 rights include SOCK_ACCEPT and reject unknown bits" {
+  debug_inspect(
+    (right_sock_accept, rights_all_valid),
+    content="(536870912, 1073741823)",
+  )
+  debug_inspect(
+    (is_valid_rights(right_sock_accept), is_valid_rights(1L << 30)),
+    content="(true, false)",
+  )
+}
+
+///|
+test "wasi: descriptor rights lookup distinguishes bad fd and missing rights" {
+  let ctx = WasiContextBuilder::WasiContextBuilder()
+    .preopen_dir("/tmp", "/")
+    .build()
+  let bad_fd = match ctx.get_file_with_base_rights(999, right_path_open) {
+    Err(Badf) => "badf"
+    _ => "unexpected"
+  }
+  let missing = match ctx.get_file_with_base_rights(3, right_sock_accept) {
+    Err(NotCapable) => "notcapable"
+    _ => "unexpected"
+  }
+  let allowed = match ctx.get_file_with_base_rights(3, right_path_open) {
+    Ok(_) => "allowed"
+    _ => "unexpected"
+  }
+  debug_inspect(
+    (bad_fd, missing, allowed),
+    content="(\"badf\", \"notcapable\", \"allowed\")",
+  )
+}
+
+///|
+test "wasi: rights ABI rejects unknown bits" {
+  let ctx = WasiContextBuilder::WasiContextBuilder()
+    .preopen_dir("/tmp", "/")
+    .build()
+  let mem = @runtime.Memory::Memory(1, None)
+  debug_inspect(
+    (
+      path_open(ctx, mem, 3, 0, 0, 0, 0, 1L << 30, 0L, 0, 8),
+      fd_fdstat_set_rights_impl(ctx, 3, 1L << 30, 0L),
+    ),
+    content="(28, 28)",
+  )
+}
+
+///|
 test "wasi: fd_fdstat_set_flags rejects unknown fdflags bits with EINVAL" {
   let ctx = WasiContextBuilder::WasiContextBuilder()
     .preopen_dir("/tmp", "/")
@@ -2712,12 +2762,13 @@ test "wasi: path_link rejects unknown lookupflags bits with EINVAL" {
 
 ///|
 test "wasi: is_valid_rights" {
-  // Valid rights (only bits 0-28 set)
+  // Valid rights (only bits 0-29 set)
   inspect(is_valid_rights(0L), content="true")
   inspect(is_valid_rights(0x1L), content="true")
-  inspect(is_valid_rights(0x1FFFFFFFL), content="true") // All valid bits
-  // Invalid rights (bits above 28 set)
-  inspect(is_valid_rights(0x20000000L), content="false") // bit 29
+  inspect(is_valid_rights(0x3FFFFFFFL), content="true") // All valid bits
+  inspect(is_valid_rights(0x20000000L), content="true") // SOCK_ACCEPT
+  // Invalid rights (bits above 29 set)
+  inspect(is_valid_rights(0x40000000L), content="false") // bit 30
   inspect(is_valid_rights(0x100000000L), content="false") // bit 32
   inspect(is_valid_rights(-1L), content="false") // All bits set
 }
