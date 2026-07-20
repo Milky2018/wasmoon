@@ -654,6 +654,7 @@ test "wasi: fd_fdstat_get" {
     right_path_remove_directory |
     right_path_unlink_file |
     right_path_filestat_get |
+    right_path_filestat_set_size |
     right_path_filestat_set_times |
     right_fd_filestat_get |
     right_fd_filestat_set_times
@@ -2465,6 +2466,53 @@ test "wasi: sock APIs reject invalid flags before descriptor-kind check" {
 }
 
 ///|
+test "wasi: socket operations enforce their base rights" {
+  let ctx = WasiContextBuilder::WasiContextBuilder().build()
+  let mem = @runtime.Memory::Memory(1, None)
+  mem.write_i32(0, 100)
+  mem.write_i32(4, 1)
+  let denied_fd = ctx.alloc_fd({
+    native_fd: 0,
+    file_type: SocketStream,
+    host_path: "<socket-denied>",
+    position: 0L,
+    flags: 0,
+    rights_base: 0L,
+    rights_inheriting: 0L,
+  })
+  let allowed_fd = ctx.alloc_fd({
+    native_fd: 0,
+    file_type: SocketStream,
+    host_path: "<socket-allowed>",
+    position: 0L,
+    flags: 0,
+    rights_base: right_fd_read |
+    right_fd_write |
+    right_sock_shutdown |
+    right_sock_accept,
+    rights_inheriting: 0L,
+  })
+  debug_inspect(
+    [
+      sock_recv_impl(ctx, mem, denied_fd, 0, 1, 0, 204, 208),
+      sock_send_impl(ctx, mem, denied_fd, 0, 1, 0, 212),
+      sock_shutdown_impl(ctx, denied_fd, 0),
+      sock_accept_impl(ctx, mem, denied_fd, 0, 216),
+    ],
+    content="[76, 76, 76, 76]",
+  )
+  debug_inspect(
+    [
+      sock_recv_impl(ctx, mem, allowed_fd, 0, 1, 0, 204, 208),
+      sock_send_impl(ctx, mem, allowed_fd, 0, 1, 0, 212),
+      sock_shutdown_impl(ctx, allowed_fd, 0),
+      sock_accept_impl(ctx, mem, allowed_fd, 0, 216),
+    ],
+    content="[58, 58, 58, 58]",
+  )
+}
+
+///|
 test "wasi: fd_fdstat_set_rights returns EBADF for stdio" {
   let ctx = WasiContextBuilder::WasiContextBuilder().build()
   let result = fd_fdstat_set_rights_impl(ctx, 0, 0L, 0L)
@@ -2636,6 +2684,213 @@ test "wasi: fd_readdir honors rights attenuation" {
   inspect(fd_readdir(ctx, mem, fd, 300, 64, 0L, 400), content="76")
   fd_close(ctx, fd) |> ignore
   path_remove_directory_impl(ctx, mem, 3, 100, dir_path.length()) |> ignore
+}
+
+///|
+test "wasi: path operations honor rights attenuation before host effects" {
+  let ctx = WasiContextBuilder::WasiContextBuilder()
+    .preopen_dir("/tmp", "/")
+    .build()
+  let mem = @runtime.Memory::Memory(1, None)
+  let first = "wasmoon_path_rights_denied"
+  let second = "wasmoon_path_rights_target"
+  for i, c in first {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  for i, c in second {
+    mem.write_byte(200 + i, c.to_int().to_byte())
+  }
+  path_remove_directory_impl(ctx, mem, 3, 100, first.length()) |> ignore
+  inspect(fd_fdstat_set_rights_impl(ctx, 3, 0L, 0L), content="0")
+  debug_inspect(
+    [
+      path_create_directory(ctx, mem, 3, 100, first.length()),
+      path_unlink_file_impl(ctx, mem, 3, 100, first.length()),
+      path_remove_directory_impl(ctx, mem, 3, 100, first.length()),
+      path_filestat_get_impl(ctx, mem, 3, 0, 100, first.length(), 500),
+      path_filestat_set_times_impl(
+        ctx,
+        mem,
+        3,
+        0,
+        100,
+        first.length(),
+        0L,
+        0L,
+        0,
+      ),
+      path_symlink_impl(ctx, mem, 100, first.length(), 3, 200, second.length()),
+      path_readlink_impl(ctx, mem, 3, 100, first.length(), 600, 32, 700),
+      path_link_impl(
+        ctx,
+        mem,
+        3,
+        0,
+        100,
+        first.length(),
+        3,
+        200,
+        second.length(),
+      ),
+      path_rename_impl(
+        ctx,
+        mem,
+        3,
+        100,
+        first.length(),
+        3,
+        200,
+        second.length(),
+      ),
+      path_open(ctx, mem, 3, 0, 100, first.length(), 0, 0L, 0L, 0, 800),
+    ],
+    content="[76, 76, 76, 76, 76, 76, 76, 76, 76, 76]",
+  )
+  let verifier = WasiContextBuilder::WasiContextBuilder()
+    .preopen_dir("/tmp", "/")
+    .build()
+  inspect(
+    path_filestat_get_impl(verifier, mem, 3, 0, 100, first.length(), 500),
+    content="44",
+  )
+}
+
+///|
+test "wasi: path_open requires truncate capability before truncating" {
+  let ctx = WasiContextBuilder::WasiContextBuilder()
+    .preopen_dir("/tmp", "/")
+    .build()
+  let mem = @runtime.Memory::Memory(1, None)
+  let path = "wasmoon_path_truncate_rights"
+  for i, c in path {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  path_unlink_file_impl(ctx, mem, 3, 100, path.length()) |> ignore
+  let child_rights = right_fd_read | right_fd_write | right_fd_seek
+  let open_result = path_open(
+    ctx,
+    mem,
+    3,
+    0,
+    100,
+    path.length(),
+    9,
+    child_rights,
+    0L,
+    0,
+    200,
+  )
+  inspect(open_result, content="0")
+  if open_result != 0 {
+    return
+  }
+  let fd = mem.read_i32(200)
+  mem.write_i32(0, 300)
+  mem.write_i32(4, 1)
+  mem.write_byte(300, b'X')
+  inspect(fd_write(ctx, mem, fd, 0, 1, 400), content="0")
+  let preopen = ctx.get_file(3).unwrap()
+  inspect(
+    fd_fdstat_set_rights_impl(
+      ctx,
+      3,
+      preopen.rights_base & right_path_filestat_set_size.lnot(),
+      preopen.rights_inheriting,
+    ),
+    content="0",
+  )
+  inspect(
+    path_open(ctx, mem, 3, 0, 100, path.length(), 8, child_rights, 0L, 0, 204),
+    content="76",
+  )
+  inspect(fd_seek(ctx, mem, fd, 0L, 0, 408), content="0")
+  mem.write_i32(0, 500)
+  mem.write_i32(4, 1)
+  inspect(fd_read(ctx, mem, fd, 0, 1, 404), content="0")
+  debug_inspect((mem.read_i32(404), mem.read_byte(500)), content="(1, 0x58)")
+  fd_close(ctx, fd) |> ignore
+  path_unlink_file_impl(ctx, mem, 3, 100, path.length()) |> ignore
+
+  let create_path = "wasmoon_path_create_rights"
+  for i, c in create_path {
+    mem.write_byte(600 + i, c.to_int().to_byte())
+  }
+  let attenuated_preopen = ctx.get_file(3).unwrap()
+  inspect(
+    fd_fdstat_set_rights_impl(
+      ctx,
+      3,
+      attenuated_preopen.rights_base & right_path_create_file.lnot(),
+      attenuated_preopen.rights_inheriting,
+    ),
+    content="0",
+  )
+  inspect(
+    path_open(ctx, mem, 3, 0, 600, create_path.length(), 1, 0L, 0L, 0, 208),
+    content="76",
+  )
+  let verifier = WasiContextBuilder::WasiContextBuilder()
+    .preopen_dir("/tmp", "/")
+    .build()
+  inspect(
+    path_filestat_get_impl(verifier, mem, 3, 0, 600, create_path.length(), 700),
+    content="44",
+  )
+}
+
+///|
+test "wasi: two-directory operations require target rights" {
+  let ctx = WasiContextBuilder::WasiContextBuilder()
+    .preopen_dir("/tmp", "/source")
+    .preopen_dir("/tmp", "/target")
+    .build()
+  let mem = @runtime.Memory::Memory(1, None)
+  let source = "wasmoon_source_right"
+  let target = "wasmoon_target_right"
+  for i, c in source {
+    mem.write_byte(100 + i, c.to_int().to_byte())
+  }
+  for i, c in target {
+    mem.write_byte(200 + i, c.to_int().to_byte())
+  }
+  let target_dir = ctx.get_file(4).unwrap()
+  inspect(
+    fd_fdstat_set_rights_impl(
+      ctx,
+      4,
+      target_dir.rights_base &
+      right_path_link_target.lnot() &
+      right_path_rename_target.lnot(),
+      target_dir.rights_inheriting,
+    ),
+    content="0",
+  )
+  debug_inspect(
+    (
+      path_link_impl(
+        ctx,
+        mem,
+        3,
+        0,
+        100,
+        source.length(),
+        4,
+        200,
+        target.length(),
+      ),
+      path_rename_impl(
+        ctx,
+        mem,
+        3,
+        100,
+        source.length(),
+        4,
+        200,
+        target.length(),
+      ),
+    ),
+    content="(76, 76)",
+  )
 }
 
 ///|

@@ -687,17 +687,24 @@ pub fn path_open(
     }
     return Errno::Badf.to_i32()
   }
-  let parent_rights_inheriting = match ctx.get_file(dir_fd) {
+  let parent_file = match ctx.get_file(dir_fd) {
     Some(file) => {
       match file.file_type {
         Directory => ()
         RegularFile => return Errno::NotDir.to_i32()
         _ => return Errno::Badf.to_i32()
       }
-      file.rights_inheriting
+      file
     }
     None => return Errno::Badf.to_i32()
   }
+  let required_parent_rights = right_path_open |
+    (if (oflags & 0x01) != 0 { right_path_create_file } else { 0L }) |
+    (if (oflags & 0x08) != 0 { right_path_filestat_set_size } else { 0L })
+  if parent_file.require_base_rights(required_parent_rights) is Err(errno) {
+    return errno.to_i32()
+  }
+  let parent_rights_inheriting = parent_file.rights_inheriting
   let effective_rights_base = fs_rights_base
   let effective_rights_inheriting = fs_rights_inheriting
   if (effective_rights_base & parent_rights_inheriting) != effective_rights_base ||
@@ -1106,6 +1113,7 @@ fn fd_rights_for_preopen_directory_base() -> Int64 {
   right_path_remove_directory |
   right_path_unlink_file |
   right_path_filestat_get |
+  right_path_filestat_set_size |
   right_path_filestat_set_times |
   right_fd_filestat_get |
   right_fd_filestat_set_times
@@ -1282,6 +1290,10 @@ pub fn path_create_directory(
   let path = match read_path_from_memory(mem, path_ptr, path_len) {
     Ok(path) => path
     Err(errno) => return errno
+  }
+  match directory_with_base_rights(ctx, dir_fd, right_path_create_directory) {
+    Ok(_) => ()
+    Err(errno) => return errno.to_i32()
   }
   let resolved_path = match resolve_host_path_nofollow_leaf(ctx, dir_fd, path) {
     Ok(resolved) => resolved
@@ -1731,8 +1743,54 @@ fn non_stdio_descriptor_native_fd_with_rights(
 }
 
 ///|
-fn is_valid_descriptor_for_sock(ctx : WasiContext, fd : Int) -> Bool {
-  ctx.is_valid_fd(fd)
+fn directory_with_base_rights(
+  ctx : WasiContext,
+  fd : Int,
+  required : Int64,
+) -> Result[OpenFile, Errno] {
+  if is_stdio_descriptor(ctx, fd) {
+    return Err(Badf)
+  }
+  match ctx.get_file(fd) {
+    Some(file) => {
+      match file.file_type {
+        Directory => ()
+        _ => return Err(Badf)
+      }
+      match file.require_base_rights(required) {
+        Ok(_) => Ok(file)
+        Err(errno) => Err(errno)
+      }
+    }
+    None => Err(Badf)
+  }
+}
+
+///|
+fn socket_with_base_rights(
+  ctx : WasiContext,
+  fd : Int,
+  required : Int64,
+) -> Result[OpenFile, Errno] {
+  if is_stdio_descriptor(ctx, fd) {
+    if is_stdio_open(ctx, fd) {
+      return Err(NotSock)
+    }
+    return Err(Badf)
+  }
+  match ctx.get_file(fd) {
+    Some(file) => {
+      match file.file_type {
+        SocketStream => ()
+        _ => return Err(NotSock)
+      }
+      match file.require_base_rights(required) {
+        Ok(_) => Ok(file)
+        Err(errno) => Err(errno)
+      }
+    }
+    None => Err(Badf)
+  }
 }
 
 // ============================================================================
@@ -1782,6 +1840,10 @@ pub fn path_unlink_file_impl(
     Ok(path) => path
     Err(errno) => return errno
   }
+  match directory_with_base_rights(ctx, dir_fd, right_path_unlink_file) {
+    Ok(_) => ()
+    Err(errno) => return errno.to_i32()
+  }
   let resolved_path = match resolve_host_path_nofollow_leaf(ctx, dir_fd, path) {
     Ok(resolved) => resolved
     Err(errno) => return errno
@@ -1805,6 +1867,10 @@ pub fn path_remove_directory_impl(
   let path = match read_path_from_memory(mem, path_ptr, path_len) {
     Ok(path) => path
     Err(errno) => return errno
+  }
+  match directory_with_base_rights(ctx, dir_fd, right_path_remove_directory) {
+    Ok(_) => ()
+    Err(errno) => return errno.to_i32()
   }
   let resolved_path = match resolve_host_path_nofollow_leaf(ctx, dir_fd, path) {
     Ok(resolved) => resolved
@@ -1836,6 +1902,14 @@ pub fn path_rename_impl(
   let new_path = match read_path_from_memory(mem, new_path_ptr, new_path_len) {
     Ok(path) => path
     Err(errno) => return errno
+  }
+  match directory_with_base_rights(ctx, old_fd, right_path_rename_source) {
+    Ok(_) => ()
+    Err(errno) => return errno.to_i32()
+  }
+  match directory_with_base_rights(ctx, new_fd, right_path_rename_target) {
+    Ok(_) => ()
+    Err(errno) => return errno.to_i32()
   }
   let old_resolved = match
     resolve_host_path_nofollow_leaf(ctx, old_fd, old_path) {
@@ -1969,6 +2043,10 @@ pub fn path_filestat_get_impl(
     Ok(path) => path
     Err(errno) => return errno
   }
+  match directory_with_base_rights(ctx, dir_fd, right_path_filestat_get) {
+    Ok(_) => ()
+    Err(errno) => return errno.to_i32()
+  }
   let has_trailing_slash = path.length() > 0 &&
     path.code_unit_at(path.length() - 1) == '/'
   let follow_symlink = (flags & 0x01) != 0
@@ -2090,6 +2168,10 @@ pub fn path_filestat_set_times_impl(
   let path = match read_path_from_memory(mem, path_ptr, path_len) {
     Ok(path) => path
     Err(errno) => return errno
+  }
+  match directory_with_base_rights(ctx, dir_fd, right_path_filestat_set_times) {
+    Ok(_) => ()
+    Err(errno) => return errno.to_i32()
   }
   let has_trailing_slash = path.length() > 0 &&
     path.code_unit_at(path.length() - 1) == '/'
@@ -2373,6 +2455,10 @@ pub fn path_symlink_impl(
     Ok(path) => path
     Err(errno) => return errno
   }
+  match directory_with_base_rights(ctx, dir_fd, right_path_symlink) {
+    Ok(_) => ()
+    Err(errno) => return errno.to_i32()
+  }
   let resolved_path = match
     resolve_host_path_nofollow_leaf(ctx, dir_fd, new_path) {
     Ok(resolved) => resolved
@@ -2404,6 +2490,10 @@ pub fn path_readlink_impl(
   let path = match read_path_from_memory(mem, path_ptr, path_len) {
     Ok(path) => path
     Err(errno) => return errno
+  }
+  match directory_with_base_rights(ctx, dir_fd, right_path_readlink) {
+    Ok(_) => ()
+    Err(errno) => return errno.to_i32()
   }
   let resolved_path = match resolve_host_path_nofollow_leaf(ctx, dir_fd, path) {
     Ok(resolved) => resolved
@@ -2440,6 +2530,9 @@ pub fn path_link_impl(
   if lookupflags_check != Errno::Success.to_i32() {
     return lookupflags_check
   }
+  if (old_flags & 0x01) != 0 {
+    return Errno::Inval.to_i32()
+  }
   let old_path = match read_path_from_memory(mem, old_path_ptr, old_path_len) {
     Ok(path) => path
     Err(errno) => return errno
@@ -2447,6 +2540,14 @@ pub fn path_link_impl(
   let new_path = match read_path_from_memory(mem, new_path_ptr, new_path_len) {
     Ok(path) => path
     Err(errno) => return errno
+  }
+  match directory_with_base_rights(ctx, old_fd, right_path_link_source) {
+    Ok(_) => ()
+    Err(errno) => return errno.to_i32()
+  }
+  match directory_with_base_rights(ctx, new_fd, right_path_link_target) {
+    Ok(_) => ()
+    Err(errno) => return errno.to_i32()
   }
   let old_resolved = match
     resolve_host_path_nofollow_leaf(ctx, old_fd, old_path) {
@@ -2457,9 +2558,6 @@ pub fn path_link_impl(
     resolve_host_path_nofollow_leaf(ctx, new_fd, new_path) {
     Ok(resolved) => resolved
     Err(errno) => return errno
-  }
-  if (old_flags & 0x01) != 0 {
-    return Errno::Inval.to_i32()
   }
   let flags = 0
   if native_linkat(0, old_resolved, 0, new_resolved, flags) {
@@ -2496,10 +2594,9 @@ pub fn sock_recv_impl(
   if riflags_check != Errno::Success.to_i32() {
     return riflags_check
   }
-  if is_valid_descriptor_for_sock(ctx, fd) {
-    Errno::NotSock.to_i32()
-  } else {
-    Errno::Badf.to_i32()
+  match socket_with_base_rights(ctx, fd, right_fd_read) {
+    Ok(_) => Errno::NotSup.to_i32()
+    Err(errno) => errno.to_i32()
   }
 }
 
@@ -2520,10 +2617,9 @@ pub fn sock_send_impl(
   if !check_iovecs_mem_range(mem, si_data_ptr, si_data_len) {
     return Errno::Fault.to_i32()
   }
-  if is_valid_descriptor_for_sock(ctx, fd) {
-    Errno::NotSock.to_i32()
-  } else {
-    Errno::Badf.to_i32()
+  match socket_with_base_rights(ctx, fd, right_fd_write) {
+    Ok(_) => Errno::NotSup.to_i32()
+    Err(errno) => errno.to_i32()
   }
 }
 
@@ -2534,10 +2630,9 @@ pub fn sock_shutdown_impl(ctx : WasiContext, fd : Int, how : Int) -> Int {
   if sdflags_check != Errno::Success.to_i32() {
     return sdflags_check
   }
-  if is_valid_descriptor_for_sock(ctx, fd) {
-    Errno::NotSock.to_i32()
-  } else {
-    Errno::Badf.to_i32()
+  match socket_with_base_rights(ctx, fd, right_sock_shutdown) {
+    Ok(_) => Errno::NotSup.to_i32()
+    Err(errno) => errno.to_i32()
   }
 }
 
@@ -2557,10 +2652,9 @@ pub fn sock_accept_impl(
   if fdflags_check != Errno::Success.to_i32() {
     return fdflags_check
   }
-  if is_valid_descriptor_for_sock(ctx, fd) {
-    Errno::NotSock.to_i32()
-  } else {
-    Errno::Badf.to_i32()
+  match socket_with_base_rights(ctx, fd, right_sock_accept) {
+    Ok(_) => Errno::NotSup.to_i32()
+    Err(errno) => errno.to_i32()
   }
 }
 
