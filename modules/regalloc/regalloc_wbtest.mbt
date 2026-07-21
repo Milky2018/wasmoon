@@ -1091,7 +1091,7 @@ test "production segment queue prioritizes allocation weight" {
 }
 
 ///|
-test "production fragments inherit whole-value spill weight" {
+test "production fragments use local spill-cost density" {
   let range = LiveRange::LiveRange(0, { id: 0, class: Int })
   range.add_range(ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 2)))
   range.add_range(ProgramRange(ProgramPoint(2, 0), ProgramPoint(2, 2)))
@@ -1100,7 +1100,7 @@ test "production fragments inherit whole-value spill weight" {
   let ranges = LiveRangeSet::LiveRangeSet([0, 1, 2])
   ranges.add_range(range)
   let (segments, _) = build_allocation_segments(ranges)
-  debug_inspect(segments.map(segment => segment.weight), content="[3001, 3001]")
+  debug_inspect(segments.map(segment => segment.weight), content="[500, 500]")
 }
 
 ///|

@@ -535,6 +535,49 @@ test "backtracking splits a live range around a clobbered CFG fragment" {
 }
 
 ///|
+test "backtracking reloads a resident segment only once" {
+  let function : CfgTestFunction = {
+    value_count: 1,
+    blocks: [[0, 1], [2], [3, 4]],
+    instructions: [
+      [Operand::use_reg(value(0))],
+      [Operand::use_reg(value(0))],
+      [],
+      [Operand::use_reg(value(0))],
+      [Operand::use_reg(value(0))],
+    ],
+    clobbers: [[], [], [int_reg(0)], [], []],
+    successors: [[1], [2], []],
+    entry_values: [value(0)],
+    parameters: [[], [], []],
+    edge_arguments: [[[]], [[]], []],
+  }
+  let plan = allocate_function(
+    function,
+    MachineEnv::new([int_reg(0)], [int_reg(1)]),
+  )
+  debug_inspect(
+    plan.edits(),
+    content=(
+      #|[
+      #|  {
+      #|    value: { id: 0, class: Int },
+      #|    from: Spill(0),
+      #|    to: Reg({ id: 0, class: Int }),
+      #|    position: Before(0),
+      #|  },
+      #|  {
+      #|    value: { id: 0, class: Int },
+      #|    from: Spill(0),
+      #|    to: Reg({ id: 0, class: Int }),
+      #|    position: Before(3),
+      #|  },
+      #|]
+    ),
+  )
+}
+
+///|
 test "backtracking avoids edge-copy cycles when an affinity is unavailable" {
   let function : CfgTestFunction = {
     value_count: 7,
@@ -571,31 +614,43 @@ test "backtracking avoids edge-copy cycles when an affinity is unavailable" {
       #|    Some(Reg({ id: 1, class: Int })),
       #|    Some(Reg({ id: 2, class: Int })),
       #|    Some(Reg({ id: 0, class: Int })),
-      #|    Some(Reg({ id: 1, class: Int })),
       #|    Some(Reg({ id: 2, class: Int })),
       #|    Some(Reg({ id: 3, class: Int })),
+      #|    Some(Reg({ id: 1, class: Int })),
       #|  ],
       #|  operand_locations: {
       #|    (1, 0): Reg({ id: 0, class: Int }),
-      #|    (1, 1): Reg({ id: 1, class: Int }),
-      #|    (1, 2): Reg({ id: 3, class: Int }),
+      #|    (1, 1): Reg({ id: 2, class: Int }),
+      #|    (1, 2): Reg({ id: 1, class: Int }),
       #|  },
       #|  operand_assignments: [
       #|    { instruction: 1, operand: 0, location: Reg({ id: 0, class: Int }) },
-      #|    { instruction: 1, operand: 1, location: Reg({ id: 1, class: Int }) },
-      #|    { instruction: 1, operand: 2, location: Reg({ id: 3, class: Int }) },
+      #|    { instruction: 1, operand: 1, location: Reg({ id: 2, class: Int }) },
+      #|    { instruction: 1, operand: 2, location: Reg({ id: 1, class: Int }) },
       #|  ],
       #|  edits: [
       #|    {
-      #|      value: { id: 4, class: Int },
+      #|      value: { id: 1, class: Int },
       #|      from: Reg({ id: 1, class: Int }),
+      #|      to: Reg({ id: 2, class: Int }),
+      #|      position: Edge(source_block=0, successor_index=0),
+      #|    },
+      #|    {
+      #|      value: { id: 2, class: Int },
+      #|      from: Reg({ id: 2, class: Int }),
+      #|      to: Reg({ id: 3, class: Int }),
+      #|      position: Edge(source_block=0, successor_index=0),
+      #|    },
+      #|    {
+      #|      value: { id: 4, class: Int },
+      #|      from: Reg({ id: 2, class: Int }),
       #|      to: Reg({ id: 0, class: Int }),
       #|      position: Edge(source_block=1, successor_index=0),
       #|    },
       #|    {
       #|      value: { id: 6, class: Int },
-      #|      from: Reg({ id: 3, class: Int }),
-      #|      to: Reg({ id: 1, class: Int }),
+      #|      from: Reg({ id: 1, class: Int }),
+      #|      to: Reg({ id: 2, class: Int }),
       #|      position: Edge(source_block=1, successor_index=0),
       #|    },
       #|  ],
@@ -703,7 +758,12 @@ test "backtracking borrows an allocatable register when spill temporaries are ex
         Operand::use_reg(value(2)),
         Operand::use_reg(value(3)),
       ],
-      [Operand::use_reg(value(0))],
+      [
+        Operand::use_reg(value(0)),
+        Operand::use_reg(value(0)),
+        Operand::use_reg(value(0)),
+        Operand::use_reg(value(0)),
+      ],
     ],
   }
   inspect(
@@ -724,14 +784,26 @@ test "backtracking borrows an allocatable register when spill temporaries are ex
       #|    (0, 1): Reg({ id: 2, class: Int }),
       #|    (0, 2): Reg({ id: 0, class: Int }),
       #|    (1, 0): Reg({ id: 0, class: Int }),
+      #|    (1, 1): Reg({ id: 0, class: Int }),
+      #|    (1, 2): Reg({ id: 0, class: Int }),
+      #|    (1, 3): Reg({ id: 0, class: Int }),
       #|  },
       #|  operand_assignments: [
       #|    { instruction: 0, operand: 0, location: Reg({ id: 1, class: Int }) },
       #|    { instruction: 0, operand: 1, location: Reg({ id: 2, class: Int }) },
       #|    { instruction: 0, operand: 2, location: Reg({ id: 0, class: Int }) },
       #|    { instruction: 1, operand: 0, location: Reg({ id: 0, class: Int }) },
+      #|    { instruction: 1, operand: 1, location: Reg({ id: 0, class: Int }) },
+      #|    { instruction: 1, operand: 2, location: Reg({ id: 0, class: Int }) },
+      #|    { instruction: 1, operand: 3, location: Reg({ id: 0, class: Int }) },
       #|  ],
       #|  edits: [
+      #|    {
+      #|      value: { id: 0, class: Int },
+      #|      from: Reg({ id: 0, class: Int }),
+      #|      to: Spill(3),
+      #|      position: Before(0),
+      #|    },
       #|    {
       #|      value: { id: 1, class: Int },
       #|      from: Spill(0),
@@ -742,12 +814,6 @@ test "backtracking borrows an allocatable register when spill temporaries are ex
       #|      value: { id: 2, class: Int },
       #|      from: Spill(1),
       #|      to: Reg({ id: 2, class: Int }),
-      #|      position: Before(0),
-      #|    },
-      #|    {
-      #|      value: { id: 0, class: Int },
-      #|      from: Reg({ id: 0, class: Int }),
-      #|      to: Spill(3),
       #|      position: Before(0),
       #|    },
       #|    {
@@ -781,7 +847,12 @@ test "backtracking keeps edit-only scratch registers out of instruction operands
     block_parameters: [value(0), value(1), value(2)],
     instructions: [
       [Operand::use_reg(value(1)), Operand::use_reg(value(2))],
-      [Operand::use_reg(value(0))],
+      [
+        Operand::use_reg(value(0)),
+        Operand::use_reg(value(0)),
+        Operand::use_reg(value(0)),
+        Operand::use_reg(value(0)),
+      ],
     ],
   }
   let environment = MachineEnv::new([int_reg(0), int_reg(1)], [int_reg(2)]).with_operand_scratch_regs([],
@@ -799,11 +870,17 @@ test "backtracking keeps edit-only scratch registers out of instruction operands
       #|    (0, 0): Reg({ id: 1, class: Int }),
       #|    (0, 1): Reg({ id: 0, class: Int }),
       #|    (1, 0): Reg({ id: 0, class: Int }),
+      #|    (1, 1): Reg({ id: 0, class: Int }),
+      #|    (1, 2): Reg({ id: 0, class: Int }),
+      #|    (1, 3): Reg({ id: 0, class: Int }),
       #|  },
       #|  operand_assignments: [
       #|    { instruction: 0, operand: 0, location: Reg({ id: 1, class: Int }) },
       #|    { instruction: 0, operand: 1, location: Reg({ id: 0, class: Int }) },
       #|    { instruction: 1, operand: 0, location: Reg({ id: 0, class: Int }) },
+      #|    { instruction: 1, operand: 1, location: Reg({ id: 0, class: Int }) },
+      #|    { instruction: 1, operand: 2, location: Reg({ id: 0, class: Int }) },
+      #|    { instruction: 1, operand: 3, location: Reg({ id: 0, class: Int }) },
       #|  ],
       #|  edits: [
       #|    {

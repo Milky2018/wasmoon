@@ -9,6 +9,26 @@ For `examples/aead_aegis128l.wasm`, Wasmoon is currently much slower than Wasmti
 
 This is an ~`11.1x` end-to-end gap in this run.
 
+### Status Update (2026-07-21)
+
+The current AArch64 backend no longer exhibits the historical gap above. A
+fresh release build, an isolated Wasmoon JIT cache, one warmup, and five
+measured runs produced these same-host medians:
+
+- `aead_aegis128l.wasm`: value ratio `1.8999x`, wall ratio `1.8851x`
+- `aead_aegis256.wasm`: value ratio `1.8793x`, wall ratio `1.8688x`
+
+The improvement came primarily from ranking register-allocation fragments by
+local spill-cost density instead of whole-range use count, retaining a loaded
+spill value while it remains resident, and selecting AArch64 zero-extended
+indexed addresses without materializing the extension and address arithmetic.
+ABI materialization results now use flexible stable homes with soft preferences
+for their incoming registers, preserving move-free common cases without pinning
+the entire live range.
+
+The figures in the remainder of this report are historical evidence from the
+older revisions named below; they should not be read as current-tree results.
+
 ### Status Update (2026-02-06)
 
 After the first optimization batch in this branch, local re-measurement is:

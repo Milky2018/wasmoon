@@ -338,6 +338,19 @@ fn call_argument_inputs(
 }
 
 ///|
+fn abi_home_output(
+  ty : @semantic.ValueType,
+  incoming : @vcode.PhysicalReg,
+) -> @vcode.Output {
+  let output = @vcode.Output::any_location(ty)
+  if is_allocatable(incoming) {
+    output.with_preference(incoming)
+  } else {
+    output
+  }
+}
+
+///|
 fn lower_direct_platform_call(
   builder : @vcode.Builder[X64Inst],
   block : @vcode.Block,
@@ -367,7 +380,7 @@ fn lower_direct_platform_call(
     platform_call_layout(call.signature.params).arguments,
   )
   let outputs = Array::makei(result_types.length(), index => {
-    @vcode.Output::any(result_types[index])
+    abi_home_output(result_types[index], result_registers[index])
   })
   (builder.append_body(
     block,
@@ -466,15 +479,17 @@ fn lower_internal_call(
   |> ignore
   let results : Array[@vcode.Value] = []
   for index, ty in result_types {
-    let operation = match plan.results[index] {
-      CallResultRegister(reg) => IncomingCallResult(ty, reg)
-      CallResultArea(offset, _) => IncomingCallAreaResult(ty, offset)
+    let (operation, output) = match plan.results[index] {
+      CallResultRegister(reg) =>
+        (IncomingCallResult(ty, reg), abi_home_output(ty, reg))
+      CallResultArea(offset, _) =>
+        (IncomingCallAreaResult(ty, offset), @vcode.Output::any_location(ty))
     }
     let (_, materialized) = builder.append_body(
       block,
       operation,
       [],
-      [@vcode.Output::any(ty)],
+      [output],
       [],
       @vcode.InstructionMetadata::empty(),
     ) catch {
@@ -1235,7 +1250,7 @@ fn lower_parameters(
           entry,
           IncomingReg(ty, reg),
           [@vcode.Input::fixed(raw, reg)],
-          [@vcode.Output::fixed(ty, reg)],
+          [abi_home_output(ty, reg)],
           @vcode.InstructionMetadata::empty(),
         )[0]
       CallStack(offset) =>
@@ -1244,7 +1259,7 @@ fn lower_parameters(
           entry,
           IncomingStack(ty, offset),
           [],
-          [@vcode.Output::any(ty)],
+          [@vcode.Output::any_location(ty)],
           @vcode.InstructionMetadata::empty(),
         )[0]
     }
@@ -1261,12 +1276,7 @@ fn lower_parameters(
           entry,
           IncomingResultArea(context.internal_abi.result_area_argument),
           [],
-          [
-            @vcode.Output::fixed(
-              Ptr64,
-              context.internal_abi.result_area_argument,
-            ),
-          ],
+          [@vcode.Output::any_location(Ptr64)],
           @vcode.InstructionMetadata::empty(),
         )[0],
       )

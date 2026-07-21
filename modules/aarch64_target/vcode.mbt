@@ -247,6 +247,7 @@ pub(all) enum AArch64Inst {
   TrapIfFloat(@semantic.ValueType, AArch64FloatTrapCondition)
   Convert(AArch64Conversion)
   AddAddress
+  AddAddressUxtw(Int)
   ScalarLoad(
     @semantic.AccessWidth,
     @semantic.LoadExtension,
@@ -314,6 +315,21 @@ fn require_fixed_use(
     raise InvalidInstruction(
       instruction~,
       message="operand does not use the required ABI register",
+    )
+  }
+}
+
+///|
+fn require_home_def(
+  function : @vcode.Function[AArch64Inst],
+  instruction : @vcode.Instruction,
+  operand_index : Int,
+) -> Unit raise TargetVCodeVerifyError {
+  if function.instruction_operand_at(instruction, operand_index).unwrap().constraint !=
+    AnyLocation {
+    raise InvalidInstruction(
+      instruction~,
+      message="ABI materialization result must use its stable home",
     )
   }
 }
@@ -771,6 +787,7 @@ fn verify_target_vcode(
         }
         require_instruction_shape(function, instruction, [ty], [ty], false, 0)
         require_fixed_use(function, instruction, 0, reg)
+        require_home_def(function, instruction, 1)
       }
       IncomingStack(ty, offset) => {
         if offset < 0 || offset % 8 != 0 {
@@ -780,6 +797,7 @@ fn verify_target_vcode(
           )
         }
         require_instruction_shape(function, instruction, [], [ty], false, 0)
+        require_home_def(function, instruction, 0)
       }
       IncomingResultArea(reg) => {
         if reg.id < 0 || reg.id >= 16 || reg.class != Int {
@@ -789,6 +807,7 @@ fn verify_target_vcode(
           )
         }
         require_instruction_shape(function, instruction, [], [Ptr64], false, 0)
+        require_home_def(function, instruction, 0)
       }
       IncomingCallResult(ty, reg) => {
         if reg.class != @vcode.reg_class_for_value_type(ty) {
@@ -798,6 +817,7 @@ fn verify_target_vcode(
           )
         }
         require_instruction_shape(function, instruction, [], [ty], false, 0)
+        require_home_def(function, instruction, 0)
       }
       IncomingCallAreaResult(ty, offset) => {
         let size = call_stack_size(ty)
@@ -808,6 +828,7 @@ fn verify_target_vcode(
           )
         }
         require_instruction_shape(function, instruction, [], [ty], false, 0)
+        require_home_def(function, instruction, 0)
       }
       LoadConstant(width, bits) => {
         if width == W32 && bits > 0xFFFFFFFFUL {
@@ -1518,6 +1539,22 @@ fn verify_target_vcode(
           false,
           0,
         )
+      AddAddressUxtw(shift) => {
+        if shift < 0 || shift > 4 {
+          raise InvalidInstruction(
+            instruction~,
+            message="invalid AArch64 extended address shift",
+          )
+        }
+        require_instruction_shape(
+          function,
+          instruction,
+          [Ptr64, I32],
+          [Ptr64],
+          false,
+          0,
+        )
+      }
       ScalarLoad(width, extension, result_type, _) => {
         if !valid_scalar_load(width, extension, result_type) {
           raise InvalidInstruction(

@@ -362,6 +362,19 @@ fn call_argument_inputs(
 }
 
 ///|
+fn abi_home_output(
+  ty : @semantic.ValueType,
+  incoming : @vcode.PhysicalReg,
+) -> @vcode.Output {
+  let output = @vcode.Output::any_location(ty)
+  if is_allocatable(incoming) {
+    output.with_preference(incoming)
+  } else {
+    output
+  }
+}
+
+///|
 fn lower_direct_platform_call(
   builder : @vcode.Builder[AArch64Inst],
   block : @vcode.Block,
@@ -391,7 +404,7 @@ fn lower_direct_platform_call(
     platform_call_layout(call.signature.params).arguments,
   )
   let outputs = Array::makei(result_types.length(), index => {
-    @vcode.Output::any(result_types[index])
+    abi_home_output(result_types[index], result_registers[index])
   })
   (builder.append_body(
     block,
@@ -491,15 +504,17 @@ fn lower_internal_call(
   |> ignore
   let results : Array[@vcode.Value] = []
   for index, ty in result_types {
-    let operation = match plan.results[index] {
-      CallResultRegister(reg) => IncomingCallResult(ty, reg)
-      CallResultArea(offset, _) => IncomingCallAreaResult(ty, offset)
+    let (operation, output) = match plan.results[index] {
+      CallResultRegister(reg) =>
+        (IncomingCallResult(ty, reg), abi_home_output(ty, reg))
+      CallResultArea(offset, _) =>
+        (IncomingCallAreaResult(ty, offset), @vcode.Output::any_location(ty))
     }
     let (_, materialized) = builder.append_body(
       block,
       operation,
       [],
-      [@vcode.Output::any(ty)],
+      [output],
       [],
       @vcode.InstructionMetadata::empty(),
     ) catch {
@@ -552,6 +567,7 @@ priv struct MemoryAddressSelection {
   base : @semantic.Value
   index : @semantic.Value
   shift : Int
+  offset : UInt64
 }
 
 ///|
@@ -677,7 +693,7 @@ fn uxtw_memory_address_selection(
   constants : Array[UInt64?],
   address : @semantic.Value,
   width : @semantic.AccessWidth,
-) -> (MemoryAddressSelection, Array[@semantic.Value], @semantic.Value?)? {
+) -> (MemoryAddressSelection, Array[@semantic.Value], Array[@semantic.Value])? {
   guard foldable_definition(function, definitions, uses, address)
     is Some(offset_instruction) else {
     return None
@@ -716,7 +732,13 @@ fn uxtw_memory_address_selection(
   let match_parts = fn(
     base_bits : @semantic.Value,
     index_bits : @semantic.Value,
-  ) -> (@semantic.Value, @semantic.Value)? {
+  ) -> (
+    @semantic.Value,
+    @semantic.Value,
+    UInt64,
+    Array[@semantic.Value],
+    Array[@semantic.Value],
+  )? {
     guard foldable_definition(function, definitions, uses, base_bits)
       is Some(base_instruction) else {
       return None
@@ -728,32 +750,87 @@ fn uxtw_memory_address_selection(
     guard function.instruction_operands(base_instruction) is [base] else {
       return None
     }
+    let match_extended_index = fn(
+      extended : @semantic.Value,
+    ) -> @semantic.Value? {
+      let extended_index = function.value_index(extended).unwrap()
+      guard definitions[extended_index] is Some(index_instruction) else {
+        return None
+      }
+      guard function.instruction_metadata(index_instruction) is Some(metadata) &&
+        metadata.live_gc_roots.is_empty() else {
+        return None
+      }
+      guard function.instruction_operation(index_instruction)
+        is Some(Convert(I64ExtendI32(Unsigned))) else {
+        return None
+      }
+      guard function.instruction_operands(index_instruction) is [index] else {
+        return None
+      }
+      Some(index)
+    }
+    if match_extended_index(index_bits) is Some(index) {
+      return Some((base, index, 0UL, [base_bits], [index_bits]))
+    }
     guard foldable_definition(function, definitions, uses, index_bits)
-      is Some(index_instruction) else {
+      is Some(offset_instruction) else {
       return None
     }
-    guard function.instruction_operation(index_instruction)
-      is Some(Convert(I64ExtendI32(Unsigned))) else {
+    guard function.instruction_operation(offset_instruction)
+      is Some(IntBinary(Add)) else {
       return None
     }
-    guard function.instruction_operands(index_instruction) is [index] else {
+    guard function.instruction_operands(offset_instruction)
+      is [offset_left, offset_right] else {
       return None
     }
-    Some((base, index))
+    let extended_and_constant = match
+      constants[function.value_index(offset_right).unwrap()] {
+      Some(bits) => Some((offset_left, offset_right, bits))
+      None =>
+        match constants[function.value_index(offset_left).unwrap()] {
+          Some(bits) => Some((offset_right, offset_left, bits))
+          None => None
+        }
+    }
+    guard extended_and_constant is Some((extended, _, offset)) else {
+      return None
+    }
+    let scale = natural_register_shift(width)
+    let byte_scale = 1UL << scale
+    if offset % byte_scale != 0UL || offset / byte_scale > 4095UL {
+      return None
+    }
+    if !valid_int_binary_immediate(W64, Add, offset) {
+      return None
+    }
+    guard match_extended_index(extended) is Some(index) else { return None }
+    Some((base, index, offset, [base_bits, index_bits], [extended]))
   }
   let parts = match match_parts(left, right) {
     Some(parts) => Some(parts)
     None => match_parts(right, left)
   }
-  guard parts is Some((base, index)) else { return None }
+  guard parts is Some((base, index, offset, extra_skipped, folded_constants)) else {
+    return None
+  }
   let (selected_index, shift, skipped_index, folded_constant) = select_scaled_index(
     function, definitions, uses, constants, index, width,
   )
-  let skipped = [address, pointer, sum, left, right]
+  let skipped = [address, pointer, sum]
+  for value in extra_skipped {
+    skipped.push(value)
+  }
   if skipped_index is Some(value) {
     skipped.push(value)
   }
-  Some(({ base, index: selected_index, shift }, skipped, folded_constant))
+  if folded_constant is Some(value) {
+    folded_constants.push(value)
+  }
+  Some(
+    ({ base, index: selected_index, shift, offset }, skipped, folded_constants),
+  )
 }
 
 ///|
@@ -892,7 +969,7 @@ fn analyze_lowering(function : @semantic.Function) -> LoweringAnalysis {
               address,
               spec.width,
             )
-            is Some((selection, skipped, folded_constant)) {
+            is Some((selection, skipped, folded_constants)) {
             memory_addresses[function.instruction_index(instruction).unwrap()] = Some(
               selection,
             )
@@ -906,7 +983,7 @@ fn analyze_lowering(function : @semantic.Function) -> LoweringAnalysis {
                 shift_immediates[value_index] = None
               }
             }
-            if folded_constant is Some(value) {
+            for value in folded_constants {
               folded_uses[function.value_index(value).unwrap()] += 1
             }
             folded_uses[function
@@ -932,7 +1009,7 @@ fn analyze_lowering(function : @semantic.Function) -> LoweringAnalysis {
               address,
               spec.width,
             )
-            is Some((selection, skipped, folded_constant)) {
+            is Some((selection, skipped, folded_constants)) {
             memory_addresses[function.instruction_index(instruction).unwrap()] = Some(
               selection,
             )
@@ -946,7 +1023,7 @@ fn analyze_lowering(function : @semantic.Function) -> LoweringAnalysis {
                 shift_immediates[value_index] = None
               }
             }
-            if folded_constant is Some(value) {
+            for value in folded_constants {
               folded_uses[function.value_index(value).unwrap()] += 1
             }
             folded_uses[function
@@ -1115,9 +1192,7 @@ fn analyze_lowering(function : @semantic.Function) -> LoweringAnalysis {
     }
   }
   for value_index in 0..<value_count {
-    if constants[value_index] is Some(_) &&
-      uses[value_index] > 0 &&
-      folded_uses[value_index] == uses[value_index] {
+    if uses[value_index] > 0 && folded_uses[value_index] == uses[value_index] {
       skip_results[value_index] = true
     }
   }
@@ -1235,6 +1310,47 @@ fn lower_instruction(
     return
   }
   if memory_address is Some(selected) {
+    if selected.offset != 0UL {
+      let address = append_body(
+          builder,
+          block,
+          AddAddressUxtw(selected.shift),
+          [@vcode.Input::any(operands[0]), @vcode.Input::any(operands[1])],
+          [@vcode.Output::any(Ptr64)],
+          @vcode.InstructionMetadata::empty(),
+        )[0]
+      let selected_operands = [address]
+      if operation is Store(_) {
+        selected_operands.push(operands[2])
+      }
+      let selected_operation = match operation {
+        Load(spec) =>
+          ScalarLoad(
+            spec.width,
+            spec.extension,
+            spec.result_type,
+            selected.offset,
+          )
+        Store(spec) => ScalarStore(spec.width, spec.value_type, selected.offset)
+        _ => abort("register-offset selection requires scalar memory operation")
+      }
+      let results = append_body(
+        builder,
+        block,
+        selected_operation,
+        selected_operands.map(@vcode.Input::any),
+        result_types.map(@vcode.Output::any),
+        source_metadata(
+          function.instruction_metadata(instruction).unwrap(),
+          roots,
+          operation.semantics(),
+        ),
+      )
+      for index, result in semantic_results {
+        values[function.value_index(result).unwrap()] = Some(results[index])
+      }
+      return
+    }
     let selected_operation = match operation {
       Load(spec) =>
         ScalarLoadUxtw(
@@ -1925,7 +2041,7 @@ fn lower_parameters(
           entry,
           IncomingReg(ty, reg),
           [@vcode.Input::fixed(raw, reg)],
-          [@vcode.Output::fixed(ty, reg)],
+          [abi_home_output(ty, reg)],
           @vcode.InstructionMetadata::empty(),
         )[0]
       CallStack(offset) =>
@@ -1934,7 +2050,7 @@ fn lower_parameters(
           entry,
           IncomingStack(ty, offset),
           [],
-          [@vcode.Output::any(ty)],
+          [@vcode.Output::any_location(ty)],
           @vcode.InstructionMetadata::empty(),
         )[0]
     }
@@ -1951,12 +2067,7 @@ fn lower_parameters(
           entry,
           IncomingResultArea(context.internal_abi.result_area_argument),
           [],
-          [
-            @vcode.Output::fixed(
-              Ptr64,
-              context.internal_abi.result_area_argument,
-            ),
-          ],
+          [@vcode.Output::any_location(Ptr64)],
           @vcode.InstructionMetadata::empty(),
         )[0],
       )

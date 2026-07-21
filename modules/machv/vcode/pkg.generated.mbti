@@ -108,7 +108,6 @@ pub suberror VCodeVerifyError {
   InvalidEdgeArity(instruction~ : Instruction, block~ : Block)
   EdgeClassMismatch(instruction~ : Instruction, block~ : Block, index~ : Int)
   InvalidTie(instruction~ : Instruction, operand~ : Int, tied_to~ : Int)
-  InvalidAnyLocationConstraint(instruction~ : Instruction, operand~ : Int)
   FixedRegisterClassMismatch(instruction~ : Instruction, operand~ : Int)
   InvalidOperandPreference(instruction~ : Instruction, operand~ : Int)
   DuplicateClobber(instruction~ : Instruction, reg~ : PhysicalReg)
@@ -318,11 +317,14 @@ pub(all) enum OperandTiming {
 pub struct Output {
   ty : @machv.ValueType
   constraint : OperandConstraint
+  preference : PhysicalReg?
   timing : OperandTiming
 }
 pub fn Output::any(@machv.ValueType) -> Self
+pub fn Output::any_location(@machv.ValueType) -> Self
 pub fn Output::fixed(@machv.ValueType, PhysicalReg) -> Self
 pub fn Output::tied(@machv.ValueType, Int) -> Self
+pub fn Output::with_preference(Self, PhysicalReg) -> Self
 pub fn Output::with_timing(Self, OperandTiming) -> Self
 
 pub struct ParallelMove {

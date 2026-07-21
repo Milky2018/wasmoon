@@ -116,12 +116,24 @@ fn use_weight(use_position : UsePosition) -> Int {
 }
 
 ///|
-fn segment_weight(range : LiveRange) -> Int {
-  let mut weight = 1
+/// Rank a fragment by spill cost per program point. This keeps a sparse,
+/// long-lived value from evicting short-lived values used at every instruction.
+fn segment_weight(range : LiveRange, fragment : ProgramRange) -> Int {
+  let mut use_cost = 0
   for use_position in range.uses {
-    weight = weight + use_weight(use_position)
+    if fragment.contains(use_position.point, []) {
+      use_cost = use_cost + use_weight(use_position)
+    }
   }
-  weight
+  if use_cost == 0 {
+    return 1
+  }
+  let length = if fragment.start.block == fragment.end.block {
+    (fragment.end.inst - fragment.start.inst).abs() + 1
+  } else {
+    1
+  }
+  ((use_cost + length - 1) / length).max(1)
 }
 
 ///|
@@ -140,9 +152,9 @@ fn build_allocation_segments(
     segments_by_value.push([])
   }
   for range in ranges.ranges {
-    let weight = segment_weight(range)
     let has_fixed_constraint = range.has_fixed_constraint()
     for fragment in range.ranges {
+      let weight = segment_weight(range, fragment)
       let id = segments.length()
       segments.push({
         id,
@@ -606,21 +618,33 @@ fn[F : FunctionView] assign_backtracking_homes(
 }
 
 ///|
+fn segment_at(
+  segments : Array[AllocationSegment],
+  segments_by_value : Array[Array[Int]],
+  value : VirtualReg,
+  point : ProgramPoint,
+) -> Int? {
+  if value.id < 0 || value.id >= segments_by_value.length() {
+    return None
+  }
+  for segment in segments_by_value[value.id] {
+    if segments[segment].range.contains(point, []) {
+      return Some(segment)
+    }
+  }
+  None
+}
+
+///|
 fn segment_location_at(
   segments : Array[AllocationSegment],
   segments_by_value : Array[Array[Int]],
   value : VirtualReg,
   point : ProgramPoint,
 ) -> SegmentLocation? {
-  if value.id < 0 || value.id >= segments_by_value.length() {
-    return None
-  }
-  for segment in segments_by_value[value.id] {
-    if segments[segment].range.contains(point, []) {
-      return segments[segment].location
-    }
-  }
-  None
+  segment_at(segments, segments_by_value, value, point).bind(segment => {
+    segments[segment].location
+  })
 }
 
 ///|
@@ -710,6 +734,16 @@ fn[F : FunctionView] assign_backtracking_operands(
 ) -> Unit raise VerifyError {
   let borrow_slots : Array[Int?] = Array::make(function.value_count(), None)
   let register_home_values : Map[(Int, Int), Array[VirtualReg]] = Map([])
+  let register_segments : Map[(Int, Int), Array[Int]] = Map([])
+  for segment in segments {
+    if segment.location is Some(SegmentReg(reg)) {
+      let key = physical_reg_key(reg)
+      match register_segments.get(key) {
+        Some(segment_ids) => segment_ids.push(segment.id)
+        None => register_segments[key] = [segment.id]
+      }
+    }
+  }
   for value in 0..<function.value_count() {
     if plan.value_location(value) is Some(Reg(reg)) {
       let vreg : VirtualReg = { id: value, class: function.value_class(value) }
@@ -721,22 +755,30 @@ fn[F : FunctionView] assign_backtracking_operands(
     }
   }
   for block in 0..<function.block_count() {
+    let resident_segments = Array::make(segments.length(), false)
     for instruction_index, instruction in function.block_instructions(block) {
       let operands = function.instruction_operands(instruction)
       let assigned : Array[Location?] = Array::make(operands.length(), None)
       let natural_locations : Array[Location] = []
+      let operand_segments : Array[Int?] = []
       let used_temps : Array[PhysicalReg] = []
+      let borrowed_temps : Array[PhysicalReg] = []
       for operand in operands {
         let home = plan.value_location(operand.vreg.id).unwrap()
-        let natural = match
-          segment_location_at(
-            segments,
-            segments_by_value,
-            operand.vreg,
-            operand_program_point(block, instruction_index, operand.timing),
-          ) {
-          Some(SegmentReg(reg)) => Reg(reg)
-          Some(SegmentSpill) | None => home
+        let segment = segment_at(
+          segments,
+          segments_by_value,
+          operand.vreg,
+          operand_program_point(block, instruction_index, operand.timing),
+        )
+        operand_segments.push(segment)
+        let natural = match segment {
+          Some(segment) =>
+            match segments[segment].location {
+              Some(SegmentReg(reg)) => Reg(reg)
+              Some(SegmentSpill) | None => home
+            }
+          None => home
         }
         natural_locations.push(natural)
         let reserved = match operand.constraint {
@@ -793,8 +835,8 @@ fn[F : FunctionView] assign_backtracking_operands(
                         used_temps,
                       ) {
                       Some(reg) => Some(reg)
-                      None =>
-                        borrow_allocatable_register(
+                      None => {
+                        let borrowed = borrow_allocatable_register(
                           plan,
                           function,
                           environment,
@@ -807,6 +849,11 @@ fn[F : FunctionView] assign_backtracking_operands(
                           operand.vreg.class,
                           used_temps,
                         )
+                        if borrowed is Some(reg) {
+                          borrowed_temps.push(reg)
+                        }
+                        borrowed
+                      }
                     }
                     guard temporary is Some(reg) else {
                       raise ScratchRegisterUnavailable(
@@ -821,7 +868,110 @@ fn[F : FunctionView] assign_backtracking_operands(
         }
         assigned[operand_index] = Some(selected)
         plan.assign_operand(instruction, operand_index, selected)
-        add_home_transfer(plan, instruction, operand, home, selected)
+      }
+      let resident_operand_segments : Array[Int?] = []
+      for operand_index, _ in operands {
+        resident_operand_segments.push(
+          match operand_segments[operand_index] {
+            Some(segment) if natural_locations[operand_index] ==
+              assigned[operand_index].unwrap() => Some(segment)
+            _ => None
+          },
+        )
+      }
+      for timing in [Early, Late] {
+        for operand_index, operand in operands {
+          if operand.timing != timing {
+            continue
+          }
+          let home = plan.value_location(operand.vreg.id).unwrap()
+          let selected = assigned[operand_index].unwrap()
+          if operand.role is Use || operand.role is UseDef {
+            match resident_operand_segments[operand_index] {
+              Some(segment) =>
+                if !resident_segments[segment] {
+                  if selected is Reg(reg) {
+                    match register_segments.get(physical_reg_key(reg)) {
+                      Some(segment_ids) =>
+                        for segment_id in segment_ids {
+                          resident_segments[segment_id] = false
+                        }
+                      None => ()
+                    }
+                  }
+                  add_use_transfer(plan, instruction, operand, home, selected)
+                  resident_segments[segment] = true
+                }
+              None => {
+                add_use_transfer(plan, instruction, operand, home, selected)
+                if selected is Reg(reg) && !borrowed_temps.contains(reg) {
+                  match register_segments.get(physical_reg_key(reg)) {
+                    Some(segment_ids) =>
+                      for segment_id in segment_ids {
+                        resident_segments[segment_id] = false
+                      }
+                    None => ()
+                  }
+                }
+              }
+            }
+          }
+        }
+        for operand_index, operand in operands {
+          if operand.timing != timing ||
+            !(operand.role is Def || operand.role is UseDef) {
+            continue
+          }
+          let home = plan.value_location(operand.vreg.id).unwrap()
+          let selected = assigned[operand_index].unwrap()
+          if home != selected && operand.constraint != AnyLocation {
+            plan.add_edit({
+              value: operand.vreg,
+              from: selected,
+              to: home,
+              position: After(instruction),
+            })
+          }
+          if resident_operand_segments[operand_index] is Some(segment) &&
+            selected is Reg(reg) {
+            match register_segments.get(physical_reg_key(reg)) {
+              Some(segment_ids) =>
+                for segment_id in segment_ids {
+                  resident_segments[segment_id] = false
+                }
+              None => ()
+            }
+            resident_segments[segment] = true
+          } else if selected is Reg(reg) && !borrowed_temps.contains(reg) {
+            match register_segments.get(physical_reg_key(reg)) {
+              Some(segment_ids) =>
+                for segment_id in segment_ids {
+                  resident_segments[segment_id] = false
+                }
+              None => ()
+            }
+          }
+        }
+        if timing == Early {
+          for clobber in function.instruction_clobbers(instruction) {
+            match register_segments.get(physical_reg_key(clobber)) {
+              Some(segment_ids) =>
+                for segment_id in segment_ids {
+                  resident_segments[segment_id] = false
+                }
+              None => ()
+            }
+          }
+        }
+      }
+      for reg in borrowed_temps {
+        match register_segments.get(physical_reg_key(reg)) {
+          Some(segment_ids) =>
+            for segment_id in segment_ids {
+              resident_segments[segment_id] = false
+            }
+          None => ()
+        }
       }
     }
   }

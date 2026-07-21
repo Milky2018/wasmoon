@@ -3029,6 +3029,14 @@ fn emit_instruction(
       buffer.emit_word(
         encode_three_register(0x8B000000U, reg(2), reg(0), reg(1)),
       )
+    AddAddressUxtw(shift) =>
+      buffer.emit_word(
+        0x8B204000U |
+        (reg_bits(reg(1)) << 16) |
+        (shift.reinterpret_as_uint() << 10) |
+        (reg_bits(reg(0)) << 5) |
+        reg_bits(reg(2)),
+      )
     ScalarLoad(width, extension, result_type, offset) => {
       guard scalar_load_base(width, extension, result_type) is Some(base) else {
         raise InvalidScalarMemoryAccess
