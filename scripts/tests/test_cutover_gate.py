@@ -65,6 +65,21 @@ class CutoverPerfTests(unittest.TestCase):
         self.assertGreater(stats["upper_95_ratio"], 1.1)
         self.assertGreater(stats["coefficient_of_variation"], 0.0)
 
+    def test_runtime_normalization_preserves_sub_nanosecond_values(self) -> None:
+        self.assertEqual(PERF.normalize_runtime_ns(101, 100, 10), 0.1)
+
+    def test_runtime_normalization_rejects_non_positive_signal(self) -> None:
+        with self.assertRaisesRegex(RuntimeError, "not positive"):
+            PERF.normalize_runtime_ns(100, 100, 10)
+
+    def test_compile_only_workload_does_not_require_runtime_samples(self) -> None:
+        self.assertIsNone(
+            PERF.workload_runtime_stats(
+                {"metrics": ["jit_compile_time", "code_size"]},
+                [{"legacy": {}, "candidate": {}}],
+            )
+        )
+
     def test_threshold_crossing_confidence_bound_is_inconclusive(self) -> None:
         failures: list[str] = []
         PERF.record_failure(

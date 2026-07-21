@@ -39,7 +39,7 @@ legacy baseline was `af3fa2d99598554baab7614e0b08584ab5f8d9da`.
 | Metric | Point ratio | Upper 95% ratio | Result |
 | --- | ---: | ---: | --- |
 | Corpus compile time | 0.936100x | 0.943234x | Pass |
-| Corpus runtime | 0.977739x | 1.118256x | Inconclusive; strict limit is 1.03x |
+| Corpus runtime | — | — | Superseded; the former wall-clock residual estimator could produce zero samples |
 | Total emitted bytes | 0.927594x | — | Pass: 37,152 versus 40,052 bytes |
 | `large_cfg.wast` compile time | 1.029926x | 1.042708x | Pass |
 | `large_cfg.wast` emitted bytes | 0.999164x | — | Pass: 14,340 versus 14,352 bytes |
@@ -69,8 +69,10 @@ The fixed large-CFG scalability defect is closed in
 
 ## Remaining failures
 
-The formal decision is still `fail`; aggregate improvement does not waive the
-strict per-workload gates:
+The formal decision is still `fail`; complete dual-target reports must be
+regenerated with the corrected runtime protocol. The former runtime point and
+confidence estimates are not acceptance evidence. Historical failures before
+that correction were:
 
 - Runtime: `gcd.wat` and `matmul.wat` are statistically inconclusive, while
   `fnv1a.wat` measures 1.085316x. `matmul.wat` has a favorable 0.826709x point
@@ -108,4 +110,10 @@ python3 scripts/run_machv_cutover_perf.py \
 
 The machine-readable report used above is `perf-report.json` in the selected
 output directory. Correctness success, point estimates, and confidence-bound
-acceptance are deliberately reported separately.
+acceptance are deliberately reported separately. For WAT workloads, the runner
+uses the candidate repository's `wasmoon-tools wat2wasm` once and gives the
+resulting identical WASM bytes to both binaries. Compile samples enable JIT
+metrics. Runtime samples separately execute verified JIT-cache hits, subtract
+only the measured process-startup calibration, preserve fractional
+nanoseconds-per-internal-iteration, and reject a non-positive signal instead of
+clamping it into a fabricated measurement.

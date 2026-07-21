@@ -220,7 +220,7 @@
     {
       "tier": "real_module",
       "path": "docs/perf/machv-migration/workloads/gcd.wat",
-      "sha256": "53f790ceab8611fc0cb2bfd72d56d71313421276d010263ad01fcbe7abd3f6cc",
+      "sha256": "729b1bc7af662077684fb9fe6d78e6165b0db524106422c7b303cab903d6bda3",
       "subcommand": "run",
       "entry": "_start",
       "expected_output": "gcd ok",

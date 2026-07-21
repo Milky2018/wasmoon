@@ -182,6 +182,18 @@ def parse_metrics(path: Path) -> tuple[int, int, int]:
     return compile_us, code_size, observed_functions
 
 
+def normalize_runtime_ns(
+    elapsed_ns: int, startup_ns: int, internal_iterations: int
+) -> float:
+    execution_ns = elapsed_ns - startup_ns
+    if execution_ns <= 0:
+        raise RuntimeError(
+            "cached runtime signal is not positive: "
+            f"elapsed={elapsed_ns}ns startup={startup_ns}ns"
+        )
+    return execution_ns / internal_iterations
+
+
 def measure_startup(binary: Path, repo: Path, samples: int = 5) -> dict[str, Any]:
     values: list[int] = []
     for _ in range(samples + 1):
@@ -201,6 +213,75 @@ def measure_startup(binary: Path, repo: Path, samples: int = 5) -> dict[str, Any
     return {"samples_ns": measured, "median_ns": int(statistics.median(measured))}
 
 
+def prepare_workload(
+    *,
+    source: Path,
+    candidate_tools: Path,
+    repo: Path,
+    out_dir: Path,
+    label: str,
+) -> Path:
+    if source.suffix != ".wat":
+        return source
+    output = out_dir / f"{label}.wasm"
+    run_logged(
+        [str(candidate_tools), "wat2wasm", str(source), "-o", str(output)],
+        cwd=repo,
+        log=out_dir / f"{label}.wat2wasm.log",
+    )
+    if not output.is_file():
+        raise RuntimeError(f"wat2wasm did not produce {output}")
+    return output
+
+
+def prime_runtime_cache(
+    *,
+    binary: Path,
+    repo: Path,
+    workload: dict[str, Any],
+    out_dir: Path,
+    label: str,
+    timeout: int,
+    cache_dir: Path,
+) -> None:
+    out_dir.mkdir(parents=True, exist_ok=True)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    env = os.environ.copy()
+    env["WASMOON_JIT_CACHE_DIR"] = str(cache_dir)
+    command = [str(binary), workload["subcommand"], workload["path"]]
+    for suffix, debug in (("prime", False), ("check", True)):
+        stdout_path = out_dir / f"cache-{suffix}-{label}.stdout.log"
+        stderr_path = out_dir / f"cache-{suffix}-{label}.stderr.log"
+        actual_command = [*command[:2], "-D", *command[2:]] if debug else command
+        with stdout_path.open("w", encoding="utf-8") as stdout, stderr_path.open(
+            "w", encoding="utf-8"
+        ) as stderr:
+            process = subprocess.run(
+                actual_command,
+                cwd=repo,
+                env=env,
+                stdout=stdout,
+                stderr=stderr,
+                timeout=timeout,
+                check=False,
+                text=True,
+            )
+        stdout_text = stdout_path.read_text(encoding="utf-8")
+        stderr_text = stderr_path.read_text(encoding="utf-8")
+        if process.returncode != 0:
+            raise RuntimeError(
+                f"cache-{suffix}-{label} failed with exit {process.returncode}; "
+                f"see {out_dir}"
+            )
+        if workload["expected_output"] not in stdout_text:
+            raise RuntimeError(
+                f"cache-{suffix}-{label} omitted expected output "
+                f"{workload['expected_output']!r}"
+            )
+        if debug and "JIT: cache hit " not in stdout_text + stderr_text:
+            raise RuntimeError(f"cache-check-{label} did not use the JIT cache")
+
+
 def run_sample(
     *,
     binary: Path,
@@ -210,6 +291,7 @@ def run_sample(
     label: str,
     timeout: int,
     startup_ns: int,
+    runtime_cache: Path | None,
 ) -> dict[str, Any]:
     out_dir.mkdir(parents=True, exist_ok=True)
     metrics = out_dir / f"{label}.metrics.json"
@@ -250,11 +332,9 @@ def run_sample(
     if not metrics.exists():
         raise RuntimeError(f"{label} did not produce {metrics}")
     compile_us, code_size, function_count = parse_metrics(metrics)
-    execution_ns = max(1, elapsed_ns - compile_us * 1000 - startup_ns)
-    return {
+    result = {
         "elapsed_ns": elapsed_ns,
         "startup_ns": startup_ns,
-        "execution_ns": execution_ns // int(workload["internal_iterations"]),
         "module_compile_us": compile_us,
         "code_size": code_size,
         "function_count": function_count,
@@ -262,6 +342,60 @@ def run_sample(
         "stdout": str(stdout_path),
         "stderr": str(stderr_path),
     }
+    if runtime_cache is None:
+        return result
+
+    runtime_stdout_path = out_dir / f"{label}.runtime.stdout.log"
+    runtime_stderr_path = out_dir / f"{label}.runtime.stderr.log"
+    runtime_env = os.environ.copy()
+    runtime_env["WASMOON_JIT_CACHE_DIR"] = str(runtime_cache)
+    runtime_started = time.perf_counter_ns()
+    with runtime_stdout_path.open(
+        "w", encoding="utf-8"
+    ) as runtime_stdout, runtime_stderr_path.open(
+        "w", encoding="utf-8"
+    ) as runtime_stderr:
+        try:
+            runtime_process = subprocess.run(
+                command,
+                cwd=repo,
+                env=runtime_env,
+                stdout=runtime_stdout,
+                stderr=runtime_stderr,
+                timeout=timeout,
+                check=False,
+                text=True,
+            )
+            runtime_exit_code = runtime_process.returncode
+            runtime_timed_out = False
+        except subprocess.TimeoutExpired:
+            runtime_exit_code = 124
+            runtime_timed_out = True
+    runtime_elapsed_ns = time.perf_counter_ns() - runtime_started
+    runtime_stdout_text = runtime_stdout_path.read_text(encoding="utf-8")
+    if runtime_exit_code != 0 or runtime_timed_out:
+        raise RuntimeError(
+            f"{label} cached runtime failed with exit {runtime_exit_code}; "
+            f"see {out_dir}"
+        )
+    if workload["expected_output"] not in runtime_stdout_text:
+        raise RuntimeError(
+            f"{label} cached runtime omitted expected output "
+            f"{workload['expected_output']!r}"
+        )
+    result.update(
+        {
+            "runtime_elapsed_ns": runtime_elapsed_ns,
+            "execution_ns": normalize_runtime_ns(
+                runtime_elapsed_ns,
+                startup_ns,
+                int(workload["internal_iterations"]),
+            ),
+            "runtime_stdout": str(runtime_stdout_path),
+            "runtime_stderr": str(runtime_stderr_path),
+        }
+    )
+    return result
 
 
 def two_sided_95_t_critical(degrees_of_freedom: float) -> float:
@@ -315,6 +449,20 @@ def ratio_stats(values: list[float]) -> dict[str, float]:
         "upper_95_ratio": math.exp(upper),
         "coefficient_of_variation": cv,
     }
+
+
+def workload_runtime_stats(
+    workload: dict[str, Any], samples: list[dict[str, Any]]
+) -> dict[str, float] | None:
+    if "runtime" not in workload["metrics"]:
+        return None
+    return ratio_stats(
+        [
+            sample["candidate"]["execution_ns"]
+            / sample["legacy"]["execution_ns"]
+            for sample in samples
+        ]
+    )
 
 
 def corpus_ratio_stats(groups: list[list[float]]) -> dict[str, float]:
@@ -468,6 +616,22 @@ def main() -> int:
             )
             legacy_binary = (legacy_repo / "wasmoon").resolve()
 
+        candidate_tools = candidate_binary.with_name("wasmoon-tools")
+        if not candidate_tools.is_file():
+            raise RuntimeError(
+                f"candidate wat2wasm tool does not exist: {candidate_tools}"
+            )
+        prepared_workloads = {
+            workload["path"]: prepare_workload(
+                source=repo / workload["path"],
+                candidate_tools=candidate_tools,
+                repo=repo,
+                out_dir=out_dir / "prepared",
+                label=workload["path"].replace("/", "__"),
+            )
+            for workload in workloads
+        }
+
         startup = {
             "legacy": measure_startup(legacy_binary, legacy_repo),
             "candidate": measure_startup(candidate_binary, repo),
@@ -477,7 +641,27 @@ def main() -> int:
         needs_expansion = False
         for workload in workloads:
             stem = workload["path"].replace("/", "__")
+            prepared_path = prepared_workloads[workload["path"]]
+            prepared_workload = {**workload, "path": str(prepared_path)}
             samples: list[dict[str, Any]] = []
+            runtime_caches: dict[str, Path] = {}
+
+            if "runtime" in workload["metrics"]:
+                for side, binary, side_repo in (
+                    ("legacy", legacy_binary, legacy_repo),
+                    ("candidate", candidate_binary, repo),
+                ):
+                    cache_dir = out_dir / "runtime-cache" / stem / side
+                    prime_runtime_cache(
+                        binary=binary,
+                        repo=side_repo,
+                        workload=prepared_workload,
+                        out_dir=out_dir / "raw" / stem,
+                        label=side,
+                        timeout=args.timeout_sec,
+                        cache_dir=cache_dir,
+                    )
+                    runtime_caches[side] = cache_dir
 
             for side, binary, side_repo in (
                 ("legacy", legacy_binary, legacy_repo),
@@ -486,11 +670,12 @@ def main() -> int:
                 run_sample(
                     binary=binary,
                     repo=side_repo,
-                    workload={**workload, "path": str(repo / workload["path"])},
+                    workload=prepared_workload,
                     out_dir=out_dir / "raw" / stem,
                     label=f"warmup-{side}",
                     timeout=args.timeout_sec,
                     startup_ns=startup[side]["median_ns"],
+                    runtime_cache=runtime_caches.get(side),
                 )
 
             pair = 0
@@ -506,37 +691,36 @@ def main() -> int:
                     result[side] = run_sample(
                         binary=binary,
                         repo=side_repo,
-                        workload={**workload, "path": str(repo / workload["path"])},
+                        workload=prepared_workload,
                         out_dir=out_dir / "raw" / stem,
                         label=f"pair-{pair:02d}-{side}",
                         timeout=args.timeout_sec,
                         startup_ns=startup[side]["median_ns"],
+                        runtime_cache=runtime_caches.get(side),
                     )
                 samples.append(result)
                 pair += 1
 
                 if pair == args.pairs:
-                    runtime_ratios = [
-                        sample["candidate"]["execution_ns"] / sample["legacy"]["execution_ns"]
-                        for sample in samples
-                    ]
                     compile_ratios = [
                         sample["candidate"]["module_compile_us"]
                         / sample["legacy"]["module_compile_us"]
                         for sample in samples
                     ]
-                    noisy = (
-                        "runtime" in workload["metrics"]
-                        and ratio_stats(runtime_ratios)["coefficient_of_variation"] > 0.015
-                    ) or ratio_stats(compile_ratios)["coefficient_of_variation"] > 0.025
+                    runtime_stats = workload_runtime_stats(workload, samples)
+                    runtime_noisy = (
+                        runtime_stats is not None
+                        and runtime_stats["coefficient_of_variation"] > 0.015
+                    )
+                    noisy = runtime_noisy or (
+                        ratio_stats(compile_ratios)["coefficient_of_variation"]
+                        > 0.025
+                    )
                     if noisy and args.expanded_pairs > args.pairs:
                         target_pairs = args.expanded_pairs
                         needs_expansion = True
 
-            runtime_ratios = [
-                sample["candidate"]["execution_ns"] / sample["legacy"]["execution_ns"]
-                for sample in samples
-            ]
+            runtime_stats = workload_runtime_stats(workload, samples)
             compile_ratios = [
                 sample["candidate"]["module_compile_us"]
                 / sample["legacy"]["module_compile_us"]
@@ -550,8 +734,9 @@ def main() -> int:
                     "tier": workload["tier"],
                     "metrics": workload["metrics"],
                     "features": workload["features"],
+                    "prepared_sha256": sha256(prepared_path),
                     "pairs": len(samples),
-                    "runtime": ratio_stats(runtime_ratios),
+                    "runtime": runtime_stats,
                     "compile": ratio_stats(compile_ratios),
                     "code_size": {
                         "legacy_median": statistics.median(legacy_sizes),
@@ -620,7 +805,7 @@ def main() -> int:
             )
 
         report = {
-            "schema_version": 1,
+            "schema_version": 2,
             "generated_at_unix_sec": int(time.time()),
             "candidate_commit": git_output(repo, "rev-parse", "HEAD"),
             "candidate_parent_commit": git_output(repo, "rev-parse", "HEAD^"),
@@ -641,6 +826,13 @@ def main() -> int:
                 "compile_workload": COMPILE_WORKLOAD_LIMIT,
                 "code_size_total": CODE_SIZE_TOTAL_LIMIT,
                 "code_size_workload": CODE_SIZE_WORKLOAD_LIMIT,
+            },
+            "runtime_measurement": {
+                "mode": "jit-cache-hit-process-elapsed-minus-startup",
+                "unit": "nanoseconds-per-internal-iteration",
+                "wat_preparation": (
+                    "candidate wasmoon-tools wat2wasm; identical wasm for both sides"
+                ),
             },
             "startup_calibration": startup,
             "expanded_for_noise": needs_expansion,

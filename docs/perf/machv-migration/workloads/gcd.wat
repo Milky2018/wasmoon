@@ -19,13 +19,14 @@
   )
 
   (func $gcd (param $a i32) (param $b i32) (result i32)
-    (local $next i32)
     (block $done
       (loop $euclid
-        (br_if $done (i32.eqz (local.get $b)))
-        (local.set $next (local.get $b))
-        (local.set $b (i32.rem_u (local.get $a) (local.get $b)))
-        (local.set $a (local.get $next))
+        (br_if $done (i32.eq (local.get $a) (local.get $b)))
+        (if (i32.gt_u (local.get $a) (local.get $b))
+          (then
+            (local.set $a (i32.sub (local.get $a) (local.get $b))))
+          (else
+            (local.set $b (i32.sub (local.get $b) (local.get $a)))))
         (br $euclid)
       )
     )
