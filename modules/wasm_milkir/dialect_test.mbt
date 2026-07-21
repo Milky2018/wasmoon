@@ -394,16 +394,37 @@ test "GC builders preserve reference carriers" {
 test "table grow preserves table index width" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder("table_grow_types")
   let vmctx = builder.add_param(I64)
-  let delta = builder.add_param(I64)
+  let delta32 = builder.add_param(I32)
+  let delta64 = builder.add_param(I64)
   let init_value = builder.add_param(CallableRef)
+  builder.add_result(I32)
+  builder.add_result(I64)
   let symbols = RuntimeSymbols::with_runtime_prefix("wasm.runtime")
-
-  inspect(
-    table_grow(builder, symbols, vmctx, 0, delta, init_value).ty,
-    content="i32",
+  let result32 = table_grow(builder, symbols, vmctx, 0, delta32, init_value)
+  let result64 = table_grow(
+    builder,
+    symbols,
+    vmctx,
+    0,
+    delta64,
+    init_value,
+    is_table64=true,
   )
+  builder.return_([result32, result64])
   inspect(
-    table_grow(builder, symbols, vmctx, 0, delta, init_value, is_table64=true).ty,
-    content="i64",
+    builder.finalize().print(),
+    content=(
+      #|function table_grow_types(v0:i64, v1:i32, v2:i64, v3:callable_ref) -> i32, i64 {
+      #|block0:
+      #|    v4:i64 = uextend v1
+      #|    v5:i32 = iconst 0
+      #|    v6:i64 = call wasm.runtime.table_grow(v0, v5, v4, v3)
+      #|    v7:i32 = ireduce v6
+      #|    v8:i32 = iconst 0
+      #|    v9:i64 = call wasm.runtime.table_grow(v0, v8, v2, v3)
+      #|    return v7, v9
+      #|}
+      #|
+    ),
   )
 }

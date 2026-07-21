@@ -7,7 +7,12 @@
 /// trampoline planner.
 
 ///|
-pub using @jit_ffi {c_jit_write_i64, c_jit_write_u32, c_jit_read_i64}
+pub using @jit_ffi {
+  c_jit_write_i64,
+  c_jit_write_u32,
+  c_jit_read_i64,
+  c_jit_read_u32,
+}
 
 ///|
 pub fn host_target_arch() -> @cwasm.TargetArch {
@@ -19,9 +24,9 @@ pub fn host_target_arch() -> @cwasm.TargetArch {
 }
 
 ///|
-pub fn target_arch_to_isa(target : @cwasm.TargetArch) -> @isa.ISA {
+pub fn target_arch_to_native_target(target : @cwasm.TargetArch) -> NativeTarget {
   match target {
-    X86_64 => AMD64
+    X86_64 => X64
     AArch64 => AArch64
     Unknown => AArch64
   }
@@ -1147,10 +1152,7 @@ fn pack_u64_le(bytes : Array[Int], start : Int) -> Int64 {
 }
 
 ///|
-pub fn build_aarch64_load_imm64_fixed_bytes(
-  reg : Int,
-  imm : Int64,
-) -> Array[Int] {
+fn build_aarch64_load_imm64_fixed_bytes(reg : Int, imm : Int64) -> Array[Int] {
   let bytes : Array[Int] = []
   let v0 = (imm & 0xffffL).to_int()
   let v1 = ((imm >> 16) & 0xffffL).to_int()
@@ -1170,108 +1172,6 @@ pub fn build_aarch64_load_imm64_fixed_bytes(
     0xf2800000 | (3 << 21) | ((v3 & 0xffff) << 5) | (reg & 0x1f),
   )
   bytes
-}
-
-///|
-pub fn build_aarch64_direct_call_stub(target_ptr : Int64) -> Array[Int] {
-  let bytes = build_aarch64_load_imm64_fixed_bytes(16, target_ptr)
-  push_u32_le(bytes, 0xd61f0000 | ((16 & 0x1f) << 5))
-  bytes
-}
-
-///|
-pub fn build_x64_direct_call_stub(target_ptr : Int64) -> Array[Int] {
-  let bytes : Array[Int] = []
-  bytes.push(0x49)
-  bytes.push(0xbb)
-  let mut value = target_ptr
-  for _ in 0..<8 {
-    bytes.push((value & 0xffL).to_int())
-    value = value >> 8
-  }
-  bytes.push(0x41)
-  bytes.push(0xff)
-  bytes.push(0xe3)
-  bytes
-}
-
-///|
-pub fn direct_call_idx_memory_fill_mem0() -> Int {
-  -1001
-}
-
-///|
-pub fn direct_call_idx_memory_copy_mem0() -> Int {
-  -1002
-}
-
-///|
-pub struct DirectCallStubSet {
-  exec_codes : Array[ExecCode]
-  targets : Map[Int, Int64]
-}
-
-///|
-pub suberror DirectCallStubInstallError {
-  UnsupportedDirectCallStubTarget(pseudo_idx~ : Int, code_size~ : Int)
-  DirectCallStubAllocationFailed(pseudo_idx~ : Int, code_size~ : Int)
-} derive(Debug, Eq)
-
-///|
-fn direct_call_stub_code_for_target(
-  target : @cwasm.TargetArch,
-  target_ptr : Int64,
-) -> Array[Int] {
-  match target {
-    AArch64 => build_aarch64_direct_call_stub(target_ptr)
-    X86_64 => build_x64_direct_call_stub(target_ptr)
-    Unknown => []
-  }
-}
-
-///|
-fn DirectCallStubSet::install_one(
-  self : DirectCallStubSet,
-  target : @cwasm.TargetArch,
-  pseudo_idx : Int,
-  target_ptr : Int64,
-) -> Unit raise DirectCallStubInstallError {
-  let stub_code = direct_call_stub_code_for_target(target, target_ptr)
-  if stub_code.length() == 0 {
-    raise UnsupportedDirectCallStubTarget(
-      pseudo_idx~,
-      code_size=stub_code.length(),
-    )
-  }
-  match ExecCode::try_alloc(stub_code) {
-    Some(ec) => {
-      self.exec_codes.push(ec)
-      self.targets.set(pseudo_idx, ec.ptr())
-    }
-    None =>
-      raise DirectCallStubAllocationFailed(
-        pseudo_idx~,
-        code_size=stub_code.length(),
-      )
-  }
-}
-
-///|
-pub fn install_direct_call_stubs_for_target(
-  target : @cwasm.TargetArch,
-) -> DirectCallStubSet raise DirectCallStubInstallError {
-  let stubs : DirectCallStubSet = { exec_codes: [], targets: Map([]) }
-  stubs.install_one(
-    target,
-    direct_call_idx_memory_fill_mem0(),
-    @jit_ffi.c_jit_get_memory_fill_mem0_ptr(),
-  )
-  stubs.install_one(
-    target,
-    direct_call_idx_memory_copy_mem0(),
-    @jit_ffi.c_jit_get_memory_copy_mem0_ptr(),
-  )
-  stubs
 }
 
 ///|
@@ -1486,6 +1386,15 @@ pub fn patch_func_addr_fixups_for_target(
 
 ///|
 pub fn encode_aarch64_bl_imm26(pc : Int64, target_ptr : Int64) -> Int? {
+  encode_aarch64_branch_imm26(pc, target_ptr, 0x94000000U)
+}
+
+///|
+fn encode_aarch64_branch_imm26(
+  pc : Int64,
+  target_ptr : Int64,
+  opcode : UInt,
+) -> Int? {
   let diff = target_ptr - pc
   if diff % 4L != 0L {
     return None
@@ -1494,7 +1403,9 @@ pub fn encode_aarch64_bl_imm26(pc : Int64, target_ptr : Int64) -> Int? {
   if imm26 < -0x2000000L || imm26 > 0x1FFFFFFL {
     return None
   }
-  Some((0x94000000L | (imm26 & 0x3FFFFFFL)).to_int())
+  Some(
+    (opcode | (imm26.to_int() & 0x3FFFFFF).reinterpret_as_uint()).reinterpret_as_int(),
+  )
 }
 
 ///|
@@ -1526,13 +1437,17 @@ pub fn patch_aarch64_direct_call(
   target_ptr : Int64,
 ) -> Unit {
   let pc = exec_ptr + fixup.offset.to_int64()
-  if encode_aarch64_bl_imm26(pc, target_ptr) is Some(encoded) {
+  let opcode = c_jit_read_u32(pc) & 0xFC000000U
+  if opcode != 0x14000000U && opcode != 0x94000000U {
+    abort("AArch64 call fixup does not point at B or BL")
+  }
+  if encode_aarch64_branch_imm26(pc, target_ptr, opcode) is Some(encoded) {
     c_jit_write_u32(pc, encoded)
     return
   }
   if fixup.veneer_offset >= 0 {
     let veneer_pc = exec_ptr + fixup.veneer_offset.to_int64()
-    if encode_aarch64_bl_imm26(pc, veneer_pc) is Some(encoded) {
+    if encode_aarch64_branch_imm26(pc, veneer_pc, opcode) is Some(encoded) {
       patch_aarch64_call_veneer_target(exec_ptr, fixup, target_ptr)
       c_jit_write_u32(pc, encoded)
       return
@@ -1552,10 +1467,22 @@ pub fn patch_x64_direct_call(
   let pc = exec_ptr + fixup.offset.to_int64()
   match encode_x64_call_rel32_disp(pc, target_ptr) {
     Some(encoded) => c_jit_write_u32(pc + 1L, encoded)
-    None =>
+    None => {
+      if fixup.veneer_offset >= 0 {
+        let veneer_pc = exec_ptr + fixup.veneer_offset.to_int64()
+        if encode_x64_call_rel32_disp(pc, veneer_pc) is Some(encoded) {
+          // Veneer layout (14 bytes):
+          //   +0:  jmp qword ptr [rip + 0]
+          //   +6:  target_ptr literal (u64)
+          c_jit_write_i64(veneer_pc + 6L, target_ptr)
+          c_jit_write_u32(pc + 1L, encoded)
+          return
+        }
+      }
       abort(
-        "direct call target out of rel32 range (func_idx=\{fixup.func_idx})",
+        "direct call target out of rel32 range (func_idx=\{fixup.func_idx}, veneer_offset=\{fixup.veneer_offset})",
       )
+    }
   }
 }
 

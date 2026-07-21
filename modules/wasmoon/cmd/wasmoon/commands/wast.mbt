@@ -435,6 +435,7 @@ fn try_compile_jit(
     None
   }
   // Compile module to JIT
+  let mut compile_failure : String? = None
   let compiled = compile_module_to_jit(
     lowered_mod,
     false, // debug mode off for wast tests
@@ -442,13 +443,19 @@ fn try_compile_jit(
     actual_memory_max~,
     0, // Keep WAST JIT compile latency aligned with timeout-limited harness runs.
     false, // DWARF off for wast tests
+    on_progress=fn(event) {
+      if event.stage is Failed {
+        compile_failure = event.message
+      }
+      None
+    },
     local_compile_mask~,
     force_subtype_indirect_check=Some(true),
   )
   match compiled {
     None =>
       return Err(
-        "WAST JIT strict mode: compile_module_to_jit returned None (unsupported or failed compilation)",
+        "WAST JIT strict mode: compile_module_to_jit failed: \{compile_failure.unwrap_or("unknown compilation error")}",
       )
     Some((pc, _)) => {
       // Build func_signatures array for JIT module

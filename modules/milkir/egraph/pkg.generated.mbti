@@ -10,25 +10,13 @@ pub fn get_compact_ruleset() -> IndexedRuleSet
 
 pub fn get_global_ruleset() -> IndexedRuleSet
 
-pub fn legality_sensitive_rules() -> Array[RewriteRule]
-
-pub fn remat_rules() -> Array[RewriteRule]
-
-pub fn select_rules() -> Array[RewriteRule]
-
-pub fn skeleton_rules() -> Array[RewriteRule]
-
-pub fn spaceship_rules() -> Array[RewriteRule]
-
-pub fn standard_rules_indexed() -> IndexedRuleSet
+pub fn legality_sensitive_rules() -> IndexedRuleSet
 
 pub fn ty_smax(Int) -> Int64
 
 pub fn ty_smin(Int) -> Int64
 
 pub fn ty_umax(Int) -> Int64
-
-pub fn vector_rules() -> Array[RewriteRule]
 
 // Errors
 
@@ -116,7 +104,6 @@ pub fn EGraph::num_nodes(Self) -> Int
 pub fn EGraph::rebuild(Self) -> Unit
 pub fn EGraph::remat_cost_bonus(Self, EClassId) -> Int
 pub fn EGraph::rewrite_to_fixpoint(Self, IndexedRuleSet) -> Unit
-pub fn EGraph::saturate(Self, Array[RewriteRule], Int) -> Int
 pub fn EGraph::saturate_indexed(Self, IndexedRuleSet, Int) -> Int
 pub fn EGraph::saturate_indexed_with_limits(Self, IndexedRuleSet, Int, SaturationLimits) -> Int
 pub fn EGraph::set_type(Self, EClassId, Int) -> Unit
@@ -198,8 +185,6 @@ pub impl Show for EOpcode
 type EOpcodeTag derive(Eq, Hash, @debug.Debug)
 
 type IndexedRuleSet
-
-type RewriteRule
 
 pub struct SaturationLimits {
   matches_limit : Int

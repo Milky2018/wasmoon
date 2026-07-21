@@ -14,7 +14,7 @@ python3 scripts/collect_perf_baseline.py --out-dir docs/perf/baselines/latest
 The default mode uses `wasmoon run` on curated `.wasm` workloads. Use
 `--subcommand test` only when you intentionally benchmark WAST test mode.
 
-For repeatable CI/nightly checks with regression thresholds:
+For an optional local comparison against a reviewed snapshot:
 
 ```bash
 python3 scripts/run_perf_benchmarks.py \
@@ -41,5 +41,5 @@ cp -R docs/perf/baselines/latest docs/perf/baselines/2026-02-06-amd64-step1
 
 - Commit only reviewed snapshots used for comparisons.
 - Keep local scratch runs in `latest/`.
-- Keep architecture-specific threshold baselines under `linux-amd64/` and
+- Keep architecture-specific diagnostic snapshots under `linux-amd64/` and
   `darwin-arm64/` (or other explicit arch folders).

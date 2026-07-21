@@ -31,6 +31,18 @@ pub(all) struct OpenFile {
 }
 
 ///|
+fn OpenFile::require_base_rights(
+  self : OpenFile,
+  required : Int64,
+) -> Result[Unit, Errno] {
+  if (self.rights_base & required) == required {
+    Ok(())
+  } else {
+    Err(NotCapable)
+  }
+}
+
+///|
 /// WASI execution context
 /// Maintains state for WASI function calls
 pub(all) struct WasiContext {
@@ -334,6 +346,24 @@ pub fn WasiContext::alloc_fd(self : WasiContext, file : OpenFile) -> Int {
 /// Get an open file by WASI file descriptor
 pub fn WasiContext::get_file(self : WasiContext, fd : Int) -> OpenFile? {
   self.open_files.get(fd)
+}
+
+///|
+/// Get a tracked descriptor after proving that it carries every required base
+/// right. Stdio descriptors are handled separately by their dedicated paths.
+fn WasiContext::get_file_with_base_rights(
+  self : WasiContext,
+  fd : Int,
+  required : Int64,
+) -> Result[OpenFile, Errno] {
+  match self.open_files.get(fd) {
+    None => Err(Badf)
+    Some(file) =>
+      match file.require_base_rights(required) {
+        Ok(_) => Ok(file)
+        Err(errno) => Err(errno)
+      }
+  }
 }
 
 ///|

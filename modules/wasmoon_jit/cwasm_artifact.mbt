@@ -24,16 +24,14 @@ pub(all) struct CwasmArtifact {
   functions : Array[CwasmFunctionRecord]
   call_veneers : Array[CwasmCallVeneer]
   runtime_relocations : Array[ResolvedRuntimeRelocation]
-  func_addr_fixups : Array[@machv_emit.FuncAddrFixup]
-  call_fixups : Array[@machv_emit.CallFixup]
+  func_addr_fixups : Array[JitFuncAddrFixup]
+  call_fixups : Array[JitCallFixup]
   gc_safepoints : Array[GcSafepoint]
   gc_stackmap_blob : Bytes
 } derive(Debug)
 
 ///|
-fn emit_target_to_cwasm_target(
-  target : @machv_emit.EmitTarget,
-) -> @cwasm.TargetArch {
+fn emit_target_to_cwasm_target(target : NativeTarget) -> @cwasm.TargetArch {
   match target {
     X64 => X86_64
     AArch64 => AArch64
@@ -141,7 +139,7 @@ fn CwasmArtifact::function_code(
 ///|
 fn collect_call_veneers(
   function_index : Int,
-  call_fixups : Array[@machv_emit.CallFixup],
+  call_fixups : Array[JitCallFixup],
 ) -> Array[CwasmCallVeneer] {
   let out : Array[CwasmCallVeneer] = []
   let seen : Map[Int, Unit] = Map([])
@@ -156,10 +154,13 @@ fn collect_call_veneers(
 }
 
 ///|
-fn cwasm_func_idx_for_reloc_target(target : @instr.RelocTarget) -> Int {
+fn cwasm_func_idx_for_reloc_target(
+  target : @code_object.RelocationTarget,
+) -> Int {
   match machv_reloc_target_to_cwasm_func_idx(target) {
     Some(func_idx) => func_idx
-    None => abort("cannot encode external reloc target in cwasm: \{target}")
+    None =>
+      abort("cannot encode relocation target in cwasm: \{to_repr(target)}")
   }
 }
 

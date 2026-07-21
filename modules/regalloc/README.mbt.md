@@ -1,79 +1,89 @@
 # regalloc
 
-Target-independent register allocation algorithm.
+`regalloc` is a target-independent register allocator for machine IRs. It
+reads a function through a narrow, read-only `FunctionView` and returns an
+`AllocationPlan`; it does not copy the client's instruction or CFG objects.
 
-`regalloc` models allocation programs, machine environments, allocation
-decisions, and verification without depending on a concrete machine IR.
+The plan contains:
 
-## Package
+- a stable home for every value;
+- a location for every instruction operand;
+- before/after edits for reloads, spills, fixed registers, and tied operands;
+- edge edits for block arguments;
+- reusable spill-slot layouts.
 
-- `Milky2018/regalloc`: allocation data structures, allocator entry points,
-  and verifier APIs.
-- `Milky2018/regalloc/planning`: expert standalone planning algorithms for
-  clients that need lower-level allocation building blocks.
-- `Milky2018/regalloc/backtracking`: expert hooks for clients that integrate
-  the production backtracking allocator with their own machine IR adapter.
+Operand constraints and placement preferences are separate contracts. A fixed
+register is a hard correctness requirement and may require an insertion edit.
+A physical-register preference only orders otherwise legal allocation choices;
+it is ignored rather than causing an extra spill, split, move, or failure when
+the preferred register cannot hold the live range.
 
-## When to use it
+## Allocation strategies
 
-Use `regalloc` when you have a machine-independent allocation problem: virtual
-registers, physical registers, instructions, use/def operands, clobbers, and a
-control-flow graph. Clients describe these inputs with `Program` and
-`MachineEnv`, then map the resulting locations back to their own machine IR.
+`Backtracking` is the default production strategy. It allocates fragmented
+live ranges, uses fixed-register, soft-register, and cross-fragment hints, evicts cheaper
+fragments, and reuses compatible non-overlapping spill slots.
 
-## Example: allocate an abstract program
-
-The smallest program has physical registers, one block, and instructions with
-virtual-register operands. The allocator returns locations for each virtual
-register and can be checked with the verifier.
-
-```moonbit check
-///|
-test "allocate virtual registers to physical registers" {
-  let r0 : PhysicalReg = { id: 0, class: Int }
-  let r1 : PhysicalReg = { id: 1, class: Int }
-  let v0 : VirtualReg = { id: 0, class: Int }
-  let v1 : VirtualReg = { id: 1, class: Int }
-  let program = Program::Program([r0, r1])
-  let block = Block::Block(0)
-  let inst = Instruction::Instruction(0)
-  inst.add_operand(Operand::def(v0))
-  inst.add_operand(Operand::use_reg(v1))
-  block.append(inst)
-  program.add_block(block)
-  let allocation = allocate(program)
-  inspect(allocation.location_of(v0) == Some(Reg(r0)), content="true")
-  inspect(allocation.location_of(v1) == Some(Reg(r1)), content="true")
-  inspect(verify_allocation(program, allocation), content="()")
-}
-```
-
-## Example: configure allocation
-
-`RegallocConfig` controls user-facing allocation behavior. By default
-`allocate` verifies the result before returning it; callers that run their own
-validation can disable that check.
+`SinglePass` is an explicit low-compile-latency strategy. It uses the same
+fragmented plan and verification contract but does not evict an existing
+fragment to make room for a more valuable one, so it may spill earlier.
+Callers should select it only when compile latency matters more than generated
+code quality.
 
 ```moonbit check
 ///|
-test "allocate with explicit configuration" {
-  let r0 : PhysicalReg = { id: 0, class: Int }
-  let v0 : VirtualReg = { id: 0, class: Int }
-  let program = Program::Program([r0])
-  let block = Block::Block(0)
-  let inst = Instruction::Instruction(0)
-  inst.add_operand(Operand::def(v0))
-  block.append(inst)
-  program.add_block(block)
-  let config = RegallocConfig::RegallocConfig(verify=false)
-  let allocation = allocate(program, config~)
-  inspect(config.strategy() == LinearScan, content="true")
-  inspect(allocation.location_of(v0) == Some(Reg(r0)), content="true")
+test "select the low-latency allocator explicitly" {
+  let config = RegallocConfig::RegallocConfig(strategy=SinglePass)
+  inspect(config.strategy(), content="SinglePass")
 }
 ```
 
-## Adapters
+## Integrating a machine IR
 
-Clients can build `Program` values directly or use an adapter for an existing
-machine IR. `Milky2018/machv_regalloc` provides this integration for MachV and
-applies the resulting locations, spills, and edge edits to MachV functions.
+Implement `FunctionView` over the machine IR and provide a `MachineEnv` with
+allocatable and scratch registers. Block arguments passed to CFG methods are
+dense layout indices; `block_id_at` maps them back to the machine IR's stable
+block id for edge edits.
+
+Scratch registers have two distinct roles. `scratch_regs` are always available
+to resolve allocator edits such as spill reloads and parallel moves. By default
+they may also hold instruction operands when all allocatable registers are
+occupied. A target whose emitter reserves those registers for instruction-local
+expansion must call `with_operand_scratch_regs([])` (or provide the safe subset),
+while leaving the edit scratch set intact.
+
+The view also distinguishes function entry values from block parameters and
+defines spill size, alignment, and slot-sharing compatibility. Operand timing
+uses `Early` and `Late` points, allowing an early input and late output to
+share a register safely across one instruction.
+
+Call `allocate_function(view, environment, config?)`. With verification
+enabled (the default), the allocator symbolically checks operand values,
+clobbers, instruction edits, CFG joins, and block-argument transfers before
+returning the plan.
+
+`Milky2018/machv_regalloc` is the reference adapter. AArch64 and x64 both use
+this path before target emission.
+
+## Production integration
+
+Wasmoon's AArch64 and x64 JIT pipelines lower semantic MachV to target-owned
+VCode, expose that VCode directly through `FunctionView`, and explicitly select
+`Backtracking`. The adapter materializes the returned plan into Target VCode's
+separate `Allocation` side tables. The aggregate target pipeline verifies
+selected VCode before allocation and independently verifies the materialized
+VCode allocation afterward, without repeating the generic plan verifier's
+whole-function analysis. Production compilation does not fall back to
+`SinglePass`.
+
+The production integration is complete. CI validates allocation correctness on
+both native targets; retired allocators and backends are not rebuilt as
+performance or code-size acceptance baselines.
+
+## Expert packages
+
+- `Milky2018/regalloc/planning` provides standalone planning utilities.
+- `Milky2018/regalloc/backtracking` provides lower-level policy components for
+  specialized allocator integrations. It is not a second production allocator;
+  the root `allocate_function` entry point owns strategy selection, plan
+  construction, and verification.

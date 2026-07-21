@@ -189,13 +189,19 @@ pub fn validate_jit(
   guard mod_ is Some(wasm_module) else { return report }
   let normalized_opt_level = normalize_opt_level(opt_level)
   let num_imports = count_func_imports(wasm_module.imports)
+  let frontend_environment = @wasmoon.wasm_frontend_embedding_environment()
+  let translation_context = @wasm_frontend.translation_context_from_module(
+    wasm_module, frontend_environment,
+  )
+  let validation_context = @wasm_frontend.wasm_validation_context(
+    translation_context,
+  )
   for i, _ in wasm_module.codes {
     let func_idx = num_imports + i
     let func_name = get_func_name(wasm_module, func_idx)
     try {
-      let env = @wasmoon.wasm_frontend_embedding_environment()
       let milk = @wasm_frontend.translate_function(
-        env,
+        frontend_environment,
         wasm_module,
         i,
         name=func_name,
@@ -205,7 +211,11 @@ pub fn validate_jit(
         @milkir.OptLevel::from_int(normalized_opt_level),
       )
       |> ignore
-      @wasmoon_jit.plan_wasm_body_milkir_integration_for_target(milk, X64)
+      @wasmoon_jit.plan_wasm_body_milkir_integration_for_target(
+        milk,
+        validation_context,
+        X64,
+      )
       |> ignore
       report.checked_funcs = report.checked_funcs + 1
     } catch {

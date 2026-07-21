@@ -19,6 +19,7 @@ test "jit: large function index ref.func uses full offset" {
   for i in 0..<(target_idx + 1) {
     lines.push("  (func $f\{i} (type $t) (result i32) i32.const \{i})")
   }
+  lines.push("  (elem declare func $f\{target_idx})")
   lines.push("  (func (export \"test\") (result i32)")
   lines.push("    ref.func $f\{target_idx}")
   lines.push("    call_ref $t")

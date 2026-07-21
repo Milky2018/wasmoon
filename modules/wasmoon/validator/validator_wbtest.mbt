@@ -304,6 +304,36 @@ test "validator: stack height - block returns correct values" {
 }
 
 ///|
+test "validator: typed block parameters form the control frame base" {
+  let func : @types.FunctionCode = {
+    locals: [],
+    body: [I32Const(7), Block(TypeIndex(0), [])],
+  }
+  let block_type : @types.FuncType = { params: [I32], results: [I32] }
+  let func_type : @types.FuncType = { params: [], results: [I32] }
+  let mod : @types.Module = {
+    types: [
+      @types.SubType::from_func(block_type),
+      @types.SubType::from_func(func_type),
+    ],
+    type_rec_groups: [0, 1],
+    imports: [],
+    funcs: [1],
+    tables: [],
+    memories: [],
+    globals: [],
+    exports: [],
+    start: None,
+    elems: [],
+    codes: [func],
+    datas: [],
+    tags: [],
+    func_names: Map([]),
+  }
+  validate_module(mod)
+}
+
+///|
 test "validator: stack height - block leaves wrong number of values" {
   // Block type says 1 result, but body leaves 2
   let func : @types.FunctionCode = {

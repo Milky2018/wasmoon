@@ -14,8 +14,8 @@ REUSABLE_MODULES = [
     "modules/machv",
     "modules/regalloc",
     "modules/machv_regalloc",
-    "modules/machv_emit",
     "modules/milkir_machv",
+    "modules/wasm_machv",
     "modules/aarch64_target",
     "modules/x64_target",
 ]
@@ -23,9 +23,16 @@ REUSABLE_MODULES = [
 FORBIDDEN_IMPORT_PREFIXES = [
     "Milky2018/wasmoon",
     "Milky2018/wasmoon_jit",
-    "Milky2018/machv_emit/jit_ffi",
 ]
 
+SEMANTIC_MACHV_FORBIDDEN_IMPORT_PREFIXES = [
+    "Milky2018/regalloc",
+    "Milky2018/machv_regalloc",
+    "Milky2018/aarch64_target",
+    "Milky2018/x64_target",
+    "Milky2018/wasmoon",
+    "Milky2018/wasmoon_jit",
+]
 
 def iter_package_manifests(module_dir: Path):
     yield from module_dir.rglob("moon.pkg")
@@ -48,6 +55,14 @@ def is_forbidden_import(package: str) -> bool:
     return False
 
 
+def is_semantic_machv_forbidden_import(package: str) -> bool:
+    module_name = package.split("@", 1)[0]
+    return any(
+        module_name == prefix or module_name.startswith(prefix + "/")
+        for prefix in SEMANTIC_MACHV_FORBIDDEN_IMPORT_PREFIXES
+    )
+
+
 def main() -> int:
     failures = []
     for module in REUSABLE_MODULES:
@@ -61,6 +76,26 @@ def main() -> int:
                 package = parse_imported_package(line)
                 if package is not None and is_forbidden_import(package):
                     failures.append((path, lineno, package))
+
+    semantic_machv = ROOT / "modules/machv"
+    semantic_manifests = [semantic_machv / "moon.mod"]
+    semantic_manifests.extend(iter_package_manifests(semantic_machv))
+    for path in semantic_manifests:
+        text = path.read_text(encoding="utf-8")
+        for lineno, line in enumerate(text.splitlines(), start=1):
+            package = parse_imported_package(line)
+            if (
+                package is not None
+                and is_semantic_machv_forbidden_import(package)
+            ):
+                failures.append(
+                    (
+                        path,
+                        lineno,
+                        "semantic MachV forbidden dependency "
+                        f"{package}",
+                    )
+                )
 
     if failures:
         print("module boundary audit failed:", file=sys.stderr)

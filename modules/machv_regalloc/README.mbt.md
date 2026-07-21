@@ -1,93 +1,84 @@
 # machv_regalloc
 
-MachV adapter for the reusable register allocator.
+Target VCode adapter for the reusable register allocator.
 
-`machv_regalloc` bridges `Milky2018/machv` virtual-register functions to the
-target-independent `Milky2018/regalloc` algorithm. It projects MachV into the
-generic allocation model, applies allocation output, and keeps edge-copy and
-layout behavior compatible with MachV emission.
+`machv_regalloc` bridges `Milky2018/machv/vcode` functions to the
+target-independent `Milky2018/regalloc` algorithm. The adapter reads compact
+operand and clobber side tables without inspecting target instructions. It
+returns a separate Allocation containing value locations, operand locations,
+spill and reload edits, edge moves, stack slots, and safepoint root locations.
 
 ## Packages
 
-- `Milky2018/machv_regalloc`: projection, allocation entry points, application,
-  validation, spill handling, and output construction.
-- `Milky2018/machv_regalloc/layout`: block layout utilities for MachV
-  functions.
+- `Milky2018/machv_regalloc`: read-only Target VCode adapter, allocation entry
+  points, validation, spill handling, and output construction.
 
 ## When to use it
 
-Use `machv_regalloc` when your code is already in MachV and you want to reuse
-the target-independent allocator. This package keeps MachV as the machine IR,
-invokes the allocator, and returns either a rewritten function or a
-Cranelift-style allocation `Output` that the emitter can consume without
-mutating the original virtual-register instructions.
+Use `allocate_vcode` after target instruction selection. Callers provide an
+explicit set of allocatable registers and spill scratch registers. The result
+is verified against fixed and tied operands, clobbers, stack slots, insertion
+edits, edge moves, and safepoint roots before it is returned.
 
-## Example: allocate a MachV function
+The production adapter reads Target VCode directly through `FunctionView`; it
+does not build a second instruction or CFG graph. The aggregate target pipeline
+first verifies selected VCode, explicitly selects the `Backtracking` strategy,
+materializes the returned `AllocationPlan` into VCode `Allocation` side tables,
+and then runs the independent VCode allocation verifier. This avoids rebuilding
+the same whole-function analysis in the generic plan verifier on the production
+path. There is no production fallback to `SinglePass`.
 
-Callers provide their calling-convention data explicitly, allowing the same
-allocation workflow to support different ABIs and reserved-register policies.
+Ordinary `Input::any` operands require a register at the instruction. A target
+operation that can consume a register or spill slot directly uses
+`Input::any_location`; its emitter then reads the allocated `Location` without
+forcing every such input through a simultaneous scratch-register reload.
+`Input::with_preference` may additionally request a same-class allocatable
+register without turning that request into a hard constraint. Production call
+lowering uses this for ABI argument registers, while the post-allocation call
+transfer planner remains responsible for the actual register and stack shuffle.
 
-```moonbit check
-///|
-fn example_abi() -> @abi.EmbeddingABI {
-  let call_conv : @abi.CallConventionLayout = {
-    context_arg: { index: 27, class: Int },
-    user_arg_gprs: [{ index: 0, class: Int }, { index: 1, class: Int }],
-    arg_fprs: [{ index: 0, class: Float64 }, { index: 1, class: Float64 }],
-    ret_gprs: [{ index: 0, class: Int }],
-    ret_fprs: [{ index: 0, class: Float64 }],
-  }
-  EmbeddingABI(call_conv, reserve_context_role=false)
-}
+## Example
 
-///|
-test "allocate a MachV copy" {
-  let builder = @machv.FunctionBuilder::FunctionBuilder("copy")
-  let src = builder.add_param(Int)
-  builder.add_result(I64)
-  let dst = builder.new_vreg(Int)
-  builder.append(Move, uses=[Virtual(src)], defs=[{ reg: Virtual(dst) }])
-  |> ignore
-  builder.terminate(Return([Virtual(dst)]))
-  let allocated = allocate_registers_backtracking_with_isa(
-    builder.finish(),
-    AArch64,
-    embedding_abi=Some(example_abi()),
-  )
-  inspect(allocated.blocks.length(), content="1")
-  inspect(allocated.blocks[0].terminator is Some(Return(_)), content="true")
-}
-```
-
-## Example: consume Cranelift-style output
-
-The output API records per-operand locations and inserted edits. This is the
-preferred path for emitters that materialize moves while encoding instructions.
+The instruction payload stays opaque to the allocator. In this small example
+`Unit` stands in for a target-owned instruction type.
 
 ```moonbit check
 ///|
-test "read operand locations from regalloc output" {
-  let builder = @machv.FunctionBuilder::FunctionBuilder("rewrite")
-  let src = builder.add_param(Int)
-  builder.add_result(I64)
-  let dst = builder.new_vreg(Int)
-  builder.append(Move, uses=[Virtual(src)], defs=[{ reg: Virtual(dst) }])
-  |> ignore
-  builder.terminate(Return([Virtual(dst)]))
-  let (_func, output) = allocate_registers_backtracking_output_with_isa(
-    builder.finish(),
-    AArch64,
-    embedding_abi=Some(example_abi()),
+test "allocate Target VCode" {
+  let builder : @vcode.Builder[Unit] = @vcode.Builder::new("copy", [I64])
+  let entry = builder.entry_block()
+  let source = builder.parameter(0)
+  let (_, result) = builder.append_body(
+    entry,
+    (),
+    [@vcode.Input::any(source)],
+    [@vcode.Output::any(I64)],
+    [],
+    @vcode.InstructionMetadata::empty(),
   )
-  inspect(output.get_num_spillslots(), content="0")
-  inspect(output.inst_def_loc(0, 0, false, 0) is Reg(_), content="true")
-  inspect(output.inst_use_loc(0, 0, false, 0) is Reg(_), content="true")
+  builder.set_terminator(
+    entry,
+    (),
+    [@vcode.Input::any(result[0])],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  let function = builder.finish()
+  let allocation = allocate_vcode(
+    function,
+    VCodeAllocationEnvironment::new([@vcode.PhysicalReg::new(0, Int)], [
+      @vcode.PhysicalReg::new(1, Int),
+    ]),
+  )
+  inspect(allocation.source_instruction_count(), content="2")
 }
 ```
 
 ## Integration
 
-This package translates MachV functions into the `regalloc` input model and
-maps allocation results back to MachV locations and edits. Use the rewritten
-function API when later passes expect assigned registers, or consume `Output`
-directly while emitting instructions.
+Each target emitter consumes its unchanged `Function[TargetInst]` together
+with the returned Allocation and a verified frame layout. Physical-register
+lookups and insertion edits are constant-time or linear side-table queries;
+the adapter never introduces runtime dispatch over target instructions.

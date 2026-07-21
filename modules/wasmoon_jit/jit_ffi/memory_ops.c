@@ -143,78 +143,6 @@ int is_memory_guard_page_access(jit_context_t *ctx, void *addr) {
     return (fault_addr >= guard_start && fault_addr < alloc_end);
 }
 
-// ============ Linear Memory Operations ============
-
-int32_t memory_grow_ctx_internal(jit_context_t *ctx, int64_t delta, int32_t max_pages) {
-    if (!ctx || !ctx->memory0) return -1;
-    if (delta < 0) return -1;
-    if (delta > INT32_MAX) return -1;
-
-    wasmoon_memory_t *mem = ctx->memory0;
-    size_t page_size = (size_t)1 << (size_t)mem->page_size_log2;
-    if (page_size == 0) return -1;
-
-    size_t current_size = atomic_load_explicit(&mem->current_length, memory_order_relaxed);
-    int64_t current_pages = (int64_t)(current_size / page_size);
-
-    int64_t new_pages = current_pages + delta;
-
-    // Spec max: memory32 has a 32-bit address space (4GiB bytes).
-    int64_t arch_max_pages;
-    if (mem->is_memory64) {
-        arch_max_pages = WASM_MEMORY64_MAX_PAGES;
-    } else {
-        const int64_t max_bytes = WASM_MEMORY32_MAX_BYTES;
-        arch_max_pages = (page_size == 0) ? 0 : (max_bytes / (int64_t)page_size);
-    }
-    if (new_pages > arch_max_pages) return -1;
-
-    // Check against configured max limit.
-    // max_pages < 0 means "use descriptor's max".
-    uint64_t stored_max = (uint64_t)mem->max_pages;
-    uint64_t effective_max = (max_pages >= 0) ? (uint64_t)max_pages : stored_max;
-
-    // SIZE_MAX in the descriptor means "unlimited".
-    if (effective_max == (uint64_t)SIZE_MAX) {
-        effective_max = (uint64_t)arch_max_pages;
-    }
-
-    if ((uint64_t)new_pages > effective_max) return -1;
-
-    // No change needed if delta is 0
-    if (delta == 0) return (int32_t)current_pages;
-
-    size_t new_size = (size_t)new_pages * page_size;
-
-    if (mem->is_guarded) {
-        if (grow_guarded_memory(mem, current_size, new_size) != 0) {
-            return -1;
-        }
-        ctx_refresh_memory0_fast_fields(ctx);
-        return (int32_t)current_pages;
-    }
-
-    uint8_t *new_base = (uint8_t *)realloc(mem->base, new_size);
-    if (!new_base) return -1;
-
-    memset(new_base + current_size, 0, new_size - current_size);
-
-    mem->base = new_base;
-    atomic_store_explicit(&mem->current_length, new_size, memory_order_relaxed);
-    ctx_refresh_memory0_fast_fields(ctx);
-
-    return (int32_t)current_pages;
-}
-
-int32_t memory_size_ctx_internal(jit_context_t *ctx) {
-    if (!ctx || !ctx->memory0) return 0;
-    wasmoon_memory_t *mem = ctx->memory0;
-    size_t page_size = (size_t)1 << (size_t)mem->page_size_log2;
-    if (page_size == 0) return 0;
-    size_t size = atomic_load_explicit(&mem->current_length, memory_order_relaxed);
-    return (int32_t)(size / page_size);
-}
-
 // ============ Descriptor-Only Operations (no ctx) ============
 
 int64_t memory_len_desc_internal(wasmoon_memory_t *mem) {
@@ -513,61 +441,9 @@ void memory_copy_indexed_internal(jit_context_t *ctx, int32_t dst_memidx, int32_
     }
 }
 
-// ============ Bulk Memory Operations ============
-
-void memory_fill_ctx_internal(jit_context_t *ctx, int32_t dst, int32_t val, int32_t size) {
-    if (!ctx || !ctx->memory0 || !ctx->memory0->base) {
-        g_trap_code = 1;  // Out of bounds memory access
-        if (g_trap_active) {
-            siglongjmp(g_trap_jmp_buf, 1);
-        }
-        return;
-    }
-
-    size_t mem_size = atomic_load_explicit(&ctx->memory0->current_length, memory_order_relaxed);
-
-    // Check bounds
-    if (dst < 0 || size < 0 || (uint32_t)dst + (uint32_t)size > mem_size) {
-        g_trap_code = 1;  // Out of bounds memory access
-        if (g_trap_active) {
-            siglongjmp(g_trap_jmp_buf, 1);
-        }
-        return;
-    }
-
-    // Fill memory with byte value (val & 0xFF)
-    fill_bytes_fast(ctx->memory0->base + dst, (uint8_t)(val & 0xFF), (size_t)size);
-}
-
-void memory_copy_ctx_internal(jit_context_t *ctx, int32_t dst, int32_t src, int32_t size) {
-    if (!ctx || !ctx->memory0 || !ctx->memory0->base) {
-        g_trap_code = 1;  // Out of bounds memory access
-        if (g_trap_active) {
-            siglongjmp(g_trap_jmp_buf, 1);
-        }
-        return;
-    }
-
-    size_t mem_size = atomic_load_explicit(&ctx->memory0->current_length, memory_order_relaxed);
-
-    // Check bounds for both source and destination
-    if (dst < 0 || src < 0 || size < 0 ||
-        (uint32_t)dst + (uint32_t)size > mem_size ||
-        (uint32_t)src + (uint32_t)size > mem_size) {
-        g_trap_code = 1;  // Out of bounds memory access
-        if (g_trap_active) {
-            siglongjmp(g_trap_jmp_buf, 1);
-        }
-        return;
-    }
-
-    // Use memmove to handle overlapping regions correctly
-    memmove(ctx->memory0->base + dst, ctx->memory0->base + src, size);
-}
-
 // ============ Table Operations ============
 
-int32_t table_grow_ctx_internal(
+int64_t table_grow_ctx_internal(
     jit_context_t *ctx,
     int32_t table_idx,
     int64_t delta,
@@ -582,6 +458,11 @@ int32_t table_grow_ctx_internal(
 
     // Check for overflow
     if (new_size < old_size) return -1;
+
+    // The current host table metadata interchange is bounded to UINT32_MAX.
+    // table64 keeps its 64-bit Wasm ABI, but larger growth is an implementation
+    // resource limit and must fail before allocation.
+    if (new_size > UINT32_MAX) return -1;
 
     // Check against max size limit
     if (ctx->table_max_sizes) {
@@ -622,5 +503,5 @@ int32_t table_grow_ctx_internal(
         free(old_table);
     }
 
-    return (int32_t)old_size;
+    return (int64_t)old_size;
 }

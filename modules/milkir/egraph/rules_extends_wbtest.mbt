@@ -31,7 +31,7 @@ test "rule_uextend_const_with_extract" {
 /// Test that typed nodes participate in rewrite_to_fixpoint
 test "rule_uextend_const_typed_rewrite" {
   let eg = EGraph::EGraph()
-  let rules = standard_rules_indexed()
+  let rules = get_global_ruleset()
   let const_200 = eg.add_typed({ op: Const(200L), children: [] }, 32)
   let uextend_node = eg.add_typed(
     { op: Uextend(32, 64), children: [const_200] },

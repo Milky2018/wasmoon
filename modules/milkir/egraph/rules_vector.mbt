@@ -472,33 +472,3 @@ fn rule_sshr_splat() -> RewriteRule {
     },
   }
 }
-
-///|
-/// Collect all vector rules
-pub fn vector_rules() -> Array[RewriteRule] {
-  [
-    rule_splat_const(),
-    // Binary ops with splat on both sides
-    rule_band_splat_splat(),
-    rule_bor_splat_splat(),
-    rule_bxor_splat_splat(),
-    rule_iadd_splat_splat(),
-    rule_isub_splat_splat(),
-    rule_imul_splat_splat(),
-    rule_smin_splat_splat(),
-    rule_umin_splat_splat(),
-    rule_smax_splat_splat(),
-    rule_umax_splat_splat(),
-    // Unary ops with splat
-    rule_bnot_splat(),
-    rule_ineg_splat(),
-    rule_iabs_splat(),
-    rule_popcnt_splat(),
-    // Shift/rotate with splat on first operand only
-    rule_rotl_splat(),
-    rule_rotr_splat(),
-    rule_ishl_splat(),
-    rule_ushr_splat(),
-    rule_sshr_splat(),
-  ]
-}

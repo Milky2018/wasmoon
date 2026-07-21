@@ -56,6 +56,13 @@ pub fn run_explore(
   // Count imports to convert between absolute and local function indices
   // Absolute index = num_imports + local_index (matches JIT error messages)
   let num_imports = count_func_imports(mod_.imports)
+  let translation_context = @wasm_frontend.translation_context_from_module(
+    mod_,
+    @wasmoon.wasm_frontend_embedding_environment(),
+  )
+  let wasm_validation_context = @wasm_frontend.wasm_validation_context(
+    translation_context,
+  )
   if !html_output {
     println("Module loaded: \{mod_.codes.length()} functions")
     println("")
@@ -170,14 +177,14 @@ pub fn run_explore(
       println(ir_optimized)
     }
 
-    let target : @machv_emit.EmitTarget = match
+    let target : @wasmoon_jit.NativeTarget = match
       @wasmoon_jit.host_target_arch() {
       AArch64 => AArch64
       X86_64 => X64
       Unknown => X64
     }
-    let mach_result = @wasmoon_jit.lower_wasm_body_milkir_for_target(
-      milk_result, target,
+    let mach_result = @wasmoon_jit.lower_wasm_body_semantic_machv(
+      milk_result, wasm_validation_context,
     ) catch {
       err => {
         if !html_output {
@@ -187,11 +194,6 @@ pub fn run_explore(
       }
     }
     let machv_text = mach_result.print()
-    if !html_output && show_machv {
-      println("")
-      println("── MachV ──")
-      println(machv_text)
-    }
 
     let allocated_text = "MachV register allocation is integrated into the wasmoon_jit planning pipeline."
     if !html_output && show_regalloc {
@@ -201,7 +203,7 @@ pub fn run_explore(
     }
 
     let plan = @wasmoon_jit.plan_wasm_body_milkir_integration_for_target(
-      milk_result, target,
+      milk_result, wasm_validation_context, target,
     ) catch {
       err => {
         if !html_output {

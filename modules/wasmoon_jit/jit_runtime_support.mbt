@@ -305,7 +305,7 @@ pub fn MemoryManager::get_current_region(
 /// Write code to the current region
 pub fn MemoryManager::write_code(
   self : MemoryManager,
-  code : @machv_emit.MachineCode,
+  code : JitCodeObject,
 ) -> Result[(ExecutableRegion, Int), String] {
   let bytes = code.get_bytes()
   let region = self.get_current_region()

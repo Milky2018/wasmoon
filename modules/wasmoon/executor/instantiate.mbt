@@ -597,15 +597,6 @@ fn eval_elem_init_expr(
       }
       Some(FuncRef(store_addr))
     }
-    [I32Const(idx)] => {
-      // Legacy format: function index as i32
-      let store_addr = if idx < func_addrs.length() {
-        func_addrs[idx]
-      } else {
-        idx // fallback
-      }
-      Some(FuncRef(store_addr))
-    }
     [RefNull(_)] => Some(Null)
     [GlobalGet(idx)] =>
       // Get funcref from global

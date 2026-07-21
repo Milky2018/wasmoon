@@ -1852,28 +1852,8 @@ pub fn SaturationLimits::eclass_enode_limit(self : SaturationLimits) -> Int {
 
 ///|
 /// A rewrite rule matches a pattern and produces equivalent expressions
-struct RewriteRule {
+priv struct RewriteRule {
   apply : (EGraph, EClassId) -> Bool // Returns true if any changes were made
-}
-
-///|
-/// Apply all rewrite rules until fixpoint (equality saturation)
-pub fn EGraph::saturate(
-  self : EGraph,
-  rules : Array[RewriteRule],
-  max_iterations : Int,
-) -> Int {
-  // Legacy API: keep for tests, implement via the indexed driver and honor
-  // `max_iterations` to avoid compile-time blowups.
-  let ruleset = IndexedRuleSet::IndexedRuleSet()
-  for rule in rules {
-    ruleset.add_rule(rule, [])
-  }
-  self.saturate_indexed_with_limits(
-    ruleset,
-    max_iterations,
-    SaturationLimits::cranelift_default(),
-  )
 }
 
 ///|

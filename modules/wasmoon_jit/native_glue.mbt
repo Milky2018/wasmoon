@@ -21,9 +21,9 @@ pub(all) struct NativeGlueBinding {
 ///|
 pub(all) struct JitIntegrationPlan {
   entry_symbol : String
-  target : @machv_emit.EmitTarget
+  target : NativeTarget
   native_glue : Array[NativeGlueBinding]
-  object : @machv_emit.MachineCode
+  object : JitCodeObject
 }
 
 ///|
@@ -115,128 +115,63 @@ pub fn native_glue_covers_jit_ffi_stubs(
 }
 
 ///|
-pub fn plan_integration_for_target(
+pub fn plan_milkir_integration_for_target(
   func : @milkir.Function,
-  machv_func : @machv.Function,
-  regalloc_output : @machv_regalloc.Output,
-  target : @machv_emit.EmitTarget,
+  target : NativeTarget,
 ) -> JitIntegrationPlan raise JitPipelineError {
-  let isa = emit_target_to_isa(target)
-  let embedding_abi = wasm_embedding_abi_for_isa(isa)
-  let object = @machv_emit.emit_function_with_regalloc(
-    machv_func,
-    regalloc_output,
-    isa~,
-    embedding_abi=Some(embedding_abi),
-  ) catch {
-    err => raise PipelineFailure(message=err.to_string())
+  if target is AArch64 {
+    let semantic = @milkir_machv.lower_core_function_with_protocol(
+      func,
+      Platform,
+    ) catch {
+      error =>
+        raise PipelineFailure(message="\{func.name}: \{error.to_string()}")
+    }
+    let compiled = build_aarch64_target(semantic)
+    return {
+      entry_symbol: func.name,
+      target,
+      native_glue: default_native_glue(),
+      object: jit_code_object_from_aarch64(compiled.object, compiled.frame_size),
+    }
   }
-  {
+  let semantic = @milkir_machv.lower_core_function_with_protocol(func, Platform) catch {
+    error => raise PipelineFailure(message="\{func.name}: \{error.to_string()}")
+  }
+  let compiled = build_x64_target(semantic)
+  return {
     entry_symbol: func.name,
     target,
     native_glue: default_native_glue(),
-    object,
+    object: jit_code_object_from_x64(compiled.object, compiled.frame_size),
   }
-}
-
-///|
-pub fn emit_target_to_isa(target : @machv_emit.EmitTarget) -> @isa.ISA {
-  match target {
-    AArch64 => AArch64
-    X64 => AMD64
-  }
-}
-
-///|
-pub fn lower_milkir_for_target(
-  func : @milkir.Function,
-  target : @machv_emit.EmitTarget,
-) -> @machv.Function raise JitPipelineError {
-  let isa = emit_target_to_isa(target)
-  let embedding_abi = wasm_embedding_abi_for_isa(isa)
-  @wasm_isa_lower.lower_function(
-    func,
-    wasm_context_slots(),
-    isa~,
-    embedding_abi=Some(embedding_abi),
-    runtime_symbols=wasm_runtime_symbols(),
-    trap_payload_resolver=wasm_trap_payload,
-  ) catch {
-    err => raise PipelineFailure(message=err.to_string())
-  }
-}
-
-///|
-pub fn lower_wasm_body_milkir_for_target(
-  func : @milkir.Function,
-  target : @machv_emit.EmitTarget,
-) -> @machv.Function raise JitPipelineError {
-  let isa = emit_target_to_isa(target)
-  let embedding_abi = wasm_embedding_abi_for_isa(isa)
-  @wasm_isa_lower.lower_function(
-    func,
-    wasm_context_slots(),
-    isa~,
-    run_ir_opt=false,
-    embedding_abi=Some(embedding_abi),
-    runtime_symbols=wasm_runtime_symbols(),
-    trap_payload_resolver=wasm_trap_payload,
-  ) catch {
-    err => raise PipelineFailure(message=err.to_string())
-  }
-}
-
-///|
-pub fn plan_milkir_integration_for_target(
-  func : @milkir.Function,
-  target : @machv_emit.EmitTarget,
-) -> JitIntegrationPlan raise JitPipelineError {
-  let isa = emit_target_to_isa(target)
-  let embedding_abi = wasm_embedding_abi_for_isa(isa)
-  let machv_func = @wasm_isa_lower.lower_function(
-    func,
-    wasm_context_slots(),
-    isa~,
-    embedding_abi=Some(embedding_abi),
-    runtime_symbols=wasm_runtime_symbols(),
-    trap_payload_resolver=wasm_trap_payload,
-  ) catch {
-    err => raise PipelineFailure(message=err.to_string())
-  }
-  let (allocated_func, output) = @machv_regalloc.allocate_registers_backtracking_output_with_isa(
-    machv_func,
-    isa,
-    embedding_abi=Some(embedding_abi),
-  ) catch {
-    err => raise PipelineFailure(message=err.to_string())
-  }
-  plan_integration_for_target(func, allocated_func, output, target)
 }
 
 ///|
 pub fn plan_wasm_body_milkir_integration_for_target(
   func : @milkir.Function,
-  target : @machv_emit.EmitTarget,
+  validation_context : @wasm_milkir.WasmValidationContext,
+  target : NativeTarget,
 ) -> JitIntegrationPlan raise JitPipelineError {
-  let isa = emit_target_to_isa(target)
-  let embedding_abi = wasm_embedding_abi_for_isa(isa)
-  let machv_func = @wasm_isa_lower.lower_function(
-    func,
-    wasm_context_slots(),
-    isa~,
-    run_ir_opt=false,
-    embedding_abi=Some(embedding_abi),
-    runtime_symbols=wasm_runtime_symbols(),
-    trap_payload_resolver=wasm_trap_payload,
-  ) catch {
-    err => raise PipelineFailure(message=err.to_string())
+  if target is AArch64 {
+    let compiled = compile_wasm_body_aarch64_target(
+      func,
+      validation_context,
+      true,
+      [],
+    )
+    return {
+      entry_symbol: func.name,
+      target,
+      native_glue: default_native_glue(),
+      object: jit_code_object_from_aarch64(compiled.object, compiled.frame_size),
+    }
   }
-  let (allocated_func, output) = @machv_regalloc.allocate_registers_backtracking_output_with_isa(
-    machv_func,
-    isa,
-    embedding_abi=Some(embedding_abi),
-  ) catch {
-    err => raise PipelineFailure(message=err.to_string())
+  let compiled = compile_wasm_body_x64_target(func, validation_context, true, [])
+  {
+    entry_symbol: func.name,
+    target,
+    native_glue: default_native_glue(),
+    object: jit_code_object_from_x64(compiled.object, compiled.frame_size),
   }
-  plan_integration_for_target(func, allocated_func, output, target)
 }

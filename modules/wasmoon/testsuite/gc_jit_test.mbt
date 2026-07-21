@@ -263,6 +263,9 @@ test "gc jit: ref.func + struct.new with deep live stack values" {
   for i in 0..<128 {
     lines.push("  (func $f\{i} (result i32) i32.const \{i})")
   }
+  lines.push(
+    "  (elem declare func $f117 $f118 $f119 $f120 $f121 $f122 $f123 $f124 $f125 $f126 $f127)",
+  )
   lines.push("  (func (export \"test\") (result i64)")
   for i in 1..<81 {
     lines.push("    i64.const \{i}")

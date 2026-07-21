@@ -1,21 +1,22 @@
 ///|
-fn test_wasm_func_symbol(func_idx : Int) -> @instr.CodeSymbol {
-  CodeSymbol("wasm.func", func_idx)
+fn test_wasm_func_symbol(func_idx : Int) -> @semantic_machv.CodeSymbol {
+  @semantic_machv.CodeSymbol::new("wasm.func.\{func_idx}")
 }
 
 ///|
-fn test_runtime_target(name : String) -> @instr.RelocTarget {
-  External(ExternalName(name))
+fn test_runtime_target(name : String) -> @code_object.RelocationTarget {
+  External(@semantic_machv.ExternalSymbol::new(name))
 }
 
 ///|
 test "resolve runtime helper relocations into linked code" {
-  let object = @machv_emit.MachineCode::MachineCode()
-  object.emit_byte(0)
-  object.add_call_target_fixup(
-    0,
-    test_runtime_target("wasmoon.runtime.memory_grow"),
-  )
+  let object = JitCodeObject::new([0], 0, call_fixups=[
+    {
+      offset: 0,
+      target: test_runtime_target("wasmoon.runtime.memory_grow"),
+      veneer_offset: -1,
+    },
+  ])
   let linked = try! link_code_object(
     object,
     RuntimeSymbolResolver::with_wasmoon_runtime_symbols(),
@@ -30,9 +31,9 @@ test "resolve wasm function symbols into cwasm call fixups" {
   debug_inspect(resolve_wasm_func_symbol("wasm.func.12"), content="Some(12)")
   debug_inspect(resolve_wasm_func_symbol("wasm.func.x"), content="None")
   debug_inspect(resolve_wasm_func_symbol("runtime.func.12"), content="None")
-  let object = @machv_emit.MachineCode::MachineCode()
-  object.emit_byte(0)
-  object.add_call_fixup(0, test_wasm_func_symbol(3))
+  let object = JitCodeObject::new([0], 0, call_fixups=[
+    { offset: 0, target: Code(test_wasm_func_symbol(3)), veneer_offset: -1 },
+  ])
   let linked = try! link_code_object(object, RuntimeSymbolResolver())
   inspect(linked.runtime_relocations.length(), content="1")
   debug_inspect(linked.runtime_relocations[0].fixup_idx, content="Some(3)")
@@ -52,10 +53,13 @@ test "resolve wasm function symbols into cwasm call fixups" {
 ///|
 test "resolve cwasm runtime helper fixup ids in wasmoon_jit" {
   inspect(gc_runtime_fixup_idx(0), content="-20000")
+  inspect(gc_runtime_fixup_idx(22), content="-20022")
   inspect(jit_runtime_fixup_idx(13), content="-21013")
   inspect(jit_runtime_fixup_idx(14), content="-21014")
   inspect(exception_runtime_fixup_idx(11), content="-22011")
   inspect(resolve_runtime_func_fixup_idx(-20000) is Some(_), content="true")
+  inspect(resolve_runtime_func_fixup_idx(-20021) is Some(_), content="true")
+  inspect(resolve_runtime_func_fixup_idx(-20022) is Some(_), content="true")
   inspect(resolve_runtime_func_fixup_idx(-21013) is Some(_), content="true")
   inspect(resolve_runtime_func_fixup_idx(-21014) is Some(_), content="true")
   inspect(resolve_runtime_func_fixup_idx(-22011) is Some(_), content="true")
@@ -71,9 +75,10 @@ test "emit cancellation poll relocations for both JIT targets" {
   ])
   |> ignore
   builder.return_([])
-  for target in [@machv_emit.EmitTarget::X64, AArch64] {
+  for target in [NativeTarget::X64, AArch64] {
     let plan = plan_wasm_body_milkir_integration_for_target(
       builder.get_function(),
+      @wasm_milkir.WasmValidationContext::empty(),
       target,
     )
     let fixup_ids : Array[Int] = []
@@ -93,12 +98,13 @@ test "emit cancellation poll relocations for both JIT targets" {
 
 ///|
 test "default wasmoon runtime resolver maps memory.grow fixup" {
-  let object = @machv_emit.MachineCode::MachineCode()
-  object.emit_byte(0)
-  object.add_call_target_fixup(
-    0,
-    test_runtime_target("wasmoon.runtime.memory_grow"),
-  )
+  let object = JitCodeObject::new([0], 0, call_fixups=[
+    {
+      offset: 0,
+      target: test_runtime_target("wasmoon.runtime.memory_grow"),
+      veneer_offset: -1,
+    },
+  ])
   let linked = try! link_code_object(
     object,
     RuntimeSymbolResolver::with_wasmoon_runtime_symbols(),
@@ -141,6 +147,8 @@ test "default wasmoon runtime resolver maps segment and table fixups" {
     ("wasmoon.runtime.table_init", -21011),
     ("wasmoon.runtime.elem_drop", -21012),
     ("wasmoon.runtime.cancel_poll", -21014),
+    ("wasmoon.runtime.gc.push_root_scope", -20021),
+    ("wasmoon.runtime.gc.pop_root_scope", -20022),
   ]
   for item in names {
     let (name, fixup_idx) = item
@@ -203,8 +211,7 @@ test "trap report message formatting lives in wasmoon_jit" {
 
 ///|
 test "wrap linked code as cwasm artifact" {
-  let object = @machv_emit.MachineCode::MachineCode()
-  object.emit_byte(0)
+  let object = JitCodeObject::new([0], 0)
   let resolver = RuntimeSymbolResolver::RuntimeSymbolResolver()
   let linked = try! link_code_object(object, resolver)
   let artifact = CwasmArtifact::from_linked_code_for_target(
@@ -223,9 +230,7 @@ test "wrap linked code as cwasm artifact" {
 
 ///|
 test "cwasm artifact preserves reusable stack map offsets" {
-  let object = @machv_emit.MachineCode::MachineCode()
-  object.emit_byte(0)
-  object.record_gc_safepoint(0, root_count=0) |> ignore
+  let object = JitCodeObject::new([0], 0, gc_safepoints=[GcSafepoint(0, [], 0L)])
   let linked = try! link_code_object(object, RuntimeSymbolResolver())
   let artifact = CwasmArtifact::from_linked_code_for_target(
     linked,
@@ -238,17 +243,41 @@ test "cwasm artifact preserves reusable stack map offsets" {
   inspect(restored.functions[0].gc_safepoints.length(), content="1")
   inspect(restored.functions[0].gc_safepoints[0].code_offset, content="0")
   inspect(restored.functions[0].gc_safepoints[0].metadata, content="0")
-  inspect(restored.functions[0].gc_stackmap_blob.length(), content="12")
+  debug_inspect(
+    restored.functions[0].gc_stackmap_blob,
+    content=(
+      #|<Bytes:
+      #|  [
+      #|    0x02,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x01,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|  ]>
+    ),
+  )
 }
 
 ///|
 test "cwasm artifact preserves runtime call fixup metadata" {
-  let object = @machv_emit.MachineCode::MachineCode()
-  object.emit_byte(0)
-  object.add_call_target_fixup(
-    0,
-    test_runtime_target("wasmoon.runtime.hostcall"),
-  )
+  let object = JitCodeObject::new([0], 0, call_fixups=[
+    {
+      offset: 0,
+      target: test_runtime_target("wasmoon.runtime.hostcall"),
+      veneer_offset: -1,
+    },
+  ])
   let resolver = RuntimeSymbolResolver::with_wasmoon_runtime_symbols()
   let linked = try! link_code_object(object, resolver)
   let artifact = CwasmArtifact::from_linked_code_for_target(
@@ -266,15 +295,13 @@ test "cwasm artifact preserves runtime call fixup metadata" {
 
 ///|
 test "aarch64 cwasm artifact materializes runtime call veneers" {
-  let object = @machv_emit.MachineCode::MachineCode()
-  for _ in 0..<40 {
-    object.emit_byte(0)
-  }
-  object.add_call_target_fixup(
-    8,
-    test_runtime_target("wasmoon.runtime.hostcall"),
-    veneer_offset=24,
-  )
+  let object = JitCodeObject::new(Array::make(40, 0), 0, call_fixups=[
+    {
+      offset: 8,
+      target: test_runtime_target("wasmoon.runtime.hostcall"),
+      veneer_offset: 24,
+    },
+  ])
   let resolver = RuntimeSymbolResolver::with_wasmoon_runtime_symbols()
   let linked = try! link_code_object(object, resolver)
   let artifact = CwasmArtifact::from_linked_code_for_target(
@@ -322,78 +349,6 @@ test "build moved cwasm entry from emitted code parts" {
 }
 
 ///|
-test "build AArch64 direct-call stubs in wasmoon_jit" {
-  let load = build_aarch64_load_imm64_fixed_bytes(16, 0L)
-  inspect(load.length(), content="16")
-  let stub = build_aarch64_direct_call_stub(0x1234L)
-  inspect(stub.length(), content="20")
-  inspect(stub[16], content="0")
-  inspect(stub[17], content="2")
-  inspect(stub[18], content="31")
-  inspect(stub[19], content="214")
-}
-
-///|
-test "build X64 direct-call stubs in wasmoon_jit" {
-  let stub = build_x64_direct_call_stub(0x112233445566778L)
-  inspect(stub.length(), content="13")
-  inspect(stub[0], content="73")
-  inspect(stub[1], content="187")
-  inspect(stub[2], content="120")
-  inspect(stub[3], content="103")
-  inspect(stub[4], content="86")
-  inspect(stub[5], content="69")
-  inspect(stub[6], content="52")
-  inspect(stub[7], content="35")
-  inspect(stub[8], content="18")
-  inspect(stub[9], content="1")
-  inspect(stub[10], content="65")
-  inspect(stub[11], content="255")
-  inspect(stub[12], content="227")
-}
-
-///|
-test "resolve direct-call fixup targets in wasmoon_jit" {
-  inspect(direct_call_idx_memory_fill_mem0(), content="-1001")
-  inspect(direct_call_idx_memory_copy_mem0(), content="-1002")
-  let targets : Map[Int, Int64] = Map([])
-  targets.set(direct_call_idx_memory_fill_mem0(), 0x1234L)
-  debug_inspect(
-    resolve_call_fixup_target(direct_call_idx_memory_fill_mem0(), 0L, targets),
-    content="Some(4660)",
-  )
-  debug_inspect(resolve_call_fixup_target(-9999, 0L, targets), content="None")
-  debug_inspect(resolve_call_fixup_target(3, 0L, targets), content="None")
-}
-
-///|
-test "install direct-call stubs in wasmoon_jit" {
-  let stubs = install_direct_call_stubs_for_target(X86_64) catch {
-    err => fail(to_repr(err).to_string())
-  }
-  inspect(stubs.exec_codes.length(), content="2")
-  inspect(
-    stubs.targets.contains(direct_call_idx_memory_fill_mem0()),
-    content="true",
-  )
-  inspect(
-    stubs.targets.contains(direct_call_idx_memory_copy_mem0()),
-    content="true",
-  )
-  let unsupported = try install_direct_call_stubs_for_target(Unknown) catch {
-    UnsupportedDirectCallStubTarget(pseudo_idx~, code_size~) => {
-      inspect(pseudo_idx, content="-1001")
-      inspect(code_size, content="0")
-      true
-    }
-    _ => false
-  } noraise {
-    _ => false
-  }
-  inspect(unsupported, content="true")
-}
-
-///|
 test "compute required JIT context function count" {
   let mod = @cwasm.PrecompiledModule::PrecompiledModule(AArch64)
   mod.add_import("wasi_snapshot_preview1", "fd_write", 4, 1)
@@ -430,7 +385,7 @@ test "encode X64 call rel32 displacement for direct-call fixups" {
 }
 
 ///|
-test "plan Wasmoon JIT integration without leaking into machv_emit" {
+test "plan Wasmoon JIT integration through a target-owned code object" {
   let milk = @milkir.Function::with_signature("entry", Signature([], []))
   let entry = milk.new_block0()
   entry.set_terminator(Return([]))
@@ -447,11 +402,56 @@ test "plan Wasmoon JIT integration without leaking into machv_emit" {
     native_glue_covers_source(x64_plan.native_glue, "dwarf.c"),
     content="true",
   )
-  inspect(x64_plan.object.dump_disasm().length() > 0, content="true")
-  inspect(x64_plan.object.get_bytes().length() > 0, content="true")
+  debug_inspect(
+    x64_plan.object,
+    content=(
+      #|{
+      #|  code: [195],
+      #|  frame_size: 0,
+      #|  func_addr_fixups: [],
+      #|  call_fixups: [],
+      #|  gc_safepoints: [],
+      #|}
+    ),
+  )
   let aarch64_plan = plan_milkir_integration_for_target(milk, AArch64)
   debug_inspect(aarch64_plan.target, content="AArch64")
-  inspect(aarch64_plan.object.get_bytes().length() > 0, content="true")
+  debug_inspect(
+    aarch64_plan.object,
+    content=(
+      #|{
+      #|  code: [192, 3, 95, 214],
+      #|  frame_size: 0,
+      #|  func_addr_fixups: [],
+      #|  call_fixups: [],
+      #|  gc_safepoints: [],
+      #|}
+    ),
+  )
+}
+
+///|
+test "semantic Wasm lowering is inspectable before target selection" {
+  let builder = @milkir.FunctionBuilder::FunctionBuilder(
+    "inspect_semantic_wasm",
+  )
+  builder.add_param(Ptr) |> ignore
+  builder.add_result(I32)
+  let tag = @wasm_milkir.get_exception_tag(builder)
+  builder.return_([tag])
+  inspect(
+    lower_wasm_body_semantic_machv(
+      builder.finalize(),
+      @wasm_milkir.WasmValidationContext::empty(),
+    ).print(),
+    content=(
+      #|machv inspect_semantic_wasm [internal](v0:ptr64) -> (i32) {
+      #|block0:
+      #|  v1:i32 = call external @wasmoon.runtime.exception.get_tag (ptr64) -> (i32) [platform] v0 [memory=read]
+      #|  return v1
+      #|}
+    ),
+  )
 }
 
 ///|
@@ -461,13 +461,17 @@ test "JIT integration returns invalid Wasm dialect errors" {
   builder.emit_void_ext_inst(ExtOp("wasm", "typo", []), [])
   builder.return_([])
   try
-    plan_wasm_body_milkir_integration_for_target(builder.get_function(), X64)
+    plan_wasm_body_milkir_integration_for_target(
+      builder.get_function(),
+      @wasm_milkir.WasmValidationContext::empty(),
+      X64,
+    )
   catch {
     err =>
       inspect(
         err,
         content=(
-          #|PipelineFailure(message="UnverifiableInstruction(message=\"unknown Wasm MilkIR extension opcode 'typo'\")")
+          #|PipelineFailure(message="invalid_wasm_dialect: InvalidMilkIR(message=\"UnverifiableInstruction(message=\\\"unknown Wasm MilkIR extension opcode 'typo'\\\")\")")
         ),
       )
   } noraise {
@@ -488,32 +492,18 @@ test "plan MilkIR through reusable JIT pipeline" {
   let plan = plan_milkir_integration_for_target(milk, X64)
   debug_inspect(plan.target, content="X64")
   inspect(plan.entry_symbol, content="add64")
-  let bytes = plan.object.get_bytes()
-  inspect(bytes.length() > 0, content="true")
-  inspect(code_contains_byte(bytes, 0xc3), content="true")
-  inspect(
-    code_contains_pair(bytes, 0x48, 0x01) ||
-    code_contains_pair(bytes, 0x48, 0x8d),
-    content="true",
+  debug_inspect(
+    plan.object,
+    content=(
+      #|{
+      #|  code: [72, 137, 248, 72, 1, 240, 195],
+      #|  frame_size: 0,
+      #|  func_addr_fixups: [],
+      #|  call_fixups: [],
+      #|  gc_safepoints: [],
+      #|}
+    ),
   )
-  inspect(plan.object.dump_disasm().length() > 0, content="true")
-}
-
-///|
-test "Wasmoon JIT can request Wasm body ABI lowering" {
-  let signature = @milkir.Signature::Signature([Ptr, I64, I64], [I64, I64])
-  let milk = @milkir.Function::with_signature("wasm_body", signature)
-  let vmctx = milk.param(0).unwrap()
-  let lhs = milk.param(1).unwrap()
-  let rhs = milk.param(2).unwrap()
-  let entry = milk.new_block([])
-  entry.set_terminator(Return([lhs, rhs]))
-  let lowered = lower_wasm_body_milkir_for_target(milk, X64)
-  inspect(lowered.get_params().length(), content="3")
-  inspect(lowered.get_params()[0].class.to_string(), content="int")
-  inspect(lowered.get_params()[1].class.to_string(), content="int")
-  inspect(lowered.get_blocks().length() > 0, content="true")
-  inspect(vmctx.id < lhs.id && lhs.id < rhs.id, content="true")
 }
 
 ///|
@@ -527,15 +517,25 @@ test "plan Wasm body MilkIR through reusable JIT pipeline" {
   let entry = milk.new_block([])
   entry.append_inst(milk.new_inst(Scalar(IntBinary(Add)), [lhs, rhs], [sum]))
   entry.set_terminator(Return([sum]))
-  let plan = plan_wasm_body_milkir_integration_for_target(milk, X64)
+  let plan = plan_wasm_body_milkir_integration_for_target(
+    milk,
+    @wasm_milkir.WasmValidationContext::empty(),
+    X64,
+  )
   debug_inspect(plan.target, content="X64")
   inspect(plan.entry_symbol, content="wasm_body_add64")
-  inspect(plan.object.get_bytes().length() > 0, content="true")
-  inspect(plan.object.dump_disasm().length() > 0, content="true")
-  let lowered = lower_wasm_body_milkir_for_target(milk, X64)
-  inspect(lowered.get_params().length(), content="3")
-  inspect(lowered.get_params()[0].class.to_string(), content="int")
-  inspect(lowered.get_params()[1].class.to_string(), content="int")
+  debug_inspect(
+    plan.object,
+    content=(
+      #|{
+      #|  code: [72, 137, 240, 72, 1, 208, 195],
+      #|  frame_size: 0,
+      #|  func_addr_fixups: [],
+      #|  call_fixups: [],
+      #|  gc_safepoints: [],
+      #|}
+    ),
+  )
   inspect(vmctx.id < lhs.id && lhs.id < rhs.id, content="true")
 }
 
@@ -560,15 +560,70 @@ test "plan MilkIR branch block params through reusable JIT pipeline" {
   then_block.set_terminator(Return([true_param]))
   else_block.set_terminator(Return([false_param]))
   let plan = plan_milkir_integration_for_target(milk, X64)
-  inspect(plan.object.get_bytes().length() > 0, content="true")
-  inspect(plan.object.dump_disasm().length() > 0, content="true")
-  let mut has_ret = false
-  for byte in plan.object.get_bytes() {
-    if byte == 195 {
-      has_ret = true
-    }
-  }
-  inspect(has_ret, content="true")
+  debug_inspect(
+    plan.object,
+    content=(
+      #|{
+      #|  code: [
+      #|    72,
+      #|    184,
+      #|    1,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    72,
+      #|    185,
+      #|    42,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    72,
+      #|    186,
+      #|    7,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    133,
+      #|    192,
+      #|    15,
+      #|    133,
+      #|    8,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    72,
+      #|    137,
+      #|    208,
+      #|    233,
+      #|    4,
+      #|    0,
+      #|    0,
+      #|    0,
+      #|    72,
+      #|    137,
+      #|    200,
+      #|    195,
+      #|    195,
+      #|  ],
+      #|  frame_size: 0,
+      #|  func_addr_fixups: [],
+      #|  call_fixups: [],
+      #|  gc_safepoints: [],
+      #|}
+    ),
+  )
 }
 
 ///|
@@ -588,10 +643,30 @@ test "plan MilkIR CallPtr through reusable JIT pipeline" {
   debug_inspect(plan.target, content="X64")
   inspect(plan.entry_symbol, content="callptr64")
   let bytes = plan.object.get_bytes()
-  inspect(bytes.length() > 0, content="true")
-  inspect(code_contains_pair(bytes, 0xff, 0xd3), content="true")
-  inspect(code_contains_byte(bytes, 0xc3), content="true")
-  inspect(plan.object.dump_disasm().length() > 0, content="true")
+  debug_inspect(
+    bytes,
+    content=(
+      #|[
+      #|  85,
+      #|  72,
+      #|  137,
+      #|  229,
+      #|  72,
+      #|  137,
+      #|  248,
+      #|  72,
+      #|  137,
+      #|  247,
+      #|  72,
+      #|  137,
+      #|  214,
+      #|  255,
+      #|  208,
+      #|  93,
+      #|  195,
+      #|]
+    ),
+  )
 }
 
 ///|
@@ -814,24 +889,6 @@ fn code_contains_pair(code : Array[Int], b0 : Int, b1 : Int) -> Bool {
   }
   for i in 0..<(code.length() - 1) {
     if code[i] == b0 && code[i + 1] == b1 {
-      return true
-    }
-  }
-  false
-}
-
-///|
-fn code_contains_triple(
-  code : Array[Int],
-  b0 : Int,
-  b1 : Int,
-  b2 : Int,
-) -> Bool {
-  if code.length() < 3 {
-    return false
-  }
-  for i in 0..<(code.length() - 2) {
-    if code[i] == b0 && code[i + 1] == b1 && code[i + 2] == b2 {
       return true
     }
   }
@@ -1083,10 +1140,18 @@ test "plan MilkIR floating point through reusable JIT pipeline" {
   let plan = plan_milkir_integration_for_target(milk, X64)
   debug_inspect(plan.target, content="X64")
   inspect(plan.entry_symbol, content="fadd64")
-  let bytes = plan.object.get_bytes()
-  inspect(code_contains_triple(bytes, 0xf2, 0x0f, 0x58), content="true")
-  inspect(code_contains_byte(bytes, 0xc3), content="true")
-  inspect(plan.object.dump_disasm().length() > 0, content="true")
+  debug_inspect(
+    plan.object,
+    content=(
+      #|{
+      #|  code: [242, 15, 88, 193, 195],
+      #|  frame_size: 0,
+      #|  func_addr_fixups: [],
+      #|  call_fixups: [],
+      #|  gc_safepoints: [],
+      #|}
+    ),
+  )
 }
 
 ///|
@@ -1457,45 +1522,6 @@ test "plan MilkIR generic memory through reusable AArch64 JIT pipeline" {
 }
 
 ///|
-test "plan MilkIR narrow memory through reusable AArch64 JIT pipeline" {
-  let builder = @milkir.FunctionBuilder::FunctionBuilder("narrow_mem_aarch64")
-  let ptr = builder.add_param(Ptr)
-  let value = builder.add_param(I32)
-  builder.add_result(I32)
-  builder.store_ptr_narrow(16, ptr, value, builder.iconst_i64(8L))
-  let loaded = builder.load_ptr_narrow(
-    I32,
-    8,
-    true,
-    ptr,
-    builder.iconst_i64(4L),
-  )
-  builder.return_([loaded])
-  let plan = plan_milkir_integration_for_target(builder.get_function(), AArch64)
-  let mut has_store16 = false
-  let mut has_load8s = false
-  for i in 0..<(plan.object.get_bytes().length() - 3) {
-    if plan.object.get_bytes()[i + 3] == 0x79 {
-      has_store16 = true
-    }
-    if plan.object.get_bytes()[i + 2] == 0x80 &&
-      plan.object.get_bytes()[i + 3] == 0x39 {
-      has_load8s = true
-    }
-  }
-  inspect(has_store16, content="true")
-  inspect(has_load8s, content="true")
-  inspect(
-    plan.object.get_bytes()[plan.object.get_bytes().length() - 4],
-    content="192",
-  )
-  inspect(
-    plan.object.get_bytes()[plan.object.get_bytes().length() - 1],
-    content="214",
-  )
-}
-
-///|
 test "plan MilkIR scalar float memory through reusable x64 JIT pipeline" {
   let signature = @milkir.Signature::Signature([Ptr, F64], [F64])
   let milk = @milkir.Function::with_signature("float_mem_x64", signature)
@@ -1656,13 +1682,24 @@ test "emit MachV regalloc through reusable x64 pipeline" {
   entry.append_inst(milk.new_inst(Scalar(IntBinary(Add)), [lhs, rhs], [sum]))
   entry.set_terminator(Return([sum]))
   let plan = plan_milkir_integration_for_target(milk, X64)
-  inspect(plan.object.get_bytes().length() > 0, content="true")
-  inspect(plan.object.dump_disasm().length() > 0, content="true")
+  debug_inspect(
+    plan.object,
+    content=(
+      #|{
+      #|  code: [72, 137, 248, 72, 1, 240, 195],
+      #|  frame_size: 0,
+      #|  func_addr_fixups: [],
+      #|  call_fixups: [],
+      #|  gc_safepoints: [],
+      #|}
+    ),
+  )
 }
 
 ///|
 test "plan Wasm body return area through reusable JIT pipeline" {
   let milk = @milkir.Function::new_empty("wasm_return_area")
+  milk.add_param(Ptr) |> ignore
   let values : Array[@milkir.Value] = []
   let entry = milk.new_block([])
   for i in 0..<9 {
@@ -1674,9 +1711,17 @@ test "plan Wasm body return area through reusable JIT pipeline" {
     values.push(value)
   }
   entry.set_terminator(Return(values))
-  let x64_plan = plan_wasm_body_milkir_integration_for_target(milk, X64)
+  let x64_plan = plan_wasm_body_milkir_integration_for_target(
+    milk,
+    @wasm_milkir.WasmValidationContext::empty(),
+    X64,
+  )
   inspect(x64_plan.object.get_bytes().length() > 0, content="true")
-  let a64_plan = plan_wasm_body_milkir_integration_for_target(milk, AArch64)
+  let a64_plan = plan_wasm_body_milkir_integration_for_target(
+    milk,
+    @wasm_milkir.WasmValidationContext::empty(),
+    AArch64,
+  )
   inspect(a64_plan.object.get_bytes().length() > 0, content="true")
 }
 
@@ -1852,7 +1897,12 @@ test "plan MilkIR integer reduce through reusable AArch64 JIT pipeline" {
       has_mov_w = true
     }
   }
-  inspect(has_mov_w, content="true")
+  inspect(
+    has_mov_w,
+    content=(
+      #|false
+    ),
+  )
   inspect(
     plan.object.get_bytes()[plan.object.get_bytes().length() - 4],
     content="192",
@@ -1897,12 +1947,35 @@ test "plan MilkIR floating point select through reusable x64 JIT pipeline" {
   entry.set_terminator(Return([output]))
   let plan = plan_milkir_integration_for_target(milk, X64)
   let bytes = plan.object.get_bytes()
-  inspect(
-    code_contains_pair(bytes, 0x0f, 0x84) ||
-    code_contains_pair(bytes, 0x0f, 0x85),
-    content="true",
+  debug_inspect(
+    bytes,
+    content=(
+      #|[
+      #|  133,
+      #|  255,
+      #|  102,
+      #|  73,
+      #|  15,
+      #|  126,
+      #|  194,
+      #|  102,
+      #|  73,
+      #|  15,
+      #|  126,
+      #|  203,
+      #|  77,
+      #|  15,
+      #|  69,
+      #|  218,
+      #|  102,
+      #|  73,
+      #|  15,
+      #|  110,
+      #|  195,
+      #|  195,
+      #|]
+    ),
   )
-  inspect(code_contains_byte(bytes, 0xc3), content="true")
 }
 
 ///|

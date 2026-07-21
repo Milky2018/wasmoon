@@ -256,6 +256,8 @@ pub let right_path_unlink_file : Int64
 
 pub let right_poll_fd_readwrite : Int64
 
+pub let right_sock_accept : Int64
+
 pub let right_sock_shutdown : Int64
 
 pub let rights_all_valid : Int64

@@ -1,7 +1,16 @@
 ///|
 pub(all) enum AllocatorStrategy {
-  LinearScan
+  Backtracking
+  SinglePass
 } derive(Eq, Debug)
+
+///|
+pub impl Show for AllocatorStrategy with fn output(self, logger) {
+  match self {
+    Backtracking => logger.write_string("Backtracking")
+    SinglePass => logger.write_string("SinglePass")
+  }
+}
 
 ///|
 pub struct RegallocConfig {
@@ -11,7 +20,7 @@ pub struct RegallocConfig {
 
 ///|
 pub fn RegallocConfig::RegallocConfig(
-  strategy? : AllocatorStrategy = LinearScan,
+  strategy? : AllocatorStrategy = Backtracking,
   verify? : Bool = true,
 ) -> RegallocConfig {
   { strategy, verify }
@@ -25,18 +34,4 @@ pub fn RegallocConfig::strategy(self : RegallocConfig) -> AllocatorStrategy {
 ///|
 pub fn RegallocConfig::verify(self : RegallocConfig) -> Bool {
   self.verify
-}
-
-///|
-pub fn allocate(
-  program : Program,
-  config? : RegallocConfig = RegallocConfig(),
-) -> Allocation raise VerifyError {
-  let allocation = match config.strategy {
-    LinearScan => allocate_linear_scan(program)
-  }
-  if config.verify {
-    verify_allocation(program, allocation)
-  }
-  allocation
 }

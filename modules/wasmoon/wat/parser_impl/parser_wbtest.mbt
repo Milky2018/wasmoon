@@ -499,6 +499,19 @@ test "regression: explicit type definitions parsed before functions" {
 }
 
 ///|
+test "regression: standalone recursive struct resolves its self reference" {
+  let wat =
+    #|(module
+    #|  (type $node (struct (field (ref null $node))))
+    #|)
+  let mod = parse(wat) catch { e => fail("Parse error: \{e}") }
+  inspect(
+    mod.types[0],
+    content="{final_: true, supertypes: [], composite: Struct({fields: [{storage_type: Val(RefNullStruct(0)), mutable: false}]})}",
+  )
+}
+
+///|
 test "regression: ref type local parsing" {
   // (ref $t) should be parsed as RefFuncTyped (non-nullable typed function reference)
   let wat =

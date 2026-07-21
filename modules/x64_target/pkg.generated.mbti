@@ -3,86 +3,387 @@ package "Milky2018/x64_target"
 
 import {
   "Milky2018/machv",
-  "Milky2018/machv/abi",
-  "Milky2018/milkir",
+  "Milky2018/machv/code_object",
+  "Milky2018/machv/vcode",
+  "Milky2018/machv_regalloc",
   "moonbitlang/core/debug",
 }
 
 // Values
-pub fn abi_policy() -> AbiPolicy
+pub fn allocate(@vcode.Function[X64Inst]) -> @vcode.Allocation raise X64AllocationError
 
-pub fn allocatable_callee_saved_regs() -> Array[@abi.PReg]
+pub fn compile(@vcode.Function[X64Inst]) -> (@code_object.UnlinkedCodeObject, Int) raise X64CompileError
 
-pub fn allocatable_regs(reserved_int_regs? : Array[Int]) -> Array[@abi.PReg]
+pub fn emit(@vcode.Function[X64Inst], @vcode.Allocation, X64Frame) -> @code_object.UnlinkedCodeObject raise X64EmitError
 
-pub fn allocatable_scratch_fprs() -> Array[@abi.PReg]
+pub fn lower(@machv.Function, LoweringContext) -> @vcode.Function[X64Inst] raise X64LowerError
 
-pub fn allocatable_scratch_regs() -> Array[@abi.PReg]
+pub fn plan_frame(@vcode.Function[X64Inst], @vcode.Allocation) -> X64Frame raise X64FrameError
 
-pub fn build_machine_env(reserved_int_regs? : Array[Int]) -> MachineEnvData
+pub fn prepare_x64_link(@code_object.UnlinkedCodeObject) -> X64LinkPlan raise X64LinkError
 
-pub fn call_clobbered_fprs() -> Array[@abi.PReg]
+pub fn verify_allocation(@vcode.Function[X64Inst], @vcode.Allocation) -> Unit raise X64AllocationError
 
-pub fn call_clobbered_fprs_same_abi() -> Array[@abi.PReg]
+pub fn verify_frame(@vcode.Function[X64Inst], @vcode.Allocation, X64Frame) -> Unit raise X64FrameError
 
-pub fn call_clobbered_gprs() -> Array[@abi.PReg]
-
-pub fn int_reg_index(IntRegRole) -> Int
-
-pub fn lower_function(@milkir.Function, return_area_base_reg? : @abi.PReg?) -> @machv.Function raise @milkir.VerifyError
-
-pub fn lower_function_with_call_conv(@milkir.Function, @abi.CallConventionLayout, return_area_base_reg? : @abi.PReg?) -> @machv.Function raise @milkir.VerifyError
-
-pub fn sysv_arg_fprs() -> Array[@abi.PReg]
-
-pub fn sysv_callee_saved() -> Array[@abi.PReg]
-
-pub fn target() -> Target
+pub fn verify_vcode(@vcode.Function[X64Inst]) -> Unit raise TargetVCodeVerifyError
 
 // Errors
+pub suberror InternalAbiError {
+  InvalidRegister(role~ : String, index~ : Int)
+  DuplicateRegister(role~ : String, index~ : Int)
+  ContextRegisterReused(index~ : Int)
+  ResultAreaRegisterReused(index~ : Int)
+  InvalidSignature(message~ : String)
+} derive(Eq, @debug.Debug)
+pub impl Show for InternalAbiError
+
+pub suberror TargetVCodeVerifyError {
+  CommonFailure(cause~ : @vcode.VCodeVerifyError)
+  InvalidInstruction(instruction~ : @vcode.Instruction, message~ : String)
+} derive(Eq, @debug.Debug)
+pub impl Show for TargetVCodeVerifyError
+
+pub suberror X64AllocationError {
+  InvalidVCode(cause~ : TargetVCodeVerifyError)
+  AllocatorFailure(cause~ : @machv_regalloc.VCodeAllocationError)
+  InvalidAllocation(cause~ : @vcode.AllocationVerifyError)
+  IllegalRegister(reg~ : @vcode.PhysicalReg)
+} derive(@debug.Debug)
+pub impl Show for X64AllocationError
+
+pub suberror X64CompileError {
+  TargetValidationFailed(cause~ : TargetVCodeVerifyError)
+  AllocationFailed(cause~ : X64AllocationError)
+  FramePlanningFailed(cause~ : X64FrameError)
+  EmissionFailed(cause~ : X64EmitError)
+} derive(@debug.Debug)
+pub impl Show for X64CompileError
+
+pub suberror X64EmitError {
+  InvalidFrame(cause~ : X64FrameError)
+  InvalidCodeObject(cause~ : @code_object.CodeObjectVerifyError)
+  InvalidParallelMove(cause~ : @vcode.MoveResolveError)
+  InvalidCallTransfer(cause~ : @vcode.CallTransferError)
+  UnresolvedStackMove
+  MissingStackObjectArea
+  MissingResultArea
+  UnexpectedStackOperand(instruction~ : @vcode.Instruction, operand~ : Int)
+  FrameOffsetOutOfRange(offset~ : Int)
+  InvalidScalarMemoryAccess
+  InvalidFloatInstruction
+  InvalidVectorInstruction
+  ScratchRegisterUnavailable
+  InvalidConversionInstruction
+  BranchTargetMissing(block~ : @vcode.Block)
+  BranchOutOfRange(offset~ : Int, bits~ : Int)
+} derive(@debug.Debug)
+pub impl Show for X64EmitError
+
+pub suberror X64FrameError {
+  InvalidAllocation(cause~ : X64AllocationError)
+  InvalidGenericFrame(cause~ : @vcode.FrameVerifyError)
+  InvalidSavedRegister(reg~ : @vcode.PhysicalReg, offset~ : Int)
+  InvalidStackSlot(slot~ : @vcode.StackSlot)
+  OutgoingAreaMismatch(expected~ : Int, actual~ : Int)
+  ResultAreaMismatch(expected~ : Int, actual~ : Int)
+  TailAreaMismatch(expected_incoming~ : Int, actual_incoming~ : Int, expected_tail~ : Int, actual_tail~ : Int)
+  InvalidStackObjectArea(message~ : String)
+  SavedRegisterSetMismatch
+} derive(@debug.Debug)
+pub impl Show for X64FrameError
+
+pub suberror X64LinkError {
+  InvalidCodeObject(message~ : String)
+  InvalidCodeBase(address~ : Int64)
+  UnresolvedRelocation(index~ : Int)
+  RelocationOutOfRange(index~ : Int)
+  UnsupportedRelocation(index~ : Int)
+} derive(Eq, @debug.Debug)
+pub impl Show for X64LinkError
+
+pub suberror X64LowerError {
+  InvalidSemantic(cause~ : @machv.MachVVerifyError)
+  MissingMappedValue(value_index~ : Int)
+  UnsupportedOperation(block_index~ : Int, instruction_index~ : Int, operation~ : @machv.Operation)
+  UnsupportedAbi(message~ : String)
+  BuildFailure(cause~ : @vcode.VCodeBuildError)
+  InvalidTarget(cause~ : TargetVCodeVerifyError)
+} derive(@debug.Debug)
+pub impl Show for X64LowerError
 
 // Types and methods
-pub(all) struct AbiPolicy {
-  pointer_size : Int
-  stack_alignment : Int
-  int_argument_regs : Array[@abi.PReg]
-  float_argument_regs : Array[@abi.PReg]
-  int_return_regs : Array[@abi.PReg]
-  float_return_regs : Array[@abi.PReg]
-  caller_saved_regs : Array[@abi.PReg]
-  callee_saved_regs : Array[@abi.PReg]
-} derive(@debug.Debug)
+type CallArgumentLocation derive(Eq, @debug.Debug)
 
-pub(all) enum CallingConvention {
-  SystemV
+type CallLayout derive(Eq, @debug.Debug)
+
+type CallResultLocation derive(Eq, @debug.Debug)
+
+pub(all) enum GprWidth {
+  W32
+  W64
 } derive(Eq, @debug.Debug)
 
-pub(all) enum IntRegRole {
-  Scratch1
-  Scratch2
-  FP
-  LR
-  SRet
+pub struct InternalAbi {
+  // private fields
+}
+pub fn InternalAbi::new(Int, Int, Array[Int], Array[Int], Array[Int], Array[Int]) -> Self raise InternalAbiError
+
+pub struct InternalCallPlan {
+  // private fields
 } derive(Eq, @debug.Debug)
 
-pub(all) struct MachineEnvData {
-  preferred_int : Array[@abi.PReg]
-  nonpreferred_int : Array[@abi.PReg]
-  preferred_float : Array[@abi.PReg]
-  nonpreferred_float : Array[@abi.PReg]
-  preferred_vector : Array[@abi.PReg]
-  nonpreferred_vector : Array[@abi.PReg]
-  callee_saved_int : Array[@abi.PReg]
-  callee_saved_float : Array[@abi.PReg]
-  scratch_int : Array[Int]
-  scratch_float : Array[Int]
-} derive(@debug.Debug)
+pub struct LoweringContext {
+  // private fields
+}
+pub fn LoweringContext::new(InternalAbi) -> Self
+pub fn LoweringContext::with_environment_field(Self, @machv.EnvironmentField, Array[Int]) -> Self
 
-pub(all) struct Target {
-  triple : String
-  calling_convention : CallingConvention
-  abi : AbiPolicy
+pub(all) enum X64Address {
+  Code(@machv.CodeSymbol)
+  External(@machv.ExternalSymbol)
+  Data(@machv.DataSymbol)
+} derive(Eq, @debug.Debug)
+
+pub(all) enum X64Condition {
+  Eq
+  Ne
+  Lt
+  Le
+  Gt
+  Ge
+  Lo
+  Ls
+  Hi
+  Hs
+} derive(Eq, @debug.Debug)
+
+pub(all) enum X64Conversion {
+  WrapI64ToI32
+  ExtendI32ToI64(@machv.Signedness)
+  SignExtend(@machv.IntegerType, @machv.AccessWidth)
+  DemoteF64ToF32
+  PromoteF32ToF64
+  Bitcast(@machv.ValueType, @machv.ValueType)
+  IntToFloat(@machv.IntegerType, @machv.FloatType, @machv.Signedness)
+  FloatToInt(@machv.FloatType, @machv.IntegerType, @machv.Signedness)
+  FloatToIntSaturating(@machv.FloatType, @machv.IntegerType, @machv.Signedness)
+} derive(Eq, @debug.Debug)
+
+pub(all) enum X64FloatBinary {
+  Add
+  Sub
+  Mul
+  Div
+  Min
+  Max
+  CopySign
+} derive(Eq, @debug.Debug)
+
+pub(all) enum X64FloatCondition {
+  Equal
+  NotEqual
+  LessThan
+  LessOrEqual
+  GreaterThan
+  GreaterOrEqual
+  Ordered
+  Unordered
+} derive(Eq, @debug.Debug)
+
+pub(all) enum X64FloatTernary {
+  Fmadd
+  Fmsub
+  Fnmadd
+  Fnmsub
+} derive(Eq, @debug.Debug)
+
+pub(all) enum X64FloatTrapCondition {
+  Unordered
+  LessThan
+  LessOrEqual
+  GreaterOrEqual
+} derive(Eq, @debug.Debug)
+
+pub(all) enum X64FloatUnary {
+  Negate
+  Absolute
+  SquareRoot
+  Ceil
+  Floor
+  Truncate
+  Nearest
+} derive(Eq, @debug.Debug)
+
+pub struct X64Frame {
+  // private fields
+}
+pub fn X64Frame::alignment(Self) -> Int
+pub fn X64Frame::frame_size(Self) -> Int
+pub fn X64Frame::incoming_args_size(Self) -> Int
+pub fn X64Frame::outgoing_args_size(Self) -> Int
+pub fn X64Frame::saved_registers(Self) -> Array[(@vcode.PhysicalReg, Int)]
+pub fn X64Frame::slot_offset(Self, @vcode.StackSlot) -> Int?
+pub fn X64Frame::stack_object_offset(Self, X64StackObject) -> Int?
+pub fn X64Frame::summary(Self) -> String
+pub fn X64Frame::tail_args_size(Self) -> Int
+
+pub(all) enum X64Inst {
+  IncomingReg(@machv.ValueType, @vcode.PhysicalReg)
+  IncomingStack(@machv.ValueType, Int)
+  IncomingResultArea(@vcode.PhysicalReg)
+  IncomingCallResult(@machv.ValueType, @vcode.PhysicalReg)
+  IncomingCallAreaResult(@machv.ValueType, Int)
+  OutgoingReg(@machv.ValueType, @vcode.PhysicalReg)
+  OutgoingAreaResult(@machv.ValueType, Int)
+  KeepAlive(@machv.ValueType)
+  LoadConstant(GprWidth, UInt64)
+  LoadVectorConstant(UInt64, UInt64)
+  LoadNull(@machv.ValueType)
+  LoadAddress(X64Address)
+  StackAddress(X64StackObject)
+  LoadFloatConstant(@machv.ValueType, UInt64)
+  Move(@machv.ValueType)
+  CarrierMove(@machv.ValueType, @machv.ValueType)
+  Select(@machv.ValueType)
+  VectorSelect
+  VectorSplat(@machv.VectorLane)
+  VectorExtractLane(@machv.VectorLane, Int, @machv.Signedness?)
+  VectorReplaceLane(@machv.VectorLane, Int)
+  VectorShuffle(FixedArray[Int])
+  VectorSwizzle
+  VectorBitwise(@machv.VectorBitwiseOp)
+  VectorIntUnary(@machv.VectorLane, X64VectorIntUnary)
+  VectorIntBinary(@machv.VectorLane, X64VectorIntBinary)
+  VectorIntShift(@machv.VectorLane, @machv.VectorIntShiftOp)
+  VectorIntCompare(@machv.VectorLane, @machv.VectorIntComparison)
+  VectorConvert(X64VectorConversion)
+  VectorPredicate(X64VectorPredicate)
+  VectorFloatUnary(@machv.VectorLane, @machv.VectorFloatUnaryOp)
+  VectorFloatBinary(@machv.VectorLane, @machv.VectorFloatBinaryOp)
+  VectorFloatTernary(@machv.VectorLane, @machv.FloatTernaryOp)
+  VectorFloatCompare(@machv.VectorLane, @machv.VectorFloatComparison)
+  VectorPairwiseAddI16x8
+  VectorRelaxedDot8To16
+  IntUnary(GprWidth, X64IntUnary)
+  IntBinary(GprWidth, X64IntBinary)
+  PopulationCount(GprWidth)
+  IntHighMultiply(GprWidth, @machv.Signedness)
+  IntWithOverflow(GprWidth, @machv.IntOverflowOp)
+  IntRemainder(GprWidth, @machv.Signedness)
+  TrapIfZero(GprWidth)
+  TrapIfSignedDivOverflow(GprWidth)
+  CompareSet(GprWidth, X64Condition)
+  ReferenceCompareSet(@machv.ValueType, X64Condition)
+  FloatUnary(@machv.ValueType, X64FloatUnary)
+  FloatBinary(@machv.ValueType, X64FloatBinary)
+  FloatTernary(@machv.ValueType, X64FloatTernary)
+  FloatCompareSet(@machv.ValueType, X64FloatCondition)
+  TrapIfFloat(@machv.ValueType, X64FloatTrapCondition)
+  Convert(X64Conversion)
+  AddAddress
+  ScalarLoad(@machv.AccessWidth, @machv.LoadExtension, @machv.ValueType, UInt64)
+  ScalarStore(@machv.AccessWidth, @machv.ValueType, UInt64)
+  VectorLoad128(UInt64)
+  VectorStore128(UInt64)
+  VectorLoadSplat(@machv.VectorLane, UInt64)
+  VectorLoadExtend(@machv.VectorLane, @machv.Signedness, UInt64)
+  VectorLoadZero(@machv.AccessWidth, UInt64)
+  VectorLoadLane(@machv.VectorLane, Int, UInt64)
+  VectorStoreLane(@machv.VectorLane, Int, UInt64)
+  AtomicLoad(@machv.AccessWidth, @machv.ValueType)
+  AtomicStore(@machv.AccessWidth, @machv.ValueType)
+  AtomicRmw(@machv.AccessWidth, @machv.ValueType, @machv.AtomicRmwOp)
+  AtomicCompareExchange(@machv.AccessWidth, @machv.ValueType)
+  AtomicFence
+  SafepointMarker
+  PlatformCall(@machv.ExternalSymbol, @machv.Signature)
+  ReturnsTwicePlatformCall(@machv.ExternalSymbol, @machv.Signature)
+  InternalCall(@machv.CodeSymbol, @machv.Signature, InternalCallPlan)
+  InternalCallIndirect(@machv.Signature, InternalCallPlan)
+  TailCallDirect(@machv.CodeSymbol, @machv.Signature, InternalCallPlan)
+  TailCallIndirect(@machv.Signature, InternalCallPlan)
+  Jump
+  BranchNonZero32
+  Switch(GprWidth, Array[UInt64])
+  Trap(@machv.TrapReason)
+  Return
+} derive(Eq, @debug.Debug)
+
+pub(all) enum X64IntBinary {
+  Add
+  Sub
+  Mul
+  And
+  Orr
+  Eor
+  Lsl
+  Asr
+  Lsr
+  Ror
+  Sdiv
+  Udiv
+} derive(Eq, @debug.Debug)
+
+pub(all) enum X64IntUnary {
+  Mvn
+  Clz
+  Rbit
+  Neg
+} derive(Eq, @debug.Debug)
+
+pub struct X64LinkPlan {
+  // private fields
 } derive(@debug.Debug)
+pub fn X64LinkPlan::code(Self) -> Array[Byte]
+pub fn X64LinkPlan::link(Self, Int64, (@code_object.RelocationTarget) -> Int64?) -> Array[Byte] raise X64LinkError
+pub fn X64LinkPlan::veneer_offsets(Self) -> Array[Int]
+
+pub struct X64StackObject {
+  offset : Int
+  size : Int
+  alignment : Int
+  area_size : Int
+  area_alignment : Int
+} derive(Eq, @debug.Debug)
+pub fn X64StackObject::new(Int, Int, Int, Int, Int) -> Self
+
+pub(all) enum X64VectorConversion {
+  ExtendLow(@machv.VectorLane, @machv.Signedness)
+  ExtendHigh(@machv.VectorLane, @machv.Signedness)
+  Narrow(@machv.VectorLane, @machv.Signedness)
+  FloatToInt(@machv.VectorLane, @machv.Signedness)
+  IntToFloat(@machv.VectorLane, @machv.Signedness)
+  PromoteLowF32x4
+  DemoteZeroF64x2
+} derive(Eq, @debug.Debug)
+
+pub(all) enum X64VectorIntBinary {
+  Add
+  Sub
+  Mul
+  AverageUnsigned
+  Min(@machv.Signedness)
+  Max(@machv.Signedness)
+  SaturatingAdd(@machv.Signedness)
+  SaturatingSub(@machv.Signedness)
+  ExtendMultiply(@machv.VectorHalf, @machv.Signedness)
+  Dot16To32Signed
+  Q15MultiplyRoundedSaturating
+} derive(Eq, @debug.Debug)
+
+pub(all) enum X64VectorIntUnary {
+  Absolute
+  Negate
+  PopulationCount
+  ExtendAddPairwise(@machv.Signedness)
+} derive(Eq, @debug.Debug)
+
+pub(all) enum X64VectorPredicate {
+  AnyTrue
+  AllTrue(@machv.VectorLane)
+  BitMask(@machv.VectorLane)
+} derive(Eq, @debug.Debug)
 
 // Type aliases
 

@@ -334,6 +334,16 @@ pub fn gc_end_frame(ctx_ptr : Int64) -> Unit {
 }
 
 ///|
+fn gc_push_root_scope_symbol() -> String {
+  "wasmoon.runtime.gc.push_root_scope"
+}
+
+///|
+fn gc_pop_root_scope_symbol() -> String {
+  "wasmoon.runtime.gc.pop_root_scope"
+}
+
+///|
 /// Merge roots into context-local scratch storage for allocation retries.
 pub fn gc_set_root_scratch(ctx_ptr : Int64, roots : Array[Int64]) -> Bool {
   let raw_roots = FixedArray::makei(roots.length(), fn(i) { roots[i] })

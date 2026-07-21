@@ -725,39 +725,3 @@ fn rule_never_less_than_umin() -> RewriteRule {
     },
   }
 }
-
-// ============================================================================
-// Get all select rules
-// ============================================================================
-
-///|
-/// Get all select rules
-pub fn select_rules() -> Array[RewriteRule] {
-  [
-    rule_select_same(),
-    rule_select_icmp_one_zero(),
-    rule_select_icmp_zero_one(),
-    rule_select_nested_same_cond_right(),
-    rule_select_nested_same_cond_left(),
-    rule_select_uextend_cond(),
-    rule_add_select_const(),
-    // Select-to-min/max rules
-    rule_select_to_smax(),
-    rule_select_to_smin(),
-    rule_select_to_umax(),
-    rule_select_to_umin(),
-    // Swapped variants
-    rule_select_to_smax_swapped(),
-    rule_select_to_smin_swapped(),
-    rule_select_to_umax_swapped(),
-    rule_select_to_umin_swapped(),
-    // Select-to-iabs rules
-    rule_select_to_iabs_positive(),
-    rule_select_to_iabs_negative(),
-    // Min/max comparison rules
-    rule_smin_never_greater(),
-    rule_never_less_than_smin(),
-    rule_umin_never_greater(),
-    rule_never_less_than_umin(),
-  ]
-}

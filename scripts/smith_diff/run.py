@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import shutil
@@ -16,6 +17,16 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SMITH_DIR = Path(__file__).resolve().parent
 DEFAULT_CONFIG = SMITH_DIR / "wasm_smith_all.json"
 TEMPLATE_WAT = SMITH_DIR / "template_run.wat"
+
+
+def _deterministic_seed(corpus_seed: int, case_index: int, size: int) -> bytes:
+    result = bytearray()
+    block = 0
+    while len(result) < size:
+        material = f"wasmoon-smith-v1:{corpus_seed}:{case_index}:{block}".encode()
+        result.extend(hashlib.sha256(material).digest())
+        block += 1
+    return bytes(result[:size])
 
 
 @dataclass(frozen=True)
@@ -255,6 +266,12 @@ def _signature(out: Outcome) -> tuple:
     return (out.kind,)
 
 
+def _is_mismatch(oracle: tuple, interpreter: tuple, jit: tuple, authority: str) -> bool:
+    if authority == "interpreter":
+        return jit != interpreter
+    return interpreter != oracle or jit != oracle
+
+
 def check_one(wasm: Path, *, timeout_s: float) -> int:
     """Exit 0 if mismatch exists, 1 otherwise.
 
@@ -297,7 +314,18 @@ def main() -> int:
     run_p = sub.add_parser("run", help="generate N cases and run diffs")
     run_p.add_argument("--count", type=int, default=1000)
     run_p.add_argument("--seed-size", type=int, default=256)
+    run_p.add_argument(
+        "--seed",
+        type=int,
+        help="Generate the corpus deterministically from this integer seed",
+    )
     run_p.add_argument("--timeout", type=float, default=3.0)
+    run_p.add_argument(
+        "--oracle",
+        choices=["wasmtime", "interpreter"],
+        default="wasmtime",
+        help="Comparison authority; interpreter checks the JIT differential only",
+    )
     run_p.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     run_p.add_argument("--out", type=Path, default=SMITH_DIR / "out")
     run_p.add_argument("--keep-passing", action="store_true")
@@ -368,7 +396,9 @@ def main() -> int:
     stats = {
         "count": args.count,
         "seed_size": args.seed_size,
+        "seed": args.seed,
         "timeout": args.timeout,
+        "oracle": args.oracle,
         "ensure_termination": ensure_termination,
         "failures": 0,
         "generated_errors": 0,
@@ -376,7 +406,11 @@ def main() -> int:
     }
 
     for i in range(args.count):
-        seed = os.urandom(args.seed_size)
+        seed = (
+            _deterministic_seed(args.seed, i, args.seed_size)
+            if args.seed is not None
+            else os.urandom(args.seed_size)
+        )
         seed_path = seeds_dir / f"seed-{i:04d}.bin"
         seed_path.write_bytes(seed)
 
@@ -404,7 +438,7 @@ def main() -> int:
         interp_sig = _signature(interp)
         jit_sig = _signature(jit)
 
-        mismatch = (interp_sig != oracle_sig) or (jit_sig != oracle_sig)
+        mismatch = _is_mismatch(oracle_sig, interp_sig, jit_sig, args.oracle)
 
         if mismatch:
             stats["failures"] += 1
@@ -477,7 +511,13 @@ def main() -> int:
 
     summary_path.write_text(json.dumps({"stats": stats}, indent=2) + "\n")
     print(json.dumps({"work_dir": str(work_dir), "stats": stats}, indent=2))
-    return 0 if stats["failures"] == 0 else 2
+    generated_cases = stats["passes"] + stats["failures"]
+    gate_failed = (
+        stats["failures"] > 0
+        or stats["generated_errors"] > 0
+        or generated_cases == 0
+    )
+    return 2 if gate_failed else 0
 
 
 if __name__ == "__main__":

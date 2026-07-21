@@ -26,6 +26,7 @@ sigjmp_buf* exception_try_begin_impl(jit_context_t *ctx, int32_t handler_id) {
     // Link to previous handler
     handler->prev = (exception_handler_t *)ctx->exception_handler;
     handler->handler_id = handler_id;
+    handler->gc_root_scope_marker = ctx->gc_root_scope_head;
     ctx->exception_handler = handler;
 
     // Return pointer to jmp_buf for caller to call setjmp
@@ -70,6 +71,7 @@ void exception_reset_context_state(jit_context_t *ctx) {
         handler = prev;
     }
     ctx->exception_handler = NULL;
+    ctx_gc_clear_root_scopes_internal(ctx);
 
     if (ctx->exception_values) {
         free(ctx->exception_values);
@@ -112,12 +114,17 @@ void exception_throw_impl(jit_context_t *ctx, int32_t tag_addr,
     // Find handler and longjmp
     exception_handler_t *handler = (exception_handler_t *)ctx->exception_handler;
     if (handler) {
+        ctx_gc_restore_root_scopes_internal(
+            ctx,
+            handler->gc_root_scope_marker
+        );
         siglongjmp(handler->jmp_buf, handler->handler_id);
     }
 
     // No handler - propagate as trap (uncaught exception)
     // Use trap code 8 for uncaught exception
     g_trap_code = 8;
+    ctx_gc_clear_root_scopes_internal(ctx);
     siglongjmp(g_trap_jmp_buf, 1);
 }
 
@@ -128,11 +135,16 @@ void exception_throw_ref_impl(jit_context_t *ctx, int64_t exnref) {
     (void)exnref; // exnref is implicit in ctx's exception state
     exception_handler_t *handler = (exception_handler_t *)ctx->exception_handler;
     if (handler) {
+        ctx_gc_restore_root_scopes_internal(
+            ctx,
+            handler->gc_root_scope_marker
+        );
         siglongjmp(handler->jmp_buf, handler->handler_id);
     }
 
     // No handler - uncaught exception trap
     g_trap_code = 8;
+    ctx_gc_clear_root_scopes_internal(ctx);
     siglongjmp(g_trap_jmp_buf, 1);
 }
 
@@ -151,11 +163,16 @@ void exception_delegate_impl(jit_context_t *ctx, int32_t depth) {
 
     if (target) {
         // longjmp to target handler
+        ctx_gc_restore_root_scopes_internal(
+            ctx,
+            target->gc_root_scope_marker
+        );
         siglongjmp(target->jmp_buf, target->handler_id);
     }
 
     // No handler at that depth - uncaught exception
     g_trap_code = 8;
+    ctx_gc_clear_root_scopes_internal(ctx);
     siglongjmp(g_trap_jmp_buf, 1);
 }
 

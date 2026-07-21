@@ -907,11 +907,31 @@ fn Parser::parse_module(self : Parser) -> @types.Module raise WatError {
         match self.current.token {
           Keyword("type") => {
             let type_idx = mod_.types.length()
+            let saved_type_pos = self.lexer.pos
+            let saved_type_line = self.lexer.line
+            let saved_type_column = self.lexer.column
+            let saved_type_token_line = self.lexer.token_start_line
+            let saved_type_token_column = self.lexer.token_start_column
+            let saved_type_current = self.current
+            self.advance()
+            if self.current.token is Id(_) {
+              self.advance()
+            }
+            let type_kind = self.peek_rec_type_kind()
+            self.lexer.pos = saved_type_pos
+            self.lexer.line = saved_type_line
+            self.lexer.column = saved_type_column
+            self.lexer.token_start_line = saved_type_token_line
+            self.lexer.token_start_column = saved_type_token_column
+            self.current = saved_type_current
+            mod_.types.push(placeholder_subtype_for_rec_kind(type_kind))
+            mod_.type_rec_groups.push(type_idx)
+            self.types = mod_.types
+            self.type_rec_groups = mod_.type_rec_groups
             let subtype = self.parse_type_def(type_idx)
             self.type_names.set("\{type_idx}", type_idx)
-            mod_.types.push(subtype)
-            // Standalone type is its own rec group
-            mod_.type_rec_groups.push(type_idx)
+            mod_.types[type_idx] = subtype
+            self.types[type_idx] = subtype
           }
           Keyword("rec") =>
             // Parse recursive type group

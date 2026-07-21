@@ -511,28 +511,3 @@ fn rule_spaceship_u_ne_one() -> RewriteRule {
     },
   }
 }
-
-///|
-/// Collect all spaceship rules
-pub fn spaceship_rules() -> Array[RewriteRule] {
-  [
-    rule_spaceship_eq_zero(),
-    rule_spaceship_ne_zero(),
-    rule_spaceship_s_lt_zero(),
-    rule_spaceship_u_lt_zero(),
-    rule_spaceship_s_le_zero(),
-    rule_spaceship_u_le_zero(),
-    rule_spaceship_s_gt_zero(),
-    rule_spaceship_u_gt_zero(),
-    rule_spaceship_s_ge_zero(),
-    rule_spaceship_u_ge_zero(),
-    rule_spaceship_s_eq_neg_one(),
-    rule_spaceship_u_eq_neg_one(),
-    rule_spaceship_s_ne_neg_one(),
-    rule_spaceship_u_ne_neg_one(),
-    rule_spaceship_s_eq_one(),
-    rule_spaceship_u_eq_one(),
-    rule_spaceship_s_ne_one(),
-    rule_spaceship_u_ne_one(),
-  ]
-}

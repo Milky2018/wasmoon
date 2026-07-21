@@ -3,14 +3,9 @@ package "Milky2018/wasmoon_jit"
 
 import {
   "Milky2018/machv",
-  "Milky2018/machv/abi",
-  "Milky2018/machv/instr",
-  "Milky2018/machv/isa",
-  "Milky2018/machv_emit",
-  "Milky2018/machv_regalloc",
+  "Milky2018/machv/code_object",
   "Milky2018/milkir",
   "Milky2018/wasm_core/types",
-  "Milky2018/wasm_isa_lower",
   "Milky2018/wasm_milkir",
   "Milky2018/wasmoon_jit/cwasm",
   "moonbitlang/core/debug",
@@ -18,25 +13,11 @@ import {
 }
 
 // Values
-pub const TYPE_F32 : Int = 2
-
-pub const TYPE_F64 : Int = 3
-
-pub const TYPE_I32 : Int = 0
-
-pub const TYPE_I64 : Int = 1
-
-pub const TYPE_V128 : Int = 4
-
 pub fn alloc_guarded_memory_desc(Int, Int?) -> Int64
 
 pub fn alloc_memory(Int64) -> Int64
 
 pub fn alloc_memory_desc(Int64, Int?, is_memory64? : Bool, page_size_log2? : Int, is_shared? : Bool) -> Int64
-
-pub fn build_aarch64_direct_call_stub(Int64) -> Array[Int]
-
-pub fn build_aarch64_load_imm64_fixed_bytes(Int, Int64) -> Array[Int]
 
 pub fn build_cwasm_entry_from_code(Int, String, Array[Int], Int, Int, Int, Int, func_addr_fixups? : Array[@cwasm.FuncAddrFixup], call_fixups? : Array[@cwasm.CallFixup], gc_safepoint_offsets? : Array[Int], gc_safepoint_root_counts? : Array[Int], gc_safepoint_root_indices? : Array[Array[Int]], gc_safepoints? : Array[@cwasm.GcSafepoint], gc_stackmap_blob? : Bytes) -> @cwasm.CompiledEntry
 
@@ -50,9 +31,9 @@ pub fn build_gc_stackmap_blob_v2(Array[@cwasm.GcSafepoint], Array[Int]) -> Bytes
 
 pub fn build_hostcall_import_trampoline_for_target(Array[@types.ValueType], Array[@types.ValueType], Int, @cwasm.TargetArch) -> HostcallImportTrampolineCode raise HostcallImportTrampolineError
 
-pub fn build_x64_direct_call_stub(Int64) -> Array[Int]
-
 pub fn c_jit_read_i64(Int64) -> Int64
+
+pub fn c_jit_read_u32(Int64) -> UInt
 
 pub fn c_jit_write_i64(Int64, Int64) -> Unit
 
@@ -69,6 +50,10 @@ pub fn clear_wasi_stdin_buffer(Int64) -> Unit
 pub fn clear_wasi_stdin_callback(Int64) -> Unit
 
 pub fn collect_gc_root_args(Array[Int64], Array[@types.ValueType]) -> Array[Int64]
+
+pub fn compile_wasm_body_aarch64_cwasm_entry(@milkir.Function, @wasm_milkir.WasmValidationContext, Int, String, Int, Int, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @cwasm.CompiledEntry raise JitPipelineError
+
+pub fn compile_wasm_body_x64_cwasm_entry(@milkir.Function, @wasm_milkir.WasmValidationContext, Int, String, Int, Int, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @cwasm.CompiledEntry raise JitPipelineError
 
 pub fn context_func_count(Int64) -> Int
 
@@ -93,18 +78,6 @@ pub fn decode_i31(Int64) -> Int
 pub fn default_native_glue() -> Array[NativeGlueBinding]
 
 pub fn derive_gc_safepoints(Array[Int], Array[Int], Array[Array[Int]]) -> Array[@cwasm.GcSafepoint]
-
-pub fn direct_call_idx_memory_copy_mem0() -> Int
-
-pub fn direct_call_idx_memory_fill_mem0() -> Int
-
-pub fn embedding_context_layout() -> @abi.EmbeddingContextLayout
-
-pub fn emit_entry_trampoline(Array[Int], Array[Int], @abi.CallConventionLayout, isa? : @isa.ISA) -> @machv_emit.MachineCode raise JitPipelineError
-
-pub fn emit_hostcall_import_trampoline(Array[@types.ValueType], Array[@types.ValueType], Int, @instr.ExternalName, @abi.CallConventionLayout, isa? : @isa.ISA) -> @machv_emit.MachineCode raise JitPipelineError
-
-pub fn emit_target_to_isa(@machv_emit.EmitTarget) -> @isa.ISA
 
 pub fn encode_aarch64_bl_imm26(Int64, Int64) -> Int?
 
@@ -324,8 +297,6 @@ pub fn i64_to_value(Int64, @types.ValueType) -> @types.Value
 
 pub fn init_wasi_context(Int64, Array[String], Array[String], Array[(String, String)], quiet? : Bool) -> Unit
 
-pub fn install_direct_call_stubs_for_target(@cwasm.TargetArch) -> DirectCallStubSet raise DirectCallStubInstallError
-
 pub fn is_cancelled_trap_code(Int) -> Bool
 
 pub fn is_funcref_ptr(Int64) -> Bool
@@ -346,15 +317,11 @@ pub fn jit_runtime_fixup_idx(Int) -> Int
 
 pub fn jit_trap_message(Int) -> String
 
-pub fn link_code_object(@machv_emit.MachineCode, RuntimeSymbolResolver) -> LinkedCode raise LinkError
+pub fn link_code_object(JitCodeObject, RuntimeSymbolResolver) -> LinkedCode raise LinkError
 
-pub fn link_machine_code(@machv_emit.MachineCode, RuntimeSymbolResolver) -> LinkedCode raise LinkError
+pub fn lower_wasm_body_semantic_machv(@milkir.Function, @wasm_milkir.WasmValidationContext, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @machv.Function raise JitPipelineError
 
-pub fn lower_milkir_for_target(@milkir.Function, @machv_emit.EmitTarget) -> @machv.Function raise JitPipelineError
-
-pub fn lower_wasm_body_milkir_for_target(@milkir.Function, @machv_emit.EmitTarget) -> @machv.Function raise JitPipelineError
-
-pub fn machv_reloc_target_to_cwasm_func_idx(@instr.RelocTarget) -> Int?
+pub fn machv_reloc_target_to_cwasm_func_idx(@code_object.RelocationTarget) -> Int?
 
 pub fn make_cstring(String) -> FixedArray[Byte]
 
@@ -400,15 +367,17 @@ pub fn patch_x64_func_addr_fixup_raw(Int64, Int, Int, Int, Int64) -> Unit
 
 pub fn patch_x64_func_addr_fixups(Int64, Array[@cwasm.FuncAddrFixup], Int64) -> Unit
 
-pub fn plan_entry_trampoline_for_target(Array[@types.ValueType], Array[@types.ValueType], @machv_emit.EmitTarget) -> JitIntegrationPlan raise JitPipelineError
+pub fn plan_entry_trampoline_for_target(Array[@types.ValueType], Array[@types.ValueType], NativeTarget) -> JitIntegrationPlan raise JitPipelineError
 
 pub fn plan_hostcall_import_trampoline_layout(Array[@types.ValueType], Array[@types.ValueType], Int, Int) -> HostcallImportTrampolineLayout
 
-pub fn plan_integration_for_target(@milkir.Function, @machv.Function, @machv_regalloc.Output, @machv_emit.EmitTarget) -> JitIntegrationPlan raise JitPipelineError
+pub fn plan_milkir_integration_for_target(@milkir.Function, NativeTarget) -> JitIntegrationPlan raise JitPipelineError
 
-pub fn plan_milkir_integration_for_target(@milkir.Function, @machv_emit.EmitTarget) -> JitIntegrationPlan raise JitPipelineError
+pub fn plan_wasm_body_aarch64_code_object(@milkir.Function, @wasm_milkir.WasmValidationContext, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @code_object.UnlinkedCodeObject raise JitPipelineError
 
-pub fn plan_wasm_body_milkir_integration_for_target(@milkir.Function, @machv_emit.EmitTarget) -> JitIntegrationPlan raise JitPipelineError
+pub fn plan_wasm_body_milkir_integration_for_target(@milkir.Function, @wasm_milkir.WasmValidationContext, NativeTarget) -> JitIntegrationPlan raise JitPipelineError
+
+pub fn plan_wasm_body_x64_code_object(@milkir.Function, @wasm_milkir.WasmValidationContext, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @code_object.UnlinkedCodeObject raise JitPipelineError
 
 pub fn required_context_function_count(@cwasm.PrecompiledModule, Int) -> Int
 
@@ -422,11 +391,7 @@ pub fn resolve_import_function_ptr(Map[String, Map[String, Int64]], String, Stri
 
 pub fn resolve_runtime_func_fixup_idx(Int) -> Int64?
 
-pub fn resolve_wasm_func_code_symbol(@instr.CodeSymbol) -> Int?
-
 pub fn resolve_wasm_func_symbol(String) -> Int?
-
-pub fn runtime_hostcall_symbol() -> @instr.ExternalName
 
 pub fn sanitize_debug_filename(String) -> String
 
@@ -452,7 +417,7 @@ pub fn take_wasi_stderr(Int64) -> Bytes
 
 pub fn take_wasi_stdout(Int64) -> Bytes
 
-pub fn target_arch_to_isa(@cwasm.TargetArch) -> @isa.ISA
+pub fn target_arch_to_native_target(@cwasm.TargetArch) -> NativeTarget
 
 pub fn throw_exception_tag(Int64, Int) -> Unit
 
@@ -466,20 +431,6 @@ pub fn value_type_may_hold_gc_ref(@types.ValueType) -> Bool
 
 pub fn vmcontext_layout() -> VMContextLayout
 
-pub fn wasm_calling_convention(isa? : @isa.ISA) -> @abi.CallConventionLayout
-
-pub fn wasm_calling_convention_for_isa(@isa.ISA) -> @abi.CallConventionLayout
-
-pub fn wasm_context_slots() -> @wasm_isa_lower.WasmContextSlots
-
-pub fn wasm_embedding_abi(isa? : @isa.ISA) -> @abi.EmbeddingABI
-
-pub fn wasm_embedding_abi_for_isa(@isa.ISA) -> @abi.EmbeddingABI
-
-pub fn wasm_embedding_reg_roles(isa? : @isa.ISA) -> @abi.EmbeddingRegRoles
-
-pub fn wasm_embedding_reg_roles_for_isa(@isa.ISA) -> @abi.EmbeddingRegRoles
-
 pub fn wasm_runtime_symbols() -> @wasm_milkir.RuntimeSymbols
 
 pub fn wasm_trap_payload(String) -> Int
@@ -490,11 +441,6 @@ pub(all) suberror CHeapError {
   NullReference
   OutOfMemory
 }
-
-pub suberror DirectCallStubInstallError {
-  UnsupportedDirectCallStubTarget(pseudo_idx~ : Int, code_size~ : Int)
-  DirectCallStubAllocationFailed(pseudo_idx~ : Int, code_size~ : Int)
-} derive(Eq, @debug.Debug)
 
 pub suberror GCSetupError {
   MissingJITContext
@@ -637,7 +583,7 @@ pub impl Show for CompilationStrategy
 
 pub struct CompiledFunction {
   name : String
-  code : @machv_emit.MachineCode
+  code : JitCodeObject
   entry_offset : Int
   code_size : Int
   frame_size : Int
@@ -645,10 +591,10 @@ pub struct CompiledFunction {
   gc_stackmap_blob : Bytes
   mut valid : Bool
 }
-pub fn CompiledFunction::CompiledFunction(String, @machv_emit.MachineCode, Int, gc_safepoints? : Array[GcSafepoint], gc_stackmap_blob? : Bytes) -> Self
-pub fn CompiledFunction::get_call_fixups(Self) -> Array[@machv_emit.CallFixup]
+pub fn CompiledFunction::CompiledFunction(String, JitCodeObject, gc_safepoints? : Array[GcSafepoint], gc_stackmap_blob? : Bytes) -> Self
+pub fn CompiledFunction::get_call_fixups(Self) -> Array[JitCallFixup]
 pub fn CompiledFunction::get_code(Self) -> Array[Int]
-pub fn CompiledFunction::get_func_addr_fixups(Self) -> Array[@machv_emit.FuncAddrFixup]
+pub fn CompiledFunction::get_func_addr_fixups(Self) -> Array[JitFuncAddrFixup]
 pub fn CompiledFunction::get_gc_safepoints(Self) -> Array[GcSafepoint]
 pub fn CompiledFunction::get_gc_stackmap_blob(Self) -> Bytes
 pub fn CompiledFunction::invalidate(Self) -> Unit
@@ -663,8 +609,8 @@ pub(all) struct CwasmArtifact {
   functions : Array[CwasmFunctionRecord]
   call_veneers : Array[CwasmCallVeneer]
   runtime_relocations : Array[ResolvedRuntimeRelocation]
-  func_addr_fixups : Array[@machv_emit.FuncAddrFixup]
-  call_fixups : Array[@machv_emit.CallFixup]
+  func_addr_fixups : Array[JitFuncAddrFixup]
+  call_fixups : Array[JitCallFixup]
   gc_safepoints : Array[GcSafepoint]
   gc_stackmap_blob : Bytes
 } derive(@debug.Debug)
@@ -702,11 +648,6 @@ pub fn DWARFBuilder::format_backtrace(Self, Array[BacktraceFrame]) -> String
 pub fn DWARFBuilder::lookup_address(Self, Int64) -> FunctionInfo?
 pub fn DWARFBuilder::register(Self, verbose? : Bool) -> Unit
 pub fn DWARFBuilder::unregister(Self) -> Unit
-
-pub struct DirectCallStubSet {
-  exec_codes : Array[ExecCode]
-  targets : Map[Int, Int64]
-}
 
 type ExecCode
 pub fn ExecCode::ptr(Self) -> Int64
@@ -802,19 +743,42 @@ pub fn JITTable::refresh_layout(Self, Int64, Int) -> Unit
 pub fn JITTable::set(Self, Int, Int64, Int) -> Unit
 pub fn JITTable::try_alloc(Int, Int?) -> Self?
 
+pub(all) struct JitCallFixup {
+  offset : Int
+  target : @code_object.RelocationTarget
+  veneer_offset : Int
+} derive(Eq, @debug.Debug)
+
+pub struct JitCodeObject {
+  // private fields
+} derive(@debug.Debug)
+pub fn JitCodeObject::frame_size(Self) -> Int
+pub fn JitCodeObject::get_bytes(Self) -> Array[Int]
+pub fn JitCodeObject::get_call_fixups(Self) -> Array[JitCallFixup]
+pub fn JitCodeObject::get_func_addr_fixups(Self) -> Array[JitFuncAddrFixup]
+pub fn JitCodeObject::get_gc_safepoints(Self) -> Array[GcSafepoint]
+pub fn JitCodeObject::new(Array[Int], Int, func_addr_fixups? : Array[JitFuncAddrFixup], call_fixups? : Array[JitCallFixup], gc_safepoints? : Array[GcSafepoint]) -> Self
+pub fn JitCodeObject::size(Self) -> Int
+
+pub(all) struct JitFuncAddrFixup {
+  offset : Int
+  target : @code_object.RelocationTarget
+  reg : Int
+} derive(Eq, @debug.Debug)
+
 pub(all) struct JitIntegrationPlan {
   entry_symbol : String
-  target : @machv_emit.EmitTarget
+  target : NativeTarget
   native_glue : Array[NativeGlueBinding]
-  object : @machv_emit.MachineCode
+  object : JitCodeObject
 }
 
 pub(all) struct LinkedCode {
   code : Array[Int]
   frame_size : Int
   runtime_relocations : Array[ResolvedRuntimeRelocation]
-  func_addr_fixups : Array[@machv_emit.FuncAddrFixup]
-  call_fixups : Array[@machv_emit.CallFixup]
+  func_addr_fixups : Array[JitFuncAddrFixup]
+  call_fixups : Array[JitCallFixup]
   gc_safepoints : Array[GcSafepoint]
   gc_stackmap_blob : Bytes
 } derive(@debug.Debug)
@@ -838,7 +802,7 @@ pub fn MemoryManager::finalize_all(Self) -> Unit
 pub fn MemoryManager::get_current_region(Self) -> ExecutableRegion
 pub fn MemoryManager::total_allocated(Self) -> Int
 pub fn MemoryManager::total_used(Self) -> Int
-pub fn MemoryManager::write_code(Self, @machv_emit.MachineCode) -> Result[(ExecutableRegion, Int), String]
+pub fn MemoryManager::write_code(Self, JitCodeObject) -> Result[(ExecutableRegion, Int), String]
 pub impl Show for MemoryManager
 
 pub(all) struct NativeGlueBinding {
@@ -880,6 +844,11 @@ pub fn NativeJITContext::set_memory(Self, Int64) -> Unit
 pub fn NativeJITContext::set_memory_pointers(Self, Array[MemoryInfo]) -> Unit
 pub fn NativeJITContext::set_table_pointers(Self, Array[JITTable?]) -> Unit
 pub fn NativeJITContext::try_alloc(Int) -> Self?
+
+pub(all) enum NativeTarget {
+  X64
+  AArch64
+} derive(Eq, @debug.Debug)
 
 pub(all) struct Profiler {
   counter : CallCounter
@@ -998,7 +967,6 @@ pub(all) struct VMContextLayout {
   table_entry_stride : Int
   func_table_entry_stride : Int
 }
-pub fn VMContextLayout::to_embedding_context_layout(Self) -> @abi.EmbeddingContextLayout
 
 pub(all) struct WasmTrapFrame {
   pc : Int64

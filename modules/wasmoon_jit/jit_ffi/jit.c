@@ -437,7 +437,7 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_shared_table_set(int64_t table_ptr, int tabl
 
 // ============ Table Operations ============
 
-MOONBIT_FFI_EXPORT int32_t wasmoon_jit_table_grow(
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_table_grow(
     jit_context_t *ctx,
     int32_t table_idx,
     int64_t delta,
@@ -475,15 +475,6 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_memory_fill(
     memory_fill_indexed_internal(ctx, memidx, dst, val, size);
 }
 
-MOONBIT_FFI_EXPORT void wasmoon_jit_memory_fill_mem0(
-    jit_context_t *ctx,
-    int32_t dst,
-    int32_t val,
-    int32_t size
-) {
-    memory_fill_ctx_internal(ctx, dst, val, size);
-}
-
 MOONBIT_FFI_EXPORT void wasmoon_jit_memory_copy(
     jit_context_t *ctx,
     int32_t dst_memidx,
@@ -493,15 +484,6 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_memory_copy(
     int32_t size
 ) {
     memory_copy_indexed_internal(ctx, dst_memidx, src_memidx, dst, src, size);
-}
-
-MOONBIT_FFI_EXPORT void wasmoon_jit_memory_copy_mem0(
-    jit_context_t *ctx,
-    int32_t dst,
-    int32_t src,
-    int32_t size
-) {
-    memory_copy_ctx_internal(ctx, dst, src, size);
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_grow_ptr(void) {
@@ -516,16 +498,8 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_fill_ptr(void) {
     return (int64_t)memory_fill_indexed_internal;
 }
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_fill_mem0_ptr(void) {
-    return (int64_t)memory_fill_ctx_internal;
-}
-
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_copy_ptr(void) {
     return (int64_t)memory_copy_indexed_internal;
-}
-
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_memory_copy_mem0_ptr(void) {
-    return (int64_t)memory_copy_ctx_internal;
 }
 
 // ============ Integer div/rem helpers ============
@@ -1344,6 +1318,14 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_write_u32(int64_t addr, uint32_t value) {
     }
 }
 
+MOONBIT_FFI_EXPORT uint32_t wasmoon_jit_read_u32(int64_t addr) {
+    uint32_t value = 0;
+    if (addr != 0) {
+        memcpy(&value, (const void *)addr, sizeof(value));
+    }
+    return value;
+}
+
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_read_i64(int64_t addr) {
     if (addr != 0) {
         return *((int64_t *)addr);
@@ -1422,6 +1404,35 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_alloc_array_from_values_slow_ptr(v
     return (int64_t)gc_alloc_array_from_values_slow;
 }
 
+static void wasmoon_jit_gc_push_root_scope_or_trap(
+    jit_context_t *ctx,
+    const int64_t *roots,
+    int32_t root_count
+) {
+    if (ctx_gc_push_root_scope_internal(ctx, roots, root_count) == 1) {
+        return;
+    }
+    g_trap_code = 99;
+    siglongjmp(g_trap_jmp_buf, 1);
+}
+
+static void wasmoon_jit_gc_pop_root_scope_or_trap(jit_context_t *ctx) {
+    if (ctx && ctx->gc_root_scope_head) {
+        ctx_gc_pop_root_scope_internal(ctx);
+        return;
+    }
+    g_trap_code = 99;
+    siglongjmp(g_trap_jmp_buf, 1);
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_push_root_scope_ptr(void) {
+    return (int64_t)wasmoon_jit_gc_push_root_scope_or_trap;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_gc_pop_root_scope_ptr(void) {
+    return (int64_t)wasmoon_jit_gc_pop_root_scope_or_trap;
+}
+
 // ============ Type Cache Management FFI Exports ============
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_gc_set_type_cache(
@@ -1492,6 +1503,20 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_gc_begin_frame(int64_t ctx_ptr, int64_t fram
 MOONBIT_FFI_EXPORT void wasmoon_jit_gc_end_frame(int64_t ctx_ptr) {
     jit_context_t *ctx = (jit_context_t *)(uintptr_t)ctx_ptr;
     ctx_gc_end_frame_internal(ctx);
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_gc_push_root_scope(
+    int64_t ctx_ptr,
+    int64_t *roots,
+    int32_t root_count
+) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)ctx_ptr;
+    return ctx_gc_push_root_scope_internal(ctx, roots, root_count);
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_jit_gc_pop_root_scope(int64_t ctx_ptr) {
+    jit_context_t *ctx = (jit_context_t *)(uintptr_t)ctx_ptr;
+    ctx_gc_pop_root_scope_internal(ctx);
 }
 
 MOONBIT_FFI_EXPORT int32_t wasmoon_jit_gc_collect_for_alloc(

@@ -149,7 +149,7 @@ pub struct CompiledFunction {
   // Function name or identifier.
   name : String
   // The compiled machine code bytes and metadata.
-  code : @machv_emit.MachineCode
+  code : JitCodeObject
   // Entry point offset, usually 0.
   entry_offset : Int
   // Size of the code in bytes.
@@ -167,31 +167,21 @@ pub struct CompiledFunction {
 ///|
 pub fn CompiledFunction::CompiledFunction(
   name : String,
-  code : @machv_emit.MachineCode,
-  frame_size : Int,
+  code : JitCodeObject,
   gc_safepoints? : Array[GcSafepoint] = [],
   gc_stackmap_blob? : Bytes = b"",
 ) -> CompiledFunction {
-  let derived_root_counts = code.get_gc_safepoint_root_counts()
-  let derived_root_indices = code.get_gc_safepoint_root_indices()
+  let object_safepoints = code.get_gc_safepoints()
+  let derived_root_counts = object_safepoints.map(safepoint => {
+    safepoint_metadata_to_root_count(safepoint.metadata)
+  })
   let resolved_gc_safepoints : Array[GcSafepoint] = if gc_safepoints.length() >
     0 {
     gc_safepoints
   } else {
     let derived : Array[GcSafepoint] = []
-    let offsets = code.get_gc_safepoint_offsets()
-    for i, offset in offsets {
-      let metadata = if i < derived_root_counts.length() {
-        derived_root_counts[i].to_int64()
-      } else {
-        0L
-      }
-      let live_refs = if i < derived_root_indices.length() {
-        derived_root_indices[i]
-      } else {
-        []
-      }
-      derived.push(GcSafepoint(offset, live_refs, metadata))
+    for safepoint in object_safepoints {
+      derived.push(safepoint)
     }
     derived
   }
@@ -220,7 +210,7 @@ pub fn CompiledFunction::CompiledFunction(
     code,
     entry_offset: 0,
     code_size: code.size(),
-    frame_size,
+    frame_size: code.frame_size(),
     gc_safepoints: resolved_gc_safepoints,
     gc_stackmap_blob: resolved_gc_stackmap_blob,
     valid: true,
@@ -249,7 +239,7 @@ pub fn CompiledFunction::get_code(self : CompiledFunction) -> Array[Int] {
 /// Get direct function address fixups.
 pub fn CompiledFunction::get_func_addr_fixups(
   self : CompiledFunction,
-) -> Array[@machv_emit.FuncAddrFixup] {
+) -> Array[JitFuncAddrFixup] {
   self.code.get_func_addr_fixups()
 }
 
@@ -257,7 +247,7 @@ pub fn CompiledFunction::get_func_addr_fixups(
 /// Get direct function call fixups.
 pub fn CompiledFunction::get_call_fixups(
   self : CompiledFunction,
-) -> Array[@machv_emit.CallFixup] {
+) -> Array[JitCallFixup] {
   self.code.get_call_fixups()
 }
 

@@ -404,6 +404,22 @@ test "simd: i32x4.shr_s" {
 }
 
 ///|
+test "simd: i8x16 shifts preserve all byte lanes" {
+  let source =
+    #|(module
+    #|  (func (export "shl") (result v128)
+    #|    (i8x16.shl
+    #|      (v128.const i8x16 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15)
+    #|      (i32.const 1)))
+    #|  (func (export "shr_u") (result v128)
+    #|    (i8x16.shr_u
+    #|      (v128.const i8x16 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15)
+    #|      (i32.const 1))))
+  inspect(compare_jit_interp(source, "shl", []), content="matched")
+  inspect(compare_jit_interp(source, "shr_u", []), content="matched")
+}
+
+///|
 test "simd: f32x4.add" {
   let source =
     #|(module

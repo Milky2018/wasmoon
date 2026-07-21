@@ -1,0 +1,392 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/machv/vcode"
+
+import {
+  "Milky2018/machv",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn plan_call_transfers(Allocation, Array[CallTransfer], Int, Int, Array[PhysicalReg], Array[PhysicalReg], Array[Location]) -> CallTransferPlan raise CallTransferError
+
+pub fn reg_class_for_value_type(@machv.ValueType) -> RegClass
+
+pub fn resolve_parallel_moves(Array[ParallelMove], Array[PhysicalReg], Array[PhysicalReg]) -> Array[ParallelMove] raise MoveResolveError
+
+pub fn[Inst] verify_allocated(Function[Inst], Allocation) -> Unit raise AllocationVerifyError
+
+pub fn[Inst] verify_allocation_invariants(Function[Inst], Allocation) -> Unit raise AllocationVerifyError
+
+pub fn[Inst] verify_emission_input(Function[Inst], Allocation, FrameLayout) -> Unit raise EmissionVerifyError
+
+pub fn[Inst] verify_framed(Function[Inst], Allocation, FrameLayout) -> Unit raise FrameVerifyError
+
+pub fn[Inst] verify_selected(Function[Inst]) -> Unit raise VCodeVerifyError
+
+// Errors
+pub suberror AllocationVerifyError {
+  SelectedFailure(cause~ : VCodeVerifyError)
+  SourceMismatch
+  MissingValueLocation(value~ : Value)
+  ForeignLocation(value~ : Value)
+  LocationClassMismatch(value~ : Value)
+  MissingOperandLocation(instruction~ : Instruction, operand~ : Int)
+  OperandClassMismatch(instruction~ : Instruction, operand~ : Int)
+  RegisterConstraintViolation(instruction~ : Instruction, operand~ : Int)
+  AnyLocationConstraintViolation(instruction~ : Instruction, operand~ : Int)
+  FixedConstraintViolation(instruction~ : Instruction, operand~ : Int)
+  TiedConstraintViolation(instruction~ : Instruction, operand~ : Int)
+  Interference(left~ : Value, right~ : Value, location~ : Location)
+  ClobberViolation(instruction~ : Instruction, value~ : Value)
+  InvalidStackSlotLayout(slot~ : StackSlot)
+  InvalidEdit(index~ : Int)
+  MissingSpill(instruction~ : Instruction, operand~ : Int)
+  MissingReload(instruction~ : Instruction, operand~ : Int)
+  InvalidEdgeMove(index~ : Int)
+  MissingSafepointRoot(instruction~ : Instruction, value~ : Value)
+  UnexpectedSafepointRoot(instruction~ : Instruction, value~ : Value)
+} derive(Eq, @debug.Debug)
+pub impl Show for AllocationVerifyError
+
+pub suberror CallTransferError {
+  InvalidSourceClass(index~ : Int)
+  ForeignSourceStack(index~ : Int)
+  InvalidSourceStackType(index~ : Int, expected~ : @machv.ValueType, actual~ : @machv.ValueType)
+  InvalidSourceStackLayout(index~ : Int)
+  InvalidDestinationClass(index~ : Int)
+  InvalidStackOffset(index~ : Int, offset~ : Int)
+  InvalidOutgoingStackRange(start~ : Int, size~ : Int)
+  OutgoingStackDestinationOutOfRange(index~ : Int, offset~ : Int)
+  DuplicateRegisterDestination(index~ : Int, register~ : PhysicalReg)
+  OverlappingStackDestination(first~ : Int, second~ : Int)
+  ProtectedLocationOverwrite(index~ : Int, location~ : Location)
+  MoveResolutionFailed(cause~ : MoveResolveError)
+} derive(Eq, @debug.Debug)
+
+pub suberror EmissionVerifyError {
+  FrameFailure(cause~ : FrameVerifyError)
+} derive(Eq, @debug.Debug)
+pub impl Show for EmissionVerifyError
+
+pub suberror FrameVerifyError {
+  AllocationFailure(cause~ : AllocationVerifyError)
+  SourceMismatch
+  InvalidFrameSize(size~ : Int)
+  InvalidFrameAlignment(alignment~ : Int)
+  MissingStackSlot(slot~ : StackSlot)
+  MisalignedStackSlot(slot~ : StackSlot)
+  OverlappingStackSlots(left~ : StackSlot, right~ : StackSlot)
+  StackSlotOutOfFrame(slot~ : StackSlot)
+} derive(Eq, @debug.Debug)
+pub impl Show for FrameVerifyError
+
+pub suberror MoveResolveError {
+  MissingScratch(class~ : RegClass)
+  InvalidScratch(reg~ : PhysicalReg, expected~ : RegClass)
+  NoSafeCycleScratch(class~ : RegClass)
+  BrokenCycle
+} derive(Eq, @debug.Debug)
+pub impl Show for MoveResolveError
+
+pub suberror VCodeBuildError {
+  InvalidParameter(index~ : Int)
+  InvalidBlockParameter(block~ : Block, index~ : Int)
+  ForeignBlock(block~ : Block)
+  ForeignValue(value~ : Value)
+  InvalidOperandConstraint
+  DuplicateTerminator(block~ : Block)
+  BlockAlreadyTerminated(block~ : Block)
+  InvalidLayout
+} derive(Eq, @debug.Debug)
+pub impl Show for VCodeBuildError
+
+pub suberror VCodeVerifyError {
+  EmptyFunction
+  MissingTerminator(block~ : Block)
+  ForeignValue(instruction~ : Instruction, value~ : Value)
+  ForeignBlock(instruction~ : Instruction, block~ : Block)
+  InvalidEdgeArity(instruction~ : Instruction, block~ : Block)
+  EdgeClassMismatch(instruction~ : Instruction, block~ : Block, index~ : Int)
+  InvalidTie(instruction~ : Instruction, operand~ : Int, tied_to~ : Int)
+  InvalidAnyLocationConstraint(instruction~ : Instruction, operand~ : Int)
+  FixedRegisterClassMismatch(instruction~ : Instruction, operand~ : Int)
+  InvalidOperandPreference(instruction~ : Instruction, operand~ : Int)
+  DuplicateClobber(instruction~ : Instruction, reg~ : PhysicalReg)
+  InvalidSafepointRoot(instruction~ : Instruction, value~ : Value)
+  InvalidStackMap(instruction~ : Instruction)
+  UnreachableBlock(block~ : Block)
+  UseBeforeDefinition(instruction~ : Instruction, value~ : Value)
+  DefinitionDoesNotDominate(instruction~ : Instruction, value~ : Value)
+  InvalidLayout
+} derive(Eq, @debug.Debug)
+pub impl Show for VCodeVerifyError
+
+// Types and methods
+pub struct Allocation {
+  // private fields
+}
+pub fn Allocation::add_edit(Self, Edit) -> Bool
+pub fn Allocation::add_safepoint_root(Self, Instruction, Value, Location) -> Bool
+pub fn Allocation::assign_operand(Self, Instruction, Int, PhysicalReg) -> Bool
+pub fn Allocation::assign_operand_location(Self, Instruction, Int, Location) -> Bool
+pub fn Allocation::assign_value(Self, Value, Location) -> Bool
+pub fn Allocation::create_stack_slot(Self, @machv.ValueType, Int, Int) -> StackSlot
+pub fn Allocation::edits(Self) -> Array[Edit]
+pub fn Allocation::edits_at(Self, Instruction, PointPlacement) -> ArrayView[Edit]
+pub fn[Inst] Allocation::for_function(Function[Inst]) -> Self
+pub fn Allocation::operand_location(Self, Instruction, Int) -> Location?
+pub fn Allocation::safepoint_roots(Self, Instruction) -> Array[(Value, Location)]
+pub fn Allocation::source_instruction_count(Self) -> Int
+pub fn Allocation::stack_slot_alignment(Self, StackSlot) -> Int?
+pub fn Allocation::stack_slot_at(Self, Int) -> StackSlot?
+pub fn Allocation::stack_slot_count(Self) -> Int
+pub fn Allocation::stack_slot_size(Self, StackSlot) -> Int?
+pub fn Allocation::stack_slot_type(Self, StackSlot) -> @machv.ValueType?
+pub fn Allocation::summary(Self) -> String
+pub fn Allocation::value_location(Self, Value) -> Location?
+
+pub struct Block {
+  // private fields
+}
+pub impl Eq for Block
+pub impl Show for Block
+pub impl @debug.Debug for Block
+
+pub struct Builder[Inst] {
+  // private fields
+}
+pub fn[Inst] Builder::append_body(Self[Inst], Block, Inst, Array[Input], Array[Output], Array[PhysicalReg], InstructionMetadata) -> (Instruction, Array[Value]) raise VCodeBuildError
+pub fn[Inst] Builder::block_parameter(Self[Inst], Block, Int) -> Value raise VCodeBuildError
+pub fn[Inst] Builder::create_block(Self[Inst], Array[@machv.ValueType]) -> Block
+pub fn[Inst] Builder::entry_block(Self[Inst]) -> Block
+pub fn[Inst] Builder::finish(Self[Inst]) -> Function[Inst]
+pub fn[Inst] Builder::new(String, Array[@machv.ValueType]) -> Self[Inst]
+pub fn[Inst] Builder::new_with_protocol(String, @machv.CallProtocol, Array[@machv.ValueType], Array[@machv.ValueType]) -> Self[Inst]
+pub fn[Inst] Builder::new_with_results(String, Array[@machv.ValueType], Array[@machv.ValueType]) -> Self[Inst]
+pub fn[Inst] Builder::parameter(Self[Inst], Int) -> Value raise VCodeBuildError
+pub fn[Inst] Builder::set_terminator(Self[Inst], Block, Inst, Array[Input], Array[Edge], Array[PhysicalReg], InstructionMetadata) -> Instruction raise VCodeBuildError
+
+pub struct CallTransfer {
+  // private fields
+}
+pub fn CallTransfer::to_register(@machv.ValueType, Location, PhysicalReg) -> Self
+pub fn CallTransfer::to_stack(@machv.ValueType, Location, Int) -> Self
+
+pub struct CallTransferPlan {
+  stack_transfers : Array[StackArgumentTransfer]
+  register_moves : Array[ParallelMove]
+} derive(Eq, @debug.Debug)
+
+pub struct Edge {
+  target : Block
+  arguments : Array[Value]
+}
+pub fn Edge::new(Block, Array[Value]) -> Self
+
+pub struct Edit {
+  point : ProgramPoint?
+  kind : EditKind
+}
+pub fn Edit::edge_move(Block, Int, Value, Location, Location) -> Self
+pub fn Edit::kind(Self) -> EditKind
+pub fn Edit::point(Self) -> ProgramPoint?
+pub fn Edit::register_move(ProgramPoint, Value, PhysicalReg, PhysicalReg) -> Self
+pub fn Edit::reload(ProgramPoint, Value, StackSlot, PhysicalReg) -> Self
+pub fn Edit::spill(ProgramPoint, Value, PhysicalReg, StackSlot) -> Self
+
+pub(all) enum EditKind {
+  Spill(value~ : Value, reg~ : PhysicalReg, slot~ : StackSlot)
+  Reload(value~ : Value, slot~ : StackSlot, reg~ : PhysicalReg)
+  Move(value~ : Value, from~ : PhysicalReg, to~ : PhysicalReg)
+  EdgeMove(source~ : Block, successor_index~ : Int, value~ : Value, from~ : Location, to~ : Location)
+} derive(Eq, @debug.Debug)
+
+pub struct FrameLayout {
+  // private fields
+}
+pub fn FrameLayout::alignment(Self) -> Int
+pub fn FrameLayout::frame_size(Self) -> Int
+pub fn[Inst] FrameLayout::new(Function[Inst], Allocation, Int, Int) -> Self
+pub fn FrameLayout::place_slot(Self, StackSlot, Int) -> Bool
+pub fn FrameLayout::slot_offset(Self, StackSlot) -> Int?
+
+pub struct Function[Inst] {
+  // private fields
+}
+pub fn[Inst] Function::after(Self[Inst], Instruction) -> ProgramPoint?
+pub fn[Inst] Function::before(Self[Inst], Instruction) -> ProgramPoint?
+pub fn[Inst] Function::block_at(Self[Inst], Int) -> Block?
+pub fn[Inst] Function::block_body(Self[Inst], Block) -> Array[Instruction]
+pub fn[Inst] Function::block_count(Self[Inst]) -> Int
+pub fn[Inst] Function::block_index(Self[Inst], Block) -> Int?
+pub fn[Inst] Function::block_parameters(Self[Inst], Block) -> Array[Value]
+pub fn[Inst] Function::block_terminator(Self[Inst], Block) -> Instruction?
+pub fn[Inst] Function::entry_block(Self[Inst]) -> Block
+pub fn[Inst] Function::instruction(Self[Inst], Instruction) -> Inst?
+pub fn[Inst] Function::instruction_at(Self[Inst], Int) -> Instruction?
+pub fn[Inst] Function::instruction_clobber_at(Self[Inst], Instruction, Int) -> PhysicalReg?
+pub fn[Inst] Function::instruction_clobber_count(Self[Inst], Instruction) -> Int
+pub fn[Inst] Function::instruction_clobbers(Self[Inst], Instruction) -> Array[PhysicalReg]
+pub fn[Inst] Function::instruction_count(Self[Inst]) -> Int
+pub fn[Inst] Function::instruction_index(Self[Inst], Instruction) -> Int?
+pub fn[Inst] Function::instruction_is_terminator(Self[Inst], Instruction) -> Bool
+pub fn[Inst] Function::instruction_metadata(Self[Inst], Instruction) -> InstructionMetadata?
+pub fn[Inst] Function::instruction_operand_at(Self[Inst], Instruction, Int) -> Operand?
+pub fn[Inst] Function::instruction_operand_count(Self[Inst], Instruction) -> Int
+pub fn[Inst] Function::instruction_operands(Self[Inst], Instruction) -> Array[Operand]
+pub fn[Inst] Function::instruction_results(Self[Inst], Instruction) -> Array[Value]
+pub fn[Inst] Function::instruction_successor_at(Self[Inst], Instruction, Int) -> Edge?
+pub fn[Inst] Function::instruction_successor_count(Self[Inst], Instruction) -> Int
+pub fn[Inst] Function::instruction_successors(Self[Inst], Instruction) -> Array[Edge]
+pub fn[Inst] Function::layout(Self[Inst]) -> Array[Block]
+pub fn[Inst] Function::name(Self[Inst]) -> String
+pub fn[Inst] Function::parameter_at(Self[Inst], Int) -> Value?
+pub fn[Inst] Function::parameter_count(Self[Inst]) -> Int
+pub fn[Inst] Function::program_point_instruction(Self[Inst], ProgramPoint) -> Instruction?
+pub fn[Inst] Function::protocol(Self[Inst]) -> @machv.CallProtocol
+pub fn[Inst] Function::result_types(Self[Inst]) -> Array[@machv.ValueType]
+pub fn[Inst] Function::set_layout(Self[Inst], Array[Block]) -> Unit raise VCodeBuildError
+pub fn[Inst : @debug.Debug] Function::summary(Self[Inst]) -> String
+pub fn[Inst] Function::value_at(Self[Inst], Int) -> Value?
+pub fn[Inst] Function::value_count(Self[Inst]) -> Int
+pub fn[Inst] Function::value_index(Self[Inst], Value) -> Int?
+pub fn[Inst] Function::value_type(Self[Inst], Value) -> @machv.ValueType?
+
+pub struct Input {
+  value : Value
+  constraint : OperandConstraint
+  preference : PhysicalReg?
+  timing : OperandTiming
+}
+pub fn Input::any(Value) -> Self
+pub fn Input::any_location(Value) -> Self
+pub fn Input::fixed(Value, PhysicalReg) -> Self
+pub fn Input::with_preference(Self, PhysicalReg) -> Self
+pub fn Input::with_timing(Self, OperandTiming) -> Self
+
+pub struct Instruction {
+  // private fields
+}
+pub impl Eq for Instruction
+pub impl Show for Instruction
+pub impl @debug.Debug for Instruction
+
+pub struct InstructionMetadata {
+  source : @machv.SourceLocation?
+  trap : @machv.TrapReason?
+  safepoint : @machv.SafepointKind?
+  live_gc_roots : Array[Value]
+  symbol : SymbolReference?
+  stack_map : @machv.StackMapMetadata?
+}
+pub fn InstructionMetadata::empty() -> Self
+pub fn InstructionMetadata::new(source? : @machv.SourceLocation, trap? : @machv.TrapReason, safepoint? : @machv.SafepointKind, live_gc_roots? : Array[Value], symbol? : SymbolReference, stack_map? : @machv.StackMapMetadata) -> Self
+pub fn InstructionMetadata::safepoint(Array[Value]) -> Self
+
+pub(all) enum Location {
+  Register(PhysicalReg)
+  Stack(StackSlot)
+} derive(Eq)
+pub impl @debug.Debug for Location
+
+pub struct Operand {
+  value : Value
+  role : OperandRole
+  constraint : OperandConstraint
+  preference : PhysicalReg?
+  timing : OperandTiming
+  tie_id : Int
+} derive(Eq, @debug.Debug)
+
+pub(all) enum OperandConstraint {
+  Any
+  AnyLocation
+  Fixed(PhysicalReg)
+  TiedTo(Int)
+} derive(Eq, @debug.Debug)
+
+pub(all) enum OperandRole {
+  Use
+  Def
+} derive(Eq, @debug.Debug)
+
+pub(all) enum OperandTiming {
+  Early
+  Late
+} derive(Eq, @debug.Debug)
+
+pub struct Output {
+  ty : @machv.ValueType
+  constraint : OperandConstraint
+  timing : OperandTiming
+}
+pub fn Output::any(@machv.ValueType) -> Self
+pub fn Output::fixed(@machv.ValueType, PhysicalReg) -> Self
+pub fn Output::tied(@machv.ValueType, Int) -> Self
+pub fn Output::with_timing(Self, OperandTiming) -> Self
+
+pub struct ParallelMove {
+  ty : @machv.ValueType
+  from : Location
+  to : Location
+} derive(Eq, @debug.Debug)
+pub fn ParallelMove::new(@machv.ValueType, Location, Location) -> Self
+
+pub struct PhysicalReg {
+  id : Int
+  class : RegClass
+} derive(Eq)
+pub fn PhysicalReg::new(Int, RegClass) -> Self
+pub impl @debug.Debug for PhysicalReg
+
+pub(all) enum PointPlacement {
+  Before
+  After
+} derive(Eq, @debug.Debug)
+
+pub struct ProgramPoint {
+  // private fields
+}
+pub fn ProgramPoint::instruction(Self) -> Instruction
+pub fn ProgramPoint::placement(Self) -> PointPlacement
+pub impl Eq for ProgramPoint
+pub impl @debug.Debug for ProgramPoint
+
+pub(all) enum RegClass {
+  Int
+  FpVector
+} derive(Eq, Hash, @debug.Debug)
+
+pub struct StackArgumentTransfer {
+  ty : @machv.ValueType
+  source : Location
+  offset : Int
+  scratch : PhysicalReg?
+} derive(Eq, @debug.Debug)
+
+pub struct StackSlot {
+  // private fields
+}
+pub impl Eq for StackSlot
+pub impl @debug.Debug for StackSlot
+
+pub(all) enum SymbolReference {
+  Code(@machv.CodeSymbol)
+  External(@machv.ExternalSymbol)
+  Data(@machv.DataSymbol)
+} derive(Eq, @debug.Debug)
+
+pub struct Value {
+  // private fields
+}
+pub impl Eq for Value
+pub impl Show for Value
+pub impl @debug.Debug for Value
+
+// Type aliases
+pub using @machv {type SafepointKind}
+
+pub using @machv {type ValueType}
+
+// Traits
+

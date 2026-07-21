@@ -459,3 +459,50 @@ test "gc: begin/end frame API accepts nested scopes" {
 
   inspect(true, content="true")
 }
+
+///|
+fn test_gc_push_root_scope(ctx_ptr : Int64, roots : Array[Int64]) -> Bool {
+  let raw_roots = FixedArray::makei(roots.length(), fn(i) { roots[i] })
+  @jit_ffi.c_jit_gc_push_root_scope(ctx_ptr, raw_roots, roots.length()) == 1
+}
+
+///|
+fn test_gc_pop_root_scope(ctx_ptr : Int64) -> Unit {
+  @jit_ffi.c_jit_gc_pop_root_scope(ctx_ptr)
+}
+
+///|
+test "gc: copied caller-root scopes nest and pop" {
+  let heap = CHeap::CHeap(capacity=1024)
+  let jit_ctx = @jit_ffi.c_jit_alloc_context_managed(0)
+  let ctx_ptr = @jit_ffi.c_jit_context_ptr(jit_ctx)
+  gc_set_heap(ctx_ptr, heap)
+
+  let outer = heap.alloc_struct(0, [I32(1)])
+  let inner = heap.alloc_struct(0, [I32(2)])
+  let unrooted = heap.alloc_struct(0, [I32(3)])
+  guard test_gc_push_root_scope(ctx_ptr, [value_to_i64(StructRef(outer))]) else {
+    fail("expected outer caller-root scope")
+  }
+  guard test_gc_push_root_scope(ctx_ptr, [value_to_i64(StructRef(inner))]) else {
+    fail("expected inner caller-root scope")
+  }
+
+  inspect(gc_collect_for_alloc(ctx_ptr, []), content="1")
+  debug_inspect(
+    [heap.is_valid(outer), heap.is_valid(inner), heap.is_valid(unrooted)],
+    content="[true, true, false]",
+  )
+
+  test_gc_pop_root_scope(ctx_ptr)
+  inspect(gc_collect_for_alloc(ctx_ptr, []), content="1")
+  debug_inspect(
+    [heap.is_valid(outer), heap.is_valid(inner)],
+    content="[true, false]",
+  )
+
+  test_gc_pop_root_scope(ctx_ptr)
+  inspect(gc_collect_for_alloc(ctx_ptr, []), content="1")
+  inspect(heap.is_valid(outer), content="false")
+  gc_clear_heap(@jit_ffi.c_jit_context_ptr(jit_ctx))
+}

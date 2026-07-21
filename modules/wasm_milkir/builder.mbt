@@ -216,16 +216,21 @@ pub fn table_grow(
   init_value : @milkir.Value,
   is_table64? : Bool = false,
 ) -> @milkir.Value {
+  let runtime_delta = if delta.ty == I64 {
+    delta
+  } else {
+    builder.uextend(I64, delta)
+  }
   let call_result = call_runtime(
     builder,
     runtime_symbols.table_grow,
-    Some(I32),
-    [vmctx, builder.iconst_i32(table_idx), delta, init_value],
+    Some(I64),
+    [vmctx, builder.iconst_i32(table_idx), runtime_delta, init_value],
   ).unwrap()
   if is_table64 {
-    builder.sextend(I64, call_result)
-  } else {
     call_result
+  } else {
+    builder.ireduce(I32, call_result)
   }
 }
 

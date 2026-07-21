@@ -940,21 +940,263 @@ test "wasi jit: stdin callback supplies multiple reads" {
 }
 
 ///|
-test "wasi jit: path_open ignores unknown rights bits and still validates dirfd" {
+test "wasi jit: rights ABI rejects unknown bits" {
   let source =
     #|(module
     #|  (import "wasi_snapshot_preview1" "path_open"
     #|    (func $path_open (param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_fdstat_set_rights"
+    #|    (func $set_rights (param i32 i64 i64) (result i32)))
     #|  (memory (export "memory") 1)
-    #|  (func (export "test") (result i32)
+    #|  (func (export "path_open") (result i32)
     #|    (call $path_open
     #|      (i32.const 3) (i32.const 0) (i32.const 0) (i32.const 0)
-    #|      (i32.const 0) (i64.const -1) (i64.const 0) (i32.const 0)
-    #|      (i32.const 8))))
-  let result = compare_wasi(source, "test")
-  inspect(result.match_, content="true")
-  inspect(wasi_errno_from_result(result.interp_result), content="8")
-  inspect(wasi_errno_from_result(result.jit_result), content="8")
+    #|      (i32.const 0) (i64.const 1073741824) (i64.const 0) (i32.const 0)
+    #|      (i32.const 8)))
+    #|  (func (export "set_rights") (result i32)
+    #|    (call $set_rights
+    #|      (i32.const 3) (i64.const 1073741824) (i64.const 0))))
+  let path_result = compare_wasi_with_options(source, "path_open", preopens=[
+    ("/tmp", "/"),
+  ])
+  debug_inspect(
+    (
+      path_result.match_,
+      wasi_errno_from_result(path_result.interp_result),
+      wasi_errno_from_result(path_result.jit_result),
+    ),
+    content="(true, 28, 28)",
+  )
+  let set_result = compare_wasi_with_options(source, "set_rights", preopens=[
+    ("/tmp", "/"),
+  ])
+  debug_inspect(
+    (
+      set_result.match_,
+      wasi_errno_from_result(set_result.interp_result),
+      wasi_errno_from_result(set_result.jit_result),
+    ),
+    content="(true, 28, 28)",
+  )
+}
+
+///|
+test "wasi jit: descriptor operations honor rights attenuation" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "path_open"
+    #|    (func $path_open (param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_fdstat_set_rights"
+    #|    (func $set_rights (param i32 i64 i64) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_write"
+    #|    (func $fd_write (param i32 i32 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_read"
+    #|    (func $fd_read (param i32 i32 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_seek"
+    #|    (func $fd_seek (param i32 i64 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_filestat_get"
+    #|    (func $fd_filestat_get (param i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_fdstat_set_flags"
+    #|    (func $set_flags (param i32 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (data (i32.const 1024) "wasmoon_jit_rights_attenuation")
+    #|  (func $attenuated_fd (result i32)
+    #|    (drop (call $path_open
+    #|      (i32.const 3) (i32.const 0) (i32.const 1024) (i32.const 30)
+    #|      (i32.const 9) (i64.const 2097230) (i64.const 0) (i32.const 0)
+    #|      (i32.const 200)))
+    #|    (drop (call $set_rights
+    #|      (i32.load (i32.const 200)) (i64.const 0) (i64.const 0)))
+    #|    (i32.load (i32.const 200)))
+    #|  (func $write_case (param $rights i64) (param $attenuate i32) (result i32)
+    #|    (local $fd i32)
+    #|    (local $errno i32)
+    #|    (local.set $errno (call $path_open
+    #|      (i32.const 3) (i32.const 0) (i32.const 1024) (i32.const 30)
+    #|      (i32.const 9) (local.get $rights) (i64.const 0) (i32.const 0)
+    #|      (i32.const 200)))
+    #|    (if (i32.ne (local.get $errno) (i32.const 0))
+    #|      (then (return (local.get $errno))))
+    #|    (local.set $fd (i32.load (i32.const 200)))
+    #|    (if (local.get $attenuate)
+    #|      (then (drop (call $set_rights
+    #|        (local.get $fd) (i64.const 0) (i64.const 0)))))
+    #|    (i32.store (i32.const 0) (i32.const 300))
+    #|    (i32.store (i32.const 4) (i32.const 1))
+    #|    (call $fd_write
+    #|      (local.get $fd) (i32.const 0) (i32.const 1) (i32.const 400)))
+    #|  (func (export "write_allowed") (result i32)
+    #|    (call $write_case (i64.const 64) (i32.const 0)))
+    #|  (func (export "write_missing") (result i32)
+    #|    (call $write_case (i64.const 0) (i32.const 0)))
+    #|  (func (export "write_unrelated") (result i32)
+    #|    (call $write_case (i64.const 2) (i32.const 0)))
+    #|  (func (export "write_attenuated") (result i32)
+    #|    (call $write_case (i64.const 64) (i32.const 1)))
+    #|  (func (export "write") (result i32)
+    #|    (i32.store (i32.const 0) (i32.const 300))
+    #|    (i32.store (i32.const 4) (i32.const 1))
+    #|    (call $fd_write
+    #|      (call $attenuated_fd) (i32.const 0) (i32.const 1) (i32.const 400)))
+    #|  (func (export "read") (result i32)
+    #|    (i32.store (i32.const 0) (i32.const 300))
+    #|    (i32.store (i32.const 4) (i32.const 1))
+    #|    (call $fd_read
+    #|      (call $attenuated_fd) (i32.const 0) (i32.const 1) (i32.const 400)))
+    #|  (func (export "seek") (result i32)
+    #|    (call $fd_seek
+    #|      (call $attenuated_fd) (i64.const 0) (i32.const 0) (i32.const 408)))
+    #|  (func (export "filestat") (result i32)
+    #|    (call $fd_filestat_get (call $attenuated_fd) (i32.const 500)))
+    #|  (func (export "set_flags") (result i32)
+    #|    (call $set_flags (call $attenuated_fd) (i32.const 0))))
+  let results : Array[(Int, Int)] = []
+  for name in ["write", "read", "seek", "filestat", "set_flags"] {
+    let result = compare_wasi_with_options(source, name, preopens=[
+      ("/tmp", "/"),
+    ])
+    results.push(
+      (
+        wasi_errno_from_result(result.interp_result),
+        wasi_errno_from_result(result.jit_result),
+      ),
+    )
+  }
+  debug_inspect(
+    results,
+    content="[(76, 76), (76, 76), (76, 76), (76, 76), (76, 76)]",
+  )
+  let matrix : Array[(Int, Int)] = []
+  for
+    name in [
+      "write_allowed", "write_missing", "write_unrelated", "write_attenuated",
+    ] {
+    let result = compare_wasi_with_options(source, name, preopens=[
+      ("/tmp", "/"),
+    ])
+    matrix.push(
+      (
+        wasi_errno_from_result(result.interp_result),
+        wasi_errno_from_result(result.jit_result),
+      ),
+    )
+  }
+  debug_inspect(matrix, content="[(0, 0), (76, 76), (76, 76), (76, 76)]")
+}
+
+///|
+test "wasi jit: path_open checks truncate rights before host effects" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "path_open"
+    #|    (func $path_open (param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "path_unlink_file"
+    #|    (func $unlink (param i32 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_fdstat_set_rights"
+    #|    (func $set_rights (param i32 i64 i64) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_write"
+    #|    (func $fd_write (param i32 i32 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_read"
+    #|    (func $fd_read (param i32 i32 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_seek"
+    #|    (func $fd_seek (param i32 i64 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_close"
+    #|    (func $fd_close (param i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (data (i32.const 1024) "wasmoon_jit_truncate_rights")
+    #|  (func (export "test") (result i32)
+    #|    (local $fd i32)
+    #|    (local $errno i32)
+    #|    (local $result i32)
+    #|    (drop (call $unlink (i32.const 3) (i32.const 1024) (i32.const 27)))
+    #|    (local.set $errno (call $path_open
+    #|      (i32.const 3) (i32.const 0) (i32.const 1024) (i32.const 27)
+    #|      (i32.const 9) (i64.const 70) (i64.const 0) (i32.const 0)
+    #|      (i32.const 200)))
+    #|    (if (i32.ne (local.get $errno) (i32.const 0))
+    #|      (then (return (local.get $errno))))
+    #|    (local.set $fd (i32.load (i32.const 200)))
+    #|    (i32.store (i32.const 0) (i32.const 300))
+    #|    (i32.store (i32.const 4) (i32.const 1))
+    #|    (i32.store8 (i32.const 300) (i32.const 88))
+    #|    (drop (call $fd_write
+    #|      (local.get $fd) (i32.const 0) (i32.const 1) (i32.const 400)))
+    #|    (drop (call $set_rights
+    #|      (i32.const 3) (i64.const 12058112) (i64.const 150994943)))
+    #|    (local.set $errno (call $path_open
+    #|      (i32.const 3) (i32.const 0) (i32.const 1024) (i32.const 27)
+    #|      (i32.const 8) (i64.const 70) (i64.const 0) (i32.const 0)
+    #|      (i32.const 204)))
+    #|    (drop (call $fd_seek
+    #|      (local.get $fd) (i64.const 0) (i32.const 0) (i32.const 408)))
+    #|    (i32.store (i32.const 0) (i32.const 500))
+    #|    (i32.store (i32.const 4) (i32.const 1))
+    #|    (drop (call $fd_read
+    #|      (local.get $fd) (i32.const 0) (i32.const 1) (i32.const 404)))
+    #|    (local.set $result
+    #|      (i32.or
+    #|        (i32.shl (local.get $errno) (i32.const 8))
+    #|        (i32.load8_u (i32.const 500))))
+    #|    (drop (call $fd_close (local.get $fd)))
+    #|    (drop (call $unlink (i32.const 3) (i32.const 1024) (i32.const 27)))
+    #|    (local.get $result)))
+  let result = compare_wasi_with_options(source, "test", preopens=[
+    ("/tmp", "/"),
+  ])
+  debug_inspect(
+    (
+      wasi_i32_from_result(result.interp_result),
+      wasi_i32_from_result(result.jit_result),
+    ),
+    content="(19544, 19544)",
+  )
+}
+
+///|
+test "wasi jit: path rights differential matrix" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "path_create_directory"
+    #|    (func $mkdir (param i32 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "path_remove_directory"
+    #|    (func $rmdir (param i32 i32 i32) (result i32)))
+    #|  (import "wasi_snapshot_preview1" "fd_fdstat_set_rights"
+    #|    (func $set_rights (param i32 i64 i64) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (data (i32.const 1024) "wasmoon_jit_path_matrix")
+    #|  (func $run (param $attenuate i32) (param $rights i64) (result i32)
+    #|    (local $errno i32)
+    #|    (drop (call $rmdir (i32.const 3) (i32.const 1024) (i32.const 23)))
+    #|    (if (local.get $attenuate)
+    #|      (then (drop (call $set_rights
+    #|        (i32.const 3) (local.get $rights) (i64.const 150994943)))))
+    #|    (local.set $errno
+    #|      (call $mkdir (i32.const 3) (i32.const 1024) (i32.const 23)))
+    #|    (if (i32.eq (local.get $errno) (i32.const 0))
+    #|      (then (drop (call $rmdir
+    #|        (i32.const 3) (i32.const 1024) (i32.const 23)))))
+    #|    (local.get $errno))
+    #|  (func (export "allowed") (result i32)
+    #|    (call $run (i32.const 0) (i64.const 0)))
+    #|  (func (export "missing") (result i32)
+    #|    (call $run (i32.const 1) (i64.const 0)))
+    #|  (func (export "unrelated") (result i32)
+    #|    (call $run (i32.const 1) (i64.const 8192)))
+    #|  (func (export "attenuated") (result i32)
+    #|    (call $run (i32.const 1) (i64.const 12581888))))
+  let matrix : Array[(Int, Int)] = []
+  for name in ["allowed", "missing", "unrelated", "attenuated"] {
+    let result = compare_wasi_with_options(source, name, preopens=[
+      ("/tmp", "/"),
+    ])
+    matrix.push(
+      (
+        wasi_errno_from_result(result.interp_result),
+        wasi_errno_from_result(result.jit_result),
+      ),
+    )
+  }
+  debug_inspect(matrix, content="[(0, 0), (76, 76), (76, 76), (76, 76)]")
 }
 
 ///|
@@ -1735,7 +1977,7 @@ test "wasi jit: fd_readdir works on path_open directory" {
     #|    (drop (call $path_create_directory (i32.const 3) (i32.const 0) (i32.const 19)))
     #|    (drop (call $path_open
     #|      (i32.const 3) (i32.const 0) (i32.const 0) (i32.const 19)
-    #|      (i32.const 2) (i64.const 0) (i64.const 0) (i32.const 0)
+    #|      (i32.const 2) (i64.const 16384) (i64.const 0) (i32.const 0)
     #|      (i32.const 100)))
     #|    (call $fd_readdir
     #|      (i32.load (i32.const 100))
@@ -1768,7 +2010,7 @@ test "wasi jit: fd_readdir writes truncated dirent header" {
     #|    (drop (call $path_create_directory (i32.const 3) (i32.const 0) (i32.const 24)))
     #|    (drop (call $path_open
     #|      (i32.const 3) (i32.const 0) (i32.const 0) (i32.const 24)
-    #|      (i32.const 2) (i64.const 0) (i64.const 0) (i32.const 0)
+    #|      (i32.const 2) (i64.const 16384) (i64.const 0) (i32.const 0)
     #|      (i32.const 100)))
     #|    (local.set $fd (i32.load (i32.const 100)))
     #|    (drop (call $fd_readdir
@@ -2064,6 +2306,23 @@ test "wasi jit: clock_time_get returns 0" {
     #|  (memory (export "memory") 1)
     #|  (func (export "test") (result i32)
     #|    (call $clock_time_get (i32.const 0) (i64.const 1000000) (i32.const 0))))
+  inspect(compare_wasi(source, "test"), content="matched")
+}
+
+///|
+test "wasi jit: clock_time_get writes a plausible realtime timestamp" {
+  let source =
+    #|(module
+    #|  (import "wasi_snapshot_preview1" "clock_time_get"
+    #|    (func $clock_time_get (param i32 i64 i32) (result i32)))
+    #|  (memory (export "memory") 1)
+    #|  (func (export "test") (result i32)
+    #|    (drop (call $clock_time_get (i32.const 0) (i64.const 1000) (i32.const 0)))
+    #|    (i64.ge_u
+    #|      (i64.div_u
+    #|        (i64.load (i32.const 0))
+    #|        (i64.const 1000000000))
+    #|      (i64.const 1577836800))))
   inspect(compare_wasi(source, "test"), content="matched")
 }
 
@@ -2459,7 +2718,7 @@ test "wasi jit: fd_allocate regular file returns ENOTSUP (58)" {
     #|  (func (export "test") (result i32)
     #|    (drop (call $path_open
     #|      (i32.const 3) (i32.const 0) (i32.const 0) (i32.const 21)
-    #|      (i32.const 9) (i64.const 2) (i64.const 0) (i32.const 0)
+    #|      (i32.const 9) (i64.const 258) (i64.const 0) (i32.const 0)
     #|      (i32.const 100)))
     #|    (call $fd_allocate (i32.load (i32.const 100)) (i64.const 0) (i64.const 32))))
   let result = compare_wasi_with_options(source, "test", preopens=[
@@ -2631,7 +2890,7 @@ test "wasi jit: fd_fdstat_set_flags rejects DSYNC with EINVAL (28)" {
     #|  (func (export "test") (result i32)
     #|    (drop (call $path_open
     #|      (i32.const 3) (i32.const 0) (i32.const 0) (i32.const 20)
-    #|      (i32.const 9) (i64.const 0) (i64.const 0) (i32.const 0)
+    #|      (i32.const 9) (i64.const 8) (i64.const 0) (i32.const 0)
     #|      (i32.const 100)))
     #|    (call $fd_fdstat_set_flags (i32.load (i32.const 100)) (i32.const 2))))
   let result = compare_wasi_with_options(source, "test", preopens=[

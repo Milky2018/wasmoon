@@ -4,8 +4,6 @@ package "Milky2018/wasmoon_jit/jit_ffi"
 // Values
 pub fn c_dwarf_add_function(Int64, Bytes, Int64, Int, Int) -> Unit
 
-pub fn c_dwarf_capture_backtrace(Int64, Int64, FixedArray[Int64], Int) -> Int
-
 pub fn c_dwarf_capture_backtrace_ex(Int64, Int64, Int64, FixedArray[Int64], Int) -> Int
 
 pub fn c_dwarf_create() -> Int64
@@ -194,6 +192,10 @@ pub fn c_jit_gc_end_frame(Int64) -> Unit
 
 pub fn c_jit_gc_get_heap(Int64) -> Int64
 
+pub fn c_jit_gc_pop_root_scope(Int64) -> Unit
+
+pub fn c_jit_gc_push_root_scope(Int64, FixedArray[Int64], Int) -> Int
+
 pub fn c_jit_gc_set_canonical_indices(Int64, FixedArray[Int], Int) -> Unit
 
 pub fn c_jit_gc_set_func_safepoints(Int64, Int, Bytes, Int, FixedArray[Int], Int) -> Int
@@ -320,6 +322,10 @@ pub fn c_jit_get_gc_array_new_ptr() -> Int64
 
 pub fn c_jit_get_gc_array_set_ptr() -> Int64
 
+pub fn c_jit_get_gc_pop_root_scope_ptr() -> Int64
+
+pub fn c_jit_get_gc_push_root_scope_ptr() -> Int64
+
 pub fn c_jit_get_gc_ref_cast_ptr() -> Int64
 
 pub fn c_jit_get_gc_ref_test_ptr() -> Int64
@@ -362,11 +368,7 @@ pub fn c_jit_get_i64_udiv_ptr() -> Int64
 
 pub fn c_jit_get_i64_urem_ptr() -> Int64
 
-pub fn c_jit_get_memory_copy_mem0_ptr() -> Int64
-
 pub fn c_jit_get_memory_copy_ptr() -> Int64
-
-pub fn c_jit_get_memory_fill_mem0_ptr() -> Int64
 
 pub fn c_jit_get_memory_fill_ptr() -> Int64
 
@@ -479,6 +481,8 @@ pub fn c_jit_memory_init_bytes(Int64, Int64, Bytes, Int) -> Int
 pub fn c_jit_memory_read(Int64, Int64, FixedArray[Byte], Int) -> Int
 
 pub fn c_jit_read_i64(Int64) -> Int64
+
+pub fn c_jit_read_u32(Int64) -> UInt
 
 pub fn c_jit_set_cancellation_callback(Int64, FuncRef[(() -> Bool) -> Int], () -> Bool) -> Unit
 

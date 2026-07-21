@@ -80,7 +80,7 @@ struct JITModule {
   mut last_trap_report : @wasmoon_jit.TrapReport?
   // Keep generated import trampolines alive (GC-managed executable memory).
   import_exec_codes : Array[@wasmoon_jit.ExecCode]
-  // Pseudo direct-call function indices -> near stub entry points.
+  // Negative runtime fixup indices -> runtime helper entry points.
   direct_call_targets : Map[Int, Int64]
   mut wasi_stdout_callback : ((Bytes) -> Unit)?
   mut wasi_stderr_callback : ((Bytes) -> Unit)?
@@ -102,36 +102,6 @@ pub fn JITModule::JITModule() -> JITModule {
     wasi_stdout_callback: None,
     wasi_stderr_callback: None,
     cancellation_safepoints: false,
-  }
-}
-
-///|
-fn install_direct_call_stubs(
-  jit_module : JITModule,
-  target : @cwasm.TargetArch,
-) -> Unit raise JITModuleLoadError {
-  let stubs = @wasmoon_jit.install_direct_call_stubs_for_target(target) catch {
-    UnsupportedDirectCallStubTarget(pseudo_idx~, code_size~) =>
-      raise ImportTrampolineAllocationFailed(
-        import_idx=-1,
-        module_name="__jit_direct_call",
-        func_name="idx_\{pseudo_idx}",
-        code_size~,
-      )
-    DirectCallStubAllocationFailed(pseudo_idx~, code_size~) =>
-      raise ImportTrampolineAllocationFailed(
-        import_idx=-1,
-        module_name="__jit_direct_call",
-        func_name="idx_\{pseudo_idx}",
-        code_size~,
-      )
-  }
-  for exec_code in stubs.exec_codes {
-    jit_module.import_exec_codes.push(exec_code)
-  }
-  for entry in stubs.targets.iter() {
-    let (pseudo_idx, ptr) = entry
-    jit_module.direct_call_targets.set(pseudo_idx, ptr)
   }
 }
 
@@ -234,9 +204,6 @@ pub fn JITModule::load_with_imports(
       // gc_set_func_safepoints() installs per-function tables during this phase.
       jit_module.context_ptr = context_ptr
 
-      // Install near stubs used by pseudo direct-call fixups.
-      install_direct_call_stubs(jit_module, precompiled.target)
-
       // Step 1: Populate import trampolines into function table
       for i, imp in precompiled.imports {
         // First check external imports, then fall back to built-in trampolines.
@@ -252,52 +219,50 @@ pub fn JITModule::load_with_imports(
               // This allows callers to pass host funcs through `external_imports` without
               // exposing raw function pointers.
               let host_func_addr = (-(ptr + 1L)).to_int()
-              let isa = @wasmoon_jit.target_arch_to_isa(precompiled.target)
               let (param_types, result_types) = if i < func_signatures.length() {
                 func_signatures[i]
               } else {
                 ([], [])
               }
-              let mc = @wasmoon_jit.emit_hostcall_import_trampoline(
-                param_types,
-                result_types,
-                host_func_addr,
-                @wasmoon_jit.runtime_hostcall_symbol(),
-                @wasmoon_jit.wasm_calling_convention(isa~),
-                isa~,
-              ) catch {
-                err =>
+              let (code_ints, func_addr_fixups) = match precompiled.target {
+                AArch64 | X86_64 => {
+                  let trampoline = @wasmoon_jit.build_hostcall_import_trampoline_for_target(
+                    param_types,
+                    result_types,
+                    host_func_addr,
+                    precompiled.target,
+                  ) catch {
+                    err =>
+                      raise ImportTrampolineCompilationFailed(
+                        import_idx=i,
+                        module_name=imp.module_name,
+                        func_name=imp.func_name,
+                        message=err.to_string(),
+                      )
+                  }
+                  (trampoline.code, trampoline.func_addr_fixups)
+                }
+                Unknown =>
                   raise ImportTrampolineCompilationFailed(
                     import_idx=i,
                     module_name=imp.module_name,
                     func_name=imp.func_name,
-                    message=err.to_string(),
+                    message="hostcall import trampoline needs a concrete target architecture",
                   )
               }
-              let code_ints = mc.get_bytes()
               let exec = @wasmoon_jit.ExecCode::try_alloc(code_ints)
               match exec {
                 Some(ec) => {
-                  // AArch64 hostcall trampolines may carry runtime func-address
-                  // fixups (LoadJITFuncPtr). Patch them before first execution.
+                  // Hostcall trampolines may carry runtime function-address
+                  // fixups. Patch them before first execution.
                   let func_table_ptr = ctx.get_func_table_ptr()
-                  for fixup in mc.get_func_addr_fixups() {
-                    let func_idx = match
-                      @wasmoon_jit.machv_reloc_target_to_cwasm_func_idx(
-                        fixup.target,
-                      ) {
-                      Some(idx) => idx
-                      None =>
-                        abort(
-                          "cannot patch hostcall trampoline target: \{fixup.target}",
-                        )
-                    }
+                  for fixup in func_addr_fixups {
                     @wasmoon_jit.patch_func_addr_fixup_raw_for_target(
                       precompiled.target,
                       ec.ptr(),
                       fixup.offset,
                       fixup.reg,
-                      func_idx,
+                      fixup.func_idx,
                       func_table_ptr,
                     )
                   }

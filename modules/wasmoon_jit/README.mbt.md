@@ -57,7 +57,7 @@ segments, and target metadata in a portable artifact format.
 ///|
 test "serialize and restore a precompiled module" {
   let mod_ = @cwasm.PrecompiledModule::PrecompiledModule(AArch64)
-  mod_.add_type([TYPE_I32], [TYPE_I32])
+  mod_.add_type([0], [0])
   mod_.add_import("env", "host_inc", 1, 1)
   let entry = @cwasm.CompiledEntry::CompiledEntry(0, "inc", [0xc3], 0, 0, 1, 1)
   mod_.add_function(entry)
@@ -71,7 +71,8 @@ test "serialize and restore a precompiled module" {
 
 ## Compiler pipeline
 
-JIT planning composes `milkir`, `milkir_machv`, the selected target package,
-`machv_regalloc`, and `machv_emit`. The resulting plan adds the VMContext,
-runtime symbols, trampolines, and native glue needed to install and invoke the
-code in Wasmoon.
+JIT planning composes `milkir`, `milkir_machv`, `machv_regalloc`, and the
+selected target package. Each target owns instruction selection, allocation
+policy, frame layout, and emission. The resulting code object is combined with
+VMContext metadata, runtime symbols, trampolines, and native glue before it is
+installed and invoked by Wasmoon.

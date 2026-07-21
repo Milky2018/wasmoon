@@ -15,9 +15,9 @@ test "call_indirect: iterative call with varying parameters" {
     #|    (local.get 1) i32.add
     #|    (local.get 2) i32.add
     #|    (local.get 3) i32.add
-    #|    (local.get 4) i32.wrap_i64
+    #|    (local.get 4) i32.wrap_i64 i32.add
     #|    (local.get 5) i32.add
-    #|    (local.get 6) i32.wrap_i64
+    #|    (local.get 6) i32.wrap_i64 i32.add
     #|    (local.get 7) i32.add
     #|    (local.get 8) i32.add
     #|    (local.get 9) i32.add
@@ -56,7 +56,7 @@ test "call_indirect: iterative call with varying parameters" {
     #|      ;; Check if result matches expected
     #|      (local.get $result)
     #|      (local.get $i)
-    #|      (i32.const 46)             ;; 1+2+3+5+6+7+8+9+10 = 51, + i should give i+51
+    #|      (i32.const 51)             ;; 1+2+3+5+6+7+8+9+10
     #|      i32.add
     #|      (i32.const 255) i32.and
     #|      i32.ne
@@ -90,10 +90,10 @@ test "call_indirect: type 11 (9 params, 3 stack args)" {
     #|    (local.get 0)
     #|    (local.get 1) i32.add
     #|    (local.get 2) i32.add
-    #|    (local.get 3) i32.wrap_i64
+    #|    (local.get 3) i32.wrap_i64 i32.add
     #|    (local.get 4) i32.add
     #|    (local.get 5) i32.add
-    #|    (local.get 6) i32.wrap_i64
+    #|    (local.get 6) i32.wrap_i64 i32.add
     #|    (local.get 7) i32.add
     #|    (local.get 8) i32.add
     #|    (i32.const 255) i32.and

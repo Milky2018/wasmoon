@@ -103,14 +103,7 @@ void wasmoon_jit_free_memory_desc(int64_t mem_ptr);
 uint8_t *alloc_guarded_memory_external(wasmoon_memory_t *memory, size_t initial_size, size_t max_size);
 int is_memory_guard_page_access(jit_context_t *ctx, void *addr);
 
-// v3 ctx-passing (re-entrant) variants (internal implementations)
-// These operate on memory 0 (fast path, backward compatible)
-int32_t memory_grow_ctx_internal(jit_context_t *ctx, int64_t delta, int32_t max_pages);
-int32_t memory_size_ctx_internal(jit_context_t *ctx);
-void memory_fill_ctx_internal(jit_context_t *ctx, int32_t dst, int32_t val, int32_t size);
-void memory_copy_ctx_internal(jit_context_t *ctx, int32_t dst, int32_t src, int32_t size);
-
-// v4 multi-memory variants (with memidx parameter)
+// Multi-memory variants (with memidx parameter)
 int32_t memory_grow_indexed_internal(jit_context_t *ctx, int32_t memidx, int64_t delta, int32_t max_pages);
 int32_t memory_size_indexed_internal(jit_context_t *ctx, int32_t memidx);
 void memory_fill_indexed_internal(jit_context_t *ctx, int32_t memidx, int32_t dst, int32_t val, int32_t size);
@@ -123,13 +116,24 @@ int64_t memory_len_desc_internal(wasmoon_memory_t *mem);
 uint8_t *memory_base_desc_internal(wasmoon_memory_t *mem);
 
 // Table operations
-int32_t table_grow_ctx_internal(jit_context_t *ctx, int32_t table_idx, int64_t delta, int64_t init_value);
+int64_t table_grow_ctx_internal(jit_context_t *ctx, int32_t table_idx, int64_t delta, int64_t init_value);
 
 // GC heap management
 void ctx_set_gc_heap_internal(jit_context_t *ctx, GcHeap *heap);
 void ctx_update_gc_heap_ptr_internal(jit_context_t *ctx);
 void ctx_gc_begin_frame_internal(jit_context_t *ctx, uintptr_t frame_id);
 void ctx_gc_end_frame_internal(jit_context_t *ctx);
+int32_t ctx_gc_push_root_scope_internal(
+    jit_context_t *ctx,
+    const int64_t *roots,
+    int32_t root_count
+);
+void ctx_gc_pop_root_scope_internal(jit_context_t *ctx);
+void ctx_gc_restore_root_scopes_internal(
+    jit_context_t *ctx,
+    wasmoon_gc_root_scope_t *marker
+);
+void ctx_gc_clear_root_scopes_internal(jit_context_t *ctx);
 void ctx_gc_set_safepoint_table_internal(
     jit_context_t *ctx,
     const wasmoon_gc_safepoint_table_t *table
@@ -211,6 +215,7 @@ typedef struct exception_handler {
     sigjmp_buf jmp_buf;               // longjmp target
     struct exception_handler *prev;    // Outer handler (linked list)
     int32_t handler_id;                // Unique ID for this handler
+    wasmoon_gc_root_scope_t *gc_root_scope_marker;
 } exception_handler_t;
 
 // Exception handling functions

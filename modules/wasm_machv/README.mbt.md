@@ -1,0 +1,14 @@
+# Wasm MachV Lowering
+
+`Milky2018/wasm_machv` validates WebAssembly-specific MilkIR extensions and
+lowers them into target-neutral MachV. It does not select AArch64 or AMD64
+instructions, apply a native ABI, or depend on the Wasmoon runtime.
+
+The embedding environment supplies opaque internal function identities and,
+as later operation families are migrated, the semantic runtime capabilities
+required by WebAssembly memory, tables, GC, and exceptions.
+
+`lower_function` also requires a short-lived `WasmValidationContext` supplied
+by the Wasm frontend adapter. It resolves linked function signatures and
+module-local type, table, aggregate, tag, memory, and segment contracts before
+instruction selection. The context is not stored in MilkIR or MachV.

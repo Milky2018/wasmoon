@@ -102,7 +102,7 @@ Use:
 python3 scripts/run_perf_benchmarks.py
 ```
 
-This runner is designed for CI/nightly use:
+This runner is a manual diagnostic tool:
 
 - Repeats each workload (`--iterations`, default `5`) with warmup runs.
 - Collects medians for:
@@ -125,8 +125,8 @@ python3 scripts/run_perf_benchmarks.py \
   --baseline docs/perf/baselines/linux-amd64/perf-summary.json
 ```
 
-The workflow `.github/workflows/perf.yml` uses this runner and uploads
-`target/perf-benchmarks/latest` as an artifact.
+The repository does not use historical backend comparisons as CI acceptance
+gates. Baseline comparison remains available for local investigations.
 
 ## Artifact Layout
 
@@ -141,12 +141,10 @@ Aggregate files:
 - `summary.json`
 - `summary.md`
 
-## CI Integration Guidance
+## Automation Guidance
 
 - Keep compile metrics opt-in in normal CI to avoid noise.
-- Use a dedicated perf workflow/job for baseline refresh and regression checks.
-- Parse benchmark `summary.json` from `run_perf_benchmarks.py` for threshold
-  gating and trend checks.
+- Treat `summary.json` as diagnostic evidence rather than a merge gate.
 
 ## Notes
 

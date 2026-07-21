@@ -14,9 +14,9 @@ test "skeleton: udiv(y, select(cond, 4, 8)) = ushr(y, select(cond, 2, 3))" {
   let k3 = eg.add_const(3L)
   let shift_amount = eg.add({ op: Select, children: [cond, k2, k3] })
   let ushr = eg.add({ op: Ushr, children: [y, shift_amount] })
-  eg.saturate_indexed(@egraph.standard_rules_indexed(), 10) |> ignore
+  eg.saturate_indexed(@egraph.get_global_ruleset(), 10) |> ignore
   inspect(eg.equiv(udiv, ushr), content="false")
-  eg.saturate(@egraph.legality_sensitive_rules(), 10) |> ignore
+  eg.saturate_indexed(@egraph.legality_sensitive_rules(), 10) |> ignore
   inspect(eg.equiv(udiv, ushr), content="true")
 }
 
@@ -34,9 +34,9 @@ test "skeleton: udiv(y, select(cond, 2, 16)) = ushr(y, select(cond, 1, 4))" {
   let k4 = eg.add_const(4L)
   let shift_amount = eg.add({ op: Select, children: [cond, k1, k4] })
   let ushr = eg.add({ op: Ushr, children: [y, shift_amount] })
-  eg.saturate_indexed(@egraph.standard_rules_indexed(), 10) |> ignore
+  eg.saturate_indexed(@egraph.get_global_ruleset(), 10) |> ignore
   inspect(eg.equiv(udiv, ushr), content="false")
-  eg.saturate(@egraph.legality_sensitive_rules(), 10) |> ignore
+  eg.saturate_indexed(@egraph.legality_sensitive_rules(), 10) |> ignore
   inspect(eg.equiv(udiv, ushr), content="true")
 }
 
@@ -54,8 +54,8 @@ test "skeleton: udiv(y, select(cond, 1, 32)) = ushr(y, select(cond, 0, 5))" {
   let k5 = eg.add_const(5L)
   let shift_amount = eg.add({ op: Select, children: [cond, k0, k5] })
   let ushr = eg.add({ op: Ushr, children: [y, shift_amount] })
-  eg.saturate_indexed(@egraph.standard_rules_indexed(), 10) |> ignore
+  eg.saturate_indexed(@egraph.get_global_ruleset(), 10) |> ignore
   inspect(eg.equiv(udiv, ushr), content="false")
-  eg.saturate(@egraph.legality_sensitive_rules(), 10) |> ignore
+  eg.saturate_indexed(@egraph.legality_sensitive_rules(), 10) |> ignore
   inspect(eg.equiv(udiv, ushr), content="true")
 }

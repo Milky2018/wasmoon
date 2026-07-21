@@ -297,7 +297,7 @@ pub extern "c" fn c_jit_free_memory(mem_ptr : Int64) -> Unit = "wasmoon_jit_free
 
 ///|
 /// Get table_grow function pointer for JIT
-/// Signature: table_grow(ctx: *jit_context_t, table_idx: i32, delta: i64, init_value: i64) -> i32
+/// Signature: table_grow(ctx: *jit_context_t, table_idx: i32, delta: i64, init_value: i64) -> i64
 pub extern "c" fn c_jit_get_table_grow_ptr() -> Int64 = "wasmoon_jit_get_table_grow_ptr"
 
 // ============ Multi-Memory Operations (with memidx) ============
@@ -318,19 +318,9 @@ pub extern "c" fn c_jit_get_memory_size_ptr() -> Int64 = "wasmoon_jit_get_memory
 pub extern "c" fn c_jit_get_memory_fill_ptr() -> Int64 = "wasmoon_jit_get_memory_fill_ptr"
 
 ///|
-/// Get memory_fill function pointer specialized for memory 0
-/// Signature: memory_fill_mem0(ctx: *jit_context_t, dst: i32, val: i32, size: i32) -> void
-pub extern "c" fn c_jit_get_memory_fill_mem0_ptr() -> Int64 = "wasmoon_jit_get_memory_fill_mem0_ptr"
-
-///|
 /// Get memory_copy function pointer for JIT (multi-memory)
 /// Signature: memory_copy(ctx: *jit_context_t, dst_memidx: i32, src_memidx: i32, dst: i32, src: i32, size: i32) -> void
 pub extern "c" fn c_jit_get_memory_copy_ptr() -> Int64 = "wasmoon_jit_get_memory_copy_ptr"
-
-///|
-/// Get memory_copy function pointer specialized for memory 0
-/// Signature: memory_copy_mem0(ctx: *jit_context_t, dst: i32, src: i32, size: i32) -> void
-pub extern "c" fn c_jit_get_memory_copy_mem0_ptr() -> Int64 = "wasmoon_jit_get_memory_copy_mem0_ptr"
 
 // ============ Integer div/rem helpers (x86_64 bootstrap) ============
 
@@ -972,6 +962,10 @@ pub extern "c" fn c_jit_write_i64(addr : Int64, value : Int64) -> Unit = "wasmoo
 pub extern "c" fn c_jit_write_u32(addr : Int64, value : Int) -> Unit = "wasmoon_jit_write_u32"
 
 ///|
+/// Read a u32 value from a memory address.
+pub extern "c" fn c_jit_read_u32(addr : Int64) -> UInt = "wasmoon_jit_read_u32"
+
+///|
 /// Read an int64 value from a memory address
 pub extern "c" fn c_jit_read_i64(addr : Int64) -> Int64 = "wasmoon_jit_read_i64"
 
@@ -1075,6 +1069,18 @@ pub extern "c" fn c_jit_get_gc_alloc_array_slow_ptr() -> Int64 = "wasmoon_jit_ge
 pub extern "c" fn c_jit_get_gc_alloc_array_from_values_slow_ptr() -> Int64 = "wasmoon_jit_get_gc_alloc_array_from_values_slow_ptr"
 
 ///|
+/// Get the copied caller-root scope push helper.
+/// Signature: void push(jit_context_t *ctx, int64_t *roots, int32_t root_count)
+/// Traps if the runtime cannot copy the roots.
+pub extern "c" fn c_jit_get_gc_push_root_scope_ptr() -> Int64 = "wasmoon_jit_get_gc_push_root_scope_ptr"
+
+///|
+/// Get the copied caller-root scope pop helper.
+/// Signature: void pop(jit_context_t *ctx)
+/// Traps if no matching scope exists.
+pub extern "c" fn c_jit_get_gc_pop_root_scope_ptr() -> Int64 = "wasmoon_jit_get_gc_pop_root_scope_ptr"
+
+///|
 /// Set type cache for GC operations
 /// types_data: array of [super_idx, kind] pairs per type
 #borrow(types_data)
@@ -1136,6 +1142,19 @@ pub extern "c" fn c_jit_gc_begin_frame(
 ///|
 /// Pop a JIT frame node for GC bookkeeping.
 pub extern "c" fn c_jit_gc_end_frame(ctx_ptr : Int64) -> Unit = "wasmoon_jit_gc_end_frame"
+
+///|
+/// Push a heap-owned copy of caller roots for a nested JIT/runtime call.
+#borrow(roots)
+pub extern "c" fn c_jit_gc_push_root_scope(
+  ctx_ptr : Int64,
+  roots : FixedArray[Int64],
+  root_count : Int,
+) -> Int = "wasmoon_jit_gc_push_root_scope"
+
+///|
+/// Pop the most recent copied caller-root scope.
+pub extern "c" fn c_jit_gc_pop_root_scope(ctx_ptr : Int64) -> Unit = "wasmoon_jit_gc_pop_root_scope"
 
 ///|
 /// Trigger GC for allocation retry with explicit roots.
@@ -1586,18 +1605,6 @@ pub extern "c" fn c_dwarf_lookup_address(
   func_idx_out : FixedArray[Int],
   offset_out : FixedArray[Int64],
 ) -> Int = "wasmoon_dwarf_lookup_address"
-
-///|
-/// Capture a backtrace starting from the given PC and FP
-/// Returns the number of frames captured
-/// frames_out contains alternating (pc, fp) pairs
-#borrow(frames_out)
-pub extern "c" fn c_dwarf_capture_backtrace(
-  initial_pc : Int64,
-  initial_fp : Int64,
-  frames_out : FixedArray[Int64],
-  max_frames : Int,
-) -> Int = "wasmoon_dwarf_capture_backtrace"
 
 ///|
 /// Capture a backtrace with LR fallback (for when FP is 0)

@@ -2,21 +2,18 @@
 package "Milky2018/wasmoon"
 
 import {
-  "Milky2018/aarch64_target",
   "Milky2018/machv",
-  "Milky2018/machv_emit",
   "Milky2018/milkir",
   "Milky2018/wasm_core/types",
   "Milky2018/wasmoon/wasm_frontend/embedding",
   "Milky2018/wasmoon_jit",
-  "Milky2018/x64_target",
   "moonbitlang/core/debug",
 }
 
 // Values
 pub fn compiler_infrastructure_assembly() -> CompilerInfrastructureAssembly raise WasmCompilerPipelineError
 
-pub fn plan_wasm_function_with_compiler_infra(@embedding.EmbeddingEnvironment, @types.Module, Int, @machv_emit.EmitTarget, opt_level? : Int) -> @wasmoon_jit.JitIntegrationPlan raise WasmCompilerPipelineError
+pub fn plan_wasm_function_with_compiler_infra(@embedding.EmbeddingEnvironment, @types.Module, Int, @wasmoon_jit.NativeTarget, opt_level? : Int) -> @wasmoon_jit.JitIntegrationPlan raise WasmCompilerPipelineError
 
 pub fn runtime_assembly() -> RuntimeAssembly
 
@@ -32,10 +29,7 @@ pub impl Show for WasmCompilerPipelineError
 pub(all) struct CompilerInfrastructureAssembly {
   signature : @milkir.Signature
   machv_function : @machv.Function
-  allocated_function : @machv.Function
-  code_object : @machv_emit.MachineCode
-  x64_abi : @x64_target.AbiPolicy
-  aarch64_abi : @aarch64_target.AbiPolicy
+  code_object : @wasmoon_jit.JitCodeObject
   jit_glue : Array[@wasmoon_jit.NativeGlueBinding]
 }
 

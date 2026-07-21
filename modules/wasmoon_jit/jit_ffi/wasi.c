@@ -66,8 +66,8 @@
 #define WASI_FILETYPE_SOCKET_STREAM    6
 #define WASI_FILETYPE_SYMBOLIC_LINK    7
 
-// WASI rights: valid bits are 0-28
-#define WASI_RIGHTS_ALL_VALID ((uint64_t)((1ULL << 29) - 1))
+// WASI rights: valid bits are 0-29
+#define WASI_RIGHTS_ALL_VALID ((uint64_t)((1ULL << 30) - 1))
 #define WASI_RIGHT_FD_DATASYNC          (1ULL << 0)
 #define WASI_RIGHT_FD_READ              (1ULL << 1)
 #define WASI_RIGHT_FD_SEEK              (1ULL << 2)
@@ -97,6 +97,7 @@
 #define WASI_RIGHT_PATH_UNLINK_FILE      (1ULL << 26)
 #define WASI_RIGHT_POLL_FD_READWRITE     (1ULL << 27)
 #define WASI_RIGHT_SOCK_SHUTDOWN         (1ULL << 28)
+#define WASI_RIGHT_SOCK_ACCEPT           (1ULL << 29)
 
 // ============ Helper Functions ============
 
@@ -115,6 +116,21 @@ static int get_native_fd(jit_context_t *ctx, int wasi_fd) {
         return -3;
     }
     return ctx->fd_table[wasi_fd];
+}
+
+static int require_base_rights(
+    jit_context_t *ctx,
+    int wasi_fd,
+    uint64_t required
+) {
+    if (!ctx || wasi_fd < 0 || !ctx->fd_table ||
+        wasi_fd >= ctx->fd_table_size || ctx->fd_table[wasi_fd] < 0 ||
+        !ctx->fd_rights_base) {
+        return WASI_EBADF;
+    }
+    return (ctx->fd_rights_base[wasi_fd] & required) == required
+        ? WASI_ESUCCESS
+        : WASI_ENOTCAPABLE;
 }
 
 static int stdio_slot_for_fd(jit_context_t *ctx, int wasi_fd) {
@@ -181,6 +197,38 @@ static const char* get_open_dir_path(jit_context_t *ctx, int wasi_fd) {
     return ctx->fd_host_paths[wasi_fd];
 }
 
+static int require_directory_base_rights(
+    jit_context_t *ctx,
+    int wasi_fd,
+    uint64_t required
+) {
+    if (!ctx || is_stdio_fd(ctx, wasi_fd)) return WASI_EBADF;
+    if (!is_preopen_fd(ctx, wasi_fd) && !get_open_dir_path(ctx, wasi_fd)) {
+        return WASI_EBADF;
+    }
+    return require_base_rights(ctx, wasi_fd, required);
+}
+
+static int require_socket_base_rights(
+    jit_context_t *ctx,
+    int wasi_fd,
+    uint64_t required
+) {
+    if (!ctx) return WASI_EBADF;
+    int native_fd = get_native_fd(ctx, wasi_fd);
+    if (native_fd < 0) return WASI_EBADF;
+#ifdef _WIN32
+    (void)native_fd;
+    return WASI_ENOTSOCK;
+#else
+    struct stat st;
+    if (native_fd < 0 || fstat(native_fd, &st) < 0 || !S_ISSOCK(st.st_mode)) {
+        return WASI_ENOTSOCK;
+    }
+    return require_base_rights(ctx, wasi_fd, required);
+#endif
+}
+
 static int is_valid_wasi_descriptor(jit_context_t *ctx, int wasi_fd) {
     if (wasi_fd < 0) return 0;
     return get_native_fd(ctx, wasi_fd) >= 0;
@@ -194,17 +242,29 @@ static uint8_t stdio_filetype_native(int native_fd) {
 #endif
 }
 
-static int get_non_stdio_native_fd(jit_context_t *ctx, int wasi_fd, int *native_fd_out) {
+static int get_non_stdio_native_fd_with_rights(
+    jit_context_t *ctx,
+    int wasi_fd,
+    uint64_t required,
+    int *native_fd_out
+) {
     if (!ctx || !native_fd_out) return WASI_EBADF;
     if (is_stdio_fd(ctx, wasi_fd)) return WASI_EBADF;
     int native_fd = get_native_fd(ctx, wasi_fd);
     if (native_fd < 0) return WASI_EBADF;
     if (!ctx->fd_table || wasi_fd >= ctx->fd_table_size) return WASI_EBADF;
+    int rights_err = require_base_rights(ctx, wasi_fd, required);
+    if (rights_err != WASI_ESUCCESS) return rights_err;
     *native_fd_out = native_fd;
     return WASI_ESUCCESS;
 }
 
-static int get_regular_file_native_fd(jit_context_t *ctx, int wasi_fd, int *native_fd_out) {
+static int get_regular_file_native_fd_with_rights(
+    jit_context_t *ctx,
+    int wasi_fd,
+    uint64_t required,
+    int *native_fd_out
+) {
     if (!ctx || !native_fd_out) return WASI_EBADF;
     if (is_stdio_fd(ctx, wasi_fd)) return WASI_EBADF;
     if (is_preopen_fd(ctx, wasi_fd) || get_open_dir_path(ctx, wasi_fd)) return WASI_EBADF;
@@ -215,6 +275,8 @@ static int get_regular_file_native_fd(jit_context_t *ctx, int wasi_fd, int *nati
     if (fstat(native_fd, &st) < 0) return WASI_EBADF;
     if (!S_ISREG(st.st_mode)) return WASI_EBADF;
 #endif
+    int rights_err = require_base_rights(ctx, wasi_fd, required);
+    if (rights_err != WASI_ESUCCESS) return rights_err;
     *native_fd_out = native_fd;
     return WASI_ESUCCESS;
 }
@@ -252,15 +314,16 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_poll_resolve_fd(
     if (is_preopen_fd(ctx, wasi_fd) || get_open_dir_path(ctx, wasi_fd)) {
         return -1;
     }
-    if (!ctx->fd_rights_base || wasi_fd >= ctx->fd_table_size) return -1;
     uint64_t direction_right = event_type == 1
         ? WASI_RIGHT_FD_READ
         : WASI_RIGHT_FD_WRITE;
-    uint64_t rights = ctx->fd_rights_base[wasi_fd];
-    if ((rights & WASI_RIGHT_POLL_FD_READWRITE) == 0 ||
-        (rights & direction_right) == 0) {
-        return -3;
-    }
+    int rights_err = require_base_rights(
+        ctx,
+        wasi_fd,
+        WASI_RIGHT_POLL_FD_READWRITE | direction_right
+    );
+    if (rights_err == WASI_ENOTCAPABLE) return -3;
+    if (rights_err != WASI_ESUCCESS) return -1;
     return get_native_fd(ctx, wasi_fd);
 }
 
@@ -1141,6 +1204,7 @@ static uint64_t preopen_directory_base_rights(void) {
         WASI_RIGHT_PATH_REMOVE_DIRECTORY |
         WASI_RIGHT_PATH_UNLINK_FILE |
         WASI_RIGHT_PATH_FILESTAT_GET |
+        WASI_RIGHT_PATH_FILESTAT_SET_SIZE |
         WASI_RIGHT_PATH_FILESTAT_SET_TIMES |
         WASI_RIGHT_FD_FILESTAT_GET |
         WASI_RIGHT_FD_FILESTAT_SET_TIMES;
@@ -1298,6 +1362,9 @@ static int64_t wasi_fd_write_impl(
         if (get_native_fd(ctx, wasi_fd) < 0) return WASI_EBADF;
     } else if (is_preopen_fd(ctx, wasi_fd) || get_open_dir_path(ctx, wasi_fd)) {
         return WASI_EBADF;
+    } else {
+        int rights_err = require_base_rights(ctx, wasi_fd, WASI_RIGHT_FD_WRITE);
+        if (rights_err != WASI_ESUCCESS) return rights_err;
     }
     int use_stdout_capture = (stdio_slot == 1 && ctx->wasi_stdout_capture);
     int use_stderr_capture = (stdio_slot == 2 && ctx->wasi_stderr_capture);
@@ -1371,6 +1438,10 @@ static int64_t wasi_fd_read_impl(
     if (stdio_slot == 1 || stdio_slot == 2) return WASI_EBADF;
     if (stdio_slot < 0 && (is_preopen_fd(ctx, wasi_fd) || get_open_dir_path(ctx, wasi_fd))) {
         return WASI_EBADF;
+    }
+    if (stdio_slot < 0) {
+        int rights_err = require_base_rights(ctx, wasi_fd, WASI_RIGHT_FD_READ);
+        if (rights_err != WASI_ESUCCESS) return rights_err;
     }
     uint32_t iovs_u = (uint32_t)iovs;
     uint32_t iovs_len_u = (uint32_t)iovs_len;
@@ -1484,9 +1555,10 @@ static int64_t wasi_fd_close_impl(
 }
 
 // fd_seek: (fd, offset, whence, newoffset) -> errno
-static int64_t wasi_fd_seek_impl(
+static int64_t wasi_fd_seek_with_right(
     jit_context_t *ctx,
-    int64_t fd, int64_t offset, int64_t whence, int64_t newoffset_ptr
+    int64_t fd, int64_t offset, int64_t whence, int64_t newoffset_ptr,
+    uint64_t required
 ) {
     if (!ctx || !ctx->memory0 || !ctx->memory0->base) return WASI_EBADF;
     if (whence < 0 || whence > 2) return trap_invalid_wasi_abi_arg();
@@ -1501,6 +1573,8 @@ static int64_t wasi_fd_seek_impl(
     if (is_preopen_fd(ctx, wasi_fd) || get_open_dir_path(ctx, wasi_fd)) return WASI_EBADF;
     int native_fd = get_native_fd(ctx, wasi_fd);
     if (native_fd < 0) return WASI_EBADF;
+    int rights_err = require_base_rights(ctx, wasi_fd, required);
+    if (rights_err != WASI_ESUCCESS) return rights_err;
     uint32_t newoffset_ptr_u = (uint32_t)newoffset_ptr;
     if (!check_mem_range(ctx, newoffset_ptr_u, 8)) return WASI_EFAULT;
     uint32_t whence_u = (uint32_t)whence;
@@ -1516,12 +1590,23 @@ static int64_t wasi_fd_seek_impl(
     return WASI_ESUCCESS;
 }
 
+static int64_t wasi_fd_seek_impl(
+    jit_context_t *ctx,
+    int64_t fd, int64_t offset, int64_t whence, int64_t newoffset_ptr
+) {
+    return wasi_fd_seek_with_right(
+        ctx, fd, offset, whence, newoffset_ptr, WASI_RIGHT_FD_SEEK
+    );
+}
+
 // fd_tell: (fd, offset) -> errno
 static int64_t wasi_fd_tell_impl(
     jit_context_t *ctx,
     int64_t fd, int64_t offset_ptr
 ) {
-    return wasi_fd_seek_impl(ctx, fd, 0, 1 /* SEEK_CUR */, offset_ptr);
+    return wasi_fd_seek_with_right(
+        ctx, fd, 0, 1 /* SEEK_CUR */, offset_ptr, WASI_RIGHT_FD_TELL
+    );
 }
 
 // fd_sync: (fd) -> errno
@@ -1530,7 +1615,9 @@ static int64_t wasi_fd_sync_impl(
 ) {
     if (!ctx) return WASI_EBADF;
     int native_fd = -1;
-    int err = get_regular_file_native_fd(ctx, (int32_t)fd, &native_fd);
+    int err = get_regular_file_native_fd_with_rights(
+        ctx, (int32_t)fd, WASI_RIGHT_FD_SYNC, &native_fd
+    );
     if (err != WASI_ESUCCESS) return err;
 
 #ifdef _WIN32
@@ -1547,7 +1634,9 @@ static int64_t wasi_fd_datasync_impl(
 ) {
     if (!ctx) return WASI_EBADF;
     int native_fd = -1;
-    int err = get_regular_file_native_fd(ctx, (int32_t)fd, &native_fd);
+    int err = get_regular_file_native_fd_with_rights(
+        ctx, (int32_t)fd, WASI_RIGHT_FD_DATASYNC, &native_fd
+    );
     if (err != WASI_ESUCCESS) return err;
 
 #ifdef _WIN32
@@ -1709,8 +1798,23 @@ static int64_t wasi_path_open_impl(
     }
     if (!ctx->fd_rights_inheriting || dirfd_i < 0 ||
         dirfd_i >= ctx->fd_table_size) return WASI_EBADF;
-    uint64_t effective_rights_base = ((uint64_t)rights_base) & WASI_RIGHTS_ALL_VALID;
-    uint64_t effective_rights_inheriting = ((uint64_t)rights_inh) & WASI_RIGHTS_ALL_VALID;
+    uint64_t effective_rights_base = (uint64_t)rights_base;
+    uint64_t effective_rights_inheriting = (uint64_t)rights_inh;
+    if ((effective_rights_base & ~WASI_RIGHTS_ALL_VALID) != 0 ||
+        (effective_rights_inheriting & ~WASI_RIGHTS_ALL_VALID) != 0) {
+        return WASI_EINVAL;
+    }
+    uint64_t required_parent_rights = WASI_RIGHT_PATH_OPEN;
+    if ((oflags & 0x01) != 0) {
+        required_parent_rights |= WASI_RIGHT_PATH_CREATE_FILE;
+    }
+    if ((oflags & 0x08) != 0) {
+        required_parent_rights |= WASI_RIGHT_PATH_FILESTAT_SET_SIZE;
+    }
+    int rights_err = require_directory_base_rights(
+        ctx, dirfd_i, required_parent_rights
+    );
+    if (rights_err != WASI_ESUCCESS) return rights_err;
     uint64_t parent_rights_inheriting = ctx->fd_rights_inheriting[dirfd_i];
     if ((effective_rights_base & parent_rights_inheriting) != effective_rights_base ||
         (effective_rights_inheriting & parent_rights_inheriting) != effective_rights_inheriting) {
@@ -1830,6 +1934,10 @@ static int64_t wasi_path_unlink_file_impl(
     if (!guest_bytes_valid_utf8(ctx->memory0->base, path_ptr_u, path_len_u)) {
         return WASI_EILSEQ;
     }
+    int rights_err = require_directory_base_rights(
+        ctx, (int)dir_fd, WASI_RIGHT_PATH_UNLINK_FILE
+    );
+    if (rights_err != WASI_ESUCCESS) return rights_err;
 
     char *path = malloc((size_t)path_len_u + 1);
     if (!path) return WASI_ENOMEM;
@@ -1869,6 +1977,10 @@ static int64_t wasi_path_remove_directory_impl(
     if (!guest_bytes_valid_utf8(ctx->memory0->base, path_ptr_u, path_len_u)) {
         return WASI_EILSEQ;
     }
+    int rights_err = require_directory_base_rights(
+        ctx, (int)dir_fd, WASI_RIGHT_PATH_REMOVE_DIRECTORY
+    );
+    if (rights_err != WASI_ESUCCESS) return rights_err;
 
     char *path = malloc((size_t)path_len_u + 1);
     if (!path) return WASI_ENOMEM;
@@ -1908,6 +2020,10 @@ static int64_t wasi_path_create_directory_impl(
     if (!guest_bytes_valid_utf8(ctx->memory0->base, path_ptr_u, path_len_u)) {
         return WASI_EILSEQ;
     }
+    int rights_err = require_directory_base_rights(
+        ctx, (int)dir_fd, WASI_RIGHT_PATH_CREATE_DIRECTORY
+    );
+    if (rights_err != WASI_ESUCCESS) return rights_err;
 
     char *path = malloc((size_t)path_len_u + 1);
     if (!path) return WASI_ENOMEM;
@@ -1955,6 +2071,14 @@ static int64_t wasi_path_rename_impl(
         !guest_bytes_valid_utf8(ctx->memory0->base, new_path_ptr_u, new_path_len_u)) {
         return WASI_EILSEQ;
     }
+    int old_rights_err = require_directory_base_rights(
+        ctx, (int)old_fd, WASI_RIGHT_PATH_RENAME_SOURCE
+    );
+    if (old_rights_err != WASI_ESUCCESS) return old_rights_err;
+    int new_rights_err = require_directory_base_rights(
+        ctx, (int)new_fd, WASI_RIGHT_PATH_RENAME_TARGET
+    );
+    if (new_rights_err != WASI_ESUCCESS) return new_rights_err;
 
     char *old_path = malloc((size_t)old_path_len_u + 1);
     char *new_path = malloc((size_t)new_path_len_u + 1);
@@ -2019,6 +2143,11 @@ static int64_t wasi_fd_filestat_get_impl(
         return WASI_ESUCCESS;
     }
 
+    int rights_err = require_base_rights(
+        ctx, wasi_fd, WASI_RIGHT_FD_FILESTAT_GET
+    );
+    if (rights_err != WASI_ESUCCESS) return rights_err;
+
     // Handle preopens
     if (is_preopen_fd(ctx, wasi_fd)) {
         memset(mem + buf_ptr_u, 0, 64);
@@ -2062,7 +2191,9 @@ static int64_t wasi_fd_filestat_set_size_impl(
 ) {
     if (!ctx) return WASI_EBADF;
     int native_fd = -1;
-    int err = get_regular_file_native_fd(ctx, (int32_t)fd, &native_fd);
+    int err = get_regular_file_native_fd_with_rights(
+        ctx, (int32_t)fd, WASI_RIGHT_FD_FILESTAT_SET_SIZE, &native_fd
+    );
     if (err != WASI_ESUCCESS) return err;
 
 #ifndef _WIN32
@@ -2336,6 +2467,11 @@ static int32_t wasi_fd_pread_impl(
     }
     if (is_preopen_fd(ctx, fd) || get_open_dir_path(ctx, fd)) return WASI_EBADF;
 
+    int rights_err = require_base_rights(
+        ctx, fd, WASI_RIGHT_FD_READ | WASI_RIGHT_FD_SEEK
+    );
+    if (rights_err != WASI_ESUCCESS) return rights_err;
+
     int native_fd = get_native_fd(ctx, fd);
     if (native_fd < 0) return WASI_EBADF;
 
@@ -2383,6 +2519,11 @@ static int32_t wasi_fd_pwrite_impl(
         return WASI_EBADF;
     }
     if (is_preopen_fd(ctx, fd) || get_open_dir_path(ctx, fd)) return WASI_EBADF;
+
+    int rights_err = require_base_rights(
+        ctx, fd, WASI_RIGHT_FD_WRITE | WASI_RIGHT_FD_SEEK
+    );
+    if (rights_err != WASI_ESUCCESS) return rights_err;
 
     int native_fd = get_native_fd(ctx, fd);
     if (native_fd < 0) return WASI_EBADF;
@@ -2461,6 +2602,9 @@ static int32_t wasi_fd_readdir_impl(
 #ifndef _WIN32
     DIR *dir = NULL;
     if (!is_preopen_fd(ctx, fd) && !get_open_dir_path(ctx, fd)) return WASI_EBADF;
+
+    int rights_err = require_base_rights(ctx, fd, WASI_RIGHT_FD_READDIR);
+    if (rights_err != WASI_ESUCCESS) return rights_err;
 
     int native_fd = get_native_fd(ctx, fd);
     if (native_fd < 0) return WASI_EBADF;
@@ -2574,6 +2718,10 @@ static int32_t wasi_path_filestat_get_impl(
     if (guest_bytes_contain_nul(mem, path_ptr_u, path_len_u)) return WASI_EINVAL;
     if (!guest_bytes_valid_utf8(mem, path_ptr_u, path_len_u)) return WASI_EILSEQ;
     if (!check_mem_range(ctx, buf_ptr_u, 64)) return WASI_EFAULT;
+    int rights_err = require_directory_base_rights(
+        ctx, dir_fd, WASI_RIGHT_PATH_FILESTAT_GET
+    );
+    if (rights_err != WASI_ESUCCESS) return rights_err;
 
 #ifndef _WIN32
     char *path_tmp = malloc((size_t)path_len_u + 1);
@@ -2661,6 +2809,10 @@ static int32_t wasi_path_readlink_impl(
     if (!guest_bytes_valid_utf8(mem, path_ptr_u, path_len_u)) return WASI_EILSEQ;
     if (!check_mem_range(ctx, buf_ptr_u, (size_t)buf_len_u)) return WASI_EFAULT;
     if (!check_mem_range(ctx, bufused_ptr_u, 4)) return WASI_EFAULT;
+    int rights_err = require_directory_base_rights(
+        ctx, dir_fd, WASI_RIGHT_PATH_READLINK
+    );
+    if (rights_err != WASI_ESUCCESS) return rights_err;
 
 #ifndef _WIN32
     char *path_tmp = malloc((size_t)path_len_u + 1);
@@ -2716,6 +2868,13 @@ static int32_t wasi_path_symlink_impl(
         free(old_path);
         return WASI_EPERM;
     }
+    int rights_err = require_directory_base_rights(
+        ctx, dir_fd, WASI_RIGHT_PATH_SYMLINK
+    );
+    if (rights_err != WASI_ESUCCESS) {
+        free(old_path);
+        return rights_err;
+    }
 
     char *new_path_tmp = malloc((size_t)new_path_len_u + 1);
     if (!new_path_tmp) {
@@ -2769,6 +2928,15 @@ static int32_t wasi_path_link_impl(
         !guest_bytes_valid_utf8(mem, new_path_ptr_u, new_path_len_u)) {
         return WASI_EILSEQ;
     }
+    if (old_flags & 0x01) return WASI_EINVAL;
+    int old_rights_err = require_directory_base_rights(
+        ctx, old_fd, WASI_RIGHT_PATH_LINK_SOURCE
+    );
+    if (old_rights_err != WASI_ESUCCESS) return old_rights_err;
+    int new_rights_err = require_directory_base_rights(
+        ctx, new_fd, WASI_RIGHT_PATH_LINK_TARGET
+    );
+    if (new_rights_err != WASI_ESUCCESS) return new_rights_err;
 
 #ifndef _WIN32
     char *old_path_tmp = malloc((size_t)old_path_len_u + 1);
@@ -2800,11 +2968,6 @@ static int32_t wasi_path_link_impl(
         return new_errno;
     }
 
-    if (old_flags & 0x01) {
-        free(full_old_path);
-        free(full_new_path);
-        return WASI_EINVAL;
-    }
     int flags = 0;
     int result = linkat(AT_FDCWD, full_old_path, AT_FDCWD, full_new_path, flags);
     free(full_old_path);
@@ -2836,7 +2999,9 @@ static int32_t wasi_fd_filestat_set_times_impl(
     if (unknown_fst_flags_for_set_times(fst_flags)) return trap_invalid_wasi_abi_arg();
     if (conflicting_fst_flags_for_set_times(fst_flags)) return WASI_EINVAL;
     int native_fd = -1;
-    int err = get_non_stdio_native_fd(ctx, fd, &native_fd);
+    int err = get_non_stdio_native_fd_with_rights(
+        ctx, fd, WASI_RIGHT_FD_FILESTAT_SET_TIMES, &native_fd
+    );
     if (err != WASI_ESUCCESS) return err;
 
 #ifndef _WIN32
@@ -2892,6 +3057,10 @@ static int32_t wasi_path_filestat_set_times_impl(
     if (!check_mem_range(ctx, path_ptr_u, (size_t)path_len_u)) return WASI_EFAULT;
     if (guest_bytes_contain_nul(mem, path_ptr_u, path_len_u)) return WASI_EINVAL;
     if (!guest_bytes_valid_utf8(mem, path_ptr_u, path_len_u)) return WASI_EILSEQ;
+    int rights_err = require_directory_base_rights(
+        ctx, dir_fd, WASI_RIGHT_PATH_FILESTAT_SET_TIMES
+    );
+    if (rights_err != WASI_ESUCCESS) return rights_err;
 
 #ifndef _WIN32
     char *path_tmp = malloc((size_t)path_len_u + 1);
@@ -2989,7 +3158,9 @@ static int32_t wasi_fd_advise_impl(
     (void)len;
     if (advice < 0 || advice > 5) return trap_invalid_wasi_abi_arg();
     int native_fd = -1;
-    int err = get_regular_file_native_fd(ctx, fd, &native_fd);
+    int err = get_regular_file_native_fd_with_rights(
+        ctx, fd, WASI_RIGHT_FD_ADVISE, &native_fd
+    );
     if (err != WASI_ESUCCESS) return err;
     (void)native_fd;
     // Advisory only, always succeed
@@ -3009,6 +3180,10 @@ static int32_t wasi_fd_fdstat_set_rights_impl(
         fd < 0 || fd >= ctx->fd_table_size) return WASI_EBADF;
     uint64_t new_base = (uint64_t)rights_base;
     uint64_t new_inheriting = (uint64_t)rights_inheriting;
+    if ((new_base & ~WASI_RIGHTS_ALL_VALID) != 0 ||
+        (new_inheriting & ~WASI_RIGHTS_ALL_VALID) != 0) {
+        return WASI_EINVAL;
+    }
     if ((new_base & ctx->fd_rights_base[fd]) != new_base ||
         (new_inheriting & ctx->fd_rights_inheriting[fd]) != new_inheriting) {
         return WASI_ENOTCAPABLE;
@@ -3026,7 +3201,9 @@ static int32_t wasi_fd_allocate_impl(
     (void)offset;
     (void)len;
     int native_fd = -1;
-    int err = get_regular_file_native_fd(ctx, fd, &native_fd);
+    int err = get_regular_file_native_fd_with_rights(
+        ctx, fd, WASI_RIGHT_FD_ALLOCATE, &native_fd
+    );
     if (err != WASI_ESUCCESS) return err;
     (void)native_fd;
     return WASI_ENOTSUP;
@@ -3134,6 +3311,10 @@ static int32_t wasi_fd_fdstat_set_flags_impl(
 
     int native_fd = get_native_fd(ctx, fd);
     if (native_fd < 0) return WASI_EBADF;
+    int rights_err = require_base_rights(
+        ctx, fd, WASI_RIGHT_FD_FDSTAT_SET_FLAGS
+    );
+    if (rights_err != WASI_ESUCCESS) return rights_err;
     // Match wasmtime behavior:
     // - unknown fdflags bits are rejected before descriptor lookup
     // - DSYNC/RSYNC/SYNC are rejected with EINVAL only for valid file descriptors
@@ -3220,8 +3401,11 @@ static int32_t wasi_sock_accept_impl(
     if (!check_mem_range(ctx, result_fd_ptr_u, 4)) return WASI_EFAULT;
     if (invalid_sock_accept_fdflags(flags)) return trap_invalid_wasi_abi_arg();
 
-    if (!is_valid_wasi_descriptor(ctx, fd)) return WASI_EBADF;
-    return WASI_ENOTSOCK;
+    int rights_err = require_socket_base_rights(
+        ctx, fd, WASI_RIGHT_SOCK_ACCEPT
+    );
+    if (rights_err != WASI_ESUCCESS) return rights_err;
+    return WASI_ENOTSUP;
 }
 
 // sock_recv: Receive data from a socket
@@ -3251,8 +3435,9 @@ static int32_t wasi_sock_recv_impl(
     (void)ri_flags;
     (void)ro_datalen_ptr_u;
     (void)ro_flags_ptr_u;
-    if (!is_valid_wasi_descriptor(ctx, fd)) return WASI_EBADF;
-    return WASI_ENOTSOCK;
+    int rights_err = require_socket_base_rights(ctx, fd, WASI_RIGHT_FD_READ);
+    if (rights_err != WASI_ESUCCESS) return rights_err;
+    return WASI_ENOTSUP;
 }
 
 // sock_send: Send data on a socket
@@ -3278,8 +3463,9 @@ static int32_t wasi_sock_send_impl(
     (void)si_data_len_u;
     (void)si_flags;
     (void)so_datalen_ptr_u;
-    if (!is_valid_wasi_descriptor(ctx, fd)) return WASI_EBADF;
-    return WASI_ENOTSOCK;
+    int rights_err = require_socket_base_rights(ctx, fd, WASI_RIGHT_FD_WRITE);
+    if (rights_err != WASI_ESUCCESS) return rights_err;
+    return WASI_ENOTSUP;
 }
 
 // sock_shutdown: Shut down a socket
@@ -3291,8 +3477,11 @@ static int32_t wasi_sock_shutdown_impl(
 ) {
     if (!ctx) return WASI_EBADF;
     if (invalid_sock_shutdown_sdflags(how)) return trap_invalid_wasi_abi_arg();
-    if (!is_valid_wasi_descriptor(ctx, fd)) return WASI_EBADF;
-    return WASI_ENOTSOCK;
+    int rights_err = require_socket_base_rights(
+        ctx, fd, WASI_RIGHT_SOCK_SHUTDOWN
+    );
+    if (rights_err != WASI_ESUCCESS) return rights_err;
+    return WASI_ENOTSUP;
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_sock_accept_ptr(void) { return (int64_t)wasi_sock_accept_impl; }

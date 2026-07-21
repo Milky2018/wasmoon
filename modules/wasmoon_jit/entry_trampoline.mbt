@@ -200,7 +200,7 @@ pub fn can_use_reusable_entry_trampoline(
 pub fn plan_entry_trampoline_for_target(
   param_types : Array[@types.ValueType],
   result_types : Array[@types.ValueType],
-  target : @machv_emit.EmitTarget,
+  target : NativeTarget,
 ) -> JitIntegrationPlan raise JitPipelineError {
   plan_milkir_integration_for_target(
     build_entry_trampoline_milkir(param_types, result_types),

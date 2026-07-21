@@ -1,0 +1,115 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/machv/code_object"
+
+import {
+  "Milky2018/machv",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn build(Architecture, Array[Byte], relocations? : Array[Relocation], sources? : Array[SourceSite], traps? : Array[TrapSite], safepoints? : Array[SafepointSite], unwind? : Array[UnwindDirective]) -> UnlinkedCodeObject raise CodeObjectVerifyError
+
+// Errors
+pub suberror CodeObjectVerifyError {
+  EmptyCode
+  MisalignedCodeSize(size~ : Int)
+  InvalidRelocation(index~ : Int, message~ : String)
+  DuplicateRelocationOffset(offset~ : Int)
+  InvalidSourceSite(index~ : Int, offset~ : Int)
+  InvalidTrapSite(index~ : Int, offset~ : Int)
+  InvalidSafepointSite(index~ : Int, offset~ : Int)
+  InvalidRootLocation(safepoint~ : Int, root~ : Int)
+  InvalidStackMap(safepoint~ : Int)
+  InvalidUnwindDirective(index~ : Int, message~ : String)
+} derive(Eq, @debug.Debug)
+pub impl Show for CodeObjectVerifyError
+
+// Types and methods
+pub(all) enum Architecture {
+  AArch64
+  X64
+} derive(Eq, @debug.Debug)
+
+pub(all) enum RegisterBank {
+  Int
+  FpVector
+} derive(Eq, @debug.Debug)
+
+pub struct Relocation {
+  offset : Int
+  kind : RelocationKind
+  target : RelocationTarget
+  addend : Int64
+} derive(Eq, @debug.Debug)
+pub fn Relocation::new(Int, RelocationKind, RelocationTarget, addend? : Int64) -> Self
+
+pub(all) enum RelocationKind {
+  AArch64Call26
+  AArch64Jump26
+  AArch64Page21
+  AArch64PageOffset12
+  X64PcRelative32
+  Absolute64
+} derive(Eq, @debug.Debug)
+
+pub(all) enum RelocationTarget {
+  Code(@machv.CodeSymbol)
+  External(@machv.ExternalSymbol)
+  Data(@machv.DataSymbol)
+} derive(Eq, @debug.Debug)
+
+pub(all) enum RootLocation {
+  Register(RegisterBank, Int)
+  Stack(offset~ : Int, ty~ : @machv.ValueType)
+} derive(Eq, @debug.Debug)
+
+pub struct SafepointSite {
+  offset : Int
+  kind : @machv.SafepointKind
+  roots : Array[RootLocation]
+  source : @machv.SourceLocation?
+  stack_map : @machv.StackMapMetadata?
+} derive(Eq, @debug.Debug)
+pub fn SafepointSite::new(Int, @machv.SafepointKind, Array[RootLocation], source? : @machv.SourceLocation, stack_map? : @machv.StackMapMetadata) -> Self
+
+pub struct SourceSite {
+  offset : Int
+  source : @machv.SourceLocation
+} derive(Eq, @debug.Debug)
+pub fn SourceSite::new(Int, @machv.SourceLocation) -> Self
+
+pub struct TrapSite {
+  offset : Int
+  reason : @machv.TrapReason
+  source : @machv.SourceLocation?
+} derive(Eq, @debug.Debug)
+pub fn TrapSite::new(Int, @machv.TrapReason, source? : @machv.SourceLocation) -> Self
+
+pub struct UnlinkedCodeObject {
+  // private fields
+} derive(@debug.Debug)
+pub fn UnlinkedCodeObject::architecture(Self) -> Architecture
+pub fn UnlinkedCodeObject::code(Self) -> Array[Byte]
+pub fn UnlinkedCodeObject::relocations(Self) -> Array[Relocation]
+pub fn UnlinkedCodeObject::safepoints(Self) -> Array[SafepointSite]
+pub fn UnlinkedCodeObject::sources(Self) -> Array[SourceSite]
+pub fn UnlinkedCodeObject::traps(Self) -> Array[TrapSite]
+pub fn UnlinkedCodeObject::unwind(Self) -> Array[UnwindDirective]
+pub fn UnlinkedCodeObject::verify(Self) -> Unit raise CodeObjectVerifyError
+
+pub struct UnwindDirective {
+  offset : Int
+  operation : UnwindOperation
+} derive(Eq, @debug.Debug)
+pub fn UnwindDirective::new(Int, UnwindOperation) -> Self
+
+pub(all) enum UnwindOperation {
+  StackAlloc(size~ : Int)
+  SetFramePointer(RegisterBank, Int, cfa_offset~ : Int)
+  SaveRegister(RegisterBank, Int, cfa_offset~ : Int)
+} derive(Eq, @debug.Debug)
+
+// Type aliases
+
+// Traits
+

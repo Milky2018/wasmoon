@@ -58,6 +58,52 @@ test "call: multi return i32 f64" {
 }
 
 ///|
+test "call: internal call returns nine i32 values" {
+  let source =
+    #|(module
+    #|  (func $producer
+    #|    (result i32 i32 i32 i32 i32 i32 i32 i32 i32)
+    #|    (i32.const 1)
+    #|    (i32.const 2)
+    #|    (i32.const 3)
+    #|    (i32.const 4)
+    #|    (i32.const 5)
+    #|    (i32.const 6)
+    #|    (i32.const 7)
+    #|    (i32.const 8)
+    #|    (i32.const 9))
+    #|  (func (export "test")
+    #|    (result i32 i32 i32 i32 i32 i32 i32 i32 i32)
+    #|    (call $producer))
+    #|)
+  inspect(compare_jit_interp(source, "test", []), content="matched")
+}
+
+///|
+test "call: indirect internal call returns nine i32 values" {
+  let source =
+    #|(module
+    #|  (type $producer-type
+    #|    (func (result i32 i32 i32 i32 i32 i32 i32 i32 i32)))
+    #|  (table 1 funcref)
+    #|  (elem (i32.const 0) $producer)
+    #|  (func $producer (type $producer-type)
+    #|    (i32.const 1)
+    #|    (i32.const 2)
+    #|    (i32.const 3)
+    #|    (i32.const 4)
+    #|    (i32.const 5)
+    #|    (i32.const 6)
+    #|    (i32.const 7)
+    #|    (i32.const 8)
+    #|    (i32.const 9))
+    #|  (func (export "test") (type $producer-type)
+    #|    (call_indirect (type $producer-type) (i32.const 0)))
+    #|)
+  inspect(compare_jit_interp(source, "test", []), content="matched")
+}
+
+///|
 test "call: simple f64 f32 return" {
   let source =
     #|(module
