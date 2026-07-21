@@ -45,6 +45,13 @@ allocatable and scratch registers. Block arguments passed to CFG methods are
 dense layout indices; `block_id_at` maps them back to the machine IR's stable
 block id for edge edits.
 
+Scratch registers have two distinct roles. `scratch_regs` are always available
+to resolve allocator edits such as spill reloads and parallel moves. By default
+they may also hold instruction operands when all allocatable registers are
+occupied. A target whose emitter reserves those registers for instruction-local
+expansion must call `with_operand_scratch_regs([])` (or provide the safe subset),
+while leaving the edit scratch set intact.
+
 The view also distinguishes function entry values from block parameters and
 defines spill size, alignment, and slot-sharing compatibility. Operand timing
 uses `Early` and `Late` points, allowing an early input and late output to

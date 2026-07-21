@@ -135,7 +135,7 @@ pub fn[Inst] allocate_selected_vcode(
     @regalloc.MachineEnv::new(
       environment.allocatable_regs.map(reg => to_regalloc_preg(reg)),
       environment.spill_scratch_regs.map(reg => to_regalloc_preg(reg)),
-    ),
+    ).with_operand_scratch_regs([]),
     config=RegallocConfig(strategy=Backtracking, verify=false),
   ) catch {
     error => raise RegallocFailure(cause=error)

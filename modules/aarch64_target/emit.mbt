@@ -2256,6 +2256,7 @@ fn emit_call_arguments(
   instruction : @vcode.Instruction,
   types : Array[@semantic.ValueType],
   locations : Array[CallArgumentLocation],
+  stack_size : Int,
   operand_start? : Int = 0,
   stack_base? : Int = 0,
   callee? : (Int, @vcode.PhysicalReg),
@@ -2301,7 +2302,10 @@ fn emit_call_arguments(
     [@vcode.PhysicalReg::new(16, Int), @vcode.PhysicalReg::new(17, Int)]
   }
   let plan = @vcode.plan_call_transfers(
+    allocation,
     transfers,
+    stack_base,
+    stack_size,
     int_scratch,
     [
       @vcode.PhysicalReg::new(16, FpVector),
@@ -3215,6 +3219,7 @@ fn emit_instruction(
         instruction,
         signature.params,
         layout.arguments,
+        layout.stack_size,
       )
       metadata_offset = buffer.position()
       buffer.emit_word(0x94000000U)
@@ -3234,6 +3239,7 @@ fn emit_instruction(
         instruction,
         signature.params,
         plan.arguments,
+        plan.stack_size,
       )
       if result_area_register(plan) is Some(destination) {
         guard frame.result_area_offset() is Some(offset) else {
@@ -3260,6 +3266,7 @@ fn emit_instruction(
         instruction,
         signature.params,
         plan.arguments,
+        plan.stack_size,
         operand_start=1,
         callee=(0, callee_register),
       )
@@ -3283,6 +3290,7 @@ fn emit_instruction(
         instruction,
         signature.params,
         plan.arguments,
+        plan.stack_size,
         stack_base=frame.tail_call_stack_base(plan.stack_size),
         result_area?,
       )
@@ -3311,6 +3319,7 @@ fn emit_instruction(
         instruction,
         signature.params,
         plan.arguments,
+        plan.stack_size,
         operand_start=1,
         stack_base=frame.tail_call_stack_base(plan.stack_size),
         callee=(0, callee_register),

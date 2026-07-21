@@ -310,12 +310,12 @@ test "AArch64 call inputs may remain in spill slots" {
       #|  i23 operand0 -> p26:int
       #|  i24 operand0 -> p27:int
       #|  i25 operand0 -> p28:int
-      #|  i26 operand0 -> p16:int
-      #|  i27 operand0 -> p16:int
-      #|  i28 operand0 -> p16:int
-      #|  i29 operand0 -> p16:int
-      #|  i30 operand0 -> p16:int
-      #|  i31 operand0 -> p16:int
+      #|  i26 operand0 -> p0:int
+      #|  i27 operand0 -> p0:int
+      #|  i28 operand0 -> p0:int
+      #|  i29 operand0 -> p0:int
+      #|  i30 operand0 -> p0:int
+      #|  i31 operand0 -> p0:int
       #|  i32 operand0 -> p0:int
       #|  i32 operand1 -> p1:int
       #|  i32 operand2 -> p2:int
@@ -348,12 +348,24 @@ test "AArch64 call inputs may remain in spill slots" {
       #|  i32 operand29 -> stack3
       #|  i32 operand30 -> stack4
       #|  i32 operand31 -> stack5
-      #|  after(i26): spill v58 p16:int -> stack0
-      #|  after(i27): spill v59 p16:int -> stack1
-      #|  after(i28): spill v60 p16:int -> stack2
-      #|  after(i29): spill v61 p16:int -> stack3
-      #|  after(i30): spill v62 p16:int -> stack4
-      #|  after(i31): spill v63 p16:int -> stack5
+      #|  before(i26): spill v32 p0:int -> stack6
+      #|  after(i26): spill v58 p0:int -> stack0
+      #|  after(i26): reload v32 stack6 -> p0:int
+      #|  before(i27): spill v32 p0:int -> stack6
+      #|  after(i27): spill v59 p0:int -> stack1
+      #|  after(i27): reload v32 stack6 -> p0:int
+      #|  before(i28): spill v32 p0:int -> stack6
+      #|  after(i28): spill v60 p0:int -> stack2
+      #|  after(i28): reload v32 stack6 -> p0:int
+      #|  before(i29): spill v32 p0:int -> stack6
+      #|  after(i29): spill v61 p0:int -> stack3
+      #|  after(i29): reload v32 stack6 -> p0:int
+      #|  before(i30): spill v32 p0:int -> stack6
+      #|  after(i30): spill v62 p0:int -> stack4
+      #|  after(i30): reload v32 stack6 -> p0:int
+      #|  before(i31): spill v32 p0:int -> stack6
+      #|  after(i31): spill v63 p0:int -> stack5
+      #|  after(i31): reload v32 stack6 -> p0:int
       #|
     ),
   )

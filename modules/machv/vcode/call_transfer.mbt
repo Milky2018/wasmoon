@@ -47,8 +47,17 @@ pub struct CallTransferPlan {
 ///|
 pub suberror CallTransferError {
   InvalidSourceClass(index~ : Int)
+  ForeignSourceStack(index~ : Int)
+  InvalidSourceStackType(
+    index~ : Int,
+    expected~ : ValueType,
+    actual~ : ValueType
+  )
+  InvalidSourceStackLayout(index~ : Int)
   InvalidDestinationClass(index~ : Int)
   InvalidStackOffset(index~ : Int, offset~ : Int)
+  InvalidOutgoingStackRange(start~ : Int, size~ : Int)
+  OutgoingStackDestinationOutOfRange(index~ : Int, offset~ : Int)
   DuplicateRegisterDestination(index~ : Int, register~ : PhysicalReg)
   OverlappingStackDestination(first~ : Int, second~ : Int)
   ProtectedLocationOverwrite(index~ : Int, location~ : Location)
@@ -79,23 +88,25 @@ fn stack_transfer_scratch(
   ty : ValueType,
   scratch_int : Array[PhysicalReg],
   scratch_fp : Array[PhysicalReg],
+  reserved : Array[Location],
 ) -> PhysicalReg raise CallTransferError {
   let candidates = if reg_class_for_value_type(ty) == Int {
     scratch_int
   } else {
     scratch_fp
   }
-  guard candidates.get(0) is Some(scratch) else {
-    raise MoveResolutionFailed(
-      cause=MissingScratch(class=reg_class_for_value_type(ty)),
-    )
+  let expected = reg_class_for_value_type(ty)
+  for scratch in candidates {
+    if scratch.class != expected {
+      raise MoveResolutionFailed(cause=InvalidScratch(reg=scratch, expected~))
+    }
+    if !reserved.contains(Register(scratch)) {
+      return scratch
+    }
   }
-  if scratch.class != reg_class_for_value_type(ty) {
-    raise MoveResolutionFailed(
-      cause=InvalidScratch(reg=scratch, expected=reg_class_for_value_type(ty)),
-    )
-  }
-  scratch
+  raise MoveResolutionFailed(
+    cause=MissingScratch(class=reg_class_for_value_type(ty)),
+  )
 }
 
 ///|
@@ -104,19 +115,66 @@ fn stack_transfer_scratch(
 /// Outgoing stack arguments are captured before any ABI register destination is
 /// overwritten. Register destinations are then resolved as one parallel move.
 pub fn plan_call_transfers(
+  allocation : Allocation,
   transfers : Array[CallTransfer],
+  outgoing_stack_start : Int,
+  outgoing_stack_size : Int,
   scratch_int : Array[PhysicalReg],
   scratch_fp : Array[PhysicalReg],
   protected_locations : Array[Location],
 ) -> CallTransferPlan raise CallTransferError {
+  if outgoing_stack_start < 0 || outgoing_stack_size < 0 {
+    raise InvalidOutgoingStackRange(
+      start=outgoing_stack_start,
+      size=outgoing_stack_size,
+    )
+  }
+  let outgoing_stack_end = outgoing_stack_start + outgoing_stack_size
+  if outgoing_stack_end < outgoing_stack_start {
+    raise InvalidOutgoingStackRange(
+      start=outgoing_stack_start,
+      size=outgoing_stack_size,
+    )
+  }
   let stack_transfers : Array[StackArgumentTransfer] = []
   let register_moves : Array[ParallelMove] = []
   let register_destinations : Array[PhysicalReg] = []
   let stack_indices : Array[Int] = []
-  for index, transfer in transfers {
+  let scratch_reserved = protected_locations.copy()
+  for transfer in transfers {
     if transfer.source is Register(source) &&
-      source.class != reg_class_for_value_type(transfer.ty) {
-      raise InvalidSourceClass(index~)
+      !scratch_reserved.contains(Register(source)) {
+      scratch_reserved.push(Register(source))
+    }
+    if transfer.destination is TransferRegister(destination) &&
+      !scratch_reserved.contains(Register(destination)) {
+      scratch_reserved.push(Register(destination))
+    }
+  }
+  for index, transfer in transfers {
+    match transfer.source {
+      Register(source) =>
+        if source.class != reg_class_for_value_type(transfer.ty) {
+          raise InvalidSourceClass(index~)
+        }
+      Stack(slot) =>
+        match allocation.stack_slot_type(slot) {
+          None => raise ForeignSourceStack(index~)
+          Some(actual) => {
+            if actual != transfer.ty {
+              raise InvalidSourceStackType(
+                index~,
+                expected=transfer.ty,
+                actual~,
+              )
+            }
+            let size = transfer_size(transfer.ty)
+            if allocation.stack_slot_size(slot).unwrap() < size ||
+              allocation.stack_slot_alignment(slot).unwrap() < size {
+              raise InvalidSourceStackLayout(index~)
+            }
+          }
+        }
     }
     match transfer.destination {
       TransferRegister(destination) => {
@@ -144,6 +202,12 @@ pub fn plan_call_transfers(
         if offset < 0 || offset % size != 0 {
           raise InvalidStackOffset(index~, offset~)
         }
+        let end = offset + size
+        if offset < outgoing_stack_start ||
+          end < offset ||
+          end > outgoing_stack_end {
+          raise OutgoingStackDestinationOutOfRange(index~, offset~)
+        }
         for previous in stack_indices {
           let previous_transfer = transfers[previous]
           guard previous_transfer.destination
@@ -163,7 +227,14 @@ pub fn plan_call_transfers(
         let scratch = match transfer.source {
           Register(_) => None
           Stack(_) =>
-            Some(stack_transfer_scratch(transfer.ty, scratch_int, scratch_fp))
+            Some(
+              stack_transfer_scratch(
+                transfer.ty,
+                scratch_int,
+                scratch_fp,
+                scratch_reserved,
+              ),
+            )
         }
         stack_transfers.push({
           ty: transfer.ty,

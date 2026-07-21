@@ -73,6 +73,7 @@ pub suberror X64EmitError {
   InvalidScalarMemoryAccess
   InvalidFloatInstruction
   InvalidVectorInstruction
+  ScratchRegisterUnavailable
   InvalidConversionInstruction
   BranchTargetMissing(block~ : @vcode.Block)
   BranchOutOfRange(offset~ : Int, bits~ : Int)

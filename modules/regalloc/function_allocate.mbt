@@ -40,7 +40,7 @@ fn find_scratch_reg(
   class : RegClass,
   used : Array[PhysicalReg],
 ) -> PhysicalReg? {
-  for reg in environment.scratch_regs {
+  for reg in environment.operand_scratch_regs {
     if reg.class == class && !used.contains(reg) {
       return Some(reg)
     }

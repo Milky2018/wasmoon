@@ -49,6 +49,7 @@ pub suberror X64EmitError {
   InvalidScalarMemoryAccess
   InvalidFloatInstruction
   InvalidVectorInstruction
+  ScratchRegisterUnavailable
   InvalidConversionInstruction
   BranchTargetMissing(block~ : @vcode.Block)
   BranchOutOfRange(offset~ : Int, bits~ : Int)
@@ -1102,12 +1103,19 @@ fn emit_vector_int_unary(
       match lane {
         I16x8 => {
           let ones = @vcode.PhysicalReg::new(14, FpVector)
+          let input = if signedness == Signed && destination == source {
+            let preserved = @vcode.PhysicalReg::new(15, FpVector)
+            emit_move(buffer, V128, preserved, source)
+            preserved
+          } else {
+            source
+          }
           emit_vector_constant(
             buffer, ones, 0x0101010101010101UL, 0x0101010101010101UL,
           )
           if signedness == Signed {
             emit_move(buffer, V128, destination, ones)
-            buffer.x86_emit_pmaddubsw_xmm_xmm(destination.id, source.id)
+            buffer.x86_emit_pmaddubsw_xmm_xmm(destination.id, input.id)
           } else {
             emit_move(buffer, V128, destination, source)
             buffer.x86_emit_pmaddubsw_xmm_xmm(destination.id, ones.id)
@@ -1203,9 +1211,27 @@ fn emit_vector_int_binary(
           buffer.x86_emit_pmulld_xmm_xmm(destination.id, source.id)
         }
       } else if lane == I64x2 {
+        let left_source = if destination == left {
+          let preserved = @vcode.PhysicalReg::new(14, FpVector)
+          emit_move(buffer, V128, preserved, left)
+          preserved
+        } else {
+          left
+        }
+        let right_source = if destination == right {
+          if right == left {
+            left_source
+          } else {
+            let preserved = @vcode.PhysicalReg::new(15, FpVector)
+            emit_move(buffer, V128, preserved, right)
+            preserved
+          }
+        } else {
+          right
+        }
         for index in 0..<2 {
-          buffer.x86_emit_pextrq_r64_xmm_imm8(10, left.id, index)
-          buffer.x86_emit_pextrq_r64_xmm_imm8(11, right.id, index)
+          buffer.x86_emit_pextrq_r64_xmm_imm8(10, left_source.id, index)
+          buffer.x86_emit_pextrq_r64_xmm_imm8(11, right_source.id, index)
           buffer.x86_emit_imul_rr(10, 11)
           if index == 0 {
             buffer.x86_emit_movq_xmm_r64(destination.id, 10)
@@ -1228,6 +1254,24 @@ fn emit_vector_int_binary(
     }
     Min(signedness) | Max(signedness) =>
       if lane == I64x2 {
+        let left_source = if destination == left {
+          let preserved = @vcode.PhysicalReg::new(14, FpVector)
+          emit_move(buffer, V128, preserved, left)
+          preserved
+        } else {
+          left
+        }
+        let right_source = if destination == right {
+          if right == left {
+            left_source
+          } else {
+            let preserved = @vcode.PhysicalReg::new(15, FpVector)
+            emit_move(buffer, V128, preserved, right)
+            preserved
+          }
+        } else {
+          right
+        }
         let choose_right = match (operation, signedness) {
           (Min(_), Signed) => RawGt
           (Min(_), Unsigned) => RawHi
@@ -1236,8 +1280,8 @@ fn emit_vector_int_binary(
           _ => RawAl
         }
         for index in 0..<2 {
-          buffer.x86_emit_pextrq_r64_xmm_imm8(10, left.id, index)
-          buffer.x86_emit_pextrq_r64_xmm_imm8(11, right.id, index)
+          buffer.x86_emit_pextrq_r64_xmm_imm8(10, left_source.id, index)
+          buffer.x86_emit_pextrq_r64_xmm_imm8(11, right_source.id, index)
           buffer.x86_emit_cmp_rr(10, 11)
           buffer.x86_emit_cmovcc_rr(choose_right, 10, 11)
           if index == 0 {
@@ -1486,8 +1530,14 @@ fn emit_vector_conversion(
     PromoteLowF32x4 =>
       buffer.x86_emit_cvtps2pd_xmm_xmm(destination.id, source.id)
     DemoteZeroF64x2 => {
+      let input = if destination == source {
+        emit_move(buffer, V128, first, source)
+        first
+      } else {
+        source
+      }
       buffer.x86_emit_xorps_xmm_xmm(destination.id, destination.id)
-      buffer.x86_emit_cvtpd2ps_xmm_xmm(destination.id, source.id)
+      buffer.x86_emit_cvtpd2ps_xmm_xmm(destination.id, input.id)
     }
     ExtendLow(_, _) | ExtendHigh(_, _) | Narrow(_, _) =>
       raise InvalidVectorInstruction
@@ -1677,6 +1727,24 @@ fn emit_vector_int_compare(
 ) -> Unit raise X64EmitError {
   let raw_lane = raw_integer_lane(lane)
   if lane == I64x2 {
+    let left_source = if destination == left {
+      let preserved = @vcode.PhysicalReg::new(14, FpVector)
+      emit_move(buffer, V128, preserved, left)
+      preserved
+    } else {
+      left
+    }
+    let right_source = if destination == right {
+      if right == left {
+        left_source
+      } else {
+        let preserved = @vcode.PhysicalReg::new(15, FpVector)
+        emit_move(buffer, V128, preserved, right)
+        preserved
+      }
+    } else {
+      right
+    }
     let condition = match comparison {
       Equal => RawEq
       NotEqual => RawNe
@@ -1690,8 +1758,8 @@ fn emit_vector_int_compare(
       GreaterOrEqual(Unsigned) => RawHs
     }
     for index in 0..<2 {
-      buffer.x86_emit_pextrq_r64_xmm_imm8(10, left.id, index)
-      buffer.x86_emit_pextrq_r64_xmm_imm8(11, right.id, index)
+      buffer.x86_emit_pextrq_r64_xmm_imm8(10, left_source.id, index)
+      buffer.x86_emit_pextrq_r64_xmm_imm8(11, right_source.id, index)
       buffer.x86_emit_cmp_rr(10, 11)
       buffer.x86_emit_setcc_r8(condition, 10)
       buffer.x86_emit_movzx_r32_r8(10, 10)
@@ -1705,8 +1773,8 @@ fn emit_vector_int_compare(
     return
   }
   if comparison == Equal || comparison == NotEqual {
-    emit_move(buffer, V128, destination, left)
-    buffer.x86_emit_pcmpeq_xmm_xmm(raw_lane, destination.id, right.id)
+    let source = prepare_xmm_two_operand(buffer, destination, left, right)
+    buffer.x86_emit_pcmpeq_xmm_xmm(raw_lane, destination.id, source.id)
     if comparison == NotEqual {
       let ones = @vcode.PhysicalReg::new(14, FpVector)
       buffer.x86_emit_pcmpeqd_xmm_xmm(ones.id, ones.id)
@@ -1722,8 +1790,8 @@ fn emit_vector_int_compare(
     _ => raise InvalidVectorInstruction
   }
   if signedness == Signed {
-    emit_move(buffer, V128, destination, first)
-    buffer.x86_emit_pcmpgt_xmm_xmm(raw_lane, destination.id, second.id)
+    let source = prepare_xmm_two_operand(buffer, destination, first, second)
+    buffer.x86_emit_pcmpgt_xmm_xmm(raw_lane, destination.id, source.id)
   } else {
     let mask = @vcode.PhysicalReg::new(14, FpVector)
     let second_copy = @vcode.PhysicalReg::new(15, FpVector)
@@ -1734,9 +1802,9 @@ fn emit_vector_int_compare(
       _ => 0UL
     }
     emit_vector_constant(buffer, mask, pattern, pattern)
+    emit_move(buffer, V128, second_copy, second)
     emit_move(buffer, V128, destination, first)
     buffer.x86_emit_pxor_xmm_xmm(destination.id, mask.id)
-    emit_move(buffer, V128, second_copy, second)
     buffer.x86_emit_pxor_xmm_xmm(second_copy.id, mask.id)
     buffer.x86_emit_pcmpgt_xmm_xmm(raw_lane, destination.id, second_copy.id)
   }
@@ -1872,17 +1940,17 @@ fn emit_vector_float_binary(
     return
   }
   if operation == PseudoMin || operation == PseudoMax {
-    emit_move(buffer, V128, destination, right)
+    let source = prepare_xmm_two_operand(buffer, destination, right, left)
     if f32 {
       if operation == PseudoMin {
-        buffer.x86_emit_minps_xmm_xmm(destination.id, left.id)
+        buffer.x86_emit_minps_xmm_xmm(destination.id, source.id)
       } else {
-        buffer.x86_emit_maxps_xmm_xmm(destination.id, left.id)
+        buffer.x86_emit_maxps_xmm_xmm(destination.id, source.id)
       }
     } else if operation == PseudoMin {
-      buffer.x86_emit_minpd_xmm_xmm(destination.id, left.id)
+      buffer.x86_emit_minpd_xmm_xmm(destination.id, source.id)
     } else {
-      buffer.x86_emit_maxpd_xmm_xmm(destination.id, left.id)
+      buffer.x86_emit_maxpd_xmm_xmm(destination.id, source.id)
     }
     return
   }
@@ -1983,7 +2051,7 @@ fn emit_vector_relaxed_dot8_to16(
   left : @vcode.PhysicalReg,
   right : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
-) -> Unit {
+) -> Unit raise X64EmitError {
   let source = prepare_xmm_two_operand(buffer, destination, right, left)
   buffer.x86_emit_pmaddubsw_xmm_xmm(destination.id, source.id)
 }
@@ -1996,7 +2064,7 @@ fn emit_vector_bitwise(
   second : @vcode.PhysicalReg,
   mask : @vcode.PhysicalReg,
   destination : @vcode.PhysicalReg,
-) -> Unit {
+) -> Unit raise X64EmitError {
   match operation {
     Not => {
       emit_move(buffer, V128, destination, first)
@@ -2038,19 +2106,18 @@ fn prepare_xmm_two_operand(
   destination : @vcode.PhysicalReg,
   left : @vcode.PhysicalReg,
   right : @vcode.PhysicalReg,
-) -> @vcode.PhysicalReg {
-  let scratch = @vcode.PhysicalReg::new(
-    if destination.id == 14 {
-      15
-    } else {
-      14
-    },
-    FpVector,
-  )
+) -> @vcode.PhysicalReg raise X64EmitError {
   if destination == left {
     return right
   }
   if destination == right {
+    let scratch = if left.id != 14 && right.id != 14 {
+      @vcode.PhysicalReg::new(14, FpVector)
+    } else if left.id != 15 && right.id != 15 {
+      @vcode.PhysicalReg::new(15, FpVector)
+    } else {
+      raise ScratchRegisterUnavailable
+    }
     buffer.x86_emit_movaps_xmm_xmm(scratch.id, right.id)
     buffer.x86_emit_movaps_xmm_xmm(destination.id, left.id)
     return scratch
@@ -2591,10 +2658,16 @@ fn emit_conversion(
           buffer.x86_emit_cvtsi2ss_xmm_r64(destination.id, source.id)
         (I64, F64, Signed) =>
           buffer.x86_emit_cvtsi2sd_xmm_r64(destination.id, source.id)
-        (I32, F32, Unsigned) =>
-          buffer.x86_emit_cvtsi2ss_xmm_r64(destination.id, source.id)
-        (I32, F64, Unsigned) =>
-          buffer.x86_emit_cvtsi2sd_xmm_r64(destination.id, source.id)
+        (I32, F32, Unsigned) => {
+          let zero_extended = @vcode.PhysicalReg::new(10, Int)
+          buffer.x86_emit_mov_rr32(zero_extended.id, source.id)
+          buffer.x86_emit_cvtsi2ss_xmm_r64(destination.id, zero_extended.id)
+        }
+        (I32, F64, Unsigned) => {
+          let zero_extended = @vcode.PhysicalReg::new(10, Int)
+          buffer.x86_emit_mov_rr32(zero_extended.id, source.id)
+          buffer.x86_emit_cvtsi2sd_xmm_r64(destination.id, zero_extended.id)
+        }
         (I64, F32 | F64, Unsigned) => {
           buffer.x86_emit_test_rr(source.id, source.id)
           let nonnegative = buffer.emit_local_jcc(RawPl)
@@ -2772,6 +2845,7 @@ fn emit_call_arguments(
   instruction : @vcode.Instruction,
   types : Array[@semantic.ValueType],
   locations : Array[CallArgumentLocation],
+  stack_size : Int,
   operand_start? : Int = 0,
   stack_base? : Int = 0,
   callee? : (Int, @vcode.PhysicalReg),
@@ -2822,7 +2896,10 @@ fn emit_call_arguments(
     }
   }
   let plan = @vcode.plan_call_transfers(
+    allocation,
     transfers,
+    stack_base,
+    stack_size,
     int_scratch,
     [
       @vcode.PhysicalReg::new(14, FpVector),
@@ -3773,6 +3850,7 @@ fn emit_instruction(
         instruction,
         signature.params,
         layout.arguments,
+        layout.stack_size,
       )
       metadata_offset = buffer.position()
       buffer.emit_byte(0xE8)
@@ -3794,6 +3872,7 @@ fn emit_instruction(
         instruction,
         signature.params,
         plan.arguments,
+        plan.stack_size,
       )
       if result_area_register(plan) is Some(destination) {
         guard frame.result_area_offset() is Some(offset) else {
@@ -3822,6 +3901,7 @@ fn emit_instruction(
         instruction,
         signature.params,
         plan.arguments,
+        plan.stack_size,
         operand_start=1,
         callee=(0, callee_register),
       )
@@ -3845,6 +3925,7 @@ fn emit_instruction(
         instruction,
         signature.params,
         plan.arguments,
+        plan.stack_size,
         stack_base=frame.tail_call_stack_base(plan.stack_size),
         result_area?,
       )
@@ -3879,6 +3960,7 @@ fn emit_instruction(
         instruction,
         signature.params,
         plan.arguments,
+        plan.stack_size,
         operand_start=1,
         stack_base=frame.tail_call_stack_base(plan.stack_size),
         callee=(0, callee_register),

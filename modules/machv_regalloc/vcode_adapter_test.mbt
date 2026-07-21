@@ -107,19 +107,22 @@ test "floating-point and SIMD values share one physical register bank" {
   |> ignore
   let allocation = allocate_vcode(
     builder.finish(),
-    VCodeAllocationEnvironment::new([@vcode.PhysicalReg::new(0, FpVector)], [
-      @vcode.PhysicalReg::new(1, FpVector),
-    ]),
+    VCodeAllocationEnvironment::new(
+      [
+        @vcode.PhysicalReg::new(0, FpVector),
+        @vcode.PhysicalReg::new(1, FpVector),
+      ],
+      [@vcode.PhysicalReg::new(2, FpVector)],
+    ),
   )
   inspect(
     allocation.summary(),
     content=(
       #|allocation fp_vector_alias
       #|  v0:f64 -> p0:fpvec
-      #|  v1:v128 -> stack0:v128(size=16, align=16)
+      #|  v1:v128 -> p1:fpvec
       #|  i0 operand0 -> p0:fpvec
       #|  i0 operand1 -> p1:fpvec
-      #|  before(i0): reload v1 stack0 -> p1:fpvec
       #|
     ),
   )

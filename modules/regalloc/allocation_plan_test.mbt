@@ -702,3 +702,60 @@ test "backtracking borrows an allocatable register when spill temporaries are ex
     ),
   )
 }
+
+///|
+test "backtracking keeps edit-only scratch registers out of instruction operands" {
+  let function : TestFunction = {
+    value_count: 3,
+    block_parameters: [value(0), value(1), value(2)],
+    instructions: [
+      [Operand::use_reg(value(1)), Operand::use_reg(value(2))],
+      [Operand::use_reg(value(0))],
+    ],
+  }
+  let environment = MachineEnv::new([int_reg(0), int_reg(1)], [int_reg(2)]).with_operand_scratch_regs([],
+  )
+  inspect(
+    allocate_function(function, environment),
+    content=(
+      #|{
+      #|  value_locations: [
+      #|    Some(Reg({ id: 0, class: Int })),
+      #|    Some(Reg({ id: 1, class: Int })),
+      #|    Some(Spill(0)),
+      #|  ],
+      #|  operand_locations: {
+      #|    (0, 0): Reg({ id: 1, class: Int }),
+      #|    (0, 1): Reg({ id: 0, class: Int }),
+      #|    (1, 0): Reg({ id: 0, class: Int }),
+      #|  },
+      #|  operand_assignments: [
+      #|    { instruction: 0, operand: 0, location: Reg({ id: 1, class: Int }) },
+      #|    { instruction: 0, operand: 1, location: Reg({ id: 0, class: Int }) },
+      #|    { instruction: 1, operand: 0, location: Reg({ id: 0, class: Int }) },
+      #|  ],
+      #|  edits: [
+      #|    {
+      #|      value: { id: 0, class: Int },
+      #|      from: Reg({ id: 0, class: Int }),
+      #|      to: Spill(1),
+      #|      position: Before(0),
+      #|    },
+      #|    {
+      #|      value: { id: 2, class: Int },
+      #|      from: Spill(0),
+      #|      to: Reg({ id: 0, class: Int }),
+      #|      position: Before(0),
+      #|    },
+      #|    {
+      #|      value: { id: 0, class: Int },
+      #|      from: Spill(1),
+      #|      to: Reg({ id: 0, class: Int }),
+      #|      position: After(0),
+      #|    },
+      #|  ],
+      #|  spill_slots: [{ size: 8, alignment: 8 }, { size: 8, alignment: 8 }],
+      #|}
+    ),
+  )
+}
