@@ -259,11 +259,11 @@
     {
       "tier": "real_module",
       "path": "docs/perf/machv-migration/workloads/matmul.wat",
-      "sha256": "86b70265db6f9dca146f585b7a6b84b7e2c6c4ef68771897a438afc191d1aa3e",
+      "sha256": "d19ab09708d72f1a5324853944f1fd7b364f51863dd0a8332304db70bc93d5f0",
       "subcommand": "run",
       "entry": "_start",
       "expected_output": "matmul ok",
-      "internal_iterations": 200,
+      "internal_iterations": 2000,
       "metrics": [
         "runtime",
         "jit_compile_time",
