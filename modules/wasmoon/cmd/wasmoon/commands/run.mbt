@@ -871,7 +871,7 @@ fn run_jit_cache_dir() -> String {
 }
 
 ///|
-let run_jit_cache_version = "v4"
+let run_jit_cache_version = "v5"
 
 ///|
 fn run_jit_cache_file(

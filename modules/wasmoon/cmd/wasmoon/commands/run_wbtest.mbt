@@ -93,7 +93,7 @@ test "jit cache bytes/ints conversion keeps unsigned bytes" {
 
 ///|
 test "run JIT cache version tracks machine-code semantics" {
-  inspect(run_jit_cache_version, content="v4")
+  inspect(run_jit_cache_version, content="v5")
 }
 
 ///|

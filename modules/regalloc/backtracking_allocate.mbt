@@ -502,13 +502,22 @@ fn[F : FunctionView] allocate_segments_backtracking(
 }
 
 ///|
-fn values_overlap(
+fn spill_homes_can_share(
   ranges : LiveRangeSet,
   lhs : VirtualReg,
   rhs : VirtualReg,
 ) -> Bool {
+  // A value has one stable spill home. Fragment liveness alone does not prove
+  // the stored value across CFG edges, so compact only linear lifetimes in one
+  // block until cross-block spill-slot contents are modeled explicitly.
   match (ranges.get_by_vreg(lhs), ranges.get_by_vreg(rhs)) {
-    (Some(left), Some(right)) => left.overlaps(right, ranges.block_order)
+    (Some(left), Some(right)) => {
+      guard left.range_count() == 1 && right.range_count() == 1 else { false }
+      let left_range = left.range_at(0).unwrap()
+      let right_range = right.range_at(0).unwrap()
+      left_range.start.block == right_range.start.block &&
+      !left_range.overlaps(right_range, ranges.block_order)
+    }
     _ => false
   }
 }
@@ -574,7 +583,7 @@ fn[F : FunctionView] assign_backtracking_homes(
       let mut compatible = true
       for occupant in occupants {
         if !function.values_share_spill_slot(value, occupant.id) ||
-          values_overlap(ranges, vreg, occupant) {
+          !spill_homes_can_share(ranges, vreg, occupant) {
           compatible = false
           break
         }

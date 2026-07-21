@@ -316,6 +316,77 @@ test "backtracking reuses spill slots for disjoint values" {
 }
 
 ///|
+test "backtracking keeps spill homes distinct across CFG blocks" {
+  let function : CfgTestFunction = {
+    value_count: 4,
+    blocks: [[0], [1, 2]],
+    instructions: [
+      [Operand::use_reg(value(0)), Operand::use_reg(value(1))],
+      [Operand::def(value(2)), Operand::def(value(3))],
+      [Operand::use_reg(value(2)), Operand::use_reg(value(3))],
+    ],
+    clobbers: [[], [], []],
+    successors: [[1], []],
+    entry_values: [value(0), value(1)],
+    parameters: [[], []],
+    edge_arguments: [[[]], []],
+  }
+  inspect(
+    allocate_function(
+      function,
+      MachineEnv::new([int_reg(0)], [int_reg(1), int_reg(2)]),
+    ),
+    content=(
+      #|{
+      #|  value_locations: [
+      #|    Some(Reg({ id: 0, class: Int })),
+      #|    Some(Spill(0)),
+      #|    Some(Reg({ id: 0, class: Int })),
+      #|    Some(Spill(1)),
+      #|  ],
+      #|  operand_locations: {
+      #|    (0, 0): Reg({ id: 0, class: Int }),
+      #|    (0, 1): Reg({ id: 1, class: Int }),
+      #|    (1, 0): Reg({ id: 0, class: Int }),
+      #|    (1, 1): Reg({ id: 1, class: Int }),
+      #|    (2, 0): Reg({ id: 0, class: Int }),
+      #|    (2, 1): Reg({ id: 1, class: Int }),
+      #|  },
+      #|  operand_assignments: [
+      #|    { instruction: 0, operand: 0, location: Reg({ id: 0, class: Int }) },
+      #|    { instruction: 0, operand: 1, location: Reg({ id: 1, class: Int }) },
+      #|    { instruction: 1, operand: 0, location: Reg({ id: 0, class: Int }) },
+      #|    { instruction: 1, operand: 1, location: Reg({ id: 1, class: Int }) },
+      #|    { instruction: 2, operand: 0, location: Reg({ id: 0, class: Int }) },
+      #|    { instruction: 2, operand: 1, location: Reg({ id: 1, class: Int }) },
+      #|  ],
+      #|  edits: [
+      #|    {
+      #|      value: { id: 1, class: Int },
+      #|      from: Spill(0),
+      #|      to: Reg({ id: 1, class: Int }),
+      #|      position: Before(0),
+      #|    },
+      #|    {
+      #|      value: { id: 3, class: Int },
+      #|      from: Reg({ id: 1, class: Int }),
+      #|      to: Spill(1),
+      #|      position: After(1),
+      #|    },
+      #|    {
+      #|      value: { id: 3, class: Int },
+      #|      from: Spill(1),
+      #|      to: Reg({ id: 1, class: Int }),
+      #|      position: Before(2),
+      #|    },
+      #|  ],
+      #|  spill_slots: [{ size: 8, alignment: 8 }, { size: 8, alignment: 8 }],
+      #|}
+    ),
+  )
+}
+
+///|
 test "backtracking evicts a cheaper live range while single pass does not" {
   let function : TestFunction = {
     value_count: 2,
