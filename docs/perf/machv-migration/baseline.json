@@ -4,9 +4,7 @@
   "workload_manifest": "docs/perf/machv-migration/workloads.json",
   "toolchain": {
     "moon": "0.1.20260714 (4620153 2026-07-14)",
-    "moonc": "v0.10.4+4f2e8f7dc-nightly (2026-07-13)",
-    "wasm_tools": "1.248.0",
-    "wasmtime": "40.0.0"
+    "moonc": "v0.10.4+4f2e8f7dc-nightly (2026-07-13)"
   },
   "targets": [
     {

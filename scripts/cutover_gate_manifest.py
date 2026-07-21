@@ -51,9 +51,6 @@ def required_job(value: str) -> tuple[str, str]:
 def init(args: argparse.Namespace) -> int:
     baseline = load(args.baseline)
     workload = Path(baseline["workload_manifest"])
-    smith_manifest = Path("docs/perf/machv-migration/smith.json")
-    smith = load(smith_manifest)
-    smith_config = Path(smith["config"])
     payload = {
         "schema_version": 1,
         "kind": args.kind,
@@ -71,8 +68,6 @@ def init(args: argparse.Namespace) -> int:
         },
         "toolchain": {
             "moon": command_output(["moon", "version", "--all"]),
-            "wasm_tools": command_output(["wasm-tools", "--version"]),
-            "wasmtime": command_output(["wasmtime", "--version"]),
             "python": platform.python_version(),
         },
         "inputs": {
@@ -80,10 +75,6 @@ def init(args: argparse.Namespace) -> int:
             "baseline_sha256": sha256(args.baseline),
             "workloads": str(workload),
             "workloads_sha256": sha256(workload),
-            "smith": str(smith_manifest),
-            "smith_sha256": sha256(smith_manifest),
-            "smith_config": str(smith_config),
-            "smith_config_sha256": sha256(smith_config),
         },
         "commands": [],
         "artifacts": [],

@@ -7,7 +7,6 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -23,7 +22,6 @@ def load_module(name: str, path: Path):
 
 
 PERF = load_module("run_machv_cutover_perf", ROOT / "scripts/run_machv_cutover_perf.py")
-SMITH = load_module("smith_diff_run", ROOT / "scripts/smith_diff/run.py")
 
 
 class CutoverPerfTests(unittest.TestCase):
@@ -60,23 +58,6 @@ class CutoverPerfTests(unittest.TestCase):
             ]
         with self.assertRaisesRegex(RuntimeError, "tail_call"):
             PERF.validate_workload_manifest(manifest)
-
-    def test_smith_seed_is_reproducible_and_case_specific(self) -> None:
-        first = SMITH._deterministic_seed(7, 3, 65)
-        self.assertEqual(first, SMITH._deterministic_seed(7, 3, 65))
-        self.assertNotEqual(first, SMITH._deterministic_seed(7, 4, 65))
-        self.assertEqual(len(first), 65)
-
-    def test_interpreter_oracle_ignores_shared_frontend_rejections(self) -> None:
-        wasmtime = ("ok", "1")
-        rejected = ("error",)
-        self.assertFalse(
-            SMITH._is_mismatch(wasmtime, rejected, rejected, "interpreter")
-        )
-        self.assertTrue(SMITH._is_mismatch(wasmtime, rejected, rejected, "wasmtime"))
-        self.assertTrue(
-            SMITH._is_mismatch(wasmtime, rejected, ("ok", "1"), "interpreter")
-        )
 
     def test_ratio_stats_are_geometric_and_report_noise(self) -> None:
         stats = PERF.ratio_stats([1.0, 1.21])
@@ -125,77 +106,6 @@ class CutoverPerfTests(unittest.TestCase):
         PERF.record_failure(failures, "runtime corpus", stats, 1.03)
         self.assertEqual(len(failures), 1)
         self.assertIn("inconclusive upper 95% ratio", failures[0])
-
-
-class SmithGateTests(unittest.TestCase):
-    def test_run_rejects_an_empty_generated_corpus(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            with (
-                mock.patch.object(
-                    sys,
-                    "argv",
-                    [
-                        "smith-diff",
-                        "run",
-                        "--count",
-                        "0",
-                        "--out",
-                        directory,
-                    ],
-                ),
-                mock.patch.object(SMITH, "_ensure_tools"),
-                mock.patch.object(
-                    SMITH,
-                    "_build_template_wasm",
-                    return_value=Path(directory) / "template.wasm",
-                ),
-                mock.patch.object(
-                    SMITH,
-                    "_smith_config_for_run",
-                    return_value=Path(directory) / "smith_config.json",
-                ),
-            ):
-                self.assertEqual(SMITH.main(), 2)
-
-    def test_run_rejects_generation_errors(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            generation_error = SMITH.Outcome(
-                kind="error",
-                rc=1,
-                stdout="",
-                stderr="failed to generate module",
-            )
-            with (
-                mock.patch.object(
-                    sys,
-                    "argv",
-                    [
-                        "smith-diff",
-                        "run",
-                        "--count",
-                        "1",
-                        "--out",
-                        directory,
-                    ],
-                ),
-                mock.patch.object(SMITH, "_ensure_tools"),
-                mock.patch.object(
-                    SMITH,
-                    "_build_template_wasm",
-                    return_value=Path(directory) / "template.wasm",
-                ),
-                mock.patch.object(
-                    SMITH,
-                    "_smith_config_for_run",
-                    return_value=Path(directory) / "smith_config.json",
-                ),
-                mock.patch.object(
-                    SMITH,
-                    "_generate_module",
-                    return_value=generation_error,
-                ),
-            ):
-                self.assertEqual(SMITH.main(), 2)
 
 
 class GateManifestTests(unittest.TestCase):
