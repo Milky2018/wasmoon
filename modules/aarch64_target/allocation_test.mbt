@@ -61,23 +61,7 @@ test "AArch64 frame plans spills and callee-saved registers" {
   inspect(
     plan_frame(function, allocation).summary(),
     content=(
-      #|aarch64 frame size=128 align=16
-      #|  place stack0 at sp+0
-      #|  place stack1 at sp+8
-      #|  place stack2 at sp+16
-      #|  place stack3 at sp+24
-      #|  place stack4 at sp+32
-      #|  place stack5 at sp+40
-      #|  save p19:int at sp+48
-      #|  save p20:int at sp+56
-      #|  save p21:int at sp+64
-      #|  save p22:int at sp+72
-      #|  save p23:int at sp+80
-      #|  save p24:int at sp+88
-      #|  save p25:int at sp+96
-      #|  save p26:int at sp+104
-      #|  save p27:int at sp+112
-      #|  save p28:int at sp+120
+      #|aarch64 frame size=0 align=16
       #|
     ),
   )
@@ -113,12 +97,13 @@ test "AArch64 allocation keeps values live across a direct call out of clobbers"
       #|  v2:i64 -> p0:int
       #|  v3:i64 -> p0:int
       #|  i0 operand0 -> p0:int
-      #|  i0 operand1 -> p19:int
+      #|  i0 operand1 -> p0:int
       #|  i2 operand0 -> p0:int
       #|  i3 operand0 -> p19:int
       #|  i3 operand1 -> p0:int
       #|  i3 operand2 -> p0:int
       #|  i4 operand0 -> p0:int
+      #|  after(i0): move v1 p0:int -> p19:int
       #|
     ),
   )
@@ -179,7 +164,7 @@ test "AArch64 allocation preserves state across both returns from setjmp" {
       #|  i1 operand0 -> p1:int
       #|  i1 operand1 -> p1:int
       #|  i2 operand0 -> p2:int
-      #|  i2 operand1 -> p19:int
+      #|  i2 operand1 -> p2:int
       #|  i3 operand0 -> p0:int
       #|  i3 operand1 -> p1:int
       #|  i4 operand0 -> p0:int
@@ -189,6 +174,7 @@ test "AArch64 allocation preserves state across both returns from setjmp" {
       #|  i6 operand1 -> p0:int
       #|  i6 operand2 -> p0:int
       #|  i7 operand0 -> p0:int
+      #|  after(i2): move v5 p2:int -> p19:int
       #|
     ),
   )
@@ -375,6 +361,43 @@ test "AArch64 call inputs may remain in spill slots" {
 }
 
 ///|
+test "AArch64 allocation honors internal call register affinities" {
+  let builder = @semantic.FunctionBuilder::new(
+    "internal_call_affinity",
+    Internal,
+    [Ptr64],
+    [Ptr64],
+  )
+  let one = builder.emit(I64Const(1UL), [], [I64])[0]
+  let call = @semantic.SemanticCall::new(
+    Internal(@semantic.CodeSymbol::new("wasm.func.affinity")),
+    @semantic.Signature::new([Ptr64, I64], []),
+    Internal,
+    @semantic.CallBehavior::new(ReadWrite, true, true, false, false),
+  )
+  builder.emit(Call(call), [builder.parameters()[0], one], []) |> ignore
+  builder.return_([builder.parameters()[0]])
+  let function = lower(builder.finish(), test_lowering_context())
+  inspect(
+    allocate(function).summary(),
+    content=(
+      #|allocation internal_call_affinity
+      #|  v0:ptr64 -> p0:int
+      #|  v1:ptr64 -> p19:int
+      #|  v2:i64 -> p1:int
+      #|  i0 operand0 -> p0:int
+      #|  i0 operand1 -> p0:int
+      #|  i1 operand0 -> p1:int
+      #|  i2 operand0 -> p19:int
+      #|  i2 operand1 -> p1:int
+      #|  i3 operand0 -> p19:int
+      #|  after(i0): move v1 p0:int -> p19:int
+      #|
+    ),
+  )
+}
+
+///|
 test "AArch64 frame reserves one aligned outgoing stack-argument area" {
   let parameter_types : Array[@semantic.ValueType] = Array::make(9, I64)
   let builder = @semantic.FunctionBuilder::new(
@@ -439,27 +462,10 @@ test "AArch64 frame separates semantic objects from outgoing spills and saves" {
   inspect(
     plan_frame(function, allocation).summary(),
     content=(
-      #|aarch64 frame size=224 align=16
+      #|aarch64 frame size=96 align=16
       #|  outgoing 16 bytes at sp+0
       #|  stack-objects 64 bytes at sp+16
-      #|  place stack0 at sp+80
-      #|  place stack1 at sp+88
-      #|  place stack2 at sp+96
-      #|  place stack3 at sp+104
-      #|  place stack4 at sp+112
-      #|  place stack5 at sp+120
-      #|  place stack6 at sp+128
-      #|  save p19:int at sp+136
-      #|  save p20:int at sp+144
-      #|  save p21:int at sp+152
-      #|  save p22:int at sp+160
-      #|  save p23:int at sp+168
-      #|  save p24:int at sp+176
-      #|  save p25:int at sp+184
-      #|  save p26:int at sp+192
-      #|  save p27:int at sp+200
-      #|  save p28:int at sp+208
-      #|  save p30:int at sp+216
+      #|  save p30:int at sp+80
       #|
     ),
   )

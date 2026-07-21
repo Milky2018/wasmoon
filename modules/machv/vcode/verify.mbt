@@ -3,20 +3,24 @@ fn[Inst] Function::definition_dominates(
   self : Function[Inst],
   value : Value,
   use_instruction : Instruction,
-  dominators : Array[Array[Bool]],
+  dominators : Array[Array[UInt64]],
   instruction_positions : Array[Int],
 ) -> Bool {
   let use_data = self.instructions[use_instruction.id]
   match self.values[value.id].definition {
     FunctionParameter => true
-    BlockParameter(block) => dominators[use_data.parent.id][block.id]
+    BlockParameter(block) =>
+      value_bitset_contains(dominators[use_data.parent.id], block.id)
     InstructionResult(definition) => {
       let definition_data = self.instructions[definition.id]
       if definition_data.parent == use_data.parent {
         instruction_positions[definition.id] <
         instruction_positions[use_instruction.id]
       } else {
-        dominators[use_data.parent.id][definition_data.parent.id]
+        value_bitset_contains(
+          dominators[use_data.parent.id],
+          definition_data.parent.id,
+        )
       }
     }
   }
@@ -45,29 +49,28 @@ fn[Inst] Function::predecessors(self : Function[Inst]) -> Array[Array[Int]] {
 fn[Inst] Function::compute_dominators(
   self : Function[Inst],
   predecessors : Array[Array[Int]],
-) -> Array[Array[Bool]] {
+) -> Array[Array[UInt64]] {
   let count = self.blocks.length()
   let dominators = Array::makei(count, block => {
     if block == 0 {
-      Array::makei(count, index => index == 0)
+      let entry = value_bitset(count)
+      value_bitset_set(entry, 0)
+      entry
     } else {
-      Array::make(count, true)
+      Array::make((count + 63) / 64, 0xFFFFFFFFFFFFFFFFUL)
     }
   })
   let mut changed = true
   while changed {
     changed = false
     for block in 1..<count {
-      let next = Array::make(count, true)
-      for index in 0..<count {
-        for predecessor in predecessors[block] {
-          if !dominators[predecessor][index] {
-            next[index] = false
-            break
-          }
+      let next = Array::make((count + 63) / 64, 0xFFFFFFFFFFFFFFFFUL)
+      for predecessor in predecessors[block] {
+        for word in 0..<next.length() {
+          next[word] = next[word] & dominators[predecessor][word]
         }
       }
-      next[block] = true
+      value_bitset_set(next, block)
       if next != dominators[block] {
         dominators[block] = next
         changed = true
@@ -97,7 +100,7 @@ fn[Inst] Function::verify_layout(
 fn[Inst] Function::verify_instruction(
   self : Function[Inst],
   instruction : Instruction,
-  dominators : Array[Array[Bool]],
+  dominators : Array[Array[UInt64]],
   instruction_positions : Array[Int],
 ) -> Unit raise VCodeVerifyError {
   let data = self.instructions[instruction.id]
@@ -107,6 +110,10 @@ fn[Inst] Function::verify_instruction(
       raise ForeignValue(instruction~, value=operand.value)
     }
     let ty = self.values[operand.value.id].ty
+    if operand.preference is Some(preference) &&
+      preference.class != reg_class_for_value_type(ty) {
+      raise InvalidOperandPreference(instruction~, operand=index)
+    }
     match operand.constraint {
       Fixed(reg) =>
         if reg.class != reg_class_for_value_type(ty) {
@@ -453,28 +460,48 @@ fn[Inst] verify_allocation_edits(
 }
 
 ///|
+fn value_bitset(value_count : Int) -> Array[UInt64] {
+  Array::make((value_count + 63) / 64, 0UL)
+}
+
+///|
+fn value_bitset_contains(bits : Array[UInt64], value : Int) -> Bool {
+  (bits[value / 64] & (1UL << (value % 64))) != 0UL
+}
+
+///|
+fn value_bitset_set(bits : Array[UInt64], value : Int) -> Unit {
+  let word = value / 64
+  bits[word] = bits[word] | (1UL << (value % 64))
+}
+
+///|
+fn value_bitset_clear(bits : Array[UInt64], value : Int) -> Unit {
+  let word = value / 64
+  bits[word] = bits[word] & (1UL << (value % 64)).lnot()
+}
+
+///|
 fn[Inst] Function::allocation_block_live_out(
   self : Function[Inst],
-) -> Array[Array[Bool]] {
+) -> Array[Array[UInt64]] {
   let value_count = self.value_count()
   let block_count = self.block_count()
-  let live_in = Array::makei(block_count, _ => Array::make(value_count, false))
-  let live_out = Array::makei(block_count, _ => Array::make(value_count, false))
+  let live_in = Array::makei(block_count, _ => value_bitset(value_count))
+  let live_out = Array::makei(block_count, _ => value_bitset(value_count))
   let mut changed = true
   while changed {
     changed = false
     for reverse_index in 0..<block_count {
       let block_index = block_count - reverse_index - 1
-      let next_out = Array::make(value_count, false)
+      let next_out = value_bitset(value_count)
       let terminator = self.blocks[block_index].terminator.unwrap()
       for edge in self.instructions[terminator.id].successors {
-        for value in 0..<value_count {
-          if live_in[edge.target.id][value] {
-            next_out[value] = true
-          }
+        for word in 0..<next_out.length() {
+          next_out[word] = next_out[word] | live_in[edge.target.id][word]
         }
         for argument in edge.arguments {
-          next_out[argument.id] = true
+          value_bitset_set(next_out, argument.id)
         }
       }
       let next_in = next_out.copy()
@@ -484,19 +511,19 @@ fn[Inst] Function::allocation_block_live_out(
         let instruction = instructions[instructions.length() - reverse_inst - 1]
         let data = self.instructions[instruction.id]
         for result in data.results {
-          next_in[result.id] = false
+          value_bitset_clear(next_in, result.id)
         }
         for operand in self.instruction_operands(instruction) {
           if operand.role == Use {
-            next_in[operand.value.id] = true
+            value_bitset_set(next_in, operand.value.id)
           }
         }
         for root in data.metadata.live_gc_roots {
-          next_in[root.id] = true
+          value_bitset_set(next_in, root.id)
         }
       }
       for parameter in self.blocks[block_index].parameters {
-        next_in[parameter.id] = false
+        value_bitset_clear(next_in, parameter.id)
       }
       if next_out != live_out[block_index] || next_in != live_in[block_index] {
         live_out[block_index] = next_out
@@ -541,7 +568,7 @@ fn[Inst] allocation_location_ids(
 ///|
 fn find_or_add_affected_value(
   value_index : Int,
-  live : Array[Bool],
+  live : Array[UInt64],
   affected_values : Array[Int],
   before_states : Array[Bool],
   middle_states : Array[Bool],
@@ -552,8 +579,9 @@ fn find_or_add_affected_value(
     }
   }
   affected_values.push(value_index)
-  before_states.push(live[value_index])
-  middle_states.push(live[value_index])
+  let is_live = value_bitset_contains(live, value_index)
+  before_states.push(is_live)
+  middle_states.push(is_live)
   affected_values.length() - 1
 }
 
@@ -562,19 +590,19 @@ fn[Inst] transition_live_locations(
   function : Function[Inst],
   allocation : Allocation,
   location_ids : Array[Int],
-  live : Array[Bool],
+  live : Array[UInt64],
   occupants : Array[Int],
   affected_values : Array[Int],
   desired_states : Array[Bool],
 ) -> Unit raise AllocationVerifyError {
   for index, value_index in affected_values {
-    if live[value_index] && !desired_states[index] {
+    if value_bitset_contains(live, value_index) && !desired_states[index] {
       occupants[location_ids[value_index]] = -1
-      live[value_index] = false
+      value_bitset_clear(live, value_index)
     }
   }
   for index, value_index in affected_values {
-    if !live[value_index] && desired_states[index] {
+    if !value_bitset_contains(live, value_index) && desired_states[index] {
       let location_id = location_ids[value_index]
       let earlier = occupants[location_id]
       if earlier >= 0 {
@@ -586,7 +614,7 @@ fn[Inst] transition_live_locations(
         )
       }
       occupants[location_id] = value_index
-      live[value_index] = true
+      value_bitset_set(live, value_index)
     }
   }
 }
@@ -595,7 +623,7 @@ fn[Inst] transition_live_locations(
 fn[Inst] verify_allocation_interference(
   function : Function[Inst],
   allocation : Allocation,
-  block_live_out : Array[Array[Bool]],
+  block_live_out : Array[Array[UInt64]],
 ) -> Unit raise AllocationVerifyError {
   let (location_ids, location_count, ids_by_location) = allocation_location_ids(
     function, allocation,
@@ -603,8 +631,8 @@ fn[Inst] verify_allocation_interference(
   for block_index in 0..<function.block_count() {
     let live = block_live_out[block_index].copy()
     let occupants = Array::make(location_count, -1)
-    for value_index, is_live in live {
-      if is_live {
+    for value_index in 0..<function.value_count() {
+      if value_bitset_contains(live, value_index) {
         let location_id = location_ids[value_index]
         let earlier = occupants[location_id]
         if earlier >= 0 {
@@ -695,13 +723,13 @@ fn[Inst] verify_allocation_interference(
 }
 
 ///|
-pub fn[Inst] verify_allocated(
+/// Verifies allocation-specific invariants for VCode that has already passed
+/// `verify_selected`. The caller must not mutate `function` between the two
+/// checks.
+pub fn[Inst] verify_allocation_invariants(
   function : Function[Inst],
   allocation : Allocation,
 ) -> Unit raise AllocationVerifyError {
-  verify_selected(function) catch {
-    error => raise SelectedFailure(cause=error)
-  }
   if !physical_equal(function.owner, allocation.source_owner) ||
     function.value_count() != allocation.source_value_count ||
     function.instruction_count() != allocation.source_instruction_count {
@@ -842,6 +870,17 @@ pub fn[Inst] verify_allocated(
       )
     }
   }
+}
+
+///|
+pub fn[Inst] verify_allocated(
+  function : Function[Inst],
+  allocation : Allocation,
+) -> Unit raise AllocationVerifyError {
+  verify_selected(function) catch {
+    error => raise SelectedFailure(cause=error)
+  }
+  verify_allocation_invariants(function, allocation)
 }
 
 ///|

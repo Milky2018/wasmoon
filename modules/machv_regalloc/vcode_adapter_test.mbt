@@ -175,3 +175,19 @@ test "fixed operands are instruction-point constraints rather than value homes" 
     ),
   )
 }
+
+///|
+test "generic adapter validates selected VCode before allocation" {
+  let builder : @vcode.Builder[Unit] = @vcode.Builder::new("invalid_selected", [])
+  let error = try {
+    allocate_vcode(builder.finish(), VCodeAllocationEnvironment::new([], []))
+    |> ignore
+    "accepted"
+  } catch {
+    error => error.to_string()
+  }
+  inspect(
+    error,
+    content="InvalidSelected(cause=MissingTerminator(block=block0))",
+  )
+}

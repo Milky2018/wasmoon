@@ -18,7 +18,11 @@ fn timing_text(timing : OperandTiming) -> String {
 
 ///|
 fn operand_text(operand : Operand) -> String {
-  "\{to_repr(operand.value)}:\{constraint_text(operand.constraint)}@\{timing_text(operand.timing)}"
+  let preference = match operand.preference {
+    Some(reg) => "(prefer=\{to_repr(reg)})"
+    None => ""
+  }
+  "\{to_repr(operand.value)}:\{constraint_text(operand.constraint)}\{preference}@\{timing_text(operand.timing)}"
 }
 
 ///|

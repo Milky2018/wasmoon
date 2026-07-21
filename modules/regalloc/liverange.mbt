@@ -89,6 +89,7 @@ pub(all) struct UsePosition {
   point : ProgramPoint
   kind : UseKind
   constraint : OperandConstraint
+  preference : PhysicalReg?
   tie_id : Int
 } derive(Eq, Debug)
 
@@ -98,12 +99,20 @@ pub fn UsePosition::UsePosition(
   kind : UseKind,
   constraint : OperandConstraint,
 ) -> UsePosition {
-  { point, kind, constraint, tie_id: -1 }
+  { point, kind, constraint, preference: None, tie_id: -1 }
 }
 
 ///|
 pub fn UsePosition::with_tie(self : UsePosition, tie_id : Int) -> UsePosition {
-  { point: self.point, kind: self.kind, constraint: self.constraint, tie_id }
+  { ..self, tie_id, }
+}
+
+///|
+pub fn UsePosition::with_preference(
+  self : UsePosition,
+  preference : PhysicalReg?,
+) -> UsePosition {
+  { ..self, preference, }
 }
 
 ///|
@@ -458,23 +467,6 @@ fn find_or_create_live_range(
       ranges.add_range(range)
       range
     }
-  }
-}
-
-///|
-fn contains_vreg(values : Array[VirtualReg], vreg : VirtualReg) -> Bool {
-  for value in values {
-    if value == vreg {
-      return true
-    }
-  }
-  false
-}
-
-///|
-fn add_vreg(values : Array[VirtualReg], vreg : VirtualReg) -> Unit {
-  if !contains_vreg(values, vreg) {
-    values.push(vreg)
   }
 }
 

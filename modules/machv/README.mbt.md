@@ -16,7 +16,14 @@ contracts used after target instruction selection.
 The VCode package does not define a union of AArch64 and x64 instructions.
 Each target supplies its own closed instruction type, while the shared package
 stores CFG edges, SSA values, stable instruction handles, operand constraints,
-clobbers, safepoints, and allocation edits.
+soft physical-register preferences, clobbers, safepoints, and allocation edits.
+
+The VCode package also owns the pure call-transfer planner shared by machine
+targets. After allocation, targets normalize ABI register and outgoing-stack
+destinations into one atomic transfer request. The planner captures stack
+arguments before destructive register moves, resolves register cycles, protects
+safepoint root homes, and returns a verified ordered plan. ABI layout, frame
+offsets, and instruction encoding remain target-owned.
 
 VCode models AArch64/x64 hardware aliasing directly: scalar floating-point and
 SIMD values share one `FpVector` register bank. They can never be allocated to

@@ -75,6 +75,14 @@ pub fn verify_allocation(
   @vcode.verify_allocated(function, allocation) catch {
     error => raise InvalidAllocation(cause=error)
   }
+  verify_target_allocation(function, allocation)
+}
+
+///|
+fn verify_target_allocation(
+  function : @vcode.Function[X64Inst],
+  allocation : @vcode.Allocation,
+) -> Unit raise X64AllocationError {
   for index in 0..<function.value_count() {
     let value = function.value_at(index).unwrap()
     match allocation.value_location(value).unwrap() {
@@ -111,13 +119,10 @@ pub fn verify_allocation(
 }
 
 ///|
-pub fn allocate(
+fn allocate_verified(
   function : @vcode.Function[X64Inst],
 ) -> @vcode.Allocation raise X64AllocationError {
-  verify_vcode(function) catch {
-    error => raise InvalidVCode(cause=error)
-  }
-  let allocation = @vcode_regalloc.allocate_vcode(
+  let allocation = @vcode_regalloc.allocate_selected_vcode(
     function,
     @vcode_regalloc.VCodeAllocationEnvironment::new(
       allocatable_physical_regs(),
@@ -126,6 +131,16 @@ pub fn allocate(
   ) catch {
     error => raise AllocatorFailure(cause=error)
   }
-  verify_allocation(function, allocation)
+  verify_target_allocation(function, allocation)
   allocation
+}
+
+///|
+pub fn allocate(
+  function : @vcode.Function[X64Inst],
+) -> @vcode.Allocation raise X64AllocationError {
+  verify_vcode(function) catch {
+    error => raise InvalidVCode(cause=error)
+  }
+  allocate_verified(function)
 }

@@ -51,18 +51,33 @@ pub(all) struct Operand {
   vreg : VirtualReg
   role : OperandRole
   constraint : OperandConstraint
+  preference : PhysicalReg?
   tie_id : Int
   timing : OperandTiming
 } derive(Eq, Debug)
 
 ///|
 pub fn Operand::use_reg(vreg : VirtualReg) -> Operand {
-  { vreg, role: Use, constraint: AnyReg, tie_id: -1, timing: Early }
+  {
+    vreg,
+    role: Use,
+    constraint: AnyReg,
+    preference: None,
+    tie_id: -1,
+    timing: Early,
+  }
 }
 
 ///|
 pub fn Operand::def(vreg : VirtualReg) -> Operand {
-  { vreg, role: Def, constraint: AnyReg, tie_id: -1, timing: Late }
+  {
+    vreg,
+    role: Def,
+    constraint: AnyReg,
+    preference: None,
+    tie_id: -1,
+    timing: Late,
+  }
 }
 
 ///|
@@ -74,9 +89,20 @@ pub fn Operand::with_constraint(
     vreg: self.vreg,
     role: self.role,
     constraint,
+    preference: self.preference,
     tie_id: self.tie_id,
     timing: self.timing,
   }
+}
+
+///|
+/// Prefer a physical register without making it a correctness constraint.
+/// Allocation may ignore the preference when that register is unavailable.
+pub fn Operand::with_preference(
+  self : Operand,
+  preference : PhysicalReg,
+) -> Operand {
+  { ..self, preference: Some(preference) }
 }
 
 ///|
@@ -85,6 +111,7 @@ pub fn Operand::with_tie(self : Operand, tie_id : Int) -> Operand {
     vreg: self.vreg,
     role: self.role,
     constraint: self.constraint,
+    preference: self.preference,
     tie_id,
     timing: self.timing,
   }
@@ -96,6 +123,7 @@ pub fn Operand::with_timing(self : Operand, timing : OperandTiming) -> Operand {
     vreg: self.vreg,
     role: self.role,
     constraint: self.constraint,
+    preference: self.preference,
     tie_id: self.tie_id,
     timing,
   }

@@ -324,6 +324,20 @@ fn terminator_trap_metadata(
 }
 
 ///|
+fn call_argument_inputs(
+  operands : Array[@vcode.Value],
+  locations : Array[CallArgumentLocation],
+) -> Array[@vcode.Input] {
+  operands.mapi((index, operand) => {
+    let input = @vcode.Input::any_location(operand)
+    match locations[index] {
+      CallRegister(reg) if is_allocatable(reg) => input.with_preference(reg)
+      CallRegister(_) | CallStack(_) => input
+    }
+  })
+}
+
+///|
 fn lower_direct_platform_call(
   builder : @vcode.Builder[X64Inst],
   block : @vcode.Block,
@@ -348,7 +362,10 @@ fn lower_direct_platform_call(
       )
   }
   let result_registers = platform_result_registers(call.signature.results)
-  let inputs = operands.map(@vcode.Input::any_location)
+  let inputs = call_argument_inputs(
+    operands,
+    platform_call_layout(call.signature.params).arguments,
+  )
   let outputs = Array::makei(result_types.length(), index => {
     @vcode.Output::any(result_types[index])
   })
@@ -432,7 +449,14 @@ fn lower_internal_call(
       Some(target) => InternalCall(target, call.signature, plan)
       None => InternalCallIndirect(call.signature, plan)
     },
-    operands.map(@vcode.Input::any_location),
+    match target {
+      Some(_) => call_argument_inputs(operands, plan.arguments)
+      None =>
+        [
+          @vcode.Input::any_location(operands[0]),
+          ..call_argument_inputs(operands[1:].to_owned(), plan.arguments),
+        ]
+    },
     [],
     internal_call_clobbers(plan),
     metadata,
@@ -1211,7 +1235,7 @@ fn lower_parameters(
           entry,
           IncomingReg(ty, reg),
           [@vcode.Input::fixed(raw, reg)],
-          [@vcode.Output::any(ty)],
+          [@vcode.Output::fixed(ty, reg)],
           @vcode.InstructionMetadata::empty(),
         )[0]
       CallStack(offset) =>
@@ -1237,7 +1261,12 @@ fn lower_parameters(
           entry,
           IncomingResultArea(context.internal_abi.result_area_argument),
           [],
-          [@vcode.Output::any(Ptr64)],
+          [
+            @vcode.Output::fixed(
+              Ptr64,
+              context.internal_abi.result_area_argument,
+            ),
+          ],
           @vcode.InstructionMetadata::empty(),
         )[0],
       )
@@ -1461,11 +1490,37 @@ pub fn lower(
               message="internal tail calls cannot target an external symbol",
             )
         }
+        let inputs = match call.callee {
+          Internal(_) =>
+            call_argument_inputs(
+              operands[:call.signature.params.length()].to_owned(),
+              plan.arguments,
+            )
+          Indirect =>
+            [
+              @vcode.Input::any_location(operands[0]),
+              ..call_argument_inputs(
+                operands[1:call.signature.params.length() + 1].to_owned(),
+                plan.arguments,
+              ),
+            ]
+          External(_) => abort("external tail call rejected above")
+        }
+        if plan.result_area_size > 0 {
+          let index = inputs.length()
+          let input = @vcode.Input::any_location(operands[index])
+          inputs.push(
+            match result_area_register(plan) {
+              Some(reg) if is_allocatable(reg) => input.with_preference(reg)
+              _ => input
+            },
+          )
+        }
         set_terminator(
           builder,
           block,
           target,
-          operands.map(@vcode.Input::any_location),
+          inputs,
           [],
           metadata,
           clobbers=platform_call_clobbers(),

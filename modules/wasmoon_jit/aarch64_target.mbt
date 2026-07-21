@@ -62,23 +62,11 @@ fn build_aarch64_target(
         message="\{function.name()}: AArch64 selection failed: \{error.to_string()}",
       )
   }
-  let allocation = @aarch64_target.allocate(selected) catch {
+  let (object, frame_size) = @aarch64_target.compile(selected) catch {
     error =>
       raise PipelineFailure(
-        message="\{function.name()}: AArch64 allocation failed: \{error.to_string()}",
+        message="\{function.name()}: AArch64 compilation failed: \{error.to_string()}",
       )
   }
-  let frame = @aarch64_target.plan_frame(selected, allocation) catch {
-    error =>
-      raise PipelineFailure(
-        message="\{function.name()}: AArch64 frame planning failed: \{error.to_string()}",
-      )
-  }
-  let object = @aarch64_target.emit(selected, allocation, frame) catch {
-    error =>
-      raise PipelineFailure(
-        message="\{function.name()}: AArch64 emission failed: \{error.to_string()}",
-      )
-  }
-  { object, frame_size: frame.frame_size() }
+  { object, frame_size }
 }

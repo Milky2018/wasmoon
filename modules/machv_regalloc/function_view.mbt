@@ -2,7 +2,15 @@
 priv struct VCodeFunctionView[Inst] {
   function : @vcode.Function[Inst]
   layout : Array[@vcode.Block]
-  block_to_layout : Array[Int]
+  value_classes : Array[@regalloc.RegClass]
+  value_sizes : Array[Int]
+  entry : Array[@regalloc.VirtualReg]
+  parameters : Array[Array[@regalloc.VirtualReg]]
+  instructions : Array[Array[Int]]
+  successors : Array[Array[Int]]
+  edge_args : Array[Array[Array[@regalloc.VirtualReg]]]
+  operands : Array[Array[@regalloc.Operand]]
+  clobbers : Array[Array[@regalloc.PhysicalReg]]
 }
 
 ///|
@@ -14,7 +22,76 @@ fn[Inst] VCodeFunctionView::new(
   for layout_index, block in layout {
     block_to_layout[function.block_index(block).unwrap()] = layout_index
   }
-  { function, layout, block_to_layout }
+  let value_classes : Array[@regalloc.RegClass] = []
+  let value_sizes : Array[Int] = []
+  for value_index in 0..<function.value_count() {
+    let value = function.value_at(value_index).unwrap()
+    let ty = function.value_type(value).unwrap()
+    value_classes.push(to_regalloc_class(@vcode.reg_class_for_value_type(ty)))
+    value_sizes.push(regalloc_value_size(ty))
+  }
+  let entry = Array::makei(function.parameter_count(), index => {
+    to_regalloc_vreg(function, function.parameter_at(index).unwrap())
+  })
+  let parameters : Array[Array[@regalloc.VirtualReg]] = []
+  let instructions : Array[Array[Int]] = []
+  let successors : Array[Array[Int]] = []
+  let edge_args : Array[Array[Array[@regalloc.VirtualReg]]] = []
+  for block in layout {
+    parameters.push(
+      function
+      .block_parameters(block)
+      .map(value => to_regalloc_vreg(function, value)),
+    )
+    let block_instructions = function.block_body(block)
+    let terminator = function.block_terminator(block).unwrap()
+    block_instructions.push(terminator)
+    instructions.push(
+      block_instructions.map(instruction => {
+        function.instruction_index(instruction).unwrap()
+      }),
+    )
+    let block_successors : Array[Int] = []
+    let block_edge_args : Array[Array[@regalloc.VirtualReg]] = []
+    for edge in function.instruction_successors(terminator) {
+      block_successors.push(
+        block_to_layout[function.block_index(edge.target).unwrap()],
+      )
+      block_edge_args.push(
+        edge.arguments.map(value => to_regalloc_vreg(function, value)),
+      )
+    }
+    successors.push(block_successors)
+    edge_args.push(block_edge_args)
+  }
+  let operands : Array[Array[@regalloc.Operand]] = []
+  let clobbers : Array[Array[@regalloc.PhysicalReg]] = []
+  for instruction_index in 0..<function.instruction_count() {
+    let instruction = function.instruction_at(instruction_index).unwrap()
+    operands.push(
+      function
+      .instruction_operands(instruction)
+      .map(operand => to_regalloc_operand(function, operand)),
+    )
+    clobbers.push(
+      function
+      .instruction_clobbers(instruction)
+      .map(reg => to_regalloc_preg(reg)),
+    )
+  }
+  {
+    function,
+    layout,
+    value_classes,
+    value_sizes,
+    entry,
+    parameters,
+    instructions,
+    successors,
+    edge_args,
+    operands,
+    clobbers,
+  }
 }
 
 ///|
@@ -65,6 +142,7 @@ fn[Inst] to_regalloc_operand(
     vreg: to_regalloc_vreg(function, operand.value),
     role: to_regalloc_operand_role(operand.role),
     constraint: to_regalloc_operand_constraint(operand.constraint),
+    preference: operand.preference.map(to_regalloc_preg),
     tie_id: operand.tie_id,
     timing: to_regalloc_operand_timing(operand.timing),
   }
@@ -82,11 +160,7 @@ impl[Inst] @regalloc.FunctionView for VCodeFunctionView[Inst] with fn value_clas
   self,
   value,
 ) -> @regalloc.RegClass {
-  to_regalloc_class(
-    @vcode.reg_class_for_value_type(
-      self.function.value_type(self.function.value_at(value).unwrap()).unwrap(),
-    ),
-  )
+  self.value_classes[value]
 }
 
 ///|
@@ -94,9 +168,7 @@ impl[Inst] @regalloc.FunctionView for VCodeFunctionView[Inst] with fn value_spil
   self,
   value,
 ) -> Int {
-  regalloc_value_size(
-    self.function.value_type(self.function.value_at(value).unwrap()).unwrap(),
-  )
+  self.value_sizes[value]
 }
 
 ///|
@@ -104,9 +176,7 @@ impl[Inst] @regalloc.FunctionView for VCodeFunctionView[Inst] with fn value_spil
   self,
   value,
 ) -> Int {
-  regalloc_value_size(
-    self.function.value_type(self.function.value_at(value).unwrap()).unwrap(),
-  )
+  self.value_sizes[value]
 }
 
 ///|
@@ -123,9 +193,7 @@ impl[Inst] @regalloc.FunctionView for VCodeFunctionView[Inst] with fn values_sha
 impl[Inst] @regalloc.FunctionView for VCodeFunctionView[Inst] with fn entry_values(
   self,
 ) -> Array[@regalloc.VirtualReg] {
-  Array::makei(self.function.parameter_count(), index => {
-    to_regalloc_vreg(self.function, self.function.parameter_at(index).unwrap())
-  })
+  self.entry
 }
 
 ///|
@@ -148,10 +216,7 @@ impl[Inst] @regalloc.FunctionView for VCodeFunctionView[Inst] with fn block_para
   self,
   block,
 ) -> Array[@regalloc.VirtualReg] {
-  let handle = self.layout[block]
-  self.function
-  .block_parameters(handle)
-  .map(value => to_regalloc_vreg(self.function, value))
+  self.parameters[block].copy()
 }
 
 ///|
@@ -159,12 +224,7 @@ impl[Inst] @regalloc.FunctionView for VCodeFunctionView[Inst] with fn block_inst
   self,
   block,
 ) -> Array[Int] {
-  let handle = self.layout[block]
-  let instructions = self.function.block_body(handle)
-  instructions.push(self.function.block_terminator(handle).unwrap())
-  instructions.map(instruction => {
-    self.function.instruction_index(instruction).unwrap()
-  })
+  self.instructions[block]
 }
 
 ///|
@@ -172,12 +232,7 @@ impl[Inst] @regalloc.FunctionView for VCodeFunctionView[Inst] with fn block_succ
   self,
   block,
 ) -> Array[Int] {
-  let terminator = self.function.block_terminator(self.layout[block]).unwrap()
-  self.function
-  .instruction_successors(terminator)
-  .map(edge => {
-    self.block_to_layout[self.function.block_index(edge.target).unwrap()]
-  })
+  self.successors[block]
 }
 
 ///|
@@ -186,11 +241,7 @@ impl[Inst] @regalloc.FunctionView for VCodeFunctionView[Inst] with fn edge_argum
   block,
   successor,
 ) -> Array[@regalloc.VirtualReg] {
-  let terminator = self.function.block_terminator(self.layout[block]).unwrap()
-  self.function.instruction_successor_at(terminator, successor).unwrap().arguments.map(value => {
-      to_regalloc_vreg(self.function, value)
-    },
-  )
+  self.edge_args[block][successor]
 }
 
 ///|
@@ -198,10 +249,7 @@ impl[Inst] @regalloc.FunctionView for VCodeFunctionView[Inst] with fn instructio
   self,
   instruction,
 ) -> Array[@regalloc.Operand] {
-  let handle = self.function.instruction_at(instruction).unwrap()
-  self.function
-  .instruction_operands(handle)
-  .map(operand => to_regalloc_operand(self.function, operand))
+  self.operands[instruction]
 }
 
 ///|
@@ -209,6 +257,5 @@ impl[Inst] @regalloc.FunctionView for VCodeFunctionView[Inst] with fn instructio
   self,
   instruction,
 ) -> Array[@regalloc.PhysicalReg] {
-  let handle = self.function.instruction_at(instruction).unwrap()
-  self.function.instruction_clobbers(handle).map(reg => to_regalloc_preg(reg))
+  self.clobbers[instruction]
 }

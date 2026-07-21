@@ -6,6 +6,7 @@ pub suberror VerifyError {
     required~ : PhysicalReg,
     actual~ : Location
   )
+  InvalidPreference(vreg~ : VirtualReg, preferred~ : PhysicalReg)
   IncorrectValue(vreg~ : VirtualReg, location~ : Location)
   ScratchRegisterUnavailable(message~ : String)
   InvalidPlan(message~ : String)

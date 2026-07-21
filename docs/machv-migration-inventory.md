@@ -23,8 +23,9 @@ addressing modes, or encodings.
 Each target owns its instruction type, verifier, ABI legalization, allocation
 policy, frame layout, encoding, relocations, and linker. The generic
 `machv/vcode` package supplies the typed container and allocation side tables;
-`machv_regalloc` projects that representation into the reusable `regalloc`
-algorithm without inspecting target instructions.
+`machv_regalloc` exposes that representation directly through the reusable
+allocator's read-only `FunctionView`, without copying the CFG or inspecting
+target instructions.
 
 Wasmoon enters native compilation through `wasmoon_jit`. The product layer
 provides VMContext field paths, runtime symbols, cwasm conversion, executable
@@ -35,6 +36,8 @@ independent of Wasmoon.
 
 - AArch64 and x64 production JIT compilation both pass through semantic MachV
   and their respective Target VCode pipelines.
+- Both production targets explicitly use the verified backtracking allocator;
+  `SinglePass` is not a runtime fallback.
 - Diagnostics and `explore --stage machv` use the same semantic path as
   production compilation.
 - The retired shared target-opcode backend, its compatibility adapters, and
@@ -44,3 +47,7 @@ independent of Wasmoon.
 
 This document replaces the pre-migration coupling inventory recorded by
 [ISS-184](../issues/ISS-184.md).
+
+Correctness cutover and performance acceptance are distinct gates. Current
+paired measurements and the remaining performance work are recorded in
+[Register-allocation cutover status](perf/machv-migration/regalloc-cutover-status.md).

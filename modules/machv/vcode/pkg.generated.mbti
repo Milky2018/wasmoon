@@ -7,11 +7,15 @@ import {
 }
 
 // Values
+pub fn plan_call_transfers(Array[CallTransfer], Array[PhysicalReg], Array[PhysicalReg], Array[Location]) -> CallTransferPlan raise CallTransferError
+
 pub fn reg_class_for_value_type(@machv.ValueType) -> RegClass
 
 pub fn resolve_parallel_moves(Array[ParallelMove], Array[PhysicalReg], Array[PhysicalReg]) -> Array[ParallelMove] raise MoveResolveError
 
 pub fn[Inst] verify_allocated(Function[Inst], Allocation) -> Unit raise AllocationVerifyError
+
+pub fn[Inst] verify_allocation_invariants(Function[Inst], Allocation) -> Unit raise AllocationVerifyError
 
 pub fn[Inst] verify_emission_input(Function[Inst], Allocation, FrameLayout) -> Unit raise EmissionVerifyError
 
@@ -43,6 +47,16 @@ pub suberror AllocationVerifyError {
   UnexpectedSafepointRoot(instruction~ : Instruction, value~ : Value)
 } derive(Eq, @debug.Debug)
 pub impl Show for AllocationVerifyError
+
+pub suberror CallTransferError {
+  InvalidSourceClass(index~ : Int)
+  InvalidDestinationClass(index~ : Int)
+  InvalidStackOffset(index~ : Int, offset~ : Int)
+  DuplicateRegisterDestination(index~ : Int, register~ : PhysicalReg)
+  OverlappingStackDestination(first~ : Int, second~ : Int)
+  ProtectedLocationOverwrite(index~ : Int, location~ : Location)
+  MoveResolutionFailed(cause~ : MoveResolveError)
+} derive(Eq, @debug.Debug)
 
 pub suberror EmissionVerifyError {
   FrameFailure(cause~ : FrameVerifyError)
@@ -91,6 +105,7 @@ pub suberror VCodeVerifyError {
   InvalidTie(instruction~ : Instruction, operand~ : Int, tied_to~ : Int)
   InvalidAnyLocationConstraint(instruction~ : Instruction, operand~ : Int)
   FixedRegisterClassMismatch(instruction~ : Instruction, operand~ : Int)
+  InvalidOperandPreference(instruction~ : Instruction, operand~ : Int)
   DuplicateClobber(instruction~ : Instruction, reg~ : PhysicalReg)
   InvalidSafepointRoot(instruction~ : Instruction, value~ : Value)
   InvalidStackMap(instruction~ : Instruction)
@@ -144,6 +159,17 @@ pub fn[Inst] Builder::new_with_protocol(String, @machv.CallProtocol, Array[@mach
 pub fn[Inst] Builder::new_with_results(String, Array[@machv.ValueType], Array[@machv.ValueType]) -> Self[Inst]
 pub fn[Inst] Builder::parameter(Self[Inst], Int) -> Value raise VCodeBuildError
 pub fn[Inst] Builder::set_terminator(Self[Inst], Block, Inst, Array[Input], Array[Edge], Array[PhysicalReg], InstructionMetadata) -> Instruction raise VCodeBuildError
+
+pub struct CallTransfer {
+  // private fields
+}
+pub fn CallTransfer::to_register(@machv.ValueType, Location, PhysicalReg) -> Self
+pub fn CallTransfer::to_stack(@machv.ValueType, Location, Int) -> Self
+
+pub struct CallTransferPlan {
+  stack_transfers : Array[StackArgumentTransfer]
+  register_moves : Array[ParallelMove]
+} derive(Eq, @debug.Debug)
 
 pub struct Edge {
   target : Block
@@ -223,11 +249,13 @@ pub fn[Inst] Function::value_type(Self[Inst], Value) -> @machv.ValueType?
 pub struct Input {
   value : Value
   constraint : OperandConstraint
+  preference : PhysicalReg?
   timing : OperandTiming
 }
 pub fn Input::any(Value) -> Self
 pub fn Input::any_location(Value) -> Self
 pub fn Input::fixed(Value, PhysicalReg) -> Self
+pub fn Input::with_preference(Self, PhysicalReg) -> Self
 pub fn Input::with_timing(Self, OperandTiming) -> Self
 
 pub struct Instruction {
@@ -259,6 +287,7 @@ pub struct Operand {
   value : Value
   role : OperandRole
   constraint : OperandConstraint
+  preference : PhysicalReg?
   timing : OperandTiming
   tie_id : Int
 } derive(Eq, @debug.Debug)
@@ -321,6 +350,13 @@ pub(all) enum RegClass {
   Int
   FpVector
 } derive(Eq, Hash, @debug.Debug)
+
+pub struct StackArgumentTransfer {
+  ty : @machv.ValueType
+  source : Location
+  offset : Int
+  scratch : PhysicalReg?
+} derive(Eq, @debug.Debug)
 
 pub struct StackSlot {
   // private fields

@@ -62,23 +62,11 @@ fn build_x64_target(
         message="\{function.name()}: x64 selection failed: \{error.to_string()}",
       )
   }
-  let allocation = @x64_target.allocate(selected) catch {
+  let (object, frame_size) = @x64_target.compile(selected) catch {
     error =>
       raise PipelineFailure(
-        message="\{function.name()}: x64 allocation failed: \{error.to_string()}",
+        message="\{function.name()}: x64 compilation failed: \{error.to_string()}",
       )
   }
-  let frame = @x64_target.plan_frame(selected, allocation) catch {
-    error =>
-      raise PipelineFailure(
-        message="\{function.name()}: x64 frame planning failed: \{error.to_string()}",
-      )
-  }
-  let object = @x64_target.emit(selected, allocation, frame) catch {
-    error =>
-      raise PipelineFailure(
-        message="\{function.name()}: x64 emission failed: \{error.to_string()}",
-      )
-  }
-  { object, frame_size: frame.frame_size() }
+  { object, frame_size }
 }

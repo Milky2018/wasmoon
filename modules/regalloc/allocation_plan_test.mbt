@@ -13,6 +13,8 @@ priv struct CfgTestFunction {
   clobbers : Array[Array[PhysicalReg]]
   successors : Array[Array[Int]]
   entry_values : Array[VirtualReg]
+  parameters : Array[Array[VirtualReg]]
+  edge_arguments : Array[Array[Array[VirtualReg]]]
 }
 
 ///|
@@ -65,10 +67,10 @@ impl FunctionView for CfgTestFunction with fn block_id_at(_self, index) -> Int {
 }
 
 ///|
-impl FunctionView for CfgTestFunction with fn block_parameters(_self, _block) -> Array[
+impl FunctionView for CfgTestFunction with fn block_parameters(self, block) -> Array[
   VirtualReg,
 ] {
-  []
+  self.parameters[block].copy()
 }
 
 ///|
@@ -87,11 +89,11 @@ impl FunctionView for CfgTestFunction with fn block_successors(self, block) -> A
 
 ///|
 impl FunctionView for CfgTestFunction with fn edge_arguments(
-  _self,
-  _block,
-  _successor,
+  self,
+  block,
+  successor,
 ) -> Array[VirtualReg] {
-  []
+  self.edge_arguments[block][successor].copy()
 }
 
 ///|
@@ -425,6 +427,8 @@ test "backtracking splits a live range around a clobbered CFG fragment" {
     clobbers: [[], [int_reg(0)], []],
     successors: [[1], [2], []],
     entry_values: [value(0)],
+    parameters: [[], [], []],
+    edge_arguments: [[[]], [[]], []],
   }
   inspect(
     allocate_function(function, MachineEnv::new([int_reg(0)], [int_reg(1)])),
@@ -457,6 +461,138 @@ test "backtracking splits a live range around a clobbered CFG fragment" {
       #|}
     ),
   )
+}
+
+///|
+test "backtracking avoids edge-copy cycles when an affinity is unavailable" {
+  let function : CfgTestFunction = {
+    value_count: 7,
+    blocks: [[0], [1, 2]],
+    instructions: [
+      [],
+      [
+        Operand::use_reg(value(3)).with_timing(Early),
+        Operand::use_reg(value(4)).with_timing(Early),
+        Operand::def(value(6)).with_timing(Late),
+      ],
+      [],
+    ],
+    clobbers: [[], [], []],
+    successors: [[1], [1]],
+    entry_values: [value(0), value(1), value(2)],
+    parameters: [[], [value(3), value(4), value(5)]],
+    edge_arguments: [
+      [[value(0), value(1), value(2)]],
+      [[value(4), value(6), value(5)]],
+    ],
+  }
+  inspect(
+    allocate_function(
+      function,
+      MachineEnv::new([int_reg(0), int_reg(1), int_reg(2), int_reg(3)], [
+        int_reg(4),
+      ]),
+    ),
+    content=(
+      #|{
+      #|  value_locations: [
+      #|    Some(Reg({ id: 0, class: Int })),
+      #|    Some(Reg({ id: 1, class: Int })),
+      #|    Some(Reg({ id: 2, class: Int })),
+      #|    Some(Reg({ id: 0, class: Int })),
+      #|    Some(Reg({ id: 1, class: Int })),
+      #|    Some(Reg({ id: 2, class: Int })),
+      #|    Some(Reg({ id: 3, class: Int })),
+      #|  ],
+      #|  operand_locations: {
+      #|    (1, 0): Reg({ id: 0, class: Int }),
+      #|    (1, 1): Reg({ id: 1, class: Int }),
+      #|    (1, 2): Reg({ id: 3, class: Int }),
+      #|  },
+      #|  operand_assignments: [
+      #|    { instruction: 1, operand: 0, location: Reg({ id: 0, class: Int }) },
+      #|    { instruction: 1, operand: 1, location: Reg({ id: 1, class: Int }) },
+      #|    { instruction: 1, operand: 2, location: Reg({ id: 3, class: Int }) },
+      #|  ],
+      #|  edits: [
+      #|    {
+      #|      value: { id: 4, class: Int },
+      #|      from: Reg({ id: 1, class: Int }),
+      #|      to: Reg({ id: 0, class: Int }),
+      #|      position: Edge(source_block=1, successor_index=0),
+      #|    },
+      #|    {
+      #|      value: { id: 6, class: Int },
+      #|      from: Reg({ id: 3, class: Int }),
+      #|      to: Reg({ id: 1, class: Int }),
+      #|      position: Edge(source_block=1, successor_index=0),
+      #|    },
+      #|  ],
+      #|  spill_slots: [],
+      #|}
+    ),
+  )
+}
+
+///|
+test "soft register preference chooses a legal home without an edit" {
+  let function : TestFunction = {
+    value_count: 1,
+    instructions: [
+      [
+        Operand::use_reg(value(0))
+        .with_constraint(AnyLocation)
+        .with_preference(int_reg(2)),
+      ],
+    ],
+    block_parameters: [value(0)],
+  }
+  inspect(
+    allocate_function(
+      function,
+      MachineEnv::new([int_reg(0), int_reg(1), int_reg(2)], [int_reg(3)]),
+    ),
+    content=(
+      #|{
+      #|  value_locations: [Some(Reg({ id: 2, class: Int }))],
+      #|  operand_locations: { (0, 0): Reg({ id: 2, class: Int }) },
+      #|  operand_assignments: [{ instruction: 0, operand: 0, location: Reg({ id: 2, class: Int }) }],
+      #|  edits: [],
+      #|  spill_slots: [],
+      #|}
+    ),
+  )
+}
+
+///|
+test "non-allocatable register preference is rejected structurally" {
+  let function : TestFunction = {
+    value_count: 1,
+    instructions: [
+      [
+        Operand::use_reg(value(0))
+        .with_constraint(AnyLocation)
+        .with_preference(int_reg(9)),
+      ],
+    ],
+    block_parameters: [value(0)],
+  }
+  try
+    allocate_function(function, MachineEnv::new([int_reg(0)], [int_reg(1)]))
+  catch {
+    error =>
+      debug_inspect(
+        error,
+        content=(
+          #|InvalidPreference(
+          #|  vreg={ id: 0, class: Int },
+          #|  preferred={ id: 9, class: Int },
+          #|)
+        ),
+      )
+  } noraise {
+    _ => fail("expected an invalid preference error")
+  }
 }
 
 ///|

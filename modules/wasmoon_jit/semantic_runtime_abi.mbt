@@ -234,6 +234,29 @@ fn elaborate_wasmoon_runtime_abi(
     @semantic_machv.ExternalSymbol,
   ),
 ) -> @semantic_machv.Function raise JitPipelineError {
+  let mut needs_elaboration = false
+  for block in function.blocks() {
+    for instruction in function.block_instructions(block) {
+      guard function.instruction_operation(instruction) is Some(Call(call)) else {
+        continue
+      }
+      let metadata = function.instruction_metadata(instruction).unwrap()
+      let hidden_safepoint = match call.callee {
+        External(symbol) => allocation_symbols.contains(symbol)
+        _ => false
+      }
+      if !metadata.live_gc_roots.is_empty() || hidden_safepoint {
+        needs_elaboration = true
+        break
+      }
+    }
+    if needs_elaboration {
+      break
+    }
+  }
+  if !needs_elaboration {
+    return function
+  }
   function.verify() catch {
     error =>
       raise PipelineFailure(

@@ -807,6 +807,7 @@ priv struct VerifierCfgView {
   operands : Array[Array[Operand]]
   successors : Array[Array[Int]]
   entry_values : Array[VirtualReg]
+  successor_queries : Ref[Int]
 }
 
 ///|
@@ -876,6 +877,7 @@ impl FunctionView for VerifierCfgView with fn block_instructions(self, block) ->
 impl FunctionView for VerifierCfgView with fn block_successors(self, block) -> Array[
   Int,
 ] {
+  self.successor_queries.val = self.successor_queries.val + 1
   self.successors[block].copy()
 }
 
@@ -937,6 +939,7 @@ test "plan verifier always enters a self-looping entry block" {
         operands: [[Operand::use_reg(value)]],
         successors: [[0]],
         entry_values: [value],
+        successor_queries: Ref(0),
       },
       None,
       0,
@@ -962,6 +965,7 @@ test "plan verifier checks an unreachable cyclic component" {
         operands: [[Operand::def(value)], [Operand::use_reg(value)]],
         successors: [[], [1]],
         entry_values: [],
+        successor_queries: Ref(0),
       },
       Some(0),
       1,
@@ -974,5 +978,116 @@ test "plan verifier checks an unreachable cyclic component" {
       #|  ),
       #|)
     ),
+  )
+}
+
+///|
+test "plan verifier queries each block successor list once" {
+  let successor_queries = Ref(0)
+  let value : VirtualReg = { id: 0, class: Int }
+  let register : PhysicalReg = { id: 0, class: Int }
+  let function : VerifierCfgView = {
+    blocks: [[], [], [], []],
+    operands: [],
+    successors: [[1], [2], [3], []],
+    entry_values: [value],
+    successor_queries,
+  }
+  let plan = AllocationPlan::new(1)
+  plan.assign_value(value, Reg(register))
+  verify_function_allocation(function, MachineEnv::new([register], []), plan)
+  inspect(successor_queries.val, content="4")
+}
+
+///|
+test "production segment queue prioritizes allocation weight" {
+  let segments : Array[AllocationSegment] = [
+    {
+      id: 0,
+      value: { id: 0, class: Int },
+      range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 2)),
+      weight: 10,
+      has_fixed_constraint: false,
+      location: None,
+    },
+    {
+      id: 1,
+      value: { id: 1, class: Int },
+      range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 2)),
+      weight: 100,
+      has_fixed_constraint: false,
+      location: None,
+    },
+    {
+      id: 2,
+      value: { id: 2, class: Int },
+      range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 2)),
+      weight: 50,
+      has_fixed_constraint: false,
+      location: None,
+    },
+  ]
+  let queue = SegmentQueue::new(segments, true)
+  for segment in segments {
+    queue.push(segment.id)
+  }
+  debug_inspect(
+    [queue.pop(), queue.pop(), queue.pop()],
+    content="[Some(1), Some(2), Some(0)]",
+  )
+}
+
+///|
+test "production fragments inherit whole-value spill weight" {
+  let range = LiveRange::LiveRange(0, { id: 0, class: Int })
+  range.add_range(ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 2)))
+  range.add_range(ProgramRange(ProgramPoint(2, 0), ProgramPoint(2, 2)))
+  range.add_use(UsePosition(ProgramPoint(0, 1), LiveUse, AnyReg))
+  range.add_use(UsePosition(ProgramPoint(2, 1), LiveUse, AnyReg))
+  let ranges = LiveRangeSet::LiveRangeSet([0, 1, 2])
+  ranges.add_range(range)
+  let (segments, _) = build_allocation_segments(ranges)
+  debug_inspect(segments.map(segment => segment.weight), content="[3001, 3001]")
+}
+
+///|
+test "production conflict index finds only overlapping occupied segments" {
+  let segments : Array[AllocationSegment] = [
+    {
+      id: 0,
+      value: { id: 0, class: Int },
+      range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 2)),
+      weight: 1,
+      has_fixed_constraint: false,
+      location: None,
+    },
+    {
+      id: 1,
+      value: { id: 1, class: Int },
+      range: ProgramRange(ProgramPoint(0, 4), ProgramPoint(0, 6)),
+      weight: 1,
+      has_fixed_constraint: false,
+      location: None,
+    },
+    {
+      id: 2,
+      value: { id: 2, class: Int },
+      range: ProgramRange(ProgramPoint(0, 8), ProgramPoint(0, 10)),
+      weight: 1,
+      has_fixed_constraint: false,
+      location: None,
+    },
+    {
+      id: 3,
+      value: { id: 3, class: Int },
+      range: ProgramRange(ProgramPoint(0, 5), ProgramPoint(0, 7)),
+      weight: 1,
+      has_fixed_constraint: false,
+      location: None,
+    },
+  ]
+  debug_inspect(
+    conflicting_segments(segments, [0, 1, 2], segments[3], [0]),
+    content="[1]",
   )
 }

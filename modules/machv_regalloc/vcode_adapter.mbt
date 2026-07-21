@@ -121,20 +121,22 @@ fn add_materialized_transfer(
 }
 
 ///|
-pub fn[Inst] allocate_vcode(
+/// Allocates VCode that has already passed `@vcode.verify_selected`.
+///
+/// The caller must not mutate `function` between validation and this call.
+/// Prefer `allocate_vcode` unless validation is owned by an aggregate compile
+/// pipeline.
+pub fn[Inst] allocate_selected_vcode(
   function : @vcode.Function[Inst],
   environment : VCodeAllocationEnvironment,
 ) -> @vcode.Allocation raise VCodeAllocationError {
-  @vcode.verify_selected(function) catch {
-    error => raise InvalidSelected(cause=error)
-  }
   let plan = @regalloc.allocate_function(
     VCodeFunctionView::new(function),
     @regalloc.MachineEnv::new(
       environment.allocatable_regs.map(reg => to_regalloc_preg(reg)),
       environment.spill_scratch_regs.map(reg => to_regalloc_preg(reg)),
     ),
-    config=RegallocConfig(strategy=Backtracking),
+    config=RegallocConfig(strategy=Backtracking, verify=false),
   ) catch {
     error => raise RegallocFailure(cause=error)
   }
@@ -246,8 +248,19 @@ pub fn[Inst] allocate_vcode(
       }
     }
   }
-  @vcode.verify_allocated(function, allocation) catch {
+  @vcode.verify_allocation_invariants(function, allocation) catch {
     error => raise InvalidAllocation(cause=error)
   }
   allocation
+}
+
+///|
+pub fn[Inst] allocate_vcode(
+  function : @vcode.Function[Inst],
+  environment : VCodeAllocationEnvironment,
+) -> @vcode.Allocation raise VCodeAllocationError {
+  @vcode.verify_selected(function) catch {
+    error => raise InvalidSelected(cause=error)
+  }
+  allocate_selected_vcode(function, environment)
 }

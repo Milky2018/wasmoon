@@ -78,7 +78,7 @@ Core modules pass through `wasmoon/validator` before the CLI instantiates or com
 3. Translate each selected function into MilkIR and run the requested optimization level.
 4. Lower verified MilkIR through `milkir_machv` and `wasm_machv` into target-neutral MachV.
 5. Lower semantic MachV into verified AArch64 or x64 Target VCode.
-6. Allocate physical registers through `machv_regalloc` and `regalloc`, then construct a verified target frame.
+6. Expose Target VCode directly through the read-only `regalloc.FunctionView`, run the verified backtracking allocator through `machv_regalloc`, materialize its `AllocationPlan`, and construct a verified target frame.
 7. Let the selected target emit machine code, relocations, traps, and safepoint metadata into an unlinked code object.
 8. Package compiled functions as an in-memory or serialized CWASM artifact.
 9. Let `wasmoon_jit` resolve runtime symbols, install code, initialize VMContext state, and enter native code through Wasmoon-owned trampolines.
@@ -93,6 +93,8 @@ MilkIR uses SSA values and block parameters rather than WebAssembly operand-stac
 
 Semantic MachV represents function-owned typed values, blocks, explicit edge arguments, calls, effects, traps, safepoints, and target-neutral operations. Target-specific operations exist only inside `aarch64_target` or `x64_target` VCode, so an instruction from one architecture cannot be represented in the other target function. Each target module owns calling-convention legalization and physical-register policy, while Wasmoon-specific VMContext meanings remain owned by `wasmoon_jit`.
 
+Register allocation does not own or copy a second machine-IR graph. `machv_regalloc` adapts the selected target VCode to the reusable allocator's read-only `FunctionView`; both production targets explicitly select the backtracking strategy. The aggregate target pipeline verifies selected VCode before allocation and independently verifies the materialized VCode allocation before frame planning. `SinglePass` remains an explicit library option and is not a production fallback.
+
 Each target emitter produces machine code and symbolic metadata. Resolving Wasmoon runtime helpers, allocating executable memory, installing signal/trap integration, and constructing VMContext state occur after emission in `wasmoon_jit`. See [JIT ABI](jit-abi.md) for the embedding contract and the target modules for executable policy definitions.
 
 ## Capability Coverage and Readiness
@@ -102,3 +104,9 @@ The repository includes broad implementation and test coverage for core WebAssem
 Wasmoon is primarily developed with AI assistance and has not received the security review expected of a production WebAssembly sandbox. The interpreter, JIT native glue, process-level trap handling, WASI host access, component runtime, and proposal implementations should be treated as experimental unless independently audited for the intended deployment. Do not use the project as a security boundary or in production merely because a feature is listed as supported.
 
 Current capability and command summaries live in the root README. Component-model limitations are tracked in [component/unsupported-matrix.md](component/unsupported-matrix.md), and development validation commands are documented in [development.md](development.md).
+
+The native JIT register-allocation cutover is active on both targets. The
+current AArch64 host correctness corpus passes, but this does not establish
+dual-target performance parity. The remaining compile-time, runtime, and
+emitted-code-size gaps and their current measurements are recorded in
+[Register-allocation cutover status](perf/machv-migration/regalloc-cutover-status.md).

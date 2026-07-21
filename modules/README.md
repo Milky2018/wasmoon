@@ -11,8 +11,8 @@ Wasmoon runtime integration packages. The main public packages are:
 | `Milky2018/machv` | Target-neutral semantic machine IR. | `Function`, `FunctionBuilder`, typed values, blocks, semantic operations, calls, traps, effects, verification, and printing. |
 | `Milky2018/milkir_machv` | Verified MilkIR-to-semantic-MachV producer. | `lower_core_function`, `lower_core_function_with_protocol`, and explicit dialect-adapter entry points. |
 | `Milky2018/wasm_machv` | WebAssembly dialect adapter for semantic MachV. | `Environment`, `lower_function`, and typed runtime-capability seams. |
-| `Milky2018/regalloc` | Target-independent register allocation algorithm. | `Program`, `Block`, `Instruction`, linear-scan/backtracking allocation, `verify_allocation`, live-range and move-resolution planning helpers. |
-| `Milky2018/machv_regalloc` | Target VCode adapter for the reusable register allocator. | `allocate_vcode`, `VCodeAllocationEnvironment`, and structured allocation errors. |
+| `Milky2018/regalloc` | Target-independent register allocation algorithm. | Read-only `FunctionView`, `MachineEnv`, `RegallocConfig`, verified `AllocationPlan`, and reusable planning helpers. |
+| `Milky2018/machv_regalloc` | Direct Target VCode adapter for the reusable register allocator. | `allocate_vcode`, `VCodeAllocationEnvironment`, verified allocation materialization, and structured allocation errors. |
 | `Milky2018/x64_target` | x64 instruction selection, ABI, allocation, frame layout, emission, and linking. | `lower`, `allocate`, `plan_frame`, `emit`, and `prepare_x64_link`. |
 | `Milky2018/aarch64_target` | AArch64 instruction selection, ABI, allocation, frame layout, emission, and linking. | `lower`, `allocate`, `plan_frame`, `emit`, and `prepare_aarch64_link`. |
 | `Milky2018/wasmoon_jit` | Native runtime and JIT integration for Wasmoon. | `plan_milkir_integration_for_target`, cwasm artifact construction, native runtime wrappers, Wasm entry/hostcall trampolines, VMContext layout, runtime symbols, and integration planning. |

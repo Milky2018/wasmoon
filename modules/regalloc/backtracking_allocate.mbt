@@ -10,6 +10,7 @@ priv struct AllocationSegment {
   value : VirtualReg
   range : ProgramRange
   weight : Int
+  has_fixed_constraint : Bool
   mut location : SegmentLocation?
 }
 
@@ -18,16 +19,31 @@ priv struct SegmentQueue {
   segments : Array[AllocationSegment]
   items : Array[Int]
   in_queue : Array[Bool]
+  weight_priority : Bool
 }
 
 ///|
-fn SegmentQueue::new(segments : Array[AllocationSegment]) -> SegmentQueue {
-  { segments, items: [], in_queue: Array::make(segments.length(), false) }
+fn SegmentQueue::new(
+  segments : Array[AllocationSegment],
+  weight_priority : Bool,
+) -> SegmentQueue {
+  {
+    segments,
+    items: [],
+    in_queue: Array::make(segments.length(), false),
+    weight_priority,
+  }
 }
 
 ///|
 fn SegmentQueue::higher(self : SegmentQueue, lhs : Int, rhs : Int) -> Bool {
-  self.segments[lhs].id < self.segments[rhs].id
+  let left = self.segments[lhs]
+  let right = self.segments[rhs]
+  if self.weight_priority && left.weight != right.weight {
+    left.weight > right.weight
+  } else {
+    left.id < right.id
+  }
 }
 
 ///|
@@ -100,12 +116,10 @@ fn use_weight(use_position : UsePosition) -> Int {
 }
 
 ///|
-fn segment_weight(range : LiveRange, fragment : ProgramRange) -> Int {
+fn segment_weight(range : LiveRange) -> Int {
   let mut weight = 1
   for use_position in range.uses {
-    if fragment.contains(use_position.point, []) {
-      weight = weight + use_weight(use_position)
-    }
+    weight = weight + use_weight(use_position)
   }
   weight
 }
@@ -126,13 +140,16 @@ fn build_allocation_segments(
     segments_by_value.push([])
   }
   for range in ranges.ranges {
+    let weight = segment_weight(range)
+    let has_fixed_constraint = range.has_fixed_constraint()
     for fragment in range.ranges {
       let id = segments.length()
       segments.push({
         id,
         value: range.vreg,
         range: fragment,
-        weight: segment_weight(range, fragment),
+        weight,
+        has_fixed_constraint,
         location: None,
       })
       segments_by_value[range.vreg.id].push(id)
@@ -181,14 +198,64 @@ fn conflicting_segments(
   segments : Array[AllocationSegment],
   occupied : Array[Int],
   current : AllocationSegment,
+  block_order : Array[Int],
 ) -> Array[Int] {
   let conflicts : Array[Int] = []
-  for segment in occupied {
-    if segments[segment].range.overlaps(current.range, []) {
+  let mut lo = 0
+  let mut hi = occupied.length()
+  while lo < hi {
+    let mid = lo + (hi - lo) / 2
+    if segments[occupied[mid]].range.end.compare_with_order(
+        current.range.start,
+        block_order,
+      ) <
+      0 {
+      lo = mid + 1
+    } else {
+      hi = mid
+    }
+  }
+  // Segments already assigned to one register are pairwise disjoint. Therefore
+  // their end order is also their start order, and no later segment can
+  // overlap once this segment starts after the current range ends.
+  for index in lo..<occupied.length() {
+    let segment = occupied[index]
+    if segments[segment].range.start.compare_with_order(
+        current.range.end,
+        block_order,
+      ) >
+      0 {
+      break
+    }
+    if segments[segment].range.overlaps(current.range, block_order) {
       conflicts.push(segment)
     }
   }
   conflicts
+}
+
+///|
+fn insert_occupied_segment(
+  segments : Array[AllocationSegment],
+  occupied : Array[Int],
+  segment : Int,
+  block_order : Array[Int],
+) -> Unit {
+  let mut lo = 0
+  let mut hi = occupied.length()
+  while lo < hi {
+    let mid = lo + (hi - lo) / 2
+    let by_end = segments[occupied[mid]].range.end.compare_with_order(
+      segments[segment].range.end,
+      block_order,
+    )
+    if by_end < 0 || (by_end == 0 && occupied[mid] < segment) {
+      lo = mid + 1
+    } else {
+      hi = mid
+    }
+  }
+  occupied.insert(lo, segment)
 }
 
 ///|
@@ -206,9 +273,12 @@ fn segment_fixed_hint(
   ranges : LiveRangeSet,
   segment : AllocationSegment,
 ) -> PhysicalReg? {
+  if !segment.has_fixed_constraint {
+    return None
+  }
   guard ranges.get_by_vreg(segment.value) is Some(range) else { return None }
   for use_position in range.uses {
-    if segment.range.contains(use_position.point, []) &&
+    if segment.range.contains(use_position.point, ranges.block_order) &&
       use_position.constraint is FixedReg(reg) {
       return Some(reg)
     }
@@ -217,10 +287,82 @@ fn segment_fixed_hint(
 }
 
 ///|
+fn segment_preference_hint(
+  ranges : LiveRangeSet,
+  segment : AllocationSegment,
+  allocatable : Array[PhysicalReg],
+) -> PhysicalReg? {
+  guard ranges.get_by_vreg(segment.value) is Some(range) else { return None }
+  let preferences : Array[PhysicalReg] = []
+  for use_position in range.uses {
+    if segment.range.contains(use_position.point, ranges.block_order) &&
+      use_position.preference is Some(preference) {
+      preferences.push(preference)
+    }
+  }
+  let mut selected : PhysicalReg? = None
+  let mut selected_count = 0
+  for candidate in allocatable {
+    let mut count = 0
+    for preference in preferences {
+      if preference == candidate {
+        count = count + 1
+      }
+    }
+    if count > selected_count {
+      selected = Some(candidate)
+      selected_count = count
+    }
+  }
+  selected
+}
+
+///|
 fn push_register_candidate(order : Array[Int], candidate : Int?) -> Unit {
   if candidate is Some(index) && !order.contains(index) {
     order.push(index)
   }
+}
+
+///|
+fn add_edge_affinity(
+  affinities : Array[Array[Int]],
+  value : VirtualReg,
+  related : VirtualReg,
+) -> Unit {
+  if value.id >= 0 &&
+    value.id < affinities.length() &&
+    !affinities[value.id].contains(related.id) {
+    affinities[value.id].push(related.id)
+  }
+}
+
+///|
+fn[F : FunctionView] build_edge_affinities(
+  function : F,
+) -> (Array[Array[Int]], Array[Bool], Array[Bool]) {
+  let affinities : Array[Array[Int]] = Array::makei(function.value_count(), _ => {
+    []
+  })
+  let is_edge_argument = Array::make(function.value_count(), false)
+  let is_edge_target = Array::make(function.value_count(), false)
+  for block in 0..<function.block_count() {
+    let successors = function.block_successors(block)
+    for successor_index, target in successors {
+      let arguments = function.edge_arguments(block, successor_index)
+      let parameters = function.block_parameters(target)
+      let count = arguments.length().min(parameters.length())
+      for index in 0..<count {
+        let argument = arguments[index]
+        let parameter = parameters[index]
+        is_edge_argument[argument.id] = true
+        is_edge_target[parameter.id] = true
+        add_edge_affinity(affinities, argument, parameter)
+        add_edge_affinity(affinities, parameter, argument)
+      }
+    }
+  }
+  (affinities, is_edge_argument, is_edge_target)
 }
 
 ///|
@@ -240,7 +382,14 @@ fn[F : FunctionView] allocate_segments_backtracking(
     function.value_count(),
     None,
   )
-  let queue = SegmentQueue::new(segments)
+  let (edge_affinities, is_edge_argument, is_edge_target) = build_edge_affinities(
+    function,
+  )
+  let edge_target_registers = Array::make(
+    environment.allocatable_regs.length(),
+    false,
+  )
+  let queue = SegmentQueue::new(segments, enable_eviction)
   for segment in segments {
     queue.push(segment.id)
   }
@@ -260,11 +409,33 @@ fn[F : FunctionView] allocate_segments_backtracking(
         register_index(environment.allocatable_regs, fixed),
       )
     }
+    if segment_preference_hint(ranges, segment, environment.allocatable_regs)
+      is Some(preferred) {
+      push_register_candidate(
+        register_order,
+        register_index(environment.allocatable_regs, preferred),
+      )
+    }
     if preferred_by_value[segment.value.id] is Some(preferred) {
       push_register_candidate(
         register_order,
         register_index(environment.allocatable_regs, preferred),
       )
+    }
+    for related in edge_affinities[segment.value.id] {
+      if preferred_by_value[related] is Some(preferred) {
+        push_register_candidate(
+          register_order,
+          register_index(environment.allocatable_regs, preferred),
+        )
+      }
+    }
+    if is_edge_argument[segment.value.id] {
+      for index in 0..<environment.allocatable_regs.length() {
+        if !edge_target_registers[index] {
+          push_register_candidate(register_order, Some(index))
+        }
+      }
     }
     for index in 0..<environment.allocatable_regs.length() {
       push_register_candidate(register_order, Some(index))
@@ -279,6 +450,7 @@ fn[F : FunctionView] allocate_segments_backtracking(
         segments,
         occupied[register_index],
         segment,
+        ranges.block_order,
       )
       if conflicts.is_empty() {
         free_register = register_index
@@ -316,7 +488,15 @@ fn[F : FunctionView] allocate_segments_backtracking(
     let reg = environment.allocatable_regs[selected]
     segment.location = Some(SegmentReg(reg))
     preferred_by_value[segment.value.id] = Some(reg)
-    occupied[selected].push(segment_id)
+    if is_edge_target[segment.value.id] {
+      edge_target_registers[selected] = true
+    }
+    insert_occupied_segment(
+      segments,
+      occupied[selected],
+      segment_id,
+      ranges.block_order,
+    )
   }
   (segments, segments_by_value)
 }

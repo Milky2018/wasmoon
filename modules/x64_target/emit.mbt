@@ -40,6 +40,7 @@ pub suberror X64EmitError {
   InvalidFrame(cause~ : X64FrameError)
   InvalidCodeObject(cause~ : @code_object.CodeObjectVerifyError)
   InvalidParallelMove(cause~ : @vcode.MoveResolveError)
+  InvalidCallTransfer(cause~ : @vcode.CallTransferError)
   UnresolvedStackMove
   MissingStackObjectArea
   MissingResultArea
@@ -2776,55 +2777,37 @@ fn emit_call_arguments(
   callee? : (Int, @vcode.PhysicalReg),
   result_area? : (Int, @vcode.PhysicalReg),
 ) -> Unit raise X64EmitError {
-  let moves : Array[@vcode.ParallelMove] = []
+  let transfers : Array[@vcode.CallTransfer] = []
   for index, ty in types {
     let source = allocation
       .operand_location(instruction, operand_start + index)
       .unwrap()
     match locations[index] {
       CallRegister(destination) =>
-        moves.push(@vcode.ParallelMove::new(ty, source, Register(destination)))
-      CallStack(offset) => {
-        let source_reg = match source {
-          Register(reg) => reg
-          Stack(slot) => {
-            let scratch = @vcode.PhysicalReg::new(
-              if @vcode.reg_class_for_value_type(ty) == Int {
-                10
-              } else {
-                14
-              },
-              @vcode.reg_class_for_value_type(ty),
-            )
-            emit_stack_access(
-              buffer,
-              true,
-              ty,
-              scratch,
-              frame.slot_offset(slot).unwrap(),
-            )
-            scratch
-          }
-        }
-        emit_stack_access(buffer, false, ty, source_reg, stack_base + offset)
-      }
+        transfers.push(
+          @vcode.CallTransfer::to_register(ty, source, destination),
+        )
+      CallStack(offset) =>
+        transfers.push(
+          @vcode.CallTransfer::to_stack(ty, source, stack_base + offset),
+        )
     }
   }
   if callee is Some((operand_index, destination)) {
-    moves.push(
-      @vcode.ParallelMove::new(
+    transfers.push(
+      @vcode.CallTransfer::to_register(
         Ptr64,
         allocation.operand_location(instruction, operand_index).unwrap(),
-        Register(destination),
+        destination,
       ),
     )
   }
   if result_area is Some((operand_index, destination)) {
-    moves.push(
-      @vcode.ParallelMove::new(
+    transfers.push(
+      @vcode.CallTransfer::to_register(
         Ptr64,
         allocation.operand_location(instruction, operand_index).unwrap(),
-        Register(destination),
+        destination,
       ),
     )
   }
@@ -2838,13 +2821,35 @@ fn emit_call_arguments(
       int_scratch.push(@vcode.PhysicalReg::new(id, Int))
     }
   }
-  let resolved = @vcode.resolve_parallel_moves(moves, int_scratch, [
-    @vcode.PhysicalReg::new(14, FpVector),
-    @vcode.PhysicalReg::new(15, FpVector),
-  ]) catch {
-    error => raise InvalidParallelMove(cause=error)
+  let plan = @vcode.plan_call_transfers(
+    transfers,
+    int_scratch,
+    [
+      @vcode.PhysicalReg::new(14, FpVector),
+      @vcode.PhysicalReg::new(15, FpVector),
+    ],
+    allocation.safepoint_roots(instruction).map(entry => entry.1),
+  ) catch {
+    error => raise InvalidCallTransfer(cause=error)
   }
-  emit_resolved_moves(buffer, frame, resolved)
+  for transfer in plan.stack_transfers {
+    let source = match transfer.source {
+      Register(reg) => reg
+      Stack(slot) => {
+        let scratch = transfer.scratch.unwrap()
+        emit_stack_access(
+          buffer,
+          true,
+          transfer.ty,
+          scratch,
+          frame.slot_offset(slot).unwrap(),
+        )
+        scratch
+      }
+    }
+    emit_stack_access(buffer, false, transfer.ty, source, transfer.offset)
+  }
+  emit_resolved_moves(buffer, frame, plan.register_moves)
 }
 
 ///|
@@ -3224,6 +3229,7 @@ fn emit_instruction(
   frame : X64Frame,
   block : @vcode.Block,
   instruction : @vcode.Instruction,
+  next_block : @vcode.Block?,
 ) -> Int raise X64EmitError {
   let reg = fn(index : Int) -> @vcode.PhysicalReg raise X64EmitError {
     match allocation.operand_location(instruction, index).unwrap() {
@@ -3890,13 +3896,10 @@ fn emit_instruction(
     }
     Jump => {
       emit_edge_moves(buffer, function, allocation, frame, block, 0)
-      buffer.x86_emit_jmp_rel32(
-        function
-        .block_index(
-          function.instruction_successor_at(instruction, 0).unwrap().target,
-        )
-        .unwrap(),
-      )
+      let target = function.instruction_successor_at(instruction, 0).unwrap().target
+      if next_block != Some(target) {
+        buffer.x86_emit_jmp_rel32(function.block_index(target).unwrap())
+      }
     }
     BranchNonZero32 =>
       emit_conditional_edges(
@@ -3907,6 +3910,7 @@ fn emit_instruction(
         block,
         instruction,
         reg(0),
+        next_block,
       )
     Switch(width, cases) =>
       emit_switch_edges(
@@ -3971,14 +3975,11 @@ fn patch_relative_branch(
 }
 
 ///|
-pub fn emit(
+fn emit_verified(
   function : @vcode.Function[X64Inst],
   allocation : @vcode.Allocation,
   frame : X64Frame,
 ) -> @code_object.UnlinkedCodeObject raise X64EmitError {
-  verify_frame(function, allocation, frame) catch {
-    error => raise InvalidFrame(cause=error)
-  }
   let buffer = CodeBuffer::new()
   let block_offsets = Array::make(function.block_count(), -1)
   let edits = allocation.edits()
@@ -3987,7 +3988,8 @@ pub fn emit(
   let safepoints : Array[@code_object.SafepointSite] = []
   let unwind : Array[@code_object.UnwindDirective] = []
   emit_prologue(buffer, frame, unwind)
-  for block in function.layout() {
+  let layout = function.layout()
+  for block_index, block in layout {
     block_offsets[function.block_index(block).unwrap()] = buffer.position()
     for instruction in function.block_body(block) {
       let abi_materialization = is_abi_materialization(
@@ -3997,7 +3999,13 @@ pub fn emit(
         emit_edits_at(buffer, function, frame, edits, instruction, Before)
       }
       let instruction_offset = emit_instruction(
-        buffer, function, allocation, frame, block, instruction,
+        buffer,
+        function,
+        allocation,
+        frame,
+        block,
+        instruction,
+        None,
       )
       record_instruction_metadata(
         buffer, function, allocation, frame, instruction, instruction_offset, sources,
@@ -4008,9 +4016,10 @@ pub fn emit(
       }
     }
     let terminator = function.block_terminator(block).unwrap()
+    let next_block = layout.get(block_index + 1)
     emit_edits_at(buffer, function, frame, edits, terminator, Before)
     let terminator_offset = emit_instruction(
-      buffer, function, allocation, frame, block, terminator,
+      buffer, function, allocation, frame, block, terminator, next_block,
     )
     record_instruction_metadata(
       buffer, function, allocation, frame, terminator, terminator_offset, sources,
@@ -4031,4 +4040,16 @@ pub fn emit(
   ) catch {
     error => raise InvalidCodeObject(cause=error)
   }
+}
+
+///|
+pub fn emit(
+  function : @vcode.Function[X64Inst],
+  allocation : @vcode.Allocation,
+  frame : X64Frame,
+) -> @code_object.UnlinkedCodeObject raise X64EmitError {
+  verify_frame(function, allocation, frame) catch {
+    error => raise InvalidFrame(cause=error)
+  }
+  emit_verified(function, allocation, frame)
 }

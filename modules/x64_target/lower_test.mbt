@@ -23,8 +23,8 @@ test "X64 lowering selects scalar SSA and preserves source metadata" {
     content=(
       #|vcode selected_add(v0:i64, v1:i64) -> (i64)
       #|block0:
-      #|  i0 IncomingReg(I64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v2:any@late]
-      #|  i1 IncomingReg(I64, p6:int) uses=[v1:fixed(p6:int)@early] defs=[v3:any@late]
+      #|  i0 IncomingReg(I64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v2:fixed(p7:int)@late]
+      #|  i1 IncomingReg(I64, p6:int) uses=[v1:fixed(p6:int)@early] defs=[v3:fixed(p6:int)@late]
       #|  i2 IntBinary(W64, Add) uses=[v2:any@early, v3:any@early] defs=[v4:any@late] source={ file: "selected.wat", line: 3, column: 9 }
       #|  i3 OutgoingReg(I64, p0:int) uses=[v4:any@early]
       #|  i4 Return
@@ -137,9 +137,9 @@ test "X64 lowering selects sequentially consistent atomic families" {
     content=(
       #|vcode atomic_families(v0:ptr64, v1:i32, v2:i64) -> (i32)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v3:any@late]
-      #|  i1 IncomingReg(I32, p6:int) uses=[v1:fixed(p6:int)@early] defs=[v4:any@late]
-      #|  i2 IncomingReg(I64, p2:int) uses=[v2:fixed(p2:int)@early] defs=[v5:any@late]
+      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v3:fixed(p7:int)@late]
+      #|  i1 IncomingReg(I32, p6:int) uses=[v1:fixed(p6:int)@early] defs=[v4:fixed(p6:int)@late]
+      #|  i2 IncomingReg(I64, p2:int) uses=[v2:fixed(p2:int)@early] defs=[v5:fixed(p2:int)@late]
       #|  i3 AtomicLoad(W8, I32) uses=[v3:any@early] defs=[v6:any@late] trap=MemoryOutOfBounds
       #|  i4 LoadConstant(W64, 2) defs=[v7:any@late]
       #|  i5 AddAddress uses=[v3:any@early, v7:any@early] defs=[v8:any@late]
@@ -186,8 +186,8 @@ test "X64 lowering selects standalone safepoint metadata markers" {
     content=(
       #|vcode safepoint_marker(v0:ptr64, v1:gcref64)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v2:any@late]
-      #|  i1 IncomingReg(GcRef64, p6:int) uses=[v1:fixed(p6:int)@early] defs=[v3:any@late]
+      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v2:fixed(p7:int)@late]
+      #|  i1 IncomingReg(GcRef64, p6:int) uses=[v1:fixed(p6:int)@early] defs=[v3:fixed(p6:int)@late]
       #|  i2 SafepointMarker source={ file: "safepoint.wat", line: 3, column: 5 } safepoint=GcAndCancellation roots=[v3]
       #|  i3 Return
       #|
@@ -238,14 +238,14 @@ test "X64 lowering selects the vector foundation" {
     content=(
       #|vcode vector_foundation(v0:ptr64, v1:i32, v2:i64, v3:f32, v4:f64, v5:v128, v6:v128, v7:v128) -> (v128)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v8:any@late]
-      #|  i1 IncomingReg(I32, p6:int) uses=[v1:fixed(p6:int)@early] defs=[v9:any@late]
-      #|  i2 IncomingReg(I64, p2:int) uses=[v2:fixed(p2:int)@early] defs=[v10:any@late]
-      #|  i3 IncomingReg(F32, p0:fpvec) uses=[v3:fixed(p0:fpvec)@early] defs=[v11:any@late]
-      #|  i4 IncomingReg(F64, p1:fpvec) uses=[v4:fixed(p1:fpvec)@early] defs=[v12:any@late]
-      #|  i5 IncomingReg(V128, p2:fpvec) uses=[v5:fixed(p2:fpvec)@early] defs=[v13:any@late]
-      #|  i6 IncomingReg(V128, p3:fpvec) uses=[v6:fixed(p3:fpvec)@early] defs=[v14:any@late]
-      #|  i7 IncomingReg(V128, p4:fpvec) uses=[v7:fixed(p4:fpvec)@early] defs=[v15:any@late]
+      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v8:fixed(p7:int)@late]
+      #|  i1 IncomingReg(I32, p6:int) uses=[v1:fixed(p6:int)@early] defs=[v9:fixed(p6:int)@late]
+      #|  i2 IncomingReg(I64, p2:int) uses=[v2:fixed(p2:int)@early] defs=[v10:fixed(p2:int)@late]
+      #|  i3 IncomingReg(F32, p0:fpvec) uses=[v3:fixed(p0:fpvec)@early] defs=[v11:fixed(p0:fpvec)@late]
+      #|  i4 IncomingReg(F64, p1:fpvec) uses=[v4:fixed(p1:fpvec)@early] defs=[v12:fixed(p1:fpvec)@late]
+      #|  i5 IncomingReg(V128, p2:fpvec) uses=[v5:fixed(p2:fpvec)@early] defs=[v13:fixed(p2:fpvec)@late]
+      #|  i6 IncomingReg(V128, p3:fpvec) uses=[v6:fixed(p3:fpvec)@early] defs=[v14:fixed(p3:fpvec)@late]
+      #|  i7 IncomingReg(V128, p4:fpvec) uses=[v7:fixed(p4:fpvec)@early] defs=[v15:fixed(p4:fpvec)@late]
       #|  i8 LoadVectorConstant(506097522914230528, 1084818905618843912) defs=[v16:any@late]
       #|  i9 VectorSplat(I8x16) uses=[v9:any@early] defs=[v17:any@late]
       #|  i10 VectorSplat(I16x8) uses=[v9:any@early] defs=[v18:any@late]
@@ -336,9 +336,9 @@ test "X64 lowering selects vector lane movement" {
     content=(
       #|vcode vector_lane_movement(v0:ptr64, v1:v128) -> (v128, i32, i64, f32, f64)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v2:any@late]
-      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v3:any@late]
-      #|  i2 IncomingResultArea(p10:int) defs=[v4:any@late]
+      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v2:fixed(p7:int)@late]
+      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v3:fixed(p0:fpvec)@late]
+      #|  i2 IncomingResultArea(p10:int) defs=[v4:fixed(p10:int)@late]
       #|  i3 VectorExtractLane(I8x16, 15, Some(Signed)) uses=[v3:any@early] defs=[v5:any@late]
       #|  i4 VectorExtractLane(I8x16, 0, Some(Unsigned)) uses=[v3:any@early] defs=[v6:any@late]
       #|  i5 VectorExtractLane(I16x8, 7, Some(Signed)) uses=[v3:any@early] defs=[v7:any@late]
@@ -392,10 +392,10 @@ test "X64 lowering selects vector shuffle and swizzle" {
     content=(
       #|vcode vector_permute(v0:ptr64, v1:v128, v2:v128, v3:v128) -> (v128)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v4:any@late]
-      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v5:any@late]
-      #|  i2 IncomingReg(V128, p1:fpvec) uses=[v2:fixed(p1:fpvec)@early] defs=[v6:any@late]
-      #|  i3 IncomingReg(V128, p2:fpvec) uses=[v3:fixed(p2:fpvec)@early] defs=[v7:any@late]
+      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v4:fixed(p7:int)@late]
+      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v5:fixed(p0:fpvec)@late]
+      #|  i2 IncomingReg(V128, p1:fpvec) uses=[v2:fixed(p1:fpvec)@early] defs=[v6:fixed(p1:fpvec)@late]
+      #|  i3 IncomingReg(V128, p2:fpvec) uses=[v3:fixed(p2:fpvec)@early] defs=[v7:fixed(p2:fpvec)@late]
       #|  i4 VectorShuffle(
       #|  <FixedArray:
       #|    [0, 17, 2, 19, 4, 21, 6, 23, 8, 25, 10, 27, 12, 29, 14, 31]>,
@@ -444,9 +444,9 @@ test "X64 lowering selects basic vector integer arithmetic" {
     content=(
       #|vcode vector_integer_arithmetic(v0:ptr64, v1:v128, v2:v128) -> (v128)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v3:any@late]
-      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v4:any@late]
-      #|  i2 IncomingReg(V128, p1:fpvec) uses=[v2:fixed(p1:fpvec)@early] defs=[v5:any@late]
+      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v3:fixed(p7:int)@late]
+      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v4:fixed(p0:fpvec)@late]
+      #|  i2 IncomingReg(V128, p1:fpvec) uses=[v2:fixed(p1:fpvec)@early] defs=[v5:fixed(p1:fpvec)@late]
       #|  i3 VectorIntUnary(I8x16, Absolute) uses=[v4:any@early] defs=[v6:any@late]
       #|  i4 VectorIntUnary(I8x16, Negate) uses=[v6:any@early] defs=[v7:any@late]
       #|  i5 VectorIntBinary(I8x16, Add) uses=[v7:any@early, v5:any@early] defs=[v8:any@late]
@@ -508,9 +508,9 @@ test "X64 lowering selects vector integer shifts" {
     content=(
       #|vcode vector_integer_shifts(v0:ptr64, v1:v128, v2:i32) -> (v128)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v3:any@late]
-      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v4:any@late]
-      #|  i2 IncomingReg(I32, p6:int) uses=[v2:fixed(p6:int)@early] defs=[v5:any@late]
+      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v3:fixed(p7:int)@late]
+      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v4:fixed(p0:fpvec)@late]
+      #|  i2 IncomingReg(I32, p6:int) uses=[v2:fixed(p6:int)@early] defs=[v5:fixed(p6:int)@late]
       #|  i3 VectorIntShift(I8x16, Left) uses=[v4:any@early, v5:any@early] defs=[v6:any@late]
       #|  i4 VectorIntShift(I8x16, Right(Signed)) uses=[v6:any@early, v5:any@early] defs=[v7:any@late]
       #|  i5 VectorIntShift(I8x16, Right(Unsigned)) uses=[v7:any@early, v5:any@early] defs=[v8:any@late]
@@ -568,9 +568,9 @@ test "X64 lowering selects vector integer comparisons" {
     content=(
       #|vcode vector_integer_comparisons(v0:ptr64, v1:v128, v2:v128) -> (v128)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v3:any@late]
-      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v4:any@late]
-      #|  i2 IncomingReg(V128, p1:fpvec) uses=[v2:fixed(p1:fpvec)@early] defs=[v5:any@late]
+      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v3:fixed(p7:int)@late]
+      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v4:fixed(p0:fpvec)@late]
+      #|  i2 IncomingReg(V128, p1:fpvec) uses=[v2:fixed(p1:fpvec)@early] defs=[v5:fixed(p1:fpvec)@late]
       #|  i3 VectorIntCompare(I8x16, Equal) uses=[v4:any@early, v5:any@early] defs=[v6:any@late]
       #|  i4 VectorIntCompare(I8x16, NotEqual) uses=[v6:any@early, v5:any@early] defs=[v7:any@late]
       #|  i5 VectorIntCompare(I8x16, LessThan(Signed)) uses=[v7:any@early, v5:any@early] defs=[v8:any@late]
@@ -650,9 +650,9 @@ test "X64 lowering selects saturating vector integer arithmetic" {
     content=(
       #|vcode vector_saturating_arithmetic(v0:ptr64, v1:v128, v2:v128) -> (v128)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v3:any@late]
-      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v4:any@late]
-      #|  i2 IncomingReg(V128, p1:fpvec) uses=[v2:fixed(p1:fpvec)@early] defs=[v5:any@late]
+      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v3:fixed(p7:int)@late]
+      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v4:fixed(p0:fpvec)@late]
+      #|  i2 IncomingReg(V128, p1:fpvec) uses=[v2:fixed(p1:fpvec)@early] defs=[v5:fixed(p1:fpvec)@late]
       #|  i3 VectorIntBinary(I8x16, SaturatingAdd(Signed)) uses=[v4:any@early, v5:any@early] defs=[v6:any@late]
       #|  i4 VectorIntBinary(I8x16, SaturatingAdd(Unsigned)) uses=[v6:any@early, v5:any@early] defs=[v7:any@late]
       #|  i5 VectorIntBinary(I8x16, SaturatingSub(Signed)) uses=[v7:any@early, v5:any@early] defs=[v8:any@late]
@@ -708,9 +708,9 @@ test "X64 lowering selects vector integer min and max" {
     content=(
       #|vcode vector_integer_min_max(v0:ptr64, v1:v128, v2:v128) -> (v128)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v3:any@late]
-      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v4:any@late]
-      #|  i2 IncomingReg(V128, p1:fpvec) uses=[v2:fixed(p1:fpvec)@early] defs=[v5:any@late]
+      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v3:fixed(p7:int)@late]
+      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v4:fixed(p0:fpvec)@late]
+      #|  i2 IncomingReg(V128, p1:fpvec) uses=[v2:fixed(p1:fpvec)@early] defs=[v5:fixed(p1:fpvec)@late]
       #|  i3 VectorIntBinary(I8x16, Min(Signed)) uses=[v4:any@early, v5:any@early] defs=[v6:any@late]
       #|  i4 VectorIntBinary(I8x16, Min(Unsigned)) uses=[v6:any@early, v5:any@early] defs=[v7:any@late]
       #|  i5 VectorIntBinary(I8x16, Max(Signed)) uses=[v7:any@early, v5:any@early] defs=[v8:any@late]
@@ -759,9 +759,9 @@ test "X64 lowering selects legal vector unsigned averages" {
     content=(
       #|vcode vector_unsigned_average(v0:ptr64, v1:v128, v2:v128) -> (v128)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v3:any@late]
-      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v4:any@late]
-      #|  i2 IncomingReg(V128, p1:fpvec) uses=[v2:fixed(p1:fpvec)@early] defs=[v5:any@late]
+      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v3:fixed(p7:int)@late]
+      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v4:fixed(p0:fpvec)@late]
+      #|  i2 IncomingReg(V128, p1:fpvec) uses=[v2:fixed(p1:fpvec)@early] defs=[v5:fixed(p1:fpvec)@late]
       #|  i3 VectorIntBinary(I8x16, AverageUnsigned) uses=[v4:any@early, v5:any@early] defs=[v6:any@late]
       #|  i4 VectorIntBinary(I16x8, AverageUnsigned) uses=[v6:any@early, v5:any@early] defs=[v7:any@late]
       #|  i5 OutgoingReg(V128, p0:fpvec) uses=[v7:any@early]
@@ -791,8 +791,8 @@ test "X64 lowering selects vector byte population count" {
     content=(
       #|vcode vector_population_count(v0:ptr64, v1:v128) -> (v128)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v2:any@late]
-      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v3:any@late]
+      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v2:fixed(p7:int)@late]
+      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v3:fixed(p0:fpvec)@late]
       #|  i2 VectorIntUnary(I8x16, PopulationCount) uses=[v3:any@early] defs=[v4:any@late]
       #|  i3 OutgoingReg(V128, p0:fpvec) uses=[v4:any@early]
       #|  i4 Return
@@ -850,9 +850,9 @@ test "X64 lowering selects widening vector integer arithmetic" {
     content=(
       #|vcode vector_widening_arithmetic(v0:ptr64, v1:v128, v2:v128) -> (v128)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v3:any@late]
-      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v4:any@late]
-      #|  i2 IncomingReg(V128, p1:fpvec) uses=[v2:fixed(p1:fpvec)@early] defs=[v5:any@late]
+      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v3:fixed(p7:int)@late]
+      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v4:fixed(p0:fpvec)@late]
+      #|  i2 IncomingReg(V128, p1:fpvec) uses=[v2:fixed(p1:fpvec)@early] defs=[v5:fixed(p1:fpvec)@late]
       #|  i3 VectorIntUnary(I16x8, ExtendAddPairwise(Signed)) uses=[v4:any@early] defs=[v6:any@late]
       #|  i4 VectorIntUnary(I16x8, ExtendAddPairwise(Unsigned)) uses=[v6:any@early] defs=[v7:any@late]
       #|  i5 VectorIntUnary(I32x4, ExtendAddPairwise(Signed)) uses=[v7:any@early] defs=[v8:any@late]
@@ -910,8 +910,8 @@ test "X64 lowering selects vector integer extension" {
     content=(
       #|vcode vector_integer_extension(v0:ptr64, v1:v128) -> (v128)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v2:any@late]
-      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v3:any@late]
+      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v2:fixed(p7:int)@late]
+      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v3:fixed(p0:fpvec)@late]
       #|  i2 VectorConvert(ExtendLow(I16x8, Signed)) uses=[v3:any@early] defs=[v4:any@late]
       #|  i3 VectorConvert(ExtendLow(I16x8, Unsigned)) uses=[v4:any@early] defs=[v5:any@late]
       #|  i4 VectorConvert(ExtendHigh(I16x8, Signed)) uses=[v5:any@early] defs=[v6:any@late]
@@ -958,9 +958,9 @@ test "X64 lowering selects saturating vector narrowing" {
     content=(
       #|vcode vector_narrowing(v0:ptr64, v1:v128, v2:v128) -> (v128)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v3:any@late]
-      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v4:any@late]
-      #|  i2 IncomingReg(V128, p1:fpvec) uses=[v2:fixed(p1:fpvec)@early] defs=[v5:any@late]
+      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v3:fixed(p7:int)@late]
+      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v4:fixed(p0:fpvec)@late]
+      #|  i2 IncomingReg(V128, p1:fpvec) uses=[v2:fixed(p1:fpvec)@early] defs=[v5:fixed(p1:fpvec)@late]
       #|  i3 VectorConvert(Narrow(I8x16, Signed)) uses=[v4:any@early, v5:any@early] defs=[v6:any@late]
       #|  i4 VectorConvert(Narrow(I8x16, Unsigned)) uses=[v6:any@early, v5:any@early] defs=[v7:any@late]
       #|  i5 VectorConvert(Narrow(I16x8, Signed)) uses=[v7:any@early, v5:any@early] defs=[v8:any@late]
@@ -997,9 +997,9 @@ test "X64 lowering selects vector truth predicates" {
     content=(
       #|vcode vector_truth_predicates(v0:ptr64, v1:v128) -> (i32, i32, i32, i32, i32)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v2:any@late]
-      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v3:any@late]
-      #|  i2 IncomingResultArea(p10:int) defs=[v4:any@late]
+      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v2:fixed(p7:int)@late]
+      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v3:fixed(p0:fpvec)@late]
+      #|  i2 IncomingResultArea(p10:int) defs=[v4:fixed(p10:int)@late]
       #|  i3 VectorPredicate(AnyTrue) uses=[v3:any@early] defs=[v5:any@late]
       #|  i4 VectorPredicate(AllTrue(I8x16)) uses=[v3:any@early] defs=[v6:any@late]
       #|  i5 VectorPredicate(AllTrue(I16x8)) uses=[v3:any@early] defs=[v7:any@late]
@@ -1035,9 +1035,9 @@ test "X64 lowering selects vector integer bitmasks" {
     content=(
       #|vcode vector_integer_bitmasks(v0:ptr64, v1:v128) -> (i32, i32, i32, i32)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v2:any@late]
-      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v3:any@late]
-      #|  i2 IncomingResultArea(p10:int) defs=[v4:any@late]
+      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v2:fixed(p7:int)@late]
+      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v3:fixed(p0:fpvec)@late]
+      #|  i2 IncomingResultArea(p10:int) defs=[v4:fixed(p10:int)@late]
       #|  i3 VectorPredicate(BitMask(I8x16)) uses=[v3:any@early] defs=[v5:any@late]
       #|  i4 VectorPredicate(BitMask(I16x8)) uses=[v3:any@early] defs=[v6:any@late]
       #|  i5 VectorPredicate(BitMask(I32x4)) uses=[v3:any@early] defs=[v7:any@late]
@@ -1119,10 +1119,10 @@ test "X64 lowering selects every non-fused vector float operation" {
     content=(
       #|vcode vector_float_operations(v0:ptr64, v1:v128, v2:v128) -> (v128, v128, v128, v128)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v3:any@late]
-      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v4:any@late]
-      #|  i2 IncomingReg(V128, p1:fpvec) uses=[v2:fixed(p1:fpvec)@early] defs=[v5:any@late]
-      #|  i3 IncomingResultArea(p10:int) defs=[v6:any@late]
+      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v3:fixed(p7:int)@late]
+      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v4:fixed(p0:fpvec)@late]
+      #|  i2 IncomingReg(V128, p1:fpvec) uses=[v2:fixed(p1:fpvec)@early] defs=[v5:fixed(p1:fpvec)@late]
+      #|  i3 IncomingResultArea(p10:int) defs=[v6:fixed(p10:int)@late]
       #|  i4 VectorFloatUnary(F32x4, Absolute) uses=[v4:any@early] defs=[v7:any@late]
       #|  i5 VectorFloatUnary(F32x4, Negate) uses=[v7:any@early] defs=[v8:any@late]
       #|  i6 VectorFloatUnary(F32x4, SquareRoot) uses=[v8:any@early] defs=[v9:any@late]
@@ -1210,10 +1210,10 @@ test "X64 lowering selects vector fused operations and relaxed producers" {
     content=(
       #|vcode vector_float_fused(v0:ptr64, v1:v128, v2:v128, v3:v128) -> (v128, v128)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v4:any@late]
-      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v5:any@late]
-      #|  i2 IncomingReg(V128, p1:fpvec) uses=[v2:fixed(p1:fpvec)@early] defs=[v6:any@late]
-      #|  i3 IncomingReg(V128, p2:fpvec) uses=[v3:fixed(p2:fpvec)@early] defs=[v7:any@late]
+      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v4:fixed(p7:int)@late]
+      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v5:fixed(p0:fpvec)@late]
+      #|  i2 IncomingReg(V128, p1:fpvec) uses=[v2:fixed(p1:fpvec)@early] defs=[v6:fixed(p1:fpvec)@late]
+      #|  i3 IncomingReg(V128, p2:fpvec) uses=[v3:fixed(p2:fpvec)@early] defs=[v7:fixed(p2:fpvec)@late]
       #|  i4 VectorFloatTernary(F32x4, FusedMultiplyAdd) uses=[v5:any@early, v6:any@early, v7:any@early] defs=[v8:any@late]
       #|  i5 VectorFloatTernary(F64x2, FusedMultiplyAdd) uses=[v5:any@early, v6:any@early, v7:any@early] defs=[v9:any@late]
       #|  i6 VectorFloatTernary(F32x4, FusedNegatedMultiplyAdd) uses=[v5:any@early, v6:any@early, v8:any@early] defs=[v10:any@late]
@@ -1275,8 +1275,8 @@ test "X64 lowering selects every remaining vector conversion" {
     content=(
       #|vcode vector_conversions(v0:ptr64, v1:v128) -> (v128)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v2:any@late]
-      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v3:any@late]
+      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v2:fixed(p7:int)@late]
+      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v3:fixed(p0:fpvec)@late]
       #|  i2 VectorConvert(FloatToInt(F32x4, Signed)) uses=[v3:any@early] defs=[v4:any@late]
       #|  i3 VectorConvert(FloatToInt(F64x2, Signed)) uses=[v4:any@early] defs=[v5:any@late]
       #|  i4 VectorConvert(IntToFloat(F32x4, Signed)) uses=[v5:any@early] defs=[v6:any@late]
@@ -1335,10 +1335,10 @@ test "X64 lowering reuses exact target operations for relaxed SIMD" {
     content=(
       #|vcode relaxed_vector_reuse(v0:ptr64, v1:v128, v2:v128, v3:v128) -> (v128)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v4:any@late]
-      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v5:any@late]
-      #|  i2 IncomingReg(V128, p1:fpvec) uses=[v2:fixed(p1:fpvec)@early] defs=[v6:any@late]
-      #|  i3 IncomingReg(V128, p2:fpvec) uses=[v3:fixed(p2:fpvec)@early] defs=[v7:any@late]
+      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v4:fixed(p7:int)@late]
+      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v5:fixed(p0:fpvec)@late]
+      #|  i2 IncomingReg(V128, p1:fpvec) uses=[v2:fixed(p1:fpvec)@early] defs=[v6:fixed(p1:fpvec)@late]
+      #|  i3 IncomingReg(V128, p2:fpvec) uses=[v3:fixed(p2:fpvec)@early] defs=[v7:fixed(p2:fpvec)@late]
       #|  i4 VectorSwizzle uses=[v5:any@early, v6:any@early] defs=[v8:any@late]
       #|  i5 VectorBitwise(BitSelect) uses=[v8:any@early, v6:any@early, v7:any@early] defs=[v9:any@late]
       #|  i6 VectorFloatBinary(F32x4, Min) uses=[v9:any@early, v6:any@early] defs=[v10:any@late]
@@ -1371,9 +1371,9 @@ test "X64 lowering selects relaxed dot8-to16" {
     content=(
       #|vcode relaxed_dot8_to16(v0:ptr64, v1:v128, v2:v128) -> (v128)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v3:any@late]
-      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v4:any@late]
-      #|  i2 IncomingReg(V128, p1:fpvec) uses=[v2:fixed(p1:fpvec)@early] defs=[v5:any@late]
+      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v3:fixed(p7:int)@late]
+      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v4:fixed(p0:fpvec)@late]
+      #|  i2 IncomingReg(V128, p1:fpvec) uses=[v2:fixed(p1:fpvec)@early] defs=[v5:fixed(p1:fpvec)@late]
       #|  i3 VectorRelaxedDot8To16 uses=[v4:any@early, v5:any@early] defs=[v6:any@late]
       #|  i4 OutgoingReg(V128, p0:fpvec) uses=[v6:any@early]
       #|  i5 Return
@@ -1402,10 +1402,10 @@ test "X64 lowering expands relaxed dot8-to32-add into allocatable temporaries" {
     content=(
       #|vcode relaxed_dot8_to32_add(v0:ptr64, v1:v128, v2:v128, v3:v128) -> (v128)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v4:any@late]
-      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v5:any@late]
-      #|  i2 IncomingReg(V128, p1:fpvec) uses=[v2:fixed(p1:fpvec)@early] defs=[v6:any@late]
-      #|  i3 IncomingReg(V128, p2:fpvec) uses=[v3:fixed(p2:fpvec)@early] defs=[v7:any@late]
+      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v4:fixed(p7:int)@late]
+      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v5:fixed(p0:fpvec)@late]
+      #|  i2 IncomingReg(V128, p1:fpvec) uses=[v2:fixed(p1:fpvec)@early] defs=[v6:fixed(p1:fpvec)@late]
+      #|  i3 IncomingReg(V128, p2:fpvec) uses=[v3:fixed(p2:fpvec)@early] defs=[v7:fixed(p2:fpvec)@late]
       #|  i4 VectorIntBinary(I16x8, ExtendMultiply(Low, Signed)) uses=[v5:any@early, v6:any@early] defs=[v8:any@late]
       #|  i5 VectorIntBinary(I16x8, ExtendMultiply(High, Signed)) uses=[v5:any@early, v6:any@early] defs=[v9:any@late]
       #|  i6 VectorPairwiseAddI16x8 uses=[v8:any@early, v9:any@early] defs=[v10:any@late]
@@ -1437,7 +1437,7 @@ test "X64 lowering assigns one aligned semantic stack-object area" {
     content=(
       #|vcode stack_object_layout(v0:ptr64) -> (ptr64, ptr64)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v1:any@late]
+      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v1:fixed(p7:int)@late]
       #|  i1 StackAddress(
       #|  {
       #|    offset: 0,
@@ -1479,8 +1479,8 @@ test "X64 lowering inserts explicit traps before signed division" {
     content=(
       #|vcode checked_divide(v0:i64, v1:i64) -> (i64)
       #|block0:
-      #|  i0 IncomingReg(I64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v2:any@late]
-      #|  i1 IncomingReg(I64, p6:int) uses=[v1:fixed(p6:int)@early] defs=[v3:any@late]
+      #|  i0 IncomingReg(I64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v2:fixed(p7:int)@late]
+      #|  i1 IncomingReg(I64, p6:int) uses=[v1:fixed(p6:int)@early] defs=[v3:fixed(p6:int)@late]
       #|  i2 TrapIfZero(W64) uses=[v3:any@early] trap=IntegerDivisionByZero
       #|  i3 TrapIfSignedDivOverflow(W64) uses=[v2:any@early, v3:any@early] trap=IntegerOverflow
       #|  i4 IntBinary(W64, Sdiv) uses=[v2:fixed(p0:int)@early, v3:fixed(p11:int)@early] defs=[v4:fixed(p0:int)@late] clobbers=[p2:int]
@@ -1548,11 +1548,11 @@ test "X64 lowering legalizes remaining pure scalar integer operations" {
     content=(
       #|vcode pure_integer_operations(v0:ptr64, v1:i32, v2:i32, v3:i64, v4:i64) -> (i32, i64)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v5:any@late]
-      #|  i1 IncomingReg(I32, p6:int) uses=[v1:fixed(p6:int)@early] defs=[v6:any@late]
-      #|  i2 IncomingReg(I32, p2:int) uses=[v2:fixed(p2:int)@early] defs=[v7:any@late]
-      #|  i3 IncomingReg(I64, p1:int) uses=[v3:fixed(p1:int)@early] defs=[v8:any@late]
-      #|  i4 IncomingReg(I64, p8:int) uses=[v4:fixed(p8:int)@early] defs=[v9:any@late]
+      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v5:fixed(p7:int)@late]
+      #|  i1 IncomingReg(I32, p6:int) uses=[v1:fixed(p6:int)@early] defs=[v6:fixed(p6:int)@late]
+      #|  i2 IncomingReg(I32, p2:int) uses=[v2:fixed(p2:int)@early] defs=[v7:fixed(p2:int)@late]
+      #|  i3 IncomingReg(I64, p1:int) uses=[v3:fixed(p1:int)@early] defs=[v8:fixed(p1:int)@late]
+      #|  i4 IncomingReg(I64, p8:int) uses=[v4:fixed(p8:int)@early] defs=[v9:fixed(p8:int)@late]
       #|  i5 IntUnary(W32, Rbit) uses=[v6:any@early] defs=[v10:any@late]
       #|  i6 IntUnary(W32, Clz) uses=[v10:any@early] defs=[v11:any@late]
       #|  i7 PopulationCount(W32) uses=[v6:any@early] defs=[v12:any@late]
@@ -1619,12 +1619,12 @@ test "X64 lowering selects every scalar overflow arithmetic contract" {
     content=(
       #|vcode overflow_arithmetic(v0:ptr64, v1:i32, v2:i32, v3:i64, v4:i64) -> (i32, i64, i32)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v5:any@late]
-      #|  i1 IncomingReg(I32, p6:int) uses=[v1:fixed(p6:int)@early] defs=[v6:any@late]
-      #|  i2 IncomingReg(I32, p2:int) uses=[v2:fixed(p2:int)@early] defs=[v7:any@late]
-      #|  i3 IncomingReg(I64, p1:int) uses=[v3:fixed(p1:int)@early] defs=[v8:any@late]
-      #|  i4 IncomingReg(I64, p8:int) uses=[v4:fixed(p8:int)@early] defs=[v9:any@late]
-      #|  i5 IncomingResultArea(p10:int) defs=[v10:any@late]
+      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v5:fixed(p7:int)@late]
+      #|  i1 IncomingReg(I32, p6:int) uses=[v1:fixed(p6:int)@early] defs=[v6:fixed(p6:int)@late]
+      #|  i2 IncomingReg(I32, p2:int) uses=[v2:fixed(p2:int)@early] defs=[v7:fixed(p2:int)@late]
+      #|  i3 IncomingReg(I64, p1:int) uses=[v3:fixed(p1:int)@early] defs=[v8:fixed(p1:int)@late]
+      #|  i4 IncomingReg(I64, p8:int) uses=[v4:fixed(p8:int)@early] defs=[v9:fixed(p8:int)@late]
+      #|  i5 IncomingResultArea(p10:int) defs=[v10:fixed(p10:int)@late]
       #|  i6 LoadConstant(W32, 0) defs=[v11:any@late]
       #|  i7 IntWithOverflow(W32, Add(Signed)) uses=[v6:any@early, v7:any@early] defs=[v12:any@late, v13:any@late]
       #|  i8 IntBinary(W32, Orr) uses=[v11:any@early, v13:any@early] defs=[v14:any@late]
@@ -1721,16 +1721,16 @@ test "X64 lowering selects null carriers references and scalar values" {
     content=(
       #|vcode scalar_carriers_and_select(v0:ptr64, v1:i32, v2:i32, v3:i64, v4:i64, v5:f32, v6:f32, v7:f64, v8:f64) -> (i32, i32, i32, i64, ptr64, gcref64, f32, f64)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v9:any@late]
-      #|  i1 IncomingReg(I32, p6:int) uses=[v1:fixed(p6:int)@early] defs=[v10:any@late]
-      #|  i2 IncomingReg(I32, p2:int) uses=[v2:fixed(p2:int)@early] defs=[v11:any@late]
-      #|  i3 IncomingReg(I64, p1:int) uses=[v3:fixed(p1:int)@early] defs=[v12:any@late]
-      #|  i4 IncomingReg(I64, p8:int) uses=[v4:fixed(p8:int)@early] defs=[v13:any@late]
-      #|  i5 IncomingReg(F32, p0:fpvec) uses=[v5:fixed(p0:fpvec)@early] defs=[v14:any@late]
-      #|  i6 IncomingReg(F32, p1:fpvec) uses=[v6:fixed(p1:fpvec)@early] defs=[v15:any@late]
-      #|  i7 IncomingReg(F64, p2:fpvec) uses=[v7:fixed(p2:fpvec)@early] defs=[v16:any@late]
-      #|  i8 IncomingReg(F64, p3:fpvec) uses=[v8:fixed(p3:fpvec)@early] defs=[v17:any@late]
-      #|  i9 IncomingResultArea(p10:int) defs=[v18:any@late]
+      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v9:fixed(p7:int)@late]
+      #|  i1 IncomingReg(I32, p6:int) uses=[v1:fixed(p6:int)@early] defs=[v10:fixed(p6:int)@late]
+      #|  i2 IncomingReg(I32, p2:int) uses=[v2:fixed(p2:int)@early] defs=[v11:fixed(p2:int)@late]
+      #|  i3 IncomingReg(I64, p1:int) uses=[v3:fixed(p1:int)@early] defs=[v12:fixed(p1:int)@late]
+      #|  i4 IncomingReg(I64, p8:int) uses=[v4:fixed(p8:int)@early] defs=[v13:fixed(p8:int)@late]
+      #|  i5 IncomingReg(F32, p0:fpvec) uses=[v5:fixed(p0:fpvec)@early] defs=[v14:fixed(p0:fpvec)@late]
+      #|  i6 IncomingReg(F32, p1:fpvec) uses=[v6:fixed(p1:fpvec)@early] defs=[v15:fixed(p1:fpvec)@late]
+      #|  i7 IncomingReg(F64, p2:fpvec) uses=[v7:fixed(p2:fpvec)@early] defs=[v16:fixed(p2:fpvec)@late]
+      #|  i8 IncomingReg(F64, p3:fpvec) uses=[v8:fixed(p3:fpvec)@early] defs=[v17:fixed(p3:fpvec)@late]
+      #|  i9 IncomingResultArea(p10:int) defs=[v18:fixed(p10:int)@late]
       #|  i10 LoadNull(Ptr64) defs=[v19:any@late]
       #|  i11 LoadNull(GcRef64) defs=[v20:any@late]
       #|  i12 CarrierMove(I64, GcRef64) uses=[v12:any@early] defs=[v21:any@late]
@@ -1793,8 +1793,8 @@ test "X64 lowering resolves environment paths and typed symbol addresses" {
     content=(
       #|vcode addresses_and_environment(v0:ptr64) -> (ptr64, ptr64, ptr64, i64)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v1:any@late]
-      #|  i1 IncomingResultArea(p10:int) defs=[v2:any@late]
+      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v1:fixed(p7:int)@late]
+      #|  i1 IncomingResultArea(p10:int) defs=[v2:fixed(p10:int)@late]
       #|  i2 LoadAddress(Code({ name: "callee" })) defs=[v3:any@late]
       #|  i3 LoadAddress(External({ name: "runtime.helper" })) defs=[v4:any@late]
       #|  i4 LoadAddress(Data({ name: "constant.pool" })) defs=[v5:any@late]
@@ -1839,12 +1839,12 @@ test "X64 lowering selects a direct platform call with explicit ABI facts" {
     content=(
       #|vcode direct_platform_call(v0:i64, v1:f64) -> (i64)
       #|block0:
-      #|  i0 IncomingReg(I64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v2:any@late]
-      #|  i1 IncomingReg(F64, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v3:any@late]
+      #|  i0 IncomingReg(I64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v2:fixed(p7:int)@late]
+      #|  i1 IncomingReg(F64, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v3:fixed(p0:fpvec)@late]
       #|  i2 PlatformCall(
       #|  { name: "runtime.helper" },
       #|  { params: [I64, F64], results: [I64] },
-      #|) uses=[v2:any-location@early, v3:any-location@early] clobbers=[p0:int, p1:int, p2:int, p6:int, p7:int, p8:int, p9:int, p10:int, p11:int, p0:fpvec, p1:fpvec, p2:fpvec, p3:fpvec, p4:fpvec, p5:fpvec, p6:fpvec, p7:fpvec, p8:fpvec, p9:fpvec, p10:fpvec, p11:fpvec, p12:fpvec, p13:fpvec, p14:fpvec, p15:fpvec] source={ file: "call.wat", line: 7, column: 11 } safepoint=GcAndCancellation
+      #|) uses=[v2:any-location(prefer=p7:int)@early, v3:any-location(prefer=p0:fpvec)@early] clobbers=[p0:int, p1:int, p2:int, p6:int, p7:int, p8:int, p9:int, p10:int, p11:int, p0:fpvec, p1:fpvec, p2:fpvec, p3:fpvec, p4:fpvec, p5:fpvec, p6:fpvec, p7:fpvec, p8:fpvec, p9:fpvec, p10:fpvec, p11:fpvec, p12:fpvec, p13:fpvec, p14:fpvec, p15:fpvec] source={ file: "call.wat", line: 7, column: 11 } safepoint=GcAndCancellation
       #|  i3 IncomingCallResult(I64, p0:int) defs=[v4:any@late]
       #|  i4 OutgoingReg(I64, p0:int) uses=[v4:any@early]
       #|  i5 Return
@@ -1884,13 +1884,13 @@ test "X64 lowering preserves returns-twice platform calls" {
     content=(
       #|vcode returns_twice_platform_call(v0:ptr64, v1:i32, v2:i64) -> (i64)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v3:any@late]
-      #|  i1 IncomingReg(I32, p6:int) uses=[v1:fixed(p6:int)@early] defs=[v4:any@late]
-      #|  i2 IncomingReg(I64, p2:int) uses=[v2:fixed(p2:int)@early] defs=[v5:any@late]
+      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v3:fixed(p7:int)@late]
+      #|  i1 IncomingReg(I32, p6:int) uses=[v1:fixed(p6:int)@early] defs=[v4:fixed(p6:int)@late]
+      #|  i2 IncomingReg(I64, p2:int) uses=[v2:fixed(p2:int)@early] defs=[v5:fixed(p2:int)@late]
       #|  i3 ReturnsTwicePlatformCall(
       #|  { name: "runtime.sigsetjmp" },
       #|  { params: [Ptr64, I32], results: [I32] },
-      #|) uses=[v3:any-location@early, v4:any-location@early] clobbers=[p0:int, p1:int, p2:int, p6:int, p7:int, p8:int, p9:int, p10:int, p11:int, p0:fpvec, p1:fpvec, p2:fpvec, p3:fpvec, p4:fpvec, p5:fpvec, p6:fpvec, p7:fpvec, p8:fpvec, p9:fpvec, p10:fpvec, p11:fpvec, p12:fpvec, p13:fpvec, p14:fpvec, p15:fpvec]
+      #|) uses=[v3:any-location(prefer=p7:int)@early, v4:any-location(prefer=p6:int)@early] clobbers=[p0:int, p1:int, p2:int, p6:int, p7:int, p8:int, p9:int, p10:int, p11:int, p0:fpvec, p1:fpvec, p2:fpvec, p3:fpvec, p4:fpvec, p5:fpvec, p6:fpvec, p7:fpvec, p8:fpvec, p9:fpvec, p10:fpvec, p11:fpvec, p12:fpvec, p13:fpvec, p14:fpvec, p15:fpvec]
       #|  i4 IncomingCallResult(I32, p0:int) defs=[v6:any@late]
       #|  i5 Convert(ExtendI32ToI64(Unsigned)) uses=[v6:any@early] defs=[v7:any@late]
       #|  i6 IntBinary(W64, Add) uses=[v5:any@early, v7:any@early] defs=[v8:any@late]
@@ -1922,9 +1922,9 @@ test "X64 lowering derives internal entry and direct-call layouts" {
     content=(
       #|vcode direct_internal_call(v0:ptr64, v1:i64, v2:f64) -> (i64)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v3:any@late]
-      #|  i1 IncomingReg(I64, p6:int) uses=[v1:fixed(p6:int)@early] defs=[v4:any@late]
-      #|  i2 IncomingReg(F64, p0:fpvec) uses=[v2:fixed(p0:fpvec)@early] defs=[v5:any@late]
+      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v3:fixed(p7:int)@late]
+      #|  i1 IncomingReg(I64, p6:int) uses=[v1:fixed(p6:int)@early] defs=[v4:fixed(p6:int)@late]
+      #|  i2 IncomingReg(F64, p0:fpvec) uses=[v2:fixed(p0:fpvec)@early] defs=[v5:fixed(p0:fpvec)@late]
       #|  i3 InternalCall(
       #|  { name: "wasm.func.7" },
       #|  { params: [Ptr64, I64, F64], results: [I64] },
@@ -1934,7 +1934,7 @@ test "X64 lowering derives internal entry and direct-call layouts" {
       #|    stack_size: 0,
       #|    result_area_size: 0,
       #|  },
-      #|) uses=[v3:any-location@early, v4:any-location@early, v5:any-location@early] clobbers=[p0:int, p1:int, p2:int, p6:int, p7:int, p8:int, p9:int, p10:int, p11:int, p0:fpvec, p1:fpvec, p2:fpvec, p3:fpvec, p4:fpvec, p5:fpvec, p6:fpvec, p7:fpvec, p8:fpvec, p9:fpvec, p10:fpvec, p11:fpvec, p12:fpvec, p13:fpvec, p14:fpvec, p15:fpvec] safepoint=GcAndCancellation
+      #|) uses=[v3:any-location(prefer=p7:int)@early, v4:any-location(prefer=p6:int)@early, v5:any-location(prefer=p0:fpvec)@early] clobbers=[p0:int, p1:int, p2:int, p6:int, p7:int, p8:int, p9:int, p10:int, p11:int, p0:fpvec, p1:fpvec, p2:fpvec, p3:fpvec, p4:fpvec, p5:fpvec, p6:fpvec, p7:fpvec, p8:fpvec, p9:fpvec, p10:fpvec, p11:fpvec, p12:fpvec, p13:fpvec, p14:fpvec, p15:fpvec] safepoint=GcAndCancellation
       #|  i4 IncomingCallResult(I64, p0:int) defs=[v6:any@late]
       #|  i5 OutgoingReg(I64, p0:int) uses=[v6:any@early]
       #|  i6 Return
@@ -1969,9 +1969,9 @@ test "X64 lowering keeps the indirect callee outside the logical signature" {
     content=(
       #|vcode indirect_internal_call(v0:ptr64, v1:ptr64, v2:i64) -> (i64)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v3:any@late]
-      #|  i1 IncomingReg(Ptr64, p6:int) uses=[v1:fixed(p6:int)@early] defs=[v4:any@late]
-      #|  i2 IncomingReg(I64, p2:int) uses=[v2:fixed(p2:int)@early] defs=[v5:any@late]
+      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v3:fixed(p7:int)@late]
+      #|  i1 IncomingReg(Ptr64, p6:int) uses=[v1:fixed(p6:int)@early] defs=[v4:fixed(p6:int)@late]
+      #|  i2 IncomingReg(I64, p2:int) uses=[v2:fixed(p2:int)@early] defs=[v5:fixed(p2:int)@late]
       #|  i3 InternalCallIndirect(
       #|  { params: [Ptr64, I64], results: [I64] },
       #|  {
@@ -1980,7 +1980,7 @@ test "X64 lowering keeps the indirect callee outside the logical signature" {
       #|    stack_size: 0,
       #|    result_area_size: 0,
       #|  },
-      #|) uses=[v4:any-location@early, v3:any-location@early, v5:any-location@early] clobbers=[p0:int, p1:int, p2:int, p6:int, p7:int, p8:int, p9:int, p10:int, p11:int, p0:fpvec, p1:fpvec, p2:fpvec, p3:fpvec, p4:fpvec, p5:fpvec, p6:fpvec, p7:fpvec, p8:fpvec, p9:fpvec, p10:fpvec, p11:fpvec, p12:fpvec, p13:fpvec, p14:fpvec, p15:fpvec]
+      #|) uses=[v4:any-location@early, v3:any-location(prefer=p7:int)@early, v5:any-location(prefer=p6:int)@early] clobbers=[p0:int, p1:int, p2:int, p6:int, p7:int, p8:int, p9:int, p10:int, p11:int, p0:fpvec, p1:fpvec, p2:fpvec, p3:fpvec, p4:fpvec, p5:fpvec, p6:fpvec, p7:fpvec, p8:fpvec, p9:fpvec, p10:fpvec, p11:fpvec, p12:fpvec, p13:fpvec, p14:fpvec, p15:fpvec]
       #|  i4 IncomingCallResult(I64, p0:int) defs=[v6:any@late]
       #|  i5 OutgoingReg(I64, p0:int) uses=[v6:any@early]
       #|  i6 Return
@@ -2009,8 +2009,8 @@ test "X64 lowering selects a compatible true internal tail call" {
     content=(
       #|vcode direct_tail_call(v0:ptr64, v1:i64) -> (i64)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v2:any@late]
-      #|  i1 IncomingReg(I64, p6:int) uses=[v1:fixed(p6:int)@early] defs=[v3:any@late]
+      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v2:fixed(p7:int)@late]
+      #|  i1 IncomingReg(I64, p6:int) uses=[v1:fixed(p6:int)@early] defs=[v3:fixed(p6:int)@late]
       #|  i2 TailCallDirect(
       #|  { name: "wasm.func.9" },
       #|  { params: [Ptr64, I64], results: [I64] },
@@ -2020,7 +2020,7 @@ test "X64 lowering selects a compatible true internal tail call" {
       #|    stack_size: 0,
       #|    result_area_size: 0,
       #|  },
-      #|) uses=[v2:any-location@early, v3:any-location@early] clobbers=[p0:int, p1:int, p2:int, p6:int, p7:int, p8:int, p9:int, p10:int, p11:int, p0:fpvec, p1:fpvec, p2:fpvec, p3:fpvec, p4:fpvec, p5:fpvec, p6:fpvec, p7:fpvec, p8:fpvec, p9:fpvec, p10:fpvec, p11:fpvec, p12:fpvec, p13:fpvec, p14:fpvec, p15:fpvec]
+      #|) uses=[v2:any-location(prefer=p7:int)@early, v3:any-location(prefer=p6:int)@early] clobbers=[p0:int, p1:int, p2:int, p6:int, p7:int, p8:int, p9:int, p10:int, p11:int, p0:fpvec, p1:fpvec, p2:fpvec, p3:fpvec, p4:fpvec, p5:fpvec, p6:fpvec, p7:fpvec, p8:fpvec, p9:fpvec, p10:fpvec, p11:fpvec, p12:fpvec, p13:fpvec, p14:fpvec, p15:fpvec]
       #|
     ),
   )
@@ -2051,8 +2051,8 @@ test "X64 tail calls transfer GC references without a caller safepoint" {
     content=(
       #|vcode tail_call_gc_argument(v0:ptr64, v1:gcref64)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v2:any@late]
-      #|  i1 IncomingReg(GcRef64, p6:int) uses=[v1:fixed(p6:int)@early] defs=[v3:any@late]
+      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v2:fixed(p7:int)@late]
+      #|  i1 IncomingReg(GcRef64, p6:int) uses=[v1:fixed(p6:int)@early] defs=[v3:fixed(p6:int)@late]
       #|  i2 TailCallDirect(
       #|  { name: "wasm.func.gc_argument" },
       #|  { params: [Ptr64, GcRef64], results: [] },
@@ -2062,7 +2062,7 @@ test "X64 tail calls transfer GC references without a caller safepoint" {
       #|    stack_size: 0,
       #|    result_area_size: 0,
       #|  },
-      #|) uses=[v2:any-location@early, v3:any-location@early] clobbers=[p0:int, p1:int, p2:int, p6:int, p7:int, p8:int, p9:int, p10:int, p11:int, p0:fpvec, p1:fpvec, p2:fpvec, p3:fpvec, p4:fpvec, p5:fpvec, p6:fpvec, p7:fpvec, p8:fpvec, p9:fpvec, p10:fpvec, p11:fpvec, p12:fpvec, p13:fpvec, p14:fpvec, p15:fpvec]
+      #|) uses=[v2:any-location(prefer=p7:int)@early, v3:any-location(prefer=p6:int)@early] clobbers=[p0:int, p1:int, p2:int, p6:int, p7:int, p8:int, p9:int, p10:int, p11:int, p0:fpvec, p1:fpvec, p2:fpvec, p3:fpvec, p4:fpvec, p5:fpvec, p6:fpvec, p7:fpvec, p8:fpvec, p9:fpvec, p10:fpvec, p11:fpvec, p12:fpvec, p13:fpvec, p14:fpvec, p15:fpvec]
       #|
     ),
   )
@@ -2104,12 +2104,12 @@ test "X64 internal calls materialize register and result-area returns" {
     content=(
       #|vcode internal_result_area_call(v0:ptr64, v1:i64, v2:i64, v3:f32, v4:v128) -> (i64, i64, f32, v128)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v5:any@late]
-      #|  i1 IncomingReg(I64, p1:int) uses=[v1:fixed(p1:int)@early] defs=[v6:any@late]
-      #|  i2 IncomingReg(I64, p2:int) uses=[v2:fixed(p2:int)@early] defs=[v7:any@late]
-      #|  i3 IncomingReg(F32, p0:fpvec) uses=[v3:fixed(p0:fpvec)@early] defs=[v8:any@late]
-      #|  i4 IncomingReg(V128, p1:fpvec) uses=[v4:fixed(p1:fpvec)@early] defs=[v9:any@late]
-      #|  i5 IncomingResultArea(p8:int) defs=[v10:any@late]
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v5:fixed(p0:int)@late]
+      #|  i1 IncomingReg(I64, p1:int) uses=[v1:fixed(p1:int)@early] defs=[v6:fixed(p1:int)@late]
+      #|  i2 IncomingReg(I64, p2:int) uses=[v2:fixed(p2:int)@early] defs=[v7:fixed(p2:int)@late]
+      #|  i3 IncomingReg(F32, p0:fpvec) uses=[v3:fixed(p0:fpvec)@early] defs=[v8:fixed(p0:fpvec)@late]
+      #|  i4 IncomingReg(V128, p1:fpvec) uses=[v4:fixed(p1:fpvec)@early] defs=[v9:fixed(p1:fpvec)@late]
+      #|  i5 IncomingResultArea(p8:int) defs=[v10:fixed(p8:int)@late]
       #|  i6 InternalCall(
       #|  { name: "wasm.func.result_area" },
       #|  {
@@ -2133,7 +2133,7 @@ test "X64 internal calls materialize register and result-area returns" {
       #|    stack_size: 0,
       #|    result_area_size: 32,
       #|  },
-      #|) uses=[v5:any-location@early, v6:any-location@early, v7:any-location@early, v8:any-location@early, v9:any-location@early] clobbers=[p0:int, p1:int, p2:int, p6:int, p7:int, p8:int, p9:int, p10:int, p11:int, p0:fpvec, p1:fpvec, p2:fpvec, p3:fpvec, p4:fpvec, p5:fpvec, p6:fpvec, p7:fpvec, p8:fpvec, p9:fpvec, p10:fpvec, p11:fpvec, p12:fpvec, p13:fpvec, p14:fpvec, p15:fpvec]
+      #|) uses=[v5:any-location(prefer=p0:int)@early, v6:any-location(prefer=p1:int)@early, v7:any-location(prefer=p2:int)@early, v8:any-location(prefer=p0:fpvec)@early, v9:any-location(prefer=p1:fpvec)@early] clobbers=[p0:int, p1:int, p2:int, p6:int, p7:int, p8:int, p9:int, p10:int, p11:int, p0:fpvec, p1:fpvec, p2:fpvec, p3:fpvec, p4:fpvec, p5:fpvec, p6:fpvec, p7:fpvec, p8:fpvec, p9:fpvec, p10:fpvec, p11:fpvec, p12:fpvec, p13:fpvec, p14:fpvec, p15:fpvec]
       #|  i7 IncomingCallResult(I64, p0:int) defs=[v11:any@late]
       #|  i8 IncomingCallAreaResult(I64, 0) defs=[v12:any@late]
       #|  i9 IncomingCallResult(F32, p0:fpvec) defs=[v13:any@late]
@@ -2169,12 +2169,12 @@ test "X64 internal tail calls forward the incoming result area" {
     content=(
       #|vcode internal_result_area_tail_call(v0:ptr64, v1:i64, v2:i64, v3:f32, v4:v128) -> (i64, i64, f32, v128)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v5:any@late]
-      #|  i1 IncomingReg(I64, p1:int) uses=[v1:fixed(p1:int)@early] defs=[v6:any@late]
-      #|  i2 IncomingReg(I64, p2:int) uses=[v2:fixed(p2:int)@early] defs=[v7:any@late]
-      #|  i3 IncomingReg(F32, p0:fpvec) uses=[v3:fixed(p0:fpvec)@early] defs=[v8:any@late]
-      #|  i4 IncomingReg(V128, p1:fpvec) uses=[v4:fixed(p1:fpvec)@early] defs=[v9:any@late]
-      #|  i5 IncomingResultArea(p8:int) defs=[v10:any@late]
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v5:fixed(p0:int)@late]
+      #|  i1 IncomingReg(I64, p1:int) uses=[v1:fixed(p1:int)@early] defs=[v6:fixed(p1:int)@late]
+      #|  i2 IncomingReg(I64, p2:int) uses=[v2:fixed(p2:int)@early] defs=[v7:fixed(p2:int)@late]
+      #|  i3 IncomingReg(F32, p0:fpvec) uses=[v3:fixed(p0:fpvec)@early] defs=[v8:fixed(p0:fpvec)@late]
+      #|  i4 IncomingReg(V128, p1:fpvec) uses=[v4:fixed(p1:fpvec)@early] defs=[v9:fixed(p1:fpvec)@late]
+      #|  i5 IncomingResultArea(p8:int) defs=[v10:fixed(p8:int)@late]
       #|  i6 TailCallDirect(
       #|  { name: "wasm.func.result_area_tail" },
       #|  {
@@ -2198,7 +2198,7 @@ test "X64 internal tail calls forward the incoming result area" {
       #|    stack_size: 0,
       #|    result_area_size: 32,
       #|  },
-      #|) uses=[v5:any-location@early, v6:any-location@early, v7:any-location@early, v8:any-location@early, v9:any-location@early, v10:any-location@early] clobbers=[p0:int, p1:int, p2:int, p6:int, p7:int, p8:int, p9:int, p10:int, p11:int, p0:fpvec, p1:fpvec, p2:fpvec, p3:fpvec, p4:fpvec, p5:fpvec, p6:fpvec, p7:fpvec, p8:fpvec, p9:fpvec, p10:fpvec, p11:fpvec, p12:fpvec, p13:fpvec, p14:fpvec, p15:fpvec]
+      #|) uses=[v5:any-location(prefer=p0:int)@early, v6:any-location(prefer=p1:int)@early, v7:any-location(prefer=p2:int)@early, v8:any-location(prefer=p0:fpvec)@early, v9:any-location(prefer=p1:fpvec)@early, v10:any-location(prefer=p8:int)@early] clobbers=[p0:int, p1:int, p2:int, p6:int, p7:int, p8:int, p9:int, p10:int, p11:int, p0:fpvec, p1:fpvec, p2:fpvec, p3:fpvec, p4:fpvec, p5:fpvec, p6:fpvec, p7:fpvec, p8:fpvec, p9:fpvec, p10:fpvec, p11:fpvec, p12:fpvec, p13:fpvec, p14:fpvec, p15:fpvec]
       #|
     ),
   )
@@ -2254,8 +2254,8 @@ test "X64 lowers dense and sparse switches with edge arguments" {
     content=(
       #|vcode dense_switch(v0:ptr64, v1:i32) -> (i32)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v2:any@late]
-      #|  i1 IncomingReg(I32, p6:int) uses=[v1:fixed(p6:int)@early] defs=[v3:any@late]
+      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v2:fixed(p7:int)@late]
+      #|  i1 IncomingReg(I32, p6:int) uses=[v1:fixed(p6:int)@early] defs=[v3:fixed(p6:int)@late]
       #|  i2 Switch(W32, [1, 0]) uses=[v3:any@early] -> block2(v3) -> block1(v3) -> block3(v3)
       #|block1(v4:i32):
       #|  i5 OutgoingReg(I32, p0:int) uses=[v4:any@early]
@@ -2274,8 +2274,8 @@ test "X64 lowers dense and sparse switches with edge arguments" {
     content=(
       #|vcode sparse_switch(v0:ptr64, v1:i64) -> (i64)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v2:any@late]
-      #|  i1 IncomingReg(I64, p6:int) uses=[v1:fixed(p6:int)@early] defs=[v3:any@late]
+      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v2:fixed(p7:int)@late]
+      #|  i1 IncomingReg(I64, p6:int) uses=[v1:fixed(p6:int)@early] defs=[v3:fixed(p6:int)@late]
       #|  i2 Switch(W64, [7, 65536]) uses=[v3:any@early] -> block1(v3) -> block2(v3) -> block3(v3)
       #|block1(v4:i64):
       #|  i7 OutgoingReg(I64, p0:int) uses=[v4:any@early]
@@ -2326,7 +2326,7 @@ test "X64 lowers noreturn calls and explicit traps" {
     content=(
       #|vcode noreturn_call(v0:gcref64)
       #|block0:
-      #|  i0 IncomingReg(GcRef64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v1:any@late]
+      #|  i0 IncomingReg(GcRef64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v1:fixed(p7:int)@late]
       #|  i1 PlatformCall({ name: "runtime.abort" }, { params: [], results: [] }) clobbers=[p0:int, p1:int, p2:int, p6:int, p7:int, p8:int, p9:int, p10:int, p11:int, p0:fpvec, p1:fpvec, p2:fpvec, p3:fpvec, p4:fpvec, p5:fpvec, p6:fpvec, p7:fpvec, p8:fpvec, p9:fpvec, p10:fpvec, p11:fpvec, p12:fpvec, p13:fpvec, p14:fpvec, p15:fpvec] source={ file: "trap.wat", line: 9, column: 4 } safepoint=GcAndCancellation roots=[v1]
       #|  i2 KeepAlive(GcRef64) uses=[v1:any@early]
       #|  i3 Trap(Unreachable) source={ file: "trap.wat", line: 9, column: 4 } trap=Unreachable
@@ -2338,7 +2338,7 @@ test "X64 lowers noreturn calls and explicit traps" {
     content=(
       #|vcode explicit_trap(v0:ptr64)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v1:any@late]
+      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v1:fixed(p7:int)@late]
       #|  i1 Trap(User(7)) source={ file: "trap.wat", line: 3, column: 9 } trap=User(7)
       #|
     ),
@@ -2369,7 +2369,7 @@ test "X64 selects tail calls larger than the incoming argument area" {
     content=(
       #|vcode oversized_tail_call(v0:ptr64)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v1:any@late]
+      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v1:fixed(p7:int)@late]
       #|  i1 LoadConstant(W64, 0) defs=[v2:any@late]
       #|  i2 LoadConstant(W64, 1) defs=[v3:any@late]
       #|  i3 LoadConstant(W64, 2) defs=[v4:any@late]
@@ -2400,7 +2400,7 @@ test "X64 selects tail calls larger than the incoming argument area" {
       #|    stack_size: 32,
       #|    result_area_size: 0,
       #|  },
-      #|) uses=[v1:any-location@early, v2:any-location@early, v3:any-location@early, v4:any-location@early, v5:any-location@early, v6:any-location@early, v7:any-location@early, v8:any-location@early, v9:any-location@early] clobbers=[p0:int, p1:int, p2:int, p6:int, p7:int, p8:int, p9:int, p10:int, p11:int, p0:fpvec, p1:fpvec, p2:fpvec, p3:fpvec, p4:fpvec, p5:fpvec, p6:fpvec, p7:fpvec, p8:fpvec, p9:fpvec, p10:fpvec, p11:fpvec, p12:fpvec, p13:fpvec, p14:fpvec, p15:fpvec]
+      #|) uses=[v1:any-location(prefer=p7:int)@early, v2:any-location(prefer=p6:int)@early, v3:any-location(prefer=p2:int)@early, v4:any-location(prefer=p1:int)@early, v5:any-location(prefer=p8:int)@early, v6:any-location(prefer=p9:int)@early, v7:any-location@early, v8:any-location@early, v9:any-location@early] clobbers=[p0:int, p1:int, p2:int, p6:int, p7:int, p8:int, p9:int, p10:int, p11:int, p0:fpvec, p1:fpvec, p2:fpvec, p3:fpvec, p4:fpvec, p5:fpvec, p6:fpvec, p7:fpvec, p8:fpvec, p9:fpvec, p10:fpvec, p11:fpvec, p12:fpvec, p13:fpvec, p14:fpvec, p15:fpvec]
       #|
     ),
   )
@@ -2496,11 +2496,11 @@ test "X64 lowering selects typed scalar memory operations and traps" {
     content=(
       #|vcode scalar_memory(v0:ptr64, v1:i32, v2:i64, v3:f32, v4:f64) -> (i64)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v5:any@late]
-      #|  i1 IncomingReg(I32, p6:int) uses=[v1:fixed(p6:int)@early] defs=[v6:any@late]
-      #|  i2 IncomingReg(I64, p2:int) uses=[v2:fixed(p2:int)@early] defs=[v7:any@late]
-      #|  i3 IncomingReg(F32, p0:fpvec) uses=[v3:fixed(p0:fpvec)@early] defs=[v8:any@late]
-      #|  i4 IncomingReg(F64, p1:fpvec) uses=[v4:fixed(p1:fpvec)@early] defs=[v9:any@late]
+      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v5:fixed(p7:int)@late]
+      #|  i1 IncomingReg(I32, p6:int) uses=[v1:fixed(p6:int)@early] defs=[v6:fixed(p6:int)@late]
+      #|  i2 IncomingReg(I64, p2:int) uses=[v2:fixed(p2:int)@early] defs=[v7:fixed(p2:int)@late]
+      #|  i3 IncomingReg(F32, p0:fpvec) uses=[v3:fixed(p0:fpvec)@early] defs=[v8:fixed(p0:fpvec)@late]
+      #|  i4 IncomingReg(F64, p1:fpvec) uses=[v4:fixed(p1:fpvec)@early] defs=[v9:fixed(p1:fpvec)@late]
       #|  i5 ScalarLoad(W8, Signed, I32, 3) uses=[v5:any@early] defs=[v10:any@late] source={ file: "memory.wat", line: 4, column: 7 } trap=MemoryOutOfBounds
       #|  i6 ScalarLoad(W32, Unsigned, I64, 12) uses=[v5:any@early] defs=[v11:any@late] trap=MemoryOutOfBounds
       #|  i7 ScalarLoad(W64, None, Ptr64, 16) uses=[v5:any@early] defs=[v12:any@late]
@@ -2674,8 +2674,8 @@ test "X64 lowering selects complete vector memory families" {
     content=(
       #|vcode vector_memory(v0:ptr64, v1:v128) -> (v128)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v2:any@late]
-      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v3:any@late]
+      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v2:fixed(p7:int)@late]
+      #|  i1 IncomingReg(V128, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v3:fixed(p0:fpvec)@late]
       #|  i2 VectorLoad128(16) uses=[v2:any@early] defs=[v4:any@late] trap=MemoryOutOfBounds
       #|  i3 VectorStore128(32) uses=[v2:any@early, v4:any@early] trap=MemoryOutOfBounds
       #|  i4 VectorLoadSplat(I16x8, 4) uses=[v2:any@early] defs=[v5:any@late] trap=MemoryOutOfBounds
@@ -2721,11 +2721,11 @@ test "X64 lowering selects non-trapping scalar floating-point operations" {
     content=(
       #|vcode scalar_float(v0:ptr64, v1:f32, v2:f32, v3:f64, v4:f64) -> (f32, f64, i32, i32)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v5:any@late]
-      #|  i1 IncomingReg(F32, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v6:any@late]
-      #|  i2 IncomingReg(F32, p1:fpvec) uses=[v2:fixed(p1:fpvec)@early] defs=[v7:any@late]
-      #|  i3 IncomingReg(F64, p2:fpvec) uses=[v3:fixed(p2:fpvec)@early] defs=[v8:any@late]
-      #|  i4 IncomingReg(F64, p3:fpvec) uses=[v4:fixed(p3:fpvec)@early] defs=[v9:any@late]
+      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v5:fixed(p7:int)@late]
+      #|  i1 IncomingReg(F32, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v6:fixed(p0:fpvec)@late]
+      #|  i2 IncomingReg(F32, p1:fpvec) uses=[v2:fixed(p1:fpvec)@early] defs=[v7:fixed(p1:fpvec)@late]
+      #|  i3 IncomingReg(F64, p2:fpvec) uses=[v3:fixed(p2:fpvec)@early] defs=[v8:fixed(p2:fpvec)@late]
+      #|  i4 IncomingReg(F64, p3:fpvec) uses=[v4:fixed(p3:fpvec)@early] defs=[v9:fixed(p3:fpvec)@late]
       #|  i5 LoadFloatConstant(F32, 1065353216) defs=[v10:any@late]
       #|  i6 FloatUnary(F32, Negate) uses=[v6:any@early] defs=[v11:any@late]
       #|  i7 FloatBinary(F32, Add) uses=[v11:any@early, v10:any@early] defs=[v12:any@late]
@@ -2777,11 +2777,11 @@ test "X64 lowering selects scalar rounding and NaN predicates" {
     content=(
       #|vcode scalar_float_rounding(v0:ptr64, v1:f32, v2:f32, v3:f64, v4:f64) -> (f32, f64, i32, i32)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v5:any@late]
-      #|  i1 IncomingReg(F32, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v6:any@late]
-      #|  i2 IncomingReg(F32, p1:fpvec) uses=[v2:fixed(p1:fpvec)@early] defs=[v7:any@late]
-      #|  i3 IncomingReg(F64, p2:fpvec) uses=[v3:fixed(p2:fpvec)@early] defs=[v8:any@late]
-      #|  i4 IncomingReg(F64, p3:fpvec) uses=[v4:fixed(p3:fpvec)@early] defs=[v9:any@late]
+      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v5:fixed(p7:int)@late]
+      #|  i1 IncomingReg(F32, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v6:fixed(p0:fpvec)@late]
+      #|  i2 IncomingReg(F32, p1:fpvec) uses=[v2:fixed(p1:fpvec)@early] defs=[v7:fixed(p1:fpvec)@late]
+      #|  i3 IncomingReg(F64, p2:fpvec) uses=[v3:fixed(p2:fpvec)@early] defs=[v8:fixed(p2:fpvec)@late]
+      #|  i4 IncomingReg(F64, p3:fpvec) uses=[v4:fixed(p3:fpvec)@early] defs=[v9:fixed(p3:fpvec)@late]
       #|  i5 FloatUnary(F32, Ceil) uses=[v6:any@early] defs=[v10:any@late]
       #|  i6 FloatUnary(F32, Floor) uses=[v10:any@early] defs=[v11:any@late]
       #|  i7 FloatUnary(F32, Truncate) uses=[v11:any@early] defs=[v12:any@late]
@@ -2838,8 +2838,8 @@ test "X64 lowering selects scalar min max and bit-exact copy-sign" {
     content=(
       #|vcode scalar_float_minmax_copysign(v0:ptr64) -> (f32, f64, f32, f64)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v1:any@late]
-      #|  i1 IncomingResultArea(p10:int) defs=[v2:any@late]
+      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v1:fixed(p7:int)@late]
+      #|  i1 IncomingResultArea(p10:int) defs=[v2:fixed(p10:int)@late]
       #|  i2 LoadFloatConstant(F32, 0) defs=[v3:any@late]
       #|  i3 LoadFloatConstant(F32, 2147483648) defs=[v4:any@late]
       #|  i4 LoadFloatConstant(F64, 0) defs=[v5:any@late]
@@ -2915,13 +2915,13 @@ test "X64 lowering maps all scalar fused operations explicitly" {
     content=(
       #|vcode scalar_float_fused(v0:ptr64, v1:f32, v2:f32, v3:f32, v4:f64, v5:f64, v6:f64) -> (f32, f64)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v7:any@late]
-      #|  i1 IncomingReg(F32, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v8:any@late]
-      #|  i2 IncomingReg(F32, p1:fpvec) uses=[v2:fixed(p1:fpvec)@early] defs=[v9:any@late]
-      #|  i3 IncomingReg(F32, p2:fpvec) uses=[v3:fixed(p2:fpvec)@early] defs=[v10:any@late]
-      #|  i4 IncomingReg(F64, p3:fpvec) uses=[v4:fixed(p3:fpvec)@early] defs=[v11:any@late]
-      #|  i5 IncomingReg(F64, p4:fpvec) uses=[v5:fixed(p4:fpvec)@early] defs=[v12:any@late]
-      #|  i6 IncomingReg(F64, p5:fpvec) uses=[v6:fixed(p5:fpvec)@early] defs=[v13:any@late]
+      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v7:fixed(p7:int)@late]
+      #|  i1 IncomingReg(F32, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v8:fixed(p0:fpvec)@late]
+      #|  i2 IncomingReg(F32, p1:fpvec) uses=[v2:fixed(p1:fpvec)@early] defs=[v9:fixed(p1:fpvec)@late]
+      #|  i3 IncomingReg(F32, p2:fpvec) uses=[v3:fixed(p2:fpvec)@early] defs=[v10:fixed(p2:fpvec)@late]
+      #|  i4 IncomingReg(F64, p3:fpvec) uses=[v4:fixed(p3:fpvec)@early] defs=[v11:fixed(p3:fpvec)@late]
+      #|  i5 IncomingReg(F64, p4:fpvec) uses=[v5:fixed(p4:fpvec)@early] defs=[v12:fixed(p4:fpvec)@late]
+      #|  i6 IncomingReg(F64, p5:fpvec) uses=[v6:fixed(p5:fpvec)@early] defs=[v13:fixed(p5:fpvec)@late]
       #|  i7 FloatTernary(F32, Fmadd) uses=[v8:any@early, v9:any@early, v10:any@early] defs=[v14:any@late]
       #|  i8 FloatTernary(F32, Fmsub) uses=[v8:any@early, v9:any@early, v14:any@early] defs=[v15:any@late]
       #|  i9 FloatTernary(F32, Fnmsub) uses=[v8:any@early, v9:any@early, v15:any@early] defs=[v16:any@late]
@@ -2983,11 +2983,11 @@ test "X64 lowering selects non-trapping scalar conversions" {
     content=(
       #|vcode scalar_conversions(v0:ptr64, v1:i32, v2:i64, v3:f32, v4:f64) -> (i32, i64, f32, f64)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v5:any@late]
-      #|  i1 IncomingReg(I32, p6:int) uses=[v1:fixed(p6:int)@early] defs=[v6:any@late]
-      #|  i2 IncomingReg(I64, p2:int) uses=[v2:fixed(p2:int)@early] defs=[v7:any@late]
-      #|  i3 IncomingReg(F32, p0:fpvec) uses=[v3:fixed(p0:fpvec)@early] defs=[v8:any@late]
-      #|  i4 IncomingReg(F64, p1:fpvec) uses=[v4:fixed(p1:fpvec)@early] defs=[v9:any@late]
+      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v5:fixed(p7:int)@late]
+      #|  i1 IncomingReg(I32, p6:int) uses=[v1:fixed(p6:int)@early] defs=[v6:fixed(p6:int)@late]
+      #|  i2 IncomingReg(I64, p2:int) uses=[v2:fixed(p2:int)@early] defs=[v7:fixed(p2:int)@late]
+      #|  i3 IncomingReg(F32, p0:fpvec) uses=[v3:fixed(p0:fpvec)@early] defs=[v8:fixed(p0:fpvec)@late]
+      #|  i4 IncomingReg(F64, p1:fpvec) uses=[v4:fixed(p1:fpvec)@early] defs=[v9:fixed(p1:fpvec)@late]
       #|  i5 Convert(WrapI64ToI32) uses=[v7:any@early] defs=[v10:any@late]
       #|  i6 Convert(SignExtend(I32, W8)) uses=[v10:any@early] defs=[v11:any@late]
       #|  i7 Convert(Bitcast(I32, F32)) uses=[v11:any@early] defs=[v12:any@late]
@@ -3039,9 +3039,9 @@ test "X64 lowering legalizes trapping and saturating float-to-int" {
     content=(
       #|vcode float_to_int(v0:ptr64, v1:f32, v2:f64) -> (i32, i64)
       #|block0:
-      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v3:any@late]
-      #|  i1 IncomingReg(F32, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v4:any@late]
-      #|  i2 IncomingReg(F64, p1:fpvec) uses=[v2:fixed(p1:fpvec)@early] defs=[v5:any@late]
+      #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v3:fixed(p7:int)@late]
+      #|  i1 IncomingReg(F32, p0:fpvec) uses=[v1:fixed(p0:fpvec)@early] defs=[v4:fixed(p0:fpvec)@late]
+      #|  i2 IncomingReg(F64, p1:fpvec) uses=[v2:fixed(p1:fpvec)@early] defs=[v5:fixed(p1:fpvec)@late]
       #|  i3 TrapIfFloat(F32, Unordered) uses=[v4:any@early] trap=InvalidConversionToInteger
       #|  i4 LoadFloatConstant(F32, 3472883712) defs=[v6:any@late]
       #|  i5 TrapIfFloat(F32, LessThan) uses=[v4:any@early, v6:any@early] trap=InvalidConversionToInteger

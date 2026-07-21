@@ -12,6 +12,8 @@ import {
 // Values
 pub fn allocate(@vcode.Function[AArch64Inst]) -> @vcode.Allocation raise AArch64AllocationError
 
+pub fn compile(@vcode.Function[AArch64Inst]) -> (@code_object.UnlinkedCodeObject, Int) raise AArch64CompileError
+
 pub fn emit(@vcode.Function[AArch64Inst], @vcode.Allocation, AArch64Frame) -> @code_object.UnlinkedCodeObject raise AArch64EmitError
 
 pub fn lower(@machv.Function, LoweringContext) -> @vcode.Function[AArch64Inst] raise AArch64LowerError
@@ -35,10 +37,19 @@ pub suberror AArch64AllocationError {
 } derive(@debug.Debug)
 pub impl Show for AArch64AllocationError
 
+pub suberror AArch64CompileError {
+  TargetValidationFailed(cause~ : TargetVCodeVerifyError)
+  AllocationFailed(cause~ : AArch64AllocationError)
+  FramePlanningFailed(cause~ : AArch64FrameError)
+  EmissionFailed(cause~ : AArch64EmitError)
+} derive(@debug.Debug)
+pub impl Show for AArch64CompileError
+
 pub suberror AArch64EmitError {
   InvalidFrame(cause~ : AArch64FrameError)
   InvalidCodeObject(cause~ : @code_object.CodeObjectVerifyError)
   InvalidParallelMove(cause~ : @vcode.MoveResolveError)
+  InvalidCallTransfer(cause~ : @vcode.CallTransferError)
   UnresolvedStackMove
   MissingStackObjectArea
   MissingResultArea
@@ -228,6 +239,9 @@ pub(all) enum AArch64Inst {
   VectorRelaxedDot8To16
   IntUnary(GprWidth, AArch64IntUnary)
   IntBinary(GprWidth, AArch64IntBinary)
+  IntBinaryImmediate(GprWidth, AArch64IntBinary, UInt64)
+  IntMultiplyAdd(GprWidth)
+  IntShiftLeftImmediate(GprWidth, Int)
   PopulationCount(GprWidth)
   IntHighMultiply(GprWidth, @machv.Signedness)
   IntWithOverflow(GprWidth, @machv.IntOverflowOp)
@@ -244,7 +258,9 @@ pub(all) enum AArch64Inst {
   Convert(AArch64Conversion)
   AddAddress
   ScalarLoad(@machv.AccessWidth, @machv.LoadExtension, @machv.ValueType, UInt64)
+  ScalarLoadUxtw(@machv.AccessWidth, @machv.LoadExtension, @machv.ValueType, Int)
   ScalarStore(@machv.AccessWidth, @machv.ValueType, UInt64)
+  ScalarStoreUxtw(@machv.AccessWidth, @machv.ValueType, Int)
   VectorLoad128(UInt64)
   VectorStore128(UInt64)
   VectorLoadSplat(@machv.VectorLane, UInt64)
@@ -265,7 +281,9 @@ pub(all) enum AArch64Inst {
   TailCallDirect(@machv.CodeSymbol, @machv.Signature, InternalCallPlan)
   TailCallIndirect(@machv.Signature, InternalCallPlan)
   Jump
-  BranchNonZero32
+  BranchNonZero(GprWidth)
+  BranchCompare(GprWidth, AArch64Condition)
+  BranchCompareImmediate(GprWidth, AArch64Condition, UInt64)
   Switch(GprWidth, Array[UInt64])
   Trap(@machv.TrapReason)
   Return

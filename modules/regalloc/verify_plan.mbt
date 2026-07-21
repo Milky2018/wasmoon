@@ -230,6 +230,7 @@ fn[F : FunctionView] prepare_successor_state(
   plan : AllocationPlan,
   block : Int,
   successor : Int,
+  target : Int,
   edits : Array[AllocationEdit],
 ) -> PlanState raise VerifyError {
   let state = output.copy()
@@ -242,7 +243,6 @@ fn[F : FunctionView] prepare_successor_state(
       state.values[location_key(edit.to)] = edit.value
     }
   }
-  let target = function.block_successors(block)[successor]
   let arguments = function.edge_arguments(block, successor)
   let parameters = function.block_parameters(target)
   if arguments.length() != parameters.length() {
@@ -283,17 +283,22 @@ fn[F : FunctionView] verify_function_allocation(
     }
   }
   let edits = plan.edits()
-  let incoming : Array[PlanState?] = Array::make(function.block_count(), None)
-  let worklist : Array[Int] = []
-  for block in 0..<function.block_count() {
-    let mut has_predecessor = false
-    for predecessor in 0..<function.block_count() {
-      if function.block_successors(predecessor).contains(block) {
-        has_predecessor = true
-        break
+  let block_count = function.block_count()
+  let successors = Array::makei(block_count, block => {
+    function.block_successors(block)
+  })
+  let has_predecessor = Array::make(block_count, false)
+  for source_successors in successors {
+    for target in source_successors {
+      if target >= 0 && target < block_count {
+        has_predecessor[target] = true
       }
     }
-    if block == 0 || !has_predecessor {
+  }
+  let incoming : Array[PlanState?] = Array::make(block_count, None)
+  let worklist : Array[Int] = []
+  for block in 0..<block_count {
+    if block == 0 || !has_predecessor[block] {
       let state = PlanState::new()
       if block == 0 {
         for parameter in function.entry_values() {
@@ -319,10 +324,9 @@ fn[F : FunctionView] verify_function_allocation(
         block,
         edits,
       )
-      for successor in 0..<function.block_successors(block).length() {
-        let target = function.block_successors(block)[successor]
+      for successor, target in successors[block] {
         let next = prepare_successor_state(
-          output, function, plan, block, successor, edits,
+          output, function, plan, block, successor, target, edits,
         )
         match incoming[target] {
           None => {
@@ -340,11 +344,11 @@ fn[F : FunctionView] verify_function_allocation(
         }
       }
     }
-    while next_unreachable_root < function.block_count() &&
+    while next_unreachable_root < block_count &&
           incoming[next_unreachable_root] is Some(_) {
       next_unreachable_root = next_unreachable_root + 1
     }
-    if next_unreachable_root >= function.block_count() {
+    if next_unreachable_root >= block_count {
       break
     }
     let state = PlanState::new()

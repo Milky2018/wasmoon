@@ -629,6 +629,16 @@ fn Function::verify_gc_safepoint_roots(
   successors : Array[Array[Int]],
   predecessors : Array[Array[Int]],
 ) -> Unit raise MachVVerifyError {
+  let mut has_gc_values = false
+  for value in self.values {
+    if value.ty == GcRef64 {
+      has_gc_values = true
+      break
+    }
+  }
+  if !has_gc_values {
+    return
+  }
   let live_out = self.compute_gc_liveness(successors, predecessors)
   for block_id, block in self.blocks {
     let live = live_out[block_id].copy()

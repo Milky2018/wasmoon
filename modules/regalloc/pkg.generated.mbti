@@ -14,6 +14,7 @@ pub fn reserve_spill_slot(Int, RegClass) -> SpillSlotReservation
 pub suberror VerifyError {
   Unassigned(vreg~ : VirtualReg)
   FixedConstraintViolation(vreg~ : VirtualReg, required~ : PhysicalReg, actual~ : Location)
+  InvalidPreference(vreg~ : VirtualReg, preferred~ : PhysicalReg)
   IncorrectValue(vreg~ : VirtualReg, location~ : Location)
   ScratchRegisterUnavailable(message~ : String)
   InvalidPlan(message~ : String)
@@ -105,12 +106,14 @@ pub(all) struct Operand {
   vreg : VirtualReg
   role : OperandRole
   constraint : OperandConstraint
+  preference : PhysicalReg?
   tie_id : Int
   timing : OperandTiming
 } derive(Eq, @debug.Debug)
 pub fn Operand::def(VirtualReg) -> Self
 pub fn Operand::use_reg(VirtualReg) -> Self
 pub fn Operand::with_constraint(Self, OperandConstraint) -> Self
+pub fn Operand::with_preference(Self, PhysicalReg) -> Self
 pub fn Operand::with_tie(Self, Int) -> Self
 pub fn Operand::with_timing(Self, OperandTiming) -> Self
 
@@ -192,9 +195,11 @@ pub(all) struct UsePosition {
   point : ProgramPoint
   kind : UseKind
   constraint : OperandConstraint
+  preference : PhysicalReg?
   tie_id : Int
 } derive(Eq, @debug.Debug)
 pub fn UsePosition::UsePosition(ProgramPoint, UseKind, OperandConstraint) -> Self
+pub fn UsePosition::with_preference(Self, PhysicalReg?) -> Self
 pub fn UsePosition::with_tie(Self, Int) -> Self
 
 pub(all) struct VirtualReg {

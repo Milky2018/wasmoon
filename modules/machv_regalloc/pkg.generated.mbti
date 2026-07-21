@@ -8,6 +8,8 @@ import {
 }
 
 // Values
+pub fn[Inst] allocate_selected_vcode(@vcode.Function[Inst], VCodeAllocationEnvironment) -> @vcode.Allocation raise VCodeAllocationError
+
 pub fn[Inst] allocate_vcode(@vcode.Function[Inst], VCodeAllocationEnvironment) -> @vcode.Allocation raise VCodeAllocationError
 
 // Errors

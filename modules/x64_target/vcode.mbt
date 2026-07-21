@@ -390,6 +390,35 @@ fn platform_call_layout(types : Array[@semantic.ValueType]) -> CallLayout {
 }
 
 ///|
+fn call_preference(location : CallArgumentLocation) -> @vcode.PhysicalReg? {
+  match location {
+    CallRegister(reg) if is_allocatable(reg) => Some(reg)
+    CallRegister(_) | CallStack(_) => None
+  }
+}
+
+///|
+fn require_call_argument_inputs(
+  function : @vcode.Function[X64Inst],
+  instruction : @vcode.Instruction,
+  operand_start : Int,
+  locations : Array[CallArgumentLocation],
+) -> Unit raise TargetVCodeVerifyError {
+  for index, location in locations {
+    let operand = function
+      .instruction_operand_at(instruction, operand_start + index)
+      .unwrap()
+    if operand.constraint != AnyLocation ||
+      operand.preference != call_preference(location) {
+      raise InvalidInstruction(
+        instruction~,
+        message="call argument does not match its ABI preference",
+      )
+    }
+  }
+}
+
+///|
 fn platform_result_registers(
   types : Array[@semantic.ValueType],
 ) -> Array[@vcode.PhysicalReg] {
@@ -563,11 +592,40 @@ fn require_tail_call_plan(
     use_types.push(Ptr64)
   }
   require_instruction_shape(function, instruction, use_types, [], true, 0)
-  for operand in function.instruction_operands(instruction) {
-    if operand.constraint != AnyLocation {
+  let operand_start = if indirect { 1 } else { 0 }
+  if indirect {
+    let callee = function.instruction_operand_at(instruction, 0).unwrap()
+    if callee.constraint != AnyLocation || callee.preference is Some(_) {
       raise InvalidInstruction(
         instruction~,
-        message="tail-call operands must remain allocatable before ABI moves",
+        message="tail-call callee must remain allocatable without a preference",
+      )
+    }
+  }
+  require_call_argument_inputs(
+    function,
+    instruction,
+    operand_start,
+    plan.arguments,
+  )
+  if plan.result_area_size > 0 {
+    let operand = function
+      .instruction_operand_at(
+        instruction,
+        operand_start + signature.params.length(),
+      )
+      .unwrap()
+    let expected = result_area_register(plan).bind(reg => {
+      if is_allocatable(reg) {
+        Some(reg)
+      } else {
+        None
+      }
+    })
+    if operand.constraint != AnyLocation || operand.preference != expected {
+      raise InvalidInstruction(
+        instruction~,
+        message="tail-call result area does not match its ABI preference",
       )
     }
   }
@@ -710,6 +768,13 @@ pub fn verify_vcode(
   @vcode.verify_selected(function) catch {
     error => raise CommonFailure(cause=error)
   }
+  verify_target_vcode(function)
+}
+
+///|
+fn verify_target_vcode(
+  function : @vcode.Function[X64Inst],
+) -> Unit raise TargetVCodeVerifyError {
   for index in 0..<function.instruction_count() {
     let instruction = function.instruction_at(index).unwrap()
     match function.instruction(instruction).unwrap() {
@@ -1663,15 +1728,12 @@ pub fn verify_vcode(
           false,
           0,
         )
-        ignore(argument_layout)
-        for operand in function.instruction_operands(instruction) {
-          if operand.constraint != AnyLocation {
-            raise InvalidInstruction(
-              instruction~,
-              message="direct call arguments must remain allocatable before ABI moves",
-            )
-          }
-        }
+        require_call_argument_inputs(
+          function,
+          instruction,
+          0,
+          argument_layout.arguments,
+        )
         ignore(result_registers)
         if function.instruction_clobbers(instruction) !=
           platform_call_clobbers() {
@@ -1723,14 +1785,7 @@ pub fn verify_vcode(
             }
           }
         }
-        for operand in function.instruction_operands(instruction) {
-          if operand.constraint != AnyLocation {
-            raise InvalidInstruction(
-              instruction~,
-              message="internal call arguments must remain allocatable before ABI moves",
-            )
-          }
-        }
+        require_call_argument_inputs(function, instruction, 0, plan.arguments)
         if function.instruction_clobbers(instruction) !=
           internal_call_clobbers(plan) {
           raise InvalidInstruction(
@@ -1781,14 +1836,14 @@ pub fn verify_vcode(
             }
           }
         }
-        for operand in function.instruction_operands(instruction) {
-          if operand.constraint != AnyLocation {
-            raise InvalidInstruction(
-              instruction~,
-              message="indirect call operands must remain allocatable before ABI moves",
-            )
-          }
+        let callee = function.instruction_operand_at(instruction, 0).unwrap()
+        if callee.constraint != AnyLocation || callee.preference is Some(_) {
+          raise InvalidInstruction(
+            instruction~,
+            message="indirect callee must remain allocatable without a preference",
+          )
         }
+        require_call_argument_inputs(function, instruction, 1, plan.arguments)
         if function.instruction_clobbers(instruction) !=
           internal_call_clobbers(plan) {
           raise InvalidInstruction(

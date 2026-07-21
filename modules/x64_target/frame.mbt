@@ -377,6 +377,15 @@ pub fn verify_frame(
   @vcode.verify_framed(function, allocation, frame.layout) catch {
     error => raise InvalidGenericFrame(cause=error)
   }
+  verify_target_frame(function, allocation, frame)
+}
+
+///|
+fn verify_target_frame(
+  function : @vcode.Function[X64Inst],
+  allocation : @vcode.Allocation,
+  frame : X64Frame,
+) -> Unit raise X64FrameError {
   let expected_outgoing = maximum_outgoing_args_size(function)
   if frame.outgoing_args_size != expected_outgoing {
     raise OutgoingAreaMismatch(
@@ -480,13 +489,10 @@ pub fn verify_frame(
 }
 
 ///|
-pub fn plan_frame(
+fn plan_frame_verified(
   function : @vcode.Function[X64Inst],
   allocation : @vcode.Allocation,
 ) -> X64Frame raise X64FrameError {
-  verify_allocation(function, allocation) catch {
-    error => raise InvalidAllocation(cause=error)
-  }
   let outgoing_args_size = maximum_outgoing_args_size(function)
   let mut offset = outgoing_args_size
   let result_area_size = maximum_result_area_size(function)
@@ -555,6 +561,17 @@ pub fn plan_frame(
     slots,
     saved_registers,
   }
-  verify_frame(function, allocation, frame)
+  verify_target_frame(function, allocation, frame)
   frame
+}
+
+///|
+pub fn plan_frame(
+  function : @vcode.Function[X64Inst],
+  allocation : @vcode.Allocation,
+) -> X64Frame raise X64FrameError {
+  verify_allocation(function, allocation) catch {
+    error => raise InvalidAllocation(cause=error)
+  }
+  plan_frame_verified(function, allocation)
 }

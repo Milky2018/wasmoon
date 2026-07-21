@@ -116,6 +116,22 @@ fn lower_condition(comparison : @semantic.IntComparison) -> AArch64Condition {
 }
 
 ///|
+fn swapped_condition(condition : AArch64Condition) -> AArch64Condition {
+  match condition {
+    Eq => Eq
+    Ne => Ne
+    Lt => Gt
+    Le => Ge
+    Gt => Lt
+    Ge => Le
+    Lo => Hi
+    Ls => Hs
+    Hi => Lo
+    Hs => Ls
+  }
+}
+
+///|
 fn lower_reference_condition(
   comparison : @semantic.ReferenceComparison,
 ) -> AArch64Condition {
@@ -332,6 +348,20 @@ fn terminator_trap_metadata(
 }
 
 ///|
+fn call_argument_inputs(
+  operands : Array[@vcode.Value],
+  locations : Array[CallArgumentLocation],
+) -> Array[@vcode.Input] {
+  operands.mapi((index, operand) => {
+    let input = @vcode.Input::any_location(operand)
+    match locations[index] {
+      CallRegister(reg) if is_allocatable(reg) => input.with_preference(reg)
+      CallRegister(_) | CallStack(_) => input
+    }
+  })
+}
+
+///|
 fn lower_direct_platform_call(
   builder : @vcode.Builder[AArch64Inst],
   block : @vcode.Block,
@@ -356,7 +386,10 @@ fn lower_direct_platform_call(
       )
   }
   let result_registers = platform_result_registers(call.signature.results)
-  let inputs = operands.map(@vcode.Input::any_location)
+  let inputs = call_argument_inputs(
+    operands,
+    platform_call_layout(call.signature.params).arguments,
+  )
   let outputs = Array::makei(result_types.length(), index => {
     @vcode.Output::any(result_types[index])
   })
@@ -434,13 +467,21 @@ fn lower_internal_call(
   let plan = context.internal_abi.call_plan(call.signature) catch {
     error => raise UnsupportedAbi(message=error.to_string())
   }
+  let inputs = match target {
+    Some(_) => call_argument_inputs(operands, plan.arguments)
+    None =>
+      [
+        @vcode.Input::any_location(operands[0]),
+        ..call_argument_inputs(operands[1:].to_owned(), plan.arguments),
+      ]
+  }
   (builder.append_body(
     block,
     match target {
       Some(target) => InternalCall(target, call.signature, plan)
       None => InternalCallIndirect(call.signature, plan)
     },
-    operands.map(@vcode.Input::any_location),
+    inputs,
     [],
     platform_call_clobbers(),
     metadata,
@@ -483,6 +524,615 @@ fn lower_internal_call(
 }
 
 ///|
+priv struct ImmediateSelection {
+  width : GprWidth
+  operation : AArch64IntBinary
+  bits : UInt64
+  input : @semantic.Value
+}
+
+///|
+priv struct MultiplyAddSelection {
+  width : GprWidth
+  accumulator : @semantic.Value
+  left : @semantic.Value
+  right : @semantic.Value
+}
+
+///|
+priv struct ShiftImmediateSelection {
+  width : GprWidth
+  amount : Int
+  input : @semantic.Value
+  constant : @semantic.Value
+}
+
+///|
+priv struct MemoryAddressSelection {
+  base : @semantic.Value
+  index : @semantic.Value
+  shift : Int
+}
+
+///|
+priv struct BranchSelection {
+  width : GprWidth
+  input : @semantic.Value
+  other : @semantic.Value?
+  immediate : UInt64?
+  condition : AArch64Condition?
+  swap_edges : Bool
+}
+
+///|
+priv struct LoweringAnalysis {
+  uses : Array[Int]
+  immediates : Array[ImmediateSelection?]
+  multiply_adds : Array[MultiplyAddSelection?]
+  shift_immediates : Array[ShiftImmediateSelection?]
+  memory_addresses : Array[MemoryAddressSelection?]
+  branches : Array[BranchSelection?]
+  skip_results : Array[Bool]
+}
+
+///|
+fn count_value_use(
+  function : @semantic.Function,
+  uses : Array[Int],
+  value : @semantic.Value,
+) -> Unit {
+  uses[function.value_index(value).unwrap()] += 1
+}
+
+///|
+fn foldable_definition(
+  function : @semantic.Function,
+  definitions : Array[@semantic.Instruction?],
+  uses : Array[Int],
+  value : @semantic.Value,
+) -> @semantic.Instruction? {
+  let index = function.value_index(value).unwrap()
+  if uses[index] != 1 {
+    return None
+  }
+  guard definitions[index] is Some(instruction) else { return None }
+  let metadata = function.instruction_metadata(instruction).unwrap()
+  if !metadata.live_gc_roots.is_empty() {
+    return None
+  }
+  Some(instruction)
+}
+
+///|
+fn multiply_add_selection(
+  function : @semantic.Function,
+  definitions : Array[@semantic.Instruction?],
+  uses : Array[Int],
+  accumulator : @semantic.Value,
+  product : @semantic.Value,
+  width : GprWidth,
+) -> MultiplyAddSelection? {
+  guard foldable_definition(function, definitions, uses, product)
+    is Some(instruction) else {
+    return None
+  }
+  guard function.instruction_operation(instruction) is Some(IntBinary(Mul)) else {
+    return None
+  }
+  guard function.instruction_operands(instruction) is [left, right] else {
+    return None
+  }
+  Some({ width, accumulator, left, right })
+}
+
+///|
+fn natural_register_shift(width : @semantic.AccessWidth) -> Int {
+  match width {
+    W8 => 0
+    W16 => 1
+    W32 => 2
+    W64 => 3
+    W128 => 4
+  }
+}
+
+///|
+fn select_scaled_index(
+  function : @semantic.Function,
+  definitions : Array[@semantic.Instruction?],
+  uses : Array[Int],
+  constants : Array[UInt64?],
+  index : @semantic.Value,
+  width : @semantic.AccessWidth,
+) -> (@semantic.Value, Int, @semantic.Value?, @semantic.Value?) {
+  let shift = natural_register_shift(width)
+  if shift == 0 {
+    return (index, 0, None, None)
+  }
+  guard foldable_definition(function, definitions, uses, index)
+    is Some(instruction) else {
+    return (index, 0, None, None)
+  }
+  guard function.instruction_operation(instruction) is Some(IntBinary(Mul)) else {
+    return (index, 0, None, None)
+  }
+  guard function.instruction_operands(instruction) is [left, right] else {
+    return (index, 0, None, None)
+  }
+  let scale = 1UL << shift
+  if constants[function.value_index(right).unwrap()] == Some(scale) {
+    (left, shift, Some(index), Some(right))
+  } else if constants[function.value_index(left).unwrap()] == Some(scale) {
+    (right, shift, Some(index), Some(left))
+  } else {
+    (index, 0, None, None)
+  }
+}
+
+///|
+fn uxtw_memory_address_selection(
+  function : @semantic.Function,
+  definitions : Array[@semantic.Instruction?],
+  uses : Array[Int],
+  constants : Array[UInt64?],
+  address : @semantic.Value,
+  width : @semantic.AccessWidth,
+) -> (MemoryAddressSelection, Array[@semantic.Value], @semantic.Value?)? {
+  guard foldable_definition(function, definitions, uses, address)
+    is Some(offset_instruction) else {
+    return None
+  }
+  guard function.instruction_operation(offset_instruction)
+    is Some(PointerOffset) else {
+    return None
+  }
+  guard function.instruction_operands(offset_instruction) is [pointer, zero] else {
+    return None
+  }
+  if constants[function.value_index(zero).unwrap()] != Some(0UL) {
+    return None
+  }
+  guard foldable_definition(function, definitions, uses, pointer)
+    is Some(pointer_instruction) else {
+    return None
+  }
+  guard function.instruction_operation(pointer_instruction)
+    is Some(Convert(Bitcast(I64, Ptr64))) else {
+    return None
+  }
+  guard function.instruction_operands(pointer_instruction) is [sum] else {
+    return None
+  }
+  guard foldable_definition(function, definitions, uses, sum)
+    is Some(add_instruction) else {
+    return None
+  }
+  guard function.instruction_operation(add_instruction) is Some(IntBinary(Add)) else {
+    return None
+  }
+  guard function.instruction_operands(add_instruction) is [left, right] else {
+    return None
+  }
+  let match_parts = fn(
+    base_bits : @semantic.Value,
+    index_bits : @semantic.Value,
+  ) -> (@semantic.Value, @semantic.Value)? {
+    guard foldable_definition(function, definitions, uses, base_bits)
+      is Some(base_instruction) else {
+      return None
+    }
+    guard function.instruction_operation(base_instruction)
+      is Some(Convert(Bitcast(Ptr64, I64))) else {
+      return None
+    }
+    guard function.instruction_operands(base_instruction) is [base] else {
+      return None
+    }
+    guard foldable_definition(function, definitions, uses, index_bits)
+      is Some(index_instruction) else {
+      return None
+    }
+    guard function.instruction_operation(index_instruction)
+      is Some(Convert(I64ExtendI32(Unsigned))) else {
+      return None
+    }
+    guard function.instruction_operands(index_instruction) is [index] else {
+      return None
+    }
+    Some((base, index))
+  }
+  let parts = match match_parts(left, right) {
+    Some(parts) => Some(parts)
+    None => match_parts(right, left)
+  }
+  guard parts is Some((base, index)) else { return None }
+  let (selected_index, shift, skipped_index, folded_constant) = select_scaled_index(
+    function, definitions, uses, constants, index, width,
+  )
+  let skipped = [address, pointer, sum, left, right]
+  if skipped_index is Some(value) {
+    skipped.push(value)
+  }
+  Some(({ base, index: selected_index, shift }, skipped, folded_constant))
+}
+
+///|
+fn analyze_lowering(function : @semantic.Function) -> LoweringAnalysis {
+  let value_count = function.value_count()
+  let constants : Array[UInt64?] = Array::make(value_count, None)
+  let definitions : Array[@semantic.Instruction?] = Array::make(
+    value_count,
+    None,
+  )
+  let uses = Array::make(value_count, 0)
+  let folded_uses = Array::make(value_count, 0)
+  let immediates : Array[ImmediateSelection?] = Array::make(value_count, None)
+  let multiply_adds : Array[MultiplyAddSelection?] = Array::make(
+    value_count,
+    None,
+  )
+  let shift_immediates : Array[ShiftImmediateSelection?] = Array::make(
+    value_count,
+    None,
+  )
+  let mut instruction_slots = 0
+  for block in function.blocks() {
+    for instruction in function.block_instructions(block) {
+      let slot = function.instruction_index(instruction).unwrap() + 1
+      if slot > instruction_slots {
+        instruction_slots = slot
+      }
+    }
+  }
+  let memory_addresses : Array[MemoryAddressSelection?] = Array::make(
+    instruction_slots,
+    None,
+  )
+  let branches : Array[BranchSelection?] = Array::make(
+    function.block_count(),
+    None,
+  )
+  let skip_results = Array::make(value_count, false)
+  for block in function.blocks() {
+    for instruction in function.block_instructions(block) {
+      let results = function.instruction_results(instruction)
+      for result in results {
+        definitions[function.value_index(result).unwrap()] = Some(instruction)
+      }
+      match (function.instruction_operation(instruction), results.get(0)) {
+        (Some(I32Const(bits)), Some(result)) =>
+          constants[function.value_index(result).unwrap()] = Some(
+            bits.to_uint64(),
+          )
+        (Some(I64Const(bits)), Some(result)) =>
+          constants[function.value_index(result).unwrap()] = Some(bits)
+        _ => ()
+      }
+      for operand in function.instruction_operands(instruction) {
+        count_value_use(function, uses, operand)
+      }
+    }
+    let record = function.block_terminator(block).unwrap()
+    match record.kind {
+      Jump(edge) =>
+        for argument in edge.arguments {
+          count_value_use(function, uses, argument)
+        }
+      Branch(condition, when_true, when_false) => {
+        count_value_use(function, uses, condition)
+        for argument in when_true.arguments {
+          count_value_use(function, uses, argument)
+        }
+        for argument in when_false.arguments {
+          count_value_use(function, uses, argument)
+        }
+      }
+      Switch(index, cases, default_edge) => {
+        count_value_use(function, uses, index)
+        for case in cases {
+          for argument in case.edge.arguments {
+            count_value_use(function, uses, argument)
+          }
+        }
+        for argument in default_edge.arguments {
+          count_value_use(function, uses, argument)
+        }
+      }
+      Return(values) | TailCall(_, values) | NoReturnCall(_, values) =>
+        for value in values {
+          count_value_use(function, uses, value)
+        }
+      Trap(_) => ()
+    }
+  }
+  for block in function.blocks() {
+    for instruction in function.block_instructions(block) {
+      let operation = function.instruction_operation(instruction).unwrap()
+      let results = function.instruction_results(instruction)
+      if operation is IntBinary(Add) &&
+        results is [result] &&
+        optional_gpr_width(function.value_type(result)) is Some(width) &&
+        function.instruction_operands(instruction) is [left, right] {
+        let selected = match
+          multiply_add_selection(
+            function, definitions, uses, left, right, width,
+          ) {
+          Some(selected) => Some((selected, right))
+          None =>
+            match
+              multiply_add_selection(
+                function, definitions, uses, right, left, width,
+              ) {
+              Some(selected) => Some((selected, left))
+              None => None
+            }
+        }
+        if selected is Some((selected, product)) {
+          multiply_adds[function.value_index(result).unwrap()] = Some(selected)
+          let product_index = function.value_index(product).unwrap()
+          skip_results[product_index] = true
+          if shift_immediates[product_index] is Some(selected_shift) {
+            folded_uses[function.value_index(selected_shift.constant).unwrap()] -= 1
+            shift_immediates[product_index] = None
+          }
+        }
+      }
+      match operation {
+        Load(spec) if spec.endianness == Little &&
+          spec.offset == 0UL &&
+          spec.width != W128 => {
+          guard function.instruction_operands(instruction) is [address] else {
+            continue
+          }
+          if uxtw_memory_address_selection(
+              function,
+              definitions,
+              uses,
+              constants,
+              address,
+              spec.width,
+            )
+            is Some((selection, skipped, folded_constant)) {
+            memory_addresses[function.instruction_index(instruction).unwrap()] = Some(
+              selection,
+            )
+            for value in skipped {
+              let value_index = function.value_index(value).unwrap()
+              skip_results[value_index] = true
+              if shift_immediates[value_index] is Some(selected_shift) {
+                folded_uses[function
+                .value_index(selected_shift.constant)
+                .unwrap()] -= 1
+                shift_immediates[value_index] = None
+              }
+            }
+            if folded_constant is Some(value) {
+              folded_uses[function.value_index(value).unwrap()] += 1
+            }
+            folded_uses[function
+            .value_index(
+              function.instruction_operands(
+                definitions[function.value_index(address).unwrap()].unwrap(),
+              )[1],
+            )
+            .unwrap()] += 1
+          }
+        }
+        Store(spec) if spec.endianness == Little &&
+          spec.offset == 0UL &&
+          spec.width != W128 => {
+          guard function.instruction_operands(instruction) is [address, _] else {
+            continue
+          }
+          if uxtw_memory_address_selection(
+              function,
+              definitions,
+              uses,
+              constants,
+              address,
+              spec.width,
+            )
+            is Some((selection, skipped, folded_constant)) {
+            memory_addresses[function.instruction_index(instruction).unwrap()] = Some(
+              selection,
+            )
+            for value in skipped {
+              let value_index = function.value_index(value).unwrap()
+              skip_results[value_index] = true
+              if shift_immediates[value_index] is Some(selected_shift) {
+                folded_uses[function
+                .value_index(selected_shift.constant)
+                .unwrap()] -= 1
+                shift_immediates[value_index] = None
+              }
+            }
+            if folded_constant is Some(value) {
+              folded_uses[function.value_index(value).unwrap()] += 1
+            }
+            folded_uses[function
+            .value_index(
+              function.instruction_operands(
+                definitions[function.value_index(address).unwrap()].unwrap(),
+              )[1],
+            )
+            .unwrap()] += 1
+          }
+        }
+        _ => ()
+      }
+      guard operation is IntBinary(binary) else { continue }
+      let binary_operation = match lower_binary(binary) {
+        Some(operation) => operation
+        None if binary == UnsignedRem => And
+        None => continue
+      }
+      guard results is [result] else { continue }
+      if multiply_adds[function.value_index(result).unwrap()] is Some(_) {
+        continue
+      }
+      guard optional_gpr_width(function.value_type(result)) is Some(width) else {
+        continue
+      }
+      guard function.instruction_operands(instruction) is [left, right] else {
+        continue
+      }
+      if binary == Mul && !skip_results[function.value_index(result).unwrap()] {
+        let selected : (@semantic.Value, @semantic.Value, UInt64)? = match
+          constants[function.value_index(right).unwrap()] {
+          Some(bits) => Some((left, right, bits))
+          None =>
+            match constants[function.value_index(left).unwrap()] {
+              Some(bits) => Some((right, left, bits))
+              None => None
+            }
+        }
+        if selected is Some((input, constant, bits)) &&
+          bits != 0UL &&
+          (bits & (bits - 1UL)) == 0UL {
+          let amount = bits.ctz()
+          let bit_width = if width == W32 { 32 } else { 64 }
+          if amount < bit_width {
+            shift_immediates[function.value_index(result).unwrap()] = Some({
+              width,
+              amount,
+              input,
+              constant,
+            })
+            folded_uses[function.value_index(constant).unwrap()] += 1
+          }
+        }
+      }
+      let selected : (UInt64, @semantic.Value, @semantic.Value)? = match
+        constants[function.value_index(right).unwrap()] {
+        Some(bits) if binary == UnsignedRem &&
+          bits > 1UL &&
+          (bits & (bits - 1UL)) == 0UL &&
+          valid_int_binary_immediate(width, And, bits - 1UL) =>
+          Some((bits - 1UL, left, right))
+        Some(bits) if binary is (Add | Sub | And | Or | Xor) &&
+          valid_int_binary_immediate(width, binary_operation, bits) =>
+          Some((bits, left, right))
+        _ =>
+          match constants[function.value_index(left).unwrap()] {
+            Some(bits) if binary is (Add | And | Or | Xor) &&
+              valid_int_binary_immediate(width, binary_operation, bits) =>
+              Some((bits, right, left))
+            _ => None
+          }
+      }
+      if selected is Some((bits, input, constant)) {
+        immediates[function.value_index(result).unwrap()] = Some({
+          width,
+          operation: binary_operation,
+          bits,
+          input,
+        })
+        folded_uses[function.value_index(constant).unwrap()] += 1
+      }
+    }
+    guard function.block_terminator(block).unwrap().kind
+      is Branch(condition, _, _) else {
+      continue
+    }
+    let condition_index = function.value_index(condition).unwrap()
+    if uses[condition_index] != 1 {
+      continue
+    }
+    guard definitions[condition_index] is Some(instruction) else { continue }
+    guard function.instruction_operation(instruction)
+      is Some(IntCompare(comparison)) else {
+      continue
+    }
+    guard function.instruction_operands(instruction) is [left, right] else {
+      continue
+    }
+    guard optional_gpr_width(function.value_type(left)) is Some(width) else {
+      continue
+    }
+    skip_results[condition_index] = true
+    let zero_selected : (@semantic.Value, @semantic.Value)? = if comparison
+      is (Equal | NotEqual) &&
+      constants[function.value_index(right).unwrap()] == Some(0UL) {
+      Some((left, right))
+    } else if comparison is (Equal | NotEqual) &&
+      constants[function.value_index(left).unwrap()] == Some(0UL) {
+      Some((right, left))
+    } else {
+      None
+    }
+    match zero_selected {
+      Some((input, zero)) => {
+        branches[function.block_index(block).unwrap()] = Some({
+          width,
+          input,
+          other: None,
+          immediate: None,
+          condition: None,
+          swap_edges: comparison == Equal,
+        })
+        folded_uses[function.value_index(zero).unwrap()] += 1
+      }
+      None => {
+        let lowered_condition = lower_condition(comparison)
+        let immediate_selected : (
+          @semantic.Value,
+          @semantic.Value,
+          UInt64,
+          AArch64Condition,
+        )? = match constants[function.value_index(right).unwrap()] {
+          Some(bits) if add_sub_immediate_shift(bits) is Some(_) =>
+            Some((left, right, bits, lowered_condition))
+          _ =>
+            match constants[function.value_index(left).unwrap()] {
+              Some(bits) if add_sub_immediate_shift(bits) is Some(_) =>
+                Some((right, left, bits, swapped_condition(lowered_condition)))
+              _ => None
+            }
+        }
+        match immediate_selected {
+          Some((input, constant, bits, condition)) => {
+            branches[function.block_index(block).unwrap()] = Some({
+              width,
+              input,
+              other: None,
+              immediate: Some(bits),
+              condition: Some(condition),
+              swap_edges: false,
+            })
+            folded_uses[function.value_index(constant).unwrap()] += 1
+          }
+          None =>
+            branches[function.block_index(block).unwrap()] = Some({
+              width,
+              input: left,
+              other: Some(right),
+              immediate: None,
+              condition: Some(lowered_condition),
+              swap_edges: false,
+            })
+        }
+      }
+    }
+  }
+  for value_index in 0..<value_count {
+    if constants[value_index] is Some(_) &&
+      uses[value_index] > 0 &&
+      folded_uses[value_index] == uses[value_index] {
+      skip_results[value_index] = true
+    }
+  }
+  {
+    uses,
+    immediates,
+    multiply_adds,
+    shift_immediates,
+    memory_addresses,
+    branches,
+    skip_results,
+  }
+}
+
+///|
 fn lower_instruction(
   function : @semantic.Function,
   context : LoweringContext,
@@ -491,12 +1141,55 @@ fn lower_instruction(
   block_index : Int,
   instruction : @semantic.Instruction,
   values : Array[@vcode.Value?],
+  analysis : LoweringAnalysis,
 ) -> Unit raise AArch64LowerError {
   let instruction_index = function.instruction_index(instruction).unwrap()
   let operation = function.instruction_operation(instruction).unwrap()
   let semantic_operands = function.instruction_operands(instruction)
-  let operands = map_values(function, values, semantic_operands)
   let semantic_results = function.instruction_results(instruction)
+  let result_index = semantic_results
+    .get(0)
+    .map(result => function.value_index(result).unwrap())
+  if result_index is Some(index) && analysis.skip_results[index] {
+    return
+  }
+  let immediate = match result_index {
+    Some(index) => analysis.immediates[index]
+    None => None
+  }
+  let multiply_add = match result_index {
+    Some(index) => analysis.multiply_adds[index]
+    None => None
+  }
+  let shift_immediate = match result_index {
+    Some(index) => analysis.shift_immediates[index]
+    None => None
+  }
+  let memory_address = analysis.memory_addresses[instruction_index]
+  let operands = match
+    (multiply_add, shift_immediate, memory_address, immediate) {
+    (Some(selected), _, _, _) =>
+      map_values(function, values, [
+        selected.accumulator,
+        selected.left,
+        selected.right,
+      ])
+    (_, Some(selected), _, _) => [map_value(function, values, selected.input)]
+    (_, _, Some(selected), _) => {
+      let selected_operands = [
+        map_value(function, values, selected.base),
+        map_value(function, values, selected.index),
+      ]
+      if operation is Store(_) {
+        selected_operands.push(
+          map_value(function, values, semantic_operands[1]),
+        )
+      }
+      selected_operands
+    }
+    (_, _, _, Some(selected)) => [map_value(function, values, selected.input)]
+    _ => map_values(function, values, semantic_operands)
+  }
   let result_types = semantic_results.map(value => {
     function.value_type(value).unwrap()
   })
@@ -505,6 +1198,90 @@ fn lower_instruction(
     values,
     function.instruction_metadata(instruction).unwrap().live_gc_roots,
   )
+  if multiply_add is Some(selected) {
+    let results = append_body(
+      builder,
+      block,
+      IntMultiplyAdd(selected.width),
+      operands.map(@vcode.Input::any),
+      result_types.map(@vcode.Output::any),
+      source_metadata(
+        function.instruction_metadata(instruction).unwrap(),
+        roots,
+        operation.semantics(),
+      ),
+    )
+    for index, result in semantic_results {
+      values[function.value_index(result).unwrap()] = Some(results[index])
+    }
+    return
+  }
+  if shift_immediate is Some(selected) {
+    let results = append_body(
+      builder,
+      block,
+      IntShiftLeftImmediate(selected.width, selected.amount),
+      operands.map(@vcode.Input::any),
+      result_types.map(@vcode.Output::any),
+      source_metadata(
+        function.instruction_metadata(instruction).unwrap(),
+        roots,
+        operation.semantics(),
+      ),
+    )
+    for index, result in semantic_results {
+      values[function.value_index(result).unwrap()] = Some(results[index])
+    }
+    return
+  }
+  if memory_address is Some(selected) {
+    let selected_operation = match operation {
+      Load(spec) =>
+        ScalarLoadUxtw(
+          spec.width,
+          spec.extension,
+          spec.result_type,
+          selected.shift,
+        )
+      Store(spec) =>
+        ScalarStoreUxtw(spec.width, spec.value_type, selected.shift)
+      _ => abort("register-offset selection requires scalar memory operation")
+    }
+    let results = append_body(
+      builder,
+      block,
+      selected_operation,
+      operands.map(@vcode.Input::any),
+      result_types.map(@vcode.Output::any),
+      source_metadata(
+        function.instruction_metadata(instruction).unwrap(),
+        roots,
+        operation.semantics(),
+      ),
+    )
+    for index, result in semantic_results {
+      values[function.value_index(result).unwrap()] = Some(results[index])
+    }
+    return
+  }
+  if immediate is Some(selected) {
+    let results = append_body(
+      builder,
+      block,
+      IntBinaryImmediate(selected.width, selected.operation, selected.bits),
+      operands.map(@vcode.Input::any),
+      result_types.map(@vcode.Output::any),
+      source_metadata(
+        function.instruction_metadata(instruction).unwrap(),
+        roots,
+        operation.semantics(),
+      ),
+    )
+    for index, result in semantic_results {
+      values[function.value_index(result).unwrap()] = Some(results[index])
+    }
+    return
+  }
   if operation is Call(call) {
     let metadata = source_metadata(
       function.instruction_metadata(instruction).unwrap(),
@@ -1120,6 +1897,7 @@ fn lower_parameters(
   context : LoweringContext,
   builder : @vcode.Builder[AArch64Inst],
   values : Array[@vcode.Value?],
+  analysis : LoweringAnalysis,
 ) -> @vcode.Value? raise AArch64LowerError {
   let entry = builder.entry_block()
   let signature = function.signature()
@@ -1132,6 +1910,11 @@ fn lower_parameters(
   }
   for index, parameter in function.parameters() {
     let ty = function.value_type(parameter).unwrap()
+    let parameter_index = function.value_index(parameter).unwrap()
+    if layout.arguments[index] is CallStack(_) &&
+      analysis.uses[parameter_index] == 0 {
+      continue
+    }
     let raw = builder.parameter(index) catch {
       error => raise BuildFailure(cause=error)
     }
@@ -1142,7 +1925,7 @@ fn lower_parameters(
           entry,
           IncomingReg(ty, reg),
           [@vcode.Input::fixed(raw, reg)],
-          [@vcode.Output::any(ty)],
+          [@vcode.Output::fixed(ty, reg)],
           @vcode.InstructionMetadata::empty(),
         )[0]
       CallStack(offset) =>
@@ -1155,7 +1938,7 @@ fn lower_parameters(
           @vcode.InstructionMetadata::empty(),
         )[0]
     }
-    values[function.value_index(parameter).unwrap()] = Some(selected)
+    values[parameter_index] = Some(selected)
   }
   if function.protocol() == Internal {
     let plan = context.internal_abi.call_plan(signature) catch {
@@ -1168,7 +1951,12 @@ fn lower_parameters(
           entry,
           IncomingResultArea(context.internal_abi.result_area_argument),
           [],
-          [@vcode.Output::any(Ptr64)],
+          [
+            @vcode.Output::fixed(
+              Ptr64,
+              context.internal_abi.result_area_argument,
+            ),
+          ],
           @vcode.InstructionMetadata::empty(),
         )[0],
       )
@@ -1263,7 +2051,10 @@ pub fn lower(
     signature.results,
   )
   let values : Array[@vcode.Value?] = Array::make(function.value_count(), None)
-  let result_area = lower_parameters(function, context, builder, values)
+  let analysis = analyze_lowering(function)
+  let result_area = lower_parameters(
+    function, context, builder, values, analysis,
+  )
   let semantic_blocks = function.blocks()
   let blocks : Array[@vcode.Block] = []
   for index, semantic_block in semantic_blocks {
@@ -1290,7 +2081,7 @@ pub fn lower(
     let block = blocks[block_index]
     for instruction in function.block_instructions(semantic_block) {
       lower_instruction(
-        function, context, builder, block, block_index, instruction, values,
+        function, context, builder, block, block_index, instruction, values, analysis,
       )
     }
     let record = function.block_terminator(semantic_block).unwrap()
@@ -1313,24 +2104,68 @@ pub fn lower(
           ],
           metadata,
         )
-      Branch(condition, true_edge, false_edge) =>
+      Branch(condition, true_edge, false_edge) => {
+        let selected = analysis.branches[block_index]
+        let (terminator, inputs, first_edge, second_edge) = match selected {
+          Some(selected) if selected.other is Some(other) &&
+            selected.condition is Some(compare_condition) =>
+            (
+              BranchCompare(selected.width, compare_condition),
+              [
+                @vcode.Input::any(map_value(function, values, selected.input)),
+                @vcode.Input::any(map_value(function, values, other)),
+              ],
+              true_edge,
+              false_edge,
+            )
+          Some(selected) if selected.immediate is Some(bits) &&
+            selected.condition is Some(compare_condition) =>
+            (
+              BranchCompareImmediate(selected.width, compare_condition, bits),
+              [@vcode.Input::any(map_value(function, values, selected.input))],
+              true_edge,
+              false_edge,
+            )
+          Some(selected) if selected.swap_edges =>
+            (
+              BranchNonZero(selected.width),
+              [@vcode.Input::any(map_value(function, values, selected.input))],
+              false_edge,
+              true_edge,
+            )
+          Some(selected) =>
+            (
+              BranchNonZero(selected.width),
+              [@vcode.Input::any(map_value(function, values, selected.input))],
+              true_edge,
+              false_edge,
+            )
+          None =>
+            (
+              BranchNonZero(W32),
+              [@vcode.Input::any(map_value(function, values, condition))],
+              true_edge,
+              false_edge,
+            )
+        }
         set_terminator(
           builder,
           block,
-          BranchNonZero32,
-          [@vcode.Input::any(map_value(function, values, condition))],
+          terminator,
+          inputs,
           [
             @vcode.Edge::new(
-              blocks[function.block_index(true_edge.target).unwrap()],
-              map_values(function, values, true_edge.arguments),
+              blocks[function.block_index(first_edge.target).unwrap()],
+              map_values(function, values, first_edge.arguments),
             ),
             @vcode.Edge::new(
-              blocks[function.block_index(false_edge.target).unwrap()],
-              map_values(function, values, false_edge.arguments),
+              blocks[function.block_index(second_edge.target).unwrap()],
+              map_values(function, values, second_edge.arguments),
             ),
           ],
           metadata,
         )
+      }
       Switch(index, cases, default_edge) => {
         let index_type = function.value_type(index).unwrap()
         let width = if index_type == I32 { W32 } else { W64 }
@@ -1392,11 +2227,37 @@ pub fn lower(
               message="internal tail calls cannot target an external symbol",
             )
         }
+        let inputs = match call.callee {
+          Internal(_) =>
+            call_argument_inputs(
+              operands[:call.signature.params.length()].to_owned(),
+              plan.arguments,
+            )
+          Indirect =>
+            [
+              @vcode.Input::any_location(operands[0]),
+              ..call_argument_inputs(
+                operands[1:call.signature.params.length() + 1].to_owned(),
+                plan.arguments,
+              ),
+            ]
+          External(_) => abort("external tail call rejected above")
+        }
+        if plan.result_area_size > 0 {
+          let index = inputs.length()
+          let input = @vcode.Input::any_location(operands[index])
+          inputs.push(
+            match result_area_register(plan) {
+              Some(reg) if is_allocatable(reg) => input.with_preference(reg)
+              _ => input
+            },
+          )
+        }
         set_terminator(
           builder,
           block,
           target,
-          operands.map(@vcode.Input::any_location),
+          inputs,
           [],
           metadata,
           clobbers=platform_call_clobbers(),

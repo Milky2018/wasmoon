@@ -229,6 +229,9 @@ pub(all) enum AArch64Inst {
   VectorRelaxedDot8To16
   IntUnary(GprWidth, AArch64IntUnary)
   IntBinary(GprWidth, AArch64IntBinary)
+  IntBinaryImmediate(GprWidth, AArch64IntBinary, UInt64)
+  IntMultiplyAdd(GprWidth)
+  IntShiftLeftImmediate(GprWidth, Int)
   PopulationCount(GprWidth)
   IntHighMultiply(GprWidth, @semantic.Signedness)
   IntWithOverflow(GprWidth, @semantic.IntOverflowOp)
@@ -250,7 +253,14 @@ pub(all) enum AArch64Inst {
     @semantic.ValueType,
     UInt64
   )
+  ScalarLoadUxtw(
+    @semantic.AccessWidth,
+    @semantic.LoadExtension,
+    @semantic.ValueType,
+    Int
+  )
   ScalarStore(@semantic.AccessWidth, @semantic.ValueType, UInt64)
+  ScalarStoreUxtw(@semantic.AccessWidth, @semantic.ValueType, Int)
   VectorLoad128(UInt64)
   VectorStore128(UInt64)
   VectorLoadSplat(@semantic.VectorLane, UInt64)
@@ -271,7 +281,9 @@ pub(all) enum AArch64Inst {
   TailCallDirect(@semantic.CodeSymbol, @semantic.Signature, InternalCallPlan)
   TailCallIndirect(@semantic.Signature, InternalCallPlan)
   Jump
-  BranchNonZero32
+  BranchNonZero(GprWidth)
+  BranchCompare(GprWidth, AArch64Condition)
+  BranchCompareImmediate(GprWidth, AArch64Condition, UInt64)
   Switch(GprWidth, Array[UInt64])
   Trap(@semantic.TrapReason)
   Return
@@ -365,6 +377,35 @@ fn platform_call_layout(types : Array[@semantic.ValueType]) -> CallLayout {
     }
   }
   { arguments, stack_size: call_align_up(stack_size, 16) }
+}
+
+///|
+fn call_preference(location : CallArgumentLocation) -> @vcode.PhysicalReg? {
+  match location {
+    CallRegister(reg) if is_allocatable(reg) => Some(reg)
+    CallRegister(_) | CallStack(_) => None
+  }
+}
+
+///|
+fn require_call_argument_inputs(
+  function : @vcode.Function[AArch64Inst],
+  instruction : @vcode.Instruction,
+  operand_start : Int,
+  locations : Array[CallArgumentLocation],
+) -> Unit raise TargetVCodeVerifyError {
+  for index, location in locations {
+    let operand = function
+      .instruction_operand_at(instruction, operand_start + index)
+      .unwrap()
+    if operand.constraint != AnyLocation ||
+      operand.preference != call_preference(location) {
+      raise InvalidInstruction(
+        instruction~,
+        message="call argument does not match its ABI preference",
+      )
+    }
+  }
 }
 
 ///|
@@ -524,11 +565,40 @@ fn require_tail_call_plan(
     use_types.push(Ptr64)
   }
   require_instruction_shape(function, instruction, use_types, [], true, 0)
-  for operand in function.instruction_operands(instruction) {
-    if operand.constraint != AnyLocation {
+  let operand_start = if indirect { 1 } else { 0 }
+  if indirect {
+    let callee = function.instruction_operand_at(instruction, 0).unwrap()
+    if callee.constraint != AnyLocation || callee.preference is Some(_) {
       raise InvalidInstruction(
         instruction~,
-        message="tail-call operands must remain allocatable before ABI moves",
+        message="tail-call callee must remain allocatable without a preference",
+      )
+    }
+  }
+  require_call_argument_inputs(
+    function,
+    instruction,
+    operand_start,
+    plan.arguments,
+  )
+  if plan.result_area_size > 0 {
+    let operand = function
+      .instruction_operand_at(
+        instruction,
+        operand_start + signature.params.length(),
+      )
+      .unwrap()
+    let expected = result_area_register(plan).bind(reg => {
+      if is_allocatable(reg) {
+        Some(reg)
+      } else {
+        None
+      }
+    })
+    if operand.constraint != AnyLocation || operand.preference != expected {
+      raise InvalidInstruction(
+        instruction~,
+        message="tail-call result area does not match its ABI preference",
       )
     }
   }
@@ -575,6 +645,21 @@ fn valid_scalar_store(
     (F32, W32) | (F64, W64) => true
     _ => false
   }
+}
+
+///|
+fn valid_scalar_register_shift(
+  width : @semantic.AccessWidth,
+  shift : Int,
+) -> Bool {
+  let natural_shift = match width {
+    W8 => 0
+    W16 => 1
+    W32 => 2
+    W64 => 3
+    W128 => 4
+  }
+  shift == 0 || shift == natural_shift
 }
 
 ///|
@@ -667,6 +752,13 @@ pub fn verify_vcode(
   @vcode.verify_selected(function) catch {
     error => raise CommonFailure(cause=error)
   }
+  verify_target_vcode(function)
+}
+
+///|
+fn verify_target_vcode(
+  function : @vcode.Function[AArch64Inst],
+) -> Unit raise TargetVCodeVerifyError {
   for index in 0..<function.instruction_count() {
     let instruction = function.instruction_at(index).unwrap()
     match function.instruction(instruction).unwrap() {
@@ -1214,6 +1306,38 @@ pub fn verify_vcode(
           0,
         )
       }
+      IntBinaryImmediate(width, operation, bits) => {
+        let ty = integer_type(width)
+        if !valid_int_binary_immediate(width, operation, bits) {
+          raise InvalidInstruction(
+            instruction~,
+            message="integer immediate cannot be encoded",
+          )
+        }
+        require_instruction_shape(function, instruction, [ty], [ty], false, 0)
+      }
+      IntMultiplyAdd(width) => {
+        let ty = integer_type(width)
+        require_instruction_shape(
+          function,
+          instruction,
+          [ty, ty, ty],
+          [ty],
+          false,
+          0,
+        )
+      }
+      IntShiftLeftImmediate(width, amount) => {
+        let ty = integer_type(width)
+        let bit_width = if width == W32 { 32 } else { 64 }
+        if amount < 0 || amount >= bit_width {
+          raise InvalidInstruction(
+            instruction~,
+            message="integer shift amount is out of range",
+          )
+        }
+        require_instruction_shape(function, instruction, [ty], [ty], false, 0)
+      }
       PopulationCount(width) => {
         let ty = integer_type(width)
         require_instruction_shape(function, instruction, [ty], [ty], false, 0)
@@ -1410,6 +1534,23 @@ pub fn verify_vcode(
           0,
         )
       }
+      ScalarLoadUxtw(width, extension, result_type, shift) => {
+        if !valid_scalar_load(width, extension, result_type) ||
+          !valid_scalar_register_shift(width, shift) {
+          raise InvalidInstruction(
+            instruction~,
+            message="invalid AArch64 scalar register-offset load",
+          )
+        }
+        require_instruction_shape(
+          function,
+          instruction,
+          [Ptr64, I32],
+          [result_type],
+          false,
+          0,
+        )
+      }
       ScalarStore(width, value_type, _) => {
         if !valid_scalar_store(width, value_type) {
           raise InvalidInstruction(
@@ -1421,6 +1562,23 @@ pub fn verify_vcode(
           function,
           instruction,
           [Ptr64, value_type],
+          [],
+          false,
+          0,
+        )
+      }
+      ScalarStoreUxtw(width, value_type, shift) => {
+        if !valid_scalar_store(width, value_type) ||
+          !valid_scalar_register_shift(width, shift) {
+          raise InvalidInstruction(
+            instruction~,
+            message="invalid AArch64 scalar register-offset store",
+          )
+        }
+        require_instruction_shape(
+          function,
+          instruction,
+          [Ptr64, I32, value_type],
           [],
           false,
           0,
@@ -1627,15 +1785,12 @@ pub fn verify_vcode(
           false,
           0,
         )
-        ignore(argument_layout)
-        for operand in function.instruction_operands(instruction) {
-          if operand.constraint != AnyLocation {
-            raise InvalidInstruction(
-              instruction~,
-              message="direct call arguments must remain allocatable before ABI moves",
-            )
-          }
-        }
+        require_call_argument_inputs(
+          function,
+          instruction,
+          0,
+          argument_layout.arguments,
+        )
         ignore(result_registers)
         if function.instruction_clobbers(instruction) !=
           platform_call_clobbers() {
@@ -1687,14 +1842,7 @@ pub fn verify_vcode(
             }
           }
         }
-        for operand in function.instruction_operands(instruction) {
-          if operand.constraint != AnyLocation {
-            raise InvalidInstruction(
-              instruction~,
-              message="internal call arguments must remain allocatable before ABI moves",
-            )
-          }
-        }
+        require_call_argument_inputs(function, instruction, 0, plan.arguments)
         if function.instruction_clobbers(instruction) !=
           platform_call_clobbers() {
           raise InvalidInstruction(
@@ -1745,14 +1893,14 @@ pub fn verify_vcode(
             }
           }
         }
-        for operand in function.instruction_operands(instruction) {
-          if operand.constraint != AnyLocation {
-            raise InvalidInstruction(
-              instruction~,
-              message="indirect call operands must remain allocatable before ABI moves",
-            )
-          }
+        let callee = function.instruction_operand_at(instruction, 0).unwrap()
+        if callee.constraint != AnyLocation || callee.preference is Some(_) {
+          raise InvalidInstruction(
+            instruction~,
+            message="indirect callee must remain allocatable without a preference",
+          )
         }
+        require_call_argument_inputs(function, instruction, 1, plan.arguments)
         if function.instruction_clobbers(instruction) !=
           platform_call_clobbers() {
           raise InvalidInstruction(
@@ -1766,8 +1914,29 @@ pub fn verify_vcode(
       TailCallIndirect(signature, plan) =>
         require_tail_call_plan(function, instruction, signature, plan, true)
       Jump => require_instruction_shape(function, instruction, [], [], true, 1)
-      BranchNonZero32 =>
-        require_instruction_shape(function, instruction, [I32], [], true, 2)
+      BranchNonZero(width) =>
+        require_instruction_shape(
+          function,
+          instruction,
+          [integer_type(width)],
+          [],
+          true,
+          2,
+        )
+      BranchCompare(width, _) => {
+        let ty = integer_type(width)
+        require_instruction_shape(function, instruction, [ty, ty], [], true, 2)
+      }
+      BranchCompareImmediate(width, _, bits) => {
+        let ty = integer_type(width)
+        if add_sub_immediate_shift(bits) is None {
+          raise InvalidInstruction(
+            instruction~,
+            message="branch comparison immediate cannot be encoded",
+          )
+        }
+        require_instruction_shape(function, instruction, [ty], [], true, 2)
+      }
       Switch(width, cases) => {
         let expected_type = integer_type(width)
         if function.instruction_successor_count(instruction) !=

@@ -12,6 +12,8 @@ import {
 // Values
 pub fn allocate(@vcode.Function[X64Inst]) -> @vcode.Allocation raise X64AllocationError
 
+pub fn compile(@vcode.Function[X64Inst]) -> (@code_object.UnlinkedCodeObject, Int) raise X64CompileError
+
 pub fn emit(@vcode.Function[X64Inst], @vcode.Allocation, X64Frame) -> @code_object.UnlinkedCodeObject raise X64EmitError
 
 pub fn lower(@machv.Function, LoweringContext) -> @vcode.Function[X64Inst] raise X64LowerError
@@ -50,10 +52,19 @@ pub suberror X64AllocationError {
 } derive(@debug.Debug)
 pub impl Show for X64AllocationError
 
+pub suberror X64CompileError {
+  TargetValidationFailed(cause~ : TargetVCodeVerifyError)
+  AllocationFailed(cause~ : X64AllocationError)
+  FramePlanningFailed(cause~ : X64FrameError)
+  EmissionFailed(cause~ : X64EmitError)
+} derive(@debug.Debug)
+pub impl Show for X64CompileError
+
 pub suberror X64EmitError {
   InvalidFrame(cause~ : X64FrameError)
   InvalidCodeObject(cause~ : @code_object.CodeObjectVerifyError)
   InvalidParallelMove(cause~ : @vcode.MoveResolveError)
+  InvalidCallTransfer(cause~ : @vcode.CallTransferError)
   UnresolvedStackMove
   MissingStackObjectArea
   MissingResultArea

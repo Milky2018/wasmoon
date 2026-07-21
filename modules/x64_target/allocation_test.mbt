@@ -17,18 +17,18 @@ test "x64 target allocates selected scalar VCode" {
       #|  v0:ptr64 -> p7:int
       #|  v1:i64 -> p6:int
       #|  v2:i64 -> p2:int
-      #|  v3:ptr64 -> p0:int
-      #|  v4:i64 -> p0:int
-      #|  v5:i64 -> p1:int
+      #|  v3:ptr64 -> p7:int
+      #|  v4:i64 -> p6:int
+      #|  v5:i64 -> p2:int
       #|  v6:i64 -> p0:int
       #|  i0 operand0 -> p7:int
-      #|  i0 operand1 -> p0:int
+      #|  i0 operand1 -> p7:int
       #|  i1 operand0 -> p6:int
-      #|  i1 operand1 -> p0:int
+      #|  i1 operand1 -> p6:int
       #|  i2 operand0 -> p2:int
-      #|  i2 operand1 -> p1:int
-      #|  i3 operand0 -> p0:int
-      #|  i3 operand1 -> p1:int
+      #|  i2 operand1 -> p2:int
+      #|  i3 operand0 -> p6:int
+      #|  i3 operand1 -> p2:int
       #|  i3 operand2 -> p0:int
       #|  i4 operand0 -> p0:int
       #|

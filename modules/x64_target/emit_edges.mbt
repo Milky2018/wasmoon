@@ -107,13 +107,45 @@ fn emit_conditional_edges(
   block : @vcode.Block,
   instruction : @vcode.Instruction,
   condition : @vcode.PhysicalReg,
+  next_block : @vcode.Block?,
 ) -> Unit raise X64EmitError {
   let when_true = function.instruction_successor_at(instruction, 0).unwrap().target
   let when_false = function.instruction_successor_at(instruction, 1).unwrap().target
   let true_moves = resolve_edge_moves(function, allocation, block, 0)
   let false_moves = resolve_edge_moves(function, allocation, block, 1)
   buffer.x86_emit_test_rr32(condition.id, condition.id)
-  if true_moves.is_empty() {
+  if next_block == Some(when_false) {
+    if true_moves.is_empty() {
+      buffer.x86_emit_jcc_rel32(RawNe, function.block_index(when_true).unwrap())
+      emit_resolved_moves(buffer, frame, false_moves)
+    } else {
+      buffer.emit_byte(0x0F)
+      buffer.emit_byte(x86_cond_to_jcc_opcode(RawEq))
+      let local_false_branch = buffer.position()
+      emit_u32_le(buffer, 0)
+      emit_resolved_moves(buffer, frame, true_moves)
+      buffer.x86_emit_jmp_rel32(function.block_index(when_true).unwrap())
+      patch_relative_branch(buffer, local_false_branch, buffer.position(), 32)
+      emit_resolved_moves(buffer, frame, false_moves)
+    }
+  } else if next_block == Some(when_true) {
+    if false_moves.is_empty() {
+      buffer.x86_emit_jcc_rel32(
+        RawEq,
+        function.block_index(when_false).unwrap(),
+      )
+      emit_resolved_moves(buffer, frame, true_moves)
+    } else {
+      buffer.emit_byte(0x0F)
+      buffer.emit_byte(x86_cond_to_jcc_opcode(RawNe))
+      let local_true_branch = buffer.position()
+      emit_u32_le(buffer, 0)
+      emit_resolved_moves(buffer, frame, false_moves)
+      buffer.x86_emit_jmp_rel32(function.block_index(when_false).unwrap())
+      patch_relative_branch(buffer, local_true_branch, buffer.position(), 32)
+      emit_resolved_moves(buffer, frame, true_moves)
+    }
+  } else if true_moves.is_empty() {
     buffer.x86_emit_jcc_rel32(RawNe, function.block_index(when_true).unwrap())
     emit_resolved_moves(buffer, frame, false_moves)
     buffer.x86_emit_jmp_rel32(function.block_index(when_false).unwrap())

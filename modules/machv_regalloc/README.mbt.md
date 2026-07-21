@@ -10,8 +10,8 @@ spill and reload edits, edge moves, stack slots, and safepoint root locations.
 
 ## Packages
 
-- `Milky2018/machv_regalloc`: Target VCode projection, allocation entry points,
-  validation, spill handling, and output construction.
+- `Milky2018/machv_regalloc`: read-only Target VCode adapter, allocation entry
+  points, validation, spill handling, and output construction.
 
 ## When to use it
 
@@ -20,10 +20,22 @@ explicit set of allocatable registers and spill scratch registers. The result
 is verified against fixed and tied operands, clobbers, stack slots, insertion
 edits, edge moves, and safepoint roots before it is returned.
 
+The production adapter reads Target VCode directly through `FunctionView`; it
+does not build a second instruction or CFG graph. The aggregate target pipeline
+first verifies selected VCode, explicitly selects the `Backtracking` strategy,
+materializes the returned `AllocationPlan` into VCode `Allocation` side tables,
+and then runs the independent VCode allocation verifier. This avoids rebuilding
+the same whole-function analysis in the generic plan verifier on the production
+path. There is no production fallback to `SinglePass`.
+
 Ordinary `Input::any` operands require a register at the instruction. A target
 operation that can consume a register or spill slot directly uses
 `Input::any_location`; its emitter then reads the allocated `Location` without
 forcing every such input through a simultaneous scratch-register reload.
+`Input::with_preference` may additionally request a same-class allocatable
+register without turning that request into a hard constraint. Production call
+lowering uses this for ABI argument registers, while the post-allocation call
+transfer planner remains responsible for the actual register and stack shuffle.
 
 ## Example
 

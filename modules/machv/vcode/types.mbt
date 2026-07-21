@@ -202,12 +202,13 @@ pub(all) enum OperandRole {
 pub struct Input {
   value : Value
   constraint : OperandConstraint
+  preference : PhysicalReg?
   timing : OperandTiming
 }
 
 ///|
 pub fn Input::any(value : Value) -> Input {
-  { value, constraint: Any, timing: Early }
+  { value, constraint: Any, preference: None, timing: Early }
 }
 
 ///|
@@ -216,12 +217,18 @@ pub fn Input::any(value : Value) -> Input {
 /// stack-resident value directly instead of requiring every input in a register
 /// at the same program point.
 pub fn Input::any_location(value : Value) -> Input {
-  { value, constraint: AnyLocation, timing: Early }
+  { value, constraint: AnyLocation, preference: None, timing: Early }
 }
 
 ///|
 pub fn Input::fixed(value : Value, reg : PhysicalReg) -> Input {
-  { value, constraint: Fixed(reg), timing: Early }
+  { value, constraint: Fixed(reg), preference: None, timing: Early }
+}
+
+///|
+/// Prefer a physical register without making it an allocation constraint.
+pub fn Input::with_preference(self : Input, preference : PhysicalReg) -> Input {
+  { ..self, preference: Some(preference) }
 }
 
 ///|
@@ -261,6 +268,7 @@ priv struct OperandData {
   value : Value
   role : OperandRole
   constraint : OperandConstraint
+  preference : PhysicalReg?
   timing : OperandTiming
   mut tie_id : Int
 }
@@ -270,6 +278,7 @@ pub struct Operand {
   value : Value
   role : OperandRole
   constraint : OperandConstraint
+  preference : PhysicalReg?
   timing : OperandTiming
   tie_id : Int
 } derive(Eq, Debug)
@@ -280,6 +289,7 @@ fn OperandData::snapshot(self : OperandData) -> Operand {
     value: self.value,
     role: self.role,
     constraint: self.constraint,
+    preference: self.preference,
     timing: self.timing,
     tie_id: self.tie_id,
   }
@@ -406,6 +416,7 @@ pub suberror VCodeVerifyError {
   InvalidTie(instruction~ : Instruction, operand~ : Int, tied_to~ : Int)
   InvalidAnyLocationConstraint(instruction~ : Instruction, operand~ : Int)
   FixedRegisterClassMismatch(instruction~ : Instruction, operand~ : Int)
+  InvalidOperandPreference(instruction~ : Instruction, operand~ : Int)
   DuplicateClobber(instruction~ : Instruction, reg~ : PhysicalReg)
   InvalidSafepointRoot(instruction~ : Instruction, value~ : Value)
   InvalidStackMap(instruction~ : Instruction)

@@ -115,12 +115,33 @@ fn[F : FunctionView] assign_edge_transfers(
 }
 
 ///|
+fn[F : FunctionView] verify_operand_preferences(
+  function : F,
+  environment : MachineEnv,
+) -> Unit raise VerifyError {
+  for block in 0..<function.block_count() {
+    for instruction in function.block_instructions(block) {
+      for operand in function.instruction_operands(instruction) {
+        if operand.preference is Some(preferred) &&
+          (
+            preferred.class != operand.vreg.class ||
+            !environment.allocatable_regs.contains(preferred)
+          ) {
+          raise InvalidPreference(vreg=operand.vreg, preferred~)
+        }
+      }
+    }
+  }
+}
+
+///|
 /// Allocate directly from a read-only machine-function view.
 pub fn[F : FunctionView] allocate_function(
   function : F,
   environment : MachineEnv,
   config? : RegallocConfig = RegallocConfig(),
 ) -> AllocationPlan raise VerifyError {
+  verify_operand_preferences(function, environment)
   let plan = allocate_fragmented(
     function,
     environment,

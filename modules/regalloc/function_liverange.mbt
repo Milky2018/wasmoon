@@ -12,45 +12,6 @@ fn operand_program_point(
 }
 
 ///|
-fn[F : FunctionView] function_block_use_defs(
-  function : F,
-  block : Int,
-) -> (Array[VirtualReg], Array[VirtualReg]) {
-  let uses : Array[VirtualReg] = []
-  let defs = function.block_parameters(block)
-  if block == 0 {
-    for value in function.entry_values() {
-      add_vreg(defs, value)
-    }
-  }
-  for instruction in function.block_instructions(block) {
-    for operand in function.instruction_operands(instruction) {
-      match operand.role {
-        Use =>
-          if !contains_vreg(defs, operand.vreg) {
-            add_vreg(uses, operand.vreg)
-          }
-        Def => add_vreg(defs, operand.vreg)
-        UseDef => {
-          if !contains_vreg(defs, operand.vreg) {
-            add_vreg(uses, operand.vreg)
-          }
-          add_vreg(defs, operand.vreg)
-        }
-      }
-    }
-  }
-  for successor in 0..<function.block_successors(block).length() {
-    for argument in function.edge_arguments(block, successor) {
-      if !contains_vreg(defs, argument) {
-        add_vreg(uses, argument)
-      }
-    }
-  }
-  (uses, defs)
-}
-
-///|
 fn[F : FunctionView] compute_function_live_sets(function : F) -> DenseLiveSets {
   let use_defs : Array[LiveSetUseDef] = []
   let definitions : Array[ProgramPoint?] = Array::make(
@@ -64,16 +25,21 @@ fn[F : FunctionView] compute_function_live_sets(function : F) -> DenseLiveSets {
   let successors : Array[Array[Int]] = []
   let block_ids : Array[Int] = []
   for block in 0..<function.block_count() {
-    let (block_uses, block_defs) = function_block_use_defs(function, block)
-    for value in block_uses {
-      uses[value.id].push(ProgramPoint(block, -1))
-    }
-    for value in block_defs {
+    let block_start = ProgramPoint(block, -1)
+    for value in function.block_parameters(block) {
       if definitions[value.id] is None {
-        definitions[value.id] = Some(ProgramPoint(block, -1))
+        definitions[value.id] = Some(block_start)
       }
     }
-    for instruction_index, instruction in function.block_instructions(block) {
+    if block == 0 {
+      for value in function.entry_values() {
+        if definitions[value.id] is None {
+          definitions[value.id] = Some(block_start)
+        }
+      }
+    }
+    let instructions = function.block_instructions(block)
+    for instruction_index, instruction in instructions {
       for operand in function.instruction_operands(instruction) {
         if operand.role is Use || operand.role is UseDef {
           uses[operand.vreg.id].push(
@@ -89,14 +55,15 @@ fn[F : FunctionView] compute_function_live_sets(function : F) -> DenseLiveSets {
         }
       }
     }
-    let edge_point = (function.block_instructions(block).length() - 1) * 2
-    for successor in 0..<function.block_successors(block).length() {
+    let edge_point = (instructions.length() - 1) * 2
+    let block_successors = function.block_successors(block)
+    for successor in 0..<block_successors.length() {
       for argument in function.edge_arguments(block, successor) {
         uses[argument.id].push(ProgramPoint(block, edge_point))
       }
     }
     block_ids.push(block)
-    successors.push(function.block_successors(block))
+    successors.push(block_successors)
   }
   for value in 0..<function.value_count() {
     if definitions[value] is Some(_) || !uses[value].is_empty() {
@@ -223,7 +190,9 @@ fn[F : FunctionView] build_function_live_ranges(function : F) -> LiveRangeSet {
             operand_program_point(block, instruction_index, operand.timing),
             use_kind_of_role(operand.role),
             operand.constraint,
-          ).with_tie(operand.tie_id),
+          )
+          .with_preference(operand.preference)
+          .with_tie(operand.tie_id),
         )
       }
     }

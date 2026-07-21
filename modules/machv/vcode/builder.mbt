@@ -106,9 +106,13 @@ fn[Inst] Builder::append_instruction(
   }
   self.validate_inputs(inputs, metadata)
   for input in inputs {
-    if input.constraint is Fixed(reg) &&
-      reg.class !=
-      reg_class_for_value_type(self.function.value_type(input.value).unwrap()) {
+    let expected = reg_class_for_value_type(
+      self.function.value_type(input.value).unwrap(),
+    )
+    if input.constraint is Fixed(reg) && reg.class != expected {
+      raise InvalidOperandConstraint
+    }
+    if input.preference is Some(preference) && preference.class != expected {
       raise InvalidOperandConstraint
     }
   }
@@ -154,6 +158,7 @@ fn[Inst] Builder::append_instruction(
       value: input.value,
       role: Use,
       constraint: input.constraint,
+      preference: input.preference,
       timing: input.timing,
       tie_id: -1,
     })
@@ -171,6 +176,7 @@ fn[Inst] Builder::append_instruction(
       value: results[index],
       role: Def,
       constraint: output.constraint,
+      preference: None,
       timing: output.timing,
       tie_id,
     })
