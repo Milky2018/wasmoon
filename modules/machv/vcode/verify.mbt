@@ -320,7 +320,7 @@ fn Allocation::has_reload(
   slot : StackSlot,
   reg : PhysicalReg,
 ) -> Bool {
-  for edit in self.edits {
+  for edit in self.before_edits[instruction.id] {
     match (edit.point, edit.kind) {
       (Some(point), Reload(value=edit_value, slot=edit_slot, reg=edit_reg)) =>
         if physical_equal(point.owner, function_owner) &&
@@ -346,7 +346,7 @@ fn Allocation::has_spill(
   reg : PhysicalReg,
   slot : StackSlot,
 ) -> Bool {
-  for edit in self.edits {
+  for edit in self.after_edits[instruction.id] {
     match (edit.point, edit.kind) {
       (Some(point), Spill(value=edit_value, reg=edit_reg, slot=edit_slot)) =>
         if physical_equal(point.owner, function_owner) &&
@@ -372,7 +372,8 @@ fn Allocation::has_edge_move(
   from : Location,
   to : Location,
 ) -> Bool {
-  for edit in self.edits {
+  let edits = self.edge_edits.get((source.id, successor_index)).unwrap_or([])
+  for edit in edits {
     match edit.kind {
       EdgeMove(
         source=edit_source,

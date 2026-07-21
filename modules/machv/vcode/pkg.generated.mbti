@@ -132,6 +132,7 @@ pub fn Allocation::assign_operand_location(Self, Instruction, Int, Location) -> 
 pub fn Allocation::assign_value(Self, Value, Location) -> Bool
 pub fn Allocation::create_stack_slot(Self, @machv.ValueType, Int, Int) -> StackSlot
 pub fn Allocation::edits(Self) -> Array[Edit]
+pub fn Allocation::edits_at(Self, Instruction, PointPlacement) -> ArrayView[Edit]
 pub fn[Inst] Allocation::for_function(Function[Inst]) -> Self
 pub fn Allocation::operand_location(Self, Instruction, Int) -> Location?
 pub fn Allocation::safepoint_roots(Self, Instruction) -> Array[(Value, Location)]

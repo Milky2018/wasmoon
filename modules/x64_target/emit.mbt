@@ -2785,43 +2785,39 @@ fn emit_epilogue(
 fn[Inst] emit_edits_at(
   buffer : CodeBuffer,
   function : @vcode.Function[Inst],
+  allocation : @vcode.Allocation,
   frame : X64Frame,
-  edits : Array[@vcode.Edit],
   instruction : @vcode.Instruction,
   placement : @vcode.PointPlacement,
 ) -> Unit raise X64EmitError {
   let moves : Array[@vcode.ParallelMove] = []
-  for edit in edits {
-    if edit.point() is Some(point) &&
-      point.instruction() == instruction &&
-      point.placement() == placement {
-      match edit.kind() {
-        Spill(value~, reg~, slot~) =>
-          moves.push(
-            @vcode.ParallelMove::new(
-              function.value_type(value).unwrap(),
-              Register(reg),
-              Stack(slot),
-            ),
-          )
-        Reload(value~, slot~, reg~) =>
-          moves.push(
-            @vcode.ParallelMove::new(
-              function.value_type(value).unwrap(),
-              Stack(slot),
-              Register(reg),
-            ),
-          )
-        Move(value~, from~, to~) =>
-          moves.push(
-            @vcode.ParallelMove::new(
-              function.value_type(value).unwrap(),
-              Register(from),
-              Register(to),
-            ),
-          )
-        EdgeMove(..) => ()
-      }
+  for edit in allocation.edits_at(instruction, placement) {
+    match edit.kind() {
+      Spill(value~, reg~, slot~) =>
+        moves.push(
+          @vcode.ParallelMove::new(
+            function.value_type(value).unwrap(),
+            Register(reg),
+            Stack(slot),
+          ),
+        )
+      Reload(value~, slot~, reg~) =>
+        moves.push(
+          @vcode.ParallelMove::new(
+            function.value_type(value).unwrap(),
+            Stack(slot),
+            Register(reg),
+          ),
+        )
+      Move(value~, from~, to~) =>
+        moves.push(
+          @vcode.ParallelMove::new(
+            function.value_type(value).unwrap(),
+            Register(from),
+            Register(to),
+          ),
+        )
+      EdgeMove(..) => ()
     }
   }
   let resolved = @vcode.resolve_parallel_moves(
@@ -4064,7 +4060,6 @@ fn emit_verified(
 ) -> @code_object.UnlinkedCodeObject raise X64EmitError {
   let buffer = CodeBuffer::new()
   let block_offsets = Array::make(function.block_count(), -1)
-  let edits = allocation.edits()
   let sources : Array[@code_object.SourceSite] = []
   let traps : Array[@code_object.TrapSite] = []
   let safepoints : Array[@code_object.SafepointSite] = []
@@ -4078,7 +4073,7 @@ fn emit_verified(
         function.instruction(instruction).unwrap(),
       )
       if !abi_materialization {
-        emit_edits_at(buffer, function, frame, edits, instruction, Before)
+        emit_edits_at(buffer, function, allocation, frame, instruction, Before)
       }
       let instruction_offset = emit_instruction(
         buffer,
@@ -4094,12 +4089,12 @@ fn emit_verified(
         traps, safepoints,
       )
       if !abi_materialization {
-        emit_edits_at(buffer, function, frame, edits, instruction, After)
+        emit_edits_at(buffer, function, allocation, frame, instruction, After)
       }
     }
     let terminator = function.block_terminator(block).unwrap()
     let next_block = layout.get(block_index + 1)
-    emit_edits_at(buffer, function, frame, edits, terminator, Before)
+    emit_edits_at(buffer, function, allocation, frame, terminator, Before)
     let terminator_offset = emit_instruction(
       buffer, function, allocation, frame, block, terminator, next_block,
     )
@@ -4107,7 +4102,7 @@ fn emit_verified(
       buffer, function, allocation, frame, terminator, terminator_offset, sources,
       traps, safepoints,
     )
-    emit_edits_at(buffer, function, frame, edits, terminator, After)
+    emit_edits_at(buffer, function, allocation, frame, terminator, After)
   }
   patch_branches(buffer, function, block_offsets)
   let relocations = buffer.relocations

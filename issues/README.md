@@ -257,6 +257,7 @@ graph TD
   ISS_225["ISS-225: Cut AArch64 calls over to planned transfers"]
   ISS_226["ISS-226: Cut AMD64 calls over to planned transfers"]
   ISS_227["ISS-227: Remove transitional call-shuffle logic and gate the cutover"]
+  ISS_228["ISS-228: Eliminate quadratic allocation-edit processing"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005

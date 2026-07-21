@@ -134,26 +134,40 @@ fn resolve_plan_moves(
 }
 
 ///|
+fn instruction_edit_key(position : EditPosition) -> (Int, Int)? {
+  match position {
+    Before(instruction) => Some((0, instruction))
+    After(instruction) => Some((1, instruction))
+    Edge(_) => None
+  }
+}
+
+///|
 fn resolve_instruction_edits(
   plan : AllocationPlan,
   environment : MachineEnv,
 ) -> Unit raise VerifyError {
   let original = plan.edits.copy()
   let positions : Array[EditPosition] = []
+  let moves_by_position : Map[(Int, Int), Array[PlanMove]] = Map([])
   for edit in original {
-    if edit.position is Edge(_) || positions.contains(edit.position) {
-      continue
+    if instruction_edit_key(edit.position) is Some(key) {
+      match moves_by_position.get(key) {
+        Some(moves) =>
+          moves.push({ value: edit.value, from: edit.from, to: edit.to })
+        None => {
+          positions.push(edit.position)
+          moves_by_position[key] = [
+            { value: edit.value, from: edit.from, to: edit.to },
+          ]
+        }
+      }
     }
-    positions.push(edit.position)
   }
   plan.edits.clear()
   for position in positions {
-    let moves : Array[PlanMove] = []
-    for edit in original {
-      if edit.position == position {
-        moves.push({ value: edit.value, from: edit.from, to: edit.to })
-      }
-    }
+    let key = instruction_edit_key(position).unwrap()
+    let moves = moves_by_position.get(key).unwrap()
     for transfer in resolve_plan_moves(moves, environment) {
       plan.add_edit({
         value: transfer.value,

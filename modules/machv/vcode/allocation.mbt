@@ -133,6 +133,9 @@ pub struct Allocation {
   priv operand_locations : Array[Array[Location?]]
   priv stack_slots : Array[StackSlotData]
   priv edits : Array[Edit]
+  priv before_edits : Array[Array[Edit]]
+  priv after_edits : Array[Array[Edit]]
+  priv edge_edits : Map[(Int, Int), Array[Edit]]
   priv safepoint_roots : Array[SafepointRootLocation]
 }
 
@@ -167,6 +170,9 @@ pub fn[Inst] Allocation::for_function(function : Function[Inst]) -> Allocation {
     operand_locations: operand_counts.map(count => Array::make(count, None)),
     stack_slots: [],
     edits: [],
+    before_edits: Array::makei(function.instruction_count(), _ => []),
+    after_edits: Array::makei(function.instruction_count(), _ => []),
+    edge_edits: Map([]),
     safepoint_roots: [],
   }
 }
@@ -360,7 +366,44 @@ pub fn Allocation::add_edit(self : Allocation, edit : Edit) -> Bool {
     return false
   }
   self.edits.push(edit)
+  match edit.kind {
+    EdgeMove(source~, successor_index~, ..) => {
+      let key = (source.id, successor_index)
+      match self.edge_edits.get(key) {
+        Some(edits) => edits.push(edit)
+        None => self.edge_edits[key] = [edit]
+      }
+    }
+    _ =>
+      if edit.point is Some(point) {
+        match point.placement {
+          Before => self.before_edits[point.instruction.id].push(edit)
+          After => self.after_edits[point.instruction.id].push(edit)
+        }
+      }
+  }
   true
+}
+
+///|
+/// Returns the allocation edits scheduled at one instruction point.
+///
+/// The returned view is read-only and remains valid while this allocation is
+/// not mutated. Target emitters should query this index instead of scanning
+/// `edits()` for every instruction.
+pub fn Allocation::edits_at(
+  self : Allocation,
+  instruction : Instruction,
+  placement : PointPlacement,
+) -> ArrayView[Edit] {
+  if !self.owns_instruction(instruction) {
+    let empty : Array[Edit] = []
+    return empty[:]
+  }
+  match placement {
+    Before => self.before_edits[instruction.id][:]
+    After => self.after_edits[instruction.id][:]
+  }
 }
 
 ///|

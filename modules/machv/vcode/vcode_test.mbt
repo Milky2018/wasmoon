@@ -168,6 +168,77 @@ test "Allocation remains separate and verifies edits, slots, and safepoints" {
 }
 
 ///|
+test "Allocation checker requires indexed reload and spill edits" {
+  let builder : Builder[TestInst] = Builder::new("indexed_edits", [I64])
+  let entry = builder.entry_block()
+  let parameter = builder.parameter(0)
+  let (add, results) = builder.append_body(
+    entry,
+    Add,
+    [Input::any(parameter)],
+    [Output::any(I64)],
+    [],
+    InstructionMetadata::empty(),
+  )
+  let return_inst = builder.set_terminator(
+    entry,
+    Return,
+    [Input::any_location(results[0])],
+    [],
+    [],
+    InstructionMetadata::empty(),
+  )
+  let function = builder.finish()
+  let allocation = Allocation::for_function(function)
+  let parameter_slot = allocation.create_stack_slot(I64, 8, 8)
+  let result_slot = allocation.create_stack_slot(I64, 8, 8)
+  let transfer_reg = PhysicalReg::new(0, Int)
+  allocation.assign_value(parameter, Stack(parameter_slot)) |> ignore
+  allocation.assign_value(results[0], Stack(result_slot)) |> ignore
+  allocation.assign_operand(add, 0, transfer_reg) |> ignore
+  allocation.assign_operand(add, 1, transfer_reg) |> ignore
+  allocation.assign_operand_location(return_inst, 0, Stack(result_slot))
+  |> ignore
+  verify_allocated(function, allocation) catch {
+    error => inspect(error, content="MissingReload(instruction=i0, operand=0)")
+  }
+  allocation.add_edit(
+    Edit::reload(
+      function.before(add).unwrap(),
+      parameter,
+      parameter_slot,
+      transfer_reg,
+    ),
+  )
+  |> ignore
+  verify_allocated(function, allocation) catch {
+    error => inspect(error, content="MissingSpill(instruction=i0, operand=1)")
+  }
+  allocation.add_edit(
+    Edit::spill(
+      function.after(add).unwrap(),
+      results[0],
+      transfer_reg,
+      result_slot,
+    ),
+  )
+  |> ignore
+  debug_inspect(
+    allocation.edits_at(add, Before).map(edit => edit.kind()),
+    content=(
+      #|[Reload(value=v0, slot=stack0, reg=p0:int)]
+    ),
+  )
+  debug_inspect(
+    allocation.edits_at(add, After).map(edit => edit.kind()),
+    content=(
+      #|[Spill(value=v1, reg=p0:int, slot=stack1)]
+    ),
+  )
+  verify_allocated(function, allocation)
+}
+
+///|
 test "Allocation checker rejects a live reference in a clobbered integer register" {
   let builder : Builder[TestInst] = Builder::new("clobber", [GcRef64])
   let entry = builder.entry_block()

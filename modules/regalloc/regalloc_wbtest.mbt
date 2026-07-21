@@ -684,6 +684,59 @@ test "resolve_parallel_moves lowers stack to stack through scratch" {
 }
 
 ///|
+test "instruction edit resolution preserves position order and edge edits" {
+  let plan = AllocationPlan::new(4)
+  let r0 : PhysicalReg = { id: 0, class: Int }
+  let r1 : PhysicalReg = { id: 1, class: Int }
+  let r2 : PhysicalReg = { id: 2, class: Int }
+  let v0 : VirtualReg = { id: 0, class: Int }
+  let v1 : VirtualReg = { id: 1, class: Int }
+  let v2 : VirtualReg = { id: 2, class: Int }
+  plan.add_edit({ value: v0, from: Reg(r0), to: Reg(r1), position: Before(2) })
+  plan.add_edit({ value: v1, from: Reg(r1), to: Reg(r2), position: After(0) })
+  plan.add_edit({ value: v2, from: Reg(r2), to: Reg(r0), position: Before(1) })
+  plan.add_edit({ value: v0, from: Reg(r0), to: Reg(r1), position: Before(2) })
+  plan.add_edit({
+    value: v1,
+    from: Reg(r1),
+    to: Reg(r0),
+    position: Edge(source_block=3, successor_index=1),
+  })
+  resolve_instruction_edits(plan, MachineEnv::new([r0, r1, r2], [r2]))
+  debug_inspect(
+    plan.edits(),
+    content=(
+      #|[
+      #|  {
+      #|    value: { id: 0, class: Int },
+      #|    from: Reg({ id: 0, class: Int }),
+      #|    to: Reg({ id: 1, class: Int }),
+      #|    position: Before(2),
+      #|  },
+      #|  {
+      #|    value: { id: 1, class: Int },
+      #|    from: Reg({ id: 1, class: Int }),
+      #|    to: Reg({ id: 2, class: Int }),
+      #|    position: After(0),
+      #|  },
+      #|  {
+      #|    value: { id: 2, class: Int },
+      #|    from: Reg({ id: 2, class: Int }),
+      #|    to: Reg({ id: 0, class: Int }),
+      #|    position: Before(1),
+      #|  },
+      #|  {
+      #|    value: { id: 1, class: Int },
+      #|    from: Reg({ id: 1, class: Int }),
+      #|    to: Reg({ id: 0, class: Int }),
+      #|    position: Edge(source_block=3, successor_index=1),
+      #|  },
+      #|]
+    ),
+  )
+}
+
+///|
 test "compute approximate loop depths from successors" {
   let depths = @planning.compute_approx_loop_depths([[1], [2], [1, 3], []])
   debug_inspect(depths, content="[0, 1, 1, 0]")
