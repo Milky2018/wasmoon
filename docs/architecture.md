@@ -105,8 +105,7 @@ Wasmoon is primarily developed with AI assistance and has not received the secur
 
 Current capability and command summaries live in the root README. Component-model limitations are tracked in [component/unsupported-matrix.md](component/unsupported-matrix.md), and development validation commands are documented in [development.md](development.md).
 
-The native JIT register-allocation cutover is active on both targets. The
-current AArch64 host correctness corpus passes, but this does not establish
-dual-target performance parity. The remaining compile-time, runtime, and
-emitted-code-size gaps and their current measurements are recorded in
-[Register-allocation cutover status](perf/machv-migration/regalloc-cutover-status.md).
+The native JIT uses the same verified register-allocation seam on both targets.
+Target correctness, ABI behavior, metadata, and artifact validity are enforced
+by CI. Historical backends are not retained or rebuilt as performance or
+code-size baselines.

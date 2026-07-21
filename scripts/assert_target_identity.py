@@ -10,20 +10,19 @@ import subprocess
 from pathlib import Path
 
 
+TARGETS = {
+    "darwin-arm64": {"system": "Darwin", "uname_m": ["arm64", "aarch64"]},
+    "linux-amd64": {"system": "Linux", "uname_m": ["x86_64"]},
+}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("target", choices=["darwin-arm64", "linux-amd64"])
-    parser.add_argument("--baseline", type=Path, required=True)
+    parser.add_argument("target", choices=TARGETS)
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
 
-    baseline = json.loads(args.baseline.read_text(encoding="utf-8"))
-    target = next(
-        (item for item in baseline["targets"] if item["name"] == args.target),
-        None,
-    )
-    if target is None:
-        raise SystemExit(f"target {args.target!r} is absent from {args.baseline}")
+    target = TARGETS[args.target]
 
     uname_machine = subprocess.check_output(["uname", "-m"], text=True).strip()
     identity = {
@@ -33,20 +32,19 @@ def main() -> int:
         "machine": platform.machine(),
         "uname_m": uname_machine,
         "processor": platform.processor(),
-        "required_uname_m": target["required_uname_m"],
+        "required_uname_m": target["uname_m"],
     }
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(identity, indent=2) + "\n", encoding="utf-8")
 
-    expected_system = "Darwin" if args.target == "darwin-arm64" else "Linux"
-    if identity["system"] != expected_system:
+    if identity["system"] != target["system"]:
         raise SystemExit(
-            f"target {args.target} requires {expected_system}, got {identity['system']}"
+            f"target {args.target} requires {target['system']}, got {identity['system']}"
         )
-    if uname_machine not in target["required_uname_m"]:
+    if uname_machine not in target["uname_m"]:
         raise SystemExit(
             f"target {args.target} requires uname -m in "
-            f"{target['required_uname_m']}, got {uname_machine!r}"
+            f"{target['uname_m']}, got {uname_machine!r}"
         )
     print(json.dumps(identity, indent=2))
     return 0

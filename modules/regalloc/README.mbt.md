@@ -76,10 +76,9 @@ VCode allocation afterward, without repeating the generic plan verifier's
 whole-function analysis. Production compilation does not fall back to
 `SinglePass`.
 
-The cutover is functionally complete, but compile-time, runtime, and emitted
-code-size acceptance remain open. See the current
-[register-allocation cutover status](../../docs/perf/machv-migration/regalloc-cutover-status.md)
-for measurements and limitations.
+The production integration is complete. CI validates allocation correctness on
+both native targets; retired allocators and backends are not rebuilt as
+performance or code-size acceptance baselines.
 
 ## Expert packages
 

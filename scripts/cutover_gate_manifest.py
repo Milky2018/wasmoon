@@ -49,15 +49,12 @@ def required_job(value: str) -> tuple[str, str]:
 
 
 def init(args: argparse.Namespace) -> int:
-    baseline = load(args.baseline)
-    workload = Path(baseline["workload_manifest"])
     payload = {
         "schema_version": 1,
         "kind": args.kind,
         "target": args.target,
         "candidate_commit": command_output(["git", "rev-parse", "HEAD"]),
         "candidate_parent_commit": command_output(["git", "rev-parse", "HEAD^"]),
-        "legacy_commit": baseline["legacy_commit"],
         "generated_at_unix_sec": int(time.time()),
         "host": {
             "system": platform.system(),
@@ -69,12 +66,6 @@ def init(args: argparse.Namespace) -> int:
         "toolchain": {
             "moon": command_output(["moon", "version", "--all"]),
             "python": platform.python_version(),
-        },
-        "inputs": {
-            "baseline": str(args.baseline),
-            "baseline_sha256": sha256(args.baseline),
-            "workloads": str(workload),
-            "workloads_sha256": sha256(workload),
         },
         "commands": [],
         "artifacts": [],
@@ -147,28 +138,6 @@ def finalize(args: argparse.Namespace) -> int:
             if failure not in payload["failures"]:
                 payload["failures"].append(failure)
 
-    if args.perf_report is not None:
-        if not args.perf_report.exists():
-            payload["failures"].append(f"missing performance report: {args.perf_report}")
-        else:
-            report = load(args.perf_report)
-            payload["performance"] = {
-                "path": str(args.perf_report),
-                "sha256": sha256(args.perf_report),
-                "decision": report.get("decision"),
-                "aggregates": report.get("aggregates"),
-                "thresholds": report.get("thresholds"),
-            }
-            payload["artifacts"].append(
-                {
-                    "kind": "paired-performance-report",
-                    "path": str(args.perf_report),
-                    "sha256": sha256(args.perf_report),
-                }
-            )
-            if report.get("decision") != "pass":
-                payload["failures"].append("performance report did not pass")
-
     payload["decision"] = "pass" if not payload["failures"] else "fail"
     payload["finalized_at_unix_sec"] = int(time.time())
     write(args.manifest, payload)
@@ -218,7 +187,6 @@ def main() -> int:
 
     init_parser = subparsers.add_parser("init")
     init_parser.add_argument("--manifest", type=Path, required=True)
-    init_parser.add_argument("--baseline", type=Path, required=True)
     init_parser.add_argument("--kind", required=True)
     init_parser.add_argument("--target", required=True)
     init_parser.set_defaults(function=init)
@@ -239,7 +207,6 @@ def main() -> int:
     finalize_parser = subparsers.add_parser("finalize")
     finalize_parser.add_argument("--manifest", type=Path, required=True)
     finalize_parser.add_argument("--required", required=True)
-    finalize_parser.add_argument("--perf-report", type=Path)
     finalize_parser.set_defaults(function=finalize)
 
     combine_parser = subparsers.add_parser("combine")

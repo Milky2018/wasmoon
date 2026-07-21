@@ -48,6 +48,6 @@ independent of Wasmoon.
 This document replaces the pre-migration coupling inventory recorded by
 [ISS-184](../issues/ISS-184.md).
 
-Correctness cutover and performance acceptance are distinct gates. Current
-paired measurements and the remaining performance work are recorded in
-[Register-allocation cutover status](perf/machv-migration/regalloc-cutover-status.md).
+The migration is validated against the current architecture's correctness,
+ABI, metadata, artifact, and dependency contracts. Retired backends are not
+rebuilt as performance or code-size acceptance baselines.

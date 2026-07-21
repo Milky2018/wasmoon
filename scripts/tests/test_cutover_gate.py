@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import importlib.util
 import json
 import subprocess
 import sys
@@ -11,119 +10,34 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 
-
-def load_module(name: str, path: Path):
-    spec = importlib.util.spec_from_file_location(name, path)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-PERF = load_module("run_machv_cutover_perf", ROOT / "scripts/run_machv_cutover_perf.py")
-
-
-class CutoverPerfTests(unittest.TestCase):
-    def test_checked_in_workload_manifest_satisfies_coverage_contract(self) -> None:
-        manifest = json.loads(
-            (ROOT / "docs/perf/machv-migration/workloads.json").read_text(
-                encoding="utf-8"
-            )
-        )
-        workloads = PERF.validate_workload_manifest(manifest)
-        PERF.validate_workload_files(ROOT, workloads)
-        self.assertGreaterEqual(
-            sum(workload["tier"] == "real_module" for workload in workloads), 3
-        )
-        self.assertGreaterEqual(
-            sum(
-                workload["tier"] == "large_compile_stress"
-                for workload in workloads
-            ),
-            2,
-        )
-
-    def test_workload_manifest_rejects_missing_required_feature(self) -> None:
-        manifest = json.loads(
-            (ROOT / "docs/perf/machv-migration/workloads.json").read_text(
-                encoding="utf-8"
-            )
-        )
-        for workload in manifest["workloads"]:
-            workload["features"] = [
-                feature
-                for feature in workload["features"]
-                if feature != "tail_call"
-            ]
-        with self.assertRaisesRegex(RuntimeError, "tail_call"):
-            PERF.validate_workload_manifest(manifest)
-
-    def test_ratio_stats_are_geometric_and_report_noise(self) -> None:
-        stats = PERF.ratio_stats([1.0, 1.21])
-        self.assertAlmostEqual(stats["geometric_mean_ratio"], 1.1)
-        self.assertGreater(stats["upper_95_ratio"], 1.1)
-        self.assertGreater(stats["coefficient_of_variation"], 0.0)
-
-    def test_runtime_normalization_preserves_sub_nanosecond_values(self) -> None:
-        self.assertEqual(PERF.normalize_runtime_ns(101, 100, 10), 0.1)
-
-    def test_runtime_normalization_rejects_non_positive_signal(self) -> None:
-        with self.assertRaisesRegex(RuntimeError, "not positive"):
-            PERF.normalize_runtime_ns(100, 100, 10)
-
-    def test_compile_only_workload_does_not_require_runtime_samples(self) -> None:
-        self.assertIsNone(
-            PERF.workload_runtime_stats(
-                {"metrics": ["jit_compile_time", "code_size"]},
-                [{"legacy": {}, "candidate": {}}],
-            )
-        )
-
-    def test_threshold_crossing_confidence_bound_is_inconclusive(self) -> None:
-        failures: list[str] = []
-        PERF.record_failure(
-            failures,
-            "runtime fixture",
-            {
-                "geometric_mean_ratio": 1.01,
-                "upper_95_ratio": 1.06,
-                "coefficient_of_variation": 0.02,
-            },
-            1.05,
-        )
-        self.assertEqual(
-            failures,
-            ["runtime fixture: inconclusive upper 95% ratio 1.060000 exceeds 1.050000"],
-        )
-
-    def test_corpus_confidence_bound_preserves_equal_workload_weighting(self) -> None:
-        stats = PERF.corpus_ratio_stats(
-            [
-                [1.00, 1.00],
-                [1.21, 1.21, 1.21, 1.21],
-            ]
-        )
-        self.assertAlmostEqual(stats["geometric_mean_ratio"], 1.10)
-        self.assertAlmostEqual(stats["upper_95_ratio"], 1.10)
-
-    def test_corpus_threshold_uses_confidence_bound(self) -> None:
-        stats = PERF.corpus_ratio_stats(
-            [
-                [1.00, 1.02],
-                [1.00, 1.02, 1.00, 1.02],
-            ]
-        )
-        self.assertLess(stats["geometric_mean_ratio"], 1.03)
-        self.assertGreater(stats["upper_95_ratio"], 1.03)
-
-        failures: list[str] = []
-        PERF.record_failure(failures, "runtime corpus", stats, 1.03)
-        self.assertEqual(len(failures), 1)
-        self.assertIn("inconclusive upper 95% ratio", failures[0])
-
-
 class GateManifestTests(unittest.TestCase):
+    def test_init_records_only_current_tree_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            manifest = Path(directory) / "manifest.json"
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(ROOT / "scripts/cutover_gate_manifest.py"),
+                    "init",
+                    "--manifest",
+                    str(manifest),
+                    "--kind",
+                    "target-cutover",
+                    "--target",
+                    "linux-amd64",
+                ],
+                cwd=ROOT,
+                check=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0)
+            payload = json.loads(manifest.read_text(encoding="utf-8"))
+            self.assertNotIn("legacy_commit", payload)
+            self.assertNotIn("performance", payload)
+            self.assertNotIn("inputs", payload)
+
     def test_finalize_rejects_a_missing_required_command(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             manifest = Path(directory) / "manifest.json"
@@ -231,6 +145,14 @@ class GateManifestTests(unittest.TestCase):
             "needs.build-ubuntu-amd64.result }}",
             workflow,
         )
+
+    def test_closing_workflow_has_no_legacy_performance_gate(self) -> None:
+        workflow = (ROOT / ".github/workflows/check.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertNotIn("paired-performance", workflow)
+        self.assertNotIn("run_machv_cutover_perf", workflow)
+        self.assertNotIn("perf-report", workflow)
 
 
 if __name__ == "__main__":
