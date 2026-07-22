@@ -1576,6 +1576,34 @@ pub fn ExecCode::try_alloc(code : Array[Int]) -> ExecCode? {
 }
 
 ///|
+fn ExecCode::try_stage(size : Int) -> ExecCode? {
+  if size <= 0 {
+    return None
+  }
+  let code = @jit_ffi.c_jit_stage_exec_managed(size)
+  if @jit_ffi.c_jit_exec_code_ptr(code) == 0L {
+    None
+  } else {
+    Some(ExecCode(code))
+  }
+}
+
+///|
+fn ExecCode::finalize(self : ExecCode, code : Array[Byte]) -> Bool {
+  let size = code.length()
+  let bytes = FixedArray::make(size, b'\x00')
+  for index, byte in code {
+    bytes[index] = byte
+  }
+  @jit_ffi.c_jit_finalize_exec_managed(self.0, bytes, size) == 0
+}
+
+///|
+fn ExecCode::release(self : ExecCode) -> Bool {
+  @jit_ffi.c_jit_release_exec_managed(self.0) == 0
+}
+
+///|
 /// Get the function pointer from this executable code.
 pub fn ExecCode::ptr(self : ExecCode) -> Int64 {
   @jit_ffi.c_jit_exec_code_ptr(self.0)

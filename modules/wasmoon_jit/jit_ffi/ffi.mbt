@@ -933,6 +933,29 @@ pub extern "c" fn c_jit_alloc_exec_managed(
 ) -> ExecCode = "wasmoon_jit_alloc_exec_managed"
 
 ///|
+/// Allocate a GC-managed writable staging mapping without publishing code.
+pub extern "c" fn c_jit_stage_exec_managed(size : Int) -> ExecCode = "wasmoon_jit_stage_exec_managed"
+
+///|
+/// Copy a complete staged image, transition it to executable-only access, and
+/// flush the platform instruction cache. Returns zero on success.
+#borrow(exec_code, code)
+pub extern "c" fn c_jit_finalize_exec_managed(
+  exec_code : ExecCode,
+  code : FixedArray[Byte],
+  size : Int,
+) -> Int = "wasmoon_jit_finalize_exec_managed"
+
+///|
+/// Immediately release a staged or finalized mapping. Repeated release is safe.
+#borrow(exec_code)
+pub extern "c" fn c_jit_release_exec_managed(exec_code : ExecCode) -> Int = "wasmoon_jit_release_exec_managed"
+
+///|
+/// Number of active executable-memory mappings, for rollback verification.
+pub extern "c" fn c_jit_exec_mapping_count() -> Int = "wasmoon_jit_exec_mapping_count"
+
+///|
 /// Get the function pointer from a GC-managed ExecCode object
 #owned(exec_code)
 pub extern "c" fn c_jit_exec_code_ptr(exec_code : ExecCode) -> Int64 = "wasmoon_jit_exec_code_ptr"

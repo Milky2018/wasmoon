@@ -432,6 +432,8 @@ pub fn value_to_i64(@types.Value) -> Int64
 
 pub fn value_type_may_hold_gc_ref(@types.ValueType) -> Bool
 
+pub fn verify_artifact(@artifact.Artifact, ArtifactCompatibility) -> LoadedArtifact raise ArtifactLoadError
+
 pub fn vmcontext_layout() -> VMContextLayout
 
 pub fn wasm_runtime_symbols() -> @wasm_milkir.RuntimeSymbols
@@ -476,6 +478,15 @@ pub suberror HostcallImportTrampolineError {
   UnsupportedHostcallImportTrampoline(message~ : String)
 } derive(Eq, @debug.Debug)
 pub impl Show for HostcallImportTrampolineError
+
+pub suberror JitInstallError {
+  ResolutionFailed(kind~ : String, name~ : String)
+  AllocationFailed(function_index~ : Int)
+  RelocationFailed(function_index~ : Int, message~ : String)
+  ProtectionFailed(function_index~ : Int)
+  RegistrationFailed(function_index~ : Int, message~ : String)
+  PublicationFailed(message~ : String)
+} derive(Eq, @debug.Debug)
 
 pub suberror JitPipelineError {
   PipelineFailure(message~ : String)
@@ -742,6 +753,33 @@ pub(all) enum ImportFunctionResolution {
   UnsupportedImportFunction
 } derive(Eq, @debug.Debug)
 
+pub struct InstalledCode {
+  // private fields
+}
+pub fn InstalledCode::entry_address(Self, Int) -> Int64?
+pub fn InstalledCode::functions(Self) -> Array[InstalledFunction]
+pub fn InstalledCode::imports(Self) -> Array[InstalledImport]
+
+pub struct InstalledFunction {
+  // private fields
+}
+pub fn InstalledFunction::code_address(Self) -> Int64
+pub fn InstalledFunction::code_size(Self) -> Int
+pub fn InstalledFunction::entry_address(Self) -> Int64
+pub fn InstalledFunction::entry_offset(Self) -> Int
+pub fn InstalledFunction::frame_size(Self) -> Int
+pub fn InstalledFunction::identity(Self) -> @artifact.FunctionIdentity
+pub fn InstalledFunction::safepoints(Self) -> Array[@code_object.SafepointSite]
+pub fn InstalledFunction::sources(Self) -> Array[@code_object.SourceSite]
+pub fn InstalledFunction::traps(Self) -> Array[@code_object.TrapSite]
+pub fn InstalledFunction::unwind(Self) -> Array[@code_object.UnwindDirective]
+
+pub struct InstalledImport {
+  // private fields
+}
+pub fn InstalledImport::address(Self) -> Int64
+pub fn InstalledImport::identity(Self) -> @artifact.ImportIdentity
+
 pub struct JITDebugDB {
   entries : Map[Int, JITFunctionDebug]
 }
@@ -781,6 +819,13 @@ pub(all) struct JitCallFixup {
   target : @code_object.RelocationTarget
   veneer_offset : Int
 } derive(Eq, @debug.Debug)
+
+pub struct JitCodeInstaller {
+  // private fields
+}
+pub fn JitCodeInstaller::current(Self) -> InstalledCode?
+pub fn JitCodeInstaller::install(Self, LoadedArtifact) -> InstalledCode raise JitInstallError
+pub fn JitCodeInstaller::new((@code_object.RelocationTarget) -> Int64?) -> Self
 
 pub struct JitCodeObject {
   // private fields

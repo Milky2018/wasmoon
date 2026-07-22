@@ -214,17 +214,14 @@ fn build_verified_code_objects(
 }
 
 ///|
-/// Decode, check compatibility, and reconstruct verified unlinked code objects.
+/// Check compatibility and reconstruct verified unlinked code objects from an
+/// in-memory artifact produced by the live compiler.
 ///
 /// No symbol is resolved and no executable memory is allocated or published.
-pub fn load_artifact(
-  bytes : Bytes,
+pub fn verify_artifact(
+  decoded : @artifact.Artifact,
   compatibility : ArtifactCompatibility,
-  limits? : @artifact.DecodeLimits = @artifact.DecodeLimits::default(),
 ) -> LoadedArtifact raise ArtifactLoadError {
-  let decoded = @artifact.decode(bytes, limits~) catch {
-    error => raise DecodeFailed(cause=error)
-  }
   verify_artifact_compatibility(decoded, compatibility) catch {
     error => raise Incompatible(cause=error)
   }
@@ -235,4 +232,20 @@ pub fn load_artifact(
     error => raise CodeObjectInvalid(cause=error)
   }
   { artifact: decoded, code_objects }
+}
+
+///|
+/// Decode, check compatibility, and reconstruct verified unlinked code objects.
+///
+/// Decoded and live artifacts converge on `verify_artifact`, before the shared
+/// installer resolves any symbol or allocates executable memory.
+pub fn load_artifact(
+  bytes : Bytes,
+  compatibility : ArtifactCompatibility,
+  limits? : @artifact.DecodeLimits = @artifact.DecodeLimits::default(),
+) -> LoadedArtifact raise ArtifactLoadError {
+  let decoded = @artifact.decode(bytes, limits~) catch {
+    error => raise DecodeFailed(cause=error)
+  }
+  verify_artifact(decoded, compatibility)
 }

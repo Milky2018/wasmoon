@@ -172,6 +172,10 @@ pub fn c_jit_exception_throw_values(Int64, Int, FixedArray[Int64], Int) -> Unit
 
 pub fn c_jit_exec_code_ptr(ExecCode) -> Int64
 
+pub fn c_jit_exec_mapping_count() -> Int
+
+pub fn c_jit_finalize_exec_managed(ExecCode, FixedArray[Byte], Int) -> Int
+
 pub fn c_jit_free_memory(Int64) -> Unit
 
 pub fn c_jit_free_memory_desc(Int64) -> Unit
@@ -484,6 +488,8 @@ pub fn c_jit_read_i64(Int64) -> Int64
 
 pub fn c_jit_read_u32(Int64) -> UInt
 
+pub fn c_jit_release_exec_managed(ExecCode) -> Int
+
 pub fn c_jit_set_cancellation_callback(Int64, FuncRef[(() -> Bool) -> Int], () -> Bool) -> Unit
 
 pub fn c_jit_set_hostcall_callback(Int64, FuncRef[(() -> Int) -> Int], () -> Int) -> Unit
@@ -505,6 +511,8 @@ pub fn c_jit_set_wasi_stdin_callback(Int64, FuncRef[(() -> Bytes) -> Bytes], () 
 pub fn c_jit_set_wasi_stdout_capture(Int64, Int) -> Unit
 
 pub fn c_jit_shared_table_set(Int64, Int, Int64, Int) -> Unit
+
+pub fn c_jit_stage_exec_managed(Int) -> ExecCode
 
 pub fn c_jit_take_wasi_stderr(Int64) -> Bytes
 
