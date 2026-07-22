@@ -1,6 +1,6 @@
 ///|
 /// JIT runtime FFI for executable memory management and code execution
-/// Uses @jit_ffi package for C function declarations
+/// Uses the Wasmoon-owned JIT facade for native runtime operations.
 
 // ============ Trap Handling ============
 

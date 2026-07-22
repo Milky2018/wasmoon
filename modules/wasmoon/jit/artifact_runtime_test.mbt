@@ -149,7 +149,12 @@ test "JITModule resolves imported Code symbols transactionally" {
     ],
   }
   let imports : Map[String, Map[String, Int64]] = Map([])
-  imports.set("env", Map([("host", @wasmoon_jit.get_spectest_print_ptr())]))
+  imports.set(
+    "env",
+    Map([
+      ("host", @wasmoon_jit.get_import_trampoline("spectest", "print").unwrap()),
+    ]),
+  )
   let jit_module = JITModule::load_artifact_with_imports(
     load_runtime_artifact(artifact),
     [([], []), ([], [])],

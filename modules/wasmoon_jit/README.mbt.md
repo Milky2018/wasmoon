@@ -9,17 +9,16 @@ bridge glue, and integration planning for loading generated code.
 ## Packages
 
 - `Milky2018/wasmoon_jit`: runtime layout, JIT integration planning,
-  trampolines, native glue, runtime symbols, and helper APIs.
+  trampolines, runtime symbols, and helper APIs.
 - `Milky2018/wasmoon_jit/artifact`: target-portable Cwasm manifests, symbolic
   function identities, signatures, and unlinked code-object data.
 - `Milky2018/wasmoon_jit/perf`: optional JIT performance metrics.
-- `Milky2018/wasmoon_jit/jit_ffi`: native stubs used by the JIT runtime.
 
 ## When to use it
 
 Use `wasmoon_jit` when integrating generated code with the Wasmoon runtime,
 including VMContext layout, runtime helper symbols, trampolines, v9
-artifacts, and native glue.
+artifacts, and installed-code lifecycle management.
 
 `load_artifact` keeps loading separate from installation: it performs bounded
 decoding, exact manifest and CPU-feature compatibility checks, symbolic target
@@ -45,10 +44,6 @@ test "plan a small MilkIR function for x64 JIT integration" {
   inspect(plan.entry_symbol, content="add64")
   debug_inspect(plan.target, content="X64")
   inspect(plan.object.get_bytes().length() > 0, content="true")
-  inspect(
-    native_glue_covers_jit_ffi_stubs(glue=plan.native_glue),
-    content="true",
-  )
 }
 ```
 
@@ -65,5 +60,6 @@ compatibility decoder for the removed v8 format.
 JIT planning composes `milkir`, `milkir_machv`, `machv_regalloc`, and the
 selected target package. Each target owns instruction selection, allocation
 policy, frame layout, and emission. The resulting code object is combined with
-VMContext metadata, runtime symbols, trampolines, and native glue before it is
-installed and invoked by Wasmoon.
+VMContext metadata, runtime symbols, and trampolines before it is installed and
+invoked by Wasmoon. Native stubs are private implementation details of this
+package rather than a separate public package.

@@ -53,7 +53,7 @@ fn RuntimeValueBridge::bridge_arg(self : RuntimeValueBridge) -> Int64 {
 ///|
 fn RuntimeValueBridge::x64_bridge_ptr(self : RuntimeValueBridge) -> Int64 {
   match self {
-    Hostcall(_) => @jit_ffi.c_jit_get_hostcall_ptr()
+    Hostcall(_) => c_jit_get_hostcall_ptr()
   }
 }
 
@@ -700,7 +700,7 @@ fn build_aarch64_hostcall_import_trampoline(
   a64_emit_add_imm(code, 2, 31, 0)
   a64_emit_load_imm64_fixed(code, 3, layout.arg_slots.to_int64())
   a64_emit_load_imm64_fixed(code, 4, layout.result_slots.to_int64())
-  a64_emit_load_imm64_fixed(code, 16, @jit_ffi.c_jit_get_hostcall_ptr())
+  a64_emit_load_imm64_fixed(code, 16, c_jit_get_hostcall_ptr())
   a64_emit_blr(code, 16)
   let mut result_offset = offset
   for i, ty in result_types {

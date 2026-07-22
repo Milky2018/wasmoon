@@ -121,15 +121,20 @@ pub fn init_jit_globals_from_store(
       Null => @wasm_milkir.NULL_REF
       V128(bytes) => {
         let offset = globals_ptr + (i * 16).to_int64()
-        @wasmoon_jit.c_jit_write_i64(offset, @types.bytes_to_int64_le(bytes, 0))
-        @wasmoon_jit.c_jit_write_i64(
-          offset + 8L,
+        @wasmoon_jit.native_value_slot_write(
+          offset,
+          0,
+          @types.bytes_to_int64_le(bytes, 0),
+        )
+        @wasmoon_jit.native_value_slot_write(
+          offset,
+          1,
           @types.bytes_to_int64_le(bytes, 8),
         )
         continue
       }
     }
-    @wasmoon_jit.c_jit_write_i64(globals_ptr + (i * 16).to_int64(), raw_value)
+    @wasmoon_jit.native_value_slot_write(globals_ptr, i * 2, raw_value)
   }
   jit_module.set_globals(globals_ptr)
   globals_ptr
@@ -279,7 +284,7 @@ pub fn sync_jit_globals_to_store(
     if global_inst.get_type().mutable {
       // Read raw value from JIT memory (16 bytes per global: 8 value + 8 tag)
       let offset = jit_ctx.globals_ptr + (i * 16).to_int64()
-      let raw_value = @wasmoon_jit.c_jit_read_i64(offset)
+      let raw_value = @wasmoon_jit.native_value_slot_read(offset, 0)
       // Convert based on global's type
       // Note: For FuncRef, JIT stores module function index, we need to convert
       // it back to store address for the interpreter
@@ -373,7 +378,7 @@ pub fn sync_jit_globals_to_store(
         RefNone => Null
         V128 => {
           // Read both 64-bit halves and construct V128
-          let high_value = @wasmoon_jit.c_jit_read_i64(offset + 8L)
+          let high_value = @wasmoon_jit.native_value_slot_read(offset, 1)
           V128(@types.int64_pair_to_v128_le(raw_value, high_value))
         }
       }
@@ -453,9 +458,9 @@ pub fn sync_store_globals_to_jit(
       jit_ctx.func_addrs,
     )
     let offset = jit_ctx.globals_ptr + (i * 16).to_int64()
-    @wasmoon_jit.c_jit_write_i64(offset, low)
+    @wasmoon_jit.native_value_slot_write(offset, 0, low)
     if high is Some(hi) {
-      @wasmoon_jit.c_jit_write_i64(offset + 8L, hi)
+      @wasmoon_jit.native_value_slot_write(offset, 1, hi)
     }
   }
 }
@@ -1089,16 +1094,6 @@ fn sum_slot_count(types : Array[@types.ValueType]) -> Int {
 }
 
 ///|
-fn read_slot_i64(values_ptr : Int64, slot_idx : Int) -> Int64 {
-  @wasmoon_jit.c_jit_read_i64(values_ptr + (slot_idx * 8).to_int64())
-}
-
-///|
-fn write_slot_i64(values_ptr : Int64, slot_idx : Int, value : Int64) -> Unit {
-  @wasmoon_jit.c_jit_write_i64(values_ptr + (slot_idx * 8).to_int64(), value)
-}
-
-///|
 fn low_u32_bits(raw : Int64) -> Int {
   (raw & 0xFFFFFFFFL).to_int()
 }
@@ -1302,33 +1297,33 @@ fn decode_ref_value(
 ///|
 fn decode_value(
   ty : @types.ValueType,
-  values_ptr : Int64,
   slot_idx : Int,
   store : @runtime.Store,
   jit_module : @jit.JITModule,
   instance : @runtime.ModuleInstance,
 ) -> (@types.Value, Int) {
   match ty {
-    I32 => (I32(low_u32_bits(read_slot_i64(values_ptr, slot_idx))), 1)
-    I64 => (I64(read_slot_i64(values_ptr, slot_idx)), 1)
+    I32 =>
+      (I32(low_u32_bits(@wasmoon_jit.hostcall_value_slot_read(slot_idx))), 1)
+    I64 => (I64(@wasmoon_jit.hostcall_value_slot_read(slot_idx)), 1)
     F32 => {
-      let bits = low_u32_bits(read_slot_i64(values_ptr, slot_idx))
+      let bits = low_u32_bits(@wasmoon_jit.hostcall_value_slot_read(slot_idx))
       (F32(Float::reinterpret_from_int(bits)), 1)
     }
     F64 => {
-      let raw = read_slot_i64(values_ptr, slot_idx)
+      let raw = @wasmoon_jit.hostcall_value_slot_read(slot_idx)
       (F64(raw.reinterpret_as_double()), 1)
     }
     V128 => {
-      let lo = read_slot_i64(values_ptr, slot_idx)
-      let hi = read_slot_i64(values_ptr, slot_idx + 1)
+      let lo = @wasmoon_jit.hostcall_value_slot_read(slot_idx)
+      let hi = @wasmoon_jit.hostcall_value_slot_read(slot_idx + 1)
       (V128(@types.int64_pair_to_v128_le(lo, hi)), 2)
     }
     _ =>
       (
         decode_ref_value(
           ty,
-          read_slot_i64(values_ptr, slot_idx),
+          @wasmoon_jit.hostcall_value_slot_read(slot_idx),
           store,
           jit_module,
           instance,
@@ -1542,7 +1537,6 @@ pub fn install_jit_hostcall_dispatcher(
 
   jit_module.set_hostcall_callback(fn() {
     let func_addr = @wasmoon_jit.get_hostcall_func_addr()
-    let values_ptr = @wasmoon_jit.get_hostcall_values_ptr()
     let arg_slots = @wasmoon_jit.get_hostcall_num_arg_slots()
     let res_slots = @wasmoon_jit.get_hostcall_num_result_slots()
     let ft = match store.get_func_type_opt(func_addr) {
@@ -1558,9 +1552,7 @@ pub fn install_jit_hostcall_dispatcher(
     let args : Array[@types.Value] = []
     let mut slot = 0
     for ty in ft.params {
-      let (v, used) = decode_value(
-        ty, values_ptr, slot, store, jit_module, instance,
-      )
+      let (v, used) = decode_value(ty, slot, store, jit_module, instance)
       args.push(v)
       slot = slot + used
     }
@@ -1606,7 +1598,10 @@ pub fn install_jit_hostcall_dispatcher(
         None => return 3
         Some(encoded_slots) => {
           for j in 0..<encoded_slots.length() {
-            write_slot_i64(values_ptr, out_slot + j, encoded_slots[j])
+            @wasmoon_jit.hostcall_value_slot_write(
+              out_slot + j,
+              encoded_slots[j],
+            )
           }
           out_slot = out_slot + encoded_slots.length()
         }

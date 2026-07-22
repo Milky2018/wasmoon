@@ -41,14 +41,14 @@ pub struct CHeap {
 ///|
 /// Create a new C heap with the given initial capacity
 pub fn CHeap::CHeap(capacity? : Int = @types.ONE_MIB_BYTES) -> CHeap {
-  let ptr = @jit_ffi.c_gc_heap_new(capacity.to_int64())
+  let ptr = c_gc_heap_new(capacity.to_int64())
   { ptr, }
 }
 
 ///|
 /// Free the C heap (called explicitly if needed before GC)
 pub fn CHeap::free(self : CHeap) -> Unit {
-  @jit_ffi.c_gc_heap_free(self.ptr)
+  c_gc_heap_free(self.ptr)
 }
 
 ///|
@@ -174,7 +174,7 @@ pub fn CHeap::alloc_struct(
   let raw_fields = FixedArray::makei(num_fields, fn(i) {
     value_to_i64(fields[i])
   })
-  let gc_ref = @jit_ffi.c_gc_heap_alloc_struct(
+  let gc_ref = c_gc_heap_alloc_struct(
     self.ptr,
     type_idx,
     raw_fields,
@@ -197,7 +197,7 @@ pub fn CHeap::struct_get(
 ) -> @types.Value {
   // Convert 0-based to 1-based for C heap
   let gc_ref = struct_idx + 1
-  let raw = @jit_ffi.c_gc_heap_struct_get(self.ptr, gc_ref, field_idx)
+  let raw = c_gc_heap_struct_get(self.ptr, gc_ref, field_idx)
   i64_to_value(raw, field_type)
 }
 
@@ -211,7 +211,7 @@ pub fn CHeap::struct_set(
 ) -> Unit {
   let gc_ref = struct_idx + 1
   let raw = value_to_i64(value)
-  @jit_ffi.c_gc_heap_struct_set(self.ptr, gc_ref, field_idx, raw)
+  c_gc_heap_struct_set(self.ptr, gc_ref, field_idx, raw)
 }
 
 // ============================================================
@@ -228,7 +228,7 @@ pub fn CHeap::alloc_array(
   init_value : @types.Value,
 ) -> Int raise CHeapError {
   let raw_init = value_to_i64(init_value)
-  let gc_ref = @jit_ffi.c_gc_heap_alloc_array(self.ptr, type_idx, len, raw_init)
+  let gc_ref = c_gc_heap_alloc_array(self.ptr, type_idx, len, raw_init)
   if gc_ref <= 0 {
     raise OutOfMemory
   }
@@ -245,7 +245,7 @@ pub fn CHeap::alloc_array_from_values(
 ) -> Int raise CHeapError {
   let len = elements.length()
   let raw_values = FixedArray::makei(len, fn(i) { value_to_i64(elements[i]) })
-  let gc_ref = @jit_ffi.c_gc_heap_alloc_array_from_values(
+  let gc_ref = c_gc_heap_alloc_array_from_values(
     self.ptr,
     type_idx,
     raw_values,
@@ -261,7 +261,7 @@ pub fn CHeap::alloc_array_from_values(
 /// Get array length
 pub fn CHeap::array_len(self : CHeap, array_idx : Int) -> Int {
   let gc_ref = array_idx + 1
-  @jit_ffi.c_gc_heap_array_len(self.ptr, gc_ref)
+  c_gc_heap_array_len(self.ptr, gc_ref)
 }
 
 ///|
@@ -274,11 +274,11 @@ pub fn CHeap::array_get(
 ) -> @types.Value raise CHeapError {
   let gc_ref = array_idx + 1
   // Check bounds before accessing
-  let len = @jit_ffi.c_gc_heap_array_len(self.ptr, gc_ref)
+  let len = c_gc_heap_array_len(self.ptr, gc_ref)
   if elem_idx < 0 || elem_idx >= len {
     raise OutOfBoundsArrayAccess
   }
-  let raw = @jit_ffi.c_gc_heap_array_get(self.ptr, gc_ref, elem_idx)
+  let raw = c_gc_heap_array_get(self.ptr, gc_ref, elem_idx)
   i64_to_value(raw, elem_type)
 }
 
@@ -292,12 +292,12 @@ pub fn CHeap::array_set(
 ) -> Unit raise CHeapError {
   let gc_ref = array_idx + 1
   // Check bounds before accessing
-  let len = @jit_ffi.c_gc_heap_array_len(self.ptr, gc_ref)
+  let len = c_gc_heap_array_len(self.ptr, gc_ref)
   if elem_idx < 0 || elem_idx >= len {
     raise OutOfBoundsArrayAccess
   }
   let raw = value_to_i64(value)
-  @jit_ffi.c_gc_heap_array_set(self.ptr, gc_ref, elem_idx, raw)
+  c_gc_heap_array_set(self.ptr, gc_ref, elem_idx, raw)
 }
 
 ///|
@@ -311,12 +311,12 @@ pub fn CHeap::array_fill(
 ) -> Unit raise CHeapError {
   let gc_ref = array_idx + 1
   // Check bounds before filling
-  let len = @jit_ffi.c_gc_heap_array_len(self.ptr, gc_ref)
+  let len = c_gc_heap_array_len(self.ptr, gc_ref)
   if offset < 0 || count < 0 || offset + count > len {
     raise OutOfBoundsArrayAccess
   }
   let raw = value_to_i64(value)
-  @jit_ffi.c_gc_heap_array_fill(self.ptr, gc_ref, offset, raw, count)
+  c_gc_heap_array_fill(self.ptr, gc_ref, offset, raw, count)
 }
 
 ///|
@@ -332,8 +332,8 @@ pub fn CHeap::array_copy(
   let dst_ref = dst_idx + 1
   let src_ref = src_idx + 1
   // Check bounds before copying
-  let dst_len = @jit_ffi.c_gc_heap_array_len(self.ptr, dst_ref)
-  let src_len = @jit_ffi.c_gc_heap_array_len(self.ptr, src_ref)
+  let dst_len = c_gc_heap_array_len(self.ptr, dst_ref)
+  let src_len = c_gc_heap_array_len(self.ptr, src_ref)
   if dst_offset < 0 ||
     src_offset < 0 ||
     count < 0 ||
@@ -341,7 +341,7 @@ pub fn CHeap::array_copy(
     src_offset + count > src_len {
     raise OutOfBoundsArrayAccess
   }
-  @jit_ffi.c_gc_heap_array_copy(
+  c_gc_heap_array_copy(
     self.ptr,
     dst_ref,
     dst_offset,
@@ -359,14 +359,14 @@ pub fn CHeap::array_copy(
 /// Get the type index of an object
 pub fn CHeap::get_type_idx(self : CHeap, idx : Int) -> Int {
   let gc_ref = idx + 1
-  @jit_ffi.c_gc_heap_get_type_idx(self.ptr, gc_ref)
+  c_gc_heap_get_type_idx(self.ptr, gc_ref)
 }
 
 ///|
 /// Get the kind of an object (1=struct, 2=array)
 pub fn CHeap::get_kind(self : CHeap, idx : Int) -> Int {
   let gc_ref = idx + 1
-  @jit_ffi.c_gc_heap_get_kind(self.ptr, gc_ref)
+  c_gc_heap_get_kind(self.ptr, gc_ref)
 }
 
 ///|
@@ -385,7 +385,7 @@ pub fn CHeap::is_array(self : CHeap, idx : Int) -> Bool {
 /// Check if an object reference is valid
 pub fn CHeap::is_valid(self : CHeap, idx : Int) -> Bool {
   let gc_ref = idx + 1
-  @jit_ffi.c_gc_heap_is_valid(self.ptr, gc_ref) != 0
+  c_gc_heap_is_valid(self.ptr, gc_ref) != 0
 }
 
 // ============================================================
@@ -398,13 +398,13 @@ pub fn CHeap::is_valid(self : CHeap, idx : Int) -> Bool {
 pub fn CHeap::collect(self : CHeap, roots : Array[@types.Value]) -> Int {
   let num_roots = roots.length()
   let raw_roots = FixedArray::makei(num_roots, fn(i) { value_to_i64(roots[i]) })
-  @jit_ffi.c_gc_heap_collect(self.ptr, raw_roots, num_roots)
+  c_gc_heap_collect(self.ptr, raw_roots, num_roots)
 }
 
 ///|
 /// Verify heap invariants (for debugging)
 pub fn CHeap::verify(self : CHeap, verbose? : Bool = false) -> Bool {
-  @jit_ffi.c_gc_heap_verify(self.ptr, if verbose { 1 } else { 0 }) != 0
+  c_gc_heap_verify(self.ptr, if verbose { 1 } else { 0 }) != 0
 }
 
 // ============================================================
@@ -414,14 +414,14 @@ pub fn CHeap::verify(self : CHeap, verbose? : Bool = false) -> Bool {
 ///|
 /// Get heap base pointer (for JIT inline access)
 pub fn CHeap::get_base(self : CHeap) -> Int64 {
-  @jit_ffi.c_gc_heap_get_base(self.ptr)
+  c_gc_heap_get_base(self.ptr)
 }
 
 ///|
 /// Get object offset in heap (for JIT inline access)
 pub fn CHeap::get_offset(self : CHeap, idx : Int) -> Int {
   let gc_ref = idx + 1
-  @jit_ffi.c_gc_heap_get_offset(self.ptr, gc_ref)
+  c_gc_heap_get_offset(self.ptr, gc_ref)
 }
 
 // ============================================================
@@ -431,13 +431,13 @@ pub fn CHeap::get_offset(self : CHeap, idx : Int) -> Int {
 ///|
 /// Get current heap size (bytes used)
 pub fn CHeap::get_size(self : CHeap) -> Int64 {
-  @jit_ffi.c_gc_heap_get_size(self.ptr)
+  c_gc_heap_get_size(self.ptr)
 }
 
 ///|
 /// Get heap capacity (total allocated bytes)
 pub fn CHeap::get_capacity(self : CHeap) -> Int64 {
-  @jit_ffi.c_gc_heap_get_capacity(self.ptr)
+  c_gc_heap_get_capacity(self.ptr)
 }
 
 ///|
@@ -455,25 +455,25 @@ pub fn CHeap::get_usage_ratio(self : CHeap) -> Double {
 ///|
 /// Get number of objects in heap
 pub fn CHeap::get_object_count(self : CHeap) -> Int {
-  @jit_ffi.c_gc_heap_get_object_count(self.ptr)
+  c_gc_heap_get_object_count(self.ptr)
 }
 
 ///|
 /// Get total number of write-barrier calls recorded
 pub fn CHeap::get_barrier_writes(self : CHeap) -> Int {
-  @jit_ffi.c_gc_heap_get_barrier_writes(self.ptr)
+  c_gc_heap_get_barrier_writes(self.ptr)
 }
 
 ///|
 /// Get total number of allocations since heap creation
 pub fn CHeap::get_total_allocations(self : CHeap) -> Int {
-  @jit_ffi.c_gc_heap_get_total_allocations(self.ptr)
+  c_gc_heap_get_total_allocations(self.ptr)
 }
 
 ///|
 /// Get total number of GC cycles performed
 pub fn CHeap::get_total_collections(self : CHeap) -> Int {
-  @jit_ffi.c_gc_heap_get_total_collections(self.ptr)
+  c_gc_heap_get_total_collections(self.ptr)
 }
 
 ///|
@@ -486,5 +486,5 @@ pub fn CHeap::should_collect(self : CHeap, threshold? : Double = 0.75) -> Bool {
 ///|
 /// Configure allocation fault injection for debugging
 pub fn gc_debug_set_fail_alloc(fail_at : Int, fail_every? : Int = 0) -> Unit {
-  @jit_ffi.c_gc_heap_debug_set_fail_alloc(fail_at, fail_every)
+  c_gc_heap_debug_set_fail_alloc(fail_at, fail_every)
 }

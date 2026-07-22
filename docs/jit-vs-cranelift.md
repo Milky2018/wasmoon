@@ -337,15 +337,15 @@ impl MachInstEmit for Inst {
 
 ## 6. Runtime/FFI
 
-### Wasmoon (`jit/jit_ffi/`)
+### Wasmoon (`wasmoon_jit`)
 
 ```moonbit
-pub struct JITContext {
-  ctx: @jit_ffi.JITContext
-  trampoline_cache: Map[Int64, ExecCode]
+priv struct JITContext {
+  ctx: @wasmoon_jit.NativeJITContext
+  trampoline_cache: Map[Int64, @wasmoon_jit.InstalledTrampoline]
 }
 
-// C FFI for:
+// Private native stubs provide:
 // - Executable memory allocation
 // - Trap handling
 // - Function table management

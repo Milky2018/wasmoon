@@ -5,18 +5,18 @@ pub(all) enum NativeTarget {
 } derive(Eq, Debug)
 
 ///|
-pub(all) struct JitFuncAddrFixup {
+priv struct JitFuncAddrFixup {
   offset : Int
   target : @code_object.RelocationTarget
   reg : Int
-} derive(Eq, Debug)
+} derive(Debug)
 
 ///|
-pub(all) struct JitCallFixup {
+priv struct JitCallFixup {
   offset : Int
   target : @code_object.RelocationTarget
   veneer_offset : Int
-} derive(Eq, Debug)
+} derive(Debug)
 
 ///|
 pub struct JitCodeObject {
@@ -28,7 +28,7 @@ pub struct JitCodeObject {
 } derive(Debug)
 
 ///|
-pub fn JitCodeObject::new(
+fn JitCodeObject::new(
   code : Array[Int],
   frame_size : Int,
   func_addr_fixups? : Array[JitFuncAddrFixup] = [],
@@ -47,37 +47,6 @@ pub fn JitCodeObject::new(
 ///|
 pub fn JitCodeObject::get_bytes(self : JitCodeObject) -> Array[Int] {
   self.code.copy()
-}
-
-///|
-pub fn JitCodeObject::size(self : JitCodeObject) -> Int {
-  self.code.length()
-}
-
-///|
-pub fn JitCodeObject::frame_size(self : JitCodeObject) -> Int {
-  self.frame_size
-}
-
-///|
-pub fn JitCodeObject::get_func_addr_fixups(
-  self : JitCodeObject,
-) -> Array[JitFuncAddrFixup] {
-  self.func_addr_fixups.copy()
-}
-
-///|
-pub fn JitCodeObject::get_call_fixups(
-  self : JitCodeObject,
-) -> Array[JitCallFixup] {
-  self.call_fixups.copy()
-}
-
-///|
-pub fn JitCodeObject::get_gc_safepoints(
-  self : JitCodeObject,
-) -> Array[GcSafepoint] {
-  self.gc_safepoints.copy()
 }
 
 ///|

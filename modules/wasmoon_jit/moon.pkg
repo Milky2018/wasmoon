@@ -8,9 +8,30 @@ import {
   "Milky2018/milkir",
   "Milky2018/wasm_milkir",
   "Milky2018/wasm_core/types",
-  "Milky2018/wasmoon_jit/jit_ffi",
   "Milky2018/wasmoon_jit/artifact",
   "moonbitlang/x/crypto",
   "moonbitlang/core/cmp",
   "moonbitlang/core/hashset",
 }
+
+options(
+  "native-stub": [
+    "jit_ffi/jit.c",
+    "jit_ffi/trap.c",
+    "jit_ffi/exec_mem.c",
+    "jit_ffi/jit_context.c",
+    "jit_ffi/memory_ops.c",
+    "jit_ffi/segment_ops.c",
+    "jit_ffi/gc_type_cache.c",
+    "jit_ffi/gc_ops.c",
+    "jit_ffi/gc_allocator.c",
+    "jit_ffi/gc_heap.c",
+    "jit_ffi/exception.c",
+    "jit_ffi/wasi.c",
+    "jit_ffi/wasm_stack.c",
+    "jit_ffi/trampoline_call_x86_64.S",
+    "jit_ffi/stack_switch_aarch64.S",
+    "jit_ffi/stack_switch_x86_64.S",
+    "jit_ffi/dwarf.c",
+  ],
+)

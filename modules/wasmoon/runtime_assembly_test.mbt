@@ -31,11 +31,6 @@ test "wasmoon consumes reusable compiler infrastructure" {
   inspect(assembly.signature.params.length(), content="0")
   inspect(assembly.machv_function.blocks().length(), content="1")
   inspect(assembly.code_object.get_bytes().length() > 0, content="true")
-  inspect(assembly.jit_glue.length(), content="9")
-  inspect(
-    @wasmoon_jit.native_glue_covers_jit_ffi_stubs(glue=assembly.jit_glue),
-    content="true",
-  )
 }
 
 ///|

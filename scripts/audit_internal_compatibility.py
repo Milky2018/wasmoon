@@ -9,6 +9,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 FORBIDDEN_FILES = [
     "modules/wasmoon/testsuite/aarch64_candidate_test.mbt",
+    "modules/wasmoon_jit/jit_ffi/ffi.mbt",
+    "modules/wasmoon_jit/jit_ffi/moon.pkg",
+    "modules/wasmoon_jit/jit_ffi/pkg.generated.mbti",
 ]
 
 FORBIDDEN_TEXT = {
@@ -43,7 +46,7 @@ FORBIDDEN_TEXT = {
         "pub fn spaceship_rules()",
         "pub fn vector_rules()",
     ],
-    "modules/wasmoon_jit/jit_ffi/ffi.mbt": [
+    "modules/wasmoon_jit/native_ffi.mbt": [
         "c_dwarf_capture_backtrace(",
         "c_jit_get_memory_fill_mem0_ptr",
         "c_jit_get_memory_copy_mem0_ptr",
@@ -69,11 +72,6 @@ FORBIDDEN_TEXT = {
         "memory_fill_ctx_internal",
         "memory_copy_ctx_internal",
     ],
-    "modules/wasmoon_jit/jit_ffi/pkg.generated.mbti": [
-        "c_dwarf_capture_backtrace(Int64",
-        "c_jit_get_memory_fill_mem0_ptr",
-        "c_jit_get_memory_copy_mem0_ptr",
-    ],
     "modules/wasmoon_jit/native_runtime.mbt": [
         "direct_call_idx_memory_fill_mem0",
         "direct_call_idx_memory_copy_mem0",
@@ -91,6 +89,11 @@ FORBIDDEN_TEXT = {
         "install_direct_call_stubs_for_target",
         "build_aarch64_direct_call_stub",
         "build_x64_direct_call_stub",
+        "pub fn c_jit_",
+        "JitCallFixup",
+        "JitFuncAddrFixup",
+        "JitCodeObject::new",
+        "NativeGlue",
     ],
     "modules/wasmoon/jit/jit_runtime.mbt": [
         "install_direct_call_stubs",
@@ -127,6 +130,20 @@ def main() -> int:
         for marker in markers:
             if marker in text:
                 failures.append(f"{relative}: retired marker {marker!r}")
+
+    for path in (ROOT / "modules").rglob("moon.pkg"):
+        text = path.read_text(encoding="utf-8")
+        if '"Milky2018/wasmoon_jit/jit_ffi"' in text:
+            relative = path.relative_to(ROOT)
+            failures.append(f"{relative}: imports retired jit_ffi package")
+
+    jit_interface = ROOT / "modules/wasmoon_jit/pkg.generated.mbti"
+    for line in jit_interface.read_text(encoding="utf-8").splitlines():
+        if line.startswith("pub fn get_") and "_ptr(" in line:
+            failures.append(
+                "modules/wasmoon_jit/pkg.generated.mbti: "
+                f"raw native address getter remains public: {line}"
+            )
 
     if failures:
         print("internal compatibility audit failed:", file=sys.stderr)

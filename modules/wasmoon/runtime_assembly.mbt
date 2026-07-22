@@ -20,7 +20,6 @@ pub(all) struct CompilerInfrastructureAssembly {
   signature : @milkir.Signature
   machv_function : @machv.Function
   code_object : @wasmoon_jit.JitCodeObject
-  jit_glue : Array[@wasmoon_jit.NativeGlueBinding]
 }
 
 ///|
@@ -128,12 +127,7 @@ pub fn compiler_infrastructure_assembly() -> CompilerInfrastructureAssembly rais
   let plan = @wasmoon_jit.plan_milkir_integration_for_target(milk, X64) catch {
     err => raise WasmCompilerPipelineFailure(message=err.to_string())
   }
-  {
-    signature,
-    machv_function,
-    code_object: plan.object,
-    jit_glue: @wasmoon_jit.default_native_glue(),
-  }
+  { signature, machv_function, code_object: plan.object }
 }
 
 ///|

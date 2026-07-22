@@ -38,14 +38,6 @@ pub fn build_host_artifact_manifest(module_identity~ : @artifact.ModuleIdentity,
 
 pub fn build_hostcall_import_trampoline_for_target(Array[@types.ValueType], Array[@types.ValueType], Int, NativeTarget) -> HostcallImportTrampolineCode raise HostcallImportTrampolineError
 
-pub fn c_jit_read_i64(Int64) -> Int64
-
-pub fn c_jit_read_u32(Int64) -> UInt
-
-pub fn c_jit_write_i64(Int64, Int64) -> Unit
-
-pub fn c_jit_write_u32(Int64, Int) -> Unit
-
 pub fn can_use_reusable_entry_trampoline(Array[@types.ValueType], Array[@types.ValueType]) -> Bool
 
 pub fn classify_import_function_ptr(Int64) -> ImportFunctionResolution
@@ -81,8 +73,6 @@ pub fn decode_gc_heap_ref(Int64) -> Int?
 pub fn decode_heap_ref(Int64) -> Int
 
 pub fn decode_i31(Int64) -> Int
-
-pub fn default_native_glue() -> Array[NativeGlueBinding]
 
 pub fn encode_externref(Int) -> Int64
 
@@ -138,147 +128,15 @@ pub fn gc_teardown(Int64) -> Unit
 
 pub fn gc_use_func_safepoints(Int64, Int) -> Unit
 
-pub fn get_args_get_ptr() -> Int64
-
-pub fn get_args_sizes_get_ptr() -> Int64
-
-pub fn get_clock_res_get_ptr() -> Int64
-
-pub fn get_clock_time_get_ptr() -> Int64
-
-pub fn get_environ_get_ptr() -> Int64
-
-pub fn get_environ_sizes_get_ptr() -> Int64
-
-pub fn get_fd_advise_ptr() -> Int64
-
-pub fn get_fd_allocate_ptr() -> Int64
-
-pub fn get_fd_close_ptr() -> Int64
-
-pub fn get_fd_datasync_ptr() -> Int64
-
-pub fn get_fd_fdstat_get_ptr() -> Int64
-
-pub fn get_fd_fdstat_set_flags_ptr() -> Int64
-
-pub fn get_fd_fdstat_set_rights_ptr() -> Int64
-
-pub fn get_fd_filestat_get_ptr() -> Int64
-
-pub fn get_fd_filestat_set_size_ptr() -> Int64
-
-pub fn get_fd_filestat_set_times_ptr() -> Int64
-
-pub fn get_fd_pread_ptr() -> Int64
-
-pub fn get_fd_prestat_dir_name_ptr() -> Int64
-
-pub fn get_fd_prestat_get_ptr() -> Int64
-
-pub fn get_fd_pwrite_ptr() -> Int64
-
-pub fn get_fd_read_ptr() -> Int64
-
-pub fn get_fd_readdir_ptr() -> Int64
-
-pub fn get_fd_renumber_ptr() -> Int64
-
-pub fn get_fd_seek_ptr() -> Int64
-
-pub fn get_fd_sync_ptr() -> Int64
-
-pub fn get_fd_tell_ptr() -> Int64
-
-pub fn get_fd_write_ptr() -> Int64
-
-pub fn get_gc_array_copy_ptr() -> Int64
-
-pub fn get_gc_array_fill_ptr() -> Int64
-
-pub fn get_gc_array_get_ptr() -> Int64
-
-pub fn get_gc_array_len_ptr() -> Int64
-
-pub fn get_gc_array_new_ptr() -> Int64
-
-pub fn get_gc_array_set_ptr() -> Int64
-
-pub fn get_gc_ref_cast_ptr() -> Int64
-
-pub fn get_gc_ref_test_ptr() -> Int64
-
-pub fn get_gc_struct_get_ptr() -> Int64
-
-pub fn get_gc_struct_new_ptr() -> Int64
-
-pub fn get_gc_struct_set_ptr() -> Int64
-
-pub fn get_gc_type_check_subtype_ptr() -> Int64
-
 pub fn get_hostcall_func_addr() -> Int
 
 pub fn get_hostcall_num_arg_slots() -> Int
 
 pub fn get_hostcall_num_result_slots() -> Int
 
-pub fn get_hostcall_values_ptr() -> Int64
-
 pub fn get_import_trampoline(String, String) -> Int64?
 
 pub fn get_last_trap_details() -> TrapDetails
-
-pub fn get_path_create_directory_ptr() -> Int64
-
-pub fn get_path_filestat_get_ptr() -> Int64
-
-pub fn get_path_filestat_set_times_ptr() -> Int64
-
-pub fn get_path_link_ptr() -> Int64
-
-pub fn get_path_open_ptr() -> Int64
-
-pub fn get_path_readlink_ptr() -> Int64
-
-pub fn get_path_remove_directory_ptr() -> Int64
-
-pub fn get_path_rename_ptr() -> Int64
-
-pub fn get_path_symlink_ptr() -> Int64
-
-pub fn get_path_unlink_file_ptr() -> Int64
-
-pub fn get_proc_exit_ptr() -> Int64
-
-pub fn get_proc_raise_ptr() -> Int64
-
-pub fn get_random_get_ptr() -> Int64
-
-pub fn get_sched_yield_ptr() -> Int64
-
-pub fn get_sock_accept_ptr() -> Int64
-
-pub fn get_sock_recv_ptr() -> Int64
-
-pub fn get_sock_send_ptr() -> Int64
-
-pub fn get_sock_shutdown_ptr() -> Int64
-
-pub fn get_spectest_print_char_ptr() -> Int64
-
-pub fn get_spectest_print_f32_ptr() -> Int64
-
-pub fn get_spectest_print_f64_f64_ptr() -> Int64
-
-pub fn get_spectest_print_f64_ptr() -> Int64
-
-pub fn get_spectest_print_i32_f32_ptr() -> Int64
-
-pub fn get_spectest_print_i32_ptr() -> Int64
-
-pub fn get_spectest_print_i64_ptr() -> Int64
-
-pub fn get_spectest_print_ptr() -> Int64
 
 pub fn get_temperature(Int, HotThreshold) -> FunctionTemperature
 
@@ -289,6 +147,10 @@ pub fn host_operating_system_abi() -> @artifact.OperatingSystemAbi raise JitPipe
 pub fn hostcall_value_byte_count(@types.ValueType) -> Int
 
 pub fn hostcall_value_slot_count(@types.ValueType) -> Int
+
+pub fn hostcall_value_slot_read(Int) -> Int64
+
+pub fn hostcall_value_slot_write(Int, Int64) -> Unit
 
 pub fn i64_to_value(Int64, @types.ValueType) -> @types.Value
 
@@ -308,8 +170,6 @@ pub fn is_null_ref(Int64) -> Bool
 
 pub fn is_wasi_exit_trap_code(Int) -> Bool
 
-pub fn jit_ffi_native_stub_sources() -> Array[String]
-
 pub fn jit_trap_message(Int) -> String
 
 pub fn load_artifact(Bytes, ArtifactCompatibility, limits? : @artifact.DecodeLimits) -> LoadedArtifact raise ArtifactLoadError
@@ -318,15 +178,29 @@ pub fn lower_wasm_body_semantic_machv(@milkir.Function, @wasm_milkir.WasmValidat
 
 pub fn make_cstring(String) -> FixedArray[Byte]
 
+pub fn memory_descriptor_fill(Int64, Int64, Int, Int) -> Int
+
+pub fn memory_descriptor_grow(Int64, Int, Int) -> Int
+
 pub fn memory_descriptor_layout() -> MemoryDescriptorLayout
+
+pub fn memory_descriptor_length(Int64) -> Int64
+
+pub fn memory_descriptor_move(Int64, Int64, Int64, Int) -> Int
+
+pub fn memory_descriptor_read(Int64, Int64, FixedArray[Byte], Int) -> Int
+
+pub fn memory_descriptor_write(Int64, Int64, FixedArray[Byte], Int) -> Int
+
+pub fn memory_descriptor_write_bytes(Int64, Int64, Bytes, Int) -> Int
 
 pub fn memory_init(Int64, Int64, Bytes) -> Bool
 
 pub fn memory_read(Int64, Int64, Int) -> Bytes
 
-pub fn native_glue_covers_jit_ffi_stubs(glue? : Array[NativeGlueBinding]) -> Bool
+pub fn native_value_slot_read(Int64, Int) -> Int64
 
-pub fn native_glue_covers_source(Array[NativeGlueBinding], String) -> Bool
+pub fn native_value_slot_write(Int64, Int, Int64) -> Unit
 
 pub fn plan_entry_trampoline_for_target(Array[@types.ValueType], Array[@types.ValueType], NativeTarget) -> JitIntegrationPlan raise JitPipelineError
 
@@ -702,12 +576,6 @@ pub fn JITTable::refresh_layout(Self, Int64, Int) -> Unit
 pub fn JITTable::set(Self, Int, Int64, Int) -> Unit
 pub fn JITTable::try_alloc(Int, Int?) -> Self?
 
-pub(all) struct JitCallFixup {
-  offset : Int
-  target : @code_object.RelocationTarget
-  veneer_offset : Int
-} derive(Eq, @debug.Debug)
-
 pub struct JitCodeInstaller {
   // private fields
 }
@@ -719,24 +587,11 @@ pub fn JitCodeInstaller::new((@code_object.RelocationTarget) -> Int64?) -> Self
 pub struct JitCodeObject {
   // private fields
 } derive(@debug.Debug)
-pub fn JitCodeObject::frame_size(Self) -> Int
 pub fn JitCodeObject::get_bytes(Self) -> Array[Int]
-pub fn JitCodeObject::get_call_fixups(Self) -> Array[JitCallFixup]
-pub fn JitCodeObject::get_func_addr_fixups(Self) -> Array[JitFuncAddrFixup]
-pub fn JitCodeObject::get_gc_safepoints(Self) -> Array[GcSafepoint]
-pub fn JitCodeObject::new(Array[Int], Int, func_addr_fixups? : Array[JitFuncAddrFixup], call_fixups? : Array[JitCallFixup], gc_safepoints? : Array[GcSafepoint]) -> Self
-pub fn JitCodeObject::size(Self) -> Int
-
-pub(all) struct JitFuncAddrFixup {
-  offset : Int
-  target : @code_object.RelocationTarget
-  reg : Int
-} derive(Eq, @debug.Debug)
 
 pub(all) struct JitIntegrationPlan {
   entry_symbol : String
   target : NativeTarget
-  native_glue : Array[NativeGlueBinding]
   object : JitCodeObject
 }
 
@@ -766,24 +621,6 @@ pub struct MemoryInfo {
   max_pages : Int?
 }
 pub fn MemoryInfo::MemoryInfo(Int64, Int64, Int?) -> Self
-
-pub(all) struct NativeGlueBinding {
-  kind : NativeGlueKind
-  symbol : String
-  sources : Array[String]
-} derive(Eq, @debug.Debug)
-
-pub(all) enum NativeGlueKind {
-  ExecutableMemory
-  TrapHandler
-  StackSwitch
-  HostCallBridge
-  WasmMemoryOp
-  GcRuntime
-  ExceptionHandling
-  WasiPreview1
-  DebugInfo
-} derive(Eq, @debug.Debug)
 
 type NativeJITContext
 pub fn NativeJITContext::alloc_guarded_memory(Self, Int, Int?) -> Int64

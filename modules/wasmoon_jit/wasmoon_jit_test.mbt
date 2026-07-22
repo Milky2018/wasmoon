@@ -6,16 +6,6 @@ test "plan Wasmoon JIT integration through a target-owned code object" {
   let x64_plan = plan_milkir_integration_for_target(milk, X64)
   inspect(x64_plan.entry_symbol, content="entry")
   debug_inspect(x64_plan.target, content="X64")
-  inspect(x64_plan.native_glue.length(), content="9")
-  inspect(jit_ffi_native_stub_sources().length(), content="17")
-  inspect(
-    native_glue_covers_jit_ffi_stubs(glue=x64_plan.native_glue),
-    content="true",
-  )
-  inspect(
-    native_glue_covers_source(x64_plan.native_glue, "dwarf.c"),
-    content="true",
-  )
   debug_inspect(
     x64_plan.object,
     content=(

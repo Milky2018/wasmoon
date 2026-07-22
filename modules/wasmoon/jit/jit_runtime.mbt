@@ -397,7 +397,7 @@ pub fn JITModule::get_func_ptr(self : JITModule, func_idx : Int) -> Int64 {
       let func_table_ptr = self.get_func_table_ptr()
       let func_count = self.get_func_count()
       if func_table_ptr != 0L && func_idx >= 0 && func_idx < func_count {
-        @wasmoon_jit.c_jit_read_i64(func_table_ptr + func_idx.to_int64() * 8L)
+        @wasmoon_jit.native_value_slot_read(func_table_ptr, func_idx)
       } else {
         0L
       }

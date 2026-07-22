@@ -7,6 +7,17 @@
 // ============================================================
 
 ///|
+#borrow(roots)
+extern "c" fn gc_push_root_scope_for_test(
+  ctx_ptr : Int64,
+  roots : FixedArray[Int64],
+  count : Int,
+) -> Int = "wasmoon_jit_gc_push_root_scope"
+
+///|
+extern "c" fn gc_pop_root_scope_for_test(ctx_ptr : Int64) -> Unit = "wasmoon_jit_gc_pop_root_scope"
+
+///|
 test "gc: collect root args from reference-typed heap values" {
   inspect(value_type_may_hold_gc_ref(RefStruct(0)), content="true")
   inspect(value_type_may_hold_gc_ref(I64), content="false")
@@ -332,16 +343,16 @@ test "gc: barrier write counter tracks reference stores" {
 ///|
 test "gc: fault injection fails configured allocation attempt" {
   gc_debug_set_fail_alloc(2)
-  let heap_ptr = @jit_ffi.c_gc_heap_new(1024L)
+  let heap_ptr = c_gc_heap_new(1024L)
   let fields = FixedArray::makei(1, fn(_) { 1L })
 
-  let first = @jit_ffi.c_gc_heap_alloc_struct(heap_ptr, 0, fields, 1)
-  let second = @jit_ffi.c_gc_heap_alloc_struct(heap_ptr, 0, fields, 1)
+  let first = c_gc_heap_alloc_struct(heap_ptr, 0, fields, 1)
+  let second = c_gc_heap_alloc_struct(heap_ptr, 0, fields, 1)
 
   inspect(first > 0, content="true")
   inspect(second == 0, content="true")
 
-  @jit_ffi.c_gc_heap_free(heap_ptr)
+  c_gc_heap_free(heap_ptr)
   gc_debug_set_fail_alloc(0)
 }
 
@@ -363,8 +374,8 @@ test "gc: c_heap allocation fault is surfaced as OutOfMemory" {
 ///|
 test "gc_setup: fail fast on inconsistent function table context" {
   let heap = CHeap::CHeap()
-  let jit_ctx = @jit_ffi.c_jit_alloc_context_managed(1)
-  let ctx_ptr = @jit_ffi.c_jit_context_ptr(jit_ctx)
+  let jit_ctx = c_jit_alloc_context_managed(1)
+  let ctx_ptr = c_jit_context_ptr(jit_ctx)
   let missing_types = try
     gc_setup(
       heap,
@@ -427,8 +438,8 @@ test "gc_setup: fail fast on inconsistent function table context" {
 ///|
 test "gc: collect_for_alloc keeps scratch roots alive" {
   let heap = CHeap::CHeap(capacity=1024)
-  let jit_ctx = @jit_ffi.c_jit_alloc_context_managed(0)
-  let ctx_ptr = @jit_ffi.c_jit_context_ptr(jit_ctx)
+  let jit_ctx = c_jit_alloc_context_managed(0)
+  let ctx_ptr = c_jit_context_ptr(jit_ctx)
   gc_set_heap(ctx_ptr, heap)
 
   let rooted = heap.alloc_struct(0, [I32(1)])
@@ -449,8 +460,8 @@ test "gc: collect_for_alloc keeps scratch roots alive" {
 
 ///|
 test "gc: begin/end frame API accepts nested scopes" {
-  let jit_ctx = @jit_ffi.c_jit_alloc_context_managed(0)
-  let ctx_ptr = @jit_ffi.c_jit_context_ptr(jit_ctx)
+  let jit_ctx = c_jit_alloc_context_managed(0)
+  let ctx_ptr = c_jit_context_ptr(jit_ctx)
 
   gc_begin_frame(ctx_ptr, 100L)
   gc_begin_frame(ctx_ptr, 200L)
@@ -463,19 +474,19 @@ test "gc: begin/end frame API accepts nested scopes" {
 ///|
 fn test_gc_push_root_scope(ctx_ptr : Int64, roots : Array[Int64]) -> Bool {
   let raw_roots = FixedArray::makei(roots.length(), fn(i) { roots[i] })
-  @jit_ffi.c_jit_gc_push_root_scope(ctx_ptr, raw_roots, roots.length()) == 1
+  gc_push_root_scope_for_test(ctx_ptr, raw_roots, roots.length()) == 1
 }
 
 ///|
 fn test_gc_pop_root_scope(ctx_ptr : Int64) -> Unit {
-  @jit_ffi.c_jit_gc_pop_root_scope(ctx_ptr)
+  gc_pop_root_scope_for_test(ctx_ptr)
 }
 
 ///|
 test "gc: copied caller-root scopes nest and pop" {
   let heap = CHeap::CHeap(capacity=1024)
-  let jit_ctx = @jit_ffi.c_jit_alloc_context_managed(0)
-  let ctx_ptr = @jit_ffi.c_jit_context_ptr(jit_ctx)
+  let jit_ctx = c_jit_alloc_context_managed(0)
+  let ctx_ptr = c_jit_context_ptr(jit_ctx)
   gc_set_heap(ctx_ptr, heap)
 
   let outer = heap.alloc_struct(0, [I32(1)])
@@ -504,5 +515,5 @@ test "gc: copied caller-root scopes nest and pop" {
   test_gc_pop_root_scope(ctx_ptr)
   inspect(gc_collect_for_alloc(ctx_ptr, []), content="1")
   inspect(heap.is_valid(outer), content="false")
-  gc_clear_heap(@jit_ffi.c_jit_context_ptr(jit_ctx))
+  gc_clear_heap(c_jit_context_ptr(jit_ctx))
 }

@@ -21,7 +21,7 @@ pub fn Memory::byte_len(self : Memory) -> Int64 {
   if self.mem_desc_ptr == 0L {
     0L
   } else {
-    @jit_ffi.c_mem_desc_get_len(self.mem_desc_ptr)
+    @wasmoon_jit.memory_descriptor_length(self.mem_desc_ptr)
   }
 }
 
@@ -72,7 +72,12 @@ fn Memory::read_fixed(self : Memory, addr : Int, len : Int) -> FixedArray[Byte] 
   }
   let out = FixedArray::make(len, b'\x00')
   let offset = self.addr_to_offset(addr)
-  let _ = @jit_ffi.c_mem_desc_read(self.mem_desc_ptr, offset, out, len)
+  let _ = @wasmoon_jit.memory_descriptor_read(
+    self.mem_desc_ptr,
+    offset,
+    out,
+    len,
+  )
   out
 }
 
@@ -87,7 +92,12 @@ fn Memory::write_fixed(
     return
   }
   let offset = self.addr_to_offset(addr)
-  let _ = @jit_ffi.c_mem_desc_write(self.mem_desc_ptr, offset, data, len)
+  let _ = @wasmoon_jit.memory_descriptor_write(
+    self.mem_desc_ptr,
+    offset,
+    data,
+    len,
+  )
 }
 
 ///|
@@ -444,7 +454,7 @@ pub fn Memory::grow(self : Memory, delta : Int) -> Int {
   if self.mem_desc_ptr == 0L {
     return -1
   }
-  @jit_ffi.c_mem_desc_grow(self.mem_desc_ptr, delta, max_pages)
+  @wasmoon_jit.memory_descriptor_grow(self.mem_desc_ptr, delta, max_pages)
 }
 
 ///|
@@ -464,7 +474,12 @@ pub fn Memory::init_data(
     return
   }
   let offset = self.addr_to_offset(dest)
-  let _ = @jit_ffi.c_mem_desc_write_bytes(self.mem_desc_ptr, offset, data, len)
+  let _ = @wasmoon_jit.memory_descriptor_write_bytes(
+    self.mem_desc_ptr,
+    offset,
+    data,
+    len,
+  )
 }
 
 ///|
@@ -484,7 +499,12 @@ pub fn Memory::copy(
   }
   let dest_off = self.addr_to_offset(dest)
   let src_off = self.addr_to_offset(src)
-  let _ = @jit_ffi.c_mem_desc_memmove(self.mem_desc_ptr, dest_off, src_off, len)
+  let _ = @wasmoon_jit.memory_descriptor_move(
+    self.mem_desc_ptr,
+    dest_off,
+    src_off,
+    len,
+  )
 }
 
 ///|
@@ -501,7 +521,7 @@ pub fn Memory::fill(
     return
   }
   let offset = self.addr_to_offset(dest)
-  let _ = @jit_ffi.c_mem_desc_memset(
+  let _ = @wasmoon_jit.memory_descriptor_fill(
     self.mem_desc_ptr,
     offset,
     value.to_int(),
@@ -581,7 +601,7 @@ pub fn Memory::read_bytes(self : Memory, addr : Int, len : Int) -> Bytes {
     return b""
   }
   let fixed = FixedArray::make(len, b'\x00')
-  let rc = @jit_ffi.c_mem_desc_read(
+  let rc = @wasmoon_jit.memory_descriptor_read(
     self.mem_desc_ptr,
     addr.to_int64(),
     fixed,

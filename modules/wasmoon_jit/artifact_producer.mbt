@@ -19,7 +19,7 @@ fn artifact_architecture(target : NativeTarget) -> @code_object.Architecture {
 
 ///|
 pub fn host_native_target() -> NativeTarget raise JitPipelineError {
-  match @jit_ffi.c_jit_host_target_arch() {
+  match c_jit_host_target_arch() {
     1 => X64
     2 => AArch64
     value => raise UnsupportedHostArchitecture(tag=value)
