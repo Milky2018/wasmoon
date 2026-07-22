@@ -7,6 +7,7 @@ import {
   "Milky2018/milkir",
   "Milky2018/wasm_core/types",
   "Milky2018/wasm_milkir",
+  "Milky2018/wasmoon_jit/artifact",
   "Milky2018/wasmoon_jit/cwasm",
   "moonbitlang/core/debug",
   "moonbitlang/core/hashset",
@@ -319,6 +320,8 @@ pub fn jit_trap_message(Int) -> String
 
 pub fn link_code_object(JitCodeObject, RuntimeSymbolResolver) -> LinkedCode raise LinkError
 
+pub fn load_artifact(Bytes, ArtifactCompatibility, limits? : @artifact.DecodeLimits) -> LoadedArtifact raise ArtifactLoadError
+
 pub fn lower_wasm_body_semantic_machv(@milkir.Function, @wasm_milkir.WasmValidationContext, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @machv.Function raise JitPipelineError
 
 pub fn machv_reloc_target_to_cwasm_func_idx(@code_object.RelocationTarget) -> Int?
@@ -436,6 +439,25 @@ pub fn wasm_runtime_symbols() -> @wasm_milkir.RuntimeSymbols
 pub fn wasm_trap_payload(String) -> Int
 
 // Errors
+pub suberror ArtifactIncompatible {
+  TargetMismatch(expected~ : @artifact.TargetSpec, actual~ : @artifact.TargetSpec)
+  MissingCpuFeature(name~ : String)
+  DuplicateCpuFeature(name~ : String)
+  JitAbiVersionMismatch(expected~ : Int, actual~ : Int)
+  CodegenRevisionMismatch(expected~ : String, actual~ : String)
+  ModuleIdentityMismatch(expected~ : @artifact.ModuleIdentity, actual~ : @artifact.ModuleIdentity)
+  CompilationPolicyMismatch(expected~ : @artifact.CompilationPolicy, actual~ : @artifact.CompilationPolicy)
+  DuplicateFunctionIndex(index~ : Int)
+  DuplicateSymbol(name~ : String)
+  UnknownSymbol(kind~ : String, name~ : String)
+} derive(Eq, @debug.Debug)
+
+pub suberror ArtifactLoadError {
+  DecodeFailed(cause~ : @artifact.ArtifactDecodeError)
+  Incompatible(cause~ : ArtifactIncompatible)
+  CodeObjectInvalid(cause~ : @code_object.CodeObjectVerifyError)
+} derive(Eq, @debug.Debug)
+
 pub(all) suberror CHeapError {
   OutOfBoundsArrayAccess
   NullReference
@@ -466,6 +488,17 @@ pub suberror LinkError {
 pub impl Show for LinkError
 
 // Types and methods
+pub(all) struct ArtifactCompatibility {
+  target : @artifact.TargetSpec
+  available_cpu_features : Array[@artifact.CpuFeature]
+  jit_abi_version : Int
+  codegen_revision : String
+  module_identity : @artifact.ModuleIdentity
+  policy : @artifact.CompilationPolicy
+  runtime_symbols : Array[@machv.ExternalSymbol]
+  data_symbols : Array[@machv.DataSymbol]
+} derive(Eq, @debug.Debug)
+
 pub struct BacktraceFrame {
   pc : Int64
   name : String
@@ -782,6 +815,13 @@ pub(all) struct LinkedCode {
   gc_safepoints : Array[GcSafepoint]
   gc_stackmap_blob : Bytes
 } derive(@debug.Debug)
+
+pub struct LoadedArtifact {
+  artifact : @artifact.Artifact
+  code_objects : Array[@code_object.UnlinkedCodeObject]
+}
+pub fn LoadedArtifact::artifact(Self) -> @artifact.Artifact
+pub fn LoadedArtifact::code_objects(Self) -> Array[@code_object.UnlinkedCodeObject]
 
 pub(all) struct MemoryDescriptorLayout {
   base_offset : Int

@@ -13,8 +13,6 @@ bridge glue, and integration planning for loading generated code.
 - `Milky2018/wasmoon_jit/artifact`: target-portable Cwasm manifests, symbolic
   function identities, signatures, and unlinked code-object data.
 - `Milky2018/wasmoon_jit/cwasm`: serialized precompiled-code artifacts.
-
-The current CWASM format records machine-code compilation features, including whether cooperative cancellation safepoints were emitted. Readers accept only the current format version; this prevents callers from assuming cancellation support for older or otherwise incompatible artifacts.
 - `Milky2018/wasmoon_jit/perf`: optional JIT performance metrics.
 - `Milky2018/wasmoon_jit/jit_ffi`: native stubs used by the JIT runtime.
 
@@ -23,6 +21,11 @@ The current CWASM format records machine-code compilation features, including wh
 Use `wasmoon_jit` when integrating generated code with the Wasmoon runtime,
 including VMContext layout, runtime helper symbols, trampolines, cwasm
 artifacts, and native glue.
+
+`load_artifact` keeps loading separate from installation: it performs bounded
+decoding, exact manifest and CPU-feature compatibility checks, symbolic target
+validation, and code-object verification without resolving an address or
+allocating executable memory.
 
 ## Example: plan MilkIR through the Wasmoon JIT pipeline
 

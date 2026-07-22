@@ -10,7 +10,26 @@ import {
 // Values
 pub const FORMAT_VERSION : Int = 9
 
+pub fn decode(Bytes, limits? : DecodeLimits) -> Artifact raise ArtifactDecodeError
+
+pub fn encode(Artifact) -> Bytes raise ArtifactEncodeError
+
 // Errors
+pub suberror ArtifactDecodeError {
+  ArtifactTooLarge(size~ : Int, limit~ : Int)
+  BadMagic
+  UnsupportedVersion(version~ : Int)
+  Truncated(field~ : String, offset~ : Int, needed~ : Int, remaining~ : Int)
+  InvalidTag(field~ : String, tag~ : Int)
+  InvalidValue(field~ : String, message~ : String)
+  InvalidUtf8(field~ : String)
+  LimitExceeded(field~ : String, count~ : Int, limit~ : Int)
+  TrailingBytes(count~ : Int)
+} derive(Eq, @debug.Debug)
+
+pub suberror ArtifactEncodeError {
+  InvalidArtifactField(field~ : String, message~ : String)
+} derive(Eq, @debug.Debug)
 
 // Types and methods
 pub(all) struct Artifact {
@@ -51,9 +70,28 @@ pub(all) struct CpuFeature {
   name : String
 } derive(Eq, @debug.Debug)
 
+pub(all) struct DecodeLimits {
+  max_artifact_bytes : Int
+  max_imports : Int
+  max_functions : Int
+  max_cpu_features : Int
+  max_string_bytes : Int
+  max_signature_values : Int
+  max_code_bytes_per_function : Int
+  max_total_code_bytes : Int
+  max_relocations_per_function : Int
+  max_sources_per_function : Int
+  max_traps_per_function : Int
+  max_safepoints_per_function : Int
+  max_unwind_directives_per_function : Int
+  max_roots_per_safepoint : Int
+} derive(Eq, @debug.Debug)
+pub fn DecodeLimits::default() -> Self
+
 pub(all) struct Digest {
   bytes : Bytes
-} derive(Eq, @debug.Debug)
+} derive(Eq)
+pub impl @debug.Debug for Digest
 
 pub(all) struct FunctionCode {
   identity : FunctionIdentity

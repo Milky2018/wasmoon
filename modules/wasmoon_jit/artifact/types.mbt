@@ -42,7 +42,20 @@ pub(all) struct CpuFeature {
 /// The Cwasm codec accepts exactly 32 bytes and interprets them as SHA-256.
 pub(all) struct Digest {
   bytes : Bytes
-} derive(Eq, Debug)
+} derive(Eq)
+
+///|
+pub impl Debug for Digest with fn to_repr(self) {
+  let hex = "0123456789abcdef"
+  let text = StringBuilder::StringBuilder()
+  text.write_string("sha256:")
+  for byte in self.bytes {
+    let value = byte.to_int()
+    text.write_char(hex.code_unit_at(value >> 4).to_int().unsafe_to_char())
+    text.write_char(hex.code_unit_at(value & 0x0F).to_int().unsafe_to_char())
+  }
+  Repr::literal(text.to_string())
+}
 
 ///|
 /// Identity of the validated WebAssembly module that produced this artifact.

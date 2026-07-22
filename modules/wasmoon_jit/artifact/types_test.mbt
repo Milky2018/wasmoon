@@ -1,8 +1,8 @@
 ///|
-test "artifact preserves the complete unlinked function contract" {
+fn sample_artifact() -> Artifact {
   let source = @machv.SourceLocation::new("answer.wasm", 12, 4)
   let function_signature = @machv.Signature::new([I64], [I64])
-  let artifact : Artifact = {
+  {
     manifest: {
       format_version: FORMAT_VERSION,
       target: {
@@ -59,15 +59,20 @@ test "artifact preserves the complete unlinked function contract" {
           @code_object.SafepointSite::new(
             0,
             GcAndCancellation,
-            [Stack(offset=-8, ty=GcRef64)],
+            [Stack(offset=8, ty=GcRef64)],
             source~,
-            stack_map=@machv.StackMapMetadata::new(5, argument_root_count=1),
+            stack_map=@machv.StackMapMetadata::new(0, argument_root_count=1),
           ),
         ],
-        unwind: [@code_object.UnwindDirective::new(0, StackAlloc(size=16))],
+        unwind: [@code_object.UnwindDirective::new(4, StackAlloc(size=16))],
       },
     ],
   }
+}
+
+///|
+test "artifact preserves the complete unlinked function contract" {
+  let artifact = sample_artifact()
   debug_inspect(
     artifact,
     content=(
@@ -85,80 +90,8 @@ test "artifact preserves the complete unlinked function contract" {
       #|    codegen_revision: "machv-2026-07-22",
       #|    module_identity: {
       #|      name: "answer",
-      #|      source_digest: {
-      #|        bytes: <Bytes:
-      #|          [
-      #|            0x11,
-      #|            0x11,
-      #|            0x11,
-      #|            0x11,
-      #|            0x11,
-      #|            0x11,
-      #|            0x11,
-      #|            0x11,
-      #|            0x11,
-      #|            0x11,
-      #|            0x11,
-      #|            0x11,
-      #|            0x11,
-      #|            0x11,
-      #|            0x11,
-      #|            0x11,
-      #|            0x11,
-      #|            0x11,
-      #|            0x11,
-      #|            0x11,
-      #|            0x11,
-      #|            0x11,
-      #|            0x11,
-      #|            0x11,
-      #|            0x11,
-      #|            0x11,
-      #|            0x11,
-      #|            0x11,
-      #|            0x11,
-      #|            0x11,
-      #|            0x11,
-      #|            0x11,
-      #|          ]>,
-      #|      },
-      #|      semantic_features_digest: {
-      #|        bytes: <Bytes:
-      #|          [
-      #|            0x22,
-      #|            0x22,
-      #|            0x22,
-      #|            0x22,
-      #|            0x22,
-      #|            0x22,
-      #|            0x22,
-      #|            0x22,
-      #|            0x22,
-      #|            0x22,
-      #|            0x22,
-      #|            0x22,
-      #|            0x22,
-      #|            0x22,
-      #|            0x22,
-      #|            0x22,
-      #|            0x22,
-      #|            0x22,
-      #|            0x22,
-      #|            0x22,
-      #|            0x22,
-      #|            0x22,
-      #|            0x22,
-      #|            0x22,
-      #|            0x22,
-      #|            0x22,
-      #|            0x22,
-      #|            0x22,
-      #|            0x22,
-      #|            0x22,
-      #|            0x22,
-      #|            0x22,
-      #|          ]>,
-      #|      },
+      #|      source_digest: sha256:1111111111111111111111111111111111111111111111111111111111111111,
+      #|      semantic_features_digest: sha256:2222222222222222222222222222222222222222222222222222222222222222,
       #|    },
       #|    policy: {
       #|      optimization_level: O2,
@@ -207,12 +140,12 @@ test "artifact preserves the complete unlinked function contract" {
       #|        {
       #|          offset: 0,
       #|          kind: GcAndCancellation,
-      #|          roots: [Stack(offset=-8, ty=GcRef64)],
+      #|          roots: [Stack(offset=8, ty=GcRef64)],
       #|          source: Some({ file: "answer.wasm", line: 12, column: 4 }),
-      #|          stack_map: Some({ id: 5, argument_root_count: 1 }),
+      #|          stack_map: Some({ id: 0, argument_root_count: 1 }),
       #|        },
       #|      ],
-      #|      unwind: [{ offset: 0, operation: StackAlloc(size=16) }],
+      #|      unwind: [{ offset: 4, operation: StackAlloc(size=16) }],
       #|    },
       #|  ],
       #|}
