@@ -14,11 +14,21 @@ import {
 }
 
 // Values
+pub const WASMOON_CODEGEN_REVISION : String = "machv-vcode-1"
+
+pub const WASMOON_JIT_ABI_VERSION : Int = 3
+
 pub fn alloc_guarded_memory_desc(Int, Int?) -> Int64
 
 pub fn alloc_memory(Int64) -> Int64
 
 pub fn alloc_memory_desc(Int64, Int?, is_memory64? : Bool, page_size_log2? : Int, is_shared? : Bool) -> Int64
+
+pub fn artifact_compatibility(@artifact.CompatibilityManifest, available_cpu_features~ : Array[@artifact.CpuFeature], runtime_symbols~ : Array[@machv.ExternalSymbol], data_symbols~ : Array[@machv.DataSymbol]) -> ArtifactCompatibility
+
+pub fn artifact_module_identity(String, Bytes, Bytes) -> @artifact.ModuleIdentity
+
+pub fn build_artifact_manifest(NativeTarget, @artifact.OperatingSystemAbi, module_identity~ : @artifact.ModuleIdentity, policy~ : @artifact.CompilationPolicy, required_cpu_features? : Array[@artifact.CpuFeature]) -> @artifact.CompatibilityManifest
 
 pub fn build_cwasm_entry_from_code(Int, String, Array[Int], Int, Int, Int, Int, func_addr_fixups? : Array[@cwasm.FuncAddrFixup], call_fixups? : Array[@cwasm.CallFixup], gc_safepoint_offsets? : Array[Int], gc_safepoint_root_counts? : Array[Int], gc_safepoint_root_indices? : Array[Array[Int]], gc_safepoints? : Array[@cwasm.GcSafepoint], gc_stackmap_blob? : Bytes) -> @cwasm.CompiledEntry
 
@@ -29,6 +39,8 @@ pub fn build_gc_stackmap_blob(Array[Int]) -> Bytes
 pub fn build_gc_stackmap_blob_for_safepoints(Array[@cwasm.GcSafepoint], Array[Int], explicit_blob? : Bytes) -> Bytes
 
 pub fn build_gc_stackmap_blob_v2(Array[@cwasm.GcSafepoint], Array[Int]) -> Bytes
+
+pub fn build_host_artifact_manifest(module_identity~ : @artifact.ModuleIdentity, policy~ : @artifact.CompilationPolicy, required_cpu_features? : Array[@artifact.CpuFeature]) -> @artifact.CompatibilityManifest raise JitPipelineError
 
 pub fn build_hostcall_import_trampoline_for_target(Array[@types.ValueType], Array[@types.ValueType], Int, @cwasm.TargetArch) -> HostcallImportTrampolineCode raise HostcallImportTrampolineError
 
@@ -53,6 +65,8 @@ pub fn clear_wasi_stdin_callback(Int64) -> Unit
 pub fn collect_gc_root_args(Array[Int64], Array[@types.ValueType]) -> Array[Int64]
 
 pub fn compile_wasm_body_aarch64_cwasm_entry(@milkir.Function, @wasm_milkir.WasmValidationContext, Int, String, Int, Int, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @cwasm.CompiledEntry raise JitPipelineError
+
+pub fn compile_wasm_body_artifact_function(@milkir.Function, @wasm_milkir.WasmValidationContext, NativeTarget, function_index~ : Int, signature~ : @machv.Signature, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @artifact.FunctionCode raise JitPipelineError
 
 pub fn compile_wasm_body_x64_cwasm_entry(@milkir.Function, @wasm_milkir.WasmValidationContext, Int, String, Int, Int, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @cwasm.CompiledEntry raise JitPipelineError
 
@@ -288,6 +302,10 @@ pub fn get_spectest_print_ptr() -> Int64
 
 pub fn get_temperature(Int, HotThreshold) -> FunctionTemperature
 
+pub fn host_native_target() -> NativeTarget raise JitPipelineError
+
+pub fn host_operating_system_abi() -> @artifact.OperatingSystemAbi raise JitPipelineError
+
 pub fn host_target_arch() -> @cwasm.TargetArch
 
 pub fn hostcall_value_byte_count(@types.ValueType) -> Int
@@ -435,6 +453,10 @@ pub fn value_type_may_hold_gc_ref(@types.ValueType) -> Bool
 pub fn verify_artifact(@artifact.Artifact, ArtifactCompatibility) -> LoadedArtifact raise ArtifactLoadError
 
 pub fn vmcontext_layout() -> VMContextLayout
+
+pub fn wasm_function_signature(@types.FuncType) -> @machv.Signature
+
+pub fn wasm_import_identity(Int, String, String, @types.FuncType) -> @artifact.ImportIdentity
 
 pub fn wasm_runtime_symbols() -> @wasm_milkir.RuntimeSymbols
 

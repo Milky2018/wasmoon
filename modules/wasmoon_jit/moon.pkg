@@ -11,6 +11,7 @@ import {
   "Milky2018/wasmoon_jit/jit_ffi",
   "Milky2018/wasmoon_jit/cwasm",
   "Milky2018/wasmoon_jit/artifact",
+  "moonbitlang/x/crypto",
   "moonbitlang/core/cmp",
   "moonbitlang/core/hashset",
 }

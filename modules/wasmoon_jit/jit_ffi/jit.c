@@ -22,6 +22,20 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_host_target_arch(void) {
 #endif
 }
 
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_host_operating_system_abi(void) {
+#if defined(__APPLE__)
+    return 1;
+#elif defined(__linux__) && defined(__GLIBC__)
+    return 2;
+#elif defined(__linux__)
+    return 3;
+#elif defined(_WIN32)
+    return 4;
+#else
+    return 0;
+#endif
+}
+
 // ============ Trap Handling FFI Exports ============
 
 MOONBIT_FFI_EXPORT int wasmoon_jit_get_trap_code(void) {

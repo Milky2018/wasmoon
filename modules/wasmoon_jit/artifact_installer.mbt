@@ -292,10 +292,13 @@ fn resolve_static_targets(
   let resolved : Array[(@code_object.RelocationTarget, Int64)] = []
   let artifact = loaded.artifact()
   for import_ in artifact.imports {
-    resolve_target_before_allocation(
-      installer,
-      resolved,
-      External(import_.symbol),
+    let external_target = @code_object.RelocationTarget::External(
+      import_.symbol,
+    )
+    resolve_target_before_allocation(installer, resolved, external_target)
+    let address = lookup_resolved_target(resolved, external_target).unwrap()
+    resolved.push(
+      (Code(@semantic_machv.CodeSymbol::new(import_.symbol.name)), address),
     )
   }
   for function in artifact.functions {

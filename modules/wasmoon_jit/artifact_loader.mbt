@@ -175,7 +175,8 @@ fn verify_artifact_identities(
     for relocation in function.relocations {
       match relocation.target {
         Code(symbol) =>
-          if !contains_function_symbol(decoded.functions, symbol.name) {
+          if !contains_function_symbol(decoded.functions, symbol.name) &&
+            !contains_import_symbol(decoded.imports, symbol.name) {
             raise UnknownSymbol(kind="code", name=symbol.name)
           }
         External(symbol) =>
