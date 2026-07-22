@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "legacy_commit": "af3fa2d99598554baab7614e0b08584ab5f8d9da",
+  "workload_manifest": "docs/perf/machv-migration/workloads.json",
+  "toolchain": {
+    "moon": "0.1.20260714 (4620153 2026-07-14)",
+    "moonc": "v0.10.4+4f2e8f7dc-nightly (2026-07-13)"
+  },
+  "targets": [
+    {
+      "name": "darwin-arm64",
+      "required_uname_m": [
+        "arm64",
+        "aarch64"
+      ],
+      "baseline_host": {
+        "os": "Darwin",
+        "cpu": "Apple M3 Max"
+      }
+    },
+    {
+      "name": "linux-amd64",
+      "required_uname_m": [
+        "x86_64"
+      ],
+      "baseline_host": {
+        "os": "Linux",
+        "cpu": "recorded by the paired CI runner"
+      }
+    }
+  ]
+}

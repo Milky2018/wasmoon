@@ -10,6 +10,18 @@ No ready issues.
 
 | ID | Status | Priority | Type | Assignee | Blocked by | Blocks | Title |
 | --- | --- | ---: | --- | --- | --- | --- | --- |
+| [ISS-193](ISS-193.md) | in_progress | 1 | task | codex | ISS-212, ISS-214, ISS-246, ISS-247, ISS-248, ISS-251 | ISS-194, ISS-244 | Define architecture acceptance and performance gates |
+| [ISS-203](ISS-203.md) | in_progress | 1 | task | agent | ISS-244 | none | Contract final MachV interfaces and diagnostics |
+| [ISS-244](ISS-244.md) | in_progress | 1 | task | agent | ISS-193, ISS-245, ISS-246, ISS-247, ISS-248, ISS-249, ISS-250, ISS-251 | ISS-203 | Publish and close the final MachV architecture |
+| [ISS-246](ISS-246.md) | in_progress | 1 | bug | agent | none | ISS-193, ISS-212, ISS-214, ISS-244 | Restore the blocking paired MachV performance gate |
+| [ISS-247](ISS-247.md) | in_progress | 1 | bug | agent | none | ISS-193, ISS-244 | Restore fixed-seed Wasm-Smith JIT differential evidence |
+| [ISS-248](ISS-248.md) | in_progress | 1 | bug | agent | none | ISS-193, ISS-244 | Detect every migration issue closing commit |
+| [ISS-249](ISS-249.md) | in_progress | 1 | bug | agent | none | ISS-244 | Reject non-representable v9 signed metadata values |
+| [ISS-250](ISS-250.md) | in_progress | 1 | bug | agent | none | ISS-244 | Register GC metadata before executable artifact commit |
+| [ISS-251](ISS-251.md) | in_progress | 2 | bug | agent | none | ISS-193, ISS-244 | Check committed changes in the cutover diff gate |
+| [ISS-245](ISS-245.md) | in_progress | 3 | chore | agent | none | ISS-244 | Use the repository result-discard convention for JIT memory descriptors |
+| [ISS-212](ISS-212.md) | open | 1 | bug | agent | ISS-246 | ISS-193 | Restore residual MachV compile-time parity |
+| [ISS-214](ISS-214.md) | open | 1 | bug | agent | ISS-246 | ISS-193 | Restore AArch64 runtime performance parity |
 | [ISS-177](ISS-177.md) | deferred | 4 | bug | unassigned | none | none | Implement a Windows fd readiness backend for poll_oneoff |
 
 ## Dependency Graph
@@ -203,7 +215,7 @@ graph TD
   ISS_190["ISS-190: Define Wasmoon JIT integration and artifact ownership"]
   ISS_191["ISS-191: Choose package and public API boundaries"]
   ISS_192["ISS-192: Choose the migration and compatibility route"]
-  ISS_193["ISS-193: Define architecture acceptance gates"]
+  ISS_193["ISS-193: Define architecture acceptance and performance gates"]
   ISS_194["ISS-194: Isolate the union backend as machv_legacy"]
   ISS_195["ISS-195: Implement the target-neutral MachV core"]
   ISS_196["ISS-196: Cut over semantic MilkIR-to-MachV production"]
@@ -255,6 +267,13 @@ graph TD
   ISS_242["ISS-242: Preserve typed target failures through JIT orchestration"]
   ISS_243["ISS-243: Remove raw JIT FFI and implementation-detail public surfaces"]
   ISS_244["ISS-244: Publish and close the final MachV architecture"]
+  ISS_245["ISS-245: Use the repository result-discard convention for JIT memory descriptors"]
+  ISS_246["ISS-246: Restore the blocking paired MachV performance gate"]
+  ISS_247["ISS-247: Restore fixed-seed Wasm-Smith JIT differential evidence"]
+  ISS_248["ISS-248: Detect every migration issue closing commit"]
+  ISS_249["ISS-249: Reject non-representable v9 signed metadata values"]
+  ISS_250["ISS-250: Register GC metadata before executable artifact commit"]
+  ISS_251["ISS-251: Check committed changes in the cutover diff gate"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
@@ -427,7 +446,14 @@ graph TD
   ISS_192 --> ISS_193
   ISS_210 --> ISS_193
   ISS_211 --> ISS_193
+  ISS_212 --> ISS_193
   ISS_213 --> ISS_193
+  ISS_214 --> ISS_193
+  ISS_215 --> ISS_193
+  ISS_246 --> ISS_193
+  ISS_247 --> ISS_193
+  ISS_248 --> ISS_193
+  ISS_251 --> ISS_193
   ISS_192 --> ISS_194
   ISS_193 --> ISS_194
   ISS_194 --> ISS_195
@@ -455,7 +481,9 @@ graph TD
   ISS_216 --> ISS_211
   ISS_217 --> ISS_211
   ISS_211 --> ISS_212
+  ISS_246 --> ISS_212
   ISS_211 --> ISS_214
+  ISS_246 --> ISS_214
   ISS_216 --> ISS_217
   ISS_217 --> ISS_218
   ISS_216 --> ISS_220
@@ -489,9 +517,17 @@ graph TD
   ISS_202 --> ISS_241
   ISS_241 --> ISS_242
   ISS_242 --> ISS_243
+  ISS_193 --> ISS_244
   ISS_241 --> ISS_244
   ISS_242 --> ISS_244
   ISS_243 --> ISS_244
+  ISS_245 --> ISS_244
+  ISS_246 --> ISS_244
+  ISS_247 --> ISS_244
+  ISS_248 --> ISS_244
+  ISS_249 --> ISS_244
+  ISS_250 --> ISS_244
+  ISS_251 --> ISS_244
 ```
 
 ## Warnings

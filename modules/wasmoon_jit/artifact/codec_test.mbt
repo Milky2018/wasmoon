@@ -38,6 +38,70 @@ fn prefix(bytes : Bytes, length : Int) -> Bytes {
 }
 
 ///|
+fn replace_i64_payload(
+  bytes : Bytes,
+  old_value : Int64,
+  new_value : Int64,
+) -> Bytes {
+  let result = copy_bytes(bytes)
+  let old_bits = old_value.reinterpret_as_uint64()
+  let new_bits = new_value.reinterpret_as_uint64()
+  let mut replaced = 0
+  for start in 0..<(result.length() - 7) {
+    let mut matches = true
+    for shift in 0..<8 {
+      if result[start + shift] != ((old_bits >> (shift * 8)) & 0xFFUL).to_byte() {
+        matches = false
+      }
+    }
+    if matches {
+      for shift in 0..<8 {
+        result[start + shift] = ((new_bits >> (shift * 8)) & 0xFFUL).to_byte()
+      }
+      replaced += 1
+    }
+  }
+  if replaced != 1 {
+    abort("expected exactly one signed metadata payload")
+  }
+  Bytes::from_array(result)
+}
+
+///|
+fn artifact_with_signed_metadata_markers() -> Artifact {
+  let artifact = sample_artifact()
+  let function = artifact.functions[0]
+  let source = @machv.SourceLocation::new("signed-metadata.wasm", 1, 1)
+  {
+    ..artifact,
+    functions: [
+      {
+        ..function,
+        traps: [@code_object.TrapSite::new(0, User(0x11111111), source~)],
+        safepoints: [
+          @code_object.SafepointSite::new(
+            0,
+            Gc,
+            [Stack(offset=0x22222222, ty=GcRef64)],
+            source~,
+          ),
+        ],
+        unwind: [
+          @code_object.UnwindDirective::new(
+            0,
+            SetFramePointer(Int, 29, cfa_offset=0x33333333),
+          ),
+          @code_object.UnwindDirective::new(
+            0,
+            SaveRegister(Int, 30, cfa_offset=0x44444444),
+          ),
+        ],
+      },
+    ],
+  }
+}
+
+///|
 test "codec round-trips every artifact field" {
   let artifact = sample_artifact()
   let encoded = encode(artifact)
@@ -94,6 +158,71 @@ test "decoder returns structured format errors" {
       #|    message="offset is outside code or violates target instruction alignment",
       #|  ),
       #|]
+    ),
+  )
+}
+
+///|
+test "decoder rejects signed metadata outside the host Int range" {
+  let encoded = encode(artifact_with_signed_metadata_markers())
+  debug_inspect(
+    [
+      decode_error(replace_i64_payload(encoded, 0x11111111L, 0x80000000L)),
+      decode_error(replace_i64_payload(encoded, 0x11111111L, -0x80000001L)),
+      decode_error(replace_i64_payload(encoded, 0x22222222L, 0x80000000L)),
+      decode_error(replace_i64_payload(encoded, 0x33333333L, 0x80000000L)),
+      decode_error(replace_i64_payload(encoded, 0x44444444L, 0x80000000L)),
+    ],
+    content=(
+      #|[
+      #|  InvalidValue(
+      #|    field="function.trap.reason.user",
+      #|    message="signed 64-bit value exceeds the host Int range",
+      #|  ),
+      #|  InvalidValue(
+      #|    field="function.trap.reason.user",
+      #|    message="signed 64-bit value exceeds the host Int range",
+      #|  ),
+      #|  InvalidValue(
+      #|    field="function.safepoint.root.stack_offset",
+      #|    message="signed 64-bit value exceeds the host Int range",
+      #|  ),
+      #|  InvalidValue(
+      #|    field="function.unwind.cfa_offset",
+      #|    message="signed 64-bit value exceeds the host Int range",
+      #|  ),
+      #|  InvalidValue(
+      #|    field="function.unwind.cfa_offset",
+      #|    message="signed 64-bit value exceeds the host Int range",
+      #|  ),
+      #|]
+    ),
+  )
+}
+
+///|
+test "decoder preserves signed metadata at the host Int boundaries" {
+  let encoded = encode(artifact_with_signed_metadata_markers())
+  let encoded = replace_i64_payload(encoded, 0x11111111L, -0x80000000L)
+  let encoded = replace_i64_payload(encoded, 0x22222222L, 0x7FFFFFFFL)
+  let encoded = replace_i64_payload(encoded, 0x33333333L, -0x80000000L)
+  let encoded = replace_i64_payload(encoded, 0x44444444L, 0x7FFFFFFFL)
+  let decoded = decode(encoded)
+  debug_inspect(
+    (
+      decoded.functions[0].traps[0].reason,
+      decoded.functions[0].safepoints[0].roots[0],
+      decoded.functions[0].unwind.map(directive => directive.operation),
+    ),
+    content=(
+      #|(
+      #|  User(-2147483648),
+      #|  Stack(offset=2147483647, ty=GcRef64),
+      #|  [
+      #|    SetFramePointer(Int, 29, cfa_offset=-2147483648),
+      #|    SaveRegister(Int, 30, cfa_offset=2147483647),
+      #|  ],
+      #|)
     ),
   )
 }

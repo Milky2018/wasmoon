@@ -35,8 +35,8 @@ jobs:
             echo "required=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          if git diff --name-only "$BASE_SHA" "$HEAD_SHA" | grep -Eq \
-            '^(issues/ISS-(19[3-9]|20[0-3])\.md|scripts/(assert_target_identity|cutover_gate_manifest)\.py|scripts/tests/test_cutover_gate\.py|\.github/workflows/check\.yml)$'
+          if python3 scripts/detect_cutover_closing_change.py \
+            --base "$BASE_SHA" --head "$HEAD_SHA"
           then
             echo "required=true" >> "$GITHUB_OUTPUT"
           else
@@ -298,6 +298,7 @@ jobs:
           mkdir -p target/cutover-gate/linux-amd64-sanitizer/logs
           python3 scripts/cutover_gate_manifest.py init \
             --manifest target/cutover-gate/linux-amd64-sanitizer/manifest.json \
+            --baseline docs/perf/machv-migration/baseline.json \
             --kind sanitizer \
             --target linux-amd64
 
@@ -357,6 +358,9 @@ jobs:
           - runner: ubuntu-latest
             target: linux-amd64
     runs-on: ${{ matrix.runner }}
+    env:
+      CUTOVER_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+      CUTOVER_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -378,12 +382,15 @@ jobs:
         run: |
           moon version --all
           moon update
+          cargo install wasm-tools --version "$WASM_TOOLS_VERSION" --locked
+          wasm-tools --version
 
       - name: initialize cutover evidence manifest
         run: |
           mkdir -p "target/cutover-gate/${{ matrix.target }}/logs"
           python3 scripts/cutover_gate_manifest.py init \
             --manifest "target/cutover-gate/${{ matrix.target }}/manifest.json" \
+            --baseline docs/perf/machv-migration/baseline.json \
             --kind target-cutover \
             --target "${{ matrix.target }}"
 
@@ -410,7 +417,7 @@ jobs:
           }
           run_gate moon-fmt 'moon fmt && git diff --exit-code'
           run_gate moon-info 'moon info && git diff --exit-code'
-          run_gate git-diff-check 'git diff --check'
+          run_gate git-diff-check 'python3 scripts/check_committed_diff.py'
           run_gate moon-check 'moon check --target native --warn-list +73'
           run_gate moon-test 'MACHV_REGALLOC_VALIDATION=1 moon test --target native --no-parallelize'
           run_gate boundary-audits 'python3 scripts/audit_module_boundaries.py && python3 scripts/audit_semantic_machv_api.py && python3 scripts/audit_internal_compatibility.py'
@@ -418,14 +425,29 @@ jobs:
           run_gate build-install 'moon build --target native --release && ./install.sh'
           run_gate wast 'python3 scripts/run_all_wast.py --dir spec --rec'
           run_gate wasi 'python3 examples/wasi_tests/wasi_test.py'
+          run_gate smith 'python3 scripts/run_fixed_smith_gate.py --out target/cutover-gate/${{ matrix.target }}/smith'
           exit "$status"
+
+      - name: run paired fixed-legacy performance gate
+        if: always()
+        timeout-minutes: 90
+        run: |
+          python3 scripts/cutover_gate_manifest.py run \
+            --manifest "target/cutover-gate/${{ matrix.target }}/manifest.json" \
+            --name paired-performance \
+            --log "target/cutover-gate/${{ matrix.target }}/logs/paired-performance.log" \
+            -- python3 scripts/run_machv_cutover_perf.py \
+              --baseline docs/perf/machv-migration/baseline.json \
+              --out-dir "target/cutover-gate/${{ matrix.target }}/performance" \
+              --candidate-binary ./wasmoon
 
       - name: finalize cutover evidence manifest
         if: always()
         run: |
           python3 scripts/cutover_gate_manifest.py finalize \
             --manifest "target/cutover-gate/${{ matrix.target }}/manifest.json" \
-            --required target-identity,moon-fmt,moon-info,git-diff-check,moon-check,moon-test,boundary-audits,python-gate-tests,build-install,wast,wasi
+            --required target-identity,moon-fmt,moon-info,git-diff-check,moon-check,moon-test,boundary-audits,python-gate-tests,build-install,wast,wasi,smith,paired-performance \
+            --perf-report "target/cutover-gate/${{ matrix.target }}/performance/perf-report.json"
 
       - name: upload cutover evidence
         if: always()
