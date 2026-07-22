@@ -1,0 +1,212 @@
+///|
+priv struct BundleTestFunction {
+  classes : Array[RegClass]
+  successors : Array[Array[Int]]
+  parameters : Array[Array[VirtualReg]]
+  edge_arguments : Array[Array[Array[VirtualReg]]]
+}
+
+///|
+priv struct BundlePlanSnapshot {
+  range_to_bundle : Array[Int]
+  segment_to_bundle : Array[Int]
+  bundle_ranges : Array[Array[Int]]
+  bundle_segments : Array[Array[Int]]
+} derive(Debug)
+
+///|
+fn bundle_plan_snapshot(plan : ProductionBundlePlan) -> BundlePlanSnapshot {
+  {
+    range_to_bundle: plan.range_to_bundle,
+    segment_to_bundle: plan.segment_to_bundle,
+    bundle_ranges: plan.bundle_ranges,
+    bundle_segments: plan.bundle_segments,
+  }
+}
+
+///|
+impl FunctionView for BundleTestFunction with fn value_count(self) -> Int {
+  self.classes.length()
+}
+
+///|
+impl FunctionView for BundleTestFunction with fn value_class(self, value) -> RegClass {
+  self.classes[value]
+}
+
+///|
+impl FunctionView for BundleTestFunction with fn value_spill_size(_self, _value) -> Int {
+  8
+}
+
+///|
+impl FunctionView for BundleTestFunction with fn value_spill_alignment(
+  _self,
+  _value,
+) -> Int {
+  8
+}
+
+///|
+impl FunctionView for BundleTestFunction with fn values_share_spill_slot(
+  _self,
+  _lhs,
+  _rhs,
+) -> Bool {
+  true
+}
+
+///|
+impl FunctionView for BundleTestFunction with fn entry_values(_self) -> Array[
+  VirtualReg,
+] {
+  []
+}
+
+///|
+impl FunctionView for BundleTestFunction with fn block_count(self) -> Int {
+  self.successors.length()
+}
+
+///|
+impl FunctionView for BundleTestFunction with fn block_id_at(_self, block) -> Int {
+  block
+}
+
+///|
+impl FunctionView for BundleTestFunction with fn block_parameters(self, block) -> Array[
+  VirtualReg,
+] {
+  self.parameters[block].copy()
+}
+
+///|
+impl FunctionView for BundleTestFunction with fn block_instructions(
+  _self,
+  _block,
+) -> Array[Int] {
+  []
+}
+
+///|
+impl FunctionView for BundleTestFunction with fn block_successors(self, block) -> Array[
+  Int,
+] {
+  self.successors[block].copy()
+}
+
+///|
+impl FunctionView for BundleTestFunction with fn edge_arguments(
+  self,
+  block,
+  successor,
+) -> Array[VirtualReg] {
+  self.edge_arguments[block][successor].copy()
+}
+
+///|
+impl FunctionView for BundleTestFunction with fn instruction_operands(
+  _self,
+  _instruction,
+) -> Array[Operand] {
+  []
+}
+
+///|
+impl FunctionView for BundleTestFunction with fn instruction_clobbers(
+  _self,
+  _instruction,
+) -> Array[PhysicalReg] {
+  []
+}
+
+///|
+fn bundle_test_range(
+  id : Int,
+  class : RegClass,
+  start : Int,
+  end : Int,
+  fixed_uses : Array[(UseKind, PhysicalReg)],
+) -> LiveRange {
+  let range = LiveRange::LiveRange(id, { id, class })
+  range.add_range(ProgramRange(ProgramPoint(0, start), ProgramPoint(0, end)))
+  for entry in fixed_uses {
+    let (kind, reg) = entry
+    range.add_use(UsePosition(ProgramPoint(0, start), kind, FixedReg(reg)))
+  }
+  range
+}
+
+///|
+test "production bundle plan follows transitive SSA edge affinities" {
+  let ranges = LiveRangeSet::LiveRangeSet([0, 1, 2])
+  let first = bundle_test_range(0, Int, 0, 2, [])
+  first.add_range(ProgramRange(ProgramPoint(0, 12), ProgramPoint(0, 14)))
+  ranges.add_range(first)
+  ranges.add_range(bundle_test_range(1, Int, 4, 6, []))
+  ranges.add_range(bundle_test_range(2, Int, 8, 10, []))
+  let (segments, _) = build_allocation_segments(ranges)
+  let function : BundleTestFunction = {
+    classes: [Int, Int, Int],
+    successors: [[1], [2], []],
+    parameters: [[], [{ id: 1, class: Int }], [{ id: 2, class: Int }]],
+    edge_arguments: [[[{ id: 0, class: Int }]], [[{ id: 1, class: Int }]], []],
+  }
+  debug_inspect(
+    bundle_plan_snapshot(
+      build_production_bundle_plan(function, ranges, segments),
+    ),
+    content=(
+      #|{
+      #|  range_to_bundle: [0, 0, 0],
+      #|  segment_to_bundle: [0, 0, 0, 0],
+      #|  bundle_ranges: [[0, 1, 2]],
+      #|  bundle_segments: [[0, 1, 2, 3]],
+      #|}
+    ),
+  )
+}
+
+///|
+test "production bundle plan rejects incompatible range contracts" {
+  let r0 : PhysicalReg = { id: 0, class: Int }
+  let r1 : PhysicalReg = { id: 1, class: Int }
+  let ranges = LiveRangeSet::LiveRangeSet([0])
+  ranges.add_range(bundle_test_range(0, Int, 0, 2, []))
+  ranges.add_range(bundle_test_range(1, Int, 1, 3, []))
+  ranges.add_range(bundle_test_range(2, Float, 4, 6, []))
+  ranges.add_range(bundle_test_range(3, Int, 4, 6, [(LiveUse, r0)]))
+  ranges.add_range(bundle_test_range(4, Int, 8, 10, [(LiveUse, r1)]))
+  ranges.add_range(
+    bundle_test_range(5, Int, 12, 14, [(LiveUse, r0), (LiveUse, r1)]),
+  )
+  ranges.add_range(bundle_test_range(6, Int, 16, 18, []))
+  ranges.add_range(bundle_test_range(7, Int, 20, 23, []))
+  ranges.add_range(bundle_test_range(8, Int, 23, 25, [(LiveDef, r0)]))
+  ranges.add_range(bundle_test_range(9, Int, 26, 28, [(LiveUse, r0)]))
+  ranges.add_range(bundle_test_range(10, Int, 30, 32, [(LiveUse, r0)]))
+  ranges.add_range(bundle_test_range(11, Int, 34, 37, []))
+  ranges.add_range(bundle_test_range(12, Int, 37, 39, []))
+  let (segments, _) = build_allocation_segments(ranges)
+  debug_inspect(
+    bundle_plan_snapshot(
+      build_production_bundle_plan_from_range_edges(ranges, segments, [
+        (0, 1),
+        (0, 2),
+        (3, 4),
+        (5, 6),
+        (7, 8),
+        (9, 10),
+        (11, 12),
+      ]),
+    ),
+    content=(
+      #|{
+      #|  range_to_bundle: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 9, 10, 10],
+      #|  segment_to_bundle: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 9, 10, 10],
+      #|  bundle_ranges: [[0], [1], [2], [3], [4], [5], [6], [7], [8], [9, 10], [11, 12]],
+      #|  bundle_segments: [[0], [1], [2], [3], [4], [5], [6], [7], [8], [9, 10], [11, 12]],
+      #|}
+    ),
+  )
+}

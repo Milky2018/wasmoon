@@ -383,8 +383,9 @@ fn[F : FunctionView] allocate_segments_backtracking(
   environment : MachineEnv,
   ranges : LiveRangeSet,
   enable_eviction : Bool,
-) -> (Array[AllocationSegment], Array[Array[Int]]) {
+) -> (Array[AllocationSegment], Array[Array[Int]], ProductionBundlePlan) {
   let (segments, segments_by_value) = build_allocation_segments(ranges)
+  let bundle_plan = build_production_bundle_plan(function, ranges, segments)
   let occupied : Array[Array[Int]] = []
   for _ in environment.allocatable_regs {
     occupied.push([])
@@ -510,7 +511,7 @@ fn[F : FunctionView] allocate_segments_backtracking(
       ranges.block_order,
     )
   }
-  (segments, segments_by_value)
+  (segments, segments_by_value, bundle_plan)
 }
 
 ///|
@@ -984,7 +985,7 @@ fn[F : FunctionView] allocate_fragmented(
   enable_eviction : Bool,
 ) -> AllocationPlan raise VerifyError {
   let ranges = build_function_live_ranges(function)
-  let (segments, segments_by_value) = allocate_segments_backtracking(
+  let (segments, segments_by_value, _) = allocate_segments_backtracking(
     function, environment, ranges, enable_eviction,
   )
   let plan = AllocationPlan::new(function.value_count())
