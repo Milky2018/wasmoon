@@ -102,6 +102,51 @@ fn BinaryWriter::write_s64(self : BinaryWriter, val : Int64) -> Unit {
 }
 
 ///|
+/// Convert a MoonBit string to its UTF-8 byte representation.
+fn string_to_bytes(s : String) -> Array[Int] {
+  let result : Array[Int] = []
+  let len = s.length()
+  let mut i = 0
+  while i < len {
+    let c = s.code_unit_at(i).to_int()
+    if c < 0x80 {
+      result.push(c)
+      i += 1
+    } else if c < 0x800 {
+      result.push(0xC0 | (c >> 6))
+      result.push(0x80 | (c & 0x3F))
+      i += 1
+    } else if c >= 0xD800 && c <= 0xDBFF && i + 1 < len {
+      let c2 = s.code_unit_at(i + 1).to_int()
+      if c2 >= 0xDC00 && c2 <= 0xDFFF {
+        let codepoint = 0x10000 + ((c - 0xD800) << 10) + (c2 - 0xDC00)
+        result.push(0xF0 | (codepoint >> 18))
+        result.push(0x80 | ((codepoint >> 12) & 0x3F))
+        result.push(0x80 | ((codepoint >> 6) & 0x3F))
+        result.push(0x80 | (codepoint & 0x3F))
+        i += 2
+      } else {
+        result.push(0xEF)
+        result.push(0xBF)
+        result.push(0xBD)
+        i += 1
+      }
+    } else if c >= 0xDC00 && c <= 0xDFFF {
+      result.push(0xEF)
+      result.push(0xBF)
+      result.push(0xBD)
+      i += 1
+    } else {
+      result.push(0xE0 | (c >> 12))
+      result.push(0x80 | ((c >> 6) & 0x3F))
+      result.push(0x80 | (c & 0x3F))
+      i += 1
+    }
+  }
+  result
+}
+
+///|
 /// Write a UTF-8 string with length prefix
 fn BinaryWriter::write_name(self : BinaryWriter, name : String) -> Unit {
   let bytes = string_to_bytes(name)

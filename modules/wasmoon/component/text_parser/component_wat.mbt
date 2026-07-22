@@ -5159,7 +5159,7 @@ fn parse_core_module_field(
   let mod = @wat.parse(module_text) catch {
     e => raise ParseError("failed to parse core module: \{e}")
   }
-  let bytes = int_array_to_bytes(@cwasm.encode(mod))
+  let bytes = int_array_to_bytes(@encoder.encode(mod))
   state.sections_ordered.push({ section_id: 1, payload: bytes })
   let idx = state.next_core_module_idx
   state.next_core_module_idx += 1

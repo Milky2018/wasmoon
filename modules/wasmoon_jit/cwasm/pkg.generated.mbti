@@ -2,14 +2,11 @@
 package "Milky2018/wasmoon_jit/cwasm"
 
 import {
-  "Milky2018/wasm_core/types",
   "moonbitlang/core/debug",
 }
 
 // Values
 pub fn deserialize(Array[Int]) -> PrecompiledModule raise DeserializeError
-
-pub fn encode(@types.Module) -> Array[Int]
 
 // Errors
 pub suberror DeserializeError {

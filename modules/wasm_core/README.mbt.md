@@ -8,6 +8,8 @@ frontends, runtimes, and tests.
 ## Packages
 
 - `Milky2018/wasm_core`: small construction helpers and facade APIs.
+- `Milky2018/wasm_core/encoder`: standard WebAssembly binary encoding for the
+  shared module model.
 - `Milky2018/wasm_core/types`: WebAssembly value types, instructions,
   modules, function types, subtyping helpers, and related spec data.
 

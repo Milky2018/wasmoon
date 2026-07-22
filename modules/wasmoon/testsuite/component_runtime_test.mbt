@@ -172,7 +172,7 @@ test "component runtime: canon lift core func" {
   let mod_ = @wat.parse(wat) catch {
     e => return fail("parse wat failed: \{e}")
   }
-  let wasm_bytes : Array[Byte] = @cwasm.encode(mod_).map(v => v.to_byte())
+  let wasm_bytes : Array[Byte] = @encoder.encode(mod_).map(v => v.to_byte())
   let core_instance_payload = vec_payload([core_instance_instantiate(0)])
   let name_inc : Array[Byte] = [b'i', b'n', b'c']
   let alias_payload = vec_payload([alias_core_export_func(0, name_inc)])
