@@ -7,6 +7,7 @@ pub suberror JitInstallError {
   ProtectionFailed(function_index~ : Int)
   RegistrationFailed(function_index~ : Int, message~ : String)
   PublicationFailed(message~ : String)
+  TrampolineAllocationFailed(code_size~ : Int)
 } derive(Eq, Debug)
 
 ///|
@@ -151,6 +152,17 @@ pub fn InstalledCode::entry_address(
 }
 
 ///|
+/// Opaque ownership of process-local executable trampoline code.
+pub struct InstalledTrampoline {
+  priv executable_code : ExecCode
+}
+
+///|
+pub fn InstalledTrampoline::entry_address(self : InstalledTrampoline) -> Int64 {
+  self.executable_code.ptr()
+}
+
+///|
 /// Installer policy plus the embedding-provided external/data symbol resolver.
 pub struct JitCodeInstaller {
   priv resolver : (@code_object.RelocationTarget) -> Int64?
@@ -168,6 +180,20 @@ pub fn JitCodeInstaller::new(
 /// Return the last fully committed installation, if any.
 pub fn JitCodeInstaller::current(self : JitCodeInstaller) -> InstalledCode? {
   self.current.val
+}
+
+///|
+/// Install process-local trampoline bytes without exposing allocation,
+/// copying, permission changes, or instruction-cache mutation.
+pub fn JitCodeInstaller::install_trampoline(
+  self : JitCodeInstaller,
+  code : Array[Int],
+) -> InstalledTrampoline raise JitInstallError {
+  self.resolver |> ignore
+  match ExecCode::try_alloc(code) {
+    Some(executable_code) => { executable_code, }
+    None => raise TrampolineAllocationFailed(code_size=code.length())
+  }
 }
 
 ///|

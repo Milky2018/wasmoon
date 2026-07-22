@@ -3,7 +3,6 @@
 /// `wasmoon_jit_hostcall` C bridge.
 pub(all) struct HostcallImportTrampolineCode {
   code : Array[Int]
-  func_addr_fixups : Array[@cwasm.FuncAddrFixup]
 }
 
 ///|
@@ -48,13 +47,6 @@ fn hostcall_abi_location_stack_size(location : HostcallAbiValueLocation) -> Int 
 fn RuntimeValueBridge::bridge_arg(self : RuntimeValueBridge) -> Int64 {
   match self {
     Hostcall(host_func_addr) => host_func_addr.to_int64()
-  }
-}
-
-///|
-fn RuntimeValueBridge::aarch64_runtime_fixup(self : RuntimeValueBridge) -> Int {
-  match self {
-    Hostcall(_) => jit_runtime_fixup_idx(13)
   }
 }
 
@@ -708,8 +700,7 @@ fn build_aarch64_hostcall_import_trampoline(
   a64_emit_add_imm(code, 2, 31, 0)
   a64_emit_load_imm64_fixed(code, 3, layout.arg_slots.to_int64())
   a64_emit_load_imm64_fixed(code, 4, layout.result_slots.to_int64())
-  let fixup_offset = code.length()
-  a64_emit_load_imm64_fixed(code, 16, 0L)
+  a64_emit_load_imm64_fixed(code, 16, @jit_ffi.c_jit_get_hostcall_ptr())
   a64_emit_blr(code, 16)
   let mut result_offset = offset
   for i, ty in result_types {
@@ -727,16 +718,7 @@ fn build_aarch64_hostcall_import_trampoline(
     a64_emit_add_imm(code, 31, 31, frame_size)
   }
   a64_emit_ret(code)
-  {
-    code,
-    func_addr_fixups: [
-      {
-        offset: fixup_offset,
-        func_idx: bridge.aarch64_runtime_fixup(),
-        reg: 16,
-      },
-    ],
-  }
+  { code, }
 }
 
 ///|
@@ -1081,7 +1063,7 @@ fn build_x64_hostcall_import_trampoline(
   }
   x64_add_rsp(code, frame_size)
   x64_ret(code)
-  { code, func_addr_fixups: [] }
+  { code, }
 }
 
 ///|
@@ -1089,7 +1071,7 @@ pub fn build_hostcall_import_trampoline_for_target(
   param_types : Array[@types.ValueType],
   result_types : Array[@types.ValueType],
   host_func_addr : Int,
-  target : @cwasm.TargetArch,
+  target : NativeTarget,
 ) -> HostcallImportTrampolineCode raise HostcallImportTrampolineError {
   match target {
     AArch64 =>
@@ -1098,15 +1080,11 @@ pub fn build_hostcall_import_trampoline_for_target(
         result_types,
         Hostcall(host_func_addr),
       )
-    X86_64 =>
+    X64 =>
       build_x64_hostcall_import_trampoline(
         param_types,
         result_types,
         Hostcall(host_func_addr),
-      )
-    Unknown =>
-      raise UnsupportedHostcallImportTrampoline(
-        message="hostcall import trampoline needs a concrete target architecture",
       )
   }
 }
@@ -1289,14 +1267,10 @@ fn build_x64_entry_trampoline(
 pub fn build_entry_trampoline_for_target(
   param_types : Array[@types.ValueType],
   result_types : Array[@types.ValueType],
-  target : @cwasm.TargetArch,
+  target : NativeTarget,
 ) -> Array[Int] raise HostcallImportTrampolineError {
   match target {
     AArch64 => build_aarch64_entry_trampoline(param_types, result_types)
-    X86_64 => build_x64_entry_trampoline(param_types, result_types)
-    Unknown =>
-      raise UnsupportedHostcallImportTrampoline(
-        message="entry trampoline needs a concrete target architecture",
-      )
+    X64 => build_x64_entry_trampoline(param_types, result_types)
   }
 }

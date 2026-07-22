@@ -9,7 +9,6 @@ import {
   "Milky2018/wasmoon/cmd/wasmoon/commands",
   "Milky2018/wasmoon/jit",
   "Milky2018/wasmoon_jit",
-  "Milky2018/wasmoon_jit/cwasm",
   "moonbitlang/core/buffer",
   "moonbitlang/core/debug",
   "moonbitlang/core/json",

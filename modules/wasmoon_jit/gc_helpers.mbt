@@ -364,34 +364,13 @@ pub fn gc_set_safepoint_table(ctx_ptr : Int64, table_ptr : Int64) -> Unit {
 }
 
 ///|
-pub fn gc_set_func_safepoints(
-  ctx_ptr : Int64,
-  func_idx : Int,
-  safepoints : Array[@cwasm.GcSafepoint],
-  stackmap_blob : Bytes,
-) -> Bool {
-  let offsets = FixedArray::makei(safepoints.length(), fn(i) {
-    safepoints[i].code_offset
-  })
-  @jit_ffi.c_jit_gc_set_func_safepoints(
-    ctx_ptr,
-    func_idx,
-    stackmap_blob,
-    stackmap_blob.length(),
-    offsets,
-    safepoints.length(),
-  ) ==
-  1
-}
-
-///|
 /// Install verified code-object safepoints into context-owned GC metadata.
 pub fn gc_set_code_object_safepoints(
   ctx_ptr : Int64,
   func_idx : Int,
   safepoints : Array[@code_object.SafepointSite],
 ) -> Bool {
-  let entries : Array[@cwasm.GcSafepoint] = []
+  let entries : Array[GcSafepoint] = []
   let root_counts : Array[Int] = []
   for site in safepoints {
     let root_count = match site.stack_map {
@@ -407,12 +386,19 @@ pub fn gc_set_code_object_safepoints(
     )
     root_counts.push(root_count)
   }
-  gc_set_func_safepoints(
+  let stackmap_blob = compiled_build_gc_stackmap_blob_v2(entries, root_counts)
+  let offsets = FixedArray::makei(entries.length(), fn(i) {
+    entries[i].code_offset
+  })
+  @jit_ffi.c_jit_gc_set_func_safepoints(
     ctx_ptr,
     func_idx,
-    entries,
-    build_gc_stackmap_blob_v2(entries, root_counts),
-  )
+    stackmap_blob,
+    stackmap_blob.length(),
+    offsets,
+    entries.length(),
+  ) ==
+  1
 }
 
 ///|

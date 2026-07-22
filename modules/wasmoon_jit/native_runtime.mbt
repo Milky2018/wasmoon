@@ -15,22 +15,33 @@ pub using @jit_ffi {
 }
 
 ///|
-pub fn host_target_arch() -> @cwasm.TargetArch {
-  match @jit_ffi.c_jit_host_target_arch() {
-    1 => X86_64
-    2 => AArch64
-    _ => Unknown
-  }
-}
+priv type ExecCodeHandle
 
 ///|
-pub fn target_arch_to_native_target(target : @cwasm.TargetArch) -> NativeTarget {
-  match target {
-    X86_64 => X64
-    AArch64 => AArch64
-    Unknown => AArch64
-  }
-}
+#borrow(code)
+extern "c" fn alloc_exec_managed(
+  code : FixedArray[Byte],
+  size : Int,
+) -> ExecCodeHandle = "wasmoon_jit_alloc_exec_managed"
+
+///|
+extern "c" fn stage_exec_managed(size : Int) -> ExecCodeHandle = "wasmoon_jit_stage_exec_managed"
+
+///|
+#borrow(exec_code, code)
+extern "c" fn finalize_exec_managed(
+  exec_code : ExecCodeHandle,
+  code : FixedArray[Byte],
+  size : Int,
+) -> Int = "wasmoon_jit_finalize_exec_managed"
+
+///|
+#borrow(exec_code)
+extern "c" fn release_exec_managed(exec_code : ExecCodeHandle) -> Int = "wasmoon_jit_release_exec_managed"
+
+///|
+#owned(exec_code)
+extern "c" fn exec_code_pointer(exec_code : ExecCodeHandle) -> Int64 = "wasmoon_jit_exec_code_ptr"
 
 ///|
 /// Low-level trap detail captured by the JIT signal handlers (best-effort).
@@ -1134,431 +1145,14 @@ pub fn get_spectest_print_char_ptr() -> Int64 {
 }
 
 ///|
-fn push_u32_le(bytes : Array[Int], value : Int) -> Unit {
-  bytes.push(value & 0xff)
-  bytes.push((value >> 8) & 0xff)
-  bytes.push((value >> 16) & 0xff)
-  bytes.push((value >> 24) & 0xff)
-}
-
-///|
-fn pack_u64_le(bytes : Array[Int], start : Int) -> Int64 {
-  let mut value : Int64 = 0L
-  for i in 0..<8 {
-    let b = bytes[start + i].to_int64() & 0xffL
-    value = value | (b << (i * 8))
-  }
-  value
-}
-
-///|
-fn build_aarch64_load_imm64_fixed_bytes(reg : Int, imm : Int64) -> Array[Int] {
-  let bytes : Array[Int] = []
-  let v0 = (imm & 0xffffL).to_int()
-  let v1 = ((imm >> 16) & 0xffffL).to_int()
-  let v2 = ((imm >> 32) & 0xffffL).to_int()
-  let v3 = ((imm >> 48) & 0xffffL).to_int()
-  push_u32_le(bytes, 0xd2800000 | ((v0 & 0xffff) << 5) | (reg & 0x1f))
-  push_u32_le(
-    bytes,
-    0xf2800000 | (1 << 21) | ((v1 & 0xffff) << 5) | (reg & 0x1f),
-  )
-  push_u32_le(
-    bytes,
-    0xf2800000 | (2 << 21) | ((v2 & 0xffff) << 5) | (reg & 0x1f),
-  )
-  push_u32_le(
-    bytes,
-    0xf2800000 | (3 << 21) | ((v3 & 0xffff) << 5) | (reg & 0x1f),
-  )
-  bytes
-}
-
-///|
-pub fn patch_aarch64_load_imm64_fixed(
-  exec_ptr : Int64,
-  offset : Int,
-  reg : Int,
-  imm : Int64,
-) -> Unit {
-  let bytes = build_aarch64_load_imm64_fixed_bytes(reg, imm)
-  if bytes.length() != 16 {
-    abort("unexpected load_imm64_fixed size")
-  }
-  let base = exec_ptr + offset.to_int64()
-  c_jit_write_i64(base, pack_u64_le(bytes, 0))
-  c_jit_write_i64(base + 8L, pack_u64_le(bytes, 8))
-}
-
-///|
-pub fn resolve_func_addr_fixup_target(
-  func_idx : Int,
-  func_table_ptr : Int64,
-) -> Int64? {
-  if func_idx >= 0 {
-    if func_table_ptr == 0L {
-      return None
-    }
-    Some(c_jit_read_i64(func_table_ptr + func_idx.to_int64() * 8L))
-  } else {
-    resolve_runtime_func_fixup_idx(func_idx)
-  }
-}
-
-///|
-pub fn resolve_call_fixup_target(
-  func_idx : Int,
-  func_table_ptr : Int64,
-  direct_call_targets : Map[Int, Int64],
-) -> Int64? {
-  if func_idx >= 0 {
-    if func_table_ptr == 0L {
-      return None
-    }
-    Some(c_jit_read_i64(func_table_ptr + func_idx.to_int64() * 8L))
-  } else {
-    direct_call_targets.get(func_idx)
-  }
-}
-
-///|
-pub fn required_context_function_count(
-  precompiled : @cwasm.PrecompiledModule,
-  func_signature_count : Int,
-) -> Int {
-  let mut count = precompiled.imports.length()
-  for entry in precompiled.functions {
-    let candidate = entry.func_idx + 1
-    if candidate > count {
-      count = candidate
-    }
-  }
-  if func_signature_count > count {
-    func_signature_count
-  } else {
-    count
-  }
-}
-
-///|
-pub fn patch_aarch64_func_addr_fixup(
-  exec_ptr : Int64,
-  fixup : @cwasm.FuncAddrFixup,
-  target_ptr : Int64,
-) -> Unit {
-  patch_aarch64_func_addr_fixup_parts(
-    exec_ptr,
-    fixup.offset,
-    fixup.reg,
-    target_ptr,
-  )
-}
-
-///|
-pub fn patch_aarch64_func_addr_fixup_parts(
-  exec_ptr : Int64,
-  offset : Int,
-  reg : Int,
-  target_ptr : Int64,
-) -> Unit {
-  patch_aarch64_load_imm64_fixed(exec_ptr, offset, reg, target_ptr)
-}
-
-///|
-pub fn patch_aarch64_func_addr_fixup_raw(
-  exec_ptr : Int64,
-  offset : Int,
-  reg : Int,
-  func_idx : Int,
-  func_table_ptr : Int64,
-) -> Unit {
-  let target_ptr = match
-    resolve_func_addr_fixup_target(func_idx, func_table_ptr) {
-    Some(ptr) => ptr
-    None => abort("unknown func addr fixup idx \{func_idx}")
-  }
-  patch_aarch64_func_addr_fixup_parts(exec_ptr, offset, reg, target_ptr)
-}
-
-///|
-pub fn patch_x64_func_addr_fixup_parts(
-  exec_ptr : Int64,
-  offset : Int,
-  _reg : Int,
-  target_ptr : Int64,
-) -> Unit {
-  // x86_emit_mov_imm64 emits: REX.W, B8+rd, then the 8-byte immediate.
-  c_jit_write_i64(exec_ptr + offset.to_int64() + 2L, target_ptr)
-}
-
-///|
-pub fn patch_x64_func_addr_fixup_raw(
-  exec_ptr : Int64,
-  offset : Int,
-  reg : Int,
-  func_idx : Int,
-  func_table_ptr : Int64,
-) -> Unit {
-  let target_ptr = match
-    resolve_func_addr_fixup_target(func_idx, func_table_ptr) {
-    Some(ptr) => ptr
-    None => abort("unknown func addr fixup idx \{func_idx}")
-  }
-  patch_x64_func_addr_fixup_parts(exec_ptr, offset, reg, target_ptr)
-}
-
-///|
-pub fn patch_func_addr_fixup_raw_for_target(
-  target : @cwasm.TargetArch,
-  exec_ptr : Int64,
-  offset : Int,
-  reg : Int,
-  func_idx : Int,
-  func_table_ptr : Int64,
-) -> Unit {
-  match target {
-    AArch64 =>
-      patch_aarch64_func_addr_fixup_raw(
-        exec_ptr, offset, reg, func_idx, func_table_ptr,
-      )
-    X86_64 =>
-      patch_x64_func_addr_fixup_raw(
-        exec_ptr, offset, reg, func_idx, func_table_ptr,
-      )
-    Unknown =>
-      abort("cannot patch function-address fixup for unknown cwasm target")
-  }
-}
-
-///|
-pub fn patch_aarch64_func_addr_fixups(
-  exec_ptr : Int64,
-  fixups : Array[@cwasm.FuncAddrFixup],
-  func_table_ptr : Int64,
-) -> Unit {
-  for fixup in fixups {
-    let target_ptr = match
-      resolve_func_addr_fixup_target(fixup.func_idx, func_table_ptr) {
-      Some(ptr) => ptr
-      None => abort("unknown func addr fixup idx \{fixup.func_idx}")
-    }
-    patch_aarch64_func_addr_fixup(exec_ptr, fixup, target_ptr)
-  }
-}
-
-///|
-pub fn patch_x64_func_addr_fixups(
-  exec_ptr : Int64,
-  fixups : Array[@cwasm.FuncAddrFixup],
-  func_table_ptr : Int64,
-) -> Unit {
-  for fixup in fixups {
-    let target_ptr = match
-      resolve_func_addr_fixup_target(fixup.func_idx, func_table_ptr) {
-      Some(ptr) => ptr
-      None => abort("unknown func addr fixup idx \{fixup.func_idx}")
-    }
-    patch_x64_func_addr_fixup_parts(
-      exec_ptr,
-      fixup.offset,
-      fixup.reg,
-      target_ptr,
-    )
-  }
-}
-
-///|
-pub fn patch_func_addr_fixups_for_target(
-  target : @cwasm.TargetArch,
-  exec_ptr : Int64,
-  fixups : Array[@cwasm.FuncAddrFixup],
-  func_table_ptr : Int64,
-) -> Unit {
-  match target {
-    AArch64 => patch_aarch64_func_addr_fixups(exec_ptr, fixups, func_table_ptr)
-    X86_64 => patch_x64_func_addr_fixups(exec_ptr, fixups, func_table_ptr)
-    Unknown =>
-      if fixups.length() > 0 {
-        abort("cannot patch function-address fixups for unknown cwasm target")
-      }
-  }
-}
-
-///|
-pub fn encode_aarch64_bl_imm26(pc : Int64, target_ptr : Int64) -> Int? {
-  encode_aarch64_branch_imm26(pc, target_ptr, 0x94000000U)
-}
-
-///|
-fn encode_aarch64_branch_imm26(
-  pc : Int64,
-  target_ptr : Int64,
-  opcode : UInt,
-) -> Int? {
-  let diff = target_ptr - pc
-  if diff % 4L != 0L {
-    return None
-  }
-  let imm26 = diff / 4L
-  if imm26 < -0x2000000L || imm26 > 0x1FFFFFFL {
-    return None
-  }
-  Some(
-    (opcode | (imm26.to_int() & 0x3FFFFFF).reinterpret_as_uint()).reinterpret_as_int(),
-  )
-}
-
-///|
-pub fn encode_x64_call_rel32_disp(pc : Int64, target_ptr : Int64) -> Int? {
-  let disp = target_ptr - (pc + 5L)
-  if disp < -0x80000000L || disp > 0x7fffffffL {
-    return None
-  }
-  Some((disp & 0xffffffffL).to_int())
-}
-
-///|
-pub fn patch_aarch64_call_veneer_target(
-  exec_ptr : Int64,
-  fixup : @cwasm.CallFixup,
-  target_ptr : Int64,
-) -> Unit {
-  // Veneer layout (16 bytes):
-  //   +0:  ldr x16, #8
-  //   +4:  br x16
-  //   +8:  target_ptr literal (u64)
-  c_jit_write_i64(exec_ptr + fixup.veneer_offset.to_int64() + 8L, target_ptr)
-}
-
-///|
-pub fn patch_aarch64_direct_call(
-  exec_ptr : Int64,
-  fixup : @cwasm.CallFixup,
-  target_ptr : Int64,
-) -> Unit {
-  let pc = exec_ptr + fixup.offset.to_int64()
-  let opcode = c_jit_read_u32(pc) & 0xFC000000U
-  if opcode != 0x14000000U && opcode != 0x94000000U {
-    abort("AArch64 call fixup does not point at B or BL")
-  }
-  if encode_aarch64_branch_imm26(pc, target_ptr, opcode) is Some(encoded) {
-    c_jit_write_u32(pc, encoded)
-    return
-  }
-  if fixup.veneer_offset >= 0 {
-    let veneer_pc = exec_ptr + fixup.veneer_offset.to_int64()
-    if encode_aarch64_branch_imm26(pc, veneer_pc, opcode) is Some(encoded) {
-      patch_aarch64_call_veneer_target(exec_ptr, fixup, target_ptr)
-      c_jit_write_u32(pc, encoded)
-      return
-    }
-  }
-  abort(
-    "direct call target out of range (func_idx=\{fixup.func_idx}, veneer_offset=\{fixup.veneer_offset})",
-  )
-}
-
-///|
-pub fn patch_x64_direct_call(
-  exec_ptr : Int64,
-  fixup : @cwasm.CallFixup,
-  target_ptr : Int64,
-) -> Unit {
-  let pc = exec_ptr + fixup.offset.to_int64()
-  match encode_x64_call_rel32_disp(pc, target_ptr) {
-    Some(encoded) => c_jit_write_u32(pc + 1L, encoded)
-    None => {
-      if fixup.veneer_offset >= 0 {
-        let veneer_pc = exec_ptr + fixup.veneer_offset.to_int64()
-        if encode_x64_call_rel32_disp(pc, veneer_pc) is Some(encoded) {
-          // Veneer layout (14 bytes):
-          //   +0:  jmp qword ptr [rip + 0]
-          //   +6:  target_ptr literal (u64)
-          c_jit_write_i64(veneer_pc + 6L, target_ptr)
-          c_jit_write_u32(pc + 1L, encoded)
-          return
-        }
-      }
-      abort(
-        "direct call target out of rel32 range (func_idx=\{fixup.func_idx}, veneer_offset=\{fixup.veneer_offset})",
-      )
-    }
-  }
-}
-
-///|
-pub fn patch_aarch64_call_fixups(
-  exec_ptr : Int64,
-  fixups : Array[@cwasm.CallFixup],
-  func_table_ptr : Int64,
-  direct_call_targets : Map[Int, Int64],
-) -> Unit {
-  for fixup in fixups {
-    let target_ptr = match
-      resolve_call_fixup_target(
-        fixup.func_idx,
-        func_table_ptr,
-        direct_call_targets,
-      ) {
-      Some(ptr) => ptr
-      None => abort("missing direct-call target for idx \{fixup.func_idx}")
-    }
-    patch_aarch64_direct_call(exec_ptr, fixup, target_ptr)
-  }
-}
-
-///|
-pub fn patch_x64_call_fixups(
-  exec_ptr : Int64,
-  fixups : Array[@cwasm.CallFixup],
-  func_table_ptr : Int64,
-  direct_call_targets : Map[Int, Int64],
-) -> Unit {
-  for fixup in fixups {
-    let target_ptr = match
-      resolve_call_fixup_target(
-        fixup.func_idx,
-        func_table_ptr,
-        direct_call_targets,
-      ) {
-      Some(ptr) => ptr
-      None => abort("missing direct-call target for idx \{fixup.func_idx}")
-    }
-    patch_x64_direct_call(exec_ptr, fixup, target_ptr)
-  }
-}
-
-///|
-pub fn patch_call_fixups_for_target(
-  target : @cwasm.TargetArch,
-  exec_ptr : Int64,
-  fixups : Array[@cwasm.CallFixup],
-  func_table_ptr : Int64,
-  direct_call_targets : Map[Int, Int64],
-) -> Unit {
-  match target {
-    AArch64 =>
-      patch_aarch64_call_fixups(
-        exec_ptr, fixups, func_table_ptr, direct_call_targets,
-      )
-    X86_64 =>
-      patch_x64_call_fixups(
-        exec_ptr, fixups, func_table_ptr, direct_call_targets,
-      )
-    Unknown =>
-      if fixups.length() > 0 {
-        abort("cannot patch call fixups for unknown cwasm target")
-      }
-  }
-}
 
 ///|
 /// GC-managed executable code block wrapper.
-struct ExecCode(@jit_ffi.ExecCode)
+struct ExecCode(ExecCodeHandle)
 
 ///|
 /// Allocate and copy code to executable memory (GC-managed).
-pub fn ExecCode::try_alloc(code : Array[Int]) -> ExecCode? {
+fn ExecCode::try_alloc(code : Array[Int]) -> ExecCode? {
   let size = code.length()
   if size == 0 {
     return None
@@ -1567,8 +1161,8 @@ pub fn ExecCode::try_alloc(code : Array[Int]) -> ExecCode? {
   for i, b in code {
     bytes[i] = b.to_byte()
   }
-  let ec = @jit_ffi.c_jit_alloc_exec_managed(bytes, size)
-  if @jit_ffi.c_jit_exec_code_ptr(ec) != 0L {
+  let ec = alloc_exec_managed(bytes, size)
+  if exec_code_pointer(ec) != 0L {
     Some(ExecCode(ec))
   } else {
     None
@@ -1580,8 +1174,8 @@ fn ExecCode::try_stage(size : Int) -> ExecCode? {
   if size <= 0 {
     return None
   }
-  let code = @jit_ffi.c_jit_stage_exec_managed(size)
-  if @jit_ffi.c_jit_exec_code_ptr(code) == 0L {
+  let code = stage_exec_managed(size)
+  if exec_code_pointer(code) == 0L {
     None
   } else {
     Some(ExecCode(code))
@@ -1595,16 +1189,16 @@ fn ExecCode::finalize(self : ExecCode, code : Array[Byte]) -> Bool {
   for index, byte in code {
     bytes[index] = byte
   }
-  @jit_ffi.c_jit_finalize_exec_managed(self.0, bytes, size) == 0
+  finalize_exec_managed(self.0, bytes, size) == 0
 }
 
 ///|
 fn ExecCode::release(self : ExecCode) -> Bool {
-  @jit_ffi.c_jit_release_exec_managed(self.0) == 0
+  release_exec_managed(self.0) == 0
 }
 
 ///|
 /// Get the function pointer from this executable code.
-pub fn ExecCode::ptr(self : ExecCode) -> Int64 {
-  @jit_ffi.c_jit_exec_code_ptr(self.0)
+fn ExecCode::ptr(self : ExecCode) -> Int64 {
+  exec_code_pointer(self.0)
 }

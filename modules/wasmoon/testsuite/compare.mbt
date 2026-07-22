@@ -515,8 +515,10 @@ fn run_jit_with_opt_level(
 }
 
 ///|
-pub fn current_target_arch() -> @cwasm.TargetArch {
-  @wasmoon_jit.host_target_arch()
+pub fn current_target_arch() -> @wasmoon_jit.NativeTarget {
+  @wasmoon_jit.host_native_target() catch {
+    _ => abort("unsupported host target")
+  }
 }
 
 ///|

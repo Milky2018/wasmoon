@@ -1441,7 +1441,7 @@ fn runtime_error_to_trap_code(err : @runtime.RuntimeError) -> Int {
 }
 
 ///|
-/// Build `external_imports` for `JITModule::load_with_imports`.
+/// Build `external_imports` for `JITModule::load_artifact_with_imports`.
 ///
 /// For function imports without built-in trampolines, we pass a special
 /// negative encoding `-(addr+1)` (store function address) to instruct the JIT

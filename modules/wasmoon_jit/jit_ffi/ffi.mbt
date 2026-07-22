@@ -52,7 +52,7 @@ pub extern "c" fn c_jit_get_trap_xreg(idx : Int) -> Int64 = "wasmoon_jit_get_tra
 // ============ Host Target ============
 
 ///|
-/// Host target architecture as a `cwasm.TargetArch` tag: 1=x86_64, 2=aarch64.
+/// Host target architecture tag: 1=x86_64, 2=aarch64.
 pub extern "c" fn c_jit_host_target_arch() -> Int = "wasmoon_jit_host_target_arch"
 
 // ============ Hostcall Bridge (JIT -> Host) ============
@@ -898,67 +898,6 @@ pub extern "c" fn c_jit_memory_fill(dst : Int, val : Int, size : Int) -> Unit = 
 /// Handles overlapping regions correctly
 /// Traps if out of bounds
 pub extern "c" fn c_jit_memory_copy(dst : Int, src : Int, size : Int) -> Unit = "wasmoon_jit_memory_copy"
-
-// ============ Executable Memory Management ============
-
-///|
-/// Allocate executable memory
-/// Returns pointer as Int64 (0 on failure)
-pub extern "c" fn c_jit_alloc_exec(size : Int) -> Int64 = "wasmoon_jit_alloc_exec"
-
-///|
-/// Copy code to executable memory
-/// Returns 0 on success, -1 on failure
-#borrow(src)
-pub extern "c" fn c_jit_copy_code(
-  dest : Int64,
-  src : FixedArray[Byte],
-  size : Int,
-) -> Int = "wasmoon_jit_copy_code"
-
-// ============ GC-managed ExecCode ============
-
-///|
-/// GC-managed executable code object
-/// The memory is automatically freed when the object is garbage collected
-pub type ExecCode
-
-///|
-/// Allocate GC-managed executable code
-/// Returns the allocated ExecCode object
-#borrow(code)
-pub extern "c" fn c_jit_alloc_exec_managed(
-  code : FixedArray[Byte],
-  size : Int,
-) -> ExecCode = "wasmoon_jit_alloc_exec_managed"
-
-///|
-/// Allocate a GC-managed writable staging mapping without publishing code.
-pub extern "c" fn c_jit_stage_exec_managed(size : Int) -> ExecCode = "wasmoon_jit_stage_exec_managed"
-
-///|
-/// Copy a complete staged image, transition it to executable-only access, and
-/// flush the platform instruction cache. Returns zero on success.
-#borrow(exec_code, code)
-pub extern "c" fn c_jit_finalize_exec_managed(
-  exec_code : ExecCode,
-  code : FixedArray[Byte],
-  size : Int,
-) -> Int = "wasmoon_jit_finalize_exec_managed"
-
-///|
-/// Immediately release a staged or finalized mapping. Repeated release is safe.
-#borrow(exec_code)
-pub extern "c" fn c_jit_release_exec_managed(exec_code : ExecCode) -> Int = "wasmoon_jit_release_exec_managed"
-
-///|
-/// Number of active executable-memory mappings, for rollback verification.
-pub extern "c" fn c_jit_exec_mapping_count() -> Int = "wasmoon_jit_exec_mapping_count"
-
-///|
-/// Get the function pointer from a GC-managed ExecCode object
-#owned(exec_code)
-pub extern "c" fn c_jit_exec_code_ptr(exec_code : ExecCode) -> Int64 = "wasmoon_jit_exec_code_ptr"
 
 // ============ Multi-value Return Support ============
 

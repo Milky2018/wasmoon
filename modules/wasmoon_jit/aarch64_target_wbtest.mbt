@@ -190,7 +190,8 @@ test "runtime ABI elaboration follows CFG order instead of block storage order" 
 
 ///|
 test "AArch64 target code executes through the production entry ABI" {
-  match host_target_arch() {
+  let host = host_native_target() catch { _ => return }
+  match host {
     AArch64 => ()
     _ => return
   }
@@ -244,16 +245,13 @@ fn install_aarch64_link_plan(
   resolve : (@code_object.RelocationTarget) -> Int64?,
 ) -> Bool raise @aarch64_target.AArch64LinkError {
   let linked = plan.link(executable.ptr(), resolve)
-  let bytes = FixedArray::make(linked.length(), b'\x00')
-  for index, byte in linked {
-    bytes[index] = byte
-  }
-  @jit_ffi.c_jit_copy_code(executable.ptr(), bytes, bytes.length()) == 0
+  executable.finalize(linked)
 }
 
 ///|
 test "AArch64 target executes internal and external relocations" {
-  match host_target_arch() {
+  let host = host_native_target() catch { _ => return }
+  match host {
     AArch64 => ()
     _ => return
   }
@@ -324,12 +322,10 @@ test "AArch64 target executes internal and external relocations" {
   ) catch {
     error => fail("failed to prepare caller link plan: \{error}")
   }
-  guard ExecCode::try_alloc(callee_plan.code().map(byte => byte.to_int()))
-    is Some(callee_code) else {
+  guard ExecCode::try_stage(callee_plan.code().length()) is Some(callee_code) else {
     fail("failed to allocate linked callee")
   }
-  guard ExecCode::try_alloc(caller_plan.code().map(byte => byte.to_int()))
-    is Some(caller_code) else {
+  guard ExecCode::try_stage(caller_plan.code().length()) is Some(caller_code) else {
     fail("failed to allocate linked caller")
   }
   let runtime = RuntimeSymbolResolver::with_wasmoon_runtime_symbols()

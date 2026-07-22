@@ -82,10 +82,6 @@ pub fn c_jit_add_preopen(Int64, Int, FixedArray[Byte], FixedArray[Byte]) -> Unit
 
 pub fn c_jit_alloc_context_managed(Int) -> JITContext
 
-pub fn c_jit_alloc_exec(Int) -> Int64
-
-pub fn c_jit_alloc_exec_managed(FixedArray[Byte], Int) -> ExecCode
-
 pub fn c_jit_alloc_guarded_memory_desc(Int64, Int64) -> Int64
 
 pub fn c_jit_alloc_memory(Int64) -> Int64
@@ -119,8 +115,6 @@ pub fn c_jit_clear_wasi_stdin_buffer(Int64) -> Unit
 pub fn c_jit_clear_wasi_stdin_callback(Int64) -> Unit
 
 pub fn c_jit_context_ptr(JITContext) -> Int64
-
-pub fn c_jit_copy_code(Int64, FixedArray[Byte], Int) -> Int
 
 pub fn c_jit_ctx_add_data_segment(Int64, Int, FixedArray[Byte], Int, Int) -> Unit
 
@@ -169,12 +163,6 @@ pub fn c_jit_exception_throw(Int64, Int, Int64, Int) -> Unit
 pub fn c_jit_exception_throw_tag(Int64, Int) -> Unit
 
 pub fn c_jit_exception_throw_values(Int64, Int, FixedArray[Int64], Int) -> Unit
-
-pub fn c_jit_exec_code_ptr(ExecCode) -> Int64
-
-pub fn c_jit_exec_mapping_count() -> Int
-
-pub fn c_jit_finalize_exec_managed(ExecCode, FixedArray[Byte], Int) -> Int
 
 pub fn c_jit_free_memory(Int64) -> Unit
 
@@ -488,8 +476,6 @@ pub fn c_jit_read_i64(Int64) -> Int64
 
 pub fn c_jit_read_u32(Int64) -> UInt
 
-pub fn c_jit_release_exec_managed(ExecCode) -> Int
-
 pub fn c_jit_set_cancellation_callback(Int64, FuncRef[(() -> Bool) -> Int], () -> Bool) -> Unit
 
 pub fn c_jit_set_hostcall_callback(Int64, FuncRef[(() -> Int) -> Int], () -> Int) -> Unit
@@ -511,8 +497,6 @@ pub fn c_jit_set_wasi_stdin_callback(Int64, FuncRef[(() -> Bytes) -> Bytes], () 
 pub fn c_jit_set_wasi_stdout_capture(Int64, Int) -> Unit
 
 pub fn c_jit_shared_table_set(Int64, Int, Int64, Int) -> Unit
-
-pub fn c_jit_stage_exec_managed(Int) -> ExecCode
 
 pub fn c_jit_take_wasi_stderr(Int64) -> Bytes
 
@@ -541,8 +525,6 @@ pub fn c_mem_desc_write_bytes(Int64, Int64, Bytes, Int) -> Int
 // Errors
 
 // Types and methods
-pub type ExecCode
-
 pub type JITContext
 
 // Type aliases

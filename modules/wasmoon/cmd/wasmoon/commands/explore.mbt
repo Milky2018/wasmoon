@@ -177,11 +177,13 @@ pub fn run_explore(
       println(ir_optimized)
     }
 
-    let target : @wasmoon_jit.NativeTarget = match
-      @wasmoon_jit.host_target_arch() {
-      AArch64 => AArch64
-      X86_64 => X64
-      Unknown => X64
+    let target = @wasmoon_jit.host_native_target() catch {
+      err => {
+        if !html_output {
+          println("Unsupported host target: \{err}")
+        }
+        continue
+      }
     }
     let mach_result = @wasmoon_jit.lower_wasm_body_semantic_machv(
       milk_result, wasm_validation_context,

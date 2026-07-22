@@ -28,9 +28,9 @@ allocator's read-only `FunctionView`, without copying the CFG or inspecting
 target instructions.
 
 Wasmoon enters native compilation through `wasmoon_jit`. The product layer
-provides VMContext field paths, runtime symbols, cwasm conversion, executable
-memory, and entry/hostcall trampolines, while reusable compiler modules remain
-independent of Wasmoon.
+provides VMContext field paths, runtime symbols, v9 artifact production and
+installation, and entry/hostcall trampolines, while reusable compiler modules
+remain independent of Wasmoon.
 
 ## Migration outcome
 

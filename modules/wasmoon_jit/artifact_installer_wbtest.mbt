@@ -43,9 +43,7 @@ fn installation_snapshot(installed : InstalledCode) -> InstallationSnapshot {
 }
 
 ///|
-fn executable_mapping_count() -> Int {
-  @jit_ffi.c_jit_exec_mapping_count()
-}
+extern "c" fn executable_mapping_count() -> Int = "wasmoon_jit_exec_mapping_count"
 
 ///|
 fn installer_for_tests() -> JitCodeInstaller {

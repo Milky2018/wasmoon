@@ -32,25 +32,6 @@ fn compiled_append_u32_le(buf : Array[Byte], value : Int) -> Unit {
 }
 
 ///|
-/// Build a compact stackmap blob for allocation safepoints.
-/// Format v1:
-///   u32 version (=1)
-///   u32 safepoint_count
-///   u32 root_count[safepoint_count]
-fn compiled_build_gc_stackmap_blob(root_counts : Array[Int]) -> Bytes {
-  if root_counts.length() == 0 {
-    return b""
-  }
-  let bytes : Array[Byte] = []
-  compiled_append_u32_le(bytes, 1)
-  compiled_append_u32_le(bytes, root_counts.length())
-  for count in root_counts {
-    compiled_append_u32_le(bytes, count)
-  }
-  Bytes::from_array(bytes)
-}
-
-///|
 fn safepoint_metadata_to_root_count(metadata : Int64) -> Int {
   if metadata <= 0L {
     return 0
@@ -71,18 +52,6 @@ fn compiled_encode_stackmap_root_count(root_count : Int) -> Int {
   } else {
     root_count
   }
-}
-
-///|
-fn compiled_has_stackmap_live_ref_indices(
-  safepoints : Array[GcSafepoint],
-) -> Bool {
-  for safepoint in safepoints {
-    if safepoint.live_refs.length() > 0 {
-      return true
-    }
-  }
-  false
 }
 
 ///|
@@ -141,137 +110,4 @@ fn compiled_build_gc_stackmap_blob_v2(
     }
   }
   Bytes::from_array(bytes)
-}
-
-///|
-/// A compiled function ready for Wasmoon JIT execution.
-pub struct CompiledFunction {
-  // Function name or identifier.
-  name : String
-  // The compiled machine code bytes and metadata.
-  code : JitCodeObject
-  // Entry point offset, usually 0.
-  entry_offset : Int
-  // Size of the code in bytes.
-  code_size : Int
-  // Stack frame size needed.
-  frame_size : Int
-  // GC safepoint metadata for this function.
-  gc_safepoints : Array[GcSafepoint]
-  // Compact stack-map payload for GC roots.
-  gc_stackmap_blob : Bytes
-  // Whether this function is currently valid.
-  mut valid : Bool
-}
-
-///|
-pub fn CompiledFunction::CompiledFunction(
-  name : String,
-  code : JitCodeObject,
-  gc_safepoints? : Array[GcSafepoint] = [],
-  gc_stackmap_blob? : Bytes = b"",
-) -> CompiledFunction {
-  let object_safepoints = code.get_gc_safepoints()
-  let derived_root_counts = object_safepoints.map(safepoint => {
-    safepoint_metadata_to_root_count(safepoint.metadata)
-  })
-  let resolved_gc_safepoints : Array[GcSafepoint] = if gc_safepoints.length() >
-    0 {
-    gc_safepoints
-  } else {
-    let derived : Array[GcSafepoint] = []
-    for safepoint in object_safepoints {
-      derived.push(safepoint)
-    }
-    derived
-  }
-  let stackmap_root_counts = if derived_root_counts.length() > 0 {
-    derived_root_counts
-  } else if resolved_gc_safepoints.length() > 0 {
-    let counts : Array[Int] = []
-    for safepoint in resolved_gc_safepoints {
-      counts.push(safepoint_metadata_to_root_count(safepoint.metadata))
-    }
-    counts
-  } else {
-    []
-  }
-  let resolved_gc_stackmap_blob = if gc_stackmap_blob.length() > 0 {
-    gc_stackmap_blob
-  } else if compiled_has_stackmap_live_ref_indices(resolved_gc_safepoints) {
-    compiled_build_gc_stackmap_blob_v2(
-      resolved_gc_safepoints, stackmap_root_counts,
-    )
-  } else {
-    compiled_build_gc_stackmap_blob(stackmap_root_counts)
-  }
-  {
-    name,
-    code,
-    entry_offset: 0,
-    code_size: code.size(),
-    frame_size: code.frame_size(),
-    gc_safepoints: resolved_gc_safepoints,
-    gc_stackmap_blob: resolved_gc_stackmap_blob,
-    valid: true,
-  }
-}
-
-///|
-/// Invalidate this compiled function and mark it for recompilation.
-pub fn CompiledFunction::invalidate(self : CompiledFunction) -> Unit {
-  self.valid = false
-}
-
-///|
-/// Check if the function is still valid.
-pub fn CompiledFunction::is_valid(self : CompiledFunction) -> Bool {
-  self.valid
-}
-
-///|
-/// Get the machine code bytes.
-pub fn CompiledFunction::get_code(self : CompiledFunction) -> Array[Int] {
-  self.code.get_bytes()
-}
-
-///|
-/// Get direct function address fixups.
-pub fn CompiledFunction::get_func_addr_fixups(
-  self : CompiledFunction,
-) -> Array[JitFuncAddrFixup] {
-  self.code.get_func_addr_fixups()
-}
-
-///|
-/// Get direct function call fixups.
-pub fn CompiledFunction::get_call_fixups(
-  self : CompiledFunction,
-) -> Array[JitCallFixup] {
-  self.code.get_call_fixups()
-}
-
-///|
-/// Get GC safepoint metadata for this function.
-pub fn CompiledFunction::get_gc_safepoints(
-  self : CompiledFunction,
-) -> Array[GcSafepoint] {
-  self.gc_safepoints
-}
-
-///|
-/// Get GC stack-map payload bytes for this function.
-pub fn CompiledFunction::get_gc_stackmap_blob(self : CompiledFunction) -> Bytes {
-  self.gc_stackmap_blob
-}
-
-///|
-fn CompiledFunction::to_string(self : CompiledFunction) -> String {
-  let status = if self.valid { "valid" } else { "invalid" }
-  "CompiledFunction(\{self.name}, \{self.code_size} bytes, frame=\{self.frame_size}, safepoints=\{self.gc_safepoints.length()}, \{status})"
-}
-
-///|
-pub impl Show for CompiledFunction with fn output(self, logger) {
-  logger.write_string(self.to_string())
 }

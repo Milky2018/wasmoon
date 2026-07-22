@@ -3,7 +3,7 @@
 JIT integration and native runtime support for Wasmoon.
 
 `wasmoon_jit` connects the compiler pipeline to Wasmoon's runtime. It provides
-VMContext layouts, native runtime helpers, cwasm artifacts, trampolines, WASI
+VMContext layouts, native runtime helpers, v9 artifacts, trampolines, WASI
 bridge glue, and integration planning for loading generated code.
 
 ## Packages
@@ -12,14 +12,13 @@ bridge glue, and integration planning for loading generated code.
   trampolines, native glue, runtime symbols, and helper APIs.
 - `Milky2018/wasmoon_jit/artifact`: target-portable Cwasm manifests, symbolic
   function identities, signatures, and unlinked code-object data.
-- `Milky2018/wasmoon_jit/cwasm`: serialized precompiled-code artifacts.
 - `Milky2018/wasmoon_jit/perf`: optional JIT performance metrics.
 - `Milky2018/wasmoon_jit/jit_ffi`: native stubs used by the JIT runtime.
 
 ## When to use it
 
 Use `wasmoon_jit` when integrating generated code with the Wasmoon runtime,
-including VMContext layout, runtime helper symbols, trampolines, cwasm
+including VMContext layout, runtime helper symbols, trampolines, v9
 artifacts, and native glue.
 
 `load_artifact` keeps loading separate from installation: it performs bounded
@@ -53,26 +52,13 @@ test "plan a small MilkIR function for x64 JIT integration" {
 }
 ```
 
-## Example: serialize a cwasm artifact
+## Persisted artifacts
 
-The `cwasm` package stores compiled functions, imports, memories, data
-segments, and target metadata in a portable artifact format.
-
-```moonbit check
-///|
-test "serialize and restore a precompiled module" {
-  let mod_ = @cwasm.PrecompiledModule::PrecompiledModule(AArch64)
-  mod_.add_type([0], [0])
-  mod_.add_import("env", "host_inc", 1, 1)
-  let entry = @cwasm.CompiledEntry::CompiledEntry(0, "inc", [0xc3], 0, 0, 1, 1)
-  mod_.add_function(entry)
-  let encoded = mod_.serialize()
-  let decoded = @cwasm.deserialize(encoded)
-  debug_inspect(decoded.target, content="AArch64")
-  inspect(decoded.import_count(), content="1")
-  inspect(decoded.function_count(), content="1")
-}
-```
+`Milky2018/wasmoon_jit/artifact` defines the v9 ordinary-data format. The live
+compiler produces symbolic, unlinked function code; `load_artifact` performs
+bounded decoding and exact compatibility verification; and `JitCodeInstaller`
+owns relocation, executable-memory mutation, and publication. There is no
+compatibility decoder for the removed v8 format.
 
 ## Compiler pipeline
 

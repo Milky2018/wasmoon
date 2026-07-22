@@ -62,7 +62,7 @@ wasmoon/
 ├── cmd/wasmoon-tools/ # wasmoon-tools CLI entry point
 ├── wat/            # WAT parser
 ├── wast/           # WAST parser
-├── cwasm/          # Binary parser
+├── parser/         # Core Wasm binary parser
 ├── validator/      # Module validation
 ├── runtime/        # Runtime structures
 ├── executor/       # Interpreter
