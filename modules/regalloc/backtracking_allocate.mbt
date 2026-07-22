@@ -273,11 +273,11 @@ fn[F : FunctionView] build_edge_affinities(
 }
 
 ///|
-fn[F : FunctionView] allocate_segments_backtracking(
+fn[F : FunctionView] allocate_segments_with_bundles(
   function : F,
   environment : MachineEnv,
   ranges : LiveRangeSet,
-  enable_eviction : Bool,
+  strategy : AllocatorStrategy,
 ) -> (
   Array[AllocationSegment],
   Array[Array[Int]],
@@ -286,8 +286,8 @@ fn[F : FunctionView] allocate_segments_backtracking(
 ) {
   let (segments, segments_by_value) = build_allocation_segments(ranges)
   let bundle_plan = build_production_bundle_plan(function, ranges, segments)
-  let (bundles, segment_owner) = allocate_production_bundles(
-    function, environment, ranges, segments, bundle_plan, enable_eviction,
+  let (bundles, segment_owner) = allocate_bundles(
+    function, environment, ranges, segments, bundle_plan, strategy,
   )
   (segments, segments_by_value, bundles, segment_owner)
 }
@@ -757,14 +757,14 @@ fn[F : FunctionView] assign_backtracking_operands(
 }
 
 ///|
-fn[F : FunctionView] allocate_fragmented(
+fn[F : FunctionView] allocate_bundle_plan(
   function : F,
   environment : MachineEnv,
-  enable_eviction : Bool,
+  strategy : AllocatorStrategy,
 ) -> AllocationPlan raise VerifyError {
   let ranges = build_function_live_ranges(function)
-  let (segments, segments_by_value, _, _) = allocate_segments_backtracking(
-    function, environment, ranges, enable_eviction,
+  let (segments, segments_by_value, _, _) = allocate_segments_with_bundles(
+    function, environment, ranges, strategy,
   )
   let plan = AllocationPlan::new(function.value_count())
   assign_backtracking_homes(

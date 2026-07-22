@@ -576,14 +576,15 @@ fn validate_bundle_allocations(
 }
 
 ///|
-fn[F : FunctionView] allocate_production_bundles(
+fn[F : FunctionView] allocate_bundles(
   function : F,
   environment : MachineEnv,
   ranges : LiveRangeSet,
   segments : Array[AllocationSegment],
   bundle_plan : ProductionBundlePlan,
-  enable_eviction : Bool,
+  strategy : AllocatorStrategy,
 ) -> (Array[AllocationBundle], Array[Int]) {
+  let enable_eviction = strategy is Backtracking
   let (bundles, segment_owner) = build_allocation_bundles(bundle_plan, segments)
   let occupied : Array[Array[Int]] = []
   for _ in environment.allocatable_regs {

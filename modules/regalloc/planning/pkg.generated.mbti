@@ -43,8 +43,6 @@ pub fn lower_bound_ordered_span_by_end(Array[OrderedProgramSpan], Int) -> Int
 
 pub fn lower_bound_sorted_int(Array[Int], Int) -> Int
 
-pub fn plan_bundle_split(Array[BundleSplitRange], @regalloc.ProgramPoint?, Array[Int], Int, Int) -> BundleSplitPlan
-
 pub fn plan_cross_block_rematerializations(Array[RematDefInfo], Array[RematUseInfo]) -> Array[RematLocalCloneInfo]
 
 pub fn plan_fixed_constraint_edits(Array[FixedConstraintInst]) -> Array[FixedConstraintInstEdits]
@@ -80,18 +78,6 @@ pub fn ActiveReloadCache::set(Self, Int, Int, Int) -> Unit
 pub(all) struct AllocatedProgramSpan {
   owner_id : Int
   span : OrderedProgramSpan
-} derive(Eq, @debug.Debug)
-
-pub(all) enum BundleSplitPlan {
-  Split(Array[Int], Array[Int])
-  Minimal
-  SpillWhole
-} derive(@debug.Debug)
-
-pub(all) struct BundleSplitRange {
-  range_id : Int
-  start : @regalloc.ProgramPoint?
-  end : @regalloc.ProgramPoint?
 } derive(Eq, @debug.Debug)
 
 pub(all) struct CompactSpillSet {
@@ -166,21 +152,6 @@ pub(all) struct ParallelMove {
   to : @regalloc.Location
   class : @regalloc.RegClass
 } derive(Eq, @debug.Debug)
-
-pub(all) struct PriorityWorkItem {
-  item_id : Int
-  priority : Int
-  seq : Int
-} derive(Eq, @debug.Debug)
-
-pub struct PriorityWorkQueue {
-  items : Array[PriorityWorkItem]
-  mut next_seq : Int
-}
-pub fn PriorityWorkQueue::PriorityWorkQueue() -> Self
-pub fn PriorityWorkQueue::length(Self) -> Int
-pub fn PriorityWorkQueue::pop(Self) -> PriorityWorkItem?
-pub fn PriorityWorkQueue::push(Self, Int, Int) -> Unit
 
 pub(all) struct ReloadIntervalInfo {
   block_id : Int

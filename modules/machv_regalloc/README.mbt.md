@@ -22,12 +22,13 @@ edits, edge moves, and safepoint roots before it is returned.
 
 The production adapter reads Target VCode directly through `FunctionView`; it
 does not build a second instruction or CFG graph. The aggregate target pipeline
-first verifies selected VCode, explicitly selects the `Backtracking` strategy,
-materializes the returned `AllocationPlan` into VCode `Allocation` side tables,
-and then runs the independent VCode allocation verifier. Production enables
-both the reusable plan verifier and the materialized VCode state verifier; the
-latter follows resident values through edits, clobbers, and CFG joins. There is
-no production fallback to `SinglePass`.
+first verifies selected VCode, explicitly selects the root allocator's
+`Backtracking` strategy, materializes its bundle-aware `AllocationPlan` into
+VCode `Allocation` side tables, and then runs the independent VCode allocation
+verifier. Production enables both the reusable plan verifier and the
+materialized VCode state verifier; the latter follows resident values through
+edits, clobbers, and CFG joins. There is no second backtracking policy package
+and no production fallback to `SinglePass`.
 
 Ordinary `Input::any` operands require a register at the instruction. A target
 operation that can consume a register or spill slot directly uses

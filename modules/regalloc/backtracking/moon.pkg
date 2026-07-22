@@ -1,5 +1,0 @@
-import {
-  "Milky2018/regalloc",
-  "Milky2018/regalloc/planning",
-  "Milky2018/regalloc/unionfind",
-}

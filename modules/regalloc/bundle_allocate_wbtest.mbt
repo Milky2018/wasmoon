@@ -113,11 +113,11 @@ test "production allocation assigns an SSA bundle atomically" {
     parameters: [[], [{ id: 1, class: Int }], [{ id: 2, class: Int }]],
     edge_arguments: [[[{ id: 0, class: Int }]], [[{ id: 1, class: Int }]], []],
   }
-  let (segments, _, bundles, segment_owner) = allocate_segments_backtracking(
+  let (segments, _, bundles, segment_owner) = allocate_segments_with_bundles(
     function,
     MachineEnv::new([{ id: 0, class: Int }], []),
     ranges,
-    true,
+    Backtracking,
   )
   debug_inspect(
     snapshot_bundle_allocation(bundles, segments, segment_owner),
@@ -190,13 +190,13 @@ test "production allocation evicts then splits a cheaper long bundle" {
     parameters: [[]],
     edge_arguments: [[]],
   }
-  let (bundles, segment_owner) = allocate_production_bundles(
+  let (bundles, segment_owner) = allocate_bundles(
     function,
     MachineEnv::new([r0], []),
     ranges,
     segments,
     plan,
-    true,
+    Backtracking,
   )
   debug_inspect(
     snapshot_bundle_allocation(bundles, segments, segment_owner),

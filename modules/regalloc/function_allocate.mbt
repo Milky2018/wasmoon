@@ -132,11 +132,7 @@ pub fn[F : FunctionView] allocate_function(
   config? : RegallocConfig = RegallocConfig(),
 ) -> AllocationPlan raise VerifyError {
   verify_operand_preferences(function, environment)
-  let plan = allocate_fragmented(
-    function,
-    environment,
-    config.strategy() is Backtracking,
-  )
+  let plan = allocate_bundle_plan(function, environment, config.strategy())
   resolve_instruction_edits(plan, environment)
   if config.verify() {
     verify_function_allocation(function, environment, plan)
