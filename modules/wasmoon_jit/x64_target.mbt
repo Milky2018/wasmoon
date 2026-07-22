@@ -5,6 +5,13 @@ priv struct X64TargetCompilation {
 }
 
 ///|
+priv struct X64TargetDiagnostics {
+  target_vcode : String
+  allocated_vcode : String
+  object : @code_object.UnlinkedCodeObject
+}
+
+///|
 fn x64_target_context(
   function : @semantic_machv.Function,
   environment_field_path : ((@semantic_machv.EnvironmentField) -> Array[Int]?)?,
@@ -69,4 +76,51 @@ fn build_x64_target(
       )
   }
   { object, frame_size }
+}
+
+///|
+fn diagnose_x64_target(
+  function : @semantic_machv.Function,
+  environment_field_path? : (@semantic_machv.EnvironmentField) -> Array[Int]?,
+  allocation_symbols? : Array[@semantic_machv.ExternalSymbol] = [],
+  root_scope_symbols? : (
+    @semantic_machv.ExternalSymbol,
+    @semantic_machv.ExternalSymbol,
+  ),
+) -> X64TargetDiagnostics raise JitPipelineError {
+  let elaborated = match root_scope_symbols {
+    Some(symbols) =>
+      elaborate_wasmoon_runtime_abi(function, allocation_symbols, symbols)
+    None => function
+  }
+  let context = x64_target_context(elaborated, environment_field_path)
+  let selected = @x64_target.lower(elaborated, context) catch {
+    error =>
+      raise PipelineFailure(
+        message="\{function.name()}: x64 selection failed: \{error.to_string()}",
+      )
+  }
+  let allocation = @x64_target.allocate(selected) catch {
+    error =>
+      raise PipelineFailure(
+        message="\{function.name()}: x64 allocation failed: \{error.to_string()}",
+      )
+  }
+  let frame = @x64_target.plan_frame(selected, allocation) catch {
+    error =>
+      raise PipelineFailure(
+        message="\{function.name()}: x64 frame planning failed: \{error.to_string()}",
+      )
+  }
+  let object = @x64_target.emit(selected, allocation, frame) catch {
+    error =>
+      raise PipelineFailure(
+        message="\{function.name()}: x64 emission failed: \{error.to_string()}",
+      )
+  }
+  {
+    target_vcode: selected.summary(),
+    allocated_vcode: selected.summary() + allocation.summary(),
+    object,
+  }
 }

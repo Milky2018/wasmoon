@@ -7,7 +7,9 @@ priv struct CompiledFunc {
   ir : String
   ir_opt : String
   machv : String
+  vcode : String
   regalloc : String
+  code_object : String
   mc : String
 }
 
@@ -25,14 +27,19 @@ pub fn run_explore(
   // Parse stages - empty means show all
   let show_all = stages.is_empty()
   let show_source = show_all || stages.contains("source")
-  let show_ir = show_all || stages.contains("ir")
-  let show_opt_ir = show_all || stages.contains("opt-ir")
-  let show_regalloc = show_all || stages.contains("regalloc")
-  let show_mc = show_all || stages.contains("mc")
-  let show_milkir = show_all || stages.contains("milkir")
-  let show_opt_milkir = show_all || stages.contains("opt-milkir")
+  let show_milkir = show_all ||
+    stages.contains("milkir") ||
+    stages.contains("ir")
+  let show_opt_milkir = show_all ||
+    stages.contains("opt-milkir") ||
+    stages.contains("opt-ir")
+  let show_regalloc = show_all ||
+    stages.contains("allocated-vcode") ||
+    stages.contains("regalloc")
+  let show_mc = show_all || stages.contains("mc") || stages.contains("machv-mc")
   let show_machv = show_all || stages.contains("machv")
-  let show_machv_mc = show_all || stages.contains("machv-mc")
+  let show_vcode = show_all || stages.contains("vcode")
+  let show_code_object = show_all || stages.contains("code-object")
   if !html_output {
     println("Exploring compilation: \{wasm_path}")
     println("=".repeat(60))
@@ -151,7 +158,9 @@ pub fn run_explore(
             ir: text,
             ir_opt: text,
             machv: text,
+            vcode: text,
             regalloc: text,
+            code_object: text,
             mc: text,
           })
         }
@@ -159,24 +168,12 @@ pub fn run_explore(
       }
     }
     let ir_text = milk_result.print()
-    if !html_output && show_ir {
-      println("")
-      println("── MilkIR (ir alias) ──")
-      println(ir_text)
-    }
-
     @milkir.optimize_with_level(
       milk_result,
       @milkir.OptLevel::from_int(opt_level),
     )
     |> ignore
     let ir_optimized = milk_result.print()
-    if !html_output && show_opt_ir {
-      println("")
-      println("── Optimized MilkIR (opt-ir alias) ──")
-      println(ir_optimized)
-    }
-
     let target = @wasmoon_jit.host_native_target() catch {
       err => {
         if !html_output {
@@ -185,67 +182,70 @@ pub fn run_explore(
         continue
       }
     }
-    let mach_result = @wasmoon_jit.lower_wasm_body_semantic_machv(
-      milk_result, wasm_validation_context,
-    ) catch {
-      err => {
-        if !html_output {
-          println("MilkIR lowering error: \{err}")
-        }
-        continue
-      }
-    }
-    let machv_text = mach_result.print()
-
-    let allocated_text = "MachV register allocation is integrated into the wasmoon_jit planning pipeline."
-    if !html_output && show_regalloc {
-      println("")
-      println("── Register Allocation ──")
-      println(allocated_text)
-    }
-
-    let plan = @wasmoon_jit.plan_wasm_body_milkir_integration_for_target(
+    let diagnostics = @wasmoon_jit.compile_wasm_body_diagnostics_for_target(
       milk_result, wasm_validation_context, target,
     ) catch {
       err => {
+        let text = "Native pipeline error: \{err}"
         if !html_output {
-          println("MilkIR planning error: \{err}")
+          println(text)
+        } else {
+          compiled_funcs.push({
+            name: func_name,
+            type_str: format_func_type(func_type),
+            source: source_text,
+            ir: ir_text,
+            ir_opt: ir_optimized,
+            machv: text,
+            vcode: text,
+            regalloc: text,
+            code_object: text,
+            mc: text,
+          })
         }
         continue
       }
     }
-    let mc_text = plan.object
-      .get_bytes()
-      .map(fn(b) { @types.to_hex_byte(b) })
-      .join(" ")
+    let machv_text = diagnostics.semantic_machv
+    let vcode_text = diagnostics.target_vcode
+    let allocated_text = diagnostics.allocated_vcode
+    let code_object_text = diagnostics.code_object
+    let mc_text = diagnostics.machine_code
+
+    if !html_output && show_milkir {
+      println("")
+      println("── MilkIR ──")
+      println(ir_text)
+    }
+    if !html_output && show_opt_milkir {
+      println("")
+      println("── Optimized MilkIR ──")
+      println(ir_optimized)
+    }
+    if !html_output && show_machv {
+      println("")
+      println("── Semantic MachV ──")
+      println(machv_text)
+    }
+    if !html_output && show_vcode {
+      println("")
+      println("── Target VCode ──")
+      println(vcode_text)
+    }
+    if !html_output && show_regalloc {
+      println("")
+      println("── Allocated Target VCode ──")
+      println(allocated_text)
+    }
+    if !html_output && show_code_object {
+      println("")
+      println("── Unlinked Code Object ──")
+      println(code_object_text)
+    }
     if !html_output && show_mc {
       println("")
       println("── Machine Code ──")
       println(mc_text)
-    }
-
-    if !html_output &&
-      (show_milkir || show_opt_milkir || show_machv || show_machv_mc) {
-      if show_milkir {
-        println("")
-        println("── MilkIR ──")
-        println(ir_text)
-      }
-      if show_opt_milkir {
-        println("")
-        println("── Optimized MilkIR ──")
-        println(ir_optimized)
-      }
-      if show_machv {
-        println("")
-        println("── MachV ──")
-        println(machv_text)
-      }
-      if show_machv_mc {
-        println("")
-        println("── MachV Machine Code ──")
-        println(mc_text)
-      }
     }
 
     // Collect for HTML
@@ -257,7 +257,9 @@ pub fn run_explore(
         ir: ir_text,
         ir_opt: ir_optimized,
         machv: machv_text,
+        vcode: vcode_text,
         regalloc: allocated_text,
+        code_object: code_object_text,
         mc: mc_text,
       })
     }

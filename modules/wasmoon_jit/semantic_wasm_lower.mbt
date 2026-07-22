@@ -203,6 +203,69 @@ pub fn lower_wasm_body_semantic_machv(
 }
 
 ///|
+/// Render every verified native compilation checkpoint without exposing
+/// concrete target construction types to diagnostics consumers.
+pub fn compile_wasm_body_diagnostics_for_target(
+  function : @milkir.Function,
+  validation_context : @wasm_milkir.WasmValidationContext,
+  target : NativeTarget,
+  use_subtype_indirect_check? : Bool = true,
+  canonical_type_indices? : Array[Int] = [],
+) -> JitPipelineDiagnostics raise JitPipelineError {
+  let environment = wasmoon_semantic_environment(
+    use_subtype_indirect_check, canonical_type_indices,
+  )
+  let semantic = lower_wasm_body_semantic_with_environment(
+    function, validation_context, environment,
+  )
+  let semantic_machv = semantic.print()
+  if target is AArch64 {
+    let diagnostics = diagnose_aarch64_target(
+      semantic,
+      environment_field_path=fn(field : @semantic_machv.EnvironmentField) {
+        environment.field_paths.get(field.name)
+      },
+      allocation_symbols=wasmoon_allocation_symbols(environment),
+      root_scope_symbols=(
+        @semantic_machv.ExternalSymbol::new(gc_push_root_scope_symbol()),
+        @semantic_machv.ExternalSymbol::new(gc_pop_root_scope_symbol()),
+      ),
+    )
+    return {
+      semantic_machv,
+      target_vcode: diagnostics.target_vcode,
+      allocated_vcode: diagnostics.allocated_vcode,
+      code_object: code_object_diagnostic_text(diagnostics.object),
+      machine_code: diagnostics.object
+      .code()
+      .map(byte => @types.to_hex_byte(byte.to_int()))
+      .join(" "),
+    }
+  }
+  let diagnostics = diagnose_x64_target(
+    semantic,
+    environment_field_path=fn(field : @semantic_machv.EnvironmentField) {
+      environment.field_paths.get(field.name)
+    },
+    allocation_symbols=wasmoon_allocation_symbols(environment),
+    root_scope_symbols=(
+      @semantic_machv.ExternalSymbol::new(gc_push_root_scope_symbol()),
+      @semantic_machv.ExternalSymbol::new(gc_pop_root_scope_symbol()),
+    ),
+  )
+  {
+    semantic_machv,
+    target_vcode: diagnostics.target_vcode,
+    allocated_vcode: diagnostics.allocated_vcode,
+    code_object: code_object_diagnostic_text(diagnostics.object),
+    machine_code: diagnostics.object
+    .code()
+    .map(byte => @types.to_hex_byte(byte.to_int()))
+    .join(" "),
+  }
+}
+
+///|
 fn compile_wasm_body_aarch64_target(
   function : @milkir.Function,
   validation_context : @wasm_milkir.WasmValidationContext,

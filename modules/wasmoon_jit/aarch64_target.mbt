@@ -5,6 +5,13 @@ priv struct AArch64TargetCompilation {
 }
 
 ///|
+priv struct AArch64TargetDiagnostics {
+  target_vcode : String
+  allocated_vcode : String
+  object : @code_object.UnlinkedCodeObject
+}
+
+///|
 fn aarch64_target_context(
   function : @semantic_machv.Function,
   environment_field_path : ((@semantic_machv.EnvironmentField) -> Array[Int]?)?,
@@ -69,4 +76,51 @@ fn build_aarch64_target(
       )
   }
   { object, frame_size }
+}
+
+///|
+fn diagnose_aarch64_target(
+  function : @semantic_machv.Function,
+  environment_field_path? : (@semantic_machv.EnvironmentField) -> Array[Int]?,
+  allocation_symbols? : Array[@semantic_machv.ExternalSymbol] = [],
+  root_scope_symbols? : (
+    @semantic_machv.ExternalSymbol,
+    @semantic_machv.ExternalSymbol,
+  ),
+) -> AArch64TargetDiagnostics raise JitPipelineError {
+  let elaborated = match root_scope_symbols {
+    Some(symbols) =>
+      elaborate_wasmoon_runtime_abi(function, allocation_symbols, symbols)
+    None => function
+  }
+  let context = aarch64_target_context(elaborated, environment_field_path)
+  let selected = @aarch64_target.lower(elaborated, context) catch {
+    error =>
+      raise PipelineFailure(
+        message="\{function.name()}: AArch64 selection failed: \{error.to_string()}",
+      )
+  }
+  let allocation = @aarch64_target.allocate(selected) catch {
+    error =>
+      raise PipelineFailure(
+        message="\{function.name()}: AArch64 allocation failed: \{error.to_string()}",
+      )
+  }
+  let frame = @aarch64_target.plan_frame(selected, allocation) catch {
+    error =>
+      raise PipelineFailure(
+        message="\{function.name()}: AArch64 frame planning failed: \{error.to_string()}",
+      )
+  }
+  let object = @aarch64_target.emit(selected, allocation, frame) catch {
+    error =>
+      raise PipelineFailure(
+        message="\{function.name()}: AArch64 emission failed: \{error.to_string()}",
+      )
+  }
+  {
+    target_vcode: selected.summary(),
+    allocated_vcode: selected.summary() + allocation.summary(),
+    object,
+  }
 }

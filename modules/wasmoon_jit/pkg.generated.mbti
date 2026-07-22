@@ -57,6 +57,8 @@ pub fn collect_gc_root_args(Array[Int64], Array[@types.ValueType]) -> Array[Int6
 
 pub fn compile_wasm_body_artifact_function(@milkir.Function, @wasm_milkir.WasmValidationContext, NativeTarget, function_index~ : Int, signature~ : @machv.Signature, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @artifact.FunctionCode raise JitPipelineError
 
+pub fn compile_wasm_body_diagnostics_for_target(@milkir.Function, @wasm_milkir.WasmValidationContext, NativeTarget, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> JitPipelineDiagnostics raise JitPipelineError
+
 pub fn context_func_count(Int64) -> Int
 
 pub fn context_func_table_ptr(Int64) -> Int64
@@ -711,6 +713,14 @@ pub(all) struct JitIntegrationPlan {
   native_glue : Array[NativeGlueBinding]
   object : JitCodeObject
 }
+
+pub struct JitPipelineDiagnostics {
+  semantic_machv : String
+  target_vcode : String
+  allocated_vcode : String
+  code_object : String
+  machine_code : String
+} derive(@debug.Debug)
 
 pub struct LoadedArtifact {
   artifact : @artifact.Artifact

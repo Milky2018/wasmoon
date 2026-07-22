@@ -27,6 +27,38 @@ pub(all) struct JitIntegrationPlan {
 }
 
 ///|
+/// Stable, read-only renderings of the final native compilation checkpoints.
+/// Concrete target instruction, allocation, and frame types remain owned by
+/// their target modules and do not cross this diagnostics facade.
+pub struct JitPipelineDiagnostics {
+  semantic_machv : String
+  target_vcode : String
+  allocated_vcode : String
+  code_object : String
+  machine_code : String
+} derive(Debug)
+
+///|
+fn code_object_diagnostic_text(
+  object : @code_object.UnlinkedCodeObject,
+) -> String {
+  let architecture = match object.architecture() {
+    AArch64 => "aarch64"
+    X64 => "x64"
+  }
+  let code = object.code()
+  let bytes = code.map(byte => @types.to_hex_byte(byte.to_int())).join(" ")
+  "code-object \{architecture}\n" +
+  "  code-size: \{code.length()}\n" +
+  "  relocations: \{to_repr(object.relocations())}\n" +
+  "  sources: \{to_repr(object.sources())}\n" +
+  "  traps: \{to_repr(object.traps())}\n" +
+  "  safepoints: \{to_repr(object.safepoints())}\n" +
+  "  unwind: \{to_repr(object.unwind())}\n" +
+  "  bytes: \{bytes}"
+}
+
+///|
 pub suberror JitPipelineError {
   PipelineFailure(message~ : String)
 } derive(Debug, Eq)

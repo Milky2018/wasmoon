@@ -31,8 +31,8 @@ fn clap_simple_value(name : String) -> @clap.SimpleValue {
 fn main {
   // Define choices for explore stages
   let stage_choices = @hashset.HashSet::from_array([
-    "source", "ir", "opt-ir", "machv", "regalloc", "mc", "milkir", "opt-milkir",
-    "machv-mc",
+    "source", "ir", "opt-ir", "machv", "vcode", "allocated-vcode", "regalloc", "code-object",
+    "mc", "milkir", "opt-milkir", "machv-mc",
   ])
 
   // Define choices for config action
@@ -137,7 +137,7 @@ fn main {
           short='s',
           nargs=Any,
           choices=stage_choices,
-          help="Stages to show: source, ir, opt-ir, machv, regalloc, mc, milkir, opt-milkir, machv-mc (default all)",
+          help="Stages to show: source, milkir, opt-milkir, machv, vcode, allocated-vcode, code-object, mc (default all; ir, opt-ir, regalloc, and machv-mc are aliases)",
         ),
         "html": @clap.Arg::flag(help="Output HTML report"),
         "debug": @clap.Arg::flag(short='D', help="Enable debug output"),
