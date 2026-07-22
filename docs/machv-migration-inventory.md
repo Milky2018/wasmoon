@@ -38,7 +38,8 @@ remain independent of Wasmoon.
   and their respective Target VCode pipelines.
 - Both production targets explicitly use the verified backtracking allocator;
   `SinglePass` is not a runtime fallback.
-- Diagnostics and `explore --stage machv` use the same semantic path as
+- Diagnostics and `explore --stage machv vcode allocated-vcode code-object mc`
+  use the same semantic, target, allocation, object, and emission path as
   production compilation.
 - The retired shared target-opcode backend, its compatibility adapters, and
   its allocation/emission packages were removed in the x64 cutover.

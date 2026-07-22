@@ -49,14 +49,19 @@ Example:
 Explore the compilation pipeline stages for debugging and analysis.
 
 Stages:
-- `ast`: Parsed AST
-- `ir`: Intermediate representation (SSA)
-- `machv`: MachV virtual-register machine IR (pre-register allocation)
+- `source`: Function source text
+- `milkir`: MilkIR SSA before optimization (`ir` is retained as a CLI alias)
+- `opt-milkir`: Optimized MilkIR (`opt-ir` is retained as a CLI alias)
+- `machv`: Target-neutral semantic MachV
+- `vcode`: Selected target VCode before register allocation
+- `allocated-vcode`: Target VCode after allocation materialization
+- `code-object`: Verified unlinked code object and metadata
 - `mc`: Machine code (final assembly)
 
 Example:
 ```bash
-./wasmoon explore test.wat --stage ir machv mc
+./wasmoon explore test.wat \
+  --stage milkir machv vcode allocated-vcode code-object mc
 ```
 
 ### Disassemble
@@ -101,13 +106,14 @@ python3 scripts/run_all_wast.py
 
 ```bash
 # View IR for a function
-./wasmoon explore mymodule.wat --stage ir
+./wasmoon explore mymodule.wat --stage milkir
 
 # View generated machine code
 ./wasmoon explore mymodule.wat --stage mc
 
 # View full pipeline
-./wasmoon explore mymodule.wat --stage ir machv mc
+./wasmoon explore mymodule.wat \
+  --stage milkir machv vcode allocated-vcode code-object mc
 ```
 
 ## Exit Codes

@@ -1,6 +1,6 @@
 name = "Milky2018/x64_target"
 
-version = "0.1.2"
+version = "0.1.3"
 
 readme = "README.mbt.md"
 
@@ -10,13 +10,13 @@ license = "Apache-2.0"
 
 keywords = [ "x64", "x86-64", "compiler", "codegen" ]
 
-description = "x64 ISA target for lowering MilkIR into MachV"
+description = "x64 target pipeline from semantic MachV to native code"
 
 import {
-  "Milky2018/milkir@0.2.0",
-  "Milky2018/machv@0.3.0",
-  "Milky2018/machv_regalloc@0.2.2",
-  "Milky2018/milkir_machv@0.3.0",
+  "Milky2018/milkir@0.2.1",
+  "Milky2018/machv@0.4.0",
+  "Milky2018/machv_regalloc@0.2.3",
+  "Milky2018/milkir_machv@0.3.1",
 }
 
 preferred_target = "wasm-gc"

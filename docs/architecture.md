@@ -14,7 +14,9 @@ WAST test script ───────→ wasmoon/wast ──┘                
                                                                                       → MachV
                                                                                       → target VCode
                                                                                       → target allocation/emission
-                                                                                      → wasmoon_jit
+                                                                                      → verified code object
+                                                                                      → v9 artifact
+                                                                                      → wasmoon_jit installer
 ```
 
 The `wasmoon run` command validates both the main module and preloaded core modules before instantiation. Library callers that assemble parsing, validation, and execution themselves remain responsible for preserving the same boundary.

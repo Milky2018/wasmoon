@@ -7,6 +7,24 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 
+RETIRED_MODULE_MARKERS = [
+    "machv_legacy",
+    "machv_emit",
+    "wasm_isa_lower",
+    "wasmoon_jit/cwasm",
+    "@jit_ffi",
+    "NativeGlue",
+]
+
+SUPPORTED_ARCHITECTURE_DOCS = [
+    "AGENTS.md",
+    "docs/architecture.md",
+    "docs/cli.md",
+    "docs/development.md",
+    "docs/machv-migration-inventory.md",
+    "modules/README.md",
+]
+
 FORBIDDEN_FILES = [
     "modules/wasmoon/testsuite/aarch64_candidate_test.mbt",
     "modules/wasmoon_jit/jit_ffi/ffi.mbt",
@@ -136,6 +154,24 @@ def main() -> int:
         if '"Milky2018/wasmoon_jit/jit_ffi"' in text:
             relative = path.relative_to(ROOT)
             failures.append(f"{relative}: imports retired jit_ffi package")
+
+    current_module_files = []
+    for path in (ROOT / "modules").rglob("*"):
+        if path.name in {"moon.mod", "moon.pkg"} or path.suffix in {
+            ".mbt",
+            ".mbti",
+            ".md",
+        }:
+            current_module_files.append(path)
+    current_module_files.extend(ROOT / path for path in SUPPORTED_ARCHITECTURE_DOCS)
+    for path in current_module_files:
+        text = path.read_text(encoding="utf-8")
+        for marker in RETIRED_MODULE_MARKERS:
+            if marker in text:
+                relative = path.relative_to(ROOT)
+                failures.append(
+                    f"{relative}: retired architecture marker {marker!r}"
+                )
 
     jit_interface = ROOT / "modules/wasmoon_jit/pkg.generated.mbti"
     for line in jit_interface.read_text(encoding="utf-8").splitlines():
