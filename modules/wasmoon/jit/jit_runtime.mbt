@@ -235,6 +235,20 @@ pub fn JITModule::load_artifact_with_imports(
   function_names? : Array[String] = [],
   debug_db? : @wasmoon_jit.JITDebugDB? = None,
 ) -> JITModule raise JITModuleLoadError {
+  load_artifact_with_imports_using_registrar(
+    loaded, func_signatures, external_imports, function_names, debug_db, @wasmoon_jit.gc_set_code_object_safepoints,
+  )
+}
+
+///|
+fn load_artifact_with_imports_using_registrar(
+  loaded : @wasmoon_jit.LoadedArtifact,
+  func_signatures : Array[(Array[@types.ValueType], Array[@types.ValueType])],
+  external_imports : Map[String, Map[String, Int64]],
+  function_names : Array[String],
+  debug_db : @wasmoon_jit.JITDebugDB?,
+  register_safepoints : (Int64, Int, Array[@code_object.SafepointSite]) -> Bool,
+) -> JITModule raise JITModuleLoadError {
   let artifact = loaded.artifact()
   let total_funcs = artifact_context_function_count(
     artifact,
@@ -242,6 +256,19 @@ pub fn JITModule::load_artifact_with_imports(
   )
   guard JITContext::try_alloc(total_funcs) is Some(ctx) else {
     raise ContextAllocationFailed(total_funcs~)
+  }
+  for function in artifact.functions {
+    let identity = function.identity
+    if !register_safepoints(
+        ctx.ptr(),
+        identity.function_index,
+        function.safepoints,
+      ) {
+      raise FunctionMetadataRegistrationFailed(
+        func_idx=identity.function_index,
+        message="failed to register GC safepoints",
+      )
+    }
   }
   let jit_module = JITModule::JITModule()
   let import_targets = stage_artifact_imports(
@@ -263,19 +290,6 @@ pub fn JITModule::load_artifact_with_imports(
   })
   let installed = installer.install(loaded) catch {
     error => raise ArtifactInstallationFailed(cause=error)
-  }
-  for function in installed.functions() {
-    let identity = function.identity()
-    if !@wasmoon_jit.gc_set_code_object_safepoints(
-        ctx.ptr(),
-        identity.function_index,
-        function.safepoints(),
-      ) {
-      raise FunctionMetadataRegistrationFailed(
-        func_idx=identity.function_index,
-        message="failed to register GC safepoints",
-      )
-    }
   }
   for import_ in installed.imports() {
     ctx.set_func(import_.identity().function_index, import_.address())

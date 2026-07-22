@@ -1,14 +1,159 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def load_module(name: str, path: Path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+SMITH = load_module("smith_diff_run", ROOT / "scripts/smith_diff/run.py")
+
+
+def git(repo: Path, *args: str) -> str:
+    return subprocess.check_output(
+        ["git", *args],
+        cwd=repo,
+        text=True,
+    ).strip()
+
+
+def commit_file(repo: Path, path: str, content: str, message: str) -> str:
+    target = repo / path
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(content, encoding="utf-8")
+    git(repo, "add", path)
+    git(repo, "commit", "-m", message)
+    return git(repo, "rev-parse", "HEAD")
+
+
+def init_git_repo(directory: str) -> Path:
+    repo = Path(directory)
+    git(repo, "init")
+    git(repo, "config", "user.email", "cutover-test@example.com")
+    git(repo, "config", "user.name", "Cutover Test")
+    return repo
+
+
+class SmithGateTests(unittest.TestCase):
+    def test_smith_seed_is_reproducible_and_case_specific(self) -> None:
+        first = SMITH._deterministic_seed(7, 3, 65)
+        self.assertEqual(first, SMITH._deterministic_seed(7, 3, 65))
+        self.assertNotEqual(first, SMITH._deterministic_seed(7, 4, 65))
+        self.assertEqual(len(first), 65)
+
+    def test_interpreter_oracle_never_requires_or_runs_wasmtime(self) -> None:
+        checked: list[str] = []
+
+        def which(tool: str) -> str:
+            checked.append(tool)
+            return f"/tools/{tool}"
+
+        with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / "wasmoon").touch()
+            with (
+                mock.patch.object(SMITH, "REPO_ROOT", Path(directory)),
+                mock.patch.object(SMITH.shutil, "which", side_effect=which),
+            ):
+                SMITH._ensure_tools("interpreter")
+        self.assertEqual(checked, ["wasm-tools"])
+        with mock.patch.object(SMITH, "_run_wasmtime") as wasmtime:
+            outcome = SMITH._run_oracle(
+                Path("case.wasm"),
+                authority="interpreter",
+                timeout_s=1.0,
+            )
+        wasmtime.assert_not_called()
+        self.assertEqual(outcome.kind, "not-run")
+
+    def test_run_rejects_an_empty_generated_corpus(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            with (
+                mock.patch.object(
+                    sys,
+                    "argv",
+                    [
+                        "smith-diff",
+                        "run",
+                        "--count",
+                        "0",
+                        "--oracle",
+                        "interpreter",
+                        "--out",
+                        directory,
+                    ],
+                ),
+                mock.patch.object(SMITH, "_ensure_tools"),
+                mock.patch.object(
+                    SMITH,
+                    "_build_template_wasm",
+                    return_value=Path(directory) / "template.wasm",
+                ),
+                mock.patch.object(
+                    SMITH,
+                    "_smith_config_for_run",
+                    return_value=Path(directory) / "smith_config.json",
+                ),
+            ):
+                self.assertEqual(SMITH.main(), 2)
+
+    def test_run_rejects_generation_errors(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            generation_error = SMITH.Outcome(
+                kind="error",
+                rc=1,
+                stdout="",
+                stderr="failed to generate module",
+            )
+            with (
+                mock.patch.object(
+                    sys,
+                    "argv",
+                    [
+                        "smith-diff",
+                        "run",
+                        "--count",
+                        "1",
+                        "--oracle",
+                        "interpreter",
+                        "--out",
+                        directory,
+                    ],
+                ),
+                mock.patch.object(SMITH, "_ensure_tools"),
+                mock.patch.object(
+                    SMITH,
+                    "_build_template_wasm",
+                    return_value=Path(directory) / "template.wasm",
+                ),
+                mock.patch.object(
+                    SMITH,
+                    "_smith_config_for_run",
+                    return_value=Path(directory) / "smith_config.json",
+                ),
+                mock.patch.object(
+                    SMITH,
+                    "_generate_module",
+                    return_value=generation_error,
+                ),
+            ):
+                self.assertEqual(SMITH.main(), 2)
+
 
 class GateManifestTests(unittest.TestCase):
     def test_init_records_only_current_tree_evidence(self) -> None:
@@ -35,8 +180,8 @@ class GateManifestTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0)
             payload = json.loads(manifest.read_text(encoding="utf-8"))
             self.assertNotIn("legacy_commit", payload)
-            self.assertNotIn("performance", payload)
             self.assertNotIn("inputs", payload)
+            self.assertNotIn("performance", payload)
 
     def test_finalize_rejects_a_missing_required_command(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -126,6 +271,105 @@ class GateManifestTests(unittest.TestCase):
             "--required target-identity,moon-fmt,moon-info,git-diff-check,",
             workflow,
         )
+        self.assertIn("scripts/check_committed_diff.py", workflow)
+        self.assertNotIn("run_gate git-diff-check 'git diff --check'", workflow)
+        self.assertNotIn("paired-performance", workflow)
+        self.assertNotIn("scripts/run_machv_cutover_perf.py", workflow)
+        self.assertNotIn("--perf-report", workflow)
+
+    def test_committed_diff_gate_rejects_committed_whitespace_damage(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = init_git_repo(directory)
+            base = commit_file(repo, "file.txt", "clean\n", "base")
+            head = commit_file(repo, "file.txt", "trailing   \n", "damage")
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(ROOT / "scripts/check_committed_diff.py"),
+                    "--base",
+                    base,
+                    "--head",
+                    head,
+                ],
+                cwd=repo,
+                check=False,
+            )
+            self.assertNotEqual(result.returncode, 0)
+
+    def test_closing_detector_handles_late_migration_issue_ids(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = init_git_repo(directory)
+            for issue_id in (203, 206, 244, 300):
+                base = commit_file(
+                    repo,
+                    f"issues/ISS-{issue_id:03d}.md",
+                    "## Metadata\n- Status: open\n",
+                    f"open ISS-{issue_id:03d}",
+                )
+                edited = commit_file(
+                    repo,
+                    f"issues/ISS-{issue_id:03d}.md",
+                    "## Metadata\n- Status: open\n\n## Notes\n- progress\n",
+                    f"edit ISS-{issue_id:03d}",
+                )
+                unchanged = subprocess.run(
+                    [
+                        sys.executable,
+                        str(ROOT / "scripts/detect_cutover_closing_change.py"),
+                        "--base",
+                        base,
+                        "--head",
+                        edited,
+                    ],
+                    cwd=repo,
+                    check=False,
+                )
+                self.assertEqual(unchanged.returncode, 1)
+                closed = commit_file(
+                    repo,
+                    f"issues/ISS-{issue_id:03d}.md",
+                    "## Metadata\n- Status: closed\n",
+                    f"close ISS-{issue_id:03d}",
+                )
+                detected = subprocess.run(
+                    [
+                        sys.executable,
+                        str(ROOT / "scripts/detect_cutover_closing_change.py"),
+                        "--base",
+                        edited,
+                        "--head",
+                        closed,
+                    ],
+                    cwd=repo,
+                    check=False,
+                )
+                self.assertEqual(detected.returncode, 0)
+
+    def test_closing_detector_triggers_for_gate_changes_and_fails_safe(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = init_git_repo(directory)
+            base = commit_file(repo, "README.md", "base\n", "base")
+            head = commit_file(
+                repo,
+                ".github/workflows/check.yml",
+                "name: check\n",
+                "change gate",
+            )
+            script = str(ROOT / "scripts/detect_cutover_closing_change.py")
+            changed = subprocess.run(
+                [sys.executable, script, "--base", base, "--head", head],
+                cwd=repo,
+                check=False,
+            )
+            self.assertEqual(changed.returncode, 0)
+            missing_base = subprocess.run(
+                [sys.executable, script, "--base", "missing", "--head", head],
+                cwd=repo,
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            self.assertEqual(missing_base.returncode, 0)
 
     def test_closing_workflow_requires_common_build_jobs(self) -> None:
         workflow = (ROOT / ".github/workflows/check.yml").read_text(
@@ -145,15 +389,6 @@ class GateManifestTests(unittest.TestCase):
             "needs.build-ubuntu-amd64.result }}",
             workflow,
         )
-
-    def test_closing_workflow_has_no_legacy_performance_gate(self) -> None:
-        workflow = (ROOT / ".github/workflows/check.yml").read_text(
-            encoding="utf-8"
-        )
-        self.assertNotIn("paired-performance", workflow)
-        self.assertNotIn("run_machv_cutover_perf", workflow)
-        self.assertNotIn("perf-report", workflow)
-
 
 if __name__ == "__main__":
     unittest.main()

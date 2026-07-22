@@ -72,12 +72,8 @@ fn Memory::read_fixed(self : Memory, addr : Int, len : Int) -> FixedArray[Byte] 
   }
   let out = FixedArray::make(len, b'\x00')
   let offset = self.addr_to_offset(addr)
-  let _ = @wasmoon_jit.memory_descriptor_read(
-    self.mem_desc_ptr,
-    offset,
-    out,
-    len,
-  )
+  @wasmoon_jit.memory_descriptor_read(self.mem_desc_ptr, offset, out, len)
+  |> ignore
   out
 }
 
@@ -92,12 +88,8 @@ fn Memory::write_fixed(
     return
   }
   let offset = self.addr_to_offset(addr)
-  let _ = @wasmoon_jit.memory_descriptor_write(
-    self.mem_desc_ptr,
-    offset,
-    data,
-    len,
-  )
+  @wasmoon_jit.memory_descriptor_write(self.mem_desc_ptr, offset, data, len)
+  |> ignore
 }
 
 ///|
@@ -474,12 +466,13 @@ pub fn Memory::init_data(
     return
   }
   let offset = self.addr_to_offset(dest)
-  let _ = @wasmoon_jit.memory_descriptor_write_bytes(
+  @wasmoon_jit.memory_descriptor_write_bytes(
     self.mem_desc_ptr,
     offset,
     data,
     len,
   )
+  |> ignore
 }
 
 ///|
@@ -499,12 +492,8 @@ pub fn Memory::copy(
   }
   let dest_off = self.addr_to_offset(dest)
   let src_off = self.addr_to_offset(src)
-  let _ = @wasmoon_jit.memory_descriptor_move(
-    self.mem_desc_ptr,
-    dest_off,
-    src_off,
-    len,
-  )
+  @wasmoon_jit.memory_descriptor_move(self.mem_desc_ptr, dest_off, src_off, len)
+  |> ignore
 }
 
 ///|
@@ -521,12 +510,13 @@ pub fn Memory::fill(
     return
   }
   let offset = self.addr_to_offset(dest)
-  let _ = @wasmoon_jit.memory_descriptor_fill(
+  @wasmoon_jit.memory_descriptor_fill(
     self.mem_desc_ptr,
     offset,
     value.to_int(),
     len,
   )
+  |> ignore
 }
 
 ///|

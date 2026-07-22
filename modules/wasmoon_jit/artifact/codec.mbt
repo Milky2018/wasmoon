@@ -212,6 +212,21 @@ fn ByteReader::read_i64(
 }
 
 ///|
+fn ByteReader::read_int_from_i64(
+  self : ByteReader,
+  field : String,
+) -> Int raise ArtifactDecodeError {
+  let value = self.read_i64(field)
+  if value < -0x80000000L || value > 0x7FFFFFFFL {
+    raise InvalidValue(
+      field~,
+      message="signed 64-bit value exceeds the host Int range",
+    )
+  }
+  value.to_int()
+}
+
+///|
 fn ByteReader::read_bool(
   self : ByteReader,
   field : String,
@@ -672,7 +687,7 @@ fn read_trap_reason(
     8 => UnalignedAtomic
     9 => UnsupportedOperation
     10 => StackOverflow
-    11 => User(reader.read_i64("function.trap.reason.user").to_int())
+    11 => User(reader.read_int_from_i64("function.trap.reason.user"))
     tag => raise InvalidTag(field="function.trap.reason", tag~)
   }
 }
@@ -759,7 +774,7 @@ fn read_root_location(
       )
     1 =>
       Stack(
-        offset=reader.read_i64("function.safepoint.root.stack_offset").to_int(),
+        offset=reader.read_int_from_i64("function.safepoint.root.stack_offset"),
         ty=read_value_type(reader, "function.safepoint.root.stack_type"),
       )
     tag => raise InvalidTag(field="function.safepoint.root", tag~)
@@ -801,13 +816,13 @@ fn read_unwind_operation(
       SetFramePointer(
         read_register_bank(reader, "function.unwind.register_bank"),
         reader.read_u32("function.unwind.register"),
-        cfa_offset=reader.read_i64("function.unwind.cfa_offset").to_int(),
+        cfa_offset=reader.read_int_from_i64("function.unwind.cfa_offset"),
       )
     2 =>
       SaveRegister(
         read_register_bank(reader, "function.unwind.register_bank"),
         reader.read_u32("function.unwind.register"),
-        cfa_offset=reader.read_i64("function.unwind.cfa_offset").to_int(),
+        cfa_offset=reader.read_int_from_i64("function.unwind.cfa_offset"),
       )
     tag => raise InvalidTag(field="function.unwind.operation", tag~)
   }

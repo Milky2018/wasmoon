@@ -101,18 +101,17 @@ def _run(
     return Outcome(kind=kind, rc=p.returncode, stdout=stdout, stderr=stderr)
 
 
-def _ensure_tools() -> None:
-    required = ["wasm-tools", "wasmtime"]
+def _ensure_tools(authority: str) -> None:
+    required = ["wasm-tools"]
+    if authority == "wasmtime":
+        required.append("wasmtime")
     missing = [t for t in required if shutil.which(t) is None]
     if missing:
         raise SystemExit(f"missing required tools in PATH: {', '.join(missing)}")
 
     wasmoon = REPO_ROOT / "wasmoon"
-    wasmoon_tools = REPO_ROOT / "wasmoon-tools"
-    if not wasmoon.exists() or not wasmoon_tools.exists():
-        raise SystemExit(
-            "missing ./wasmoon or ./wasmoon-tools; run `./install.sh` first"
-        )
+    if not wasmoon.exists():
+        raise SystemExit("missing ./wasmoon; run `./install.sh` first")
 
 
 def _build_template_wasm(work_dir: Path) -> Path:
@@ -260,6 +259,18 @@ def _run_wasmoon(
     return _run(argv, timeout_s=timeout_s)
 
 
+def _run_oracle(
+    wasm: Path,
+    *,
+    authority: str,
+    timeout_s: float,
+    preloads: list[str] | None = None,
+) -> Outcome:
+    if authority == "interpreter":
+        return Outcome(kind="not-run", rc=0, stdout="", stderr="")
+    return _run_wasmtime(wasm, timeout_s=timeout_s, preloads=preloads)
+
+
 def _signature(out: Outcome) -> tuple:
     if out.kind == "ok":
         return ("ok", out.stdout.strip())
@@ -302,12 +313,12 @@ def main() -> int:
                     timeout_s = float(sys.argv[idx + 1])
                 except ValueError:
                     pass
-        _ensure_tools()
+        _ensure_tools("wasmtime")
         return check_one(wasm, timeout_s=timeout_s)
 
     parser = argparse.ArgumentParser(
         prog="smith-diff",
-        description="Generate wasm-smith cases and diff wasmoon vs wasmtime",
+        description="Generate wasm-smith cases and compare Wasmoon execution modes",
     )
     sub = parser.add_subparsers(dest="cmd", required=True)
 
@@ -344,10 +355,10 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.cmd == "check":
-        _ensure_tools()
+        _ensure_tools("wasmtime")
         return check_one(args.wasm, timeout_s=args.timeout)
 
-    _ensure_tools()
+    _ensure_tools(args.oracle)
 
     out_root = args.out
     out_root.mkdir(parents=True, exist_ok=True)
@@ -430,7 +441,12 @@ def main() -> int:
                 wasm_path.unlink(missing_ok=True)
             continue
 
-        oracle = _run_wasmtime(wasm_path, timeout_s=args.timeout, preloads=preloads)
+        oracle = _run_oracle(
+            wasm_path,
+            authority=args.oracle,
+            timeout_s=args.timeout,
+            preloads=preloads,
+        )
         interp = _run_wasmoon(wasm_path, jit=False, timeout_s=args.timeout, preloads=preloads)
         jit = _run_wasmoon(wasm_path, jit=True, timeout_s=args.timeout, preloads=preloads)
 

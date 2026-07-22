@@ -66,6 +66,7 @@ def init(args: argparse.Namespace) -> int:
         "toolchain": {
             "moon": command_output(["moon", "version", "--all"]),
             "python": platform.python_version(),
+            "wasm_tools": command_output(["wasm-tools", "--version"]),
         },
         "commands": [],
         "artifacts": [],
