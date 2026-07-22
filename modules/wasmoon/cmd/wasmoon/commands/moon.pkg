@@ -1,5 +1,6 @@
 import {
   "Milky2018/wasm_core/types",
+  "Milky2018/wasm_core/encoder",
   "Milky2018/wasmoon/component",
   "Milky2018/wasmoon/component/runtime_impl",
   "Milky2018/wasmoon/parser",
@@ -11,7 +12,7 @@ import {
   "Milky2018/machv",
   "Milky2018/milkir",
   "Milky2018/wasm_milkir",
-  "Milky2018/wasmoon_jit/cwasm",
+  "Milky2018/wasmoon_jit/artifact",
   "Milky2018/wasmoon_jit",
   "Milky2018/wasmoon_jit/perf",
   "Milky2018/wasmoon/wasi",

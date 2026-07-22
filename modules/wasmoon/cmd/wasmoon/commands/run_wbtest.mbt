@@ -62,7 +62,18 @@ test "compile api: records cancellation safepoints" {
     is Some(compiled) else {
     fail("compile returned unsupported")
   }
-  debug_inspect(compiled.features, content="{ cancellation_safepoints: true }")
+  debug_inspect(
+    compiled.manifest.policy,
+    content=(
+      #|{
+      #|  optimization_level: O2,
+      #|  code_model: Small,
+      #|  call_binding: DirectBody,
+      #|  cancellation_safepoints: true,
+      #|  debug_info: false,
+      #|}
+    ),
+  )
 }
 
 ///|
@@ -81,19 +92,113 @@ test "compile api: parse failure emits failed stage" {
 }
 
 ///|
-test "jit cache bytes/ints conversion keeps unsigned bytes" {
-  let source = Bytes::from_array([0x00, 0x01, 0x7f, 0x80, 0xfe, 0xff])
-  let ints = bytes_to_int_array(source)
-  inspect(ints[0], content="0")
-  inspect(ints[3], content="128")
-  inspect(ints[4], content="254")
-  inspect(ints[5], content="255")
-  inspect(int_array_to_bytes(ints) == source, content="true")
+test "run JIT cache version tracks machine-code semantics" {
+  inspect(run_jit_cache_version, content="v9")
 }
 
 ///|
-test "run JIT cache version tracks machine-code semantics" {
-  inspect(run_jit_cache_version, content="v5")
+fn cache_test_file(label : String) -> String {
+  "/tmp/wasmoon-v9-cache-\{label}.cwasm"
+}
+
+///|
+fn write_cache_test_bytes(path : String, bytes : Bytes) -> Unit {
+  @fs.remove_file(path) catch {
+    _ => ()
+  }
+  @fs.write_bytes_to_file(path, bytes) catch {
+    err => abort("failed to write cache fixture: \{err}")
+  }
+}
+
+///|
+test "run JIT cache accepts an exactly compatible v9 artifact" {
+  guard compile_module(minimal_i32_const_module_bytes()) is Some(artifact) else {
+    fail("compile returned unsupported")
+  }
+  let path = cache_test_file("compatible")
+  save_run_jit_cache(path, artifact)
+  guard load_run_jit_cache(path, jit_artifact_compatibility(artifact.manifest))
+    is Some(loaded) else {
+    fail("compatible cache entry was rejected")
+  }
+  debug_inspect(
+    loaded.artifact().manifest.policy,
+    content=(
+      #|{
+      #|  optimization_level: O2,
+      #|  code_model: Small,
+      #|  call_binding: DirectBody,
+      #|  cancellation_safepoints: false,
+      #|  debug_info: false,
+      #|}
+    ),
+  )
+  @fs.remove_file(path)
+}
+
+///|
+test "run JIT cache removes corrupt and old entries" {
+  guard compile_module(minimal_i32_const_module_bytes()) is Some(artifact) else {
+    fail("compile returned unsupported")
+  }
+  let compatibility = jit_artifact_compatibility(artifact.manifest)
+  let outcomes : Array[(String, Bool, Bool)] = []
+  for
+    fixture in [
+      ("corrupt", Bytes::from_array([b'n', b'o', b'p', b'e'])),
+      ("old", Bytes::from_array([b'c', b'w', b'a', b's', 8, 0, 0, 0])),
+    ] {
+    let (label, bytes) = fixture
+    let path = cache_test_file(label)
+    write_cache_test_bytes(path, bytes)
+    let rejected = load_run_jit_cache(path, compatibility) is None
+    outcomes.push((label, rejected, @fs.path_exists(path)))
+  }
+  debug_inspect(
+    outcomes,
+    content=(
+      #|[("corrupt", true, false), ("old", true, false)]
+    ),
+  )
+}
+
+///|
+test "run JIT cache removes incompatible and oversized entries" {
+  guard compile_module(minimal_i32_const_module_bytes(), opt_level=2)
+    is Some(artifact) else {
+    fail("compile returned unsupported")
+  }
+  guard compile_module(minimal_i32_const_module_bytes(), opt_level=3)
+    is Some(other_policy) else {
+    fail("compile returned unsupported")
+  }
+  let bytes = @artifact.encode(artifact)
+  let incompatible_path = cache_test_file("incompatible")
+  write_cache_test_bytes(incompatible_path, bytes)
+  let incompatible = load_run_jit_cache(
+    incompatible_path,
+    jit_artifact_compatibility(other_policy.manifest),
+  )
+  let oversized_path = cache_test_file("oversized")
+  write_cache_test_bytes(oversized_path, bytes)
+  let oversized = load_run_jit_cache(
+    oversized_path,
+    jit_artifact_compatibility(artifact.manifest),
+    limits={
+      ..@artifact.DecodeLimits::default(),
+      max_artifact_bytes: bytes.length() - 1,
+    },
+  )
+  debug_inspect(
+    [
+      ("incompatible", incompatible is None, @fs.path_exists(incompatible_path)),
+      ("oversized", oversized is None, @fs.path_exists(oversized_path)),
+    ],
+    content=(
+      #|[("incompatible", true, false), ("oversized", true, false)]
+    ),
+  )
 }
 
 ///|

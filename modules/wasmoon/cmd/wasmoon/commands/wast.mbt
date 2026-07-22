@@ -457,15 +457,26 @@ fn try_compile_jit(
       return Err(
         "WAST JIT strict mode: compile_module_to_jit failed: \{compile_failure.unwrap_or("unknown compilation error")}",
       )
-    Some((pc, _)) => {
+    Some((artifact, _)) => {
       // Build func_signatures array for JIT module
       let func_signatures = @wast.build_func_signatures(lowered_mod)
       let external_imports = @wast.build_external_imports_for_jit(
         lowered_mod, instance, store,
       )
       // Load JIT module
+      let loaded = verify_compiled_jit_artifact(artifact) catch {
+        err =>
+          return Err(
+            "WAST JIT strict mode: artifact verification failed: \{to_repr(err)}",
+          )
+      }
       let jit_module_result : Result[@jit.JITModule, @jit.JITModuleLoadError] = try
-        @jit.JITModule::load_with_imports(pc, func_signatures, external_imports)
+        @jit.JITModule::load_artifact_with_imports(
+          loaded,
+          func_signatures,
+          external_imports,
+          function_names=build_jit_function_names(lowered_mod),
+        )
       catch {
         e => Err(e)
       } noraise {

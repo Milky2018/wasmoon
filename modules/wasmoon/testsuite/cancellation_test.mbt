@@ -22,12 +22,13 @@ test "JIT controlled call cancels at loop safepoint" {
       false,
       enable_cancellation=true,
     )
-    is Some((precompiled, debug_db)) else {
+    is Some((artifact, debug_db)) else {
     fail("JIT compile returned unsupported")
   }
-  let jm = @jit.JITModule::load(
-    precompiled,
+  let jm = @jit.JITModule::load_artifact(
+    @commands.verify_compiled_jit_artifact(artifact),
     @wast.build_func_signatures(mod_),
+    function_names=@commands.build_jit_function_names(mod_),
     debug_db~,
   )
   guard jm.get_func_by_name("run") is Some(func) else {
@@ -54,12 +55,13 @@ test "JIT controlled call rejects an uninstrumented artifact" {
     #|(module (func (export "run") (result i32) i32.const 42))
   let mod_ = @wat.parse(source)
   guard @commands.compile_module_to_jit(mod_, false, false, 0, false)
-    is Some((precompiled, debug_db)) else {
+    is Some((artifact, debug_db)) else {
     fail("JIT compile returned unsupported")
   }
-  let jm = @jit.JITModule::load(
-    precompiled,
+  let jm = @jit.JITModule::load_artifact(
+    @commands.verify_compiled_jit_artifact(artifact),
     @wast.build_func_signatures(mod_),
+    function_names=@commands.build_jit_function_names(mod_),
     debug_db~,
   )
   guard jm.get_func_by_name("run") is Some(func) else {
