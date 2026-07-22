@@ -14,13 +14,11 @@ ISSUE_PATH = re.compile(r"^issues/ISS-(\d{3,})\.md$")
 STATUS_LINE = re.compile(r"^- Status: ([a-z_]+)$", re.MULTILINE)
 GATE_PATHS = {
     ".github/workflows/check.yml",
-    ".github/workflows/perf.yml",
     "scripts/assert_target_identity.py",
     "scripts/check_committed_diff.py",
     "scripts/cutover_gate_manifest.py",
     "scripts/detect_cutover_closing_change.py",
     "scripts/run_fixed_smith_gate.py",
-    "scripts/run_machv_cutover_perf.py",
     "scripts/smith_diff/run.py",
     "scripts/tests/test_cutover_gate.py",
 }

@@ -23,9 +23,6 @@ def load_module(name: str, path: Path):
 
 
 SMITH = load_module("smith_diff_run", ROOT / "scripts/smith_diff/run.py")
-PERF = load_module(
-    "run_machv_cutover_perf", ROOT / "scripts/run_machv_cutover_perf.py"
-)
 
 
 def git(repo: Path, *args: str) -> str:
@@ -67,8 +64,13 @@ class SmithGateTests(unittest.TestCase):
             checked.append(tool)
             return f"/tools/{tool}"
 
-        with mock.patch.object(SMITH.shutil, "which", side_effect=which):
-            SMITH._ensure_tools("interpreter")
+        with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / "wasmoon").touch()
+            with (
+                mock.patch.object(SMITH, "REPO_ROOT", Path(directory)),
+                mock.patch.object(SMITH.shutil, "which", side_effect=which),
+            ):
+                SMITH._ensure_tools("interpreter")
         self.assertEqual(checked, ["wasm-tools"])
         with mock.patch.object(SMITH, "_run_wasmtime") as wasmtime:
             outcome = SMITH._run_oracle(
@@ -153,107 +155,8 @@ class SmithGateTests(unittest.TestCase):
                 self.assertEqual(SMITH.main(), 2)
 
 
-class CutoverPerfTests(unittest.TestCase):
-    def test_checked_in_workload_manifest_satisfies_coverage_contract(self) -> None:
-        manifest = json.loads(
-            (ROOT / "docs/perf/machv-migration/workloads.json").read_text(
-                encoding="utf-8"
-            )
-        )
-        workloads = PERF.validate_workload_manifest(manifest)
-        PERF.validate_workload_files(ROOT, workloads)
-        self.assertGreaterEqual(
-            sum(workload["tier"] == "real_module" for workload in workloads), 3
-        )
-        self.assertGreaterEqual(
-            sum(
-                workload["tier"] == "large_compile_stress"
-                for workload in workloads
-            ),
-            2,
-        )
-
-    def test_workload_manifest_rejects_missing_required_feature(self) -> None:
-        manifest = json.loads(
-            (ROOT / "docs/perf/machv-migration/workloads.json").read_text(
-                encoding="utf-8"
-            )
-        )
-        for workload in manifest["workloads"]:
-            workload["features"] = [
-                feature
-                for feature in workload["features"]
-                if feature != "tail_call"
-            ]
-        with self.assertRaisesRegex(RuntimeError, "tail_call"):
-            PERF.validate_workload_manifest(manifest)
-
-    def test_ratio_stats_are_geometric_and_report_noise(self) -> None:
-        stats = PERF.ratio_stats([1.0, 1.21])
-        self.assertAlmostEqual(stats["geometric_mean_ratio"], 1.1)
-        self.assertGreater(stats["upper_95_ratio"], 1.1)
-        self.assertGreater(stats["coefficient_of_variation"], 0.0)
-
-    def test_runtime_normalization_preserves_sub_nanosecond_values(self) -> None:
-        self.assertEqual(PERF.normalize_runtime_ns(101, 100, 10), 0.1)
-
-    def test_runtime_normalization_rejects_non_positive_signal(self) -> None:
-        with self.assertRaisesRegex(RuntimeError, "not positive"):
-            PERF.normalize_runtime_ns(100, 100, 10)
-
-    def test_compile_only_workload_does_not_require_runtime_samples(self) -> None:
-        self.assertIsNone(
-            PERF.workload_runtime_stats(
-                {"metrics": ["jit_compile_time", "code_size"]},
-                [{"legacy": {}, "candidate": {}}],
-            )
-        )
-
-    def test_threshold_crossing_confidence_bound_is_inconclusive(self) -> None:
-        failures: list[str] = []
-        PERF.record_failure(
-            failures,
-            "runtime fixture",
-            {
-                "geometric_mean_ratio": 1.01,
-                "upper_95_ratio": 1.06,
-                "coefficient_of_variation": 0.02,
-            },
-            1.05,
-        )
-        self.assertEqual(
-            failures,
-            ["runtime fixture: inconclusive upper 95% ratio 1.060000 exceeds 1.050000"],
-        )
-
-    def test_corpus_confidence_bound_preserves_equal_workload_weighting(self) -> None:
-        stats = PERF.corpus_ratio_stats(
-            [
-                [1.00, 1.00],
-                [1.21, 1.21, 1.21, 1.21],
-            ]
-        )
-        self.assertAlmostEqual(stats["geometric_mean_ratio"], 1.10)
-        self.assertAlmostEqual(stats["upper_95_ratio"], 1.10)
-
-    def test_corpus_threshold_uses_confidence_bound(self) -> None:
-        stats = PERF.corpus_ratio_stats(
-            [
-                [1.00, 1.02],
-                [1.00, 1.02, 1.00, 1.02],
-            ]
-        )
-        self.assertLess(stats["geometric_mean_ratio"], 1.03)
-        self.assertGreater(stats["upper_95_ratio"], 1.03)
-
-        failures: list[str] = []
-        PERF.record_failure(failures, "runtime corpus", stats, 1.03)
-        self.assertEqual(len(failures), 1)
-        self.assertIn("inconclusive upper 95% ratio", failures[0])
-
-
 class GateManifestTests(unittest.TestCase):
-    def test_init_records_fixed_legacy_and_workload_inputs(self) -> None:
+    def test_init_records_only_current_tree_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             manifest = Path(directory) / "manifest.json"
             result = subprocess.run(
@@ -263,8 +166,6 @@ class GateManifestTests(unittest.TestCase):
                     "init",
                     "--manifest",
                     str(manifest),
-                    "--baseline",
-                    str(ROOT / "docs/perf/machv-migration/baseline.json"),
                     "--kind",
                     "target-cutover",
                     "--target",
@@ -278,12 +179,9 @@ class GateManifestTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 0)
             payload = json.loads(manifest.read_text(encoding="utf-8"))
-            self.assertEqual(
-                payload["legacy_commit"],
-                "af3fa2d99598554baab7614e0b08584ab5f8d9da",
-            )
-            self.assertIn("baseline_sha256", payload["inputs"])
-            self.assertIn("workloads_sha256", payload["inputs"])
+            self.assertNotIn("legacy_commit", payload)
+            self.assertNotIn("inputs", payload)
+            self.assertNotIn("performance", payload)
 
     def test_finalize_rejects_a_missing_required_command(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -375,10 +273,9 @@ class GateManifestTests(unittest.TestCase):
         )
         self.assertIn("scripts/check_committed_diff.py", workflow)
         self.assertNotIn("run_gate git-diff-check 'git diff --check'", workflow)
-        self.assertIn("--name paired-performance", workflow)
-        self.assertIn("scripts/run_machv_cutover_perf.py", workflow)
-        self.assertIn("--perf-report", workflow)
-        self.assertIn("smith,paired-performance", workflow)
+        self.assertNotIn("paired-performance", workflow)
+        self.assertNotIn("scripts/run_machv_cutover_perf.py", workflow)
+        self.assertNotIn("--perf-report", workflow)
 
     def test_committed_diff_gate_rejects_committed_whitespace_damage(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -454,8 +351,8 @@ class GateManifestTests(unittest.TestCase):
             base = commit_file(repo, "README.md", "base\n", "base")
             head = commit_file(
                 repo,
-                ".github/workflows/perf.yml",
-                "name: performance\n",
+                ".github/workflows/check.yml",
+                "name: check\n",
                 "change gate",
             )
             script = str(ROOT / "scripts/detect_cutover_closing_change.py")

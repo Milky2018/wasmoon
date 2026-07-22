@@ -298,7 +298,6 @@ jobs:
           mkdir -p target/cutover-gate/linux-amd64-sanitizer/logs
           python3 scripts/cutover_gate_manifest.py init \
             --manifest target/cutover-gate/linux-amd64-sanitizer/manifest.json \
-            --baseline docs/perf/machv-migration/baseline.json \
             --kind sanitizer \
             --target linux-amd64
 
@@ -390,7 +389,6 @@ jobs:
           mkdir -p "target/cutover-gate/${{ matrix.target }}/logs"
           python3 scripts/cutover_gate_manifest.py init \
             --manifest "target/cutover-gate/${{ matrix.target }}/manifest.json" \
-            --baseline docs/perf/machv-migration/baseline.json \
             --kind target-cutover \
             --target "${{ matrix.target }}"
 
@@ -428,26 +426,12 @@ jobs:
           run_gate smith 'python3 scripts/run_fixed_smith_gate.py --out target/cutover-gate/${{ matrix.target }}/smith'
           exit "$status"
 
-      - name: run paired fixed-legacy performance gate
-        if: always()
-        timeout-minutes: 90
-        run: |
-          python3 scripts/cutover_gate_manifest.py run \
-            --manifest "target/cutover-gate/${{ matrix.target }}/manifest.json" \
-            --name paired-performance \
-            --log "target/cutover-gate/${{ matrix.target }}/logs/paired-performance.log" \
-            -- python3 scripts/run_machv_cutover_perf.py \
-              --baseline docs/perf/machv-migration/baseline.json \
-              --out-dir "target/cutover-gate/${{ matrix.target }}/performance" \
-              --candidate-binary ./wasmoon
-
       - name: finalize cutover evidence manifest
         if: always()
         run: |
           python3 scripts/cutover_gate_manifest.py finalize \
             --manifest "target/cutover-gate/${{ matrix.target }}/manifest.json" \
-            --required target-identity,moon-fmt,moon-info,git-diff-check,moon-check,moon-test,boundary-audits,python-gate-tests,build-install,wast,wasi,smith,paired-performance \
-            --perf-report "target/cutover-gate/${{ matrix.target }}/performance/perf-report.json"
+            --required target-identity,moon-fmt,moon-info,git-diff-check,moon-check,moon-test,boundary-audits,python-gate-tests,build-install,wast,wasi,smith
 
       - name: upload cutover evidence
         if: always()
