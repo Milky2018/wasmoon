@@ -1169,8 +1169,6 @@ test "optimizer threads trivial jump blocks" {
       #|function thread_jump() {
       #|block0:
       #|    jump block2
-      #|block1:
-      #|    jump block2
       #|block2:
       #|    trap "exit"
       #|}
@@ -1209,11 +1207,58 @@ test "optimizer threads jump args through block params" {
       #|    v0:i32 = iconst 1
       #|    v1:i32 = iconst 2
       #|    jump block2(v1, v0)
-      #|block1(v2:i32, v3:i32):
-      #|    jump block2(v3, v2)
       #|block2(v4:i32, v5:i32):
       #|    v6:i32 = iadd v4, v5
       #|    return v6
+      #|}
+      #|
+    ),
+  )
+  inspect(func.verify(), content="()")
+}
+
+///|
+test "optimizer removes unreachable trampoline with dominating free value" {
+  let builder = FunctionBuilder::FunctionBuilder("thread_jump_free_value")
+  builder.add_result(I32)
+  let defining = builder.create_block()
+  let left = builder.create_block()
+  let right = builder.create_block()
+  let middle = builder.create_block()
+  let exit = builder.create_block()
+  builder.jump(defining, [])
+  builder.switch_to_block(defining)
+  let value = builder.iconst_i32(7)
+  let condition = builder.iconst_i32(1)
+  builder.brnz(condition, left, right)
+  builder.switch_to_block(left)
+  builder.jump(middle, [])
+  builder.switch_to_block(right)
+  builder.jump(middle, [])
+  builder.switch_to_block(middle)
+  builder.jump(exit, [value])
+  let result = builder.add_block_param(exit, I32)
+  builder.switch_to_block(exit)
+  builder.return_([result])
+  let func = builder.get_function()
+  inspect(func.verify(), content="()")
+  thread_jumps(func) |> ignore
+  inspect(
+    func.print(),
+    content=(
+      #|function thread_jump_free_value() -> i32 {
+      #|block0:
+      #|    jump block1
+      #|block1:
+      #|    v0:i32 = iconst 7
+      #|    v1:i32 = iconst 1
+      #|    brnz v1, block2, block3
+      #|block2:
+      #|    jump block5(v0)
+      #|block3:
+      #|    jump block5(v0)
+      #|block5(v2:i32):
+      #|    return v2
       #|}
       #|
     ),

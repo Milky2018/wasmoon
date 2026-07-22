@@ -20,9 +20,11 @@ the preferred register cannot hold the live range.
 
 ## Allocation strategies
 
-`Backtracking` is the default production strategy. It allocates fragmented
-live ranges, uses fixed-register, soft-register, and cross-fragment hints, evicts cheaper
-fragments, and reuses compatible non-overlapping spill slots.
+`Backtracking` is the default production strategy. It builds allocation bundles
+from compatible SSA edge affinities, allocates each bundle atomically, splits
+bundles when pressure requires it, evicts cheaper residents, and reuses
+compatible non-overlapping spill slots. Fixed-register, soft-register, and
+cross-fragment hints all feed this one production implementation.
 
 `SinglePass` is an explicit low-compile-latency strategy. It uses the same
 fragmented plan and verification contract but does not evict an existing
@@ -82,8 +84,7 @@ performance or code-size acceptance baselines.
 
 ## Expert packages
 
-- `Milky2018/regalloc/planning` provides standalone planning utilities.
-- `Milky2018/regalloc/backtracking` provides lower-level policy components for
-  specialized allocator integrations. It is not a second production allocator;
-  the root `allocate_function` entry point owns strategy selection, plan
-  construction, and verification.
+- `Milky2018/regalloc/planning` provides standalone CFG, spill-slot, edit, and
+  frame-planning utilities. Allocation queues, bundle merging, eviction, and
+  splitting remain private to the root production allocator so there is only
+  one maintained allocation policy.

@@ -243,6 +243,10 @@ typedef struct {
 int64_t wasmoon_jit_alloc_exec(int size);
 int wasmoon_jit_copy_code(int64_t dest, uint8_t *src, int size);
 static int wasmoon_jit_free_exec(int64_t ptr);
+void *wasmoon_jit_stage_exec_managed(int size);
+int wasmoon_jit_finalize_exec_managed(void *exec_code, uint8_t *code, int size);
+int wasmoon_jit_release_exec_managed(void *exec_code);
+int wasmoon_jit_exec_mapping_count(void);
 
 // ============ WASM Stack Functions ============
 // Allocate/free independent WASM stack with guard page

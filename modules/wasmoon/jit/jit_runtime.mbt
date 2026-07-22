@@ -1,13 +1,13 @@
 ///|
 /// JIT Execution Runtime
-/// Loads and executes precompiled .cwasm files
+/// Loads and executes verified v9 JIT artifacts.
 
 ///|
 /// JIT-compiled function ready for execution
 pub struct JITFunction {
   func_idx : Int
   name : String
-  priv exec_code : @wasmoon_jit.ExecCode
+  priv func_ptr : Int64
   priv code_size : Int
   param_types : Array[@types.ValueType] // Parameter types for proper register allocation
   result_types : Array[@types.ValueType] // Return types (empty = void, 1 = single, 2+ = multi-value)
@@ -34,11 +34,8 @@ pub suberror JITModuleLoadError {
     func_name~ : String,
     message~ : String
   )
-  FunctionCodeAllocationFailed(
-    func_idx~ : Int,
-    func_name~ : String,
-    code_size~ : Int
-  )
+  ArtifactInstallationFailed(cause~ : @wasmoon_jit.JitInstallError)
+  FunctionMetadataRegistrationFailed(func_idx~ : Int, message~ : String)
 } derive(Debug)
 
 ///|
@@ -52,12 +49,12 @@ pub impl Show for JITModuleLoadError with fn output(self, logger) {
 fn JITFunction::JITFunction(
   func_idx : Int,
   name : String,
-  exec_code : @wasmoon_jit.ExecCode,
+  func_ptr : Int64,
   code_size : Int,
   param_types : Array[@types.ValueType],
   result_types : Array[@types.ValueType],
 ) -> JITFunction {
-  { func_idx, name, exec_code, code_size, param_types, result_types }
+  { func_idx, name, func_ptr, code_size, param_types, result_types }
 }
 
 ///|
@@ -78,10 +75,10 @@ struct JITModule {
   mut context_ptr : Int64
   mut debug_db : @wasmoon_jit.JITDebugDB?
   mut last_trap_report : @wasmoon_jit.TrapReport?
-  // Keep generated import trampolines alive (GC-managed executable memory).
-  import_exec_codes : Array[@wasmoon_jit.ExecCode]
-  // Negative runtime fixup indices -> runtime helper entry points.
-  direct_call_targets : Map[Int, Int64]
+  // Keep generated process-local import trampolines alive.
+  owned_trampolines : Array[@wasmoon_jit.InstalledTrampoline]
+  // Keep the transactionally installed artifact alive.
+  mut installed_code : @wasmoon_jit.InstalledCode?
   mut wasi_stdout_callback : ((Bytes) -> Unit)?
   mut wasi_stderr_callback : ((Bytes) -> Unit)?
   mut cancellation_safepoints : Bool
@@ -97,8 +94,8 @@ pub fn JITModule::JITModule() -> JITModule {
     context_ptr: 0L,
     debug_db: None,
     last_trap_report: None,
-    import_exec_codes: [],
-    direct_call_targets: Map([]),
+    owned_trampolines: [],
+    installed_code: None,
     wasi_stdout_callback: None,
     wasi_stderr_callback: None,
     cancellation_safepoints: false,
@@ -106,317 +103,219 @@ pub fn JITModule::JITModule() -> JITModule {
 }
 
 ///|
-fn apply_func_addr_fixups(
-  ctx : JITContext,
-  jit_module : JITModule,
-  precompiled : @cwasm.PrecompiledModule,
-) -> Unit {
-  let func_table_ptr = ctx.get_func_table_ptr()
-  for entry in precompiled.functions {
-    if entry.func_addr_fixups.length() == 0 {
-      continue
-    }
-    if jit_module.functions.get(entry.func_idx) is Some(func) {
-      let exec_ptr = func.exec_code.ptr()
-      @wasmoon_jit.patch_func_addr_fixups_for_target(
-        precompiled.target,
-        exec_ptr,
-        entry.func_addr_fixups,
-        func_table_ptr,
-      )
-    }
+fn artifact_target_architecture(
+  artifact : @artifact.Artifact,
+) -> @wasmoon_jit.NativeTarget {
+  match artifact.manifest.target.architecture {
+    X64 => X64
+    AArch64 => AArch64
   }
 }
 
 ///|
-fn apply_call_fixups(
-  ctx : JITContext,
-  jit_module : JITModule,
-  precompiled : @cwasm.PrecompiledModule,
-) -> Unit {
-  for entry in precompiled.functions {
-    for fixup in entry.call_fixups {
-      if fixup.func_idx < 0 &&
-        jit_module.direct_call_targets.get(fixup.func_idx) is None {
-        if @wasmoon_jit.resolve_runtime_func_fixup_idx(fixup.func_idx)
-          is Some(ptr) {
-          jit_module.direct_call_targets.set(fixup.func_idx, ptr)
-        }
-      }
+fn artifact_context_function_count(
+  artifact : @artifact.Artifact,
+  signature_count : Int,
+) -> Int {
+  let mut count = signature_count
+  for import_ in artifact.imports {
+    if import_.function_index >= count {
+      count = import_.function_index + 1
     }
   }
-  let func_table_ptr = ctx.get_func_table_ptr()
-  if func_table_ptr == 0L && jit_module.direct_call_targets.is_empty() {
-    return
+  for function in artifact.functions {
+    if function.identity.function_index >= count {
+      count = function.identity.function_index + 1
+    }
   }
-  for entry in precompiled.functions {
-    if entry.call_fixups.length() == 0 {
-      continue
-    }
-    if jit_module.functions.get(entry.func_idx) is Some(func) {
-      let exec_ptr = func.exec_code.ptr()
-      @wasmoon_jit.patch_call_fixups_for_target(
-        precompiled.target,
-        exec_ptr,
-        entry.call_fixups,
-        func_table_ptr,
-        jit_module.direct_call_targets,
-      )
-    }
+  count
+}
+
+///|
+fn artifact_function_name(
+  function_index : Int,
+  function_names : Array[String],
+) -> String {
+  if function_index >= 0 &&
+    function_index < function_names.length() &&
+    !function_names[function_index].is_empty() {
+    function_names[function_index]
+  } else {
+    "func_\{function_index}"
   }
 }
 
 ///|
-/// Load a precompiled module
-/// func_signatures: Array of (param_types, result_types) for each func_idx
-pub fn JITModule::load(
-  precompiled : @cwasm.PrecompiledModule,
-  func_signatures : Array[(Array[@types.ValueType], Array[@types.ValueType])],
-  debug_db? : @wasmoon_jit.JITDebugDB? = None,
-) -> JITModule raise JITModuleLoadError {
-  JITModule::load_with_imports(precompiled, func_signatures, Map([]), debug_db~)
-}
-
-///|
-/// Load a precompiled module with external import resolution
-/// func_signatures: Array of (param_types, result_types) for each func_idx
-/// external_imports: Map from (module_name, func_name) to function pointer
-pub fn JITModule::load_with_imports(
-  precompiled : @cwasm.PrecompiledModule,
+fn stage_artifact_imports(
+  artifact : @artifact.Artifact,
   func_signatures : Array[(Array[@types.ValueType], Array[@types.ValueType])],
   external_imports : Map[String, Map[String, Int64]],
-  debug_db? : @wasmoon_jit.JITDebugDB? = None,
-) -> JITModule raise JITModuleLoadError {
-  let jit_module = JITModule::JITModule()
-  jit_module.cancellation_safepoints = precompiled.features.cancellation_safepoints
-  let total_funcs = @wasmoon_jit.required_context_function_count(
-    precompiled,
-    func_signatures.length(),
-  )
-
-  // Create JIT context with function table
-  let context = JITContext::try_alloc(total_funcs)
-  match context {
-    None => raise ContextAllocationFailed(total_funcs~)
-    Some(ctx) => {
-      let context_ptr = ctx.ptr()
-      // Context pointer must be visible before loading functions because
-      // gc_set_func_safepoints() installs per-function tables during this phase.
-      jit_module.context_ptr = context_ptr
-
-      // Step 1: Populate import trampolines into function table
-      for i, imp in precompiled.imports {
-        // First check external imports, then fall back to built-in trampolines.
-        let func_ptr = @wasmoon_jit.resolve_import_function_ptr(
-          external_imports,
-          imp.module_name,
-          imp.func_name,
-        )
-        match func_ptr {
-          Some(ptr) =>
-            if ptr < 0L {
-              // Special encoding: negative values represent a runtime Store host func address.
-              // This allows callers to pass host funcs through `external_imports` without
-              // exposing raw function pointers.
-              let host_func_addr = (-(ptr + 1L)).to_int()
-              let (param_types, result_types) = if i < func_signatures.length() {
-                func_signatures[i]
-              } else {
-                ([], [])
-              }
-              let (code_ints, func_addr_fixups) = match precompiled.target {
-                AArch64 | X86_64 => {
-                  let trampoline = @wasmoon_jit.build_hostcall_import_trampoline_for_target(
-                    param_types,
-                    result_types,
-                    host_func_addr,
-                    precompiled.target,
-                  ) catch {
-                    err =>
-                      raise ImportTrampolineCompilationFailed(
-                        import_idx=i,
-                        module_name=imp.module_name,
-                        func_name=imp.func_name,
-                        message=err.to_string(),
-                      )
-                  }
-                  (trampoline.code, trampoline.func_addr_fixups)
-                }
-                Unknown =>
-                  raise ImportTrampolineCompilationFailed(
-                    import_idx=i,
-                    module_name=imp.module_name,
-                    func_name=imp.func_name,
-                    message="hostcall import trampoline needs a concrete target architecture",
-                  )
-              }
-              let exec = @wasmoon_jit.ExecCode::try_alloc(code_ints)
-              match exec {
-                Some(ec) => {
-                  // Hostcall trampolines may carry runtime function-address
-                  // fixups. Patch them before first execution.
-                  let func_table_ptr = ctx.get_func_table_ptr()
-                  for fixup in func_addr_fixups {
-                    @wasmoon_jit.patch_func_addr_fixup_raw_for_target(
-                      precompiled.target,
-                      ec.ptr(),
-                      fixup.offset,
-                      fixup.reg,
-                      fixup.func_idx,
-                      func_table_ptr,
-                    )
-                  }
-                  jit_module.import_exec_codes.push(ec)
-                  ctx.set_func(i, ec.ptr())
-                }
-                None =>
-                  raise ImportTrampolineAllocationFailed(
-                    import_idx=i,
-                    module_name=imp.module_name,
-                    func_name=imp.func_name,
-                    code_size=code_ints.length(),
-                  )
-              }
-            } else {
-              ctx.set_func(i, ptr)
-            }
-          None =>
-            raise UnsupportedImport(
-              import_idx=i,
-              module_name=imp.module_name,
-              func_name=imp.func_name,
-            )
-        }
-      }
-
-      // Expose context before loading functions so per-function safepoint tables
-      // can be installed during this phase.
-      jit_module.context = Some(ctx)
-      jit_module.context_ptr = context_ptr
-      jit_module.debug_db = debug_db
-
-      // Step 2: Load compiled functions and populate their pointers
-      for entry in precompiled.functions {
-        // Allocate executable memory directly from code array
-        let exec_code = @wasmoon_jit.ExecCode::try_alloc(entry.code)
-        match exec_code {
-          Some(ec) => {
-            // Get function signature
-            let (param_types, result_types) = if entry.func_idx <
-              func_signatures.length() {
-              func_signatures[entry.func_idx]
-            } else {
-              ([], [])
-            }
-            let jit_func = JITFunction::JITFunction(
-              entry.func_idx,
-              entry.name,
-              ec,
-              entry.code.length(),
-              param_types,
-              result_types,
-            )
-            jit_module.functions.set(entry.func_idx, jit_func)
-            jit_module.by_name.set(entry.name, entry.func_idx)
-            // Set function pointer in context's function table
-            ctx.set_func(entry.func_idx, ec.ptr())
-            // Install per-function GC safepoint metadata (if present).
-            jit_module.gc_set_func_safepoints(
-              entry.func_idx,
-              entry.gc_safepoints,
-              entry.gc_stackmap_blob,
-            )
-            |> ignore
-          }
-          None =>
-            raise FunctionCodeAllocationFailed(
-              func_idx=entry.func_idx,
-              func_name=entry.name,
-              code_size=entry.code.length(),
-            )
-        }
-      }
-
-      // Patch direct-call function address loads now that pointers are known.
-      apply_func_addr_fixups(ctx, jit_module, precompiled)
-      apply_call_fixups(ctx, jit_module, precompiled)
-
-      // Build sorted address_ranges for binary search in find_func_by_pc
-      for func_idx, f in jit_module.functions {
-        let start = f.exec_code.ptr()
-        let end_ = start + f.code_size.to_int64()
-        jit_module.address_ranges.push({ start, end: end_, func_idx })
-      }
-      jit_module.address_ranges.sort_by(fn(a, b) { a.start.compare(b.start) })
+  owned_trampolines : Array[@wasmoon_jit.InstalledTrampoline],
+) -> Map[String, Int64] raise JITModuleLoadError {
+  let import_targets : Map[String, Int64] = Map([])
+  let target = artifact_target_architecture(artifact)
+  let trampoline_installer = @wasmoon_jit.JitCodeInstaller::new(fn(_) { None })
+  for import_ in artifact.imports {
+    let function_index = import_.function_index
+    let resolved = @wasmoon_jit.resolve_import_function_ptr(
+      external_imports,
+      import_.module_name,
+      import_.function_name,
+    )
+    guard resolved is Some(raw_pointer) else {
+      raise UnsupportedImport(
+        import_idx=function_index,
+        module_name=import_.module_name,
+        func_name=import_.function_name,
+      )
     }
+    let pointer = if raw_pointer < 0L {
+      let host_func_addr = (-(raw_pointer + 1L)).to_int()
+      let (param_types, result_types) = if function_index >= 0 &&
+        function_index < func_signatures.length() {
+        func_signatures[function_index]
+      } else {
+        ([], [])
+      }
+      let trampoline = @wasmoon_jit.build_hostcall_import_trampoline_for_target(
+        param_types, result_types, host_func_addr, target,
+      ) catch {
+        error =>
+          raise ImportTrampolineCompilationFailed(
+            import_idx=function_index,
+            module_name=import_.module_name,
+            func_name=import_.function_name,
+            message=error.to_string(),
+          )
+      }
+      let code = trampoline_installer.install_trampoline(trampoline.code) catch {
+        _ =>
+          raise ImportTrampolineAllocationFailed(
+            import_idx=function_index,
+            module_name=import_.module_name,
+            func_name=import_.function_name,
+            code_size=trampoline.code.length(),
+          )
+      }
+      let pointer = code.entry_address()
+      owned_trampolines.push(code)
+      pointer
+    } else {
+      raw_pointer
+    }
+    import_targets.set(import_.symbol.name, pointer)
   }
-  jit_module
+  import_targets
 }
 
 ///|
-/// Create a JITModule from a single compiled function (for testing)
-/// This is a convenience method for unit tests that compile a single function
-pub fn JITModule::from_single_function(
-  code_bytes : Array[Int],
-  func_name : String,
-  param_types : Array[@types.ValueType],
-  result_types : Array[@types.ValueType],
-  mem_size : Int64,
-) -> JITModule? {
-  // Create context with 1 function slot
-  let context = JITContext::try_alloc(1)
-  match context {
-    None => return None
-    Some(ctx) => {
-      // Allocate memory (guarded for memory32 bounds-check elimination)
-      let pages = if mem_size <= 0L {
-        0
-      } else {
-        ((mem_size + @types.WASM_PAGE_SIZE_BYTES - 1L) /
-        @types.WASM_PAGE_SIZE_BYTES).to_int()
-      }
-      let actual_size = pages.to_int64() * @types.WASM_PAGE_SIZE_BYTES
-      let mem_ptr = if pages > 0 {
-        ctx.alloc_guarded_memory(pages, None)
-      } else {
-        0L
-      }
-      if mem_ptr == 0L && actual_size > 0L {
-        return None
-      }
-      ctx.set_memory(mem_ptr)
-      // Create executable code
-      let exec_code = @wasmoon_jit.ExecCode::try_alloc(code_bytes)
-      match exec_code {
-        None => return None
-        Some(ec) => {
-          // Set function in table
-          ctx.set_func(0, ec.ptr())
-          // Create JIT function
-          let jit_func = JITFunction::JITFunction(
-            0,
-            func_name,
-            ec,
-            code_bytes.length(),
-            param_types,
-            result_types,
-          )
-          // Create module
-          let jit_module = JITModule::JITModule()
-          jit_module.functions.set(0, jit_func)
-          jit_module.by_name.set(func_name, 0)
-          let context_ptr = ctx.ptr()
-          jit_module.context = Some(ctx)
-          jit_module.context_ptr = context_ptr
-          // Build address_ranges for this single function
-          let start = ec.ptr()
-          let end_ = start + code_bytes.length().to_int64()
-          jit_module.address_ranges.push({ start, end: end_, func_idx: 0 })
-          Some(jit_module)
+/// Load a verified v9 artifact without exposing any partially initialized
+/// context, function table, executable mapping, or metadata registration.
+pub fn JITModule::load_artifact(
+  loaded : @wasmoon_jit.LoadedArtifact,
+  func_signatures : Array[(Array[@types.ValueType], Array[@types.ValueType])],
+  function_names? : Array[String] = [],
+  debug_db? : @wasmoon_jit.JITDebugDB? = None,
+) -> JITModule raise JITModuleLoadError {
+  JITModule::load_artifact_with_imports(
+    loaded,
+    func_signatures,
+    Map([]),
+    function_names~,
+    debug_db~,
+  )
+}
+
+///|
+/// Load a verified v9 artifact with embedding-provided import addresses.
+pub fn JITModule::load_artifact_with_imports(
+  loaded : @wasmoon_jit.LoadedArtifact,
+  func_signatures : Array[(Array[@types.ValueType], Array[@types.ValueType])],
+  external_imports : Map[String, Map[String, Int64]],
+  function_names? : Array[String] = [],
+  debug_db? : @wasmoon_jit.JITDebugDB? = None,
+) -> JITModule raise JITModuleLoadError {
+  let artifact = loaded.artifact()
+  let total_funcs = artifact_context_function_count(
+    artifact,
+    func_signatures.length(),
+  )
+  guard JITContext::try_alloc(total_funcs) is Some(ctx) else {
+    raise ContextAllocationFailed(total_funcs~)
+  }
+  let jit_module = JITModule::JITModule()
+  let import_targets = stage_artifact_imports(
+    artifact,
+    func_signatures,
+    external_imports,
+    jit_module.owned_trampolines,
+  )
+  let runtime_symbols = @wasmoon_jit.RuntimeSymbolResolver::with_wasmoon_runtime_symbols()
+  let installer = @wasmoon_jit.JitCodeInstaller::new(fn(target) {
+    match target {
+      External(symbol) =>
+        match import_targets.get(symbol.name) {
+          Some(pointer) => Some(pointer)
+          None => runtime_symbols.resolve(symbol.name)
         }
-      }
+      Code(_) | Data(_) => None
+    }
+  })
+  let installed = installer.install(loaded) catch {
+    error => raise ArtifactInstallationFailed(cause=error)
+  }
+  for function in installed.functions() {
+    let identity = function.identity()
+    if !@wasmoon_jit.gc_set_code_object_safepoints(
+        ctx.ptr(),
+        identity.function_index,
+        function.safepoints(),
+      ) {
+      raise FunctionMetadataRegistrationFailed(
+        func_idx=identity.function_index,
+        message="failed to register GC safepoints",
+      )
     }
   }
+  for import_ in installed.imports() {
+    ctx.set_func(import_.identity().function_index, import_.address())
+  }
+  for function in installed.functions() {
+    let identity = function.identity()
+    let function_index = identity.function_index
+    ctx.set_func(function_index, function.entry_address())
+    let (param_types, result_types) = if function_index >= 0 &&
+      function_index < func_signatures.length() {
+      func_signatures[function_index]
+    } else {
+      ([], [])
+    }
+    let name = artifact_function_name(function_index, function_names)
+    jit_module.functions.set(
+      function_index,
+      JITFunction(
+        function_index,
+        name,
+        function.entry_address(),
+        function.code_size(),
+        param_types,
+        result_types,
+      ),
+    )
+    jit_module.by_name.set(name, function_index)
+    jit_module.address_ranges.push({
+      start: function.code_address(),
+      end: function.code_address() + function.code_size().to_int64(),
+      func_idx: function_index,
+    })
+  }
+  jit_module.address_ranges.sort_by(fn(a, b) { a.start.compare(b.start) })
+  jit_module.context = Some(ctx)
+  jit_module.context_ptr = ctx.ptr()
+  jit_module.debug_db = debug_db
+  jit_module.installed_code = Some(installed)
+  jit_module.cancellation_safepoints = artifact.manifest.policy.cancellation_safepoints
+  jit_module
 }
 
 ///|
@@ -490,13 +389,15 @@ pub fn JITModule::get_func_by_name(
 /// Get function pointer by function index (for indirect table initialization)
 /// Returns the executable code pointer for the function, or 0 if not found
 pub fn JITModule::get_func_ptr(self : JITModule, func_idx : Int) -> Int64 {
+  // Keep transaction-owned mappings reachable while returning their address.
+  self.installed_code |> ignore
   match self.functions.get(func_idx) {
-    Some(f) => f.exec_code.ptr()
+    Some(f) => f.func_ptr
     None => {
       let func_table_ptr = self.get_func_table_ptr()
       let func_count = self.get_func_count()
       if func_table_ptr != 0L && func_idx >= 0 && func_idx < func_count {
-        @wasmoon_jit.c_jit_read_i64(func_table_ptr + func_idx.to_int64() * 8L)
+        @wasmoon_jit.native_value_slot_read(func_table_ptr, func_idx)
       } else {
         0L
       }
@@ -550,7 +451,7 @@ pub fn JITModule::get_func_ptr_by_name(
   name : String,
 ) -> Int64 {
   match self.get_func_by_name(name) {
-    Some(f) => f.exec_code.ptr()
+    Some(f) => f.func_ptr
     None => 0L
   }
 }
@@ -611,7 +512,7 @@ pub fn JITModule::call_with_context(
       self.gc_use_func_safepoints(func.func_idx)
       self.gc_begin_frame(func.func_idx.to_int64())
       ctx.call_multi_return(
-        func.exec_code.ptr(),
+        func.func_ptr,
         args,
         func.param_types,
         results,
@@ -985,25 +886,6 @@ pub fn JITModule::gc_set_safepoint_table(
   if self.context_ptr != 0L {
     @wasmoon_jit.gc_set_safepoint_table(self.context_ptr, table_ptr)
   }
-}
-
-///|
-/// Install a function's GC safepoint table into context-owned storage.
-pub fn JITModule::gc_set_func_safepoints(
-  self : JITModule,
-  func_idx : Int,
-  safepoints : Array[@cwasm.GcSafepoint],
-  stackmap_blob : Bytes,
-) -> Bool {
-  if self.context_ptr == 0L {
-    return false
-  }
-  @wasmoon_jit.gc_set_func_safepoints(
-    self.context_ptr,
-    func_idx,
-    safepoints,
-    stackmap_blob,
-  )
 }
 
 ///|

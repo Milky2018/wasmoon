@@ -312,6 +312,21 @@ fn require_fixed_use(
 }
 
 ///|
+fn require_home_def(
+  function : @vcode.Function[X64Inst],
+  instruction : @vcode.Instruction,
+  operand_index : Int,
+) -> Unit raise TargetVCodeVerifyError {
+  if function.instruction_operand_at(instruction, operand_index).unwrap().constraint !=
+    AnyLocation {
+    raise InvalidInstruction(
+      instruction~,
+      message="ABI materialization result must use its stable home",
+    )
+  }
+}
+
+///|
 enum CallArgumentLocation {
   CallRegister(@vcode.PhysicalReg)
   CallStack(Int)
@@ -787,6 +802,7 @@ fn verify_target_vcode(
         }
         require_instruction_shape(function, instruction, [ty], [ty], false, 0)
         require_fixed_use(function, instruction, 0, reg)
+        require_home_def(function, instruction, 1)
       }
       IncomingStack(ty, offset) => {
         if offset < 0 || offset % 8 != 0 {
@@ -796,6 +812,7 @@ fn verify_target_vcode(
           )
         }
         require_instruction_shape(function, instruction, [], [ty], false, 0)
+        require_home_def(function, instruction, 0)
       }
       IncomingResultArea(reg) => {
         if reg.id < 0 || reg.id >= 16 || reg.class != Int {
@@ -805,6 +822,7 @@ fn verify_target_vcode(
           )
         }
         require_instruction_shape(function, instruction, [], [Ptr64], false, 0)
+        require_home_def(function, instruction, 0)
       }
       IncomingCallResult(ty, reg) => {
         if reg.class != @vcode.reg_class_for_value_type(ty) {
@@ -814,6 +832,7 @@ fn verify_target_vcode(
           )
         }
         require_instruction_shape(function, instruction, [], [ty], false, 0)
+        require_home_def(function, instruction, 0)
       }
       IncomingCallAreaResult(ty, offset) => {
         let size = call_stack_size(ty)
@@ -824,6 +843,7 @@ fn verify_target_vcode(
           )
         }
         require_instruction_shape(function, instruction, [], [ty], false, 0)
+        require_home_def(function, instruction, 0)
       }
       LoadConstant(width, bits) => {
         if width == W32 && bits > 0xFFFFFFFFUL {

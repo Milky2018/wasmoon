@@ -4,15 +4,17 @@ package "Milky2018/wasmoon/cmd/wasmoon/commands"
 import {
   "Milky2018/wasm_core/types",
   "Milky2018/wasmoon_jit",
-  "Milky2018/wasmoon_jit/cwasm",
+  "Milky2018/wasmoon_jit/artifact",
   "Milky2018/wasmoon_jit/perf",
   "moonbitlang/core/debug",
 }
 
 // Values
-pub fn compile_module(Bytes, opt_level? : Int, enable_dwarf? : Bool, on_progress? : (CompileProgress) -> Unit?, enable_cancellation? : Bool) -> @cwasm.PrecompiledModule?
+pub fn build_jit_function_names(@types.Module) -> Array[String]
 
-pub fn compile_module_to_jit(@types.Module, Bool, Bool, actual_memory_max? : Int?, Int, Bool, on_progress? : (CompileProgress) -> Unit?, compile_start? : @perf.Instant?, local_compile_mask? : Array[Bool]?, force_subtype_indirect_check? : Bool?, use_reusable_pipeline? : Bool, enable_cancellation? : Bool) -> (@cwasm.PrecompiledModule, @wasmoon_jit.JITDebugDB?)?
+pub fn compile_module(Bytes, opt_level? : Int, enable_dwarf? : Bool, on_progress? : (CompileProgress) -> Unit?, enable_cancellation? : Bool) -> @artifact.Artifact?
+
+pub fn compile_module_to_jit(@types.Module, Bool, Bool, actual_memory_max? : Int?, Int, Bool, on_progress? : (CompileProgress) -> Unit?, compile_start? : @perf.Instant?, local_compile_mask? : Array[Bool]?, force_subtype_indirect_check? : Bool?, use_reusable_pipeline? : Bool, enable_cancellation? : Bool) -> (@artifact.Artifact, @wasmoon_jit.JITDebugDB?)?
 
 pub fn func_to_wat(String, @types.FuncType, Array[@types.ValueType], Array[@types.Instruction]) -> String
 
@@ -35,6 +37,8 @@ pub fn run_testsuite(String, Bool, Bool) -> Unit
 pub fn run_wasm(String, String?, Array[String], Array[String], Array[String], Array[String], Array[String], Array[String], Bool, Bool, Bool, Int, Bool) -> Unit
 
 pub fn run_wat(String) -> Unit
+
+pub fn verify_compiled_jit_artifact(@artifact.Artifact) -> @wasmoon_jit.LoadedArtifact raise @wasmoon_jit.ArtifactLoadError
 
 // Errors
 pub suberror ComponentTestError {

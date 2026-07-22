@@ -45,7 +45,9 @@ test "AArch64 pipeline emits multiply-add as one instruction" {
   let (object, _) = compile(selected)
   debug_inspect(
     object.code(),
-    content="[0x00, 0x08, 0x01, 0x1b, 0xc0, 0x03, 0x5f, 0xd6]",
+    content=(
+      #|[0x00, 0x08, 0x01, 0x1b, 0xc0, 0x03, 0x5f, 0xd6]
+    ),
   )
 }
 
@@ -78,7 +80,59 @@ test "AArch64 pipeline emits a scaled zero-extended register-offset load" {
   let (object, _) = compile(selected)
   debug_inspect(
     object.code(),
-    content="[0x00, 0x58, 0x61, 0xb8, 0xc0, 0x03, 0x5f, 0xd6]",
+    content=(
+      #|[0x00, 0x58, 0x61, 0xb8, 0xc0, 0x03, 0x5f, 0xd6]
+    ),
+  )
+}
+
+///|
+test "AArch64 pipeline emits an extended address with a constant displacement" {
+  let builder = @semantic.FunctionBuilder::new(
+    "emitted_register_offset_load_with_displacement",
+    Platform,
+    [Ptr64, I32],
+    [I32],
+  )
+  let parameters = builder.parameters()
+  let base = builder.emit(Convert(Bitcast(Ptr64, I64)), [parameters[0]], [I64])[0]
+  let index = builder.emit(Convert(I64ExtendI32(Unsigned)), [parameters[1]], [
+      I64,
+    ])[0]
+  let twelve = builder.emit(I64Const(12UL), [], [I64])[0]
+  let displaced = builder.emit(IntBinary(Add), [index, twelve], [I64])[0]
+  let address_bits = builder.emit(IntBinary(Add), [base, displaced], [I64])[0]
+  let address = builder.emit(Convert(Bitcast(I64, Ptr64)), [address_bits], [
+      Ptr64,
+    ])[0]
+  let zero = builder.emit(I64Const(0UL), [], [I64])[0]
+  let pointer = builder.emit(PointerOffset, [address, zero], [Ptr64])[0]
+  let loaded = builder.emit(
+      Load(@semantic.LoadSpec::new(W32, None, I32, 0UL, Little, None)),
+      [pointer],
+      [I32],
+    )[0]
+  builder.return_([loaded])
+  let selected = lower(builder.finish(), test_lowering_context())
+  let (object, _) = compile(selected)
+  debug_inspect(
+    object.code(),
+    content=(
+      #|[
+      #|  0x00,
+      #|  0x40,
+      #|  0x21,
+      #|  0x8b,
+      #|  0x00,
+      #|  0x0c,
+      #|  0x40,
+      #|  0xb9,
+      #|  0xc0,
+      #|  0x03,
+      #|  0x5f,
+      #|  0xd6,
+      #|]
+    ),
   )
 }
 
@@ -96,7 +150,9 @@ test "AArch64 compile runs the complete target pipeline" {
   let (object, frame_size) = compile(function)
   debug_inspect(
     object.code(),
-    content="[0x00, 0x00, 0x01, 0x8b, 0xc0, 0x03, 0x5f, 0xd6]",
+    content=(
+      #|[0x00, 0x00, 0x01, 0x8b, 0xc0, 0x03, 0x5f, 0xd6]
+    ),
   )
   inspect(frame_size, content="0")
 }
@@ -2085,11 +2141,11 @@ test "AArch64 pipeline emits sequentially consistent atomic loops" {
       #|  v5:i64 -> p2:int
       #|  v6:ptr64 -> p2:int
       #|  v7:i64 -> p2:int
-      #|  v8:ptr64 -> p2:int
-      #|  v9:i32 -> p3:int
-      #|  v10:i64 -> p2:int
-      #|  v11:ptr64 -> p0:int
-      #|  v12:i32 -> p2:int
+      #|  v8:ptr64 -> p3:int
+      #|  v9:i32 -> p2:int
+      #|  v10:i64 -> p3:int
+      #|  v11:ptr64 -> p3:int
+      #|  v12:i32 -> p0:int
       #|  i0 operand0 -> p0:int
       #|  i0 operand1 -> p0:int
       #|  i1 operand0 -> p1:int
@@ -2105,19 +2161,19 @@ test "AArch64 pipeline emits sequentially consistent atomic loops" {
       #|  i6 operand0 -> p2:int
       #|  i7 operand0 -> p0:int
       #|  i7 operand1 -> p2:int
-      #|  i7 operand2 -> p2:int
-      #|  i8 operand0 -> p2:int
+      #|  i7 operand2 -> p3:int
+      #|  i8 operand0 -> p3:int
       #|  i8 operand1 -> p1:int
-      #|  i8 operand2 -> p3:int
-      #|  i9 operand0 -> p2:int
+      #|  i8 operand2 -> p2:int
+      #|  i9 operand0 -> p3:int
       #|  i10 operand0 -> p0:int
-      #|  i10 operand1 -> p2:int
-      #|  i10 operand2 -> p0:int
-      #|  i11 operand0 -> p0:int
-      #|  i11 operand1 -> p3:int
+      #|  i10 operand1 -> p3:int
+      #|  i10 operand2 -> p3:int
+      #|  i11 operand0 -> p3:int
+      #|  i11 operand1 -> p2:int
       #|  i11 operand2 -> p1:int
-      #|  i11 operand3 -> p2:int
-      #|  i13 operand0 -> p2:int
+      #|  i11 operand3 -> p0:int
+      #|  i13 operand0 -> p0:int
       #|
     ),
   )
@@ -2147,19 +2203,19 @@ test "AArch64 pipeline emits sequentially consistent atomic loops" {
       #|    0x00,
       #|    0x80,
       #|    0xd2,
-      #|    0x02,
+      #|    0x03,
       #|    0x00,
       #|    0x02,
       #|    0x8b,
-      #|    0x43,
+      #|    0x62,
       #|    0xfc,
       #|    0x5f,
       #|    0x88,
-      #|    0x70,
+      #|    0x50,
       #|    0x00,
       #|    0x01,
       #|    0x0b,
-      #|    0x50,
+      #|    0x70,
       #|    0xfc,
       #|    0x11,
       #|    0x88,
@@ -2167,23 +2223,23 @@ test "AArch64 pipeline emits sequentially consistent atomic loops" {
       #|    0xff,
       #|    0xff,
       #|    0x35,
-      #|    0x02,
+      #|    0x03,
       #|    0x01,
       #|    0x80,
       #|    0xd2,
+      #|    0x03,
       #|    0x00,
-      #|    0x00,
-      #|    0x02,
+      #|    0x03,
       #|    0x8b,
-      #|    0x70,
+      #|    0x50,
       #|    0x1c,
       #|    0x00,
       #|    0x53,
-      #|    0x02,
+      #|    0x60,
       #|    0xfc,
       #|    0x5f,
       #|    0x08,
-      #|    0x5f,
+      #|    0x1f,
       #|    0x00,
       #|    0x10,
       #|    0x6b,
@@ -2199,7 +2255,7 @@ test "AArch64 pipeline emits sequentially consistent atomic loops" {
       #|    0x00,
       #|    0x00,
       #|    0x14,
-      #|    0x01,
+      #|    0x61,
       #|    0xfc,
       #|    0x11,
       #|    0x08,
@@ -2211,10 +2267,6 @@ test "AArch64 pipeline emits sequentially consistent atomic loops" {
       #|    0x3b,
       #|    0x03,
       #|    0xd5,
-      #|    0xe0,
-      #|    0x03,
-      #|    0x02,
-      #|    0x2a,
       #|    0xc0,
       #|    0x03,
       #|    0x5f,
@@ -2491,7 +2543,7 @@ test "AArch64 pipeline materializes block arguments on their selected edges" {
       #|  v3:i32 -> p0:int
       #|  v4:i64 -> p1:int
       #|  v5:i64 -> p2:int
-      #|  v6:i64 -> p0:int
+      #|  v6:i64 -> p1:int
       #|  i0 operand0 -> p0:int
       #|  i0 operand1 -> p0:int
       #|  i1 operand0 -> p1:int
@@ -2499,9 +2551,8 @@ test "AArch64 pipeline materializes block arguments on their selected edges" {
       #|  i2 operand0 -> p2:int
       #|  i2 operand1 -> p2:int
       #|  i3 operand0 -> p0:int
-      #|  i6 operand0 -> p0:int
-      #|  edge(block1, 0): move v4 p1:int -> p0:int
-      #|  edge(block2, 0): move v5 p2:int -> p0:int
+      #|  i6 operand0 -> p1:int
+      #|  edge(block2, 0): move v5 p2:int -> p1:int
       #|
     ),
   )
@@ -2511,21 +2562,21 @@ test "AArch64 pipeline materializes block arguments on their selected edges" {
       #|{
       #|  architecture: AArch64,
       #|  code: [
-      #|    0x60,
+      #|    0x40,
       #|    0x00,
       #|    0x00,
       #|    0x34,
-      #|    0xe0,
-      #|    0x03,
-      #|    0x01,
-      #|    0xaa,
       #|    0x02,
       #|    0x00,
       #|    0x00,
       #|    0x14,
-      #|    0xe0,
+      #|    0xe1,
       #|    0x03,
       #|    0x02,
+      #|    0xaa,
+      #|    0xe0,
+      #|    0x03,
+      #|    0x01,
       #|    0xaa,
       #|    0xc0,
       #|    0x03,
@@ -2568,7 +2619,7 @@ test "AArch64 conditional edges isolate their parallel copies" {
       #|  v3:i32 -> p0:int
       #|  v4:i64 -> p1:int
       #|  v5:i64 -> p2:int
-      #|  v6:i64 -> p0:int
+      #|  v6:i64 -> p1:int
       #|  i0 operand0 -> p0:int
       #|  i0 operand1 -> p0:int
       #|  i1 operand0 -> p1:int
@@ -2576,9 +2627,8 @@ test "AArch64 conditional edges isolate their parallel copies" {
       #|  i2 operand0 -> p2:int
       #|  i2 operand1 -> p2:int
       #|  i3 operand0 -> p0:int
-      #|  i4 operand0 -> p0:int
-      #|  edge(block0, 0): move v4 p1:int -> p0:int
-      #|  edge(block0, 1): move v5 p2:int -> p0:int
+      #|  i4 operand0 -> p1:int
+      #|  edge(block0, 1): move v5 p2:int -> p1:int
       #|
     ),
   )
@@ -2588,21 +2638,17 @@ test "AArch64 conditional edges isolate their parallel copies" {
       #|{
       #|  architecture: AArch64,
       #|  code: [
-      #|    0x60,
+      #|    0x40,
       #|    0x00,
       #|    0x00,
-      #|    0x34,
+      #|    0x35,
+      #|    0xe1,
+      #|    0x03,
+      #|    0x02,
+      #|    0xaa,
       #|    0xe0,
       #|    0x03,
       #|    0x01,
-      #|    0xaa,
-      #|    0x02,
-      #|    0x00,
-      #|    0x00,
-      #|    0x14,
-      #|    0xe0,
-      #|    0x03,
-      #|    0x02,
       #|    0xaa,
       #|    0xc0,
       #|    0x03,
@@ -4225,15 +4271,15 @@ test "AArch64 emits remaining pure scalar integer operations" {
       #|    0x7c,
       #|    0xa0,
       #|    0x9b,
-      #|    0x01,
+      #|    0x00,
       #|    0xfe,
       #|    0x60,
       #|    0xd3,
-      #|    0x60,
+      #|    0x61,
       #|    0x00,
       #|    0xc0,
       #|    0xda,
-      #|    0x02,
+      #|    0x22,
       #|    0x10,
       #|    0xc0,
       #|    0xda,
@@ -4249,13 +4295,13 @@ test "AArch64 emits remaining pure scalar integer operations" {
       #|    0xba,
       #|    0x31,
       #|    0x0e,
-      #|    0x00,
+      #|    0x01,
       #|    0x02,
       #|    0x26,
       #|    0x1e,
       #|    0xe3,
       #|    0x03,
-      #|    0x00,
+      #|    0x01,
       #|    0xcb,
       #|    0x42,
       #|    0x2c,
@@ -4265,22 +4311,10 @@ test "AArch64 emits remaining pure scalar integer operations" {
       #|    0x7c,
       #|    0x44,
       #|    0x9b,
-      #|    0x40,
+      #|    0x41,
       #|    0x7c,
-      #|    0xc0,
+      #|    0xc1,
       #|    0x9b,
-      #|    0xf0,
-      #|    0x03,
-      #|    0x00,
-      #|    0xaa,
-      #|    0xe0,
-      #|    0x03,
-      #|    0x01,
-      #|    0x2a,
-      #|    0xe1,
-      #|    0x03,
-      #|    0x10,
-      #|    0xaa,
       #|    0xc0,
       #|    0x03,
       #|    0x5f,
@@ -4362,43 +4396,35 @@ test "AArch64 emits null carriers references and scalar values" {
       #|{
       #|  architecture: AArch64,
       #|  code: [
-      #|    0xe6,
-      #|    0x03,
-      #|    0x02,
-      #|    0x2a,
-      #|    0xe7,
-      #|    0x03,
-      #|    0x04,
-      #|    0xaa,
-      #|    0x02,
+      #|    0x00,
       #|    0x00,
       #|    0xe0,
       #|    0xd2,
-      #|    0x04,
-      #|    0x00,
-      #|    0xe0,
-      #|    0xd2,
-      #|    0xe0,
-      #|    0x03,
-      #|    0x03,
-      #|    0xaa,
-      #|    0xe5,
-      #|    0x03,
-      #|    0x00,
-      #|    0xaa,
-      #|    0x5f,
-      #|    0x00,
       #|    0x05,
-      #|    0xeb,
+      #|    0x00,
+      #|    0xe0,
+      #|    0xd2,
       #|    0xe8,
+      #|    0x03,
+      #|    0x03,
+      #|    0xaa,
+      #|    0xe9,
+      #|    0x03,
+      #|    0x08,
+      #|    0xaa,
+      #|    0x1f,
+      #|    0x00,
+      #|    0x09,
+      #|    0xeb,
+      #|    0xe6,
       #|    0x17,
       #|    0x9f,
       #|    0x9a,
-      #|    0x9f,
+      #|    0xbf,
       #|    0x00,
-      #|    0x00,
+      #|    0x08,
       #|    0xeb,
-      #|    0xe9,
+      #|    0xe7,
       #|    0x07,
       #|    0x9f,
       #|    0x9a,
@@ -4406,9 +4432,9 @@ test "AArch64 emits null carriers references and scalar values" {
       #|    0x00,
       #|    0x00,
       #|    0x71,
-      #|    0x26,
+      #|    0x22,
       #|    0x10,
-      #|    0x86,
+      #|    0x82,
       #|    0x1a,
       #|    0x3f,
       #|    0x00,
@@ -4416,23 +4442,23 @@ test "AArch64 emits null carriers references and scalar values" {
       #|    0x71,
       #|    0x63,
       #|    0x10,
-      #|    0x87,
+      #|    0x84,
       #|    0x9a,
       #|    0x3f,
       #|    0x00,
       #|    0x00,
       #|    0x71,
-      #|    0x42,
+      #|    0x00,
       #|    0x10,
-      #|    0x85,
+      #|    0x89,
       #|    0x9a,
       #|    0x3f,
       #|    0x00,
       #|    0x00,
       #|    0x71,
-      #|    0x80,
+      #|    0xa4,
       #|    0x10,
-      #|    0x80,
+      #|    0x88,
       #|    0x9a,
       #|    0x3f,
       #|    0x00,
@@ -4452,23 +4478,19 @@ test "AArch64 emits null carriers references and scalar values" {
       #|    0x1e,
       #|    0xe1,
       #|    0x03,
-      #|    0x09,
-      #|    0x2a,
-      #|    0xe4,
-      #|    0x03,
-      #|    0x02,
-      #|    0xaa,
-      #|    0xe2,
-      #|    0x03,
-      #|    0x06,
+      #|    0x07,
       #|    0x2a,
       #|    0xe5,
+      #|    0x03,
+      #|    0x04,
+      #|    0xaa,
+      #|    0xe4,
       #|    0x03,
       #|    0x00,
       #|    0xaa,
       #|    0xe0,
       #|    0x03,
-      #|    0x08,
+      #|    0x06,
       #|    0x2a,
       #|    0xc0,
       #|    0x03,
@@ -4525,6 +4547,18 @@ test "AArch64 emits environment paths and typed symbol relocations" {
       #|{
       #|  architecture: AArch64,
       #|  code: [
+      #|    0xe3,
+      #|    0x03,
+      #|    0x00,
+      #|    0xaa,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x90,
+      #|    0x00,
+      #|    0x00,
+      #|    0x00,
+      #|    0x91,
       #|    0x01,
       #|    0x00,
       #|    0x00,
@@ -4541,42 +4575,14 @@ test "AArch64 emits environment paths and typed symbol relocations" {
       #|    0x00,
       #|    0x00,
       #|    0x91,
-      #|    0x03,
-      #|    0x00,
-      #|    0x00,
-      #|    0x90,
       #|    0x63,
-      #|    0x00,
-      #|    0x00,
-      #|    0x91,
-      #|    0x00,
       #|    0x04,
       #|    0x40,
       #|    0xf9,
-      #|    0x00,
+      #|    0x63,
       #|    0x0c,
       #|    0x40,
       #|    0xf9,
-      #|    0xf0,
-      #|    0x03,
-      #|    0x00,
-      #|    0xaa,
-      #|    0xe0,
-      #|    0x03,
-      #|    0x01,
-      #|    0xaa,
-      #|    0xe1,
-      #|    0x03,
-      #|    0x02,
-      #|    0xaa,
-      #|    0xe2,
-      #|    0x03,
-      #|    0x03,
-      #|    0xaa,
-      #|    0xe3,
-      #|    0x03,
-      #|    0x10,
-      #|    0xaa,
       #|    0xc0,
       #|    0x03,
       #|    0x5f,
@@ -4584,37 +4590,37 @@ test "AArch64 emits environment paths and typed symbol relocations" {
       #|  ],
       #|  relocations: [
       #|    {
-      #|      offset: 0,
-      #|      kind: AArch64Page21,
-      #|      target: Code({ name: "callee" }),
-      #|      addend: 0,
-      #|    },
-      #|    {
       #|      offset: 4,
-      #|      kind: AArch64PageOffset12,
+      #|      kind: AArch64Page21,
       #|      target: Code({ name: "callee" }),
       #|      addend: 0,
       #|    },
       #|    {
       #|      offset: 8,
-      #|      kind: AArch64Page21,
-      #|      target: External({ name: "runtime.helper" }),
+      #|      kind: AArch64PageOffset12,
+      #|      target: Code({ name: "callee" }),
       #|      addend: 0,
       #|    },
       #|    {
       #|      offset: 12,
-      #|      kind: AArch64PageOffset12,
+      #|      kind: AArch64Page21,
       #|      target: External({ name: "runtime.helper" }),
       #|      addend: 0,
       #|    },
       #|    {
       #|      offset: 16,
+      #|      kind: AArch64PageOffset12,
+      #|      target: External({ name: "runtime.helper" }),
+      #|      addend: 0,
+      #|    },
+      #|    {
+      #|      offset: 20,
       #|      kind: AArch64Page21,
       #|      target: Data({ name: "constant.pool" }),
       #|      addend: 0,
       #|    },
       #|    {
-      #|      offset: 20,
+      #|      offset: 24,
       #|      kind: AArch64PageOffset12,
       #|      target: Data({ name: "constant.pool" }),
       #|      addend: 0,
@@ -4938,7 +4944,7 @@ test "AArch64 emits scalar min max and bit-exact copy-sign" {
       #|    0x00,
       #|    0xb0,
       #|    0x52,
-      #|    0x00,
+      #|    0x01,
       #|    0x02,
       #|    0x27,
       #|    0x1e,
@@ -4946,7 +4952,7 @@ test "AArch64 emits scalar min max and bit-exact copy-sign" {
       #|    0x00,
       #|    0xe0,
       #|    0xd2,
-      #|    0x01,
+      #|    0x00,
       #|    0x02,
       #|    0x67,
       #|    0x9e,
@@ -4960,11 +4966,11 @@ test "AArch64 emits scalar min max and bit-exact copy-sign" {
       #|    0x9e,
       #|    0x42,
       #|    0x58,
-      #|    0x20,
+      #|    0x21,
       #|    0x1e,
       #|    0x63,
       #|    0x48,
-      #|    0x61,
+      #|    0x60,
       #|    0x1e,
       #|    0xb0,
       #|    0x68,
@@ -4986,11 +4992,11 @@ test "AArch64 emits scalar min max and bit-exact copy-sign" {
       #|    0x02,
       #|    0x27,
       #|    0x1e,
-      #|    0x10,
+      #|    0x30,
       #|    0x1c,
       #|    0x64,
       #|    0x6e,
-      #|    0x00,
+      #|    0x01,
       #|    0x1e,
       #|    0xb0,
       #|    0x4e,
@@ -5022,11 +5028,11 @@ test "AArch64 emits scalar min max and bit-exact copy-sign" {
       #|    0x02,
       #|    0x67,
       #|    0x9e,
-      #|    0x30,
+      #|    0x10,
       #|    0x1c,
       #|    0x64,
       #|    0x6e,
-      #|    0x01,
+      #|    0x00,
       #|    0x1e,
       #|    0xb0,
       #|    0x4e,
@@ -5038,11 +5044,7 @@ test "AArch64 emits scalar min max and bit-exact copy-sign" {
       #|    0x1c,
       #|    0xa2,
       #|    0x4e,
-      #|    0x02,
-      #|    0x1e,
-      #|    0xb0,
-      #|    0x4e,
-      #|    0x30,
+      #|    0x22,
       #|    0x1c,
       #|    0xa1,
       #|    0x4e,

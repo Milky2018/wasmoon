@@ -22,7 +22,7 @@ pub struct DWARFBuilder {
 ///|
 /// Create a new DWARF builder
 pub fn DWARFBuilder::DWARFBuilder() -> DWARFBuilder {
-  { handle: @jit_ffi.c_dwarf_create() }
+  { handle: c_dwarf_create() }
 }
 
 ///|
@@ -43,7 +43,7 @@ pub fn DWARFBuilder::add_function(
   let name_bytes = Bytes::from_array(
     name.to_array().map(fn(c) { c.to_int().to_byte() }),
   )
-  @jit_ffi.c_dwarf_add_function(self.handle, name_bytes, addr, size, func_idx)
+  c_dwarf_add_function(self.handle, name_bytes, addr, size, func_idx)
 }
 
 ///|
@@ -57,23 +57,23 @@ pub fn DWARFBuilder::register(
   self : DWARFBuilder,
   verbose? : Bool = false,
 ) -> Unit {
-  @jit_ffi.c_dwarf_register(self.handle, if verbose { 1 } else { 0 })
+  c_dwarf_register(self.handle, if verbose { 1 } else { 0 })
   // Set as active for backtrace lookups
-  @jit_ffi.c_dwarf_set_active(self.handle)
+  c_dwarf_set_active(self.handle)
 }
 
 ///|
 /// Unregister DWARF debug info from the debugger
 /// Call this before destroying if you want to explicitly unregister
 pub fn DWARFBuilder::unregister(self : DWARFBuilder) -> Unit {
-  @jit_ffi.c_dwarf_unregister(self.handle)
+  c_dwarf_unregister(self.handle)
 }
 
 ///|
 /// Destroy the DWARF builder and free all resources
 /// This also unregisters the debug info if it was registered
 pub fn DWARFBuilder::destroy(self : DWARFBuilder) -> Unit {
-  @jit_ffi.c_dwarf_destroy(self.handle)
+  c_dwarf_destroy(self.handle)
 }
 
 ///|
@@ -94,7 +94,7 @@ pub fn DWARFBuilder::lookup_address(
   let name_buf = FixedArray::make(256, b'\x00')
   let func_idx_buf = FixedArray::make(1, 0)
   let offset_buf = FixedArray::make(1, 0L)
-  let found = @jit_ffi.c_dwarf_lookup_address(
+  let found = c_dwarf_lookup_address(
     self.handle,
     addr,
     name_buf,
@@ -137,9 +137,9 @@ pub struct BacktraceFrame {
 pub fn DWARFBuilder::capture_backtrace(
   self : DWARFBuilder,
 ) -> Array[BacktraceFrame] {
-  let pc = @jit_ffi.c_jit_get_trap_pc()
-  let fp = @jit_ffi.c_jit_get_trap_fp()
-  let lr = @jit_ffi.c_jit_get_trap_lr()
+  let pc = c_jit_get_trap_pc()
+  let fp = c_jit_get_trap_fp()
+  let lr = c_jit_get_trap_lr()
   if pc == 0L {
     return []
   }
@@ -147,7 +147,7 @@ pub fn DWARFBuilder::capture_backtrace(
   // Use the extended function that includes LR for when FP is 0
   let max_frames = 32
   let frames_buf = FixedArray::make(max_frames * 2, 0L)
-  let frame_count = @jit_ffi.c_dwarf_capture_backtrace_ex(
+  let frame_count = c_dwarf_capture_backtrace_ex(
     pc, fp, lr, frames_buf, max_frames,
   )
   // Convert to BacktraceFrame array

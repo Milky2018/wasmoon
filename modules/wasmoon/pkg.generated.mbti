@@ -30,7 +30,6 @@ pub(all) struct CompilerInfrastructureAssembly {
   signature : @milkir.Signature
   machv_function : @machv.Function
   code_object : @wasmoon_jit.JitCodeObject
-  jit_glue : Array[@wasmoon_jit.NativeGlueBinding]
 }
 
 pub(all) struct RuntimeAssembly {

@@ -1,6 +1,6 @@
 ///|
 /// JIT runtime FFI for executable memory management and code execution
-/// Uses @jit_ffi package for C function declarations
+/// Uses the Wasmoon-owned JIT facade for native runtime operations.
 
 // ============ Trap Handling ============
 
@@ -36,7 +36,7 @@ priv struct JITContext {
   ctx : @wasmoon_jit.NativeJITContext
   // Trampoline cache: maps signature hash to generated trampoline
   // Signature hash = hash of (param_types, result_types)
-  trampoline_cache : Map[Int64, @wasmoon_jit.ExecCode]
+  trampoline_cache : Map[Int64, @wasmoon_jit.InstalledTrampoline]
 }
 
 ///|
@@ -99,12 +99,6 @@ fn JITContext::alloc_guarded_memory(
   max_pages : Int?,
 ) -> Int64 {
   self.ctx.alloc_guarded_memory(initial_pages, max_pages)
-}
-
-///|
-/// Get the function table base pointer
-fn JITContext::get_func_table_ptr(self : JITContext) -> Int64 {
-  self.ctx.func_table_ptr()
 }
 
 ///|
@@ -290,23 +284,24 @@ fn JITContext::call_multi_return(
 
   // Get or generate trampoline
   let trampoline_ptr = match self.trampoline_cache.get(sig_hash) {
-    Some(trampoline) => trampoline.ptr()
+    Some(trampoline) => trampoline.entry_address()
     None => {
-      let target_arch = @wasmoon_jit.host_target_arch()
+      let target_arch = @wasmoon_jit.host_native_target() catch {
+        err => raise JITTrap("unsupported host target: \{err}")
+      }
       let code_ints = @wasmoon_jit.build_entry_trampoline_for_target(
         param_types, result_types, target_arch,
       ) catch {
         err => raise JITTrap("entry trampoline generation failed: \{err}")
       }
-      let trampoline = @wasmoon_jit.ExecCode::try_alloc(code_ints)
-      match trampoline {
-        Some(t) => {
-          let ptr = t.ptr()
-          self.trampoline_cache.set(sig_hash, t)
-          ptr
-        }
-        None => abort("Failed to allocate trampoline")
+      let installer = @wasmoon_jit.JitCodeInstaller::new(fn(_) { None })
+      let trampoline = installer.install_trampoline(code_ints) catch {
+        err =>
+          raise JITTrap("entry trampoline installation failed: \{to_repr(err)}")
       }
+      let pointer = trampoline.entry_address()
+      self.trampoline_cache.set(sig_hash, trampoline)
+      pointer
     }
   }
 

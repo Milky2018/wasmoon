@@ -402,17 +402,19 @@ fn run_jit_with_opt_level(
           None
         },
       )
-      is Some((precompiled, debug_db)) else {
+      is Some((artifact, debug_db)) else {
       return Err(compile_error.unwrap_or("JIT compile returned unsupported"))
     }
     let func_signatures = @wast.build_func_signatures(mod_)
     let external_imports = @wast.build_external_imports_for_jit(
       mod_, instance, store,
     )
-    let jm = @jit.JITModule::load_with_imports(
-      precompiled,
+    let loaded = @commands.verify_compiled_jit_artifact(artifact)
+    let jm = @jit.JITModule::load_artifact_with_imports(
+      loaded,
       func_signatures,
       external_imports,
+      function_names=@commands.build_jit_function_names(mod_),
       debug_db~,
     )
     jm_opt = Some(jm)
@@ -513,8 +515,10 @@ fn run_jit_with_opt_level(
 }
 
 ///|
-pub fn current_target_arch() -> @cwasm.TargetArch {
-  @wasmoon_jit.host_target_arch()
+pub fn current_target_arch() -> @wasmoon_jit.NativeTarget {
+  @wasmoon_jit.host_native_target() catch {
+    _ => abort("unsupported host target")
+  }
 }
 
 ///|

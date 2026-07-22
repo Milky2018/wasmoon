@@ -1,6 +1,6 @@
 name = "Milky2018/machv_regalloc"
 
-version = "0.2.2"
+version = "0.2.3"
 
 readme = "README.mbt.md"
 
@@ -10,12 +10,12 @@ license = "Apache-2.0"
 
 keywords = [ "compiler", "register-allocation", "machv", "jit" ]
 
-description = "MachV adapter for the reusable register allocator"
+description = "Target VCode adapter for the reusable register allocator"
 
 import {
   "moonbitlang/x@0.4.38",
-  "Milky2018/machv@0.3.0",
-  "Milky2018/regalloc@0.2.0",
+  "Milky2018/machv@0.4.0",
+  "Milky2018/regalloc@0.3.0",
 }
 
 preferred_target = "wasm-gc"

@@ -240,22 +240,40 @@ pub fn Input::with_timing(self : Input, timing : OperandTiming) -> Input {
 pub struct Output {
   ty : ValueType
   constraint : OperandConstraint
+  preference : PhysicalReg?
   timing : OperandTiming
 }
 
 ///|
 pub fn Output::any(ty : ValueType) -> Output {
-  { ty, constraint: Any, timing: Late }
+  { ty, constraint: Any, preference: None, timing: Late }
+}
+
+///|
+/// Materialize the result directly in its stable register or stack home.
+/// This is intended for target ABI pseudos whose emitter owns the transfer
+/// from an implicit incoming location.
+pub fn Output::any_location(ty : ValueType) -> Output {
+  { ty, constraint: AnyLocation, preference: None, timing: Late }
 }
 
 ///|
 pub fn Output::fixed(ty : ValueType, reg : PhysicalReg) -> Output {
-  { ty, constraint: Fixed(reg), timing: Late }
+  { ty, constraint: Fixed(reg), preference: None, timing: Late }
 }
 
 ///|
 pub fn Output::tied(ty : ValueType, operand_index : Int) -> Output {
-  { ty, constraint: TiedTo(operand_index), timing: Late }
+  { ty, constraint: TiedTo(operand_index), preference: None, timing: Late }
+}
+
+///|
+/// Prefer a physical register without making it an allocation constraint.
+pub fn Output::with_preference(
+  self : Output,
+  preference : PhysicalReg,
+) -> Output {
+  { ..self, preference: Some(preference) }
 }
 
 ///|
@@ -414,7 +432,6 @@ pub suberror VCodeVerifyError {
   InvalidEdgeArity(instruction~ : Instruction, block~ : Block)
   EdgeClassMismatch(instruction~ : Instruction, block~ : Block, index~ : Int)
   InvalidTie(instruction~ : Instruction, operand~ : Int, tied_to~ : Int)
-  InvalidAnyLocationConstraint(instruction~ : Instruction, operand~ : Int)
   FixedRegisterClassMismatch(instruction~ : Instruction, operand~ : Int)
   InvalidOperandPreference(instruction~ : Instruction, operand~ : Int)
   DuplicateClobber(instruction~ : Instruction, reg~ : PhysicalReg)

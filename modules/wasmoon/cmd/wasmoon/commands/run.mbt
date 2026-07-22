@@ -821,45 +821,12 @@ fn build_run_compile_mask(
 }
 
 ///|
-fn hash_run_compile_mask(mask : Array[Bool]?) -> Int {
-  match mask {
-    None => 0
-    Some(bits) => {
-      let mut h = 5381
-      for bit in bits {
-        let v = if bit { 1 } else { 0 }
-        h = h * 33 + v
-      }
-      h
-    }
-  }
-}
-
-///|
-fn bytes_to_int_array(bytes : Bytes) -> Array[Int] {
-  let ints : Array[Int] = []
-  for b in bytes {
-    ints.push(b.to_int() & 0xFF)
-  }
-  ints
-}
-
-///|
 fn int_array_to_bytes(ints : Array[Int]) -> Bytes {
   let bytes : Array[Byte] = []
   for value in ints {
     bytes.push((value & 0xFF).to_byte())
   }
   Bytes::from_array(bytes)
-}
-
-///|
-fn run_jit_cache_arch_tag() -> String {
-  match @wasmoon_jit.host_target_arch() {
-    AArch64 => "aarch64"
-    X86_64 => "x86_64"
-    Unknown => "unknown"
-  }
 }
 
 ///|
@@ -871,28 +838,176 @@ fn run_jit_cache_dir() -> String {
 }
 
 ///|
-let run_jit_cache_version = "v4"
+let run_jit_cache_version = "v9"
+
+///|
+fn artifact_optimization_level(level : Int) -> @artifact.OptimizationLevel {
+  match normalize_opt_level(level) {
+    0 => O0
+    1 => O1
+    2 => O2
+    _ => O3
+  }
+}
+
+///|
+fn jit_artifact_policy(
+  opt_level : Int,
+  enable_cancellation : Bool,
+) -> @artifact.CompilationPolicy {
+  {
+    optimization_level: artifact_optimization_level(opt_level),
+    code_model: Small,
+    call_binding: DirectBody,
+    cancellation_safepoints: enable_cancellation,
+    debug_info: false,
+  }
+}
+
+///|
+fn append_i64_identity_bytes(bytes : Array[Byte], value : Int64) -> Unit {
+  for shift in 0..<8 {
+    bytes.push((value >> (shift * 8)).to_byte())
+  }
+}
+
+///|
+fn jit_semantic_feature_bytes(
+  actual_memory_max : Int?,
+  use_subtype_indirect_check : Bool,
+  local_compile_mask : Array[Bool]?,
+) -> Bytes {
+  let bytes : Array[Byte] = [1]
+  match actual_memory_max {
+    Some(max) => {
+      bytes.push(1)
+      append_i64_identity_bytes(bytes, max.to_int64())
+    }
+    None => bytes.push(0)
+  }
+  bytes.push(if use_subtype_indirect_check { 1 } else { 0 })
+  match local_compile_mask {
+    Some(mask) => {
+      bytes.push(1)
+      append_i64_identity_bytes(bytes, mask.length().to_int64())
+      for enabled in mask {
+        bytes.push(if enabled { 1 } else { 0 })
+      }
+    }
+    None => bytes.push(0)
+  }
+  Bytes::from_array(bytes)
+}
+
+///|
+fn build_jit_artifact_manifest(
+  mod_ : @types.Module,
+  source_module? : Bytes? = None,
+  actual_memory_max? : Int? = None,
+  opt_level : Int,
+  local_compile_mask? : Array[Bool]? = None,
+  force_subtype_indirect_check? : Bool? = None,
+  enable_cancellation? : Bool = false,
+) -> @artifact.CompatibilityManifest raise @wasmoon_jit.JitPipelineError {
+  let use_subtype_indirect_check = force_subtype_indirect_check.unwrap_or(
+    module_indirect_subtype_check_reason(mod_) is Some(_),
+  )
+  let source = source_module.unwrap_or_else(fn() {
+    int_array_to_bytes(@encoder.encode(mod_))
+  })
+  let identity = @wasmoon_jit.artifact_module_identity(
+    "wasm-module",
+    source,
+    jit_semantic_feature_bytes(
+      actual_memory_max, use_subtype_indirect_check, local_compile_mask,
+    ),
+  )
+  @wasmoon_jit.build_host_artifact_manifest(
+    module_identity=identity,
+    policy=jit_artifact_policy(opt_level, enable_cancellation),
+  )
+}
+
+///|
+fn jit_artifact_compatibility(
+  manifest : @artifact.CompatibilityManifest,
+) -> @wasmoon_jit.ArtifactCompatibility {
+  @wasmoon_jit.artifact_compatibility(
+    manifest,
+    available_cpu_features=[],
+    runtime_symbols=@wasmoon_jit.wasmoon_runtime_external_symbols(),
+    data_symbols=[],
+  )
+}
+
+///|
+/// Verify a freshly compiled v9 artifact before executable installation.
+pub fn verify_compiled_jit_artifact(
+  artifact : @artifact.Artifact,
+) -> @wasmoon_jit.LoadedArtifact raise @wasmoon_jit.ArtifactLoadError {
+  @wasmoon_jit.verify_artifact(
+    artifact,
+    jit_artifact_compatibility(artifact.manifest),
+  )
+}
 
 ///|
 fn run_jit_cache_file(
   cache_dir : String,
-  wasm_binary : Bytes,
-  func_name : String,
-  opt_level : Int,
-  enable_dwarf : Bool,
-  local_compile_mask : Array[Bool]?,
+  manifest : @artifact.CompatibilityManifest,
 ) -> String {
-  let module_hash = wasm_binary.hash()
-  let func_hash = func_name.hash()
-  let mask_hash = hash_run_compile_mask(local_compile_mask)
-  let dwarf_tag = if enable_dwarf { 1 } else { 0 }
-  // Bump cache key version when generated machine code semantics change.
-  let file_name = "\{run_jit_cache_version}-\{run_jit_cache_arch_tag()}-o\{opt_level}-d\{dwarf_tag}-f\{func_hash}-m\{mask_hash}-n\{wasm_binary.length()}-h\{module_hash}.cwasm"
+  let source_digest = manifest.module_identity.source_digest.bytes
+  let semantic_digest = manifest.module_identity.semantic_features_digest.bytes
+  let target_tag = match manifest.target.architecture {
+    X64 => "x86_64"
+    AArch64 => "aarch64"
+  }
+  let os_tag = match manifest.target.operating_system_abi {
+    MacOS => "macos"
+    LinuxGnu => "linux-gnu"
+    LinuxMusl => "linux-musl"
+    WindowsMsvc => "windows-msvc"
+  }
+  let opt_tag = match manifest.policy.optimization_level {
+    O0 => "o0"
+    O1 => "o1"
+    O2 => "o2"
+    O3 => "o3"
+  }
+  let code_model_tag = match manifest.policy.code_model {
+    Small => "small"
+    Large => "large"
+  }
+  let call_binding_tag = match manifest.policy.call_binding {
+    StableEntry => "stable"
+    DirectBody => "direct"
+  }
+  let cancellation_tag = if manifest.policy.cancellation_safepoints {
+    "cancel"
+  } else {
+    "no-cancel"
+  }
+  let debug_tag = if manifest.policy.debug_info { "debug" } else { "no-debug" }
+  let file_name = "\{run_jit_cache_version}-\{target_tag}-\{os_tag}-\{opt_tag}-\{code_model_tag}-\{call_binding_tag}-\{cancellation_tag}-\{debug_tag}-s\{digest_hex(source_digest)}-x\{digest_hex(semantic_digest)}.cwasm"
   if cache_dir.has_suffix("/") {
     "\{cache_dir}\{file_name}"
   } else {
     "\{cache_dir}/\{file_name}"
   }
+}
+
+///|
+fn digest_hex(bytes : Bytes) -> String {
+  let digits = "0123456789abcdef"
+  let output = StringBuilder::StringBuilder()
+  for byte in bytes {
+    let value = byte.to_int()
+    output.write_char(digits.code_unit_at(value >> 4).to_int().unsafe_to_char())
+    output.write_char(
+      digits.code_unit_at(value & 0x0F).to_int().unsafe_to_char(),
+    )
+  }
+  output.to_string()
 }
 
 ///|
@@ -910,13 +1025,16 @@ fn ensure_run_jit_cache_dir(cache_dir : String) -> Bool {
 }
 
 ///|
-fn load_run_jit_cache(cache_file : String) -> @cwasm.PrecompiledModule? {
+fn load_run_jit_cache(
+  cache_file : String,
+  compatibility : @wasmoon_jit.ArtifactCompatibility,
+  limits? : @artifact.DecodeLimits = @artifact.DecodeLimits::default(),
+) -> @wasmoon_jit.LoadedArtifact? {
   if !@fs.path_exists(cache_file) {
     return None
   }
   let bytes = @fs.read_file_to_bytes(cache_file) catch { _ => return None }
-  let ints = bytes_to_int_array(bytes)
-  let precompiled = @cwasm.deserialize(ints) catch {
+  let loaded = @wasmoon_jit.load_artifact(bytes, compatibility, limits~) catch {
     _ => {
       @fs.remove_file(cache_file) catch {
         _ => ()
@@ -924,15 +1042,15 @@ fn load_run_jit_cache(cache_file : String) -> @cwasm.PrecompiledModule? {
       return None
     }
   }
-  Some(precompiled)
+  Some(loaded)
 }
 
 ///|
 fn save_run_jit_cache(
   cache_file : String,
-  precompiled : @cwasm.PrecompiledModule,
+  artifact : @artifact.Artifact,
 ) -> Unit {
-  let bytes = int_array_to_bytes(precompiled.serialize())
+  let bytes = @artifact.encode(artifact) catch { _ => return }
   @fs.write_bytes_to_file(cache_file, bytes) catch {
     _ => ()
   }
@@ -1084,19 +1202,30 @@ fn run_with_jit(
     Some(func_idx) => build_run_compile_mask(mod_, func_idx)
     None => None
   }
+  let expected_manifest = build_jit_artifact_manifest(
+    mod_,
+    source_module=wasm_binary,
+    actual_memory_max~,
+    opt_level,
+    local_compile_mask~,
+  ) catch {
+    err => {
+      @logger.error("Failed to build JIT artifact manifest: \{err}")
+      return exit_failure()
+    }
+  }
+  let compatibility = jit_artifact_compatibility(expected_manifest)
   let mut cache_path : String? = None
-  let mut cache_precompiled : @cwasm.PrecompiledModule? = None
+  let mut cached_artifact : @wasmoon_jit.LoadedArtifact? = None
   if should_use_run_jit_cache(dump_on_trap, @perf.enabled()) {
     match wasm_binary {
-      Some(binary) => {
+      Some(_) => {
         let cache_dir = run_jit_cache_dir()
         if ensure_run_jit_cache_dir(cache_dir) {
-          let path = run_jit_cache_file(
-            cache_dir, binary, func_name, opt_level, enable_dwarf, local_compile_mask,
-          )
+          let path = run_jit_cache_file(cache_dir, expected_manifest)
           cache_path = Some(path)
-          cache_precompiled = load_run_jit_cache(path)
-          if cache_precompiled is Some(_) && debug {
+          cached_artifact = load_run_jit_cache(path, compatibility)
+          if cached_artifact is Some(_) && debug {
             @logger.debug("JIT: cache hit \{path}")
           }
         }
@@ -1104,11 +1233,11 @@ fn run_with_jit(
       None => ()
     }
   }
-  // Compile module to precompiled format in memory on cache miss.
-  let compiled = match cache_precompiled {
-    Some(precompiled) => Some((precompiled, None))
-    None =>
-      compile_validated_module_to_jit(
+  // Compile and verify the same v9 artifact shape used by persisted cache hits.
+  let compiled = match cached_artifact {
+    Some(loaded) => Some((loaded, None, None))
+    None => {
+      let fresh = compile_validated_module_to_jit(
         mod_,
         debug,
         dump_on_trap,
@@ -1116,19 +1245,35 @@ fn run_with_jit(
         opt_level,
         enable_dwarf,
         local_compile_mask~,
+        source_module=wasm_binary,
       )
+      match fresh {
+        None => None
+        Some((artifact, debug_db)) => {
+          let loaded = @wasmoon_jit.verify_artifact(artifact, compatibility) catch {
+            err => {
+              @logger.error(
+                "Fresh JIT artifact failed validation: \{to_repr(err)}",
+              )
+              return exit_failure()
+            }
+          }
+          Some((loaded, debug_db, Some(artifact)))
+        }
+      }
+    }
   }
   match compiled {
     None => {
       @logger.error("JIT compilation failed")
       return exit_failure()
     }
-    Some((pc, debug_db)) => {
-      if cache_precompiled is None && cache_path is Some(path) {
+    Some((loaded, debug_db, fresh_artifact)) => {
+      if fresh_artifact is Some(artifact) && cache_path is Some(path) {
         if debug {
           @logger.debug("JIT: cache write \{path}")
         }
-        save_run_jit_cache(path, pc)
+        save_run_jit_cache(path, artifact)
       }
       // Build func_signatures array for JITModule::load
       let func_signatures = build_jit_func_signatures(mod_)
@@ -1137,10 +1282,11 @@ fn run_with_jit(
       )
       // Load JIT module
       let jit_module_result : Result[@jit.JITModule, @jit.JITModuleLoadError] = try
-        @jit.JITModule::load_with_imports(
-          pc,
+        @jit.JITModule::load_artifact_with_imports(
+          loaded,
           func_signatures,
           external_imports,
+          function_names=build_jit_function_names(mod_),
           debug_db~,
         )
       catch {
@@ -1345,14 +1491,14 @@ fn module_indirect_subtype_check_reason(mod_ : @types.Module) -> String? {
 }
 
 ///|
-/// Compile module bytes into a precompiled artifact and emit structured progress.
+/// Compile module bytes into a v9 JIT artifact and emit structured progress.
 pub fn compile_module(
   module_bytes : Bytes,
   opt_level? : Int = 2,
   enable_dwarf? : Bool = false,
   on_progress? : (CompileProgress) -> Unit? = fn(_event) { None },
   enable_cancellation? : Bool = false,
-) -> @cwasm.PrecompiledModule? {
+) -> @artifact.Artifact? {
   let compile_start = @perf.tick_now()
   emit_compile_progress(on_progress, Parse, compile_start, 0, 0)
   let wasm_module = @parser.parse_module(module_bytes) catch {
@@ -1400,12 +1546,13 @@ pub fn compile_module(
     actual_memory_max=None,
     opt_level,
     enable_dwarf,
+    source_module=Some(module_bytes),
     on_progress~,
     compile_start=Some(compile_start),
     enable_cancellation~,
   )
   match compiled {
-    Some((precompiled, _debug_db)) => Some(precompiled)
+    Some((artifact, _debug_db)) => Some(artifact)
     None => {
       emit_compile_progress(
         on_progress,
@@ -1432,7 +1579,7 @@ fn normalize_opt_level(opt_level : Int) -> Int {
 }
 
 ///|
-/// Compile a WASM module to precompiled format in memory.
+/// Compile a WASM module to a v9 JIT artifact in memory.
 ///
 /// Decoded modules are untrusted at this public seam and are fully validated
 /// before frontend translation. `actual_memory_max` overrides the memory limit
@@ -1450,7 +1597,7 @@ pub fn compile_module_to_jit(
   force_subtype_indirect_check? : Bool? = None,
   use_reusable_pipeline? : Bool = true,
   enable_cancellation? : Bool = false,
-) -> (@cwasm.PrecompiledModule, @wasmoon_jit.JITDebugDB?)? {
+) -> (@artifact.Artifact, @wasmoon_jit.JITDebugDB?)? {
   let progress_start = compile_start.unwrap_or(@perf.tick_now())
   @validator.validate_module(mod_) catch {
     error => {
@@ -1500,7 +1647,8 @@ fn compile_validated_module_to_jit(
   force_subtype_indirect_check? : Bool? = None,
   use_reusable_pipeline? : Bool = true,
   enable_cancellation? : Bool = false,
-) -> (@cwasm.PrecompiledModule, @wasmoon_jit.JITDebugDB?)? {
+  source_module? : Bytes? = None,
+) -> (@artifact.Artifact, @wasmoon_jit.JITDebugDB?)? {
   use_reusable_pipeline |> ignore
   // DWARF registration consumes the completed artifact when the JIT module is
   // loaded; target compilation itself has no separate debug path.
@@ -1508,12 +1656,19 @@ fn compile_validated_module_to_jit(
   let progress_start = compile_start.unwrap_or(@perf.tick_now())
   let perf_on = @perf.enabled()
   let module_tick = if perf_on { Some(@perf.tick_now()) } else { None }
-  let target_arch = @wasmoon_jit.host_target_arch()
-  let native_target = @wasmoon_jit.target_arch_to_native_target(target_arch)
-  let precompiled = @cwasm.PrecompiledModule::PrecompiledModule(
-    target_arch,
-    features=CompilationFeatures(cancellation_safepoints=enable_cancellation),
-  )
+  let native_target = @wasmoon_jit.host_native_target() catch {
+    err => {
+      emit_compile_progress(
+        on_progress,
+        Failed,
+        progress_start,
+        mod_.codes.length(),
+        0,
+        message=Some(err.to_string()),
+      )
+      return None
+    }
+  }
   let debug_db : @wasmoon_jit.JITDebugDB? = if dump_on_trap {
     Some(JITDebugDB())
   } else {
@@ -1584,20 +1739,46 @@ fn compile_validated_module_to_jit(
   let wasm_validation_context = @wasm_frontend.wasm_validation_context(
     translation_ctx,
   )
-  // Record imports in precompiled module
+  let mut compiled_count = 0
+  let manifest = build_jit_artifact_manifest(
+    mod_,
+    source_module~,
+    actual_memory_max~,
+    opt_level,
+    local_compile_mask=compile_mask,
+    force_subtype_indirect_check=Some(use_subtype_indirect_check),
+    enable_cancellation~,
+  ) catch {
+    err => {
+      emit_compile_progress(
+        on_progress,
+        Failed,
+        progress_start,
+        total_compile_funcs,
+        compiled_count,
+        message=Some(err.to_string()),
+      )
+      return None
+    }
+  }
+  let imports : Array[@artifact.ImportIdentity] = []
+  let functions : Array[@artifact.FunctionCode] = []
+  let mut import_func_idx = 0
   for imp in mod_.imports {
     if imp.desc is Func(type_idx) {
       let func_type = mod_.get_func_type(type_idx)
-      precompiled.add_import(
-        imp.mod_name,
-        imp.name,
-        func_type.params.length(),
-        func_type.results.length(),
+      imports.push(
+        @wasmoon_jit.wasm_import_identity(
+          import_func_idx,
+          imp.mod_name,
+          imp.name,
+          func_type,
+        ),
       )
+      import_func_idx = import_func_idx + 1
     }
   }
   // Compile each function
-  let mut compiled_count = 0
   for i, _ in mod_.codes {
     let should_compile = match compile_mask {
       Some(mask) => mask[i]
@@ -1677,34 +1858,15 @@ fn compile_validated_module_to_jit(
       func_idx=Some(func_idx),
       func_name=Some(func_name),
     )
-    let num_params = func_type.params.length()
-    let num_results = func_type.results.length()
-    let entry = try {
-      match native_target {
-        AArch64 =>
-          @wasmoon_jit.compile_wasm_body_aarch64_cwasm_entry(
-            ir_func,
-            wasm_validation_context,
-            func_idx,
-            func_name,
-            num_params,
-            num_results,
-            use_subtype_indirect_check~,
-            canonical_type_indices~,
-          )
-        X64 =>
-          @wasmoon_jit.compile_wasm_body_x64_cwasm_entry(
-            ir_func,
-            wasm_validation_context,
-            func_idx,
-            func_name,
-            num_params,
-            num_results,
-            use_subtype_indirect_check~,
-            canonical_type_indices~,
-          )
-      }
-    } catch {
+    let entry = @wasmoon_jit.compile_wasm_body_artifact_function(
+      ir_func,
+      wasm_validation_context,
+      native_target,
+      function_index=func_idx,
+      signature=@wasmoon_jit.wasm_function_signature(func_type),
+      use_subtype_indirect_check~,
+      canonical_type_indices~,
+    ) catch {
       err => {
         emit_compile_progress(
           on_progress,
@@ -1740,7 +1902,7 @@ fn compile_validated_module_to_jit(
       func_idx=Some(func_idx),
       func_name=Some(func_name),
     )
-    precompiled.add_function(entry)
+    functions.push(entry)
     emit_compile_progress(
       on_progress,
       Link,
@@ -1763,7 +1925,9 @@ fn compile_validated_module_to_jit(
           ir_dump.unwrap_or(""),
           "",
           "",
-          entry.code.map(fn(byte) { @types.to_hex_byte(byte) }).join(" "),
+          entry.code
+          .map(fn(byte) { @types.to_hex_byte(byte.to_int()) })
+          .join(" "),
         ),
       )
     }
@@ -1797,7 +1961,7 @@ fn compile_validated_module_to_jit(
     total_compile_funcs,
     compiled_count,
   )
-  Some((precompiled, debug_db))
+  Some(({ manifest, imports, functions }, debug_db))
 }
 
 ///|
@@ -1829,6 +1993,12 @@ fn build_jit_func_signatures(
     }
   }
   signatures
+}
+
+///|
+pub fn build_jit_function_names(mod_ : @types.Module) -> Array[String] {
+  let total_funcs = count_func_imports(mod_.imports) + mod_.funcs.length()
+  Array::makei(total_funcs, fn(index) { get_func_name(mod_, index) })
 }
 
 ///|

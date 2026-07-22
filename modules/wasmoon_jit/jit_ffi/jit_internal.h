@@ -83,6 +83,7 @@ void install_trap_handler(void);
 int64_t alloc_exec_internal(int size);
 int copy_code_internal(int64_t dest, const uint8_t *src, int size);
 int free_exec_internal(int64_t ptr);
+int exec_block_count_internal(void);
 
 // ============ JIT Context (jit_context.c) ============
 

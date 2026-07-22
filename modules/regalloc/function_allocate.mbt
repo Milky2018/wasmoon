@@ -49,7 +49,7 @@ fn find_scratch_reg(
 }
 
 ///|
-fn add_home_transfer(
+fn add_use_transfer(
   plan : AllocationPlan,
   instruction : Int,
   operand : Operand,
@@ -59,22 +59,12 @@ fn add_home_transfer(
   if home == selected || operand.constraint == AnyLocation {
     return
   }
-  if operand.role is Use || operand.role is UseDef {
-    plan.add_edit({
-      value: operand.vreg,
-      from: home,
-      to: selected,
-      position: Before(instruction),
-    })
-  }
-  if operand.role is Def || operand.role is UseDef {
-    plan.add_edit({
-      value: operand.vreg,
-      from: selected,
-      to: home,
-      position: After(instruction),
-    })
-  }
+  plan.add_edit({
+    value: operand.vreg,
+    from: home,
+    to: selected,
+    position: Before(instruction),
+  })
 }
 
 ///|
@@ -142,11 +132,7 @@ pub fn[F : FunctionView] allocate_function(
   config? : RegallocConfig = RegallocConfig(),
 ) -> AllocationPlan raise VerifyError {
   verify_operand_preferences(function, environment)
-  let plan = allocate_fragmented(
-    function,
-    environment,
-    config.strategy() is Backtracking,
-  )
+  let plan = allocate_bundle_plan(function, environment, config.strategy())
   resolve_instruction_edits(plan, environment)
   if config.verify() {
     verify_function_allocation(function, environment, plan)

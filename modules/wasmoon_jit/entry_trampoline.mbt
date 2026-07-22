@@ -8,7 +8,7 @@ fn entry_trampoline_type(
     F32 => F32
     F64 => F64
     V128 =>
-      raise PipelineFailure(
+      raise UnsupportedEntrySignature(
         message="unsupported V128 MilkIR entry trampoline: values-vector packing needs 16-byte slot handling",
       )
     FuncRef

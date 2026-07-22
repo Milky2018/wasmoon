@@ -4,7 +4,7 @@
 
 Wasmoon is a WebAssembly runtime written in MoonBit. Module metadata lives in `moon.mod.json`; each package directory has a `moon.pkg.json`.
 
-- Pipeline: parsers (`wat/`, `wast/`, `cwasm/`, `parser/`) → `validator/` → `runtime/` → `executor/` or JIT (`milkir` → semantic `machv` → target VCode → `machv_regalloc` → target emitter).
+- Pipeline: parsers (`wat/`, `wast/`, `parser/`) → `validator/` → `runtime/` → `executor/` or JIT (`milkir` → semantic `machv` → target VCode → `machv_regalloc` → target emitter → v9 artifact installer).
 - CLI entry point: `cmd/wasmoon/` (builds the `wasmoon` binary).
 - WASI Preview 1 support: `wasi/`.
 - Tests: `testsuite/` (MoonBit tests) and `spec/` (upstream WAST scripts used by the CLI runner).
@@ -25,7 +25,7 @@ Wasmoon is a WebAssembly runtime written in MoonBit. Module metadata lives in `m
 ./install.sh    # Build and (re)link wasmoon binaries into repo root
 ./wasmoon test <file.wast>    # Run WAST tests
 ./wasmoon test --no-jit <file.wast>  # Run in interpreter-only mode
-./wasmoon explore <file.wat> --stage ir machv mc  # View compilation stages
+./wasmoon explore <file.wat> --stage milkir machv vcode allocated-vcode code-object mc  # View compilation stages
 python3 scripts/run_all_wast.py --rec  # Run all WAST tests (ensure ./wasmoon exists; run ./install.sh once)
 python3 scripts/run_component_wast.py --dir component-spec/values --rec  # Component model (subset)
 python3 scripts/run_component_wast.py --dir component-spec/names --rec   # Component model (subset)

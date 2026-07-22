@@ -2,42 +2,41 @@
 package "Milky2018/wasmoon_jit"
 
 import {
+  "Milky2018/aarch64_target",
   "Milky2018/machv",
   "Milky2018/machv/code_object",
   "Milky2018/milkir",
+  "Milky2018/milkir_machv",
   "Milky2018/wasm_core/types",
   "Milky2018/wasm_milkir",
-  "Milky2018/wasmoon_jit/cwasm",
+  "Milky2018/wasmoon_jit/artifact",
+  "Milky2018/x64_target",
   "moonbitlang/core/debug",
   "moonbitlang/core/hashset",
 }
 
 // Values
+pub const WASMOON_CODEGEN_REVISION : String = "machv-vcode-1"
+
+pub const WASMOON_JIT_ABI_VERSION : Int = 3
+
 pub fn alloc_guarded_memory_desc(Int, Int?) -> Int64
 
 pub fn alloc_memory(Int64) -> Int64
 
 pub fn alloc_memory_desc(Int64, Int?, is_memory64? : Bool, page_size_log2? : Int, is_shared? : Bool) -> Int64
 
-pub fn build_cwasm_entry_from_code(Int, String, Array[Int], Int, Int, Int, Int, func_addr_fixups? : Array[@cwasm.FuncAddrFixup], call_fixups? : Array[@cwasm.CallFixup], gc_safepoint_offsets? : Array[Int], gc_safepoint_root_counts? : Array[Int], gc_safepoint_root_indices? : Array[Array[Int]], gc_safepoints? : Array[@cwasm.GcSafepoint], gc_stackmap_blob? : Bytes) -> @cwasm.CompiledEntry
+pub fn artifact_compatibility(@artifact.CompatibilityManifest, available_cpu_features~ : Array[@artifact.CpuFeature], runtime_symbols~ : Array[@machv.ExternalSymbol], data_symbols~ : Array[@machv.DataSymbol]) -> ArtifactCompatibility
 
-pub fn build_entry_trampoline_for_target(Array[@types.ValueType], Array[@types.ValueType], @cwasm.TargetArch) -> Array[Int] raise HostcallImportTrampolineError
+pub fn artifact_module_identity(String, Bytes, Bytes) -> @artifact.ModuleIdentity
 
-pub fn build_gc_stackmap_blob(Array[Int]) -> Bytes
+pub fn build_artifact_manifest(NativeTarget, @artifact.OperatingSystemAbi, module_identity~ : @artifact.ModuleIdentity, policy~ : @artifact.CompilationPolicy, required_cpu_features? : Array[@artifact.CpuFeature]) -> @artifact.CompatibilityManifest
 
-pub fn build_gc_stackmap_blob_for_safepoints(Array[@cwasm.GcSafepoint], Array[Int], explicit_blob? : Bytes) -> Bytes
+pub fn build_entry_trampoline_for_target(Array[@types.ValueType], Array[@types.ValueType], NativeTarget) -> Array[Int] raise HostcallImportTrampolineError
 
-pub fn build_gc_stackmap_blob_v2(Array[@cwasm.GcSafepoint], Array[Int]) -> Bytes
+pub fn build_host_artifact_manifest(module_identity~ : @artifact.ModuleIdentity, policy~ : @artifact.CompilationPolicy, required_cpu_features? : Array[@artifact.CpuFeature]) -> @artifact.CompatibilityManifest raise JitPipelineError
 
-pub fn build_hostcall_import_trampoline_for_target(Array[@types.ValueType], Array[@types.ValueType], Int, @cwasm.TargetArch) -> HostcallImportTrampolineCode raise HostcallImportTrampolineError
-
-pub fn c_jit_read_i64(Int64) -> Int64
-
-pub fn c_jit_read_u32(Int64) -> UInt
-
-pub fn c_jit_write_i64(Int64, Int64) -> Unit
-
-pub fn c_jit_write_u32(Int64, Int) -> Unit
+pub fn build_hostcall_import_trampoline_for_target(Array[@types.ValueType], Array[@types.ValueType], Int, NativeTarget) -> HostcallImportTrampolineCode raise HostcallImportTrampolineError
 
 pub fn can_use_reusable_entry_trampoline(Array[@types.ValueType], Array[@types.ValueType]) -> Bool
 
@@ -51,9 +50,9 @@ pub fn clear_wasi_stdin_callback(Int64) -> Unit
 
 pub fn collect_gc_root_args(Array[Int64], Array[@types.ValueType]) -> Array[Int64]
 
-pub fn compile_wasm_body_aarch64_cwasm_entry(@milkir.Function, @wasm_milkir.WasmValidationContext, Int, String, Int, Int, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @cwasm.CompiledEntry raise JitPipelineError
+pub fn compile_wasm_body_artifact_function(@milkir.Function, @wasm_milkir.WasmValidationContext, NativeTarget, function_index~ : Int, signature~ : @machv.Signature, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @artifact.FunctionCode raise JitPipelineError
 
-pub fn compile_wasm_body_x64_cwasm_entry(@milkir.Function, @wasm_milkir.WasmValidationContext, Int, String, Int, Int, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @cwasm.CompiledEntry raise JitPipelineError
+pub fn compile_wasm_body_diagnostics_for_target(@milkir.Function, @wasm_milkir.WasmValidationContext, NativeTarget, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> JitPipelineDiagnostics raise JitPipelineError
 
 pub fn context_func_count(Int64) -> Int
 
@@ -75,12 +74,6 @@ pub fn decode_heap_ref(Int64) -> Int
 
 pub fn decode_i31(Int64) -> Int
 
-pub fn default_native_glue() -> Array[NativeGlueBinding]
-
-pub fn derive_gc_safepoints(Array[Int], Array[Int], Array[Array[Int]]) -> Array[@cwasm.GcSafepoint]
-
-pub fn encode_aarch64_bl_imm26(Int64, Int64) -> Int?
-
 pub fn encode_externref(Int) -> Int64
 
 pub fn encode_funcref_idx(Int) -> Int64
@@ -93,15 +86,11 @@ pub fn encode_i31(Int) -> Int64
 
 pub fn encode_null_ref() -> Int64
 
-pub fn encode_x64_call_rel32_disp(Int64, Int64) -> Int?
-
 pub fn entry_trampoline_signature_hash(Array[@types.ValueType], Array[@types.ValueType]) -> Int64
 
 pub fn entry_trampoline_type_codes(Array[@types.ValueType]) -> Array[Int]
 
 pub fn entry_trampoline_value_type_code(@types.ValueType) -> Int
-
-pub fn exception_runtime_fixup_idx(Int) -> Int
 
 pub fn format_signal_name(Int) -> String
 
@@ -123,13 +112,9 @@ pub fn gc_debug_set_fail_alloc(Int, fail_every? : Int) -> Unit
 
 pub fn gc_end_frame(Int64) -> Unit
 
-pub fn gc_runtime_fixup_idx(Int) -> Int
-
-pub fn gc_safepoint_metadata_to_root_count(Int64) -> Int
+pub fn gc_set_code_object_safepoints(Int64, Int, Array[@code_object.SafepointSite]) -> Bool
 
 pub fn gc_set_context_heap_ptr(Int64, Int64) -> Unit
-
-pub fn gc_set_func_safepoints(Int64, Int, Array[@cwasm.GcSafepoint], Bytes) -> Bool
 
 pub fn gc_set_heap(Int64, CHeap) -> Unit
 
@@ -143,155 +128,29 @@ pub fn gc_teardown(Int64) -> Unit
 
 pub fn gc_use_func_safepoints(Int64, Int) -> Unit
 
-pub fn get_args_get_ptr() -> Int64
-
-pub fn get_args_sizes_get_ptr() -> Int64
-
-pub fn get_clock_res_get_ptr() -> Int64
-
-pub fn get_clock_time_get_ptr() -> Int64
-
-pub fn get_environ_get_ptr() -> Int64
-
-pub fn get_environ_sizes_get_ptr() -> Int64
-
-pub fn get_fd_advise_ptr() -> Int64
-
-pub fn get_fd_allocate_ptr() -> Int64
-
-pub fn get_fd_close_ptr() -> Int64
-
-pub fn get_fd_datasync_ptr() -> Int64
-
-pub fn get_fd_fdstat_get_ptr() -> Int64
-
-pub fn get_fd_fdstat_set_flags_ptr() -> Int64
-
-pub fn get_fd_fdstat_set_rights_ptr() -> Int64
-
-pub fn get_fd_filestat_get_ptr() -> Int64
-
-pub fn get_fd_filestat_set_size_ptr() -> Int64
-
-pub fn get_fd_filestat_set_times_ptr() -> Int64
-
-pub fn get_fd_pread_ptr() -> Int64
-
-pub fn get_fd_prestat_dir_name_ptr() -> Int64
-
-pub fn get_fd_prestat_get_ptr() -> Int64
-
-pub fn get_fd_pwrite_ptr() -> Int64
-
-pub fn get_fd_read_ptr() -> Int64
-
-pub fn get_fd_readdir_ptr() -> Int64
-
-pub fn get_fd_renumber_ptr() -> Int64
-
-pub fn get_fd_seek_ptr() -> Int64
-
-pub fn get_fd_sync_ptr() -> Int64
-
-pub fn get_fd_tell_ptr() -> Int64
-
-pub fn get_fd_write_ptr() -> Int64
-
-pub fn get_gc_array_copy_ptr() -> Int64
-
-pub fn get_gc_array_fill_ptr() -> Int64
-
-pub fn get_gc_array_get_ptr() -> Int64
-
-pub fn get_gc_array_len_ptr() -> Int64
-
-pub fn get_gc_array_new_ptr() -> Int64
-
-pub fn get_gc_array_set_ptr() -> Int64
-
-pub fn get_gc_ref_cast_ptr() -> Int64
-
-pub fn get_gc_ref_test_ptr() -> Int64
-
-pub fn get_gc_struct_get_ptr() -> Int64
-
-pub fn get_gc_struct_new_ptr() -> Int64
-
-pub fn get_gc_struct_set_ptr() -> Int64
-
-pub fn get_gc_type_check_subtype_ptr() -> Int64
-
 pub fn get_hostcall_func_addr() -> Int
 
 pub fn get_hostcall_num_arg_slots() -> Int
 
 pub fn get_hostcall_num_result_slots() -> Int
 
-pub fn get_hostcall_values_ptr() -> Int64
-
 pub fn get_import_trampoline(String, String) -> Int64?
 
 pub fn get_last_trap_details() -> TrapDetails
 
-pub fn get_path_create_directory_ptr() -> Int64
-
-pub fn get_path_filestat_get_ptr() -> Int64
-
-pub fn get_path_filestat_set_times_ptr() -> Int64
-
-pub fn get_path_link_ptr() -> Int64
-
-pub fn get_path_open_ptr() -> Int64
-
-pub fn get_path_readlink_ptr() -> Int64
-
-pub fn get_path_remove_directory_ptr() -> Int64
-
-pub fn get_path_rename_ptr() -> Int64
-
-pub fn get_path_symlink_ptr() -> Int64
-
-pub fn get_path_unlink_file_ptr() -> Int64
-
-pub fn get_proc_exit_ptr() -> Int64
-
-pub fn get_proc_raise_ptr() -> Int64
-
-pub fn get_random_get_ptr() -> Int64
-
-pub fn get_sched_yield_ptr() -> Int64
-
-pub fn get_sock_accept_ptr() -> Int64
-
-pub fn get_sock_recv_ptr() -> Int64
-
-pub fn get_sock_send_ptr() -> Int64
-
-pub fn get_sock_shutdown_ptr() -> Int64
-
-pub fn get_spectest_print_char_ptr() -> Int64
-
-pub fn get_spectest_print_f32_ptr() -> Int64
-
-pub fn get_spectest_print_f64_f64_ptr() -> Int64
-
-pub fn get_spectest_print_f64_ptr() -> Int64
-
-pub fn get_spectest_print_i32_f32_ptr() -> Int64
-
-pub fn get_spectest_print_i32_ptr() -> Int64
-
-pub fn get_spectest_print_i64_ptr() -> Int64
-
-pub fn get_spectest_print_ptr() -> Int64
-
 pub fn get_temperature(Int, HotThreshold) -> FunctionTemperature
 
-pub fn host_target_arch() -> @cwasm.TargetArch
+pub fn host_native_target() -> NativeTarget raise JitPipelineError
+
+pub fn host_operating_system_abi() -> @artifact.OperatingSystemAbi raise JitPipelineError
 
 pub fn hostcall_value_byte_count(@types.ValueType) -> Int
 
 pub fn hostcall_value_slot_count(@types.ValueType) -> Int
+
+pub fn hostcall_value_slot_read(Int) -> Int64
+
+pub fn hostcall_value_slot_write(Int, Int64) -> Unit
 
 pub fn i64_to_value(Int64, @types.ValueType) -> @types.Value
 
@@ -311,61 +170,37 @@ pub fn is_null_ref(Int64) -> Bool
 
 pub fn is_wasi_exit_trap_code(Int) -> Bool
 
-pub fn jit_ffi_native_stub_sources() -> Array[String]
-
-pub fn jit_runtime_fixup_idx(Int) -> Int
-
 pub fn jit_trap_message(Int) -> String
 
-pub fn link_code_object(JitCodeObject, RuntimeSymbolResolver) -> LinkedCode raise LinkError
+pub fn load_artifact(Bytes, ArtifactCompatibility, limits? : @artifact.DecodeLimits) -> LoadedArtifact raise ArtifactLoadError
 
 pub fn lower_wasm_body_semantic_machv(@milkir.Function, @wasm_milkir.WasmValidationContext, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @machv.Function raise JitPipelineError
 
-pub fn machv_reloc_target_to_cwasm_func_idx(@code_object.RelocationTarget) -> Int?
-
 pub fn make_cstring(String) -> FixedArray[Byte]
 
+pub fn memory_descriptor_fill(Int64, Int64, Int, Int) -> Int
+
+pub fn memory_descriptor_grow(Int64, Int, Int) -> Int
+
 pub fn memory_descriptor_layout() -> MemoryDescriptorLayout
+
+pub fn memory_descriptor_length(Int64) -> Int64
+
+pub fn memory_descriptor_move(Int64, Int64, Int64, Int) -> Int
+
+pub fn memory_descriptor_read(Int64, Int64, FixedArray[Byte], Int) -> Int
+
+pub fn memory_descriptor_write(Int64, Int64, FixedArray[Byte], Int) -> Int
+
+pub fn memory_descriptor_write_bytes(Int64, Int64, Bytes, Int) -> Int
 
 pub fn memory_init(Int64, Int64, Bytes) -> Bool
 
 pub fn memory_read(Int64, Int64, Int) -> Bytes
 
-pub fn native_glue_covers_jit_ffi_stubs(glue? : Array[NativeGlueBinding]) -> Bool
+pub fn native_value_slot_read(Int64, Int) -> Int64
 
-pub fn native_glue_covers_source(Array[NativeGlueBinding], String) -> Bool
-
-pub fn patch_aarch64_call_fixups(Int64, Array[@cwasm.CallFixup], Int64, Map[Int, Int64]) -> Unit
-
-pub fn patch_aarch64_call_veneer_target(Int64, @cwasm.CallFixup, Int64) -> Unit
-
-pub fn patch_aarch64_direct_call(Int64, @cwasm.CallFixup, Int64) -> Unit
-
-pub fn patch_aarch64_func_addr_fixup(Int64, @cwasm.FuncAddrFixup, Int64) -> Unit
-
-pub fn patch_aarch64_func_addr_fixup_parts(Int64, Int, Int, Int64) -> Unit
-
-pub fn patch_aarch64_func_addr_fixup_raw(Int64, Int, Int, Int, Int64) -> Unit
-
-pub fn patch_aarch64_func_addr_fixups(Int64, Array[@cwasm.FuncAddrFixup], Int64) -> Unit
-
-pub fn patch_aarch64_load_imm64_fixed(Int64, Int, Int, Int64) -> Unit
-
-pub fn patch_call_fixups_for_target(@cwasm.TargetArch, Int64, Array[@cwasm.CallFixup], Int64, Map[Int, Int64]) -> Unit
-
-pub fn patch_func_addr_fixup_raw_for_target(@cwasm.TargetArch, Int64, Int, Int, Int, Int64) -> Unit
-
-pub fn patch_func_addr_fixups_for_target(@cwasm.TargetArch, Int64, Array[@cwasm.FuncAddrFixup], Int64) -> Unit
-
-pub fn patch_x64_call_fixups(Int64, Array[@cwasm.CallFixup], Int64, Map[Int, Int64]) -> Unit
-
-pub fn patch_x64_direct_call(Int64, @cwasm.CallFixup, Int64) -> Unit
-
-pub fn patch_x64_func_addr_fixup_parts(Int64, Int, Int, Int64) -> Unit
-
-pub fn patch_x64_func_addr_fixup_raw(Int64, Int, Int, Int, Int64) -> Unit
-
-pub fn patch_x64_func_addr_fixups(Int64, Array[@cwasm.FuncAddrFixup], Int64) -> Unit
+pub fn native_value_slot_write(Int64, Int, Int64) -> Unit
 
 pub fn plan_entry_trampoline_for_target(Array[@types.ValueType], Array[@types.ValueType], NativeTarget) -> JitIntegrationPlan raise JitPipelineError
 
@@ -379,19 +214,9 @@ pub fn plan_wasm_body_milkir_integration_for_target(@milkir.Function, @wasm_milk
 
 pub fn plan_wasm_body_x64_code_object(@milkir.Function, @wasm_milkir.WasmValidationContext, use_subtype_indirect_check? : Bool, canonical_type_indices? : Array[Int]) -> @code_object.UnlinkedCodeObject raise JitPipelineError
 
-pub fn required_context_function_count(@cwasm.PrecompiledModule, Int) -> Int
-
-pub fn resolve_call_fixup_target(Int, Int64, Map[Int, Int64]) -> Int64?
-
-pub fn resolve_func_addr_fixup_target(Int, Int64) -> Int64?
-
 pub fn resolve_import_function(Map[String, Map[String, Int64]], String, String) -> ImportFunctionResolution
 
 pub fn resolve_import_function_ptr(Map[String, Map[String, Int64]], String, String) -> Int64?
-
-pub fn resolve_runtime_func_fixup_idx(Int) -> Int64?
-
-pub fn resolve_wasm_func_symbol(String) -> Int?
 
 pub fn sanitize_debug_filename(String) -> String
 
@@ -417,8 +242,6 @@ pub fn take_wasi_stderr(Int64) -> Bytes
 
 pub fn take_wasi_stdout(Int64) -> Bytes
 
-pub fn target_arch_to_native_target(@cwasm.TargetArch) -> NativeTarget
-
 pub fn throw_exception_tag(Int64, Int) -> Unit
 
 pub fn throw_exception_values(Int64, Int, Array[Int64]) -> Unit
@@ -429,13 +252,40 @@ pub fn value_to_i64(@types.Value) -> Int64
 
 pub fn value_type_may_hold_gc_ref(@types.ValueType) -> Bool
 
+pub fn verify_artifact(@artifact.Artifact, ArtifactCompatibility) -> LoadedArtifact raise ArtifactLoadError
+
 pub fn vmcontext_layout() -> VMContextLayout
+
+pub fn wasm_function_signature(@types.FuncType) -> @machv.Signature
+
+pub fn wasm_import_identity(Int, String, String, @types.FuncType) -> @artifact.ImportIdentity
 
 pub fn wasm_runtime_symbols() -> @wasm_milkir.RuntimeSymbols
 
 pub fn wasm_trap_payload(String) -> Int
 
+pub fn wasmoon_runtime_external_symbols() -> Array[@machv.ExternalSymbol]
+
 // Errors
+pub suberror ArtifactIncompatible {
+  TargetMismatch(expected~ : @artifact.TargetSpec, actual~ : @artifact.TargetSpec)
+  MissingCpuFeature(name~ : String)
+  DuplicateCpuFeature(name~ : String)
+  JitAbiVersionMismatch(expected~ : Int, actual~ : Int)
+  CodegenRevisionMismatch(expected~ : String, actual~ : String)
+  ModuleIdentityMismatch(expected~ : @artifact.ModuleIdentity, actual~ : @artifact.ModuleIdentity)
+  CompilationPolicyMismatch(expected~ : @artifact.CompilationPolicy, actual~ : @artifact.CompilationPolicy)
+  DuplicateFunctionIndex(index~ : Int)
+  DuplicateSymbol(name~ : String)
+  UnknownSymbol(kind~ : String, name~ : String)
+} derive(Eq, @debug.Debug)
+
+pub suberror ArtifactLoadError {
+  DecodeFailed(cause~ : @artifact.ArtifactDecodeError)
+  Incompatible(cause~ : ArtifactIncompatible)
+  CodeObjectInvalid(cause~ : @code_object.CodeObjectVerifyError)
+} derive(Eq, @debug.Debug)
+
 pub(all) suberror CHeapError {
   OutOfBoundsArrayAccess
   NullReference
@@ -455,17 +305,56 @@ pub suberror HostcallImportTrampolineError {
 } derive(Eq, @debug.Debug)
 pub impl Show for HostcallImportTrampolineError
 
-pub suberror JitPipelineError {
-  PipelineFailure(message~ : String)
+pub suberror JitInstallError {
+  ResolutionFailed(kind~ : String, name~ : String)
+  AllocationFailed(function_index~ : Int)
+  RelocationFailed(function_index~ : Int, message~ : String)
+  ProtectionFailed(function_index~ : Int)
+  RegistrationFailed(function_index~ : Int, message~ : String)
+  PublicationFailed(message~ : String)
+  TrampolineAllocationFailed(code_size~ : Int)
 } derive(Eq, @debug.Debug)
+
+pub suberror JitPipelineError {
+  SemanticLoweringFailed(cause~ : @milkir_machv.SemanticLowerError)
+  RuntimeAbiInputInvalid(cause~ : @machv.MachVVerifyError)
+  RuntimeAbiOutputInvalid(cause~ : @machv.MachVVerifyError)
+  RuntimeAbiContractViolation(message~ : String)
+  AArch64AbiInvalid(cause~ : @aarch64_target.InternalAbiError)
+  X64AbiInvalid(cause~ : @x64_target.InternalAbiError)
+  MissingEnvironmentField(target~ : NativeTarget, field~ : String)
+  AArch64LoweringFailed(cause~ : @aarch64_target.AArch64LowerError)
+  X64LoweringFailed(cause~ : @x64_target.X64LowerError)
+  AArch64CompilationFailed(cause~ : @aarch64_target.AArch64CompileError)
+  X64CompilationFailed(cause~ : @x64_target.X64CompileError)
+  AArch64AllocationFailed(cause~ : @aarch64_target.AArch64AllocationError)
+  X64AllocationFailed(cause~ : @x64_target.X64AllocationError)
+  AArch64FramePlanningFailed(cause~ : @aarch64_target.AArch64FrameError)
+  X64FramePlanningFailed(cause~ : @x64_target.X64FrameError)
+  AArch64EmissionFailed(cause~ : @aarch64_target.AArch64EmitError)
+  X64EmissionFailed(cause~ : @x64_target.X64EmitError)
+  AArch64LinkPreparationFailed(cause~ : @aarch64_target.AArch64LinkError)
+  X64LinkPreparationFailed(cause~ : @x64_target.X64LinkError)
+  InvalidJitRelocation(target~ : NativeTarget, index~ : Int, message~ : String)
+  UnsupportedEntrySignature(message~ : String)
+  UnsupportedHostArchitecture(tag~ : Int)
+  UnsupportedHostOsAbi(tag~ : Int)
+  InvalidFunctionIndex(index~ : Int)
+} derive(@debug.Debug)
 pub impl Show for JitPipelineError
 
-pub suberror LinkError {
-  UnknownRuntimeSymbol(String)
-} derive(Eq, @debug.Debug)
-pub impl Show for LinkError
-
 // Types and methods
+pub(all) struct ArtifactCompatibility {
+  target : @artifact.TargetSpec
+  available_cpu_features : Array[@artifact.CpuFeature]
+  jit_abi_version : Int
+  codegen_revision : String
+  module_identity : @artifact.ModuleIdentity
+  policy : @artifact.CompilationPolicy
+  runtime_symbols : Array[@machv.ExternalSymbol]
+  data_symbols : Array[@machv.DataSymbol]
+} derive(Eq, @debug.Debug)
+
 pub struct BacktraceFrame {
   pc : Int64
   name : String
@@ -519,17 +408,6 @@ pub fn CallCounter::reset(Self, Int) -> Unit
 pub fn CallCounter::total(Self) -> Int
 pub fn CallCounter::unique_functions(Self) -> Int
 
-type CodeCache
-pub fn CodeCache::CodeCache(Int) -> Self
-pub fn CodeCache::clear(Self) -> Unit
-pub fn CodeCache::contains(Self, Int) -> Bool
-pub fn CodeCache::get(Self, Int) -> CompiledFunction?
-pub fn CodeCache::insert(Self, Int, CompiledFunction) -> Unit
-pub fn CodeCache::invalidate(Self, Int) -> Unit
-pub fn CodeCache::remove(Self, Int) -> Unit
-pub fn CodeCache::stats(Self) -> (Int, Int, Int, Int)
-pub impl Show for CodeCache
-
 pub(all) enum CompilationDecision {
   Interpret
   CompileAndExecute(CompilationMode)
@@ -581,62 +459,6 @@ pub fn CompilationStrategy::schedule_compilation(Self, Int, CompilationMode) -> 
 pub fn CompilationStrategy::stats(Self) -> (Int, Int, Int, Int, Int, Int)
 pub impl Show for CompilationStrategy
 
-pub struct CompiledFunction {
-  name : String
-  code : JitCodeObject
-  entry_offset : Int
-  code_size : Int
-  frame_size : Int
-  gc_safepoints : Array[GcSafepoint]
-  gc_stackmap_blob : Bytes
-  mut valid : Bool
-}
-pub fn CompiledFunction::CompiledFunction(String, JitCodeObject, gc_safepoints? : Array[GcSafepoint], gc_stackmap_blob? : Bytes) -> Self
-pub fn CompiledFunction::get_call_fixups(Self) -> Array[JitCallFixup]
-pub fn CompiledFunction::get_code(Self) -> Array[Int]
-pub fn CompiledFunction::get_func_addr_fixups(Self) -> Array[JitFuncAddrFixup]
-pub fn CompiledFunction::get_gc_safepoints(Self) -> Array[GcSafepoint]
-pub fn CompiledFunction::get_gc_stackmap_blob(Self) -> Bytes
-pub fn CompiledFunction::invalidate(Self) -> Unit
-pub fn CompiledFunction::is_valid(Self) -> Bool
-pub impl Show for CompiledFunction
-
-pub(all) struct CwasmArtifact {
-  version : Int
-  target : @cwasm.TargetArch
-  entry_symbol : String
-  code : Array[Int]
-  functions : Array[CwasmFunctionRecord]
-  call_veneers : Array[CwasmCallVeneer]
-  runtime_relocations : Array[ResolvedRuntimeRelocation]
-  func_addr_fixups : Array[JitFuncAddrFixup]
-  call_fixups : Array[JitCallFixup]
-  gc_safepoints : Array[GcSafepoint]
-  gc_stackmap_blob : Bytes
-} derive(@debug.Debug)
-pub fn CwasmArtifact::from_jit_plan(JitIntegrationPlan, RuntimeSymbolResolver, Int) -> Self raise LinkError
-pub fn CwasmArtifact::from_jit_plan_with_signature(JitIntegrationPlan, RuntimeSymbolResolver, Int, Int, Int) -> Self raise LinkError
-pub fn CwasmArtifact::from_linked_code_for_target(LinkedCode, Int, @cwasm.TargetArch, String) -> Self
-pub fn CwasmArtifact::from_linked_code_for_target_with_signature(LinkedCode, Int, @cwasm.TargetArch, String, Int, Int) -> Self
-pub fn CwasmArtifact::manifest(Self) -> Array[String]
-pub fn CwasmArtifact::serialize(Self) -> Array[Int]
-pub fn CwasmArtifact::to_precompiled_module(Self) -> @cwasm.PrecompiledModule
-
-pub(all) struct CwasmCallVeneer {
-  function_index : Int
-  func_idx : Int
-  offset : Int
-} derive(Eq, @debug.Debug)
-
-pub(all) struct CwasmFunctionRecord {
-  function_index : Int
-  code_offset : Int
-  code_size : Int
-  frame_size : Int
-  num_params : Int
-  num_results : Int
-} derive(Eq, @debug.Debug)
-
 pub struct DWARFBuilder {
   // private fields
 }
@@ -650,17 +472,6 @@ pub fn DWARFBuilder::register(Self, verbose? : Bool) -> Unit
 pub fn DWARFBuilder::unregister(Self) -> Unit
 
 type ExecCode
-pub fn ExecCode::ptr(Self) -> Int64
-pub fn ExecCode::try_alloc(Array[Int]) -> Self?
-
-type ExecutableRegion
-pub fn ExecutableRegion::ExecutableRegion(Int, Int) -> Self
-pub fn ExecutableRegion::address_at(Self, Int) -> Int
-pub fn ExecutableRegion::finalize(Self) -> Unit
-pub fn ExecutableRegion::read_at(Self, Int, Int) -> Array[Int]
-pub fn ExecutableRegion::remaining(Self) -> Int
-pub fn ExecutableRegion::write(Self, Array[Int]) -> Result[Int, String]
-pub impl Show for ExecutableRegion
 
 pub struct FunctionInfo {
   name : String
@@ -684,7 +495,6 @@ pub fn GcSafepoint::GcSafepoint(Int, Array[Int], Int64) -> Self
 
 pub(all) struct HostcallImportTrampolineCode {
   code : Array[Int]
-  func_addr_fixups : Array[@cwasm.FuncAddrFixup]
 }
 
 pub(all) struct HostcallImportTrampolineLayout {
@@ -709,6 +519,38 @@ pub(all) enum ImportFunctionResolution {
   UnsupportedImportFunction
 } derive(Eq, @debug.Debug)
 
+pub struct InstalledCode {
+  // private fields
+}
+pub fn InstalledCode::entry_address(Self, Int) -> Int64?
+pub fn InstalledCode::functions(Self) -> Array[InstalledFunction]
+pub fn InstalledCode::imports(Self) -> Array[InstalledImport]
+
+pub struct InstalledFunction {
+  // private fields
+}
+pub fn InstalledFunction::code_address(Self) -> Int64
+pub fn InstalledFunction::code_size(Self) -> Int
+pub fn InstalledFunction::entry_address(Self) -> Int64
+pub fn InstalledFunction::entry_offset(Self) -> Int
+pub fn InstalledFunction::frame_size(Self) -> Int
+pub fn InstalledFunction::identity(Self) -> @artifact.FunctionIdentity
+pub fn InstalledFunction::safepoints(Self) -> Array[@code_object.SafepointSite]
+pub fn InstalledFunction::sources(Self) -> Array[@code_object.SourceSite]
+pub fn InstalledFunction::traps(Self) -> Array[@code_object.TrapSite]
+pub fn InstalledFunction::unwind(Self) -> Array[@code_object.UnwindDirective]
+
+pub struct InstalledImport {
+  // private fields
+}
+pub fn InstalledImport::address(Self) -> Int64
+pub fn InstalledImport::identity(Self) -> @artifact.ImportIdentity
+
+pub struct InstalledTrampoline {
+  // private fields
+}
+pub fn InstalledTrampoline::entry_address(Self) -> Int64
+
 pub struct JITDebugDB {
   entries : Map[Int, JITFunctionDebug]
 }
@@ -724,15 +566,6 @@ pub struct JITFunctionDebug {
 }
 pub fn JITFunctionDebug::JITFunctionDebug(String, String, String, String) -> Self
 
-type JITRuntime
-pub fn JITRuntime::JITRuntime(Int, Int) -> Self
-pub fn JITRuntime::clear(Self) -> Unit
-pub fn JITRuntime::invalidate(Self, Int) -> Unit
-pub fn JITRuntime::lookup(Self, Int) -> CompiledFunction?
-pub fn JITRuntime::register(Self, Int, CompiledFunction) -> Result[Int, String]
-pub fn JITRuntime::stats(Self) -> (Int, Int, Int, Int, Int, Int, Int)
-pub impl Show for JITRuntime
-
 type JITTable derive(@debug.Debug)
 pub fn JITTable::get_entry_type(Self, Int) -> Int
 pub fn JITTable::get_entry_value(Self, Int) -> Int64
@@ -743,45 +576,39 @@ pub fn JITTable::refresh_layout(Self, Int64, Int) -> Unit
 pub fn JITTable::set(Self, Int, Int64, Int) -> Unit
 pub fn JITTable::try_alloc(Int, Int?) -> Self?
 
-pub(all) struct JitCallFixup {
-  offset : Int
-  target : @code_object.RelocationTarget
-  veneer_offset : Int
-} derive(Eq, @debug.Debug)
+pub struct JitCodeInstaller {
+  // private fields
+}
+pub fn JitCodeInstaller::current(Self) -> InstalledCode?
+pub fn JitCodeInstaller::install(Self, LoadedArtifact) -> InstalledCode raise JitInstallError
+pub fn JitCodeInstaller::install_trampoline(Self, Array[Int]) -> InstalledTrampoline raise JitInstallError
+pub fn JitCodeInstaller::new((@code_object.RelocationTarget) -> Int64?) -> Self
 
 pub struct JitCodeObject {
   // private fields
 } derive(@debug.Debug)
-pub fn JitCodeObject::frame_size(Self) -> Int
 pub fn JitCodeObject::get_bytes(Self) -> Array[Int]
-pub fn JitCodeObject::get_call_fixups(Self) -> Array[JitCallFixup]
-pub fn JitCodeObject::get_func_addr_fixups(Self) -> Array[JitFuncAddrFixup]
-pub fn JitCodeObject::get_gc_safepoints(Self) -> Array[GcSafepoint]
-pub fn JitCodeObject::new(Array[Int], Int, func_addr_fixups? : Array[JitFuncAddrFixup], call_fixups? : Array[JitCallFixup], gc_safepoints? : Array[GcSafepoint]) -> Self
-pub fn JitCodeObject::size(Self) -> Int
-
-pub(all) struct JitFuncAddrFixup {
-  offset : Int
-  target : @code_object.RelocationTarget
-  reg : Int
-} derive(Eq, @debug.Debug)
 
 pub(all) struct JitIntegrationPlan {
   entry_symbol : String
   target : NativeTarget
-  native_glue : Array[NativeGlueBinding]
   object : JitCodeObject
 }
 
-pub(all) struct LinkedCode {
-  code : Array[Int]
-  frame_size : Int
-  runtime_relocations : Array[ResolvedRuntimeRelocation]
-  func_addr_fixups : Array[JitFuncAddrFixup]
-  call_fixups : Array[JitCallFixup]
-  gc_safepoints : Array[GcSafepoint]
-  gc_stackmap_blob : Bytes
+pub struct JitPipelineDiagnostics {
+  semantic_machv : String
+  target_vcode : String
+  allocated_vcode : String
+  code_object : String
+  machine_code : String
 } derive(@debug.Debug)
+
+pub struct LoadedArtifact {
+  artifact : @artifact.Artifact
+  code_objects : Array[@code_object.UnlinkedCodeObject]
+}
+pub fn LoadedArtifact::artifact(Self) -> @artifact.Artifact
+pub fn LoadedArtifact::code_objects(Self) -> Array[@code_object.UnlinkedCodeObject]
 
 pub(all) struct MemoryDescriptorLayout {
   base_offset : Int
@@ -794,34 +621,6 @@ pub struct MemoryInfo {
   max_pages : Int?
 }
 pub fn MemoryInfo::MemoryInfo(Int64, Int64, Int?) -> Self
-
-type MemoryManager
-pub fn MemoryManager::MemoryManager(Int) -> Self
-pub fn MemoryManager::alloc_region(Self, Int) -> ExecutableRegion
-pub fn MemoryManager::finalize_all(Self) -> Unit
-pub fn MemoryManager::get_current_region(Self) -> ExecutableRegion
-pub fn MemoryManager::total_allocated(Self) -> Int
-pub fn MemoryManager::total_used(Self) -> Int
-pub fn MemoryManager::write_code(Self, JitCodeObject) -> Result[(ExecutableRegion, Int), String]
-pub impl Show for MemoryManager
-
-pub(all) struct NativeGlueBinding {
-  kind : NativeGlueKind
-  symbol : String
-  sources : Array[String]
-} derive(Eq, @debug.Debug)
-
-pub(all) enum NativeGlueKind {
-  ExecutableMemory
-  TrapHandler
-  StackSwitch
-  HostCallBridge
-  WasmMemoryOp
-  GcRuntime
-  ExceptionHandling
-  WasiPreview1
-  DebugInfo
-} derive(Eq, @debug.Debug)
 
 type NativeJITContext
 pub fn NativeJITContext::alloc_guarded_memory(Self, Int, Int?) -> Int64
@@ -867,17 +666,9 @@ pub fn Profiler::should_use_jit(Self, Int) -> Bool
 pub fn Profiler::stats(Self) -> (Int, Int, Int, Int)
 pub impl Show for Profiler
 
-pub(all) struct ResolvedRuntimeRelocation {
-  offset : Int
-  symbol : String
-  address : Int64
-  fixup_idx : Int?
-} derive(Eq, @debug.Debug)
-
 pub(all) struct RuntimeSymbol {
   name : String
   address : Int64
-  fixup_idx : Int?
 } derive(Eq, @debug.Debug)
 
 pub(all) struct RuntimeSymbolResolver {
@@ -885,7 +676,6 @@ pub(all) struct RuntimeSymbolResolver {
 } derive(@debug.Debug)
 pub fn RuntimeSymbolResolver::RuntimeSymbolResolver() -> Self
 pub fn RuntimeSymbolResolver::add_symbol(Self, String, Int64) -> Unit
-pub fn RuntimeSymbolResolver::add_symbol_fixup(Self, String, Int64, Int) -> Unit
 pub fn RuntimeSymbolResolver::resolve(Self, String) -> Int64?
 pub fn RuntimeSymbolResolver::resolve_symbol(Self, String) -> RuntimeSymbol?
 pub fn RuntimeSymbolResolver::with_wasmoon_runtime_symbols() -> Self

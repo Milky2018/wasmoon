@@ -86,7 +86,7 @@ fn cmd_wat2wasm(file : String, output_opt : String?) -> Unit {
   }
 
   // Encode module to binary format
-  let bytes = @cwasm.encode(mod)
+  let bytes = @encoder.encode(mod)
 
   // Write to file
   write_binary_file(output_path, bytes)

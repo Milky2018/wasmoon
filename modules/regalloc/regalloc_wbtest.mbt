@@ -272,33 +272,6 @@ test "compact spill slots honors vector alignment and no-share edges" {
 }
 
 ///|
-test "priority work queue pops by priority with stable tie-breaks" {
-  let queue = @planning.PriorityWorkQueue::PriorityWorkQueue()
-  queue.push(3, 10)
-  queue.push(1, 20)
-  queue.push(2, 20)
-  queue.push(0, 10)
-  inspect(queue.length(), content="4")
-  debug_inspect(
-    queue.pop(),
-    content="Some({ item_id: 1, priority: 20, seq: 1 })",
-  )
-  debug_inspect(
-    queue.pop(),
-    content="Some({ item_id: 2, priority: 20, seq: 2 })",
-  )
-  debug_inspect(
-    queue.pop(),
-    content="Some({ item_id: 3, priority: 10, seq: 0 })",
-  )
-  debug_inspect(
-    queue.pop(),
-    content="Some({ item_id: 0, priority: 10, seq: 3 })",
-  )
-  debug_inspect(queue.pop(), content="None")
-}
-
-///|
 test "choose fixed register hint by frequency and low-id tie break" {
   let r0 : PhysicalReg = { id: 0, class: Int }
   let r1 : PhysicalReg = { id: 1, class: Int }
@@ -507,45 +480,6 @@ test "plan register probe order uses phased rotation and skip" {
     None,
   )
   debug_inspect(flat, content="[{ id: 2, class: Int }, { id: 0, class: Int }]")
-}
-
-///|
-test "bundle split planner partitions around split point and handles fallbacks" {
-  let ranges : Array[@planning.BundleSplitRange] = [
-    {
-      range_id: 0,
-      start: Some(ProgramPoint(0, 0)),
-      end: Some(ProgramPoint(0, 2)),
-    },
-    {
-      range_id: 1,
-      start: Some(ProgramPoint(0, 4)),
-      end: Some(ProgramPoint(0, 8)),
-    },
-  ]
-  let split = @planning.plan_bundle_split(
-    ranges,
-    Some(ProgramPoint(0, 3)),
-    [0],
-    0,
-    8,
-  )
-  match split {
-    Split(before, after) => {
-      debug_inspect(before, content="[0]")
-      debug_inspect(after, content="[1]")
-    }
-    _ => abort("expected split")
-  }
-  match
-    @planning.plan_bundle_split(ranges, Some(ProgramPoint(0, 9)), [0], 0, 8) {
-    Minimal => ()
-    _ => abort("expected minimal fallback")
-  }
-  match @planning.plan_bundle_split(ranges, None, [0], 0, 8) {
-    SpillWhole => ()
-    _ => abort("expected whole-bundle spill")
-  }
 }
 
 ///|
@@ -1053,45 +987,7 @@ test "plan verifier queries each block successor list once" {
 }
 
 ///|
-test "production segment queue prioritizes allocation weight" {
-  let segments : Array[AllocationSegment] = [
-    {
-      id: 0,
-      value: { id: 0, class: Int },
-      range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 2)),
-      weight: 10,
-      has_fixed_constraint: false,
-      location: None,
-    },
-    {
-      id: 1,
-      value: { id: 1, class: Int },
-      range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 2)),
-      weight: 100,
-      has_fixed_constraint: false,
-      location: None,
-    },
-    {
-      id: 2,
-      value: { id: 2, class: Int },
-      range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 2)),
-      weight: 50,
-      has_fixed_constraint: false,
-      location: None,
-    },
-  ]
-  let queue = SegmentQueue::new(segments, true)
-  for segment in segments {
-    queue.push(segment.id)
-  }
-  debug_inspect(
-    [queue.pop(), queue.pop(), queue.pop()],
-    content="[Some(1), Some(2), Some(0)]",
-  )
-}
-
-///|
-test "production fragments inherit whole-value spill weight" {
+test "production fragments use local spill-cost density" {
   let range = LiveRange::LiveRange(0, { id: 0, class: Int })
   range.add_range(ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 2)))
   range.add_range(ProgramRange(ProgramPoint(2, 0), ProgramPoint(2, 2)))
@@ -1100,7 +996,7 @@ test "production fragments inherit whole-value spill weight" {
   let ranges = LiveRangeSet::LiveRangeSet([0, 1, 2])
   ranges.add_range(range)
   let (segments, _) = build_allocation_segments(ranges)
-  debug_inspect(segments.map(segment => segment.weight), content="[3001, 3001]")
+  debug_inspect(segments.map(segment => segment.weight), content="[500, 500]")
 }
 
 ///|

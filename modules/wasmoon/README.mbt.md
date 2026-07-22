@@ -111,7 +111,8 @@ wasmoon test spec/i32.wast
 wasmoon test --help
 
 # explore
-wasmoon explore examples/add.wat --stage ir machv mc
+wasmoon explore examples/add.wat \
+  --stage milkir machv vcode allocated-vcode code-object mc
 wasmoon explore --help
 
 # component

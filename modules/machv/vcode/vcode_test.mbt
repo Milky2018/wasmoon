@@ -63,6 +63,41 @@ test "Target VCode snapshots selected SSA and compact allocation facts" {
 }
 
 ///|
+test "output register preferences remain soft allocation hints" {
+  let builder : Builder[TestInst] = Builder::new("preferred_output", [])
+  let entry = builder.entry_block()
+  let (_, results) = builder.append_body(
+    entry,
+    Add,
+    [],
+    [Output::any_location(I64).with_preference(PhysicalReg::new(1, Int))],
+    [],
+    InstructionMetadata::empty(),
+  )
+  builder.set_terminator(
+    entry,
+    Return,
+    [Input::any(results[0])],
+    [],
+    [],
+    InstructionMetadata::empty(),
+  )
+  |> ignore
+  let function = builder.finish()
+  verify_selected(function)
+  inspect(
+    function.summary(),
+    content=(
+      #|vcode preferred_output()
+      #|block0:
+      #|  i0 Add defs=[v0:any-location(prefer=p1:int)@late]
+      #|  i1 Return uses=[v0:any@early]
+      #|
+    ),
+  )
+}
+
+///|
 test "instruction and program-point handles survive layout and allocation" {
   let function = build_test_function()
   let before = function.instruction_at(0).unwrap()

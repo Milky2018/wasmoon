@@ -23,7 +23,7 @@ Implement the following diagnostics end-to-end:
 
 - A full AArch64 disassembler for arbitrary machine code bytes.
 - Guaranteeing stable PC addresses across OS versions/builds (PC values are for debugging only).
-- Changing the `.cwasm` on-disk format to embed debug metadata.
+- Changing the v9 artifact format to embed debug metadata.
 
 ## Design Overview
 
@@ -123,4 +123,4 @@ Optionally also enable “always include trap detail fields” (1 & 2) by defaul
   - includes `sig`, `pc`, `addr` (if applicable), and `brk_imm` (if applicable)
   - includes wasm `func_idx`/name when determinable (via PC range or `debug_current_func_idx`)
 - `wasmoon run --dump-on-trap ...` produces exactly one per-trap dump file for the relevant function.
-- No change to `.cwasm` file format or serializer.
+- No change to the v9 artifact format or codec.

@@ -190,7 +190,8 @@ test "runtime ABI elaboration follows CFG order instead of block storage order" 
 
 ///|
 test "AArch64 target code executes through the production entry ABI" {
-  match host_target_arch() {
+  let host = host_native_target() catch { _ => return }
+  match host {
     AArch64 => ()
     _ => return
   }
@@ -238,22 +239,45 @@ test "AArch64 target code executes through the production entry ABI" {
 }
 
 ///|
+test "JIT orchestration preserves the typed target link failure" {
+  let function = @milkir.Function::with_signature(
+    "typed_link_failure",
+    Signature([], []),
+  )
+  let entry = function.new_block0()
+  entry.set_terminator(Return([]))
+  let semantic = @milkir_machv.lower_core_function_with_protocol(
+    function,
+    Platform,
+  )
+  let compiled = build_aarch64_target(semantic)
+  try jit_code_object_from_x64(compiled.object, compiled.frame_size) catch {
+    error =>
+      inspect(
+        error,
+        content=(
+          #|X64LinkPreparationFailed(cause=InvalidCodeObject(message="expected an x64 code object"))
+        ),
+      )
+  } noraise {
+    _ => fail("expected x64 link preparation to reject an AArch64 object")
+  }
+}
+
+///|
 fn install_aarch64_link_plan(
   plan : @aarch64_target.AArch64LinkPlan,
   executable : ExecCode,
   resolve : (@code_object.RelocationTarget) -> Int64?,
 ) -> Bool raise @aarch64_target.AArch64LinkError {
   let linked = plan.link(executable.ptr(), resolve)
-  let bytes = FixedArray::make(linked.length(), b'\x00')
-  for index, byte in linked {
-    bytes[index] = byte
-  }
-  @jit_ffi.c_jit_copy_code(executable.ptr(), bytes, bytes.length()) == 0
+  executable.finalize(linked)
 }
 
 ///|
 test "AArch64 target executes internal and external relocations" {
-  match host_target_arch() {
+  let host = host_native_target() catch { _ => return }
+  match host {
     AArch64 => ()
     _ => return
   }
@@ -324,12 +348,10 @@ test "AArch64 target executes internal and external relocations" {
   ) catch {
     error => fail("failed to prepare caller link plan: \{error}")
   }
-  guard ExecCode::try_alloc(callee_plan.code().map(byte => byte.to_int()))
-    is Some(callee_code) else {
+  guard ExecCode::try_stage(callee_plan.code().length()) is Some(callee_code) else {
     fail("failed to allocate linked callee")
   }
-  guard ExecCode::try_alloc(caller_plan.code().map(byte => byte.to_int()))
-    is Some(caller_code) else {
+  guard ExecCode::try_stage(caller_plan.code().length()) is Some(caller_code) else {
     fail("failed to allocate linked caller")
   }
   let runtime = RuntimeSymbolResolver::with_wasmoon_runtime_symbols()

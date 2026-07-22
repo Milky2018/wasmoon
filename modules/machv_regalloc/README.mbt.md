@@ -22,11 +22,13 @@ edits, edge moves, and safepoint roots before it is returned.
 
 The production adapter reads Target VCode directly through `FunctionView`; it
 does not build a second instruction or CFG graph. The aggregate target pipeline
-first verifies selected VCode, explicitly selects the `Backtracking` strategy,
-materializes the returned `AllocationPlan` into VCode `Allocation` side tables,
-and then runs the independent VCode allocation verifier. This avoids rebuilding
-the same whole-function analysis in the generic plan verifier on the production
-path. There is no production fallback to `SinglePass`.
+first verifies selected VCode, explicitly selects the root allocator's
+`Backtracking` strategy, materializes its bundle-aware `AllocationPlan` into
+VCode `Allocation` side tables, and then runs the independent VCode allocation
+verifier. Production enables both the reusable plan verifier and the
+materialized VCode state verifier; the latter follows resident values through
+edits, clobbers, and CFG joins. There is no second backtracking policy package
+and no production fallback to `SinglePass`.
 
 Ordinary `Input::any` operands require a register at the instruction. A target
 operation that can consume a register or spill slot directly uses
@@ -36,6 +38,10 @@ forcing every such input through a simultaneous scratch-register reload.
 register without turning that request into a hard constraint. Production call
 lowering uses this for ABI argument registers, while the post-allocation call
 transfer planner remains responsible for the actual register and stack shuffle.
+ABI pseudos that materialize an implicit incoming register or stack value use
+`Output::any_location`, so the result is written directly to its stable home.
+`Output::with_preference` keeps the move-free incoming-register case cheap when
+that register is allocatable, without pinning the value's full live range.
 
 ## Example
 

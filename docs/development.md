@@ -62,7 +62,7 @@ wasmoon/
 ├── cmd/wasmoon-tools/ # wasmoon-tools CLI entry point
 ├── wat/            # WAT parser
 ├── wast/           # WAST parser
-├── cwasm/          # Binary parser
+├── parser/         # Core Wasm binary parser
 ├── validator/      # Module validation
 ├── runtime/        # Runtime structures
 ├── executor/       # Interpreter
@@ -143,8 +143,12 @@ lldb -- ./wasmoon test path/to/test.wast
 ### Exploring Compilation Stages
 
 ```bash
-# View IR
-./wasmoon explore test.wat --stage ir
+# View MilkIR
+./wasmoon explore test.wat --stage milkir
+
+# View every native compiler boundary
+./wasmoon explore test.wat \
+  --stage milkir machv vcode allocated-vcode code-object mc
 
 # View machine code
 ./wasmoon explore test.wat --stage mc

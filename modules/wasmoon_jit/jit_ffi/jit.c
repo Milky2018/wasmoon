@@ -22,6 +22,20 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_host_target_arch(void) {
 #endif
 }
 
+MOONBIT_FFI_EXPORT int32_t wasmoon_jit_host_operating_system_abi(void) {
+#if defined(__APPLE__)
+    return 1;
+#elif defined(__linux__) && defined(__GLIBC__)
+    return 2;
+#elif defined(__linux__)
+    return 3;
+#elif defined(_WIN32)
+    return 4;
+#else
+    return 0;
+#endif
+}
+
 // ============ Trap Handling FFI Exports ============
 
 MOONBIT_FFI_EXPORT int wasmoon_jit_get_trap_code(void) {
@@ -1255,12 +1269,33 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_ctx_get_memory_size(int64_t ctx_ptr, int 
 
 // ============ Executable Memory FFI Exports ============
 
+typedef struct {
+    int64_t ptr;
+    int32_t size;
+    int32_t finalized;
+} managed_exec_code_t;
+
 static void finalize_exec_code(void *self) {
-    int64_t *ptr = (int64_t *)self;
-    if (*ptr != 0) {
-        free_exec_internal(*ptr);
-        *ptr = 0;
+    managed_exec_code_t *code = (managed_exec_code_t *)self;
+    if (code->ptr != 0) {
+        free_exec_internal(code->ptr);
+        code->ptr = 0;
     }
+}
+
+static void *make_managed_exec_code(int64_t ptr, int size, int finalized) {
+    managed_exec_code_t *payload = (managed_exec_code_t *)moonbit_make_external_object(
+        finalize_exec_code,
+        sizeof(managed_exec_code_t)
+    );
+    if (!payload) {
+        free_exec_internal(ptr);
+        return NULL;
+    }
+    payload->ptr = ptr;
+    payload->size = size;
+    payload->finalized = finalized;
+    return payload;
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_alloc_exec(int size) {
@@ -1287,19 +1322,47 @@ MOONBIT_FFI_EXPORT void *wasmoon_jit_alloc_exec_managed(moonbit_bytes_t code, in
         return NULL;
     }
 
-    int64_t *payload = (int64_t *)moonbit_make_external_object(finalize_exec_code, sizeof(int64_t));
-    if (!payload) {
-        free_exec_internal(ptr);
-        return NULL;
-    }
+    return make_managed_exec_code(ptr, size, 1);
+}
 
-    *payload = ptr;
-    return payload;
+MOONBIT_FFI_EXPORT void *wasmoon_jit_stage_exec_managed(int size) {
+    if (size <= 0) return NULL;
+    int64_t ptr = alloc_exec_internal(size);
+    if (ptr == 0) return NULL;
+    return make_managed_exec_code(ptr, size, 0);
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_jit_finalize_exec_managed(
+    void *exec_code,
+    moonbit_bytes_t code,
+    int size
+) {
+    if (!exec_code || !code) return -1;
+    managed_exec_code_t *payload = (managed_exec_code_t *)exec_code;
+    if (payload->ptr == 0 || payload->finalized || size != payload->size) return -1;
+    if (copy_code_internal(payload->ptr, code, size) != 0) return -1;
+    payload->finalized = 1;
+    return 0;
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_jit_release_exec_managed(void *exec_code) {
+    if (!exec_code) return -1;
+    managed_exec_code_t *payload = (managed_exec_code_t *)exec_code;
+    if (payload->ptr == 0) return 0;
+    if (free_exec_internal(payload->ptr) != 0) return -1;
+    payload->ptr = 0;
+    payload->size = 0;
+    payload->finalized = 0;
+    return 0;
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_exec_code_ptr(void *exec_code) {
     if (!exec_code) return 0;
-    return *(int64_t *)exec_code;
+    return ((managed_exec_code_t *)exec_code)->ptr;
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_jit_exec_mapping_count(void) {
+    return exec_block_count_internal();
 }
 
 // ============ Memory Read/Write Helpers ============

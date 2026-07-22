@@ -19,6 +19,16 @@ static int num_code_blocks = 0;
 static int code_blocks_capacity = 0;
 static void *next_exec_hint = NULL;
 
+#ifdef _WIN32
+static SRWLOCK code_blocks_lock = SRWLOCK_INIT;
+static void lock_code_blocks(void) { AcquireSRWLockExclusive(&code_blocks_lock); }
+static void unlock_code_blocks(void) { ReleaseSRWLockExclusive(&code_blocks_lock); }
+#else
+static pthread_mutex_t code_blocks_lock = PTHREAD_MUTEX_INITIALIZER;
+static void lock_code_blocks(void) { pthread_mutex_lock(&code_blocks_lock); }
+static void unlock_code_blocks(void) { pthread_mutex_unlock(&code_blocks_lock); }
+#endif
+
 static int ensure_code_block_capacity(void) {
     if (num_code_blocks < code_blocks_capacity) {
         return 1;
@@ -68,14 +78,16 @@ int64_t alloc_exec_internal(int size) {
     if (size <= 0) {
         return 0;
     }
+    lock_code_blocks();
     if (!ensure_code_block_capacity()) {
+        unlock_code_blocks();
         return 0;
     }
 
     size_t alloc_size = round_up_to_page((size_t)size);
 
 #ifdef _WIN32
-    void *ptr = VirtualAlloc(NULL, alloc_size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    void *ptr = VirtualAlloc(NULL, alloc_size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
 #else
 #ifdef __APPLE__
     int flags = MAP_PRIVATE | MAP_ANONYMOUS;
@@ -97,11 +109,13 @@ int64_t alloc_exec_internal(int size) {
     }
 #endif
     if (ptr == MAP_FAILED) {
+        unlock_code_blocks();
         return 0;
     }
 #endif
 
     if (!ptr) {
+        unlock_code_blocks();
         return 0;
     }
 
@@ -111,6 +125,7 @@ int64_t alloc_exec_internal(int size) {
 #ifndef _WIN32
     next_exec_hint = (void *)((uint8_t *)ptr + alloc_size);
 #endif
+    unlock_code_blocks();
     return (int64_t)ptr;
 }
 
@@ -121,57 +136,78 @@ int copy_code_internal(int64_t dest, const uint8_t *src, int size) {
     if (!ptr || !src || size <= 0) {
         return -1;
     }
+    lock_code_blocks();
 
-    // Find the code block containing this address
+    // Find the code block containing this complete write range.
     size_t alloc_size = 0;
     void *block_base = NULL;
     for (int i = 0; i < num_code_blocks; i++) {
         uint8_t *base = (uint8_t *)code_blocks[i].code;
-        uint8_t *end = base + code_blocks[i].size;
-        if ((uint8_t *)ptr >= base && (uint8_t *)ptr < end) {
+        uintptr_t base_address = (uintptr_t)base;
+        uintptr_t end_address = base_address + code_blocks[i].size;
+        uintptr_t address = (uintptr_t)ptr;
+        if (address >= base_address && address <= end_address &&
+            end_address - address >= (size_t)size) {
             alloc_size = code_blocks[i].size;
             block_base = base;
             break;
         }
     }
     if (alloc_size == 0) {
+        unlock_code_blocks();
         return -1;
     }
 
-#ifndef _WIN32
-#ifdef __APPLE__
+#ifdef _WIN32
+    DWORD old_protection = 0;
+    if (!VirtualProtect(block_base, alloc_size, PAGE_READWRITE, &old_protection)) {
+        unlock_code_blocks();
+        return -1;
+    }
+#elif defined(__APPLE__)
     // Toggle write protection for JIT pages on Apple platforms.
     pthread_jit_write_protect_np(0);
 #else
     // Ensure writable before patching (needed for runtime fixups).
     if (mprotect(block_base, alloc_size, PROT_READ | PROT_WRITE) != 0) {
+        unlock_code_blocks();
         return -1;
     }
-#endif
 #endif
 
     // Copy code.
     memcpy(ptr, src, (size_t)size);
 
-#ifndef _WIN32
-#ifdef __APPLE__
+#ifdef _WIN32
+    DWORD ignored = 0;
+    if (!VirtualProtect(block_base, alloc_size, PAGE_EXECUTE_READ, &ignored)) {
+        unlock_code_blocks();
+        return -1;
+    }
+#elif defined(__APPLE__)
     // Re-enable write protection for JIT pages.
     pthread_jit_write_protect_np(1);
 #else
     // Change permissions from WRITE to EXEC.
     if (mprotect(block_base, alloc_size, PROT_READ | PROT_EXEC) != 0) {
+        unlock_code_blocks();
         return -1;
     }
 #endif
-#endif
 
     // Flush instruction cache
-#ifdef __APPLE__
+#ifdef _WIN32
+    if (!FlushInstructionCache(GetCurrentProcess(), ptr, (SIZE_T)size)) {
+        unlock_code_blocks();
+        return -1;
+    }
+#elif defined(__APPLE__)
     sys_icache_invalidate(ptr, (size_t)size);
-#elif defined(__aarch64__) && !defined(_WIN32)
+#elif defined(__aarch64__)
     __builtin___clear_cache(ptr, (char*)ptr + size);
 #endif
 
+    unlock_code_blocks();
     return 0;
 }
 
@@ -182,6 +218,7 @@ int free_exec_internal(int64_t ptr_i64) {
     if (!ptr) {
         return -1;
     }
+    lock_code_blocks();
 
     // Find the code block
     for (int i = 0; i < num_code_blocks; i++) {
@@ -201,9 +238,18 @@ int free_exec_internal(int64_t ptr_i64) {
                 code_blocks = NULL;
                 code_blocks_capacity = 0;
             }
+            unlock_code_blocks();
             return 0;
         }
     }
 
+    unlock_code_blocks();
     return -1;  // Not found
+}
+
+int exec_block_count_internal(void) {
+    lock_code_blocks();
+    int count = num_code_blocks;
+    unlock_code_blocks();
+    return count;
 }

@@ -28,9 +28,9 @@ allocator's read-only `FunctionView`, without copying the CFG or inspecting
 target instructions.
 
 Wasmoon enters native compilation through `wasmoon_jit`. The product layer
-provides VMContext field paths, runtime symbols, cwasm conversion, executable
-memory, and entry/hostcall trampolines, while reusable compiler modules remain
-independent of Wasmoon.
+provides VMContext field paths, runtime symbols, v9 artifact production and
+installation, and entry/hostcall trampolines, while reusable compiler modules
+remain independent of Wasmoon.
 
 ## Migration outcome
 
@@ -38,7 +38,8 @@ independent of Wasmoon.
   and their respective Target VCode pipelines.
 - Both production targets explicitly use the verified backtracking allocator;
   `SinglePass` is not a runtime fallback.
-- Diagnostics and `explore --stage machv` use the same semantic path as
+- Diagnostics and `explore --stage machv vcode allocated-vcode code-object mc`
+  use the same semantic, target, allocation, object, and emission path as
   production compilation.
 - The retired shared target-opcode backend, its compatibility adapters, and
   its allocation/emission packages were removed in the x64 cutover.

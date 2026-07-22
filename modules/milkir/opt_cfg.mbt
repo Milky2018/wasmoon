@@ -1024,5 +1024,8 @@ fn thread_jumps(func : Function) -> OptResult {
       _ => ()
     }
   }
+  if result.changed {
+    eliminate_unreachable_code(func) |> ignore
+  }
   result
 }

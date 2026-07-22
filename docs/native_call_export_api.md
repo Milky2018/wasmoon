@@ -56,11 +56,11 @@ The controlled JIT call returns `JITCallResult`:
 - `Failed(JITTrap)`
 - `UnsupportedCancellation`
 
-The `.cwasm` artifact records whether cancellation safepoints were emitted. Passing a cancellation callback to an uninstrumented artifact returns `UnsupportedCancellation` before machine code starts. The legacy `call_with_context(...)` API remains unchanged.
+The v9 artifact manifest records whether cancellation safepoints were emitted. Passing a cancellation callback to an uninstrumented artifact returns `UnsupportedCancellation` before machine code starts. The existing `call_with_context(...)` API remains unchanged.
 
 A `JITModule` supports one active invocation at a time. Do not call the same module concurrently or re-enter it from its cancellation callback; the callback is stored in that module's execution context for the duration of the call.
 
 ## Backward compatibility
 
 `call_exported_func(...)` remains unchanged and still raises `RuntimeError`.  
-Host-call errors are still surfaced as the original runtime error in this legacy API.
+Host-call errors are still surfaced as the original runtime error in this API.

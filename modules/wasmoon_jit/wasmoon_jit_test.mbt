@@ -1,390 +1,4 @@
 ///|
-fn test_wasm_func_symbol(func_idx : Int) -> @semantic_machv.CodeSymbol {
-  @semantic_machv.CodeSymbol::new("wasm.func.\{func_idx}")
-}
-
-///|
-fn test_runtime_target(name : String) -> @code_object.RelocationTarget {
-  External(@semantic_machv.ExternalSymbol::new(name))
-}
-
-///|
-test "resolve runtime helper relocations into linked code" {
-  let object = JitCodeObject::new([0], 0, call_fixups=[
-    {
-      offset: 0,
-      target: test_runtime_target("wasmoon.runtime.memory_grow"),
-      veneer_offset: -1,
-    },
-  ])
-  let linked = try! link_code_object(
-    object,
-    RuntimeSymbolResolver::with_wasmoon_runtime_symbols(),
-  )
-  inspect(linked.code.length(), content="1")
-  inspect(linked.runtime_relocations.length(), content="1")
-  inspect(linked.call_fixups.length(), content="1")
-}
-
-///|
-test "resolve wasm function symbols into cwasm call fixups" {
-  debug_inspect(resolve_wasm_func_symbol("wasm.func.12"), content="Some(12)")
-  debug_inspect(resolve_wasm_func_symbol("wasm.func.x"), content="None")
-  debug_inspect(resolve_wasm_func_symbol("runtime.func.12"), content="None")
-  let object = JitCodeObject::new([0], 0, call_fixups=[
-    { offset: 0, target: Code(test_wasm_func_symbol(3)), veneer_offset: -1 },
-  ])
-  let linked = try! link_code_object(object, RuntimeSymbolResolver())
-  inspect(linked.runtime_relocations.length(), content="1")
-  debug_inspect(linked.runtime_relocations[0].fixup_idx, content="Some(3)")
-  let artifact = CwasmArtifact::from_linked_code_for_target(
-    linked,
-    9,
-    X86_64,
-    "caller",
-  )
-  let restored = try! @cwasm.deserialize(artifact.serialize())
-  inspect(restored.functions[0].call_fixups.length(), content="1")
-  inspect(restored.functions[0].call_fixups[0].offset, content="0")
-  inspect(restored.functions[0].call_fixups[0].func_idx, content="3")
-  inspect(restored.functions[0].call_fixups[0].veneer_offset, content="-1")
-}
-
-///|
-test "resolve cwasm runtime helper fixup ids in wasmoon_jit" {
-  inspect(gc_runtime_fixup_idx(0), content="-20000")
-  inspect(gc_runtime_fixup_idx(22), content="-20022")
-  inspect(jit_runtime_fixup_idx(13), content="-21013")
-  inspect(jit_runtime_fixup_idx(14), content="-21014")
-  inspect(exception_runtime_fixup_idx(11), content="-22011")
-  inspect(resolve_runtime_func_fixup_idx(-20000) is Some(_), content="true")
-  inspect(resolve_runtime_func_fixup_idx(-20021) is Some(_), content="true")
-  inspect(resolve_runtime_func_fixup_idx(-20022) is Some(_), content="true")
-  inspect(resolve_runtime_func_fixup_idx(-21013) is Some(_), content="true")
-  inspect(resolve_runtime_func_fixup_idx(-21014) is Some(_), content="true")
-  inspect(resolve_runtime_func_fixup_idx(-22011) is Some(_), content="true")
-  inspect(resolve_runtime_func_fixup_idx(-1) is None, content="true")
-}
-
-///|
-test "emit cancellation poll relocations for both JIT targets" {
-  let builder = @milkir.FunctionBuilder::FunctionBuilder("cancel_poll")
-  let vmctx = builder.add_param(I64)
-  builder.call_symbol(ExternalSymbol("wasmoon.runtime.cancel_poll"), None, [
-    vmctx,
-  ])
-  |> ignore
-  builder.return_([])
-  for target in [NativeTarget::X64, AArch64] {
-    let plan = plan_wasm_body_milkir_integration_for_target(
-      builder.get_function(),
-      @wasm_milkir.WasmValidationContext::empty(),
-      target,
-    )
-    let fixup_ids : Array[Int] = []
-    for fixup in plan.object.get_func_addr_fixups() {
-      if machv_reloc_target_to_cwasm_func_idx(fixup.target) is Some(idx) {
-        fixup_ids.push(idx)
-      }
-    }
-    for fixup in plan.object.get_call_fixups() {
-      if machv_reloc_target_to_cwasm_func_idx(fixup.target) is Some(idx) {
-        fixup_ids.push(idx)
-      }
-    }
-    debug_inspect(fixup_ids, content="[-21014]")
-  }
-}
-
-///|
-test "default wasmoon runtime resolver maps memory.grow fixup" {
-  let object = JitCodeObject::new([0], 0, call_fixups=[
-    {
-      offset: 0,
-      target: test_runtime_target("wasmoon.runtime.memory_grow"),
-      veneer_offset: -1,
-    },
-  ])
-  let linked = try! link_code_object(
-    object,
-    RuntimeSymbolResolver::with_wasmoon_runtime_symbols(),
-  )
-  inspect(linked.runtime_relocations.length(), content="1")
-  debug_inspect(linked.runtime_relocations[0].fixup_idx, content="Some(-21000)")
-  let artifact = CwasmArtifact::from_linked_code_for_target(
-    linked,
-    7,
-    X86_64,
-    "memory_grow_caller",
-  )
-  let restored = try! @cwasm.deserialize(artifact.serialize())
-  inspect(restored.functions[0].call_fixups.length(), content="1")
-  inspect(restored.functions[0].call_fixups[0].func_idx, content="-21000")
-}
-
-///|
-test "default wasmoon runtime resolver maps bulk memory fixups" {
-  let resolver = RuntimeSymbolResolver::with_wasmoon_runtime_symbols()
-  guard resolver.resolve_symbol("wasmoon.runtime.memory_fill") is Some(fill) else {
-    fail("missing memory_fill runtime symbol")
-  }
-  guard resolver.resolve_symbol("wasmoon.runtime.memory_copy") is Some(copy) else {
-    fail("missing memory_copy runtime symbol")
-  }
-  debug_inspect(fill.fixup_idx, content="Some(-21002)")
-  debug_inspect(copy.fixup_idx, content="Some(-21004)")
-}
-
-///|
-test "default wasmoon runtime resolver maps segment and table fixups" {
-  let resolver = RuntimeSymbolResolver::with_wasmoon_runtime_symbols()
-  let names = [
-    ("wasmoon.runtime.memory_init", -21006),
-    ("wasmoon.runtime.data_drop", -21007),
-    ("wasmoon.runtime.table_grow", -21008),
-    ("wasmoon.runtime.table_fill", -21009),
-    ("wasmoon.runtime.table_copy", -21010),
-    ("wasmoon.runtime.table_init", -21011),
-    ("wasmoon.runtime.elem_drop", -21012),
-    ("wasmoon.runtime.cancel_poll", -21014),
-    ("wasmoon.runtime.gc.push_root_scope", -20021),
-    ("wasmoon.runtime.gc.pop_root_scope", -20022),
-  ]
-  for item in names {
-    let (name, fixup_idx) = item
-    guard resolver.resolve_symbol(name) is Some(symbol) else {
-      fail("missing runtime symbol \{name}")
-    }
-    debug_inspect(symbol.fixup_idx, content="Some(\{fixup_idx})")
-  }
-}
-
-///|
-test "resolve function-address fixup targets in wasmoon_jit" {
-  inspect(resolve_func_addr_fixup_target(-20000, 0L) is Some(_), content="true")
-  debug_inspect(resolve_func_addr_fixup_target(3, 0L), content="None")
-  debug_inspect(resolve_func_addr_fixup_target(-1, 0L), content="None")
-}
-
-///|
-test "JIT trap code policy lives in wasmoon_jit" {
-  inspect(jit_trap_message(1), content="out of bounds memory access")
-  inspect(jit_trap_message(10), content="gc precise roots unavailable")
-  inspect(jit_trap_message(99), content="unknown trap")
-  inspect(is_wasi_exit_trap_code(100), content="true")
-  inspect(is_wasi_exit_trap_code(1), content="false")
-  inspect(format_signal_name(11), content="SIGSEGV(11)")
-  inspect(format_signal_name(123), content="SIG(123)")
-}
-
-///|
-test "trap report message formatting lives in wasmoon_jit" {
-  inspect(format_u64_hex(-1L), content="0xffffffffffffffff")
-  inspect(sanitize_debug_filename("a/b:c"), content="a_b_c")
-  inspect(sanitize_debug_filename(""), content="unknown")
-  let report : TrapReport = {
-    trap_kind: "integer overflow",
-    message: "integer overflow",
-    signal: 11,
-    signal_name: "SIGSEGV(11)",
-    pc: 0x12L,
-    lr: 0L,
-    fp: 0L,
-    frame_lr: 0L,
-    fault_addr: 0x34L,
-    brk_imm: 5,
-    wasm_func_idx: Some(7),
-    wasm_func_name: Some("callee"),
-    wasm_offset: Some(0x20L),
-    wasm_frames: [
-      { pc: 0x12L, func_idx: 7, func_name: "callee", wasm_offset: 0x20L },
-      { pc: 0x40L, func_idx: 3, func_name: "caller", wasm_offset: 0x10L },
-    ],
-    host_frames: [],
-    dump_path: Some("/tmp/jit-trap.txt"),
-  }
-  inspect(
-    format_trap_report_message(report),
-    content="integer overflow (sig=SIGSEGV(11), pc=0x0000000000000012, addr=0x0000000000000034, brk_imm=5, wasm=7 'callee'+0x20, caller=3 'caller'+0x10, dump=/tmp/jit-trap.txt)",
-  )
-}
-
-///|
-test "wrap linked code as cwasm artifact" {
-  let object = JitCodeObject::new([0], 0)
-  let resolver = RuntimeSymbolResolver::RuntimeSymbolResolver()
-  let linked = try! link_code_object(object, resolver)
-  let artifact = CwasmArtifact::from_linked_code_for_target(
-    linked,
-    7,
-    X86_64,
-    "caller",
-  )
-  inspect(artifact.functions.length(), content="1")
-  inspect(artifact.manifest().length(), content="7")
-  let restored = try! @cwasm.deserialize(artifact.serialize())
-  inspect(restored.function_count(), content="1")
-  inspect(restored.functions[0].name, content="caller")
-  inspect(restored.functions[0].frame_size, content="0")
-}
-
-///|
-test "cwasm artifact preserves reusable stack map offsets" {
-  let object = JitCodeObject::new([0], 0, gc_safepoints=[GcSafepoint(0, [], 0L)])
-  let linked = try! link_code_object(object, RuntimeSymbolResolver())
-  let artifact = CwasmArtifact::from_linked_code_for_target(
-    linked,
-    7,
-    X86_64,
-    "caller",
-  )
-  inspect(artifact.gc_safepoints.length(), content="1")
-  let restored = try! @cwasm.deserialize(artifact.serialize())
-  inspect(restored.functions[0].gc_safepoints.length(), content="1")
-  inspect(restored.functions[0].gc_safepoints[0].code_offset, content="0")
-  inspect(restored.functions[0].gc_safepoints[0].metadata, content="0")
-  debug_inspect(
-    restored.functions[0].gc_stackmap_blob,
-    content=(
-      #|<Bytes:
-      #|  [
-      #|    0x02,
-      #|    0x00,
-      #|    0x00,
-      #|    0x00,
-      #|    0x01,
-      #|    0x00,
-      #|    0x00,
-      #|    0x00,
-      #|    0x00,
-      #|    0x00,
-      #|    0x00,
-      #|    0x00,
-      #|    0x00,
-      #|    0x00,
-      #|    0x00,
-      #|    0x00,
-      #|  ]>
-    ),
-  )
-}
-
-///|
-test "cwasm artifact preserves runtime call fixup metadata" {
-  let object = JitCodeObject::new([0], 0, call_fixups=[
-    {
-      offset: 0,
-      target: test_runtime_target("wasmoon.runtime.hostcall"),
-      veneer_offset: -1,
-    },
-  ])
-  let resolver = RuntimeSymbolResolver::with_wasmoon_runtime_symbols()
-  let linked = try! link_code_object(object, resolver)
-  let artifact = CwasmArtifact::from_linked_code_for_target(
-    linked,
-    9,
-    X86_64,
-    "caller",
-  )
-  let restored = try! @cwasm.deserialize(artifact.serialize())
-  inspect(restored.functions[0].call_fixups.length(), content="1")
-  inspect(restored.functions[0].call_fixups[0].offset, content="0")
-  inspect(restored.functions[0].call_fixups[0].func_idx, content="-21013")
-  inspect(restored.functions[0].call_fixups[0].veneer_offset, content="-1")
-}
-
-///|
-test "aarch64 cwasm artifact materializes runtime call veneers" {
-  let object = JitCodeObject::new(Array::make(40, 0), 0, call_fixups=[
-    {
-      offset: 8,
-      target: test_runtime_target("wasmoon.runtime.hostcall"),
-      veneer_offset: 24,
-    },
-  ])
-  let resolver = RuntimeSymbolResolver::with_wasmoon_runtime_symbols()
-  let linked = try! link_code_object(object, resolver)
-  let artifact = CwasmArtifact::from_linked_code_for_target(
-    linked,
-    9,
-    AArch64,
-    "caller",
-  )
-  inspect(artifact.call_veneers.length(), content="1")
-  let restored = try! @cwasm.deserialize(artifact.serialize())
-  inspect(restored.functions[0].call_fixups.length(), content="1")
-  inspect(restored.functions[0].call_fixups[0].offset, content="8")
-  inspect(restored.functions[0].call_fixups[0].func_idx, content="-21013")
-  inspect(restored.functions[0].call_fixups[0].veneer_offset, content="24")
-  inspect(restored.functions[0].code.length(), content="40")
-  inspect(restored.functions[0].code[24], content="0")
-  inspect(restored.functions[0].code[39], content="0")
-}
-
-///|
-test "build moved cwasm entry from emitted code parts" {
-  let entry = build_cwasm_entry_from_code(
-    9,
-    "compiled",
-    [1, 2, 3, 4],
-    16,
-    0,
-    2,
-    1,
-    func_addr_fixups=[{ offset: 4, func_idx: 7, reg: 16 }],
-    call_fixups=[{ offset: 8, func_idx: -1000, veneer_offset: 12 }],
-    gc_safepoint_offsets=[20],
-    gc_safepoint_root_counts=[2],
-    gc_safepoint_root_indices=[[0, 3]],
-  )
-  inspect(entry.func_idx, content="9")
-  inspect(entry.code.length(), content="4")
-  inspect(entry.frame_size, content="16")
-  inspect(entry.func_addr_fixups[0].func_idx, content="7")
-  inspect(entry.call_fixups[0].veneer_offset, content="12")
-  inspect(entry.gc_safepoints.length(), content="1")
-  inspect(entry.gc_safepoints[0].code_offset, content="20")
-  inspect(entry.gc_safepoints[0].metadata, content="2")
-  inspect(entry.gc_stackmap_blob.length(), content="24")
-}
-
-///|
-test "compute required JIT context function count" {
-  let mod = @cwasm.PrecompiledModule::PrecompiledModule(AArch64)
-  mod.add_import("wasi_snapshot_preview1", "fd_write", 4, 1)
-  mod.add_import("spectest", "print", 1, 0)
-  mod.add_function(CompiledEntry(7, "f7", [0xC3], 0, 0, 0, 0))
-  inspect(required_context_function_count(mod, 5), content="8")
-  inspect(required_context_function_count(mod, 12), content="12")
-}
-
-///|
-test "encode AArch64 BL immediate for direct-call fixups" {
-  debug_inspect(
-    encode_aarch64_bl_imm26(0x1000L, 0x1008L),
-    content="Some(-1811939326)",
-  )
-  debug_inspect(encode_aarch64_bl_imm26(0x1000L, 0x1002L), content="None")
-  debug_inspect(encode_aarch64_bl_imm26(0x1000L, 0x9000000L), content="None")
-}
-
-///|
-test "encode X64 call rel32 displacement for direct-call fixups" {
-  debug_inspect(
-    encode_x64_call_rel32_disp(0x1000L, 0x1010L),
-    content="Some(11)",
-  )
-  debug_inspect(
-    encode_x64_call_rel32_disp(0x1010L, 0x1000L),
-    content="Some(-21)",
-  )
-  debug_inspect(
-    encode_x64_call_rel32_disp(0x1000L, 0x80001005L),
-    content="None",
-  )
-}
-
-///|
 test "plan Wasmoon JIT integration through a target-owned code object" {
   let milk = @milkir.Function::with_signature("entry", Signature([], []))
   let entry = milk.new_block0()
@@ -392,16 +6,6 @@ test "plan Wasmoon JIT integration through a target-owned code object" {
   let x64_plan = plan_milkir_integration_for_target(milk, X64)
   inspect(x64_plan.entry_symbol, content="entry")
   debug_inspect(x64_plan.target, content="X64")
-  inspect(x64_plan.native_glue.length(), content="9")
-  inspect(jit_ffi_native_stub_sources().length(), content="17")
-  inspect(
-    native_glue_covers_jit_ffi_stubs(glue=x64_plan.native_glue),
-    content="true",
-  )
-  inspect(
-    native_glue_covers_source(x64_plan.native_glue, "dwarf.c"),
-    content="true",
-  )
   debug_inspect(
     x64_plan.object,
     content=(
@@ -455,13 +59,59 @@ test "semantic Wasm lowering is inspectable before target selection" {
 }
 
 ///|
-test "JIT integration returns invalid Wasm dialect errors" {
+test "final native diagnostics expose real x64 and AArch64 checkpoints" {
+  let signature = @milkir.Signature::Signature([Ptr, I64, I64], [I64])
+  let function = @milkir.Function::with_signature("diagnostic_add64", signature)
+  let lhs = function.param(1).unwrap()
+  let rhs = function.param(2).unwrap()
+  let sum = function.new_value(I64)
+  let entry = function.new_block([])
+  entry.append_inst(
+    function.new_inst(Scalar(IntBinary(Add)), [lhs, rhs], [sum]),
+  )
+  entry.set_terminator(Return([sum]))
+  debug_inspect(
+    [
+      compile_wasm_body_diagnostics_for_target(
+        function,
+        @wasm_milkir.WasmValidationContext::empty(),
+        X64,
+      ),
+      compile_wasm_body_diagnostics_for_target(
+        function,
+        @wasm_milkir.WasmValidationContext::empty(),
+        AArch64,
+      ),
+    ],
+    content=(
+      #|[
+      #|  {
+      #|    semantic_machv: "machv diagnostic_add64 [internal](v0:ptr64, v1:i64, v2:i64) -> (i64) {\nblock0:\n  v3:i64 = int.binary.Add v1, v2\n  return v3\n}",
+      #|    target_vcode: "vcode diagnostic_add64(v0:ptr64, v1:i64, v2:i64) -> (i64)\nblock0:\n  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v3:any-location(prefer=p7:int)@late]\n  i1 IncomingReg(I64, p6:int) uses=[v1:fixed(p6:int)@early] defs=[v4:any-location(prefer=p6:int)@late]\n  i2 IncomingReg(I64, p2:int) uses=[v2:fixed(p2:int)@early] defs=[v5:any-location(prefer=p2:int)@late]\n  i3 IntBinary(W64, Add) uses=[v4:any@early, v5:any@early] defs=[v6:any@late]\n  i4 OutgoingReg(I64, p0:int) uses=[v6:any@early]\n  i5 Return\n",
+      #|    allocated_vcode: "vcode diagnostic_add64(v0:ptr64, v1:i64, v2:i64) -> (i64)\nblock0:\n  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v3:any-location(prefer=p7:int)@late]\n  i1 IncomingReg(I64, p6:int) uses=[v1:fixed(p6:int)@early] defs=[v4:any-location(prefer=p6:int)@late]\n  i2 IncomingReg(I64, p2:int) uses=[v2:fixed(p2:int)@early] defs=[v5:any-location(prefer=p2:int)@late]\n  i3 IntBinary(W64, Add) uses=[v4:any@early, v5:any@early] defs=[v6:any@late]\n  i4 OutgoingReg(I64, p0:int) uses=[v6:any@early]\n  i5 Return\nallocation diagnostic_add64\n  v0:ptr64 -> p7:int\n  v1:i64 -> p6:int\n  v2:i64 -> p2:int\n  v3:ptr64 -> p7:int\n  v4:i64 -> p6:int\n  v5:i64 -> p2:int\n  v6:i64 -> p0:int\n  i0 operand0 -> p7:int\n  i0 operand1 -> p7:int\n  i1 operand0 -> p6:int\n  i1 operand1 -> p6:int\n  i2 operand0 -> p2:int\n  i2 operand1 -> p2:int\n  i3 operand0 -> p6:int\n  i3 operand1 -> p2:int\n  i3 operand2 -> p0:int\n  i4 operand0 -> p0:int\n",
+      #|    code_object: "code-object x64\n  code-size: 7\n  relocations: []\n  sources: []\n  traps: []\n  safepoints: []\n  unwind: []\n  bytes: 48 89 f0 48 01 d0 c3",
+      #|    machine_code: "48 89 f0 48 01 d0 c3",
+      #|  },
+      #|  {
+      #|    semantic_machv: "machv diagnostic_add64 [internal](v0:ptr64, v1:i64, v2:i64) -> (i64) {\nblock0:\n  v3:i64 = int.binary.Add v1, v2\n  return v3\n}",
+      #|    target_vcode: "vcode diagnostic_add64(v0:ptr64, v1:i64, v2:i64) -> (i64)\nblock0:\n  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v3:any-location(prefer=p0:int)@late]\n  i1 IncomingReg(I64, p1:int) uses=[v1:fixed(p1:int)@early] defs=[v4:any-location(prefer=p1:int)@late]\n  i2 IncomingReg(I64, p2:int) uses=[v2:fixed(p2:int)@early] defs=[v5:any-location(prefer=p2:int)@late]\n  i3 IntBinary(W64, Add) uses=[v4:any@early, v5:any@early] defs=[v6:any@late]\n  i4 OutgoingReg(I64, p0:int) uses=[v6:any@early]\n  i5 Return\n",
+      #|    allocated_vcode: "vcode diagnostic_add64(v0:ptr64, v1:i64, v2:i64) -> (i64)\nblock0:\n  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v3:any-location(prefer=p0:int)@late]\n  i1 IncomingReg(I64, p1:int) uses=[v1:fixed(p1:int)@early] defs=[v4:any-location(prefer=p1:int)@late]\n  i2 IncomingReg(I64, p2:int) uses=[v2:fixed(p2:int)@early] defs=[v5:any-location(prefer=p2:int)@late]\n  i3 IntBinary(W64, Add) uses=[v4:any@early, v5:any@early] defs=[v6:any@late]\n  i4 OutgoingReg(I64, p0:int) uses=[v6:any@early]\n  i5 Return\nallocation diagnostic_add64\n  v0:ptr64 -> p0:int\n  v1:i64 -> p1:int\n  v2:i64 -> p2:int\n  v3:ptr64 -> p0:int\n  v4:i64 -> p1:int\n  v5:i64 -> p2:int\n  v6:i64 -> p0:int\n  i0 operand0 -> p0:int\n  i0 operand1 -> p0:int\n  i1 operand0 -> p1:int\n  i1 operand1 -> p1:int\n  i2 operand0 -> p2:int\n  i2 operand1 -> p2:int\n  i3 operand0 -> p1:int\n  i3 operand1 -> p2:int\n  i3 operand2 -> p0:int\n  i4 operand0 -> p0:int\n",
+      #|    code_object: "code-object aarch64\n  code-size: 8\n  relocations: []\n  sources: []\n  traps: []\n  safepoints: []\n  unwind: []\n  bytes: 20 00 02 8b c0 03 5f d6",
+      #|    machine_code: "20 00 02 8b c0 03 5f d6",
+      #|  },
+      #|]
+    ),
+  )
+}
+
+///|
+test "JIT diagnostics return invalid Wasm dialect errors" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder("invalid_wasm_dialect")
   @wasm_milkir.get_exception_tag(builder) |> ignore
   builder.emit_void_ext_inst(ExtOp("wasm", "typo", []), [])
   builder.return_([])
   try
-    plan_wasm_body_milkir_integration_for_target(
+    compile_wasm_body_diagnostics_for_target(
       builder.get_function(),
       @wasm_milkir.WasmValidationContext::empty(),
       X64,
@@ -471,7 +121,7 @@ test "JIT integration returns invalid Wasm dialect errors" {
       inspect(
         err,
         content=(
-          #|PipelineFailure(message="invalid_wasm_dialect: InvalidMilkIR(message=\"UnverifiableInstruction(message=\\\"unknown Wasm MilkIR extension opcode 'typo'\\\")\")")
+          #|SemanticLoweringFailed(cause=InvalidMilkIR(message="UnverifiableInstruction(message=\"unknown Wasm MilkIR extension opcode 'typo'\")"))
         ),
       )
   } noraise {
@@ -598,15 +248,7 @@ test "plan MilkIR branch block params through reusable JIT pipeline" {
       #|    133,
       #|    192,
       #|    15,
-      #|    133,
-      #|    8,
-      #|    0,
-      #|    0,
-      #|    0,
-      #|    72,
-      #|    137,
-      #|    208,
-      #|    233,
+      #|    132,
       #|    4,
       #|    0,
       #|    0,
@@ -615,6 +257,9 @@ test "plan MilkIR branch block params through reusable JIT pipeline" {
       #|    137,
       #|    200,
       #|    195,
+      #|    72,
+      #|    137,
+      #|    208,
       #|    195,
       #|  ],
       #|  frame_size: 0,
@@ -679,15 +324,6 @@ test "plan scalar entry trampoline through reusable JIT pipeline" {
   debug_inspect(plan.target, content="X64")
   inspect(plan.entry_symbol, content="entry_trampoline")
   inspect(plan.object.get_bytes().length() > 0, content="true")
-  let artifact = try! CwasmArtifact::from_jit_plan(
-    plan,
-    RuntimeSymbolResolver(),
-    11,
-  )
-  let restored = try! @cwasm.deserialize(artifact.serialize())
-  inspect(restored.functions[0].func_idx, content="11")
-  inspect(restored.functions[0].name, content="entry_trampoline")
-  inspect(restored.functions[0].code.length() > 0, content="true")
   let aarch64_plan = plan_entry_trampoline_for_target(params, results, AArch64) catch {
     err => fail(to_repr(err).to_string())
   }
@@ -707,8 +343,9 @@ test "entry trampoline reports V128 MilkIR planner gap" {
   let params : Array[@types.ValueType] = [V128]
   let results : Array[@types.ValueType] = []
   try plan_entry_trampoline_for_target(params, results, X64) catch {
-    PipelineFailure(message=msg) =>
+    UnsupportedEntrySignature(message=msg) =>
       inspect(msg.contains("V128 MilkIR entry trampoline"), content="true")
+    error => fail("unexpected entry trampoline error: \{to_repr(error)}")
   } noraise {
     _ => fail("expected V128 trampoline planning to report unsupported")
   }
@@ -772,7 +409,7 @@ test "plan hostcall import trampoline values_vec layout" {
 test "machine-code entry trampolines support V128 registers" {
   let params : Array[@types.ValueType] = [V128]
   let results : Array[@types.ValueType] = [V128]
-  let x64_code = build_entry_trampoline_for_target(params, results, X86_64) catch {
+  let x64_code = build_entry_trampoline_for_target(params, results, X64) catch {
     err => fail(to_repr(err).to_string())
   }
   let mut x64_has_load = false
@@ -813,7 +450,7 @@ test "hostcall trampolines support V128 registers" {
     params,
     results,
     0,
-    X86_64,
+    X64,
   ) catch {
     err => fail(to_repr(err).to_string())
   }
@@ -1009,7 +646,7 @@ test "hostcall trampolines support stack-passed arguments" {
     x64_params,
     results,
     0,
-    X86_64,
+    X64,
   ) catch {
     err => fail(to_repr(err).to_string())
   }
@@ -1047,7 +684,7 @@ test "entry trampolines support stack-passed arguments" {
     I64,
   ]
   let results : Array[@types.ValueType] = []
-  let x64_code = build_entry_trampoline_for_target(x64_params, results, X86_64) catch {
+  let x64_code = build_entry_trampoline_for_target(x64_params, results, X64) catch {
     err => fail(to_repr(err).to_string())
   }
   inspect(code_contains_x64_r14_int_load(x64_code), content="true")
@@ -1077,7 +714,7 @@ test "hostcall trampolines support overflow result areas" {
     params,
     results,
     0,
-    X86_64,
+    X64,
   ) catch {
     err => fail(to_repr(err).to_string())
   }
@@ -1115,7 +752,7 @@ test "entry trampolines support overflow result areas" {
     I64,
     I64,
   ]
-  let x64_code = build_entry_trampoline_for_target(params, results, X86_64) catch {
+  let x64_code = build_entry_trampoline_for_target(params, results, X64) catch {
     err => fail(to_repr(err).to_string())
   }
   inspect(code_contains_x64_rsp_int_load(x64_code), content="true")
@@ -2396,63 +2033,6 @@ test "plan MilkIR rotate-left through reusable AArch64 JIT pipeline" {
     plan.object.get_bytes()[plan.object.get_bytes().length() - 1],
     content="214",
   )
-}
-
-///|
-test "wrap reusable JIT plan as cwasm artifact" {
-  let signature = @milkir.Signature::Signature([I64, I64], [I64])
-  let milk = @milkir.Function::with_signature("add64_artifact", signature)
-  let lhs = milk.param(0).unwrap()
-  let rhs = milk.param(1).unwrap()
-  let sum = milk.new_value(I64)
-  let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Scalar(IntBinary(Add)), [lhs, rhs], [sum]))
-  entry.set_terminator(Return([sum]))
-  let plan = plan_milkir_integration_for_target(milk, X64)
-  let artifact = try! CwasmArtifact::from_jit_plan(
-    plan,
-    RuntimeSymbolResolver(),
-    3,
-  )
-  inspect(artifact.functions.length(), content="1")
-  inspect(artifact.functions[0].function_index, content="3")
-  inspect(artifact.code.length() > 0, content="true")
-  inspect(artifact.code.length() > 0, content="true")
-  let restored = try! @cwasm.deserialize(artifact.serialize())
-  inspect(restored.function_count(), content="1")
-  inspect(restored.functions[0].func_idx, content="3")
-  inspect(restored.functions[0].name, content="add64_artifact")
-  inspect(restored.functions[0].frame_size, content="0")
-  inspect(
-    restored.functions[0].code.length(),
-    content=artifact.code.length().to_string(),
-  )
-}
-
-///|
-test "wrap reusable JIT plan preserves cwasm signature metadata" {
-  let signature = @milkir.Signature::Signature([I64, I64], [I64])
-  let milk = @milkir.Function::with_signature("add64_artifact_sig", signature)
-  let lhs = milk.param(0).unwrap()
-  let rhs = milk.param(1).unwrap()
-  let sum = milk.new_value(I64)
-  let entry = milk.new_block([])
-  entry.append_inst(milk.new_inst(Scalar(IntBinary(Add)), [lhs, rhs], [sum]))
-  entry.set_terminator(Return([sum]))
-  let plan = plan_milkir_integration_for_target(milk, X64)
-  let artifact = try! CwasmArtifact::from_jit_plan_with_signature(
-    plan,
-    RuntimeSymbolResolver(),
-    4,
-    2,
-    1,
-  )
-  inspect(artifact.functions[0].num_params, content="2")
-  inspect(artifact.functions[0].num_results, content="1")
-  let restored = try! @cwasm.deserialize(artifact.serialize())
-  inspect(restored.functions[0].func_idx, content="4")
-  inspect(restored.functions[0].num_params, content="2")
-  inspect(restored.functions[0].num_results, content="1")
 }
 
 ///|

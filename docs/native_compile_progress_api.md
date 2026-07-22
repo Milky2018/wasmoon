@@ -4,7 +4,7 @@ Wasmoon now exposes compile progress events during JIT compilation:
 
 - Package: `Milky2018/wasmoon/cmd/wasmoon`
 - API:
-  - `compile_module(module_bytes, opt_level?, enable_dwarf?, on_progress?) -> PrecompiledModule?`
+  - `compile_module(module_bytes, opt_level?, enable_dwarf?, on_progress?) -> Artifact?`
 
 ## Progress callback
 

@@ -131,10 +131,7 @@ fn[Inst] Function::verify_instruction(
           raise InvalidTie(instruction~, operand=index, tied_to~)
         }
       }
-      AnyLocation =>
-        if operand.role != Use {
-          raise InvalidAnyLocationConstraint(instruction~, operand=index)
-        }
+      AnyLocation => ()
       Any => ()
     }
     if operand.role == Use &&
@@ -309,32 +306,6 @@ fn Allocation::location_matches(
     Register(reg) => reg.class == reg_class_for_value_type(ty)
     Stack(slot) => self.owns_slot(slot) && self.stack_slots[slot.id].ty == ty
   }
-}
-
-///|
-fn Allocation::has_reload(
-  self : Allocation,
-  function_owner : Ref[Unit],
-  instruction : Instruction,
-  value : Value,
-  slot : StackSlot,
-  reg : PhysicalReg,
-) -> Bool {
-  for edit in self.before_edits[instruction.id] {
-    match (edit.point, edit.kind) {
-      (Some(point), Reload(value=edit_value, slot=edit_slot, reg=edit_reg)) =>
-        if physical_equal(point.owner, function_owner) &&
-          point.instruction == instruction &&
-          point.placement == Before &&
-          edit_value == value &&
-          edit_slot == slot &&
-          edit_reg == reg {
-          return true
-        }
-      _ => ()
-    }
-  }
-  false
 }
 
 ///|
@@ -788,40 +759,12 @@ pub fn[Inst] verify_allocation_invariants(
             )
           }
         AnyLocation =>
-          if operand.role != Use ||
-            assignment != allocation.value_locations[operand.value.id].unwrap() {
+          if assignment != allocation.value_locations[operand.value.id].unwrap() {
             raise AnyLocationConstraintViolation(
               instruction~,
               operand=operand_index,
             )
           }
-      }
-      match allocation.value_locations[operand.value.id].unwrap() {
-        Stack(slot) =>
-          match assignment {
-            Stack(_) => ()
-            Register(reg) =>
-              if operand.role == Use {
-                if !allocation.has_reload(
-                    function.owner,
-                    instruction,
-                    operand.value,
-                    slot,
-                    reg,
-                  ) {
-                  raise MissingReload(instruction~, operand=operand_index)
-                }
-              } else if !allocation.has_spill(
-                  function.owner,
-                  instruction,
-                  operand.value,
-                  reg,
-                  slot,
-                ) {
-                raise MissingSpill(instruction~, operand=operand_index)
-              }
-          }
-        Register(_) => ()
       }
     }
   }
@@ -842,6 +785,7 @@ pub fn[Inst] verify_allocation_invariants(
   }
   let block_live_out = function.allocation_block_live_out()
   verify_allocation_interference(function, allocation, block_live_out)
+  verify_allocation_state(function, allocation)
   for instruction_index in 0..<function.instruction_count() {
     let instruction = function.instruction_at(instruction_index).unwrap()
     let metadata = function.instructions[instruction_index].metadata

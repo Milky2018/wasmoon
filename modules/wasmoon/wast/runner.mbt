@@ -820,9 +820,8 @@ pub fn invoke_action(
                       gc_func_type_indices.clear()
                       for i, entry in gc_funcref_entries {
                         let (func_ptr, type_idx) = entry
-                        @wasmoon_jit.c_jit_write_i64(
-                          table_ptr + (i * 8).to_int64(),
-                          func_ptr,
+                        @wasmoon_jit.native_value_slot_write(
+                          table_ptr, i, func_ptr,
                         )
                         gc_func_type_indices.push(type_idx)
                       }

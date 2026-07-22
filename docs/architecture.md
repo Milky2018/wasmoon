@@ -14,7 +14,9 @@ WAST test script ───────→ wasmoon/wast ──┘                
                                                                                       → MachV
                                                                                       → target VCode
                                                                                       → target allocation/emission
-                                                                                      → wasmoon_jit
+                                                                                      → verified code object
+                                                                                      → v9 artifact
+                                                                                      → wasmoon_jit installer
 ```
 
 The `wasmoon run` command validates both the main module and preloaded core modules before instantiation. Library callers that assemble parsing, validation, and execution themselves remain responsible for preserving the same boundary.
@@ -45,8 +47,8 @@ Reusable modules must not import `Milky2018/wasmoon`, `Milky2018/wasmoon_jit`, o
 | --- | --- |
 | `wasmoon` | Product assembly, CLI, parsing, validation, runtime objects, interpreter, WASI Preview 1, component-model work, and test runners. |
 | `wasmoon/wasm_frontend` | Canonical product-facing Wasm-to-MilkIR frontend API. Its `ir` subpackage is an implementation detail; embedding configuration lives in the dependency-neutral `embedding` subpackage. |
-| `wasmoon_jit` | Wasmoon VMContext layout, native runtime helpers, trampolines, executable-memory integration, runtime symbol resolution, and CWASM artifacts. |
-| `wasmoon_jit/cwasm` | Serialized Wasmoon precompiled native-code format. CWASM is not the parser for ordinary core `.wasm` binaries. |
+| `wasmoon_jit` | Wasmoon VMContext layout, native runtime helpers, trampolines, runtime symbol resolution, and transactional executable-code installation. |
+| `wasmoon_jit/artifact` | Bounded v9 persisted-artifact format with exact compatibility manifests and symbolic unlinked code objects. |
 
 `wasmoon_jit` intentionally belongs to the Wasmoon product side even though it consumes reusable compiler infrastructure.
 
@@ -58,7 +60,7 @@ Reusable modules must not import `Milky2018/wasmoon`, `Milky2018/wasmoon_jit`, o
 | Core `.wat` text | `wasmoon/wat` | `wasm_core/types.Module` |
 | `.wast` script | `wasmoon/wat` plus `wasmoon/wast` runner | Test commands and modules |
 | Component binary or text | `wasmoon/component/*` | Component-model structures and runtime inputs |
-| CWASM artifact | `wasmoon_jit/cwasm` | Wasmoon precompiled native module |
+| Persisted JIT artifact | `wasmoon_jit/artifact` | Verified v9 ordinary-data artifact |
 
 Core modules pass through `wasmoon/validator` before the CLI instantiates or compiles them. Component validation is implemented separately under `wasmoon/validator/component_model`.
 
@@ -80,8 +82,8 @@ Core modules pass through `wasmoon/validator` before the CLI instantiates or com
 5. Lower semantic MachV into verified AArch64 or x64 Target VCode.
 6. Expose Target VCode directly through the read-only `regalloc.FunctionView`, run the verified backtracking allocator through `machv_regalloc`, materialize its `AllocationPlan`, and construct a verified target frame.
 7. Let the selected target emit machine code, relocations, traps, and safepoint metadata into an unlinked code object.
-8. Package compiled functions as an in-memory or serialized CWASM artifact.
-9. Let `wasmoon_jit` resolve runtime symbols, install code, initialize VMContext state, and enter native code through Wasmoon-owned trampolines.
+8. Package compiled functions as an in-memory or serialized v9 artifact with symbolic relocations and an exact compatibility manifest.
+9. Let `wasmoon_jit` verify compatibility, resolve runtime symbols, transactionally install code, initialize VMContext state, and enter native code through Wasmoon-owned trampolines.
 
 At O3, MilkIR may unroll only canonical constant-trip natural loops after checked signed/unsigned I32 or I64 trip analysis and complete SSA/effect remapping. Unsupported shapes, dynamic bounds, possible arithmetic wraparound, and transformations beyond the code-growth budget remain unchanged.
 

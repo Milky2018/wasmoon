@@ -117,19 +117,19 @@ fn[Inst] Builder::append_instruction(
     }
   }
   for output in outputs {
+    let expected = reg_class_for_value_type(output.ty)
     match output.constraint {
-      Fixed(reg) =>
-        if reg.class != reg_class_for_value_type(output.ty) {
-          raise InvalidOperandConstraint
-        }
+      Fixed(reg) => if reg.class != expected { raise InvalidOperandConstraint }
       TiedTo(tied_to) =>
         if tied_to < 0 ||
           tied_to >= inputs.length() ||
           self.function.value_type(inputs[tied_to].value) != Some(output.ty) {
           raise InvalidOperandConstraint
         }
-      AnyLocation => raise InvalidOperandConstraint
-      Any => ()
+      AnyLocation | Any => ()
+    }
+    if output.preference is Some(preference) && preference.class != expected {
+      raise InvalidOperandConstraint
     }
   }
   for edge in successors {
@@ -176,7 +176,7 @@ fn[Inst] Builder::append_instruction(
       value: results[index],
       role: Def,
       constraint: output.constraint,
-      preference: None,
+      preference: output.preference,
       timing: output.timing,
       tie_id,
     })
