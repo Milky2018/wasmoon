@@ -105,24 +105,25 @@ fn jit_code_object_from_x64(
   frame_size : Int,
 ) -> JitCodeObject raise JitPipelineError {
   let plan = @x64_target.prepare_x64_link(object) catch {
-    error =>
-      raise PipelineFailure(
-        message="x64 link preparation failed: \{error.to_string()}",
-      )
+    error => raise X64LinkPreparationFailed(cause=error)
   }
   let addresses : Array[JitFuncAddrFixup] = []
   let calls : Array[JitCallFixup] = []
   let veneer_offsets = plan.veneer_offsets()
   for index, relocation in object.relocations() {
     if relocation.addend != 0L {
-      raise PipelineFailure(
+      raise InvalidJitRelocation(
+        target=X64,
+        index~,
         message="x64 JIT relocation \{index} has a non-zero addend",
       )
     }
     match relocation.kind {
       X64PcRelative32 => {
         if relocation.offset < 1 {
-          raise PipelineFailure(
+          raise InvalidJitRelocation(
+            target=X64,
+            index~,
             message="x64 rel32 relocation has invalid offset",
           )
         }
@@ -134,7 +135,9 @@ fn jit_code_object_from_x64(
       }
       Absolute64 => {
         if relocation.offset < 2 {
-          raise PipelineFailure(
+          raise InvalidJitRelocation(
+            target=X64,
+            index~,
             message="x64 absolute relocation has invalid offset",
           )
         }
@@ -145,7 +148,9 @@ fn jit_code_object_from_x64(
         })
       }
       AArch64Call26 | AArch64Jump26 | AArch64Page21 | AArch64PageOffset12 =>
-        raise PipelineFailure(
+        raise InvalidJitRelocation(
+          target=X64,
+          index~,
           message="x64 code object contains AArch64 relocation \{index}",
         )
     }
@@ -165,15 +170,14 @@ fn jit_code_object_from_aarch64(
   frame_size : Int,
 ) -> JitCodeObject raise JitPipelineError {
   let plan = @aarch64_target.prepare_aarch64_link(object) catch {
-    error =>
-      raise PipelineFailure(
-        message="AArch64 link preparation failed: \{error.to_string()}",
-      )
+    error => raise AArch64LinkPreparationFailed(cause=error)
   }
   let calls : Array[JitCallFixup] = []
   for index, relocation in object.relocations() {
     if relocation.addend != 0L {
-      raise PipelineFailure(
+      raise InvalidJitRelocation(
+        target=AArch64,
+        index~,
         message="AArch64 JIT relocation \{index} has a non-zero addend",
       )
     }
@@ -185,7 +189,9 @@ fn jit_code_object_from_aarch64(
           veneer_offset: plan.veneer_offsets()[index],
         })
       AArch64Page21 | AArch64PageOffset12 | Absolute64 | X64PcRelative32 =>
-        raise PipelineFailure(
+        raise InvalidJitRelocation(
+          target=AArch64,
+          index~,
           message="unsupported AArch64 JIT relocation \{index}",
         )
     }

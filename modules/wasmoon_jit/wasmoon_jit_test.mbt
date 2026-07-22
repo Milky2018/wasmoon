@@ -131,7 +131,7 @@ test "JIT diagnostics return invalid Wasm dialect errors" {
       inspect(
         err,
         content=(
-          #|PipelineFailure(message="invalid_wasm_dialect: InvalidMilkIR(message=\"UnverifiableInstruction(message=\\\"unknown Wasm MilkIR extension opcode 'typo'\\\")\")")
+          #|SemanticLoweringFailed(cause=InvalidMilkIR(message="UnverifiableInstruction(message=\"unknown Wasm MilkIR extension opcode 'typo'\")"))
         ),
       )
   } noraise {
@@ -353,8 +353,9 @@ test "entry trampoline reports V128 MilkIR planner gap" {
   let params : Array[@types.ValueType] = [V128]
   let results : Array[@types.ValueType] = []
   try plan_entry_trampoline_for_target(params, results, X64) catch {
-    PipelineFailure(message=msg) =>
+    UnsupportedEntrySignature(message=msg) =>
       inspect(msg.contains("V128 MilkIR entry trampoline"), content="true")
+    error => fail("unexpected entry trampoline error: \{to_repr(error)}")
   } noraise {
     _ => fail("expected V128 trampoline planning to report unsupported")
   }

@@ -24,10 +24,7 @@ fn x64_target_context(
     [0, 2, 1, 8, 9, 6, 7, 10],
     [0, 1, 2, 3, 4, 5, 6, 7],
   ) catch {
-    error =>
-      raise PipelineFailure(
-        message="\{function.name()}: invalid x64 ABI: \{error.to_string()}",
-      )
+    error => raise X64AbiInvalid(cause=error)
   }
   let mut context = @x64_target.LoweringContext::new(abi)
   for block in function.blocks() {
@@ -36,9 +33,7 @@ fn x64_target_context(
         is Some(EnvironmentField(field)) {
         guard environment_field_path is Some(resolve) &&
           resolve(field) is Some(offsets) else {
-          raise PipelineFailure(
-            message="\{function.name()}: missing x64 binding for environment field '\{field.name}'",
-          )
+          raise MissingEnvironmentField(target=X64, field=field.name)
         }
         context = context.with_environment_field(field, offsets)
       }
@@ -64,16 +59,10 @@ fn build_x64_target(
   }
   let context = x64_target_context(elaborated, environment_field_path)
   let selected = @x64_target.lower(elaborated, context) catch {
-    error =>
-      raise PipelineFailure(
-        message="\{function.name()}: x64 selection failed: \{error.to_string()}",
-      )
+    error => raise X64LoweringFailed(cause=error)
   }
   let (object, frame_size) = @x64_target.compile(selected) catch {
-    error =>
-      raise PipelineFailure(
-        message="\{function.name()}: x64 compilation failed: \{error.to_string()}",
-      )
+    error => raise X64CompilationFailed(cause=error)
   }
   { object, frame_size }
 }
@@ -95,28 +84,16 @@ fn diagnose_x64_target(
   }
   let context = x64_target_context(elaborated, environment_field_path)
   let selected = @x64_target.lower(elaborated, context) catch {
-    error =>
-      raise PipelineFailure(
-        message="\{function.name()}: x64 selection failed: \{error.to_string()}",
-      )
+    error => raise X64LoweringFailed(cause=error)
   }
   let allocation = @x64_target.allocate(selected) catch {
-    error =>
-      raise PipelineFailure(
-        message="\{function.name()}: x64 allocation failed: \{error.to_string()}",
-      )
+    error => raise X64AllocationFailed(cause=error)
   }
   let frame = @x64_target.plan_frame(selected, allocation) catch {
-    error =>
-      raise PipelineFailure(
-        message="\{function.name()}: x64 frame planning failed: \{error.to_string()}",
-      )
+    error => raise X64FramePlanningFailed(cause=error)
   }
   let object = @x64_target.emit(selected, allocation, frame) catch {
-    error =>
-      raise PipelineFailure(
-        message="\{function.name()}: x64 emission failed: \{error.to_string()}",
-      )
+    error => raise X64EmissionFailed(cause=error)
   }
   {
     target_vcode: selected.summary(),

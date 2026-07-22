@@ -22,10 +22,7 @@ pub fn host_native_target() -> NativeTarget raise JitPipelineError {
   match @jit_ffi.c_jit_host_target_arch() {
     1 => X64
     2 => AArch64
-    value =>
-      raise PipelineFailure(
-        message="unsupported host architecture tag \{value}",
-      )
+    value => raise UnsupportedHostArchitecture(tag=value)
   }
 }
 
@@ -83,10 +80,7 @@ pub fn host_operating_system_abi() -> @artifact.OperatingSystemAbi raise JitPipe
     2 => LinuxGnu
     3 => LinuxMusl
     4 => WindowsMsvc
-    value =>
-      raise PipelineFailure(
-        message="unsupported host operating-system ABI tag \{value}",
-      )
+    value => raise UnsupportedHostOsAbi(tag=value)
   }
 }
 
@@ -235,7 +229,7 @@ pub fn compile_wasm_body_artifact_function(
   canonical_type_indices? : Array[Int] = [],
 ) -> @artifact.FunctionCode raise JitPipelineError {
   if function_index < 0 {
-    raise PipelineFailure(message="negative Wasm function index")
+    raise InvalidFunctionIndex(index=function_index)
   }
   match target {
     AArch64 => {

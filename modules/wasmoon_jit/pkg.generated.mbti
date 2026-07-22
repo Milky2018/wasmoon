@@ -2,12 +2,15 @@
 package "Milky2018/wasmoon_jit"
 
 import {
+  "Milky2018/aarch64_target",
   "Milky2018/machv",
   "Milky2018/machv/code_object",
   "Milky2018/milkir",
+  "Milky2018/milkir_machv",
   "Milky2018/wasm_core/types",
   "Milky2018/wasm_milkir",
   "Milky2018/wasmoon_jit/artifact",
+  "Milky2018/x64_target",
   "moonbitlang/core/debug",
   "moonbitlang/core/hashset",
 }
@@ -439,8 +442,31 @@ pub suberror JitInstallError {
 } derive(Eq, @debug.Debug)
 
 pub suberror JitPipelineError {
-  PipelineFailure(message~ : String)
-} derive(Eq, @debug.Debug)
+  SemanticLoweringFailed(cause~ : @milkir_machv.SemanticLowerError)
+  RuntimeAbiInputInvalid(cause~ : @machv.MachVVerifyError)
+  RuntimeAbiOutputInvalid(cause~ : @machv.MachVVerifyError)
+  RuntimeAbiContractViolation(message~ : String)
+  AArch64AbiInvalid(cause~ : @aarch64_target.InternalAbiError)
+  X64AbiInvalid(cause~ : @x64_target.InternalAbiError)
+  MissingEnvironmentField(target~ : NativeTarget, field~ : String)
+  AArch64LoweringFailed(cause~ : @aarch64_target.AArch64LowerError)
+  X64LoweringFailed(cause~ : @x64_target.X64LowerError)
+  AArch64CompilationFailed(cause~ : @aarch64_target.AArch64CompileError)
+  X64CompilationFailed(cause~ : @x64_target.X64CompileError)
+  AArch64AllocationFailed(cause~ : @aarch64_target.AArch64AllocationError)
+  X64AllocationFailed(cause~ : @x64_target.X64AllocationError)
+  AArch64FramePlanningFailed(cause~ : @aarch64_target.AArch64FrameError)
+  X64FramePlanningFailed(cause~ : @x64_target.X64FrameError)
+  AArch64EmissionFailed(cause~ : @aarch64_target.AArch64EmitError)
+  X64EmissionFailed(cause~ : @x64_target.X64EmitError)
+  AArch64LinkPreparationFailed(cause~ : @aarch64_target.AArch64LinkError)
+  X64LinkPreparationFailed(cause~ : @x64_target.X64LinkError)
+  InvalidJitRelocation(target~ : NativeTarget, index~ : Int, message~ : String)
+  UnsupportedEntrySignature(message~ : String)
+  UnsupportedHostArchitecture(tag~ : Int)
+  UnsupportedHostOsAbi(tag~ : Int)
+  InvalidFunctionIndex(index~ : Int)
+} derive(@debug.Debug)
 pub impl Show for JitPipelineError
 
 // Types and methods

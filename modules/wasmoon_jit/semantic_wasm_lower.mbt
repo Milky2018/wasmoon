@@ -182,8 +182,7 @@ fn lower_wasm_body_semantic_with_environment(
   environment : WasmoonSemanticEnvironment,
 ) -> @semantic_machv.Function raise JitPipelineError {
   @wasm_machv.lower_function(function, validation_context, environment.wasm) catch {
-    error =>
-      raise PipelineFailure(message="\{function.name}: \{error.to_string()}")
+    error => raise SemanticLoweringFailed(cause=error)
   }
 }
 

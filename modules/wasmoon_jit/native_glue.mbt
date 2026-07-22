@@ -60,8 +60,31 @@ fn code_object_diagnostic_text(
 
 ///|
 pub suberror JitPipelineError {
-  PipelineFailure(message~ : String)
-} derive(Debug, Eq)
+  SemanticLoweringFailed(cause~ : @milkir_machv.SemanticLowerError)
+  RuntimeAbiInputInvalid(cause~ : @semantic_machv.MachVVerifyError)
+  RuntimeAbiOutputInvalid(cause~ : @semantic_machv.MachVVerifyError)
+  RuntimeAbiContractViolation(message~ : String)
+  AArch64AbiInvalid(cause~ : @aarch64_target.InternalAbiError)
+  X64AbiInvalid(cause~ : @x64_target.InternalAbiError)
+  MissingEnvironmentField(target~ : NativeTarget, field~ : String)
+  AArch64LoweringFailed(cause~ : @aarch64_target.AArch64LowerError)
+  X64LoweringFailed(cause~ : @x64_target.X64LowerError)
+  AArch64CompilationFailed(cause~ : @aarch64_target.AArch64CompileError)
+  X64CompilationFailed(cause~ : @x64_target.X64CompileError)
+  AArch64AllocationFailed(cause~ : @aarch64_target.AArch64AllocationError)
+  X64AllocationFailed(cause~ : @x64_target.X64AllocationError)
+  AArch64FramePlanningFailed(cause~ : @aarch64_target.AArch64FrameError)
+  X64FramePlanningFailed(cause~ : @x64_target.X64FrameError)
+  AArch64EmissionFailed(cause~ : @aarch64_target.AArch64EmitError)
+  X64EmissionFailed(cause~ : @x64_target.X64EmitError)
+  AArch64LinkPreparationFailed(cause~ : @aarch64_target.AArch64LinkError)
+  X64LinkPreparationFailed(cause~ : @x64_target.X64LinkError)
+  InvalidJitRelocation(target~ : NativeTarget, index~ : Int, message~ : String)
+  UnsupportedEntrySignature(message~ : String)
+  UnsupportedHostArchitecture(tag~ : Int)
+  UnsupportedHostOsAbi(tag~ : Int)
+  InvalidFunctionIndex(index~ : Int)
+} derive(Debug)
 
 ///|
 pub impl Show for JitPipelineError with fn output(self, logger) {
@@ -156,8 +179,7 @@ pub fn plan_milkir_integration_for_target(
       func,
       Platform,
     ) catch {
-      error =>
-        raise PipelineFailure(message="\{func.name}: \{error.to_string()}")
+      error => raise SemanticLoweringFailed(cause=error)
     }
     let compiled = build_aarch64_target(semantic)
     return {
@@ -168,7 +190,7 @@ pub fn plan_milkir_integration_for_target(
     }
   }
   let semantic = @milkir_machv.lower_core_function_with_protocol(func, Platform) catch {
-    error => raise PipelineFailure(message="\{func.name}: \{error.to_string()}")
+    error => raise SemanticLoweringFailed(cause=error)
   }
   let compiled = build_x64_target(semantic)
   return {

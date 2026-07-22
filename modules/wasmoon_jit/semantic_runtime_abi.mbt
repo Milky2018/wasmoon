@@ -5,14 +5,14 @@ fn require_mapped_value(
   value : @semantic_machv.Value,
 ) -> @semantic_machv.Value raise JitPipelineError {
   guard function.value_index(value) is Some(index) else {
-    raise PipelineFailure(
+    raise RuntimeAbiContractViolation(
       message="\{function.name()}: runtime ABI elaboration used an unmapped value",
     )
   }
   match values[index] {
     Some(mapped) => mapped
     None =>
-      raise PipelineFailure(
+      raise RuntimeAbiContractViolation(
         message="\{function.name()}: runtime ABI elaboration used an unmapped value",
       )
   }
@@ -34,7 +34,7 @@ fn mapped_block(
   block : @semantic_machv.Block,
 ) -> @semantic_machv.Block raise JitPipelineError {
   guard function.block_index(block) is Some(index) else {
-    raise PipelineFailure(
+    raise RuntimeAbiContractViolation(
       message="\{function.name()}: runtime ABI elaboration used an unmapped block",
     )
   }
@@ -52,26 +52,26 @@ fn allocation_argument_root_count(
     [Ptr64, I32, I32, I64] => 1
     [Ptr64, I32, Ptr64, I32] => {
       guard operands.length() == 4 else {
-        raise PipelineFailure(
+        raise RuntimeAbiContractViolation(
           message="\{function.name()}: allocation root count must be a compile-time i32 constant",
         )
       }
       guard function.value_index(operands[3]) is Some(index) else {
-        raise PipelineFailure(
+        raise RuntimeAbiContractViolation(
           message="\{function.name()}: allocation root count must be a compile-time i32 constant",
         )
       }
       guard integer_constants[index] is Some(count) &&
         count >= 0L &&
         count <= @types.I32_MAX.to_int64() else {
-        raise PipelineFailure(
+        raise RuntimeAbiContractViolation(
           message="\{function.name()}: allocation root count must be a compile-time i32 constant",
         )
       }
       count.to_int()
     }
     _ =>
-      raise PipelineFailure(
+      raise RuntimeAbiContractViolation(
         message="\{function.name()}: allocation helper has an unsupported ABI",
       )
   }
@@ -89,7 +89,7 @@ fn call_context(
   }
   guard operands.length() > index &&
     function.value_type(operands[index]) == Some(Ptr64) else {
-    raise PipelineFailure(
+    raise RuntimeAbiContractViolation(
       message="\{function.name()}: precise roots require a ptr64 execution environment",
     )
   }
@@ -258,10 +258,7 @@ fn elaborate_wasmoon_runtime_abi(
     return function
   }
   function.verify() catch {
-    error =>
-      raise PipelineFailure(
-        message="\{function.name()}: invalid semantic MachV before runtime ABI elaboration: \{error.to_string()}",
-      )
+    error => raise RuntimeAbiInputInvalid(cause=error)
   }
   let signature = function.signature()
   let builder = @semantic_machv.FunctionBuilder::new(
@@ -342,7 +339,7 @@ fn elaborate_wasmoon_runtime_abi(
       if operation is Call(call) {
         if !roots.is_empty() {
           if call.behavior.returns_twice {
-            raise PipelineFailure(
+            raise RuntimeAbiContractViolation(
               message="\{function.name()}: returns-twice calls cannot use a caller root scope",
             )
           }
@@ -357,12 +354,12 @@ fn elaborate_wasmoon_runtime_abi(
         }
         if hidden_safepoint {
           if call.protocol != Platform || !call.behavior.gc_safepoint {
-            raise PipelineFailure(
+            raise RuntimeAbiContractViolation(
               message="\{function.name()}: allocation helper must be a platform GC safepoint",
             )
           }
           if stack_map is Some(_) {
-            raise PipelineFailure(
+            raise RuntimeAbiContractViolation(
               message="\{function.name()}: allocation helper already has stack-map metadata",
             )
           }
@@ -429,9 +426,6 @@ fn elaborate_wasmoon_runtime_abi(
     )
   }
   builder.finish() catch {
-    error =>
-      raise PipelineFailure(
-        message="\{function.name()}: invalid semantic MachV after runtime ABI elaboration: \{error.to_string()}",
-      )
+    error => raise RuntimeAbiOutputInvalid(cause=error)
   }
 }

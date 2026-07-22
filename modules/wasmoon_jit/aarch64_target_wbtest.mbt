@@ -239,6 +239,32 @@ test "AArch64 target code executes through the production entry ABI" {
 }
 
 ///|
+test "JIT orchestration preserves the typed target link failure" {
+  let function = @milkir.Function::with_signature(
+    "typed_link_failure",
+    Signature([], []),
+  )
+  let entry = function.new_block0()
+  entry.set_terminator(Return([]))
+  let semantic = @milkir_machv.lower_core_function_with_protocol(
+    function,
+    Platform,
+  )
+  let compiled = build_aarch64_target(semantic)
+  try jit_code_object_from_x64(compiled.object, compiled.frame_size) catch {
+    error =>
+      inspect(
+        error,
+        content=(
+          #|X64LinkPreparationFailed(cause=InvalidCodeObject(message="expected an x64 code object"))
+        ),
+      )
+  } noraise {
+    _ => fail("expected x64 link preparation to reject an AArch64 object")
+  }
+}
+
+///|
 fn install_aarch64_link_plan(
   plan : @aarch64_target.AArch64LinkPlan,
   executable : ExecCode,
