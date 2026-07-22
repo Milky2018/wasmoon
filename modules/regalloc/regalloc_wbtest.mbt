@@ -1053,44 +1053,6 @@ test "plan verifier queries each block successor list once" {
 }
 
 ///|
-test "production segment queue prioritizes allocation weight" {
-  let segments : Array[AllocationSegment] = [
-    {
-      id: 0,
-      value: { id: 0, class: Int },
-      range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 2)),
-      weight: 10,
-      has_fixed_constraint: false,
-      location: None,
-    },
-    {
-      id: 1,
-      value: { id: 1, class: Int },
-      range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 2)),
-      weight: 100,
-      has_fixed_constraint: false,
-      location: None,
-    },
-    {
-      id: 2,
-      value: { id: 2, class: Int },
-      range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 2)),
-      weight: 50,
-      has_fixed_constraint: false,
-      location: None,
-    },
-  ]
-  let queue = SegmentQueue::new(segments, true)
-  for segment in segments {
-    queue.push(segment.id)
-  }
-  debug_inspect(
-    [queue.pop(), queue.pop(), queue.pop()],
-    content="[Some(1), Some(2), Some(0)]",
-  )
-}
-
-///|
 test "production fragments use local spill-cost density" {
   let range = LiveRange::LiveRange(0, { id: 0, class: Int })
   range.add_range(ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 2)))

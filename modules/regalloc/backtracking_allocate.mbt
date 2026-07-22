@@ -15,92 +15,6 @@ priv struct AllocationSegment {
 }
 
 ///|
-priv struct SegmentQueue {
-  segments : Array[AllocationSegment]
-  items : Array[Int]
-  in_queue : Array[Bool]
-  weight_priority : Bool
-}
-
-///|
-fn SegmentQueue::new(
-  segments : Array[AllocationSegment],
-  weight_priority : Bool,
-) -> SegmentQueue {
-  {
-    segments,
-    items: [],
-    in_queue: Array::make(segments.length(), false),
-    weight_priority,
-  }
-}
-
-///|
-fn SegmentQueue::higher(self : SegmentQueue, lhs : Int, rhs : Int) -> Bool {
-  let left = self.segments[lhs]
-  let right = self.segments[rhs]
-  if self.weight_priority && left.weight != right.weight {
-    left.weight > right.weight
-  } else {
-    left.id < right.id
-  }
-}
-
-///|
-fn SegmentQueue::push(self : SegmentQueue, segment : Int) -> Unit {
-  if self.in_queue[segment] {
-    return
-  }
-  self.in_queue[segment] = true
-  self.items.push(segment)
-  let mut index = self.items.length() - 1
-  while index > 0 {
-    let parent = (index - 1) / 2
-    if !self.higher(self.items[index], self.items[parent]) {
-      break
-    }
-    let temporary = self.items[index]
-    self.items[index] = self.items[parent]
-    self.items[parent] = temporary
-    index = parent
-  }
-}
-
-///|
-fn SegmentQueue::pop(self : SegmentQueue) -> Int? {
-  if self.items.is_empty() {
-    return None
-  }
-  let first = self.items[0]
-  self.in_queue[first] = false
-  let last = self.items.pop().unwrap()
-  if !self.items.is_empty() {
-    self.items[0] = last
-    let mut index = 0
-    while true {
-      let left = index * 2 + 1
-      if left >= self.items.length() {
-        break
-      }
-      let right = left + 1
-      let mut higher = left
-      if right < self.items.length() &&
-        self.higher(self.items[right], self.items[left]) {
-        higher = right
-      }
-      if !self.higher(self.items[higher], self.items[index]) {
-        break
-      }
-      let temporary = self.items[index]
-      self.items[index] = self.items[higher]
-      self.items[higher] = temporary
-      index = higher
-    }
-  }
-  Some(first)
-}
-
-///|
 fn use_weight(use_position : UsePosition) -> Int {
   let role_weight = match use_position.kind {
     LiveUse => 1000
@@ -168,25 +82,6 @@ fn build_allocation_segments(
     }
   }
   (segments, segments_by_value)
-}
-
-///|
-fn segment_uses_clobbered_register(
-  segment : AllocationSegment,
-  reg : PhysicalReg,
-  clobbers : Map[(Int, Int), Array[ProgramPoint]],
-) -> Bool {
-  match clobbers.get(physical_reg_key(reg)) {
-    Some(points) =>
-      for point in points {
-        if segment.range.start.compare_with_order(point, []) < 0 &&
-          point.compare_with_order(segment.range.end, []) < 0 {
-          return true
-        }
-      }
-    None => ()
-  }
-  false
 }
 
 ///|
@@ -383,135 +278,18 @@ fn[F : FunctionView] allocate_segments_backtracking(
   environment : MachineEnv,
   ranges : LiveRangeSet,
   enable_eviction : Bool,
-) -> (Array[AllocationSegment], Array[Array[Int]], ProductionBundlePlan) {
+) -> (
+  Array[AllocationSegment],
+  Array[Array[Int]],
+  Array[AllocationBundle],
+  Array[Int],
+) {
   let (segments, segments_by_value) = build_allocation_segments(ranges)
   let bundle_plan = build_production_bundle_plan(function, ranges, segments)
-  let occupied : Array[Array[Int]] = []
-  for _ in environment.allocatable_regs {
-    occupied.push([])
-  }
-  let clobbers = collect_function_clobber_points(function)
-  let preferred_by_value : Array[PhysicalReg?] = Array::make(
-    function.value_count(),
-    None,
+  let (bundles, segment_owner) = allocate_production_bundles(
+    function, environment, ranges, segments, bundle_plan, enable_eviction,
   )
-  let (edge_affinities, is_edge_argument, is_edge_target) = build_edge_affinities(
-    function,
-  )
-  let edge_target_registers = Array::make(
-    environment.allocatable_regs.length(),
-    false,
-  )
-  let queue = SegmentQueue::new(segments, enable_eviction)
-  for segment in segments {
-    queue.push(segment.id)
-  }
-  while queue.pop() is Some(segment_id) {
-    let segment = segments[segment_id]
-    if segment.location is Some(_) {
-      continue
-    }
-    let mut free_register = -1
-    let mut eviction_register = -1
-    let eviction_conflicts : Array[Int] = []
-    let mut eviction_cost : Int? = None
-    let register_order : Array[Int] = []
-    if segment_fixed_hint(ranges, segment) is Some(fixed) {
-      push_register_candidate(
-        register_order,
-        register_index(environment.allocatable_regs, fixed),
-      )
-    }
-    if segment_preference_hint(ranges, segment, environment.allocatable_regs)
-      is Some(preferred) {
-      push_register_candidate(
-        register_order,
-        register_index(environment.allocatable_regs, preferred),
-      )
-    }
-    if preferred_by_value[segment.value.id] is Some(preferred) {
-      push_register_candidate(
-        register_order,
-        register_index(environment.allocatable_regs, preferred),
-      )
-    }
-    for related in edge_affinities[segment.value.id] {
-      if preferred_by_value[related] is Some(preferred) {
-        push_register_candidate(
-          register_order,
-          register_index(environment.allocatable_regs, preferred),
-        )
-      }
-    }
-    if is_edge_argument[segment.value.id] {
-      for index in 0..<environment.allocatable_regs.length() {
-        if !edge_target_registers[index] {
-          push_register_candidate(register_order, Some(index))
-        }
-      }
-    }
-    for index in 0..<environment.allocatable_regs.length() {
-      push_register_candidate(register_order, Some(index))
-    }
-    for register_index in register_order {
-      let reg = environment.allocatable_regs[register_index]
-      if reg.class != segment.value.class ||
-        segment_uses_clobbered_register(segment, reg, clobbers) {
-        continue
-      }
-      let conflicts = conflicting_segments(
-        segments,
-        occupied[register_index],
-        segment,
-        ranges.block_order,
-      )
-      if conflicts.is_empty() {
-        free_register = register_index
-        break
-      }
-      let mut cost = 0
-      for conflict in conflicts {
-        cost = cost + segments[conflict].weight
-      }
-      if enable_eviction &&
-        cost < segment.weight &&
-        (eviction_cost is None || cost < eviction_cost.unwrap()) {
-        eviction_register = register_index
-        eviction_cost = Some(cost)
-        eviction_conflicts.clear()
-        for conflict in conflicts {
-          eviction_conflicts.push(conflict)
-        }
-      }
-    }
-    let selected = if free_register >= 0 {
-      free_register
-    } else {
-      eviction_register
-    }
-    if selected < 0 {
-      segment.location = Some(SegmentSpill)
-      continue
-    }
-    for conflict in eviction_conflicts {
-      remove_occupied_segment(occupied, selected, conflict)
-      segments[conflict].location = None
-      queue.push(conflict)
-    }
-    let reg = environment.allocatable_regs[selected]
-    segment.location = Some(SegmentReg(reg))
-    preferred_by_value[segment.value.id] = Some(reg)
-    if is_edge_target[segment.value.id] {
-      edge_target_registers[selected] = true
-    }
-    insert_occupied_segment(
-      segments,
-      occupied[selected],
-      segment_id,
-      ranges.block_order,
-    )
-  }
-  (segments, segments_by_value, bundle_plan)
+  (segments, segments_by_value, bundles, segment_owner)
 }
 
 ///|
@@ -985,7 +763,7 @@ fn[F : FunctionView] allocate_fragmented(
   enable_eviction : Bool,
 ) -> AllocationPlan raise VerifyError {
   let ranges = build_function_live_ranges(function)
-  let (segments, segments_by_value, _) = allocate_segments_backtracking(
+  let (segments, segments_by_value, _, _) = allocate_segments_backtracking(
     function, environment, ranges, enable_eviction,
   )
   let plan = AllocationPlan::new(function.value_count())
