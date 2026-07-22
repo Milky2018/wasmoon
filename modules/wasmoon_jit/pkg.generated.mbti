@@ -142,6 +142,8 @@ pub fn gc_runtime_fixup_idx(Int) -> Int
 
 pub fn gc_safepoint_metadata_to_root_count(Int64) -> Int
 
+pub fn gc_set_code_object_safepoints(Int64, Int, Array[@code_object.SafepointSite]) -> Bool
+
 pub fn gc_set_context_heap_ptr(Int64, Int64) -> Unit
 
 pub fn gc_set_func_safepoints(Int64, Int, Array[@cwasm.GcSafepoint], Bytes) -> Bool
@@ -461,6 +463,8 @@ pub fn wasm_import_identity(Int, String, String, @types.FuncType) -> @artifact.I
 pub fn wasm_runtime_symbols() -> @wasm_milkir.RuntimeSymbols
 
 pub fn wasm_trap_payload(String) -> Int
+
+pub fn wasmoon_runtime_external_symbols() -> Array[@machv.ExternalSymbol]
 
 // Errors
 pub suberror ArtifactIncompatible {

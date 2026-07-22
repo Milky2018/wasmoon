@@ -7,7 +7,7 @@
 pub struct JITFunction {
   func_idx : Int
   name : String
-  priv exec_code : @wasmoon_jit.ExecCode
+  priv func_ptr : Int64
   priv code_size : Int
   param_types : Array[@types.ValueType] // Parameter types for proper register allocation
   result_types : Array[@types.ValueType] // Return types (empty = void, 1 = single, 2+ = multi-value)
@@ -39,6 +39,8 @@ pub suberror JITModuleLoadError {
     func_name~ : String,
     code_size~ : Int
   )
+  ArtifactInstallationFailed(cause~ : @wasmoon_jit.JitInstallError)
+  FunctionMetadataRegistrationFailed(func_idx~ : Int, message~ : String)
 } derive(Debug)
 
 ///|
@@ -52,12 +54,12 @@ pub impl Show for JITModuleLoadError with fn output(self, logger) {
 fn JITFunction::JITFunction(
   func_idx : Int,
   name : String,
-  exec_code : @wasmoon_jit.ExecCode,
+  func_ptr : Int64,
   code_size : Int,
   param_types : Array[@types.ValueType],
   result_types : Array[@types.ValueType],
 ) -> JITFunction {
-  { func_idx, name, exec_code, code_size, param_types, result_types }
+  { func_idx, name, func_ptr, code_size, param_types, result_types }
 }
 
 ///|
@@ -78,8 +80,10 @@ struct JITModule {
   mut context_ptr : Int64
   mut debug_db : @wasmoon_jit.JITDebugDB?
   mut last_trap_report : @wasmoon_jit.TrapReport?
-  // Keep generated import trampolines alive (GC-managed executable memory).
-  import_exec_codes : Array[@wasmoon_jit.ExecCode]
+  // Keep transitional standalone code and generated import trampolines alive.
+  owned_exec_codes : Array[@wasmoon_jit.ExecCode]
+  // Keep the transactionally installed artifact alive.
+  mut installed_code : @wasmoon_jit.InstalledCode?
   // Negative runtime fixup indices -> runtime helper entry points.
   direct_call_targets : Map[Int, Int64]
   mut wasi_stdout_callback : ((Bytes) -> Unit)?
@@ -97,7 +101,8 @@ pub fn JITModule::JITModule() -> JITModule {
     context_ptr: 0L,
     debug_db: None,
     last_trap_report: None,
-    import_exec_codes: [],
+    owned_exec_codes: [],
+    installed_code: None,
     direct_call_targets: Map([]),
     wasi_stdout_callback: None,
     wasi_stderr_callback: None,
@@ -117,7 +122,7 @@ fn apply_func_addr_fixups(
       continue
     }
     if jit_module.functions.get(entry.func_idx) is Some(func) {
-      let exec_ptr = func.exec_code.ptr()
+      let exec_ptr = func.func_ptr
       @wasmoon_jit.patch_func_addr_fixups_for_target(
         precompiled.target,
         exec_ptr,
@@ -154,7 +159,7 @@ fn apply_call_fixups(
       continue
     }
     if jit_module.functions.get(entry.func_idx) is Some(func) {
-      let exec_ptr = func.exec_code.ptr()
+      let exec_ptr = func.func_ptr
       @wasmoon_jit.patch_call_fixups_for_target(
         precompiled.target,
         exec_ptr,
@@ -266,7 +271,7 @@ pub fn JITModule::load_with_imports(
                       func_table_ptr,
                     )
                   }
-                  jit_module.import_exec_codes.push(ec)
+                  jit_module.owned_exec_codes.push(ec)
                   ctx.set_func(i, ec.ptr())
                 }
                 None =>
@@ -311,11 +316,12 @@ pub fn JITModule::load_with_imports(
             let jit_func = JITFunction::JITFunction(
               entry.func_idx,
               entry.name,
-              ec,
+              ec.ptr(),
               entry.code.length(),
               param_types,
               result_types,
             )
+            jit_module.owned_exec_codes.push(ec)
             jit_module.functions.set(entry.func_idx, jit_func)
             jit_module.by_name.set(entry.name, entry.func_idx)
             // Set function pointer in context's function table
@@ -343,13 +349,239 @@ pub fn JITModule::load_with_imports(
 
       // Build sorted address_ranges for binary search in find_func_by_pc
       for func_idx, f in jit_module.functions {
-        let start = f.exec_code.ptr()
+        let start = f.func_ptr
         let end_ = start + f.code_size.to_int64()
         jit_module.address_ranges.push({ start, end: end_, func_idx })
       }
       jit_module.address_ranges.sort_by(fn(a, b) { a.start.compare(b.start) })
     }
   }
+  jit_module
+}
+
+///|
+fn artifact_target_architecture(
+  artifact : @artifact.Artifact,
+) -> @cwasm.TargetArch {
+  match artifact.manifest.target.architecture {
+    X64 => X86_64
+    AArch64 => AArch64
+  }
+}
+
+///|
+fn artifact_context_function_count(
+  artifact : @artifact.Artifact,
+  signature_count : Int,
+) -> Int {
+  let mut count = signature_count
+  for import_ in artifact.imports {
+    if import_.function_index >= count {
+      count = import_.function_index + 1
+    }
+  }
+  for function in artifact.functions {
+    if function.identity.function_index >= count {
+      count = function.identity.function_index + 1
+    }
+  }
+  count
+}
+
+///|
+fn artifact_function_name(
+  function_index : Int,
+  function_names : Array[String],
+) -> String {
+  if function_index >= 0 &&
+    function_index < function_names.length() &&
+    !function_names[function_index].is_empty() {
+    function_names[function_index]
+  } else {
+    "func_\{function_index}"
+  }
+}
+
+///|
+fn stage_artifact_imports(
+  artifact : @artifact.Artifact,
+  ctx : JITContext,
+  func_signatures : Array[(Array[@types.ValueType], Array[@types.ValueType])],
+  external_imports : Map[String, Map[String, Int64]],
+  owned_exec_codes : Array[@wasmoon_jit.ExecCode],
+) -> Map[String, Int64] raise JITModuleLoadError {
+  let import_targets : Map[String, Int64] = Map([])
+  let target = artifact_target_architecture(artifact)
+  for import_ in artifact.imports {
+    let function_index = import_.function_index
+    let resolved = @wasmoon_jit.resolve_import_function_ptr(
+      external_imports,
+      import_.module_name,
+      import_.function_name,
+    )
+    guard resolved is Some(raw_pointer) else {
+      raise UnsupportedImport(
+        import_idx=function_index,
+        module_name=import_.module_name,
+        func_name=import_.function_name,
+      )
+    }
+    let pointer = if raw_pointer < 0L {
+      let host_func_addr = (-(raw_pointer + 1L)).to_int()
+      let (param_types, result_types) = if function_index >= 0 &&
+        function_index < func_signatures.length() {
+        func_signatures[function_index]
+      } else {
+        ([], [])
+      }
+      let trampoline = @wasmoon_jit.build_hostcall_import_trampoline_for_target(
+        param_types, result_types, host_func_addr, target,
+      ) catch {
+        error =>
+          raise ImportTrampolineCompilationFailed(
+            import_idx=function_index,
+            module_name=import_.module_name,
+            func_name=import_.function_name,
+            message=error.to_string(),
+          )
+      }
+      guard @wasmoon_jit.ExecCode::try_alloc(trampoline.code) is Some(code) else {
+        raise ImportTrampolineAllocationFailed(
+          import_idx=function_index,
+          module_name=import_.module_name,
+          func_name=import_.function_name,
+          code_size=trampoline.code.length(),
+        )
+      }
+      for fixup in trampoline.func_addr_fixups {
+        @wasmoon_jit.patch_func_addr_fixup_raw_for_target(
+          target,
+          code.ptr(),
+          fixup.offset,
+          fixup.reg,
+          fixup.func_idx,
+          ctx.get_func_table_ptr(),
+        )
+      }
+      let pointer = code.ptr()
+      owned_exec_codes.push(code)
+      pointer
+    } else {
+      raw_pointer
+    }
+    import_targets.set(import_.symbol.name, pointer)
+  }
+  import_targets
+}
+
+///|
+/// Load a verified v9 artifact without exposing any partially initialized
+/// context, function table, executable mapping, or metadata registration.
+pub fn JITModule::load_artifact(
+  loaded : @wasmoon_jit.LoadedArtifact,
+  func_signatures : Array[(Array[@types.ValueType], Array[@types.ValueType])],
+  function_names? : Array[String] = [],
+  debug_db? : @wasmoon_jit.JITDebugDB? = None,
+) -> JITModule raise JITModuleLoadError {
+  JITModule::load_artifact_with_imports(
+    loaded,
+    func_signatures,
+    Map([]),
+    function_names~,
+    debug_db~,
+  )
+}
+
+///|
+/// Load a verified v9 artifact with embedding-provided import addresses.
+pub fn JITModule::load_artifact_with_imports(
+  loaded : @wasmoon_jit.LoadedArtifact,
+  func_signatures : Array[(Array[@types.ValueType], Array[@types.ValueType])],
+  external_imports : Map[String, Map[String, Int64]],
+  function_names? : Array[String] = [],
+  debug_db? : @wasmoon_jit.JITDebugDB? = None,
+) -> JITModule raise JITModuleLoadError {
+  let artifact = loaded.artifact()
+  let total_funcs = artifact_context_function_count(
+    artifact,
+    func_signatures.length(),
+  )
+  guard JITContext::try_alloc(total_funcs) is Some(ctx) else {
+    raise ContextAllocationFailed(total_funcs~)
+  }
+  let jit_module = JITModule::JITModule()
+  let import_targets = stage_artifact_imports(
+    artifact,
+    ctx,
+    func_signatures,
+    external_imports,
+    jit_module.owned_exec_codes,
+  )
+  let runtime_symbols = @wasmoon_jit.RuntimeSymbolResolver::with_wasmoon_runtime_symbols()
+  let installer = @wasmoon_jit.JitCodeInstaller::new(fn(target) {
+    match target {
+      External(symbol) =>
+        match import_targets.get(symbol.name) {
+          Some(pointer) => Some(pointer)
+          None => runtime_symbols.resolve(symbol.name)
+        }
+      Code(_) | Data(_) => None
+    }
+  })
+  let installed = installer.install(loaded) catch {
+    error => raise ArtifactInstallationFailed(cause=error)
+  }
+  for function in installed.functions() {
+    let identity = function.identity()
+    if !@wasmoon_jit.gc_set_code_object_safepoints(
+        ctx.ptr(),
+        identity.function_index,
+        function.safepoints(),
+      ) {
+      raise FunctionMetadataRegistrationFailed(
+        func_idx=identity.function_index,
+        message="failed to register GC safepoints",
+      )
+    }
+  }
+  for import_ in installed.imports() {
+    ctx.set_func(import_.identity().function_index, import_.address())
+  }
+  for function in installed.functions() {
+    let identity = function.identity()
+    let function_index = identity.function_index
+    ctx.set_func(function_index, function.entry_address())
+    let (param_types, result_types) = if function_index >= 0 &&
+      function_index < func_signatures.length() {
+      func_signatures[function_index]
+    } else {
+      ([], [])
+    }
+    let name = artifact_function_name(function_index, function_names)
+    jit_module.functions.set(
+      function_index,
+      JITFunction(
+        function_index,
+        name,
+        function.entry_address(),
+        function.code_size(),
+        param_types,
+        result_types,
+      ),
+    )
+    jit_module.by_name.set(name, function_index)
+    jit_module.address_ranges.push({
+      start: function.code_address(),
+      end: function.code_address() + function.code_size().to_int64(),
+      func_idx: function_index,
+    })
+  }
+  jit_module.address_ranges.sort_by(fn(a, b) { a.start.compare(b.start) })
+  jit_module.context = Some(ctx)
+  jit_module.context_ptr = ctx.ptr()
+  jit_module.debug_db = debug_db
+  jit_module.installed_code = Some(installed)
+  jit_module.cancellation_safepoints = artifact.manifest.policy.cancellation_safepoints
   jit_module
 }
 
@@ -396,13 +628,14 @@ pub fn JITModule::from_single_function(
           let jit_func = JITFunction::JITFunction(
             0,
             func_name,
-            ec,
+            ec.ptr(),
             code_bytes.length(),
             param_types,
             result_types,
           )
           // Create module
           let jit_module = JITModule::JITModule()
+          jit_module.owned_exec_codes.push(ec)
           jit_module.functions.set(0, jit_func)
           jit_module.by_name.set(func_name, 0)
           let context_ptr = ctx.ptr()
@@ -490,8 +723,10 @@ pub fn JITModule::get_func_by_name(
 /// Get function pointer by function index (for indirect table initialization)
 /// Returns the executable code pointer for the function, or 0 if not found
 pub fn JITModule::get_func_ptr(self : JITModule, func_idx : Int) -> Int64 {
+  // Keep transaction-owned mappings reachable while returning their address.
+  self.installed_code |> ignore
   match self.functions.get(func_idx) {
-    Some(f) => f.exec_code.ptr()
+    Some(f) => f.func_ptr
     None => {
       let func_table_ptr = self.get_func_table_ptr()
       let func_count = self.get_func_count()
@@ -550,7 +785,7 @@ pub fn JITModule::get_func_ptr_by_name(
   name : String,
 ) -> Int64 {
   match self.get_func_by_name(name) {
-    Some(f) => f.exec_code.ptr()
+    Some(f) => f.func_ptr
     None => 0L
   }
 }
@@ -611,7 +846,7 @@ pub fn JITModule::call_with_context(
       self.gc_use_func_safepoints(func.func_idx)
       self.gc_begin_frame(func.func_idx.to_int64())
       ctx.call_multi_return(
-        func.exec_code.ptr(),
+        func.func_ptr,
         args,
         func.param_types,
         results,

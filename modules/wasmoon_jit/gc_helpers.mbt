@@ -385,6 +385,37 @@ pub fn gc_set_func_safepoints(
 }
 
 ///|
+/// Install verified code-object safepoints into context-owned GC metadata.
+pub fn gc_set_code_object_safepoints(
+  ctx_ptr : Int64,
+  func_idx : Int,
+  safepoints : Array[@code_object.SafepointSite],
+) -> Bool {
+  let entries : Array[@cwasm.GcSafepoint] = []
+  let root_counts : Array[Int] = []
+  for site in safepoints {
+    let root_count = match site.stack_map {
+      Some(stack_map) => stack_map.argument_root_count
+      None => 0
+    }
+    entries.push(
+      GcSafepoint(
+        site.offset,
+        Array::makei(root_count, index => index),
+        root_count.to_int64(),
+      ),
+    )
+    root_counts.push(root_count)
+  }
+  gc_set_func_safepoints(
+    ctx_ptr,
+    func_idx,
+    entries,
+    build_gc_stackmap_blob_v2(entries, root_counts),
+  )
+}
+
+///|
 pub fn gc_use_func_safepoints(ctx_ptr : Int64, func_idx : Int) -> Unit {
   @jit_ffi.c_jit_gc_use_func_safepoints(ctx_ptr, func_idx)
 }
