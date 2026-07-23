@@ -177,16 +177,31 @@ fn emit_stack_access(
     F64 => (8, 0xFD400000U, 0xFD000000U)
     V128 => (16, 0x3DC00000U, 0x3D800000U)
   }
-  if offset < 0 || offset % scale != 0 || offset / scale > 4095 {
+  if offset < 0 || offset % scale != 0 {
     raise FrameOffsetOutOfRange(offset~)
   }
   let base = if load { load_base } else { store_base }
-  buffer.emit_word(
-    base |
-    ((offset / scale).reinterpret_as_uint() << 10) |
-    (31U << 5) |
-    reg_bits(reg),
-  )
+  if offset / scale <= 4095 {
+    buffer.emit_word(
+      base |
+      ((offset / scale).reinterpret_as_uint() << 10) |
+      (31U << 5) |
+      reg_bits(reg),
+    )
+  } else {
+    let primary = stack_address_scratch()
+    let address = if reg == primary {
+      if load {
+        reg
+      } else {
+        int_transfer_scratch()
+      }
+    } else {
+      primary
+    }
+    emit_stack_address(buffer, address, offset)
+    buffer.emit_word(base | (reg_bits(address) << 5) | reg_bits(reg))
+  }
 }
 
 ///|
@@ -622,26 +637,39 @@ fn emit_stack_address(
   destination : @vcode.PhysicalReg,
   offset : Int,
 ) -> Unit {
-  if offset <= 4095 {
+  let pages = offset / 4096
+  let remainder = offset % 4096
+  if pages == 0 {
     buffer.emit_word(
       0x91000000U |
-      (offset.reinterpret_as_uint() << 10) |
+      (remainder.reinterpret_as_uint() << 10) |
       (31U << 5) |
       reg_bits(destination),
     )
-  } else if offset % 4096 == 0 && offset / 4096 <= 4095 {
+  } else if pages <= 4095 {
     buffer.emit_word(
       0x91400000U |
-      ((offset / 4096).reinterpret_as_uint() << 10) |
+      (pages.reinterpret_as_uint() << 10) |
       (31U << 5) |
       reg_bits(destination),
     )
+    if remainder > 0 {
+      buffer.emit_word(
+        0x91000000U |
+        (remainder.reinterpret_as_uint() << 10) |
+        (reg_bits(destination) << 5) |
+        reg_bits(destination),
+      )
+    }
   } else {
-    buffer.emit_word(0x910003E0U | reg_bits(destination))
-    let scratch = @vcode.PhysicalReg::new(16, Int)
-    emit_constant(buffer, W64, scratch, offset.to_uint64())
+    emit_constant(buffer, W64, destination, offset.to_uint64())
     buffer.emit_word(
-      encode_three_register(0x8B000000U, destination, destination, scratch),
+      encode_three_register(
+        0x8B000000U,
+        destination,
+        @vcode.PhysicalReg::new(31, Int),
+        destination,
+      ),
     )
   }
 }
@@ -2045,18 +2073,7 @@ fn emit_register_save_or_restore(
 ) -> Unit raise AArch64EmitError {
   match reg.class {
     Int => emit_stack_access(buffer, load, I64, reg, offset)
-    FpVector => {
-      if offset < 0 || offset % 8 != 0 || offset / 8 > 4095 {
-        raise FrameOffsetOutOfRange(offset~)
-      }
-      let base = if load { 0xFD400000U } else { 0xFD000000U }
-      buffer.emit_word(
-        base |
-        ((offset / 8).reinterpret_as_uint() << 10) |
-        (31U << 5) |
-        reg_bits(reg),
-      )
-    }
+    FpVector => emit_stack_access(buffer, load, F64, reg, offset)
   }
 }
 
@@ -2233,11 +2250,8 @@ fn[Inst] emit_edits_at(
   }
   let resolved = @vcode.resolve_parallel_moves(
     moves,
-    [@vcode.PhysicalReg::new(16, Int), @vcode.PhysicalReg::new(17, Int)],
-    [
-      @vcode.PhysicalReg::new(16, FpVector),
-      @vcode.PhysicalReg::new(17, FpVector),
-    ],
+    int_transfer_scratch_regs(),
+    fp_transfer_scratch_regs(),
   ) catch {
     error => raise InvalidParallelMove(cause=error)
   }
@@ -2292,10 +2306,13 @@ fn emit_call_arguments(
       ),
     )
   }
-  let int_scratch = if callee is Some(_) || result_area is Some(_) {
-    [@vcode.PhysicalReg::new(16, Int)]
+  let int_scratch = if (
+      callee is Some((_, reg)) && reg == int_transfer_scratch()
+    ) ||
+    (result_area is Some((_, reg)) && reg == int_transfer_scratch()) {
+    [stack_address_scratch()]
   } else {
-    [@vcode.PhysicalReg::new(16, Int), @vcode.PhysicalReg::new(17, Int)]
+    int_transfer_scratch_regs()
   }
   let plan = @vcode.plan_call_transfers(
     allocation,
@@ -2303,10 +2320,7 @@ fn emit_call_arguments(
     stack_base,
     stack_size,
     int_scratch,
-    [
-      @vcode.PhysicalReg::new(16, FpVector),
-      @vcode.PhysicalReg::new(17, FpVector),
-    ],
+    fp_transfer_scratch_regs(),
     allocation.safepoint_roots(instruction).map(entry => entry.1),
   ) catch {
     error => raise InvalidCallTransfer(cause=error)
@@ -2449,11 +2463,8 @@ fn emit_function_inputs(
   }
   let resolved = @vcode.resolve_parallel_moves(
     register_moves,
-    [@vcode.PhysicalReg::new(16, Int), @vcode.PhysicalReg::new(17, Int)],
-    [
-      @vcode.PhysicalReg::new(16, FpVector),
-      @vcode.PhysicalReg::new(17, FpVector),
-    ],
+    int_transfer_scratch_regs(),
+    fp_transfer_scratch_regs(),
   ) catch {
     error => raise InvalidParallelMove(cause=error)
   }
@@ -2470,10 +2481,7 @@ fn emit_function_inputs(
           frame.frame_size() + offset,
         )
       Stack(slot) => {
-        let scratch = @vcode.PhysicalReg::new(
-          16,
-          @vcode.reg_class_for_value_type(ty),
-        )
+        let scratch = transfer_scratch_for_type(ty)
         emit_stack_access(
           buffer,
           true,
@@ -2541,11 +2549,8 @@ fn emit_incoming_call_results(
   }
   let resolved = @vcode.resolve_parallel_moves(
     register_moves,
-    [@vcode.PhysicalReg::new(16, Int), @vcode.PhysicalReg::new(17, Int)],
-    [
-      @vcode.PhysicalReg::new(16, FpVector),
-      @vcode.PhysicalReg::new(17, FpVector),
-    ],
+    int_transfer_scratch_regs(),
+    fp_transfer_scratch_regs(),
   ) catch {
     error => raise InvalidParallelMove(cause=error)
   }
@@ -2568,10 +2573,7 @@ fn emit_incoming_call_results(
           result_area_base + offset,
         )
       Stack(slot) => {
-        let scratch = @vcode.PhysicalReg::new(
-          16,
-          @vcode.reg_class_for_value_type(ty),
-        )
+        let scratch = transfer_scratch_for_type(ty)
         emit_stack_access(buffer, true, ty, scratch, result_area_base + offset)
         emit_stack_access(
           buffer,
@@ -2646,33 +2648,10 @@ fn emit_function_outputs(
   }
   for result in area_results {
     let (output_instruction, ty, offset) = result
-    let address = match
-      value_home(function, allocation, output_instruction, 0) {
-      Register(address) => address
-      Stack(slot) => {
-        let scratch = @vcode.PhysicalReg::new(16, Int)
-        emit_stack_access(
-          buffer,
-          true,
-          Ptr64,
-          scratch,
-          frame.slot_offset(slot).unwrap(),
-        )
-        scratch
-      }
-    }
     let value = match value_home(function, allocation, output_instruction, 1) {
       Register(value) => value
       Stack(slot) => {
-        let scratch_id = if @vcode.reg_class_for_value_type(ty) == Int {
-          17
-        } else {
-          16
-        }
-        let scratch = @vcode.PhysicalReg::new(
-          scratch_id,
-          @vcode.reg_class_for_value_type(ty),
-        )
+        let scratch = transfer_scratch_for_type(ty)
         emit_stack_access(
           buffer,
           true,
@@ -2683,15 +2662,29 @@ fn emit_function_outputs(
         scratch
       }
     }
+    // Load the address after the value: a far value reload uses IP0 while an
+    // address spilled to the stack is itself materialized into IP0.
+    let address = match
+      value_home(function, allocation, output_instruction, 0) {
+      Register(address) => address
+      Stack(slot) => {
+        let scratch = stack_address_scratch()
+        emit_stack_access(
+          buffer,
+          true,
+          Ptr64,
+          scratch,
+          frame.slot_offset(slot).unwrap(),
+        )
+        scratch
+      }
+    }
     emit_result_area_access(buffer, false, ty, address~, value~, offset)
   }
   let resolved = @vcode.resolve_parallel_moves(
     register_moves,
-    [@vcode.PhysicalReg::new(16, Int), @vcode.PhysicalReg::new(17, Int)],
-    [
-      @vcode.PhysicalReg::new(16, FpVector),
-      @vcode.PhysicalReg::new(17, FpVector),
-    ],
+    int_transfer_scratch_regs(),
+    fp_transfer_scratch_regs(),
   ) catch {
     error => raise InvalidParallelMove(cause=error)
   }

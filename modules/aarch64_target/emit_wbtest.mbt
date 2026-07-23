@@ -31,6 +31,83 @@ test "AArch64 stack access encodings preserve width and scaled offset" {
 }
 
 ///|
+test "AArch64 far stack accesses use IP0 and fall back to IP1 on conflict" {
+  let buffer = CodeBuffer::new()
+  emit_stack_access(buffer, false, I32, @vcode.PhysicalReg::new(0, Int), 17600)
+  emit_stack_access(
+    buffer,
+    true,
+    F32,
+    @vcode.PhysicalReg::new(0, FpVector),
+    17600,
+  )
+  emit_stack_access(
+    buffer,
+    true,
+    V128,
+    @vcode.PhysicalReg::new(1, FpVector),
+    65536,
+  )
+  emit_stack_access(buffer, true, I64, stack_address_scratch(), 32768)
+  emit_stack_access(buffer, false, I64, stack_address_scratch(), 32768)
+  debug_inspect(
+    buffer.code,
+    content=(
+      #|[
+      #|  0xf0,
+      #|  0x13,
+      #|  0x40,
+      #|  0x91,
+      #|  0x10,
+      #|  0x02,
+      #|  0x13,
+      #|  0x91,
+      #|  0x00,
+      #|  0x02,
+      #|  0x00,
+      #|  0xb9,
+      #|  0xf0,
+      #|  0x13,
+      #|  0x40,
+      #|  0x91,
+      #|  0x10,
+      #|  0x02,
+      #|  0x13,
+      #|  0x91,
+      #|  0x00,
+      #|  0x02,
+      #|  0x40,
+      #|  0xbd,
+      #|  0xf0,
+      #|  0x43,
+      #|  0x40,
+      #|  0x91,
+      #|  0x01,
+      #|  0x02,
+      #|  0xc0,
+      #|  0x3d,
+      #|  0xf0,
+      #|  0x23,
+      #|  0x40,
+      #|  0x91,
+      #|  0x10,
+      #|  0x02,
+      #|  0x40,
+      #|  0xf9,
+      #|  0xf1,
+      #|  0x23,
+      #|  0x40,
+      #|  0x91,
+      #|  0x30,
+      #|  0x02,
+      #|  0x00,
+      #|  0xf9,
+      #|]
+    ),
+  )
+}
+
+///|
 test "AArch64 stack allocation probes every guard-page interval" {
   let buffer = CodeBuffer::new()
   emit_sp_adjust(buffer, true, 8192)

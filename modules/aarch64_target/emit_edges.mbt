@@ -33,11 +33,8 @@ fn resolve_edge_moves(
 ) -> Array[@vcode.ParallelMove] raise AArch64EmitError {
   @vcode.resolve_parallel_moves(
     edge_parallel_moves(function, allocation, block, successor_index),
-    [@vcode.PhysicalReg::new(16, Int), @vcode.PhysicalReg::new(17, Int)],
-    [
-      @vcode.PhysicalReg::new(16, FpVector),
-      @vcode.PhysicalReg::new(17, FpVector),
-    ],
+    int_transfer_scratch_regs(),
+    fp_transfer_scratch_regs(),
   ) catch {
     error => raise InvalidParallelMove(cause=error)
   }

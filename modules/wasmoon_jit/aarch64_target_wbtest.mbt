@@ -148,6 +148,104 @@ test "Wasmoon runtime ABI elaboration makes roots and stack maps explicit" {
 }
 
 ///|
+test "Wasmoon runtime ABI elaboration shares one root-scope stack object" {
+  let builder = @semantic_machv.FunctionBuilder::new(
+    "shared_root_scope_object",
+    Internal,
+    [Ptr64, GcRef64, GcRef64, GcRef64],
+    [I64],
+  )
+  let parameters = builder.parameters()
+  let first_call = @semantic_machv.SemanticCall::new(
+    External(@semantic_machv.ExternalSymbol::new("host.first")),
+    @semantic_machv.Signature::new([Ptr64], [I64]),
+    Platform,
+    @semantic_machv.CallBehavior::new(ReadWrite, true, false, true, false),
+  )
+  builder.emit_with_metadata(
+    Call(first_call),
+    [parameters[0]],
+    [I64],
+    @semantic_machv.InstructionMetadata::new(None, [
+      parameters[1],
+      parameters[2],
+      parameters[3],
+    ]),
+  )
+  |> ignore
+  let second_call = @semantic_machv.SemanticCall::new(
+    External(@semantic_machv.ExternalSymbol::new("host.second")),
+    @semantic_machv.Signature::new([Ptr64], [I64]),
+    Platform,
+    @semantic_machv.CallBehavior::new(ReadWrite, true, false, true, false),
+  )
+  let result = builder.emit_with_metadata(
+      Call(second_call),
+      [parameters[0]],
+      [I64],
+      @semantic_machv.InstructionMetadata::new(None, [parameters[1]]),
+    )[0]
+  builder.return_([result])
+  inspect(
+    elaborate_wasmoon_runtime_abi(
+      builder.finish(),
+      [],
+      (
+        @semantic_machv.ExternalSymbol::new(
+          "wasmoon.runtime.gc.push_root_scope",
+        ),
+        @semantic_machv.ExternalSymbol::new("wasmoon.runtime.gc.pop_root_scope"),
+      ),
+    ),
+    content=(
+      #|machv shared_root_scope_object [internal](v0:ptr64, v1:gcref64, v2:gcref64, v3:gcref64) -> (i64) {
+      #|stack0: size=24, alignment=16
+      #|block0:
+      #|  v4:ptr64 = stack.address stack0
+      #|  store {
+      #|  width: W64,
+      #|  value_type: GcRef64,
+      #|  offset: 0,
+      #|  endianness: Little,
+      #|  trap: None,
+      #|} v4, v1 [memory=write]
+      #|  store {
+      #|  width: W64,
+      #|  value_type: GcRef64,
+      #|  offset: 8,
+      #|  endianness: Little,
+      #|  trap: None,
+      #|} v4, v2 [memory=write]
+      #|  store {
+      #|  width: W64,
+      #|  value_type: GcRef64,
+      #|  offset: 16,
+      #|  endianness: Little,
+      #|  trap: None,
+      #|} v4, v3 [memory=write]
+      #|  v5:i32 = i32.const 3
+      #|  call external @wasmoon.runtime.gc.push_root_scope (ptr64, ptr64, i32) -> () [platform] v0, v4, v5 [memory=read-write, trap]
+      #|  v6:i64 = call external @host.first (ptr64) -> (i64) [platform] v0 [memory=read-write, trap, gc-safepoint] roots=[v1, v2, v3]
+      #|  call external @wasmoon.runtime.gc.pop_root_scope (ptr64) -> () [platform] v0 [memory=read-write, trap]
+      #|  v7:ptr64 = stack.address stack0
+      #|  store {
+      #|  width: W64,
+      #|  value_type: GcRef64,
+      #|  offset: 0,
+      #|  endianness: Little,
+      #|  trap: None,
+      #|} v7, v1 [memory=write]
+      #|  v8:i32 = i32.const 1
+      #|  call external @wasmoon.runtime.gc.push_root_scope (ptr64, ptr64, i32) -> () [platform] v0, v7, v8 [memory=read-write, trap]
+      #|  v9:i64 = call external @host.second (ptr64) -> (i64) [platform] v0 [memory=read-write, trap, gc-safepoint] roots=[v1]
+      #|  call external @wasmoon.runtime.gc.pop_root_scope (ptr64) -> () [platform] v0 [memory=read-write, trap]
+      #|  return v9
+      #|}
+    ),
+  )
+}
+
+///|
 test "runtime ABI elaboration follows CFG order instead of block storage order" {
   let builder = @semantic_machv.FunctionBuilder::new(
     "shadow_cfg_order",
