@@ -22,6 +22,43 @@ fn fp_physical(index : Int) -> @vcode.PhysicalReg {
 }
 
 ///|
+/// IP0 is excluded from allocation so late emission can finalize arbitrary
+/// stack offsets without changing the allocation.
+fn stack_address_scratch() -> @vcode.PhysicalReg {
+  int_physical(16)
+}
+
+///|
+/// IP1 carries allocator-inserted integer transfers and the occasional second
+/// emitter temporary.
+fn int_transfer_scratch() -> @vcode.PhysicalReg {
+  int_physical(17)
+}
+
+///|
+fn fp_transfer_scratch() -> @vcode.PhysicalReg {
+  fp_physical(16)
+}
+
+///|
+fn int_transfer_scratch_regs() -> Array[@vcode.PhysicalReg] {
+  [int_transfer_scratch()]
+}
+
+///|
+fn fp_transfer_scratch_regs() -> Array[@vcode.PhysicalReg] {
+  [fp_transfer_scratch(), fp_physical(17)]
+}
+
+///|
+fn transfer_scratch_for_type(ty : @semantic.ValueType) -> @vcode.PhysicalReg {
+  match @vcode.reg_class_for_value_type(ty) {
+    Int => int_transfer_scratch()
+    FpVector => fp_transfer_scratch()
+  }
+}
+
+///|
 fn allocatable_physical_regs() -> Array[@vcode.PhysicalReg] {
   let regs : Array[@vcode.PhysicalReg] = []
   for index in 0..<16 {
@@ -41,7 +78,7 @@ fn allocatable_physical_regs() -> Array[@vcode.PhysicalReg] {
 
 ///|
 fn spill_scratch_regs() -> Array[@vcode.PhysicalReg] {
-  [int_physical(16), int_physical(17), fp_physical(16), fp_physical(17)]
+  [int_transfer_scratch(), fp_physical(16), fp_physical(17)]
 }
 
 ///|
@@ -54,7 +91,10 @@ fn is_allocatable(reg : @vcode.PhysicalReg) -> Bool {
 
 ///|
 fn is_scratch(reg : @vcode.PhysicalReg) -> Bool {
-  (reg.id == 16 || reg.id == 17) && (reg.class == Int || reg.class == FpVector)
+  match reg.class {
+    Int => reg.id == 17
+    FpVector => reg.id == 16 || reg.id == 17
+  }
 }
 
 ///|

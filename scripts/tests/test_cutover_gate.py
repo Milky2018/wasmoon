@@ -154,6 +154,93 @@ class SmithGateTests(unittest.TestCase):
             ):
                 self.assertEqual(SMITH.main(), 2)
 
+    def test_interpreter_oracle_distinguishes_trap_reasons(self) -> None:
+        interpreter = SMITH._signature(
+            SMITH.Outcome(
+                kind="trap",
+                rc=1,
+                stdout="",
+                stderr="Error: out of bounds memory access",
+            )
+        )
+        jit = SMITH._signature(
+            SMITH.Outcome(
+                kind="trap",
+                rc=1,
+                stdout="",
+                stderr="Error: integer divide by zero",
+            )
+        )
+        self.assertNotEqual(interpreter, jit)
+        self.assertTrue(
+            SMITH._is_mismatch(("not-run",), interpreter, jit, "interpreter")
+        )
+
+    def test_interpreter_oracle_accepts_equivalent_trap_wording(self) -> None:
+        interpreter = SMITH._signature(
+            SMITH.Outcome(
+                kind="trap",
+                rc=1,
+                stdout="",
+                stderr="Error: division by zero",
+            )
+        )
+        jit = SMITH._signature(
+            SMITH.Outcome(
+                kind="trap",
+                rc=1,
+                stdout="",
+                stderr="wasm trap: integer divide by zero",
+            )
+        )
+        self.assertEqual(interpreter, jit)
+        self.assertFalse(
+            SMITH._is_mismatch(("not-run",), interpreter, jit, "interpreter")
+        )
+
+    def test_interpreter_oracle_distinguishes_runtime_errors(self) -> None:
+        interpreter = SMITH._signature(
+            SMITH.Outcome(
+                kind="error",
+                rc=1,
+                stdout="",
+                stderr="InternalError: interpreter invariant failed",
+            )
+        )
+        jit = SMITH._signature(
+            SMITH.Outcome(
+                kind="error",
+                rc=2,
+                stdout="",
+                stderr="EmissionFailed: unsupported relocation",
+            )
+        )
+        self.assertNotEqual(interpreter, jit)
+        self.assertTrue(
+            SMITH._is_mismatch(("not-run",), interpreter, jit, "interpreter")
+        )
+
+    def test_interpreter_oracle_accepts_matching_runtime_errors(self) -> None:
+        error = SMITH._signature(
+            SMITH.Outcome(
+                kind="error",
+                rc=1,
+                stdout="",
+                stderr="Error: unsupported shared reference type",
+            )
+        )
+        self.assertFalse(
+            SMITH._is_mismatch(("not-run",), error, error, "interpreter")
+        )
+
+    def test_interpreter_oracle_rejects_matching_timeouts(self) -> None:
+        timeout = SMITH._signature(
+            SMITH.Outcome(kind="timeout", rc=124, stdout="", stderr="")
+        )
+        self.assertTrue(
+            SMITH._is_mismatch(("not-run",), timeout, timeout, "interpreter")
+        )
+
 
 class GateManifestTests(unittest.TestCase):
     def test_init_records_only_current_tree_evidence(self) -> None:

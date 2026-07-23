@@ -2416,17 +2416,13 @@ test "AArch64 pipeline materializes a large semantic stack-object offset" {
       #|    0x0e,
       #|    0xd1,
       #|    0xe0,
-      #|    0x03,
-      #|    0x00,
+      #|    0x07,
+      #|    0x40,
       #|    0x91,
-      #|    0x10,
-      #|    0x71,
-      #|    0x82,
-      #|    0xd2,
       #|    0x00,
-      #|    0x00,
-      #|    0x10,
-      #|    0x8b,
+      #|    0x20,
+      #|    0x0e,
+      #|    0x91,
       #|    0xff,
       #|    0x07,
       #|    0x40,
@@ -2451,6 +2447,58 @@ test "AArch64 pipeline materializes a large semantic stack-object offset" {
       #|}
     ),
   )
+}
+
+///|
+test "AArch64 pipeline emits far I32 spill slots" {
+  let parameter_types : Array[@semantic.ValueType] = Array::make(32, I32)
+  let builder = @semantic.FunctionBuilder::new(
+    "emitted_far_i32_spill",
+    Platform,
+    parameter_types,
+    [Ptr64],
+  )
+  let object = builder.create_stack_object(16384, 16)
+  let address = builder.emit(StackAddress(object), [], [Ptr64])[0]
+  let values = builder.parameters()
+  let mut sum = values[0]
+  for index in 1..<values.length() {
+    sum = builder.emit(IntBinary(Add), [sum, values[index]], [I32])[0]
+  }
+  let offset = builder.emit(Convert(I64ExtendI32(Unsigned)), [sum], [I64])[0]
+  let result = builder.emit(PointerOffset, [address, offset], [Ptr64])[0]
+  builder.return_([result])
+  let selected = lower(builder.finish(), test_lowering_context())
+  let (_, frame_size) = compile(selected)
+  inspect(frame_size, content="16496")
+}
+
+///|
+test "AArch64 pipeline emits far F32 spill slots" {
+  let parameter_types : Array[@semantic.ValueType] = Array::make(32, F32)
+  let builder = @semantic.FunctionBuilder::new(
+    "emitted_far_f32_spill",
+    Platform,
+    parameter_types,
+    [F32],
+  )
+  let object = builder.create_stack_object(16384, 16)
+  let address = builder.emit(StackAddress(object), [], [Ptr64])[0]
+  let values = builder.parameters()
+  let mut sum = values[0]
+  for index in 1..<values.length() {
+    sum = builder.emit(FloatBinary(Add), [sum, values[index]], [F32])[0]
+  }
+  builder.emit(
+    Store(@semantic.StoreSpec::new(W32, F32, 0UL, Little, None)),
+    [address, sum],
+    [],
+  )
+  |> ignore
+  builder.return_([sum])
+  let selected = lower(builder.finish(), test_lowering_context())
+  let (_, frame_size) = compile(selected)
+  inspect(frame_size, content="16464")
 }
 
 ///|
@@ -5369,7 +5417,7 @@ test "AArch64 edge emission resolves register cycles through reserved scratch" {
       #|{
       #|  architecture: AArch64,
       #|  code: [
-      #|    0xf0,
+      #|    0xf1,
       #|    0x03,
       #|    0x01,
       #|    0xaa,
@@ -5379,7 +5427,7 @@ test "AArch64 edge emission resolves register cycles through reserved scratch" {
       #|    0xaa,
       #|    0xe0,
       #|    0x03,
-      #|    0x10,
+      #|    0x11,
       #|    0xaa,
       #|    0xe0,
       #|    0x03,

@@ -101,9 +101,9 @@ fn emit_root_scope_push(
   builder : @semantic_machv.FunctionBuilder,
   context : @semantic_machv.Value,
   roots : Array[@semantic_machv.Value],
+  object : @semantic_machv.StackObject,
   symbol : @semantic_machv.ExternalSymbol,
 ) -> Unit {
-  let object = builder.create_stack_object(roots.length() * 8, 16)
   let address = builder.emit(StackAddress(object), [], [Ptr64])[0]
   for index, root in roots {
     builder.emit(
@@ -235,6 +235,7 @@ fn elaborate_wasmoon_runtime_abi(
   ),
 ) -> @semantic_machv.Function raise JitPipelineError {
   let mut needs_elaboration = false
+  let mut root_scope_capacity = 0
   for block in function.blocks() {
     for instruction in function.block_instructions(block) {
       guard function.instruction_operation(instruction) is Some(Call(call)) else {
@@ -247,11 +248,10 @@ fn elaborate_wasmoon_runtime_abi(
       }
       if !metadata.live_gc_roots.is_empty() || hidden_safepoint {
         needs_elaboration = true
-        break
       }
-    }
-    if needs_elaboration {
-      break
+      if metadata.live_gc_roots.length() > root_scope_capacity {
+        root_scope_capacity = metadata.live_gc_roots.length()
+      }
     }
   }
   if !needs_elaboration {
@@ -299,6 +299,11 @@ fn elaborate_wasmoon_runtime_abi(
       ),
     )
   }
+  let root_scope_object = if root_scope_capacity > 0 {
+    Some(builder.create_stack_object(root_scope_capacity * 8, 16))
+  } else {
+    None
+  }
   let integer_constants : Array[Int64?] = Array::make(
     function.value_count(),
     None,
@@ -345,7 +350,13 @@ fn elaborate_wasmoon_runtime_abi(
           }
           let context = call_context(function, call, old_operands)
           let mapped_context = require_mapped_value(function, values, context)
-          emit_root_scope_push(builder, mapped_context, roots, push_symbol)
+          emit_root_scope_push(
+            builder,
+            mapped_context,
+            roots,
+            root_scope_object.unwrap(),
+            push_symbol,
+          )
           root_scope_context = Some(mapped_context)
         }
         let hidden_safepoint = match call.callee {

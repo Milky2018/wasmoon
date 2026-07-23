@@ -70,7 +70,7 @@ test "safepoint registration failure precedes executable installation" {
   catch {
     error => error
   } noraise {
-    _ => abort("expected metadata registration to fail")
+    _ => fail("expected metadata registration to fail")
   }
   debug_inspect(
     error,
