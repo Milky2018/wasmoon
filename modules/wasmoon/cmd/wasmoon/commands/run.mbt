@@ -988,12 +988,28 @@ fn run_jit_cache_file(
     "no-cancel"
   }
   let debug_tag = if manifest.policy.debug_info { "debug" } else { "no-debug" }
-  let file_name = "\{run_jit_cache_version}-\{target_tag}-\{os_tag}-\{opt_tag}-\{code_model_tag}-\{call_binding_tag}-\{cancellation_tag}-\{debug_tag}-s\{digest_hex(source_digest)}-x\{digest_hex(semantic_digest)}.cwasm"
+  let revision_tag = cache_revision_file_tag(manifest.codegen_revision)
+  let file_name = "\{run_jit_cache_version}-\{target_tag}-\{os_tag}-\{opt_tag}-\{code_model_tag}-\{call_binding_tag}-\{cancellation_tag}-\{debug_tag}-r\{revision_tag}-s\{digest_hex(source_digest)}-x\{digest_hex(semantic_digest)}.cwasm"
   if cache_dir.has_suffix("/") {
     "\{cache_dir}\{file_name}"
   } else {
     "\{cache_dir}/\{file_name}"
   }
+}
+
+///|
+fn cache_revision_file_tag(revision : String) -> String {
+  let digits = "0123456789abcdef"
+  let output = StringBuilder::StringBuilder()
+  for index in 0..<revision.length() {
+    let value = revision.code_unit_at(index).to_int()
+    for shift in [12, 8, 4, 0] {
+      output.write_char(
+        digits.code_unit_at((value >> shift) & 0x0F).to_int().unsafe_to_char(),
+      )
+    }
+  }
+  output.to_string()
 }
 
 ///|
