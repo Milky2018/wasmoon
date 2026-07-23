@@ -664,12 +664,12 @@ fn emit_stack_address(
   } else {
     emit_constant(buffer, W64, destination, offset.to_uint64())
     buffer.emit_word(
-      encode_three_register(
-        0x8B000000U,
-        destination,
-        @vcode.PhysicalReg::new(31, Int),
-        destination,
-      ),
+      // ADD (extended register) permits SP as Rn; the shifted-register form
+      // interprets register 31 as XZR.
+      0x8B206000U |
+      (reg_bits(destination) << 16) |
+      (31U << 5) |
+      reg_bits(destination),
     )
   }
 }

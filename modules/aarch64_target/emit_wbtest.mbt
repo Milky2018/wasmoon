@@ -108,6 +108,36 @@ test "AArch64 far stack accesses use IP0 and fall back to IP1 on conflict" {
 }
 
 ///|
+test "AArch64 stack address fallback preserves SP above immediate range" {
+  let buffer = CodeBuffer::new()
+  emit_stack_address(buffer, stack_address_scratch(), 4095 * 4096 + 4095)
+  emit_stack_address(buffer, stack_address_scratch(), 4096 * 4096)
+  debug_inspect(
+    buffer.code,
+    content=(
+      #|[
+      #|  0xf0,
+      #|  0xff,
+      #|  0x7f,
+      #|  0x91,
+      #|  0x10,
+      #|  0xfe,
+      #|  0x3f,
+      #|  0x91,
+      #|  0x10,
+      #|  0x20,
+      #|  0xa0,
+      #|  0xd2,
+      #|  0xf0,
+      #|  0x63,
+      #|  0x30,
+      #|  0x8b,
+      #|]
+    ),
+  )
+}
+
+///|
 test "AArch64 stack allocation probes every guard-page interval" {
   let buffer = CodeBuffer::new()
   emit_sp_adjust(buffer, true, 8192)
