@@ -4580,7 +4580,7 @@ test "AArch64 emits environment paths and typed symbol relocations" {
       [Ptr64],
     )[0]
   let environment = builder.emit(
-      EnvironmentField(field),
+      EnvironmentField(field, Mutable),
       [builder.parameters()[0]],
       [I64],
     )[0]

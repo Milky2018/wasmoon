@@ -30,7 +30,7 @@ fn x64_target_context(
   for block in function.blocks() {
     for instruction in function.block_instructions(block) {
       if function.instruction_operation(instruction)
-        is Some(EnvironmentField(field)) {
+        is Some(EnvironmentField(field, _)) {
         guard environment_field_path is Some(resolve) &&
           resolve(field) is Some(offsets) else {
           raise MissingEnvironmentField(target=X64, field=field.name)

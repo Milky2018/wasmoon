@@ -147,7 +147,7 @@ test "AArch64 lowering keeps a constant displacement after an extended index" {
 }
 
 ///|
-test "AArch64 lowering folds every use of a shared extended index" {
+test "AArch64 lowering folds every use of a shared base and extended index" {
   let builder = @semantic.FunctionBuilder::new(
     "selected_shared_extended_index",
     Platform,
@@ -155,12 +155,12 @@ test "AArch64 lowering folds every use of a shared extended index" {
     [I32],
   )
   let parameters = builder.parameters()
+  let base = builder.emit(Convert(Bitcast(Ptr64, I64)), [parameters[0]], [I64])[0]
   let index = builder.emit(Convert(I64ExtendI32(Unsigned)), [parameters[1]], [
       I64,
     ])[0]
   let loads : Array[@semantic.Value] = []
   for offset in [4UL, 8UL] {
-    let base = builder.emit(Convert(Bitcast(Ptr64, I64)), [parameters[0]], [I64])[0]
     let displacement = builder.emit(I64Const(offset), [], [I64])[0]
     let displaced = builder.emit(IntBinary(Add), [index, displacement], [I64])[0]
     let address_bits = builder.emit(IntBinary(Add), [base, displaced], [I64])[0]
@@ -2102,7 +2102,7 @@ test "AArch64 lowering resolves environment paths and typed symbol addresses" {
       [Ptr64],
     )[0]
   let environment = builder.emit(
-      EnvironmentField(field),
+      EnvironmentField(field, Mutable),
       [builder.parameters()[0]],
       [I64],
     )[0]
@@ -2124,6 +2124,101 @@ test "AArch64 lowering resolves environment paths and typed symbol addresses" {
       #|  i8 OutgoingReg(Ptr64, p2:int) uses=[v4:any@early]
       #|  i9 OutgoingReg(I64, p3:int) uses=[v6:any@early]
       #|  i10 Return
+      #|
+    ),
+  )
+}
+
+///|
+test "AArch64 lowering locally reuses only stable environment fields" {
+  let field = @semantic.EnvironmentField::new("runtime.memory.base", I64)
+  let builder = @semantic.FunctionBuilder::new(
+    "environment_stability",
+    Internal,
+    [Ptr64],
+    [I64, I64, I64, I64],
+  )
+  let stable_first = builder.emit(
+      EnvironmentField(field, Stable),
+      [builder.parameters()[0]],
+      [I64],
+    )[0]
+  let stable_second = builder.emit(
+      EnvironmentField(field, Stable),
+      [builder.parameters()[0]],
+      [I64],
+    )[0]
+  let mutable_first = builder.emit(
+      EnvironmentField(field, Mutable),
+      [builder.parameters()[0]],
+      [I64],
+    )[0]
+  let mutable_second = builder.emit(
+      EnvironmentField(field, Mutable),
+      [builder.parameters()[0]],
+      [I64],
+    )[0]
+  builder.return_([stable_first, stable_second, mutable_first, mutable_second])
+  let context = test_lowering_context().with_environment_field(field, [24])
+  inspect(
+    lower(builder.finish(), context).summary(),
+    content=(
+      #|vcode environment_stability(v0:ptr64) -> (i64, i64, i64, i64)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v1:any-location(prefer=p0:int)@late]
+      #|  i1 ScalarLoad(W64, None, I64, 24) uses=[v1:any@early] defs=[v2:any@late]
+      #|  i2 ScalarLoad(W64, None, I64, 24) uses=[v1:any@early] defs=[v3:any@late]
+      #|  i3 ScalarLoad(W64, None, I64, 24) uses=[v1:any@early] defs=[v4:any@late]
+      #|  i4 OutgoingReg(I64, p0:int) uses=[v2:any@early]
+      #|  i5 OutgoingReg(I64, p1:int) uses=[v2:any@early]
+      #|  i6 OutgoingReg(I64, p2:int) uses=[v3:any@early]
+      #|  i7 OutgoingReg(I64, p3:int) uses=[v4:any@early]
+      #|  i8 Return
+      #|
+    ),
+  )
+}
+
+///|
+test "AArch64 lowering bounds stable environment reuse at calls" {
+  let field = @semantic.EnvironmentField::new("runtime.memory.base", I64)
+  let builder = @semantic.FunctionBuilder::new(
+    "environment_call_boundary",
+    Internal,
+    [Ptr64],
+    [I64, I64],
+  )
+  let before_call = builder.emit(
+      EnvironmentField(field, Stable),
+      [builder.parameters()[0]],
+      [I64],
+    )[0]
+  let call = @semantic.SemanticCall::new(
+    External(@semantic.ExternalSymbol::new("runtime.helper")),
+    @semantic.Signature::new([], []),
+    Platform,
+    @semantic.CallBehavior::new(ReadWrite, true, true, true, true),
+  )
+  builder.emit(Call(call), [], []) |> ignore
+  let after_call = builder.emit(
+      EnvironmentField(field, Stable),
+      [builder.parameters()[0]],
+      [I64],
+    )[0]
+  builder.return_([before_call, after_call])
+  let context = test_lowering_context().with_environment_field(field, [24])
+  inspect(
+    lower(builder.finish(), context).summary(),
+    content=(
+      #|vcode environment_call_boundary(v0:ptr64) -> (i64, i64)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v1:any-location(prefer=p0:int)@late]
+      #|  i1 ScalarLoad(W64, None, I64, 24) uses=[v1:any@early] defs=[v2:any@late]
+      #|  i2 PlatformCall({ name: "runtime.helper" }, { params: [], results: [] }) clobbers=[p0:int, p1:int, p2:int, p3:int, p4:int, p5:int, p6:int, p7:int, p8:int, p9:int, p10:int, p11:int, p12:int, p13:int, p14:int, p15:int, p16:int, p17:int, p0:fpvec, p1:fpvec, p2:fpvec, p3:fpvec, p4:fpvec, p5:fpvec, p6:fpvec, p7:fpvec, p8:fpvec, p9:fpvec, p10:fpvec, p11:fpvec, p12:fpvec, p13:fpvec, p14:fpvec, p15:fpvec, p16:fpvec, p17:fpvec, p18:fpvec, p19:fpvec, p20:fpvec, p21:fpvec, p22:fpvec, p23:fpvec, p24:fpvec, p25:fpvec, p26:fpvec, p27:fpvec, p28:fpvec, p29:fpvec, p30:fpvec, p31:fpvec] safepoint=GcAndCancellation
+      #|  i3 ScalarLoad(W64, None, I64, 24) uses=[v1:any@early] defs=[v3:any@late]
+      #|  i4 OutgoingReg(I64, p0:int) uses=[v2:any@early]
+      #|  i5 OutgoingReg(I64, p1:int) uses=[v3:any@early]
+      #|  i6 Return
       #|
     ),
   )

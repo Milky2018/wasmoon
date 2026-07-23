@@ -153,6 +153,123 @@ pub struct ExternalSymbol {
 } derive(Eq, Debug, Hash)
 
 ///|
+/// Opaque embedding-context field identity.
+///
+/// The dialect owns the meaning of `key` and `parameters`; MilkIR only relies
+/// on the declared type and optimizer-visible global-value contract.
+pub struct ContextField {
+  dialect : String
+  key : Int
+  parameters : FixedArray[Int]
+  ty : Type
+} derive(Debug)
+
+///|
+pub fn ContextField::new(
+  dialect : String,
+  key : Int,
+  parameters : FixedArray[Int],
+  ty : Type,
+) -> ContextField {
+  { dialect, key, parameters, ty }
+}
+
+///|
+pub impl Eq for ContextField with fn equal(self, other) {
+  if self.dialect != other.dialect ||
+    self.key != other.key ||
+    self.ty != other.ty ||
+    self.parameters.length() != other.parameters.length() {
+    return false
+  }
+  for i in 0..<self.parameters.length() {
+    if self.parameters[i] != other.parameters[i] {
+      return false
+    }
+  }
+  true
+}
+
+///|
+pub impl Hash for ContextField with fn hash_combine(self, hasher) {
+  self.dialect.hash_combine(hasher)
+  self.key.hash_combine(hasher)
+  self.ty.hash_combine(hasher)
+  self.parameters.length().hash_combine(hasher)
+  for parameter in self.parameters {
+    parameter.hash_combine(hasher)
+  }
+}
+
+///|
+/// Disjoint abstract memory regions used by alias analysis.
+pub(all) enum AliasRegion {
+  Heap(Int)
+  Table(Int)
+  Context
+  Other
+} derive(Debug, Eq, Hash)
+
+///|
+/// Whether a context field may change while the function is executing.
+///
+/// `Stable` grants reuse permission for one invocation. `Mutable` requires
+/// invalidation at calls and writes that may affect the context region.
+pub(all) enum GlobalValueStability {
+  Stable
+  Mutable
+} derive(Debug, Eq, Hash)
+
+///|
+/// Function-scoped global-value declaration.
+pub(all) enum GlobalValueData {
+  ContextField(ContextField, GlobalValueStability, AliasRegion)
+} derive(Debug, Eq, Hash)
+
+///|
+pub fn GlobalValueData::context_field(
+  field : ContextField,
+  stability : GlobalValueStability,
+  result_region : AliasRegion,
+) -> GlobalValueData {
+  ContextField(field, stability, result_region)
+}
+
+///|
+fn GlobalValueData::result_type(self : GlobalValueData) -> Type {
+  match self {
+    ContextField(field, _, _) => field.ty
+  }
+}
+
+///|
+/// Function-owned handle to an interned global-value declaration.
+pub struct GlobalValue {
+  priv owner : Ref[FunctionOwnerContext]
+  id : Int
+}
+
+///|
+fn GlobalValue::new(owner : Ref[FunctionOwnerContext], id : Int) -> GlobalValue {
+  { owner, id }
+}
+
+///|
+pub impl Eq for GlobalValue with fn equal(self, other) {
+  physical_equal(self.owner, other.owner) && self.id == other.id
+}
+
+///|
+pub impl Hash for GlobalValue with fn hash_combine(self, hasher) {
+  self.id.hash_combine(hasher)
+}
+
+///|
+pub impl Debug for GlobalValue with fn to_repr(self) {
+  Repr::record({ "id": to_repr(self.id) })
+}
+
+///|
 pub fn ExternalSymbol::ExternalSymbol(name : String) -> ExternalSymbol {
   { name, }
 }
@@ -340,7 +457,8 @@ fn Block::add_inst(self : Block, inst : Inst) -> Unit {
   }
   if reject_foreign_values(self.owner, inst.args) ||
     reject_foreign_values(self.owner, inst.operands) ||
-    reject_foreign_values(self.owner, inst.results) {
+    reject_foreign_values(self.owner, inst.results) ||
+    reject_foreign_opcode_entities(self.owner, inst.opcode) {
     return
   }
   self.instructions.push(inst)
@@ -784,6 +902,9 @@ pub(all) enum Opcode {
   // Generic memory operations.
   Memory(MemoryOp)
 
+  // Function-scoped context and embedding values.
+  GlobalValue(GlobalValue)
+
   // Dialect extension operations. The core IR treats these conservatively;
   // dialect-owned packages define the opcode set, builders, validation rules,
   // and lowering behavior.
@@ -796,6 +917,21 @@ pub(all) enum Opcode {
 ///|
 pub impl Show for Opcode with fn output(self, logger) {
   logger.write_string(to_repr(self).to_string())
+}
+
+///|
+fn reject_foreign_opcode_entities(
+  owner : Ref[FunctionOwnerContext],
+  opcode : Opcode,
+) -> Bool {
+  if opcode is GlobalValue(global_value) &&
+    !physical_equal(owner, global_value.owner) {
+    owner.val.record_construction_error(
+      ForeignGlobalValue(global_value_id=global_value.id),
+    )
+    return true
+  }
+  false
 }
 
 ///|
@@ -861,9 +997,11 @@ pub struct Function {
   results : Array[Type] // Return types
   blocks : Array[Block] // Basic blocks (block 0 is entry)
   external_symbols : Array[ExternalSymbol]
+  global_values : Array[(GlobalValue, GlobalValueData)]
   mut next_value_id : Int // For generating unique value IDs
   mut next_inst_id : Int
   mut next_block_id : Int // For generating unique block IDs
+  mut next_global_value_id : Int
 }
 
 ///|
@@ -874,9 +1012,11 @@ pub impl Debug for Function with fn to_repr(self) {
     "results": to_repr(self.results),
     "blocks": to_repr(self.blocks),
     "external_symbols": to_repr(self.external_symbols),
+    "global_values": to_repr(self.global_values),
     "next_value_id": to_repr(self.next_value_id),
     "next_inst_id": to_repr(self.next_inst_id),
     "next_block_id": to_repr(self.next_block_id),
+    "next_global_value_id": to_repr(self.next_global_value_id),
   })
 }
 
@@ -889,9 +1029,11 @@ pub fn Function::new_empty(name : String) -> Function {
     results: [],
     blocks: [],
     external_symbols: [],
+    global_values: [],
     next_value_id: 0,
     next_inst_id: 0,
     next_block_id: 0,
+    next_global_value_id: 0,
   }
 }
 
@@ -962,7 +1104,8 @@ pub fn Function::new_inst(
   results : Array[Value],
 ) -> Inst {
   if reject_foreign_values(self.owner, args) ||
-    reject_foreign_values(self.owner, results) {
+    reject_foreign_values(self.owner, results) ||
+    reject_foreign_opcode_entities(self.owner, opcode) {
     return Inst::new_with_id(self.owner, self.next_inst_id, opcode, [], [])
   }
   let inst = Inst::new_with_id(
@@ -989,6 +1132,14 @@ fn Function::owns_block(self : Function, block : Block) -> Bool {
 ///|
 fn Function::owns_inst(self : Function, inst : Inst) -> Bool {
   physical_equal(self.owner, inst.owner)
+}
+
+///|
+fn Function::owns_global_value(
+  self : Function,
+  global_value : GlobalValue,
+) -> Bool {
+  physical_equal(self.owner, global_value.owner)
 }
 
 ///|
@@ -1021,4 +1172,39 @@ pub fn Function::declare_external_symbol(
   let symbol = ExternalSymbol::ExternalSymbol(name)
   self.external_symbols.push(symbol)
   symbol
+}
+
+///|
+/// Declare or reuse an identical function-scoped global value.
+pub fn Function::declare_global_value(
+  self : Function,
+  data : GlobalValueData,
+) -> GlobalValue {
+  for entry in self.global_values {
+    if entry.1 == data {
+      return entry.0
+    }
+  }
+  let global_value = GlobalValue::new(self.owner, self.next_global_value_id)
+  self.next_global_value_id = self.next_global_value_id + 1
+  self.global_values.push((global_value, data))
+  global_value
+}
+
+///|
+/// Return the declaration for an owned global-value handle.
+pub fn Function::global_value_data(
+  self : Function,
+  global_value : GlobalValue,
+) -> GlobalValueData? {
+  if !self.owns_global_value(global_value) ||
+    global_value.id < 0 ||
+    global_value.id >= self.global_values.length() {
+    return None
+  }
+  let entry = self.global_values[global_value.id]
+  if entry.0.id != global_value.id {
+    return None
+  }
+  Some(entry.1)
 }

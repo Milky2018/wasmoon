@@ -190,20 +190,6 @@ fn lower_i31_get(context : @adapter.InstructionContext, signed : Bool) -> Unit {
 }
 
 ///|
-fn lower_memory_base(
-  context : @adapter.InstructionContext,
-  memory_index : Int,
-  environment : Environment,
-) -> Unit {
-  let pointer = context.emit(
-      EnvironmentField((environment.memory_base_field)(memory_index)),
-      context.operands(),
-      [Ptr64],
-    )[0]
-  context.finish_operation(Convert(Bitcast(Ptr64, I64)), [pointer])
-}
-
-///|
 fn lower_get_function_reference(
   context : @adapter.InstructionContext,
   function_index : Int,
@@ -211,7 +197,7 @@ fn lower_get_function_reference(
 ) -> Unit {
   let execution_environment = context.environment()[0]
   let function_table = context.emit(
-      EnvironmentField(environment.function_table_field),
+      EnvironmentField(environment.function_table_field, Mutable),
       [execution_environment],
       [Ptr64],
     )[0]
@@ -247,7 +233,7 @@ fn table_entry_address(
   let shift = context.emit(I64Const(4UL), [], [I64])[0]
   let byte_offset = context.emit(IntBinary(ShiftLeft), [index, shift], [I64])[0]
   let table = context.emit(
-      EnvironmentField((environment.table_base_field)(table_index)),
+      EnvironmentField((environment.table_base_field)(table_index), Mutable),
       context.environment(),
       [Ptr64],
     )[0]
@@ -1062,10 +1048,6 @@ fn lower_extension(
     None => return Some("Wasm extension changed after successful validation")
   }
   match opcode {
-    LoadMemBase(memory_index) => {
-      lower_memory_base(context, memory_index, environment)
-      None
-    }
     GetFuncRef(function_index) => {
       lower_get_function_reference(context, function_index, environment)
       None
@@ -1322,11 +1304,24 @@ pub fn lower_function(
   ) -> String? {
     lower_extension(context, extension, environment)
   }
+  fn validate_global(data : @milkir.GlobalValueData) -> String? {
+    validation_context.validate_global_value(data)
+  }
+  fn resolve_context_field(
+    field : @milkir.ContextField,
+  ) -> @machv.EnvironmentField? {
+    match @wasm_milkir.decode_memory_base_context_field(field) {
+      Some(memory_index) => Some((environment.memory_base_field)(memory_index))
+      None => None
+    }
+  }
   @milkir_machv.lower_dialect_function(
     function,
     @wasm_milkir.WASM_DIALECT,
     validate,
+    validate_global,
     [(0, Ptr64)],
     lower,
+    resolve_context_field,
   )
 }

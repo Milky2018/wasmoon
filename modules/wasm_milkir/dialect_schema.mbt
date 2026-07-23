@@ -10,7 +10,6 @@ priv enum WasmTypePattern {
   ExactType(@milkir.Type)
   IntegerType
   ReferenceLike
-  PointerLike
   ContextualType
 }
 
@@ -95,7 +94,6 @@ fn type_pattern_matches(pattern : WasmTypePattern, ty : @milkir.Type) -> Bool {
         Ref | CallableRef | OpaqueRef => true
         _ => false
       }
-    PointerLike => ty == Ptr || ty == I64
     ContextualType => true
   }
 }
@@ -106,7 +104,6 @@ fn type_pattern_name(pattern : WasmTypePattern) -> String {
     ExactType(ty) => ty.to_string()
     IntegerType => "i32 | i64"
     ReferenceLike => "ref_like"
-    PointerLike => "pointer"
     ContextualType => "contextual"
   }
 }

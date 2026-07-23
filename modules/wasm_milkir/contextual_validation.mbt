@@ -701,15 +701,6 @@ pub fn WasmValidationContext::validate_extension(
     None => return Some("invalid Wasm extension after local validation")
   }
   match opcode {
-    LoadMemBase(memory_index) =>
-      if (self.memory_exists)(memory_index) {
-        None
-      } else {
-        contextual_error(
-          "load_mem_base",
-          "unknown memory index \{memory_index}",
-        )
-      }
     WasmCall(function_index) =>
       validate_direct_call("call", view, self, function_index, None)
     ReturnCall(function_index) =>
@@ -849,6 +840,31 @@ pub fn WasmValidationContext::validate_extension(
 }
 
 ///|
+pub fn WasmValidationContext::validate_global_value(
+  self : WasmValidationContext,
+  data : @milkir.GlobalValueData,
+) -> String? {
+  if validate_global_value(data) is Some(message) {
+    return Some(message)
+  }
+  match data {
+    ContextField(field, _, _) =>
+      match decode_memory_base_context_field(field) {
+        Some(memory_index) =>
+          if (self.memory_exists)(memory_index) {
+            None
+          } else {
+            contextual_error(
+              "memory_base",
+              "unknown memory index \{memory_index}",
+            )
+          }
+        None => Some("invalid Wasm context field after local validation")
+      }
+  }
+}
+
+///|
 /// Verify core MilkIR, local Wasm schema, and module-contextual contracts.
 pub fn verify_function_with_context(
   func : @milkir.Function,
@@ -857,5 +873,8 @@ pub fn verify_function_with_context(
   fn validate(view : @milkir.ExtensionInstView) -> String? {
     context.validate_extension(view, func.results)
   }
-  func.verify_with_extension_validator(WASM_DIALECT, validate)
+  fn validate_global(data : @milkir.GlobalValueData) -> String? {
+    context.validate_global_value(data)
+  }
+  func.verify_with_dialect_validator(WASM_DIALECT, validate, validate_global)
 }

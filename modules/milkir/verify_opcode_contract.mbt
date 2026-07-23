@@ -582,7 +582,10 @@ fn verify_vector_contract(
 }
 
 ///|
-fn verify_opcode_contract(inst : Inst) -> Unit raise VerifyError {
+fn verify_opcode_contract(
+  func : Function,
+  inst : Inst,
+) -> Unit raise VerifyError {
   match inst.opcode {
     Call(call_op) =>
       match call_op {
@@ -644,6 +647,14 @@ fn verify_opcode_contract(inst : Inst) -> Unit raise VerifyError {
         }
         Vector(opcode) => verify_vector_memory_contract(inst, opcode)
       }
+    GlobalValue(global_value) => {
+      guard func.global_value_data(global_value) is Some(data) else {
+        raise ForeignGlobalValue(global_value_id=global_value.id)
+      }
+      require_arity(inst.args.length(), 1, "global value")
+      require_pointer_value(inst.args[0].ty, "global value context")
+      require_single_result(inst, data.result_type(), "global value")
+    }
     Ext(ext, signature) => {
       if ext.dialect == "" || ext.opcode == "" {
         raise UnverifiableInstruction(

@@ -25,7 +25,6 @@ TYPE_PATTERN_TO_MOONBIT = {
     "callable_ref": "ExactType(CallableRef)",
     "opaque_ref": "ExactType(OpaqueRef)",
     "ref_like": "ReferenceLike",
-    "pointer": "PointerLike",
     "any": "ContextualType",
 }
 

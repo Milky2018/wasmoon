@@ -21,6 +21,7 @@ priv struct DialectLowering {
   name : String
   environment_parameters : Array[(Int, @semantic.ValueType)]
   lower : (@adapter.InstructionContext, @milkir.ExtOp) -> String?
+  resolve_context_field : (@milkir.ContextField) -> @semantic.EnvironmentField?
 }
 
 ///|
@@ -977,6 +978,7 @@ fn lower_scalar_operation(
 
 ///|
 fn lower_instruction(
+  function : @milkir.Function,
   builder : @semantic.FunctionBuilder,
   values : Array[@semantic.Value?],
   value_types : Array[@semantic.ValueType?],
@@ -1010,6 +1012,57 @@ fn lower_instruction(
         builder, values, value_types, instruction, memory,
       )
       return false
+    }
+    GlobalValue(global_value) => {
+      guard function.global_value_data(global_value) is Some(data) else {
+        raise UnsupportedOperation(
+          block_id~,
+          instruction_id=instruction.id,
+          message="global value \{global_value.id} has no declaration",
+        )
+      }
+      let lowering = match dialect {
+        Some(lowering) => lowering
+        None =>
+          raise UnsupportedOperation(
+            block_id~,
+            instruction_id=instruction.id,
+            message="global value \{global_value.id} requires a dialect adapter",
+          )
+      }
+      match data {
+        ContextField(field, stability, _) => {
+          guard (lowering.resolve_context_field)(field) is Some(lowered_field) else {
+            raise UnsupportedOperation(
+              block_id~,
+              instruction_id=instruction.id,
+              message="dialect '\{lowering.name}' cannot resolve context field \{field.dialect}:\{field.key}",
+            )
+          }
+          let expected_type = lower_type(field.ty)
+          if lowered_field.value_type != expected_type {
+            raise UnsupportedOperation(
+              block_id~,
+              instruction_id=instruction.id,
+              message="context field \{field.dialect}:\{field.key} resolved as \{lowered_field.value_type}, expected \{expected_type}",
+            )
+          }
+          let lowered_results = builder.emit_with_metadata(
+            EnvironmentField(
+              lowered_field,
+              match stability {
+                Stable => Stable
+                Mutable => Mutable
+              },
+            ),
+            mapped_values(values, instruction.args),
+            [expected_type],
+            instruction_metadata(instruction, []),
+          )
+          assign_instruction_results(values, instruction, lowered_results)
+          return false
+        }
+      }
     }
     Scalar(scalar) => {
       if scalar is Convert(Bitcast) &&
@@ -1327,6 +1380,7 @@ fn lower_verified_function(
     for instruction in block.instructions {
       if !terminator_replaced {
         terminator_replaced = lower_instruction(
+          function,
           builder,
           values,
           value_types,
@@ -1386,10 +1440,14 @@ pub fn lower_dialect_function_with_protocol(
   protocol : @semantic.CallProtocol,
   dialect : String,
   validator : (@milkir.ExtensionInstView) -> String?,
+  global_value_validator : (@milkir.GlobalValueData) -> String?,
   environment_parameters : Array[(Int, @semantic.ValueType)],
   lower : (@adapter.InstructionContext, @milkir.ExtOp) -> String?,
+  resolve_context_field : (@milkir.ContextField) -> @semantic.EnvironmentField?,
 ) -> @semantic.Function raise SemanticLowerError {
-  function.verify_with_extension_validator(dialect, validator) catch {
+  function.verify_with_dialect_validator(
+    dialect, validator, global_value_validator,
+  ) catch {
     error => raise InvalidMilkIR(message=error.to_string())
   }
   lower_verified_function(
@@ -1399,6 +1457,7 @@ pub fn lower_dialect_function_with_protocol(
       name: dialect,
       environment_parameters: environment_parameters.copy(),
       lower,
+      resolve_context_field,
     }),
   )
 }
@@ -1408,15 +1467,19 @@ pub fn lower_dialect_function(
   function : @milkir.Function,
   dialect : String,
   validator : (@milkir.ExtensionInstView) -> String?,
+  global_value_validator : (@milkir.GlobalValueData) -> String?,
   environment_parameters : Array[(Int, @semantic.ValueType)],
   lower : (@adapter.InstructionContext, @milkir.ExtOp) -> String?,
+  resolve_context_field : (@milkir.ContextField) -> @semantic.EnvironmentField?,
 ) -> @semantic.Function raise SemanticLowerError {
   lower_dialect_function_with_protocol(
     function,
     Internal,
     dialect,
     validator,
+    global_value_validator,
     environment_parameters,
     lower,
+    resolve_context_field,
   )
 }

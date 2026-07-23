@@ -460,6 +460,7 @@ fn format_opcode(opcode : Opcode, operands : Array[Value]) -> String {
         StoreNarrow(bits) => "store\{bits} \{ops}"
         Vector(opcode) => format_vector_memory_opcode(opcode, operands)
       }
+    GlobalValue(global_value) => "global_value gv\{global_value.id} \{ops}"
     Ext(ext, _) => {
       let imms : Array[String] = []
       for imm in ext.immediates {
@@ -473,6 +474,29 @@ fn format_opcode(opcode : Opcode, operands : Array[Value]) -> String {
       "ext.\{ext.dialect}.\{ext.opcode}\{imm_str} \{ops}"
     }
     Vector(vector_op) => format_vector_opcode(vector_op, operands)
+  }
+}
+
+///|
+fn format_global_value(
+  global_value : GlobalValue,
+  data : GlobalValueData,
+) -> String {
+  match data {
+    ContextField(field, stability, region) => {
+      let parameters = [ for parameter in field.parameters => "\{parameter}" ]
+      let stability_text = match stability {
+        Stable => "stable"
+        Mutable => "mutable"
+      }
+      let region_text = match region {
+        Heap(index) => "heap[\{index}]"
+        Table(index) => "table[\{index}]"
+        Context => "context"
+        Other => "other"
+      }
+      "gv\{global_value.id} = context_field \{field.dialect}:\{field.key}[\{parameters.join(", ")}] : \{format_type(field.ty)} \{stability_text} -> \{region_text}"
+    }
   }
 }
 
@@ -580,6 +604,11 @@ pub fn Function::print(self : Function) -> String {
     )
   } else {
     sb.write_string("function \{self.name}(\{params_str}) {\n")
+  }
+  for global_value in self.global_values {
+    sb.write_string(
+      "    \{format_global_value(global_value.0, global_value.1)}\n",
+    )
   }
   // Blocks
   for block in self.blocks {

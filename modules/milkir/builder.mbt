@@ -214,6 +214,22 @@ pub fn FunctionBuilder::emit_multi_inst(
 }
 
 ///|
+/// Read a function-scoped global value from the explicit embedding context.
+pub fn FunctionBuilder::global_value(
+  self : FunctionBuilder,
+  global_value : GlobalValue,
+  context : Value,
+) -> Value {
+  guard self.func.global_value_data(global_value) is Some(data) else {
+    self.func.record_construction_error(
+      ForeignGlobalValue(global_value_id=global_value.id),
+    )
+    return self.func.new_value(I64)
+  }
+  self.emit_inst(data.result_type(), GlobalValue(global_value), [context])
+}
+
+///|
 pub fn FunctionBuilder::emit_ext_inst(
   self : FunctionBuilder,
   ty : Type,

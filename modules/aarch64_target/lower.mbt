@@ -571,6 +571,23 @@ priv struct MemoryAddressSelection {
 }
 
 ///|
+priv struct EnvironmentReuseKey {
+  field : @semantic.EnvironmentField
+  context : @semantic.Value
+} derive(Eq, Hash)
+
+///|
+priv struct EnvironmentReuseEntry {
+  value : @semantic.Value
+  definition_index : Int
+}
+
+///|
+/// Bound reuse to nearby instructions so eliminating a context load does not
+/// turn its result into a long-lived register-allocation constraint.
+const ENVIRONMENT_REUSE_DISTANCE : Int = 8
+
+///|
 priv struct BranchSelection {
   width : GprWidth
   input : @semantic.Value
@@ -587,6 +604,7 @@ priv struct LoweringAnalysis {
   multiply_adds : Array[MultiplyAddSelection?]
   shift_immediates : Array[ShiftImmediateSelection?]
   memory_addresses : Array[MemoryAddressSelection?]
+  environment_aliases : Array[@semantic.Value?]
   branches : Array[BranchSelection?]
   skip_results : Array[Bool]
 }
@@ -611,6 +629,21 @@ fn foldable_definition(
   if uses[index] != 1 {
     return None
   }
+  guard definitions[index] is Some(instruction) else { return None }
+  let metadata = function.instruction_metadata(instruction).unwrap()
+  if !metadata.live_gc_roots.is_empty() {
+    return None
+  }
+  Some(instruction)
+}
+
+///|
+fn reusable_definition(
+  function : @semantic.Function,
+  definitions : Array[@semantic.Instruction?],
+  value : @semantic.Value,
+) -> @semantic.Instruction? {
+  let index = function.value_index(value).unwrap()
   guard definitions[index] is Some(instruction) else { return None }
   let metadata = function.instruction_metadata(instruction).unwrap()
   if !metadata.live_gc_roots.is_empty() {
@@ -739,7 +772,7 @@ fn uxtw_memory_address_selection(
     Array[@semantic.Value],
     Array[@semantic.Value],
   )? {
-    guard foldable_definition(function, definitions, uses, base_bits)
+    guard reusable_definition(function, definitions, base_bits)
       is Some(base_instruction) else {
       return None
     }
@@ -771,7 +804,7 @@ fn uxtw_memory_address_selection(
       Some(index)
     }
     if match_extended_index(index_bits) is Some(index) {
-      return Some((base, index, 0UL, [base_bits], [index_bits]))
+      return Some((base, index, 0UL, [], [base_bits, index_bits]))
     }
     guard foldable_definition(function, definitions, uses, index_bits)
       is Some(offset_instruction) else {
@@ -806,7 +839,7 @@ fn uxtw_memory_address_selection(
       return None
     }
     guard match_extended_index(extended) is Some(index) else { return None }
-    Some((base, index, offset, [base_bits, index_bits], [extended]))
+    Some((base, index, offset, [index_bits], [base_bits, extended]))
   }
   let parts = match match_parts(left, right) {
     Some(parts) => Some(parts)
@@ -865,6 +898,10 @@ fn analyze_lowering(function : @semantic.Function) -> LoweringAnalysis {
     instruction_slots,
     None,
   )
+  let environment_aliases : Array[@semantic.Value?] = Array::make(
+    value_count,
+    None,
+  )
   let branches : Array[BranchSelection?] = Array::make(
     function.block_count(),
     None,
@@ -920,6 +957,30 @@ fn analyze_lowering(function : @semantic.Function) -> LoweringAnalysis {
           count_value_use(function, uses, value)
         }
       Trap(_) => ()
+    }
+  }
+  for block in function.blocks() {
+    let available : Map[EnvironmentReuseKey, EnvironmentReuseEntry] = Map([])
+    let mut definition_index = 0
+    for instruction in function.block_instructions(block) {
+      let operation = function.instruction_operation(instruction).unwrap()
+      if operation is Call(_) {
+        available.clear()
+      }
+      if operation is EnvironmentField(field, Stable) &&
+        function.instruction_operands(instruction) is [context] &&
+        function.instruction_results(instruction) is [result] {
+        let key = { field, context }
+        match available.get(key) {
+          Some(entry) if definition_index - entry.definition_index <=
+            ENVIRONMENT_REUSE_DISTANCE =>
+            environment_aliases[function.value_index(result).unwrap()] = Some(
+              entry.value,
+            )
+          _ => available.set(key, { value: result, definition_index })
+        }
+      }
+      definition_index += 1
     }
   }
   for block in function.blocks() {
@@ -1202,6 +1263,7 @@ fn analyze_lowering(function : @semantic.Function) -> LoweringAnalysis {
     multiply_adds,
     shift_immediates,
     memory_addresses,
+    environment_aliases,
     branches,
     skip_results,
   }
@@ -1225,6 +1287,11 @@ fn lower_instruction(
   let result_index = semantic_results
     .get(0)
     .map(result => function.value_index(result).unwrap())
+  if result_index is Some(index) &&
+    analysis.environment_aliases[index] is Some(alias_value) {
+    values[index] = Some(map_value(function, values, alias_value))
+    return
+  }
   if result_index is Some(index) && analysis.skip_results[index] {
     return
   }
@@ -1623,7 +1690,7 @@ fn lower_instruction(
     }
     return
   }
-  if operation is EnvironmentField(field) {
+  if operation is EnvironmentField(field, _) {
     let offsets = match context.environment_field_offsets(field) {
       Some(offsets) if !offsets.is_empty() => offsets
       _ =>

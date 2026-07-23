@@ -40,7 +40,7 @@ test "AArch64 target binds product environment fields explicitly" {
     [Ptr64],
   )
   let result = builder.emit(
-      EnvironmentField(field),
+      EnvironmentField(field, Mutable),
       [builder.parameters()[0]],
       [Ptr64],
     )[0]

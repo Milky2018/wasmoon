@@ -45,3 +45,12 @@ The public checkpoints are:
 4. verified unlinked code object.
 
 Every checkpoint returns a structured error for malformed input.
+
+## Embedding environment fields
+
+Semantic MachV keeps embedding context access explicit as
+`EnvironmentField(field, stability)`. `Stable` means the embedding guarantees
+the field value is unchanged for one function invocation; `Mutable` does not
+grant that reuse permission. A target may rematerialize either form, but it may
+reuse only stable fields according to its own instruction and register-pressure
+cost model. Field offsets and runtime layout remain embedding-provided ABI data.

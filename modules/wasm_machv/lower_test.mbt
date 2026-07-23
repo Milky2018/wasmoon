@@ -632,16 +632,14 @@ test "memory base access uses an opaque semantic environment field" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder("memory_base")
   let vmctx = builder.add_param(I64)
   builder.add_result(I64)
-  let base = builder.emit_ext_inst(I64, @wasm_milkir.encode(LoadMemBase(3)), [
-    vmctx,
-  ])
+  let base = @wasm_milkir.load_mem_base(builder, vmctx, 3, Stable)
   builder.return_([base])
   inspect(
     lower_test_function(builder.finalize()),
     content=(
       #|machv memory_base [internal](v0:ptr64) -> (i64) {
       #|block0:
-      #|  v1:ptr64 = environment.field @wasm.memory.3.base v0 [memory=read]
+      #|  v1:ptr64 = environment.field.stable @wasm.memory.3.base v0 [memory=read]
       #|  v2:i64 = convert.Bitcast(Ptr64, I64) v1
       #|  return v2
       #|}
