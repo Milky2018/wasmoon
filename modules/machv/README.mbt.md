@@ -37,6 +37,11 @@ tables and returns a separate `Allocation`; it does not rewrite Target VCode.
 Frame planning and emission consume the same stable instruction and program
 point handles.
 
+The aggregate target `compile` entry points report `TargetCompileEvent`
+boundaries around allocation, frame planning, and emission. The allocation
+completion event carries `AllocationStatistics`, including edge-transfer
+classification, while keeping timing and reporting policy embedding-owned.
+
 The public checkpoints are:
 
 1. selected Target VCode SSA;

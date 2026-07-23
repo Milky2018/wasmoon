@@ -177,6 +177,18 @@ test "Allocation remains separate and verifies edits, slots, and safepoints" {
   |> ignore
   allocation.add_safepoint_root(call, root, Stack(slot)) |> ignore
   verify_allocated(function, allocation)
+  debug_inspect(
+    allocation.statistics(),
+    content=(
+      #|{
+      #|  spill_slots: 1,
+      #|  spills: 1,
+      #|  reloads: 2,
+      #|  reg_moves: 0,
+      #|  spill_to_spill: 0,
+      #|}
+    ),
+  )
   let frame = FrameLayout::new(function, allocation, 16, 16)
   frame.place_slot(slot, 0) |> ignore
   let foreign_allocation = Allocation::for_function(function)

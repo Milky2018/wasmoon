@@ -55,6 +55,16 @@ pub(all) enum EditKind {
 } derive(Eq, Debug)
 
 ///|
+/// Read-only summary of the transfers introduced by register allocation.
+pub struct AllocationStatistics {
+  spill_slots : Int
+  spills : Int
+  reloads : Int
+  reg_moves : Int
+  spill_to_spill : Int
+} derive(Eq, Debug)
+
+///|
 pub struct Edit {
   point : ProgramPoint?
   kind : EditKind
@@ -425,6 +435,35 @@ pub fn Allocation::add_safepoint_root(
 ///|
 pub fn Allocation::edits(self : Allocation) -> Array[Edit] {
   self.edits.copy()
+}
+
+///|
+pub fn Allocation::statistics(self : Allocation) -> AllocationStatistics {
+  let mut spills = 0
+  let mut reloads = 0
+  let mut reg_moves = 0
+  let mut spill_to_spill = 0
+  for edit in self.edits {
+    match edit.kind {
+      Spill(..) => spills = spills + 1
+      Reload(..) => reloads = reloads + 1
+      Move(..) => reg_moves = reg_moves + 1
+      EdgeMove(from~, to~, ..) =>
+        match (from, to) {
+          (Register(_), Stack(_)) => spills = spills + 1
+          (Stack(_), Register(_)) => reloads = reloads + 1
+          (Register(_), Register(_)) => reg_moves = reg_moves + 1
+          (Stack(_), Stack(_)) => spill_to_spill = spill_to_spill + 1
+        }
+    }
+  }
+  {
+    spill_slots: self.stack_slots.length(),
+    spills,
+    reloads,
+    reg_moves,
+    spill_to_spill,
+  }
 }
 
 ///|

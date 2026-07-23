@@ -82,7 +82,9 @@ pub struct FunctionMetrics {
   mut ir_insts_after : Int
   mut optimize_us : Int64
   mut lower_us : Int64
+  mut target_lower_us : Int64
   mut regalloc_us : Int64
+  mut frame_plan_us : Int64
   mut emit_us : Int64
   mut code_size : Int
   mut spill_slots : Int
@@ -114,7 +116,7 @@ fn ensure_module_state() -> ModuleMetricsReport {
     Some(m) => m
     None => {
       let m = {
-        schema_version: 2,
+        schema_version: 3,
         expected_functions: 0,
         module_compile_us: 0L,
         functions: [],
@@ -137,7 +139,7 @@ fn flush_current_function_if_any() -> Unit {
 pub fn reset_module(expected_functions : Int) -> Unit {
   guard enabled() else { return }
   module_state.val = Some({
-    schema_version: 2,
+    schema_version: 3,
     expected_functions,
     module_compile_us: 0L,
     functions: [],
@@ -168,7 +170,9 @@ pub fn begin_function(
     ir_insts_after: ir_insts_before,
     optimize_us: 0L,
     lower_us: 0L,
+    target_lower_us: 0L,
     regalloc_us: 0L,
+    frame_plan_us: 0L,
     emit_us: 0L,
     code_size: 0,
     spill_slots: 0,
@@ -264,7 +268,9 @@ pub fn record_stage_us(stage_name : String, duration_us : Int64) -> Unit {
     match stage_name {
       "optimize" => m.optimize_us = duration_us
       "lower" => m.lower_us = duration_us
+      "target_lower" => m.target_lower_us = duration_us
       "regalloc" => m.regalloc_us = duration_us
+      "frame_plan" => m.frame_plan_us = duration_us
       "emit" => m.emit_us = duration_us
       _ => ()
     }

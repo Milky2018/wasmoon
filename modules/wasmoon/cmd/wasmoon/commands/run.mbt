@@ -1860,7 +1860,6 @@ fn compile_validated_module_to_jit(
     if optimize_tick is Some(tick) {
       @perf.record_stage_us("optimize", @perf.elapsed_us(tick))
     }
-    let lower_tick = if perf_on { Some(@perf.tick_now()) } else { None }
     let mut ir_dump : String? = None
     if debug_db is Some(_) {
       ir_dump = Some(ir_func.print())
@@ -1896,9 +1895,6 @@ fn compile_validated_module_to_jit(
         )
         return None
       }
-    }
-    if lower_tick is Some(tick) {
-      @perf.record_stage_us("lower", @perf.elapsed_us(tick))
     }
     emit_compile_progress(
       on_progress,

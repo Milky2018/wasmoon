@@ -238,7 +238,11 @@ pub fn compile_wasm_body_artifact_function(
   match target {
     AArch64 => {
       let compiled = compile_wasm_body_aarch64_target(
-        function, validation_context, use_subtype_indirect_check, canonical_type_indices,
+        function,
+        validation_context,
+        use_subtype_indirect_check,
+        canonical_type_indices,
+        record_metrics=@perf.enabled(),
       )
       artifact_function_from_code_object(
         compiled.object,
@@ -249,7 +253,11 @@ pub fn compile_wasm_body_artifact_function(
     }
     X64 => {
       let compiled = compile_wasm_body_x64_target(
-        function, validation_context, use_subtype_indirect_check, canonical_type_indices,
+        function,
+        validation_context,
+        use_subtype_indirect_check,
+        canonical_type_indices,
+        record_metrics=@perf.enabled(),
       )
       artifact_function_from_code_object(
         compiled.object,

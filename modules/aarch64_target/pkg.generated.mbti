@@ -12,7 +12,7 @@ import {
 // Values
 pub fn allocate(@vcode.Function[AArch64Inst]) -> @vcode.Allocation raise AArch64AllocationError
 
-pub fn compile(@vcode.Function[AArch64Inst]) -> (@code_object.UnlinkedCodeObject, Int) raise AArch64CompileError
+pub fn compile(@vcode.Function[AArch64Inst], on_event? : (@vcode.TargetCompileEvent) -> Unit) -> (@code_object.UnlinkedCodeObject, Int) raise AArch64CompileError
 
 pub fn emit(@vcode.Function[AArch64Inst], @vcode.Allocation, AArch64Frame) -> @code_object.UnlinkedCodeObject raise AArch64EmitError
 

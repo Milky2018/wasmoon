@@ -45,7 +45,9 @@ pub struct FunctionMetrics {
   mut ir_insts_after : Int
   mut optimize_us : Int64
   mut lower_us : Int64
+  mut target_lower_us : Int64
   mut regalloc_us : Int64
+  mut frame_plan_us : Int64
   mut emit_us : Int64
   mut code_size : Int
   mut spill_slots : Int

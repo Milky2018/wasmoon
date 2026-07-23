@@ -38,7 +38,10 @@ test "X64 compile runs the complete target pipeline" {
   let sum = builder.emit(IntBinary(Add), builder.parameters(), [I64])[0]
   builder.return_([sum])
   let function = lower(builder.finish(), test_lowering_context())
-  let (object, frame_size) = compile(function)
+  let events : Array[@vcode.TargetCompileEvent] = []
+  let (object, frame_size) = compile(function, on_event=fn(event) {
+    events.push(event)
+  })
   debug_inspect(
     object.code(),
     content=(
@@ -46,6 +49,27 @@ test "X64 compile runs the complete target pipeline" {
     ),
   )
   inspect(frame_size, content="0")
+  debug_inspect(
+    events,
+    content=(
+      #|[
+      #|  RegallocStarted,
+      #|  RegallocFinished(
+      #|    {
+      #|      spill_slots: 0,
+      #|      spills: 0,
+      #|      reloads: 0,
+      #|      reg_moves: 0,
+      #|      spill_to_spill: 0,
+      #|    },
+      #|  ),
+      #|  FramePlanningStarted,
+      #|  FramePlanningFinished,
+      #|  EmissionStarted,
+      #|  EmissionFinished,
+      #|]
+    ),
+  )
 }
 
 ///|

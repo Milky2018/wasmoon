@@ -47,11 +47,13 @@ fn build_aarch64_target(
   function : @semantic_machv.Function,
   environment_field_path? : (@semantic_machv.EnvironmentField) -> Array[Int]?,
   allocation_symbols? : Array[@semantic_machv.ExternalSymbol] = [],
+  record_metrics? : Bool = false,
   root_scope_symbols? : (
     @semantic_machv.ExternalSymbol,
     @semantic_machv.ExternalSymbol,
   ),
 ) -> AArch64TargetCompilation raise JitPipelineError {
+  let target_lower_tick = target_metrics_tick(record_metrics)
   let elaborated = match root_scope_symbols {
     Some(symbols) =>
       elaborate_wasmoon_runtime_abi(function, allocation_symbols, symbols)
@@ -61,9 +63,19 @@ fn build_aarch64_target(
   let selected = @aarch64_target.lower(elaborated, context) catch {
     error => raise AArch64LoweringFailed(cause=error)
   }
-  let (object, frame_size) = @aarch64_target.compile(selected) catch {
+  let compiled = try {
+    match target_lower_tick {
+      Some(tick) =>
+        @aarch64_target.compile(
+          selected,
+          on_event=target_compile_metrics_observer(tick),
+        )
+      None => @aarch64_target.compile(selected)
+    }
+  } catch {
     error => raise AArch64CompilationFailed(cause=error)
   }
+  let (object, frame_size) = compiled
   { object, frame_size }
 }
 

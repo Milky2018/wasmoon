@@ -45,6 +45,12 @@ MachV. It produces a verified `Milky2018/machv/code_object` value. Runtime
 symbol resolution, relocation application, and executable-memory ownership
 remain responsibilities of the embedding application.
 
+`compile` performs allocation, frame planning, and emission without repeating
+checkpoint validation. Its optional `on_event` callback reports generic stage
+boundaries and a read-only allocation summary so an embedding can collect
+metrics without coupling this module to a product metrics system. The callback
+must not mutate compiler inputs.
+
 Internal functions use the tail-call convention: an ordinary internal caller
 places stack arguments in its reserved outgoing area, the callee pops that
 incoming area on return, and the call pseudo immediately restores the caller's
