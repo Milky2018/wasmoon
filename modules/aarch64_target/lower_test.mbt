@@ -2257,20 +2257,33 @@ test "AArch64 lowering resolves environment paths and typed symbol addresses" {
 }
 
 ///|
-test "AArch64 lowering locally reuses only stable environment fields" {
+test "AArch64 lowering bounds stable environment reuse by pressure region" {
   let field = @semantic.EnvironmentField::new("runtime.memory.base", I64)
   let builder = @semantic.FunctionBuilder::new(
     "environment_stability",
     Internal,
     [Ptr64],
-    [I64, I64, I64, I64],
+    [I64, I64, I64, I64, I64, I64],
   )
   let stable_first = builder.emit(
       EnvironmentField(field, Stable),
       [builder.parameters()[0]],
       [I64],
     )[0]
+  for value in 0..<9 {
+    builder.emit(I64Const(value.to_uint64()), [], [I64]) |> ignore
+  }
   let stable_second = builder.emit(
+      EnvironmentField(field, Stable),
+      [builder.parameters()[0]],
+      [I64],
+    )[0]
+  let stable_third = builder.emit(
+      EnvironmentField(field, Stable),
+      [builder.parameters()[0]],
+      [I64],
+    )[0]
+  let stable_fourth = builder.emit(
       EnvironmentField(field, Stable),
       [builder.parameters()[0]],
       [I64],
@@ -2285,22 +2298,27 @@ test "AArch64 lowering locally reuses only stable environment fields" {
       [builder.parameters()[0]],
       [I64],
     )[0]
-  builder.return_([stable_first, stable_second, mutable_first, mutable_second])
+  builder.return_([
+    stable_first, stable_second, stable_third, stable_fourth, mutable_first, mutable_second,
+  ])
   let context = test_lowering_context().with_environment_field(field, [24])
   inspect(
     lower(builder.finish(), context).summary(),
     content=(
-      #|vcode environment_stability(v0:ptr64) -> (i64, i64, i64, i64)
+      #|vcode environment_stability(v0:ptr64) -> (i64, i64, i64, i64, i64, i64)
       #|block0:
       #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v1:any-location(prefer=p0:int)@late]
       #|  i1 ScalarLoad(W64, None, I64, 24) uses=[v1:any@early] defs=[v2:any@late]
       #|  i2 ScalarLoad(W64, None, I64, 24) uses=[v1:any@early] defs=[v3:any@late]
       #|  i3 ScalarLoad(W64, None, I64, 24) uses=[v1:any@early] defs=[v4:any@late]
-      #|  i4 OutgoingReg(I64, p0:int) uses=[v2:any@early]
-      #|  i5 OutgoingReg(I64, p1:int) uses=[v2:any@early]
-      #|  i6 OutgoingReg(I64, p2:int) uses=[v3:any@early]
-      #|  i7 OutgoingReg(I64, p3:int) uses=[v4:any@early]
-      #|  i8 Return
+      #|  i4 ScalarLoad(W64, None, I64, 24) uses=[v1:any@early] defs=[v5:any@late]
+      #|  i5 OutgoingReg(I64, p0:int) uses=[v2:any@early]
+      #|  i6 OutgoingReg(I64, p1:int) uses=[v2:any@early]
+      #|  i7 OutgoingReg(I64, p2:int) uses=[v3:any@early]
+      #|  i8 OutgoingReg(I64, p3:int) uses=[v3:any@early]
+      #|  i9 OutgoingReg(I64, p4:int) uses=[v4:any@early]
+      #|  i10 OutgoingReg(I64, p5:int) uses=[v5:any@early]
+      #|  i11 Return
       #|
     ),
   )

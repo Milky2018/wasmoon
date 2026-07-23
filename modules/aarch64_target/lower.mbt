@@ -621,12 +621,17 @@ priv struct EnvironmentReuseKey {
 priv struct EnvironmentReuseEntry {
   value : @semantic.Value
   definition_index : Int
+  reuse_count : Int
 }
 
 ///|
-/// Bound reuse to nearby instructions so eliminating a context load does not
-/// turn its result into a long-lived register-allocation constraint.
-const ENVIRONMENT_REUSE_DISTANCE : Int = 8
+/// Bound stable-field reuse by both span and consumer count. This keeps each
+/// cached value inside one short pressure region instead of pinning it across
+/// the complete function or loop.
+const ENVIRONMENT_REUSE_DISTANCE : Int = 16
+
+///|
+const ENVIRONMENT_REUSE_LIMIT : Int = 1
 
 ///|
 priv struct BranchSelection {
@@ -1050,12 +1055,20 @@ fn analyze_lowering(function : @semantic.Function) -> LoweringAnalysis {
         function.instruction_results(instruction) is [result] {
         let key = { field, context }
         match available.get(key) {
-          Some(entry) if definition_index - entry.definition_index <=
-            ENVIRONMENT_REUSE_DISTANCE =>
+          Some(entry) if entry.reuse_count < ENVIRONMENT_REUSE_LIMIT &&
+            definition_index - entry.definition_index <=
+            ENVIRONMENT_REUSE_DISTANCE => {
             environment_aliases[function.value_index(result).unwrap()] = Some(
               entry.value,
             )
-          _ => available.set(key, { value: result, definition_index })
+            available.set(key, { ..entry, reuse_count: entry.reuse_count + 1 })
+          }
+          _ =>
+            available.set(key, {
+              value: result,
+              definition_index,
+              reuse_count: 0,
+            })
         }
       }
       definition_index += 1
