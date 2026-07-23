@@ -172,6 +172,47 @@ test "AArch64 verifier rejects an out-of-range shifted add" {
 }
 
 ///|
+test "AArch64 verifier rejects an unencodable address immediate" {
+  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
+    "bad_address_immediate",
+    [Ptr64],
+  )
+  let entry = builder.entry_block()
+  builder.append_body(
+    entry,
+    AddAddressImmediate(4097UL),
+    [@vcode.Input::any(builder.parameter(0))],
+    [@vcode.Output::any(Ptr64)],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  builder.set_terminator(
+    entry,
+    Return,
+    [],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  try verify_vcode(builder.finish()) catch {
+    error =>
+      inspect(
+        error,
+        content=(
+          #|InvalidInstruction(
+          #|  instruction=i0,
+          #|  message="address immediate cannot be encoded",
+          #|)
+        ),
+      )
+  } noraise {
+    _ => fail("expected an unencodable address immediate to be rejected")
+  }
+}
+
+///|
 test "AArch64 verifier rejects duplicate switch cases" {
   let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
     "bad_switch",

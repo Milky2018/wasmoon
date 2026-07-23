@@ -159,6 +159,38 @@ test "AArch64 lowering folds a single-use left shift into integer add" {
 }
 
 ///|
+test "AArch64 lowering folds shared pointer offsets into address immediates" {
+  let builder = @semantic.FunctionBuilder::new(
+    "selected_address_immediate",
+    Internal,
+    [Ptr64],
+    [Ptr64, Ptr64],
+  )
+  let offset = builder.emit(I64Const(48UL), [], [I64])[0]
+  let first = builder.emit(PointerOffset, [builder.parameters()[0], offset], [
+      Ptr64,
+    ])[0]
+  let second = builder.emit(PointerOffset, [builder.parameters()[0], offset], [
+      Ptr64,
+    ])[0]
+  builder.return_([first, second])
+  inspect(
+    lower(builder.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode selected_address_immediate(v0:ptr64) -> (ptr64, ptr64)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v1:any-location(prefer=p0:int)@late]
+      #|  i1 AddAddressImmediate(48) uses=[v1:any@early] defs=[v2:any@late]
+      #|  i2 AddAddressImmediate(48) uses=[v1:any@early] defs=[v3:any@late]
+      #|  i3 OutgoingReg(Ptr64, p0:int) uses=[v2:any@early]
+      #|  i4 OutgoingReg(Ptr64, p1:int) uses=[v3:any@early]
+      #|  i5 Return
+      #|
+    ),
+  )
+}
+
+///|
 test "AArch64 lowering selects zero-extended register-offset loads" {
   let builder = @semantic.FunctionBuilder::new(
     "selected_register_offset_load",

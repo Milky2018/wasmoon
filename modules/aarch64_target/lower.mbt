@@ -597,6 +597,13 @@ priv struct ShiftedAddSelection {
 }
 
 ///|
+priv struct AddressImmediateSelection {
+  bits : UInt64
+  input : @semantic.Value
+  constant : @semantic.Value
+}
+
+///|
 priv struct MemoryAddressSelection {
   base : @semantic.Value
   index : @semantic.Value
@@ -638,6 +645,7 @@ priv struct LoweringAnalysis {
   multiply_adds : Array[MultiplyAddSelection?]
   shift_immediates : Array[ShiftImmediateSelection?]
   shifted_adds : Array[ShiftedAddSelection?]
+  address_immediates : Array[AddressImmediateSelection?]
   memory_addresses : Array[MemoryAddressSelection?]
   environment_aliases : Array[@semantic.Value?]
   branches : Array[BranchSelection?]
@@ -951,6 +959,10 @@ fn analyze_lowering(function : @semantic.Function) -> LoweringAnalysis {
     value_count,
     None,
   )
+  let address_immediates : Array[AddressImmediateSelection?] = Array::make(
+    value_count,
+    None,
+  )
   let mut instruction_slots = 0
   for block in function.blocks() {
     for instruction in function.block_instructions(block) {
@@ -1053,6 +1065,18 @@ fn analyze_lowering(function : @semantic.Function) -> LoweringAnalysis {
     for instruction in function.block_instructions(block) {
       let operation = function.instruction_operation(instruction).unwrap()
       let results = function.instruction_results(instruction)
+      if operation is PointerOffset &&
+        results is [result] &&
+        function.instruction_operands(instruction) is [input, constant] &&
+        constants[function.value_index(constant).unwrap()] is Some(bits) &&
+        add_sub_immediate_shift(bits) is Some(_) {
+        address_immediates[function.value_index(result).unwrap()] = Some({
+          bits,
+          input,
+          constant,
+        })
+        folded_uses[function.value_index(constant).unwrap()] += 1
+      }
       if operation is IntBinary(Add) &&
         results is [result] &&
         optional_gpr_width(function.value_type(result)) is Some(width) &&
@@ -1138,6 +1162,12 @@ fn analyze_lowering(function : @semantic.Function) -> LoweringAnalysis {
                 .unwrap()] -= 1
                 shift_immediates[value_index] = None
               }
+              if address_immediates[value_index] is Some(selected_address) {
+                folded_uses[function
+                .value_index(selected_address.constant)
+                .unwrap()] -= 1
+                address_immediates[value_index] = None
+              }
             }
             for value in folded_constants {
               folded_uses[function.value_index(value).unwrap()] += 1
@@ -1177,6 +1207,12 @@ fn analyze_lowering(function : @semantic.Function) -> LoweringAnalysis {
                 .value_index(selected_shift.constant)
                 .unwrap()] -= 1
                 shift_immediates[value_index] = None
+              }
+              if address_immediates[value_index] is Some(selected_address) {
+                folded_uses[function
+                .value_index(selected_address.constant)
+                .unwrap()] -= 1
+                address_immediates[value_index] = None
               }
             }
             for value in folded_constants {
@@ -1374,6 +1410,7 @@ fn analyze_lowering(function : @semantic.Function) -> LoweringAnalysis {
     multiply_adds,
     shift_immediates,
     shifted_adds,
+    address_immediates,
     memory_addresses,
     environment_aliases,
     branches,
@@ -1423,23 +1460,32 @@ fn lower_instruction(
     Some(index) => analysis.shifted_adds[index]
     None => None
   }
+  let address_immediate = match result_index {
+    Some(index) => analysis.address_immediates[index]
+    None => None
+  }
   let memory_address = analysis.memory_addresses[instruction_index]
   let operands = match
-    (multiply_add, shifted_add, shift_immediate, memory_address, immediate) {
-    (Some(selected), _, _, _, _) =>
+    (
+      multiply_add, shifted_add, shift_immediate, address_immediate, memory_address,
+      immediate,
+    ) {
+    (Some(selected), _, _, _, _, _) =>
       map_values(function, values, [
         selected.accumulator,
         selected.left,
         selected.right,
       ])
-    (_, Some(selected), _, _, _) =>
+    (_, Some(selected), _, _, _, _) =>
       map_values(function, values, [
         selected.accumulator,
         selected.shifted_input,
       ])
-    (_, _, Some(selected), _, _) =>
+    (_, _, Some(selected), _, _, _) =>
       [map_value(function, values, selected.input)]
-    (_, _, _, Some(selected), _) => {
+    (_, _, _, Some(selected), _, _) =>
+      [map_value(function, values, selected.input)]
+    (_, _, _, _, Some(selected), _) => {
       let selected_operands = [
         map_value(function, values, selected.base),
         map_value(function, values, selected.index),
@@ -1451,7 +1497,7 @@ fn lower_instruction(
       }
       selected_operands
     }
-    (_, _, _, _, Some(selected)) =>
+    (_, _, _, _, _, Some(selected)) =>
       [map_value(function, values, selected.input)]
     _ => map_values(function, values, semantic_operands)
   }
@@ -1504,6 +1550,24 @@ fn lower_instruction(
       builder,
       block,
       IntAddShiftedLeft(selected.width, selected.amount),
+      operands.map(@vcode.Input::any),
+      result_types.map(@vcode.Output::any),
+      source_metadata(
+        function.instruction_metadata(instruction).unwrap(),
+        roots,
+        operation.semantics(),
+      ),
+    )
+    for index, result in semantic_results {
+      values[function.value_index(result).unwrap()] = Some(results[index])
+    }
+    return
+  }
+  if address_immediate is Some(selected) {
+    let results = append_body(
+      builder,
+      block,
+      AddAddressImmediate(selected.bits),
       operands.map(@vcode.Input::any),
       result_types.map(@vcode.Output::any),
       source_metadata(

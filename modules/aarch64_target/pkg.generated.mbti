@@ -259,6 +259,7 @@ pub(all) enum AArch64Inst {
   TrapIfFloat(@machv.ValueType, AArch64FloatTrapCondition)
   Convert(AArch64Conversion)
   AddAddress
+  AddAddressImmediate(UInt64)
   AddAddressUxtw(Int)
   ScalarLoad(@machv.AccessWidth, @machv.LoadExtension, @machv.ValueType, UInt64)
   ScalarLoadUxtw(@machv.AccessWidth, @machv.LoadExtension, @machv.ValueType, Int)

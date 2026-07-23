@@ -253,6 +253,7 @@ pub(all) enum AArch64Inst {
   TrapIfFloat(@semantic.ValueType, AArch64FloatTrapCondition)
   Convert(AArch64Conversion)
   AddAddress
+  AddAddressImmediate(UInt64)
   AddAddressUxtw(Int)
   ScalarLoad(
     @semantic.AccessWidth,
@@ -1574,6 +1575,22 @@ fn verify_target_vcode(
           false,
           0,
         )
+      AddAddressImmediate(bits) => {
+        if add_sub_immediate_shift(bits) is None {
+          raise InvalidInstruction(
+            instruction~,
+            message="address immediate cannot be encoded",
+          )
+        }
+        require_instruction_shape(
+          function,
+          instruction,
+          [Ptr64],
+          [Ptr64],
+          false,
+          0,
+        )
+      }
       AddAddressUxtw(shift) => {
         if shift < 0 || shift > 4 {
           raise InvalidInstruction(

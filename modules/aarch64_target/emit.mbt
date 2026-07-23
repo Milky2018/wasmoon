@@ -3086,6 +3086,10 @@ fn emit_instruction(
       buffer.emit_word(
         encode_three_register(0x8B000000U, reg(2), reg(0), reg(1)),
       )
+    AddAddressImmediate(bits) =>
+      buffer.emit_word(
+        encode_int_binary_immediate(W64, Add, bits, reg(1), reg(0)),
+      )
     AddAddressUxtw(shift) =>
       buffer.emit_word(
         0x8B204000U |
