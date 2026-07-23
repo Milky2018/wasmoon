@@ -18,6 +18,53 @@ SMITH_DIR = Path(__file__).resolve().parent
 DEFAULT_CONFIG = SMITH_DIR / "wasm_smith_all.json"
 TEMPLATE_WAT = SMITH_DIR / "template_run.wat"
 
+TRAP_REASON_MARKERS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    (
+        "memory-out-of-bounds",
+        ("out of bounds memory", "memory out of bounds"),
+    ),
+    (
+        "table-out-of-bounds",
+        ("out of bounds table", "table out of bounds"),
+    ),
+    (
+        "array-out-of-bounds",
+        ("out of bounds array", "array out of bounds"),
+    ),
+    ("out-of-bounds", ("out of bounds",)),
+    (
+        "integer-division-by-zero",
+        (
+            "integer divide by zero",
+            "integer division by zero",
+            "division by zero",
+        ),
+    ),
+    ("integer-overflow", ("integer overflow",)),
+    (
+        "invalid-conversion-to-integer",
+        ("invalid conversion to integer",),
+    ),
+    ("unreachable", ("unreachable",)),
+    ("stack-overflow", ("stack overflow", "call stack exhausted")),
+    ("memory-fault", ("memory fault",)),
+    ("undefined-element", ("undefined element",)),
+    ("uninitialized-element", ("uninitialized element",)),
+    (
+        "indirect-call-type-mismatch",
+        ("indirect call type mismatch",),
+    ),
+    ("null-reference", ("null reference",)),
+    ("unaligned-atomic", ("unaligned atomic",)),
+)
+
+PARSE_ERROR_MARKERS = (
+    "parse wasm module error",
+    "parse wat file error",
+    "parsing wasm",
+    "parsing wat",
+)
+
 
 def _deterministic_seed(corpus_seed: int, case_index: int, size: int) -> bytes:
     result = bytearray()
@@ -35,6 +82,29 @@ class Outcome:
     rc: int
     stdout: str
     stderr: str
+
+
+def _combined_output(stdout: str, stderr: str) -> str:
+    return "\n".join(part for part in (stderr, stdout) if part)
+
+
+def _normalize_diagnostic(text: str) -> str:
+    return " ".join(text.lower().split())
+
+
+def _trap_reason(text: str) -> str | None:
+    normalized = _normalize_diagnostic(text)
+    for reason, markers in TRAP_REASON_MARKERS:
+        if any(marker in normalized for marker in markers):
+            return reason
+
+    for line in text.splitlines():
+        normalized_line = _normalize_diagnostic(line)
+        for marker in ("wasm trap", "trap:"):
+            if marker in normalized_line:
+                detail = normalized_line.split(marker, maxsplit=1)[1].strip(" :")
+                return f"other:{detail}" if detail else "other"
+    return None
 
 
 def _run(
@@ -63,38 +133,12 @@ def _run(
     if p.returncode == 0:
         return Outcome(kind="ok", rc=0, stdout=stdout, stderr=stderr)
 
-    lowered = (stderr + "\n" + stdout).lower()
+    output = _combined_output(stdout, stderr)
+    lowered = output.lower()
 
-    # Classify traps heuristically across runtimes.
-    # Wasmoon often formats traps as `Error: <trap reason>`.
-    trap_markers = [
-        "wasm trap",
-        "trap:",
-        "unreachable",
-        "stack overflow",
-        "out of bounds",
-        "memory fault",
-        "division by zero",
-        "integer divide by zero",
-        "integer overflow",
-        "invalid conversion to integer",
-        "undefined element",
-        "uninitialized element",
-        "indirect call type mismatch",
-        "null reference",
-        "unaligned atomic",
-    ]
-
-    parse_markers = [
-        "parse wasm module error",
-        "parse wat file error",
-        "parsing wasm",
-        "parsing wat",
-    ]
-
-    if any(m in lowered for m in parse_markers):
+    if any(marker in lowered for marker in PARSE_ERROR_MARKERS):
         kind = "error"
-    elif any(m in lowered for m in trap_markers):
+    elif _trap_reason(output) is not None:
         kind = "trap"
     else:
         kind = "error"
@@ -274,13 +318,32 @@ def _run_oracle(
 def _signature(out: Outcome) -> tuple:
     if out.kind == "ok":
         return ("ok", out.stdout.strip())
+    if out.kind == "trap":
+        reason = _trap_reason(_combined_output(out.stdout, out.stderr))
+        if reason is None:
+            reason = f"unclassified:{_normalize_diagnostic(out.stderr or out.stdout)}"
+        return ("trap", reason)
+    if out.kind == "error":
+        diagnostic = _normalize_diagnostic(
+            _combined_output(out.stdout, out.stderr)
+        )
+        return ("error", out.rc, diagnostic)
     return (out.kind,)
 
 
 def _is_mismatch(oracle: tuple, interpreter: tuple, jit: tuple, authority: str) -> bool:
-    if authority == "interpreter":
-        return jit != interpreter
-    return interpreter != oracle or jit != oracle
+    compared = (
+        (interpreter, jit)
+        if authority == "interpreter"
+        else (oracle, interpreter, jit)
+    )
+    if any(
+        signature[0] == "timeout"
+        or signature[0] not in {"ok", "trap", "error"}
+        for signature in compared
+    ):
+        return True
+    return len(set(compared)) != 1
 
 
 def check_one(wasm: Path, *, timeout_s: float) -> int:
@@ -292,7 +355,7 @@ def check_one(wasm: Path, *, timeout_s: float) -> int:
     interp = _signature(_run_wasmoon(wasm, jit=False, timeout_s=timeout_s))
     jit = _signature(_run_wasmoon(wasm, jit=True, timeout_s=timeout_s))
 
-    mismatch = (interp != oracle) or (jit != oracle)
+    mismatch = _is_mismatch(oracle, interp, jit, "wasmtime")
     return 0 if mismatch else 1
 
 
