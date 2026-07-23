@@ -1858,7 +1858,7 @@ fn compile_validated_module_to_jit(
       @perf.clear_milkir_metrics_sink()
     }
     if optimize_tick is Some(tick) {
-      @perf.record_stage_us("optimize", @perf.elapsed_us(tick))
+      @perf.record_stage_us(Optimize, @perf.elapsed_us(tick))
     }
     let mut ir_dump : String? = None
     if debug_db is Some(_) {

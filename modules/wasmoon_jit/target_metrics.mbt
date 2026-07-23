@@ -8,13 +8,17 @@ fn target_metrics_tick(enabled : Bool) -> @perf.PerfTick? {
 }
 
 ///|
-fn record_target_stage(stage : String, tick : @perf.PerfTick?) -> Unit {
-  if tick is Some(start) {
-    let duration_us = @perf.elapsed_us(start)
-    @perf.record_stage_us(stage, duration_us)
-    if stage == "regalloc" {
-      @perf.record_regalloc_phase_us("allocate_vcode", duration_us)
+fn record_target_stage(
+  stage : @perf.FunctionCompileStage,
+  tick : @perf.PerfTick?,
+) -> Int64? {
+  match tick {
+    Some(start) => {
+      let duration_us = @perf.elapsed_us(start)
+      @perf.record_stage_us(stage, duration_us)
+      Some(duration_us)
     }
+    None => None
   }
 }
 
@@ -39,17 +43,22 @@ fn target_compile_metrics_observer(
   fn(event) {
     match event {
       RegallocStarted => {
-        record_target_stage("target_lower", Some(target_lower_tick))
+        record_target_stage(TargetLowering, Some(target_lower_tick)) |> ignore
         phase_tick.val = Some(@perf.tick_now())
       }
       RegallocFinished(statistics) => {
-        record_target_stage("regalloc", phase_tick.val)
+        if record_target_stage(RegisterAllocation, phase_tick.val)
+          is Some(duration_us) {
+          @perf.record_regalloc_phase_us("allocate_vcode", duration_us)
+        }
         record_target_allocation_stats(statistics)
       }
       FramePlanningStarted => phase_tick.val = Some(@perf.tick_now())
-      FramePlanningFinished => record_target_stage("frame_plan", phase_tick.val)
+      FramePlanningFinished =>
+        record_target_stage(FramePlanning, phase_tick.val) |> ignore
       EmissionStarted => phase_tick.val = Some(@perf.tick_now())
-      EmissionFinished => record_target_stage("emit", phase_tick.val)
+      EmissionFinished =>
+        record_target_stage(Emission, phase_tick.val) |> ignore
     }
   }
 }

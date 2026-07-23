@@ -283,7 +283,7 @@ fn compile_wasm_body_aarch64_target(
   let semantic = lower_wasm_body_semantic_with_environment(
     function, validation_context, environment,
   )
-  record_target_stage("lower", semantic_lower_tick)
+  record_target_stage(SemanticLowering, semantic_lower_tick) |> ignore
   build_wasmoon_aarch64_target(semantic, environment, record_metrics~)
 }
 
@@ -302,7 +302,7 @@ fn compile_wasm_body_x64_target(
   let semantic = lower_wasm_body_semantic_with_environment(
     function, validation_context, environment,
   )
-  record_target_stage("lower", semantic_lower_tick)
+  record_target_stage(SemanticLowering, semantic_lower_tick) |> ignore
   build_wasmoon_x64_target(semantic, environment, record_metrics~)
 }
 

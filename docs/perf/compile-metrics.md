@@ -66,6 +66,12 @@ lower bound on `module_compile_us`; frontend translation, manifest construction,
 and orchestration account for the remainder and must not be double-counted into
 one of the target stages.
 
+Producers record these top-level fields through `FunctionCompileStage`, and the
+`TargetCompileEvent` observer maps events to that enum with an exhaustive match.
+String names exist only in the exported JSON schema and in the open-ended
+`regalloc_phases` detail list; an unknown top-level stage cannot be silently
+ignored.
+
 Allocation counters describe the final VCode allocation. Edge transfers are
 classified by their source and destination: register-to-stack is a spill,
 stack-to-register is a reload, register-to-register is a register move, and

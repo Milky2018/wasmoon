@@ -54,6 +54,20 @@ pub fn elapsed_us(start : PerfTick) -> Int64 {
 }
 
 ///|
+/// A complete compilation stage recorded for one function.
+///
+/// Keep this typed at the recording boundary so adding or renaming a stage
+/// cannot silently lose metrics through an unknown string.
+pub(all) enum FunctionCompileStage {
+  Optimize
+  SemanticLowering
+  TargetLowering
+  RegisterAllocation
+  FramePlanning
+  Emission
+}
+
+///|
 pub struct IRPassMetric {
   name : String
   duration_us : Int64
@@ -262,17 +276,19 @@ pub fn clear_milkir_metrics_sink() -> Unit {
 }
 
 ///|
-pub fn record_stage_us(stage_name : String, duration_us : Int64) -> Unit {
+pub fn record_stage_us(
+  stage : FunctionCompileStage,
+  duration_us : Int64,
+) -> Unit {
   guard enabled() else { return }
   if current_function_state.val is Some(m) {
-    match stage_name {
-      "optimize" => m.optimize_us = duration_us
-      "lower" => m.lower_us = duration_us
-      "target_lower" => m.target_lower_us = duration_us
-      "regalloc" => m.regalloc_us = duration_us
-      "frame_plan" => m.frame_plan_us = duration_us
-      "emit" => m.emit_us = duration_us
-      _ => ()
+    match stage {
+      Optimize => m.optimize_us = duration_us
+      SemanticLowering => m.lower_us = duration_us
+      TargetLowering => m.target_lower_us = duration_us
+      RegisterAllocation => m.regalloc_us = duration_us
+      FramePlanning => m.frame_plan_us = duration_us
+      Emission => m.emit_us = duration_us
     }
   }
 }

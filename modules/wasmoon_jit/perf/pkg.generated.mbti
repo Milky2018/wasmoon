@@ -26,7 +26,7 @@ pub fn record_regalloc_phase_us(String, Int64) -> Unit
 
 pub fn record_regalloc_stats(Int, Int, Int, Int, Int) -> Unit
 
-pub fn record_stage_us(String, Int64) -> Unit
+pub fn record_stage_us(FunctionCompileStage, Int64) -> Unit
 
 pub fn reset_module(Int) -> Unit
 
@@ -37,6 +37,15 @@ pub fn tick_now() -> Instant
 // Errors
 
 // Types and methods
+pub(all) enum FunctionCompileStage {
+  Optimize
+  SemanticLowering
+  TargetLowering
+  RegisterAllocation
+  FramePlanning
+  Emission
+}
+
 pub struct FunctionMetrics {
   func_idx : Int
   func_name : String
