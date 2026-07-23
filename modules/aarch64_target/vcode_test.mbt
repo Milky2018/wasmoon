@@ -87,6 +87,91 @@ test "AArch64 verifier rejects an invalid 32-bit constant" {
 }
 
 ///|
+test "AArch64 verifier rejects an out-of-range immediate shift" {
+  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
+    "bad_immediate_shift",
+    [I32],
+  )
+  let entry = builder.entry_block()
+  builder.append_body(
+    entry,
+    IntShiftImmediate(W32, Lsl, 32),
+    [@vcode.Input::any(builder.parameter(0))],
+    [@vcode.Output::any(I32)],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  builder.set_terminator(
+    entry,
+    Return,
+    [],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  try verify_vcode(builder.finish()) catch {
+    error =>
+      inspect(
+        error,
+        content=(
+          #|InvalidInstruction(
+          #|  instruction=i0,
+          #|  message="integer shift amount is out of range",
+          #|)
+        ),
+      )
+  } noraise {
+    _ => fail("expected an out-of-range immediate shift to be rejected")
+  }
+}
+
+///|
+test "AArch64 verifier rejects an out-of-range shifted add" {
+  let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
+    "bad_shifted_add",
+    [I64, I64],
+  )
+  let entry = builder.entry_block()
+  builder.append_body(
+    entry,
+    IntAddShiftedLeft(W64, 64),
+    [
+      @vcode.Input::any(builder.parameter(0)),
+      @vcode.Input::any(builder.parameter(1)),
+    ],
+    [@vcode.Output::any(I64)],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  builder.set_terminator(
+    entry,
+    Return,
+    [],
+    [],
+    [],
+    @vcode.InstructionMetadata::empty(),
+  )
+  |> ignore
+  try verify_vcode(builder.finish()) catch {
+    error =>
+      inspect(
+        error,
+        content=(
+          #|InvalidInstruction(
+          #|  instruction=i0,
+          #|  message="integer shift amount is out of range",
+          #|)
+        ),
+      )
+  } noraise {
+    _ => fail("expected an out-of-range shifted add to be rejected")
+  }
+}
+
+///|
 test "AArch64 verifier rejects duplicate switch cases" {
   let builder : @vcode.Builder[AArch64Inst] = @vcode.Builder::new(
     "bad_switch",

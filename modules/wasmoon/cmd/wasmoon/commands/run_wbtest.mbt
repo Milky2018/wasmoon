@@ -99,8 +99,8 @@ test "run JIT cache version tracks the artifact format" {
 ///|
 test "run JIT cache encodes the codegen revision as a path-safe component" {
   inspect(
-    cache_revision_file_tag("machv-vcode-2"),
-    content="006d0061006300680076002d00760063006f00640065002d0032",
+    cache_revision_file_tag("machv-vcode-3"),
+    content="006d0061006300680076002d00760063006f00640065002d0033",
   )
 }
 
@@ -134,7 +134,7 @@ test "run JIT cache accepts an exactly compatible v9 artifact" {
   }
   inspect(
     run_jit_cache_file("/tmp/cache", deterministic_manifest),
-    content="/tmp/cache/v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0032-s32e9891ae7d3cedff10d21cea1ae3a989d4fb5424b89b9c2f93328535cf30af7-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm",
+    content="/tmp/cache/v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0033-s32e9891ae7d3cedff10d21cea1ae3a989d4fb5424b89b9c2f93328535cf30af7-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm",
   )
   let path = cache_test_file("compatible")
   save_run_jit_cache(path, artifact)
@@ -228,7 +228,7 @@ test "run JIT cache rejects an artifact from the previous codegen revision" {
   }
   let previous : @artifact.Artifact = {
     ..current,
-    manifest: { ..current.manifest, codegen_revision: "machv-vcode-1" },
+    manifest: { ..current.manifest, codegen_revision: "machv-vcode-2" },
   }
   let path = cache_test_file("previous-codegen")
   save_run_jit_cache(path, previous)
@@ -244,7 +244,7 @@ test "run JIT cache rejects an artifact from the previous codegen revision" {
       @fs.path_exists(path),
     ),
     content=(
-      #|("machv-vcode-2", "machv-vcode-1", true, false)
+      #|("machv-vcode-3", "machv-vcode-2", true, false)
     ),
   )
 }

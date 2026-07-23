@@ -209,6 +209,68 @@ test "AArch64 integer unary encodings place source in the correct field" {
 }
 
 ///|
+test "AArch64 immediate shift encodings cover both widths and boundaries" {
+  let source = @vcode.PhysicalReg::new(3, Int)
+  let destination = @vcode.PhysicalReg::new(5, Int)
+  debug_inspect(
+    [
+      encode_shift_immediate(W32, Lsl, 0, destination, source),
+      encode_shift_immediate(W32, Lsl, 31, destination, source),
+      encode_shift_immediate(W32, Lsr, 0, destination, source),
+      encode_shift_immediate(W32, Lsr, 31, destination, source),
+      encode_shift_immediate(W32, Asr, 0, destination, source),
+      encode_shift_immediate(W32, Asr, 31, destination, source),
+      encode_shift_immediate(W32, Ror, 0, destination, source),
+      encode_shift_immediate(W32, Ror, 31, destination, source),
+      encode_shift_immediate(W64, Lsl, 0, destination, source),
+      encode_shift_immediate(W64, Lsl, 63, destination, source),
+      encode_shift_immediate(W64, Lsr, 0, destination, source),
+      encode_shift_immediate(W64, Lsr, 63, destination, source),
+      encode_shift_immediate(W64, Asr, 0, destination, source),
+      encode_shift_immediate(W64, Asr, 63, destination, source),
+      encode_shift_immediate(W64, Ror, 0, destination, source),
+      encode_shift_immediate(W64, Ror, 63, destination, source),
+      encode_add_shifted_left(
+        W32,
+        31,
+        destination,
+        source,
+        @vcode.PhysicalReg::new(4, Int),
+      ),
+      encode_add_shifted_left(
+        W64,
+        63,
+        destination,
+        source,
+        @vcode.PhysicalReg::new(4, Int),
+      ),
+    ],
+    content=(
+      #|[
+      #|  1392540773,
+      #|  1392574565,
+      #|  1392540773,
+      #|  1394572389,
+      #|  318798949,
+      #|  320830565,
+      #|  327352421,
+      #|  327384165,
+      #|  3544251493,
+      #|  3544252517,
+      #|  3544251493,
+      #|  3548380261,
+      #|  2470509669,
+      #|  2474638437,
+      #|  2479030373,
+      #|  2479094885,
+      #|  184843365,
+      #|  2332359781,
+      #|]
+    ),
+  )
+}
+
+///|
 test "AArch64 overflow arithmetic encodes every width and signedness" {
   let buffer = CodeBuffer::new()
   let operations : Array[@semantic.IntOverflowOp] = [

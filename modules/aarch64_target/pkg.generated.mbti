@@ -241,7 +241,9 @@ pub(all) enum AArch64Inst {
   IntBinary(GprWidth, AArch64IntBinary)
   IntBinaryImmediate(GprWidth, AArch64IntBinary, UInt64)
   IntMultiplyAdd(GprWidth)
-  IntShiftLeftImmediate(GprWidth, Int)
+  IntShiftRegister(GprWidth, AArch64Shift)
+  IntShiftImmediate(GprWidth, AArch64Shift, Int)
+  IntAddShiftedLeft(GprWidth, Int)
   PopulationCount(GprWidth)
   IntHighMultiply(GprWidth, @machv.Signedness)
   IntWithOverflow(GprWidth, @machv.IntOverflowOp)
@@ -297,10 +299,6 @@ pub(all) enum AArch64IntBinary {
   And
   Orr
   Eor
-  Lsl
-  Asr
-  Lsr
-  Ror
   Sdiv
   Udiv
 } derive(Eq, @debug.Debug)
@@ -318,6 +316,13 @@ pub struct AArch64LinkPlan {
 pub fn AArch64LinkPlan::code(Self) -> Array[Byte]
 pub fn AArch64LinkPlan::link(Self, Int64, (@code_object.RelocationTarget) -> Int64?) -> Array[Byte] raise AArch64LinkError
 pub fn AArch64LinkPlan::veneer_offsets(Self) -> Array[Int]
+
+pub(all) enum AArch64Shift {
+  Lsl
+  Asr
+  Lsr
+  Ror
+} derive(Eq, @debug.Debug)
 
 pub struct AArch64StackObject {
   offset : Int

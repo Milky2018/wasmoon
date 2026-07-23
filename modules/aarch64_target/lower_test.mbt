@@ -64,6 +64,101 @@ test "AArch64 lowering fuses single-use integer multiply-add" {
 }
 
 ///|
+test "AArch64 lowering selects immediate scalar shifts and rotates" {
+  let builder = @semantic.FunctionBuilder::new(
+    "selected_immediate_shifts",
+    Internal,
+    [Ptr64, I32, I64],
+    [I32, I32, I32, I32, I32, I64, I64, I64, I64, I64],
+  )
+  let parameters = builder.parameters()
+  let thirty_one = builder.emit(I32Const(31U), [], [I32])[0]
+  let one32 = builder.emit(I32Const(1U), [], [I32])[0]
+  let sixty_three = builder.emit(I64Const(63UL), [], [I64])[0]
+  let one64 = builder.emit(I64Const(1UL), [], [I64])[0]
+  let results = [
+    builder.emit(IntBinary(ShiftLeft), [parameters[1], thirty_one], [I32])[0],
+    builder.emit(IntBinary(SignedShiftRight), [parameters[1], thirty_one], [I32])[0],
+    builder.emit(IntBinary(UnsignedShiftRight), [parameters[1], thirty_one], [
+      I32,
+    ])[0],
+    builder.emit(IntBinary(RotateRight), [parameters[1], thirty_one], [I32])[0],
+    builder.emit(IntBinary(RotateLeft), [parameters[1], one32], [I32])[0],
+    builder.emit(IntBinary(ShiftLeft), [parameters[2], sixty_three], [I64])[0],
+    builder.emit(IntBinary(SignedShiftRight), [parameters[2], sixty_three], [
+      I64,
+    ])[0],
+    builder.emit(IntBinary(UnsignedShiftRight), [parameters[2], sixty_three], [
+      I64,
+    ])[0],
+    builder.emit(IntBinary(RotateRight), [parameters[2], sixty_three], [I64])[0],
+    builder.emit(IntBinary(RotateLeft), [parameters[2], one64], [I64])[0],
+  ]
+  builder.return_(results)
+  inspect(
+    lower(builder.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode selected_immediate_shifts(v0:ptr64, v1:i32, v2:i64) -> (i32, i32, i32, i32, i32, i64, i64, i64, i64, i64)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v3:any-location(prefer=p0:int)@late]
+      #|  i1 IncomingReg(I32, p1:int) uses=[v1:fixed(p1:int)@early] defs=[v4:any-location(prefer=p1:int)@late]
+      #|  i2 IncomingReg(I64, p2:int) uses=[v2:fixed(p2:int)@early] defs=[v5:any-location(prefer=p2:int)@late]
+      #|  i3 IncomingResultArea(p8:int) defs=[v6:any-location@late]
+      #|  i4 IntShiftImmediate(W32, Lsl, 31) uses=[v4:any@early] defs=[v7:any@late]
+      #|  i5 IntShiftImmediate(W32, Asr, 31) uses=[v4:any@early] defs=[v8:any@late]
+      #|  i6 IntShiftImmediate(W32, Lsr, 31) uses=[v4:any@early] defs=[v9:any@late]
+      #|  i7 IntShiftImmediate(W32, Ror, 31) uses=[v4:any@early] defs=[v10:any@late]
+      #|  i8 IntShiftImmediate(W32, Ror, 31) uses=[v4:any@early] defs=[v11:any@late]
+      #|  i9 IntShiftImmediate(W64, Lsl, 63) uses=[v5:any@early] defs=[v12:any@late]
+      #|  i10 IntShiftImmediate(W64, Asr, 63) uses=[v5:any@early] defs=[v13:any@late]
+      #|  i11 IntShiftImmediate(W64, Lsr, 63) uses=[v5:any@early] defs=[v14:any@late]
+      #|  i12 IntShiftImmediate(W64, Ror, 63) uses=[v5:any@early] defs=[v15:any@late]
+      #|  i13 IntShiftImmediate(W64, Ror, 63) uses=[v5:any@early] defs=[v16:any@late]
+      #|  i14 OutgoingReg(I32, p0:int) uses=[v7:any@early]
+      #|  i15 OutgoingReg(I32, p1:int) uses=[v8:any@early]
+      #|  i16 OutgoingReg(I32, p2:int) uses=[v9:any@early]
+      #|  i17 OutgoingReg(I32, p3:int) uses=[v10:any@early]
+      #|  i18 OutgoingReg(I32, p4:int) uses=[v11:any@early]
+      #|  i19 OutgoingReg(I64, p5:int) uses=[v12:any@early]
+      #|  i20 OutgoingReg(I64, p6:int) uses=[v13:any@early]
+      #|  i21 OutgoingReg(I64, p7:int) uses=[v14:any@early]
+      #|  i22 OutgoingAreaResult(I64, 0) uses=[v6:any@early, v15:any@early]
+      #|  i23 OutgoingAreaResult(I64, 8) uses=[v6:any@early, v16:any@early]
+      #|  i24 Return
+      #|
+    ),
+  )
+}
+
+///|
+test "AArch64 lowering folds a single-use left shift into integer add" {
+  let builder = @semantic.FunctionBuilder::new(
+    "selected_add_shifted_left",
+    Platform,
+    [I64, I64],
+    [I64],
+  )
+  let parameters = builder.parameters()
+  let three = builder.emit(I64Const(3UL), [], [I64])[0]
+  let shifted = builder.emit(IntBinary(ShiftLeft), [parameters[1], three], [I64])[0]
+  let sum = builder.emit(IntBinary(Add), [parameters[0], shifted], [I64])[0]
+  builder.return_([sum])
+  inspect(
+    lower(builder.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode selected_add_shifted_left(v0:i64, v1:i64) -> (i64)
+      #|block0:
+      #|  i0 IncomingReg(I64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v2:any-location(prefer=p0:int)@late]
+      #|  i1 IncomingReg(I64, p1:int) uses=[v1:fixed(p1:int)@early] defs=[v3:any-location(prefer=p1:int)@late]
+      #|  i2 IntAddShiftedLeft(W64, 3) uses=[v2:any@early, v3:any@early] defs=[v4:any@late]
+      #|  i3 OutgoingReg(I64, p0:int) uses=[v4:any@early]
+      #|  i4 Return
+      #|
+    ),
+  )
+}
+
+///|
 test "AArch64 lowering selects zero-extended register-offset loads" {
   let builder = @semantic.FunctionBuilder::new(
     "selected_register_offset_load",
@@ -1879,14 +1974,14 @@ test "AArch64 lowering legalizes remaining pure scalar integer operations" {
       #|  i6 IntUnary(W32, Clz) uses=[v10:any@early] defs=[v11:any@late]
       #|  i7 PopulationCount(W32) uses=[v6:any@early] defs=[v12:any@late]
       #|  i8 IntUnary(W32, Neg) uses=[v12:any@early] defs=[v13:any@late]
-      #|  i9 IntBinary(W32, Ror) uses=[v11:any@early, v13:any@early] defs=[v14:any@late]
+      #|  i9 IntShiftRegister(W32, Ror) uses=[v11:any@early, v13:any@early] defs=[v14:any@late]
       #|  i10 IntHighMultiply(W32, Signed) uses=[v14:any@early, v7:any@early] defs=[v15:any@late]
       #|  i11 IntHighMultiply(W32, Unsigned) uses=[v15:any@early, v12:any@early] defs=[v16:any@late]
       #|  i12 IntUnary(W64, Rbit) uses=[v8:any@early] defs=[v17:any@late]
       #|  i13 IntUnary(W64, Clz) uses=[v17:any@early] defs=[v18:any@late]
       #|  i14 PopulationCount(W64) uses=[v8:any@early] defs=[v19:any@late]
       #|  i15 IntUnary(W64, Neg) uses=[v19:any@early] defs=[v20:any@late]
-      #|  i16 IntBinary(W64, Ror) uses=[v18:any@early, v20:any@early] defs=[v21:any@late]
+      #|  i16 IntShiftRegister(W64, Ror) uses=[v18:any@early, v20:any@early] defs=[v21:any@late]
       #|  i17 IntHighMultiply(W64, Signed) uses=[v21:any@early, v9:any@early] defs=[v22:any@late]
       #|  i18 IntHighMultiply(W64, Unsigned) uses=[v22:any@early, v19:any@early] defs=[v23:any@late]
       #|  i19 OutgoingReg(I32, p0:int) uses=[v16:any@early]

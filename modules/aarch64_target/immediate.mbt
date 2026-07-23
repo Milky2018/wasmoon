@@ -91,7 +91,7 @@ fn valid_int_binary_immediate(
   match operation {
     Add | Sub => add_sub_immediate_shift(bits) is Some(_)
     And | Orr | Eor => logical_immediate_bits(bits, width) is Some(_)
-    Mul | Lsl | Asr | Lsr | Ror | Sdiv | Udiv => false
+    Mul | Sdiv | Udiv => false
   }
 }
 

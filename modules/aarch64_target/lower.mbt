@@ -91,11 +91,36 @@ fn lower_binary(operation : @semantic.IntBinaryOp) -> AArch64IntBinary? {
     And => Some(And)
     Or => Some(Orr)
     Xor => Some(Eor)
+    ShiftLeft
+    | SignedShiftRight
+    | UnsignedShiftRight
+    | RotateLeft
+    | RotateRight
+    | SignedDiv
+    | UnsignedDiv
+    | SignedRem
+    | UnsignedRem => None
+  }
+}
+
+///|
+fn lower_shift(operation : @semantic.IntBinaryOp) -> AArch64Shift? {
+  match operation {
     ShiftLeft => Some(Lsl)
     SignedShiftRight => Some(Asr)
     UnsignedShiftRight => Some(Lsr)
     RotateRight => Some(Ror)
-    SignedDiv | UnsignedDiv | SignedRem | UnsignedRem | RotateLeft => None
+    Add
+    | Sub
+    | Mul
+    | SignedDiv
+    | UnsignedDiv
+    | SignedRem
+    | UnsignedRem
+    | And
+    | Or
+    | Xor
+    | RotateLeft => None
   }
 }
 
@@ -557,9 +582,18 @@ priv struct MultiplyAddSelection {
 ///|
 priv struct ShiftImmediateSelection {
   width : GprWidth
+  operation : AArch64Shift
   amount : Int
   input : @semantic.Value
   constant : @semantic.Value
+}
+
+///|
+priv struct ShiftedAddSelection {
+  width : GprWidth
+  amount : Int
+  accumulator : @semantic.Value
+  shifted_input : @semantic.Value
 }
 
 ///|
@@ -603,6 +637,7 @@ priv struct LoweringAnalysis {
   immediates : Array[ImmediateSelection?]
   multiply_adds : Array[MultiplyAddSelection?]
   shift_immediates : Array[ShiftImmediateSelection?]
+  shifted_adds : Array[ShiftedAddSelection?]
   memory_addresses : Array[MemoryAddressSelection?]
   environment_aliases : Array[@semantic.Value?]
   branches : Array[BranchSelection?]
@@ -672,6 +707,33 @@ fn multiply_add_selection(
     return None
   }
   Some({ width, accumulator, left, right })
+}
+
+///|
+fn immediate_shift_selection(
+  operation : @semantic.IntBinaryOp,
+  width : GprWidth,
+  bits : UInt64,
+) -> (AArch64Shift, Int)? {
+  let bit_width = if width == W32 { 32 } else { 64 }
+  let amount = (bits & (if width == W32 { 31UL } else { 63UL })).to_int()
+  match operation {
+    ShiftLeft => Some((Lsl, amount))
+    SignedShiftRight => Some((Asr, amount))
+    UnsignedShiftRight => Some((Lsr, amount))
+    RotateRight => Some((Ror, amount))
+    RotateLeft => Some((Ror, (bit_width - amount) % bit_width))
+    Add
+    | Sub
+    | Mul
+    | SignedDiv
+    | UnsignedDiv
+    | SignedRem
+    | UnsignedRem
+    | And
+    | Or
+    | Xor => None
+  }
 }
 
 ///|
@@ -885,6 +947,10 @@ fn analyze_lowering(function : @semantic.Function) -> LoweringAnalysis {
     value_count,
     None,
   )
+  let shifted_adds : Array[ShiftedAddSelection?] = Array::make(
+    value_count,
+    None,
+  )
   let mut instruction_slots = 0
   for block in function.blocks() {
     for instruction in function.block_instructions(block) {
@@ -1014,6 +1080,35 @@ fn analyze_lowering(function : @semantic.Function) -> LoweringAnalysis {
             shift_immediates[product_index] = None
           }
         }
+        if multiply_adds[function.value_index(result).unwrap()] is None {
+          let select_shifted = fn(
+            accumulator : @semantic.Value,
+            shifted : @semantic.Value,
+          ) -> ShiftedAddSelection? {
+            let shifted_index = function.value_index(shifted).unwrap()
+            guard foldable_definition(function, definitions, uses, shifted)
+              is Some(_) else {
+              return None
+            }
+            guard shift_immediates[shifted_index]
+              is Some({ operation: Lsl, amount, input, .. }) else {
+              return None
+            }
+            Some({ width, amount, accumulator, shifted_input: input })
+          }
+          let shifted = match select_shifted(left, right) {
+            Some(selected) => Some((selected, right))
+            None =>
+              match select_shifted(right, left) {
+                Some(selected) => Some((selected, left))
+                None => None
+              }
+          }
+          if shifted is Some((selected, shifted_result)) {
+            shifted_adds[function.value_index(result).unwrap()] = Some(selected)
+            skip_results[function.value_index(shifted_result).unwrap()] = true
+          }
+        }
       }
       match operation {
         Load(spec) if spec.endianness == Little &&
@@ -1099,13 +1194,10 @@ fn analyze_lowering(function : @semantic.Function) -> LoweringAnalysis {
         _ => ()
       }
       guard operation is IntBinary(binary) else { continue }
-      let binary_operation = match lower_binary(binary) {
-        Some(operation) => operation
-        None if binary == UnsignedRem => And
-        None => continue
-      }
       guard results is [result] else { continue }
-      if multiply_adds[function.value_index(result).unwrap()] is Some(_) {
+      let result_index = function.value_index(result).unwrap()
+      if multiply_adds[result_index] is Some(_) ||
+        shifted_adds[result_index] is Some(_) {
         continue
       }
       guard optional_gpr_width(function.value_type(result)) is Some(width) else {
@@ -1114,7 +1206,25 @@ fn analyze_lowering(function : @semantic.Function) -> LoweringAnalysis {
       guard function.instruction_operands(instruction) is [left, right] else {
         continue
       }
-      if binary == Mul && !skip_results[function.value_index(result).unwrap()] {
+      if constants[function.value_index(right).unwrap()] is Some(bits) &&
+        immediate_shift_selection(binary, width, bits)
+        is Some((shift_operation, amount)) {
+        shift_immediates[result_index] = Some({
+          width,
+          operation: shift_operation,
+          amount,
+          input: left,
+          constant: right,
+        })
+        folded_uses[function.value_index(right).unwrap()] += 1
+        continue
+      }
+      let binary_operation = match lower_binary(binary) {
+        Some(operation) => operation
+        None if binary == UnsignedRem => And
+        None => continue
+      }
+      if binary == Mul && !skip_results[result_index] {
         let selected : (@semantic.Value, @semantic.Value, UInt64)? = match
           constants[function.value_index(right).unwrap()] {
           Some(bits) => Some((left, right, bits))
@@ -1130,8 +1240,9 @@ fn analyze_lowering(function : @semantic.Function) -> LoweringAnalysis {
           let amount = bits.ctz()
           let bit_width = if width == W32 { 32 } else { 64 }
           if amount < bit_width {
-            shift_immediates[function.value_index(result).unwrap()] = Some({
+            shift_immediates[result_index] = Some({
               width,
+              operation: Lsl,
               amount,
               input,
               constant,
@@ -1159,7 +1270,7 @@ fn analyze_lowering(function : @semantic.Function) -> LoweringAnalysis {
           }
       }
       if selected is Some((bits, input, constant)) {
-        immediates[function.value_index(result).unwrap()] = Some({
+        immediates[result_index] = Some({
           width,
           operation: binary_operation,
           bits,
@@ -1262,6 +1373,7 @@ fn analyze_lowering(function : @semantic.Function) -> LoweringAnalysis {
     immediates,
     multiply_adds,
     shift_immediates,
+    shifted_adds,
     memory_addresses,
     environment_aliases,
     branches,
@@ -1307,17 +1419,27 @@ fn lower_instruction(
     Some(index) => analysis.shift_immediates[index]
     None => None
   }
+  let shifted_add = match result_index {
+    Some(index) => analysis.shifted_adds[index]
+    None => None
+  }
   let memory_address = analysis.memory_addresses[instruction_index]
   let operands = match
-    (multiply_add, shift_immediate, memory_address, immediate) {
-    (Some(selected), _, _, _) =>
+    (multiply_add, shifted_add, shift_immediate, memory_address, immediate) {
+    (Some(selected), _, _, _, _) =>
       map_values(function, values, [
         selected.accumulator,
         selected.left,
         selected.right,
       ])
-    (_, Some(selected), _, _) => [map_value(function, values, selected.input)]
-    (_, _, Some(selected), _) => {
+    (_, Some(selected), _, _, _) =>
+      map_values(function, values, [
+        selected.accumulator,
+        selected.shifted_input,
+      ])
+    (_, _, Some(selected), _, _) =>
+      [map_value(function, values, selected.input)]
+    (_, _, _, Some(selected), _) => {
       let selected_operands = [
         map_value(function, values, selected.base),
         map_value(function, values, selected.index),
@@ -1329,7 +1451,8 @@ fn lower_instruction(
       }
       selected_operands
     }
-    (_, _, _, Some(selected)) => [map_value(function, values, selected.input)]
+    (_, _, _, _, Some(selected)) =>
+      [map_value(function, values, selected.input)]
     _ => map_values(function, values, semantic_operands)
   }
   let result_types = semantic_results.map(value => {
@@ -1362,7 +1485,25 @@ fn lower_instruction(
     let results = append_body(
       builder,
       block,
-      IntShiftLeftImmediate(selected.width, selected.amount),
+      IntShiftImmediate(selected.width, selected.operation, selected.amount),
+      operands.map(@vcode.Input::any),
+      result_types.map(@vcode.Output::any),
+      source_metadata(
+        function.instruction_metadata(instruction).unwrap(),
+        roots,
+        operation.semantics(),
+      ),
+    )
+    for index, result in semantic_results {
+      values[function.value_index(result).unwrap()] = Some(results[index])
+    }
+    return
+  }
+  if shifted_add is Some(selected) {
+    let results = append_body(
+      builder,
+      block,
+      IntAddShiftedLeft(selected.width, selected.amount),
       operands.map(@vcode.Input::any),
       result_types.map(@vcode.Output::any),
       source_metadata(
@@ -1674,7 +1815,7 @@ fn lower_instruction(
     let results = append_body(
       builder,
       block,
-      IntBinary(width, Ror),
+      IntShiftRegister(width, Ror),
       [@vcode.Input::any(operands[0]), @vcode.Input::any(negated_shift)],
       result_types.map(@vcode.Output::any),
       source_metadata(
@@ -1915,9 +2056,17 @@ fn lower_instruction(
         None => None
       }
     IntBinary(binary) =>
-      match (optional_gpr_width(result_types.get(0)), lower_binary(binary)) {
-        (Some(width), Some(binary)) => Some(IntBinary(width, binary))
-        _ => None
+      match optional_gpr_width(result_types.get(0)) {
+        Some(width) =>
+          match lower_binary(binary) {
+            Some(binary) => Some(IntBinary(width, binary))
+            None =>
+              match lower_shift(binary) {
+                Some(shift) => Some(IntShiftRegister(width, shift))
+                None => None
+              }
+          }
+        None => None
       }
     IntCompare(comparison) => {
       let operand_type = match semantic_operands.get(0) {

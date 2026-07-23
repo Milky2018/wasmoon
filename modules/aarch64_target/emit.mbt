@@ -730,6 +730,23 @@ fn encode_int_binary(
     (W64, Orr) => 0xAA000000U
     (W32, Eor) => 0x4A000000U
     (W64, Eor) => 0xCA000000U
+    (W32, Sdiv) => 0x1AC00C00U
+    (W64, Sdiv) => 0x9AC00C00U
+    (W32, Udiv) => 0x1AC00800U
+    (W64, Udiv) => 0x9AC00800U
+  }
+  encode_three_register(base, destination, left, right)
+}
+
+///|
+fn encode_shift_register(
+  width : GprWidth,
+  operation : AArch64Shift,
+  destination : @vcode.PhysicalReg,
+  input : @vcode.PhysicalReg,
+  amount : @vcode.PhysicalReg,
+) -> UInt {
+  let base = match (width, operation) {
     (W32, Lsl) => 0x1AC02000U
     (W64, Lsl) => 0x9AC02000U
     (W32, Lsr) => 0x1AC02400U
@@ -738,12 +755,8 @@ fn encode_int_binary(
     (W64, Asr) => 0x9AC02800U
     (W32, Ror) => 0x1AC02C00U
     (W64, Ror) => 0x9AC02C00U
-    (W32, Sdiv) => 0x1AC00C00U
-    (W64, Sdiv) => 0x9AC00C00U
-    (W32, Udiv) => 0x1AC00800U
-    (W64, Udiv) => 0x9AC00800U
   }
-  encode_three_register(base, destination, left, right)
+  encode_three_register(base, destination, input, amount)
 }
 
 ///|
@@ -763,20 +776,63 @@ fn encode_int_multiply_add(
 }
 
 ///|
-fn encode_shift_left_immediate(
+fn encode_shift_immediate(
   width : GprWidth,
+  operation : AArch64Shift,
   amount : Int,
   destination : @vcode.PhysicalReg,
   source : @vcode.PhysicalReg,
 ) -> UInt {
   let bit_width = if width == W32 { 32 } else { 64 }
-  let immr = (bit_width - amount) % bit_width
-  let imms = bit_width - 1 - amount
-  let base = if width == W32 { 0x53000000U } else { 0xD3400000U }
+  match operation {
+    Lsl => {
+      let immr = (bit_width - amount) % bit_width
+      let imms = bit_width - 1 - amount
+      let base = if width == W32 { 0x53000000U } else { 0xD3400000U }
+      base |
+      (immr.reinterpret_as_uint() << 16) |
+      (imms.reinterpret_as_uint() << 10) |
+      (reg_bits(source) << 5) |
+      reg_bits(destination)
+    }
+    Lsr | Asr => {
+      let base = match (width, operation) {
+        (W32, Lsr) => 0x53000000U
+        (W64, Lsr) => 0xD3400000U
+        (W32, Asr) => 0x13000000U
+        (W64, Asr) => 0x93400000U
+        _ => abort("unreachable immediate shift operation")
+      }
+      base |
+      (amount.reinterpret_as_uint() << 16) |
+      ((bit_width - 1).reinterpret_as_uint() << 10) |
+      (reg_bits(source) << 5) |
+      reg_bits(destination)
+    }
+    Ror => {
+      let base = if width == W32 { 0x13800000U } else { 0x93C00000U }
+      base |
+      (reg_bits(source) << 16) |
+      (amount.reinterpret_as_uint() << 10) |
+      (reg_bits(source) << 5) |
+      reg_bits(destination)
+    }
+  }
+}
+
+///|
+fn encode_add_shifted_left(
+  width : GprWidth,
+  amount : Int,
+  destination : @vcode.PhysicalReg,
+  accumulator : @vcode.PhysicalReg,
+  shifted : @vcode.PhysicalReg,
+) -> UInt {
+  let base = if width == W32 { 0x0B000000U } else { 0x8B000000U }
   base |
-  (immr.reinterpret_as_uint() << 16) |
-  (imms.reinterpret_as_uint() << 10) |
-  (reg_bits(source) << 5) |
+  (reg_bits(shifted) << 16) |
+  (amount.reinterpret_as_uint() << 10) |
+  (reg_bits(accumulator) << 5) |
   reg_bits(destination)
 }
 
@@ -2869,9 +2925,17 @@ fn emit_instruction(
       buffer.emit_word(
         encode_int_multiply_add(width, reg(3), reg(0), reg(1), reg(2)),
       )
-    IntShiftLeftImmediate(width, amount) =>
+    IntShiftRegister(width, operation) =>
       buffer.emit_word(
-        encode_shift_left_immediate(width, amount, reg(1), reg(0)),
+        encode_shift_register(width, operation, reg(2), reg(0), reg(1)),
+      )
+    IntShiftImmediate(width, operation, amount) =>
+      buffer.emit_word(
+        encode_shift_immediate(width, operation, amount, reg(1), reg(0)),
+      )
+    IntAddShiftedLeft(width, amount) =>
+      buffer.emit_word(
+        encode_add_shifted_left(width, amount, reg(2), reg(0), reg(1)),
       )
     PopulationCount(width) => {
       let scratch = @vcode.PhysicalReg::new(16, FpVector)
