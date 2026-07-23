@@ -1074,6 +1074,42 @@ fn analyze_lowering(function : @semantic.Function) -> LoweringAnalysis {
       definition_index += 1
     }
   }
+  let record_folded_memory_address = fn(
+    instruction : @semantic.Instruction,
+    address : @semantic.Value,
+    width : @semantic.AccessWidth,
+  ) {
+    if uxtw_memory_address_selection(
+        function, definitions, uses, constants, address, width,
+      )
+      is Some((selection, skipped, folded_constants)) {
+      memory_addresses[function.instruction_index(instruction).unwrap()] = Some(
+        selection,
+      )
+      for value in skipped {
+        let value_index = function.value_index(value).unwrap()
+        skip_results[value_index] = true
+        if shift_immediates[value_index] is Some(selected_shift) {
+          folded_uses[function.value_index(selected_shift.constant).unwrap()] -= 1
+          shift_immediates[value_index] = None
+        }
+        if address_immediates[value_index] is Some(selected_address) {
+          folded_uses[function.value_index(selected_address.constant).unwrap()] -= 1
+          address_immediates[value_index] = None
+        }
+      }
+      for value in folded_constants {
+        folded_uses[function.value_index(value).unwrap()] += 1
+      }
+      folded_uses[function
+      .value_index(
+        function.instruction_operands(
+          definitions[function.value_index(address).unwrap()].unwrap(),
+        )[1],
+      )
+      .unwrap()] += 1
+    }
+  }
   for block in function.blocks() {
     for instruction in function.block_instructions(block) {
       let operation = function.instruction_operation(instruction).unwrap()
@@ -1154,45 +1190,7 @@ fn analyze_lowering(function : @semantic.Function) -> LoweringAnalysis {
           guard function.instruction_operands(instruction) is [address] else {
             continue
           }
-          if uxtw_memory_address_selection(
-              function,
-              definitions,
-              uses,
-              constants,
-              address,
-              spec.width,
-            )
-            is Some((selection, skipped, folded_constants)) {
-            memory_addresses[function.instruction_index(instruction).unwrap()] = Some(
-              selection,
-            )
-            for value in skipped {
-              let value_index = function.value_index(value).unwrap()
-              skip_results[value_index] = true
-              if shift_immediates[value_index] is Some(selected_shift) {
-                folded_uses[function
-                .value_index(selected_shift.constant)
-                .unwrap()] -= 1
-                shift_immediates[value_index] = None
-              }
-              if address_immediates[value_index] is Some(selected_address) {
-                folded_uses[function
-                .value_index(selected_address.constant)
-                .unwrap()] -= 1
-                address_immediates[value_index] = None
-              }
-            }
-            for value in folded_constants {
-              folded_uses[function.value_index(value).unwrap()] += 1
-            }
-            folded_uses[function
-            .value_index(
-              function.instruction_operands(
-                definitions[function.value_index(address).unwrap()].unwrap(),
-              )[1],
-            )
-            .unwrap()] += 1
-          }
+          record_folded_memory_address(instruction, address, spec.width)
         }
         Store(spec) if spec.endianness == Little &&
           spec.offset == 0UL &&
@@ -1200,45 +1198,7 @@ fn analyze_lowering(function : @semantic.Function) -> LoweringAnalysis {
           guard function.instruction_operands(instruction) is [address, _] else {
             continue
           }
-          if uxtw_memory_address_selection(
-              function,
-              definitions,
-              uses,
-              constants,
-              address,
-              spec.width,
-            )
-            is Some((selection, skipped, folded_constants)) {
-            memory_addresses[function.instruction_index(instruction).unwrap()] = Some(
-              selection,
-            )
-            for value in skipped {
-              let value_index = function.value_index(value).unwrap()
-              skip_results[value_index] = true
-              if shift_immediates[value_index] is Some(selected_shift) {
-                folded_uses[function
-                .value_index(selected_shift.constant)
-                .unwrap()] -= 1
-                shift_immediates[value_index] = None
-              }
-              if address_immediates[value_index] is Some(selected_address) {
-                folded_uses[function
-                .value_index(selected_address.constant)
-                .unwrap()] -= 1
-                address_immediates[value_index] = None
-              }
-            }
-            for value in folded_constants {
-              folded_uses[function.value_index(value).unwrap()] += 1
-            }
-            folded_uses[function
-            .value_index(
-              function.instruction_operands(
-                definitions[function.value_index(address).unwrap()].unwrap(),
-              )[1],
-            )
-            .unwrap()] += 1
-          }
+          record_folded_memory_address(instruction, address, spec.width)
         }
         _ => ()
       }

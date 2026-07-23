@@ -231,6 +231,47 @@ test "AArch64 lowering selects zero-extended register-offset loads" {
 }
 
 ///|
+test "AArch64 lowering selects zero-extended register-offset stores" {
+  let builder = @semantic.FunctionBuilder::new(
+    "selected_register_offset_store",
+    Platform,
+    [Ptr64, I32, I32],
+    [],
+  )
+  let parameters = builder.parameters()
+  let base = builder.emit(Convert(Bitcast(Ptr64, I64)), [parameters[0]], [I64])[0]
+  let index = builder.emit(Convert(I64ExtendI32(Unsigned)), [parameters[1]], [
+      I64,
+    ])[0]
+  let address_bits = builder.emit(IntBinary(Add), [base, index], [I64])[0]
+  let address = builder.emit(Convert(Bitcast(I64, Ptr64)), [address_bits], [
+      Ptr64,
+    ])[0]
+  let zero = builder.emit(I64Const(0UL), [], [I64])[0]
+  let pointer = builder.emit(PointerOffset, [address, zero], [Ptr64])[0]
+  builder.emit(
+    Store(@semantic.StoreSpec::new(W32, I32, 0UL, Little, None)),
+    [pointer, parameters[2]],
+    [],
+  )
+  |> ignore
+  builder.return_([])
+  inspect(
+    lower(builder.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode selected_register_offset_store(v0:ptr64, v1:i32, v2:i32)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v3:any-location(prefer=p0:int)@late]
+      #|  i1 IncomingReg(I32, p1:int) uses=[v1:fixed(p1:int)@early] defs=[v4:any-location(prefer=p1:int)@late]
+      #|  i2 IncomingReg(I32, p2:int) uses=[v2:fixed(p2:int)@early] defs=[v5:any-location(prefer=p2:int)@late]
+      #|  i3 ScalarStoreUxtw(W32, I32, 0) uses=[v3:any@early, v4:any@early, v5:any@early]
+      #|  i4 Return
+      #|
+    ),
+  )
+}
+
+///|
 test "AArch64 lowering keeps a constant displacement after an extended index" {
   let builder = @semantic.FunctionBuilder::new(
     "selected_register_offset_load_with_displacement",
