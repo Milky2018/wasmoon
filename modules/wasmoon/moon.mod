@@ -1,6 +1,6 @@
 name = "Milky2018/wasmoon"
 
-version = "0.8.0"
+version = "0.8.1"
 
 import {
   "moonbitlang/x@0.4.38",
@@ -13,7 +13,7 @@ import {
   "Milky2018/machv_regalloc@0.2.3",
   "Milky2018/x64_target@0.1.3",
   "Milky2018/aarch64_target@0.2.0",
-  "Milky2018/wasmoon_jit@0.3.0",
+  "Milky2018/wasmoon_jit@0.3.1",
 }
 
 readme = "README.mbt.md"
