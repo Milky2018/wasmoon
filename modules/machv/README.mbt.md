@@ -59,3 +59,9 @@ the field value is unchanged for one function invocation; `Mutable` does not
 grant that reuse permission. A target may rematerialize either form, but it may
 reuse only stable fields according to its own instruction and register-pressure
 cost model. Field offsets and runtime layout remain embedding-provided ABI data.
+
+`Function::environment_field_use_groups` derives target-neutral field/context
+occurrence groups, call-free regions, context use counts, and the conservative
+fact that a stable result can replace an exclusive context carrier. It does not
+choose whether a target should keep the value live; that profitability policy
+belongs to target lowering.
