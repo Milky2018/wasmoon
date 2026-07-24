@@ -309,64 +309,6 @@ fn Allocation::location_matches(
 }
 
 ///|
-fn Allocation::has_spill(
-  self : Allocation,
-  function_owner : Ref[Unit],
-  instruction : Instruction,
-  value : Value,
-  reg : PhysicalReg,
-  slot : StackSlot,
-) -> Bool {
-  for edit in self.after_edits[instruction.id] {
-    match (edit.point, edit.kind) {
-      (Some(point), Spill(value=edit_value, reg=edit_reg, slot=edit_slot)) =>
-        if physical_equal(point.owner, function_owner) &&
-          point.instruction == instruction &&
-          point.placement == After &&
-          edit_value == value &&
-          edit_slot == slot &&
-          edit_reg == reg {
-          return true
-        }
-      _ => ()
-    }
-  }
-  false
-}
-
-///|
-fn Allocation::has_edge_move(
-  self : Allocation,
-  source : Block,
-  successor_index : Int,
-  value : Value,
-  from : Location,
-  to : Location,
-) -> Bool {
-  let edits = self.edge_edits.get((source.id, successor_index)).unwrap_or([])
-  for edit in edits {
-    match edit.kind {
-      EdgeMove(
-        source=edit_source,
-        successor_index=edit_successor,
-        value=edit_value,
-        from=edit_from,
-        to=edit_to
-      ) =>
-        if edit_source == source &&
-          edit_successor == successor_index &&
-          edit_value == value &&
-          edit_from == from &&
-          edit_to == to {
-          return true
-        }
-      _ => ()
-    }
-  }
-  false
-}
-
-///|
 fn[Inst] verify_allocation_edits(
   function : Function[Inst],
   allocation : Allocation,
@@ -414,16 +356,6 @@ fn[Inst] verify_allocation_edits(
           successor_index < 0 ||
           successor_index >=
           function.instruction_successors(terminator.unwrap()).length() {
-          raise InvalidEdgeMove(index~)
-        }
-        let edge = function.instruction_successors(terminator.unwrap())[successor_index]
-        let mut found = false
-        for argument in edge.arguments {
-          if argument == value {
-            found = true
-          }
-        }
-        if !found || allocation.value_location(value) != Some(from) {
           raise InvalidEdgeMove(index~)
         }
       }
@@ -758,31 +690,11 @@ pub fn[Inst] verify_allocation_invariants(
               operand=operand_index,
             )
           }
-        AnyLocation =>
-          if assignment != allocation.value_locations[operand.value.id].unwrap() {
-            raise AnyLocationConstraintViolation(
-              instruction~,
-              operand=operand_index,
-            )
-          }
+        AnyLocation => ()
       }
     }
   }
   verify_allocation_edits(function, allocation)
-  for block in function.layout() {
-    let terminator = function.block_terminator(block).unwrap()
-    for successor_index, edge in function.instruction_successors(terminator) {
-      let parameters = function.block_parameters(edge.target)
-      for index, argument in edge.arguments {
-        let from = allocation.value_location(argument).unwrap()
-        let to = allocation.value_location(parameters[index]).unwrap()
-        if from != to &&
-          !allocation.has_edge_move(block, successor_index, argument, from, to) {
-          raise InvalidEdgeMove(index=allocation.edits.length())
-        }
-      }
-    }
-  }
   let block_live_out = function.allocation_block_live_out()
   verify_allocation_interference(function, allocation, block_live_out)
   verify_allocation_state(function, allocation)

@@ -517,6 +517,158 @@ test "backtracking splits a live range around a clobbered CFG fragment" {
 }
 
 ///|
+test "backtracking parks cold live-through values outside hot loops" {
+  let instructions : Array[Array[Operand]] = []
+  for _ in 0..<19 {
+    instructions.push([])
+  }
+  instructions.push([
+    {
+      vreg: value(3),
+      role: UseDef,
+      constraint: AnyReg,
+      preference: None,
+      tie_id: -1,
+      timing: Early,
+    },
+    {
+      vreg: value(4),
+      role: UseDef,
+      constraint: AnyReg,
+      preference: None,
+      tie_id: -1,
+      timing: Early,
+    },
+  ])
+  instructions.push([])
+  instructions.push([
+    Operand::use_reg(value(0)),
+    Operand::use_reg(value(0)),
+    Operand::use_reg(value(0)),
+    Operand::use_reg(value(0)),
+  ])
+  let function : CfgTestFunction = {
+    value_count: 5,
+    blocks: [[], Array::makei(20, index => index), [21], [20]],
+    instructions,
+    clobbers: Array::makei(22, _ => []),
+    successors: [[1], [3, 2], [], [1]],
+    entry_values: [value(0), value(1), value(2)],
+    parameters: [[], [value(3), value(4)], [], []],
+    edge_arguments: [
+      [[value(1), value(2)]],
+      [[], []],
+      [],
+      [[value(3), value(4)]],
+    ],
+  }
+  inspect(
+    allocate_function(
+      function,
+      MachineEnv::new([int_reg(0), int_reg(1)], [int_reg(2)]),
+    ),
+    content=(
+      #|{
+      #|  value_locations: [
+      #|    Some(Spill(0)),
+      #|    Some(Reg({ id: 0, class: Int })),
+      #|    Some(Reg({ id: 1, class: Int })),
+      #|    Some(Reg({ id: 1, class: Int })),
+      #|    Some(Reg({ id: 0, class: Int })),
+      #|  ],
+      #|  operand_locations: {
+      #|    (19, 0): Reg({ id: 1, class: Int }),
+      #|    (19, 1): Reg({ id: 0, class: Int }),
+      #|    (21, 0): Reg({ id: 0, class: Int }),
+      #|    (21, 1): Reg({ id: 0, class: Int }),
+      #|    (21, 2): Reg({ id: 0, class: Int }),
+      #|    (21, 3): Reg({ id: 0, class: Int }),
+      #|  },
+      #|  operand_assignments: [
+      #|    { instruction: 19, operand: 0, location: Reg({ id: 1, class: Int }) },
+      #|    { instruction: 19, operand: 1, location: Reg({ id: 0, class: Int }) },
+      #|    { instruction: 21, operand: 0, location: Reg({ id: 0, class: Int }) },
+      #|    { instruction: 21, operand: 1, location: Reg({ id: 0, class: Int }) },
+      #|    { instruction: 21, operand: 2, location: Reg({ id: 0, class: Int }) },
+      #|    { instruction: 21, operand: 3, location: Reg({ id: 0, class: Int }) },
+      #|  ],
+      #|  edits: [
+      #|    {
+      #|      value: { id: 0, class: Int },
+      #|      from: Spill(0),
+      #|      to: Reg({ id: 0, class: Int }),
+      #|      position: Before(21),
+      #|    },
+      #|    {
+      #|      value: { id: 1, class: Int },
+      #|      from: Reg({ id: 0, class: Int }),
+      #|      to: Reg({ id: 1, class: Int }),
+      #|      position: Edge(source_block=0, successor_index=0),
+      #|    },
+      #|    {
+      #|      value: { id: 2, class: Int },
+      #|      from: Reg({ id: 1, class: Int }),
+      #|      to: Reg({ id: 0, class: Int }),
+      #|      position: Edge(source_block=0, successor_index=0),
+      #|    },
+      #|  ],
+      #|  spill_slots: [{ size: 8, alignment: 8 }],
+      #|}
+    ),
+  )
+}
+
+///|
+test "backtracking shares a spill home across a loop-carried SSA bundle" {
+  let function : CfgTestFunction = {
+    value_count: 3,
+    blocks: [[], [0], []],
+    instructions: [
+      [
+        Operand::use_reg(value(0)).with_timing(Early),
+        Operand::def(value(1)).with_timing(Late),
+      ],
+    ],
+    clobbers: [[]],
+    successors: [[1], [1, 2], []],
+    entry_values: [value(2)],
+    parameters: [[], [value(0)], []],
+    edge_arguments: [[[value(2)]], [[value(1)], []], []],
+  }
+  inspect(
+    allocate_function(function, MachineEnv::new([], [int_reg(0), int_reg(1)])),
+    content=(
+      #|{
+      #|  value_locations: [Some(Spill(0)), Some(Spill(0)), Some(Spill(0))],
+      #|  operand_locations: {
+      #|    (0, 0): Reg({ id: 0, class: Int }),
+      #|    (0, 1): Reg({ id: 1, class: Int }),
+      #|  },
+      #|  operand_assignments: [
+      #|    { instruction: 0, operand: 0, location: Reg({ id: 0, class: Int }) },
+      #|    { instruction: 0, operand: 1, location: Reg({ id: 1, class: Int }) },
+      #|  ],
+      #|  edits: [
+      #|    {
+      #|      value: { id: 0, class: Int },
+      #|      from: Spill(0),
+      #|      to: Reg({ id: 0, class: Int }),
+      #|      position: Before(0),
+      #|    },
+      #|    {
+      #|      value: { id: 1, class: Int },
+      #|      from: Reg({ id: 1, class: Int }),
+      #|      to: Spill(0),
+      #|      position: After(0),
+      #|    },
+      #|  ],
+      #|  spill_slots: [{ size: 8, alignment: 8 }],
+      #|}
+    ),
+  )
+}
+
+///|
 test "backtracking reloads a resident segment only once" {
   let function : CfgTestFunction = {
     value_count: 1,

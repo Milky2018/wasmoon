@@ -109,11 +109,12 @@ test "production allocation assigns an SSA bundle atomically" {
   ranges.add_range(bundle_test_range(2, Int, 8, 10, []))
   let function : BundleTestFunction = {
     classes: [Int, Int, Int],
+    spill_kinds: [0, 0, 0],
     successors: [[1], [2], []],
     parameters: [[], [{ id: 1, class: Int }], [{ id: 2, class: Int }]],
     edge_arguments: [[[{ id: 0, class: Int }]], [[{ id: 1, class: Int }]], []],
   }
-  let (segments, _, bundles, segment_owner) = allocate_segments_with_bundles(
+  let (segments, _, bundles, segment_owner, _) = allocate_segments_with_bundles(
     function,
     MachineEnv::new([{ id: 0, class: Int }], []),
     ranges,
@@ -128,7 +129,7 @@ test "production allocation assigns an SSA bundle atomically" {
       #|      id: 0,
       #|      segments: [0, 1, 2],
       #|      priority: 9,
-      #|      weight: 3,
+      #|      weight: 1,
       #|      has_fixed_constraint: false,
       #|      state: SnapshotReg({ id: 0, class: Int }),
       #|    },
@@ -159,6 +160,7 @@ test "production allocation evicts then splits a cheaper long bundle" {
       weight: 2,
       has_fixed_constraint: true,
       location: None,
+      defer_home: false,
     },
     {
       id: 1,
@@ -167,6 +169,7 @@ test "production allocation evicts then splits a cheaper long bundle" {
       weight: 3,
       has_fixed_constraint: false,
       location: None,
+      defer_home: false,
     },
     {
       id: 2,
@@ -175,6 +178,7 @@ test "production allocation evicts then splits a cheaper long bundle" {
       weight: 20,
       has_fixed_constraint: false,
       location: None,
+      defer_home: false,
     },
   ]
   let plan : ProductionBundlePlan = {
@@ -186,6 +190,7 @@ test "production allocation evicts then splits a cheaper long bundle" {
   plan.validate(3, 3)
   let function : BundleTestFunction = {
     classes: [Int, Int, Int],
+    spill_kinds: [0, 0, 0],
     successors: [[]],
     parameters: [[]],
     edge_arguments: [[]],
@@ -207,7 +212,7 @@ test "production allocation evicts then splits a cheaper long bundle" {
       #|      id: 0,
       #|      segments: [0, 1],
       #|      priority: 6,
-      #|      weight: 5,
+      #|      weight: 3,
       #|      has_fixed_constraint: true,
       #|      state: SnapshotSplit,
       #|    },
@@ -258,6 +263,7 @@ test "production eviction accounts for and removes every conflicting bundle" {
       weight: 4,
       has_fixed_constraint: false,
       location: Some(SegmentReg(r0)),
+      defer_home: false,
     },
     {
       id: 1,
@@ -266,22 +272,25 @@ test "production eviction accounts for and removes every conflicting bundle" {
       weight: 5,
       has_fixed_constraint: false,
       location: Some(SegmentReg(r0)),
+      defer_home: false,
     },
     {
       id: 2,
       value: { id: 2, class: Int },
       range: ProgramRange(ProgramPoint(0, 1), ProgramPoint(0, 3)),
-      weight: 5,
+      weight: 6,
       has_fixed_constraint: false,
       location: None,
+      defer_home: false,
     },
     {
       id: 3,
       value: { id: 2, class: Int },
       range: ProgramRange(ProgramPoint(0, 7), ProgramPoint(0, 9)),
-      weight: 5,
+      weight: 6,
       has_fixed_constraint: false,
       location: None,
+      defer_home: false,
     },
   ]
   let bundles : Array[AllocationBundle] = [
@@ -315,7 +324,7 @@ test "production eviction accounts for and removes every conflicting bundle" {
     content=(
       #|{
       #|  conflicts: [0, 1],
-      #|  conflict_cost: 9,
+      #|  conflict_cost: 5,
       #|  first_conflict: Some({ block: 0, inst: 1 }),
       #|  clobbered: false,
       #|  can_evict: true,
@@ -368,7 +377,7 @@ test "production eviction accounts for and removes every conflicting bundle" {
       #|      id: 2,
       #|      segments: [2, 3],
       #|      priority: 6,
-      #|      weight: 10,
+      #|      weight: 6,
       #|      has_fixed_constraint: false,
       #|      state: SnapshotPending,
       #|    },
@@ -396,6 +405,7 @@ test "production bundle queue keeps live extent separate from spill weight" {
       weight: 100,
       has_fixed_constraint: false,
       location: None,
+      defer_home: false,
     },
     {
       id: 1,
@@ -404,6 +414,7 @@ test "production bundle queue keeps live extent separate from spill weight" {
       weight: 10,
       has_fixed_constraint: false,
       location: None,
+      defer_home: false,
     },
     {
       id: 2,
@@ -412,6 +423,7 @@ test "production bundle queue keeps live extent separate from spill weight" {
       weight: 50,
       has_fixed_constraint: false,
       location: None,
+      defer_home: false,
     },
   ]
   let bundles : Array[AllocationBundle] = []

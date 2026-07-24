@@ -628,20 +628,24 @@ test "i31 get uses explicit null-trap control flow" {
 }
 
 ///|
-test "memory base access uses an opaque semantic environment field" {
+test "memory base access preserves stable field identity in semantic MachV" {
   let builder = @milkir.FunctionBuilder::FunctionBuilder("memory_base")
   let vmctx = builder.add_param(I64)
   builder.add_result(I64)
-  let base = @wasm_milkir.load_mem_base(builder, vmctx, 3, Stable)
-  builder.return_([base])
+  builder.add_result(I64)
+  let first = @wasm_milkir.load_mem_base(builder, vmctx, 3, Stable)
+  let second = @wasm_milkir.load_mem_base(builder, vmctx, 3, Stable)
+  builder.return_([first, second])
   inspect(
     lower_test_function(builder.finalize()),
     content=(
-      #|machv memory_base [internal](v0:ptr64) -> (i64) {
+      #|machv memory_base [internal](v0:ptr64) -> (i64, i64) {
       #|block0:
       #|  v1:ptr64 = environment.field.stable @wasm.memory.3.base v0 [memory=read]
       #|  v2:i64 = convert.Bitcast(Ptr64, I64) v1
-      #|  return v2
+      #|  v3:ptr64 = environment.field.stable @wasm.memory.3.base v0 [memory=read]
+      #|  v4:i64 = convert.Bitcast(Ptr64, I64) v3
+      #|  return v2, v4
       #|}
     ),
   )

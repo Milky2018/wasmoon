@@ -290,6 +290,10 @@ pub fn Allocation::assign_value(
 }
 
 ///|
+/// Return the value's default transfer home.
+///
+/// A verified segmented allocation may keep the newest value in an
+/// instruction- or edge-specific location until an edit returns it here.
 pub fn Allocation::value_location(
   self : Allocation,
   value : Value,
@@ -493,14 +497,12 @@ pub suberror AllocationVerifyError {
   MissingOperandLocation(instruction~ : Instruction, operand~ : Int)
   OperandClassMismatch(instruction~ : Instruction, operand~ : Int)
   RegisterConstraintViolation(instruction~ : Instruction, operand~ : Int)
-  AnyLocationConstraintViolation(instruction~ : Instruction, operand~ : Int)
   FixedConstraintViolation(instruction~ : Instruction, operand~ : Int)
   TiedConstraintViolation(instruction~ : Instruction, operand~ : Int)
   Interference(left~ : Value, right~ : Value, location~ : Location)
   ClobberViolation(instruction~ : Instruction, value~ : Value)
   InvalidStackSlotLayout(slot~ : StackSlot)
   InvalidEdit(index~ : Int)
-  MissingSpill(instruction~ : Instruction, operand~ : Int)
   MissingReload(instruction~ : Instruction, operand~ : Int)
   InvalidEdgeMove(index~ : Int)
   MissingSafepointRoot(instruction~ : Instruction, value~ : Value)

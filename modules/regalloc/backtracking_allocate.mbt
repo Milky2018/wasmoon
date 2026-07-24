@@ -12,31 +12,51 @@ priv struct AllocationSegment {
   weight : Int
   has_fixed_constraint : Bool
   mut location : SegmentLocation?
+  mut defer_home : Bool
 }
 
 ///|
-fn use_weight(use_position : UsePosition) -> Int {
-  let role_weight = match use_position.kind {
-    LiveUse => 1000
-    LiveDef => 1500
-    LiveUseDef => 2500
+fn use_weight(use_position : UsePosition, loop_depths : Array[Int]) -> Int {
+  let mut depth = if use_position.point.block >= 0 &&
+    use_position.point.block < loop_depths.length() {
+    loop_depths[use_position.point.block]
+  } else {
+    0
+  }
+  if depth < 0 {
+    depth = 0
+  }
+  if depth > 10 {
+    depth = 10
+  }
+  let mut hot_bonus = 1000
+  for _ in 0..<depth {
+    hot_bonus = hot_bonus * 4
+  }
+  let def_bonus = match use_position.kind {
+    LiveDef | LiveUseDef => 2000
+    LiveUse => 0
   }
   let constraint_weight = match use_position.constraint {
     AnyLocation => 0
-    AnyReg => 500
-    FixedReg(_) => 1500
+    AnyReg => 1000
+    FixedReg(_) => 2000
   }
-  role_weight + constraint_weight
+  hot_bonus + def_bonus + constraint_weight
 }
 
 ///|
 /// Rank a fragment by spill cost per program point. This keeps a sparse,
 /// long-lived value from evicting short-lived values used at every instruction.
-fn segment_weight(range : LiveRange, fragment : ProgramRange) -> Int {
+fn segment_weight(
+  range : LiveRange,
+  fragment : ProgramRange,
+  loop_depths : Array[Int],
+) -> Int {
   let mut use_cost = 0
   for use_position in range.uses {
     if fragment.contains(use_position.point, []) {
-      use_cost = use_cost + use_weight(use_position)
+      use_cost = use_cost + use_weight(use_position, loop_depths)
     }
   }
   if use_cost == 0 {
@@ -53,6 +73,7 @@ fn segment_weight(range : LiveRange, fragment : ProgramRange) -> Int {
 ///|
 fn build_allocation_segments(
   ranges : LiveRangeSet,
+  loop_depths? : Array[Int] = [],
 ) -> (Array[AllocationSegment], Array[Array[Int]]) {
   let segments : Array[AllocationSegment] = []
   let segments_by_value : Array[Array[Int]] = []
@@ -68,7 +89,7 @@ fn build_allocation_segments(
   for range in ranges.ranges {
     let has_fixed_constraint = range.has_fixed_constraint()
     for fragment in range.ranges {
-      let weight = segment_weight(range, fragment)
+      let weight = segment_weight(range, fragment, loop_depths)
       let id = segments.length()
       segments.push({
         id,
@@ -77,11 +98,48 @@ fn build_allocation_segments(
         weight,
         has_fixed_constraint,
         location: None,
+        defer_home: false,
       })
       segments_by_value[range.vreg.id].push(id)
     }
   }
   (segments, segments_by_value)
+}
+
+///|
+fn[F : FunctionView] compute_allocator_loop_depths(function : F) -> Array[Int] {
+  let block_count = function.block_count()
+  let backedge_in = Array::make(block_count, 0)
+  let backedge_out = Array::make(block_count, 0)
+  for block in 0..<block_count {
+    for successor in function.block_successors(block) {
+      if successor >= 0 && successor < block_count && successor <= block {
+        backedge_in[successor] = backedge_in[successor] + 1
+        backedge_out[block] = backedge_out[block] + 1
+      }
+    }
+  }
+  let depths : Array[Int] = []
+  let backedge_stack : Array[Int] = []
+  let mut current_depth = 0
+  for block in 0..<block_count {
+    if backedge_in[block] > 0 {
+      current_depth = current_depth + 1
+      backedge_stack.push(backedge_in[block])
+    }
+    depths.push(current_depth)
+    let mut outgoing = backedge_out[block]
+    while !backedge_stack.is_empty() && outgoing > 0 {
+      outgoing = outgoing - 1
+      let last = backedge_stack.length() - 1
+      backedge_stack[last] = backedge_stack[last] - 1
+      if backedge_stack[last] == 0 {
+        current_depth = current_depth - 1
+        backedge_stack.pop() |> ignore
+      }
+    }
+  }
+  depths
 }
 
 ///|
@@ -283,13 +341,24 @@ fn[F : FunctionView] allocate_segments_with_bundles(
   Array[Array[Int]],
   Array[AllocationBundle],
   Array[Int],
+  ProductionBundlePlan,
 ) {
-  let (segments, segments_by_value) = build_allocation_segments(ranges)
+  let loop_depths = compute_allocator_loop_depths(function)
+  let (segments, segments_by_value) = build_allocation_segments(
+    ranges,
+    loop_depths~,
+  )
   let bundle_plan = build_production_bundle_plan(function, ranges, segments)
   let (bundles, segment_owner) = allocate_bundles(
-    function, environment, ranges, segments, bundle_plan, strategy,
+    function,
+    environment,
+    ranges,
+    segments,
+    bundle_plan,
+    strategy,
+    loop_depths~,
   )
-  (segments, segments_by_value, bundles, segment_owner)
+  (segments, segments_by_value, bundles, segment_owner, bundle_plan)
 }
 
 ///|
@@ -314,6 +383,99 @@ fn spill_homes_can_share(
 }
 
 ///|
+fn[F : FunctionView] spill_home_types_match(
+  function : F,
+  lhs : VirtualReg,
+  rhs : VirtualReg,
+) -> Bool {
+  function.values_share_spill_slot(lhs.id, rhs.id) &&
+  function.values_share_spill_slot(rhs.id, lhs.id) &&
+  function.value_spill_size(lhs.id) == function.value_spill_size(rhs.id) &&
+  function.value_spill_alignment(lhs.id) ==
+  function.value_spill_alignment(rhs.id)
+}
+
+///|
+fn[F : FunctionView] build_spill_home_groups(
+  function : F,
+  ranges : LiveRangeSet,
+  bundle_plan : ProductionBundlePlan,
+  needs_spill : Array[Bool],
+) -> (Array[Int], Array[Array[VirtualReg]]) {
+  let group_by_value = Array::make(function.value_count(), -1)
+  let groups : Array[Array[VirtualReg]] = []
+  // Bundle ranges are copy-related and non-overlapping by construction. Keep
+  // their stable ids separate from the layout-sorted range storage.
+  let range_values : Array[VirtualReg?] = Array::make(ranges.length(), None)
+  for range in ranges.ranges {
+    range_values[range.id] = Some(range.vreg)
+  }
+  for range_ids in bundle_plan.bundle_ranges {
+    let compatible_groups : Array[Array[VirtualReg]] = []
+    for range_id in range_ids {
+      let value = range_values[range_id].unwrap()
+      if !needs_spill[value.id] {
+        continue
+      }
+      let mut selected = -1
+      for index, group in compatible_groups {
+        let mut compatible = true
+        for grouped_value in group {
+          if !spill_home_types_match(function, value, grouped_value) {
+            compatible = false
+            break
+          }
+        }
+        if compatible {
+          selected = index
+          break
+        }
+      }
+      if selected < 0 {
+        compatible_groups.push([value])
+      } else {
+        compatible_groups[selected].push(value)
+      }
+    }
+    for group in compatible_groups {
+      if group.length() < 2 {
+        continue
+      }
+      let group_id = groups.length()
+      groups.push(group)
+      for value in group {
+        group_by_value[value.id] = group_id
+      }
+    }
+  }
+  (group_by_value, groups)
+}
+
+///|
+fn[F : FunctionView] spill_home_candidates_can_share(
+  function : F,
+  ranges : LiveRangeSet,
+  group_by_value : Array[Int],
+  candidates : Array[VirtualReg],
+  occupants : Array[VirtualReg],
+) -> Bool {
+  for candidate in candidates {
+    for occupant in occupants {
+      if !spill_home_types_match(function, candidate, occupant) {
+        return false
+      }
+      let same_affinity_group = group_by_value[candidate.id] >= 0 &&
+        group_by_value[candidate.id] == group_by_value[occupant.id]
+      if !same_affinity_group &&
+        !spill_homes_can_share(ranges, candidate, occupant) {
+        return false
+      }
+    }
+  }
+  true
+}
+
+///|
 fn[F : FunctionView] assign_backtracking_homes(
   plan : AllocationPlan,
   function : F,
@@ -321,6 +483,7 @@ fn[F : FunctionView] assign_backtracking_homes(
   ranges : LiveRangeSet,
   segments : Array[AllocationSegment],
   segments_by_value : Array[Array[Int]],
+  bundle_plan : ProductionBundlePlan,
 ) -> Unit {
   let needs_spill = Array::make(function.value_count(), false)
   let register_homes : Array[PhysicalReg?] = Array::make(
@@ -360,28 +523,34 @@ fn[F : FunctionView] assign_backtracking_homes(
   }
 
   let slot_values : Array[Array[VirtualReg]] = []
+  let (group_by_value, spill_home_groups) = build_spill_home_groups(
+    function, ranges, bundle_plan, needs_spill,
+  )
+  let group_slots : Array[Int?] = Array::make(spill_home_groups.length(), None)
   for value in 0..<function.value_count() {
     let vreg : VirtualReg = { id: value, class: function.value_class(value) }
     if !needs_spill[value] {
       plan.assign_value(vreg, Reg(register_homes[value].unwrap()))
       continue
     }
-    let mut selected = -1
-    for slot, occupants in slot_values {
-      if occupants.is_empty() {
-        continue
-      }
-      let mut compatible = true
-      for occupant in occupants {
-        if !function.values_share_spill_slot(value, occupant.id) ||
-          !spill_homes_can_share(ranges, vreg, occupant) {
-          compatible = false
+    let group = group_by_value[value]
+    let candidates = if group >= 0 { spill_home_groups[group] } else { [vreg] }
+    let mut selected = if group >= 0 {
+      group_slots[group].unwrap_or(-1)
+    } else {
+      -1
+    }
+    if selected < 0 {
+      for slot, occupants in slot_values {
+        if occupants.is_empty() {
+          continue
+        }
+        if spill_home_candidates_can_share(
+            function, ranges, group_by_value, candidates, occupants,
+          ) {
+          selected = slot
           break
         }
-      }
-      if compatible {
-        selected = slot
-        break
       }
     }
     if selected < 0 {
@@ -391,7 +560,16 @@ fn[F : FunctionView] assign_backtracking_homes(
       )
       slot_values.push([])
     }
-    slot_values[selected].push(vreg)
+    if group >= 0 {
+      if group_slots[group] is None {
+        group_slots[group] = Some(selected)
+        for grouped_value in candidates {
+          slot_values[selected].push(grouped_value)
+        }
+      }
+    } else {
+      slot_values[selected].push(vreg)
+    }
     plan.assign_value(vreg, Spill(selected))
   }
 }
@@ -427,13 +605,25 @@ fn segment_location_at(
 }
 
 ///|
-fn live_register_home_value_at(
+fn live_register_value_at(
   register_home_values : Map[(Int, Int), Array[VirtualReg]],
+  register_segments : Map[(Int, Int), Array[Int]],
+  resident_segments : Array[Bool],
   segments : Array[AllocationSegment],
   segments_by_value : Array[Array[Int]],
   reg : PhysicalReg,
   point : ProgramPoint,
 ) -> VirtualReg? {
+  match register_segments.get(physical_reg_key(reg)) {
+    Some(segment_ids) =>
+      for segment_id in segment_ids {
+        if resident_segments[segment_id] &&
+          segments[segment_id].range.contains(point, []) {
+          return Some(segments[segment_id].value)
+        }
+      }
+    None => ()
+  }
   guard register_home_values.get(physical_reg_key(reg)) is Some(values) else {
     return None
   }
@@ -451,6 +641,8 @@ fn[F : FunctionView] borrow_allocatable_register(
   function : F,
   environment : MachineEnv,
   register_home_values : Map[(Int, Int), Array[VirtualReg]],
+  register_segments : Map[(Int, Int), Array[Int]],
+  resident_segments : Array[Bool],
   segments : Array[AllocationSegment],
   segments_by_value : Array[Array[Int]],
   borrow_slots : Array[Int?],
@@ -466,8 +658,9 @@ fn[F : FunctionView] borrow_allocatable_register(
       continue
     }
     match
-      live_register_home_value_at(
-        register_home_values, segments, segments_by_value, reg, point,
+      live_register_value_at(
+        register_home_values, register_segments, resident_segments, segments, segments_by_value,
+        reg, point,
       ) {
       None => return Some(reg)
       Some(value) =>
@@ -504,13 +697,46 @@ fn[F : FunctionView] borrow_allocatable_register(
 }
 
 ///|
+fn preserve_deferred_resident_segments(
+  plan : AllocationPlan,
+  segments : Array[AllocationSegment],
+  register_segments : Map[(Int, Int), Array[Int]],
+  resident_segments : Array[Bool],
+  reg : PhysicalReg,
+  keep : Int?,
+  instruction : Int,
+) -> Unit {
+  guard register_segments.get(physical_reg_key(reg)) is Some(segment_ids) else {
+    return
+  }
+  for segment_id in segment_ids {
+    if !resident_segments[segment_id] ||
+      keep == Some(segment_id) ||
+      !segments[segment_id].defer_home {
+      continue
+    }
+    let value = segments[segment_id].value
+    let home = plan.value_location(value.id).unwrap()
+    if home != Reg(reg) {
+      plan.add_edit({
+        value,
+        from: Reg(reg),
+        to: home,
+        position: Before(instruction),
+      })
+    }
+    resident_segments[segment_id] = false
+  }
+}
+
+///|
 fn[F : FunctionView] assign_backtracking_operands(
   plan : AllocationPlan,
   function : F,
   environment : MachineEnv,
   segments : Array[AllocationSegment],
   segments_by_value : Array[Array[Int]],
-) -> Unit raise VerifyError {
+) -> Array[Array[Bool]] raise VerifyError {
   let borrow_slots : Array[Int?] = Array::make(function.value_count(), None)
   let register_home_values : Map[(Int, Int), Array[VirtualReg]] = Map([])
   let register_segments : Map[(Int, Int), Array[Int]] = Map([])
@@ -533,8 +759,32 @@ fn[F : FunctionView] assign_backtracking_operands(
       }
     }
   }
+  let resident_segments_by_block : Array[Array[Bool]] = []
+  let has_predecessor = Array::make(function.block_count(), false)
+  for block in 0..<function.block_count() {
+    for successor in function.block_successors(block) {
+      if successor >= 0 && successor < function.block_count() {
+        has_predecessor[successor] = true
+      }
+    }
+  }
   for block in 0..<function.block_count() {
     let resident_segments = Array::make(segments.length(), false)
+    if has_predecessor[block] {
+      let parameters = function.block_parameters(block)
+      for segment in segments {
+        if segment.range.start.block == block &&
+          segment.range.start.inst == -1 &&
+          segment.location is Some(SegmentReg(reg)) {
+          let home_matches = plan.value_location(segment.value.id) ==
+            Some(Reg(reg))
+          if (!parameters.contains(segment.value) && segment.defer_home) ||
+            home_matches {
+            resident_segments[segment.id] = true
+          }
+        }
+      }
+    }
     for instruction_index, instruction in function.block_instructions(block) {
       let operands = function.instruction_operands(instruction)
       let assigned : Array[Location?] = Array::make(operands.length(), None)
@@ -560,10 +810,11 @@ fn[F : FunctionView] assign_backtracking_operands(
           None => home
         }
         natural_locations.push(natural)
+        let any_location = if operand.role is Def { home } else { natural }
         let reserved = match operand.constraint {
           FixedReg(reg) => Some(reg)
           AnyLocation =>
-            match home {
+            match any_location {
               Reg(reg) => Some(reg)
               Spill(_) => None
             }
@@ -597,7 +848,12 @@ fn[F : FunctionView] assign_backtracking_operands(
           None =>
             match operand.constraint {
               FixedReg(reg) => Reg(reg)
-              AnyLocation => home
+              AnyLocation =>
+                if operand.role is Def {
+                  home
+                } else {
+                  natural_locations[operand_index]
+                }
               AnyReg =>
                 match natural_locations[operand_index] {
                   Reg(reg) => Reg(reg)
@@ -620,6 +876,8 @@ fn[F : FunctionView] assign_backtracking_operands(
                           function,
                           environment,
                           register_home_values,
+                          register_segments,
+                          resident_segments,
                           segments,
                           segments_by_value,
                           borrow_slots,
@@ -657,6 +915,38 @@ fn[F : FunctionView] assign_backtracking_operands(
             _ => None
           },
         )
+      }
+      let preserved_registers : Array[PhysicalReg] = []
+      for operand_index, _ in operands {
+        if assigned[operand_index].unwrap() is Reg(reg) &&
+          !preserved_registers.contains(reg) {
+          let mut keep = resident_operand_segments[operand_index]
+          for other in 0..<operands.length() {
+            if other != operand_index &&
+              assigned[other].unwrap() == Reg(reg) &&
+              resident_operand_segments[other] != keep {
+              keep = None
+            }
+          }
+          preserve_deferred_resident_segments(
+            plan, segments, register_segments, resident_segments, reg, keep, instruction,
+          )
+          preserved_registers.push(reg)
+        }
+      }
+      for clobber in function.instruction_clobbers(instruction) {
+        if !preserved_registers.contains(clobber) {
+          preserve_deferred_resident_segments(
+            plan,
+            segments,
+            register_segments,
+            resident_segments,
+            clobber,
+            None,
+            instruction,
+          )
+          preserved_registers.push(clobber)
+        }
       }
       for timing in [Early, Late] {
         for operand_index, operand in operands {
@@ -703,7 +993,11 @@ fn[F : FunctionView] assign_backtracking_operands(
           }
           let home = plan.value_location(operand.vreg.id).unwrap()
           let selected = assigned[operand_index].unwrap()
-          if home != selected && operand.constraint != AnyLocation {
+          if home != selected &&
+            (
+              resident_operand_segments[operand_index] is None ||
+              !segments[resident_operand_segments[operand_index].unwrap()].defer_home
+            ) {
             plan.add_edit({
               value: operand.vreg,
               from: selected,
@@ -743,17 +1037,10 @@ fn[F : FunctionView] assign_backtracking_operands(
           }
         }
       }
-      for reg in borrowed_temps {
-        match register_segments.get(physical_reg_key(reg)) {
-          Some(segment_ids) =>
-            for segment_id in segment_ids {
-              resident_segments[segment_id] = false
-            }
-          None => ()
-        }
-      }
     }
+    resident_segments_by_block.push(resident_segments)
   }
+  resident_segments_by_block
 }
 
 ///|
@@ -763,16 +1050,18 @@ fn[F : FunctionView] allocate_bundle_plan(
   strategy : AllocatorStrategy,
 ) -> AllocationPlan raise VerifyError {
   let ranges = build_function_live_ranges(function)
-  let (segments, segments_by_value, _, _) = allocate_segments_with_bundles(
+  let (segments, segments_by_value, _, _, bundle_plan) = allocate_segments_with_bundles(
     function, environment, ranges, strategy,
   )
   let plan = AllocationPlan::new(function.value_count())
   assign_backtracking_homes(
-    plan, function, environment, ranges, segments, segments_by_value,
+    plan, function, environment, ranges, segments, segments_by_value, bundle_plan,
   )
-  assign_backtracking_operands(
+  let resident_segments_by_block = assign_backtracking_operands(
     plan, function, environment, segments, segments_by_value,
   )
-  assign_edge_transfers(plan, function)
+  assign_edge_transfers(
+    plan, function, segments, segments_by_value, resident_segments_by_block,
+  )
   plan
 }

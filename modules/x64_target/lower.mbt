@@ -1592,6 +1592,12 @@ pub fn lower(
     }
   }
   let lowered = builder.finish()
+  let layout = function
+    .blocks_in_cfg_order()
+    .map(semantic_block => blocks[function.block_index(semantic_block).unwrap()])
+  lowered.set_layout(layout) catch {
+    error => raise BuildFailure(cause=error)
+  }
   verify_vcode(lowered) catch {
     error => raise InvalidTarget(cause=error)
   }

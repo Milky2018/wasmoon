@@ -612,19 +612,6 @@ priv struct MemoryAddressSelection {
 }
 
 ///|
-priv struct EnvironmentReuseKey {
-  field : @semantic.EnvironmentField
-  context : @semantic.Value
-} derive(Eq, Hash)
-
-///|
-priv struct EnvironmentReuseEntry {
-  value : @semantic.Value
-  definition_index : Int
-  reuse_count : Int
-}
-
-///|
 /// Bound stable-field reuse by both span and consumer count. This keeps each
 /// cached value inside one short pressure region instead of pinning it across
 /// the complete function or loop.
@@ -632,6 +619,12 @@ const ENVIRONMENT_REUSE_DISTANCE : Int = 16
 
 ///|
 const ENVIRONMENT_REUSE_LIMIT : Int = 1
+
+///|
+/// Semantic SSA pressure undercounts target addressing temporaries and fixed
+/// ABI constraints, so keep long-lived environment values below a conservative
+/// fraction of the physical integer register file.
+const ENVIRONMENT_REUSE_INTEGER_PRESSURE_LIMIT : Int = 11
 
 ///|
 priv struct BranchSelection {
@@ -664,6 +657,262 @@ fn count_value_use(
   value : @semantic.Value,
 ) -> Unit {
   uses[function.value_index(value).unwrap()] += 1
+}
+
+///|
+fn update_last_use(
+  function : @semantic.Function,
+  last_uses : Array[Int],
+  value : @semantic.Value,
+  position : Int,
+) -> Unit {
+  let index = function.value_index(value).unwrap()
+  if position > last_uses[index] {
+    last_uses[index] = position
+  }
+}
+
+///|
+fn record_terminator_last_uses(
+  function : @semantic.Function,
+  last_uses : Array[Int],
+  record : @semantic.TerminatorRecord,
+  position : Int,
+) -> Unit {
+  match record.kind {
+    Jump(edge) =>
+      for argument in edge.arguments {
+        update_last_use(function, last_uses, argument, position)
+      }
+    Branch(condition, when_true, when_false) => {
+      update_last_use(function, last_uses, condition, position)
+      for argument in when_true.arguments {
+        update_last_use(function, last_uses, argument, position)
+      }
+      for argument in when_false.arguments {
+        update_last_use(function, last_uses, argument, position)
+      }
+    }
+    Switch(index, cases, default_edge) => {
+      update_last_use(function, last_uses, index, position)
+      for case in cases {
+        for argument in case.edge.arguments {
+          update_last_use(function, last_uses, argument, position)
+        }
+      }
+      for argument in default_edge.arguments {
+        update_last_use(function, last_uses, argument, position)
+      }
+    }
+    Return(values) | TailCall(_, values) | NoReturnCall(_, values) =>
+      for value in values {
+        update_last_use(function, last_uses, value, position)
+      }
+    Trap(_) => ()
+  }
+  for root in record.metadata.live_gc_roots {
+    update_last_use(function, last_uses, root, position)
+  }
+}
+
+///|
+fn environment_reuse_lifetimes(
+  function : @semantic.Function,
+  instruction_positions : Array[Int],
+) -> (Array[Int], Array[Int], Array[@semantic.ValueType?]) {
+  let definitions = Array::make(function.value_count(), -1)
+  let last_uses = Array::make(function.value_count(), -1)
+  let value_types : Array[@semantic.ValueType?] = Array::make(
+    function.value_count(),
+    None,
+  )
+  for parameter in function.parameters() {
+    let index = function.value_index(parameter).unwrap()
+    definitions[index] = 0
+    last_uses[index] = 0
+    value_types[index] = function.value_type(parameter)
+  }
+  let mut position = 1
+  for block in function.blocks_in_cfg_order() {
+    for parameter in function.block_parameters(block) {
+      let index = function.value_index(parameter).unwrap()
+      definitions[index] = position
+      last_uses[index] = position
+      value_types[index] = function.value_type(parameter)
+    }
+    for instruction in function.block_instructions(block) {
+      instruction_positions[function.instruction_index(instruction).unwrap()] = position
+      for result in function.instruction_results(instruction) {
+        let index = function.value_index(result).unwrap()
+        definitions[index] = position
+        last_uses[index] = position
+        value_types[index] = function.value_type(result)
+      }
+      for operand in function.instruction_operands(instruction) {
+        update_last_use(function, last_uses, operand, position)
+      }
+      for
+        root in function.instruction_metadata(instruction).unwrap().live_gc_roots {
+        update_last_use(function, last_uses, root, position)
+      }
+      position += 1
+    }
+    record_terminator_last_uses(
+      function,
+      last_uses,
+      function.block_terminator(block).unwrap(),
+      position,
+    )
+    position += 1
+  }
+  (definitions, last_uses, value_types)
+}
+
+///|
+fn can_reuse_environment_region(
+  function : @semantic.Function,
+  region : @semantic.EnvironmentFieldUseRegion,
+  instruction_positions : Array[Int],
+  integer_pressure : Array[Int],
+  environment_pressure : Array[Int],
+) -> Bool {
+  if region.occurrences.length() < 3 {
+    return false
+  }
+  let first_position = instruction_positions[function
+    .instruction_index(region.occurrences[0])
+    .unwrap()]
+  let last_position = instruction_positions[function
+    .instruction_index(region.occurrences[region.occurrences.length() - 1])
+    .unwrap()]
+  let mut peak = 0
+  for position in first_position..<=last_position {
+    let live = integer_pressure[position] - environment_pressure[position]
+    if live > peak {
+      peak = live
+    }
+  }
+  peak + 1 <= ENVIRONMENT_REUSE_INTEGER_PRESSURE_LIMIT
+}
+
+///|
+fn add_pressure_range(
+  changes : Array[Int],
+  definition : Int,
+  last_use : Int,
+) -> Unit {
+  if definition >= 0 && last_use >= definition {
+    changes[definition] += 1
+    changes[last_use + 1] -= 1
+  }
+}
+
+///|
+fn finish_pressure_ranges(changes : Array[Int]) -> Array[Int] {
+  let pressure = Array::make(changes.length() - 1, 0)
+  let mut live = 0
+  for index in 0..<pressure.length() {
+    live += changes[index]
+    pressure[index] = live
+  }
+  pressure
+}
+
+///|
+fn integer_pressure_by_position(
+  definitions : Array[Int],
+  last_uses : Array[Int],
+  value_types : Array[@semantic.ValueType?],
+  skip_results : Array[Bool],
+  position_count : Int,
+) -> Array[Int] {
+  let changes = Array::make(position_count + 1, 0)
+  for index in 0..<definitions.length() {
+    if !skip_results[index] &&
+      value_types[index].map(@vcode.reg_class_for_value_type) == Some(Int) {
+      add_pressure_range(changes, definitions[index], last_uses[index])
+    }
+  }
+  finish_pressure_ranges(changes)
+}
+
+///|
+fn environment_pressure_by_position(
+  function : @semantic.Function,
+  group : @semantic.EnvironmentFieldUseGroup,
+  definitions : Array[Int],
+  last_uses : Array[Int],
+  skip_results : Array[Bool],
+  position_count : Int,
+) -> Array[Int] {
+  let changes = Array::make(position_count + 1, 0)
+  for occurrence in group.occurrences {
+    for result in function.instruction_results(occurrence) {
+      let index = function.value_index(result).unwrap()
+      if !skip_results[index] {
+        add_pressure_range(changes, definitions[index], last_uses[index])
+      }
+    }
+  }
+  finish_pressure_ranges(changes)
+}
+
+///|
+fn record_environment_aliases(
+  function : @semantic.Function,
+  occurrences : Array[@semantic.Instruction],
+  environment_aliases : Array[@semantic.Value?],
+) -> Unit {
+  guard occurrences.get(0) is Some(first) &&
+    function.instruction_results(first) is [canonical] else {
+    return
+  }
+  for occurrence in occurrences[1:] {
+    guard function.instruction_results(occurrence) is [result] else { continue }
+    environment_aliases[function.value_index(result).unwrap()] = Some(canonical)
+  }
+}
+
+///|
+fn record_bounded_environment_aliases(
+  function : @semantic.Function,
+  occurrences : Array[@semantic.Instruction],
+  instruction_positions : Array[Int],
+  environment_aliases : Array[@semantic.Value?],
+) -> Unit {
+  guard occurrences.get(0) is Some(first) &&
+    function.instruction_results(first) is [first_result] else {
+    return
+  }
+  let mut canonical = first_result
+  let mut canonical_position = instruction_positions[function
+    .instruction_index(first)
+    .unwrap()]
+  let mut reuse_count = 0
+  for occurrence in occurrences[1:] {
+    guard function.instruction_results(occurrence) is [result] else { continue }
+    let position = instruction_positions[function
+      .instruction_index(occurrence)
+      .unwrap()]
+    if reuse_count < ENVIRONMENT_REUSE_LIMIT &&
+      position - canonical_position <= ENVIRONMENT_REUSE_DISTANCE {
+      environment_aliases[function.value_index(result).unwrap()] = Some(
+        canonical,
+      )
+      reuse_count += 1
+    } else {
+      canonical = result
+      canonical_position = position
+      reuse_count = 0
+    }
+  }
+}
+
+///|
+fn environment_field_uses_integer_register(
+  group : @semantic.EnvironmentFieldUseGroup,
+) -> Bool {
+  @vcode.reg_class_for_value_type(group.field.value_type) == Int
 }
 
 ///|
@@ -1042,38 +1291,6 @@ fn analyze_lowering(function : @semantic.Function) -> LoweringAnalysis {
       Trap(_) => ()
     }
   }
-  for block in function.blocks() {
-    let available : Map[EnvironmentReuseKey, EnvironmentReuseEntry] = Map([])
-    let mut definition_index = 0
-    for instruction in function.block_instructions(block) {
-      let operation = function.instruction_operation(instruction).unwrap()
-      if operation is Call(_) {
-        available.clear()
-      }
-      if operation is EnvironmentField(field, Stable) &&
-        function.instruction_operands(instruction) is [context] &&
-        function.instruction_results(instruction) is [result] {
-        let key = { field, context }
-        match available.get(key) {
-          Some(entry) if entry.reuse_count < ENVIRONMENT_REUSE_LIMIT &&
-            definition_index - entry.definition_index <=
-            ENVIRONMENT_REUSE_DISTANCE => {
-            environment_aliases[function.value_index(result).unwrap()] = Some(
-              entry.value,
-            )
-            available.set(key, { ..entry, reuse_count: entry.reuse_count + 1 })
-          }
-          _ =>
-            available.set(key, {
-              value: result,
-              definition_index,
-              reuse_count: 0,
-            })
-        }
-      }
-      definition_index += 1
-    }
-  }
   let record_folded_memory_address = fn(
     instruction : @semantic.Instruction,
     address : @semantic.Value,
@@ -1375,6 +1592,74 @@ fn analyze_lowering(function : @semantic.Function) -> LoweringAnalysis {
   for value_index in 0..<value_count {
     if uses[value_index] > 0 && folded_uses[value_index] == uses[value_index] {
       skip_results[value_index] = true
+    }
+  }
+  let environment_groups = function.environment_field_use_groups()
+  for group in environment_groups {
+    if group.stability == Stable &&
+      group.can_replace_context_carrier &&
+      environment_field_uses_integer_register(group) {
+      record_environment_aliases(
+        function,
+        group.occurrences,
+        environment_aliases,
+      )
+    }
+  }
+  let needs_regional_reuse = environment_groups.any(group => {
+    group.stability == Stable &&
+    !(group.can_replace_context_carrier &&
+    environment_field_uses_integer_register(group))
+  })
+  if needs_regional_reuse {
+    let instruction_positions = Array::make(instruction_slots, -1)
+    let (value_definitions, value_last_uses, value_types) = environment_reuse_lifetimes(
+      function, instruction_positions,
+    )
+    let position_count = instruction_slots + function.block_count() + 2
+    let integer_pressure = integer_pressure_by_position(
+      value_definitions, value_last_uses, value_types, skip_results, position_count,
+    )
+    for group in environment_groups {
+      if group.stability == Mutable ||
+        (
+          group.can_replace_context_carrier &&
+          environment_field_uses_integer_register(group)
+        ) {
+        continue
+      }
+      if !environment_field_uses_integer_register(group) {
+        for region in group.call_free_regions {
+          record_bounded_environment_aliases(
+            function,
+            region.occurrences,
+            instruction_positions,
+            environment_aliases,
+          )
+        }
+        continue
+      }
+      let environment_pressure = environment_pressure_by_position(
+        function, group, value_definitions, value_last_uses, skip_results, position_count,
+      )
+      for region in group.call_free_regions {
+        if can_reuse_environment_region(
+            function, region, instruction_positions, integer_pressure, environment_pressure,
+          ) {
+          record_environment_aliases(
+            function,
+            region.occurrences,
+            environment_aliases,
+          )
+        } else {
+          record_bounded_environment_aliases(
+            function,
+            region.occurrences,
+            instruction_positions,
+            environment_aliases,
+          )
+        }
+      }
     }
   }
   {
@@ -2683,6 +2968,12 @@ pub fn lower(
     }
   }
   let lowered = builder.finish()
+  let layout = function
+    .blocks_in_cfg_order()
+    .map(semantic_block => blocks[function.block_index(semantic_block).unwrap()])
+  lowered.set_layout(layout) catch {
+    error => raise BuildFailure(cause=error)
+  }
   verify_vcode(lowered) catch {
     error => raise InvalidTarget(cause=error)
   }

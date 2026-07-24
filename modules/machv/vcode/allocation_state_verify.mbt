@@ -166,17 +166,6 @@ fn[Inst] process_allocation_operand_phase(
       }
     }
     if operand.role is Def {
-      if allocation.value_locations[operand.value.id] is Some(Stack(slot)) &&
-        location is Register(reg) &&
-        !allocation.has_spill(
-          function.owner,
-          instruction,
-          operand.value,
-          reg,
-          slot,
-        ) {
-        raise MissingSpill(instruction~, operand=operand_index)
-      }
       state.remove_value(operand.value)
       state.set(operand.value, location)
     }

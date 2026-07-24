@@ -1,6 +1,7 @@
 ///|
 priv struct BundleTestFunction {
   classes : Array[RegClass]
+  spill_kinds : Array[Int]
   successors : Array[Array[Int]]
   parameters : Array[Array[VirtualReg]]
   edge_arguments : Array[Array[Array[VirtualReg]]]
@@ -49,11 +50,11 @@ impl FunctionView for BundleTestFunction with fn value_spill_alignment(
 
 ///|
 impl FunctionView for BundleTestFunction with fn values_share_spill_slot(
-  _self,
-  _lhs,
-  _rhs,
+  self,
+  lhs,
+  rhs,
 ) -> Bool {
-  true
+  self.spill_kinds[lhs] == self.spill_kinds[rhs]
 }
 
 ///|
@@ -148,6 +149,7 @@ test "production bundle plan follows transitive SSA edge affinities" {
   let (segments, _) = build_allocation_segments(ranges)
   let function : BundleTestFunction = {
     classes: [Int, Int, Int],
+    spill_kinds: [0, 0, 0],
     successors: [[1], [2], []],
     parameters: [[], [{ id: 1, class: Int }], [{ id: 2, class: Int }]],
     edge_arguments: [[[{ id: 0, class: Int }]], [[{ id: 1, class: Int }]], []],
@@ -164,6 +166,38 @@ test "production bundle plan follows transitive SSA edge affinities" {
       #|  bundle_segments: [[0, 1, 2, 3]],
       #|}
     ),
+  )
+}
+
+///|
+test "spill-home groups retain stable range ids after layout sorting" {
+  let ranges = LiveRangeSet::LiveRangeSet([0])
+  ranges.add_range(bundle_test_range(2, Int, 4, 6, []))
+  ranges.add_range(bundle_test_range(0, Int, 0, 2, []))
+  ranges.add_range(bundle_test_range(1, Int, 8, 10, []))
+  let (segments, _) = build_allocation_segments(ranges)
+  let function : BundleTestFunction = {
+    classes: [Int, Int, Int],
+    spill_kinds: [0, 0, 1],
+    successors: [[]],
+    parameters: [[]],
+    edge_arguments: [[]],
+  }
+  let plan = build_production_bundle_plan_from_range_edges(ranges, segments, [
+    (0, 1),
+  ])
+  debug_inspect(
+    build_spill_home_groups(function, ranges, plan, [true, true, true]),
+    content="([0, 0, -1], [[{ id: 0, class: Int }, { id: 1, class: Int }]])",
+  )
+  debug_inspect(
+    build_spill_home_groups(
+      { ..function, spill_kinds: [0, 1, 2] },
+      ranges,
+      plan,
+      [true, true, true],
+    ),
+    content="([-1, -1, -1], [])",
   )
 }
 

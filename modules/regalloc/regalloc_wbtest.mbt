@@ -790,16 +790,19 @@ test "reload intervals skip vectors by default" {
 
 ///|
 priv struct VerifierCfgView {
+  value_count : Int
   blocks : Array[Array[Int]]
   operands : Array[Array[Operand]]
   successors : Array[Array[Int]]
   entry_values : Array[VirtualReg]
+  parameters : Array[Array[VirtualReg]]
+  edge_arguments : Array[Array[Array[VirtualReg]]]
   successor_queries : Ref[Int]
 }
 
 ///|
-impl FunctionView for VerifierCfgView with fn value_count(_self) -> Int {
-  1
+impl FunctionView for VerifierCfgView with fn value_count(self) -> Int {
+  self.value_count
 }
 
 ///|
@@ -847,10 +850,10 @@ impl FunctionView for VerifierCfgView with fn block_id_at(_self, block) -> Int {
 }
 
 ///|
-impl FunctionView for VerifierCfgView with fn block_parameters(_self, _block) -> Array[
+impl FunctionView for VerifierCfgView with fn block_parameters(self, block) -> Array[
   VirtualReg,
 ] {
-  []
+  self.parameters[block].copy()
 }
 
 ///|
@@ -870,11 +873,11 @@ impl FunctionView for VerifierCfgView with fn block_successors(self, block) -> A
 
 ///|
 impl FunctionView for VerifierCfgView with fn edge_arguments(
-  _self,
-  _block,
-  _successor,
+  self,
+  block,
+  successor,
 ) -> Array[VirtualReg] {
-  []
+  self.edge_arguments[block][successor].copy()
 }
 
 ///|
@@ -922,10 +925,13 @@ test "plan verifier always enters a self-looping entry block" {
   debug_inspect(
     verify_wrong_location(
       {
+        value_count: 1,
         blocks: [[0]],
         operands: [[Operand::use_reg(value)]],
         successors: [[0]],
         entry_values: [value],
+        parameters: [[]],
+        edge_arguments: [[[]]],
         successor_queries: Ref(0),
       },
       None,
@@ -948,10 +954,13 @@ test "plan verifier checks an unreachable cyclic component" {
   debug_inspect(
     verify_wrong_location(
       {
+        value_count: 1,
         blocks: [[], [0, 1]],
         operands: [[Operand::def(value)], [Operand::use_reg(value)]],
         successors: [[], [1]],
         entry_values: [],
+        parameters: [[], []],
+        edge_arguments: [[], [[]]],
         successor_queries: Ref(0),
       },
       Some(0),
@@ -974,10 +983,13 @@ test "plan verifier queries each block successor list once" {
   let value : VirtualReg = { id: 0, class: Int }
   let register : PhysicalReg = { id: 0, class: Int }
   let function : VerifierCfgView = {
+    value_count: 1,
     blocks: [[], [], [], []],
     operands: [],
     successors: [[1], [2], [3], []],
     entry_values: [value],
+    parameters: [[], [], [], []],
+    edge_arguments: [[[]], [[]], [[]], []],
     successor_queries,
   }
   let plan = AllocationPlan::new(1)
@@ -996,7 +1008,114 @@ test "production fragments use local spill-cost density" {
   let ranges = LiveRangeSet::LiveRangeSet([0, 1, 2])
   ranges.add_range(range)
   let (segments, _) = build_allocation_segments(ranges)
-  debug_inspect(segments.map(segment => segment.weight), content="[500, 500]")
+  debug_inspect(segments.map(segment => segment.weight), content="[667, 667]")
+}
+
+///|
+test "any-location definitions materialize in their stable home" {
+  let value : VirtualReg = { id: 0, class: Int }
+  let register : PhysicalReg = { id: 0, class: Int }
+  let function : VerifierCfgView = {
+    value_count: 1,
+    blocks: [[0]],
+    operands: [[Operand::def(value).with_constraint(AnyLocation)]],
+    successors: [[]],
+    entry_values: [],
+    parameters: [[]],
+    edge_arguments: [[]],
+    successor_queries: Ref(0),
+  }
+  let plan = AllocationPlan::new(1)
+  let slot = plan.create_spill_slot(8, 8)
+  plan.assign_value(value, Spill(slot))
+  let segments : Array[AllocationSegment] = [
+    {
+      id: 0,
+      value,
+      range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 2)),
+      weight: 1,
+      has_fixed_constraint: false,
+      location: Some(SegmentReg(register)),
+      defer_home: false,
+    },
+  ]
+  assign_backtracking_operands(
+    plan,
+    function,
+    MachineEnv::new([register], []),
+    segments,
+    [[0]],
+  )
+  |> ignore
+  debug_inspect(
+    (plan.operand_location(0, 0), plan.edits()),
+    content="(Some(Spill(0)), [])",
+  )
+}
+
+///|
+test "edge arguments do not hide a live-through value transfer" {
+  let value : VirtualReg = { id: 0, class: Int }
+  let parameter : VirtualReg = { id: 1, class: Int }
+  let source_register : PhysicalReg = { id: 0, class: Int }
+  let parameter_register : PhysicalReg = { id: 1, class: Int }
+  let function : VerifierCfgView = {
+    value_count: 2,
+    blocks: [[], []],
+    operands: [],
+    successors: [[1], []],
+    entry_values: [value],
+    parameters: [[], [parameter]],
+    edge_arguments: [[[value]], []],
+    successor_queries: Ref(0),
+  }
+  let plan = AllocationPlan::new(2)
+  let slot = plan.create_spill_slot(8, 8)
+  plan.assign_value(value, Spill(slot))
+  plan.assign_value(parameter, Reg(parameter_register))
+  let segments : Array[AllocationSegment] = [
+    {
+      id: 0,
+      value,
+      range: ProgramRange(ProgramPoint(0, -1), ProgramPoint(0, 0)),
+      weight: 1,
+      has_fixed_constraint: false,
+      location: Some(SegmentReg(source_register)),
+      defer_home: true,
+    },
+    {
+      id: 1,
+      value,
+      range: ProgramRange(ProgramPoint(1, -1), ProgramPoint(1, 0)),
+      weight: 1,
+      has_fixed_constraint: false,
+      location: Some(SegmentSpill),
+      defer_home: false,
+    },
+  ]
+  assign_edge_transfers(plan, function, segments, [[0, 1], []], [
+    [true, false],
+    [false, false],
+  ])
+  debug_inspect(
+    plan.edits(),
+    content=(
+      #|[
+      #|  {
+      #|    value: { id: 0, class: Int },
+      #|    from: Reg({ id: 0, class: Int }),
+      #|    to: Reg({ id: 1, class: Int }),
+      #|    position: Edge(source_block=0, successor_index=0),
+      #|  },
+      #|  {
+      #|    value: { id: 0, class: Int },
+      #|    from: Reg({ id: 0, class: Int }),
+      #|    to: Spill(0),
+      #|    position: Edge(source_block=0, successor_index=0),
+      #|  },
+      #|]
+    ),
+  )
 }
 
 ///|
@@ -1009,6 +1128,7 @@ test "production conflict index finds only overlapping occupied segments" {
       weight: 1,
       has_fixed_constraint: false,
       location: None,
+      defer_home: false,
     },
     {
       id: 1,
@@ -1017,6 +1137,7 @@ test "production conflict index finds only overlapping occupied segments" {
       weight: 1,
       has_fixed_constraint: false,
       location: None,
+      defer_home: false,
     },
     {
       id: 2,
@@ -1025,6 +1146,7 @@ test "production conflict index finds only overlapping occupied segments" {
       weight: 1,
       has_fixed_constraint: false,
       location: None,
+      defer_home: false,
     },
     {
       id: 3,
@@ -1033,6 +1155,7 @@ test "production conflict index finds only overlapping occupied segments" {
       weight: 1,
       has_fixed_constraint: false,
       location: None,
+      defer_home: false,
     },
   ]
   debug_inspect(
