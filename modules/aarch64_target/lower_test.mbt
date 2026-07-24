@@ -34,6 +34,29 @@ test "AArch64 lowering selects scalar SSA and preserves source metadata" {
 }
 
 ///|
+test "AArch64 lowering lays out a loop for fallthrough before allocation" {
+  let builder = @semantic.FunctionBuilder::new("cfg_layout", Platform, [I32], [
+    I32,
+  ])
+  let exit = builder.create_block([I32])
+  let body = builder.create_block([I32])
+  let header = builder.create_block([I32])
+  builder.jump(header, builder.parameters())
+  builder.switch_to_block(header)
+  let header_value = builder.block_parameters(header)[0]
+  builder.branch(header_value, body, [header_value], exit, [header_value])
+  builder.switch_to_block(body)
+  builder.jump(header, builder.block_parameters(body))
+  builder.switch_to_block(exit)
+  builder.return_(builder.block_parameters(exit))
+  let selected = lower(builder.finish(), test_lowering_context())
+  debug_inspect(
+    selected.layout().map(block => selected.block_index(block).unwrap()),
+    content="[0, 3, 1, 2]",
+  )
+}
+
+///|
 test "AArch64 lowering fuses single-use integer multiply-add" {
   let builder = @semantic.FunctionBuilder::new(
     "selected_multiply_add",
@@ -399,14 +422,14 @@ test "AArch64 lowering folds encodable immediates and compare-zero branches" {
       #|  i1 IntBinaryImmediate(W32, Add, 1) uses=[v1:any@early] defs=[v2:any@late]
       #|  i2 IntBinaryImmediate(W32, And, 8) uses=[v2:any@early] defs=[v3:any@late]
       #|  i3 BranchNonZero(W32) uses=[v3:any@early] -> block1() -> block2()
-      #|block1:
-      #|  i7 LoadConstant(W32, 3) defs=[v5:any@late]
-      #|  i8 OutgoingReg(I32, p0:int) uses=[v5:any@early]
-      #|  i9 Return
       #|block2:
       #|  i4 LoadConstant(W32, 7) defs=[v4:any@late]
       #|  i5 OutgoingReg(I32, p0:int) uses=[v4:any@early]
       #|  i6 Return
+      #|block1:
+      #|  i7 LoadConstant(W32, 3) defs=[v5:any@late]
+      #|  i8 OutgoingReg(I32, p0:int) uses=[v5:any@early]
+      #|  i9 Return
       #|
     ),
   )
@@ -470,14 +493,14 @@ test "AArch64 lowering fuses integer comparisons into branches" {
       #|  i0 IncomingReg(I64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v2:any-location(prefer=p0:int)@late]
       #|  i1 IncomingReg(I64, p1:int) uses=[v1:fixed(p1:int)@early] defs=[v3:any-location(prefer=p1:int)@late]
       #|  i2 BranchCompare(W64, Hs) uses=[v2:any@early, v3:any@early] -> block1() -> block2()
-      #|block1:
-      #|  i6 LoadConstant(W32, 1) defs=[v5:any@late]
-      #|  i7 OutgoingReg(I32, p0:int) uses=[v5:any@early]
-      #|  i8 Return
       #|block2:
       #|  i3 LoadConstant(W32, 0) defs=[v4:any@late]
       #|  i4 OutgoingReg(I32, p0:int) uses=[v4:any@early]
       #|  i5 Return
+      #|block1:
+      #|  i6 LoadConstant(W32, 1) defs=[v5:any@late]
+      #|  i7 OutgoingReg(I32, p0:int) uses=[v5:any@early]
+      #|  i8 Return
       #|
     ),
   )
@@ -514,14 +537,14 @@ test "AArch64 lowering folds integer comparison immediates into branches" {
       #|block0:
       #|  i0 IncomingReg(I32, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v1:any-location(prefer=p0:int)@late]
       #|  i1 BranchCompareImmediate(W32, Hs, 200) uses=[v1:any@early] -> block1() -> block2()
-      #|block1:
-      #|  i5 LoadConstant(W32, 1) defs=[v3:any@late]
-      #|  i6 OutgoingReg(I32, p0:int) uses=[v3:any@early]
-      #|  i7 Return
       #|block2:
       #|  i2 LoadConstant(W32, 0) defs=[v2:any@late]
       #|  i3 OutgoingReg(I32, p0:int) uses=[v2:any@early]
       #|  i4 Return
+      #|block1:
+      #|  i5 LoadConstant(W32, 1) defs=[v3:any@late]
+      #|  i6 OutgoingReg(I32, p0:int) uses=[v3:any@early]
+      #|  i7 Return
       #|
     ),
   )
@@ -2989,15 +3012,15 @@ test "AArch64 lowers dense and sparse switches with edge arguments" {
       #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v2:any-location(prefer=p0:int)@late]
       #|  i1 IncomingReg(I32, p1:int) uses=[v1:fixed(p1:int)@early] defs=[v3:any-location(prefer=p1:int)@late]
       #|  i2 Switch(W32, [1, 0]) uses=[v3:any@early] -> block2(v3) -> block1(v3) -> block3(v3)
+      #|block3(v6:i32):
+      #|  i3 OutgoingReg(I32, p0:int) uses=[v6:any@early]
+      #|  i4 Return
       #|block1(v4:i32):
       #|  i5 OutgoingReg(I32, p0:int) uses=[v4:any@early]
       #|  i6 Return
       #|block2(v5:i32):
       #|  i7 OutgoingReg(I32, p0:int) uses=[v5:any@early]
       #|  i8 Return
-      #|block3(v6:i32):
-      #|  i3 OutgoingReg(I32, p0:int) uses=[v6:any@early]
-      #|  i4 Return
       #|
     ),
   )
@@ -3009,15 +3032,15 @@ test "AArch64 lowers dense and sparse switches with edge arguments" {
       #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v2:any-location(prefer=p0:int)@late]
       #|  i1 IncomingReg(I64, p1:int) uses=[v1:fixed(p1:int)@early] defs=[v3:any-location(prefer=p1:int)@late]
       #|  i2 Switch(W64, [7, 65536]) uses=[v3:any@early] -> block1(v3) -> block2(v3) -> block3(v3)
-      #|block1(v4:i64):
-      #|  i7 OutgoingReg(I64, p0:int) uses=[v4:any@early]
-      #|  i8 Return
-      #|block2(v5:i64):
-      #|  i5 OutgoingReg(I64, p0:int) uses=[v5:any@early]
-      #|  i6 Return
       #|block3(v6:i64):
       #|  i3 OutgoingReg(I64, p0:int) uses=[v6:any@early]
       #|  i4 Return
+      #|block2(v5:i64):
+      #|  i5 OutgoingReg(I64, p0:int) uses=[v5:any@early]
+      #|  i6 Return
+      #|block1(v4:i64):
+      #|  i7 OutgoingReg(I64, p0:int) uses=[v4:any@early]
+      #|  i8 Return
       #|
     ),
   )

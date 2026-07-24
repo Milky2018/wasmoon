@@ -34,6 +34,29 @@ test "X64 lowering selects scalar SSA and preserves source metadata" {
 }
 
 ///|
+test "X64 lowering lays out a loop for fallthrough before allocation" {
+  let builder = @semantic.FunctionBuilder::new("cfg_layout", Platform, [I32], [
+    I32,
+  ])
+  let exit = builder.create_block([I32])
+  let body = builder.create_block([I32])
+  let header = builder.create_block([I32])
+  builder.jump(header, builder.parameters())
+  builder.switch_to_block(header)
+  let header_value = builder.block_parameters(header)[0]
+  builder.branch(header_value, body, [header_value], exit, [header_value])
+  builder.switch_to_block(body)
+  builder.jump(header, builder.block_parameters(body))
+  builder.switch_to_block(exit)
+  builder.return_(builder.block_parameters(exit))
+  let selected = lower(builder.finish(), test_lowering_context())
+  debug_inspect(
+    selected.layout().map(block => selected.block_index(block).unwrap()),
+    content="[0, 3, 1, 2]",
+  )
+}
+
+///|
 test "X64 lowering rejects unsupported valid operations structurally" {
   let builder = @semantic.FunctionBuilder::new(
     "unsupported_big_endian_atomic",
@@ -2257,15 +2280,15 @@ test "X64 lowers dense and sparse switches with edge arguments" {
       #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v2:any-location(prefer=p7:int)@late]
       #|  i1 IncomingReg(I32, p6:int) uses=[v1:fixed(p6:int)@early] defs=[v3:any-location(prefer=p6:int)@late]
       #|  i2 Switch(W32, [1, 0]) uses=[v3:any@early] -> block2(v3) -> block1(v3) -> block3(v3)
+      #|block3(v6:i32):
+      #|  i3 OutgoingReg(I32, p0:int) uses=[v6:any@early]
+      #|  i4 Return
       #|block1(v4:i32):
       #|  i5 OutgoingReg(I32, p0:int) uses=[v4:any@early]
       #|  i6 Return
       #|block2(v5:i32):
       #|  i7 OutgoingReg(I32, p0:int) uses=[v5:any@early]
       #|  i8 Return
-      #|block3(v6:i32):
-      #|  i3 OutgoingReg(I32, p0:int) uses=[v6:any@early]
-      #|  i4 Return
       #|
     ),
   )
@@ -2277,15 +2300,15 @@ test "X64 lowers dense and sparse switches with edge arguments" {
       #|  i0 IncomingReg(Ptr64, p7:int) uses=[v0:fixed(p7:int)@early] defs=[v2:any-location(prefer=p7:int)@late]
       #|  i1 IncomingReg(I64, p6:int) uses=[v1:fixed(p6:int)@early] defs=[v3:any-location(prefer=p6:int)@late]
       #|  i2 Switch(W64, [7, 65536]) uses=[v3:any@early] -> block1(v3) -> block2(v3) -> block3(v3)
-      #|block1(v4:i64):
-      #|  i7 OutgoingReg(I64, p0:int) uses=[v4:any@early]
-      #|  i8 Return
-      #|block2(v5:i64):
-      #|  i5 OutgoingReg(I64, p0:int) uses=[v5:any@early]
-      #|  i6 Return
       #|block3(v6:i64):
       #|  i3 OutgoingReg(I64, p0:int) uses=[v6:any@early]
       #|  i4 Return
+      #|block2(v5:i64):
+      #|  i5 OutgoingReg(I64, p0:int) uses=[v5:any@early]
+      #|  i6 Return
+      #|block1(v4:i64):
+      #|  i7 OutgoingReg(I64, p0:int) uses=[v4:any@early]
+      #|  i8 Return
       #|
     ),
   )
