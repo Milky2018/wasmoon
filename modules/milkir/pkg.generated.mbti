@@ -24,6 +24,7 @@ pub suberror VerifyError {
   ForeignValue(value_id~ : Int)
   ForeignBlock(block_id~ : Int)
   ForeignInstruction(inst_id~ : Int)
+  ForeignGlobalValue(global_value_id~ : Int)
   DuplicateBlockId(block_id~ : Int)
   DuplicateValueDefinition(value_id~ : Int)
   DuplicateInstructionId(inst_id~ : Int)
@@ -39,6 +40,13 @@ pub fn VerifyError::unverifiable_instruction(String) -> Self
 pub impl Show for VerifyError
 
 // Types and methods
+pub(all) enum AliasRegion {
+  Heap(Int)
+  Table(Int)
+  Context
+  Other
+} derive(Eq, Hash, @debug.Debug)
+
 pub struct Block {
   id : Int
   params : Array[(Value, Type)]
@@ -76,6 +84,16 @@ pub(all) enum CallOp {
   Direct(ExternalSymbol, Signature)
   Pointer(Int, Int)
 } derive(Eq, Hash, @debug.Debug)
+
+pub struct ContextField {
+  dialect : String
+  key : Int
+  parameters : FixedArray[Int]
+  ty : Type
+} derive(@debug.Debug)
+pub fn ContextField::new(String, Int, FixedArray[Int], Type) -> Self
+pub impl Eq for ContextField
+pub impl Hash for ContextField
 
 pub(all) enum ConversionOp {
   IntReduce
@@ -158,14 +176,18 @@ pub struct Function {
   results : Array[Type]
   blocks : Array[Block]
   external_symbols : Array[ExternalSymbol]
+  global_values : Array[(GlobalValue, GlobalValueData)]
   mut next_value_id : Int
   mut next_inst_id : Int
   mut next_block_id : Int
+  mut next_global_value_id : Int
   // private fields
 }
 pub fn Function::add_param(Self, Type) -> Value
 pub fn Function::add_result(Self, Type) -> Unit
 pub fn Function::declare_external_symbol(Self, String) -> ExternalSymbol
+pub fn Function::declare_global_value(Self, GlobalValueData) -> GlobalValue
+pub fn Function::global_value_data(Self, GlobalValue) -> GlobalValueData?
 pub fn Function::new_block(Self, Array[Value]) -> Block
 pub fn Function::new_block0(Self) -> Block
 pub fn Function::new_empty(String) -> Self
@@ -176,7 +198,7 @@ pub fn Function::print(Self) -> String
 pub fn Function::signature(Self) -> Signature
 pub fn Function::verify(Self) -> Unit raise VerifyError
 pub fn Function::verify_core(Self) -> Unit raise VerifyError
-pub fn Function::verify_with_extension_validator(Self, String, (ExtensionInstView) -> String?) -> Unit raise VerifyError
+pub fn Function::verify_with_dialect_validator(Self, String, (ExtensionInstView) -> String?, (GlobalValueData) -> String?) -> Unit raise VerifyError
 pub fn Function::with_signature(String, Signature) -> Self
 pub impl @debug.Debug for Function
 
@@ -235,6 +257,7 @@ pub fn FunctionBuilder::fsub(Self, Value, Value) -> Value
 pub fn FunctionBuilder::ftrunc(Self, Value) -> Value
 pub fn FunctionBuilder::get_const_value(Self, Value) -> Int64?
 pub fn FunctionBuilder::get_function(Self) -> Function
+pub fn FunctionBuilder::global_value(Self, GlobalValue, Value) -> Value
 pub fn FunctionBuilder::iadd(Self, Value, Value) -> Value
 pub fn FunctionBuilder::icmp(Self, IntCC, Value, Value) -> Value
 pub fn FunctionBuilder::icmp_eq(Self, Value, Value) -> Value
@@ -316,6 +339,24 @@ pub fn FunctionBuilder::v128_store_lane_with_addr(Self, VectorMemoryOp, Value, V
 pub fn FunctionBuilder::v128_swizzle(Self, Value, Value) -> Value
 pub fn FunctionBuilder::v128_xor(Self, Value, Value) -> Value
 
+pub struct GlobalValue {
+  id : Int
+  // private fields
+}
+pub impl Eq for GlobalValue
+pub impl Hash for GlobalValue
+pub impl @debug.Debug for GlobalValue
+
+pub(all) enum GlobalValueData {
+  ContextField(ContextField, GlobalValueStability, AliasRegion)
+} derive(Eq, Hash, @debug.Debug)
+pub fn GlobalValueData::context_field(ContextField, GlobalValueStability, AliasRegion) -> Self
+
+pub(all) enum GlobalValueStability {
+  Stable
+  Mutable
+} derive(Eq, Hash, @debug.Debug)
+
 pub struct Inst {
   id : Int
   results : Array[Value]
@@ -396,6 +437,7 @@ pub(all) enum Opcode {
   Scalar(ScalarOp)
   Call(CallOp)
   Memory(MemoryOp)
+  GlobalValue(GlobalValue)
   Ext(ExtOp, Signature)
   Vector(VectorOp)
 } derive(Eq, Hash, @debug.Debug)

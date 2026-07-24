@@ -130,10 +130,14 @@ test "extension validators receive the complete read-only instruction shape" {
   let result = builder.emit_ext_inst(I32, ExtOp("demo", "shape", []), [input])
   builder.return_([result])
   let func = builder.finalize()
-  func.verify_with_extension_validator("demo", view => {
-    views.push(view)
-    None
-  })
+  func.verify_with_dialect_validator(
+    "demo",
+    view => {
+      views.push(view)
+      None
+    },
+    fn(_) { Some("demo does not define context globals") },
+  )
   debug_inspect(
     views,
     content=(
@@ -154,7 +158,11 @@ test "adapter validation rejects extensions owned by another dialect" {
   builder.emit_void_ext_inst(ExtOp("demo", "effect", []), [])
   builder.return_([])
   let func = builder.finalize()
-  try func.verify_with_extension_validator("wasm", fn(_) { None }) catch {
+  try
+    func.verify_with_dialect_validator("wasm", fn(_) { None }, fn(_) {
+      Some("wasm context globals are not expected")
+    })
+  catch {
     err =>
       inspect(
         err,

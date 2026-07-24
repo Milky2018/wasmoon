@@ -99,9 +99,16 @@ Every instruction belongs to one semantic family. `Opcode` has no source-languag
 | `Memory(MemoryOp)` | Full-width and narrow loads and stores over an explicit base and offset value. |
 | `Call(CallOp)` | Direct external-symbol calls and function-pointer calls with explicit contracts. |
 | `Vector(VectorOp)` | Language-neutral V128 lane, arithmetic, comparison, conversion, and effective-address memory operations. |
+| `GlobalValue(GlobalValue)` | A function-scoped, adapter-owned context field with an explicit type, stability, and alias region. |
 | `Ext(ExtOp, Signature)` | Typed operations whose semantics belong to a separately owned dialect. |
 
 Frontends must consume source-only metadata before constructing a core instruction. For example, a WebAssembly frontend resolves a SIMD memory index, alignment hint, and immediate offset while computing the effective address; MilkIR receives that address and the vector load/store semantics. A frontend uses `Ext` only when the operation genuinely requires dialect-owned validation and lowering.
+
+### Embedding context fields
+
+`GlobalValue` models a typed value loaded from an embedding-provided context, such as a linear-memory base pointer. Its declaration is interned in the `Function`; the instruction names that declaration and takes the context pointer explicitly. MilkIR does not know the field offset or runtime layout. The owning dialect validates the opaque `ContextField`, and its MilkIR-to-MachV adapter resolves it to a semantic `EnvironmentField`.
+
+Every declaration also states whether the field is `Stable` for the whole function invocation or `Mutable` across calls, plus the abstract region reached by the resulting pointer. Stable fields remain explicit and cheap to rematerialize: general GVN and LICM do not turn them into function-wide live ranges. Mutable fields may be reused across unrelated heap stores but are invalidated by calls and unknown memory writes. Target lowering may reuse stable fields within a target-specific cost window. These contracts permit local redundancy elimination without pinning a physical register or hard-coding an embedding layout into MilkIR.
 
 ### Semantic ownership
 
@@ -334,7 +341,7 @@ An embedding adapter may assign roles such as VMContext to those arguments when 
 
 `Ext(ExtOp, Signature)` represents dialect-specific operations. MilkIR stores only a dialect name, opcode name, integer immediates, and an explicit operand/result contract. Validator closures are not part of `Function`; the dialect package owns builders, semantic validation, decoding, and lowering.
 
-`Function::verify` and `FunctionBuilder::finalize` validate generic IR structure without interpreting dialect semantics. At the adapter seam, `Function::verify_with_extension_validator` receives the owned dialect name and validator explicitly, rejects extensions owned by another dialect, and converts diagnostics into `VerifyError::UnverifiableInstruction`. Dialect lowering likewise requires an explicit adapter verifier, so validation behavior depends only on the adapter selected by the consumer, never on function construction history.
+`Function::verify` and `FunctionBuilder::finalize` validate generic IR structure without interpreting dialect semantics. At the adapter seam, `Function::verify_with_dialect_validator` receives the owned dialect name plus explicit instruction and global-value validators, rejects data owned by another dialect, and converts diagnostics into `VerifyError::UnverifiableInstruction`. Dialect lowering likewise requires explicit adapter validation, so validation behavior depends only on the adapter selected by the consumer, never on function construction history.
 
 ```moonbit check
 ///|

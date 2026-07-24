@@ -501,8 +501,10 @@ test "dialect lowering uses the narrow semantic adapter" {
       builder.finalize(),
       "demo",
       validate,
+      fn(_) { Some("demo does not define context globals") },
       [(0, I32)],
       lower,
+      fn(_) { None },
     ),
     content=(
       #|machv dialect_adapter [internal](v0:i32, v1:i32) -> (i32) {
@@ -530,7 +532,15 @@ test "dialect lowering rejects an adapter that omits completion" {
     None
   }
   try
-    lower_dialect_function(builder.finalize(), "demo", validate, [], lower)
+    lower_dialect_function(
+      builder.finalize(),
+      "demo",
+      validate,
+      fn(_) { Some("demo does not define context globals") },
+      [],
+      lower,
+      fn(_) { None },
+    )
     |> ignore
   catch {
     error =>

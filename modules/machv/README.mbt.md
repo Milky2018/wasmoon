@@ -37,6 +37,11 @@ tables and returns a separate `Allocation`; it does not rewrite Target VCode.
 Frame planning and emission consume the same stable instruction and program
 point handles.
 
+The aggregate target `compile` entry points report `TargetCompileEvent`
+boundaries around allocation, frame planning, and emission. The allocation
+completion event carries `AllocationStatistics`, including edge-transfer
+classification, while keeping timing and reporting policy embedding-owned.
+
 The public checkpoints are:
 
 1. selected Target VCode SSA;
@@ -45,3 +50,12 @@ The public checkpoints are:
 4. verified unlinked code object.
 
 Every checkpoint returns a structured error for malformed input.
+
+## Embedding environment fields
+
+Semantic MachV keeps embedding context access explicit as
+`EnvironmentField(field, stability)`. `Stable` means the embedding guarantees
+the field value is unchanged for one function invocation; `Mutable` does not
+grant that reuse permission. A target may rematerialize either form, but it may
+reuse only stable fields according to its own instruction and register-pressure
+cost model. Field offsets and runtime layout remain embedding-provided ABI data.

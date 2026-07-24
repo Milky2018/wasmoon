@@ -198,25 +198,9 @@ fn bundle_class(
 fn first_clobber_point(
   segment : AllocationSegment,
   reg : PhysicalReg,
-  clobbers : Map[(Int, Int), Array[ProgramPoint]],
-  block_order : Array[Int],
+  clobbers : RegisterClobberIndex,
 ) -> ProgramPoint? {
-  let mut first : ProgramPoint? = None
-  match clobbers.get(physical_reg_key(reg)) {
-    Some(points) =>
-      for point in points {
-        if segment.range.start.compare_with_order(point, block_order) < 0 &&
-          point.compare_with_order(segment.range.end, block_order) < 0 &&
-          (
-            first is None ||
-            point.compare_with_order(first.unwrap(), block_order) < 0
-          ) {
-          first = Some(point)
-        }
-      }
-    None => ()
-  }
-  first
+  clobbers.query(reg, segment.range).0
 }
 
 ///|
@@ -245,7 +229,7 @@ fn probe_bundle_register(
   segments : Array[AllocationSegment],
   segment_owner : Array[Int],
   occupied : Array[Array[Int]],
-  clobbers : Map[(Int, Int), Array[ProgramPoint]],
+  clobbers : RegisterClobberIndex,
   block_order : Array[Int],
 ) -> BundleRegisterProbe {
   let conflicts : Array[Int] = []
@@ -254,7 +238,7 @@ fn probe_bundle_register(
   let mut clobbered = false
   for segment_id in bundle.segments {
     let segment = segments[segment_id]
-    if first_clobber_point(segment, reg, clobbers, block_order) is Some(point) {
+    if first_clobber_point(segment, reg, clobbers) is Some(point) {
       clobbered = true
       first_conflict = Some(
         earlier_conflict_point(first_conflict, point, block_order),
@@ -590,7 +574,7 @@ fn[F : FunctionView] allocate_bundles(
   for _ in environment.allocatable_regs {
     occupied.push([])
   }
-  let clobbers = collect_function_clobber_points(function)
+  let clobbers = build_register_clobber_index(function, ranges.block_order)
   let preferred_by_value : Array[PhysicalReg?] = Array::make(
     function.value_count(),
     None,

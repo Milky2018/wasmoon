@@ -38,10 +38,15 @@ whether the enclosing function uses the internal or platform call protocol.
 
 ## Dialect lowering
 
-`lower_dialect_function` accepts one named dialect, its instruction validator,
-explicit environment parameters, and a narrow `InstructionContext` adapter.
-The adapter can only construct verified semantic MachV operations and must
-complete the declared result contract for every extension instruction.
+`lower_dialect_function` accepts one named dialect, instruction and global-value
+validators, explicit environment parameters, a context-field resolver, and a
+narrow `InstructionContext` adapter. The adapter can only construct verified
+semantic MachV operations and must complete the declared result contract for
+every extension instruction. The resolver turns opaque MilkIR `ContextField`
+declarations into semantic MachV `EnvironmentField` values without exposing an
+embedding layout to MilkIR. The adapter also preserves the declaration's
+stability contract so target lowering can choose local reuse without extending
+live ranges in target-neutral IR.
 
 WebAssembly uses the separate `Milky2018/wasm_machv` package. Product-specific
 VMContext offsets, runtime helper names, trap payloads, and executable-memory

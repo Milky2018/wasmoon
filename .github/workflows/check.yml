@@ -419,7 +419,7 @@ jobs:
           run_gate moon-check 'moon check --target native --warn-list +73'
           run_gate moon-test 'MACHV_REGALLOC_VALIDATION=1 moon test --target native --no-parallelize'
           run_gate boundary-audits 'python3 scripts/audit_module_boundaries.py && python3 scripts/audit_semantic_machv_api.py && python3 scripts/audit_internal_compatibility.py'
-          run_gate python-gate-tests 'python3 -m unittest scripts.tests.test_cutover_gate'
+          run_gate python-gate-tests 'python3 -m unittest discover -s scripts/tests -p "test_*.py"'
           run_gate build-install 'moon build --target native --release && ./install.sh'
           run_gate wast 'python3 scripts/run_all_wast.py --dir spec --rec'
           run_gate wasi 'python3 examples/wasi_tests/wasi_test.py'

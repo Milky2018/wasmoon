@@ -114,7 +114,11 @@ pub fn validate_extension(view : @milkir.ExtensionInstView) -> String? {
 pub fn verify_function(
   func : @milkir.Function,
 ) -> Unit raise @milkir.VerifyError {
-  func.verify_with_extension_validator(WASM_DIALECT, validate_extension)
+  func.verify_with_dialect_validator(
+    WASM_DIALECT,
+    validate_extension,
+    validate_global_value,
+  )
 }
 
 ///|

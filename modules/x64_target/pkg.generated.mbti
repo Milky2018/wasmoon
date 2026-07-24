@@ -12,7 +12,7 @@ import {
 // Values
 pub fn allocate(@vcode.Function[X64Inst]) -> @vcode.Allocation raise X64AllocationError
 
-pub fn compile(@vcode.Function[X64Inst]) -> (@code_object.UnlinkedCodeObject, Int) raise X64CompileError
+pub fn compile(@vcode.Function[X64Inst], on_event? : (@vcode.TargetCompileEvent) -> Unit) -> (@code_object.UnlinkedCodeObject, Int) raise X64CompileError
 
 pub fn emit(@vcode.Function[X64Inst], @vcode.Allocation, X64Frame) -> @code_object.UnlinkedCodeObject raise X64EmitError
 

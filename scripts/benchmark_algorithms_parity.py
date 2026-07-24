@@ -1,22 +1,21 @@
 #!/usr/bin/env python3
-"""Benchmark examples/algorithms with cached Wasmtime baselines.
-
-Perf-gap policy is one-sided by default: only regressions where Wasmoon is
-slower than Wasmtime by more than threshold are flagged.
-"""
+"""Run paired, cache-isolated Wasmoon/Wasmtime algorithm benchmarks."""
 
 from __future__ import annotations
 
 import argparse
 import json
+import math
+import os
 import re
+import shutil
 import statistics
 import subprocess
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Sequence
 
 NUMBER_RE = re.compile(r"[-+]?\d+(?:\.\d+)?")
 
@@ -30,6 +29,9 @@ class RunResult:
     stderr: str
     parsed_value: Optional[float]
     timeout: bool
+    freshly_compiled: Optional[bool] = None
+    cache_files_before: List[str] = field(default_factory=list)
+    cache_files_after: List[str] = field(default_factory=list)
 
 
 def parse_first_number(output: str) -> Optional[float]:
@@ -42,8 +44,17 @@ def parse_first_number(output: str) -> Optional[float]:
         return None
 
 
-def run_one(command: List[str], timeout_sec: int) -> RunResult:
+def run_one(
+    command: List[str],
+    timeout_sec: int,
+    *,
+    extra_env: Optional[Dict[str, str]] = None,
+) -> RunResult:
     started = time.perf_counter()
+    env = None
+    if extra_env:
+        env = os.environ.copy()
+        env.update(extra_env)
     try:
         completed = subprocess.run(
             command,
@@ -51,6 +62,7 @@ def run_one(command: List[str], timeout_sec: int) -> RunResult:
             capture_output=True,
             text=True,
             timeout=timeout_sec,
+            env=env,
         )
     except subprocess.TimeoutExpired as exc:
         duration = time.perf_counter() - started
@@ -78,10 +90,6 @@ def run_one(command: List[str], timeout_sec: int) -> RunResult:
     )
 
 
-def load_json(path: Path) -> Dict:
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
 def save_json(path: Path, payload: Dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
@@ -91,94 +99,176 @@ def list_workloads(root: Path) -> List[Path]:
     return sorted(root.glob("*.wasm"))
 
 
-def build_wasmtime_baseline(
-    workloads: List[Path],
-    wasmtime_bin: str,
-    timeout_sec: int,
-    iterations: int,
-    warmup: int,
-) -> Dict[str, Dict]:
-    baseline: Dict[str, Dict] = {}
-    for index, workload in enumerate(workloads, start=1):
-        print(
-            f"[baseline] {index}/{len(workloads)} {workload}",
-            file=sys.stderr,
-            flush=True,
-        )
-        cmd = [wasmtime_bin, "run", str(workload)]
-        for _ in range(warmup):
-            run_one(cmd, timeout_sec)
-        runs = [run_one(cmd, timeout_sec) for _ in range(iterations)]
-        ok_runs = [run for run in runs if run.exit_code == 0 and not run.timeout]
-        durations = [run.duration_sec for run in ok_runs]
-        parsed_values = [
-            run.parsed_value for run in ok_runs if run.parsed_value is not None
-        ]
-        median_duration = median(durations)
-        median_value = median(parsed_values)
-        has_valid_median = median_duration is not None and median_value is not None
-        baseline[str(workload)] = {
-            "command": cmd,
-            "iterations": iterations,
-            "warmup": warmup,
-            "ok_runs": len(ok_runs),
-            "runs": [
-                {
-                    "exit_code": run.exit_code,
-                    "timeout": run.timeout,
-                    "duration_sec": run.duration_sec,
-                    "parsed_value": run.parsed_value,
-                    "stdout": run.stdout.strip(),
-                    "stderr": run.stderr.strip(),
-                }
-                for run in runs
-            ],
-            "exit_code": 0 if has_valid_median else 1,
-            "duration_sec": median_duration,
-            "stdout": ok_runs[-1].stdout.strip() if ok_runs else "",
-            "stderr": ok_runs[-1].stderr.strip() if ok_runs else "",
-            "parsed_value": median_value,
-            "timeout": all(run.timeout for run in runs),
-            "generated_at_unix_sec": int(time.time()),
-        }
-    return baseline
-
-
-def median(values: List[float]) -> Optional[float]:
+def median(values: Sequence[float]) -> Optional[float]:
     if not values:
         return None
     return float(statistics.median(values))
 
 
-def pct_delta(observed: Optional[float], baseline: Optional[float]) -> Optional[float]:
-    if observed is None or baseline is None:
+def geometric_mean(values: Sequence[float]) -> Optional[float]:
+    if not values or any(value <= 0.0 for value in values):
         return None
-    if baseline == 0.0:
-        if observed == 0.0:
-            return 0.0
-        return float("inf") if observed > 0.0 else float("-inf")
-    return ((observed - baseline) / baseline) * 100.0
+    return math.exp(sum(math.log(value) for value in values) / len(values))
 
 
-def abs_delta(observed: Optional[float], baseline: Optional[float]) -> Optional[float]:
-    if observed is None or baseline is None:
+def ratio(numerator: Optional[float], denominator: Optional[float]) -> Optional[float]:
+    if numerator is None or denominator is None:
         return None
-    return observed - baseline
+    if denominator == 0.0:
+        if numerator == 0.0:
+            return 1.0
+        return float("inf") if numerator > 0.0 else float("-inf")
+    return numerator / denominator
+
+
+def paired_ratio_summary(values: Sequence[float]) -> Dict[str, Optional[float]]:
+    return {
+        "count": len(values),
+        "median": median(values),
+        "geometric_mean": geometric_mean(values),
+    }
+
+
+def pair_engine_order(pair_index: int) -> List[str]:
+    if pair_index % 2 == 0:
+        return ["wasmoon", "wasmtime"]
+    return ["wasmtime", "wasmoon"]
+
+
+def sanitized_workload_name(workload: Path) -> str:
+    return re.sub(r"[^A-Za-z0-9_.-]+", "_", workload.stem)
+
+
+def prepare_isolated_cache(cache_root: Path, workload: Path) -> Path:
+    cache_dir = cache_root / sanitized_workload_name(workload)
+    if cache_dir.exists():
+        shutil.rmtree(cache_dir)
+    cache_dir.mkdir(parents=True)
+    return cache_dir
+
+
+def cache_snapshot(cache_dir: Path) -> Dict[str, tuple[int, int]]:
+    snapshot: Dict[str, tuple[int, int]] = {}
+    for path in sorted(cache_dir.glob("**/*")):
+        if path.is_file():
+            stat = path.stat()
+            snapshot[str(path.relative_to(cache_dir))] = (
+                stat.st_size,
+                stat.st_mtime_ns,
+            )
+    return snapshot
+
+
+def run_wasmoon(
+    command: List[str],
+    timeout_sec: int,
+    cache_dir: Path,
+) -> RunResult:
+    before = cache_snapshot(cache_dir)
+    result = run_one(
+        command,
+        timeout_sec,
+        extra_env={"WASMOON_JIT_CACHE_DIR": str(cache_dir)},
+    )
+    after = cache_snapshot(cache_dir)
+    result.freshly_compiled = any(
+        name not in before or before[name] != metadata
+        for name, metadata in after.items()
+    )
+    result.cache_files_before = sorted(before)
+    result.cache_files_after = sorted(after)
+    return result
+
+
+def run_payload(result: RunResult) -> Dict:
+    payload = {
+        "command": result.command,
+        "exit_code": result.exit_code,
+        "timeout": result.timeout,
+        "duration_sec": result.duration_sec,
+        "parsed_value": result.parsed_value,
+        "stdout": result.stdout.strip(),
+        "stderr": result.stderr.strip(),
+    }
+    if result.freshly_compiled is not None:
+        payload.update(
+            {
+                "freshly_compiled": result.freshly_compiled,
+                "cache_files_before": result.cache_files_before,
+                "cache_files_after": result.cache_files_after,
+            }
+        )
+    return payload
+
+
+def successful(result: RunResult) -> bool:
+    return result.exit_code == 0 and not result.timeout
+
+
+def run_engine(
+    engine: str,
+    workload: Path,
+    *,
+    wasmoon_bin: str,
+    wasmtime_bin: str,
+    timeout_sec: int,
+    cache_dir: Path,
+) -> RunResult:
+    if engine == "wasmoon":
+        return run_wasmoon(
+            [wasmoon_bin, "run", str(workload)],
+            timeout_sec,
+            cache_dir,
+        )
+    return run_one([wasmtime_bin, "run", str(workload)], timeout_sec)
+
+
+def run_pair(
+    pair_index: int,
+    workload: Path,
+    *,
+    wasmoon_bin: str,
+    wasmtime_bin: str,
+    timeout_sec: int,
+    cache_dir: Path,
+) -> Dict:
+    results: Dict[str, RunResult] = {}
+    order = pair_engine_order(pair_index)
+    for engine in order:
+        results[engine] = run_engine(
+            engine,
+            workload,
+            wasmoon_bin=wasmoon_bin,
+            wasmtime_bin=wasmtime_bin,
+            timeout_sec=timeout_sec,
+            cache_dir=cache_dir,
+        )
+    wasmoon = results["wasmoon"]
+    wasmtime = results["wasmtime"]
+    pair_value_ratio = None
+    pair_wall_ratio = None
+    if successful(wasmoon) and successful(wasmtime):
+        pair_value_ratio = ratio(wasmoon.parsed_value, wasmtime.parsed_value)
+        pair_wall_ratio = ratio(wasmoon.duration_sec, wasmtime.duration_sec)
+    return {
+        "index": pair_index,
+        "order": order,
+        "wasmoon": run_payload(wasmoon),
+        "wasmtime": run_payload(wasmtime),
+        "value_ratio": pair_value_ratio,
+        "wall_ratio": pair_wall_ratio,
+    }
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=(
-            "Benchmark wasmoon against cached wasmtime baselines for examples/algorithms."
+            "Run paired Wasmoon/Wasmtime samples for examples/algorithms."
         )
     )
     parser.add_argument("--wasmoon", default="./wasmoon")
     parser.add_argument("--wasmtime", default="wasmtime")
     parser.add_argument("--workloads-dir", default="examples/algorithms")
-    parser.add_argument(
-        "--baseline-file",
-        default="target/perf-benchmarks/algorithms/wasmtime-baseline.json",
-    )
     parser.add_argument(
         "--summary-file",
         default="target/perf-benchmarks/algorithms/wasmoon-vs-wasmtime-summary.json",
@@ -187,200 +277,180 @@ def main() -> int:
     parser.add_argument("--timeout-sec", type=int, default=300)
     parser.add_argument("--iterations", type=int, default=3)
     parser.add_argument("--warmup", type=int, default=1)
-    parser.add_argument("--baseline-iterations", type=int, default=3)
-    parser.add_argument("--baseline-warmup", type=int, default=1)
     parser.add_argument(
         "--value-ratio-threshold",
         type=float,
         default=1.05,
-        help=(
-            "Allowed one-sided output ratio (wasmoon/wasmtime). "
-            "Ratios above this threshold are flagged."
-        ),
+        help="Allowed one-sided paired median output ratio.",
     )
     parser.add_argument(
         "--wall-ratio-threshold",
         type=float,
         default=2.0,
-        help=(
-            "Allowed one-sided wall-time ratio (wasmoon/wasmtime). "
-            "Ratios above this threshold are flagged."
-        ),
-    )
-    parser.add_argument(
-        "--refresh-wasmtime-baseline",
-        action="store_true",
-        help="Rebuild baseline instead of reusing cached file.",
+        help="Allowed one-sided paired median wall-time ratio.",
     )
     parser.add_argument(
         "--strict",
         action="store_true",
-        help="Return non-zero when failures or perf gaps exist.",
+        help="Return non-zero when failures or performance gaps exist.",
     )
     args = parser.parse_args()
+
+    if args.iterations <= 0:
+        raise SystemExit("--iterations must be positive")
+    if args.warmup < 0:
+        raise SystemExit("--warmup must be non-negative")
 
     workloads = list_workloads(Path(args.workloads_dir))
     if not workloads:
         raise SystemExit(f"No wasm workloads found in {args.workloads_dir}")
 
-    baseline_path = Path(args.baseline_file)
-    if args.refresh_wasmtime_baseline or not baseline_path.exists():
-        print(
-            f"[baseline] building wasmtime cache for {len(workloads)} workloads",
-            file=sys.stderr,
-            flush=True,
-        )
-        baseline_payload = {
-            "schema_version": 1,
-            "generated_at_unix_sec": int(time.time()),
-            "wasmtime": args.wasmtime,
-            "workloads": build_wasmtime_baseline(
-                workloads,
-                args.wasmtime,
-                args.timeout_sec,
-                args.baseline_iterations,
-                args.baseline_warmup,
-            ),
-        }
-        save_json(baseline_path, baseline_payload)
-        print(
-            f"[baseline] wrote {baseline_path}",
-            file=sys.stderr,
-            flush=True,
-        )
-    else:
-        baseline_payload = load_json(baseline_path)
-        print(
-            f"[baseline] using cached {baseline_path}",
-            file=sys.stderr,
-            flush=True,
-        )
-
-    baseline_workloads: Dict[str, Dict] = baseline_payload.get("workloads", {})
+    summary_path = Path(args.summary_file)
+    cache_root = summary_path.parent / "jit-cache"
     rows: List[Dict] = []
     failures: List[str] = []
     perf_gaps: List[str] = []
 
-    for index, workload in enumerate(workloads, start=1):
+    for workload_index, workload in enumerate(workloads, start=1):
         workload_str = str(workload)
         print(
-            f"[run] {index}/{len(workloads)} {workload_str}",
+            f"[run] {workload_index}/{len(workloads)} {workload_str}",
             file=sys.stderr,
             flush=True,
         )
-        baseline_row = baseline_workloads.get(workload_str)
-        if baseline_row is None:
-            failures.append(f"{workload_str}: missing wasmtime baseline entry")
-            continue
-
-        baseline_ok = baseline_row.get("exit_code") == 0 and not baseline_row.get("timeout", False)
-        if not baseline_ok:
-            failures.append(f"{workload_str}: wasmtime baseline failed")
-            rows.append(
+        cache_dir = prepare_isolated_cache(cache_root, workload)
+        warmup_runs: List[Dict] = []
+        for warmup_index in range(args.warmup):
+            order = pair_engine_order(warmup_index)
+            warmup_results = {}
+            for engine in order:
+                warmup_results[engine] = run_payload(
+                    run_engine(
+                        engine,
+                        workload,
+                        wasmoon_bin=args.wasmoon,
+                        wasmtime_bin=args.wasmtime,
+                        timeout_sec=args.timeout_sec,
+                        cache_dir=cache_dir,
+                    )
+                )
+            warmup_runs.append(
                 {
-                    "workload": workload_str,
-                    "status": "baseline_failed",
-                    "baseline": baseline_row,
+                    "index": warmup_index,
+                    "order": order,
+                    "wasmoon": warmup_results["wasmoon"],
+                    "wasmtime": warmup_results["wasmtime"],
                 }
             )
-            continue
 
-        for _ in range(args.warmup):
-            run_one([args.wasmoon, "run", workload_str], args.timeout_sec)
-
-        runs = [
-            run_one([args.wasmoon, "run", workload_str], args.timeout_sec)
-            for _ in range(args.iterations)
+        pairs = [
+            run_pair(
+                pair_index,
+                workload,
+                wasmoon_bin=args.wasmoon,
+                wasmtime_bin=args.wasmtime,
+                timeout_sec=args.timeout_sec,
+                cache_dir=cache_dir,
+            )
+            for pair_index in range(args.iterations)
         ]
-
-        ok_runs = [run for run in runs if run.exit_code == 0 and not run.timeout]
-        durations = [run.duration_sec for run in ok_runs]
-        parsed_values = [
-            run.parsed_value for run in ok_runs if run.parsed_value is not None
+        valid_pairs = [
+            pair
+            for pair in pairs
+            if pair["value_ratio"] is not None and pair["wall_ratio"] is not None
         ]
-        median_duration = median(durations)
-        median_value = median(parsed_values)
-
-        baseline_duration = baseline_row.get("duration_sec")
-        baseline_value = baseline_row.get("parsed_value")
-        value_delta_pct = pct_delta(median_value, baseline_value)
-        value_delta_abs = abs_delta(median_value, baseline_value)
-        wall_delta_pct = pct_delta(median_duration, baseline_duration)
-        value_ratio = None
-        if median_value is not None and baseline_value is not None:
-            if baseline_value == 0.0:
-                value_ratio = 1.0 if median_value == 0.0 else float("inf")
-            else:
-                value_ratio = median_value / baseline_value
-        wall_ratio = (
-            (median_duration / baseline_duration)
-            if median_duration is not None and baseline_duration not in (None, 0.0)
-            else None
-        )
+        value_ratios = [pair["value_ratio"] for pair in valid_pairs]
+        wall_ratios = [pair["wall_ratio"] for pair in valid_pairs]
+        value_summary = paired_ratio_summary(value_ratios)
+        wall_summary = paired_ratio_summary(wall_ratios)
 
         status = "ok"
-        if not ok_runs:
+        if len(valid_pairs) != args.iterations:
             status = "runtime_error"
-            failures.append(f"{workload_str}: wasmoon failed in all runs")
-        elif value_delta_pct is None:
-            status = "parse_error"
-            failures.append(f"{workload_str}: unable to parse numeric output")
-        elif value_ratio is None:
-            status = "parse_error"
-            failures.append(f"{workload_str}: unable to compute output ratio")
-        elif value_ratio > args.value_ratio_threshold:
+            failures.append(
+                f"{workload_str}: {len(valid_pairs)}/{args.iterations} valid pairs"
+            )
+        elif (
+            value_summary["median"] is not None
+            and value_summary["median"] > args.value_ratio_threshold
+        ):
             status = "perf_gap"
             perf_gaps.append(
-                f"{workload_str}: output ratio {value_ratio:.4f} "
+                f"{workload_str}: paired output ratio "
+                f"{value_summary['median']:.4f} "
                 f"(threshold {args.value_ratio_threshold:.4f})"
             )
-        elif wall_ratio is not None and wall_ratio > args.wall_ratio_threshold:
+        elif (
+            wall_summary["median"] is not None
+            and wall_summary["median"] > args.wall_ratio_threshold
+        ):
             status = "perf_gap"
             perf_gaps.append(
-                f"{workload_str}: wall ratio {wall_ratio:.4f} "
+                f"{workload_str}: paired wall ratio "
+                f"{wall_summary['median']:.4f} "
                 f"(threshold {args.wall_ratio_threshold:.4f})"
             )
 
-        rows.append(
-            {
-                "workload": workload_str,
-                "status": status,
-                "wasmoon": {
-                    "iterations": args.iterations,
-                    "warmup": args.warmup,
-                    "ok_runs": len(ok_runs),
-                    "runs": [
-                        {
-                            "exit_code": run.exit_code,
-                            "timeout": run.timeout,
-                            "duration_sec": run.duration_sec,
-                            "parsed_value": run.parsed_value,
-                            "stdout": run.stdout.strip(),
-                            "stderr": run.stderr.strip(),
-                        }
-                        for run in runs
-                    ],
-                    "median_duration_sec": median_duration,
-                    "median_value": median_value,
-                },
-                "wasmtime_baseline": baseline_row,
-                "value_delta_pct": value_delta_pct,
-                "value_delta_abs": value_delta_abs,
-                "wall_delta_pct": wall_delta_pct,
-                "value_ratio": value_ratio,
-                "wall_ratio": wall_ratio,
-            }
-        )
+        wasmoon_runs = [pair["wasmoon"] for pair in pairs]
+        wasmtime_runs = [pair["wasmtime"] for pair in pairs]
+        row = {
+            "workload": workload_str,
+            "status": status,
+            "cache": {
+                "directory": str(cache_dir),
+                "isolated": True,
+                "warmup_fresh_compilations": sum(
+                    1
+                    for warmup_run in warmup_runs
+                    if warmup_run["wasmoon"].get("freshly_compiled")
+                ),
+                "measured_fresh_compilations": sum(
+                    1
+                    for run in wasmoon_runs
+                    if run.get("freshly_compiled")
+                ),
+                "final_files": sorted(cache_snapshot(cache_dir)),
+            },
+            "warmups": warmup_runs,
+            "pairs": pairs,
+            "paired_ratios": {
+                "value": value_summary,
+                "wall": wall_summary,
+            },
+            "engine_medians": {
+                "wasmoon_value": median(
+                    [
+                        run["parsed_value"]
+                        for run in wasmoon_runs
+                        if run["parsed_value"] is not None
+                    ]
+                ),
+                "wasmtime_value": median(
+                    [
+                        run["parsed_value"]
+                        for run in wasmtime_runs
+                        if run["parsed_value"] is not None
+                    ]
+                ),
+                "wasmoon_wall_sec": median(
+                    [run["duration_sec"] for run in wasmoon_runs]
+                ),
+                "wasmtime_wall_sec": median(
+                    [run["duration_sec"] for run in wasmtime_runs]
+                ),
+            },
+        }
+        rows.append(row)
         print(
             f"[run] {workload_str} status={status} "
-            f"value_ratio={'n/a' if value_ratio is None else f'{value_ratio:.4f}'} "
-            f"wall_ratio={'n/a' if wall_ratio is None else f'{wall_ratio:.4f}'}",
+            f"value_ratio={value_summary['median']} "
+            f"wall_ratio={wall_summary['median']}",
             file=sys.stderr,
             flush=True,
         )
 
     summary_payload = {
-        "schema_version": 1,
+        "schema_version": 2,
         "generated_at_unix_sec": int(time.time()),
         "config": {
             "wasmoon": args.wasmoon,
@@ -390,64 +460,71 @@ def main() -> int:
             "warmup": args.warmup,
             "value_ratio_threshold": args.value_ratio_threshold,
             "wall_ratio_threshold": args.wall_ratio_threshold,
-            "baseline_file": str(baseline_path),
+            "cache_root": str(cache_root),
         },
         "stats": {
             "total": len(workloads),
             "failures": len(failures),
             "perf_gaps": len(perf_gaps),
-            "ok": len([row for row in rows if row.get("status") == "ok"]),
+            "ok": sum(row["status"] == "ok" for row in rows),
         },
         "failures": failures,
         "perf_gaps": perf_gaps,
         "rows": rows,
     }
-
-    summary_path = Path(args.summary_file)
     save_json(summary_path, summary_payload)
 
-    markdown_path = Path(args.markdown_file) if args.markdown_file else summary_path.with_suffix(".md")
+    markdown_path = (
+        Path(args.markdown_file)
+        if args.markdown_file
+        else summary_path.with_suffix(".md")
+    )
     md_lines = [
         "# Algorithms Benchmark: Wasmoon vs Wasmtime",
         "",
-        f"- Baseline file: `{baseline_path}`",
         f"- Summary file: `{summary_path}`",
+        f"- Isolated cache root: `{cache_root}`",
         f"- Total workloads: `{summary_payload['stats']['total']}`",
         f"- OK: `{summary_payload['stats']['ok']}`",
         f"- Failures: `{summary_payload['stats']['failures']}`",
         f"- Perf gaps: `{summary_payload['stats']['perf_gaps']}`",
         "",
-        "| Workload | Status | Value Ratio | Wall Ratio | Value Delta % | Wasmoon Median Value | Wasmtime Value |",
+        "| Workload | Status | Value Median | Value Geomean | Wall Median | Wall Geomean | Fresh Measured Compiles |",
         "|---|---|---:|---:|---:|---:|---:|",
     ]
     for row in rows:
-        value_ratio = row.get("value_ratio")
-        wall_ratio = row.get("wall_ratio")
-        value_delta = row.get("value_delta_pct")
-        wasmoon_median_value = row.get("wasmoon", {}).get("median_value")
-        wasmtime_value = row.get("wasmtime_baseline", {}).get("parsed_value")
+        value = row["paired_ratios"]["value"]
+        wall = row["paired_ratios"]["wall"]
         md_lines.append(
             "| `{}` | {} | {} | {} | {} | {} | {} |".format(
-                row.get("workload"),
-                row.get("status"),
-                "n/a" if value_ratio is None else f"{value_ratio:.4f}",
-                "n/a" if wall_ratio is None else f"{wall_ratio:.4f}",
-                "n/a" if value_delta is None else f"{value_delta:.2f}",
-                "n/a" if wasmoon_median_value is None else f"{wasmoon_median_value:.2f}",
-                "n/a" if wasmtime_value is None else f"{wasmtime_value:.2f}",
+                row["workload"],
+                row["status"],
+                "n/a" if value["median"] is None else f"{value['median']:.4f}",
+                (
+                    "n/a"
+                    if value["geometric_mean"] is None
+                    else f"{value['geometric_mean']:.4f}"
+                ),
+                "n/a" if wall["median"] is None else f"{wall['median']:.4f}",
+                (
+                    "n/a"
+                    if wall["geometric_mean"] is None
+                    else f"{wall['geometric_mean']:.4f}"
+                ),
+                row["cache"]["measured_fresh_compilations"],
             )
         )
     if failures:
         md_lines.extend(["", "## Failures", ""])
-        for entry in failures:
-            md_lines.append(f"- {entry}")
+        md_lines.extend(f"- {entry}" for entry in failures)
     if perf_gaps:
-        md_lines.extend(["", "## Perf Gaps", ""])
-        for entry in perf_gaps:
-            md_lines.append(f"- {entry}")
-    markdown_path.write_text("\n".join(md_lines), encoding="utf-8")
+        md_lines.extend(["", "## Performance Gaps", ""])
+        md_lines.extend(f"- {entry}" for entry in perf_gaps)
+    markdown_path.parent.mkdir(parents=True, exist_ok=True)
+    markdown_path.write_text("\n".join(md_lines) + "\n", encoding="utf-8")
     print(
-        f"[done] summary={summary_path} failures={len(failures)} perf_gaps={len(perf_gaps)}",
+        f"[done] summary={summary_path} failures={len(failures)} "
+        f"perf_gaps={len(perf_gaps)}",
         file=sys.stderr,
         flush=True,
     )

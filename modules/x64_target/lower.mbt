@@ -782,7 +782,7 @@ fn lower_instruction(
     }
     return
   }
-  if operation is EnvironmentField(field) {
+  if operation is EnvironmentField(field, _) {
     let offsets = match context.environment_field_offsets(field) {
       Some(offsets) if !offsets.is_empty() => offsets
       _ =>

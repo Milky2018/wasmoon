@@ -6,6 +6,7 @@ pub suberror VerifyError {
   ForeignValue(value_id~ : Int)
   ForeignBlock(block_id~ : Int)
   ForeignInstruction(inst_id~ : Int)
+  ForeignGlobalValue(global_value_id~ : Int)
   DuplicateBlockId(block_id~ : Int)
   DuplicateValueDefinition(value_id~ : Int)
   DuplicateInstructionId(inst_id~ : Int)
@@ -44,6 +45,13 @@ pub fn Function::verify(self : Function) -> Unit raise VerifyError {
   }
   if self.blocks.is_empty() {
     raise EmptyFunction
+  }
+  for index, entry in self.global_values {
+    let (global_value, data) = entry
+    if !self.owns_global_value(global_value) || global_value.id != index {
+      raise ForeignGlobalValue(global_value_id=global_value.id)
+    }
+    verify_global_value_data(data)
   }
   let mut max_block_id = -1
   for block in self.blocks {
@@ -114,7 +122,7 @@ pub fn Function::verify(self : Function) -> Unit raise VerifyError {
   let idom = CFG::build(self).compute_dominators()
   for block in self.blocks {
     for inst_index, inst in block.instructions {
-      verify_inst(inst, definitions, block.id, inst_index, idom)
+      verify_inst(self, inst, definitions, block.id, inst_index, idom)
     }
     if block.terminator is Some(term) {
       verify_terminator(
@@ -173,6 +181,11 @@ fn require_owned_terminator_values(
 /// instructions must be validated and lowered by their owning adapter.
 pub fn Function::verify_core(self : Function) -> Unit raise VerifyError {
   self.verify()
+  if !self.global_values.is_empty() {
+    raise UnverifiableInstruction(
+      message="context global values require a dialect adapter",
+    )
+  }
   for block in self.blocks {
     for inst in block.instructions {
       if inst.opcode is Ext(ext, _) {
@@ -185,14 +198,28 @@ pub fn Function::verify_core(self : Function) -> Unit raise VerifyError {
 }
 
 ///|
-/// Verify generic MilkIR structure, require every extension to belong to the
-/// owning dialect, and apply that adapter's validator before crossing its seam.
-pub fn Function::verify_with_extension_validator(
+/// Verify generic MilkIR structure, require every extension and context global
+/// to belong to the owning dialect, and apply that adapter's validators before
+/// crossing its seam.
+pub fn Function::verify_with_dialect_validator(
   self : Function,
   dialect : String,
-  validate : (ExtensionInstView) -> String?,
+  validate_extension : (ExtensionInstView) -> String?,
+  validate_global_value : (GlobalValueData) -> String?,
 ) -> Unit raise VerifyError {
   self.verify()
+  for entry in self.global_values {
+    if entry.1 is ContextField(field, _, _) {
+      if field.dialect != dialect {
+        raise UnverifiableInstruction(
+          message="context field dialect '\{field.dialect}' is not owned by adapter '\{dialect}'",
+        )
+      }
+      if validate_global_value(entry.1) is Some(message) {
+        raise UnverifiableInstruction(message~)
+      }
+    }
+  }
   for block in self.blocks {
     for inst in block.instructions {
       if inst.opcode is Ext(_, _) {
@@ -202,7 +229,7 @@ pub fn Function::verify_with_extension_validator(
             message="extension dialect '\{view.op.dialect}' is not owned by adapter '\{dialect}'",
           )
         }
-        if validate(view) is Some(message) {
+        if validate_extension(view) is Some(message) {
           raise UnverifiableInstruction(message~)
         }
       }
@@ -371,6 +398,7 @@ fn verify_i32(value : Value, context : String) -> Unit raise VerifyError {
 
 ///|
 fn verify_inst(
+  func : Function,
   inst : Inst,
   definitions : @hashmap.HashMap[Int, ValueDefinition],
   use_block : Int,
@@ -380,7 +408,34 @@ fn verify_inst(
   for arg in inst.args {
     verify_defined(arg, definitions, use_block, use_position, idom)
   }
-  verify_opcode_contract(inst)
+  verify_opcode_contract(func, inst)
+}
+
+///|
+fn verify_global_value_data(data : GlobalValueData) -> Unit raise VerifyError {
+  match data {
+    ContextField(field, _, region) => {
+      if field.dialect == "" {
+        raise UnverifiableInstruction(
+          message="context fields require a dialect name",
+        )
+      }
+      if field.key < 0 {
+        raise UnverifiableInstruction(
+          message="context field keys must be non-negative",
+        )
+      }
+      match region {
+        Heap(index) | Table(index) =>
+          if index < 0 {
+            raise UnverifiableInstruction(
+              message="context field alias-region indices must be non-negative",
+            )
+          }
+        Context | Other => ()
+      }
+    }
+  }
 }
 
 ///|

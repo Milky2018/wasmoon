@@ -81,6 +81,9 @@ fn is_loop_invariant(
   if inst.opcode.semantics().must_preserve_if_unused() {
     return false
   }
+  if inst.opcode is GlobalValue(_) {
+    return false
+  }
 
   // Check all operands
   for op in inst.operands {

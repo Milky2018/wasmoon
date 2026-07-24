@@ -165,6 +165,7 @@ fn Opcode::semantics(self : Opcode) -> OpcodeSemantics {
     Scalar(op) => op.semantics()
     Call(op) => op.semantics()
     Memory(op) => op.semantics()
+    GlobalValue(_) => pure_opcode_semantics()
     Ext(_, _) => unknown_opcode_semantics()
     Vector(op) => op.semantics()
   }

@@ -3,7 +3,6 @@
 
 ///|
 pub(all) enum WasmOpcode {
-  LoadMemBase(Int)
   WasmCall(Int)
   WasmCallIndirect(Int, Int)
   CallRef(Int)
@@ -55,16 +54,6 @@ pub(all) enum WasmOpcode {
 let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
   {
     id: 0,
-    typed_constructor: "LoadMemBase",
-    wire_name: "load_mem_base",
-    immediate_kinds: [IntegerImmediate],
-    operand_types: [PointerLike],
-    result_types: [ExactType(I64)],
-    variadic_operands: false,
-    variadic_results: false,
-  },
-  {
-    id: 1,
     typed_constructor: "WasmCall",
     wire_name: "call",
     immediate_kinds: [IntegerImmediate],
@@ -74,7 +63,7 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_results: true,
   },
   {
-    id: 2,
+    id: 1,
     typed_constructor: "WasmCallIndirect",
     wire_name: "call_indirect",
     immediate_kinds: [IntegerImmediate, IntegerImmediate],
@@ -84,7 +73,7 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_results: true,
   },
   {
-    id: 3,
+    id: 2,
     typed_constructor: "CallRef",
     wire_name: "call_ref",
     immediate_kinds: [IntegerImmediate],
@@ -94,7 +83,7 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_results: true,
   },
   {
-    id: 4,
+    id: 3,
     typed_constructor: "ReturnCall",
     wire_name: "return_call",
     immediate_kinds: [IntegerImmediate],
@@ -104,7 +93,7 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_results: false,
   },
   {
-    id: 5,
+    id: 4,
     typed_constructor: "ReturnCallIndirect",
     wire_name: "return_call_indirect",
     immediate_kinds: [IntegerImmediate, IntegerImmediate],
@@ -114,7 +103,7 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_results: false,
   },
   {
-    id: 6,
+    id: 5,
     typed_constructor: "ReturnCallRef",
     wire_name: "return_call_ref",
     immediate_kinds: [IntegerImmediate],
@@ -124,7 +113,7 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_results: false,
   },
   {
-    id: 7,
+    id: 6,
     typed_constructor: "GetFuncRef",
     wire_name: "get_func_ref",
     immediate_kinds: [IntegerImmediate],
@@ -134,7 +123,7 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_results: false,
   },
   {
-    id: 8,
+    id: 7,
     typed_constructor: "StructNew",
     wire_name: "struct_new",
     immediate_kinds: [IntegerImmediate],
@@ -144,7 +133,7 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_results: false,
   },
   {
-    id: 9,
+    id: 8,
     typed_constructor: "StructNewDefault",
     wire_name: "struct_new_default",
     immediate_kinds: [IntegerImmediate],
@@ -154,7 +143,7 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_results: false,
   },
   {
-    id: 10,
+    id: 9,
     typed_constructor: "StructGet",
     wire_name: "struct_get",
     immediate_kinds: [IntegerImmediate, IntegerImmediate],
@@ -164,7 +153,7 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_results: false,
   },
   {
-    id: 11,
+    id: 10,
     typed_constructor: "StructGetS",
     wire_name: "struct_get_s",
     immediate_kinds: [IntegerImmediate, IntegerImmediate, PackedWidthImmediate],
@@ -174,7 +163,7 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_results: false,
   },
   {
-    id: 12,
+    id: 11,
     typed_constructor: "StructGetU",
     wire_name: "struct_get_u",
     immediate_kinds: [IntegerImmediate, IntegerImmediate, PackedWidthImmediate],
@@ -184,7 +173,7 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_results: false,
   },
   {
-    id: 13,
+    id: 12,
     typed_constructor: "StructSet",
     wire_name: "struct_set",
     immediate_kinds: [IntegerImmediate, IntegerImmediate],
@@ -194,7 +183,7 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_results: false,
   },
   {
-    id: 14,
+    id: 13,
     typed_constructor: "ArrayNew",
     wire_name: "array_new",
     immediate_kinds: [IntegerImmediate],
@@ -204,7 +193,7 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_results: false,
   },
   {
-    id: 15,
+    id: 14,
     typed_constructor: "ArrayNewDefault",
     wire_name: "array_new_default",
     immediate_kinds: [IntegerImmediate],
@@ -214,7 +203,7 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_results: false,
   },
   {
-    id: 16,
+    id: 15,
     typed_constructor: "ArrayNewFixed",
     wire_name: "array_new_fixed",
     immediate_kinds: [IntegerImmediate, IntegerImmediate],
@@ -224,7 +213,7 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_results: false,
   },
   {
-    id: 17,
+    id: 16,
     typed_constructor: "ArrayGet",
     wire_name: "array_get",
     immediate_kinds: [IntegerImmediate],
@@ -234,7 +223,7 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_results: false,
   },
   {
-    id: 18,
+    id: 17,
     typed_constructor: "ArrayGetS",
     wire_name: "array_get_s",
     immediate_kinds: [IntegerImmediate, PackedWidthImmediate],
@@ -244,7 +233,7 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_results: false,
   },
   {
-    id: 19,
+    id: 18,
     typed_constructor: "ArrayGetU",
     wire_name: "array_get_u",
     immediate_kinds: [IntegerImmediate, PackedWidthImmediate],
@@ -254,7 +243,7 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_results: false,
   },
   {
-    id: 20,
+    id: 19,
     typed_constructor: "ArraySet",
     wire_name: "array_set",
     immediate_kinds: [IntegerImmediate],
@@ -264,7 +253,7 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_results: false,
   },
   {
-    id: 21,
+    id: 20,
     typed_constructor: "ArrayLen",
     wire_name: "array_len",
     immediate_kinds: [],
@@ -274,7 +263,7 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_results: false,
   },
   {
-    id: 22,
+    id: 21,
     typed_constructor: "ArrayFill",
     wire_name: "array_fill",
     immediate_kinds: [IntegerImmediate],
@@ -284,7 +273,7 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_results: false,
   },
   {
-    id: 23,
+    id: 22,
     typed_constructor: "ArrayCopy",
     wire_name: "array_copy",
     immediate_kinds: [IntegerImmediate, IntegerImmediate],
@@ -294,7 +283,7 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_results: false,
   },
   {
-    id: 24,
+    id: 23,
     typed_constructor: "ArrayNewData",
     wire_name: "array_new_data",
     immediate_kinds: [IntegerImmediate, IntegerImmediate],
@@ -304,7 +293,7 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_results: false,
   },
   {
-    id: 25,
+    id: 24,
     typed_constructor: "ArrayNewElem",
     wire_name: "array_new_elem",
     immediate_kinds: [IntegerImmediate, IntegerImmediate],
@@ -314,7 +303,7 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_results: false,
   },
   {
-    id: 26,
+    id: 25,
     typed_constructor: "ArrayInitData",
     wire_name: "array_init_data",
     immediate_kinds: [IntegerImmediate, IntegerImmediate],
@@ -324,7 +313,7 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_results: false,
   },
   {
-    id: 27,
+    id: 26,
     typed_constructor: "ArrayInitElem",
     wire_name: "array_init_elem",
     immediate_kinds: [IntegerImmediate, IntegerImmediate],
@@ -334,7 +323,7 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_results: false,
   },
   {
-    id: 28,
+    id: 27,
     typed_constructor: "I31New",
     wire_name: "i31_new",
     immediate_kinds: [],
@@ -344,7 +333,7 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_results: false,
   },
   {
-    id: 29,
+    id: 28,
     typed_constructor: "I31GetS",
     wire_name: "i31_get_s",
     immediate_kinds: [],
@@ -354,7 +343,7 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_results: false,
   },
   {
-    id: 30,
+    id: 29,
     typed_constructor: "I31GetU",
     wire_name: "i31_get_u",
     immediate_kinds: [],
@@ -364,7 +353,7 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_results: false,
   },
   {
-    id: 31,
+    id: 30,
     typed_constructor: "RefTest",
     wire_name: "ref_test",
     immediate_kinds: [IntegerImmediate, BooleanImmediate],
@@ -374,7 +363,7 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_results: false,
   },
   {
-    id: 32,
+    id: 31,
     typed_constructor: "RefCast",
     wire_name: "ref_cast",
     immediate_kinds: [IntegerImmediate, BooleanImmediate],
@@ -384,7 +373,7 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_results: false,
   },
   {
-    id: 33,
+    id: 32,
     typed_constructor: "AnyConvertExtern",
     wire_name: "any_convert_extern",
     immediate_kinds: [],
@@ -394,7 +383,7 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_results: false,
   },
   {
-    id: 34,
+    id: 33,
     typed_constructor: "ExternConvertAny",
     wire_name: "extern_convert_any",
     immediate_kinds: [],
@@ -404,7 +393,7 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_results: false,
   },
   {
-    id: 35,
+    id: 34,
     typed_constructor: "RefEq",
     wire_name: "ref_eq",
     immediate_kinds: [],
@@ -414,7 +403,7 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_results: false,
   },
   {
-    id: 36,
+    id: 35,
     typed_constructor: "Throw",
     wire_name: "throw",
     immediate_kinds: [IntegerImmediate],
@@ -424,7 +413,7 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_results: false,
   },
   {
-    id: 37,
+    id: 36,
     typed_constructor: "ThrowRef",
     wire_name: "throw_ref",
     immediate_kinds: [],
@@ -434,7 +423,7 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_results: false,
   },
   {
-    id: 38,
+    id: 37,
     typed_constructor: "TryTableBegin",
     wire_name: "try_table_begin",
     immediate_kinds: [IntegerImmediate],
@@ -444,7 +433,7 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_results: false,
   },
   {
-    id: 39,
+    id: 38,
     typed_constructor: "TryTableEnd",
     wire_name: "try_table_end",
     immediate_kinds: [IntegerImmediate],
@@ -454,7 +443,7 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_results: false,
   },
   {
-    id: 40,
+    id: 39,
     typed_constructor: "GetExceptionTag",
     wire_name: "get_exception_tag",
     immediate_kinds: [],
@@ -464,7 +453,7 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_results: false,
   },
   {
-    id: 41,
+    id: 40,
     typed_constructor: "GetExceptionValue",
     wire_name: "get_exception_value",
     immediate_kinds: [IntegerImmediate],
@@ -474,7 +463,7 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_results: false,
   },
   {
-    id: 42,
+    id: 41,
     typed_constructor: "GetExceptionValueCount",
     wire_name: "get_exception_value_count",
     immediate_kinds: [],
@@ -484,7 +473,7 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_results: false,
   },
   {
-    id: 43,
+    id: 42,
     typed_constructor: "Delegate",
     wire_name: "delegate",
     immediate_kinds: [IntegerImmediate],
@@ -494,7 +483,7 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_results: false,
   },
   {
-    id: 44,
+    id: 43,
     typed_constructor: "SpillLocalsForThrow",
     wire_name: "spill_locals_for_throw",
     immediate_kinds: [IntegerImmediate],
@@ -504,7 +493,7 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
     variadic_results: false,
   },
   {
-    id: 45,
+    id: 44,
     typed_constructor: "GetSpilledLocal",
     wire_name: "get_spilled_local",
     immediate_kinds: [IntegerImmediate],
@@ -518,52 +507,51 @@ let wasm_opcode_specs : Array[WasmOpcodeSpec] = [
 ///|
 fn opcode_payload(opcode : WasmOpcode) -> (Int, FixedArray[Int]) {
   match opcode {
-    LoadMemBase(imm0) => (0, imm([imm0]))
-    WasmCall(imm0) => (1, imm([imm0]))
-    WasmCallIndirect(imm0, imm1) => (2, imm([imm0, imm1]))
-    CallRef(imm0) => (3, imm([imm0]))
-    ReturnCall(imm0) => (4, imm([imm0]))
-    ReturnCallIndirect(imm0, imm1) => (5, imm([imm0, imm1]))
-    ReturnCallRef(imm0) => (6, imm([imm0]))
-    GetFuncRef(imm0) => (7, imm([imm0]))
-    StructNew(imm0) => (8, imm([imm0]))
-    StructNewDefault(imm0) => (9, imm([imm0]))
-    StructGet(imm0, imm1) => (10, imm([imm0, imm1]))
-    StructGetS(imm0, imm1, imm2) => (11, imm([imm0, imm1, imm2]))
-    StructGetU(imm0, imm1, imm2) => (12, imm([imm0, imm1, imm2]))
-    StructSet(imm0, imm1) => (13, imm([imm0, imm1]))
-    ArrayNew(imm0) => (14, imm([imm0]))
-    ArrayNewDefault(imm0) => (15, imm([imm0]))
-    ArrayNewFixed(imm0, imm1) => (16, imm([imm0, imm1]))
-    ArrayGet(imm0) => (17, imm([imm0]))
-    ArrayGetS(imm0, imm1) => (18, imm([imm0, imm1]))
-    ArrayGetU(imm0, imm1) => (19, imm([imm0, imm1]))
-    ArraySet(imm0) => (20, imm([imm0]))
-    ArrayLen => (21, imm([]))
-    ArrayFill(imm0) => (22, imm([imm0]))
-    ArrayCopy(imm0, imm1) => (23, imm([imm0, imm1]))
-    ArrayNewData(imm0, imm1) => (24, imm([imm0, imm1]))
-    ArrayNewElem(imm0, imm1) => (25, imm([imm0, imm1]))
-    ArrayInitData(imm0, imm1) => (26, imm([imm0, imm1]))
-    ArrayInitElem(imm0, imm1) => (27, imm([imm0, imm1]))
-    I31New => (28, imm([]))
-    I31GetS => (29, imm([]))
-    I31GetU => (30, imm([]))
-    RefTest(imm0, imm1) => (31, imm([imm0, bool_imm(imm1)]))
-    RefCast(imm0, imm1) => (32, imm([imm0, bool_imm(imm1)]))
-    AnyConvertExtern => (33, imm([]))
-    ExternConvertAny => (34, imm([]))
-    RefEq => (35, imm([]))
-    Throw(imm0) => (36, imm([imm0]))
-    ThrowRef => (37, imm([]))
-    TryTableBegin(imm0) => (38, imm([imm0]))
-    TryTableEnd(imm0) => (39, imm([imm0]))
-    GetExceptionTag => (40, imm([]))
-    GetExceptionValue(imm0) => (41, imm([imm0]))
-    GetExceptionValueCount => (42, imm([]))
-    Delegate(imm0) => (43, imm([imm0]))
-    SpillLocalsForThrow(imm0) => (44, imm([imm0]))
-    GetSpilledLocal(imm0) => (45, imm([imm0]))
+    WasmCall(imm0) => (0, imm([imm0]))
+    WasmCallIndirect(imm0, imm1) => (1, imm([imm0, imm1]))
+    CallRef(imm0) => (2, imm([imm0]))
+    ReturnCall(imm0) => (3, imm([imm0]))
+    ReturnCallIndirect(imm0, imm1) => (4, imm([imm0, imm1]))
+    ReturnCallRef(imm0) => (5, imm([imm0]))
+    GetFuncRef(imm0) => (6, imm([imm0]))
+    StructNew(imm0) => (7, imm([imm0]))
+    StructNewDefault(imm0) => (8, imm([imm0]))
+    StructGet(imm0, imm1) => (9, imm([imm0, imm1]))
+    StructGetS(imm0, imm1, imm2) => (10, imm([imm0, imm1, imm2]))
+    StructGetU(imm0, imm1, imm2) => (11, imm([imm0, imm1, imm2]))
+    StructSet(imm0, imm1) => (12, imm([imm0, imm1]))
+    ArrayNew(imm0) => (13, imm([imm0]))
+    ArrayNewDefault(imm0) => (14, imm([imm0]))
+    ArrayNewFixed(imm0, imm1) => (15, imm([imm0, imm1]))
+    ArrayGet(imm0) => (16, imm([imm0]))
+    ArrayGetS(imm0, imm1) => (17, imm([imm0, imm1]))
+    ArrayGetU(imm0, imm1) => (18, imm([imm0, imm1]))
+    ArraySet(imm0) => (19, imm([imm0]))
+    ArrayLen => (20, imm([]))
+    ArrayFill(imm0) => (21, imm([imm0]))
+    ArrayCopy(imm0, imm1) => (22, imm([imm0, imm1]))
+    ArrayNewData(imm0, imm1) => (23, imm([imm0, imm1]))
+    ArrayNewElem(imm0, imm1) => (24, imm([imm0, imm1]))
+    ArrayInitData(imm0, imm1) => (25, imm([imm0, imm1]))
+    ArrayInitElem(imm0, imm1) => (26, imm([imm0, imm1]))
+    I31New => (27, imm([]))
+    I31GetS => (28, imm([]))
+    I31GetU => (29, imm([]))
+    RefTest(imm0, imm1) => (30, imm([imm0, bool_imm(imm1)]))
+    RefCast(imm0, imm1) => (31, imm([imm0, bool_imm(imm1)]))
+    AnyConvertExtern => (32, imm([]))
+    ExternConvertAny => (33, imm([]))
+    RefEq => (34, imm([]))
+    Throw(imm0) => (35, imm([imm0]))
+    ThrowRef => (36, imm([]))
+    TryTableBegin(imm0) => (37, imm([imm0]))
+    TryTableEnd(imm0) => (38, imm([imm0]))
+    GetExceptionTag => (39, imm([]))
+    GetExceptionValue(imm0) => (40, imm([imm0]))
+    GetExceptionValueCount => (41, imm([]))
+    Delegate(imm0) => (42, imm([imm0]))
+    SpillLocalsForThrow(imm0) => (43, imm([imm0]))
+    GetSpilledLocal(imm0) => (44, imm([imm0]))
   }
 }
 
@@ -573,52 +561,51 @@ fn opcode_from_payload(
   imms : FixedArray[Int],
 ) -> WasmOpcode? {
   match id {
-    0 => Some(LoadMemBase(imms[0]))
-    1 => Some(WasmCall(imms[0]))
-    2 => Some(WasmCallIndirect(imms[0], imms[1]))
-    3 => Some(CallRef(imms[0]))
-    4 => Some(ReturnCall(imms[0]))
-    5 => Some(ReturnCallIndirect(imms[0], imms[1]))
-    6 => Some(ReturnCallRef(imms[0]))
-    7 => Some(GetFuncRef(imms[0]))
-    8 => Some(StructNew(imms[0]))
-    9 => Some(StructNewDefault(imms[0]))
-    10 => Some(StructGet(imms[0], imms[1]))
-    11 => Some(StructGetS(imms[0], imms[1], imms[2]))
-    12 => Some(StructGetU(imms[0], imms[1], imms[2]))
-    13 => Some(StructSet(imms[0], imms[1]))
-    14 => Some(ArrayNew(imms[0]))
-    15 => Some(ArrayNewDefault(imms[0]))
-    16 => Some(ArrayNewFixed(imms[0], imms[1]))
-    17 => Some(ArrayGet(imms[0]))
-    18 => Some(ArrayGetS(imms[0], imms[1]))
-    19 => Some(ArrayGetU(imms[0], imms[1]))
-    20 => Some(ArraySet(imms[0]))
-    21 => Some(ArrayLen)
-    22 => Some(ArrayFill(imms[0]))
-    23 => Some(ArrayCopy(imms[0], imms[1]))
-    24 => Some(ArrayNewData(imms[0], imms[1]))
-    25 => Some(ArrayNewElem(imms[0], imms[1]))
-    26 => Some(ArrayInitData(imms[0], imms[1]))
-    27 => Some(ArrayInitElem(imms[0], imms[1]))
-    28 => Some(I31New)
-    29 => Some(I31GetS)
-    30 => Some(I31GetU)
-    31 => Some(RefTest(imms[0], imm_bool(imms[1])))
-    32 => Some(RefCast(imms[0], imm_bool(imms[1])))
-    33 => Some(AnyConvertExtern)
-    34 => Some(ExternConvertAny)
-    35 => Some(RefEq)
-    36 => Some(Throw(imms[0]))
-    37 => Some(ThrowRef)
-    38 => Some(TryTableBegin(imms[0]))
-    39 => Some(TryTableEnd(imms[0]))
-    40 => Some(GetExceptionTag)
-    41 => Some(GetExceptionValue(imms[0]))
-    42 => Some(GetExceptionValueCount)
-    43 => Some(Delegate(imms[0]))
-    44 => Some(SpillLocalsForThrow(imms[0]))
-    45 => Some(GetSpilledLocal(imms[0]))
+    0 => Some(WasmCall(imms[0]))
+    1 => Some(WasmCallIndirect(imms[0], imms[1]))
+    2 => Some(CallRef(imms[0]))
+    3 => Some(ReturnCall(imms[0]))
+    4 => Some(ReturnCallIndirect(imms[0], imms[1]))
+    5 => Some(ReturnCallRef(imms[0]))
+    6 => Some(GetFuncRef(imms[0]))
+    7 => Some(StructNew(imms[0]))
+    8 => Some(StructNewDefault(imms[0]))
+    9 => Some(StructGet(imms[0], imms[1]))
+    10 => Some(StructGetS(imms[0], imms[1], imms[2]))
+    11 => Some(StructGetU(imms[0], imms[1], imms[2]))
+    12 => Some(StructSet(imms[0], imms[1]))
+    13 => Some(ArrayNew(imms[0]))
+    14 => Some(ArrayNewDefault(imms[0]))
+    15 => Some(ArrayNewFixed(imms[0], imms[1]))
+    16 => Some(ArrayGet(imms[0]))
+    17 => Some(ArrayGetS(imms[0], imms[1]))
+    18 => Some(ArrayGetU(imms[0], imms[1]))
+    19 => Some(ArraySet(imms[0]))
+    20 => Some(ArrayLen)
+    21 => Some(ArrayFill(imms[0]))
+    22 => Some(ArrayCopy(imms[0], imms[1]))
+    23 => Some(ArrayNewData(imms[0], imms[1]))
+    24 => Some(ArrayNewElem(imms[0], imms[1]))
+    25 => Some(ArrayInitData(imms[0], imms[1]))
+    26 => Some(ArrayInitElem(imms[0], imms[1]))
+    27 => Some(I31New)
+    28 => Some(I31GetS)
+    29 => Some(I31GetU)
+    30 => Some(RefTest(imms[0], imm_bool(imms[1])))
+    31 => Some(RefCast(imms[0], imm_bool(imms[1])))
+    32 => Some(AnyConvertExtern)
+    33 => Some(ExternConvertAny)
+    34 => Some(RefEq)
+    35 => Some(Throw(imms[0]))
+    36 => Some(ThrowRef)
+    37 => Some(TryTableBegin(imms[0]))
+    38 => Some(TryTableEnd(imms[0]))
+    39 => Some(GetExceptionTag)
+    40 => Some(GetExceptionValue(imms[0]))
+    41 => Some(GetExceptionValueCount)
+    42 => Some(Delegate(imms[0]))
+    43 => Some(SpillLocalsForThrow(imms[0]))
+    44 => Some(GetSpilledLocal(imms[0]))
     _ => None
   }
 }

@@ -1,7 +1,14 @@
 ///|
-fn[F : FunctionView] collect_function_clobber_points(
+priv struct RegisterClobberIndex {
+  points_by_reg : Map[(Int, Int), Array[ProgramPoint]]
+  block_order : Array[Int]
+}
+
+///|
+fn[F : FunctionView] build_register_clobber_index(
   function : F,
-) -> Map[(Int, Int), Array[ProgramPoint]] {
+  block_order : Array[Int],
+) -> RegisterClobberIndex {
   let points_by_reg : Map[(Int, Int), Array[ProgramPoint]] = Map([])
   fn record(
     points_by_reg : Map[(Int, Int), Array[ProgramPoint]],
@@ -31,7 +38,42 @@ fn[F : FunctionView] collect_function_clobber_points(
       }
     }
   }
-  points_by_reg
+  for _, points in points_by_reg {
+    points.sort_by(fn(left, right) {
+      left.compare_with_order(right, block_order)
+    })
+  }
+  { points_by_reg, block_order: block_order.copy() }
+}
+
+///|
+fn RegisterClobberIndex::query(
+  self : RegisterClobberIndex,
+  reg : PhysicalReg,
+  range : ProgramRange,
+) -> (ProgramPoint?, Int) {
+  guard self.points_by_reg.get(physical_reg_key(reg)) is Some(points) else {
+    return (None, 0)
+  }
+  let mut comparisons = 0
+  let mut lo = 0
+  let mut hi = points.length()
+  while lo < hi {
+    let mid = lo + (hi - lo) / 2
+    comparisons = comparisons + 1
+    if points[mid].compare_with_order(range.start, self.block_order) <= 0 {
+      lo = mid + 1
+    } else {
+      hi = mid
+    }
+  }
+  if lo < points.length() {
+    comparisons = comparisons + 1
+    if points[lo].compare_with_order(range.end, self.block_order) < 0 {
+      return (Some(points[lo]), comparisons)
+    }
+  }
+  (None, comparisons)
 }
 
 ///|

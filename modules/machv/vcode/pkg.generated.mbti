@@ -141,8 +141,17 @@ pub fn Allocation::stack_slot_at(Self, Int) -> StackSlot?
 pub fn Allocation::stack_slot_count(Self) -> Int
 pub fn Allocation::stack_slot_size(Self, StackSlot) -> Int?
 pub fn Allocation::stack_slot_type(Self, StackSlot) -> @machv.ValueType?
+pub fn Allocation::statistics(Self) -> AllocationStatistics
 pub fn Allocation::summary(Self) -> String
 pub fn Allocation::value_location(Self, Value) -> Location?
+
+pub struct AllocationStatistics {
+  spill_slots : Int
+  spills : Int
+  reloads : Int
+  reg_moves : Int
+  spill_to_spill : Int
+} derive(Eq, @debug.Debug)
 
 pub struct Block {
   // private fields
@@ -376,6 +385,15 @@ pub(all) enum SymbolReference {
   Code(@machv.CodeSymbol)
   External(@machv.ExternalSymbol)
   Data(@machv.DataSymbol)
+} derive(Eq, @debug.Debug)
+
+pub(all) enum TargetCompileEvent {
+  RegallocStarted
+  RegallocFinished(AllocationStatistics)
+  FramePlanningStarted
+  FramePlanningFinished
+  EmissionStarted
+  EmissionFinished
 } derive(Eq, @debug.Debug)
 
 pub struct Value {

@@ -99,6 +99,18 @@ pub fn EnvironmentField::new(
 }
 
 ///|
+/// Whether an embedding context field may be reused during one function
+/// invocation.
+///
+/// `Stable` grants reuse permission for the invocation. `Mutable` requires each
+/// operation to observe the current field value. Target lowering may
+/// rematerialize either form.
+pub(all) enum EnvironmentFieldStability {
+  Stable
+  Mutable
+} derive(Debug, Eq, Hash)
+
+///|
 pub(all) enum Signedness {
   Signed
   Unsigned

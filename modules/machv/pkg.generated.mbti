@@ -142,6 +142,11 @@ pub struct EnvironmentField {
 } derive(Eq, Hash, @debug.Debug)
 pub fn EnvironmentField::new(String, ValueType) -> Self
 
+pub(all) enum EnvironmentFieldStability {
+  Stable
+  Mutable
+} derive(Eq, Hash, @debug.Debug)
+
 pub struct ExternalSymbol {
   name : String
 } derive(Eq, Hash, @debug.Debug)
@@ -345,7 +350,7 @@ pub(all) enum Operation {
   CodeAddress(CodeSymbol)
   ExternalAddress(ExternalSymbol)
   DataAddress(DataSymbol)
-  EnvironmentField(EnvironmentField)
+  EnvironmentField(EnvironmentField, EnvironmentFieldStability)
   StackAddress(StackObject)
   Copy
   Select

@@ -32,6 +32,12 @@ test "validate the x64 internal ABI" {
 
 ## Integration
 
-Use `lower`, `allocate`, `plan_frame`, and `emit` in order. The returned
-`UnlinkedCodeObject` contains bytes, relocations, and safepoints; the embedding
-application supplies symbol addresses and executable memory.
+Use `lower` followed by `compile` for the efficient aggregate path, or call
+`allocate`, `plan_frame`, and `emit` individually when inspecting checkpoints.
+The returned `UnlinkedCodeObject` contains bytes, relocations, and safepoints;
+the embedding application supplies symbol addresses and executable memory.
+
+`compile` accepts an optional `on_event` callback that reports generic stage
+boundaries and a read-only allocation summary. This lets an embedding collect
+metrics without coupling the target to a product metrics system. The callback
+must not mutate compiler inputs.

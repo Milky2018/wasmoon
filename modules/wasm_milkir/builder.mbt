@@ -74,8 +74,18 @@ pub fn load_mem_base(
   builder : @milkir.FunctionBuilder,
   vmctx : @milkir.Value,
   memidx : Int,
+  stability : @milkir.GlobalValueStability,
 ) -> @milkir.Value {
-  emit_wasm_inst(builder, i64_type(), LoadMemBase(memidx), [vmctx])
+  let global_value = builder
+    .get_function()
+    .declare_global_value(
+      @milkir.GlobalValueData::context_field(
+        memory_base_context_field(memidx),
+        stability,
+        Heap(memidx),
+      ),
+    )
+  builder.bitcast(I64, builder.global_value(global_value, vmctx))
 }
 
 ///|

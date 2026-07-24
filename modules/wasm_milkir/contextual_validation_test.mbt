@@ -171,7 +171,7 @@ test "contextual Wasm validation rejects forged aggregate contracts" {
 test "contextual Wasm validation rejects invalid indices and exception payloads" {
   let memory = @milkir.FunctionBuilder::FunctionBuilder("bad_memory")
   let vmctx = memory.add_param(I64)
-  load_mem_base(memory, vmctx, 4) |> ignore
+  load_mem_base(memory, vmctx, 4, Mutable) |> ignore
   memory.return_([])
 
   let function_reference = @milkir.FunctionBuilder::FunctionBuilder(
@@ -215,7 +215,7 @@ test "contextual Wasm validation rejects invalid indices and exception payloads"
     ],
     content=(
       #|[
-      #|  UnverifiableInstruction(message="malformed contextual Wasm MilkIR extension 'load_mem_base': unknown memory index 4"),
+      #|  UnverifiableInstruction(message="malformed contextual Wasm MilkIR extension 'memory_base': unknown memory index 4"),
       #|  UnverifiableInstruction(message="malformed contextual Wasm MilkIR extension 'get_func_ref': unknown linked function index 99"),
       #|  UnverifiableInstruction(message="malformed contextual Wasm MilkIR extension 'array_new_data': unknown data segment index 8"),
       #|  UnverifiableInstruction(message="malformed contextual Wasm MilkIR extension 'array_new_elem': element segment 0 has carrier ref, expected f64"),

@@ -20,12 +20,16 @@ pub(all) enum AArch64IntBinary {
   And
   Orr
   Eor
+  Sdiv
+  Udiv
+} derive(Eq, Debug)
+
+///|
+pub(all) enum AArch64Shift {
   Lsl
   Asr
   Lsr
   Ror
-  Sdiv
-  Udiv
 } derive(Eq, Debug)
 
 ///|
@@ -231,7 +235,9 @@ pub(all) enum AArch64Inst {
   IntBinary(GprWidth, AArch64IntBinary)
   IntBinaryImmediate(GprWidth, AArch64IntBinary, UInt64)
   IntMultiplyAdd(GprWidth)
-  IntShiftLeftImmediate(GprWidth, Int)
+  IntShiftRegister(GprWidth, AArch64Shift)
+  IntShiftImmediate(GprWidth, AArch64Shift, Int)
+  IntAddShiftedLeft(GprWidth, Int)
   PopulationCount(GprWidth)
   IntHighMultiply(GprWidth, @semantic.Signedness)
   IntWithOverflow(GprWidth, @semantic.IntOverflowOp)
@@ -247,6 +253,7 @@ pub(all) enum AArch64Inst {
   TrapIfFloat(@semantic.ValueType, AArch64FloatTrapCondition)
   Convert(AArch64Conversion)
   AddAddress
+  AddAddressImmediate(UInt64)
   AddAddressUxtw(Int)
   ScalarLoad(
     @semantic.AccessWidth,
@@ -1348,7 +1355,18 @@ fn verify_target_vcode(
           0,
         )
       }
-      IntShiftLeftImmediate(width, amount) => {
+      IntShiftRegister(width, _) => {
+        let ty = integer_type(width)
+        require_instruction_shape(
+          function,
+          instruction,
+          [ty, ty],
+          [ty],
+          false,
+          0,
+        )
+      }
+      IntShiftImmediate(width, _, amount) => {
         let ty = integer_type(width)
         let bit_width = if width == W32 { 32 } else { 64 }
         if amount < 0 || amount >= bit_width {
@@ -1358,6 +1376,24 @@ fn verify_target_vcode(
           )
         }
         require_instruction_shape(function, instruction, [ty], [ty], false, 0)
+      }
+      IntAddShiftedLeft(width, amount) => {
+        let ty = integer_type(width)
+        let bit_width = if width == W32 { 32 } else { 64 }
+        if amount < 0 || amount >= bit_width {
+          raise InvalidInstruction(
+            instruction~,
+            message="integer shift amount is out of range",
+          )
+        }
+        require_instruction_shape(
+          function,
+          instruction,
+          [ty, ty],
+          [ty],
+          false,
+          0,
+        )
       }
       PopulationCount(width) => {
         let ty = integer_type(width)
@@ -1539,6 +1575,22 @@ fn verify_target_vcode(
           false,
           0,
         )
+      AddAddressImmediate(bits) => {
+        if add_sub_immediate_shift(bits) is None {
+          raise InvalidInstruction(
+            instruction~,
+            message="address immediate cannot be encoded",
+          )
+        }
+        require_instruction_shape(
+          function,
+          instruction,
+          [Ptr64],
+          [Ptr64],
+          false,
+          0,
+        )
+      }
       AddAddressUxtw(shift) => {
         if shift < 0 || shift > 4 {
           raise InvalidInstruction(

@@ -1782,7 +1782,7 @@ test "X64 lowering resolves environment paths and typed symbol addresses" {
       [Ptr64],
     )[0]
   let environment = builder.emit(
-      EnvironmentField(field),
+      EnvironmentField(field, Mutable),
       [builder.parameters()[0]],
       [I64],
     )[0]

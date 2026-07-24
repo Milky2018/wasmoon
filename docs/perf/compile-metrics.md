@@ -34,7 +34,7 @@ Collection starts in `cmd/wasmoon/run.mbt` during `compile_module_to_jit(...)`.
 
 ### Module-level fields
 
-- `schema_version`
+- `schema_version` (`3` for the phase-complete target pipeline)
 - `expected_functions`
 - `module_compile_us`
 - `functions[]`
@@ -46,12 +46,36 @@ Collection starts in `cmd/wasmoon/run.mbt` during `compile_module_to_jit(...)`.
 - IR size:
   - `ir_insts_before`, `ir_insts_after`
 - Stage time:
-  - `optimize_us`, `lower_us`, `regalloc_us`, `emit_us`
+  - `optimize_us`: MilkIR optimization.
+  - `lower_us`: validated Wasm MilkIR to semantic MachV lowering.
+  - `target_lower_us`: embedding ABI elaboration, target instruction selection,
+    and selected-VCode verification.
+  - `regalloc_us`: production VCode register allocation.
+  - `frame_plan_us`: target frame planning.
+  - `emit_us`: final code-object emission.
 - Codegen pressure indicators:
   - `code_size`
   - `spill_slots`, `spills`, `reloads`, `reg_moves`, `spill_to_spill`
 - Pass list:
   - `ir_passes[]`
+  - `regalloc_phases[]` when detailed metrics are enabled.
+
+All microsecond fields use JSON strings because their in-memory type is `Int64`.
+For sequential compilation, the sum of per-function stage times is an attributed
+lower bound on `module_compile_us`; frontend translation, manifest construction,
+and orchestration account for the remainder and must not be double-counted into
+one of the target stages.
+
+Producers record these top-level fields through `FunctionCompileStage`, and the
+`TargetCompileEvent` observer maps events to that enum with an exhaustive match.
+String names exist only in the exported JSON schema and in the open-ended
+`regalloc_phases` detail list; an unknown top-level stage cannot be silently
+ignored.
+
+Allocation counters describe the final VCode allocation. Edge transfers are
+classified by their source and destination: register-to-stack is a spill,
+stack-to-register is a reload, register-to-register is a register move, and
+stack-to-stack is `spill_to_spill`.
 
 ### Per-pass fields (`ir_passes[]`)
 

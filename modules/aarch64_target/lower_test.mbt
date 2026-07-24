@@ -64,6 +64,133 @@ test "AArch64 lowering fuses single-use integer multiply-add" {
 }
 
 ///|
+test "AArch64 lowering selects immediate scalar shifts and rotates" {
+  let builder = @semantic.FunctionBuilder::new(
+    "selected_immediate_shifts",
+    Internal,
+    [Ptr64, I32, I64],
+    [I32, I32, I32, I32, I32, I64, I64, I64, I64, I64],
+  )
+  let parameters = builder.parameters()
+  let thirty_one = builder.emit(I32Const(31U), [], [I32])[0]
+  let one32 = builder.emit(I32Const(1U), [], [I32])[0]
+  let sixty_three = builder.emit(I64Const(63UL), [], [I64])[0]
+  let one64 = builder.emit(I64Const(1UL), [], [I64])[0]
+  let results = [
+    builder.emit(IntBinary(ShiftLeft), [parameters[1], thirty_one], [I32])[0],
+    builder.emit(IntBinary(SignedShiftRight), [parameters[1], thirty_one], [I32])[0],
+    builder.emit(IntBinary(UnsignedShiftRight), [parameters[1], thirty_one], [
+      I32,
+    ])[0],
+    builder.emit(IntBinary(RotateRight), [parameters[1], thirty_one], [I32])[0],
+    builder.emit(IntBinary(RotateLeft), [parameters[1], one32], [I32])[0],
+    builder.emit(IntBinary(ShiftLeft), [parameters[2], sixty_three], [I64])[0],
+    builder.emit(IntBinary(SignedShiftRight), [parameters[2], sixty_three], [
+      I64,
+    ])[0],
+    builder.emit(IntBinary(UnsignedShiftRight), [parameters[2], sixty_three], [
+      I64,
+    ])[0],
+    builder.emit(IntBinary(RotateRight), [parameters[2], sixty_three], [I64])[0],
+    builder.emit(IntBinary(RotateLeft), [parameters[2], one64], [I64])[0],
+  ]
+  builder.return_(results)
+  inspect(
+    lower(builder.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode selected_immediate_shifts(v0:ptr64, v1:i32, v2:i64) -> (i32, i32, i32, i32, i32, i64, i64, i64, i64, i64)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v3:any-location(prefer=p0:int)@late]
+      #|  i1 IncomingReg(I32, p1:int) uses=[v1:fixed(p1:int)@early] defs=[v4:any-location(prefer=p1:int)@late]
+      #|  i2 IncomingReg(I64, p2:int) uses=[v2:fixed(p2:int)@early] defs=[v5:any-location(prefer=p2:int)@late]
+      #|  i3 IncomingResultArea(p8:int) defs=[v6:any-location@late]
+      #|  i4 IntShiftImmediate(W32, Lsl, 31) uses=[v4:any@early] defs=[v7:any@late]
+      #|  i5 IntShiftImmediate(W32, Asr, 31) uses=[v4:any@early] defs=[v8:any@late]
+      #|  i6 IntShiftImmediate(W32, Lsr, 31) uses=[v4:any@early] defs=[v9:any@late]
+      #|  i7 IntShiftImmediate(W32, Ror, 31) uses=[v4:any@early] defs=[v10:any@late]
+      #|  i8 IntShiftImmediate(W32, Ror, 31) uses=[v4:any@early] defs=[v11:any@late]
+      #|  i9 IntShiftImmediate(W64, Lsl, 63) uses=[v5:any@early] defs=[v12:any@late]
+      #|  i10 IntShiftImmediate(W64, Asr, 63) uses=[v5:any@early] defs=[v13:any@late]
+      #|  i11 IntShiftImmediate(W64, Lsr, 63) uses=[v5:any@early] defs=[v14:any@late]
+      #|  i12 IntShiftImmediate(W64, Ror, 63) uses=[v5:any@early] defs=[v15:any@late]
+      #|  i13 IntShiftImmediate(W64, Ror, 63) uses=[v5:any@early] defs=[v16:any@late]
+      #|  i14 OutgoingReg(I32, p0:int) uses=[v7:any@early]
+      #|  i15 OutgoingReg(I32, p1:int) uses=[v8:any@early]
+      #|  i16 OutgoingReg(I32, p2:int) uses=[v9:any@early]
+      #|  i17 OutgoingReg(I32, p3:int) uses=[v10:any@early]
+      #|  i18 OutgoingReg(I32, p4:int) uses=[v11:any@early]
+      #|  i19 OutgoingReg(I64, p5:int) uses=[v12:any@early]
+      #|  i20 OutgoingReg(I64, p6:int) uses=[v13:any@early]
+      #|  i21 OutgoingReg(I64, p7:int) uses=[v14:any@early]
+      #|  i22 OutgoingAreaResult(I64, 0) uses=[v6:any@early, v15:any@early]
+      #|  i23 OutgoingAreaResult(I64, 8) uses=[v6:any@early, v16:any@early]
+      #|  i24 Return
+      #|
+    ),
+  )
+}
+
+///|
+test "AArch64 lowering folds a single-use left shift into integer add" {
+  let builder = @semantic.FunctionBuilder::new(
+    "selected_add_shifted_left",
+    Platform,
+    [I64, I64],
+    [I64],
+  )
+  let parameters = builder.parameters()
+  let three = builder.emit(I64Const(3UL), [], [I64])[0]
+  let shifted = builder.emit(IntBinary(ShiftLeft), [parameters[1], three], [I64])[0]
+  let sum = builder.emit(IntBinary(Add), [parameters[0], shifted], [I64])[0]
+  builder.return_([sum])
+  inspect(
+    lower(builder.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode selected_add_shifted_left(v0:i64, v1:i64) -> (i64)
+      #|block0:
+      #|  i0 IncomingReg(I64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v2:any-location(prefer=p0:int)@late]
+      #|  i1 IncomingReg(I64, p1:int) uses=[v1:fixed(p1:int)@early] defs=[v3:any-location(prefer=p1:int)@late]
+      #|  i2 IntAddShiftedLeft(W64, 3) uses=[v2:any@early, v3:any@early] defs=[v4:any@late]
+      #|  i3 OutgoingReg(I64, p0:int) uses=[v4:any@early]
+      #|  i4 Return
+      #|
+    ),
+  )
+}
+
+///|
+test "AArch64 lowering folds shared pointer offsets into address immediates" {
+  let builder = @semantic.FunctionBuilder::new(
+    "selected_address_immediate",
+    Internal,
+    [Ptr64],
+    [Ptr64, Ptr64],
+  )
+  let offset = builder.emit(I64Const(48UL), [], [I64])[0]
+  let first = builder.emit(PointerOffset, [builder.parameters()[0], offset], [
+      Ptr64,
+    ])[0]
+  let second = builder.emit(PointerOffset, [builder.parameters()[0], offset], [
+      Ptr64,
+    ])[0]
+  builder.return_([first, second])
+  inspect(
+    lower(builder.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode selected_address_immediate(v0:ptr64) -> (ptr64, ptr64)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v1:any-location(prefer=p0:int)@late]
+      #|  i1 AddAddressImmediate(48) uses=[v1:any@early] defs=[v2:any@late]
+      #|  i2 AddAddressImmediate(48) uses=[v1:any@early] defs=[v3:any@late]
+      #|  i3 OutgoingReg(Ptr64, p0:int) uses=[v2:any@early]
+      #|  i4 OutgoingReg(Ptr64, p1:int) uses=[v3:any@early]
+      #|  i5 Return
+      #|
+    ),
+  )
+}
+
+///|
 test "AArch64 lowering selects zero-extended register-offset loads" {
   let builder = @semantic.FunctionBuilder::new(
     "selected_register_offset_load",
@@ -97,6 +224,47 @@ test "AArch64 lowering selects zero-extended register-offset loads" {
       #|  i1 IncomingReg(I32, p1:int) uses=[v1:fixed(p1:int)@early] defs=[v3:any-location(prefer=p1:int)@late]
       #|  i2 ScalarLoadUxtw(W32, None, I32, 0) uses=[v2:any@early, v3:any@early] defs=[v4:any@late]
       #|  i3 OutgoingReg(I32, p0:int) uses=[v4:any@early]
+      #|  i4 Return
+      #|
+    ),
+  )
+}
+
+///|
+test "AArch64 lowering selects zero-extended register-offset stores" {
+  let builder = @semantic.FunctionBuilder::new(
+    "selected_register_offset_store",
+    Platform,
+    [Ptr64, I32, I32],
+    [],
+  )
+  let parameters = builder.parameters()
+  let base = builder.emit(Convert(Bitcast(Ptr64, I64)), [parameters[0]], [I64])[0]
+  let index = builder.emit(Convert(I64ExtendI32(Unsigned)), [parameters[1]], [
+      I64,
+    ])[0]
+  let address_bits = builder.emit(IntBinary(Add), [base, index], [I64])[0]
+  let address = builder.emit(Convert(Bitcast(I64, Ptr64)), [address_bits], [
+      Ptr64,
+    ])[0]
+  let zero = builder.emit(I64Const(0UL), [], [I64])[0]
+  let pointer = builder.emit(PointerOffset, [address, zero], [Ptr64])[0]
+  builder.emit(
+    Store(@semantic.StoreSpec::new(W32, I32, 0UL, Little, None)),
+    [pointer, parameters[2]],
+    [],
+  )
+  |> ignore
+  builder.return_([])
+  inspect(
+    lower(builder.finish(), test_lowering_context()).summary(),
+    content=(
+      #|vcode selected_register_offset_store(v0:ptr64, v1:i32, v2:i32)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v3:any-location(prefer=p0:int)@late]
+      #|  i1 IncomingReg(I32, p1:int) uses=[v1:fixed(p1:int)@early] defs=[v4:any-location(prefer=p1:int)@late]
+      #|  i2 IncomingReg(I32, p2:int) uses=[v2:fixed(p2:int)@early] defs=[v5:any-location(prefer=p2:int)@late]
+      #|  i3 ScalarStoreUxtw(W32, I32, 0) uses=[v3:any@early, v4:any@early, v5:any@early]
       #|  i4 Return
       #|
     ),
@@ -147,7 +315,7 @@ test "AArch64 lowering keeps a constant displacement after an extended index" {
 }
 
 ///|
-test "AArch64 lowering folds every use of a shared extended index" {
+test "AArch64 lowering folds every use of a shared base and extended index" {
   let builder = @semantic.FunctionBuilder::new(
     "selected_shared_extended_index",
     Platform,
@@ -155,12 +323,12 @@ test "AArch64 lowering folds every use of a shared extended index" {
     [I32],
   )
   let parameters = builder.parameters()
+  let base = builder.emit(Convert(Bitcast(Ptr64, I64)), [parameters[0]], [I64])[0]
   let index = builder.emit(Convert(I64ExtendI32(Unsigned)), [parameters[1]], [
       I64,
     ])[0]
   let loads : Array[@semantic.Value] = []
   for offset in [4UL, 8UL] {
-    let base = builder.emit(Convert(Bitcast(Ptr64, I64)), [parameters[0]], [I64])[0]
     let displacement = builder.emit(I64Const(offset), [], [I64])[0]
     let displaced = builder.emit(IntBinary(Add), [index, displacement], [I64])[0]
     let address_bits = builder.emit(IntBinary(Add), [base, displaced], [I64])[0]
@@ -1879,14 +2047,14 @@ test "AArch64 lowering legalizes remaining pure scalar integer operations" {
       #|  i6 IntUnary(W32, Clz) uses=[v10:any@early] defs=[v11:any@late]
       #|  i7 PopulationCount(W32) uses=[v6:any@early] defs=[v12:any@late]
       #|  i8 IntUnary(W32, Neg) uses=[v12:any@early] defs=[v13:any@late]
-      #|  i9 IntBinary(W32, Ror) uses=[v11:any@early, v13:any@early] defs=[v14:any@late]
+      #|  i9 IntShiftRegister(W32, Ror) uses=[v11:any@early, v13:any@early] defs=[v14:any@late]
       #|  i10 IntHighMultiply(W32, Signed) uses=[v14:any@early, v7:any@early] defs=[v15:any@late]
       #|  i11 IntHighMultiply(W32, Unsigned) uses=[v15:any@early, v12:any@early] defs=[v16:any@late]
       #|  i12 IntUnary(W64, Rbit) uses=[v8:any@early] defs=[v17:any@late]
       #|  i13 IntUnary(W64, Clz) uses=[v17:any@early] defs=[v18:any@late]
       #|  i14 PopulationCount(W64) uses=[v8:any@early] defs=[v19:any@late]
       #|  i15 IntUnary(W64, Neg) uses=[v19:any@early] defs=[v20:any@late]
-      #|  i16 IntBinary(W64, Ror) uses=[v18:any@early, v20:any@early] defs=[v21:any@late]
+      #|  i16 IntShiftRegister(W64, Ror) uses=[v18:any@early, v20:any@early] defs=[v21:any@late]
       #|  i17 IntHighMultiply(W64, Signed) uses=[v21:any@early, v9:any@early] defs=[v22:any@late]
       #|  i18 IntHighMultiply(W64, Unsigned) uses=[v22:any@early, v19:any@early] defs=[v23:any@late]
       #|  i19 OutgoingReg(I32, p0:int) uses=[v16:any@early]
@@ -2102,7 +2270,7 @@ test "AArch64 lowering resolves environment paths and typed symbol addresses" {
       [Ptr64],
     )[0]
   let environment = builder.emit(
-      EnvironmentField(field),
+      EnvironmentField(field, Mutable),
       [builder.parameters()[0]],
       [I64],
     )[0]
@@ -2124,6 +2292,119 @@ test "AArch64 lowering resolves environment paths and typed symbol addresses" {
       #|  i8 OutgoingReg(Ptr64, p2:int) uses=[v4:any@early]
       #|  i9 OutgoingReg(I64, p3:int) uses=[v6:any@early]
       #|  i10 Return
+      #|
+    ),
+  )
+}
+
+///|
+test "AArch64 lowering bounds stable environment reuse by pressure region" {
+  let field = @semantic.EnvironmentField::new("runtime.memory.base", I64)
+  let builder = @semantic.FunctionBuilder::new(
+    "environment_stability",
+    Internal,
+    [Ptr64],
+    [I64, I64, I64, I64, I64, I64],
+  )
+  let stable_first = builder.emit(
+      EnvironmentField(field, Stable),
+      [builder.parameters()[0]],
+      [I64],
+    )[0]
+  for value in 0..<9 {
+    builder.emit(I64Const(value.to_uint64()), [], [I64]) |> ignore
+  }
+  let stable_second = builder.emit(
+      EnvironmentField(field, Stable),
+      [builder.parameters()[0]],
+      [I64],
+    )[0]
+  let stable_third = builder.emit(
+      EnvironmentField(field, Stable),
+      [builder.parameters()[0]],
+      [I64],
+    )[0]
+  let stable_fourth = builder.emit(
+      EnvironmentField(field, Stable),
+      [builder.parameters()[0]],
+      [I64],
+    )[0]
+  let mutable_first = builder.emit(
+      EnvironmentField(field, Mutable),
+      [builder.parameters()[0]],
+      [I64],
+    )[0]
+  let mutable_second = builder.emit(
+      EnvironmentField(field, Mutable),
+      [builder.parameters()[0]],
+      [I64],
+    )[0]
+  builder.return_([
+    stable_first, stable_second, stable_third, stable_fourth, mutable_first, mutable_second,
+  ])
+  let context = test_lowering_context().with_environment_field(field, [24])
+  inspect(
+    lower(builder.finish(), context).summary(),
+    content=(
+      #|vcode environment_stability(v0:ptr64) -> (i64, i64, i64, i64, i64, i64)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v1:any-location(prefer=p0:int)@late]
+      #|  i1 ScalarLoad(W64, None, I64, 24) uses=[v1:any@early] defs=[v2:any@late]
+      #|  i2 ScalarLoad(W64, None, I64, 24) uses=[v1:any@early] defs=[v3:any@late]
+      #|  i3 ScalarLoad(W64, None, I64, 24) uses=[v1:any@early] defs=[v4:any@late]
+      #|  i4 ScalarLoad(W64, None, I64, 24) uses=[v1:any@early] defs=[v5:any@late]
+      #|  i5 OutgoingReg(I64, p0:int) uses=[v2:any@early]
+      #|  i6 OutgoingReg(I64, p1:int) uses=[v2:any@early]
+      #|  i7 OutgoingReg(I64, p2:int) uses=[v3:any@early]
+      #|  i8 OutgoingReg(I64, p3:int) uses=[v3:any@early]
+      #|  i9 OutgoingReg(I64, p4:int) uses=[v4:any@early]
+      #|  i10 OutgoingReg(I64, p5:int) uses=[v5:any@early]
+      #|  i11 Return
+      #|
+    ),
+  )
+}
+
+///|
+test "AArch64 lowering bounds stable environment reuse at calls" {
+  let field = @semantic.EnvironmentField::new("runtime.memory.base", I64)
+  let builder = @semantic.FunctionBuilder::new(
+    "environment_call_boundary",
+    Internal,
+    [Ptr64],
+    [I64, I64],
+  )
+  let before_call = builder.emit(
+      EnvironmentField(field, Stable),
+      [builder.parameters()[0]],
+      [I64],
+    )[0]
+  let call = @semantic.SemanticCall::new(
+    External(@semantic.ExternalSymbol::new("runtime.helper")),
+    @semantic.Signature::new([], []),
+    Platform,
+    @semantic.CallBehavior::new(ReadWrite, true, true, true, true),
+  )
+  builder.emit(Call(call), [], []) |> ignore
+  let after_call = builder.emit(
+      EnvironmentField(field, Stable),
+      [builder.parameters()[0]],
+      [I64],
+    )[0]
+  builder.return_([before_call, after_call])
+  let context = test_lowering_context().with_environment_field(field, [24])
+  inspect(
+    lower(builder.finish(), context).summary(),
+    content=(
+      #|vcode environment_call_boundary(v0:ptr64) -> (i64, i64)
+      #|block0:
+      #|  i0 IncomingReg(Ptr64, p0:int) uses=[v0:fixed(p0:int)@early] defs=[v1:any-location(prefer=p0:int)@late]
+      #|  i1 ScalarLoad(W64, None, I64, 24) uses=[v1:any@early] defs=[v2:any@late]
+      #|  i2 PlatformCall({ name: "runtime.helper" }, { params: [], results: [] }) clobbers=[p0:int, p1:int, p2:int, p3:int, p4:int, p5:int, p6:int, p7:int, p8:int, p9:int, p10:int, p11:int, p12:int, p13:int, p14:int, p15:int, p16:int, p17:int, p0:fpvec, p1:fpvec, p2:fpvec, p3:fpvec, p4:fpvec, p5:fpvec, p6:fpvec, p7:fpvec, p8:fpvec, p9:fpvec, p10:fpvec, p11:fpvec, p12:fpvec, p13:fpvec, p14:fpvec, p15:fpvec, p16:fpvec, p17:fpvec, p18:fpvec, p19:fpvec, p20:fpvec, p21:fpvec, p22:fpvec, p23:fpvec, p24:fpvec, p25:fpvec, p26:fpvec, p27:fpvec, p28:fpvec, p29:fpvec, p30:fpvec, p31:fpvec] safepoint=GcAndCancellation
+      #|  i3 ScalarLoad(W64, None, I64, 24) uses=[v1:any@early] defs=[v3:any@late]
+      #|  i4 OutgoingReg(I64, p0:int) uses=[v2:any@early]
+      #|  i5 OutgoingReg(I64, p1:int) uses=[v3:any@early]
+      #|  i6 Return
       #|
     ),
   )

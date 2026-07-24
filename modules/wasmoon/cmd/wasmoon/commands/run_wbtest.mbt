@@ -92,8 +92,16 @@ test "compile api: parse failure emits failed stage" {
 }
 
 ///|
-test "run JIT cache version tracks machine-code semantics" {
+test "run JIT cache version tracks the artifact format" {
   inspect(run_jit_cache_version, content="v9")
+}
+
+///|
+test "run JIT cache encodes the codegen revision as a path-safe component" {
+  inspect(
+    cache_revision_file_tag("machv-vcode-5"),
+    content="006d0061006300680076002d00760063006f00640065002d0035",
+  )
 }
 
 ///|
@@ -116,6 +124,18 @@ test "run JIT cache accepts an exactly compatible v9 artifact" {
   guard compile_module(minimal_i32_const_module_bytes()) is Some(artifact) else {
     fail("compile returned unsupported")
   }
+  let deterministic_manifest = {
+    ..artifact.manifest,
+    target: {
+      ..artifact.manifest.target,
+      architecture: AArch64,
+      operating_system_abi: MacOS,
+    },
+  }
+  inspect(
+    run_jit_cache_file("/tmp/cache", deterministic_manifest),
+    content="/tmp/cache/v9-aarch64-macos-o2-small-direct-no-cancel-no-debug-r006d0061006300680076002d00760063006f00640065002d0035-s32e9891ae7d3cedff10d21cea1ae3a989d4fb5424b89b9c2f93328535cf30af7-x67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450.cwasm",
+  )
   let path = cache_test_file("compatible")
   save_run_jit_cache(path, artifact)
   guard load_run_jit_cache(path, jit_artifact_compatibility(artifact.manifest))
@@ -197,6 +217,34 @@ test "run JIT cache removes incompatible and oversized entries" {
     ],
     content=(
       #|[("incompatible", true, false), ("oversized", true, false)]
+    ),
+  )
+}
+
+///|
+test "run JIT cache rejects an artifact from the previous codegen revision" {
+  guard compile_module(minimal_i32_const_module_bytes()) is Some(current) else {
+    fail("compile returned unsupported")
+  }
+  let previous : @artifact.Artifact = {
+    ..current,
+    manifest: { ..current.manifest, codegen_revision: "machv-vcode-4" },
+  }
+  let path = cache_test_file("previous-codegen")
+  save_run_jit_cache(path, previous)
+  let loaded = load_run_jit_cache(
+    path,
+    jit_artifact_compatibility(current.manifest),
+  )
+  debug_inspect(
+    (
+      current.manifest.codegen_revision,
+      previous.manifest.codegen_revision,
+      loaded is None,
+      @fs.path_exists(path),
+    ),
+    content=(
+      #|("machv-vcode-5", "machv-vcode-4", true, false)
     ),
   )
 }

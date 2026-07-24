@@ -54,6 +54,20 @@ pub fn elapsed_us(start : PerfTick) -> Int64 {
 }
 
 ///|
+/// A complete compilation stage recorded for one function.
+///
+/// Keep this typed at the recording boundary so adding or renaming a stage
+/// cannot silently lose metrics through an unknown string.
+pub(all) enum FunctionCompileStage {
+  Optimize
+  SemanticLowering
+  TargetLowering
+  RegisterAllocation
+  FramePlanning
+  Emission
+}
+
+///|
 pub struct IRPassMetric {
   name : String
   duration_us : Int64
@@ -82,7 +96,9 @@ pub struct FunctionMetrics {
   mut ir_insts_after : Int
   mut optimize_us : Int64
   mut lower_us : Int64
+  mut target_lower_us : Int64
   mut regalloc_us : Int64
+  mut frame_plan_us : Int64
   mut emit_us : Int64
   mut code_size : Int
   mut spill_slots : Int
@@ -114,7 +130,7 @@ fn ensure_module_state() -> ModuleMetricsReport {
     Some(m) => m
     None => {
       let m = {
-        schema_version: 2,
+        schema_version: 3,
         expected_functions: 0,
         module_compile_us: 0L,
         functions: [],
@@ -137,7 +153,7 @@ fn flush_current_function_if_any() -> Unit {
 pub fn reset_module(expected_functions : Int) -> Unit {
   guard enabled() else { return }
   module_state.val = Some({
-    schema_version: 2,
+    schema_version: 3,
     expected_functions,
     module_compile_us: 0L,
     functions: [],
@@ -168,7 +184,9 @@ pub fn begin_function(
     ir_insts_after: ir_insts_before,
     optimize_us: 0L,
     lower_us: 0L,
+    target_lower_us: 0L,
     regalloc_us: 0L,
+    frame_plan_us: 0L,
     emit_us: 0L,
     code_size: 0,
     spill_slots: 0,
@@ -258,15 +276,19 @@ pub fn clear_milkir_metrics_sink() -> Unit {
 }
 
 ///|
-pub fn record_stage_us(stage_name : String, duration_us : Int64) -> Unit {
+pub fn record_stage_us(
+  stage : FunctionCompileStage,
+  duration_us : Int64,
+) -> Unit {
   guard enabled() else { return }
   if current_function_state.val is Some(m) {
-    match stage_name {
-      "optimize" => m.optimize_us = duration_us
-      "lower" => m.lower_us = duration_us
-      "regalloc" => m.regalloc_us = duration_us
-      "emit" => m.emit_us = duration_us
-      _ => ()
+    match stage {
+      Optimize => m.optimize_us = duration_us
+      SemanticLowering => m.lower_us = duration_us
+      TargetLowering => m.target_lower_us = duration_us
+      RegisterAllocation => m.regalloc_us = duration_us
+      FramePlanning => m.frame_plan_us = duration_us
+      Emission => m.emit_us = duration_us
     }
   }
 }

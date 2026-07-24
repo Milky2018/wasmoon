@@ -4,7 +4,11 @@ pub const WASMOON_JIT_ABI_VERSION : Int = 3
 
 ///|
 /// Revision of the current semantic-MachV target code generator.
-pub const WASMOON_CODEGEN_REVISION : String = "machv-vcode-1"
+///
+/// Advance this value whenever compiler changes can alter emitted code while
+/// preserving the artifact format and JIT ABI. Persistent caches use it as part
+/// of their compatibility identity.
+pub const WASMOON_CODEGEN_REVISION : String = "machv-vcode-5"
 
 ///|
 extern "c" fn host_operating_system_abi_tag() -> Int = "wasmoon_jit_host_operating_system_abi"
@@ -234,7 +238,11 @@ pub fn compile_wasm_body_artifact_function(
   match target {
     AArch64 => {
       let compiled = compile_wasm_body_aarch64_target(
-        function, validation_context, use_subtype_indirect_check, canonical_type_indices,
+        function,
+        validation_context,
+        use_subtype_indirect_check,
+        canonical_type_indices,
+        record_metrics=@perf.enabled(),
       )
       artifact_function_from_code_object(
         compiled.object,
@@ -245,7 +253,11 @@ pub fn compile_wasm_body_artifact_function(
     }
     X64 => {
       let compiled = compile_wasm_body_x64_target(
-        function, validation_context, use_subtype_indirect_check, canonical_type_indices,
+        function,
+        validation_context,
+        use_subtype_indirect_check,
+        canonical_type_indices,
+        record_metrics=@perf.enabled(),
       )
       artifact_function_from_code_object(
         compiled.object,

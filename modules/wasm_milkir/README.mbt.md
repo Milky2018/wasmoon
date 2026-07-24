@@ -28,6 +28,13 @@ opcode families directly. In particular, the Wasm frontend consumes SIMD
 `memidx`, alignment, and offset fields while constructing the effective address;
 the resulting MilkIR `VectorOp` carries only vector load/store semantics.
 
+Linear-memory base pointers use MilkIR `GlobalValue` declarations rather than a
+Wasm extension opcode. `memory_base_context_field` identifies the memory index,
+the declaration records `Heap(memidx)` provenance, and the frontend chooses
+`Stable` only when the embedding guarantees that the base cannot move during
+the function invocation. Contextual validation checks that the memory exists;
+`wasm_machv` resolves the opaque field through its embedding environment.
+
 ## Example: map Wasm reference types to MilkIR
 
 ```moonbit check

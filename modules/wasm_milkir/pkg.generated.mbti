@@ -57,6 +57,8 @@ pub fn decode(@milkir.ExtOp) -> WasmOpcode?
 
 pub fn decode_error(@milkir.ExtOp) -> String?
 
+pub fn decode_memory_base_context_field(@milkir.ContextField) -> Int?
+
 pub fn decode_opcode(@milkir.Opcode) -> WasmOpcode?
 
 pub fn delegate(@milkir.FunctionBuilder, Int) -> Unit
@@ -91,7 +93,9 @@ pub fn i31_get_u(@milkir.FunctionBuilder, @milkir.Value) -> @milkir.Value
 
 pub fn i31_new(@milkir.FunctionBuilder, @milkir.Value) -> @milkir.Value
 
-pub fn load_mem_base(@milkir.FunctionBuilder, @milkir.Value, Int) -> @milkir.Value
+pub fn load_mem_base(@milkir.FunctionBuilder, @milkir.Value, Int, @milkir.GlobalValueStability) -> @milkir.Value
+
+pub fn memory_base_context_field(Int) -> @milkir.ContextField
 
 pub fn memory_copy(@milkir.FunctionBuilder, RuntimeSymbols, @milkir.Value, Int, Int, @milkir.Value, @milkir.Value, @milkir.Value) -> Unit
 
@@ -142,6 +146,8 @@ pub fn try_table_begin(@milkir.FunctionBuilder, Int) -> @milkir.Value
 pub fn try_table_end(@milkir.FunctionBuilder, Int) -> Unit
 
 pub fn validate_extension(@milkir.ExtensionInstView) -> String?
+
+pub fn validate_global_value(@milkir.GlobalValueData) -> String?
 
 pub fn verify_function(@milkir.Function) -> Unit raise @milkir.VerifyError
 
@@ -218,7 +224,6 @@ pub(all) struct WasmFunctionContract {
 } derive(Eq, @debug.Debug)
 
 pub(all) enum WasmOpcode {
-  LoadMemBase(Int)
   WasmCall(Int)
   WasmCallIndirect(Int, Int)
   CallRef(Int)
@@ -281,6 +286,7 @@ type WasmValidationContext
 pub fn WasmValidationContext::empty() -> Self
 pub fn WasmValidationContext::new(WasmValidationResolvers) -> Self
 pub fn WasmValidationContext::validate_extension(Self, @milkir.ExtensionInstView, Array[@milkir.Type]) -> String?
+pub fn WasmValidationContext::validate_global_value(Self, @milkir.GlobalValueData) -> String?
 
 pub(all) struct WasmValidationResolvers {
   function_contract : (Int) -> WasmFunctionContract?
