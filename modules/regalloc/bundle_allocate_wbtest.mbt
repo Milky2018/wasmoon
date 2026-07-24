@@ -109,11 +109,12 @@ test "production allocation assigns an SSA bundle atomically" {
   ranges.add_range(bundle_test_range(2, Int, 8, 10, []))
   let function : BundleTestFunction = {
     classes: [Int, Int, Int],
+    spill_kinds: [0, 0, 0],
     successors: [[1], [2], []],
     parameters: [[], [{ id: 1, class: Int }], [{ id: 2, class: Int }]],
     edge_arguments: [[[{ id: 0, class: Int }]], [[{ id: 1, class: Int }]], []],
   }
-  let (segments, _, bundles, segment_owner) = allocate_segments_with_bundles(
+  let (segments, _, bundles, segment_owner, _) = allocate_segments_with_bundles(
     function,
     MachineEnv::new([{ id: 0, class: Int }], []),
     ranges,
@@ -189,6 +190,7 @@ test "production allocation evicts then splits a cheaper long bundle" {
   plan.validate(3, 3)
   let function : BundleTestFunction = {
     classes: [Int, Int, Int],
+    spill_kinds: [0, 0, 0],
     successors: [[]],
     parameters: [[]],
     edge_arguments: [[]],

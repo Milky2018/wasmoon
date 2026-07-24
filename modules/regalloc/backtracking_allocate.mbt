@@ -341,6 +341,7 @@ fn[F : FunctionView] allocate_segments_with_bundles(
   Array[Array[Int]],
   Array[AllocationBundle],
   Array[Int],
+  ProductionBundlePlan,
 ) {
   let loop_depths = compute_allocator_loop_depths(function)
   let (segments, segments_by_value) = build_allocation_segments(
@@ -357,7 +358,7 @@ fn[F : FunctionView] allocate_segments_with_bundles(
     strategy,
     loop_depths~,
   )
-  (segments, segments_by_value, bundles, segment_owner)
+  (segments, segments_by_value, bundles, segment_owner, bundle_plan)
 }
 
 ///|
@@ -382,6 +383,99 @@ fn spill_homes_can_share(
 }
 
 ///|
+fn[F : FunctionView] spill_home_types_match(
+  function : F,
+  lhs : VirtualReg,
+  rhs : VirtualReg,
+) -> Bool {
+  function.values_share_spill_slot(lhs.id, rhs.id) &&
+  function.values_share_spill_slot(rhs.id, lhs.id) &&
+  function.value_spill_size(lhs.id) == function.value_spill_size(rhs.id) &&
+  function.value_spill_alignment(lhs.id) ==
+  function.value_spill_alignment(rhs.id)
+}
+
+///|
+fn[F : FunctionView] build_spill_home_groups(
+  function : F,
+  ranges : LiveRangeSet,
+  bundle_plan : ProductionBundlePlan,
+  needs_spill : Array[Bool],
+) -> (Array[Int], Array[Array[VirtualReg]]) {
+  let group_by_value = Array::make(function.value_count(), -1)
+  let groups : Array[Array[VirtualReg]] = []
+  // Bundle ranges are copy-related and non-overlapping by construction. Keep
+  // their stable ids separate from the layout-sorted range storage.
+  let range_values : Array[VirtualReg?] = Array::make(ranges.length(), None)
+  for range in ranges.ranges {
+    range_values[range.id] = Some(range.vreg)
+  }
+  for range_ids in bundle_plan.bundle_ranges {
+    let compatible_groups : Array[Array[VirtualReg]] = []
+    for range_id in range_ids {
+      let value = range_values[range_id].unwrap()
+      if !needs_spill[value.id] {
+        continue
+      }
+      let mut selected = -1
+      for index, group in compatible_groups {
+        let mut compatible = true
+        for grouped_value in group {
+          if !spill_home_types_match(function, value, grouped_value) {
+            compatible = false
+            break
+          }
+        }
+        if compatible {
+          selected = index
+          break
+        }
+      }
+      if selected < 0 {
+        compatible_groups.push([value])
+      } else {
+        compatible_groups[selected].push(value)
+      }
+    }
+    for group in compatible_groups {
+      if group.length() < 2 {
+        continue
+      }
+      let group_id = groups.length()
+      groups.push(group)
+      for value in group {
+        group_by_value[value.id] = group_id
+      }
+    }
+  }
+  (group_by_value, groups)
+}
+
+///|
+fn[F : FunctionView] spill_home_candidates_can_share(
+  function : F,
+  ranges : LiveRangeSet,
+  group_by_value : Array[Int],
+  candidates : Array[VirtualReg],
+  occupants : Array[VirtualReg],
+) -> Bool {
+  for candidate in candidates {
+    for occupant in occupants {
+      if !spill_home_types_match(function, candidate, occupant) {
+        return false
+      }
+      let same_affinity_group = group_by_value[candidate.id] >= 0 &&
+        group_by_value[candidate.id] == group_by_value[occupant.id]
+      if !same_affinity_group &&
+        !spill_homes_can_share(ranges, candidate, occupant) {
+        return false
+      }
+    }
+  }
+  true
+}
+
+///|
 fn[F : FunctionView] assign_backtracking_homes(
   plan : AllocationPlan,
   function : F,
@@ -389,6 +483,7 @@ fn[F : FunctionView] assign_backtracking_homes(
   ranges : LiveRangeSet,
   segments : Array[AllocationSegment],
   segments_by_value : Array[Array[Int]],
+  bundle_plan : ProductionBundlePlan,
 ) -> Unit {
   let needs_spill = Array::make(function.value_count(), false)
   let register_homes : Array[PhysicalReg?] = Array::make(
@@ -428,28 +523,34 @@ fn[F : FunctionView] assign_backtracking_homes(
   }
 
   let slot_values : Array[Array[VirtualReg]] = []
+  let (group_by_value, spill_home_groups) = build_spill_home_groups(
+    function, ranges, bundle_plan, needs_spill,
+  )
+  let group_slots : Array[Int?] = Array::make(spill_home_groups.length(), None)
   for value in 0..<function.value_count() {
     let vreg : VirtualReg = { id: value, class: function.value_class(value) }
     if !needs_spill[value] {
       plan.assign_value(vreg, Reg(register_homes[value].unwrap()))
       continue
     }
-    let mut selected = -1
-    for slot, occupants in slot_values {
-      if occupants.is_empty() {
-        continue
-      }
-      let mut compatible = true
-      for occupant in occupants {
-        if !function.values_share_spill_slot(value, occupant.id) ||
-          !spill_homes_can_share(ranges, vreg, occupant) {
-          compatible = false
+    let group = group_by_value[value]
+    let candidates = if group >= 0 { spill_home_groups[group] } else { [vreg] }
+    let mut selected = if group >= 0 {
+      group_slots[group].unwrap_or(-1)
+    } else {
+      -1
+    }
+    if selected < 0 {
+      for slot, occupants in slot_values {
+        if occupants.is_empty() {
+          continue
+        }
+        if spill_home_candidates_can_share(
+            function, ranges, group_by_value, candidates, occupants,
+          ) {
+          selected = slot
           break
         }
-      }
-      if compatible {
-        selected = slot
-        break
       }
     }
     if selected < 0 {
@@ -459,7 +560,16 @@ fn[F : FunctionView] assign_backtracking_homes(
       )
       slot_values.push([])
     }
-    slot_values[selected].push(vreg)
+    if group >= 0 {
+      if group_slots[group] is None {
+        group_slots[group] = Some(selected)
+        for grouped_value in candidates {
+          slot_values[selected].push(grouped_value)
+        }
+      }
+    } else {
+      slot_values[selected].push(vreg)
+    }
     plan.assign_value(vreg, Spill(selected))
   }
 }
@@ -933,12 +1043,12 @@ fn[F : FunctionView] allocate_bundle_plan(
   strategy : AllocatorStrategy,
 ) -> AllocationPlan raise VerifyError {
   let ranges = build_function_live_ranges(function)
-  let (segments, segments_by_value, _, _) = allocate_segments_with_bundles(
+  let (segments, segments_by_value, _, _, bundle_plan) = allocate_segments_with_bundles(
     function, environment, ranges, strategy,
   )
   let plan = AllocationPlan::new(function.value_count())
   assign_backtracking_homes(
-    plan, function, environment, ranges, segments, segments_by_value,
+    plan, function, environment, ranges, segments, segments_by_value, bundle_plan,
   )
   let resident_segments_by_block = assign_backtracking_operands(
     plan, function, environment, segments, segments_by_value,
