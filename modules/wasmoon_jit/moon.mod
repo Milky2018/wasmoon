@@ -1,6 +1,6 @@
 name = "Milky2018/wasmoon_jit"
 
-version = "0.4.1"
+version = "0.4.2"
 
 readme = "README.mbt.md"
 
@@ -14,15 +14,15 @@ description = "Wasmoon-specific JIT integration and native runtime glue"
 
 import {
   "moonbitlang/x@0.4.38",
-  "Milky2018/wasm_core@0.2.0",
-  "Milky2018/wasm_milkir@0.3.1",
-  "Milky2018/wasm_machv@0.2.1",
-  "Milky2018/milkir@0.3.1",
-  "Milky2018/machv@0.5.1",
-  "Milky2018/milkir_machv@0.4.1",
-  "Milky2018/machv_regalloc@0.3.1",
-  "Milky2018/aarch64_target@0.3.1",
-  "Milky2018/x64_target@0.2.1",
+  "Milky2018/wasm_core@0.2.1",
+  "Milky2018/wasm_milkir@0.3.2",
+  "Milky2018/wasm_machv@0.2.2",
+  "Milky2018/milkir@0.3.2",
+  "Milky2018/machv@0.5.2",
+  "Milky2018/milkir_machv@0.4.2",
+  "Milky2018/machv_regalloc@0.3.2",
+  "Milky2018/aarch64_target@0.3.2",
+  "Milky2018/x64_target@0.2.2",
 }
 
 preferred_target = "native"
