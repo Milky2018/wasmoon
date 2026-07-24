@@ -282,6 +282,7 @@ graph TD
   ISS_264["ISS-264: Reuse stable memory bases across profitable regions"]
   ISS_265["ISS-265: Simplify the AArch64 SMix control-flow layout"]
   ISS_266["ISS-266: Record final pwhash_scrypt_ll performance evidence"]
+  ISS_267["ISS-267: Preserve deferred homes across ABI definitions and CFG edges"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005

@@ -226,15 +226,11 @@ fn[F : FunctionView] assign_edge_transfers(
     for successor_index, target in successors {
       let arguments = function.edge_arguments(block_index, successor_index)
       let parameters = function.block_parameters(target)
-      let transferred_arguments = Array::make(function.value_count(), false)
       for argument_index, argument in arguments {
         if argument_index >= parameters.length() {
           break
         }
         let parameter = parameters[argument_index]
-        if argument.id >= 0 && argument.id < transferred_arguments.length() {
-          transferred_arguments[argument.id] = true
-        }
         guard edge_source_location(
             plan, segments, segments_by_value, resident_segments_by_block, argument,
             block_index,
@@ -258,8 +254,7 @@ fn[F : FunctionView] assign_edge_transfers(
         }
       }
       for value in 0..<function.value_count() {
-        if transferred_arguments[value] ||
-          !value_is_live_out_of_block(
+        if !value_is_live_out_of_block(
             function, segments, segments_by_value, value, block_index,
           ) ||
           !value_is_live_into_block(segments, segments_by_value, value, target) {

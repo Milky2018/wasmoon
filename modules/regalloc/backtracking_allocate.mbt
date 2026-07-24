@@ -810,10 +810,11 @@ fn[F : FunctionView] assign_backtracking_operands(
           None => home
         }
         natural_locations.push(natural)
+        let any_location = if operand.role is Def { home } else { natural }
         let reserved = match operand.constraint {
           FixedReg(reg) => Some(reg)
           AnyLocation =>
-            match natural {
+            match any_location {
               Reg(reg) => Some(reg)
               Spill(_) => None
             }
@@ -828,6 +829,7 @@ fn[F : FunctionView] assign_backtracking_operands(
         }
       }
       for operand_index, operand in operands {
+        let home = plan.value_location(operand.vreg.id).unwrap()
         let tied_location : Location? = if operand.tie_id < 0 {
           None
         } else {
@@ -846,7 +848,12 @@ fn[F : FunctionView] assign_backtracking_operands(
           None =>
             match operand.constraint {
               FixedReg(reg) => Reg(reg)
-              AnyLocation => natural_locations[operand_index]
+              AnyLocation =>
+                if operand.role is Def {
+                  home
+                } else {
+                  natural_locations[operand_index]
+                }
               AnyReg =>
                 match natural_locations[operand_index] {
                   Reg(reg) => Reg(reg)
