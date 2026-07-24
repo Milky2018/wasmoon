@@ -996,7 +996,7 @@ test "production fragments use local spill-cost density" {
   let ranges = LiveRangeSet::LiveRangeSet([0, 1, 2])
   ranges.add_range(range)
   let (segments, _) = build_allocation_segments(ranges)
-  debug_inspect(segments.map(segment => segment.weight), content="[500, 500]")
+  debug_inspect(segments.map(segment => segment.weight), content="[667, 667]")
 }
 
 ///|
@@ -1009,6 +1009,7 @@ test "production conflict index finds only overlapping occupied segments" {
       weight: 1,
       has_fixed_constraint: false,
       location: None,
+      defer_home: false,
     },
     {
       id: 1,
@@ -1017,6 +1018,7 @@ test "production conflict index finds only overlapping occupied segments" {
       weight: 1,
       has_fixed_constraint: false,
       location: None,
+      defer_home: false,
     },
     {
       id: 2,
@@ -1025,6 +1027,7 @@ test "production conflict index finds only overlapping occupied segments" {
       weight: 1,
       has_fixed_constraint: false,
       location: None,
+      defer_home: false,
     },
     {
       id: 3,
@@ -1033,6 +1036,7 @@ test "production conflict index finds only overlapping occupied segments" {
       weight: 1,
       has_fixed_constraint: false,
       location: None,
+      defer_home: false,
     },
   ]
   debug_inspect(

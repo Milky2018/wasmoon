@@ -93,6 +93,10 @@ fn AllocationPlan::create_spill_slot(
 }
 
 ///|
+/// Return the value's default transfer home.
+///
+/// Segment-specific operand assignments and edits may keep the newest value
+/// elsewhere until a transition returns it here.
 pub fn AllocationPlan::value_location(
   self : AllocationPlan,
   value : Int,

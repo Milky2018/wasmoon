@@ -259,7 +259,7 @@ test "Allocation checker requires indexed reload and spill edits" {
   )
   |> ignore
   verify_allocated(function, allocation) catch {
-    error => inspect(error, content="MissingSpill(instruction=i0, operand=1)")
+    error => inspect(error, content="MissingReload(instruction=i1, operand=0)")
   }
   allocation.add_edit(
     Edit::spill(
@@ -446,7 +446,7 @@ test "Allocation checker requires and validates edge parallel moves" {
   allocation.assign_value(parameter, destination) |> ignore
   allocation.assign_operand(return_inst, 0, PhysicalReg::new(1, Int)) |> ignore
   verify_allocated(function, allocation) catch {
-    error => inspect(error, content="InvalidEdgeMove(index=0)")
+    error => inspect(error, content="InvalidEdgeMove(index=-1)")
   }
   allocation.add_edit(Edit::edge_move(entry, 0, value, source, destination))
   |> ignore
