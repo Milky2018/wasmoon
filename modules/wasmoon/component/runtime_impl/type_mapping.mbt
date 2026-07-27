@@ -29,9 +29,10 @@ fn discriminant_layout(case_count : Int) -> (Int, Int) {
 }
 
 ///|
-fn canonical_stream_layout(
+fn canonical_memory_layout(
   ty : ValType,
   types : Array[TypeDef?],
+  mem_is_64 : Bool,
 ) -> (Int, Int) raise ComponentRuntimeError {
   match resolve_valtype(ty, types) {
     Prim(p) =>
@@ -40,17 +41,18 @@ fn canonical_stream_layout(
         S16 | U16 => (2, 2)
         S32 | U32 | Char | F32 | ErrorContext => (4, 4)
         S64 | U64 | F64 => (8, 8)
-        String => (8, 4)
+        String => if mem_is_64 { (16, 8) } else { (8, 4) }
       }
     TypeIdx(idx) =>
       match types.get(idx) {
-        Some(Some(DefValType(p))) => canonical_stream_layout(Prim(p), types)
+        Some(Some(DefValType(p))) =>
+          canonical_memory_layout(Prim(p), types, mem_is_64)
         Some(Some(Tuple(items))) => {
           let mut size = 0
           let mut alignment = 1
           for item in items {
-            let (item_size, item_alignment) = canonical_stream_layout(
-              item, types,
+            let (item_size, item_alignment) = canonical_memory_layout(
+              item, types, mem_is_64,
             )
             size = align_to(size, item_alignment) + item_size
             if item_alignment > alignment {
@@ -63,9 +65,10 @@ fn canonical_stream_layout(
           let mut size = 0
           let mut alignment = 1
           for field in fields {
-            let (field_size, field_alignment) = canonical_stream_layout(
+            let (field_size, field_alignment) = canonical_memory_layout(
               field.ty,
               types,
+              mem_is_64,
             )
             size = align_to(size, field_alignment) + field_size
             if field_alignment > alignment {
@@ -74,7 +77,7 @@ fn canonical_stream_layout(
           }
           (align_to(size, alignment), alignment)
         }
-        Some(Some(List(_))) => (8, 4)
+        Some(Some(List(_))) => if mem_is_64 { (16, 8) } else { (8, 4) }
         Some(Some(Enum(labels))) => discriminant_layout(labels.length())
         Some(Some(Flags(labels))) => {
           let words = (labels.length() + 31) / 32
@@ -95,7 +98,9 @@ fn canonical_stream_layout(
           for case in cases {
             match case.ty {
               Some(payload) => {
-                let (size, alignment) = canonical_stream_layout(payload, types)
+                let (size, alignment) = canonical_memory_layout(
+                  payload, types, mem_is_64,
+                )
                 if size > payload_size {
                   payload_size = size
                 }
@@ -115,8 +120,8 @@ fn canonical_stream_layout(
           (align_to(payload_offset + payload_size, alignment), alignment)
         }
         Some(Some(Option(payload))) => {
-          let (payload_size, payload_alignment) = canonical_stream_layout(
-            payload, types,
+          let (payload_size, payload_alignment) = canonical_memory_layout(
+            payload, types, mem_is_64,
           )
           let payload_offset = align_to(1, payload_alignment)
           (
@@ -130,7 +135,9 @@ fn canonical_stream_layout(
           for payload in [ok, err] {
             match payload {
               Some(value) => {
-                let (size, alignment) = canonical_stream_layout(value, types)
+                let (size, alignment) = canonical_memory_layout(
+                  value, types, mem_is_64,
+                )
                 if size > payload_size {
                   payload_size = size
                 }
@@ -170,7 +177,7 @@ fn stream_payload_info(
   match payload_ty {
     None => (1, None)
     Some(vt) => {
-      let (size, alignment) = canonical_stream_layout(vt, types)
+      let (size, alignment) = canonical_memory_layout(vt, types, false)
       let element_size = align_to(size, alignment)
       let own_resource_type_id = match resolve_valtype(vt, types) {
         TypeIdx(idx) =>

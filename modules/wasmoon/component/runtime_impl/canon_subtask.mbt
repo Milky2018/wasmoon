@@ -23,14 +23,7 @@ fn instantiate_canon_subtask_cancel(
     } else {
       async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1]
     }
-    let per_task = match async_state.call_results.get(task_id) {
-      Some(m) => m
-      None => {
-        let m : Map[Int, Array[@types.Value]] = Map([])
-        async_state.call_results.set(task_id, m)
-        m
-      }
-    }
+    let per_task = canon_call_results_for_task(async_state, task_id)
     if per_task.get(cur) is Some(v) {
       async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1] = cur +
         1
@@ -44,12 +37,19 @@ fn instantiate_canon_subtask_cancel(
       out
     }
 
-    if !is_async_cancel && !async_state.task_can_block[0] {
-      trap_canon("cannot block a synchronous task before returning")
-      return cache_i32(0)
-    }
     match args {
       [I32(id)] => {
+        if !is_async_cancel &&
+          waitable_is_in_set(async_state, owner_component_id, id) {
+          trap_canon(
+            "waitable cannot be used synchronously while added to a waitable set",
+          )
+          return cache_i32(0)
+        }
+        if !is_async_cancel && !async_state.task_can_block[0] {
+          trap_canon("cannot block a synchronous task before returning")
+          return cache_i32(0)
+        }
         let skey = handle_key(owner_component_id, id)
         match async_state.subtasks.get(skey) {
           None => {
@@ -66,6 +66,32 @@ fn instantiate_canon_subtask_cancel(
             // Mark cancellation request for callback-driven tasks.
             match st.driver {
               CallbackLifted(t) => t.cancelled[0] = true
+            }
+
+            if st.phase[0] == Starting {
+              st.phase[0] = Returned
+              let pending_keys : Array[Int] = []
+              for kv in async_state.pending_by_instance.iter() {
+                let (key, _) = kv
+                pending_keys.push(key)
+              }
+              for key in pending_keys {
+                if async_state.pending_by_instance.get(key) is Some(queue) {
+                  let mut i = 0
+                  while i < queue.length() {
+                    if queue[i] == skey {
+                      queue.remove(i) |> ignore
+                    } else {
+                      i = i + 1
+                    }
+                  }
+                  if queue.length() == 0 {
+                    async_state.pending_by_instance.remove(key)
+                  }
+                }
+              }
+              // CANCELLED_BEFORE_STARTED.
+              return cache_i32(3)
             }
 
             // Best-effort: if the subtask uses the callback-style async ABI,
@@ -156,14 +182,7 @@ fn instantiate_canon_subtask_drop(
     } else {
       async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1]
     }
-    let per_task = match async_state.call_results.get(task_id) {
-      Some(m) => m
-      None => {
-        let m : Map[Int, Array[@types.Value]] = Map([])
-        async_state.call_results.set(task_id, m)
-        m
-      }
-    }
+    let per_task = canon_call_results_for_task(async_state, task_id)
     if per_task.get(cur) is Some(v) {
       async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1] = cur +
         1
@@ -232,6 +251,9 @@ fn instantiate_canon_subtask_drop(
         async_state.wait_results.remove(skey)
         async_state.waiting_ws.remove(skey)
         async_state.call_results.remove(skey)
+        async_state.call_results_cb.remove(skey)
+        async_state.call_result_ends.remove(skey)
+        async_state.call_result_ends_cb.remove(skey)
         async_state.sync_lower_states.remove(skey)
 
         // Remove from pending queues if it was still STARTING.

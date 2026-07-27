@@ -22,14 +22,7 @@ fn instantiate_canon_waitable_set_new(
     } else {
       async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1]
     }
-    let per_task = match async_state.call_results.get(task_id) {
-      Some(m) => m
-      None => {
-        let m : Map[Int, Array[@types.Value]] = Map([])
-        async_state.call_results.set(task_id, m)
-        m
-      }
-    }
+    let per_task = canon_call_results_for_task(async_state, task_id)
     match per_task.get(cur) {
       Some(v) => {
         async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1] = cur +
@@ -273,6 +266,25 @@ fn instantiate_canon_waitable_set_wait(
             [I32(ev.code)]
           }
           None => {
+            if _cancellable &&
+              async_state.task_cancelled.get(task_id) is Some(true) {
+              async_state.task_cancelled.remove(task_id)
+              let ev : WaitEvent = {
+                owner_component_id,
+                code: 6,
+                index: 0,
+                payload: 0,
+              }
+              per_task.set(cur, {
+                ev,
+                subtask_mem_addr: None,
+                subtask_retptr: 0,
+                subtask_i32: None,
+              })
+              async_state.wait_cursor_stack[async_state.wait_cursor_stack.length() -
+              1] = cur + 1
+              return [I32(6)]
+            }
             // Cooperative wait: suspend the current task until an event exists.
             // (The sync-style async ABI will replay this call and consume the event.)
             if !waitable_set_has_event(async_state, ws_key) {
@@ -391,6 +403,11 @@ fn instantiate_canon_waitable_set_poll(
     }
     match args {
       [I32(ws), I32(ptr)] => {
+        let task_id = current_task_id(async_state)
+        if _cancellable && async_state.task_cancelled.get(task_id) is Some(true) {
+          async_state.task_cancelled.remove(task_id)
+          return [I32(6)]
+        }
         if (ptr.reinterpret_as_uint() & 3U) != 0U {
           trap_canon("unaligned pointer")
           return [I32(0)]
@@ -407,7 +424,15 @@ fn instantiate_canon_waitable_set_poll(
             }
             [I32(ev.code)]
           }
-          None => [I32(0)]
+          None => {
+            mem.store_i32(ptr + 0, 0) catch {
+              _ => ()
+            }
+            mem.store_i32(ptr + 4, 0) catch {
+              _ => ()
+            }
+            [I32(0)]
+          }
         }
       }
       _ => {
@@ -497,6 +522,13 @@ fn instantiate_canon_waitable_join(
     match args {
       [I32(waitable), I32(ws)] => {
         let waitable_key = handle_key(owner_component_id, waitable)
+        if ws != 0 &&
+          waitable_is_in_sync_use(async_state, owner_component_id, waitable) {
+          trap_canon(
+            "waitable cannot be used synchronously while added to a waitable set",
+          )
+          return []
+        }
         if ws == 0 {
           if async_state.stream_table.endpoints.get(waitable_key)
             is Some(endpoint) {

@@ -676,7 +676,6 @@ def compile_component(
     text: str,
     tmp: Path,
     idx: int,
-    wasmoon_tools: Path,
     wasm_tools: Path,
 ) -> Tuple[Optional[Path], Optional[str]]:
     src = tmp / f"component_{idx}.wat"
@@ -684,37 +683,17 @@ def compile_component(
     src.write_text(text, encoding="utf-8")
 
     returncode, stdout, stderr, timed_out = run_command(
-        [str(wasmoon_tools), "wat2wasm", str(src), "-o", str(out)],
+        [str(wasm_tools), "parse", str(src), "-o", str(out)],
         timeout_sec=DEFAULT_TOOLS_TIMEOUT_SECONDS,
     )
     if timed_out:
         return (
             None,
-            f"wasmoon-tools wat2wasm timeout ({DEFAULT_TOOLS_TIMEOUT_SECONDS}s)",
+            f"wasm-tools parse timeout ({DEFAULT_TOOLS_TIMEOUT_SECONDS}s)",
         )
     if returncode != 0:
-        primary_err = (stderr or stdout).strip() or "unknown error"
-        fb_code, fb_stdout, fb_stderr, fb_timed_out = run_command(
-            [str(wasm_tools), "parse", str(src), "-o", str(out)],
-            timeout_sec=DEFAULT_TOOLS_TIMEOUT_SECONDS,
-        )
-        if fb_timed_out:
-            return (
-                None,
-                "wasmoon-tools wat2wasm failed: "
-                + primary_err
-                + f"; fallback wasm-tools parse timeout ({DEFAULT_TOOLS_TIMEOUT_SECONDS}s)",
-            )
-        if fb_code == 0:
-            return out, None
-        fb_err = (fb_stderr or fb_stdout).strip() or "unknown error"
-        return (
-            None,
-            "wasmoon-tools wat2wasm failed: "
-            + primary_err
-            + "; fallback wasm-tools parse failed: "
-            + fb_err,
-        )
+        err = (stderr or stdout).strip() or "unknown error"
+        return None, f"wasm-tools parse failed: {err}"
 
     return out, None
 
@@ -887,7 +866,6 @@ def run_file(
                     normalized,
                     tmp_path,
                     comp_idx,
-                    wasmoon_tools,
                     wasm_tools,
                 )
                 comp_idx += 1
@@ -943,7 +921,6 @@ def run_file(
                     normalized,
                     tmp_path,
                     comp_idx,
-                    wasmoon_tools,
                     wasm_tools,
                 )
                 comp_idx += 1
@@ -1017,7 +994,6 @@ def run_file(
                     normalized,
                     tmp_path,
                     comp_idx,
-                    wasmoon_tools,
                     wasm_tools,
                 )
                 comp_idx += 1
@@ -1057,7 +1033,6 @@ def run_file(
                     normalized,
                     tmp_path,
                     comp_idx,
-                    wasmoon_tools,
                     wasm_tools,
                 )
                 comp_idx += 1
@@ -1152,7 +1127,6 @@ def run_file(
                     normalized,
                     tmp_path,
                     comp_idx,
-                    wasmoon_tools,
                     wasm_tools,
                 )
                 comp_idx += 1

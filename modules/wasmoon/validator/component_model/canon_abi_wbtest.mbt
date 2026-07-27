@@ -65,3 +65,62 @@ test "canon lower only requires realloc for values written into core memory" {
     content="[(\"string-parameter\", false), (\"string-result\", true)]",
   )
 }
+
+///|
+test "canonical memory address type follows the selected memory" {
+  let memory32 : @types.MemoryType = {
+    limits: { min: 1L, max: None },
+    is_memory64: false,
+    page_size_log2: 16,
+  }
+  let memory64 : @types.MemoryType = {
+    limits: { min: 1L, max: None },
+    is_memory64: true,
+    page_size_log2: 16,
+  }
+  debug_inspect(
+    [
+      canon_address_type([Memory(0)], [Some(memory32)]),
+      canon_address_type([Memory(0)], [Some(memory64)]),
+    ],
+    content="[I32, I64]",
+  )
+}
+
+///|
+test "memory64 canonical realloc requires an i64 address signature" {
+  let memory64 : @types.MemoryType = {
+    limits: { min: 1L, max: None },
+    is_memory64: true,
+    page_size_log2: 16,
+  }
+  let func_type : @component.FuncType = {
+    is_async: false,
+    params: [{ label: "value", ty: Prim(String) }],
+    result: None,
+  }
+  let invalid_realloc : @types.FuncType = {
+    params: [I32, I32, I32, I32],
+    results: [I32],
+  }
+  let result = try {
+    validate_canon(
+      Lower(0, [Memory(0), Realloc(0)]),
+      [],
+      [],
+      0,
+      [Some(memory64)],
+      [Some(invalid_realloc)],
+      [Some(func_type)],
+    )
+    "accepted"
+  } catch {
+    error => error.to_string()
+  }
+  inspect(
+    result,
+    content=(
+      #|CanonCoreFuncTypeMismatch("canonical option `realloc` uses a core function with an incorrect signature")
+    ),
+  )
+}

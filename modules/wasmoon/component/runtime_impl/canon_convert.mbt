@@ -98,22 +98,16 @@ fn lift_component_value_from_flat(
                 _ => raise HostCallError("type mismatch")
               }
             }
-            let elem_storage = flat_storage_for_valtype(
+            let (elem_size, elem_align) = canonical_memory_layout(
               elem_ty, types, mem_is_64,
-            )
-            let (offsets, elem_size, elem_align) = layout_of_flat_storage_fields(
-              elem_storage,
             )
             let stride = align_to(elem_size, elem_align)
             let items : Array[ComponentValue] = []
             for i in 0..<len {
               let base = ptr + stride * i
-              let elem_vals : Array[@types.Value] = []
-              for j in 0..<elem_storage.length() {
-                elem_vals.push(
-                  load_storage_value(m, base + offsets[j], elem_storage[j]),
-                )
-              }
+              let elem_vals = load_flat_component_value_from_memory(
+                m, base, elem_ty, types, mem_is_64,
+              )
               items.push(
                 lift_component_value_from_flat(
                   elem_ty, elem_vals, types, mem, mem_is_64, encoding,
@@ -412,11 +406,8 @@ fn component_args_to_core(
                   Some(r) => r
                   None => raise MissingCanonRealloc
                 }
-                let elem_storage = flat_storage_for_valtype(
+                let (elem_size, elem_align) = canonical_memory_layout(
                   elem_ty, types, mem_is_64,
-                )
-                let (offsets, elem_size, elem_align) = layout_of_flat_storage_fields(
-                  elem_storage,
                 )
                 let stride = align_to(elem_size, elem_align)
                 let total_size = stride * items.length()
@@ -425,18 +416,10 @@ fn component_args_to_core(
                 )
                 for i in 0..<items.length() {
                   let elem_vals = lower_value(items[i], elem_ty)
-                  if elem_vals.length() != elem_storage.length() {
-                    raise HostCallError("argument type mismatch")
-                  }
                   let base = ptr + stride * i
-                  for j in 0..<elem_vals.length() {
-                    store_storage_value(
-                      m,
-                      base + offsets[j],
-                      elem_vals[j],
-                      elem_storage[j],
-                    )
-                  }
+                  store_flat_component_value_to_memory(
+                    m, base, elem_ty, elem_vals, types, mem_is_64,
+                  )
                 }
                 let len = items.length()
                 if mem_is_64 {
@@ -1275,11 +1258,8 @@ fn component_results_to_core(
                         Some(rf) => rf
                         None => raise MissingCanonRealloc
                       }
-                      let elem_storage = flat_storage_for_valtype(
+                      let (elem_size, elem_align) = canonical_memory_layout(
                         elem_ty, types, mem_is_64,
-                      )
-                      let (offsets, elem_size, elem_align) = layout_of_flat_storage_fields(
-                        elem_storage,
                       )
                       let stride = align_to(elem_size, elem_align)
                       let ptr = alloc_realloc_area(
@@ -1292,18 +1272,10 @@ fn component_results_to_core(
                       )
                       for i in 0..<items.length() {
                         let elem_values = lower_value(items[i], elem_ty)
-                        if elem_values.length() != elem_storage.length() {
-                          raise HostCallError("result type mismatch")
-                        }
                         let base = ptr + stride * i
-                        for j in 0..<elem_values.length() {
-                          store_storage_value(
-                            mem,
-                            base + offsets[j],
-                            elem_values[j],
-                            elem_storage[j],
-                          )
-                        }
+                        store_flat_component_value_to_memory(
+                          mem, base, elem_ty, elem_values, types, mem_is_64,
+                        )
                       }
                       if mem_is_64 {
                         [I64(ptr.to_int64()), I64(items.length().to_int64())]

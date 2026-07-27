@@ -178,6 +178,9 @@ fn cleanup_thread_task(async_state : AsyncState, task_id : Int64) -> Unit {
   async_state.wait_results.remove(task_id)
   async_state.waiting_ws.remove(task_id)
   async_state.call_results.remove(task_id)
+  async_state.call_results_cb.remove(task_id)
+  async_state.call_result_ends.remove(task_id)
+  async_state.call_result_ends_cb.remove(task_id)
   async_state.stream_results.remove(task_id)
   async_state.stream_results_cb.remove(task_id)
   async_state.sync_lower_states.remove(task_id)
@@ -368,14 +371,14 @@ fn execute_thread_suspension_intrinsic(
   }
 
   if is_explicit {
+    if maybe_consume_cancelled(async_state, task_id, cancellable) {
+      return [I32(1)]
+    }
+
     if cur < replay_upto {
       async_state.yield_cursor_stack[async_state.yield_cursor_stack.length() - 1] = cur +
         1
       return [I32(0)]
-    }
-
-    if maybe_consume_cancelled(async_state, task_id, cancellable) {
-      return [I32(1)]
     }
 
     match target {
@@ -403,6 +406,10 @@ fn execute_thread_suspension_intrinsic(
 
   // Implicit `thread.yield` is modeled as cooperative suspension. On replay
   // we consume exactly one suspended yield and continue execution.
+  if maybe_consume_cancelled(async_state, task_id, cancellable) {
+    return [I32(1)]
+  }
+
   if async_state.task_can_block[0] &&
     schedule_current &&
     target is None &&
@@ -410,10 +417,6 @@ fn execute_thread_suspension_intrinsic(
     async_state.yield_cursor_stack[async_state.yield_cursor_stack.length() - 1] = cur +
       1
     return [I32(0)]
-  }
-
-  if maybe_consume_cancelled(async_state, task_id, cancellable) {
-    return [I32(1)]
   }
 
   if schedule_current {
@@ -590,6 +593,40 @@ fn instantiate_canon_thread_yield(
       cancellable,
       true,
       None,
+      async_state,
+      store,
+      owner_component_id,
+    )
+  }
+  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+}
+
+///|
+fn instantiate_canon_thread_yield_then_resume(
+  cancellable : Bool,
+  state : BuildState,
+  store : @runtime.Store,
+) -> Unit {
+  let core_type : @types.FuncType = { params: [I32], results: [I32] }
+  let async_state = state.async_state
+  let owner_component_id = state.resource_table.id
+  let host = fn(
+    args : Array[@types.Value],
+  ) -> Array[@types.Value] raise @runtime.RuntimeError {
+    if !canon_may_leave[0] {
+      trap_canon("cannot leave component instance")
+    }
+    let target = match args {
+      [I32(handle)] => handle
+      _ => {
+        trap_canon("type mismatch")
+        return [I32(0)]
+      }
+    }
+    execute_thread_suspension_intrinsic(
+      cancellable,
+      true,
+      Some(target),
       async_state,
       store,
       owner_component_id,

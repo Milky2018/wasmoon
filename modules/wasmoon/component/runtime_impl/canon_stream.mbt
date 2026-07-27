@@ -33,20 +33,14 @@ fn instantiate_canon_stream_new(
     // surrounding core function is restarted after a cooperative suspension.
     // Cache the i64 result per task/call cursor so handle numbering remains stable.
     let task_id = current_task_id(async_state)
+    let replay_enabled = task_id != 0L
     let cur = if async_state.call_cursor_stack.length() == 0 {
       0
     } else {
       async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1]
     }
-    let per_task = match async_state.call_results.get(task_id) {
-      Some(m) => m
-      None => {
-        let m : Map[Int, Array[@types.Value]] = Map([])
-        async_state.call_results.set(task_id, m)
-        m
-      }
-    }
-    if per_task.get(cur) is Some(v) {
+    let per_task = canon_call_results_for_task(async_state, task_id)
+    if replay_enabled && per_task.get(cur) is Some(v) {
       set_canon_debug_message("stream.new(replay cur=\{cur})-> \{to_repr(v)}")
       async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1] = cur +
         1
@@ -54,7 +48,9 @@ fn instantiate_canon_stream_new(
     }
     fn cache_i64(x : Int64) -> Array[@types.Value] {
       let out = [@types.Value::I64(x)]
-      per_task.set(cur, out)
+      if replay_enabled {
+        per_task.set(cur, out)
+      }
       async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1] = cur +
         1
       out
@@ -304,6 +300,7 @@ fn instantiate_canon_stream_read(
     // restarted after a cooperative suspension. Cache their return codes per task + cursor so
     // side effects (buffer copies / handle transfers) are not repeated.
     let task_id = current_task_id(async_state)
+    let replay_enabled = task_id != 0L
     let cur = if async_state.stream_cursor_stack.length() == 0 {
       0
     } else {
@@ -332,14 +329,16 @@ fn instantiate_canon_stream_read(
         }
       }
     }
-    if per_task.get(cur) is Some(code) {
+    if replay_enabled && per_task.get(cur) is Some(code) {
       set_canon_debug_message("stream.read(replay cur=\{cur})-> \{code}")
       async_state.stream_cursor_stack[async_state.stream_cursor_stack.length() -
       1] = cur + 1
       return [I32(code)]
     }
     fn cache_i32(code : Int) -> Array[@types.Value] {
-      per_task.set(cur, code)
+      if replay_enabled {
+        per_task.set(cur, code)
+      }
       async_state.stream_cursor_stack[async_state.stream_cursor_stack.length() -
       1] = cur + 1
       [I32(code)]
@@ -370,6 +369,18 @@ fn instantiate_canon_stream_read(
     }
     match args {
       [I32(handle), I32(ptr), I32(len)] => {
+        if !is_async {
+          resume_sync_waitable_use(
+            async_state, owner_component_id, handle, task_id,
+          )
+        }
+        if !is_async &&
+          waitable_is_in_set(async_state, owner_component_id, handle) {
+          trap_canon(
+            "waitable cannot be used synchronously while added to a waitable set",
+          )
+          return ret_i32(0)
+        }
         if !is_async && !async_state.task_can_block[0] {
           trap_canon("cannot block a synchronous task before returning")
           return ret_i32(0)
@@ -453,7 +464,13 @@ fn instantiate_canon_stream_read(
                   Some(source) => {
                     match st0.pending_read {
                       Some(read) =>
-                        if read.reader_handle == handle && read.event_enqueued {
+                        if is_async {
+                          trap_canon(
+                            "cannot have concurrent operations active on a future/stream",
+                          )
+                          return ret_i32(0)
+                        } else if read.reader_handle == handle &&
+                          read.event_enqueued {
                           table.streams.set(ep.stream_id, {
                             elem_size: st0.elem_size,
                             own_resource_type_id: st0.own_resource_type_id,
@@ -534,6 +551,9 @@ fn instantiate_canon_stream_read(
                         if is_async {
                           return ret_i32(-1)
                         }
+                        mark_sync_waitable_blocked(
+                          async_state, owner_component_id, handle, task_id,
+                        )
                         canon_suspend[0] = Some(Yield)
                         raise Unreachable
                       }
@@ -544,7 +564,12 @@ fn instantiate_canon_stream_read(
                 // If re-executing a previously blocking read, return its completion.
                 match st0.pending_read {
                   Some(pr0) =>
-                    if pr0.reader_handle == handle {
+                    if is_async {
+                      trap_canon(
+                        "cannot have concurrent operations active on a future/stream",
+                      )
+                      return ret_i32(0)
+                    } else if pr0.reader_handle == handle {
                       if pr0.filled == pr0.len || st0.writable_dropped {
                         let dropped = if st0.writable_dropped { 1 } else { 0 }
                         if dropped == 1 {
@@ -575,6 +600,9 @@ fn instantiate_canon_stream_read(
                           )
                           return ret_i32(0)
                         }
+                        mark_sync_waitable_blocked(
+                          async_state, owner_component_id, handle, task_id,
+                        )
                         canon_suspend[0] = Some(Yield)
                         raise Unreachable
                       }
@@ -652,10 +680,6 @@ fn instantiate_canon_stream_read(
                       return ret_i32(-1)
                     }
                     let remain = total_elems - pw.sent
-                    // If the pending write has been fully consumed (or is zero-length),
-                    // it must not cause reads to "complete" with 0 elements. Treat it as
-                    // no available data, but make sure the writer's completion event is
-                    // eventually delivered.
                     if remain <= 0 {
                       let mut pw_event_enqueued = pw.event_enqueued
                       if !pw_event_enqueued {
@@ -734,6 +758,9 @@ fn instantiate_canon_stream_read(
                           )
                           return ret_i32(0)
                         }
+                        mark_sync_waitable_blocked(
+                          async_state, owner_component_id, handle, task_id,
+                        )
                         canon_suspend[0] = Some(Yield)
                         raise Unreachable
                       }
@@ -798,10 +825,19 @@ fn instantiate_canon_stream_read(
                       (None, None) => ()
                     }
                     let new_sent = pw.sent + n
-                    // When a pending write has been fully consumed, emit STREAM_WRITE and
-                    // keep the write around until its event is delivered (notification semantics).
+                    // Publish cumulative progress. Further reads may extend
+                    // the same pending write before the event is observed, in
+                    // which case the queued event is replaced.
                     let mut event_enqueued = pw.event_enqueued
-                    if new_sent >= total_elems && !event_enqueued {
+                    if n > 0 {
+                      if event_enqueued {
+                        remove_waitable_events_for(
+                          async_state,
+                          pw.writer_table.id,
+                          pw.writer_handle,
+                          3,
+                        )
+                      }
                       enqueue_waitable_event(
                         async_state,
                         handle_key(pw.writer_table.id, pw.writer_handle),
@@ -810,7 +846,7 @@ fn instantiate_canon_stream_read(
                           code: 3,
                           index: pw.writer_handle,
                           payload: (if st0.readable_dropped { 1 } else { 0 }) |
-                          (total_elems << 4),
+                          (new_sent << 4),
                         },
                       )
                       event_enqueued = true
@@ -878,6 +914,9 @@ fn instantiate_canon_stream_read(
                           )
                           return ret_i32(0)
                         }
+                        mark_sync_waitable_blocked(
+                          async_state, owner_component_id, handle, task_id,
+                        )
                         canon_suspend[0] = Some(Yield)
                         raise Unreachable
                       }
@@ -924,6 +963,7 @@ fn instantiate_canon_stream_write(
     // restarted after a cooperative suspension. Cache their return codes per task + cursor so
     // side effects (buffer copies / handle transfers) are not repeated.
     let task_id = current_task_id(async_state)
+    let replay_enabled = task_id != 0L
     let cur = if async_state.stream_cursor_stack.length() == 0 {
       0
     } else {
@@ -952,14 +992,16 @@ fn instantiate_canon_stream_write(
         }
       }
     }
-    if per_task.get(cur) is Some(code) {
+    if replay_enabled && per_task.get(cur) is Some(code) {
       set_canon_debug_message("stream.write(replay cur=\{cur})-> \{code}")
       async_state.stream_cursor_stack[async_state.stream_cursor_stack.length() -
       1] = cur + 1
       return [I32(code)]
     }
     fn cache_i32(code : Int) -> Array[@types.Value] {
-      per_task.set(cur, code)
+      if replay_enabled {
+        per_task.set(cur, code)
+      }
       async_state.stream_cursor_stack[async_state.stream_cursor_stack.length() -
       1] = cur + 1
       [I32(code)]
@@ -990,6 +1032,18 @@ fn instantiate_canon_stream_write(
     }
     match args {
       [I32(handle), I32(ptr), I32(len)] => {
+        if !is_async {
+          resume_sync_waitable_use(
+            async_state, owner_component_id, handle, task_id,
+          )
+        }
+        if !is_async &&
+          waitable_is_in_set(async_state, owner_component_id, handle) {
+          trap_canon(
+            "waitable cannot be used synchronously while added to a waitable set",
+          )
+          return ret_i32(0)
+        }
         if !is_async && !async_state.task_can_block[0] {
           trap_canon("cannot block a synchronous task before returning")
           return ret_i32(0)
@@ -1024,7 +1078,12 @@ fn instantiate_canon_stream_write(
                 // If re-executing a previously blocking write, return its completion.
                 match st0.pending_write {
                   Some(pw0) =>
-                    if pw0.writer_handle == handle {
+                    if is_async {
+                      trap_canon(
+                        "cannot have concurrent operations active on a future/stream",
+                      )
+                      return ret_i32(0)
+                    } else if pw0.writer_handle == handle {
                       let elem_size = st0.elem_size
                       let total_elems = pw0.buf.length() / elem_size
                       if st0.readable_dropped || pw0.sent >= total_elems {
@@ -1051,6 +1110,9 @@ fn instantiate_canon_stream_write(
                             readable_dropped: st0.readable_dropped,
                             writable_dropped: st0.writable_dropped,
                           })
+                          mark_sync_waitable_blocked(
+                            async_state, owner_component_id, handle, task_id,
+                          )
                           canon_suspend[0] = Some(Yield)
                           raise Unreachable
                         }
@@ -1083,6 +1145,9 @@ fn instantiate_canon_stream_write(
                           )
                           return ret_i32(0)
                         }
+                        mark_sync_waitable_blocked(
+                          async_state, owner_component_id, handle, task_id,
+                        )
                         canon_suspend[0] = Some(Yield)
                         raise Unreachable
                       }
@@ -1206,6 +1271,9 @@ fn instantiate_canon_stream_write(
                           )
                           return ret_i32(0)
                         }
+                        mark_sync_waitable_blocked(
+                          async_state, owner_component_id, handle, task_id,
+                        )
                         canon_suspend[0] = Some(Yield)
                         raise Unreachable
                       }
@@ -1319,9 +1387,17 @@ fn instantiate_canon_stream_write(
                     }
                     let filled1 = pr0.filled + n
                     let mut event_enqueued = pr0.event_enqueued
-                    // Emit STREAM_READ once the whole read buffer is filled (or the peer is dropped).
-                    if (filled1 >= pr0.len || st0.writable_dropped) &&
-                      !event_enqueued {
+                    // Publish cumulative progress, replacing an earlier event
+                    // if another write arrives before it is observed.
+                    if n > 0 || st0.writable_dropped {
+                      if event_enqueued {
+                        remove_waitable_events_for(
+                          async_state,
+                          pr0.reader_table.id,
+                          pr0.reader_handle,
+                          2,
+                        )
+                      }
                       enqueue_waitable_event(
                         async_state,
                         handle_key(pr0.reader_table.id, pr0.reader_handle),
@@ -1405,6 +1481,9 @@ fn instantiate_canon_stream_write(
                         )
                         return ret_i32(0)
                       }
+                      mark_sync_waitable_blocked(
+                        async_state, owner_component_id, handle, task_id,
+                      )
                       canon_suspend[0] = Some(Yield)
                       raise Unreachable
                     }
@@ -1439,6 +1518,17 @@ fn instantiate_canon_stream_cancel_read(
   ) -> Array[@types.Value] raise @runtime.RuntimeError {
     if !canon_may_leave[0] {
       trap_canon("cannot leave component instance")
+    }
+    match args {
+      [I32(handle)] =>
+        if !is_async_cancel &&
+          waitable_is_in_set(async_state, owner_component_id, handle) {
+          trap_canon(
+            "waitable cannot be used synchronously while added to a waitable set",
+          )
+          return [I32(0)]
+        }
+      _ => ()
     }
     if !is_async_cancel && !async_state.task_can_block[0] {
       trap_canon("cannot block a synchronous task before returning")
@@ -1507,6 +1597,17 @@ fn instantiate_canon_stream_cancel_write(
     if !canon_may_leave[0] {
       trap_canon("cannot leave component instance")
     }
+    match args {
+      [I32(handle)] =>
+        if !is_async_cancel &&
+          waitable_is_in_set(async_state, owner_component_id, handle) {
+          trap_canon(
+            "waitable cannot be used synchronously while added to a waitable set",
+          )
+          return [I32(0)]
+        }
+      _ => ()
+    }
     if !is_async_cancel && !async_state.task_can_block[0] {
       trap_canon("cannot block a synchronous task before returning")
       return [I32(0)]
@@ -1572,6 +1673,13 @@ fn instantiate_canon_stream_drop_readable(
   ) -> Array[@types.Value] raise @runtime.RuntimeError {
     if !canon_may_leave[0] {
       trap_canon("cannot leave component instance")
+    }
+    let replay_slot = current_canon_call_replay_slot(async_state)
+    if replay_canon_call_result(async_state, replay_slot) is Some(result) {
+      return result
+    }
+    fn cache_void() -> Array[@types.Value] {
+      cache_canon_call_result(async_state, replay_slot, [])
     }
     match args {
       [I32(handle)] =>
@@ -1661,7 +1769,7 @@ fn instantiate_canon_stream_drop_readable(
               }
               table.host_values.remove(ep.stream_id)
               free_shared_handle(async_state, owner_component_id, handle)
-              []
+              cache_void()
             }
         }
       _ => {
@@ -1688,6 +1796,13 @@ fn instantiate_canon_stream_drop_writable(
   ) -> Array[@types.Value] raise @runtime.RuntimeError {
     if !canon_may_leave[0] {
       trap_canon("cannot leave component instance")
+    }
+    let replay_slot = current_canon_call_replay_slot(async_state)
+    if replay_canon_call_result(async_state, replay_slot) is Some(result) {
+      return result
+    }
+    fn cache_void() -> Array[@types.Value] {
+      cache_canon_call_result(async_state, replay_slot, [])
     }
     match args {
       [I32(handle)] =>
@@ -1771,7 +1886,7 @@ fn instantiate_canon_stream_drop_writable(
               )
               table.endpoints.remove(handle_key(owner_component_id, handle))
               free_shared_handle(async_state, owner_component_id, handle)
-              []
+              cache_void()
             }
         }
       _ => {

@@ -22,9 +22,6 @@ fn instantiate_canon_backpressure_inc(
   let host = fn(
     _args : Array[@types.Value],
   ) -> Array[@types.Value] raise @runtime.RuntimeError {
-    if !canon_may_leave[0] {
-      trap_canon("cannot leave component instance")
-    }
     let old = backpressure_value_for_instance(async_state, owner_component_id)
     if old >= 65535 {
       trap_canon("backpressure counter overflow")
@@ -51,9 +48,6 @@ fn instantiate_canon_backpressure_dec(
   let host = fn(
     _args : Array[@types.Value],
   ) -> Array[@types.Value] raise @runtime.RuntimeError {
-    if !canon_may_leave[0] {
-      trap_canon("cannot leave component instance")
-    }
     let old = backpressure_value_for_instance(async_state, owner_component_id)
     if old <= 0 {
       trap_canon("backpressure counter overflow")

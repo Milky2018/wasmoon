@@ -78,6 +78,7 @@ pub(all) enum Canon {
   TaskCancel
   ThreadIndex
   ThreadYield(Bool)
+  ThreadYieldThenResume(Bool)
   ThreadResumeLater
   ThreadSuspend(Bool)
   ThreadNewIndirect(Int, Int)

@@ -132,6 +132,190 @@ fn type_at(types : Array[TypeDef?], index : Int) -> TypeDef? {
 }
 
 ///|
+fn clone_materialized_valtype(
+  ty : ValType,
+  source_types : Array[TypeDef?],
+  dest_types : Array[TypeDef?],
+  remapped : Map[Int, Int],
+) -> ValType raise ComponentRuntimeError {
+  match ty {
+    Prim(p) => Prim(p)
+    TypeIdx(index) =>
+      TypeIdx(
+        clone_materialized_type_index(index, source_types, dest_types, remapped),
+      )
+  }
+}
+
+///|
+fn clone_materialized_optional_valtype(
+  ty : ValType?,
+  source_types : Array[TypeDef?],
+  dest_types : Array[TypeDef?],
+  remapped : Map[Int, Int],
+) -> ValType? raise ComponentRuntimeError {
+  match ty {
+    Some(value) =>
+      Some(
+        clone_materialized_valtype(value, source_types, dest_types, remapped),
+      )
+    None => None
+  }
+}
+
+///|
+fn clone_materialized_type_def(
+  type_def : TypeDef,
+  source_types : Array[TypeDef?],
+  dest_types : Array[TypeDef?],
+  remapped : Map[Int, Int],
+) -> TypeDef raise ComponentRuntimeError {
+  match type_def {
+    DefValType(p) => DefValType(p)
+    FuncType(func) => {
+      let params : Array[@component.Param] = []
+      for param in func.params {
+        params.push({
+          label: param.label,
+          ty: clone_materialized_valtype(
+            param.ty,
+            source_types,
+            dest_types,
+            remapped,
+          ),
+        })
+      }
+      FuncType({
+        is_async: func.is_async,
+        params,
+        result: clone_materialized_optional_valtype(
+          func.result,
+          source_types,
+          dest_types,
+          remapped,
+        ),
+      })
+    }
+    List(ty) =>
+      List(clone_materialized_valtype(ty, source_types, dest_types, remapped))
+    Record(fields) => {
+      let cloned : Array[@component.RecordField] = []
+      for field in fields {
+        cloned.push({
+          label: field.label,
+          ty: clone_materialized_valtype(
+            field.ty,
+            source_types,
+            dest_types,
+            remapped,
+          ),
+        })
+      }
+      Record(cloned)
+    }
+    Variant(cases) => {
+      let cloned : Array[@component.VariantCase] = []
+      for case in cases {
+        cloned.push({
+          label: case.label,
+          ty: clone_materialized_optional_valtype(
+            case.ty,
+            source_types,
+            dest_types,
+            remapped,
+          ),
+          refines: case.refines,
+        })
+      }
+      Variant(cloned)
+    }
+    Tuple(types) => {
+      let cloned : Array[ValType] = []
+      for ty in types {
+        cloned.push(
+          clone_materialized_valtype(ty, source_types, dest_types, remapped),
+        )
+      }
+      Tuple(cloned)
+    }
+    Flags(labels) => Flags(labels)
+    Enum(labels) => Enum(labels)
+    Option(ty) =>
+      Option(clone_materialized_valtype(ty, source_types, dest_types, remapped))
+    Result(ok, err) =>
+      Result(
+        clone_materialized_optional_valtype(
+          ok, source_types, dest_types, remapped,
+        ),
+        clone_materialized_optional_valtype(
+          err, source_types, dest_types, remapped,
+        ),
+      )
+    Own(index) =>
+      Own(
+        clone_materialized_type_index(index, source_types, dest_types, remapped),
+      )
+    Borrow(index) =>
+      Borrow(
+        clone_materialized_type_index(index, source_types, dest_types, remapped),
+      )
+    Stream(ty) =>
+      Stream(
+        clone_materialized_optional_valtype(
+          ty, source_types, dest_types, remapped,
+        ),
+      )
+    Future(ty) =>
+      Future(
+        clone_materialized_optional_valtype(
+          ty, source_types, dest_types, remapped,
+        ),
+      )
+    ResourceType(id, rep, dtor, kind) => ResourceType(id, rep, dtor, kind)
+    ComponentType(decls) => ComponentType(decls)
+    InstanceTypeEmpty => InstanceTypeEmpty
+    InstanceType(decls) => InstanceType(decls)
+  }
+}
+
+///|
+fn clone_materialized_type_index(
+  index : Int,
+  source_types : Array[TypeDef?],
+  dest_types : Array[TypeDef?],
+  remapped : Map[Int, Int],
+) -> Int raise ComponentRuntimeError {
+  if remapped.get(index) is Some(existing) {
+    return existing
+  }
+  if index < 0 || index >= source_types.length() {
+    raise InvalidTypeIndex(index)
+  }
+  let dest_index = dest_types.length()
+  remapped.set(index, dest_index)
+  dest_types.push(None)
+  if source_types[index] is Some(type_def) {
+    dest_types[dest_index] = Some(
+      clone_materialized_type_def(type_def, source_types, dest_types, remapped),
+    )
+  }
+  dest_index
+}
+
+///|
+fn materialize_outer_type(
+  source_index : Int,
+  source_types : Array[TypeDef?],
+  dest_types : Array[TypeDef?],
+) -> Unit raise ComponentRuntimeError {
+  let remapped : Map[Int, Int] = Map([])
+  clone_materialized_type_index(
+    source_index, source_types, dest_types, remapped,
+  )
+  |> ignore
+}
+
+///|
 fn optional_val_types_match(
   expected : ValType?,
   expected_types : Array[TypeDef?],
@@ -320,8 +504,7 @@ fn component_func_types_match(
     return false
   }
   for i in 0..<expected.params.length() {
-    if expected.params[i].label != actual.params[i].label ||
-      !component_val_types_match(
+    if !component_val_types_match(
         expected.params[i].ty,
         expected_types,
         actual.params[i].ty,
@@ -398,7 +581,7 @@ fn validate_instance_import_type(
               if idx < 0 || idx >= outer.types.length() {
                 raise InvalidTypeIndex(idx)
               }
-              local_types.push(outer.types[idx])
+              materialize_outer_type(idx, outer.types, local_types)
             } else if (kind & 0x100) != 0 {
               if idx < 0 || idx >= outer.core_types.length() {
                 raise InvalidCoreTypeIndex(idx)

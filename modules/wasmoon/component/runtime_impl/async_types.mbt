@@ -94,6 +94,99 @@ pub(all) struct ResourceTable {
 } derive(Debug)
 
 ///|
+priv struct CanonCallReplaySlot {
+  cursor : Int
+  results : Map[Int, Array[@types.Value]]
+  enabled : Bool
+}
+
+///|
+fn canon_call_results_for_task(
+  async_state : AsyncState,
+  task_id : Int64,
+) -> Map[Int, Array[@types.Value]] {
+  let all_results = if async_state.in_async_callback[0] {
+    async_state.call_results_cb
+  } else {
+    async_state.call_results
+  }
+  match all_results.get(task_id) {
+    Some(results) => results
+    None => {
+      let results : Map[Int, Array[@types.Value]] = Map([])
+      all_results.set(task_id, results)
+      results
+    }
+  }
+}
+
+///|
+fn canon_call_result_ends_for_task(
+  async_state : AsyncState,
+  task_id : Int64,
+) -> Map[Int, Int] {
+  let all_ends = if async_state.in_async_callback[0] {
+    async_state.call_result_ends_cb
+  } else {
+    async_state.call_result_ends
+  }
+  match all_ends.get(task_id) {
+    Some(ends) => ends
+    None => {
+      let ends : Map[Int, Int] = Map([])
+      all_ends.set(task_id, ends)
+      ends
+    }
+  }
+}
+
+///|
+fn current_canon_call_replay_slot(
+  async_state : AsyncState,
+) -> CanonCallReplaySlot {
+  let task_id = current_task_id(async_state)
+  let cursor = if async_state.call_cursor_stack.length() == 0 {
+    0
+  } else {
+    async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1]
+  }
+  let results = canon_call_results_for_task(async_state, task_id)
+  { cursor, results, enabled: task_id != 0L }
+}
+
+///|
+fn replay_canon_call_result(
+  async_state : AsyncState,
+  slot : CanonCallReplaySlot,
+) -> Array[@types.Value]? {
+  if !slot.enabled {
+    return None
+  }
+  match slot.results.get(slot.cursor) {
+    Some(result) => {
+      async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1] = slot.cursor +
+        1
+      Some(result)
+    }
+    None => None
+  }
+}
+
+///|
+fn cache_canon_call_result(
+  async_state : AsyncState,
+  slot : CanonCallReplaySlot,
+  result : Array[@types.Value],
+) -> Array[@types.Value] {
+  if slot.enabled {
+    slot.results.set(slot.cursor, result)
+  }
+  async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1] = slot.cursor +
+    1
+  result
+}
+
+///|
 let resource_table_id_counter : Array[Int] = [0]
 
 ///|
@@ -356,6 +449,13 @@ pub(all) struct AsyncState {
   wait_results : Map[Int64, Map[Int, WaitResult]]
   waiting_ws : Map[Int64, Int64]
   call_results : Map[Int64, Map[Int, Array[@types.Value]]]
+  // Callback invocations restart independently from the initial core function.
+  // Their call ordinals therefore need a separate replay namespace.
+  call_results_cb : Map[Int64, Map[Int, Array[@types.Value]]]
+  // Enclosing lower calls reserve a replay slot before executing nested
+  // component code. The end cursor lets replay skip the nested slots.
+  call_result_ends : Map[Int64, Map[Int, Int]]
+  call_result_ends_cb : Map[Int64, Map[Int, Int]]
   stream_results : Map[Int64, Map[Int, Int]]
   // Separate stream read/write memoization for callback invocations to avoid
   // colliding with the initial core function body in callback-style async ABI.
@@ -367,6 +467,7 @@ pub(all) struct AsyncState {
   waitable_sets : Map[Int64, WaitableSet]
   waitable_to_set : Map[Int64, Int64]
   waitable_events : Map[Int64, Array[WaitEvent]]
+  sync_waitable_users : Map[Int64, Int64]
 
   // Subtasks created by `canon lower ... async`.
   subtasks : Map[Int64, Subtask]
@@ -616,12 +717,16 @@ pub fn AsyncState::AsyncState(stream_table : StreamTable) -> AsyncState {
     wait_results: Map([]),
     waiting_ws: Map([]),
     call_results: Map([]),
+    call_results_cb: Map([]),
+    call_result_ends: Map([]),
+    call_result_ends_cb: Map([]),
     stream_results: Map([]),
     stream_results_cb: Map([]),
     sync_lower_states: Map([]),
     waitable_sets: Map([]),
     waitable_to_set: Map([]),
     waitable_events: Map([]),
+    sync_waitable_users: Map([]),
     subtasks: Map([]),
     inflight_by_instance: Map([]),
     pending_by_instance: Map([]),
@@ -726,6 +831,53 @@ fn remove_waitable_membership(
     }
   }
   async_state.waitable_events.remove(wkey)
+}
+
+///|
+fn waitable_is_in_set(
+  async_state : AsyncState,
+  owner_component_id : Int,
+  handle : Int,
+) -> Bool {
+  async_state.waitable_to_set.get(handle_key(owner_component_id, handle))
+  is Some(_)
+}
+
+///|
+fn resume_sync_waitable_use(
+  async_state : AsyncState,
+  owner_component_id : Int,
+  handle : Int,
+  task_id : Int64,
+) -> Unit {
+  let key = handle_key(owner_component_id, handle)
+  if async_state.sync_waitable_users.get(key) is Some(owner_task_id) &&
+    owner_task_id == task_id {
+    async_state.sync_waitable_users.remove(key)
+  }
+}
+
+///|
+fn mark_sync_waitable_blocked(
+  async_state : AsyncState,
+  owner_component_id : Int,
+  handle : Int,
+  task_id : Int64,
+) -> Unit {
+  async_state.sync_waitable_users.set(
+    handle_key(owner_component_id, handle),
+    task_id,
+  )
+}
+
+///|
+fn waitable_is_in_sync_use(
+  async_state : AsyncState,
+  owner_component_id : Int,
+  handle : Int,
+) -> Bool {
+  async_state.sync_waitable_users.get(handle_key(owner_component_id, handle))
+  is Some(_)
 }
 
 ///|

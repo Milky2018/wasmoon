@@ -913,12 +913,13 @@ fn progress_one_subtask(
       Some(n) => n
       None => 0
     }
-    if inflight == 0 && queue0.length() > 0 {
+    if queue0.length() > 0 {
       let next_id = queue0[0]
       let can_start = match async_state.subtasks.get(next_id) {
         Some(st) =>
           backpressure_value_for_instance(async_state, st.callee_instance_id) ==
-          0
+          0 &&
+          inflight == 0
         None => true
       }
       if can_start && !task_on_stack(next_id) {
@@ -1004,9 +1005,25 @@ fn progress_one_subtask(
         step_task_once(t, store, st.caller_table, async_state)
     }
     pop_task(async_state)
+    let releases_auto_backpressure = match st.driver {
+      CallbackLifted(task) =>
+        match task.func {
+          HostAsync(_, _, _) => true
+          Lifted(_, _, _, _, _, _, Some(_), _) => task.started[0]
+          _ => false
+        }
+    }
     match step {
-      Blocked => ()
-      Progressed => return true
+      Blocked =>
+        if releases_auto_backpressure {
+          async_state.inflight_by_instance.set(st.bp_key, 0)
+        }
+      Progressed => {
+        if releases_auto_backpressure {
+          async_state.inflight_by_instance.set(st.bp_key, 0)
+        }
+        return true
+      }
       Done => {
         drop_task_thread(async_state, task_id)
         if st.detached {
@@ -1028,10 +1045,12 @@ fn progress_one_subtask(
           async_state.wait_results.remove(task_id)
           async_state.waiting_ws.remove(task_id)
           async_state.call_results.remove(task_id)
+          async_state.call_results_cb.remove(task_id)
+          async_state.call_result_ends.remove(task_id)
+          async_state.call_result_ends_cb.remove(task_id)
           async_state.stream_results.remove(task_id)
           async_state.stream_results_cb.remove(task_id)
           async_state.sync_lower_states.remove(task_id)
-          async_state.inflight_by_instance.set(st.bp_key, 0)
           free_shared_handle(async_state, owner_component_id, st.id)
           return true
         }
@@ -1382,8 +1401,11 @@ fn call_component_func_in_task(
       // loop until the call can complete or deadlock.
       let mut core_results : Array[@types.Value] = []
       while true {
+        let previous_can_block = async_state.task_can_block[0]
+        async_state.task_can_block[0] = false
         let out = call_core_func_guarded(store, may_enter, core_func, core_args) catch {
           AsyncSuspendYield => {
+            async_state.task_can_block[0] = previous_can_block
             let progressed = progress_one_subtask(async_state, store) catch {
               AsyncSuspendYield => true
               AsyncSuspendWait(_) => true
@@ -1397,6 +1419,7 @@ fn call_component_func_in_task(
             continue
           }
           AsyncSuspendWait(ws) => {
+            async_state.task_can_block[0] = previous_can_block
             while !waitable_set_has_event(async_state, ws) {
               let progressed = progress_one_subtask(async_state, store) catch {
                 AsyncSuspendYield => true
@@ -1411,8 +1434,12 @@ fn call_component_func_in_task(
             }
             continue
           }
-          e => raise e
+          e => {
+            async_state.task_can_block[0] = previous_can_block
+            raise e
+          }
         }
+        async_state.task_can_block[0] = previous_can_block
         core_results = out
         break
       }

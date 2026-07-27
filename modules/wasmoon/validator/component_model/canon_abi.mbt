@@ -282,9 +282,25 @@ fn core_functype_for_canon(
     SubtaskDrop => Some({ params: [I32], results: [] })
     SubtaskCancel(_) => Some({ params: [I32], results: [I32] })
     ThreadYield(_) => Some({ params: [], results: [I32] })
+    ThreadYieldThenResume(_) => Some({ params: [I32], results: [I32] })
     ContextGet(vt, _) => Some({ params: [], results: [vt] })
     ContextSet(vt, _) => Some({ params: [vt], results: [] })
     _ => None
+  }
+}
+
+///|
+fn canon_address_type(
+  opts : Array[@component.CanonOpt],
+  core_memory_types : Array[@types.MemoryType?],
+) -> @types.ValueType {
+  match canon_memory_idx(opts) {
+    Some(mem_idx) =>
+      match core_memory_types[mem_idx] {
+        Some(mt) => if mt.is_memory64 { I64 } else { I32 }
+        None => I32
+      }
+    None => I32
   }
 }
 
@@ -305,14 +321,6 @@ fn validate_canon(
         Some(mem_idx) =>
           if mem_idx < 0 || mem_idx >= core_memory_types.length() {
             raise InvalidCoreMemoryIndex(mem_idx)
-          } else {
-            match core_memory_types[mem_idx] {
-              Some(mt) =>
-                if mt.is_memory64 {
-                  raise CanonMemoryNot32Bit(mem_idx)
-                }
-              None => ()
-            }
           }
         None => ()
       }
@@ -342,19 +350,24 @@ fn validate_canon(
           }
           match canon_realloc_idx(opts) {
             Some(idx) =>
-              match core_func_types[idx] {
-                Some(core_ft) => {
-                  let expected : @types.FuncType = {
-                    params: [I32, I32, I32, I32],
-                    results: [I32],
+              if !canon_has_memory(opts) {
+                raise MissingCanonOption("memory")
+              } else {
+                match core_func_types[idx] {
+                  Some(core_ft) => {
+                    let addr_type = canon_address_type(opts, core_memory_types)
+                    let expected : @types.FuncType = {
+                      params: [addr_type, addr_type, addr_type, addr_type],
+                      results: [addr_type],
+                    }
+                    if core_ft != expected {
+                      raise CanonCoreFuncTypeMismatch(
+                        "canonical option `realloc` uses a core function with an incorrect signature",
+                      )
+                    }
                   }
-                  if core_ft != expected {
-                    raise CanonCoreFuncTypeMismatch(
-                      "canonical option `realloc` uses a core function with an incorrect signature",
-                    )
-                  }
+                  None => ()
                 }
-                None => ()
               }
             None => ()
           }
@@ -419,14 +432,6 @@ fn validate_canon(
         Some(mem_idx) =>
           if mem_idx < 0 || mem_idx >= core_memory_types.length() {
             raise InvalidCoreMemoryIndex(mem_idx)
-          } else {
-            match core_memory_types[mem_idx] {
-              Some(mt) =>
-                if mt.is_memory64 {
-                  raise CanonMemoryNot32Bit(mem_idx)
-                }
-              None => ()
-            }
           }
         None => ()
       }
@@ -447,19 +452,24 @@ fn validate_canon(
           }
           match canon_realloc_idx(opts) {
             Some(idx) =>
-              match core_func_types[idx] {
-                Some(core_ft) => {
-                  let expected : @types.FuncType = {
-                    params: [I32, I32, I32, I32],
-                    results: [I32],
+              if !canon_has_memory(opts) {
+                raise MissingCanonOption("memory")
+              } else {
+                match core_func_types[idx] {
+                  Some(core_ft) => {
+                    let addr_type = canon_address_type(opts, core_memory_types)
+                    let expected : @types.FuncType = {
+                      params: [addr_type, addr_type, addr_type, addr_type],
+                      results: [addr_type],
+                    }
+                    if core_ft != expected {
+                      raise CanonCoreFuncTypeMismatch(
+                        "canonical option `realloc` uses a core function with an incorrect signature",
+                      )
+                    }
                   }
-                  if core_ft != expected {
-                    raise CanonCoreFuncTypeMismatch(
-                      "canonical option `realloc` uses a core function with an incorrect signature",
-                    )
-                  }
+                  None => ()
                 }
-                None => ()
               }
             None => ()
           }
