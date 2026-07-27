@@ -1265,6 +1265,142 @@ fn component_results_to_core(
                       }
                     _ => raise HostCallError("result type mismatch")
                   }
+                Some(Some(Variant(cases))) =>
+                  match v {
+                    Variant(tag, payload) => {
+                      if tag < 0 || tag >= cases.length() {
+                        raise HostCallError("invalid variant discriminant")
+                      }
+                      let all_flat = core_types_for_valtype(
+                        TypeIdx(ti),
+                        types,
+                        mem_is_64,
+                      )
+                      let out : Array[@types.Value] = [I32(tag)]
+                      let payload_values = match (cases[tag].ty, payload) {
+                        (None, None) => []
+                        (Some(payload_ty), Some(payload_value)) =>
+                          lower_value(payload_value, payload_ty)
+                        _ => raise HostCallError("result type mismatch")
+                      }
+                      for i in 1..<all_flat.length() {
+                        if i - 1 < payload_values.length() {
+                          let actual = payload_values[i - 1]
+                          let actual_type = match actual {
+                            I32(_) => @types.ValueType::I32
+                            I64(_) => I64
+                            F32(_) => F32
+                            F64(_) => F64
+                            _ => I32
+                          }
+                          out.push(
+                            coerce_flat_value(actual, actual_type, all_flat[i]),
+                          )
+                        } else {
+                          out.push(zero_flat_value(all_flat[i]))
+                        }
+                      }
+                      out
+                    }
+                    _ => raise HostCallError("result type mismatch")
+                  }
+                Some(Some(Option(payload_ty))) =>
+                  match v {
+                    Variant(0, None) => {
+                      let out : Array[@types.Value] = [I32(0)]
+                      for
+                        ty in core_types_for_valtype(
+                          payload_ty, types, mem_is_64,
+                        ) {
+                        out.push(zero_flat_value(ty))
+                      }
+                      out
+                    }
+                    Variant(1, Some(payload)) =>
+                      [I32(1)] + lower_value(payload, payload_ty)
+                    _ => raise HostCallError("result type mismatch")
+                  }
+                Some(Some(Result(ok_ty, error_ty))) =>
+                  match v {
+                    Variant(tag, payload) => {
+                      let payload_ty = if tag == 0 {
+                        ok_ty
+                      } else if tag == 1 {
+                        error_ty
+                      } else {
+                        raise HostCallError("invalid variant discriminant")
+                      }
+                      let payload_values = match (payload_ty, payload) {
+                        (None, None) => []
+                        (Some(ty), Some(value)) => lower_value(value, ty)
+                        _ => raise HostCallError("result type mismatch")
+                      }
+                      let all_flat = core_types_for_valtype(
+                        TypeIdx(ti),
+                        types,
+                        mem_is_64,
+                      )
+                      let out : Array[@types.Value] = [I32(tag)]
+                      for i in 1..<all_flat.length() {
+                        if i - 1 < payload_values.length() {
+                          let actual = payload_values[i - 1]
+                          let actual_type = match actual {
+                            I32(_) => @types.ValueType::I32
+                            I64(_) => I64
+                            F32(_) => F32
+                            F64(_) => F64
+                            _ => I32
+                          }
+                          out.push(
+                            coerce_flat_value(actual, actual_type, all_flat[i]),
+                          )
+                        } else {
+                          out.push(zero_flat_value(all_flat[i]))
+                        }
+                      }
+                      out
+                    }
+                    _ => raise HostCallError("result type mismatch")
+                  }
+                Some(Some(Flags(labels))) => {
+                  let nbits = labels.length()
+                  if nbits <= 32 {
+                    let raw = match v {
+                      U32(n) => n.reinterpret_as_uint()
+                      S32(n) => n.reinterpret_as_uint()
+                      _ => raise HostCallError("result type mismatch")
+                    }
+                    let masked = if nbits == 32 {
+                      raw
+                    } else {
+                      raw & ((1U << nbits) - 1U)
+                    }
+                    [I32(masked.reinterpret_as_int())]
+                  } else {
+                    let raw = match v {
+                      U64(n) => n.reinterpret_as_uint64()
+                      S64(n) => n.reinterpret_as_uint64()
+                      _ => raise HostCallError("result type mismatch")
+                    }
+                    let masked = if nbits == 64 {
+                      raw
+                    } else {
+                      raw & ((1UL << nbits) - 1UL)
+                    }
+                    [I64(masked.reinterpret_as_int64())]
+                  }
+                }
+                Some(Some(Enum(labels))) => {
+                  let tag = match v {
+                    U32(n) => n
+                    S32(n) => n
+                    _ => raise HostCallError("result type mismatch")
+                  }
+                  if tag < 0 || tag >= labels.length() {
+                    raise HostCallError("invalid enum discriminant")
+                  }
+                  [I32(tag)]
+                }
                 Some(Some(Own(_)))
                 | Some(Some(Borrow(_)))
                 | Some(Some(ResourceType(_, _, _, _)))

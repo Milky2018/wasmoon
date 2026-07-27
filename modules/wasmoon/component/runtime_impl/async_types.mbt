@@ -235,16 +235,30 @@ struct StreamState {
 } derive(Debug)
 
 ///|
+struct HostValueStream {
+  payload_ty : ValType
+  types : Array[TypeDef?]
+  values : Array[ComponentValue]
+  next : Ref[Int]
+} derive(Debug)
+
+///|
 pub(all) struct StreamTable {
   next_stream_id : Array[Int]
   // Keyed by `handle_key(component_id, local_handle)`.
   endpoints : Map[Int64, StreamEndpoint]
   streams : Map[Int, StreamState]
+  host_values : Map[Int, HostValueStream]
 } derive(Debug)
 
 ///|
 pub fn StreamTable::StreamTable() -> StreamTable {
-  { next_stream_id: [0], endpoints: Map([]), streams: Map([]) }
+  {
+    next_stream_id: [0],
+    endpoints: Map([]),
+    streams: Map([]),
+    host_values: Map([]),
+  }
 }
 
 ///|

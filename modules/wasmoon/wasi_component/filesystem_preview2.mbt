@@ -233,6 +233,7 @@ fn open_capability_parent(
 fn new_descriptor_resource(
   host : WasiComponentHost,
   table : @runtime_impl.ResourceTable,
+  descriptor_type : @component.TypeDef?,
   fd : Int,
   flags : Int,
 ) -> @runtime_impl.ComponentValue raise @runtime_impl.ComponentRuntimeError {
@@ -246,16 +247,7 @@ fn new_descriptor_resource(
         Descriptor({ fd, flags, file_type: stat.filetype, closed: Ref(false) }),
       )
       filesystem_ok(
-        U32(
-          allocate_resource_handle(
-            host.ctx,
-            table,
-            host.resolve_resource_type(
-              "wasi:filesystem@0.2.11/types.descriptor",
-            ),
-            rep,
-          ),
-        ),
+        U32(allocate_resource_handle(host.ctx, table, descriptor_type, rep)),
       )
     }
   }
@@ -850,7 +842,11 @@ fn add_descriptor_path_methods(
               (path_flags & 0x01) != 0,
             ) {
             Some(fd) =>
-              [new_descriptor_resource(host, table, fd, requested_flags)]
+              [
+                new_descriptor_resource(
+                  host, table, descriptor_type, fd, requested_flags,
+                ),
+              ]
             None => [filesystem_error()]
           }
       }

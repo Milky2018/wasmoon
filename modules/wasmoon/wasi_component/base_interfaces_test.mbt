@@ -119,6 +119,87 @@ test "Preview 3 stdio uses canonical byte streams and result futures" {
 }
 
 ///|
+test "Preview 3 filesystem reuses capability roots and canonical byte streams" {
+  let host_file = "/tmp/wasmoon-component-preview3-filesystem-test.txt"
+  @wasi.native_unlinkat(0, host_file, 0) |> ignore
+  guard @wasi.native_open(host_file, [WriteOnly, Create, Truncate], 0o600)
+    is Some(fd) else {
+    fail("could not create Preview 3 filesystem fixture")
+  }
+  let contents = FixedArray::makei(4, fn(i) { b"data"[i] })
+  guard @wasi.native_write(fd, contents, contents.length()) is Some(4) else {
+    @wasi.native_close(fd) |> ignore
+    fail("could not write Preview 3 filesystem fixture")
+  }
+  @wasi.native_close(fd) |> ignore
+  defer @wasi.native_unlinkat(0, host_file, 0) |> ignore
+
+  let linker = @runtime_impl.ComponentLinker()
+  let ctx = @wasi_component.WasiComponentCtxBuilder()
+    .preopened_directory("/tmp", "/sandbox", false)
+    .build()
+  defer ctx.close()
+  let host = @wasi_component.WasiComponentHost(linker, ctx)
+  host.add_preview3_cli_clocks_random()
+  host.add_preview3_filesystem()
+  guard linker.get_import("wasi:filesystem/preopens@0.3.0-rc-2025-09-16")
+    is Some(Instance(preopens)) &&
+    preopens.call_exported_func("get-directories", [])
+    is [List([Tuple([U32(directory), String("/sandbox")])])] &&
+    linker.get_import("wasi:filesystem/types@0.3.0-rc-2025-09-16")
+    is Some(Instance(filesystem)) else {
+    fail("Preview 3 filesystem interfaces were not registered")
+  }
+  guard filesystem.call_exported_func("[method]descriptor.open-at", [
+      U32(directory),
+      U32(0),
+      String("wasmoon-component-preview3-filesystem-test.txt"),
+      U32(0),
+      U32(1),
+    ])
+    is [Variant(0, Some(U32(file)))] else {
+    fail("Preview 3 preopened file could not be opened")
+  }
+  debug_inspect(
+    filesystem.call_exported_func("[method]descriptor.get-type", [U32(file)]),
+    content="[Variant(0, Some(U32(6)))]",
+  )
+  guard filesystem.call_exported_func("[method]descriptor.read-via-stream", [
+      U32(file),
+      U64(0L),
+    ])
+    is [Tuple([U32(readable), U32(completion)])] else {
+    fail("Preview 3 file stream was not created")
+  }
+  let runtime = host.runtime()
+  let table = runtime.resource_table()
+  debug_inspect(
+    [
+      runtime.read_host_byte_stream(table, readable),
+      runtime.read_host_byte_stream(table, readable),
+      runtime.read_host_byte_stream(table, completion),
+    ],
+    content="[\n" +
+      "  Data(<Bytes: [0x64, 0x61, 0x74, 0x61]>),\n" +
+      "  Closed,\n" +
+      "  Data(<Bytes: [0x00, 0x00]>),\n" +
+      "]",
+  )
+  runtime.drop_host_readable_stream(table, readable)
+  runtime.drop_host_readable_stream(table, completion)
+  debug_inspect(
+    filesystem.call_exported_func("[method]descriptor.open-at", [
+      U32(directory),
+      U32(0),
+      String("../etc/passwd"),
+      U32(0),
+      U32(1),
+    ]),
+    content="[Variant(1, Some(U32(31)))]",
+  )
+}
+
+///|
 test "WASI component exit is structured and recorded" {
   let linker = @runtime_impl.ComponentLinker()
   let ctx = @wasi_component.WasiComponentCtxBuilder().build()

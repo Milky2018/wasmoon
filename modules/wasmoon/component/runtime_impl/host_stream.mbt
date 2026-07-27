@@ -57,6 +57,55 @@ pub fn HostRuntimeState::new_host_byte_stream(
 }
 
 ///|
+/// Create a finite typed stream produced by the embedding.
+///
+/// Values are lowered into the reader's canonical memory when `stream.read`
+/// runs. This is required for payloads such as records containing strings:
+/// storing writer-side canonical bytes would leave pointers referring to the
+/// wrong component memory.
+pub fn HostRuntimeState::new_host_value_stream(
+  self : HostRuntimeState,
+  table : ResourceTable,
+  payload_ty : ValType,
+  types : Array[TypeDef?],
+  values : Array[ComponentValue],
+) -> Int raise ComponentRuntimeError {
+  let (element_size, own_resource_type) = stream_payload_info(
+    Some(payload_ty),
+    types,
+  )
+  if own_resource_type is Some(_) {
+    raise HostCallError(
+      "typed host streams of owned resources are not supported by this constructor",
+    )
+  }
+  let stream_id = self.stream_table.next_stream_id[0]
+  self.stream_table.next_stream_id[0] = stream_id + 1
+  let readable = alloc_shared_handle(self.async_state, table.id)
+  self.stream_table.streams.set(stream_id, {
+    elem_size: element_size,
+    own_resource_type_id: None,
+    pending_read: None,
+    pending_write: None,
+    readable_dropped: false,
+    writable_dropped: true,
+  })
+  self.stream_table.host_values.set(stream_id, {
+    payload_ty,
+    types,
+    values: values.copy(),
+    next: Ref(0),
+  })
+  self.stream_table.endpoints.set(handle_key(table.id, readable), {
+    stream_id,
+    is_readable: true,
+    notified_peer_dropped: [false],
+    in_waitable_set: Ref(false),
+  })
+  readable
+}
+
+///|
 /// Create a completed `future<result<_, E>>` containing `ok(())`.
 ///
 /// Canonical memory represents this two-case result as a zero discriminant
@@ -224,5 +273,6 @@ pub fn HostRuntimeState::drop_host_readable_stream(
   })
   remove_waitable_membership(self.async_state, table.id, readable)
   self.stream_table.endpoints.remove(key)
+  self.stream_table.host_values.remove(endpoint.stream_id)
   free_shared_handle(self.async_state, table.id, readable)
 }

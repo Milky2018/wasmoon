@@ -276,10 +276,13 @@ pub fn HostRuntimeState::async_state(Self) -> AsyncState
 pub fn HostRuntimeState::drop_host_readable_stream(Self, ResourceTable, Int) -> Unit raise ComponentRuntimeError
 pub fn HostRuntimeState::new_host_byte_stream(Self, ResourceTable, Bytes) -> Int
 pub fn HostRuntimeState::new_host_unit_result_future(Self, ResourceTable, @model.ValType, Array[@model.TypeDef?], error_case? : Int) -> Int raise ComponentRuntimeError
+pub fn HostRuntimeState::new_host_value_stream(Self, ResourceTable, @model.ValType, Array[@model.TypeDef?], Array[ComponentValue]) -> Int raise ComponentRuntimeError
 pub fn HostRuntimeState::read_host_byte_stream(Self, ResourceTable, Int) -> HostByteStreamRead raise ComponentRuntimeError
 pub fn HostRuntimeState::resource_table(Self) -> ResourceTable
 pub fn HostRuntimeState::set_event_loop(Self, () -> Bool raise ComponentRuntimeError) -> Unit
 pub fn HostRuntimeState::stream_table(Self) -> StreamTable
+
+type HostValueStream derive(@debug.Debug)
 
 type PendingFutureRead derive(@debug.Debug)
 
@@ -326,6 +329,7 @@ pub(all) struct StreamTable {
   next_stream_id : Array[Int]
   endpoints : Map[Int64, StreamEndpoint]
   streams : Map[Int, StreamState]
+  host_values : Map[Int, HostValueStream]
 } derive(@debug.Debug)
 pub fn StreamTable::StreamTable() -> Self
 

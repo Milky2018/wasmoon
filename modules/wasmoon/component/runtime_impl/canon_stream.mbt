@@ -99,6 +99,50 @@ fn instantiate_canon_stream_new(
 }
 
 ///|
+fn store_host_stream_value(
+  value : ComponentValue,
+  payload_ty : ValType,
+  types : Array[TypeDef?],
+  resources : CanonResources,
+  store : @runtime.Store,
+  table : ResourceTable,
+  ptr : Int,
+) -> Unit raise ComponentRuntimeError {
+  let mem = require_memory(resources, store)
+  let mem_is_64 = mem.is_memory64()
+  let storage = flat_storage_for_valtype(payload_ty, types, mem_is_64)
+  if storage.length() > 16 {
+    raise HostCallError(
+      "typed host stream payload exceeds the canonical flat-value limit",
+    )
+  }
+  let values = component_args_to_core(
+    [value],
+    {
+      is_async: false,
+      params: [{ label: "value", ty: payload_ty }],
+      result: None,
+    },
+    types,
+    resources,
+    store,
+    table,
+    table,
+  )
+  if values.length() != storage.length() {
+    raise HostCallError("typed host stream payload has an invalid shape")
+  }
+  let (offsets, _size, alignment) = layout_of_flat_storage_fields(storage)
+  if alignment > 1 &&
+    ptr.reinterpret_as_uint() % alignment.reinterpret_as_uint() != 0U {
+    raise CanonCallError("unaligned pointer")
+  }
+  for i in 0..<values.length() {
+    store_storage_value(mem, ptr + offsets[i], values[i], storage[i])
+  }
+}
+
+///|
 fn instantiate_canon_stream_read(
   _tyidx : Int,
   opts : Array[CanonOpt],
@@ -270,6 +314,39 @@ fn instantiate_canon_stream_read(
                     trap_canon("unknown stream handle index \{handle}")
                     return ret_i32(0)
                   }
+                }
+                match table.host_values.get(ep.stream_id) {
+                  Some(source) => {
+                    let remaining = source.values.length() - source.next.val
+                    let n = if len < remaining { len } else { remaining }
+                    for i in 0..<n {
+                      store_host_stream_value(
+                        source.values[source.next.val + i],
+                        source.payload_ty,
+                        source.types,
+                        resources,
+                        store,
+                        reader_table,
+                        ptr + i * st0.elem_size,
+                      ) catch {
+                        e => {
+                          trap_canon(e.to_string())
+                          return ret_i32(0)
+                        }
+                      }
+                    }
+                    source.next.val = source.next.val + n
+                    let closed = source.next.val >= source.values.length()
+                    if closed {
+                      ep.notified_peer_dropped[0] = true
+                    }
+                    let code = (if closed { 1 } else { 0 }) | (n << 4)
+                    set_canon_debug_message(
+                      "stream.read(host handle=\{handle} len=\{len})-> \{code}",
+                    )
+                    return ret_i32(code)
+                  }
+                  None => ()
                 }
                 // If re-executing a previously blocking read, return its completion.
                 match st0.pending_read {
