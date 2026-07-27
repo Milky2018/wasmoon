@@ -1265,6 +1265,54 @@ fn component_results_to_core(
                       }
                     _ => raise HostCallError("result type mismatch")
                   }
+                Some(Some(List(elem_ty))) =>
+                  match v {
+                    List(items) => {
+                      if resources.mem_addr is None {
+                        raise MissingCanonMemory
+                      }
+                      let realloc = match resources.realloc {
+                        Some(rf) => rf
+                        None => raise MissingCanonRealloc
+                      }
+                      let elem_storage = flat_storage_for_valtype(
+                        elem_ty, types, mem_is_64,
+                      )
+                      let (offsets, elem_size, elem_align) = layout_of_flat_storage_fields(
+                        elem_storage,
+                      )
+                      let stride = align_to(elem_size, elem_align)
+                      let ptr = alloc_realloc_area(
+                        store,
+                        mem,
+                        realloc,
+                        mem_is_64,
+                        stride * items.length(),
+                        elem_align,
+                      )
+                      for i in 0..<items.length() {
+                        let elem_values = lower_value(items[i], elem_ty)
+                        if elem_values.length() != elem_storage.length() {
+                          raise HostCallError("result type mismatch")
+                        }
+                        let base = ptr + stride * i
+                        for j in 0..<elem_values.length() {
+                          store_storage_value(
+                            mem,
+                            base + offsets[j],
+                            elem_values[j],
+                            elem_storage[j],
+                          )
+                        }
+                      }
+                      if mem_is_64 {
+                        [I64(ptr.to_int64()), I64(items.length().to_int64())]
+                      } else {
+                        [I32(ptr), I32(items.length())]
+                      }
+                    }
+                    _ => raise HostCallError("result type mismatch")
+                  }
                 Some(Some(Variant(cases))) =>
                   match v {
                     Variant(tag, payload) => {

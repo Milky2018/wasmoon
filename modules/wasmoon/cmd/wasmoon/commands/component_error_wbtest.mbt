@@ -102,6 +102,20 @@ test "component command executes a pinned Preview 2 run export" {
 }
 
 ///|
+test "component command lowers Preview 2 filesystem preopens end to end" {
+  let status = run_wasi_component_command(
+    "testsuite/fixtures/wasi-command-filesystem.component.wasm",
+    [],
+    [],
+    ["/tmp::/sandbox"],
+    "deny",
+    true,
+    Text,
+  )
+  debug_inspect(status, content="0")
+}
+
+///|
 test "component command executes a pinned Preview 3 async run export" {
   let status = run_wasi_component_command(
     "testsuite/fixtures/wasi-command-async-ok.component.wasm",
