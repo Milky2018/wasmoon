@@ -80,6 +80,8 @@ pub fn native_clock_gettime_realtime() -> Int64
 
 pub fn native_close(Int) -> Bool
 
+pub fn native_dup(Int) -> Int?
+
 pub fn native_dup2(Int, Int) -> Bool
 
 pub fn native_fcntl_getfl(Int) -> Int?
@@ -112,6 +114,8 @@ pub fn native_linkat(Int, String, Int, String, Int) -> Bool
 
 pub fn native_mkdir(String, Int) -> Bool
 
+pub fn native_mkdirat(Int, String, Int) -> Bool
+
 pub fn native_nanosleep(Int64) -> Bool
 
 pub fn native_o_append() -> Int
@@ -126,13 +130,21 @@ pub fn native_o_wronly() -> Int
 
 pub fn native_open(String, Array[OpenFlags], Int) -> Int?
 
+pub fn native_open_parent_beneath(Int, String) -> Int?
+
 pub fn native_open_read(String) -> Int?
 
 pub fn native_open_write(String) -> Int?
 
+pub fn native_openat_beneath(Int, String, String, Array[OpenFlags], Int, Bool) -> Int?
+
 pub fn native_path_within_base(String, String) -> Bool
 
 pub fn native_poll(Array[Int], Array[Int], Int) -> PollResult?
+
+pub fn native_pread(Int, FixedArray[Byte], Int, Int64) -> Int?
+
+pub fn native_pwrite(Int, FixedArray[Byte], Int, Int64) -> Int?
 
 pub fn native_raise(Int) -> Bool
 

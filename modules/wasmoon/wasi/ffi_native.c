@@ -6,6 +6,7 @@ extern "C" {
 #endif
 
 #include <errno.h>
+#include <limits.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -39,6 +40,109 @@ extern "C" {
 #define WASMOON_AT_SYMLINK_NOFOLLOW_TOKEN 0x100
 
 #ifndef _WIN32
+static int wasmoon_wasi_path_is_within_base(
+  const char *base_real,
+  const char *target_real
+);
+
+static int wasmoon_wasi_same_file(const struct stat *left, const struct stat *right) {
+  return left->st_dev == right->st_dev && left->st_ino == right->st_ino;
+}
+
+static int wasmoon_wasi_directory_is_beneath(int root_fd, int candidate_fd) {
+  struct stat root_stat;
+  if (fstat(root_fd, &root_stat) != 0 || !S_ISDIR(root_stat.st_mode)) return 0;
+
+  int current_fd = dup(candidate_fd);
+  if (current_fd < 0) return 0;
+
+  for (int depth = 0; depth < 1024; depth++) {
+    struct stat current_stat;
+    if (fstat(current_fd, &current_stat) != 0) {
+      close(current_fd);
+      return 0;
+    }
+    if (wasmoon_wasi_same_file(&root_stat, &current_stat)) {
+      close(current_fd);
+      return 1;
+    }
+
+    int parent_fd = openat(current_fd, "..", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+    if (parent_fd < 0) {
+      close(current_fd);
+      return 0;
+    }
+    struct stat parent_stat;
+    if (fstat(parent_fd, &parent_stat) != 0) {
+      close(parent_fd);
+      close(current_fd);
+      return 0;
+    }
+    if (wasmoon_wasi_same_file(&current_stat, &parent_stat)) {
+      close(parent_fd);
+      close(current_fd);
+      return 0;
+    }
+    close(current_fd);
+    current_fd = parent_fd;
+  }
+
+  close(current_fd);
+  errno = ELOOP;
+  return 0;
+}
+
+static int wasmoon_wasi_fd_path(int fd, char *buffer, size_t buffer_size) {
+#if defined(__APPLE__)
+  return fcntl(fd, F_GETPATH, buffer) == 0;
+#elif defined(__linux__)
+  char proc_path[64];
+  int length = snprintf(proc_path, sizeof(proc_path), "/proc/self/fd/%d", fd);
+  if (length < 0 || (size_t)length >= sizeof(proc_path)) return 0;
+  ssize_t written = readlink(proc_path, buffer, buffer_size - 1);
+  if (written < 0 || (size_t)written >= buffer_size) return 0;
+  buffer[written] = '\0';
+  return 1;
+#else
+  (void)fd;
+  (void)buffer;
+  (void)buffer_size;
+  return 0;
+#endif
+}
+
+static int wasmoon_wasi_object_is_beneath(int root_fd, int object_fd) {
+  struct stat object_stat;
+  if (fstat(object_fd, &object_stat) != 0) return 0;
+  if (S_ISDIR(object_stat.st_mode)) {
+    return wasmoon_wasi_directory_is_beneath(root_fd, object_fd);
+  }
+
+  char root_path[PATH_MAX];
+  char object_path[PATH_MAX];
+  if (!wasmoon_wasi_fd_path(root_fd, root_path, sizeof(root_path)) ||
+      !wasmoon_wasi_fd_path(object_fd, object_path, sizeof(object_path))) {
+    return 0;
+  }
+  return wasmoon_wasi_path_is_within_base(root_path, object_path);
+}
+
+static int wasmoon_wasi_open_parent_beneath_impl(int root_fd, const char *path) {
+  if (!path || path[0] == '/') {
+    errno = EPERM;
+    return -1;
+  }
+  const char *relative = path[0] == '\0' ? "." : path;
+  int fd = openat(root_fd, relative, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+  if (fd < 0) return -1;
+  if (!wasmoon_wasi_directory_is_beneath(root_fd, fd)) {
+    close(fd);
+    errno = EPERM;
+    return -1;
+  }
+  return fd;
+}
+
 static int wasmoon_wasi_path_is_within_base(const char *base_real, const char *target_real) {
   if (!base_real || !target_real) return 0;
   if (strcmp(base_real, "/") == 0) {
@@ -115,12 +219,132 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_open(moonbit_bytes_t path, int flags, int mo
 #endif
 }
 
+MOONBIT_FFI_EXPORT int wasmoon_wasi_open_parent_beneath(
+  int root_fd,
+  moonbit_bytes_t path
+) {
+#ifdef _WIN32
+  (void)root_fd;
+  (void)path;
+  errno = ENOTSUP;
+  return -1;
+#else
+  return wasmoon_wasi_open_parent_beneath_impl(root_fd, (const char *)path);
+#endif
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_wasi_openat_beneath(
+  int root_fd,
+  moonbit_bytes_t parent_path,
+  moonbit_bytes_t leaf,
+  int flags,
+  int mode,
+  int follow_final
+) {
+#ifdef _WIN32
+  (void)root_fd;
+  (void)parent_path;
+  (void)leaf;
+  (void)flags;
+  (void)mode;
+  (void)follow_final;
+  errno = ENOTSUP;
+  return -1;
+#else
+  if (((const char *)leaf)[0] == '\0' ||
+      strcmp((const char *)leaf, ".") == 0 ||
+      strcmp((const char *)leaf, "..") == 0 ||
+      strchr((const char *)leaf, '/') != NULL) {
+    errno = EINVAL;
+    return -1;
+  }
+  int parent_fd = wasmoon_wasi_open_parent_beneath_impl(
+    root_fd,
+    (const char *)parent_path
+  );
+  if (parent_fd < 0) return -1;
+
+  int open_flags = flags | O_CLOEXEC;
+  int wants_truncate = (open_flags & O_TRUNC) != 0;
+  open_flags &= ~O_TRUNC;
+#ifdef O_NOFOLLOW
+  if (!follow_final) open_flags |= O_NOFOLLOW;
+#else
+  if (!follow_final) {
+    close(parent_fd);
+    errno = ENOTSUP;
+    return -1;
+  }
+#endif
+
+  int fd = openat(parent_fd, (const char *)leaf, open_flags, mode);
+  close(parent_fd);
+  if (fd < 0) return -1;
+  if (!wasmoon_wasi_object_is_beneath(root_fd, fd)) {
+    close(fd);
+    errno = EPERM;
+    return -1;
+  }
+  if (wants_truncate && ftruncate(fd, 0) != 0) {
+    close(fd);
+    return -1;
+  }
+  return fd;
+#endif
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_wasi_dup(int fd) {
+#ifdef _WIN32
+  return _dup(fd);
+#else
+  return dup(fd);
+#endif
+}
+
 // Close a file descriptor
 MOONBIT_FFI_EXPORT int wasmoon_wasi_close(int fd) {
 #ifdef _WIN32
   return _close(fd);
 #else
   return close(fd);
+#endif
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_wasi_pread(
+  int fd,
+  moonbit_bytes_t buf,
+  int count,
+  int64_t offset
+) {
+#ifdef _WIN32
+  int64_t saved = _lseeki64(fd, 0, SEEK_CUR);
+  if (saved < 0 || _lseeki64(fd, offset, SEEK_SET) < 0) return -1;
+  int result = _read(fd, buf, count);
+  int saved_errno = errno;
+  _lseeki64(fd, saved, SEEK_SET);
+  errno = saved_errno;
+  return result;
+#else
+  return pread(fd, buf, count, (off_t)offset);
+#endif
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_wasi_pwrite(
+  int fd,
+  moonbit_bytes_t buf,
+  int count,
+  int64_t offset
+) {
+#ifdef _WIN32
+  int64_t saved = _lseeki64(fd, 0, SEEK_CUR);
+  if (saved < 0 || _lseeki64(fd, offset, SEEK_SET) < 0) return -1;
+  int result = _write(fd, buf, count);
+  int saved_errno = errno;
+  _lseeki64(fd, saved, SEEK_SET);
+  errno = saved_errno;
+  return result;
+#else
+  return pwrite(fd, buf, count, (off_t)offset);
 #endif
 }
 
@@ -442,6 +666,20 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_mkdir(moonbit_bytes_t path, int mode) {
   return _mkdir((const char *)path);
 #else
   return mkdir((const char *)path, mode);
+#endif
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_wasi_mkdirat(
+  int dirfd,
+  moonbit_bytes_t path,
+  int mode
+) {
+#ifdef _WIN32
+  (void)dirfd;
+  (void)mode;
+  return _mkdir((const char *)path);
+#else
+  return mkdirat(dirfd, (const char *)path, mode);
 #endif
 }
 

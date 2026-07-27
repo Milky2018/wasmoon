@@ -82,7 +82,7 @@ fn err_last_operation_failed(
   table : @runtime_impl.ResourceTable,
   message : String,
 ) -> @runtime_impl.ComponentValue raise @runtime_impl.ComponentRuntimeError {
-  let rep = host.ctx.insert_resource(IoError(message))
+  let rep = host.ctx.insert_resource(IoError(message, None))
   let handle = allocate_resource_handle(
     host.ctx,
     table,
@@ -192,7 +192,18 @@ fn read_input_stream(
       }
       let count = if len < 4096 { len } else { 4096 }
       let buffer = FixedArray::make(count, b'\x00')
-      match @wasi.native_read(fd, buffer, count) {
+      let read_result = match state.file_position {
+        Some(position) =>
+          match @wasi.native_pread(fd, buffer, count, position.val) {
+            Some(read) => {
+              position.val = position.val + read.to_int64()
+              Some(read)
+            }
+            None => None
+          }
+        None => @wasi.native_read(fd, buffer, count)
+      }
+      match read_result {
         Some(read) if read > 0 => {
           let values : Array[@runtime_impl.ComponentValue] = []
           for i in 0..<read {
@@ -241,9 +252,12 @@ fn output_stream_state(
 
 ///|
 fn write_output_stream(
+  host : WasiComponentHost,
+  table : @runtime_impl.ResourceTable,
   state : OutputStreamState,
   bytes : Bytes,
   require_permit : Bool,
+  blocking : Bool,
 ) -> @runtime_impl.ComponentValue raise @runtime_impl.ComponentRuntimeError {
   if state.closed.val {
     return err_closed()
@@ -251,9 +265,62 @@ fn write_output_stream(
   if require_permit && bytes.length().to_int64() > state.permit.val {
     raise HostCallError("write exceeds check-write permit")
   }
-  (state.write)(bytes)
   state.permit.val = 0L
-  ok_void()
+  let success = match state.native_fd {
+    None => (state.write)(bytes)
+    Some(fd) => {
+      let mut offset = 0
+      while offset < bytes.length() {
+        if blocking && @wasi.native_poll([fd], [0x04], -1) is None {
+          break
+        }
+        let remaining = bytes.length() - offset
+        let buffer = FixedArray::makei(remaining, fn(i) { bytes[offset + i] })
+        let write_result = if state.append {
+          match @wasi.native_fstat(fd) {
+            Some(stat) =>
+              if stat.size > 0x7fffffffffffffffUL {
+                None
+              } else {
+                @wasi.native_pwrite(
+                  fd,
+                  buffer,
+                  remaining,
+                  stat.size.reinterpret_as_int64(),
+                )
+              }
+            None => None
+          }
+        } else {
+          match state.file_position {
+            Some(position) =>
+              match @wasi.native_pwrite(fd, buffer, remaining, position.val) {
+                Some(written) => {
+                  position.val = position.val + written.to_int64()
+                  Some(written)
+                }
+                None => None
+              }
+            None => @wasi.native_write(fd, buffer, remaining)
+          }
+        }
+        match write_result {
+          Some(written) if written > 0 => offset = offset + written
+          _ => break
+        }
+        if !blocking {
+          break
+        }
+      }
+      offset == bytes.length()
+    }
+  }
+  if success {
+    ok_void()
+  } else {
+    state.closed.val = true
+    err_last_operation_failed(host, table, "output stream write failed")
+  }
 }
 
 ///|
@@ -282,7 +349,19 @@ fn poll_source_ready(ctx : WasiComponentCtx, source : PollSource) -> Bool {
       }
     Output(rep) =>
       match ctx.get_resource(rep) {
-        Some(OutputStream(_)) => true
+        Some(OutputStream(state)) =>
+          if state.closed.val {
+            true
+          } else {
+            match state.native_fd {
+              Some(fd) =>
+                match @wasi.native_poll([fd], [0x04], 0) {
+                  Some(result) => result.ready_count > 0
+                  None => true
+                }
+              None => true
+            }
+          }
         _ => true
       }
   }
@@ -318,7 +397,15 @@ fn block_poll_source(
           }
         _ => ()
       }
-    Output(_) => ()
+    Output(rep) =>
+      match ctx.get_resource(rep) {
+        Some(OutputStream(state)) =>
+          if state.native_fd is Some(fd) &&
+            @wasi.native_poll([fd], [0x04], -1) is None {
+            raise HostCallError("output readiness poll failed")
+          }
+        _ => ()
+      }
   }
 }
 
@@ -367,7 +454,15 @@ fn block_poll_sources(
             }
           _ => ()
         }
-      Output(_) => ()
+      Output(rep) =>
+        match ctx.get_resource(rep) {
+          Some(OutputStream(state)) =>
+            if !state.closed.val && state.native_fd is Some(fd) {
+              fds.push(fd)
+              events.push(0x04)
+            }
+          _ => ()
+        }
     }
   }
   let now = @wasi.native_clock_gettime_monotonic()
@@ -516,7 +611,7 @@ fn add_error_interface(
       let handle = resource_handle_arg(args, 0)
       let rep = resource_rep(table, handle, error_type)
       match host.ctx.get_resource(rep) {
-        Some(IoError(message)) => [String(message)]
+        Some(IoError(message, _)) => [String(message)]
         _ => raise HostCallError("I/O error resource is not live")
       }
     },
@@ -677,8 +772,28 @@ fn add_output_stream_methods(
       if state.closed.val {
         [err_closed()]
       } else {
-        state.permit.val = 65536L
-        [ok_value(U64(65536L))]
+        match state.native_fd {
+          Some(fd) =>
+            match @wasi.native_poll([fd], [0x04], 0) {
+              Some(result) => {
+                let permit = if result.ready_count > 0 { 65536L } else { 0L }
+                state.permit.val = permit
+                [ok_value(U64(permit))]
+              }
+              None => {
+                state.closed.val = true
+                [
+                  err_last_operation_failed(
+                    host, table, "output readiness poll failed",
+                  ),
+                ]
+              }
+            }
+          None => {
+            state.permit.val = 65536L
+            [ok_value(U64(65536L))]
+          }
+        }
       }
     },
   )
@@ -692,9 +807,12 @@ fn add_output_stream_methods(
       }
       [
         write_output_stream(
+          host,
+          table,
           output_stream_state(host.ctx, rep),
           component_list_to_bytes(args[1]),
           true,
+          false,
         ),
       ]
     },
@@ -707,11 +825,18 @@ fn add_output_stream_methods(
       if args.length() != 2 {
         raise HostCallError("expected output stream and byte list")
       }
+      let bytes = component_list_to_bytes(args[1])
+      if bytes.length() > 4096 {
+        raise HostCallError("blocking write exceeds 4096 bytes")
+      }
       [
         write_output_stream(
+          host,
+          table,
           output_stream_state(host.ctx, rep),
-          component_list_to_bytes(args[1]),
+          bytes,
           false,
+          true,
         ),
       ]
     },
@@ -769,7 +894,16 @@ fn add_output_stream_methods(
       let rep = resource_rep(table, resource_handle_arg(args, 0), output_type)
       let len = stream_length_arg(args, 1)
       let bytes = Bytes::from_array(Array::make(len, b'\x00'))
-      [write_output_stream(output_stream_state(host.ctx, rep), bytes, true)]
+      [
+        write_output_stream(
+          host,
+          table,
+          output_stream_state(host.ctx, rep),
+          bytes,
+          true,
+          false,
+        ),
+      ]
     },
   )
   builder.add_func(
@@ -780,8 +914,20 @@ fn add_output_stream_methods(
     (args, table) => {
       let rep = resource_rep(table, resource_handle_arg(args, 0), output_type)
       let len = stream_length_arg(args, 1)
+      if len > 4096 {
+        raise HostCallError("blocking zero write exceeds 4096 bytes")
+      }
       let bytes = Bytes::from_array(Array::make(len, b'\x00'))
-      [write_output_stream(output_stream_state(host.ctx, rep), bytes, false)]
+      [
+        write_output_stream(
+          host,
+          table,
+          output_stream_state(host.ctx, rep),
+          bytes,
+          false,
+          true,
+        ),
+      ]
     },
   )
   fn splice(
@@ -800,15 +946,46 @@ fn add_output_stream_methods(
       host.resource_types.input_stream,
     )
     let len = stream_length_arg(args, 2)
-    match read_input_stream(host, table, input_rep, len, blocking) {
+    let output_state = output_stream_state(host.ctx, output_rep)
+    if output_state.closed.val {
+      return [err_closed()]
+    }
+    let permit = match output_state.native_fd {
+      Some(fd) => {
+        let timeout = if blocking { -1 } else { 0 }
+        match @wasi.native_poll([fd], [0x04], timeout) {
+          Some(result) =>
+            if result.ready_count > 0 {
+              if blocking {
+                4096
+              } else {
+                65536
+              }
+            } else {
+              0
+            }
+          None => {
+            output_state.closed.val = true
+            return [
+              err_last_operation_failed(
+                host, table, "output readiness poll failed",
+              ),
+            ]
+          }
+        }
+      }
+      None => if blocking { 4096 } else { 65536 }
+    }
+    output_state.permit.val = permit.to_int64()
+    let transfer_len = if len < permit { len } else { permit }
+    if transfer_len == 0 {
+      return [ok_value(U64(0L))]
+    }
+    match read_input_stream(host, table, input_rep, transfer_len, blocking) {
       Variant(0, Some(List(values))) => {
         let bytes = component_list_to_bytes(List(values))
         match
-          write_output_stream(
-            output_stream_state(host.ctx, output_rep),
-            bytes,
-            false,
-          ) {
+          write_output_stream(host, table, output_state, bytes, true, blocking) {
           Variant(0, _) => [ok_value(U64(values.length().to_int64()))]
           Variant(1, payload) => [Variant(1, payload)]
           _ => raise HostCallError("invalid output stream result")

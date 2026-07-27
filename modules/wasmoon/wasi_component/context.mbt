@@ -17,6 +17,7 @@ struct WasiComponentCtx {
   stdin_rep : Int
   stdout_rep : Int
   stderr_rep : Int
+  preopens : Array[PreopenState]
 }
 
 ///|
@@ -27,8 +28,11 @@ struct WasiComponentCtxBuilder {
   mut insecure_seed : (Int64, Int64)
   mut stdin : Bytes
   mut inherit_stdin : Bool
-  mut stdout : (Bytes) -> Unit
-  mut stderr : (Bytes) -> Unit
+  mut stdout : (Bytes) -> Bool
+  mut stderr : (Bytes) -> Bool
+  mut stdout_fd : Int?
+  mut stderr_fd : Int?
+  preopens : Array[PreopenState]
 }
 
 ///|
@@ -40,8 +44,11 @@ pub fn WasiComponentCtxBuilder::WasiComponentCtxBuilder() -> WasiComponentCtxBui
     insecure_seed: (0x4d595df4d0f33173L, 0x123456789abcdefL),
     stdin: b"",
     inherit_stdin: false,
-    stdout: fn(_bytes) { () },
-    stderr: fn(_bytes) { () },
+    stdout: fn(_bytes) { true },
+    stderr: fn(_bytes) { true },
+    stdout_fd: None,
+    stderr_fd: None,
+    preopens: [],
   }
 }
 
@@ -100,7 +107,11 @@ pub fn WasiComponentCtxBuilder::stdout(
   self : WasiComponentCtxBuilder,
   write : (Bytes) -> Unit,
 ) -> WasiComponentCtxBuilder {
-  self.stdout = write
+  self.stdout = fn(bytes) {
+    write(bytes)
+    true
+  }
+  self.stdout_fd = None
   self
 }
 
@@ -109,7 +120,11 @@ pub fn WasiComponentCtxBuilder::stderr(
   self : WasiComponentCtxBuilder,
   write : (Bytes) -> Unit,
 ) -> WasiComponentCtxBuilder {
-  self.stderr = write
+  self.stderr = fn(bytes) {
+    write(bytes)
+    true
+  }
+  self.stderr_fd = None
   self
 }
 
@@ -125,12 +140,7 @@ pub fn WasiComponentCtxBuilder::inherit_stdin(
 pub fn WasiComponentCtxBuilder::inherit_stdout(
   self : WasiComponentCtxBuilder,
 ) -> WasiComponentCtxBuilder {
-  self.stdout = fn(bytes) {
-    if bytes.length() > 0 {
-      let buffer = FixedArray::makei(bytes.length(), fn(i) { bytes[i] })
-      @wasi.native_write(1, buffer, buffer.length()) |> ignore
-    }
-  }
+  self.stdout_fd = Some(1)
   self
 }
 
@@ -138,12 +148,7 @@ pub fn WasiComponentCtxBuilder::inherit_stdout(
 pub fn WasiComponentCtxBuilder::inherit_stderr(
   self : WasiComponentCtxBuilder,
 ) -> WasiComponentCtxBuilder {
-  self.stderr = fn(bytes) {
-    if bytes.length() > 0 {
-      let buffer = FixedArray::makei(bytes.length(), fn(i) { bytes[i] })
-      @wasi.native_write(2, buffer, buffer.length()) |> ignore
-    }
-  }
+  self.stderr_fd = Some(2)
   self
 }
 
@@ -152,6 +157,42 @@ pub fn WasiComponentCtxBuilder::inherit_stdio(
   self : WasiComponentCtxBuilder,
 ) -> WasiComponentCtxBuilder {
   self.inherit_stdin().inherit_stdout().inherit_stderr()
+}
+
+///|
+/// Grant one host directory to the component under `guest_path`.
+///
+/// The host path is opened immediately and all guest path operations remain
+/// rooted at that directory descriptor. Set `read_only` to reject every
+/// operation which mutates directory entries or file contents.
+pub fn WasiComponentCtxBuilder::preopened_directory(
+  self : WasiComponentCtxBuilder,
+  host_path : String,
+  guest_path : String,
+  read_only : Bool,
+) -> WasiComponentCtxBuilder raise @runtime_impl.ComponentRuntimeError {
+  if guest_path == "" {
+    raise HostCallError("preopen guest path must not be empty")
+  }
+  match @wasi.native_open(host_path, [ReadOnly, Directory], 0) {
+    Some(fd) => {
+      self.preopens.push({
+        fd,
+        guest_path,
+        flags: if read_only {
+          descriptor_read
+        } else {
+          descriptor_all
+        },
+        closed: Ref(false),
+      })
+      self
+    }
+    None =>
+      raise HostCallError(
+        "cannot preopen '\{host_path}': \{@wasi.native_get_error_message()}",
+      )
+  }
 }
 
 ///|
@@ -178,16 +219,34 @@ pub fn WasiComponentCtxBuilder::build(
       } else {
         None
       },
+      file_position: None,
+      owns_fd: false,
       closed: Ref(false),
     }),
   )
   resources.set(
     stdout_rep,
-    OutputStream({ write: self.stdout, permit: Ref(0L), closed: Ref(false) }),
+    OutputStream({
+      write: self.stdout,
+      native_fd: self.stdout_fd,
+      file_position: None,
+      append: false,
+      owns_fd: false,
+      permit: Ref(0L),
+      closed: Ref(false),
+    }),
   )
   resources.set(
     stderr_rep,
-    OutputStream({ write: self.stderr, permit: Ref(0L), closed: Ref(false) }),
+    OutputStream({
+      write: self.stderr,
+      native_fd: self.stderr_fd,
+      file_position: None,
+      append: false,
+      owns_fd: false,
+      permit: Ref(0L),
+      closed: Ref(false),
+    }),
   )
   {
     args: self.args.copy(),
@@ -203,6 +262,7 @@ pub fn WasiComponentCtxBuilder::build(
     stdin_rep,
     stdout_rep,
     stderr_rep,
+    preopens: self.preopens.copy(),
   }
 }
 
@@ -229,6 +289,20 @@ pub fn WasiComponentCtx::exit_status(self : WasiComponentCtx) -> Int? {
 }
 
 ///|
+/// Release embedding-owned preopen roots.
+///
+/// Call this after component execution has ended and all host resource handles
+/// have been destroyed. Repeated calls are harmless.
+pub fn WasiComponentCtx::close(self : WasiComponentCtx) -> Unit {
+  for preopen in self.preopens {
+    if !preopen.closed.val {
+      preopen.closed.val = true
+      @wasi.native_close(preopen.fd) |> ignore
+    }
+  }
+}
+
+///|
 fn WasiComponentCtx::request_exit(
   self : WasiComponentCtx,
   status : Int,
@@ -252,12 +326,18 @@ priv struct InputStreamState {
   bytes : Ref[Bytes]
   offset : Ref[Int]
   native_fd : Int?
+  file_position : Ref[Int64]?
+  owns_fd : Bool
   closed : Ref[Bool]
 }
 
 ///|
 priv struct OutputStreamState {
-  write : (Bytes) -> Unit
+  write : (Bytes) -> Bool
+  native_fd : Int?
+  file_position : Ref[Int64]?
+  append : Bool
+  owns_fd : Bool
   permit : Ref[Int64]
   closed : Ref[Bool]
 }
@@ -270,11 +350,55 @@ priv enum PollSource {
 }
 
 ///|
+let descriptor_read : Int = 0x01
+
+///|
+let descriptor_write : Int = 0x02
+
+///|
+let descriptor_mutate_directory : Int = 0x20
+
+///|
+let descriptor_all : Int = descriptor_read |
+  descriptor_write |
+  descriptor_mutate_directory
+
+///|
+priv struct PreopenState {
+  fd : Int
+  guest_path : String
+  flags : Int
+  closed : Ref[Bool]
+}
+
+///|
+priv struct DescriptorState {
+  fd : Int
+  flags : Int
+  file_type : Int
+  closed : Ref[Bool]
+}
+
+///|
+priv struct DirectoryEntryState {
+  name : String
+  file_type : Int
+}
+
+///|
+priv struct DirectoryEntryStreamState {
+  entries : Array[DirectoryEntryState]
+  index : Ref[Int]
+}
+
+///|
 priv enum WasiHostResource {
-  IoError(String)
+  IoError(String, Int?)
   InputStream(InputStreamState)
   OutputStream(OutputStreamState)
   Pollable(PollSource)
+  Descriptor(DescriptorState)
+  DirectoryEntryStream(DirectoryEntryStreamState)
 }
 
 ///|
@@ -309,6 +433,30 @@ fn WasiComponentCtx::clone_resource(
 
 ///|
 fn WasiComponentCtx::drop_resource(self : WasiComponentCtx, rep : Int) -> Unit {
+  match self.resources.get(rep) {
+    Some(InputStream(state)) =>
+      if state.owns_fd && !state.closed.val {
+        state.closed.val = true
+        match state.native_fd {
+          Some(fd) => @wasi.native_close(fd) |> ignore
+          None => ()
+        }
+      }
+    Some(OutputStream(state)) =>
+      if state.owns_fd && !state.closed.val {
+        state.closed.val = true
+        match state.native_fd {
+          Some(fd) => @wasi.native_close(fd) |> ignore
+          None => ()
+        }
+      }
+    Some(Descriptor(state)) =>
+      if !state.closed.val {
+        state.closed.val = true
+        @wasi.native_close(state.fd) |> ignore
+      }
+    _ => ()
+  }
   self.resources.remove(rep)
 }
 

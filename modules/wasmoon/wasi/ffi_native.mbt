@@ -10,6 +10,27 @@
 extern "c" fn c_open(path : FixedArray[Byte], flags : Int, mode : Int) -> Int = "wasmoon_wasi_open"
 
 ///|
+#borrow(parent_path)
+extern "c" fn c_open_parent_beneath(
+  root_fd : Int,
+  parent_path : FixedArray[Byte],
+) -> Int = "wasmoon_wasi_open_parent_beneath"
+
+///|
+#borrow(parent_path, leaf)
+extern "c" fn c_openat_beneath(
+  root_fd : Int,
+  parent_path : FixedArray[Byte],
+  leaf : FixedArray[Byte],
+  flags : Int,
+  mode : Int,
+  follow_final : Int,
+) -> Int = "wasmoon_wasi_openat_beneath"
+
+///|
+extern "c" fn c_dup(fd : Int) -> Int = "wasmoon_wasi_dup"
+
+///|
 /// Close a file descriptor
 extern "c" fn c_close(fd : Int) -> Int = "wasmoon_wasi_close"
 
@@ -24,6 +45,24 @@ extern "c" fn c_read(fd : Int, buf : FixedArray[Byte], count : Int) -> Int = "wa
 /// Returns number of bytes written or -1 on error
 #borrow(buf)
 extern "c" fn c_write(fd : Int, buf : FixedArray[Byte], count : Int) -> Int = "wasmoon_wasi_write"
+
+///|
+#borrow(buf)
+extern "c" fn c_pread(
+  fd : Int,
+  buf : FixedArray[Byte],
+  count : Int,
+  offset : Int64,
+) -> Int = "wasmoon_wasi_pread"
+
+///|
+#borrow(buf)
+extern "c" fn c_pwrite(
+  fd : Int,
+  buf : FixedArray[Byte],
+  count : Int,
+  offset : Int64,
+) -> Int = "wasmoon_wasi_pwrite"
 
 ///|
 /// Seek in a file
@@ -152,6 +191,57 @@ pub fn native_open(path : String, flags : Array[OpenFlags], mode : Int) -> Int? 
 }
 
 ///|
+pub fn native_open_parent_beneath(root_fd : Int, parent_path : String) -> Int? {
+  let path_bytes = string_to_cstring(parent_path)
+  let fd = c_open_parent_beneath(root_fd, path_bytes)
+  if fd < 0 {
+    None
+  } else {
+    Some(fd)
+  }
+}
+
+///|
+pub fn native_openat_beneath(
+  root_fd : Int,
+  parent_path : String,
+  leaf : String,
+  flags : Array[OpenFlags],
+  mode : Int,
+  follow_final : Bool,
+) -> Int? {
+  let parent_bytes = string_to_cstring(parent_path)
+  let leaf_bytes = string_to_cstring(leaf)
+  let fd = c_openat_beneath(
+    root_fd,
+    parent_bytes,
+    leaf_bytes,
+    open_flags_to_int(flags),
+    mode,
+    if follow_final {
+      1
+    } else {
+      0
+    },
+  )
+  if fd < 0 {
+    None
+  } else {
+    Some(fd)
+  }
+}
+
+///|
+pub fn native_dup(fd : Int) -> Int? {
+  let result = c_dup(fd)
+  if result < 0 {
+    None
+  } else {
+    Some(result)
+  }
+}
+
+///|
 /// Open a file for reading
 pub fn native_open_read(path : String) -> Int? {
   native_open(path, [ReadOnly], 0)
@@ -225,6 +315,36 @@ pub fn native_write(fd : Int, buf : FixedArray[Byte], count : Int) -> Int? {
 }
 
 ///|
+pub fn native_pread(
+  fd : Int,
+  buf : FixedArray[Byte],
+  count : Int,
+  offset : Int64,
+) -> Int? {
+  let result = c_pread(fd, buf, count, offset)
+  if result < 0 {
+    None
+  } else {
+    Some(result)
+  }
+}
+
+///|
+pub fn native_pwrite(
+  fd : Int,
+  buf : FixedArray[Byte],
+  count : Int,
+  offset : Int64,
+) -> Int? {
+  let result = c_pwrite(fd, buf, count, offset)
+  if result < 0 {
+    None
+  } else {
+    Some(result)
+  }
+}
+
+///|
 /// Seek in a file
 /// Returns new offset or None on error
 pub fn native_seek(fd : Int, offset : Int64, whence : Whence) -> Int64? {
@@ -280,6 +400,14 @@ pub fn native_path_within_base(
 extern "c" fn c_mkdir(path : FixedArray[Byte], mode : Int) -> Int = "wasmoon_wasi_mkdir"
 
 ///|
+#borrow(path)
+extern "c" fn c_mkdirat(
+  dirfd : Int,
+  path : FixedArray[Byte],
+  mode : Int,
+) -> Int = "wasmoon_wasi_mkdirat"
+
+///|
 /// Read directory entries
 /// Returns serialized entries or null on error
 #borrow(path)
@@ -294,6 +422,11 @@ extern "c" fn c_readdir_fd(fd : Int) -> Bytes? = "wasmoon_wasi_readdir_fd"
 pub fn native_mkdir(path : String, mode : Int) -> Bool {
   let path_bytes = string_to_cstring(path)
   c_mkdir(path_bytes, mode) == 0
+}
+
+///|
+pub fn native_mkdirat(dirfd : Int, path : String, mode : Int) -> Bool {
+  c_mkdirat(dirfd, string_to_cstring(path), mode) == 0
 }
 
 ///|
