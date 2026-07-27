@@ -1,17 +1,32 @@
-# Reference Tests
+# Component Model reference tests
 
-This directory contains Component Model reference tests, grouped by functionality.
+`upstream/` is a byte-for-byte import of the official Component Model `test/`
+tree at the commit recorded in `SNAPSHOT.json`. The manifest pins the upstream
+commit, Git tree, parser version, complete path set, and SHA-256 of every file.
+Do not edit files under `upstream/` directly.
 
-## Running in Wasmtime
+The `.wast` files are partitioned exactly once by the manifests in `suites/`:
 
-(Until the `component-model-async` and `component-model-async-builtins` features
-are enabled by default, they must be explicitly enabled as shown below.)
+- `stable-0.2`: files whose valid component forms require no post-0.2
+  Component Model feature.
+- `async-0.3`: files that require the WASI 0.3 🔀 async feature, but no later
+  emoji-gated feature.
+- `future-gated`: files with at least one valid form that requires a later
+  emoji-gated feature, such as 🚝, 🚟, 🧵, 🐘, or 🏷️.
 
-A single `.wast` test can be run with full backtrace on trap via:
+The partition was checked with the feature validator from the pinned
+`wasm-tools` release. A file is assigned to the newest feature level required
+by any of its valid component forms.
+
+Run the suites independently:
+
+```bash
+python3 scripts/check_component_snapshot.py
+python3 scripts/run_component_wast.py --suite stable-0.2 --dump-failures
+python3 scripts/run_component_wast.py --suite async-0.3 --dump-failures
+python3 scripts/run_component_wast.py --suite future-gated --dump-failures
 ```
-WASMTIME_BACKTRACE_DETAILS=1 wasmtime wast -W component-model-async=y -W component-model-async-builtins=y -W component-model-threading=y -W component-model-async-stackful=y -W exceptions=y the-test.wast
-```
-All the tests can be run from this directory via:
-```
-find . -name "*.wast" | xargs wasmtime wast -W component-model-async=y -W component-model-async-builtins=y -W component-model-threading=y -W component-model-async-stackful=y -W exceptions=y
-```
+
+To update the snapshot, review the upstream changes and suite classifications,
+then run the exact sync command documented in `UPSTREAM.md`. The checker rejects
+missing, extra, modified, multiply assigned, unassigned, and empty suites.

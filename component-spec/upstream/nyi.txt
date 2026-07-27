@@ -1,0 +1,3 @@
+# See README.md
+./wasm-tools/memory64.wast
+./wasm-tools/resources.wast

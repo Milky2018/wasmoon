@@ -27,8 +27,9 @@ Wasmoon is a WebAssembly runtime written in MoonBit. Module metadata lives in `m
 ./wasmoon test --no-jit <file.wast>  # Run in interpreter-only mode
 ./wasmoon explore <file.wat> --stage milkir machv vcode allocated-vcode code-object mc  # View compilation stages
 python3 scripts/run_all_wast.py --rec  # Run all WAST tests (ensure ./wasmoon exists; run ./install.sh once)
-python3 scripts/run_component_wast.py --dir component-spec/values --rec  # Component model (subset)
-python3 scripts/run_component_wast.py --dir component-spec/names --rec   # Component model (subset)
+python3 scripts/run_component_wast.py --suite stable-0.2  # Stable Component Model 0.2
+python3 scripts/run_component_wast.py --suite async-0.3   # Component Model 0.3 async
+python3 scripts/run_component_wast.py --suite future-gated  # Later gated features
 ```
 
 ## Testing
@@ -37,8 +38,8 @@ python3 scripts/run_component_wast.py --dir component-spec/names --rec   # Compo
 - Never batch use `--update`. Treat snapshot errors seriously
 - Don't use `println` in tests. Use `inspect(expr)` and update snapshots, then read the file
 - Use `compare_jit_interp(wat_string)` in `testsuite/` for JIT regression tests
-- Component-model runner requires pinned `wasm-tools` 1.248.0 on `PATH` (used to compile `.wast` `(component ...)` forms):
-  `cargo install wasm-tools --version 1.248.0 --locked`
+- Component-model runner requires pinned `wasm-tools` 1.254.0 on `PATH` (used to compile `.wast` `(component ...)` forms):
+  `cargo install wasm-tools --version 1.254.0 --locked`
 
 ## Debugging
 

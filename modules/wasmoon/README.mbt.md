@@ -207,9 +207,12 @@ their own compatible licenses. See `THIRD_PARTY_NOTICES.md`.
 moon check --target native
 moon test --target native
 ./install.sh
-cargo install wasm-tools --version 1.248.0 --locked
+cargo install wasm-tools --version 1.254.0 --locked
 python3 scripts/run_all_wast.py --dir spec --rec
-python3 scripts/run_component_wast.py --dir component-spec --rec
+python3 scripts/check_component_snapshot.py
+python3 scripts/run_component_wast.py --suite stable-0.2
+python3 scripts/run_component_wast.py --suite async-0.3
+python3 scripts/run_component_wast.py --suite future-gated
 ```
 
 ## Library Usage

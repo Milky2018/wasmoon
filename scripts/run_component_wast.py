@@ -7,13 +7,19 @@ import argparse
 import json
 import os
 import signal
+import shutil
 import subprocess
 import sys
-import shutil
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Tuple
+
+from component_snapshot import (
+    REQUIRED_SUITES,
+    SnapshotError,
+    validate_snapshot,
+)
 
 BASE_VALIDATE_TIMEOUT_SECONDS = int(
     os.environ.get("WASMOON_COMPONENT_VALIDATE_TIMEOUT", "20")
@@ -58,7 +64,7 @@ def scale_timeout(base: int) -> int:
 DEFAULT_VALIDATE_TIMEOUT_SECONDS = scale_timeout(BASE_VALIDATE_TIMEOUT_SECONDS)
 DEFAULT_SCRIPT_TIMEOUT_SECONDS = scale_timeout(BASE_SCRIPT_TIMEOUT_SECONDS)
 DEFAULT_TOOLS_TIMEOUT_SECONDS = scale_timeout(BASE_TOOLS_TIMEOUT_SECONDS)
-REQUIRED_WASM_TOOLS_VERSION = "1.248.0"
+DEFAULT_WASM_TOOLS_VERSION = "1.254.0"
 
 
 def run_command(
@@ -1165,8 +1171,12 @@ def main() -> int:
     parser.add_argument(
         "--dir",
         type=str,
-        default="component-spec",
-        help="Directory containing .wast files (default: component-spec)",
+        help="Directory containing .wast files (default: component-spec/upstream)",
+    )
+    parser.add_argument(
+        "--suite",
+        choices=REQUIRED_SUITES,
+        help="Run one exact suite from the pinned Component Model snapshot",
     )
     parser.add_argument(
         "--rec",
@@ -1192,6 +1202,37 @@ def main() -> int:
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parent.parent
+    if args.suite is not None:
+        if args.dir is not None or args.rec:
+            print("Error: --suite cannot be combined with --dir or --rec")
+            return 1
+        try:
+            snapshot = validate_snapshot(repo_root)
+        except SnapshotError as error:
+            print(f"Error: invalid Component Model snapshot: {error}")
+            return 1
+        test_dir = snapshot.root
+        wast_files = [test_dir / path for path in snapshot.suites[args.suite]]
+        required_wasm_tools_version = snapshot.wasm_tools_version
+        print(
+            f"Using suite {args.suite!r} from "
+            f"{snapshot.repository}@{snapshot.commit}"
+        )
+    else:
+        test_dir = repo_root / (args.dir or "component-spec/upstream")
+        required_wasm_tools_version = DEFAULT_WASM_TOOLS_VERSION
+        if not test_dir.exists():
+            print(f"Error: Directory '{test_dir}' does not exist")
+            return 1
+        if args.rec:
+            wast_files = sorted(test_dir.glob("**/*.wast"))
+        else:
+            wast_files = sorted(test_dir.glob("*.wast"))
+
+    if not wast_files:
+        print(f"No .wast files found in '{test_dir}'")
+        return 1
+
     wasmoon = repo_root / "wasmoon"
     if not wasmoon.exists():
         print(
@@ -1215,33 +1256,21 @@ def main() -> int:
         print(
             "Error: `wasm-tools` not found on PATH. "
             "Install pinned wasm-tools with: "
-            f"cargo install wasm-tools --version {REQUIRED_WASM_TOOLS_VERSION} --locked"
+            "cargo install wasm-tools --version "
+            f"{required_wasm_tools_version} --locked"
         )
         return 1
     wasm_tools = Path(wasm_tools_bin).resolve()
     wasm_tools_version = read_wasm_tools_version(wasm_tools)
-    if wasm_tools_version != REQUIRED_WASM_TOOLS_VERSION:
+    if wasm_tools_version != required_wasm_tools_version:
         actual = wasm_tools_version or "unknown"
         print(
             "Error: unsupported `wasm-tools` version "
-            f"{actual} at {wasm_tools}; expected {REQUIRED_WASM_TOOLS_VERSION}. "
+            f"{actual} at {wasm_tools}; expected {required_wasm_tools_version}. "
             "Install the pinned version with: "
-            f"cargo install wasm-tools --version {REQUIRED_WASM_TOOLS_VERSION} --locked"
+            "cargo install wasm-tools --version "
+            f"{required_wasm_tools_version} --locked"
         )
-        return 1
-
-    test_dir = repo_root / args.dir
-    if not test_dir.exists():
-        print(f"Error: Directory '{test_dir}' does not exist")
-        return 1
-
-    if args.rec:
-        wast_files = sorted(test_dir.glob("**/*.wast"))
-    else:
-        wast_files = sorted(test_dir.glob("*.wast"))
-
-    if not wast_files:
-        print(f"No .wast files found in '{test_dir}'")
         return 1
 
     print(f"Found {len(wast_files)} .wast test files in '{test_dir}'")
@@ -1288,6 +1317,9 @@ def main() -> int:
     print(f"  Commands failed:  {total_failed}")
     print(f"  Commands skipped: {total_skipped}")
 
+    if total_passed == 0:
+        print("Error: component test lane executed zero passing commands")
+        return 1
     return 0 if total_failed == 0 else 1
 
 

@@ -1,0 +1,382 @@
+{
+  "schema_version": 1,
+  "repository": "https://github.com/WebAssembly/component-model.git",
+  "commit": "d6b48f2f28880fbf3cbc3777fba7ac31084c7540",
+  "upstream_tree": "d323b6c4bfa5d94a222b90f8f13546ec67e8e325",
+  "upstream_path": "test",
+  "wasm_tools_version": "1.254.0",
+  "files": [
+    {
+      "path": "README.md",
+      "sha256": "b849a95a6891f3a45569ae417247fdb172c2d233bee46a746289d71a1ab33535"
+    },
+    {
+      "path": "async/async-calls-sync.wast",
+      "sha256": "bacf1fab5f97e7dfcceca89c19a6b84bf4d89ebaedb69ccb448928f9af0fc879"
+    },
+    {
+      "path": "async/big-interleaving-test.wast",
+      "sha256": "63a0002de42ee9c92c779904935da2530860f4f2e7ccc9970233769d5e6fa98b"
+    },
+    {
+      "path": "async/builtin-trap-poisons-instance.wast",
+      "sha256": "d513bcff29bb9ca0356f31806cfaed2b15ad3ac1593c1fa1eb913fd1010c0c77"
+    },
+    {
+      "path": "async/cancel-stream.wast",
+      "sha256": "c754d0d3d116d0afecbce87ea72e179c15374b6790b944dc9d87052e858a3312"
+    },
+    {
+      "path": "async/cancel-subtask.wast",
+      "sha256": "8adb805defc244dd66adc5be966f4d4bffc35f15235b14b69f4668ae99baca1f"
+    },
+    {
+      "path": "async/cancellable.wast",
+      "sha256": "cf194416faced2a66bd90e4c8d3310ff2c72e1ee377ba8fb2d1f4a43b169d1c6"
+    },
+    {
+      "path": "async/closed-stream.wast",
+      "sha256": "5fddd95e1f7920f6a453e4f72bd4abc9d8a1615f8937f33ae06e0df31ca4d2a0"
+    },
+    {
+      "path": "async/cross-abi-calls.wast",
+      "sha256": "32a9b35490c7f3ca8191ddd9d812810d9d0b70d67b50b97e10f75a72bfd8b85e"
+    },
+    {
+      "path": "async/cross-task-future.wast",
+      "sha256": "d962876ba33012ce0ff068a0d056b2d8b27f5a86749fc410ca1051bd26a50a14"
+    },
+    {
+      "path": "async/deadlock.wast",
+      "sha256": "9bdd951733f5219bba0b3e226a15d85429f054d67faa6d784c42b50588213e19"
+    },
+    {
+      "path": "async/dont-block-start.wast",
+      "sha256": "1307825cd82ecb3f3cf3dd3d7eaee7ae6143cd28bc62bb867eb0332510f8a91f"
+    },
+    {
+      "path": "async/drop-cross-task-borrow.wast",
+      "sha256": "1e8f60537f6f0a6f78a693de01b8175181c1e15fbd8a78be27a3764576d1e1e3"
+    },
+    {
+      "path": "async/drop-stream.wast",
+      "sha256": "ea165885b0c880c3ccb4b91ba47222da5aa616548c8aedcd78b7a45853192c2a"
+    },
+    {
+      "path": "async/drop-subtask.wast",
+      "sha256": "2b41e426796f0b49b25ce8ce8ae5bb1ed1b1d9279e59d2d0bdc1dadaf0f67b97"
+    },
+    {
+      "path": "async/drop-waitable-set.wast",
+      "sha256": "8c4deb26d062ab421c99d8c178e59916473bc0e3016efea6b68779b0338ee59f"
+    },
+    {
+      "path": "async/empty-wait.wast",
+      "sha256": "cadb124978a329d9fa2912d109901ad862357d7969f072325069511646b892c9"
+    },
+    {
+      "path": "async/futures-must-write.wast",
+      "sha256": "518774d8e05c192841adfc141842c826ad24d10617d01a5cf4c8cc44bf694f3a"
+    },
+    {
+      "path": "async/partial-stream-copies.wast",
+      "sha256": "dddd39e572f1f2eb31025bc96de1f0acccb061741a37eed270b7f0e143f269c8"
+    },
+    {
+      "path": "async/passing-resources.wast",
+      "sha256": "5fcee86ff0e2581af82095e56ed6661a651f80f6c6060a428f00ec7911bddf23"
+    },
+    {
+      "path": "async/same-component-stream-future.wast",
+      "sha256": "2623dc2abe9b6a438d66c9c01ac92e59655121ccf04f5e230af9839cc7b023fa"
+    },
+    {
+      "path": "async/sync-barges-in.wast",
+      "sha256": "46131ddb36e5961a837ec1b008b8a9f6c8d2c3518e392be68e77c4e4ee073800"
+    },
+    {
+      "path": "async/sync-streams.wast",
+      "sha256": "53b7cc563a410dcaa545844fd9ab0d5704e53092ad136dc1ee16d44ff89360a6"
+    },
+    {
+      "path": "async/trap-if-block-and-sync.wast",
+      "sha256": "61863077c138c5fe5e593a0a8bc432ff630ce5f12d74acc5ff442b3d7a592838"
+    },
+    {
+      "path": "async/trap-if-done.wast",
+      "sha256": "fb166ecbd2ba5099f7c03b83b4ba0c3282ee544b940fde83b933a3b306c556c8"
+    },
+    {
+      "path": "async/trap-if-sync-and-waitable-set.wast",
+      "sha256": "6ac84936bf218a61d374e5cce27dc0516f9af5e29cb77181a47e72f636a756b0"
+    },
+    {
+      "path": "async/trap-if-transfer-in-waitable-set.wast",
+      "sha256": "71cb99c7f7b6dd6533bc3fc744392f495c78814eae27e7d72ee9431c8e299460"
+    },
+    {
+      "path": "async/trap-on-reenter.wast",
+      "sha256": "8c6f080b113256ec7a682ccea7591b245830b8722925c617b0cca5e48fd1fc92"
+    },
+    {
+      "path": "async/validate-no-async-abi-for-sync-type.wast",
+      "sha256": "ac454e9b7685b2b22b29be1f3b8b5d4c5d38e3378ebe1b49a88d0bdad0ebb55b"
+    },
+    {
+      "path": "async/validate-no-stream-char.wast",
+      "sha256": "5767951700e4e823da091bc82bdaa3cf99ded92b279b0ddd0352dddf4c545bec"
+    },
+    {
+      "path": "async/wait-during-callback.wast",
+      "sha256": "8231ba4aac41de37aed764c6fff78b610b05d1fbfcf7c0da3ccc01cc8d926079"
+    },
+    {
+      "path": "async/zero-length.wast",
+      "sha256": "4daabf45fc03b5e00bda2ba5d309df2ee8b050c637cc75ec4efc0ec4b822f728"
+    },
+    {
+      "path": "linking/link-time-virtualization.wast",
+      "sha256": "c8ea5dc01e1c9254b98f0d6a33e39909acb93222689a7a2a332c6fefb91a423b"
+    },
+    {
+      "path": "linking/shared-everything-dynamic-linking.wast",
+      "sha256": "7687ec4f1af476d0f7fdc97aa7c0bcf8841e6f9272b83b9133b1be891eb52a65"
+    },
+    {
+      "path": "linking/unit.wast",
+      "sha256": "421f09ef3ff326376d4f7440dc0406ee561000805acc92f8ce28cff6bb83899b"
+    },
+    {
+      "path": "nyi.txt",
+      "sha256": "fafc07caf1aa9491e59026db6e9e5b52afc0d6e0a183cde86a4fa278c2dae559"
+    },
+    {
+      "path": "resources/multiple-resources.wast",
+      "sha256": "e9e326df8a048b6843210e9eebe1cf2499a9d481a810ef04cc7a84b83b4f48b5"
+    },
+    {
+      "path": "validation/abi.wast",
+      "sha256": "eedba21513fa444818a0456902f141f8453c69f5e11e0c9a3d3b661d8811c27a"
+    },
+    {
+      "path": "validation/attributes.wast",
+      "sha256": "bf1704cc8c1f76827da3061299efe59112480040f192eedf3bfd3cf50076019e"
+    },
+    {
+      "path": "validation/external-visibility.wast",
+      "sha256": "a44d3edc58a01ad2545784a49da15d6b4ac9303fef9555706b75c58437ef61f7"
+    },
+    {
+      "path": "validation/indicies.wast",
+      "sha256": "fbe17419859bcd0785e81dabecbb37fab04ac5dc55c4e5998d4dbf04b5336308"
+    },
+    {
+      "path": "validation/kebab.wast",
+      "sha256": "c9f8cc19f3008a20e5b8149781c34b37789e7df07dd90310a82bb265d5dbc186"
+    },
+    {
+      "path": "validation/outer-alias.wast",
+      "sha256": "e5efcf463171883f92cee01a8fd4a6102f02b370b3489f85c5051dad9ac809e4"
+    },
+    {
+      "path": "validation/resources.wast",
+      "sha256": "ee05862e6349496a3e3c21ef6e539d0faa1223530e7e3a2701613080d741c60a"
+    },
+    {
+      "path": "values/concat.wast",
+      "sha256": "d8e4e9721dcec9901dafbc853ca611ed93a56f55b9fba09bce7056b6adf7c3cc"
+    },
+    {
+      "path": "values/post-return.wast",
+      "sha256": "28b23b475ec004a284492d4e12baeea21e024a33917bf659ef3ebd843f00ce6c"
+    },
+    {
+      "path": "values/strings.wast",
+      "sha256": "9dc09eb596c8bd5b165ff7a49ee8d006579ac349eda17d042502a3f2afb583cf"
+    },
+    {
+      "path": "wasm-tools/adapt.wast",
+      "sha256": "04333e646fb46c420b8ee45337c38e87c2ed7c3cb5ca32b040a01e6690e54f2c"
+    },
+    {
+      "path": "wasm-tools/alias.wast",
+      "sha256": "dcfe7de33d4b1ba88fa852d8d5dfb3d8551af7615c7dc8db1654ccf24300787d"
+    },
+    {
+      "path": "wasm-tools/big.wast",
+      "sha256": "c9c4f7eb6880aa6efa35a7e0e6072c4329db33f8e70560764eca09927c043a56"
+    },
+    {
+      "path": "wasm-tools/definedtypes.wast",
+      "sha256": "105215d7b521db6001b708cfe84ceca9d753b2f1b8805a2d6f1d4a347b93eb41"
+    },
+    {
+      "path": "wasm-tools/empty.wast",
+      "sha256": "ca440eca3973aeeb931e0811a2c9975b2226de3299a7522e52c60b72282e167b"
+    },
+    {
+      "path": "wasm-tools/example.wast",
+      "sha256": "b88d530ae25d86650e2c48190f3e50900ae9f778b645ceb4294a32ac2c37b42c"
+    },
+    {
+      "path": "wasm-tools/export-ascription.wast",
+      "sha256": "52f71f72fb70925183e89a71dd98d2567c22abe8f83da8871b7b4f115e8015c0"
+    },
+    {
+      "path": "wasm-tools/export-introduces-alias.wast",
+      "sha256": "2219f47c1c9e95e34d3f4541d7fa01c88c852fa9a6e4d86786276d6eb70b933f"
+    },
+    {
+      "path": "wasm-tools/export.wast",
+      "sha256": "3e73dbe7a281d2b6bba0f39e76b41c75417f13a83ba5480e71ed41fe9fb14bef"
+    },
+    {
+      "path": "wasm-tools/func.wast",
+      "sha256": "c4b3f22e16d278000fe7cb256bbb149b2867534298a64f7b979d8793189c853b"
+    },
+    {
+      "path": "wasm-tools/import.wast",
+      "sha256": "c0c6da019d476ebd723344b279dcebdc1d5e1ab6c64dc8b8cee3ae9b64905333"
+    },
+    {
+      "path": "wasm-tools/imports-exports.wast",
+      "sha256": "33da026b47479b637c833b2465b4a81031be80335d2aaebb8e6f775b81f2383e"
+    },
+    {
+      "path": "wasm-tools/inline-exports.wast",
+      "sha256": "01d29687ecc2629388f792de3a302145f181e6da82f688d6b2eabddff68d9c8f"
+    },
+    {
+      "path": "wasm-tools/instance-type.wast",
+      "sha256": "9e4a6bb2dddffd20c17d88758ba1cad4038eaaaa88f8fae3b3538a8f0069f581"
+    },
+    {
+      "path": "wasm-tools/instantiate.wast",
+      "sha256": "84cda61d865e955af0f9255691a52094e5a7700a2dfe289592af215d23dc84fb"
+    },
+    {
+      "path": "wasm-tools/invalid.wast",
+      "sha256": "91b2e8db497512d18e8d413398d17b7baf9dc19053cd7b5909356d7c7c88ce83"
+    },
+    {
+      "path": "wasm-tools/link.wast",
+      "sha256": "ca89adffd4c102c418aa1e9845625625964a7e1223c70069f8ce25f6e906b348"
+    },
+    {
+      "path": "wasm-tools/lots-of-aliases.wast",
+      "sha256": "6e4533f40781d0104568a5dbfbf899e43b3eefbd6bd5ecf0a4b87739a6a0d604"
+    },
+    {
+      "path": "wasm-tools/lower.wast",
+      "sha256": "5453d57803a263d81a37afc0eb9e99a4616ad3cf2299cb2c135ae1ac5a8e5023"
+    },
+    {
+      "path": "wasm-tools/memory64.wast",
+      "sha256": "5c3e60f4c740fb1f78a1827db8f263ee7932fde52dd8e01fa4e815656116470e"
+    },
+    {
+      "path": "wasm-tools/module-link.wast",
+      "sha256": "5663e61403825755091b63d90e484fabdbc01ca73c366fdff7dead7513756b37"
+    },
+    {
+      "path": "wasm-tools/more-flags.wast",
+      "sha256": "024239341d2a29b9f46d189d48f072c6ec539da943eb4acfb45508133ecb91d8"
+    },
+    {
+      "path": "wasm-tools/naming.wast",
+      "sha256": "e05ece25d4103feaf4e96ab5324365ee67020513357d5e6d87f17153ca1bc9e5"
+    },
+    {
+      "path": "wasm-tools/nested-modules.wast",
+      "sha256": "38bc99941422241ca7c3fe1d5d31cc3e538207980a065895cb1630d97eb49663"
+    },
+    {
+      "path": "wasm-tools/resources.wast",
+      "sha256": "072236f1ae653b89976ccc8c58d20ae66c2001ba4c5000efdda69067a13b18e9"
+    },
+    {
+      "path": "wasm-tools/tags.wast",
+      "sha256": "139ed3070269e75bca23c09c42ac16d3e9f4db42bcd1c5540be40a99752642ca"
+    },
+    {
+      "path": "wasm-tools/type-export-restrictions.wast",
+      "sha256": "23af405b8dc38fdb46e057862ed4dfe473ee11e1cfbd3b863671fa64993d2585"
+    },
+    {
+      "path": "wasm-tools/types.wast",
+      "sha256": "e1b314c15636255e8d9b9ca2b20ecb48216bae9ac743bd9d580f99da4c6e04be"
+    },
+    {
+      "path": "wasm-tools/very-nested.wast",
+      "sha256": "16369ff989cedede6262bb7f5bd20f2bc29175efa02dae0b33cafb27d19040d0"
+    },
+    {
+      "path": "wasm-tools/virtualize.wast",
+      "sha256": "c047e6c40bba1ba893683abf507f9b98cf74f1d2514dc761ea785bcd31bd41c7"
+    },
+    {
+      "path": "wasm-tools/wrong-order.wast",
+      "sha256": "6798a2e015661edb5cf85f65bb57bfea795e2e7b9f3a67a6f9d46b4f5db4b132"
+    },
+    {
+      "path": "wasmtime/LICENSE-Apache-2.0_WITH_LLVM-exception",
+      "sha256": "268872b9816f90fd8e85db5a28d33f8150ebb8dd016653fb39ef1f94f2686bc5"
+    },
+    {
+      "path": "wasmtime/adapter.wast",
+      "sha256": "9f43723f24ac7dec8d0a136d164fd198b337be7a53b4ce9e2c232762c416b643"
+    },
+    {
+      "path": "wasmtime/aliasing.wast",
+      "sha256": "240f18acff9546907625a539c1404e056ca903e9623a55cd099abb1cb4fab684"
+    },
+    {
+      "path": "wasmtime/fused.wast",
+      "sha256": "2abe21b6c8b8069a582688123343d4f562e1ac4945ce7876b9493c3d9b7dc4c0"
+    },
+    {
+      "path": "wasmtime/import.wast",
+      "sha256": "db6d83d7c3150672470f3c7e78df50edf0e2985a03eda09e53bc0e510a46a70a"
+    },
+    {
+      "path": "wasmtime/instance.wast",
+      "sha256": "9f7034514a5fbf97330e7b4e99ba18dea577505114ffdbeac752d5f1beb5b0a6"
+    },
+    {
+      "path": "wasmtime/linking.wast",
+      "sha256": "2d12d58e2592b4c53d9c7bd636779ccbe646685316725e7c9d67663fca7ee2aa"
+    },
+    {
+      "path": "wasmtime/modules.wast",
+      "sha256": "1d77183ba2d0d0f698d6dfc642006b8f09340168dff309355cd56d72e99a2357"
+    },
+    {
+      "path": "wasmtime/nested.wast",
+      "sha256": "cf0e0dda1d1d1ffc098e2208a09324a6a2c289f866b13bc2022f90c06c9b2a35"
+    },
+    {
+      "path": "wasmtime/resources.wast",
+      "sha256": "46d5217ee385323cdb2e17b25a106ea93fc36f76b6f3b73da328ed5150fd4f7f"
+    },
+    {
+      "path": "wasmtime/restrictions.wast",
+      "sha256": "c5f247681b53e35e42d82153d7f5340b4a59148538353041d0323e2bd6cf9f61"
+    },
+    {
+      "path": "wasmtime/simple.wast",
+      "sha256": "d8ff64e2ae6f4765782b8ab497e7a1ba630a81832ee0a11a2c3a9aa15e23a199"
+    },
+    {
+      "path": "wasmtime/strings.wast",
+      "sha256": "d2d41f45f7f6a82c76c2c37086feab7346c8f27f6e0fff12854c94248caf9066"
+    },
+    {
+      "path": "wasmtime/tags.wast",
+      "sha256": "3f3bc1deb581dbaca861f7acb3c1e780ca211f15f5b3ebc7e20089c0c5e2d73b"
+    },
+    {
+      "path": "wasmtime/types.wast",
+      "sha256": "fcd1262c95ffba205267e519588a1ae115b7698d51d5f6ba768e3055e7bfeb39"
+    }
+  ]
+}

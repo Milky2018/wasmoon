@@ -464,7 +464,8 @@ class GateManifestTests(unittest.TestCase):
         )
         self.assertIn(
             "needs: [detect-machv-cutover, machv-cutover, "
-            "build-ubuntu-sanitizer, build-macos, build-ubuntu-amd64]",
+            "build-ubuntu-sanitizer, build-macos, build-ubuntu-amd64, "
+            "component-model]",
             workflow,
         )
         self.assertIn(
@@ -474,6 +475,11 @@ class GateManifestTests(unittest.TestCase):
         self.assertIn(
             "--required-job build-ubuntu-amd64=${{ "
             "needs.build-ubuntu-amd64.result }}",
+            workflow,
+        )
+        self.assertIn(
+            "--required-job component-model=${{ "
+            "needs.component-model.result }}",
             workflow,
         )
 

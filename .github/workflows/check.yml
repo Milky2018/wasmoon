@@ -8,6 +8,7 @@ on:
 
 env:
   WASM_TOOLS_VERSION: "1.248.0"
+  COMPONENT_WASM_TOOLS_VERSION: "1.254.0"
   MOONBIT_INSTALL_VERSION: "nightly"
 
 jobs:
@@ -90,16 +91,6 @@ jobs:
         run: |
           moon build --target native --release
           ./install.sh
-
-      - name: install wasm-tools
-        run: |
-          cargo install wasm-tools --version "$WASM_TOOLS_VERSION" --locked
-          wasm-tools --version
-
-      - name: run component-spec subset
-        timeout-minutes: 5
-        run: |
-          python3 scripts/run_component_wast.py --dir component-spec --rec --dump-failures
 
       - name: run wast spec tests
         timeout-minutes: 5
@@ -220,16 +211,6 @@ jobs:
           moon build --target native --release
           ./install.sh
 
-      - name: install wasm-tools
-        run: |
-          cargo install wasm-tools --version "$WASM_TOOLS_VERSION" --locked
-          wasm-tools --version
-
-      - name: run component-spec subset (amd64)
-        timeout-minutes: 5
-        run: |
-          python3 scripts/run_component_wast.py --dir component-spec --rec --dump-failures
-
       - name: run wast spec tests (amd64)
         id: wast_amd64
         timeout-minutes: 10
@@ -261,6 +242,56 @@ jobs:
       - name: fail fast if wast spec tests failed (amd64)
         if: steps.wast_amd64.outcome != 'success'
         run: exit 1
+
+  component-model:
+    name: Component Model (${{ matrix.suite }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - macos-latest
+          - ubuntu-latest
+        suite:
+          - stable-0.2
+          - async-0.3
+          - future-gated
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: verify pinned official snapshot
+        run: python3 scripts/check_component_snapshot.py
+
+      - name: install system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl clang lld python3
+
+      - name: install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+
+      - name: prepare toolchain
+        run: |
+          moon version --all
+          moon update
+          cargo install wasm-tools \
+            --version "$COMPONENT_WASM_TOOLS_VERSION" --locked
+          wasm-tools --version
+
+      - name: build Wasmoon component harness
+        run: |
+          moon build --target native --release
+          ./install.sh
+
+      - name: run ${{ matrix.suite }} suite
+        timeout-minutes: 10
+        run: |
+          python3 scripts/run_component_wast.py \
+            --suite "${{ matrix.suite }}" \
+            --dump-failures
 
   build-ubuntu-sanitizer:
     runs-on: ubuntu-latest
@@ -443,7 +474,7 @@ jobs:
           retention-days: 30
 
   machv-cutover-manifest:
-    needs: [detect-machv-cutover, machv-cutover, build-ubuntu-sanitizer, build-macos, build-ubuntu-amd64]
+    needs: [detect-machv-cutover, machv-cutover, build-ubuntu-sanitizer, build-macos, build-ubuntu-amd64, component-model]
     if: always() && needs.detect-machv-cutover.outputs.required == 'true'
     runs-on: ubuntu-latest
     steps:
@@ -462,6 +493,7 @@ jobs:
             --out target/cutover-evidence/gate-manifest.json \
             --required-job build-macos=${{ needs.build-macos.result }} \
             --required-job build-ubuntu-amd64=${{ needs.build-ubuntu-amd64.result }} \
+            --required-job component-model=${{ needs.component-model.result }} \
             "${manifests[@]}"
       - name: upload combined closing-commit manifest
         if: always()
