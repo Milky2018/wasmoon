@@ -189,6 +189,8 @@ struct PendingStreamRead {
   // Writes can come from a different component instance/memory, so we must keep
   // enough info to write into the *reader* memory.
   mem_addr : Int?
+  realloc : CoreFuncRef?
+  encoding : StringEncoding
   // Resource table of the reader component instance (used to transfer `own` resources).
   reader_table : ResourceTable
   ptr : Int
@@ -235,12 +237,27 @@ struct StreamState {
 } derive(Debug)
 
 ///|
+pub(all) enum HostValueStreamPoll {
+  Pending
+  Values(Array[ComponentValue])
+  Closed
+} derive(Debug)
+
+///|
 struct HostValueStream {
   payload_ty : ValType
   types : Array[TypeDef?]
   values : Array[ComponentValue]
   next : Ref[Int]
-} derive(Debug)
+  pull : ((Int) -> HostValueStreamPoll raise ComponentRuntimeError)?
+  closed : Ref[Bool]
+}
+
+///|
+impl Debug for HostValueStream with fn to_repr(self) {
+  let _ = self
+  Repr::literal("HostValueStream")
+}
 
 ///|
 pub(all) struct StreamTable {
@@ -359,6 +376,7 @@ pub(all) struct AsyncState {
   next_future_id : Array[Int]
   futures : Map[Int, FutureState]
   future_endpoints : Map[Int64, FutureEndpoint]
+  host_future_values : Map[Int, HostFutureValue]
 
   // Per-component backpressure counter used by `canon backpressure.*`.
   // Matches Wasmtime behavior: enabled when > 0; valid range is u16.
@@ -448,6 +466,13 @@ struct FutureState {
   write_observed_readable_drop : Bool
   // True once a value has been provided via `future.write` (even if it blocked).
   wrote_value : Bool
+} derive(Debug)
+
+///|
+struct HostFutureValue {
+  payload_ty : ValType
+  types : Array[TypeDef?]
+  value : ComponentValue
 } derive(Debug)
 
 ///|
@@ -585,6 +610,7 @@ pub fn AsyncState::AsyncState(stream_table : StreamTable) -> AsyncState {
     next_future_id: [0],
     futures: Map([]),
     future_endpoints: Map([]),
+    host_future_values: Map([]),
     backpressure_by_instance: Map([]),
     next_error_context_by_component: Map([]),
     error_contexts: Map([]),

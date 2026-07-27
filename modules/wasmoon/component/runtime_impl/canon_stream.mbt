@@ -143,6 +143,140 @@ fn store_host_stream_value(
 }
 
 ///|
+fn poll_host_value_stream(
+  source : HostValueStream,
+  max_elements : Int,
+) -> HostValueStreamPoll raise ComponentRuntimeError {
+  let remaining = source.values.length() - source.next.val
+  if remaining > 0 {
+    let count = if max_elements < remaining { max_elements } else { remaining }
+    let values : Array[ComponentValue] = []
+    for i in 0..<count {
+      values.push(source.values[source.next.val + i])
+    }
+    source.next.val = source.next.val + count
+    Values(values)
+  } else if source.closed.val {
+    Closed
+  } else {
+    match source.pull {
+      Some(pull) =>
+        match pull(max_elements) {
+          Closed => {
+            source.closed.val = true
+            Closed
+          }
+          result => result
+        }
+      None => {
+        source.closed.val = true
+        Closed
+      }
+    }
+  }
+}
+
+///|
+fn progress_host_stream_sources(
+  async_state : AsyncState,
+  store : @runtime.Store,
+) -> Bool raise ComponentRuntimeError {
+  let table = async_state.stream_table
+  let mut progressed = false
+  for item in table.host_values.iter() {
+    let (stream_id, source) = item
+    guard table.streams.get(stream_id) is Some(state) &&
+      state.pending_read is Some(read) else {
+      continue
+    }
+    match poll_host_value_stream(source, read.len - read.filled) {
+      Pending => ()
+      Closed => {
+        table.streams.set(stream_id, {
+          elem_size: state.elem_size,
+          own_resource_type_id: state.own_resource_type_id,
+          pending_read: Some({
+            mem_addr: read.mem_addr,
+            realloc: read.realloc,
+            encoding: read.encoding,
+            reader_table: read.reader_table,
+            ptr: read.ptr,
+            len: read.len,
+            filled: read.filled,
+            reader_handle: read.reader_handle,
+            event_enqueued: true,
+          }),
+          pending_write: state.pending_write,
+          readable_dropped: state.readable_dropped,
+          writable_dropped: true,
+        })
+        enqueue_waitable_event(
+          async_state,
+          handle_key(read.reader_table.id, read.reader_handle),
+          {
+            owner_component_id: read.reader_table.id,
+            code: 2,
+            index: read.reader_handle,
+            payload: 1 | (read.filled << 4),
+          },
+        )
+        progressed = true
+      }
+      Values(values) => {
+        let resources : CanonResources = {
+          mem_addr: read.mem_addr,
+          realloc: read.realloc,
+          post_return: None,
+          encoding: read.encoding,
+        }
+        for i, value in values {
+          store_host_stream_value(
+            value,
+            source.payload_ty,
+            source.types,
+            resources,
+            store,
+            read.reader_table,
+            read.ptr + (read.filled + i) * state.elem_size,
+          )
+        }
+        let filled = read.filled + values.length()
+        table.streams.set(stream_id, {
+          elem_size: state.elem_size,
+          own_resource_type_id: state.own_resource_type_id,
+          pending_read: Some({
+            mem_addr: read.mem_addr,
+            realloc: read.realloc,
+            encoding: read.encoding,
+            reader_table: read.reader_table,
+            ptr: read.ptr,
+            len: read.len,
+            filled,
+            reader_handle: read.reader_handle,
+            event_enqueued: true,
+          }),
+          pending_write: state.pending_write,
+          readable_dropped: state.readable_dropped,
+          writable_dropped: false,
+        })
+        enqueue_waitable_event(
+          async_state,
+          handle_key(read.reader_table.id, read.reader_handle),
+          {
+            owner_component_id: read.reader_table.id,
+            code: 2,
+            index: read.reader_handle,
+            payload: filled << 4,
+          },
+        )
+        progressed = true
+      }
+    }
+  }
+  progressed
+}
+
+///|
 fn instantiate_canon_stream_read(
   _tyidx : Int,
   opts : Array[CanonOpt],
@@ -317,34 +451,93 @@ fn instantiate_canon_stream_read(
                 }
                 match table.host_values.get(ep.stream_id) {
                   Some(source) => {
-                    let remaining = source.values.length() - source.next.val
-                    let n = if len < remaining { len } else { remaining }
-                    for i in 0..<n {
-                      store_host_stream_value(
-                        source.values[source.next.val + i],
-                        source.payload_ty,
-                        source.types,
-                        resources,
-                        store,
-                        reader_table,
-                        ptr + i * st0.elem_size,
-                      ) catch {
-                        e => {
-                          trap_canon(e.to_string())
-                          return ret_i32(0)
+                    match st0.pending_read {
+                      Some(read) =>
+                        if read.reader_handle == handle && read.event_enqueued {
+                          table.streams.set(ep.stream_id, {
+                            elem_size: st0.elem_size,
+                            own_resource_type_id: st0.own_resource_type_id,
+                            pending_read: None,
+                            pending_write: st0.pending_write,
+                            readable_dropped: st0.readable_dropped,
+                            writable_dropped: st0.writable_dropped,
+                          })
+                          if st0.writable_dropped {
+                            ep.notified_peer_dropped[0] = true
+                          }
+                          return ret_i32(
+                            (if st0.writable_dropped { 1 } else { 0 }) |
+                            (read.filled << 4),
+                          )
+                        } else {
+                          return ret_i32(-1)
                         }
+                      None => ()
+                    }
+                    let poll_result = poll_host_value_stream(source, len) catch {
+                      e => {
+                        trap_canon(e.to_string())
+                        return ret_i32(0)
                       }
                     }
-                    source.next.val = source.next.val + n
-                    let closed = source.next.val >= source.values.length()
-                    if closed {
-                      ep.notified_peer_dropped[0] = true
+                    match poll_result {
+                      HostValueStreamPoll::Values(values) => {
+                        for i, value in values {
+                          store_host_stream_value(
+                            value,
+                            source.payload_ty,
+                            source.types,
+                            resources,
+                            store,
+                            reader_table,
+                            ptr + i * st0.elem_size,
+                          ) catch {
+                            e => {
+                              trap_canon(e.to_string())
+                              return ret_i32(0)
+                            }
+                          }
+                        }
+                        return ret_i32(values.length() << 4)
+                      }
+                      HostValueStreamPoll::Closed => {
+                        ep.notified_peer_dropped[0] = true
+                        table.streams.set(ep.stream_id, {
+                          elem_size: st0.elem_size,
+                          own_resource_type_id: st0.own_resource_type_id,
+                          pending_read: None,
+                          pending_write: st0.pending_write,
+                          readable_dropped: st0.readable_dropped,
+                          writable_dropped: true,
+                        })
+                        return ret_i32(1)
+                      }
+                      HostValueStreamPoll::Pending => {
+                        table.streams.set(ep.stream_id, {
+                          elem_size: st0.elem_size,
+                          own_resource_type_id: st0.own_resource_type_id,
+                          pending_read: Some({
+                            mem_addr: resources.mem_addr,
+                            realloc: resources.realloc,
+                            encoding: resources.encoding,
+                            reader_table,
+                            ptr,
+                            len,
+                            filled: 0,
+                            reader_handle: handle,
+                            event_enqueued: false,
+                          }),
+                          pending_write: st0.pending_write,
+                          readable_dropped: st0.readable_dropped,
+                          writable_dropped: false,
+                        })
+                        if is_async {
+                          return ret_i32(-1)
+                        }
+                        canon_suspend[0] = Some(Yield)
+                        raise Unreachable
+                      }
                     }
-                    let code = (if closed { 1 } else { 0 }) | (n << 4)
-                    set_canon_debug_message(
-                      "stream.read(host handle=\{handle} len=\{len})-> \{code}",
-                    )
-                    return ret_i32(code)
                   }
                   None => ()
                 }
@@ -429,6 +622,8 @@ fn instantiate_canon_stream_read(
                       )
                       let pr = {
                         mem_addr: resources.mem_addr,
+                        realloc: resources.realloc,
+                        encoding: resources.encoding,
                         reader_table,
                         ptr,
                         len: 0,
@@ -503,6 +698,8 @@ fn instantiate_canon_stream_read(
                       }
                       let pr = {
                         mem_addr: resources.mem_addr,
+                        realloc: resources.realloc,
+                        encoding: resources.encoding,
                         reader_table,
                         ptr,
                         len,
@@ -652,6 +849,8 @@ fn instantiate_canon_stream_read(
                       // Register a pending read and report BLOCKED.
                       let pr = {
                         mem_addr: resources.mem_addr,
+                        realloc: resources.realloc,
+                        encoding: resources.encoding,
                         reader_table,
                         ptr,
                         len,
@@ -936,6 +1135,8 @@ fn instantiate_canon_stream_write(
                         own_resource_type_id: st0.own_resource_type_id,
                         pending_read: Some({
                           mem_addr: pr0.mem_addr,
+                          realloc: pr0.realloc,
+                          encoding: pr0.encoding,
                           reader_table: pr0.reader_table,
                           ptr: pr0.ptr,
                           len: pr0.len,
@@ -1136,6 +1337,8 @@ fn instantiate_canon_stream_write(
                     }
                     let pr1 = {
                       mem_addr: pr0.mem_addr,
+                      realloc: pr0.realloc,
+                      encoding: pr0.encoding,
                       reader_table: pr0.reader_table,
                       ptr: pr0.ptr,
                       len: pr0.len,
@@ -1529,6 +1732,8 @@ fn instantiate_canon_stream_drop_writable(
                     own_resource_type_id: st0.own_resource_type_id,
                     pending_read: Some({
                       mem_addr: pr.mem_addr,
+                      realloc: pr.realloc,
+                      encoding: pr.encoding,
                       reader_table: pr.reader_table,
                       ptr: pr.ptr,
                       len: pr.len,

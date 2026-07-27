@@ -74,17 +74,12 @@ pub fn HostRuntimeState::new_host_value_stream(
     Some(payload_ty),
     types,
   )
-  if own_resource_type is Some(_) {
-    raise HostCallError(
-      "typed host streams of owned resources are not supported by this constructor",
-    )
-  }
   let stream_id = self.stream_table.next_stream_id[0]
   self.stream_table.next_stream_id[0] = stream_id + 1
   let readable = alloc_shared_handle(self.async_state, table.id)
   self.stream_table.streams.set(stream_id, {
     elem_size: element_size,
-    own_resource_type_id: None,
+    own_resource_type_id: own_resource_type,
     pending_read: None,
     pending_write: None,
     readable_dropped: false,
@@ -95,6 +90,8 @@ pub fn HostRuntimeState::new_host_value_stream(
     types,
     values: values.copy(),
     next: Ref(0),
+    pull: None,
+    closed: Ref(true),
   })
   self.stream_table.endpoints.set(handle_key(table.id, readable), {
     stream_id,
@@ -106,10 +103,92 @@ pub fn HostRuntimeState::new_host_value_stream(
 }
 
 ///|
-/// Create a completed `future<result<_, E>>` containing `ok(())`.
+/// Create a typed stream whose values are produced on demand by the embedding.
 ///
-/// Canonical memory represents this two-case result as a zero discriminant
-/// followed by zeroed payload storage.
+/// `pull` must be non-blocking. Returning `Pending` delegates waiting to the
+/// embedding event loop installed on `HostRuntimeState`; after that loop
+/// reports progress, the runtime polls the source again and completes the
+/// pending canonical read.
+pub fn HostRuntimeState::new_host_value_stream_source(
+  self : HostRuntimeState,
+  table : ResourceTable,
+  payload_ty : ValType,
+  types : Array[TypeDef?],
+  pull : (Int) -> HostValueStreamPoll raise ComponentRuntimeError,
+) -> Int raise ComponentRuntimeError {
+  let (element_size, own_resource_type) = stream_payload_info(
+    Some(payload_ty),
+    types,
+  )
+  let stream_id = self.stream_table.next_stream_id[0]
+  self.stream_table.next_stream_id[0] = stream_id + 1
+  let readable = alloc_shared_handle(self.async_state, table.id)
+  self.stream_table.streams.set(stream_id, {
+    elem_size: element_size,
+    own_resource_type_id: own_resource_type,
+    pending_read: None,
+    pending_write: None,
+    readable_dropped: false,
+    writable_dropped: false,
+  })
+  self.stream_table.host_values.set(stream_id, {
+    payload_ty,
+    types,
+    values: [],
+    next: Ref(0),
+    pull: Some(pull),
+    closed: Ref(false),
+  })
+  self.stream_table.endpoints.set(handle_key(table.id, readable), {
+    stream_id,
+    is_readable: true,
+    notified_peer_dropped: [false],
+    in_waitable_set: Ref(false),
+  })
+  readable
+}
+
+///|
+/// Create a completed typed future produced by the embedding.
+pub fn HostRuntimeState::new_host_value_future(
+  self : HostRuntimeState,
+  table : ResourceTable,
+  element_type : ValType,
+  types : Array[TypeDef?],
+  value : ComponentValue,
+) -> Int raise ComponentRuntimeError {
+  stream_payload_info(Some(element_type), types) |> ignore
+  let future_id = self.async_state.next_future_id[0]
+  self.async_state.next_future_id[0] = future_id + 1
+  let readable = alloc_shared_handle(self.async_state, table.id)
+  self.async_state.future_endpoints.set(handle_key(table.id, readable), {
+    future_id,
+    is_readable: true,
+    creator_component_id: table.id,
+    in_waitable_set: Ref(false),
+  })
+  self.async_state.futures.set(future_id, {
+    payload_ty: Some(element_type),
+    pending_read: None,
+    pending_write: None,
+    readable_dropped: false,
+    writable_dropped: true,
+    read_done: false,
+    write_succeeded: true,
+    write_observed_readable_drop: false,
+    wrote_value: true,
+  })
+  self.async_state.host_future_values.set(future_id, {
+    payload_ty: element_type,
+    types,
+    value,
+  })
+  readable
+}
+
+///|
+/// Create a completed `future<result<_, E>>` containing `ok(())` or one
+/// structured error-code case.
 pub fn HostRuntimeState::new_host_unit_result_future(
   self : HostRuntimeState,
   table : ResourceTable,
@@ -117,15 +196,7 @@ pub fn HostRuntimeState::new_host_unit_result_future(
   types : Array[TypeDef?],
   error_case? : Int,
 ) -> Int raise ComponentRuntimeError {
-  let (canonical_element_size, own_resource_type) = stream_payload_info(
-    Some(element_type),
-    types,
-  )
-  if own_resource_type is Some(_) {
-    raise HostCallError("unit result future cannot own a resource payload")
-  }
-  let bytes = Array::make(canonical_element_size, b'\x00')
-  match error_case {
+  let value = match error_case {
     Some(error_case) => {
       guard resolve_valtype(element_type, types) is TypeIdx(result_index) &&
         types.get(result_index) is Some(Some(Result(None, Some(error_type)))) &&
@@ -135,22 +206,11 @@ pub fn HostRuntimeState::new_host_unit_result_future(
         error_case < cases.length() else {
         raise HostCallError("future error does not match unit result type")
       }
-      bytes[0] = b'\x01'
-      let (payload_size, payload_alignment) = canonical_stream_layout(
-        error_type, types,
-      )
-      let payload_offset = align_to(1, payload_alignment)
-      for i in 0..<payload_size {
-        bytes[payload_offset + i] = ((error_case >> (i * 8)) & 0xff).to_byte()
-      }
+      Variant(1, Some(U32(error_case)))
     }
-    None => ()
+    None => Variant(0, None)
   }
-  self.new_closed_host_stream(
-    table,
-    canonical_element_size,
-    Bytes::from_array(bytes),
-  )
+  self.new_host_value_future(table, element_type, types, value)
 }
 
 ///|

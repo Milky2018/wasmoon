@@ -1121,7 +1121,13 @@ fn progress_one_subtask(
     }
   }
   match async_state.host_event_loop.val {
-    Some(event_loop) => (event_loop.wait)()
+    Some(event_loop) =>
+      if (event_loop.wait)() {
+        progress_host_stream_sources(async_state, store) |> ignore
+        true
+      } else {
+        false
+      }
     None => false
   }
 }

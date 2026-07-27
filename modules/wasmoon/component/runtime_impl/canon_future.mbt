@@ -184,6 +184,44 @@ fn instantiate_canon_future_read(
                   return cache_i32(0)
                 }
               }
+              match async_state.host_future_values.get(ep.future_id) {
+                Some(host_value) => {
+                  if st0.read_done {
+                    trap_canon(
+                      "cannot read from future after previous read succeeded",
+                    )
+                    return cache_i32(0)
+                  }
+                  store_host_stream_value(
+                    host_value.value,
+                    host_value.payload_ty,
+                    host_value.types,
+                    resources,
+                    store,
+                    state.resource_table,
+                    ptr,
+                  ) catch {
+                    e => {
+                      trap_canon(e.to_string())
+                      return cache_i32(0)
+                    }
+                  }
+                  async_state.host_future_values.remove(ep.future_id)
+                  async_state.futures.set(ep.future_id, {
+                    payload_ty: st0.payload_ty,
+                    pending_read: None,
+                    pending_write: None,
+                    readable_dropped: st0.readable_dropped,
+                    writable_dropped: true,
+                    read_done: true,
+                    write_succeeded: true,
+                    write_observed_readable_drop: false,
+                    wrote_value: true,
+                  })
+                  return cache_i32(0)
+                }
+                None => ()
+              }
               let cancelled = async_state.task_cancelled.get(task_id)
                 is Some(true)
               let mut explicit_thread_task = false
@@ -940,6 +978,7 @@ fn instantiate_canon_future_drop_readable(
                 st0.write_observed_readable_drop,
                 wrote_value: st0.wrote_value,
               })
+              async_state.host_future_values.remove(ep.future_id)
 
               // Remove from any waitable-set membership and queued events.
               remove_waitable_membership(

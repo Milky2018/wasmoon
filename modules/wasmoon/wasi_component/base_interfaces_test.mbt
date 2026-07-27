@@ -94,15 +94,14 @@ test "Preview 3 stdio uses canonical byte streams and result futures" {
   let runtime = host.runtime()
   let table = runtime.resource_table()
   debug_inspect(
-    [
+    (
       runtime.read_host_byte_stream(table, input),
       runtime.read_host_byte_stream(table, input),
-      runtime.read_host_byte_stream(table, completion),
-    ],
-    content="[Data(<Bytes: [0x6f, 0x6b]>), Closed, Data(<Bytes: [0x00, 0x00]>)]",
+      completion > 0,
+    ),
+    content="(Data(<Bytes: [0x6f, 0x6b]>), Closed, true)",
   )
   runtime.drop_host_readable_stream(table, input)
-  runtime.drop_host_readable_stream(table, completion)
   let output_stream = runtime.new_host_byte_stream(table, b"written")
   guard linker.get_import("wasi:cli/stdout@0.3.0-rc-2025-09-16")
     is Some(Instance(stdout)) else {
@@ -174,19 +173,14 @@ test "Preview 3 filesystem reuses capability roots and canonical byte streams" {
   let runtime = host.runtime()
   let table = runtime.resource_table()
   debug_inspect(
-    [
+    (
       runtime.read_host_byte_stream(table, readable),
       runtime.read_host_byte_stream(table, readable),
-      runtime.read_host_byte_stream(table, completion),
-    ],
-    content="[\n" +
-      "  Data(<Bytes: [0x64, 0x61, 0x74, 0x61]>),\n" +
-      "  Closed,\n" +
-      "  Data(<Bytes: [0x00, 0x00]>),\n" +
-      "]",
+      completion > 0,
+    ),
+    content="(Data(<Bytes: [0x64, 0x61, 0x74, 0x61]>), Closed, true)",
   )
   runtime.drop_host_readable_stream(table, readable)
-  runtime.drop_host_readable_stream(table, completion)
   debug_inspect(
     filesystem.call_exported_func("[method]descriptor.open-at", [
       U32(directory),
