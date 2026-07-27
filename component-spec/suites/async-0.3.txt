@@ -1,4 +1,4 @@
-# Component Model forms that require 🔀, but no later gated feature.
+# Component Model forms that require the WASI 0.3 async proposal, but no later gated proposal.
 async/async-calls-sync.wast
 async/builtin-trap-poisons-instance.wast
 async/cancel-stream.wast

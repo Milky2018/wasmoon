@@ -9,10 +9,12 @@ The `.wast` files are partitioned exactly once by the manifests in `suites/`:
 
 - `stable-0.2`: files whose valid component forms require no post-0.2
   Component Model feature.
-- `async-0.3`: files that require the WASI 0.3 🔀 async feature, but no later
-  emoji-gated feature.
+- `async-0.3`: files that require the Component Model async proposal included
+  in WASI 0.3, but no later gated proposal.
 - `future-gated`: files with at least one valid form that requires a later
-  emoji-gated feature, such as 🚝, 🚟, 🧵, 🐘, or 🏷️.
+  gated proposal, such as additional async built-ins, the stackful async ABI,
+  component threading, 64-bit canonical ABI contexts, or component
+  attributes.
 
 The partition was checked with the feature validator from the pinned
 `wasm-tools` release. A file is assigned to the newest feature level required
