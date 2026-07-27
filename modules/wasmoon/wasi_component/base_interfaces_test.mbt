@@ -377,6 +377,292 @@ test "Preview 2 filesystem rejects intermediate symlink escape" {
 }
 
 ///|
+test "Preview 2 sockets deny ambient network access by default" {
+  let linker = @runtime_impl.ComponentLinker()
+  let host = @wasi_component.WasiComponentHost(
+    linker,
+    @wasi_component.WasiComponentCtxBuilder().build(),
+  )
+  host.add_preview2_sockets()
+  guard linker.get_import("wasi:sockets/instance-network@0.2.11")
+    is Some(Instance(instance_network)) &&
+    instance_network.call_exported_func("instance-network", [])
+    is [U32(network)] &&
+    linker.get_import("wasi:sockets/tcp-create-socket@0.2.11")
+    is Some(Instance(create)) &&
+    create.call_exported_func("create-tcp-socket", [Variant(0, None)])
+    is [Variant(0, Some(U32(socket)))] &&
+    linker.get_import("wasi:sockets/tcp@0.2.11") is Some(Instance(tcp)) else {
+    fail("Preview 2 TCP interfaces were not registered")
+  }
+  debug_inspect(
+    tcp.call_exported_func("[method]tcp-socket.start-bind", [
+      U32(socket),
+      U32(network),
+      Variant(0, Some(Tuple([U16(0), Tuple([U8(127), U8(0), U8(0), U8(1)])]))),
+    ]),
+    content="[Variant(1, Some(Variant(1, None)))]",
+  )
+  guard linker.get_import("wasi:sockets/ip-name-lookup@0.2.11")
+    is Some(Instance(lookup)) else {
+    fail("Preview 2 name lookup was not registered")
+  }
+  debug_inspect(
+    lookup.call_exported_func("resolve-addresses", [
+      U32(network),
+      String("localhost"),
+    ]),
+    content="[Variant(1, Some(Variant(1, None)))]",
+  )
+}
+
+///|
+test "Preview 2 TCP loopback capability completes a polled connection" {
+  let linker = @runtime_impl.ComponentLinker()
+  let host = @wasi_component.WasiComponentHost(
+    linker,
+    @wasi_component.WasiComponentCtxBuilder()
+    .network_policy(LoopbackOnly)
+    .build(),
+  )
+  host.add_preview2_io()
+  host.add_preview2_sockets()
+  guard linker.get_import("wasi:sockets/instance-network@0.2.11")
+    is Some(Instance(instance_network)) &&
+    instance_network.call_exported_func("instance-network", [])
+    is [U32(network)] &&
+    linker.get_import("wasi:sockets/tcp-create-socket@0.2.11")
+    is Some(Instance(create)) &&
+    linker.get_import("wasi:sockets/tcp@0.2.11") is Some(Instance(tcp)) &&
+    linker.get_import("wasi:io/poll@0.2.11") is Some(Instance(poll)) &&
+    linker.get_import("wasi:io/streams@0.2.11") is Some(Instance(streams)) else {
+    fail("Preview 2 TCP dependencies were not registered")
+  }
+  guard create.call_exported_func("create-tcp-socket", [Variant(0, None)])
+    is [Variant(0, Some(U32(listener)))] else {
+    fail("listener socket was not created")
+  }
+  let loopback : @runtime_impl.ComponentValue = Variant(
+    0,
+    Some(Tuple([U16(0), Tuple([U8(127), U8(0), U8(0), U8(1)])])),
+  )
+  debug_inspect(
+    [
+      tcp.call_exported_func("[method]tcp-socket.start-bind", [
+        U32(listener),
+        U32(network),
+        loopback,
+      ]),
+      tcp.call_exported_func("[method]tcp-socket.finish-bind", [U32(listener)]),
+      tcp.call_exported_func("[method]tcp-socket.start-listen", [U32(listener)]),
+      tcp.call_exported_func("[method]tcp-socket.finish-listen", [U32(listener)]),
+    ],
+    content="[\n" +
+      "  [Variant(0, None)],\n" +
+      "  [Variant(0, None)],\n" +
+      "  [Variant(0, None)],\n" +
+      "  [Variant(0, None)],\n" +
+      "]",
+  )
+  guard tcp.call_exported_func("[method]tcp-socket.local-address", [
+      U32(listener),
+    ])
+    is [Variant(0, Some(Variant(0, Some(Tuple([U16(port), address])))))] else {
+    fail("listener local address was unavailable")
+  }
+  guard create.call_exported_func("create-tcp-socket", [Variant(0, None)])
+    is [Variant(0, Some(U32(client)))] else {
+    fail("client socket was not created")
+  }
+  debug_inspect(
+    tcp.call_exported_func("[method]tcp-socket.start-connect", [
+      U32(client),
+      U32(network),
+      Variant(0, Some(Tuple([U16(port), address]))),
+    ]),
+    content="[Variant(0, None)]",
+  )
+  guard tcp.call_exported_func("[method]tcp-socket.subscribe", [U32(client)])
+    is [U32(connect_pollable)] else {
+    fail("connect pollable was not created")
+  }
+  poll.call_exported_func("poll", [List([U32(connect_pollable)])]) |> ignore
+  guard tcp.call_exported_func("[method]tcp-socket.finish-connect", [
+      U32(client),
+    ])
+    is [Variant(0, Some(Tuple([U32(_client_input), U32(client_output)])))] else {
+    fail("client connection did not finish")
+  }
+  guard tcp.call_exported_func("[method]tcp-socket.subscribe", [U32(listener)])
+    is [U32(accept_pollable)] else {
+    fail("accept pollable was not created")
+  }
+  poll.call_exported_func("poll", [List([U32(accept_pollable)])]) |> ignore
+  guard tcp.call_exported_func("[method]tcp-socket.accept", [U32(listener)])
+    is [
+      Variant(
+        0,
+        Some(Tuple([U32(_accepted), U32(server_input), U32(_server_output)]))
+      ),
+    ] else {
+    fail("listener did not accept the client")
+  }
+  streams.call_exported_func("[method]output-stream.check-write", [
+    U32(client_output),
+  ])
+  |> ignore
+  debug_inspect(
+    streams.call_exported_func("[method]output-stream.write", [
+      U32(client_output),
+      List([U8(111), U8(107)]),
+    ]),
+    content="[Variant(0, None)]",
+  )
+  guard streams.call_exported_func("[method]input-stream.subscribe", [
+      U32(server_input),
+    ])
+    is [U32(read_pollable)] else {
+    fail("server read pollable was not created")
+  }
+  poll.call_exported_func("poll", [List([U32(read_pollable)])]) |> ignore
+  debug_inspect(
+    streams.call_exported_func("[method]input-stream.read", [
+      U32(server_input),
+      U64(2L),
+    ]),
+    content="[Variant(0, Some(List([U8(111), U8(107)])))]",
+  )
+}
+
+///|
+test "Preview 2 UDP loopback streams preserve datagram boundaries" {
+  let linker = @runtime_impl.ComponentLinker()
+  let host = @wasi_component.WasiComponentHost(
+    linker,
+    @wasi_component.WasiComponentCtxBuilder()
+    .network_policy(LoopbackOnly)
+    .build(),
+  )
+  host.add_preview2_io()
+  host.add_preview2_sockets()
+  guard linker.get_import("wasi:sockets/instance-network@0.2.11")
+    is Some(Instance(instance_network)) &&
+    instance_network.call_exported_func("instance-network", [])
+    is [U32(network)] &&
+    linker.get_import("wasi:sockets/udp-create-socket@0.2.11")
+    is Some(Instance(create)) &&
+    linker.get_import("wasi:sockets/udp@0.2.11") is Some(Instance(udp)) &&
+    linker.get_import("wasi:io/poll@0.2.11") is Some(Instance(poll)) else {
+    fail("Preview 2 UDP interfaces were not registered")
+  }
+  guard create.call_exported_func("create-udp-socket", [Variant(0, None)])
+    is [Variant(0, Some(U32(server)))] &&
+    create.call_exported_func("create-udp-socket", [Variant(0, None)])
+    is [Variant(0, Some(U32(client)))] else {
+    fail("UDP sockets were not created")
+  }
+  let loopback : @runtime_impl.ComponentValue = Variant(
+    0,
+    Some(Tuple([U16(0), Tuple([U8(127), U8(0), U8(0), U8(1)])])),
+  )
+  for socket in [server, client] {
+    debug_inspect(
+      [
+        udp.call_exported_func("[method]udp-socket.start-bind", [
+          U32(socket),
+          U32(network),
+          loopback,
+        ]),
+        udp.call_exported_func("[method]udp-socket.finish-bind", [U32(socket)]),
+      ],
+      content="[[Variant(0, None)], [Variant(0, None)]]",
+    )
+  }
+  guard udp.call_exported_func("[method]udp-socket.local-address", [U32(server)])
+    is [Variant(0, Some(server_address))] else {
+    fail("UDP server address was unavailable")
+  }
+  guard udp.call_exported_func("[method]udp-socket.local-address", [U32(client)])
+    is [Variant(0, Some(client_address))] else {
+    fail("UDP client address was unavailable")
+  }
+  guard udp.call_exported_func("[method]udp-socket.stream", [
+      U32(server),
+      Variant(0, None),
+    ])
+    is [Variant(0, Some(Tuple([U32(server_input), U32(_server_output)])))] &&
+    udp.call_exported_func("[method]udp-socket.stream", [
+      U32(client),
+      Variant(1, Some(server_address)),
+    ])
+    is [Variant(0, Some(Tuple([U32(_client_input), U32(client_output)])))] else {
+    fail("UDP datagram streams were not created")
+  }
+  debug_inspect(
+    udp.call_exported_func("[method]outgoing-datagram-stream.check-send", [
+      U32(client_output),
+    ]),
+    content="[Variant(0, Some(U64(64)))]",
+  )
+  debug_inspect(
+    udp.call_exported_func("[method]outgoing-datagram-stream.send", [
+      U32(client_output),
+      List([Tuple([List([U8(111), U8(107)]), Variant(0, None)])]),
+    ]),
+    content="[Variant(0, Some(U64(1)))]",
+  )
+  guard udp.call_exported_func("[method]incoming-datagram-stream.subscribe", [
+      U32(server_input),
+    ])
+    is [U32(read_pollable)] else {
+    fail("UDP receive pollable was not created")
+  }
+  poll.call_exported_func("poll", [List([U32(read_pollable)])]) |> ignore
+  guard udp.call_exported_func("[method]incoming-datagram-stream.receive", [
+      U32(server_input),
+      U64(1L),
+    ])
+    is [Variant(0, Some(List([Tuple([data, remote_address])])))] else {
+    fail("UDP datagram was not received")
+  }
+  debug_inspect(data, content="List([U8(111), U8(107)])")
+  guard remote_address == client_address else {
+    fail("UDP source address did not match the sending socket")
+  }
+  guard linker.get_import("wasi:sockets/ip-name-lookup@0.2.11")
+    is Some(Instance(lookup)) &&
+    lookup.call_exported_func("resolve-addresses", [
+      U32(network),
+      String("localhost"),
+    ])
+    is [Variant(0, Some(U32(resolver)))] &&
+    lookup.call_exported_func("[method]resolve-address-stream.subscribe", [
+      U32(resolver),
+    ])
+    is [U32(resolve_pollable)] else {
+    fail("loopback name resolver was not created")
+  }
+  poll.call_exported_func("poll", [List([U32(resolve_pollable)])]) |> ignore
+  guard lookup.call_exported_func(
+      "[method]resolve-address-stream.resolve-next-address",
+      [U32(resolver)],
+    )
+    is [Variant(0, Some(Variant(1, Some(resolved))))] else {
+    fail("localhost did not resolve")
+  }
+  guard resolved is Variant(0, Some(Tuple([U8(127), _, _, _]))) ||
+    resolved
+    is Variant(
+      1,
+      Some(
+        Tuple([U16(0), U16(0), U16(0), U16(0), U16(0), U16(0), U16(0), U16(1)])
+      )
+    ) else {
+    fail("localhost resolved outside the loopback capability")
+  }
+}
+
+///|
 test "Preview 2 clock subscriptions use the shared pollable identity" {
   let linker = @runtime_impl.ComponentLinker()
   let host = @wasi_component.WasiComponentHost(

@@ -7,6 +7,7 @@ extern "C" {
 
 #include <errno.h>
 #include <limits.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -1186,12 +1187,650 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_linkat(int olddirfd, moonbit_bytes_t oldpath
 // ============================================================================
 
 #ifndef _WIN32
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <pthread.h>
 #include <poll.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <signal.h>
 #include <time.h>
 #endif
+
+static int wasmoon_wasi_socket_family(int family) {
+#ifdef _WIN32
+  (void)family;
+  return -1;
+#else
+  return family == 4 ? AF_INET : family == 6 ? AF_INET6 : -1;
+#endif
+}
+
+static int wasmoon_wasi_socket_address(
+  int family,
+  const uint8_t *address,
+  int port,
+  int scope_id,
+  struct sockaddr_storage *storage,
+  socklen_t *length
+) {
+#ifdef _WIN32
+  (void)family;
+  (void)address;
+  (void)port;
+  (void)scope_id;
+  (void)storage;
+  (void)length;
+  errno = ENOTSUP;
+  return 0;
+#else
+  memset(storage, 0, sizeof(*storage));
+  if (family == 4) {
+    struct sockaddr_in *addr = (struct sockaddr_in *)storage;
+    addr->sin_family = AF_INET;
+    addr->sin_port = htons((uint16_t)port);
+    memcpy(&addr->sin_addr, address, 4);
+    *length = sizeof(*addr);
+    return 1;
+  }
+  if (family == 6) {
+    struct sockaddr_in6 *addr = (struct sockaddr_in6 *)storage;
+    addr->sin6_family = AF_INET6;
+    addr->sin6_port = htons((uint16_t)port);
+    addr->sin6_scope_id = (uint32_t)scope_id;
+    memcpy(&addr->sin6_addr, address, 16);
+    *length = sizeof(*addr);
+    return 1;
+  }
+  errno = EAFNOSUPPORT;
+  return 0;
+#endif
+}
+
+#ifndef _WIN32
+struct wasmoon_wasi_resolver_address {
+  uint8_t family;
+  uint8_t address[16];
+  uint32_t scope_id;
+};
+
+struct wasmoon_wasi_resolver {
+  pthread_mutex_t mutex;
+  int read_fd;
+  int write_fd;
+  int completed;
+  int dropped;
+  int gai_error;
+  size_t count;
+  size_t index;
+  struct wasmoon_wasi_resolver_address *addresses;
+  char *name;
+};
+
+static void wasmoon_wasi_resolver_free(struct wasmoon_wasi_resolver *resolver) {
+  if (resolver->read_fd >= 0) close(resolver->read_fd);
+  if (resolver->write_fd >= 0) close(resolver->write_fd);
+  free(resolver->addresses);
+  free(resolver->name);
+  pthread_mutex_destroy(&resolver->mutex);
+  free(resolver);
+}
+
+static int wasmoon_wasi_is_mapped_ipv4(const struct in6_addr *address) {
+  const uint8_t *bytes = (const uint8_t *)address;
+  for (int i = 0; i < 10; i++) {
+    if (bytes[i] != 0) return 0;
+  }
+  return bytes[10] == 0xff && bytes[11] == 0xff;
+}
+
+static void *wasmoon_wasi_resolver_run(void *argument) {
+  struct wasmoon_wasi_resolver *resolver =
+    (struct wasmoon_wasi_resolver *)argument;
+  struct addrinfo hints;
+  memset(&hints, 0, sizeof(hints));
+  hints.ai_family = AF_UNSPEC;
+  hints.ai_socktype = SOCK_STREAM;
+  struct addrinfo *results = NULL;
+  int gai_error = getaddrinfo(resolver->name, NULL, &hints, &results);
+  size_t count = 0;
+  if (gai_error == 0) {
+    for (struct addrinfo *current = results;
+         current != NULL;
+         current = current->ai_next) {
+      if (current->ai_family == AF_INET) {
+        count++;
+      } else if (current->ai_family == AF_INET6) {
+        struct sockaddr_in6 *address =
+          (struct sockaddr_in6 *)current->ai_addr;
+        if (!wasmoon_wasi_is_mapped_ipv4(&address->sin6_addr)) count++;
+      }
+    }
+  }
+  struct wasmoon_wasi_resolver_address *addresses = NULL;
+  if (count > 0) {
+    addresses = calloc(count, sizeof(*addresses));
+    if (addresses == NULL) {
+      gai_error = EAI_MEMORY;
+      count = 0;
+    }
+  }
+  size_t index = 0;
+  if (gai_error == 0) {
+    for (struct addrinfo *current = results;
+         current != NULL && index < count;
+         current = current->ai_next) {
+      if (current->ai_family == AF_INET) {
+        struct sockaddr_in *address = (struct sockaddr_in *)current->ai_addr;
+        addresses[index].family = 4;
+        memcpy(addresses[index].address, &address->sin_addr, 4);
+        index++;
+      } else if (current->ai_family == AF_INET6) {
+        struct sockaddr_in6 *address =
+          (struct sockaddr_in6 *)current->ai_addr;
+        if (wasmoon_wasi_is_mapped_ipv4(&address->sin6_addr)) continue;
+        addresses[index].family = 6;
+        addresses[index].scope_id = address->sin6_scope_id;
+        memcpy(addresses[index].address, &address->sin6_addr, 16);
+        index++;
+      }
+    }
+  }
+  if (results != NULL) freeaddrinfo(results);
+
+  pthread_mutex_lock(&resolver->mutex);
+  resolver->gai_error = gai_error;
+  resolver->addresses = addresses;
+  resolver->count = index;
+  resolver->completed = 1;
+  int dropped = resolver->dropped;
+  int write_fd = resolver->write_fd;
+  resolver->write_fd = -1;
+  pthread_mutex_unlock(&resolver->mutex);
+  if (write_fd >= 0) {
+    uint8_t ready = 1;
+    (void)write(write_fd, &ready, sizeof(ready));
+    close(write_fd);
+  }
+  if (dropped) wasmoon_wasi_resolver_free(resolver);
+  return NULL;
+}
+#endif
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_wasi_resolver_start(
+  moonbit_bytes_t name,
+  int *poll_fd
+) {
+#ifdef _WIN32
+  (void)name;
+  (void)poll_fd;
+  errno = ENOTSUP;
+  return 0;
+#else
+  int pipe_fds[2];
+  if (pipe(pipe_fds) != 0) return 0;
+  int flags = fcntl(pipe_fds[0], F_GETFL, 0);
+  if (flags < 0 || fcntl(pipe_fds[0], F_SETFL, flags | O_NONBLOCK) != 0) {
+    close(pipe_fds[0]);
+    close(pipe_fds[1]);
+    return 0;
+  }
+  struct wasmoon_wasi_resolver *resolver = calloc(1, sizeof(*resolver));
+  if (resolver == NULL) {
+    close(pipe_fds[0]);
+    close(pipe_fds[1]);
+    return 0;
+  }
+  resolver->read_fd = pipe_fds[0];
+  resolver->write_fd = pipe_fds[1];
+  resolver->name = strdup((const char *)name);
+  if (resolver->name == NULL || pthread_mutex_init(&resolver->mutex, NULL) != 0) {
+    close(pipe_fds[0]);
+    close(pipe_fds[1]);
+    free(resolver->name);
+    free(resolver);
+    return 0;
+  }
+  pthread_t thread;
+  if (pthread_create(&thread, NULL, wasmoon_wasi_resolver_run, resolver) != 0) {
+    wasmoon_wasi_resolver_free(resolver);
+    return 0;
+  }
+  pthread_detach(thread);
+  *poll_fd = resolver->read_fd;
+  return (int64_t)(intptr_t)resolver;
+#endif
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_wasi_resolver_next(
+  int64_t resolver_handle,
+  uint8_t *family,
+  uint8_t *address,
+  uint32_t *scope_id
+) {
+#ifdef _WIN32
+  (void)resolver_handle;
+  (void)family;
+  (void)address;
+  (void)scope_id;
+  errno = ENOTSUP;
+  return -1;
+#else
+  struct wasmoon_wasi_resolver *resolver =
+    (struct wasmoon_wasi_resolver *)(intptr_t)resolver_handle;
+  pthread_mutex_lock(&resolver->mutex);
+  if (!resolver->completed) {
+    pthread_mutex_unlock(&resolver->mutex);
+    return 1;
+  }
+  if (resolver->gai_error != 0) {
+    int error = resolver->gai_error;
+    pthread_mutex_unlock(&resolver->mutex);
+    if (error == EAI_AGAIN) return 4;
+#if defined(EAI_NONAME)
+    if (error == EAI_NONAME) return 3;
+#endif
+#if defined(EAI_NODATA) && EAI_NODATA != EAI_NONAME
+    if (error == EAI_NODATA) return 3;
+#endif
+    return 5;
+  }
+  if (resolver->index >= resolver->count) {
+    pthread_mutex_unlock(&resolver->mutex);
+    return 2;
+  }
+  struct wasmoon_wasi_resolver_address *result =
+    &resolver->addresses[resolver->index++];
+  *family = result->family;
+  memset(address, 0, 16);
+  memcpy(address, result->address, result->family == 4 ? 4 : 16);
+  *scope_id = result->scope_id;
+  pthread_mutex_unlock(&resolver->mutex);
+  return 0;
+#endif
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_wasi_resolver_drop(int64_t resolver_handle) {
+#ifndef _WIN32
+  struct wasmoon_wasi_resolver *resolver =
+    (struct wasmoon_wasi_resolver *)(intptr_t)resolver_handle;
+  if (resolver == NULL) return;
+  pthread_mutex_lock(&resolver->mutex);
+  resolver->dropped = 1;
+  int completed = resolver->completed;
+  int read_fd = resolver->read_fd;
+  resolver->read_fd = -1;
+  pthread_mutex_unlock(&resolver->mutex);
+  if (read_fd >= 0) close(read_fd);
+  if (completed) wasmoon_wasi_resolver_free(resolver);
+#else
+  (void)resolver_handle;
+#endif
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_wasi_socket_create(int family, int kind) {
+#ifdef _WIN32
+  (void)family;
+  (void)kind;
+  errno = ENOTSUP;
+  return -1;
+#else
+  int native_family = wasmoon_wasi_socket_family(family);
+  if (native_family < 0 || (kind != 1 && kind != 2)) {
+    errno = EAFNOSUPPORT;
+    return -1;
+  }
+  int fd = socket(native_family, kind == 1 ? SOCK_STREAM : SOCK_DGRAM, 0);
+  if (fd < 0) return -1;
+  int flags = fcntl(fd, F_GETFL, 0);
+  if (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) != 0) {
+    close(fd);
+    return -1;
+  }
+  if (native_family == AF_INET6) {
+    int enabled = 1;
+    if (setsockopt(
+      fd,
+      IPPROTO_IPV6,
+      IPV6_V6ONLY,
+      &enabled,
+      sizeof(enabled)
+    ) != 0) {
+      close(fd);
+      return -1;
+    }
+  }
+  return fd;
+#endif
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_wasi_socket_bind(
+  int fd,
+  int family,
+  moonbit_bytes_t address,
+  int port,
+  int scope_id
+) {
+#ifdef _WIN32
+  (void)fd;
+  (void)family;
+  (void)address;
+  (void)port;
+  (void)scope_id;
+  errno = ENOTSUP;
+  return -1;
+#else
+  struct sockaddr_storage storage;
+  socklen_t length;
+  if (!wasmoon_wasi_socket_address(
+    family,
+    address,
+    port,
+    scope_id,
+    &storage,
+    &length
+  )) return -1;
+  return bind(fd, (struct sockaddr *)&storage, length);
+#endif
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_wasi_socket_connect(
+  int fd,
+  int family,
+  moonbit_bytes_t address,
+  int port,
+  int scope_id
+) {
+#ifdef _WIN32
+  (void)fd;
+  (void)family;
+  (void)address;
+  (void)port;
+  (void)scope_id;
+  errno = ENOTSUP;
+  return -1;
+#else
+  struct sockaddr_storage storage;
+  socklen_t length;
+  if (!wasmoon_wasi_socket_address(
+    family,
+    address,
+    port,
+    scope_id,
+    &storage,
+    &length
+  )) return -1;
+  if (connect(fd, (struct sockaddr *)&storage, length) == 0) return 0;
+  if (errno == EINPROGRESS || errno == EWOULDBLOCK) return 1;
+  return -1;
+#endif
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_wasi_socket_disconnect(int fd) {
+#ifdef _WIN32
+  (void)fd;
+  errno = ENOTSUP;
+  return -1;
+#else
+  struct sockaddr_storage storage;
+  memset(&storage, 0, sizeof(storage));
+  storage.ss_family = AF_UNSPEC;
+  return connect(fd, (struct sockaddr *)&storage, sizeof(storage));
+#endif
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_wasi_socket_recv_from(
+  int fd,
+  moonbit_bytes_t data,
+  int length,
+  uint8_t *family,
+  uint8_t *address,
+  uint16_t *port,
+  uint32_t *scope_id
+) {
+#ifdef _WIN32
+  (void)fd;
+  (void)data;
+  (void)length;
+  (void)family;
+  (void)address;
+  (void)port;
+  (void)scope_id;
+  errno = ENOTSUP;
+  return -1;
+#else
+  struct sockaddr_storage storage;
+  socklen_t storage_length = sizeof(storage);
+  ssize_t received = recvfrom(
+    fd,
+    data,
+    (size_t)length,
+    0,
+    (struct sockaddr *)&storage,
+    &storage_length
+  );
+  if (received < 0) return -1;
+  memset(address, 0, 16);
+  if (storage.ss_family == AF_INET) {
+    struct sockaddr_in *addr = (struct sockaddr_in *)&storage;
+    *family = 4;
+    *port = ntohs(addr->sin_port);
+    *scope_id = 0;
+    memcpy(address, &addr->sin_addr, 4);
+  } else if (storage.ss_family == AF_INET6) {
+    struct sockaddr_in6 *addr = (struct sockaddr_in6 *)&storage;
+    *family = 6;
+    *port = ntohs(addr->sin6_port);
+    *scope_id = addr->sin6_scope_id;
+    memcpy(address, &addr->sin6_addr, 16);
+  } else {
+    errno = EAFNOSUPPORT;
+    return -1;
+  }
+  return (int64_t)received;
+#endif
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_wasi_socket_send_to(
+  int fd,
+  moonbit_bytes_t data,
+  int length,
+  int has_address,
+  int family,
+  moonbit_bytes_t address,
+  int port,
+  int scope_id
+) {
+#ifdef _WIN32
+  (void)fd;
+  (void)data;
+  (void)length;
+  (void)has_address;
+  (void)family;
+  (void)address;
+  (void)port;
+  (void)scope_id;
+  errno = ENOTSUP;
+  return -1;
+#else
+  if (!has_address) {
+    return (int64_t)send(fd, data, (size_t)length, 0);
+  }
+  struct sockaddr_storage storage;
+  socklen_t storage_length;
+  if (!wasmoon_wasi_socket_address(
+    family,
+    address,
+    port,
+    scope_id,
+    &storage,
+    &storage_length
+  )) return -1;
+  return (int64_t)sendto(
+    fd,
+    data,
+    (size_t)length,
+    0,
+    (struct sockaddr *)&storage,
+    storage_length
+  );
+#endif
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_wasi_socket_listen(int fd, int backlog) {
+#ifdef _WIN32
+  (void)fd;
+  (void)backlog;
+  errno = ENOTSUP;
+  return -1;
+#else
+  return listen(fd, backlog);
+#endif
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_wasi_socket_error(int fd) {
+#ifdef _WIN32
+  (void)fd;
+  errno = ENOTSUP;
+  return -1;
+#else
+  int error = 0;
+  socklen_t length = sizeof(error);
+  if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &length) != 0) return -1;
+  return error;
+#endif
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_wasi_socket_address_get(
+  int fd,
+  int peer,
+  uint8_t *family,
+  uint8_t *address,
+  uint16_t *port,
+  uint32_t *scope_id
+) {
+#ifdef _WIN32
+  (void)fd;
+  (void)peer;
+  (void)family;
+  (void)address;
+  (void)port;
+  (void)scope_id;
+  errno = ENOTSUP;
+  return -1;
+#else
+  struct sockaddr_storage storage;
+  socklen_t length = sizeof(storage);
+  int result = peer
+    ? getpeername(fd, (struct sockaddr *)&storage, &length)
+    : getsockname(fd, (struct sockaddr *)&storage, &length);
+  if (result != 0) return -1;
+  memset(address, 0, 16);
+  if (storage.ss_family == AF_INET) {
+    struct sockaddr_in *addr = (struct sockaddr_in *)&storage;
+    *family = 4;
+    *port = ntohs(addr->sin_port);
+    *scope_id = 0;
+    memcpy(address, &addr->sin_addr, 4);
+    return 0;
+  }
+  if (storage.ss_family == AF_INET6) {
+    struct sockaddr_in6 *addr = (struct sockaddr_in6 *)&storage;
+    *family = 6;
+    *port = ntohs(addr->sin6_port);
+    *scope_id = addr->sin6_scope_id;
+    memcpy(address, &addr->sin6_addr, 16);
+    return 0;
+  }
+  errno = EAFNOSUPPORT;
+  return -1;
+#endif
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_wasi_socket_option_get(
+  int fd,
+  int family,
+  int option
+) {
+#ifdef _WIN32
+  (void)fd;
+  (void)family;
+  (void)option;
+  errno = ENOTSUP;
+  return -1;
+#else
+  int level = SOL_SOCKET;
+  int native_option = 0;
+  switch (option) {
+    case 0: native_option = SO_KEEPALIVE; break;
+    case 1:
+      level = IPPROTO_TCP;
+#if defined(__APPLE__)
+      native_option = TCP_KEEPALIVE;
+#else
+      native_option = TCP_KEEPIDLE;
+#endif
+      break;
+    case 2: level = IPPROTO_TCP; native_option = TCP_KEEPINTVL; break;
+    case 3: level = IPPROTO_TCP; native_option = TCP_KEEPCNT; break;
+    case 4:
+      level = family == 6 ? IPPROTO_IPV6 : IPPROTO_IP;
+      native_option = family == 6 ? IPV6_UNICAST_HOPS : IP_TTL;
+      break;
+    case 5: native_option = SO_RCVBUF; break;
+    case 6: native_option = SO_SNDBUF; break;
+    case 7: native_option = SO_REUSEADDR; break;
+    default: errno = EINVAL; return -1;
+  }
+  int value = 0;
+  socklen_t length = sizeof(value);
+  if (getsockopt(fd, level, native_option, &value, &length) != 0) return -1;
+  return value;
+#endif
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_wasi_socket_option_set(
+  int fd,
+  int family,
+  int option,
+  int value
+) {
+#ifdef _WIN32
+  (void)fd;
+  (void)family;
+  (void)option;
+  (void)value;
+  errno = ENOTSUP;
+  return -1;
+#else
+  int level = SOL_SOCKET;
+  int native_option = 0;
+  switch (option) {
+    case 0: native_option = SO_KEEPALIVE; break;
+    case 1:
+      level = IPPROTO_TCP;
+#if defined(__APPLE__)
+      native_option = TCP_KEEPALIVE;
+#else
+      native_option = TCP_KEEPIDLE;
+#endif
+      break;
+    case 2: level = IPPROTO_TCP; native_option = TCP_KEEPINTVL; break;
+    case 3: level = IPPROTO_TCP; native_option = TCP_KEEPCNT; break;
+    case 4:
+      level = family == 6 ? IPPROTO_IPV6 : IPPROTO_IP;
+      native_option = family == 6 ? IPV6_UNICAST_HOPS : IP_TTL;
+      break;
+    case 5: native_option = SO_RCVBUF; break;
+    case 6: native_option = SO_SNDBUF; break;
+    case 7: native_option = SO_REUSEADDR; break;
+    default: errno = EINVAL; return -1;
+  }
+  return setsockopt(fd, level, native_option, &value, sizeof(value));
+#endif
+}
 
 // Nanosleep - sleep for specified nanoseconds
 // Returns 0 on success, -1 on error
@@ -1367,7 +2006,14 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_accept(int sockfd) {
   (void)sockfd;
   return -1;
 #else
-  return accept(sockfd, NULL, NULL);
+  int fd = accept(sockfd, NULL, NULL);
+  if (fd < 0) return -1;
+  int flags = fcntl(fd, F_GETFL, 0);
+  if (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) != 0) {
+    close(fd);
+    return -1;
+  }
+  return fd;
 #endif
 }
 

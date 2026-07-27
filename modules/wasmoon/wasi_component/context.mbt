@@ -17,8 +17,16 @@ struct WasiComponentCtx {
   stdin_rep : Int
   stdout_rep : Int
   stderr_rep : Int
+  network_rep : Int
   preopens : Array[PreopenState]
 }
+
+///|
+pub(all) enum WasiNetworkPolicy {
+  DenyAll
+  LoopbackOnly
+  AllowAll
+} derive(Eq)
 
 ///|
 struct WasiComponentCtxBuilder {
@@ -32,6 +40,7 @@ struct WasiComponentCtxBuilder {
   mut stderr : (Bytes) -> Bool
   mut stdout_fd : Int?
   mut stderr_fd : Int?
+  mut network_policy : WasiNetworkPolicy
   preopens : Array[PreopenState]
 }
 
@@ -48,6 +57,7 @@ pub fn WasiComponentCtxBuilder::WasiComponentCtxBuilder() -> WasiComponentCtxBui
     stderr: fn(_bytes) { true },
     stdout_fd: None,
     stderr_fd: None,
+    network_policy: DenyAll,
     preopens: [],
   }
 }
@@ -160,6 +170,19 @@ pub fn WasiComponentCtxBuilder::inherit_stdio(
 }
 
 ///|
+/// Set the explicit network capability granted to this component.
+///
+/// The default is `DenyAll`. `LoopbackOnly` permits bind, connect, and name
+/// lookup only for loopback addresses and `localhost`.
+pub fn WasiComponentCtxBuilder::network_policy(
+  self : WasiComponentCtxBuilder,
+  policy : WasiNetworkPolicy,
+) -> WasiComponentCtxBuilder {
+  self.network_policy = policy
+  self
+}
+
+///|
 /// Grant one host directory to the component under `guest_path`.
 ///
 /// The host path is opened immediately and all guest path operations remain
@@ -209,6 +232,7 @@ pub fn WasiComponentCtxBuilder::build(
   let stdin_rep = 1
   let stdout_rep = 2
   let stderr_rep = 3
+  let network_rep = 4
   resources.set(
     stdin_rep,
     InputStream({
@@ -224,6 +248,7 @@ pub fn WasiComponentCtxBuilder::build(
       closed: Ref(false),
     }),
   )
+  resources.set(network_rep, Network(self.network_policy))
   resources.set(
     stdout_rep,
     OutputStream({
@@ -256,12 +281,13 @@ pub fn WasiComponentCtxBuilder::build(
     insecure_state: Ref(initial_state),
     insecure_seed: self.insecure_seed,
     resources,
-    next_resource_rep: Ref(4),
+    next_resource_rep: Ref(5),
     async_deadlines: Map([]),
     next_async_operation: Ref(1),
     stdin_rep,
     stdout_rep,
     stderr_rep,
+    network_rep,
     preopens: self.preopens.copy(),
   }
 }
@@ -347,6 +373,75 @@ priv enum PollSource {
   Deadline(Int64)
   Input(Int)
   Output(Int)
+  Socket(Int, Int)
+  OwnedSocket(Int, Int)
+}
+
+///|
+priv enum TcpSocketPhase {
+  Unbound
+  BindStarted
+  Bound
+  ConnectStarted
+  Connected
+  ListenStarted
+  Listening
+  Closed
+} derive(Eq)
+
+///|
+priv struct TcpSocketState {
+  fd : Int
+  family : Int
+  phase : Ref[TcpSocketPhase]
+  backlog : Ref[Int]
+  closed : Ref[Bool]
+}
+
+///|
+priv enum UdpSocketPhase {
+  UdpUnbound
+  UdpBindStarted
+  UdpBound
+  UdpClosed
+} derive(Eq)
+
+///|
+priv struct UdpSocketState {
+  fd : Int
+  family : Int
+  phase : Ref[UdpSocketPhase]
+  generation : Ref[Int]
+  remote : Ref[@wasi.NativeSocketAddress?]
+  policy : Ref[WasiNetworkPolicy]
+  closed : Ref[Bool]
+}
+
+///|
+priv struct IncomingDatagramStreamState {
+  fd : Int
+  generation : Ref[Int]
+  expected_generation : Int
+  closed : Ref[Bool]
+}
+
+///|
+priv struct OutgoingDatagramStreamState {
+  fd : Int
+  family : Int
+  generation : Ref[Int]
+  expected_generation : Int
+  remote : @wasi.NativeSocketAddress?
+  permit : Ref[Int64]
+  closed : Ref[Bool]
+}
+
+///|
+priv struct ResolveAddressStreamState {
+  resolver : Int64
+  poll_fd : Int
+  policy : WasiNetworkPolicy
+  closed : Ref[Bool]
 }
 
 ///|
@@ -399,6 +494,12 @@ priv enum WasiHostResource {
   Pollable(PollSource)
   Descriptor(DescriptorState)
   DirectoryEntryStream(DirectoryEntryStreamState)
+  Network(WasiNetworkPolicy)
+  TcpSocket(TcpSocketState)
+  UdpSocket(UdpSocketState)
+  IncomingDatagramStream(IncomingDatagramStreamState)
+  OutgoingDatagramStream(OutgoingDatagramStreamState)
+  ResolveAddressStream(ResolveAddressStreamState)
 }
 
 ///|
@@ -455,6 +556,35 @@ fn WasiComponentCtx::drop_resource(self : WasiComponentCtx, rep : Int) -> Unit {
         state.closed.val = true
         @wasi.native_close(state.fd) |> ignore
       }
+    Some(TcpSocket(state)) =>
+      if !state.closed.val {
+        state.closed.val = true
+        state.phase.val = Closed
+        @wasi.native_close(state.fd) |> ignore
+      }
+    Some(UdpSocket(state)) =>
+      if !state.closed.val {
+        state.closed.val = true
+        state.phase.val = UdpClosed
+        state.generation.val = state.generation.val + 1
+        @wasi.native_close(state.fd) |> ignore
+      }
+    Some(IncomingDatagramStream(state)) =>
+      if !state.closed.val {
+        state.closed.val = true
+        @wasi.native_close(state.fd) |> ignore
+      }
+    Some(OutgoingDatagramStream(state)) =>
+      if !state.closed.val {
+        state.closed.val = true
+        @wasi.native_close(state.fd) |> ignore
+      }
+    Some(ResolveAddressStream(state)) =>
+      if !state.closed.val {
+        state.closed.val = true
+        @wasi.native_resolver_drop(state.resolver)
+      }
+    Some(Pollable(OwnedSocket(fd, _events))) => @wasi.native_close(fd) |> ignore
     _ => ()
   }
   self.resources.remove(rep)

@@ -383,6 +383,11 @@ pub fn native_last_errno_to_wasi() -> Int {
 }
 
 ///|
+pub fn native_errno_to_wasi(errno : Int) -> Int {
+  c_errno_to_wasi(errno)
+}
+
+///|
 /// Check whether target path stays within base after symlink resolution
 pub fn native_path_within_base(
   base_path : String,
@@ -1056,6 +1061,104 @@ extern "c" fn c_poll(
 extern "c" fn c_socket_bytes_available(fd : Int) -> Int64 = "wasmoon_wasi_socket_bytes_available"
 
 ///|
+extern "c" fn c_socket_create(family : Int, kind : Int) -> Int = "wasmoon_wasi_socket_create"
+
+///|
+#borrow(address)
+extern "c" fn c_socket_bind(
+  fd : Int,
+  family : Int,
+  address : FixedArray[Byte],
+  port : Int,
+  scope_id : Int,
+) -> Int = "wasmoon_wasi_socket_bind"
+
+///|
+#borrow(address)
+extern "c" fn c_socket_connect(
+  fd : Int,
+  family : Int,
+  address : FixedArray[Byte],
+  port : Int,
+  scope_id : Int,
+) -> Int = "wasmoon_wasi_socket_connect"
+
+///|
+extern "c" fn c_socket_disconnect(fd : Int) -> Int = "wasmoon_wasi_socket_disconnect"
+
+///|
+#borrow(data, family, address, port, scope_id)
+extern "c" fn c_socket_recv_from(
+  fd : Int,
+  data : FixedArray[Byte],
+  length : Int,
+  family : FixedArray[Byte],
+  address : FixedArray[Byte],
+  port : FixedArray[UInt16],
+  scope_id : FixedArray[UInt],
+) -> Int64 = "wasmoon_wasi_socket_recv_from"
+
+///|
+#borrow(data, address)
+extern "c" fn c_socket_send_to(
+  fd : Int,
+  data : FixedArray[Byte],
+  length : Int,
+  has_address : Int,
+  family : Int,
+  address : FixedArray[Byte],
+  port : Int,
+  scope_id : Int,
+) -> Int64 = "wasmoon_wasi_socket_send_to"
+
+///|
+extern "c" fn c_socket_listen(fd : Int, backlog : Int) -> Int = "wasmoon_wasi_socket_listen"
+
+///|
+extern "c" fn c_socket_error(fd : Int) -> Int = "wasmoon_wasi_socket_error"
+
+///|
+#borrow(family, address, port, scope_id)
+extern "c" fn c_socket_address_get(
+  fd : Int,
+  peer : Int,
+  family : FixedArray[Byte],
+  address : FixedArray[Byte],
+  port : FixedArray[UInt16],
+  scope_id : FixedArray[UInt],
+) -> Int = "wasmoon_wasi_socket_address_get"
+
+///|
+extern "c" fn c_socket_option_get(fd : Int, family : Int, option : Int) -> Int = "wasmoon_wasi_socket_option_get"
+
+///|
+extern "c" fn c_socket_option_set(
+  fd : Int,
+  family : Int,
+  option : Int,
+  value : Int,
+) -> Int = "wasmoon_wasi_socket_option_set"
+
+///|
+#borrow(name, poll_fd)
+extern "c" fn c_resolver_start(
+  name : FixedArray[Byte],
+  poll_fd : FixedArray[Int],
+) -> Int64 = "wasmoon_wasi_resolver_start"
+
+///|
+#borrow(family, address, scope_id)
+extern "c" fn c_resolver_next(
+  resolver : Int64,
+  family : FixedArray[Byte],
+  address : FixedArray[Byte],
+  scope_id : FixedArray[UInt],
+) -> Int = "wasmoon_wasi_resolver_next"
+
+///|
+extern "c" fn c_resolver_drop(resolver : Int64) = "wasmoon_wasi_resolver_drop"
+
+///|
 extern "c" fn c_active_jit_context_ptr() -> Int64 = "wasmoon_jit_active_context_ptr"
 
 ///|
@@ -1188,6 +1291,243 @@ fn native_socket_bytes_available(fd : Int) -> Int64? {
   } else {
     Some(available)
   }
+}
+
+///|
+pub(all) struct NativeSocketAddress {
+  family : Int
+  address : FixedArray[Byte]
+  port : Int
+  scope_id : Int
+}
+
+///|
+pub fn native_socket_create(family : Int, kind : Int) -> Int? {
+  let fd = c_socket_create(family, kind)
+  if fd < 0 {
+    None
+  } else {
+    Some(fd)
+  }
+}
+
+///|
+pub fn native_socket_bind(fd : Int, address : NativeSocketAddress) -> Bool {
+  c_socket_bind(
+    fd,
+    address.family,
+    address.address,
+    address.port,
+    address.scope_id,
+  ) ==
+  0
+}
+
+///|
+pub fn native_socket_connect(fd : Int, address : NativeSocketAddress) -> Int {
+  c_socket_connect(
+    fd,
+    address.family,
+    address.address,
+    address.port,
+    address.scope_id,
+  )
+}
+
+///|
+pub fn native_socket_disconnect(fd : Int) -> Bool {
+  c_socket_disconnect(fd) == 0
+}
+
+///|
+pub(all) struct NativeSocketDatagram {
+  data : Bytes
+  address : NativeSocketAddress
+}
+
+///|
+pub fn native_socket_recv_from(
+  fd : Int,
+  capacity : Int,
+) -> NativeSocketDatagram? {
+  if capacity < 0 {
+    return None
+  }
+  let data = FixedArray::make(capacity, b'\x00')
+  let family = FixedArray::make(1, b'\x00')
+  let address = FixedArray::make(16, b'\x00')
+  let port : FixedArray[UInt16] = FixedArray::make(1, 0)
+  let scope_id = FixedArray::make(1, 0U)
+  let received = c_socket_recv_from(
+    fd, data, capacity, family, address, port, scope_id,
+  )
+  if received < 0L || received > capacity.to_int64() {
+    None
+  } else {
+    let bytes : Array[Byte] = []
+    for i in 0..<received.to_int() {
+      bytes.push(data[i])
+    }
+    Some({
+      data: Bytes::from_array(bytes),
+      address: {
+        family: family[0].to_int(),
+        address,
+        port: port[0].to_uint().reinterpret_as_int(),
+        scope_id: scope_id[0].reinterpret_as_int(),
+      },
+    })
+  }
+}
+
+///|
+pub fn native_socket_send_to(
+  fd : Int,
+  data : FixedArray[Byte],
+  address : NativeSocketAddress?,
+) -> Int64 {
+  match address {
+    Some(address) =>
+      c_socket_send_to(
+        fd,
+        data,
+        data.length(),
+        1,
+        address.family,
+        address.address,
+        address.port,
+        address.scope_id,
+      )
+    None =>
+      c_socket_send_to(
+        fd,
+        data,
+        data.length(),
+        0,
+        4,
+        FixedArray::make(4, b'\x00'),
+        0,
+        0,
+      )
+  }
+}
+
+///|
+pub fn native_socket_listen(fd : Int, backlog : Int) -> Bool {
+  c_socket_listen(fd, backlog) == 0
+}
+
+///|
+pub fn native_socket_error(fd : Int) -> Int? {
+  let error = c_socket_error(fd)
+  if error < 0 {
+    None
+  } else {
+    Some(error)
+  }
+}
+
+///|
+pub fn native_socket_address(fd : Int, peer : Bool) -> NativeSocketAddress? {
+  let family = FixedArray::make(1, b'\x00')
+  let address = FixedArray::make(16, b'\x00')
+  let port : FixedArray[UInt16] = FixedArray::make(1, 0)
+  let scope_id = FixedArray::make(1, 0U)
+  if c_socket_address_get(
+      fd,
+      if peer {
+        1
+      } else {
+        0
+      },
+      family,
+      address,
+      port,
+      scope_id,
+    ) ==
+    0 {
+    Some({
+      family: family[0].to_int(),
+      address,
+      port: port[0].to_uint().reinterpret_as_int(),
+      scope_id: scope_id[0].reinterpret_as_int(),
+    })
+  } else {
+    None
+  }
+}
+
+///|
+pub fn native_socket_option_get(fd : Int, family : Int, option : Int) -> Int? {
+  let value = c_socket_option_get(fd, family, option)
+  if value < 0 {
+    None
+  } else {
+    Some(value)
+  }
+}
+
+///|
+pub fn native_socket_option_set(
+  fd : Int,
+  family : Int,
+  option : Int,
+  value : Int,
+) -> Bool {
+  c_socket_option_set(fd, family, option, value) == 0
+}
+
+///|
+pub(all) struct NativeResolver {
+  handle : Int64
+  poll_fd : Int
+}
+
+///|
+pub fn native_resolver_start(name : String) -> NativeResolver? {
+  let poll_fd = FixedArray::make(1, -1)
+  let handle = c_resolver_start(string_to_cstring(name), poll_fd)
+  if handle == 0L || poll_fd[0] < 0 {
+    None
+  } else {
+    Some({ handle, poll_fd: poll_fd[0] })
+  }
+}
+
+///|
+pub(all) enum NativeResolverNext {
+  Address(NativeSocketAddress)
+  Pending
+  Finished
+  NameUnresolvable
+  TemporaryFailure
+  PermanentFailure
+}
+
+///|
+pub fn native_resolver_next(resolver : Int64) -> NativeResolverNext {
+  let family = FixedArray::make(1, b'\x00')
+  let address = FixedArray::make(16, b'\x00')
+  let scope_id = FixedArray::make(1, 0U)
+  match c_resolver_next(resolver, family, address, scope_id) {
+    0 =>
+      Address({
+        family: family[0].to_int(),
+        address,
+        port: 0,
+        scope_id: scope_id[0].reinterpret_as_int(),
+      })
+    1 => Pending
+    2 => Finished
+    3 => NameUnresolvable
+    4 => TemporaryFailure
+    _ => PermanentFailure
+  }
+}
+
+///|
+pub fn native_resolver_drop(resolver : Int64) -> Unit {
+  c_resolver_drop(resolver)
 }
 
 ///|

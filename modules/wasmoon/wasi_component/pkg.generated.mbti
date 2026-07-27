@@ -35,6 +35,7 @@ pub fn WasiComponentCtxBuilder::inherit_stdio(Self) -> Self
 pub fn WasiComponentCtxBuilder::inherit_stdout(Self) -> Self
 pub fn WasiComponentCtxBuilder::initial_cwd(Self, String) -> Self
 pub fn WasiComponentCtxBuilder::insecure_seed(Self, Int64, Int64) -> Self
+pub fn WasiComponentCtxBuilder::network_policy(Self, WasiNetworkPolicy) -> Self
 pub fn WasiComponentCtxBuilder::preopened_directory(Self, String, String, Bool) -> Self raise @runtime_impl.ComponentRuntimeError
 pub fn WasiComponentCtxBuilder::stderr(Self, (Bytes) -> Unit) -> Self
 pub fn WasiComponentCtxBuilder::stdin(Self, Bytes) -> Self
@@ -45,9 +46,16 @@ pub fn WasiComponentHost::WasiComponentHost(@runtime_impl.ComponentLinker, WasiC
 pub fn WasiComponentHost::add_preview2_cli_clocks_random(Self) -> Unit raise @runtime_impl.ComponentRuntimeError
 pub fn WasiComponentHost::add_preview2_filesystem(Self) -> Unit raise @runtime_impl.ComponentRuntimeError
 pub fn WasiComponentHost::add_preview2_io(Self) -> Unit raise @runtime_impl.ComponentRuntimeError
+pub fn WasiComponentHost::add_preview2_sockets(Self) -> Unit raise @runtime_impl.ComponentRuntimeError
 pub fn WasiComponentHost::add_preview3_cli_clocks_random(Self) -> Unit raise @runtime_impl.ComponentRuntimeError
 pub fn WasiComponentHost::context(Self) -> WasiComponentCtx
 pub fn WasiComponentHost::runtime(Self) -> @runtime_impl.HostRuntimeState
+
+pub(all) enum WasiNetworkPolicy {
+  DenyAll
+  LoopbackOnly
+  AllowAll
+} derive(Eq)
 
 // Type aliases
 

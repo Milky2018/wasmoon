@@ -364,6 +364,11 @@ fn poll_source_ready(ctx : WasiComponentCtx, source : PollSource) -> Bool {
           }
         _ => true
       }
+    Socket(fd, events) | OwnedSocket(fd, events) =>
+      match @wasi.native_poll([fd], [events], 0) {
+        Some(result) => result.ready_count > 0
+        None => true
+      }
   }
 }
 
@@ -405,6 +410,10 @@ fn block_poll_source(
             raise HostCallError("output readiness poll failed")
           }
         _ => ()
+      }
+    Socket(fd, events) | OwnedSocket(fd, events) =>
+      if @wasi.native_poll([fd], [events], -1) is None {
+        raise HostCallError("socket readiness poll failed")
       }
   }
 }
@@ -463,6 +472,10 @@ fn block_poll_sources(
             }
           _ => ()
         }
+      Socket(fd, socket_events) | OwnedSocket(fd, socket_events) => {
+        fds.push(fd)
+        events.push(socket_events)
+      }
     }
   }
   let now = @wasi.native_clock_gettime_monotonic()

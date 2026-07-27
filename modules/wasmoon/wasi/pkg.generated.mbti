@@ -84,6 +84,8 @@ pub fn native_dup(Int) -> Int?
 
 pub fn native_dup2(Int, Int) -> Bool
 
+pub fn native_errno_to_wasi(Int) -> Int
+
 pub fn native_fcntl_getfl(Int) -> Int?
 
 pub fn native_fcntl_setfl(Int, Int) -> Bool
@@ -162,11 +164,39 @@ pub fn native_recv(Int, FixedArray[Byte], Int) -> Int64
 
 pub fn native_renameat(Int, String, Int, String) -> Bool
 
+pub fn native_resolver_drop(Int64) -> Unit
+
+pub fn native_resolver_next(Int64) -> NativeResolverNext
+
+pub fn native_resolver_start(String) -> NativeResolver?
+
 pub fn native_seek(Int, Int64, Whence) -> Int64?
 
 pub fn native_send(Int, FixedArray[Byte], Int, Int) -> Int64
 
 pub fn native_shutdown(Int, Int) -> Bool
+
+pub fn native_socket_address(Int, Bool) -> NativeSocketAddress?
+
+pub fn native_socket_bind(Int, NativeSocketAddress) -> Bool
+
+pub fn native_socket_connect(Int, NativeSocketAddress) -> Int
+
+pub fn native_socket_create(Int, Int) -> Int?
+
+pub fn native_socket_disconnect(Int) -> Bool
+
+pub fn native_socket_error(Int) -> Int?
+
+pub fn native_socket_listen(Int, Int) -> Bool
+
+pub fn native_socket_option_get(Int, Int, Int) -> Int?
+
+pub fn native_socket_option_set(Int, Int, Int, Int) -> Bool
+
+pub fn native_socket_recv_from(Int, Int) -> NativeSocketDatagram?
+
+pub fn native_socket_send_to(Int, FixedArray[Byte], NativeSocketAddress?) -> Int64
 
 pub fn native_symlinkat(String, Int, String) -> Bool
 
@@ -418,6 +448,32 @@ pub(all) enum FileType {
 pub(all) struct IoVec {
   buf : Int
   buf_len : Int
+}
+
+pub(all) struct NativeResolver {
+  handle : Int64
+  poll_fd : Int
+}
+
+pub(all) enum NativeResolverNext {
+  Address(NativeSocketAddress)
+  Pending
+  Finished
+  NameUnresolvable
+  TemporaryFailure
+  PermanentFailure
+}
+
+pub(all) struct NativeSocketAddress {
+  family : Int
+  address : FixedArray[Byte]
+  port : Int
+  scope_id : Int
+}
+
+pub(all) struct NativeSocketDatagram {
+  data : Bytes
+  address : NativeSocketAddress
 }
 
 pub(all) struct OpenFile {
