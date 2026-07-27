@@ -120,6 +120,7 @@ fn instantiate_canon_waitable_set_wait(
           CallbackLifted(t) =>
             match t.func {
               Host(func_type, types, _) => (func_type, types)
+              HostAsync(func_type, types, _) => (func_type, types)
               Lifted(_, func_type, _, types, _, _, _, _) => (func_type, types)
             }
         }

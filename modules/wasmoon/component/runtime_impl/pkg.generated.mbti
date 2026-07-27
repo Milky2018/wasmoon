@@ -52,11 +52,14 @@ pub(all) suberror ComponentRuntimeError {
   UnsupportedStringEncoding
   CanonCallError(String)
   HostCallError(String)
+  HostExit(Int)
   AsyncSuspendYield
   AsyncSuspendWait(Int64)
   InvalidStartResultCount(Int)
   OuterAliasOutOfRange(Int)
   AliasTargetMismatch(String)
+  DuplicateHostExport(String)
+  InvalidHostTypeReference(Int)
 } derive(Eq, @debug.Debug)
 pub impl Show for ComponentRuntimeError
 
@@ -66,6 +69,7 @@ pub(all) struct AsyncState {
   free_handles_by_component : Map[Int, Array[Int]]
   stream_table : StreamTable
   resource_tables : Map[Int, ResourceTable]
+  host_event_loop : @ref.Ref[HostEventLoop?]
   task_stack : Array[Int64]
   next_task_id : Array[Int64]
   task_results : Map[Int64, Array[ComponentValue]]
@@ -143,6 +147,7 @@ pub impl Show for ComponentExtern
 pub(all) enum ComponentFunc {
   Lifted(CoreFuncRef, @model.FuncType, CanonResources, Array[@model.TypeDef?], ResourceTable, @ref.Ref[Bool], CoreFuncRef?, Bool)
   Host(@model.FuncType, Array[@model.TypeDef?], (Array[ComponentValue], ResourceTable) -> Array[ComponentValue] raise ComponentRuntimeError)
+  HostAsync(@model.FuncType, Array[@model.TypeDef?], (Array[ComponentValue], ResourceTable) -> HostFuture raise ComponentRuntimeError)
 }
 pub impl Show for ComponentFunc
 pub impl @debug.Debug for ComponentFunc
@@ -182,8 +187,11 @@ pub fn ComponentLinker::add_import(Self, String, ComponentExtern) -> Unit
 pub fn ComponentLinker::add_instance(Self, String, ComponentInstance) -> Unit
 pub fn ComponentLinker::add_value(Self, String, ComponentValue) -> Unit
 pub fn ComponentLinker::get_component(Self, String) -> ComponentInstance?
+pub fn ComponentLinker::get_import(Self, String) -> ComponentExtern?
 pub fn ComponentLinker::get_store(Self) -> @runtime.Store
+pub fn ComponentLinker::host_instance_builder(Self, String, HostRuntimeState) -> HostInstanceBuilder
 pub fn ComponentLinker::instantiate(Self, String, @model.Component) -> ComponentInstance raise ComponentRuntimeError
+pub fn ComponentLinker::new_host_resource_type(Self) -> @model.TypeDef?
 pub fn ComponentLinker::register(Self, String, ComponentInstance) -> Unit
 
 pub(all) enum ComponentValue {
@@ -233,6 +241,31 @@ type FutureState derive(@debug.Debug)
 type GuestThread derive(@debug.Debug)
 
 type GuestThreadPhase derive(Eq, @debug.Debug)
+
+type HostEventLoop
+
+type HostFuture
+pub fn HostFuture::HostFuture(() -> HostFuturePoll raise ComponentRuntimeError, () -> Unit raise ComponentRuntimeError) -> Self
+
+pub(all) enum HostFuturePoll {
+  Pending
+  Ready(Array[ComponentValue])
+}
+
+type HostInstanceBuilder
+pub fn HostInstanceBuilder::add_async_func(Self, String, @model.FuncType, (Array[ComponentValue], ResourceTable) -> HostFuture raise ComponentRuntimeError) -> Unit raise ComponentRuntimeError
+pub fn HostInstanceBuilder::add_func(Self, String, @model.FuncType, (Array[ComponentValue], ResourceTable) -> Array[ComponentValue] raise ComponentRuntimeError) -> Unit raise ComponentRuntimeError
+pub fn HostInstanceBuilder::add_instance(Self, String, ComponentInstance) -> Unit raise ComponentRuntimeError
+pub fn HostInstanceBuilder::add_type(Self, String, Int) -> Unit raise ComponentRuntimeError
+pub fn HostInstanceBuilder::finish(Self) -> ComponentInstance
+pub fn HostInstanceBuilder::set_type_space(Self, Array[@model.TypeDef?]) -> Unit raise ComponentRuntimeError
+
+type HostRuntimeState
+pub fn HostRuntimeState::HostRuntimeState() -> Self
+pub fn HostRuntimeState::async_state(Self) -> AsyncState
+pub fn HostRuntimeState::resource_table(Self) -> ResourceTable
+pub fn HostRuntimeState::set_event_loop(Self, () -> Bool raise ComponentRuntimeError) -> Unit
+pub fn HostRuntimeState::stream_table(Self) -> StreamTable
 
 type PendingFutureRead derive(@debug.Debug)
 

@@ -281,6 +281,13 @@ jobs:
             --version "$COMPONENT_WASM_TOOLS_VERSION" --locked
           wasm-tools --version
 
+      - name: verify generated WASI host contracts
+        run: |
+          python3 modules/wasmoon/wasi_component/tools/generate_wasi_contracts.py \
+            modules/wasmoon/wasi_component/wit \
+            modules/wasmoon/wasi_component/wit_contracts_generated.mbt \
+            --verify-wit --check
+
       - name: build Wasmoon component harness
         run: |
           moon build --target native --release

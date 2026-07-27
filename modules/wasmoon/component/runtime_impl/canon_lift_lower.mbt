@@ -66,6 +66,7 @@ fn instantiate_canon_lower(
   let func = state.funcs[func_idx]
   let (func_type, func_types) = match func {
     Host(ft, types, _) => (ft, types)
+    HostAsync(ft, types, _) => (ft, types)
     Lifted(_, ft, _, types, _, _, _, _) => (ft, types)
   }
   let resources = resolve_canon_resources(opts, state)
@@ -181,6 +182,7 @@ fn instantiate_canon_lower(
       }
       let inst_id = match func {
         Host(_, _, _) => caller_table.id
+        HostAsync(_, _, _) => caller_table.id
         Lifted(_, _, _, _, callee_table, _, _, _) => callee_table.id
       }
       if func is Lifted(_, _, _, _, callee_table, _, _, _) &&
@@ -190,6 +192,7 @@ fn instantiate_canon_lower(
       let caller_task_id = current_task_id(async_state)
       let meta_inst_id = match func {
         Host(_, _, _) => -1
+        HostAsync(_, _, _) => -1
         _ => inst_id
       }
       // Prevent stackless callback-driven tasks from re-entering their own
@@ -218,6 +221,7 @@ fn instantiate_canon_lower(
         started: [false],
         code: [0],
         waiting_set: [None],
+        host_future: [None],
         cancelled: [false],
       }
       let retp = match retptr {
@@ -627,6 +631,7 @@ fn instantiate_canon_lower(
       let owner_component_id = caller_table.id
       let inst_id = match func {
         Host(_, _, _) => owner_component_id
+        HostAsync(_, _, _) => owner_component_id
         Lifted(_, _, _, _, callee_table, _, _, _) => callee_table.id
       }
       if func is Lifted(_, _, _, _, callee_table, _, _, _) &&
@@ -636,6 +641,7 @@ fn instantiate_canon_lower(
       let caller_task_id = current_task_id(async_state)
       let meta_inst_id = match func {
         Host(_, _, _) => -1
+        HostAsync(_, _, _) => -1
         _ => inst_id
       }
       if meta_inst_id >= 0 &&
@@ -687,6 +693,7 @@ fn instantiate_canon_lower(
               started: [false],
               code: [0],
               waiting_set: [None],
+              host_future: [None],
               cancelled: [false],
             }
             init_task_meta(
@@ -706,6 +713,7 @@ fn instantiate_canon_lower(
         } else {
           let callee_instance_id = match st.task.func {
             Host(_, _, _) => state.resource_table.id
+            HostAsync(_, _, _) => state.resource_table.id
             Lifted(_, _, _, _, callee_table, _, _, _) => callee_table.id
           }
           push_task(async_state, st.task_id, can_block)
@@ -854,6 +862,7 @@ fn instantiate_canon_lower(
               // handle space before exposing the core i32 indices.
               let callee_instance_id = match st.task.func {
                 Host(_, _, _) => state.resource_table.id
+                HostAsync(_, _, _) => state.resource_table.id
                 Lifted(_, _, _, _, callee_table, _, _, _) => callee_table.id
               }
               let result_owner = match

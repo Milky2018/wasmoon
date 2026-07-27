@@ -233,6 +233,9 @@ pub(all) struct AsyncState {
   // Shared stream table (streams share the same handle space as waitables/subtasks).
   stream_table : StreamTable
   resource_tables : Map[Int, ResourceTable]
+  // Embedding-owned reactor hook for asynchronous host calls. It blocks until
+  // at least one registered external operation may make progress.
+  host_event_loop : Ref[HostEventLoop?]
 
   // Task stack + per-task state (used by canon task.return/context.*).
   task_stack : Array[Int64]
@@ -463,6 +466,8 @@ struct CallbackTask {
   code : Array[Int]
   // Waitable-set key (handle_key(owner_component_id, local_index)).
   waiting_set : Array[Int64?]
+  // Lazily-created state for an asynchronous host function.
+  host_future : Array[HostFuture?]
   cancelled : Array[Bool]
 } derive(Debug)
 
@@ -498,6 +503,7 @@ pub fn AsyncState::AsyncState(stream_table : StreamTable) -> AsyncState {
     free_handles_by_component: Map([]),
     stream_table,
     resource_tables: Map([]),
+    host_event_loop: Ref(None),
     task_stack: [0L],
     // Use negative ids for internal tasks so they don't collide with the shared handle space.
     next_task_id: [-1L],

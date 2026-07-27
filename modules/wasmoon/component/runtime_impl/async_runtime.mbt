@@ -70,6 +70,7 @@ fn await_component_func(
   let caller_task_id = current_task_id(async_state)
   let callee_instance_id = match func {
     Host(_, _, _) => -1
+    HostAsync(_, _, _) => -1
     Lifted(_, _, _, _, callee_table, _, _, _) => callee_table.id
   }
   if callee_instance_id >= 0 &&
@@ -85,10 +86,34 @@ fn await_component_func(
   take_task_result(async_state, task_id) |> ignore
   let out = try {
     match func {
-      Host(_ft, _types, host) =>
-        host(args, caller_table) catch {
-          e => raise HostCallError(e.to_string())
+      Host(_ft, _types, host) => host(args, caller_table)
+      HostAsync(_ft, _types, start) => {
+        let future = start(args, caller_table)
+        let result : Ref[Array[ComponentValue]?] = Ref(None)
+        while result.val is None {
+          match (future.poll)() {
+            Ready(values) => result.val = Some(values)
+            Pending =>
+              match async_state.host_event_loop.val {
+                Some(event_loop) =>
+                  if !(event_loop.wait)() {
+                    raise CanonCallError(
+                      "wasm trap: async host event loop cannot make further progress",
+                    )
+                  }
+                None =>
+                  raise CanonCallError(
+                    "wasm trap: async host function has no event loop",
+                  )
+              }
+          }
         }
+        match result.val {
+          Some(values) => values
+          None =>
+            raise HostCallError("asynchronous host function did not finish")
+        }
+      }
       Lifted(
         core_func,
         func_type,
@@ -426,6 +451,7 @@ fn step_task_once(
   fn task_owner_component_id() -> Int {
     match task.func {
       Host(_, _, _) => caller_table.id
+      HostAsync(_, _, _) => caller_table.id
       Lifted(_, _, _, _, callee_table, _, _, _) => callee_table.id
     }
   }
@@ -452,11 +478,34 @@ fn step_task_once(
 
   match task.func {
     Host(_ft, _types, host) => {
-      (host(task.args, caller_table) catch {
-        e => raise HostCallError(e.to_string())
-      })
-      |> ignore
+      host(task.args, caller_table) |> ignore
       Done
+    }
+    HostAsync(_ft, _types, start) => {
+      if task.host_future[0] is None {
+        task.host_future[0] = Some(start(task.args, caller_table))
+      }
+      guard task.host_future[0] is Some(future) else {
+        raise HostCallError("asynchronous host future was not initialized")
+      }
+      if task.cancelled[0] {
+        (future.cancel)()
+        async_state.task_self_cancelled.set(current_task_id(async_state), true)
+        Done
+      } else {
+        match (future.poll)() {
+          Pending => Blocked
+          Ready(values) => {
+            set_task_result(
+              async_state,
+              current_task_id(async_state),
+              caller_table.id,
+              values,
+            )
+            Done
+          }
+        }
+      }
     }
     Lifted(
       core_func,
@@ -1013,6 +1062,7 @@ fn progress_one_subtask(
                   CallbackLifted(t) =>
                     match t.func {
                       Host(func_type, types, _) => (func_type, types)
+                      HostAsync(func_type, types, _) => (func_type, types)
                       Lifted(_, func_type, _, types, _, _, _, _) =>
                         (func_type, types)
                     }
@@ -1068,7 +1118,10 @@ fn progress_one_subtask(
       }
     }
   }
-  false
+  match async_state.host_event_loop.val {
+    Some(event_loop) => (event_loop.wait)()
+    None => false
+  }
 }
 
 ///|
@@ -1132,9 +1185,13 @@ fn call_component_func_in_task(
       if func_type.is_async {
         await_component_func(func, args, store, resource_table, async_state)
       } else {
-        host(args, resource_table) catch {
-          e => raise HostCallError(e.to_string())
-        }
+        host(args, resource_table)
+      }
+    HostAsync(func_type, _types, _) =>
+      if func_type.is_async {
+        await_component_func(func, args, store, resource_table, async_state)
+      } else {
+        raise HostCallError("asynchronous host function has a synchronous type")
       }
     Lifted(
       core_func,

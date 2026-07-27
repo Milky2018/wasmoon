@@ -1,0 +1,16 @@
+import {
+  "Milky2018/wasmoon/component/model" @component,
+  "Milky2018/wasmoon/component/runtime_impl",
+  "Milky2018/wasmoon/wasi",
+}
+
+rule(
+  name: "generate_wasi_contracts",
+  command: "python3 wasi_component/tools/generate_wasi_contracts.py $input $output",
+)
+
+dev_build(
+  rule: "generate_wasi_contracts",
+  input: "wit",
+  output: "wit_contracts_generated.mbt",
+)
