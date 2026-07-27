@@ -13,6 +13,7 @@ struct WasiComponentCtx {
   resources : Map[Int, WasiHostResource]
   next_resource_rep : Ref[Int]
   async_deadlines : Map[Int, Int64]
+  async_fds : Map[Int, (Int, Int)]
   next_async_operation : Ref[Int]
   stdin_rep : Int
   stdout_rep : Int
@@ -283,6 +284,7 @@ pub fn WasiComponentCtxBuilder::build(
     resources,
     next_resource_rep: Ref(5),
     async_deadlines: Map([]),
+    async_fds: Map([]),
     next_async_operation: Ref(1),
     stdin_rep,
     stdout_rep,
@@ -623,6 +625,42 @@ fn WasiComponentCtx::cancel_deadline(self : WasiComponentCtx, id : Int) -> Unit 
 }
 
 ///|
+fn WasiComponentCtx::register_async_fd(
+  self : WasiComponentCtx,
+  fd : Int,
+  events : Int,
+) -> Int {
+  let id = self.next_async_operation.val
+  self.next_async_operation.val = id + 1
+  self.async_fds.set(id, (fd, events))
+  id
+}
+
+///|
+fn WasiComponentCtx::async_fd_ready(self : WasiComponentCtx, id : Int) -> Bool {
+  match self.async_fds.get(id) {
+    Some((fd, events)) =>
+      match @wasi.native_poll([fd], [events], 0) {
+        Some(result) if result.ready_count > 0 => {
+          self.async_fds.remove(id)
+          true
+        }
+        Some(_) => false
+        None => {
+          self.async_fds.remove(id)
+          true
+        }
+      }
+    None => true
+  }
+}
+
+///|
+fn WasiComponentCtx::cancel_async_fd(self : WasiComponentCtx, id : Int) -> Unit {
+  self.async_fds.remove(id)
+}
+
+///|
 fn WasiComponentCtx::wait_for_async_event(
   self : WasiComponentCtx,
 ) -> Bool raise @runtime_impl.ComponentRuntimeError {
@@ -634,17 +672,39 @@ fn WasiComponentCtx::wait_for_async_event(
       _ => nearest = Some(deadline)
     }
   }
-  match nearest {
-    None => false
+  let fds : Array[Int] = []
+  let events : Array[Int] = []
+  for entry in self.async_fds.iter() {
+    let (_id, source) = entry
+    let (fd, event) = source
+    fds.push(fd)
+    events.push(event)
+  }
+  let now = @wasi.native_clock_gettime_monotonic()
+  if now < 0L {
+    raise HostCallError("monotonic clock is unavailable")
+  }
+  let timeout = match nearest {
+    None => -1
+    Some(deadline) if deadline <= now => 0
     Some(deadline) => {
-      let now = @wasi.native_clock_gettime_monotonic()
-      if now < 0L {
-        raise HostCallError("monotonic clock is unavailable")
+      let remaining = deadline - now
+      let milliseconds = (remaining + 999999L) / 1000000L
+      if milliseconds > 0x7fffffffL {
+        0x7fffffff
+      } else {
+        milliseconds.to_int()
       }
-      if deadline > now {
-        @wasi.native_nanosleep(deadline - now) |> ignore
-      }
-      true
     }
+  }
+  if fds.length() > 0 {
+    @wasi.native_poll(fds, events, timeout) is Some(_)
+  } else if nearest is Some(_) {
+    if timeout > 0 {
+      @wasi.native_nanosleep(timeout.to_int64() * 1000000L) |> ignore
+    }
+    true
+  } else {
+    false
   }
 }

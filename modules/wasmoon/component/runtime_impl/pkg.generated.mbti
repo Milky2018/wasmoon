@@ -242,6 +242,12 @@ type GuestThread derive(@debug.Debug)
 
 type GuestThreadPhase derive(Eq, @debug.Debug)
 
+pub(all) enum HostByteStreamRead {
+  Pending
+  Data(Bytes)
+  Closed
+} derive(@debug.Debug)
+
 type HostEventLoop
 
 type HostFuture
@@ -267,6 +273,10 @@ pub fn HostResourceDestructor::destroy(Self, Int) -> Unit
 type HostRuntimeState
 pub fn HostRuntimeState::HostRuntimeState() -> Self
 pub fn HostRuntimeState::async_state(Self) -> AsyncState
+pub fn HostRuntimeState::drop_host_readable_stream(Self, ResourceTable, Int) -> Unit raise ComponentRuntimeError
+pub fn HostRuntimeState::new_host_byte_stream(Self, ResourceTable, Bytes) -> Int
+pub fn HostRuntimeState::new_host_unit_result_future(Self, ResourceTable, @model.ValType, Array[@model.TypeDef?], error_case? : Int) -> Int raise ComponentRuntimeError
+pub fn HostRuntimeState::read_host_byte_stream(Self, ResourceTable, Int) -> HostByteStreamRead raise ComponentRuntimeError
 pub fn HostRuntimeState::resource_table(Self) -> ResourceTable
 pub fn HostRuntimeState::set_event_loop(Self, () -> Bool raise ComponentRuntimeError) -> Unit
 pub fn HostRuntimeState::stream_table(Self) -> StreamTable

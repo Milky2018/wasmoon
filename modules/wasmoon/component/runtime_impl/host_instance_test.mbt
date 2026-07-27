@@ -69,6 +69,21 @@ test "async host functions suspend through the shared event loop" {
 }
 
 ///|
+test "embedding byte streams expose finite data without blocking" {
+  let runtime = @runtime_impl.HostRuntimeState()
+  let table = runtime.resource_table()
+  let stream = runtime.new_host_byte_stream(table, b"abc")
+  debug_inspect(
+    [
+      runtime.read_host_byte_stream(table, stream),
+      runtime.read_host_byte_stream(table, stream),
+    ],
+    content="[Data(<Bytes: [0x61, 0x62, 0x63]>), Closed]",
+  )
+  runtime.drop_host_readable_stream(table, stream)
+}
+
+///|
 test "host instance builder rejects duplicate exports" {
   let linker = @runtime_impl.ComponentLinker()
   let builder = linker.host_instance_builder(

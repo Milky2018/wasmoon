@@ -169,4 +169,5 @@ pub fn WasiComponentHost::add_preview3_cli_clocks_random(
 ) -> Unit raise @runtime_impl.ComponentRuntimeError {
   add_preview3_base_interfaces(self)
   add_preview3_monotonic_clock(self)
+  add_preview3_stdio(self)
 }

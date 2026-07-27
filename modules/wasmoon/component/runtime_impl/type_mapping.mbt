@@ -18,6 +18,146 @@ fn resolve_valtype(
 }
 
 ///|
+fn discriminant_layout(case_count : Int) -> (Int, Int) {
+  if case_count <= 0x100 {
+    (1, 1)
+  } else if case_count <= 0x10000 {
+    (2, 2)
+  } else {
+    (4, 4)
+  }
+}
+
+///|
+fn canonical_stream_layout(
+  ty : ValType,
+  types : Array[TypeDef?],
+) -> (Int, Int) raise ComponentRuntimeError {
+  match resolve_valtype(ty, types) {
+    Prim(p) =>
+      match p {
+        Bool | S8 | U8 => (1, 1)
+        S16 | U16 => (2, 2)
+        S32 | U32 | Char | F32 | ErrorContext => (4, 4)
+        S64 | U64 | F64 => (8, 8)
+        String => (8, 4)
+      }
+    TypeIdx(idx) =>
+      match types.get(idx) {
+        Some(Some(DefValType(p))) => canonical_stream_layout(Prim(p), types)
+        Some(Some(Tuple(items))) => {
+          let mut size = 0
+          let mut alignment = 1
+          for item in items {
+            let (item_size, item_alignment) = canonical_stream_layout(
+              item, types,
+            )
+            size = align_to(size, item_alignment) + item_size
+            if item_alignment > alignment {
+              alignment = item_alignment
+            }
+          }
+          (align_to(size, alignment), alignment)
+        }
+        Some(Some(Record(fields))) => {
+          let mut size = 0
+          let mut alignment = 1
+          for field in fields {
+            let (field_size, field_alignment) = canonical_stream_layout(
+              field.ty,
+              types,
+            )
+            size = align_to(size, field_alignment) + field_size
+            if field_alignment > alignment {
+              alignment = field_alignment
+            }
+          }
+          (align_to(size, alignment), alignment)
+        }
+        Some(Some(List(_))) => (8, 4)
+        Some(Some(Enum(labels))) => discriminant_layout(labels.length())
+        Some(Some(Flags(labels))) => {
+          let words = (labels.length() + 31) / 32
+          if words == 0 {
+            (0, 1)
+          } else if labels.length() <= 8 {
+            (1, 1)
+          } else if labels.length() <= 16 {
+            (2, 2)
+          } else {
+            (words * 4, 4)
+          }
+        }
+        Some(Some(Variant(cases))) => {
+          let (tag_size, tag_alignment) = discriminant_layout(cases.length())
+          let mut payload_size = 0
+          let mut payload_alignment = 1
+          for case in cases {
+            match case.ty {
+              Some(payload) => {
+                let (size, alignment) = canonical_stream_layout(payload, types)
+                if size > payload_size {
+                  payload_size = size
+                }
+                if alignment > payload_alignment {
+                  payload_alignment = alignment
+                }
+              }
+              None => ()
+            }
+          }
+          let alignment = if tag_alignment > payload_alignment {
+            tag_alignment
+          } else {
+            payload_alignment
+          }
+          let payload_offset = align_to(tag_size, payload_alignment)
+          (align_to(payload_offset + payload_size, alignment), alignment)
+        }
+        Some(Some(Option(payload))) => {
+          let (payload_size, payload_alignment) = canonical_stream_layout(
+            payload, types,
+          )
+          let payload_offset = align_to(1, payload_alignment)
+          (
+            align_to(payload_offset + payload_size, payload_alignment),
+            payload_alignment,
+          )
+        }
+        Some(Some(Result(ok, err))) => {
+          let mut payload_size = 0
+          let mut payload_alignment = 1
+          for payload in [ok, err] {
+            match payload {
+              Some(value) => {
+                let (size, alignment) = canonical_stream_layout(value, types)
+                if size > payload_size {
+                  payload_size = size
+                }
+                if alignment > payload_alignment {
+                  payload_alignment = alignment
+                }
+              }
+              None => ()
+            }
+          }
+          let payload_offset = align_to(1, payload_alignment)
+          (
+            align_to(payload_offset + payload_size, payload_alignment),
+            payload_alignment,
+          )
+        }
+        Some(Some(Own(_)))
+        | Some(Some(Borrow(_)))
+        | Some(Some(ResourceType(_, _, _, _)))
+        | Some(Some(Stream(_)))
+        | Some(Some(Future(_))) => (4, 4)
+        _ => raise HostCallError("unsupported stream payload type")
+      }
+  }
+}
+
+///|
 fn stream_payload_info(
   payload_ty : ValType?,
   types : Array[TypeDef?],
@@ -29,31 +169,23 @@ fn stream_payload_info(
   // (an i32 handle index in memory).
   match payload_ty {
     None => (1, None)
-    Some(vt) =>
-      match resolve_valtype(vt, types) {
-        Prim(p) =>
-          match p {
-            Bool | S8 | U8 => (1, None)
-            S16 | U16 => (2, None)
-            S32 | U32 | Char => (4, None)
-            S64 | U64 | F64 => (8, None)
-            F32 => (4, None)
-            // Not used in current component-spec stream tests.
-            String | ErrorContext =>
-              raise HostCallError("unsupported stream payload type")
-          }
+    Some(vt) => {
+      let (size, alignment) = canonical_stream_layout(vt, types)
+      let element_size = align_to(size, alignment)
+      let own_resource_type_id = match resolve_valtype(vt, types) {
         TypeIdx(idx) =>
           match types.get(idx) {
             Some(Some(Own(resource_tyidx))) =>
               match types.get(resource_tyidx) {
-                Some(Some(ResourceType(id, _, _, _))) => (4, Some(id))
+                Some(Some(ResourceType(id, _, _, _))) => Some(id)
                 _ => raise HostCallError("unsupported stream payload type")
               }
-            Some(Some(Borrow(_))) | Some(Some(ResourceType(_, _, _, _))) =>
-              (4, None)
-            _ => raise HostCallError("unsupported stream payload type")
+            _ => None
           }
+        _ => None
       }
+      (element_size, own_resource_type_id)
+    }
   }
 }
 

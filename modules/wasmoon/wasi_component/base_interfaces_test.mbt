@@ -76,6 +76,49 @@ test "Preview 3 uses current environment and seed export names" {
 }
 
 ///|
+test "Preview 3 stdio uses canonical byte streams and result futures" {
+  let linker = @runtime_impl.ComponentLinker()
+  let output = Ref(b"")
+  let ctx = @wasi_component.WasiComponentCtxBuilder()
+    .stdin(b"ok")
+    .stdout(bytes => output.val = bytes)
+    .build()
+  let host = @wasi_component.WasiComponentHost(linker, ctx)
+  host.add_preview3_cli_clocks_random()
+  guard linker.get_import("wasi:cli/stdin@0.3.0-rc-2025-09-16")
+    is Some(Instance(stdin)) &&
+    stdin.call_exported_func("read-via-stream", [])
+    is [Tuple([U32(input), U32(completion)])] else {
+    fail("Preview 3 stdin was not registered")
+  }
+  let runtime = host.runtime()
+  let table = runtime.resource_table()
+  debug_inspect(
+    [
+      runtime.read_host_byte_stream(table, input),
+      runtime.read_host_byte_stream(table, input),
+      runtime.read_host_byte_stream(table, completion),
+    ],
+    content="[Data(<Bytes: [0x6f, 0x6b]>), Closed, Data(<Bytes: [0x00, 0x00]>)]",
+  )
+  runtime.drop_host_readable_stream(table, input)
+  runtime.drop_host_readable_stream(table, completion)
+  let output_stream = runtime.new_host_byte_stream(table, b"written")
+  guard linker.get_import("wasi:cli/stdout@0.3.0-rc-2025-09-16")
+    is Some(Instance(stdout)) else {
+    fail("Preview 3 stdout was not registered")
+  }
+  debug_inspect(
+    stdout.call_exported_func("write-via-stream", [U32(output_stream)]),
+    content="[Variant(0, None)]",
+  )
+  debug_inspect(
+    output.val,
+    content="<Bytes: [0x77, 0x72, 0x69, 0x74, 0x74, 0x65, 0x6e]>",
+  )
+}
+
+///|
 test "WASI component exit is structured and recorded" {
   let linker = @runtime_impl.ComponentLinker()
   let ctx = @wasi_component.WasiComponentCtxBuilder().build()

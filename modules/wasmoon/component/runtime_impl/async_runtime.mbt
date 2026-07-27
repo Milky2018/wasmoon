@@ -94,17 +94,19 @@ fn await_component_func(
           match (future.poll)() {
             Ready(values) => result.val = Some(values)
             Pending =>
-              match async_state.host_event_loop.val {
-                Some(event_loop) =>
-                  if !(event_loop.wait)() {
+              if !progress_one_subtask(async_state, store) {
+                match async_state.host_event_loop.val {
+                  Some(event_loop) =>
+                    if !(event_loop.wait)() {
+                      raise CanonCallError(
+                        "wasm trap: async host event loop cannot make further progress",
+                      )
+                    }
+                  None =>
                     raise CanonCallError(
-                      "wasm trap: async host event loop cannot make further progress",
+                      "wasm trap: async host function has no event loop",
                     )
-                  }
-                None =>
-                  raise CanonCallError(
-                    "wasm trap: async host function has no event loop",
-                  )
+                }
               }
           }
         }
