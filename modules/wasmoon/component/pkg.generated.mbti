@@ -81,6 +81,8 @@ pub using @model {type InstanceExpr}
 
 pub using @model {type InstantiateArg}
 
+pub using @model {type NameAttribute}
+
 pub using @model {type Param}
 
 pub using @model {type PrimValType}

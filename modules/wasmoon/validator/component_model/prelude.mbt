@@ -158,6 +158,8 @@ priv enum TypeSig {
   Flags(Array[String])
   Enum(Array[String])
   Resource(Int)
+  Own(Int)
+  Borrow(Int)
   Other
 } derive(Debug, Eq)
 
@@ -188,15 +190,39 @@ fn typeidx_of_typesig(
 }
 
 ///|
+fn typeidx_of_typesig_prefer_named(
+  sig : TypeSig,
+  type_table : Array[@component.TypeDef?],
+  resource_ids : Array[Int?],
+  preferred_named_types : Map[Int, Int]?,
+) -> Int? {
+  if preferred_named_types is Some(named_types) {
+    for entry in named_types.iter() {
+      let (idx, _marker) = entry
+      if idx >= 0 &&
+        idx < type_table.length() &&
+        type_sig_of_typeidx(idx, type_table, resource_ids) == sig {
+        return Some(idx)
+      }
+    }
+  }
+  typeidx_of_typesig(sig, type_table, resource_ids)
+}
+
+///|
 fn valtype_of_typesig(
   sig : TypeSig,
   type_table : Array[@component.TypeDef?],
   resource_ids : Array[Int?],
+  preferred_named_types : Map[Int, Int]?,
 ) -> @component.ValType? {
   match sig {
     Prim(p) => Some(Prim(p))
     _ =>
-      match typeidx_of_typesig(sig, type_table, resource_ids) {
+      match
+        typeidx_of_typesig_prefer_named(
+          sig, type_table, resource_ids, preferred_named_types,
+        ) {
         Some(idx) => Some(TypeIdx(idx))
         None => None
       }
@@ -208,13 +234,15 @@ fn typedef_of_typesig(
   sig : TypeSig,
   type_table : Array[@component.TypeDef?],
   resource_ids : Array[Int?],
+  preferred_named_types : Map[Int, Int]?,
 ) -> @component.TypeDef? {
   match sig {
     Prim(p) => Some(DefValType(p))
     Tuple(ts) => {
       let out : Array[@component.ValType] = []
       for t in ts {
-        match valtype_of_typesig(t, type_table, resource_ids) {
+        match
+          valtype_of_typesig(t, type_table, resource_ids, preferred_named_types) {
           Some(v) => out.push(v)
           None => return None
         }
@@ -224,7 +252,13 @@ fn typedef_of_typesig(
     Record(fields) => {
       let out : Array[@component.RecordField] = []
       for f in fields {
-        match valtype_of_typesig(f.ty, type_table, resource_ids) {
+        match
+          valtype_of_typesig(
+            f.ty,
+            type_table,
+            resource_ids,
+            preferred_named_types,
+          ) {
           Some(v) => out.push({ label: f.name, ty: v })
           None => return None
         }
@@ -237,7 +271,10 @@ fn typedef_of_typesig(
         let ty = match c.ty {
           None => None
           Some(t) =>
-            match valtype_of_typesig(t, type_table, resource_ids) {
+            match
+              valtype_of_typesig(
+                t, type_table, resource_ids, preferred_named_types,
+              ) {
               Some(v) => Some(v)
               None => return None
             }
@@ -247,7 +284,8 @@ fn typedef_of_typesig(
       Some(Variant(out))
     }
     Option(t) =>
-      match valtype_of_typesig(t, type_table, resource_ids) {
+      match
+        valtype_of_typesig(t, type_table, resource_ids, preferred_named_types) {
         Some(v) => Some(Option(v))
         None => None
       }
@@ -255,7 +293,10 @@ fn typedef_of_typesig(
       let ok_v = match ok {
         None => None
         Some(t) =>
-          match valtype_of_typesig(t, type_table, resource_ids) {
+          match
+            valtype_of_typesig(
+              t, type_table, resource_ids, preferred_named_types,
+            ) {
             Some(v) => Some(v)
             None => return None
           }
@@ -263,7 +304,10 @@ fn typedef_of_typesig(
       let err_v = match err {
         None => None
         Some(t) =>
-          match valtype_of_typesig(t, type_table, resource_ids) {
+          match
+            valtype_of_typesig(
+              t, type_table, resource_ids, preferred_named_types,
+            ) {
             Some(v) => Some(v)
             None => return None
           }
@@ -271,12 +315,35 @@ fn typedef_of_typesig(
       Some(Result(ok_v, err_v))
     }
     List(t) =>
-      match valtype_of_typesig(t, type_table, resource_ids) {
+      match
+        valtype_of_typesig(t, type_table, resource_ids, preferred_named_types) {
         Some(v) => Some(List(v))
         None => None
       }
     Flags(labels) => Some(Flags(labels))
     Enum(labels) => Some(Enum(labels))
+    Own(rid) =>
+      match
+        typeidx_of_typesig_prefer_named(
+          Resource(rid),
+          type_table,
+          resource_ids,
+          preferred_named_types,
+        ) {
+        Some(idx) => Some(Own(idx))
+        None => None
+      }
+    Borrow(rid) =>
+      match
+        typeidx_of_typesig_prefer_named(
+          Resource(rid),
+          type_table,
+          resource_ids,
+          preferred_named_types,
+        ) {
+        Some(idx) => Some(Borrow(idx))
+        None => None
+      }
     _ => None
   }
 }
@@ -296,6 +363,7 @@ fn typesig_valid_in_interface(sig : TypeSig, named : Array[TypeSig]) -> Bool {
   match sig {
     Prim(_) | Other => true
     Resource(_) | Flags(_) | Enum(_) => typesig_contains(sig, named)
+    Own(rid) | Borrow(rid) => typesig_contains(Resource(rid), named)
     Record(fields) =>
       if !typesig_contains(sig, named) {
         false
@@ -722,6 +790,55 @@ fn is_kebab_case_range(name : Bytes, start : Int, end_ : Int) -> Bool {
 }
 
 ///|
+fn is_canonversion_range(name : Bytes, start : Int, end_ : Int) -> Bool {
+  if start < 0 || end_ <= start || end_ > name.length() {
+    return false
+  }
+  let mut i = start
+  if name[i].to_int() >= 0x31 && name[i].to_int() <= 0x39 {
+    i += 1
+    while i < end_ && is_ascii_digit(name[i]) {
+      i += 1
+    }
+    return i == end_
+  }
+  if name[i].to_int() != 0x30 || i + 1 >= end_ {
+    return false
+  }
+  i += 1
+  if name[i].to_int() != 0x2E || i + 1 >= end_ {
+    return false
+  }
+  i += 1
+  if name[i].to_int() >= 0x31 && name[i].to_int() <= 0x39 {
+    i += 1
+    while i < end_ && is_ascii_digit(name[i]) {
+      i += 1
+    }
+    return i == end_
+  }
+  if name[i].to_int() != 0x30 || i + 1 >= end_ {
+    return false
+  }
+  i += 1
+  if name[i].to_int() != 0x2E || i + 1 >= end_ {
+    return false
+  }
+  i += 1
+  if name[i].to_int() == 0x30 {
+    return i + 1 == end_
+  }
+  if name[i].to_int() < 0x31 || name[i].to_int() > 0x39 {
+    return false
+  }
+  i += 1
+  while i < end_ && is_ascii_digit(name[i]) {
+    i += 1
+  }
+  i == end_
+}
+
+///|
 fn is_semver_range(name : Bytes, start : Int, end_ : Int) -> Bool {
   // Minimal SemVer parser (enough to match wasm-tools component-spec tests).
   // Accepts: MAJOR.MINOR.PATCH[-prerelease][+build]
@@ -835,8 +952,7 @@ fn is_package_name(name : Bytes) -> Bool {
   if name.length() == 0 {
     return false
   }
-  // Allow WIT-style package names like `wasi:http/types` (the version suffix is
-  // encoded separately in ImportName/ExportName::WithVersion).
+  // Allow WIT-style interface names like `wasi:http/types`.
   let mut colon = -1
   let mut at = -1
   for i in 0..<name.length() {
@@ -863,7 +979,8 @@ fn is_package_name(name : Bytes) -> Bool {
     if at >= name.length() - 1 {
       return false
     }
-    if !is_semver_range(name, at + 1, name.length()) {
+    if !is_semver_range(name, at + 1, name.length()) &&
+      !is_canonversion_range(name, at + 1, name.length()) {
       return false
     }
   }

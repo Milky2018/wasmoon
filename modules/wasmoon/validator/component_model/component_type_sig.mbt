@@ -47,7 +47,7 @@ fn componenttype_import_func_sigs_of_decls(
         if kind == 0x03 {
           record_type_slot()
         }
-      Import(name, desc) => {
+      Import(name, _attributes, desc) => {
         match desc {
           FuncType(tyidx) =>
             if tyidx >= 0 && tyidx < local_types.length() {
@@ -84,7 +84,7 @@ fn componenttype_import_func_sigs_of_decls(
           _ => ()
         }
       }
-      Export(_name, desc) =>
+      Export(_name, _attributes, desc) =>
         match desc {
           Type(b) => record_type_slot_for_bound(b)
           _ => ()
@@ -144,7 +144,7 @@ fn componenttype_import_type_sigs_of_decls(
         if kind == 0x03 {
           record_type_slot(false) |> ignore
         }
-      Import(name, desc) =>
+      Import(name, _attributes, desc) =>
         match desc {
           Type(bound) =>
             match bound {
@@ -180,7 +180,7 @@ fn componenttype_import_type_sigs_of_decls(
             }
           _ => if desc is Type(_) { record_type_slot(false) |> ignore }
         }
-      Export(_name, desc) =>
+      Export(_name, _attributes, desc) =>
         match desc {
           Type(bound) =>
             match bound {
@@ -201,8 +201,105 @@ fn componenttype_import_type_bounds_of_decls(
 ) -> Map[String, @component.TypeBound] {
   let out : Map[String, @component.TypeBound] = Map([])
   for d in decls {
-    if d is Import(name, Type(b)) {
+    if d is Import(name, _attributes, Type(b)) {
       out.set(name, b)
+    }
+  }
+  out
+}
+
+///|
+fn componenttype_export_type_sigs_of_decls(
+  decls : Array[@component.ComponentDecl],
+  global_types : Array[@component.TypeDef?],
+  global_resource_ids : Array[Int?],
+) -> Map[String, TypeSig] {
+  let out : Map[String, TypeSig] = Map([])
+  let local_types : Array[@component.TypeDef] = []
+  let local_resource_ids : Array[Int?] = []
+  let mut next_rid = 0
+  for rid in global_resource_ids {
+    if rid is Some(value) && value >= next_rid {
+      next_rid = value + 1
+    }
+  }
+
+  fn push_placeholder() -> Unit {
+    local_types.push(InstanceTypeEmpty)
+    local_resource_ids.push(None)
+  }
+
+  fn push_resource() -> Int {
+    let idx = local_types.length()
+    local_types.push(ResourceType(-1, 0x7f, None, HostDefined))
+    local_resource_ids.push(Some(next_rid))
+    next_rid += 1
+    idx
+  }
+
+  fn push_eq(idx : Int) -> Unit {
+    if idx >= 0 && idx < local_types.length() {
+      local_types.push(local_types[idx])
+      local_resource_ids.push(local_resource_ids[idx])
+    } else {
+      push_placeholder()
+    }
+  }
+
+  for d in decls {
+    match d {
+      Type(t) => {
+        local_types.push(t)
+        if t is ResourceType(_, _, _, _) {
+          local_resource_ids.push(Some(next_rid))
+          next_rid += 1
+        } else {
+          local_resource_ids.push(None)
+        }
+      }
+      AliasOuter(kind, _, _) | AliasInstanceExport(kind, _, _) =>
+        if kind == 0x03 {
+          push_placeholder()
+        }
+      Import(_name, _attributes, desc) =>
+        match desc {
+          Type(SubResource) => push_resource() |> ignore
+          Type(Eq(idx)) => push_eq(idx)
+          _ => ()
+        }
+      Export(name, _attributes, desc) =>
+        match desc {
+          Type(SubResource) => {
+            let idx = push_resource()
+            out.set(
+              name,
+              type_sig_of_valtype_lg(
+                TypeIdx(idx),
+                local_types,
+                local_resource_ids,
+                global_types,
+                global_resource_ids,
+                Map([]),
+              ),
+            )
+          }
+          Type(Eq(idx)) => {
+            out.set(
+              name,
+              type_sig_of_valtype_lg(
+                TypeIdx(idx),
+                local_types,
+                local_resource_ids,
+                global_types,
+                global_resource_ids,
+                Map([]),
+              ),
+            )
+            push_eq(idx)
+          }
+          _ => ()
+        }
+      CoreType(_) => ()
     }
   }
   out
@@ -263,8 +360,8 @@ fn componenttype_export_func_sigs_of_decls(
         if kind == 0x03 {
           record_type_slot()
         }
-      Import(_name, desc) => record_type_slots_for_desc(desc)
-      Export(name, desc) => {
+      Import(_name, _attributes, desc) => record_type_slots_for_desc(desc)
+      Export(name, _attributes, desc) => {
         match desc {
           FuncType(tyidx) =>
             if tyidx >= 0 && tyidx < local_types.length() {
@@ -426,7 +523,7 @@ fn componenttype_import_core_module_sigs_of_decls(
   let import_sigs : Map[String, Map[String, CoreExternType]] = Map([])
   let export_kinds : Map[String, Map[String, Int]] = Map([])
   for d in decls {
-    if d is Import(name, desc) &&
+    if d is Import(name, _attributes, desc) &&
       desc is CoreModuleType(tyidx) &&
       tyidx >= 0 &&
       tyidx < local_core_import_sigs.length() {
@@ -708,10 +805,14 @@ fn validate_typedef(
   td : @component.TypeDef,
   cfg : ComponentValidationConfig,
   type_outers : Array[Array[@component.TypeDef?]],
+  type_outer_depths : Array[Int],
+  component_depth : Int,
   core_type_outers : Array[Array[Map[String, Int]?]],
   allow_resource_defs : Bool,
 ) -> Unit raise ComponentValidationError {
-  if type_outers.length() == 0 || core_type_outers.length() == 0 {
+  if type_outers.length() == 0 ||
+    type_outer_depths.length() != type_outers.length() ||
+    core_type_outers.length() == 0 {
     raise SectionParseError(
       7, "missing outer environment for typedef validation",
     )
@@ -883,40 +984,63 @@ fn validate_typedef(
             local_core_type_bound += 1
           }
           AliasOuter(kind, count, idx) =>
-            // Component-model extern kinds use the same discriminants as the
-            // component export kind encoding; `Type` is 0x03.
             if kind == 0x03 {
-              local_type_table.push(
-                outer_type_of_alias(type_outers, count, idx),
-              )
+              let outer = outer_type_of_alias(type_outers, count, idx)
+              if type_outer_depths[count - 1] < component_depth {
+                match outer {
+                  Some(td) =>
+                    if typedef_refers_to_resource(
+                        td,
+                        type_outers[count - 1],
+                        Map([]),
+                      ) {
+                      raise SectionParseError(
+                        7, "transitively refers to resources",
+                      )
+                    }
+                  None => ()
+                }
+              }
+              local_type_table.push(outer)
               local_resource_ids.push(None)
-            } else {
+            } else if kind == 0x110 {
               local_core_type_exports.push(
                 outer_core_type_of_alias(core_type_outers, count, idx),
               )
               local_core_type_bound += 1
+            } else {
+              raise SectionParseError(7, "outer alias may only refer to types")
             }
           AliasInstanceExport(kind, _instance_idx, _name) =>
             if kind == 0x03 {
               local_type_table.push(None)
               local_resource_ids.push(None)
-            } else {
-              local_core_type_exports.push(None)
-              local_core_type_bound += 1
+            } else if kind != 0x05 {
+              raise SectionParseError(
+                7, "alias export may only refer to types or instances",
+              )
             }
           Type(t) => {
             validate_typedef(
               t,
               cfg,
               [local_type_table] + type_outers,
+              [component_depth] + type_outer_depths,
+              component_depth,
               [local_core_type_exports] + core_type_outers,
               false,
             )
             local_type_table.push(Some(t))
             local_resource_ids.push(None)
           }
-          Import(name, desc) => {
+          Import(name, attributes, desc) => {
             validate_extern_name_string(name, cfg)
+            validate_name_attributes_string(
+              7,
+              name,
+              attributes,
+              sort_of_externdesc(desc),
+            )
             let key = ascii_lower_key(name)
             match seen_imports.get(key) {
               Some(prev) =>
@@ -1007,8 +1131,14 @@ fn validate_typedef(
               _ => ()
             }
           }
-          Export(name, desc) => {
+          Export(name, attributes, desc) => {
             validate_extern_name_string(name, cfg)
+            validate_name_attributes_string(
+              7,
+              name,
+              attributes,
+              sort_of_externdesc(desc),
+            )
             let key = ascii_lower_key(name)
             match seen_exports.get(key) {
               Some(prev) =>
@@ -1127,34 +1257,59 @@ fn validate_typedef(
           }
           AliasOuter(kind, count, idx) =>
             if kind == 0x03 {
-              local_type_table.push(
-                outer_type_of_alias(type_outers, count, idx),
-              )
-            } else {
+              let outer = outer_type_of_alias(type_outers, count, idx)
+              if type_outer_depths[count - 1] < component_depth {
+                match outer {
+                  Some(td) =>
+                    if typedef_refers_to_resource(
+                        td,
+                        type_outers[count - 1],
+                        Map([]),
+                      ) {
+                      raise SectionParseError(
+                        7, "transitively refers to resources",
+                      )
+                    }
+                  None => ()
+                }
+              }
+              local_type_table.push(outer)
+            } else if kind == 0x110 {
               local_core_type_exports.push(
                 outer_core_type_of_alias(core_type_outers, count, idx),
               )
               local_core_type_bound += 1
+            } else {
+              raise SectionParseError(7, "outer alias may only refer to types")
             }
           AliasInstanceExport(kind, _instance_idx, _name) =>
             if kind == 0x03 {
               local_type_table.push(None)
-            } else {
-              local_core_type_exports.push(None)
-              local_core_type_bound += 1
+            } else if kind != 0x05 {
+              raise SectionParseError(
+                7, "alias export may only refer to types or instances",
+              )
             }
           Type(t) => {
             validate_typedef(
               t,
               cfg,
               [local_type_table] + type_outers,
+              [component_depth] + type_outer_depths,
+              component_depth,
               [local_core_type_exports] + core_type_outers,
               false,
             )
             local_type_table.push(Some(t))
           }
-          Export(name, desc) => {
+          Export(name, attributes, desc) => {
             validate_extern_name_string(name, cfg)
+            validate_name_attributes_string(
+              7,
+              name,
+              attributes,
+              sort_of_externdesc(desc),
+            )
             let key = ascii_lower_key(name)
             match seen_exports.get(key) {
               Some(prev) =>

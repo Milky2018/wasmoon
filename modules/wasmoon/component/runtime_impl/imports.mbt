@@ -130,7 +130,7 @@ fn validate_instance_import_type(
               local_types.push(None)
             }
           Type(t) => local_types.push(Some(t))
-          Export(name, desc) => {
+          Export(name, _attributes, desc) => {
             // Instance type exports of `type` also declare a slot in the local
             // type index space, which later decls can reference (e.g. `own 0`).
             let type_slot : Int? = match desc {

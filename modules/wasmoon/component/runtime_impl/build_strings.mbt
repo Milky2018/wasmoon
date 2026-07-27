@@ -286,7 +286,7 @@ fn synthesize_trivial_instance_import(
               if kind == 0x03 {
                 local_types.push(None)
               }
-            Export(name, Type(bound)) =>
+            Export(name, _attributes, Type(bound)) =>
               match bound {
                 Eq(ti) => {
                   let aliased = if ti >= 0 && ti < local_types.length() {
@@ -303,7 +303,7 @@ fn synthesize_trivial_instance_import(
                 // Cannot synthesize abstract resources without a host-supplied identity.
                 SubResource => return None
               }
-            Export(name, InstanceType(inner)) =>
+            Export(name, _attributes, InstanceType(inner)) =>
               match resolve_inst_typedef(local_types, inner) {
                 Some(inner_td) =>
                   match
@@ -313,7 +313,7 @@ fn synthesize_trivial_instance_import(
                   }
                 None => return None
               }
-            Export(_, _) => return None
+            Export(_, _, _) => return None
             _ => return None
           }
         }

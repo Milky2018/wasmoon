@@ -294,7 +294,12 @@ fn validate_component_section_alias(
                       match sm.get(name) {
                         Some(sig) =>
                           match
-                            typedef_of_typesig(sig, type_table, resource_ids) {
+                            typedef_of_typesig(
+                              sig,
+                              type_table,
+                              resource_ids,
+                              Some(named_types),
+                            ) {
                             Some(td) => new_td = Some(td)
                             None => ()
                           }

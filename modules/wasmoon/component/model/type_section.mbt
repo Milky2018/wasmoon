@@ -61,7 +61,7 @@ pub(all) enum InstanceDecl {
   // (alias export ...) inside an instance type declaration.
   // `kind` is the component model external kind discriminator.
   AliasInstanceExport(Int, Int, String)
-  Export(String, ExternDesc)
+  Export(String, Array[NameAttribute], ExternDesc)
 } derive(Debug, Eq)
 
 ///|
@@ -74,8 +74,8 @@ pub(all) enum ComponentDecl {
   AliasOuter(Int, Int, Int)
   // (alias export ...) inside a component type declaration.
   AliasInstanceExport(Int, Int, String)
-  Import(String, ExternDesc)
-  Export(String, ExternDesc)
+  Import(String, Array[NameAttribute], ExternDesc)
+  Export(String, Array[NameAttribute], ExternDesc)
 } derive(Debug, Eq)
 
 ///|
@@ -206,18 +206,22 @@ fn parse_functype(
 }
 
 ///|
-fn parse_exportname_string(reader : Reader) -> String raise ComponentParseError {
+fn parse_nameattributes_string(
+  reader : Reader,
+) -> (String, Array[NameAttribute]) raise ComponentParseError {
   let tag = reader.read_u8()
   if tag == 0x00 {
     let len = reader.read_leb_u32()
     let bytes = reader.read_bytes(len)
-    decode_utf8_validated(bytes)
+    (decode_utf8_validated(bytes), [])
   } else if tag == 0x01 {
     let len = reader.read_leb_u32()
     let bytes = reader.read_bytes(len)
-    let vs_len = reader.read_leb_u32()
-    reader.read_bytes(vs_len) |> ignore
-    decode_utf8_validated(bytes)
+    (decode_utf8_validated(bytes), [])
+  } else if tag == 0x02 {
+    let len = reader.read_leb_u32()
+    let bytes = reader.read_bytes(len)
+    (decode_utf8_validated(bytes), parse_attributes(reader))
   } else {
     raise InvalidTypeSection
   }
@@ -429,9 +433,9 @@ fn parse_instancedecl(
       raise InvalidTypeSection
     }
   } else if tag == 0x04 {
-    let name = parse_exportname_string(reader)
+    let (name, attributes) = parse_nameattributes_string(reader)
     let desc = parse_externdesc_for_instancedecl(reader)
-    Export(name, desc)
+    Export(name, attributes, desc)
   } else {
     raise UnsupportedTypeOpcode(tag)
   }
@@ -467,13 +471,13 @@ fn parse_componentdecl(
       raise InvalidTypeSection
     }
   } else if tag == 0x03 {
-    let name = parse_exportname_string(reader)
+    let (name, attributes) = parse_nameattributes_string(reader)
     let desc = parse_externdesc_for_instancedecl(reader)
-    Import(name, desc)
+    Import(name, attributes, desc)
   } else if tag == 0x04 {
-    let name = parse_exportname_string(reader)
+    let (name, attributes) = parse_nameattributes_string(reader)
     let desc = parse_externdesc_for_instancedecl(reader)
-    Export(name, desc)
+    Export(name, attributes, desc)
   } else {
     raise UnsupportedTypeOpcode(tag)
   }

@@ -1632,12 +1632,12 @@ fn pp_componentdecl(
       pp_typedef(sb, td)
       sb.write_string(")\n")
     }
-    Import(name, desc) => {
+    Import(name, _attributes, desc) => {
       sb.write_string("(import \"" + name + "\" ")
       pp_externdesc(sb, desc)
       sb.write_string(")\n")
     }
-    Export(name, desc) => {
+    Export(name, _attributes, desc) => {
       sb.write_string("(export \"" + name + "\" ")
       pp_externdesc(sb, desc)
       sb.write_string(")\n")
@@ -1683,7 +1683,7 @@ fn pp_instancedecl(
       pp_typedef(sb, td)
       sb.write_string(")\n")
     }
-    Export(name, desc) => {
+    Export(name, _attributes, desc) => {
       sb.write_string("(export \"" + name + "\" ")
       pp_externdesc(sb, desc)
       sb.write_string(")\n")

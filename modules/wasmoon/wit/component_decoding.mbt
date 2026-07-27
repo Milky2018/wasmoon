@@ -245,7 +245,7 @@ fn build_instancetype_type_slots(
         if kind == 0x03 {
           slots.push(AliasOuter(count, idx))
         }
-      Export(name, desc) =>
+      Export(name, _attributes, desc) =>
         match desc {
           Type(bound) => {
             let idx = slots.length()
@@ -274,7 +274,7 @@ fn decode_interface_from_componenttype(
   let mut full_name : String? = None
   let mut inst_tyidx : Int? = None
   for d in decls {
-    if d is Export(name, InstanceType(ti)) {
+    if d is Export(name, _attributes, InstanceType(ti)) {
       full_name = Some(name)
       inst_tyidx = Some(ti)
     }
@@ -296,7 +296,7 @@ fn decode_interface_from_componenttype(
   for d in decls {
     match d {
       Type(_td) => cur_typeidx = cur_typeidx + 1
-      Import(_n, InstanceType(ti)) => {
+      Import(_n, _attributes, InstanceType(ti)) => {
         inst_sig_typeidx_by_inst.set(cur_instidx, ti)
         cur_instidx = cur_instidx + 1
       }
@@ -390,7 +390,7 @@ fn decode_interface_from_componenttype(
   // Collect named types.
   let type_items : Array[InterfaceItem] = []
   for d in inst_decls {
-    if d is Export(tname, Type(bound)) && bound is Eq(ti) {
+    if d is Export(tname, _attributes, Type(bound)) && bound is Eq(ti) {
       // If this is an alias to an outer type, try to resolve it through
       // the imported instance signature.
       match slots[ti] {
@@ -511,7 +511,8 @@ fn decode_interface_from_componenttype(
   // Collect exported funcs and resource methods.
   let func_items : Array[InterfaceItem] = []
   for d in inst_decls {
-    if d is Export(fname, FuncType(ti)) && slots[ti] is Def(FuncType(ft)) {
+    if d is Export(fname, _attributes, FuncType(ti)) &&
+      slots[ti] is Def(FuncType(ft)) {
       if fname.has_prefix("[method]") {
         let rest = slice_ascii(fname, 8, fname.length())
         if find_last_code_unit(rest, 46) is Some(dot) { // '.'
@@ -619,7 +620,7 @@ fn decode_world_from_componenttype(
   let mut full_name : String? = None
   let mut comp_tyidx : Int? = None
   for d in decls {
-    if d is Export(name, ComponentType(ti)) {
+    if d is Export(name, _attributes, ComponentType(ti)) {
       full_name = Some(name)
       comp_tyidx = Some(ti)
     }
@@ -653,9 +654,9 @@ fn decode_world_from_componenttype(
   let items : Array[WorldItem] = []
   for d in inner_decls {
     match d {
-      Import(n, InstanceType(_ti)) =>
+      Import(n, _attributes, InstanceType(_ti)) =>
         items.push(Import({ raw: normalize_inst_name(n) }))
-      Export(n, InstanceType(_ti)) =>
+      Export(n, _attributes, InstanceType(_ti)) =>
         items.push(Export({ raw: normalize_inst_name(n) }))
       _ => ()
     }
@@ -708,8 +709,9 @@ pub fn decode_wit_package_from_component(
       let mut has_component_export = false
       for d in decls {
         match d {
-          Export(_, InstanceType(_)) => has_instance_export = true
-          Export(_, ComponentType(_)) => has_component_export = true
+          Export(_, _attributes, InstanceType(_)) => has_instance_export = true
+          Export(_, _attributes, ComponentType(_)) =>
+            has_component_export = true
           _ => ()
         }
       }

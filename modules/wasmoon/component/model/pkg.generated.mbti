@@ -152,8 +152,8 @@ pub(all) enum ComponentDecl {
   Type(TypeDef)
   AliasOuter(Int, Int, Int)
   AliasInstanceExport(Int, Int, String)
-  Import(String, ExternDesc)
-  Export(String, ExternDesc)
+  Import(String, Array[NameAttribute], ExternDesc)
+  Export(String, Array[NameAttribute], ExternDesc)
 } derive(Eq, @debug.Debug)
 
 pub(all) struct CoreInlineExport {
@@ -177,6 +177,7 @@ pub(all) struct CoreInstantiateArg {
 
 pub(all) struct Export {
   name : ExportName
+  attributes : Array[NameAttribute]
   sortidx : SortIdx
   desc : ExternDesc?
 } derive(Eq, @debug.Debug)
@@ -204,6 +205,7 @@ pub(all) struct FuncType {
 
 pub(all) struct Import {
   name : ImportName
+  attributes : Array[NameAttribute]
   desc : ExternDesc
 } derive(Eq, @debug.Debug)
 
@@ -214,6 +216,7 @@ pub(all) enum ImportName {
 
 pub(all) struct InlineExport {
   name : String
+  attributes : Array[NameAttribute]
   sortidx : SortIdx
 } derive(Eq, @debug.Debug)
 
@@ -226,7 +229,7 @@ pub(all) enum InstanceDecl {
   Type(TypeDef)
   AliasOuter(Int, Int, Int)
   AliasInstanceExport(Int, Int, String)
-  Export(String, ExternDesc)
+  Export(String, Array[NameAttribute], ExternDesc)
 } derive(Eq, @debug.Debug)
 
 pub(all) enum InstanceExpr {
@@ -238,6 +241,12 @@ pub impl Show for InstanceExpr
 pub(all) struct InstantiateArg {
   name : String
   sortidx : SortIdx
+} derive(Eq, @debug.Debug)
+
+pub(all) enum NameAttribute {
+  Implements(Bytes)
+  VersionSuffix(Bytes)
+  ExternalId(Bytes)
 } derive(Eq, @debug.Debug)
 
 pub(all) struct Param {

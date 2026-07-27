@@ -608,7 +608,7 @@ fn externdesc_refers_to_resource(
                     any = true
                     break
                   }
-                Export(_name, desc) =>
+                Export(_name, _attributes, desc) =>
                   if externdesc_refers_to_resource(desc, type_table, visiting) {
                     any = true
                     break
@@ -635,12 +635,12 @@ fn externdesc_refers_to_resource(
                     any = true
                     break
                   }
-                Import(_name, desc) =>
+                Import(_name, _attributes, desc) =>
                   if externdesc_refers_to_resource(desc, type_table, visiting) {
                     any = true
                     break
                   }
-                Export(_name, desc) =>
+                Export(_name, _attributes, desc) =>
                   if externdesc_refers_to_resource(desc, type_table, visiting) {
                     any = true
                     break
@@ -747,12 +747,12 @@ fn typedef_refers_to_resource(
               any = true
               break
             }
-          Import(_name, desc) =>
+          Import(_name, _attributes, desc) =>
             if externdesc_refers_to_resource(desc, type_table, visiting) {
               any = true
               break
             }
-          Export(_name, desc) =>
+          Export(_name, _attributes, desc) =>
             if externdesc_refers_to_resource(desc, type_table, visiting) {
               any = true
               break
@@ -771,7 +771,7 @@ fn typedef_refers_to_resource(
               any = true
               break
             }
-          Export(_name, desc) =>
+          Export(_name, _attributes, desc) =>
             if externdesc_refers_to_resource(desc, type_table, visiting) {
               any = true
               break
@@ -868,7 +868,7 @@ fn effective_typedef_size(
             } else {
               ()
             }
-          Import(_name, desc) | Export(_name, desc) => {
+          Import(_name, _attributes, desc) | Export(_name, _attributes, desc) => {
             total = add_type_size(
               total,
               externdesc_type_size(desc, local_sizes),
@@ -909,7 +909,7 @@ fn effective_typedef_size(
             } else {
               ()
             }
-          Export(_name, desc) => {
+          Export(_name, _attributes, desc) => {
             total = add_type_size(
               total,
               externdesc_type_size(desc, local_sizes),

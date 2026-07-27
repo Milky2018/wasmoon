@@ -75,6 +75,12 @@ fn validate_component_section_import(
   }
   for i in imports {
     validate_import_name(i.name, cfg)
+    validate_name_attributes(
+      10,
+      importname_to_bytes(i.name),
+      i.attributes,
+      sort_of_externdesc(i.desc),
+    )
     if is_root && i.desc is ComponentType(_) {
       raise SectionParseError(
         10, "root-level component imports are not supported",
@@ -219,7 +225,7 @@ fn validate_component_section_import(
                       if kind == 0x03 {
                         record_type_slot()
                       }
-                    Export(name, desc) =>
+                    Export(name, _attributes, desc) =>
                       match desc {
                         Type(b) =>
                           match b {
@@ -355,6 +361,7 @@ fn validate_component_section_import(
       let mut import_type_bounds : Map[String, @component.TypeBound]? = None
       let mut export_sorts : Map[String, @component.Sort]? = None
       let mut export_instance_sigs : Map[String, InstanceSig]? = None
+      let mut export_type_sigs : Map[String, TypeSig]? = None
       let mut export_func_sigs : Map[String, FuncSigShape]? = None
       if tyidx >= 0 && tyidx < type_table.length() {
         if type_table[tyidx] is Some(ComponentType(decls)) {
@@ -383,6 +390,11 @@ fn validate_component_section_import(
           )
           export_sorts = Some(exp_sorts)
           export_instance_sigs = Some(exp_inst_sigs)
+          export_type_sigs = Some(
+            componenttype_export_type_sigs_of_decls(
+              decls, type_table, resource_ids,
+            ),
+          )
           export_func_sigs = Some(
             componenttype_export_func_sigs_of_decls(
               decls, type_table, resource_ids,
@@ -404,7 +416,7 @@ fn validate_component_section_import(
       component_export_instance_sigs.push(export_instance_sigs)
       component_export_instance_type_sigs.push(None)
       component_export_instance_func_sigs.push(None)
-      component_export_type_sigs.push(None)
+      component_export_type_sigs.push(export_type_sigs)
       component_export_func_sigs.push(export_func_sigs)
       // Imported component size is unknown; treat as 1.
       component_sizes.push(1)
