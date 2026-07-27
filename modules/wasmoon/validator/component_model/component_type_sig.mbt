@@ -944,7 +944,14 @@ fn validate_typedef(
         Some(_) => raise SectionParseError(7, "not a resource type")
       }
     }
-    Stream(v) | Future(v) =>
+    Stream(v) =>
+      match v {
+        Some(Prim(Char)) =>
+          raise SectionParseError(7, "`stream<char>` is not valid")
+        Some(t) => validate_valtype(t, type_table)
+        None => ()
+      }
+    Future(v) =>
       match v {
         Some(t) => validate_valtype(t, type_table)
         None => ()
@@ -1578,12 +1585,10 @@ fn functype_needs_memory(
 }
 
 ///|
-fn functype_needs_realloc_for_lift(
+fn functype_params_need_memory(
   ft : @component.FuncType,
   type_table : Array[@component.TypeDef?],
 ) -> Bool {
-  // For canon lift, `realloc` is required when the wrapper must allocate/write
-  // linear memory to pass params (strings/lists or indirect args).
   let mut param_count = 0
   for p in ft.params {
     match core_valtypes_for_component_valtype(p.ty, type_table) {
@@ -1600,14 +1605,154 @@ fn functype_needs_realloc_for_lift(
 }
 
 ///|
+fn functype_async_lift_needs_memory(
+  ft : @component.FuncType,
+  type_table : Array[@component.TypeDef?],
+) -> Bool {
+  if functype_params_need_memory(ft, type_table) {
+    return true
+  }
+  match ft.result {
+    None => false
+    Some(r) =>
+      match core_valtypes_for_component_valtype(r, type_table) {
+        None => true
+        Some(ts) => ts.length() > 16
+      }
+  }
+}
+
+///|
+fn valtype_contains_list_or_string(
+  ty : @component.ValType,
+  type_table : Array[@component.TypeDef?],
+  visiting : Map[Int, Unit],
+) -> Bool {
+  match ty {
+    Prim(String) => true
+    Prim(_) => false
+    TypeIdx(idx) =>
+      if idx < 0 || idx >= type_table.length() || visiting.get(idx) is Some(_) {
+        false
+      } else {
+        visiting.set(idx, ())
+        let found = match type_table[idx] {
+          None => false
+          Some(td) =>
+            match td {
+              DefValType(String) | List(_) => true
+              DefValType(_)
+              | Flags(_)
+              | Enum(_)
+              | Own(_)
+              | Borrow(_)
+              | ResourceType(_, _, _, _)
+              | Stream(_)
+              | Future(_)
+              | InstanceTypeEmpty => false
+              Record(fields) => {
+                let mut any = false
+                for field in fields {
+                  if valtype_contains_list_or_string(
+                      field.ty,
+                      type_table,
+                      visiting,
+                    ) {
+                    any = true
+                    break
+                  }
+                }
+                any
+              }
+              Variant(cases) => {
+                let mut any = false
+                for variant_case in cases {
+                  if variant_case.ty is Some(case_ty) &&
+                    valtype_contains_list_or_string(
+                      case_ty, type_table, visiting,
+                    ) {
+                    any = true
+                    break
+                  }
+                }
+                any
+              }
+              Tuple(types) => {
+                let mut any = false
+                for element in types {
+                  if valtype_contains_list_or_string(
+                      element, type_table, visiting,
+                    ) {
+                    any = true
+                    break
+                  }
+                }
+                any
+              }
+              Option(inner) =>
+                valtype_contains_list_or_string(inner, type_table, visiting)
+              Result(ok, err) => {
+                let ok_has = match ok {
+                  Some(inner) =>
+                    valtype_contains_list_or_string(inner, type_table, visiting)
+                  None => false
+                }
+                let err_has = match err {
+                  Some(inner) =>
+                    valtype_contains_list_or_string(inner, type_table, visiting)
+                  None => false
+                }
+                ok_has || err_has
+              }
+              FuncType(_) | ComponentType(_) | InstanceType(_) => false
+            }
+        }
+        visiting.remove(idx) |> ignore
+        found
+      }
+  }
+}
+
+///|
+fn functype_needs_realloc_for_lift(
+  ft : @component.FuncType,
+  type_table : Array[@component.TypeDef?],
+) -> Bool {
+  // For canon lift, `realloc` is required when the wrapper must allocate/write
+  // linear memory to pass params (strings/lists or indirect args).
+  let mut param_count = 0
+  for p in ft.params {
+    if valtype_contains_list_or_string(p.ty, type_table, Map([])) {
+      return true
+    }
+    match core_valtypes_for_component_valtype(p.ty, type_table) {
+      Some(ts) => {
+        param_count += ts.length()
+        if param_count > 16 {
+          return true
+        }
+      }
+      None => return true
+    }
+  }
+  match ft.result {
+    Some(r) => valtype_contains_list_or_string(r, type_table, Map([]))
+    None => false
+  }
+}
+
+///|
 fn functype_needs_realloc_for_lower(
   ft : @component.FuncType,
   type_table : Array[@component.TypeDef?],
 ) -> Bool {
-  // For canon lower, `realloc` is required when the wrapper must write a
-  // component value into core linear memory as a result.
-  match ft.result {
-    Some(r) => core_valtypes_for_component_valtype(r, type_table) is None
-    None => false
+  // Canon lower lifts its core arguments into component values. Dynamic
+  // list/string arguments require the embedding allocator; an indirect scalar
+  // result only needs the caller-provided return area.
+  for p in ft.params {
+    if valtype_contains_list_or_string(p.ty, type_table, Map([])) {
+      return true
+    }
   }
+  false
 }

@@ -17,19 +17,20 @@ fn instantiate_component(
     AsyncState(stream_table)
   }
   let state = BuildState::BuildState(stream_table, async_state)
-  // Reserve handle index 1 for nested component instances so tests that
-  // assume a pre-existing handle slot (e.g. resources.wast) see the expected
-  // numbering. If we end up running core start code, drop the reservation so
-  // start-time allocations can still begin at 1.
-  let mut reserved_resource_handle : Int? = Some(
-    state.resource_table.alloc({
-      type_id: -1,
-      rep: 0,
-      dtor: None,
-      kind: GuestDefined,
-    }),
+  if outer_stack.length() > 0 {
+    let parent_table = outer_stack[outer_stack.length() - 1].resource_table
+    let ancestors : Array[Int] = []
+    for ancestor in parent_table.ancestors.val {
+      ancestors.push(ancestor)
+    }
+    ancestors.push(parent_table.id)
+    state.resource_table.ancestors.val = ancestors
+  }
+  state.async_state.resource_tables.set(
+    state.resource_table.id,
+    state.resource_table,
   )
-  let may_enter_self : Array[Bool] = [false]
+  let may_enter_self : Ref[Bool] = Ref(false)
   let store = linker.get_store()
   for section in component.binary.sections {
     match section.id {
@@ -52,17 +53,6 @@ fn instantiate_component(
               let mod_ = state.core_modules[module_idx]
               validate_core_import_args(mod_, args, state)
               let imports = core_imports_from_args(args, state)
-              // If this module has a start function, don't hold the reserved
-              // handle: start code expects fresh resource tables.
-              if mod_.start is Some(_) {
-                match reserved_resource_handle {
-                  Some(h) => {
-                    state.resource_table.free(h) |> ignore
-                    reserved_resource_handle = None
-                  }
-                  None => ()
-                }
-              }
               let module_name = "\{name}::coreinst\{state.core_instances.length()}"
               clear_canon_trap_message()
               // Core module instantiation can execute start functions that call back into
@@ -71,17 +61,6 @@ fn instantiate_component(
               let inst_task_id = alloc_task_id(async_state)
               // Core start runs during instantiation and must not block.
               push_task(async_state, inst_task_id, false)
-              // Some canonical ops assume an implicit "current thread" handle slot is reserved
-              // even for synchronous tasks. If this component requires that numbering, reserve
-              // it for the instantiation task as well so start functions see consistent ids.
-              if async_state.thread_handle_required.get(state.resource_table.id)
-                is Some(true) {
-                ensure_task_thread(
-                  async_state,
-                  state.resource_table.id,
-                  inst_task_id,
-                )
-              }
               let instance = @executor.instantiate_module_with_imports(
                 store, mod_, imports,
               ) catch {
@@ -376,7 +355,7 @@ fn instantiate_component(
       _ => ()
     }
   }
-  may_enter_self[0] = true
+  may_enter_self.val = true
   let instance : ComponentInstance = {
     name,
     types: state.types,

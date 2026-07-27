@@ -24,7 +24,6 @@ pub(all) enum CanonOpt {
 pub(all) enum Canon {
   Lift(Int, Array[CanonOpt], Int) // core funcidx, opts, typeidx
   Lower(Int, Array[CanonOpt]) // funcidx, opts
-  BackpressureSet
   BackpressureInc
   BackpressureDec
   ContextGet(@types.ValueType, Int) // valtype, context index
@@ -33,8 +32,6 @@ pub(all) enum Canon {
   TaskCancel
   ThreadIndex
   ThreadYield(Bool) // cancellable?
-  ThreadYieldTo(Bool) // cancellable?
-  ThreadSwitchTo(Bool) // cancellable?
   ThreadResumeLater
   ThreadSuspend(Bool) // cancellable?
   ThreadNewIndirect(Int, Int) // core functype index, core table index
@@ -184,7 +181,6 @@ fn parse_canon(reader : Reader) -> Canon raise ComponentParseError {
       let opts = parse_opts(reader)
       Lower(func, opts)
     }
-    0x08 => BackpressureSet
     0x05 => TaskCancel
     0x06 => {
       let async_flag = reader.read_u8()
@@ -230,27 +226,13 @@ fn parse_canon(reader : Reader) -> Canon raise ComponentParseError {
       let table = reader.read_leb_u32()
       ThreadNewIndirect(ty, table)
     }
-    0x28 => {
-      let flag = reader.read_u8()
-      if flag != 0x00 && flag != 0x01 {
-        raise InvalidCanonSection
-      }
-      ThreadSwitchTo(flag == 0x01)
-    }
+    0x28 => ThreadResumeLater
     0x29 => {
       let flag = reader.read_u8()
       if flag != 0x00 && flag != 0x01 {
         raise InvalidCanonSection
       }
       ThreadSuspend(flag == 0x01)
-    }
-    0x2a => ThreadResumeLater
-    0x2b => {
-      let flag = reader.read_u8()
-      if flag != 0x00 && flag != 0x01 {
-        raise InvalidCanonSection
-      }
-      ThreadYieldTo(flag == 0x01)
     }
     0x0d => SubtaskDrop
     0x0e => StreamNew(reader.read_typeidx())

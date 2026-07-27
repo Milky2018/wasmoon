@@ -70,7 +70,6 @@ pub impl Show for BinaryKind
 pub(all) enum Canon {
   Lift(Int, Array[CanonOpt], Int)
   Lower(Int, Array[CanonOpt])
-  BackpressureSet
   BackpressureInc
   BackpressureDec
   ContextGet(@types.ValueType, Int)
@@ -79,8 +78,6 @@ pub(all) enum Canon {
   TaskCancel
   ThreadIndex
   ThreadYield(Bool)
-  ThreadYieldTo(Bool)
-  ThreadSwitchTo(Bool)
   ThreadResumeLater
   ThreadSuspend(Bool)
   ThreadNewIndirect(Int, Int)

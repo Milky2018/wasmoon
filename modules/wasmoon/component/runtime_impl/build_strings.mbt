@@ -24,13 +24,15 @@ fn BuildState::BuildState(
   stream_table : StreamTable,
   async_state : AsyncState,
 ) -> BuildState {
+  let resource_table = ResourceTable()
+  async_state.resource_tables.set(resource_table.id, resource_table)
   {
     types: [],
     funcs: [],
     values: [],
     components: [],
     instances: [],
-    resource_table: ResourceTable(),
+    resource_table,
     stream_table,
     async_state,
     core_modules: [],

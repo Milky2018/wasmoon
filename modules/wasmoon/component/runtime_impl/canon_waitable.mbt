@@ -10,9 +10,6 @@ fn instantiate_canon_waitable_set_new(
   let core_type : @types.FuncType = { params: [], results: [I32] }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
-  // Component-model async ABI: even if the current task is synchronous (e.g. core start),
-  // handle numbering assumes an implicit "current thread" handle slot exists.
-  async_state.thread_handle_required.set(owner_component_id, true)
   let host = fn(
     _args : Array[@types.Value],
   ) -> Array[@types.Value] raise @runtime.RuntimeError {
@@ -449,6 +446,13 @@ fn instantiate_canon_waitable_set_drop(
               for kv in set.members.iter() {
                 let (waitable, _v) = kv
                 let wkey = handle_key(owner_component_id, waitable)
+                if async_state.stream_table.endpoints.get(wkey)
+                  is Some(endpoint) {
+                  endpoint.in_waitable_set.val = false
+                }
+                if async_state.future_endpoints.get(wkey) is Some(endpoint) {
+                  endpoint.in_waitable_set.val = false
+                }
                 match async_state.waitable_to_set.get(wkey) {
                   Some(ws2_key) =>
                     if ws2_key == ws_key {
@@ -491,10 +495,37 @@ fn instantiate_canon_waitable_join(
     }
     match args {
       [I32(waitable), I32(ws)] => {
-        let ws_key = handle_key(owner_component_id, ws)
         let waitable_key = handle_key(owner_component_id, waitable)
+        if ws == 0 {
+          if async_state.stream_table.endpoints.get(waitable_key)
+            is Some(endpoint) {
+            endpoint.in_waitable_set.val = false
+          }
+          if async_state.future_endpoints.get(waitable_key) is Some(endpoint) {
+            endpoint.in_waitable_set.val = false
+          }
+          match async_state.waitable_to_set.get(waitable_key) {
+            Some(previous_key) => {
+              async_state.waitable_to_set.remove(waitable_key)
+              match async_state.waitable_sets.get(previous_key) {
+                Some(previous_set) => previous_set.members.remove(waitable)
+                None => ()
+              }
+            }
+            None => ()
+          }
+          return []
+        }
+        let ws_key = handle_key(owner_component_id, ws)
         match async_state.waitable_sets.get(ws_key) {
-          Some(set) =>
+          Some(set) => {
+            if async_state.stream_table.endpoints.get(waitable_key)
+              is Some(endpoint) {
+              endpoint.in_waitable_set.val = true
+            }
+            if async_state.future_endpoints.get(waitable_key) is Some(endpoint) {
+              endpoint.in_waitable_set.val = true
+            }
             match async_state.waitable_to_set.get(waitable_key) {
               Some(prev_ws_key) =>
                 if prev_ws_key == ws_key {
@@ -532,6 +563,7 @@ fn instantiate_canon_waitable_join(
                 []
               }
             }
+          }
           None => {
             trap_canon("unknown waitable set index \{ws}")
             []

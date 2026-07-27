@@ -13,16 +13,15 @@ fn transfer_args_if_needed(
   let out : Array[ComponentValue] = []
   for i, param in func_type.params {
     let v = if i < args.length() { args[i] } else { raise InvalidValueIndex(i) }
-    out.push(
-      transfer_stream_future_value(
-        param.ty,
-        v,
-        types,
-        async_state,
-        from_component_id,
-        to_component_id,
-      ),
+    let transferred = transfer_stream_future_value(
+      param.ty,
+      v,
+      types,
+      async_state,
+      from_component_id,
+      to_component_id,
     )
+    out.push(transferred)
   }
   out
 }
@@ -83,13 +82,6 @@ fn await_component_func(
   let task_id = alloc_task_id(async_state)
   init_task_meta(async_state, task_id, callee_instance_id, caller_task_id)
   push_task(async_state, task_id, can_block)
-  // Ensure this async task has a current thread handle in the callee instance's
-  // handle space (affects stream/future numbering per component-spec/async).
-  match func {
-    Host(_, _, _) => ensure_task_thread(async_state, caller_table.id, task_id)
-    Lifted(_, _, _, _, callee_table, _, _, _) =>
-      ensure_task_thread(async_state, callee_table.id, task_id)
-  }
   take_task_result(async_state, task_id) |> ignore
   let out = try {
     match func {
@@ -120,7 +112,7 @@ fn await_component_func(
           callee_table.id,
         )
         let core_args = component_args_to_core(
-          xargs, func_type, types, resources, store, caller_table, callee_table,
+          xargs, func_type, types, resources, store, callee_table, callee_table,
         )
         match cb_opt {
           None =>
@@ -496,15 +488,23 @@ fn step_task_once(
         }
         task.args_owner_component_id[0] = callee_table.id
       }
-      let core_args = component_args_to_core(
-        task.args,
-        func_type,
-        types,
-        resources,
-        store,
-        caller_table,
-        callee_table,
-      )
+      async_state.resource_tables.set(callee_table.id, callee_table)
+      let core_args : Array[@types.Value] = if cb_opt is Some(_) &&
+        task.started[0] {
+        // Callback invocations receive only the event triple below. Re-lowering
+        // the original component arguments would duplicate task-scoped borrows.
+        []
+      } else {
+        component_args_to_core(
+          task.args,
+          func_type,
+          types,
+          resources,
+          store,
+          callee_table,
+          callee_table,
+        )
+      }
 
       // Callback-style async ABI: initial call returns a callback code; resumption uses `callback`.
       if cb_opt is Some(cb) {
@@ -947,7 +947,6 @@ fn progress_one_subtask(
     if task_on_stack(task_id) {
       continue
     }
-    ensure_task_thread(async_state, st.callee_instance_id, task_id)
     push_task(async_state, task_id, true)
     let step = match st.driver {
       CallbackLifted(t) =>
@@ -1102,20 +1101,6 @@ fn call_component_func(
     // Preserve the host-provided `task_can_block` flag: exported async funcs must be allowed to block.
     let can_block = async_state.task_can_block[0]
     push_task(async_state, task_id, can_block)
-    if can_block {
-      // Async tasks always maintain a current thread handle.
-      ensure_task_thread(async_state, resource_table.id, task_id)
-    } else {
-      let inst_id = match func {
-        Host(_, _, _) => resource_table.id
-        Lifted(_, _, _, _, callee_table, _, _, _) => callee_table.id
-      }
-      // Some synchronous component instances still need the implicit thread
-      // handle slot reserved for component-spec/async handle numbering.
-      if async_state.thread_handle_required.get(inst_id) is Some(true) {
-        ensure_task_thread(async_state, inst_id, task_id)
-      }
-    }
     let out = call_component_func_in_task(
       func, args, store, resource_table, async_state,
     ) catch {
@@ -1161,6 +1146,9 @@ fn call_component_func_in_task(
       cb_opt,
       async_abi
     ) => {
+      if !may_enter.val {
+        raise CanonCallError("cannot enter component instance")
+      }
       if func_type.is_async {
         return await_component_func(
           func, args, store, resource_table, async_state,
@@ -1183,7 +1171,7 @@ fn call_component_func_in_task(
             callee_table.id,
           )
           let core_args = component_args_to_core(
-            xargs, func_type, types, resources, store, resource_table, callee_table,
+            xargs, func_type, types, resources, store, callee_table, callee_table,
           )
           // Create a dedicated task context so `canon task.return` has somewhere to put results.
           let task_id = alloc_task_id(async_state)
@@ -1321,7 +1309,7 @@ fn call_component_func_in_task(
         callee_table.id,
       )
       let core_args = component_args_to_core(
-        xargs, func_type, types, resources, store, resource_table, callee_table,
+        xargs, func_type, types, resources, store, callee_table, callee_table,
       )
       // Synchronous lifts can still hit cooperative suspension points from
       // canonical intrinsics (e.g. sync future.read/write). Drive the event
@@ -1408,33 +1396,8 @@ fn call_component_func_in_task(
         }
         None => ()
       }
-      // If this function belongs to a different component instance, transfer
-      // owned resources into the caller's table so handles are local.
-      let out0 = if resource_table.id != callee_table.id {
-        match func_type.result {
-          Some(TypeIdx(ti)) =>
-            match types.get(ti) {
-              Some(Some(Own(_resource_tyidx))) =>
-                match component_results {
-                  [U32(h)] => {
-                    let entry = match callee_table.free(h) {
-                      Some(e) => e
-                      None => raise CanonCallError("unknown handle index \{h}")
-                    }
-                    let new_h = resource_table.alloc(entry)
-                    [ComponentValue::U32(new_h)]
-                  }
-                  _ => component_results
-                }
-              _ => component_results
-            }
-          _ => component_results
-        }
-      } else {
-        component_results
-      }
       transfer_results_if_needed(
-        out0,
+        component_results,
         func_type.result,
         types,
         async_state,

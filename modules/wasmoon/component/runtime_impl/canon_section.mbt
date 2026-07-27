@@ -8,7 +8,7 @@ fn process_canon_section(
   payload : Bytes,
   state : BuildState,
   store : @runtime.Store,
-  may_enter_self : Array[Bool],
+  may_enter_self : Ref[Bool],
 ) -> Unit raise ComponentRuntimeError {
   let canons = parse_canon_section(payload) catch {
     e => raise CoreModuleInstantiateError(e.to_string())
@@ -21,7 +21,6 @@ fn process_canon_section(
         )
       Lower(func_idx, opts) =>
         instantiate_canon_lower(func_idx, opts, state, store)
-      BackpressureSet => instantiate_canon_backpressure_set(state, store)
       BackpressureInc => instantiate_canon_backpressure_inc(state, store)
       BackpressureDec => instantiate_canon_backpressure_dec(state, store)
       ResourceNew(tyidx) => instantiate_canon_resource_new(tyidx, state, store)
@@ -34,10 +33,6 @@ fn process_canon_section(
       ThreadIndex => instantiate_canon_thread_index(state, store)
       ThreadYield(_cancellable) =>
         instantiate_canon_thread_yield(_cancellable, state, store)
-      ThreadYieldTo(_cancellable) =>
-        instantiate_canon_thread_yield_to(_cancellable, state, store)
-      ThreadSwitchTo(_cancellable) =>
-        instantiate_canon_thread_switch_to(_cancellable, state, store)
       ThreadResumeLater => instantiate_canon_thread_resume_later(state, store)
       ThreadSuspend(_cancellable) =>
         instantiate_canon_thread_suspend(_cancellable, state, store)

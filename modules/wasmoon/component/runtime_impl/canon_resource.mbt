@@ -39,7 +39,16 @@ fn instantiate_canon_resource_new(
     }
     match args {
       [I32(rep)] => {
-        let handle = table.alloc({ type_id, rep, dtor, kind })
+        let handle = table.alloc({
+          type_id,
+          rep,
+          dtor,
+          kind,
+          impl_component_id: table.id,
+          own: true,
+          borrow_scope: None,
+          num_lends: [0],
+        })
         [I32(handle)]
       }
       _ => {
@@ -106,7 +115,7 @@ fn instantiate_canon_resource_rep(
             }
           None => {
             trap_canon(
-              "unknown handle index \{handle}; index \{handle} is not a resource",
+              "resource.rep: unknown handle index \{handle}; index \{handle} is not a resource in table \{table.id}",
             )
             []
           }
@@ -171,26 +180,50 @@ fn instantiate_canon_resource_drop(
               )
               []
             } else {
+              if entry.own && entry.num_lends[0] > 0 {
+                trap_canon("cannot drop resource handle while it is borrowed")
+                return []
+              }
               let taken = table.free(handle)
               match taken {
                 Some(real) =>
-                  match real.dtor {
-                    Some(d) => {
-                      clear_canon_trap_message()
-                      (@executor.call_func_by_index(
-                        store,
-                        d.instance,
-                        d.func_idx,
-                        [I32(real.rep)],
-                      ) catch {
-                        e => {
-                          trap_canon(e.to_string())
-                          []
-                        }
-                      })
-                      |> ignore
+                  if real.own {
+                    match real.dtor {
+                      Some(d) => {
+                        clear_canon_trap_message()
+                        (@executor.call_func_by_index(
+                          store,
+                          d.instance,
+                          d.func_idx,
+                          [I32(real.rep)],
+                        ) catch {
+                          e => {
+                            trap_canon(e.to_string())
+                            []
+                          }
+                        })
+                        |> ignore
+                      }
+                      None => ()
                     }
-                    None => ()
+                  } else {
+                    real.num_lends[0] -= 1
+                    match real.borrow_scope {
+                      Some(scope) => {
+                        let task_id = scope[0]
+                        let count = match
+                          state.async_state.task_borrows.get(task_id) {
+                          Some(n) => n
+                          None => 0
+                        }
+                        if count <= 1 {
+                          state.async_state.task_borrows.remove(task_id)
+                        } else {
+                          state.async_state.task_borrows.set(task_id, count - 1)
+                        }
+                      }
+                      None => ()
+                    }
                   }
                 None => ()
               }
@@ -198,7 +231,7 @@ fn instantiate_canon_resource_drop(
             }
           None => {
             trap_canon(
-              "unknown handle index \{handle}; index \{handle} is not a resource",
+              "resource.drop: unknown handle index \{handle}; index \{handle} is not a resource in table \{table.id}",
             )
             []
           }

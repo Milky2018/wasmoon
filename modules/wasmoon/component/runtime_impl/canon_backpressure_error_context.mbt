@@ -12,45 +12,6 @@ fn parse_i32_like_arg(v : @types.Value) -> Int? {
 }
 
 ///|
-fn instantiate_canon_backpressure_set(
-  state : BuildState,
-  store : @runtime.Store,
-) -> Unit {
-  let core_type : @types.FuncType = { params: [I32], results: [] }
-  let async_state = state.async_state
-  let owner_component_id = state.resource_table.id
-  let host = fn(
-    args : Array[@types.Value],
-  ) -> Array[@types.Value] raise @runtime.RuntimeError {
-    if !canon_may_leave[0] {
-      trap_canon("cannot leave component instance")
-    }
-    if args.length() != 1 {
-      trap_canon("type mismatch")
-      return []
-    }
-    let enabled = match parse_i32_like_arg(args[0]) {
-      Some(n) => n != 0
-      None => {
-        trap_canon("type mismatch")
-        return []
-      }
-    }
-    set_backpressure_value_for_instance(
-      async_state,
-      owner_component_id,
-      if enabled {
-        1
-      } else {
-        0
-      },
-    )
-    []
-  }
-  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
-}
-
-///|
 fn instantiate_canon_backpressure_inc(
   state : BuildState,
   store : @runtime.Store,

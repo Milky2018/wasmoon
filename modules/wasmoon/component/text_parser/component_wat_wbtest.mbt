@@ -43,9 +43,10 @@ test "component text parser: core module and canon lift" {
     "(core module $M " +
     "(memory (export \"mem\") 1) " +
     "(func (export \"f\") (result i32) (i32.const 0))" +
+    "(func (export \"realloc\") (param i32 i32 i32 i32) (result i32) (i32.const 0))" +
     ") " +
     "(core instance $m (instantiate $M)) " +
-    "(func (export \"f\") (result string) (canon lift (core func $m \"f\") (memory $m \"mem\")))" +
+    "(func (export \"f\") (result string) (canon lift (core func $m \"f\") (memory $m \"mem\") (realloc (core func $m \"realloc\"))))" +
     ")"
   let bytes = parse_component_wat(text) catch {
     e => {

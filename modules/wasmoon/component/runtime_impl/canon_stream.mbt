@@ -81,11 +81,13 @@ fn instantiate_canon_stream_new(
       stream_id: sid,
       is_readable: true,
       notified_peer_dropped: [false],
+      in_waitable_set: Ref(false),
     })
     table.endpoints.set(handle_key(owner_component_id, wh), {
       stream_id: sid,
       is_readable: false,
       notified_peer_dropped: [false],
+      in_waitable_set: Ref(false),
     })
     set_canon_debug_message(
       "stream.new(owner=\{owner_component_id})-> rh=\{rh} wh=\{wh}",
@@ -232,40 +234,11 @@ fn instantiate_canon_stream_read(
                             stream_id: ep0.stream_id,
                             is_readable: ep0.is_readable,
                             notified_peer_dropped: ep0.notified_peer_dropped,
+                            in_waitable_set: ep0.in_waitable_set,
                           })
-                          // Reserve the adopted handle in the destination allocator.
-                          let next = match
-                            async_state.next_handle_by_component.get(
-                              owner_component_id,
-                            ) {
-                            Some(a) => a
-                            None => {
-                              let a = [1]
-                              async_state.next_handle_by_component.set(
-                                owner_component_id, a,
-                              )
-                              a
-                            }
-                          }
-                          if next[0] <= handle {
-                            next[0] = handle + 1
-                          }
-                          match
-                            async_state.free_handles_by_component.get(
-                              owner_component_id,
-                            ) {
-                            Some(free) => {
-                              let mut i = 0
-                              while i < free.length() {
-                                if free[i] == handle {
-                                  free.remove(i) |> ignore
-                                } else {
-                                  i = i + 1
-                                }
-                              }
-                            }
-                            None => ()
-                          }
+                          reserve_shared_handle(
+                            async_state, owner_component_id, handle,
+                          )
                         }
                       None => ()
                     }
@@ -1314,7 +1287,6 @@ fn instantiate_canon_stream_drop_readable(
   let table = state.stream_table
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
-  async_state.thread_handle_required.set(owner_component_id, true)
   let host = fn(
     args : Array[@types.Value],
   ) -> Array[@types.Value] raise @runtime.RuntimeError {

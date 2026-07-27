@@ -623,6 +623,7 @@ fn component_args_to_core(
             let handle = match val {
               U32(h) => h
               S32(h) => h
+              ResourceValue(rep) => return [I32(rep)]
               _ => raise HostCallError("argument type mismatch")
             }
             match caller_table.get(handle) {
@@ -631,10 +632,15 @@ fn component_args_to_core(
                   raise CanonCallError(
                     "handle index \{handle} used with the wrong type",
                   )
-                } else {
+                } else if entry.impl_component_id == callee_table.id {
                   [I32(entry.rep)]
+                } else {
+                  [I32(handle)]
                 }
-              None => raise CanonCallError("unknown handle index \{handle}")
+              None =>
+                raise CanonCallError(
+                  "lower borrow: unknown handle index \{handle} in resource table \{caller_table.id}",
+                )
             }
           }
           Some(Some(Own(resource_tyidx))) => {
@@ -652,7 +658,10 @@ fn component_args_to_core(
             } else {
               let entry = match caller_table.free(handle) {
                 Some(e) => e
-                None => raise CanonCallError("unknown handle index \{handle}")
+                None =>
+                  raise CanonCallError(
+                    "lower own: unknown handle index \{handle} in resource table \{caller_table.id}",
+                  )
               }
               if entry.type_id != expected_type_id {
                 raise CanonCallError(
@@ -764,7 +773,7 @@ fn core_results_to_component(
     match table.get(handle) {
       None =>
         raise CanonCallError(
-          "unknown handle index \{handle}; index \{handle} is not a resource",
+          "core result: unknown handle index \{handle}; index \{handle} is not a resource in table \{table.id}",
         )
       Some(entry) =>
         if entry.type_id < 0 {
@@ -976,6 +985,8 @@ fn core_args_to_component(
   resources : CanonResources,
   store : @runtime.Store,
   resource_table : ResourceTable,
+  max_flat_params : Int,
+  context : String,
 ) -> Array[ComponentValue] raise ComponentRuntimeError {
   fn resource_type_info(
     tyidx : Int,
@@ -996,7 +1007,7 @@ fn core_args_to_component(
     match table.get(handle) {
       None =>
         raise CanonCallError(
-          "unknown handle index \{handle}; index \{handle} is not a resource",
+          "\{context}: unknown handle index \{handle}; index \{handle} is not a resource",
         )
       Some(entry) =>
         if entry.type_id < 0 {
@@ -1050,7 +1061,7 @@ fn core_args_to_component(
     None => []
   }
   let indirect_result = flat_result_types.length() > 1
-  let indirect_params = flat_param_types.length() > 16
+  let indirect_params = flat_param_types.length() > max_flat_params
   let arg_limit = if indirect_result {
     args.length() - 1
   } else {

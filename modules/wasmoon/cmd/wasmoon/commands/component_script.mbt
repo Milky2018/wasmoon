@@ -735,6 +735,10 @@ fn run_component_script_impl(
           rep,
           dtor: Some(resource1_dtor),
           kind: HostDefined,
+          impl_component_id: table.id,
+          own: true,
+          borrow_scope: None,
+          num_lends: [0],
         })
         [U32(handle)]
       }
@@ -987,7 +991,12 @@ fn run_component_script_impl(
         }
         match components.get(comp_name) {
           Some(component) => {
-            let inst_name = strip_identifier(name)
+            anon_count += 1
+            // Script identifiers may be rebound. Keep the linker-facing
+            // instantiation name unique so a later `(component instance $i …)`
+            // creates fresh runtime state instead of resolving through the
+            // previous `$i` binding.
+            let inst_name = "\{strip_identifier(name)}-\{anon_count}"
             match instantiate_component(linker, inst_name, component) {
               Ok(instance) => {
                 instances.set(name, instance)
@@ -1124,14 +1133,14 @@ fn run_component_script_impl(
           "assert_trap" =>
             match call_result {
               Ok(_vals) =>
-                result.add_failed("assert_trap unexpectedly returned")
+                result.add_failed("assert_trap \{field} unexpectedly returned")
               Err(e) =>
                 match cmd.text {
                   Some(msg) =>
                     if e.to_string().contains(msg) {
                       result.add_passed()
                     } else {
-                      result.add_failed("assert_trap wrong trap: \{e}")
+                      result.add_failed("assert_trap \{field} wrong trap: \{e}")
                     }
                   None => result.add_passed()
                 }

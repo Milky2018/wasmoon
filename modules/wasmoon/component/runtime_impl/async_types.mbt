@@ -19,6 +19,9 @@ pub(all) enum ComponentValue {
   /// Canonical ABI representation for variants/options/results.
   /// `tag` is the case index, and `payload` is the case payload (if any).
   Variant(Int, ComponentValue?)
+  // Resource representation after a borrow crosses into the component
+  // instance that implements its resource type.
+  ResourceValue(Int)
 } derive(Debug, Eq)
 
 ///|
@@ -48,14 +51,19 @@ pub(all) struct ResourceHandle {
   rep : Int
   dtor : CoreFuncRef?
   kind : ResourceKind
+  impl_component_id : Int
+  own : Bool
+  borrow_scope : Array[Int64]?
+  num_lends : Array[Int]
 } derive(Debug)
 
 ///|
 pub(all) struct ResourceTable {
   id : Int
-  next_handle : Array[Int]
-  free_handles : Array[Int]
-  entries : Map[Int, ResourceHandle]
+  ancestors : Ref[Array[Int]]
+  next_handle : Ref[Int]
+  free_handles : Ref[Array[Int]]
+  entries : Ref[Map[Int, ResourceHandle]]
 } derive(Debug)
 
 ///|
@@ -66,7 +74,27 @@ pub fn ResourceTable::ResourceTable() -> ResourceTable {
   let id = resource_table_id_counter[0]
   resource_table_id_counter[0] = id + 1
   // Handle 0 is always invalid; the first valid allocation is 1.
-  { id, next_handle: [1], free_handles: [], entries: Map([]) }
+  {
+    id,
+    ancestors: Ref([]),
+    next_handle: Ref(1),
+    free_handles: Ref([]),
+    entries: Ref(Map([])),
+  }
+}
+
+///|
+fn alloc_handle_index(
+  next_handle : Ref[Int],
+  free_handles : Ref[Array[Int]],
+) -> (Int, Bool) {
+  if free_handles.val.length() > 0 {
+    (free_handles.val.remove(free_handles.val.length() - 1), true)
+  } else {
+    let handle = next_handle.val
+    next_handle.val = handle + 1
+    (handle, false)
+  }
 }
 
 ///|
@@ -74,14 +102,13 @@ pub fn ResourceTable::alloc(
   self : ResourceTable,
   entry : ResourceHandle,
 ) -> Int {
-  let handle = if self.free_handles.length() > 0 {
-    self.free_handles.remove(self.free_handles.length() - 1)
-  } else {
-    let h = self.next_handle[0]
-    self.next_handle[0] = h + 1
-    h
-  }
-  self.entries.set(handle, entry)
+  let (handle, _from_free) = alloc_handle_index(
+    self.next_handle,
+    self.free_handles,
+  )
+  let entries = self.entries.val
+  entries.set(handle, entry)
+  self.entries.val = entries
   handle
 }
 
@@ -90,7 +117,7 @@ pub fn ResourceTable::get(
   self : ResourceTable,
   handle : Int,
 ) -> ResourceHandle? {
-  self.entries.get(handle)
+  self.entries.val.get(handle)
 }
 
 ///|
@@ -98,12 +125,25 @@ pub fn ResourceTable::free(
   self : ResourceTable,
   handle : Int,
 ) -> ResourceHandle? {
-  let entry = self.entries.get(handle)
+  let entry = self.entries.val.get(handle)
   if entry is Some(_) {
-    self.entries.remove(handle)
-    self.free_handles.push(handle)
+    let entries = self.entries.val
+    entries.remove(handle)
+    self.entries.val = entries
+    self.free_handles.val.push(handle)
   }
   entry
+}
+
+///|
+fn registered_resource_table(
+  async_state : AsyncState,
+  table : ResourceTable,
+) -> ResourceTable {
+  match async_state.resource_tables.get(table.id) {
+    Some(registered) => registered
+    None => table
+  }
 }
 
 ///|
@@ -113,6 +153,7 @@ pub(all) struct StreamEndpoint {
   // Set once an operation observed that the opposite end was dropped; subsequent
   // reads/writes/lifts should trap (component-spec "done" semantics).
   notified_peer_dropped : Array[Bool]
+  in_waitable_set : Ref[Bool]
 } derive(Debug)
 
 ///|
@@ -191,6 +232,7 @@ pub(all) struct AsyncState {
   free_handles_by_component : Map[Int, Array[Int]]
   // Shared stream table (streams share the same handle space as waitables/subtasks).
   stream_table : StreamTable
+  resource_tables : Map[Int, ResourceTable]
 
   // Task stack + per-task state (used by canon task.return/context.*).
   task_stack : Array[Int64]
@@ -204,6 +246,12 @@ pub(all) struct AsyncState {
   task_self_cancelled : Map[Int64, Bool]
   task_cancelled : Map[Int64, Bool]
   task_contexts : Map[Int64, Map[Int, @types.Value]]
+  // Outstanding task-scoped resource borrows. A task cannot return or cancel
+  // while this count is non-zero.
+  task_borrows : Map[Int64, Int]
+  // Mutable task ids referenced by borrowed resource handles. Subtask handle
+  // allocation can rename an internal task id after the borrow is created.
+  task_borrow_scopes : Map[Int64, Array[Array[Int64]]]
   // Synthetic implicit thread handles for each running task, keyed by the
   // component instance id where the thread handle lives.
   //
@@ -268,11 +316,6 @@ pub(all) struct AsyncState {
   futures : Map[Int, FutureState]
   future_endpoints : Map[Int64, FutureEndpoint]
 
-  // Component instances that require reserving a "current thread" handle slot
-  // even for synchronous tasks (affects stream/future handle numbering in
-  // component-spec/async).
-  thread_handle_required : Map[Int, Bool]
-
   // Per-component backpressure counter used by `canon backpressure.*`.
   // Matches Wasmtime behavior: enabled when > 0; valid range is u16.
   backpressure_by_instance : Map[Int, Int]
@@ -320,6 +363,7 @@ struct FutureEndpoint {
   is_readable : Bool
   // Component instance id where this future was created (resource_table.id).
   creator_component_id : Int
+  in_waitable_set : Ref[Bool]
 } derive(Debug)
 
 ///|
@@ -453,6 +497,7 @@ pub fn AsyncState::AsyncState(stream_table : StreamTable) -> AsyncState {
     next_handle_by_component: Map([]),
     free_handles_by_component: Map([]),
     stream_table,
+    resource_tables: Map([]),
     task_stack: [0L],
     // Use negative ids for internal tasks so they don't collide with the shared handle space.
     next_task_id: [-1L],
@@ -462,6 +507,8 @@ pub fn AsyncState::AsyncState(stream_table : StreamTable) -> AsyncState {
     task_self_cancelled: Map([]),
     task_cancelled: Map([]),
     task_contexts: Map([]),
+    task_borrows: Map([]),
+    task_borrow_scopes: Map([]),
     task_thread: Map([]),
     threads: Map([]),
     thread_runnable: Map([]),
@@ -491,11 +538,28 @@ pub fn AsyncState::AsyncState(stream_table : StreamTable) -> AsyncState {
     next_future_id: [0],
     futures: Map([]),
     future_endpoints: Map([]),
-    thread_handle_required: Map([]),
     backpressure_by_instance: Map([]),
     next_error_context_by_component: Map([]),
     error_contexts: Map([]),
   }
+}
+
+///|
+fn resource_tables_are_nested(
+  first : ResourceTable,
+  second : ResourceTable,
+) -> Bool {
+  for ancestor in first.ancestors.val {
+    if ancestor == second.id {
+      return true
+    }
+  }
+  for ancestor in second.ancestors.val {
+    if ancestor == first.id {
+      return true
+    }
+  }
+  false
 }
 
 ///|
@@ -550,6 +614,12 @@ fn remove_waitable_membership(
   handle : Int,
 ) -> Unit {
   let wkey = handle_key(owner_component_id, handle)
+  if async_state.stream_table.endpoints.get(wkey) is Some(endpoint) {
+    endpoint.in_waitable_set.val = false
+  }
+  if async_state.future_endpoints.get(wkey) is Some(endpoint) {
+    endpoint.in_waitable_set.val = false
+  }
   if async_state.waitable_to_set.get(wkey) is Some(ws_key) {
     async_state.waitable_to_set.remove(wkey)
     if async_state.waitable_sets.get(ws_key) is Some(set) {
@@ -787,6 +857,10 @@ fn validate_lifted_stream_future(
                     "cannot lift stream after being notified that the readable end dropped",
                   )
                 }
+              } else if ep.in_waitable_set.val {
+                raise CanonCallError(
+                  "cannot lift stream while it's in a waitable set",
+                )
               }
           }
         }
@@ -808,6 +882,11 @@ fn validate_lifted_stream_future(
               if !ep.is_readable && st0.write_succeeded {
                 raise CanonCallError(
                   "cannot lift future after previous write succeeded",
+                )
+              }
+              if ep.in_waitable_set.val {
+                raise CanonCallError(
+                  "cannot lift future while it's in a waitable set",
                 )
               }
             }
@@ -856,8 +935,9 @@ fn transfer_stream_readable_handle(
         "unknown stream handle index \{handle} (transfer from \{from_component_id} to \{to_component_id})",
       )
   }
-  // Drop any waitable-set membership and recycle the local handle in the source component.
-  remove_waitable_membership(async_state, from_component_id, handle)
+  if ep.in_waitable_set.val {
+    raise CanonCallError("cannot lift stream while it's in a waitable set")
+  }
   async_state.stream_table.endpoints.remove(from_key)
   free_shared_handle(async_state, from_component_id, handle)
   let new_handle = alloc_shared_handle(async_state, to_component_id)
@@ -868,6 +948,7 @@ fn transfer_stream_readable_handle(
       is_readable: ep.is_readable,
       // Preserve \"done\" notification state across the move.
       notified_peer_dropped: ep.notified_peer_dropped,
+      in_waitable_set: ep.in_waitable_set,
     },
   )
   new_handle
@@ -900,6 +981,7 @@ fn clone_stream_readable_handle(
       stream_id: ep.stream_id,
       is_readable: ep.is_readable,
       notified_peer_dropped: ep.notified_peer_dropped,
+      in_waitable_set: ep.in_waitable_set,
     },
   )
   new_handle
@@ -936,7 +1018,9 @@ fn transfer_future_readable_handle(
     Some(e) => e
     None => raise CanonCallError("unknown future handle index \{handle}")
   }
-  remove_waitable_membership(async_state, from_component_id, handle)
+  if ep.in_waitable_set.val {
+    raise CanonCallError("cannot lift future while it's in a waitable set")
+  }
   async_state.future_endpoints.remove(from_key)
   free_shared_handle(async_state, from_component_id, handle)
   let new_handle = alloc_shared_handle(async_state, to_component_id)
@@ -1117,6 +1201,104 @@ fn transfer_stream_future_value(
               } else {
                 v
               }
+            _ => v
+          }
+        Some(Some(Own(resource_tyidx))) =>
+          match v {
+            U32(handle) | S32(handle) =>
+              if from_component_id == to_component_id {
+                v
+              } else {
+                let from_table = match
+                  async_state.resource_tables.get(from_component_id) {
+                  Some(table) => table
+                  None =>
+                    raise CanonCallError("unknown resource owner instance")
+                }
+                let to_table = match
+                  async_state.resource_tables.get(to_component_id) {
+                  Some(table) => table
+                  None =>
+                    raise CanonCallError("unknown resource target instance")
+                }
+                let entry = match from_table.get(handle) {
+                  Some(entry) => entry
+                  None =>
+                    raise CanonCallError(
+                      "transfer own type \{ti}/\{resource_tyidx}: unknown handle index \{handle} in resource table \{from_component_id} -> \{to_component_id}",
+                    )
+                }
+                if !entry.own || entry.num_lends[0] > 0 {
+                  raise CanonCallError(
+                    "cannot transfer a borrowed or currently lent resource",
+                  )
+                }
+                from_table.free(handle) |> ignore
+                async_state.resource_tables.set(from_component_id, from_table)
+                let new_handle = to_table.alloc(entry)
+                async_state.resource_tables.set(to_component_id, to_table)
+                U32(new_handle)
+              }
+            _ => v
+          }
+        Some(Some(Borrow(_resource_tyidx))) =>
+          match v {
+            ResourceValue(_) => v
+            U32(handle) | S32(handle) => {
+              let from_table = match
+                async_state.resource_tables.get(from_component_id) {
+                Some(table) => table
+                None => raise CanonCallError("unknown resource owner instance")
+              }
+              let entry = match from_table.get(handle) {
+                Some(entry) => entry
+                None =>
+                  raise CanonCallError(
+                    "transfer borrow: unknown handle index \{handle} in resource table \{from_component_id}",
+                  )
+              }
+              if to_component_id == entry.impl_component_id {
+                ResourceValue(entry.rep)
+              } else if from_component_id == to_component_id {
+                v
+              } else {
+                let to_table = match
+                  async_state.resource_tables.get(to_component_id) {
+                  Some(table) => table
+                  None =>
+                    raise CanonCallError("unknown resource target instance")
+                }
+                let task_id = current_task_id(async_state)
+                entry.num_lends[0] += 1
+                let count = match async_state.task_borrows.get(task_id) {
+                  Some(n) => n
+                  None => 0
+                }
+                async_state.task_borrows.set(task_id, count + 1)
+                let borrow_scope = [task_id]
+                let scopes = match async_state.task_borrow_scopes.get(task_id) {
+                  Some(existing) => existing
+                  None => {
+                    let created : Array[Array[Int64]] = []
+                    async_state.task_borrow_scopes.set(task_id, created)
+                    created
+                  }
+                }
+                scopes.push(borrow_scope)
+                let new_handle = to_table.alloc({
+                  type_id: entry.type_id,
+                  rep: entry.rep,
+                  dtor: entry.dtor,
+                  kind: entry.kind,
+                  impl_component_id: entry.impl_component_id,
+                  own: false,
+                  borrow_scope: Some(borrow_scope),
+                  num_lends: entry.num_lends,
+                })
+                async_state.resource_tables.set(to_component_id, to_table)
+                U32(new_handle)
+              }
+            }
             _ => v
           }
         Some(Some(Stream(_))) =>
@@ -1357,6 +1539,9 @@ fn alloc_shared_handle_with_source(
   async_state : AsyncState,
   component_id : Int,
 ) -> (Int, Bool) {
+  if async_state.resource_tables.get(component_id) is Some(table) {
+    return alloc_handle_index(table.next_handle, table.free_handles)
+  }
   let next = match async_state.next_handle_by_component.get(component_id) {
     Some(a) => a
     None => {
@@ -1391,6 +1576,49 @@ fn alloc_shared_handle_with_source(
     let h = next[0]
     next[0] = h + 1
     (h, false)
+  }
+}
+
+///|
+fn reserve_shared_handle(
+  async_state : AsyncState,
+  component_id : Int,
+  handle : Int,
+) -> Unit {
+  if async_state.resource_tables.get(component_id) is Some(table) {
+    if table.next_handle.val <= handle {
+      table.next_handle.val = handle + 1
+    }
+    let mut i = 0
+    while i < table.free_handles.val.length() {
+      if table.free_handles.val[i] == handle {
+        table.free_handles.val.remove(i) |> ignore
+      } else {
+        i = i + 1
+      }
+    }
+    return
+  }
+  let next = match async_state.next_handle_by_component.get(component_id) {
+    Some(existing) => existing
+    None => {
+      let created = [1]
+      async_state.next_handle_by_component.set(component_id, created)
+      created
+    }
+  }
+  if next[0] <= handle {
+    next[0] = handle + 1
+  }
+  if async_state.free_handles_by_component.get(component_id) is Some(free) {
+    let mut i = 0
+    while i < free.length() {
+      if free[i] == handle {
+        free.remove(i) |> ignore
+      } else {
+        i = i + 1
+      }
+    }
   }
 }
 
@@ -1482,6 +1710,10 @@ fn free_shared_handle(
 ) -> Unit {
   // Handle 0 is invalid; never recycle it.
   if handle > 0 {
+    if async_state.resource_tables.get(component_id) is Some(table) {
+      table.free_handles.val.push(handle)
+      return
+    }
     let free = match async_state.free_handles_by_component.get(component_id) {
       Some(xs) => xs
       None => {
@@ -1518,6 +1750,8 @@ fn init_task_meta(
 fn remove_task_meta(async_state : AsyncState, task_id : Int64) -> Unit {
   async_state.task_instance.remove(task_id)
   async_state.task_caller.remove(task_id)
+  async_state.task_borrows.remove(task_id)
+  async_state.task_borrow_scopes.remove(task_id)
 }
 
 ///|
@@ -1531,6 +1765,17 @@ fn migrate_task_meta(
   }
   if async_state.task_caller.get(from_id) is Some(parent) {
     async_state.task_caller.set(to_id, parent)
+  }
+  if async_state.task_borrows.get(from_id) is Some(count) {
+    async_state.task_borrows.remove(from_id)
+    async_state.task_borrows.set(to_id, count)
+  }
+  if async_state.task_borrow_scopes.get(from_id) is Some(scopes) {
+    async_state.task_borrow_scopes.remove(from_id)
+    for scope in scopes {
+      scope[0] = to_id
+    }
+    async_state.task_borrow_scopes.set(to_id, scopes)
   }
   remove_task_meta(async_state, from_id)
 }

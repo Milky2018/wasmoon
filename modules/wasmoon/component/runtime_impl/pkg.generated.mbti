@@ -6,6 +6,7 @@ import {
   "Milky2018/wasmoon/component/model",
   "Milky2018/wasmoon/runtime",
   "moonbitlang/core/debug",
+  "moonbitlang/core/ref",
 }
 
 // Values
@@ -64,6 +65,7 @@ pub(all) struct AsyncState {
   next_handle_by_component : Map[Int, Array[Int]]
   free_handles_by_component : Map[Int, Array[Int]]
   stream_table : StreamTable
+  resource_tables : Map[Int, ResourceTable]
   task_stack : Array[Int64]
   next_task_id : Array[Int64]
   task_results : Map[Int64, Array[ComponentValue]]
@@ -72,6 +74,8 @@ pub(all) struct AsyncState {
   task_self_cancelled : Map[Int64, Bool]
   task_cancelled : Map[Int64, Bool]
   task_contexts : Map[Int64, Map[Int, @types.Value]]
+  task_borrows : Map[Int64, Int]
+  task_borrow_scopes : Map[Int64, Array[Array[Int64]]]
   task_thread : Map[Int64, Map[Int, Int]]
   threads : Map[Int64, GuestThread]
   thread_runnable : Map[Int64, Array[Int]]
@@ -101,7 +105,6 @@ pub(all) struct AsyncState {
   next_future_id : Array[Int]
   futures : Map[Int, FutureState]
   future_endpoints : Map[Int64, FutureEndpoint]
-  thread_handle_required : Map[Int, Bool]
   backpressure_by_instance : Map[Int, Int]
   next_error_context_by_component : Map[Int, Array[Int]]
   error_contexts : Map[Int64, String]
@@ -138,7 +141,7 @@ pub(all) enum ComponentExtern {
 pub impl Show for ComponentExtern
 
 pub(all) enum ComponentFunc {
-  Lifted(CoreFuncRef, @model.FuncType, CanonResources, Array[@model.TypeDef?], ResourceTable, Array[Bool], CoreFuncRef?, Bool)
+  Lifted(CoreFuncRef, @model.FuncType, CanonResources, Array[@model.TypeDef?], ResourceTable, @ref.Ref[Bool], CoreFuncRef?, Bool)
   Host(@model.FuncType, Array[@model.TypeDef?], (Array[ComponentValue], ResourceTable) -> Array[ComponentValue] raise ComponentRuntimeError)
 }
 pub impl Show for ComponentFunc
@@ -201,6 +204,7 @@ pub(all) enum ComponentValue {
   List(Array[ComponentValue])
   Tuple(Array[ComponentValue])
   Variant(Int, ComponentValue?)
+  ResourceValue(Int)
 } derive(Eq, @debug.Debug)
 pub impl Show for ComponentValue
 
@@ -243,13 +247,18 @@ pub(all) struct ResourceHandle {
   rep : Int
   dtor : CoreFuncRef?
   kind : @model.ResourceKind
+  impl_component_id : Int
+  own : Bool
+  borrow_scope : Array[Int64]?
+  num_lends : Array[Int]
 } derive(@debug.Debug)
 
 pub(all) struct ResourceTable {
   id : Int
-  next_handle : Array[Int]
-  free_handles : Array[Int]
-  entries : Map[Int, ResourceHandle]
+  ancestors : @ref.Ref[Array[Int]]
+  next_handle : @ref.Ref[Int]
+  free_handles : @ref.Ref[Array[Int]]
+  entries : @ref.Ref[Map[Int, ResourceHandle]]
 } derive(@debug.Debug)
 pub fn ResourceTable::ResourceTable() -> Self
 pub fn ResourceTable::alloc(Self, ResourceHandle) -> Int
@@ -260,6 +269,7 @@ pub(all) struct StreamEndpoint {
   stream_id : Int
   is_readable : Bool
   notified_peer_dropped : Array[Bool]
+  in_waitable_set : @ref.Ref[Bool]
 } derive(@debug.Debug)
 
 type StreamState derive(@debug.Debug)

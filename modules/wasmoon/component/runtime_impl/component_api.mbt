@@ -8,7 +8,7 @@ pub(all) enum ComponentFunc {
     CanonResources,
     Array[TypeDef?],
     ResourceTable,
-    Array[Bool],
+    Ref[Bool],
     // Optional async callback core function (used by `canon lift ... async (callback ...)`).
     CoreFuncRef?,
     // Whether this canonical lift uses the async ABI (`canon lift ... async ...`).

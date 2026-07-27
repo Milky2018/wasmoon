@@ -97,10 +97,12 @@ fn call_core_func(
         None => {
           // Include a tiny bit of context to make debugging easier when the trap
           // originates from core wasm (e.g. `unreachable` inside a component-spec test).
-          let trap_msg = if e.to_string() == "unreachable" {
-            "wasm `unreachable` instruction executed"
+          let error_message = e.to_string()
+          let trap_msg = if error_message == "unreachable" ||
+            error_message.contains("wasm `unreachable` instruction executed") {
+            "wasm trap: wasm `unreachable` instruction executed"
           } else {
-            e.to_string()
+            error_message
           }
           let inst_name = match
             core_instance_names.get(core_func.instance.store_idx) {
@@ -129,21 +131,30 @@ fn call_core_func(
 ///|
 fn call_core_func_guarded(
   store : @runtime.Store,
-  may_enter : Array[Bool],
+  may_enter : Ref[Bool],
   core_func : CoreFuncRef,
   args : Array[@types.Value],
 ) -> Array[@types.Value] raise ComponentRuntimeError {
-  let prev = may_enter[0]
+  let prev = may_enter.val
   // Mark this component instance as in-progress to prevent re-entrancy via
   // lowered functions (component-spec/async/trap-on-reenter.wast).
-  may_enter[0] = false
+  may_enter.val = false
   let out = call_core_func(store, core_func, args) catch {
-    e => {
-      may_enter[0] = prev
+    AsyncSuspendYield as e => {
+      may_enter.val = prev
       raise e
     }
+    AsyncSuspendWait(_) as e => {
+      may_enter.val = prev
+      raise e
+    }
+    e =>
+      // A trap while executing a component instance permanently poisons that
+      // instance. Subsequent entry attempts must fail instead of observing
+      // partially-updated canonical ABI state.
+      raise e
   }
-  may_enter[0] = prev
+  may_enter.val = prev
   out
 }
 

@@ -252,13 +252,14 @@ fn core_functype_for_task_return(
     Some(vt) =>
       match core_valtypes_for_component_valtype(vt, type_table) {
         Some(ts) =>
-          for t in ts {
-            params.push(t)
-            if params.length() > 16 {
-              return None
+          if ts.length() > 16 {
+            params.push(I32)
+          } else {
+            for t in ts {
+              params.push(t)
             }
           }
-        None => return None
+        None => params.push(I32)
       }
   }
   Some({ params, results: [] })
@@ -270,7 +271,6 @@ fn core_functype_for_canon(
   type_table : Array[@component.TypeDef?],
 ) -> @types.FuncType? {
   match c {
-    BackpressureSet => Some({ params: [I32], results: [] })
     BackpressureInc | BackpressureDec | TaskCancel =>
       Some({ params: [], results: [] })
     TaskReturn(result, _) => core_functype_for_task_return(result, type_table)
@@ -337,6 +337,9 @@ fn validate_canon(
       let td = type_table[tyidx]
       match td {
         Some(FuncType(ft)) => {
+          if canon_has_async(opts) && !ft.is_async {
+            raise CanonAsyncTypeMismatch(tyidx)
+          }
           match canon_realloc_idx(opts) {
             Some(idx) =>
               match core_func_types[idx] {
@@ -373,7 +376,12 @@ fn validate_canon(
               }
             None => ()
           }
-          if functype_needs_memory(ft, type_table) && !canon_has_memory(opts) {
+          let needs_memory = if canon_has_async(opts) {
+            functype_async_lift_needs_memory(ft, type_table)
+          } else {
+            functype_needs_memory(ft, type_table)
+          }
+          if needs_memory && !canon_has_memory(opts) {
             raise MissingCanonOption("memory")
           }
           if functype_needs_realloc_for_lift(ft, type_table) &&
@@ -434,6 +442,9 @@ fn validate_canon(
       }
       match func_types[func_idx] {
         Some(ft) => {
+          if canon_has_async(opts) && !ft.is_async {
+            raise CanonAsyncTypeMismatch(func_idx)
+          }
           match canon_realloc_idx(opts) {
             Some(idx) =>
               match core_func_types[idx] {

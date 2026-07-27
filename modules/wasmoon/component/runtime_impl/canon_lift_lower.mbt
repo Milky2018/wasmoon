@@ -3,12 +3,25 @@
 /// (group: lift_lower)
 
 ///|
+fn store_async_lower_result(
+  mem : @runtime.Memory,
+  retptr : Int,
+  values : Array[@types.Value],
+) -> Unit raise ComponentRuntimeError {
+  match values {
+    [] => ()
+    [value] => store_flat_value(mem, retptr, value)
+    _ => raise HostCallError("async lower produced multiple direct results")
+  }
+}
+
+///|
 fn instantiate_canon_lift(
   core_func_idx : Int,
   opts : Array[CanonOpt],
   type_idx : Int,
   state : BuildState,
-  may_enter_self : Array[Bool],
+  may_enter_self : Ref[Bool],
 ) -> Unit raise ComponentRuntimeError {
   if core_func_idx < 0 || core_func_idx >= state.core_funcs.length() {
     raise InvalidCoreFuncIndex(core_func_idx)
@@ -77,9 +90,14 @@ fn instantiate_canon_lower(
         flat_params.push(t)
       }
     }
+    let lowered_params : Array[@types.ValueType] = if flat_params.length() > 4 {
+      [ptr_ty]
+    } else {
+      flat_params
+    }
     let params : Array[@types.ValueType] = match func_type.result {
-      Some(_) => flat_params + [ptr_ty]
-      None => flat_params
+      Some(_) => lowered_params + [ptr_ty]
+      None => lowered_params
     }
     let core_type : @types.FuncType = { params, results: [I32] }
     let async_state = state.async_state
@@ -90,9 +108,12 @@ fn instantiate_canon_lower(
       if !canon_may_leave[0] {
         trap_canon("cannot leave component instance")
       }
-      if func is Lifted(_, _, _, _, _, may_enter, _, _) && !may_enter[0] {
+      if func is Lifted(_, _, _, _, _, may_enter, _, _) && !may_enter.val {
         trap_canon("wasm trap: cannot enter component instance")
       }
+      let live_caller_table = registered_resource_table(
+        async_state, caller_table,
+      )
       let cur_task_id = current_task_id(async_state)
       let cur = if async_state.call_cursor_stack.length() == 0 {
         0
@@ -150,7 +171,8 @@ fn instantiate_canon_lower(
           }
       }
       let component_args = core_args_to_component(
-        param_args, func_type, func_types, resources, store, caller_table,
+        param_args, func_type, func_types, resources, store, live_caller_table, 4,
+        "async lower argument",
       ) catch {
         e => {
           trap_canon(canon_err_message(e))
@@ -160,6 +182,10 @@ fn instantiate_canon_lower(
       let inst_id = match func {
         Host(_, _, _) => caller_table.id
         Lifted(_, _, _, _, callee_table, _, _, _) => callee_table.id
+      }
+      if func is Lifted(_, _, _, _, callee_table, _, _, _) &&
+        resource_tables_are_nested(caller_table, callee_table) {
+        trap_canon("wasm trap: cannot enter component instance")
       }
       let caller_task_id = current_task_id(async_state)
       let meta_inst_id = match func {
@@ -280,9 +306,8 @@ fn instantiate_canon_lower(
           let mut ok = true
           canon_in_handleless_step[0] = true
           init_task_meta(async_state, tmp_task_id, meta_inst_id, caller_task_id)
-          ensure_task_thread(async_state, inst_id, tmp_task_id)
           push_task(async_state, tmp_task_id, true)
-          let step = step_task_once(task, store, caller_table, async_state) catch {
+          let step = step_task_once(task, store, live_caller_table, async_state) catch {
             _e => {
               ok = false
               // Reset state so the real subtask can start fresh.
@@ -326,10 +351,11 @@ fn instantiate_canon_lower(
                   return cache_and_advance([I32(0)])
                 }
               }
-              match core_vals {
-                [I32(n)] => mem.store_i32(p, n) catch { _ => () }
-                [I64(n)] => mem.store_i64(p, n) catch { _ => () }
-                _ => ()
+              store_async_lower_result(mem, p, core_vals) catch {
+                e => {
+                  trap_canon(canon_err_message(e))
+                  return cache_and_advance([I32(0)])
+                }
               }
             }
             cleanup_task_id(tmp_task_id)
@@ -387,10 +413,11 @@ fn instantiate_canon_lower(
                   return cache_and_advance([I32(0)])
                 }
               }
-              match core_vals {
-                [I32(n)] => mem.store_i32(p, n) catch { _ => () }
-                [I64(n)] => mem.store_i64(p, n) catch { _ => () }
-                _ => ()
+              store_async_lower_result(mem, p, core_vals) catch {
+                e => {
+                  trap_canon(canon_err_message(e))
+                  return cache_and_advance([I32(0)])
+                }
               }
             }
             async_state.subtasks.set(tmp_task_id, {
@@ -398,7 +425,7 @@ fn instantiate_canon_lower(
               id: 0,
               detached: true,
               phase: [Started],
-              caller_table,
+              caller_table: live_caller_table,
               callee_instance_id: inst_id,
               bp_key,
               retptr: 0,
@@ -421,7 +448,7 @@ fn instantiate_canon_lower(
             id: sub_id,
             detached: false,
             phase: [Started],
-            caller_table,
+            caller_table: live_caller_table,
             callee_instance_id: inst_id,
             bp_key,
             retptr: retp,
@@ -443,9 +470,8 @@ fn instantiate_canon_lower(
         let mut ok = true
         canon_in_handleless_step[0] = true
         init_task_meta(async_state, tmp_task_id, meta_inst_id, caller_task_id)
-        ensure_task_thread(async_state, inst_id, tmp_task_id)
         push_task(async_state, tmp_task_id, true)
-        let step = step_task_once(task, store, caller_table, async_state) catch {
+        let step = step_task_once(task, store, live_caller_table, async_state) catch {
           _e => {
             ok = false
             task.started[0] = false
@@ -488,10 +514,11 @@ fn instantiate_canon_lower(
                 return cache_and_advance([I32(0)])
               }
             }
-            match core_vals {
-              [I32(n)] => mem.store_i32(p, n) catch { _ => () }
-              [I64(n)] => mem.store_i64(p, n) catch { _ => () }
-              _ => ()
+            store_async_lower_result(mem, p, core_vals) catch {
+              e => {
+                trap_canon(canon_err_message(e))
+                return cache_and_advance([I32(0)])
+              }
             }
           }
           cleanup_task_id(tmp_task_id)
@@ -505,7 +532,7 @@ fn instantiate_canon_lower(
           id: sub_id,
           detached: false,
           phase: [Started],
-          caller_table,
+          caller_table: live_caller_table,
           callee_instance_id: inst_id,
           bp_key,
           retptr: retp,
@@ -526,7 +553,7 @@ fn instantiate_canon_lower(
           id: sub_id,
           detached: false,
           phase: [Starting],
-          caller_table,
+          caller_table: live_caller_table,
           callee_instance_id: inst_id,
           bp_key,
           retptr: retp,
@@ -558,30 +585,53 @@ fn instantiate_canon_lower(
     let host = fn(
       args : Array[@types.Value],
     ) -> Array[@types.Value] raise @runtime.RuntimeError {
-      if func is Lifted(_, _, _, _, _, may_enter, _, _) && !may_enter[0] {
+      if func is Lifted(_, _, _, _, _, may_enter, _, _) && !may_enter.val {
         trap_canon("wasm trap: cannot enter component instance")
       }
       if !canon_may_leave[0] {
         trap_canon("cannot leave component instance")
       }
-      let component_args = core_args_to_component(
-        args,
-        func_type,
-        func_types,
-        resources,
-        store,
+      let async_state = state.async_state
+      let caller_table = registered_resource_table(
+        async_state,
         state.resource_table,
+      )
+      let outer_task_id = current_task_id(async_state)
+      let cur = if async_state.call_cursor_stack.length() == 0 {
+        0
+      } else {
+        async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1]
+      }
+      let per_task_calls = match async_state.call_results.get(outer_task_id) {
+        Some(m) => m
+        None => {
+          let m : Map[Int, Array[@types.Value]] = Map([])
+          async_state.call_results.set(outer_task_id, m)
+          m
+        }
+      }
+      let replay_enabled = outer_task_id != 0L
+      if replay_enabled && per_task_calls.get(cur) is Some(v) {
+        async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1] = cur +
+          1
+        return v
+      }
+      let component_args = core_args_to_component(
+        args, func_type, func_types, resources, store, caller_table, 16, "sync lower argument",
       ) catch {
         e => {
           trap_canon(canon_err_message(e))
           ([] : Array[ComponentValue])
         }
       }
-      let async_state = state.async_state
-      let owner_component_id = state.resource_table.id
+      let owner_component_id = caller_table.id
       let inst_id = match func {
         Host(_, _, _) => owner_component_id
         Lifted(_, _, _, _, callee_table, _, _, _) => callee_table.id
+      }
+      if func is Lifted(_, _, _, _, callee_table, _, _, _) &&
+        resource_tables_are_nested(caller_table, callee_table) {
+        trap_canon("wasm trap: cannot enter component instance")
       }
       let caller_task_id = current_task_id(async_state)
       let meta_inst_id = match func {
@@ -614,26 +664,6 @@ fn instantiate_canon_lower(
       let results : Array[ComponentValue] = if func_type.is_async {
         // Sync-lowering an async component function must be cooperative:
         // treat YIELD/WAIT as restartable suspension points instead of busy looping.
-        let outer_task_id = current_task_id(async_state)
-        let cur = if async_state.call_cursor_stack.length() == 0 {
-          0
-        } else {
-          async_state.call_cursor_stack[async_state.call_cursor_stack.length() -
-          1]
-        }
-        let per_task_calls = match async_state.call_results.get(outer_task_id) {
-          Some(m) => m
-          None => {
-            let m : Map[Int, Array[@types.Value]] = Map([])
-            async_state.call_results.set(outer_task_id, m)
-            m
-          }
-        }
-        if per_task_calls.get(cur) is Some(v) {
-          async_state.call_cursor_stack[async_state.call_cursor_stack.length() -
-          1] = cur + 1
-          return v
-        }
         let per_task_state = match
           async_state.sync_lower_states.get(outer_task_id) {
           Some(m) => m
@@ -678,7 +708,6 @@ fn instantiate_canon_lower(
             Host(_, _, _) => state.resource_table.id
             Lifted(_, _, _, _, callee_table, _, _, _) => callee_table.id
           }
-          ensure_task_thread(async_state, callee_instance_id, st.task_id)
           push_task(async_state, st.task_id, can_block)
           let step = step_task_once(
             st.task,
@@ -902,11 +931,7 @@ fn instantiate_canon_lower(
         }
       } else {
         call_component_func(
-          func,
-          component_args,
-          store,
-          state.resource_table,
-          state.async_state,
+          func, component_args, store, caller_table, async_state,
         ) catch {
           e => {
             let msg = canon_err_message(e)
@@ -939,7 +964,7 @@ fn instantiate_canon_lower(
           }
         }
       }
-      component_results_to_core(
+      let out = component_results_to_core(
         results, func_type, func_types, resources, store, out_ptr,
       ) catch {
         e => {
@@ -947,6 +972,12 @@ fn instantiate_canon_lower(
           ([] : Array[@types.Value])
         }
       }
+      if replay_enabled {
+        per_task_calls.set(cur, out)
+        async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1] = cur +
+          1
+      }
+      out
     }
     let func_addr = store.alloc_host_func(host, func_type=core_type, type_idx=0)
     let instance : @runtime.ModuleInstance = {

@@ -446,7 +446,7 @@ fn validate_core_import_args(
             let actual = core_func_ref_type(f)
             if actual != expected {
               raise ImportTypeMismatch(
-                "type mismatch for export `\{imp.name}` of module instantiation argument `\{imp.mod_name}`",
+                "type mismatch for export `\{imp.name}` of module instantiation argument `\{imp.mod_name}`: expected \{expected}, found \{actual}",
               )
             }
           }

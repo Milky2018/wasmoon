@@ -85,11 +85,13 @@ fn instantiate_canon_future_new(
       future_id,
       is_readable: true,
       creator_component_id,
+      in_waitable_set: Ref(false),
     })
     async_state.future_endpoints.set(handle_key(creator_component_id, wh), {
       future_id,
       is_readable: false,
       creator_component_id,
+      in_waitable_set: Ref(false),
     })
     async_state.futures.set(future_id, {
       payload_ty,
@@ -886,7 +888,6 @@ fn instantiate_canon_future_drop_readable(
   let core_type : @types.FuncType = { params: [I32], results: [] }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
-  async_state.thread_handle_required.set(owner_component_id, true)
   let host = fn(
     args : Array[@types.Value],
   ) -> Array[@types.Value] raise @runtime.RuntimeError {
