@@ -140,6 +140,40 @@ test "Preview 2 standard streams share typed resource handles" {
 }
 
 ///|
+test "dropping one standard stream handle preserves independent handles" {
+  let linker = @runtime_impl.ComponentLinker()
+  let host = @wasi_component.WasiComponentHost(
+    linker,
+    @wasi_component.WasiComponentCtxBuilder().stdin(b"ok").build(),
+  )
+  host.add_preview2_io()
+  guard linker.get_import("wasi:cli/stdin@0.2.11") is Some(Instance(stdin)) else {
+    fail("stdin interface was not registered")
+  }
+  guard stdin.call_exported_func("get-stdin", []) is [U32(first)] &&
+    stdin.call_exported_func("get-stdin", []) is [U32(second)] else {
+    fail("stdin did not return owned stream handles")
+  }
+  let table = host.runtime().resource_table()
+  guard table.get(first) is Some(first_resource) &&
+    first_resource.host_dtor is Some(dtor) else {
+    fail("owned host resource did not carry its destructor")
+  }
+  dtor.destroy(first_resource.rep)
+  table.free(first) |> ignore
+  guard linker.get_import("wasi:io/streams@0.2.11") is Some(Instance(streams)) else {
+    fail("streams interface was not registered")
+  }
+  debug_inspect(
+    streams.call_exported_func("[method]input-stream.read", [
+      U32(second),
+      U64(2L),
+    ]),
+    content="[Variant(0, Some(List([U8(111), U8(107)])))]",
+  )
+}
+
+///|
 test "Preview 2 clock subscriptions use the shared pollable identity" {
   let linker = @runtime_impl.ComponentLinker()
   let host = @wasi_component.WasiComponentHost(

@@ -297,6 +297,22 @@ fn WasiComponentCtx::get_resource(
 }
 
 ///|
+fn WasiComponentCtx::clone_resource(
+  self : WasiComponentCtx,
+  rep : Int,
+) -> Int raise @runtime_impl.ComponentRuntimeError {
+  match self.resources.get(rep) {
+    Some(resource) => self.insert_resource(resource)
+    None => raise HostCallError("WASI host resource is not live")
+  }
+}
+
+///|
+fn WasiComponentCtx::drop_resource(self : WasiComponentCtx, rep : Int) -> Unit {
+  self.resources.remove(rep)
+}
+
+///|
 fn WasiComponentCtx::register_deadline(
   self : WasiComponentCtx,
   deadline : Int64,

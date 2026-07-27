@@ -10,6 +10,7 @@ fn resource_type_id(
 
 ///|
 fn allocate_resource_handle(
+  ctx : WasiComponentCtx,
   table : @runtime_impl.ResourceTable,
   ty : @component.TypeDef?,
   rep : Int,
@@ -19,6 +20,7 @@ fn allocate_resource_handle(
     type_id,
     rep,
     dtor: None,
+    host_dtor: Some(HostResourceDestructor(fn(rep) { ctx.drop_resource(rep) })),
     kind: HostDefined,
     impl_component_id: table.id,
     own: true,
@@ -81,7 +83,12 @@ fn err_last_operation_failed(
   message : String,
 ) -> @runtime_impl.ComponentValue raise @runtime_impl.ComponentRuntimeError {
   let rep = host.ctx.insert_resource(IoError(message))
-  let handle = allocate_resource_handle(table, host.resource_types.error, rep)
+  let handle = allocate_resource_handle(
+    host.ctx,
+    table,
+    host.resource_types.error,
+    rep,
+  )
   Variant(1, Some(Variant(0, Some(U32(handle)))))
 }
 
@@ -446,7 +453,16 @@ fn add_preview2_monotonic_clock(
         requested
       }
       let rep = host.ctx.insert_resource(Pollable(Deadline(deadline)))
-      [U32(allocate_resource_handle(table, host.resource_types.pollable, rep))]
+      [
+        U32(
+          allocate_resource_handle(
+            host.ctx,
+            table,
+            host.resource_types.pollable,
+            rep,
+          ),
+        ),
+      ]
     },
   )
   builder.add_func(
@@ -464,7 +480,16 @@ fn add_preview2_monotonic_clock(
         now + duration
       }
       let rep = host.ctx.insert_resource(Pollable(Deadline(deadline)))
-      [U32(allocate_resource_handle(table, host.resource_types.pollable, rep))]
+      [
+        U32(
+          allocate_resource_handle(
+            host.ctx,
+            table,
+            host.resource_types.pollable,
+            rep,
+          ),
+        ),
+      ]
     },
   )
   host.linker.add_instance(
@@ -625,6 +650,7 @@ fn add_input_stream_methods(
       [
         U32(
           allocate_resource_handle(
+            host.ctx,
             table,
             host.resource_types.pollable,
             poll_rep,
@@ -727,6 +753,7 @@ fn add_output_stream_methods(
       [
         U32(
           allocate_resource_handle(
+            host.ctx,
             table,
             host.resource_types.pollable,
             poll_rep,
@@ -838,7 +865,10 @@ fn add_stdio_interface(
   builder.add_func(export_name, preview2_func(interface, export_name), (
     _args,
     table,
-  ) => [U32(allocate_resource_handle(table, resource_type, rep))])
+  ) => {
+    let owned_rep = host.ctx.clone_resource(rep)
+    [U32(allocate_resource_handle(host.ctx, table, resource_type, owned_rep))]
+  })
   host.linker.add_instance(
     "wasi:cli/\{interface_name}@\{preview2_version}",
     builder.finish(),

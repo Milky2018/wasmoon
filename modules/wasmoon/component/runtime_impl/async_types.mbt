@@ -38,6 +38,32 @@ pub(all) struct CoreFuncRef {
 } derive(Debug)
 
 ///|
+/// Embedding-owned cleanup associated with an owned host resource handle.
+struct HostResourceDestructor {
+  drop : (Int) -> Unit
+}
+
+///|
+impl Debug for HostResourceDestructor with fn to_repr(_self) {
+  Repr::literal("HostResourceDestructor")
+}
+
+///|
+pub fn HostResourceDestructor::HostResourceDestructor(
+  drop : (Int) -> Unit,
+) -> HostResourceDestructor {
+  { drop, }
+}
+
+///|
+pub fn HostResourceDestructor::destroy(
+  self : HostResourceDestructor,
+  rep : Int,
+) -> Unit {
+  (self.drop)(rep)
+}
+
+///|
 struct CanonResources {
   mem_addr : Int?
   realloc : CoreFuncRef?
@@ -50,6 +76,7 @@ pub(all) struct ResourceHandle {
   type_id : Int
   rep : Int
   dtor : CoreFuncRef?
+  host_dtor : HostResourceDestructor?
   kind : ResourceKind
   impl_component_id : Int
   own : Bool
@@ -1295,6 +1322,7 @@ fn transfer_stream_future_value(
                   type_id: entry.type_id,
                   rep: entry.rep,
                   dtor: entry.dtor,
+                  host_dtor: entry.host_dtor,
                   kind: entry.kind,
                   impl_component_id: entry.impl_component_id,
                   own: false,

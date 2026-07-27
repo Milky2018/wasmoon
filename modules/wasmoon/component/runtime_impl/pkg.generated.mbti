@@ -260,6 +260,10 @@ pub fn HostInstanceBuilder::add_type(Self, String, Int) -> Unit raise ComponentR
 pub fn HostInstanceBuilder::finish(Self) -> ComponentInstance
 pub fn HostInstanceBuilder::set_type_space(Self, Array[@model.TypeDef?]) -> Unit raise ComponentRuntimeError
 
+type HostResourceDestructor
+pub fn HostResourceDestructor::HostResourceDestructor((Int) -> Unit) -> Self
+pub fn HostResourceDestructor::destroy(Self, Int) -> Unit
+
 type HostRuntimeState
 pub fn HostRuntimeState::HostRuntimeState() -> Self
 pub fn HostRuntimeState::async_state(Self) -> AsyncState
@@ -279,6 +283,7 @@ pub(all) struct ResourceHandle {
   type_id : Int
   rep : Int
   dtor : CoreFuncRef?
+  host_dtor : HostResourceDestructor?
   kind : @model.ResourceKind
   impl_component_id : Int
   own : Bool

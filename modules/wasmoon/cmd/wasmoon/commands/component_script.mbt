@@ -734,6 +734,7 @@ fn run_component_script_impl(
           type_id: resource1_id,
           rep,
           dtor: Some(resource1_dtor),
+          host_dtor: None,
           kind: HostDefined,
           impl_component_id: table.id,
           own: true,

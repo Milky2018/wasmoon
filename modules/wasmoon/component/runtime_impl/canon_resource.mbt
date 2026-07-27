@@ -43,6 +43,7 @@ fn instantiate_canon_resource_new(
           type_id,
           rep,
           dtor,
+          host_dtor: None,
           kind,
           impl_component_id: table.id,
           own: true,
@@ -188,6 +189,9 @@ fn instantiate_canon_resource_drop(
               match taken {
                 Some(real) =>
                   if real.own {
+                    if real.host_dtor is Some(host_dtor) {
+                      host_dtor.destroy(real.rep)
+                    }
                     match real.dtor {
                       Some(d) => {
                         clear_canon_trap_message()
