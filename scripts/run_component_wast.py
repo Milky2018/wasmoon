@@ -470,6 +470,8 @@ SUPPORTED_VALUE_TYPES = {
     "s32",
     "u64",
     "s64",
+    "f32",
+    "f64",
     "char",
     "str",
     "string",
@@ -514,7 +516,21 @@ def parse_const(node) -> Optional[dict]:
     if not isinstance(node, list) or not node:
         return None
     head = node[0]
-    if not isinstance(head, str) or not head.endswith(".const"):
+    if not isinstance(head, str):
+        return None
+    if head in ("option.some", "result.ok", "result.err"):
+        if len(node) != 2:
+            return None
+        payload = parse_const(node[1])
+        if payload is None:
+            return None
+        kind, case = head.split(".", 1)
+        return {"type": kind, "value": case, "items": [payload]}
+    if head == "option.none":
+        if len(node) != 1:
+            return None
+        return {"type": "option", "value": "none", "items": []}
+    if not head.endswith(".const"):
         return None
     if head == "list.const":
         items: list[dict] = []
@@ -532,10 +548,50 @@ def parse_const(node) -> Optional[dict]:
                 return None
             items.append(val)
         return {"type": "tuple", "items": items}
+    if head == "record.const":
+        items: list[dict] = []
+        for field in node[1:]:
+            if (
+                not isinstance(field, list)
+                or len(field) < 3
+                or field[0] != "field"
+                or not isinstance(field[1], StringToken)
+            ):
+                return None
+            value_node = field[2] if len(field) == 3 else field[2:]
+            val = parse_const(value_node)
+            if val is None:
+                return None
+            val["label"] = field[1].value
+            items.append(val)
+        return {"type": "record", "items": items}
+    if head == "variant.const":
+        if len(node) < 2 or not isinstance(node[1], StringToken):
+            return None
+        items: list[dict] = []
+        if len(node) == 3:
+            payload = parse_const(node[2])
+            if payload is None:
+                return None
+            items.append(payload)
+        elif len(node) != 2:
+            return None
+        return {
+            "type": "variant",
+            "value": node[1].value,
+            "items": items,
+        }
     if head == "enum.const":
         if len(node) < 2 or not isinstance(node[1], StringToken):
             return None
         return {"type": "enum", "value": node[1].value}
+    if head == "flags.const":
+        labels: list[str] = []
+        for label in node[1:]:
+            if not isinstance(label, StringToken):
+                return None
+            labels.append(label.value)
+        return {"type": "flags", "labels": labels}
     type_name = head[: -len(".const")]
     if type_name not in SUPPORTED_VALUE_TYPES:
         return None

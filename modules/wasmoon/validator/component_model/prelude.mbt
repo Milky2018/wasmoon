@@ -1004,7 +1004,7 @@ fn is_package_name(name : Bytes) -> Bool {
   if !is_lower_kebab_case_range(name, colon + 1, slash) {
     return false
   }
-  is_lower_kebab_case_range(name, slash + 1, base_end)
+  is_kebab_case_range(name, slash + 1, base_end)
 }
 
 ///|

@@ -59,6 +59,8 @@ priv struct JsonValue {
   type_ : String
   value : String?
   items : Array[JsonValue]?
+  label : String?
+  labels : Array[String]?
 } derive(FromJson(fields(type_(rename="type"))))
 
 ///|
@@ -393,6 +395,30 @@ fn parse_component_value(
           },
         ),
       )
+    "f32" =>
+      F32(
+        Float::from_double(
+          @string.parse_double(
+            match raw {
+              Some(v) => v
+              None => raise ParseError("missing value")
+            },
+          ) catch {
+            e => raise ParseError(e.to_string())
+          },
+        ),
+      )
+    "f64" =>
+      F64(
+        @string.parse_double(
+          match raw {
+            Some(v) => v
+            None => raise ParseError("missing value")
+          },
+        ) catch {
+          e => raise ParseError(e.to_string())
+        },
+      )
     "char" =>
       Char(
         parse_char_value(
@@ -421,16 +447,272 @@ fn parse_component_value(
 }
 
 ///|
-fn parse_values(
-  vals : Array[JsonValue]?,
-) -> Array[@runtime_impl.ComponentValue] raise ComponentTestError {
-  let result : Array[@runtime_impl.ComponentValue] = []
-  if vals is Some(arr) {
-    for v in arr {
-      result.push(parse_component_value(v))
+fn component_func_contract(
+  instance : @runtime_impl.ComponentInstance,
+  field : String,
+) -> (@component.FuncType, Array[@component.TypeDef?]) raise ComponentTestError {
+  match instance.get_export(field) {
+    Some(Func(func)) =>
+      match func {
+        Host(func_type, types, _) | HostAsync(func_type, types, _) =>
+          (func_type, types)
+        Lifted(_, func_type, _, types, _, _, _, _) => (func_type, types)
+      }
+    _ => raise ScriptError("unknown exported function \{field}")
+  }
+}
+
+///|
+fn parse_typed_component_value(
+  val : JsonValue,
+  ty : @component.ValType,
+  types : Array[@component.TypeDef?],
+) -> @runtime_impl.ComponentValue raise ComponentTestError {
+  match ty {
+    Prim(_) => parse_component_value(val)
+    TypeIdx(index) => {
+      guard types.get(index) is Some(Some(type_def)) else {
+        raise ScriptError("unknown component value type \{index}")
+      }
+      match type_def {
+        DefValType(prim) => parse_typed_component_value(val, Prim(prim), types)
+        List(element_ty) => {
+          if val.type_ != "list" {
+            raise ParseError("expected list value")
+          }
+          let values = []
+          if val.items is Some(items) {
+            for item in items {
+              values.push(parse_typed_component_value(item, element_ty, types))
+            }
+          }
+          List(values)
+        }
+        Tuple(element_types) => {
+          if val.type_ != "tuple" {
+            raise ParseError("expected tuple value")
+          }
+          let items = val.items.unwrap_or([])
+          if items.length() != element_types.length() {
+            raise ParseError("tuple value length mismatch")
+          }
+          let values = []
+          for i in 0..<element_types.length() {
+            values.push(
+              parse_typed_component_value(items[i], element_types[i], types),
+            )
+          }
+          Tuple(values)
+        }
+        Record(fields) => {
+          if val.type_ != "record" {
+            raise ParseError("expected record value")
+          }
+          let items = val.items.unwrap_or([])
+          if items.length() != fields.length() {
+            raise ParseError("record value length mismatch")
+          }
+          let values = []
+          for field in fields {
+            let mut found : JsonValue? = None
+            for item in items {
+              if item.label is Some(label) && label == field.label {
+                found = Some(item)
+                break
+              }
+            }
+            guard found is Some(item) else {
+              raise ParseError("missing record field \{field.label}")
+            }
+            values.push(parse_typed_component_value(item, field.ty, types))
+          }
+          Tuple(values)
+        }
+        Variant(cases) => {
+          if val.type_ != "variant" {
+            raise ParseError("expected variant value")
+          }
+          guard val.value is Some(label) else {
+            raise ParseError("variant value is missing its case")
+          }
+          let mut tag = -1
+          for i, case in cases {
+            if case.label == label {
+              tag = i
+              break
+            }
+          }
+          if tag < 0 {
+            raise ParseError("unknown variant case \{label}")
+          }
+          let items = val.items.unwrap_or([])
+          let payload = match cases[tag].ty {
+            None => {
+              if items.length() != 0 {
+                raise ParseError("variant case \{label} has no payload")
+              }
+              None
+            }
+            Some(payload_ty) => {
+              if items.length() != 1 {
+                raise ParseError("variant case \{label} requires one payload")
+              }
+              Some(parse_typed_component_value(items[0], payload_ty, types))
+            }
+          }
+          Variant(tag, payload)
+        }
+        Enum(labels) => {
+          if val.type_ != "enum" {
+            raise ParseError("expected enum value")
+          }
+          guard val.value is Some(label) else {
+            raise ParseError("enum value is missing its case")
+          }
+          let mut tag = -1
+          for i, candidate in labels {
+            if candidate == label {
+              tag = i
+              break
+            }
+          }
+          if tag < 0 {
+            tag = parse_enum_case_tag(label)
+          }
+          if tag < 0 || tag >= labels.length() {
+            raise ParseError("unknown enum case \{label}")
+          }
+          U32(tag)
+        }
+        Flags(labels) => {
+          if val.type_ != "flags" {
+            raise ParseError("expected flags value")
+          }
+          let selected = val.labels.unwrap_or([])
+          let mut bits = 0UL
+          for label in selected {
+            let mut index = -1
+            for i, candidate in labels {
+              if candidate == label {
+                index = i
+                break
+              }
+            }
+            if index < 0 {
+              raise ParseError("unknown flag \{label}")
+            }
+            bits = bits | (1UL << index)
+          }
+          if labels.length() <= 32 {
+            U32(bits.to_uint().reinterpret_as_int())
+          } else {
+            U64(bits.reinterpret_as_int64())
+          }
+        }
+        Option(payload_ty) => {
+          if val.type_ != "option" {
+            raise ParseError("expected option value")
+          }
+          let items = val.items.unwrap_or([])
+          match val.value {
+            Some("none") =>
+              if items.length() == 0 {
+                Variant(0, None)
+              } else {
+                raise ParseError("option.none has a payload")
+              }
+            Some("some") =>
+              if items.length() == 1 {
+                Variant(
+                  1,
+                  Some(parse_typed_component_value(items[0], payload_ty, types)),
+                )
+              } else {
+                raise ParseError("option.some requires one payload")
+              }
+            _ => raise ParseError("unknown option case")
+          }
+        }
+        Result(ok_ty, error_ty) => {
+          if val.type_ != "result" {
+            raise ParseError("expected result value")
+          }
+          let (tag, payload_ty) = match val.value {
+            Some("ok") => (0, ok_ty)
+            Some("err") => (1, error_ty)
+            _ => raise ParseError("unknown result case")
+          }
+          let items = val.items.unwrap_or([])
+          let payload = match payload_ty {
+            None =>
+              if items.length() == 0 {
+                None
+              } else {
+                raise ParseError("result case has no payload")
+              }
+            Some(payload_ty) =>
+              if items.length() == 1 {
+                Some(parse_typed_component_value(items[0], payload_ty, types))
+              } else {
+                raise ParseError("result case requires one payload")
+              }
+          }
+          Variant(tag, payload)
+        }
+        Own(_) | Borrow(_) | ResourceType(_, _, _, _) =>
+          parse_component_value(val)
+        Stream(_)
+        | Future(_)
+        | FuncType(_)
+        | ComponentType(_)
+        | InstanceTypeEmpty
+        | InstanceType(_) =>
+          raise ScriptError("unsupported component value type")
+      }
     }
   }
+}
+
+///|
+fn parse_typed_arguments(
+  vals : Array[JsonValue]?,
+  func_type : @component.FuncType,
+  types : Array[@component.TypeDef?],
+) -> Array[@runtime_impl.ComponentValue] raise ComponentTestError {
+  let values = vals.unwrap_or([])
+  if values.length() != func_type.params.length() {
+    raise ParseError("argument count mismatch")
+  }
+  let result = []
+  for i in 0..<values.length() {
+    result.push(
+      parse_typed_component_value(values[i], func_type.params[i].ty, types),
+    )
+  }
   result
+}
+
+///|
+fn parse_typed_results(
+  vals : Array[JsonValue]?,
+  func_type : @component.FuncType,
+  types : Array[@component.TypeDef?],
+) -> Array[@runtime_impl.ComponentValue] raise ComponentTestError {
+  let values = vals.unwrap_or([])
+  match func_type.result {
+    None =>
+      if values.length() == 0 {
+        []
+      } else {
+        raise ParseError("result count mismatch")
+      }
+    Some(result_ty) =>
+      if values.length() == 1 {
+        [parse_typed_component_value(values[0], result_ty, types)]
+      } else {
+        raise ParseError("result count mismatch")
+      }
+  }
 }
 
 ///|
@@ -1057,12 +1339,6 @@ fn run_component_script_impl(
             continue
           }
         }
-        let args = parse_values(cmd.args) catch {
-          e => {
-            result.add_failed("\{cmd.type_} invalid args: \{e}")
-            continue
-          }
-        }
         let instance = match cmd.instance {
           Some(n) =>
             match instances.get(n) {
@@ -1105,6 +1381,18 @@ fn run_component_script_impl(
                 }
             }
         }
+        let (func_type, func_types) = component_func_contract(instance, field) catch {
+          e => {
+            result.add_failed("\{cmd.type_} invalid function: \{e}")
+            continue
+          }
+        }
+        let args = parse_typed_arguments(cmd.args, func_type, func_types) catch {
+          e => {
+            result.add_failed("\{cmd.type_} invalid args: \{e}")
+            continue
+          }
+        }
         let call_result = run_invoke(instance, field, args)
         match cmd.type_ {
           "invoke" =>
@@ -1113,7 +1401,11 @@ fn run_component_script_impl(
               Err(e) => result.add_failed("invoke failed: \{e}")
             }
           "assert_return" => {
-            let expected = parse_values(cmd.expected) catch {
+            let expected = parse_typed_results(
+              cmd.expected,
+              func_type,
+              func_types,
+            ) catch {
               e => {
                 result.add_failed("assert_return invalid expected: \{e}")
                 continue

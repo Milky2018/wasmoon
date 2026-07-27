@@ -116,6 +116,68 @@ test "component command lowers Preview 2 filesystem preopens end to end" {
 }
 
 ///|
+test "component script parses named composite values against function types" {
+  let types : Array[@component.TypeDef?] = [
+    Some(Enum(["red", "green", "blue"])),
+    Some(Flags(["a", "b", "c"])),
+    Some(
+      Variant([
+        { label: "number", ty: Some(Prim(U32)), refines: None },
+        { label: "text", ty: Some(Prim(String)), refines: None },
+      ]),
+    ),
+    Some(
+      Record([
+        { label: "color", ty: TypeIdx(0) },
+        { label: "features", ty: TypeIdx(1) },
+        { label: "payload", ty: TypeIdx(2) },
+      ]),
+    ),
+  ]
+  let value : JsonValue = {
+    type_: "record",
+    value: None,
+    label: None,
+    labels: None,
+    items: Some([
+      {
+        type_: "variant",
+        value: Some("text"),
+        label: Some("payload"),
+        labels: None,
+        items: Some([
+          {
+            type_: "str",
+            value: Some("ok"),
+            label: None,
+            labels: None,
+            items: None,
+          },
+        ]),
+      },
+      {
+        type_: "flags",
+        value: None,
+        label: Some("features"),
+        labels: Some(["a", "c"]),
+        items: None,
+      },
+      {
+        type_: "enum",
+        value: Some("green"),
+        label: Some("color"),
+        labels: None,
+        items: None,
+      },
+    ]),
+  }
+  debug_inspect(
+    parse_typed_component_value(value, TypeIdx(3), types),
+    content="([U32(1), U32(5), Variant(1, Some(String(\"ok\")))])",
+  )
+}
+
+///|
 test "component command executes a pinned Preview 3 async run export" {
   let status = run_wasi_component_command(
     "testsuite/fixtures/wasi-command-async-ok.component.wasm",

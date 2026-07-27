@@ -1735,10 +1735,10 @@ fn functype_needs_realloc_for_lift(
       None => return true
     }
   }
-  match ft.result {
-    Some(r) => valtype_contains_list_or_string(r, type_table, Map([]))
-    None => false
-  }
+  // Results are lifted from memory written by the core callee. Reading a
+  // string/list result needs `memory`, but does not allocate through the
+  // component's realloc function.
+  false
 }
 
 ///|
@@ -1746,13 +1746,12 @@ fn functype_needs_realloc_for_lower(
   ft : @component.FuncType,
   type_table : Array[@component.TypeDef?],
 ) -> Bool {
-  // Canon lower lifts its core arguments into component values. Dynamic
-  // list/string arguments require the embedding allocator; an indirect scalar
-  // result only needs the caller-provided return area.
-  for p in ft.params {
-    if valtype_contains_list_or_string(p.ty, type_table, Map([])) {
-      return true
-    }
+  // Canon lower reads parameters already written by the core caller, so
+  // dynamic parameters only require `memory`. A dynamic result is written
+  // back into that memory and therefore requires the supplied allocator.
+  match ft.result {
+    Some(result_ty) =>
+      valtype_contains_list_or_string(result_ty, type_table, Map([]))
+    None => false
   }
-  false
 }
