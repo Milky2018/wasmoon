@@ -1,6 +1,6 @@
 name = "Milky2018/wasm_core"
 
-version = "0.2.0"
+version = "0.2.1"
 
 readme = "README.mbt.md"
 
