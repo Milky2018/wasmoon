@@ -49,6 +49,7 @@ pub fn WasiComponentHost::add_preview2_io(Self) -> Unit raise @runtime_impl.Comp
 pub fn WasiComponentHost::add_preview2_sockets(Self) -> Unit raise @runtime_impl.ComponentRuntimeError
 pub fn WasiComponentHost::add_preview3_cli_clocks_random(Self) -> Unit raise @runtime_impl.ComponentRuntimeError
 pub fn WasiComponentHost::add_preview3_filesystem(Self) -> Unit raise @runtime_impl.ComponentRuntimeError
+pub fn WasiComponentHost::add_preview3_sockets(Self) -> Unit raise @runtime_impl.ComponentRuntimeError
 pub fn WasiComponentHost::context(Self) -> WasiComponentCtx
 pub fn WasiComponentHost::runtime(Self) -> @runtime_impl.HostRuntimeState
 

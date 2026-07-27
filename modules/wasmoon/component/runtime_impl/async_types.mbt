@@ -250,6 +250,7 @@ struct HostValueStream {
   values : Array[ComponentValue]
   next : Ref[Int]
   pull : ((Int) -> HostValueStreamPoll raise ComponentRuntimeError)?
+  cancel : (() -> Unit)?
   closed : Ref[Bool]
 }
 
@@ -433,6 +434,10 @@ struct PendingFutureRead {
   // Memory where the read pointer lives (from the canonical options of future.read).
   // Writes can come from a different component instance/memory.
   mem_addr : Int?
+  realloc : CoreFuncRef?
+  encoding : StringEncoding
+  // Resource table of the reader component instance.
+  reader_table : ResourceTable
   // For typed futures, write the payload at `ptr`.
   ptr : Int
   // The readable endpoint that initiated this pending read.
@@ -469,11 +474,24 @@ struct FutureState {
 } derive(Debug)
 
 ///|
+pub(all) enum HostFutureValuePoll {
+  Pending
+  Ready(ComponentValue)
+} derive(Debug)
+
+///|
 struct HostFutureValue {
   payload_ty : ValType
   types : Array[TypeDef?]
-  value : ComponentValue
-} derive(Debug)
+  value : Ref[ComponentValue?]
+  pull : (() -> HostFutureValuePoll raise ComponentRuntimeError)?
+  cancel : (() -> Unit)?
+}
+
+///|
+impl Debug for HostFutureValue with fn to_repr(_self) {
+  Repr::literal("HostFutureValue")
+}
 
 ///|
 enum GuestThreadPhase {

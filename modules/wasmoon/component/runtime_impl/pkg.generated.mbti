@@ -259,7 +259,12 @@ pub(all) enum HostFuturePoll {
   Ready(Array[ComponentValue])
 }
 
-type HostFutureValue derive(@debug.Debug)
+type HostFutureValue
+
+pub(all) enum HostFutureValuePoll {
+  Pending
+  Ready(ComponentValue)
+} derive(@debug.Debug)
 
 type HostInstanceBuilder
 pub fn HostInstanceBuilder::add_async_func(Self, String, @model.FuncType, (Array[ComponentValue], ResourceTable) -> HostFuture raise ComponentRuntimeError) -> Unit raise ComponentRuntimeError
@@ -280,8 +285,9 @@ pub fn HostRuntimeState::drop_host_readable_stream(Self, ResourceTable, Int) -> 
 pub fn HostRuntimeState::new_host_byte_stream(Self, ResourceTable, Bytes) -> Int
 pub fn HostRuntimeState::new_host_unit_result_future(Self, ResourceTable, @model.ValType, Array[@model.TypeDef?], error_case? : Int) -> Int raise ComponentRuntimeError
 pub fn HostRuntimeState::new_host_value_future(Self, ResourceTable, @model.ValType, Array[@model.TypeDef?], ComponentValue) -> Int raise ComponentRuntimeError
+pub fn HostRuntimeState::new_host_value_future_source(Self, ResourceTable, @model.ValType, Array[@model.TypeDef?], () -> HostFutureValuePoll raise ComponentRuntimeError, () -> Unit) -> Int raise ComponentRuntimeError
 pub fn HostRuntimeState::new_host_value_stream(Self, ResourceTable, @model.ValType, Array[@model.TypeDef?], Array[ComponentValue]) -> Int raise ComponentRuntimeError
-pub fn HostRuntimeState::new_host_value_stream_source(Self, ResourceTable, @model.ValType, Array[@model.TypeDef?], (Int) -> HostValueStreamPoll raise ComponentRuntimeError) -> Int raise ComponentRuntimeError
+pub fn HostRuntimeState::new_host_value_stream_source(Self, ResourceTable, @model.ValType, Array[@model.TypeDef?], (Int) -> HostValueStreamPoll raise ComponentRuntimeError, () -> Unit) -> Int raise ComponentRuntimeError
 pub fn HostRuntimeState::read_host_byte_stream(Self, ResourceTable, Int) -> HostByteStreamRead raise ComponentRuntimeError
 pub fn HostRuntimeState::resource_table(Self) -> ResourceTable
 pub fn HostRuntimeState::set_event_loop(Self, () -> Bool raise ComponentRuntimeError) -> Unit

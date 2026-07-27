@@ -192,33 +192,44 @@ fn instantiate_canon_future_read(
                     )
                     return cache_i32(0)
                   }
-                  store_host_stream_value(
-                    host_value.value,
-                    host_value.payload_ty,
-                    host_value.types,
-                    resources,
-                    store,
-                    state.resource_table,
-                    ptr,
-                  ) catch {
+                  let polled = poll_host_future_value(host_value) catch {
                     e => {
                       trap_canon(e.to_string())
                       return cache_i32(0)
                     }
                   }
-                  async_state.host_future_values.remove(ep.future_id)
-                  async_state.futures.set(ep.future_id, {
-                    payload_ty: st0.payload_ty,
-                    pending_read: None,
-                    pending_write: None,
-                    readable_dropped: st0.readable_dropped,
-                    writable_dropped: true,
-                    read_done: true,
-                    write_succeeded: true,
-                    write_observed_readable_drop: false,
-                    wrote_value: true,
-                  })
-                  return cache_i32(0)
+                  match polled {
+                    Ready(value) => {
+                      store_host_stream_value(
+                        value,
+                        host_value.payload_ty,
+                        host_value.types,
+                        resources,
+                        store,
+                        state.resource_table,
+                        ptr,
+                      ) catch {
+                        e => {
+                          trap_canon(e.to_string())
+                          return cache_i32(0)
+                        }
+                      }
+                      async_state.host_future_values.remove(ep.future_id)
+                      async_state.futures.set(ep.future_id, {
+                        payload_ty: st0.payload_ty,
+                        pending_read: None,
+                        pending_write: None,
+                        readable_dropped: st0.readable_dropped,
+                        writable_dropped: true,
+                        read_done: true,
+                        write_succeeded: true,
+                        write_observed_readable_drop: false,
+                        wrote_value: true,
+                      })
+                      return cache_i32(0)
+                    }
+                    Pending => ()
+                  }
                 }
                 None => ()
               }
@@ -363,6 +374,9 @@ fn instantiate_canon_future_read(
                         // Remember the reader-side canon memory so a writer from a different
                         // component instance can write into the correct memory.
                         mem_addr: resources.mem_addr,
+                        realloc: resources.realloc,
+                        encoding: resources.encoding,
+                        reader_table: state.resource_table,
                         ptr,
                         reader_component_id: caller_component_id,
                         reader_handle: handle,
@@ -392,6 +406,90 @@ fn instantiate_canon_future_read(
     }
   }
   state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+}
+
+///|
+fn poll_host_future_value(
+  source : HostFutureValue,
+) -> HostFutureValuePoll raise ComponentRuntimeError {
+  match source.value.val {
+    Some(value) => Ready(value)
+    None =>
+      match source.pull {
+        Some(pull) =>
+          match pull() {
+            Ready(value) => {
+              source.value.val = Some(value)
+              Ready(value)
+            }
+            Pending => Pending
+          }
+        None => Pending
+      }
+  }
+}
+
+///|
+fn progress_host_future_sources(
+  async_state : AsyncState,
+  store : @runtime.Store,
+) -> Bool raise ComponentRuntimeError {
+  let mut progressed = false
+  for item in async_state.host_future_values.iter() {
+    let (future_id, source) = item
+    guard async_state.futures.get(future_id) is Some(state) &&
+      state.pending_read is Some(read) else {
+      continue
+    }
+    match poll_host_future_value(source) {
+      Pending => ()
+      Ready(value) => {
+        store_host_stream_value(
+          value,
+          source.payload_ty,
+          source.types,
+          {
+            mem_addr: read.mem_addr,
+            realloc: read.realloc,
+            post_return: None,
+            encoding: read.encoding,
+          },
+          store,
+          read.reader_table,
+          read.ptr,
+        )
+        async_state.host_future_values.remove(future_id)
+        async_state.futures.set(future_id, {
+          payload_ty: state.payload_ty,
+          pending_read: None,
+          pending_write: None,
+          readable_dropped: state.readable_dropped,
+          writable_dropped: true,
+          read_done: true,
+          write_succeeded: true,
+          write_observed_readable_drop: state.write_observed_readable_drop,
+          wrote_value: true,
+        })
+        if async_state.future_endpoints.get(
+            handle_key(read.reader_component_id, read.reader_handle),
+          )
+          is Some(_) {
+          enqueue_waitable_event(
+            async_state,
+            handle_key(read.reader_component_id, read.reader_handle),
+            {
+              owner_component_id: read.reader_component_id,
+              code: 4,
+              index: read.reader_handle,
+              payload: 0,
+            },
+          )
+        }
+        progressed = true
+      }
+    }
+  }
+  progressed
 }
 
 ///|
@@ -978,6 +1076,14 @@ fn instantiate_canon_future_drop_readable(
                 st0.write_observed_readable_drop,
                 wrote_value: st0.wrote_value,
               })
+              match async_state.host_future_values.get(ep.future_id) {
+                Some(source) =>
+                  match source.cancel {
+                    Some(cancel) => cancel()
+                    None => ()
+                  }
+                None => ()
+              }
               async_state.host_future_values.remove(ep.future_id)
 
               // Remove from any waitable-set membership and queued events.

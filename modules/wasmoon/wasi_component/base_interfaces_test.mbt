@@ -495,6 +495,110 @@ test "Preview 2 filesystem rejects intermediate symlink escape" {
 }
 
 ///|
+test "Preview 3 sockets use the configured network capability" {
+  let linker = @runtime_impl.ComponentLinker()
+  let ctx = @wasi_component.WasiComponentCtxBuilder().build()
+  defer ctx.close()
+  let host = @wasi_component.WasiComponentHost(linker, ctx)
+  host.add_preview3_sockets()
+  guard linker.get_import("wasi:sockets/types@0.3.0-rc-2025-09-16")
+    is Some(Instance(sockets)) &&
+    sockets.call_exported_func("[static]tcp-socket.create", [U32(0)])
+    is [Variant(0, Some(U32(socket)))] else {
+    fail("Preview 3 socket types were not registered")
+  }
+  let loopback : @runtime_impl.ComponentValue = Variant(
+    0,
+    Some(Tuple([U16(0), Tuple([U8(127), U8(0), U8(0), U8(1)])])),
+  )
+  debug_inspect(
+    sockets.call_exported_func("[method]tcp-socket.bind", [
+      U32(socket),
+      loopback,
+    ]),
+    content="[Variant(1, Some(U32(1)))]",
+  )
+  guard linker.get_import("wasi:sockets/ip-name-lookup@0.3.0-rc-2025-09-16")
+    is Some(Instance(lookup)) else {
+    fail("Preview 3 name lookup was not registered")
+  }
+  debug_inspect(
+    lookup.call_exported_func("resolve-addresses", [String("localhost")]),
+    content="[Variant(1, Some(U32(1)))]",
+  )
+}
+
+///|
+test "Preview 3 UDP preserves one datagram per async receive" {
+  let linker = @runtime_impl.ComponentLinker()
+  let ctx = @wasi_component.WasiComponentCtxBuilder()
+    .network_policy(LoopbackOnly)
+    .build()
+  defer ctx.close()
+  let host = @wasi_component.WasiComponentHost(linker, ctx)
+  host.add_preview3_sockets()
+  guard linker.get_import("wasi:sockets/types@0.3.0-rc-2025-09-16")
+    is Some(Instance(sockets)) &&
+    sockets.call_exported_func("[static]udp-socket.create", [U32(0)])
+    is [Variant(0, Some(U32(server)))] &&
+    sockets.call_exported_func("[static]udp-socket.create", [U32(0)])
+    is [Variant(0, Some(U32(client)))] else {
+    fail("Preview 3 UDP sockets were not created")
+  }
+  let loopback : @runtime_impl.ComponentValue = Variant(
+    0,
+    Some(Tuple([U16(0), Tuple([U8(127), U8(0), U8(0), U8(1)])])),
+  )
+  debug_inspect(
+    [
+      sockets.call_exported_func("[method]udp-socket.bind", [
+        U32(server),
+        loopback,
+      ]),
+      sockets.call_exported_func("[method]udp-socket.bind", [
+        U32(client),
+        loopback,
+      ]),
+    ],
+    content="[[Variant(0, None)], [Variant(0, None)]]",
+  )
+  guard sockets.call_exported_func("[method]udp-socket.get-local-address", [
+      U32(server),
+    ])
+    is [Variant(0, Some(server_address))] else {
+    fail("Preview 3 UDP server address was unavailable")
+  }
+  debug_inspect(
+    sockets.call_exported_func("[method]udp-socket.connect", [
+      U32(client),
+      server_address,
+    ]),
+    content="[Variant(0, None)]",
+  )
+  debug_inspect(
+    sockets.call_exported_func("[method]udp-socket.send", [
+      U32(client),
+      List([U8(111), U8(107)]),
+      Variant(0, None),
+    ]),
+    content="[Variant(0, None)]",
+  )
+  guard sockets.call_exported_func("[method]udp-socket.receive", [U32(server)])
+    is [Variant(0, Some(Tuple([data, remote])))] else {
+    fail("Preview 3 UDP datagram was not received")
+  }
+  guard remote
+    is Variant(
+      0,
+      Some(Tuple([U16(port), Tuple([U8(127), U8(0), U8(0), U8(1)])]))
+    ) &&
+    port > 0 else {
+    fail("Preview 3 UDP sender address was not loopback")
+  }
+  debug_inspect(data, content="List([U8(111), U8(107)])")
+}
+
+///|
 test "Preview 2 sockets deny ambient network access by default" {
   let linker = @runtime_impl.ComponentLinker()
   let host = @wasi_component.WasiComponentHost(

@@ -10,11 +10,14 @@ The implemented surface is intentionally versioned:
 - Preview 3 uses the repository-pinned
   `0.3.0-rc-2025-09-16` async contracts.
 - Preview 2 command environment, exit, clocks, random, standard streams,
-  polling, and capability-rooted filesystem interfaces are implemented.
-- Preview 3 command environment, exit, clocks, random, and asynchronous
-  monotonic waits are implemented.
-- Sockets, the complete Preview 3 stream/future surface, and CLI command
-  execution are not yet implemented.
+  polling, capability-rooted filesystem, and socket interfaces are
+  implemented.
+- Preview 3 command environment, exit, clocks, random, standard streams,
+  capability-rooted filesystem, and socket interfaces are implemented.
+- Preview 3 waits, TCP/UDP operations, streams, and completion futures are
+  driven by the host reactor and do not block the cooperative component task.
+- CLI component-command execution and the final pinned conformance matrix
+  remain tracked separately.
 
 The default `WasiComponentCtxBuilder` grants no filesystem or network
 authority. Standard input is closed and standard output/error are discarded
@@ -32,7 +35,17 @@ let host = @wasi_component.WasiComponentHost(linker, ctx)
 host.add_preview2_cli_clocks_random()
 host.add_preview2_io()
 host.add_preview2_filesystem()
+host.add_preview2_sockets()
 defer ctx.close()
+```
+
+Preview 3 embeddings register the corresponding async interfaces explicitly:
+
+```moonbit nocheck
+let host = @wasi_component.WasiComponentHost(linker, ctx)
+host.add_preview3_cli_clocks_random()
+host.add_preview3_filesystem()
+host.add_preview3_sockets()
 ```
 
 Preopens are directory-descriptor capabilities, not ambient path prefixes.

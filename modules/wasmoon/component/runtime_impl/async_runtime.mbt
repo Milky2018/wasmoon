@@ -1124,6 +1124,7 @@ fn progress_one_subtask(
     Some(event_loop) =>
       if (event_loop.wait)() {
         progress_host_stream_sources(async_state, store) |> ignore
+        progress_host_future_sources(async_state, store) |> ignore
         true
       } else {
         false

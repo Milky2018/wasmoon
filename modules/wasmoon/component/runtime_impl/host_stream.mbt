@@ -91,6 +91,7 @@ pub fn HostRuntimeState::new_host_value_stream(
     values: values.copy(),
     next: Ref(0),
     pull: None,
+    cancel: None,
     closed: Ref(true),
   })
   self.stream_table.endpoints.set(handle_key(table.id, readable), {
@@ -115,6 +116,7 @@ pub fn HostRuntimeState::new_host_value_stream_source(
   payload_ty : ValType,
   types : Array[TypeDef?],
   pull : (Int) -> HostValueStreamPoll raise ComponentRuntimeError,
+  cancel : () -> Unit,
 ) -> Int raise ComponentRuntimeError {
   let (element_size, own_resource_type) = stream_payload_info(
     Some(payload_ty),
@@ -137,6 +139,7 @@ pub fn HostRuntimeState::new_host_value_stream_source(
     values: [],
     next: Ref(0),
     pull: Some(pull),
+    cancel: Some(cancel),
     closed: Ref(false),
   })
   self.stream_table.endpoints.set(handle_key(table.id, readable), {
@@ -181,7 +184,53 @@ pub fn HostRuntimeState::new_host_value_future(
   self.async_state.host_future_values.set(future_id, {
     payload_ty: element_type,
     types,
-    value,
+    value: Ref(Some(value)),
+    pull: None,
+    cancel: None,
+  })
+  readable
+}
+
+///|
+/// Create a typed future whose value is produced on demand by the embedding.
+///
+/// `pull` must be non-blocking. Returning `Pending` delegates waiting to the
+/// embedding event loop installed on `HostRuntimeState`.
+pub fn HostRuntimeState::new_host_value_future_source(
+  self : HostRuntimeState,
+  table : ResourceTable,
+  element_type : ValType,
+  types : Array[TypeDef?],
+  pull : () -> HostFutureValuePoll raise ComponentRuntimeError,
+  cancel : () -> Unit,
+) -> Int raise ComponentRuntimeError {
+  stream_payload_info(Some(element_type), types) |> ignore
+  let future_id = self.async_state.next_future_id[0]
+  self.async_state.next_future_id[0] = future_id + 1
+  let readable = alloc_shared_handle(self.async_state, table.id)
+  self.async_state.future_endpoints.set(handle_key(table.id, readable), {
+    future_id,
+    is_readable: true,
+    creator_component_id: table.id,
+    in_waitable_set: Ref(false),
+  })
+  self.async_state.futures.set(future_id, {
+    payload_ty: Some(element_type),
+    pending_read: None,
+    pending_write: None,
+    readable_dropped: false,
+    writable_dropped: false,
+    read_done: false,
+    write_succeeded: false,
+    write_observed_readable_drop: false,
+    wrote_value: false,
+  })
+  self.async_state.host_future_values.set(future_id, {
+    payload_ty: element_type,
+    types,
+    value: Ref(None),
+    pull: Some(pull),
+    cancel: Some(cancel),
   })
   readable
 }
@@ -333,6 +382,14 @@ pub fn HostRuntimeState::drop_host_readable_stream(
   })
   remove_waitable_membership(self.async_state, table.id, readable)
   self.stream_table.endpoints.remove(key)
+  match self.stream_table.host_values.get(endpoint.stream_id) {
+    Some(source) =>
+      match source.cancel {
+        Some(cancel) => cancel()
+        None => ()
+      }
+    None => ()
+  }
   self.stream_table.host_values.remove(endpoint.stream_id)
   free_shared_handle(self.async_state, table.id, readable)
 }

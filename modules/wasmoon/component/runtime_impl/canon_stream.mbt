@@ -1651,6 +1651,15 @@ fn instantiate_canon_stream_drop_readable(
                 async_state, owner_component_id, handle,
               )
               table.endpoints.remove(handle_key(owner_component_id, handle))
+              match table.host_values.get(ep.stream_id) {
+                Some(source) =>
+                  match source.cancel {
+                    Some(cancel) => cancel()
+                    None => ()
+                  }
+                None => ()
+              }
+              table.host_values.remove(ep.stream_id)
               free_shared_handle(async_state, owner_component_id, handle)
               []
             }
