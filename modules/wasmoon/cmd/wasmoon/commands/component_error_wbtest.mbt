@@ -58,6 +58,64 @@ test "component command eval: minimal component validates ok" {
 }
 
 ///|
+test "WASI command status follows run result and structured exit" {
+  debug_inspect(
+    [
+      component_command_status([Variant(0, None)], None),
+      component_command_status([Variant(1, None)], None),
+      component_command_status([Variant(0, None)], Some(7)),
+    ],
+    content="[0, 1, 7]",
+  )
+}
+
+///|
+test "WASI command context preserves arguments and environment values" {
+  let ctx = component_command_context(
+    "command.wasm",
+    ["first", "second"],
+    ["LANG=C", "EMPTY="],
+    [],
+    "loopback",
+  ) catch {
+    e => return fail("could not build command context: \{e}")
+  }
+  defer ctx.close()
+  debug_inspect(
+    (ctx.arguments(), ctx.environment()),
+    content="([\"command.wasm\", \"first\", \"second\"], [(\"LANG\", \"C\"), (\"EMPTY\", \"\")])",
+  )
+}
+
+///|
+test "component command executes a pinned Preview 2 run export" {
+  let status = run_wasi_component_command(
+    "testsuite/fixtures/wasi-command-ok.component.wasm",
+    ["argument"],
+    ["LANG=C"],
+    [],
+    "deny",
+    true,
+    Text,
+  )
+  debug_inspect(status, content="0")
+}
+
+///|
+test "component command executes a pinned Preview 3 async run export" {
+  let status = run_wasi_component_command(
+    "testsuite/fixtures/wasi-command-async-ok.component.wasm",
+    [],
+    [],
+    [],
+    "deny",
+    true,
+    Text,
+  )
+  debug_inspect(status, content="0")
+}
+
+///|
 test "component-test json helper includes status fields" {
   let result = ScriptResult::ScriptResult()
   result.add_passed()

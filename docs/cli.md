@@ -40,6 +40,30 @@ Example:
 ./wasmoon test spec/i32.wast
 ```
 
+### Run a WASI Component Command
+
+```bash
+./wasmoon component command.component.wasm --run
+```
+
+The command must export the pinned `wasi:cli/run` interface from either
+Preview 2 `0.2.11` or Preview 3 `0.3.0-rc-2025-09-16`. Components are
+validated before instantiation.
+
+Filesystem and network authority are denied by default. Grant only the
+capabilities the command requires:
+
+```bash
+./wasmoon component command.component.wasm --run \
+  --arg input.txt \
+  --env LANG=C \
+  --dir /srv/data::/data \
+  --network loopback
+```
+
+`--network` accepts `deny`, `loopback`, or `all`. Standard input, output, and
+error are inherited by command execution.
+
 ### Explore Compilation
 
 ```bash

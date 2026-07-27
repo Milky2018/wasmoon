@@ -117,6 +117,9 @@ wasmoon explore --help
 
 # component
 wasmoon component path/to/component.wasm --validate
+wasmoon component path/to/command.component.wasm --run \
+  --dir /srv/data::/data \
+  --network loopback
 wasmoon component --help
 
 # component-test

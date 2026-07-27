@@ -34,6 +34,8 @@ pub fn run_settings() -> Unit
 
 pub fn run_testsuite(String, Bool, Bool) -> Unit
 
+pub fn run_wasi_component_command(String, Array[String], Array[String], Array[String], String, Bool, ComponentErrorFormat) -> Int
+
 pub fn run_wasm(String, String?, Array[String], Array[String], Array[String], Array[String], Array[String], Array[String], Bool, Bool, Bool, Int, Bool) -> Unit
 
 pub fn run_wat(String) -> Unit
@@ -78,6 +80,7 @@ pub(all) enum ComponentErrorCode {
   CompParseError
   CompValidateError
   CompUnsupported
+  CompRuntimeError
 } derive(Eq, @debug.Debug)
 pub impl Show for ComponentErrorCode
 

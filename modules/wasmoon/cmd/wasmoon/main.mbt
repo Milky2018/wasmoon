@@ -103,6 +103,26 @@ fn main {
           "validate": @clap.Arg::flag(
             help="Validate the component after parsing",
           ),
+          "run": @clap.Arg::flag(
+            help="Run a pinned WASI Preview 2 or Preview 3 command component",
+          ),
+          "arg": @clap.Arg::named(
+            nargs=Any,
+            help="Command arguments passed after the component path",
+          ),
+          "env": @clap.Arg::named(
+            nargs=Any,
+            help="Command environment entry in NAME=VALUE form",
+          ),
+          "dir": @clap.Arg::named(
+            nargs=Any,
+            help="Preopen HOST_DIR or HOST_DIR::GUEST_DIR",
+          ),
+          "network": @clap.Arg::named(
+            nargs=AtMost(1),
+            choices=@hashset.HashSet::from_array(["deny", "loopback", "all"]),
+            help="Network capability: deny (default), loopback, or all",
+          ),
           "no-wit-names": @clap.Arg::flag(
             help="Disable wasm-tools/WIT name validation (kebab-case/package-name checks)",
           ),
@@ -269,6 +289,7 @@ fn main {
               if positional.length() > 0 {
                 let dump = sub.flags.get("dump") is Some(true)
                 let validate = sub.flags.get("validate") is Some(true)
+                let run = sub.flags.get("run") is Some(true)
                 let wit_names = match sub.flags.get("no-wit-names") {
                   Some(true) => false
                   _ => true
@@ -282,13 +303,37 @@ fn main {
                     }
                   None => Text
                 }
-                let status = @commands.run_component_command(
-                  positional[0],
-                  dump,
-                  validate,
-                  wit_names,
-                  error_format,
-                )
+                let status = if run {
+                  @commands.run_wasi_component_command(
+                    positional[0],
+                    match sub.args.get("arg") {
+                      Some(values) => values
+                      None => []
+                    },
+                    match sub.args.get("env") {
+                      Some(values) => values
+                      None => []
+                    },
+                    match sub.args.get("dir") {
+                      Some(values) => values
+                      None => []
+                    },
+                    match sub.args.get("network") {
+                      Some([value]) => value
+                      _ => "deny"
+                    },
+                    wit_names,
+                    error_format,
+                  )
+                } else {
+                  @commands.run_component_command(
+                    positional[0],
+                    dump,
+                    validate,
+                    wit_names,
+                    error_format,
+                  )
+                }
                 if status != 0 {
                   @sys.exit(status)
                 }
