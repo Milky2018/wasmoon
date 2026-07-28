@@ -635,7 +635,7 @@ fn step_task_once_impl(
       resources,
       types,
       callee_table,
-      may_enter,
+      entry,
       cb_opt,
       async_abi
     ) => {
@@ -692,7 +692,7 @@ fn step_task_once_impl(
           let polled = poll_core(fn() raise ComponentRuntimeError {
             call_core_func_guarded_outcome(
               store,
-              may_enter,
+              entry,
               core_func,
               core_args,
               CallbackStep,
@@ -736,13 +736,7 @@ fn step_task_once_impl(
           }
           async_state.in_async_callback[0] = true
           let polled = poll_core(fn() raise ComponentRuntimeError {
-            call_core_func_guarded_outcome(
-              store,
-              may_enter,
-              cb,
-              args,
-              CallbackStep,
-            )
+            call_core_func_guarded_outcome(store, entry, cb, args, CallbackStep)
           })
           async_state.in_async_callback[0] = false
           let r = match polled {
@@ -775,7 +769,7 @@ fn step_task_once_impl(
             let polled = poll_core(fn() raise ComponentRuntimeError {
               call_core_func_guarded_outcome(
                 store,
-                may_enter,
+                entry,
                 cb,
                 [I32(6), I32(0), I32(0)],
                 CallbackStep,
@@ -815,7 +809,7 @@ fn step_task_once_impl(
           let polled = poll_core(fn() raise ComponentRuntimeError {
             call_core_func_guarded_outcome(
               store,
-              may_enter,
+              entry,
               cb,
               [I32(ev.code), I32(ev.index), I32(ev.payload)],
               CallbackStep,
@@ -860,7 +854,7 @@ fn step_task_once_impl(
         let polled = poll_core(fn() raise ComponentRuntimeError {
           call_core_func_guarded_outcome(
             store,
-            may_enter,
+            entry,
             core_func,
             core_args,
             Stackful,
@@ -909,7 +903,7 @@ fn step_task_once_impl(
         let polled = poll_core(fn() raise ComponentRuntimeError {
           call_core_func_guarded_outcome(
             store,
-            may_enter,
+            entry,
             core_func,
             core_args,
             Stackful,
@@ -1363,11 +1357,11 @@ fn call_component_func_in_task(
       resources,
       types,
       callee_table,
-      may_enter,
+      entry,
       cb_opt,
       async_abi
     ) => {
-      if !may_enter.val {
+      if !entry.may_enter() {
         raise CanonCallError("cannot enter component instance")
       }
       if func_type.is_async {
@@ -1407,7 +1401,7 @@ fn call_component_func_in_task(
               store,
               call_core_func_guarded_outcome(
                 store,
-                may_enter,
+                entry,
                 core_func,
                 core_args,
                 CallbackStep,
@@ -1431,7 +1425,7 @@ fn call_component_func_in_task(
                   store,
                   call_core_func_guarded_outcome(
                     store,
-                    may_enter,
+                    entry,
                     cb,
                     [I32(0), I32(0), I32(0)],
                     CallbackStep,
@@ -1517,14 +1511,14 @@ fn call_component_func_in_task(
             store,
             call_core_func_guarded_outcome(
               store,
-              may_enter,
+              entry,
               core_func,
               core_args,
               Stackful,
             ),
           )
         } else {
-          call_core_func_guarded(store, may_enter, core_func, core_args)
+          call_core_func_guarded(store, entry, core_func, core_args)
         }
       } catch {
         error => {
@@ -1568,7 +1562,7 @@ fn call_component_func_in_task(
         Some(pr) => {
           let prev = canon_may_leave[0]
           canon_may_leave[0] = false
-          (call_core_func_guarded(store, may_enter, pr, core_results) catch {
+          (call_core_func_guarded(store, entry, pr, core_results) catch {
             e => {
               canon_may_leave[0] = prev
               raise e

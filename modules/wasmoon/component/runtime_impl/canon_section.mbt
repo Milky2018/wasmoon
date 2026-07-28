@@ -8,7 +8,7 @@ fn process_canon_section(
   payload : Bytes,
   state : BuildState,
   store : @runtime.Store,
-  may_enter_self : Ref[Bool],
+  entry_state : ComponentInstanceEntryState,
 ) -> Unit raise ComponentRuntimeError {
   let canons = parse_canon_section(payload) catch {
     e => raise CoreModuleInstantiateError(e.to_string())
@@ -17,7 +17,7 @@ fn process_canon_section(
     match c {
       Lift(core_func_idx, opts, type_idx) =>
         instantiate_canon_lift(
-          core_func_idx, opts, type_idx, state, may_enter_self,
+          core_func_idx, opts, type_idx, state, entry_state,
         )
       Lower(func_idx, opts) =>
         instantiate_canon_lower(func_idx, opts, state, store)

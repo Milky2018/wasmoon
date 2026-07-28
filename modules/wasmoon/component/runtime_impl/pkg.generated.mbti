@@ -143,7 +143,7 @@ pub(all) enum ComponentExtern {
 pub impl Show for ComponentExtern
 
 pub(all) enum ComponentFunc {
-  Lifted(CoreFuncRef, @model.FuncType, CanonResources, Array[@model.TypeDef?], ResourceTable, @ref.Ref[Bool], CoreFuncRef?, Bool)
+  Lifted(CoreFuncRef, @model.FuncType, CanonResources, Array[@model.TypeDef?], ResourceTable, ComponentInstanceEntryState, CoreFuncRef?, Bool)
   Host(@model.FuncType, Array[@model.TypeDef?], (Array[ComponentValue], ResourceTable) -> Array[ComponentValue] raise ComponentRuntimeError)
   HostAsync(@model.FuncType, Array[@model.TypeDef?], (Array[ComponentValue], ResourceTable) -> HostFuture raise ComponentRuntimeError)
 }
@@ -174,6 +174,8 @@ pub(all) struct ComponentInstance {
 pub fn ComponentInstance::call_exported_func(Self, String, Array[ComponentValue]) -> Array[ComponentValue] raise ComponentRuntimeError
 pub fn ComponentInstance::get_core_instance(Self, Int) -> CoreInstance?
 pub fn ComponentInstance::get_export(Self, String) -> ComponentExtern?
+
+type ComponentInstanceEntryState derive(@debug.Debug)
 
 type ComponentLinker
 pub fn ComponentLinker::ComponentLinker() -> Self
@@ -248,8 +250,9 @@ pub(all) enum CoreExecutionOutcome {
 pub struct CoreExecutionRequest {
   style : CoreCallStyle
   backend : CoreBackendPolicy
+  suspension : CoreSuspensionPolicy
 } derive(Eq, @debug.Debug)
-pub fn CoreExecutionRequest::CoreExecutionRequest(CoreCallStyle, CoreBackendPolicy) -> Self
+pub fn CoreExecutionRequest::CoreExecutionRequest(CoreCallStyle, CoreBackendPolicy, CoreSuspensionPolicy) -> Self
 
 pub(all) struct CoreFuncRef {
   instance : @runtime.ModuleInstance
@@ -271,6 +274,11 @@ pub impl Show for CoreInstance
 pub(all) enum CoreSuspension {
   Yield
   Wait(Int64)
+} derive(Eq, @debug.Debug)
+
+pub(all) enum CoreSuspensionPolicy {
+  RunToReturn
+  Resumable
 } derive(Eq, @debug.Debug)
 
 type DecodedCallbackCode derive(@debug.Debug)

@@ -252,7 +252,18 @@ test "component runtime: core execution crosses the configured engine seam" {
     content=(
       #|(
       #|  [(1, 0)],
-      #|  [(0, 0, [I32(41)], { style: RunToCompletion, backend: PreferNative })],
+      #|  [
+      #|    (
+      #|      0,
+      #|      0,
+      #|      [I32(41)],
+      #|      {
+      #|        style: RunToCompletion,
+      #|        backend: PreferNative,
+      #|        suspension: RunToReturn,
+      #|      },
+      #|    ),
+      #|  ],
       #|  [S32(42)],
       #|)
     ),
@@ -263,17 +274,33 @@ test "component runtime: core execution crosses the configured engine seam" {
 test "component runtime: core call style is independent from backend policy" {
   debug_inspect(
     [
-      @runtime_impl.CoreExecutionRequest(RunToCompletion, PreferNative),
-      @runtime_impl.CoreExecutionRequest(CallbackStep, PreferNative),
-      @runtime_impl.CoreExecutionRequest(Stackful, PreferNative),
-      @runtime_impl.CoreExecutionRequest(RunToCompletion, InterpreterOnly),
+      @runtime_impl.CoreExecutionRequest(
+        RunToCompletion,
+        PreferNative,
+        RunToReturn,
+      ),
+      @runtime_impl.CoreExecutionRequest(CallbackStep, PreferNative, Resumable),
+      @runtime_impl.CoreExecutionRequest(Stackful, PreferNative, Resumable),
+      @runtime_impl.CoreExecutionRequest(
+        RunToCompletion,
+        InterpreterOnly,
+        RunToReturn,
+      ),
     ],
     content=(
       #|[
-      #|  { style: RunToCompletion, backend: PreferNative },
-      #|  { style: CallbackStep, backend: PreferNative },
-      #|  { style: Stackful, backend: PreferNative },
-      #|  { style: RunToCompletion, backend: InterpreterOnly },
+      #|  {
+      #|    style: RunToCompletion,
+      #|    backend: PreferNative,
+      #|    suspension: RunToReturn,
+      #|  },
+      #|  { style: CallbackStep, backend: PreferNative, suspension: Resumable },
+      #|  { style: Stackful, backend: PreferNative, suspension: Resumable },
+      #|  {
+      #|    style: RunToCompletion,
+      #|    backend: InterpreterOnly,
+      #|    suspension: RunToReturn,
+      #|  },
       #|]
     ),
   )

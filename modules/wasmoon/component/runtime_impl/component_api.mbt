@@ -28,6 +28,69 @@ pub fn HostFuture::HostFuture(
 }
 
 ///|
+/// Entry state for one component instance.
+///
+/// `ready` prevents lowered imports from entering a partially-instantiated
+/// instance. `active` is a dynamic execution guard and is released while a
+/// stackful invocation is suspended. `poisoned` is permanent after a trap.
+struct ComponentInstanceEntryState {
+  ready : Ref[Bool]
+  active : Ref[Bool]
+  poisoned : Ref[Bool]
+} derive(Debug)
+
+///|
+fn ComponentInstanceEntryState::new() -> ComponentInstanceEntryState {
+  { ready: Ref(false), active: Ref(false), poisoned: Ref(false) }
+}
+
+///|
+fn ComponentInstanceEntryState::enable(
+  self : ComponentInstanceEntryState,
+) -> Unit {
+  self.ready.val = true
+}
+
+///|
+fn ComponentInstanceEntryState::may_queue(
+  self : ComponentInstanceEntryState,
+) -> Bool {
+  self.ready.val && !self.poisoned.val
+}
+
+///|
+fn ComponentInstanceEntryState::may_enter(
+  self : ComponentInstanceEntryState,
+) -> Bool {
+  self.may_queue() && !self.active.val
+}
+
+///|
+fn ComponentInstanceEntryState::enter(
+  self : ComponentInstanceEntryState,
+) -> Unit raise ComponentRuntimeError {
+  if !self.may_enter() {
+    raise CanonCallError("cannot enter component instance")
+  }
+  self.active.val = true
+}
+
+///|
+fn ComponentInstanceEntryState::leave(
+  self : ComponentInstanceEntryState,
+) -> Unit {
+  self.active.val = false
+}
+
+///|
+fn ComponentInstanceEntryState::poison(
+  self : ComponentInstanceEntryState,
+) -> Unit {
+  self.active.val = false
+  self.poisoned.val = true
+}
+
+///|
 struct HostEventLoop {
   wait : () -> Bool raise ComponentRuntimeError
 }
@@ -39,15 +102,15 @@ impl Debug for HostEventLoop with fn to_repr(_self) {
 
 ///|
 pub(all) enum ComponentFunc {
-  // `may_enter` is used to enforce "cannot enter component instance" during
-  // instantiation when core module start code calls lowered functions.
+  // The entry state separates partial instantiation, active execution, and
+  // permanent poisoning.
   Lifted(
     CoreFuncRef,
     FuncType,
     CanonResources,
     Array[TypeDef?],
     ResourceTable,
-    Ref[Bool],
+    ComponentInstanceEntryState,
     // Optional async callback core function (used by `canon lift ... async (callback ...)`).
     CoreFuncRef?,
     // Whether this canonical lift uses the async ABI (`canon lift ... async ...`).

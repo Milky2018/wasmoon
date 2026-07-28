@@ -36,7 +36,7 @@ fn instantiate_component(
     state.resource_table.id,
     state.resource_table,
   )
-  let may_enter_self : Ref[Bool] = Ref(false)
+  let entry_state = ComponentInstanceEntryState::new()
   let store = linker.get_store()
   for section in component.binary.sections {
     match section.id {
@@ -278,7 +278,7 @@ fn instantiate_component(
           state.types.push(Some(t2))
         }
       }
-      8 => process_canon_section(section.payload, state, store, may_enter_self)
+      8 => process_canon_section(section.payload, state, store, entry_state)
       9 => {
         let start = parse_start_section(section.payload) catch {
           e => raise CoreModuleInstantiateError(e.to_string())
@@ -374,7 +374,7 @@ fn instantiate_component(
       _ => ()
     }
   }
-  may_enter_self.val = true
+  entry_state.enable()
   let instance : ComponentInstance = {
     name,
     types: state.types,

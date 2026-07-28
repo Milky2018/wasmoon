@@ -21,18 +21,32 @@ pub(all) enum CoreBackendPolicy {
 } derive(Debug, Eq)
 
 ///|
+/// Whether this particular core entry must preserve its activation when a
+/// canonical host intrinsic suspends.
+///
+/// This is independent of `CoreCallStyle`: a callback step normally returns a
+/// callback code, but may still call a sync-lowered async import before it
+/// returns.
+pub(all) enum CoreSuspensionPolicy {
+  RunToReturn
+  Resumable
+} derive(Debug, Eq)
+
+///|
 /// Typed contract passed from component execution to a core backend adapter.
 pub struct CoreExecutionRequest {
   style : CoreCallStyle
   backend : CoreBackendPolicy
+  suspension : CoreSuspensionPolicy
 } derive(Debug, Eq)
 
 ///|
 pub fn CoreExecutionRequest::CoreExecutionRequest(
   style : CoreCallStyle,
   backend : CoreBackendPolicy,
+  suspension : CoreSuspensionPolicy,
 ) -> CoreExecutionRequest {
-  { style, backend }
+  { style, backend, suspension }
 }
 
 ///|
@@ -242,8 +256,8 @@ pub fn interpreter_core_execution_engine() -> CoreExecutionEngine {
     args,
     request,
   ) raise ComponentRuntimeError {
-    match request.style {
-      RunToCompletion | CallbackStep => {
+    match request.suspension {
+      RunToReturn => {
         let results = @executor.call_func_by_index(
           store, instance, func_idx, args,
         ) catch {
@@ -251,7 +265,7 @@ pub fn interpreter_core_execution_engine() -> CoreExecutionEngine {
         }
         Returned(results)
       }
-      Stackful => {
+      Resumable => {
         let outcome = @executor.call_func_by_index_resumable(
           store,
           instance,

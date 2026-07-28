@@ -114,6 +114,11 @@ fn call_core_func_outcome(
       } else {
         InterpreterOnly
       },
+      if style is Stackful || core_func.may_suspend {
+        Resumable
+      } else {
+        RunToReturn
+      },
     ),
   ) catch {
     e => {
@@ -172,56 +177,53 @@ fn call_core_func_outcome(
 ///|
 fn call_core_func_guarded(
   store : @runtime.Store,
-  may_enter : Ref[Bool],
+  entry : ComponentInstanceEntryState,
   core_func : CoreFuncRef,
   args : Array[@types.Value],
   style? : CoreCallStyle = RunToCompletion,
 ) -> Array[@types.Value] raise ComponentRuntimeError {
-  let prev = may_enter.val
-  // Mark this component instance as in-progress to prevent re-entrancy via
-  // lowered functions (component-spec/async/trap-on-reenter.wast).
-  may_enter.val = false
+  entry.enter()
   let out = call_core_func(store, core_func, args, style~) catch {
-    e =>
-      // A trap while executing a component instance permanently poisons that
-      // instance. Subsequent entry attempts must fail instead of observing
-      // partially-updated canonical ABI state.
+    e => {
+      entry.poison()
       raise e
+    }
   }
-  may_enter.val = prev
+  entry.leave()
   out
 }
 
 ///|
 fn guard_core_outcome(
   outcome : CoreExecutionOutcome,
-  may_enter : Ref[Bool],
-  previous : Bool,
+  entry : ComponentInstanceEntryState,
 ) -> CoreExecutionOutcome {
   match outcome {
     Returned(results) => {
-      may_enter.val = previous
+      entry.leave()
       Returned(results)
     }
     Suspended(reason, continuation) => {
       // A captured continuation is not actively executing guest code. Release
       // the dynamic entry guard while it waits; task ancestry still prevents
       // prohibited async re-entry. Re-acquire it immediately before resuming.
-      may_enter.val = previous
+      entry.leave()
       Suspended(
         reason,
         CoreContinuation(
           fn() raise ComponentRuntimeError {
-            if !may_enter.val {
-              raise CanonCallError("cannot enter component instance")
+            entry.enter()
+            let resumed = continuation.continue_execution() catch {
+              e => {
+                entry.poison()
+                raise e
+              }
             }
-            may_enter.val = false
-            let resumed = continuation.continue_execution()
-            guard_core_outcome(resumed, may_enter, previous)
+            guard_core_outcome(resumed, entry)
           },
           fn() {
             continuation.cancel()
-            may_enter.val = previous
+            entry.leave()
           },
         ),
       )
@@ -232,15 +234,19 @@ fn guard_core_outcome(
 ///|
 fn call_core_func_guarded_outcome(
   store : @runtime.Store,
-  may_enter : Ref[Bool],
+  entry : ComponentInstanceEntryState,
   core_func : CoreFuncRef,
   args : Array[@types.Value],
   style : CoreCallStyle,
 ) -> CoreExecutionOutcome raise ComponentRuntimeError {
-  let previous = may_enter.val
-  may_enter.val = false
-  let outcome = call_core_func_outcome(store, core_func, args, style)
-  guard_core_outcome(outcome, may_enter, previous)
+  entry.enter()
+  let outcome = call_core_func_outcome(store, core_func, args, style) catch {
+    e => {
+      entry.poison()
+      raise e
+    }
+  }
+  guard_core_outcome(outcome, entry)
 }
 
 ///|

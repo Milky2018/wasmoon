@@ -21,7 +21,7 @@ fn instantiate_canon_lift(
   opts : Array[CanonOpt],
   type_idx : Int,
   state : BuildState,
-  may_enter_self : Ref[Bool],
+  entry_state : ComponentInstanceEntryState,
 ) -> Unit raise ComponentRuntimeError {
   if core_func_idx < 0 || core_func_idx >= state.core_funcs.length() {
     raise InvalidCoreFuncIndex(core_func_idx)
@@ -46,7 +46,7 @@ fn instantiate_canon_lift(
       resources,
       state.types,
       state.resource_table,
-      may_enter_self,
+      entry_state,
       callback,
       async_abi,
     ),
@@ -109,7 +109,7 @@ fn instantiate_canon_lower(
       if !canon_may_leave[0] {
         trap_canon("cannot leave component instance")
       }
-      if func is Lifted(_, _, _, _, _, may_enter, _, _) && !may_enter.val {
+      if func is Lifted(_, _, _, _, _, entry, _, _) && !entry.may_queue() {
         trap_canon("wasm trap: cannot enter component instance")
       }
       let live_caller_table = registered_resource_table(
@@ -188,6 +188,10 @@ fn instantiate_canon_lower(
       let instance_backpressure = backpressure_value_for_instance(
         async_state, inst_id,
       )
+      let entry_available = match func {
+        Lifted(_, _, _, _, _, entry, _, _) => entry.may_enter()
+        _ => true
+      }
       let task : CallbackTask = {
         func,
         args: component_args,
@@ -265,7 +269,7 @@ fn instantiate_canon_lower(
         migrate_task_meta(async_state, from_id, to_id)
       }
 
-      if instance_backpressure == 0 && inflight == 0 {
+      if instance_backpressure == 0 && inflight == 0 && entry_available {
         let is_callback = match func {
           Lifted(_, _ft, _res, _tys, _tbl, _may_enter, Some(_cb), _async_abi) =>
             true
@@ -276,23 +280,21 @@ fn instantiate_canon_lower(
           // RETURNED=2 without consuming the shared handle space (otherwise it would
           // perturb handle numbering observed by the core code; see empty-wait.wast).
           let tmp_task_id = alloc_task_id(async_state)
-          let mut ok = true
           canon_in_handleless_step[0] = true
           init_task_meta(async_state, tmp_task_id, meta_inst_id, caller_task_id)
           push_task(async_state, tmp_task_id, true)
           let step = step_task_once(task, store, live_caller_table, async_state) catch {
-            _e => {
-              ok = false
-              // Reset state so the real subtask can start fresh.
-              task.started[0] = false
-              task.code[0] = 0
-              task.waiting_set[0] = None
-              Blocked
+            e => {
+              pop_task(async_state)
+              canon_in_handleless_step[0] = false
+              cleanup_task_id(tmp_task_id)
+              trap_canon(canon_err_message(e))
+              return finish_call([I32(0)])
             }
           }
           pop_task(async_state)
           canon_in_handleless_step[0] = false
-          if ok && step == Done {
+          if step == Done {
             if func_type.result is Some(_) && retptr is Some(p) {
               let vals = match take_task_result(async_state, tmp_task_id) {
                 Some(v) => v
@@ -339,8 +341,7 @@ fn instantiate_canon_lower(
           // and then continue running (e.g. stream producers). For async-lowering, return
           // RETURNED=2 immediately and keep the task alive as a detached background subtask so the
           // event loop can continue driving it (component-spec/async/partial-stream-copies.wast).
-          if ok &&
-            step != Done &&
+          if step != Done &&
             async_state.task_returned.get(tmp_task_id) is Some(true) {
             if retptr is Some(p) {
               let vals = match async_state.task_results.get(tmp_task_id) {
@@ -453,22 +454,21 @@ fn instantiate_canon_lower(
         // register any pending waits (e.g. future.read/stream.read) before returning STARTED.
         // If it completes immediately, return RETURNED=2 without consuming the shared handle space.
         let tmp_task_id = alloc_task_id(async_state)
-        let mut ok = true
         canon_in_handleless_step[0] = true
         init_task_meta(async_state, tmp_task_id, meta_inst_id, caller_task_id)
         push_task(async_state, tmp_task_id, true)
         let step = step_task_once(task, store, live_caller_table, async_state) catch {
-          _e => {
-            ok = false
-            task.started[0] = false
-            task.code[0] = 0
-            task.waiting_set[0] = None
-            Blocked
+          e => {
+            pop_task(async_state)
+            canon_in_handleless_step[0] = false
+            cleanup_task_id(tmp_task_id)
+            trap_canon(canon_err_message(e))
+            return finish_call([I32(0)])
           }
         }
         pop_task(async_state)
         canon_in_handleless_step[0] = false
-        if ok && step == Done {
+        if step == Done {
           if func_type.result is Some(_) && retptr is Some(p) {
             let vals = match take_task_result(async_state, tmp_task_id) {
               Some(v) => v
@@ -583,7 +583,7 @@ fn instantiate_canon_lower(
     let host = fn(
       args : Array[@types.Value],
     ) -> Array[@types.Value] raise @runtime.RuntimeError {
-      if func is Lifted(_, _, _, _, _, may_enter, _, _) && !may_enter.val {
+      if func is Lifted(_, _, _, _, _, entry, _, _) && !entry.may_enter() {
         trap_canon("wasm trap: cannot enter component instance")
       }
       if !canon_may_leave[0] {

@@ -128,7 +128,7 @@ fn component_jit_execution_engine() -> @runtime_impl.CoreExecutionEngine {
           "component JIT context is missing for core instance \{instance.store_idx}",
         )
       }
-      if request.style is Stackful {
+      if request.suspension is Resumable {
         context.pending_suspension[0] = None
         context.suspension_enabled[0] = true
         defer {
