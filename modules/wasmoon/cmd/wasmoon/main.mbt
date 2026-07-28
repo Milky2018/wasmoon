@@ -388,7 +388,7 @@ fn main {
                 let status = @commands.run_component_script_cli(
                   positional[0],
                   error_format,
-                  use_jit=!sub.args.contains("no-jit"),
+                  use_jit=!(sub.flags.get("no-jit") is Some(true)),
                 )
                 if status != 0 {
                   @sys.exit(status)
