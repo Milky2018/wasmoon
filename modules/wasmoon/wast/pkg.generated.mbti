@@ -90,6 +90,7 @@ pub(all) suberror JITCoreCallError {
   Cancelled
   Exit(Int)
   GcSetupFailed(String)
+  ExecutionStateFailure(@wasmoon_jit.NativeExecutionStateError)
 } derive(Eq, @debug.Debug)
 pub impl Show for JITCoreCallError
 

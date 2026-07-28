@@ -371,6 +371,7 @@ pub struct Store {
   jit_tables : Array[@wasmoon_jit.JITTable?]
   mut wasi_mem_addr : Int?
   mut wasi_ctx_handle : Int
+  native_execution : @wasmoon_jit.NativeExecutionState
 } derive(@debug.Debug)
 pub fn Store::Store() -> Self
 pub fn Store::alloc_array(Self, Int, Array[@types.Value]) -> Int raise RuntimeError
@@ -417,6 +418,7 @@ pub fn Store::get_wasi_memory(Self) -> Memory
 pub fn Store::has_c_heap(Self) -> Bool
 pub fn Store::is_gc_valid(Self, Int) -> Bool
 pub fn Store::maybe_collect(Self, additional_roots? : Array[@types.Value], threshold? : Double) -> Int
+pub fn Store::native_execution_state(Self) -> @wasmoon_jit.NativeExecutionState
 pub fn Store::register_instance(Self, ModuleInstance) -> Int
 pub fn Store::set_module_types(Self, Array[@types.SubType], rec_groups? : Array[Int]) -> Unit
 pub fn Store::set_wasi_ctx_handle(Self, Int) -> Unit

@@ -343,6 +343,14 @@ pub suberror JitPipelineError {
 } derive(@debug.Debug)
 pub impl Show for JitPipelineError
 
+pub suberror NativeExecutionStateError {
+  UnknownInvocation(Int64)
+  InvocationNotActive(Int64)
+  InvocationNotParked(Int64)
+  InvocationNotCurrent(Int64)
+} derive(Eq, @debug.Debug)
+pub impl Show for NativeExecutionStateError
+
 // Types and methods
 pub(all) struct ArtifactCompatibility {
   target : @artifact.TargetSpec
@@ -621,6 +629,32 @@ pub struct MemoryInfo {
   max_pages : Int?
 }
 pub fn MemoryInfo::MemoryInfo(Int64, Int64, Int?) -> Self
+
+type NativeExecutionState
+pub fn NativeExecutionState::NativeExecutionState() -> Self
+pub fn NativeExecutionState::active_depth(Self) -> Int
+pub fn NativeExecutionState::begin(Self, release? : () -> Unit) -> NativeInvocationHandle
+pub fn NativeExecutionState::current_invocation(Self) -> Int64?
+pub fn NativeExecutionState::live_count(Self) -> Int
+pub fn NativeExecutionState::parked_count(Self) -> Int
+pub fn NativeExecutionState::release_if_live(Self, Int64) -> Unit
+pub impl @debug.Debug for NativeExecutionState
+
+type NativeInvocationHandle
+pub fn NativeInvocationHandle::cancel(Self) -> Unit raise NativeExecutionStateError
+pub fn NativeInvocationHandle::complete(Self) -> Unit raise NativeExecutionStateError
+pub fn NativeInvocationHandle::id(Self) -> Int64
+pub fn NativeInvocationHandle::park(Self) -> Unit raise NativeExecutionStateError
+pub fn NativeInvocationHandle::phase(Self) -> NativeInvocationPhase raise NativeExecutionStateError
+pub fn NativeInvocationHandle::reactivate(Self) -> Unit raise NativeExecutionStateError
+pub fn NativeInvocationHandle::release_if_live(Self) -> Unit
+pub fn NativeInvocationHandle::resource_id(Self) -> Int64 raise NativeExecutionStateError
+pub impl @debug.Debug for NativeInvocationHandle
+
+pub(all) enum NativeInvocationPhase {
+  Active
+  Parked
+} derive(Eq, @debug.Debug)
 
 type NativeJITContext
 pub fn NativeJITContext::alloc_guarded_memory(Self, Int, Int?) -> Int64

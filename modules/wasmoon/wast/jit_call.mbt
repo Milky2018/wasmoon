@@ -8,6 +8,7 @@ pub(all) suberror JITCoreCallError {
   Cancelled
   Exit(Int)
   GcSetupFailed(String)
+  ExecutionStateFailure(@wasmoon_jit.NativeExecutionStateError)
 } derive(Debug, Eq)
 
 ///|
@@ -126,10 +127,15 @@ pub fn JITModuleContext::call_core_func(
     }
     None => ()
   }
+  let invocation = store.native_execution_state().begin()
+  defer invocation.release_if_live()
   let raw_results = self.jit_module.call_with_context(func, encoded_args) catch {
     JITTrap(message) => raise Trap(message)
     JITCancelled => raise Cancelled
     JITExit(code) => raise Exit(code)
+  }
+  invocation.complete() catch {
+    error => raise ExecutionStateFailure(error)
   }
   decode_jit_entry_results(
     raw_results,

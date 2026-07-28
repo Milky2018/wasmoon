@@ -50,6 +50,8 @@ pub struct Store {
   // Opaque WASI context handle (for WAST runner to store WASI context)
   // This avoids circular dependency between runtime and wasi packages
   mut wasi_ctx_handle : Int
+  // Native invocation/fiber lifetimes belong to the Store, not a JIT module.
+  native_execution : @wasmoon_jit.NativeExecutionState
 } derive(Debug)
 
 ///|
@@ -107,6 +109,7 @@ pub fn Store::Store() -> Store {
     jit_tables: [],
     wasi_mem_addr: None,
     wasi_ctx_handle: 0,
+    native_execution: @wasmoon_jit.NativeExecutionState(),
   }
 }
 
@@ -135,7 +138,16 @@ pub fn Store::with_c_heap() -> Store {
     jit_tables: [],
     wasi_mem_addr: None,
     wasi_ctx_handle: 0,
+    native_execution: @wasmoon_jit.NativeExecutionState(),
   }
+}
+
+///|
+/// Return the Store-owned native invocation registry.
+pub fn Store::native_execution_state(
+  self : Store,
+) -> @wasmoon_jit.NativeExecutionState {
+  self.native_execution
 }
 
 ///|
