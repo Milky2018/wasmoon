@@ -112,40 +112,25 @@ fn filesystem_string_arg(
 }
 
 ///|
-fn normalize_capability_path(path : String) -> Array[String]? {
+fn capability_parent_and_leaf(path : String) -> (String, String)? {
   if path == "" || path.has_prefix("/") {
     return None
   }
   let parts : Array[String] = []
   for part in path.split("/") {
-    if part == "" || part == "." {
+    if part == "" {
       continue
     }
-    if part == ".." {
-      if parts.length() == 0 {
-        return None
-      }
-      parts.pop() |> ignore
-    } else {
-      parts.push(part.to_owned())
-    }
+    parts.push(part.to_owned())
   }
   if parts.length() == 0 {
-    None
-  } else {
-    Some(parts)
+    return None
   }
-}
-
-///|
-fn capability_parent_and_leaf(path : String) -> (String, String)? {
-  match normalize_capability_path(path) {
-    None => None
-    Some(parts) => {
-      let leaf = parts.pop().unwrap()
-      Some((parts.join("/"), leaf))
-    }
+  let leaf = parts.pop().unwrap()
+  if leaf == "." || leaf == ".." {
+    return None
   }
+  Some((parts.join("/"), leaf))
 }
 
 ///|

@@ -64,102 +64,257 @@ static int wasmoon_wasi_path_is_within_base(
   const char *target_real
 );
 
-static int wasmoon_wasi_same_file(const struct stat *left, const struct stat *right) {
-  return left->st_dev == right->st_dev && left->st_ino == right->st_ino;
+static void wasmoon_wasi_close_fd_stack(int *fds, size_t length) {
+  for (size_t i = 0; i < length; i++) close(fds[i]);
 }
 
-static int wasmoon_wasi_directory_is_beneath(int root_fd, int candidate_fd) {
-  struct stat root_stat;
-  if (fstat(root_fd, &root_stat) != 0 || !S_ISDIR(root_stat.st_mode)) return 0;
-
-  int current_fd = dup(candidate_fd);
-  if (current_fd < 0) return 0;
-
-  for (int depth = 0; depth < 1024; depth++) {
-    struct stat current_stat;
-    if (fstat(current_fd, &current_stat) != 0) {
-      close(current_fd);
+static int wasmoon_wasi_push_fd(int **fds, size_t *length, size_t *capacity, int fd) {
+  if (*length == *capacity) {
+    if (*capacity > SIZE_MAX / 2 / sizeof(int)) {
+      errno = ENOMEM;
       return 0;
     }
-    if (wasmoon_wasi_same_file(&root_stat, &current_stat)) {
-      close(current_fd);
-      return 1;
-    }
-
-    int parent_fd = openat(current_fd, "..", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
-    if (parent_fd < 0) {
-      close(current_fd);
+    size_t next_capacity = *capacity == 0 ? 8 : *capacity * 2;
+    int *next = (int *)realloc(*fds, next_capacity * sizeof(int));
+    if (!next) {
+      errno = ENOMEM;
       return 0;
     }
-    struct stat parent_stat;
-    if (fstat(parent_fd, &parent_stat) != 0) {
-      close(parent_fd);
-      close(current_fd);
-      return 0;
-    }
-    if (wasmoon_wasi_same_file(&current_stat, &parent_stat)) {
-      close(parent_fd);
-      close(current_fd);
-      return 0;
-    }
-    close(current_fd);
-    current_fd = parent_fd;
+    *fds = next;
+    *capacity = next_capacity;
   }
-
-  close(current_fd);
-  errno = ELOOP;
-  return 0;
-}
-
-static int wasmoon_wasi_fd_path(int fd, char *buffer, size_t buffer_size) {
-#if defined(__APPLE__)
-  return fcntl(fd, F_GETPATH, buffer) == 0;
-#elif defined(__linux__)
-  char proc_path[64];
-  int length = snprintf(proc_path, sizeof(proc_path), "/proc/self/fd/%d", fd);
-  if (length < 0 || (size_t)length >= sizeof(proc_path)) return 0;
-  ssize_t written = readlink(proc_path, buffer, buffer_size - 1);
-  if (written < 0 || (size_t)written >= buffer_size) return 0;
-  buffer[written] = '\0';
+  (*fds)[*length] = fd;
+  *length += 1;
   return 1;
-#else
-  (void)fd;
-  (void)buffer;
-  (void)buffer_size;
-  return 0;
-#endif
 }
 
-static int wasmoon_wasi_object_is_beneath(int root_fd, int object_fd) {
-  struct stat object_stat;
-  if (fstat(object_fd, &object_stat) != 0) return 0;
-  if (S_ISDIR(object_stat.st_mode)) {
-    return wasmoon_wasi_directory_is_beneath(root_fd, object_fd);
-  }
-
-  char root_path[PATH_MAX];
-  char object_path[PATH_MAX];
-  if (!wasmoon_wasi_fd_path(root_fd, root_path, sizeof(root_path)) ||
-      !wasmoon_wasi_fd_path(object_fd, object_path, sizeof(object_path))) {
-    return 0;
-  }
-  return wasmoon_wasi_path_is_within_base(root_path, object_path);
+static int wasmoon_wasi_path_has_component(const char *path) {
+  while (*path == '/') path++;
+  return *path != '\0';
 }
 
-static int wasmoon_wasi_open_parent_beneath_impl(int root_fd, const char *path) {
+static int wasmoon_wasi_is_symlink_at(int dir_fd, const char *name) {
+  struct stat stat_buffer;
+  return fstatat(dir_fd, name, &stat_buffer, AT_SYMLINK_NOFOLLOW) == 0 &&
+         S_ISLNK(stat_buffer.st_mode);
+}
+
+static char *wasmoon_wasi_prepend_symlink_target(
+  const char *target,
+  const char *remaining
+) {
+  size_t target_length = strlen(target);
+  while (*remaining == '/') remaining++;
+  size_t remaining_length = strlen(remaining);
+  size_t separator_length = remaining_length == 0 ? 0 : 1;
+  if (target_length > SIZE_MAX - remaining_length) {
+    errno = ENAMETOOLONG;
+    return NULL;
+  }
+  size_t combined_length = target_length + remaining_length;
+  if (combined_length > SIZE_MAX - separator_length - 1) {
+    errno = ENAMETOOLONG;
+    return NULL;
+  }
+  char *result = (char *)malloc(
+    target_length + separator_length + remaining_length + 1
+  );
+  if (!result) {
+    errno = ENOMEM;
+    return NULL;
+  }
+  memcpy(result, target, target_length);
+  if (separator_length != 0) result[target_length] = '/';
+  memcpy(
+    result + target_length + separator_length,
+    remaining,
+    remaining_length + 1
+  );
+  return result;
+}
+
+// Resolve from the capability root one component at a time. Keeping every
+// descended directory open makes ".." a stack operation and prevents rename
+// races from turning it into ambient parent traversal.
+static int wasmoon_wasi_open_beneath_impl(
+  int root_fd,
+  const char *path,
+  int flags,
+  int mode,
+  int follow_final
+) {
   if (!path || path[0] == '/') {
     errno = EPERM;
     return -1;
   }
-  const char *relative = path[0] == '\0' ? "." : path;
-  int fd = openat(root_fd, relative, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
-  if (fd < 0) return -1;
-  if (!wasmoon_wasi_directory_is_beneath(root_fd, fd)) {
-    close(fd);
-    errno = EPERM;
+#ifndef O_NOFOLLOW
+  (void)root_fd;
+  (void)flags;
+  (void)mode;
+  (void)follow_final;
+  errno = ENOTSUP;
+  return -1;
+#else
+  int *fds = NULL;
+  size_t fd_length = 0;
+  size_t fd_capacity = 0;
+  int root_copy = dup(root_fd);
+  if (root_copy < 0) return -1;
+  if (!wasmoon_wasi_push_fd(&fds, &fd_length, &fd_capacity, root_copy)) {
+    int saved_errno = errno;
+    close(root_copy);
+    free(fds);
+    errno = saved_errno;
     return -1;
   }
-  return fd;
+
+  char *work = strdup(path);
+  if (!work) {
+    wasmoon_wasi_close_fd_stack(fds, fd_length);
+    free(fds);
+    errno = ENOMEM;
+    return -1;
+  }
+  char *cursor = work;
+  int symlink_count = 0;
+
+  for (;;) {
+    while (*cursor == '/') cursor++;
+    if (*cursor == '\0') {
+      int open_flags = flags | O_CLOEXEC | O_NOFOLLOW;
+      int wants_truncate = (open_flags & O_TRUNC) != 0;
+      open_flags &= ~O_TRUNC;
+      int result = openat(fds[fd_length - 1], ".", open_flags, mode);
+      if (result >= 0 && wants_truncate && ftruncate(result, 0) != 0) {
+        int saved_errno = errno;
+        close(result);
+        errno = saved_errno;
+        result = -1;
+      }
+      int saved_errno = errno;
+      free(work);
+      wasmoon_wasi_close_fd_stack(fds, fd_length);
+      free(fds);
+      errno = saved_errno;
+      return result;
+    }
+
+    char *separator = strchr(cursor, '/');
+    char *remaining = separator ? separator + 1 : cursor + strlen(cursor);
+    if (separator) *separator = '\0';
+    const char *component = cursor;
+    int is_final = !wasmoon_wasi_path_has_component(remaining);
+
+    if (strcmp(component, ".") == 0) {
+      cursor = remaining;
+      continue;
+    }
+    if (strcmp(component, "..") == 0) {
+      if (fd_length == 1) {
+        errno = EPERM;
+        goto fail;
+      }
+      close(fds[fd_length - 1]);
+      fd_length -= 1;
+      cursor = remaining;
+      continue;
+    }
+
+    int open_flags;
+    int wants_truncate = 0;
+    if (is_final) {
+      open_flags = flags | O_CLOEXEC | O_NOFOLLOW;
+      wants_truncate = (open_flags & O_TRUNC) != 0;
+      open_flags &= ~O_TRUNC;
+    } else {
+      open_flags = O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW;
+    }
+    int opened = openat(fds[fd_length - 1], component, open_flags, mode);
+    if (opened >= 0) {
+      if (is_final) {
+        if (wants_truncate && ftruncate(opened, 0) != 0) {
+          int saved_errno = errno;
+          close(opened);
+          errno = saved_errno;
+          goto fail;
+        }
+        free(work);
+        wasmoon_wasi_close_fd_stack(fds, fd_length);
+        free(fds);
+        return opened;
+      }
+      if (!wasmoon_wasi_push_fd(&fds, &fd_length, &fd_capacity, opened)) {
+        int saved_errno = errno;
+        close(opened);
+        errno = saved_errno;
+        goto fail;
+      }
+      cursor = remaining;
+      continue;
+    }
+
+    int open_errno = errno;
+    if (!wasmoon_wasi_is_symlink_at(fds[fd_length - 1], component)) {
+      errno = open_errno;
+      goto fail;
+    }
+    if (is_final &&
+        (!follow_final || ((flags & O_CREAT) != 0 && (flags & O_EXCL) != 0))) {
+      errno = open_errno;
+      goto fail;
+    }
+    symlink_count += 1;
+    if (symlink_count > 40) {
+      errno = ELOOP;
+      goto fail;
+    }
+    char target[PATH_MAX + 1];
+    ssize_t target_length = readlinkat(
+      fds[fd_length - 1],
+      component,
+      target,
+      PATH_MAX
+    );
+    if (target_length < 0) goto fail;
+    if (target_length == 0) {
+      errno = ENOENT;
+      goto fail;
+    }
+    if (target_length >= PATH_MAX) {
+      errno = ENAMETOOLONG;
+      goto fail;
+    }
+    target[target_length] = '\0';
+    if (target[0] == '/') {
+      errno = EPERM;
+      goto fail;
+    }
+    char *next_work = wasmoon_wasi_prepend_symlink_target(target, remaining);
+    if (!next_work) goto fail;
+    free(work);
+    work = next_work;
+    cursor = work;
+  }
+
+fail: {
+    int saved_errno = errno;
+    free(work);
+    wasmoon_wasi_close_fd_stack(fds, fd_length);
+    free(fds);
+    errno = saved_errno;
+    return -1;
+  }
+#endif
+}
+
+static int wasmoon_wasi_open_parent_beneath_impl(int root_fd, const char *path) {
+  return wasmoon_wasi_open_beneath_impl(
+    root_fd,
+    path,
+    O_RDONLY | O_DIRECTORY,
+    0,
+    1
+  );
 }
 
 static int wasmoon_wasi_path_is_within_base(const char *base_real, const char *target_real) {
@@ -270,45 +425,43 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_openat_beneath(
   errno = ENOTSUP;
   return -1;
 #else
-  if (((const char *)leaf)[0] == '\0' ||
-      strcmp((const char *)leaf, ".") == 0 ||
-      strcmp((const char *)leaf, "..") == 0 ||
-      strchr((const char *)leaf, '/') != NULL) {
+  const char *parent = (const char *)parent_path;
+  const char *name = (const char *)leaf;
+  if (name[0] == '\0' || strchr(name, '/') != NULL) {
     errno = EINVAL;
     return -1;
   }
-  int parent_fd = wasmoon_wasi_open_parent_beneath_impl(
-    root_fd,
-    (const char *)parent_path
+  size_t parent_length = strlen(parent);
+  size_t name_length = strlen(name);
+  size_t separator_length = parent_length == 0 ? 0 : 1;
+  if (parent_length > SIZE_MAX - name_length) {
+    errno = ENAMETOOLONG;
+    return -1;
+  }
+  size_t combined_length = parent_length + name_length;
+  if (combined_length > SIZE_MAX - separator_length - 1) {
+    errno = ENAMETOOLONG;
+    return -1;
+  }
+  char *path = (char *)malloc(
+    parent_length + separator_length + name_length + 1
   );
-  if (parent_fd < 0) return -1;
-
-  int open_flags = flags | O_CLOEXEC;
-  int wants_truncate = (open_flags & O_TRUNC) != 0;
-  open_flags &= ~O_TRUNC;
-#ifdef O_NOFOLLOW
-  if (!follow_final) open_flags |= O_NOFOLLOW;
-#else
-  if (!follow_final) {
-    close(parent_fd);
-    errno = ENOTSUP;
+  if (!path) {
+    errno = ENOMEM;
     return -1;
   }
-#endif
-
-  int fd = openat(parent_fd, (const char *)leaf, open_flags, mode);
-  close(parent_fd);
-  if (fd < 0) return -1;
-  if (!wasmoon_wasi_object_is_beneath(root_fd, fd)) {
-    close(fd);
-    errno = EPERM;
-    return -1;
-  }
-  if (wants_truncate && ftruncate(fd, 0) != 0) {
-    close(fd);
-    return -1;
-  }
-  return fd;
+  memcpy(path, parent, parent_length);
+  if (separator_length != 0) path[parent_length] = '/';
+  memcpy(path + parent_length + separator_length, name, name_length + 1);
+  int result = wasmoon_wasi_open_beneath_impl(
+    root_fd,
+    path,
+    flags,
+    mode,
+    follow_final
+  );
+  free(path);
+  return result;
 #endif
 }
 
