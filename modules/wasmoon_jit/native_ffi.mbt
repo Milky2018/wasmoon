@@ -462,6 +462,59 @@ extern "c" fn c_jit_call_with_stack_switch_managed(
   values_len : Int,
 ) -> Int = "wasmoon_jit_call_with_stack_switch_managed"
 
+// ============ Store-Owned Native Fibers ============
+
+///|
+priv type NativeFiberObject
+
+///|
+#owned(closure)
+extern "c" fn c_native_fiber_alloc(
+  call_closure : FuncRef[(() -> Int64) -> Int64],
+  closure : () -> Int64,
+  stack_size : Int64,
+) -> NativeFiberObject = "wasmoon_native_fiber_alloc"
+
+///|
+#borrow(fiber)
+extern "c" fn c_native_fiber_continue(
+  fiber : NativeFiberObject,
+  resume_value : Int64,
+) -> Int = "wasmoon_native_fiber_continue"
+
+///|
+extern "c" fn c_native_fiber_yield(value : Int64) -> Int64 = "wasmoon_native_fiber_yield"
+
+///|
+#borrow(fiber)
+extern "c" fn c_native_fiber_cancel(fiber : NativeFiberObject) -> Int = "wasmoon_native_fiber_cancel"
+
+///|
+#borrow(fiber)
+extern "c" fn c_native_fiber_state(fiber : NativeFiberObject) -> Int = "wasmoon_native_fiber_state"
+
+///|
+#borrow(fiber)
+extern "c" fn c_native_fiber_yielded_value(fiber : NativeFiberObject) -> Int64 = "wasmoon_native_fiber_yielded_value"
+
+///|
+#borrow(fiber)
+extern "c" fn c_native_fiber_return_value(fiber : NativeFiberObject) -> Int64 = "wasmoon_native_fiber_return_value"
+
+///|
+#borrow(fiber)
+extern "c" fn c_native_fiber_stack_size(fiber : NativeFiberObject) -> Int64 = "wasmoon_native_fiber_stack_size"
+
+///|
+#borrow(fiber)
+extern "c" fn c_native_fiber_guard_size(fiber : NativeFiberObject) -> Int64 = "wasmoon_native_fiber_guard_size"
+
+///|
+extern "c" fn c_native_fiber_guard_test() -> Int = "wasmoon_native_fiber_guard_test"
+
+///|
+extern "c" fn c_native_fiber_register_test() -> Int = "wasmoon_native_fiber_register_test"
+
 // ============ WASI Trampoline Pointers ============
 
 ///|
