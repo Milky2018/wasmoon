@@ -50,6 +50,7 @@ extern "c" fn c_reactor_register_timer(
 #borrow(reactor)
 extern "c" fn c_reactor_cancel(
   reactor : NativeReactorObject,
+  token : Int64,
   ident : Int64,
   filter : Int,
 ) -> Int = "wasmoon_async_reactor_cancel"
@@ -76,9 +77,9 @@ priv struct RegistrationRecord {
 }
 
 ///|
-/// macOS kqueue adapter.
+/// Native descriptor-readiness adapter.
 ///
-/// The kqueue descriptor, event filters, and kernel user-data tokens are
+/// Platform descriptors, event filters, and kernel user-data tokens are
 /// confined to this package. Callers retain only an opaque registration.
 struct NativeReactor {
   raw : NativeReactorObject
@@ -263,6 +264,6 @@ pub fn NativeRegistration::cancel(self : NativeRegistration) -> Unit {
   }
   self.2.active[0] = false
   self.0.registrations.remove(self.1)
-  c_reactor_cancel(self.0.raw, self.2.ident, self.2.filter) |> ignore
+  c_reactor_cancel(self.0.raw, self.1, self.2.ident, self.2.filter) |> ignore
   self.2.operation.cancel()
 }

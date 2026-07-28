@@ -18,7 +18,7 @@ fn test_pipe() -> (Int, Int)? {
 }
 
 ///|
-test "kqueue reactor delivers readable and writable events" {
+test "native reactor delivers readable and writable events" {
   if !NativeReactor::supported() {
     return
   }
@@ -73,7 +73,7 @@ test "kqueue reactor delivers readable and writable events" {
 }
 
 ///|
-test "kqueue reactor delivers timers and explicit wakeups" {
+test "native reactor delivers timers and explicit wakeups" {
   if !NativeReactor::supported() {
     return
   }
@@ -94,7 +94,7 @@ test "kqueue reactor delivers timers and explicit wakeups" {
 }
 
 ///|
-test "cancelled kqueue registration ignores stale readiness" {
+test "cancelled native registration ignores stale readiness" {
   if !NativeReactor::supported() {
     return
   }
@@ -127,7 +127,7 @@ test "cancelled kqueue registration ignores stale readiness" {
 }
 
 ///|
-test "kqueue registration tokens are never reused" {
+test "native registration tokens are never reused" {
   if !NativeReactor::supported() {
     return
   }
