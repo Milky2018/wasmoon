@@ -103,6 +103,11 @@ void jit_trap_activation_pop(jit_trap_activation_t *activation);
 jit_trap_activation_t *jit_trap_activation_detach(void);
 void jit_trap_activation_attach(jit_trap_activation_t *activation);
 void jit_trap_activation_abandon(jit_trap_activation_t *activation);
+int jit_parked_gc_roots_register(
+    jit_trap_activation_t *activation,
+    void **registration
+);
+void jit_parked_gc_roots_unregister(void *registration);
 
 #define g_trap_jmp_buf (jit_current_trap_activation()->jmp_buf)
 #define g_trap_active (jit_current_trap_activation()->active)

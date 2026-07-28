@@ -72,6 +72,7 @@ typedef struct native_fiber {
     int64_t yielded_value;
     int64_t return_value;
     jit_trap_activation_t *detached_activation;
+    void *parked_gc_roots;
 } native_fiber_t;
 
 typedef struct {
@@ -194,6 +195,8 @@ static native_fiber_t *allocate_fiber(
 static void destroy_fiber(native_fiber_t *fiber) {
     if (!fiber) return;
     if (fiber->state == NATIVE_FIBER_RUNNING) return;
+    jit_parked_gc_roots_unregister(fiber->parked_gc_roots);
+    fiber->parked_gc_roots = NULL;
     jit_trap_activation_abandon(fiber->detached_activation);
     fiber->detached_activation = NULL;
     release_fiber_stack(fiber);
@@ -330,7 +333,18 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_native_fiber_yield(int64_t value) {
     fiber->yielded_value = value;
     fiber->state = NATIVE_FIBER_SUSPENDED;
     fiber->detached_activation = jit_trap_activation_detach();
+    if (!jit_parked_gc_roots_register(
+            fiber->detached_activation,
+            &fiber->parked_gc_roots
+        )) {
+        jit_trap_activation_attach(fiber->detached_activation);
+        fiber->detached_activation = NULL;
+        fiber->state = NATIVE_FIBER_RUNNING;
+        return INT64_MIN;
+    }
     wasmoon_native_fiber_swap(&fiber->context, &fiber->caller);
+    jit_parked_gc_roots_unregister(fiber->parked_gc_roots);
+    fiber->parked_gc_roots = NULL;
     jit_trap_activation_attach(fiber->detached_activation);
     fiber->detached_activation = NULL;
     if (fiber->state != NATIVE_FIBER_RUNNING) return INT64_MIN;
@@ -346,6 +360,8 @@ MOONBIT_FFI_EXPORT int wasmoon_native_fiber_cancel(void *managed) {
         return -3;
     }
     fiber->state = NATIVE_FIBER_CANCELLED;
+    jit_parked_gc_roots_unregister(fiber->parked_gc_roots);
+    fiber->parked_gc_roots = NULL;
     jit_trap_activation_abandon(fiber->detached_activation);
     fiber->detached_activation = NULL;
     release_fiber_stack(fiber);
@@ -394,6 +410,34 @@ static int probe_trampoline(
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_native_hostcall_probe_trampoline(void) {
     return (int64_t)probe_trampoline;
+}
+
+static int parked_gc_root_probe(
+    jit_context_t *ctx,
+    int64_t *values,
+    void *func_ptr
+) {
+    (void)func_ptr;
+    if (!ctx || !ctx->gc_heap || !values) return 8;
+    if (!ctx_gc_push_root_scope_internal(ctx, values, 1)) return 9;
+    int result = wasmoon_jit_hostcall(
+        ctx,
+        43,
+        (int64_t)values,
+        0,
+        0
+    );
+    int64_t encoded = values[0];
+    int32_t gc_ref = encoded > 0 && (encoded & 1L) == 0
+        ? (int32_t)(encoded >> 1)
+        : 0;
+    values[1] = gc_heap_is_valid((GcHeap *)ctx->gc_heap, gc_ref);
+    ctx_gc_pop_root_scope_internal(ctx);
+    return result;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_native_parked_gc_root_probe(void) {
+    return (int64_t)parked_gc_root_probe;
 }
 
 static int nested_trap_probe(

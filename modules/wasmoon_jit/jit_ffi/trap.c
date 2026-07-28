@@ -156,6 +156,101 @@ static void restore_activation_context(jit_trap_activation_t *activation) {
     activation->context_detached = 0;
 }
 
+static int32_t activation_root_count(
+    const jit_trap_activation_t *activation
+) {
+    if (!activation) return 0;
+    int64_t total = 0;
+    const wasmoon_gc_root_scope_t *scope =
+        activation->gc_root_scope_head;
+    while (scope) {
+        if (scope->root_count > 0) {
+            total += scope->root_count;
+        }
+        scope = scope->prev;
+    }
+    if (activation->exception_value_count > 0) {
+        total += activation->exception_value_count;
+    }
+    if (activation->spilled_locals_count > 0) {
+        total += activation->spilled_locals_count;
+    }
+    return total > INT32_MAX ? -1 : (int32_t)total;
+}
+
+static int32_t copy_activation_roots(
+    const jit_trap_activation_t *activation,
+    int64_t *destination
+) {
+    if (!activation || !destination) return 0;
+    int32_t at = 0;
+    const wasmoon_gc_root_scope_t *scope =
+        activation->gc_root_scope_head;
+    while (scope) {
+        if (scope->root_count > 0 && scope->roots) {
+            memcpy(
+                &destination[at],
+                scope->roots,
+                (size_t)scope->root_count * sizeof(int64_t)
+            );
+            at += scope->root_count;
+        }
+        scope = scope->prev;
+    }
+    if (activation->exception_value_count > 0 &&
+        activation->exception_values) {
+        memcpy(
+            &destination[at],
+            activation->exception_values,
+            (size_t)activation->exception_value_count * sizeof(int64_t)
+        );
+        at += activation->exception_value_count;
+    }
+    if (activation->spilled_locals_count > 0 &&
+        activation->spilled_locals) {
+        memcpy(
+            &destination[at],
+            activation->spilled_locals,
+            (size_t)activation->spilled_locals_count * sizeof(int64_t)
+        );
+        at += activation->spilled_locals_count;
+    }
+    return at;
+}
+
+int jit_parked_gc_roots_register(
+    jit_trap_activation_t *activation,
+    void **registration
+) {
+    if (!registration) return 0;
+    *registration = NULL;
+    if (!activation || !activation->context) return 1;
+    int32_t root_count = activation_root_count(activation);
+    if (root_count < 0) return 0;
+    if (root_count == 0) return 1;
+    GcHeap *heap = (GcHeap *)activation->context->gc_heap;
+    if (!heap) return 0;
+    int64_t *roots = NULL;
+    if (!gc_heap_register_parked_roots(
+            heap,
+            root_count,
+            registration,
+            &roots
+        )) {
+        return 0;
+    }
+    if (copy_activation_roots(activation, roots) != root_count) {
+        gc_heap_unregister_parked_roots(*registration);
+        *registration = NULL;
+        return 0;
+    }
+    return 1;
+}
+
+void jit_parked_gc_roots_unregister(void *registration) {
+    gc_heap_unregister_parked_roots(registration);
+}
+
 void jit_trap_activation_push(jit_trap_activation_t *activation) {
     activation->previous = current_activation;
     if (current_activation &&

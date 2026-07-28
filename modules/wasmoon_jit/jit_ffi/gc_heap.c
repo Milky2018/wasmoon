@@ -104,6 +104,14 @@ static void gc_set_fail_alloc_config(int fail_at, int fail_every) {
 
 static int gc_barrier_assert_env_cached = -1;
 
+typedef struct GcParkedRoots {
+    GcHeap* heap;
+    struct GcParkedRoots* previous;
+    struct GcParkedRoots* next;
+    int64_t* roots;
+    int32_t root_count;
+} GcParkedRoots;
+
 static int gc_barrier_assert_enabled(void) {
     if (gc_barrier_assert_env_cached < 0) {
         const char* value = getenv("WASMOON_GC_ASSERT_BARRIER");
@@ -236,6 +244,7 @@ GcHeap* gc_heap_new(size_t initial_capacity) {
     heap->total_allocations = 0;
     heap->total_collections = 0;
     heap->barrier_writes = 0;
+    heap->parked_jit_roots_head = NULL;
 
     return heap;
 }
@@ -244,10 +253,73 @@ void gc_heap_free(GcHeap* heap) {
     if (!heap) {
         return;
     }
+    if (heap->parked_jit_roots_head) {
+        abort();
+    }
     free(heap->free_list);
     free(heap->object_table);
     free(heap->data);
     free(heap);
+}
+
+int32_t gc_heap_register_parked_roots(
+    GcHeap* heap,
+    int32_t root_count,
+    void** out_registration,
+    int64_t** out_roots
+) {
+    if (!heap ||
+        root_count <= 0 ||
+        !out_registration ||
+        !out_roots) {
+        return 0;
+    }
+    *out_registration = NULL;
+    *out_roots = NULL;
+    GcParkedRoots* registration =
+        (GcParkedRoots*)calloc(1, sizeof(GcParkedRoots));
+    if (!registration) {
+        return 0;
+    }
+    registration->roots =
+        (int64_t*)malloc((size_t)root_count * sizeof(int64_t));
+    if (!registration->roots) {
+        free(registration);
+        return 0;
+    }
+    GcParkedRoots* head = (GcParkedRoots*)heap->parked_jit_roots_head;
+    registration->heap = heap;
+    registration->root_count = root_count;
+    registration->next = head;
+    if (head) {
+        head->previous = registration;
+    }
+    heap->parked_jit_roots_head = registration;
+    *out_registration = registration;
+    *out_roots = registration->roots;
+    return 1;
+}
+
+void gc_heap_unregister_parked_roots(void* opaque_registration) {
+    GcParkedRoots* registration =
+        (GcParkedRoots*)opaque_registration;
+    if (!registration) {
+        return;
+    }
+    GcHeap* heap = registration->heap;
+    if (!heap) {
+        abort();
+    }
+    if (registration->previous) {
+        registration->previous->next = registration->next;
+    } else {
+        heap->parked_jit_roots_head = registration->next;
+    }
+    if (registration->next) {
+        registration->next->previous = registration->previous;
+    }
+    free(registration->roots);
+    free(registration);
 }
 
 // ============ Struct Operations ============
@@ -728,6 +800,12 @@ int32_t gc_heap_collect(GcHeap* heap, const int64_t* roots, int32_t num_roots) {
 
     // Mark phase
     gc_heap_mark_roots(heap, roots, num_roots);
+    GcParkedRoots* parked =
+        (GcParkedRoots*)heap->parked_jit_roots_head;
+    while (parked) {
+        gc_heap_mark_roots(heap, parked->roots, parked->root_count);
+        parked = parked->next;
+    }
 
     // Sweep phase
     int32_t collected = gc_heap_sweep(heap);

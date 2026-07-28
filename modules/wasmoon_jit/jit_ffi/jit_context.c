@@ -868,10 +868,22 @@ int32_t gc_collect_for_alloc_internal(
     int32_t exception_root_count = ctx->exception_value_count > 0 ? ctx->exception_value_count : 0;
     int32_t spilled_root_count = ctx->spilled_locals_count > 0 ? ctx->spilled_locals_count : 0;
     int32_t table_root_count = gc_count_table_roots(ctx);
-    int32_t stack_root_count =
-        safe_root_count + scratch_count + caller_root_count;
-    int32_t store_root_count = exception_root_count + spilled_root_count;
-    int32_t total_roots = stack_root_count + store_root_count + table_root_count;
+    int64_t stack_root_count64 =
+        (int64_t)safe_root_count +
+        scratch_count +
+        caller_root_count;
+    int64_t store_root_count64 =
+        (int64_t)exception_root_count + spilled_root_count;
+    int64_t total_roots64 =
+        stack_root_count64 + store_root_count64 + table_root_count;
+    if (stack_root_count64 > INT32_MAX ||
+        store_root_count64 > INT32_MAX ||
+        total_roots64 > INT32_MAX) {
+        return -1;
+    }
+    int32_t stack_root_count = (int32_t)stack_root_count64;
+    int32_t store_root_count = (int32_t)store_root_count64;
+    int32_t total_roots = (int32_t)total_roots64;
     int32_t collected = 0;
     const wasmoon_gc_safepoint_table_t *active_table = ctx->gc_safepoint_table;
     if (ctx->gc_frame_chain_head && ctx->gc_frame_chain_head->table) {
