@@ -89,6 +89,34 @@ At O3, MilkIR may unroll only canonical constant-trip natural loops after checke
 
 The top-level `wasmoon/wasm_frontend` package is the product API boundary. Product callers do not import `wasmoon/wasm_frontend/ir` directly.
 
+### Component Core Execution
+
+The component linker owns a `CoreExecutionEngine` seam rather than calling the
+core interpreter directly. After a core module is instantiated, the engine
+registers the shared module instance and chooses one of three execution modes
+for each entry:
+
+- `Synchronous` uses native JIT code when the function and its imported call
+  graph can enter native code safely.
+- `Interpreted` executes non-suspending functions whose imports or tables can
+  re-enter component adapters. This conservative path prevents unsupported
+  nested native activation while preserving synchronous semantics.
+- `Suspendable` enters the interpreter through an explicit continuation seam.
+  Yield and wait operations return captured operand-stack, frame, local, label,
+  and structured-control state. Resumption continues at the suspended host-call
+  boundary; it does not replay the function from its first instruction.
+
+The default `component` and `component-test` commands enable the JIT engine.
+`--no-jit` selects the interpreter engine for differential testing.
+
+Component async execution uses one cooperative host event loop. MoonBit
+processes and component tasks are logical scheduling units, not operating-system
+threads. A task may return `Yield` or wait on a waitable set; the scheduler then
+runs another ready task and resumes the stored continuation when an event is
+available. Embedding-provided host futures expose non-blocking `poll` and
+`cancel` operations, while the host event-loop hook is responsible for waiting
+for external I/O or timer readiness without blocking guest execution.
+
 ## IR and ABI Boundaries
 
 MilkIR uses SSA values and block parameters rather than WebAssembly operand-stack state. Its core opcode contract consists of five semantic families: scalar, memory, call, vector, and typed extension operations. WebAssembly-specific operations are represented through the `wasm_milkir` dialect or lowered into ordinary MilkIR operations by the frontend. Source-only fields such as WebAssembly SIMD memory indices, alignment hints, and immediate offsets are consumed before core IR construction.

@@ -1,6 +1,9 @@
 ///|
 fn core_instance_from_module(
   instance : @runtime.ModuleInstance,
+  engine : CoreExecutionEngine,
+  may_suspend : Bool,
+  native_eligible : Bool,
 ) -> CoreInstance {
   let funcs : Map[String, CoreFuncRef] = Map([])
   let tables : Map[String, Int] = Map([])
@@ -9,7 +12,14 @@ fn core_instance_from_module(
   let tags : Map[String, Int] = Map([])
   for exp in instance.exports {
     match exp.desc {
-      Func(idx) => funcs.set(exp.name, { instance, func_idx: idx })
+      Func(idx) =>
+        funcs.set(exp.name, {
+          instance,
+          func_idx: idx,
+          engine,
+          may_suspend,
+          native_eligible,
+        })
       Table(idx) => tables.set(exp.name, instance.table_addrs[idx])
       Memory(idx) => memories.set(exp.name, instance.mem_addrs[idx])
       Global(idx) => globals.set(exp.name, instance.global_addrs[idx])

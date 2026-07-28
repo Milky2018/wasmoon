@@ -376,6 +376,7 @@ pub fn run_wasi_component_command(
   network : String,
   wit_names : Bool,
   error_format : ComponentErrorFormat,
+  use_jit? : Bool = true,
 ) -> Int {
   let parsed = run_component_command_eval(file_path, true, wit_names)
   guard parsed.parsed is Some(component) else {
@@ -390,7 +391,13 @@ pub fn run_wasi_component_command(
       )
   }
   defer ctx.close()
-  let linker = @runtime_impl.ComponentLinker()
+  let linker = if use_jit {
+    @runtime_impl.ComponentLinker::with_core_execution_engine(
+      component_jit_execution_engine(),
+    )
+  } else {
+    ComponentLinker()
+  }
   let host = @wasi_component.WasiComponentHost(linker, ctx)
   (try {
     host.add_preview2_cli_clocks_random()

@@ -106,6 +106,9 @@ fn main {
           "run": @clap.Arg::flag(
             help="Run a pinned WASI Preview 2 or Preview 3 command component",
           ),
+          "no-jit": @clap.Arg::flag(
+            help="Disable JIT compilation for synchronous component core functions",
+          ),
           "arg": @clap.Arg::named(
             nargs=Any,
             help="Command arguments passed after the component path",
@@ -141,6 +144,9 @@ fn main {
             nargs=AtMost(1),
             choices=error_format_choices,
             help="component-test output format: text (default) or json",
+          ),
+          "no-jit": @clap.Arg::flag(
+            help="Use the core interpreter for all component test calls",
           ),
         },
       ),
@@ -304,6 +310,10 @@ fn main {
                   None => Text
                 }
                 let status = if run {
+                  let use_jit = match sub.flags.get("no-jit") {
+                    Some(true) => false
+                    _ => true
+                  }
                   @commands.run_wasi_component_command(
                     positional[0],
                     match sub.args.get("arg") {
@@ -324,6 +334,7 @@ fn main {
                     },
                     wit_names,
                     error_format,
+                    use_jit~,
                   )
                 } else {
                   @commands.run_component_command(
@@ -356,6 +367,7 @@ fn main {
                 let status = @commands.run_component_script_cli(
                   positional[0],
                   error_format,
+                  use_jit=!sub.args.contains("no-jit"),
                 )
                 if status != 0 {
                   @sys.exit(status)

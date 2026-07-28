@@ -30,9 +30,6 @@ pub(all) suberror ComponentRuntimeError {
   HostCallError(String)
   /// Structured termination requested by an embedding-provided command host.
   HostExit(Int)
-  // Cooperative suspension used by sync-style async lifting (canon lift ... async).
-  AsyncSuspendYield
-  AsyncSuspendWait(Int64)
   InvalidStartResultCount(Int)
   OuterAliasOutOfRange(Int)
   AliasTargetMismatch(String)

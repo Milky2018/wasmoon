@@ -212,15 +212,28 @@ fn ExecContext::call_func_inst_with_context(
       self.call_wasm_func(code, args, num_results)
     }
   } else if func_inst is HostFunc(host_fn) {
-    // Call host function directly
-    let caller = @runtime.Caller::Caller(self.store, self.instance)
-    let results = host_fn(caller, args) catch {
-      e => raise InvocationSignal::HostInvocation(e)
+    self.invoke_host_func(host_fn, self.instance, args)
+  }
+}
+
+///|
+fn ExecContext::invoke_host_func(
+  self : ExecContext,
+  host_fn : (@runtime.Caller, Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError,
+  caller_instance : @runtime.ModuleInstance,
+  args : Array[@types.Value],
+) -> Unit raise {
+  let caller = @runtime.Caller::Caller(self.store, caller_instance)
+  let results = host_fn(caller, args) catch {
+    error => {
+      self.suspend_host_call(error, fn() raise {
+        self.invoke_host_func(host_fn, caller_instance, args)
+      })
+      return
     }
-    // Push results onto the stack
-    for result in results {
-      self.stack.push(result)
-    }
+  }
+  for result in results {
+    self.stack.push(result)
   }
 }
 
@@ -283,6 +296,12 @@ fn ExecContext::call_wasm_func_with_instance(
       self.pop_frame()
       should_continue = false
     } catch {
+      ExecutionSuspended => {
+        self.append_resume_handler(fn(result) raise {
+          self.finish_suspended_wasm_frame(saved_instance, result)
+        })
+        raise ExecutionSuspended
+      }
       ControlSignal::TailCall(store_addr, func_inst, tail_args, _) => {
         // Tail call detected! Pop current frame and loop with new target
         self.pop_frame()
@@ -324,6 +343,53 @@ fn ExecContext::call_wasm_func_with_instance(
 
   // Restore original instance
   self.instance = saved_instance
+}
+
+///|
+fn ExecContext::finish_suspended_wasm_frame(
+  self : ExecContext,
+  saved_instance : @runtime.ModuleInstance,
+  result : ExecBlockResult,
+) -> Unit raise {
+  match result {
+    ExecBlockCompleted => {
+      self.pop_frame()
+      self.instance = saved_instance
+    }
+    ExecBlockRaised(
+      ControlSignal::TailCall(store_addr, func_inst, tail_args, num_results)
+    ) => {
+      let caller_instance = self.instance
+      self.pop_frame()
+      self.instance = saved_instance
+      match func_inst {
+        WasmFunc(code) => {
+          let target_instance = match self.store.get_func_owner(store_addr) {
+            Some(owner) => owner
+            None => saved_instance
+          }
+          self.call_wasm_func_with_instance(
+            target_instance, code, tail_args, num_results,
+          )
+        }
+        HostFunc(host_fn) => {
+          self.invoke_host_func(host_fn, caller_instance, tail_args) catch {
+            ExecutionSuspended => {
+              self.append_resume_suffix(fn() { self.instance = saved_instance })
+              raise ExecutionSuspended
+            }
+            error => raise error
+          }
+          self.instance = saved_instance
+        }
+      }
+    }
+    ExecBlockRaised(error) => {
+      self.pop_frame()
+      self.instance = saved_instance
+      raise error
+    }
+  }
 }
 
 ///|

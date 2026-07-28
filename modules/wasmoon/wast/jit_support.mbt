@@ -1500,6 +1500,8 @@ pub fn install_jit_hostcall_dispatcher(
   jit_module : @jit.JITModule,
   store : @runtime.Store,
   instance : @runtime.ModuleInstance,
+  before_dispatch? : () -> Unit = fn() { () },
+  after_dispatch? : () -> Unit = fn() { () },
 ) -> Unit {
   fn call_func_by_addr(
     store : @runtime.Store,
@@ -1557,10 +1559,17 @@ pub fn install_jit_hostcall_dispatcher(
       slot = slot + used
     }
 
-    // Invoke imported function (host or wasm).
+    // Imported code observes interpreter-owned globals and tables. Publish the
+    // caller's native state before dispatch, then pull mutations back before
+    // returning to native code.
+    before_dispatch()
     let invoke_result = call_func_by_addr(store, instance, func_addr, args) catch {
-      e => return runtime_error_to_trap_code(e)
+      e => {
+        after_dispatch()
+        return runtime_error_to_trap_code(e)
+      }
     }
+    after_dispatch()
     let results : Array[@types.Value] = match invoke_result {
       Returned(values) => values
       Thrown(tag_addr, values) => {

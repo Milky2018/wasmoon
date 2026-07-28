@@ -248,6 +248,7 @@ pub fn ComponentInstance::get_core_instance(
 ///|
 struct ComponentLinker {
   core_linker : @runtime.Linker
+  core_engine : CoreExecutionEngine
   components : Array[(String, ComponentInstance)]
   imports : Map[String, ComponentExtern]
   // Mutable counter stored in a 1-element array so methods can bump it without
@@ -257,8 +258,21 @@ struct ComponentLinker {
 
 ///|
 pub fn ComponentLinker::ComponentLinker() -> ComponentLinker {
+  ComponentLinker::with_core_execution_engine(
+    interpreter_core_execution_engine(),
+  )
+}
+
+///|
+/// Create a component linker with an embedding-provided core execution engine.
+pub fn ComponentLinker::with_core_execution_engine(
+  core_engine : CoreExecutionEngine,
+) -> ComponentLinker {
+  let core_linker = @runtime.Linker::Linker()
+  core_engine.prepare_store(core_linker.get_store())
   {
-    core_linker: Linker(),
+    core_linker,
+    core_engine,
     components: [],
     imports: Map([]),
     resource_id_counter: [0],

@@ -14,7 +14,7 @@ fn instantiate_component(
   let async_state = if outer_stack.length() > 0 {
     outer_stack[outer_stack.length() - 1].async_state
   } else {
-    AsyncState(stream_table)
+    AsyncState(stream_table, core_engine=linker.core_engine)
   }
   let state = BuildState::BuildState(stream_table, async_state)
   if outer_stack.length() > 0 {
@@ -53,11 +53,13 @@ fn instantiate_component(
               let mod_ = state.core_modules[module_idx]
               validate_core_import_args(mod_, args, state)
               let imports = core_imports_from_args(args, state)
+              let may_suspend = core_args_may_suspend(args, state)
+              let native_eligible = core_args_native_eligible(args, state)
               let module_name = "\{name}::coreinst\{state.core_instances.length()}"
               clear_canon_trap_message()
-              // Core module instantiation can execute start functions that call back into
-              // canonical host imports. Run under a dedicated task id so per-task replay/caching
-              // state (e.g. waitable-set.new) does not leak across component instances.
+              // Core module instantiation can execute start functions that call
+              // canonical host imports. Give start its own task-scoped borrow,
+              // cancellation, and continuation state.
               let inst_task_id = alloc_task_id(async_state)
               // Core start runs during instantiation and must not block.
               push_task(async_state, inst_task_id, false)
@@ -78,7 +80,15 @@ fn instantiate_component(
               // Register a stable name for debugging core traps.
               register_core_instance_name(instance.store_idx, module_name)
               linker.core_linker.register(module_name, instance)
-              state.core_instances.push(core_instance_from_module(instance))
+              linker.core_engine.register_instance(store, mod_, instance)
+              state.core_instances.push(
+                core_instance_from_module(
+                  instance,
+                  linker.core_engine,
+                  may_suspend,
+                  native_eligible,
+                ),
+              )
             }
             InlineExports(exports) =>
               state.core_instances.push(

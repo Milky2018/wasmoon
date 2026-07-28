@@ -771,15 +771,19 @@ def wit_names_for_path(wast_file: Path) -> bool:
 
 
 def run_component_script(
-    script: dict, wasmoon: Path, tmp: Path
+    script: dict, wasmoon: Path, tmp: Path, *, no_jit: bool = False
 ) -> Tuple[int, int, int, list[str], str, bool]:
     script_path = tmp / "component_script.json"
     script_path.write_text(
         json.dumps(script, ensure_ascii=True, indent=2),
         encoding="utf-8",
     )
+    command = [str(wasmoon), "component-test"]
+    if no_jit:
+        command.append("--no-jit")
+    command.append(str(script_path))
     returncode, stdout, stderr, timed_out = run_command(
-        [str(wasmoon), "component-test", str(script_path)],
+        command,
         timeout_sec=DEFAULT_SCRIPT_TIMEOUT_SECONDS,
     )
     if timed_out:
@@ -814,6 +818,7 @@ def run_file(
     wasm_tools: Path,
     *,
     keep_tmp_on_failure: bool = False,
+    no_jit: bool = False,
 ) -> dict:
     text = path.read_text(encoding="utf-8")
     passed = failed = 0
@@ -1177,7 +1182,12 @@ def run_file(
                 sfailures,
                 raw,
                 saw_result,
-            ) = run_component_script(script, wasmoon, tmp_path)
+            ) = run_component_script(
+                script,
+                wasmoon,
+                tmp_path,
+                no_jit=no_jit,
+            )
             passed += spassed
             failed += sfailed
             if sskipped:
@@ -1222,6 +1232,11 @@ def main() -> int:
         "--keep-tmp-on-failure",
         action="store_true",
         help="Keep per-file temporary directories when a file fails (debug)",
+    )
+    parser.add_argument(
+        "--no-jit",
+        action="store_true",
+        help="Run component core functions with the interpreter instead of JIT",
     )
     parser.add_argument(
         "--wasmoon-tools",
@@ -1304,6 +1319,7 @@ def main() -> int:
         return 1
 
     print(f"Found {len(wast_files)} .wast test files in '{test_dir}'")
+    print(f"Core execution mode: {'interpreter' if args.no_jit else 'JIT'}")
     print(
         "Timeout settings: "
         f"validate={DEFAULT_VALIDATE_TIMEOUT_SECONDS}s(base {BASE_VALIDATE_TIMEOUT_SECONDS}s), "
@@ -1322,6 +1338,7 @@ def main() -> int:
             wasmoon_tools,
             wasm_tools,
             keep_tmp_on_failure=args.keep_tmp_on_failure,
+            no_jit=args.no_jit,
         )
         total_passed += result["passed"]
         total_failed += result["failed"]

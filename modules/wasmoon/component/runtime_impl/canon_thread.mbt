@@ -174,15 +174,8 @@ fn cleanup_thread_task(async_state : AsyncState, task_id : Int64) -> Unit {
   async_state.task_contexts.remove(task_id)
   drop_task_thread(async_state, task_id)
   remove_task_meta(async_state, task_id)
-  async_state.yield_replay_upto.remove(task_id)
-  async_state.wait_results.remove(task_id)
+  async_state.yield_suspended.remove(task_id)
   async_state.waiting_ws.remove(task_id)
-  async_state.call_results.remove(task_id)
-  async_state.call_results_cb.remove(task_id)
-  async_state.call_result_ends.remove(task_id)
-  async_state.call_result_ends_cb.remove(task_id)
-  async_state.stream_results.remove(task_id)
-  async_state.stream_results_cb.remove(task_id)
   async_state.sync_lower_states.remove(task_id)
 }
 
@@ -220,31 +213,43 @@ fn run_explicit_thread_once(
   }
 
   push_task(async_state, t.task_id, true)
-  let mut done = false
-  let mut wait_ws : Int64? = None
-  let _ = try {
-    call_core_func(store, t.start_func, [I32(t.context)]) |> ignore
-    done = true
-    ()
+  let outcome = try {
+    match t.continuation[0] {
+      Some(continuation) => {
+        t.continuation[0] = None
+        continuation.continue_execution()
+      }
+      None =>
+        call_core_func_outcome(
+          store,
+          t.start_func,
+          [I32(t.context)],
+          Suspendable,
+        )
+    }
   } catch {
-    AsyncSuspendYield => ()
-    AsyncSuspendWait(ws) => wait_ws = Some(ws)
-    e => {
+    error => {
       pop_task(async_state)
-      raise e
+      raise error
     }
   }
   pop_task(async_state)
 
-  if done {
-    t.phase[0] = Completed
-    t.waiting_ws[0] = None
-    cleanup_thread_task(async_state, t.task_id)
-    return
+  match outcome {
+    Returned(_) => {
+      t.phase[0] = Completed
+      t.waiting_ws[0] = None
+      cleanup_thread_task(async_state, t.task_id)
+    }
+    Suspended(reason, continuation) => {
+      t.continuation[0] = Some(continuation)
+      t.phase[0] = Suspended
+      t.waiting_ws[0] = match reason {
+        Yield => None
+        Wait(waitable_set) => Some(waitable_set)
+      }
+    }
   }
-
-  t.phase[0] = Suspended
-  t.waiting_ws[0] = wait_ws
 }
 
 ///|
@@ -360,24 +365,16 @@ fn execute_thread_suspension_intrinsic(
     }
   }
 
-  let cur = if async_state.yield_cursor_stack.length() == 0 {
-    0
-  } else {
-    async_state.yield_cursor_stack[async_state.yield_cursor_stack.length() - 1]
-  }
-  let replay_upto = match async_state.yield_replay_upto.get(task_id) {
-    Some(n) => n
-    None => 0
-  }
+  let resuming = async_state.yield_suspended.get(task_id) is Some(true)
 
   if is_explicit {
     if maybe_consume_cancelled(async_state, task_id, cancellable) {
+      async_state.yield_suspended.remove(task_id)
       return [I32(1)]
     }
 
-    if cur < replay_upto {
-      async_state.yield_cursor_stack[async_state.yield_cursor_stack.length() - 1] = cur +
-        1
+    if resuming {
+      async_state.yield_suspended.remove(task_id)
       return [I32(0)]
     }
 
@@ -399,23 +396,20 @@ fn execute_thread_suspension_intrinsic(
       |> ignore
     }
 
-    async_state.yield_replay_upto.set(task_id, replay_upto + 1)
+    async_state.yield_suspended.set(task_id, true)
     canon_suspend[0] = Some(Yield)
     raise Unreachable
   }
 
-  // Implicit `thread.yield` is modeled as cooperative suspension. On replay
-  // we consume exactly one suspended yield and continue execution.
+  // Implicit `thread.yield` is modeled as cooperative suspension. Resuming
+  // retries this host instruction once and then continues at its successor.
   if maybe_consume_cancelled(async_state, task_id, cancellable) {
+    async_state.yield_suspended.remove(task_id)
     return [I32(1)]
   }
 
-  if async_state.task_can_block[0] &&
-    schedule_current &&
-    target is None &&
-    cur < replay_upto {
-    async_state.yield_cursor_stack[async_state.yield_cursor_stack.length() - 1] = cur +
-      1
+  if resuming {
+    async_state.yield_suspended.remove(task_id)
     return [I32(0)]
   }
 
@@ -487,7 +481,7 @@ fn execute_thread_suspension_intrinsic(
         if !async_state.task_can_block[0] {
           return [I32(0)]
         }
-        async_state.yield_replay_upto.set(task_id, replay_upto + 1)
+        async_state.yield_suspended.set(task_id, true)
         canon_suspend[0] = Some(Yield)
         raise Unreachable
       }
@@ -519,6 +513,7 @@ fn resolve_start_core_func(
   store : @runtime.Store,
   table_addr : Int,
   start_func_idx : Int,
+  engine : CoreExecutionEngine,
 ) -> CoreFuncRef raise ComponentRuntimeError {
   let table = store.get_table(table_addr) catch {
     e => raise CanonCallError(e.to_string())
@@ -544,7 +539,13 @@ fn resolve_start_core_func(
   if func_idx < 0 {
     raise CanonCallError("unknown thread start function")
   }
-  { instance: owner, func_idx }
+  {
+    instance: owner,
+    func_idx,
+    engine,
+    may_suspend: true,
+    native_eligible: false,
+  }
 }
 
 ///|
@@ -598,7 +599,9 @@ fn instantiate_canon_thread_yield(
       owner_component_id,
     )
   }
-  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+  state.core_funcs.push(
+    alloc_host_core_func(store, core_type, host, may_suspend=true),
+  )
 }
 
 ///|
@@ -632,7 +635,9 @@ fn instantiate_canon_thread_yield_then_resume(
       owner_component_id,
     )
   }
-  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+  state.core_funcs.push(
+    alloc_host_core_func(store, core_type, host, may_suspend=true),
+  )
 }
 
 ///|
@@ -699,7 +704,9 @@ fn instantiate_canon_thread_suspend(
       owner_component_id,
     )
   }
-  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+  state.core_funcs.push(
+    alloc_host_core_func(store, core_type, host, may_suspend=true),
+  )
 }
 
 ///|
@@ -737,7 +744,12 @@ fn instantiate_canon_thread_new_indirect(
         return [I32(0)]
       }
     }
-    let start_func = resolve_start_core_func(store, table_addr, start_idx) catch {
+    let start_func = resolve_start_core_func(
+      store,
+      table_addr,
+      start_idx,
+      async_state.core_engine,
+    ) catch {
       e => {
         trap_canon(canon_err_message(e))
         return [I32(0)]
@@ -772,6 +784,7 @@ fn instantiate_canon_thread_new_indirect(
       phase: [NotStarted],
       scheduled: [false],
       waiting_ws: [None],
+      continuation: [None],
     })
 
     [I32(id)]

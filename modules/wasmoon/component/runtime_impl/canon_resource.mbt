@@ -148,13 +148,6 @@ fn instantiate_canon_resource_drop(
     if !canon_may_leave[0] {
       trap_canon("cannot leave component instance")
     }
-    let replay_slot = current_canon_call_replay_slot(state.async_state)
-    if replay_canon_call_result(state.async_state, replay_slot) is Some(result) {
-      return result
-    }
-    fn cache_void() -> Array[@types.Value] {
-      cache_canon_call_result(state.async_state, replay_slot, [])
-    }
     match args {
       [I32(handle)] =>
         match table.get(handle) {
@@ -235,7 +228,7 @@ fn instantiate_canon_resource_drop(
                   }
                 None => ()
               }
-              cache_void()
+              []
             }
           None => {
             trap_canon(

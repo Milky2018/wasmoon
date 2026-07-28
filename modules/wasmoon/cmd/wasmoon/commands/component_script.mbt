@@ -852,6 +852,7 @@ fn run_component_script_impl(
   path : String,
   error_format : ComponentErrorFormat,
   print_output : Bool,
+  use_jit : Bool,
 ) -> Int {
   let contents = @fs.read_file_to_string(path) catch {
     IOError(e) => {
@@ -914,7 +915,13 @@ fn run_component_script_impl(
     }
   }
   let result = ScriptResult::ScriptResult()
-  let linker = @runtime_impl.ComponentLinker::ComponentLinker()
+  let linker = if use_jit {
+    @runtime_impl.ComponentLinker::with_core_execution_engine(
+      component_jit_execution_engine(),
+    )
+  } else {
+    ComponentLinker()
+  }
   let store = linker.get_store()
   let return_two = make_const_u32_func(2)
   let return_three = make_const_u32_func(3)
@@ -1491,14 +1498,16 @@ fn run_component_script_impl(
 pub fn run_component_script(
   path : String,
   error_format : ComponentErrorFormat,
+  use_jit? : Bool = true,
 ) -> Int {
-  run_component_script_impl(path, error_format, false)
+  run_component_script_impl(path, error_format, false, use_jit)
 }
 
 ///|
 pub fn run_component_script_cli(
   path : String,
   error_format : ComponentErrorFormat,
+  use_jit? : Bool = true,
 ) -> Int {
-  run_component_script_impl(path, error_format, true)
+  run_component_script_impl(path, error_format, true, use_jit)
 }

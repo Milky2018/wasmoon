@@ -29,33 +29,6 @@ fn instantiate_canon_stream_new(
       trap_canon("cannot leave component instance")
     }
 
-    // Replay-safe: `canon stream.new` can be executed multiple times if the
-    // surrounding core function is restarted after a cooperative suspension.
-    // Cache the i64 result per task/call cursor so handle numbering remains stable.
-    let task_id = current_task_id(async_state)
-    let replay_enabled = task_id != 0L
-    let cur = if async_state.call_cursor_stack.length() == 0 {
-      0
-    } else {
-      async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1]
-    }
-    let per_task = canon_call_results_for_task(async_state, task_id)
-    if replay_enabled && per_task.get(cur) is Some(v) {
-      set_canon_debug_message("stream.new(replay cur=\{cur})-> \{to_repr(v)}")
-      async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1] = cur +
-        1
-      return v
-    }
-    fn cache_i64(x : Int64) -> Array[@types.Value] {
-      let out = [@types.Value::I64(x)]
-      if replay_enabled {
-        per_task.set(cur, out)
-      }
-      async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1] = cur +
-        1
-      out
-    }
-
     let sid = table.next_stream_id[0]
     table.next_stream_id[0] = sid + 1
     table.streams.set(sid, {
@@ -89,7 +62,7 @@ fn instantiate_canon_stream_new(
       "stream.new(owner=\{owner_component_id})-> rh=\{rh} wh=\{wh}",
     )
     let packed = (wh.to_int64() << 32) | (rh.to_int64() & 0xFFFFFFFFL)
-    cache_i64(packed)
+    [I64(packed)]
   }
   state.core_funcs.push(alloc_host_core_func(store, core_type, host))
 }
@@ -296,56 +269,9 @@ fn instantiate_canon_stream_read(
     if !canon_may_leave[0] {
       trap_canon("cannot leave component instance")
     }
-    // Replay-safe: stream.read/write can be re-executed when the surrounding core function is
-    // restarted after a cooperative suspension. Cache their return codes per task + cursor so
-    // side effects (buffer copies / handle transfers) are not repeated.
     let task_id = current_task_id(async_state)
-    let replay_enabled = task_id != 0L
-    let cur = if async_state.stream_cursor_stack.length() == 0 {
-      0
-    } else {
-      async_state.stream_cursor_stack[async_state.stream_cursor_stack.length() -
-      1]
-    }
-    // Callback-style async ABI runs different core functions across steps; their cursors
-    // restart at 0 each step, so keep a separate replay map for callbacks to avoid
-    // colliding with the initial core function body.
-    let per_task = if async_state.in_async_callback[0] {
-      match async_state.stream_results_cb.get(task_id) {
-        Some(m) => m
-        None => {
-          let m : Map[Int, Int] = Map([])
-          async_state.stream_results_cb.set(task_id, m)
-          m
-        }
-      }
-    } else {
-      match async_state.stream_results.get(task_id) {
-        Some(m) => m
-        None => {
-          let m : Map[Int, Int] = Map([])
-          async_state.stream_results.set(task_id, m)
-          m
-        }
-      }
-    }
-    if replay_enabled && per_task.get(cur) is Some(code) {
-      set_canon_debug_message("stream.read(replay cur=\{cur})-> \{code}")
-      async_state.stream_cursor_stack[async_state.stream_cursor_stack.length() -
-      1] = cur + 1
-      return [I32(code)]
-    }
-    fn cache_i32(code : Int) -> Array[@types.Value] {
-      if replay_enabled {
-        per_task.set(cur, code)
-      }
-      async_state.stream_cursor_stack[async_state.stream_cursor_stack.length() -
-      1] = cur + 1
-      [I32(code)]
-    }
-
     fn ret_i32(code : Int) -> Array[@types.Value] {
-      cache_i32(code)
+      [I32(code)]
     }
 
     let mem_opt : @runtime.Memory? = match payload_ty {
@@ -373,6 +299,7 @@ fn instantiate_canon_stream_read(
           resume_sync_waitable_use(
             async_state, owner_component_id, handle, task_id,
           )
+          |> ignore
         }
         if !is_async &&
           waitable_is_in_set(async_state, owner_component_id, handle) {
@@ -498,7 +425,7 @@ fn instantiate_canon_stream_read(
                       }
                     }
                     match poll_result {
-                      HostValueStreamPoll::Values(values) => {
+                      Values(values) => {
                         for i, value in values {
                           store_host_stream_value(
                             value,
@@ -517,7 +444,7 @@ fn instantiate_canon_stream_read(
                         }
                         return ret_i32(values.length() << 4)
                       }
-                      HostValueStreamPoll::Closed => {
+                      Closed => {
                         ep.notified_peer_dropped[0] = true
                         table.streams.set(ep.stream_id, {
                           elem_size: st0.elem_size,
@@ -529,7 +456,7 @@ fn instantiate_canon_stream_read(
                         })
                         return ret_i32(1)
                       }
-                      HostValueStreamPoll::Pending => {
+                      Pending => {
                         table.streams.set(ep.stream_id, {
                           elem_size: st0.elem_size,
                           own_resource_type_id: st0.own_resource_type_id,
@@ -932,7 +859,9 @@ fn instantiate_canon_stream_read(
       }
     }
   }
-  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+  state.core_funcs.push(
+    alloc_host_core_func(store, core_type, host, may_suspend=!is_async),
+  )
 }
 
 ///|
@@ -959,56 +888,9 @@ fn instantiate_canon_stream_write(
     if !canon_may_leave[0] {
       trap_canon("cannot leave component instance")
     }
-    // Replay-safe: stream.read/write can be re-executed when the surrounding core function is
-    // restarted after a cooperative suspension. Cache their return codes per task + cursor so
-    // side effects (buffer copies / handle transfers) are not repeated.
     let task_id = current_task_id(async_state)
-    let replay_enabled = task_id != 0L
-    let cur = if async_state.stream_cursor_stack.length() == 0 {
-      0
-    } else {
-      async_state.stream_cursor_stack[async_state.stream_cursor_stack.length() -
-      1]
-    }
-    // Callback-style async ABI runs different core functions across steps; their cursors
-    // restart at 0 each step, so keep a separate replay map for callbacks to avoid
-    // colliding with the initial core function body.
-    let per_task = if async_state.in_async_callback[0] {
-      match async_state.stream_results_cb.get(task_id) {
-        Some(m) => m
-        None => {
-          let m : Map[Int, Int] = Map([])
-          async_state.stream_results_cb.set(task_id, m)
-          m
-        }
-      }
-    } else {
-      match async_state.stream_results.get(task_id) {
-        Some(m) => m
-        None => {
-          let m : Map[Int, Int] = Map([])
-          async_state.stream_results.set(task_id, m)
-          m
-        }
-      }
-    }
-    if replay_enabled && per_task.get(cur) is Some(code) {
-      set_canon_debug_message("stream.write(replay cur=\{cur})-> \{code}")
-      async_state.stream_cursor_stack[async_state.stream_cursor_stack.length() -
-      1] = cur + 1
-      return [I32(code)]
-    }
-    fn cache_i32(code : Int) -> Array[@types.Value] {
-      if replay_enabled {
-        per_task.set(cur, code)
-      }
-      async_state.stream_cursor_stack[async_state.stream_cursor_stack.length() -
-      1] = cur + 1
-      [I32(code)]
-    }
-
     fn ret_i32(code : Int) -> Array[@types.Value] {
-      cache_i32(code)
+      [I32(code)]
     }
 
     let mem_opt : @runtime.Memory? = match payload_ty {
@@ -1036,6 +918,7 @@ fn instantiate_canon_stream_write(
           resume_sync_waitable_use(
             async_state, owner_component_id, handle, task_id,
           )
+          |> ignore
         }
         if !is_async &&
           waitable_is_in_set(async_state, owner_component_id, handle) {
@@ -1075,7 +958,8 @@ fn instantiate_canon_stream_write(
                     return ret_i32(0)
                   }
                 }
-                // If re-executing a previously blocking write, return its completion.
+                // A resumed blocking write retries this host instruction with
+                // the same pending operation.
                 match st0.pending_write {
                   Some(pw0) =>
                     if is_async {
@@ -1089,8 +973,8 @@ fn instantiate_canon_stream_write(
                       if st0.readable_dropped || pw0.sent >= total_elems {
                         // Sync stream.write should observe a drop that happens immediately after a
                         // successful rendezvous (read returns to the caller and then the caller
-                        // drops the readable end). To model this with cooperative replay, defer
-                        // completion by one yield once the write becomes fully consumed.
+                        // drops the readable end). Defer completion by one yield
+                        // once the write becomes fully consumed.
                         if !is_async &&
                           !st0.readable_dropped &&
                           pw0.sent >= total_elems &&
@@ -1499,7 +1383,9 @@ fn instantiate_canon_stream_write(
       }
     }
   }
-  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+  state.core_funcs.push(
+    alloc_host_core_func(store, core_type, host, may_suspend=!is_async),
+  )
 }
 
 ///|
@@ -1674,13 +1560,6 @@ fn instantiate_canon_stream_drop_readable(
     if !canon_may_leave[0] {
       trap_canon("cannot leave component instance")
     }
-    let replay_slot = current_canon_call_replay_slot(async_state)
-    if replay_canon_call_result(async_state, replay_slot) is Some(result) {
-      return result
-    }
-    fn cache_void() -> Array[@types.Value] {
-      cache_canon_call_result(async_state, replay_slot, [])
-    }
     match args {
       [I32(handle)] =>
         match table.endpoints.get(handle_key(owner_component_id, handle)) {
@@ -1769,7 +1648,7 @@ fn instantiate_canon_stream_drop_readable(
               }
               table.host_values.remove(ep.stream_id)
               free_shared_handle(async_state, owner_component_id, handle)
-              cache_void()
+              []
             }
         }
       _ => {
@@ -1796,13 +1675,6 @@ fn instantiate_canon_stream_drop_writable(
   ) -> Array[@types.Value] raise @runtime.RuntimeError {
     if !canon_may_leave[0] {
       trap_canon("cannot leave component instance")
-    }
-    let replay_slot = current_canon_call_replay_slot(async_state)
-    if replay_canon_call_result(async_state, replay_slot) is Some(result) {
-      return result
-    }
-    fn cache_void() -> Array[@types.Value] {
-      cache_canon_call_result(async_state, replay_slot, [])
     }
     match args {
       [I32(handle)] =>
@@ -1886,7 +1758,7 @@ fn instantiate_canon_stream_drop_writable(
               )
               table.endpoints.remove(handle_key(owner_component_id, handle))
               free_shared_handle(async_state, owner_component_id, handle)
-              cache_void()
+              []
             }
         }
       _ => {

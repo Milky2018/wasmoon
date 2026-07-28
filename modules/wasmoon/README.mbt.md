@@ -120,10 +120,12 @@ wasmoon component path/to/component.wasm --validate
 wasmoon component path/to/command.component.wasm --run \
   --dir /srv/data::/data \
   --network loopback
+wasmoon component path/to/command.component.wasm --run --no-jit
 wasmoon component --help
 
 # component-test
 wasmoon component-test path/to/component-tests.json
+wasmoon component-test path/to/component-tests.json --no-jit
 wasmoon component-test --help
 
 # wat
@@ -214,8 +216,11 @@ cargo install wasm-tools --version 1.254.0 --locked
 python3 scripts/run_all_wast.py --dir spec --rec
 python3 scripts/check_component_snapshot.py
 python3 scripts/run_component_wast.py --suite stable-0.2
+python3 scripts/run_component_wast.py --suite stable-0.2 --no-jit
 python3 scripts/run_component_wast.py --suite async-0.3
+python3 scripts/run_component_wast.py --suite async-0.3 --no-jit
 python3 scripts/run_component_wast.py --suite future-gated
+python3 scripts/run_component_wast.py --suite future-gated --no-jit
 ```
 
 ## Library Usage

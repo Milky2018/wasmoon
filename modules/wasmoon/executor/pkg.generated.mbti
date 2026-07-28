@@ -14,6 +14,8 @@ pub fn call_exported_func_with_options(@runtime.Store, @runtime.ModuleInstance, 
 
 pub fn call_func_by_index(@runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError
 
+pub fn call_func_by_index_resumable(@runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value], (@runtime.RuntimeError) -> Int64?) -> ResumableCallOutcome raise @runtime.RuntimeError
+
 pub fn call_func_by_index_with_exception(@runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value]) -> InvokeWithExceptionResult raise @runtime.RuntimeError
 
 pub fn eval_const_expr(Array[@types.Instruction], func_addrs? : Array[Int], globals? : Array[@runtime.GlobalInstance], store? : @runtime.Store?, types? : Array[@types.SubType]) -> @types.Value raise @runtime.RuntimeError
@@ -70,6 +72,11 @@ pub fn ExecContext::exec_tail_call(Self, Int) -> Unit raise
 pub fn ExecContext::exec_tail_call_indirect(Self, Int, Int) -> Unit raise
 pub fn ExecContext::exec_tail_call_ref(Self, Int) -> Unit raise
 
+type ExecutionContinuation
+pub fn ExecutionContinuation::cancel(Self) -> Unit
+pub fn ExecutionContinuation::continue_execution(Self) -> ResumableCallOutcome raise @runtime.RuntimeError
+pub impl @debug.Debug for ExecutionContinuation
+
 pub struct ImportDiagnostic {
   import_index : Int
   module_name : String
@@ -102,6 +109,11 @@ pub(all) enum InvokeWithExceptionResult {
   Returned(Array[@types.Value])
   Thrown(Int, Array[@types.Value])
 }
+
+pub(all) enum ResumableCallOutcome {
+  Returned(Array[@types.Value])
+  Suspended(Int64, ExecutionContinuation)
+} derive(@debug.Debug)
 
 // Type aliases
 

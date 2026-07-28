@@ -35,6 +35,9 @@ pub impl Show for ComponentValue with fn output(self, logger) {
 pub(all) struct CoreFuncRef {
   instance : @runtime.ModuleInstance
   func_idx : Int
+  engine : CoreExecutionEngine
+  may_suspend : Bool
+  native_eligible : Bool
 } derive(Debug)
 
 ///|
@@ -92,99 +95,6 @@ pub(all) struct ResourceTable {
   free_handles : Ref[Array[Int]]
   entries : Ref[Map[Int, ResourceHandle]]
 } derive(Debug)
-
-///|
-priv struct CanonCallReplaySlot {
-  cursor : Int
-  results : Map[Int, Array[@types.Value]]
-  enabled : Bool
-}
-
-///|
-fn canon_call_results_for_task(
-  async_state : AsyncState,
-  task_id : Int64,
-) -> Map[Int, Array[@types.Value]] {
-  let all_results = if async_state.in_async_callback[0] {
-    async_state.call_results_cb
-  } else {
-    async_state.call_results
-  }
-  match all_results.get(task_id) {
-    Some(results) => results
-    None => {
-      let results : Map[Int, Array[@types.Value]] = Map([])
-      all_results.set(task_id, results)
-      results
-    }
-  }
-}
-
-///|
-fn canon_call_result_ends_for_task(
-  async_state : AsyncState,
-  task_id : Int64,
-) -> Map[Int, Int] {
-  let all_ends = if async_state.in_async_callback[0] {
-    async_state.call_result_ends_cb
-  } else {
-    async_state.call_result_ends
-  }
-  match all_ends.get(task_id) {
-    Some(ends) => ends
-    None => {
-      let ends : Map[Int, Int] = Map([])
-      all_ends.set(task_id, ends)
-      ends
-    }
-  }
-}
-
-///|
-fn current_canon_call_replay_slot(
-  async_state : AsyncState,
-) -> CanonCallReplaySlot {
-  let task_id = current_task_id(async_state)
-  let cursor = if async_state.call_cursor_stack.length() == 0 {
-    0
-  } else {
-    async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1]
-  }
-  let results = canon_call_results_for_task(async_state, task_id)
-  { cursor, results, enabled: task_id != 0L }
-}
-
-///|
-fn replay_canon_call_result(
-  async_state : AsyncState,
-  slot : CanonCallReplaySlot,
-) -> Array[@types.Value]? {
-  if !slot.enabled {
-    return None
-  }
-  match slot.results.get(slot.cursor) {
-    Some(result) => {
-      async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1] = slot.cursor +
-        1
-      Some(result)
-    }
-    None => None
-  }
-}
-
-///|
-fn cache_canon_call_result(
-  async_state : AsyncState,
-  slot : CanonCallReplaySlot,
-  result : Array[@types.Value],
-) -> Array[@types.Value] {
-  if slot.enabled {
-    slot.results.set(slot.cursor, result)
-  }
-  async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1] = slot.cursor +
-    1
-  result
-}
 
 ///|
 let resource_table_id_counter : Array[Int] = [0]
@@ -378,6 +288,7 @@ pub fn StreamTable::StreamTable() -> StreamTable {
 /// Waitable/stream/future/subtask handle numbers are per component instance (resource_table.id).
 /// Internally we key maps by `handle_key(component_id, local_handle)` to avoid collisions.
 pub(all) struct AsyncState {
+  core_engine : CoreExecutionEngine
   // Per-component handle allocator for waitables/streams/futures/subtasks/threads.
   // Handle 0 is invalid; allocation starts at 1 (matches component model ABI).
   next_handle_by_component : Map[Int, Array[Int]]
@@ -428,15 +339,6 @@ pub(all) struct AsyncState {
   // True while executing an async callback (used to conservatively reject re-entrancy).
   in_async_callback : Array[Bool]
 
-  // Per-invocation ordinals for restartable sync-style suspension points.
-  yield_cursor_stack : Array[Int]
-  wait_cursor_stack : Array[Int]
-  // Per-invocation ordinal for restartable non-suspending operations that must be replay-safe.
-  call_cursor_stack : Array[Int]
-  // Per-invocation ordinal for stream.read/write restartability (kept separate from
-  // `call_cursor_stack` to avoid collisions with non-i32 canonical calls like `stream.new`).
-  stream_cursor_stack : Array[Int]
-
   // Task tree metadata used to prevent async re-entrancy into the same component
   // instance (mirrors Wasmtime's ConcurrentState::may_enter).
   //
@@ -444,24 +346,11 @@ pub(all) struct AsyncState {
   task_caller : Map[Int64, Int64]
   // Component instance id (ResourceTable.id) associated with this task.
   task_instance : Map[Int64, Int]
-  // Replay/memoization state keyed by task id.
-  yield_replay_upto : Map[Int64, Int]
-  wait_results : Map[Int64, Map[Int, WaitResult]]
+  // A resumed yield retries the suspended host instruction exactly once.
+  yield_suspended : Map[Int64, Bool]
   waiting_ws : Map[Int64, Int64]
-  call_results : Map[Int64, Map[Int, Array[@types.Value]]]
-  // Callback invocations restart independently from the initial core function.
-  // Their call ordinals therefore need a separate replay namespace.
-  call_results_cb : Map[Int64, Map[Int, Array[@types.Value]]]
-  // Enclosing lower calls reserve a replay slot before executing nested
-  // component code. The end cursor lets replay skip the nested slots.
-  call_result_ends : Map[Int64, Map[Int, Int]]
-  call_result_ends_cb : Map[Int64, Map[Int, Int]]
-  stream_results : Map[Int64, Map[Int, Int]]
-  // Separate stream read/write memoization for callback invocations to avoid
-  // colliding with the initial core function body in callback-style async ABI.
-  stream_results_cb : Map[Int64, Map[Int, Int]]
-  // Sync-lower resumption state (keyed by task id + call cursor).
-  sync_lower_states : Map[Int64, Map[Int, SyncLowerState]]
+  // At most one sync-lowered call can be suspended in a task continuation.
+  sync_lower_states : Map[Int64, SyncLowerState]
 
   // Waitable sets and event queues.
   waitable_sets : Map[Int64, WaitableSet]
@@ -473,6 +362,8 @@ pub(all) struct AsyncState {
   subtasks : Map[Int64, Subtask]
   inflight_by_instance : Map[Int, Int]
   pending_by_instance : Map[Int, Array[Int64]]
+  // Round-robin cursor for the single-threaded host task scheduler.
+  scheduler_cursor : Array[Int64?]
 
   // Futures created by `canon future.new`.
   next_future_id : Array[Int]
@@ -496,19 +387,6 @@ struct WaitEvent {
   code : Int
   index : Int
   payload : Int
-} derive(Debug)
-
-///|
-/// Cached `waitable-set.wait` result for replay.
-///
-/// For SUBTASK+RETURNED events we also cache the return buffer slot, so replay
-/// remains correct even if subtask handles are later reused.
-struct WaitResult {
-  ev : WaitEvent
-  subtask_mem_addr : Int?
-  subtask_retptr : Int
-  // Scalar return value written at `subtask_retptr` (currently only used for i32 results).
-  subtask_i32 : Int?
 } derive(Debug)
 
 ///|
@@ -608,13 +486,14 @@ struct GuestThread {
   handle : Int
   // Root task that owns this thread.
   parent_task_id : Int64
-  // Internal task id used for replay/suspension of the explicit thread body.
+  // Internal task id that owns the explicit thread continuation.
   task_id : Int64
   start_func : CoreFuncRef
   context : Int
   phase : Array[GuestThreadPhase]
   scheduled : Array[Bool]
   waiting_ws : Array[Int64?]
+  continuation : Array[CoreContinuation?]
 } derive(Debug)
 
 ///|
@@ -638,6 +517,12 @@ enum TaskStep {
 } derive(Debug, Eq)
 
 ///|
+priv enum TaskCorePoll {
+  CoreReady(Array[@types.Value])
+  CorePending(TaskStep)
+}
+
+///|
 struct CallbackTask {
   func : ComponentFunc
   args : Array[ComponentValue]
@@ -654,6 +539,8 @@ struct CallbackTask {
   // Lazily-created state for an asynchronous host function.
   host_future : Array[HostFuture?]
   cancelled : Array[Bool]
+  // Exact core interpreter state captured at the suspension point.
+  continuation : Array[CoreContinuation?]
 } derive(Debug)
 
 ///|
@@ -682,8 +569,12 @@ struct Subtask {
 } derive(Debug)
 
 ///|
-pub fn AsyncState::AsyncState(stream_table : StreamTable) -> AsyncState {
+pub fn AsyncState::AsyncState(
+  stream_table : StreamTable,
+  core_engine? : CoreExecutionEngine = interpreter_core_execution_engine(),
+) -> AsyncState {
   {
+    core_engine,
     next_handle_by_component: Map([]),
     free_handles_by_component: Map([]),
     stream_table,
@@ -707,21 +598,10 @@ pub fn AsyncState::AsyncState(stream_table : StreamTable) -> AsyncState {
     task_can_block: [false],
     can_block_stack: [false],
     in_async_callback: [false],
-    yield_cursor_stack: [0],
-    wait_cursor_stack: [0],
-    call_cursor_stack: [0],
-    stream_cursor_stack: [0],
     task_caller: Map([]),
     task_instance: Map([]),
-    yield_replay_upto: Map([]),
-    wait_results: Map([]),
+    yield_suspended: Map([]),
     waiting_ws: Map([]),
-    call_results: Map([]),
-    call_results_cb: Map([]),
-    call_result_ends: Map([]),
-    call_result_ends_cb: Map([]),
-    stream_results: Map([]),
-    stream_results_cb: Map([]),
     sync_lower_states: Map([]),
     waitable_sets: Map([]),
     waitable_to_set: Map([]),
@@ -730,6 +610,7 @@ pub fn AsyncState::AsyncState(stream_table : StreamTable) -> AsyncState {
     subtasks: Map([]),
     inflight_by_instance: Map([]),
     pending_by_instance: Map([]),
+    scheduler_cursor: [None],
     next_future_id: [0],
     futures: Map([]),
     future_endpoints: Map([]),
@@ -849,11 +730,14 @@ fn resume_sync_waitable_use(
   owner_component_id : Int,
   handle : Int,
   task_id : Int64,
-) -> Unit {
+) -> Bool {
   let key = handle_key(owner_component_id, handle)
   if async_state.sync_waitable_users.get(key) is Some(owner_task_id) &&
     owner_task_id == task_id {
     async_state.sync_waitable_users.remove(key)
+    true
+  } else {
+    false
   }
 }
 
@@ -1201,8 +1085,8 @@ fn transfer_stream_readable_handle(
 /// Create a new readable stream handle in `to_component_id` that aliases the same stream as
 /// `handle` in `from_component_id`, without removing the original mapping.
 ///
-/// This is used to publish results early (via `canon task.return`) while the task may still be
-/// cooperatively replayed, so the callee must retain the original handle for idempotency checks.
+/// This publishes a result early via `canon task.return` while retaining the
+/// callee's original handle for the still-running producer task.
 fn clone_stream_readable_handle(
   async_state : AsyncState,
   from_component_id : Int,
@@ -2095,10 +1979,6 @@ fn push_task(async_state : AsyncState, id : Int64, can_block : Bool) -> Unit {
   async_state.task_stack.push(id)
   async_state.can_block_stack.push(can_block)
   async_state.task_can_block[0] = can_block
-  async_state.yield_cursor_stack.push(0)
-  async_state.wait_cursor_stack.push(0)
-  async_state.call_cursor_stack.push(0)
-  async_state.stream_cursor_stack.push(0)
 }
 
 ///|
@@ -2108,30 +1988,6 @@ fn pop_task(async_state : AsyncState) -> Unit {
   }
   if async_state.can_block_stack.length() > 0 {
     async_state.can_block_stack.remove(async_state.can_block_stack.length() - 1)
-    |> ignore
-  }
-  if async_state.yield_cursor_stack.length() > 0 {
-    async_state.yield_cursor_stack.remove(
-      async_state.yield_cursor_stack.length() - 1,
-    )
-    |> ignore
-  }
-  if async_state.wait_cursor_stack.length() > 0 {
-    async_state.wait_cursor_stack.remove(
-      async_state.wait_cursor_stack.length() - 1,
-    )
-    |> ignore
-  }
-  if async_state.call_cursor_stack.length() > 0 {
-    async_state.call_cursor_stack.remove(
-      async_state.call_cursor_stack.length() - 1,
-    )
-    |> ignore
-  }
-  if async_state.stream_cursor_stack.length() > 0 {
-    async_state.stream_cursor_stack.remove(
-      async_state.stream_cursor_stack.length() - 1,
-    )
     |> ignore
   }
   if async_state.can_block_stack.length() == 0 {

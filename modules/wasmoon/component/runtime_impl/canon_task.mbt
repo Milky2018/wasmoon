@@ -81,45 +81,9 @@ fn instantiate_canon_task_return(
       trap_canon("borrow handles still remain at the end of the call")
       return []
     }
-    // `canon task.return` can be executed multiple times if the surrounding
-    // core function is cooperatively replayed after a suspension (e.g. a
-    // sync stream.read/write inside a callback-style async task).
-    // Treat re-execution as idempotent as long as it returns the same value.
     if async_state.task_returned.get(task_id) is Some(_) {
-      match result {
-        None => return []
-        Some(vt) => {
-          let v = lift_task_return_value(
-            vt,
-            args,
-            resources,
-            types,
-            state.resource_table,
-            store,
-          ) catch {
-            e => {
-              trap_canon(canon_err_message(e))
-              return []
-            }
-          }
-          // NOTE: Unlike wasmtime, wasmoon currently implements sync-style
-          // suspension by cooperatively replaying the whole core function.
-          // This means `task.return` may be re-executed after its stream/future
-          // readable handles have already been transferred to the caller's
-          // component instance. In that case, re-validating the handle against
-          // the original component's handle table would spuriously trap.
-          match async_state.task_results.get(task_id) {
-            Some(prev) =>
-              if prev.length() == 1 && prev[0] == v {
-                return []
-              } else {
-                trap_canon("task.return called more than once")
-                return []
-              }
-            None => return []
-          }
-        }
-      }
+      trap_canon("task.return called more than once")
+      return []
     }
     async_state.task_returned.set(task_id, true)
     let vals : Array[ComponentValue] = match result {

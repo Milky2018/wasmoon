@@ -492,8 +492,6 @@ fn try_compile_jit(
           wast_jit_compiled_functions.val = wast_jit_compiled_functions.val +
             compiled_local_funcs
           @wast.register_instance_funcrefs_for_jit(jm, instance)
-          // Enable arbitrary host function imports via JIT -> hostcall bridge.
-          @wast.install_jit_hostcall_dispatcher(jm, store, instance)
           // Allocate independent WASM stack with guard page. Native JIT
           // execution and hostcall bridges use this stack, so keep it aligned
           // with `wasmoon run`.
@@ -580,6 +578,26 @@ fn try_compile_jit(
             jm, globals_ptr, global_addrs_copy, table_addrs_copy, func_addrs_copy,
             func_type_indices_copy, canonical_type_indices_copy, module_types_copy,
             module_rec_groups_copy, use_subtype_indirect_check,
+          )
+          // Cross an explicit state-coherence boundary around imported host or
+          // interpreter calls made from native component code.
+          @wast.install_jit_hostcall_dispatcher(
+            jm,
+            store,
+            instance,
+            before_dispatch=fn() {
+              @wast.sync_jit_globals_to_store(jit_ctx, store)
+              @wast.sync_jit_tables_to_store(jit_ctx, store)
+            },
+            after_dispatch=fn() {
+              @wast.sync_store_globals_to_jit(jit_ctx, store)
+              @wast.sync_tables_to_jit(
+                instance,
+                store,
+                jm,
+                use_subtype_indirect_check~,
+              )
+            },
           )
           Ok(jit_ctx)
         }

@@ -17,24 +17,8 @@ fn instantiate_canon_subtask_cancel(
     if !canon_may_leave[0] {
       trap_canon("cannot leave component instance")
     }
-    let task_id = current_task_id(async_state)
-    let cur = if async_state.call_cursor_stack.length() == 0 {
-      0
-    } else {
-      async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1]
-    }
-    let per_task = canon_call_results_for_task(async_state, task_id)
-    if per_task.get(cur) is Some(v) {
-      async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1] = cur +
-        1
-      return v
-    }
-    fn cache_i32(n : Int) -> Array[@types.Value] {
-      let out = [@types.Value::I32(n)]
-      per_task.set(cur, out)
-      async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1] = cur +
-        1
-      out
+    fn ret_i32(n : Int) -> Array[@types.Value] {
+      [I32(n)]
     }
 
     match args {
@@ -44,22 +28,22 @@ fn instantiate_canon_subtask_cancel(
           trap_canon(
             "waitable cannot be used synchronously while added to a waitable set",
           )
-          return cache_i32(0)
+          return ret_i32(0)
         }
         if !is_async_cancel && !async_state.task_can_block[0] {
           trap_canon("cannot block a synchronous task before returning")
-          return cache_i32(0)
+          return ret_i32(0)
         }
         let skey = handle_key(owner_component_id, id)
         match async_state.subtasks.get(skey) {
           None => {
             trap_canon("unknown subtask handle index \{id}")
-            cache_i32(0)
+            ret_i32(0)
           }
           Some(st) => {
             if st.phase[0] == Returned {
               // Already resolved.
-              return cache_i32(0)
+              return ret_i32(0)
             }
             async_state.task_cancelled.set(skey, true)
 
@@ -91,7 +75,7 @@ fn instantiate_canon_subtask_cancel(
                 }
               }
               // CANCELLED_BEFORE_STARTED.
-              return cache_i32(3)
+              return ret_i32(3)
             }
 
             // Best-effort: if the subtask uses the callback-style async ABI,
@@ -125,7 +109,7 @@ fn instantiate_canon_subtask_cancel(
                     e => {
                       pop_task(async_state)
                       trap_canon(canon_err_message(e))
-                      return cache_i32(0)
+                      return ret_i32(0)
                     }
                   }
                   pop_task(async_state)
@@ -140,7 +124,7 @@ fn instantiate_canon_subtask_cancel(
                         payload: 4,
                       })
                       // CANCELLED_BEFORE_RETURNED=4 (component-spec convention).
-                      return cache_i32(4)
+                      return ret_i32(4)
                     }
                     _ => ()
                   }
@@ -149,13 +133,13 @@ fn instantiate_canon_subtask_cancel(
             }
 
             // BLOCKED=-1 (cancellation didn't complete synchronously).
-            cache_i32(-1)
+            ret_i32(-1)
           }
         }
       }
       _ => {
         trap_canon("type mismatch")
-        cache_i32(0)
+        ret_i32(0)
       }
     }
   }
@@ -176,24 +160,8 @@ fn instantiate_canon_subtask_drop(
     if !canon_may_leave[0] {
       trap_canon("cannot leave component instance")
     }
-    let task_id = current_task_id(async_state)
-    let cur = if async_state.call_cursor_stack.length() == 0 {
-      0
-    } else {
-      async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1]
-    }
-    let per_task = canon_call_results_for_task(async_state, task_id)
-    if per_task.get(cur) is Some(v) {
-      async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1] = cur +
-        1
-      return v
-    }
-    fn cache_void() -> Array[@types.Value] {
-      let out : Array[@types.Value] = []
-      per_task.set(cur, out)
-      async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1] = cur +
-        1
-      out
+    fn ret_void() -> Array[@types.Value] {
+      []
     }
 
     match args {
@@ -205,13 +173,13 @@ fn instantiate_canon_subtask_drop(
           Some(st) =>
             if st.phase[0] != Returned {
               trap_canon("cannot drop a subtask which has not yet resolved")
-              return cache_void()
+              return ret_void()
             } else {
               async_state.subtasks.remove(skey)
             }
           None => {
             trap_canon("unknown subtask handle index \{id}")
-            return cache_void()
+            return ret_void()
           }
         }
 
@@ -247,13 +215,8 @@ fn instantiate_canon_subtask_drop(
         async_state.task_cancelled.remove(skey)
         async_state.task_contexts.remove(skey)
         drop_task_thread(async_state, skey)
-        async_state.yield_replay_upto.remove(skey)
-        async_state.wait_results.remove(skey)
+        async_state.yield_suspended.remove(skey)
         async_state.waiting_ws.remove(skey)
-        async_state.call_results.remove(skey)
-        async_state.call_results_cb.remove(skey)
-        async_state.call_result_ends.remove(skey)
-        async_state.call_result_ends_cb.remove(skey)
         async_state.sync_lower_states.remove(skey)
 
         // Remove from pending queues if it was still STARTING.
@@ -281,11 +244,11 @@ fn instantiate_canon_subtask_drop(
           }
         }
         free_shared_handle(async_state, owner_component_id, id)
-        cache_void()
+        ret_void()
       }
       _ => {
         trap_canon("type mismatch")
-        cache_void()
+        ret_void()
       }
     }
   }

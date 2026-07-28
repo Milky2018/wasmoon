@@ -47,31 +47,17 @@ fn ExecContext::exec_control(
       }
       self.push_label(false, arity) // Block branches use result arity
       let result = try self.exec_block(body) catch {
-        e => ExecBlockRaised(e)
+        ExecutionSuspended => {
+          self.append_resume_handler(fn(result) raise {
+            self.finish_block_control(result, arity, stack_height)
+          })
+          raise ExecutionSuspended
+        }
+        error => ExecBlockRaised(error)
       } noraise {
         _ => ExecBlockCompleted
       }
-      self.pop_label()
-      match result {
-        ExecBlockCompleted => {
-          // Normal completion: keep only block results on the outer stack.
-          let results = self.stack.pop_n(arity)
-          self.restore_stack_to(stack_height)
-          for v in results {
-            self.stack.push(v)
-          }
-        }
-        ExecBlockRaised(BranchWith(0, values)) => {
-          // br 0: jump to end, keep carried values only.
-          self.restore_stack_to(stack_height)
-          for v in values {
-            self.stack.push(v)
-          }
-        }
-        ExecBlockRaised(BranchWith(n, values)) =>
-          raise BranchWith(n - 1, values)
-        ExecBlockRaised(e) => raise e
-      }
+      self.finish_block_control(result, arity, stack_height)
     }
     // Loop: execute body, br 0 jumps to start
     Loop(bt, body) => {
@@ -83,42 +69,7 @@ fn ExecContext::exec_control(
         self.stack.push(v)
       }
       self.push_label(true, param_arity) // Loop branches use param arity
-      while true {
-        self.check_cancellation()
-        let result = try self.exec_block(body) catch {
-          e => ExecBlockRaised(e)
-        } noraise {
-          _ => ExecBlockCompleted
-        }
-        match result {
-          ExecBlockCompleted => {
-            self.pop_label()
-            // Normal loop exit: keep only loop results on the outer stack.
-            let results = self.stack.pop_n(result_arity)
-            self.restore_stack_to(stack_height)
-            for v in results {
-              self.stack.push(v)
-            }
-            break // Normal exit
-          }
-          ExecBlockRaised(BranchWith(0, values)) => {
-            // For loop, branch to start: restore stack and push params back
-            self.restore_stack_to(stack_height)
-            for v in values {
-              self.stack.push(v)
-            }
-            continue
-          }
-          ExecBlockRaised(BranchWith(n, values)) => {
-            self.pop_label()
-            raise BranchWith(n - 1, values)
-          }
-          ExecBlockRaised(e) => {
-            self.pop_label()
-            raise e
-          }
-        }
-      }
+      self.exec_loop_body(body, result_arity, stack_height)
     }
     // If-else: pop condition, execute appropriate branch
     If(bt, then_body, else_body) => {
@@ -133,30 +84,17 @@ fn ExecContext::exec_control(
       }
       self.push_label(false, arity) // If branches use result arity
       let result = try self.exec_block(body) catch {
-        e => ExecBlockRaised(e)
+        ExecutionSuspended => {
+          self.append_resume_handler(fn(result) raise {
+            self.finish_block_control(result, arity, stack_height)
+          })
+          raise ExecutionSuspended
+        }
+        error => ExecBlockRaised(error)
       } noraise {
         _ => ExecBlockCompleted
       }
-      self.pop_label()
-      match result {
-        ExecBlockCompleted => {
-          // Normal completion: keep only if results on the outer stack.
-          let results = self.stack.pop_n(arity)
-          self.restore_stack_to(stack_height)
-          for v in results {
-            self.stack.push(v)
-          }
-        }
-        ExecBlockRaised(BranchWith(0, values)) => {
-          self.restore_stack_to(stack_height)
-          for v in values {
-            self.stack.push(v)
-          }
-        }
-        ExecBlockRaised(BranchWith(n, values)) =>
-          raise BranchWith(n - 1, values)
-        ExecBlockRaised(e) => raise e
-      }
+      self.finish_block_control(result, arity, stack_height)
     }
     // Unconditional branch - collect values based on target block arity
     Br(depth) => {
@@ -239,13 +177,147 @@ fn ExecContext::exec_control(
 }
 
 ///|
+fn ExecContext::finish_block_control(
+  self : ExecContext,
+  result : ExecBlockResult,
+  arity : Int,
+  stack_height : Int,
+) -> Unit raise {
+  self.pop_label()
+  match result {
+    ExecBlockCompleted => {
+      let results = self.stack.pop_n(arity)
+      self.restore_stack_to(stack_height)
+      for value in results {
+        self.stack.push(value)
+      }
+    }
+    ExecBlockRaised(BranchWith(0, values)) => {
+      self.restore_stack_to(stack_height)
+      for value in values {
+        self.stack.push(value)
+      }
+    }
+    ExecBlockRaised(BranchWith(depth, values)) =>
+      raise BranchWith(depth - 1, values)
+    ExecBlockRaised(error) => raise error
+  }
+}
+
+///|
+fn ExecContext::exec_loop_body(
+  self : ExecContext,
+  body : Array[@types.Instruction],
+  result_arity : Int,
+  stack_height : Int,
+) -> Unit raise {
+  while true {
+    self.check_cancellation()
+    let result = try self.exec_block(body) catch {
+      ExecutionSuspended => {
+        self.append_resume_handler(fn(result) raise {
+          self.finish_suspended_loop_iteration(
+            result, body, result_arity, stack_height,
+          )
+        })
+        raise ExecutionSuspended
+      }
+      error => ExecBlockRaised(error)
+    } noraise {
+      _ => ExecBlockCompleted
+    }
+    match result {
+      ExecBlockCompleted => {
+        self.finish_loop(result, result_arity, stack_height)
+        return
+      }
+      ExecBlockRaised(BranchWith(0, values)) => {
+        self.restore_stack_to(stack_height)
+        for value in values {
+          self.stack.push(value)
+        }
+      }
+      _ => {
+        self.finish_loop(result, result_arity, stack_height)
+        return
+      }
+    }
+  }
+}
+
+///|
+fn ExecContext::finish_suspended_loop_iteration(
+  self : ExecContext,
+  result : ExecBlockResult,
+  body : Array[@types.Instruction],
+  result_arity : Int,
+  stack_height : Int,
+) -> Unit raise {
+  match result {
+    ExecBlockRaised(BranchWith(0, values)) => {
+      self.restore_stack_to(stack_height)
+      for value in values {
+        self.stack.push(value)
+      }
+      self.exec_loop_body(body, result_arity, stack_height)
+    }
+    _ => self.finish_loop(result, result_arity, stack_height)
+  }
+}
+
+///|
+fn ExecContext::finish_loop(
+  self : ExecContext,
+  result : ExecBlockResult,
+  result_arity : Int,
+  stack_height : Int,
+) -> Unit raise {
+  match result {
+    ExecBlockCompleted => {
+      self.pop_label()
+      let results = self.stack.pop_n(result_arity)
+      self.restore_stack_to(stack_height)
+      for value in results {
+        self.stack.push(value)
+      }
+    }
+    ExecBlockRaised(BranchWith(0, _)) =>
+      abort("loop continuation did not resume the next iteration")
+    ExecBlockRaised(BranchWith(depth, values)) => {
+      self.pop_label()
+      raise BranchWith(depth - 1, values)
+    }
+    ExecBlockRaised(error) => {
+      self.pop_label()
+      raise error
+    }
+  }
+}
+
+///|
 /// Execute a block body (can raise ControlSignal)
 fn ExecContext::exec_block(
   self : ExecContext,
   instrs : Array[@types.Instruction],
 ) -> Unit raise {
-  for instr in instrs {
+  self.exec_block_from(instrs, 0)
+}
+
+///|
+fn ExecContext::exec_block_from(
+  self : ExecContext,
+  instrs : Array[@types.Instruction],
+  start : Int,
+) -> Unit raise {
+  for i in start..<instrs.length() {
+    let instr = instrs[i]
     self.exec_instr(instr) catch {
+      ExecutionSuspended => {
+        self.append_resume_suffix(fn() raise {
+          self.exec_block_from(instrs, i + 1)
+        })
+        raise ExecutionSuspended
+      }
       @runtime.TypeMismatch => {
         @logger.debug("type mismatch at instr: \{instr}")
         raise @runtime.TypeMismatch
@@ -261,14 +333,34 @@ fn ExecContext::exec_expr(
   self : ExecContext,
   instrs : Array[@types.Instruction],
 ) -> Unit raise {
-  self.exec_block(instrs) catch {
-    Return => () // Explicit return
-    BranchWith(0, values) =>
+  let result = try self.exec_block(instrs) catch {
+    ExecutionSuspended => {
+      self.append_resume_handler(fn(result) raise {
+        self.finish_exec_expr(result)
+      })
+      raise ExecutionSuspended
+    }
+    error => ExecBlockRaised(error)
+  } noraise {
+    _ => ExecBlockCompleted
+  }
+  self.finish_exec_expr(result)
+}
+
+///|
+fn ExecContext::finish_exec_expr(
+  self : ExecContext,
+  result : ExecBlockResult,
+) -> Unit raise {
+  match result {
+    ExecBlockCompleted => ()
+    ExecBlockRaised(Return) => () // Explicit return
+    ExecBlockRaised(BranchWith(0, values)) =>
       // Branch to function (br 0 from outermost block) acts like return
       // Push the return values back onto the stack
       for v in values {
         self.stack.push(v)
       }
-    e => raise e
+    ExecBlockRaised(error) => raise error
   }
 }

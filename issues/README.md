@@ -295,6 +295,12 @@ graph TD
   ISS_277["ISS-277: Implement the current Preview 3 async WASI interfaces"]
   ISS_278["ISS-278: Integrate component commands and WASI conformance gates"]
   ISS_279["ISS-279: Generate WASI component contracts from pinned official WIT"]
+  ISS_280["ISS-280: Add JIT component execution and explicit async continuations"]
+  ISS_281["ISS-281: Introduce the component core execution engine seam"]
+  ISS_282["ISS-282: Make the core interpreter explicitly resumable"]
+  ISS_283["ISS-283: Drive component continuations from the host event loop"]
+  ISS_284["ISS-284: Remove component async replay state"]
+  ISS_285["ISS-285: Add the component JIT adapter and execution gates"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
@@ -584,6 +590,15 @@ graph TD
   ISS_276 --> ISS_278
   ISS_277 --> ISS_278
   ISS_272 --> ISS_279
+  ISS_281 --> ISS_280
+  ISS_282 --> ISS_280
+  ISS_283 --> ISS_280
+  ISS_284 --> ISS_280
+  ISS_285 --> ISS_280
+  ISS_281 --> ISS_282
+  ISS_282 --> ISS_283
+  ISS_283 --> ISS_284
+  ISS_281 --> ISS_285
 ```
 
 ## Warnings

@@ -10,9 +10,11 @@ import {
 }
 
 // Values
-pub fn alloc_host_core_func(@runtime.Store, @types.FuncType, (Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError) -> CoreFuncRef
+pub fn alloc_host_core_func(@runtime.Store, @types.FuncType, (Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError, may_suspend? : Bool, native_eligible? : Bool) -> CoreFuncRef
 
 pub fn clear_canon_debug_message() -> Unit
+
+pub fn interpreter_core_execution_engine() -> CoreExecutionEngine
 
 pub fn preset_canon_debug_message(String) -> Unit
 
@@ -53,8 +55,6 @@ pub(all) suberror ComponentRuntimeError {
   CanonCallError(String)
   HostCallError(String)
   HostExit(Int)
-  AsyncSuspendYield
-  AsyncSuspendWait(Int64)
   InvalidStartResultCount(Int)
   OuterAliasOutOfRange(Int)
   AliasTargetMismatch(String)
@@ -65,6 +65,7 @@ pub impl Show for ComponentRuntimeError
 
 // Types and methods
 pub(all) struct AsyncState {
+  core_engine : CoreExecutionEngine
   next_handle_by_component : Map[Int, Array[Int]]
   free_handles_by_component : Map[Int, Array[Int]]
   stream_table : StreamTable
@@ -87,22 +88,11 @@ pub(all) struct AsyncState {
   task_can_block : Array[Bool]
   can_block_stack : Array[Bool]
   in_async_callback : Array[Bool]
-  yield_cursor_stack : Array[Int]
-  wait_cursor_stack : Array[Int]
-  call_cursor_stack : Array[Int]
-  stream_cursor_stack : Array[Int]
   task_caller : Map[Int64, Int64]
   task_instance : Map[Int64, Int]
-  yield_replay_upto : Map[Int64, Int]
-  wait_results : Map[Int64, Map[Int, WaitResult]]
+  yield_suspended : Map[Int64, Bool]
   waiting_ws : Map[Int64, Int64]
-  call_results : Map[Int64, Map[Int, Array[@types.Value]]]
-  call_results_cb : Map[Int64, Map[Int, Array[@types.Value]]]
-  call_result_ends : Map[Int64, Map[Int, Int]]
-  call_result_ends_cb : Map[Int64, Map[Int, Int]]
-  stream_results : Map[Int64, Map[Int, Int]]
-  stream_results_cb : Map[Int64, Map[Int, Int]]
-  sync_lower_states : Map[Int64, Map[Int, SyncLowerState]]
+  sync_lower_states : Map[Int64, SyncLowerState]
   waitable_sets : Map[Int64, WaitableSet]
   waitable_to_set : Map[Int64, Int64]
   waitable_events : Map[Int64, Array[WaitEvent]]
@@ -110,6 +100,7 @@ pub(all) struct AsyncState {
   subtasks : Map[Int64, Subtask]
   inflight_by_instance : Map[Int, Int]
   pending_by_instance : Map[Int, Array[Int64]]
+  scheduler_cursor : Array[Int64?]
   next_future_id : Array[Int]
   futures : Map[Int, FutureState]
   future_endpoints : Map[Int64, FutureEndpoint]
@@ -118,7 +109,7 @@ pub(all) struct AsyncState {
   next_error_context_by_component : Map[Int, Array[Int]]
   error_contexts : Map[Int64, String]
 } derive(@debug.Debug)
-pub fn AsyncState::AsyncState(StreamTable) -> Self
+pub fn AsyncState::AsyncState(StreamTable, core_engine? : CoreExecutionEngine) -> Self
 
 type CallbackTask derive(@debug.Debug)
 
@@ -198,6 +189,7 @@ pub fn ComponentLinker::host_instance_builder(Self, String, HostRuntimeState) ->
 pub fn ComponentLinker::instantiate(Self, String, @model.Component) -> ComponentInstance raise ComponentRuntimeError
 pub fn ComponentLinker::new_host_resource_type(Self) -> @model.TypeDef?
 pub fn ComponentLinker::register(Self, String, ComponentInstance) -> Unit
+pub fn ComponentLinker::with_core_execution_engine(CoreExecutionEngine) -> Self
 
 pub(all) enum ComponentValue {
   Bool(Bool)
@@ -221,9 +213,36 @@ pub(all) enum ComponentValue {
 } derive(Eq, @debug.Debug)
 pub impl Show for ComponentValue
 
+type CoreContinuation
+pub fn CoreContinuation::CoreContinuation(() -> CoreExecutionOutcome raise ComponentRuntimeError, () -> Unit) -> Self
+pub fn CoreContinuation::cancel(Self) -> Unit
+pub fn CoreContinuation::continue_execution(Self) -> CoreExecutionOutcome raise ComponentRuntimeError
+pub impl @debug.Debug for CoreContinuation
+
+type CoreExecutionEngine
+pub fn CoreExecutionEngine::CoreExecutionEngine((@runtime.Store, @types.Module, @runtime.ModuleInstance) -> Unit raise ComponentRuntimeError, (@runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value], CoreExecutionMode) -> CoreExecutionOutcome raise ComponentRuntimeError, prepare_store? : (@runtime.Store) -> Unit) -> Self
+pub fn CoreExecutionEngine::invoke(Self, @runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value], CoreExecutionMode) -> CoreExecutionOutcome raise ComponentRuntimeError
+pub fn CoreExecutionEngine::prepare_store(Self, @runtime.Store) -> Unit
+pub fn CoreExecutionEngine::register_instance(Self, @runtime.Store, @types.Module, @runtime.ModuleInstance) -> Unit raise ComponentRuntimeError
+pub impl @debug.Debug for CoreExecutionEngine
+
+pub(all) enum CoreExecutionMode {
+  Synchronous
+  Interpreted
+  Suspendable
+} derive(Eq, @debug.Debug)
+
+pub(all) enum CoreExecutionOutcome {
+  Returned(Array[@types.Value])
+  Suspended(CoreSuspension, CoreContinuation)
+} derive(@debug.Debug)
+
 pub(all) struct CoreFuncRef {
   instance : @runtime.ModuleInstance
   func_idx : Int
+  engine : CoreExecutionEngine
+  may_suspend : Bool
+  native_eligible : Bool
 } derive(@debug.Debug)
 
 pub(all) struct CoreInstance {
@@ -234,6 +253,11 @@ pub(all) struct CoreInstance {
   tags : Map[String, Int]
 }
 pub impl Show for CoreInstance
+
+pub(all) enum CoreSuspension {
+  Yield
+  Wait(Int64)
+} derive(Eq, @debug.Debug)
 
 type DecodedCallbackCode derive(@debug.Debug)
 
@@ -365,8 +389,6 @@ type SyncLowerState derive(@debug.Debug)
 type TaskStep derive(Eq, @debug.Debug)
 
 type WaitEvent derive(@debug.Debug)
-
-type WaitResult derive(@debug.Debug)
 
 type WaitableSet derive(@debug.Debug)
 

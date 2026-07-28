@@ -1,89 +1,68 @@
-# Component Model Plan (MVP)
+# Component Model Architecture
 
-This document proposes a staged plan to add WebAssembly Component Model support
-in Wasmoon while keeping the existing core Wasm pipeline intact.
+Wasmoon layers the WebAssembly Component Model above its validated core Wasm
+runtime. Component parsing, validation, linking, canonical ABI adaptation, and
+WASI component hosts remain product-owned code; embedded core modules reuse the
+same runtime objects, interpreter, and native compiler as ordinary core Wasm.
 
-## Goals
+## Package Boundaries
 
-- Parse and validate component binaries and text format inputs.
-- Instantiate components that embed or reference core Wasm modules.
-- Support canonical ABI adapters (lift/lower) for basic value types.
-- Provide a CLI surface for running and testing component inputs.
+- `wasmoon/component`: component binary model and parser.
+- `wasmoon/validator/component_model`: component validation.
+- `wasmoon/component/runtime_impl`: linker, instantiation, canonical ABI,
+  resources, tasks, streams, futures, and host adapters.
+- `wasmoon/wasi_component`: WASI Preview 2 and Preview 3 component hosts.
+- `wasmoon/cmd/wasmoon`: command execution and component-spec test harness.
 
-## Non-goals (for MVP)
+Component execution does not add product dependencies to reusable compiler
+modules. The component runtime selects a core execution engine through an
+adapter owned by Wasmoon.
 
-- Full async/futures support.
-- Resource types beyond basic handles.
-- Complete WIT package manager integration.
-- Advanced optimization of adapters or cross-component inlining.
+## Core Execution Contract
 
-## Architecture Alignment
+Each instantiated core module is registered with a `CoreExecutionEngine`.
+Component function references retain that engine and declare whether a call may
+suspend and whether native entry is safe.
 
-Component model will be layered above the existing core Wasm pipeline:
+Synchronous, native-eligible core calls use the JIT by default. Calls that may
+re-enter canonical adapters through imports or indirect tables use the
+interpreter conservatively. Suspendable calls always use the continuation-aware
+interpreter because native machine stacks are not guest continuations.
 
+The interpreter returns either completed results or a typed suspension with an
+owned continuation. A continuation captures the exact operand stack, locals,
+frames, labels, and remaining structured control flow. It can be resumed once
+or cancelled; resumption retries only the suspended host-call boundary.
+
+## Async Host Contract
+
+The component scheduler is a cooperative, single-threaded event loop. Component
+tasks and MoonBit processes are logical tasks; Wasmoon does not require or
+model operating-system threads.
+
+Host async functions return pollable futures. Polling must be non-blocking.
+When no guest task can progress, the embedding-provided host event-loop hook
+waits for external I/O or timer readiness. Waitable-set events wake the owning
+task, and the scheduler resumes its stored continuation. Cancellation releases
+the continuation and calls the host future's cancellation hook.
+
+No replay cursor or cached host result is part of this protocol. Effects before
+a suspension point execute once, and events are consumed once after resumption.
+
+## Validation
+
+The pinned component-model snapshot is divided into stable 0.2, current 0.3
+async, and future-gated suites. Each suite can run with the default JIT adapter
+or with `--no-jit`:
+
+```bash
+python3 scripts/run_component_wast.py --suite stable-0.2
+python3 scripts/run_component_wast.py --suite stable-0.2 --no-jit
+python3 scripts/run_component_wast.py --suite async-0.3
+python3 scripts/run_component_wast.py --suite async-0.3 --no-jit
+python3 scripts/run_component_wast.py --suite future-gated
+python3 scripts/run_component_wast.py --suite future-gated --no-jit
 ```
-component parser -> component validator -> component runtime/linker
-                                 |               |
-                                 v               v
-                           core wasm parser  runtime/executor/JIT
-```
 
-Key idea: component instantiation produces core Wasm modules and adapters that
-reuse the existing runtime and execution stacks.
-
-## Proposed Packages (high-level)
-
-- `component/`: AST + IR for component definitions.
-- `component_parser/`: binary + text parsing for component model.
-- `component_validator/`: type checking, aliasing rules, canonical ABI rules.
-- `component_runtime/`: linker/instantiator, adapter dispatch, host bindings.
-- `component_types/`: canonicalized type system and WIT mapping.
-
-(Exact package names to be finalized after first parser prototype.)
-
-## Staged Plan
-
-### Phase 0: Scope + CLI Surface
-
-- Add a design doc (this file) and an initial CLI flag plan.
-- Decide on file detection: explicit subcommand vs. auto-detect.
-- Decide on where component code lives in the repo tree.
-
-### Phase 1: Parsing + IR
-
-- Implement component AST and binary parser for core component sections:
-  - type, import/export, alias, component/module, instance, canon, start.
-- Add WIT parsing for a minimal subset required by canonical ABI mapping.
-- Provide a round-trip dump utility for debugging.
-
-### Phase 2: Validation
-
-- Validate type correctness for component definitions and instantiation.
-- Validate canonical ABI lifting/lowering constraints.
-- Validate alias/import/export/instance dependency ordering.
-
-### Phase 3: Runtime + Linker
-
-- Instantiate component graphs, resolve imports/exports, build core modules.
-- Implement canonical ABI adapters (lift/lower) for basic types.
-- Bridge adapters to core Wasm functions and host bindings.
-- Ensure compatibility with interpreter and JIT call paths.
-
-### Phase 4: CLI + Tests
-
-- Add `wasmoon component <command>` (exact names TBD).
-- Add fixtures and spec tests (component-model WAST/WIT sources).
-- Add targeted regression tests for canonical ABI conversions.
-
-## Open Questions
-
-- Binary component format detection (magic/version) vs. explicit CLI flag.
-- WIT parsing strategy: minimal in-tree parser vs. external generator.
-- Host binding model: map to existing WASI import style or new interface.
-- JIT interaction: whether to JIT adapters or keep them in interpreter.
-
-## Success Criteria (MVP)
-
-- Load and instantiate component binaries with nested core modules.
-- Execute an exported component function that uses lift/lower.
-- Run a small suite of component spec tests in CI.
+Known unsupported specification features are recorded in
+`docs/component/unsupported-matrix.md`.

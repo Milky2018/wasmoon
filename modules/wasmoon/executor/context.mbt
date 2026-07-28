@@ -85,6 +85,26 @@ impl Debug for CancellationPoller with fn to_repr(_self) {
 }
 
 ///|
+priv struct SuspensionClassifier {
+  classify : (@runtime.RuntimeError) -> Int64?
+}
+
+///|
+impl Debug for SuspensionClassifier with fn to_repr(_self) {
+  Repr::literal("<suspension-classifier>")
+}
+
+///|
+priv struct ResumeAction {
+  run : () -> Unit raise
+}
+
+///|
+impl Debug for ResumeAction with fn to_repr(_self) {
+  Repr::literal("<resume-action>")
+}
+
+///|
 /// Execution context for running WASM code
 struct ExecContext {
   stack : @runtime.Stack
@@ -97,6 +117,9 @@ struct ExecContext {
   gc_stress_every : Int
   mut gc_stress_alloc_count : Int
   cancel : CancellationPoller?
+  suspension_classifier : SuspensionClassifier?
+  mut resume_action : ResumeAction?
+  mut suspension_token : Int64?
 } derive(Debug)
 
 ///|
@@ -104,6 +127,7 @@ fn ExecContext::ExecContext(
   store : @runtime.Store,
   instance : @runtime.ModuleInstance,
   cancel? : (() -> Bool)? = None,
+  classify_suspension? : (@runtime.RuntimeError) -> Int64? = fn(_) { None },
 ) -> ExecContext {
   {
     stack: Stack(),
@@ -116,6 +140,9 @@ fn ExecContext::ExecContext(
     gc_stress_every: gc_stress_every(),
     gc_stress_alloc_count: 0,
     cancel: cancel.map(fn(callback) { { callback, } }),
+    suspension_classifier: Some({ classify: classify_suspension }),
+    resume_action: None,
+    suspension_token: None,
   }
 }
 
