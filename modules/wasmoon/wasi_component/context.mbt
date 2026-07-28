@@ -1,4 +1,11 @@
 ///|
+priv struct WasiAsyncOperation {
+  task : @wasmoon_async.TaskHandle
+  registration : @async_native.NativeRegistration
+  ready : Ref[Bool]
+}
+
+///|
 /// Capability and process state supplied to a WASI component.
 ///
 /// The context contains no ambient filesystem or network authority. Those
@@ -12,9 +19,9 @@ struct WasiComponentCtx {
   insecure_seed : (Int64, Int64)
   resources : Map[Int, WasiHostResource]
   next_resource_rep : Ref[Int]
-  async_deadlines : Map[Int, Int64]
-  async_fds : Map[Int, (Int, Int)]
-  next_async_operation : Ref[Int]
+  async_runtime : @wasmoon_async.Runtime
+  native_reactor : @async_native.NativeReactor?
+  async_ready : Map[@wasmoon_async.TaskId, Ref[Bool]]
   stdin_rep : Int
   stdout_rep : Int
   stderr_rep : Int
@@ -234,18 +241,30 @@ pub fn WasiComponentCtxBuilder::build(
   let stdout_rep = 2
   let stderr_rep = 3
   let network_rep = 4
+  let stdin_fd = if self.inherit_stdin {
+    Some(@wasi.native_dup(0).unwrap_or(-1))
+  } else {
+    None
+  }
+  let stdout_fd = match self.stdout_fd {
+    Some(fd) => Some(@wasi.native_dup(fd).unwrap_or(-1))
+    None => None
+  }
+  let stderr_fd = match self.stderr_fd {
+    Some(fd) => Some(@wasi.native_dup(fd).unwrap_or(-1))
+    None => None
+  }
+  let native_reactor = Some(@async_native.NativeReactor::try_new()) catch {
+    _ => None
+  }
   resources.set(
     stdin_rep,
     InputStream({
       bytes: Ref(self.stdin),
       offset: Ref(0),
-      native_fd: if self.inherit_stdin {
-        Some(0)
-      } else {
-        None
-      },
+      native_fd: stdin_fd,
       file_position: None,
-      owns_fd: false,
+      owns_fd: stdin_fd is Some(fd) && fd >= 0,
       closed: Ref(false),
     }),
   )
@@ -254,10 +273,10 @@ pub fn WasiComponentCtxBuilder::build(
     stdout_rep,
     OutputStream({
       write: self.stdout,
-      native_fd: self.stdout_fd,
+      native_fd: stdout_fd,
       file_position: None,
       append: false,
-      owns_fd: false,
+      owns_fd: stdout_fd is Some(fd) && fd >= 0,
       permit: Ref(0L),
       pending: Ref(None),
       failure: Ref(None),
@@ -268,10 +287,10 @@ pub fn WasiComponentCtxBuilder::build(
     stderr_rep,
     OutputStream({
       write: self.stderr,
-      native_fd: self.stderr_fd,
+      native_fd: stderr_fd,
       file_position: None,
       append: false,
-      owns_fd: false,
+      owns_fd: stderr_fd is Some(fd) && fd >= 0,
       permit: Ref(0L),
       pending: Ref(None),
       failure: Ref(None),
@@ -287,9 +306,9 @@ pub fn WasiComponentCtxBuilder::build(
     insecure_seed: self.insecure_seed,
     resources,
     next_resource_rep: Ref(5),
-    async_deadlines: Map([]),
-    async_fds: Map([]),
-    next_async_operation: Ref(1),
+    async_runtime: @wasmoon_async.Runtime(),
+    native_reactor,
+    async_ready: Map([]),
     stdin_rep,
     stdout_rep,
     stderr_rep,
@@ -602,32 +621,55 @@ fn WasiComponentCtx::drop_resource(self : WasiComponentCtx, rep : Int) -> Unit {
 fn WasiComponentCtx::register_deadline(
   self : WasiComponentCtx,
   deadline : Int64,
-) -> Int {
-  let id = self.next_async_operation.val
-  self.next_async_operation.val = id + 1
-  self.async_deadlines.set(id, deadline)
-  id
-}
-
-///|
-fn WasiComponentCtx::deadline_ready(self : WasiComponentCtx, id : Int) -> Bool {
-  match self.async_deadlines.get(id) {
-    Some(deadline) => {
-      let now = @wasi.native_clock_gettime_monotonic()
-      if now >= 0L && now >= deadline {
-        self.async_deadlines.remove(id)
-        true
-      } else {
-        false
-      }
-    }
-    None => true
+) -> WasiAsyncOperation raise @runtime_impl.ComponentRuntimeError {
+  guard self.native_reactor is Some(reactor) else {
+    raise HostCallError("native async reactor is unavailable")
   }
+  let now = @wasi.native_clock_gettime_monotonic()
+  if now < 0L {
+    raise HostCallError("monotonic clock is unavailable")
+  }
+  let task = self.async_runtime.spawn()
+  task.take_ready() |> ignore
+  let ready = Ref(false)
+  let registration = reactor.register_timer(
+    if deadline <= now {
+      1L
+    } else {
+      deadline - now
+    },
+    task.waker(),
+  ) catch {
+    error => {
+      task.cancel()
+      raise HostCallError("cannot register native timer: \{error}")
+    }
+  }
+  self.async_ready.set(task.id(), ready)
+  { task, registration, ready }
 }
 
 ///|
-fn WasiComponentCtx::cancel_deadline(self : WasiComponentCtx, id : Int) -> Unit {
-  self.async_deadlines.remove(id)
+fn WasiComponentCtx::async_operation_ready(
+  self : WasiComponentCtx,
+  operation : WasiAsyncOperation,
+) -> Bool {
+  if !operation.ready.val {
+    return false
+  }
+  self.async_ready.remove(operation.task.id())
+  operation.task.complete()
+  true
+}
+
+///|
+fn WasiComponentCtx::cancel_async_operation(
+  self : WasiComponentCtx,
+  operation : WasiAsyncOperation,
+) -> Unit {
+  self.async_ready.remove(operation.task.id())
+  operation.registration.cancel()
+  operation.task.cancel()
 }
 
 ///|
@@ -635,82 +677,62 @@ fn WasiComponentCtx::register_async_fd(
   self : WasiComponentCtx,
   fd : Int,
   events : Int,
-) -> Int {
-  let id = self.next_async_operation.val
-  self.next_async_operation.val = id + 1
-  self.async_fds.set(id, (fd, events))
-  id
-}
-
-///|
-fn WasiComponentCtx::async_fd_ready(self : WasiComponentCtx, id : Int) -> Bool {
-  match self.async_fds.get(id) {
-    Some((fd, events)) =>
-      match @wasi.native_poll([fd], [events], 0) {
-        Some(result) if result.ready_count > 0 => {
-          self.async_fds.remove(id)
-          true
-        }
-        Some(_) => false
-        None => {
-          self.async_fds.remove(id)
-          true
-        }
-      }
-    None => true
+) -> WasiAsyncOperation raise @runtime_impl.ComponentRuntimeError {
+  guard self.native_reactor is Some(reactor) else {
+    raise HostCallError("native async reactor is unavailable")
   }
-}
-
-///|
-fn WasiComponentCtx::cancel_async_fd(self : WasiComponentCtx, id : Int) -> Unit {
-  self.async_fds.remove(id)
+  let task = self.async_runtime.spawn()
+  task.take_ready() |> ignore
+  let ready = Ref(false)
+  let writable = if (events & 0x01) != 0 {
+    false
+  } else if (events & 0x04) != 0 {
+    true
+  } else {
+    task.cancel()
+    raise HostCallError("unsupported native descriptor event mask")
+  }
+  let registration = try {
+    if writable {
+      reactor.register_write(fd, task.waker())
+    } else {
+      reactor.register_read(fd, task.waker())
+    }
+  } catch {
+    error => {
+      task.cancel()
+      raise HostCallError("cannot register native descriptor: \{error}")
+    }
+  }
+  self.async_ready.set(task.id(), ready)
+  { task, registration, ready }
 }
 
 ///|
 fn WasiComponentCtx::wait_for_async_event(
   self : WasiComponentCtx,
 ) -> Bool raise @runtime_impl.ComponentRuntimeError {
-  let mut nearest : Int64? = None
-  for entry in self.async_deadlines.iter() {
-    let (_id, deadline) = entry
-    match nearest {
-      Some(current) if current <= deadline => ()
-      _ => nearest = Some(deadline)
+  guard !self.async_ready.is_empty() else { return false }
+  guard self.native_reactor is Some(reactor) else {
+    raise HostCallError("native async reactor is unavailable")
+  }
+  while !self.async_ready.is_empty() {
+    try reactor.wait(None) |> ignore catch {
+      error => raise HostCallError("native async reactor wait failed: \{error}")
     }
-  }
-  let fds : Array[Int] = []
-  let events : Array[Int] = []
-  for entry in self.async_fds.iter() {
-    let (_id, source) = entry
-    let (fd, event) = source
-    fds.push(fd)
-    events.push(event)
-  }
-  let now = @wasi.native_clock_gettime_monotonic()
-  if now < 0L {
-    raise HostCallError("monotonic clock is unavailable")
-  }
-  let timeout = match nearest {
-    None => -1
-    Some(deadline) if deadline <= now => 0
-    Some(deadline) => {
-      let remaining = deadline - now
-      let milliseconds = (remaining + 999999L) / 1000000L
-      if milliseconds > 0x7fffffffL {
-        0x7fffffff
-      } else {
-        milliseconds.to_int()
+    let mut progressed = false
+    while self.async_runtime.next_ready() is Some(task) {
+      match self.async_ready.get(task) {
+        Some(ready) => {
+          ready.val = true
+          progressed = true
+        }
+        None => ()
       }
     }
-  }
-  if fds.length() > 0 {
-    @wasi.native_poll(fds, events, timeout) is Some(_)
-  } else if nearest is Some(_) {
-    if timeout > 0 {
-      @wasi.native_nanosleep(timeout.to_int64() * 1000000L) |> ignore
+    if progressed {
+      return true
     }
-    true
-  } else {
-    false
   }
+  false
 }

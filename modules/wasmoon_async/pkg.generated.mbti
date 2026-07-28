@@ -42,9 +42,10 @@ pub fn TaskHandle::cancel(Self) -> Unit
 pub fn TaskHandle::complete(Self) -> Unit
 pub fn TaskHandle::id(Self) -> TaskId
 pub fn TaskHandle::is_active(Self) -> Bool
+pub fn TaskHandle::take_ready(Self) -> Bool
 pub fn TaskHandle::waker(Self) -> Waker
 
-type TaskId derive(Eq, @debug.Debug)
+type TaskId derive(Eq, Hash, @debug.Debug)
 
 type Waker
 pub fn Waker::register(Self) -> OperationHandle?

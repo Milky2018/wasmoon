@@ -186,11 +186,11 @@ fn preview3_socket_fd_future(
   step : () -> @runtime_impl.ComponentValue? raise @runtime_impl.ComponentRuntimeError,
   cancel : () -> Unit,
 ) -> @runtime_impl.HostFuture {
-  let operation : Ref[Int?] = Ref(None)
+  let operation : Ref[WasiAsyncOperation?] = Ref(None)
   let done = Ref(false)
   fn cleanup() {
     match operation.val {
-      Some(id) => ctx.cancel_async_fd(id)
+      Some(id) => ctx.cancel_async_operation(id)
       None => ()
     }
     operation.val = None
@@ -202,7 +202,7 @@ fn preview3_socket_fd_future(
       }
       match operation.val {
         Some(id) =>
-          if ctx.async_fd_ready(id) {
+          if ctx.async_operation_ready(id) {
             operation.val = None
           } else {
             return Pending
@@ -325,7 +325,7 @@ fn preview3_tcp_listen_stream(
     types.get(stream_index) is Some(Some(Stream(Some(element_type)))) else {
     raise HostCallError("generated Preview 3 TCP listen contract is malformed")
   }
-  let operation : Ref[Int?] = Ref(None)
+  let operation : Ref[WasiAsyncOperation?] = Ref(None)
   let stream = host.runtime.new_host_value_stream_source(
     table,
     element_type,
@@ -336,7 +336,7 @@ fn preview3_tcp_listen_stream(
       }
       match operation.val {
         Some(id) =>
-          if host.ctx.async_fd_ready(id) {
+          if host.ctx.async_operation_ready(id) {
             operation.val = None
           } else {
             return Pending
@@ -357,7 +357,7 @@ fn preview3_tcp_listen_stream(
     },
     () => {
       match operation.val {
-        Some(id) => host.ctx.cancel_async_fd(id)
+        Some(id) => host.ctx.cancel_async_operation(id)
         None => ()
       }
       operation.val = None
@@ -380,11 +380,11 @@ fn preview3_tcp_send_future(
     return preview3_ready_future([preview3_socket_error_code(5)])
   }
   let pending : Ref[(Bytes, Int)?] = Ref(None)
-  let operation : Ref[Int?] = Ref(None)
+  let operation : Ref[WasiAsyncOperation?] = Ref(None)
   let done = Ref(false)
   fn cleanup() -> Unit raise @runtime_impl.ComponentRuntimeError {
     match operation.val {
-      Some(id) => host.ctx.cancel_async_fd(id)
+      Some(id) => host.ctx.cancel_async_operation(id)
       None => ()
     }
     operation.val = None
@@ -408,7 +408,7 @@ fn preview3_tcp_send_future(
       }
       match operation.val {
         Some(id) =>
-          if host.ctx.async_fd_ready(id) {
+          if host.ctx.async_operation_ready(id) {
             operation.val = None
           } else {
             return Pending
@@ -469,7 +469,7 @@ fn preview3_tcp_receive(
   )
   let buffered : Array[Byte] = []
   let next = Ref(0)
-  let operation : Ref[Int?] = Ref(None)
+  let operation : Ref[WasiAsyncOperation?] = Ref(None)
   let completion : Ref[@runtime_impl.ComponentValue?] = Ref(
     if state.phase.val == Connected {
       None
@@ -484,19 +484,19 @@ fn preview3_tcp_receive(
     }
     if users.val == 0 {
       match operation.val {
-        Some(id) => host.ctx.cancel_async_fd(id)
+        Some(id) => host.ctx.cancel_async_operation(id)
         None => ()
       }
       operation.val = None
     }
   }
-  fn pump(capacity : Int) -> Unit {
+  fn pump(capacity : Int) -> Unit raise @runtime_impl.ComponentRuntimeError {
     if completion.val is Some(_) {
       return
     }
     match operation.val {
       Some(id) =>
-        if host.ctx.async_fd_ready(id) {
+        if host.ctx.async_operation_ready(id) {
           operation.val = None
         } else {
           return
@@ -1286,12 +1286,12 @@ fn preview3_resolve_addresses_future(
   guard @wasi.native_resolver_start(name) is Some(resolver) else {
     return preview3_ready_future([preview3_lookup_error(5)])
   }
-  let operation : Ref[Int?] = Ref(None)
+  let operation : Ref[WasiAsyncOperation?] = Ref(None)
   let addresses : Array[@runtime_impl.ComponentValue] = []
   let done = Ref(false)
   fn cleanup() {
     match operation.val {
-      Some(id) => host.ctx.cancel_async_fd(id)
+      Some(id) => host.ctx.cancel_async_operation(id)
       None => ()
     }
     operation.val = None
@@ -1304,7 +1304,7 @@ fn preview3_resolve_addresses_future(
     () => {
       match operation.val {
         Some(id) =>
-          if host.ctx.async_fd_ready(id) {
+          if host.ctx.async_operation_ready(id) {
             operation.val = None
           } else {
             return Pending

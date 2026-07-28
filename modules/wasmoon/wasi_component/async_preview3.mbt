@@ -11,12 +11,12 @@ fn preview3_deadline_after(now : Int64, duration : Int64) -> Int64 {
 fn preview3_clock_future(
   ctx : WasiComponentCtx,
   deadline : Int64,
-) -> @runtime_impl.HostFuture {
+) -> @runtime_impl.HostFuture raise @runtime_impl.ComponentRuntimeError {
   let operation = ctx.register_deadline(deadline)
   let done = Ref(false)
   HostFuture(
     fn() {
-      if done.val || ctx.deadline_ready(operation) {
+      if done.val || ctx.async_operation_ready(operation) {
         done.val = true
         Ready([])
       } else {
@@ -25,7 +25,7 @@ fn preview3_clock_future(
     },
     fn() {
       if !done.val {
-        ctx.cancel_deadline(operation)
+        ctx.cancel_async_operation(operation)
         done.val = true
       }
     },

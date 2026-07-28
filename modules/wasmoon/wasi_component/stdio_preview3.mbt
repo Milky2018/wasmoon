@@ -35,7 +35,8 @@ priv struct Preview3StdinSource {
   fd : Int
   buffered : Array[Byte]
   next : Ref[Int]
-  operation : Ref[Int?]
+  always_ready : Bool
+  operation : Ref[WasiAsyncOperation?]
   completion : Ref[@runtime_impl.ComponentValue?]
 }
 
@@ -44,22 +45,34 @@ fn Preview3StdinSource::new(
   ctx : WasiComponentCtx,
   state : InputStreamState,
   fd : Int,
-) -> Preview3StdinSource {
+) -> Preview3StdinSource raise @runtime_impl.ComponentRuntimeError {
+  let stat = @wasi.native_fstat(fd)
+  let invalid = stat is None
+  let always_ready = match stat {
+    Some(stat) => stat.filetype == 4
+    None => false
+  }
+  if invalid {
+    state.closed.val = true
+  }
   {
     ctx,
     state,
     fd,
     buffered: [],
     next: Ref(0),
+    always_ready,
     operation: Ref(
-      if state.closed.val {
+      if state.closed.val || always_ready || invalid {
         None
       } else {
         Some(ctx.register_async_fd(fd, 0x01))
       },
     ),
     completion: Ref(
-      if state.closed.val {
+      if invalid {
+        Some(Variant(1, Some(U32(0))))
+      } else if state.closed.val {
         Some(Variant(0, None))
       } else {
         None
@@ -71,7 +84,7 @@ fn Preview3StdinSource::new(
 ///|
 fn Preview3StdinSource::cancel_operation(self : Preview3StdinSource) -> Unit {
   match self.operation.val {
-    Some(operation) => self.ctx.cancel_async_fd(operation)
+    Some(operation) => self.ctx.cancel_async_operation(operation)
     None => ()
   }
   self.operation.val = None
@@ -96,18 +109,18 @@ fn Preview3StdinSource::complete(
 fn Preview3StdinSource::pump(
   self : Preview3StdinSource,
   capacity : Int,
-) -> Unit {
+) -> Unit raise @runtime_impl.ComponentRuntimeError {
   if self.completion.val is Some(_) || self.next.val < self.buffered.length() {
     return
   }
   match self.operation.val {
     Some(operation) =>
-      if self.ctx.async_fd_ready(operation) {
+      if self.ctx.async_operation_ready(operation) {
         self.operation.val = None
       } else {
         return
       }
-    None => return
+    None => if !self.always_ready { return }
   }
   let count = if capacity <= 0 {
     1
@@ -125,7 +138,16 @@ fn Preview3StdinSource::pump(
       for i in 0..<read {
         self.buffered.push(buffer[i])
       }
-      self.operation.val = Some(self.ctx.register_async_fd(self.fd, 0x01))
+      let reached_regular_file_end = self.always_ready &&
+        @wasi.native_fstat(self.fd) is Some(stat) &&
+        @wasi.native_tell(self.fd) is Some(position) &&
+        position >= 0L &&
+        stat.size <= position.reinterpret_as_uint64()
+      if reached_regular_file_end {
+        self.complete(Variant(0, None), true)
+      } else if !self.always_ready {
+        self.operation.val = Some(self.ctx.register_async_fd(self.fd, 0x01))
+      }
     }
     None =>
       if @wasi.native_last_errno_to_wasi() == 6 {
@@ -140,7 +162,7 @@ fn Preview3StdinSource::pump(
 fn Preview3StdinSource::pull(
   self : Preview3StdinSource,
   maximum : Int,
-) -> @runtime_impl.HostValueStreamPoll {
+) -> @runtime_impl.HostValueStreamPoll raise @runtime_impl.ComponentRuntimeError {
   if maximum <= 0 {
     return Values([])
   }
@@ -247,9 +269,9 @@ fn preview3_output_future(
     raise HostCallError("Preview 3 output stream is unavailable")
   }
   let pending : Ref[(Bytes, Int)?] = Ref(None)
-  let fd_operation : Ref[Int?] = Ref(None)
+  let fd_operation : Ref[WasiAsyncOperation?] = Ref(None)
   let done = Ref(false)
-  fn register_fd() {
+  fn register_fd() raise @runtime_impl.ComponentRuntimeError {
     match (output.native_fd, fd_operation.val) {
       (Some(fd), None) =>
         fd_operation.val = Some(host.ctx.register_async_fd(fd, 0x04))
@@ -259,7 +281,7 @@ fn preview3_output_future(
 
   fn cleanup() -> Unit raise @runtime_impl.ComponentRuntimeError {
     match fd_operation.val {
-      Some(operation) => host.ctx.cancel_async_fd(operation)
+      Some(operation) => host.ctx.cancel_async_operation(operation)
       None => ()
     }
     fd_operation.val = None
@@ -276,7 +298,7 @@ fn preview3_output_future(
       }
       match fd_operation.val {
         Some(operation) =>
-          if host.ctx.async_fd_ready(operation) {
+          if host.ctx.async_operation_ready(operation) {
             fd_operation.val = None
           } else {
             return Pending

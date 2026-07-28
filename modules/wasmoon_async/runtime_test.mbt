@@ -26,6 +26,31 @@ test "ready queue deduplicates wakeups and preserves task order" {
 }
 
 ///|
+test "task handles consume only their own initial readiness" {
+  let runtime = @wasmoon_async.Runtime()
+  let first = runtime.spawn()
+  let second = runtime.spawn()
+  debug_inspect(
+    (
+      second.take_ready(),
+      second.take_ready(),
+      runtime.next_ready(),
+      runtime.next_ready(),
+      first.id(),
+    ),
+    content=(
+      #|(
+      #|  true,
+      #|  false,
+      #|  Some({ slot: 0, generation: 0 }),
+      #|  None,
+      #|  { slot: 0, generation: 0 },
+      #|)
+    ),
+  )
+}
+
+///|
 test "operation completion wakes its task and stale events are rejected" {
   let runtime = @wasmoon_async.Runtime()
   let task = runtime.spawn()

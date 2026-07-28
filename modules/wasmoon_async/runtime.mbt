@@ -15,7 +15,7 @@ pub(all) enum Poll[A] {
 struct TaskId {
   slot : Int
   generation : Int
-} derive(Debug, Eq)
+} derive(Debug, Eq, Hash)
 
 ///|
 /// Stable identity of one pending host operation.
@@ -344,6 +344,19 @@ pub fn TaskHandle::waker(self : TaskHandle) -> Waker {
 ///|
 pub fn TaskHandle::is_active(self : TaskHandle) -> Bool {
   self.0.task_record(self.1) is Some(_)
+}
+
+///|
+/// Consume this task's queued poll without disturbing other ready tasks.
+///
+/// Adapters use this after `spawn` when the caller has already performed the
+/// initial poll and only future reactor completions should enqueue the task.
+pub fn TaskHandle::take_ready(self : TaskHandle) -> Bool {
+  guard self.0.task_record(self.1) is Some(record) && record.queued else {
+    return false
+  }
+  record.queued = false
+  true
 }
 
 ///|
