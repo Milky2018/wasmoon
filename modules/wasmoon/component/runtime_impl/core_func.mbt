@@ -73,9 +73,9 @@ fn call_core_func(
   store : @runtime.Store,
   core_func : CoreFuncRef,
   args : Array[@types.Value],
-  mode? : CoreExecutionMode = Synchronous,
+  style? : CoreCallStyle = RunToCompletion,
 ) -> Array[@types.Value] raise ComponentRuntimeError {
-  let outcome = call_core_func_outcome(store, core_func, args, mode)
+  let outcome = call_core_func_outcome(store, core_func, args, style)
   match outcome {
     Returned(results) => results
     Suspended(_, continuation) => {
@@ -92,7 +92,7 @@ fn call_core_func_outcome(
   store : @runtime.Store,
   core_func : CoreFuncRef,
   args : Array[@types.Value],
-  mode : CoreExecutionMode,
+  style : CoreCallStyle,
 ) -> CoreExecutionOutcome raise ComponentRuntimeError {
   // Reset any previous canonical trap so we don't leak messages across calls.
   clear_canon_trap_message()
@@ -107,7 +107,14 @@ fn call_core_func_outcome(
     core_func.instance,
     core_func.func_idx,
     args,
-    mode,
+    CoreExecutionRequest(
+      style,
+      if core_func.native_eligible {
+        PreferNative
+      } else {
+        InterpreterOnly
+      },
+    ),
   ) catch {
     e => {
       match canon_suspend[0] {
@@ -168,13 +175,13 @@ fn call_core_func_guarded(
   may_enter : Ref[Bool],
   core_func : CoreFuncRef,
   args : Array[@types.Value],
-  mode? : CoreExecutionMode = Synchronous,
+  style? : CoreCallStyle = RunToCompletion,
 ) -> Array[@types.Value] raise ComponentRuntimeError {
   let prev = may_enter.val
   // Mark this component instance as in-progress to prevent re-entrancy via
   // lowered functions (component-spec/async/trap-on-reenter.wast).
   may_enter.val = false
-  let out = call_core_func(store, core_func, args, mode~) catch {
+  let out = call_core_func(store, core_func, args, style~) catch {
     e =>
       // A trap while executing a component instance permanently poisons that
       // instance. Subsequent entry attempts must fail instead of observing
@@ -228,10 +235,11 @@ fn call_core_func_guarded_outcome(
   may_enter : Ref[Bool],
   core_func : CoreFuncRef,
   args : Array[@types.Value],
+  style : CoreCallStyle,
 ) -> CoreExecutionOutcome raise ComponentRuntimeError {
   let previous = may_enter.val
   may_enter.val = false
-  let outcome = call_core_func_outcome(store, core_func, args, Suspendable)
+  let outcome = call_core_func_outcome(store, core_func, args, style)
   guard_core_outcome(outcome, may_enter, previous)
 }
 

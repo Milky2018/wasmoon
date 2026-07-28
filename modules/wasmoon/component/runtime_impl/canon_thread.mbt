@@ -220,12 +220,7 @@ fn run_explicit_thread_once(
         continuation.continue_execution()
       }
       None =>
-        call_core_func_outcome(
-          store,
-          t.start_func,
-          [I32(t.context)],
-          Suspendable,
-        )
+        call_core_func_outcome(store, t.start_func, [I32(t.context)], Stackful)
     }
   } catch {
     error => {

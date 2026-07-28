@@ -222,7 +222,7 @@ test "component runtime: core execution crosses the configured engine seam" {
   }
   let registrations : Array[(Int, Int)] = []
   let calls : Array[
-    (Int, Int, Array[@types.Value], @runtime_impl.CoreExecutionMode),
+    (Int, Int, Array[@types.Value], @runtime_impl.CoreExecutionRequest),
   ] = []
   let engine = @runtime_impl.CoreExecutionEngine(
     fn(_store, module_, instance) {
@@ -233,9 +233,9 @@ test "component runtime: core execution crosses the configured engine seam" {
       instance,
       func_idx,
       args,
-      mode,
+      request,
     ) raise @runtime_impl.ComponentRuntimeError {
-      calls.push((instance.store_idx, func_idx, args.copy(), mode))
+      calls.push((instance.store_idx, func_idx, args.copy(), request))
       let results = @executor.call_func_by_index(
         store, instance, func_idx, args,
       ) catch {
@@ -249,7 +249,33 @@ test "component runtime: core execution crosses the configured engine seam" {
   let results = instance.call_exported_func("inc", [S32(41)])
   debug_inspect(
     (registrations, calls, results),
-    content="([(1, 0)], [(0, 0, [I32(41)], Synchronous)], [S32(42)])",
+    content=(
+      #|(
+      #|  [(1, 0)],
+      #|  [(0, 0, [I32(41)], { style: RunToCompletion, backend: PreferNative })],
+      #|  [S32(42)],
+      #|)
+    ),
+  )
+}
+
+///|
+test "component runtime: core call style is independent from backend policy" {
+  debug_inspect(
+    [
+      @runtime_impl.CoreExecutionRequest(RunToCompletion, PreferNative),
+      @runtime_impl.CoreExecutionRequest(CallbackStep, PreferNative),
+      @runtime_impl.CoreExecutionRequest(Stackful, PreferNative),
+      @runtime_impl.CoreExecutionRequest(RunToCompletion, InterpreterOnly),
+    ],
+    content=(
+      #|[
+      #|  { style: RunToCompletion, backend: PreferNative },
+      #|  { style: CallbackStep, backend: PreferNative },
+      #|  { style: Stackful, backend: PreferNative },
+      #|  { style: RunToCompletion, backend: InterpreterOnly },
+      #|]
+    ),
   )
 }
 

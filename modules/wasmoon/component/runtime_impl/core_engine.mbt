@@ -1,13 +1,39 @@
 ///|
-/// Whether a core call is allowed to suspend.
+/// Semantic shape of one core function call.
 ///
-/// A native JIT adapter must reject or route `Suspendable` calls to a resumable
-/// engine before entering native code. Native stacks are not continuations.
-pub(all) enum CoreExecutionMode {
-  Synchronous
-  Interpreted
-  Suspendable
+/// `CallbackStep` returns a callback code before the component scheduler
+/// decides whether to invoke it again. `Stackful` may suspend without returning
+/// from the core function and therefore requires a resumable execution stack.
+pub(all) enum CoreCallStyle {
+  RunToCompletion
+  CallbackStep
+  Stackful
 } derive(Debug, Eq)
+
+///|
+/// Whether an execution adapter may select its native backend for this call.
+///
+/// This is deliberately separate from `CoreCallStyle`: execution semantics do
+/// not change merely because an instance cannot use the native backend.
+pub(all) enum CoreBackendPolicy {
+  PreferNative
+  InterpreterOnly
+} derive(Debug, Eq)
+
+///|
+/// Typed contract passed from component execution to a core backend adapter.
+pub struct CoreExecutionRequest {
+  style : CoreCallStyle
+  backend : CoreBackendPolicy
+} derive(Debug, Eq)
+
+///|
+pub fn CoreExecutionRequest::CoreExecutionRequest(
+  style : CoreCallStyle,
+  backend : CoreBackendPolicy,
+) -> CoreExecutionRequest {
+  { style, backend }
+}
 
 ///|
 /// Why a core execution continuation stopped.
@@ -63,7 +89,7 @@ pub(all) enum CoreExecutionOutcome {
 ///
 /// `register_instance` is called once after interpreter instantiation has
 /// allocated the shared store objects. `invoke` may then select an interpreter
-/// or JIT adapter according to `mode`.
+/// or JIT adapter according to the typed execution request.
 struct CoreExecutionEngine {
   prepare_store_fn : (@runtime.Store) -> Unit
   register_instance_fn : (
@@ -76,7 +102,7 @@ struct CoreExecutionEngine {
     @runtime.ModuleInstance,
     Int,
     Array[@types.Value],
-    CoreExecutionMode,
+    CoreExecutionRequest,
   ) -> CoreExecutionOutcome raise ComponentRuntimeError
 }
 
@@ -88,7 +114,7 @@ pub fn CoreExecutionEngine::CoreExecutionEngine(
     @runtime.ModuleInstance,
     Int,
     Array[@types.Value],
-    CoreExecutionMode,
+    CoreExecutionRequest,
   ) -> CoreExecutionOutcome raise ComponentRuntimeError,
   prepare_store? : (@runtime.Store) -> Unit = fn(_store) { () },
 ) -> CoreExecutionEngine {
@@ -124,9 +150,9 @@ pub fn CoreExecutionEngine::invoke(
   instance : @runtime.ModuleInstance,
   func_idx : Int,
   args : Array[@types.Value],
-  mode : CoreExecutionMode,
+  request : CoreExecutionRequest,
 ) -> CoreExecutionOutcome raise ComponentRuntimeError {
-  (self.invoke_fn)(store, instance, func_idx, args, mode)
+  (self.invoke_fn)(store, instance, func_idx, args, request)
 }
 
 ///|
@@ -194,10 +220,10 @@ pub fn interpreter_core_execution_engine() -> CoreExecutionEngine {
     instance,
     func_idx,
     args,
-    mode,
+    request,
   ) raise ComponentRuntimeError {
-    match mode {
-      Synchronous => {
+    match request.style {
+      RunToCompletion | CallbackStep => {
         let results = @executor.call_func_by_index(
           store, instance, func_idx, args,
         ) catch {
@@ -205,15 +231,7 @@ pub fn interpreter_core_execution_engine() -> CoreExecutionEngine {
         }
         Returned(results)
       }
-      Interpreted => {
-        let results = @executor.call_func_by_index(
-          store, instance, func_idx, args,
-        ) catch {
-          error => raise CanonCallError(error.to_string())
-        }
-        Returned(results)
-      }
-      Suspendable => {
+      Stackful => {
         let outcome = @executor.call_func_by_index_resumable(
           store,
           instance,

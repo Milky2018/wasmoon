@@ -1,8 +1,28 @@
 ///|
+priv enum ComponentCoreRoute {
+  NativeCore
+  InterpreterCore
+} derive(Eq)
+
+///|
+fn component_core_route(
+  request : @runtime_impl.CoreExecutionRequest,
+) -> ComponentCoreRoute {
+  if request.backend == InterpreterOnly {
+    return InterpreterCore
+  }
+  match request.style {
+    RunToCompletion => NativeCore
+    CallbackStep | Stackful => InterpreterCore
+  }
+}
+
+///|
 /// Build the Wasmoon-owned native adapter for component core execution.
 ///
-/// Suspendable calls are selected before native entry and remain on the
-/// resumable interpreter path. A JIT stack is never treated as a continuation.
+/// Stackful calls remain on the resumable interpreter path. Callback steps are
+/// semantically distinct, but remain interpreted until the callback JIT path
+/// is enabled.
 fn component_jit_execution_engine() -> @runtime_impl.CoreExecutionEngine {
   let contexts : Map[Int, @wast.JITModuleContext] = Map([])
   let interpreter = @runtime_impl.interpreter_core_execution_engine()
@@ -19,10 +39,10 @@ fn component_jit_execution_engine() -> @runtime_impl.CoreExecutionEngine {
       instance,
       func_idx,
       args,
-      mode,
+      request,
     ) raise @runtime_impl.ComponentRuntimeError {
-      if mode != Synchronous {
-        return interpreter.invoke(store, instance, func_idx, args, mode)
+      if component_core_route(request) == InterpreterCore {
+        return interpreter.invoke(store, instance, func_idx, args, request)
       }
       guard contexts.get(instance.store_idx) is Some(context) else {
         raise CanonCallError(

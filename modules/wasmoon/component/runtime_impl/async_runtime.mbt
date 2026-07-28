@@ -248,7 +248,11 @@ fn await_component_func(
                 async_state,
                 store,
                 call_core_func_guarded_outcome(
-                  store, may_enter, core_func, core_args,
+                  store,
+                  may_enter,
+                  core_func,
+                  core_args,
+                  Stackful,
                 ),
               )
               // Prefer results published via `canon task.return` (used by many
@@ -293,7 +297,11 @@ fn await_component_func(
                 async_state,
                 store,
                 call_core_func_guarded_outcome(
-                  store, may_enter, core_func, core_args,
+                  store,
+                  may_enter,
+                  core_func,
+                  core_args,
+                  Stackful,
                 ),
               )
               let vals = core_results_to_component(
@@ -332,7 +340,11 @@ fn await_component_func(
               async_state,
               store,
               call_core_func_guarded_outcome(
-                store, may_enter, core_func, core_args,
+                store,
+                may_enter,
+                core_func,
+                core_args,
+                CallbackStep,
               ),
             )
             let mut code = match core_results {
@@ -353,11 +365,13 @@ fn await_component_func(
                 let r = drive_core_to_completion(
                   async_state,
                   store,
-                  call_core_func_guarded_outcome(store, may_enter, cb, [
-                    I32(0),
-                    I32(0),
-                    I32(0),
-                  ]),
+                  call_core_func_guarded_outcome(
+                    store,
+                    may_enter,
+                    cb,
+                    [I32(0), I32(0), I32(0)],
+                    CallbackStep,
+                  ),
                 ) catch {
                   e => {
                     async_state.in_async_callback[0] = false
@@ -406,11 +420,13 @@ fn await_component_func(
                 let r = drive_core_to_completion(
                   async_state,
                   store,
-                  call_core_func_guarded_outcome(store, may_enter, cb, [
-                    I32(ev.code),
-                    I32(ev.index),
-                    I32(ev.payload),
-                  ]),
+                  call_core_func_guarded_outcome(
+                    store,
+                    may_enter,
+                    cb,
+                    [I32(ev.code), I32(ev.index), I32(ev.payload)],
+                    CallbackStep,
+                  ),
                 ) catch {
                   e => {
                     async_state.in_async_callback[0] = false
@@ -675,7 +691,11 @@ fn step_task_once_impl(
         if !task.started[0] || task.continuation[0] is Some(_) {
           let polled = poll_core(fn() raise ComponentRuntimeError {
             call_core_func_guarded_outcome(
-              store, may_enter, core_func, core_args,
+              store,
+              may_enter,
+              core_func,
+              core_args,
+              CallbackStep,
             )
           })
           let core_results = match polled {
@@ -716,7 +736,13 @@ fn step_task_once_impl(
           }
           async_state.in_async_callback[0] = true
           let polled = poll_core(fn() raise ComponentRuntimeError {
-            call_core_func_guarded_outcome(store, may_enter, cb, args)
+            call_core_func_guarded_outcome(
+              store,
+              may_enter,
+              cb,
+              args,
+              CallbackStep,
+            )
           })
           async_state.in_async_callback[0] = false
           let r = match polled {
@@ -747,11 +773,13 @@ fn step_task_once_impl(
             set_waiting(None)
             async_state.in_async_callback[0] = true
             let polled = poll_core(fn() raise ComponentRuntimeError {
-              call_core_func_guarded_outcome(store, may_enter, cb, [
-                I32(6),
-                I32(0),
-                I32(0),
-              ])
+              call_core_func_guarded_outcome(
+                store,
+                may_enter,
+                cb,
+                [I32(6), I32(0), I32(0)],
+                CallbackStep,
+              )
             })
             async_state.in_async_callback[0] = false
             let r = match polled {
@@ -785,11 +813,13 @@ fn step_task_once_impl(
           set_waiting(None)
           async_state.in_async_callback[0] = true
           let polled = poll_core(fn() raise ComponentRuntimeError {
-            call_core_func_guarded_outcome(store, may_enter, cb, [
-              I32(ev.code),
-              I32(ev.index),
-              I32(ev.payload),
-            ])
+            call_core_func_guarded_outcome(
+              store,
+              may_enter,
+              cb,
+              [I32(ev.code), I32(ev.index), I32(ev.payload)],
+              CallbackStep,
+            )
           })
           async_state.in_async_callback[0] = false
           let r = match polled {
@@ -828,7 +858,13 @@ fn step_task_once_impl(
           None => ()
         }
         let polled = poll_core(fn() raise ComponentRuntimeError {
-          call_core_func_guarded_outcome(store, may_enter, core_func, core_args)
+          call_core_func_guarded_outcome(
+            store,
+            may_enter,
+            core_func,
+            core_args,
+            Stackful,
+          )
         })
         let core_results = match polled {
           CoreReady(results) => results
@@ -871,7 +907,13 @@ fn step_task_once_impl(
         // A core function without the canonical async option can still suspend
         // through a sync-lowered async import.
         let polled = poll_core(fn() raise ComponentRuntimeError {
-          call_core_func_guarded_outcome(store, may_enter, core_func, core_args)
+          call_core_func_guarded_outcome(
+            store,
+            may_enter,
+            core_func,
+            core_args,
+            Stackful,
+          )
         })
         let core_results = match polled {
           CoreReady(results) => results
@@ -1364,7 +1406,11 @@ fn call_component_func_in_task(
               async_state,
               store,
               call_core_func_guarded_outcome(
-                store, may_enter, core_func, core_args,
+                store,
+                may_enter,
+                core_func,
+                core_args,
+                CallbackStep,
               ),
             )
             let mut code = match initial_results {
@@ -1383,11 +1429,13 @@ fn call_component_func_in_task(
                 let r = drive_core_to_completion(
                   async_state,
                   store,
-                  call_core_func_guarded_outcome(store, may_enter, cb, [
-                    I32(0),
-                    I32(0),
-                    I32(0),
-                  ]),
+                  call_core_func_guarded_outcome(
+                    store,
+                    may_enter,
+                    cb,
+                    [I32(0), I32(0), I32(0)],
+                    CallbackStep,
+                  ),
                 ) catch {
                   e => {
                     async_state.in_async_callback[0] = false
@@ -1468,21 +1516,15 @@ fn call_component_func_in_task(
             async_state,
             store,
             call_core_func_guarded_outcome(
-              store, may_enter, core_func, core_args,
+              store,
+              may_enter,
+              core_func,
+              core_args,
+              Stackful,
             ),
           )
         } else {
-          call_core_func_guarded(
-            store,
-            may_enter,
-            core_func,
-            core_args,
-            mode=if core_func.native_eligible {
-              Synchronous
-            } else {
-              Interpreted
-            },
-          )
+          call_core_func_guarded(store, may_enter, core_func, core_args)
         }
       } catch {
         error => {

@@ -214,6 +214,17 @@ pub(all) enum ComponentValue {
 } derive(Eq, @debug.Debug)
 pub impl Show for ComponentValue
 
+pub(all) enum CoreBackendPolicy {
+  PreferNative
+  InterpreterOnly
+} derive(Eq, @debug.Debug)
+
+pub(all) enum CoreCallStyle {
+  RunToCompletion
+  CallbackStep
+  Stackful
+} derive(Eq, @debug.Debug)
+
 type CoreContinuation
 pub fn CoreContinuation::CoreContinuation(() -> CoreExecutionOutcome raise ComponentRuntimeError, () -> Unit) -> Self
 pub fn CoreContinuation::cancel(Self) -> Unit
@@ -221,22 +232,22 @@ pub fn CoreContinuation::continue_execution(Self) -> CoreExecutionOutcome raise 
 pub impl @debug.Debug for CoreContinuation
 
 type CoreExecutionEngine
-pub fn CoreExecutionEngine::CoreExecutionEngine((@runtime.Store, @types.Module, @runtime.ModuleInstance) -> Unit raise ComponentRuntimeError, (@runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value], CoreExecutionMode) -> CoreExecutionOutcome raise ComponentRuntimeError, prepare_store? : (@runtime.Store) -> Unit) -> Self
-pub fn CoreExecutionEngine::invoke(Self, @runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value], CoreExecutionMode) -> CoreExecutionOutcome raise ComponentRuntimeError
+pub fn CoreExecutionEngine::CoreExecutionEngine((@runtime.Store, @types.Module, @runtime.ModuleInstance) -> Unit raise ComponentRuntimeError, (@runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value], CoreExecutionRequest) -> CoreExecutionOutcome raise ComponentRuntimeError, prepare_store? : (@runtime.Store) -> Unit) -> Self
+pub fn CoreExecutionEngine::invoke(Self, @runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value], CoreExecutionRequest) -> CoreExecutionOutcome raise ComponentRuntimeError
 pub fn CoreExecutionEngine::prepare_store(Self, @runtime.Store) -> Unit
 pub fn CoreExecutionEngine::register_instance(Self, @runtime.Store, @types.Module, @runtime.ModuleInstance) -> Unit raise ComponentRuntimeError
 pub impl @debug.Debug for CoreExecutionEngine
-
-pub(all) enum CoreExecutionMode {
-  Synchronous
-  Interpreted
-  Suspendable
-} derive(Eq, @debug.Debug)
 
 pub(all) enum CoreExecutionOutcome {
   Returned(Array[@types.Value])
   Suspended(CoreSuspension, CoreContinuation)
 } derive(@debug.Debug)
+
+pub struct CoreExecutionRequest {
+  style : CoreCallStyle
+  backend : CoreBackendPolicy
+} derive(Eq, @debug.Debug)
+pub fn CoreExecutionRequest::CoreExecutionRequest(CoreCallStyle, CoreBackendPolicy) -> Self
 
 pub(all) struct CoreFuncRef {
   instance : @runtime.ModuleInstance
