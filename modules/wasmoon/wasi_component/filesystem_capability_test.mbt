@@ -103,8 +103,35 @@ test "Preview 2 capability paths resolve each filesystem step" {
     filesystem.call_exported_func("[method]descriptor.get-type", [U32(nested)]),
     content="[Variant(0, Some(Variant(6, None)))]",
   )
+  guard filesystem.call_exported_func("[method]descriptor.stat-at", [
+      U32(directory),
+      U32(0),
+      String("."),
+    ])
+    is [Variant(0, Some(Tuple([Variant(3, None), _, _, _, _, _])))] else {
+    fail("Preview 2 rejected the capability root path")
+  }
+  guard filesystem.call_exported_func("[method]descriptor.open-at", [
+      U32(directory),
+      U32(1),
+      String("inside/.."),
+      U32(2),
+      U32(1),
+    ])
+    is [Variant(0, Some(U32(root_directory)))] &&
+    filesystem.call_exported_func("[method]descriptor.get-type", [
+      U32(root_directory),
+    ])
+    is [Variant(0, Some(Variant(3, None)))] else {
+    fail("Preview 2 rejected a terminal parent within the capability root")
+  }
   debug_inspect(
     [
+      filesystem.call_exported_func("[method]descriptor.stat-at", [
+        U32(directory),
+        U32(0),
+        String(".."),
+      ]),
       filesystem.call_exported_func("[method]descriptor.open-at", [
         U32(directory),
         U32(1),
@@ -122,6 +149,7 @@ test "Preview 2 capability paths resolve each filesystem step" {
     ],
     content=(
       #|[
+      #|  [Variant(1, Some(Variant(31, None)))],
       #|  [Variant(1, Some(Variant(31, None)))],
       #|  [Variant(1, Some(Variant(31, None)))],
       #|]
@@ -178,8 +206,35 @@ test "Preview 3 capability paths resolve each filesystem step" {
     filesystem.call_exported_func("[method]descriptor.get-type", [U32(nested)]),
     content="[Variant(0, Some(U32(6)))]",
   )
+  guard filesystem.call_exported_func("[method]descriptor.stat-at", [
+      U32(directory),
+      U32(0),
+      String("."),
+    ])
+    is [Variant(0, Some(Tuple([U32(3), _, _, _, _, _])))] else {
+    fail("Preview 3 rejected the capability root path")
+  }
+  guard filesystem.call_exported_func("[method]descriptor.open-at", [
+      U32(directory),
+      U32(1),
+      String("inside/.."),
+      U32(2),
+      U32(1),
+    ])
+    is [Variant(0, Some(U32(root_directory)))] &&
+    filesystem.call_exported_func("[method]descriptor.get-type", [
+      U32(root_directory),
+    ])
+    is [Variant(0, Some(U32(3)))] else {
+    fail("Preview 3 rejected a terminal parent within the capability root")
+  }
   debug_inspect(
     [
+      filesystem.call_exported_func("[method]descriptor.stat-at", [
+        U32(directory),
+        U32(0),
+        String(".."),
+      ]),
       filesystem.call_exported_func("[method]descriptor.open-at", [
         U32(directory),
         U32(1),
@@ -195,7 +250,13 @@ test "Preview 3 capability paths resolve each filesystem step" {
         U32(1),
       ]),
     ],
-    content="[[Variant(1, Some(U32(30)))], [Variant(1, Some(U32(30)))]]",
+    content=(
+      #|[
+      #|  [Variant(1, Some(U32(30)))],
+      #|  [Variant(1, Some(U32(30)))],
+      #|  [Variant(1, Some(U32(30)))],
+      #|]
+    ),
   )
 }
 

@@ -127,9 +127,6 @@ fn capability_parent_and_leaf(path : String) -> (String, String)? {
     return None
   }
   let leaf = parts.pop().unwrap()
-  if leaf == "." || leaf == ".." {
-    return None
-  }
   Some((parts.join("/"), leaf))
 }
 
@@ -208,9 +205,16 @@ fn open_capability_parent(
   match capability_parent_and_leaf(path) {
     None => None
     Some((parent, leaf)) =>
-      match @wasi.native_open_parent_beneath(state.fd, parent) {
-        Some(parent_fd) => Some((parent_fd, leaf))
-        None => None
+      if leaf == "." || leaf == ".." {
+        match @wasi.native_open_parent_beneath(state.fd, path) {
+          Some(fd) => Some((fd, "."))
+          None => None
+        }
+      } else {
+        match @wasi.native_open_parent_beneath(state.fd, parent) {
+          Some(parent_fd) => Some((parent_fd, leaf))
+          None => None
+        }
       }
   }
 }
@@ -612,7 +616,16 @@ fn stat_capability_path(
   match capability_parent_and_leaf(path) {
     None => None
     Some((parent, leaf)) =>
-      if follow_final {
+      if leaf == "." || leaf == ".." {
+        match @wasi.native_open_parent_beneath(state.fd, path) {
+          None => None
+          Some(fd) => {
+            let stat = @wasi.native_fstat(fd)
+            @wasi.native_close(fd) |> ignore
+            stat
+          }
+        }
+      } else if follow_final {
         match
           @wasi.native_openat_beneath(
             state.fd,
