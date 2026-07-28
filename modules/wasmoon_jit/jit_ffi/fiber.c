@@ -412,6 +412,29 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_native_hostcall_probe_trampoline(void) {
     return (int64_t)probe_trampoline;
 }
 
+static int fiber_stack_hostcall_probe(
+    jit_context_t *ctx,
+    int64_t *values,
+    void *func_ptr
+) {
+    (void)func_ptr;
+    int64_t slots[1] = {0};
+    int result = wasmoon_jit_hostcall(
+        ctx,
+        44,
+        (int64_t)slots,
+        0,
+        0
+    );
+    values[0] = result;
+    return result;
+}
+
+MOONBIT_FFI_EXPORT int64_t
+wasmoon_native_fiber_stack_hostcall_probe_trampoline(void) {
+    return (int64_t)fiber_stack_hostcall_probe;
+}
+
 static int parked_gc_root_probe(
     jit_context_t *ctx,
     int64_t *values,

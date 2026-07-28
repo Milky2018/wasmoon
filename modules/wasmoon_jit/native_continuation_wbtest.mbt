@@ -2,6 +2,9 @@
 extern "c" fn c_native_hostcall_probe_trampoline() -> Int64 = "wasmoon_native_hostcall_probe_trampoline"
 
 ///|
+extern "c" fn c_native_fiber_stack_hostcall_probe_trampoline() -> Int64 = "wasmoon_native_fiber_stack_hostcall_probe_trampoline"
+
+///|
 extern "c" fn c_native_nested_trap_probe() -> Int64 = "wasmoon_native_nested_trap_probe"
 
 ///|
@@ -80,6 +83,26 @@ test "native hostcall suspension can retry only the suspended hostcall" {
       callback_count[0],
     ),
     content="(NativeJITReturned(0), 11, 2)",
+  )
+}
+
+///|
+test "native hostcall accepts slots on the active fiber stack" {
+  let context = native_continuation_test_context()
+  guard context.alloc_wasm_stack(64L * 1024L) else {
+    fail("failed to allocate ordinary Wasm stack")
+  }
+  context.set_hostcall_callback(fn() { HostcallCompleted })
+  let values = FixedArray::from_array([99L])
+  let continuation = context.start_continuation(
+    c_native_fiber_stack_hostcall_probe_trampoline(),
+    1L,
+    values,
+    values.length(),
+  )
+  debug_inspect(
+    (continuation.continue_with(), values[0]),
+    content="(NativeJITReturned(0), 0)",
   )
 }
 

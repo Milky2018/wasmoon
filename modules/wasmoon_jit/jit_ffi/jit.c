@@ -128,6 +128,16 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_clear_hostcall_callback(int64_t ctx_ptr) {
 // Called by JIT-generated trampolines (C calling convention).
 // The MoonBit callback returns before a suspension switches stacks, so no
 // callback frame is retained by a parked native continuation.
+static int hostcall_slots_in_range(
+    uintptr_t ptr,
+    uintptr_t bytes,
+    uintptr_t base,
+    uintptr_t top
+) {
+    if (base >= top || ptr < base || ptr > top) return 0;
+    return bytes <= top - ptr;
+}
+
 MOONBIT_FFI_EXPORT int32_t wasmoon_jit_hostcall(
     jit_context_t *ctx,
     int32_t func_idx,
@@ -149,8 +159,25 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_hostcall(
         uintptr_t ptr = (uintptr_t)values_ptr;
         // Each slot is 8 bytes; `num_args`/`num_results` are already slot counts
         // (v128 uses 2 slots in the trampoline).
+        if (num_args < 0 || num_results < 0 ||
+            num_args > INT32_MAX - num_results) {
+            g_trap_code = 3;
+            if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
+            return (int32_t)g_trap_code;
+        }
         uintptr_t bytes = (uintptr_t)(num_args + num_results) * 8u;
-        if (ptr < base || ptr + bytes > top) {
+        int valid = hostcall_slots_in_range(ptr, bytes, base, top);
+        uintptr_t fiber_base = 0;
+        uintptr_t fiber_top = 0;
+        if (!valid &&
+            wasmoon_native_fiber_stack_bounds(
+                &fiber_base, &fiber_top, NULL, NULL
+            )) {
+            valid = hostcall_slots_in_range(
+                ptr, bytes, fiber_base, fiber_top
+            );
+        }
+        if (!valid) {
             g_trap_code = 3; // unreachable
             if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
             return (int32_t)g_trap_code;
