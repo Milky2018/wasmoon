@@ -675,6 +675,12 @@ pub(all) enum NativeFiberPhase {
   Cancelled
 } derive(Eq, @debug.Debug)
 
+pub(all) enum NativeHostcallOutcome {
+  HostcallCompleted
+  HostcallTrap(Int)
+  HostcallSuspended
+} derive(Eq, @debug.Debug)
+
 type NativeInvocationHandle
 pub fn NativeInvocationHandle::cancel(Self) -> Unit raise NativeExecutionStateError
 pub fn NativeInvocationHandle::complete(Self) -> Unit raise NativeExecutionStateError
@@ -706,12 +712,23 @@ pub fn NativeJITContext::ptr(Self) -> Int64
 pub fn NativeJITContext::set_cancellation_callback(Self, () -> Bool) -> Unit
 pub fn NativeJITContext::set_func(Self, Int, Int64) -> Unit
 pub fn NativeJITContext::set_globals(Self, Int64) -> Unit
-pub fn NativeJITContext::set_hostcall_callback(Self, () -> Int) -> Unit
+pub fn NativeJITContext::set_hostcall_callback(Self, () -> NativeHostcallOutcome) -> Unit
 pub fn NativeJITContext::set_indirect(Self, Int, Int, Int) -> Unit
 pub fn NativeJITContext::set_memory(Self, Int64) -> Unit
 pub fn NativeJITContext::set_memory_pointers(Self, Array[MemoryInfo]) -> Unit
 pub fn NativeJITContext::set_table_pointers(Self, Array[JITTable?]) -> Unit
+pub fn NativeJITContext::start_continuation(Self, Int64, Int64, FixedArray[Int64], Int, stack_size? : Int64) -> NativeJITContinuation raise NativeFiberError
 pub fn NativeJITContext::try_alloc(Int) -> Self?
+
+type NativeJITContinuation
+pub fn NativeJITContinuation::cancel(Self) -> Unit raise NativeFiberError
+pub fn NativeJITContinuation::continue_with(Self, value? : Int64) -> NativeJITContinuationEvent raise NativeFiberError
+pub fn NativeJITContinuation::phase(Self) -> NativeFiberPhase
+
+pub(all) enum NativeJITContinuationEvent {
+  NativeHostcallSuspended
+  NativeJITReturned(Int)
+} derive(Eq, @debug.Debug)
 
 pub(all) enum NativeTarget {
   X64

@@ -476,6 +476,17 @@ extern "c" fn c_native_fiber_alloc(
 ) -> NativeFiberObject = "wasmoon_native_fiber_alloc"
 
 ///|
+#owned(jit_context, values)
+extern "c" fn c_native_jit_continuation_alloc(
+  jit_context : JITContext,
+  trampoline_ptr : Int64,
+  func_ptr : Int64,
+  values : FixedArray[Int64],
+  values_len : Int,
+  stack_size : Int64,
+) -> NativeFiberObject = "wasmoon_native_jit_continuation_alloc"
+
+///|
 #borrow(fiber)
 extern "c" fn c_native_fiber_continue(
   fiber : NativeFiberObject,
@@ -511,6 +522,9 @@ extern "c" fn c_native_fiber_guard_size(fiber : NativeFiberObject) -> Int64 = "w
 
 ///|
 extern "c" fn c_native_fiber_guard_test() -> Int = "wasmoon_native_fiber_guard_test"
+
+///|
+extern "c" fn c_native_hostcall_suspend_event() -> Int64 = "wasmoon_native_hostcall_suspend_event"
 
 ///|
 extern "c" fn c_native_fiber_register_test() -> Int = "wasmoon_native_fiber_register_test"

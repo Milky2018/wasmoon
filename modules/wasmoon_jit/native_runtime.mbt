@@ -645,12 +645,27 @@ pub fn NativeJITContext::has_wasm_stack(self : NativeJITContext) -> Bool {
 }
 
 ///|
+/// Typed result returned by a JIT hostcall dispatcher.
+pub(all) enum NativeHostcallOutcome {
+  HostcallCompleted
+  HostcallTrap(Int)
+  HostcallSuspended
+} derive(Debug, Eq)
+
+///|
 pub fn NativeJITContext::set_hostcall_callback(
   self : NativeJITContext,
-  callback : () -> Int,
+  callback : () -> NativeHostcallOutcome,
 ) -> Unit {
+  let encoded = fn() {
+    match callback() {
+      HostcallCompleted => 0
+      HostcallTrap(code) => if code > 0 { code } else { 8 }
+      HostcallSuspended => -1
+    }
+  }
   let call_closure : FuncRef[(() -> Int) -> Int] = fn(f : () -> Int) { f() }
-  c_jit_set_hostcall_callback(self.ptr(), call_closure, callback)
+  c_jit_set_hostcall_callback(self.ptr(), call_closure, encoded)
 }
 
 ///|

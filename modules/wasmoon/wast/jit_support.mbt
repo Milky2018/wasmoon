@@ -1543,11 +1543,11 @@ pub fn install_jit_hostcall_dispatcher(
     let res_slots = @wasmoon_jit.get_hostcall_num_result_slots()
     let ft = match store.get_func_type_opt(func_addr) {
       Some(t) => t
-      None => return 3
+      None => return @wasmoon_jit.NativeHostcallOutcome::HostcallTrap(3)
     }
     if sum_slot_count(ft.params) != arg_slots ||
       sum_slot_count(ft.results) != res_slots {
-      return 3
+      return @wasmoon_jit.NativeHostcallOutcome::HostcallTrap(3)
     }
 
     // Decode args.
@@ -1566,7 +1566,9 @@ pub fn install_jit_hostcall_dispatcher(
     let invoke_result = call_func_by_addr(store, instance, func_addr, args) catch {
       e => {
         after_dispatch()
-        return runtime_error_to_trap_code(e)
+        return @wasmoon_jit.NativeHostcallOutcome::HostcallTrap(
+          runtime_error_to_trap_code(e),
+        )
       }
     }
     after_dispatch()
@@ -1583,7 +1585,7 @@ pub fn install_jit_hostcall_dispatcher(
           for v in values {
             match encode_exception_value_for_jit(v, jit_module, instance) {
               Some(raw) => encoded_values.push(raw)
-              None => return 8
+              None => return @wasmoon_jit.NativeHostcallOutcome::HostcallTrap(8)
             }
           }
           @jit.throw_exception_values(
@@ -1592,11 +1594,11 @@ pub fn install_jit_hostcall_dispatcher(
             encoded_values,
           )
         }
-        return 8
+        return @wasmoon_jit.NativeHostcallOutcome::HostcallTrap(8)
       }
     }
     if results.length() != ft.results.length() {
-      return 3
+      return @wasmoon_jit.NativeHostcallOutcome::HostcallTrap(3)
     }
 
     // Encode results right after the arg slots region.
@@ -1604,7 +1606,7 @@ pub fn install_jit_hostcall_dispatcher(
     for i, ty in ft.results {
       let slots = encode_value(ty, results[i], jit_module, instance)
       match slots {
-        None => return 3
+        None => return @wasmoon_jit.NativeHostcallOutcome::HostcallTrap(3)
         Some(encoded_slots) => {
           for j in 0..<encoded_slots.length() {
             @wasmoon_jit.hostcall_value_slot_write(
@@ -1616,6 +1618,6 @@ pub fn install_jit_hostcall_dispatcher(
         }
       }
     }
-    0
+    @wasmoon_jit.NativeHostcallOutcome::HostcallCompleted
   })
 }

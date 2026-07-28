@@ -45,38 +45,105 @@
 // 10 = GC precise roots unavailable
 // 99 = unknown trap
 
-extern __thread sigjmp_buf g_trap_jmp_buf;
-extern __thread volatile sig_atomic_t g_trap_code;
-extern __thread volatile sig_atomic_t g_trap_active;
-extern __thread volatile sig_atomic_t g_trap_signal;
-extern __thread volatile uintptr_t g_trap_pc;
-extern __thread volatile uintptr_t g_trap_lr;
-extern __thread volatile uintptr_t g_trap_fp;
-extern __thread volatile uintptr_t g_trap_frame_lr;
-extern __thread volatile uintptr_t g_trap_fault_addr;
-extern __thread volatile sig_atomic_t g_trap_brk_imm;
-extern __thread volatile sig_atomic_t g_trap_func_idx;
-extern __thread volatile uintptr_t g_trap_x0;
-extern __thread volatile uintptr_t g_trap_x1;
-extern __thread volatile uintptr_t g_trap_x2;
-extern __thread volatile uintptr_t g_trap_x3;
-extern __thread volatile uintptr_t g_trap_x6;
-extern __thread volatile uintptr_t g_trap_x7;
-extern __thread volatile uintptr_t g_trap_x8;
-extern __thread volatile uintptr_t g_trap_x9;
-extern __thread volatile uintptr_t g_trap_x10;
-extern __thread volatile uintptr_t g_trap_x11;
-extern __thread volatile uintptr_t g_trap_x15;
-extern __thread volatile uintptr_t g_trap_wasm_stack_base;
-extern __thread volatile uintptr_t g_trap_wasm_stack_top;
-
-// Pre-captured frame chain (captured in signal handler)
 #define MAX_TRAP_FRAMES 32
-extern __thread volatile uintptr_t g_trap_frames_pc[MAX_TRAP_FRAMES];
-extern __thread volatile uintptr_t g_trap_frames_fp[MAX_TRAP_FRAMES];
-extern __thread volatile int g_trap_frame_count;
+
+typedef struct jit_trap_activation {
+    sigjmp_buf jmp_buf;
+    volatile sig_atomic_t active;
+    volatile sig_atomic_t code;
+    volatile sig_atomic_t signal;
+    volatile uintptr_t pc;
+    volatile uintptr_t lr;
+    volatile uintptr_t fp;
+    volatile uintptr_t frame_lr;
+    volatile uintptr_t fault_addr;
+    volatile sig_atomic_t brk_imm;
+    volatile sig_atomic_t func_idx;
+    volatile uintptr_t x0;
+    volatile uintptr_t x1;
+    volatile uintptr_t x2;
+    volatile uintptr_t x3;
+    volatile uintptr_t x6;
+    volatile uintptr_t x7;
+    volatile uintptr_t x8;
+    volatile uintptr_t x9;
+    volatile uintptr_t x10;
+    volatile uintptr_t x11;
+    volatile uintptr_t x15;
+    volatile uintptr_t stack_base;
+    volatile uintptr_t stack_top;
+    volatile uintptr_t guard_base;
+    volatile size_t guard_size;
+    volatile uintptr_t frames_pc[MAX_TRAP_FRAMES];
+    volatile uintptr_t frames_fp[MAX_TRAP_FRAMES];
+    volatile int frame_count;
+    jit_context_t *context;
+    struct jit_trap_activation *previous;
+    void *exception_handler;
+    int32_t exception_tag;
+    int64_t *exception_values;
+    int32_t exception_value_count;
+    int64_t *spilled_locals;
+    int32_t spilled_locals_count;
+    wasmoon_gc_frame_t *gc_frame_chain_head;
+    wasmoon_gc_root_scope_t *gc_root_scope_head;
+    int32_t debug_current_func_idx;
+    int context_detached;
+} jit_trap_activation_t;
+
+jit_trap_activation_t *jit_current_trap_activation(void);
+jit_trap_activation_t *jit_observed_trap_activation(void);
+void jit_trap_activation_init(
+    jit_trap_activation_t *activation,
+    jit_context_t *context
+);
+void jit_trap_activation_push(jit_trap_activation_t *activation);
+void jit_trap_activation_publish(jit_trap_activation_t *activation);
+void jit_trap_activation_pop(jit_trap_activation_t *activation);
+jit_trap_activation_t *jit_trap_activation_detach(void);
+void jit_trap_activation_attach(jit_trap_activation_t *activation);
+void jit_trap_activation_abandon(jit_trap_activation_t *activation);
+
+#define g_trap_jmp_buf (jit_current_trap_activation()->jmp_buf)
+#define g_trap_active (jit_current_trap_activation()->active)
+#define g_trap_code (jit_current_trap_activation()->code)
+#define g_trap_signal (jit_current_trap_activation()->signal)
+#define g_trap_pc (jit_current_trap_activation()->pc)
+#define g_trap_lr (jit_current_trap_activation()->lr)
+#define g_trap_fp (jit_current_trap_activation()->fp)
+#define g_trap_frame_lr (jit_current_trap_activation()->frame_lr)
+#define g_trap_fault_addr (jit_current_trap_activation()->fault_addr)
+#define g_trap_brk_imm (jit_current_trap_activation()->brk_imm)
+#define g_trap_func_idx (jit_current_trap_activation()->func_idx)
+#define g_trap_x0 (jit_current_trap_activation()->x0)
+#define g_trap_x1 (jit_current_trap_activation()->x1)
+#define g_trap_x2 (jit_current_trap_activation()->x2)
+#define g_trap_x3 (jit_current_trap_activation()->x3)
+#define g_trap_x6 (jit_current_trap_activation()->x6)
+#define g_trap_x7 (jit_current_trap_activation()->x7)
+#define g_trap_x8 (jit_current_trap_activation()->x8)
+#define g_trap_x9 (jit_current_trap_activation()->x9)
+#define g_trap_x10 (jit_current_trap_activation()->x10)
+#define g_trap_x11 (jit_current_trap_activation()->x11)
+#define g_trap_x15 (jit_current_trap_activation()->x15)
+#define g_trap_wasm_stack_base (jit_current_trap_activation()->stack_base)
+#define g_trap_wasm_stack_top (jit_current_trap_activation()->stack_top)
+#define g_trap_frames_pc (jit_current_trap_activation()->frames_pc)
+#define g_trap_frames_fp (jit_current_trap_activation()->frames_fp)
+#define g_trap_frame_count (jit_current_trap_activation()->frame_count)
 
 void install_trap_handler(void);
+
+int wasmoon_native_fiber_stack_bounds(
+    uintptr_t *stack_base,
+    uintptr_t *stack_top,
+    uintptr_t *guard_base,
+    size_t *guard_size
+);
+int64_t wasmoon_native_fiber_yield(int64_t value);
+
+#define WASMOON_HOSTCALL_SUSPEND_STATUS (-1)
+#define WASMOON_FIBER_EVENT_HOSTCALL_SUSPENDED INT64_C(0x57534d5355535001)
 
 // ============ Executable Memory (exec_mem.c) ============
 

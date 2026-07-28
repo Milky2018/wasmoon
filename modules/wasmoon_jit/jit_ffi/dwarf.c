@@ -928,19 +928,19 @@ MOONBIT_FFI_EXPORT int wasmoon_dwarf_capture_backtrace_ex(
     }
 
     // Use pre-captured frames from signal handler
-    extern __thread volatile uintptr_t g_trap_frames_pc[];
-    extern __thread volatile uintptr_t g_trap_frames_fp[];
-    extern __thread volatile int g_trap_frame_count;
+    extern int wasmoon_jit_get_trap_frame_count(void);
+    extern int64_t wasmoon_jit_get_trap_frame_pc(int idx);
+    extern int64_t wasmoon_jit_get_trap_frame_fp(int idx);
 
     int count = 0;
-    int captured = g_trap_frame_count;
+    int captured = wasmoon_jit_get_trap_frame_count();
     if (captured > max_frames) {
         captured = max_frames;
     }
 
     for (int i = 0; i < captured; i++) {
-        frames_out[count * 2] = (int64_t)g_trap_frames_pc[i];
-        frames_out[count * 2 + 1] = (int64_t)g_trap_frames_fp[i];
+        frames_out[count * 2] = wasmoon_jit_get_trap_frame_pc(i);
+        frames_out[count * 2 + 1] = wasmoon_jit_get_trap_frame_fp(i);
         count++;
     }
 

@@ -210,11 +210,9 @@ fn JITContext::set_wasi_stdin_callback(
 
 ///|
 /// Set hostcall callback for JIT -> host bridging.
-/// The callback is invoked with no arguments and should return 0 on success,
-/// or a trap code on failure.
 fn JITContext::set_hostcall_callback(
   self : JITContext,
-  callback : () -> Int,
+  callback : () -> @wasmoon_jit.NativeHostcallOutcome,
 ) -> Unit {
   self.ctx.set_hostcall_callback(callback)
 }

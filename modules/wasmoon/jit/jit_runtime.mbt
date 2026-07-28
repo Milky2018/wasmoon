@@ -997,10 +997,9 @@ pub fn JITModule::has_wasm_stack(self : JITModule) -> Bool {
 
 ///|
 /// Set the hostcall callback used for JIT -> host bridging.
-/// The callback should return 0 on success, or a trap code on failure.
 pub fn JITModule::set_hostcall_callback(
   self : JITModule,
-  callback : () -> Int,
+  callback : () -> @wasmoon_jit.NativeHostcallOutcome,
 ) -> Unit {
   if self.context is Some(ctx) {
     ctx.set_hostcall_callback(callback)

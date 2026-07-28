@@ -71,16 +71,40 @@ typedef struct native_fiber {
     int64_t resume_value;
     int64_t yielded_value;
     int64_t return_value;
+    jit_trap_activation_t *detached_activation;
 } native_fiber_t;
+
+typedef struct {
+    native_fiber_t *fiber;
+    void *jit_context;
+    int64_t trampoline_ptr;
+    int64_t func_ptr;
+    int64_t *values;
+    int values_len;
+} native_jit_continuation_t;
 
 extern void wasmoon_native_fiber_swap(
     native_fiber_context_t *from,
     const native_fiber_context_t *to
 );
+extern int64_t wasmoon_native_fiber_register_probe(void *closure);
+extern int64_t wasmoon_jit_context_ptr(void *managed);
+extern int wasmoon_jit_call_trampoline(
+    int64_t trampoline_ptr,
+    int64_t ctx_ptr,
+    int64_t func_ptr,
+    int64_t *values_vec,
+    int values_len
+);
+extern int32_t wasmoon_jit_hostcall(
+    jit_context_t *ctx,
+    int32_t func_idx,
+    int64_t values_ptr,
+    int32_t num_args,
+    int32_t num_results
+);
 
 static __thread native_fiber_t *current_native_fiber = NULL;
-
-static int64_t register_test_entry(void *closure);
 
 static int fiber_on_owner_thread(const native_fiber_t *fiber) {
     return fiber && pthread_equal(fiber->owner_thread, pthread_self());
@@ -170,6 +194,8 @@ static native_fiber_t *allocate_fiber(
 static void destroy_fiber(native_fiber_t *fiber) {
     if (!fiber) return;
     if (fiber->state == NATIVE_FIBER_RUNNING) return;
+    jit_trap_activation_abandon(fiber->detached_activation);
+    fiber->detached_activation = NULL;
     release_fiber_stack(fiber);
     if (fiber->owns_closure && fiber->closure) {
         moonbit_decref(fiber->closure);
@@ -188,6 +214,33 @@ static void finalize_native_fiber(void *self) {
 static native_fiber_t *managed_fiber_ptr(void *managed) {
     if (!managed) return NULL;
     return *(native_fiber_t **)managed;
+}
+
+static int64_t native_jit_continuation_entry(void *closure) {
+    native_jit_continuation_t *continuation =
+        (native_jit_continuation_t *)closure;
+    return wasmoon_jit_call_trampoline(
+        continuation->trampoline_ptr,
+        wasmoon_jit_context_ptr(continuation->jit_context),
+        continuation->func_ptr,
+        continuation->values,
+        continuation->values_len
+    );
+}
+
+static void finalize_native_jit_continuation(void *self) {
+    native_jit_continuation_t *continuation =
+        (native_jit_continuation_t *)self;
+    destroy_fiber(continuation->fiber);
+    continuation->fiber = NULL;
+    if (continuation->jit_context) {
+        moonbit_decref(continuation->jit_context);
+        continuation->jit_context = NULL;
+    }
+    if (continuation->values) {
+        moonbit_decref(continuation->values);
+        continuation->values = NULL;
+    }
 }
 
 MOONBIT_FFI_EXPORT void *wasmoon_native_fiber_alloc(
@@ -210,6 +263,43 @@ MOONBIT_FFI_EXPORT void *wasmoon_native_fiber_alloc(
     }
     *managed = fiber;
     return managed;
+}
+
+MOONBIT_FFI_EXPORT void *wasmoon_native_jit_continuation_alloc(
+    void *jit_context,
+    int64_t trampoline_ptr,
+    int64_t func_ptr,
+    int64_t *values,
+    int values_len,
+    int64_t stack_size
+) {
+    native_jit_continuation_t *continuation =
+        (native_jit_continuation_t *)moonbit_make_external_object(
+            finalize_native_jit_continuation,
+            sizeof(native_jit_continuation_t)
+        );
+    if (!continuation) {
+        if (jit_context) moonbit_decref(jit_context);
+        if (values) moonbit_decref(values);
+        return NULL;
+    }
+    memset(continuation, 0, sizeof(*continuation));
+    continuation->jit_context = jit_context;
+    continuation->trampoline_ptr = trampoline_ptr;
+    continuation->func_ptr = func_ptr;
+    continuation->values = values;
+    continuation->values_len = values_len;
+    continuation->fiber = allocate_fiber(
+        native_jit_continuation_entry,
+        continuation,
+        0,
+        stack_size
+    );
+    if (!continuation->fiber) {
+        finalize_native_jit_continuation(continuation);
+        return NULL;
+    }
+    return continuation;
 }
 
 MOONBIT_FFI_EXPORT int wasmoon_native_fiber_continue(
@@ -239,7 +329,10 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_native_fiber_yield(int64_t value) {
     if (!fiber || fiber->state != NATIVE_FIBER_RUNNING) return INT64_MIN;
     fiber->yielded_value = value;
     fiber->state = NATIVE_FIBER_SUSPENDED;
+    fiber->detached_activation = jit_trap_activation_detach();
     wasmoon_native_fiber_swap(&fiber->context, &fiber->caller);
+    jit_trap_activation_attach(fiber->detached_activation);
+    fiber->detached_activation = NULL;
     if (fiber->state != NATIVE_FIBER_RUNNING) return INT64_MIN;
     return fiber->resume_value;
 }
@@ -253,12 +346,71 @@ MOONBIT_FFI_EXPORT int wasmoon_native_fiber_cancel(void *managed) {
         return -3;
     }
     fiber->state = NATIVE_FIBER_CANCELLED;
+    jit_trap_activation_abandon(fiber->detached_activation);
+    fiber->detached_activation = NULL;
     release_fiber_stack(fiber);
     if (fiber->owns_closure && fiber->closure) {
         moonbit_decref(fiber->closure);
         fiber->closure = NULL;
     }
     return 0;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_native_hostcall_suspend_event(void) {
+    return WASMOON_FIBER_EVENT_HOSTCALL_SUSPENDED;
+}
+
+static int probe_trampoline(
+    jit_context_t *ctx,
+    int64_t *values,
+    void *func_ptr
+) {
+    values[0] = 10;
+    int result = wasmoon_jit_hostcall(
+        ctx,
+        42,
+        (int64_t)values,
+        0,
+        0
+    );
+    if (result != 0) return result;
+    values[0] += 1;
+    int mode = (int)(intptr_t)func_ptr;
+    if (mode == 999) {
+        ctx->debug_current_func_idx = mode;
+        volatile unsigned char *guard =
+            (volatile unsigned char *)current_native_fiber->mapping;
+        *guard = 1;
+        return 0;
+    }
+    if (mode > 1) {
+        g_trap_func_idx = mode;
+        g_trap_pc = (uintptr_t)probe_trampoline;
+        g_trap_code = 6;
+        siglongjmp(g_trap_jmp_buf, 1);
+    }
+    return 0;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_native_hostcall_probe_trampoline(void) {
+    return (int64_t)probe_trampoline;
+}
+
+static int nested_trap_probe(
+    jit_context_t *ctx,
+    int64_t *values,
+    void *func_ptr
+) {
+    (void)ctx;
+    (void)values;
+    g_trap_func_idx = (int)(intptr_t)func_ptr;
+    g_trap_pc = (uintptr_t)nested_trap_probe;
+    g_trap_code = 6;
+    siglongjmp(g_trap_jmp_buf, 1);
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_native_nested_trap_probe(void) {
+    return (int64_t)nested_trap_probe;
 }
 
 MOONBIT_FFI_EXPORT int wasmoon_native_fiber_state(void *managed) {
@@ -286,9 +438,28 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_native_fiber_guard_size(void *managed) {
     return fiber ? (int64_t)fiber->guard_size : 0;
 }
 
+int wasmoon_native_fiber_stack_bounds(
+    uintptr_t *stack_base,
+    uintptr_t *stack_top,
+    uintptr_t *guard_base,
+    size_t *guard_size
+) {
+    native_fiber_t *fiber = current_native_fiber;
+    if (!fiber || !fiber->mapping) return 0;
+    if (stack_base) {
+        *stack_base = (uintptr_t)fiber->mapping + fiber->guard_size;
+    }
+    if (stack_top) {
+        *stack_top = (uintptr_t)fiber->mapping + fiber->mapping_size;
+    }
+    if (guard_base) *guard_base = (uintptr_t)fiber->mapping;
+    if (guard_size) *guard_size = fiber->guard_size;
+    return 1;
+}
+
 MOONBIT_FFI_EXPORT int wasmoon_native_fiber_guard_test(void) {
     native_fiber_t *fiber = allocate_fiber(
-        register_test_entry,
+        wasmoon_native_fiber_register_probe,
         NULL,
         0,
         64 * 1024
@@ -311,39 +482,13 @@ MOONBIT_FFI_EXPORT int wasmoon_native_fiber_guard_test(void) {
     return waited == child && WIFSIGNALED(status);
 }
 
-static int64_t register_test_entry(void *closure) {
-    (void)closure;
-#if defined(__aarch64__) || defined(_M_ARM64)
-    uint64_t integer_after = 0;
-    uint64_t float_after = 0;
-    const uint64_t integer_before = UINT64_C(0x1938574628193746);
-    const uint64_t float_before = UINT64_C(0x406EDD2F1A9FBE77);
-    __asm__ volatile(
-        "mov x19, %0\n\t"
-        "fmov d8, %1\n\t"
-        :
-        : "r"(integer_before), "r"(float_before)
-        : "x19", "d8"
-    );
-    wasmoon_native_fiber_yield(1);
-    __asm__ volatile(
-        "mov %0, x19\n\t"
-        "fmov %1, d8\n\t"
-        : "=r"(integer_after), "=r"(float_after)
-    );
-    return integer_after == integer_before && float_after == float_before;
-#elif defined(__x86_64__) || defined(_M_X64)
-    uint64_t after = 0;
-    const uint64_t before = UINT64_C(0x1938574628193746);
-    __asm__ volatile("movq %0, %%r12" : : "r"(before) : "r12");
-    wasmoon_native_fiber_yield(1);
-    __asm__ volatile("movq %%r12, %0" : "=r"(after));
-    return after == before;
-#endif
-}
-
 MOONBIT_FFI_EXPORT int wasmoon_native_fiber_register_test(void) {
-    native_fiber_t *fiber = allocate_fiber(register_test_entry, NULL, 0, 64 * 1024);
+    native_fiber_t *fiber = allocate_fiber(
+        wasmoon_native_fiber_register_probe,
+        NULL,
+        0,
+        64 * 1024
+    );
     if (!fiber) return 0;
     native_fiber_t *previous = current_native_fiber;
     current_native_fiber = fiber;

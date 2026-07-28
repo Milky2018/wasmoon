@@ -16,6 +16,13 @@ pub(all) enum NativeFiberEvent {
 } derive(Debug, Eq)
 
 ///|
+/// Result of advancing a stackful JIT invocation.
+pub(all) enum NativeJITContinuationEvent {
+  NativeHostcallSuspended
+  NativeJITReturned(Int)
+} derive(Debug, Eq)
+
+///|
 pub suberror NativeFiberError {
   StackAllocationFailed(Int64)
   WrongThread
@@ -38,17 +45,49 @@ struct NativeFiber {
 }
 
 ///|
+/// Stackful JIT invocation whose entry frame is entirely native.
+///
+/// MoonBit hostcall callbacks always return before this continuation yields.
+struct NativeJITContinuation {
+  raw : NativeFiberObject
+}
+
+///|
 pub fn NativeFiber::new(
   entry : () -> Int64,
   stack_size? : Int64 = 1024L * 1024L,
 ) -> NativeFiber raise NativeFiberError {
   let call_closure : FuncRef[(() -> Int64) -> Int64] = fn(f) { f() }
   let raw = c_native_fiber_alloc(call_closure, entry, stack_size)
-  let fiber = { raw, }
+  let fiber : NativeFiber = { raw, }
   if c_native_fiber_state(raw) < 0 {
     raise StackAllocationFailed(stack_size)
   }
   fiber
+}
+
+///|
+pub fn NativeJITContext::start_continuation(
+  self : NativeJITContext,
+  trampoline_ptr : Int64,
+  func_ptr : Int64,
+  values : FixedArray[Int64],
+  values_len : Int,
+  stack_size? : Int64 = 1024L * 1024L,
+) -> NativeJITContinuation raise NativeFiberError {
+  let raw = c_native_jit_continuation_alloc(
+    self.0,
+    trampoline_ptr,
+    func_ptr,
+    values,
+    values_len,
+    stack_size,
+  )
+  let continuation = NativeJITContinuation::{ raw, }
+  if c_native_fiber_state(raw) < 0 {
+    raise StackAllocationFailed(stack_size)
+  }
+  continuation
 }
 
 ///|
@@ -81,6 +120,53 @@ pub fn NativeFiber::continue_with(
     -3 => raise InvalidTransition(self.phase())
     code => raise NativeFailure(code)
   }
+}
+
+///|
+pub fn NativeJITContinuation::continue_with(
+  self : NativeJITContinuation,
+  value? : Int64 = 0L,
+) -> NativeJITContinuationEvent raise NativeFiberError {
+  let status = c_native_fiber_continue(self.raw, value)
+  match status {
+    0 =>
+      if c_native_fiber_yielded_value(self.raw) ==
+        c_native_hostcall_suspend_event() {
+        NativeHostcallSuspended
+      } else {
+        raise NativeFailure(-5)
+      }
+    1 => NativeJITReturned(c_native_fiber_return_value(self.raw).to_int())
+    -2 => raise WrongThread
+    -3 =>
+      raise InvalidTransition(
+        native_fiber_phase(c_native_fiber_state(self.raw)),
+      )
+    code => raise NativeFailure(code)
+  }
+}
+
+///|
+pub fn NativeJITContinuation::cancel(
+  self : NativeJITContinuation,
+) -> Unit raise NativeFiberError {
+  let status = c_native_fiber_cancel(self.raw)
+  match status {
+    0 => ()
+    -2 => raise WrongThread
+    -3 =>
+      raise InvalidTransition(
+        native_fiber_phase(c_native_fiber_state(self.raw)),
+      )
+    code => raise NativeFailure(code)
+  }
+}
+
+///|
+pub fn NativeJITContinuation::phase(
+  self : NativeJITContinuation,
+) -> NativeFiberPhase {
+  native_fiber_phase(c_native_fiber_state(self.raw))
 }
 
 ///|

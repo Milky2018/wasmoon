@@ -104,6 +104,19 @@ SYMBOL(wasmoon_native_fiber_swap):
     movq    48(%rsi), %r15
     ret
 
+// int64_t wasmoon_native_fiber_register_probe(void *closure)
+    .globl SYMBOL(wasmoon_native_fiber_register_probe)
+SYMBOL(wasmoon_native_fiber_register_probe):
+    pushq   %r12
+    movq    $0x1938, %r12
+    movq    $1, %rdi
+    call    SYMBOL(wasmoon_native_fiber_yield)
+    cmpq    $0x1938, %r12
+    sete    %al
+    movzbq  %al, %rax
+    popq    %r12
+    ret
+
 #if !defined(__APPLE__)
     .section .note.GNU-stack,"",@progbits
 #endif

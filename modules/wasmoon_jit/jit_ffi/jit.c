@@ -39,50 +39,52 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_host_operating_system_abi(void) {
 // ============ Trap Handling FFI Exports ============
 
 MOONBIT_FFI_EXPORT int wasmoon_jit_get_trap_code(void) {
-    return (int)g_trap_code;
+    return (int)jit_observed_trap_activation()->code;
 }
 
 MOONBIT_FFI_EXPORT void wasmoon_jit_clear_trap(void) {
     g_trap_code = 0;
+    jit_observed_trap_activation()->code = 0;
 }
 
 MOONBIT_FFI_EXPORT int wasmoon_jit_get_trap_signal(void) {
-    return (int)g_trap_signal;
+    return (int)jit_observed_trap_activation()->signal;
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_trap_pc(void) {
-    return (int64_t)g_trap_pc;
+    return (int64_t)jit_observed_trap_activation()->pc;
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_trap_lr(void) {
-    return (int64_t)g_trap_lr;
+    return (int64_t)jit_observed_trap_activation()->lr;
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_trap_fp(void) {
-    return (int64_t)g_trap_fp;
+    return (int64_t)jit_observed_trap_activation()->fp;
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_trap_frame_lr(void) {
-    return (int64_t)g_trap_frame_lr;
+    return (int64_t)jit_observed_trap_activation()->frame_lr;
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_trap_fault_addr(void) {
-    return (int64_t)g_trap_fault_addr;
+    return (int64_t)jit_observed_trap_activation()->fault_addr;
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_trap_xreg(int idx) {
+    jit_trap_activation_t *activation = jit_observed_trap_activation();
     switch (idx) {
-        case 0: return (int64_t)g_trap_x0;
-        case 1: return (int64_t)g_trap_x1;
-        case 2: return (int64_t)g_trap_x2;
-        case 3: return (int64_t)g_trap_x3;
-        case 6: return (int64_t)g_trap_x6;
-        case 7: return (int64_t)g_trap_x7;
-        case 8: return (int64_t)g_trap_x8;
-        case 9: return (int64_t)g_trap_x9;
-        case 10: return (int64_t)g_trap_x10;
-        case 11: return (int64_t)g_trap_x11;
-        case 15: return (int64_t)g_trap_x15;
+        case 0: return (int64_t)activation->x0;
+        case 1: return (int64_t)activation->x1;
+        case 2: return (int64_t)activation->x2;
+        case 3: return (int64_t)activation->x3;
+        case 6: return (int64_t)activation->x6;
+        case 7: return (int64_t)activation->x7;
+        case 8: return (int64_t)activation->x8;
+        case 9: return (int64_t)activation->x9;
+        case 10: return (int64_t)activation->x10;
+        case 11: return (int64_t)activation->x11;
+        case 15: return (int64_t)activation->x15;
         default: return 0;
     }
 }
@@ -106,10 +108,12 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_set_hostcall_callback(
     void *closure
 ) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
-    if (!ctx) return;
+    if (!ctx) {
+        if (closure) moonbit_decref(closure);
+        return;
+    }
     clear_hostcall_callback(ctx);
     ctx->hostcall_callback = (void *)callback;
-    if (closure) moonbit_incref(closure);
     ctx->hostcall_callback_data = closure;
 }
 
@@ -122,7 +126,8 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_clear_hostcall_callback(int64_t ctx_ptr) {
 // ============ Hostcall Execution ============
 
 // Called by JIT-generated trampolines (C calling convention).
-// On error, sets g_trap_code and longjmps back to the JIT entrypoint.
+// The MoonBit callback returns before a suspension switches stacks, so no
+// callback frame is retained by a parked native continuation.
 MOONBIT_FFI_EXPORT int32_t wasmoon_jit_hostcall(
     jit_context_t *ctx,
     int32_t func_idx,
@@ -152,6 +157,10 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_hostcall(
         }
     }
 
+    int32_t previous_func_idx = g_hostcall_func_idx;
+    int64_t previous_values_ptr = g_hostcall_values_ptr;
+    int32_t previous_num_args = g_hostcall_num_args;
+    int32_t previous_num_results = g_hostcall_num_results;
     g_hostcall_func_idx = func_idx;
     g_hostcall_values_ptr = values_ptr;
     g_hostcall_num_args = num_args;
@@ -159,6 +168,16 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_hostcall(
 
     hostcall_callback_fn cb = (hostcall_callback_fn)ctx->hostcall_callback;
     int32_t trap = cb(ctx->hostcall_callback_data);
+    if (trap == WASMOON_HOSTCALL_SUSPEND_STATUS) {
+        int64_t resume = wasmoon_native_fiber_yield(
+            WASMOON_FIBER_EVENT_HOSTCALL_SUSPENDED
+        );
+        trap = resume == INT64_MIN ? 8 : 0;
+    }
+    g_hostcall_func_idx = previous_func_idx;
+    g_hostcall_values_ptr = previous_values_ptr;
+    g_hostcall_num_args = previous_num_args;
+    g_hostcall_num_results = previous_num_results;
     if (trap != 0) {
         g_trap_code = trap;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
@@ -233,35 +252,37 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_get_hostcall_num_results(void) {
 }
 
 MOONBIT_FFI_EXPORT int wasmoon_jit_get_trap_brk_imm(void) {
-    return (int)g_trap_brk_imm;
+    return (int)jit_observed_trap_activation()->brk_imm;
 }
 
 MOONBIT_FFI_EXPORT int wasmoon_jit_get_trap_func_idx(void) {
-    return (int)g_trap_func_idx;
+    return (int)jit_observed_trap_activation()->func_idx;
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_trap_wasm_stack_base(void) {
-    return (int64_t)g_trap_wasm_stack_base;
+    return (int64_t)jit_observed_trap_activation()->stack_base;
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_trap_wasm_stack_top(void) {
-    return (int64_t)g_trap_wasm_stack_top;
+    return (int64_t)jit_observed_trap_activation()->stack_top;
 }
 
 MOONBIT_FFI_EXPORT int wasmoon_jit_get_trap_frame_count(void) {
-    return g_trap_frame_count;
+    return jit_observed_trap_activation()->frame_count;
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_trap_frame_pc(int idx) {
-    if (idx >= 0 && idx < g_trap_frame_count) {
-        return (int64_t)g_trap_frames_pc[idx];
+    jit_trap_activation_t *activation = jit_observed_trap_activation();
+    if (idx >= 0 && idx < activation->frame_count) {
+        return (int64_t)activation->frames_pc[idx];
     }
     return 0;
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_trap_frame_fp(int idx) {
-    if (idx >= 0 && idx < g_trap_frame_count) {
-        return (int64_t)g_trap_frames_fp[idx];
+    jit_trap_activation_t *activation = jit_observed_trap_activation();
+    if (idx >= 0 && idx < activation->frame_count) {
+        return (int64_t)activation->frames_fp[idx];
     }
     return 0;
 }
@@ -740,12 +761,9 @@ extern int wasmoon_call_entry_trampoline(
 );
 #endif
 
-// Global pointer to current JIT context for guard page detection in signal handler
-// This is set before JIT execution and cleared after
-static __thread jit_context_t *g_current_jit_context = NULL;
-
 jit_context_t *get_current_jit_context(void) {
-    return g_current_jit_context;
+    jit_trap_activation_t *activation = jit_current_trap_activation();
+    return activation->active ? activation->context : NULL;
 }
 
 MOONBIT_FFI_EXPORT int wasmoon_jit_call_trampoline(
@@ -760,30 +778,18 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_trampoline(
     if (!trampoline_ptr || !ctx_ptr || !func_ptr) return -1;
 
     install_trap_handler();
-    g_trap_code = 0;
-    g_trap_signal = 0;
-    g_trap_pc = 0;
-    g_trap_lr = 0;
-    g_trap_frame_lr = 0;
-    g_trap_fault_addr = 0;
-    g_trap_brk_imm = -1;
-    g_trap_func_idx = -1;
-    g_trap_active = 1;
-
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
     ctx_refresh_memory0_fast_fields(ctx);
-    exception_reset_context_state(ctx);
-    g_current_jit_context = ctx;  // Set for guard page detection
-    g_trap_wasm_stack_base = (uintptr_t)ctx->wasm_stack_base;
-    g_trap_wasm_stack_top = (uintptr_t)ctx->wasm_stack_top;
+    jit_trap_activation_t activation;
+    jit_trap_activation_init(&activation, ctx);
+    jit_trap_activation_push(&activation);
 
-    if (sigsetjmp(g_trap_jmp_buf, 1) != 0) {
-        g_trap_active = 0;
+    if (sigsetjmp(activation.jmp_buf, 1) != 0) {
+        int trap_code = (int)activation.code;
+        jit_trap_activation_publish(&activation);
         exception_reset_context_state(ctx);
-        g_current_jit_context = NULL;
-        g_trap_wasm_stack_base = 0;
-        g_trap_wasm_stack_top = 0;
-        return (int)g_trap_code;
+        jit_trap_activation_pop(&activation);
+        return trap_code;
     }
 
     int result;
@@ -799,14 +805,13 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_trampoline(
     result = trampoline(ctx, values_vec, (void *)func_ptr);
 #endif
 
-    g_trap_active = 0;
+    int trap_code = (int)activation.code;
+    jit_trap_activation_publish(&activation);
     exception_reset_context_state(ctx);
-    g_current_jit_context = NULL;
-    g_trap_wasm_stack_base = 0;
-    g_trap_wasm_stack_top = 0;
+    jit_trap_activation_pop(&activation);
 
-    if (g_trap_code != 0) {
-        return (int)g_trap_code;
+    if (trap_code != 0) {
+        return trap_code;
     }
 
     return result;
@@ -859,27 +864,16 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_with_stack_switch(
 
 #if defined(__aarch64__) || defined(_M_ARM64) || defined(__x86_64__) || defined(_M_X64)
     install_trap_handler();
-    g_trap_code = 0;
-    g_trap_signal = 0;
-    g_trap_pc = 0;
-    g_trap_lr = 0;
-    g_trap_frame_lr = 0;
-    g_trap_fault_addr = 0;
-    g_trap_brk_imm = -1;
-    g_trap_func_idx = -1;
-    g_trap_active = 1;
-    g_current_jit_context = ctx;  // Set for guard page detection
-    exception_reset_context_state(ctx);
-    g_trap_wasm_stack_base = (uintptr_t)ctx->wasm_stack_base;
-    g_trap_wasm_stack_top = (uintptr_t)ctx->wasm_stack_top;
+    jit_trap_activation_t activation;
+    jit_trap_activation_init(&activation, ctx);
+    jit_trap_activation_push(&activation);
 
-    if (sigsetjmp(g_trap_jmp_buf, 1) != 0) {
-        g_trap_active = 0;
+    if (sigsetjmp(activation.jmp_buf, 1) != 0) {
+        int trap_code = (int)activation.code;
+        jit_trap_activation_publish(&activation);
         exception_reset_context_state(ctx);
-        g_current_jit_context = NULL;
-        g_trap_wasm_stack_base = 0;
-        g_trap_wasm_stack_top = 0;
-        return (int)g_trap_code;
+        jit_trap_activation_pop(&activation);
+        return trap_code;
     }
 
     // Call using stack-switching assembly
@@ -891,14 +885,13 @@ MOONBIT_FFI_EXPORT int wasmoon_jit_call_with_stack_switch(
         (void *)func_ptr
     );
 
-    g_trap_active = 0;
+    int trap_code = (int)activation.code;
+    jit_trap_activation_publish(&activation);
     exception_reset_context_state(ctx);
-    g_current_jit_context = NULL;
-    g_trap_wasm_stack_base = 0;
-    g_trap_wasm_stack_top = 0;
+    jit_trap_activation_pop(&activation);
 
-    if (g_trap_code != 0) {
-        return (int)g_trap_code;
+    if (trap_code != 0) {
+        return trap_code;
     }
 
     return result;
