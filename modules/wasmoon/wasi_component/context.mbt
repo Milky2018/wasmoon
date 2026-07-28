@@ -259,6 +259,8 @@ pub fn WasiComponentCtxBuilder::build(
       append: false,
       owns_fd: false,
       permit: Ref(0L),
+      pending: Ref(None),
+      failure: Ref(None),
       closed: Ref(false),
     }),
   )
@@ -271,6 +273,8 @@ pub fn WasiComponentCtxBuilder::build(
       append: false,
       owns_fd: false,
       permit: Ref(0L),
+      pending: Ref(None),
+      failure: Ref(None),
       closed: Ref(false),
     }),
   )
@@ -367,6 +371,8 @@ priv struct OutputStreamState {
   append : Bool
   owns_fd : Bool
   permit : Ref[Int64]
+  pending : Ref[(Bytes, Int)?]
+  failure : Ref[String?]
   closed : Ref[Bool]
 }
 

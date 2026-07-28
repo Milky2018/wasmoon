@@ -251,6 +251,143 @@ fn output_stream_state(
 }
 
 ///|
+priv enum OutputWriteAttempt {
+  Written(Int)
+  WouldBlock
+  WriteFailed
+}
+
+///|
+priv enum OutputDrainStatus {
+  Drained
+  Pending
+  DrainFailed
+}
+
+///|
+fn drain_output_stream_with(
+  state : OutputStreamState,
+  blocking : Bool,
+  wait_writable : () -> Bool,
+  write_once : (Bytes, Int) -> OutputWriteAttempt,
+) -> OutputDrainStatus {
+  while state.pending.val is Some((bytes, offset)) {
+    if blocking && !wait_writable() {
+      return DrainFailed
+    }
+    match write_once(bytes, offset) {
+      Written(written) if written > 0 && written <= bytes.length() - offset => {
+        let next = offset + written
+        if next == bytes.length() {
+          state.pending.val = None
+          return Drained
+        }
+        state.pending.val = Some((bytes, next))
+      }
+      WouldBlock => if !blocking { return Pending }
+      _ => return DrainFailed
+    }
+  }
+  Drained
+}
+
+///|
+fn native_output_write_once(
+  state : OutputStreamState,
+  bytes : Bytes,
+  offset : Int,
+) -> OutputWriteAttempt {
+  guard state.native_fd is Some(fd) else { return WriteFailed }
+  let remaining = bytes.length() - offset
+  let buffer = FixedArray::makei(remaining, fn(i) { bytes[offset + i] })
+  let write_result = if state.append {
+    match @wasi.native_fstat(fd) {
+      Some(stat) =>
+        if stat.size > 0x7fffffffffffffffUL {
+          None
+        } else {
+          @wasi.native_pwrite(
+            fd,
+            buffer,
+            remaining,
+            stat.size.reinterpret_as_int64(),
+          )
+        }
+      None => None
+    }
+  } else {
+    match state.file_position {
+      Some(position) =>
+        match @wasi.native_pwrite(fd, buffer, remaining, position.val) {
+          Some(written) => {
+            position.val = position.val + written.to_int64()
+            Some(written)
+          }
+          None => None
+        }
+      None => @wasi.native_write(fd, buffer, remaining)
+    }
+  }
+  match write_result {
+    Some(written) if written > 0 => Written(written)
+    None if @wasi.native_last_errno_to_wasi() == 6 => WouldBlock
+    _ => WriteFailed
+  }
+}
+
+///|
+fn drain_output_stream(
+  state : OutputStreamState,
+  blocking : Bool,
+) -> OutputDrainStatus {
+  guard state.native_fd is Some(fd) else { return Drained }
+  drain_output_stream_with(
+    state,
+    blocking,
+    fn() {
+      match @wasi.native_poll([fd], [0x04], -1) {
+        Some(result) => result.ready_count > 0
+        None => false
+      }
+    },
+    fn(bytes, offset) { native_output_write_once(state, bytes, offset) },
+  )
+}
+
+///|
+fn record_output_failure(state : OutputStreamState, message : String) -> Unit {
+  state.failure.val = Some(message)
+  state.permit.val = 0L
+}
+
+///|
+fn output_stream_error(
+  host : WasiComponentHost,
+  table : @runtime_impl.ResourceTable,
+  state : OutputStreamState,
+) -> @runtime_impl.ComponentValue? raise @runtime_impl.ComponentRuntimeError {
+  match state.failure.val {
+    Some(message) => {
+      state.failure.val = None
+      state.closed.val = true
+      Some(err_last_operation_failed(host, table, message))
+    }
+    None => if state.closed.val { Some(err_closed()) } else { None }
+  }
+}
+
+///|
+fn finish_output_failure(
+  host : WasiComponentHost,
+  table : @runtime_impl.ResourceTable,
+  state : OutputStreamState,
+  message : String,
+) -> @runtime_impl.ComponentValue raise @runtime_impl.ComponentRuntimeError {
+  record_output_failure(state, message)
+  output_stream_error(host, table, state).unwrap()
+}
+
+///|
 fn write_output_stream(
   host : WasiComponentHost,
   table : @runtime_impl.ResourceTable,
@@ -259,67 +396,44 @@ fn write_output_stream(
   require_permit : Bool,
   blocking : Bool,
 ) -> @runtime_impl.ComponentValue raise @runtime_impl.ComponentRuntimeError {
-  if state.closed.val {
-    return err_closed()
+  if output_stream_error(host, table, state) is Some(error) {
+    return error
   }
   if require_permit && bytes.length().to_int64() > state.permit.val {
     raise HostCallError("write exceeds check-write permit")
   }
   state.permit.val = 0L
-  let success = match state.native_fd {
-    None => (state.write)(bytes)
-    Some(fd) => {
-      let mut offset = 0
-      while offset < bytes.length() {
-        if blocking && @wasi.native_poll([fd], [0x04], -1) is None {
-          break
-        }
-        let remaining = bytes.length() - offset
-        let buffer = FixedArray::makei(remaining, fn(i) { bytes[offset + i] })
-        let write_result = if state.append {
-          match @wasi.native_fstat(fd) {
-            Some(stat) =>
-              if stat.size > 0x7fffffffffffffffUL {
-                None
-              } else {
-                @wasi.native_pwrite(
-                  fd,
-                  buffer,
-                  remaining,
-                  stat.size.reinterpret_as_int64(),
-                )
-              }
-            None => None
-          }
-        } else {
-          match state.file_position {
-            Some(position) =>
-              match @wasi.native_pwrite(fd, buffer, remaining, position.val) {
-                Some(written) => {
-                  position.val = position.val + written.to_int64()
-                  Some(written)
-                }
-                None => None
-              }
-            None => @wasi.native_write(fd, buffer, remaining)
-          }
-        }
-        match write_result {
-          Some(written) if written > 0 => offset = offset + written
-          _ => break
-        }
-        if !blocking {
-          break
-        }
-      }
-      offset == bytes.length()
-    }
+  if bytes.length() == 0 {
+    return ok_void()
   }
-  if success {
-    ok_void()
-  } else {
-    state.closed.val = true
-    err_last_operation_failed(host, table, "output stream write failed")
+  match state.native_fd {
+    None =>
+      if (state.write)(bytes) {
+        ok_void()
+      } else {
+        finish_output_failure(host, table, state, "output stream write failed")
+      }
+    Some(_) => {
+      match drain_output_stream(state, blocking) {
+        Drained => ()
+        Pending =>
+          raise HostCallError(
+            "write called while a previous output operation is pending",
+          )
+        DrainFailed =>
+          return finish_output_failure(
+            host, table, state, "output stream write failed",
+          )
+      }
+      state.pending.val = Some((bytes, 0))
+      match drain_output_stream(state, blocking) {
+        Drained | Pending => ok_void()
+        DrainFailed =>
+          finish_output_failure(
+            host, table, state, "output stream write failed",
+          )
+      }
+    }
   }
 }
 
@@ -350,16 +464,16 @@ fn poll_source_ready(ctx : WasiComponentCtx, source : PollSource) -> Bool {
     Output(rep) =>
       match ctx.get_resource(rep) {
         Some(OutputStream(state)) =>
-          if state.closed.val {
+          if state.closed.val || state.failure.val is Some(_) {
             true
           } else {
-            match state.native_fd {
-              Some(fd) =>
-                match @wasi.native_poll([fd], [0x04], 0) {
-                  Some(result) => result.ready_count > 0
-                  None => true
-                }
-              None => true
+            match drain_output_stream(state, false) {
+              Drained => true
+              Pending => false
+              DrainFailed => {
+                record_output_failure(state, "output stream write failed")
+                true
+              }
             }
           }
         _ => true
@@ -405,9 +519,13 @@ fn block_poll_source(
     Output(rep) =>
       match ctx.get_resource(rep) {
         Some(OutputStream(state)) =>
-          if state.native_fd is Some(fd) &&
-            @wasi.native_poll([fd], [0x04], -1) is None {
-            raise HostCallError("output readiness poll failed")
+          while !poll_source_ready(ctx, Output(rep)) {
+            guard state.native_fd is Some(fd) else {
+              raise HostCallError("pending output stream has no descriptor")
+            }
+            if @wasi.native_poll([fd], [0x04], -1) is None {
+              raise HostCallError("output readiness poll failed")
+            }
           }
         _ => ()
       }
@@ -466,7 +584,10 @@ fn block_poll_sources(
       Output(rep) =>
         match ctx.get_resource(rep) {
           Some(OutputStream(state)) =>
-            if !state.closed.val && state.native_fd is Some(fd) {
+            if !state.closed.val &&
+              state.failure.val is None &&
+              state.pending.val is Some(_) &&
+              state.native_fd is Some(fd) {
               fds.push(fd)
               events.push(0x04)
             }
@@ -484,7 +605,9 @@ fn block_poll_sources(
   }
   let timeout = poll_timeout_ms(nearest_deadline, now)
   if fds.length() > 0 {
-    @wasi.native_poll(fds, events, timeout) |> ignore
+    if @wasi.native_poll(fds, events, timeout) is None {
+      raise HostCallError("poll failed")
+    }
   } else {
     match nearest_deadline {
       Some(deadline) if deadline > now =>
@@ -693,7 +816,7 @@ fn add_poll_interface(
         ready.push(U32(i))
       }
     }
-    if ready.length() == 0 {
+    while ready.length() == 0 {
       block_poll_sources(host.ctx, sources)
       for i, source in sources {
         if poll_source_ready(host.ctx, source) {
@@ -782,31 +905,27 @@ fn add_output_stream_methods(
     (args, table) => {
       let rep = resource_rep(table, resource_handle_arg(args, 0), output_type)
       let state = output_stream_state(host.ctx, rep)
-      if state.closed.val {
-        [err_closed()]
-      } else {
-        match state.native_fd {
-          Some(fd) =>
-            match @wasi.native_poll([fd], [0x04], 0) {
-              Some(result) => {
-                let permit = if result.ready_count > 0 { 65536L } else { 0L }
-                state.permit.val = permit
-                [ok_value(U64(permit))]
-              }
-              None => {
-                state.closed.val = true
-                [
-                  err_last_operation_failed(
-                    host, table, "output readiness poll failed",
-                  ),
-                ]
-              }
+      match output_stream_error(host, table, state) {
+        Some(error) => [error]
+        None =>
+          match drain_output_stream(state, false) {
+            Drained => {
+              // This is host-buffer capacity, not a promise that one native
+              // write will consume the full payload.
+              state.permit.val = 65536L
+              [ok_value(U64(65536L))]
             }
-          None => {
-            state.permit.val = 65536L
-            [ok_value(U64(65536L))]
+            Pending => {
+              state.permit.val = 0L
+              [ok_value(U64(0L))]
+            }
+            DrainFailed =>
+              [
+                finish_output_failure(
+                  host, table, state, "output stream write failed",
+                ),
+              ]
           }
-        }
       }
     },
   )
@@ -859,10 +978,19 @@ fn add_output_stream_methods(
     preview2_func(interface, "[method]output-stream.flush"),
     (args, table) => {
       let rep = resource_rep(table, resource_handle_arg(args, 0), output_type)
-      if output_stream_state(host.ctx, rep).closed.val {
-        [err_closed()]
-      } else {
-        [ok_void()]
+      let state = output_stream_state(host.ctx, rep)
+      match output_stream_error(host, table, state) {
+        Some(error) => [error]
+        None =>
+          match drain_output_stream(state, false) {
+            Drained | Pending => [ok_void()]
+            DrainFailed =>
+              [
+                finish_output_failure(
+                  host, table, state, "output stream flush failed",
+                ),
+              ]
+          }
       }
     },
   )
@@ -871,10 +999,19 @@ fn add_output_stream_methods(
     preview2_func(interface, "[method]output-stream.blocking-flush"),
     (args, table) => {
       let rep = resource_rep(table, resource_handle_arg(args, 0), output_type)
-      if output_stream_state(host.ctx, rep).closed.val {
-        [err_closed()]
-      } else {
-        [ok_void()]
+      let state = output_stream_state(host.ctx, rep)
+      match output_stream_error(host, table, state) {
+        Some(error) => [error]
+        None =>
+          match drain_output_stream(state, true) {
+            Drained => [ok_void()]
+            Pending | DrainFailed =>
+              [
+                finish_output_failure(
+                  host, table, state, "output stream flush failed",
+                ),
+              ]
+          }
       }
     },
   )
@@ -960,34 +1097,18 @@ fn add_output_stream_methods(
     )
     let len = stream_length_arg(args, 2)
     let output_state = output_stream_state(host.ctx, output_rep)
-    if output_state.closed.val {
-      return [err_closed()]
+    if output_stream_error(host, table, output_state) is Some(error) {
+      return [error]
     }
-    let permit = match output_state.native_fd {
-      Some(fd) => {
-        let timeout = if blocking { -1 } else { 0 }
-        match @wasi.native_poll([fd], [0x04], timeout) {
-          Some(result) =>
-            if result.ready_count > 0 {
-              if blocking {
-                4096
-              } else {
-                65536
-              }
-            } else {
-              0
-            }
-          None => {
-            output_state.closed.val = true
-            return [
-              err_last_operation_failed(
-                host, table, "output readiness poll failed",
-              ),
-            ]
-          }
-        }
-      }
-      None => if blocking { 4096 } else { 65536 }
+    let permit = match drain_output_stream(output_state, blocking) {
+      Drained => if blocking { 4096 } else { 65536 }
+      Pending => 0
+      DrainFailed =>
+        return [
+          finish_output_failure(
+            host, table, output_state, "output stream write failed",
+          ),
+        ]
     }
     output_state.permit.val = permit.to_int64()
     let transfer_len = if len < permit { len } else { permit }

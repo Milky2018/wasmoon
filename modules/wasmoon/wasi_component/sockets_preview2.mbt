@@ -290,6 +290,8 @@ fn tcp_streams(
           append: false,
           owns_fd: true,
           permit: Ref(0L),
+          pending: Ref(None),
+          failure: Ref(None),
           closed: Ref(false),
         }),
       )
