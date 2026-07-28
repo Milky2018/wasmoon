@@ -1648,6 +1648,7 @@ fn instantiate_canon_stream_drop_readable(
               }
               table.host_values.remove(ep.stream_id)
               free_shared_handle(async_state, owner_component_id, handle)
+              cleanup_closed_stream(table, ep.stream_id)
               []
             }
         }
@@ -1758,6 +1759,7 @@ fn instantiate_canon_stream_drop_writable(
               )
               table.endpoints.remove(handle_key(owner_component_id, handle))
               free_shared_handle(async_state, owner_component_id, handle)
+              cleanup_closed_stream(table, ep.stream_id)
               []
             }
         }

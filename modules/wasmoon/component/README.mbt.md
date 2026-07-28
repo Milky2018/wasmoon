@@ -113,3 +113,17 @@ The `wasmoon component --run` WASI command path and component conformance runner
 continue to use Wasmoon's native JIT by default, with `--no-jit` for
 differential testing. General facade and `--invoke` behavior stays independent
 of target-specific engine types.
+
+## Security and hardening
+
+The facade validates component bytes before linker instantiation and returns
+structured errors, but the Component Model runtime has not completed an
+independent security audit. It must not be treated as a production sandbox for
+untrusted components.
+
+Repository hardening includes deterministic malformed-binary and generated
+valid-component fuzzing, an official Wasmtime 45.0.0 semantic differential,
+logical stream/future/resource lifecycle checks, source-boundary auditing, and
+large generated component stress workloads. See
+`docs/component-security.md` for the exact threat model, commands, CI budgets,
+and retained evidence.

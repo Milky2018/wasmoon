@@ -305,6 +305,14 @@ graph TD
   ISS_287["ISS-287: Add the stable component runtime facade"]
   ISS_288["ISS-288: Add general component invocation to the CLI"]
   ISS_289["ISS-289: Add checked WIT typed bindings"]
+  ISS_290["ISS-290: Harden the component runtime validation surface"]
+  ISS_291["ISS-291: Add deterministic component fuzzing"]
+  ISS_292["ISS-292: Add current Wasmtime component differential coverage"]
+  ISS_293["ISS-293: Verify and repair component resource lifecycle cleanup"]
+  ISS_294["ISS-294: Establish a component security audit gate"]
+  ISS_295["ISS-295: Add large component stress coverage"]
+  ISS_296["ISS-296: Validate canonical lift signatures through core instance exports"]
+  ISS_297["ISS-297: Parse component type indices at 64 and above"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
@@ -606,6 +614,10 @@ graph TD
   ISS_285 --> ISS_286
   ISS_287 --> ISS_288
   ISS_287 --> ISS_289
+  ISS_291 --> ISS_292
+  ISS_291 --> ISS_294
+  ISS_293 --> ISS_294
+  ISS_291 --> ISS_295
 ```
 
 ## Warnings

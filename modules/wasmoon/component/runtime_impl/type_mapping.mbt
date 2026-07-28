@@ -212,119 +212,13 @@ fn core_types_for_valtype(
   types : Array[TypeDef?],
   mem_is_64 : Bool,
 ) -> Array[@types.ValueType] raise ComponentRuntimeError {
-  fn join_flat(a : @types.ValueType, b : @types.ValueType) -> @types.ValueType {
-    if a == b {
-      return a
-    }
-    match (a, b) {
-      (I64, _) | (_, I64) | (F64, _) | (_, F64) => I64
-      (F32, I32) | (I32, F32) => I32
-      (I32, _) | (_, I32) => I32
-      _ => I64
-    }
-  }
-
-  match resolve_valtype(ty, types) {
-    Prim(p) =>
-      match p {
-        Bool | S8 | U8 | S16 | U16 | S32 | U32 | Char => [I32]
-        S64 | U64 => [I64]
-        F32 => [F32]
-        F64 => [F64]
-        String | ErrorContext => if mem_is_64 { [I64, I64] } else { [I32, I32] }
-      }
-    TypeIdx(idx) =>
-      match types[idx] {
-        Some(Tuple(tys)) => {
-          let out : Array[@types.ValueType] = []
-          for t in tys {
-            for vt in core_types_for_valtype(t, types, mem_is_64) {
-              out.push(vt)
-            }
-          }
-          out
-        }
-        Some(Record(fields)) => {
-          let out : Array[@types.ValueType] = []
-          for f in fields {
-            for vt in core_types_for_valtype(f.ty, types, mem_is_64) {
-              out.push(vt)
-            }
-          }
-          out
-        }
-        Some(Variant(cases)) => {
-          let payloads : Array[Array[@types.ValueType]] = []
-          let mut max_len = 0
-          for c in cases {
-            let flat = match c.ty {
-              None => []
-              Some(t) => core_types_for_valtype(t, types, mem_is_64)
-            }
-            if flat.length() > max_len {
-              max_len = flat.length()
-            }
-            payloads.push(flat)
-          }
-          let joined : Array[@types.ValueType] = []
-          for i in 0..<max_len {
-            let mut cur : @types.ValueType? = None
-            for p in payloads {
-              if i < p.length() {
-                cur = match cur {
-                  None => Some(p[i])
-                  Some(prev) => Some(join_flat(prev, p[i]))
-                }
-              }
-            }
-            match cur {
-              None => ()
-              Some(t) => joined.push(t)
-            }
-          }
-          [I32] + joined
-        }
-        Some(Option(v)) => [I32] + core_types_for_valtype(v, types, mem_is_64)
-        Some(Result(ok, err)) => {
-          let ok_flat = match ok {
-            None => []
-            Some(v) => core_types_for_valtype(v, types, mem_is_64)
-          }
-          let err_flat = match err {
-            None => []
-            Some(v) => core_types_for_valtype(v, types, mem_is_64)
-          }
-          let mut max_len = ok_flat.length()
-          if err_flat.length() > max_len {
-            max_len = err_flat.length()
-          }
-          let joined : Array[@types.ValueType] = []
-          for i in 0..<max_len {
-            let mut cur : @types.ValueType? = None
-            if i < ok_flat.length() {
-              cur = Some(ok_flat[i])
-            }
-            if i < err_flat.length() {
-              cur = match cur {
-                None => Some(err_flat[i])
-                Some(prev) => Some(join_flat(prev, err_flat[i]))
-              }
-            }
-            match cur {
-              None => ()
-              Some(t) => joined.push(t)
-            }
-          }
-          [I32] + joined
-        }
-        Some(Flags(labels)) => if labels.length() <= 32 { [I32] } else { [I64] }
-        Some(Enum(_)) => [I32]
-        Some(Own(_)) | Some(Borrow(_)) | Some(ResourceType(_, _, _, _)) => [I32]
-        // Stream/future values are represented as i32 handles; the i64
-        // representation is used by the `canon stream.new` intrinsic only.
-        Some(Stream(_)) | Some(Future(_)) => [I32]
-        Some(List(_)) => if mem_is_64 { [I64, I64] } else { [I32, I32] }
-        _ => raise InvalidTypeDef(idx)
+  let pointer_type : @types.ValueType = if mem_is_64 { I64 } else { I32 }
+  match @component.canonical_flat_types(ty, types, pointer_type) {
+    Some(flat) => flat
+    None =>
+      match ty {
+        TypeIdx(idx) => raise InvalidTypeDef(idx)
+        _ => raise InvalidTypeDef(-1)
       }
   }
 }
@@ -425,36 +319,10 @@ fn core_func_type_from_component(
   mem_is_64 : Bool,
 ) -> @types.FuncType raise ComponentRuntimeError {
   let ptr_ty = if mem_is_64 { @types.ValueType::I64 } else { I32 }
-  let flat_params : Array[@types.ValueType] = []
-  for p in func_type.params {
-    for t in core_types_for_valtype(p.ty, types, mem_is_64) {
-      flat_params.push(t)
-    }
+  match @component.canonical_lower_core_func_type(func_type, types, ptr_ty) {
+    Some(core_type) => core_type
+    None => raise InvalidTypeDef(-1)
   }
-  let flat_results : Array[@types.ValueType] = match func_type.result {
-    Some(r) => core_types_for_valtype(r, types, mem_is_64)
-    None => []
-  }
-
-  // Canonical ABI:
-  // - If there are too many flattened parameters, pass a single pointer to a
-  //   memory area containing the flattened arguments.
-  // - If the flattened result count isn't exactly 1, use an indirect return
-  //   pointer parameter (and return nothing).
-  let params : Array[@types.ValueType] = if flat_params.length() > 16 {
-    [ptr_ty]
-  } else {
-    flat_params
-  }
-  let results : Array[@types.ValueType] = if flat_results.length() == 1 {
-    flat_results
-  } else if flat_results.length() == 0 {
-    []
-  } else {
-    params.push(ptr_ty)
-    []
-  }
-  { params, results }
 }
 
 ///|

@@ -283,6 +283,40 @@ pub fn StreamTable::StreamTable() -> StreamTable {
 }
 
 ///|
+fn cleanup_closed_stream(table : StreamTable, stream_id : Int) -> Unit {
+  guard table.streams.get(stream_id) is Some(state) &&
+    state.readable_dropped &&
+    state.writable_dropped else {
+    return
+  }
+  for entry in table.endpoints {
+    let (_, endpoint) = entry
+    if endpoint.stream_id == stream_id {
+      return
+    }
+  }
+  table.host_values.remove(stream_id)
+  table.streams.remove(stream_id)
+}
+
+///|
+fn cleanup_closed_future(async_state : AsyncState, future_id : Int) -> Unit {
+  guard async_state.futures.get(future_id) is Some(state) &&
+    state.readable_dropped &&
+    state.writable_dropped else {
+    return
+  }
+  for entry in async_state.future_endpoints {
+    let (_, endpoint) = entry
+    if endpoint.future_id == future_id {
+      return
+    }
+  }
+  async_state.host_future_values.remove(future_id)
+  async_state.futures.remove(future_id)
+}
+
+///|
 /// Async/task/waitable state shared across a whole component instantiation tree.
 ///
 /// Waitable/stream/future/subtask handle numbers are per component instance (resource_table.id).

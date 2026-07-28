@@ -207,38 +207,9 @@ fn core_valtypes_for_component_valtype(
 fn core_functype_for_component_functype(
   ft : @component.FuncType,
   type_table : Array[@component.TypeDef?],
+  pointer_type : @types.ValueType,
 ) -> @types.FuncType? {
-  let params : Array[@types.ValueType] = []
-  for p in ft.params {
-    match core_valtypes_for_component_valtype(p.ty, type_table) {
-      Some(ts) =>
-        for t in ts {
-          params.push(t)
-          if params.length() > 16 {
-            // Indirect parameters: canonical ABI requires memory.
-            return None
-          }
-        }
-      None => return None
-    }
-  }
-  let results : Array[@types.ValueType] = []
-  match ft.result {
-    None => ()
-    Some(r) =>
-      match core_valtypes_for_component_valtype(r, type_table) {
-        Some(ts) =>
-          for t in ts {
-            results.push(t)
-          }
-        None => return None
-      }
-  }
-  // Indirect/multi-value results go through memory (retptr), not direct core results.
-  if results.length() > 1 {
-    return None
-  }
-  Some({ params, results })
+  @component.canonical_lift_core_func_type(ft, type_table, pointer_type)
 }
 
 ///|
@@ -407,7 +378,11 @@ fn validate_canon(
             match
               (
                 core_func_types[core_func_idx],
-                core_functype_for_component_functype(ft, type_table),
+                core_functype_for_component_functype(
+                  ft,
+                  type_table,
+                  canon_address_type(opts, core_memory_types),
+                ),
               ) {
               (Some(core_ft), Some(expected_core_ft)) =>
                 if core_ft != expected_core_ft {

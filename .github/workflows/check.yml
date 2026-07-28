@@ -308,6 +308,80 @@ jobs:
             --dump-failures \
             "${args[@]}"
 
+  component-hardening:
+    name: Component Model hardening
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl clang lld python3 xz-utils
+
+      - name: install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+
+      - name: prepare pinned tools
+        run: |
+          moon version --all
+          moon update
+          cargo install wasm-tools \
+            --version "$COMPONENT_WASM_TOOLS_VERSION" --locked
+          python3 scripts/install_wasmtime_oracle.py \
+            --output target/component-hardening/wasmtime-oracle
+
+      - name: build Wasmoon component harness
+        run: |
+          moon build --target native --release
+          ./install.sh
+
+      - name: audit component security boundaries
+        run: python3 scripts/audit_component_security.py
+
+      - name: test hardening harness and logical resource cleanup
+        run: |
+          python3 -m unittest discover \
+            -s scripts/tests -p "test_component_*.py"
+          moon test \
+            modules/wasmoon/component/runtime_impl/runtime_cleanup_wbtest.mbt \
+            2>&1 | tee target/component-hardening/lifecycle.log
+
+      - name: run deterministic fuzz smoke campaign
+        timeout-minutes: 5
+        run: |
+          python3 scripts/component_fuzz.py \
+            --mutations 64 --valid-cases 16
+
+      - name: run current Wasmtime differential
+        timeout-minutes: 5
+        run: |
+          python3 scripts/component_differential.py \
+            --wasmtime \
+              target/component-hardening/wasmtime-oracle/wasmtime \
+            --cases 16
+
+      - name: run large component smoke campaign
+        timeout-minutes: 5
+        run: |
+          python3 scripts/component_stress.py \
+            --functions 256 \
+            --instance-depth 16 \
+            --type-width 128 \
+            --type-depth 32 \
+            --invocations 32
+
+      - name: upload component hardening evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: component-hardening
+          path: target/component-hardening
+          if-no-files-found: error
+          retention-days: 30
+
   build-ubuntu-sanitizer:
     runs-on: ubuntu-latest
     env:
@@ -375,12 +449,23 @@ jobs:
             --log target/cutover-gate/linux-amd64-sanitizer/logs/gc-fault-injection.log \
             -- python3 scripts/find_gc_bugs.py --dir spec/gc --timeout 30 --max-files 64 --fault-alloc-every 7
 
+      - name: run component resource lifecycle checks (sanitizer)
+        if: always()
+        timeout-minutes: 5
+        run: |
+          python3 scripts/cutover_gate_manifest.py run \
+            --manifest target/cutover-gate/linux-amd64-sanitizer/manifest.json \
+            --name component-resource-lifecycle \
+            --log target/cutover-gate/linux-amd64-sanitizer/logs/component-resource-lifecycle.log \
+            -- moon test \
+              modules/wasmoon/component/runtime_impl/runtime_cleanup_wbtest.mbt
+
       - name: finalize sanitizer evidence manifest
         if: always()
         run: |
           python3 scripts/cutover_gate_manifest.py finalize \
             --manifest target/cutover-gate/linux-amd64-sanitizer/manifest.json \
-            --required build-sanitizer,gc-stress,gc-fault-injection
+            --required build-sanitizer,gc-stress,gc-fault-injection,component-resource-lifecycle
 
       - name: upload sanitizer evidence
         if: always()
@@ -489,7 +574,7 @@ jobs:
           retention-days: 30
 
   machv-cutover-manifest:
-    needs: [detect-machv-cutover, machv-cutover, build-ubuntu-sanitizer, build-macos, build-ubuntu-amd64, component-model]
+    needs: [detect-machv-cutover, machv-cutover, build-ubuntu-sanitizer, build-macos, build-ubuntu-amd64, component-model, component-hardening]
     if: always() && needs.detect-machv-cutover.outputs.required == 'true'
     runs-on: ubuntu-latest
     steps:
@@ -509,6 +594,7 @@ jobs:
             --required-job build-macos=${{ needs.build-macos.result }} \
             --required-job build-ubuntu-amd64=${{ needs.build-ubuntu-amd64.result }} \
             --required-job component-model=${{ needs.component-model.result }} \
+            --required-job component-hardening=${{ needs.component-hardening.result }} \
             "${manifests[@]}"
       - name: upload combined closing-commit manifest
         if: always()

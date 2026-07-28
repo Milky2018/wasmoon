@@ -215,6 +215,7 @@ fn instantiate_canon_subtask_drop(
         async_state.task_cancelled.remove(skey)
         async_state.task_contexts.remove(skey)
         drop_task_thread(async_state, skey)
+        remove_task_meta(async_state, skey)
         async_state.yield_suspended.remove(skey)
         async_state.waiting_ws.remove(skey)
         async_state.sync_lower_states.remove(skey)

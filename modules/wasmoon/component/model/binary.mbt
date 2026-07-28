@@ -260,11 +260,7 @@ fn Reader::read_sleb_i32(self : Reader) -> Int raise ComponentParseError {
 
 ///|
 fn Reader::read_typeidx(self : Reader) -> Int raise ComponentParseError {
-  let idx = self.read_sleb_i32()
-  if idx < 0 {
-    raise InvalidTypeSection
-  }
-  idx
+  self.read_leb_u32()
 }
 
 ///|

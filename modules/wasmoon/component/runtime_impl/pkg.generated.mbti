@@ -309,6 +309,7 @@ pub fn HostResourceDestructor::destroy(Self, Int) -> Unit
 type HostRuntimeState
 pub fn HostRuntimeState::HostRuntimeState() -> Self
 pub fn HostRuntimeState::async_state(Self) -> AsyncState
+pub fn HostRuntimeState::drop_host_readable_future(Self, ResourceTable, Int) -> Unit raise ComponentRuntimeError
 pub fn HostRuntimeState::drop_host_readable_stream(Self, ResourceTable, Int) -> Unit raise ComponentRuntimeError
 pub fn HostRuntimeState::new_host_byte_stream(Self, ResourceTable, Bytes) -> Int
 pub fn HostRuntimeState::new_host_unit_result_future(Self, ResourceTable, @model.ValType, Array[@model.TypeDef?], error_case? : Int) -> Int raise ComponentRuntimeError

@@ -392,4 +392,50 @@ pub fn HostRuntimeState::drop_host_readable_stream(
   }
   self.stream_table.host_values.remove(endpoint.stream_id)
   free_shared_handle(self.async_state, table.id, readable)
+  cleanup_closed_stream(self.stream_table, endpoint.stream_id)
+}
+
+///|
+/// Drop an embedding-owned readable future endpoint.
+///
+/// Host-created futures have no live writable endpoint. Busy component-owned
+/// futures must be dropped through their canonical ABI operation instead.
+pub fn HostRuntimeState::drop_host_readable_future(
+  self : HostRuntimeState,
+  table : ResourceTable,
+  readable : Int,
+) -> Unit raise ComponentRuntimeError {
+  let key = handle_key(table.id, readable)
+  guard self.async_state.future_endpoints.get(key) is Some(endpoint) &&
+    endpoint.is_readable &&
+    self.async_state.futures.get(endpoint.future_id) is Some(state) else {
+    raise HostCallError("host future is not live")
+  }
+  if state.pending_read is Some(_) || state.pending_write is Some(_) {
+    raise HostCallError("cannot remove busy host future")
+  }
+  match self.async_state.host_future_values.get(endpoint.future_id) {
+    Some(source) =>
+      match source.cancel {
+        Some(cancel) => cancel()
+        None => ()
+      }
+    None => ()
+  }
+  self.async_state.host_future_values.remove(endpoint.future_id)
+  self.async_state.futures.set(endpoint.future_id, {
+    payload_ty: state.payload_ty,
+    pending_read: None,
+    pending_write: None,
+    readable_dropped: true,
+    writable_dropped: true,
+    read_done: true,
+    write_succeeded: state.write_succeeded,
+    write_observed_readable_drop: state.write_observed_readable_drop,
+    wrote_value: state.wrote_value,
+  })
+  remove_waitable_membership(self.async_state, table.id, readable)
+  self.async_state.future_endpoints.remove(key)
+  free_shared_handle(self.async_state, table.id, readable)
+  cleanup_closed_future(self.async_state, endpoint.future_id)
 }

@@ -1115,6 +1115,7 @@ fn instantiate_canon_future_drop_readable(
                 handle_key(owner_component_id, handle),
               )
               free_shared_handle(async_state, owner_component_id, handle)
+              cleanup_closed_future(async_state, ep.future_id)
               []
             }
           None => []
@@ -1198,6 +1199,7 @@ fn instantiate_canon_future_drop_writable(
                 handle_key(owner_component_id, handle),
               )
               free_shared_handle(async_state, owner_component_id, handle)
+              cleanup_closed_future(async_state, ep.future_id)
               []
             }
           None => []

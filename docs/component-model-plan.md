@@ -73,3 +73,8 @@ python3 scripts/run_component_wast.py --suite future-gated --no-jit
 
 Known unsupported specification features are recorded in
 `docs/component/unsupported-matrix.md`.
+
+Adversarial validation, the pinned current-Wasmtime differential, logical
+resource cleanup, and generated large-component campaigns are documented in
+`docs/component-security.md`. These gates are regression evidence, not a claim
+that the runtime is safe for untrusted production workloads.

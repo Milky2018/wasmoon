@@ -7,6 +7,12 @@ import {
 }
 
 // Values
+pub fn canonical_flat_types(ValType, Array[TypeDef?], @types.ValueType) -> Array[@types.ValueType]?
+
+pub fn canonical_lift_core_func_type(FuncType, Array[TypeDef?], @types.ValueType) -> @types.FuncType?
+
+pub fn canonical_lower_core_func_type(FuncType, Array[TypeDef?], @types.ValueType) -> @types.FuncType?
+
 pub fn parse_alias_section(Bytes) -> Array[Alias] raise ComponentParseError
 
 pub fn parse_canon_section(Bytes) -> Array[Canon] raise ComponentParseError

@@ -1,0 +1,79 @@
+name: Component Model Hardening Campaign
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "31 3 * * 2"
+
+env:
+  COMPONENT_WASM_TOOLS_VERSION: "1.254.0"
+
+jobs:
+  campaign:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl clang lld python3 xz-utils
+
+      - name: install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+
+      - name: prepare pinned tools
+        run: |
+          moon version --all
+          moon update
+          cargo install wasm-tools \
+            --version "$COMPONENT_WASM_TOOLS_VERSION" --locked
+          python3 scripts/install_wasmtime_oracle.py \
+            --output target/component-hardening/wasmtime-oracle
+
+      - name: build Wasmoon
+        run: |
+          moon build --target native --release
+          ./install.sh
+
+      - name: run security and lifecycle checks
+        run: |
+          python3 scripts/audit_component_security.py
+          python3 -m unittest discover \
+            -s scripts/tests -p "test_component_*.py"
+          moon test \
+            modules/wasmoon/component/runtime_impl/runtime_cleanup_wbtest.mbt \
+            2>&1 | tee target/component-hardening/lifecycle.log
+
+      - name: run deterministic fuzz campaign
+        run: |
+          python3 scripts/component_fuzz.py \
+            --mutations 1024 --valid-cases 128
+
+      - name: run current Wasmtime differential
+        run: |
+          python3 scripts/component_differential.py \
+            --wasmtime \
+              target/component-hardening/wasmtime-oracle/wasmtime \
+            --cases 128
+
+      - name: run large component stress campaign
+        run: |
+          python3 scripts/component_stress.py \
+            --functions 4096 \
+            --instance-depth 64 \
+            --type-width 1024 \
+            --type-depth 90 \
+            --invocations 512
+
+      - name: upload component hardening evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: component-hardening-${{ github.run_id }}
+          path: target/component-hardening
+          if-no-files-found: error
+          retention-days: 90
