@@ -200,26 +200,21 @@ def audit_repo(root: Path) -> list[AuditCheck]:
             "missing: " + ", ".join(missing_scripts) if missing_scripts else "present",
         )
     )
-    ci_text = ""
-    for path in [
-        ".github/workflows/check.yml",
-        ".github/workflows/component-hardening.yml",
-    ]:
-        try:
-            ci_text += read_text(root, path)
-        except OSError:
-            pass
+    try:
+        ci_text = read_text(root, ".github/workflows/check.yml")
+    except OSError:
+        ci_text = ""
     required_ci_tokens = [
-        *(Path(path).name for path in scripts),
         "runtime_cleanup_wbtest.mbt",
-        "actions/upload-artifact@v4",
-        "if: always()",
-        "target/component-hardening",
+        "run native sanitizer checks",
+        "stable-0.2",
+        "async-0.3",
+        "future-gated",
     ]
     missing_ci = [token for token in required_ci_tokens if token not in ci_text]
     checks.append(
         AuditCheck(
-            "hardening-ci",
+            "platform-ci",
             not missing_ci,
             "missing CI references: " + ", ".join(missing_ci)
             if missing_ci

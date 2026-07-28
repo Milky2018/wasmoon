@@ -101,8 +101,6 @@
     }
   ],
   "ci": {
-    "pull_request_workflow": ".github/workflows/check.yml",
-    "scheduled_workflow": ".github/workflows/component-hardening.yml",
-    "artifact_root": "target/component-hardening"
+    "platform_workflow": ".github/workflows/check.yml"
   }
 }

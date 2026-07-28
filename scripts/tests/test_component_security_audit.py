@@ -70,25 +70,23 @@ class ComponentSecurityAuditTests(unittest.TestCase):
             )
         scripts = root / "scripts"
         scripts.mkdir()
-        script_names = [
+        for name in [
             "component_fuzz.py",
             "component_differential.py",
             "component_stress.py",
             "install_wasmtime_oracle.py",
-        ]
-        for name in script_names:
+        ]:
             (scripts / name).write_text("# fixture\n", encoding="utf-8")
         workflows = root / ".github/workflows"
         workflows.mkdir(parents=True)
-        ci = (
-            "\n".join(script_names)
-            + "\nruntime_cleanup_wbtest.mbt\n"
-            + "actions/upload-artifact@v4\n"
-            + "if: always()\n"
-            + "target/component-hardening\n"
+        (workflows / "check.yml").write_text(
+            "runtime_cleanup_wbtest.mbt\n"
+            "run native sanitizer checks\n"
+            "stable-0.2\n"
+            "async-0.3\n"
+            "future-gated\n",
+            encoding="utf-8",
         )
-        (workflows / "check.yml").write_text(ci, encoding="utf-8")
-        (workflows / "component-hardening.yml").write_text(ci, encoding="utf-8")
 
     def assert_failed(self, root: Path, name: str) -> None:
         checks = {check.name: check for check in audit_repo(root)}
@@ -168,13 +166,13 @@ class ComponentSecurityAuditTests(unittest.TestCase):
             (root / "scripts/component_fuzz.py").unlink()
             self.assert_failed(root, "hardening-tools")
 
-    def test_missing_ci_reference_fails(self) -> None:
+    def test_missing_platform_ci_reference_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self.create_fixture(root)
             for path in (root / ".github/workflows").iterdir():
-                path.write_text("target/component-hardening\n")
-            self.assert_failed(root, "hardening-ci")
+                path.write_text("run native sanitizer checks\n")
+            self.assert_failed(root, "platform-ci")
 
 
 if __name__ == "__main__":

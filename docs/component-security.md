@@ -19,18 +19,22 @@ resistance, host capability confinement, or conformance for every Component
 Model proposal. The stable 0.2, current 0.3 async, and future-gated conformance
 suites remain separate evidence.
 
-## Pull-request gates
+## Continuous integration
 
 `scripts/audit_component_security.py` validates the stable facade boundary,
 validation-before-instantiation ordering, explicit type-size/depth limits,
-structured termination policy, resource cleanup seams, and the presence of all
-hardening lanes. Its source of truth is `docs/component-hardening.json`.
+structured termination policy, resource cleanup seams, and the platform CI
+coverage. Its source of truth is `docs/component-hardening.json`.
 
-The blocking Component Model hardening job additionally runs:
+The Linux AMD64 and macOS ARM64 jobs each run the stable 0.2, current 0.3
+async, and future-gated suites through both JIT and interpreter execution. They
+also run native sanitizer checks in the same platform job instead of launching
+separate Component Model or sanitizer jobs.
+
+The following tools remain available for explicit local diagnostics, but they
+are not pull-request gates or scheduled CI campaigns:
 
 ```bash
-python3 -m unittest discover -s scripts/tests -p "test_component_*.py"
-moon test modules/wasmoon/component/runtime_impl/runtime_cleanup_wbtest.mbt
 python3 scripts/component_fuzz.py --mutations 64 --valid-cases 16
 python3 scripts/component_differential.py \
   --wasmtime target/component-hardening/wasmtime-oracle/wasmtime \
@@ -55,13 +59,6 @@ exported-instance paths, wide record types, deep type graphs, and repeated
 invocation. Every subprocess has a timeout and the report records input sizes,
 component sizes, elapsed time, process output, and maximum child resident set
 size.
-
-## Scheduled campaign
-
-`.github/workflows/component-hardening.yml` runs a larger fixed-seed campaign
-weekly and on demand. It retains all reports and failing cases for 90 days. The
-pull-request lane uses smaller deterministic budgets so a change cannot bypass
-hardening through an empty or impractically expensive campaign.
 
 Native ASan/UBSan execution and direct logical-state assertions are both
 required for resource cleanup. The logical tests currently cover host

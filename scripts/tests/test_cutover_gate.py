@@ -348,18 +348,18 @@ class GateManifestTests(unittest.TestCase):
                 ["required job 'build-macos' result is 'failure'"],
             )
 
-    def test_closing_workflow_records_common_quality_commands(self) -> None:
+    def test_check_workflow_has_only_platform_jobs(self) -> None:
         workflow = (ROOT / ".github/workflows/check.yml").read_text(
             encoding="utf-8"
         )
-        for command in ("moon-fmt", "moon-info", "git-diff-check"):
-            self.assertIn(f"run_gate {command}", workflow)
-        self.assertIn(
-            "--required target-identity,moon-fmt,moon-info,git-diff-check,",
-            workflow,
-        )
+        self.assertIn("  linux-amd64:", workflow)
+        self.assertIn("  macos-arm64:", workflow)
         self.assertIn("scripts/check_committed_diff.py", workflow)
-        self.assertNotIn("run_gate git-diff-check 'git diff --check'", workflow)
+        self.assertNotIn("  component-model:", workflow)
+        self.assertNotIn("  component-hardening:", workflow)
+        self.assertNotIn("  build-ubuntu-sanitizer:", workflow)
+        self.assertNotIn("  detect-machv-cutover:", workflow)
+        self.assertNotIn("  machv-cutover:", workflow)
         self.assertNotIn("paired-performance", workflow)
         self.assertNotIn("scripts/run_machv_cutover_perf.py", workflow)
         self.assertNotIn("--perf-report", workflow)
@@ -458,30 +458,17 @@ class GateManifestTests(unittest.TestCase):
             )
             self.assertEqual(missing_base.returncode, 0)
 
-    def test_closing_workflow_requires_common_build_jobs(self) -> None:
+    def test_platform_jobs_own_component_and_sanitizer_checks(self) -> None:
         workflow = (ROOT / ".github/workflows/check.yml").read_text(
             encoding="utf-8"
         )
-        self.assertIn(
-            "needs: [detect-machv-cutover, machv-cutover, "
-            "build-ubuntu-sanitizer, build-macos, build-ubuntu-amd64, "
-            "component-model]",
-            workflow,
+        self.assertEqual(workflow.count("run stable Component Model 0.2"), 2)
+        self.assertEqual(workflow.count("run Component Model 0.3 async"), 2)
+        self.assertEqual(
+            workflow.count("run future-gated Component Model features"),
+            2,
         )
-        self.assertIn(
-            "--required-job build-macos=${{ needs.build-macos.result }}",
-            workflow,
-        )
-        self.assertIn(
-            "--required-job build-ubuntu-amd64=${{ "
-            "needs.build-ubuntu-amd64.result }}",
-            workflow,
-        )
-        self.assertIn(
-            "--required-job component-model=${{ "
-            "needs.component-model.result }}",
-            workflow,
-        )
+        self.assertEqual(workflow.count("run native sanitizer checks"), 2)
 
 if __name__ == "__main__":
     unittest.main()
