@@ -189,7 +189,7 @@ test "Preview 3 filesystem reuses capability roots and canonical byte streams" {
       U32(0),
       U32(1),
     ]),
-    content="[Variant(1, Some(U32(31)))]",
+    content="[Variant(1, Some(U32(30)))]",
   )
 }
 
