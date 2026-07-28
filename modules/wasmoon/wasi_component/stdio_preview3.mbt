@@ -131,7 +131,7 @@ fn Preview3StdinSource::pump(
       if @wasi.native_last_errno_to_wasi() == 6 {
         self.operation.val = Some(self.ctx.register_async_fd(self.fd, 0x01))
       } else {
-        self.complete(Variant(1, Some(Variant(0, None))), true)
+        self.complete(Variant(1, Some(U32(0))), true)
       }
   }
 }

@@ -30,6 +30,9 @@
     (core func $stream-read))
   (canon stream.drop-readable $stdin-stream
     (core func $stream-drop-readable))
+  (canon future.read $stdin-future
+    (memory (core memory $memory "memory"))
+    (core func $future-read))
   (canon future.drop-readable $stdin-future
     (core func $future-drop-readable))
 
@@ -40,6 +43,8 @@
       (func $stream-read (param i32 i32 i32) (result i32)))
     (import "" "stream-drop-readable"
       (func $stream-drop-readable (param i32)))
+    (import "" "future-read"
+      (func $future-read (param i32 i32) (result i32)))
     (import "" "future-drop-readable"
       (func $future-drop-readable (param i32)))
 
@@ -47,6 +52,7 @@
       (local $stream i32)
       (local $future i32)
       (local $status i32)
+      (local $future-status i32)
       (call $read-via-stream (i32.const 0))
       (local.set $stream (i32.load (i32.const 0)))
       (local.set $future (i32.load (i32.const 4)))
@@ -55,20 +61,41 @@
           (local.get $stream)
           (i32.const 16)
           (i32.const 5)))
+      (local.set $future-status
+        (call $future-read
+          (local.get $future)
+          (i32.const 32)))
       (call $stream-drop-readable (local.get $stream))
       (call $future-drop-readable (local.get $future))
       (if (result i32)
-        (i32.and
-          (i32.eq
-            (i32.shr_u (local.get $status) (i32.const 4))
-            (i32.const 5))
+        (i32.eq
+          (i32.shr_u (local.get $status) (i32.const 4))
+          (i32.const 5))
+        (then
           (i32.and
-            (i32.eq
-              (i32.load (i32.const 16))
-              (i32.const 0x6c6c6568))
-            (i32.eq
-              (i32.load8_u (i32.const 20))
-              (i32.const 0x6f))))
+            (i32.and
+              (i32.eq (local.get $future-status) (i32.const 0))
+              (i32.eq
+                (i32.load8_u (i32.const 32))
+                (i32.const 0)))
+            (i32.and
+              (i32.eq
+                (i32.load (i32.const 16))
+                (i32.const 0x6c6c6568))
+              (i32.eq
+                (i32.load8_u (i32.const 20))
+                (i32.const 0x6f)))))
+        (else
+          (i32.and
+            (i32.eq (local.get $future-status) (i32.const 0))
+            (i32.and
+              (i32.eq
+                (i32.load8_u (i32.const 32))
+                (i32.const 1))
+              (i32.eq
+                (i32.load8_u (i32.const 33))
+                (i32.const 0))))))
+      (if (result i32)
         (then (i32.const 0))
         (else (i32.const 1)))))
 
@@ -79,6 +106,7 @@
         (export "read-via-stream" (func $read-via-stream-core))
         (export "stream-read" (func $stream-read))
         (export "stream-drop-readable" (func $stream-drop-readable))
+        (export "future-read" (func $future-read))
         (export "future-drop-readable" (func $future-drop-readable))))))
   (type $run-result (result))
   (func $run async (result $run-result)

@@ -226,6 +226,26 @@ test "component command passes inherited stdin to Preview 3 streams" {
 }
 
 ///|
+test "component command returns Preview 3 stdin errors through the future" {
+  guard @wasi.native_dup(0) is Some(saved_stdin) else {
+    return fail("could not preserve stdin")
+  }
+  defer @wasi.native_close(saved_stdin) |> ignore
+  guard @wasi.native_close(0) else { return fail("could not close stdin") }
+  defer @wasi.native_dup2(saved_stdin, 0) |> ignore
+  let status = run_wasi_component_command(
+    "testsuite/fixtures/wasi-command-async-stdin.component.wasm",
+    [],
+    [],
+    [],
+    "deny",
+    true,
+    Text,
+  )
+  debug_inspect(status, content="0")
+}
+
+///|
 test "component invoke evaluates a nested export with typed JSON" {
   @fs.create_dir("tmp") catch {
     _ => ()
