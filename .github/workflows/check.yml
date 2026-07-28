@@ -39,6 +39,7 @@ jobs:
       - name: report toolchain
         run: |
           moon version --all
+          moon update
           wasm-tools --version
           uname -a
 
@@ -155,6 +156,7 @@ jobs:
       - name: report toolchain
         run: |
           moon version --all
+          moon update
           wasm-tools --version
           uname -a
 
