@@ -147,6 +147,18 @@ pub fn NativeJITContinuation::continue_with(
 }
 
 ///|
+/// Resume a continuation stopped at an imported hostcall.
+///
+/// `retry=true` re-enters only the suspended hostcall before continuing the
+/// native guest frame. It never restarts the guest function from its entry.
+pub fn NativeJITContinuation::continue_after_hostcall(
+  self : NativeJITContinuation,
+  retry~ : Bool,
+) -> NativeJITContinuationEvent raise NativeFiberError {
+  self.continue_with(value=if retry { 1L } else { 0L })
+}
+
+///|
 pub fn NativeJITContinuation::cancel(
   self : NativeJITContinuation,
 ) -> Unit raise NativeFiberError {

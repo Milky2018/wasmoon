@@ -262,26 +262,15 @@ fn JITContext::take_wasi_stderr(self : JITContext) -> Bytes {
 // ============ Multi-value Return Support ============
 
 ///|
-/// Call a JIT function with multiple return values
-/// Uses JIT-generated trampolines on-demand.
-/// X19 = ctx_ptr (vmctx), all other values loaded on-demand from vmctx.
-/// Returns 0 on success, trap code on error
-fn JITContext::call_multi_return(
+fn JITContext::entry_trampoline(
   self : JITContext,
-  func_ptr : Int64,
-  args : Array[Int64],
   param_types : Array[@types.ValueType],
-  results : Array[Int64],
   result_types : Array[@types.ValueType],
-) -> Unit raise JITTrap {
-  let num_arg_slots = args.length() // Number of Int64 slots (V128 takes 2)
-  let num_result_slots = @wasmoon_jit.count_entry_trampoline_slots(result_types)
+) -> Int64 raise JITTrap {
   let sig_hash = @wasmoon_jit.entry_trampoline_signature_hash(
     param_types, result_types,
   )
-
-  // Get or generate trampoline
-  let trampoline_ptr = match self.trampoline_cache.get(sig_hash) {
+  match self.trampoline_cache.get(sig_hash) {
     Some(trampoline) => trampoline.entry_address()
     None => {
       let target_arch = @wasmoon_jit.host_native_target() catch {
@@ -302,6 +291,24 @@ fn JITContext::call_multi_return(
       pointer
     }
   }
+}
+
+///|
+/// Call a JIT function with multiple return values
+/// Uses JIT-generated trampolines on-demand.
+/// X19 = ctx_ptr (vmctx), all other values loaded on-demand from vmctx.
+/// Returns 0 on success, trap code on error
+fn JITContext::call_multi_return(
+  self : JITContext,
+  func_ptr : Int64,
+  args : Array[Int64],
+  param_types : Array[@types.ValueType],
+  results : Array[Int64],
+  result_types : Array[@types.ValueType],
+) -> Unit raise JITTrap {
+  let num_arg_slots = args.length() // Number of Int64 slots (V128 takes 2)
+  let num_result_slots = @wasmoon_jit.count_entry_trampoline_slots(result_types)
+  let trampoline_ptr = self.entry_trampoline(param_types, result_types)
 
   // Prepare values_vec: [args..., results...]
   // Each slot is 8 bytes (Int64), V128 uses 2 slots
@@ -337,4 +344,102 @@ fn JITContext::call_multi_return(
   for i in 0..<num_result_slots {
     results[i] = values_vec[num_arg_slots + i]
   }
+}
+
+///|
+priv struct JITContextContinuation {
+  raw : @wasmoon_jit.NativeJITContinuation
+  context_ptr : Int64
+  values : FixedArray[Int64]
+  num_arg_slots : Int
+  num_result_slots : Int
+  active : Array[Bool]
+}
+
+///|
+priv enum JITContextContinuationEvent {
+  Suspended
+  Returned(Array[Int64])
+}
+
+///|
+fn JITContext::start_continuation(
+  self : JITContext,
+  func_ptr : Int64,
+  args : Array[Int64],
+  param_types : Array[@types.ValueType],
+  result_types : Array[@types.ValueType],
+) -> JITContextContinuation raise JITTrap {
+  let num_arg_slots = args.length()
+  let num_result_slots = @wasmoon_jit.count_entry_trampoline_slots(result_types)
+  let values_len = num_arg_slots + num_result_slots
+  let values = FixedArray::make(values_len.max(1), 0L)
+  for i in 0..<num_arg_slots {
+    values[i] = args[i]
+  }
+  let raw = self.ctx.start_continuation(
+    self.entry_trampoline(param_types, result_types),
+    func_ptr,
+    values,
+    values_len,
+  ) catch {
+    error => raise JITTrap("native continuation creation failed: \{error}")
+  }
+  {
+    raw,
+    context_ptr: self.ptr(),
+    values,
+    num_arg_slots,
+    num_result_slots,
+    active: [true],
+  }
+}
+
+///|
+fn JITContextContinuation::advance(
+  self : JITContextContinuation,
+  retry_hostcall : Bool,
+) -> JITContextContinuationEvent raise JITTrap {
+  if !self.active[0] {
+    raise JITTrap("native continuation is no longer active")
+  }
+  let event = self.raw.continue_after_hostcall(retry=retry_hostcall) catch {
+    error => {
+      self.active[0] = false
+      raise JITTrap("native continuation failed: \{error}")
+    }
+  }
+  match event {
+    NativeHostcallSuspended => Suspended
+    NativeJITReturned(trap_code) => {
+      self.active[0] = false
+      if trap_code != 0 {
+        if @wasmoon_jit.is_wasi_exit_trap_code(trap_code) {
+          raise JITExit(@wasmoon_jit.take_wasi_exit_code(self.context_ptr))
+        }
+        if @wasmoon_jit.is_cancelled_trap_code(trap_code) {
+          raise JITCancelled
+        }
+        raise JITTrap(@wasmoon_jit.jit_trap_message(trap_code))
+      }
+      let results : Array[Int64] = []
+      for i in 0..<self.num_result_slots {
+        results.push(self.values[self.num_arg_slots + i])
+      }
+      Returned(results)
+    }
+  }
+}
+
+///|
+fn JITContextContinuation::cancel(
+  self : JITContextContinuation,
+) -> Unit raise JITTrap {
+  if !self.active[0] {
+    return
+  }
+  self.raw.cancel() catch {
+    error => raise JITTrap("native continuation cancellation failed: \{error}")
+  }
+  self.active[0] = false
 }

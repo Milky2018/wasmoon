@@ -1502,6 +1502,7 @@ pub fn install_jit_hostcall_dispatcher(
   instance : @runtime.ModuleInstance,
   before_dispatch? : () -> Unit = fn() { () },
   after_dispatch? : () -> Unit = fn() { () },
+  classify_suspension? : (@runtime.RuntimeError) -> Bool = fn(_error) { false },
 ) -> Unit {
   fn call_func_by_addr(
     store : @runtime.Store,
@@ -1566,6 +1567,9 @@ pub fn install_jit_hostcall_dispatcher(
     let invoke_result = call_func_by_addr(store, instance, func_addr, args) catch {
       e => {
         after_dispatch()
+        if classify_suspension(e) {
+          return @wasmoon_jit.NativeHostcallOutcome::HostcallSuspended
+        }
         return @wasmoon_jit.NativeHostcallOutcome::HostcallTrap(
           runtime_error_to_trap_code(e),
         )

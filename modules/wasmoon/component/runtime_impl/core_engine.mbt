@@ -170,6 +170,26 @@ fn core_suspension_from_token(token : Int64) -> CoreSuspension {
 }
 
 ///|
+/// Consume the canonical suspension requested by the current host intrinsic.
+///
+/// Native execution adapters call this only while advancing a stackful core
+/// invocation. Synchronous callers leave the marker for the ordinary canonical
+/// trap path.
+pub fn take_core_suspension() -> CoreSuspension? {
+  match canon_suspend[0] {
+    Some(Yield) => {
+      canon_suspend[0] = None
+      Some(CoreSuspension::Yield)
+    }
+    Some(Wait(waitable_set)) => {
+      canon_suspend[0] = None
+      Some(CoreSuspension::Wait(waitable_set))
+    }
+    None => None
+  }
+}
+
+///|
 fn resume_interpreter_continuation(
   continuation : @executor.ExecutionContinuation,
 ) -> CoreExecutionOutcome raise ComponentRuntimeError {

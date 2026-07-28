@@ -168,11 +168,17 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_hostcall(
 
     hostcall_callback_fn cb = (hostcall_callback_fn)ctx->hostcall_callback;
     int32_t trap = cb(ctx->hostcall_callback_data);
-    if (trap == WASMOON_HOSTCALL_SUSPEND_STATUS) {
+    while (trap == WASMOON_HOSTCALL_SUSPEND_STATUS) {
         int64_t resume = wasmoon_native_fiber_yield(
             WASMOON_FIBER_EVENT_HOSTCALL_SUSPENDED
         );
-        trap = resume == INT64_MIN ? 8 : 0;
+        if (resume == INT64_MIN) {
+            trap = 8;
+        } else if (resume == 1) {
+            trap = cb(ctx->hostcall_callback_data);
+        } else {
+            trap = 0;
+        }
     }
     g_hostcall_func_idx = previous_func_idx;
     g_hostcall_values_ptr = previous_values_ptr;

@@ -73,6 +73,214 @@ fn decode_jit_entry_results(
 }
 
 ///|
+fn prepare_jit_core_environment(
+  context : JITModuleContext,
+  store : @runtime.Store,
+  instance : @runtime.ModuleInstance,
+) -> Bool raise JITCoreCallError {
+  sync_store_globals_to_jit(context, store)
+  sync_tables_to_jit(
+    instance,
+    store,
+    context.jit_module,
+    use_subtype_indirect_check=context.use_subtype_indirect_check,
+  )
+  match store.c_heap {
+    Some(heap) => {
+      @wasmoon_jit.gc_setup(
+        heap,
+        context.module_types,
+        context.canonical_type_indices,
+        ctx_ptr=context.jit_module.get_context_ptr(),
+        func_type_indices=context.func_type_indices,
+        func_table_ptr=context.jit_module.get_func_table_ptr(),
+        num_funcs=context.jit_module.get_func_count(),
+      ) catch {
+        error => raise GcSetupFailed(error.to_string())
+      }
+      context.jit_module.set_gc_heap(heap.get_ptr())
+      true
+    }
+    None => false
+  }
+}
+
+///|
+fn finish_jit_core_environment(
+  context : JITModuleContext,
+  store : @runtime.Store,
+  gc_active : Bool,
+) -> Unit {
+  if gc_active {
+    @wasmoon_jit.gc_teardown(context.jit_module.get_context_ptr())
+  }
+  sync_jit_globals_to_store(context, store)
+  sync_jit_tables_to_store(context, store)
+}
+
+///|
+fn map_jit_call_error(error : @jit.JITTrap) -> JITCoreCallError {
+  match error {
+    JITTrap(message) => Trap(message)
+    JITCancelled => Cancelled
+    JITExit(code) => Exit(code)
+  }
+}
+
+///|
+/// Result of entering or resuming a stackful native core call.
+pub(all) enum JITCoreCallOutcome {
+  NativeCoreReturned(Array[@types.Value])
+  NativeCoreSuspended(JITCoreContinuation)
+}
+
+///|
+/// Product-owned native core continuation retained by Component Async.
+struct JITCoreContinuation {
+  context : JITModuleContext
+  store : @runtime.Store
+  instance : @runtime.ModuleInstance
+  result_types : Array[@types.ValueType]
+  call : @jit.JITCallContinuation
+  invocation : @wasmoon_jit.NativeInvocationHandle
+  active : Array[Bool]
+}
+
+///|
+fn JITCoreContinuation::finish(
+  self : JITCoreContinuation,
+  outcome : @jit.JITContinuationOutcome,
+) -> JITCoreCallOutcome raise JITCoreCallError {
+  match outcome {
+    JITSuspended(_) => {
+      self.invocation.park() catch {
+        error => raise ExecutionStateFailure(error)
+      }
+      NativeCoreSuspended(self)
+    }
+    JITReturned(raw_results) => {
+      self.active[0] = false
+      self.invocation.complete() catch {
+        error => raise ExecutionStateFailure(error)
+      }
+      NativeCoreReturned(
+        decode_jit_entry_results(
+          raw_results,
+          self.result_types,
+          self.store,
+          self.context.jit_module,
+          self.instance,
+        ),
+      )
+    }
+  }
+}
+
+///|
+pub fn JITCoreContinuation::continue_execution(
+  self : JITCoreContinuation,
+) -> JITCoreCallOutcome raise JITCoreCallError {
+  if !self.active[0] {
+    raise Trap("native core continuation is no longer active")
+  }
+  self.invocation.reactivate() catch {
+    error => raise ExecutionStateFailure(error)
+  }
+  let gc_active = prepare_jit_core_environment(
+    self.context,
+    self.store,
+    self.instance,
+  ) catch {
+    error => {
+      self.invocation.release_if_live()
+      self.active[0] = false
+      raise error
+    }
+  }
+  let outcome = self.call.continue_execution() catch {
+    error => {
+      finish_jit_core_environment(self.context, self.store, gc_active)
+      self.invocation.release_if_live()
+      self.active[0] = false
+      raise map_jit_call_error(error)
+    }
+  }
+  finish_jit_core_environment(self.context, self.store, gc_active)
+  self.finish(outcome)
+}
+
+///|
+pub fn JITCoreContinuation::cancel(self : JITCoreContinuation) -> Unit {
+  if !self.active[0] {
+    return
+  }
+  self.call.cancel() catch {
+    _ => ()
+  }
+  self.invocation.release_if_live()
+  self.active[0] = false
+}
+
+///|
+/// Enter one function on a native fiber and retain its machine stack if an
+/// imported canonical hostcall suspends.
+pub fn JITModuleContext::call_core_func_resumable(
+  self : JITModuleContext,
+  store : @runtime.Store,
+  instance : @runtime.ModuleInstance,
+  func_idx : Int,
+  args : Array[@types.Value],
+) -> JITCoreCallOutcome raise JITCoreCallError {
+  guard self.jit_module.get_func(func_idx) is Some(func) else {
+    raise FunctionUnavailable(func_idx)
+  }
+  let encoded_args = encode_jit_entry_args(
+    args,
+    func.param_types,
+    self.jit_module,
+    instance,
+  )
+  let gc_active = prepare_jit_core_environment(self, store, instance)
+  let invocation = store.native_execution_state().begin()
+  let outcome = self.jit_module.start_continuation_call(func, encoded_args) catch {
+    error => {
+      finish_jit_core_environment(self, store, gc_active)
+      invocation.release_if_live()
+      raise map_jit_call_error(error)
+    }
+  }
+  finish_jit_core_environment(self, store, gc_active)
+  match outcome {
+    JITSuspended(call) => {
+      let continuation : JITCoreContinuation = {
+        context: self,
+        store,
+        instance,
+        result_types: func.result_types,
+        call,
+        invocation,
+        active: [true],
+      }
+      continuation.finish(outcome)
+    }
+    JITReturned(raw_results) => {
+      invocation.complete() catch {
+        error => raise ExecutionStateFailure(error)
+      }
+      NativeCoreReturned(
+        decode_jit_entry_results(
+          raw_results,
+          func.result_types,
+          store,
+          self.jit_module,
+          instance,
+        ),
+      )
+    }
+  }
+}
+
+///|
 /// Invoke one function through a prepared JIT module context.
 ///
 /// This is the shared entry-call seam used by WAST and component adapters. It
@@ -94,39 +302,8 @@ pub fn JITModuleContext::call_core_func(
     self.jit_module,
     instance,
   )
-  sync_store_globals_to_jit(self, store)
-  sync_tables_to_jit(
-    instance,
-    store,
-    self.jit_module,
-    use_subtype_indirect_check=self.use_subtype_indirect_check,
-  )
-  let mut gc_active = false
-  defer {
-    if gc_active {
-      @wasmoon_jit.gc_teardown(self.jit_module.get_context_ptr())
-    }
-    sync_jit_globals_to_store(self, store)
-    sync_jit_tables_to_store(self, store)
-  }
-  match store.c_heap {
-    Some(heap) => {
-      @wasmoon_jit.gc_setup(
-        heap,
-        self.module_types,
-        self.canonical_type_indices,
-        ctx_ptr=self.jit_module.get_context_ptr(),
-        func_type_indices=self.func_type_indices,
-        func_table_ptr=self.jit_module.get_func_table_ptr(),
-        num_funcs=self.jit_module.get_func_count(),
-      ) catch {
-        error => raise GcSetupFailed(error.to_string())
-      }
-      gc_active = true
-      self.jit_module.set_gc_heap(heap.get_ptr())
-    }
-    None => ()
-  }
+  let gc_active = prepare_jit_core_environment(self, store, instance)
+  defer finish_jit_core_environment(self, store, gc_active)
   let invocation = store.native_execution_state().begin()
   defer invocation.release_if_live()
   let raw_results = self.jit_module.call_with_context(func, encoded_args) catch {

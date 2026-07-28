@@ -405,10 +405,11 @@ fn module_has_wasi_import(mod_ : @types.Module) -> Bool {
 
 ///|
 /// Try to compile a module to JIT and return JITModuleContext if successful
-fn try_compile_jit(
+fn try_compile_jit_with_suspension(
   mod_ : @types.Module,
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
+  classify_suspension : (@runtime.RuntimeError) -> Bool,
 ) -> Result[@wast.JITModuleContext, String] {
   let lowered_mod = rewrite_module_alias_indices_for_jit(mod_, instance)
   let local_compile_mask = build_wast_compile_mask(lowered_mod)
@@ -598,10 +599,20 @@ fn try_compile_jit(
                 use_subtype_indirect_check~,
               )
             },
+            classify_suspension~,
           )
           Ok(jit_ctx)
         }
       }
     }
   }
+}
+
+///|
+fn try_compile_jit(
+  mod_ : @types.Module,
+  instance : @runtime.ModuleInstance,
+  store : @runtime.Store,
+) -> Result[@wast.JITModuleContext, String] {
+  try_compile_jit_with_suspension(mod_, instance, store, fn(_error) { false })
 }

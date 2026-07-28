@@ -15,8 +15,8 @@ test "component JIT routes typed core execution requests" {
   guard component_core_route(
       @runtime_impl.CoreExecutionRequest(Stackful, PreferNative),
     )
-    is InterpreterCore else {
-    fail("stackful call did not select interpreter execution")
+    is NativeCore else {
+    fail("stackful call did not select native execution")
   }
   guard component_core_route(
       @runtime_impl.CoreExecutionRequest(RunToCompletion, InterpreterOnly),

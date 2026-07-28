@@ -39,12 +39,21 @@ pub suberror PolycallError {
 // Types and methods
 type AddressRange derive(@debug.Debug)
 
+type JITCallContinuation
+pub fn JITCallContinuation::cancel(Self) -> Unit raise JITTrap
+pub fn JITCallContinuation::continue_execution(Self) -> JITContinuationOutcome raise JITTrap
+
 pub(all) enum JITCallResult {
   Completed(Array[Int64])
   Cancelled
   Failed(JITTrap)
   UnsupportedCancellation
 } derive(@debug.Debug)
+
+pub(all) enum JITContinuationOutcome {
+  JITReturned(Array[Int64])
+  JITSuspended(JITCallContinuation)
+}
 
 pub struct JITFunction {
   func_idx : Int
@@ -97,6 +106,7 @@ pub fn JITModule::set_hostcall_callback(Self, () -> @wasmoon_jit.NativeHostcallO
 pub fn JITModule::set_memory(Self, Int64) -> Unit
 pub fn JITModule::set_memory_pointers(Self, Array[@wasmoon_jit.MemoryInfo]) -> Unit
 pub fn JITModule::setup_segments(Self, Array[@types.Data], Array[Array[Int64]], data_dropped? : Array[Bool], elem_dropped? : Array[Bool]) -> Unit
+pub fn JITModule::start_continuation_call(Self, JITFunction, Array[Int64]) -> JITContinuationOutcome raise JITTrap
 
 pub(all) struct Single[A](A)
 pub impl[A : @types.ToInt64] DynamicArgs for Single[A]

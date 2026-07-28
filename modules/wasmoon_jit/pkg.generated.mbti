@@ -722,6 +722,7 @@ pub fn NativeJITContext::try_alloc(Int) -> Self?
 
 type NativeJITContinuation
 pub fn NativeJITContinuation::cancel(Self) -> Unit raise NativeFiberError
+pub fn NativeJITContinuation::continue_after_hostcall(Self, retry~ : Bool) -> NativeJITContinuationEvent raise NativeFiberError
 pub fn NativeJITContinuation::continue_with(Self, value? : Int64) -> NativeJITContinuationEvent raise NativeFiberError
 pub fn NativeJITContinuation::phase(Self) -> NativeFiberPhase
 

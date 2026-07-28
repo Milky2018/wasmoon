@@ -51,6 +51,39 @@ test "native hostcall suspension continues after the call without replay" {
 }
 
 ///|
+test "native hostcall suspension can retry only the suspended hostcall" {
+  let context = native_continuation_test_context()
+  let callback_count = [0]
+  context.set_hostcall_callback(fn() {
+    callback_count[0] = callback_count[0] + 1
+    if callback_count[0] == 1 {
+      HostcallSuspended
+    } else {
+      HostcallCompleted
+    }
+  })
+  let values = FixedArray::from_array([0L])
+  let continuation = context.start_continuation(
+    c_native_hostcall_probe_trampoline(),
+    1L,
+    values,
+    values.length(),
+  )
+  debug_inspect(
+    (continuation.continue_with(), callback_count[0]),
+    content="(NativeHostcallSuspended, 1)",
+  )
+  debug_inspect(
+    (
+      continuation.continue_after_hostcall(retry=true),
+      values[0],
+      callback_count[0],
+    ),
+    content="(NativeJITReturned(0), 11, 2)",
+  )
+}
+
+///|
 test "trap activation survives a native hostcall suspension" {
   let context = native_continuation_test_context()
   context.set_hostcall_callback(fn() { HostcallSuspended })
