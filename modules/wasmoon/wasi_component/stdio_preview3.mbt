@@ -29,6 +29,189 @@ fn preview3_stdin_snapshot(ctx : WasiComponentCtx) -> (Bytes, Int?) {
 }
 
 ///|
+priv struct Preview3StdinSource {
+  ctx : WasiComponentCtx
+  state : InputStreamState
+  fd : Int
+  buffered : Array[Byte]
+  next : Ref[Int]
+  operation : Ref[Int?]
+  completion : Ref[@runtime_impl.ComponentValue?]
+}
+
+///|
+fn Preview3StdinSource::new(
+  ctx : WasiComponentCtx,
+  state : InputStreamState,
+  fd : Int,
+) -> Preview3StdinSource {
+  Preview3StdinSource::{
+    ctx,
+    state,
+    fd,
+    buffered: [],
+    next: Ref(0),
+    operation: Ref(
+      if state.closed.val {
+        None
+      } else {
+        Some(ctx.register_async_fd(fd, 0x01))
+      },
+    ),
+    completion: Ref(
+      if state.closed.val {
+        Some(Variant(0, None))
+      } else {
+        None
+      },
+    ),
+  }
+}
+
+///|
+fn Preview3StdinSource::cancel_operation(self : Preview3StdinSource) -> Unit {
+  match self.operation.val {
+    Some(operation) => self.ctx.cancel_async_fd(operation)
+    None => ()
+  }
+  self.operation.val = None
+}
+
+///|
+fn Preview3StdinSource::complete(
+  self : Preview3StdinSource,
+  value : @runtime_impl.ComponentValue,
+  close_input : Bool,
+) -> Unit {
+  if self.completion.val is None {
+    self.completion.val = Some(value)
+  }
+  if close_input {
+    self.state.closed.val = true
+  }
+  self.cancel_operation()
+}
+
+///|
+fn Preview3StdinSource::pump(
+  self : Preview3StdinSource,
+  capacity : Int,
+) -> Unit {
+  if self.completion.val is Some(_) || self.next.val < self.buffered.length() {
+    return
+  }
+  match self.operation.val {
+    Some(operation) =>
+      if self.ctx.async_fd_ready(operation) {
+        self.operation.val = None
+      } else {
+        return
+      }
+    None => return
+  }
+  let count = if capacity <= 0 {
+    1
+  } else if capacity > 65536 {
+    65536
+  } else {
+    capacity
+  }
+  let buffer = FixedArray::make(count, b'\x00')
+  match @wasi.native_read(self.fd, buffer, count) {
+    Some(0) => self.complete(Variant(0, None), true)
+    Some(read) => {
+      self.buffered.clear()
+      self.next.val = 0
+      for i in 0..<read {
+        self.buffered.push(buffer[i])
+      }
+      self.operation.val = Some(self.ctx.register_async_fd(self.fd, 0x01))
+    }
+    None =>
+      if @wasi.native_last_errno_to_wasi() == 6 {
+        self.operation.val = Some(self.ctx.register_async_fd(self.fd, 0x01))
+      } else {
+        self.complete(Variant(1, Some(Variant(0, None))), true)
+      }
+  }
+}
+
+///|
+fn Preview3StdinSource::pull(
+  self : Preview3StdinSource,
+  maximum : Int,
+) -> @runtime_impl.HostValueStreamPoll {
+  if maximum <= 0 {
+    return Values([])
+  }
+  if self.next.val >= self.buffered.length() {
+    self.buffered.clear()
+    self.next.val = 0
+    self.pump(maximum)
+  }
+  let available = self.buffered.length() - self.next.val
+  if available > 0 {
+    let count = if maximum < available { maximum } else { available }
+    let values : Array[@runtime_impl.ComponentValue] = []
+    for i in 0..<count {
+      values.push(U8(self.buffered[self.next.val + i].to_int()))
+    }
+    self.next.val = self.next.val + count
+    Values(values)
+  } else if self.completion.val is Some(_) {
+    Closed
+  } else {
+    Pending
+  }
+}
+
+///|
+fn preview3_native_stdin(
+  host : WasiComponentHost,
+  table : @runtime_impl.ResourceTable,
+  state : InputStreamState,
+  fd : Int,
+  stream_element : @component.ValType,
+  future_element : @component.ValType,
+  types : Array[@component.TypeDef?],
+) -> @runtime_impl.ComponentValue raise @runtime_impl.ComponentRuntimeError {
+  let source = Preview3StdinSource::new(host.ctx, state, fd)
+  let users = Ref(2)
+  fn release() {
+    if users.val > 0 {
+      users.val = users.val - 1
+    }
+    if users.val == 0 {
+      source.cancel_operation()
+    }
+  }
+  let stream = host.runtime.new_host_value_stream_source(
+    table,
+    stream_element,
+    types,
+    maximum => source.pull(maximum),
+    () => {
+      source.complete(Variant(0, None), false)
+      release()
+    },
+  )
+  let future = host.runtime.new_host_value_future_source(
+    table,
+    future_element,
+    types,
+    () => {
+      source.pump(65536)
+      match source.completion.val {
+        Some(value) => Ready(value)
+        None => Pending
+      }
+    },
+    () => release(),
+  )
+  Tuple([U32(stream), U32(future)])
+}
+
+///|
 fn preview3_output_write_once(
   state : OutputStreamState,
   bytes : Bytes,
@@ -186,23 +369,48 @@ fn add_preview3_stdin(
     preview3_func(interface, "read-via-stream"),
     (args, table) => {
       empty_args(args)
-      let (bytes, error_case) = preview3_stdin_snapshot(host.ctx)
-      let readable = host.runtime.new_host_byte_stream(table, bytes)
-      let (future_element, types) = preview3_future_element(
+      let (stream_element, future_element, types) = preview3_stream_future_types(
         host, interface, "read-via-stream",
       )
-      let future = match error_case {
-        Some(error_case) =>
-          host.runtime.new_host_unit_result_future(
+      match host.ctx.get_resource(host.ctx.stdin_rep) {
+        Some(InputStream(state)) =>
+          match state.native_fd {
+            Some(fd) =>
+              [
+                preview3_native_stdin(
+                  host, table, state, fd, stream_element, future_element, types,
+                ),
+              ]
+            None => {
+              let (bytes, error_case) = preview3_stdin_snapshot(host.ctx)
+              let readable = host.runtime.new_host_byte_stream(table, bytes)
+              let future = match error_case {
+                Some(error_case) =>
+                  host.runtime.new_host_unit_result_future(
+                    table,
+                    future_element,
+                    types,
+                    error_case~,
+                  )
+                None =>
+                  host.runtime.new_host_unit_result_future(
+                    table, future_element, types,
+                  )
+              }
+              [Tuple([U32(readable), U32(future)])]
+            }
+          }
+        _ => {
+          let readable = host.runtime.new_host_byte_stream(table, b"")
+          let future = host.runtime.new_host_unit_result_future(
             table,
             future_element,
             types,
-            error_case~,
+            error_case=0,
           )
-        None =>
-          host.runtime.new_host_unit_result_future(table, future_element, types)
+          [Tuple([U32(readable), U32(future)])]
+        }
       }
-      [Tuple([U32(readable), U32(future)])]
     },
   )
   host.linker.add_instance(

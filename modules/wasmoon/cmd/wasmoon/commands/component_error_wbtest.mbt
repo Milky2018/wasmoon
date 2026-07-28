@@ -192,6 +192,40 @@ test "component command executes a pinned Preview 3 async run export" {
 }
 
 ///|
+test "component command passes inherited stdin to Preview 3 streams" {
+  @fs.create_dir("tmp") catch {
+    _ => ()
+  }
+  let path = "tmp/component-preview3-stdin"
+  @fs.write_bytes_to_file(path, b"hello") catch {
+    IOError(error) => return fail(error)
+  }
+  defer (@fs.remove_file(path) catch { _ => () })
+  guard @wasi.native_open(path, [ReadOnly], 0) is Some(input_fd) else {
+    return fail("could not open inherited stdin fixture")
+  }
+  defer @wasi.native_close(input_fd) |> ignore
+  guard @wasi.native_dup(0) is Some(saved_stdin) else {
+    return fail("could not preserve stdin")
+  }
+  defer @wasi.native_close(saved_stdin) |> ignore
+  guard @wasi.native_dup2(input_fd, 0) else {
+    return fail("could not redirect stdin")
+  }
+  defer @wasi.native_dup2(saved_stdin, 0) |> ignore
+  let status = run_wasi_component_command(
+    "testsuite/fixtures/wasi-command-async-stdin.component.wasm",
+    [],
+    [],
+    [],
+    "deny",
+    true,
+    Text,
+  )
+  debug_inspect(status, content="0")
+}
+
+///|
 test "component invoke evaluates a nested export with typed JSON" {
   @fs.create_dir("tmp") catch {
     _ => ()

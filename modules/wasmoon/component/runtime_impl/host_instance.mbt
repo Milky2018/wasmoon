@@ -1,9 +1,10 @@
 ///|
 /// Runtime state shared by a set of host-provided component instances.
 ///
-/// An embedding should create one value per `ComponentLinker` and use it for
-/// every interface that belongs to the same host world. This preserves resource
-/// identity, stream ownership, and async task state across interface imports.
+/// An embedding should obtain this value from
+/// `ComponentLinker::host_runtime_state` and use it for every interface that
+/// belongs to the same host world. This preserves resource identity, stream
+/// ownership, and async task state across host imports and guest instances.
 struct HostRuntimeState {
   resource_table : ResourceTable
   stream_table : StreamTable
@@ -12,11 +13,42 @@ struct HostRuntimeState {
 
 ///|
 pub fn HostRuntimeState::HostRuntimeState() -> HostRuntimeState {
+  HostRuntimeState::with_core_execution_engine(
+    interpreter_core_execution_engine(),
+  )
+}
+
+///|
+fn HostRuntimeState::with_core_execution_engine(
+  core_engine : CoreExecutionEngine,
+) -> HostRuntimeState {
   let resource_table = ResourceTable()
   let stream_table = StreamTable()
-  let async_state = AsyncState(stream_table)
+  let async_state = AsyncState(stream_table, core_engine~)
   async_state.resource_tables.set(resource_table.id, resource_table)
   { resource_table, stream_table, async_state }
+}
+
+///|
+/// Return the host runtime shared by component instances registered on this
+/// linker.
+///
+/// Host stream, future, and task handles must use the same async state as guest
+/// component instances. Embeddings should obtain their runtime through this
+/// method before building host instances.
+pub fn ComponentLinker::host_runtime_state(
+  self : ComponentLinker,
+) -> HostRuntimeState {
+  match self.host_runtime.val {
+    Some(runtime) => runtime
+    None => {
+      let runtime = HostRuntimeState::with_core_execution_engine(
+        self.core_engine,
+      )
+      self.host_runtime.val = Some(runtime)
+      runtime
+    }
+  }
 }
 
 ///|

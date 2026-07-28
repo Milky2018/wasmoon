@@ -251,6 +251,7 @@ struct ComponentLinker {
   core_engine : CoreExecutionEngine
   components : Array[(String, ComponentInstance)]
   imports : Map[String, ComponentExtern]
+  host_runtime : Ref[HostRuntimeState?]
   // Mutable counter stored in a 1-element array so methods can bump it without
   // requiring `mut self`.
   resource_id_counter : Array[Int]
@@ -275,6 +276,7 @@ pub fn ComponentLinker::with_core_execution_engine(
     core_engine,
     components: [],
     imports: Map([]),
+    host_runtime: Ref(None),
     resource_id_counter: [0],
   }
 }

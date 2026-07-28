@@ -9,12 +9,18 @@ fn instantiate_component(
   let stream_table = if outer_stack.length() > 0 {
     outer_stack[outer_stack.length() - 1].stream_table
   } else {
-    StreamTable()
+    match linker.host_runtime.val {
+      Some(runtime) => runtime.stream_table
+      None => StreamTable()
+    }
   }
   let async_state = if outer_stack.length() > 0 {
     outer_stack[outer_stack.length() - 1].async_state
   } else {
-    AsyncState(stream_table, core_engine=linker.core_engine)
+    match linker.host_runtime.val {
+      Some(runtime) => runtime.async_state
+      None => AsyncState(stream_table, core_engine=linker.core_engine)
+    }
   }
   let state = BuildState::BuildState(stream_table, async_state)
   if outer_stack.length() > 0 {
