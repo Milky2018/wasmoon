@@ -577,11 +577,9 @@ fn Translator::get_array_element_byte_width(
 ///|
 /// Extract type index from a ValueType (for GC reference types)
 fn Translator::extract_type_idx(
-  self : Translator,
+  _self : Translator,
   value_type : @types.ValueType,
 ) -> Int {
-  // Ignore the self parameter - we don't need module context to extract indices
-  let _ = self
   // Abstract types are encoded as negative indices:
   // -1 = anyref (any), -2 = eqref (eq), -3 = i31ref
   // -4 = structref (abstract), -5 = arrayref (abstract)

@@ -258,8 +258,7 @@ struct HostValueStream {
 }
 
 ///|
-impl Debug for HostValueStream with fn to_repr(self) {
-  let _ = self
+impl Debug for HostValueStream with fn to_repr(_self) {
   Repr::literal("HostValueStream")
 }
 
