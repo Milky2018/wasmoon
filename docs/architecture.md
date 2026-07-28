@@ -93,18 +93,21 @@ The top-level `wasmoon/wasm_frontend` package is the product API boundary. Produ
 
 The component linker owns a `CoreExecutionEngine` seam rather than calling the
 core interpreter directly. After a core module is instantiated, the engine
-registers the shared module instance and chooses one of three execution modes
-for each entry:
+registers the shared module instance and receives a typed request for each
+entry:
 
-- `Synchronous` uses native JIT code when the function and its imported call
-  graph can enter native code safely.
-- `Interpreted` executes non-suspending functions whose imports or tables can
-  re-enter component adapters. This conservative path prevents unsupported
-  nested native activation while preserving synchronous semantics.
-- `Suspendable` enters the interpreter through an explicit continuation seam.
-  Yield and wait operations return captured operand-stack, frame, local, label,
-  and structured-control state. Resumption continues at the suspended host-call
-  boundary; it does not replay the function from its first instruction.
+- `RunToCompletion` enters native JIT code and returns ordinary core results.
+- `CallbackStep` enters native code for one Component Async callback step and
+  returns normally to the scheduler.
+- `Stackful` enters native code on a guarded fiber stack. A suspending canonical
+  hostcall parks the activation and returns an opaque continuation.
+
+Native resumption restores the original machine stack, hostcall and trap
+activation state, and precise GC roots, then continues after the suspended
+hostcall without replay. Explicit interpreter mode provides the equivalent
+structured continuation. `PreferNative` is strict; an unavailable native route
+is a structured error rather than an implicit fallback. Interpreter-owned
+imports and re-exports request `InterpreterOnly` explicitly.
 
 The default `component --run` and `component-test` commands enable the JIT
 engine. `--no-jit` selects the interpreter engine for differential testing.
@@ -120,11 +123,23 @@ before the first call.
 
 Component async execution uses one cooperative host event loop. MoonBit
 processes and component tasks are logical scheduling units, not operating-system
-threads. A task may return `Yield` or wait on a waitable set; the scheduler then
-runs another ready task and resumes the stored continuation when an event is
-available. Embedding-provided host futures expose non-blocking `poll` and
-`cancel` operations, while the host event-loop hook is responsible for waiting
-for external I/O or timer readiness without blocking guest execution.
+threads. `wasmoon_async` owns task and operation identities, while the native
+adapter translates kqueue on macOS and epoll on Linux into readiness events.
+A task may yield or wait on a waitable set; the scheduler then runs another
+ready task and resumes the stored continuation when an event is available.
+Host futures expose non-blocking `poll` and `cancel` operations.
+
+A Store and its continuations remain on their creation thread. Multiple parked
+continuations may exist, but only one component entry chain is active at a
+time. Cancellation is cooperative at scheduler and hostcall boundaries; it
+releases the host registration, native stack, and parked GC roots without
+arbitrary-instruction preemption.
+
+Native WASI 0.3 execution is supported on macOS AArch64 and Linux AMD64.
+Windows, multi-threaded Store access, cross-thread continuation migration,
+continuation serialization, and arbitrary-instruction preemption are explicit
+non-goals. Embeddings must finish or cancel outstanding continuations before
+the terminal, idempotent `ComponentLinker::close` call.
 
 ## IR and ABI Boundaries
 

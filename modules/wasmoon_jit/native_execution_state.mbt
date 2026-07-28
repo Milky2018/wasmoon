@@ -23,7 +23,7 @@ pub impl Show for NativeExecutionStateError with fn output(self, logger) {
 /// One live native invocation.
 ///
 /// `resource_id` identifies the exclusive stack resource assigned to this
-/// invocation. ISS-306 replaces this identity with an allocated native fiber.
+/// invocation. The native continuation layer owns the corresponding fiber.
 priv struct NativeInvocation {
   id : Int64
   resource_id : Int64

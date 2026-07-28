@@ -15,8 +15,8 @@ The implemented surface is intentionally versioned:
   capability-rooted filesystem, and socket interfaces are implemented.
 - Preview 3 waits, TCP/UDP operations, streams, and completion futures are
   driven by the host reactor and do not block the cooperative component task.
-- CLI component-command execution and the final pinned conformance matrix
-  remain tracked separately.
+- Native Preview 3 command execution uses Component Async callbacks and
+  stackful JIT continuations on macOS AArch64 and Linux AMD64.
 
 The default `WasiComponentCtxBuilder` grants no filesystem or network
 authority. Standard input is closed and standard output/error are discarded
@@ -55,3 +55,16 @@ The WIT snapshots, normalized contracts, generator, and upstream provenance
 are under `wit/`. Normal package builds consume committed generated MoonBit
 source; the CI drift check uses the pinned public `wasm-tools` release to
 verify that the normalized contracts still match the WIT inputs.
+
+## Async ownership
+
+The host is single-threaded. It polls futures without blocking and waits for
+file-descriptor or timer readiness through the Wasmoon-owned native reactor.
+The reactor retains opaque task and operation identities, not guest values,
+Store state, or continuations.
+
+Cancellation removes the native registration and releases the associated host
+operation. Native component continuations remain owned by the component
+runtime and must be resumed or cancelled before `ComponentLinker::close`.
+Windows, multi-threaded Store access, and cross-thread continuation migration
+are not supported.

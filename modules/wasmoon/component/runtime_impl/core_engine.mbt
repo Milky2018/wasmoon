@@ -60,7 +60,9 @@ pub(all) enum CoreSuspension {
 /// A suspended core computation.
 ///
 /// The continuation owns the execution state needed to resume after the
-/// suspension point. `cancel` releases that state without resuming it.
+/// suspension point. It is linear: continue it until the next suspension or
+/// terminal return, or cancel it. `cancel` releases that state without
+/// resuming it.
 struct CoreContinuation {
   resume_fn : () -> CoreExecutionOutcome raise ComponentRuntimeError
   cancel_fn : () -> Unit
@@ -103,7 +105,8 @@ pub(all) enum CoreExecutionOutcome {
 ///
 /// `register_instance` is called once after interpreter instantiation has
 /// allocated the shared store objects. `invoke` may then select an interpreter
-/// or JIT adapter according to the typed execution request.
+/// or JIT adapter according to the typed execution request. Implementations
+/// are thread-confined to the Store supplied by the component linker.
 struct CoreExecutionEngine {
   prepare_store_fn : (@runtime.Store) -> Unit
   close_fn : () -> Unit
@@ -144,6 +147,9 @@ pub fn CoreExecutionEngine::CoreExecutionEngine(
 
 ///|
 /// Release execution-engine resources after all calls and continuations end.
+///
+/// This operation is terminal. The owning linker makes repeated close calls
+/// idempotent.
 pub fn CoreExecutionEngine::close(self : CoreExecutionEngine) -> Unit {
   (self.close_fn)()
 }

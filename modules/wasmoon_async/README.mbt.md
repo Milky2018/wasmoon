@@ -19,6 +19,11 @@ The interface enforces the main ownership seam:
 Platform adapters translate kqueue or epoll events into
 `Runtime::complete_operation`. Native descriptors remain inside those adapters.
 
+`Runtime`, `TaskHandle`, `Waker`, and `OperationHandle` are thread-confined.
+They are not a general MoonBit executor and do not make a WebAssembly Store
+thread-safe. The caller polls its own task state after `next_ready`; the
+runtime's mutable ready queues and generation tables are not exposed.
+
 ```moonbit check
 ///|
 test "drive one caller-owned task" {

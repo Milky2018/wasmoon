@@ -105,14 +105,21 @@ runtime target, but does not itself emit MoonBit source.
 ## Execution policy
 
 `ComponentRuntime` uses the portable continuation-aware interpreter. Native JIT
-selection is a Wasmoon product embedding policy because constructing a native
-engine requires Store, core-module, VM context, and hostcall coordination that
-must not appear in this stable facade.
+selection remains a Wasmoon product embedding policy because constructing a
+native engine requires Store, core-module, VM context, hostcall, trap, and GC
+coordination that must not appear in this stable facade.
 
 The `wasmoon component --run` WASI command path and component conformance runner
-continue to use Wasmoon's native JIT by default, with `--no-jit` for
-differential testing. General facade and `--invoke` behavior stays independent
-of target-specific engine types.
+use Wasmoon's native JIT by default on macOS AArch64 and Linux AMD64, with
+`--no-jit` for explicit interpreter execution. Native callback steps return to
+the scheduler normally. Stackful calls park an opaque continuation and resume
+the original native activation after the suspending hostcall; they are not
+replayed and do not silently fall back to the interpreter.
+
+The stable facade deliberately exposes none of the native fiber, platform
+reactor, descriptor, Store, or mutable scheduler types. General facade and
+`--invoke` behavior therefore remain independent of target-specific engine
+types.
 
 ## Security and hardening
 
