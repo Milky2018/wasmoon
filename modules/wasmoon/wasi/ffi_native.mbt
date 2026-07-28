@@ -469,12 +469,11 @@ fn parse_native_readdir(result : Bytes?) -> Array[(String, Int)]? {
     if offset + name_len > bytes.length() {
       break
     }
-    let name_chars : Array[Char] = []
-    for i in 0..<name_len {
-      name_chars.push(bytes[offset + i].to_int().unsafe_to_char())
+    let name = @utf8.decode(bytes[offset:offset + name_len]) catch {
+      _ => return None
     }
     offset = offset + name_len
-    entries.push((String::from_array(name_chars), file_type))
+    entries.push((name, file_type))
   }
   Some(entries)
 }
@@ -500,87 +499,18 @@ pub fn native_readdir_fd(fd : Int) -> Array[(String, Int)]? {
 ///|
 /// Convert a MoonBit string to a null-terminated C string (UTF-8)
 fn string_to_cstring(s : String) -> FixedArray[Byte] {
-  let len = s.length()
-  // Estimate UTF-8 byte length (worst case: 4 bytes per char)
-  let buf = FixedArray::make(len * 4 + 1, b'\x00')
-  let mut pos = 0
-  for i in 0..<len {
-    let c = s.code_unit_at(i).to_int()
-    if c < 0x80 {
-      buf[pos] = c.to_byte()
-      pos = pos + 1
-    } else if c < 0x800 {
-      buf[pos] = (0xC0 | (c >> 6)).to_byte()
-      buf[pos + 1] = (0x80 | (c & 0x3F)).to_byte()
-      pos = pos + 2
-    } else if c >= 0xD800 && c <= 0xDBFF && i + 1 < len {
-      // Surrogate pair
-      let c2 = s.code_unit_at(i + 1).to_int()
-      if c2 >= 0xDC00 && c2 <= 0xDFFF {
-        let codepoint = 0x10000 + ((c - 0xD800) << 10) + (c2 - 0xDC00)
-        buf[pos] = (0xF0 | (codepoint >> 18)).to_byte()
-        buf[pos + 1] = (0x80 | ((codepoint >> 12) & 0x3F)).to_byte()
-        buf[pos + 2] = (0x80 | ((codepoint >> 6) & 0x3F)).to_byte()
-        buf[pos + 3] = (0x80 | (codepoint & 0x3F)).to_byte()
-        pos = pos + 4
-      } else {
-        // Invalid surrogate, encode as replacement character
-        buf[pos] = b'\xEF'
-        buf[pos + 1] = b'\xBF'
-        buf[pos + 2] = b'\xBD'
-        pos = pos + 3
-      }
-    } else {
-      buf[pos] = (0xE0 | (c >> 12)).to_byte()
-      buf[pos + 1] = (0x80 | ((c >> 6) & 0x3F)).to_byte()
-      buf[pos + 2] = (0x80 | (c & 0x3F)).to_byte()
-      pos = pos + 3
-    }
+  let encoded = @utf8.encode(s)
+  let buf = FixedArray::make(encoded.length() + 1, b'\x00')
+  for i in 0..<encoded.length() {
+    buf[i] = encoded[i]
   }
-  buf[pos] = b'\x00' // Null terminator
   buf
 }
 
 ///|
 /// Convert UTF-8 bytes to a MoonBit string
 fn utf8_bytes_to_string(bytes : Bytes) -> String {
-  let len = bytes.length()
-  let chars : Array[Char] = []
-  let mut i = 0
-  while i < len {
-    let b = bytes[i].to_int()
-    if b == 0 {
-      break // Stop at null terminator
-    }
-    if b < 0x80 {
-      chars.push(b.unsafe_to_char())
-      i = i + 1
-    } else if b < 0xE0 && i + 1 < len {
-      let c = ((b & 0x1F) << 6) | (bytes[i + 1].to_int() & 0x3F)
-      chars.push(c.unsafe_to_char())
-      i = i + 2
-    } else if b < 0xF0 && i + 2 < len {
-      let c = ((b & 0x0F) << 12) |
-        ((bytes[i + 1].to_int() & 0x3F) << 6) |
-        (bytes[i + 2].to_int() & 0x3F)
-      chars.push(c.unsafe_to_char())
-      i = i + 3
-    } else if b < 0xF8 && i + 3 < len {
-      let codepoint = ((b & 0x07) << 18) |
-        ((bytes[i + 1].to_int() & 0x3F) << 12) |
-        ((bytes[i + 2].to_int() & 0x3F) << 6) |
-        (bytes[i + 3].to_int() & 0x3F)
-      // Convert to surrogate pair
-      let adjusted = codepoint - 0x10000
-      chars.push((0xD800 + (adjusted >> 10)).unsafe_to_char())
-      chars.push((0xDC00 + (adjusted & 0x3FF)).unsafe_to_char())
-      i = i + 4
-    } else {
-      // Invalid UTF-8, skip byte
-      i = i + 1
-    }
-  }
-  String::from_array(chars)
+  @utf8.decode_lossy(bytes)
 }
 
 ///|
@@ -964,11 +894,12 @@ pub fn native_readlinkat(dirfd : Int, path : String, bufsize : Int) -> String? {
     None
   } else {
     let len = result.to_int()
-    let chars : Array[Char] = []
-    for i in 0..<len {
-      chars.push(buf[i].to_int().unsafe_to_char())
+    let bytes = Bytes::makei(len, fn(i) { buf[i] })
+    try @utf8.decode(bytes) catch {
+      _ => None
+    } noraise {
+      target => Some(target)
     }
-    Some(String::from_array(chars))
   }
 }
 

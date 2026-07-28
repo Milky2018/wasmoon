@@ -198,3 +198,120 @@ test "Preview 3 capability paths resolve each filesystem step" {
     content="[[Variant(1, Some(U32(30)))], [Variant(1, Some(U32(30)))]]",
   )
 }
+
+///|
+fn remove_utf8_filesystem_fixture(root : String) -> Unit {
+  for name in ["中文.txt", "e\u{0301}.txt", "😀.txt"] {
+    @wasi.native_unlinkat(0, root + "/" + name, 0) |> ignore
+  }
+  @wasi.native_unlinkat(0, root, @wasi.AT_REMOVEDIR) |> ignore
+}
+
+///|
+fn create_utf8_filesystem_fixture(root : String) -> Bool {
+  remove_utf8_filesystem_fixture(root)
+  if !@wasi.native_mkdir(root, 0o700) {
+    return false
+  }
+  for name in ["中文.txt", "e\u{0301}.txt", "😀.txt"] {
+    if !create_capability_file(root + "/" + name) {
+      remove_utf8_filesystem_fixture(root)
+      return false
+    }
+  }
+  true
+}
+
+///|
+test "Preview 2 directory names round-trip through UTF-8" {
+  let root = "/tmp/wasmoon-preview2-filesystem-utf8"
+  guard create_utf8_filesystem_fixture(root) else {
+    fail("could not create Preview 2 UTF-8 filesystem fixture")
+  }
+  defer remove_utf8_filesystem_fixture(root)
+  let linker = @runtime_impl.ComponentLinker()
+  let ctx = @wasi_component.WasiComponentCtxBuilder()
+    .preopened_directory(root, "/sandbox", false)
+    .build()
+  defer ctx.close()
+  @wasi_component.WasiComponentHost(linker, ctx).add_preview2_filesystem()
+  guard linker.get_import("wasi:filesystem/preopens@0.2.11")
+    is Some(Instance(preopens)) &&
+    preopens.call_exported_func("get-directories", [])
+    is [List([Tuple([U32(directory), String("/sandbox")])])] &&
+    linker.get_import("wasi:filesystem/types@0.2.11")
+    is Some(Instance(filesystem)) &&
+    filesystem.call_exported_func("[method]descriptor.read-directory", [
+      U32(directory),
+    ])
+    is [Variant(0, Some(U32(stream)))] else {
+    fail("Preview 2 UTF-8 directory stream was not created")
+  }
+  let names : Array[String] = []
+  for ;; {
+    match
+      filesystem.call_exported_func(
+        "[method]directory-entry-stream.read-directory-entry",
+        [U32(stream)],
+      ) {
+      [Variant(0, Some(Variant(1, Some(Tuple([_, String(name)])))))] =>
+        names.push(name)
+      [Variant(0, Some(Variant(0, None)))] => break
+      result => fail("unexpected Preview 2 directory entry: \{to_repr(result)}")
+    }
+  }
+  names.sort()
+  debug_inspect(names, content="[\"é.txt\", \"中文.txt\", \"😀.txt\"]")
+  for name in names {
+    guard filesystem.call_exported_func("[method]descriptor.open-at", [
+        U32(directory),
+        U32(1),
+        String(name),
+        U32(0),
+        U32(1),
+      ])
+      is [Variant(0, Some(U32(_)))] else {
+      fail("Preview 2 could not reopen UTF-8 directory entry \{name}")
+    }
+  }
+}
+
+///|
+test "Preview 3 filesystem paths preserve UTF-8 names" {
+  let root = "/tmp/wasmoon-preview3-filesystem-utf8"
+  guard create_utf8_filesystem_fixture(root) else {
+    fail("could not create Preview 3 UTF-8 filesystem fixture")
+  }
+  defer remove_utf8_filesystem_fixture(root)
+  let linker = @runtime_impl.ComponentLinker()
+  let ctx = @wasi_component.WasiComponentCtxBuilder()
+    .preopened_directory(root, "/sandbox", false)
+    .build()
+  defer ctx.close()
+  let host = @wasi_component.WasiComponentHost(linker, ctx)
+  host.add_preview3_filesystem()
+  guard linker.get_import("wasi:filesystem/preopens@0.3.0-rc-2025-09-16")
+    is Some(Instance(preopens)) &&
+    preopens.call_exported_func("get-directories", [])
+    is [List([Tuple([U32(directory), String("/sandbox")])])] &&
+    linker.get_import("wasi:filesystem/types@0.3.0-rc-2025-09-16")
+    is Some(Instance(filesystem)) &&
+    filesystem.call_exported_func("[method]descriptor.read-directory", [
+      U32(directory),
+    ])
+    is [Tuple([U32(_), U32(_)])] else {
+    fail("Preview 3 UTF-8 directory stream was not created")
+  }
+  for name in ["中文.txt", "e\u{0301}.txt", "😀.txt"] {
+    guard filesystem.call_exported_func("[method]descriptor.open-at", [
+        U32(directory),
+        U32(1),
+        String(name),
+        U32(0),
+        U32(1),
+      ])
+      is [Variant(0, Some(U32(_)))] else {
+      fail("Preview 3 could not open UTF-8 path \{name}")
+    }
+  }
+}
