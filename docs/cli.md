@@ -47,7 +47,7 @@ Example:
 ```
 
 The command must export the pinned `wasi:cli/run` interface from either
-Preview 2 `0.2.11` or Preview 3 `0.3.0-rc-2025-09-16`. Components are
+Preview 2 `0.2.11` or Preview 3 `0.3.0`. Components are
 validated before instantiation.
 
 Core functions use JIT compilation by default when their component call graph

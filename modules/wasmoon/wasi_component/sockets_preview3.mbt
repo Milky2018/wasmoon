@@ -1,45 +1,55 @@
 ///|
-let preview3_sockets_interface : String = "wasi:sockets@0.3.0-rc-2025-09-16/types"
+let preview3_sockets_interface : String = "wasi:sockets@0.3.0/types"
 
 ///|
 fn preview3_socket_error_case(preview1_errno : Int) -> Int {
+  if preview1_errno == 64 {
+    return 10
+  }
   match socket_error_index(preview1_errno) {
-    1 => 1
-    2 => 2
-    3 => 3
-    4 | 10 => 4
-    5 => 5
-    6 | 7 | 9 => 6
-    11 => 7
-    12 => 8
-    13 => 9
-    14 => 10
+    1 => 0
+    2 => 1
+    3 => 2
+    4 | 10 => 3
+    5 => 4
+    6 | 7 | 9 => 5
+    11 => 6
+    12 => 7
+    13 => 8
+    14 => 9
     15 => 11
     16 => 12
     17 => 13
-    _ => 0
+    _ => 14
   }
 }
 
 ///|
 fn preview3_socket_error() -> @runtime_impl.ComponentValue {
-  Variant(
-    1,
-    Some(U32(preview3_socket_error_case(@wasi.native_last_errno_to_wasi()))),
+  preview3_socket_error_code(
+    preview3_socket_error_case(@wasi.native_last_errno_to_wasi()),
   )
 }
 
 ///|
 fn preview3_socket_native_error(errno : Int) -> @runtime_impl.ComponentValue {
-  Variant(
-    1,
-    Some(U32(preview3_socket_error_case(@wasi.native_errno_to_wasi(errno)))),
+  preview3_socket_error_code(
+    preview3_socket_error_case(@wasi.native_errno_to_wasi(errno)),
   )
 }
 
 ///|
 fn preview3_socket_error_code(index : Int) -> @runtime_impl.ComponentValue {
-  Variant(1, Some(U32(index)))
+  Variant(
+    1,
+    Some(
+      if index == 14 {
+        Variant(14, Some(Variant(0, None)))
+      } else {
+        Variant(index, None)
+      },
+    ),
+  )
 }
 
 ///|
@@ -83,7 +93,7 @@ fn preview3_tcp_socket_state(
   index : Int,
 ) -> TcpSocketState raise @runtime_impl.ComponentRuntimeError {
   let resource_type = host.resolve_resource_type(
-    "wasi:sockets@0.3.0-rc-2025-09-16/types.tcp-socket",
+    "wasi:sockets@0.3.0/types.tcp-socket",
   )
   let rep = resource_rep(table, resource_handle_arg(args, index), resource_type)
   match host.ctx.get_resource(rep) {
@@ -100,7 +110,7 @@ fn preview3_udp_socket_state(
   index : Int,
 ) -> UdpSocketState raise @runtime_impl.ComponentRuntimeError {
   let resource_type = host.resolve_resource_type(
-    "wasi:sockets@0.3.0-rc-2025-09-16/types.udp-socket",
+    "wasi:sockets@0.3.0/types.udp-socket",
   )
   let rep = resource_rep(table, resource_handle_arg(args, index), resource_type)
   match host.ctx.get_resource(rep) {
@@ -129,9 +139,7 @@ fn preview3_new_tcp_socket(
   allocate_resource_handle(
     host.ctx,
     table,
-    host.resolve_resource_type(
-      "wasi:sockets@0.3.0-rc-2025-09-16/types.tcp-socket",
-    ),
+    host.resolve_resource_type("wasi:sockets@0.3.0/types.tcp-socket"),
     rep,
   )
 }
@@ -157,9 +165,7 @@ fn preview3_new_udp_socket(
   allocate_resource_handle(
     host.ctx,
     table,
-    host.resolve_resource_type(
-      "wasi:sockets@0.3.0-rc-2025-09-16/types.udp-socket",
-    ),
+    host.resolve_resource_type("wasi:sockets@0.3.0/types.udp-socket"),
     rep,
   )
 }
@@ -192,7 +198,7 @@ fn preview3_socket_fd_future(
   HostFuture(
     () => {
       if done.val {
-        return Ready([preview3_socket_error_code(6)])
+        return Ready([preview3_socket_error_code(5)])
       }
       match operation.val {
         Some(id) =>
@@ -232,13 +238,13 @@ fn preview3_tcp_connect_future(
   address : ComponentSocketAddress,
 ) -> @runtime_impl.HostFuture raise @runtime_impl.ComponentRuntimeError {
   if state.phase.val != Unbound && state.phase.val != Bound {
-    return preview3_ready_future([preview3_socket_error_code(6)])
+    return preview3_ready_future([preview3_socket_error_code(5)])
   }
   if address.native.family != state.family {
-    return preview3_ready_future([preview3_socket_error_code(3)])
+    return preview3_ready_future([preview3_socket_error_code(2)])
   }
   if !preview3_socket_address_allowed(host, address) {
-    return preview3_ready_future([preview3_socket_error_code(1)])
+    return preview3_ready_future([preview3_socket_error_code(0)])
   }
   let started = Ref(false)
   preview3_socket_fd_future(
@@ -305,7 +311,7 @@ fn preview3_tcp_listen_stream(
     state.phase.val = Bound
   }
   if state.phase.val != Bound {
-    return preview3_socket_error_code(6)
+    return preview3_socket_error_code(5)
   }
   if !@wasi.native_socket_listen(state.fd, state.backlog.val) {
     return preview3_socket_error()
@@ -371,7 +377,7 @@ fn preview3_tcp_send_future(
     host.runtime.drop_host_readable_stream(table, readable) catch {
       _ => ()
     }
-    return preview3_ready_future([preview3_socket_error_code(6)])
+    return preview3_ready_future([preview3_socket_error_code(5)])
   }
   let pending : Ref[(Bytes, Int)?] = Ref(None)
   let operation : Ref[Int?] = Ref(None)
@@ -468,7 +474,7 @@ fn preview3_tcp_receive(
     if state.phase.val == Connected {
       None
     } else {
-      Some(preview3_socket_error_code(6))
+      Some(preview3_socket_error_code(5))
     },
   )
   let users = Ref(2)
@@ -664,7 +670,7 @@ fn add_preview3_tcp_options(
         let socket = state(args, table)
         [
           if value <= 0L || value > 0x7fffffffL {
-            preview3_socket_error_code(3)
+            preview3_socket_error_code(2)
           } else {
             preview3_set_socket_option(
               socket.fd,
@@ -720,7 +726,7 @@ fn add_preview3_tcp_options(
                 value,
               ),
             ]
-          None => [preview3_socket_error_code(3)]
+          None => [preview3_socket_error_code(2)]
         }
       },
     )
@@ -749,7 +755,7 @@ fn add_preview3_tcp_options(
         let socket = state(args, table)
         [
           if value <= 0 {
-            preview3_socket_error_code(3)
+            preview3_socket_error_code(2)
           } else {
             preview3_set_socket_option(socket.fd, socket.family, option, value)
           },
@@ -779,7 +785,7 @@ fn add_preview3_tcp_options(
       let socket = state(args, table)
       [
         if value <= 0 {
-          preview3_socket_error_code(3)
+          preview3_socket_error_code(2)
         } else {
           preview3_set_socket_option(socket.fd, socket.family, 4, value)
         },
@@ -826,16 +832,16 @@ fn add_preview3_tcp(
     (args, table) => {
       let state = preview3_tcp_socket_state(host, table, args, 0)
       guard decode_socket_address(args[1]) is Some(address) else {
-        return [preview3_socket_error_code(3)]
+        return [preview3_socket_error_code(2)]
       }
       if state.phase.val != Unbound {
-        return [preview3_socket_error_code(6)]
+        return [preview3_socket_error_code(5)]
       }
       if address.native.family != state.family {
-        return [preview3_socket_error_code(3)]
+        return [preview3_socket_error_code(2)]
       }
       if !preview3_socket_address_allowed(host, address) {
-        return [preview3_socket_error_code(1)]
+        return [preview3_socket_error_code(0)]
       }
       if @wasi.native_socket_bind(state.fd, address.native) {
         state.phase.val = Bound
@@ -851,7 +857,7 @@ fn add_preview3_tcp(
     (args, table) => {
       let state = preview3_tcp_socket_state(host, table, args, 0)
       guard decode_socket_address(args[1]) is Some(address) else {
-        return preview3_ready_future([preview3_socket_error_code(3)])
+        return preview3_ready_future([preview3_socket_error_code(2)])
       }
       preview3_tcp_connect_future(host, state, address)
     },
@@ -869,19 +875,27 @@ fn add_preview3_tcp(
       ]
     },
   )
-  builder.add_async_func(
+  builder.add_func(
     "[method]tcp-socket.send",
     preview3_func(preview3_sockets_interface, "[method]tcp-socket.send"),
     (args, table) => {
       guard args is [_, U32(readable)] else {
         raise HostCallError("expected Preview 3 TCP byte stream")
       }
-      preview3_tcp_send_future(
-        host,
-        table,
-        preview3_tcp_socket_state(host, table, args, 0),
-        readable,
-      )
+      [
+        preview3_call_future_value(
+          host,
+          table,
+          preview3_sockets_interface,
+          "[method]tcp-socket.send",
+          preview3_tcp_send_future(
+            host,
+            table,
+            preview3_tcp_socket_state(host, table, args, 0),
+            readable,
+          ),
+        ),
+      ]
     },
   )
   builder.add_func(
@@ -950,11 +964,11 @@ fn add_preview3_tcp(
       let state = preview3_tcp_socket_state(host, table, args, 0)
       let value = socket_u64_arg(args, 1)
       if value <= 0L || value > 0x7fffffffL {
-        [preview3_socket_error_code(3)]
+        [preview3_socket_error_code(2)]
       } else if state.phase.val == Listening ||
         state.phase.val == Connected ||
         state.phase.val == ConnectStarted {
-        [preview3_socket_error_code(6)]
+        [preview3_socket_error_code(5)]
       } else {
         state.backlog.val = value.to_int()
         [preview3_socket_ok_void()]
@@ -1004,7 +1018,7 @@ fn add_preview3_udp_options(
         let value = socket_u64_arg(args, 1)
         [
           if value <= 0L || value > 0x7fffffffL {
-            preview3_socket_error_code(3)
+            preview3_socket_error_code(2)
           } else {
             preview3_set_socket_option(
               socket.fd,
@@ -1039,7 +1053,7 @@ fn add_preview3_udp_options(
       let socket = preview3_udp_socket_state(host, table, args, 0)
       [
         if value <= 0 {
-          preview3_socket_error_code(3)
+          preview3_socket_error_code(2)
         } else {
           preview3_set_socket_option(socket.fd, socket.family, 4, value)
         },
@@ -1086,16 +1100,16 @@ fn add_preview3_udp(
     (args, table) => {
       let state = preview3_udp_socket_state(host, table, args, 0)
       guard decode_socket_address(args[1]) is Some(address) else {
-        return [preview3_socket_error_code(3)]
+        return [preview3_socket_error_code(2)]
       }
       if state.phase.val != UdpUnbound {
-        return [preview3_socket_error_code(6)]
+        return [preview3_socket_error_code(5)]
       }
       if address.native.family != state.family {
-        return [preview3_socket_error_code(3)]
+        return [preview3_socket_error_code(2)]
       }
       if !preview3_socket_address_allowed(host, address) {
-        return [preview3_socket_error_code(1)]
+        return [preview3_socket_error_code(0)]
       }
       if @wasi.native_socket_bind(state.fd, address.native) {
         state.phase.val = UdpBound
@@ -1111,11 +1125,11 @@ fn add_preview3_udp(
     (args, table) => {
       let state = preview3_udp_socket_state(host, table, args, 0)
       guard decode_socket_address(args[1]) is Some(address) else {
-        return [preview3_socket_error_code(3)]
+        return [preview3_socket_error_code(2)]
       }
       if address.native.family != state.family ||
         !preview3_socket_address_allowed(host, address) {
-        return [preview3_socket_error_code(1)]
+        return [preview3_socket_error_code(0)]
       }
       if @wasi.native_socket_connect(state.fd, address.native) == 0 {
         state.remote.val = Some(address.native)
@@ -1145,7 +1159,7 @@ fn add_preview3_udp(
       let state = preview3_udp_socket_state(host, table, args, 0)
       guard component_bytes(args[1]) is Some(data) &&
         decode_optional_socket_address(args[2]) is Some(remote) else {
-        return preview3_ready_future([preview3_socket_error_code(3)])
+        return preview3_ready_future([preview3_socket_error_code(2)])
       }
       let destination = match (state.remote.val, remote) {
         (Some(_), None) => None
@@ -1153,17 +1167,17 @@ fn add_preview3_udp(
           if native_socket_address_equal(expected, actual.native) {
             None
           } else {
-            return preview3_ready_future([preview3_socket_error_code(3)])
+            return preview3_ready_future([preview3_socket_error_code(2)])
           }
         (None, Some(address)) =>
           if address.native.family == state.family &&
             network_allows(preview3_network_policy(host), address) {
             Some(address.native)
           } else {
-            return preview3_ready_future([preview3_socket_error_code(1)])
+            return preview3_ready_future([preview3_socket_error_code(0)])
           }
         (None, None) =>
-          return preview3_ready_future([preview3_socket_error_code(6)])
+          return preview3_ready_future([preview3_socket_error_code(5)])
       }
       preview3_udp_async_future(host, state, 0x04, () => {
         let sent = @wasi.native_socket_send_to(state.fd, data, destination)
@@ -1244,7 +1258,16 @@ fn add_preview3_udp(
 
 ///|
 fn preview3_lookup_error(index : Int) -> @runtime_impl.ComponentValue {
-  Variant(1, Some(U32(index)))
+  Variant(
+    1,
+    Some(
+      if index == 5 {
+        Variant(5, Some(Variant(0, None)))
+      } else {
+        Variant(index, None)
+      },
+    ),
+  )
 }
 
 ///|
@@ -1254,14 +1277,14 @@ fn preview3_resolve_addresses_future(
 ) -> @runtime_impl.HostFuture raise @runtime_impl.ComponentRuntimeError {
   let policy = preview3_network_policy(host)
   if name.length() == 0 || name.length() > 253 {
-    return preview3_ready_future([preview3_lookup_error(2)])
+    return preview3_ready_future([preview3_lookup_error(1)])
   }
   if policy == DenyAll ||
     (policy == LoopbackOnly && !loopback_name_allowed(name)) {
-    return preview3_ready_future([preview3_lookup_error(1)])
+    return preview3_ready_future([preview3_lookup_error(0)])
   }
   guard @wasi.native_resolver_start(name) is Some(resolver) else {
-    return preview3_ready_future([preview3_lookup_error(0)])
+    return preview3_ready_future([preview3_lookup_error(5)])
   }
   let operation : Ref[Int?] = Ref(None)
   let addresses : Array[@runtime_impl.ComponentValue] = []
@@ -1306,19 +1329,19 @@ fn preview3_resolve_addresses_future(
           }
           NameUnresolvable => {
             cleanup()
-            return Ready([preview3_lookup_error(3)])
+            return Ready([preview3_lookup_error(2)])
           }
           TemporaryFailure => {
             cleanup()
-            return Ready([preview3_lookup_error(4)])
+            return Ready([preview3_lookup_error(3)])
           }
           PermanentFailure => {
             cleanup()
-            return Ready([preview3_lookup_error(5)])
+            return Ready([preview3_lookup_error(4)])
           }
         }
       }
-      Ready([preview3_lookup_error(0)])
+      Ready([preview3_lookup_error(5)])
     },
     () => cleanup(),
   )
@@ -1328,7 +1351,7 @@ fn preview3_resolve_addresses_future(
 fn add_preview3_ip_name_lookup(
   host : WasiComponentHost,
 ) -> Unit raise @runtime_impl.ComponentRuntimeError {
-  let interface = "wasi:sockets@0.3.0-rc-2025-09-16/ip-name-lookup"
+  let interface = "wasi:sockets@0.3.0/ip-name-lookup"
   let builder = host.linker.host_instance_builder(
     "wasi:sockets/ip-name-lookup@\{preview3_version}",
     host.runtime,

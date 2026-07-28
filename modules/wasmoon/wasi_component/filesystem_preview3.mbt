@@ -37,13 +37,22 @@ fn preview3_filesystem_error_index(preview1_errno : Int) -> Int {
     70 => 33
     74 => 34
     75 => 35
-    _ => 12
+    _ => 36
   }
 }
 
 ///|
 fn preview3_filesystem_error_code(index : Int) -> @runtime_impl.ComponentValue {
-  Variant(1, Some(U32(index)))
+  Variant(
+    1,
+    Some(
+      if index == 36 {
+        Variant(36, Some(Variant(0, None)))
+      } else {
+        Variant(index, None)
+      },
+    ),
+  )
 }
 
 ///|
@@ -106,6 +115,32 @@ fn preview3_stream_future_types(
 }
 
 ///|
+fn preview3_direct_future_type(
+  host : WasiComponentHost,
+  interface : String,
+  function : String,
+) -> (@component.ValType, Array[@component.TypeDef?]) raise @runtime_impl.ComponentRuntimeError {
+  let types = preview3_filesystem_types(host)
+  guard preview3_func(interface, function).result is Some(TypeIdx(future_index)) &&
+    types.get(future_index) is Some(Some(Future(Some(element)))) else {
+    raise HostCallError("generated Preview 3 future contract is malformed")
+  }
+  (element, types)
+}
+
+///|
+fn preview3_call_future_value(
+  host : WasiComponentHost,
+  table : @runtime_impl.ResourceTable,
+  interface : String,
+  function : String,
+  future : @runtime_impl.HostFuture,
+) -> @runtime_impl.ComponentValue raise @runtime_impl.ComponentRuntimeError {
+  let (element, types) = preview3_direct_future_type(host, interface, function)
+  U32(host.runtime.new_host_call_future(table, element, types, future))
+}
+
+///|
 fn preview3_descriptor_state(
   host : WasiComponentHost,
   table : @runtime_impl.ResourceTable,
@@ -124,13 +159,74 @@ fn preview3_descriptor_stat_value(
   stat : @wasi.FileStat,
 ) -> @runtime_impl.ComponentValue {
   Tuple([
-    U32(native_file_type_to_component(stat.filetype)),
+    preview3_descriptor_type(stat.filetype),
     U64(stat.nlink.reinterpret_as_int64()),
     U64(stat.size.reinterpret_as_int64()),
-    datetime_value(stat.atim),
-    datetime_value(stat.mtim),
-    datetime_value(stat.ctim),
+    preview3_instant_value(stat.atim),
+    preview3_instant_value(stat.mtim),
+    preview3_instant_value(stat.ctim),
   ])
+}
+
+///|
+fn preview3_descriptor_type(file_type : Int) -> @runtime_impl.ComponentValue {
+  match file_type {
+    1 => Variant(0, None)
+    2 => Variant(1, None)
+    3 => Variant(2, None)
+    8 => Variant(3, None)
+    7 => Variant(4, None)
+    4 => Variant(5, None)
+    5 | 6 => Variant(6, None)
+    _ => Variant(7, Some(Variant(0, None)))
+  }
+}
+
+///|
+fn preview3_instant_value(timestamp : UInt64) -> @runtime_impl.ComponentValue {
+  let seconds = timestamp / 1_000_000_000UL
+  let nanoseconds = timestamp % 1_000_000_000UL
+  Variant(
+    1,
+    Some(
+      Tuple([S64(seconds.reinterpret_as_int64()), U32(nanoseconds.to_int())]),
+    ),
+  )
+}
+
+///|
+fn parse_preview3_new_timestamp(
+  value : @runtime_impl.ComponentValue,
+  set_flag : Int,
+  now_flag : Int,
+) -> (Int64, Int)? {
+  match value {
+    Variant(0, None) => Some((0L, 0))
+    Variant(1, None) => Some((0L, now_flag))
+    Variant(2, Some(Tuple([S64(seconds), U32(nanoseconds)]))) =>
+      if nanoseconds < 0 || nanoseconds >= 1_000_000_000 {
+        None
+      } else if seconds == -9_223_372_037L {
+        if nanoseconds < 145_224_192 {
+          None
+        } else {
+          Some(
+            (
+              -9_223_372_036_854_775_808L +
+              (nanoseconds - 145_224_192).to_int64(),
+              set_flag,
+            ),
+          )
+        }
+      } else if seconds < -9_223_372_036L ||
+        seconds > 9_223_372_036L ||
+        (seconds == 9_223_372_036L && nanoseconds > 854_775_807) {
+        None
+      } else {
+        Some((seconds * 1_000_000_000L + nanoseconds.to_int64(), set_flag))
+      }
+    _ => None
+  }
 }
 
 ///|
@@ -310,7 +406,7 @@ fn add_preview3_filesystem_stream_methods(
       [Tuple([U32(readable), U32(future)])]
     },
   )
-  builder.add_async_func(
+  builder.add_func(
     "[method]descriptor.write-via-stream",
     preview3_func(interface, "[method]descriptor.write-via-stream"),
     (args, table) => {
@@ -326,16 +422,42 @@ fn add_preview3_filesystem_stream_methods(
       )
       if !descriptor_has(state, descriptor_write) {
         host.runtime.drop_host_readable_stream(table, readable)
-        return preview3_ready_future([preview3_filesystem_error_for(Acces)])
+        return [
+          preview3_call_future_value(
+            host,
+            table,
+            interface,
+            "[method]descriptor.write-via-stream",
+            preview3_ready_future([preview3_filesystem_error_for(Acces)]),
+          ),
+        ]
       }
       if offset < 0L {
         host.runtime.drop_host_readable_stream(table, readable)
-        return preview3_ready_future([preview3_filesystem_error_for(Overflow)])
+        return [
+          preview3_call_future_value(
+            host,
+            table,
+            interface,
+            "[method]descriptor.write-via-stream",
+            preview3_ready_future([preview3_filesystem_error_for(Overflow)]),
+          ),
+        ]
       }
-      preview3_file_write_future(host, table, state, readable, offset, false)
+      [
+        preview3_call_future_value(
+          host,
+          table,
+          interface,
+          "[method]descriptor.write-via-stream",
+          preview3_file_write_future(
+            host, table, state, readable, offset, false,
+          ),
+        ),
+      ]
     },
   )
-  builder.add_async_func(
+  builder.add_func(
     "[method]descriptor.append-via-stream",
     preview3_func(interface, "[method]descriptor.append-via-stream"),
     (args, table) => {
@@ -351,9 +473,25 @@ fn add_preview3_filesystem_stream_methods(
       )
       if !descriptor_has(state, descriptor_write) {
         host.runtime.drop_host_readable_stream(table, readable)
-        return preview3_ready_future([preview3_filesystem_error_for(Acces)])
+        return [
+          preview3_call_future_value(
+            host,
+            table,
+            interface,
+            "[method]descriptor.append-via-stream",
+            preview3_ready_future([preview3_filesystem_error_for(Acces)]),
+          ),
+        ]
       }
-      preview3_file_write_future(host, table, state, readable, 0L, true)
+      [
+        preview3_call_future_value(
+          host,
+          table,
+          interface,
+          "[method]descriptor.append-via-stream",
+          preview3_file_write_future(host, table, state, readable, 0L, true),
+        ),
+      ]
     },
   )
 }
@@ -383,11 +521,7 @@ fn preview3_filesystem_basic_operation(
       ]
     "get-flags" => [preview3_filesystem_ok(U32(state.flags))]
     "get-type" =>
-      [
-        preview3_filesystem_ok(
-          U32(native_file_type_to_component(state.file_type)),
-        ),
-      ]
+      [preview3_filesystem_ok(preview3_descriptor_type(state.file_type))]
     "set-size" => {
       let size = filesystem_u64_arg(args, 1)
       if !descriptor_has(state, descriptor_write) {
@@ -408,8 +542,8 @@ fn preview3_filesystem_basic_operation(
       [
         match
           (
-            parse_new_timestamp(args[1], 0x01, 0x02),
-            parse_new_timestamp(args[2], 0x04, 0x08),
+            parse_preview3_new_timestamp(args[1], 0x01, 0x02),
+            parse_preview3_new_timestamp(args[2], 0x04, 0x08),
           ) {
           (Some((atim, af)), Some((mtim, mf))) =>
             if @wasi.native_futimens(state.fd, atim, mtim, af | mf) {
@@ -563,8 +697,9 @@ fn preview3_filesystem_path_operation(
       if reject_path(path) {
         return [preview3_filesystem_error_for(Perm)]
       }
-      guard parse_new_timestamp(args[3], 0x01, 0x02) is Some((atim, af)) &&
-        parse_new_timestamp(args[4], 0x04, 0x08) is Some((mtim, mf)) else {
+      guard parse_preview3_new_timestamp(args[3], 0x01, 0x02)
+        is Some((atim, af)) &&
+        parse_preview3_new_timestamp(args[4], 0x04, 0x08) is Some((mtim, mf)) else {
         return [preview3_filesystem_error_for(Inval)]
       }
       if follow {
@@ -846,10 +981,7 @@ fn add_preview3_read_directory(
   let descriptor_type = host.resolve_resource_type(
     "wasi:filesystem@\{preview3_version}/types.descriptor",
   )
-  builder.add_async_func(function, preview3_func(interface, function), (
-    args,
-    table,
-  ) => {
+  builder.add_func(function, preview3_func(interface, function), (args, table) => {
     let state = preview3_descriptor_state(host, table, descriptor_type, args, 0)
     let (stream_element, _future_element, types) = preview3_stream_future_types(
       host, interface, function,
@@ -867,10 +999,7 @@ fn add_preview3_read_directory(
           for entry in native_entries {
             let (name, file_type) = entry
             entries.push(
-              Tuple([
-                U32(native_file_type_to_component(file_type)),
-                String(name),
-              ]),
+              Tuple([preview3_descriptor_type(file_type), String(name)]),
             )
           }
           None
@@ -885,7 +1014,7 @@ fn add_preview3_read_directory(
         preview3_result_future(host, table, interface, function, error_case~)
       None => preview3_result_future(host, table, interface, function)
     }
-    preview3_ready_future([Tuple([U32(readable), U32(future)])])
+    [Tuple([U32(readable), U32(future)])]
   })
 }
 

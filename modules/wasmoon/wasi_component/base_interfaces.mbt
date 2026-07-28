@@ -2,7 +2,7 @@
 pub let preview2_version : String = "0.2.11"
 
 ///|
-pub let preview3_version : String = "0.3.0-rc-2025-09-16"
+pub let preview3_version : String = "0.3.0"
 
 ///|
 fn empty_args(
@@ -161,6 +161,19 @@ fn add_exit_interface(
       _ => raise HostCallError("expected result status")
     }
   })
+  if preview3 {
+    builder.add_func(
+      "exit-with-code",
+      preview3_func(interface, "exit-with-code"),
+      (args, _table) => {
+        guard args is [U8(status)] else {
+          raise HostCallError("expected u8 exit status")
+        }
+        host.ctx.request_exit(status)
+        []
+      },
+    )
+  }
   host.linker.add_instance("wasi:cli/exit@\{version}", builder.finish())
 }
 
@@ -171,11 +184,12 @@ fn add_wall_clock_interface(
   resolution_export : String,
   preview3 : Bool,
 ) -> Unit raise @runtime_impl.ComponentRuntimeError {
+  let clock_name = if preview3 { "system-clock" } else { "wall-clock" }
   let builder = host.linker.host_instance_builder(
-    "wasi:clocks/wall-clock@\{version}",
+    "wasi:clocks/\{clock_name}@\{version}",
     host.runtime,
   )
-  let interface = "wasi:clocks@\{version}/wall-clock"
+  let interface = "wasi:clocks@\{version}/\{clock_name}"
   if preview3 {
     host.prepare_preview3_interface(builder, interface)
   } else {
@@ -196,7 +210,16 @@ fn add_wall_clock_interface(
     if now < 0L {
       raise HostCallError("wall clock is unavailable")
     }
-    [Tuple([U64(now / 1000000000L), U32((now % 1000000000L).to_int())])]
+    [
+      Tuple([
+        if preview3 {
+          S64(now / 1000000000L)
+        } else {
+          U64(now / 1000000000L)
+        },
+        U32((now % 1000000000L).to_int()),
+      ]),
+    ]
   })
   builder.add_func(resolution_export, contract(resolution_export), (
     args,
@@ -206,15 +229,19 @@ fn add_wall_clock_interface(
     guard @wasi.native_clock_getres_realtime() is Some(resolution) else {
       raise HostCallError("wall clock resolution is unavailable")
     }
-    [
-      Tuple([
-        U64(resolution / 1000000000L),
-        U32((resolution % 1000000000L).to_int()),
-      ]),
-    ]
+    if preview3 {
+      [U64(resolution)]
+    } else {
+      [
+        Tuple([
+          U64(resolution / 1000000000L),
+          U32((resolution % 1000000000L).to_int()),
+        ]),
+      ]
+    }
   })
   host.linker.add_instance(
-    "wasi:clocks/wall-clock@\{version}",
+    "wasi:clocks/\{clock_name}@\{version}",
     builder.finish(),
   )
 }
@@ -348,7 +375,7 @@ fn add_preview2_base_interfaces(
 }
 
 ///|
-/// Register the resource-free portion of the pinned Preview 3 async command
+/// Register the resource-free portion of the stable Preview 3 async command
 /// world. Async waits and stream/future interfaces are registered separately.
 fn add_preview3_base_interfaces(
   host : WasiComponentHost,

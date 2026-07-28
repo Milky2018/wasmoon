@@ -202,7 +202,7 @@ pub fn HostRuntimeState::new_host_value_future_source(
   element_type : ValType,
   types : Array[TypeDef?],
   pull : () -> HostFutureValuePoll raise ComponentRuntimeError,
-  cancel : () -> Unit,
+  cancel : () -> Unit raise ComponentRuntimeError,
 ) -> Int raise ComponentRuntimeError {
   stream_payload_info(Some(element_type), types) |> ignore
   let future_id = self.async_state.next_future_id[0]
@@ -236,6 +236,34 @@ pub fn HostRuntimeState::new_host_value_future_source(
 }
 
 ///|
+/// Adapt one asynchronous host-call result into a first-class component
+/// `future<T>`.
+pub fn HostRuntimeState::new_host_call_future(
+  self : HostRuntimeState,
+  table : ResourceTable,
+  element_type : ValType,
+  types : Array[TypeDef?],
+  future : HostFuture,
+) -> Int raise ComponentRuntimeError {
+  self.new_host_value_future_source(
+    table,
+    element_type,
+    types,
+    () => {
+      match (future.poll)() {
+        Pending => Pending
+        Ready([value]) => Ready(value)
+        Ready(_) =>
+          raise HostCallError(
+            "host call backing future<T> must produce exactly one value",
+          )
+      }
+    },
+    () => (future.cancel)(),
+  )
+}
+
+///|
 /// Create a completed `future<result<_, E>>` containing `ok(())` or one
 /// structured error-code case.
 pub fn HostRuntimeState::new_host_unit_result_future(
@@ -249,13 +277,18 @@ pub fn HostRuntimeState::new_host_unit_result_future(
     Some(error_case) => {
       guard resolve_valtype(element_type, types) is TypeIdx(result_index) &&
         types.get(result_index) is Some(Some(Result(None, Some(error_type)))) &&
-        resolve_valtype(error_type, types) is TypeIdx(error_index) &&
-        types.get(error_index) is Some(Some(Enum(cases))) &&
-        error_case >= 0 &&
-        error_case < cases.length() else {
+        resolve_valtype(error_type, types) is TypeIdx(error_index) else {
         raise HostCallError("future error does not match unit result type")
       }
-      Variant(1, Some(U32(error_case)))
+      let error_value = match types.get(error_index) {
+        Some(Some(Enum(cases))) if error_case >= 0 &&
+          error_case < cases.length() => U32(error_case)
+        Some(Some(Variant(cases))) if error_case >= 0 &&
+          error_case < cases.length() &&
+          cases[error_case].ty is None => Variant(error_case, None)
+        _ => raise HostCallError("future error does not match unit result type")
+      }
+      Variant(1, Some(error_value))
     }
     None => Variant(0, None)
   }

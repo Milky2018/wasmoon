@@ -313,9 +313,10 @@ pub fn HostRuntimeState::async_state(Self) -> AsyncState
 pub fn HostRuntimeState::drop_host_readable_future(Self, ResourceTable, Int) -> Unit raise ComponentRuntimeError
 pub fn HostRuntimeState::drop_host_readable_stream(Self, ResourceTable, Int) -> Unit raise ComponentRuntimeError
 pub fn HostRuntimeState::new_host_byte_stream(Self, ResourceTable, Bytes) -> Int
+pub fn HostRuntimeState::new_host_call_future(Self, ResourceTable, @model.ValType, Array[@model.TypeDef?], HostFuture) -> Int raise ComponentRuntimeError
 pub fn HostRuntimeState::new_host_unit_result_future(Self, ResourceTable, @model.ValType, Array[@model.TypeDef?], error_case? : Int) -> Int raise ComponentRuntimeError
 pub fn HostRuntimeState::new_host_value_future(Self, ResourceTable, @model.ValType, Array[@model.TypeDef?], ComponentValue) -> Int raise ComponentRuntimeError
-pub fn HostRuntimeState::new_host_value_future_source(Self, ResourceTable, @model.ValType, Array[@model.TypeDef?], () -> HostFutureValuePoll raise ComponentRuntimeError, () -> Unit) -> Int raise ComponentRuntimeError
+pub fn HostRuntimeState::new_host_value_future_source(Self, ResourceTable, @model.ValType, Array[@model.TypeDef?], () -> HostFutureValuePoll raise ComponentRuntimeError, () -> Unit raise ComponentRuntimeError) -> Int raise ComponentRuntimeError
 pub fn HostRuntimeState::new_host_value_stream(Self, ResourceTable, @model.ValType, Array[@model.TypeDef?], Array[ComponentValue]) -> Int raise ComponentRuntimeError
 pub fn HostRuntimeState::new_host_value_stream_source(Self, ResourceTable, @model.ValType, Array[@model.TypeDef?], (Int) -> HostValueStreamPoll raise ComponentRuntimeError, () -> Unit) -> Int raise ComponentRuntimeError
 pub fn HostRuntimeState::read_host_byte_stream(Self, ResourceTable, Int) -> HostByteStreamRead raise ComponentRuntimeError

@@ -12,5 +12,5 @@
   (instance $run-interface
     (export "run" (func $run))
   )
-  (export "wasi:cli/run@0.3.0-rc-2025-09-16" (instance $run-interface))
+  (export "wasi:cli/run@0.3.0" (instance $run-interface))
 )

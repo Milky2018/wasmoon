@@ -370,7 +370,7 @@ pub fn run_component_invoke_command(
 fn component_command_run_instance(
   instance : @runtime_impl.ComponentInstance,
 ) -> @runtime_impl.ComponentInstance? {
-  for name in ["wasi:cli/run@0.2.11", "wasi:cli/run@0.3.0-rc-2025-09-16"] {
+  for name in ["wasi:cli/run@0.2.11", "wasi:cli/run@0.3.0"] {
     match instance.get_export(name) {
       Some(Instance(run)) => return Some(run)
       _ => ()

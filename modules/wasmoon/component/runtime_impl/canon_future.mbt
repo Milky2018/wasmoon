@@ -1100,7 +1100,13 @@ fn instantiate_canon_future_drop_readable(
               match async_state.host_future_values.get(ep.future_id) {
                 Some(source) =>
                   match source.cancel {
-                    Some(cancel) => cancel()
+                    Some(cancel) =>
+                      cancel() catch {
+                        e => {
+                          trap_canon(canon_err_message(e))
+                          return []
+                        }
+                      }
                     None => ()
                   }
                 None => ()

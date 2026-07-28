@@ -389,16 +389,16 @@ fn wasi_preview2_exported_types(
 }
 
 ///|
-let wasi_preview3_wit_sha256 : String = "8948c1651d7fc84a921565845ff9975bcac4508c54f16bb735f476ee53503f33"
+let wasi_preview3_wit_sha256 : String = "40406e7432b7e3213b083d0bcb308676927c97fc488acaaf6c179f1a9e64124b"
 
 ///|
 fn wasi_preview3_resource_names() -> Array[String] {
   [
-    "wasi:cli@0.3.0-rc-2025-09-16/terminal-input.terminal-input",
-    "wasi:cli@0.3.0-rc-2025-09-16/terminal-output.terminal-output",
-    "wasi:filesystem@0.3.0-rc-2025-09-16/types.descriptor",
-    "wasi:sockets@0.3.0-rc-2025-09-16/types.tcp-socket",
-    "wasi:sockets@0.3.0-rc-2025-09-16/types.udp-socket",
+    "wasi:cli@0.3.0/terminal-input.terminal-input",
+    "wasi:cli@0.3.0/terminal-output.terminal-output",
+    "wasi:filesystem@0.3.0/types.descriptor",
+    "wasi:sockets@0.3.0/types.tcp-socket",
+    "wasi:sockets@0.3.0/types.udp-socket",
   ]
 }
 
@@ -410,105 +410,112 @@ fn wasi_preview3_type_space(
     Some(DefValType(U64)),
     Some(DefValType(U64)),
     Some(DefValType(U64)),
-    Some(Record([{ label: "seconds", ty: Prim(U64) }, { label: "nanoseconds", ty: Prim(U32) }])),
-    Some(Record([{ label: "seconds", ty: Prim(U64) }, { label: "nanoseconds", ty: Prim(U32) }])),
     Some(DefValType(U64)),
-    Some(Enum(["unknown", "block-device", "character-device", "directory", "fifo", "symbolic-link", "regular-file", "socket"])),
+    Some(Record([{ label: "seconds", ty: Prim(S64) }, { label: "nanoseconds", ty: Prim(U32) }])),
+    Some(Option(Prim(String))),
+    Some(Option(Prim(S64))),
+    Some(Record([{ label: "seconds", ty: Prim(S64) }, { label: "nanoseconds", ty: Prim(U32) }])),
+    Some(DefValType(U64)),
+    Some(Option(Prim(String))),
+    Some(Variant([{ label: "block-device", ty: None, refines: None }, { label: "character-device", ty: None, refines: None }, { label: "directory", ty: None, refines: None }, { label: "fifo", ty: None, refines: None }, { label: "symbolic-link", ty: None, refines: None }, { label: "regular-file", ty: None, refines: None }, { label: "socket", ty: None, refines: None }, { label: "other", ty: Some(TypeIdx(9)), refines: None }])),
     Some(Flags(["read", "write", "file-integrity-sync", "data-integrity-sync", "requested-write-sync", "mutate-directory"])),
     Some(Flags(["symlink-follow"])),
     Some(Flags(["create", "directory", "exclusive", "truncate"])),
     Some(DefValType(U64)),
-    Some(Option(TypeIdx(4))),
-    Some(Record([{ label: "type", ty: TypeIdx(6) }, { label: "link-count", ty: TypeIdx(10) }, { label: "size", ty: TypeIdx(5) }, { label: "data-access-timestamp", ty: TypeIdx(11) }, { label: "data-modification-timestamp", ty: TypeIdx(11) }, { label: "status-change-timestamp", ty: TypeIdx(11) }])),
-    Some(Variant([{ label: "no-change", ty: None, refines: None }, { label: "now", ty: None, refines: None }, { label: "timestamp", ty: Some(TypeIdx(4)), refines: None }])),
-    Some(Record([{ label: "type", ty: TypeIdx(6) }, { label: "name", ty: Prim(String) }])),
-    Some(Enum(["access", "already", "bad-descriptor", "busy", "deadlock", "quota", "exist", "file-too-large", "illegal-byte-sequence", "in-progress", "interrupted", "invalid", "io", "is-directory", "loop", "too-many-links", "message-size", "name-too-long", "no-device", "no-entry", "no-lock", "insufficient-memory", "insufficient-space", "not-directory", "not-empty", "not-recoverable", "unsupported", "no-tty", "no-such-device", "overflow", "not-permitted", "pipe", "read-only", "invalid-seek", "text-file-busy", "cross-device"])),
+    Some(Option(TypeIdx(7))),
+    Some(Record([{ label: "type", ty: TypeIdx(10) }, { label: "link-count", ty: TypeIdx(14) }, { label: "size", ty: TypeIdx(8) }, { label: "data-access-timestamp", ty: TypeIdx(15) }, { label: "data-modification-timestamp", ty: TypeIdx(15) }, { label: "status-change-timestamp", ty: TypeIdx(15) }])),
+    Some(Variant([{ label: "no-change", ty: None, refines: None }, { label: "now", ty: None, refines: None }, { label: "timestamp", ty: Some(TypeIdx(7)), refines: None }])),
+    Some(Record([{ label: "type", ty: TypeIdx(10) }, { label: "name", ty: Prim(String) }])),
+    Some(Variant([{ label: "access", ty: None, refines: None }, { label: "already", ty: None, refines: None }, { label: "bad-descriptor", ty: None, refines: None }, { label: "busy", ty: None, refines: None }, { label: "deadlock", ty: None, refines: None }, { label: "quota", ty: None, refines: None }, { label: "exist", ty: None, refines: None }, { label: "file-too-large", ty: None, refines: None }, { label: "illegal-byte-sequence", ty: None, refines: None }, { label: "in-progress", ty: None, refines: None }, { label: "interrupted", ty: None, refines: None }, { label: "invalid", ty: None, refines: None }, { label: "io", ty: None, refines: None }, { label: "is-directory", ty: None, refines: None }, { label: "loop", ty: None, refines: None }, { label: "too-many-links", ty: None, refines: None }, { label: "message-size", ty: None, refines: None }, { label: "name-too-long", ty: None, refines: None }, { label: "no-device", ty: None, refines: None }, { label: "no-entry", ty: None, refines: None }, { label: "no-lock", ty: None, refines: None }, { label: "insufficient-memory", ty: None, refines: None }, { label: "insufficient-space", ty: None, refines: None }, { label: "not-directory", ty: None, refines: None }, { label: "not-empty", ty: None, refines: None }, { label: "not-recoverable", ty: None, refines: None }, { label: "unsupported", ty: None, refines: None }, { label: "no-tty", ty: None, refines: None }, { label: "no-such-device", ty: None, refines: None }, { label: "overflow", ty: None, refines: None }, { label: "not-permitted", ty: None, refines: None }, { label: "pipe", ty: None, refines: None }, { label: "read-only", ty: None, refines: None }, { label: "invalid-seek", ty: None, refines: None }, { label: "text-file-busy", ty: None, refines: None }, { label: "cross-device", ty: None, refines: None }, { label: "other", ty: Some(TypeIdx(9)), refines: None }])),
     Some(Enum(["normal", "sequential", "random", "will-need", "dont-need", "no-reuse"])),
     Some(Record([{ label: "lower", ty: Prim(U64) }, { label: "upper", ty: Prim(U64) }])),
-    resolve_resource("wasi:filesystem@0.3.0-rc-2025-09-16/types.descriptor"),
-    Some(Borrow(18)),
+    resolve_resource("wasi:filesystem@0.3.0/types.descriptor"),
+    Some(Borrow(22)),
     Some(Stream(Some(Prim(U8)))),
-    Some(Result(None, Some(TypeIdx(15)))),
-    Some(Future(Some(TypeIdx(21)))),
-    Some(Tuple([TypeIdx(20), TypeIdx(22)])),
-    Some(Result(Some(TypeIdx(7)), Some(TypeIdx(15)))),
-    Some(Result(Some(TypeIdx(6)), Some(TypeIdx(15)))),
-    Some(Stream(Some(TypeIdx(14)))),
-    Some(Tuple([TypeIdx(26), TypeIdx(22)])),
-    Some(Result(Some(TypeIdx(12)), Some(TypeIdx(15)))),
-    Some(Own(18)),
-    Some(Result(Some(TypeIdx(29)), Some(TypeIdx(15)))),
-    Some(Result(Some(Prim(String)), Some(TypeIdx(15)))),
-    Some(Result(Some(TypeIdx(17)), Some(TypeIdx(15)))),
-    resolve_resource("wasi:filesystem@0.3.0-rc-2025-09-16/types.descriptor"),
-    Some(Own(33)),
-    Some(Tuple([TypeIdx(34), Prim(String)])),
-    Some(List(TypeIdx(35))),
+    Some(Result(None, Some(TypeIdx(19)))),
+    Some(Future(Some(TypeIdx(25)))),
+    Some(Tuple([TypeIdx(24), TypeIdx(26)])),
+    Some(Result(Some(TypeIdx(11)), Some(TypeIdx(19)))),
+    Some(Result(Some(TypeIdx(10)), Some(TypeIdx(19)))),
+    Some(Stream(Some(TypeIdx(18)))),
+    Some(Tuple([TypeIdx(30), TypeIdx(26)])),
+    Some(Result(Some(TypeIdx(16)), Some(TypeIdx(19)))),
+    Some(Own(22)),
+    Some(Result(Some(TypeIdx(33)), Some(TypeIdx(19)))),
+    Some(Result(Some(Prim(String)), Some(TypeIdx(19)))),
+    Some(Result(Some(TypeIdx(21)), Some(TypeIdx(19)))),
+    resolve_resource("wasi:filesystem@0.3.0/types.descriptor"),
+    Some(Own(37)),
+    Some(Tuple([TypeIdx(38), Prim(String)])),
+    Some(List(TypeIdx(39))),
     Some(DefValType(U64)),
-    Some(Enum(["unknown", "access-denied", "not-supported", "invalid-argument", "out-of-memory", "timeout", "invalid-state", "address-not-bindable", "address-in-use", "remote-unreachable", "connection-refused", "connection-reset", "connection-aborted", "datagram-too-large"])),
+    Some(Option(Prim(String))),
+    Some(Variant([{ label: "access-denied", ty: None, refines: None }, { label: "not-supported", ty: None, refines: None }, { label: "invalid-argument", ty: None, refines: None }, { label: "out-of-memory", ty: None, refines: None }, { label: "timeout", ty: None, refines: None }, { label: "invalid-state", ty: None, refines: None }, { label: "address-not-bindable", ty: None, refines: None }, { label: "address-in-use", ty: None, refines: None }, { label: "remote-unreachable", ty: None, refines: None }, { label: "connection-refused", ty: None, refines: None }, { label: "connection-broken", ty: None, refines: None }, { label: "connection-reset", ty: None, refines: None }, { label: "connection-aborted", ty: None, refines: None }, { label: "datagram-too-large", ty: None, refines: None }, { label: "other", ty: Some(TypeIdx(42)), refines: None }])),
     Some(Enum(["ipv4", "ipv6"])),
     Some(Tuple([Prim(U8), Prim(U8), Prim(U8), Prim(U8)])),
     Some(Tuple([Prim(U16), Prim(U16), Prim(U16), Prim(U16), Prim(U16), Prim(U16), Prim(U16), Prim(U16)])),
-    Some(Variant([{ label: "ipv4", ty: Some(TypeIdx(40)), refines: None }, { label: "ipv6", ty: Some(TypeIdx(41)), refines: None }])),
-    Some(Record([{ label: "port", ty: Prim(U16) }, { label: "address", ty: TypeIdx(40) }])),
-    Some(Record([{ label: "port", ty: Prim(U16) }, { label: "flow-info", ty: Prim(U32) }, { label: "address", ty: TypeIdx(41) }, { label: "scope-id", ty: Prim(U32) }])),
-    Some(Variant([{ label: "ipv4", ty: Some(TypeIdx(43)), refines: None }, { label: "ipv6", ty: Some(TypeIdx(44)), refines: None }])),
-    resolve_resource("wasi:sockets@0.3.0-rc-2025-09-16/types.tcp-socket"),
-    resolve_resource("wasi:sockets@0.3.0-rc-2025-09-16/types.udp-socket"),
-    Some(Own(46)),
-    Some(Result(Some(TypeIdx(48)), Some(TypeIdx(38)))),
-    Some(Borrow(46)),
-    Some(Result(None, Some(TypeIdx(38)))),
-    Some(Stream(Some(TypeIdx(48)))),
-    Some(Result(Some(TypeIdx(52)), Some(TypeIdx(38)))),
+    Some(Variant([{ label: "ipv4", ty: Some(TypeIdx(45)), refines: None }, { label: "ipv6", ty: Some(TypeIdx(46)), refines: None }])),
+    Some(Record([{ label: "port", ty: Prim(U16) }, { label: "address", ty: TypeIdx(45) }])),
+    Some(Record([{ label: "port", ty: Prim(U16) }, { label: "flow-info", ty: Prim(U32) }, { label: "address", ty: TypeIdx(46) }, { label: "scope-id", ty: Prim(U32) }])),
+    Some(Variant([{ label: "ipv4", ty: Some(TypeIdx(48)), refines: None }, { label: "ipv6", ty: Some(TypeIdx(49)), refines: None }])),
+    resolve_resource("wasi:sockets@0.3.0/types.tcp-socket"),
+    resolve_resource("wasi:sockets@0.3.0/types.udp-socket"),
+    Some(Own(51)),
+    Some(Result(Some(TypeIdx(53)), Some(TypeIdx(43)))),
+    Some(Borrow(51)),
+    Some(Result(None, Some(TypeIdx(43)))),
+    Some(Stream(Some(TypeIdx(53)))),
+    Some(Result(Some(TypeIdx(57)), Some(TypeIdx(43)))),
     Some(Stream(Some(Prim(U8)))),
-    Some(Future(Some(TypeIdx(51)))),
-    Some(Tuple([TypeIdx(54), TypeIdx(55)])),
-    Some(Result(Some(TypeIdx(45)), Some(TypeIdx(38)))),
-    Some(Result(Some(Prim(Bool)), Some(TypeIdx(38)))),
-    Some(Result(Some(TypeIdx(37)), Some(TypeIdx(38)))),
-    Some(Result(Some(Prim(U32)), Some(TypeIdx(38)))),
-    Some(Result(Some(Prim(U8)), Some(TypeIdx(38)))),
-    Some(Result(Some(Prim(U64)), Some(TypeIdx(38)))),
-    Some(Own(47)),
-    Some(Result(Some(TypeIdx(63)), Some(TypeIdx(38)))),
-    Some(Borrow(47)),
+    Some(Future(Some(TypeIdx(56)))),
+    Some(Tuple([TypeIdx(59), TypeIdx(60)])),
+    Some(Result(Some(TypeIdx(50)), Some(TypeIdx(43)))),
+    Some(Result(Some(Prim(Bool)), Some(TypeIdx(43)))),
+    Some(Result(Some(TypeIdx(41)), Some(TypeIdx(43)))),
+    Some(Result(Some(Prim(U32)), Some(TypeIdx(43)))),
+    Some(Result(Some(Prim(U8)), Some(TypeIdx(43)))),
+    Some(Result(Some(Prim(U64)), Some(TypeIdx(43)))),
+    Some(Own(52)),
+    Some(Result(Some(TypeIdx(68)), Some(TypeIdx(43)))),
+    Some(Borrow(52)),
     Some(List(Prim(U8))),
-    Some(Option(TypeIdx(45))),
-    Some(Tuple([TypeIdx(66), TypeIdx(45)])),
-    Some(Result(Some(TypeIdx(68)), Some(TypeIdx(38)))),
-    Some(Variant([{ label: "ipv4", ty: Some(TypeIdx(40)), refines: None }, { label: "ipv6", ty: Some(TypeIdx(41)), refines: None }])),
-    Some(Enum(["unknown", "access-denied", "invalid-argument", "name-unresolvable", "temporary-resolver-failure", "permanent-resolver-failure"])),
-    Some(List(TypeIdx(70))),
-    Some(Result(Some(TypeIdx(72)), Some(TypeIdx(71)))),
+    Some(Option(TypeIdx(50))),
+    Some(Tuple([TypeIdx(71), TypeIdx(50)])),
+    Some(Result(Some(TypeIdx(73)), Some(TypeIdx(43)))),
+    Some(Variant([{ label: "ipv4", ty: Some(TypeIdx(45)), refines: None }, { label: "ipv6", ty: Some(TypeIdx(46)), refines: None }])),
+    Some(Variant([{ label: "access-denied", ty: None, refines: None }, { label: "invalid-argument", ty: None, refines: None }, { label: "name-unresolvable", ty: None, refines: None }, { label: "temporary-resolver-failure", ty: None, refines: None }, { label: "permanent-resolver-failure", ty: None, refines: None }, { label: "other", ty: Some(TypeIdx(42)), refines: None }])),
+    Some(List(TypeIdx(75))),
+    Some(Result(Some(TypeIdx(77)), Some(TypeIdx(76)))),
     Some(Tuple([Prim(U64), Prim(U64)])),
     Some(List(Prim(U8))),
     Some(Tuple([Prim(String), Prim(String)])),
-    Some(List(TypeIdx(76))),
+    Some(List(TypeIdx(81))),
     Some(List(Prim(String))),
     Some(Option(Prim(String))),
     Some(Result(None, None)),
     Some(Enum(["io", "illegal-byte-sequence", "pipe"])),
     Some(Enum(["io", "illegal-byte-sequence", "pipe"])),
     Some(Stream(Some(Prim(U8)))),
-    Some(Result(None, Some(TypeIdx(82)))),
-    Some(Future(Some(TypeIdx(84)))),
-    Some(Tuple([TypeIdx(83), TypeIdx(85)])),
-    Some(Enum(["io", "illegal-byte-sequence", "pipe"])),
     Some(Result(None, Some(TypeIdx(87)))),
+    Some(Future(Some(TypeIdx(89)))),
+    Some(Tuple([TypeIdx(88), TypeIdx(90)])),
     Some(Enum(["io", "illegal-byte-sequence", "pipe"])),
-    Some(Result(None, Some(TypeIdx(89)))),
-    resolve_resource("wasi:cli@0.3.0-rc-2025-09-16/terminal-input.terminal-input"),
-    resolve_resource("wasi:cli@0.3.0-rc-2025-09-16/terminal-output.terminal-output"),
-    resolve_resource("wasi:cli@0.3.0-rc-2025-09-16/terminal-input.terminal-input"),
-    Some(Own(93)),
-    Some(Option(TypeIdx(94))),
-    resolve_resource("wasi:cli@0.3.0-rc-2025-09-16/terminal-output.terminal-output"),
-    Some(Own(96)),
-    Some(Option(TypeIdx(97))),
-    resolve_resource("wasi:cli@0.3.0-rc-2025-09-16/terminal-output.terminal-output"),
-    Some(Own(99)),
-    Some(Option(TypeIdx(100))),
+    Some(Result(None, Some(TypeIdx(92)))),
+    Some(Future(Some(TypeIdx(93)))),
+    Some(Enum(["io", "illegal-byte-sequence", "pipe"])),
+    Some(Result(None, Some(TypeIdx(95)))),
+    Some(Future(Some(TypeIdx(96)))),
+    resolve_resource("wasi:cli@0.3.0/terminal-input.terminal-input"),
+    resolve_resource("wasi:cli@0.3.0/terminal-output.terminal-output"),
+    resolve_resource("wasi:cli@0.3.0/terminal-input.terminal-input"),
+    Some(Own(100)),
+    Some(Option(TypeIdx(101))),
+    resolve_resource("wasi:cli@0.3.0/terminal-output.terminal-output"),
+    Some(Own(103)),
+    Some(Option(TypeIdx(104))),
+    resolve_resource("wasi:cli@0.3.0/terminal-output.terminal-output"),
+    Some(Own(106)),
+    Some(Option(TypeIdx(107))),
   ]
 }
 
@@ -518,95 +525,96 @@ fn wasi_preview3_func_type(
   function : String,
 ) -> @component.FuncType? {
   match "\{interface}#\{function}" {
-    "wasi:clocks@0.3.0-rc-2025-09-16/monotonic-clock#now" => Some({ is_async: false, params: [], result: Some(TypeIdx(2)) })
-    "wasi:clocks@0.3.0-rc-2025-09-16/monotonic-clock#get-resolution" => Some({ is_async: false, params: [], result: Some(TypeIdx(1)) })
-    "wasi:clocks@0.3.0-rc-2025-09-16/monotonic-clock#wait-until" => Some({ is_async: true, params: [{ label: "when", ty: TypeIdx(2) }], result: None })
-    "wasi:clocks@0.3.0-rc-2025-09-16/monotonic-clock#wait-for" => Some({ is_async: true, params: [{ label: "how-long", ty: TypeIdx(1) }], result: None })
-    "wasi:clocks@0.3.0-rc-2025-09-16/wall-clock#now" => Some({ is_async: false, params: [], result: Some(TypeIdx(3)) })
-    "wasi:clocks@0.3.0-rc-2025-09-16/wall-clock#get-resolution" => Some({ is_async: false, params: [], result: Some(TypeIdx(3)) })
-    "wasi:filesystem@0.3.0-rc-2025-09-16/types#[method]descriptor.read-via-stream" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(19) }, { label: "offset", ty: TypeIdx(5) }], result: Some(TypeIdx(23)) })
-    "wasi:filesystem@0.3.0-rc-2025-09-16/types#[method]descriptor.write-via-stream" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(19) }, { label: "data", ty: TypeIdx(20) }, { label: "offset", ty: TypeIdx(5) }], result: Some(TypeIdx(21)) })
-    "wasi:filesystem@0.3.0-rc-2025-09-16/types#[method]descriptor.append-via-stream" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(19) }, { label: "data", ty: TypeIdx(20) }], result: Some(TypeIdx(21)) })
-    "wasi:filesystem@0.3.0-rc-2025-09-16/types#[method]descriptor.advise" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(19) }, { label: "offset", ty: TypeIdx(5) }, { label: "length", ty: TypeIdx(5) }, { label: "advice", ty: TypeIdx(16) }], result: Some(TypeIdx(21)) })
-    "wasi:filesystem@0.3.0-rc-2025-09-16/types#[method]descriptor.sync-data" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(19) }], result: Some(TypeIdx(21)) })
-    "wasi:filesystem@0.3.0-rc-2025-09-16/types#[method]descriptor.get-flags" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(19) }], result: Some(TypeIdx(24)) })
-    "wasi:filesystem@0.3.0-rc-2025-09-16/types#[method]descriptor.get-type" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(19) }], result: Some(TypeIdx(25)) })
-    "wasi:filesystem@0.3.0-rc-2025-09-16/types#[method]descriptor.set-size" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(19) }, { label: "size", ty: TypeIdx(5) }], result: Some(TypeIdx(21)) })
-    "wasi:filesystem@0.3.0-rc-2025-09-16/types#[method]descriptor.set-times" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(19) }, { label: "data-access-timestamp", ty: TypeIdx(13) }, { label: "data-modification-timestamp", ty: TypeIdx(13) }], result: Some(TypeIdx(21)) })
-    "wasi:filesystem@0.3.0-rc-2025-09-16/types#[method]descriptor.read-directory" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(19) }], result: Some(TypeIdx(27)) })
-    "wasi:filesystem@0.3.0-rc-2025-09-16/types#[method]descriptor.sync" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(19) }], result: Some(TypeIdx(21)) })
-    "wasi:filesystem@0.3.0-rc-2025-09-16/types#[method]descriptor.create-directory-at" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(19) }, { label: "path", ty: Prim(String) }], result: Some(TypeIdx(21)) })
-    "wasi:filesystem@0.3.0-rc-2025-09-16/types#[method]descriptor.stat" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(19) }], result: Some(TypeIdx(28)) })
-    "wasi:filesystem@0.3.0-rc-2025-09-16/types#[method]descriptor.stat-at" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(19) }, { label: "path-flags", ty: TypeIdx(8) }, { label: "path", ty: Prim(String) }], result: Some(TypeIdx(28)) })
-    "wasi:filesystem@0.3.0-rc-2025-09-16/types#[method]descriptor.set-times-at" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(19) }, { label: "path-flags", ty: TypeIdx(8) }, { label: "path", ty: Prim(String) }, { label: "data-access-timestamp", ty: TypeIdx(13) }, { label: "data-modification-timestamp", ty: TypeIdx(13) }], result: Some(TypeIdx(21)) })
-    "wasi:filesystem@0.3.0-rc-2025-09-16/types#[method]descriptor.link-at" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(19) }, { label: "old-path-flags", ty: TypeIdx(8) }, { label: "old-path", ty: Prim(String) }, { label: "new-descriptor", ty: TypeIdx(19) }, { label: "new-path", ty: Prim(String) }], result: Some(TypeIdx(21)) })
-    "wasi:filesystem@0.3.0-rc-2025-09-16/types#[method]descriptor.open-at" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(19) }, { label: "path-flags", ty: TypeIdx(8) }, { label: "path", ty: Prim(String) }, { label: "open-flags", ty: TypeIdx(9) }, { label: "flags", ty: TypeIdx(7) }], result: Some(TypeIdx(30)) })
-    "wasi:filesystem@0.3.0-rc-2025-09-16/types#[method]descriptor.readlink-at" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(19) }, { label: "path", ty: Prim(String) }], result: Some(TypeIdx(31)) })
-    "wasi:filesystem@0.3.0-rc-2025-09-16/types#[method]descriptor.remove-directory-at" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(19) }, { label: "path", ty: Prim(String) }], result: Some(TypeIdx(21)) })
-    "wasi:filesystem@0.3.0-rc-2025-09-16/types#[method]descriptor.rename-at" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(19) }, { label: "old-path", ty: Prim(String) }, { label: "new-descriptor", ty: TypeIdx(19) }, { label: "new-path", ty: Prim(String) }], result: Some(TypeIdx(21)) })
-    "wasi:filesystem@0.3.0-rc-2025-09-16/types#[method]descriptor.symlink-at" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(19) }, { label: "old-path", ty: Prim(String) }, { label: "new-path", ty: Prim(String) }], result: Some(TypeIdx(21)) })
-    "wasi:filesystem@0.3.0-rc-2025-09-16/types#[method]descriptor.unlink-file-at" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(19) }, { label: "path", ty: Prim(String) }], result: Some(TypeIdx(21)) })
-    "wasi:filesystem@0.3.0-rc-2025-09-16/types#[method]descriptor.is-same-object" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(19) }, { label: "other", ty: TypeIdx(19) }], result: Some(Prim(Bool)) })
-    "wasi:filesystem@0.3.0-rc-2025-09-16/types#[method]descriptor.metadata-hash" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(19) }], result: Some(TypeIdx(32)) })
-    "wasi:filesystem@0.3.0-rc-2025-09-16/types#[method]descriptor.metadata-hash-at" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(19) }, { label: "path-flags", ty: TypeIdx(8) }, { label: "path", ty: Prim(String) }], result: Some(TypeIdx(32)) })
-    "wasi:filesystem@0.3.0-rc-2025-09-16/preopens#get-directories" => Some({ is_async: false, params: [], result: Some(TypeIdx(36)) })
-    "wasi:sockets@0.3.0-rc-2025-09-16/types#[static]tcp-socket.create" => Some({ is_async: false, params: [{ label: "address-family", ty: TypeIdx(39) }], result: Some(TypeIdx(49)) })
-    "wasi:sockets@0.3.0-rc-2025-09-16/types#[method]tcp-socket.bind" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(50) }, { label: "local-address", ty: TypeIdx(45) }], result: Some(TypeIdx(51)) })
-    "wasi:sockets@0.3.0-rc-2025-09-16/types#[method]tcp-socket.connect" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(50) }, { label: "remote-address", ty: TypeIdx(45) }], result: Some(TypeIdx(51)) })
-    "wasi:sockets@0.3.0-rc-2025-09-16/types#[method]tcp-socket.listen" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(50) }], result: Some(TypeIdx(53)) })
-    "wasi:sockets@0.3.0-rc-2025-09-16/types#[method]tcp-socket.send" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(50) }, { label: "data", ty: TypeIdx(54) }], result: Some(TypeIdx(51)) })
-    "wasi:sockets@0.3.0-rc-2025-09-16/types#[method]tcp-socket.receive" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(50) }], result: Some(TypeIdx(56)) })
-    "wasi:sockets@0.3.0-rc-2025-09-16/types#[method]tcp-socket.get-local-address" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(50) }], result: Some(TypeIdx(57)) })
-    "wasi:sockets@0.3.0-rc-2025-09-16/types#[method]tcp-socket.get-remote-address" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(50) }], result: Some(TypeIdx(57)) })
-    "wasi:sockets@0.3.0-rc-2025-09-16/types#[method]tcp-socket.get-is-listening" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(50) }], result: Some(Prim(Bool)) })
-    "wasi:sockets@0.3.0-rc-2025-09-16/types#[method]tcp-socket.get-address-family" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(50) }], result: Some(TypeIdx(39)) })
-    "wasi:sockets@0.3.0-rc-2025-09-16/types#[method]tcp-socket.set-listen-backlog-size" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(50) }, { label: "value", ty: Prim(U64) }], result: Some(TypeIdx(51)) })
-    "wasi:sockets@0.3.0-rc-2025-09-16/types#[method]tcp-socket.get-keep-alive-enabled" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(50) }], result: Some(TypeIdx(58)) })
-    "wasi:sockets@0.3.0-rc-2025-09-16/types#[method]tcp-socket.set-keep-alive-enabled" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(50) }, { label: "value", ty: Prim(Bool) }], result: Some(TypeIdx(51)) })
-    "wasi:sockets@0.3.0-rc-2025-09-16/types#[method]tcp-socket.get-keep-alive-idle-time" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(50) }], result: Some(TypeIdx(59)) })
-    "wasi:sockets@0.3.0-rc-2025-09-16/types#[method]tcp-socket.set-keep-alive-idle-time" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(50) }, { label: "value", ty: TypeIdx(37) }], result: Some(TypeIdx(51)) })
-    "wasi:sockets@0.3.0-rc-2025-09-16/types#[method]tcp-socket.get-keep-alive-interval" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(50) }], result: Some(TypeIdx(59)) })
-    "wasi:sockets@0.3.0-rc-2025-09-16/types#[method]tcp-socket.set-keep-alive-interval" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(50) }, { label: "value", ty: TypeIdx(37) }], result: Some(TypeIdx(51)) })
-    "wasi:sockets@0.3.0-rc-2025-09-16/types#[method]tcp-socket.get-keep-alive-count" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(50) }], result: Some(TypeIdx(60)) })
-    "wasi:sockets@0.3.0-rc-2025-09-16/types#[method]tcp-socket.set-keep-alive-count" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(50) }, { label: "value", ty: Prim(U32) }], result: Some(TypeIdx(51)) })
-    "wasi:sockets@0.3.0-rc-2025-09-16/types#[method]tcp-socket.get-hop-limit" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(50) }], result: Some(TypeIdx(61)) })
-    "wasi:sockets@0.3.0-rc-2025-09-16/types#[method]tcp-socket.set-hop-limit" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(50) }, { label: "value", ty: Prim(U8) }], result: Some(TypeIdx(51)) })
-    "wasi:sockets@0.3.0-rc-2025-09-16/types#[method]tcp-socket.get-receive-buffer-size" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(50) }], result: Some(TypeIdx(62)) })
-    "wasi:sockets@0.3.0-rc-2025-09-16/types#[method]tcp-socket.set-receive-buffer-size" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(50) }, { label: "value", ty: Prim(U64) }], result: Some(TypeIdx(51)) })
-    "wasi:sockets@0.3.0-rc-2025-09-16/types#[method]tcp-socket.get-send-buffer-size" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(50) }], result: Some(TypeIdx(62)) })
-    "wasi:sockets@0.3.0-rc-2025-09-16/types#[method]tcp-socket.set-send-buffer-size" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(50) }, { label: "value", ty: Prim(U64) }], result: Some(TypeIdx(51)) })
-    "wasi:sockets@0.3.0-rc-2025-09-16/types#[static]udp-socket.create" => Some({ is_async: false, params: [{ label: "address-family", ty: TypeIdx(39) }], result: Some(TypeIdx(64)) })
-    "wasi:sockets@0.3.0-rc-2025-09-16/types#[method]udp-socket.bind" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(65) }, { label: "local-address", ty: TypeIdx(45) }], result: Some(TypeIdx(51)) })
-    "wasi:sockets@0.3.0-rc-2025-09-16/types#[method]udp-socket.connect" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(65) }, { label: "remote-address", ty: TypeIdx(45) }], result: Some(TypeIdx(51)) })
-    "wasi:sockets@0.3.0-rc-2025-09-16/types#[method]udp-socket.disconnect" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(65) }], result: Some(TypeIdx(51)) })
-    "wasi:sockets@0.3.0-rc-2025-09-16/types#[method]udp-socket.send" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(65) }, { label: "data", ty: TypeIdx(66) }, { label: "remote-address", ty: TypeIdx(67) }], result: Some(TypeIdx(51)) })
-    "wasi:sockets@0.3.0-rc-2025-09-16/types#[method]udp-socket.receive" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(65) }], result: Some(TypeIdx(69)) })
-    "wasi:sockets@0.3.0-rc-2025-09-16/types#[method]udp-socket.get-local-address" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(65) }], result: Some(TypeIdx(57)) })
-    "wasi:sockets@0.3.0-rc-2025-09-16/types#[method]udp-socket.get-remote-address" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(65) }], result: Some(TypeIdx(57)) })
-    "wasi:sockets@0.3.0-rc-2025-09-16/types#[method]udp-socket.get-address-family" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(65) }], result: Some(TypeIdx(39)) })
-    "wasi:sockets@0.3.0-rc-2025-09-16/types#[method]udp-socket.get-unicast-hop-limit" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(65) }], result: Some(TypeIdx(61)) })
-    "wasi:sockets@0.3.0-rc-2025-09-16/types#[method]udp-socket.set-unicast-hop-limit" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(65) }, { label: "value", ty: Prim(U8) }], result: Some(TypeIdx(51)) })
-    "wasi:sockets@0.3.0-rc-2025-09-16/types#[method]udp-socket.get-receive-buffer-size" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(65) }], result: Some(TypeIdx(62)) })
-    "wasi:sockets@0.3.0-rc-2025-09-16/types#[method]udp-socket.set-receive-buffer-size" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(65) }, { label: "value", ty: Prim(U64) }], result: Some(TypeIdx(51)) })
-    "wasi:sockets@0.3.0-rc-2025-09-16/types#[method]udp-socket.get-send-buffer-size" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(65) }], result: Some(TypeIdx(62)) })
-    "wasi:sockets@0.3.0-rc-2025-09-16/types#[method]udp-socket.set-send-buffer-size" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(65) }, { label: "value", ty: Prim(U64) }], result: Some(TypeIdx(51)) })
-    "wasi:sockets@0.3.0-rc-2025-09-16/ip-name-lookup#resolve-addresses" => Some({ is_async: true, params: [{ label: "name", ty: Prim(String) }], result: Some(TypeIdx(73)) })
-    "wasi:random@0.3.0-rc-2025-09-16/insecure-seed#get-insecure-seed" => Some({ is_async: false, params: [], result: Some(TypeIdx(74)) })
-    "wasi:random@0.3.0-rc-2025-09-16/insecure#get-insecure-random-bytes" => Some({ is_async: false, params: [{ label: "len", ty: Prim(U64) }], result: Some(TypeIdx(75)) })
-    "wasi:random@0.3.0-rc-2025-09-16/insecure#get-insecure-random-u64" => Some({ is_async: false, params: [], result: Some(Prim(U64)) })
-    "wasi:random@0.3.0-rc-2025-09-16/random#get-random-bytes" => Some({ is_async: false, params: [{ label: "len", ty: Prim(U64) }], result: Some(TypeIdx(75)) })
-    "wasi:random@0.3.0-rc-2025-09-16/random#get-random-u64" => Some({ is_async: false, params: [], result: Some(Prim(U64)) })
-    "wasi:cli@0.3.0-rc-2025-09-16/environment#get-environment" => Some({ is_async: false, params: [], result: Some(TypeIdx(77)) })
-    "wasi:cli@0.3.0-rc-2025-09-16/environment#get-arguments" => Some({ is_async: false, params: [], result: Some(TypeIdx(78)) })
-    "wasi:cli@0.3.0-rc-2025-09-16/environment#get-initial-cwd" => Some({ is_async: false, params: [], result: Some(TypeIdx(79)) })
-    "wasi:cli@0.3.0-rc-2025-09-16/exit#exit" => Some({ is_async: false, params: [{ label: "status", ty: TypeIdx(80) }], result: None })
-    "wasi:cli@0.3.0-rc-2025-09-16/run#run" => Some({ is_async: true, params: [], result: Some(TypeIdx(80)) })
-    "wasi:cli@0.3.0-rc-2025-09-16/stdin#read-via-stream" => Some({ is_async: false, params: [], result: Some(TypeIdx(86)) })
-    "wasi:cli@0.3.0-rc-2025-09-16/stdout#write-via-stream" => Some({ is_async: true, params: [{ label: "data", ty: TypeIdx(83) }], result: Some(TypeIdx(88)) })
-    "wasi:cli@0.3.0-rc-2025-09-16/stderr#write-via-stream" => Some({ is_async: true, params: [{ label: "data", ty: TypeIdx(83) }], result: Some(TypeIdx(90)) })
-    "wasi:cli@0.3.0-rc-2025-09-16/terminal-stdin#get-terminal-stdin" => Some({ is_async: false, params: [], result: Some(TypeIdx(95)) })
-    "wasi:cli@0.3.0-rc-2025-09-16/terminal-stdout#get-terminal-stdout" => Some({ is_async: false, params: [], result: Some(TypeIdx(98)) })
-    "wasi:cli@0.3.0-rc-2025-09-16/terminal-stderr#get-terminal-stderr" => Some({ is_async: false, params: [], result: Some(TypeIdx(101)) })
+    "wasi:clocks@0.3.0/monotonic-clock#now" => Some({ is_async: false, params: [], result: Some(TypeIdx(2)) })
+    "wasi:clocks@0.3.0/monotonic-clock#get-resolution" => Some({ is_async: false, params: [], result: Some(TypeIdx(1)) })
+    "wasi:clocks@0.3.0/monotonic-clock#wait-until" => Some({ is_async: true, params: [{ label: "when", ty: TypeIdx(2) }], result: None })
+    "wasi:clocks@0.3.0/monotonic-clock#wait-for" => Some({ is_async: true, params: [{ label: "how-long", ty: TypeIdx(1) }], result: None })
+    "wasi:clocks@0.3.0/system-clock#now" => Some({ is_async: false, params: [], result: Some(TypeIdx(4)) })
+    "wasi:clocks@0.3.0/system-clock#get-resolution" => Some({ is_async: false, params: [], result: Some(TypeIdx(3)) })
+    "wasi:filesystem@0.3.0/types#[method]descriptor.read-via-stream" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(23) }, { label: "offset", ty: TypeIdx(8) }], result: Some(TypeIdx(27)) })
+    "wasi:filesystem@0.3.0/types#[method]descriptor.write-via-stream" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(23) }, { label: "data", ty: TypeIdx(24) }, { label: "offset", ty: TypeIdx(8) }], result: Some(TypeIdx(26)) })
+    "wasi:filesystem@0.3.0/types#[method]descriptor.append-via-stream" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(23) }, { label: "data", ty: TypeIdx(24) }], result: Some(TypeIdx(26)) })
+    "wasi:filesystem@0.3.0/types#[method]descriptor.advise" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(23) }, { label: "offset", ty: TypeIdx(8) }, { label: "length", ty: TypeIdx(8) }, { label: "advice", ty: TypeIdx(20) }], result: Some(TypeIdx(25)) })
+    "wasi:filesystem@0.3.0/types#[method]descriptor.sync-data" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(23) }], result: Some(TypeIdx(25)) })
+    "wasi:filesystem@0.3.0/types#[method]descriptor.get-flags" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(23) }], result: Some(TypeIdx(28)) })
+    "wasi:filesystem@0.3.0/types#[method]descriptor.get-type" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(23) }], result: Some(TypeIdx(29)) })
+    "wasi:filesystem@0.3.0/types#[method]descriptor.set-size" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(23) }, { label: "size", ty: TypeIdx(8) }], result: Some(TypeIdx(25)) })
+    "wasi:filesystem@0.3.0/types#[method]descriptor.set-times" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(23) }, { label: "data-access-timestamp", ty: TypeIdx(17) }, { label: "data-modification-timestamp", ty: TypeIdx(17) }], result: Some(TypeIdx(25)) })
+    "wasi:filesystem@0.3.0/types#[method]descriptor.read-directory" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(23) }], result: Some(TypeIdx(31)) })
+    "wasi:filesystem@0.3.0/types#[method]descriptor.sync" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(23) }], result: Some(TypeIdx(25)) })
+    "wasi:filesystem@0.3.0/types#[method]descriptor.create-directory-at" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(23) }, { label: "path", ty: Prim(String) }], result: Some(TypeIdx(25)) })
+    "wasi:filesystem@0.3.0/types#[method]descriptor.stat" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(23) }], result: Some(TypeIdx(32)) })
+    "wasi:filesystem@0.3.0/types#[method]descriptor.stat-at" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(23) }, { label: "path-flags", ty: TypeIdx(12) }, { label: "path", ty: Prim(String) }], result: Some(TypeIdx(32)) })
+    "wasi:filesystem@0.3.0/types#[method]descriptor.set-times-at" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(23) }, { label: "path-flags", ty: TypeIdx(12) }, { label: "path", ty: Prim(String) }, { label: "data-access-timestamp", ty: TypeIdx(17) }, { label: "data-modification-timestamp", ty: TypeIdx(17) }], result: Some(TypeIdx(25)) })
+    "wasi:filesystem@0.3.0/types#[method]descriptor.link-at" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(23) }, { label: "old-path-flags", ty: TypeIdx(12) }, { label: "old-path", ty: Prim(String) }, { label: "new-descriptor", ty: TypeIdx(23) }, { label: "new-path", ty: Prim(String) }], result: Some(TypeIdx(25)) })
+    "wasi:filesystem@0.3.0/types#[method]descriptor.open-at" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(23) }, { label: "path-flags", ty: TypeIdx(12) }, { label: "path", ty: Prim(String) }, { label: "open-flags", ty: TypeIdx(13) }, { label: "flags", ty: TypeIdx(11) }], result: Some(TypeIdx(34)) })
+    "wasi:filesystem@0.3.0/types#[method]descriptor.readlink-at" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(23) }, { label: "path", ty: Prim(String) }], result: Some(TypeIdx(35)) })
+    "wasi:filesystem@0.3.0/types#[method]descriptor.remove-directory-at" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(23) }, { label: "path", ty: Prim(String) }], result: Some(TypeIdx(25)) })
+    "wasi:filesystem@0.3.0/types#[method]descriptor.rename-at" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(23) }, { label: "old-path", ty: Prim(String) }, { label: "new-descriptor", ty: TypeIdx(23) }, { label: "new-path", ty: Prim(String) }], result: Some(TypeIdx(25)) })
+    "wasi:filesystem@0.3.0/types#[method]descriptor.symlink-at" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(23) }, { label: "old-path", ty: Prim(String) }, { label: "new-path", ty: Prim(String) }], result: Some(TypeIdx(25)) })
+    "wasi:filesystem@0.3.0/types#[method]descriptor.unlink-file-at" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(23) }, { label: "path", ty: Prim(String) }], result: Some(TypeIdx(25)) })
+    "wasi:filesystem@0.3.0/types#[method]descriptor.is-same-object" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(23) }, { label: "other", ty: TypeIdx(23) }], result: Some(Prim(Bool)) })
+    "wasi:filesystem@0.3.0/types#[method]descriptor.metadata-hash" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(23) }], result: Some(TypeIdx(36)) })
+    "wasi:filesystem@0.3.0/types#[method]descriptor.metadata-hash-at" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(23) }, { label: "path-flags", ty: TypeIdx(12) }, { label: "path", ty: Prim(String) }], result: Some(TypeIdx(36)) })
+    "wasi:filesystem@0.3.0/preopens#get-directories" => Some({ is_async: false, params: [], result: Some(TypeIdx(40)) })
+    "wasi:sockets@0.3.0/types#[static]tcp-socket.create" => Some({ is_async: false, params: [{ label: "address-family", ty: TypeIdx(44) }], result: Some(TypeIdx(54)) })
+    "wasi:sockets@0.3.0/types#[method]tcp-socket.bind" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(55) }, { label: "local-address", ty: TypeIdx(50) }], result: Some(TypeIdx(56)) })
+    "wasi:sockets@0.3.0/types#[method]tcp-socket.connect" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(55) }, { label: "remote-address", ty: TypeIdx(50) }], result: Some(TypeIdx(56)) })
+    "wasi:sockets@0.3.0/types#[method]tcp-socket.listen" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(55) }], result: Some(TypeIdx(58)) })
+    "wasi:sockets@0.3.0/types#[method]tcp-socket.send" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(55) }, { label: "data", ty: TypeIdx(59) }], result: Some(TypeIdx(60)) })
+    "wasi:sockets@0.3.0/types#[method]tcp-socket.receive" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(55) }], result: Some(TypeIdx(61)) })
+    "wasi:sockets@0.3.0/types#[method]tcp-socket.get-local-address" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(55) }], result: Some(TypeIdx(62)) })
+    "wasi:sockets@0.3.0/types#[method]tcp-socket.get-remote-address" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(55) }], result: Some(TypeIdx(62)) })
+    "wasi:sockets@0.3.0/types#[method]tcp-socket.get-is-listening" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(55) }], result: Some(Prim(Bool)) })
+    "wasi:sockets@0.3.0/types#[method]tcp-socket.get-address-family" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(55) }], result: Some(TypeIdx(44)) })
+    "wasi:sockets@0.3.0/types#[method]tcp-socket.set-listen-backlog-size" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(55) }, { label: "value", ty: Prim(U64) }], result: Some(TypeIdx(56)) })
+    "wasi:sockets@0.3.0/types#[method]tcp-socket.get-keep-alive-enabled" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(55) }], result: Some(TypeIdx(63)) })
+    "wasi:sockets@0.3.0/types#[method]tcp-socket.set-keep-alive-enabled" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(55) }, { label: "value", ty: Prim(Bool) }], result: Some(TypeIdx(56)) })
+    "wasi:sockets@0.3.0/types#[method]tcp-socket.get-keep-alive-idle-time" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(55) }], result: Some(TypeIdx(64)) })
+    "wasi:sockets@0.3.0/types#[method]tcp-socket.set-keep-alive-idle-time" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(55) }, { label: "value", ty: TypeIdx(41) }], result: Some(TypeIdx(56)) })
+    "wasi:sockets@0.3.0/types#[method]tcp-socket.get-keep-alive-interval" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(55) }], result: Some(TypeIdx(64)) })
+    "wasi:sockets@0.3.0/types#[method]tcp-socket.set-keep-alive-interval" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(55) }, { label: "value", ty: TypeIdx(41) }], result: Some(TypeIdx(56)) })
+    "wasi:sockets@0.3.0/types#[method]tcp-socket.get-keep-alive-count" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(55) }], result: Some(TypeIdx(65)) })
+    "wasi:sockets@0.3.0/types#[method]tcp-socket.set-keep-alive-count" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(55) }, { label: "value", ty: Prim(U32) }], result: Some(TypeIdx(56)) })
+    "wasi:sockets@0.3.0/types#[method]tcp-socket.get-hop-limit" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(55) }], result: Some(TypeIdx(66)) })
+    "wasi:sockets@0.3.0/types#[method]tcp-socket.set-hop-limit" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(55) }, { label: "value", ty: Prim(U8) }], result: Some(TypeIdx(56)) })
+    "wasi:sockets@0.3.0/types#[method]tcp-socket.get-receive-buffer-size" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(55) }], result: Some(TypeIdx(67)) })
+    "wasi:sockets@0.3.0/types#[method]tcp-socket.set-receive-buffer-size" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(55) }, { label: "value", ty: Prim(U64) }], result: Some(TypeIdx(56)) })
+    "wasi:sockets@0.3.0/types#[method]tcp-socket.get-send-buffer-size" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(55) }], result: Some(TypeIdx(67)) })
+    "wasi:sockets@0.3.0/types#[method]tcp-socket.set-send-buffer-size" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(55) }, { label: "value", ty: Prim(U64) }], result: Some(TypeIdx(56)) })
+    "wasi:sockets@0.3.0/types#[static]udp-socket.create" => Some({ is_async: false, params: [{ label: "address-family", ty: TypeIdx(44) }], result: Some(TypeIdx(69)) })
+    "wasi:sockets@0.3.0/types#[method]udp-socket.bind" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(70) }, { label: "local-address", ty: TypeIdx(50) }], result: Some(TypeIdx(56)) })
+    "wasi:sockets@0.3.0/types#[method]udp-socket.connect" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(70) }, { label: "remote-address", ty: TypeIdx(50) }], result: Some(TypeIdx(56)) })
+    "wasi:sockets@0.3.0/types#[method]udp-socket.disconnect" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(70) }], result: Some(TypeIdx(56)) })
+    "wasi:sockets@0.3.0/types#[method]udp-socket.send" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(70) }, { label: "data", ty: TypeIdx(71) }, { label: "remote-address", ty: TypeIdx(72) }], result: Some(TypeIdx(56)) })
+    "wasi:sockets@0.3.0/types#[method]udp-socket.receive" => Some({ is_async: true, params: [{ label: "self", ty: TypeIdx(70) }], result: Some(TypeIdx(74)) })
+    "wasi:sockets@0.3.0/types#[method]udp-socket.get-local-address" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(70) }], result: Some(TypeIdx(62)) })
+    "wasi:sockets@0.3.0/types#[method]udp-socket.get-remote-address" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(70) }], result: Some(TypeIdx(62)) })
+    "wasi:sockets@0.3.0/types#[method]udp-socket.get-address-family" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(70) }], result: Some(TypeIdx(44)) })
+    "wasi:sockets@0.3.0/types#[method]udp-socket.get-unicast-hop-limit" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(70) }], result: Some(TypeIdx(66)) })
+    "wasi:sockets@0.3.0/types#[method]udp-socket.set-unicast-hop-limit" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(70) }, { label: "value", ty: Prim(U8) }], result: Some(TypeIdx(56)) })
+    "wasi:sockets@0.3.0/types#[method]udp-socket.get-receive-buffer-size" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(70) }], result: Some(TypeIdx(67)) })
+    "wasi:sockets@0.3.0/types#[method]udp-socket.set-receive-buffer-size" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(70) }, { label: "value", ty: Prim(U64) }], result: Some(TypeIdx(56)) })
+    "wasi:sockets@0.3.0/types#[method]udp-socket.get-send-buffer-size" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(70) }], result: Some(TypeIdx(67)) })
+    "wasi:sockets@0.3.0/types#[method]udp-socket.set-send-buffer-size" => Some({ is_async: false, params: [{ label: "self", ty: TypeIdx(70) }, { label: "value", ty: Prim(U64) }], result: Some(TypeIdx(56)) })
+    "wasi:sockets@0.3.0/ip-name-lookup#resolve-addresses" => Some({ is_async: true, params: [{ label: "name", ty: Prim(String) }], result: Some(TypeIdx(78)) })
+    "wasi:random@0.3.0/insecure-seed#get-insecure-seed" => Some({ is_async: false, params: [], result: Some(TypeIdx(79)) })
+    "wasi:random@0.3.0/insecure#get-insecure-random-bytes" => Some({ is_async: false, params: [{ label: "max-len", ty: Prim(U64) }], result: Some(TypeIdx(80)) })
+    "wasi:random@0.3.0/insecure#get-insecure-random-u64" => Some({ is_async: false, params: [], result: Some(Prim(U64)) })
+    "wasi:random@0.3.0/random#get-random-bytes" => Some({ is_async: false, params: [{ label: "max-len", ty: Prim(U64) }], result: Some(TypeIdx(80)) })
+    "wasi:random@0.3.0/random#get-random-u64" => Some({ is_async: false, params: [], result: Some(Prim(U64)) })
+    "wasi:cli@0.3.0/environment#get-environment" => Some({ is_async: false, params: [], result: Some(TypeIdx(82)) })
+    "wasi:cli@0.3.0/environment#get-arguments" => Some({ is_async: false, params: [], result: Some(TypeIdx(83)) })
+    "wasi:cli@0.3.0/environment#get-initial-cwd" => Some({ is_async: false, params: [], result: Some(TypeIdx(84)) })
+    "wasi:cli@0.3.0/exit#exit" => Some({ is_async: false, params: [{ label: "status", ty: TypeIdx(85) }], result: None })
+    "wasi:cli@0.3.0/exit#exit-with-code" => Some({ is_async: false, params: [{ label: "status-code", ty: Prim(U8) }], result: None })
+    "wasi:cli@0.3.0/run#run" => Some({ is_async: true, params: [], result: Some(TypeIdx(85)) })
+    "wasi:cli@0.3.0/stdin#read-via-stream" => Some({ is_async: false, params: [], result: Some(TypeIdx(91)) })
+    "wasi:cli@0.3.0/stdout#write-via-stream" => Some({ is_async: false, params: [{ label: "data", ty: TypeIdx(88) }], result: Some(TypeIdx(94)) })
+    "wasi:cli@0.3.0/stderr#write-via-stream" => Some({ is_async: false, params: [{ label: "data", ty: TypeIdx(88) }], result: Some(TypeIdx(97)) })
+    "wasi:cli@0.3.0/terminal-stdin#get-terminal-stdin" => Some({ is_async: false, params: [], result: Some(TypeIdx(102)) })
+    "wasi:cli@0.3.0/terminal-stdout#get-terminal-stdout" => Some({ is_async: false, params: [], result: Some(TypeIdx(105)) })
+    "wasi:cli@0.3.0/terminal-stderr#get-terminal-stderr" => Some({ is_async: false, params: [], result: Some(TypeIdx(108)) })
     _ => None
   }
 }
@@ -616,28 +624,28 @@ fn wasi_preview3_exported_types(
   interface : String,
 ) -> Array[(String, Int)] {
   match interface {
-    "wasi:clocks@0.3.0-rc-2025-09-16/types" => [("duration", 0)]
-    "wasi:clocks@0.3.0-rc-2025-09-16/monotonic-clock" => [("duration", 1), ("instant", 2)]
-    "wasi:clocks@0.3.0-rc-2025-09-16/wall-clock" => [("datetime", 3)]
-    "wasi:filesystem@0.3.0-rc-2025-09-16/types" => [("datetime", 4), ("filesize", 5), ("descriptor-type", 6), ("descriptor-flags", 7), ("path-flags", 8), ("open-flags", 9), ("link-count", 10), ("descriptor-stat", 12), ("new-timestamp", 13), ("directory-entry", 14), ("error-code", 15), ("advice", 16), ("metadata-hash-value", 17), ("descriptor", 18)]
-    "wasi:filesystem@0.3.0-rc-2025-09-16/preopens" => [("descriptor", 33)]
-    "wasi:sockets@0.3.0-rc-2025-09-16/types" => [("duration", 37), ("error-code", 38), ("ip-address-family", 39), ("ipv4-address", 40), ("ipv6-address", 41), ("ip-address", 42), ("ipv4-socket-address", 43), ("ipv6-socket-address", 44), ("ip-socket-address", 45), ("tcp-socket", 46), ("udp-socket", 47)]
-    "wasi:sockets@0.3.0-rc-2025-09-16/ip-name-lookup" => [("ip-address", 70), ("error-code", 71)]
-    "wasi:random@0.3.0-rc-2025-09-16/insecure-seed" => []
-    "wasi:random@0.3.0-rc-2025-09-16/insecure" => []
-    "wasi:random@0.3.0-rc-2025-09-16/random" => []
-    "wasi:cli@0.3.0-rc-2025-09-16/environment" => []
-    "wasi:cli@0.3.0-rc-2025-09-16/exit" => []
-    "wasi:cli@0.3.0-rc-2025-09-16/run" => []
-    "wasi:cli@0.3.0-rc-2025-09-16/types" => [("error-code", 81)]
-    "wasi:cli@0.3.0-rc-2025-09-16/stdin" => [("error-code", 82)]
-    "wasi:cli@0.3.0-rc-2025-09-16/stdout" => [("error-code", 87)]
-    "wasi:cli@0.3.0-rc-2025-09-16/stderr" => [("error-code", 89)]
-    "wasi:cli@0.3.0-rc-2025-09-16/terminal-input" => [("terminal-input", 91)]
-    "wasi:cli@0.3.0-rc-2025-09-16/terminal-output" => [("terminal-output", 92)]
-    "wasi:cli@0.3.0-rc-2025-09-16/terminal-stdin" => [("terminal-input", 93)]
-    "wasi:cli@0.3.0-rc-2025-09-16/terminal-stdout" => [("terminal-output", 96)]
-    "wasi:cli@0.3.0-rc-2025-09-16/terminal-stderr" => [("terminal-output", 99)]
+    "wasi:clocks@0.3.0/types" => [("duration", 0)]
+    "wasi:clocks@0.3.0/monotonic-clock" => [("duration", 1), ("mark", 2)]
+    "wasi:clocks@0.3.0/system-clock" => [("duration", 3), ("instant", 4)]
+    "wasi:filesystem@0.3.0/types" => [("instant", 7), ("filesize", 8), ("descriptor-type", 10), ("descriptor-flags", 11), ("path-flags", 12), ("open-flags", 13), ("link-count", 14), ("descriptor-stat", 16), ("new-timestamp", 17), ("directory-entry", 18), ("error-code", 19), ("advice", 20), ("metadata-hash-value", 21), ("descriptor", 22)]
+    "wasi:filesystem@0.3.0/preopens" => [("descriptor", 37)]
+    "wasi:sockets@0.3.0/types" => [("duration", 41), ("error-code", 43), ("ip-address-family", 44), ("ipv4-address", 45), ("ipv6-address", 46), ("ip-address", 47), ("ipv4-socket-address", 48), ("ipv6-socket-address", 49), ("ip-socket-address", 50), ("tcp-socket", 51), ("udp-socket", 52)]
+    "wasi:sockets@0.3.0/ip-name-lookup" => [("ip-address", 75), ("error-code", 76)]
+    "wasi:random@0.3.0/insecure-seed" => []
+    "wasi:random@0.3.0/insecure" => []
+    "wasi:random@0.3.0/random" => []
+    "wasi:cli@0.3.0/environment" => []
+    "wasi:cli@0.3.0/exit" => []
+    "wasi:cli@0.3.0/run" => []
+    "wasi:cli@0.3.0/types" => [("error-code", 86)]
+    "wasi:cli@0.3.0/stdin" => [("error-code", 87)]
+    "wasi:cli@0.3.0/stdout" => [("error-code", 92)]
+    "wasi:cli@0.3.0/stderr" => [("error-code", 95)]
+    "wasi:cli@0.3.0/terminal-input" => [("terminal-input", 98)]
+    "wasi:cli@0.3.0/terminal-output" => [("terminal-output", 99)]
+    "wasi:cli@0.3.0/terminal-stdin" => [("terminal-input", 100)]
+    "wasi:cli@0.3.0/terminal-stdout" => [("terminal-output", 103)]
+    "wasi:cli@0.3.0/terminal-stderr" => [("terminal-output", 106)]
     _ => []
   }
 }

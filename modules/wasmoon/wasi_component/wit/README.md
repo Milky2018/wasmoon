@@ -6,9 +6,9 @@ tables in `wit_contracts_generated.mbt`.
 - `preview2` is copied from the official WebAssembly/WASI `v0.2.11` tag at
   commit `ed73919426173babd88ae145e31deca3d484bbd0`. `host.wit` is the local
   aggregation world; every file below `deps` is unmodified upstream text.
-- `preview3` is pinned to the WASI 0.3 async snapshot used by Wasmtime commit
-  `68a6afd4f925724fd359c13a27fac5a6163d12f4`, with package version
-  `0.3.0-rc-2025-09-16`.
+- `preview3` is copied from the official WebAssembly/WASI `v0.3.0` tag at
+  commit `3ee2a590c766594ae44a54730fc74fc27da5c609`. Every `.wit` file below
+  `deps` is unmodified upstream text.
 
 The Moon development build runs:
 

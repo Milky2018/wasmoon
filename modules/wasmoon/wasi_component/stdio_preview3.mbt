@@ -45,7 +45,7 @@ fn Preview3StdinSource::new(
   state : InputStreamState,
   fd : Int,
 ) -> Preview3StdinSource {
-  Preview3StdinSource::{
+  {
     ctx,
     state,
     fd,
@@ -431,14 +431,22 @@ fn add_preview3_output(
     host.runtime,
   )
   host.prepare_preview3_interface(builder, interface)
-  builder.add_async_func(
+  builder.add_func(
     "write-via-stream",
     preview3_func(interface, "write-via-stream"),
     (args, table) => {
       guard args is [U32(readable)] else {
         raise HostCallError("expected Preview 3 byte stream")
       }
-      preview3_output_future(host, table, readable, output_rep)
+      [
+        preview3_call_future_value(
+          host,
+          table,
+          interface,
+          "write-via-stream",
+          preview3_output_future(host, table, readable, output_rep),
+        ),
+      ]
     },
   )
   host.linker.add_instance(

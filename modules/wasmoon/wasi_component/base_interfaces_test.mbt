@@ -7,7 +7,7 @@ test "WASI component contracts pin the reviewed WIT snapshots" {
     ],
     content="[\n" +
       "  \"b349a9c4d0b68e5e0943d355a9b8c282d9f320ce90a084a4ee44435feb276f8f\",\n" +
-      "  \"8948c1651d7fc84a921565845ff9975bcac4508c54f16bb735f476ee53503f33\",\n" +
+      "  \"40406e7432b7e3213b083d0bcb308676927c97fc488acaaf6c179f1a9e64124b\",\n" +
       "]",
   )
 }
@@ -49,7 +49,7 @@ test "Preview 3 uses current environment and seed export names" {
     .insecure_seed(11L, 29L)
     .build()
   @wasi_component.WasiComponentHost(linker, ctx).add_preview3_cli_clocks_random()
-  guard linker.get_import("wasi:cli/environment@0.3.0-rc-2025-09-16")
+  guard linker.get_import("wasi:cli/environment@0.3.0")
     is Some(Instance(environment)) else {
     fail("Preview 3 environment interface was not registered")
   }
@@ -57,7 +57,7 @@ test "Preview 3 uses current environment and seed export names" {
     environment.call_exported_func("get-initial-cwd", []),
     content="[Variant(0, None)]",
   )
-  guard linker.get_import("wasi:random/insecure-seed@0.3.0-rc-2025-09-16")
+  guard linker.get_import("wasi:random/insecure-seed@0.3.0")
     is Some(Instance(seed)) else {
     fail("Preview 3 insecure seed interface was not registered")
   }
@@ -65,7 +65,7 @@ test "Preview 3 uses current environment and seed export names" {
     seed.call_exported_func("get-insecure-seed", []),
     content="[([U64(11), U64(29)])]",
   )
-  guard linker.get_import("wasi:clocks/monotonic-clock@0.3.0-rc-2025-09-16")
+  guard linker.get_import("wasi:clocks/monotonic-clock@0.3.0")
     is Some(Instance(clock)) else {
     fail("Preview 3 monotonic clock interface was not registered")
   }
@@ -73,6 +73,24 @@ test "Preview 3 uses current environment and seed export names" {
     clock.call_exported_func("wait-for", [U64(1000000L)]),
     content="[]",
   )
+  guard linker.get_import("wasi:clocks/system-clock@0.3.0")
+    is Some(Instance(system_clock)) &&
+    system_clock.call_exported_func("now", [])
+    is [Tuple([S64(_), U32(nanoseconds)])] &&
+    nanoseconds >= 0 &&
+    nanoseconds < 1_000_000_000 &&
+    system_clock.call_exported_func("get-resolution", []) is [U64(_)] &&
+    linker.get_import("wasi:clocks/wall-clock@0.3.0") is None else {
+    fail("Preview 3 system clock does not match stable 0.3")
+  }
+  guard linker.get_import("wasi:cli/exit@0.3.0") is Some(Instance(exit)) else {
+    fail("Preview 3 exit interface was not registered")
+  }
+  try exit.call_exported_func("exit-with-code", [U8(7)]) catch {
+    e => debug_inspect(e, content="HostExit(7)")
+  } noraise {
+    _ => fail("Preview 3 exit-with-code must terminate the command")
+  }
 }
 
 ///|
@@ -85,8 +103,7 @@ test "Preview 3 stdio uses canonical byte streams and result futures" {
     .build()
   let host = @wasi_component.WasiComponentHost(linker, ctx)
   host.add_preview3_cli_clocks_random()
-  guard linker.get_import("wasi:cli/stdin@0.3.0-rc-2025-09-16")
-    is Some(Instance(stdin)) &&
+  guard linker.get_import("wasi:cli/stdin@0.3.0") is Some(Instance(stdin)) &&
     stdin.call_exported_func("read-via-stream", [])
     is [Tuple([U32(input), U32(completion)])] else {
     fail("Preview 3 stdin was not registered")
@@ -103,18 +120,16 @@ test "Preview 3 stdio uses canonical byte streams and result futures" {
   )
   runtime.drop_host_readable_stream(table, input)
   let output_stream = runtime.new_host_byte_stream(table, b"written")
-  guard linker.get_import("wasi:cli/stdout@0.3.0-rc-2025-09-16")
-    is Some(Instance(stdout)) else {
+  guard linker.get_import("wasi:cli/stdout@0.3.0") is Some(Instance(stdout)) else {
     fail("Preview 3 stdout was not registered")
   }
-  debug_inspect(
-    stdout.call_exported_func("write-via-stream", [U32(output_stream)]),
-    content="[Variant(0, None)]",
-  )
-  debug_inspect(
-    output.val,
-    content="<Bytes: [0x77, 0x72, 0x69, 0x74, 0x74, 0x65, 0x6e]>",
-  )
+  guard stdout.call_exported_func("write-via-stream", [U32(output_stream)])
+    is [U32(output_completion)] &&
+    output_completion > 0 else {
+    fail("Preview 3 stdout did not return a future")
+  }
+  runtime.drop_host_readable_future(table, output_completion)
+  debug_inspect(output.val, content="<Bytes: []>")
 }
 
 ///|
@@ -141,11 +156,11 @@ test "Preview 3 filesystem reuses capability roots and canonical byte streams" {
   let host = @wasi_component.WasiComponentHost(linker, ctx)
   host.add_preview3_cli_clocks_random()
   host.add_preview3_filesystem()
-  guard linker.get_import("wasi:filesystem/preopens@0.3.0-rc-2025-09-16")
+  guard linker.get_import("wasi:filesystem/preopens@0.3.0")
     is Some(Instance(preopens)) &&
     preopens.call_exported_func("get-directories", [])
     is [List([Tuple([U32(directory), String("/sandbox")])])] &&
-    linker.get_import("wasi:filesystem/types@0.3.0-rc-2025-09-16")
+    linker.get_import("wasi:filesystem/types@0.3.0")
     is Some(Instance(filesystem)) else {
     fail("Preview 3 filesystem interfaces were not registered")
   }
@@ -161,7 +176,7 @@ test "Preview 3 filesystem reuses capability roots and canonical byte streams" {
   }
   debug_inspect(
     filesystem.call_exported_func("[method]descriptor.get-type", [U32(file)]),
-    content="[Variant(0, Some(U32(6)))]",
+    content="[Variant(0, Some(Variant(5, None)))]",
   )
   guard filesystem.call_exported_func("[method]descriptor.read-via-stream", [
       U32(file),
@@ -189,7 +204,7 @@ test "Preview 3 filesystem reuses capability roots and canonical byte streams" {
       U32(0),
       U32(1),
     ]),
-    content="[Variant(1, Some(U32(30)))]",
+    content="[Variant(1, Some(Variant(30, None)))]",
   )
 }
 
@@ -501,8 +516,7 @@ test "Preview 3 sockets use the configured network capability" {
   defer ctx.close()
   let host = @wasi_component.WasiComponentHost(linker, ctx)
   host.add_preview3_sockets()
-  guard linker.get_import("wasi:sockets/types@0.3.0-rc-2025-09-16")
-    is Some(Instance(sockets)) &&
+  guard linker.get_import("wasi:sockets/types@0.3.0") is Some(Instance(sockets)) &&
     sockets.call_exported_func("[static]tcp-socket.create", [U32(0)])
     is [Variant(0, Some(U32(socket)))] else {
     fail("Preview 3 socket types were not registered")
@@ -516,15 +530,15 @@ test "Preview 3 sockets use the configured network capability" {
       U32(socket),
       loopback,
     ]),
-    content="[Variant(1, Some(U32(1)))]",
+    content="[Variant(1, Some(Variant(0, None)))]",
   )
-  guard linker.get_import("wasi:sockets/ip-name-lookup@0.3.0-rc-2025-09-16")
+  guard linker.get_import("wasi:sockets/ip-name-lookup@0.3.0")
     is Some(Instance(lookup)) else {
     fail("Preview 3 name lookup was not registered")
   }
   debug_inspect(
     lookup.call_exported_func("resolve-addresses", [String("localhost")]),
-    content="[Variant(1, Some(U32(1)))]",
+    content="[Variant(1, Some(Variant(0, None)))]",
   )
 }
 
@@ -537,8 +551,7 @@ test "Preview 3 UDP preserves one datagram per async receive" {
   defer ctx.close()
   let host = @wasi_component.WasiComponentHost(linker, ctx)
   host.add_preview3_sockets()
-  guard linker.get_import("wasi:sockets/types@0.3.0-rc-2025-09-16")
-    is Some(Instance(sockets)) &&
+  guard linker.get_import("wasi:sockets/types@0.3.0") is Some(Instance(sockets)) &&
     sockets.call_exported_func("[static]udp-socket.create", [U32(0)])
     is [Variant(0, Some(U32(server)))] &&
     sockets.call_exported_func("[static]udp-socket.create", [U32(0)])

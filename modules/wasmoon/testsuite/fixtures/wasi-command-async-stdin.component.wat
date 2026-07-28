@@ -1,13 +1,13 @@
 (component
   (type $error-code (enum "io" "illegal-byte-sequence" "pipe"))
-  (import "wasi:cli/types@0.3.0-rc-2025-09-16"
+  (import "wasi:cli/types@0.3.0"
     (instance $types
       (export "error-code" (type (eq $error-code)))))
   (alias export $types "error-code" (type $imported-error-code))
   (type $stdin-stream (stream u8))
   (type $stdin-result (result (error $imported-error-code)))
   (type $stdin-future (future $stdin-result))
-  (import "wasi:cli/stdin@0.3.0-rc-2025-09-16"
+  (import "wasi:cli/stdin@0.3.0"
     (instance $stdin
       (export "error-code" (type (eq $imported-error-code)))
       (type $imported-stdin-stream (stream u8))
@@ -113,5 +113,5 @@
     (canon lift (core func $instance "run")))
   (instance $run-interface
     (export "run" (func $run)))
-  (export "wasi:cli/run@0.3.0-rc-2025-09-16" (instance $run-interface))
+  (export "wasi:cli/run@0.3.0" (instance $run-interface))
 )

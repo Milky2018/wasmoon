@@ -497,7 +497,7 @@ struct HostFutureValue {
   types : Array[TypeDef?]
   value : Ref[ComponentValue?]
   pull : (() -> HostFutureValuePoll raise ComponentRuntimeError)?
-  cancel : (() -> Unit)?
+  cancel : (() -> Unit raise ComponentRuntimeError)?
 }
 
 ///|

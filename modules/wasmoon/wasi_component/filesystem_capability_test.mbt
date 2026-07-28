@@ -174,11 +174,11 @@ test "Preview 3 capability paths resolve each filesystem step" {
     .build()
   defer ctx.close()
   @wasi_component.WasiComponentHost(linker, ctx).add_preview3_filesystem()
-  guard linker.get_import("wasi:filesystem/preopens@0.3.0-rc-2025-09-16")
+  guard linker.get_import("wasi:filesystem/preopens@0.3.0")
     is Some(Instance(preopens)) &&
     preopens.call_exported_func("get-directories", [])
     is [List([Tuple([U32(directory), String("/sandbox")])])] &&
-    linker.get_import("wasi:filesystem/types@0.3.0-rc-2025-09-16")
+    linker.get_import("wasi:filesystem/types@0.3.0")
     is Some(Instance(filesystem)) else {
     fail("Preview 3 filesystem interfaces were not registered")
   }
@@ -190,7 +190,7 @@ test "Preview 3 capability paths resolve each filesystem step" {
       U32(0),
       U32(1),
     ]),
-    content="[Variant(1, Some(U32(23)))]",
+    content="[Variant(1, Some(Variant(23, None)))]",
   )
   guard filesystem.call_exported_func("[method]descriptor.open-at", [
       U32(directory),
@@ -204,14 +204,14 @@ test "Preview 3 capability paths resolve each filesystem step" {
   }
   debug_inspect(
     filesystem.call_exported_func("[method]descriptor.get-type", [U32(nested)]),
-    content="[Variant(0, Some(U32(6)))]",
+    content="[Variant(0, Some(Variant(5, None)))]",
   )
   guard filesystem.call_exported_func("[method]descriptor.stat-at", [
       U32(directory),
       U32(0),
       String("."),
     ])
-    is [Variant(0, Some(Tuple([U32(3), _, _, _, _, _])))] else {
+    is [Variant(0, Some(Tuple([Variant(2, None), _, _, _, _, _])))] else {
     fail("Preview 3 rejected the capability root path")
   }
   guard filesystem.call_exported_func("[method]descriptor.open-at", [
@@ -225,7 +225,7 @@ test "Preview 3 capability paths resolve each filesystem step" {
     filesystem.call_exported_func("[method]descriptor.get-type", [
       U32(root_directory),
     ])
-    is [Variant(0, Some(U32(3)))] else {
+    is [Variant(0, Some(Variant(2, None)))] else {
     fail("Preview 3 rejected a terminal parent within the capability root")
   }
   debug_inspect(
@@ -252,9 +252,9 @@ test "Preview 3 capability paths resolve each filesystem step" {
     ],
     content=(
       #|[
-      #|  [Variant(1, Some(U32(30)))],
-      #|  [Variant(1, Some(U32(30)))],
-      #|  [Variant(1, Some(U32(30)))],
+      #|  [Variant(1, Some(Variant(30, None)))],
+      #|  [Variant(1, Some(Variant(30, None)))],
+      #|  [Variant(1, Some(Variant(30, None)))],
       #|]
     ),
   )
@@ -351,11 +351,11 @@ test "Preview 3 filesystem paths preserve UTF-8 names" {
   defer ctx.close()
   let host = @wasi_component.WasiComponentHost(linker, ctx)
   host.add_preview3_filesystem()
-  guard linker.get_import("wasi:filesystem/preopens@0.3.0-rc-2025-09-16")
+  guard linker.get_import("wasi:filesystem/preopens@0.3.0")
     is Some(Instance(preopens)) &&
     preopens.call_exported_func("get-directories", [])
     is [List([Tuple([U32(directory), String("/sandbox")])])] &&
-    linker.get_import("wasi:filesystem/types@0.3.0-rc-2025-09-16")
+    linker.get_import("wasi:filesystem/types@0.3.0")
     is Some(Instance(filesystem)) &&
     filesystem.call_exported_func("[method]descriptor.read-directory", [
       U32(directory),

@@ -3,10 +3,21 @@ test "embedding result futures use the canonical future table" {
   let runtime = HostRuntimeState()
   let table = runtime.resource_table()
   let types : Array[TypeDef?] = [
-    Some(Enum(["io"])),
+    Some(
+      Variant([
+        { label: "io", ty: None, refines: None },
+        { label: "other", ty: Some(TypeIdx(1)), refines: None },
+      ]),
+    ),
+    Some(Option(Prim(String))),
     Some(Result(None, Some(TypeIdx(0)))),
   ]
-  let handle = runtime.new_host_unit_result_future(table, TypeIdx(1), types) catch {
+  let handle = runtime.new_host_unit_result_future(
+    table,
+    TypeIdx(2),
+    types,
+    error_case=0,
+  ) catch {
     e => return fail("could not create host future: \{e}")
   }
   guard runtime.async_state.future_endpoints.get(handle_key(table.id, handle))
@@ -16,10 +27,49 @@ test "embedding result futures use the canonical future table" {
   debug_inspect(
     (
       runtime.stream_table.endpoints.get(handle_key(table.id, handle)),
-      runtime.async_state.host_future_values.get(endpoint.future_id),
+      match runtime.async_state.host_future_values.get(endpoint.future_id) {
+        Some(source) => poll_host_future_value(source)
+        None => Pending
+      },
     ),
-    content="(None, Some(HostFutureValue))",
+    content="(None, Ready(Variant(1, Some(Variant(0, None)))))",
   )
+}
+
+///|
+test "host call futures become first-class component futures" {
+  let runtime = HostRuntimeState()
+  let table = runtime.resource_table()
+  let polled = Ref(false)
+  let cancelled = Ref(false)
+  let handle = runtime.new_host_call_future(
+    table,
+    Prim(U8),
+    [],
+    HostFuture(
+      () => {
+        if polled.val {
+          Ready([U8(7)])
+        } else {
+          polled.val = true
+          Pending
+        }
+      },
+      () => cancelled.val = true,
+    ),
+  )
+  guard runtime.async_state.future_endpoints.get(handle_key(table.id, handle))
+    is Some(endpoint) &&
+    runtime.async_state.host_future_values.get(endpoint.future_id)
+    is Some(source) else {
+    return fail("host call future did not allocate a future endpoint")
+  }
+  debug_inspect(
+    [poll_host_future_value(source), poll_host_future_value(source)],
+    content="[Pending, Ready(U8(7))]",
+  )
+  runtime.drop_host_readable_future(table, handle)
+  debug_inspect(cancelled.val, content="true")
 }
 
 ///|

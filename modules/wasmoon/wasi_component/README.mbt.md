@@ -7,8 +7,7 @@ host interface instances through `ComponentLinker`.
 The implemented surface is intentionally versioned:
 
 - Preview 2 uses the official `wasi:cli/command@0.2.11` contracts.
-- Preview 3 uses the repository-pinned
-  `0.3.0-rc-2025-09-16` async contracts.
+- Preview 3 uses the official `wasi:cli/command@0.3.0` contracts.
 - Preview 2 command environment, exit, clocks, random, standard streams,
   polling, capability-rooted filesystem, and socket interfaces are
   implemented.

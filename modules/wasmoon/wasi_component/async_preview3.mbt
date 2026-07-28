@@ -50,7 +50,7 @@ fn add_preview3_monotonic_clock(
     "wasi:clocks/monotonic-clock@\{preview3_version}",
     host.runtime,
   )
-  let interface = "wasi:clocks@0.3.0-rc-2025-09-16/monotonic-clock"
+  let interface = "wasi:clocks@0.3.0/monotonic-clock"
   host.prepare_preview3_interface(builder, interface)
   builder.add_func("now", preview3_func(interface, "now"), (args, _table) => {
     empty_args(args)
