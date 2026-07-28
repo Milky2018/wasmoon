@@ -18,7 +18,11 @@ pub fn compile_module_to_jit(@types.Module, Bool, Bool, actual_memory_max? : Int
 
 pub fn func_to_wat(String, @types.FuncType, Array[@types.ValueType], Array[@types.Instruction]) -> String
 
+pub fn report_component_option_error(ComponentErrorFormat, String) -> Int
+
 pub fn run_component_command(String, Bool, Bool, Bool, ComponentErrorFormat) -> Int
+
+pub fn run_component_invoke_command(String, String, Array[String], Bool, ComponentErrorFormat) -> Int
 
 pub fn run_component_script(String, ComponentErrorFormat, use_jit? : Bool) -> Int
 

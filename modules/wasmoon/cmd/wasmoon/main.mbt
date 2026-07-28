@@ -106,12 +106,16 @@ fn main {
           "run": @clap.Arg::flag(
             help="Run a pinned WASI Preview 2 or Preview 3 command component",
           ),
+          "invoke": @clap.Arg::named(
+            nargs=AtMost(1),
+            help="Invoke export or interface#function with typed JSON arguments",
+          ),
           "no-jit": @clap.Arg::flag(
             help="Disable JIT compilation for synchronous component core functions",
           ),
           "arg": @clap.Arg::named(
             nargs=Any,
-            help="Command arguments passed after the component path",
+            help="Command strings for --run or typed JSON values for --invoke",
           ),
           "env": @clap.Arg::named(
             nargs=Any,
@@ -296,6 +300,10 @@ fn main {
                 let dump = sub.flags.get("dump") is Some(true)
                 let validate = sub.flags.get("validate") is Some(true)
                 let run = sub.flags.get("run") is Some(true)
+                let invoke = match sub.args.get("invoke") {
+                  Some([path]) => Some(path)
+                  _ => None
+                }
                 let wit_names = match sub.flags.get("no-wit-names") {
                   Some(true) => false
                   _ => true
@@ -309,17 +317,30 @@ fn main {
                     }
                   None => Text
                 }
-                let status = if run {
+                let component_args = match sub.args.get("arg") {
+                  Some(values) => values
+                  None => []
+                }
+                let status = if run && invoke is Some(_) {
+                  @commands.report_component_option_error(
+                    error_format, "--run and --invoke are mutually exclusive",
+                  )
+                } else if invoke is Some(export_path) {
+                  @commands.run_component_invoke_command(
+                    positional[0],
+                    export_path,
+                    component_args,
+                    wit_names,
+                    error_format,
+                  )
+                } else if run {
                   let use_jit = match sub.flags.get("no-jit") {
                     Some(true) => false
                     _ => true
                   }
                   @commands.run_wasi_component_command(
                     positional[0],
-                    match sub.args.get("arg") {
-                      Some(values) => values
-                      None => []
-                    },
+                    component_args,
                     match sub.args.get("env") {
                       Some(values) => values
                       None => []

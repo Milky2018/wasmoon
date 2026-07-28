@@ -30,3 +30,7 @@ import {
   "moonbitlang/core/string",
   "moonbitlang/core/strconv",
 }
+
+import {
+  "Milky2018/wasmoon/component/text_parser" @component_text,
+} for "wbtest"

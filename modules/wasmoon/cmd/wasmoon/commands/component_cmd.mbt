@@ -266,6 +266,107 @@ pub fn run_component_command(
 }
 
 ///|
+fn component_invoke_success_json(
+  path : String,
+  values : Array[@component.ComponentValue],
+) -> String {
+  "{\"ok\":true,\"phase\":\"invoke\",\"detail\":\"\{json_escape_string(path)}\",\"result\":\{@component.component_values_to_json(values).stringify()}}"
+}
+
+///|
+priv struct ComponentInvokeEvalResult {
+  ok : Bool
+  phase : String
+  detail : String
+  values : Array[@component.ComponentValue]
+}
+
+///|
+fn run_component_invoke_eval(
+  file_path : String,
+  export_path : String,
+  args : Array[String],
+  wit_names : Bool,
+) -> ComponentInvokeEvalResult {
+  let bytes = @fs.read_file_to_bytes(file_path) catch {
+    IOError(error) =>
+      return { ok: false, phase: "read", detail: error, values: [] }
+  }
+  let instance = @component.ComponentRuntime(wit_names~).instantiate(
+    "invoke", bytes,
+  ) catch {
+    error =>
+      return {
+        ok: false,
+        phase: "instantiate",
+        detail: error.to_string(),
+        values: [],
+      }
+  }
+  let function = instance.bind(export_path) catch {
+    error =>
+      return { ok: false, phase: "bind", detail: error.to_string(), values: [] }
+  }
+  let function_type = function.type_()
+  if args.length() != function_type.params.length() {
+    return {
+      ok: false,
+      phase: "arguments",
+      detail: "expected \{function_type.params.length()} arguments but received \{args.length()}",
+      values: [],
+    }
+  }
+  let values = []
+  for index in 0..<args.length() {
+    let value = @component.parse_component_value_json(
+      args[index],
+      function_type.params[index].ty,
+    ) catch {
+      error =>
+        return {
+          ok: false,
+          phase: "arguments",
+          detail: "argument \{index}: \{error}",
+          values: [],
+        }
+    }
+    values.push(value)
+  }
+  let results = function.call(values) catch {
+    error =>
+      return {
+        ok: false,
+        phase: "invoke",
+        detail: error.to_string(),
+        values: [],
+      }
+  }
+  { ok: true, phase: "invoke", detail: export_path, values: results }
+}
+
+///|
+pub fn run_component_invoke_command(
+  file_path : String,
+  export_path : String,
+  args : Array[String],
+  wit_names : Bool,
+  error_format : ComponentErrorFormat,
+) -> Int {
+  let result = run_component_invoke_eval(
+    file_path, export_path, args, wit_names,
+  )
+  if !result.ok {
+    return report_component_run_error(error_format, result.phase, result.detail)
+  }
+  if error_format is Json {
+    println(component_invoke_success_json(export_path, result.values))
+  } else {
+    println(@component.component_values_to_json(result.values).stringify())
+  }
+  0
+}
+
+///|
 fn component_command_run_instance(
   instance : @runtime_impl.ComponentInstance,
 ) -> @runtime_impl.ComponentInstance? {
@@ -317,6 +418,14 @@ fn report_component_run_error(
     println("component \{phase} error: \{detail}")
   }
   1
+}
+
+///|
+pub fn report_component_option_error(
+  format : ComponentErrorFormat,
+  detail : String,
+) -> Int {
+  report_component_run_error(format, "options", detail)
 }
 
 ///|

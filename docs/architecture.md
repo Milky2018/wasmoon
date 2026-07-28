@@ -59,7 +59,7 @@ Reusable modules must not import `Milky2018/wasmoon`, `Milky2018/wasmoon_jit`, o
 | Core `.wasm` binary | `wasmoon/parser` | `wasm_core/types.Module` |
 | Core `.wat` text | `wasmoon/wat` | `wasm_core/types.Module` |
 | `.wast` script | `wasmoon/wat` plus `wasmoon/wast` runner | Test commands and modules |
-| Component binary or text | `wasmoon/component/*` | Component-model structures and runtime inputs |
+| Component binary or text | `wasmoon/component` | Validated component instances, typed exports, and WIT-shaped values |
 | Persisted JIT artifact | `wasmoon_jit/artifact` | Verified v9 ordinary-data artifact |
 
 Core modules pass through `wasmoon/validator` before the CLI instantiates or compiles them. Component validation is implemented separately under `wasmoon/validator/component_model`.
@@ -106,8 +106,17 @@ for each entry:
   and structured-control state. Resumption continues at the suspended host-call
   boundary; it does not replay the function from its first instruction.
 
-The default `component` and `component-test` commands enable the JIT engine.
-`--no-jit` selects the interpreter engine for differential testing.
+The default `component --run` and `component-test` commands enable the JIT
+engine. `--no-jit` selects the interpreter engine for differential testing.
+
+The stable library surface is `Milky2018/wasmoon/component`. It owns opaque
+runtime, instance, and function handles plus typed values and structured
+errors; applications do not depend on `component/runtime_impl`. Its portable
+runtime constructor uses the continuation-aware interpreter. The product CLI
+retains the separate native engine adapter for WASI command execution and
+conformance runs. `Milky2018/wasmoon/wit` can bind a resolved world eagerly
+against a stable component instance, rejecting missing or incompatible exports
+before the first call.
 
 Component async execution uses one cooperative host event loop. MoonBit
 processes and component tasks are logical scheduling units, not operating-system

@@ -301,6 +301,10 @@ graph TD
   ISS_283["ISS-283: Drive component continuations from the host event loop"]
   ISS_284["ISS-284: Remove component async replay state"]
   ISS_285["ISS-285: Add the component JIT adapter and execution gates"]
+  ISS_286["ISS-286: Establish the stable component invocation surface"]
+  ISS_287["ISS-287: Add the stable component runtime facade"]
+  ISS_288["ISS-288: Add general component invocation to the CLI"]
+  ISS_289["ISS-289: Add checked WIT typed bindings"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
@@ -599,6 +603,9 @@ graph TD
   ISS_282 --> ISS_283
   ISS_283 --> ISS_284
   ISS_281 --> ISS_285
+  ISS_285 --> ISS_286
+  ISS_287 --> ISS_288
+  ISS_287 --> ISS_289
 ```
 
 ## Warnings

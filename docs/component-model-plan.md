@@ -7,7 +7,9 @@ same runtime objects, interpreter, and native compiler as ordinary core Wasm.
 
 ## Package Boundaries
 
-- `wasmoon/component`: component binary model and parser.
+- `wasmoon/component`: stable parse, validation, instantiation, typed-value, and
+  invocation facade.
+- `wasmoon/component/model`: component binary data model and section parsers.
 - `wasmoon/validator/component_model`: component validation.
 - `wasmoon/component/runtime_impl`: linker, instantiation, canonical ABI,
   resources, tasks, streams, futures, and host adapters.
@@ -17,6 +19,11 @@ same runtime objects, interpreter, and native compiler as ordinary core Wasm.
 Component execution does not add product dependencies to reusable compiler
 modules. The component runtime selects a core execution engine through an
 adapter owned by Wasmoon.
+
+Ordinary embedders depend only on the root component facade. The validator and
+runtime implementation depend directly on `component/model`, so the root
+package can compose them without a dependency cycle. Public facade signatures
+do not contain runtime implementation types.
 
 ## Core Execution Contract
 

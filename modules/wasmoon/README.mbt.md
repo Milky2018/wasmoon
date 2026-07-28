@@ -117,6 +117,9 @@ wasmoon explore --help
 
 # component
 wasmoon component path/to/component.wasm --validate
+wasmoon component path/to/component.wasm \
+  --invoke 'math#increment' \
+  --arg 41
 wasmoon component path/to/command.component.wasm --run \
   --dir /srv/data::/data \
   --network loopback

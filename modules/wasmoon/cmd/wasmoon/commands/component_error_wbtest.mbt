@@ -192,6 +192,58 @@ test "component command executes a pinned Preview 3 async run export" {
 }
 
 ///|
+test "component invoke evaluates a nested export with typed JSON" {
+  @fs.create_dir("tmp") catch {
+    _ => ()
+  }
+  let path = "tmp/component-invoke.component.wasm"
+  let bytes = @component_text.parse_component_wat(
+    (
+      #|(component
+      #|  (core module $m
+      #|    (func (export "increment") (param i32) (result i32)
+      #|      local.get 0
+      #|      i32.const 1
+      #|      i32.add))
+      #|  (core instance $i (instantiate $m))
+      #|  (func $increment (param "value" u32) (result u32)
+      #|    (canon lift (core func $i "increment")))
+      #|  (instance $math (export "increment" (func $increment)))
+      #|  (export "math" (instance $math)))
+      #|
+    ),
+  )
+  @fs.write_bytes_to_file(path, bytes) catch {
+    IOError(error) => fail(error)
+  }
+  defer (@fs.remove_file(path) catch { _ => () })
+  let success = run_component_invoke_eval(path, "math#increment", ["41"], true)
+  debug_inspect(
+    (success.ok, success.phase, success.detail, success.values),
+    content=(
+      #|(true, "invoke", "math#increment", [U32(42)])
+    ),
+  )
+  let failure = run_component_invoke_eval(
+    path,
+    "math#increment",
+    ["\"bad\""],
+    true,
+  )
+  debug_inspect(
+    (failure.ok, failure.phase, failure.detail, failure.values),
+    content=(
+      #|(
+      #|  false,
+      #|  "arguments",
+      #|  "argument 0: JsonValueError(\"invalid u32 integer 'bad'\")",
+      #|  [],
+      #|)
+    ),
+  )
+}
+
+///|
 test "component-test json helper includes status fields" {
   let result = ScriptResult::ScriptResult()
   result.add_passed()
