@@ -219,7 +219,7 @@ test "gc: deep reference chain" {
 
   // Add some garbage
   for _ in 0..<5 {
-    let _ = heap.alloc_struct(0, [I32(999)])
+    heap.alloc_struct(0, [I32(999)]) |> ignore
   }
   inspect(heap.get_object_count(), content="15")
 
@@ -272,7 +272,7 @@ test "gc: heap size after allocation and collection" {
   inspect(size_after_alloc, content="96")
 
   // Collect - keep only obj1
-  let _ = heap.collect([StructRef(obj1)])
+  heap.collect([StructRef(obj1)]) |> ignore
 
   // After compaction, only obj1 remains: 32 bytes
   let size_after_gc = heap.get_size()
@@ -293,11 +293,11 @@ test "gc: field access after collection" {
 
   // Add garbage
   for _ in 0..<10 {
-    let _ = heap.alloc_struct(0, [I32(999)])
+    heap.alloc_struct(0, [I32(999)]) |> ignore
   }
 
   // Collect
-  let _ = heap.collect([StructRef(parent)])
+  heap.collect([StructRef(parent)]) |> ignore
 
   // Verify we can still access fields correctly
   let field0 = heap.struct_get(parent, 0, RefStruct(0))
@@ -315,7 +315,7 @@ test "gc: heap verify succeeds on valid graph" {
   let heap = CHeap::CHeap()
   let leaf = heap.alloc_struct(0, [I32(7)])
   let root = heap.alloc_struct(0, [StructRef(leaf)])
-  let _ = heap.collect([StructRef(root)])
+  heap.collect([StructRef(root)]) |> ignore
   inspect(heap.verify(), content="true")
 }
 

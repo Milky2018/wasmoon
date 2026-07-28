@@ -167,8 +167,8 @@ test "GC: stats initial" {
 ///|
 test "GC: stats after allocation" {
   let heap = MarkSweepHeap::MarkSweepHeap()
-  let _ = heap.alloc_struct(0, [I32(1)])
-  let _ = heap.alloc_array(0, [I32(2)])
+  heap.alloc_struct(0, [I32(1)]) |> ignore
+  heap.alloc_array(0, [I32(2)]) |> ignore
   let stats = heap.stats()
   inspect(stats.total_objects, content="2")
   inspect(stats.live_objects, content="2")
@@ -181,9 +181,9 @@ test "GC: stats after allocation" {
 test "GC: collect unreachable objects" {
   let heap = MarkSweepHeap::MarkSweepHeap()
   // Allocate some objects
-  let _ = heap.alloc_struct(0, [I32(1)])
-  let _ = heap.alloc_struct(0, [I32(2)])
-  let _ = heap.alloc_struct(0, [I32(3)])
+  heap.alloc_struct(0, [I32(1)]) |> ignore
+  heap.alloc_struct(0, [I32(2)]) |> ignore
+  heap.alloc_struct(0, [I32(3)]) |> ignore
   inspect(heap.stats().live_objects, content="3")
 
   // Collect with no roots - all objects should be collected
@@ -200,7 +200,7 @@ test "GC: preserve reachable objects" {
   let heap = MarkSweepHeap::MarkSweepHeap()
   // Allocate objects
   let s1 = heap.alloc_struct(0, [I32(1)])
-  let _ = heap.alloc_struct(0, [I32(2)]) // unreachable
+  heap.alloc_struct(0, [I32(2)]) |> ignore // unreachable
   let s3 = heap.alloc_struct(0, [I32(3)])
 
   // Collect with s1 and s3 as roots
@@ -221,7 +221,7 @@ test "GC: follow references in structs" {
   let s3 = heap.alloc_struct(0, [I32(3)])
   let s2 = heap.alloc_struct(0, [StructRef(s3)])
   let s1 = heap.alloc_struct(0, [StructRef(s2)])
-  let _ = heap.alloc_struct(0, [I32(999)]) // unreachable
+  heap.alloc_struct(0, [I32(999)]) |> ignore // unreachable
 
   // Collect with only s1 as root - s2 and s3 should be preserved via references
   let collected = heap.collect([StructRef(s1)])
@@ -242,7 +242,7 @@ test "GC: follow references in arrays" {
   let s2 = heap.alloc_struct(0, [I32(2)])
   // Create array containing references to s1 and s2
   let arr = heap.alloc_array(0, [StructRef(s1), StructRef(s2)])
-  let _ = heap.alloc_struct(0, [I32(999)]) // unreachable
+  heap.alloc_struct(0, [I32(999)]) |> ignore // unreachable
 
   // Collect with only array as root
   let collected = heap.collect([ArrayRef(arr)])
@@ -254,8 +254,8 @@ test "GC: follow references in arrays" {
 test "GC: reuse freed slots" {
   let heap = MarkSweepHeap::MarkSweepHeap()
   // Allocate and collect
-  let _ = heap.alloc_struct(0, [I32(1)])
-  let _ = heap.alloc_struct(0, [I32(2)])
+  heap.alloc_struct(0, [I32(1)]) |> ignore
+  heap.alloc_struct(0, [I32(2)]) |> ignore
   heap.collect([]) |> ignore
 
   // Allocate again - should reuse freed slots
@@ -279,7 +279,7 @@ test "GC: threshold check" {
 
   // Allocate until threshold
   for i in 0..<5 {
-    let _ = heap.alloc_struct(0, [I32(i)])
+    heap.alloc_struct(0, [I32(i)]) |> ignore
   }
   inspect(heap.should_collect(), content="true")
 }
