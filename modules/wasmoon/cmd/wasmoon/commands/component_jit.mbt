@@ -12,17 +12,16 @@ fn component_core_route(
     return InterpreterCore
   }
   match request.style {
-    RunToCompletion => NativeCore
-    CallbackStep | Stackful => InterpreterCore
+    RunToCompletion | CallbackStep => NativeCore
+    Stackful => InterpreterCore
   }
 }
 
 ///|
 /// Build the Wasmoon-owned native adapter for component core execution.
 ///
-/// Stackful calls remain on the resumable interpreter path. Callback steps are
-/// semantically distinct, but remain interpreted until the callback JIT path
-/// is enabled.
+/// Stackful calls remain on the resumable interpreter path. Callback steps
+/// return normally after each scheduler decision and use ordinary native entry.
 fn component_jit_execution_engine() -> @runtime_impl.CoreExecutionEngine {
   let contexts : Map[Int, @wast.JITModuleContext] = Map([])
   let interpreter = @runtime_impl.interpreter_core_execution_engine()
