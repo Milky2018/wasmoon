@@ -1,0 +1,57 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon_async"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+
+// Errors
+pub suberror AsyncRuntimeError {
+  TimeWentBackwards(previous~ : Int64, requested~ : Int64)
+} derive(Eq, @debug.Debug)
+pub impl Show for AsyncRuntimeError
+
+// Types and methods
+type OperationHandle
+pub fn OperationHandle::cancel(Self) -> Unit
+pub fn OperationHandle::complete(Self) -> Bool
+pub fn OperationHandle::id(Self) -> OperationId
+
+type OperationId derive(Eq, @debug.Debug)
+
+pub(all) enum Poll[A] {
+  Ready(A)
+  Pending
+} derive(Eq, @debug.Debug)
+
+type Runtime
+pub fn Runtime::Runtime() -> Self
+pub fn Runtime::advance_to(Self, Int64) -> Int raise AsyncRuntimeError
+pub fn Runtime::cancel_operation(Self, OperationId) -> Unit
+pub fn Runtime::complete_operation(Self, OperationId) -> Bool
+pub fn Runtime::next_deadline(Self) -> Int64?
+pub fn Runtime::next_ready(Self) -> TaskId?
+pub fn Runtime::now(Self) -> Int64
+pub fn Runtime::spawn(Self) -> TaskHandle
+pub impl @debug.Debug for Runtime
+
+type TaskHandle
+pub fn TaskHandle::cancel(Self) -> Unit
+pub fn TaskHandle::complete(Self) -> Unit
+pub fn TaskHandle::id(Self) -> TaskId
+pub fn TaskHandle::is_active(Self) -> Bool
+pub fn TaskHandle::waker(Self) -> Waker
+
+type TaskId derive(Eq, @debug.Debug)
+
+type Waker
+pub fn Waker::register(Self) -> OperationHandle?
+pub fn Waker::register_timer(Self, Int64) -> OperationHandle?
+pub fn Waker::wake(Self) -> Bool
+
+// Type aliases
+
+// Traits
+

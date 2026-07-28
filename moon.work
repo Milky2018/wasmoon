@@ -9,6 +9,7 @@ members = [
   "./modules/machv_regalloc",
   "./modules/x64_target",
   "./modules/aarch64_target",
+  "./modules/wasmoon_async",
   "./modules/wasmoon_jit",
   "./modules/wasmoon",
 ]
