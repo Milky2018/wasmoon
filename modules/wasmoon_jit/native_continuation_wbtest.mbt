@@ -5,6 +5,9 @@ extern "c" fn c_native_hostcall_probe_trampoline() -> Int64 = "wasmoon_native_ho
 extern "c" fn c_native_fiber_stack_hostcall_probe_trampoline() -> Int64 = "wasmoon_native_fiber_stack_hostcall_probe_trampoline"
 
 ///|
+extern "c" fn c_native_nested_hostcall_tls_probe_trampoline() -> Int64 = "wasmoon_native_nested_hostcall_tls_probe_trampoline"
+
+///|
 extern "c" fn c_native_nested_trap_probe() -> Int64 = "wasmoon_native_nested_trap_probe"
 
 ///|
@@ -104,6 +107,49 @@ test "native hostcall accepts slots on the active fiber stack" {
     (continuation.continue_with(), values[0]),
     content="(NativeJITReturned(0), 0)",
   )
+}
+
+///|
+test "suspended nested hostcall restores the outer hostcall slots" {
+  let context = native_continuation_test_context()
+  let nested : Array[NativeJITContinuation?] = [None]
+  context.set_hostcall_callback(fn() {
+    match get_hostcall_func_addr() {
+      46 => {
+        let continuation = context.start_continuation(
+          c_native_fiber_stack_hostcall_probe_trampoline(),
+          1L,
+          FixedArray::from_array([0L]),
+          1,
+        ) catch {
+          _ => return HostcallTrap(8)
+        }
+        let event = continuation.continue_with() catch {
+          _ => return HostcallTrap(8)
+        }
+        guard event is NativeHostcallSuspended else { return HostcallTrap(8) }
+        nested[0] = Some(continuation)
+        hostcall_value_slot_write(0, 77L)
+        HostcallCompleted
+      }
+      44 => HostcallSuspended
+      _ => HostcallTrap(8)
+    }
+  })
+  let values = FixedArray::from_array([0L])
+  let outer = context.start_continuation(
+    c_native_nested_hostcall_tls_probe_trampoline(),
+    1L,
+    values,
+    values.length(),
+  )
+  debug_inspect(
+    (outer.continue_with(), values[0]),
+    content="(NativeJITReturned(0), 77)",
+  )
+  if nested[0] is Some(continuation) {
+    continuation.cancel()
+  }
 }
 
 ///|

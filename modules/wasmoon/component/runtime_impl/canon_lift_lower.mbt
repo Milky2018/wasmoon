@@ -936,9 +936,9 @@ fn instantiate_canon_lower(
       func_idx: 0,
       engine: interpreter_core_execution_engine(),
       may_suspend: func_type.is_async,
-      // Entering this adapter may invoke another component core engine. The
-      // current native runtime does not support nested JIT activation.
-      native_eligible: false,
+      // Native activations may call this host adapter and nest another core
+      // activation through the Store-scoped activation chain.
+      native_eligible: true,
     })
   }
 }

@@ -435,6 +435,29 @@ wasmoon_native_fiber_stack_hostcall_probe_trampoline(void) {
     return (int64_t)fiber_stack_hostcall_probe;
 }
 
+static int nested_hostcall_tls_probe(
+    jit_context_t *ctx,
+    int64_t *values,
+    void *func_ptr
+) {
+    (void)func_ptr;
+    int64_t slots[1] = {0};
+    int result = wasmoon_jit_hostcall(
+        ctx,
+        46,
+        (int64_t)slots,
+        0,
+        1
+    );
+    values[0] = slots[0];
+    return result;
+}
+
+MOONBIT_FFI_EXPORT int64_t
+wasmoon_native_nested_hostcall_tls_probe_trampoline(void) {
+    return (int64_t)nested_hostcall_tls_probe;
+}
+
 static int parked_gc_root_probe(
     jit_context_t *ctx,
     int64_t *values,

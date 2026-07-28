@@ -5,6 +5,43 @@ priv enum ComponentCoreRoute {
 } derive(Eq)
 
 ///|
+priv enum ComponentCoreExecutionEvent {
+  NativeRunToReturn
+  NativeResumable
+  ExplicitInterpreter
+}
+
+///|
+priv struct ComponentJITExecutionEvidence {
+  native_run_to_return : Ref[Int]
+  native_resumable : Ref[Int]
+  explicit_interpreter : Ref[Int]
+}
+
+///|
+fn ComponentJITExecutionEvidence::new() -> ComponentJITExecutionEvidence {
+  {
+    native_run_to_return: Ref(0),
+    native_resumable: Ref(0),
+    explicit_interpreter: Ref(0),
+  }
+}
+
+///|
+fn ComponentJITExecutionEvidence::record(
+  self : ComponentJITExecutionEvidence,
+  event : ComponentCoreExecutionEvent,
+) -> Unit {
+  match event {
+    NativeRunToReturn =>
+      self.native_run_to_return.val = self.native_run_to_return.val + 1
+    NativeResumable => self.native_resumable.val = self.native_resumable.val + 1
+    ExplicitInterpreter =>
+      self.explicit_interpreter.val = self.explicit_interpreter.val + 1
+  }
+}
+
+///|
 fn component_core_route(
   request : @runtime_impl.CoreExecutionRequest,
 ) -> ComponentCoreRoute {
@@ -83,7 +120,9 @@ fn component_native_outcome(
 ///
 /// Stackful calls retain their native machine stack across canonical hostcall
 /// suspension. Callback steps return normally after each scheduler decision.
-fn component_jit_execution_engine() -> @runtime_impl.CoreExecutionEngine {
+fn component_jit_execution_engine(
+  evidence? : ComponentJITExecutionEvidence = ComponentJITExecutionEvidence::new(),
+) -> @runtime_impl.CoreExecutionEngine {
   let contexts : Map[Int, ComponentJITContext] = Map([])
   let interpreter = @runtime_impl.interpreter_core_execution_engine()
   CoreExecutionEngine(
@@ -121,7 +160,11 @@ fn component_jit_execution_engine() -> @runtime_impl.CoreExecutionEngine {
       request,
     ) raise @runtime_impl.ComponentRuntimeError {
       if component_core_route(request) == InterpreterCore {
-        return interpreter.invoke(store, instance, func_idx, args, request)
+        let outcome = interpreter.invoke(
+          store, instance, func_idx, args, request,
+        )
+        evidence.record(ExplicitInterpreter)
+        return outcome
       }
       guard contexts.get(instance.store_idx) is Some(context) else {
         raise CanonCallError(
@@ -137,20 +180,15 @@ fn component_jit_execution_engine() -> @runtime_impl.CoreExecutionEngine {
         let outcome = context.core.call_core_func_resumable(
           store, instance, func_idx, args,
         ) catch {
-          FunctionUnavailable(_) =>
-            return interpreter.invoke(store, instance, func_idx, args, request)
           error => raise component_jit_error(error)
         }
+        evidence.record(NativeResumable)
         return component_native_outcome(context, outcome)
       }
       let results = context.core.call_core_func(store, instance, func_idx, args) catch {
-        FunctionUnavailable(_) =>
-          // Re-exported imports do not have local machine code in this module.
-          @executor.call_func_by_index(store, instance, func_idx, args) catch {
-            error => raise CanonCallError(error.to_string())
-          }
         error => raise component_jit_error(error)
       }
+      evidence.record(NativeRunToReturn)
       Returned(results)
     },
     prepare_store=fn(store) { store.enable_c_heap() },

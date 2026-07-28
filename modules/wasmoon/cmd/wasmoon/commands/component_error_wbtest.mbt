@@ -192,6 +192,81 @@ test "component command executes a pinned Preview 3 async run export" {
 }
 
 ///|
+test "component command reads the Preview 3 monotonic clock through JIT" {
+  let evidence = ComponentJITExecutionEvidence::new()
+  let status = run_wasi_component_command_with_evidence(
+    "testsuite/fixtures/wasi-command-clock-preview3.component.wasm",
+    [],
+    [],
+    [],
+    "deny",
+    true,
+    Text,
+    true,
+    Some(evidence),
+  )
+  debug_inspect(
+    (
+      status,
+      evidence.native_run_to_return.val,
+      evidence.native_resumable.val,
+      evidence.explicit_interpreter.val,
+    ),
+    content="(0, 0, 1, 0)",
+  )
+}
+
+///|
+test "component command enumerates Preview 3 filesystem preopens through JIT" {
+  let evidence = ComponentJITExecutionEvidence::new()
+  let status = run_wasi_component_command_with_evidence(
+    "testsuite/fixtures/wasi-command-filesystem-preview3.component.wasm",
+    [],
+    [],
+    ["/tmp::/sandbox"],
+    "deny",
+    true,
+    Text,
+    true,
+    Some(evidence),
+  )
+  debug_inspect(
+    (
+      status,
+      evidence.native_run_to_return.val,
+      evidence.native_resumable.val,
+      evidence.explicit_interpreter.val,
+    ),
+    content="(0, 2, 1, 0)",
+  )
+}
+
+///|
+test "component command creates and drops a Preview 3 socket through JIT" {
+  let evidence = ComponentJITExecutionEvidence::new()
+  let status = run_wasi_component_command_with_evidence(
+    "testsuite/fixtures/wasi-command-sockets-preview3.component.wasm",
+    [],
+    [],
+    [],
+    "deny",
+    true,
+    Text,
+    true,
+    Some(evidence),
+  )
+  debug_inspect(
+    (
+      status,
+      evidence.native_run_to_return.val,
+      evidence.native_resumable.val,
+      evidence.explicit_interpreter.val,
+    ),
+    content="(0, 0, 1, 0)",
+  )
+}
+
+///|
 test "component command passes inherited stdin to Preview 3 streams" {
   @fs.create_dir("tmp") catch {
     _ => ()
@@ -213,7 +288,8 @@ test "component command passes inherited stdin to Preview 3 streams" {
     return fail("could not redirect stdin")
   }
   defer @wasi.native_dup2(saved_stdin, 0) |> ignore
-  let status = run_wasi_component_command(
+  let evidence = ComponentJITExecutionEvidence::new()
+  let status = run_wasi_component_command_with_evidence(
     "testsuite/fixtures/wasi-command-async-stdin.component.wasm",
     [],
     [],
@@ -221,8 +297,18 @@ test "component command passes inherited stdin to Preview 3 streams" {
     "deny",
     true,
     Text,
+    true,
+    Some(evidence),
   )
-  debug_inspect(status, content="0")
+  debug_inspect(
+    (
+      status,
+      evidence.native_run_to_return.val,
+      evidence.native_resumable.val,
+      evidence.explicit_interpreter.val,
+    ),
+    content="(0, 0, 1, 0)",
+  )
 }
 
 ///|

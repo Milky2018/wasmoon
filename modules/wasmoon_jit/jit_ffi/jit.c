@@ -196,9 +196,27 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_hostcall(
     hostcall_callback_fn cb = (hostcall_callback_fn)ctx->hostcall_callback;
     int32_t trap = cb(ctx->hostcall_callback_data);
     while (trap == WASMOON_HOSTCALL_SUSPEND_STATUS) {
+        // A parked fiber is not the dynamically active hostcall. Restore its
+        // caller before yielding so nested native entry writes through the
+        // caller's values buffer rather than this parked frame.
+        g_hostcall_func_idx = previous_func_idx;
+        g_hostcall_values_ptr = previous_values_ptr;
+        g_hostcall_num_args = previous_num_args;
+        g_hostcall_num_results = previous_num_results;
         int64_t resume = wasmoon_native_fiber_yield(
             WASMOON_FIBER_EVENT_HOSTCALL_SUSPENDED
         );
+        // A continuation may be resumed from a different dynamic hostcall.
+        // Capture that caller now instead of retaining the caller that was
+        // active at the original suspension point.
+        previous_func_idx = g_hostcall_func_idx;
+        previous_values_ptr = g_hostcall_values_ptr;
+        previous_num_args = g_hostcall_num_args;
+        previous_num_results = g_hostcall_num_results;
+        g_hostcall_func_idx = func_idx;
+        g_hostcall_values_ptr = values_ptr;
+        g_hostcall_num_args = num_args;
+        g_hostcall_num_results = num_results;
         if (resume == INT64_MIN) {
             trap = 8;
         } else if (resume == 1) {

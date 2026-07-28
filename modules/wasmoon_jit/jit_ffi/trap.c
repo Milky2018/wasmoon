@@ -319,7 +319,16 @@ jit_trap_activation_t *jit_trap_activation_detach(void) {
 
 void jit_trap_activation_attach(jit_trap_activation_t *activation) {
     if (!activation) return;
-    if (current_activation != activation->previous) abort();
+    if (current_activation != activation->previous) {
+        // A parked continuation may be resumed after its original dynamic
+        // caller has returned or parked. Rebind it to the activation that is
+        // current at the actual resume point.
+        activation->previous = current_activation;
+        if (current_activation &&
+            current_activation->context == activation->context) {
+            save_activation_context(current_activation);
+        }
+    }
     restore_activation_context(activation);
     current_activation = activation;
 }

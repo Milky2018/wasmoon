@@ -727,10 +727,25 @@ fn validate_instance_import_type(
                               )
                             }
                           _ =>
-                            if expected != actual {
-                              raise ImportTypeMismatch(
-                                "instance export type mismatch",
-                              )
+                            match (expected, actual) {
+                              (Some(expected_type), Some(actual_type)) =>
+                                if !component_type_defs_match(
+                                    expected_type,
+                                    local_types,
+                                    actual_type,
+                                    inst.types,
+                                    0,
+                                  ) {
+                                  raise ImportTypeMismatch(
+                                    "instance export type mismatch: \{name}",
+                                  )
+                                }
+                              _ =>
+                                if expected != actual {
+                                  raise ImportTypeMismatch(
+                                    "instance export type mismatch: \{name}",
+                                  )
+                                }
                             }
                         }
                       }

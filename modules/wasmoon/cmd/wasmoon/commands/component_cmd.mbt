@@ -483,7 +483,7 @@ fn component_command_context(
 }
 
 ///|
-pub fn run_wasi_component_command(
+fn run_wasi_component_command_with_evidence(
   file_path : String,
   args : Array[String],
   envs : Array[String],
@@ -491,7 +491,8 @@ pub fn run_wasi_component_command(
   network : String,
   wit_names : Bool,
   error_format : ComponentErrorFormat,
-  use_jit? : Bool = true,
+  use_jit : Bool,
+  evidence : ComponentJITExecutionEvidence?,
 ) -> Int {
   let parsed = run_component_command_eval(file_path, true, wit_names)
   guard parsed.parsed is Some(component) else {
@@ -508,7 +509,10 @@ pub fn run_wasi_component_command(
   defer ctx.close()
   let linker = if use_jit {
     @runtime_impl.ComponentLinker::with_core_execution_engine(
-      component_jit_execution_engine(),
+      match evidence {
+        Some(record) => component_jit_execution_engine(evidence=record)
+        None => component_jit_execution_engine()
+      },
     )
   } else {
     ComponentLinker()
@@ -553,4 +557,28 @@ pub fn run_wasi_component_command(
   component_command_status(result, ctx.exit_status()) catch {
     e => report_component_run_error(error_format, "run", e.to_string())
   }
+}
+
+///|
+pub fn run_wasi_component_command(
+  file_path : String,
+  args : Array[String],
+  envs : Array[String],
+  dirs : Array[String],
+  network : String,
+  wit_names : Bool,
+  error_format : ComponentErrorFormat,
+  use_jit? : Bool = true,
+) -> Int {
+  run_wasi_component_command_with_evidence(
+    file_path,
+    args,
+    envs,
+    dirs,
+    network,
+    wit_names,
+    error_format,
+    use_jit,
+    None,
+  )
 }
