@@ -170,6 +170,7 @@ fn native_file_type_to_component(file_type : Int) -> Int {
     1 => 1
     2 => 2
     3 => 3
+    8 => 4
     7 => 5
     4 => 6
     5 | 6 => 7
@@ -1079,8 +1080,8 @@ fn add_directory_stream_methods(
         Some(native_entries) => {
           let entries : Array[DirectoryEntryState] = []
           for entry in native_entries {
-            let (name, is_directory) = entry
-            entries.push({ name, file_type: if is_directory { 3 } else { 4 } })
+            let (name, file_type) = entry
+            entries.push({ name, file_type })
           }
           let rep = host.ctx.insert_resource(
             DirectoryEntryStream({ entries, index: Ref(0) }),

@@ -435,11 +435,7 @@ pub fn native_mkdirat(dirfd : Int, path : String, mode : Int) -> Bool {
 }
 
 ///|
-/// Read directory entries
-/// Returns array of (name, is_dir) tuples or None on error
-pub fn native_readdir(path : String) -> Array[(String, Bool)]? {
-  let path_bytes = string_to_cstring(path)
-  let result = c_readdir(path_bytes)
+fn parse_native_readdir(result : Bytes?) -> Array[(String, Int)]? {
   if result is None {
     return None
   }
@@ -452,14 +448,13 @@ pub fn native_readdir(path : String) -> Array[(String, Bool)]? {
     (bytes[1].to_int() << 8) |
     (bytes[2].to_int() << 16) |
     (bytes[3].to_int() << 24)
-  let entries : Array[(String, Bool)] = []
+  let entries : Array[(String, Int)] = []
   let mut offset = 4
   for _ in 0..<count {
     if offset >= bytes.length() {
       break
     }
-    // Read is_dir
-    let is_dir = bytes[offset].to_int() != 0
+    let file_type = bytes[offset].to_int()
     offset = offset + 1
     // Read name_len (little-endian)
     if offset + 4 > bytes.length() {
@@ -479,58 +474,27 @@ pub fn native_readdir(path : String) -> Array[(String, Bool)]? {
       name_chars.push(bytes[offset + i].to_int().unsafe_to_char())
     }
     offset = offset + name_len
-    entries.push((String::from_array(name_chars), is_dir))
+    entries.push((String::from_array(name_chars), file_type))
   }
   Some(entries)
 }
 
 ///|
+/// Read directory entries.
+///
+/// Each entry contains its name and native file-type token. Tokens 0-7 match
+/// WASI Preview 1 filetype; token 8 denotes a FIFO.
+pub fn native_readdir(path : String) -> Array[(String, Int)]? {
+  parse_native_readdir(c_readdir(string_to_cstring(path)))
+}
+
+///|
 /// Read directory entries from an opened directory fd.
-/// Returns array of (name, is_dir) tuples or None on error.
-pub fn native_readdir_fd(fd : Int) -> Array[(String, Bool)]? {
-  let result = c_readdir_fd(fd)
-  if result is None {
-    return None
-  }
-  let bytes = result.unwrap()
-  if bytes.length() < 4 {
-    return Some([])
-  }
-  // Parse count (little-endian)
-  let count = bytes[0].to_int() |
-    (bytes[1].to_int() << 8) |
-    (bytes[2].to_int() << 16) |
-    (bytes[3].to_int() << 24)
-  let entries : Array[(String, Bool)] = []
-  let mut offset = 4
-  for _ in 0..<count {
-    if offset >= bytes.length() {
-      break
-    }
-    // Read is_dir
-    let is_dir = bytes[offset].to_int() != 0
-    offset = offset + 1
-    // Read name_len (little-endian)
-    if offset + 4 > bytes.length() {
-      break
-    }
-    let name_len = bytes[offset].to_int() |
-      (bytes[offset + 1].to_int() << 8) |
-      (bytes[offset + 2].to_int() << 16) |
-      (bytes[offset + 3].to_int() << 24)
-    offset = offset + 4
-    // Read name
-    if offset + name_len > bytes.length() {
-      break
-    }
-    let name_chars : Array[Char] = []
-    for i in 0..<name_len {
-      name_chars.push(bytes[offset + i].to_int().unsafe_to_char())
-    }
-    offset = offset + name_len
-    entries.push((String::from_array(name_chars), is_dir))
-  }
-  Some(entries)
+///
+/// Each entry contains its name and native file-type token. Tokens 0-7 match
+/// WASI Preview 1 filetype; token 8 denotes a FIFO.
+pub fn native_readdir_fd(fd : Int) -> Array[(String, Int)]? {
+  parse_native_readdir(c_readdir_fd(fd))
 }
 
 ///|

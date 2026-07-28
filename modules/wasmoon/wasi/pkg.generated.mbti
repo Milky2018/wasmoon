@@ -154,9 +154,9 @@ pub fn native_read(Int, FixedArray[Byte], Int) -> Int?
 
 pub fn native_read_to_memory(Int, @runtime.Memory, Int, Int) -> Int?
 
-pub fn native_readdir(String) -> Array[(String, Bool)]?
+pub fn native_readdir(String) -> Array[(String, Int)]?
 
-pub fn native_readdir_fd(Int) -> Array[(String, Bool)]?
+pub fn native_readdir_fd(Int) -> Array[(String, Int)]?
 
 pub fn native_readlinkat(Int, String, Int) -> String?
 

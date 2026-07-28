@@ -12,3 +12,11 @@ test "Preview 3 filesystem errno indices follow the Preview 3 WIT order" {
     ),
   )
 }
+
+///|
+test "component descriptor types preserve every native file type" {
+  debug_inspect(
+    Array::makei(9, native_file_type_to_component),
+    content="[0, 1, 2, 3, 6, 7, 7, 5, 4]",
+  )
+}

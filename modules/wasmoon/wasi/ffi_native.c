@@ -35,6 +35,24 @@ extern "C" {
 
 #include "moonbit.h"
 
+// Native file-type tokens shared with the MoonBit side. Values 0-7 match
+// WASI Preview 1 filetype; 8 extends the internal protocol for FIFO, which is
+// represented explicitly by the Component Model.
+static uint8_t wasmoon_wasi_filetype_from_mode(mode_t mode) {
+  if (S_ISDIR(mode)) return 3;
+  if (S_ISREG(mode)) return 4;
+  if (S_ISLNK(mode)) return 7;
+  if (S_ISCHR(mode)) return 2;
+  if (S_ISBLK(mode)) return 1;
+#ifdef S_ISSOCK
+  if (S_ISSOCK(mode)) return 6;
+#endif
+#ifdef S_ISFIFO
+  if (S_ISFIFO(mode)) return 8;
+#endif
+  return 0;
+}
+
 // Internal token values used by MoonBit side. Translate to host constants
 // before calling libc APIs so behavior is consistent across platforms.
 #define WASMOON_AT_REMOVEDIR_TOKEN 0x200
@@ -684,9 +702,48 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_mkdirat(
 #endif
 }
 
+#ifndef _WIN32
+static uint8_t wasmoon_wasi_dirent_filetype(
+  DIR *dir,
+  const struct dirent *entry
+) {
+#ifdef AT_SYMLINK_NOFOLLOW
+  struct stat st;
+  if (fstatat(dirfd(dir), entry->d_name, &st, AT_SYMLINK_NOFOLLOW) == 0) {
+    return wasmoon_wasi_filetype_from_mode(st.st_mode);
+  }
+#endif
+
+  switch (entry->d_type) {
+#ifdef DT_BLK
+    case DT_BLK: return 1;
+#endif
+#ifdef DT_CHR
+    case DT_CHR: return 2;
+#endif
+#ifdef DT_DIR
+    case DT_DIR: return 3;
+#endif
+#ifdef DT_REG
+    case DT_REG: return 4;
+#endif
+#ifdef DT_SOCK
+    case DT_SOCK: return 6;
+#endif
+#ifdef DT_LNK
+    case DT_LNK: return 7;
+#endif
+#ifdef DT_FIFO
+    case DT_FIFO: return 8;
+#endif
+    default: return 0;
+  }
+}
+#endif
+
 // Directory entry structure for readdir
 // Returns a serialized format: count (4 bytes) + entries
-// Each entry: is_dir (1 byte) + name_len (4 bytes) + name (variable)
+// Each entry: filetype (1 byte) + name_len (4 bytes) + name (variable)
 MOONBIT_FFI_EXPORT moonbit_bytes_t wasmoon_wasi_readdir(moonbit_bytes_t path) {
 #ifdef _WIN32
   // Windows implementation using FindFirstFile/FindNextFile
@@ -711,7 +768,7 @@ MOONBIT_FFI_EXPORT moonbit_bytes_t wasmoon_wasi_readdir(moonbit_bytes_t path) {
       continue;
     }
     count++;
-    total_size += 1 + 4 + strlen(entry->d_name);  // is_dir + name_len + name
+    total_size += 1 + 4 + strlen(entry->d_name);  // filetype + name_len + name
   }
 
   // Allocate result buffer
@@ -732,9 +789,7 @@ MOONBIT_FFI_EXPORT moonbit_bytes_t wasmoon_wasi_readdir(moonbit_bytes_t path) {
       continue;
     }
 
-    // Determine if it's a directory
-    int is_dir = (entry->d_type == DT_DIR) ? 1 : 0;
-    result[offset] = is_dir;
+    result[offset] = wasmoon_wasi_dirent_filetype(dir, entry);
     offset++;
 
     // Write name length (little-endian)
@@ -781,7 +836,7 @@ MOONBIT_FFI_EXPORT moonbit_bytes_t wasmoon_wasi_readdir_fd(int fd) {
       continue;
     }
     count++;
-    total_size += 1 + 4 + strlen(entry->d_name);  // is_dir + name_len + name
+    total_size += 1 + 4 + strlen(entry->d_name);  // filetype + name_len + name
   }
 
   moonbit_bytes_t result = moonbit_make_bytes(total_size, 0);
@@ -797,8 +852,7 @@ MOONBIT_FFI_EXPORT moonbit_bytes_t wasmoon_wasi_readdir_fd(int fd) {
       continue;
     }
 
-    int is_dir = (entry->d_type == DT_DIR) ? 1 : 0;
-    result[offset] = is_dir;
+    result[offset] = wasmoon_wasi_dirent_filetype(dir, entry);
     offset++;
 
     size_t name_len = strlen(entry->d_name);
@@ -911,20 +965,7 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_fstat(int fd,
   *nlink = st.st_nlink;
   *size = st.st_size;
 
-  // Determine file type
-  if (S_ISDIR(st.st_mode)) {
-    *filetype = 3;  // directory
-  } else if (S_ISREG(st.st_mode)) {
-    *filetype = 4;  // regular_file
-  } else if (S_ISLNK(st.st_mode)) {
-    *filetype = 7;  // symbolic_link
-  } else if (S_ISCHR(st.st_mode)) {
-    *filetype = 2;  // character_device
-  } else if (S_ISBLK(st.st_mode)) {
-    *filetype = 1;  // block_device
-  } else {
-    *filetype = 0;  // unknown
-  }
+  *filetype = wasmoon_wasi_filetype_from_mode(st.st_mode);
 
   // Convert timespec to nanoseconds
 #ifdef _WIN32
@@ -972,20 +1013,7 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_fstatat(int dirfd, moonbit_bytes_t path, int
   *nlink = st.st_nlink;
   *size = st.st_size;
 
-  // Determine file type
-  if (S_ISDIR(st.st_mode)) {
-    *filetype = 3;  // directory
-  } else if (S_ISREG(st.st_mode)) {
-    *filetype = 4;  // regular_file
-  } else if (S_ISLNK(st.st_mode)) {
-    *filetype = 7;  // symbolic_link
-  } else if (S_ISCHR(st.st_mode)) {
-    *filetype = 2;  // character_device
-  } else if (S_ISBLK(st.st_mode)) {
-    *filetype = 1;  // block_device
-  } else {
-    *filetype = 0;  // unknown
-  }
+  *filetype = wasmoon_wasi_filetype_from_mode(st.st_mode);
 
   // Convert timespec to nanoseconds
 #ifdef _WIN32

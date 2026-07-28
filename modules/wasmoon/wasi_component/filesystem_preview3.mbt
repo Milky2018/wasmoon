@@ -865,9 +865,12 @@ fn add_preview3_read_directory(
           )
         Some(native_entries) => {
           for entry in native_entries {
-            let (name, is_directory) = entry
+            let (name, file_type) = entry
             entries.push(
-              Tuple([U32(if is_directory { 3 } else { 4 }), String(name)]),
+              Tuple([
+                U32(native_file_type_to_component(file_type)),
+                String(name),
+              ]),
             )
           }
           None

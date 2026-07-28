@@ -108,6 +108,56 @@ test "native file operations: write and read" {
 }
 
 ///|
+test "native readdir preserves directory entry file types" {
+  let root = "/tmp/wasmoon-native-readdir-file-types"
+  let file = root + "/file"
+  let directory = root + "/directory"
+  let symlink = root + "/symlink"
+  @wasi.native_unlinkat(0, symlink, 0) |> ignore
+  @wasi.native_unlinkat(0, file, 0) |> ignore
+  @wasi.native_unlinkat(0, directory, @wasi.AT_REMOVEDIR) |> ignore
+  @wasi.native_unlinkat(0, root, @wasi.AT_REMOVEDIR) |> ignore
+  guard @wasi.native_mkdir(root, 0o700) else {
+    fail("could not create readdir fixture directory")
+  }
+  defer @wasi.native_unlinkat(0, root, @wasi.AT_REMOVEDIR) |> ignore
+  guard @wasi.native_open(file, [WriteOnly, Create, Truncate], 0o600)
+    is Some(fd) else {
+    fail("could not create readdir fixture file")
+  }
+  @wasi.native_close(fd) |> ignore
+  defer @wasi.native_unlinkat(0, file, 0) |> ignore
+  guard @wasi.native_mkdir(directory, 0o700) else {
+    fail("could not create readdir fixture subdirectory")
+  }
+  defer @wasi.native_unlinkat(0, directory, @wasi.AT_REMOVEDIR) |> ignore
+  guard @wasi.native_symlinkat("file", 0, symlink) else {
+    fail("could not create readdir fixture symlink")
+  }
+  defer @wasi.native_unlinkat(0, symlink, 0) |> ignore
+  guard @wasi.native_open(root, [ReadOnly], 0) is Some(directory_fd) else {
+    fail("could not open fixture directory")
+  }
+  defer @wasi.native_close(directory_fd) |> ignore
+  guard @wasi.native_readdir_fd(directory_fd) is Some(entries) else {
+    fail("could not read fixture directory")
+  }
+  let mut file_type = -1
+  let mut directory_type = -1
+  let mut symlink_type = -1
+  for entry in entries {
+    let (name, native_type) = entry
+    match name {
+      "file" => file_type = native_type
+      "directory" => directory_type = native_type
+      "symlink" => symlink_type = native_type
+      _ => ()
+    }
+  }
+  debug_inspect([file_type, directory_type, symlink_type], content="[4, 3, 7]")
+}
+
+///|
 test "native file operations: seek and tell" {
   let test_file = "/tmp/wasmoon_test_seek.txt"
   let content = "0123456789"
