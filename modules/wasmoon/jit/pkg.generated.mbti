@@ -72,6 +72,7 @@ pub fn JITModule::call_with_context_controlled(Self, JITFunction, Array[Int64], 
 pub fn[Arg : DynamicArgs, Ret : DynamicReturn] JITModule::call_with_context_poly(Self, JITFunction, Arg) -> Ret raise PolycallError
 pub fn JITModule::clear_hostcall_callback(Self) -> Unit
 pub fn JITModule::clear_segments(Self) -> Unit
+pub fn JITModule::close(Self) -> Unit
 pub fn JITModule::export_functions(Self) -> Map[String, Int64]
 pub fn JITModule::find_func_by_pc(Self, Int64) -> (Int, JITFunction, Int)?
 pub fn JITModule::gc_begin_frame(Self, Int64) -> Unit

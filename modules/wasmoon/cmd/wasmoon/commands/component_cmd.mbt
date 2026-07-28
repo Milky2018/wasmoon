@@ -517,6 +517,7 @@ fn run_wasi_component_command_with_evidence(
   } else {
     ComponentLinker()
   }
+  defer linker.close()
   let host = @wasi_component.WasiComponentHost(linker, ctx)
   (try {
     host.add_preview2_cli_clocks_random()

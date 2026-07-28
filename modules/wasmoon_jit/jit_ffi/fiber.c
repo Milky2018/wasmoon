@@ -106,6 +106,9 @@ extern int32_t wasmoon_jit_hostcall(
 );
 
 static __thread native_fiber_t *current_native_fiber = NULL;
+static int64_t live_fiber_count = 0;
+static int64_t mapped_fiber_stack_bytes = 0;
+static int64_t parked_root_registration_count = 0;
 
 static int fiber_on_owner_thread(const native_fiber_t *fiber) {
     return fiber && pthread_equal(fiber->owner_thread, pthread_self());
@@ -113,12 +116,21 @@ static int fiber_on_owner_thread(const native_fiber_t *fiber) {
 
 static void release_fiber_stack(native_fiber_t *fiber) {
     if (!fiber || !fiber->mapping) return;
-    munmap(fiber->mapping, fiber->mapping_size);
+    if (munmap(fiber->mapping, fiber->mapping_size) == 0) {
+        mapped_fiber_stack_bytes -= (int64_t)fiber->mapping_size;
+    }
     fiber->mapping = NULL;
     fiber->mapping_size = 0;
     fiber->guard_size = 0;
     fiber->usable_size = 0;
     memset(&fiber->context, 0, sizeof(fiber->context));
+}
+
+static void unregister_fiber_parked_roots(native_fiber_t *fiber) {
+    if (!fiber || !fiber->parked_gc_roots) return;
+    jit_parked_gc_roots_unregister(fiber->parked_gc_roots);
+    fiber->parked_gc_roots = NULL;
+    parked_root_registration_count--;
 }
 
 static void fiber_bootstrap(void) {
@@ -175,6 +187,8 @@ static native_fiber_t *allocate_fiber(
     fiber->owns_closure = owns_closure;
     fiber->owner_thread = pthread_self();
     fiber->state = NATIVE_FIBER_READY;
+    live_fiber_count++;
+    mapped_fiber_stack_bytes += (int64_t)mapping_size;
 
     uintptr_t stack_top = (uintptr_t)mapping + mapping_size;
 #if defined(__x86_64__) || defined(_M_X64)
@@ -195,8 +209,7 @@ static native_fiber_t *allocate_fiber(
 static void destroy_fiber(native_fiber_t *fiber) {
     if (!fiber) return;
     if (fiber->state == NATIVE_FIBER_RUNNING) return;
-    jit_parked_gc_roots_unregister(fiber->parked_gc_roots);
-    fiber->parked_gc_roots = NULL;
+    unregister_fiber_parked_roots(fiber);
     jit_trap_activation_abandon(fiber->detached_activation);
     fiber->detached_activation = NULL;
     release_fiber_stack(fiber);
@@ -204,6 +217,7 @@ static void destroy_fiber(native_fiber_t *fiber) {
         moonbit_decref(fiber->closure);
         fiber->closure = NULL;
     }
+    live_fiber_count--;
     free(fiber);
 }
 
@@ -342,9 +356,9 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_native_fiber_yield(int64_t value) {
         fiber->state = NATIVE_FIBER_RUNNING;
         return INT64_MIN;
     }
+    if (fiber->parked_gc_roots) parked_root_registration_count++;
     wasmoon_native_fiber_swap(&fiber->context, &fiber->caller);
-    jit_parked_gc_roots_unregister(fiber->parked_gc_roots);
-    fiber->parked_gc_roots = NULL;
+    unregister_fiber_parked_roots(fiber);
     jit_trap_activation_attach(fiber->detached_activation);
     fiber->detached_activation = NULL;
     if (fiber->state != NATIVE_FIBER_RUNNING) return INT64_MIN;
@@ -360,8 +374,7 @@ MOONBIT_FFI_EXPORT int wasmoon_native_fiber_cancel(void *managed) {
         return -3;
     }
     fiber->state = NATIVE_FIBER_CANCELLED;
-    jit_parked_gc_roots_unregister(fiber->parked_gc_roots);
-    fiber->parked_gc_roots = NULL;
+    unregister_fiber_parked_roots(fiber);
     jit_trap_activation_abandon(fiber->detached_activation);
     fiber->detached_activation = NULL;
     release_fiber_stack(fiber);
@@ -526,6 +539,19 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_native_fiber_stack_size(void *managed) {
 MOONBIT_FFI_EXPORT int64_t wasmoon_native_fiber_guard_size(void *managed) {
     native_fiber_t *fiber = managed_fiber_ptr(managed);
     return fiber ? (int64_t)fiber->guard_size : 0;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_native_fiber_live_count(void) {
+    return live_fiber_count;
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_native_fiber_mapped_stack_bytes(void) {
+    return mapped_fiber_stack_bytes;
+}
+
+MOONBIT_FFI_EXPORT int64_t
+wasmoon_native_fiber_parked_root_registration_count(void) {
+    return parked_root_registration_count;
 }
 
 int wasmoon_native_fiber_stack_bounds(

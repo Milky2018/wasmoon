@@ -1,4 +1,7 @@
 ///|
+extern "c" fn component_test_executable_mapping_count() -> Int = "wasmoon_jit_exec_mapping_count"
+
+///|
 test "component error code mapping: enum string is stable" {
   inspect(
     component_error_code_string(CompUnsupported),
@@ -213,6 +216,39 @@ test "component command reads the Preview 3 monotonic clock through JIT" {
       evidence.explicit_interpreter.val,
     ),
     content="(0, 0, 1, 0)",
+  )
+}
+
+///|
+test "component command repeatedly releases Preview 3 JIT executions" {
+  let evidence = ComponentJITExecutionEvidence::new()
+  let failures = Ref(0)
+  let executable_mappings_before = component_test_executable_mapping_count()
+  for _iteration in 0..<64 {
+    let status = run_wasi_component_command_with_evidence(
+      "testsuite/fixtures/wasi-command-clock-preview3.component.wasm",
+      [],
+      [],
+      [],
+      "deny",
+      true,
+      Text,
+      true,
+      Some(evidence),
+    )
+    if status != 0 {
+      failures.val = failures.val + 1
+    }
+  }
+  debug_inspect(
+    (
+      failures.val,
+      evidence.native_run_to_return.val,
+      evidence.native_resumable.val,
+      evidence.explicit_interpreter.val,
+      component_test_executable_mapping_count() - executable_mappings_before,
+    ),
+    content="(0, 0, 64, 0, 0)",
   )
 }
 

@@ -75,6 +75,12 @@ pub fn JITModuleContext::JITModuleContext(
 }
 
 ///|
+/// Release the native module after every call and continuation has ended.
+pub fn JITModuleContext::close(self : JITModuleContext) -> Unit {
+  self.jit_module.close()
+}
+
+///|
 /// Modules that have built-in JIT trampolines
 pub fn builtin_jit_modules() -> Array[String] {
   ["spectest", "wasi_snapshot_preview1"]

@@ -224,6 +224,7 @@ test "component runtime: core execution crosses the configured engine seam" {
   let calls : Array[
     (Int, Int, Array[@types.Value], @runtime_impl.CoreExecutionRequest),
   ] = []
+  let closes = Ref(0)
   let engine = @runtime_impl.CoreExecutionEngine(
     fn(_store, module_, instance) {
       registrations.push((module_.codes.length(), instance.store_idx))
@@ -243,12 +244,15 @@ test "component runtime: core execution crosses the configured engine seam" {
       }
       Returned(results)
     },
+    close=fn() { closes.val = closes.val + 1 },
   )
   let linker = @runtime_impl.ComponentLinker::with_core_execution_engine(engine)
   let instance = linker.instantiate("engine_seam", component)
   let results = instance.call_exported_func("inc", [S32(41)])
+  linker.close()
+  linker.close()
   debug_inspect(
-    (registrations, calls, results),
+    (registrations, calls, results, closes.val),
     content=(
       #|(
       #|  [(1, 0)],
@@ -265,6 +269,7 @@ test "component runtime: core execution crosses the configured engine seam" {
       #|    ),
       #|  ],
       #|  [S32(42)],
+      #|  1,
       #|)
     ),
   )

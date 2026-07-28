@@ -164,3 +164,58 @@ test "native registration tokens are never reused" {
     ),
   )
 }
+
+///|
+test "native reactor cancellation stress returns to an empty baseline" {
+  if !NativeReactor::supported() {
+    return
+  }
+  let runtime = @wasmoon_async.Runtime()
+  guard test_pipe() is Some((read_fd, write_fd)) else {
+    fail("failed to create reactor test pipe")
+  }
+  defer {
+    c_test_close(read_fd)
+    c_test_close(write_fd)
+  }
+  let reactor = NativeReactor::try_new()
+  let first_operation : Array[@wasmoon_async.OperationId?] = [None]
+  let last_operation : Array[@wasmoon_async.OperationId?] = [None]
+  for index in 0..<512 {
+    let task = runtime.spawn()
+    runtime.next_ready() |> ignore
+    let registration = if index % 2 == 0 {
+      reactor.register_read(read_fd, task.waker())
+    } else {
+      reactor.register_timer(1000000000L, task.waker())
+    }
+    if first_operation[0] is None {
+      first_operation[0] = Some(registration.operation_id())
+    }
+    last_operation[0] = Some(registration.operation_id())
+    registration.cancel()
+    registration.cancel()
+    task.cancel()
+  }
+  c_test_write(write_fd) |> ignore
+  debug_inspect(
+    (
+      first_operation[0],
+      last_operation[0],
+      reactor.wait(Some(0L)),
+      runtime.next_ready(),
+      reactor,
+      runtime,
+    ),
+    content=(
+      #|(
+      #|  Some({ slot: 0, generation: 0 }),
+      #|  Some({ slot: 0, generation: 511 }),
+      #|  0,
+      #|  None,
+      #|  NativeReactor(registrations=0),
+      #|  Runtime(now=0, tasks=0, operations=0, ready=0),
+      #|)
+    ),
+  )
+}

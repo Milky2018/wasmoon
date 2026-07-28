@@ -186,6 +186,7 @@ pub fn ComponentLinker::add_func(Self, String, @model.FuncType, (Array[Component
 pub fn ComponentLinker::add_import(Self, String, ComponentExtern) -> Unit
 pub fn ComponentLinker::add_instance(Self, String, ComponentInstance) -> Unit
 pub fn ComponentLinker::add_value(Self, String, ComponentValue) -> Unit
+pub fn ComponentLinker::close(Self) -> Unit
 pub fn ComponentLinker::get_component(Self, String) -> ComponentInstance?
 pub fn ComponentLinker::get_import(Self, String) -> ComponentExtern?
 pub fn ComponentLinker::get_store(Self) -> @runtime.Store
@@ -236,7 +237,8 @@ pub fn CoreContinuation::continue_execution(Self) -> CoreExecutionOutcome raise 
 pub impl @debug.Debug for CoreContinuation
 
 type CoreExecutionEngine
-pub fn CoreExecutionEngine::CoreExecutionEngine((@runtime.Store, @types.Module, @runtime.ModuleInstance) -> Unit raise ComponentRuntimeError, (@runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value], CoreExecutionRequest) -> CoreExecutionOutcome raise ComponentRuntimeError, prepare_store? : (@runtime.Store) -> Unit) -> Self
+pub fn CoreExecutionEngine::CoreExecutionEngine((@runtime.Store, @types.Module, @runtime.ModuleInstance) -> Unit raise ComponentRuntimeError, (@runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value], CoreExecutionRequest) -> CoreExecutionOutcome raise ComponentRuntimeError, prepare_store? : (@runtime.Store) -> Unit, close? : () -> Unit) -> Self
+pub fn CoreExecutionEngine::close(Self) -> Unit
 pub fn CoreExecutionEngine::invoke(Self, @runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value], CoreExecutionRequest) -> CoreExecutionOutcome raise ComponentRuntimeError
 pub fn CoreExecutionEngine::prepare_store(Self, @runtime.Store) -> Unit
 pub fn CoreExecutionEngine::register_instance(Self, @runtime.Store, @types.Module, @runtime.ModuleInstance) -> Unit raise ComponentRuntimeError

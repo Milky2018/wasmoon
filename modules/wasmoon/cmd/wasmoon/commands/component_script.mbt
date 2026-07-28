@@ -958,6 +958,7 @@ fn run_component_script_impl(
   } else {
     ComponentLinker()
   }
+  defer linker.close()
   let store = linker.get_store()
   let return_two = make_const_u32_func(2)
   let return_three = make_const_u32_func(3)

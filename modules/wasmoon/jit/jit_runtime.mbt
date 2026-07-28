@@ -333,6 +333,30 @@ fn load_artifact_with_imports_using_registrar(
 }
 
 ///|
+/// Close this module and release all process-local executable mappings.
+///
+/// The module is terminal after this call. The caller must first finish or
+/// cancel every invocation and continuation that can enter its code.
+pub fn JITModule::close(self : JITModule) -> Unit {
+  if self.context is Some(context) {
+    context.close()
+  }
+  self.context = None
+  self.context_ptr = 0L
+  for trampoline in self.owned_trampolines {
+    trampoline.release()
+  }
+  self.owned_trampolines.clear()
+  if self.installed_code is Some(installed) {
+    installed.release()
+  }
+  self.installed_code = None
+  self.functions.clear()
+  self.by_name.clear()
+  self.address_ranges.clear()
+}
+
+///|
 /// Get the raw VMContext pointer for this JIT module
 /// Returns 0 if no context is available
 pub fn JITModule::get_context_ptr(self : JITModule) -> Int64 {

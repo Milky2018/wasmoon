@@ -54,6 +54,14 @@ fn JITContext::ptr(self : JITContext) -> Int64 {
 }
 
 ///|
+fn JITContext::close(self : JITContext) -> Unit {
+  for entry in self.trampoline_cache {
+    entry.1.release()
+  }
+  self.trampoline_cache.clear()
+}
+
+///|
 /// Set a function pointer in the context
 fn JITContext::set_func(self : JITContext, idx : Int, func_ptr : Int64) -> Unit {
   self.ctx.set_func(idx, func_ptr)

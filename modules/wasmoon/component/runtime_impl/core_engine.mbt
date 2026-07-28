@@ -106,6 +106,7 @@ pub(all) enum CoreExecutionOutcome {
 /// or JIT adapter according to the typed execution request.
 struct CoreExecutionEngine {
   prepare_store_fn : (@runtime.Store) -> Unit
+  close_fn : () -> Unit
   register_instance_fn : (
     @runtime.Store,
     @types.Module,
@@ -131,12 +132,20 @@ pub fn CoreExecutionEngine::CoreExecutionEngine(
     CoreExecutionRequest,
   ) -> CoreExecutionOutcome raise ComponentRuntimeError,
   prepare_store? : (@runtime.Store) -> Unit = fn(_store) { () },
+  close? : () -> Unit = fn() { () },
 ) -> CoreExecutionEngine {
   {
     prepare_store_fn: prepare_store,
+    close_fn: close,
     register_instance_fn: register_instance,
     invoke_fn: invoke,
   }
+}
+
+///|
+/// Release execution-engine resources after all calls and continuations end.
+pub fn CoreExecutionEngine::close(self : CoreExecutionEngine) -> Unit {
+  (self.close_fn)()
 }
 
 ///|

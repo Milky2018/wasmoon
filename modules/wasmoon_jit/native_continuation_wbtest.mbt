@@ -14,11 +14,160 @@ extern "c" fn c_native_nested_trap_probe() -> Int64 = "wasmoon_native_nested_tra
 extern "c" fn c_native_parked_gc_root_probe() -> Int64 = "wasmoon_native_parked_gc_root_probe"
 
 ///|
+extern "c" fn c_native_fiber_live_count() -> Int64 = "wasmoon_native_fiber_live_count"
+
+///|
+extern "c" fn c_native_fiber_mapped_stack_bytes() -> Int64 = "wasmoon_native_fiber_mapped_stack_bytes"
+
+///|
+extern "c" fn c_native_fiber_parked_root_registration_count() -> Int64 = "wasmoon_native_fiber_parked_root_registration_count"
+
+///|
+fn native_fiber_lifecycle_counts() -> (Int64, Int64, Int64) {
+  (
+    c_native_fiber_live_count(),
+    c_native_fiber_mapped_stack_bytes(),
+    c_native_fiber_parked_root_registration_count(),
+  )
+}
+
+///|
 fn native_continuation_test_context() -> NativeJITContext {
   match NativeJITContext::try_alloc(1) {
     Some(context) => context
     None => abort("failed to allocate native JIT test context")
   }
+}
+
+///|
+test "native continuation cancellation has explicit phase boundaries" {
+  let context = native_continuation_test_context()
+  let running : Array[NativeJITContinuation?] = [None]
+  let running_cancel_phase : Array[NativeFiberPhase?] = [None]
+  context.set_hostcall_callback(fn() {
+    if running[0] is Some(continuation) {
+      continuation.cancel() catch {
+        InvalidTransition(phase) => running_cancel_phase[0] = Some(phase)
+        _ => ()
+      }
+    }
+    HostcallSuspended
+  })
+  let active = context.start_continuation(
+    c_native_hostcall_probe_trampoline(),
+    1L,
+    FixedArray::from_array([0L]),
+    1,
+    stack_size=64L * 1024L,
+  )
+  running[0] = Some(active)
+  let suspended = active.continue_with()
+  running[0] = None
+  let suspended_phase = active.phase()
+  active.cancel()
+  let cancelled_phase = active.phase()
+  let repeated_cancel_phase : Array[NativeFiberPhase?] = [None]
+  active.cancel() catch {
+    InvalidTransition(phase) => repeated_cancel_phase[0] = Some(phase)
+    _ => ()
+  }
+
+  let ready = context.start_continuation(
+    c_native_hostcall_probe_trampoline(),
+    1L,
+    FixedArray::from_array([0L]),
+    1,
+    stack_size=64L * 1024L,
+  )
+  ready.cancel()
+
+  context.set_hostcall_callback(fn() { HostcallCompleted })
+  let returned = context.start_continuation(
+    c_native_hostcall_probe_trampoline(),
+    1L,
+    FixedArray::from_array([0L]),
+    1,
+    stack_size=64L * 1024L,
+  )
+  let returned_event = returned.continue_with()
+  let returned_cancel_phase : Array[NativeFiberPhase?] = [None]
+  returned.cancel() catch {
+    InvalidTransition(phase) => returned_cancel_phase[0] = Some(phase)
+    _ => ()
+  }
+  debug_inspect(
+    (
+      suspended,
+      running_cancel_phase[0],
+      suspended_phase,
+      cancelled_phase,
+      repeated_cancel_phase[0],
+      ready.phase(),
+      returned_event,
+      returned_cancel_phase[0],
+    ),
+    content=(
+      #|(
+      #|  NativeHostcallSuspended,
+      #|  Some(Running),
+      #|  Suspended,
+      #|  Cancelled,
+      #|  Some(Cancelled),
+      #|  Cancelled,
+      #|  NativeJITReturned(0),
+      #|  Some(Returned),
+      #|)
+    ),
+  )
+}
+
+///|
+test "interleaved native continuations release all lifecycle state" {
+  let before = native_fiber_lifecycle_counts()
+  let context = native_continuation_test_context()
+  context.set_hostcall_callback(fn() { HostcallSuspended })
+  let completed = Ref(0)
+  let cancelled = Ref(0)
+  for _round in 0..<16 {
+    let parked : Array[NativeJITContinuation] = []
+    for index in 0..<32 {
+      let continuation = context.start_continuation(
+        c_native_hostcall_probe_trampoline(),
+        1L,
+        FixedArray::from_array([0L]),
+        1,
+        stack_size=64L * 1024L,
+      )
+      let event = continuation.continue_with()
+      guard event is NativeHostcallSuspended else {
+        return fail("continuation \{index} did not suspend: \{to_repr(event)}")
+      }
+      parked.push(continuation)
+    }
+    for offset in 0..<parked.length() {
+      let index = parked.length() - 1 - offset
+      if index % 2 == 0 {
+        parked[index].cancel()
+        cancelled.val = cancelled.val + 1
+      } else {
+        guard parked[index].continue_with() is NativeJITReturned(0) else {
+          return fail("continuation did not return")
+        }
+        completed.val = completed.val + 1
+      }
+    }
+  }
+  let after = native_fiber_lifecycle_counts()
+  debug_inspect(
+    (
+      completed.val,
+      cancelled.val,
+      after.0 - before.0,
+      after.1 - before.1,
+      after.2 - before.2,
+    ),
+    content="(256, 256, 0, 0, 0)",
+  )
 }
 
 ///|

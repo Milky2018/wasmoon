@@ -135,7 +135,17 @@ jobs:
           python3 scripts/find_gc_bugs.py \
             --dir spec/gc --timeout 30 --max-files 64 --fault-alloc-every 7
           moon test \
+            modules/wasmoon_jit/native_continuation_wbtest.mbt
+          moon test \
+            modules/wasmoon/async_native/reactor_wbtest.mbt
+          moon test \
+            modules/wasmoon/wasi_component/async_preview3_wbtest.mbt
+          moon test \
             modules/wasmoon/component/runtime_impl/runtime_cleanup_wbtest.mbt
+          moon test \
+            modules/wasmoon/component/runtime_impl/entry_state_wbtest.mbt
+          moon test \
+            modules/wasmoon/cmd/wasmoon/commands/component_error_wbtest.mbt
 
   macos-arm64:
     name: macOS ARM64
@@ -250,4 +260,14 @@ jobs:
           python3 scripts/find_gc_bugs.py \
             --dir spec/gc --timeout 30 --max-files 64 --fault-alloc-every 7
           moon test \
+            modules/wasmoon_jit/native_continuation_wbtest.mbt
+          moon test \
+            modules/wasmoon/async_native/reactor_wbtest.mbt
+          moon test \
+            modules/wasmoon/wasi_component/async_preview3_wbtest.mbt
+          moon test \
             modules/wasmoon/component/runtime_impl/runtime_cleanup_wbtest.mbt
+          moon test \
+            modules/wasmoon/component/runtime_impl/entry_state_wbtest.mbt
+          moon test \
+            modules/wasmoon/cmd/wasmoon/commands/component_error_wbtest.mbt

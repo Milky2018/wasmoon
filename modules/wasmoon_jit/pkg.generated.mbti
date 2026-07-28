@@ -545,6 +545,7 @@ pub struct InstalledCode {
 pub fn InstalledCode::entry_address(Self, Int) -> Int64?
 pub fn InstalledCode::functions(Self) -> Array[InstalledFunction]
 pub fn InstalledCode::imports(Self) -> Array[InstalledImport]
+pub fn InstalledCode::release(Self) -> Unit
 
 pub struct InstalledFunction {
   // private fields
@@ -570,6 +571,7 @@ pub struct InstalledTrampoline {
   // private fields
 }
 pub fn InstalledTrampoline::entry_address(Self) -> Int64
+pub fn InstalledTrampoline::release(Self) -> Unit
 
 pub struct JITDebugDB {
   entries : Map[Int, JITFunctionDebug]

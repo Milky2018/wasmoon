@@ -69,3 +69,33 @@ test "Preview 3 cancellation releases runtime and native registrations" {
     ),
   )
 }
+
+///|
+test "Preview 3 repeated cancellation leaves no host operations" {
+  let ctx = WasiComponentCtxBuilder().build()
+  defer ctx.close()
+  let now = @wasi.native_clock_gettime_monotonic()
+  if now < 0L {
+    return fail("monotonic clock is unavailable")
+  }
+  for index in 0..<512 {
+    let operation = ctx.register_deadline(now + 1000000000L + index.to_int64())
+    ctx.cancel_async_operation(operation)
+  }
+  debug_inspect(
+    (
+      ctx.async_ready.length(),
+      ctx.wait_for_async_event(),
+      ctx.native_reactor,
+      ctx.async_runtime,
+    ),
+    content=(
+      #|(
+      #|  0,
+      #|  false,
+      #|  Some(NativeReactor(registrations=0)),
+      #|  Runtime(now=0, tasks=0, operations=0, ready=0),
+      #|)
+    ),
+  )
+}

@@ -192,5 +192,11 @@ fn component_jit_execution_engine(
       Returned(results)
     },
     prepare_store=fn(store) { store.enable_c_heap() },
+    close=fn() {
+      for entry in contexts {
+        entry.1.core.close()
+      }
+      contexts.clear()
+    },
   )
 }

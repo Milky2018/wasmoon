@@ -315,6 +315,7 @@ struct ComponentLinker {
   components : Array[(String, ComponentInstance)]
   imports : Map[String, ComponentExtern]
   host_runtime : Ref[HostRuntimeState?]
+  closed : Ref[Bool]
   // Mutable counter stored in a 1-element array so methods can bump it without
   // requiring `mut self`.
   resource_id_counter : Array[Int]
@@ -340,6 +341,7 @@ pub fn ComponentLinker::with_core_execution_engine(
     components: [],
     imports: Map([]),
     host_runtime: Ref(None),
+    closed: Ref(false),
     resource_id_counter: [0],
   }
 }
@@ -354,6 +356,22 @@ fn ComponentLinker::alloc_resource_id(self : ComponentLinker) -> Int {
 ///|
 pub fn ComponentLinker::get_store(self : ComponentLinker) -> @runtime.Store {
   self.core_linker.get_store()
+}
+
+///|
+/// Close the execution engine after all component calls have ended.
+///
+/// A linker is terminal after this call. Embeddings must finish or cancel every
+/// outstanding continuation before closing it.
+pub fn ComponentLinker::close(self : ComponentLinker) -> Unit {
+  if self.closed.val {
+    return
+  }
+  self.closed.val = true
+  self.components.clear()
+  self.imports.clear()
+  self.host_runtime.val = None
+  self.core_engine.close()
 }
 
 ///|

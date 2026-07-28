@@ -131,6 +131,7 @@ pub struct JITModuleContext {
 pub fn JITModuleContext::JITModuleContext(@jit.JITModule, Int64, Array[Int], Array[Int], Array[Int], Array[Int], Array[Int], Array[@types.SubType], Array[Int], Bool) -> Self
 pub fn JITModuleContext::call_core_func(Self, @runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value]) -> Array[@types.Value] raise JITCoreCallError
 pub fn JITModuleContext::call_core_func_resumable(Self, @runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value]) -> JITCoreCallOutcome raise JITCoreCallError
+pub fn JITModuleContext::close(Self) -> Unit
 
 pub struct WastContext {
   store : @runtime.Store
