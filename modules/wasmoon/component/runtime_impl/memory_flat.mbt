@@ -25,18 +25,16 @@ fn read_string_from_memory_with_encoding(
   }
   let mem_len = mem.byte_len()
   let mut byte_len = len
-  let mut latin1 = false
+  let mut utf16 = encoding == Utf16
   if encoding == Utf16 {
     byte_len = len * 2
   } else if encoding == Latin1Utf16 {
     // In the canonical ABI, latin1+utf16 uses the high bit of the length to
-    // indicate latin1 vs utf16.
+    // indicate UTF-16; an untagged length selects Latin-1.
     let ulen = len.reinterpret_as_uint()
     if (ulen & 0x8000_0000U) != 0U {
-      latin1 = true
-      byte_len = (ulen & 0x7FFF_FFFFU).reinterpret_as_int()
-    } else {
-      byte_len = len * 2
+      utf16 = true
+      byte_len = (ulen & 0x7FFF_FFFFU).reinterpret_as_int() * 2
     }
   }
   if ptr.to_int64() + byte_len.to_int64() > mem_len {
@@ -44,7 +42,7 @@ fn read_string_from_memory_with_encoding(
       "string content out-of-bounds (string pointer/length out of bounds of memory)",
     )
   }
-  if encoding == Utf8 || latin1 {
+  if encoding == Utf8 || !utf16 {
     let bytes : Array[Byte] = []
     for i in 0..<byte_len {
       let b = mem.load_byte(ptr + i) catch {
@@ -52,7 +50,7 @@ fn read_string_from_memory_with_encoding(
       }
       bytes.push(b)
     }
-    if latin1 {
+    if encoding == Latin1Utf16 {
       // Latin1 is a byte-for-codepoint mapping.
       let buf = StringBuilder::StringBuilder()
       for b in bytes {
@@ -119,6 +117,9 @@ fn write_bytes_to_memory_with_align(
     [I32(n)] => n
     [I64(n)] => n.to_int()
     _ => raise CanonCallError("invalid realloc result")
+  }
+  if align > 1 && ptr % align != 0 {
+    raise CanonCallError("realloc return: result not aligned")
   }
   // Even for zero-sized allocations we must validate the returned pointer.
   let mem_len = mem.byte_len().to_int()
@@ -303,6 +304,9 @@ fn alloc_realloc_area(
     [I32(n)] => n
     [I64(n)] => n.to_int()
     _ => raise CanonCallError("invalid realloc result")
+  }
+  if align > 1 && ptr % align != 0 {
+    raise CanonCallError("realloc return: result not aligned")
   }
   let mem_len = mem.byte_len().to_int()
   if ptr < 0 || ptr > mem_len || ptr + size > mem_len {

@@ -764,12 +764,6 @@ def is_parse_rejection(msg: str, code: Optional[str]) -> bool:
     return "parse component error" in lower or '"phase":"parse"' in lower
 
 
-def wit_names_for_path(wast_file: Path) -> bool:
-    # wasm-tools' suite validates the WIT component encoding, which imposes
-    # kebab-case/package-name name rules. wasmtime's suite uses arbitrary names.
-    return "wasmtime" not in wast_file.parts
-
-
 def run_component_script(
     script: dict, wasmoon: Path, tmp: Path, *, no_jit: bool = False
 ) -> Tuple[int, int, int, list[str], str, bool]:
@@ -825,7 +819,8 @@ def run_file(
     failures: list[str] = []
     defined_components: set[str] = set()
     anon_def_count = 0
-    wit_names = wit_names_for_path(path)
+    # The consolidated official suite uses the normative WIT name rules.
+    wit_names = True
     current_form_idx = 0
     current_cmd = ""
 

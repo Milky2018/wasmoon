@@ -880,7 +880,7 @@ fn instantiate_canon_lower(
           func, component_args, store, caller_table, async_state,
         ) catch {
           e => {
-            trap_canon(canon_err_message(e))
+            trap_canon(canon_core_boundary_error_message(e))
             ([] : Array[ComponentValue])
           }
         }

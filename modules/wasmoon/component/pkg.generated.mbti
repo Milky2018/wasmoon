@@ -149,6 +149,8 @@ pub(all) enum ComponentValueType {
   String
   ErrorContext
   List(ComponentValueType)
+  FixedList(ComponentValueType, Int)
+  MapType(ComponentValueType, ComponentValueType)
   Tuple(Array[ComponentValueType])
   Record(Array[ComponentField])
   Variant(Array[ComponentCase])

@@ -174,8 +174,8 @@ fn encode_string_for_canon(
       (Bytes::from_array(out), units, 2)
     }
     Latin1Utf16 => {
-      // Encode as latin1 if possible, otherwise utf16. We use the high bit of
-      // the length to indicate latin1.
+      // Encode as latin1 if possible, otherwise utf16. The canonical ABI uses
+      // the high bit of the length to indicate UTF-16.
       let mut latin1_ok = true
       for c in s {
         if c.to_int() > 0xFF {
@@ -188,11 +188,11 @@ fn encode_string_for_canon(
         for c in s {
           bytes.push(c.to_int().to_byte())
         }
-        let len = (bytes.length().reinterpret_as_uint() | 0x8000_0000U).reinterpret_as_int()
-        (Bytes::from_array(bytes), len, 2)
+        (Bytes::from_array(bytes), bytes.length(), 2)
       } else {
         let (bytes, units, _align) = encode_string_for_canon(s, Utf16)
-        (bytes, units, 2)
+        let tagged_units = (units.reinterpret_as_uint() | 0x8000_0000U).reinterpret_as_int()
+        (bytes, tagged_units, 2)
       }
     }
   }

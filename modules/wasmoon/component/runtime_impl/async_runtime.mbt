@@ -9,21 +9,57 @@ fn transfer_args_if_needed(
   async_state : AsyncState,
   from_component_id : Int,
   to_component_id : Int,
-) -> Array[ComponentValue] raise ComponentRuntimeError {
-  let out : Array[ComponentValue] = []
+) -> (Array[ComponentValue], Array[Array[Int]]) raise ComponentRuntimeError {
+  let lends : Array[Array[Int]] = []
   for i, param in func_type.params {
     let v = if i < args.length() { args[i] } else { raise InvalidValueIndex(i) }
-    let transferred = transfer_stream_future_value(
+    collect_direct_borrow_lends(
       param.ty,
       v,
       types,
       async_state,
       from_component_id,
       to_component_id,
+      lends,
     )
-    out.push(transferred)
   }
-  out
+  fn release_lends() -> Unit {
+    for counter in lends {
+      counter[0] -= 1
+    }
+  }
+  let out : Array[ComponentValue] = []
+  try {
+    for i, param in func_type.params {
+      let v = if i < args.length() {
+        args[i]
+      } else {
+        raise InvalidValueIndex(i)
+      }
+      let transferred = transfer_stream_future_value(
+        param.ty,
+        v,
+        types,
+        async_state,
+        from_component_id,
+        to_component_id,
+      )
+      out.push(transferred)
+    }
+  } catch {
+    error => {
+      release_lends()
+      raise error
+    }
+  }
+  (out, lends)
+}
+
+///|
+fn release_direct_borrow_lends(lends : Array[Array[Int]]) -> Unit {
+  for counter in lends {
+    counter[0] -= 1
+  }
 }
 
 ///|
@@ -193,7 +229,7 @@ fn await_component_func(
           resources.mem_addr is None {
           raise MissingCanonMemory
         }
-        let xargs = transfer_args_if_needed(
+        let (xargs, direct_borrow_lends) = transfer_args_if_needed(
           args,
           func_type,
           types,
@@ -201,6 +237,7 @@ fn await_component_func(
           caller_table.id,
           callee_table.id,
         )
+        defer release_direct_borrow_lends(direct_borrow_lends)
         let core_args = component_args_to_core(
           xargs, func_type, types, resources, store, callee_table, callee_table,
         )
@@ -591,7 +628,7 @@ fn step_task_once_impl(
       }
       let args_owner = task.args_owner_component_id[0]
       if args_owner != callee_table.id {
-        let xargs = transfer_args_if_needed(
+        let (xargs, direct_borrow_lends) = transfer_args_if_needed(
           task.args,
           func_type,
           types,
@@ -599,6 +636,7 @@ fn step_task_once_impl(
           args_owner,
           callee_table.id,
         )
+        defer release_direct_borrow_lends(direct_borrow_lends)
         // Persist the renumbered handles so subsequent callback steps don't re-transfer.
         task.args.clear()
         for v in xargs {
@@ -1303,7 +1341,7 @@ fn call_component_func_in_task(
             resources.mem_addr is None {
             raise MissingCanonMemory
           }
-          let xargs = transfer_args_if_needed(
+          let (xargs, direct_borrow_lends) = transfer_args_if_needed(
             args,
             func_type,
             types,
@@ -1311,6 +1349,7 @@ fn call_component_func_in_task(
             resource_table.id,
             callee_table.id,
           )
+          defer release_direct_borrow_lends(direct_borrow_lends)
           let core_args = component_args_to_core(
             xargs, func_type, types, resources, store, callee_table, callee_table,
           )
@@ -1406,7 +1445,7 @@ fn call_component_func_in_task(
       if func_type_needs_memory(func_type, types) && resources.mem_addr is None {
         raise MissingCanonMemory
       }
-      let xargs = transfer_args_if_needed(
+      let (xargs, direct_borrow_lends) = transfer_args_if_needed(
         args,
         func_type,
         types,
@@ -1414,6 +1453,7 @@ fn call_component_func_in_task(
         resource_table.id,
         callee_table.id,
       )
+      defer release_direct_borrow_lends(direct_borrow_lends)
       let core_args = component_args_to_core(
         xargs, func_type, types, resources, store, callee_table, callee_table,
       )

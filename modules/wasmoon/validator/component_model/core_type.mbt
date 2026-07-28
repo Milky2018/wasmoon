@@ -98,6 +98,23 @@ fn parse_core_type_module_exports(
 }
 
 ///|
+fn skip_prefixed_core_subtype(
+  r : CoreTypeReader,
+) -> Unit raise ComponentValidationError {
+  if r.read_u8() != 0x50 {
+    raise SectionParseError(3, "invalid prefixed core subtype")
+  }
+  let supertype_count = r.read_leb_u32()
+  for _ in 0..<supertype_count {
+    r.read_leb_u32() |> ignore
+  }
+  if r.read_u8() != 0x60 {
+    raise SectionParseError(3, "unsupported core subtype")
+  }
+  r.skip_func_type_body()
+}
+
+///|
 fn parse_core_type_section(
   payload : Bytes,
   max_outer_depth : Int,
@@ -122,6 +139,9 @@ fn parse_core_type_section(
       )
     } else if op == 0x60 {
       r.skip_func_type_body()
+      out.push(None)
+    } else if op == 0x00 {
+      skip_prefixed_core_subtype(r)
       out.push(None)
     } else {
       raise SectionParseError(3, "unsupported core type opcode: \{op}")
@@ -159,6 +179,10 @@ fn parse_core_type_section_module_sigs(
       r.skip_func_type_body()
       imports.push(None)
       export_types.push(None)
+    } else if op == 0x00 {
+      skip_prefixed_core_subtype(r)
+      imports.push(None)
+      export_types.push(None)
     } else {
       raise SectionParseError(3, "unsupported core type opcode: \{op}")
     }
@@ -189,6 +213,9 @@ fn validate_single_core_type(
     )
   } else if op == 0x60 {
     r.skip_func_type_body()
+    None
+  } else if op == 0x00 {
+    skip_prefixed_core_subtype(r)
     None
   } else {
     raise SectionParseError(3, "unsupported core type opcode: \{op}")

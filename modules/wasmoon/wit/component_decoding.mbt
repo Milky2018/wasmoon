@@ -82,6 +82,13 @@ fn typeexpr_of_typedef(
       Apply("list", [
         typeexpr_of_valtype(slots, t, export_name_by_idx, resource_by_idx),
       ])
+    FixedList(_, _) =>
+      raise Error("fixed-length lists cannot be represented by the WIT AST")
+    MapType(key, value) =>
+      Apply("map", [
+        typeexpr_of_valtype(slots, key, export_name_by_idx, resource_by_idx),
+        typeexpr_of_valtype(slots, value, export_name_by_idx, resource_by_idx),
+      ])
     Tuple(ts) => {
       let args : Array[TypeExpr] = []
       for t in ts {

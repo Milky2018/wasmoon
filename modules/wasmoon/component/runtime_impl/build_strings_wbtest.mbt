@@ -24,3 +24,15 @@ test "canonical UTF-8 decoding distinguishes malformed and incomplete input" {
     ),
   )
 }
+
+///|
+test "latin1+utf16 tags only UTF-16 payloads" {
+  let latin1 = encode_string_for_canon("é", Latin1Utf16)
+  let utf16 = encode_string_for_canon("水", Latin1Utf16)
+  debug_inspect(
+    (latin1, utf16),
+    content=(
+      #|((<Bytes: [0xe9]>, 1, 2), (<Bytes: [0x34, 0x6c]>, -2147483647, 2))
+    ),
+  )
+}

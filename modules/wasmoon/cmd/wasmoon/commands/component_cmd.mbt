@@ -70,6 +70,12 @@ fn component_validation_error_code(
       } else {
         CompValidateError
       }
+    CoreModuleError(msg) =>
+      if msg == "unknown binary version" || msg.has_prefix("parse core module:") {
+        CompParseError
+      } else {
+        CompValidateError
+      }
     _ => CompValidateError
   }
 }

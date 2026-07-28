@@ -276,7 +276,7 @@ fn lift_component_value_from_flat(
               _ => raise HostCallError("type mismatch")
             }
             if n < 0 || n >= labels.length() {
-              raise CanonCallError("invalid enum discriminant")
+              raise CanonCallError("invalid variant discriminant")
             }
             U32(n)
           }
@@ -594,7 +594,7 @@ fn component_args_to_core(
               _ => raise HostCallError("argument type mismatch")
             }
             if n < 0 || n >= labels.length() {
-              raise HostCallError("invalid enum discriminant")
+              raise HostCallError("invalid variant discriminant")
             }
             [I32(n)]
           }
@@ -613,7 +613,7 @@ fn component_args_to_core(
               Some(entry) =>
                 if entry.type_id != expected_type_id {
                   raise CanonCallError(
-                    "handle index \{handle} used with the wrong type",
+                    "handle index \{resource_handle_index_text(handle)} used with the wrong type",
                   )
                 } else if entry.impl_component_id == callee_table.id {
                   [I32(entry.rep)]
@@ -622,7 +622,7 @@ fn component_args_to_core(
                 }
               None =>
                 raise CanonCallError(
-                  "lower borrow: unknown handle index \{handle} in resource table \{caller_table.id}",
+                  "lower borrow: unknown handle index \{resource_handle_index_text(handle)} in resource table \{caller_table.id}",
                 )
             }
           }
@@ -643,12 +643,12 @@ fn component_args_to_core(
                 Some(e) => e
                 None =>
                   raise CanonCallError(
-                    "lower own: unknown handle index \{handle} in resource table \{caller_table.id}",
+                    "lower own: unknown handle index \{resource_handle_index_text(handle)} in resource table \{caller_table.id}",
                   )
               }
               if entry.type_id != expected_type_id {
                 raise CanonCallError(
-                  "handle index \{handle} used with the wrong type",
+                  "handle index \{resource_handle_index_text(handle)} used with the wrong type",
                 )
               }
               let new_handle = callee_table.alloc(entry)
@@ -756,12 +756,12 @@ fn core_results_to_component(
     match table.get(handle) {
       None =>
         raise CanonCallError(
-          "core result: unknown handle index \{handle}; index \{handle} is not a resource in table \{table.id}",
+          "core result: unknown handle index \{resource_handle_index_text(handle)}; index \{resource_handle_index_text(handle)} is not a resource in table \{table.id}",
         )
       Some(entry) =>
         if entry.type_id < 0 {
           raise CanonCallError(
-            "unknown handle index \{handle}; index \{handle} is not a resource",
+            "unknown handle index \{resource_handle_index_text(handle)}; index \{resource_handle_index_text(handle)} is not a resource",
           )
         } else if entry.type_id != expected_type_id {
           let expected_desc = if expected_kind == GuestDefined {
@@ -780,7 +780,7 @@ fn core_results_to_component(
             found_desc
           }
           raise CanonCallError(
-            "handle index \{handle} used with the wrong type, expected \{expected_desc} but found \{suffix}",
+            "handle index \{resource_handle_index_text(handle)} used with the wrong type, expected \{expected_desc} but found \{suffix}",
           )
         }
     }
@@ -990,12 +990,12 @@ fn core_args_to_component(
     match table.get(handle) {
       None =>
         raise CanonCallError(
-          "\{context}: unknown handle index \{handle}; index \{handle} is not a resource",
+          "\{context}: unknown handle index \{resource_handle_index_text(handle)}; index \{resource_handle_index_text(handle)} is not a resource",
         )
       Some(entry) =>
         if entry.type_id < 0 {
           raise CanonCallError(
-            "unknown handle index \{handle}; index \{handle} is not a resource",
+            "unknown handle index \{resource_handle_index_text(handle)}; index \{resource_handle_index_text(handle)} is not a resource",
           )
         } else if entry.type_id != expected_type_id {
           let expected_desc = if expected_kind == GuestDefined {
@@ -1014,7 +1014,7 @@ fn core_args_to_component(
             found_desc
           }
           raise CanonCallError(
-            "handle index \{handle} used with the wrong type, expected \{expected_desc} but found \{suffix}",
+            "handle index \{resource_handle_index_text(handle)} used with the wrong type, expected \{expected_desc} but found \{suffix}",
           )
         }
     }
@@ -1417,7 +1417,7 @@ fn component_results_to_core(
                     _ => raise HostCallError("result type mismatch")
                   }
                   if tag < 0 || tag >= labels.length() {
-                    raise HostCallError("invalid enum discriminant")
+                    raise HostCallError("invalid variant discriminant")
                   }
                   [I32(tag)]
                 }
@@ -1585,7 +1585,7 @@ fn component_results_to_core(
                 _ => raise HostCallError("result type mismatch")
               }
               if n < 0 || n >= labels.length() {
-                raise HostCallError("invalid enum discriminant")
+                raise HostCallError("invalid variant discriminant")
               }
               [I32(n)]
             }

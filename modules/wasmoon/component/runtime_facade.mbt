@@ -38,6 +38,8 @@ pub(all) enum ComponentValueType {
   String
   ErrorContext
   List(ComponentValueType)
+  FixedList(ComponentValueType, Int)
+  MapType(ComponentValueType, ComponentValueType)
   Tuple(Array[ComponentValueType])
   Record(Array[ComponentField])
   Variant(Array[ComponentCase])
@@ -300,6 +302,13 @@ fn resolve_component_value_type(
       match type_def {
         DefValType(primitive) => component_primitive_type(primitive)
         List(element) => List(resolve_component_value_type(element, types))
+        FixedList(element, len) =>
+          FixedList(resolve_component_value_type(element, types), len)
+        MapType(key, value) =>
+          MapType(
+            resolve_component_value_type(key, types),
+            resolve_component_value_type(value, types),
+          )
         Tuple(elements) => {
           let resolved = []
           for element in elements {
@@ -1244,6 +1253,39 @@ pub fn component_value_from_json(
           List(values)
         }
         _ => raise JsonValueError("expected list array")
+      }
+    FixedList(element_type, len) =>
+      match json {
+        Array(items) => {
+          if items.length() != len {
+            raise JsonValueError("fixed-length list length mismatch")
+          }
+          let values = []
+          for item in items {
+            values.push(component_value_from_json(item, element_type))
+          }
+          List(values)
+        }
+        _ => raise JsonValueError("expected fixed-length list array")
+      }
+    MapType(key_type, value_type) =>
+      match json {
+        Array(entries) => {
+          let values = []
+          for entry in entries {
+            guard entry is Array([key, value]) else {
+              raise JsonValueError("expected map entry pair")
+            }
+            values.push(
+              ComponentValue::Tuple([
+                component_value_from_json(key, key_type),
+                component_value_from_json(value, value_type),
+              ]),
+            )
+          }
+          List(values)
+        }
+        _ => raise JsonValueError("expected map entry array")
       }
     Tuple(element_types) =>
       match json {

@@ -198,6 +198,16 @@ fn clone_materialized_type_def(
     }
     List(ty) =>
       List(clone_materialized_valtype(ty, source_types, dest_types, remapped))
+    FixedList(ty, len) =>
+      FixedList(
+        clone_materialized_valtype(ty, source_types, dest_types, remapped),
+        len,
+      )
+    MapType(key, value) =>
+      MapType(
+        clone_materialized_valtype(key, source_types, dest_types, remapped),
+        clone_materialized_valtype(value, source_types, dest_types, remapped),
+      )
     Record(fields) => {
       let cloned : Array[@component.RecordField] = []
       for field in fields {
@@ -380,6 +390,30 @@ fn component_type_defs_match(
         left,
         expected_types,
         right,
+        actual_types,
+        depth + 1,
+      )
+    (FixedList(left, left_len), FixedList(right, right_len)) =>
+      left_len == right_len &&
+      component_val_types_match(
+        left,
+        expected_types,
+        right,
+        actual_types,
+        depth + 1,
+      )
+    (MapType(left_key, left_value), MapType(right_key, right_value)) =>
+      component_val_types_match(
+        left_key,
+        expected_types,
+        right_key,
+        actual_types,
+        depth + 1,
+      ) &&
+      component_val_types_match(
+        left_value,
+        expected_types,
+        right_value,
         actual_types,
         depth + 1,
       )

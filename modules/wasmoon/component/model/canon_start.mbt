@@ -32,7 +32,10 @@ pub(all) enum Canon {
   TaskCancel
   ThreadIndex
   ThreadYield(Bool) // cancellable?
+  ThreadSuspendThenResume(Bool) // cancellable?
   ThreadYieldThenResume(Bool) // cancellable?
+  ThreadSuspendThenPromote(Bool) // cancellable?
+  ThreadYieldThenPromote(Bool) // cancellable?
   ThreadResumeLater
   ThreadSuspend(Bool) // cancellable?
   ThreadNewIndirect(Int, Int) // core functype index, core table index
@@ -235,12 +238,33 @@ fn parse_canon(reader : Reader) -> Canon raise ComponentParseError {
       }
       ThreadSuspend(flag == 0x01)
     }
+    0x2a => {
+      let flag = reader.read_u8()
+      if flag != 0x00 && flag != 0x01 {
+        raise InvalidCanonSection
+      }
+      ThreadSuspendThenResume(flag == 0x01)
+    }
     0x2b => {
       let flag = reader.read_u8()
       if flag != 0x00 && flag != 0x01 {
         raise InvalidCanonSection
       }
       ThreadYieldThenResume(flag == 0x01)
+    }
+    0x2c => {
+      let flag = reader.read_u8()
+      if flag != 0x00 && flag != 0x01 {
+        raise InvalidCanonSection
+      }
+      ThreadSuspendThenPromote(flag == 0x01)
+    }
+    0x2d => {
+      let flag = reader.read_u8()
+      if flag != 0x00 && flag != 0x01 {
+        raise InvalidCanonSection
+      }
+      ThreadYieldThenPromote(flag == 0x01)
     }
     0x0d => SubtaskDrop
     0x0e => StreamNew(reader.read_typeidx())

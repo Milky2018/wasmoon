@@ -33,8 +33,16 @@ fn process_canon_section(
       ThreadIndex => instantiate_canon_thread_index(state, store)
       ThreadYield(_cancellable) =>
         instantiate_canon_thread_yield(_cancellable, state, store)
+      ThreadSuspendThenResume(_cancellable) =>
+        instantiate_canon_thread_suspend_then_resume(_cancellable, state, store)
       ThreadYieldThenResume(_cancellable) =>
         instantiate_canon_thread_yield_then_resume(_cancellable, state, store)
+      ThreadSuspendThenPromote(_cancellable) =>
+        instantiate_canon_thread_suspend_then_promote(
+          _cancellable, state, store,
+        )
+      ThreadYieldThenPromote(_cancellable) =>
+        instantiate_canon_thread_yield_then_promote(_cancellable, state, store)
       ThreadResumeLater => instantiate_canon_thread_resume_later(state, store)
       ThreadSuspend(_cancellable) =>
         instantiate_canon_thread_suspend(_cancellable, state, store)

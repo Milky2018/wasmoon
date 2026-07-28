@@ -488,6 +488,42 @@ fn parse_typed_component_value(
           }
           List(values)
         }
+        FixedList(element_ty, len) => {
+          if val.type_ != "list" {
+            raise ParseError("expected fixed-length list value")
+          }
+          let items = val.items.unwrap_or([])
+          if items.length() != len {
+            raise ParseError("fixed-length list value length mismatch")
+          }
+          let values = []
+          for item in items {
+            values.push(parse_typed_component_value(item, element_ty, types))
+          }
+          List(values)
+        }
+        MapType(key_ty, value_ty) => {
+          if val.type_ != "list" {
+            raise ParseError("expected map value")
+          }
+          let entries = []
+          for item in val.items.unwrap_or([]) {
+            if item.type_ != "tuple" {
+              raise ParseError("expected map entry tuple")
+            }
+            let pair = item.items.unwrap_or([])
+            if pair.length() != 2 {
+              raise ParseError("map entry tuple length mismatch")
+            }
+            entries.push(
+              @runtime_impl.ComponentValue::Tuple([
+                parse_typed_component_value(pair[0], key_ty, types),
+                parse_typed_component_value(pair[1], value_ty, types),
+              ]),
+            )
+          }
+          List(entries)
+        }
         Tuple(element_types) => {
           if val.type_ != "tuple" {
             raise ParseError("expected tuple value")

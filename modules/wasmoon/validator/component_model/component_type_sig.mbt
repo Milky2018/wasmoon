@@ -801,6 +801,40 @@ fn valtype_contains_borrow(
 }
 
 ///|
+fn is_map_key_type(
+  ty : @component.ValType,
+  type_table : Array[@component.TypeDef?],
+  visiting : Map[Int, Int],
+) -> Bool {
+  match ty {
+    Prim(Bool)
+    | Prim(S8)
+    | Prim(U8)
+    | Prim(S16)
+    | Prim(U16)
+    | Prim(S32)
+    | Prim(U32)
+    | Prim(S64)
+    | Prim(U64)
+    | Prim(Char)
+    | Prim(String) => true
+    Prim(_) => false
+    TypeIdx(idx) =>
+      if idx < 0 || idx >= type_table.length() || visiting.get(idx) is Some(_) {
+        false
+      } else {
+        visiting.set(idx, 1)
+        let valid = match type_table[idx] {
+          Some(DefValType(p)) => is_map_key_type(Prim(p), type_table, visiting)
+          _ => false
+        }
+        visiting.remove(idx) |> ignore
+        valid
+      }
+  }
+}
+
+///|
 fn validate_typedef(
   td : @component.TypeDef,
   cfg : ComponentValidationConfig,
@@ -825,6 +859,19 @@ fn validate_typedef(
   match td {
     DefValType(_) => ()
     List(v) => validate_valtype(v, type_table)
+    FixedList(v, len) => {
+      if len <= 0 {
+        raise SectionParseError(7, "fixed-length list must not be empty")
+      }
+      validate_valtype(v, type_table)
+    }
+    MapType(key, value) => {
+      validate_valtype(key, type_table)
+      validate_valtype(value, type_table)
+      if !is_map_key_type(key, type_table, Map([])) {
+        raise SectionParseError(7, "invalid map key type")
+      }
+    }
     Record(fields) => {
       if fields.length() == 0 {
         raise SectionParseError(7, "record type must have at least one field")
@@ -1640,7 +1687,7 @@ fn valtype_contains_list_or_string(
           None => false
           Some(td) =>
             match td {
-              DefValType(String) | List(_) => true
+              DefValType(String) | List(_) | MapType(_, _) => true
               DefValType(_)
               | Flags(_)
               | Enum(_)
@@ -1650,6 +1697,8 @@ fn valtype_contains_list_or_string(
               | Stream(_)
               | Future(_)
               | InstanceTypeEmpty => false
+              FixedList(element, _) =>
+                valtype_contains_list_or_string(element, type_table, visiting)
               Record(fields) => {
                 let mut any = false
                 for field in fields {

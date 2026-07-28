@@ -165,7 +165,12 @@ fn validate_host_type_def(
         validate_host_val_type(result, types)
       }
     }
-    List(element) | Option(element) => validate_host_val_type(element, types)
+    List(element) | Option(element) | FixedList(element, _) =>
+      validate_host_val_type(element, types)
+    MapType(key, value) => {
+      validate_host_val_type(key, types)
+      validate_host_val_type(value, types)
+    }
     Record(fields) =>
       for field in fields {
         validate_host_val_type(field.ty, types)

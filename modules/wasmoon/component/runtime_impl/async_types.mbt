@@ -166,6 +166,11 @@ pub fn ResourceTable::free(
 }
 
 ///|
+fn resource_handle_index_text(handle : Int) -> String {
+  handle.reinterpret_as_uint().to_string()
+}
+
+///|
 fn registered_resource_table(
   async_state : AsyncState,
   table : ResourceTable,
@@ -1390,7 +1395,7 @@ fn transfer_stream_future_value(
                 }
                 if !entry.own || entry.num_lends[0] > 0 {
                   raise CanonCallError(
-                    "cannot transfer a borrowed or currently lent resource",
+                    "cannot remove owned resource while borrowed",
                   )
                 }
                 from_table.free(handle) |> ignore
@@ -1495,6 +1500,136 @@ fn transfer_stream_future_value(
             _ => v
           }
         _ => v
+      }
+  }
+}
+
+///|
+fn collect_direct_borrow_lends(
+  ty : ValType,
+  v : ComponentValue,
+  types : Array[TypeDef?],
+  async_state : AsyncState,
+  from_component_id : Int,
+  to_component_id : Int,
+  lends : Array[Array[Int]],
+) -> Unit raise ComponentRuntimeError {
+  match resolve_valtype(ty, types) {
+    Prim(_) => ()
+    TypeIdx(ti) =>
+      match types.get(ti) {
+        Some(Some(Tuple(tys))) =>
+          if v is Tuple(items) {
+            for i in 0..<items.length() {
+              if i < tys.length() {
+                collect_direct_borrow_lends(
+                  tys[i],
+                  items[i],
+                  types,
+                  async_state,
+                  from_component_id,
+                  to_component_id,
+                  lends,
+                )
+              }
+            }
+          }
+        Some(Some(Record(fields))) =>
+          if v is Tuple(items) {
+            for i in 0..<items.length() {
+              if i < fields.length() {
+                collect_direct_borrow_lends(
+                  fields[i].ty,
+                  items[i],
+                  types,
+                  async_state,
+                  from_component_id,
+                  to_component_id,
+                  lends,
+                )
+              }
+            }
+          }
+        Some(Some(List(element))) | Some(Some(FixedList(element, _))) =>
+          if v is List(items) {
+            for item in items {
+              collect_direct_borrow_lends(
+                element, item, types, async_state, from_component_id, to_component_id,
+                lends,
+              )
+            }
+          }
+        Some(Some(MapType(key, value))) =>
+          if v is List(entries) {
+            for entry in entries {
+              if entry is Tuple([key_value, value_value]) {
+                collect_direct_borrow_lends(
+                  key, key_value, types, async_state, from_component_id, to_component_id,
+                  lends,
+                )
+                collect_direct_borrow_lends(
+                  value, value_value, types, async_state, from_component_id, to_component_id,
+                  lends,
+                )
+              }
+            }
+          }
+        Some(Some(Variant(cases))) =>
+          if v is Variant(tag, Some(payload)) &&
+            tag >= 0 &&
+            tag < cases.length() &&
+            cases[tag].ty is Some(payload_type) {
+            collect_direct_borrow_lends(
+              payload_type, payload, types, async_state, from_component_id, to_component_id,
+              lends,
+            )
+          }
+        Some(Some(Option(element))) =>
+          if v is Variant(1, Some(payload)) {
+            collect_direct_borrow_lends(
+              element, payload, types, async_state, from_component_id, to_component_id,
+              lends,
+            )
+          }
+        Some(Some(Result(ok, err))) =>
+          if v is Variant(tag, Some(payload)) {
+            let payload_type = if tag == 0 {
+              ok
+            } else if tag == 1 {
+              err
+            } else {
+              None
+            }
+            if payload_type is Some(payload_type) {
+              collect_direct_borrow_lends(
+                payload_type, payload, types, async_state, from_component_id, to_component_id,
+                lends,
+              )
+            }
+          }
+        Some(Some(Borrow(_))) =>
+          match v {
+            U32(handle) | S32(handle) => {
+              let from_table = match
+                async_state.resource_tables.get(from_component_id) {
+                Some(table) => table
+                None => raise CanonCallError("unknown resource owner instance")
+              }
+              let entry = match from_table.get(handle) {
+                Some(entry) => entry
+                None =>
+                  raise CanonCallError(
+                    "transfer borrow: unknown handle index \{handle} in resource table \{from_component_id}",
+                  )
+              }
+              if to_component_id == entry.impl_component_id {
+                entry.num_lends[0] += 1
+                lends.push(entry.num_lends)
+              }
+            }
+            _ => ()
+          }
+        _ => ()
       }
   }
 }

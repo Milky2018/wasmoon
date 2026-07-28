@@ -219,6 +219,9 @@ fn validate_component_inner(
       // Core module/instance/type sections each declare a single core item.
       1 => {
         // Validate embedded core modules using the existing core validator.
+        if @component.sniff_binary_kind(s.payload) != Some(CoreModule) {
+          raise CoreModuleError("unknown binary version")
+        }
         let core_mod = @parser.parse_module(s.payload) catch {
           e => raise CoreModuleError("parse core module: \{e}")
         }

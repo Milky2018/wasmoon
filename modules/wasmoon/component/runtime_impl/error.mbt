@@ -99,6 +99,23 @@ fn canon_err_message(e : ComponentRuntimeError) -> String {
 }
 
 ///|
+fn canon_core_boundary_error_message(e : ComponentRuntimeError) -> String {
+  let message = canon_err_message(e)
+  let canonical_message = if message == "realloc return: result not aligned" {
+    "unaligned pointer"
+  } else if message == "realloc return: beyond end of memory" {
+    "list content out-of-bounds"
+  } else {
+    message
+  }
+  if canonical_message.has_prefix("wasm trap:") {
+    canonical_message
+  } else {
+    "wasm trap: \{canonical_message}"
+  }
+}
+
+///|
 /// Some operations are guarded by `may_leave` in the component model; for
 /// example, post-return functions cannot "leave" the current component
 /// instance. We model this with a global flag checked by canonical host funcs.

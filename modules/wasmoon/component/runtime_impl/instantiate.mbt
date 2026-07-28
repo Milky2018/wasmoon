@@ -41,6 +41,9 @@ fn instantiate_component(
   for section in component.binary.sections {
     match section.id {
       1 => {
+        if @component.sniff_binary_kind(section.payload) != Some(CoreModule) {
+          raise CoreModuleParseError("unknown binary version")
+        }
         let core_module = @parser.parse_module(section.payload) catch {
           e => raise CoreModuleParseError(e.to_string())
         }

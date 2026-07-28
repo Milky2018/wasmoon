@@ -641,6 +641,80 @@ fn instantiate_canon_thread_yield_then_resume(
 }
 
 ///|
+fn instantiate_canon_thread_suspend_then_resume(
+  cancellable : Bool,
+  state : BuildState,
+  store : @runtime.Store,
+) -> Unit {
+  let core_type : @types.FuncType = { params: [I32], results: [I32] }
+  let async_state = state.async_state
+  let owner_component_id = state.resource_table.id
+  let host = fn(
+    args : Array[@types.Value],
+  ) -> Array[@types.Value] raise @runtime.RuntimeError {
+    if !canon_may_leave[0] {
+      trap_canon("cannot leave component instance")
+    }
+    let target = match args {
+      [I32(handle)] => handle
+      _ => {
+        trap_canon("type mismatch")
+        return [I32(0)]
+      }
+    }
+    execute_thread_suspension_intrinsic(
+      cancellable,
+      false,
+      Some(target),
+      async_state,
+      store,
+      owner_component_id,
+    )
+  }
+  state.core_funcs.push(
+    alloc_host_core_func(store, core_type, host, may_suspend=true),
+  )
+}
+
+///|
+fn instantiate_unsupported_thread_promotion(
+  operation : String,
+  state : BuildState,
+  store : @runtime.Store,
+) -> Unit {
+  let core_type : @types.FuncType = { params: [I32], results: [I32] }
+  let host = fn(
+    _args : Array[@types.Value],
+  ) -> Array[@types.Value] raise @runtime.RuntimeError {
+    trap_canon("\{operation} is not implemented")
+    [I32(0)]
+  }
+  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+}
+
+///|
+fn instantiate_canon_thread_suspend_then_promote(
+  _cancellable : Bool,
+  state : BuildState,
+  store : @runtime.Store,
+) -> Unit {
+  instantiate_unsupported_thread_promotion(
+    "thread.suspend-then-promote", state, store,
+  )
+}
+
+///|
+fn instantiate_canon_thread_yield_then_promote(
+  _cancellable : Bool,
+  state : BuildState,
+  store : @runtime.Store,
+) -> Unit {
+  instantiate_unsupported_thread_promotion(
+    "thread.yield-then-promote", state, store,
+  )
+}
+
+///|
 fn instantiate_canon_thread_resume_later(
   state : BuildState,
   store : @runtime.Store,

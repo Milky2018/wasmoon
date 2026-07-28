@@ -253,7 +253,10 @@ fn core_functype_for_canon(
     SubtaskDrop => Some({ params: [I32], results: [] })
     SubtaskCancel(_) => Some({ params: [I32], results: [I32] })
     ThreadYield(_) => Some({ params: [], results: [I32] })
-    ThreadYieldThenResume(_) => Some({ params: [I32], results: [I32] })
+    ThreadSuspendThenResume(_)
+    | ThreadYieldThenResume(_)
+    | ThreadSuspendThenPromote(_)
+    | ThreadYieldThenPromote(_) => Some({ params: [I32], results: [I32] })
     ContextGet(vt, _) => Some({ params: [], results: [vt] })
     ContextSet(vt, _) => Some({ params: [vt], results: [] })
     _ => None

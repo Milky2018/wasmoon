@@ -85,7 +85,7 @@ fn instantiate_canon_resource_rep(
           Some(entry) =>
             if entry.type_id < 0 {
               trap_canon(
-                "unknown handle index \{handle}; index \{handle} is not a resource",
+                "unknown handle index \{resource_handle_index_text(handle)}; index \{resource_handle_index_text(handle)} is not a resource",
               )
               []
             } else if entry.type_id != type_id {
@@ -105,7 +105,7 @@ fn instantiate_canon_resource_rep(
                 found_desc
               }
               trap_canon(
-                "handle index \{handle} used with the wrong type, expected \{expected_desc} but found \{suffix}",
+                "handle index \{resource_handle_index_text(handle)} used with the wrong type, expected \{expected_desc} but found \{suffix}",
               )
               []
             } else {
@@ -113,7 +113,7 @@ fn instantiate_canon_resource_rep(
             }
           None => {
             trap_canon(
-              "resource.rep: unknown handle index \{handle}; index \{handle} is not a resource in table \{table.id}",
+              "resource.rep: unknown handle index \{resource_handle_index_text(handle)}; index \{resource_handle_index_text(handle)} is not a resource in table \{table.id}",
             )
             []
           }
@@ -154,7 +154,7 @@ fn instantiate_canon_resource_drop(
           Some(entry) =>
             if entry.type_id < 0 {
               trap_canon(
-                "unknown handle index \{handle}; index \{handle} is not a resource",
+                "unknown handle index \{resource_handle_index_text(handle)}; index \{resource_handle_index_text(handle)} is not a resource",
               )
               []
             } else if entry.type_id != type_id {
@@ -174,7 +174,7 @@ fn instantiate_canon_resource_drop(
                 found_desc
               }
               trap_canon(
-                "handle index \{handle} used with the wrong type, expected \{expected_desc} but found \{suffix}",
+                "handle index \{resource_handle_index_text(handle)} used with the wrong type, expected \{expected_desc} but found \{suffix}",
               )
               []
             } else {
@@ -232,7 +232,7 @@ fn instantiate_canon_resource_drop(
             }
           None => {
             trap_canon(
-              "resource.drop: unknown handle index \{handle}; index \{handle} is not a resource in table \{table.id}",
+              "resource.drop: unknown handle index \{resource_handle_index_text(handle)}; index \{resource_handle_index_text(handle)} is not a resource in table \{table.id}",
             )
             []
           }

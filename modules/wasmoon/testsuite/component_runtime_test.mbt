@@ -26,7 +26,7 @@ fn leb_u32(n : Int) -> Array[Byte] {
 ///|
 fn build_component(sections : Array[(Int, Array[Byte])]) -> Bytes {
   let bytes : Array[Byte] = [
-    b'\x00', b'\x61', b'\x73', b'\x6d', b'\x01', b'\x00', b'\x01', b'\x00',
+    b'\x00', b'\x61', b'\x73', b'\x6d', b'\x0d', b'\x00', b'\x01', b'\x00',
   ]
   for entry in sections {
     let (id, payload) = entry

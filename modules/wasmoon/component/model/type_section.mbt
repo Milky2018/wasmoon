@@ -83,6 +83,8 @@ pub(all) enum TypeDef {
   DefValType(PrimValType)
   FuncType(FuncType)
   List(ValType)
+  FixedList(ValType, Int)
+  MapType(ValType, ValType)
   Record(Array[RecordField])
   Variant(Array[VariantCase])
   Tuple(Array[ValType])
@@ -387,6 +389,18 @@ fn skip_core_typedef(reader : Reader) -> Unit raise ComponentParseError {
     skip_core_moduletype(reader)
   } else if op == 0x60 {
     skip_core_functype_body(reader)
+  } else if op == 0x00 {
+    if reader.read_u8() != 0x50 {
+      raise InvalidTypeSection
+    }
+    let supertype_count = reader.read_leb_u32()
+    for _ in 0..<supertype_count {
+      reader.read_sleb_i32() |> ignore
+    }
+    if reader.read_u8() != 0x60 {
+      raise InvalidTypeSection
+    }
+    skip_core_functype_body(reader)
   } else {
     raise InvalidTypeSection
   }
@@ -557,6 +571,12 @@ fn parse_typedef(reader : Reader) -> TypeDef raise ComponentParseError {
       Tuple(tys)
     }
     0x70 => List(parse_valtype(reader))
+    0x67 => {
+      let ty = parse_valtype(reader)
+      let len = reader.read_leb_u32()
+      FixedList(ty, len)
+    }
+    0x63 => MapType(parse_valtype(reader), parse_valtype(reader))
     0x71 => {
       let n = reader.read_leb_u32()
       let cases : Array[VariantCase] = []

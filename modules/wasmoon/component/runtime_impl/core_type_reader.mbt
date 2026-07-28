@@ -233,6 +233,18 @@ fn skip_core_typedef(reader : Reader) -> Unit raise ComponentRuntimeError {
     skip_core_moduletype(reader)
   } else if op == 0x60 {
     skip_core_functype_body(reader)
+  } else if op == 0x00 {
+    if reader.read_u8() != 0x50 {
+      raise ComponentParseError("invalid core type section")
+    }
+    let supertype_count = reader.read_leb_u32()
+    for _ in 0..<supertype_count {
+      reader.read_leb_u32() |> ignore
+    }
+    if reader.read_u8() != 0x60 {
+      raise ComponentParseError("invalid core type section")
+    }
+    skip_core_functype_body(reader)
   } else {
     raise ComponentParseError("invalid core type section")
   }

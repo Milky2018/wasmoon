@@ -84,7 +84,10 @@ pub(all) enum Canon {
   TaskCancel
   ThreadIndex
   ThreadYield(Bool)
+  ThreadSuspendThenResume(Bool)
   ThreadYieldThenResume(Bool)
+  ThreadSuspendThenPromote(Bool)
+  ThreadYieldThenPromote(Bool)
   ThreadResumeLater
   ThreadSuspend(Bool)
   ThreadNewIndirect(Int, Int)
@@ -327,6 +330,8 @@ pub(all) enum TypeDef {
   DefValType(PrimValType)
   FuncType(FuncType)
   List(ValType)
+  FixedList(ValType, Int)
+  MapType(ValType, ValType)
   Record(Array[RecordField])
   Variant(Array[VariantCase])
   Tuple(Array[ValType])
