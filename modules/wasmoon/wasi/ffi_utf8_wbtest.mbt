@@ -18,7 +18,9 @@ fn append_native_directory_entry(bytes : Array[Byte], name : String) -> Unit {
 
 ///|
 test "native strings encode complete Unicode scalars as UTF-8" {
-  let encoded = string_to_cstring("é|中文|e\u{0301}|😀")
+  guard string_to_cstring("é|中文|e\u{0301}|😀") is Some(encoded) else {
+    fail("valid Unicode string was rejected")
+  }
   debug_inspect(
     Bytes::makei(encoded.length(), fn(i) { encoded[i] }),
     content=(
@@ -61,4 +63,20 @@ test "native directory entries decode UTF-8 names" {
       #|Some([("中文.txt", 4), ("é.txt", 4), ("😀.txt", 4)])
     ),
   )
+}
+
+///|
+test "invalid UTF-8 directory entries set EILSEQ" {
+  let wire : Array[Byte] = []
+  append_u32_le(wire, 1)
+  wire.push(4)
+  append_u32_le(wire, 1)
+  wire.push(b'\xff')
+  native_open("/tmp/wasmoon-stale-errno-must-not-exist", [ReadOnly], 0)
+  |> ignore
+  debug_inspect(
+    parse_native_readdir(Some(Bytes::from_array(wire))),
+    content="None",
+  )
+  inspect(native_last_errno_to_wasi(), content="25")
 }

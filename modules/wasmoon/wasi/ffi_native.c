@@ -561,6 +561,14 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_get_errno(void) {
   return errno;
 }
 
+MOONBIT_FFI_EXPORT void wasmoon_wasi_set_errno_invalid_argument(void) {
+  errno = EINVAL;
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_wasi_set_errno_illegal_byte_sequence(void) {
+  errno = EILSEQ;
+}
+
 MOONBIT_FFI_EXPORT int wasmoon_wasi_isatty(int fd) {
 #ifdef _WIN32
   return _isatty(fd);

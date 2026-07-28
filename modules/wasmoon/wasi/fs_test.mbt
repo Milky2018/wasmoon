@@ -53,6 +53,32 @@ test "native file operations: write and read" {
 }
 
 ///|
+test "native paths reject embedded NUL before filesystem access" {
+  let prefix = "/tmp/wasmoon-native-embedded-nul"
+  @wasi.native_unlinkat(0, prefix, 0) |> ignore
+  guard @wasi.native_open(prefix, [WriteOnly, Create, Truncate], 0o600)
+    is Some(fd) else {
+    fail("could not create embedded-NUL fixture")
+  }
+  defer @wasi.native_unlinkat(0, prefix, 0) |> ignore
+  let contents = string_to_utf8("safe")
+  let buffer = FixedArray::makei(contents.length(), fn(i) { contents[i] })
+  guard @wasi.native_write(fd, buffer, buffer.length()) is Some(_) else {
+    fail("could not write embedded-NUL fixture")
+  }
+  @wasi.native_close(fd) |> ignore
+  debug_inspect(
+    @wasi.native_open(prefix + "\u{0000}-suffix", [WriteOnly, Truncate], 0),
+    content="None",
+  )
+  inspect(@wasi.native_last_errno_to_wasi(), content="28")
+  guard @wasi.native_fstatat(0, prefix, 0) is Some(stat) else {
+    fail("could not stat embedded-NUL fixture")
+  }
+  inspect(stat.size, content="4")
+}
+
+///|
 test "native readdir preserves directory entry file types" {
   let root = "/tmp/wasmoon-native-readdir-file-types"
   let file = root + "/file"

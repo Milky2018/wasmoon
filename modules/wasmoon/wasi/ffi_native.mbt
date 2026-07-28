@@ -78,6 +78,12 @@ extern "c" fn c_get_error_message() -> Bytes = "wasmoon_wasi_get_error_message"
 extern "c" fn c_get_errno() -> Int = "wasmoon_wasi_get_errno"
 
 ///|
+extern "c" fn c_set_errno_invalid_argument() -> Unit = "wasmoon_wasi_set_errno_invalid_argument"
+
+///|
+extern "c" fn c_set_errno_illegal_byte_sequence() -> Unit = "wasmoon_wasi_set_errno_illegal_byte_sequence"
+
+///|
 /// Check whether file descriptor is a TTY
 extern "c" fn c_isatty(fd : Int) -> Int = "wasmoon_wasi_isatty"
 
@@ -180,7 +186,7 @@ fn whence_to_int(w : Whence) -> Int {
 /// Open a file with the given path and flags
 /// Returns file descriptor or None on error
 pub fn native_open(path : String, flags : Array[OpenFlags], mode : Int) -> Int? {
-  let path_bytes = string_to_cstring(path)
+  guard string_to_cstring(path) is Some(path_bytes) else { return None }
   let flags_int = open_flags_to_int(flags)
   let fd = c_open(path_bytes, flags_int, mode)
   if fd < 0 {
@@ -192,7 +198,7 @@ pub fn native_open(path : String, flags : Array[OpenFlags], mode : Int) -> Int? 
 
 ///|
 pub fn native_open_parent_beneath(root_fd : Int, parent_path : String) -> Int? {
-  let path_bytes = string_to_cstring(parent_path)
+  guard string_to_cstring(parent_path) is Some(path_bytes) else { return None }
   let fd = c_open_parent_beneath(root_fd, path_bytes)
   if fd < 0 {
     None
@@ -210,8 +216,10 @@ pub fn native_openat_beneath(
   mode : Int,
   follow_final : Bool,
 ) -> Int? {
-  let parent_bytes = string_to_cstring(parent_path)
-  let leaf_bytes = string_to_cstring(leaf)
+  guard string_to_cstring(parent_path) is Some(parent_bytes) else {
+    return None
+  }
+  guard string_to_cstring(leaf) is Some(leaf_bytes) else { return None }
   let fd = c_openat_beneath(
     root_fd,
     parent_bytes,
@@ -393,8 +401,12 @@ pub fn native_path_within_base(
   base_path : String,
   target_path : String,
 ) -> Bool {
-  let base_path_bytes = string_to_cstring(base_path)
-  let target_path_bytes = string_to_cstring(target_path)
+  guard string_to_cstring(base_path) is Some(base_path_bytes) else {
+    return false
+  }
+  guard string_to_cstring(target_path) is Some(target_path_bytes) else {
+    return false
+  }
   c_path_within_base(base_path_bytes, target_path_bytes) != 0
 }
 
@@ -425,13 +437,14 @@ extern "c" fn c_readdir_fd(fd : Int) -> Bytes? = "wasmoon_wasi_readdir_fd"
 /// Create a directory
 /// Returns true on success
 pub fn native_mkdir(path : String, mode : Int) -> Bool {
-  let path_bytes = string_to_cstring(path)
+  guard string_to_cstring(path) is Some(path_bytes) else { return false }
   c_mkdir(path_bytes, mode) == 0
 }
 
 ///|
 pub fn native_mkdirat(dirfd : Int, path : String, mode : Int) -> Bool {
-  c_mkdirat(dirfd, string_to_cstring(path), mode) == 0
+  guard string_to_cstring(path) is Some(path_bytes) else { return false }
+  c_mkdirat(dirfd, path_bytes, mode) == 0
 }
 
 ///|
@@ -470,7 +483,10 @@ fn parse_native_readdir(result : Bytes?) -> Array[(String, Int)]? {
       break
     }
     let name = @utf8.decode(bytes[offset:offset + name_len]) catch {
-      _ => return None
+      _ => {
+        c_set_errno_illegal_byte_sequence()
+        return None
+      }
     }
     offset = offset + name_len
     entries.push((name, file_type))
@@ -484,7 +500,8 @@ fn parse_native_readdir(result : Bytes?) -> Array[(String, Int)]? {
 /// Each entry contains its name and native file-type token. Tokens 0-7 match
 /// WASI Preview 1 filetype; token 8 denotes a FIFO.
 pub fn native_readdir(path : String) -> Array[(String, Int)]? {
-  parse_native_readdir(c_readdir(string_to_cstring(path)))
+  guard string_to_cstring(path) is Some(path_bytes) else { return None }
+  parse_native_readdir(c_readdir(path_bytes))
 }
 
 ///|
@@ -498,13 +515,19 @@ pub fn native_readdir_fd(fd : Int) -> Array[(String, Int)]? {
 
 ///|
 /// Convert a MoonBit string to a null-terminated C string (UTF-8)
-fn string_to_cstring(s : String) -> FixedArray[Byte] {
+fn string_to_cstring(s : String) -> FixedArray[Byte]? {
   let encoded = @utf8.encode(s)
+  for byte in encoded {
+    if byte == b'\x00' {
+      c_set_errno_invalid_argument()
+      return None
+    }
+  }
   let buf = FixedArray::make(encoded.length() + 1, b'\x00')
   for i in 0..<encoded.length() {
     buf[i] = encoded[i]
   }
-  buf
+  Some(buf)
 }
 
 ///|
@@ -531,13 +554,11 @@ pub fn putchar(c : Int) -> Unit {
 ///|
 /// Print a string to stdout without newline
 pub fn print_string(s : String) -> Unit {
-  let bytes = string_to_cstring(s)
-  // Find actual length (excluding null terminator)
-  let mut len = 0
-  while len < bytes.length() && bytes[len] != b'\x00' {
-    len = len + 1
+  let encoded = @utf8.encode(s)
+  let bytes = FixedArray::makei(encoded.length(), fn(i) { encoded[i] })
+  if bytes.length() > 0 {
+    c_print_string(bytes, bytes.length())
   }
-  c_print_string(bytes, len)
 }
 
 ///|
@@ -615,7 +636,7 @@ pub const AT_REMOVEDIR : Int = 0x200
 ///|
 /// Unlink file (returns 0 on success, -1 on error)
 pub fn native_unlinkat(dirfd : Int, path : String, flags : Int) -> Bool {
-  let path_bytes = string_to_cstring(path)
+  guard string_to_cstring(path) is Some(path_bytes) else { return false }
   c_unlinkat(dirfd, path_bytes, flags) == 0
 }
 
@@ -627,8 +648,12 @@ pub fn native_renameat(
   new_dirfd : Int,
   new_path : String,
 ) -> Bool {
-  let old_path_bytes = string_to_cstring(old_path)
-  let new_path_bytes = string_to_cstring(new_path)
+  guard string_to_cstring(old_path) is Some(old_path_bytes) else {
+    return false
+  }
+  guard string_to_cstring(new_path) is Some(new_path_bytes) else {
+    return false
+  }
   c_renameat(old_dirfd, old_path_bytes, new_dirfd, new_path_bytes) == 0
 }
 
@@ -740,7 +765,7 @@ pub const AT_SYMLINK_NOFOLLOW : Int = 0x100
 ///|
 /// Get file stat via path
 pub fn native_fstatat(dirfd : Int, path : String, flags : Int) -> FileStat? {
-  let path_bytes = string_to_cstring(path)
+  guard string_to_cstring(path) is Some(path_bytes) else { return None }
   let dev = FixedArray::make(1, 0UL)
   let ino = FixedArray::make(1, 0UL)
   let filetype = FixedArray::make(1, b'\x00')
@@ -795,7 +820,7 @@ pub fn native_utimensat(
   fst_flags : Int,
   lookup_flags : Int,
 ) -> Bool {
-  let path_bytes = string_to_cstring(path)
+  guard string_to_cstring(path) is Some(path_bytes) else { return false }
   c_utimensat(dirfd, path_bytes, atim, mtim, fst_flags, lookup_flags) == 0
 }
 
@@ -879,15 +904,17 @@ pub fn native_symlinkat(
   dirfd : Int,
   linkpath : String,
 ) -> Bool {
-  let target_bytes = string_to_cstring(target)
-  let linkpath_bytes = string_to_cstring(linkpath)
+  guard string_to_cstring(target) is Some(target_bytes) else { return false }
+  guard string_to_cstring(linkpath) is Some(linkpath_bytes) else {
+    return false
+  }
   c_symlinkat(target_bytes, dirfd, linkpath_bytes) == 0
 }
 
 ///|
 /// Read symbolic link
 pub fn native_readlinkat(dirfd : Int, path : String, bufsize : Int) -> String? {
-  let path_bytes = string_to_cstring(path)
+  guard string_to_cstring(path) is Some(path_bytes) else { return None }
   let buf = FixedArray::make(bufsize, b'\x00')
   let result = c_readlinkat(dirfd, path_bytes, buf, bufsize.to_int64())
   if result < 0L {
@@ -912,8 +939,8 @@ pub fn native_linkat(
   newpath : String,
   flags : Int,
 ) -> Bool {
-  let oldpath_bytes = string_to_cstring(oldpath)
-  let newpath_bytes = string_to_cstring(newpath)
+  guard string_to_cstring(oldpath) is Some(oldpath_bytes) else { return false }
+  guard string_to_cstring(newpath) is Some(newpath_bytes) else { return false }
   c_linkat(olddirfd, oldpath_bytes, newdirfd, newpath_bytes, flags) == 0
 }
 
@@ -1381,7 +1408,8 @@ pub(all) struct NativeResolver {
 ///|
 pub fn native_resolver_start(name : String) -> NativeResolver? {
   let poll_fd = FixedArray::make(1, -1)
-  let handle = c_resolver_start(string_to_cstring(name), poll_fd)
+  guard string_to_cstring(name) is Some(name_bytes) else { return None }
+  let handle = c_resolver_start(name_bytes, poll_fd)
   if handle == 0L || poll_fd[0] < 0 {
     None
   } else {
