@@ -496,6 +496,20 @@ class GateManifestTests(unittest.TestCase):
             2,
         )
         self.assertEqual(workflow.count('export MOON_AR="$(command -v ar)"'), 2)
+        self.assertEqual(workflow.count("timeout-minutes: 40"), 2)
+        self.assertEqual(
+            workflow.count(
+                "python3 scripts/find_gc_bugs.py --dir spec/gc --timeout 30"
+            ),
+            2,
+        )
+        sanitizer_steps = workflow.split(
+            "      - name: run native sanitizer checks\n"
+        )[1:]
+        self.assertEqual(len(sanitizer_steps), 2)
+        for step in sanitizer_steps:
+            step = step.split("\n      - name:", maxsplit=1)[0]
+            self.assertNotIn("scripts/find_gc_bugs.py", step)
         self.assertNotIn("CFLAGS:", workflow)
         self.assertNotIn("CXXFLAGS:", workflow)
         self.assertNotIn("LDFLAGS:", workflow)

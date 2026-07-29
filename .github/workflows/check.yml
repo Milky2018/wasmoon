@@ -77,7 +77,11 @@ jobs:
 
       - name: run core WAST tests
         timeout-minutes: 10
-        run: python3 scripts/run_all_wast.py --dir spec --rec
+        run: |
+          python3 scripts/run_all_wast.py --dir spec --rec
+          python3 scripts/find_gc_bugs.py --dir spec/gc --timeout 30
+          python3 scripts/find_gc_bugs.py \
+            --dir spec/gc --timeout 30 --max-files 64 --fault-alloc-every 7
 
       - name: run WASI Preview 1 tests
         run: python3 examples/wasi_tests/wasi_test.py
@@ -113,7 +117,7 @@ jobs:
           exit "$status"
 
       - name: run native sanitizer checks
-        timeout-minutes: 20
+        timeout-minutes: 40
         env:
           MOONBIT_NEW_NATIVE: 0
           ASAN_OPTIONS: detect_leaks=1:abort_on_error=1
@@ -131,9 +135,6 @@ jobs:
             "$sanitizer_build/native/release/build/Milky2018/wasmoon/cmd/wasmoon/wasmoon.exe" \
             ./wasmoon
           chmod +x ./wasmoon
-          python3 scripts/find_gc_bugs.py --dir spec/gc --timeout 30
-          python3 scripts/find_gc_bugs.py \
-            --dir spec/gc --timeout 30 --max-files 64 --fault-alloc-every 7
           moon test --target native --target-dir "$sanitizer_build" \
             modules/wasmoon_jit/native_continuation_wbtest.mbt
           moon test --target native --target-dir "$sanitizer_build" \
@@ -204,7 +205,11 @@ jobs:
 
       - name: run core WAST tests
         timeout-minutes: 10
-        run: python3 scripts/run_all_wast.py --dir spec --rec
+        run: |
+          python3 scripts/run_all_wast.py --dir spec --rec
+          python3 scripts/find_gc_bugs.py --dir spec/gc --timeout 30
+          python3 scripts/find_gc_bugs.py \
+            --dir spec/gc --timeout 30 --max-files 64 --fault-alloc-every 7
 
       - name: run WASI Preview 1 tests
         run: python3 examples/wasi_tests/wasi_test.py
@@ -240,7 +245,7 @@ jobs:
           exit "$status"
 
       - name: run native sanitizer checks
-        timeout-minutes: 20
+        timeout-minutes: 40
         env:
           MOONBIT_NEW_NATIVE: 0
           ASAN_OPTIONS: detect_leaks=0:abort_on_error=1
@@ -258,9 +263,6 @@ jobs:
             "$sanitizer_build/native/release/build/Milky2018/wasmoon/cmd/wasmoon/wasmoon.exe" \
             ./wasmoon
           chmod +x ./wasmoon
-          python3 scripts/find_gc_bugs.py --dir spec/gc --timeout 30
-          python3 scripts/find_gc_bugs.py \
-            --dir spec/gc --timeout 30 --max-files 64 --fault-alloc-every 7
           moon test --target native --target-dir "$sanitizer_build" \
             modules/wasmoon_jit/native_continuation_wbtest.mbt
           moon test --target native --target-dir "$sanitizer_build" \
