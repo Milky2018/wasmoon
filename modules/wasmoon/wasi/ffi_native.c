@@ -93,6 +93,11 @@ static int wasmoon_wasi_path_has_component(const char *path) {
   return *path != '\0';
 }
 
+static int wasmoon_wasi_path_requires_directory(const char *path) {
+  size_t length = strlen(path);
+  return length != 0 && path[length - 1] == '/';
+}
+
 static int wasmoon_wasi_is_symlink_at(int dir_fd, const char *name) {
   struct stat stat_buffer;
   return fstatat(dir_fd, name, &stat_buffer, AT_SYMLINK_NOFOLLOW) == 0 &&
@@ -177,11 +182,13 @@ static int wasmoon_wasi_open_beneath_impl(
   }
   char *cursor = work;
   int symlink_count = 0;
+  int requires_directory = wasmoon_wasi_path_requires_directory(work);
 
   for (;;) {
     while (*cursor == '/') cursor++;
     if (*cursor == '\0') {
       int open_flags = flags | O_CLOEXEC | O_NOFOLLOW;
+      if (requires_directory) open_flags |= O_DIRECTORY;
       int wants_truncate = (open_flags & O_TRUNC) != 0;
       open_flags &= ~O_TRUNC;
       int result = openat(fds[fd_length - 1], ".", open_flags, mode);
@@ -224,6 +231,7 @@ static int wasmoon_wasi_open_beneath_impl(
     int wants_truncate = 0;
     if (is_final) {
       open_flags = flags | O_CLOEXEC | O_NOFOLLOW;
+      if (requires_directory) open_flags |= O_DIRECTORY;
       wants_truncate = (open_flags & O_TRUNC) != 0;
       open_flags &= ~O_TRUNC;
     } else {
@@ -291,6 +299,8 @@ static int wasmoon_wasi_open_beneath_impl(
     }
     char *next_work = wasmoon_wasi_prepend_symlink_target(target, remaining);
     if (!next_work) goto fail;
+    requires_directory =
+      requires_directory || wasmoon_wasi_path_requires_directory(next_work);
     free(work);
     work = next_work;
     cursor = work;
@@ -427,9 +437,17 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_openat_beneath(
 #else
   const char *parent = (const char *)parent_path;
   const char *name = (const char *)leaf;
-  if (name[0] == '\0' || strchr(name, '/') != NULL) {
+  if (name[0] == '\0' || name[0] == '/') {
     errno = EINVAL;
     return -1;
+  }
+  const char *separator = strchr(name, '/');
+  if (separator != NULL) {
+    while (*separator == '/') separator++;
+    if (*separator != '\0') {
+      errno = EINVAL;
+      return -1;
+    }
   }
   size_t parent_length = strlen(parent);
   size_t name_length = strlen(name);

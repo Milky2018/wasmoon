@@ -116,6 +116,7 @@ fn capability_parent_and_leaf(path : String) -> (String, String)? {
   if path == "" || path.has_prefix("/") {
     return None
   }
+  let requires_directory = path.has_suffix("/")
   let parts : Array[String] = []
   for part in path.split("/") {
     if part == "" {
@@ -127,6 +128,7 @@ fn capability_parent_and_leaf(path : String) -> (String, String)? {
     return None
   }
   let leaf = parts.pop().unwrap()
+  let leaf = if requires_directory { leaf + "/" } else { leaf }
   Some((parts.join("/"), leaf))
 }
 
@@ -205,7 +207,7 @@ fn open_capability_parent(
   match capability_parent_and_leaf(path) {
     None => None
     Some((parent, leaf)) =>
-      if leaf == "." || leaf == ".." {
+      if leaf == "." || leaf == ".." || leaf == "./" || leaf == "../" {
         match @wasi.native_open_parent_beneath(state.fd, path) {
           Some(fd) => Some((fd, "."))
           None => None
@@ -616,7 +618,7 @@ fn stat_capability_path(
   match capability_parent_and_leaf(path) {
     None => None
     Some((parent, leaf)) =>
-      if leaf == "." || leaf == ".." {
+      if leaf == "." || leaf == ".." || leaf == "./" || leaf == "../" {
         match @wasi.native_open_parent_beneath(state.fd, path) {
           None => None
           Some(fd) => {

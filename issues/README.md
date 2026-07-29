@@ -340,6 +340,7 @@ graph TD
   ISS_322["ISS-322: Release native continuation GC frames exactly once"]
   ISS_323["ISS-323: Make native sanitizer CI produce instrumented test binaries"]
   ISS_324["ISS-324: Keep synchronous Component JIT traps on their native fiber"]
+  ISS_325["ISS-325: Preserve trailing-slash directory semantics in WASI component paths"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
