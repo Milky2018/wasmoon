@@ -119,6 +119,7 @@ test "native continuation cancellation has explicit phase boundaries" {
       #|)
     ),
   )
+  context.clear_hostcall_callback()
 }
 
 ///|
@@ -168,6 +169,7 @@ test "interleaved native continuations release all lifecycle state" {
     ),
     content="(256, 256, 0, 0, 0)",
   )
+  context.clear_hostcall_callback()
 }
 
 ///|
@@ -203,6 +205,7 @@ test "native hostcall suspension continues after the call without replay" {
     ),
     content="(NativeJITReturned(0), 11, 1, Returned)",
   )
+  context.clear_hostcall_callback()
 }
 
 ///|
@@ -236,6 +239,7 @@ test "native hostcall suspension can retry only the suspended hostcall" {
     ),
     content="(NativeJITReturned(0), 11, 2)",
   )
+  context.clear_hostcall_callback()
 }
 
 ///|
@@ -256,6 +260,7 @@ test "native hostcall accepts slots on the active fiber stack" {
     (continuation.continue_with(), values[0]),
     content="(NativeJITReturned(0), 0)",
   )
+  context.clear_hostcall_callback()
 }
 
 ///|
@@ -299,6 +304,7 @@ test "suspended nested hostcall restores the outer hostcall slots" {
   if nested[0] is Some(continuation) {
     continuation.cancel()
   }
+  context.clear_hostcall_callback()
 }
 
 ///|
@@ -316,6 +322,7 @@ test "trap activation survives a native hostcall suspension" {
   debug_inspect(continuation.continue_with(), content="NativeJITReturned(6)")
   let details = get_last_trap_details()
   debug_inspect((details.func_idx, details.pc != 0L), content="(73, true)")
+  context.clear_hostcall_callback()
 }
 
 ///|
@@ -335,6 +342,7 @@ test "fiber guard fault after resume becomes a structured stack trap" {
     (details.func_idx, details.signal != 0, details.fault_addr != 0L),
     content="(999, true, true)",
   )
+  context.clear_hostcall_callback()
 }
 
 ///|
@@ -368,6 +376,7 @@ test "nested same-context activation preserves its suspended caller" {
   )
   debug_inspect(continuation.continue_with(), content="NativeJITReturned(6)")
   debug_inspect(get_last_trap_details().func_idx, content="73")
+  context.clear_hostcall_callback()
 }
 
 ///|
@@ -394,6 +403,7 @@ test "parked native trap activations do not overwrite each other" {
   debug_inspect(get_last_trap_details().func_idx, content="222")
   debug_inspect(first.continue_with(), content="NativeJITReturned(6)")
   debug_inspect(get_last_trap_details().func_idx, content="111")
+  context.clear_hostcall_callback()
 }
 
 ///|
@@ -423,6 +433,8 @@ test "parked native continuation keeps its precise GC root alive" {
   inspect(heap.collect([]), content="1")
   inspect(heap.is_valid(rooted), content="false")
   context.clear_gc_heap()
+  context.clear_hostcall_callback()
+  heap.free()
 }
 
 ///|
@@ -465,4 +477,7 @@ test "multiple parked continuations unregister GC roots independently" {
   inspect(heap.is_valid(second_root), content="false")
   first_context.clear_gc_heap()
   second_context.clear_gc_heap()
+  first_context.clear_hostcall_callback()
+  second_context.clear_hostcall_callback()
+  heap.free()
 }
