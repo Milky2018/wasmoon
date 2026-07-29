@@ -510,6 +510,11 @@ pub fn NativeJITContext::ptr(self : NativeJITContext) -> Int64 {
 }
 
 ///|
+pub fn NativeJITContext::clear_gc_heap(self : NativeJITContext) -> Unit {
+  c_jit_gc_clear_heap_managed(self.0)
+}
+
+///|
 pub fn NativeJITContext::set_func(
   self : NativeJITContext,
   idx : Int,

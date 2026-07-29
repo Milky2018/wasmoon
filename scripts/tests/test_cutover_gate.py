@@ -470,5 +470,35 @@ class GateManifestTests(unittest.TestCase):
         )
         self.assertEqual(workflow.count("run native sanitizer checks"), 2)
 
+    def test_sanitizer_tests_are_isolated_and_instrumentation_is_verified(
+        self,
+    ) -> None:
+        workflow = (ROOT / ".github/workflows/check.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertEqual(
+            workflow.count(
+                'moon test --target native --target-dir "$sanitizer_build" \\'
+            ),
+            12,
+        )
+        self.assertEqual(
+            workflow.count("scripts/native_sanitizer_cc.sh"),
+            2,
+        )
+        self.assertEqual(
+            workflow.count("scripts/verify_native_sanitizers.py"),
+            2,
+        )
+        self.assertEqual(workflow.count("MOONBIT_NEW_NATIVE: 0"), 2)
+        self.assertEqual(
+            workflow.count('export MOON_CC="$sanitizer_wrapper"'),
+            2,
+        )
+        self.assertEqual(workflow.count('export MOON_AR="$(command -v ar)"'), 2)
+        self.assertNotIn("CFLAGS:", workflow)
+        self.assertNotIn("CXXFLAGS:", workflow)
+        self.assertNotIn("LDFLAGS:", workflow)
+
 if __name__ == "__main__":
     unittest.main()

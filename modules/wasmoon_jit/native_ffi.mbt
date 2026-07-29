@@ -1020,6 +1020,11 @@ extern "c" fn c_jit_gc_set_heap(ctx_ptr : Int64, heap_ptr : Int64) -> Unit = "wa
 extern "c" fn c_jit_gc_clear_heap(ctx_ptr : Int64) -> Unit = "wasmoon_jit_gc_clear_heap"
 
 ///|
+/// Clear the GC heap while keeping the managed context alive for the C call.
+#borrow(jit_context)
+extern "c" fn c_jit_gc_clear_heap_managed(jit_context : JITContext) -> Unit = "wasmoon_jit_gc_clear_heap_managed"
+
+///|
 /// Push a JIT frame node for GC bookkeeping.
 extern "c" fn c_jit_gc_begin_frame(ctx_ptr : Int64, frame_id : Int64) -> Unit = "wasmoon_jit_gc_begin_frame"
 

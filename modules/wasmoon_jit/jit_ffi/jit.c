@@ -1591,6 +1591,11 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_gc_clear_heap(int64_t ctx_ptr) {
     ctx_set_gc_heap_internal(ctx, NULL);
 }
 
+MOONBIT_FFI_EXPORT void wasmoon_jit_gc_clear_heap_managed(void *jit_context) {
+    int64_t ctx_ptr = wasmoon_jit_context_ptr(jit_context);
+    wasmoon_jit_gc_clear_heap(ctx_ptr);
+}
+
 MOONBIT_FFI_EXPORT int64_t wasmoon_jit_gc_get_heap(int64_t ctx_ptr) {
     jit_context_t *ctx = (jit_context_t *)(uintptr_t)ctx_ptr;
     return (ctx != NULL) ? (int64_t)(uintptr_t)ctx->gc_heap : 0;

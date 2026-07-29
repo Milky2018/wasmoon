@@ -115,15 +115,15 @@ jobs:
       - name: run native sanitizer checks
         timeout-minutes: 20
         env:
-          CC: clang
-          CXX: clang++
-          CFLAGS: -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer
-          CXXFLAGS: -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer
-          LDFLAGS: -fsanitize=address,undefined
+          MOONBIT_NEW_NATIVE: 0
           ASAN_OPTIONS: detect_leaks=1:abort_on_error=1
           UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
         run: |
           sanitizer_build="$RUNNER_TEMP/wasmoon-sanitizer-build"
+          sanitizer_wrapper="$GITHUB_WORKSPACE/scripts/native_sanitizer_cc.sh"
+          export WASMOON_SANITIZER_REAL_CC="$(command -v clang)"
+          export MOON_CC="$sanitizer_wrapper"
+          export MOON_AR="$(command -v ar)"
           rm -rf "$sanitizer_build"
           moon build modules/wasmoon/cmd/wasmoon \
             --target native --release --target-dir "$sanitizer_build"
@@ -134,18 +134,20 @@ jobs:
           python3 scripts/find_gc_bugs.py --dir spec/gc --timeout 30
           python3 scripts/find_gc_bugs.py \
             --dir spec/gc --timeout 30 --max-files 64 --fault-alloc-every 7
-          moon test \
+          moon test --target native --target-dir "$sanitizer_build" \
             modules/wasmoon_jit/native_continuation_wbtest.mbt
-          moon test \
+          moon test --target native --target-dir "$sanitizer_build" \
             modules/wasmoon/async_native/reactor_wbtest.mbt
-          moon test \
+          moon test --target native --target-dir "$sanitizer_build" \
             modules/wasmoon/wasi_component/async_preview3_wbtest.mbt
-          moon test \
+          moon test --target native --target-dir "$sanitizer_build" \
             modules/wasmoon/component/runtime_impl/runtime_cleanup_wbtest.mbt
-          moon test \
+          moon test --target native --target-dir "$sanitizer_build" \
             modules/wasmoon/component/runtime_impl/entry_state_wbtest.mbt
-          moon test \
+          moon test --target native --target-dir "$sanitizer_build" \
             modules/wasmoon/cmd/wasmoon/commands/component_error_wbtest.mbt
+          python3 scripts/verify_native_sanitizers.py \
+            --target-dir "$sanitizer_build" --minimum-test-binaries 5
 
   macos-arm64:
     name: macOS ARM64
@@ -240,15 +242,15 @@ jobs:
       - name: run native sanitizer checks
         timeout-minutes: 20
         env:
-          CC: clang
-          CXX: clang++
-          CFLAGS: -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer
-          CXXFLAGS: -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer
-          LDFLAGS: -fsanitize=address,undefined
+          MOONBIT_NEW_NATIVE: 0
           ASAN_OPTIONS: detect_leaks=0:abort_on_error=1
           UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
         run: |
           sanitizer_build="$RUNNER_TEMP/wasmoon-sanitizer-build"
+          sanitizer_wrapper="$GITHUB_WORKSPACE/scripts/native_sanitizer_cc.sh"
+          export WASMOON_SANITIZER_REAL_CC="$(command -v clang)"
+          export MOON_CC="$sanitizer_wrapper"
+          export MOON_AR="$(command -v ar)"
           rm -rf "$sanitizer_build"
           moon build modules/wasmoon/cmd/wasmoon \
             --target native --release --target-dir "$sanitizer_build"
@@ -259,15 +261,17 @@ jobs:
           python3 scripts/find_gc_bugs.py --dir spec/gc --timeout 30
           python3 scripts/find_gc_bugs.py \
             --dir spec/gc --timeout 30 --max-files 64 --fault-alloc-every 7
-          moon test \
+          moon test --target native --target-dir "$sanitizer_build" \
             modules/wasmoon_jit/native_continuation_wbtest.mbt
-          moon test \
+          moon test --target native --target-dir "$sanitizer_build" \
             modules/wasmoon/async_native/reactor_wbtest.mbt
-          moon test \
+          moon test --target native --target-dir "$sanitizer_build" \
             modules/wasmoon/wasi_component/async_preview3_wbtest.mbt
-          moon test \
+          moon test --target native --target-dir "$sanitizer_build" \
             modules/wasmoon/component/runtime_impl/runtime_cleanup_wbtest.mbt
-          moon test \
+          moon test --target native --target-dir "$sanitizer_build" \
             modules/wasmoon/component/runtime_impl/entry_state_wbtest.mbt
-          moon test \
+          moon test --target native --target-dir "$sanitizer_build" \
             modules/wasmoon/cmd/wasmoon/commands/component_error_wbtest.mbt
+          python3 scripts/verify_native_sanitizers.py \
+            --target-dir "$sanitizer_build" --minimum-test-binaries 5

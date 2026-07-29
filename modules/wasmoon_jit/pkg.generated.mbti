@@ -705,6 +705,7 @@ pub fn NativeJITContext::alloc_indirect_table(Self, Int) -> Bool
 pub fn NativeJITContext::alloc_wasm_stack(Self, Int64) -> Bool
 pub fn NativeJITContext::call_trampoline(Self, Int64, Int64, FixedArray[Int64], Int, Bool) -> Int
 pub fn NativeJITContext::clear_cancellation_callback(Self) -> Unit
+pub fn NativeJITContext::clear_gc_heap(Self) -> Unit
 pub fn NativeJITContext::clear_hostcall_callback(Self) -> Unit
 pub fn NativeJITContext::func_table_ptr(Self) -> Int64
 pub fn NativeJITContext::has_wasm_stack(Self) -> Bool

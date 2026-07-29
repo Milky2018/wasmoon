@@ -8,6 +8,13 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#if defined(WASMOON_ADDRESS_SANITIZER)
+#include <sanitizer/common_interface_defs.h>
+#define WASMOON_NO_ADDRESS_SANITIZE __attribute__((no_sanitize("address")))
+#else
+#define WASMOON_NO_ADDRESS_SANITIZE
+#endif
+
 typedef int64_t (*native_fiber_entry_fn)(void *closure);
 
 typedef enum {
@@ -73,6 +80,8 @@ typedef struct native_fiber {
     int64_t return_value;
     jit_trap_activation_t *detached_activation;
     void *parked_gc_roots;
+    const void *caller_stack_bottom;
+    size_t caller_stack_size;
 } native_fiber_t;
 
 typedef struct {
@@ -114,6 +123,38 @@ static int fiber_on_owner_thread(const native_fiber_t *fiber) {
     return fiber && pthread_equal(fiber->owner_thread, pthread_self());
 }
 
+static void native_fiber_swap_stacks(
+    native_fiber_context_t *from,
+    const native_fiber_context_t *to,
+    const void *target_stack_bottom,
+    size_t target_stack_size,
+    int is_finishing,
+    const void **old_stack_bottom,
+    size_t *old_stack_size
+) {
+#if defined(WASMOON_ADDRESS_SANITIZER)
+    void *fake_stack = NULL;
+    __sanitizer_start_switch_fiber(
+        is_finishing ? NULL : &fake_stack,
+        target_stack_bottom,
+        target_stack_size
+    );
+    wasmoon_native_fiber_swap(from, to);
+    __sanitizer_finish_switch_fiber(
+        fake_stack,
+        old_stack_bottom,
+        old_stack_size
+    );
+#else
+    (void)target_stack_bottom;
+    (void)target_stack_size;
+    (void)is_finishing;
+    (void)old_stack_bottom;
+    (void)old_stack_size;
+    wasmoon_native_fiber_swap(from, to);
+#endif
+}
+
 static void release_fiber_stack(native_fiber_t *fiber) {
     if (!fiber || !fiber->mapping) return;
     if (munmap(fiber->mapping, fiber->mapping_size) == 0) {
@@ -133,14 +174,35 @@ static void unregister_fiber_parked_roots(native_fiber_t *fiber) {
     parked_root_registration_count--;
 }
 
-static void fiber_bootstrap(void) {
+static WASMOON_NO_ADDRESS_SANITIZE void fiber_bootstrap(void) {
+#if defined(WASMOON_ADDRESS_SANITIZER)
+    const void *caller_stack_bottom = NULL;
+    size_t caller_stack_size = 0;
+    __sanitizer_finish_switch_fiber(
+        NULL,
+        &caller_stack_bottom,
+        &caller_stack_size
+    );
+#endif
     native_fiber_t *fiber = current_native_fiber;
     if (!fiber || fiber->state != NATIVE_FIBER_RUNNING || !fiber->entry) {
         abort();
     }
+#if defined(WASMOON_ADDRESS_SANITIZER)
+    fiber->caller_stack_bottom = caller_stack_bottom;
+    fiber->caller_stack_size = caller_stack_size;
+#endif
     fiber->return_value = fiber->entry(fiber->closure);
     fiber->state = NATIVE_FIBER_RETURNED;
-    wasmoon_native_fiber_swap(&fiber->context, &fiber->caller);
+    native_fiber_swap_stacks(
+        &fiber->context,
+        &fiber->caller,
+        fiber->caller_stack_bottom,
+        fiber->caller_stack_size,
+        1,
+        NULL,
+        NULL
+    );
     abort();
 }
 
@@ -334,7 +396,15 @@ MOONBIT_FFI_EXPORT int wasmoon_native_fiber_continue(
     current_native_fiber = fiber;
     fiber->resume_value = resume_value;
     fiber->state = NATIVE_FIBER_RUNNING;
-    wasmoon_native_fiber_swap(&fiber->caller, &fiber->context);
+    native_fiber_swap_stacks(
+        &fiber->caller,
+        &fiber->context,
+        (const unsigned char *)fiber->mapping + fiber->guard_size,
+        fiber->usable_size,
+        0,
+        NULL,
+        NULL
+    );
     current_native_fiber = previous;
     if (fiber->state == NATIVE_FIBER_SUSPENDED) return 0;
     if (fiber->state == NATIVE_FIBER_RETURNED) return 1;
@@ -357,7 +427,15 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_native_fiber_yield(int64_t value) {
         return INT64_MIN;
     }
     if (fiber->parked_gc_roots) parked_root_registration_count++;
-    wasmoon_native_fiber_swap(&fiber->context, &fiber->caller);
+    native_fiber_swap_stacks(
+        &fiber->context,
+        &fiber->caller,
+        fiber->caller_stack_bottom,
+        fiber->caller_stack_size,
+        0,
+        &fiber->caller_stack_bottom,
+        &fiber->caller_stack_size
+    );
     unregister_fiber_parked_roots(fiber);
     jit_trap_activation_attach(fiber->detached_activation);
     fiber->detached_activation = NULL;
@@ -609,14 +687,30 @@ MOONBIT_FFI_EXPORT int wasmoon_native_fiber_register_test(void) {
     native_fiber_t *previous = current_native_fiber;
     current_native_fiber = fiber;
     fiber->state = NATIVE_FIBER_RUNNING;
-    wasmoon_native_fiber_swap(&fiber->caller, &fiber->context);
+    native_fiber_swap_stacks(
+        &fiber->caller,
+        &fiber->context,
+        (const unsigned char *)fiber->mapping + fiber->guard_size,
+        fiber->usable_size,
+        0,
+        NULL,
+        NULL
+    );
     if (fiber->state != NATIVE_FIBER_SUSPENDED) {
         current_native_fiber = previous;
         destroy_fiber(fiber);
         return 0;
     }
     fiber->state = NATIVE_FIBER_RUNNING;
-    wasmoon_native_fiber_swap(&fiber->caller, &fiber->context);
+    native_fiber_swap_stacks(
+        &fiber->caller,
+        &fiber->context,
+        (const unsigned char *)fiber->mapping + fiber->guard_size,
+        fiber->usable_size,
+        0,
+        NULL,
+        NULL
+    );
     current_native_fiber = previous;
     int passed = fiber->state == NATIVE_FIBER_RETURNED &&
         fiber->return_value == 1;

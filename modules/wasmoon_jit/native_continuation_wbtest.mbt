@@ -422,7 +422,7 @@ test "parked native continuation keeps its precise GC root alive" {
   inspect(values[1], content="1")
   inspect(heap.collect([]), content="1")
   inspect(heap.is_valid(rooted), content="false")
-  gc_clear_heap(context.ptr())
+  context.clear_gc_heap()
 }
 
 ///|
@@ -463,6 +463,6 @@ test "multiple parked continuations unregister GC roots independently" {
   debug_inspect(second.continue_with(), content="NativeJITReturned(0)")
   inspect(heap.collect([]), content="1")
   inspect(heap.is_valid(second_root), content="false")
-  gc_clear_heap(first_context.ptr())
-  gc_clear_heap(second_context.ptr())
+  first_context.clear_gc_heap()
+  second_context.clear_gc_heap()
 }

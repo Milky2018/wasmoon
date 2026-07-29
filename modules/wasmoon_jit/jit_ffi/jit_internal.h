@@ -29,6 +29,15 @@
 #include "jit_ffi.h"
 #include "gc_heap.h"
 
+#if defined(__has_feature)
+#if __has_feature(address_sanitizer)
+#define WASMOON_ADDRESS_SANITIZER 1
+#endif
+#endif
+#if !defined(WASMOON_ADDRESS_SANITIZER) && defined(__SANITIZE_ADDRESS__)
+#define WASMOON_ADDRESS_SANITIZER 1
+#endif
+
 // ============ Trap Handling (trap.c) ============
 
 // Trap codes (matching WebAssembly trap types):
