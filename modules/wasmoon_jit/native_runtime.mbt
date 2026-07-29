@@ -105,7 +105,7 @@ extern "c" fn finalize_exec_managed(
 extern "c" fn release_exec_managed(exec_code : ExecCodeHandle) -> Int = "wasmoon_jit_release_exec_managed"
 
 ///|
-#owned(exec_code)
+#borrow(exec_code)
 extern "c" fn exec_code_pointer(exec_code : ExecCodeHandle) -> Int64 = "wasmoon_jit_exec_code_ptr"
 
 ///|

@@ -6,6 +6,7 @@ type Instant
 pub extern "c" fn instant_now() -> Instant = "perf_instant_now_ffi"
 
 ///|
+#borrow(i)
 extern "c" fn instant_as_secs_f64_ffi(i : Instant) -> Double = "perf_instant_as_secs_f64_ffi"
 
 ///|

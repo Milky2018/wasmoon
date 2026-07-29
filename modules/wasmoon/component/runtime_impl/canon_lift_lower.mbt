@@ -74,20 +74,17 @@ fn instantiate_canon_lower(
   if func_type_needs_memory(func_type, func_types) && resources.mem_addr is None {
     raise MissingCanonMemory
   }
-  let mem = match resources.mem_addr {
-    Some(addr) =>
-      store.get_mem(addr) catch {
-        e => raise CanonCallError(e.to_string())
-      }
-    None => Memory(0, None)
+  let mem_is_64 = match resources.mem_addr {
+    Some(_) => require_memory(resources, store).is_memory64()
+    None => false
   }
   if is_async_lower {
     // Async lowering: start a subtask and return a status code, writing
     // eventual results into the provided return pointer.
-    let ptr_ty = if mem.is_memory64() { @types.ValueType::I64 } else { I32 }
+    let ptr_ty = if mem_is_64 { @types.ValueType::I64 } else { I32 }
     let flat_params : Array[@types.ValueType] = []
     for p in func_type.params {
-      for t in core_types_for_valtype(p.ty, func_types, mem.is_memory64()) {
+      for t in core_types_for_valtype(p.ty, func_types, mem_is_64) {
         flat_params.push(t)
       }
     }
@@ -326,7 +323,11 @@ fn instantiate_canon_lower(
                   return finish_call([I32(0)])
                 }
               }
-              store_async_lower_result(mem, p, core_vals) catch {
+              store_async_lower_result(
+                require_memory(resources, store),
+                p,
+                core_vals,
+              ) catch {
                 e => {
                   trap_canon(canon_err_message(e))
                   return finish_call([I32(0)])
@@ -386,7 +387,11 @@ fn instantiate_canon_lower(
                   return finish_call([I32(0)])
                 }
               }
-              store_async_lower_result(mem, p, core_vals) catch {
+              store_async_lower_result(
+                require_memory(resources, store),
+                p,
+                core_vals,
+              ) catch {
                 e => {
                   trap_canon(canon_err_message(e))
                   return finish_call([I32(0)])
@@ -500,7 +505,11 @@ fn instantiate_canon_lower(
                 return finish_call([I32(0)])
               }
             }
-            store_async_lower_result(mem, p, core_vals) catch {
+            store_async_lower_result(
+              require_memory(resources, store),
+              p,
+              core_vals,
+            ) catch {
               e => {
                 trap_canon(canon_err_message(e))
                 return finish_call([I32(0)])
@@ -576,9 +585,7 @@ fn instantiate_canon_lower(
     state.core_funcs.push(alloc_host_core_func(store, core_type, host))
   } else {
     let core_type = core_func_type_from_component(
-      func_type,
-      func_types,
-      mem.is_memory64(),
+      func_type, func_types, mem_is_64,
     )
     let host = fn(
       args : Array[@types.Value],
@@ -762,11 +769,7 @@ fn instantiate_canon_lower(
 
             let mut out_ptr : Int? = None
             if func_type.result is Some(rty) {
-              let flat = core_types_for_valtype(
-                rty,
-                func_types,
-                mem.is_memory64(),
-              ) catch {
+              let flat = core_types_for_valtype(rty, func_types, mem_is_64) catch {
                 _ => []
               }
               if flat.length() > 1 {
@@ -828,11 +831,7 @@ fn instantiate_canon_lower(
               let mut out_ptr : Int? = None
               match func_type.result {
                 Some(rty) => {
-                  let flat = core_types_for_valtype(
-                    rty,
-                    func_types,
-                    mem.is_memory64(),
-                  ) catch {
+                  let flat = core_types_for_valtype(rty, func_types, mem_is_64) catch {
                     _ => []
                   }
                   if flat.length() > 1 {
@@ -887,7 +886,7 @@ fn instantiate_canon_lower(
       }
       let mut out_ptr : Int? = None
       if func_type.result is Some(rty) {
-        let flat = core_types_for_valtype(rty, func_types, mem.is_memory64()) catch {
+        let flat = core_types_for_valtype(rty, func_types, mem_is_64) catch {
           _ => []
         }
         if flat.length() > 1 {

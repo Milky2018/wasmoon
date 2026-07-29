@@ -1147,14 +1147,10 @@ fn component_results_to_core(
         raise HostCallError("missing result")
       }
       let val = results[0]
-      let mem = match resources.mem_addr {
-        Some(addr) =>
-          store.get_mem(addr) catch {
-            e => raise CanonCallError(e.to_string())
-          }
-        None => Memory(0, None)
+      let mem_is_64 = match resources.mem_addr {
+        Some(_) => require_memory(resources, store).is_memory64()
+        None => false
       }
-      let mem_is_64 = mem.is_memory64()
       let flat_res_types = core_types_for_valtype(r, types, mem_is_64)
       let flat_res_storage = flat_storage_for_valtype(r, types, mem_is_64)
       if flat_res_types.length() > 1 {
@@ -1165,6 +1161,7 @@ fn component_results_to_core(
           Some(p) => p
           None => raise HostCallError("missing retptr")
         }
+        let mem = require_memory(resources, store)
         let (offsets, _size, struct_align) = layout_of_flat_storage_fields(
           flat_res_storage,
         )
@@ -1195,6 +1192,7 @@ fn component_results_to_core(
                   if resources.mem_addr is None {
                     raise MissingCanonMemory
                   }
+                  let mem = require_memory(resources, store)
                   let realloc = match resources.realloc {
                     Some(rf) => rf
                     None => raise MissingCanonRealloc
@@ -1254,6 +1252,7 @@ fn component_results_to_core(
                       if resources.mem_addr is None {
                         raise MissingCanonMemory
                       }
+                      let mem = require_memory(resources, store)
                       let realloc = match resources.realloc {
                         Some(rf) => rf
                         None => raise MissingCanonRealloc
