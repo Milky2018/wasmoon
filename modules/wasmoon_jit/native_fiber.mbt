@@ -27,6 +27,8 @@ pub suberror NativeFiberError {
   StackAllocationFailed(Int64)
   WrongThread
   InvalidTransition(NativeFiberPhase)
+  InvalidState(Int)
+  UnexpectedYield(Int64)
   NativeFailure(Int)
 } derive(Debug, Eq)
 
@@ -60,7 +62,7 @@ pub fn NativeFiber::new(
   let call_closure : FuncRef[(() -> Int64) -> Int64] = fn(f) { f() }
   let raw = c_native_fiber_alloc(call_closure, entry, stack_size)
   let fiber : NativeFiber = { raw, }
-  if c_native_fiber_state(raw) < 0 {
+  if !native_fiber_is_allocated(raw) {
     raise StackAllocationFailed(stack_size)
   }
   fiber
@@ -84,27 +86,15 @@ pub fn NativeJITContext::start_continuation(
     stack_size,
   )
   let continuation = NativeJITContinuation::{ raw, }
-  if c_native_fiber_state(raw) < 0 {
+  if !native_fiber_is_allocated(raw) {
     raise StackAllocationFailed(stack_size)
   }
   continuation
 }
 
 ///|
-fn native_fiber_phase(code : Int) -> NativeFiberPhase {
-  match code {
-    0 => Ready
-    1 => Running
-    2 => Suspended
-    3 => Returned
-    4 => Cancelled
-    _ => Cancelled
-  }
-}
-
-///|
 pub fn NativeFiber::phase(self : NativeFiber) -> NativeFiberPhase {
-  native_fiber_phase(c_native_fiber_state(self.raw))
+  native_fiber_phase(self.raw)
 }
 
 ///|
@@ -112,13 +102,10 @@ pub fn NativeFiber::continue_with(
   self : NativeFiber,
   value? : Int64 = 0L,
 ) -> NativeFiberEvent raise NativeFiberError {
-  let status = c_native_fiber_continue(self.raw, value)
-  match status {
-    0 => Yielded(c_native_fiber_yielded_value(self.raw))
-    1 => Finished(c_native_fiber_return_value(self.raw))
-    -2 => raise WrongThread
-    -3 => raise InvalidTransition(self.phase())
-    code => raise NativeFailure(code)
+  match native_fiber_advance(self.raw, value) {
+    FiberSuspended(value) => Yielded(value)
+    FiberReturned(value) => Finished(value)
+    FiberAdvanceFailed(failure) => raise failure.to_error()
   }
 }
 
@@ -127,22 +114,10 @@ pub fn NativeJITContinuation::continue_with(
   self : NativeJITContinuation,
   value? : Int64 = 0L,
 ) -> NativeJITContinuationEvent raise NativeFiberError {
-  let status = c_native_fiber_continue(self.raw, value)
-  match status {
-    0 =>
-      if c_native_fiber_yielded_value(self.raw) ==
-        c_native_hostcall_suspend_event() {
-        NativeHostcallSuspended
-      } else {
-        raise NativeFailure(-5)
-      }
-    1 => NativeJITReturned(c_native_fiber_return_value(self.raw).to_int())
-    -2 => raise WrongThread
-    -3 =>
-      raise InvalidTransition(
-        native_fiber_phase(c_native_fiber_state(self.raw)),
-      )
-    code => raise NativeFailure(code)
+  match native_jit_continuation_advance(self.raw, value) {
+    JITHostcallSuspended => NativeHostcallSuspended
+    JITReturned(code) => NativeJITReturned(code)
+    JITAdvanceFailed(failure) => raise failure.to_error()
   }
 }
 
@@ -162,15 +137,9 @@ pub fn NativeJITContinuation::continue_after_hostcall(
 pub fn NativeJITContinuation::cancel(
   self : NativeJITContinuation,
 ) -> Unit raise NativeFiberError {
-  let status = c_native_fiber_cancel(self.raw)
-  match status {
-    0 => ()
-    -2 => raise WrongThread
-    -3 =>
-      raise InvalidTransition(
-        native_fiber_phase(c_native_fiber_state(self.raw)),
-      )
-    code => raise NativeFailure(code)
+  match native_fiber_cancel(self.raw) {
+    None => ()
+    Some(failure) => raise failure.to_error()
   }
 }
 
@@ -178,7 +147,7 @@ pub fn NativeJITContinuation::cancel(
 pub fn NativeJITContinuation::phase(
   self : NativeJITContinuation,
 ) -> NativeFiberPhase {
-  native_fiber_phase(c_native_fiber_state(self.raw))
+  native_fiber_phase(self.raw)
 }
 
 ///|
@@ -189,12 +158,9 @@ pub fn NativeFiber::suspend(value : Int64) -> Int64 {
 
 ///|
 pub fn NativeFiber::cancel(self : NativeFiber) -> Unit raise NativeFiberError {
-  let status = c_native_fiber_cancel(self.raw)
-  match status {
-    0 => ()
-    -2 => raise WrongThread
-    -3 => raise InvalidTransition(self.phase())
-    code => raise NativeFailure(code)
+  match native_fiber_cancel(self.raw) {
+    None => ()
+    Some(failure) => raise failure.to_error()
   }
 }
 

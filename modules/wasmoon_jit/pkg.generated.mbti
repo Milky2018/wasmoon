@@ -355,6 +355,8 @@ pub suberror NativeFiberError {
   StackAllocationFailed(Int64)
   WrongThread
   InvalidTransition(NativeFiberPhase)
+  InvalidState(Int)
+  UnexpectedYield(Int64)
   NativeFailure(Int)
 } derive(Eq, @debug.Debug)
 pub impl Show for NativeFiberError

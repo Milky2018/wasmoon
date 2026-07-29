@@ -23,14 +23,6 @@ static WASMOON_NO_FUNCTION_SANITIZE int64_t call_native_fiber_entry(
     return entry(closure);
 }
 
-typedef enum {
-    NATIVE_FIBER_READY = 0,
-    NATIVE_FIBER_RUNNING = 1,
-    NATIVE_FIBER_SUSPENDED = 2,
-    NATIVE_FIBER_RETURNED = 3,
-    NATIVE_FIBER_CANCELLED = 4,
-} native_fiber_state_t;
-
 #if defined(__x86_64__) || defined(_M_X64)
 typedef struct {
     uintptr_t sp;
@@ -80,7 +72,7 @@ typedef struct native_fiber {
     void *closure;
     int owns_closure;
     pthread_t owner_thread;
-    native_fiber_state_t state;
+    wasmoon_fiber_state_code_t state;
     int64_t resume_value;
     int64_t yielded_value;
     int64_t return_value;
@@ -184,7 +176,9 @@ static WASMOON_NO_ADDRESS_SANITIZE void fiber_bootstrap(void) {
     );
 #endif
     native_fiber_t *fiber = current_native_fiber;
-    if (!fiber || fiber->state != NATIVE_FIBER_RUNNING || !fiber->entry) {
+    if (!fiber ||
+        fiber->state != WASMOON_FIBER_STATE_RUNNING ||
+        !fiber->entry) {
         abort();
     }
 #if defined(WASMOON_ADDRESS_SANITIZER)
@@ -194,7 +188,7 @@ static WASMOON_NO_ADDRESS_SANITIZE void fiber_bootstrap(void) {
     fiber->return_value = call_native_fiber_entry(
         fiber->entry, fiber->closure
     );
-    fiber->state = NATIVE_FIBER_RETURNED;
+    fiber->state = WASMOON_FIBER_STATE_RETURNED;
     native_fiber_swap_stacks(
         &fiber->context,
         &fiber->caller,
@@ -249,7 +243,7 @@ static native_fiber_t *allocate_fiber(
     fiber->closure = closure;
     fiber->owns_closure = owns_closure;
     fiber->owner_thread = pthread_self();
-    fiber->state = NATIVE_FIBER_READY;
+    fiber->state = WASMOON_FIBER_STATE_READY;
 
     uintptr_t stack_top = (uintptr_t)mapping + mapping_size;
 #if defined(__x86_64__) || defined(_M_X64)
@@ -269,7 +263,7 @@ static native_fiber_t *allocate_fiber(
 
 static void destroy_fiber(native_fiber_t *fiber) {
     if (!fiber) return;
-    if (fiber->state == NATIVE_FIBER_RUNNING) return;
+    if (fiber->state == WASMOON_FIBER_STATE_RUNNING) return;
     unregister_fiber_parked_roots(fiber);
     jit_trap_activation_abandon(fiber->detached_activation);
     fiber->detached_activation = NULL;
@@ -384,16 +378,18 @@ MOONBIT_FFI_EXPORT int wasmoon_native_fiber_continue(
     int64_t resume_value
 ) {
     native_fiber_t *fiber = managed_fiber_ptr(managed);
-    if (!fiber) return -1;
-    if (!fiber_on_owner_thread(fiber)) return -2;
-    if (fiber->state != NATIVE_FIBER_READY &&
-        fiber->state != NATIVE_FIBER_SUSPENDED) {
-        return -3;
+    if (!fiber) return WASMOON_FIBER_ADVANCE_INVALID_HANDLE;
+    if (!fiber_on_owner_thread(fiber)) {
+        return WASMOON_FIBER_ADVANCE_WRONG_THREAD;
+    }
+    if (fiber->state != WASMOON_FIBER_STATE_READY &&
+        fiber->state != WASMOON_FIBER_STATE_SUSPENDED) {
+        return WASMOON_FIBER_ADVANCE_INVALID_TRANSITION;
     }
     native_fiber_t *previous = current_native_fiber;
     current_native_fiber = fiber;
     fiber->resume_value = resume_value;
-    fiber->state = NATIVE_FIBER_RUNNING;
+    fiber->state = WASMOON_FIBER_STATE_RUNNING;
     native_fiber_swap_stacks(
         &fiber->caller,
         &fiber->context,
@@ -404,16 +400,22 @@ MOONBIT_FFI_EXPORT int wasmoon_native_fiber_continue(
         NULL
     );
     current_native_fiber = previous;
-    if (fiber->state == NATIVE_FIBER_SUSPENDED) return 0;
-    if (fiber->state == NATIVE_FIBER_RETURNED) return 1;
-    return -4;
+    if (fiber->state == WASMOON_FIBER_STATE_SUSPENDED) {
+        return WASMOON_FIBER_ADVANCE_SUSPENDED;
+    }
+    if (fiber->state == WASMOON_FIBER_STATE_RETURNED) {
+        return WASMOON_FIBER_ADVANCE_RETURNED;
+    }
+    return WASMOON_FIBER_ADVANCE_INVALID_STATE;
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_native_fiber_yield(int64_t value) {
     native_fiber_t *fiber = current_native_fiber;
-    if (!fiber || fiber->state != NATIVE_FIBER_RUNNING) return INT64_MIN;
+    if (!fiber || fiber->state != WASMOON_FIBER_STATE_RUNNING) {
+        return INT64_MIN;
+    }
     fiber->yielded_value = value;
-    fiber->state = NATIVE_FIBER_SUSPENDED;
+    fiber->state = WASMOON_FIBER_STATE_SUSPENDED;
     fiber->detached_activation = jit_trap_activation_detach();
     if (!jit_parked_gc_roots_register(
             fiber->detached_activation,
@@ -421,7 +423,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_native_fiber_yield(int64_t value) {
         )) {
         jit_trap_activation_attach(fiber->detached_activation);
         fiber->detached_activation = NULL;
-        fiber->state = NATIVE_FIBER_RUNNING;
+        fiber->state = WASMOON_FIBER_STATE_RUNNING;
         return INT64_MIN;
     }
     native_fiber_swap_stacks(
@@ -436,19 +438,21 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_native_fiber_yield(int64_t value) {
     unregister_fiber_parked_roots(fiber);
     jit_trap_activation_attach(fiber->detached_activation);
     fiber->detached_activation = NULL;
-    if (fiber->state != NATIVE_FIBER_RUNNING) return INT64_MIN;
+    if (fiber->state != WASMOON_FIBER_STATE_RUNNING) return INT64_MIN;
     return fiber->resume_value;
 }
 
 MOONBIT_FFI_EXPORT int wasmoon_native_fiber_cancel(void *managed) {
     native_fiber_t *fiber = managed_fiber_ptr(managed);
-    if (!fiber) return -1;
-    if (!fiber_on_owner_thread(fiber)) return -2;
-    if (fiber->state != NATIVE_FIBER_READY &&
-        fiber->state != NATIVE_FIBER_SUSPENDED) {
-        return -3;
+    if (!fiber) return WASMOON_FIBER_CANCEL_INVALID_HANDLE;
+    if (!fiber_on_owner_thread(fiber)) {
+        return WASMOON_FIBER_CANCEL_WRONG_THREAD;
     }
-    fiber->state = NATIVE_FIBER_CANCELLED;
+    if (fiber->state != WASMOON_FIBER_STATE_READY &&
+        fiber->state != WASMOON_FIBER_STATE_SUSPENDED) {
+        return WASMOON_FIBER_CANCEL_INVALID_TRANSITION;
+    }
+    fiber->state = WASMOON_FIBER_STATE_CANCELLED;
     unregister_fiber_parked_roots(fiber);
     jit_trap_activation_abandon(fiber->detached_activation);
     fiber->detached_activation = NULL;
@@ -457,7 +461,7 @@ MOONBIT_FFI_EXPORT int wasmoon_native_fiber_cancel(void *managed) {
         moonbit_decref(fiber->closure);
         fiber->closure = NULL;
     }
-    return 0;
+    return WASMOON_FIBER_CANCEL_OK;
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_native_hostcall_suspend_event(void) {
@@ -466,7 +470,7 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_native_hostcall_suspend_event(void) {
 
 MOONBIT_FFI_EXPORT int wasmoon_native_fiber_state(void *managed) {
     native_fiber_t *fiber = managed_fiber_ptr(managed);
-    return fiber ? (int)fiber->state : -1;
+    return fiber ? (int)fiber->state : WASMOON_FIBER_STATE_INVALID;
 }
 
 MOONBIT_FFI_EXPORT int64_t wasmoon_native_fiber_yielded_value(void *managed) {

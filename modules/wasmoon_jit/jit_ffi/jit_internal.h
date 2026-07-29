@@ -27,6 +27,7 @@
 
 #include "moonbit.h"
 #include "jit_ffi.h"
+#include "fiber_protocol.h"
 #include "gc_heap.h"
 
 #if defined(__has_feature)

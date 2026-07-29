@@ -208,10 +208,10 @@ MOONBIT_FFI_EXPORT int wasmoon_test_fiber_preserves_registers(void) {
     );
     if (!fiber) return 0;
     int first = wasmoon_native_fiber_continue(fiber, 0);
-    int second = first == 0
+    int second = first == WASMOON_FIBER_ADVANCE_SUSPENDED
         ? wasmoon_native_fiber_continue(fiber, 0)
-        : -1;
-    int passed = second == 1 &&
+        : WASMOON_FIBER_ADVANCE_INVALID_HANDLE;
+    int passed = second == WASMOON_FIBER_ADVANCE_RETURNED &&
         wasmoon_native_fiber_return_value(fiber) == 1;
     moonbit_decref(fiber);
     return passed;

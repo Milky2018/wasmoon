@@ -488,7 +488,7 @@ extern "c" fn c_native_jit_continuation_alloc(
 
 ///|
 #borrow(fiber)
-extern "c" fn c_native_fiber_continue(
+extern "c" fn c_native_fiber_continue_code(
   fiber : NativeFiberObject,
   resume_value : Int64,
 ) -> Int = "wasmoon_native_fiber_continue"
@@ -498,11 +498,11 @@ extern "c" fn c_native_fiber_yield(value : Int64) -> Int64 = "wasmoon_native_fib
 
 ///|
 #borrow(fiber)
-extern "c" fn c_native_fiber_cancel(fiber : NativeFiberObject) -> Int = "wasmoon_native_fiber_cancel"
+extern "c" fn c_native_fiber_cancel_code(fiber : NativeFiberObject) -> Int = "wasmoon_native_fiber_cancel"
 
 ///|
 #borrow(fiber)
-extern "c" fn c_native_fiber_state(fiber : NativeFiberObject) -> Int = "wasmoon_native_fiber_state"
+extern "c" fn c_native_fiber_state_code(fiber : NativeFiberObject) -> Int = "wasmoon_native_fiber_state"
 
 ///|
 #borrow(fiber)
