@@ -216,17 +216,3 @@ pub impl Debug for NativeFiber with fn to_repr(self) {
     (Some("guard_size"), to_repr(self.guard_size())),
   ])
 }
-
-///|
-/// Native ABI self-test for callee-preserved registers across a suspension.
-pub fn native_fiber_preserves_registers() -> Bool {
-  c_native_fiber_register_test() == 1
-}
-
-///|
-/// Native subprocess self-test that confirms the fiber guard page is
-/// inaccessible. Converting such a fault into a structured JIT trap belongs to
-/// the trap activation seam.
-pub fn native_fiber_guard_rejects_access() -> Bool {
-  c_native_fiber_guard_test() == 1
-}

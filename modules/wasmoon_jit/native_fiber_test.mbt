@@ -73,7 +73,7 @@ test "native fiber allocates a guarded stack" {
     (
       fiber.stack_size(),
       fiber.guard_size() > 0L,
-      native_fiber_guard_rejects_access(),
+      @native_test_support.fiber_guard_rejects_access(),
     ),
     content="(65536, true, true)",
   )
@@ -82,5 +82,8 @@ test "native fiber allocates a guarded stack" {
 
 ///|
 test "native fiber preserves ABI callee-saved registers" {
-  debug_inspect(native_fiber_preserves_registers(), content="true")
+  debug_inspect(
+    @native_test_support.fiber_preserves_registers(),
+    content="true",
+  )
 }

@@ -16,6 +16,14 @@ import {
   "moonbitlang/core/hashset",
 }
 
+import {
+  "Milky2018/wasmoon_jit/native_test_support",
+} for "test"
+
+import {
+  "Milky2018/wasmoon_jit/native_test_support",
+} for "wbtest"
+
 options(
   "native-stub": [
     "jit_ffi/jit.c",

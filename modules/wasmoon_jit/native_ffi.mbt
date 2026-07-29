@@ -521,13 +521,7 @@ extern "c" fn c_native_fiber_stack_size(fiber : NativeFiberObject) -> Int64 = "w
 extern "c" fn c_native_fiber_guard_size(fiber : NativeFiberObject) -> Int64 = "wasmoon_native_fiber_guard_size"
 
 ///|
-extern "c" fn c_native_fiber_guard_test() -> Int = "wasmoon_native_fiber_guard_test"
-
-///|
 extern "c" fn c_native_hostcall_suspend_event() -> Int64 = "wasmoon_native_hostcall_suspend_event"
-
-///|
-extern "c" fn c_native_fiber_register_test() -> Int = "wasmoon_native_fiber_register_test"
 
 // ============ WASI Trampoline Pointers ============
 

@@ -1,7 +1,4 @@
 ///|
-extern "c" fn native_hostcall_probe_trampoline_for_gc_frame_test() -> Int64 = "wasmoon_native_hostcall_probe_trampoline"
-
-///|
 extern "c" fn gc_live_frame_count_for_test() -> Int64 = "wasmoon_jit_gc_live_frame_count"
 
 ///|
@@ -16,7 +13,7 @@ fn gc_frame_test_continuation(
   jit_module.context_ptr = context.ptr()
   let values = FixedArray::from_array([0L])
   let raw = context.ctx.start_continuation(
-    native_hostcall_probe_trampoline_for_gc_frame_test(),
+    @native_test_support.hostcall_probe_trampoline(),
     mode,
     values,
     values.length(),

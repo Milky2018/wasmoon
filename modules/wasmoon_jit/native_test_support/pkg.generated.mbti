@@ -1,0 +1,26 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon_jit/native_test_support"
+
+// Values
+pub fn fiber_guard_rejects_access() -> Bool
+
+pub fn fiber_preserves_registers() -> Bool
+
+pub fn fiber_stack_hostcall_probe_trampoline() -> Int64
+
+pub fn hostcall_probe_trampoline() -> Int64
+
+pub fn nested_hostcall_tls_probe_trampoline() -> Int64
+
+pub fn nested_trap_probe() -> Int64
+
+pub fn parked_gc_root_probe() -> Int64
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+

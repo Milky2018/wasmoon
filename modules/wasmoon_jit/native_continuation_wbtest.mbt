@@ -1,37 +1,4 @@
 ///|
-extern "c" fn c_native_hostcall_probe_trampoline() -> Int64 = "wasmoon_native_hostcall_probe_trampoline"
-
-///|
-extern "c" fn c_native_fiber_stack_hostcall_probe_trampoline() -> Int64 = "wasmoon_native_fiber_stack_hostcall_probe_trampoline"
-
-///|
-extern "c" fn c_native_nested_hostcall_tls_probe_trampoline() -> Int64 = "wasmoon_native_nested_hostcall_tls_probe_trampoline"
-
-///|
-extern "c" fn c_native_nested_trap_probe() -> Int64 = "wasmoon_native_nested_trap_probe"
-
-///|
-extern "c" fn c_native_parked_gc_root_probe() -> Int64 = "wasmoon_native_parked_gc_root_probe"
-
-///|
-extern "c" fn c_native_fiber_live_count() -> Int64 = "wasmoon_native_fiber_live_count"
-
-///|
-extern "c" fn c_native_fiber_mapped_stack_bytes() -> Int64 = "wasmoon_native_fiber_mapped_stack_bytes"
-
-///|
-extern "c" fn c_native_fiber_parked_root_registration_count() -> Int64 = "wasmoon_native_fiber_parked_root_registration_count"
-
-///|
-fn native_fiber_lifecycle_counts() -> (Int64, Int64, Int64) {
-  (
-    c_native_fiber_live_count(),
-    c_native_fiber_mapped_stack_bytes(),
-    c_native_fiber_parked_root_registration_count(),
-  )
-}
-
-///|
 fn native_continuation_test_context() -> NativeJITContext {
   match NativeJITContext::try_alloc(1) {
     Some(context) => context
@@ -54,7 +21,7 @@ test "native continuation cancellation has explicit phase boundaries" {
     HostcallSuspended
   })
   let active = context.start_continuation(
-    c_native_hostcall_probe_trampoline(),
+    @native_test_support.hostcall_probe_trampoline(),
     1L,
     FixedArray::from_array([0L]),
     1,
@@ -73,7 +40,7 @@ test "native continuation cancellation has explicit phase boundaries" {
   }
 
   let ready = context.start_continuation(
-    c_native_hostcall_probe_trampoline(),
+    @native_test_support.hostcall_probe_trampoline(),
     1L,
     FixedArray::from_array([0L]),
     1,
@@ -83,7 +50,7 @@ test "native continuation cancellation has explicit phase boundaries" {
 
   context.set_hostcall_callback(fn() { HostcallCompleted })
   let returned = context.start_continuation(
-    c_native_hostcall_probe_trampoline(),
+    @native_test_support.hostcall_probe_trampoline(),
     1L,
     FixedArray::from_array([0L]),
     1,
@@ -123,8 +90,7 @@ test "native continuation cancellation has explicit phase boundaries" {
 }
 
 ///|
-test "interleaved native continuations release all lifecycle state" {
-  let before = native_fiber_lifecycle_counts()
+test "interleaved native continuations complete and cancel exactly" {
   let context = native_continuation_test_context()
   context.set_hostcall_callback(fn() { HostcallSuspended })
   let completed = Ref(0)
@@ -133,7 +99,7 @@ test "interleaved native continuations release all lifecycle state" {
     let parked : Array[NativeJITContinuation] = []
     for index in 0..<32 {
       let continuation = context.start_continuation(
-        c_native_hostcall_probe_trampoline(),
+        @native_test_support.hostcall_probe_trampoline(),
         1L,
         FixedArray::from_array([0L]),
         1,
@@ -158,17 +124,7 @@ test "interleaved native continuations release all lifecycle state" {
       }
     }
   }
-  let after = native_fiber_lifecycle_counts()
-  debug_inspect(
-    (
-      completed.val,
-      cancelled.val,
-      after.0 - before.0,
-      after.1 - before.1,
-      after.2 - before.2,
-    ),
-    content="(256, 256, 0, 0, 0)",
-  )
+  debug_inspect((completed.val, cancelled.val), content="(256, 256)")
   context.clear_hostcall_callback()
 }
 
@@ -182,7 +138,7 @@ test "native hostcall suspension continues after the call without replay" {
   })
   let values = FixedArray::from_array([0L])
   let continuation = context.start_continuation(
-    c_native_hostcall_probe_trampoline(),
+    @native_test_support.hostcall_probe_trampoline(),
     1L,
     values,
     values.length(),
@@ -222,7 +178,7 @@ test "native hostcall suspension can retry only the suspended hostcall" {
   })
   let values = FixedArray::from_array([0L])
   let continuation = context.start_continuation(
-    c_native_hostcall_probe_trampoline(),
+    @native_test_support.hostcall_probe_trampoline(),
     1L,
     values,
     values.length(),
@@ -251,7 +207,7 @@ test "native hostcall accepts slots on the active fiber stack" {
   context.set_hostcall_callback(fn() { HostcallCompleted })
   let values = FixedArray::from_array([99L])
   let continuation = context.start_continuation(
-    c_native_fiber_stack_hostcall_probe_trampoline(),
+    @native_test_support.fiber_stack_hostcall_probe_trampoline(),
     1L,
     values,
     values.length(),
@@ -271,7 +227,7 @@ test "suspended nested hostcall restores the outer hostcall slots" {
     match get_hostcall_func_addr() {
       46 => {
         let continuation = context.start_continuation(
-          c_native_fiber_stack_hostcall_probe_trampoline(),
+          @native_test_support.fiber_stack_hostcall_probe_trampoline(),
           1L,
           FixedArray::from_array([0L]),
           1,
@@ -292,7 +248,7 @@ test "suspended nested hostcall restores the outer hostcall slots" {
   })
   let values = FixedArray::from_array([0L])
   let outer = context.start_continuation(
-    c_native_nested_hostcall_tls_probe_trampoline(),
+    @native_test_support.nested_hostcall_tls_probe_trampoline(),
     1L,
     values,
     values.length(),
@@ -313,7 +269,7 @@ test "trap activation survives a native hostcall suspension" {
   context.set_hostcall_callback(fn() { HostcallSuspended })
   let values = FixedArray::from_array([0L])
   let continuation = context.start_continuation(
-    c_native_hostcall_probe_trampoline(),
+    @native_test_support.hostcall_probe_trampoline(),
     73L,
     values,
     values.length(),
@@ -330,7 +286,7 @@ test "fiber guard fault after resume becomes a structured stack trap" {
   let context = native_continuation_test_context()
   context.set_hostcall_callback(fn() { HostcallSuspended })
   let continuation = context.start_continuation(
-    c_native_hostcall_probe_trampoline(),
+    @native_test_support.hostcall_probe_trampoline(),
     999L,
     FixedArray::from_array([0L]),
     1,
@@ -352,7 +308,7 @@ test "nested same-context activation preserves its suspended caller" {
   context.set_hostcall_callback(fn() {
     let nested_values = FixedArray::from_array([0L])
     let trap = context.call_trampoline(
-      c_native_nested_trap_probe(),
+      @native_test_support.nested_trap_probe(),
       321L,
       nested_values,
       nested_values.length(),
@@ -365,7 +321,7 @@ test "nested same-context activation preserves its suspended caller" {
     HostcallSuspended
   })
   let continuation = context.start_continuation(
-    c_native_hostcall_probe_trampoline(),
+    @native_test_support.hostcall_probe_trampoline(),
     73L,
     FixedArray::from_array([0L]),
     1,
@@ -384,13 +340,13 @@ test "parked native trap activations do not overwrite each other" {
   let context = native_continuation_test_context()
   context.set_hostcall_callback(fn() { HostcallSuspended })
   let first = context.start_continuation(
-    c_native_hostcall_probe_trampoline(),
+    @native_test_support.hostcall_probe_trampoline(),
     111L,
     FixedArray::from_array([0L]),
     1,
   )
   let second = context.start_continuation(
-    c_native_hostcall_probe_trampoline(),
+    @native_test_support.hostcall_probe_trampoline(),
     222L,
     FixedArray::from_array([0L]),
     1,
@@ -416,7 +372,7 @@ test "parked native continuation keeps its precise GC root alive" {
   let rooted = heap.alloc_struct(0, [I32(22)])
   let values = FixedArray::from_array([value_to_i64(StructRef(rooted)), 0L])
   let continuation = context.start_continuation(
-    c_native_parked_gc_root_probe(),
+    @native_test_support.parked_gc_root_probe(),
     1L,
     values,
     values.length(),
@@ -449,13 +405,13 @@ test "multiple parked continuations unregister GC roots independently" {
   let first_root = heap.alloc_struct(0, [I32(1)])
   let second_root = heap.alloc_struct(0, [I32(3)])
   let first = first_context.start_continuation(
-    c_native_parked_gc_root_probe(),
+    @native_test_support.parked_gc_root_probe(),
     1L,
     FixedArray::from_array([value_to_i64(StructRef(first_root)), 0L]),
     2,
   )
   let second = second_context.start_continuation(
-    c_native_parked_gc_root_probe(),
+    @native_test_support.parked_gc_root_probe(),
     1L,
     FixedArray::from_array([value_to_i64(StructRef(second_root)), 0L]),
     2,

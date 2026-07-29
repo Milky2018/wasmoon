@@ -198,10 +198,6 @@ pub fn memory_init(Int64, Int64, Bytes) -> Bool
 
 pub fn memory_read(Int64, Int64, Int) -> Bytes
 
-pub fn native_fiber_guard_rejects_access() -> Bool
-
-pub fn native_fiber_preserves_registers() -> Bool
-
 pub fn native_value_slot_read(Int64, Int) -> Int64
 
 pub fn native_value_slot_write(Int64, Int, Int64) -> Unit

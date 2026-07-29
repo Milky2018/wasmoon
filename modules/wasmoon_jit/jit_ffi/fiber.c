@@ -5,7 +5,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
-#include <sys/wait.h>
 #include <unistd.h>
 
 #if defined(WASMOON_ADDRESS_SANITIZER)
@@ -104,7 +103,6 @@ extern void wasmoon_native_fiber_swap(
     native_fiber_context_t *from,
     const native_fiber_context_t *to
 );
-extern int64_t wasmoon_native_fiber_register_probe(void *closure);
 extern int64_t wasmoon_jit_context_ptr(void *managed);
 extern int wasmoon_jit_call_trampoline(
     int64_t trampoline_ptr,
@@ -122,9 +120,6 @@ extern int32_t wasmoon_jit_hostcall(
 );
 
 static __thread native_fiber_t *current_native_fiber = NULL;
-static int64_t live_fiber_count = 0;
-static int64_t mapped_fiber_stack_bytes = 0;
-static int64_t parked_root_registration_count = 0;
 
 static int fiber_on_owner_thread(const native_fiber_t *fiber) {
     return fiber && pthread_equal(fiber->owner_thread, pthread_self());
@@ -164,9 +159,7 @@ static void native_fiber_swap_stacks(
 
 static void release_fiber_stack(native_fiber_t *fiber) {
     if (!fiber || !fiber->mapping) return;
-    if (munmap(fiber->mapping, fiber->mapping_size) == 0) {
-        mapped_fiber_stack_bytes -= (int64_t)fiber->mapping_size;
-    }
+    munmap(fiber->mapping, fiber->mapping_size);
     fiber->mapping = NULL;
     fiber->mapping_size = 0;
     fiber->guard_size = 0;
@@ -178,7 +171,6 @@ static void unregister_fiber_parked_roots(native_fiber_t *fiber) {
     if (!fiber || !fiber->parked_gc_roots) return;
     jit_parked_gc_roots_unregister(fiber->parked_gc_roots);
     fiber->parked_gc_roots = NULL;
-    parked_root_registration_count--;
 }
 
 static WASMOON_NO_ADDRESS_SANITIZE void fiber_bootstrap(void) {
@@ -258,8 +250,6 @@ static native_fiber_t *allocate_fiber(
     fiber->owns_closure = owns_closure;
     fiber->owner_thread = pthread_self();
     fiber->state = NATIVE_FIBER_READY;
-    live_fiber_count++;
-    mapped_fiber_stack_bytes += (int64_t)mapping_size;
 
     uintptr_t stack_top = (uintptr_t)mapping + mapping_size;
 #if defined(__x86_64__) || defined(_M_X64)
@@ -288,7 +278,6 @@ static void destroy_fiber(native_fiber_t *fiber) {
         moonbit_decref(fiber->closure);
         fiber->closure = NULL;
     }
-    live_fiber_count--;
     free(fiber);
 }
 
@@ -435,7 +424,6 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_native_fiber_yield(int64_t value) {
         fiber->state = NATIVE_FIBER_RUNNING;
         return INT64_MIN;
     }
-    if (fiber->parked_gc_roots) parked_root_registration_count++;
     native_fiber_swap_stacks(
         &fiber->context,
         &fiber->caller,
@@ -476,143 +464,6 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_native_hostcall_suspend_event(void) {
     return WASMOON_FIBER_EVENT_HOSTCALL_SUSPENDED;
 }
 
-static int probe_trampoline(
-    jit_context_t *ctx,
-    int64_t *values,
-    void *func_ptr
-) {
-    values[0] = 10;
-    int result = wasmoon_jit_hostcall(
-        ctx,
-        42,
-        (int64_t)values,
-        0,
-        0
-    );
-    if (result != 0) return result;
-    values[0] += 1;
-    int mode = (int)(intptr_t)func_ptr;
-    if (mode == 999) {
-        ctx->debug_current_func_idx = mode;
-        volatile unsigned char *guard =
-            (volatile unsigned char *)current_native_fiber->mapping;
-        *guard = 1;
-        return 0;
-    }
-    if (mode > 1) {
-        g_trap_func_idx = mode;
-        g_trap_pc = (uintptr_t)probe_trampoline;
-        g_trap_code = 6;
-        siglongjmp(g_trap_jmp_buf, 1);
-    }
-    return 0;
-}
-
-MOONBIT_FFI_EXPORT int64_t wasmoon_native_hostcall_probe_trampoline(void) {
-    return (int64_t)probe_trampoline;
-}
-
-static int fiber_stack_hostcall_probe(
-    jit_context_t *ctx,
-    int64_t *values,
-    void *func_ptr
-) {
-    (void)func_ptr;
-    uintptr_t fiber_base = 0;
-    if (!wasmoon_native_fiber_stack_bounds(
-            &fiber_base, NULL, NULL, NULL
-        )) {
-        values[0] = 3;
-        return 3;
-    }
-    // AddressSanitizer may place fixed-size C locals on its fake stack. Use
-    // the registered fiber mapping directly so this probe still exercises
-    // the runtime's real native-fiber slot boundary under instrumentation.
-    int64_t *slots = (int64_t *)fiber_base;
-    int result = wasmoon_jit_hostcall(
-        ctx,
-        44,
-        (int64_t)slots,
-        0,
-        0
-    );
-    values[0] = result;
-    return result;
-}
-
-MOONBIT_FFI_EXPORT int64_t
-wasmoon_native_fiber_stack_hostcall_probe_trampoline(void) {
-    return (int64_t)fiber_stack_hostcall_probe;
-}
-
-static int nested_hostcall_tls_probe(
-    jit_context_t *ctx,
-    int64_t *values,
-    void *func_ptr
-) {
-    (void)func_ptr;
-    int64_t slots[1] = {0};
-    int result = wasmoon_jit_hostcall(
-        ctx,
-        46,
-        (int64_t)slots,
-        0,
-        1
-    );
-    values[0] = slots[0];
-    return result;
-}
-
-MOONBIT_FFI_EXPORT int64_t
-wasmoon_native_nested_hostcall_tls_probe_trampoline(void) {
-    return (int64_t)nested_hostcall_tls_probe;
-}
-
-static int parked_gc_root_probe(
-    jit_context_t *ctx,
-    int64_t *values,
-    void *func_ptr
-) {
-    (void)func_ptr;
-    if (!ctx || !ctx->gc_heap || !values) return 8;
-    if (!ctx_gc_push_root_scope_internal(ctx, values, 1)) return 9;
-    int result = wasmoon_jit_hostcall(
-        ctx,
-        43,
-        (int64_t)values,
-        0,
-        0
-    );
-    int64_t encoded = values[0];
-    int32_t gc_ref = encoded > 0 && (encoded & 1L) == 0
-        ? (int32_t)(encoded >> 1)
-        : 0;
-    values[1] = gc_heap_is_valid((GcHeap *)ctx->gc_heap, gc_ref);
-    ctx_gc_pop_root_scope_internal(ctx);
-    return result;
-}
-
-MOONBIT_FFI_EXPORT int64_t wasmoon_native_parked_gc_root_probe(void) {
-    return (int64_t)parked_gc_root_probe;
-}
-
-static int nested_trap_probe(
-    jit_context_t *ctx,
-    int64_t *values,
-    void *func_ptr
-) {
-    (void)ctx;
-    (void)values;
-    g_trap_func_idx = (int)(intptr_t)func_ptr;
-    g_trap_pc = (uintptr_t)nested_trap_probe;
-    g_trap_code = 6;
-    siglongjmp(g_trap_jmp_buf, 1);
-}
-
-MOONBIT_FFI_EXPORT int64_t wasmoon_native_nested_trap_probe(void) {
-    return (int64_t)nested_trap_probe;
-}
-
 MOONBIT_FFI_EXPORT int wasmoon_native_fiber_state(void *managed) {
     native_fiber_t *fiber = managed_fiber_ptr(managed);
     return fiber ? (int)fiber->state : -1;
@@ -638,19 +489,6 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_native_fiber_guard_size(void *managed) {
     return fiber ? (int64_t)fiber->guard_size : 0;
 }
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_native_fiber_live_count(void) {
-    return live_fiber_count;
-}
-
-MOONBIT_FFI_EXPORT int64_t wasmoon_native_fiber_mapped_stack_bytes(void) {
-    return mapped_fiber_stack_bytes;
-}
-
-MOONBIT_FFI_EXPORT int64_t
-wasmoon_native_fiber_parked_root_registration_count(void) {
-    return parked_root_registration_count;
-}
-
 int wasmoon_native_fiber_stack_bounds(
     uintptr_t *stack_base,
     uintptr_t *stack_top,
@@ -668,71 +506,4 @@ int wasmoon_native_fiber_stack_bounds(
     if (guard_base) *guard_base = (uintptr_t)fiber->mapping;
     if (guard_size) *guard_size = fiber->guard_size;
     return 1;
-}
-
-MOONBIT_FFI_EXPORT int wasmoon_native_fiber_guard_test(void) {
-    native_fiber_t *fiber = allocate_fiber(
-        wasmoon_native_fiber_register_probe,
-        NULL,
-        0,
-        64 * 1024
-    );
-    if (!fiber) return 0;
-    pid_t child = fork();
-    if (child < 0) {
-        destroy_fiber(fiber);
-        return 0;
-    }
-    if (child == 0) {
-        volatile unsigned char *guard =
-            (volatile unsigned char *)fiber->mapping;
-        *guard = 1;
-        _exit(0);
-    }
-    int status = 0;
-    int waited = waitpid(child, &status, 0);
-    destroy_fiber(fiber);
-    return waited == child && WIFSIGNALED(status);
-}
-
-MOONBIT_FFI_EXPORT int wasmoon_native_fiber_register_test(void) {
-    native_fiber_t *fiber = allocate_fiber(
-        wasmoon_native_fiber_register_probe,
-        NULL,
-        0,
-        64 * 1024
-    );
-    if (!fiber) return 0;
-    native_fiber_t *previous = current_native_fiber;
-    current_native_fiber = fiber;
-    fiber->state = NATIVE_FIBER_RUNNING;
-    native_fiber_swap_stacks(
-        &fiber->caller,
-        &fiber->context,
-        (const unsigned char *)fiber->mapping + fiber->guard_size,
-        fiber->usable_size,
-        0,
-        NULL,
-        NULL
-    );
-    if (fiber->state != NATIVE_FIBER_SUSPENDED) {
-        current_native_fiber = previous;
-        destroy_fiber(fiber);
-        return 0;
-    }
-    fiber->state = NATIVE_FIBER_RUNNING;
-    native_fiber_swap_stacks(
-        &fiber->caller,
-        &fiber->context,
-        (const unsigned char *)fiber->mapping + fiber->guard_size,
-        fiber->usable_size,
-        0,
-        NULL,
-        NULL
-    );
-    current_native_fiber = previous;
-    int passed = fiber->state == NATIVE_FIBER_RETURNED &&
-        fiber->return_value == 1;
-    destroy_fiber(fiber);
-    return passed;
 }

@@ -341,6 +341,7 @@ graph TD
   ISS_323["ISS-323: Make native sanitizer CI produce instrumented test binaries"]
   ISS_324["ISS-324: Keep synchronous Component JIT traps on their native fiber"]
   ISS_325["ISS-325: Preserve trailing-slash directory semantics in WASI component paths"]
+  ISS_326["ISS-326: Move native fiber probes out of the production runtime"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
@@ -667,6 +668,7 @@ graph TD
   ISS_311 --> ISS_312
   ISS_314 --> ISS_315
   ISS_323 --> ISS_324
+  ISS_323 --> ISS_326
 ```
 
 ## Warnings
