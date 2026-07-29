@@ -5,6 +5,7 @@
 #include "jit_internal.h"
 
 static int gc_collect_debug_cached = -1;
+static int64_t live_gc_frame_count = 0;
 
 static int gc_collect_is_truthy_env(const char *value) {
     if (!value) return 0;
@@ -343,11 +344,7 @@ void free_context_internal(jit_context_t *ctx) {
         free(ctx->gc_root_scratch);
         ctx->gc_root_scratch = NULL;
     }
-    while (ctx->gc_frame_chain_head) {
-        wasmoon_gc_frame_t *prev = ctx->gc_frame_chain_head->prev;
-        free(ctx->gc_frame_chain_head);
-        ctx->gc_frame_chain_head = prev;
-    }
+    ctx_gc_clear_frames_internal(ctx);
     ctx_gc_clear_root_scopes_internal(ctx);
     if (ctx->gc_func_safepoint_tables) {
         int32_t count = ctx->gc_func_safepoint_table_count;
@@ -600,6 +597,7 @@ void ctx_gc_begin_frame_internal(jit_context_t *ctx, uintptr_t frame_id) {
     frame->frame_id = frame_id;
     frame->table = ctx->gc_safepoint_table;
     ctx->gc_frame_chain_head = frame;
+    live_gc_frame_count++;
 }
 
 void ctx_gc_end_frame_internal(jit_context_t *ctx) {
@@ -607,6 +605,18 @@ void ctx_gc_end_frame_internal(jit_context_t *ctx) {
     wasmoon_gc_frame_t *top = ctx->gc_frame_chain_head;
     ctx->gc_frame_chain_head = top->prev;
     free(top);
+    live_gc_frame_count--;
+}
+
+void ctx_gc_clear_frames_internal(jit_context_t *ctx) {
+    if (!ctx) return;
+    while (ctx->gc_frame_chain_head) {
+        ctx_gc_end_frame_internal(ctx);
+    }
+}
+
+int64_t ctx_gc_live_frame_count_internal(void) {
+    return live_gc_frame_count;
 }
 
 int32_t ctx_gc_push_root_scope_internal(

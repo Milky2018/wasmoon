@@ -596,7 +596,32 @@ struct JITCallContinuation {
   call : JITContextContinuation
   entry_roots : Array[Int64]
   first_entry : Array[Bool]
+  gc_frame_active : Array[Bool]
   active : Array[Bool]
+}
+
+///|
+priv enum JITContinuationFrameDisposition {
+  // The native activation restored the frame to the JIT context.
+  AttachedFrame
+  // Cancelling a parked activation released its detached frame chain.
+  DetachedFrameReleased
+}
+
+///|
+fn JITCallContinuation::finish(
+  self : JITCallContinuation,
+  frame_disposition : JITContinuationFrameDisposition,
+) -> Unit {
+  self.active[0] = false
+  if self.gc_frame_active[0] {
+    self.gc_frame_active[0] = false
+    if frame_disposition is AttachedFrame {
+      self.jit_module.gc_end_frame()
+    }
+  }
+  self.jit_module.gc_use_func_safepoints(-1)
+  self.jit_module.gc_set_root_scratch([]) |> ignore
 }
 
 ///|
@@ -604,7 +629,7 @@ fn JITCallContinuation::finish_error(
   self : JITCallContinuation,
   error : JITTrap,
 ) -> Unit raise JITTrap {
-  self.active[0] = false
+  self.finish(AttachedFrame)
   match error {
     JITTrap(msg) => {
       let report = self.jit_module.build_trap_report(msg)
@@ -628,13 +653,14 @@ fn JITCallContinuation::advance(
     self.jit_module.gc_set_root_scratch(self.entry_roots) |> ignore
     self.jit_module.gc_use_func_safepoints(self.func.func_idx)
     self.jit_module.gc_begin_frame(self.func.func_idx.to_int64())
+    self.gc_frame_active[0] = true
     self.first_entry[0] = false
   }
   let mut call_error : JITTrap? = None
   let event = self.call.advance(retry_hostcall) catch {
     error => {
       call_error = Some(error)
-      JITContextContinuationEvent::Suspended
+      Suspended
     }
   }
   self.jit_module.gc_use_func_safepoints(-1)
@@ -643,7 +669,13 @@ fn JITCallContinuation::advance(
     match self.jit_module.context {
       Some(ctx) => ctx
       None => {
-        self.active[0] = false
+        match (call_error, event) {
+          (Some(_), _) | (None, Returned(_)) => self.finish(AttachedFrame)
+          (None, Suspended) => {
+            self.call.cancel()
+            self.finish(DetachedFrameReleased)
+          }
+        }
         raise JITTrap("native JIT context disappeared while suspended")
       }
     },
@@ -654,8 +686,7 @@ fn JITCallContinuation::advance(
   match event {
     Suspended => JITSuspended(self)
     Returned(results) => {
-      self.active[0] = false
-      self.jit_module.gc_end_frame()
+      self.finish(AttachedFrame)
       JITReturned(results)
     }
   }
@@ -682,6 +713,7 @@ pub fn JITModule::start_continuation_call(
     call,
     entry_roots: @wasmoon_jit.collect_gc_root_args(args, func.param_types),
     first_entry: [true],
+    gc_frame_active: [false],
     active: [true],
   }
   continuation.advance(false)
@@ -705,9 +737,7 @@ pub fn JITCallContinuation::cancel(
     return
   }
   self.call.cancel()
-  self.active[0] = false
-  self.jit_module.gc_use_func_safepoints(-1)
-  self.jit_module.gc_set_root_scratch([]) |> ignore
+  self.finish(DetachedFrameReleased)
 }
 
 ///|

@@ -358,6 +358,7 @@ void jit_trap_activation_abandon(jit_trap_activation_t *activation) {
         context->gc_frame_chain_head = activation->gc_frame_chain_head;
         context->gc_root_scope_head = activation->gc_root_scope_head;
         exception_reset_context_state(context);
+        ctx_gc_clear_frames_internal(context);
         context->exception_handler = saved_handler;
         context->exception_tag = saved_tag;
         context->exception_values = saved_values;
@@ -366,6 +367,13 @@ void jit_trap_activation_abandon(jit_trap_activation_t *activation) {
         context->spilled_locals_count = saved_locals_count;
         context->gc_frame_chain_head = saved_frames;
         context->gc_root_scope_head = saved_scopes;
+        activation->exception_handler = NULL;
+        activation->exception_values = NULL;
+        activation->exception_value_count = 0;
+        activation->spilled_locals = NULL;
+        activation->spilled_locals_count = 0;
+        activation->gc_frame_chain_head = NULL;
+        activation->gc_root_scope_head = NULL;
         activation->context_detached = 0;
     }
 }

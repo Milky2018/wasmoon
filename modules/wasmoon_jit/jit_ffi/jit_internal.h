@@ -196,6 +196,8 @@ void ctx_set_gc_heap_internal(jit_context_t *ctx, GcHeap *heap);
 void ctx_update_gc_heap_ptr_internal(jit_context_t *ctx);
 void ctx_gc_begin_frame_internal(jit_context_t *ctx, uintptr_t frame_id);
 void ctx_gc_end_frame_internal(jit_context_t *ctx);
+void ctx_gc_clear_frames_internal(jit_context_t *ctx);
+int64_t ctx_gc_live_frame_count_internal(void);
 int32_t ctx_gc_push_root_scope_internal(
     jit_context_t *ctx,
     const int64_t *roots,
