@@ -22,9 +22,6 @@ test "native reactor delivers readable and writable events" {
   if !NativeReactor::supported() {
     return
   }
-  let runtime = @wasmoon_async.Runtime()
-  let read_task = runtime.spawn()
-  runtime.next_ready() |> ignore
   guard test_pipe() is Some((read_fd, write_fd)) else {
     fail("failed to create reactor test pipe")
   }
@@ -33,42 +30,26 @@ test "native reactor delivers readable and writable events" {
     c_test_close(write_fd)
   }
   let reactor = NativeReactor::try_new()
-  let read_registration = reactor.register_read(read_fd, read_task.waker())
+  let read_registration = reactor.register_read(read_fd)
   c_test_write(write_fd) |> ignore
   debug_inspect(
     (
       reactor.wait(Some(1000000000L)),
-      runtime.next_ready(),
+      read_registration.is_ready(),
       read_registration.is_active(),
       reactor,
     ),
-    content=(
-      #|(
-      #|  1,
-      #|  Some({ slot: 0, generation: 0 }),
-      #|  false,
-      #|  NativeReactor(registrations=0),
-      #|)
-    ),
+    content="(1, true, false, NativeReactor(registrations=0))",
   )
-  let write_task = runtime.spawn()
-  runtime.next_ready() |> ignore
-  let write_registration = reactor.register_write(write_fd, write_task.waker())
+  let write_registration = reactor.register_write(write_fd)
   debug_inspect(
     (
       reactor.wait(Some(1000000000L)),
-      runtime.next_ready(),
+      write_registration.is_ready(),
       write_registration.is_active(),
       reactor,
     ),
-    content=(
-      #|(
-      #|  1,
-      #|  Some({ slot: 1, generation: 0 }),
-      #|  false,
-      #|  NativeReactor(registrations=0),
-      #|)
-    ),
+    content="(1, true, false, NativeReactor(registrations=0))",
   )
 }
 
@@ -77,14 +58,11 @@ test "native reactor delivers timers and explicit wakeups" {
   if !NativeReactor::supported() {
     return
   }
-  let runtime = @wasmoon_async.Runtime()
-  let task = runtime.spawn()
-  runtime.next_ready() |> ignore
   let reactor = NativeReactor::try_new()
-  let timer = reactor.register_timer(1000000L, task.waker())
+  let timer = reactor.register_timer(1000000L)
   debug_inspect(
-    (reactor.wait(Some(1000000000L)), runtime.next_ready(), timer.is_active()),
-    content="(1, Some({ slot: 0, generation: 0 }), false)",
+    (reactor.wait(Some(1000000000L)), timer.is_ready(), timer.is_active()),
+    content="(1, true, false)",
   )
   reactor.wake()
   debug_inspect(
@@ -98,9 +76,6 @@ test "cancelled native registration ignores stale readiness" {
   if !NativeReactor::supported() {
     return
   }
-  let runtime = @wasmoon_async.Runtime()
-  let task = runtime.spawn()
-  runtime.next_ready() |> ignore
   guard test_pipe() is Some((read_fd, write_fd)) else {
     fail("failed to create reactor test pipe")
   }
@@ -109,20 +84,18 @@ test "cancelled native registration ignores stale readiness" {
     c_test_close(write_fd)
   }
   let reactor = NativeReactor::try_new()
-  let cancelled = reactor.register_read(read_fd, task.waker())
-  let stale = cancelled.operation_id()
+  let cancelled = reactor.register_read(read_fd)
   cancelled.cancel()
   cancelled.cancel()
   c_test_write(write_fd) |> ignore
   debug_inspect(
     (
       reactor.wait(Some(0L)),
-      runtime.complete_operation(stale),
-      runtime.next_ready(),
+      cancelled.is_ready(),
       cancelled.is_active(),
       reactor,
     ),
-    content="(0, false, None, false, NativeReactor(registrations=0))",
+    content="(0, false, false, NativeReactor(registrations=0))",
   )
 }
 
@@ -131,9 +104,6 @@ test "native registration tokens are never reused" {
   if !NativeReactor::supported() {
     return
   }
-  let runtime = @wasmoon_async.Runtime()
-  let task = runtime.spawn()
-  runtime.next_ready() |> ignore
   guard test_pipe() is Some((read_fd, write_fd)) else {
     fail("failed to create reactor test pipe")
   }
@@ -142,26 +112,20 @@ test "native registration tokens are never reused" {
     c_test_close(write_fd)
   }
   let reactor = NativeReactor::try_new()
-  let first = reactor.register_read(read_fd, task.waker())
-  let first_operation = first.operation_id()
+  let first = reactor.register_read(read_fd)
+  let first_token = first.1
   first.cancel()
-  let second = reactor.register_read(read_fd, task.waker())
+  let second = reactor.register_read(read_fd)
   c_test_write(write_fd) |> ignore
   debug_inspect(
     (
       reactor.wait(Some(1000000000L)),
-      first_operation == second.operation_id(),
-      runtime.next_ready(),
+      first_token == second.1,
+      first.is_ready(),
+      second.is_ready(),
       reactor,
     ),
-    content=(
-      #|(
-      #|  1,
-      #|  false,
-      #|  Some({ slot: 0, generation: 0 }),
-      #|  NativeReactor(registrations=0),
-      #|)
-    ),
+    content="(1, false, false, true, NativeReactor(registrations=0))",
   )
 }
 
@@ -170,7 +134,6 @@ test "native reactor cancellation stress returns to an empty baseline" {
   if !NativeReactor::supported() {
     return
   }
-  let runtime = @wasmoon_async.Runtime()
   guard test_pipe() is Some((read_fd, write_fd)) else {
     fail("failed to create reactor test pipe")
   }
@@ -179,43 +142,30 @@ test "native reactor cancellation stress returns to an empty baseline" {
     c_test_close(write_fd)
   }
   let reactor = NativeReactor::try_new()
-  let first_operation : Array[@wasmoon_async.OperationId?] = [None]
-  let last_operation : Array[@wasmoon_async.OperationId?] = [None]
+  let first_token : Array[Int64?] = [None]
+  let last_token : Array[Int64?] = [None]
   for index in 0..<512 {
-    let task = runtime.spawn()
-    runtime.next_ready() |> ignore
     let registration = if index % 2 == 0 {
-      reactor.register_read(read_fd, task.waker())
+      reactor.register_read(read_fd)
     } else {
-      reactor.register_timer(1000000000L, task.waker())
+      reactor.register_timer(1000000000L)
     }
-    if first_operation[0] is None {
-      first_operation[0] = Some(registration.operation_id())
+    if first_token[0] is None {
+      first_token[0] = Some(registration.1)
     }
-    last_operation[0] = Some(registration.operation_id())
+    last_token[0] = Some(registration.1)
     registration.cancel()
     registration.cancel()
-    task.cancel()
   }
   c_test_write(write_fd) |> ignore
   debug_inspect(
     (
-      first_operation[0],
-      last_operation[0],
+      first_token[0],
+      last_token[0],
       reactor.wait(Some(0L)),
-      runtime.next_ready(),
+      reactor.has_pending(),
       reactor,
-      runtime,
     ),
-    content=(
-      #|(
-      #|  Some({ slot: 0, generation: 0 }),
-      #|  Some({ slot: 0, generation: 511 }),
-      #|  0,
-      #|  None,
-      #|  NativeReactor(registrations=0),
-      #|  Runtime(now=0, tasks=0, operations=0, ready=0),
-      #|)
-    ),
+    content="(Some(1), Some(512), 0, false, NativeReactor(registrations=0))",
   )
 }

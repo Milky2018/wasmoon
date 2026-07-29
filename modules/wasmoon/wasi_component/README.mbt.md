@@ -60,8 +60,9 @@ verify that the normalized contracts still match the WIT inputs.
 
 The host is single-threaded. It polls futures without blocking and waits for
 file-descriptor or timer readiness through the Wasmoon-owned native reactor.
-The reactor retains opaque task and operation identities, not guest values,
-Store state, or continuations.
+The reactor retains opaque one-shot registration state, not guest values, Store
+state, or continuations. Component task and continuation identity remains in
+the component runtime.
 
 Cancellation removes the native registration and releases the associated host
 operation. Native component continuations remain owned by the component

@@ -123,11 +123,12 @@ before the first call.
 
 Component async execution uses one cooperative host event loop. MoonBit
 processes and component tasks are logical scheduling units, not operating-system
-threads. `wasmoon_async` owns task and operation identities, while the native
-adapter translates kqueue on macOS and epoll on Linux into readiness events.
-A task may yield or wait on a waitable set; the scheduler then runs another
-ready task and resumes the stored continuation when an event is available.
-Host futures expose non-blocking `poll` and `cancel` operations.
+threads. `component/runtime_impl` owns guest-visible tasks, waitables, and
+continuations. The native adapter translates kqueue on macOS and epoll on Linux
+into opaque `Pending`, `Ready`, or `Cancelled` host registrations. Host futures
+observe those registrations through non-blocking `poll` and idempotent
+`cancel` operations; the component scheduler resumes the stored continuation
+when a host event becomes ready.
 
 A Store and its continuations remain on their creation thread. Multiple parked
 continuations may exist, but only one component entry chain is active at a

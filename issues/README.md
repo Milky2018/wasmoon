@@ -333,6 +333,7 @@ graph TD
   ISS_315["ISS-315: Return structured Component Async canonical traps"]
   ISS_316["ISS-316: Honor component-test interpreter mode"]
   ISS_317["ISS-317: Accept native fiber hostcall frames"]
+  ISS_318["ISS-318: Remove the redundant wasmoon_async scheduling layer"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005

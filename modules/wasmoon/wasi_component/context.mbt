@@ -1,8 +1,6 @@
 ///|
 priv struct WasiAsyncOperation {
-  task : @wasmoon_async.TaskHandle
   registration : @async_native.NativeRegistration
-  ready : Ref[Bool]
 }
 
 ///|
@@ -19,9 +17,7 @@ struct WasiComponentCtx {
   insecure_seed : (Int64, Int64)
   resources : Map[Int, WasiHostResource]
   next_resource_rep : Ref[Int]
-  async_runtime : @wasmoon_async.Runtime
   native_reactor : @async_native.NativeReactor?
-  async_ready : Map[@wasmoon_async.TaskId, Ref[Bool]]
   stdin_rep : Int
   stdout_rep : Int
   stderr_rep : Int
@@ -306,9 +302,7 @@ pub fn WasiComponentCtxBuilder::build(
     insecure_seed: self.insecure_seed,
     resources,
     next_resource_rep: Ref(5),
-    async_runtime: @wasmoon_async.Runtime(),
     native_reactor,
-    async_ready: Map([]),
     stdin_rep,
     stdout_rep,
     stderr_rep,
@@ -629,47 +623,32 @@ fn WasiComponentCtx::register_deadline(
   if now < 0L {
     raise HostCallError("monotonic clock is unavailable")
   }
-  let task = self.async_runtime.spawn()
-  task.take_ready() |> ignore
-  let ready = Ref(false)
   let registration = reactor.register_timer(
     if deadline <= now {
       1L
     } else {
       deadline - now
     },
-    task.waker(),
   ) catch {
-    error => {
-      task.cancel()
-      raise HostCallError("cannot register native timer: \{error}")
-    }
+    error => raise HostCallError("cannot register native timer: \{error}")
   }
-  self.async_ready.set(task.id(), ready)
-  { task, registration, ready }
+  { registration, }
 }
 
 ///|
 fn WasiComponentCtx::async_operation_ready(
-  self : WasiComponentCtx,
+  _self : WasiComponentCtx,
   operation : WasiAsyncOperation,
 ) -> Bool {
-  if !operation.ready.val {
-    return false
-  }
-  self.async_ready.remove(operation.task.id())
-  operation.task.complete()
-  true
+  operation.registration.is_ready()
 }
 
 ///|
 fn WasiComponentCtx::cancel_async_operation(
-  self : WasiComponentCtx,
+  _self : WasiComponentCtx,
   operation : WasiAsyncOperation,
 ) -> Unit {
-  self.async_ready.remove(operation.task.id())
   operation.registration.cancel()
-  operation.task.cancel()
 }
 
 ///|
@@ -681,56 +660,37 @@ fn WasiComponentCtx::register_async_fd(
   guard self.native_reactor is Some(reactor) else {
     raise HostCallError("native async reactor is unavailable")
   }
-  let task = self.async_runtime.spawn()
-  task.take_ready() |> ignore
-  let ready = Ref(false)
   let writable = if (events & 0x01) != 0 {
     false
   } else if (events & 0x04) != 0 {
     true
   } else {
-    task.cancel()
     raise HostCallError("unsupported native descriptor event mask")
   }
   let registration = try {
     if writable {
-      reactor.register_write(fd, task.waker())
+      reactor.register_write(fd)
     } else {
-      reactor.register_read(fd, task.waker())
+      reactor.register_read(fd)
     }
   } catch {
-    error => {
-      task.cancel()
-      raise HostCallError("cannot register native descriptor: \{error}")
-    }
+    error => raise HostCallError("cannot register native descriptor: \{error}")
   }
-  self.async_ready.set(task.id(), ready)
-  { task, registration, ready }
+  { registration, }
 }
 
 ///|
 fn WasiComponentCtx::wait_for_async_event(
   self : WasiComponentCtx,
 ) -> Bool raise @runtime_impl.ComponentRuntimeError {
-  guard !self.async_ready.is_empty() else { return false }
   guard self.native_reactor is Some(reactor) else {
     raise HostCallError("native async reactor is unavailable")
   }
-  while !self.async_ready.is_empty() {
-    try reactor.wait(None) |> ignore catch {
+  while reactor.has_pending() {
+    let completed = reactor.wait(None) catch {
       error => raise HostCallError("native async reactor wait failed: \{error}")
     }
-    let mut progressed = false
-    while self.async_runtime.next_ready() is Some(task) {
-      match self.async_ready.get(task) {
-        Some(ready) => {
-          ready.val = true
-          progressed = true
-        }
-        None => ()
-      }
-    }
-    if progressed {
+    if completed > 0 {
       return true
     }
   }

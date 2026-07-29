@@ -69,11 +69,17 @@ extern "c" fn c_reactor_wait(
 extern "c" fn c_reactor_wake(reactor : NativeReactorObject) -> Int = "wasmoon_async_reactor_wake"
 
 ///|
+priv enum RegistrationState {
+  Pending
+  Ready
+  Cancelled
+}
+
+///|
 priv struct RegistrationRecord {
-  operation : @wasmoon_async.OperationHandle
   ident : Int64
   filter : Int
-  active : Array[Bool]
+  state : Ref[RegistrationState]
 }
 
 ///|
@@ -114,19 +120,16 @@ fn NativeReactor::allocate_token(self : NativeReactor) -> Int64 {
 ///|
 fn NativeReactor::register(
   self : NativeReactor,
-  waker : @wasmoon_async.Waker,
   ident : Int64,
   filter : Int,
   install : (Int64) -> Int,
 ) -> NativeRegistration raise NativeReactorError {
-  guard waker.register() is Some(operation) else { raise RegistrationFailed(0) }
   let token = self.allocate_token()
   let status = install(token)
   if status != 0 {
-    operation.cancel()
     raise RegistrationFailed(status)
   }
-  let record : RegistrationRecord = { operation, ident, filter, active: [true] }
+  let record : RegistrationRecord = { ident, filter, state: Ref(Pending) }
   self.registrations.set(token, record)
   NativeRegistration(self, token, record)
 }
@@ -136,9 +139,8 @@ fn NativeReactor::register(
 pub fn NativeReactor::register_read(
   self : NativeReactor,
   fd : Int,
-  waker : @wasmoon_async.Waker,
 ) -> NativeRegistration raise NativeReactorError {
-  self.register(waker, fd.to_int64(), -1, fn(token) {
+  self.register(fd.to_int64(), -1, fn(token) {
     c_reactor_register_fd(self.raw, fd, 0, token)
   })
 }
@@ -148,9 +150,8 @@ pub fn NativeReactor::register_read(
 pub fn NativeReactor::register_write(
   self : NativeReactor,
   fd : Int,
-  waker : @wasmoon_async.Waker,
 ) -> NativeRegistration raise NativeReactorError {
-  self.register(waker, fd.to_int64(), -2, fn(token) {
+  self.register(fd.to_int64(), -2, fn(token) {
     c_reactor_register_fd(self.raw, fd, 1, token)
   })
 }
@@ -160,20 +161,16 @@ pub fn NativeReactor::register_write(
 pub fn NativeReactor::register_timer(
   self : NativeReactor,
   delay_ns : Int64,
-  waker : @wasmoon_async.Waker,
 ) -> NativeRegistration raise NativeReactorError {
   let token = self.allocate_token()
-  guard waker.register() is Some(operation) else { raise RegistrationFailed(0) }
   let status = c_reactor_register_timer(self.raw, delay_ns.max(1L), token)
   if status != 0 {
-    operation.cancel()
     raise RegistrationFailed(status)
   }
   let record : RegistrationRecord = {
-    operation,
     ident: token,
     filter: -7,
-    active: [true],
+    state: Ref(Pending),
   }
   self.registrations.set(token, record)
   NativeRegistration(self, token, record)
@@ -183,11 +180,19 @@ pub fn NativeReactor::register_timer(
 fn NativeReactor::complete_token(self : NativeReactor, token : Int64) -> Bool {
   guard self.registrations.get(token) is Some(record) else { return false }
   self.registrations.remove(token)
-  if !record.active[0] {
-    return false
+  match record.state.val {
+    Pending => {
+      record.state.val = Ready
+      true
+    }
+    Ready | Cancelled => false
   }
-  record.active[0] = false
-  record.operation.complete()
+}
+
+///|
+/// Whether this reactor still owns kernel registrations that can complete.
+pub fn NativeReactor::has_pending(self : NativeReactor) -> Bool {
+  !self.registrations.is_empty()
 }
 
 ///|
@@ -242,28 +247,31 @@ pub impl Debug for NativeReactor with fn to_repr(self) {
 struct NativeRegistration(NativeReactor, Int64, RegistrationRecord)
 
 ///|
-pub fn NativeRegistration::operation_id(
-  self : NativeRegistration,
-) -> @wasmoon_async.OperationId {
-  self.2.operation.id()
-}
-
-///|
+/// Whether this registration is still waiting for a kernel event.
 pub fn NativeRegistration::is_active(self : NativeRegistration) -> Bool {
-  self.2.active[0]
+  self.2.state.val is Pending
 }
 
 ///|
-/// Cancel this native registration and its runtime operation.
+/// Whether the registered kernel event has completed.
+pub fn NativeRegistration::is_ready(self : NativeRegistration) -> Bool {
+  self.2.state.val is Ready
+}
+
+///|
+/// Cancel this native registration.
 ///
 /// Cancellation is idempotent. A kernel event already queued for this token is
-/// ignored because the token is removed before the operation is cancelled.
+/// ignored because the token is removed before the registration is cancelled.
 pub fn NativeRegistration::cancel(self : NativeRegistration) -> Unit {
-  if !self.2.active[0] {
-    return
+  match self.2.state.val {
+    Pending => {
+      self.2.state.val = Cancelled
+      self.0.registrations.remove(self.1)
+      c_reactor_cancel(self.0.raw, self.1, self.2.ident, self.2.filter)
+      |> ignore
+    }
+    Ready => self.2.state.val = Cancelled
+    Cancelled => ()
   }
-  self.2.active[0] = false
-  self.0.registrations.remove(self.1)
-  c_reactor_cancel(self.0.raw, self.1, self.2.ident, self.2.filter) |> ignore
-  self.2.operation.cancel()
 }

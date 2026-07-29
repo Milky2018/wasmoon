@@ -10,11 +10,10 @@ test "Preview 3 timers become ready through the native reactor" {
   debug_inspect(
     (
       ctx.async_operation_ready(operation),
-      operation.task.is_active(),
       operation.registration.is_active(),
-      ctx.async_ready.length(),
+      operation.registration.is_ready(),
     ),
-    content="(false, true, true, 1)",
+    content="(false, true, false)",
   )
   guard ctx.wait_for_async_event() else {
     return fail("native timer readiness did not arrive")
@@ -22,20 +21,11 @@ test "Preview 3 timers become ready through the native reactor" {
   debug_inspect(
     (
       ctx.async_operation_ready(operation),
-      operation.task.is_active(),
       operation.registration.is_active(),
-      ctx.async_ready.length(),
-      ctx.async_runtime,
+      operation.registration.is_ready(),
+      ctx.native_reactor,
     ),
-    content=(
-      #|(
-      #|  true,
-      #|  false,
-      #|  false,
-      #|  0,
-      #|  Runtime(now=0, tasks=0, operations=0, ready=0),
-      #|)
-    ),
+    content="(true, false, true, Some(NativeReactor(registrations=0)))",
   )
 }
 
@@ -52,21 +42,12 @@ test "Preview 3 cancellation releases runtime and native registrations" {
   ctx.cancel_async_operation(operation)
   debug_inspect(
     (
-      operation.task.is_active(),
       operation.registration.is_active(),
-      ctx.async_ready.length(),
+      operation.registration.is_ready(),
       ctx.wait_for_async_event(),
-      ctx.async_runtime,
+      ctx.native_reactor,
     ),
-    content=(
-      #|(
-      #|  false,
-      #|  false,
-      #|  0,
-      #|  false,
-      #|  Runtime(now=0, tasks=0, operations=0, ready=0),
-      #|)
-    ),
+    content="(false, false, false, Some(NativeReactor(registrations=0)))",
   )
 }
 
@@ -83,19 +64,7 @@ test "Preview 3 repeated cancellation leaves no host operations" {
     ctx.cancel_async_operation(operation)
   }
   debug_inspect(
-    (
-      ctx.async_ready.length(),
-      ctx.wait_for_async_event(),
-      ctx.native_reactor,
-      ctx.async_runtime,
-    ),
-    content=(
-      #|(
-      #|  0,
-      #|  false,
-      #|  Some(NativeReactor(registrations=0)),
-      #|  Runtime(now=0, tasks=0, operations=0, ready=0),
-      #|)
-    ),
+    (ctx.wait_for_async_event(), ctx.native_reactor),
+    content="(false, Some(NativeReactor(registrations=0)))",
   )
 }

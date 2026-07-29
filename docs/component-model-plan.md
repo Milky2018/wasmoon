@@ -60,11 +60,12 @@ component entry chain is active at a time; nested native entry is tracked as
 part of that chain.
 
 Host async functions return pollable futures. Polling must be non-blocking.
-`wasmoon_async` owns only task, operation, timer, and waker identities.
-`wasmoon/async_native` translates macOS kqueue or Linux epoll events into those
-identities without retaining guest state. When no guest task can progress, the
-WASI host waits in that reactor. Waitable-set events wake the owning task, and
-the scheduler resumes its stored continuation.
+`wasmoon/async_native` owns opaque native registrations and translates macOS
+kqueue or Linux epoll events directly into `Pending`, `Ready`, or `Cancelled`
+state without retaining guest state. When no guest task can progress, the WASI
+host waits in that reactor. The component runtime owns guest-visible task and
+waitable identity and resumes the stored continuation after observing
+readiness.
 
 Cancellation is cooperative and terminal. Ready or suspended work can be
 cancelled at scheduler and hostcall boundaries; an actively running native
