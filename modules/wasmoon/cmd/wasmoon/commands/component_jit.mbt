@@ -185,11 +185,21 @@ fn component_jit_execution_engine(
         evidence.record(NativeResumable)
         return component_native_outcome(context, outcome)
       }
-      let results = context.core.call_core_func(store, instance, func_idx, args) catch {
+      let outcome = context.core.call_core_func_resumable(
+        store, instance, func_idx, args,
+      ) catch {
         error => raise component_jit_error(error)
       }
       evidence.record(NativeRunToReturn)
-      Returned(results)
+      match outcome {
+        NativeCoreReturned(results) => Returned(results)
+        NativeCoreSuspended(continuation) => {
+          continuation.cancel()
+          raise CanonCallError(
+            "native run-to-return core execution unexpectedly suspended",
+          )
+        }
+      }
     },
     prepare_store=fn(store) { store.enable_c_heap() },
     close=fn() {
