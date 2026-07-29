@@ -224,3 +224,23 @@ test "native reactor cancellation stress returns to an empty baseline" {
     content="(Some(1), Some(512), 0, false, NativeReactor(registrations=0))",
   )
 }
+
+///|
+test "native reactor close cancels registrations and releases its handle" {
+  if !NativeReactor::supported() {
+    return
+  }
+  let reactor = NativeReactor::try_new()
+  let registration = reactor.register_timer(1000000000L)
+  reactor.close()
+  reactor.close()
+  debug_inspect(
+    (
+      registration.is_active(),
+      registration.is_ready(),
+      reactor.has_pending(),
+      c_reactor_state(reactor.raw),
+    ),
+    content="(false, false, false, -1)",
+  )
+}

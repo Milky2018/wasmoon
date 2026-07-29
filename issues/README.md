@@ -336,6 +336,7 @@ graph TD
   ISS_318["ISS-318: Remove the redundant wasmoon_async scheduling layer"]
   ISS_319["ISS-319: Encode Preview 3 output error futures correctly"]
   ISS_320["ISS-320: Isolate concurrent macOS descriptor registrations"]
+  ISS_321["ISS-321: Close all WASI component context resources"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005

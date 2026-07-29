@@ -19,6 +19,7 @@ pub impl Show for NativeReactorError
 
 // Types and methods
 type NativeReactor
+pub fn NativeReactor::close(Self) -> Unit
 pub fn NativeReactor::has_pending(Self) -> Bool
 pub fn NativeReactor::register_read(Self, Int) -> NativeRegistration raise NativeReactorError
 pub fn NativeReactor::register_timer(Self, Int64) -> NativeRegistration raise NativeReactorError

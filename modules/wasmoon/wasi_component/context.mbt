@@ -15,7 +15,7 @@ struct WasiComponentCtx {
   exit_status : Ref[Int?]
   insecure_state : Ref[Int64]
   insecure_seed : (Int64, Int64)
-  resources : Map[Int, WasiHostResource]
+  resources : Map[Int, WasiHostResourceEntry]
   next_resource_rep : Ref[Int]
   native_reactor : @async_native.NativeReactor?
   stdin_rep : Int
@@ -23,6 +23,7 @@ struct WasiComponentCtx {
   stderr_rep : Int
   network_rep : Int
   preopens : Array[PreopenState]
+  closed : Ref[Bool]
 }
 
 ///|
@@ -232,7 +233,7 @@ pub fn WasiComponentCtxBuilder::build(
   } else {
     low ^ high
   }
-  let resources : Map[Int, WasiHostResource] = Map([])
+  let resources : Map[Int, WasiHostResourceEntry] = Map([])
   let stdin_rep = 1
   let stdout_rep = 2
   let stderr_rep = 3
@@ -255,43 +256,49 @@ pub fn WasiComponentCtxBuilder::build(
   }
   resources.set(
     stdin_rep,
-    InputStream({
-      bytes: Ref(self.stdin),
-      offset: Ref(0),
-      native_fd: stdin_fd,
-      file_position: None,
-      owns_fd: stdin_fd is Some(fd) && fd >= 0,
-      closed: Ref(false),
-    }),
+    new_resource_entry(
+      InputStream({
+        bytes: Ref(self.stdin),
+        offset: Ref(0),
+        native_fd: stdin_fd,
+        file_position: None,
+        owns_fd: stdin_fd is Some(fd) && fd >= 0,
+        closed: Ref(false),
+      }),
+    ),
   )
-  resources.set(network_rep, Network(self.network_policy))
+  resources.set(network_rep, new_resource_entry(Network(self.network_policy)))
   resources.set(
     stdout_rep,
-    OutputStream({
-      write: self.stdout,
-      native_fd: stdout_fd,
-      file_position: None,
-      append: false,
-      owns_fd: stdout_fd is Some(fd) && fd >= 0,
-      permit: Ref(0L),
-      pending: Ref(None),
-      failure: Ref(None),
-      closed: Ref(false),
-    }),
+    new_resource_entry(
+      OutputStream({
+        write: self.stdout,
+        native_fd: stdout_fd,
+        file_position: None,
+        append: false,
+        owns_fd: stdout_fd is Some(fd) && fd >= 0,
+        permit: Ref(0L),
+        pending: Ref(None),
+        failure: Ref(None),
+        closed: Ref(false),
+      }),
+    ),
   )
   resources.set(
     stderr_rep,
-    OutputStream({
-      write: self.stderr,
-      native_fd: stderr_fd,
-      file_position: None,
-      append: false,
-      owns_fd: stderr_fd is Some(fd) && fd >= 0,
-      permit: Ref(0L),
-      pending: Ref(None),
-      failure: Ref(None),
-      closed: Ref(false),
-    }),
+    new_resource_entry(
+      OutputStream({
+        write: self.stderr,
+        native_fd: stderr_fd,
+        file_position: None,
+        append: false,
+        owns_fd: stderr_fd is Some(fd) && fd >= 0,
+        permit: Ref(0L),
+        pending: Ref(None),
+        failure: Ref(None),
+        closed: Ref(false),
+      }),
+    ),
   )
   {
     args: self.args.copy(),
@@ -308,6 +315,7 @@ pub fn WasiComponentCtxBuilder::build(
     stderr_rep,
     network_rep,
     preopens: self.preopens.copy(),
+    closed: Ref(false),
   }
 }
 
@@ -334,11 +342,24 @@ pub fn WasiComponentCtx::exit_status(self : WasiComponentCtx) -> Int? {
 }
 
 ///|
-/// Release embedding-owned preopen roots.
+/// Release every host resource owned by this context.
 ///
-/// Call this after component execution has ended and all host resource handles
-/// have been destroyed. Repeated calls are harmless.
+/// Call this after component execution has ended. Pending native operations
+/// are cancelled before their source descriptors close. Repeated calls are
+/// harmless, and the context is terminal after the first call.
 pub fn WasiComponentCtx::close(self : WasiComponentCtx) -> Unit {
+  if self.closed.val {
+    return
+  }
+  self.closed.val = true
+  match self.native_reactor {
+    Some(reactor) => reactor.close()
+    None => ()
+  }
+  for entry in self.resources.to_array() {
+    let (rep, _resource) = entry
+    self.drop_resource(rep)
+  }
   for preopen in self.preopens {
     if !preopen.closed.val {
       preopen.closed.val = true
@@ -524,13 +545,24 @@ priv enum WasiHostResource {
 }
 
 ///|
+priv struct WasiHostResourceEntry {
+  resource : WasiHostResource
+  references : Ref[Int]
+}
+
+///|
+fn new_resource_entry(resource : WasiHostResource) -> WasiHostResourceEntry {
+  { resource, references: Ref(1) }
+}
+
+///|
 fn WasiComponentCtx::insert_resource(
   self : WasiComponentCtx,
   resource : WasiHostResource,
 ) -> Int {
   let rep = self.next_resource_rep.val
   self.next_resource_rep.val = rep + 1
-  self.resources.set(rep, resource)
+  self.resources.set(rep, new_resource_entry(resource))
   rep
 }
 
@@ -539,7 +571,10 @@ fn WasiComponentCtx::get_resource(
   self : WasiComponentCtx,
   rep : Int,
 ) -> WasiHostResource? {
-  self.resources.get(rep)
+  match self.resources.get(rep) {
+    Some(entry) => Some(entry.resource)
+    None => None
+  }
 }
 
 ///|
@@ -548,67 +583,83 @@ fn WasiComponentCtx::clone_resource(
   rep : Int,
 ) -> Int raise @runtime_impl.ComponentRuntimeError {
   match self.resources.get(rep) {
-    Some(resource) => self.insert_resource(resource)
+    Some(entry) => {
+      entry.references.val = entry.references.val + 1
+      let cloned_rep = self.next_resource_rep.val
+      self.next_resource_rep.val = cloned_rep + 1
+      self.resources.set(cloned_rep, entry)
+      cloned_rep
+    }
     None => raise HostCallError("WASI host resource is not live")
   }
 }
 
 ///|
 fn WasiComponentCtx::drop_resource(self : WasiComponentCtx, rep : Int) -> Unit {
-  match self.resources.get(rep) {
-    Some(InputStream(state)) =>
-      if state.owns_fd && !state.closed.val {
+  guard self.resources.get(rep) is Some(entry) else { return }
+  self.resources.remove(rep)
+  entry.references.val = entry.references.val - 1
+  if entry.references.val > 0 {
+    return
+  }
+  match entry.resource {
+    InputStream(state) =>
+      if !state.closed.val {
         state.closed.val = true
-        match state.native_fd {
-          Some(fd) => @wasi.native_close(fd) |> ignore
-          None => ()
+        if state.owns_fd {
+          match state.native_fd {
+            Some(fd) => @wasi.native_close(fd) |> ignore
+            None => ()
+          }
         }
       }
-    Some(OutputStream(state)) =>
-      if state.owns_fd && !state.closed.val {
+    OutputStream(state) =>
+      if !state.closed.val {
         state.closed.val = true
-        match state.native_fd {
-          Some(fd) => @wasi.native_close(fd) |> ignore
-          None => ()
+        state.pending.val = None
+        if state.owns_fd {
+          match state.native_fd {
+            Some(fd) => @wasi.native_close(fd) |> ignore
+            None => ()
+          }
         }
       }
-    Some(Descriptor(state)) =>
+    Descriptor(state) =>
       if !state.closed.val {
         state.closed.val = true
         @wasi.native_close(state.fd) |> ignore
       }
-    Some(TcpSocket(state)) =>
+    TcpSocket(state) =>
       if !state.closed.val {
         state.closed.val = true
         state.phase.val = Closed
         @wasi.native_close(state.fd) |> ignore
       }
-    Some(UdpSocket(state)) =>
+    UdpSocket(state) =>
       if !state.closed.val {
         state.closed.val = true
         state.phase.val = UdpClosed
         state.generation.val = state.generation.val + 1
         @wasi.native_close(state.fd) |> ignore
       }
-    Some(IncomingDatagramStream(state)) =>
+    IncomingDatagramStream(state) =>
       if !state.closed.val {
         state.closed.val = true
         @wasi.native_close(state.fd) |> ignore
       }
-    Some(OutgoingDatagramStream(state)) =>
+    OutgoingDatagramStream(state) =>
       if !state.closed.val {
         state.closed.val = true
         @wasi.native_close(state.fd) |> ignore
       }
-    Some(ResolveAddressStream(state)) =>
+    ResolveAddressStream(state) =>
       if !state.closed.val {
         state.closed.val = true
         @wasi.native_resolver_drop(state.resolver)
       }
-    Some(Pollable(OwnedSocket(fd, _events))) => @wasi.native_close(fd) |> ignore
+    Pollable(OwnedSocket(fd, _events)) => @wasi.native_close(fd) |> ignore
     _ => ()
   }
-  self.resources.remove(rep)
 }
 
 ///|
@@ -616,6 +667,9 @@ fn WasiComponentCtx::register_deadline(
   self : WasiComponentCtx,
   deadline : Int64,
 ) -> WasiAsyncOperation raise @runtime_impl.ComponentRuntimeError {
+  if self.closed.val {
+    raise HostCallError("WASI component context is closed")
+  }
   guard self.native_reactor is Some(reactor) else {
     raise HostCallError("native async reactor is unavailable")
   }
@@ -657,6 +711,9 @@ fn WasiComponentCtx::register_async_fd(
   fd : Int,
   events : Int,
 ) -> WasiAsyncOperation raise @runtime_impl.ComponentRuntimeError {
+  if self.closed.val {
+    raise HostCallError("WASI component context is closed")
+  }
   guard self.native_reactor is Some(reactor) else {
     raise HostCallError("native async reactor is unavailable")
   }
@@ -683,6 +740,9 @@ fn WasiComponentCtx::register_async_fd(
 fn WasiComponentCtx::wait_for_async_event(
   self : WasiComponentCtx,
 ) -> Bool raise @runtime_impl.ComponentRuntimeError {
+  if self.closed.val {
+    return false
+  }
   guard self.native_reactor is Some(reactor) else {
     raise HostCallError("native async reactor is unavailable")
   }

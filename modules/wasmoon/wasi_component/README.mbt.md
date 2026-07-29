@@ -30,12 +30,12 @@ let ctx = @wasi_component.WasiComponentCtxBuilder()
   .inherit_stdio()
   .preopened_directory("/srv/data", "/data", true)
   .build()
+defer ctx.close()
 let host = @wasi_component.WasiComponentHost(linker, ctx)
 host.add_preview2_cli_clocks_random()
 host.add_preview2_io()
 host.add_preview2_filesystem()
 host.add_preview2_sockets()
-defer ctx.close()
 ```
 
 Preview 3 embeddings register the corresponding async interfaces explicitly:
@@ -67,5 +67,9 @@ the component runtime.
 Cancellation removes the native registration and releases the associated host
 operation. Native component continuations remain owned by the component
 runtime and must be resumed or cancelled before `ComponentLinker::close`.
+`WasiComponentCtx::close` is terminal and idempotent: it cancels remaining
+native registrations before closing inherited streams, dynamic host resources,
+preopen roots, and the reactor itself. Embeddings should defer it immediately
+after a successful `build()`.
 Windows, multi-threaded Store access, and cross-thread continuation migration
 are not supported.

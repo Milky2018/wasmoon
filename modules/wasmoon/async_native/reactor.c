@@ -145,6 +145,10 @@ static void wasmoon_async_reactor_finalize(void *self) {
   reactor->handle = -1;
 }
 
+MOONBIT_FFI_EXPORT void wasmoon_async_reactor_close(void *managed) {
+  if (managed) wasmoon_async_reactor_finalize(managed);
+}
+
 MOONBIT_FFI_EXPORT int wasmoon_async_reactor_supported(void) {
 #if defined(__APPLE__) || defined(__linux__)
   return 1;

@@ -23,6 +23,10 @@ extern "c" fn c_reactor_alloc() -> NativeReactorObject = "wasmoon_async_reactor_
 
 ///|
 #borrow(reactor)
+extern "c" fn c_reactor_close(reactor : NativeReactorObject) -> Unit = "wasmoon_async_reactor_close"
+
+///|
+#borrow(reactor)
 extern "c" fn c_reactor_state(reactor : NativeReactorObject) -> Int = "wasmoon_async_reactor_state"
 
 ///|
@@ -87,6 +91,7 @@ struct NativeReactor {
   raw : NativeReactorObject
   mut next_token : Int64
   registrations : Map[Int64, RegistrationRecord]
+  closed : Ref[Bool]
 }
 
 ///|
@@ -103,7 +108,7 @@ pub fn NativeReactor::try_new() -> NativeReactor raise NativeReactorError {
   if c_reactor_state(raw) != 0 {
     raise AllocationFailed
   }
-  { raw, next_token: 1L, registrations: Map([]) }
+  { raw, next_token: 1L, registrations: Map([]), closed: Ref(false) }
 }
 
 ///|
@@ -182,6 +187,22 @@ fn NativeReactor::complete_token(self : NativeReactor, token : Int64) -> Bool {
 /// Whether this reactor still owns kernel registrations that can complete.
 pub fn NativeReactor::has_pending(self : NativeReactor) -> Bool {
   !self.registrations.is_empty()
+}
+
+///|
+/// Cancel every pending registration and release the kernel reactor.
+///
+/// Closing is idempotent. The reactor is terminal after this call.
+pub fn NativeReactor::close(self : NativeReactor) -> Unit {
+  if self.closed.val {
+    return
+  }
+  self.closed.val = true
+  for entry in self.registrations.to_array() {
+    let (token, record) = entry
+    NativeRegistration(self, token, record).cancel()
+  }
+  c_reactor_close(self.raw)
 }
 
 ///|
