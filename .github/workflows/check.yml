@@ -15,16 +15,29 @@ env:
   COMPONENT_WASM_TOOLS_VERSION: "1.254.0"
 
 jobs:
-  linux-amd64:
-    name: Linux AMD64
-    runs-on: ubuntu-latest
+  native-platform:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux AMD64
+            os: ubuntu-latest
+            native_test_args: --no-parallelize
+            asan_options: detect_leaks=1:abort_on_error=1
+          - name: macOS ARM64
+            os: macos-latest
+            native_test_args: ""
+            asan_options: detect_leaks=0:abort_on_error=1
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: install system dependencies
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y curl clang lld python3
@@ -68,7 +81,7 @@ jobs:
       - name: run native tests
         run: |
           MACHV_REGALLOC_VALIDATION=1 \
-            moon test --target native --no-parallelize
+            moon test --target native ${{ matrix.native_test_args }}
 
       - name: build Wasmoon
         run: |
@@ -120,135 +133,7 @@ jobs:
         timeout-minutes: 40
         env:
           MOONBIT_NEW_NATIVE: 0
-          ASAN_OPTIONS: detect_leaks=1:abort_on_error=1
-          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
-        run: |
-          sanitizer_build="$RUNNER_TEMP/wasmoon-sanitizer-build"
-          sanitizer_wrapper="$GITHUB_WORKSPACE/scripts/native_sanitizer_cc.sh"
-          export WASMOON_SANITIZER_REAL_CC="$(command -v clang)"
-          export MOON_CC="$sanitizer_wrapper"
-          export MOON_AR="$(command -v ar)"
-          rm -rf "$sanitizer_build"
-          moon build modules/wasmoon/cmd/wasmoon \
-            --target native --release --target-dir "$sanitizer_build"
-          cp \
-            "$sanitizer_build/native/release/build/Milky2018/wasmoon/cmd/wasmoon/wasmoon.exe" \
-            ./wasmoon
-          chmod +x ./wasmoon
-          moon test --target native --target-dir "$sanitizer_build" \
-            modules/wasmoon_jit/native_continuation_wbtest.mbt
-          moon test --target native --target-dir "$sanitizer_build" \
-            modules/wasmoon/async_native/reactor_wbtest.mbt
-          moon test --target native --target-dir "$sanitizer_build" \
-            modules/wasmoon/wasi_component/async_preview3_wbtest.mbt
-          moon test --target native --target-dir "$sanitizer_build" \
-            modules/wasmoon/component/runtime_impl/runtime_cleanup_wbtest.mbt
-          moon test --target native --target-dir "$sanitizer_build" \
-            modules/wasmoon/component/runtime_impl/entry_state_wbtest.mbt
-          moon test --target native --target-dir "$sanitizer_build" \
-            modules/wasmoon/cmd/wasmoon/commands/component_error_wbtest.mbt
-          python3 scripts/verify_native_sanitizers.py \
-            --target-dir "$sanitizer_build" --minimum-test-binaries 5
-
-  macos-arm64:
-    name: macOS ARM64
-    runs-on: macos-latest
-    timeout-minutes: 90
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: install toolchain
-        run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
-          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
-          cargo install wasm-tools \
-            --version "$COMPONENT_WASM_TOOLS_VERSION" --locked
-
-      - name: report toolchain
-        run: |
-          moon version --all
-          moon update
-          wasm-tools --version
-          uname -a
-
-      - name: check source and generated interfaces
-        run: |
-          moon check --target native --warn-list +73
-          moon fmt
-          git diff --exit-code
-          moon info
-          git diff --exit-code
-          base="${{ github.event.pull_request.base.sha || github.event.before }}"
-          if [ -z "$base" ] || ! git cat-file -e "$base^{commit}"; then
-            base="$(git rev-parse HEAD^)"
-          fi
-          python3 scripts/check_committed_diff.py \
-            --base "$base" --head "${{ github.event.pull_request.head.sha || github.sha }}"
-          python3 scripts/audit_module_boundaries.py
-          python3 scripts/audit_semantic_machv_api.py
-          python3 scripts/audit_internal_compatibility.py
-          python3 scripts/check_component_snapshot.py
-          python3 modules/wasmoon/wasi_component/tools/generate_wasi_contracts.py \
-            modules/wasmoon/wasi_component/wit \
-            modules/wasmoon/wasi_component/wit_contracts_generated.mbt \
-            --verify-wit --check
-
-      - name: run native tests
-        run: MACHV_REGALLOC_VALIDATION=1 moon test --target native
-
-      - name: build Wasmoon
-        run: |
-          moon build --target native --release
-          ./install.sh
-
-      - name: run core WAST tests
-        timeout-minutes: 10
-        run: |
-          python3 scripts/run_all_wast.py --dir spec --rec
-          python3 scripts/find_gc_bugs.py --dir spec/gc --timeout 30
-          python3 scripts/find_gc_bugs.py \
-            --dir spec/gc --timeout 30 --max-files 64 --fault-alloc-every 7
-
-      - name: run WASI Preview 1 tests
-        run: python3 examples/wasi_tests/wasi_test.py
-
-      - name: run stable Component Model 0.2
-        timeout-minutes: 20
-        run: |
-          status=0
-          python3 scripts/run_component_wast.py \
-            --suite stable-0.2 --dump-failures || status=$?
-          python3 scripts/run_component_wast.py \
-            --suite stable-0.2 --dump-failures --no-jit || status=$?
-          exit "$status"
-
-      - name: run Component Model 0.3 async
-        timeout-minutes: 20
-        run: |
-          status=0
-          python3 scripts/run_component_wast.py \
-            --suite async-0.3 --dump-failures || status=$?
-          python3 scripts/run_component_wast.py \
-            --suite async-0.3 --dump-failures --no-jit || status=$?
-          exit "$status"
-
-      - name: run future-gated Component Model features
-        timeout-minutes: 20
-        run: |
-          status=0
-          python3 scripts/run_component_wast.py \
-            --suite future-gated --dump-failures || status=$?
-          python3 scripts/run_component_wast.py \
-            --suite future-gated --dump-failures --no-jit || status=$?
-          exit "$status"
-
-      - name: run native sanitizer checks
-        timeout-minutes: 40
-        env:
-          MOONBIT_NEW_NATIVE: 0
-          ASAN_OPTIONS: detect_leaks=0:abort_on_error=1
+          ASAN_OPTIONS: ${{ matrix.asan_options }}
           UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
         run: |
           sanitizer_build="$RUNNER_TEMP/wasmoon-sanitizer-build"

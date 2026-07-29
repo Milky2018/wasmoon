@@ -352,8 +352,17 @@ class GateManifestTests(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/check.yml").read_text(
             encoding="utf-8"
         )
-        self.assertIn("  linux-amd64:", workflow)
-        self.assertIn("  macos-arm64:", workflow)
+        self.assertIn("  native-platform:", workflow)
+        self.assertIn("name: ${{ matrix.name }}", workflow)
+        self.assertIn("name: Linux AMD64", workflow)
+        self.assertIn("name: macOS ARM64", workflow)
+        self.assertIn("runs-on: ${{ matrix.os }}", workflow)
+        self.assertIn("if: runner.os == 'Linux'", workflow)
+        self.assertIn("native_test_args: --no-parallelize", workflow)
+        self.assertIn("native_test_args: \"\"", workflow)
+        self.assertIn("ASAN_OPTIONS: ${{ matrix.asan_options }}", workflow)
+        self.assertNotIn("  linux-amd64:", workflow)
+        self.assertNotIn("  macos-arm64:", workflow)
         self.assertIn("scripts/check_committed_diff.py", workflow)
         self.assertNotIn("  component-model:", workflow)
         self.assertNotIn("  component-hardening:", workflow)
@@ -462,13 +471,13 @@ class GateManifestTests(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/check.yml").read_text(
             encoding="utf-8"
         )
-        self.assertEqual(workflow.count("run stable Component Model 0.2"), 2)
-        self.assertEqual(workflow.count("run Component Model 0.3 async"), 2)
+        self.assertEqual(workflow.count("run stable Component Model 0.2"), 1)
+        self.assertEqual(workflow.count("run Component Model 0.3 async"), 1)
         self.assertEqual(
             workflow.count("run future-gated Component Model features"),
-            2,
+            1,
         )
-        self.assertEqual(workflow.count("run native sanitizer checks"), 2)
+        self.assertEqual(workflow.count("run native sanitizer checks"), 1)
 
     def test_sanitizer_tests_are_isolated_and_instrumentation_is_verified(
         self,
@@ -480,33 +489,33 @@ class GateManifestTests(unittest.TestCase):
             workflow.count(
                 'moon test --target native --target-dir "$sanitizer_build" \\'
             ),
-            12,
+            6,
         )
         self.assertEqual(
             workflow.count("scripts/native_sanitizer_cc.sh"),
-            2,
+            1,
         )
         self.assertEqual(
             workflow.count("scripts/verify_native_sanitizers.py"),
-            2,
+            1,
         )
-        self.assertEqual(workflow.count("MOONBIT_NEW_NATIVE: 0"), 2)
+        self.assertEqual(workflow.count("MOONBIT_NEW_NATIVE: 0"), 1)
         self.assertEqual(
             workflow.count('export MOON_CC="$sanitizer_wrapper"'),
-            2,
+            1,
         )
-        self.assertEqual(workflow.count('export MOON_AR="$(command -v ar)"'), 2)
-        self.assertEqual(workflow.count("timeout-minutes: 40"), 2)
+        self.assertEqual(workflow.count('export MOON_AR="$(command -v ar)"'), 1)
+        self.assertEqual(workflow.count("timeout-minutes: 40"), 1)
         self.assertEqual(
             workflow.count(
                 "python3 scripts/find_gc_bugs.py --dir spec/gc --timeout 30"
             ),
-            2,
+            1,
         )
         sanitizer_steps = workflow.split(
             "      - name: run native sanitizer checks\n"
         )[1:]
-        self.assertEqual(len(sanitizer_steps), 2)
+        self.assertEqual(len(sanitizer_steps), 1)
         for step in sanitizer_steps:
             step = step.split("\n      - name:", maxsplit=1)[0]
             self.assertNotIn("scripts/find_gc_bugs.py", step)
