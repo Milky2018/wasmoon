@@ -372,6 +372,7 @@ pub fn ComponentLinker::close(self : ComponentLinker) -> Unit {
   self.imports.clear()
   self.host_runtime.val = None
   self.core_engine.close()
+  self.core_linker.close()
 }
 
 ///|

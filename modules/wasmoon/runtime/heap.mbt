@@ -111,6 +111,14 @@ pub fn MarkSweepHeap::stats(self : MarkSweepHeap) -> GCStats {
 }
 
 ///|
+fn MarkSweepHeap::clear(self : MarkSweepHeap) -> Unit {
+  self.objects.clear()
+  self.marks.clear()
+  self.free_list.clear()
+  self.total_live = 0
+}
+
+///|
 /// Allocate a struct instance and return its reference index
 pub fn MarkSweepHeap::alloc_struct(
   self : MarkSweepHeap,

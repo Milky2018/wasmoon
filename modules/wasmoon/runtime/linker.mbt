@@ -24,6 +24,15 @@ pub fn Linker::get_store(self : Linker) -> Store {
 }
 
 ///|
+/// Release this linker's store after all module execution has ended.
+///
+/// This operation is idempotent and terminal.
+pub fn Linker::close(self : Linker) -> Unit {
+  self.modules.clear()
+  self.store.close()
+}
+
+///|
 /// Register a module instance with a name
 /// The module's exports will be available as imports for subsequent modules
 pub fn Linker::register(

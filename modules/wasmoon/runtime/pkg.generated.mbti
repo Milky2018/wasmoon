@@ -172,6 +172,7 @@ pub fn Linker::add_host_func_with_caller(Self, String, String, (Caller, Array[@t
 pub fn Linker::add_memory(Self, String, String, Memory) -> Unit
 pub fn Linker::add_table(Self, String, String, Table) -> Unit
 pub fn Linker::build_imports(Self) -> Imports
+pub fn Linker::close(Self) -> Unit
 pub fn Linker::get_module(Self, String) -> ModuleInstance?
 pub fn Linker::get_store(Self) -> Store
 pub fn Linker::register(Self, String, ModuleInstance) -> Unit
@@ -372,6 +373,7 @@ pub struct Store {
   mut wasi_mem_addr : Int?
   mut wasi_ctx_handle : Int
   native_execution : @wasmoon_jit.NativeExecutionState
+  // private fields
 } derive(@debug.Debug)
 pub fn Store::Store() -> Self
 pub fn Store::alloc_array(Self, Int, Array[@types.Value]) -> Int raise RuntimeError
@@ -389,6 +391,7 @@ pub fn Store::array_fill(Self, Int, Int, @types.Value, Int) -> Unit raise Runtim
 pub fn Store::array_get(Self, Int, Int) -> @types.Value raise RuntimeError
 pub fn Store::array_len(Self, Int) -> Int raise RuntimeError
 pub fn Store::array_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeError
+pub fn Store::close(Self) -> Unit
 pub fn Store::collect_garbage(Self, additional_roots? : Array[@types.Value]) -> Int
 pub fn Store::collect_roots(Self, Array[@types.Value]) -> Array[@types.Value]
 pub fn Store::enable_c_heap(Self) -> Unit

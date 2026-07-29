@@ -52,6 +52,7 @@ pub struct Store {
   mut wasi_ctx_handle : Int
   // Native invocation/fiber lifetimes belong to the Store, not a JIT module.
   native_execution : @wasmoon_jit.NativeExecutionState
+  priv closed : Ref[Bool]
 } derive(Debug)
 
 ///|
@@ -110,6 +111,7 @@ pub fn Store::Store() -> Store {
     wasi_mem_addr: None,
     wasi_ctx_handle: 0,
     native_execution: @wasmoon_jit.NativeExecutionState(),
+    closed: Ref(false),
   }
 }
 
@@ -139,7 +141,52 @@ pub fn Store::with_c_heap() -> Store {
     wasi_mem_addr: None,
     wasi_ctx_handle: 0,
     native_execution: @wasmoon_jit.NativeExecutionState(),
+    closed: Ref(false),
   }
+}
+
+///|
+/// Release resources owned by this store and break host-function reference
+/// cycles.
+///
+/// This operation is idempotent and terminal. Every native invocation must
+/// have returned or been cancelled before the store is closed.
+pub fn Store::close(self : Store) -> Unit {
+  if self.closed.val {
+    return
+  }
+  self.closed.val = true
+  self.funcs.clear()
+  self.func_types.clear()
+  self.func_type_indices.clear()
+  self.func_owners.clear()
+  self.instances.clear()
+  self.tables.clear()
+  let freed_memories : Map[Int64, Bool] = Map([])
+  for memory in self.mems {
+    let pointer = memory.desc_ptr()
+    if pointer != 0L && freed_memories.get(pointer) is None {
+      @wasmoon_jit.free_memory_desc(pointer)
+      freed_memories.set(pointer, true)
+    }
+  }
+  self.mems.clear()
+  self.globals.clear()
+  self.tags.clear()
+  self.tag_type_indices.clear()
+  self.tag_owners.clear()
+  self.exns.clear()
+  self.heap.clear()
+  if self.c_heap is Some(heap) {
+    heap.free()
+    self.c_heap = None
+  }
+  self.module_types.clear()
+  self.module_rec_groups.clear()
+  self.wrapped_externs.clear()
+  self.jit_tables.clear()
+  self.wasi_mem_addr = None
+  self.wasi_ctx_handle = 0
 }
 
 ///|
