@@ -55,6 +55,10 @@ fn JITContext::ptr(self : JITContext) -> Int64 {
 
 ///|
 fn JITContext::close(self : JITContext) -> Unit {
+  self.clear_hostcall_callback()
+  self.clear_cancellation_callback()
+  self.clear_wasi_stdin_callback()
+  self.clear_wasi_stdin_buffer()
   for entry in self.trampoline_cache {
     entry.1.release()
   }
