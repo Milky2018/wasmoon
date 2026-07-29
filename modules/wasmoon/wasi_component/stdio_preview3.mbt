@@ -259,6 +259,11 @@ fn preview3_output_write_once(
 }
 
 ///|
+fn preview3_output_error() -> @runtime_impl.ComponentValue {
+  Variant(1, Some(U32(0)))
+}
+
+///|
 fn preview3_output_future(
   host : WasiComponentHost,
   table : @runtime_impl.ResourceTable,
@@ -310,7 +315,7 @@ fn preview3_output_future(
           let written = preview3_output_write_once(output, bytes, offset)
           if written < 0 {
             cleanup()
-            return Ready([Variant(1, Some(Variant(0, None)))])
+            return Ready([preview3_output_error()])
           }
           let next = offset + written
           if next < bytes.length() {
@@ -327,7 +332,7 @@ fn preview3_output_future(
           let written = preview3_output_write_once(output, bytes, 0)
           if written < 0 {
             cleanup()
-            Ready([Variant(1, Some(Variant(0, None)))])
+            Ready([preview3_output_error()])
           } else if written < bytes.length() {
             pending.val = Some((bytes, written))
             register_fd()

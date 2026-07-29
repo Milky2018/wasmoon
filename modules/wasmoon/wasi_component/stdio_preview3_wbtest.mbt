@@ -47,6 +47,26 @@ extern "c" fn c_preview3_test_pipe(fds : FixedArray[Int]) -> Int = "wasmoon_asyn
 extern "c" fn c_preview3_test_close(fd : Int) -> Unit = "wasmoon_async_test_close"
 
 ///|
+test "Preview 3 output failures use an enum error payload" {
+  let ctx = WasiComponentCtxBuilder().build()
+  defer ctx.close()
+  let outcomes = []
+  for rep in [ctx.stdout_rep, ctx.stderr_rep] {
+    guard ctx.get_resource(rep) is Some(OutputStream(output)) else {
+      return fail("Preview 3 output stream is unavailable")
+    }
+    output.closed.val = true
+    outcomes.push(
+      (preview3_output_write_once(output, b"x", 0), preview3_output_error()),
+    )
+  }
+  debug_inspect(
+    outcomes,
+    content="[(-1, Variant(1, Some(U32(0)))), (-1, Variant(1, Some(U32(0))))]",
+  )
+}
+
+///|
 test "Preview 3 inherited pipe stdin waits for native readiness" {
   let fds = FixedArray::make(2, -1)
   guard c_preview3_test_pipe(fds) == 0 else {

@@ -218,3 +218,42 @@ test "typed host stream values lower strings into reader memory" {
     content="(2, 1024, 4, [0x64, 0x61, 0x74, 0x61])",
   )
 }
+
+///|
+test "typed host future results lower enum error payloads" {
+  let store = @runtime.Store::Store()
+  let mem_addr = store.alloc_mem(Memory(1, None))
+  let resources : CanonResources = {
+    mem_addr: Some(mem_addr),
+    realloc: None,
+    post_return: None,
+    encoding: Utf8,
+  }
+  let types : Array[TypeDef?] = [
+    Some(Enum(["io", "illegal-byte-sequence", "pipe"])),
+    Some(Result(None, Some(TypeIdx(0)))),
+  ]
+  store_host_stream_value(
+    Variant(1, Some(U32(0))),
+    TypeIdx(1),
+    types,
+    resources,
+    store,
+    ResourceTable(),
+    64,
+  ) catch {
+    e => return fail("enum error future lowering failed: \{e}")
+  }
+  let mem = store.get_mem(mem_addr) catch { _ => return fail("missing memory") }
+  debug_inspect(
+    (
+      mem.load_byte(64) catch {
+        _ => b'\xff'
+      },
+      mem.load_byte(65) catch {
+        _ => b'\xff'
+      },
+    ),
+    content="(0x01, 0x00)",
+  )
+}
