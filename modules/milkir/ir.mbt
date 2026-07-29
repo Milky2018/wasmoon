@@ -88,8 +88,8 @@ pub impl Eq for Value with fn equal(self, other) {
 pub impl Hash for Value with fn hash_combine(self, hasher) {
   // Owner identity deliberately does not contribute to the hash. Values from
   // different functions may collide, but equal values always hash equally.
-  self.id.hash_combine(hasher)
-  self.ty.hash_combine(hasher)
+  hasher.combine(self.id)
+  hasher.combine(self.ty)
 }
 
 ///|
@@ -192,12 +192,12 @@ pub impl Eq for ContextField with fn equal(self, other) {
 
 ///|
 pub impl Hash for ContextField with fn hash_combine(self, hasher) {
-  self.dialect.hash_combine(hasher)
-  self.key.hash_combine(hasher)
-  self.ty.hash_combine(hasher)
-  self.parameters.length().hash_combine(hasher)
+  hasher.combine(self.dialect)
+  hasher.combine(self.key)
+  hasher.combine(self.ty)
+  hasher.combine(self.parameters.length())
   for parameter in self.parameters {
-    parameter.hash_combine(hasher)
+    hasher.combine(parameter)
   }
 }
 
@@ -261,7 +261,7 @@ pub impl Eq for GlobalValue with fn equal(self, other) {
 
 ///|
 pub impl Hash for GlobalValue with fn hash_combine(self, hasher) {
-  self.id.hash_combine(hasher)
+  hasher.combine(self.id)
 }
 
 ///|
@@ -377,11 +377,11 @@ pub impl Eq for ExtOp with fn equal(self, other) {
 
 ///|
 pub impl Hash for ExtOp with fn hash_combine(self, hasher) {
-  self.dialect.hash_combine(hasher)
-  self.opcode.hash_combine(hasher)
-  self.immediates.length().hash_combine(hasher)
+  hasher.combine(self.dialect)
+  hasher.combine(self.opcode)
+  hasher.combine(self.immediates.length())
   for imm in self.immediates {
-    imm.hash_combine(hasher)
+    hasher.combine(imm)
   }
 }
 
@@ -512,12 +512,12 @@ pub impl Debug for Inst with fn to_repr(self) {
 /// Result IDs are definitions rather than part of expression identity.
 pub impl Hash for Inst with fn hash_combine(self, hasher) {
   hash_opcode_identity(self.opcode, hasher)
-  self.results.length().hash_combine(hasher)
+  hasher.combine(self.results.length())
   for result in self.results {
-    result.ty.hash_combine(hasher)
+    hasher.combine(result.ty)
   }
   for op in self.operands {
-    op.id.hash_combine(hasher)
+    hasher.combine(op.id)
   }
 }
 
@@ -551,7 +551,7 @@ pub impl Eq for Inst with fn equal(self, other) {
 
 ///|
 fn hash_opcode_identity(opcode : Opcode, hasher : Hasher) -> Unit {
-  opcode.hash_combine(hasher)
+  hasher.combine(opcode)
 }
 
 ///|

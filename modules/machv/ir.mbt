@@ -17,7 +17,7 @@ pub impl Eq for Value with fn equal(self, other) {
 
 ///|
 pub impl Hash for Value with fn hash_combine(self, hasher) {
-  self.id.hash_combine(hasher)
+  hasher.combine(self.id)
 }
 
 ///|
@@ -44,7 +44,7 @@ pub impl Eq for Block with fn equal(self, other) {
 
 ///|
 pub impl Hash for Block with fn hash_combine(self, hasher) {
-  self.id.hash_combine(hasher)
+  hasher.combine(self.id)
 }
 
 ///|
@@ -71,7 +71,7 @@ pub impl Eq for Instruction with fn equal(self, other) {
 
 ///|
 pub impl Hash for Instruction with fn hash_combine(self, hasher) {
-  self.id.hash_combine(hasher)
+  hasher.combine(self.id)
 }
 
 ///|
@@ -98,7 +98,7 @@ pub impl Eq for StackObject with fn equal(self, other) {
 
 ///|
 pub impl Hash for StackObject with fn hash_combine(self, hasher) {
-  self.id.hash_combine(hasher)
+  hasher.combine(self.id)
 }
 
 ///|
