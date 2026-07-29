@@ -93,6 +93,17 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_trap_xreg(int idx) {
 
 typedef int32_t (*hostcall_callback_fn)(void *closure);
 
+// MoonBit's C backend gives each closure signature a generated nominal struct
+// tag. FuncRef erases that tag at the separately compiled native-stub boundary,
+// while its extern declaration still fixes the pointer and result ABI. Disable
+// only Clang's nominal indirect-function check at this call seam.
+static WASMOON_NO_FUNCTION_SANITIZE int32_t call_hostcall_callback(
+    hostcall_callback_fn callback,
+    void *closure
+) {
+    return callback(closure);
+}
+
 static void clear_hostcall_callback(jit_context_t *ctx) {
     if (!ctx) return;
     if (ctx->hostcall_callback_data) {
@@ -194,7 +205,9 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_hostcall(
     g_hostcall_num_results = num_results;
 
     hostcall_callback_fn cb = (hostcall_callback_fn)ctx->hostcall_callback;
-    int32_t trap = cb(ctx->hostcall_callback_data);
+    int32_t trap = call_hostcall_callback(
+        cb, ctx->hostcall_callback_data
+    );
     while (trap == WASMOON_HOSTCALL_SUSPEND_STATUS) {
         // A parked fiber is not the dynamically active hostcall. Restore its
         // caller before yielding so nested native entry writes through the
@@ -220,7 +233,9 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_hostcall(
         if (resume == INT64_MIN) {
             trap = 8;
         } else if (resume == 1) {
-            trap = cb(ctx->hostcall_callback_data);
+            trap = call_hostcall_callback(
+                cb, ctx->hostcall_callback_data
+            );
         } else {
             trap = 0;
         }
@@ -243,6 +258,13 @@ MOONBIT_FFI_EXPORT int64_t wasmoon_jit_get_hostcall_ptr(void) {
 // ============ Cooperative Cancellation ============
 
 typedef int32_t (*cancellation_callback_fn)(void *closure);
+
+static WASMOON_NO_FUNCTION_SANITIZE int32_t call_cancellation_callback(
+    cancellation_callback_fn callback,
+    void *closure
+) {
+    return callback(closure);
+}
 
 static void clear_cancellation_callback(jit_context_t *ctx) {
     if (!ctx) return;
@@ -274,7 +296,9 @@ MOONBIT_FFI_EXPORT int32_t wasmoon_jit_cancel_poll(jit_context_t *ctx) {
     if (!ctx || !ctx->cancellation_callback) return 0;
     cancellation_callback_fn cb =
         (cancellation_callback_fn)ctx->cancellation_callback;
-    if (cb(ctx->cancellation_callback_data) != 0) {
+    if (call_cancellation_callback(
+        cb, ctx->cancellation_callback_data
+    ) != 0) {
         g_trap_code = 11;
         if (g_trap_active) siglongjmp(g_trap_jmp_buf, 1);
         return 11;

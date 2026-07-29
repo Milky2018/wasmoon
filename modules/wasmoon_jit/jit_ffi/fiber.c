@@ -17,6 +17,13 @@
 
 typedef int64_t (*native_fiber_entry_fn)(void *closure);
 
+static WASMOON_NO_FUNCTION_SANITIZE int64_t call_native_fiber_entry(
+    native_fiber_entry_fn entry,
+    void *closure
+) {
+    return entry(closure);
+}
+
 typedef enum {
     NATIVE_FIBER_READY = 0,
     NATIVE_FIBER_RUNNING = 1,
@@ -192,7 +199,9 @@ static WASMOON_NO_ADDRESS_SANITIZE void fiber_bootstrap(void) {
     fiber->caller_stack_bottom = caller_stack_bottom;
     fiber->caller_stack_size = caller_stack_size;
 #endif
-    fiber->return_value = fiber->entry(fiber->closure);
+    fiber->return_value = call_native_fiber_entry(
+        fiber->entry, fiber->closure
+    );
     fiber->state = NATIVE_FIBER_RETURNED;
     native_fiber_swap_stacks(
         &fiber->context,
