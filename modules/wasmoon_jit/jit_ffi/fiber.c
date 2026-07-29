@@ -518,7 +518,17 @@ static int fiber_stack_hostcall_probe(
     void *func_ptr
 ) {
     (void)func_ptr;
-    int64_t slots[1] = {0};
+    uintptr_t fiber_base = 0;
+    if (!wasmoon_native_fiber_stack_bounds(
+            &fiber_base, NULL, NULL, NULL
+        )) {
+        values[0] = 3;
+        return 3;
+    }
+    // AddressSanitizer may place fixed-size C locals on its fake stack. Use
+    // the registered fiber mapping directly so this probe still exercises
+    // the runtime's real native-fiber slot boundary under instrumentation.
+    int64_t *slots = (int64_t *)fiber_base;
     int result = wasmoon_jit_hostcall(
         ctx,
         44,
