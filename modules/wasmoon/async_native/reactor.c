@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 
 #include <errno.h>
+#include <fcntl.h>
 #include <limits.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -12,31 +13,27 @@
 #include <sys/event.h>
 #include <sys/time.h>
 #elif defined(__linux__)
-#include <fcntl.h>
 #include <sys/epoll.h>
 #include <sys/eventfd.h>
 #include <sys/timerfd.h>
 #endif
 
-#if defined(__linux__)
 typedef struct wasmoon_async_registration {
   int64_t token;
-  int descriptor;
+  uintptr_t ident;
+  int owned_descriptor;
+  int filter;
   struct wasmoon_async_registration *next;
 } wasmoon_async_registration_t;
-#endif
 
 typedef struct {
   int handle;
   int wake_handle;
   int last_errno;
-#if defined(__linux__)
   wasmoon_async_registration_t *registrations;
-#endif
 } wasmoon_async_reactor_t;
 
-#if defined(__linux__)
-static int wasmoon_async_remove_registration(
+static wasmoon_async_registration_t *wasmoon_async_remove_registration(
   wasmoon_async_reactor_t *reactor,
   int64_t token
 ) {
@@ -44,16 +41,57 @@ static int wasmoon_async_remove_registration(
   while (*link) {
     wasmoon_async_registration_t *registration = *link;
     if (registration->token == token) {
-      int descriptor = registration->descriptor;
       *link = registration->next;
-      free(registration);
-      return descriptor;
+      return registration;
     }
     link = &registration->next;
   }
-  return -1;
+  return NULL;
 }
 
+#if defined(__APPLE__)
+static int wasmoon_async_install_kqueue_registration(
+  wasmoon_async_reactor_t *reactor,
+  uintptr_t ident,
+  int filter,
+  int owned_descriptor,
+  int flags,
+  int fflags,
+  int64_t data,
+  int64_t token
+) {
+  wasmoon_async_registration_t *registration = malloc(sizeof(*registration));
+  if (!registration) {
+    if (owned_descriptor >= 0) close(owned_descriptor);
+    reactor->last_errno = ENOMEM;
+    return ENOMEM;
+  }
+  struct kevent change;
+  EV_SET(
+    &change,
+    ident,
+    (short)filter,
+    (uint16_t)flags,
+    (uint32_t)fflags,
+    data,
+    (void *)(intptr_t)token
+  );
+  if (kevent(reactor->handle, &change, 1, NULL, 0, NULL) != 0) {
+    int error = errno;
+    free(registration);
+    if (owned_descriptor >= 0) close(owned_descriptor);
+    reactor->last_errno = error;
+    return error;
+  }
+  registration->token = token;
+  registration->ident = ident;
+  registration->owned_descriptor = owned_descriptor;
+  registration->filter = filter;
+  registration->next = reactor->registrations;
+  reactor->registrations = registration;
+  return 0;
+}
+#elif defined(__linux__)
 static int wasmoon_async_install_registration(
   wasmoon_async_reactor_t *reactor,
   int descriptor,
@@ -78,7 +116,9 @@ static int wasmoon_async_install_registration(
     return error;
   }
   registration->token = token;
-  registration->descriptor = descriptor;
+  registration->ident = (uintptr_t)descriptor;
+  registration->owned_descriptor = descriptor;
+  registration->filter = 0;
   registration->next = reactor->registrations;
   reactor->registrations = registration;
   return 0;
@@ -87,14 +127,14 @@ static int wasmoon_async_install_registration(
 
 static void wasmoon_async_reactor_finalize(void *self) {
   wasmoon_async_reactor_t *reactor = self;
-#if defined(__linux__)
   while (reactor->registrations) {
     wasmoon_async_registration_t *registration = reactor->registrations;
     reactor->registrations = registration->next;
-    close(registration->descriptor);
+    if (registration->owned_descriptor >= 0) {
+      close(registration->owned_descriptor);
+    }
     free(registration);
   }
-#endif
   if (reactor->wake_handle >= 0) {
     close(reactor->wake_handle);
   }
@@ -123,9 +163,7 @@ MOONBIT_FFI_EXPORT void *wasmoon_async_reactor_alloc(void) {
   reactor->handle = -1;
   reactor->wake_handle = -1;
   reactor->last_errno = 0;
-#if defined(__linux__)
   reactor->registrations = NULL;
-#endif
 #if defined(__APPLE__)
   reactor->handle = kqueue();
   if (reactor->handle < 0) {
@@ -199,21 +237,21 @@ MOONBIT_FFI_EXPORT int wasmoon_async_reactor_register_fd(
   wasmoon_async_reactor_t *reactor = managed;
   if (!reactor || reactor->handle < 0 || fd < 0 || token <= 0) return EINVAL;
 #if defined(__APPLE__)
-  struct kevent change;
-  EV_SET(
-    &change,
-    (uintptr_t)fd,
-    writable ? EVFILT_WRITE : EVFILT_READ,
-    EV_ADD | EV_ONESHOT,
-    0,
-    0,
-    (void *)(intptr_t)token
-  );
-  if (kevent(reactor->handle, &change, 1, NULL, 0, NULL) != 0) {
+  int duplicate = fcntl(fd, F_DUPFD_CLOEXEC, 0);
+  if (duplicate < 0) {
     reactor->last_errno = errno;
     return errno;
   }
-  return 0;
+  return wasmoon_async_install_kqueue_registration(
+    reactor,
+    (uintptr_t)duplicate,
+    writable ? EVFILT_WRITE : EVFILT_READ,
+    duplicate,
+    EV_ADD | EV_ONESHOT,
+    0,
+    0,
+    token
+  );
 #elif defined(__linux__)
   int duplicate = fcntl(fd, F_DUPFD_CLOEXEC, 0);
   if (duplicate < 0) {
@@ -242,21 +280,16 @@ MOONBIT_FFI_EXPORT int wasmoon_async_reactor_register_timer(
     return EINVAL;
   }
 #if defined(__APPLE__)
-  struct kevent change;
-  EV_SET(
-    &change,
+  return wasmoon_async_install_kqueue_registration(
+    reactor,
     (uintptr_t)token,
     EVFILT_TIMER,
+    -1,
     EV_ADD | EV_ONESHOT,
     NOTE_NSECONDS,
     delay_ns,
-    (void *)(intptr_t)token
+    token
   );
-  if (kevent(reactor->handle, &change, 1, NULL, 0, NULL) != 0) {
-    reactor->last_errno = errno;
-    return errno;
-  }
-  return 0;
 #elif defined(__linux__)
   int timer = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
   if (timer < 0) {
@@ -284,42 +317,47 @@ MOONBIT_FFI_EXPORT int wasmoon_async_reactor_register_timer(
 
 MOONBIT_FFI_EXPORT int wasmoon_async_reactor_cancel(
   void *managed,
-  int64_t token,
-  int64_t ident,
-  int filter
+  int64_t token
 ) {
   wasmoon_async_reactor_t *reactor = managed;
   if (!reactor || reactor->handle < 0) return EINVAL;
+  wasmoon_async_registration_t *registration =
+    wasmoon_async_remove_registration(reactor, token);
+  if (!registration) return 0;
 #if defined(__APPLE__)
-  (void)token;
   struct kevent change;
   EV_SET(
     &change,
-    (uintptr_t)ident,
-    (short)filter,
+    registration->ident,
+    (short)registration->filter,
     EV_DELETE,
     0,
     0,
     NULL
   );
+  int status = 0;
   if (kevent(reactor->handle, &change, 1, NULL, 0, NULL) != 0 &&
       errno != ENOENT) {
     reactor->last_errno = errno;
-    return errno;
+    status = errno;
   }
-  return 0;
+  if (registration->owned_descriptor >= 0) {
+    close(registration->owned_descriptor);
+  }
+  free(registration);
+  return status;
 #elif defined(__linux__)
-  (void)ident;
-  (void)filter;
-  int descriptor = wasmoon_async_remove_registration(reactor, token);
-  if (descriptor < 0) return 0;
-  epoll_ctl(reactor->handle, EPOLL_CTL_DEL, descriptor, NULL);
-  close(descriptor);
+  epoll_ctl(
+    reactor->handle,
+    EPOLL_CTL_DEL,
+    registration->owned_descriptor,
+    NULL
+  );
+  close(registration->owned_descriptor);
+  free(registration);
   return 0;
 #else
-  (void)token;
-  (void)ident;
-  (void)filter;
+  free(registration);
   return ENOTSUP;
 #endif
 }
@@ -362,7 +400,17 @@ MOONBIT_FFI_EXPORT int wasmoon_async_reactor_wait(
     return -1;
   }
   for (int i = 0; i < count; i++) {
-    tokens[i] = (int64_t)(intptr_t)events[i].udata;
+    int64_t token = (int64_t)(intptr_t)events[i].udata;
+    tokens[i] = token;
+    if (token == 0) continue;
+    wasmoon_async_registration_t *registration =
+      wasmoon_async_remove_registration(reactor, token);
+    if (registration) {
+      if (registration->owned_descriptor >= 0) {
+        close(registration->owned_descriptor);
+      }
+      free(registration);
+    }
   }
   free(events);
   return count;
@@ -393,10 +441,17 @@ MOONBIT_FFI_EXPORT int wasmoon_async_reactor_wait(
       }
       continue;
     }
-    int descriptor = wasmoon_async_remove_registration(reactor, token);
-    if (descriptor >= 0) {
-      epoll_ctl(reactor->handle, EPOLL_CTL_DEL, descriptor, NULL);
-      close(descriptor);
+    wasmoon_async_registration_t *registration =
+      wasmoon_async_remove_registration(reactor, token);
+    if (registration) {
+      epoll_ctl(
+        reactor->handle,
+        EPOLL_CTL_DEL,
+        registration->owned_descriptor,
+        NULL
+      );
+      close(registration->owned_descriptor);
+      free(registration);
     }
   }
   free(events);

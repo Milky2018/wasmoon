@@ -51,8 +51,6 @@ extern "c" fn c_reactor_register_timer(
 extern "c" fn c_reactor_cancel(
   reactor : NativeReactorObject,
   token : Int64,
-  ident : Int64,
-  filter : Int,
 ) -> Int = "wasmoon_async_reactor_cancel"
 
 ///|
@@ -77,8 +75,6 @@ priv enum RegistrationState {
 
 ///|
 priv struct RegistrationRecord {
-  ident : Int64
-  filter : Int
   state : Ref[RegistrationState]
 }
 
@@ -120,8 +116,6 @@ fn NativeReactor::allocate_token(self : NativeReactor) -> Int64 {
 ///|
 fn NativeReactor::register(
   self : NativeReactor,
-  ident : Int64,
-  filter : Int,
   install : (Int64) -> Int,
 ) -> NativeRegistration raise NativeReactorError {
   let token = self.allocate_token()
@@ -129,20 +123,21 @@ fn NativeReactor::register(
   if status != 0 {
     raise RegistrationFailed(status)
   }
-  let record : RegistrationRecord = { ident, filter, state: Ref(Pending) }
+  let record : RegistrationRecord = { state: Ref(Pending) }
   self.registrations.set(token, record)
   NativeRegistration(self, token, record)
 }
 
 ///|
 /// Register one one-shot readable event.
+///
+/// Each registration owns an independent duplicate of `fd`, so multiple
+/// concurrent registrations for the same descriptor remain isolated.
 pub fn NativeReactor::register_read(
   self : NativeReactor,
   fd : Int,
 ) -> NativeRegistration raise NativeReactorError {
-  self.register(fd.to_int64(), -1, fn(token) {
-    c_reactor_register_fd(self.raw, fd, 0, token)
-  })
+  self.register(fn(token) { c_reactor_register_fd(self.raw, fd, 0, token) })
 }
 
 ///|
@@ -151,9 +146,7 @@ pub fn NativeReactor::register_write(
   self : NativeReactor,
   fd : Int,
 ) -> NativeRegistration raise NativeReactorError {
-  self.register(fd.to_int64(), -2, fn(token) {
-    c_reactor_register_fd(self.raw, fd, 1, token)
-  })
+  self.register(fn(token) { c_reactor_register_fd(self.raw, fd, 1, token) })
 }
 
 ///|
@@ -167,11 +160,7 @@ pub fn NativeReactor::register_timer(
   if status != 0 {
     raise RegistrationFailed(status)
   }
-  let record : RegistrationRecord = {
-    ident: token,
-    filter: -7,
-    state: Ref(Pending),
-  }
+  let record : RegistrationRecord = { state: Ref(Pending) }
   self.registrations.set(token, record)
   NativeRegistration(self, token, record)
 }
@@ -268,8 +257,7 @@ pub fn NativeRegistration::cancel(self : NativeRegistration) -> Unit {
     Pending => {
       self.2.state.val = Cancelled
       self.0.registrations.remove(self.1)
-      c_reactor_cancel(self.0.raw, self.1, self.2.ident, self.2.filter)
-      |> ignore
+      c_reactor_cancel(self.0.raw, self.1) |> ignore
     }
     Ready => self.2.state.val = Cancelled
     Cancelled => ()

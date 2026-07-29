@@ -100,6 +100,61 @@ test "cancelled native registration ignores stale readiness" {
 }
 
 ///|
+test "same descriptor registrations complete independently" {
+  if !NativeReactor::supported() {
+    return
+  }
+  guard test_pipe() is Some((read_fd, write_fd)) else {
+    fail("failed to create reactor test pipe")
+  }
+  defer {
+    c_test_close(read_fd)
+    c_test_close(write_fd)
+  }
+  let reactor = NativeReactor::try_new()
+  let first = reactor.register_read(read_fd)
+  let second = reactor.register_read(read_fd)
+  c_test_write(write_fd) |> ignore
+  debug_inspect(
+    (
+      reactor.wait(Some(1000000000L)),
+      first.is_ready(),
+      second.is_ready(),
+      reactor,
+    ),
+    content="(2, true, true, NativeReactor(registrations=0))",
+  )
+}
+
+///|
+test "cancelling one same descriptor registration preserves its peer" {
+  if !NativeReactor::supported() {
+    return
+  }
+  guard test_pipe() is Some((read_fd, write_fd)) else {
+    fail("failed to create reactor test pipe")
+  }
+  defer {
+    c_test_close(read_fd)
+    c_test_close(write_fd)
+  }
+  let reactor = NativeReactor::try_new()
+  let cancelled = reactor.register_read(read_fd)
+  let active = reactor.register_read(read_fd)
+  cancelled.cancel()
+  c_test_write(write_fd) |> ignore
+  debug_inspect(
+    (
+      reactor.wait(Some(1000000000L)),
+      cancelled.is_ready(),
+      active.is_ready(),
+      reactor,
+    ),
+    content="(1, false, true, NativeReactor(registrations=0))",
+  )
+}
+
+///|
 test "native registration tokens are never reused" {
   if !NativeReactor::supported() {
     return

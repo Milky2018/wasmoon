@@ -12,4 +12,6 @@ guest continuation.
 
 The reactor is single-threaded and must be driven on its creation thread.
 Cancellation is idempotent and stale events are rejected through monotonic
-kernel tokens. Windows is not supported.
+kernel tokens. Every descriptor registration owns a close-on-exec duplicate,
+so concurrent operations for the same descriptor and direction retain
+independent readiness and cancellation lifetimes. Windows is not supported.
