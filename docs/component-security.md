@@ -26,6 +26,14 @@ validation-before-instantiation ordering, explicit type-size/depth limits,
 structured termination policy, resource cleanup seams, and the platform CI
 coverage. Its source of truth is `docs/component-hardening.json`.
 
+Interface isolation is checked from generated `.mbti` semantics rather than
+alias spellings. The audit resolves every referenced package alias to its full
+import owner, compares owner path segments against the implementation roots,
+and scans every generated Wasmoon interface for unreviewed exposure. The
+native session and WASI host interfaces are explicit reviewed low-level seams;
+adding another implementation-bearing public interface requires an intentional
+manifest change.
+
 The Linux AMD64 and macOS ARM64 jobs each run the stable 0.2, current 0.3
 async, and future-gated suites through both JIT and interpreter execution. They
 also run native sanitizer checks in the same platform job instead of launching

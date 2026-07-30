@@ -22,6 +22,17 @@ class ComponentSecurityAuditTests(unittest.TestCase):
                 "stable_interface": "interface.mbti",
                 "facade": "facade.mbt",
                 "validator": "validator.mbt",
+                "interface_scan_root": "modules/wasmoon",
+                "implementation_owner_roots": [
+                    "Milky2018/wasmoon/component/runtime_impl",
+                    "Milky2018/wasmoon/component_engine",
+                    "Milky2018/wasmoon/component_host",
+                    "Milky2018/wasmoon/component_native",
+                ],
+                "implementation_interface_allowlist": [
+                    "modules/wasmoon/component_native/pkg.generated.mbti",
+                    "modules/wasmoon/wasi_component/pkg.generated.mbti",
+                ],
                 "forbidden_termination_roots": ["untrusted"],
                 "forbidden_termination_patterns": ["abort(", "try!"],
                 "termination_allowlist": [],
@@ -108,11 +119,27 @@ class ComponentSecurityAuditTests(unittest.TestCase):
             manifest_path.write_text(json.dumps(manifest))
             self.assert_failed(root, "manifest-evidence")
 
+    def test_missing_interface_owner_config_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.create_fixture(root)
+            manifest_path = root / "docs/component-hardening.json"
+            manifest = json.loads(manifest_path.read_text())
+            del manifest["source_checks"]["implementation_owner_roots"]
+            manifest_path.write_text(json.dumps(manifest))
+            self.assert_failed(root, "interface-owner-config")
+
     def test_stable_interface_leak_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self.create_fixture(root)
-            (root / "interface.mbti").write_text("pub type runtime_impl.State\n")
+            (root / "interface.mbti").write_text(
+                "import {\n"
+                '  "Milky2018/wasmoon/component/runtime_impl",\n'
+                "}\n"
+                "pub fn state() -> @runtime_impl.State\n",
+                encoding="utf-8",
+            )
             self.assert_failed(root, "stable-interface-isolation")
 
     def test_reexported_implementation_adapter_fails(self) -> None:
@@ -120,11 +147,62 @@ class ComponentSecurityAuditTests(unittest.TestCase):
             root = Path(directory)
             self.create_fixture(root)
             (root / "interface.mbti").write_text(
-                "pub using @component_engine {type ComponentEngine}\n"
+                "import {\n"
+                '  "Milky2018/wasmoon/component_engine",\n'
+                "}\n"
+                "pub using @component_engine {type ComponentEngine}\n",
+                encoding="utf-8",
             )
             self.assert_failed(root, "stable-interface-isolation")
 
-    def test_obsolete_generic_adapter_package_fails(self) -> None:
+    def test_aliased_nested_implementation_owner_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.create_fixture(root)
+            (root / "interface.mbti").write_text(
+                "import {\n"
+                '  "Milky2018/wasmoon/component_native/internal" @engine,\n'
+                "}\n"
+                "pub fn engine() -> @engine.CoreExecutionEngine\n",
+                encoding="utf-8",
+            )
+            self.assert_failed(root, "stable-interface-isolation")
+
+    def test_similarly_prefixed_public_owner_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.create_fixture(root)
+            (root / "interface.mbti").write_text(
+                "import {\n"
+                '  "Milky2018/wasmoon/component_native_api",\n'
+                "}\n"
+                "pub fn engine() -> @component_native_api.Engine\n",
+                encoding="utf-8",
+            )
+            checks = {check.name: check for check in audit_repo(root)}
+            self.assertTrue(
+                checks["stable-interface-isolation"].passed,
+                checks["stable-interface-isolation"].detail,
+            )
+
+    def test_unused_implementation_import_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.create_fixture(root)
+            (root / "interface.mbti").write_text(
+                "import {\n"
+                '  "Milky2018/wasmoon/component_native/internal" @engine,\n'
+                "}\n"
+                "pub fn local_engine() -> LocalEngine\n",
+                encoding="utf-8",
+            )
+            checks = {check.name: check for check in audit_repo(root)}
+            self.assertTrue(
+                checks["stable-interface-isolation"].passed,
+                checks["stable-interface-isolation"].detail,
+            )
+
+    def test_generic_adapter_under_another_package_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self.create_fixture(root)
@@ -132,15 +210,45 @@ class ComponentSecurityAuditTests(unittest.TestCase):
                 root
                 / "modules"
                 / "wasmoon"
-                / "component_engine"
+                / "alternate_adapter"
                 / "pkg.generated.mbti"
             )
             path.parent.mkdir(parents=True)
             path.write_text(
-                "pub fn ComponentEngine::from_session_factory("
-                "() -> @runtime_impl.CoreExecutionEngine) -> Self\n"
+                "import {\n"
+                '  "Milky2018/wasmoon/component/runtime_impl" @engine,\n'
+                "}\n"
+                "pub fn from_session_factory(\n"
+                "  factory : () -> @engine.CoreExecutionEngine,\n"
+                ") -> Adapter\n",
+                encoding="utf-8",
             )
             self.assert_failed(root, "adapter-interface-isolation")
+
+    def test_reviewed_low_level_interface_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.create_fixture(root)
+            path = (
+                root
+                / "modules"
+                / "wasmoon"
+                / "component_native"
+                / "pkg.generated.mbti"
+            )
+            path.parent.mkdir(parents=True)
+            path.write_text(
+                "import {\n"
+                '  "Milky2018/wasmoon/component/runtime_impl" @engine,\n'
+                "}\n"
+                "pub fn open_session() -> @engine.CoreExecutionEngine\n",
+                encoding="utf-8",
+            )
+            checks = {check.name: check for check in audit_repo(root)}
+            self.assertTrue(
+                checks["adapter-interface-isolation"].passed,
+                checks["adapter-interface-isolation"].detail,
+            )
 
     def test_instantiate_before_validation_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

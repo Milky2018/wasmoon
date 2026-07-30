@@ -368,6 +368,7 @@ graph TD
   ISS_348["ISS-348: Seal stable component adapter ownership"]
   ISS_349["ISS-349: Preserve guest progress in component blocking waits"]
   ISS_350["ISS-350: Seal component session and host installation ownership"]
+  ISS_351["ISS-351: Parse public interface owner references in the component audit"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005

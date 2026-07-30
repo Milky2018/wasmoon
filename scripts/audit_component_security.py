@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -18,8 +19,66 @@ class AuditCheck:
     detail: str
 
 
+@dataclass(frozen=True)
+class InterfaceOwnerAnalysis:
+    owners: tuple[str, ...]
+    unresolved_aliases: tuple[str, ...]
+
+
+MBTI_IMPORT_ENTRY = re.compile(
+    r'^\s*"(?P<owner>[^"]+)"'
+    r"(?:\s+@(?P<alias>[A-Za-z_][A-Za-z0-9_]*))?,?\s*$"
+)
+MBTI_ALIAS_REFERENCE = re.compile(r"@([A-Za-z_][A-Za-z0-9_]*)")
+
+
 def read_text(root: Path, relative: str) -> str:
     return (root / relative).read_text(encoding="utf-8")
+
+
+def analyze_interface_owners(interface: str) -> InterfaceOwnerAnalysis:
+    """Resolve package owners referenced by a generated public interface."""
+    aliases: dict[str, str] = {}
+    public_declarations: list[str] = []
+    in_imports = False
+    for line in interface.splitlines():
+        stripped = line.strip()
+        if stripped == "import {":
+            in_imports = True
+            continue
+        if in_imports:
+            if stripped == "}":
+                in_imports = False
+                continue
+            entry = MBTI_IMPORT_ENTRY.match(line)
+            if entry is not None:
+                owner = entry.group("owner")
+                alias = entry.group("alias") or owner.rsplit("/", 1)[-1]
+                aliases[alias] = owner
+            continue
+        if not stripped.startswith("//"):
+            public_declarations.append(line)
+    referenced_aliases = set(
+        MBTI_ALIAS_REFERENCE.findall("\n".join(public_declarations))
+    )
+    return InterfaceOwnerAnalysis(
+        owners=tuple(
+            sorted(
+                {
+                    aliases[alias]
+                    for alias in referenced_aliases
+                    if alias in aliases
+                }
+            )
+        ),
+        unresolved_aliases=tuple(
+            sorted(alias for alias in referenced_aliases if alias not in aliases)
+        ),
+    )
+
+
+def owner_matches_root(owner: str, root: str) -> bool:
+    return owner == root or owner.startswith(root + "/")
 
 
 def check_manifest(root: Path) -> tuple[dict[str, object], list[AuditCheck]]:
@@ -83,47 +142,76 @@ def audit_repo(root: Path) -> list[AuditCheck]:
         validator = read_text(root, str(source["validator"]))
     except (KeyError, OSError) as error:
         return checks + [AuditCheck("source-inputs", False, str(error))]
+    interface_scan_root = source.get("interface_scan_root")
+    implementation_owner_roots = source.get("implementation_owner_roots")
+    implementation_interface_allowlist = source.get(
+        "implementation_interface_allowlist"
+    )
+    valid_interface_config = (
+        isinstance(interface_scan_root, str)
+        and isinstance(implementation_owner_roots, list)
+        and all(isinstance(owner, str) for owner in implementation_owner_roots)
+        and isinstance(implementation_interface_allowlist, list)
+        and all(
+            isinstance(path, str) for path in implementation_interface_allowlist
+        )
+    )
+    checks.append(
+        AuditCheck(
+            "interface-owner-config",
+            valid_interface_config,
+            "interface scan root, implementation owner roots, and interface "
+            "allowlist must be configured",
+        )
+    )
+    if not valid_interface_config:
+        return checks
+    owner_roots = [str(owner) for owner in implementation_owner_roots]
+    interface_allowlist = {
+        str(path) for path in implementation_interface_allowlist
+    }
+    stable_analysis = analyze_interface_owners(interface)
     forbidden_interface_owners = [
         owner
-        for owner, markers in [
-            ("runtime_impl", ["runtime_impl"]),
-            (
-                "component_engine",
-                ["@component_engine", "/component_engine\""],
-            ),
-            ("component_host", ["@component_host", "/component_host\""]),
-            (
-                "component_native",
-                ["@component_native", "/component_native\""],
-            ),
-        ]
-        if any(marker in interface for marker in markers)
+        for owner in stable_analysis.owners
+        if any(owner_matches_root(owner, root) for root in owner_roots)
     ]
     checks.append(
         AuditCheck(
             "stable-interface-isolation",
-            not forbidden_interface_owners,
+            not forbidden_interface_owners
+            and not stable_analysis.unresolved_aliases,
             "stable component interface must not expose implementation owners; "
-            f"found {forbidden_interface_owners}",
+            f"found {forbidden_interface_owners}; unresolved aliases "
+            f"{list(stable_analysis.unresolved_aliases)}",
         )
     )
     adapter_leaks: list[str] = []
-    for relative in [
-        "modules/wasmoon/component_engine",
-        "modules/wasmoon/component_host",
-    ]:
-        path = root / relative
-        if path.exists() and any(
-            child.is_file()
-            and (child.suffix in {".mbt", ".mbti"} or child.name == "moon.pkg")
-            for child in path.iterdir()
-        ):
-            adapter_leaks.append(relative)
+    scan_root = root / str(interface_scan_root)
+    if scan_root.exists():
+        for path in sorted(scan_root.rglob("pkg.generated.mbti")):
+            relative = str(path.relative_to(root))
+            if relative in interface_allowlist:
+                continue
+            analysis = analyze_interface_owners(
+                path.read_text(encoding="utf-8")
+            )
+            exposed = [
+                owner
+                for owner in analysis.owners
+                if any(owner_matches_root(owner, root) for root in owner_roots)
+            ]
+            if exposed or analysis.unresolved_aliases:
+                detail = exposed + [
+                    f"unresolved:@{alias}"
+                    for alias in analysis.unresolved_aliases
+                ]
+                adapter_leaks.append(f"{relative}: {detail}")
     checks.append(
         AuditCheck(
             "adapter-interface-isolation",
             not adapter_leaks,
-            "obsolete generic component adapter packages must remain absent; "
+            "unreviewed interfaces must not expose implementation owners; "
             f"found {adapter_leaks}",
         )
     )
