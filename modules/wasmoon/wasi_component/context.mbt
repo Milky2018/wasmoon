@@ -28,6 +28,14 @@ struct WasiComponentCtx {
 }
 
 ///|
+/// Exclusive authority to close a context owned by an embedding runtime.
+///
+/// This capability is produced only by a successful runtime-owner claim.
+struct WasiComponentCtxRuntimeOwner {
+  ctx : WasiComponentCtx
+}
+
+///|
 pub(all) enum WasiNetworkPolicy {
   DenyAll
   LoopbackOnly
@@ -329,12 +337,12 @@ pub fn WasiComponentCtxBuilder::build(
 /// context.
 pub fn WasiComponentCtx::try_claim_runtime_owner(
   self : WasiComponentCtx,
-) -> Bool {
+) -> WasiComponentCtxRuntimeOwner? {
   if self.closed.val || self.runtime_owner_claimed.val {
-    false
+    None
   } else {
     self.runtime_owner_claimed.val = true
-    true
+    Some({ ctx: self })
   }
 }
 
@@ -361,12 +369,32 @@ pub fn WasiComponentCtx::exit_status(self : WasiComponentCtx) -> Int? {
 }
 
 ///|
-/// Release every host resource owned by this context.
+/// Release every host resource owned by this unclaimed context.
 ///
 /// Call this after component execution has ended. Pending native operations
 /// are cancelled before their source descriptors close. Repeated calls are
-/// harmless, and the context is terminal after the first call.
+/// harmless, and the context is terminal after the first call. Once an
+/// embedding runtime claims this context, only its runtime-owner capability
+/// can close it; calls through ordinary context aliases have no effect.
 pub fn WasiComponentCtx::close(self : WasiComponentCtx) -> Unit {
+  if self.runtime_owner_claimed.val {
+    return
+  }
+  self.close_resources()
+}
+
+///|
+/// Close the claimed context through its exclusive runtime-owner capability.
+///
+/// Repeated calls through capability aliases are harmless.
+pub fn WasiComponentCtxRuntimeOwner::close(
+  self : WasiComponentCtxRuntimeOwner,
+) -> Unit {
+  self.ctx.close_resources()
+}
+
+///|
+fn WasiComponentCtx::close_resources(self : WasiComponentCtx) -> Unit {
   if self.closed.val {
     return
   }

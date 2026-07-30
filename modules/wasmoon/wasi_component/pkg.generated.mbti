@@ -25,7 +25,7 @@ pub fn WasiComponentCtx::close(Self) -> Unit
 pub fn WasiComponentCtx::environment(Self) -> Array[(String, String)]
 pub fn WasiComponentCtx::exit_status(Self) -> Int?
 pub fn WasiComponentCtx::initial_cwd(Self) -> String?
-pub fn WasiComponentCtx::try_claim_runtime_owner(Self) -> Bool
+pub fn WasiComponentCtx::try_claim_runtime_owner(Self) -> WasiComponentCtxRuntimeOwner?
 
 type WasiComponentCtxBuilder
 pub fn WasiComponentCtxBuilder::WasiComponentCtxBuilder() -> Self
@@ -43,6 +43,9 @@ pub fn WasiComponentCtxBuilder::preopened_directory(Self, String, String, Bool) 
 pub fn WasiComponentCtxBuilder::stderr(Self, (Bytes) -> Unit) -> Self
 pub fn WasiComponentCtxBuilder::stdin(Self, Bytes) -> Self
 pub fn WasiComponentCtxBuilder::stdout(Self, (Bytes) -> Unit) -> Self
+
+type WasiComponentCtxRuntimeOwner
+pub fn WasiComponentCtxRuntimeOwner::close(Self) -> Unit
 
 type WasiComponentHost
 pub fn WasiComponentHost::WasiComponentHost(@runtime_impl.ComponentLinker, WasiComponentCtx) -> Self raise @runtime_impl.ComponentRuntimeError

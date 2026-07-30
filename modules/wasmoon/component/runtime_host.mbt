@@ -53,15 +53,27 @@ fn ComponentHostInstaller::close(self : ComponentHostInstaller) -> Unit {
 pub fn wasi_command_component_host(
   ctx : @wasi_component.WasiComponentCtx,
 ) -> ComponentHostInstaller {
+  let runtime_owner : Ref[@wasi_component.WasiComponentCtxRuntimeOwner?] = Ref(
+    None,
+  )
   ComponentHostInstaller::from_linker_installer(
     fn(linker) raise @runtime_impl.ComponentRuntimeError {
       @wasi_component.install_command_world(linker, ctx)
     },
     claim=fn() raise ComponentRuntimeError {
-      if !ctx.try_claim_runtime_owner() {
-        raise HostContextAlreadyOwned
+      match ctx.try_claim_runtime_owner() {
+        Some(owner) => runtime_owner.val = Some(owner)
+        None => raise HostContextAlreadyOwned
       }
     },
-    close=fn() { ctx.close() },
+    close=fn() {
+      match runtime_owner.val {
+        Some(owner) => {
+          runtime_owner.val = None
+          owner.close()
+        }
+        None => ()
+      }
+    },
   )
 }

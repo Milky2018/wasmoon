@@ -341,6 +341,45 @@ test "WASI command hosts reject installer and context aliases" {
 }
 
 ///|
+test "WASI runtime ownership rejects external context close" {
+  let ctx = @wasi_component.WasiComponentCtxBuilder().stdin(b"hello").build()
+  let runtime = @component.ComponentRuntime(
+    engine=@component.interpreter_component_engine(),
+  )
+  defer runtime.close()
+  runtime.install(@component.wasi_command_component_host(ctx))
+  ctx.close()
+  let stdin_component = @component_text.parse_component_wat(
+    @fs.read_file_to_string(
+      "testsuite/fixtures/wasi-command-async-stdin.component.wat",
+    ),
+  )
+  let result = runtime
+    .instantiate("externally-closed-wasi-owner", stdin_component)
+    .bind("wasi:cli/run@0.3.0#run")
+    .call([])
+  let closed_before_claim = @wasi_component.WasiComponentCtxBuilder().build()
+  closed_before_claim.close()
+  let rejected_runtime = @component.ComponentRuntime(
+    engine=@component.interpreter_component_engine(),
+  )
+  defer rejected_runtime.close()
+  let closed_context_error = try
+    rejected_runtime.install(
+      @component.wasi_command_component_host(closed_before_claim),
+    )
+  catch {
+    error => error
+  } noraise {
+    _ => fail("expected a closed context to reject runtime ownership")
+  }
+  debug_inspect(
+    (result, closed_context_error),
+    content="([ResultOk(None)], HostContextAlreadyOwned)",
+  )
+}
+
+///|
 test "component runtime native engine executes without interpreter fallback" {
   let events : Array[@component.NativeComponentExecutionEvent] = []
   let runtime = @component.ComponentRuntime(
