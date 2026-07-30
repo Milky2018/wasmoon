@@ -330,6 +330,42 @@ test "component runtime native engine executes without interpreter fallback" {
 }
 
 ///|
+test "native execution callback can close its runtime during suspension" {
+  let close_runtime = Ref(fn() { () })
+  let events : Array[@component.NativeComponentExecutionEvent] = []
+  let runtime = @component.ComponentRuntime(
+    engine=@component.native_component_engine(opt_level=0, on_execution=fn(
+      event,
+    ) {
+      events.push(event)
+      (close_runtime.val)()
+    }),
+  )
+  close_runtime.val = fn() { runtime.close() }
+  let call = runtime
+    .instantiate("native-close-on-suspend", component_runtime_yield_fixture())
+    .bind("yield-once")
+    .start([])
+  let poll_error = try call.poll() catch {
+    error => error
+  } noraise {
+    _ => fail("expected callback close to cancel the call")
+  }
+  let closed_error = try
+    runtime.instantiate("closed", component_runtime_facade_fixture())
+  catch {
+    error => error
+  } noraise {
+    _ => fail("expected runtime to remain closed")
+  }
+  runtime.close()
+  debug_inspect(
+    (events, poll_error, closed_error),
+    content="([Resumable], Cancelled, RuntimeClosed)",
+  )
+}
+
+///|
 test "component calls expose stable completion and cancellation states" {
   let runtime = @component.ComponentRuntime(
     engine=@component.interpreter_component_engine(),

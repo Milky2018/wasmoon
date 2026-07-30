@@ -220,6 +220,8 @@ priv struct ComponentRuntimeState {
   linker : @runtime_impl.ComponentLinker
   wit_names : Bool
   closed : Ref[Bool]
+  execution_depth : Ref[Int]
+  teardown_complete : Ref[Bool]
   next_call_id : Ref[Int]
   active_calls : Map[Int, @runtime_impl.ComponentInvocation]
   host_installers : Array[ComponentHostInstaller]
@@ -270,6 +272,8 @@ pub fn ComponentRuntime::ComponentRuntime(
       ),
       wit_names,
       closed: Ref(false),
+      execution_depth: Ref(0),
+      teardown_complete: Ref(false),
       next_call_id: Ref(0),
       active_calls: Map([]),
       host_installers: [],
@@ -307,6 +311,41 @@ fn ComponentRuntimeState::retire_call(
 }
 
 ///|
+fn ComponentRuntimeState::begin_execution(self : ComponentRuntimeState) -> Unit {
+  self.execution_depth.val = self.execution_depth.val + 1
+}
+
+///|
+fn ComponentRuntimeState::finish_close(self : ComponentRuntimeState) -> Unit {
+  if self.teardown_complete.val {
+    return
+  }
+  self.teardown_complete.val = true
+  for entry in self.active_calls.to_array() {
+    let (_, invocation) = entry
+    invocation.cancel() catch {
+      _ => ()
+    }
+  }
+  self.active_calls.clear()
+  for installer in self.host_installers {
+    installer.close()
+  }
+  self.host_installers.clear()
+  self.linker.close()
+}
+
+///|
+fn ComponentRuntimeState::end_execution(self : ComponentRuntimeState) -> Unit {
+  if self.execution_depth.val > 0 {
+    self.execution_depth.val = self.execution_depth.val - 1
+  }
+  if self.execution_depth.val == 0 && self.closed.val {
+    self.finish_close()
+  }
+}
+
+///|
 pub fn ComponentRuntime::install(
   self : ComponentRuntime,
   installer : ComponentHostInstaller,
@@ -324,22 +363,18 @@ pub fn ComponentRuntime::install(
 
 ///|
 pub fn ComponentRuntime::close(self : ComponentRuntime) -> Unit {
-  if self.state.closed.val {
-    return
-  }
-  self.state.closed.val = true
-  for entry in self.state.active_calls.to_array() {
-    let (_, invocation) = entry
-    invocation.cancel() catch {
-      _ => ()
+  if !self.state.closed.val {
+    self.state.closed.val = true
+    for entry in self.state.active_calls.to_array() {
+      let (_, invocation) = entry
+      invocation.cancel() catch {
+        _ => ()
+      }
     }
   }
-  self.state.active_calls.clear()
-  for installer in self.state.host_installers {
-    installer.close()
+  if self.state.execution_depth.val == 0 {
+    self.state.finish_close()
   }
-  self.state.host_installers.clear()
-  self.state.linker.close()
 }
 
 ///|
@@ -368,10 +403,22 @@ pub fn ComponentRuntime::instantiate_component(
   ) catch {
     error => raise ValidationFailed(error.to_string())
   }
+  self.state.begin_execution()
   let inner = self.state.linker.instantiate(name, component) catch {
-    NativeEngineUnavailable(message) => raise NativeEngineUnavailable(message)
-    NativeCompilationFailed(message) => raise NativeCompilationFailed(message)
-    error => raise InstantiationFailed(error.to_string())
+    error => {
+      self.state.end_execution()
+      match error {
+        NativeEngineUnavailable(message) =>
+          raise NativeEngineUnavailable(message)
+        NativeCompilationFailed(message) =>
+          raise NativeCompilationFailed(message)
+        error => raise InstantiationFailed(error.to_string())
+      }
+    }
+  }
+  self.state.end_execution()
+  if self.state.closed.val {
+    raise RuntimeClosed
   }
   { inner, runtime: self.state }
 }
@@ -1247,12 +1294,19 @@ pub fn ComponentFunction::start(
 pub fn ComponentCall::poll(
   self : ComponentCall,
 ) -> ComponentCallPoll raise ComponentRuntimeError {
+  self.runtime.begin_execution()
   let polled = self.inner.poll() catch {
     error => {
+      self.runtime.end_execution()
       self.runtime.retire_call(self.call_id)
       raise_public_invocation_error(error)
       raise InvocationFailed("unreachable")
     }
+  }
+  self.runtime.end_execution()
+  if self.runtime.closed.val {
+    self.runtime.retire_call(self.call_id)
+    raise Cancelled
   }
   match polled {
     InvocationPending => Pending
@@ -1267,12 +1321,19 @@ pub fn ComponentCall::poll(
 pub fn ComponentCall::wait(
   self : ComponentCall,
 ) -> Array[ComponentValue] raise ComponentRuntimeError {
+  self.runtime.begin_execution()
   let results = self.inner.wait() catch {
     error => {
+      self.runtime.end_execution()
       self.runtime.retire_call(self.call_id)
       raise_public_invocation_error(error)
       raise InvocationFailed("unreachable")
     }
+  }
+  self.runtime.end_execution()
+  if self.runtime.closed.val {
+    self.runtime.retire_call(self.call_id)
+    raise Cancelled
   }
   self.runtime.retire_call(self.call_id)
   lift_component_results(results, self.result_type)
@@ -1282,12 +1343,19 @@ pub fn ComponentCall::wait(
 pub async fn ComponentCall::join(
   self : ComponentCall,
 ) -> Array[ComponentValue] raise ComponentRuntimeError {
+  self.runtime.begin_execution()
   let results = self.inner.join() catch {
     error => {
+      self.runtime.end_execution()
       self.runtime.retire_call(self.call_id)
       raise_public_invocation_error(error)
       raise InvocationFailed("unreachable")
     }
+  }
+  self.runtime.end_execution()
+  if self.runtime.closed.val {
+    self.runtime.retire_call(self.call_id)
+    raise Cancelled
   }
   self.runtime.retire_call(self.call_id)
   lift_component_results(results, self.result_type)

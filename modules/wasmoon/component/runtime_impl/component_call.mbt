@@ -28,6 +28,8 @@ struct ComponentInvocation {
   async_state : AsyncState
   can_block : Bool
   phase : Array[ComponentInvocationPhase]
+  driving : Array[Bool]
+  cancel_requested : Array[Bool]
 }
 
 ///|
@@ -113,6 +115,36 @@ fn ComponentInvocation::fail(
 }
 
 ///|
+fn ComponentInvocation::finish_cancel(
+  self : ComponentInvocation,
+) -> Unit raise ComponentRuntimeError {
+  self.cancel_requested[0] = false
+  let cancellation_error : ComponentRuntimeError? = match
+    self.task.host_future[0] {
+    Some(future) =>
+      try (future.cancel)() catch {
+        error => Some(error)
+      } noraise {
+        _ => None
+      }
+    None => None
+  }
+  match self.task.continuation[0] {
+    Some(continuation) => {
+      self.task.continuation[0] = None
+      continuation.cancel()
+    }
+    None => ()
+  }
+  self.cleanup_task()
+  self.phase[0] = WasCancelled
+  match cancellation_error {
+    Some(error) => raise error
+    None => ()
+  }
+}
+
+///|
 fn ComponentInvocation::drive_once(
   self : ComponentInvocation,
 ) -> ComponentInvocationStep raise ComponentRuntimeError {
@@ -123,6 +155,7 @@ fn ComponentInvocation::drive_once(
     Running => ()
   }
   push_task(self.async_state, self.task_id, self.can_block)
+  self.driving[0] = true
   let step = step_task_once(
     self.task,
     self.store,
@@ -130,12 +163,22 @@ fn ComponentInvocation::drive_once(
     self.async_state,
   ) catch {
     error => {
+      self.driving[0] = false
       pop_task(self.async_state)
+      if self.cancel_requested[0] {
+        self.finish_cancel()
+        raise Cancelled
+      }
       self.fail(error)
       raise error
     }
   }
+  self.driving[0] = false
   pop_task(self.async_state)
+  if self.cancel_requested[0] {
+    self.finish_cancel()
+    raise Cancelled
+  }
   match step {
     Done =>
       DriveReady(self.finish()) catch {
@@ -231,29 +274,11 @@ pub fn ComponentInvocation::cancel(
     Completed(_) | Failed(_) | WasCancelled => return
   }
   self.task.cancelled[0] = true
-  let cancellation_error : ComponentRuntimeError? = match
-    self.task.host_future[0] {
-    Some(future) =>
-      try (future.cancel)() catch {
-        error => Some(error)
-      } noraise {
-        _ => None
-      }
-    None => None
+  if self.driving[0] {
+    self.cancel_requested[0] = true
+    return
   }
-  match self.task.continuation[0] {
-    Some(continuation) => {
-      self.task.continuation[0] = None
-      continuation.cancel()
-    }
-    None => ()
-  }
-  self.cleanup_task()
-  self.phase[0] = WasCancelled
-  match cancellation_error {
-    Some(error) => raise error
-    None => ()
-  }
+  self.finish_cancel()
 }
 
 ///|
@@ -290,5 +315,7 @@ pub fn ComponentInstance::start_exported_func(
     async_state: self.async_state,
     can_block: func_type.is_async,
     phase: [Running],
+    driving: [false],
+    cancel_requested: [false],
   }
 }
