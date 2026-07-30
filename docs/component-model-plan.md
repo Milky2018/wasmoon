@@ -13,12 +13,8 @@ same runtime objects, interpreter, and native compiler as ordinary core Wasm.
 - `wasmoon/validator/component_model`: component validation.
 - `wasmoon/component/runtime_impl`: linker, instantiation, canonical ABI,
   resources, tasks, streams, futures, and host adapters.
-- `wasmoon/component_engine`: low-level Store-scoped execution adapter behind
-  the stable facade.
-- `wasmoon/component_native`: strict native JIT adapter behind the stable
-  facade and low-level conformance harnesses.
-- `wasmoon/component_host`: low-level linker installation adapter behind the
-  stable facade.
+- `wasmoon/component_native`: strict native JIT session factory used by the
+  stable facade and low-level conformance harnesses.
 - `wasmoon/wasi_component`: WASI Preview 2 and Preview 3 component hosts.
 - `wasmoon/cmd/wasmoon`: command execution and component-spec test harness.
 
@@ -27,11 +23,13 @@ modules. The component runtime selects a core execution engine through an
 adapter owned by Wasmoon.
 
 Ordinary embedders depend only on the root component facade. The root package
-owns its opaque engine, execution-event, and host-installer types; it does not
-reexport the low-level adapter types. The validator and runtime implementation
-depend directly on `component/model`, so the root package can compose them
-without a dependency cycle. Public facade signatures do not contain runtime
-implementation types or implementation-owned adapter types.
+owns its opaque engine, execution-event, and host-installer types and the
+private closures that create execution sessions or populate linkers. Only
+concrete interpreter, native, and WASI constructors are public: embedders
+cannot inject a reused mutable execution session or directly receive the
+linker. The validator and runtime implementation depend directly on
+`component/model`, so the root package can compose them without a dependency
+cycle. Public facade signatures do not contain runtime implementation types.
 
 ## Core Execution Contract
 

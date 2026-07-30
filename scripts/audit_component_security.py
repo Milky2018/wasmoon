@@ -107,6 +107,26 @@ def audit_repo(root: Path) -> list[AuditCheck]:
             f"found {forbidden_interface_owners}",
         )
     )
+    adapter_leaks: list[str] = []
+    for relative in [
+        "modules/wasmoon/component_engine",
+        "modules/wasmoon/component_host",
+    ]:
+        path = root / relative
+        if path.exists() and any(
+            child.is_file()
+            and (child.suffix in {".mbt", ".mbti"} or child.name == "moon.pkg")
+            for child in path.iterdir()
+        ):
+            adapter_leaks.append(relative)
+    checks.append(
+        AuditCheck(
+            "adapter-interface-isolation",
+            not adapter_leaks,
+            "obsolete generic component adapter packages must remain absent; "
+            f"found {adapter_leaks}",
+        )
+    )
     validation = facade.find("@component_model.validate_component_with_config")
     instantiate = facade.find(".linker.instantiate(", validation + 1)
     checks.append(

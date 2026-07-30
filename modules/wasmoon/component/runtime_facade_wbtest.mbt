@@ -18,25 +18,23 @@ fn component_runtime_async_host(
   ready : Ref[Bool],
   cancellations : Ref[Int],
 ) -> ComponentHostInstaller {
-  ComponentHostInstaller::from_adapter(
-    @component_host.ComponentHostInstaller::from_linker_installer(fn(
-      linker,
-    ) raise @runtime_impl.ComponentRuntimeError {
-      let host_runtime = linker.host_runtime_state()
-      let builder = linker.host_instance_builder("host", host_runtime)
-      builder.add_async_func(
-        "wait",
-        { is_async: true, params: [], result: Some(Prim(U32)) },
-        fn(_args, _table) {
-          HostFuture(
-            fn() { if ready.val { Ready([U32(17)]) } else { Pending } },
-            fn() { cancellations.val = cancellations.val + 1 },
-          )
-        },
-      )
-      linker.add_import("host", Instance(builder.finish()))
-    }),
-  )
+  ComponentHostInstaller::from_linker_installer(fn(
+    linker,
+  ) raise @runtime_impl.ComponentRuntimeError {
+    let host_runtime = linker.host_runtime_state()
+    let builder = linker.host_instance_builder("host", host_runtime)
+    builder.add_async_func(
+      "wait",
+      { is_async: true, params: [], result: Some(Prim(U32)) },
+      fn(_args, _table) {
+        HostFuture(
+          fn() { if ready.val { Ready([U32(17)]) } else { Pending } },
+          fn() { cancellations.val = cancellations.val + 1 },
+        )
+      },
+    )
+    linker.add_import("host", Instance(builder.finish()))
+  })
 }
 
 ///|

@@ -12,7 +12,7 @@
 /// This stable wrapper intentionally hides the Store-scoped core execution
 /// engine owned by the implementation adapter.
 struct ComponentEngine {
-  adapter : @component_engine.ComponentEngine
+  open_session : () -> @runtime_impl.CoreExecutionEngine
 }
 
 ///|
@@ -24,7 +24,7 @@ pub(all) enum NativeComponentExecutionEvent {
 
 ///|
 pub fn interpreter_component_engine() -> ComponentEngine {
-  { adapter: @component_engine.interpreter_component_engine() }
+  { open_session: fn() { @runtime_impl.interpreter_core_execution_engine() } }
 }
 
 ///|
@@ -32,18 +32,28 @@ pub fn native_component_engine(
   opt_level? : Int = 2,
   on_execution? : (NativeComponentExecutionEvent) -> Unit = fn(_event) { () },
 ) -> ComponentEngine {
+  let normalized_level = if opt_level < 0 {
+    0
+  } else if opt_level > 3 {
+    3
+  } else {
+    opt_level
+  }
   {
-    adapter: @component_native.native_component_engine(opt_level~, on_execution=fn(
-      event,
-    ) {
-      on_execution(
-        match event {
-          RunToReturn => RunToReturn
-          Resumable => Resumable
-          ExplicitInterpreter => ExplicitInterpreter
+    open_session: fn() {
+      @component_native.open_native_component_session(
+        opt_level=normalized_level,
+        on_execution=fn(event) {
+          on_execution(
+            match event {
+              RunToReturn => RunToReturn
+              Resumable => Resumable
+              ExplicitInterpreter => ExplicitInterpreter
+            },
+          )
         },
       )
-    }),
+    },
   }
 }
 
@@ -51,19 +61,21 @@ pub fn native_component_engine(
 fn ComponentEngine::open_session(
   self : ComponentEngine,
 ) -> @runtime_impl.CoreExecutionEngine {
-  self.adapter.open_session()
+  (self.open_session)()
 }
 
 ///|
 struct ComponentHostInstaller {
-  adapter : @component_host.ComponentHostInstaller
+  install : (@runtime_impl.ComponentLinker) -> Unit raise @runtime_impl.ComponentRuntimeError
+  close : () -> Unit
 }
 
 ///|
-fn ComponentHostInstaller::from_adapter(
-  adapter : @component_host.ComponentHostInstaller,
+fn ComponentHostInstaller::from_linker_installer(
+  install : (@runtime_impl.ComponentLinker) -> Unit raise @runtime_impl.ComponentRuntimeError,
+  close? : () -> Unit = fn() { () },
 ) -> ComponentHostInstaller {
-  { adapter, }
+  { install, close }
 }
 
 ///|
@@ -71,20 +83,30 @@ fn ComponentHostInstaller::install(
   self : ComponentHostInstaller,
   linker : @runtime_impl.ComponentLinker,
 ) -> Unit raise @runtime_impl.ComponentRuntimeError {
-  self.adapter.install(linker)
+  (self.install)(linker)
 }
 
 ///|
 fn ComponentHostInstaller::close(self : ComponentHostInstaller) -> Unit {
-  self.adapter.close()
+  (self.close)()
 }
 
 ///|
 pub fn wasi_command_component_host(
   ctx : @wasi_component.WasiComponentCtx,
 ) -> ComponentHostInstaller {
-  ComponentHostInstaller::from_adapter(
-    @wasi_component.wasi_command_component_host(ctx),
+  ComponentHostInstaller::from_linker_installer(
+    fn(linker) raise @runtime_impl.ComponentRuntimeError {
+      let host = @wasi_component.WasiComponentHost(linker, ctx)
+      host.add_preview2_cli_clocks_random()
+      host.add_preview2_io()
+      host.add_preview2_filesystem()
+      host.add_preview2_sockets()
+      host.add_preview3_cli_clocks_random()
+      host.add_preview3_filesystem()
+      host.add_preview3_sockets()
+    },
+    close=fn() { ctx.close() },
   )
 }
 

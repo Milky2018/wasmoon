@@ -2,12 +2,12 @@
 package "Milky2018/wasmoon/component_native"
 
 import {
-  "Milky2018/wasmoon/component_engine",
+  "Milky2018/wasmoon/component/runtime_impl",
   "moonbitlang/core/debug",
 }
 
 // Values
-pub fn native_component_engine(opt_level? : Int, on_execution? : (NativeComponentExecutionEvent) -> Unit) -> @component_engine.ComponentEngine
+pub fn open_native_component_session(opt_level? : Int, on_execution? : (NativeComponentExecutionEvent) -> Unit) -> @runtime_impl.CoreExecutionEngine
 
 // Errors
 

@@ -953,7 +953,7 @@ fn run_component_script_impl(
   let result = ScriptResult::ScriptResult()
   let linker = if use_jit {
     @runtime_impl.ComponentLinker::with_core_execution_engine(
-      @component_native.native_component_engine(opt_level=0).open_session(),
+      @component_native.open_native_component_session(opt_level=0),
     )
   } else {
     ComponentLinker()

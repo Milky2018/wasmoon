@@ -124,6 +124,24 @@ class ComponentSecurityAuditTests(unittest.TestCase):
             )
             self.assert_failed(root, "stable-interface-isolation")
 
+    def test_obsolete_generic_adapter_package_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.create_fixture(root)
+            path = (
+                root
+                / "modules"
+                / "wasmoon"
+                / "component_engine"
+                / "pkg.generated.mbti"
+            )
+            path.parent.mkdir(parents=True)
+            path.write_text(
+                "pub fn ComponentEngine::from_session_factory("
+                "() -> @runtime_impl.CoreExecutionEngine) -> Self\n"
+            )
+            self.assert_failed(root, "adapter-interface-isolation")
+
     def test_instantiate_before_validation_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

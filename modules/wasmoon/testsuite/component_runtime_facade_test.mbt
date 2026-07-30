@@ -126,10 +126,9 @@ test "component calls resume a directly yielding guest" {
 }
 
 ///|
-test "component engines open independent interpreter sessions" {
+test "closing one interpreter session leaves its sibling operational" {
   let engine = @component.interpreter_component_engine()
   let first_runtime = @component.ComponentRuntime(engine~)
-  defer first_runtime.close()
   let second_runtime = @component.ComponentRuntime(engine~)
   defer second_runtime.close()
   let first = first_runtime.instantiate(
@@ -140,13 +139,36 @@ test "component engines open independent interpreter sessions" {
     "second",
     component_runtime_facade_fixture(),
   )
+  let first_result = first.bind("increment").call([U32(1U)])
+  first_runtime.close()
   debug_inspect(
-    (
-      first.bind("increment").call([U32(1U)]),
-      second.bind("increment").call([U32(40U)]),
-    ),
+    (first_result, second.bind("increment").call([U32(40U)])),
     content=(
       #|([U32(2)], [U32(41)])
+    ),
+  )
+}
+
+///|
+test "closing one native session leaves its sibling operational" {
+  let engine = @component.native_component_engine(opt_level=0)
+  let first_runtime = @component.ComponentRuntime(engine~)
+  let second_runtime = @component.ComponentRuntime(engine~)
+  defer second_runtime.close()
+  let first = first_runtime.instantiate(
+    "first-native",
+    component_runtime_facade_fixture(),
+  )
+  let second = second_runtime.instantiate(
+    "second-native",
+    component_runtime_facade_fixture(),
+  )
+  let first_result = first.bind("increment").call([U32(2U)])
+  first_runtime.close()
+  debug_inspect(
+    (first_result, second.bind("increment").call([U32(41U)])),
+    content=(
+      #|([U32(3)], [U32(42)])
     ),
   )
 }

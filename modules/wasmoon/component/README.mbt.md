@@ -19,10 +19,9 @@ implementation state.
 
 `ComponentEngine`, `NativeComponentExecutionEvent`, and
 `ComponentHostInstaller` are owned by this package. They are not aliases for
-the low-level `component_engine`, `component_native`, or `component_host`
-adapter types, so their public methods cannot reveal a Store-scoped core engine
-or linker. Those low-level packages are reserved for internal product and
-conformance adapters rather than ordinary embedding.
+low-level implementation types, so their public methods cannot reveal a
+Store-scoped core engine or linker. The native session factory remains an
+internal product and conformance seam rather than an ordinary embedding API.
 
 ## Invoke an export
 
@@ -149,7 +148,9 @@ target failures are structured errors and never trigger an implicit
 interpreter fallback. Use
 `ComponentRuntime(engine=interpreter_component_engine())` when portable
 interpreter execution is required. Advanced embedders can retain and reuse a
-`ComponentEngine`; each runtime opens an independent execution session.
+`ComponentEngine`; it is an immutable configuration produced by a concrete
+facade constructor, and each runtime opens an independent execution session.
+The facade does not expose a generic session factory.
 
 The `wasmoon component --run` WASI command path and component conformance runner
 use Wasmoon's native JIT by default on macOS AArch64 and Linux AMD64, with

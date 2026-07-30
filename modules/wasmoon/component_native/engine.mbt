@@ -187,10 +187,10 @@ fn native_component_session(
 }
 
 ///|
-pub fn native_component_engine(
+pub fn open_native_component_session(
   opt_level? : Int = 2,
   on_execution? : (NativeComponentExecutionEvent) -> Unit = fn(_event) { () },
-) -> @component_engine.ComponentEngine {
+) -> @runtime_impl.CoreExecutionEngine {
   let normalized_level = if opt_level < 0 {
     0
   } else if opt_level > 3 {
@@ -198,7 +198,5 @@ pub fn native_component_engine(
   } else {
     opt_level
   }
-  @component_engine.ComponentEngine::from_session_factory(fn() {
-    native_component_session(normalized_level, on_execution)
-  })
+  native_component_session(normalized_level, on_execution)
 }

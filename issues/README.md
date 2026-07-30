@@ -367,6 +367,7 @@ graph TD
   ISS_347["ISS-347: Isolate the low-level component-spec harness from CLI commands"]
   ISS_348["ISS-348: Seal stable component adapter ownership"]
   ISS_349["ISS-349: Preserve guest progress in component blocking waits"]
+  ISS_350["ISS-350: Seal component session and host installation ownership"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
