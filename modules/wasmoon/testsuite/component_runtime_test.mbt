@@ -279,18 +279,14 @@ test "component runtime: core execution crosses the configured engine seam" {
 test "component runtime: core call style is independent from backend policy" {
   debug_inspect(
     [
-      @runtime_impl.CoreExecutionRequest(
+      @runtime_impl.CoreExecutionRequest::CoreExecutionRequest(
         RunToCompletion,
         PreferNative,
         RunToReturn,
       ),
-      @runtime_impl.CoreExecutionRequest(CallbackStep, PreferNative, Resumable),
-      @runtime_impl.CoreExecutionRequest(Stackful, PreferNative, Resumable),
-      @runtime_impl.CoreExecutionRequest(
-        RunToCompletion,
-        InterpreterOnly,
-        RunToReturn,
-      ),
+      CoreExecutionRequest(CallbackStep, PreferNative, Resumable),
+      CoreExecutionRequest(Stackful, PreferNative, Resumable),
+      CoreExecutionRequest(RunToCompletion, InterpreterOnly, RunToReturn),
     ],
     content=(
       #|[

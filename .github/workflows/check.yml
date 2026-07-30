@@ -58,7 +58,7 @@ jobs:
 
       - name: check source and generated interfaces
         run: |
-          moon check --target native --warn-list +73
+          moon check --target native --warn-list @73
           moon fmt
           git diff --exit-code
           moon info

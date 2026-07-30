@@ -35,7 +35,7 @@ test "Store close releases owned state and is idempotent" {
 ///|
 test "Linker close releases its modules and store" {
   let linker = Linker::Linker()
-  linker.register("empty", ModuleInstance::ModuleInstance())
+  linker.register("empty", ModuleInstance())
   linker.close()
   linker.close()
   debug_inspect(

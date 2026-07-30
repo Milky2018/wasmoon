@@ -96,7 +96,7 @@ fn component_native_outcome(
       context.pending_suspension[0] = None
       Suspended(
         reason,
-        @runtime_impl.CoreContinuation(
+        CoreContinuation(
           fn() raise @runtime_impl.ComponentRuntimeError {
             context.pending_suspension[0] = None
             context.suspension_enabled[0] = true

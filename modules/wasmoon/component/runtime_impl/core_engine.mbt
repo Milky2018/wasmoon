@@ -208,11 +208,11 @@ pub fn take_core_suspension() -> CoreSuspension? {
   match canon_suspend[0] {
     Some(Yield) => {
       canon_suspend[0] = None
-      Some(CoreSuspension::Yield)
+      Some(Yield)
     }
     Some(Wait(waitable_set)) => {
       canon_suspend[0] = None
-      Some(CoreSuspension::Wait(waitable_set))
+      Some(Wait(waitable_set))
     }
     None => None
   }

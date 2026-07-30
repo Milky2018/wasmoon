@@ -110,7 +110,7 @@ pub fn Store::Store() -> Store {
     jit_tables: [],
     wasi_mem_addr: None,
     wasi_ctx_handle: 0,
-    native_execution: @wasmoon_jit.NativeExecutionState(),
+    native_execution: NativeExecutionState(),
     closed: Ref(false),
   }
 }
@@ -140,7 +140,7 @@ pub fn Store::with_c_heap() -> Store {
     jit_tables: [],
     wasi_mem_addr: None,
     wasi_ctx_handle: 0,
-    native_execution: @wasmoon_jit.NativeExecutionState(),
+    native_execution: NativeExecutionState(),
     closed: Ref(false),
   }
 }
