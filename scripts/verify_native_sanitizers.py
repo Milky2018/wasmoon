@@ -5,8 +5,31 @@ from __future__ import annotations
 
 import argparse
 import platform
+import re
 import subprocess
 from pathlib import Path
+
+
+ASAN_RUNTIME_NAMES = (
+    re.compile(r"libasan\.so(?:\.\d+)*"),
+    re.compile(r"libclang_rt\.asan_osx_dynamic\.dylib"),
+    re.compile(r"libclang_rt\.asan-(?:aarch64|armhf|i386|x86_64)\.so"),
+)
+UBSAN_RUNTIME_NAMES = (
+    re.compile(r"libubsan\.so(?:\.\d+)*"),
+    re.compile(r"libclang_rt\.ubsan_osx_dynamic\.dylib"),
+    re.compile(
+        r"libclang_rt\.ubsan_(?:minimal|standalone)-"
+        r"(?:aarch64|armhf|i386|x86_64)\.so"
+    ),
+)
+ASAN_SYMBOL = re.compile(
+    r"(?<![A-Za-z0-9_])_{2,3}asan_[A-Za-z0-9_]+(?![A-Za-z0-9_])"
+)
+UBSAN_SYMBOL = re.compile(
+    r"(?<![A-Za-z0-9_])_{2,3}ubsan_handle_[A-Za-z0-9_]+"
+    r"(?![A-Za-z0-9_])"
+)
 
 
 def command_output(command: list[str]) -> str:
@@ -22,12 +45,29 @@ def command_output(command: list[str]) -> str:
     return result.stdout
 
 
+def has_runtime_dependency(
+    dependencies: str,
+    accepted_names: tuple[re.Pattern[str], ...],
+) -> bool:
+    tokens = re.findall(r"[A-Za-z0-9_@./+-]+", dependencies)
+    for token in tokens:
+        basename = token.rsplit("/", 1)[-1]
+        if any(pattern.fullmatch(basename) for pattern in accepted_names):
+            return True
+    return False
+
+
 def missing_sanitizers(dependencies: str, symbols: str) -> list[str]:
-    dependency_text = dependencies.lower()
     missing = []
-    if "asan" not in dependency_text and "__asan_" not in symbols:
+    if (
+        not has_runtime_dependency(dependencies, ASAN_RUNTIME_NAMES)
+        and ASAN_SYMBOL.search(symbols) is None
+    ):
         missing.append("ASan")
-    if "ubsan" not in dependency_text and "__ubsan_handle_" not in symbols:
+    if (
+        not has_runtime_dependency(dependencies, UBSAN_RUNTIME_NAMES)
+        and UBSAN_SYMBOL.search(symbols) is None
+    ):
         missing.append("UBSan")
     return missing
 

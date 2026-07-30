@@ -346,6 +346,7 @@ graph TD
   ISS_328["ISS-328: Type the native fiber FFI protocol"]
   ISS_329["ISS-329: Invalidate shared memories when their owning store closes"]
   ISS_330["ISS-330: Remove GC frame test counters from release artifacts"]
+  ISS_331["ISS-331: Match sanitizer evidence without substring false positives"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005

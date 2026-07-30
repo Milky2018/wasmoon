@@ -25,6 +25,29 @@ class NativeSanitizerVerificationTests(unittest.TestCase):
             missing_sanitizers("libasan.so.8\nlibubsan.so.1", ""),
             [],
         )
+        self.assertEqual(
+            missing_sanitizers(
+                "@rpath/libclang_rt.asan_osx_dynamic.dylib\n"
+                "@rpath/libclang_rt.ubsan_osx_dynamic.dylib",
+                "",
+            ),
+            [],
+        )
+        self.assertEqual(
+            missing_sanitizers(
+                "libclang_rt.asan-x86_64.so\n"
+                "libclang_rt.ubsan_standalone-x86_64.so",
+                "",
+            ),
+            [],
+        )
+        self.assertEqual(
+            missing_sanitizers(
+                "",
+                "__asan_init\n__ubsan_handle_add_overflow",
+            ),
+            [],
+        )
 
     def test_reports_each_missing_sanitizer(self) -> None:
         self.assertEqual(missing_sanitizers("libSystem", ""), ["ASan", "UBSan"])
@@ -35,6 +58,25 @@ class NativeSanitizerVerificationTests(unittest.TestCase):
         self.assertEqual(
             missing_sanitizers("", "__ubsan_handle_add_overflow"),
             ["ASan"],
+        )
+
+    def test_rejects_adversarial_runtime_and_symbol_names(self) -> None:
+        self.assertEqual(
+            missing_sanitizers(
+                "libnotasan.so\n"
+                "libnotubsan.so\n"
+                "libclang_rt.asan_fake.so\n"
+                "libclang_rt.ubsan_fake.so",
+                "",
+            ),
+            ["ASan", "UBSan"],
+        )
+        self.assertEqual(
+            missing_sanitizers(
+                "",
+                "__notasan_init\n__notubsan_handle_add_overflow",
+            ),
+            ["ASan", "UBSan"],
         )
 
     def test_collects_cli_and_test_executables(self) -> None:
