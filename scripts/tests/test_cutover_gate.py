@@ -500,12 +500,19 @@ class GateManifestTests(unittest.TestCase):
             workflow.count(
                 'moon test --target native --target-dir "$sanitizer_build" \\'
             ),
-            8,
+            9,
         )
         self.assertEqual(
             workflow.count(
                 "modules/wasmoon/testsuite/"
                 "jit_resumable_lifecycle_test.mbt"
+            ),
+            1,
+        )
+        self.assertEqual(
+            workflow.count(
+                "modules/wasmoon/testsuite/"
+                "component_runtime_facade_test.mbt"
             ),
             1,
         )
