@@ -21,6 +21,7 @@ import {
   "Milky2018/wasm_core/encoder",
   "Milky2018/wasmoon",
   "Milky2018/wasmoon/component",
+  "Milky2018/wasmoon/component_host",
   "Milky2018/wasmoon/component/text_parser" @component_text,
   "Milky2018/wasmoon/component/runtime_impl",
   "Milky2018/wasmoon/validator/component_model",
@@ -30,6 +31,7 @@ import {
   "moonbitlang/core/double",
   "moonbitlang/core/float",
   "moonbitlang/x/fs",
+  "moonbitlang/async",
 } for "test"
 
 import {

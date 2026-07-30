@@ -172,5 +172,7 @@ jobs:
             modules/wasmoon/component/runtime_impl/entry_state_wbtest.mbt
           moon test --target native --target-dir "$sanitizer_build" \
             modules/wasmoon/cmd/wasmoon/commands/component_error_wbtest.mbt
+          moon test --target native --target-dir "$sanitizer_build" \
+            modules/wasmoon/testsuite/component_runtime_facade_test.mbt
           python3 scripts/verify_native_sanitizers.py \
             --target-dir "$sanitizer_build" --minimum-test-binaries 5

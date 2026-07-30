@@ -4,6 +4,8 @@ package "Milky2018/wasmoon/component"
 import {
   "Milky2018/wasmoon/component/model",
   "Milky2018/wasmoon/component_engine",
+  "Milky2018/wasmoon/component_host",
+  "Milky2018/wasmoon/component_native",
   "moonbitlang/core/debug",
 }
 
@@ -15,6 +17,8 @@ pub fn component_value_to_json(ComponentValue) -> Json
 pub fn component_values_to_json(Array[ComponentValue]) -> Json
 
 pub fn interpreter_component_engine() -> @component_engine.ComponentEngine
+
+pub fn native_component_engine(opt_level? : Int, on_execution? : (@component_native.NativeComponentExecutionEvent) -> Unit) -> @component_engine.ComponentEngine
 
 pub fn parse_alias_section(Bytes) -> Array[@model.Alias] raise @model.ComponentParseError
 
@@ -53,11 +57,27 @@ pub(all) suberror ComponentRuntimeError {
   ArgumentCountMismatch(expected~ : Int, actual~ : Int)
   TypeMismatch(path~ : String, expected~ : ComponentValueType, actual~ : String)
   InvocationFailed(String)
+  NativeEngineUnavailable(String)
+  NativeCompilationFailed(String)
+  RuntimeClosed
+  Cancelled
+  HostExit(Int)
   JsonValueError(String)
 } derive(Eq, @debug.Debug)
 pub impl Show for ComponentRuntimeError
 
 // Types and methods
+type ComponentCall
+pub fn ComponentCall::cancel(Self) -> Unit raise ComponentRuntimeError
+pub async fn ComponentCall::join(Self) -> Array[ComponentValue] raise ComponentRuntimeError
+pub fn ComponentCall::poll(Self) -> ComponentCallPoll raise ComponentRuntimeError
+pub fn ComponentCall::wait(Self) -> Array[ComponentValue] raise ComponentRuntimeError
+
+pub(all) enum ComponentCallPoll {
+  Pending
+  Ready(Array[ComponentValue])
+} derive(Eq, @debug.Debug)
+
 pub struct ComponentCase {
   name : String
   ty : ComponentValueType?
@@ -82,6 +102,7 @@ pub impl Show for ComponentFuncType
 
 type ComponentFunction
 pub fn ComponentFunction::call(Self, Array[ComponentValue]) -> Array[ComponentValue] raise ComponentRuntimeError
+pub fn ComponentFunction::start(Self, Array[ComponentValue]) -> ComponentCall raise ComponentRuntimeError
 pub fn ComponentFunction::type_(Self) -> ComponentFuncType
 
 type ComponentInstance
@@ -104,6 +125,8 @@ pub fn ComponentResourceType::named(String) -> Self
 
 type ComponentRuntime
 pub fn ComponentRuntime::ComponentRuntime(engine? : @component_engine.ComponentEngine, wit_names? : Bool) -> Self
+pub fn ComponentRuntime::close(Self) -> Unit
+pub fn ComponentRuntime::install(Self, @component_host.ComponentHostInstaller) -> Unit raise ComponentRuntimeError
 pub fn ComponentRuntime::instantiate(Self, String, Bytes) -> ComponentInstance raise ComponentRuntimeError
 pub fn ComponentRuntime::instantiate_component(Self, String, @model.Component) -> ComponentInstance raise ComponentRuntimeError
 
@@ -187,6 +210,8 @@ pub using @model {type ComponentDecl}
 
 pub using @component_engine {type ComponentEngine}
 
+pub using @component_host {type ComponentHostInstaller}
+
 pub using @model {type ComponentParseError}
 
 pub using @model {type CoreInlineExport}
@@ -220,6 +245,8 @@ pub using @model {type InstanceExpr}
 pub using @model {type InstantiateArg}
 
 pub using @model {type NameAttribute}
+
+pub using @component_native {type NativeComponentExecutionEvent}
 
 pub using @model {type Param}
 

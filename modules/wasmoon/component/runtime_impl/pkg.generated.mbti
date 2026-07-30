@@ -56,6 +56,9 @@ pub(all) suberror ComponentRuntimeError {
   UnsupportedStringEncoding
   CanonCallError(String)
   HostCallError(String)
+  NativeEngineUnavailable(String)
+  NativeCompilationFailed(String)
+  Cancelled
   HostExit(Int)
   InvalidStartResultCount(Int)
   OuterAliasOutOfRange(Int)
@@ -174,8 +177,20 @@ pub(all) struct ComponentInstance {
 pub fn ComponentInstance::call_exported_func(Self, String, Array[ComponentValue]) -> Array[ComponentValue] raise ComponentRuntimeError
 pub fn ComponentInstance::get_core_instance(Self, Int) -> CoreInstance?
 pub fn ComponentInstance::get_export(Self, String) -> ComponentExtern?
+pub fn ComponentInstance::start_exported_func(Self, String, Array[ComponentValue]) -> ComponentInvocation raise ComponentRuntimeError
 
 type ComponentInstanceEntryState derive(@debug.Debug)
+
+type ComponentInvocation
+pub fn ComponentInvocation::cancel(Self) -> Unit raise ComponentRuntimeError
+pub async fn ComponentInvocation::join(Self) -> Array[ComponentValue] raise ComponentRuntimeError
+pub fn ComponentInvocation::poll(Self) -> ComponentInvocationPoll raise ComponentRuntimeError
+pub fn ComponentInvocation::wait(Self) -> Array[ComponentValue] raise ComponentRuntimeError
+
+pub(all) enum ComponentInvocationPoll {
+  InvocationPending
+  InvocationReady(Array[ComponentValue])
+} derive(@debug.Debug)
 
 type ComponentLinker
 pub fn ComponentLinker::ComponentLinker() -> Self
@@ -344,7 +359,7 @@ pub fn HostRuntimeState::new_host_value_stream(Self, ResourceTable, @model.ValTy
 pub fn HostRuntimeState::new_host_value_stream_source(Self, ResourceTable, @model.ValType, Array[@model.TypeDef?], (Int) -> HostValueStreamPoll raise ComponentRuntimeError, () -> Unit) -> Int raise ComponentRuntimeError
 pub fn HostRuntimeState::read_host_byte_stream(Self, ResourceTable, Int) -> HostByteStreamRead raise ComponentRuntimeError
 pub fn HostRuntimeState::resource_table(Self) -> ResourceTable
-pub fn HostRuntimeState::set_event_loop(Self, () -> Bool raise ComponentRuntimeError) -> Unit
+pub fn HostRuntimeState::set_event_loop(Self, () -> Bool raise ComponentRuntimeError, poll? : () -> Bool raise ComponentRuntimeError) -> Unit
 pub fn HostRuntimeState::stream_table(Self) -> StreamTable
 
 type HostValueStream

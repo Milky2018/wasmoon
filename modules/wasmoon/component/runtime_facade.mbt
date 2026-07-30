@@ -10,6 +10,15 @@
 pub using @component_engine {type ComponentEngine, interpreter_component_engine}
 
 ///|
+pub using @component_host {type ComponentHostInstaller}
+
+///|
+pub using @component_native {
+  type NativeComponentExecutionEvent,
+  native_component_engine,
+}
+
+///|
 struct ComponentResourceType {
   identity : String
 } derive(Debug, Eq)
@@ -203,6 +212,11 @@ pub(all) suberror ComponentRuntimeError {
   ArgumentCountMismatch(expected~ : Int, actual~ : Int)
   TypeMismatch(path~ : String, expected~ : ComponentValueType, actual~ : String)
   InvocationFailed(String)
+  NativeEngineUnavailable(String)
+  NativeCompilationFailed(String)
+  RuntimeClosed
+  Cancelled
+  HostExit(Int)
   JsonValueError(String)
 } derive(Debug, Eq)
 
@@ -212,34 +226,129 @@ pub impl Show for ComponentRuntimeError with fn output(self, logger) {
 }
 
 ///|
-struct ComponentRuntime {
+priv struct ComponentRuntimeState {
   linker : @runtime_impl.ComponentLinker
   wit_names : Bool
+  closed : Ref[Bool]
+  next_call_id : Ref[Int]
+  active_calls : Map[Int, @runtime_impl.ComponentInvocation]
+  host_installers : Array[ComponentHostInstaller]
+}
+
+///|
+struct ComponentRuntime {
+  state : ComponentRuntimeState
 }
 
 ///|
 struct ComponentInstance {
   inner : @runtime_impl.ComponentInstance
+  runtime : ComponentRuntimeState
 }
 
 ///|
 struct ComponentFunction {
   instance : @runtime_impl.ComponentInstance
+  runtime : ComponentRuntimeState
   name : String
   public_type : ComponentFuncType
 }
 
 ///|
+struct ComponentCall {
+  inner : @runtime_impl.ComponentInvocation
+  runtime : ComponentRuntimeState
+  call_id : Int
+  result_type : ComponentValueType?
+}
+
+///|
+pub(all) enum ComponentCallPoll {
+  Pending
+  Ready(Array[ComponentValue])
+} derive(Debug, Eq)
+
+///|
 pub fn ComponentRuntime::ComponentRuntime(
-  engine? : ComponentEngine = interpreter_component_engine(),
+  engine? : ComponentEngine = native_component_engine(),
   wit_names? : Bool = true,
 ) -> ComponentRuntime {
   {
-    linker: @runtime_impl.ComponentLinker::with_core_execution_engine(
-      engine.open_session(),
-    ),
-    wit_names,
+    state: {
+      linker: @runtime_impl.ComponentLinker::with_core_execution_engine(
+        engine.open_session(),
+      ),
+      wit_names,
+      closed: Ref(false),
+      next_call_id: Ref(0),
+      active_calls: Map([]),
+      host_installers: [],
+    },
   }
+}
+
+///|
+fn ComponentRuntimeState::ensure_open(
+  self : ComponentRuntimeState,
+) -> Unit raise ComponentRuntimeError {
+  if self.closed.val {
+    raise RuntimeClosed
+  }
+}
+
+///|
+fn ComponentRuntimeState::register_call(
+  self : ComponentRuntimeState,
+  call : @runtime_impl.ComponentInvocation,
+) -> Int raise ComponentRuntimeError {
+  self.ensure_open()
+  let call_id = self.next_call_id.val
+  self.next_call_id.val = call_id + 1
+  self.active_calls.set(call_id, call)
+  call_id
+}
+
+///|
+fn ComponentRuntimeState::retire_call(
+  self : ComponentRuntimeState,
+  call_id : Int,
+) -> Unit {
+  self.active_calls.remove(call_id)
+}
+
+///|
+pub fn ComponentRuntime::install(
+  self : ComponentRuntime,
+  installer : ComponentHostInstaller,
+) -> Unit raise ComponentRuntimeError {
+  self.state.ensure_open()
+  installer.install(self.state.linker) catch {
+    error => {
+      installer.close()
+      raise InstantiationFailed(error.to_string())
+    }
+  }
+  self.state.host_installers.push(installer)
+}
+
+///|
+pub fn ComponentRuntime::close(self : ComponentRuntime) -> Unit {
+  if self.state.closed.val {
+    return
+  }
+  self.state.closed.val = true
+  for entry in self.state.active_calls.to_array() {
+    let (_, invocation) = entry
+    invocation.cancel() catch {
+      _ => ()
+    }
+  }
+  self.state.active_calls.clear()
+  for installer in self.state.host_installers {
+    installer.close()
+  }
+  self.state.host_installers.clear()
+  self.state.linker.close()
 }
 
 ///|
@@ -248,6 +357,7 @@ pub fn ComponentRuntime::instantiate(
   name : String,
   bytes : Bytes,
 ) -> ComponentInstance raise ComponentRuntimeError {
+  self.state.ensure_open()
   let component = @model.parse_component(bytes) catch {
     error => raise ParseFailed(error.to_string())
   }
@@ -260,16 +370,19 @@ pub fn ComponentRuntime::instantiate_component(
   name : String,
   component : Component,
 ) -> ComponentInstance raise ComponentRuntimeError {
+  self.state.ensure_open()
   @component_model.validate_component_with_config(
     component,
-    ComponentValidationConfig(self.wit_names),
+    ComponentValidationConfig(self.state.wit_names),
   ) catch {
     error => raise ValidationFailed(error.to_string())
   }
-  let inner = self.linker.instantiate(name, component) catch {
+  let inner = self.state.linker.instantiate(name, component) catch {
+    NativeEngineUnavailable(message) => raise NativeEngineUnavailable(message)
+    NativeCompilationFailed(message) => raise NativeCompilationFailed(message)
     error => raise InstantiationFailed(error.to_string())
   }
-  { inner, }
+  { inner, runtime: self.state }
 }
 
 ///|
@@ -430,6 +543,7 @@ pub fn ComponentInstance::bind(
   self : ComponentInstance,
   path : String,
 ) -> ComponentFunction raise ComponentRuntimeError {
+  self.runtime.ensure_open()
   let segments = []
   for segment in path.split("#") {
     let segment = segment.to_owned()
@@ -454,7 +568,7 @@ pub fn ComponentInstance::bind(
     Some(Func(func)) => {
       let (raw_type, raw_types) = component_function_parts(func)
       let public_type = resolve_component_func_type(raw_type, raw_types)
-      { instance: current, name, public_type }
+      { instance: current, runtime: self.runtime, name, public_type }
     }
     Some(_) => raise ExportNotFunction(path)
     None => raise UnknownExport(path)
@@ -1064,30 +1178,24 @@ fn lift_component_value(
 }
 
 ///|
-pub fn ComponentFunction::call(
-  self : ComponentFunction,
-  args : Array[ComponentValue],
-) -> Array[ComponentValue] raise ComponentRuntimeError {
-  if args.length() != self.public_type.params.length() {
-    raise ArgumentCountMismatch(
-      expected=self.public_type.params.length(),
-      actual=args.length(),
-    )
-  }
-  let lowered = []
-  for index in 0..<args.length() {
-    lowered.push(
-      lower_component_value(
-        args[index],
-        self.public_type.params[index].ty,
-        "argument[\{index}]",
-      ),
-    )
-  }
-  let raw_results = self.instance.call_exported_func(self.name, lowered) catch {
+fn raise_public_invocation_error(
+  error : @runtime_impl.ComponentRuntimeError,
+) -> Unit raise ComponentRuntimeError {
+  match error {
+    NativeEngineUnavailable(message) => raise NativeEngineUnavailable(message)
+    NativeCompilationFailed(message) => raise NativeCompilationFailed(message)
+    Cancelled => raise Cancelled
+    HostExit(status) => raise HostExit(status)
     error => raise InvocationFailed(error.to_string())
   }
-  match self.public_type.result {
+}
+
+///|
+fn lift_component_results(
+  raw_results : Array[@runtime_impl.ComponentValue],
+  result_type : ComponentValueType?,
+) -> Array[ComponentValue] raise ComponentRuntimeError {
+  match result_type {
     None =>
       if raw_results.length() == 0 {
         []
@@ -1105,6 +1213,114 @@ pub fn ComponentFunction::call(
         )
       }
   }
+}
+
+///|
+pub fn ComponentFunction::start(
+  self : ComponentFunction,
+  args : Array[ComponentValue],
+) -> ComponentCall raise ComponentRuntimeError {
+  self.runtime.ensure_open()
+  if args.length() != self.public_type.params.length() {
+    raise ArgumentCountMismatch(
+      expected=self.public_type.params.length(),
+      actual=args.length(),
+    )
+  }
+  let lowered = []
+  for index in 0..<args.length() {
+    lowered.push(
+      lower_component_value(
+        args[index],
+        self.public_type.params[index].ty,
+        "argument[\{index}]",
+      ),
+    )
+  }
+  let inner = self.instance.start_exported_func(self.name, lowered) catch {
+    error => {
+      raise_public_invocation_error(error)
+      raise InvocationFailed("unreachable")
+    }
+  }
+  let call_id = self.runtime.register_call(inner)
+  {
+    inner,
+    runtime: self.runtime,
+    call_id,
+    result_type: self.public_type.result,
+  }
+}
+
+///|
+pub fn ComponentCall::poll(
+  self : ComponentCall,
+) -> ComponentCallPoll raise ComponentRuntimeError {
+  let polled = self.inner.poll() catch {
+    error => {
+      self.runtime.retire_call(self.call_id)
+      raise_public_invocation_error(error)
+      raise InvocationFailed("unreachable")
+    }
+  }
+  match polled {
+    InvocationPending => Pending
+    InvocationReady(results) => {
+      self.runtime.retire_call(self.call_id)
+      Ready(lift_component_results(results, self.result_type))
+    }
+  }
+}
+
+///|
+pub fn ComponentCall::wait(
+  self : ComponentCall,
+) -> Array[ComponentValue] raise ComponentRuntimeError {
+  let results = self.inner.wait() catch {
+    error => {
+      self.runtime.retire_call(self.call_id)
+      raise_public_invocation_error(error)
+      raise InvocationFailed("unreachable")
+    }
+  }
+  self.runtime.retire_call(self.call_id)
+  lift_component_results(results, self.result_type)
+}
+
+///|
+pub async fn ComponentCall::join(
+  self : ComponentCall,
+) -> Array[ComponentValue] raise ComponentRuntimeError {
+  let results = self.inner.join() catch {
+    error => {
+      self.runtime.retire_call(self.call_id)
+      raise_public_invocation_error(error)
+      raise InvocationFailed("unreachable")
+    }
+  }
+  self.runtime.retire_call(self.call_id)
+  lift_component_results(results, self.result_type)
+}
+
+///|
+pub fn ComponentCall::cancel(
+  self : ComponentCall,
+) -> Unit raise ComponentRuntimeError {
+  self.inner.cancel() catch {
+    error => {
+      self.runtime.retire_call(self.call_id)
+      raise_public_invocation_error(error)
+    }
+  }
+  self.runtime.retire_call(self.call_id)
+}
+
+///|
+pub fn ComponentFunction::call(
+  self : ComponentFunction,
+  args : Array[ComponentValue],
+) -> Array[ComponentValue] raise ComponentRuntimeError {
+  self.start(args).wait()
 }
 
 ///|
