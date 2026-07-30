@@ -86,7 +86,6 @@ jobs:
             moon test --target native ${{ matrix.native_test_args }}
 
       - name: build Wasmoon
-        if: ${{ !cancelled() }}
         run: |
           moon build --target native --release
           if nm \
@@ -96,39 +95,6 @@ jobs:
             exit 1
           fi
           ./install.sh
-
-      - name: collect native AMD64 compile trend
-        if: ${{ !cancelled() && runner.os == 'Linux' && github.ref_name == 'milky/component-runtime-engine-async' }}
-        run: |
-          uname -a > target/amd64-compile-trend-host.txt
-          moon version --all >> target/amd64-compile-trend-host.txt
-          python3 scripts/run_perf_benchmarks.py \
-            --wasmoon ./wasmoon \
-            --out-dir target/amd64-compile-trend-run \
-            --iterations 3 \
-            --warmup 1 \
-            --timeout-sec 180 \
-            --workload examples/benchmark.wasm \
-            --workload examples/algorithms/aead_aegis128l.wasm
-          python3 scripts/run_perf_benchmarks.py \
-            --wasmoon ./wasmoon \
-            --out-dir target/amd64-compile-trend-test \
-            --subcommand test \
-            --iterations 3 \
-            --warmup 1 \
-            --timeout-sec 180 \
-            --workload spec/const.wast \
-            --workload spec/int_exprs.wast \
-            --workload spec/float_exprs.wast
-
-      - uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() && runner.os == 'Linux' && github.ref_name == 'milky/component-runtime-engine-async' }}
-        with:
-          name: amd64-current-version-compile-trend
-          path: |
-            target/amd64-compile-trend-host.txt
-            target/amd64-compile-trend-run
-            target/amd64-compile-trend-test
 
       - name: run core WAST tests
         timeout-minutes: 10
