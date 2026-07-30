@@ -8,8 +8,8 @@ pub fn run_component_script(
   @component_conformance.run_component_script(
     path,
     match error_format {
-      Text => @component_conformance.ComponentTestOutputFormat::Text
-      Json => @component_conformance.ComponentTestOutputFormat::Json
+      Text => Text
+      Json => Json
     },
     use_jit~,
   )
@@ -25,8 +25,8 @@ pub fn run_component_script_cli(
   @component_conformance.run_component_script_cli(
     path,
     match error_format {
-      Text => @component_conformance.ComponentTestOutputFormat::Text
-      Json => @component_conformance.ComponentTestOutputFormat::Json
+      Text => Text
+      Json => Json
     },
     use_jit~,
   )

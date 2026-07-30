@@ -13,15 +13,10 @@ priv enum ComponentTestErrorCode {
   CompTestRuntimeError
   CompTestAssertFailed
   CompTestUnsupportedCommand
-} derive(Debug, Eq)
-
-///|
-impl Show for ComponentTestError with fn output(self, logger) {
-  logger.write_string(to_repr(self).to_string())
 }
 
 ///|
-impl Show for ComponentTestErrorCode with fn output(self, logger) {
+impl Show for ComponentTestError with fn output(self, logger) {
   logger.write_string(to_repr(self).to_string())
 }
 
@@ -788,7 +783,7 @@ fn instantiate_component(
   let validated = try
     @component_model.validate_component_for_instantiation_with_config(
       component,
-      @component_model.ComponentValidationConfig(false),
+      ComponentValidationConfig(false),
     )
   catch {
     e => return Err(e.to_string())

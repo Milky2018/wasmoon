@@ -8,10 +8,7 @@ fn run_script_fixture(name : String, contents : String) -> Int raise {
     IOError(error) => fail(error)
   }
   defer (@fs.remove_file(path) catch { _ => () })
-  @component_conformance.run_component_script(
-    path,
-    @component_conformance.ComponentTestOutputFormat::Json,
-  )
+  @component_conformance.run_component_script(path, Json)
 }
 
 ///|

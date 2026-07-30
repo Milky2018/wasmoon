@@ -187,7 +187,7 @@ test "yielding background work cannot starve a WASI timer" {
   )
   instance.bind("start-spinner").call([]) |> ignore
   let timer = instance.bind("wait-for").start([U64(0UL)])
-  debug_inspect((timer.poll(), timer.poll()), content="(Pending, Ready([]))")
+  debug_inspect((timer.poll(), timer.wait()), content="(Pending, [])")
 }
 
 ///|
@@ -215,8 +215,8 @@ test "component runtime rejects a second WASI readiness source" {
     _ => fail("expected a second WASI readiness source to be rejected")
   }
   debug_inspect(
-    (install_error, timer.poll()),
-    content="(HostReadinessAlreadyInstalled, Ready([]))",
+    (install_error, timer.wait()),
+    content="(HostReadinessAlreadyInstalled, [])",
   )
 }
 
