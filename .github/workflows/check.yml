@@ -88,7 +88,7 @@ jobs:
           moon build --target native --release
           if nm \
             target/native/release/build/Milky2018/wasmoon_jit/libwasmoon_jit.a \
-            | grep -q "live_gc_frame_count"; then
+            | grep "live_gc_frame_count" >/dev/null; then
             echo "release libwasmoon_jit.a contains test-only GC frame counters"
             exit 1
           fi
