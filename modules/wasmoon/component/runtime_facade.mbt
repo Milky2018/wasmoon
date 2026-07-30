@@ -7,6 +7,9 @@
 /// scheduler state remain private implementation details.
 
 ///|
+pub using @component_engine {type ComponentEngine, interpreter_component_engine}
+
+///|
 struct ComponentResourceType {
   identity : String
 } derive(Debug, Eq)
@@ -228,9 +231,15 @@ struct ComponentFunction {
 
 ///|
 pub fn ComponentRuntime::ComponentRuntime(
+  engine? : ComponentEngine = interpreter_component_engine(),
   wit_names? : Bool = true,
 ) -> ComponentRuntime {
-  { linker: ComponentLinker(), wit_names }
+  {
+    linker: @runtime_impl.ComponentLinker::with_core_execution_engine(
+      engine.open_session(),
+    ),
+    wit_names,
+  }
 }
 
 ///|

@@ -1,0 +1,21 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon/component_engine"
+
+import {
+  "Milky2018/wasmoon/component/runtime_impl",
+}
+
+// Values
+pub fn interpreter_component_engine() -> ComponentEngine
+
+// Errors
+
+// Types and methods
+type ComponentEngine
+pub fn ComponentEngine::from_session_factory(() -> @runtime_impl.CoreExecutionEngine) -> Self
+pub fn ComponentEngine::open_session(Self) -> @runtime_impl.CoreExecutionEngine
+
+// Type aliases
+
+// Traits
+

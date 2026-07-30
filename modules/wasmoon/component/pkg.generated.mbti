@@ -3,6 +3,7 @@ package "Milky2018/wasmoon/component"
 
 import {
   "Milky2018/wasmoon/component/model",
+  "Milky2018/wasmoon/component_engine",
   "moonbitlang/core/debug",
 }
 
@@ -12,6 +13,8 @@ pub fn component_value_from_json(Json, ComponentValueType) -> ComponentValue rai
 pub fn component_value_to_json(ComponentValue) -> Json
 
 pub fn component_values_to_json(Array[ComponentValue]) -> Json
+
+pub fn interpreter_component_engine() -> @component_engine.ComponentEngine
 
 pub fn parse_alias_section(Bytes) -> Array[@model.Alias] raise @model.ComponentParseError
 
@@ -100,7 +103,7 @@ pub fn ComponentResourceType::name(Self) -> String
 pub fn ComponentResourceType::named(String) -> Self
 
 type ComponentRuntime
-pub fn ComponentRuntime::ComponentRuntime(wit_names? : Bool) -> Self
+pub fn ComponentRuntime::ComponentRuntime(engine? : @component_engine.ComponentEngine, wit_names? : Bool) -> Self
 pub fn ComponentRuntime::instantiate(Self, String, Bytes) -> ComponentInstance raise ComponentRuntimeError
 pub fn ComponentRuntime::instantiate_component(Self, String, @model.Component) -> ComponentInstance raise ComponentRuntimeError
 
@@ -181,6 +184,8 @@ pub using @model {type Component}
 pub using @model {type ComponentBinary}
 
 pub using @model {type ComponentDecl}
+
+pub using @component_engine {type ComponentEngine}
 
 pub using @model {type ComponentParseError}
 

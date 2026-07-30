@@ -46,6 +46,28 @@ test "component runtime facade binds and invokes nested exports" {
 }
 
 ///|
+test "component engines open independent interpreter sessions" {
+  let engine = @component.interpreter_component_engine()
+  let first = @component.ComponentRuntime(engine~).instantiate(
+    "first",
+    component_runtime_facade_fixture(),
+  )
+  let second = @component.ComponentRuntime(engine~).instantiate(
+    "second",
+    component_runtime_facade_fixture(),
+  )
+  debug_inspect(
+    (
+      first.bind("increment").call([U32(1U)]),
+      second.bind("increment").call([U32(40U)]),
+    ),
+    content=(
+      #|([U32(2)], [U32(41)])
+    ),
+  )
+}
+
+///|
 test "component runtime facade reports stable path and arity errors" {
   let instance = @component.ComponentRuntime().instantiate(
     "fixture",
