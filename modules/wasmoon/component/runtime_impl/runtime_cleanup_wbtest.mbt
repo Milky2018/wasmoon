@@ -117,3 +117,86 @@ test "task metadata cleanup returns all ownership maps to baseline" {
     content="(0, 0, 0, 0)",
   )
 }
+
+///|
+test "linker close cannot overtake in-flight continuation ownership" {
+  let events : Array[String] = []
+  let close_linker = Ref(fn() { () })
+  let engine = CoreExecutionEngine(
+    fn(_store, _module, _instance) { () },
+    fn(_store, _instance, _function_index, _arguments, _request) {
+      (close_linker.val)()
+      Suspended(
+        Yield,
+        CoreContinuation(fn() { Returned([]) }, fn() {
+          events.push("continuation")
+        }),
+      )
+    },
+    close=fn() { events.push("engine") },
+  )
+  let linker = ComponentLinker::with_core_execution_engine(engine)
+  close_linker.val = fn() { linker.close() }
+  let core_func = alloc_host_core_func(
+    linker.get_store(),
+    { params: [], results: [] },
+    fn(_arguments) { [] },
+  )
+  let result = try {
+    linker.core_engine.invoke(
+      linker.get_store(),
+      core_func.instance,
+      0,
+      [],
+      CoreExecutionRequest(CallbackStep, PreferNative, Resumable),
+    )
+    |> ignore
+    "published"
+  } catch {
+    Cancelled => "cancelled"
+    error => "unexpected: \{error}"
+  } noraise {
+    result => result
+  }
+  debug_inspect(
+    (result, events),
+    content="(\"cancelled\", [\"continuation\", \"engine\"])",
+  )
+}
+
+///|
+test "published continuation lease delays linker teardown" {
+  let events : Array[String] = []
+  let engine = CoreExecutionEngine(
+    fn(_store, _module, _instance) { () },
+    fn(_store, _instance, _function_index, _arguments, _request) {
+      Suspended(
+        Yield,
+        CoreContinuation(fn() { Returned([]) }, fn() {
+          events.push("continuation")
+        }),
+      )
+    },
+    close=fn() { events.push("engine") },
+  )
+  let linker = ComponentLinker::with_core_execution_engine(engine)
+  let core_func = alloc_host_core_func(
+    linker.get_store(),
+    { params: [], results: [] },
+    fn(_arguments) { [] },
+  )
+  let outcome = linker.core_engine.invoke(
+    linker.get_store(),
+    core_func.instance,
+    0,
+    [],
+    CoreExecutionRequest(CallbackStep, PreferNative, Resumable),
+  )
+  guard outcome is Suspended(_, continuation) else {
+    return fail("expected a suspended managed execution")
+  }
+  linker.close()
+  debug_inspect(events, content="[]")
+  continuation.cancel()
+  debug_inspect(events, content="[\"continuation\", \"engine\"]")
+}

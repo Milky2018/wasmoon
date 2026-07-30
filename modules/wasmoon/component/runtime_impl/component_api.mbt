@@ -313,10 +313,12 @@ pub fn ComponentInstance::get_core_instance(
 struct ComponentLinker {
   core_linker : @runtime.Linker
   core_engine : CoreExecutionEngine
+  core_execution_lifecycle : CoreExecutionLifecycle
   components : Array[(String, ComponentInstance)]
   imports : Map[String, ComponentExtern]
   host_runtime : Ref[HostRuntimeState?]
   closed : Ref[Bool]
+  close_complete : Ref[Bool]
   // Mutable counter stored in a 1-element array so methods can bump it without
   // requiring `mut self`.
   resource_id_counter : Array[Int]
@@ -335,14 +337,18 @@ pub fn ComponentLinker::with_core_execution_engine(
   core_engine : CoreExecutionEngine,
 ) -> ComponentLinker {
   let core_linker = @runtime.Linker::Linker()
-  core_engine.prepare_store(core_linker.get_store())
+  let core_execution_lifecycle = CoreExecutionLifecycle::new()
+  let managed_core_engine = core_engine.with_lifecycle(core_execution_lifecycle)
+  managed_core_engine.prepare_store(core_linker.get_store())
   {
     core_linker,
-    core_engine,
+    core_engine: managed_core_engine,
+    core_execution_lifecycle,
     components: [],
     imports: Map([]),
     host_runtime: Ref(None),
     closed: Ref(false),
+    close_complete: Ref(false),
     resource_id_counter: [0],
   }
 }
@@ -360,15 +366,18 @@ pub fn ComponentLinker::get_store(self : ComponentLinker) -> @runtime.Store {
 }
 
 ///|
-/// Close the execution engine after all component calls have ended.
+/// Close the linker and its execution engine.
 ///
-/// A linker is terminal after this call. Embeddings must finish or cancel every
-/// outstanding continuation before closing it.
+/// The linker is terminal as soon as this is called. Published continuations
+/// are cancelled first; final engine and Store teardown waits until every
+/// in-flight core execution has either returned or transferred and released
+/// its continuation lease.
 pub fn ComponentLinker::close(self : ComponentLinker) -> Unit {
   if self.closed.val {
     return
   }
   self.closed.val = true
+  self.core_execution_lifecycle.begin_close()
   for entry in self.components {
     let (_, component) = entry
     cancel_async_state_continuations(component.async_state)
@@ -377,6 +386,15 @@ pub fn ComponentLinker::close(self : ComponentLinker) -> Unit {
     Some(runtime) => runtime.cancel_continuations()
     None => ()
   }
+  self.core_execution_lifecycle.request_close(fn() { self.finish_close() })
+}
+
+///|
+fn ComponentLinker::finish_close(self : ComponentLinker) -> Unit {
+  if self.close_complete.val {
+    return
+  }
+  self.close_complete.val = true
   self.components.clear()
   self.imports.clear()
   self.host_runtime.val = None

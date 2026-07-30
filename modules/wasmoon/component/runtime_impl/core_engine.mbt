@@ -125,6 +125,121 @@ struct CoreExecutionEngine {
 }
 
 ///|
+priv struct CoreExecutionLifecycle {
+  active_leases : Ref[Int]
+  closing : Ref[Bool]
+  close_when_idle : Ref[(() -> Unit)?]
+}
+
+///|
+fn CoreExecutionLifecycle::new() -> CoreExecutionLifecycle {
+  { active_leases: Ref(0), closing: Ref(false), close_when_idle: Ref(None) }
+}
+
+///|
+fn CoreExecutionLifecycle::enter(
+  self : CoreExecutionLifecycle,
+) -> Unit raise ComponentRuntimeError {
+  if self.closing.val {
+    raise Cancelled
+  }
+  self.active_leases.val = self.active_leases.val + 1
+}
+
+///|
+fn CoreExecutionLifecycle::leave(self : CoreExecutionLifecycle) -> Unit {
+  self.active_leases.val = self.active_leases.val - 1
+  if self.active_leases.val == 0 && self.closing.val {
+    match self.close_when_idle.val {
+      Some(close) => {
+        self.close_when_idle.val = None
+        close()
+      }
+      None => ()
+    }
+  }
+}
+
+///|
+fn CoreExecutionLifecycle::begin_close(self : CoreExecutionLifecycle) -> Unit {
+  self.closing.val = true
+}
+
+///|
+fn CoreExecutionLifecycle::request_close(
+  self : CoreExecutionLifecycle,
+  close : () -> Unit,
+) -> Unit {
+  if self.active_leases.val == 0 {
+    close()
+  } else {
+    self.close_when_idle.val = Some(close)
+  }
+}
+
+///|
+fn CoreExecutionLifecycle::finish_outcome(
+  self : CoreExecutionLifecycle,
+  outcome : CoreExecutionOutcome,
+) -> CoreExecutionOutcome raise ComponentRuntimeError {
+  if self.closing.val {
+    match outcome {
+      Suspended(_, continuation) => continuation.cancel()
+      Returned(_) => ()
+    }
+    self.leave()
+    raise Cancelled
+  }
+  match outcome {
+    Returned(results) => {
+      self.leave()
+      Returned(results)
+    }
+    Suspended(reason, continuation) =>
+      Suspended(reason, continuation.with_lifecycle(self))
+  }
+}
+
+///|
+fn CoreContinuation::with_lifecycle(
+  self : CoreContinuation,
+  lifecycle : CoreExecutionLifecycle,
+) -> CoreContinuation {
+  let consumed = Ref(false)
+  CoreContinuation(
+    fn() raise ComponentRuntimeError {
+      if consumed.val {
+        raise CanonCallError("core continuation has already been consumed")
+      }
+      consumed.val = true
+      if lifecycle.closing.val {
+        self.cancel()
+        lifecycle.leave()
+        raise Cancelled
+      }
+      let outcome = self.continue_execution() catch {
+        error => {
+          let closing = lifecycle.closing.val
+          lifecycle.leave()
+          if closing {
+            raise Cancelled
+          }
+          raise error
+        }
+      }
+      lifecycle.finish_outcome(outcome)
+    },
+    fn() {
+      if !consumed.val {
+        consumed.val = true
+        self.cancel()
+        lifecycle.leave()
+      }
+    },
+  )
+}
+
+///|
 pub fn CoreExecutionEngine::CoreExecutionEngine(
   register_instance : (@runtime.Store, @types.Module, @runtime.ModuleInstance) -> Unit raise ComponentRuntimeError,
   invoke : (
@@ -143,6 +258,34 @@ pub fn CoreExecutionEngine::CoreExecutionEngine(
     register_instance_fn: register_instance,
     invoke_fn: invoke,
   }
+}
+
+///|
+fn CoreExecutionEngine::with_lifecycle(
+  self : CoreExecutionEngine,
+  lifecycle : CoreExecutionLifecycle,
+) -> CoreExecutionEngine {
+  CoreExecutionEngine(
+    fn(store, module_, instance) raise ComponentRuntimeError {
+      self.register_instance(store, module_, instance)
+    },
+    fn(store, instance, func_idx, args, request) raise ComponentRuntimeError {
+      lifecycle.enter()
+      let outcome = self.invoke(store, instance, func_idx, args, request) catch {
+        error => {
+          let closing = lifecycle.closing.val
+          lifecycle.leave()
+          if closing {
+            raise Cancelled
+          }
+          raise error
+        }
+      }
+      lifecycle.finish_outcome(outcome)
+    },
+    prepare_store=fn(store) { self.prepare_store(store) },
+    close=fn() { self.close() },
+  )
 }
 
 ///|
