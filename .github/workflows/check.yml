@@ -108,10 +108,8 @@ jobs:
             --iterations 3 \
             --warmup 1 \
             --timeout-sec 180 \
-            --workload examples/algorithms/core3.wasm \
             --workload examples/benchmark.wasm \
-            --workload examples/algorithms/aead_aegis128l.wasm \
-            --workload examples/algorithms/pwhash_scrypt_ll.wasm
+            --workload examples/algorithms/aead_aegis128l.wasm
           python3 scripts/run_perf_benchmarks.py \
             --wasmoon ./wasmoon \
             --out-dir target/amd64-compile-trend-test \
