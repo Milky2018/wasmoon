@@ -91,7 +91,7 @@ def audit_repo(root: Path) -> list[AuditCheck]:
         )
     )
     validation = facade.find("@component_model.validate_component_with_config")
-    instantiate = facade.find("self.linker.instantiate", validation + 1)
+    instantiate = facade.find(".linker.instantiate(", validation + 1)
     checks.append(
         AuditCheck(
             "validate-before-instantiate",
