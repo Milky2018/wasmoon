@@ -6,6 +6,8 @@ import {
 }
 
 // Values
+pub fn install_command_world(@runtime_impl.ComponentLinker, WasiComponentCtx) -> Unit raise @runtime_impl.ComponentRuntimeError
+
 pub let preview2_version : String
 
 pub fn preview2_wit_sha256() -> String

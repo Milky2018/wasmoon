@@ -369,6 +369,10 @@ graph TD
   ISS_349["ISS-349: Preserve guest progress in component blocking waits"]
   ISS_350["ISS-350: Seal component session and host installation ownership"]
   ISS_351["ISS-351: Parse public interface owner references in the component audit"]
+  ISS_352["ISS-352: Move WASI command-world assembly behind one host helper"]
+  ISS_353["ISS-353: Analyze validation order from effective facade code"]
+  ISS_354["ISS-354: Normalize component native optimization level once"]
+  ISS_355["ISS-355: Compare sanitizer test targets as a set"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005

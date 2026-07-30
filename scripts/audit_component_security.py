@@ -81,6 +81,116 @@ def owner_matches_root(owner: str, root: str) -> bool:
     return owner == root or owner.startswith(root + "/")
 
 
+def effective_moonbit_code(source: str) -> str:
+    """Replace comments and literal contents while preserving code positions."""
+    output = list(source)
+    index = 0
+    block_depth = 0
+    quote: str | None = None
+    while index < len(source):
+        if block_depth > 0:
+            if source.startswith("/*", index):
+                output[index] = " "
+                output[index + 1] = " "
+                block_depth += 1
+                index += 2
+            elif source.startswith("*/", index):
+                output[index] = " "
+                output[index + 1] = " "
+                block_depth -= 1
+                index += 2
+            else:
+                if source[index] != "\n":
+                    output[index] = " "
+                index += 1
+            continue
+        if quote is not None:
+            if source[index] == "\\" and index + 1 < len(source):
+                output[index] = " "
+                if source[index + 1] != "\n":
+                    output[index + 1] = " "
+                index += 2
+            else:
+                char = source[index]
+                if char != "\n":
+                    output[index] = " "
+                index += 1
+                if char == quote:
+                    quote = None
+            continue
+        if source.startswith("//", index) or source.startswith("#|", index):
+            while index < len(source) and source[index] != "\n":
+                output[index] = " "
+                index += 1
+            continue
+        if source.startswith("/*", index):
+            output[index] = " "
+            output[index + 1] = " "
+            block_depth = 1
+            index += 2
+            continue
+        if source[index] in {'"', "'"}:
+            quote = source[index]
+            output[index] = " "
+        index += 1
+    return "".join(output)
+
+
+def moonbit_function_body(source: str, qualified_name: str) -> str | None:
+    code = effective_moonbit_code(source)
+    declaration = re.search(
+        rf"\bpub\s+fn\s+{re.escape(qualified_name)}\s*\(",
+        code,
+    )
+    if declaration is None:
+        return None
+    opening = code.find("{", declaration.end())
+    if opening < 0:
+        return None
+    depth = 1
+    for index in range(opening + 1, len(code)):
+        if code[index] == "{":
+            depth += 1
+        elif code[index] == "}":
+            depth -= 1
+            if depth == 0:
+                return code[opening + 1 : index]
+    return None
+
+
+def validates_before_every_instantiation(facade: str) -> bool:
+    body = moonbit_function_body(
+        facade,
+        "ComponentRuntime::instantiate_component",
+    )
+    if body is None:
+        return False
+    validations = [
+        match.start()
+        for match in re.finditer(
+            r"@component_model\s*\.\s*"
+            r"validate_component_with_config\s*\(",
+            body,
+        )
+    ]
+    instantiations = [
+        match.start()
+        for match in re.finditer(
+            r"\bself\s*\.\s*state\s*\.\s*linker\s*\.\s*"
+            r"instantiate\s*\(",
+            body,
+        )
+    ]
+    return bool(
+        validations
+        and instantiations
+        and all(
+            any(validation < instantiation for validation in validations)
+            for instantiation in instantiations
+        )
+    )
+
+
 def check_manifest(root: Path) -> tuple[dict[str, object], list[AuditCheck]]:
     path = root / "docs/component-hardening.json"
     try:
@@ -215,13 +325,12 @@ def audit_repo(root: Path) -> list[AuditCheck]:
             f"found {adapter_leaks}",
         )
     )
-    validation = facade.find("@component_model.validate_component_with_config")
-    instantiate = facade.find(".linker.instantiate(", validation + 1)
     checks.append(
         AuditCheck(
             "validate-before-instantiate",
-            validation >= 0 and instantiate > validation,
-            "facade must validate before linker instantiation",
+            validates_before_every_instantiation(facade),
+            "ComponentRuntime::instantiate_component must validate effective "
+            "code before every linker instantiation",
         )
     )
     checks.append(
