@@ -281,10 +281,12 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_set_cancellation_callback(
     void *closure
 ) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
-    if (!ctx) return;
+    if (!ctx) {
+        if (closure) moonbit_decref(closure);
+        return;
+    }
     clear_cancellation_callback(ctx);
     ctx->cancellation_callback = (void *)callback;
-    if (closure) moonbit_incref(closure);
     ctx->cancellation_callback_data = closure;
 }
 

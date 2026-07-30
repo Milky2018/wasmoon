@@ -489,7 +489,7 @@ class GateManifestTests(unittest.TestCase):
             workflow.count(
                 'moon test --target native --target-dir "$sanitizer_build" \\'
             ),
-            6,
+            7,
         )
         self.assertEqual(
             workflow.count("scripts/native_sanitizer_cc.sh"),

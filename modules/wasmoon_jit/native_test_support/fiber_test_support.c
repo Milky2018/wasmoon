@@ -1,10 +1,62 @@
 #include "../jit_ffi/jit_internal.h"
 
 #include <stdint.h>
+#include <stdatomic.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
 typedef int64_t (*native_fiber_entry_fn)(void *closure);
+typedef int32_t (*cancellation_callback_fn)(void *closure);
+
+typedef struct {
+    int64_t marker;
+} callback_capture_t;
+
+static _Atomic int callback_capture_releases;
+
+static void finalize_callback_capture(void *self) {
+    (void)self;
+    atomic_fetch_add_explicit(
+        &callback_capture_releases,
+        1,
+        memory_order_relaxed
+    );
+}
+
+MOONBIT_FFI_EXPORT void *wasmoon_test_callback_capture_new(void) {
+    callback_capture_t *capture = moonbit_make_external_object(
+        finalize_callback_capture,
+        sizeof(callback_capture_t)
+    );
+    if (!capture) return NULL;
+    capture->marker = 0;
+    return capture;
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_test_callback_capture_touch(void *capture) {
+    (void)capture;
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_test_callback_capture_reset(void) {
+    atomic_store_explicit(
+        &callback_capture_releases,
+        0,
+        memory_order_relaxed
+    );
+}
+
+MOONBIT_FFI_EXPORT int32_t wasmoon_test_callback_capture_release_count(void) {
+    return atomic_load_explicit(
+        &callback_capture_releases,
+        memory_order_relaxed
+    );
+}
+
+extern void wasmoon_jit_set_cancellation_callback(
+    int64_t ctx_ptr,
+    cancellation_callback_fn callback,
+    void *closure
+);
 
 extern void *wasmoon_native_fiber_alloc(
     native_fiber_entry_fn entry,

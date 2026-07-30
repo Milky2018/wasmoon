@@ -3678,11 +3678,13 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_set_wasi_stdin_callback(
     void *closure
 ) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
-    if (!ctx) return;
+    if (!ctx) {
+        if (closure) moonbit_decref(closure);
+        return;
+    }
     clear_wasi_stdin_buffer(ctx);
     clear_wasi_stdin_callback(ctx);
     ctx->wasi_stdin_callback = (void *)callback;
-    if (closure) moonbit_incref(closure);
     ctx->wasi_stdin_callback_data = closure;
 }
 

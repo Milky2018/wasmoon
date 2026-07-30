@@ -2,6 +2,10 @@
 package "Milky2018/wasmoon_jit/native_test_support"
 
 // Values
+pub fn callback_capture() -> CallbackCapture
+
+pub fn callback_capture_release_count() -> Int
+
 pub fn fiber_guard_rejects_access() -> Bool
 
 pub fn fiber_preserves_registers() -> Bool
@@ -16,9 +20,15 @@ pub fn nested_trap_probe() -> Int64
 
 pub fn parked_gc_root_probe() -> Int64
 
+pub fn reset_callback_capture() -> Unit
+
+pub fn transfer_cancellation_callback_to_null_context(() -> Bool) -> Unit
+
 // Errors
 
 // Types and methods
+type CallbackCapture
+pub fn CallbackCapture::touch(Self) -> Unit
 
 // Type aliases
 

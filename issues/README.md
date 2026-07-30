@@ -348,6 +348,7 @@ graph TD
   ISS_330["ISS-330: Remove GC frame test counters from release artifacts"]
   ISS_331["ISS-331: Match sanitizer evidence without substring false positives"]
   ISS_332["ISS-332: Enforce warning 73 cleanliness"]
+  ISS_333["ISS-333: Consume owned callback closures exactly once"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
