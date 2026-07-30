@@ -81,196 +81,33 @@ def owner_matches_root(owner: str, root: str) -> bool:
     return owner == root or owner.startswith(root + "/")
 
 
-def effective_moonbit_code(source: str) -> str:
-    """Replace comments and literal contents while preserving code positions."""
-    output = list(source)
-    index = 0
-    block_depth = 0
-    quote: str | None = None
-    while index < len(source):
-        if block_depth > 0:
-            if source.startswith("/*", index):
-                output[index] = " "
-                output[index + 1] = " "
-                block_depth += 1
-                index += 2
-            elif source.startswith("*/", index):
-                output[index] = " "
-                output[index + 1] = " "
-                block_depth -= 1
-                index += 2
-            else:
-                if source[index] != "\n":
-                    output[index] = " "
-                index += 1
-            continue
-        if quote is not None:
-            if source[index] == "\\" and index + 1 < len(source):
-                output[index] = " "
-                if source[index + 1] != "\n":
-                    output[index + 1] = " "
-                index += 2
-            else:
-                char = source[index]
-                if char != "\n":
-                    output[index] = " "
-                index += 1
-                if char == quote:
-                    quote = None
-            continue
-        if source.startswith("//", index) or source.startswith("#|", index):
-            while index < len(source) and source[index] != "\n":
-                output[index] = " "
-                index += 1
-            continue
-        if source.startswith("/*", index):
-            output[index] = " "
-            output[index + 1] = " "
-            block_depth = 1
-            index += 2
-            continue
-        if source[index] in {'"', "'"}:
-            quote = source[index]
-            output[index] = " "
-        index += 1
-    return "".join(output)
-
-
-def moonbit_function_body(source: str, qualified_name: str) -> str | None:
-    code = effective_moonbit_code(source)
-    declaration = re.search(
-        rf"\bpub\s+fn\s+{re.escape(qualified_name)}\s*\(",
-        code,
-    )
-    if declaration is None:
-        return None
-    opening = code.find("{", declaration.end())
-    if opening < 0:
-        return None
-    depth = 1
-    for index in range(opening + 1, len(code)):
-        if code[index] == "{":
-            depth += 1
-        elif code[index] == "}":
-            depth -= 1
-            if depth == 0:
-                return code[opening + 1 : index]
-    return None
-
-
-def delimiter_depths(code: str) -> list[int] | None:
-    """Return nesting depth before each character, or None if unbalanced."""
-    depths: list[int] = []
-    stack: list[str] = []
-    closing_delimiters = {")": "(", "}": "{", "]": "["}
-    for char in code:
-        depths.append(len(stack))
-        if char in "({[":
-            stack.append(char)
-        elif char in closing_delimiters:
-            if not stack or stack.pop() != closing_delimiters[char]:
-                return None
-    return depths if not stack else None
-
-
-def matching_delimiter(
-    code: str,
-    opening: int,
-    open_char: str,
-    close_char: str,
-) -> int | None:
-    depth = 0
-    for index in range(opening, len(code)):
-        if code[index] == open_char:
-            depth += 1
-        elif code[index] == close_char:
-            depth -= 1
-            if depth == 0:
-                return index
-            if depth < 0:
-                return None
-    return None
-
-
-def top_level_arrows(code: str) -> list[int] | None:
-    depths = delimiter_depths(code)
-    if depths is None:
-        return None
-    return [
-        match.start()
-        for match in re.finditer(r"=>", code)
-        if depths[match.start()] == 0
-    ]
-
-
-def validation_executes_or_propagates(
-    body: str,
-    validation: re.Match[str],
+def has_validated_instantiation_boundary(
+    validator_interface: str,
+    runtime_interface: str,
 ) -> bool:
-    line_start = body.rfind("\n", 0, validation.start()) + 1
-    if body[line_start : validation.start()].strip():
-        return False
-    if re.search(r"\b(?:defer|try[!?]?)\s*$", body[: validation.start()]):
-        return False
-
-    opening = validation.end() - 1
-    closing = matching_delimiter(body, opening, "(", ")")
-    if closing is None:
-        return False
-    suffix = body[closing + 1 :].lstrip()
-    catch = re.match(r"catch\s*\{", suffix)
-    if catch is None:
-        return re.match(r"catch\b", suffix) is None
-
-    catch_opening = catch.end() - 1
-    catch_closing = matching_delimiter(suffix, catch_opening, "{", "}")
-    if catch_closing is None:
-        return False
-    catch_body = suffix[catch_opening + 1 : catch_closing]
-    arrows = top_level_arrows(catch_body)
-    if not arrows:
-        return False
-    return all(
-        re.match(r"\s*raise\b", catch_body[arrow + 2 :]) is not None
-        for arrow in arrows
+    """Check the compiler-generated type-state boundary, not source ordering."""
+    validator = re.sub(r"\s+", " ", validator_interface)
+    runtime = re.sub(r"\s+", " ", runtime_interface)
+    has_abstract_evidence = re.search(
+        r"\btype ValidatedComponent\b",
+        validator,
     )
-
-
-def validates_before_every_instantiation(facade: str) -> bool:
-    body = moonbit_function_body(
-        facade,
-        "ComponentRuntime::instantiate_component",
+    has_evidence_producer = re.search(
+        r"pub fn validate_component_for_instantiation_with_config"
+        r"\(@model\.Component, ComponentValidationConfig\)"
+        r" -> ValidatedComponent raise ComponentValidationError",
+        validator,
     )
-    if body is None:
-        return False
-    depths = delimiter_depths(body)
-    if depths is None:
-        return False
-    validations = [
-        match.start()
-        for match in re.finditer(
-            r"@component_model\s*\.\s*"
-            r"validate_component_with_config\s*\(",
-            body,
-        )
-        if depths[match.start()] == 0
-        and validation_executes_or_propagates(body, match)
-    ]
-    instantiations = [
-        match.start()
-        for match in re.finditer(
-            r"\bself\s*\.\s*state\s*\.\s*linker\s*\.\s*"
-            r"instantiate\s*\(",
-            body,
-        )
-    ]
+    linker_requires_evidence = re.search(
+        r"pub fn ComponentLinker::instantiate"
+        r"\(Self, String, @component_model\.ValidatedComponent\)"
+        r" -> ComponentInstance raise ComponentRuntimeError",
+        runtime,
+    )
     return bool(
-        validations
-        and instantiations
-        and all(
-            any(validation < instantiation for validation in validations)
-            for instantiation in instantiations
-        )
+        has_abstract_evidence
+        and has_evidence_producer
+        and linker_requires_evidence
     )
 
 
@@ -331,8 +168,15 @@ def audit_repo(root: Path) -> list[AuditCheck]:
         ]
     try:
         interface = read_text(root, str(source["stable_interface"]))
-        facade = read_text(root, str(source["facade"]))
         validator = read_text(root, str(source["validator"]))
+        validator_interface = read_text(
+            root,
+            str(source["validator_interface"]),
+        )
+        runtime_interface = read_text(
+            root,
+            str(source["runtime_interface"]),
+        )
     except (KeyError, OSError) as error:
         return checks + [AuditCheck("source-inputs", False, str(error))]
     interface_scan_root = source.get("interface_scan_root")
@@ -411,9 +255,12 @@ def audit_repo(root: Path) -> list[AuditCheck]:
     checks.append(
         AuditCheck(
             "validate-before-instantiate",
-            validates_before_every_instantiation(facade),
-            "ComponentRuntime::instantiate_component must unconditionally "
-            "validate before every linker instantiation",
+            has_validated_instantiation_boundary(
+                validator_interface,
+                runtime_interface,
+            ),
+            "ComponentLinker::instantiate must require abstract evidence "
+            "returned by successful component validation",
         )
     )
     checks.append(

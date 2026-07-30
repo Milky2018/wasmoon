@@ -9,6 +9,10 @@ import {
 // Values
 pub fn validate_component(@model.Component) -> Unit raise ComponentValidationError
 
+pub fn validate_component_for_instantiation(@model.Component) -> ValidatedComponent raise ComponentValidationError
+
+pub fn validate_component_for_instantiation_with_config(@model.Component, ComponentValidationConfig) -> ValidatedComponent raise ComponentValidationError
+
 pub fn validate_component_with_config(@model.Component, ComponentValidationConfig) -> Unit raise ComponentValidationError
 
 // Errors
@@ -66,6 +70,9 @@ pub struct ComponentValidationConfig {
 }
 pub fn ComponentValidationConfig::ComponentValidationConfig(Bool) -> Self
 pub fn ComponentValidationConfig::default() -> Self
+
+type ValidatedComponent
+pub fn ValidatedComponent::component(Self) -> @model.Component
 
 // Type aliases
 

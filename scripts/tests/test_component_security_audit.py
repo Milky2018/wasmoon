@@ -20,8 +20,9 @@ class ComponentSecurityAuditTests(unittest.TestCase):
             "oracle": {"name": "wasmtime", "version": "45.0.0"},
             "source_checks": {
                 "stable_interface": "interface.mbti",
-                "facade": "facade.mbt",
                 "validator": "validator.mbt",
+                "validator_interface": "validator.mbti",
+                "runtime_interface": "runtime.mbti",
                 "interface_scan_root": "modules/wasmoon",
                 "implementation_owner_roots": [
                     "Milky2018/wasmoon/component/runtime_impl",
@@ -55,16 +56,22 @@ class ComponentSecurityAuditTests(unittest.TestCase):
             encoding="utf-8",
         )
         (root / "interface.mbti").write_text("pub type Component\n", encoding="utf-8")
-        (root / "facade.mbt").write_text(
-            "pub fn ComponentRuntime::instantiate_component() {\n"
-            "  @component_model.validate_component_with_config(component)\n"
-            "  self.state.linker.instantiate(name, component)\n"
-            "}\n",
-            encoding="utf-8",
-        )
         (root / "validator.mbt").write_text(
             '"effective type size exceeds the limit"\n'
             '"type nesting is too deep"\n',
+            encoding="utf-8",
+        )
+        (root / "validator.mbti").write_text(
+            "type ValidatedComponent\n"
+            "pub fn validate_component_for_instantiation_with_config"
+            "(@model.Component, ComponentValidationConfig)"
+            " -> ValidatedComponent raise ComponentValidationError\n",
+            encoding="utf-8",
+        )
+        (root / "runtime.mbti").write_text(
+            "pub fn ComponentLinker::instantiate"
+            "(Self, String, @component_model.ValidatedComponent)"
+            " -> ComponentInstance raise ComponentRuntimeError\n",
             encoding="utf-8",
         )
         (root / "untrusted").mkdir()
@@ -252,146 +259,44 @@ class ComponentSecurityAuditTests(unittest.TestCase):
                 checks["adapter-interface-isolation"].detail,
             )
 
-    def test_instantiate_before_validation_fails(self) -> None:
+    def test_raw_component_instantiation_boundary_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self.create_fixture(root)
-            (root / "facade.mbt").write_text(
-                "pub fn ComponentRuntime::instantiate_component() {\n"
-                "  self.state.linker.instantiate(name, component)\n"
-                "  @component_model.validate_component_with_config(component)\n"
+            (root / "runtime.mbti").write_text(
+                "pub fn ComponentLinker::instantiate"
+                "(Self, String, @model.Component)"
+                " -> ComponentInstance raise ComponentRuntimeError\n",
+                encoding="utf-8",
+            )
+            self.assert_failed(root, "validate-before-instantiate")
+
+    def test_missing_validation_evidence_producer_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.create_fixture(root)
+            (root / "validator.mbti").write_text(
+                "pub struct ValidatedComponent {\n"
+                "  component : @model.Component\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            self.assert_failed(root, "validate-before-instantiate")
+
+    def test_constructible_validation_evidence_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.create_fixture(root)
+            (root / "validator.mbti").write_text(
+                "pub struct ValidatedComponent {\n"
+                "  component : @model.Component\n"
                 "}\n"
-            )
-            self.assert_failed(root, "validate-before-instantiate")
-
-    def test_validation_mention_in_comment_does_not_pass(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            self.create_fixture(root)
-            (root / "facade.mbt").write_text(
-                "pub fn ComponentRuntime::instantiate_component() {\n"
-                "  // @component_model.validate_component_with_config(component)\n"
-                "  self.state.linker.instantiate(name, component)\n"
-                "}\n",
+                "pub fn validate_component_for_instantiation_with_config"
+                "(@model.Component, ComponentValidationConfig)"
+                " -> ValidatedComponent raise ComponentValidationError\n",
                 encoding="utf-8",
             )
             self.assert_failed(root, "validate-before-instantiate")
-
-    def test_validation_mention_in_string_does_not_pass(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            self.create_fixture(root)
-            (root / "facade.mbt").write_text(
-                "pub fn ComponentRuntime::instantiate_component() {\n"
-                '  let text = "@component_model.'
-                'validate_component_with_config(component)"\n'
-                "  self.state.linker.instantiate(name, component)\n"
-                "}\n",
-                encoding="utf-8",
-            )
-            self.assert_failed(root, "validate-before-instantiate")
-
-    def test_every_instantiate_must_follow_validation(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            self.create_fixture(root)
-            (root / "facade.mbt").write_text(
-                "pub fn ComponentRuntime::instantiate_component() {\n"
-                "  self.state.linker.instantiate(name, component)\n"
-                "  @component_model.validate_component_with_config(component)\n"
-                "  self.state.linker.instantiate(name, component)\n"
-                "}\n",
-                encoding="utf-8",
-            )
-            self.assert_failed(root, "validate-before-instantiate")
-
-    def test_conditional_validation_does_not_dominate_instantiation(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            self.create_fixture(root)
-            (root / "facade.mbt").write_text(
-                "pub fn ComponentRuntime::instantiate_component() {\n"
-                "  if false {\n"
-                "    @component_model."
-                "validate_component_with_config(component)\n"
-                "  }\n"
-                "  self.state.linker.instantiate(name, component)\n"
-                "}\n",
-                encoding="utf-8",
-            )
-            self.assert_failed(root, "validate-before-instantiate")
-
-    def test_top_level_validation_dominates_nested_instantiation(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            self.create_fixture(root)
-            (root / "facade.mbt").write_text(
-                "pub fn ComponentRuntime::instantiate_component() {\n"
-                "  @component_model."
-                "validate_component_with_config(component)\n"
-                "  if enabled {\n"
-                "    self.state.linker.instantiate(name, component)\n"
-                "  }\n"
-                "}\n",
-                encoding="utf-8",
-            )
-            checks = {check.name: check for check in audit_repo(root)}
-            self.assertTrue(
-                checks["validate-before-instantiate"].passed,
-                checks["validate-before-instantiate"].detail,
-            )
-
-    def test_swallowed_validation_error_does_not_dominate_instantiation(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            self.create_fixture(root)
-            (root / "facade.mbt").write_text(
-                "pub fn ComponentRuntime::instantiate_component() {\n"
-                "  @component_model."
-                "validate_component_with_config(component) catch {\n"
-                "    _ => ()\n"
-                "  }\n"
-                "  self.state.linker.instantiate(name, component)\n"
-                "}\n",
-                encoding="utf-8",
-            )
-            self.assert_failed(root, "validate-before-instantiate")
-
-    def test_deferred_validation_does_not_dominate_instantiation(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            self.create_fixture(root)
-            (root / "facade.mbt").write_text(
-                "pub fn ComponentRuntime::instantiate_component() {\n"
-                "  defer @component_model."
-                "validate_component_with_config(component)\n"
-                "  self.state.linker.instantiate(name, component)\n"
-                "}\n",
-                encoding="utf-8",
-            )
-            self.assert_failed(root, "validate-before-instantiate")
-
-    def test_structured_validation_failure_propagation_dominates_instantiation(
-        self,
-    ) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            self.create_fixture(root)
-            (root / "facade.mbt").write_text(
-                "pub fn ComponentRuntime::instantiate_component() {\n"
-                "  @component_model."
-                "validate_component_with_config(component) catch {\n"
-                "    error => raise ValidationFailed(error.to_string())\n"
-                "  }\n"
-                "  self.state.linker.instantiate(name, component)\n"
-                "}\n",
-                encoding="utf-8",
-            )
-            checks = {check.name: check for check in audit_repo(root)}
-            self.assertTrue(
-                checks["validate-before-instantiate"].passed,
-                checks["validate-before-instantiate"].detail,
-            )
 
     def test_missing_validator_limit_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

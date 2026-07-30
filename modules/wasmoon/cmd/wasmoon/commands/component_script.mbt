@@ -784,12 +784,19 @@ fn instantiate_component(
   linker : @runtime_impl.ComponentLinker,
   name : String,
   component : @component.Component,
-) -> Result[
-  @runtime_impl.ComponentInstance,
-  @runtime_impl.ComponentRuntimeError,
-] {
-  try linker.instantiate(name, component) catch {
-    e => Err(e)
+) -> Result[@runtime_impl.ComponentInstance, String] {
+  let validated = try
+    @component_model.validate_component_for_instantiation_with_config(
+      component,
+      @component_model.ComponentValidationConfig(false),
+    )
+  catch {
+    e => return Err(e.to_string())
+  } noraise {
+    value => value
+  }
+  try linker.instantiate(name, validated) catch {
+    e => Err(e.to_string())
   } noraise {
     instance => Ok(instance)
   }

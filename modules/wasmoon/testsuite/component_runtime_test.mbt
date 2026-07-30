@@ -134,13 +134,15 @@ fn canon_lower_entry(func_idx : Int) -> Array[Byte] {
 }
 
 ///|
-test "component runtime: host import export" {
+test "component runtime: host import canonical roundtrip" {
   let type_payload : Array[Byte] = [0x01, 0x40, 0x01, 0x00, 0x7a, 0x00, 0x7a]
   let import_payload = vec_payload([import_entry_func([], 0)])
-  let export_payload = vec_payload([export_entry_func([], 0)])
+  let canon_payload = vec_payload([canon_lower_entry(0), canon_lift_entry(0, 0)])
+  let export_payload = vec_payload([export_entry_func([], 1)])
   let bytes = build_component([
     (7, type_payload),
     (10, import_payload),
+    (8, canon_payload),
     (11, export_payload),
   ])
   let component = @component.parse_component(bytes) catch {
@@ -161,7 +163,11 @@ test "component runtime: host import export" {
     }
   }
   linker.add_func("", func_type, host)
-  let instance = linker.instantiate("host_import", component)
+  let validated = @component_model.validate_component_for_instantiation_with_config(
+    component,
+    @component_model.ComponentValidationConfig(false),
+  )
+  let instance = linker.instantiate("host_import", validated)
   let results = instance.call_exported_func("", [S32(41)])
   debug_inspect(results, content="[S32(42)]")
 }
@@ -191,7 +197,11 @@ test "component runtime: canon lift core func" {
     e => return fail("parse component failed: \{e}")
   }
   let linker = @runtime_impl.ComponentLinker::ComponentLinker()
-  let instance = linker.instantiate("canon_lift", component)
+  let validated = @component_model.validate_component_for_instantiation_with_config(
+    component,
+    @component_model.ComponentValidationConfig(false),
+  )
+  let instance = linker.instantiate("canon_lift", validated)
   let results = instance.call_exported_func("inc", [S32(41)])
   debug_inspect(results, content="[S32(42)]")
 }
@@ -247,7 +257,11 @@ test "component runtime: core execution crosses the configured engine seam" {
     close=fn() { closes.val = closes.val + 1 },
   )
   let linker = @runtime_impl.ComponentLinker::with_core_execution_engine(engine)
-  let instance = linker.instantiate("engine_seam", component)
+  let validated = @component_model.validate_component_for_instantiation_with_config(
+    component,
+    @component_model.ComponentValidationConfig(false),
+  )
+  let instance = linker.instantiate("engine_seam", validated)
   let results = instance.call_exported_func("inc", [S32(41)])
   linker.close()
   linker.close()
@@ -524,7 +538,11 @@ test "component runtime: canon lower to core func" {
     }
   }
   linker.add_func("inc", func_type, host)
-  let instance = linker.instantiate("canon_lower", component)
+  let validated = @component_model.validate_component_for_instantiation_with_config(
+    component,
+    @component_model.ComponentValidationConfig(false),
+  )
+  let instance = linker.instantiate("canon_lower", validated)
   let exported = instance.get_export("core")
   let core_func = match exported {
     Some(CoreFunc(f)) => f

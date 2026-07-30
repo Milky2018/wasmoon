@@ -911,3 +911,25 @@ pub fn validate_component_with_config(
 ) -> Unit raise ComponentValidationError {
   validate_component_inner(component, true, cfg, 0, [], [], [], []) |> ignore
 }
+
+///|
+/// Validate a component and return evidence accepted by runtime instantiation.
+pub fn validate_component_for_instantiation(
+  component : @component.Component,
+) -> ValidatedComponent raise ComponentValidationError {
+  validate_component_for_instantiation_with_config(
+    component,
+    ComponentValidationConfig::default(),
+  )
+}
+
+///|
+/// Validate a component with the requested name policy and return evidence
+/// accepted by runtime instantiation.
+pub fn validate_component_for_instantiation_with_config(
+  component : @component.Component,
+  cfg : ComponentValidationConfig,
+) -> ValidatedComponent raise ComponentValidationError {
+  validate_component_with_config(component, cfg)
+  { component, }
+}

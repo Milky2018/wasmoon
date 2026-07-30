@@ -820,6 +820,28 @@ test "component runtime facade rejects malformed JSON before invocation" {
 }
 
 ///|
+test "component runtime facade rejects an unvalidated component" {
+  let bytes = Bytes::from_array([
+    b'\x00', b'\x61', b'\x73', b'\x6d', b'\x0d', b'\x00', b'\x01', b'\x00',
+    // One function import references type index 0, but no types are defined.
+     b'\x0a', b'\x06', b'\x01', b'\x00', b'\x01', b'\x61', b'\x01', b'\x00',
+  ])
+  let component = @component.parse_component(bytes)
+  let runtime = @component.ComponentRuntime()
+  defer runtime.close()
+  inspect(
+    try runtime.instantiate_component("invalid", component) catch {
+      error => error
+    } noraise {
+      _ => fail("expected component validation failure")
+    },
+    content=(
+      #|ValidationFailed("InvalidTypeIndex(0)")
+    ),
+  )
+}
+
+///|
 test "component JSON preserves non-finite floating-point values" {
   inspect(
     @component.component_values_to_json([

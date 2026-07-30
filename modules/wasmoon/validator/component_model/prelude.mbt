@@ -89,6 +89,24 @@ pub fn ComponentValidationConfig::default() -> ComponentValidationConfig {
 }
 
 ///|
+/// Evidence that a component completed structural validation successfully.
+///
+/// The constructor is package-private. Runtime instantiation boundaries accept
+/// this type instead of a raw component so validation failure cannot be
+/// swallowed before execution.
+struct ValidatedComponent {
+  component : @component.Component
+}
+
+///|
+/// Return the validated component to the runtime implementation.
+pub fn ValidatedComponent::component(
+  self : ValidatedComponent,
+) -> @component.Component {
+  self.component
+}
+
+///|
 priv struct Counts {
   mut func : Int
   mut value : Int

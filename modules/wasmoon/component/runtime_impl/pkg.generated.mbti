@@ -5,6 +5,7 @@ import {
   "Milky2018/wasm_core/types",
   "Milky2018/wasmoon/component/model",
   "Milky2018/wasmoon/runtime",
+  "Milky2018/wasmoon/validator/component_model",
   "moonbitlang/core/debug",
   "moonbitlang/core/ref",
 }
@@ -209,7 +210,7 @@ pub fn ComponentLinker::get_import(Self, String) -> ComponentExtern?
 pub fn ComponentLinker::get_store(Self) -> @runtime.Store
 pub fn ComponentLinker::host_instance_builder(Self, String, HostRuntimeState) -> HostInstanceBuilder
 pub fn ComponentLinker::host_runtime_state(Self) -> HostRuntimeState
-pub fn ComponentLinker::instantiate(Self, String, @model.Component) -> ComponentInstance raise ComponentRuntimeError
+pub fn ComponentLinker::instantiate(Self, String, @component_model.ValidatedComponent) -> ComponentInstance raise ComponentRuntimeError
 pub fn ComponentLinker::new_host_resource_type(Self) -> @model.TypeDef?
 pub fn ComponentLinker::register(Self, String, ComponentInstance) -> Unit
 pub fn ComponentLinker::with_core_execution_engine(CoreExecutionEngine) -> Self

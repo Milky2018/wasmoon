@@ -512,7 +512,7 @@ pub fn ComponentLinker::add_core_instance(
 pub fn ComponentLinker::instantiate(
   self : ComponentLinker,
   name : String,
-  component : Component,
+  component : @component_validator.ValidatedComponent,
 ) -> ComponentInstance raise ComponentRuntimeError {
-  instantiate_component(self, name, component, Map([]), [])
+  instantiate_component(self, name, component.component(), Map([]), [])
 }

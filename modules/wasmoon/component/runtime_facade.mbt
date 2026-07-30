@@ -404,14 +404,14 @@ pub fn ComponentRuntime::instantiate_component(
   component : Component,
 ) -> ComponentInstance raise ComponentRuntimeError {
   self.state.ensure_open()
-  @component_model.validate_component_with_config(
+  let validated = @component_model.validate_component_for_instantiation_with_config(
     component,
     ComponentValidationConfig(self.state.wit_names),
   ) catch {
     error => raise ValidationFailed(error.to_string())
   }
   self.state.begin_execution()
-  let inner = self.state.linker.instantiate(name, component) catch {
+  let inner = self.state.linker.instantiate(name, validated) catch {
     error => {
       self.state.end_execution()
       match error {

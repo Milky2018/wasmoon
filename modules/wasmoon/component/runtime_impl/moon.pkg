@@ -4,5 +4,6 @@ import {
   "Milky2018/wasmoon/executor",
   "Milky2018/wasmoon/parser",
   "Milky2018/wasmoon/runtime",
+  "Milky2018/wasmoon/validator/component_model" @component_validator,
   "Milky2018/wasm_core/types",
 }
