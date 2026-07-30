@@ -418,10 +418,10 @@ pub fn run_wasm(
   let wasi_ctx = wasi_builder.build()
 
   // Register WASI functions
-  @wasi.register_wasi(linker, wasi_ctx)
+  try! @wasi.register_wasi(linker, wasi_ctx)
   // Register spectest module (standard test functions)
-  let spectest_instance = @wast.create_spectest_module(linker.get_store())
-  linker.register("spectest", spectest_instance)
+  let spectest_instance = try! @wast.create_spectest_module(linker.get_store())
+  try! linker.register("spectest", spectest_instance)
   // Load preloaded modules
   for preload in preloads {
     // Parse NAME=PATH format
@@ -451,7 +451,7 @@ pub fn run_wasm(
             return
           }
         }
-        linker.register(name, preload_instance)
+        try! linker.register(name, preload_instance)
       }
       None => {
         @logger.error("invalid preload format '\{preload}', expected NAME=PATH")
@@ -486,7 +486,7 @@ pub fn run_wasm(
   let store = linker.get_store()
   // Enable C heap for JIT mode (required for GC operations)
   if use_jit {
-    store.enable_c_heap()
+    try! store.enable_c_heap()
   }
   let imports = linker.build_imports()
   let instance = @executor.instantiate_module_with_imports(store, mod_, imports) catch {

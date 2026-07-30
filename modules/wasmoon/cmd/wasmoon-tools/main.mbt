@@ -299,8 +299,8 @@ fn cmd_wit(
   output_opt : String?,
   out_dir_opt : String?,
   as_json : Bool,
-  no_docs : Bool,
-  skip_validation : Bool,
+  _no_docs : Bool,
+  _skip_validation : Bool,
   as_wasm : Bool,
   as_wat : Bool,
   importize : Bool,
@@ -310,7 +310,6 @@ fn cmd_wit(
   // Currently `no-docs` / `skip-validation` are accepted for CLI parity but are
   // no-ops (wasmoon's WIT parser does not preserve docs, and validation happens
   // during resolve/encode).
-  let _ = (no_docs, skip_validation)
   let input_opt2 : String? = match input_opt {
     Some(p) => if p == "-" { None } else { Some(p) }
     None => None

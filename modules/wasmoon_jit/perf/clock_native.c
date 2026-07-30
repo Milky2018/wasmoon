@@ -20,17 +20,14 @@ MOONBIT_FFI_EXPORT double perf_instant_as_secs_f64_ffi(int64_t t) {
 
 #include <time.h>
 
-void perf_timespec_delete(void *_t) {}
-
-MOONBIT_FFI_EXPORT struct timespec *perf_instant_now_ffi() {
-  struct timespec *res =
-      moonbit_make_external_object(&perf_timespec_delete, sizeof(struct timespec));
-  clock_gettime(CLOCK_MONOTONIC, res);
-  return res;
+MOONBIT_FFI_EXPORT int64_t perf_instant_now_ffi() {
+  struct timespec value;
+  clock_gettime(CLOCK_MONOTONIC, &value);
+  return ((int64_t)value.tv_sec * 1000000000ll) + (int64_t)value.tv_nsec;
 }
 
-MOONBIT_FFI_EXPORT double perf_instant_as_secs_f64_ffi(struct timespec *t) {
-  return ((double)t->tv_sec) + ((double)t->tv_nsec) * 1e-9;
+MOONBIT_FFI_EXPORT double perf_instant_as_secs_f64_ffi(int64_t t) {
+  return ((double)t) * 1e-9;
 }
 
 #endif

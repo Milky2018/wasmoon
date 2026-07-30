@@ -64,6 +64,9 @@ pub type ImportName = @model.ImportName
 pub type ExportName = @model.ExportName
 
 ///|
+pub type NameAttribute = @model.NameAttribute
+
+///|
 pub type Import = @model.Import
 
 ///|

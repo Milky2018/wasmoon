@@ -3,9 +3,16 @@ package "Milky2018/wasmoon/component"
 
 import {
   "Milky2018/wasmoon/component/model",
+  "moonbitlang/core/debug",
 }
 
 // Values
+pub fn component_value_from_json(Json, ComponentValueType) -> ComponentValue raise ComponentRuntimeError
+
+pub fn component_value_to_json(ComponentValue) -> Json
+
+pub fn component_values_to_json(Array[ComponentValue]) -> Json
+
 pub fn parse_alias_section(Bytes) -> Array[@model.Alias] raise @model.ComponentParseError
 
 pub fn parse_canon_section(Bytes) -> Array[@model.Canon] raise @model.ComponentParseError
@@ -13,6 +20,8 @@ pub fn parse_canon_section(Bytes) -> Array[@model.Canon] raise @model.ComponentP
 pub fn parse_component(Bytes) -> @model.Component raise @model.ComponentParseError
 
 pub fn parse_component_binary(Bytes) -> @model.ComponentBinary raise @model.ComponentParseError
+
+pub fn parse_component_value_json(String, ComponentValueType) -> ComponentValue raise ComponentRuntimeError
 
 pub fn parse_core_instance_section(Bytes) -> Array[@model.CoreInstanceDecl] raise @model.ComponentParseError
 
@@ -29,8 +38,132 @@ pub fn parse_type_section(Bytes) -> Array[@model.TypeDef] raise @model.Component
 pub fn sniff_binary_kind(Bytes) -> @model.BinaryKind?
 
 // Errors
+pub(all) suberror ComponentRuntimeError {
+  ParseFailed(String)
+  ValidationFailed(String)
+  InstantiationFailed(String)
+  InvalidExportPath(String)
+  UnknownExport(String)
+  ExportNotFunction(String)
+  InvalidContract(String)
+  BindingTypeMismatch(path~ : String, expected~ : ComponentFuncType, actual~ : ComponentFuncType)
+  ArgumentCountMismatch(expected~ : Int, actual~ : Int)
+  TypeMismatch(path~ : String, expected~ : ComponentValueType, actual~ : String)
+  InvocationFailed(String)
+  JsonValueError(String)
+} derive(Eq, @debug.Debug)
+pub impl Show for ComponentRuntimeError
 
 // Types and methods
+pub struct ComponentCase {
+  name : String
+  ty : ComponentValueType?
+} derive(Eq, @debug.Debug)
+pub fn ComponentCase::ComponentCase(String, ComponentValueType?) -> Self
+pub impl Show for ComponentCase
+
+pub struct ComponentField {
+  name : String
+  ty : ComponentValueType
+} derive(Eq, @debug.Debug)
+pub fn ComponentField::ComponentField(String, ComponentValueType) -> Self
+pub impl Show for ComponentField
+
+pub struct ComponentFuncType {
+  is_async : Bool
+  params : Array[ComponentParam]
+  result : ComponentValueType?
+} derive(Eq, @debug.Debug)
+pub fn ComponentFuncType::ComponentFuncType(Array[ComponentParam], ComponentValueType?, is_async? : Bool) -> Self
+pub impl Show for ComponentFuncType
+
+type ComponentFunction
+pub fn ComponentFunction::call(Self, Array[ComponentValue]) -> Array[ComponentValue] raise ComponentRuntimeError
+pub fn ComponentFunction::type_(Self) -> ComponentFuncType
+
+type ComponentInstance
+pub fn ComponentInstance::bind(Self, String) -> ComponentFunction raise ComponentRuntimeError
+pub fn ComponentInstance::bind_typed(Self, String, ComponentFuncType) -> ComponentFunction raise ComponentRuntimeError
+
+pub struct ComponentParam {
+  name : String
+  ty : ComponentValueType
+} derive(Eq, @debug.Debug)
+pub fn ComponentParam::ComponentParam(String, ComponentValueType) -> Self
+pub impl Show for ComponentParam
+
+type ComponentResource derive(Eq, @debug.Debug)
+pub fn ComponentResource::type_(Self) -> ComponentResourceType
+
+type ComponentResourceType derive(Eq, @debug.Debug)
+pub fn ComponentResourceType::name(Self) -> String
+pub fn ComponentResourceType::named(String) -> Self
+
+type ComponentRuntime
+pub fn ComponentRuntime::ComponentRuntime(wit_names? : Bool) -> Self
+pub fn ComponentRuntime::instantiate(Self, String, Bytes) -> ComponentInstance raise ComponentRuntimeError
+pub fn ComponentRuntime::instantiate_component(Self, String, @model.Component) -> ComponentInstance raise ComponentRuntimeError
+
+pub(all) enum ComponentValue {
+  Bool(Bool)
+  S8(Int)
+  U8(Int)
+  S16(Int)
+  U16(Int)
+  S32(Int)
+  U32(UInt)
+  S64(Int64)
+  U64(UInt64)
+  F32(Float)
+  F64(Double)
+  Char(Char)
+  String(String)
+  ErrorContext(String)
+  List(Array[ComponentValue])
+  Tuple(Array[ComponentValue])
+  Record(Array[(String, ComponentValue)])
+  Variant(String, ComponentValue?)
+  Enum(String)
+  Flags(Array[String])
+  OptionNone
+  OptionSome(ComponentValue)
+  ResultOk(ComponentValue?)
+  ResultErr(ComponentValue?)
+  Resource(ComponentResource)
+} derive(Eq, @debug.Debug)
+pub impl Show for ComponentValue
+
+pub(all) enum ComponentValueType {
+  Bool
+  S8
+  U8
+  S16
+  U16
+  S32
+  U32
+  S64
+  U64
+  F32
+  F64
+  Char
+  String
+  ErrorContext
+  List(ComponentValueType)
+  FixedList(ComponentValueType, Int)
+  MapType(ComponentValueType, ComponentValueType)
+  Tuple(Array[ComponentValueType])
+  Record(Array[ComponentField])
+  Variant(Array[ComponentCase])
+  Enum(Array[String])
+  Flags(Array[String])
+  Option(ComponentValueType)
+  Result(ComponentValueType?, ComponentValueType?)
+  Own(ComponentResourceType)
+  Borrow(ComponentResourceType)
+  Stream(ComponentValueType?)
+  Future(ComponentValueType?)
+} derive(Eq, @debug.Debug)
+pub impl Show for ComponentValueType
 
 // Type aliases
 pub using @model {type Alias}
@@ -80,6 +213,8 @@ pub using @model {type InstanceDecl}
 pub using @model {type InstanceExpr}
 
 pub using @model {type InstantiateArg}
+
+pub using @model {type NameAttribute}
 
 pub using @model {type Param}
 

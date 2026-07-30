@@ -3,8 +3,14 @@
 ///
 /// This implementation uses a shared C-side `wasmoon_memory_t` descriptor as the
 /// single source of truth for both interpreter and JIT.
+priv enum MemoryDescriptorState {
+  Open(Int64)
+  Closed
+} derive(Debug)
+
+///|
 struct Memory {
-  mem_desc_ptr : Int64
+  descriptor_state : Ref[MemoryDescriptorState]
   max : Int? // max size in logical pages
   is_memory64 : Bool // true for memory64 (i64-indexed)
   page_size_log2 : Int
@@ -12,16 +18,46 @@ struct Memory {
 } derive(Debug)
 
 ///|
+/// Return the borrowed native descriptor pointer.
+///
+/// The pointer is valid only while the owning Store remains open. Do not retain
+/// it across `Store::close`; this method returns zero after shared invalidation.
 pub fn Memory::desc_ptr(self : Memory) -> Int64 {
-  self.mem_desc_ptr
+  match self.descriptor_state.val {
+    Open(pointer) => pointer
+    Closed => 0L
+  }
+}
+
+///|
+fn Memory::require_desc_ptr(self : Memory) -> Int64 raise RuntimeError {
+  match self.descriptor_state.val {
+    Open(pointer) if pointer != 0L => pointer
+    Open(_) => raise OutOfMemory
+    Closed => raise MemoryClosed
+  }
+}
+
+///|
+fn Memory::close(self : Memory) -> Unit {
+  match self.descriptor_state.val {
+    Open(pointer) => {
+      self.descriptor_state.val = Closed
+      if pointer != 0L {
+        @wasmoon_jit.free_memory_desc(pointer)
+      }
+    }
+    Closed => ()
+  }
 }
 
 ///|
 pub fn Memory::byte_len(self : Memory) -> Int64 {
-  if self.mem_desc_ptr == 0L {
+  let pointer = self.desc_ptr()
+  if pointer == 0L {
     0L
   } else {
-    @wasmoon_jit.memory_descriptor_length(self.mem_desc_ptr)
+    @wasmoon_jit.memory_descriptor_length(pointer)
   }
 }
 
@@ -50,6 +86,7 @@ fn Memory::check_bounds(
   addr : Int,
   len : Int,
 ) -> Unit raise RuntimeError {
+  self.require_desc_ptr() |> ignore
   if len < 0 {
     raise OutOfBoundsMemoryAccess
   }
@@ -67,13 +104,13 @@ fn Memory::check_bounds(
 
 ///|
 fn Memory::read_fixed(self : Memory, addr : Int, len : Int) -> FixedArray[Byte] {
-  if self.mem_desc_ptr == 0L || len <= 0 {
+  let pointer = self.desc_ptr()
+  if pointer == 0L || len <= 0 {
     return FixedArray::make(0, b'\x00')
   }
   let out = FixedArray::make(len, b'\x00')
   let offset = self.addr_to_offset(addr)
-  @wasmoon_jit.memory_descriptor_read(self.mem_desc_ptr, offset, out, len)
-  |> ignore
+  @wasmoon_jit.memory_descriptor_read(pointer, offset, out, len) |> ignore
   out
 }
 
@@ -84,12 +121,12 @@ fn Memory::write_fixed(
   data : FixedArray[Byte],
   len : Int,
 ) -> Unit {
-  if self.mem_desc_ptr == 0L || len <= 0 {
+  let pointer = self.desc_ptr()
+  if pointer == 0L || len <= 0 {
     return
   }
   let offset = self.addr_to_offset(addr)
-  @wasmoon_jit.memory_descriptor_write(self.mem_desc_ptr, offset, data, len)
-  |> ignore
+  @wasmoon_jit.memory_descriptor_write(pointer, offset, data, len) |> ignore
 }
 
 ///|
@@ -137,7 +174,13 @@ pub fn Memory::Memory(
       is_shared=false,
     )
   }
-  { mem_desc_ptr, max, is_memory64, page_size_log2: l2, page_size_bytes }
+  {
+    descriptor_state: Ref(Open(mem_desc_ptr)),
+    max,
+    is_memory64,
+    page_size_log2: l2,
+    page_size_bytes,
+  }
 }
 
 ///|
@@ -147,7 +190,7 @@ pub fn Memory::new_guarded_memory0(min : Int, max : Int?) -> Memory {
   let initial_pages = min
   let mem_desc_ptr = @wasmoon_jit.alloc_guarded_memory_desc(initial_pages, max)
   {
-    mem_desc_ptr,
+    descriptor_state: Ref(Open(mem_desc_ptr)),
     max,
     is_memory64: false,
     page_size_log2: 16,
@@ -443,10 +486,11 @@ pub fn Memory::grow(self : Memory, delta : Int) -> Int {
     return -1
   }
   let max_pages = self.max.unwrap_or(-1)
-  if self.mem_desc_ptr == 0L {
+  let pointer = self.desc_ptr()
+  if pointer == 0L {
     return -1
   }
-  @wasmoon_jit.memory_descriptor_grow(self.mem_desc_ptr, delta, max_pages)
+  @wasmoon_jit.memory_descriptor_grow(pointer, delta, max_pages)
 }
 
 ///|
@@ -467,7 +511,7 @@ pub fn Memory::init_data(
   }
   let offset = self.addr_to_offset(dest)
   @wasmoon_jit.memory_descriptor_write_bytes(
-    self.mem_desc_ptr,
+    self.require_desc_ptr(),
     offset,
     data,
     len,
@@ -492,7 +536,12 @@ pub fn Memory::copy(
   }
   let dest_off = self.addr_to_offset(dest)
   let src_off = self.addr_to_offset(src)
-  @wasmoon_jit.memory_descriptor_move(self.mem_desc_ptr, dest_off, src_off, len)
+  @wasmoon_jit.memory_descriptor_move(
+    self.require_desc_ptr(),
+    dest_off,
+    src_off,
+    len,
+  )
   |> ignore
 }
 
@@ -511,7 +560,7 @@ pub fn Memory::fill(
   }
   let offset = self.addr_to_offset(dest)
   @wasmoon_jit.memory_descriptor_fill(
-    self.mem_desc_ptr,
+    self.require_desc_ptr(),
     offset,
     value.to_int(),
     len,
@@ -592,7 +641,7 @@ pub fn Memory::read_bytes(self : Memory, addr : Int, len : Int) -> Bytes {
   }
   let fixed = FixedArray::make(len, b'\x00')
   let rc = @wasmoon_jit.memory_descriptor_read(
-    self.mem_desc_ptr,
+    self.desc_ptr(),
     addr.to_int64(),
     fixed,
     len,

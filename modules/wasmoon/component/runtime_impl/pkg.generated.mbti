@@ -6,12 +6,15 @@ import {
   "Milky2018/wasmoon/component/model",
   "Milky2018/wasmoon/runtime",
   "moonbitlang/core/debug",
+  "moonbitlang/core/ref",
 }
 
 // Values
-pub fn alloc_host_core_func(@runtime.Store, @types.FuncType, (Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError) -> CoreFuncRef
+pub fn alloc_host_core_func(@runtime.Store, @types.FuncType, (Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError, may_suspend? : Bool, native_eligible? : Bool) -> CoreFuncRef raise @runtime.RuntimeError
 
 pub fn clear_canon_debug_message() -> Unit
+
+pub fn interpreter_core_execution_engine() -> CoreExecutionEngine
 
 pub fn preset_canon_debug_message(String) -> Unit
 
@@ -20,6 +23,8 @@ pub fn progress_one_subtask_intrinsic(AsyncState, @runtime.Store) -> Bool raise 
 pub fn register_core_instance_name(Int, String) -> Unit
 
 pub fn set_canon_debug_message(String) -> Unit
+
+pub fn take_core_suspension() -> CoreSuspension?
 
 // Errors
 pub(all) suberror ComponentRuntimeError {
@@ -51,19 +56,23 @@ pub(all) suberror ComponentRuntimeError {
   UnsupportedStringEncoding
   CanonCallError(String)
   HostCallError(String)
-  AsyncSuspendYield
-  AsyncSuspendWait(Int64)
+  HostExit(Int)
   InvalidStartResultCount(Int)
   OuterAliasOutOfRange(Int)
   AliasTargetMismatch(String)
+  DuplicateHostExport(String)
+  InvalidHostTypeReference(Int)
 } derive(Eq, @debug.Debug)
 pub impl Show for ComponentRuntimeError
 
 // Types and methods
 pub(all) struct AsyncState {
+  core_engine : CoreExecutionEngine
   next_handle_by_component : Map[Int, Array[Int]]
   free_handles_by_component : Map[Int, Array[Int]]
   stream_table : StreamTable
+  resource_tables : Map[Int, ResourceTable]
+  host_event_loop : @ref.Ref[HostEventLoop?]
   task_stack : Array[Int64]
   next_task_id : Array[Int64]
   task_results : Map[Int64, Array[ComponentValue]]
@@ -72,6 +81,8 @@ pub(all) struct AsyncState {
   task_self_cancelled : Map[Int64, Bool]
   task_cancelled : Map[Int64, Bool]
   task_contexts : Map[Int64, Map[Int, @types.Value]]
+  task_borrows : Map[Int64, Int]
+  task_borrow_scopes : Map[Int64, Array[Array[Int64]]]
   task_thread : Map[Int64, Map[Int, Int]]
   threads : Map[Int64, GuestThread]
   thread_runnable : Map[Int64, Array[Int]]
@@ -79,34 +90,28 @@ pub(all) struct AsyncState {
   task_can_block : Array[Bool]
   can_block_stack : Array[Bool]
   in_async_callback : Array[Bool]
-  yield_cursor_stack : Array[Int]
-  wait_cursor_stack : Array[Int]
-  call_cursor_stack : Array[Int]
-  stream_cursor_stack : Array[Int]
   task_caller : Map[Int64, Int64]
   task_instance : Map[Int64, Int]
-  yield_replay_upto : Map[Int64, Int]
-  wait_results : Map[Int64, Map[Int, WaitResult]]
+  yield_suspended : Map[Int64, Bool]
   waiting_ws : Map[Int64, Int64]
-  call_results : Map[Int64, Map[Int, Array[@types.Value]]]
-  stream_results : Map[Int64, Map[Int, Int]]
-  stream_results_cb : Map[Int64, Map[Int, Int]]
-  sync_lower_states : Map[Int64, Map[Int, SyncLowerState]]
+  sync_lower_states : Map[Int64, SyncLowerState]
   waitable_sets : Map[Int64, WaitableSet]
   waitable_to_set : Map[Int64, Int64]
   waitable_events : Map[Int64, Array[WaitEvent]]
+  sync_waitable_users : Map[Int64, Int64]
   subtasks : Map[Int64, Subtask]
   inflight_by_instance : Map[Int, Int]
   pending_by_instance : Map[Int, Array[Int64]]
+  scheduler_cursor : Array[Int64?]
   next_future_id : Array[Int]
   futures : Map[Int, FutureState]
   future_endpoints : Map[Int64, FutureEndpoint]
-  thread_handle_required : Map[Int, Bool]
+  host_future_values : Map[Int, HostFutureValue]
   backpressure_by_instance : Map[Int, Int]
   next_error_context_by_component : Map[Int, Array[Int]]
   error_contexts : Map[Int64, String]
 } derive(@debug.Debug)
-pub fn AsyncState::AsyncState(StreamTable) -> Self
+pub fn AsyncState::AsyncState(StreamTable, core_engine? : CoreExecutionEngine) -> Self
 
 type CallbackTask derive(@debug.Debug)
 
@@ -138,8 +143,9 @@ pub(all) enum ComponentExtern {
 pub impl Show for ComponentExtern
 
 pub(all) enum ComponentFunc {
-  Lifted(CoreFuncRef, @model.FuncType, CanonResources, Array[@model.TypeDef?], ResourceTable, Array[Bool], CoreFuncRef?, Bool)
+  Lifted(CoreFuncRef, @model.FuncType, CanonResources, Array[@model.TypeDef?], ResourceTable, ComponentInstanceEntryState, CoreFuncRef?, Bool)
   Host(@model.FuncType, Array[@model.TypeDef?], (Array[ComponentValue], ResourceTable) -> Array[ComponentValue] raise ComponentRuntimeError)
+  HostAsync(@model.FuncType, Array[@model.TypeDef?], (Array[ComponentValue], ResourceTable) -> HostFuture raise ComponentRuntimeError)
 }
 pub impl Show for ComponentFunc
 pub impl @debug.Debug for ComponentFunc
@@ -169,6 +175,8 @@ pub fn ComponentInstance::call_exported_func(Self, String, Array[ComponentValue]
 pub fn ComponentInstance::get_core_instance(Self, Int) -> CoreInstance?
 pub fn ComponentInstance::get_export(Self, String) -> ComponentExtern?
 
+type ComponentInstanceEntryState derive(@debug.Debug)
+
 type ComponentLinker
 pub fn ComponentLinker::ComponentLinker() -> Self
 pub fn ComponentLinker::add_component(Self, String, @model.Component) -> Unit
@@ -178,10 +186,16 @@ pub fn ComponentLinker::add_func(Self, String, @model.FuncType, (Array[Component
 pub fn ComponentLinker::add_import(Self, String, ComponentExtern) -> Unit
 pub fn ComponentLinker::add_instance(Self, String, ComponentInstance) -> Unit
 pub fn ComponentLinker::add_value(Self, String, ComponentValue) -> Unit
+pub fn ComponentLinker::close(Self) -> Unit
 pub fn ComponentLinker::get_component(Self, String) -> ComponentInstance?
+pub fn ComponentLinker::get_import(Self, String) -> ComponentExtern?
 pub fn ComponentLinker::get_store(Self) -> @runtime.Store
+pub fn ComponentLinker::host_instance_builder(Self, String, HostRuntimeState) -> HostInstanceBuilder
+pub fn ComponentLinker::host_runtime_state(Self) -> HostRuntimeState
 pub fn ComponentLinker::instantiate(Self, String, @model.Component) -> ComponentInstance raise ComponentRuntimeError
+pub fn ComponentLinker::new_host_resource_type(Self) -> @model.TypeDef?
 pub fn ComponentLinker::register(Self, String, ComponentInstance) -> Unit
+pub fn ComponentLinker::with_core_execution_engine(CoreExecutionEngine) -> Self
 
 pub(all) enum ComponentValue {
   Bool(Bool)
@@ -201,12 +215,53 @@ pub(all) enum ComponentValue {
   List(Array[ComponentValue])
   Tuple(Array[ComponentValue])
   Variant(Int, ComponentValue?)
+  ResourceValue(Int)
 } derive(Eq, @debug.Debug)
 pub impl Show for ComponentValue
+
+pub(all) enum CoreBackendPolicy {
+  PreferNative
+  InterpreterOnly
+} derive(Eq, @debug.Debug)
+
+pub(all) enum CoreCallStyle {
+  RunToCompletion
+  CallbackStep
+  Stackful
+} derive(Eq, @debug.Debug)
+
+type CoreContinuation
+pub fn CoreContinuation::CoreContinuation(() -> CoreExecutionOutcome raise ComponentRuntimeError, () -> Unit) -> Self
+pub fn CoreContinuation::cancel(Self) -> Unit
+pub fn CoreContinuation::continue_execution(Self) -> CoreExecutionOutcome raise ComponentRuntimeError
+pub impl @debug.Debug for CoreContinuation
+
+type CoreExecutionEngine
+pub fn CoreExecutionEngine::CoreExecutionEngine((@runtime.Store, @types.Module, @runtime.ModuleInstance) -> Unit raise ComponentRuntimeError, (@runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value], CoreExecutionRequest) -> CoreExecutionOutcome raise ComponentRuntimeError, prepare_store? : (@runtime.Store) -> Unit, close? : () -> Unit) -> Self
+pub fn CoreExecutionEngine::close(Self) -> Unit
+pub fn CoreExecutionEngine::invoke(Self, @runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value], CoreExecutionRequest) -> CoreExecutionOutcome raise ComponentRuntimeError
+pub fn CoreExecutionEngine::prepare_store(Self, @runtime.Store) -> Unit
+pub fn CoreExecutionEngine::register_instance(Self, @runtime.Store, @types.Module, @runtime.ModuleInstance) -> Unit raise ComponentRuntimeError
+pub impl @debug.Debug for CoreExecutionEngine
+
+pub(all) enum CoreExecutionOutcome {
+  Returned(Array[@types.Value])
+  Suspended(CoreSuspension, CoreContinuation)
+} derive(@debug.Debug)
+
+pub struct CoreExecutionRequest {
+  style : CoreCallStyle
+  backend : CoreBackendPolicy
+  suspension : CoreSuspensionPolicy
+} derive(Eq, @debug.Debug)
+pub fn CoreExecutionRequest::CoreExecutionRequest(CoreCallStyle, CoreBackendPolicy, CoreSuspensionPolicy) -> Self
 
 pub(all) struct CoreFuncRef {
   instance : @runtime.ModuleInstance
   func_idx : Int
+  engine : CoreExecutionEngine
+  may_suspend : Bool
+  native_eligible : Bool
 } derive(@debug.Debug)
 
 pub(all) struct CoreInstance {
@@ -217,6 +272,16 @@ pub(all) struct CoreInstance {
   tags : Map[String, Int]
 }
 pub impl Show for CoreInstance
+
+pub(all) enum CoreSuspension {
+  Yield
+  Wait(Int64)
+} derive(Eq, @debug.Debug)
+
+pub(all) enum CoreSuspensionPolicy {
+  RunToReturn
+  Resumable
+} derive(Eq, @debug.Debug)
 
 type DecodedCallbackCode derive(@debug.Debug)
 
@@ -230,6 +295,66 @@ type GuestThread derive(@debug.Debug)
 
 type GuestThreadPhase derive(Eq, @debug.Debug)
 
+pub(all) enum HostByteStreamRead {
+  Pending
+  Data(Bytes)
+  Closed
+} derive(@debug.Debug)
+
+type HostEventLoop
+
+type HostFuture
+pub fn HostFuture::HostFuture(() -> HostFuturePoll raise ComponentRuntimeError, () -> Unit raise ComponentRuntimeError) -> Self
+
+pub(all) enum HostFuturePoll {
+  Pending
+  Ready(Array[ComponentValue])
+}
+
+type HostFutureValue
+
+pub(all) enum HostFutureValuePoll {
+  Pending
+  Ready(ComponentValue)
+} derive(@debug.Debug)
+
+type HostInstanceBuilder
+pub fn HostInstanceBuilder::add_async_func(Self, String, @model.FuncType, (Array[ComponentValue], ResourceTable) -> HostFuture raise ComponentRuntimeError) -> Unit raise ComponentRuntimeError
+pub fn HostInstanceBuilder::add_func(Self, String, @model.FuncType, (Array[ComponentValue], ResourceTable) -> Array[ComponentValue] raise ComponentRuntimeError) -> Unit raise ComponentRuntimeError
+pub fn HostInstanceBuilder::add_instance(Self, String, ComponentInstance) -> Unit raise ComponentRuntimeError
+pub fn HostInstanceBuilder::add_type(Self, String, Int) -> Unit raise ComponentRuntimeError
+pub fn HostInstanceBuilder::finish(Self) -> ComponentInstance
+pub fn HostInstanceBuilder::set_type_space(Self, Array[@model.TypeDef?]) -> Unit raise ComponentRuntimeError
+
+type HostResourceDestructor
+pub fn HostResourceDestructor::HostResourceDestructor((Int) -> Unit) -> Self
+pub fn HostResourceDestructor::destroy(Self, Int) -> Unit
+
+type HostRuntimeState
+pub fn HostRuntimeState::HostRuntimeState() -> Self
+pub fn HostRuntimeState::async_state(Self) -> AsyncState
+pub fn HostRuntimeState::drop_host_readable_future(Self, ResourceTable, Int) -> Unit raise ComponentRuntimeError
+pub fn HostRuntimeState::drop_host_readable_stream(Self, ResourceTable, Int) -> Unit raise ComponentRuntimeError
+pub fn HostRuntimeState::new_host_byte_stream(Self, ResourceTable, Bytes) -> Int
+pub fn HostRuntimeState::new_host_call_future(Self, ResourceTable, @model.ValType, Array[@model.TypeDef?], HostFuture) -> Int raise ComponentRuntimeError
+pub fn HostRuntimeState::new_host_unit_result_future(Self, ResourceTable, @model.ValType, Array[@model.TypeDef?], error_case? : Int) -> Int raise ComponentRuntimeError
+pub fn HostRuntimeState::new_host_value_future(Self, ResourceTable, @model.ValType, Array[@model.TypeDef?], ComponentValue) -> Int raise ComponentRuntimeError
+pub fn HostRuntimeState::new_host_value_future_source(Self, ResourceTable, @model.ValType, Array[@model.TypeDef?], () -> HostFutureValuePoll raise ComponentRuntimeError, () -> Unit raise ComponentRuntimeError) -> Int raise ComponentRuntimeError
+pub fn HostRuntimeState::new_host_value_stream(Self, ResourceTable, @model.ValType, Array[@model.TypeDef?], Array[ComponentValue]) -> Int raise ComponentRuntimeError
+pub fn HostRuntimeState::new_host_value_stream_source(Self, ResourceTable, @model.ValType, Array[@model.TypeDef?], (Int) -> HostValueStreamPoll raise ComponentRuntimeError, () -> Unit) -> Int raise ComponentRuntimeError
+pub fn HostRuntimeState::read_host_byte_stream(Self, ResourceTable, Int) -> HostByteStreamRead raise ComponentRuntimeError
+pub fn HostRuntimeState::resource_table(Self) -> ResourceTable
+pub fn HostRuntimeState::set_event_loop(Self, () -> Bool raise ComponentRuntimeError) -> Unit
+pub fn HostRuntimeState::stream_table(Self) -> StreamTable
+
+type HostValueStream
+
+pub(all) enum HostValueStreamPoll {
+  Pending
+  Values(Array[ComponentValue])
+  Closed
+} derive(@debug.Debug)
+
 type PendingFutureRead derive(@debug.Debug)
 
 type PendingFutureWrite derive(@debug.Debug)
@@ -242,14 +367,20 @@ pub(all) struct ResourceHandle {
   type_id : Int
   rep : Int
   dtor : CoreFuncRef?
+  host_dtor : HostResourceDestructor?
   kind : @model.ResourceKind
+  impl_component_id : Int
+  own : Bool
+  borrow_scope : Array[Int64]?
+  num_lends : Array[Int]
 } derive(@debug.Debug)
 
 pub(all) struct ResourceTable {
   id : Int
-  next_handle : Array[Int]
-  free_handles : Array[Int]
-  entries : Map[Int, ResourceHandle]
+  ancestors : @ref.Ref[Array[Int]]
+  next_handle : @ref.Ref[Int]
+  free_handles : @ref.Ref[Array[Int]]
+  entries : @ref.Ref[Map[Int, ResourceHandle]]
 } derive(@debug.Debug)
 pub fn ResourceTable::ResourceTable() -> Self
 pub fn ResourceTable::alloc(Self, ResourceHandle) -> Int
@@ -260,6 +391,7 @@ pub(all) struct StreamEndpoint {
   stream_id : Int
   is_readable : Bool
   notified_peer_dropped : Array[Bool]
+  in_waitable_set : @ref.Ref[Bool]
 } derive(@debug.Debug)
 
 type StreamState derive(@debug.Debug)
@@ -268,6 +400,7 @@ pub(all) struct StreamTable {
   next_stream_id : Array[Int]
   endpoints : Map[Int64, StreamEndpoint]
   streams : Map[Int, StreamState]
+  host_values : Map[Int, HostValueStream]
 } derive(@debug.Debug)
 pub fn StreamTable::StreamTable() -> Self
 
@@ -282,8 +415,6 @@ type SyncLowerState derive(@debug.Debug)
 type TaskStep derive(Eq, @debug.Debug)
 
 type WaitEvent derive(@debug.Debug)
-
-type WaitResult derive(@debug.Debug)
 
 type WaitableSet derive(@debug.Debug)
 

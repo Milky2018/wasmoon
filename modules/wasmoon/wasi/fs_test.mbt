@@ -4,68 +4,13 @@
 ///|
 /// Convert string to UTF-8 bytes
 fn string_to_utf8(s : String) -> Bytes {
-  let len = s.length()
-  let buf : Array[Byte] = []
-  buf.reserve_capacity(len * 4)
-  for i in 0..<len {
-    let c = s.code_unit_at(i).to_int()
-    if c < 0x80 {
-      buf.push(c.to_byte())
-    } else if c < 0x800 {
-      buf.push((0xC0 | (c >> 6)).to_byte())
-      buf.push((0x80 | (c & 0x3F)).to_byte())
-    } else if c >= 0xD800 && c <= 0xDBFF && i + 1 < len {
-      // Surrogate pair
-      let c2 = s.code_unit_at(i + 1).to_int()
-      if c2 >= 0xDC00 && c2 <= 0xDFFF {
-        let codepoint = 0x10000 + ((c - 0xD800) << 10) + (c2 - 0xDC00)
-        buf.push((0xF0 | (codepoint >> 18)).to_byte())
-        buf.push((0x80 | ((codepoint >> 12) & 0x3F)).to_byte())
-        buf.push((0x80 | ((codepoint >> 6) & 0x3F)).to_byte())
-        buf.push((0x80 | (codepoint & 0x3F)).to_byte())
-      }
-    } else {
-      buf.push((0xE0 | (c >> 12)).to_byte())
-      buf.push((0x80 | ((c >> 6) & 0x3F)).to_byte())
-      buf.push((0x80 | (c & 0x3F)).to_byte())
-    }
-  }
-  Bytes::from_iter(buf.iter())
+  @utf8.encode(s)
 }
 
 ///|
 /// Convert UTF-8 bytes to string
 fn utf8_to_string(bytes : Bytes, len : Int) -> String {
-  let buf = StringBuilder::StringBuilder()
-  let mut i = 0
-  while i < len {
-    let b = bytes[i].to_int()
-    if b < 0x80 {
-      buf.write_char(b.unsafe_to_char())
-      i = i + 1
-    } else if b < 0xE0 {
-      let c = ((b & 0x1F) << 6) | (bytes[i + 1].to_int() & 0x3F)
-      buf.write_char(c.unsafe_to_char())
-      i = i + 2
-    } else if b < 0xF0 {
-      let c = ((b & 0x0F) << 12) |
-        ((bytes[i + 1].to_int() & 0x3F) << 6) |
-        (bytes[i + 2].to_int() & 0x3F)
-      buf.write_char(c.unsafe_to_char())
-      i = i + 3
-    } else {
-      let codepoint = ((b & 0x07) << 18) |
-        ((bytes[i + 1].to_int() & 0x3F) << 12) |
-        ((bytes[i + 2].to_int() & 0x3F) << 6) |
-        (bytes[i + 3].to_int() & 0x3F)
-      // Convert to surrogate pair
-      let cp = codepoint - 0x10000
-      buf.write_char((0xD800 + (cp >> 10)).unsafe_to_char())
-      buf.write_char((0xDC00 + (cp & 0x3FF)).unsafe_to_char())
-      i = i + 4
-    }
-  }
-  buf.to_string()
+  @utf8.decode_lossy(bytes[:len])
 }
 
 ///|
@@ -105,6 +50,126 @@ test "native file operations: write and read" {
 
   // Close file
   inspect(@wasi.native_close(fd), content="true")
+}
+
+///|
+test "native paths reject embedded NUL before filesystem access" {
+  let prefix = "/tmp/wasmoon-native-embedded-nul"
+  @wasi.native_unlinkat(0, prefix, 0) |> ignore
+  guard @wasi.native_open(prefix, [WriteOnly, Create, Truncate], 0o600)
+    is Some(fd) else {
+    fail("could not create embedded-NUL fixture")
+  }
+  defer @wasi.native_unlinkat(0, prefix, 0) |> ignore
+  let contents = string_to_utf8("safe")
+  let buffer = FixedArray::makei(contents.length(), fn(i) { contents[i] })
+  guard @wasi.native_write(fd, buffer, buffer.length()) is Some(_) else {
+    fail("could not write embedded-NUL fixture")
+  }
+  @wasi.native_close(fd) |> ignore
+  debug_inspect(
+    @wasi.native_open(prefix + "\u{0000}-suffix", [WriteOnly, Truncate], 0),
+    content="None",
+  )
+  inspect(@wasi.native_last_errno_to_wasi(), content="28")
+  guard @wasi.native_fstatat(0, prefix, 0) is Some(stat) else {
+    fail("could not stat embedded-NUL fixture")
+  }
+  inspect(stat.size, content="4")
+}
+
+///|
+test "native readdir preserves directory entry file types" {
+  let root = "/tmp/wasmoon-native-readdir-file-types"
+  let file = root + "/file"
+  let directory = root + "/directory"
+  let symlink = root + "/symlink"
+  @wasi.native_unlinkat(0, symlink, 0) |> ignore
+  @wasi.native_unlinkat(0, file, 0) |> ignore
+  @wasi.native_unlinkat(0, directory, @wasi.AT_REMOVEDIR) |> ignore
+  @wasi.native_unlinkat(0, root, @wasi.AT_REMOVEDIR) |> ignore
+  guard @wasi.native_mkdir(root, 0o700) else {
+    fail("could not create readdir fixture directory")
+  }
+  defer @wasi.native_unlinkat(0, root, @wasi.AT_REMOVEDIR) |> ignore
+  guard @wasi.native_open(file, [WriteOnly, Create, Truncate], 0o600)
+    is Some(fd) else {
+    fail("could not create readdir fixture file")
+  }
+  @wasi.native_close(fd) |> ignore
+  defer @wasi.native_unlinkat(0, file, 0) |> ignore
+  guard @wasi.native_mkdir(directory, 0o700) else {
+    fail("could not create readdir fixture subdirectory")
+  }
+  defer @wasi.native_unlinkat(0, directory, @wasi.AT_REMOVEDIR) |> ignore
+  guard @wasi.native_symlinkat("file", 0, symlink) else {
+    fail("could not create readdir fixture symlink")
+  }
+  defer @wasi.native_unlinkat(0, symlink, 0) |> ignore
+  guard @wasi.native_open(root, [ReadOnly], 0) is Some(directory_fd) else {
+    fail("could not open fixture directory")
+  }
+  defer @wasi.native_close(directory_fd) |> ignore
+  guard @wasi.native_readdir_fd(directory_fd) is Some(entries) else {
+    fail("could not read fixture directory")
+  }
+  let mut file_type = -1
+  let mut directory_type = -1
+  let mut symlink_type = -1
+  for entry in entries {
+    let (name, native_type) = entry
+    match name {
+      "file" => file_type = native_type
+      "directory" => directory_type = native_type
+      "symlink" => symlink_type = native_type
+      _ => ()
+    }
+  }
+  debug_inspect([file_type, directory_type, symlink_type], content="[4, 3, 7]")
+}
+
+///|
+test "native file names round-trip through UTF-8 directory entries" {
+  let root = "/tmp/wasmoon-native-readdir-utf8"
+  let expected = ["中文.txt", "e\u{0301}.txt", "😀.txt"]
+  for name in expected {
+    @wasi.native_unlinkat(0, root + "/" + name, 0) |> ignore
+  }
+  @wasi.native_unlinkat(0, root, @wasi.AT_REMOVEDIR) |> ignore
+  guard @wasi.native_mkdir(root, 0o700) else {
+    fail("could not create UTF-8 readdir fixture")
+  }
+  defer {
+    for name in expected {
+      @wasi.native_unlinkat(0, root + "/" + name, 0) |> ignore
+    }
+    @wasi.native_unlinkat(0, root, @wasi.AT_REMOVEDIR) |> ignore
+  }
+  for name in expected {
+    let path = root + "/" + name
+    guard @wasi.native_open(path, [WriteOnly, Create, Truncate], 0o600)
+      is Some(fd) else {
+      fail("could not create UTF-8 file \{name}")
+    }
+    @wasi.native_close(fd) |> ignore
+  }
+  guard @wasi.native_open(root, [ReadOnly, Directory], 0) is Some(directory_fd) else {
+    fail("could not open UTF-8 readdir fixture")
+  }
+  defer @wasi.native_close(directory_fd) |> ignore
+  guard @wasi.native_readdir_fd(directory_fd) is Some(entries) else {
+    fail("could not read UTF-8 readdir fixture")
+  }
+  let actual = entries.map(entry => entry.0)
+  actual.sort()
+  expected.sort()
+  debug_inspect(actual, content="[\"é.txt\", \"中文.txt\", \"😀.txt\"]")
+  for name in actual {
+    guard @wasi.native_open(root + "/" + name, [ReadOnly], 0) is Some(fd) else {
+      fail("could not reopen UTF-8 directory entry \{name}")
+    }
+    @wasi.native_close(fd) |> ignore
+  }
 }
 
 ///|

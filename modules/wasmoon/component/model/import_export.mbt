@@ -65,14 +65,23 @@ pub(all) enum ExportName {
 } derive(Debug, Eq)
 
 ///|
+pub(all) enum NameAttribute {
+  Implements(Bytes)
+  VersionSuffix(Bytes)
+  ExternalId(Bytes)
+} derive(Debug, Eq)
+
+///|
 pub(all) struct Import {
   name : ImportName
+  attributes : Array[NameAttribute]
   desc : ExternDesc
 } derive(Debug, Eq)
 
 ///|
 pub(all) struct Export {
   name : ExportName
+  attributes : Array[NameAttribute]
   sortidx : SortIdx
   desc : ExternDesc?
 } derive(Debug, Eq)
@@ -90,28 +99,58 @@ fn parse_versionsuffix(reader : Reader) -> Bytes raise ComponentParseError {
 }
 
 ///|
-fn parse_importname(reader : Reader) -> ImportName raise ComponentParseError {
+fn parse_attribute(reader : Reader) -> NameAttribute raise ComponentParseError {
   let tag = reader.read_u8()
   if tag == 0x00 {
-    Plain(parse_name_annot(reader))
+    Implements(parse_name_annot(reader))
   } else if tag == 0x01 {
-    let name = parse_name_annot(reader)
-    let vs = parse_versionsuffix(reader)
-    WithVersion(name, vs)
+    VersionSuffix(parse_versionsuffix(reader))
+  } else if tag == 0x02 {
+    ExternalId(parse_name_annot(reader))
   } else {
     raise InvalidTypeSection
   }
 }
 
 ///|
-fn parse_exportname(reader : Reader) -> ExportName raise ComponentParseError {
+fn parse_attributes(
+  reader : Reader,
+) -> Array[NameAttribute] raise ComponentParseError {
+  let count = reader.read_leb_u32()
+  let attributes : Array[NameAttribute] = []
+  for _ in 0..<count {
+    attributes.push(parse_attribute(reader))
+  }
+  attributes
+}
+
+///|
+fn parse_importname(
+  reader : Reader,
+) -> (ImportName, Array[NameAttribute]) raise ComponentParseError {
   let tag = reader.read_u8()
   if tag == 0x00 {
-    Plain(parse_name_annot(reader))
+    (Plain(parse_name_annot(reader)), [])
   } else if tag == 0x01 {
-    let name = parse_name_annot(reader)
-    let vs = parse_versionsuffix(reader)
-    WithVersion(name, vs)
+    (Plain(parse_name_annot(reader)), [])
+  } else if tag == 0x02 {
+    (Plain(parse_name_annot(reader)), parse_attributes(reader))
+  } else {
+    raise InvalidTypeSection
+  }
+}
+
+///|
+fn parse_exportname(
+  reader : Reader,
+) -> (ExportName, Array[NameAttribute]) raise ComponentParseError {
+  let tag = reader.read_u8()
+  if tag == 0x00 {
+    (Plain(parse_name_annot(reader)), [])
+  } else if tag == 0x01 {
+    (Plain(parse_name_annot(reader)), [])
+  } else if tag == 0x02 {
+    (Plain(parse_name_annot(reader)), parse_attributes(reader))
   } else {
     raise InvalidTypeSection
   }
@@ -215,28 +254,9 @@ pub fn parse_import_section(
   let n = reader.read_leb_u32()
   let imports : Array[Import] = []
   for _i in 0..<n {
-    let start_pos = reader.pos
-    // New encoding: tagged import names (0x00 plain, 0x01 with-version).
-    // Backwards compat: wasm-tools accepts an older encoding where 0x01 was
-    // used as a "plain name" tag with no version suffix.
-    let (name, desc) = try {
-      let name = parse_importname(reader)
-      let desc = parse_externdesc(reader)
-      (name, desc)
-    } catch {
-      e => {
-        reader.pos = start_pos
-        let tag = reader.read_u8()
-        if tag == 0x01 {
-          let name = ImportName::Plain(parse_name_annot(reader))
-          let desc = parse_externdesc(reader)
-          (name, desc)
-        } else {
-          raise e
-        }
-      }
-    }
-    imports.push({ name, desc })
+    let (name, attributes) = parse_importname(reader)
+    let desc = parse_externdesc(reader)
+    imports.push({ name, attributes, desc })
   }
   if !reader.is_eof() {
     raise InvalidTypeSection
@@ -252,10 +272,10 @@ pub fn parse_export_section(
   let n = reader.read_leb_u32()
   let exports : Array[Export] = []
   for _ in 0..<n {
-    let name = parse_exportname(reader)
+    let (name, attributes) = parse_exportname(reader)
     let sortidx = parse_sortidx(reader)
     let desc = parse_opt_externdesc(reader)
-    exports.push({ name, sortidx, desc })
+    exports.push({ name, attributes, sortidx, desc })
   }
   if !reader.is_eof() {
     raise InvalidTypeSection

@@ -334,6 +334,8 @@ test "AArch64 target code executes through the production entry ABI" {
     (trap, values[0], values[1], values[2]),
     content="(0, 20, 22, 42)",
   )
+  trampoline.release() |> ignore
+  candidate.release() |> ignore
 }
 
 ///|
@@ -501,4 +503,7 @@ test "AArch64 target executes internal and external relocations" {
     false,
   )
   debug_inspect((trap, values[0], values[1]), content="(0, 41, 42)")
+  trampoline.release() |> ignore
+  caller_code.release() |> ignore
+  callee_code.release() |> ignore
 }

@@ -7,13 +7,19 @@ import argparse
 import json
 import os
 import signal
+import shutil
 import subprocess
 import sys
-import shutil
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Tuple
+
+from component_snapshot import (
+    REQUIRED_SUITES,
+    SnapshotError,
+    validate_snapshot,
+)
 
 BASE_VALIDATE_TIMEOUT_SECONDS = int(
     os.environ.get("WASMOON_COMPONENT_VALIDATE_TIMEOUT", "20")
@@ -58,7 +64,7 @@ def scale_timeout(base: int) -> int:
 DEFAULT_VALIDATE_TIMEOUT_SECONDS = scale_timeout(BASE_VALIDATE_TIMEOUT_SECONDS)
 DEFAULT_SCRIPT_TIMEOUT_SECONDS = scale_timeout(BASE_SCRIPT_TIMEOUT_SECONDS)
 DEFAULT_TOOLS_TIMEOUT_SECONDS = scale_timeout(BASE_TOOLS_TIMEOUT_SECONDS)
-REQUIRED_WASM_TOOLS_VERSION = "1.248.0"
+DEFAULT_WASM_TOOLS_VERSION = "1.254.0"
 
 
 def run_command(
@@ -464,6 +470,8 @@ SUPPORTED_VALUE_TYPES = {
     "s32",
     "u64",
     "s64",
+    "f32",
+    "f64",
     "char",
     "str",
     "string",
@@ -508,7 +516,21 @@ def parse_const(node) -> Optional[dict]:
     if not isinstance(node, list) or not node:
         return None
     head = node[0]
-    if not isinstance(head, str) or not head.endswith(".const"):
+    if not isinstance(head, str):
+        return None
+    if head in ("option.some", "result.ok", "result.err"):
+        if len(node) != 2:
+            return None
+        payload = parse_const(node[1])
+        if payload is None:
+            return None
+        kind, case = head.split(".", 1)
+        return {"type": kind, "value": case, "items": [payload]}
+    if head == "option.none":
+        if len(node) != 1:
+            return None
+        return {"type": "option", "value": "none", "items": []}
+    if not head.endswith(".const"):
         return None
     if head == "list.const":
         items: list[dict] = []
@@ -526,10 +548,50 @@ def parse_const(node) -> Optional[dict]:
                 return None
             items.append(val)
         return {"type": "tuple", "items": items}
+    if head == "record.const":
+        items: list[dict] = []
+        for field in node[1:]:
+            if (
+                not isinstance(field, list)
+                or len(field) < 3
+                or field[0] != "field"
+                or not isinstance(field[1], StringToken)
+            ):
+                return None
+            value_node = field[2] if len(field) == 3 else field[2:]
+            val = parse_const(value_node)
+            if val is None:
+                return None
+            val["label"] = field[1].value
+            items.append(val)
+        return {"type": "record", "items": items}
+    if head == "variant.const":
+        if len(node) < 2 or not isinstance(node[1], StringToken):
+            return None
+        items: list[dict] = []
+        if len(node) == 3:
+            payload = parse_const(node[2])
+            if payload is None:
+                return None
+            items.append(payload)
+        elif len(node) != 2:
+            return None
+        return {
+            "type": "variant",
+            "value": node[1].value,
+            "items": items,
+        }
     if head == "enum.const":
         if len(node) < 2 or not isinstance(node[1], StringToken):
             return None
         return {"type": "enum", "value": node[1].value}
+    if head == "flags.const":
+        labels: list[str] = []
+        for label in node[1:]:
+            if not isinstance(label, StringToken):
+                return None
+            labels.append(label.value)
+        return {"type": "flags", "labels": labels}
     type_name = head[: -len(".const")]
     if type_name not in SUPPORTED_VALUE_TYPES:
         return None
@@ -614,7 +676,6 @@ def compile_component(
     text: str,
     tmp: Path,
     idx: int,
-    wasmoon_tools: Path,
     wasm_tools: Path,
 ) -> Tuple[Optional[Path], Optional[str]]:
     src = tmp / f"component_{idx}.wat"
@@ -622,37 +683,17 @@ def compile_component(
     src.write_text(text, encoding="utf-8")
 
     returncode, stdout, stderr, timed_out = run_command(
-        [str(wasmoon_tools), "wat2wasm", str(src), "-o", str(out)],
+        [str(wasm_tools), "parse", str(src), "-o", str(out)],
         timeout_sec=DEFAULT_TOOLS_TIMEOUT_SECONDS,
     )
     if timed_out:
         return (
             None,
-            f"wasmoon-tools wat2wasm timeout ({DEFAULT_TOOLS_TIMEOUT_SECONDS}s)",
+            f"wasm-tools parse timeout ({DEFAULT_TOOLS_TIMEOUT_SECONDS}s)",
         )
     if returncode != 0:
-        primary_err = (stderr or stdout).strip() or "unknown error"
-        fb_code, fb_stdout, fb_stderr, fb_timed_out = run_command(
-            [str(wasm_tools), "parse", str(src), "-o", str(out)],
-            timeout_sec=DEFAULT_TOOLS_TIMEOUT_SECONDS,
-        )
-        if fb_timed_out:
-            return (
-                None,
-                "wasmoon-tools wat2wasm failed: "
-                + primary_err
-                + f"; fallback wasm-tools parse timeout ({DEFAULT_TOOLS_TIMEOUT_SECONDS}s)",
-            )
-        if fb_code == 0:
-            return out, None
-        fb_err = (fb_stderr or fb_stdout).strip() or "unknown error"
-        return (
-            None,
-            "wasmoon-tools wat2wasm failed: "
-            + primary_err
-            + "; fallback wasm-tools parse failed: "
-            + fb_err,
-        )
+        err = (stderr or stdout).strip() or "unknown error"
+        return None, f"wasm-tools parse failed: {err}"
 
     return out, None
 
@@ -723,22 +764,20 @@ def is_parse_rejection(msg: str, code: Optional[str]) -> bool:
     return "parse component error" in lower or '"phase":"parse"' in lower
 
 
-def wit_names_for_path(wast_file: Path) -> bool:
-    # wasm-tools' suite validates the WIT component encoding, which imposes
-    # kebab-case/package-name name rules. wasmtime's suite uses arbitrary names.
-    return "wasmtime" not in wast_file.parts
-
-
 def run_component_script(
-    script: dict, wasmoon: Path, tmp: Path
+    script: dict, wasmoon: Path, tmp: Path, *, no_jit: bool = False
 ) -> Tuple[int, int, int, list[str], str, bool]:
     script_path = tmp / "component_script.json"
     script_path.write_text(
         json.dumps(script, ensure_ascii=True, indent=2),
         encoding="utf-8",
     )
+    command = [str(wasmoon), "component-test"]
+    if no_jit:
+        command.append("--no-jit")
+    command.append(str(script_path))
     returncode, stdout, stderr, timed_out = run_command(
-        [str(wasmoon), "component-test", str(script_path)],
+        command,
         timeout_sec=DEFAULT_SCRIPT_TIMEOUT_SECONDS,
     )
     if timed_out:
@@ -773,13 +812,15 @@ def run_file(
     wasm_tools: Path,
     *,
     keep_tmp_on_failure: bool = False,
+    no_jit: bool = False,
 ) -> dict:
     text = path.read_text(encoding="utf-8")
     passed = failed = 0
     failures: list[str] = []
     defined_components: set[str] = set()
     anon_def_count = 0
-    wit_names = wit_names_for_path(path)
+    # The consolidated official suite uses the normative WIT name rules.
+    wit_names = True
     current_form_idx = 0
     current_cmd = ""
 
@@ -825,7 +866,6 @@ def run_file(
                     normalized,
                     tmp_path,
                     comp_idx,
-                    wasmoon_tools,
                     wasm_tools,
                 )
                 comp_idx += 1
@@ -881,7 +921,6 @@ def run_file(
                     normalized,
                     tmp_path,
                     comp_idx,
-                    wasmoon_tools,
                     wasm_tools,
                 )
                 comp_idx += 1
@@ -955,7 +994,6 @@ def run_file(
                     normalized,
                     tmp_path,
                     comp_idx,
-                    wasmoon_tools,
                     wasm_tools,
                 )
                 comp_idx += 1
@@ -995,7 +1033,6 @@ def run_file(
                     normalized,
                     tmp_path,
                     comp_idx,
-                    wasmoon_tools,
                     wasm_tools,
                 )
                 comp_idx += 1
@@ -1090,7 +1127,6 @@ def run_file(
                     normalized,
                     tmp_path,
                     comp_idx,
-                    wasmoon_tools,
                     wasm_tools,
                 )
                 comp_idx += 1
@@ -1141,7 +1177,12 @@ def run_file(
                 sfailures,
                 raw,
                 saw_result,
-            ) = run_component_script(script, wasmoon, tmp_path)
+            ) = run_component_script(
+                script,
+                wasmoon,
+                tmp_path,
+                no_jit=no_jit,
+            )
             passed += spassed
             failed += sfailed
             if sskipped:
@@ -1165,8 +1206,12 @@ def main() -> int:
     parser.add_argument(
         "--dir",
         type=str,
-        default="component-spec",
-        help="Directory containing .wast files (default: component-spec)",
+        help="Directory containing .wast files (default: component-spec/upstream)",
+    )
+    parser.add_argument(
+        "--suite",
+        choices=REQUIRED_SUITES,
+        help="Run one exact suite from the pinned Component Model snapshot",
     )
     parser.add_argument(
         "--rec",
@@ -1184,6 +1229,11 @@ def main() -> int:
         help="Keep per-file temporary directories when a file fails (debug)",
     )
     parser.add_argument(
+        "--no-jit",
+        action="store_true",
+        help="Run component core functions with the interpreter instead of JIT",
+    )
+    parser.add_argument(
         "--wasmoon-tools",
         type=str,
         default="./wasmoon-tools",
@@ -1192,6 +1242,37 @@ def main() -> int:
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parent.parent
+    if args.suite is not None:
+        if args.dir is not None or args.rec:
+            print("Error: --suite cannot be combined with --dir or --rec")
+            return 1
+        try:
+            snapshot = validate_snapshot(repo_root)
+        except SnapshotError as error:
+            print(f"Error: invalid Component Model snapshot: {error}")
+            return 1
+        test_dir = snapshot.root
+        wast_files = [test_dir / path for path in snapshot.suites[args.suite]]
+        required_wasm_tools_version = snapshot.wasm_tools_version
+        print(
+            f"Using suite {args.suite!r} from "
+            f"{snapshot.repository}@{snapshot.commit}"
+        )
+    else:
+        test_dir = repo_root / (args.dir or "component-spec/upstream")
+        required_wasm_tools_version = DEFAULT_WASM_TOOLS_VERSION
+        if not test_dir.exists():
+            print(f"Error: Directory '{test_dir}' does not exist")
+            return 1
+        if args.rec:
+            wast_files = sorted(test_dir.glob("**/*.wast"))
+        else:
+            wast_files = sorted(test_dir.glob("*.wast"))
+
+    if not wast_files:
+        print(f"No .wast files found in '{test_dir}'")
+        return 1
+
     wasmoon = repo_root / "wasmoon"
     if not wasmoon.exists():
         print(
@@ -1215,36 +1296,25 @@ def main() -> int:
         print(
             "Error: `wasm-tools` not found on PATH. "
             "Install pinned wasm-tools with: "
-            f"cargo install wasm-tools --version {REQUIRED_WASM_TOOLS_VERSION} --locked"
+            "cargo install wasm-tools --version "
+            f"{required_wasm_tools_version} --locked"
         )
         return 1
     wasm_tools = Path(wasm_tools_bin).resolve()
     wasm_tools_version = read_wasm_tools_version(wasm_tools)
-    if wasm_tools_version != REQUIRED_WASM_TOOLS_VERSION:
+    if wasm_tools_version != required_wasm_tools_version:
         actual = wasm_tools_version or "unknown"
         print(
             "Error: unsupported `wasm-tools` version "
-            f"{actual} at {wasm_tools}; expected {REQUIRED_WASM_TOOLS_VERSION}. "
+            f"{actual} at {wasm_tools}; expected {required_wasm_tools_version}. "
             "Install the pinned version with: "
-            f"cargo install wasm-tools --version {REQUIRED_WASM_TOOLS_VERSION} --locked"
+            "cargo install wasm-tools --version "
+            f"{required_wasm_tools_version} --locked"
         )
         return 1
 
-    test_dir = repo_root / args.dir
-    if not test_dir.exists():
-        print(f"Error: Directory '{test_dir}' does not exist")
-        return 1
-
-    if args.rec:
-        wast_files = sorted(test_dir.glob("**/*.wast"))
-    else:
-        wast_files = sorted(test_dir.glob("*.wast"))
-
-    if not wast_files:
-        print(f"No .wast files found in '{test_dir}'")
-        return 1
-
     print(f"Found {len(wast_files)} .wast test files in '{test_dir}'")
+    print(f"Core execution mode: {'interpreter' if args.no_jit else 'JIT'}")
     print(
         "Timeout settings: "
         f"validate={DEFAULT_VALIDATE_TIMEOUT_SECONDS}s(base {BASE_VALIDATE_TIMEOUT_SECONDS}s), "
@@ -1263,6 +1333,7 @@ def main() -> int:
             wasmoon_tools,
             wasm_tools,
             keep_tmp_on_failure=args.keep_tmp_on_failure,
+            no_jit=args.no_jit,
         )
         total_passed += result["passed"]
         total_failed += result["failed"]
@@ -1288,6 +1359,9 @@ def main() -> int:
     print(f"  Commands failed:  {total_failed}")
     print(f"  Commands skipped: {total_skipped}")
 
+    if total_passed == 0:
+        print("Error: component test lane executed zero passing commands")
+        return 1
     return 0 if total_failed == 0 else 1
 
 

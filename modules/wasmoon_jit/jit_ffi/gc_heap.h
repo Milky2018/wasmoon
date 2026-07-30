@@ -82,6 +82,10 @@ typedef struct GcHeap {
     int32_t total_allocations;
     int32_t total_collections;
     int32_t barrier_writes;
+
+    // Runtime-owned registrations for precise roots held by parked native JIT
+    // continuations that share this Store heap.
+    void *parked_jit_roots_head;
 } GcHeap;
 
 // ============ Heap Lifecycle ============
@@ -98,6 +102,23 @@ GcHeap* gc_heap_new(size_t initial_capacity);
  * @param heap Heap to free
  */
 void gc_heap_free(GcHeap* heap);
+
+/**
+ * Register an updateable, heap-owned root array for a parked continuation.
+ * The returned registration must be removed exactly once before freeing the
+ * heap. `out_roots` points to `root_count` writable slots owned by the heap.
+ */
+int32_t gc_heap_register_parked_roots(
+    GcHeap* heap,
+    int32_t root_count,
+    void** out_registration,
+    int64_t** out_roots
+);
+
+/**
+ * Remove and free one parked-root registration.
+ */
+void gc_heap_unregister_parked_roots(void* registration);
 
 // ============ Struct Operations ============
 

@@ -3,7 +3,9 @@ pub fn alloc_host_core_func(
   store : @runtime.Store,
   core_type : @types.FuncType,
   host : (Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError,
-) -> CoreFuncRef {
+  may_suspend? : Bool = false,
+  native_eligible? : Bool = true,
+) -> CoreFuncRef raise @runtime.RuntimeError {
   let func_addr = store.alloc_host_func(host, func_type=core_type, type_idx=0)
   let instance : @runtime.ModuleInstance = {
     types: [@types.SubType::from_func(core_type)],
@@ -22,7 +24,26 @@ pub fn alloc_host_core_func(
     dropped_elems: [],
     dropped_datas: [],
   }
-  { instance, func_idx: 0 }
+  {
+    instance,
+    func_idx: 0,
+    engine: interpreter_core_execution_engine(),
+    may_suspend,
+    native_eligible,
+  }
+}
+
+///|
+fn alloc_component_host_core_func(
+  store : @runtime.Store,
+  core_type : @types.FuncType,
+  host : (Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError,
+  may_suspend? : Bool = false,
+  native_eligible? : Bool = true,
+) -> CoreFuncRef raise ComponentRuntimeError {
+  alloc_host_core_func(store, core_type, host, may_suspend~, native_eligible~) catch {
+    error => raise CoreModuleInstantiateError(error.to_string())
+  }
 }
 
 ///|
@@ -65,7 +86,27 @@ fn call_core_func(
   store : @runtime.Store,
   core_func : CoreFuncRef,
   args : Array[@types.Value],
+  style? : CoreCallStyle = RunToCompletion,
 ) -> Array[@types.Value] raise ComponentRuntimeError {
+  let outcome = call_core_func_outcome(store, core_func, args, style)
+  match outcome {
+    Returned(results) => results
+    Suspended(_, continuation) => {
+      continuation.cancel()
+      raise CanonCallError(
+        "core execution engine returned a continuation to a synchronous caller",
+      )
+    }
+  }
+}
+
+///|
+fn call_core_func_outcome(
+  store : @runtime.Store,
+  core_func : CoreFuncRef,
+  args : Array[@types.Value],
+  style : CoreCallStyle,
+) -> CoreExecutionOutcome raise ComponentRuntimeError {
   // Reset any previous canonical trap so we don't leak messages across calls.
   clear_canon_trap_message()
   clear_canon_debug_message()
@@ -74,21 +115,32 @@ fn call_core_func(
     set_canon_debug_message(msg)
   }
   canon_suspend[0] = None
-  @executor.call_func_by_index(
+  let outcome = core_func.engine.invoke(
     store,
     core_func.instance,
     core_func.func_idx,
     args,
+    CoreExecutionRequest(
+      style,
+      if core_func.native_eligible {
+        PreferNative
+      } else {
+        InterpreterOnly
+      },
+      if style is Stackful || core_func.may_suspend {
+        Resumable
+      } else {
+        RunToReturn
+      },
+    ),
   ) catch {
     e => {
       match canon_suspend[0] {
-        Some(Yield) => {
+        Some(_) => {
           canon_suspend[0] = None
-          raise AsyncSuspendYield
-        }
-        Some(Wait(ws)) => {
-          canon_suspend[0] = None
-          raise AsyncSuspendWait(ws)
+          raise CanonCallError(
+            "core execution attempted to suspend in synchronous mode",
+          )
         }
         None => ()
       }
@@ -97,10 +149,15 @@ fn call_core_func(
         None => {
           // Include a tiny bit of context to make debugging easier when the trap
           // originates from core wasm (e.g. `unreachable` inside a component-spec test).
-          let trap_msg = if e.to_string() == "unreachable" {
-            "wasm `unreachable` instruction executed"
+          let error_message = match e {
+            CanonCallError(message) => message
+            _ => e.to_string()
+          }
+          let trap_msg = if error_message == "unreachable" ||
+            error_message.contains("wasm `unreachable` instruction executed") {
+            "wasm trap: wasm `unreachable` instruction executed"
           } else {
-            e.to_string()
+            error_message
           }
           let inst_name = match
             core_instance_names.get(core_func.instance.store_idx) {
@@ -124,27 +181,85 @@ fn call_core_func(
       }
     }
   }
+  if outcome is Suspended(_, _) {
+    canon_suspend[0] = None
+  }
+  outcome
 }
 
 ///|
 fn call_core_func_guarded(
   store : @runtime.Store,
-  may_enter : Array[Bool],
+  entry : ComponentInstanceEntryState,
   core_func : CoreFuncRef,
   args : Array[@types.Value],
+  style? : CoreCallStyle = RunToCompletion,
 ) -> Array[@types.Value] raise ComponentRuntimeError {
-  let prev = may_enter[0]
-  // Mark this component instance as in-progress to prevent re-entrancy via
-  // lowered functions (component-spec/async/trap-on-reenter.wast).
-  may_enter[0] = false
-  let out = call_core_func(store, core_func, args) catch {
+  entry.enter()
+  let out = call_core_func(store, core_func, args, style~) catch {
     e => {
-      may_enter[0] = prev
+      entry.poison()
       raise e
     }
   }
-  may_enter[0] = prev
+  entry.leave()
   out
+}
+
+///|
+fn guard_core_outcome(
+  outcome : CoreExecutionOutcome,
+  entry : ComponentInstanceEntryState,
+) -> CoreExecutionOutcome {
+  match outcome {
+    Returned(results) => {
+      entry.leave()
+      Returned(results)
+    }
+    Suspended(reason, continuation) => {
+      // A captured continuation is not actively executing guest code. Release
+      // the dynamic entry guard while it waits; task ancestry still prevents
+      // prohibited async re-entry. Re-acquire it immediately before resuming.
+      entry.leave()
+      Suspended(
+        reason,
+        CoreContinuation(
+          fn() raise ComponentRuntimeError {
+            entry.enter()
+            let resumed = continuation.continue_execution() catch {
+              e => {
+                entry.poison()
+                raise e
+              }
+            }
+            guard_core_outcome(resumed, entry)
+          },
+          fn() {
+            continuation.cancel()
+            entry.leave()
+          },
+        ),
+      )
+    }
+  }
+}
+
+///|
+fn call_core_func_guarded_outcome(
+  store : @runtime.Store,
+  entry : ComponentInstanceEntryState,
+  core_func : CoreFuncRef,
+  args : Array[@types.Value],
+  style : CoreCallStyle,
+) -> CoreExecutionOutcome raise ComponentRuntimeError {
+  entry.enter()
+  let outcome = call_core_func_outcome(store, core_func, args, style) catch {
+    e => {
+      entry.poison()
+      raise e
+    }
+  }
+  guard_core_outcome(outcome, entry)
 }
 
 ///|

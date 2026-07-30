@@ -219,12 +219,13 @@ test "wit component encode+decode roundtrip (parseable)" {
   }
   let out = @wit.format_package(pkg)
   // Best-effort: ensure extracted WIT is parseable and includes key items.
-  let _ = @wit.parse_package(out) catch {
+  (@wit.parse_package(out) catch {
     e => {
       fail(e.to_string())
       panic()
     }
-  }
+  })
+  |> ignore
   if !out.contains("variant maybe-point") {
     fail("expected extracted WIT to include variant type")
   }

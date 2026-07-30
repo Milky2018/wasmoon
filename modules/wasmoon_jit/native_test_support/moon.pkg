@@ -1,0 +1,8 @@
+options(
+  "native-stub": [
+    "fiber_test_support.c",
+    "gc_test_support.c",
+    "fiber_register_probe_aarch64.S",
+    "fiber_register_probe_x86_64.S",
+  ],
+)

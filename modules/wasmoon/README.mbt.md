@@ -13,7 +13,8 @@ A WebAssembly runtime written in MoonBit with JIT compilation support.
 - **WAT/WASM Parser**: Parse both text and binary formats
 - **WASI Preview 1 Support**: File I/O, environment variables, command-line arguments
 - **GC Proposal Support**: i31/struct/array/ref operations in interpreter and JIT
-- **Component Model**: Component parser/validator/runtime with component-spec runner support
+- **Component Model**: Component parser, validator, runtime, and stable WIT-shaped facade
+- **WASI Components**: Preview 2 and WASI 0.3 hosts with native Component Async JIT on macOS AArch64 and Linux AMD64
 
 ## Requirements
 
@@ -117,10 +118,18 @@ wasmoon explore --help
 
 # component
 wasmoon component path/to/component.wasm --validate
+wasmoon component path/to/component.wasm \
+  --invoke 'math#increment' \
+  --arg 41
+wasmoon component path/to/command.component.wasm --run \
+  --dir /srv/data::/data \
+  --network loopback
+wasmoon component path/to/command.component.wasm --run --no-jit
 wasmoon component --help
 
 # component-test
 wasmoon component-test path/to/component-tests.json
+wasmoon component-test path/to/component-tests.json --no-jit
 wasmoon component-test --help
 
 # wat
@@ -207,9 +216,15 @@ their own compatible licenses. See `THIRD_PARTY_NOTICES.md`.
 moon check --target native
 moon test --target native
 ./install.sh
-cargo install wasm-tools --version 1.248.0 --locked
+cargo install wasm-tools --version 1.254.0 --locked
 python3 scripts/run_all_wast.py --dir spec --rec
-python3 scripts/run_component_wast.py --dir component-spec --rec
+python3 scripts/check_component_snapshot.py
+python3 scripts/run_component_wast.py --suite stable-0.2
+python3 scripts/run_component_wast.py --suite stable-0.2 --no-jit
+python3 scripts/run_component_wast.py --suite async-0.3
+python3 scripts/run_component_wast.py --suite async-0.3 --no-jit
+python3 scripts/run_component_wast.py --suite future-gated
+python3 scripts/run_component_wast.py --suite future-gated --no-jit
 ```
 
 ## Library Usage

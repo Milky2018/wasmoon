@@ -1500,6 +1500,9 @@ pub fn install_jit_hostcall_dispatcher(
   jit_module : @jit.JITModule,
   store : @runtime.Store,
   instance : @runtime.ModuleInstance,
+  before_dispatch? : () -> Unit = fn() { () },
+  after_dispatch? : () -> Unit = fn() { () },
+  classify_suspension? : (@runtime.RuntimeError) -> Bool = fn(_error) { false },
 ) -> Unit {
   fn call_func_by_addr(
     store : @runtime.Store,
@@ -1541,11 +1544,11 @@ pub fn install_jit_hostcall_dispatcher(
     let res_slots = @wasmoon_jit.get_hostcall_num_result_slots()
     let ft = match store.get_func_type_opt(func_addr) {
       Some(t) => t
-      None => return 3
+      None => return HostcallTrap(3)
     }
     if sum_slot_count(ft.params) != arg_slots ||
       sum_slot_count(ft.results) != res_slots {
-      return 3
+      return HostcallTrap(3)
     }
 
     // Decode args.
@@ -1557,10 +1560,20 @@ pub fn install_jit_hostcall_dispatcher(
       slot = slot + used
     }
 
-    // Invoke imported function (host or wasm).
+    // Imported code observes interpreter-owned globals and tables. Publish the
+    // caller's native state before dispatch, then pull mutations back before
+    // returning to native code.
+    before_dispatch()
     let invoke_result = call_func_by_addr(store, instance, func_addr, args) catch {
-      e => return runtime_error_to_trap_code(e)
+      e => {
+        after_dispatch()
+        if classify_suspension(e) {
+          return HostcallSuspended
+        }
+        return HostcallTrap(runtime_error_to_trap_code(e))
+      }
     }
+    after_dispatch()
     let results : Array[@types.Value] = match invoke_result {
       Returned(values) => values
       Thrown(tag_addr, values) => {
@@ -1574,7 +1587,7 @@ pub fn install_jit_hostcall_dispatcher(
           for v in values {
             match encode_exception_value_for_jit(v, jit_module, instance) {
               Some(raw) => encoded_values.push(raw)
-              None => return 8
+              None => return HostcallTrap(8)
             }
           }
           @jit.throw_exception_values(
@@ -1583,11 +1596,11 @@ pub fn install_jit_hostcall_dispatcher(
             encoded_values,
           )
         }
-        return 8
+        return HostcallTrap(8)
       }
     }
     if results.length() != ft.results.length() {
-      return 3
+      return HostcallTrap(3)
     }
 
     // Encode results right after the arg slots region.
@@ -1595,7 +1608,7 @@ pub fn install_jit_hostcall_dispatcher(
     for i, ty in ft.results {
       let slots = encode_value(ty, results[i], jit_module, instance)
       match slots {
-        None => return 3
+        None => return HostcallTrap(3)
         Some(encoded_slots) => {
           for j in 0..<encoded_slots.length() {
             @wasmoon_jit.hostcall_value_slot_write(
@@ -1607,6 +1620,6 @@ pub fn install_jit_hostcall_dispatcher(
         }
       }
     }
-    0
+    HostcallCompleted
   })
 }

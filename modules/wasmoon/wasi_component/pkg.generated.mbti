@@ -1,0 +1,65 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon/wasi_component"
+
+import {
+  "Milky2018/wasmoon/component/runtime_impl",
+}
+
+// Values
+pub let preview2_version : String
+
+pub fn preview2_wit_sha256() -> String
+
+pub let preview3_version : String
+
+pub fn preview3_wit_sha256() -> String
+
+// Errors
+
+// Types and methods
+type WasiComponentCtx
+pub fn WasiComponentCtx::arguments(Self) -> Array[String]
+pub fn WasiComponentCtx::close(Self) -> Unit
+pub fn WasiComponentCtx::environment(Self) -> Array[(String, String)]
+pub fn WasiComponentCtx::exit_status(Self) -> Int?
+pub fn WasiComponentCtx::initial_cwd(Self) -> String?
+
+type WasiComponentCtxBuilder
+pub fn WasiComponentCtxBuilder::WasiComponentCtxBuilder() -> Self
+pub fn WasiComponentCtxBuilder::args(Self, Array[String]) -> Self
+pub fn WasiComponentCtxBuilder::build(Self) -> WasiComponentCtx
+pub fn WasiComponentCtxBuilder::env(Self, String, String) -> Self
+pub fn WasiComponentCtxBuilder::inherit_stderr(Self) -> Self
+pub fn WasiComponentCtxBuilder::inherit_stdin(Self) -> Self
+pub fn WasiComponentCtxBuilder::inherit_stdio(Self) -> Self
+pub fn WasiComponentCtxBuilder::inherit_stdout(Self) -> Self
+pub fn WasiComponentCtxBuilder::initial_cwd(Self, String) -> Self
+pub fn WasiComponentCtxBuilder::insecure_seed(Self, Int64, Int64) -> Self
+pub fn WasiComponentCtxBuilder::network_policy(Self, WasiNetworkPolicy) -> Self
+pub fn WasiComponentCtxBuilder::preopened_directory(Self, String, String, Bool) -> Self raise @runtime_impl.ComponentRuntimeError
+pub fn WasiComponentCtxBuilder::stderr(Self, (Bytes) -> Unit) -> Self
+pub fn WasiComponentCtxBuilder::stdin(Self, Bytes) -> Self
+pub fn WasiComponentCtxBuilder::stdout(Self, (Bytes) -> Unit) -> Self
+
+type WasiComponentHost
+pub fn WasiComponentHost::WasiComponentHost(@runtime_impl.ComponentLinker, WasiComponentCtx) -> Self
+pub fn WasiComponentHost::add_preview2_cli_clocks_random(Self) -> Unit raise @runtime_impl.ComponentRuntimeError
+pub fn WasiComponentHost::add_preview2_filesystem(Self) -> Unit raise @runtime_impl.ComponentRuntimeError
+pub fn WasiComponentHost::add_preview2_io(Self) -> Unit raise @runtime_impl.ComponentRuntimeError
+pub fn WasiComponentHost::add_preview2_sockets(Self) -> Unit raise @runtime_impl.ComponentRuntimeError
+pub fn WasiComponentHost::add_preview3_cli_clocks_random(Self) -> Unit raise @runtime_impl.ComponentRuntimeError
+pub fn WasiComponentHost::add_preview3_filesystem(Self) -> Unit raise @runtime_impl.ComponentRuntimeError
+pub fn WasiComponentHost::add_preview3_sockets(Self) -> Unit raise @runtime_impl.ComponentRuntimeError
+pub fn WasiComponentHost::context(Self) -> WasiComponentCtx
+pub fn WasiComponentHost::runtime(Self) -> @runtime_impl.HostRuntimeState
+
+pub(all) enum WasiNetworkPolicy {
+  DenyAll
+  LoopbackOnly
+  AllowAll
+} derive(Eq)
+
+// Type aliases
+
+// Traits
+

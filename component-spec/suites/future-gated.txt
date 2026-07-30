@@ -1,0 +1,13 @@
+# Files with at least one valid form requiring a post-0.3 emoji-gated feature.
+async/big-interleaving-test.wast
+async/cancel-subtask.wast
+async/cancellable.wast
+async/sync-barges-in.wast
+async/sync-streams.wast
+async/trap-if-block-and-sync.wast
+async/trap-if-sync-and-waitable-set.wast
+binary/binary.wast
+validation/attributes.wast
+validation/indicies.wast
+values/post-return.wast
+values/variants.wast

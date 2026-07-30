@@ -80,7 +80,11 @@ pub fn native_clock_gettime_realtime() -> Int64
 
 pub fn native_close(Int) -> Bool
 
+pub fn native_dup(Int) -> Int?
+
 pub fn native_dup2(Int, Int) -> Bool
+
+pub fn native_errno_to_wasi(Int) -> Int
 
 pub fn native_fcntl_getfl(Int) -> Int?
 
@@ -112,6 +116,8 @@ pub fn native_linkat(Int, String, Int, String, Int) -> Bool
 
 pub fn native_mkdir(String, Int) -> Bool
 
+pub fn native_mkdirat(Int, String, Int) -> Bool
+
 pub fn native_nanosleep(Int64) -> Bool
 
 pub fn native_o_append() -> Int
@@ -126,13 +132,21 @@ pub fn native_o_wronly() -> Int
 
 pub fn native_open(String, Array[OpenFlags], Int) -> Int?
 
+pub fn native_open_parent_beneath(Int, String) -> Int?
+
 pub fn native_open_read(String) -> Int?
 
 pub fn native_open_write(String) -> Int?
 
+pub fn native_openat_beneath(Int, String, String, Array[OpenFlags], Int, Bool) -> Int?
+
 pub fn native_path_within_base(String, String) -> Bool
 
 pub fn native_poll(Array[Int], Array[Int], Int) -> PollResult?
+
+pub fn native_pread(Int, FixedArray[Byte], Int, Int64) -> Int?
+
+pub fn native_pwrite(Int, FixedArray[Byte], Int, Int64) -> Int?
 
 pub fn native_raise(Int) -> Bool
 
@@ -140,9 +154,9 @@ pub fn native_read(Int, FixedArray[Byte], Int) -> Int?
 
 pub fn native_read_to_memory(Int, @runtime.Memory, Int, Int) -> Int?
 
-pub fn native_readdir(String) -> Array[(String, Bool)]?
+pub fn native_readdir(String) -> Array[(String, Int)]?
 
-pub fn native_readdir_fd(Int) -> Array[(String, Bool)]?
+pub fn native_readdir_fd(Int) -> Array[(String, Int)]?
 
 pub fn native_readlinkat(Int, String, Int) -> String?
 
@@ -150,11 +164,39 @@ pub fn native_recv(Int, FixedArray[Byte], Int) -> Int64
 
 pub fn native_renameat(Int, String, Int, String) -> Bool
 
+pub fn native_resolver_drop(Int64) -> Unit
+
+pub fn native_resolver_next(Int64) -> NativeResolverNext
+
+pub fn native_resolver_start(String) -> NativeResolver?
+
 pub fn native_seek(Int, Int64, Whence) -> Int64?
 
 pub fn native_send(Int, FixedArray[Byte], Int, Int) -> Int64
 
 pub fn native_shutdown(Int, Int) -> Bool
+
+pub fn native_socket_address(Int, Bool) -> NativeSocketAddress?
+
+pub fn native_socket_bind(Int, NativeSocketAddress) -> Bool
+
+pub fn native_socket_connect(Int, NativeSocketAddress) -> Int
+
+pub fn native_socket_create(Int, Int) -> Int?
+
+pub fn native_socket_disconnect(Int) -> Bool
+
+pub fn native_socket_error(Int) -> Int?
+
+pub fn native_socket_listen(Int, Int) -> Bool
+
+pub fn native_socket_option_get(Int, Int, Int) -> Int?
+
+pub fn native_socket_option_set(Int, Int, Int, Int) -> Bool
+
+pub fn native_socket_recv_from(Int, Int) -> NativeSocketDatagram?
+
+pub fn native_socket_send_to(Int, FixedArray[Byte], NativeSocketAddress?) -> Int64
 
 pub fn native_symlinkat(String, Int, String) -> Bool
 
@@ -198,7 +240,7 @@ pub fn putchar(Int) -> Unit
 
 pub fn random_get(@runtime.Memory, Int, Int) -> Int
 
-pub fn register_wasi(@runtime.Linker, WasiContext) -> Unit
+pub fn register_wasi(@runtime.Linker, WasiContext) -> Unit raise @runtime.RuntimeError
 
 pub let right_fd_advise : Int64
 
@@ -406,6 +448,32 @@ pub(all) enum FileType {
 pub(all) struct IoVec {
   buf : Int
   buf_len : Int
+}
+
+pub(all) struct NativeResolver {
+  handle : Int64
+  poll_fd : Int
+}
+
+pub(all) enum NativeResolverNext {
+  Address(NativeSocketAddress)
+  Pending
+  Finished
+  NameUnresolvable
+  TemporaryFailure
+  PermanentFailure
+}
+
+pub(all) struct NativeSocketAddress {
+  family : Int
+  address : FixedArray[Byte]
+  port : Int
+  scope_id : Int
+}
+
+pub(all) struct NativeSocketDatagram {
+  data : Bytes
+  address : NativeSocketAddress
 }
 
 pub(all) struct OpenFile {

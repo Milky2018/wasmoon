@@ -8,7 +8,7 @@ fn process_canon_section(
   payload : Bytes,
   state : BuildState,
   store : @runtime.Store,
-  may_enter_self : Array[Bool],
+  entry_state : ComponentInstanceEntryState,
 ) -> Unit raise ComponentRuntimeError {
   let canons = parse_canon_section(payload) catch {
     e => raise CoreModuleInstantiateError(e.to_string())
@@ -17,11 +17,10 @@ fn process_canon_section(
     match c {
       Lift(core_func_idx, opts, type_idx) =>
         instantiate_canon_lift(
-          core_func_idx, opts, type_idx, state, may_enter_self,
+          core_func_idx, opts, type_idx, state, entry_state,
         )
       Lower(func_idx, opts) =>
         instantiate_canon_lower(func_idx, opts, state, store)
-      BackpressureSet => instantiate_canon_backpressure_set(state, store)
       BackpressureInc => instantiate_canon_backpressure_inc(state, store)
       BackpressureDec => instantiate_canon_backpressure_dec(state, store)
       ResourceNew(tyidx) => instantiate_canon_resource_new(tyidx, state, store)
@@ -34,10 +33,16 @@ fn process_canon_section(
       ThreadIndex => instantiate_canon_thread_index(state, store)
       ThreadYield(_cancellable) =>
         instantiate_canon_thread_yield(_cancellable, state, store)
-      ThreadYieldTo(_cancellable) =>
-        instantiate_canon_thread_yield_to(_cancellable, state, store)
-      ThreadSwitchTo(_cancellable) =>
-        instantiate_canon_thread_switch_to(_cancellable, state, store)
+      ThreadSuspendThenResume(_cancellable) =>
+        instantiate_canon_thread_suspend_then_resume(_cancellable, state, store)
+      ThreadYieldThenResume(_cancellable) =>
+        instantiate_canon_thread_yield_then_resume(_cancellable, state, store)
+      ThreadSuspendThenPromote(_cancellable) =>
+        instantiate_canon_thread_suspend_then_promote(
+          _cancellable, state, store,
+        )
+      ThreadYieldThenPromote(_cancellable) =>
+        instantiate_canon_thread_yield_then_promote(_cancellable, state, store)
       ThreadResumeLater => instantiate_canon_thread_resume_later(state, store)
       ThreadSuspend(_cancellable) =>
         instantiate_canon_thread_suspend(_cancellable, state, store)

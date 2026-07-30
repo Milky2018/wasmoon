@@ -343,6 +343,25 @@ pub suberror JitPipelineError {
 } derive(@debug.Debug)
 pub impl Show for JitPipelineError
 
+pub suberror NativeExecutionStateError {
+  ExecutionStateSealed
+  UnknownInvocation(Int64)
+  InvocationNotActive(Int64)
+  InvocationNotParked(Int64)
+  InvocationNotCurrent(Int64)
+} derive(Eq, @debug.Debug)
+pub impl Show for NativeExecutionStateError
+
+pub suberror NativeFiberError {
+  StackAllocationFailed(Int64)
+  WrongThread
+  InvalidTransition(NativeFiberPhase)
+  InvalidState(Int)
+  UnexpectedYield(Int64)
+  NativeFailure(Int)
+} derive(Eq, @debug.Debug)
+pub impl Show for NativeFiberError
+
 // Types and methods
 pub(all) struct ArtifactCompatibility {
   target : @artifact.TargetSpec
@@ -525,6 +544,7 @@ pub struct InstalledCode {
 pub fn InstalledCode::entry_address(Self, Int) -> Int64?
 pub fn InstalledCode::functions(Self) -> Array[InstalledFunction]
 pub fn InstalledCode::imports(Self) -> Array[InstalledImport]
+pub fn InstalledCode::release(Self) -> Unit
 
 pub struct InstalledFunction {
   // private fields
@@ -550,6 +570,7 @@ pub struct InstalledTrampoline {
   // private fields
 }
 pub fn InstalledTrampoline::entry_address(Self) -> Int64
+pub fn InstalledTrampoline::release(Self) -> Unit
 
 pub struct JITDebugDB {
   entries : Map[Int, JITFunctionDebug]
@@ -622,12 +643,69 @@ pub struct MemoryInfo {
 }
 pub fn MemoryInfo::MemoryInfo(Int64, Int64, Int?) -> Self
 
+type NativeExecutionState
+pub fn NativeExecutionState::NativeExecutionState() -> Self
+pub fn NativeExecutionState::active_depth(Self) -> Int
+pub fn NativeExecutionState::begin(Self, release? : () -> Unit) -> NativeInvocationHandle raise NativeExecutionStateError
+pub fn NativeExecutionState::current_invocation(Self) -> Int64?
+pub fn NativeExecutionState::live_count(Self) -> Int
+pub fn NativeExecutionState::parked_count(Self) -> Int
+pub fn NativeExecutionState::release_if_live(Self, Int64) -> Unit
+pub fn NativeExecutionState::seal(Self) -> Unit
+pub impl @debug.Debug for NativeExecutionState
+
+type NativeFiber
+pub fn NativeFiber::cancel(Self) -> Unit raise NativeFiberError
+pub fn NativeFiber::continue_with(Self, value? : Int64) -> NativeFiberEvent raise NativeFiberError
+pub fn NativeFiber::guard_size(Self) -> Int64
+pub fn NativeFiber::new(() -> Int64, stack_size? : Int64) -> Self raise NativeFiberError
+pub fn NativeFiber::phase(Self) -> NativeFiberPhase
+pub fn NativeFiber::stack_size(Self) -> Int64
+pub fn NativeFiber::suspend(Int64) -> Int64
+pub impl @debug.Debug for NativeFiber
+
+pub(all) enum NativeFiberEvent {
+  Yielded(Int64)
+  Finished(Int64)
+} derive(Eq, @debug.Debug)
+
+pub(all) enum NativeFiberPhase {
+  Ready
+  Running
+  Suspended
+  Returned
+  Cancelled
+} derive(Eq, @debug.Debug)
+
+pub(all) enum NativeHostcallOutcome {
+  HostcallCompleted
+  HostcallTrap(Int)
+  HostcallSuspended
+} derive(Eq, @debug.Debug)
+
+type NativeInvocationHandle
+pub fn NativeInvocationHandle::cancel(Self) -> Unit raise NativeExecutionStateError
+pub fn NativeInvocationHandle::complete(Self) -> Unit raise NativeExecutionStateError
+pub fn NativeInvocationHandle::id(Self) -> Int64
+pub fn NativeInvocationHandle::park(Self) -> Unit raise NativeExecutionStateError
+pub fn NativeInvocationHandle::phase(Self) -> NativeInvocationPhase raise NativeExecutionStateError
+pub fn NativeInvocationHandle::reactivate(Self) -> Unit raise NativeExecutionStateError
+pub fn NativeInvocationHandle::release_if_live(Self) -> Unit
+pub fn NativeInvocationHandle::resource_id(Self) -> Int64 raise NativeExecutionStateError
+pub impl @debug.Debug for NativeInvocationHandle
+
+pub(all) enum NativeInvocationPhase {
+  Active
+  Parked
+} derive(Eq, @debug.Debug)
+
 type NativeJITContext
 pub fn NativeJITContext::alloc_guarded_memory(Self, Int, Int?) -> Int64
 pub fn NativeJITContext::alloc_indirect_table(Self, Int) -> Bool
 pub fn NativeJITContext::alloc_wasm_stack(Self, Int64) -> Bool
 pub fn NativeJITContext::call_trampoline(Self, Int64, Int64, FixedArray[Int64], Int, Bool) -> Int
 pub fn NativeJITContext::clear_cancellation_callback(Self) -> Unit
+pub fn NativeJITContext::clear_gc_heap(Self) -> Unit
 pub fn NativeJITContext::clear_hostcall_callback(Self) -> Unit
 pub fn NativeJITContext::func_table_ptr(Self) -> Int64
 pub fn NativeJITContext::has_wasm_stack(Self) -> Bool
@@ -637,12 +715,24 @@ pub fn NativeJITContext::ptr(Self) -> Int64
 pub fn NativeJITContext::set_cancellation_callback(Self, () -> Bool) -> Unit
 pub fn NativeJITContext::set_func(Self, Int, Int64) -> Unit
 pub fn NativeJITContext::set_globals(Self, Int64) -> Unit
-pub fn NativeJITContext::set_hostcall_callback(Self, () -> Int) -> Unit
+pub fn NativeJITContext::set_hostcall_callback(Self, () -> NativeHostcallOutcome) -> Unit
 pub fn NativeJITContext::set_indirect(Self, Int, Int, Int) -> Unit
 pub fn NativeJITContext::set_memory(Self, Int64) -> Unit
 pub fn NativeJITContext::set_memory_pointers(Self, Array[MemoryInfo]) -> Unit
 pub fn NativeJITContext::set_table_pointers(Self, Array[JITTable?]) -> Unit
+pub fn NativeJITContext::start_continuation(Self, Int64, Int64, FixedArray[Int64], Int, stack_size? : Int64) -> NativeJITContinuation raise NativeFiberError
 pub fn NativeJITContext::try_alloc(Int) -> Self?
+
+type NativeJITContinuation
+pub fn NativeJITContinuation::cancel(Self) -> Unit raise NativeFiberError
+pub fn NativeJITContinuation::continue_after_hostcall(Self, retry~ : Bool) -> NativeJITContinuationEvent raise NativeFiberError
+pub fn NativeJITContinuation::continue_with(Self, value? : Int64) -> NativeJITContinuationEvent raise NativeFiberError
+pub fn NativeJITContinuation::phase(Self) -> NativeFiberPhase
+
+pub(all) enum NativeJITContinuationEvent {
+  NativeHostcallSuspended
+  NativeJITReturned(Int)
+} derive(Eq, @debug.Debug)
 
 pub(all) enum NativeTarget {
   X64

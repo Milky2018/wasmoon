@@ -1,4 +1,5 @@
 name: Check and Test
+
 on:
   workflow_dispatch:
   pull_request:
@@ -6,365 +7,34 @@ on:
     branches:
       - $default-branch
 
+concurrency:
+  group: check-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 env:
-  WASM_TOOLS_VERSION: "1.248.0"
-  MOONBIT_INSTALL_VERSION: "nightly"
+  COMPONENT_WASM_TOOLS_VERSION: "1.254.0"
 
 jobs:
-  detect-machv-cutover:
-    runs-on: ubuntu-latest
-    outputs:
-      required: ${{ steps.detect.outputs.required }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: detect a cutover closing change
-        id: detect
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: |
-          set -euo pipefail
-          if [ "$EVENT_NAME" = workflow_dispatch ]; then
-            echo "required=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          if [ -z "$BASE_SHA" ] || ! git cat-file -e "$BASE_SHA^{commit}"; then
-            echo "required=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          if python3 scripts/detect_cutover_closing_change.py \
-            --base "$BASE_SHA" --head "$HEAD_SHA"
-          then
-            echo "required=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "required=false" >> "$GITHUB_OUTPUT"
-          fi
-
-  build-macos:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: install
-        run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
-          echo "$HOME/.moon/bin" >> $GITHUB_PATH
-
-      - name: post install
-        run: |
-          moon version --all
-          moon update
-
-      - name: moon check
-        id: moon_check
-        continue-on-error: true
-        run: |
-          set -euxo pipefail
-          moon check --target native 2>&1 | tee /tmp/moon_check_native.log
-
-      - name: dump moon check log (if any)
-        if: steps.moon_check.outcome != 'success'
-        run: |
-          set -euxo pipefail
-          cat /tmp/moon_check_native.log || true
-
-      - name: fail fast if moon check failed
-        if: steps.moon_check.outcome != 'success'
-        run: exit 1
-
-      - name: moon test
-        run: |
-          MACHV_REGALLOC_VALIDATION=1 moon test --target native
-
-      - name: lint
-        run: |
-          moon fmt && git diff --exit-code
-          moon info && git diff --exit-code
-          python3 scripts/audit_module_boundaries.py
-          python3 scripts/audit_semantic_machv_api.py
-          python3 scripts/audit_internal_compatibility.py
-
-      - name: build wasmoon
-        run: |
-          moon build --target native --release
-          ./install.sh
-
-      - name: install wasm-tools
-        run: |
-          cargo install wasm-tools --version "$WASM_TOOLS_VERSION" --locked
-          wasm-tools --version
-
-      - name: run component-spec subset
-        timeout-minutes: 5
-        run: |
-          python3 scripts/run_component_wast.py --dir component-spec --rec --dump-failures
-
-      - name: run wast spec tests
-        timeout-minutes: 5
-        run: |
-          python3 scripts/run_all_wast.py --dir spec --rec
-
-  build-ubuntu-amd64:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: install system deps
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y curl clang lld python3 gdb
-
-      - name: install moon
-        run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
-          echo "$HOME/.moon/bin" >> $GITHUB_PATH
-
-      - name: post install
-        run: |
-          moon version --all
-          moon update
-
-      - name: moon check
-        id: moon_check
-        continue-on-error: true
-        run: |
-          set -euxo pipefail
-          moon check --target native 2>&1 | tee /tmp/moon_check_native.log
-
-      - name: dump moon check log (if any)
-        if: steps.moon_check.outcome != 'success'
-        run: |
-          set -euxo pipefail
-          cat /tmp/moon_check_native.log || true
-
-      - name: fail fast if moon check failed
-        if: steps.moon_check.outcome != 'success'
-        run: exit 1
-
-      - name: moon test
-        id: moon_test
-        continue-on-error: true
-        run: |
-          MACHV_REGALLOC_VALIDATION=1 moon test --target native --no-parallelize -v
-
-      - name: dump failing rspfile (if any)
-        if: steps.moon_test.outcome != 'success'
-        run: |
-          set -euxo pipefail
-          echo "=== rspfiles under _build/native/debug/test ==="
-          find _build/native/debug/test -name '*.rspfile' -maxdepth 4 -print || true
-          echo "=== testsuite.whitebox_test.rspfile ==="
-          cat _build/native/debug/test/Milky2018/wasmoon/testsuite/testsuite.whitebox_test.rspfile || true
-
-      - name: gdb backtrace (testsuite whitebox)
-        if: steps.moon_test.outcome != 'success'
-        continue-on-error: true
-        run: |
-          set -euxo pipefail
-          # Build tests without running them, then run the failing whitebox
-          # test executable under gdb to capture a backtrace.
-          moon test --target native --no-parallelize -v --build-only -p testsuite
-
-          RSP="_build/native/debug/test/Milky2018/wasmoon/testsuite/testsuite.whitebox_test.rspfile"
-          NORUN="/tmp/testsuite.whitebox_test.norun.rspfile"
-          BIN="/tmp/testsuite.whitebox_test"
-          grep -v '^-run$' "$RSP" > "$NORUN"
-
-          MOON_BIN="$(dirname "$(command -v moon)")"
-          MOON_HOME="$(dirname "$MOON_BIN")"
-          "$MOON_HOME/bin/internal/tcc" @"$NORUN" -o "$BIN"
-
-          ulimit -c unlimited || true
-          export LD_LIBRARY_PATH="$PWD/_build/native/debug/test:$PWD/_build/native/debug/test/Milky2018/wasmoon_jit:$PWD/_build/native/debug/test/moonbitlang/x/fs:$PWD/_build/native/debug/test/Milky2018/wasmoon/wasi${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-
-          # Reconstruct the argv filter that `moon test` passes to the whitebox
-          # test runner (e.g. "foo_wbtest.mbt:0-3/bar_wbtest.mbt:0-2/...").
-          FILTER_ARG="$(
-            python3 -c 'import json; info=json.load(open("_build/native/debug/test/Milky2018/wasmoon/testsuite/__whitebox_test_info.json")); print("/".join(f"{k}:0-{len(v)}" for k, v in info["tests"].items()))'
-          )"
-
-          MALLOC_CHECK_=3 MALLOC_PERTURB_=165 \
-            gdb -q -batch \
-              -ex 'set pagination off' \
-              -ex 'handle SIGPIPE nostop noprint pass' \
-              -ex run \
-              -ex bt \
-              -ex 'info registers' \
-              -ex 'info symbol $r11' \
-              -ex 'info symbol $r12' \
-              -ex 'info symbol $r14' \
-              -ex 'info symbol $r15' \
-              -ex 'info symbol $pc' \
-              -ex 'info proc mappings' \
-              -ex 'info sharedlibrary' \
-              -ex 'x/48i $pc-96' \
-              -ex 'x/48i $pc' \
-              --args "$BIN" "$FILTER_ARG"
-
-      - name: fail fast if moon test failed
-        if: steps.moon_test.outcome != 'success'
-        run: exit 1
-
-      - name: lint
-        run: |
-          moon fmt && git diff --exit-code
-          moon info && git diff --exit-code
-          python3 scripts/audit_module_boundaries.py
-          python3 scripts/audit_semantic_machv_api.py
-          python3 scripts/audit_internal_compatibility.py
-
-      - name: build wasmoon
-        run: |
-          moon build --target native --release
-          ./install.sh
-
-      - name: install wasm-tools
-        run: |
-          cargo install wasm-tools --version "$WASM_TOOLS_VERSION" --locked
-          wasm-tools --version
-
-      - name: run component-spec subset (amd64)
-        timeout-minutes: 5
-        run: |
-          python3 scripts/run_component_wast.py --dir component-spec --rec --dump-failures
-
-      - name: run wast spec tests (amd64)
-        id: wast_amd64
-        timeout-minutes: 10
-        continue-on-error: true
-        run: |
-          python3 scripts/run_all_wast.py --dir spec --rec
-
-      - name: dump amd64 JIT regressions
-        if: steps.wast_amd64.outcome != 'success'
-        run: |
-          set -euxo pipefail
-          python3 scripts/run_all_wast.py --dir spec --rec --dump-failures || true
-          for f in \
-            call.wast \
-            call_indirect.wast \
-            exceptions/try_table.wast \
-            gc/array.wast \
-            gc/array_init_data.wast \
-            gc/array_init_elem.wast \
-            gc/array_new_elem.wast \
-            gc/i31.wast \
-            left-to-right.wast \
-            simd/simd_i64x2_cmp.wast
-          do
-            echo "===== amd64 debug: $f ====="
-            ./wasmoon test "spec/$f" -D || true
-          done
-
-      - name: fail fast if wast spec tests failed (amd64)
-        if: steps.wast_amd64.outcome != 'success'
-        run: exit 1
-
-  build-ubuntu-sanitizer:
-    runs-on: ubuntu-latest
-    env:
-      CC: clang
-      CXX: clang++
-      CFLAGS: -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer
-      CXXFLAGS: -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer
-      LDFLAGS: -fsanitize=address,undefined
-      ASAN_OPTIONS: detect_leaks=1:abort_on_error=1
-      UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-
-      - name: install system deps
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y curl clang lld python3
-
-      - name: install moon
-        run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
-          echo "$HOME/.moon/bin" >> $GITHUB_PATH
-
-      - name: post install
-        run: |
-          moon version --all
-          moon update
-
-      - name: initialize sanitizer evidence manifest
-        run: |
-          mkdir -p target/cutover-gate/linux-amd64-sanitizer/logs
-          python3 scripts/cutover_gate_manifest.py init \
-            --manifest target/cutover-gate/linux-amd64-sanitizer/manifest.json \
-            --kind sanitizer \
-            --target linux-amd64
-
-      - name: build wasmoon (sanitizer)
-        run: |
-          python3 scripts/cutover_gate_manifest.py run \
-            --manifest target/cutover-gate/linux-amd64-sanitizer/manifest.json \
-            --name build-sanitizer \
-            --log target/cutover-gate/linux-amd64-sanitizer/logs/build.log \
-            -- bash -c 'moon build --target native --release && ./install.sh'
-
-      - name: run GC differential stress matrix (sanitizer)
-        if: always()
-        timeout-minutes: 10
-        run: |
-          python3 scripts/cutover_gate_manifest.py run \
-            --manifest target/cutover-gate/linux-amd64-sanitizer/manifest.json \
-            --name gc-stress \
-            --log target/cutover-gate/linux-amd64-sanitizer/logs/gc-stress.log \
-            -- python3 scripts/find_gc_bugs.py --dir spec/gc --timeout 30
-
-      - name: run GC differential fault-injection lane (sanitizer)
-        if: always()
-        timeout-minutes: 10
-        run: |
-          python3 scripts/cutover_gate_manifest.py run \
-            --manifest target/cutover-gate/linux-amd64-sanitizer/manifest.json \
-            --name gc-fault-injection \
-            --log target/cutover-gate/linux-amd64-sanitizer/logs/gc-fault-injection.log \
-            -- python3 scripts/find_gc_bugs.py --dir spec/gc --timeout 30 --max-files 64 --fault-alloc-every 7
-
-      - name: finalize sanitizer evidence manifest
-        if: always()
-        run: |
-          python3 scripts/cutover_gate_manifest.py finalize \
-            --manifest target/cutover-gate/linux-amd64-sanitizer/manifest.json \
-            --required build-sanitizer,gc-stress,gc-fault-injection
-
-      - name: upload sanitizer evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: machv-cutover-linux-amd64-sanitizer
-          path: target/cutover-gate/linux-amd64-sanitizer
-          if-no-files-found: error
-          retention-days: 30
-
-  machv-cutover:
-    needs: detect-machv-cutover
-    if: needs.detect-machv-cutover.outputs.required == 'true'
+  native-platform:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
         include:
-          - runner: macos-latest
-            target: darwin-arm64
-          - runner: ubuntu-latest
-            target: linux-amd64
-    runs-on: ${{ matrix.runner }}
-    env:
-      CUTOVER_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-      CUTOVER_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          - name: Linux AMD64
+            os: ubuntu-latest
+            native_test_args: --no-parallelize
+            asan_options: detect_leaks=1:abort_on_error=1
+          - name: macOS ARM64
+            os: macos-latest
+            native_test_args: ""
+            asan_options: detect_leaks=0:abort_on_error=1
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: install system dependencies
         if: runner.os == 'Linux'
@@ -372,102 +42,135 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y curl clang lld python3
 
-      - name: install MoonBit
+      - name: install toolchain
         run: |
           curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
           echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+          cargo install wasm-tools \
+            --version "$COMPONENT_WASM_TOOLS_VERSION" --locked
 
-      - name: prepare gate toolchain
+      - name: report toolchain
         run: |
           moon version --all
           moon update
-          cargo install wasm-tools --version "$WASM_TOOLS_VERSION" --locked
           wasm-tools --version
+          uname -a
 
-      - name: initialize cutover evidence manifest
+      - name: check source and generated interfaces
         run: |
-          mkdir -p "target/cutover-gate/${{ matrix.target }}/logs"
-          python3 scripts/cutover_gate_manifest.py init \
-            --manifest "target/cutover-gate/${{ matrix.target }}/manifest.json" \
-            --kind target-cutover \
-            --target "${{ matrix.target }}"
+          moon check --target native --warn-list @73
+          moon fmt
+          git diff --exit-code
+          moon info
+          git diff --exit-code
+          base="${{ github.event.pull_request.base.sha || github.event.before }}"
+          if [ -z "$base" ] || ! git cat-file -e "$base^{commit}"; then
+            base="$(git rev-parse HEAD^)"
+          fi
+          python3 scripts/check_committed_diff.py \
+            --base "$base" --head "${{ github.event.pull_request.head.sha || github.sha }}"
+          python3 scripts/audit_module_boundaries.py
+          python3 scripts/audit_semantic_machv_api.py
+          python3 scripts/audit_internal_compatibility.py
+          python3 -m unittest discover -s scripts/tests -p 'test_*.py'
+          python3 scripts/audit_component_security.py
+          python3 scripts/check_component_snapshot.py
+          python3 modules/wasmoon/wasi_component/tools/generate_wasi_contracts.py \
+            modules/wasmoon/wasi_component/wit \
+            modules/wasmoon/wasi_component/wit_contracts_generated.mbt \
+            --verify-wit --check
 
-      - name: assert target identity
+      - name: run native tests
         run: |
-          python3 scripts/cutover_gate_manifest.py run \
-            --manifest "target/cutover-gate/${{ matrix.target }}/manifest.json" \
-            --name target-identity \
-            --log "target/cutover-gate/${{ matrix.target }}/logs/target-identity.log" \
-            -- python3 scripts/assert_target_identity.py "${{ matrix.target }}" \
-              --out "target/cutover-gate/${{ matrix.target }}/target-identity.json"
+          MACHV_REGALLOC_VALIDATION=1 \
+            moon test --target native ${{ matrix.native_test_args }}
 
-      - name: run cutover quality and correctness matrix
-        if: always()
+      - name: build Wasmoon
         run: |
-          set +e
+          moon build --target native --release
+          if nm \
+            target/native/release/build/Milky2018/wasmoon_jit/libwasmoon_jit.a \
+            | grep "live_gc_frame_count" >/dev/null; then
+            echo "release libwasmoon_jit.a contains test-only GC frame counters"
+            exit 1
+          fi
+          ./install.sh
+
+      - name: run core WAST tests
+        timeout-minutes: 10
+        run: |
+          python3 scripts/run_all_wast.py --dir spec --rec
+          python3 scripts/find_gc_bugs.py --dir spec/gc --timeout 30
+          python3 scripts/find_gc_bugs.py \
+            --dir spec/gc --timeout 30 --max-files 64 --fault-alloc-every 7
+
+      - name: run WASI Preview 1 tests
+        run: python3 examples/wasi_tests/wasi_test.py
+
+      - name: run stable Component Model 0.2
+        timeout-minutes: 20
+        run: |
           status=0
-          MANIFEST="target/cutover-gate/${{ matrix.target }}/manifest.json"
-          LOGS="target/cutover-gate/${{ matrix.target }}/logs"
-          run_gate() {
-            python3 scripts/cutover_gate_manifest.py run \
-              --manifest "$MANIFEST" --name "$1" --log "$LOGS/$1.log" \
-              -- bash -c "$2" || status=$?
-          }
-          run_gate moon-fmt 'moon fmt && git diff --exit-code'
-          run_gate moon-info 'moon info && git diff --exit-code'
-          run_gate git-diff-check 'python3 scripts/check_committed_diff.py'
-          run_gate moon-check 'moon check --target native --warn-list +73'
-          run_gate moon-test 'MACHV_REGALLOC_VALIDATION=1 moon test --target native --no-parallelize'
-          run_gate boundary-audits 'python3 scripts/audit_module_boundaries.py && python3 scripts/audit_semantic_machv_api.py && python3 scripts/audit_internal_compatibility.py'
-          run_gate python-gate-tests 'python3 -m unittest discover -s scripts/tests -p "test_*.py"'
-          run_gate build-install 'moon build --target native --release && ./install.sh'
-          run_gate wast 'python3 scripts/run_all_wast.py --dir spec --rec'
-          run_gate wasi 'python3 examples/wasi_tests/wasi_test.py'
-          run_gate smith 'python3 scripts/run_fixed_smith_gate.py --out target/cutover-gate/${{ matrix.target }}/smith'
+          python3 scripts/run_component_wast.py \
+            --suite stable-0.2 --dump-failures || status=$?
+          python3 scripts/run_component_wast.py \
+            --suite stable-0.2 --dump-failures --no-jit || status=$?
           exit "$status"
 
-      - name: finalize cutover evidence manifest
-        if: always()
+      - name: run Component Model 0.3 async
+        timeout-minutes: 20
         run: |
-          python3 scripts/cutover_gate_manifest.py finalize \
-            --manifest "target/cutover-gate/${{ matrix.target }}/manifest.json" \
-            --required target-identity,moon-fmt,moon-info,git-diff-check,moon-check,moon-test,boundary-audits,python-gate-tests,build-install,wast,wasi,smith
+          status=0
+          python3 scripts/run_component_wast.py \
+            --suite async-0.3 --dump-failures || status=$?
+          python3 scripts/run_component_wast.py \
+            --suite async-0.3 --dump-failures --no-jit || status=$?
+          exit "$status"
 
-      - name: upload cutover evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: machv-cutover-${{ matrix.target }}
-          path: target/cutover-gate/${{ matrix.target }}
-          if-no-files-found: error
-          retention-days: 30
-
-  machv-cutover-manifest:
-    needs: [detect-machv-cutover, machv-cutover, build-ubuntu-sanitizer, build-macos, build-ubuntu-amd64]
-    if: always() && needs.detect-machv-cutover.outputs.required == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: machv-cutover-*
-          path: target/cutover-evidence
-      - name: combine target evidence
+      - name: run future-gated Component Model features
+        timeout-minutes: 20
         run: |
-          mapfile -t manifests < <(find target/cutover-evidence -name manifest.json -type f | sort)
-          test "${#manifests[@]}" -eq 3
-          python3 scripts/cutover_gate_manifest.py combine \
-            --out target/cutover-evidence/gate-manifest.json \
-            --required-job build-macos=${{ needs.build-macos.result }} \
-            --required-job build-ubuntu-amd64=${{ needs.build-ubuntu-amd64.result }} \
-            "${manifests[@]}"
-      - name: upload combined closing-commit manifest
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: machv-cutover-gate-manifest
-          path: target/cutover-evidence
-          if-no-files-found: error
-          retention-days: 90
+          status=0
+          python3 scripts/run_component_wast.py \
+            --suite future-gated --dump-failures || status=$?
+          python3 scripts/run_component_wast.py \
+            --suite future-gated --dump-failures --no-jit || status=$?
+          exit "$status"
+
+      - name: run native sanitizer checks
+        timeout-minutes: 40
+        env:
+          MOONBIT_NEW_NATIVE: 0
+          ASAN_OPTIONS: ${{ matrix.asan_options }}
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+        run: |
+          sanitizer_build="$RUNNER_TEMP/wasmoon-sanitizer-build"
+          sanitizer_wrapper="$GITHUB_WORKSPACE/scripts/native_sanitizer_cc.sh"
+          export WASMOON_SANITIZER_REAL_CC="$(command -v clang)"
+          export MOON_CC="$sanitizer_wrapper"
+          export MOON_AR="$(command -v ar)"
+          rm -rf "$sanitizer_build"
+          moon build modules/wasmoon/cmd/wasmoon \
+            --target native --release --target-dir "$sanitizer_build"
+          cp \
+            "$sanitizer_build/native/release/build/Milky2018/wasmoon/cmd/wasmoon/wasmoon.exe" \
+            ./wasmoon
+          chmod +x ./wasmoon
+          moon test --target native --target-dir "$sanitizer_build" \
+            modules/wasmoon_jit/native_continuation_test.mbt
+          moon test --target native --target-dir "$sanitizer_build" \
+            modules/wasmoon/testsuite/jit_resumable_lifecycle_test.mbt
+          moon test --target native --target-dir "$sanitizer_build" \
+            modules/wasmoon_jit/callback_ownership_test.mbt
+          moon test --target native --target-dir "$sanitizer_build" \
+            modules/wasmoon/async_native/reactor_wbtest.mbt
+          moon test --target native --target-dir "$sanitizer_build" \
+            modules/wasmoon/wasi_component/async_preview3_wbtest.mbt
+          moon test --target native --target-dir "$sanitizer_build" \
+            modules/wasmoon/component/runtime_impl/runtime_cleanup_wbtest.mbt
+          moon test --target native --target-dir "$sanitizer_build" \
+            modules/wasmoon/component/runtime_impl/entry_state_wbtest.mbt
+          moon test --target native --target-dir "$sanitizer_build" \
+            modules/wasmoon/cmd/wasmoon/commands/component_error_wbtest.mbt
+          python3 scripts/verify_native_sanitizers.py \
+            --target-dir "$sanitizer_build" --minimum-test-binaries 5

@@ -1,0 +1,5 @@
+options(
+  "native-stub": [ "reactor.c" ],
+  targets: { "reactor.mbt": [ "native" ] },
+  warn_list: "+73",
+)

@@ -523,6 +523,12 @@ fn validate_component_section_instance(
         let func_map : Map[String, FuncSigShape] = Map([])
         for ex in inline_exports {
           check_sortidx(ex.sortidx, counts, type_table.length())
+          validate_name_attributes_string(
+            5,
+            ex.name,
+            ex.attributes,
+            ex.sortidx.sort,
+          )
           if cfg.wit_names && parse_bracket_resource_name(ex.name) is Some(_) {
             raise SectionParseError(
               5, "resource used in function does not have a name in this context",

@@ -24,13 +24,15 @@ fn BuildState::BuildState(
   stream_table : StreamTable,
   async_state : AsyncState,
 ) -> BuildState {
+  let resource_table = ResourceTable()
+  async_state.resource_tables.set(resource_table.id, resource_table)
   {
     types: [],
     funcs: [],
     values: [],
     components: [],
     instances: [],
-    resource_table: ResourceTable(),
+    resource_table,
     stream_table,
     async_state,
     core_modules: [],
@@ -55,57 +57,57 @@ fn decode_utf8_runtime(bytes : Bytes) -> String raise ComponentRuntimeError {
       buf.write_char(b.unsafe_to_char())
       i = i + 1
     } else if b < 0xC0 {
-      raise InvalidUtf8
+      raise CanonCallError("invalid utf-8")
     } else if b < 0xE0 {
       if i + 1 >= bytes.length() {
-        raise InvalidUtf8
+        raise CanonCallError("incomplete utf-8 byte sequence")
       }
       let b2 = bytes[i + 1].to_int()
       if (b2 & 0xC0) != 0x80 {
-        raise InvalidUtf8
+        raise CanonCallError("invalid utf-8")
       }
       let cp = ((b & 0x1F) << 6) | (b2 & 0x3F)
       if cp < 0x80 {
-        raise InvalidUtf8
+        raise CanonCallError("invalid utf-8")
       }
       buf.write_char(cp.unsafe_to_char())
       i = i + 2
     } else if b < 0xF0 {
       if i + 2 >= bytes.length() {
-        raise InvalidUtf8
+        raise CanonCallError("incomplete utf-8 byte sequence")
       }
       let b2 = bytes[i + 1].to_int()
       let b3 = bytes[i + 2].to_int()
       if (b2 & 0xC0) != 0x80 || (b3 & 0xC0) != 0x80 {
-        raise InvalidUtf8
+        raise CanonCallError("invalid utf-8")
       }
       let cp = ((b & 0x0F) << 12) | ((b2 & 0x3F) << 6) | (b3 & 0x3F)
       if cp < 0x800 || (cp >= 0xD800 && cp <= 0xDFFF) {
-        raise InvalidUtf8
+        raise CanonCallError("invalid utf-8")
       }
       buf.write_char(cp.unsafe_to_char())
       i = i + 3
     } else if b < 0xF8 {
       if i + 3 >= bytes.length() {
-        raise InvalidUtf8
+        raise CanonCallError("incomplete utf-8 byte sequence")
       }
       let b2 = bytes[i + 1].to_int()
       let b3 = bytes[i + 2].to_int()
       let b4 = bytes[i + 3].to_int()
       if (b2 & 0xC0) != 0x80 || (b3 & 0xC0) != 0x80 || (b4 & 0xC0) != 0x80 {
-        raise InvalidUtf8
+        raise CanonCallError("invalid utf-8")
       }
       let cp = ((b & 0x07) << 18) |
         ((b2 & 0x3F) << 12) |
         ((b3 & 0x3F) << 6) |
         (b4 & 0x3F)
       if cp < 0x10000 || cp > 0x10FFFF {
-        raise InvalidUtf8
+        raise CanonCallError("invalid utf-8")
       }
       buf.write_char(cp.unsafe_to_char())
       i = i + 4
     } else {
-      raise InvalidUtf8
+      raise CanonCallError("invalid utf-8")
     }
   }
   buf.to_string()
@@ -172,8 +174,8 @@ fn encode_string_for_canon(
       (Bytes::from_array(out), units, 2)
     }
     Latin1Utf16 => {
-      // Encode as latin1 if possible, otherwise utf16. We use the high bit of
-      // the length to indicate latin1.
+      // Encode as latin1 if possible, otherwise utf16. The canonical ABI uses
+      // the high bit of the length to indicate UTF-16.
       let mut latin1_ok = true
       for c in s {
         if c.to_int() > 0xFF {
@@ -186,11 +188,11 @@ fn encode_string_for_canon(
         for c in s {
           bytes.push(c.to_int().to_byte())
         }
-        let len = (bytes.length().reinterpret_as_uint() | 0x8000_0000U).reinterpret_as_int()
-        (Bytes::from_array(bytes), len, 2)
+        (Bytes::from_array(bytes), bytes.length(), 2)
       } else {
         let (bytes, units, _align) = encode_string_for_canon(s, Utf16)
-        (bytes, units, 2)
+        let tagged_units = (units.reinterpret_as_uint() | 0x8000_0000U).reinterpret_as_int()
+        (bytes, tagged_units, 2)
       }
     }
   }
@@ -286,7 +288,7 @@ fn synthesize_trivial_instance_import(
               if kind == 0x03 {
                 local_types.push(None)
               }
-            Export(name, Type(bound)) =>
+            Export(name, _attributes, Type(bound)) =>
               match bound {
                 Eq(ti) => {
                   let aliased = if ti >= 0 && ti < local_types.length() {
@@ -303,7 +305,7 @@ fn synthesize_trivial_instance_import(
                 // Cannot synthesize abstract resources without a host-supplied identity.
                 SubResource => return None
               }
-            Export(name, InstanceType(inner)) =>
+            Export(name, _attributes, InstanceType(inner)) =>
               match resolve_inst_typedef(local_types, inner) {
                 Some(inner_td) =>
                   match
@@ -313,7 +315,7 @@ fn synthesize_trivial_instance_import(
                   }
                 None => return None
               }
-            Export(_, _) => return None
+            Export(_, _, _) => return None
             _ => return None
           }
         }

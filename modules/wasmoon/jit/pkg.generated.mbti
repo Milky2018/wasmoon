@@ -39,12 +39,21 @@ pub suberror PolycallError {
 // Types and methods
 type AddressRange derive(@debug.Debug)
 
+type JITCallContinuation
+pub fn JITCallContinuation::cancel(Self) -> Unit raise JITTrap
+pub fn JITCallContinuation::continue_execution(Self) -> JITContinuationOutcome raise JITTrap
+
 pub(all) enum JITCallResult {
   Completed(Array[Int64])
   Cancelled
   Failed(JITTrap)
   UnsupportedCancellation
 } derive(@debug.Debug)
+
+pub(all) enum JITContinuationOutcome {
+  JITReturned(Array[Int64])
+  JITSuspended(JITCallContinuation)
+}
 
 pub struct JITFunction {
   func_idx : Int
@@ -63,6 +72,7 @@ pub fn JITModule::call_with_context_controlled(Self, JITFunction, Array[Int64], 
 pub fn[Arg : DynamicArgs, Ret : DynamicReturn] JITModule::call_with_context_poly(Self, JITFunction, Arg) -> Ret raise PolycallError
 pub fn JITModule::clear_hostcall_callback(Self) -> Unit
 pub fn JITModule::clear_segments(Self) -> Unit
+pub fn JITModule::close(Self) -> Unit
 pub fn JITModule::export_functions(Self) -> Map[String, Int64]
 pub fn JITModule::find_func_by_pc(Self, Int64) -> (Int, JITFunction, Int)?
 pub fn JITModule::gc_begin_frame(Self, Int64) -> Unit
@@ -93,10 +103,11 @@ pub fn JITModule::load_artifact_with_imports(@wasmoon_jit.LoadedArtifact, Array[
 pub fn JITModule::register_dwarf(Self, verbose? : Bool) -> @wasmoon_jit.DWARFBuilder
 pub fn JITModule::set_gc_heap(Self, Int64) -> Unit
 pub fn JITModule::set_globals(Self, Int64) -> Unit
-pub fn JITModule::set_hostcall_callback(Self, () -> Int) -> Unit
+pub fn JITModule::set_hostcall_callback(Self, () -> @wasmoon_jit.NativeHostcallOutcome) -> Unit
 pub fn JITModule::set_memory(Self, Int64) -> Unit
 pub fn JITModule::set_memory_pointers(Self, Array[@wasmoon_jit.MemoryInfo]) -> Unit
 pub fn JITModule::setup_segments(Self, Array[@types.Data], Array[Array[Int64]], data_dropped? : Array[Bool], elem_dropped? : Array[Bool]) -> Unit
+pub fn JITModule::start_continuation_call(Self, JITFunction, Array[Int64]) -> JITContinuationOutcome raise JITTrap
 
 pub(all) struct Single[A](A)
 pub impl[A : @types.ToInt64] DynamicArgs for Single[A]

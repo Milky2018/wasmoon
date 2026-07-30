@@ -1,14 +1,116 @@
 ///|
+pub(all) enum HostFuturePoll {
+  Pending
+  Ready(Array[ComponentValue])
+}
+
+///|
+/// A single in-flight asynchronous host call.
+///
+/// `poll` must not block. External readiness is driven through the
+/// `HostRuntimeState` event-loop callback shared by the surrounding host world.
+struct HostFuture {
+  poll : () -> HostFuturePoll raise ComponentRuntimeError
+  cancel : () -> Unit raise ComponentRuntimeError
+}
+
+///|
+impl Debug for HostFuture with fn to_repr(_self) {
+  Repr::literal("HostFuture")
+}
+
+///|
+pub fn HostFuture::HostFuture(
+  poll : () -> HostFuturePoll raise ComponentRuntimeError,
+  cancel : () -> Unit raise ComponentRuntimeError,
+) -> HostFuture {
+  { poll, cancel }
+}
+
+///|
+/// Entry state for one component instance.
+///
+/// `ready` prevents lowered imports from entering a partially-instantiated
+/// instance. `active` is a dynamic execution guard and is released while a
+/// stackful invocation is suspended. `poisoned` is permanent after a trap.
+struct ComponentInstanceEntryState {
+  ready : Ref[Bool]
+  active : Ref[Bool]
+  poisoned : Ref[Bool]
+} derive(Debug)
+
+///|
+fn ComponentInstanceEntryState::new() -> ComponentInstanceEntryState {
+  { ready: Ref(false), active: Ref(false), poisoned: Ref(false) }
+}
+
+///|
+fn ComponentInstanceEntryState::enable(
+  self : ComponentInstanceEntryState,
+) -> Unit {
+  self.ready.val = true
+}
+
+///|
+fn ComponentInstanceEntryState::may_queue(
+  self : ComponentInstanceEntryState,
+) -> Bool {
+  self.ready.val && !self.poisoned.val
+}
+
+///|
+fn ComponentInstanceEntryState::may_enter(
+  self : ComponentInstanceEntryState,
+) -> Bool {
+  self.may_queue() && !self.active.val
+}
+
+///|
+fn ComponentInstanceEntryState::enter(
+  self : ComponentInstanceEntryState,
+) -> Unit raise ComponentRuntimeError {
+  if !self.may_enter() {
+    raise CanonCallError("cannot enter component instance")
+  }
+  self.active.val = true
+}
+
+///|
+fn ComponentInstanceEntryState::leave(
+  self : ComponentInstanceEntryState,
+) -> Unit {
+  self.active.val = false
+}
+
+///|
+fn ComponentInstanceEntryState::poison(
+  self : ComponentInstanceEntryState,
+) -> Unit {
+  self.active.val = false
+  self.poisoned.val = true
+}
+
+///|
+struct HostEventLoop {
+  wait : () -> Bool raise ComponentRuntimeError
+}
+
+///|
+impl Debug for HostEventLoop with fn to_repr(_self) {
+  Repr::literal("HostEventLoop")
+}
+
+///|
 pub(all) enum ComponentFunc {
-  // `may_enter` is used to enforce "cannot enter component instance" during
-  // instantiation when core module start code calls lowered functions.
+  // The entry state separates partial instantiation, active execution, and
+  // permanent poisoning.
   Lifted(
     CoreFuncRef,
     FuncType,
     CanonResources,
     Array[TypeDef?],
     ResourceTable,
-    Array[Bool],
+    ComponentInstanceEntryState,
     // Optional async callback core function (used by `canon lift ... async (callback ...)`).
     CoreFuncRef?,
     // Whether this canonical lift uses the async ABI (`canon lift ... async ...`).
@@ -19,6 +121,11 @@ pub(all) enum ComponentFunc {
     Array[TypeDef?],
     (Array[ComponentValue], ResourceTable) -> Array[ComponentValue] raise ComponentRuntimeError
   )
+  HostAsync(
+    FuncType,
+    Array[TypeDef?],
+    (Array[ComponentValue], ResourceTable) -> HostFuture raise ComponentRuntimeError
+  )
 }
 
 ///|
@@ -27,6 +134,8 @@ pub impl Debug for ComponentFunc with fn to_repr(self) {
     Lifted(_, _, _, _, _, _, _, _) =>
       Repr::ctor("Lifted", [(None, Repr::literal("<lowered>"))])
     Host(_, _, _) => Repr::ctor("Host", [(None, Repr::literal("<native>"))])
+    HostAsync(_, _, _) =>
+      Repr::ctor("HostAsync", [(None, Repr::literal("<native-async>"))])
   }
 }
 
@@ -35,6 +144,7 @@ pub impl Show for ComponentFunc with fn output(self, logger) {
   match self {
     Lifted(_, _, _, _, _, _, _, _) => logger.write_string("Lifted")
     Host(_, _, _) => logger.write_string("Host")
+    HostAsync(_, _, _) => logger.write_string("HostAsync")
   }
 }
 
@@ -142,6 +252,7 @@ pub fn ComponentInstance::call_exported_func(
     Some(Func(func)) => {
       let func_type = match func {
         Host(ft, _, _) => ft
+        HostAsync(ft, _, _) => ft
         Lifted(_, ft, _, _, _, _, _, _) => ft
       }
       let prev_can_block = self.async_state.task_can_block[0]
@@ -200,8 +311,11 @@ pub fn ComponentInstance::get_core_instance(
 ///|
 struct ComponentLinker {
   core_linker : @runtime.Linker
+  core_engine : CoreExecutionEngine
   components : Array[(String, ComponentInstance)]
   imports : Map[String, ComponentExtern]
+  host_runtime : Ref[HostRuntimeState?]
+  closed : Ref[Bool]
   // Mutable counter stored in a 1-element array so methods can bump it without
   // requiring `mut self`.
   resource_id_counter : Array[Int]
@@ -209,10 +323,25 @@ struct ComponentLinker {
 
 ///|
 pub fn ComponentLinker::ComponentLinker() -> ComponentLinker {
+  ComponentLinker::with_core_execution_engine(
+    interpreter_core_execution_engine(),
+  )
+}
+
+///|
+/// Create a component linker with an embedding-provided core execution engine.
+pub fn ComponentLinker::with_core_execution_engine(
+  core_engine : CoreExecutionEngine,
+) -> ComponentLinker {
+  let core_linker = @runtime.Linker::Linker()
+  core_engine.prepare_store(core_linker.get_store())
   {
-    core_linker: Linker(),
+    core_linker,
+    core_engine,
     components: [],
     imports: Map([]),
+    host_runtime: Ref(None),
+    closed: Ref(false),
     resource_id_counter: [0],
   }
 }
@@ -227,6 +356,23 @@ fn ComponentLinker::alloc_resource_id(self : ComponentLinker) -> Int {
 ///|
 pub fn ComponentLinker::get_store(self : ComponentLinker) -> @runtime.Store {
   self.core_linker.get_store()
+}
+
+///|
+/// Close the execution engine after all component calls have ended.
+///
+/// A linker is terminal after this call. Embeddings must finish or cancel every
+/// outstanding continuation before closing it.
+pub fn ComponentLinker::close(self : ComponentLinker) -> Unit {
+  if self.closed.val {
+    return
+  }
+  self.closed.val = true
+  self.components.clear()
+  self.imports.clear()
+  self.host_runtime.val = None
+  self.core_engine.close()
+  self.core_linker.close()
 }
 
 ///|
@@ -259,6 +405,15 @@ pub fn ComponentLinker::add_import(
   ext : ComponentExtern,
 ) -> Unit {
   self.imports.set(name, ext)
+}
+
+///|
+/// Return a host import previously configured on this linker.
+pub fn ComponentLinker::get_import(
+  self : ComponentLinker,
+  name : String,
+) -> ComponentExtern? {
+  self.imports.get(name)
 }
 
 ///|

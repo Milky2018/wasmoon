@@ -405,10 +405,11 @@ fn module_has_wasi_import(mod_ : @types.Module) -> Bool {
 
 ///|
 /// Try to compile a module to JIT and return JITModuleContext if successful
-fn try_compile_jit(
+fn try_compile_jit_with_suspension(
   mod_ : @types.Module,
   instance : @runtime.ModuleInstance,
   store : @runtime.Store,
+  classify_suspension : (@runtime.RuntimeError) -> Bool,
 ) -> Result[@wast.JITModuleContext, String] {
   let lowered_mod = rewrite_module_alias_indices_for_jit(mod_, instance)
   let local_compile_mask = build_wast_compile_mask(lowered_mod)
@@ -492,12 +493,10 @@ fn try_compile_jit(
           wast_jit_compiled_functions.val = wast_jit_compiled_functions.val +
             compiled_local_funcs
           @wast.register_instance_funcrefs_for_jit(jm, instance)
-          // Enable arbitrary host function imports via JIT -> hostcall bridge.
-          @wast.install_jit_hostcall_dispatcher(jm, store, instance)
           // Allocate independent WASM stack with guard page. Native JIT
           // execution and hostcall bridges use this stack, so keep it aligned
           // with `wasmoon run`.
-          let _ = jm.alloc_wasm_stack(16L * 1024L * 1024L)
+          jm.alloc_wasm_stack(16L * 1024L * 1024L) |> ignore
           // Initialize WASI only when the module imports it.
           if module_has_wasi_import(lowered_mod) {
             jm.init_wasi_quiet([], [], [])
@@ -581,9 +580,39 @@ fn try_compile_jit(
             func_type_indices_copy, canonical_type_indices_copy, module_types_copy,
             module_rec_groups_copy, use_subtype_indirect_check,
           )
+          // Cross an explicit state-coherence boundary around imported host or
+          // interpreter calls made from native component code.
+          @wast.install_jit_hostcall_dispatcher(
+            jm,
+            store,
+            instance,
+            before_dispatch=fn() {
+              @wast.sync_jit_globals_to_store(jit_ctx, store)
+              @wast.sync_jit_tables_to_store(jit_ctx, store)
+            },
+            after_dispatch=fn() {
+              @wast.sync_store_globals_to_jit(jit_ctx, store)
+              @wast.sync_tables_to_jit(
+                instance,
+                store,
+                jm,
+                use_subtype_indirect_check~,
+              )
+            },
+            classify_suspension~,
+          )
           Ok(jit_ctx)
         }
       }
     }
   }
+}
+
+///|
+fn try_compile_jit(
+  mod_ : @types.Module,
+  instance : @runtime.ModuleInstance,
+  store : @runtime.Store,
+) -> Result[@wast.JITModuleContext, String] {
+  try_compile_jit_with_suspension(mod_, instance, store, fn(_error) { false })
 }

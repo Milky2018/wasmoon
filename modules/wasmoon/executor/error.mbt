@@ -20,3 +20,8 @@ priv suberror InvocationSignal {
   HostInvocation(Error)
   Cancelled
 } derive(Debug)
+
+///|
+/// Internal control signal used only while building a resumable interpreter
+/// continuation. It must never escape the public resumable-call seam.
+priv suberror ExecutionSuspended derive(Debug)

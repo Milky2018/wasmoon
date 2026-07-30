@@ -8,15 +8,12 @@ fn instantiate_canon_context_get(
   _idx : Int,
   state : BuildState,
   store : @runtime.Store,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [], results: [_vt] }
   let async_state = state.async_state
   let host = fn(
     _args : Array[@types.Value],
   ) -> Array[@types.Value] raise @runtime.RuntimeError {
-    if !canon_may_leave[0] {
-      trap_canon("cannot leave component instance")
-    }
     let task_id = current_task_id(async_state)
     match async_state.task_contexts.get(task_id) {
       Some(m) =>
@@ -48,7 +45,7 @@ fn instantiate_canon_context_get(
         }
     }
   }
-  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+  state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
 }
 
 ///|
@@ -57,15 +54,12 @@ fn instantiate_canon_context_set(
   _idx : Int,
   state : BuildState,
   store : @runtime.Store,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [_vt], results: [] }
   let async_state = state.async_state
   let host = fn(
     args : Array[@types.Value],
   ) -> Array[@types.Value] raise @runtime.RuntimeError {
-    if !canon_may_leave[0] {
-      trap_canon("cannot leave component instance")
-    }
     if args.length() != 1 {
       trap_canon("type mismatch")
       return []
@@ -82,5 +76,5 @@ fn instantiate_canon_context_set(
     m.set(_idx, args[0])
     []
   }
-  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+  state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
 }

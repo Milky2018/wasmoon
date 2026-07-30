@@ -7,7 +7,7 @@ fn instantiate_canon_future_new(
   _tyidx : Int,
   state : BuildState,
   store : @runtime.Store,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [], results: [I64] }
   let async_state = state.async_state
   let creator_component_id = state.resource_table.id
@@ -21,35 +21,6 @@ fn instantiate_canon_future_new(
     if !canon_may_leave[0] {
       trap_canon("cannot leave component instance")
     }
-    // Replay-safe: `canon future.new` can be re-executed when a callback-style
-    // async core function is restarted after a suspension.
-    let task_id = current_task_id(async_state)
-    let cur = if async_state.call_cursor_stack.length() == 0 {
-      0
-    } else {
-      async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1]
-    }
-    let per_task = match async_state.call_results.get(task_id) {
-      Some(m) => m
-      None => {
-        let m : Map[Int, Array[@types.Value]] = Map([])
-        async_state.call_results.set(task_id, m)
-        m
-      }
-    }
-    if per_task.get(cur) is Some(v) {
-      async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1] = cur +
-        1
-      return v
-    }
-    fn cache_i64(x : Int64) -> Array[@types.Value] {
-      let out = [@types.Value::I64(x)]
-      per_task.set(cur, out)
-      async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1] = cur +
-        1
-      out
-    }
-
     let future_id = async_state.next_future_id[0]
     async_state.next_future_id[0] = future_id + 1
     let (rh, wh) = if payload_ty is Some(_) {
@@ -85,11 +56,13 @@ fn instantiate_canon_future_new(
       future_id,
       is_readable: true,
       creator_component_id,
+      in_waitable_set: Ref(false),
     })
     async_state.future_endpoints.set(handle_key(creator_component_id, wh), {
       future_id,
       is_readable: false,
       creator_component_id,
+      in_waitable_set: Ref(false),
     })
     async_state.futures.set(future_id, {
       payload_ty,
@@ -103,9 +76,9 @@ fn instantiate_canon_future_new(
       wrote_value: false,
     })
     let packed = (wh.to_int64() << 32) | (rh.to_int64() & 0xFFFFFFFFL)
-    cache_i64(packed)
+    [I64(packed)]
   }
-  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+  state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
 }
 
 ///|
@@ -127,30 +100,28 @@ fn instantiate_canon_future_read(
       trap_canon("cannot leave component instance")
     }
     let task_id = current_task_id(async_state)
-    let cur = if async_state.call_cursor_stack.length() == 0 {
-      0
-    } else {
-      async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1]
+    fn ret_i32(n : Int) -> Array[@types.Value] {
+      [I32(n)]
     }
-    let per_task = match async_state.call_results.get(task_id) {
-      Some(m) => m
-      None => {
-        let m : Map[Int, Array[@types.Value]] = Map([])
-        async_state.call_results.set(task_id, m)
-        m
+    let resumed_sync = match args {
+      [I32(handle), _] => {
+        let resumed = if !is_async {
+          resume_sync_waitable_use(
+            async_state, caller_component_id, handle, task_id,
+          )
+        } else {
+          false
+        }
+        if !is_async &&
+          waitable_is_in_set(async_state, caller_component_id, handle) {
+          trap_canon(
+            "waitable cannot be used synchronously while added to a waitable set",
+          )
+          return ret_i32(0)
+        }
+        resumed
       }
-    }
-    if per_task.get(cur) is Some(v) {
-      async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1] = cur +
-        1
-      return v
-    }
-    fn cache_i32(n : Int) -> Array[@types.Value] {
-      let out = [@types.Value::I32(n)]
-      per_task.set(cur, out)
-      async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1] = cur +
-        1
-      out
+      _ => false
     }
     match args {
       [I32(handle), I32(ptr)] =>
@@ -164,7 +135,7 @@ fn instantiate_canon_future_read(
             } else {
               trap_canon("unknown future handle index \{handle}")
             }
-            cache_i32(0)
+            ret_i32(0)
           }
           Some(ep) =>
             if !ep.is_readable {
@@ -173,35 +144,91 @@ fn instantiate_canon_future_read(
               } else {
                 trap_canon("type mismatch")
               }
-              cache_i32(0)
+              ret_i32(0)
             } else {
               let st0 = match async_state.futures.get(ep.future_id) {
                 Some(s) => s
                 None => {
                   trap_canon("unknown future handle index \{handle}")
-                  return cache_i32(0)
+                  return ret_i32(0)
                 }
               }
-              let cancelled = async_state.task_cancelled.get(task_id)
-                is Some(true)
-              let mut explicit_thread_task = false
-              for kv in async_state.threads.iter() {
-                let (_k, t) = kv
-                if t.task_id == task_id {
-                  explicit_thread_task = true
-                  break
+              match async_state.host_future_values.get(ep.future_id) {
+                Some(host_value) => {
+                  if st0.read_done {
+                    trap_canon(
+                      "cannot read from future after previous read succeeded",
+                    )
+                    return ret_i32(0)
+                  }
+                  let polled = poll_host_future_value(host_value) catch {
+                    e => {
+                      trap_canon(e.to_string())
+                      return ret_i32(0)
+                    }
+                  }
+                  match polled {
+                    Ready(value) => {
+                      store_host_stream_value(
+                        value,
+                        host_value.payload_ty,
+                        host_value.types,
+                        resources,
+                        store,
+                        state.resource_table,
+                        ptr,
+                      ) catch {
+                        e => {
+                          trap_canon(e.to_string())
+                          return ret_i32(0)
+                        }
+                      }
+                      async_state.host_future_values.remove(ep.future_id)
+                      async_state.futures.set(ep.future_id, {
+                        payload_ty: st0.payload_ty,
+                        pending_read: None,
+                        pending_write: None,
+                        readable_dropped: st0.readable_dropped,
+                        writable_dropped: true,
+                        read_done: true,
+                        write_succeeded: true,
+                        write_observed_readable_drop: false,
+                        wrote_value: true,
+                      })
+                      return ret_i32(0)
+                    }
+                    Pending => ()
+                  }
                 }
+                None => ()
               }
               if st0.read_done {
-                // Explicit guest thread tasks can replay suspended reads while
-                // unwinding stackful cancellation paths.
-                if cancelled || explicit_thread_task {
-                  return cache_i32(0)
+                // A completed synchronous read resumes by retrying this host
+                // instruction after the peer has already written its buffer.
+                if resumed_sync {
+                  return ret_i32(0)
                 }
                 trap_canon(
                   "cannot read from future after previous read succeeded",
                 )
-                return cache_i32(0)
+                return ret_i32(0)
+              }
+              if st0.pending_read is Some(_) {
+                if is_async {
+                  trap_canon(
+                    "cannot have concurrent operations active on a future/stream",
+                  )
+                  return ret_i32(0)
+                }
+                if !async_state.task_can_block[0] {
+                  trap_canon("cannot block a synchronous task before returning")
+                  return ret_i32(0)
+                }
+                mark_sync_waitable_blocked(
+                  async_state, caller_component_id, handle, task_id,
+                )
+                canon_suspend[0] = Some(Yield)
+                raise Unreachable
               }
               match st0.pending_write {
                 Some(pw) => {
@@ -299,7 +326,7 @@ fn instantiate_canon_future_read(
                     write_observed_readable_drop: st0.write_observed_readable_drop,
                     wrote_value: st0.wrote_value,
                   })
-                  cache_i32(0)
+                  ret_i32(0)
                 }
                 None =>
                   if st0.writable_dropped {
@@ -314,7 +341,7 @@ fn instantiate_canon_future_read(
                       write_observed_readable_drop: st0.write_observed_readable_drop,
                       wrote_value: st0.wrote_value,
                     })
-                    cache_i32(1)
+                    ret_i32(1)
                   } else {
                     // Register a pending read and report BLOCKED=-1.
                     async_state.futures.set(ep.future_id, {
@@ -323,6 +350,9 @@ fn instantiate_canon_future_read(
                         // Remember the reader-side canon memory so a writer from a different
                         // component instance can write into the correct memory.
                         mem_addr: resources.mem_addr,
+                        realloc: resources.realloc,
+                        encoding: resources.encoding,
+                        reader_table: state.resource_table,
                         ptr,
                         reader_component_id: caller_component_id,
                         reader_handle: handle,
@@ -336,8 +366,11 @@ fn instantiate_canon_future_read(
                       wrote_value: st0.wrote_value,
                     })
                     if is_async {
-                      cache_i32(-1)
+                      ret_i32(-1)
                     } else {
+                      mark_sync_waitable_blocked(
+                        async_state, caller_component_id, handle, task_id,
+                      )
                       canon_suspend[0] = Some(Yield)
                       raise Unreachable
                     }
@@ -347,11 +380,102 @@ fn instantiate_canon_future_read(
         }
       _ => {
         trap_canon("type mismatch")
-        cache_i32(0)
+        ret_i32(0)
       }
     }
   }
-  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+  state.core_funcs.push(
+    alloc_component_host_core_func(
+      store,
+      core_type,
+      host,
+      may_suspend=!is_async,
+    ),
+  )
+}
+
+///|
+fn poll_host_future_value(
+  source : HostFutureValue,
+) -> HostFutureValuePoll raise ComponentRuntimeError {
+  match source.value.val {
+    Some(value) => Ready(value)
+    None =>
+      match source.pull {
+        Some(pull) =>
+          match pull() {
+            Ready(value) => {
+              source.value.val = Some(value)
+              Ready(value)
+            }
+            Pending => Pending
+          }
+        None => Pending
+      }
+  }
+}
+
+///|
+fn progress_host_future_sources(
+  async_state : AsyncState,
+  store : @runtime.Store,
+) -> Bool raise ComponentRuntimeError {
+  let mut progressed = false
+  for item in async_state.host_future_values.iter() {
+    let (future_id, source) = item
+    guard async_state.futures.get(future_id) is Some(state) &&
+      state.pending_read is Some(read) else {
+      continue
+    }
+    match poll_host_future_value(source) {
+      Pending => ()
+      Ready(value) => {
+        store_host_stream_value(
+          value,
+          source.payload_ty,
+          source.types,
+          {
+            mem_addr: read.mem_addr,
+            realloc: read.realloc,
+            post_return: None,
+            encoding: read.encoding,
+          },
+          store,
+          read.reader_table,
+          read.ptr,
+        )
+        async_state.host_future_values.remove(future_id)
+        async_state.futures.set(future_id, {
+          payload_ty: state.payload_ty,
+          pending_read: None,
+          pending_write: None,
+          readable_dropped: state.readable_dropped,
+          writable_dropped: true,
+          read_done: true,
+          write_succeeded: true,
+          write_observed_readable_drop: state.write_observed_readable_drop,
+          wrote_value: true,
+        })
+        if async_state.future_endpoints.get(
+            handle_key(read.reader_component_id, read.reader_handle),
+          )
+          is Some(_) {
+          enqueue_waitable_event(
+            async_state,
+            handle_key(read.reader_component_id, read.reader_handle),
+            {
+              owner_component_id: read.reader_component_id,
+              code: 4,
+              index: read.reader_handle,
+              payload: 0,
+            },
+          )
+        }
+        progressed = true
+      }
+    }
+  }
+  progressed
 }
 
 ///|
@@ -373,30 +497,26 @@ fn instantiate_canon_future_write(
       trap_canon("cannot leave component instance")
     }
     let task_id = current_task_id(async_state)
-    let cur = if async_state.call_cursor_stack.length() == 0 {
-      0
-    } else {
-      async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1]
+    fn ret_i32(n : Int) -> Array[@types.Value] {
+      [I32(n)]
     }
-    let per_task = match async_state.call_results.get(task_id) {
-      Some(m) => m
-      None => {
-        let m : Map[Int, Array[@types.Value]] = Map([])
-        async_state.call_results.set(task_id, m)
-        m
+    match args {
+      [I32(handle), _] => {
+        if !is_async {
+          resume_sync_waitable_use(
+            async_state, caller_component_id, handle, task_id,
+          )
+          |> ignore
+        }
+        if !is_async &&
+          waitable_is_in_set(async_state, caller_component_id, handle) {
+          trap_canon(
+            "waitable cannot be used synchronously while added to a waitable set",
+          )
+          return ret_i32(0)
+        }
       }
-    }
-    if per_task.get(cur) is Some(v) {
-      async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1] = cur +
-        1
-      return v
-    }
-    fn cache_i32(n : Int) -> Array[@types.Value] {
-      let out = [@types.Value::I32(n)]
-      per_task.set(cur, out)
-      async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1] = cur +
-        1
-      out
+      _ => ()
     }
     match args {
       [I32(handle), I32(ptr)] =>
@@ -410,7 +530,7 @@ fn instantiate_canon_future_write(
             } else {
               trap_canon("unknown future handle index \{handle}")
             }
-            cache_i32(0)
+            ret_i32(0)
           }
           Some(ep) =>
             if ep.is_readable {
@@ -419,26 +539,43 @@ fn instantiate_canon_future_write(
               } else {
                 trap_canon("type mismatch")
               }
-              cache_i32(0)
+              ret_i32(0)
             } else {
               let st0 = match async_state.futures.get(ep.future_id) {
                 Some(s) => s
                 None => {
                   trap_canon("unknown future handle index \{handle}")
-                  return cache_i32(0)
+                  return ret_i32(0)
                 }
               }
               if st0.write_succeeded {
                 trap_canon(
                   "cannot write to future after previous write succeeded",
                 )
-                return cache_i32(0)
+                return ret_i32(0)
               }
               if st0.write_observed_readable_drop {
                 trap_canon(
                   "cannot write to future after previous write succeeded or readable end dropped",
                 )
-                return cache_i32(0)
+                return ret_i32(0)
+              }
+              if st0.pending_write is Some(_) {
+                if is_async {
+                  trap_canon(
+                    "cannot have concurrent operations active on a future/stream",
+                  )
+                  return ret_i32(0)
+                }
+                if !async_state.task_can_block[0] {
+                  trap_canon("cannot block a synchronous task before returning")
+                  return ret_i32(0)
+                }
+                mark_sync_waitable_blocked(
+                  async_state, caller_component_id, handle, task_id,
+                )
+                canon_suspend[0] = Some(Yield)
+                raise Unreachable
               }
 
               // If the readable end was dropped before any rendezvous, report DROPPED.
@@ -454,7 +591,7 @@ fn instantiate_canon_future_write(
                   write_observed_readable_drop: true,
                   wrote_value: st0.wrote_value,
                 })
-                return cache_i32(1)
+                return ret_i32(1)
               }
               match st0.pending_read {
                 Some(pr) => {
@@ -599,7 +736,7 @@ fn instantiate_canon_future_write(
                     write_observed_readable_drop: st0.write_observed_readable_drop,
                     wrote_value: true,
                   })
-                  cache_i32(0)
+                  ret_i32(0)
                 }
                 None => {
                   // Register a pending write by reading the payload once.
@@ -681,8 +818,11 @@ fn instantiate_canon_future_write(
                     wrote_value: true,
                   })
                   if is_async {
-                    cache_i32(-1)
+                    ret_i32(-1)
                   } else {
+                    mark_sync_waitable_blocked(
+                      async_state, caller_component_id, handle, task_id,
+                    )
                     canon_suspend[0] = Some(Yield)
                     raise Unreachable
                   }
@@ -692,11 +832,18 @@ fn instantiate_canon_future_write(
         }
       _ => {
         trap_canon("type mismatch")
-        cache_i32(0)
+        ret_i32(0)
       }
     }
   }
-  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+  state.core_funcs.push(
+    alloc_component_host_core_func(
+      store,
+      core_type,
+      host,
+      may_suspend=!is_async,
+    ),
+  )
 }
 
 ///|
@@ -705,7 +852,7 @@ fn instantiate_canon_future_cancel_read(
   is_async_cancel : Bool,
   state : BuildState,
   store : @runtime.Store,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [I32], results: [I32] }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
@@ -714,6 +861,17 @@ fn instantiate_canon_future_cancel_read(
   ) -> Array[@types.Value] raise @runtime.RuntimeError {
     if !canon_may_leave[0] {
       trap_canon("cannot leave component instance")
+    }
+    match args {
+      [I32(handle)] =>
+        if !is_async_cancel &&
+          waitable_is_in_set(async_state, owner_component_id, handle) {
+          trap_canon(
+            "waitable cannot be used synchronously while added to a waitable set",
+          )
+          return [I32(0)]
+        }
+      _ => ()
     }
     match args {
       [I32(handle)] =>
@@ -784,7 +942,7 @@ fn instantiate_canon_future_cancel_read(
       }
     }
   }
-  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+  state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
 }
 
 ///|
@@ -793,7 +951,7 @@ fn instantiate_canon_future_cancel_write(
   is_async_cancel : Bool,
   state : BuildState,
   store : @runtime.Store,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [I32], results: [I32] }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
@@ -802,6 +960,17 @@ fn instantiate_canon_future_cancel_write(
   ) -> Array[@types.Value] raise @runtime.RuntimeError {
     if !canon_may_leave[0] {
       trap_canon("cannot leave component instance")
+    }
+    match args {
+      [I32(handle)] =>
+        if !is_async_cancel &&
+          waitable_is_in_set(async_state, owner_component_id, handle) {
+          trap_canon(
+            "waitable cannot be used synchronously while added to a waitable set",
+          )
+          return [I32(0)]
+        }
+      _ => ()
     }
     match args {
       [I32(handle)] =>
@@ -874,7 +1043,7 @@ fn instantiate_canon_future_cancel_write(
       }
     }
   }
-  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+  state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
 }
 
 ///|
@@ -882,11 +1051,10 @@ fn instantiate_canon_future_drop_readable(
   _tyidx : Int,
   state : BuildState,
   store : @runtime.Store,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [I32], results: [] }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
-  async_state.thread_handle_required.set(owner_component_id, true)
   let host = fn(
     args : Array[@types.Value],
   ) -> Array[@types.Value] raise @runtime.RuntimeError {
@@ -939,6 +1107,21 @@ fn instantiate_canon_future_drop_readable(
                 st0.write_observed_readable_drop,
                 wrote_value: st0.wrote_value,
               })
+              match async_state.host_future_values.get(ep.future_id) {
+                Some(source) =>
+                  match source.cancel {
+                    Some(cancel) =>
+                      cancel() catch {
+                        e => {
+                          trap_canon(canon_err_message(e))
+                          return []
+                        }
+                      }
+                    None => ()
+                  }
+                None => ()
+              }
+              async_state.host_future_values.remove(ep.future_id)
 
               // Remove from any waitable-set membership and queued events.
               remove_waitable_membership(
@@ -948,6 +1131,7 @@ fn instantiate_canon_future_drop_readable(
                 handle_key(owner_component_id, handle),
               )
               free_shared_handle(async_state, owner_component_id, handle)
+              cleanup_closed_future(async_state, ep.future_id)
               []
             }
           None => []
@@ -955,7 +1139,7 @@ fn instantiate_canon_future_drop_readable(
       _ => []
     }
   }
-  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+  state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
 }
 
 ///|
@@ -963,7 +1147,7 @@ fn instantiate_canon_future_drop_writable(
   _tyidx : Int,
   state : BuildState,
   store : @runtime.Store,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [I32], results: [] }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
@@ -1031,6 +1215,7 @@ fn instantiate_canon_future_drop_writable(
                 handle_key(owner_component_id, handle),
               )
               free_shared_handle(async_state, owner_component_id, handle)
+              cleanup_closed_future(async_state, ep.future_id)
               []
             }
           None => []
@@ -1038,5 +1223,5 @@ fn instantiate_canon_future_drop_writable(
       _ => []
     }
   }
-  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+  state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
 }

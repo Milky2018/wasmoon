@@ -18,11 +18,15 @@ pub fn compile_module_to_jit(@types.Module, Bool, Bool, actual_memory_max? : Int
 
 pub fn func_to_wat(String, @types.FuncType, Array[@types.ValueType], Array[@types.Instruction]) -> String
 
+pub fn report_component_option_error(ComponentErrorFormat, String) -> Int
+
 pub fn run_component_command(String, Bool, Bool, Bool, ComponentErrorFormat) -> Int
 
-pub fn run_component_script(String, ComponentErrorFormat) -> Int
+pub fn run_component_invoke_command(String, String, Array[String], Bool, ComponentErrorFormat) -> Int
 
-pub fn run_component_script_cli(String, ComponentErrorFormat) -> Int
+pub fn run_component_script(String, ComponentErrorFormat, use_jit? : Bool) -> Int
+
+pub fn run_component_script_cli(String, ComponentErrorFormat, use_jit? : Bool) -> Int
 
 pub fn run_config(String) -> Unit
 
@@ -33,6 +37,8 @@ pub fn run_explore(String, Int?, Int, Array[String], Bool, Bool) -> Unit
 pub fn run_settings() -> Unit
 
 pub fn run_testsuite(String, Bool, Bool) -> Unit
+
+pub fn run_wasi_component_command(String, Array[String], Array[String], Array[String], String, Bool, ComponentErrorFormat, use_jit? : Bool) -> Int
 
 pub fn run_wasm(String, String?, Array[String], Array[String], Array[String], Array[String], Array[String], Array[String], Bool, Bool, Bool, Int, Bool) -> Unit
 
@@ -78,6 +84,7 @@ pub(all) enum ComponentErrorCode {
   CompParseError
   CompValidateError
   CompUnsupported
+  CompRuntimeError
 } derive(Eq, @debug.Debug)
 pub impl Show for ComponentErrorCode
 

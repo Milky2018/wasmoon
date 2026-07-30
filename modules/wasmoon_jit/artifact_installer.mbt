@@ -152,6 +152,18 @@ pub fn InstalledCode::entry_address(
 }
 
 ///|
+/// Release every executable mapping owned by this installation.
+///
+/// The embedding must ensure that no invocation or continuation can still
+/// enter these addresses. Repeated calls are harmless.
+pub fn InstalledCode::release(self : InstalledCode) -> Unit {
+  for code in self.executable_code {
+    code.release() |> ignore
+  }
+  self.executable_code.clear()
+}
+
+///|
 /// Opaque ownership of process-local executable trampoline code.
 pub struct InstalledTrampoline {
   priv executable_code : ExecCode
@@ -160,6 +172,12 @@ pub struct InstalledTrampoline {
 ///|
 pub fn InstalledTrampoline::entry_address(self : InstalledTrampoline) -> Int64 {
   self.executable_code.ptr()
+}
+
+///|
+/// Release this trampoline after its owning execution context is closed.
+pub fn InstalledTrampoline::release(self : InstalledTrampoline) -> Unit {
+  self.executable_code.release() |> ignore
 }
 
 ///|

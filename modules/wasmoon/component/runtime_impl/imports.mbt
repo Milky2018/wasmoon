@@ -78,6 +78,508 @@ fn resolve_import(
 }
 
 ///|
+fn component_func_signature(
+  func : ComponentFunc,
+) -> (FuncType, Array[TypeDef?]) {
+  match func {
+    Host(func_type, types, _) => (func_type, types)
+    HostAsync(func_type, types, _) => (func_type, types)
+    Lifted(_, func_type, _, types, _, _, _, _) => (func_type, types)
+  }
+}
+
+///|
+fn component_val_types_match(
+  expected : ValType,
+  expected_types : Array[TypeDef?],
+  actual : ValType,
+  actual_types : Array[TypeDef?],
+  depth : Int,
+) -> Bool {
+  if depth > 64 {
+    return false
+  }
+  match (expected, actual) {
+    (Prim(left), Prim(right)) => left == right
+    (TypeIdx(left), TypeIdx(right)) =>
+      component_type_indices_match(
+        left,
+        expected_types,
+        right,
+        actual_types,
+        depth + 1,
+      )
+    (Prim(left), TypeIdx(right)) =>
+      match type_at(actual_types, right) {
+        Some(DefValType(right_prim)) => left == right_prim
+        _ => false
+      }
+    (TypeIdx(left), Prim(right)) =>
+      match type_at(expected_types, left) {
+        Some(DefValType(left_prim)) => left_prim == right
+        _ => false
+      }
+  }
+}
+
+///|
+fn type_at(types : Array[TypeDef?], index : Int) -> TypeDef? {
+  if index < 0 || index >= types.length() {
+    None
+  } else {
+    types[index]
+  }
+}
+
+///|
+fn clone_materialized_valtype(
+  ty : ValType,
+  source_types : Array[TypeDef?],
+  dest_types : Array[TypeDef?],
+  remapped : Map[Int, Int],
+) -> ValType raise ComponentRuntimeError {
+  match ty {
+    Prim(p) => Prim(p)
+    TypeIdx(index) =>
+      TypeIdx(
+        clone_materialized_type_index(index, source_types, dest_types, remapped),
+      )
+  }
+}
+
+///|
+fn clone_materialized_optional_valtype(
+  ty : ValType?,
+  source_types : Array[TypeDef?],
+  dest_types : Array[TypeDef?],
+  remapped : Map[Int, Int],
+) -> ValType? raise ComponentRuntimeError {
+  match ty {
+    Some(value) =>
+      Some(
+        clone_materialized_valtype(value, source_types, dest_types, remapped),
+      )
+    None => None
+  }
+}
+
+///|
+fn clone_materialized_type_def(
+  type_def : TypeDef,
+  source_types : Array[TypeDef?],
+  dest_types : Array[TypeDef?],
+  remapped : Map[Int, Int],
+) -> TypeDef raise ComponentRuntimeError {
+  match type_def {
+    DefValType(p) => DefValType(p)
+    FuncType(func) => {
+      let params : Array[@component.Param] = []
+      for param in func.params {
+        params.push({
+          label: param.label,
+          ty: clone_materialized_valtype(
+            param.ty,
+            source_types,
+            dest_types,
+            remapped,
+          ),
+        })
+      }
+      FuncType({
+        is_async: func.is_async,
+        params,
+        result: clone_materialized_optional_valtype(
+          func.result,
+          source_types,
+          dest_types,
+          remapped,
+        ),
+      })
+    }
+    List(ty) =>
+      List(clone_materialized_valtype(ty, source_types, dest_types, remapped))
+    FixedList(ty, len) =>
+      FixedList(
+        clone_materialized_valtype(ty, source_types, dest_types, remapped),
+        len,
+      )
+    MapType(key, value) =>
+      MapType(
+        clone_materialized_valtype(key, source_types, dest_types, remapped),
+        clone_materialized_valtype(value, source_types, dest_types, remapped),
+      )
+    Record(fields) => {
+      let cloned : Array[@component.RecordField] = []
+      for field in fields {
+        cloned.push({
+          label: field.label,
+          ty: clone_materialized_valtype(
+            field.ty,
+            source_types,
+            dest_types,
+            remapped,
+          ),
+        })
+      }
+      Record(cloned)
+    }
+    Variant(cases) => {
+      let cloned : Array[@component.VariantCase] = []
+      for case in cases {
+        cloned.push({
+          label: case.label,
+          ty: clone_materialized_optional_valtype(
+            case.ty,
+            source_types,
+            dest_types,
+            remapped,
+          ),
+          refines: case.refines,
+        })
+      }
+      Variant(cloned)
+    }
+    Tuple(types) => {
+      let cloned : Array[ValType] = []
+      for ty in types {
+        cloned.push(
+          clone_materialized_valtype(ty, source_types, dest_types, remapped),
+        )
+      }
+      Tuple(cloned)
+    }
+    Flags(labels) => Flags(labels)
+    Enum(labels) => Enum(labels)
+    Option(ty) =>
+      Option(clone_materialized_valtype(ty, source_types, dest_types, remapped))
+    Result(ok, err) =>
+      Result(
+        clone_materialized_optional_valtype(
+          ok, source_types, dest_types, remapped,
+        ),
+        clone_materialized_optional_valtype(
+          err, source_types, dest_types, remapped,
+        ),
+      )
+    Own(index) =>
+      Own(
+        clone_materialized_type_index(index, source_types, dest_types, remapped),
+      )
+    Borrow(index) =>
+      Borrow(
+        clone_materialized_type_index(index, source_types, dest_types, remapped),
+      )
+    Stream(ty) =>
+      Stream(
+        clone_materialized_optional_valtype(
+          ty, source_types, dest_types, remapped,
+        ),
+      )
+    Future(ty) =>
+      Future(
+        clone_materialized_optional_valtype(
+          ty, source_types, dest_types, remapped,
+        ),
+      )
+    ResourceType(id, rep, dtor, kind) => ResourceType(id, rep, dtor, kind)
+    ComponentType(decls) => ComponentType(decls)
+    InstanceTypeEmpty => InstanceTypeEmpty
+    InstanceType(decls) => InstanceType(decls)
+  }
+}
+
+///|
+fn clone_materialized_type_index(
+  index : Int,
+  source_types : Array[TypeDef?],
+  dest_types : Array[TypeDef?],
+  remapped : Map[Int, Int],
+) -> Int raise ComponentRuntimeError {
+  if remapped.get(index) is Some(existing) {
+    return existing
+  }
+  if index < 0 || index >= source_types.length() {
+    raise InvalidTypeIndex(index)
+  }
+  let dest_index = dest_types.length()
+  remapped.set(index, dest_index)
+  dest_types.push(None)
+  if source_types[index] is Some(type_def) {
+    dest_types[dest_index] = Some(
+      clone_materialized_type_def(type_def, source_types, dest_types, remapped),
+    )
+  }
+  dest_index
+}
+
+///|
+fn materialize_outer_type(
+  source_index : Int,
+  source_types : Array[TypeDef?],
+  dest_types : Array[TypeDef?],
+) -> Unit raise ComponentRuntimeError {
+  let remapped : Map[Int, Int] = Map([])
+  clone_materialized_type_index(
+    source_index, source_types, dest_types, remapped,
+  )
+  |> ignore
+}
+
+///|
+fn optional_val_types_match(
+  expected : ValType?,
+  expected_types : Array[TypeDef?],
+  actual : ValType?,
+  actual_types : Array[TypeDef?],
+  depth : Int,
+) -> Bool {
+  match (expected, actual) {
+    (None, None) => true
+    (Some(left), Some(right)) =>
+      component_val_types_match(
+        left,
+        expected_types,
+        right,
+        actual_types,
+        depth + 1,
+      )
+    _ => false
+  }
+}
+
+///|
+fn component_type_indices_match(
+  expected_index : Int,
+  expected_types : Array[TypeDef?],
+  actual_index : Int,
+  actual_types : Array[TypeDef?],
+  depth : Int,
+) -> Bool {
+  match
+    (
+      type_at(expected_types, expected_index),
+      type_at(actual_types, actual_index),
+    ) {
+    (Some(expected), Some(actual)) =>
+      component_type_defs_match(
+        expected,
+        expected_types,
+        actual,
+        actual_types,
+        depth + 1,
+      )
+    _ => false
+  }
+}
+
+///|
+fn component_type_defs_match(
+  expected : TypeDef,
+  expected_types : Array[TypeDef?],
+  actual : TypeDef,
+  actual_types : Array[TypeDef?],
+  depth : Int,
+) -> Bool {
+  if depth > 64 {
+    return false
+  }
+  match (expected, actual) {
+    (DefValType(left), DefValType(right)) => left == right
+    (List(left), List(right)) | (Option(left), Option(right)) =>
+      component_val_types_match(
+        left,
+        expected_types,
+        right,
+        actual_types,
+        depth + 1,
+      )
+    (FixedList(left, left_len), FixedList(right, right_len)) =>
+      left_len == right_len &&
+      component_val_types_match(
+        left,
+        expected_types,
+        right,
+        actual_types,
+        depth + 1,
+      )
+    (MapType(left_key, left_value), MapType(right_key, right_value)) =>
+      component_val_types_match(
+        left_key,
+        expected_types,
+        right_key,
+        actual_types,
+        depth + 1,
+      ) &&
+      component_val_types_match(
+        left_value,
+        expected_types,
+        right_value,
+        actual_types,
+        depth + 1,
+      )
+    (Record(left), Record(right)) => {
+      if left.length() != right.length() {
+        return false
+      }
+      for i in 0..<left.length() {
+        if left[i].label != right[i].label ||
+          !component_val_types_match(
+            left[i].ty,
+            expected_types,
+            right[i].ty,
+            actual_types,
+            depth + 1,
+          ) {
+          return false
+        }
+      }
+      true
+    }
+    (Variant(left), Variant(right)) => {
+      if left.length() != right.length() {
+        return false
+      }
+      for i in 0..<left.length() {
+        if left[i].label != right[i].label ||
+          left[i].refines != right[i].refines ||
+          !optional_val_types_match(
+            left[i].ty,
+            expected_types,
+            right[i].ty,
+            actual_types,
+            depth + 1,
+          ) {
+          return false
+        }
+      }
+      true
+    }
+    (Tuple(left), Tuple(right)) => {
+      if left.length() != right.length() {
+        return false
+      }
+      for i in 0..<left.length() {
+        if !component_val_types_match(
+            left[i],
+            expected_types,
+            right[i],
+            actual_types,
+            depth + 1,
+          ) {
+          return false
+        }
+      }
+      true
+    }
+    (Flags(left), Flags(right)) | (Enum(left), Enum(right)) => left == right
+    (Result(left_ok, left_err), Result(right_ok, right_err)) =>
+      optional_val_types_match(
+        left_ok,
+        expected_types,
+        right_ok,
+        actual_types,
+        depth + 1,
+      ) &&
+      optional_val_types_match(
+        left_err,
+        expected_types,
+        right_err,
+        actual_types,
+        depth + 1,
+      )
+    (Own(left), Own(right)) | (Borrow(left), Borrow(right)) =>
+      component_type_indices_match(
+        left,
+        expected_types,
+        right,
+        actual_types,
+        depth + 1,
+      )
+    (Stream(left), Stream(right)) | (Future(left), Future(right)) =>
+      optional_val_types_match(
+        left,
+        expected_types,
+        right,
+        actual_types,
+        depth + 1,
+      )
+    (
+      ResourceType(left_id, left_rep, _, left_kind),
+      ResourceType(right_id, right_rep, _, right_kind),
+    ) =>
+      (left_id < 0 || right_id < 0 || left_id == right_id) &&
+      left_rep == right_rep &&
+      left_kind == right_kind
+    (FuncType(left), FuncType(right)) =>
+      component_func_types_match(
+        left,
+        expected_types,
+        right,
+        actual_types,
+        depth + 1,
+      )
+    (InstanceTypeEmpty, InstanceTypeEmpty) => true
+    (ComponentType(left), ComponentType(right)) => left == right
+    (InstanceType(left), InstanceType(right)) => left == right
+    _ => false
+  }
+}
+
+///|
+fn component_func_types_match(
+  expected : FuncType,
+  expected_types : Array[TypeDef?],
+  actual : FuncType,
+  actual_types : Array[TypeDef?],
+  depth : Int,
+) -> Bool {
+  if expected.is_async != actual.is_async ||
+    expected.params.length() != actual.params.length() {
+    return false
+  }
+  for i in 0..<expected.params.length() {
+    if !component_val_types_match(
+        expected.params[i].ty,
+        expected_types,
+        actual.params[i].ty,
+        actual_types,
+        depth + 1,
+      ) {
+      return false
+    }
+  }
+  optional_val_types_match(
+    expected.result,
+    expected_types,
+    actual.result,
+    actual_types,
+    depth + 1,
+  )
+}
+
+///|
+fn require_component_func_type(
+  name : String,
+  expected_index : Int,
+  expected_types : Array[TypeDef?],
+  actual_func : ComponentFunc,
+) -> Unit raise ComponentRuntimeError {
+  guard type_at(expected_types, expected_index) is Some(FuncType(expected)) else {
+    raise ImportTypeMismatch(
+      "invalid function type for instance export \{name}",
+    )
+  }
+  let (actual, actual_types) = component_func_signature(actual_func)
+  if !component_func_types_match(
+      expected, expected_types, actual, actual_types, 0,
+    ) {
+    raise ImportTypeMismatch(
+      "instance function export signature mismatch: \{name}",
+    )
+  }
+}
+
+///|
 fn validate_instance_import_type(
   import_key : String,
   tyidx : Int,
@@ -113,7 +615,7 @@ fn validate_instance_import_type(
               if idx < 0 || idx >= outer.types.length() {
                 raise InvalidTypeIndex(idx)
               }
-              local_types.push(outer.types[idx])
+              materialize_outer_type(idx, outer.types, local_types)
             } else if (kind & 0x100) != 0 {
               if idx < 0 || idx >= outer.core_types.length() {
                 raise InvalidCoreTypeIndex(idx)
@@ -130,7 +632,7 @@ fn validate_instance_import_type(
               local_types.push(None)
             }
           Type(t) => local_types.push(Some(t))
-          Export(name, desc) => {
+          Export(name, _attributes, desc) => {
             // Instance type exports of `type` also declare a slot in the local
             // type index space, which later decls can reference (e.g. `own 0`).
             let type_slot : Int? = match desc {
@@ -175,8 +677,9 @@ fn validate_instance_import_type(
                     }
                     check_core_module_against_type(m, local_core_types[tyidx])
                   }
-                  (FuncType(_), Func(_))
-                  | (Value(_), Value(_))
+                  (FuncType(tyidx), Func(func)) =>
+                    require_component_func_type(name, tyidx, local_types, func)
+                  (Value(_), Value(_))
                   | (ComponentType(_), Component(_))
                   | (InstanceType(_), Instance(_)) => ()
                   (Type(bound), Type(actual)) =>
@@ -224,10 +727,25 @@ fn validate_instance_import_type(
                               )
                             }
                           _ =>
-                            if expected != actual {
-                              raise ImportTypeMismatch(
-                                "instance export type mismatch",
-                              )
+                            match (expected, actual) {
+                              (Some(expected_type), Some(actual_type)) =>
+                                if !component_type_defs_match(
+                                    expected_type,
+                                    local_types,
+                                    actual_type,
+                                    inst.types,
+                                    0,
+                                  ) {
+                                  raise ImportTypeMismatch(
+                                    "instance export type mismatch: \{name}",
+                                  )
+                                }
+                              _ =>
+                                if expected != actual {
+                                  raise ImportTypeMismatch(
+                                    "instance export type mismatch: \{name}",
+                                  )
+                                }
                             }
                         }
                       }

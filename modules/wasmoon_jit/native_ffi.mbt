@@ -462,6 +462,67 @@ extern "c" fn c_jit_call_with_stack_switch_managed(
   values_len : Int,
 ) -> Int = "wasmoon_jit_call_with_stack_switch_managed"
 
+// ============ Store-Owned Native Fibers ============
+
+///|
+priv type NativeFiberObject
+
+///|
+#owned(closure)
+extern "c" fn c_native_fiber_alloc(
+  call_closure : FuncRef[(() -> Int64) -> Int64],
+  closure : () -> Int64,
+  stack_size : Int64,
+) -> NativeFiberObject = "wasmoon_native_fiber_alloc"
+
+///|
+#owned(jit_context, values)
+extern "c" fn c_native_jit_continuation_alloc(
+  jit_context : JITContext,
+  trampoline_ptr : Int64,
+  func_ptr : Int64,
+  values : FixedArray[Int64],
+  values_len : Int,
+  stack_size : Int64,
+) -> NativeFiberObject = "wasmoon_native_jit_continuation_alloc"
+
+///|
+#borrow(fiber)
+extern "c" fn c_native_fiber_continue_code(
+  fiber : NativeFiberObject,
+  resume_value : Int64,
+) -> Int = "wasmoon_native_fiber_continue"
+
+///|
+extern "c" fn c_native_fiber_yield(value : Int64) -> Int64 = "wasmoon_native_fiber_yield"
+
+///|
+#borrow(fiber)
+extern "c" fn c_native_fiber_cancel_code(fiber : NativeFiberObject) -> Int = "wasmoon_native_fiber_cancel"
+
+///|
+#borrow(fiber)
+extern "c" fn c_native_fiber_state_code(fiber : NativeFiberObject) -> Int = "wasmoon_native_fiber_state"
+
+///|
+#borrow(fiber)
+extern "c" fn c_native_fiber_yielded_value(fiber : NativeFiberObject) -> Int64 = "wasmoon_native_fiber_yielded_value"
+
+///|
+#borrow(fiber)
+extern "c" fn c_native_fiber_return_value(fiber : NativeFiberObject) -> Int64 = "wasmoon_native_fiber_return_value"
+
+///|
+#borrow(fiber)
+extern "c" fn c_native_fiber_stack_size(fiber : NativeFiberObject) -> Int64 = "wasmoon_native_fiber_stack_size"
+
+///|
+#borrow(fiber)
+extern "c" fn c_native_fiber_guard_size(fiber : NativeFiberObject) -> Int64 = "wasmoon_native_fiber_guard_size"
+
+///|
+extern "c" fn c_native_hostcall_suspend_event() -> Int64 = "wasmoon_native_hostcall_suspend_event"
+
 // ============ WASI Trampoline Pointers ============
 
 ///|
@@ -951,6 +1012,11 @@ extern "c" fn c_jit_gc_set_heap(ctx_ptr : Int64, heap_ptr : Int64) -> Unit = "wa
 ///|
 /// Clear GC heap pointer after JIT execution
 extern "c" fn c_jit_gc_clear_heap(ctx_ptr : Int64) -> Unit = "wasmoon_jit_gc_clear_heap"
+
+///|
+/// Clear the GC heap while keeping the managed context alive for the C call.
+#borrow(jit_context)
+extern "c" fn c_jit_gc_clear_heap_managed(jit_context : JITContext) -> Unit = "wasmoon_jit_gc_clear_heap_managed"
 
 ///|
 /// Push a JIT frame node for GC bookkeeping.

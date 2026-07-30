@@ -1,0 +1,106 @@
+{
+  "schema_version": 1,
+  "oracle": {
+    "name": "wasmtime",
+    "version": "45.0.0",
+    "installer": "scripts/install_wasmtime_oracle.py"
+  },
+  "source_checks": {
+    "stable_interface": "modules/wasmoon/component/pkg.generated.mbti",
+    "facade": "modules/wasmoon/component/runtime_facade.mbt",
+    "validator": "modules/wasmoon/validator/component_model/validate.mbt",
+    "forbidden_termination_roots": [
+      "modules/wasmoon/component/model",
+      "modules/wasmoon/component/runtime_impl",
+      "modules/wasmoon/validator/component_model",
+      "modules/wasmoon/wit"
+    ],
+    "forbidden_termination_patterns": [
+      "abort(",
+      "try!"
+    ],
+    "termination_allowlist": [],
+    "unsafe_conversion_allowlist": [
+      {
+        "path": "modules/wasmoon/component/model/binary.mbt",
+        "max_occurrences": 4,
+        "rationale": "UTF-8 decoder validates byte and scalar ranges before conversion."
+      },
+      {
+        "path": "modules/wasmoon/component/runtime_impl/build_strings.mbt",
+        "max_occurrences": 4,
+        "rationale": "Canonical string decoder validates byte and scalar ranges before conversion."
+      },
+      {
+        "path": "modules/wasmoon/component/runtime_impl/core_type_reader.mbt",
+        "max_occurrences": 4,
+        "rationale": "Core type-name decoder validates byte and scalar ranges before conversion."
+      },
+      {
+        "path": "modules/wasmoon/component/runtime_impl/memory_flat.mbt",
+        "max_occurrences": 4,
+        "rationale": "Canonical memory string paths range-check code points before conversion."
+      },
+      {
+        "path": "modules/wasmoon/validator/component_model/core_type.mbt",
+        "max_occurrences": 1,
+        "rationale": "Name normalization adds a bounded ASCII offset."
+      },
+      {
+        "path": "modules/wasmoon/validator/component_model/prelude.mbt",
+        "max_occurrences": 1,
+        "rationale": "Validated name bytes are converted after range checks."
+      },
+      {
+        "path": "modules/wasmoon/wit/component_decoding.mbt",
+        "max_occurrences": 2,
+        "rationale": "Decoded component name bytes are already validated as byte values."
+      },
+      {
+        "path": "modules/wasmoon/wit/component_encoding.mbt",
+        "max_occurrences": 1,
+        "rationale": "Encoded bytes are read from a valid generated UTF-8 sequence."
+      },
+      {
+        "path": "modules/wasmoon/wit/parser.mbt",
+        "max_occurrences": 3,
+        "rationale": "Lexer branches validate ASCII and escaped scalar ranges first."
+      },
+      {
+        "path": "modules/wasmoon/wit/resolve.mbt",
+        "max_occurrences": 1,
+        "rationale": "Resolution copies an existing valid code unit."
+      }
+    ]
+  },
+  "evidence": [
+    {
+      "name": "fuzz",
+      "command": "python3 scripts/component_fuzz.py",
+      "report": "target/component-hardening/fuzz/report.json"
+    },
+    {
+      "name": "wasmtime-differential",
+      "command": "python3 scripts/component_differential.py --wasmtime target/component-hardening/wasmtime-oracle/wasmtime",
+      "report": "target/component-hardening/differential/report.json"
+    },
+    {
+      "name": "logical-resource-lifecycle",
+      "command": "moon test modules/wasmoon/component/runtime_impl/runtime_cleanup_wbtest.mbt",
+      "report": "target/component-hardening/lifecycle.log"
+    },
+    {
+      "name": "native-sanitizers",
+      "command": "moon test --target native",
+      "report": "target/component-hardening/sanitizer.log"
+    },
+    {
+      "name": "large-component-stress",
+      "command": "python3 scripts/component_stress.py",
+      "report": "target/component-hardening/stress/report.json"
+    }
+  ],
+  "ci": {
+    "platform_workflow": ".github/workflows/check.yml"
+  }
+}

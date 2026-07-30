@@ -28,12 +28,13 @@ pub(all) suberror ComponentRuntimeError {
   UnsupportedStringEncoding
   CanonCallError(String)
   HostCallError(String)
-  // Cooperative suspension used by sync-style async lifting (canon lift ... async).
-  AsyncSuspendYield
-  AsyncSuspendWait(Int64)
+  /// Structured termination requested by an embedding-provided command host.
+  HostExit(Int)
   InvalidStartResultCount(Int)
   OuterAliasOutOfRange(Int)
   AliasTargetMismatch(String)
+  DuplicateHostExport(String)
+  InvalidHostTypeReference(Int)
 } derive(Debug, Eq)
 
 ///|
@@ -94,6 +95,23 @@ fn canon_err_message(e : ComponentRuntimeError) -> String {
     CanonCallError(msg) => msg
     HostCallError(msg) => msg
     _ => e.to_string()
+  }
+}
+
+///|
+fn canon_core_boundary_error_message(e : ComponentRuntimeError) -> String {
+  let message = canon_err_message(e)
+  let canonical_message = if message == "realloc return: result not aligned" {
+    "unaligned pointer"
+  } else if message == "realloc return: beyond end of memory" {
+    "list content out-of-bounds"
+  } else {
+    message
+  }
+  if canonical_message.has_prefix("wasm trap:") {
+    canonical_message
+  } else {
+    "wasm trap: \{canonical_message}"
   }
 }
 

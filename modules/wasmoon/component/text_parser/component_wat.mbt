@@ -284,6 +284,7 @@ priv struct FuncTypeSig {
 ///|
 priv struct ImportEntry {
   name : String
+  attributes : Bytes?
   desc : Bytes
 }
 
@@ -303,6 +304,7 @@ priv struct CoreTypeEntry {
 ///|
 priv struct ExportEntry {
   name : String
+  attributes : Bytes?
   sort_tag : Int
   core_kind : Int?
   idx : Int
@@ -357,6 +359,7 @@ priv struct CoreInstanceEntry {
 ///|
 priv struct SortRef {
   name : String
+  attributes : Bytes?
   sort_tag : Int
   core_kind : Int?
   idx : Int
@@ -671,6 +674,82 @@ fn parse_name_text(
     }
   }
   raise Unsupported("\{context} must be a string or atom")
+}
+
+///|
+fn parse_name_attributes(
+  field : Array[SExpr],
+  start : Int,
+) -> (Bytes?, Int) raise ComponentTextError {
+  let encoded = ByteBuf::ByteBuf()
+  let attributes = ByteBuf::ByteBuf()
+  let mut cursor = start
+  let mut count = 0
+  let mut has_implements = false
+  let mut has_version = false
+  let mut has_external_id = false
+  while cursor < field.length() {
+    let items = if field[cursor] is List(items) { items } else { break }
+    if items.length() == 0 {
+      break
+    }
+    let kind = if items[0] is Atom(kind) { kind } else { break }
+    if kind != "implements" && kind != "versionsuffix" && kind != "external-id" {
+      break
+    }
+    if items.length() != 2 {
+      raise Unsupported("name attribute must contain exactly one value")
+    }
+    if kind == "implements" {
+      if has_implements {
+        raise Unsupported("duplicate `implements` attribute")
+      }
+      has_implements = true
+      attributes.push_u8(0x00)
+    } else if kind == "versionsuffix" {
+      if has_version {
+        raise Unsupported("duplicate `versionsuffix` attribute")
+      }
+      has_version = true
+      attributes.push_u8(0x01)
+    } else {
+      if has_external_id {
+        raise Unsupported("duplicate `external-id` attribute")
+      }
+      has_external_id = true
+      attributes.push_u8(0x02)
+    }
+    attributes.push_utf8_name(
+      parse_name_text(items[1], "\{kind} attribute value"),
+    )
+    count += 1
+    cursor += 1
+  }
+  if count == 0 {
+    return (None, cursor)
+  }
+  encoded.push_uleb_u32(count)
+  encoded.push_bytes(attributes.to_bytes())
+  (Some(encoded.to_bytes()), cursor)
+}
+
+///|
+fn push_name_attributes(
+  payload : ByteBuf,
+  name : String,
+  attributes : Bytes?,
+) -> Unit {
+  match attributes {
+    None => {
+      payload.push_u8(0x00)
+      payload.push_utf8_name(name)
+    }
+    Some(encoded) => {
+      payload.push_u8(0x02)
+      payload.push_utf8_name(name)
+      payload.push_bytes(encoded)
+    }
+  }
 }
 
 ///|
@@ -2180,10 +2259,6 @@ fn parse_inline_alias_decl(
       next_local_instance_count += 1
     } else if sort_spec.sort_tag == 0x00 && sort_spec.core_kind is Some(0x05) {
       next_local_core_type_count += 1
-    } else {
-      raise Unsupported(
-        "inline alias only supports instance/type/core type references",
-      )
     }
     let alias_decl = encode_alias_instance_export_decl(
       sort_spec.sort_tag,
@@ -2201,8 +2276,15 @@ fn parse_inline_alias_decl(
       sort_spec.core_kind is None
     let is_core_type_alias = sort_spec.sort_tag == 0x00 &&
       sort_spec.core_kind is Some(0x05)
-    if !is_type_alias && !is_core_type_alias {
-      raise Unsupported("inline alias only supports type/core type references")
+    let is_component_alias = sort_spec.sort_tag == 0x04 &&
+      sort_spec.core_kind is None
+    let is_core_module_alias = sort_spec.sort_tag == 0x00 &&
+      sort_spec.core_kind is Some(0x11)
+    if !is_type_alias &&
+      !is_core_type_alias &&
+      !is_component_alias &&
+      !is_core_module_alias {
+      raise Unsupported("unsupported inline outer alias sort")
     }
     let inferred_outer_count = if field[3] is Atom(target_name) &&
       target_name.has_prefix("$") {
@@ -2220,14 +2302,48 @@ fn parse_inline_alias_decl(
           }
           found
         }
-      } else if lookup_named_index(state.core_type_names, target_name)
+      } else if is_core_type_alias {
+        if lookup_named_index(state.core_type_names, target_name) is Some(_) {
+          Some(1)
+        } else {
+          let mut found : Int? = None
+          for depth in 0..<state.outer_core_type_scopes.length() {
+            if lookup_named_index(
+                state.outer_core_type_scopes[depth],
+                target_name,
+              )
+              is Some(_) {
+              found = Some(depth + 2)
+              break
+            }
+          }
+          found
+        }
+      } else if is_component_alias {
+        if lookup_named_index(state.component_names, target_name) is Some(_) {
+          Some(1)
+        } else {
+          let mut found : Int? = None
+          for depth in 0..<state.outer_component_scopes.length() {
+            if lookup_named_index(
+                state.outer_component_scopes[depth],
+                target_name,
+              )
+              is Some(_) {
+              found = Some(depth + 2)
+              break
+            }
+          }
+          found
+        }
+      } else if lookup_named_index(state.core_module_names, target_name)
         is Some(_) {
         Some(1)
       } else {
         let mut found : Int? = None
-        for depth in 0..<state.outer_core_type_scopes.length() {
+        for depth in 0..<state.outer_core_module_scopes.length() {
           if lookup_named_index(
-              state.outer_core_type_scopes[depth],
+              state.outer_core_module_scopes[depth],
               target_name,
             )
             is Some(_) {
@@ -2273,19 +2389,56 @@ fn parse_inline_alias_decl(
         resolve_reference(field[3], local_type_names, "type")
       }
     } else if field[3] is Atom(target_name) && target_name.has_prefix("$") {
-      if count == 1 &&
-        lookup_named_index(state.core_type_names, target_name) is Some(idx) {
+      if is_core_type_alias {
+        if count == 1 &&
+          lookup_named_index(state.core_type_names, target_name) is Some(idx) {
+          idx
+        } else if count > 1 &&
+          count - 2 < state.outer_core_type_scopes.length() &&
+          lookup_named_index(
+            state.outer_core_type_scopes[count - 2],
+            target_name,
+          )
+          is Some(idx) {
+          idx
+        } else {
+          resolve_reference(field[3], state.core_type_names, "core type")
+        }
+      } else if is_component_alias {
+        if count == 1 &&
+          lookup_named_index(state.component_names, target_name) is Some(idx) {
+          idx
+        } else if count > 1 &&
+          count - 2 < state.outer_component_scopes.length() &&
+          lookup_named_index(
+            state.outer_component_scopes[count - 2],
+            target_name,
+          )
+          is Some(idx) {
+          idx
+        } else {
+          resolve_reference(field[3], state.component_names, "component")
+        }
+      } else if count == 1 &&
+        lookup_named_index(state.core_module_names, target_name) is Some(idx) {
         idx
       } else if count > 1 &&
-        count - 2 < state.outer_core_type_scopes.length() &&
-        lookup_named_index(state.outer_core_type_scopes[count - 2], target_name)
+        count - 2 < state.outer_core_module_scopes.length() &&
+        lookup_named_index(
+          state.outer_core_module_scopes[count - 2],
+          target_name,
+        )
         is Some(idx) {
         idx
       } else {
-        resolve_reference(field[3], state.core_type_names, "core type")
+        resolve_reference(field[3], state.core_module_names, "core module")
       }
-    } else {
+    } else if is_core_type_alias {
       resolve_reference(field[3], state.core_type_names, "core type")
+    } else if is_component_alias {
+      resolve_reference(field[3], state.component_names, "component")
+    } else {
+      resolve_reference(field[3], state.core_module_names, "core module")
     }
     let mut next_local_type_count = local_type_count
     let mut next_local_core_type_count = local_core_type_count
@@ -2432,13 +2585,19 @@ fn build_inline_instance_type_bytes_with_ambient(
       count += 1
       continue
     }
-    if field.length() != 3 || !(field[0] is Atom("export")) {
+    if field.length() < 3 || !(field[0] is Atom("export")) {
       raise Unsupported(
         "inline instance descriptor only supports `(export <name> <type-desc>)` entries",
       )
     }
     let export_name = parse_name_text(field[1], "instance type export name")
-    let export_desc = if field[2] is List(items) {
+    let (attributes, desc_index) = parse_name_attributes(field, 2)
+    if desc_index + 1 != field.length() {
+      raise Unsupported(
+        "inline instance type export expects exactly one descriptor",
+      )
+    }
+    let export_desc = if field[desc_index] is List(items) {
       items
     } else {
       raise Unsupported("instance type export descriptor must be a list")
@@ -2464,8 +2623,7 @@ fn build_inline_instance_type_bytes_with_ambient(
       local_instance_count += 1
     }
     decls.push_u8(0x04)
-    decls.push_u8(0x00)
-    decls.push_utf8_name(export_name)
+    push_name_attributes(decls, export_name, attributes)
     decls.push_bytes(desc_bytes)
     count += 1
   }
@@ -2604,7 +2762,7 @@ fn build_inline_component_type_bytes_with_ambient(
       count += 1
       continue
     }
-    if field.length() != 3 {
+    if field.length() < 3 {
       raise Unsupported(
         "inline component descriptor entries must be `(import/export <name> <type-desc>)`",
       )
@@ -2624,7 +2782,13 @@ fn build_inline_component_type_bytes_with_ambient(
         "component type export name"
       },
     )
-    let field_desc = if field[2] is List(items) {
+    let (attributes, desc_index) = parse_name_attributes(field, 2)
+    if desc_index + 1 != field.length() {
+      raise Unsupported(
+        "inline component declaration expects exactly one descriptor",
+      )
+    }
+    let field_desc = if field[desc_index] is List(items) {
       items
     } else {
       raise Unsupported("component type declaration descriptor must be a list")
@@ -2650,8 +2814,7 @@ fn build_inline_component_type_bytes_with_ambient(
       local_instance_count += 1
     }
     decls.push_u8(if is_import { 0x03 } else { 0x04 })
-    decls.push_u8(0x00)
-    decls.push_utf8_name(field_name)
+    push_name_attributes(decls, field_name, attributes)
     decls.push_bytes(desc_bytes)
     count += 1
   }
@@ -2711,16 +2874,19 @@ fn parse_import(
   field : Array[SExpr],
   state : ComponentBuildState,
 ) -> Unit raise ComponentTextError {
-  if field.length() < 2 || field.length() > 4 {
+  if field.length() < 2 {
     raise Unsupported("import form currently expects exactly one descriptor")
   }
   let import_id_opt = parse_optional_identifier(field, 1)
   let name_index = if import_id_opt is Some(_) { 2 } else { 1 }
-  let desc_index = name_index + 1
-  if name_index >= field.length() || desc_index + 1 < field.length() {
+  if name_index >= field.length() {
     raise Unsupported("import form currently expects exactly one descriptor")
   }
   let name = parse_name_text(field[name_index], "import name")
+  let (attributes, desc_index) = parse_name_attributes(field, name_index + 1)
+  if desc_index + 1 < field.length() {
+    raise Unsupported("import form currently expects exactly one descriptor")
+  }
   let desc = if desc_index >= field.length() {
     [Atom("func")]
   } else if field[desc_index] is List(items) {
@@ -2743,6 +2909,7 @@ fn parse_import(
     let bound_bytes = parse_type_bound_bytes(desc[bound_index], state)
     let import_entry : ImportEntry = {
       name,
+      attributes,
       desc: {
         let b = ByteBuf::ByteBuf()
         b.push_u8(0x03)
@@ -2769,6 +2936,7 @@ fn parse_import(
     let (func_name, type_idx) = parse_import_func_desc(desc, state)
     let import_entry : ImportEntry = {
       name,
+      attributes,
       desc: {
         let b = ByteBuf::ByteBuf()
         b.push_u8(0x01)
@@ -2817,6 +2985,7 @@ fn parse_import(
     }
     let import_entry : ImportEntry = {
       name,
+      attributes,
       desc: {
         let b = ByteBuf::ByteBuf()
         b.push_u8(if is_component { 0x04 } else { 0x05 })
@@ -2877,6 +3046,7 @@ fn parse_import(
     }
     let import_entry : ImportEntry = {
       name,
+      attributes,
       desc: {
         let b = ByteBuf::ByteBuf()
         b.push_u8(0x00)
@@ -2906,8 +3076,7 @@ fn parse_import(
 ///|
 fn encode_import_decl(import_item : ImportEntry) -> Bytes {
   let payload = ByteBuf::ByteBuf()
-  payload.push_u8(0x00)
-  payload.push_utf8_name(import_item.name)
+  push_name_attributes(payload, import_item.name, import_item.attributes)
   payload.push_bytes(import_item.desc)
   payload.to_bytes()
 }
@@ -2936,8 +3105,7 @@ fn encode_export_section(
   let payload = ByteBuf::ByteBuf()
   payload.push_uleb_u32(exports.length())
   for export_item in exports {
-    payload.push_u8(0x00)
-    payload.push_utf8_name(export_item.name)
+    push_name_attributes(payload, export_item.name, export_item.attributes)
     push_sort_prefix(payload, export_item.sort_tag, export_item.core_kind)
     payload.push_uleb_u32(export_item.idx)
     if export_item.desc is Some(desc) {
@@ -3026,8 +3194,7 @@ fn encode_instance_decl(
       payload.push_u8(0x01)
       payload.push_uleb_u32(exports.length())
       for export_item in exports {
-        payload.push_u8(0x00)
-        payload.push_utf8_name(export_item.name)
+        push_name_attributes(payload, export_item.name, export_item.attributes)
         push_sort_prefix(payload, export_item.sort_tag, export_item.core_kind)
         payload.push_uleb_u32(export_item.idx)
       }
@@ -3394,6 +3561,7 @@ fn parse_type_field(
     for export_name in exports {
       push_export_decl(state, {
         name: export_name,
+        attributes: None,
         sort_tag: 0x03,
         core_kind: None,
         idx: type_idx,
@@ -4096,8 +4264,15 @@ fn parse_component_type_ref(
   expr : SExpr,
   state : ComponentBuildState,
 ) -> Int raise ComponentTextError {
-  if expr is List(items) && items.length() == 2 && items[0] is Atom("type") {
-    return resolve_type_reference(items[1], state)
+  if expr is List(items) && items.length() >= 2 && items[0] is Atom("type") {
+    if items.length() == 2 {
+      return resolve_type_reference(items[1], state)
+    }
+    let sort_ref = parse_component_sort_ref(expr, state)
+    if sort_ref.sort_tag != 0x03 || sort_ref.core_kind is Some(_) {
+      raise Unsupported("expected component type reference")
+    }
+    return sort_ref.idx
   }
   resolve_type_reference(expr, state)
 }
@@ -4662,6 +4837,7 @@ fn parse_func_field(
     for export_name in exports {
       push_export_decl(state, {
         name: export_name,
+        attributes: None,
         sort_tag: 0x01,
         core_kind: None,
         idx: func_idx,
@@ -4703,6 +4879,7 @@ fn parse_func_field(
   for export_name in exports {
     push_export_decl(state, {
       name: export_name,
+      attributes: None,
       sort_tag: 0x01,
       core_kind: None,
       idx: func_idx,
@@ -4832,24 +5009,28 @@ fn parse_export_field(
   field : Array[SExpr],
   state : ComponentBuildState,
 ) -> Unit raise ComponentTextError {
-  if field.length() < 2 || field.length() > 5 {
+  if field.length() < 2 {
     raise Unsupported(
       "export form expects `(export <name> <desc> [<ascribed>])`",
     )
   }
   let export_id_opt = parse_optional_identifier(field, 1)
   let name_index = if export_id_opt is Some(_) { 2 } else { 1 }
-  let desc_index = name_index + 1
+  if name_index >= field.length() {
+    raise Unsupported("export form is missing a name")
+  }
+  let name = parse_name_text(field[name_index], "export name")
+  let (attributes, desc_index) = parse_name_attributes(field, name_index + 1)
   if desc_index + 1 < field.length() - 1 {
     raise Unsupported(
       "export form expects `(export <name> <desc> [<ascribed>])`",
     )
   }
-  let name = parse_name_text(field[name_index], "export name")
   if desc_index >= field.length() {
     if state.next_component_idx > 0 {
       push_export_decl(state, {
         name,
+        attributes,
         sort_tag: 0x04,
         core_kind: None,
         idx: state.next_component_idx - 1,
@@ -4861,6 +5042,7 @@ fn parse_export_field(
     if state.next_instance_idx > 0 {
       push_export_decl(state, {
         name,
+        attributes,
         sort_tag: 0x05,
         core_kind: None,
         idx: state.next_instance_idx - 1,
@@ -4872,6 +5054,7 @@ fn parse_export_field(
     if state.next_func_idx > 0 {
       push_export_decl(state, {
         name,
+        attributes,
         sort_tag: 0x01,
         core_kind: None,
         idx: state.next_func_idx - 1,
@@ -4883,6 +5066,7 @@ fn parse_export_field(
     if state.next_type_idx > 0 {
       push_export_decl(state, {
         name,
+        attributes,
         sort_tag: 0x03,
         core_kind: None,
         idx: state.next_type_idx - 1,
@@ -4894,6 +5078,7 @@ fn parse_export_field(
     if state.next_core_module_idx > 0 {
       push_export_decl(state, {
         name,
+        attributes,
         sort_tag: 0x00,
         core_kind: Some(0x11),
         idx: state.next_core_module_idx - 1,
@@ -4910,6 +5095,7 @@ fn parse_export_field(
     state.next_component_idx += 1
     push_export_decl(state, {
       name,
+      attributes,
       sort_tag: 0x04,
       core_kind: None,
       idx: component_idx,
@@ -4945,6 +5131,7 @@ fn parse_export_field(
       let idx = resolve_alias_sort_index(desc[1], state, sort_tag, None)
       push_export_decl(state, {
         name,
+        attributes,
         sort_tag,
         core_kind: None,
         idx,
@@ -4986,6 +5173,7 @@ fn parse_export_field(
     }
     push_export_decl(state, {
       name,
+      attributes,
       sort_tag,
       core_kind: None,
       idx: resolved_idx,
@@ -5027,6 +5215,7 @@ fn parse_export_field(
     }
     push_export_decl(state, {
       name,
+      attributes,
       sort_tag: 0x03,
       core_kind: None,
       idx,
@@ -5060,6 +5249,7 @@ fn parse_export_field(
       let idx = resolve_alias_sort_index(desc[2], state, 0x00, Some(core_kind))
       push_export_decl(state, {
         name,
+        attributes,
         sort_tag: 0x00,
         core_kind: Some(core_kind),
         idx,
@@ -5104,6 +5294,7 @@ fn parse_export_field(
     }
     push_export_decl(state, {
       name,
+      attributes,
       sort_tag: 0x00,
       core_kind: Some(core_kind),
       idx: resolved_idx,
@@ -5167,6 +5358,7 @@ fn parse_core_module_field(
   for export_name in export_names {
     push_export_decl(state, {
       name: export_name,
+      attributes: None,
       sort_tag: 0x00,
       core_kind: Some(0x11),
       idx,
@@ -5867,7 +6059,13 @@ fn parse_component_sort_ref(
       }
       resolved_idx
     }
-    return { name: "", sort_tag: 0x00, core_kind: Some(core_sort), idx }
+    return {
+      name: "",
+      attributes: None,
+      sort_tag: 0x00,
+      core_kind: Some(core_sort),
+      idx,
+    }
   }
   let sort_name = if items[0] is Atom(sort_name) {
     sort_name
@@ -5888,7 +6086,7 @@ fn parse_component_sort_ref(
         } else {
           raise Unsupported("instance inline export must be a list")
         }
-        if export_item.length() != 3 || !(export_item[0] is Atom("export")) {
+        if export_item.length() < 3 || !(export_item[0] is Atom("export")) {
           raise Unsupported(
             "instance inline export must be `(export <name> <sort-ref>)`",
           )
@@ -5897,9 +6095,16 @@ fn parse_component_sort_ref(
           export_item[1],
           "instance inline export name",
         )
-        let export_ref = parse_component_sort_ref(export_item[2], state)
+        let (attributes, ref_index) = parse_name_attributes(export_item, 2)
+        if ref_index + 1 != export_item.length() {
+          raise Unsupported(
+            "instance inline export expects exactly one sort reference",
+          )
+        }
+        let export_ref = parse_component_sort_ref(export_item[ref_index], state)
         exports.push({
           name: export_name,
+          attributes,
           sort_tag: export_ref.sort_tag,
           core_kind: export_ref.core_kind,
           idx: export_ref.idx,
@@ -5909,7 +6114,13 @@ fn parse_component_sort_ref(
       let instance_idx = state.next_instance_idx
       state.next_instance_idx += 1
       push_ordered_section(state, 5, encode_instance_decl(entry))
-      return { name: "", sort_tag: 0x05, core_kind: None, idx: instance_idx }
+      return {
+        name: "",
+        attributes: None,
+        sort_tag: 0x05,
+        core_kind: None,
+        idx: instance_idx,
+      }
     }
     let idx = match sort_tag {
       0x01 => resolve_reference(items[1], state.func_names, "function")
@@ -5918,7 +6129,7 @@ fn parse_component_sort_ref(
       0x05 => resolve_reference(items[1], state.instance_names, "instance")
       _ => raise Unsupported("unsupported component sort reference")
     }
-    return { name: "", sort_tag, core_kind: None, idx }
+    return { name: "", attributes: None, sort_tag, core_kind: None, idx }
   }
   if items.length() >= 3 &&
     (
@@ -5949,7 +6160,13 @@ fn parse_component_sort_ref(
         resolved_idx = alias_idx
       }
     }
-    return { name: "", sort_tag, core_kind: None, idx: resolved_idx }
+    return {
+      name: "",
+      attributes: None,
+      sort_tag,
+      core_kind: None,
+      idx: resolved_idx,
+    }
   }
   raise Unsupported("sort reference must be `(<sort> <index-or-id>)` for now")
 }
@@ -5971,6 +6188,7 @@ fn parse_instance_instantiate_arg(
   let sort_ref = parse_component_sort_ref(arg[2], state)
   {
     name,
+    attributes: None,
     sort_tag: sort_ref.sort_tag,
     core_kind: sort_ref.core_kind,
     idx: sort_ref.idx,
@@ -6013,6 +6231,7 @@ fn parse_instance_field(
       for export_name in export_names {
         exports.push({
           name: export_name,
+          attributes: None,
           sort_tag: 0x01,
           core_kind: None,
           idx: 0,
@@ -6046,6 +6265,7 @@ fn parse_instance_field(
     for export_name in export_names {
       push_export_decl(state, {
         name: export_name,
+        attributes: None,
         sort_tag: 0x05,
         core_kind: None,
         idx: instance_idx,
@@ -6136,16 +6356,22 @@ fn parse_instance_field(
     } else {
       raise Unsupported("instance inline export is missing name")
     }
+    let (attributes, ref_index) = parse_name_attributes(list, 2)
     if import_field is Some(import_desc) {
       let desc_items = if import_desc[2] is List(items) {
         items
       } else {
         raise Unsupported("instance import descriptor must be a list")
       }
-      if list.length() == 2 {
+      if ref_index >= list.length() {
         desc_items.push(List([Atom("export"), list[1], List([Atom("func")])]))
-      } else if list.length() == 3 {
-        desc_items.push(List([Atom("export"), list[1], list[2]]))
+      } else if ref_index + 1 == list.length() {
+        let export_decl : Array[SExpr] = [Atom("export"), list[1]]
+        for i in 2..<ref_index {
+          export_decl.push(list[i])
+        }
+        export_decl.push(list[ref_index])
+        desc_items.push(List(export_decl))
       } else {
         raise Unsupported(
           "instance import export sugar must be `(export <name> [<type-desc>])`",
@@ -6153,23 +6379,25 @@ fn parse_instance_field(
       }
       continue
     }
-    if list.length() == 2 {
+    if ref_index >= list.length() {
       exports.push({
         name: export_name,
+        attributes,
         sort_tag: 0x01,
         core_kind: None,
         idx: 0,
       })
       continue
     }
-    if list.length() != 3 {
+    if ref_index + 1 != list.length() {
       raise Unsupported(
         "instance inline export must be `(export <name> <sort-ref>)`",
       )
     }
-    let sort_ref = parse_component_sort_ref(list[2], state)
+    let sort_ref = parse_component_sort_ref(list[ref_index], state)
     exports.push({
       name: export_name,
+      attributes,
       sort_tag: sort_ref.sort_tag,
       core_kind: sort_ref.core_kind,
       idx: sort_ref.idx,
@@ -6212,6 +6440,13 @@ fn parse_core_sort_ref(
     items
   } else {
     raise Unsupported("core instantiate arg must be a list")
+  }
+  if items.length() > 1 && items[0] is Atom("core") {
+    let unwrapped : Array[SExpr] = []
+    for i in 1..<items.length() {
+      unwrapped.push(items[i])
+    }
+    return parse_core_sort_ref(List(unwrapped), state)
   }
   if items.length() < 2 {
     raise Unsupported("core instantiate arg is incomplete")
@@ -6885,6 +7120,34 @@ fn parse_canon_field(
   field : Array[SExpr],
   state : ComponentBuildState,
 ) -> Unit raise ComponentTextError {
+  if field.length() >= 4 && field[1] is Atom("lift") {
+    let func_desc = if field[field.length() - 1] is List(items) {
+      items
+    } else {
+      raise Unsupported("`canon lift` must end with a function descriptor")
+    }
+    if func_desc.length() == 0 || !(func_desc[0] is Atom("func")) {
+      raise Unsupported("`canon lift` must end with a function descriptor")
+    }
+    let type_idx = ensure_func_type(state, parse_func_sig(func_desc, state))
+    let canon_items : Array[SExpr] = []
+    for i in 0..<(field.length() - 1) {
+      canon_items.push(field[i])
+    }
+    push_ordered_section(
+      state,
+      8,
+      parse_canon_lift(canon_items, state, type_idx),
+    )
+    let idx = state.next_func_idx
+    state.next_func_idx += 1
+    bind_named_index(
+      state.func_names,
+      parse_optional_identifier(func_desc, 1),
+      idx,
+    )
+    return
+  }
   let (canon_decl, is_core_func_decl, target_name_opt) = parse_canon_decl(
     field, state, true,
   )
@@ -7023,6 +7286,7 @@ fn compile_component_expr_with_outer(
       for export_name in export_names {
         push_export_decl(state, {
           name: export_name,
+          attributes: None,
           sort_tag: 0x04,
           core_kind: None,
           idx: component_idx,

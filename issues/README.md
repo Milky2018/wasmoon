@@ -283,6 +283,79 @@ graph TD
   ISS_265["ISS-265: Simplify the AArch64 SMix control-flow layout"]
   ISS_266["ISS-266: Record final pwhash_scrypt_ll performance evidence"]
   ISS_267["ISS-267: Preserve deferred homes across ABI definitions and CFG edges"]
+  ISS_268["ISS-268: Close stable Component Model 0.2 snapshot gaps"]
+  ISS_269["ISS-269: Close Component Model 0.3 async snapshot gaps"]
+  ISS_270["ISS-270: Close future-gated Component Model snapshot gaps"]
+  ISS_271["ISS-271: Implement the WASI Preview 2 and Preview 3 component host"]
+  ISS_272["ISS-272: Establish typed component host-instance registration"]
+  ISS_273["ISS-273: Implement Preview 2 CLI clocks and random interfaces"]
+  ISS_274["ISS-274: Implement Preview 2 streams and polling"]
+  ISS_275["ISS-275: Implement Preview 2 filesystem capabilities"]
+  ISS_276["ISS-276: Implement Preview 2 socket capabilities"]
+  ISS_277["ISS-277: Implement the current Preview 3 async WASI interfaces"]
+  ISS_278["ISS-278: Integrate component commands and WASI conformance gates"]
+  ISS_279["ISS-279: Generate WASI component contracts from pinned official WIT"]
+  ISS_280["ISS-280: Add JIT component execution and explicit async continuations"]
+  ISS_281["ISS-281: Introduce the component core execution engine seam"]
+  ISS_282["ISS-282: Make the core interpreter explicitly resumable"]
+  ISS_283["ISS-283: Drive component continuations from the host event loop"]
+  ISS_284["ISS-284: Remove component async replay state"]
+  ISS_285["ISS-285: Add the component JIT adapter and execution gates"]
+  ISS_286["ISS-286: Establish the stable component invocation surface"]
+  ISS_287["ISS-287: Add the stable component runtime facade"]
+  ISS_288["ISS-288: Add general component invocation to the CLI"]
+  ISS_289["ISS-289: Add checked WIT typed bindings"]
+  ISS_290["ISS-290: Harden the component runtime validation surface"]
+  ISS_291["ISS-291: Add deterministic component fuzzing"]
+  ISS_292["ISS-292: Add current Wasmtime component differential coverage"]
+  ISS_293["ISS-293: Verify and repair component resource lifecycle cleanup"]
+  ISS_294["ISS-294: Establish a component security audit gate"]
+  ISS_295["ISS-295: Add large component stress coverage"]
+  ISS_296["ISS-296: Validate canonical lift signatures through core instance exports"]
+  ISS_297["ISS-297: Parse component type indices at 64 and above"]
+  ISS_298["ISS-298: Complete native WASI 0.3 JIT execution"]
+  ISS_299["ISS-299: Separate core call semantics from backend selection"]
+  ISS_300["ISS-300: Execute callback-driven async steps through native JIT"]
+  ISS_301["ISS-301: Add the Wasmoon-owned async runtime seam"]
+  ISS_302["ISS-302: Implement the macOS kqueue reactor adapter"]
+  ISS_303["ISS-303: Implement the Linux epoll reactor adapter"]
+  ISS_304["ISS-304: Migrate Preview 3 host operations to wasmoon_async"]
+  ISS_305["ISS-305: Introduce Store-scoped native execution state"]
+  ISS_306["ISS-306: Implement native fiber context switching"]
+  ISS_307["ISS-307: Preserve hostcall suspension and trap activations"]
+  ISS_308["ISS-308: Trace precise roots on suspended native fibers"]
+  ISS_309["ISS-309: Integrate native continuations with Component Async"]
+  ISS_310["ISS-310: Require native execution in WASI 0.3 conformance"]
+  ISS_311["ISS-311: Stress native async cancellation and lifecycle cleanup"]
+  ISS_312["ISS-312: Finalize the WASI 0.3 native runtime contract"]
+  ISS_313["ISS-313: Correct Component Async instance entry and poisoning"]
+  ISS_314["ISS-314: Complete Component Async future and stream state transitions"]
+  ISS_315["ISS-315: Return structured Component Async canonical traps"]
+  ISS_316["ISS-316: Honor component-test interpreter mode"]
+  ISS_317["ISS-317: Accept native fiber hostcall frames"]
+  ISS_318["ISS-318: Remove the redundant wasmoon_async scheduling layer"]
+  ISS_319["ISS-319: Encode Preview 3 output error futures correctly"]
+  ISS_320["ISS-320: Isolate concurrent macOS descriptor registrations"]
+  ISS_321["ISS-321: Close all WASI component context resources"]
+  ISS_322["ISS-322: Release native continuation GC frames exactly once"]
+  ISS_323["ISS-323: Make native sanitizer CI produce instrumented test binaries"]
+  ISS_324["ISS-324: Keep synchronous Component JIT traps on their native fiber"]
+  ISS_325["ISS-325: Preserve trailing-slash directory semantics in WASI component paths"]
+  ISS_326["ISS-326: Move native fiber probes out of the production runtime"]
+  ISS_327["ISS-327: Consolidate native platform CI with a matrix"]
+  ISS_328["ISS-328: Type the native fiber FFI protocol"]
+  ISS_329["ISS-329: Invalidate shared memories when their owning store closes"]
+  ISS_330["ISS-330: Remove GC frame test counters from release artifacts"]
+  ISS_331["ISS-331: Match sanitizer evidence without substring false positives"]
+  ISS_332["ISS-332: Enforce warning 73 cleanliness"]
+  ISS_333["ISS-333: Consume owned callback closures exactly once"]
+  ISS_334["ISS-334: Enforce terminal Store and Linker close semantics"]
+  ISS_335["ISS-335: Preserve the named fiber advance invalid-state result"]
+  ISS_336["ISS-336: Seal Store-owned native execution state on close"]
+  ISS_337["ISS-337: Make the release symbol gate pipefail-safe"]
+  ISS_338["ISS-338: Preserve Store errors when allocating component host core functions"]
+  ISS_339["ISS-339: Tear down resumable JIT setup when execution admission fails"]
+  ISS_340["ISS-340: Gate Python tooling and component security audits in CI"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
@@ -553,6 +626,65 @@ graph TD
   ISS_263 --> ISS_266
   ISS_264 --> ISS_266
   ISS_265 --> ISS_266
+  ISS_278 --> ISS_271
+  ISS_272 --> ISS_273
+  ISS_279 --> ISS_273
+  ISS_272 --> ISS_274
+  ISS_279 --> ISS_274
+  ISS_272 --> ISS_275
+  ISS_274 --> ISS_275
+  ISS_272 --> ISS_276
+  ISS_274 --> ISS_276
+  ISS_273 --> ISS_277
+  ISS_274 --> ISS_277
+  ISS_275 --> ISS_277
+  ISS_276 --> ISS_277
+  ISS_273 --> ISS_278
+  ISS_274 --> ISS_278
+  ISS_275 --> ISS_278
+  ISS_276 --> ISS_278
+  ISS_277 --> ISS_278
+  ISS_272 --> ISS_279
+  ISS_281 --> ISS_280
+  ISS_282 --> ISS_280
+  ISS_283 --> ISS_280
+  ISS_284 --> ISS_280
+  ISS_285 --> ISS_280
+  ISS_281 --> ISS_282
+  ISS_282 --> ISS_283
+  ISS_283 --> ISS_284
+  ISS_281 --> ISS_285
+  ISS_285 --> ISS_286
+  ISS_287 --> ISS_288
+  ISS_287 --> ISS_289
+  ISS_291 --> ISS_292
+  ISS_291 --> ISS_294
+  ISS_293 --> ISS_294
+  ISS_291 --> ISS_295
+  ISS_312 --> ISS_298
+  ISS_299 --> ISS_300
+  ISS_301 --> ISS_302
+  ISS_301 --> ISS_303
+  ISS_302 --> ISS_304
+  ISS_303 --> ISS_304
+  ISS_299 --> ISS_305
+  ISS_305 --> ISS_306
+  ISS_306 --> ISS_307
+  ISS_307 --> ISS_308
+  ISS_300 --> ISS_309
+  ISS_308 --> ISS_309
+  ISS_304 --> ISS_310
+  ISS_309 --> ISS_310
+  ISS_313 --> ISS_310
+  ISS_314 --> ISS_310
+  ISS_315 --> ISS_310
+  ISS_310 --> ISS_311
+  ISS_311 --> ISS_312
+  ISS_314 --> ISS_315
+  ISS_323 --> ISS_324
+  ISS_323 --> ISS_326
+  ISS_323 --> ISS_327
+  ISS_326 --> ISS_328
 ```
 
 ## Warnings

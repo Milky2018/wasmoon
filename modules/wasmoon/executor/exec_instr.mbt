@@ -565,71 +565,17 @@ fn ExecContext::exec_instr(
       let stack_height = self.stack.size()
       self.push_label(false, arity)
       let result = try self.exec_block(body) catch {
+        ExecutionSuspended => {
+          self.append_resume_handler(fn(result) raise {
+            self.finish_try_table(result, handlers, stack_height)
+          })
+          raise ExecutionSuspended
+        }
         e => ExecBlockRaised(e)
       } noraise {
         _ => ExecBlockCompleted
       }
-      self.pop_label()
-      match result {
-        ExecBlockCompleted => ()
-        ExecBlockRaised(ThrowException(tag_addr, values)) => {
-          // Find a matching handler
-          for handler in handlers {
-            match handler {
-              Catch(handler_tag_idx, label_idx) => {
-                let handler_tag_addr = self.instance.tag_addrs[handler_tag_idx]
-                if handler_tag_addr == tag_addr {
-                  // Match! Push exception values and branch
-                  self.restore_stack_to(stack_height)
-                  for v in values {
-                    self.stack.push(v)
-                  }
-                  raise BranchWith(label_idx, values)
-                }
-              }
-              CatchRef(handler_tag_idx, label_idx) => {
-                let handler_tag_addr = self.instance.tag_addrs[handler_tag_idx]
-                if handler_tag_addr == tag_addr {
-                  // Match! Push exception values and exnref, then branch
-                  let exn_addr = self.store.alloc_exn(tag_addr, values)
-                  self.restore_stack_to(stack_height)
-                  for v in values {
-                    self.stack.push(v)
-                  }
-                  self.stack.push(ExnRef(exn_addr))
-                  let branch_values = values.copy()
-                  branch_values.push(ExnRef(exn_addr))
-                  raise BranchWith(label_idx, branch_values)
-                }
-              }
-              CatchAll(label_idx) => {
-                // Matches any exception
-                self.restore_stack_to(stack_height)
-                raise BranchWith(label_idx, [])
-              }
-              CatchAllRef(label_idx) => {
-                // Matches any exception and pushes exnref
-                let exn_addr = self.store.alloc_exn(tag_addr, values)
-                self.restore_stack_to(stack_height)
-                self.stack.push(ExnRef(exn_addr))
-                raise BranchWith(label_idx, [ExnRef(exn_addr)])
-              }
-            }
-          }
-          // No handler matched, re-raise the exception
-          raise ThrowException(tag_addr, values)
-        }
-        ExecBlockRaised(BranchWith(0, values)) => {
-          // Normal branch to end of try_table
-          self.restore_stack_to(stack_height)
-          for v in values {
-            self.stack.push(v)
-          }
-        }
-        ExecBlockRaised(BranchWith(n, values)) =>
-          raise BranchWith(n - 1, values)
-        ExecBlockRaised(e) => raise e
-      }
+      self.finish_try_table(result, handlers, stack_height)
     }
 
     // GC instructions - struct operations
@@ -940,6 +886,69 @@ fn ExecContext::exec_instr(
     | I16x8RelaxedQ15mulrS
     | I16x8RelaxedDotI8x16I7x16S
     | I32x4RelaxedDotI8x16I7x16AddS => self.exec_simd(instr)
+  }
+}
+
+///|
+fn ExecContext::finish_try_table(
+  self : ExecContext,
+  result : ExecBlockResult,
+  handlers : Array[@types.CatchHandler],
+  stack_height : Int,
+) -> Unit raise {
+  self.pop_label()
+  match result {
+    ExecBlockCompleted => ()
+    ExecBlockRaised(ThrowException(tag_addr, values)) => {
+      for handler in handlers {
+        match handler {
+          Catch(handler_tag_idx, label_idx) => {
+            let handler_tag_addr = self.instance.tag_addrs[handler_tag_idx]
+            if handler_tag_addr == tag_addr {
+              self.restore_stack_to(stack_height)
+              for value in values {
+                self.stack.push(value)
+              }
+              raise BranchWith(label_idx, values)
+            }
+          }
+          CatchRef(handler_tag_idx, label_idx) => {
+            let handler_tag_addr = self.instance.tag_addrs[handler_tag_idx]
+            if handler_tag_addr == tag_addr {
+              let exn_addr = self.store.alloc_exn(tag_addr, values)
+              self.restore_stack_to(stack_height)
+              for value in values {
+                self.stack.push(value)
+              }
+              self.stack.push(ExnRef(exn_addr))
+              let branch_values = values.copy()
+              branch_values.push(ExnRef(exn_addr))
+              raise BranchWith(label_idx, branch_values)
+            }
+          }
+          CatchAll(label_idx) => {
+            self.restore_stack_to(stack_height)
+            raise BranchWith(label_idx, [])
+          }
+          CatchAllRef(label_idx) => {
+            let exn_addr = self.store.alloc_exn(tag_addr, values)
+            self.restore_stack_to(stack_height)
+            self.stack.push(ExnRef(exn_addr))
+            raise BranchWith(label_idx, [ExnRef(exn_addr)])
+          }
+        }
+      }
+      raise ThrowException(tag_addr, values)
+    }
+    ExecBlockRaised(BranchWith(0, values)) => {
+      self.restore_stack_to(stack_height)
+      for value in values {
+        self.stack.push(value)
+      }
+    }
+    ExecBlockRaised(BranchWith(depth, values)) =>
+      raise BranchWith(depth - 1, values)
+    ExecBlockRaised(error) => raise error
   }
 }
 

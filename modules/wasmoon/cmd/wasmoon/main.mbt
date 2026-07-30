@@ -103,6 +103,33 @@ fn main {
           "validate": @clap.Arg::flag(
             help="Validate the component after parsing",
           ),
+          "run": @clap.Arg::flag(
+            help="Run a pinned WASI Preview 2 or Preview 3 command component",
+          ),
+          "invoke": @clap.Arg::named(
+            nargs=AtMost(1),
+            help="Invoke export or interface#function with typed JSON arguments",
+          ),
+          "no-jit": @clap.Arg::flag(
+            help="Disable JIT compilation for synchronous component core functions",
+          ),
+          "arg": @clap.Arg::named(
+            nargs=Any,
+            help="Command strings for --run or typed JSON values for --invoke",
+          ),
+          "env": @clap.Arg::named(
+            nargs=Any,
+            help="Command environment entry in NAME=VALUE form",
+          ),
+          "dir": @clap.Arg::named(
+            nargs=Any,
+            help="Preopen HOST_DIR or HOST_DIR::GUEST_DIR",
+          ),
+          "network": @clap.Arg::named(
+            nargs=AtMost(1),
+            choices=@hashset.HashSet::from_array(["deny", "loopback", "all"]),
+            help="Network capability: deny (default), loopback, or all",
+          ),
           "no-wit-names": @clap.Arg::flag(
             help="Disable wasm-tools/WIT name validation (kebab-case/package-name checks)",
           ),
@@ -121,6 +148,9 @@ fn main {
             nargs=AtMost(1),
             choices=error_format_choices,
             help="component-test output format: text (default) or json",
+          ),
+          "no-jit": @clap.Arg::flag(
+            help="Use the core interpreter for all component test calls",
           ),
         },
       ),
@@ -269,6 +299,11 @@ fn main {
               if positional.length() > 0 {
                 let dump = sub.flags.get("dump") is Some(true)
                 let validate = sub.flags.get("validate") is Some(true)
+                let run = sub.flags.get("run") is Some(true)
+                let invoke = match sub.args.get("invoke") {
+                  Some([path]) => Some(path)
+                  _ => None
+                }
                 let wit_names = match sub.flags.get("no-wit-names") {
                   Some(true) => false
                   _ => true
@@ -282,13 +317,55 @@ fn main {
                     }
                   None => Text
                 }
-                let status = @commands.run_component_command(
-                  positional[0],
-                  dump,
-                  validate,
-                  wit_names,
-                  error_format,
-                )
+                let component_args = match sub.args.get("arg") {
+                  Some(values) => values
+                  None => []
+                }
+                let status = if run && invoke is Some(_) {
+                  @commands.report_component_option_error(
+                    error_format, "--run and --invoke are mutually exclusive",
+                  )
+                } else if invoke is Some(export_path) {
+                  @commands.run_component_invoke_command(
+                    positional[0],
+                    export_path,
+                    component_args,
+                    wit_names,
+                    error_format,
+                  )
+                } else if run {
+                  let use_jit = match sub.flags.get("no-jit") {
+                    Some(true) => false
+                    _ => true
+                  }
+                  @commands.run_wasi_component_command(
+                    positional[0],
+                    component_args,
+                    match sub.args.get("env") {
+                      Some(values) => values
+                      None => []
+                    },
+                    match sub.args.get("dir") {
+                      Some(values) => values
+                      None => []
+                    },
+                    match sub.args.get("network") {
+                      Some([value]) => value
+                      _ => "deny"
+                    },
+                    wit_names,
+                    error_format,
+                    use_jit~,
+                  )
+                } else {
+                  @commands.run_component_command(
+                    positional[0],
+                    dump,
+                    validate,
+                    wit_names,
+                    error_format,
+                  )
+                }
                 if status != 0 {
                   @sys.exit(status)
                 }
@@ -311,6 +388,7 @@ fn main {
                 let status = @commands.run_component_script_cli(
                   positional[0],
                   error_format,
+                  use_jit=!(sub.flags.get("no-jit") is Some(true)),
                 )
                 if status != 0 {
                   @sys.exit(status)

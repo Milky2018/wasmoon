@@ -1,0 +1,25 @@
+# Component Model forms that require the WASI 0.3 async proposal, but no later gated proposal.
+async/async-calls-sync.wast
+async/builtin-trap-poisons-instance.wast
+async/cancel-stream.wast
+async/closed-stream.wast
+async/cross-abi-calls.wast
+async/cross-task-future.wast
+async/deadlock.wast
+async/dont-block-start.wast
+async/drop-cross-task-borrow.wast
+async/drop-stream.wast
+async/drop-subtask.wast
+async/drop-waitable-set.wast
+async/empty-wait.wast
+async/futures-must-write.wast
+async/partial-stream-copies.wast
+async/passing-resources.wast
+async/same-component-stream-future.wast
+async/trap-if-done.wast
+async/trap-if-transfer-in-waitable-set.wast
+async/trap-on-reenter.wast
+async/validate-no-async-abi-for-sync-type.wast
+async/validate-no-stream-char.wast
+async/wait-during-callback.wast
+async/zero-length.wast

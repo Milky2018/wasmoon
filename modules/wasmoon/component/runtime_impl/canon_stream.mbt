@@ -29,37 +29,6 @@ fn instantiate_canon_stream_new(
       trap_canon("cannot leave component instance")
     }
 
-    // Replay-safe: `canon stream.new` can be executed multiple times if the
-    // surrounding core function is restarted after a cooperative suspension.
-    // Cache the i64 result per task/call cursor so handle numbering remains stable.
-    let task_id = current_task_id(async_state)
-    let cur = if async_state.call_cursor_stack.length() == 0 {
-      0
-    } else {
-      async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1]
-    }
-    let per_task = match async_state.call_results.get(task_id) {
-      Some(m) => m
-      None => {
-        let m : Map[Int, Array[@types.Value]] = Map([])
-        async_state.call_results.set(task_id, m)
-        m
-      }
-    }
-    if per_task.get(cur) is Some(v) {
-      set_canon_debug_message("stream.new(replay cur=\{cur})-> \{to_repr(v)}")
-      async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1] = cur +
-        1
-      return v
-    }
-    fn cache_i64(x : Int64) -> Array[@types.Value] {
-      let out = [@types.Value::I64(x)]
-      per_task.set(cur, out)
-      async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1] = cur +
-        1
-      out
-    }
-
     let sid = table.next_stream_id[0]
     table.next_stream_id[0] = sid + 1
     table.streams.set(sid, {
@@ -81,19 +50,199 @@ fn instantiate_canon_stream_new(
       stream_id: sid,
       is_readable: true,
       notified_peer_dropped: [false],
+      in_waitable_set: Ref(false),
     })
     table.endpoints.set(handle_key(owner_component_id, wh), {
       stream_id: sid,
       is_readable: false,
       notified_peer_dropped: [false],
+      in_waitable_set: Ref(false),
     })
     set_canon_debug_message(
       "stream.new(owner=\{owner_component_id})-> rh=\{rh} wh=\{wh}",
     )
     let packed = (wh.to_int64() << 32) | (rh.to_int64() & 0xFFFFFFFFL)
-    cache_i64(packed)
+    [I64(packed)]
   }
-  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+  state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
+}
+
+///|
+fn store_host_stream_value(
+  value : ComponentValue,
+  payload_ty : ValType,
+  types : Array[TypeDef?],
+  resources : CanonResources,
+  store : @runtime.Store,
+  table : ResourceTable,
+  ptr : Int,
+) -> Unit raise ComponentRuntimeError {
+  let mem = require_memory(resources, store)
+  let mem_is_64 = mem.is_memory64()
+  let storage = flat_storage_for_valtype(payload_ty, types, mem_is_64)
+  if storage.length() > 16 {
+    raise HostCallError(
+      "typed host stream payload exceeds the canonical flat-value limit",
+    )
+  }
+  let values = component_args_to_core(
+    [value],
+    {
+      is_async: false,
+      params: [{ label: "value", ty: payload_ty }],
+      result: None,
+    },
+    types,
+    resources,
+    store,
+    table,
+    table,
+  )
+  if values.length() != storage.length() {
+    raise HostCallError("typed host stream payload has an invalid shape")
+  }
+  let (offsets, _size, alignment) = layout_of_flat_storage_fields(storage)
+  if alignment > 1 &&
+    ptr.reinterpret_as_uint() % alignment.reinterpret_as_uint() != 0U {
+    raise CanonCallError("unaligned pointer")
+  }
+  for i in 0..<values.length() {
+    store_storage_value(mem, ptr + offsets[i], values[i], storage[i])
+  }
+}
+
+///|
+fn poll_host_value_stream(
+  source : HostValueStream,
+  max_elements : Int,
+) -> HostValueStreamPoll raise ComponentRuntimeError {
+  let remaining = source.values.length() - source.next.val
+  if remaining > 0 {
+    let count = if max_elements < remaining { max_elements } else { remaining }
+    let values : Array[ComponentValue] = []
+    for i in 0..<count {
+      values.push(source.values[source.next.val + i])
+    }
+    source.next.val = source.next.val + count
+    Values(values)
+  } else if source.closed.val {
+    Closed
+  } else {
+    match source.pull {
+      Some(pull) =>
+        match pull(max_elements) {
+          Closed => {
+            source.closed.val = true
+            Closed
+          }
+          result => result
+        }
+      None => {
+        source.closed.val = true
+        Closed
+      }
+    }
+  }
+}
+
+///|
+fn progress_host_stream_sources(
+  async_state : AsyncState,
+  store : @runtime.Store,
+) -> Bool raise ComponentRuntimeError {
+  let table = async_state.stream_table
+  let mut progressed = false
+  for item in table.host_values.iter() {
+    let (stream_id, source) = item
+    guard table.streams.get(stream_id) is Some(state) &&
+      state.pending_read is Some(read) else {
+      continue
+    }
+    match poll_host_value_stream(source, read.len - read.filled) {
+      Pending => ()
+      Closed => {
+        table.streams.set(stream_id, {
+          elem_size: state.elem_size,
+          own_resource_type_id: state.own_resource_type_id,
+          pending_read: Some({
+            mem_addr: read.mem_addr,
+            realloc: read.realloc,
+            encoding: read.encoding,
+            reader_table: read.reader_table,
+            ptr: read.ptr,
+            len: read.len,
+            filled: read.filled,
+            reader_handle: read.reader_handle,
+            event_enqueued: true,
+          }),
+          pending_write: state.pending_write,
+          readable_dropped: state.readable_dropped,
+          writable_dropped: true,
+        })
+        enqueue_waitable_event(
+          async_state,
+          handle_key(read.reader_table.id, read.reader_handle),
+          {
+            owner_component_id: read.reader_table.id,
+            code: 2,
+            index: read.reader_handle,
+            payload: 1 | (read.filled << 4),
+          },
+        )
+        progressed = true
+      }
+      Values(values) => {
+        let resources : CanonResources = {
+          mem_addr: read.mem_addr,
+          realloc: read.realloc,
+          post_return: None,
+          encoding: read.encoding,
+        }
+        for i, value in values {
+          store_host_stream_value(
+            value,
+            source.payload_ty,
+            source.types,
+            resources,
+            store,
+            read.reader_table,
+            read.ptr + (read.filled + i) * state.elem_size,
+          )
+        }
+        let filled = read.filled + values.length()
+        table.streams.set(stream_id, {
+          elem_size: state.elem_size,
+          own_resource_type_id: state.own_resource_type_id,
+          pending_read: Some({
+            mem_addr: read.mem_addr,
+            realloc: read.realloc,
+            encoding: read.encoding,
+            reader_table: read.reader_table,
+            ptr: read.ptr,
+            len: read.len,
+            filled,
+            reader_handle: read.reader_handle,
+            event_enqueued: true,
+          }),
+          pending_write: state.pending_write,
+          readable_dropped: state.readable_dropped,
+          writable_dropped: false,
+        })
+        enqueue_waitable_event(
+          async_state,
+          handle_key(read.reader_table.id, read.reader_handle),
+          {
+            owner_component_id: read.reader_table.id,
+            code: 2,
+            index: read.reader_handle,
+            payload: filled << 4,
+          },
+        )
+        progressed = true
+      }
+    }
+  }
+  progressed
 }
 
 ///|
@@ -120,53 +269,9 @@ fn instantiate_canon_stream_read(
     if !canon_may_leave[0] {
       trap_canon("cannot leave component instance")
     }
-    // Replay-safe: stream.read/write can be re-executed when the surrounding core function is
-    // restarted after a cooperative suspension. Cache their return codes per task + cursor so
-    // side effects (buffer copies / handle transfers) are not repeated.
     let task_id = current_task_id(async_state)
-    let cur = if async_state.stream_cursor_stack.length() == 0 {
-      0
-    } else {
-      async_state.stream_cursor_stack[async_state.stream_cursor_stack.length() -
-      1]
-    }
-    // Callback-style async ABI runs different core functions across steps; their cursors
-    // restart at 0 each step, so keep a separate replay map for callbacks to avoid
-    // colliding with the initial core function body.
-    let per_task = if async_state.in_async_callback[0] {
-      match async_state.stream_results_cb.get(task_id) {
-        Some(m) => m
-        None => {
-          let m : Map[Int, Int] = Map([])
-          async_state.stream_results_cb.set(task_id, m)
-          m
-        }
-      }
-    } else {
-      match async_state.stream_results.get(task_id) {
-        Some(m) => m
-        None => {
-          let m : Map[Int, Int] = Map([])
-          async_state.stream_results.set(task_id, m)
-          m
-        }
-      }
-    }
-    if per_task.get(cur) is Some(code) {
-      set_canon_debug_message("stream.read(replay cur=\{cur})-> \{code}")
-      async_state.stream_cursor_stack[async_state.stream_cursor_stack.length() -
-      1] = cur + 1
-      return [I32(code)]
-    }
-    fn cache_i32(code : Int) -> Array[@types.Value] {
-      per_task.set(cur, code)
-      async_state.stream_cursor_stack[async_state.stream_cursor_stack.length() -
-      1] = cur + 1
-      [I32(code)]
-    }
-
     fn ret_i32(code : Int) -> Array[@types.Value] {
-      cache_i32(code)
+      [I32(code)]
     }
 
     let mem_opt : @runtime.Memory? = match payload_ty {
@@ -190,6 +295,19 @@ fn instantiate_canon_stream_read(
     }
     match args {
       [I32(handle), I32(ptr), I32(len)] => {
+        if !is_async {
+          resume_sync_waitable_use(
+            async_state, owner_component_id, handle, task_id,
+          )
+          |> ignore
+        }
+        if !is_async &&
+          waitable_is_in_set(async_state, owner_component_id, handle) {
+          trap_canon(
+            "waitable cannot be used synchronously while added to a waitable set",
+          )
+          return ret_i32(0)
+        }
         if !is_async && !async_state.task_can_block[0] {
           trap_canon("cannot block a synchronous task before returning")
           return ret_i32(0)
@@ -232,40 +350,11 @@ fn instantiate_canon_stream_read(
                             stream_id: ep0.stream_id,
                             is_readable: ep0.is_readable,
                             notified_peer_dropped: ep0.notified_peer_dropped,
+                            in_waitable_set: ep0.in_waitable_set,
                           })
-                          // Reserve the adopted handle in the destination allocator.
-                          let next = match
-                            async_state.next_handle_by_component.get(
-                              owner_component_id,
-                            ) {
-                            Some(a) => a
-                            None => {
-                              let a = [1]
-                              async_state.next_handle_by_component.set(
-                                owner_component_id, a,
-                              )
-                              a
-                            }
-                          }
-                          if next[0] <= handle {
-                            next[0] = handle + 1
-                          }
-                          match
-                            async_state.free_handles_by_component.get(
-                              owner_component_id,
-                            ) {
-                            Some(free) => {
-                              let mut i = 0
-                              while i < free.length() {
-                                if free[i] == handle {
-                                  free.remove(i) |> ignore
-                                } else {
-                                  i = i + 1
-                                }
-                              }
-                            }
-                            None => ()
-                          }
+                          reserve_shared_handle(
+                            async_state, owner_component_id, handle,
+                          )
                         }
                       None => ()
                     }
@@ -298,10 +387,116 @@ fn instantiate_canon_stream_read(
                     return ret_i32(0)
                   }
                 }
+                match table.host_values.get(ep.stream_id) {
+                  Some(source) => {
+                    match st0.pending_read {
+                      Some(read) =>
+                        if is_async {
+                          trap_canon(
+                            "cannot have concurrent operations active on a future/stream",
+                          )
+                          return ret_i32(0)
+                        } else if read.reader_handle == handle &&
+                          read.event_enqueued {
+                          table.streams.set(ep.stream_id, {
+                            elem_size: st0.elem_size,
+                            own_resource_type_id: st0.own_resource_type_id,
+                            pending_read: None,
+                            pending_write: st0.pending_write,
+                            readable_dropped: st0.readable_dropped,
+                            writable_dropped: st0.writable_dropped,
+                          })
+                          if st0.writable_dropped {
+                            ep.notified_peer_dropped[0] = true
+                          }
+                          return ret_i32(
+                            (if st0.writable_dropped { 1 } else { 0 }) |
+                            (read.filled << 4),
+                          )
+                        } else {
+                          return ret_i32(-1)
+                        }
+                      None => ()
+                    }
+                    let poll_result = poll_host_value_stream(source, len) catch {
+                      e => {
+                        trap_canon(e.to_string())
+                        return ret_i32(0)
+                      }
+                    }
+                    match poll_result {
+                      Values(values) => {
+                        for i, value in values {
+                          store_host_stream_value(
+                            value,
+                            source.payload_ty,
+                            source.types,
+                            resources,
+                            store,
+                            reader_table,
+                            ptr + i * st0.elem_size,
+                          ) catch {
+                            e => {
+                              trap_canon(e.to_string())
+                              return ret_i32(0)
+                            }
+                          }
+                        }
+                        return ret_i32(values.length() << 4)
+                      }
+                      Closed => {
+                        ep.notified_peer_dropped[0] = true
+                        table.streams.set(ep.stream_id, {
+                          elem_size: st0.elem_size,
+                          own_resource_type_id: st0.own_resource_type_id,
+                          pending_read: None,
+                          pending_write: st0.pending_write,
+                          readable_dropped: st0.readable_dropped,
+                          writable_dropped: true,
+                        })
+                        return ret_i32(1)
+                      }
+                      Pending => {
+                        table.streams.set(ep.stream_id, {
+                          elem_size: st0.elem_size,
+                          own_resource_type_id: st0.own_resource_type_id,
+                          pending_read: Some({
+                            mem_addr: resources.mem_addr,
+                            realloc: resources.realloc,
+                            encoding: resources.encoding,
+                            reader_table,
+                            ptr,
+                            len,
+                            filled: 0,
+                            reader_handle: handle,
+                            event_enqueued: false,
+                          }),
+                          pending_write: st0.pending_write,
+                          readable_dropped: st0.readable_dropped,
+                          writable_dropped: false,
+                        })
+                        if is_async {
+                          return ret_i32(-1)
+                        }
+                        mark_sync_waitable_blocked(
+                          async_state, owner_component_id, handle, task_id,
+                        )
+                        canon_suspend[0] = Some(Yield)
+                        raise Unreachable
+                      }
+                    }
+                  }
+                  None => ()
+                }
                 // If re-executing a previously blocking read, return its completion.
                 match st0.pending_read {
                   Some(pr0) =>
-                    if pr0.reader_handle == handle {
+                    if is_async {
+                      trap_canon(
+                        "cannot have concurrent operations active on a future/stream",
+                      )
+                      return ret_i32(0)
+                    } else if pr0.reader_handle == handle {
                       if pr0.filled == pr0.len || st0.writable_dropped {
                         let dropped = if st0.writable_dropped { 1 } else { 0 }
                         if dropped == 1 {
@@ -332,6 +527,9 @@ fn instantiate_canon_stream_read(
                           )
                           return ret_i32(0)
                         }
+                        mark_sync_waitable_blocked(
+                          async_state, owner_component_id, handle, task_id,
+                        )
                         canon_suspend[0] = Some(Yield)
                         raise Unreachable
                       }
@@ -379,6 +577,8 @@ fn instantiate_canon_stream_read(
                       )
                       let pr = {
                         mem_addr: resources.mem_addr,
+                        realloc: resources.realloc,
+                        encoding: resources.encoding,
                         reader_table,
                         ptr,
                         len: 0,
@@ -407,10 +607,6 @@ fn instantiate_canon_stream_read(
                       return ret_i32(-1)
                     }
                     let remain = total_elems - pw.sent
-                    // If the pending write has been fully consumed (or is zero-length),
-                    // it must not cause reads to "complete" with 0 elements. Treat it as
-                    // no available data, but make sure the writer's completion event is
-                    // eventually delivered.
                     if remain <= 0 {
                       let mut pw_event_enqueued = pw.event_enqueued
                       if !pw_event_enqueued {
@@ -453,6 +649,8 @@ fn instantiate_canon_stream_read(
                       }
                       let pr = {
                         mem_addr: resources.mem_addr,
+                        realloc: resources.realloc,
+                        encoding: resources.encoding,
                         reader_table,
                         ptr,
                         len,
@@ -487,6 +685,9 @@ fn instantiate_canon_stream_read(
                           )
                           return ret_i32(0)
                         }
+                        mark_sync_waitable_blocked(
+                          async_state, owner_component_id, handle, task_id,
+                        )
                         canon_suspend[0] = Some(Yield)
                         raise Unreachable
                       }
@@ -551,10 +752,19 @@ fn instantiate_canon_stream_read(
                       (None, None) => ()
                     }
                     let new_sent = pw.sent + n
-                    // When a pending write has been fully consumed, emit STREAM_WRITE and
-                    // keep the write around until its event is delivered (notification semantics).
+                    // Publish cumulative progress. Further reads may extend
+                    // the same pending write before the event is observed, in
+                    // which case the queued event is replaced.
                     let mut event_enqueued = pw.event_enqueued
-                    if new_sent >= total_elems && !event_enqueued {
+                    if n > 0 {
+                      if event_enqueued {
+                        remove_waitable_events_for(
+                          async_state,
+                          pw.writer_table.id,
+                          pw.writer_handle,
+                          3,
+                        )
+                      }
                       enqueue_waitable_event(
                         async_state,
                         handle_key(pw.writer_table.id, pw.writer_handle),
@@ -563,7 +773,7 @@ fn instantiate_canon_stream_read(
                           code: 3,
                           index: pw.writer_handle,
                           payload: (if st0.readable_dropped { 1 } else { 0 }) |
-                          (total_elems << 4),
+                          (new_sent << 4),
                         },
                       )
                       event_enqueued = true
@@ -602,6 +812,8 @@ fn instantiate_canon_stream_read(
                       // Register a pending read and report BLOCKED.
                       let pr = {
                         mem_addr: resources.mem_addr,
+                        realloc: resources.realloc,
+                        encoding: resources.encoding,
                         reader_table,
                         ptr,
                         len,
@@ -629,6 +841,9 @@ fn instantiate_canon_stream_read(
                           )
                           return ret_i32(0)
                         }
+                        mark_sync_waitable_blocked(
+                          async_state, owner_component_id, handle, task_id,
+                        )
                         canon_suspend[0] = Some(Yield)
                         raise Unreachable
                       }
@@ -644,7 +859,14 @@ fn instantiate_canon_stream_read(
       }
     }
   }
-  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+  state.core_funcs.push(
+    alloc_component_host_core_func(
+      store,
+      core_type,
+      host,
+      may_suspend=!is_async,
+    ),
+  )
 }
 
 ///|
@@ -671,53 +893,9 @@ fn instantiate_canon_stream_write(
     if !canon_may_leave[0] {
       trap_canon("cannot leave component instance")
     }
-    // Replay-safe: stream.read/write can be re-executed when the surrounding core function is
-    // restarted after a cooperative suspension. Cache their return codes per task + cursor so
-    // side effects (buffer copies / handle transfers) are not repeated.
     let task_id = current_task_id(async_state)
-    let cur = if async_state.stream_cursor_stack.length() == 0 {
-      0
-    } else {
-      async_state.stream_cursor_stack[async_state.stream_cursor_stack.length() -
-      1]
-    }
-    // Callback-style async ABI runs different core functions across steps; their cursors
-    // restart at 0 each step, so keep a separate replay map for callbacks to avoid
-    // colliding with the initial core function body.
-    let per_task = if async_state.in_async_callback[0] {
-      match async_state.stream_results_cb.get(task_id) {
-        Some(m) => m
-        None => {
-          let m : Map[Int, Int] = Map([])
-          async_state.stream_results_cb.set(task_id, m)
-          m
-        }
-      }
-    } else {
-      match async_state.stream_results.get(task_id) {
-        Some(m) => m
-        None => {
-          let m : Map[Int, Int] = Map([])
-          async_state.stream_results.set(task_id, m)
-          m
-        }
-      }
-    }
-    if per_task.get(cur) is Some(code) {
-      set_canon_debug_message("stream.write(replay cur=\{cur})-> \{code}")
-      async_state.stream_cursor_stack[async_state.stream_cursor_stack.length() -
-      1] = cur + 1
-      return [I32(code)]
-    }
-    fn cache_i32(code : Int) -> Array[@types.Value] {
-      per_task.set(cur, code)
-      async_state.stream_cursor_stack[async_state.stream_cursor_stack.length() -
-      1] = cur + 1
-      [I32(code)]
-    }
-
     fn ret_i32(code : Int) -> Array[@types.Value] {
-      cache_i32(code)
+      [I32(code)]
     }
 
     let mem_opt : @runtime.Memory? = match payload_ty {
@@ -741,6 +919,19 @@ fn instantiate_canon_stream_write(
     }
     match args {
       [I32(handle), I32(ptr), I32(len)] => {
+        if !is_async {
+          resume_sync_waitable_use(
+            async_state, owner_component_id, handle, task_id,
+          )
+          |> ignore
+        }
+        if !is_async &&
+          waitable_is_in_set(async_state, owner_component_id, handle) {
+          trap_canon(
+            "waitable cannot be used synchronously while added to a waitable set",
+          )
+          return ret_i32(0)
+        }
         if !is_async && !async_state.task_can_block[0] {
           trap_canon("cannot block a synchronous task before returning")
           return ret_i32(0)
@@ -772,17 +963,23 @@ fn instantiate_canon_stream_write(
                     return ret_i32(0)
                   }
                 }
-                // If re-executing a previously blocking write, return its completion.
+                // A resumed blocking write retries this host instruction with
+                // the same pending operation.
                 match st0.pending_write {
                   Some(pw0) =>
-                    if pw0.writer_handle == handle {
+                    if is_async {
+                      trap_canon(
+                        "cannot have concurrent operations active on a future/stream",
+                      )
+                      return ret_i32(0)
+                    } else if pw0.writer_handle == handle {
                       let elem_size = st0.elem_size
                       let total_elems = pw0.buf.length() / elem_size
                       if st0.readable_dropped || pw0.sent >= total_elems {
                         // Sync stream.write should observe a drop that happens immediately after a
                         // successful rendezvous (read returns to the caller and then the caller
-                        // drops the readable end). To model this with cooperative replay, defer
-                        // completion by one yield once the write becomes fully consumed.
+                        // drops the readable end). Defer completion by one yield
+                        // once the write becomes fully consumed.
                         if !is_async &&
                           !st0.readable_dropped &&
                           pw0.sent >= total_elems &&
@@ -802,6 +999,9 @@ fn instantiate_canon_stream_write(
                             readable_dropped: st0.readable_dropped,
                             writable_dropped: st0.writable_dropped,
                           })
+                          mark_sync_waitable_blocked(
+                            async_state, owner_component_id, handle, task_id,
+                          )
                           canon_suspend[0] = Some(Yield)
                           raise Unreachable
                         }
@@ -834,6 +1034,9 @@ fn instantiate_canon_stream_write(
                           )
                           return ret_i32(0)
                         }
+                        mark_sync_waitable_blocked(
+                          async_state, owner_component_id, handle, task_id,
+                        )
                         canon_suspend[0] = Some(Yield)
                         raise Unreachable
                       }
@@ -886,6 +1089,8 @@ fn instantiate_canon_stream_write(
                         own_resource_type_id: st0.own_resource_type_id,
                         pending_read: Some({
                           mem_addr: pr0.mem_addr,
+                          realloc: pr0.realloc,
+                          encoding: pr0.encoding,
                           reader_table: pr0.reader_table,
                           ptr: pr0.ptr,
                           len: pr0.len,
@@ -955,6 +1160,9 @@ fn instantiate_canon_stream_write(
                           )
                           return ret_i32(0)
                         }
+                        mark_sync_waitable_blocked(
+                          async_state, owner_component_id, handle, task_id,
+                        )
                         canon_suspend[0] = Some(Yield)
                         raise Unreachable
                       }
@@ -1068,9 +1276,17 @@ fn instantiate_canon_stream_write(
                     }
                     let filled1 = pr0.filled + n
                     let mut event_enqueued = pr0.event_enqueued
-                    // Emit STREAM_READ once the whole read buffer is filled (or the peer is dropped).
-                    if (filled1 >= pr0.len || st0.writable_dropped) &&
-                      !event_enqueued {
+                    // Publish cumulative progress, replacing an earlier event
+                    // if another write arrives before it is observed.
+                    if n > 0 || st0.writable_dropped {
+                      if event_enqueued {
+                        remove_waitable_events_for(
+                          async_state,
+                          pr0.reader_table.id,
+                          pr0.reader_handle,
+                          2,
+                        )
+                      }
                       enqueue_waitable_event(
                         async_state,
                         handle_key(pr0.reader_table.id, pr0.reader_handle),
@@ -1086,6 +1302,8 @@ fn instantiate_canon_stream_write(
                     }
                     let pr1 = {
                       mem_addr: pr0.mem_addr,
+                      realloc: pr0.realloc,
+                      encoding: pr0.encoding,
                       reader_table: pr0.reader_table,
                       ptr: pr0.ptr,
                       len: pr0.len,
@@ -1152,6 +1370,9 @@ fn instantiate_canon_stream_write(
                         )
                         return ret_i32(0)
                       }
+                      mark_sync_waitable_blocked(
+                        async_state, owner_component_id, handle, task_id,
+                      )
                       canon_suspend[0] = Some(Yield)
                       raise Unreachable
                     }
@@ -1167,7 +1388,14 @@ fn instantiate_canon_stream_write(
       }
     }
   }
-  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+  state.core_funcs.push(
+    alloc_component_host_core_func(
+      store,
+      core_type,
+      host,
+      may_suspend=!is_async,
+    ),
+  )
 }
 
 ///|
@@ -1176,7 +1404,7 @@ fn instantiate_canon_stream_cancel_read(
   is_async_cancel : Bool,
   state : BuildState,
   store : @runtime.Store,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [I32], results: [I32] }
   let table = state.stream_table
   let async_state = state.async_state
@@ -1186,6 +1414,17 @@ fn instantiate_canon_stream_cancel_read(
   ) -> Array[@types.Value] raise @runtime.RuntimeError {
     if !canon_may_leave[0] {
       trap_canon("cannot leave component instance")
+    }
+    match args {
+      [I32(handle)] =>
+        if !is_async_cancel &&
+          waitable_is_in_set(async_state, owner_component_id, handle) {
+          trap_canon(
+            "waitable cannot be used synchronously while added to a waitable set",
+          )
+          return [I32(0)]
+        }
+      _ => ()
     }
     if !is_async_cancel && !async_state.task_can_block[0] {
       trap_canon("cannot block a synchronous task before returning")
@@ -1234,7 +1473,7 @@ fn instantiate_canon_stream_cancel_read(
       }
     }
   }
-  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+  state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
 }
 
 ///|
@@ -1243,7 +1482,7 @@ fn instantiate_canon_stream_cancel_write(
   is_async_cancel : Bool,
   state : BuildState,
   store : @runtime.Store,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [I32], results: [I32] }
   let table = state.stream_table
   let async_state = state.async_state
@@ -1253,6 +1492,17 @@ fn instantiate_canon_stream_cancel_write(
   ) -> Array[@types.Value] raise @runtime.RuntimeError {
     if !canon_may_leave[0] {
       trap_canon("cannot leave component instance")
+    }
+    match args {
+      [I32(handle)] =>
+        if !is_async_cancel &&
+          waitable_is_in_set(async_state, owner_component_id, handle) {
+          trap_canon(
+            "waitable cannot be used synchronously while added to a waitable set",
+          )
+          return [I32(0)]
+        }
+      _ => ()
     }
     if !is_async_cancel && !async_state.task_can_block[0] {
       trap_canon("cannot block a synchronous task before returning")
@@ -1301,7 +1551,7 @@ fn instantiate_canon_stream_cancel_write(
       }
     }
   }
-  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+  state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
 }
 
 ///|
@@ -1309,12 +1559,11 @@ fn instantiate_canon_stream_drop_readable(
   _tyidx : Int,
   state : BuildState,
   store : @runtime.Store,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [I32], results: [] }
   let table = state.stream_table
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
-  async_state.thread_handle_required.set(owner_component_id, true)
   let host = fn(
     args : Array[@types.Value],
   ) -> Array[@types.Value] raise @runtime.RuntimeError {
@@ -1399,7 +1648,17 @@ fn instantiate_canon_stream_drop_readable(
                 async_state, owner_component_id, handle,
               )
               table.endpoints.remove(handle_key(owner_component_id, handle))
+              match table.host_values.get(ep.stream_id) {
+                Some(source) =>
+                  match source.cancel {
+                    Some(cancel) => cancel()
+                    None => ()
+                  }
+                None => ()
+              }
+              table.host_values.remove(ep.stream_id)
               free_shared_handle(async_state, owner_component_id, handle)
+              cleanup_closed_stream(table, ep.stream_id)
               []
             }
         }
@@ -1409,7 +1668,7 @@ fn instantiate_canon_stream_drop_readable(
       }
     }
   }
-  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+  state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
 }
 
 ///|
@@ -1417,7 +1676,7 @@ fn instantiate_canon_stream_drop_writable(
   _tyidx : Int,
   state : BuildState,
   store : @runtime.Store,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [I32], results: [] }
   let table = state.stream_table
   let async_state = state.async_state
@@ -1480,6 +1739,8 @@ fn instantiate_canon_stream_drop_writable(
                     own_resource_type_id: st0.own_resource_type_id,
                     pending_read: Some({
                       mem_addr: pr.mem_addr,
+                      realloc: pr.realloc,
+                      encoding: pr.encoding,
                       reader_table: pr.reader_table,
                       ptr: pr.ptr,
                       len: pr.len,
@@ -1508,6 +1769,7 @@ fn instantiate_canon_stream_drop_writable(
               )
               table.endpoints.remove(handle_key(owner_component_id, handle))
               free_shared_handle(async_state, owner_component_id, handle)
+              cleanup_closed_stream(table, ep.stream_id)
               []
             }
         }
@@ -1517,5 +1779,5 @@ fn instantiate_canon_stream_drop_writable(
       }
     }
   }
-  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+  state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
 }

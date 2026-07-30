@@ -105,7 +105,7 @@ extern "c" fn finalize_exec_managed(
 extern "c" fn release_exec_managed(exec_code : ExecCodeHandle) -> Int = "wasmoon_jit_release_exec_managed"
 
 ///|
-#owned(exec_code)
+#borrow(exec_code)
 extern "c" fn exec_code_pointer(exec_code : ExecCodeHandle) -> Int64 = "wasmoon_jit_exec_code_ptr"
 
 ///|
@@ -510,6 +510,11 @@ pub fn NativeJITContext::ptr(self : NativeJITContext) -> Int64 {
 }
 
 ///|
+pub fn NativeJITContext::clear_gc_heap(self : NativeJITContext) -> Unit {
+  c_jit_gc_clear_heap_managed(self.0)
+}
+
+///|
 pub fn NativeJITContext::set_func(
   self : NativeJITContext,
   idx : Int,
@@ -645,12 +650,27 @@ pub fn NativeJITContext::has_wasm_stack(self : NativeJITContext) -> Bool {
 }
 
 ///|
+/// Typed result returned by a JIT hostcall dispatcher.
+pub(all) enum NativeHostcallOutcome {
+  HostcallCompleted
+  HostcallTrap(Int)
+  HostcallSuspended
+} derive(Debug, Eq)
+
+///|
 pub fn NativeJITContext::set_hostcall_callback(
   self : NativeJITContext,
-  callback : () -> Int,
+  callback : () -> NativeHostcallOutcome,
 ) -> Unit {
+  let encoded = fn() {
+    match callback() {
+      HostcallCompleted => 0
+      HostcallTrap(code) => if code > 0 { code } else { 8 }
+      HostcallSuspended => -1
+    }
+  }
   let call_closure : FuncRef[(() -> Int) -> Int] = fn(f : () -> Int) { f() }
-  c_jit_set_hostcall_callback(self.ptr(), call_closure, callback)
+  c_jit_set_hostcall_callback(self.ptr(), call_closure, encoded)
 }
 
 ///|

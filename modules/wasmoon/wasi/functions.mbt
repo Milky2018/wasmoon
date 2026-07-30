@@ -147,6 +147,15 @@ fn open_file_type_from_native(stat_filetype : Int) -> FileType {
 }
 
 ///|
+fn native_file_type_to_preview1(file_type : Int) -> Int {
+  if file_type >= 1 && file_type <= 7 {
+    file_type
+  } else {
+    0
+  }
+}
+
+///|
 fn first_non_empty_iov(
   mem : @runtime.Memory,
   iovs : Int,
@@ -1388,13 +1397,12 @@ fn emit_readdir_entry(
   entry_idx : Int64,
   d_ino : Int64,
   name : String,
-  is_dir : Bool,
+  file_type : Int,
 ) -> (Int, Bool) {
   if offset >= buf_len {
     return (offset, false)
   }
   let d_next = entry_idx + 1L
-  let d_type = if is_dir { 3 } else { 4 }
   let header_written = write_readdir_header(
     mem,
     buf_ptr + offset,
@@ -1402,7 +1410,7 @@ fn emit_readdir_entry(
     d_next,
     d_ino,
     name.length(),
-    d_type,
+    native_file_type_to_preview1(file_type),
   )
   let mut new_offset = offset + header_written
   if header_written < 24 {
@@ -1445,7 +1453,7 @@ fn readdir_impl(
   let mut keep_going = true
   if entry_idx >= effective_cookie {
     let (next_offset, ok) = emit_readdir_entry(
-      mem, buf_ptr, buf_len, offset, entry_idx, dir_ino, ".", true,
+      mem, buf_ptr, buf_len, offset, entry_idx, dir_ino, ".", 3,
     )
     offset = next_offset
     keep_going = ok
@@ -1453,7 +1461,7 @@ fn readdir_impl(
   entry_idx = entry_idx + 1L
   if keep_going && entry_idx >= effective_cookie {
     let (next_offset, ok) = emit_readdir_entry(
-      mem, buf_ptr, buf_len, offset, entry_idx, dir_ino, "..", true,
+      mem, buf_ptr, buf_len, offset, entry_idx, dir_ino, "..", 3,
     )
     offset = next_offset
     keep_going = ok
@@ -1464,7 +1472,7 @@ fn readdir_impl(
     return Errno::Success.to_i32()
   }
   for entry in dir_entries {
-    let (name, is_dir) = entry
+    let (name, file_type) = entry
     // Skip entries before cookie
     if entry_idx < effective_cookie {
       entry_idx = entry_idx + 1L
@@ -1475,7 +1483,7 @@ fn readdir_impl(
       None => entry_idx + 1L
     }
     let (next_offset, ok) = emit_readdir_entry(
-      mem, buf_ptr, buf_len, offset, entry_idx, entry_ino, name, is_dir,
+      mem, buf_ptr, buf_len, offset, entry_idx, entry_ino, name, file_type,
     )
     offset = next_offset
     entry_idx = entry_idx + 1L
@@ -2010,7 +2018,10 @@ fn write_filestat(
 ) -> Unit {
   mem.write_i64(buf_ptr, stat.dev.reinterpret_as_int64()) // dev
   mem.write_i64(buf_ptr + 8, stat.ino.reinterpret_as_int64()) // ino
-  mem.write_byte(buf_ptr + 16, stat.filetype.to_byte()) // filetype
+  mem.write_byte(
+    buf_ptr + 16,
+    native_file_type_to_preview1(stat.filetype).to_byte(),
+  ) // filetype
   for i in 17..<24 {
     mem.write_byte(buf_ptr + i, b'\x00') // padding
   }

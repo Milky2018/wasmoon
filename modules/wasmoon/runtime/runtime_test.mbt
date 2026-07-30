@@ -71,6 +71,25 @@ test "Store allocates and retrieves memory" {
 }
 
 ///|
+test "Store owns an independent native execution registry" {
+  let first_store = @runtime.Store::Store()
+  let second_store = @runtime.Store::Store()
+  let first = first_store.native_execution_state().begin()
+  let second = second_store.native_execution_state().begin()
+  debug_inspect(
+    (
+      first.id(),
+      second.id(),
+      first_store.native_execution_state().active_depth(),
+      second_store.native_execution_state().active_depth(),
+    ),
+    content="(0, 0, 1, 1)",
+  )
+  first.complete()
+  second.complete()
+}
+
+///|
 test "Frame local variable access" {
   let frame = @runtime.Frame::Frame(0, [I32(10), I64(20L), F64(3.14)], 0)
   // Get and set operations
@@ -140,6 +159,7 @@ test "all RuntimeError types have descriptive messages" {
     StackUnderflow,
     StackOverflow,
     TypeMismatch,
+    MemoryClosed,
     OutOfBoundsMemoryAccess,
     OutOfBoundsTableAccess,
     OutOfBoundsArrayAccess,

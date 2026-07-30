@@ -3,75 +3,44 @@
 /// (group: waitable)
 
 ///|
+fn release_waiter(
+  async_state : AsyncState,
+  task_id : Int64,
+  ws_key : Int64,
+) -> Unit {
+  if async_state.waiting_ws.get(task_id) is Some(active_ws) &&
+    active_ws == ws_key {
+    async_state.waiting_ws.remove(task_id)
+    if async_state.waitable_sets.get(ws_key) is Some(set) {
+      set.waiters[0] = set.waiters[0] - 1
+    }
+  }
+}
+
+///|
 fn instantiate_canon_waitable_set_new(
   state : BuildState,
   store : @runtime.Store,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [], results: [I32] }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
-  // Component-model async ABI: even if the current task is synchronous (e.g. core start),
-  // handle numbering assumes an implicit "current thread" handle slot exists.
-  async_state.thread_handle_required.set(owner_component_id, true)
   let host = fn(
     _args : Array[@types.Value],
   ) -> Array[@types.Value] raise @runtime.RuntimeError {
     if !canon_may_leave[0] {
       trap_canon("cannot leave component instance")
     }
-    let task_id = current_task_id(async_state)
-    let cur = if async_state.call_cursor_stack.length() == 0 {
-      0
-    } else {
-      async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1]
-    }
-    let per_task = match async_state.call_results.get(task_id) {
-      Some(m) => m
-      None => {
-        let m : Map[Int, Array[@types.Value]] = Map([])
-        async_state.call_results.set(task_id, m)
-        m
-      }
-    }
-    match per_task.get(cur) {
-      Some(v) => {
-        async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1] = cur +
-          1
-        // Replay-safe: if the waitable-set was created and later dropped in a
-        // previous run (before a suspension forced replay), recreate it so the
-        // cached id remains usable.
-        match v {
-          [I32(id)] =>
-            if async_state.waitable_sets.get(handle_key(owner_component_id, id))
-              is None {
-              async_state.waitable_sets.set(
-                handle_key(owner_component_id, id),
-                { id, members: Map([]), queue: [], waiters: [0] },
-              )
-            } else {
-              ()
-            }
-          _ => ()
-        }
-        v
-      }
-      None => {
-        let id = alloc_shared_handle(async_state, owner_component_id)
-        async_state.waitable_sets.set(handle_key(owner_component_id, id), {
-          id,
-          members: Map([]),
-          queue: [],
-          waiters: [0],
-        })
-        let out = [@types.Value::I32(id)]
-        per_task.set(cur, out)
-        async_state.call_cursor_stack[async_state.call_cursor_stack.length() - 1] = cur +
-          1
-        out
-      }
-    }
+    let id = alloc_shared_handle(async_state, owner_component_id)
+    async_state.waitable_sets.set(handle_key(owner_component_id, id), {
+      id,
+      members: Map([]),
+      queue: [],
+      waiters: [0],
+    })
+    [I32(id)]
   }
-  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+  state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
 }
 
 ///|
@@ -101,8 +70,7 @@ fn instantiate_canon_waitable_set_wait(
       }
     }
     fn ensure_subtask_return_ready(ev : WaitEvent) -> Unit {
-      // Replay can clobber the caller's return buffer; ensure it is rewritten
-      // before exposing a RETURNED subtask event.
+      // Materialize the subtask result immediately before exposing RETURNED.
       if ev.code != 1 || ev.payload != 2 {
         return
       }
@@ -123,6 +91,7 @@ fn instantiate_canon_waitable_set_wait(
           CallbackLifted(t) =>
             match t.func {
               Host(func_type, types, _) => (func_type, types)
+              HostAsync(func_type, types, _) => (func_type, types)
               Lifted(_, func_type, _, types, _, _, _, _) => (func_type, types)
             }
         }
@@ -217,144 +186,44 @@ fn instantiate_canon_waitable_set_wait(
           return [I32(0)]
         }
         let task_id = current_task_id(async_state)
-        let cur = if async_state.wait_cursor_stack.length() == 0 {
-          0
-        } else {
-          async_state.wait_cursor_stack[async_state.wait_cursor_stack.length() -
-          1]
+        if _cancellable && async_state.task_cancelled.get(task_id) is Some(true) {
+          async_state.task_cancelled.remove(task_id)
+          release_waiter(async_state, task_id, ws_key)
+          return [I32(6)]
         }
-        let per_task = match async_state.wait_results.get(task_id) {
-          Some(m) => m
-          None => {
-            let m : Map[Int, WaitResult] = Map([])
-            async_state.wait_results.set(task_id, m)
-            m
-          }
-        }
-        match per_task.get(cur) {
-          Some(cached) => {
-            let ev = cached.ev
-            // Replay: write cached event and return its code.
-            match cached.subtask_i32 {
-              Some(n) =>
-                match cached.subtask_mem_addr {
-                  Some(addr) =>
-                    match (Some(store.get_mem(addr)) catch { _ => None }) {
-                      Some(mem2) =>
-                        mem2.store_i32(cached.subtask_retptr, n) catch {
-                          _ => ()
-                        }
-                      None => ()
-                    }
-                  None => ()
-                }
-              None => ensure_subtask_return_ready(ev)
-            }
-            mem.store_i32(ptr + 0, ev.index) catch {
-              _ => ()
-            }
-            mem.store_i32(ptr + 4, ev.payload) catch {
-              _ => ()
-            }
-            match async_state.waiting_ws.get(task_id) {
-              Some(ws0) =>
-                if ws0 == ws_key {
-                  async_state.waiting_ws.remove(task_id)
-                  match async_state.waitable_sets.get(ws_key) {
-                    Some(set) => set.waiters[0] = set.waiters[0] - 1
-                    None => ()
-                  }
-                }
+        if !waitable_set_has_event(async_state, ws_key) {
+          // Track the dormant continuation so `waitable-set.drop` can reject
+          // a set with an active waiter.
+          if async_state.waiting_ws.get(task_id) is None {
+            match async_state.waitable_sets.get(ws_key) {
+              Some(set) => set.waiters[0] = set.waiters[0] + 1
               None => ()
             }
-            async_state.wait_cursor_stack[async_state.wait_cursor_stack.length() -
-            1] = cur + 1
-            set_canon_debug_message(
-              "waitable-set.wait(replay cur=\{cur} ws=\{ws})-> code=\{ev.code} index=\{ev.index} payload=\{ev.payload}\{subtask_result_dbg(ev)}",
-            )
-            [I32(ev.code)]
+            async_state.waiting_ws.set(task_id, ws_key)
           }
+          canon_suspend[0] = Some(Wait(ws_key))
+          raise Unreachable
+        }
+        let ev = match pop_waitable_event(async_state, ws_key) {
+          Some(ev) => ev
           None => {
-            // Cooperative wait: suspend the current task until an event exists.
-            // (The sync-style async ABI will replay this call and consume the event.)
-            if !waitable_set_has_event(async_state, ws_key) {
-              // Track that this task is a waiter so `waitable-set.drop` can trap.
-              if async_state.waiting_ws.get(task_id) is None {
-                match async_state.waitable_sets.get(ws_key) {
-                  Some(set) => set.waiters[0] = set.waiters[0] + 1
-                  None => ()
-                }
-                async_state.waiting_ws.set(task_id, ws_key)
-              }
-              canon_suspend[0] = Some(Wait(ws_key))
-              raise Unreachable
-            }
-            let ev = match pop_waitable_event(async_state, ws_key) {
-              Some(ev) => ev
-              None => {
-                canon_suspend[0] = Some(Wait(ws_key))
-                raise Unreachable
-              }
-            }
-            ensure_subtask_return_ready(ev)
-            acknowledge_waitable_event(async_state, ev)
-            match async_state.waiting_ws.get(task_id) {
-              Some(ws0) =>
-                if ws0 == ws_key {
-                  async_state.waiting_ws.remove(task_id)
-                  match async_state.waitable_sets.get(ws_key) {
-                    Some(set) => set.waiters[0] = set.waiters[0] - 1
-                    None => ()
-                  }
-                }
-              None => ()
-            }
-            // Cache event and (for SUBTASK+RETURNED) cache the scalar return value at the
-            // time of delivery so replay remains correct even if handle ids are later reused.
-            let mut cached_mem : Int? = None
-            let mut cached_retptr = 0
-            let mut cached_i32 : Int? = None
-            if ev.code == 1 && ev.payload == 2 {
-              let sub_key = handle_key(ev.owner_component_id, ev.index)
-              match async_state.subtasks.get(sub_key) {
-                Some(st) =>
-                  match st.mem_addr {
-                    Some(addr) => {
-                      cached_mem = Some(addr)
-                      cached_retptr = st.retptr
-                      match (Some(store.get_mem(addr)) catch { _ => None }) {
-                        Some(mem2) =>
-                          cached_i32 = Some(mem2.load_i32(st.retptr)) catch {
-                            _ => None
-                          }
-                        None => ()
-                      }
-                    }
-                    None => ()
-                  }
-                None => ()
-              }
-            }
-            per_task.set(cur, {
-              ev,
-              subtask_mem_addr: cached_mem,
-              subtask_retptr: cached_retptr,
-              subtask_i32: cached_i32,
-            })
-            mem.store_i32(ptr + 0, ev.index) catch {
-              _ => ()
-            }
-            mem.store_i32(ptr + 4, ev.payload) catch {
-              _ => ()
-            }
-            async_state.wait_cursor_stack[async_state.wait_cursor_stack.length() -
-            1] = cur + 1
-            set_canon_debug_message(
-              "waitable-set.wait(cur=\{cur} ws=\{ws})-> code=\{ev.code} index=\{ev.index} payload=\{ev.payload}\{subtask_result_dbg(ev)}",
-            )
-            [I32(ev.code)]
+            canon_suspend[0] = Some(Wait(ws_key))
+            raise Unreachable
           }
         }
+        ensure_subtask_return_ready(ev)
+        acknowledge_waitable_event(async_state, ev)
+        release_waiter(async_state, task_id, ws_key)
+        mem.store_i32(ptr + 0, ev.index) catch {
+          _ => ()
+        }
+        mem.store_i32(ptr + 4, ev.payload) catch {
+          _ => ()
+        }
+        set_canon_debug_message(
+          "waitable-set.wait(ws=\{ws})-> code=\{ev.code} index=\{ev.index} payload=\{ev.payload}\{subtask_result_dbg(ev)}",
+        )
+        [I32(ev.code)]
       }
       _ => {
         trap_canon("type mismatch")
@@ -362,7 +231,9 @@ fn instantiate_canon_waitable_set_wait(
       }
     }
   }
-  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+  state.core_funcs.push(
+    alloc_component_host_core_func(store, core_type, host, may_suspend=true),
+  )
 }
 
 ///|
@@ -393,6 +264,11 @@ fn instantiate_canon_waitable_set_poll(
     }
     match args {
       [I32(ws), I32(ptr)] => {
+        let task_id = current_task_id(async_state)
+        if _cancellable && async_state.task_cancelled.get(task_id) is Some(true) {
+          async_state.task_cancelled.remove(task_id)
+          return [I32(6)]
+        }
         if (ptr.reinterpret_as_uint() & 3U) != 0U {
           trap_canon("unaligned pointer")
           return [I32(0)]
@@ -409,7 +285,15 @@ fn instantiate_canon_waitable_set_poll(
             }
             [I32(ev.code)]
           }
-          None => [I32(0)]
+          None => {
+            mem.store_i32(ptr + 0, 0) catch {
+              _ => ()
+            }
+            mem.store_i32(ptr + 4, 0) catch {
+              _ => ()
+            }
+            [I32(0)]
+          }
         }
       }
       _ => {
@@ -418,14 +302,14 @@ fn instantiate_canon_waitable_set_poll(
       }
     }
   }
-  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+  state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
 }
 
 ///|
 fn instantiate_canon_waitable_set_drop(
   state : BuildState,
   store : @runtime.Store,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [I32], results: [] }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
@@ -449,6 +333,13 @@ fn instantiate_canon_waitable_set_drop(
               for kv in set.members.iter() {
                 let (waitable, _v) = kv
                 let wkey = handle_key(owner_component_id, waitable)
+                if async_state.stream_table.endpoints.get(wkey)
+                  is Some(endpoint) {
+                  endpoint.in_waitable_set.val = false
+                }
+                if async_state.future_endpoints.get(wkey) is Some(endpoint) {
+                  endpoint.in_waitable_set.val = false
+                }
                 match async_state.waitable_to_set.get(wkey) {
                   Some(ws2_key) =>
                     if ws2_key == ws_key {
@@ -472,14 +363,14 @@ fn instantiate_canon_waitable_set_drop(
       }
     }
   }
-  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+  state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
 }
 
 ///|
 fn instantiate_canon_waitable_join(
   state : BuildState,
   store : @runtime.Store,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [I32, I32], results: [] }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
@@ -491,14 +382,48 @@ fn instantiate_canon_waitable_join(
     }
     match args {
       [I32(waitable), I32(ws)] => {
-        let ws_key = handle_key(owner_component_id, ws)
         let waitable_key = handle_key(owner_component_id, waitable)
+        if ws != 0 &&
+          waitable_is_in_sync_use(async_state, owner_component_id, waitable) {
+          trap_canon(
+            "waitable cannot be used synchronously while added to a waitable set",
+          )
+          return []
+        }
+        if ws == 0 {
+          if async_state.stream_table.endpoints.get(waitable_key)
+            is Some(endpoint) {
+            endpoint.in_waitable_set.val = false
+          }
+          if async_state.future_endpoints.get(waitable_key) is Some(endpoint) {
+            endpoint.in_waitable_set.val = false
+          }
+          match async_state.waitable_to_set.get(waitable_key) {
+            Some(previous_key) => {
+              async_state.waitable_to_set.remove(waitable_key)
+              match async_state.waitable_sets.get(previous_key) {
+                Some(previous_set) => previous_set.members.remove(waitable)
+                None => ()
+              }
+            }
+            None => ()
+          }
+          return []
+        }
+        let ws_key = handle_key(owner_component_id, ws)
         match async_state.waitable_sets.get(ws_key) {
-          Some(set) =>
+          Some(set) => {
+            if async_state.stream_table.endpoints.get(waitable_key)
+              is Some(endpoint) {
+              endpoint.in_waitable_set.val = true
+            }
+            if async_state.future_endpoints.get(waitable_key) is Some(endpoint) {
+              endpoint.in_waitable_set.val = true
+            }
             match async_state.waitable_to_set.get(waitable_key) {
               Some(prev_ws_key) =>
                 if prev_ws_key == ws_key {
-                  // Idempotent on replay: do not re-flush backlog.
+                  // Joining an existing set is idempotent; do not re-flush backlog.
                   []
                 } else {
                   // Move membership between sets.
@@ -532,6 +457,7 @@ fn instantiate_canon_waitable_join(
                 []
               }
             }
+          }
           None => {
             trap_canon("unknown waitable set index \{ws}")
             []
@@ -544,5 +470,5 @@ fn instantiate_canon_waitable_join(
       }
     }
   }
-  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+  state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
 }

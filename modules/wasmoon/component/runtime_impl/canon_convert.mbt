@@ -98,22 +98,16 @@ fn lift_component_value_from_flat(
                 _ => raise HostCallError("type mismatch")
               }
             }
-            let elem_storage = flat_storage_for_valtype(
+            let (elem_size, elem_align) = canonical_memory_layout(
               elem_ty, types, mem_is_64,
-            )
-            let (offsets, elem_size, elem_align) = layout_of_flat_storage_fields(
-              elem_storage,
             )
             let stride = align_to(elem_size, elem_align)
             let items : Array[ComponentValue] = []
             for i in 0..<len {
               let base = ptr + stride * i
-              let elem_vals : Array[@types.Value] = []
-              for j in 0..<elem_storage.length() {
-                elem_vals.push(
-                  load_storage_value(m, base + offsets[j], elem_storage[j]),
-                )
-              }
+              let elem_vals = load_flat_component_value_from_memory(
+                m, base, elem_ty, types, mem_is_64,
+              )
               items.push(
                 lift_component_value_from_flat(
                   elem_ty, elem_vals, types, mem, mem_is_64, encoding,
@@ -282,7 +276,7 @@ fn lift_component_value_from_flat(
               _ => raise HostCallError("type mismatch")
             }
             if n < 0 || n >= labels.length() {
-              raise CanonCallError("invalid enum discriminant")
+              raise CanonCallError("invalid variant discriminant")
             }
             U32(n)
           }
@@ -412,11 +406,8 @@ fn component_args_to_core(
                   Some(r) => r
                   None => raise MissingCanonRealloc
                 }
-                let elem_storage = flat_storage_for_valtype(
+                let (elem_size, elem_align) = canonical_memory_layout(
                   elem_ty, types, mem_is_64,
-                )
-                let (offsets, elem_size, elem_align) = layout_of_flat_storage_fields(
-                  elem_storage,
                 )
                 let stride = align_to(elem_size, elem_align)
                 let total_size = stride * items.length()
@@ -425,18 +416,10 @@ fn component_args_to_core(
                 )
                 for i in 0..<items.length() {
                   let elem_vals = lower_value(items[i], elem_ty)
-                  if elem_vals.length() != elem_storage.length() {
-                    raise HostCallError("argument type mismatch")
-                  }
                   let base = ptr + stride * i
-                  for j in 0..<elem_vals.length() {
-                    store_storage_value(
-                      m,
-                      base + offsets[j],
-                      elem_vals[j],
-                      elem_storage[j],
-                    )
-                  }
+                  store_flat_component_value_to_memory(
+                    m, base, elem_ty, elem_vals, types, mem_is_64,
+                  )
                 }
                 let len = items.length()
                 if mem_is_64 {
@@ -611,7 +594,7 @@ fn component_args_to_core(
               _ => raise HostCallError("argument type mismatch")
             }
             if n < 0 || n >= labels.length() {
-              raise HostCallError("invalid enum discriminant")
+              raise HostCallError("invalid variant discriminant")
             }
             [I32(n)]
           }
@@ -623,18 +606,24 @@ fn component_args_to_core(
             let handle = match val {
               U32(h) => h
               S32(h) => h
+              ResourceValue(rep) => return [I32(rep)]
               _ => raise HostCallError("argument type mismatch")
             }
             match caller_table.get(handle) {
               Some(entry) =>
                 if entry.type_id != expected_type_id {
                   raise CanonCallError(
-                    "handle index \{handle} used with the wrong type",
+                    "handle index \{resource_handle_index_text(handle)} used with the wrong type",
                   )
-                } else {
+                } else if entry.impl_component_id == callee_table.id {
                   [I32(entry.rep)]
+                } else {
+                  [I32(handle)]
                 }
-              None => raise CanonCallError("unknown handle index \{handle}")
+              None =>
+                raise CanonCallError(
+                  "lower borrow: unknown handle index \{resource_handle_index_text(handle)} in resource table \{caller_table.id}",
+                )
             }
           }
           Some(Some(Own(resource_tyidx))) => {
@@ -652,11 +641,14 @@ fn component_args_to_core(
             } else {
               let entry = match caller_table.free(handle) {
                 Some(e) => e
-                None => raise CanonCallError("unknown handle index \{handle}")
+                None =>
+                  raise CanonCallError(
+                    "lower own: unknown handle index \{resource_handle_index_text(handle)} in resource table \{caller_table.id}",
+                  )
               }
               if entry.type_id != expected_type_id {
                 raise CanonCallError(
-                  "handle index \{handle} used with the wrong type",
+                  "handle index \{resource_handle_index_text(handle)} used with the wrong type",
                 )
               }
               let new_handle = callee_table.alloc(entry)
@@ -764,12 +756,12 @@ fn core_results_to_component(
     match table.get(handle) {
       None =>
         raise CanonCallError(
-          "unknown handle index \{handle}; index \{handle} is not a resource",
+          "core result: unknown handle index \{resource_handle_index_text(handle)}; index \{resource_handle_index_text(handle)} is not a resource in table \{table.id}",
         )
       Some(entry) =>
         if entry.type_id < 0 {
           raise CanonCallError(
-            "unknown handle index \{handle}; index \{handle} is not a resource",
+            "unknown handle index \{resource_handle_index_text(handle)}; index \{resource_handle_index_text(handle)} is not a resource",
           )
         } else if entry.type_id != expected_type_id {
           let expected_desc = if expected_kind == GuestDefined {
@@ -788,7 +780,7 @@ fn core_results_to_component(
             found_desc
           }
           raise CanonCallError(
-            "handle index \{handle} used with the wrong type, expected \{expected_desc} but found \{suffix}",
+            "handle index \{resource_handle_index_text(handle)} used with the wrong type, expected \{expected_desc} but found \{suffix}",
           )
         }
     }
@@ -976,6 +968,8 @@ fn core_args_to_component(
   resources : CanonResources,
   store : @runtime.Store,
   resource_table : ResourceTable,
+  max_flat_params : Int,
+  context : String,
 ) -> Array[ComponentValue] raise ComponentRuntimeError {
   fn resource_type_info(
     tyidx : Int,
@@ -996,12 +990,12 @@ fn core_args_to_component(
     match table.get(handle) {
       None =>
         raise CanonCallError(
-          "unknown handle index \{handle}; index \{handle} is not a resource",
+          "\{context}: unknown handle index \{resource_handle_index_text(handle)}; index \{resource_handle_index_text(handle)} is not a resource",
         )
       Some(entry) =>
         if entry.type_id < 0 {
           raise CanonCallError(
-            "unknown handle index \{handle}; index \{handle} is not a resource",
+            "unknown handle index \{resource_handle_index_text(handle)}; index \{resource_handle_index_text(handle)} is not a resource",
           )
         } else if entry.type_id != expected_type_id {
           let expected_desc = if expected_kind == GuestDefined {
@@ -1020,7 +1014,7 @@ fn core_args_to_component(
             found_desc
           }
           raise CanonCallError(
-            "handle index \{handle} used with the wrong type, expected \{expected_desc} but found \{suffix}",
+            "handle index \{resource_handle_index_text(handle)} used with the wrong type, expected \{expected_desc} but found \{suffix}",
           )
         }
     }
@@ -1050,7 +1044,7 @@ fn core_args_to_component(
     None => []
   }
   let indirect_result = flat_result_types.length() > 1
-  let indirect_params = flat_param_types.length() > 16
+  let indirect_params = flat_param_types.length() > max_flat_params
   let arg_limit = if indirect_result {
     args.length() - 1
   } else {
@@ -1153,14 +1147,10 @@ fn component_results_to_core(
         raise HostCallError("missing result")
       }
       let val = results[0]
-      let mem = match resources.mem_addr {
-        Some(addr) =>
-          store.get_mem(addr) catch {
-            e => raise CanonCallError(e.to_string())
-          }
-        None => Memory(0, None)
+      let mem_is_64 = match resources.mem_addr {
+        Some(_) => require_memory(resources, store).is_memory64()
+        None => false
       }
-      let mem_is_64 = mem.is_memory64()
       let flat_res_types = core_types_for_valtype(r, types, mem_is_64)
       let flat_res_storage = flat_storage_for_valtype(r, types, mem_is_64)
       if flat_res_types.length() > 1 {
@@ -1171,6 +1161,7 @@ fn component_results_to_core(
           Some(p) => p
           None => raise HostCallError("missing retptr")
         }
+        let mem = require_memory(resources, store)
         let (offsets, _size, struct_align) = layout_of_flat_storage_fields(
           flat_res_storage,
         )
@@ -1201,6 +1192,7 @@ fn component_results_to_core(
                   if resources.mem_addr is None {
                     raise MissingCanonMemory
                   }
+                  let mem = require_memory(resources, store)
                   let realloc = match resources.realloc {
                     Some(rf) => rf
                     None => raise MissingCanonRealloc
@@ -1254,6 +1246,180 @@ fn component_results_to_core(
                       }
                     _ => raise HostCallError("result type mismatch")
                   }
+                Some(Some(List(elem_ty))) =>
+                  match v {
+                    List(items) => {
+                      if resources.mem_addr is None {
+                        raise MissingCanonMemory
+                      }
+                      let mem = require_memory(resources, store)
+                      let realloc = match resources.realloc {
+                        Some(rf) => rf
+                        None => raise MissingCanonRealloc
+                      }
+                      let (elem_size, elem_align) = canonical_memory_layout(
+                        elem_ty, types, mem_is_64,
+                      )
+                      let stride = align_to(elem_size, elem_align)
+                      let ptr = alloc_realloc_area(
+                        store,
+                        mem,
+                        realloc,
+                        mem_is_64,
+                        stride * items.length(),
+                        elem_align,
+                      )
+                      for i in 0..<items.length() {
+                        let elem_values = lower_value(items[i], elem_ty)
+                        let base = ptr + stride * i
+                        store_flat_component_value_to_memory(
+                          mem, base, elem_ty, elem_values, types, mem_is_64,
+                        )
+                      }
+                      if mem_is_64 {
+                        [I64(ptr.to_int64()), I64(items.length().to_int64())]
+                      } else {
+                        [I32(ptr), I32(items.length())]
+                      }
+                    }
+                    _ => raise HostCallError("result type mismatch")
+                  }
+                Some(Some(Variant(cases))) =>
+                  match v {
+                    Variant(tag, payload) => {
+                      if tag < 0 || tag >= cases.length() {
+                        raise HostCallError("invalid variant discriminant")
+                      }
+                      let all_flat = core_types_for_valtype(
+                        TypeIdx(ti),
+                        types,
+                        mem_is_64,
+                      )
+                      let out : Array[@types.Value] = [I32(tag)]
+                      let payload_values = match (cases[tag].ty, payload) {
+                        (None, None) => []
+                        (Some(payload_ty), Some(payload_value)) =>
+                          lower_value(payload_value, payload_ty)
+                        _ => raise HostCallError("result type mismatch")
+                      }
+                      for i in 1..<all_flat.length() {
+                        if i - 1 < payload_values.length() {
+                          let actual = payload_values[i - 1]
+                          let actual_type = match actual {
+                            I32(_) => @types.ValueType::I32
+                            I64(_) => I64
+                            F32(_) => F32
+                            F64(_) => F64
+                            _ => I32
+                          }
+                          out.push(
+                            coerce_flat_value(actual, actual_type, all_flat[i]),
+                          )
+                        } else {
+                          out.push(zero_flat_value(all_flat[i]))
+                        }
+                      }
+                      out
+                    }
+                    _ => raise HostCallError("result type mismatch")
+                  }
+                Some(Some(Option(payload_ty))) =>
+                  match v {
+                    Variant(0, None) => {
+                      let out : Array[@types.Value] = [I32(0)]
+                      for
+                        ty in core_types_for_valtype(
+                          payload_ty, types, mem_is_64,
+                        ) {
+                        out.push(zero_flat_value(ty))
+                      }
+                      out
+                    }
+                    Variant(1, Some(payload)) =>
+                      [I32(1)] + lower_value(payload, payload_ty)
+                    _ => raise HostCallError("result type mismatch")
+                  }
+                Some(Some(Result(ok_ty, error_ty))) =>
+                  match v {
+                    Variant(tag, payload) => {
+                      let payload_ty = if tag == 0 {
+                        ok_ty
+                      } else if tag == 1 {
+                        error_ty
+                      } else {
+                        raise HostCallError("invalid variant discriminant")
+                      }
+                      let payload_values = match (payload_ty, payload) {
+                        (None, None) => []
+                        (Some(ty), Some(value)) => lower_value(value, ty)
+                        _ => raise HostCallError("result type mismatch")
+                      }
+                      let all_flat = core_types_for_valtype(
+                        TypeIdx(ti),
+                        types,
+                        mem_is_64,
+                      )
+                      let out : Array[@types.Value] = [I32(tag)]
+                      for i in 1..<all_flat.length() {
+                        if i - 1 < payload_values.length() {
+                          let actual = payload_values[i - 1]
+                          let actual_type = match actual {
+                            I32(_) => @types.ValueType::I32
+                            I64(_) => I64
+                            F32(_) => F32
+                            F64(_) => F64
+                            _ => I32
+                          }
+                          out.push(
+                            coerce_flat_value(actual, actual_type, all_flat[i]),
+                          )
+                        } else {
+                          out.push(zero_flat_value(all_flat[i]))
+                        }
+                      }
+                      out
+                    }
+                    _ => raise HostCallError("result type mismatch")
+                  }
+                Some(Some(Flags(labels))) => {
+                  let nbits = labels.length()
+                  if nbits <= 32 {
+                    let raw = match v {
+                      U32(n) => n.reinterpret_as_uint()
+                      S32(n) => n.reinterpret_as_uint()
+                      _ => raise HostCallError("result type mismatch")
+                    }
+                    let masked = if nbits == 32 {
+                      raw
+                    } else {
+                      raw & ((1U << nbits) - 1U)
+                    }
+                    [I32(masked.reinterpret_as_int())]
+                  } else {
+                    let raw = match v {
+                      U64(n) => n.reinterpret_as_uint64()
+                      S64(n) => n.reinterpret_as_uint64()
+                      _ => raise HostCallError("result type mismatch")
+                    }
+                    let masked = if nbits == 64 {
+                      raw
+                    } else {
+                      raw & ((1UL << nbits) - 1UL)
+                    }
+                    [I64(masked.reinterpret_as_int64())]
+                  }
+                }
+                Some(Some(Enum(labels))) => {
+                  let tag = match v {
+                    U32(n) => n
+                    S32(n) => n
+                    _ => raise HostCallError("result type mismatch")
+                  }
+                  if tag < 0 || tag >= labels.length() {
+                    raise HostCallError("invalid variant discriminant")
+                  }
+                  [I32(tag)]
+                }
                 Some(Some(Own(_)))
                 | Some(Some(Borrow(_)))
                 | Some(Some(ResourceType(_, _, _, _)))
@@ -1418,7 +1584,7 @@ fn component_results_to_core(
                 _ => raise HostCallError("result type mismatch")
               }
               if n < 0 || n >= labels.length() {
-                raise HostCallError("invalid enum discriminant")
+                raise HostCallError("invalid variant discriminant")
               }
               [I32(n)]
             }

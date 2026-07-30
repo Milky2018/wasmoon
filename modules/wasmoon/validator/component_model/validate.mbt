@@ -115,6 +115,7 @@ fn validate_component_inner(
   cfg : ComponentValidationConfig,
   depth : Int,
   type_outers : Array[Array[@component.TypeDef?]],
+  type_outer_depths : Array[Int],
   core_type_bound_outers : Array[Int],
   component_size_outers : Array[Array[Int]],
 ) -> ValidatedComponentInfo raise ComponentValidationError {
@@ -218,6 +219,9 @@ fn validate_component_inner(
       // Core module/instance/type sections each declare a single core item.
       1 => {
         // Validate embedded core modules using the existing core validator.
+        if @component.sniff_binary_kind(s.payload) != Some(CoreModule) {
+          raise CoreModuleError("unknown binary version")
+        }
         let core_mod = @parser.parse_module(s.payload) catch {
           e => raise CoreModuleError("parse core module: \{e}")
         }
@@ -502,6 +506,7 @@ fn validate_component_inner(
           cfg,
           depth + 1,
           [type_table] + type_outers,
+          [depth] + type_outer_depths,
           [counts.core_type] + core_type_bound_outers,
           [component_sizes] + component_size_outers,
         )
@@ -550,6 +555,8 @@ fn validate_component_inner(
             d,
             cfg,
             [type_table] + type_outers,
+            [depth] + type_outer_depths,
+            depth,
             [core_type_exports],
             true,
           )
@@ -665,8 +672,8 @@ fn validate_component_inner(
         next_resource_id = new_next_resource_id
         imported_funcs = new_imported_funcs
       }
-      11 =>
-        export_size = validate_component_section_export(
+      11 => {
+        let (new_export_size, new_next_resource_id) = validate_component_section_export(
           s.payload,
           cfg,
           is_root,
@@ -723,7 +730,11 @@ fn validate_component_inner(
           my_export_type_sigs,
           my_export_func_sigs,
           type_outers,
+          next_resource_id,
         )
+        export_size = new_export_size
+        next_resource_id = new_next_resource_id
+      }
       5 =>
         next_resource_id = validate_component_section_instance(
           s.payload,
@@ -898,5 +909,5 @@ pub fn validate_component_with_config(
   component : @component.Component,
   cfg : ComponentValidationConfig,
 ) -> Unit raise ComponentValidationError {
-  validate_component_inner(component, true, cfg, 0, [], [], []) |> ignore
+  validate_component_inner(component, true, cfg, 0, [], [], [], []) |> ignore
 }

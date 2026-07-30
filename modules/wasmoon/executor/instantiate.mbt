@@ -12,6 +12,8 @@ fn normalize_runtime_error(e : Error) -> @runtime.RuntimeError {
     @runtime.StackUnderflow => StackUnderflow
     @runtime.StackOverflow => StackOverflow
     @runtime.TypeMismatch => TypeMismatch
+    @runtime.StoreClosed => StoreClosed
+    @runtime.MemoryClosed => MemoryClosed
     @runtime.OutOfBoundsMemoryAccess => OutOfBoundsMemoryAccess
     @runtime.OutOfBoundsTableAccess => OutOfBoundsTableAccess
     @runtime.OutOfBoundsArrayAccess => OutOfBoundsArrayAccess
@@ -55,14 +57,14 @@ pub fn instantiate_module(
 ) -> (@runtime.Store, @runtime.ModuleInstance) {
   let store = @runtime.Store::Store()
   // Set module types for GC support
-  store.set_module_types(mod.types, rec_groups=mod.type_rec_groups)
+  try! store.set_module_types(mod.types, rec_groups=mod.type_rec_groups)
 
   // Allocate functions with their types
   let func_addrs : Array[Int] = []
   for i, code in mod.codes {
     let type_idx = mod.funcs[i]
     let func_type = mod.get_func_type(type_idx)
-    let addr = store.alloc_func(code, func_type~, type_idx~)
+    let addr = try! store.alloc_func(code, func_type~, type_idx~)
     func_addrs.push(addr)
   }
 
@@ -83,7 +85,7 @@ pub fn instantiate_module(
         page_size_log2=mem_type.page_size_log2,
       )
     }
-    let addr = store.alloc_mem(mem)
+    let addr = try! store.alloc_mem(mem)
     mem_addrs.push(addr)
   }
 
@@ -115,7 +117,7 @@ pub fn instantiate_module(
       init_value~,
       is_table64=table_def.type_.is_table64,
     )
-    let addr = store.alloc_table(table)
+    let addr = try! store.alloc_table(table)
     table_addrs.push(addr)
   }
 
@@ -138,7 +140,7 @@ pub fn instantiate_module(
       global.type_,
       init_value,
     )
-    let addr = store.alloc_global(global_inst)
+    let addr = try! store.alloc_global(global_inst)
     global_addrs.push(addr)
     global_instances.push(global_inst)
   }
@@ -147,7 +149,7 @@ pub fn instantiate_module(
   let tag_addrs : Array[Int] = []
   for tag in mod.tags {
     let tag_type = mod.get_func_type(tag.type_idx)
-    let addr = store.alloc_tag(tag_type, type_idx=tag.type_idx)
+    let addr = try! store.alloc_tag(tag_type, type_idx=tag.type_idx)
     tag_addrs.push(addr)
   }
 
@@ -790,7 +792,7 @@ pub fn validate_imports_with_diagnostics(
   store : @runtime.Store,
   mod : @types.Module,
   imports : @runtime.Imports,
-) -> ImportDiagnosticsResult {
+) -> ImportDiagnosticsResult raise @runtime.RuntimeError {
   store.set_module_types(mod.types, rec_groups=mod.type_rec_groups)
   let result = ImportDiagnosticsResult::ImportDiagnosticsResult()
   let canonical_type_indices = @types.compute_canonical_type_indices(
@@ -1277,7 +1279,9 @@ pub fn instantiate_module_with_import_diagnostics(
   mod : @types.Module,
   imports : @runtime.Imports,
 ) -> InstantiateWithImportDiagnosticsResult {
-  let diagnostics = validate_imports_with_diagnostics(store, mod, imports)
+  let diagnostics = validate_imports_with_diagnostics(store, mod, imports) catch {
+    e => return RuntimeFailure(normalize_runtime_error(e))
+  }
   if !diagnostics.ok {
     return ImportError(diagnostics)
   }

@@ -24,13 +24,23 @@ pub fn Linker::get_store(self : Linker) -> Store {
 }
 
 ///|
+/// Release this linker's store after all module execution has ended.
+///
+/// This operation is idempotent and terminal.
+pub fn Linker::close(self : Linker) -> Unit {
+  self.modules.clear()
+  self.store.close()
+}
+
+///|
 /// Register a module instance with a name
 /// The module's exports will be available as imports for subsequent modules
 pub fn Linker::register(
   self : Linker,
   name : String,
   instance : ModuleInstance,
-) -> Unit {
+) -> Unit raise RuntimeError {
+  self.store.ensure_open()
   self.modules.push((name, instance))
 }
 
@@ -90,7 +100,8 @@ pub fn Linker::add_host_func(
   name : String,
   func : (Array[@types.Value]) -> Array[@types.Value] raise RuntimeError,
   func_type? : @types.FuncType = { params: [], results: [] },
-) -> Unit {
+) -> Unit raise RuntimeError {
+  self.store.ensure_open()
   let func_addr = self.store.alloc_host_func(func, func_type~)
   // Create a minimal instance to hold this function
   // We need to add it to an existing module or create a synthetic one
@@ -147,7 +158,8 @@ pub fn Linker::add_host_func_with_caller(
   name : String,
   func : (Caller, Array[@types.Value]) -> Array[@types.Value] raise RuntimeError,
   func_type? : @types.FuncType = { params: [], results: [] },
-) -> Unit {
+) -> Unit raise RuntimeError {
+  self.store.ensure_open()
   let func_addr = self.store.alloc_host_func_with_caller(func, func_type~)
 
   // Find or create a synthetic module entry for this mod_name (same as add_host_func).
@@ -195,7 +207,8 @@ pub fn Linker::add_memory(
   mod_name : String,
   name : String,
   mem : Memory,
-) -> Unit {
+) -> Unit raise RuntimeError {
+  self.store.ensure_open()
   let mem_addr = self.store.alloc_mem(mem)
   fn find_or_create_host_module(
     modules : Array[(String, ModuleInstance)],
@@ -241,7 +254,8 @@ pub fn Linker::add_table(
   mod_name : String,
   name : String,
   table : Table,
-) -> Unit {
+) -> Unit raise RuntimeError {
+  self.store.ensure_open()
   let table_addr = self.store.alloc_table(table)
   fn find_or_create_host_module(
     modules : Array[(String, ModuleInstance)],
@@ -287,7 +301,8 @@ pub fn Linker::add_global(
   mod_name : String,
   name : String,
   global : GlobalInstance,
-) -> Unit {
+) -> Unit raise RuntimeError {
+  self.store.ensure_open()
   let global_addr = self.store.alloc_global(global)
   fn find_or_create_host_module(
     modules : Array[(String, ModuleInstance)],

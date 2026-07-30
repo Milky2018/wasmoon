@@ -1517,6 +1517,10 @@ fn pp_typedef(sb : StringBuilder, td : @component.TypeDef) -> Unit {
     DefValType(p) => sb.write_string(pp_primvaltype(p))
     FuncType(ft) => pp_functype(sb, ft)
     List(t) => sb.write_string("(list " + pp_valtype(t) + ")")
+    FixedList(t, len) =>
+      sb.write_string("(list " + pp_valtype(t) + " " + len.to_string() + ")")
+    MapType(key, value) =>
+      sb.write_string("(map " + pp_valtype(key) + " " + pp_valtype(value) + ")")
     Tuple(ts) => {
       sb.write_string("(tuple")
       for t in ts {
@@ -1632,12 +1636,12 @@ fn pp_componentdecl(
       pp_typedef(sb, td)
       sb.write_string(")\n")
     }
-    Import(name, desc) => {
+    Import(name, _attributes, desc) => {
       sb.write_string("(import \"" + name + "\" ")
       pp_externdesc(sb, desc)
       sb.write_string(")\n")
     }
-    Export(name, desc) => {
+    Export(name, _attributes, desc) => {
       sb.write_string("(export \"" + name + "\" ")
       pp_externdesc(sb, desc)
       sb.write_string(")\n")
@@ -1683,7 +1687,7 @@ fn pp_instancedecl(
       pp_typedef(sb, td)
       sb.write_string(")\n")
     }
-    Export(name, desc) => {
+    Export(name, _attributes, desc) => {
       sb.write_string("(export \"" + name + "\" ")
       pp_externdesc(sb, desc)
       sb.write_string(")\n")

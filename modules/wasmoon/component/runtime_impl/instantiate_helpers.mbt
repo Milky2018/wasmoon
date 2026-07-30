@@ -403,6 +403,53 @@ fn core_imports_from_args(
 }
 
 ///|
+fn core_args_may_suspend(
+  args : Array[CoreInstantiateArg],
+  state : BuildState,
+) -> Bool raise ComponentRuntimeError {
+  for arg in args {
+    match resolve_sortidx(arg.sortidx, state) {
+      CoreInstance(instance) =>
+        for entry in instance.funcs.iter() {
+          let (_, func) = entry
+          if func.may_suspend {
+            return true
+          }
+        }
+      CoreFunc(func) => if func.may_suspend { return true }
+      CoreTable(_) | CoreMemory(_) | CoreGlobal(_) | CoreTag(_) => ()
+      _ => raise AliasTargetMismatch("core instantiate arg")
+    }
+  }
+  false
+}
+
+///|
+fn core_args_native_eligible(
+  args : Array[CoreInstantiateArg],
+  state : BuildState,
+) -> Bool raise ComponentRuntimeError {
+  for arg in args {
+    match resolve_sortidx(arg.sortidx, state) {
+      CoreInstance(instance) =>
+        for entry in instance.funcs.iter() {
+          let (_, func) = entry
+          if !func.native_eligible {
+            return false
+          }
+        }
+      CoreFunc(func) => if !func.native_eligible { return false }
+      // An imported function table can indirect through a component adapter.
+      // Keep such modules interpreted until nested native entry is supported.
+      CoreTable(_) => return false
+      CoreMemory(_) | CoreGlobal(_) | CoreTag(_) => ()
+      _ => raise AliasTargetMismatch("core instantiate arg")
+    }
+  }
+  true
+}
+
+///|
 fn supplied_core_func_for_import(
   mod_name : String,
   field : String,
@@ -446,7 +493,7 @@ fn validate_core_import_args(
             let actual = core_func_ref_type(f)
             if actual != expected {
               raise ImportTypeMismatch(
-                "type mismatch for export `\{imp.name}` of module instantiation argument `\{imp.mod_name}`",
+                "type mismatch for export `\{imp.name}` of module instantiation argument `\{imp.mod_name}`: expected \{expected}, found \{actual}",
               )
             }
           }

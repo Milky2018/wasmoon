@@ -1,0 +1,254 @@
+{
+  "schema_version": 1,
+  "repository": "https://github.com/WebAssembly/component-model.git",
+  "commit": "d346e5a335b772909ac4c8072f56d7ed7ea49927",
+  "upstream_tree": "cf8cfdb0ec1b2385a3452ee3380d736c2138e69a",
+  "upstream_path": "test",
+  "wasm_tools_version": "1.254.0",
+  "files": [
+    {
+      "path": "README.md",
+      "sha256": "bb5a5f2bda1e8920d59fa8c5344f51e0ba6a03e2ddbb5ce733a92edad72c751c"
+    },
+    {
+      "path": "async/async-calls-sync.wast",
+      "sha256": "bacf1fab5f97e7dfcceca89c19a6b84bf4d89ebaedb69ccb448928f9af0fc879"
+    },
+    {
+      "path": "async/big-interleaving-test.wast",
+      "sha256": "63a0002de42ee9c92c779904935da2530860f4f2e7ccc9970233769d5e6fa98b"
+    },
+    {
+      "path": "async/builtin-trap-poisons-instance.wast",
+      "sha256": "d513bcff29bb9ca0356f31806cfaed2b15ad3ac1593c1fa1eb913fd1010c0c77"
+    },
+    {
+      "path": "async/cancel-stream.wast",
+      "sha256": "c754d0d3d116d0afecbce87ea72e179c15374b6790b944dc9d87052e858a3312"
+    },
+    {
+      "path": "async/cancel-subtask.wast",
+      "sha256": "8adb805defc244dd66adc5be966f4d4bffc35f15235b14b69f4668ae99baca1f"
+    },
+    {
+      "path": "async/cancellable.wast",
+      "sha256": "70daaf01935eeeb5773117b153ca50c80c0c1fb640c4e298182ada68b735bfb4"
+    },
+    {
+      "path": "async/closed-stream.wast",
+      "sha256": "5fddd95e1f7920f6a453e4f72bd4abc9d8a1615f8937f33ae06e0df31ca4d2a0"
+    },
+    {
+      "path": "async/cross-abi-calls.wast",
+      "sha256": "32a9b35490c7f3ca8191ddd9d812810d9d0b70d67b50b97e10f75a72bfd8b85e"
+    },
+    {
+      "path": "async/cross-task-future.wast",
+      "sha256": "d962876ba33012ce0ff068a0d056b2d8b27f5a86749fc410ca1051bd26a50a14"
+    },
+    {
+      "path": "async/deadlock.wast",
+      "sha256": "9bdd951733f5219bba0b3e226a15d85429f054d67faa6d784c42b50588213e19"
+    },
+    {
+      "path": "async/dont-block-start.wast",
+      "sha256": "1307825cd82ecb3f3cf3dd3d7eaee7ae6143cd28bc62bb867eb0332510f8a91f"
+    },
+    {
+      "path": "async/drop-cross-task-borrow.wast",
+      "sha256": "1e8f60537f6f0a6f78a693de01b8175181c1e15fbd8a78be27a3764576d1e1e3"
+    },
+    {
+      "path": "async/drop-stream.wast",
+      "sha256": "ea165885b0c880c3ccb4b91ba47222da5aa616548c8aedcd78b7a45853192c2a"
+    },
+    {
+      "path": "async/drop-subtask.wast",
+      "sha256": "2b41e426796f0b49b25ce8ce8ae5bb1ed1b1d9279e59d2d0bdc1dadaf0f67b97"
+    },
+    {
+      "path": "async/drop-waitable-set.wast",
+      "sha256": "8c4deb26d062ab421c99d8c178e59916473bc0e3016efea6b68779b0338ee59f"
+    },
+    {
+      "path": "async/empty-wait.wast",
+      "sha256": "cadb124978a329d9fa2912d109901ad862357d7969f072325069511646b892c9"
+    },
+    {
+      "path": "async/futures-must-write.wast",
+      "sha256": "518774d8e05c192841adfc141842c826ad24d10617d01a5cf4c8cc44bf694f3a"
+    },
+    {
+      "path": "async/partial-stream-copies.wast",
+      "sha256": "dddd39e572f1f2eb31025bc96de1f0acccb061741a37eed270b7f0e143f269c8"
+    },
+    {
+      "path": "async/passing-resources.wast",
+      "sha256": "5fcee86ff0e2581af82095e56ed6661a651f80f6c6060a428f00ec7911bddf23"
+    },
+    {
+      "path": "async/same-component-stream-future.wast",
+      "sha256": "2623dc2abe9b6a438d66c9c01ac92e59655121ccf04f5e230af9839cc7b023fa"
+    },
+    {
+      "path": "async/sync-barges-in.wast",
+      "sha256": "46131ddb36e5961a837ec1b008b8a9f6c8d2c3518e392be68e77c4e4ee073800"
+    },
+    {
+      "path": "async/sync-streams.wast",
+      "sha256": "53b7cc563a410dcaa545844fd9ab0d5704e53092ad136dc1ee16d44ff89360a6"
+    },
+    {
+      "path": "async/trap-if-block-and-sync.wast",
+      "sha256": "1285ae51f57649b42ae7d73f12ab75f1d31e4f655f0c9a8f11b94bea3d2af685"
+    },
+    {
+      "path": "async/trap-if-done.wast",
+      "sha256": "fb166ecbd2ba5099f7c03b83b4ba0c3282ee544b940fde83b933a3b306c556c8"
+    },
+    {
+      "path": "async/trap-if-sync-and-waitable-set.wast",
+      "sha256": "6ac84936bf218a61d374e5cce27dc0516f9af5e29cb77181a47e72f636a756b0"
+    },
+    {
+      "path": "async/trap-if-transfer-in-waitable-set.wast",
+      "sha256": "71cb99c7f7b6dd6533bc3fc744392f495c78814eae27e7d72ee9431c8e299460"
+    },
+    {
+      "path": "async/trap-on-reenter.wast",
+      "sha256": "8c6f080b113256ec7a682ccea7591b245830b8722925c617b0cca5e48fd1fc92"
+    },
+    {
+      "path": "async/validate-no-async-abi-for-sync-type.wast",
+      "sha256": "ac454e9b7685b2b22b29be1f3b8b5d4c5d38e3378ebe1b49a88d0bdad0ebb55b"
+    },
+    {
+      "path": "async/validate-no-stream-char.wast",
+      "sha256": "5767951700e4e823da091bc82bdaa3cf99ded92b279b0ddd0352dddf4c545bec"
+    },
+    {
+      "path": "async/wait-during-callback.wast",
+      "sha256": "8231ba4aac41de37aed764c6fff78b610b05d1fbfcf7c0da3ccc01cc8d926079"
+    },
+    {
+      "path": "async/zero-length.wast",
+      "sha256": "4daabf45fc03b5e00bda2ba5d309df2ee8b050c637cc75ec4efc0ec4b822f728"
+    },
+    {
+      "path": "binary/binary.wast",
+      "sha256": "0ddc0b16eae837f1b9e7e00b71681eba5bfe8f22ddf85ef298c3f156e6137eeb"
+    },
+    {
+      "path": "linking/link-time-virtualization.wast",
+      "sha256": "c8ea5dc01e1c9254b98f0d6a33e39909acb93222689a7a2a332c6fefb91a423b"
+    },
+    {
+      "path": "linking/shared-everything-dynamic-linking.wast",
+      "sha256": "7687ec4f1af476d0f7fdc97aa7c0bcf8841e6f9272b83b9133b1be891eb52a65"
+    },
+    {
+      "path": "linking/tags.wast",
+      "sha256": "0677e8cacb1d844a14392d3d3c7d733e0d43a8ee7c87d698724b0623a6c504dc"
+    },
+    {
+      "path": "linking/unit.wast",
+      "sha256": "5fe5706c450cfa1d0d487ce55972fc8477e0619b45c6f94cc5716391b1534416"
+    },
+    {
+      "path": "nyi.txt",
+      "sha256": "36e248a6195333cec8a7729a4d64539fbfc5fb6d966a8dbaa1796116373a2bb2"
+    },
+    {
+      "path": "resources/borrows.wast",
+      "sha256": "a9cc6feec6c0123eb5151379612f42b5a7f4b061253e36921064a3b072b19a84"
+    },
+    {
+      "path": "resources/handle-table.wast",
+      "sha256": "c55cda21386773137431b7b9019989f468e0ae42504aa60f45a707dfc4ad38b5"
+    },
+    {
+      "path": "resources/multiple-resources.wast",
+      "sha256": "e9e326df8a048b6843210e9eebe1cf2499a9d481a810ef04cc7a84b83b4f48b5"
+    },
+    {
+      "path": "validation/abi.wast",
+      "sha256": "ddb7668968f75fb7da5af6d68eda5239efe2bc1275983494edb4db93226b136e"
+    },
+    {
+      "path": "validation/annotated-names.wast",
+      "sha256": "b6ba437337ef9c5d8980bcdc06c8c1d6dd963db100cc1c66c2f5d56e7afe837d"
+    },
+    {
+      "path": "validation/attributes.wast",
+      "sha256": "bf1704cc8c1f76827da3061299efe59112480040f192eedf3bfd3cf50076019e"
+    },
+    {
+      "path": "validation/core-modules.wast",
+      "sha256": "1bba3744a9b37a65a268b5a3aa6fc0e72185fa817691c52e55c91a421f9c99e8"
+    },
+    {
+      "path": "validation/defined-types.wast",
+      "sha256": "7a2dd64a6a5fa69b60a514829d6bd6d7a75b141e4becc5302efaa43954c26da9"
+    },
+    {
+      "path": "validation/extern-names.wast",
+      "sha256": "c19cbb9de838794a9ac5a0c4d3b4067670c8d0568a5bf70fe541f4d3365bf778"
+    },
+    {
+      "path": "validation/external-visibility.wast",
+      "sha256": "1772a7430188141bf7649c5c1ee610ece48dca626ca032d09dabd60352d095b3"
+    },
+    {
+      "path": "validation/indicies.wast",
+      "sha256": "b4f4dd20c97b66d70b2969b154e46c2c3921ada82a496e9b18e052d88c85583f"
+    },
+    {
+      "path": "validation/instantiation.wast",
+      "sha256": "25d0b94eefa2ddcc1bd1f7cc820803b24ca21f6ddd52ff7d77ac3fc262c92e81"
+    },
+    {
+      "path": "validation/kebab.wast",
+      "sha256": "992879f76914397555b11ca4b580e0490974de0f8489965c24c1ef8d2ff155bd"
+    },
+    {
+      "path": "validation/outer-alias.wast",
+      "sha256": "7bf76946c7707d9e0135cfa449c59e282277e3491aad9dcfcaec964c52fbf58d"
+    },
+    {
+      "path": "validation/resources.wast",
+      "sha256": "c40cc57fae33dd10ba81b8c82d44c0599da0f5053dc90a2d95854822c176fa09"
+    },
+    {
+      "path": "values/alignment.wast",
+      "sha256": "0caf9c9534e474d93d6452bef0bbfe16729ee8083fa4d8968b39e6b4e5100c70"
+    },
+    {
+      "path": "values/concat.wast",
+      "sha256": "d8e4e9721dcec9901dafbc853ca611ed93a56f55b9fba09bce7056b6adf7c3cc"
+    },
+    {
+      "path": "values/numerics.wast",
+      "sha256": "990040c362068e2c9d461439fc323af95878bcea283b43a10d67639015faf7b9"
+    },
+    {
+      "path": "values/post-return.wast",
+      "sha256": "5db8944fd8a9353b21c41cc52e45b76bcf44db4bf9afe9b51e722982edc96fbd"
+    },
+    {
+      "path": "values/realloc.wast",
+      "sha256": "a6792f029779d12ede89c90443ea9b5d5071089b501f843f3fa4c0fbdef0735d"
+    },
+    {
+      "path": "values/strings.wast",
+      "sha256": "a70c90a0ede0e2364040da75f4c2c0e56c2d34fdac746a11b6347fdbac60283c"
+    },
+    {
+      "path": "values/transcode.wast",
+      "sha256": "4cb545c7816ceb106f5962a1dcf9ed4ad50112b9aff2fdbd785d6c7e53b1a4cb"
+    },
+    {
+      "path": "values/variants.wast",
+      "sha256": "ad4b1b2f915c549b90c3d30e059fd15d21034a5b1cae0b7c16b8b83bf361bd96"
+    }
+  ]
+}

@@ -462,6 +462,13 @@ static int ensure_fd_capacity(jit_context_t *ctx, int target_fd) {
 
 typedef moonbit_bytes_t (*wasi_stdin_callback_fn)(void *closure);
 
+static WASMOON_NO_FUNCTION_SANITIZE moonbit_bytes_t call_wasi_stdin_callback(
+    wasi_stdin_callback_fn callback,
+    void *closure
+) {
+    return callback(closure);
+}
+
 static void clear_wasi_stdin_buffer(jit_context_t *ctx) {
     if (!ctx) return;
     ctx->wasi_stdin_use_buffer = 0;
@@ -1480,7 +1487,9 @@ static int64_t wasi_fd_read_impl(
         }
         if (ctx->wasi_stdin_callback) {
             wasi_stdin_callback_fn cb = (wasi_stdin_callback_fn)ctx->wasi_stdin_callback;
-            moonbit_bytes_t input = cb(ctx->wasi_stdin_callback_data);
+            moonbit_bytes_t input = call_wasi_stdin_callback(
+                cb, ctx->wasi_stdin_callback_data
+            );
             size_t input_len = 0;
             if (input) {
                 input_len = (size_t)Moonbit_array_length(input);
@@ -3669,11 +3678,13 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_set_wasi_stdin_callback(
     void *closure
 ) {
     jit_context_t *ctx = (jit_context_t *)ctx_ptr;
-    if (!ctx) return;
+    if (!ctx) {
+        if (closure) moonbit_decref(closure);
+        return;
+    }
     clear_wasi_stdin_buffer(ctx);
     clear_wasi_stdin_callback(ctx);
     ctx->wasi_stdin_callback = (void *)callback;
-    if (closure) moonbit_incref(closure);
     ctx->wasi_stdin_callback_data = closure;
 }
 

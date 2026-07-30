@@ -10,6 +10,27 @@
 extern "c" fn c_open(path : FixedArray[Byte], flags : Int, mode : Int) -> Int = "wasmoon_wasi_open"
 
 ///|
+#borrow(parent_path)
+extern "c" fn c_open_parent_beneath(
+  root_fd : Int,
+  parent_path : FixedArray[Byte],
+) -> Int = "wasmoon_wasi_open_parent_beneath"
+
+///|
+#borrow(parent_path, leaf)
+extern "c" fn c_openat_beneath(
+  root_fd : Int,
+  parent_path : FixedArray[Byte],
+  leaf : FixedArray[Byte],
+  flags : Int,
+  mode : Int,
+  follow_final : Int,
+) -> Int = "wasmoon_wasi_openat_beneath"
+
+///|
+extern "c" fn c_dup(fd : Int) -> Int = "wasmoon_wasi_dup"
+
+///|
 /// Close a file descriptor
 extern "c" fn c_close(fd : Int) -> Int = "wasmoon_wasi_close"
 
@@ -26,6 +47,24 @@ extern "c" fn c_read(fd : Int, buf : FixedArray[Byte], count : Int) -> Int = "wa
 extern "c" fn c_write(fd : Int, buf : FixedArray[Byte], count : Int) -> Int = "wasmoon_wasi_write"
 
 ///|
+#borrow(buf)
+extern "c" fn c_pread(
+  fd : Int,
+  buf : FixedArray[Byte],
+  count : Int,
+  offset : Int64,
+) -> Int = "wasmoon_wasi_pread"
+
+///|
+#borrow(buf)
+extern "c" fn c_pwrite(
+  fd : Int,
+  buf : FixedArray[Byte],
+  count : Int,
+  offset : Int64,
+) -> Int = "wasmoon_wasi_pwrite"
+
+///|
 /// Seek in a file
 /// Returns new offset or -1 on error
 extern "c" fn c_lseek(fd : Int, offset : Int64, whence : Int) -> Int64 = "wasmoon_wasi_lseek"
@@ -37,6 +76,12 @@ extern "c" fn c_get_error_message() -> Bytes = "wasmoon_wasi_get_error_message"
 ///|
 /// Get errno value
 extern "c" fn c_get_errno() -> Int = "wasmoon_wasi_get_errno"
+
+///|
+extern "c" fn c_set_errno_invalid_argument() -> Unit = "wasmoon_wasi_set_errno_invalid_argument"
+
+///|
+extern "c" fn c_set_errno_illegal_byte_sequence() -> Unit = "wasmoon_wasi_set_errno_illegal_byte_sequence"
 
 ///|
 /// Check whether file descriptor is a TTY
@@ -141,13 +186,66 @@ fn whence_to_int(w : Whence) -> Int {
 /// Open a file with the given path and flags
 /// Returns file descriptor or None on error
 pub fn native_open(path : String, flags : Array[OpenFlags], mode : Int) -> Int? {
-  let path_bytes = string_to_cstring(path)
+  guard string_to_cstring(path) is Some(path_bytes) else { return None }
   let flags_int = open_flags_to_int(flags)
   let fd = c_open(path_bytes, flags_int, mode)
   if fd < 0 {
     None
   } else {
     Some(fd)
+  }
+}
+
+///|
+pub fn native_open_parent_beneath(root_fd : Int, parent_path : String) -> Int? {
+  guard string_to_cstring(parent_path) is Some(path_bytes) else { return None }
+  let fd = c_open_parent_beneath(root_fd, path_bytes)
+  if fd < 0 {
+    None
+  } else {
+    Some(fd)
+  }
+}
+
+///|
+pub fn native_openat_beneath(
+  root_fd : Int,
+  parent_path : String,
+  leaf : String,
+  flags : Array[OpenFlags],
+  mode : Int,
+  follow_final : Bool,
+) -> Int? {
+  guard string_to_cstring(parent_path) is Some(parent_bytes) else {
+    return None
+  }
+  guard string_to_cstring(leaf) is Some(leaf_bytes) else { return None }
+  let fd = c_openat_beneath(
+    root_fd,
+    parent_bytes,
+    leaf_bytes,
+    open_flags_to_int(flags),
+    mode,
+    if follow_final {
+      1
+    } else {
+      0
+    },
+  )
+  if fd < 0 {
+    None
+  } else {
+    Some(fd)
+  }
+}
+
+///|
+pub fn native_dup(fd : Int) -> Int? {
+  let result = c_dup(fd)
+  if result < 0 {
+    None
+  } else {
+    Some(result)
   }
 }
 
@@ -225,6 +323,36 @@ pub fn native_write(fd : Int, buf : FixedArray[Byte], count : Int) -> Int? {
 }
 
 ///|
+pub fn native_pread(
+  fd : Int,
+  buf : FixedArray[Byte],
+  count : Int,
+  offset : Int64,
+) -> Int? {
+  let result = c_pread(fd, buf, count, offset)
+  if result < 0 {
+    None
+  } else {
+    Some(result)
+  }
+}
+
+///|
+pub fn native_pwrite(
+  fd : Int,
+  buf : FixedArray[Byte],
+  count : Int,
+  offset : Int64,
+) -> Int? {
+  let result = c_pwrite(fd, buf, count, offset)
+  if result < 0 {
+    None
+  } else {
+    Some(result)
+  }
+}
+
+///|
 /// Seek in a file
 /// Returns new offset or None on error
 pub fn native_seek(fd : Int, offset : Int64, whence : Whence) -> Int64? {
@@ -263,13 +391,22 @@ pub fn native_last_errno_to_wasi() -> Int {
 }
 
 ///|
+pub fn native_errno_to_wasi(errno : Int) -> Int {
+  c_errno_to_wasi(errno)
+}
+
+///|
 /// Check whether target path stays within base after symlink resolution
 pub fn native_path_within_base(
   base_path : String,
   target_path : String,
 ) -> Bool {
-  let base_path_bytes = string_to_cstring(base_path)
-  let target_path_bytes = string_to_cstring(target_path)
+  guard string_to_cstring(base_path) is Some(base_path_bytes) else {
+    return false
+  }
+  guard string_to_cstring(target_path) is Some(target_path_bytes) else {
+    return false
+  }
   c_path_within_base(base_path_bytes, target_path_bytes) != 0
 }
 
@@ -278,6 +415,14 @@ pub fn native_path_within_base(
 /// Returns 0 on success, -1 on error
 #borrow(path)
 extern "c" fn c_mkdir(path : FixedArray[Byte], mode : Int) -> Int = "wasmoon_wasi_mkdir"
+
+///|
+#borrow(path)
+extern "c" fn c_mkdirat(
+  dirfd : Int,
+  path : FixedArray[Byte],
+  mode : Int,
+) -> Int = "wasmoon_wasi_mkdirat"
 
 ///|
 /// Read directory entries
@@ -292,16 +437,18 @@ extern "c" fn c_readdir_fd(fd : Int) -> Bytes? = "wasmoon_wasi_readdir_fd"
 /// Create a directory
 /// Returns true on success
 pub fn native_mkdir(path : String, mode : Int) -> Bool {
-  let path_bytes = string_to_cstring(path)
+  guard string_to_cstring(path) is Some(path_bytes) else { return false }
   c_mkdir(path_bytes, mode) == 0
 }
 
 ///|
-/// Read directory entries
-/// Returns array of (name, is_dir) tuples or None on error
-pub fn native_readdir(path : String) -> Array[(String, Bool)]? {
-  let path_bytes = string_to_cstring(path)
-  let result = c_readdir(path_bytes)
+pub fn native_mkdirat(dirfd : Int, path : String, mode : Int) -> Bool {
+  guard string_to_cstring(path) is Some(path_bytes) else { return false }
+  c_mkdirat(dirfd, path_bytes, mode) == 0
+}
+
+///|
+fn parse_native_readdir(result : Bytes?) -> Array[(String, Int)]? {
   if result is None {
     return None
   }
@@ -314,14 +461,13 @@ pub fn native_readdir(path : String) -> Array[(String, Bool)]? {
     (bytes[1].to_int() << 8) |
     (bytes[2].to_int() << 16) |
     (bytes[3].to_int() << 24)
-  let entries : Array[(String, Bool)] = []
+  let entries : Array[(String, Int)] = []
   let mut offset = 4
   for _ in 0..<count {
     if offset >= bytes.length() {
       break
     }
-    // Read is_dir
-    let is_dir = bytes[offset].to_int() != 0
+    let file_type = bytes[offset].to_int()
     offset = offset + 1
     // Read name_len (little-endian)
     if offset + 4 > bytes.length() {
@@ -336,149 +482,58 @@ pub fn native_readdir(path : String) -> Array[(String, Bool)]? {
     if offset + name_len > bytes.length() {
       break
     }
-    let name_chars : Array[Char] = []
-    for i in 0..<name_len {
-      name_chars.push(bytes[offset + i].to_int().unsafe_to_char())
+    let name = @utf8.decode(bytes[offset:offset + name_len]) catch {
+      _ => {
+        c_set_errno_illegal_byte_sequence()
+        return None
+      }
     }
     offset = offset + name_len
-    entries.push((String::from_array(name_chars), is_dir))
+    entries.push((name, file_type))
   }
   Some(entries)
+}
+
+///|
+/// Read directory entries.
+///
+/// Each entry contains its name and native file-type token. Tokens 0-7 match
+/// WASI Preview 1 filetype; token 8 denotes a FIFO.
+pub fn native_readdir(path : String) -> Array[(String, Int)]? {
+  guard string_to_cstring(path) is Some(path_bytes) else { return None }
+  parse_native_readdir(c_readdir(path_bytes))
 }
 
 ///|
 /// Read directory entries from an opened directory fd.
-/// Returns array of (name, is_dir) tuples or None on error.
-pub fn native_readdir_fd(fd : Int) -> Array[(String, Bool)]? {
-  let result = c_readdir_fd(fd)
-  if result is None {
-    return None
-  }
-  let bytes = result.unwrap()
-  if bytes.length() < 4 {
-    return Some([])
-  }
-  // Parse count (little-endian)
-  let count = bytes[0].to_int() |
-    (bytes[1].to_int() << 8) |
-    (bytes[2].to_int() << 16) |
-    (bytes[3].to_int() << 24)
-  let entries : Array[(String, Bool)] = []
-  let mut offset = 4
-  for _ in 0..<count {
-    if offset >= bytes.length() {
-      break
-    }
-    // Read is_dir
-    let is_dir = bytes[offset].to_int() != 0
-    offset = offset + 1
-    // Read name_len (little-endian)
-    if offset + 4 > bytes.length() {
-      break
-    }
-    let name_len = bytes[offset].to_int() |
-      (bytes[offset + 1].to_int() << 8) |
-      (bytes[offset + 2].to_int() << 16) |
-      (bytes[offset + 3].to_int() << 24)
-    offset = offset + 4
-    // Read name
-    if offset + name_len > bytes.length() {
-      break
-    }
-    let name_chars : Array[Char] = []
-    for i in 0..<name_len {
-      name_chars.push(bytes[offset + i].to_int().unsafe_to_char())
-    }
-    offset = offset + name_len
-    entries.push((String::from_array(name_chars), is_dir))
-  }
-  Some(entries)
+///
+/// Each entry contains its name and native file-type token. Tokens 0-7 match
+/// WASI Preview 1 filetype; token 8 denotes a FIFO.
+pub fn native_readdir_fd(fd : Int) -> Array[(String, Int)]? {
+  parse_native_readdir(c_readdir_fd(fd))
 }
 
 ///|
 /// Convert a MoonBit string to a null-terminated C string (UTF-8)
-fn string_to_cstring(s : String) -> FixedArray[Byte] {
-  let len = s.length()
-  // Estimate UTF-8 byte length (worst case: 4 bytes per char)
-  let buf = FixedArray::make(len * 4 + 1, b'\x00')
-  let mut pos = 0
-  for i in 0..<len {
-    let c = s.code_unit_at(i).to_int()
-    if c < 0x80 {
-      buf[pos] = c.to_byte()
-      pos = pos + 1
-    } else if c < 0x800 {
-      buf[pos] = (0xC0 | (c >> 6)).to_byte()
-      buf[pos + 1] = (0x80 | (c & 0x3F)).to_byte()
-      pos = pos + 2
-    } else if c >= 0xD800 && c <= 0xDBFF && i + 1 < len {
-      // Surrogate pair
-      let c2 = s.code_unit_at(i + 1).to_int()
-      if c2 >= 0xDC00 && c2 <= 0xDFFF {
-        let codepoint = 0x10000 + ((c - 0xD800) << 10) + (c2 - 0xDC00)
-        buf[pos] = (0xF0 | (codepoint >> 18)).to_byte()
-        buf[pos + 1] = (0x80 | ((codepoint >> 12) & 0x3F)).to_byte()
-        buf[pos + 2] = (0x80 | ((codepoint >> 6) & 0x3F)).to_byte()
-        buf[pos + 3] = (0x80 | (codepoint & 0x3F)).to_byte()
-        pos = pos + 4
-      } else {
-        // Invalid surrogate, encode as replacement character
-        buf[pos] = b'\xEF'
-        buf[pos + 1] = b'\xBF'
-        buf[pos + 2] = b'\xBD'
-        pos = pos + 3
-      }
-    } else {
-      buf[pos] = (0xE0 | (c >> 12)).to_byte()
-      buf[pos + 1] = (0x80 | ((c >> 6) & 0x3F)).to_byte()
-      buf[pos + 2] = (0x80 | (c & 0x3F)).to_byte()
-      pos = pos + 3
+fn string_to_cstring(s : String) -> FixedArray[Byte]? {
+  let encoded = @utf8.encode(s)
+  for byte in encoded {
+    if byte == b'\x00' {
+      c_set_errno_invalid_argument()
+      return None
     }
   }
-  buf[pos] = b'\x00' // Null terminator
-  buf
+  let buf = FixedArray::make(encoded.length() + 1, b'\x00')
+  for i in 0..<encoded.length() {
+    buf[i] = encoded[i]
+  }
+  Some(buf)
 }
 
 ///|
 /// Convert UTF-8 bytes to a MoonBit string
 fn utf8_bytes_to_string(bytes : Bytes) -> String {
-  let len = bytes.length()
-  let chars : Array[Char] = []
-  let mut i = 0
-  while i < len {
-    let b = bytes[i].to_int()
-    if b == 0 {
-      break // Stop at null terminator
-    }
-    if b < 0x80 {
-      chars.push(b.unsafe_to_char())
-      i = i + 1
-    } else if b < 0xE0 && i + 1 < len {
-      let c = ((b & 0x1F) << 6) | (bytes[i + 1].to_int() & 0x3F)
-      chars.push(c.unsafe_to_char())
-      i = i + 2
-    } else if b < 0xF0 && i + 2 < len {
-      let c = ((b & 0x0F) << 12) |
-        ((bytes[i + 1].to_int() & 0x3F) << 6) |
-        (bytes[i + 2].to_int() & 0x3F)
-      chars.push(c.unsafe_to_char())
-      i = i + 3
-    } else if b < 0xF8 && i + 3 < len {
-      let codepoint = ((b & 0x07) << 18) |
-        ((bytes[i + 1].to_int() & 0x3F) << 12) |
-        ((bytes[i + 2].to_int() & 0x3F) << 6) |
-        (bytes[i + 3].to_int() & 0x3F)
-      // Convert to surrogate pair
-      let adjusted = codepoint - 0x10000
-      chars.push((0xD800 + (adjusted >> 10)).unsafe_to_char())
-      chars.push((0xDC00 + (adjusted & 0x3FF)).unsafe_to_char())
-      i = i + 4
-    } else {
-      // Invalid UTF-8, skip byte
-      i = i + 1
-    }
-  }
-  String::from_array(chars)
+  @utf8.decode_lossy(bytes)
 }
 
 ///|
@@ -499,13 +554,11 @@ pub fn putchar(c : Int) -> Unit {
 ///|
 /// Print a string to stdout without newline
 pub fn print_string(s : String) -> Unit {
-  let bytes = string_to_cstring(s)
-  // Find actual length (excluding null terminator)
-  let mut len = 0
-  while len < bytes.length() && bytes[len] != b'\x00' {
-    len = len + 1
+  let encoded = @utf8.encode(s)
+  let bytes = FixedArray::makei(encoded.length(), fn(i) { encoded[i] })
+  if bytes.length() > 0 {
+    c_print_string(bytes, bytes.length())
   }
-  c_print_string(bytes, len)
 }
 
 ///|
@@ -583,7 +636,7 @@ pub const AT_REMOVEDIR : Int = 0x200
 ///|
 /// Unlink file (returns 0 on success, -1 on error)
 pub fn native_unlinkat(dirfd : Int, path : String, flags : Int) -> Bool {
-  let path_bytes = string_to_cstring(path)
+  guard string_to_cstring(path) is Some(path_bytes) else { return false }
   c_unlinkat(dirfd, path_bytes, flags) == 0
 }
 
@@ -595,8 +648,12 @@ pub fn native_renameat(
   new_dirfd : Int,
   new_path : String,
 ) -> Bool {
-  let old_path_bytes = string_to_cstring(old_path)
-  let new_path_bytes = string_to_cstring(new_path)
+  guard string_to_cstring(old_path) is Some(old_path_bytes) else {
+    return false
+  }
+  guard string_to_cstring(new_path) is Some(new_path_bytes) else {
+    return false
+  }
   c_renameat(old_dirfd, old_path_bytes, new_dirfd, new_path_bytes) == 0
 }
 
@@ -708,7 +765,7 @@ pub const AT_SYMLINK_NOFOLLOW : Int = 0x100
 ///|
 /// Get file stat via path
 pub fn native_fstatat(dirfd : Int, path : String, flags : Int) -> FileStat? {
-  let path_bytes = string_to_cstring(path)
+  guard string_to_cstring(path) is Some(path_bytes) else { return None }
   let dev = FixedArray::make(1, 0UL)
   let ino = FixedArray::make(1, 0UL)
   let filetype = FixedArray::make(1, b'\x00')
@@ -763,7 +820,7 @@ pub fn native_utimensat(
   fst_flags : Int,
   lookup_flags : Int,
 ) -> Bool {
-  let path_bytes = string_to_cstring(path)
+  guard string_to_cstring(path) is Some(path_bytes) else { return false }
   c_utimensat(dirfd, path_bytes, atim, mtim, fst_flags, lookup_flags) == 0
 }
 
@@ -847,26 +904,29 @@ pub fn native_symlinkat(
   dirfd : Int,
   linkpath : String,
 ) -> Bool {
-  let target_bytes = string_to_cstring(target)
-  let linkpath_bytes = string_to_cstring(linkpath)
+  guard string_to_cstring(target) is Some(target_bytes) else { return false }
+  guard string_to_cstring(linkpath) is Some(linkpath_bytes) else {
+    return false
+  }
   c_symlinkat(target_bytes, dirfd, linkpath_bytes) == 0
 }
 
 ///|
 /// Read symbolic link
 pub fn native_readlinkat(dirfd : Int, path : String, bufsize : Int) -> String? {
-  let path_bytes = string_to_cstring(path)
+  guard string_to_cstring(path) is Some(path_bytes) else { return None }
   let buf = FixedArray::make(bufsize, b'\x00')
   let result = c_readlinkat(dirfd, path_bytes, buf, bufsize.to_int64())
   if result < 0L {
     None
   } else {
     let len = result.to_int()
-    let chars : Array[Char] = []
-    for i in 0..<len {
-      chars.push(buf[i].to_int().unsafe_to_char())
+    let bytes = Bytes::makei(len, fn(i) { buf[i] })
+    try @utf8.decode(bytes) catch {
+      _ => None
+    } noraise {
+      target => Some(target)
     }
-    Some(String::from_array(chars))
   }
 }
 
@@ -879,8 +939,8 @@ pub fn native_linkat(
   newpath : String,
   flags : Int,
 ) -> Bool {
-  let oldpath_bytes = string_to_cstring(oldpath)
-  let newpath_bytes = string_to_cstring(newpath)
+  guard string_to_cstring(oldpath) is Some(oldpath_bytes) else { return false }
+  guard string_to_cstring(newpath) is Some(newpath_bytes) else { return false }
   c_linkat(olddirfd, oldpath_bytes, newdirfd, newpath_bytes, flags) == 0
 }
 
@@ -921,6 +981,104 @@ extern "c" fn c_poll(
 
 ///|
 extern "c" fn c_socket_bytes_available(fd : Int) -> Int64 = "wasmoon_wasi_socket_bytes_available"
+
+///|
+extern "c" fn c_socket_create(family : Int, kind : Int) -> Int = "wasmoon_wasi_socket_create"
+
+///|
+#borrow(address)
+extern "c" fn c_socket_bind(
+  fd : Int,
+  family : Int,
+  address : FixedArray[Byte],
+  port : Int,
+  scope_id : Int,
+) -> Int = "wasmoon_wasi_socket_bind"
+
+///|
+#borrow(address)
+extern "c" fn c_socket_connect(
+  fd : Int,
+  family : Int,
+  address : FixedArray[Byte],
+  port : Int,
+  scope_id : Int,
+) -> Int = "wasmoon_wasi_socket_connect"
+
+///|
+extern "c" fn c_socket_disconnect(fd : Int) -> Int = "wasmoon_wasi_socket_disconnect"
+
+///|
+#borrow(data, family, address, port, scope_id)
+extern "c" fn c_socket_recv_from(
+  fd : Int,
+  data : FixedArray[Byte],
+  length : Int,
+  family : FixedArray[Byte],
+  address : FixedArray[Byte],
+  port : FixedArray[UInt16],
+  scope_id : FixedArray[UInt],
+) -> Int64 = "wasmoon_wasi_socket_recv_from"
+
+///|
+#borrow(data, address)
+extern "c" fn c_socket_send_to(
+  fd : Int,
+  data : FixedArray[Byte],
+  length : Int,
+  has_address : Int,
+  family : Int,
+  address : FixedArray[Byte],
+  port : Int,
+  scope_id : Int,
+) -> Int64 = "wasmoon_wasi_socket_send_to"
+
+///|
+extern "c" fn c_socket_listen(fd : Int, backlog : Int) -> Int = "wasmoon_wasi_socket_listen"
+
+///|
+extern "c" fn c_socket_error(fd : Int) -> Int = "wasmoon_wasi_socket_error"
+
+///|
+#borrow(family, address, port, scope_id)
+extern "c" fn c_socket_address_get(
+  fd : Int,
+  peer : Int,
+  family : FixedArray[Byte],
+  address : FixedArray[Byte],
+  port : FixedArray[UInt16],
+  scope_id : FixedArray[UInt],
+) -> Int = "wasmoon_wasi_socket_address_get"
+
+///|
+extern "c" fn c_socket_option_get(fd : Int, family : Int, option : Int) -> Int = "wasmoon_wasi_socket_option_get"
+
+///|
+extern "c" fn c_socket_option_set(
+  fd : Int,
+  family : Int,
+  option : Int,
+  value : Int,
+) -> Int = "wasmoon_wasi_socket_option_set"
+
+///|
+#borrow(name, poll_fd)
+extern "c" fn c_resolver_start(
+  name : FixedArray[Byte],
+  poll_fd : FixedArray[Int],
+) -> Int64 = "wasmoon_wasi_resolver_start"
+
+///|
+#borrow(family, address, scope_id)
+extern "c" fn c_resolver_next(
+  resolver : Int64,
+  family : FixedArray[Byte],
+  address : FixedArray[Byte],
+  scope_id : FixedArray[UInt],
+) -> Int = "wasmoon_wasi_resolver_next"
+
+///|
+extern "c" fn c_resolver_drop(resolver : Int64) = "wasmoon_wasi_resolver_drop"
 
 ///|
 extern "c" fn c_active_jit_context_ptr() -> Int64 = "wasmoon_jit_active_context_ptr"
@@ -1055,6 +1213,244 @@ fn native_socket_bytes_available(fd : Int) -> Int64? {
   } else {
     Some(available)
   }
+}
+
+///|
+pub(all) struct NativeSocketAddress {
+  family : Int
+  address : FixedArray[Byte]
+  port : Int
+  scope_id : Int
+}
+
+///|
+pub fn native_socket_create(family : Int, kind : Int) -> Int? {
+  let fd = c_socket_create(family, kind)
+  if fd < 0 {
+    None
+  } else {
+    Some(fd)
+  }
+}
+
+///|
+pub fn native_socket_bind(fd : Int, address : NativeSocketAddress) -> Bool {
+  c_socket_bind(
+    fd,
+    address.family,
+    address.address,
+    address.port,
+    address.scope_id,
+  ) ==
+  0
+}
+
+///|
+pub fn native_socket_connect(fd : Int, address : NativeSocketAddress) -> Int {
+  c_socket_connect(
+    fd,
+    address.family,
+    address.address,
+    address.port,
+    address.scope_id,
+  )
+}
+
+///|
+pub fn native_socket_disconnect(fd : Int) -> Bool {
+  c_socket_disconnect(fd) == 0
+}
+
+///|
+pub(all) struct NativeSocketDatagram {
+  data : Bytes
+  address : NativeSocketAddress
+}
+
+///|
+pub fn native_socket_recv_from(
+  fd : Int,
+  capacity : Int,
+) -> NativeSocketDatagram? {
+  if capacity < 0 {
+    return None
+  }
+  let data = FixedArray::make(capacity, b'\x00')
+  let family = FixedArray::make(1, b'\x00')
+  let address = FixedArray::make(16, b'\x00')
+  let port : FixedArray[UInt16] = FixedArray::make(1, 0)
+  let scope_id = FixedArray::make(1, 0U)
+  let received = c_socket_recv_from(
+    fd, data, capacity, family, address, port, scope_id,
+  )
+  if received < 0L || received > capacity.to_int64() {
+    None
+  } else {
+    let bytes : Array[Byte] = []
+    for i in 0..<received.to_int() {
+      bytes.push(data[i])
+    }
+    Some({
+      data: Bytes::from_array(bytes),
+      address: {
+        family: family[0].to_int(),
+        address,
+        port: port[0].to_uint().reinterpret_as_int(),
+        scope_id: scope_id[0].reinterpret_as_int(),
+      },
+    })
+  }
+}
+
+///|
+pub fn native_socket_send_to(
+  fd : Int,
+  data : FixedArray[Byte],
+  address : NativeSocketAddress?,
+) -> Int64 {
+  match address {
+    Some(address) =>
+      c_socket_send_to(
+        fd,
+        data,
+        data.length(),
+        1,
+        address.family,
+        address.address,
+        address.port,
+        address.scope_id,
+      )
+    None =>
+      c_socket_send_to(
+        fd,
+        data,
+        data.length(),
+        0,
+        4,
+        FixedArray::make(4, b'\x00'),
+        0,
+        0,
+      )
+  }
+}
+
+///|
+pub fn native_socket_listen(fd : Int, backlog : Int) -> Bool {
+  c_socket_listen(fd, backlog) == 0
+}
+
+///|
+pub fn native_socket_error(fd : Int) -> Int? {
+  let error = c_socket_error(fd)
+  if error < 0 {
+    None
+  } else {
+    Some(error)
+  }
+}
+
+///|
+pub fn native_socket_address(fd : Int, peer : Bool) -> NativeSocketAddress? {
+  let family = FixedArray::make(1, b'\x00')
+  let address = FixedArray::make(16, b'\x00')
+  let port : FixedArray[UInt16] = FixedArray::make(1, 0)
+  let scope_id = FixedArray::make(1, 0U)
+  if c_socket_address_get(
+      fd,
+      if peer {
+        1
+      } else {
+        0
+      },
+      family,
+      address,
+      port,
+      scope_id,
+    ) ==
+    0 {
+    Some({
+      family: family[0].to_int(),
+      address,
+      port: port[0].to_uint().reinterpret_as_int(),
+      scope_id: scope_id[0].reinterpret_as_int(),
+    })
+  } else {
+    None
+  }
+}
+
+///|
+pub fn native_socket_option_get(fd : Int, family : Int, option : Int) -> Int? {
+  let value = c_socket_option_get(fd, family, option)
+  if value < 0 {
+    None
+  } else {
+    Some(value)
+  }
+}
+
+///|
+pub fn native_socket_option_set(
+  fd : Int,
+  family : Int,
+  option : Int,
+  value : Int,
+) -> Bool {
+  c_socket_option_set(fd, family, option, value) == 0
+}
+
+///|
+pub(all) struct NativeResolver {
+  handle : Int64
+  poll_fd : Int
+}
+
+///|
+pub fn native_resolver_start(name : String) -> NativeResolver? {
+  let poll_fd = FixedArray::make(1, -1)
+  guard string_to_cstring(name) is Some(name_bytes) else { return None }
+  let handle = c_resolver_start(name_bytes, poll_fd)
+  if handle == 0L || poll_fd[0] < 0 {
+    None
+  } else {
+    Some({ handle, poll_fd: poll_fd[0] })
+  }
+}
+
+///|
+pub(all) enum NativeResolverNext {
+  Address(NativeSocketAddress)
+  Pending
+  Finished
+  NameUnresolvable
+  TemporaryFailure
+  PermanentFailure
+}
+
+///|
+pub fn native_resolver_next(resolver : Int64) -> NativeResolverNext {
+  let family = FixedArray::make(1, b'\x00')
+  let address = FixedArray::make(16, b'\x00')
+  let scope_id = FixedArray::make(1, 0U)
+  match c_resolver_next(resolver, family, address, scope_id) {
+    0 =>
+      Address({
+        family: family[0].to_int(),
+        address,
+        port: 0,
+        scope_id: scope_id[0].reinterpret_as_int(),
+      })
+    1 => Pending
+    2 => Finished
+    3 => NameUnresolvable
+    4 => TemporaryFailure
+    _ => PermanentFailure
+  }
+}
+
+///|
+pub fn native_resolver_drop(resolver : Int64) -> Unit {
+  c_resolver_drop(resolver)
 }
 
 ///|

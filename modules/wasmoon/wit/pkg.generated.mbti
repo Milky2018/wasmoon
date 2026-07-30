@@ -1,6 +1,11 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "Milky2018/wasmoon/wit"
 
+import {
+  "Milky2018/wasmoon/component",
+  "moonbitlang/core/debug",
+}
+
 // Values
 pub fn decode_wit_package_from_component(Bytes) -> Package raise WitError
 
@@ -27,6 +32,18 @@ pub fn parse_package(String) -> Package raise WitError
 pub fn resolve_package(Package, Array[Package]) -> ResolveResult raise WitError
 
 // Errors
+pub(all) suberror WitBindingError {
+  UnknownWorld(String)
+  UnknownInterface(String)
+  UnknownType(String)
+  RecursiveType(String)
+  InvalidType(String)
+  DuplicateFunction(String)
+  MissingFunction(String)
+  RuntimeBindingFailed(String)
+} derive(Eq, @debug.Debug)
+pub impl Show for WitBindingError
+
 pub(all) suberror WitError {
   Error(String)
 }
@@ -91,6 +108,7 @@ pub(all) struct ResolveResult {
   root : Package
   deps : Array[Package]
 }
+pub fn ResolveResult::bind_world(Self, String, @component.ComponentInstance) -> WitBindings raise WitBindingError
 
 pub(all) struct ResourceDecl {
   name : String
@@ -183,6 +201,10 @@ pub(all) struct VariantDecl {
   name : String
   cases : Array[VariantCase]
 }
+
+type WitBindings
+pub fn WitBindings::function(Self, String) -> @component.ComponentFunction raise WitBindingError
+pub fn WitBindings::paths(Self) -> Array[String]
 
 pub(all) struct World {
   name : String

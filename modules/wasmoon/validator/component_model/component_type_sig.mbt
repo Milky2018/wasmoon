@@ -47,7 +47,7 @@ fn componenttype_import_func_sigs_of_decls(
         if kind == 0x03 {
           record_type_slot()
         }
-      Import(name, desc) => {
+      Import(name, _attributes, desc) => {
         match desc {
           FuncType(tyidx) =>
             if tyidx >= 0 && tyidx < local_types.length() {
@@ -84,7 +84,7 @@ fn componenttype_import_func_sigs_of_decls(
           _ => ()
         }
       }
-      Export(_name, desc) =>
+      Export(_name, _attributes, desc) =>
         match desc {
           Type(b) => record_type_slot_for_bound(b)
           _ => ()
@@ -144,7 +144,7 @@ fn componenttype_import_type_sigs_of_decls(
         if kind == 0x03 {
           record_type_slot(false) |> ignore
         }
-      Import(name, desc) =>
+      Import(name, _attributes, desc) =>
         match desc {
           Type(bound) =>
             match bound {
@@ -180,7 +180,7 @@ fn componenttype_import_type_sigs_of_decls(
             }
           _ => if desc is Type(_) { record_type_slot(false) |> ignore }
         }
-      Export(_name, desc) =>
+      Export(_name, _attributes, desc) =>
         match desc {
           Type(bound) =>
             match bound {
@@ -201,8 +201,105 @@ fn componenttype_import_type_bounds_of_decls(
 ) -> Map[String, @component.TypeBound] {
   let out : Map[String, @component.TypeBound] = Map([])
   for d in decls {
-    if d is Import(name, Type(b)) {
+    if d is Import(name, _attributes, Type(b)) {
       out.set(name, b)
+    }
+  }
+  out
+}
+
+///|
+fn componenttype_export_type_sigs_of_decls(
+  decls : Array[@component.ComponentDecl],
+  global_types : Array[@component.TypeDef?],
+  global_resource_ids : Array[Int?],
+) -> Map[String, TypeSig] {
+  let out : Map[String, TypeSig] = Map([])
+  let local_types : Array[@component.TypeDef] = []
+  let local_resource_ids : Array[Int?] = []
+  let mut next_rid = 0
+  for rid in global_resource_ids {
+    if rid is Some(value) && value >= next_rid {
+      next_rid = value + 1
+    }
+  }
+
+  fn push_placeholder() -> Unit {
+    local_types.push(InstanceTypeEmpty)
+    local_resource_ids.push(None)
+  }
+
+  fn push_resource() -> Int {
+    let idx = local_types.length()
+    local_types.push(ResourceType(-1, 0x7f, None, HostDefined))
+    local_resource_ids.push(Some(next_rid))
+    next_rid += 1
+    idx
+  }
+
+  fn push_eq(idx : Int) -> Unit {
+    if idx >= 0 && idx < local_types.length() {
+      local_types.push(local_types[idx])
+      local_resource_ids.push(local_resource_ids[idx])
+    } else {
+      push_placeholder()
+    }
+  }
+
+  for d in decls {
+    match d {
+      Type(t) => {
+        local_types.push(t)
+        if t is ResourceType(_, _, _, _) {
+          local_resource_ids.push(Some(next_rid))
+          next_rid += 1
+        } else {
+          local_resource_ids.push(None)
+        }
+      }
+      AliasOuter(kind, _, _) | AliasInstanceExport(kind, _, _) =>
+        if kind == 0x03 {
+          push_placeholder()
+        }
+      Import(_name, _attributes, desc) =>
+        match desc {
+          Type(SubResource) => push_resource() |> ignore
+          Type(Eq(idx)) => push_eq(idx)
+          _ => ()
+        }
+      Export(name, _attributes, desc) =>
+        match desc {
+          Type(SubResource) => {
+            let idx = push_resource()
+            out.set(
+              name,
+              type_sig_of_valtype_lg(
+                TypeIdx(idx),
+                local_types,
+                local_resource_ids,
+                global_types,
+                global_resource_ids,
+                Map([]),
+              ),
+            )
+          }
+          Type(Eq(idx)) => {
+            out.set(
+              name,
+              type_sig_of_valtype_lg(
+                TypeIdx(idx),
+                local_types,
+                local_resource_ids,
+                global_types,
+                global_resource_ids,
+                Map([]),
+              ),
+            )
+            push_eq(idx)
+          }
+          _ => ()
+        }
+      CoreType(_) => ()
     }
   }
   out
@@ -263,8 +360,8 @@ fn componenttype_export_func_sigs_of_decls(
         if kind == 0x03 {
           record_type_slot()
         }
-      Import(_name, desc) => record_type_slots_for_desc(desc)
-      Export(name, desc) => {
+      Import(_name, _attributes, desc) => record_type_slots_for_desc(desc)
+      Export(name, _attributes, desc) => {
         match desc {
           FuncType(tyidx) =>
             if tyidx >= 0 && tyidx < local_types.length() {
@@ -426,7 +523,7 @@ fn componenttype_import_core_module_sigs_of_decls(
   let import_sigs : Map[String, Map[String, CoreExternType]] = Map([])
   let export_kinds : Map[String, Map[String, Int]] = Map([])
   for d in decls {
-    if d is Import(name, desc) &&
+    if d is Import(name, _attributes, desc) &&
       desc is CoreModuleType(tyidx) &&
       tyidx >= 0 &&
       tyidx < local_core_import_sigs.length() {
@@ -704,14 +801,52 @@ fn valtype_contains_borrow(
 }
 
 ///|
+fn is_map_key_type(
+  ty : @component.ValType,
+  type_table : Array[@component.TypeDef?],
+  visiting : Map[Int, Int],
+) -> Bool {
+  match ty {
+    Prim(Bool)
+    | Prim(S8)
+    | Prim(U8)
+    | Prim(S16)
+    | Prim(U16)
+    | Prim(S32)
+    | Prim(U32)
+    | Prim(S64)
+    | Prim(U64)
+    | Prim(Char)
+    | Prim(String) => true
+    Prim(_) => false
+    TypeIdx(idx) =>
+      if idx < 0 || idx >= type_table.length() || visiting.get(idx) is Some(_) {
+        false
+      } else {
+        visiting.set(idx, 1)
+        let valid = match type_table[idx] {
+          Some(DefValType(p)) => is_map_key_type(Prim(p), type_table, visiting)
+          _ => false
+        }
+        visiting.remove(idx) |> ignore
+        valid
+      }
+  }
+}
+
+///|
 fn validate_typedef(
   td : @component.TypeDef,
   cfg : ComponentValidationConfig,
   type_outers : Array[Array[@component.TypeDef?]],
+  type_outer_depths : Array[Int],
+  component_depth : Int,
   core_type_outers : Array[Array[Map[String, Int]?]],
   allow_resource_defs : Bool,
 ) -> Unit raise ComponentValidationError {
-  if type_outers.length() == 0 || core_type_outers.length() == 0 {
+  if type_outers.length() == 0 ||
+    type_outer_depths.length() != type_outers.length() ||
+    core_type_outers.length() == 0 {
     raise SectionParseError(
       7, "missing outer environment for typedef validation",
     )
@@ -724,6 +859,19 @@ fn validate_typedef(
   match td {
     DefValType(_) => ()
     List(v) => validate_valtype(v, type_table)
+    FixedList(v, len) => {
+      if len <= 0 {
+        raise SectionParseError(7, "fixed-length list must not be empty")
+      }
+      validate_valtype(v, type_table)
+    }
+    MapType(key, value) => {
+      validate_valtype(key, type_table)
+      validate_valtype(value, type_table)
+      if !is_map_key_type(key, type_table, Map([])) {
+        raise SectionParseError(7, "invalid map key type")
+      }
+    }
     Record(fields) => {
       if fields.length() == 0 {
         raise SectionParseError(7, "record type must have at least one field")
@@ -843,7 +991,14 @@ fn validate_typedef(
         Some(_) => raise SectionParseError(7, "not a resource type")
       }
     }
-    Stream(v) | Future(v) =>
+    Stream(v) =>
+      match v {
+        Some(Prim(Char)) =>
+          raise SectionParseError(7, "`stream<char>` is not valid")
+        Some(t) => validate_valtype(t, type_table)
+        None => ()
+      }
+    Future(v) =>
       match v {
         Some(t) => validate_valtype(t, type_table)
         None => ()
@@ -883,40 +1038,63 @@ fn validate_typedef(
             local_core_type_bound += 1
           }
           AliasOuter(kind, count, idx) =>
-            // Component-model extern kinds use the same discriminants as the
-            // component export kind encoding; `Type` is 0x03.
             if kind == 0x03 {
-              local_type_table.push(
-                outer_type_of_alias(type_outers, count, idx),
-              )
+              let outer = outer_type_of_alias(type_outers, count, idx)
+              if type_outer_depths[count - 1] < component_depth {
+                match outer {
+                  Some(td) =>
+                    if typedef_refers_to_resource(
+                        td,
+                        type_outers[count - 1],
+                        Map([]),
+                      ) {
+                      raise SectionParseError(
+                        7, "transitively refers to resources",
+                      )
+                    }
+                  None => ()
+                }
+              }
+              local_type_table.push(outer)
               local_resource_ids.push(None)
-            } else {
+            } else if kind == 0x110 {
               local_core_type_exports.push(
                 outer_core_type_of_alias(core_type_outers, count, idx),
               )
               local_core_type_bound += 1
+            } else {
+              raise SectionParseError(7, "outer alias may only refer to types")
             }
           AliasInstanceExport(kind, _instance_idx, _name) =>
             if kind == 0x03 {
               local_type_table.push(None)
               local_resource_ids.push(None)
-            } else {
-              local_core_type_exports.push(None)
-              local_core_type_bound += 1
+            } else if kind != 0x05 {
+              raise SectionParseError(
+                7, "alias export may only refer to types or instances",
+              )
             }
           Type(t) => {
             validate_typedef(
               t,
               cfg,
               [local_type_table] + type_outers,
+              [component_depth] + type_outer_depths,
+              component_depth,
               [local_core_type_exports] + core_type_outers,
               false,
             )
             local_type_table.push(Some(t))
             local_resource_ids.push(None)
           }
-          Import(name, desc) => {
+          Import(name, attributes, desc) => {
             validate_extern_name_string(name, cfg)
+            validate_name_attributes_string(
+              7,
+              name,
+              attributes,
+              sort_of_externdesc(desc),
+            )
             let key = ascii_lower_key(name)
             match seen_imports.get(key) {
               Some(prev) =>
@@ -1007,8 +1185,14 @@ fn validate_typedef(
               _ => ()
             }
           }
-          Export(name, desc) => {
+          Export(name, attributes, desc) => {
             validate_extern_name_string(name, cfg)
+            validate_name_attributes_string(
+              7,
+              name,
+              attributes,
+              sort_of_externdesc(desc),
+            )
             let key = ascii_lower_key(name)
             match seen_exports.get(key) {
               Some(prev) =>
@@ -1127,34 +1311,59 @@ fn validate_typedef(
           }
           AliasOuter(kind, count, idx) =>
             if kind == 0x03 {
-              local_type_table.push(
-                outer_type_of_alias(type_outers, count, idx),
-              )
-            } else {
+              let outer = outer_type_of_alias(type_outers, count, idx)
+              if type_outer_depths[count - 1] < component_depth {
+                match outer {
+                  Some(td) =>
+                    if typedef_refers_to_resource(
+                        td,
+                        type_outers[count - 1],
+                        Map([]),
+                      ) {
+                      raise SectionParseError(
+                        7, "transitively refers to resources",
+                      )
+                    }
+                  None => ()
+                }
+              }
+              local_type_table.push(outer)
+            } else if kind == 0x110 {
               local_core_type_exports.push(
                 outer_core_type_of_alias(core_type_outers, count, idx),
               )
               local_core_type_bound += 1
+            } else {
+              raise SectionParseError(7, "outer alias may only refer to types")
             }
           AliasInstanceExport(kind, _instance_idx, _name) =>
             if kind == 0x03 {
               local_type_table.push(None)
-            } else {
-              local_core_type_exports.push(None)
-              local_core_type_bound += 1
+            } else if kind != 0x05 {
+              raise SectionParseError(
+                7, "alias export may only refer to types or instances",
+              )
             }
           Type(t) => {
             validate_typedef(
               t,
               cfg,
               [local_type_table] + type_outers,
+              [component_depth] + type_outer_depths,
+              component_depth,
               [local_core_type_exports] + core_type_outers,
               false,
             )
             local_type_table.push(Some(t))
           }
-          Export(name, desc) => {
+          Export(name, attributes, desc) => {
             validate_extern_name_string(name, cfg)
+            validate_name_attributes_string(
+              7,
+              name,
+              attributes,
+              sort_of_externdesc(desc),
+            )
             let key = ascii_lower_key(name)
             match seen_exports.get(key) {
               Some(prev) =>
@@ -1423,12 +1632,10 @@ fn functype_needs_memory(
 }
 
 ///|
-fn functype_needs_realloc_for_lift(
+fn functype_params_need_memory(
   ft : @component.FuncType,
   type_table : Array[@component.TypeDef?],
 ) -> Bool {
-  // For canon lift, `realloc` is required when the wrapper must allocate/write
-  // linear memory to pass params (strings/lists or indirect args).
   let mut param_count = 0
   for p in ft.params {
     match core_valtypes_for_component_valtype(p.ty, type_table) {
@@ -1445,14 +1652,155 @@ fn functype_needs_realloc_for_lift(
 }
 
 ///|
+fn functype_async_lift_needs_memory(
+  ft : @component.FuncType,
+  type_table : Array[@component.TypeDef?],
+) -> Bool {
+  if functype_params_need_memory(ft, type_table) {
+    return true
+  }
+  match ft.result {
+    None => false
+    Some(r) =>
+      match core_valtypes_for_component_valtype(r, type_table) {
+        None => true
+        Some(ts) => ts.length() > 16
+      }
+  }
+}
+
+///|
+fn valtype_contains_list_or_string(
+  ty : @component.ValType,
+  type_table : Array[@component.TypeDef?],
+  visiting : Map[Int, Unit],
+) -> Bool {
+  match ty {
+    Prim(String) => true
+    Prim(_) => false
+    TypeIdx(idx) =>
+      if idx < 0 || idx >= type_table.length() || visiting.get(idx) is Some(_) {
+        false
+      } else {
+        visiting.set(idx, ())
+        let found = match type_table[idx] {
+          None => false
+          Some(td) =>
+            match td {
+              DefValType(String) | List(_) | MapType(_, _) => true
+              DefValType(_)
+              | Flags(_)
+              | Enum(_)
+              | Own(_)
+              | Borrow(_)
+              | ResourceType(_, _, _, _)
+              | Stream(_)
+              | Future(_)
+              | InstanceTypeEmpty => false
+              FixedList(element, _) =>
+                valtype_contains_list_or_string(element, type_table, visiting)
+              Record(fields) => {
+                let mut any = false
+                for field in fields {
+                  if valtype_contains_list_or_string(
+                      field.ty,
+                      type_table,
+                      visiting,
+                    ) {
+                    any = true
+                    break
+                  }
+                }
+                any
+              }
+              Variant(cases) => {
+                let mut any = false
+                for variant_case in cases {
+                  if variant_case.ty is Some(case_ty) &&
+                    valtype_contains_list_or_string(
+                      case_ty, type_table, visiting,
+                    ) {
+                    any = true
+                    break
+                  }
+                }
+                any
+              }
+              Tuple(types) => {
+                let mut any = false
+                for element in types {
+                  if valtype_contains_list_or_string(
+                      element, type_table, visiting,
+                    ) {
+                    any = true
+                    break
+                  }
+                }
+                any
+              }
+              Option(inner) =>
+                valtype_contains_list_or_string(inner, type_table, visiting)
+              Result(ok, err) => {
+                let ok_has = match ok {
+                  Some(inner) =>
+                    valtype_contains_list_or_string(inner, type_table, visiting)
+                  None => false
+                }
+                let err_has = match err {
+                  Some(inner) =>
+                    valtype_contains_list_or_string(inner, type_table, visiting)
+                  None => false
+                }
+                ok_has || err_has
+              }
+              FuncType(_) | ComponentType(_) | InstanceType(_) => false
+            }
+        }
+        visiting.remove(idx) |> ignore
+        found
+      }
+  }
+}
+
+///|
+fn functype_needs_realloc_for_lift(
+  ft : @component.FuncType,
+  type_table : Array[@component.TypeDef?],
+) -> Bool {
+  // For canon lift, `realloc` is required when the wrapper must allocate/write
+  // linear memory to pass params (strings/lists or indirect args).
+  let mut param_count = 0
+  for p in ft.params {
+    if valtype_contains_list_or_string(p.ty, type_table, Map([])) {
+      return true
+    }
+    match core_valtypes_for_component_valtype(p.ty, type_table) {
+      Some(ts) => {
+        param_count += ts.length()
+        if param_count > 16 {
+          return true
+        }
+      }
+      None => return true
+    }
+  }
+  // Results are lifted from memory written by the core callee. Reading a
+  // string/list result needs `memory`, but does not allocate through the
+  // component's realloc function.
+  false
+}
+
+///|
 fn functype_needs_realloc_for_lower(
   ft : @component.FuncType,
   type_table : Array[@component.TypeDef?],
 ) -> Bool {
-  // For canon lower, `realloc` is required when the wrapper must write a
-  // component value into core linear memory as a result.
+  // Canon lower reads parameters already written by the core caller, so
+  // dynamic parameters only require `memory`. A dynamic result is written
+  // back into that memory and therefore requires the supplied allocator.
   match ft.result {
-    Some(r) => core_valtypes_for_component_valtype(r, type_table) is None
+    Some(result_ty) =>
+      valtype_contains_list_or_string(result_ty, type_table, Map([]))
     None => false
   }
 }

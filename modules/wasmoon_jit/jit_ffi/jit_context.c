@@ -343,11 +343,7 @@ void free_context_internal(jit_context_t *ctx) {
         free(ctx->gc_root_scratch);
         ctx->gc_root_scratch = NULL;
     }
-    while (ctx->gc_frame_chain_head) {
-        wasmoon_gc_frame_t *prev = ctx->gc_frame_chain_head->prev;
-        free(ctx->gc_frame_chain_head);
-        ctx->gc_frame_chain_head = prev;
-    }
+    ctx_gc_clear_frames_internal(ctx);
     ctx_gc_clear_root_scopes_internal(ctx);
     if (ctx->gc_func_safepoint_tables) {
         int32_t count = ctx->gc_func_safepoint_table_count;
@@ -609,6 +605,13 @@ void ctx_gc_end_frame_internal(jit_context_t *ctx) {
     free(top);
 }
 
+void ctx_gc_clear_frames_internal(jit_context_t *ctx) {
+    if (!ctx) return;
+    while (ctx->gc_frame_chain_head) {
+        ctx_gc_end_frame_internal(ctx);
+    }
+}
+
 int32_t ctx_gc_push_root_scope_internal(
     jit_context_t *ctx,
     const int64_t *roots,
@@ -868,10 +871,22 @@ int32_t gc_collect_for_alloc_internal(
     int32_t exception_root_count = ctx->exception_value_count > 0 ? ctx->exception_value_count : 0;
     int32_t spilled_root_count = ctx->spilled_locals_count > 0 ? ctx->spilled_locals_count : 0;
     int32_t table_root_count = gc_count_table_roots(ctx);
-    int32_t stack_root_count =
-        safe_root_count + scratch_count + caller_root_count;
-    int32_t store_root_count = exception_root_count + spilled_root_count;
-    int32_t total_roots = stack_root_count + store_root_count + table_root_count;
+    int64_t stack_root_count64 =
+        (int64_t)safe_root_count +
+        scratch_count +
+        caller_root_count;
+    int64_t store_root_count64 =
+        (int64_t)exception_root_count + spilled_root_count;
+    int64_t total_roots64 =
+        stack_root_count64 + store_root_count64 + table_root_count;
+    if (stack_root_count64 > INT32_MAX ||
+        store_root_count64 > INT32_MAX ||
+        total_roots64 > INT32_MAX) {
+        return -1;
+    }
+    int32_t stack_root_count = (int32_t)stack_root_count64;
+    int32_t store_root_count = (int32_t)store_root_count64;
+    int32_t total_roots = (int32_t)total_roots64;
     int32_t collected = 0;
     const wasmoon_gc_safepoint_table_t *active_table = ctx->gc_safepoint_table;
     if (ctx->gc_frame_chain_head && ctx->gc_frame_chain_head->table) {

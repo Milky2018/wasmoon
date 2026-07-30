@@ -40,6 +40,52 @@ Example:
 ./wasmoon test spec/i32.wast
 ```
 
+### Run a WASI Component Command
+
+```bash
+./wasmoon component command.component.wasm --run
+```
+
+The command must export the pinned `wasi:cli/run` interface from either
+Preview 2 `0.2.11` or Preview 3 `0.3.0`. Components are
+validated before instantiation.
+
+Core functions use JIT compilation by default when their component call graph
+can enter native code safely. Use `--no-jit` to force interpreter execution:
+
+```bash
+./wasmoon component command.component.wasm --run --no-jit
+```
+
+Filesystem and network authority are denied by default. Grant only the
+capabilities the command requires:
+
+```bash
+./wasmoon component command.component.wasm --run \
+  --arg input.txt \
+  --env LANG=C \
+  --dir /srv/data::/data \
+  --network loopback
+```
+
+`--network` accepts `deny`, `loopback`, or `all`. Standard input, output, and
+error are inherited by command execution.
+
+### Run Component Model Tests
+
+```bash
+./wasmoon component-test component-tests.json
+```
+
+The component test harness also enables JIT execution by default. Pass
+`--no-jit` to run the same script through the interpreter. The pinned upstream
+suites expose the same switch:
+
+```bash
+python3 scripts/run_component_wast.py --suite stable-0.2
+python3 scripts/run_component_wast.py --suite stable-0.2 --no-jit
+```
+
 ### Explore Compilation
 
 ```bash

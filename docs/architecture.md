@@ -59,7 +59,7 @@ Reusable modules must not import `Milky2018/wasmoon`, `Milky2018/wasmoon_jit`, o
 | Core `.wasm` binary | `wasmoon/parser` | `wasm_core/types.Module` |
 | Core `.wat` text | `wasmoon/wat` | `wasm_core/types.Module` |
 | `.wast` script | `wasmoon/wat` plus `wasmoon/wast` runner | Test commands and modules |
-| Component binary or text | `wasmoon/component/*` | Component-model structures and runtime inputs |
+| Component binary or text | `wasmoon/component` | Validated component instances, typed exports, and WIT-shaped values |
 | Persisted JIT artifact | `wasmoon_jit/artifact` | Verified v9 ordinary-data artifact |
 
 Core modules pass through `wasmoon/validator` before the CLI instantiates or compiles them. Component validation is implemented separately under `wasmoon/validator/component_model`.
@@ -88,6 +88,59 @@ Core modules pass through `wasmoon/validator` before the CLI instantiates or com
 At O3, MilkIR may unroll only canonical constant-trip natural loops after checked signed/unsigned I32 or I64 trip analysis and complete SSA/effect remapping. Unsupported shapes, dynamic bounds, possible arithmetic wraparound, and transformations beyond the code-growth budget remain unchanged.
 
 The top-level `wasmoon/wasm_frontend` package is the product API boundary. Product callers do not import `wasmoon/wasm_frontend/ir` directly.
+
+### Component Core Execution
+
+The component linker owns a `CoreExecutionEngine` seam rather than calling the
+core interpreter directly. After a core module is instantiated, the engine
+registers the shared module instance and receives a typed request for each
+entry:
+
+- `RunToCompletion` enters native JIT code and returns ordinary core results.
+- `CallbackStep` enters native code for one Component Async callback step and
+  returns normally to the scheduler.
+- `Stackful` enters native code on a guarded fiber stack. A suspending canonical
+  hostcall parks the activation and returns an opaque continuation.
+
+Native resumption restores the original machine stack, hostcall and trap
+activation state, and precise GC roots, then continues after the suspended
+hostcall without replay. Explicit interpreter mode provides the equivalent
+structured continuation. `PreferNative` is strict; an unavailable native route
+is a structured error rather than an implicit fallback. Interpreter-owned
+imports and re-exports request `InterpreterOnly` explicitly.
+
+The default `component --run` and `component-test` commands enable the JIT
+engine. `--no-jit` selects the interpreter engine for differential testing.
+
+The stable library surface is `Milky2018/wasmoon/component`. It owns opaque
+runtime, instance, and function handles plus typed values and structured
+errors; applications do not depend on `component/runtime_impl`. Its portable
+runtime constructor uses the continuation-aware interpreter. The product CLI
+retains the separate native engine adapter for WASI command execution and
+conformance runs. `Milky2018/wasmoon/wit` can bind a resolved world eagerly
+against a stable component instance, rejecting missing or incompatible exports
+before the first call.
+
+Component async execution uses one cooperative host event loop. MoonBit
+processes and component tasks are logical scheduling units, not operating-system
+threads. `component/runtime_impl` owns guest-visible tasks, waitables, and
+continuations. The native adapter translates kqueue on macOS and epoll on Linux
+into opaque `Pending`, `Ready`, or `Cancelled` host registrations. Host futures
+observe those registrations through non-blocking `poll` and idempotent
+`cancel` operations; the component scheduler resumes the stored continuation
+when a host event becomes ready.
+
+A Store and its continuations remain on their creation thread. Multiple parked
+continuations may exist, but only one component entry chain is active at a
+time. Cancellation is cooperative at scheduler and hostcall boundaries; it
+releases the host registration, native stack, and parked GC roots without
+arbitrary-instruction preemption.
+
+Native WASI 0.3 execution is supported on macOS AArch64 and Linux AMD64.
+Windows, multi-threaded Store access, cross-thread continuation migration,
+continuation serialization, and arbitrary-instruction preemption are explicit
+non-goals. Embeddings must finish or cancel outstanding continuations before
+the terminal, idempotent `ComponentLinker::close` call.
 
 ## IR and ABI Boundaries
 

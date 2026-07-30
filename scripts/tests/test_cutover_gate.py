@@ -348,18 +348,27 @@ class GateManifestTests(unittest.TestCase):
                 ["required job 'build-macos' result is 'failure'"],
             )
 
-    def test_closing_workflow_records_common_quality_commands(self) -> None:
+    def test_check_workflow_has_only_platform_jobs(self) -> None:
         workflow = (ROOT / ".github/workflows/check.yml").read_text(
             encoding="utf-8"
         )
-        for command in ("moon-fmt", "moon-info", "git-diff-check"):
-            self.assertIn(f"run_gate {command}", workflow)
-        self.assertIn(
-            "--required target-identity,moon-fmt,moon-info,git-diff-check,",
-            workflow,
-        )
+        self.assertIn("  native-platform:", workflow)
+        self.assertIn("name: ${{ matrix.name }}", workflow)
+        self.assertIn("name: Linux AMD64", workflow)
+        self.assertIn("name: macOS ARM64", workflow)
+        self.assertIn("runs-on: ${{ matrix.os }}", workflow)
+        self.assertIn("if: runner.os == 'Linux'", workflow)
+        self.assertIn("native_test_args: --no-parallelize", workflow)
+        self.assertIn("native_test_args: \"\"", workflow)
+        self.assertIn("ASAN_OPTIONS: ${{ matrix.asan_options }}", workflow)
+        self.assertNotIn("  linux-amd64:", workflow)
+        self.assertNotIn("  macos-arm64:", workflow)
         self.assertIn("scripts/check_committed_diff.py", workflow)
-        self.assertNotIn("run_gate git-diff-check 'git diff --check'", workflow)
+        self.assertNotIn("  component-model:", workflow)
+        self.assertNotIn("  component-hardening:", workflow)
+        self.assertNotIn("  build-ubuntu-sanitizer:", workflow)
+        self.assertNotIn("  detect-machv-cutover:", workflow)
+        self.assertNotIn("  machv-cutover:", workflow)
         self.assertNotIn("paired-performance", workflow)
         self.assertNotIn("scripts/run_machv_cutover_perf.py", workflow)
         self.assertNotIn("--perf-report", workflow)
@@ -458,24 +467,79 @@ class GateManifestTests(unittest.TestCase):
             )
             self.assertEqual(missing_base.returncode, 0)
 
-    def test_closing_workflow_requires_common_build_jobs(self) -> None:
+    def test_platform_jobs_own_component_and_sanitizer_checks(self) -> None:
         workflow = (ROOT / ".github/workflows/check.yml").read_text(
             encoding="utf-8"
         )
-        self.assertIn(
-            "needs: [detect-machv-cutover, machv-cutover, "
-            "build-ubuntu-sanitizer, build-macos, build-ubuntu-amd64]",
-            workflow,
+        self.assertEqual(
+            workflow.count(
+                "python3 -m unittest discover -s scripts/tests "
+                "-p 'test_*.py'"
+            ),
+            1,
         )
-        self.assertIn(
-            "--required-job build-macos=${{ needs.build-macos.result }}",
-            workflow,
+        self.assertEqual(
+            workflow.count("python3 scripts/audit_component_security.py"),
+            1,
         )
-        self.assertIn(
-            "--required-job build-ubuntu-amd64=${{ "
-            "needs.build-ubuntu-amd64.result }}",
-            workflow,
+        self.assertEqual(workflow.count("run stable Component Model 0.2"), 1)
+        self.assertEqual(workflow.count("run Component Model 0.3 async"), 1)
+        self.assertEqual(
+            workflow.count("run future-gated Component Model features"),
+            1,
         )
+        self.assertEqual(workflow.count("run native sanitizer checks"), 1)
+
+    def test_sanitizer_tests_are_isolated_and_instrumentation_is_verified(
+        self,
+    ) -> None:
+        workflow = (ROOT / ".github/workflows/check.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertEqual(
+            workflow.count(
+                'moon test --target native --target-dir "$sanitizer_build" \\'
+            ),
+            8,
+        )
+        self.assertEqual(
+            workflow.count(
+                "modules/wasmoon/testsuite/"
+                "jit_resumable_lifecycle_test.mbt"
+            ),
+            1,
+        )
+        self.assertEqual(
+            workflow.count("scripts/native_sanitizer_cc.sh"),
+            1,
+        )
+        self.assertEqual(
+            workflow.count("scripts/verify_native_sanitizers.py"),
+            1,
+        )
+        self.assertEqual(workflow.count("MOONBIT_NEW_NATIVE: 0"), 1)
+        self.assertEqual(
+            workflow.count('export MOON_CC="$sanitizer_wrapper"'),
+            1,
+        )
+        self.assertEqual(workflow.count('export MOON_AR="$(command -v ar)"'), 1)
+        self.assertEqual(workflow.count("timeout-minutes: 40"), 1)
+        self.assertEqual(
+            workflow.count(
+                "python3 scripts/find_gc_bugs.py --dir spec/gc --timeout 30"
+            ),
+            1,
+        )
+        sanitizer_steps = workflow.split(
+            "      - name: run native sanitizer checks\n"
+        )[1:]
+        self.assertEqual(len(sanitizer_steps), 1)
+        for step in sanitizer_steps:
+            step = step.split("\n      - name:", maxsplit=1)[0]
+            self.assertNotIn("scripts/find_gc_bugs.py", step)
+        self.assertNotIn("CFLAGS:", workflow)
+        self.assertNotIn("CXXFLAGS:", workflow)
+        self.assertNotIn("LDFLAGS:", workflow)
 
 if __name__ == "__main__":
     unittest.main()

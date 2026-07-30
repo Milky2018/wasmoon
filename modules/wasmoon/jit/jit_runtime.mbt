@@ -333,6 +333,30 @@ fn load_artifact_with_imports_using_registrar(
 }
 
 ///|
+/// Close this module and release all process-local executable mappings.
+///
+/// The module is terminal after this call. The caller must first finish or
+/// cancel every invocation and continuation that can enter its code.
+pub fn JITModule::close(self : JITModule) -> Unit {
+  if self.context is Some(context) {
+    context.close()
+  }
+  self.context = None
+  self.context_ptr = 0L
+  for trampoline in self.owned_trampolines {
+    trampoline.release()
+  }
+  self.owned_trampolines.clear()
+  if self.installed_code is Some(installed) {
+    installed.release()
+  }
+  self.installed_code = None
+  self.functions.clear()
+  self.by_name.clear()
+  self.address_ranges.clear()
+}
+
+///|
 /// Get the raw VMContext pointer for this JIT module
 /// Returns 0 if no context is available
 pub fn JITModule::get_context_ptr(self : JITModule) -> Int64 {
@@ -552,6 +576,168 @@ pub fn JITModule::call_with_context(
     }
     None => [] // No context, cannot call
   }
+}
+
+///|
+/// Result of advancing a stackful native JIT call.
+pub(all) enum JITContinuationOutcome {
+  JITReturned(Array[Int64])
+  JITSuspended(JITCallContinuation)
+}
+
+///|
+/// One stackful native JIT call parked at an imported hostcall.
+///
+/// The continuation retains its installed code, argument/result buffer, trap
+/// activation, and GC metadata until it returns or is cancelled.
+struct JITCallContinuation {
+  jit_module : JITModule
+  func : JITFunction
+  call : JITContextContinuation
+  entry_roots : Array[Int64]
+  first_entry : Array[Bool]
+  gc_frame_active : Array[Bool]
+  active : Array[Bool]
+}
+
+///|
+priv enum JITContinuationFrameDisposition {
+  // The native activation restored the frame to the JIT context.
+  AttachedFrame
+  // Cancelling a parked activation released its detached frame chain.
+  DetachedFrameReleased
+}
+
+///|
+fn JITCallContinuation::finish(
+  self : JITCallContinuation,
+  frame_disposition : JITContinuationFrameDisposition,
+) -> Unit {
+  self.active[0] = false
+  if self.gc_frame_active[0] {
+    self.gc_frame_active[0] = false
+    if frame_disposition is AttachedFrame {
+      self.jit_module.gc_end_frame()
+    }
+  }
+  self.jit_module.gc_use_func_safepoints(-1)
+  self.jit_module.gc_set_root_scratch([]) |> ignore
+}
+
+///|
+fn JITCallContinuation::finish_error(
+  self : JITCallContinuation,
+  error : JITTrap,
+) -> Unit raise JITTrap {
+  self.finish(AttachedFrame)
+  match error {
+    JITTrap(msg) => {
+      let report = self.jit_module.build_trap_report(msg)
+      self.jit_module.last_trap_report = Some(report)
+      raise JITTrap(@wasmoon_jit.format_trap_report_message(report))
+    }
+    JITExit(code) => raise JITExit(code)
+    JITCancelled => raise JITCancelled
+  }
+}
+
+///|
+fn JITCallContinuation::advance(
+  self : JITCallContinuation,
+  retry_hostcall : Bool,
+) -> JITContinuationOutcome raise JITTrap {
+  if !self.active[0] {
+    raise JITTrap("native JIT continuation is no longer active")
+  }
+  if self.first_entry[0] {
+    self.jit_module.gc_set_root_scratch(self.entry_roots) |> ignore
+    self.jit_module.gc_use_func_safepoints(self.func.func_idx)
+    self.jit_module.gc_begin_frame(self.func.func_idx.to_int64())
+    self.gc_frame_active[0] = true
+    self.first_entry[0] = false
+  }
+  let mut call_error : JITTrap? = None
+  let event = self.call.advance(retry_hostcall) catch {
+    error => {
+      call_error = Some(error)
+      Suspended
+    }
+  }
+  self.jit_module.gc_use_func_safepoints(-1)
+  self.jit_module.gc_set_root_scratch([]) |> ignore
+  self.jit_module.flush_wasi_output(
+    match self.jit_module.context {
+      Some(ctx) => ctx
+      None => {
+        match (call_error, event) {
+          (Some(_), _) | (None, Returned(_)) => self.finish(AttachedFrame)
+          (None, Suspended) => {
+            self.call.cancel()
+            self.finish(DetachedFrameReleased)
+          }
+        }
+        raise JITTrap("native JIT context disappeared while suspended")
+      }
+    },
+  )
+  if call_error is Some(error) {
+    self.finish_error(error)
+  }
+  match event {
+    Suspended => JITSuspended(self)
+    Returned(results) => {
+      self.finish(AttachedFrame)
+      JITReturned(results)
+    }
+  }
+}
+
+///|
+/// Enter a native JIT function on a resumable fiber.
+pub fn JITModule::start_continuation_call(
+  self : JITModule,
+  func : JITFunction,
+  args : Array[Int64],
+) -> JITContinuationOutcome raise JITTrap {
+  guard self.context is Some(ctx) else { return JITReturned([]) }
+  self.last_trap_report = None
+  let call = ctx.start_continuation(
+    func.func_ptr,
+    args,
+    func.param_types,
+    func.result_types,
+  )
+  let continuation : JITCallContinuation = {
+    jit_module: self,
+    func,
+    call,
+    entry_roots: @wasmoon_jit.collect_gc_root_args(args, func.param_types),
+    first_entry: [true],
+    gc_frame_active: [false],
+    active: [true],
+  }
+  continuation.advance(false)
+}
+
+///|
+/// Resume after the component scheduler has made the suspended host operation
+/// runnable. Only that hostcall is retried; the guest frame itself is retained.
+pub fn JITCallContinuation::continue_execution(
+  self : JITCallContinuation,
+) -> JITContinuationOutcome raise JITTrap {
+  self.advance(true)
+}
+
+///|
+/// Release a parked native JIT call without resuming it.
+pub fn JITCallContinuation::cancel(
+  self : JITCallContinuation,
+) -> Unit raise JITTrap {
+  if !self.active[0] {
+    return
+  }
+  self.call.cancel()
+  self.finish(DetachedFrameReleased)
 }
 
 ///|
@@ -997,10 +1183,9 @@ pub fn JITModule::has_wasm_stack(self : JITModule) -> Bool {
 
 ///|
 /// Set the hostcall callback used for JIT -> host bridging.
-/// The callback should return 0 on success, or a trap code on failure.
 pub fn JITModule::set_hostcall_callback(
   self : JITModule,
-  callback : () -> Int,
+  callback : () -> @wasmoon_jit.NativeHostcallOutcome,
 ) -> Unit {
   if self.context is Some(ctx) {
     ctx.set_hostcall_callback(callback)

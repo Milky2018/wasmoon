@@ -75,6 +75,12 @@ pub fn JITModuleContext::JITModuleContext(
 }
 
 ///|
+/// Release the native module after every call and continuation has ended.
+pub fn JITModuleContext::close(self : JITModuleContext) -> Unit {
+  self.jit_module.close()
+}
+
+///|
 /// Modules that have built-in JIT trampolines
 pub fn builtin_jit_modules() -> Array[String] {
   ["spectest", "wasi_snapshot_preview1"]
@@ -119,14 +125,14 @@ pub fn WastContext::WastContext(
   let wasi_ctx = wasi_builder.build()
 
   // Create spectest module with standard test functions/values
-  let spectest_instance = create_spectest_module(store)
+  let spectest_instance = try! create_spectest_module(store)
 
   // Create WASI module using Linker (to reuse wasi::register_wasi)
   let linker = @runtime.Linker::with_store(store)
   // Register spectest with linker so WASI functions can use it if needed
-  linker.register("spectest", spectest_instance)
+  try! linker.register("spectest", spectest_instance)
   // Register all WASI functions - this creates the wasi_snapshot_preview1 module
-  @wasi.register_wasi(linker, wasi_ctx)
+  try! @wasi.register_wasi(linker, wasi_ctx)
   // Get the WASI module instance that was created by register_wasi
   let wasi_instance = match linker.get_module("wasi_snapshot_preview1") {
     Some(instance) => instance

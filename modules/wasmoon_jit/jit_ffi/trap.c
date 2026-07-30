@@ -57,42 +57,326 @@
 #endif
 #endif
 
-// ============ Trap State (Thread-Local) ============
-// These values are read/written by JIT execution and signal handlers.
-// They must be thread-local because tests (and users) may run JIT concurrently.
+// ============ Trap Activations (Thread-Local) ============
 
-__thread sigjmp_buf g_trap_jmp_buf;
-__thread volatile sig_atomic_t g_trap_code = 0;
-__thread volatile sig_atomic_t g_trap_active = 0;
-__thread volatile sig_atomic_t g_trap_signal = 0;
-__thread volatile uintptr_t g_trap_pc = 0;
-__thread volatile uintptr_t g_trap_lr = 0;
-__thread volatile uintptr_t g_trap_fp = 0;
-__thread volatile uintptr_t g_trap_frame_lr = 0;
-__thread volatile uintptr_t g_trap_fault_addr = 0;
-__thread volatile sig_atomic_t g_trap_brk_imm = -1;
-__thread volatile sig_atomic_t g_trap_func_idx = -1;
-__thread volatile uintptr_t g_trap_x0 = 0;
-__thread volatile uintptr_t g_trap_x1 = 0;
-__thread volatile uintptr_t g_trap_x2 = 0;
-__thread volatile uintptr_t g_trap_x3 = 0;
-__thread volatile uintptr_t g_trap_x6 = 0;
-__thread volatile uintptr_t g_trap_x7 = 0;
-__thread volatile uintptr_t g_trap_x8 = 0;
-__thread volatile uintptr_t g_trap_x9 = 0;
-__thread volatile uintptr_t g_trap_x10 = 0;
-__thread volatile uintptr_t g_trap_x11 = 0;
-__thread volatile uintptr_t g_trap_x15 = 0;
+static __thread jit_trap_activation_t fallback_activation;
+static __thread jit_trap_activation_t observed_activation;
+static __thread jit_trap_activation_t *current_activation = NULL;
+static __thread int observed_activation_valid = 0;
 
-// WASM stack bounds for frame walking validation
-__thread volatile uintptr_t g_trap_wasm_stack_base = 0;
-__thread volatile uintptr_t g_trap_wasm_stack_top = 0;
+jit_trap_activation_t *jit_current_trap_activation(void) {
+    return current_activation ? current_activation : &fallback_activation;
+}
 
-// Pre-captured frame chain (captured in signal handler while stack is still valid)
-#define MAX_TRAP_FRAMES 32
-__thread volatile uintptr_t g_trap_frames_pc[MAX_TRAP_FRAMES];
-__thread volatile uintptr_t g_trap_frames_fp[MAX_TRAP_FRAMES];
-__thread volatile int g_trap_frame_count = 0;
+jit_trap_activation_t *jit_observed_trap_activation(void) {
+    return observed_activation_valid
+        ? &observed_activation
+        : jit_current_trap_activation();
+}
+
+void jit_trap_activation_init(
+    jit_trap_activation_t *activation,
+    jit_context_t *context
+) {
+    memset(activation, 0, sizeof(*activation));
+    activation->active = 1;
+    activation->brk_imm = -1;
+    activation->func_idx = -1;
+    activation->context = context;
+    uintptr_t stack_base = 0;
+    uintptr_t stack_top = 0;
+    uintptr_t guard_base = 0;
+    size_t guard_size = 0;
+    if (wasmoon_native_fiber_stack_bounds(
+            &stack_base,
+            &stack_top,
+            &guard_base,
+            &guard_size
+        )) {
+        activation->stack_base = stack_base;
+        activation->stack_top = stack_top;
+        activation->guard_base = guard_base;
+        activation->guard_size = guard_size;
+    } else if (context) {
+        activation->stack_base = (uintptr_t)context->wasm_stack_base;
+        activation->stack_top = (uintptr_t)context->wasm_stack_top;
+        activation->guard_base = (uintptr_t)context->wasm_stack_guard;
+        activation->guard_size = context->guard_page_size;
+    }
+}
+
+static void save_activation_context(jit_trap_activation_t *activation) {
+    jit_context_t *context = activation->context;
+    if (!context || activation->context_detached) return;
+    activation->exception_handler = context->exception_handler;
+    activation->exception_tag = context->exception_tag;
+    activation->exception_values = context->exception_values;
+    activation->exception_value_count = context->exception_value_count;
+    activation->spilled_locals = context->spilled_locals;
+    activation->spilled_locals_count = context->spilled_locals_count;
+    activation->gc_frame_chain_head = context->gc_frame_chain_head;
+    activation->gc_root_scope_head = context->gc_root_scope_head;
+    activation->debug_current_func_idx = context->debug_current_func_idx;
+    activation->context_detached = 1;
+    context->exception_handler = NULL;
+    context->exception_tag = 0;
+    context->exception_values = NULL;
+    context->exception_value_count = 0;
+    context->spilled_locals = NULL;
+    context->spilled_locals_count = 0;
+    context->gc_frame_chain_head = NULL;
+    context->gc_root_scope_head = NULL;
+    context->debug_current_func_idx = -1;
+}
+
+static void restore_activation_context(jit_trap_activation_t *activation) {
+    jit_context_t *context = activation->context;
+    if (!context || !activation->context_detached) return;
+    if (context->exception_handler ||
+        context->exception_values ||
+        context->spilled_locals ||
+        context->gc_frame_chain_head ||
+        context->gc_root_scope_head) {
+        abort();
+    }
+    context->exception_handler = activation->exception_handler;
+    context->exception_tag = activation->exception_tag;
+    context->exception_values = activation->exception_values;
+    context->exception_value_count = activation->exception_value_count;
+    context->spilled_locals = activation->spilled_locals;
+    context->spilled_locals_count = activation->spilled_locals_count;
+    context->gc_frame_chain_head = activation->gc_frame_chain_head;
+    context->gc_root_scope_head = activation->gc_root_scope_head;
+    context->debug_current_func_idx = activation->debug_current_func_idx;
+    activation->exception_handler = NULL;
+    activation->exception_values = NULL;
+    activation->spilled_locals = NULL;
+    activation->gc_frame_chain_head = NULL;
+    activation->gc_root_scope_head = NULL;
+    activation->context_detached = 0;
+}
+
+static int32_t activation_root_count(
+    const jit_trap_activation_t *activation
+) {
+    if (!activation) return 0;
+    int64_t total = 0;
+    const wasmoon_gc_root_scope_t *scope =
+        activation->gc_root_scope_head;
+    while (scope) {
+        if (scope->root_count > 0) {
+            total += scope->root_count;
+        }
+        scope = scope->prev;
+    }
+    if (activation->exception_value_count > 0) {
+        total += activation->exception_value_count;
+    }
+    if (activation->spilled_locals_count > 0) {
+        total += activation->spilled_locals_count;
+    }
+    return total > INT32_MAX ? -1 : (int32_t)total;
+}
+
+static int32_t copy_activation_roots(
+    const jit_trap_activation_t *activation,
+    int64_t *destination
+) {
+    if (!activation || !destination) return 0;
+    int32_t at = 0;
+    const wasmoon_gc_root_scope_t *scope =
+        activation->gc_root_scope_head;
+    while (scope) {
+        if (scope->root_count > 0 && scope->roots) {
+            memcpy(
+                &destination[at],
+                scope->roots,
+                (size_t)scope->root_count * sizeof(int64_t)
+            );
+            at += scope->root_count;
+        }
+        scope = scope->prev;
+    }
+    if (activation->exception_value_count > 0 &&
+        activation->exception_values) {
+        memcpy(
+            &destination[at],
+            activation->exception_values,
+            (size_t)activation->exception_value_count * sizeof(int64_t)
+        );
+        at += activation->exception_value_count;
+    }
+    if (activation->spilled_locals_count > 0 &&
+        activation->spilled_locals) {
+        memcpy(
+            &destination[at],
+            activation->spilled_locals,
+            (size_t)activation->spilled_locals_count * sizeof(int64_t)
+        );
+        at += activation->spilled_locals_count;
+    }
+    return at;
+}
+
+int jit_parked_gc_roots_register(
+    jit_trap_activation_t *activation,
+    void **registration
+) {
+    if (!registration) return 0;
+    *registration = NULL;
+    if (!activation || !activation->context) return 1;
+    int32_t root_count = activation_root_count(activation);
+    if (root_count < 0) return 0;
+    if (root_count == 0) return 1;
+    GcHeap *heap = (GcHeap *)activation->context->gc_heap;
+    if (!heap) return 0;
+    int64_t *roots = NULL;
+    if (!gc_heap_register_parked_roots(
+            heap,
+            root_count,
+            registration,
+            &roots
+        )) {
+        return 0;
+    }
+    if (copy_activation_roots(activation, roots) != root_count) {
+        gc_heap_unregister_parked_roots(*registration);
+        *registration = NULL;
+        return 0;
+    }
+    return 1;
+}
+
+void jit_parked_gc_roots_unregister(void *registration) {
+    gc_heap_unregister_parked_roots(registration);
+}
+
+void jit_trap_activation_push(jit_trap_activation_t *activation) {
+    activation->previous = current_activation;
+    if (current_activation &&
+        current_activation->context == activation->context) {
+        save_activation_context(current_activation);
+    } else if (activation->context) {
+        exception_reset_context_state(activation->context);
+    }
+    current_activation = activation;
+}
+
+void jit_trap_activation_publish(jit_trap_activation_t *activation) {
+    memset(&observed_activation, 0, sizeof(observed_activation));
+    observed_activation.code = activation->code;
+    observed_activation.signal = activation->signal;
+    observed_activation.pc = activation->pc;
+    observed_activation.lr = activation->lr;
+    observed_activation.fp = activation->fp;
+    observed_activation.frame_lr = activation->frame_lr;
+    observed_activation.fault_addr = activation->fault_addr;
+    observed_activation.brk_imm = activation->brk_imm;
+    observed_activation.func_idx = activation->func_idx;
+    observed_activation.x0 = activation->x0;
+    observed_activation.x1 = activation->x1;
+    observed_activation.x2 = activation->x2;
+    observed_activation.x3 = activation->x3;
+    observed_activation.x6 = activation->x6;
+    observed_activation.x7 = activation->x7;
+    observed_activation.x8 = activation->x8;
+    observed_activation.x9 = activation->x9;
+    observed_activation.x10 = activation->x10;
+    observed_activation.x11 = activation->x11;
+    observed_activation.x15 = activation->x15;
+    observed_activation.stack_base = activation->stack_base;
+    observed_activation.stack_top = activation->stack_top;
+    observed_activation.guard_base = activation->guard_base;
+    observed_activation.guard_size = activation->guard_size;
+    int frame_count = activation->frame_count;
+    if (frame_count < 0) frame_count = 0;
+    if (frame_count > MAX_TRAP_FRAMES) frame_count = MAX_TRAP_FRAMES;
+    observed_activation.frame_count = frame_count;
+    for (int i = 0; i < frame_count; i++) {
+        observed_activation.frames_pc[i] = activation->frames_pc[i];
+        observed_activation.frames_fp[i] = activation->frames_fp[i];
+    }
+    observed_activation_valid = 1;
+}
+
+void jit_trap_activation_pop(jit_trap_activation_t *activation) {
+    if (current_activation != activation) abort();
+    current_activation = activation->previous;
+    if (current_activation &&
+        current_activation->context == activation->context) {
+        restore_activation_context(current_activation);
+    }
+    activation->active = 0;
+}
+
+jit_trap_activation_t *jit_trap_activation_detach(void) {
+    jit_trap_activation_t *activation = current_activation;
+    if (!activation) return NULL;
+    save_activation_context(activation);
+    current_activation = activation->previous;
+    return activation;
+}
+
+void jit_trap_activation_attach(jit_trap_activation_t *activation) {
+    if (!activation) return;
+    if (current_activation != activation->previous) {
+        // A parked continuation may be resumed after its original dynamic
+        // caller has returned or parked. Rebind it to the activation that is
+        // current at the actual resume point.
+        activation->previous = current_activation;
+        if (current_activation &&
+            current_activation->context == activation->context) {
+            save_activation_context(current_activation);
+        }
+    }
+    restore_activation_context(activation);
+    current_activation = activation;
+}
+
+void jit_trap_activation_abandon(jit_trap_activation_t *activation) {
+    if (!activation) return;
+    if (current_activation == activation) {
+        current_activation = activation->previous;
+    }
+    activation->active = 0;
+    jit_context_t *context = activation->context;
+    if (context && activation->context_detached) {
+        void *saved_handler = context->exception_handler;
+        int32_t saved_tag = context->exception_tag;
+        int64_t *saved_values = context->exception_values;
+        int32_t saved_value_count = context->exception_value_count;
+        int64_t *saved_locals = context->spilled_locals;
+        int32_t saved_locals_count = context->spilled_locals_count;
+        wasmoon_gc_frame_t *saved_frames = context->gc_frame_chain_head;
+        wasmoon_gc_root_scope_t *saved_scopes = context->gc_root_scope_head;
+        context->exception_handler = activation->exception_handler;
+        context->exception_tag = activation->exception_tag;
+        context->exception_values = activation->exception_values;
+        context->exception_value_count = activation->exception_value_count;
+        context->spilled_locals = activation->spilled_locals;
+        context->spilled_locals_count = activation->spilled_locals_count;
+        context->gc_frame_chain_head = activation->gc_frame_chain_head;
+        context->gc_root_scope_head = activation->gc_root_scope_head;
+        exception_reset_context_state(context);
+        ctx_gc_clear_frames_internal(context);
+        context->exception_handler = saved_handler;
+        context->exception_tag = saved_tag;
+        context->exception_values = saved_values;
+        context->exception_value_count = saved_value_count;
+        context->spilled_locals = saved_locals;
+        context->spilled_locals_count = saved_locals_count;
+        context->gc_frame_chain_head = saved_frames;
+        context->gc_root_scope_head = saved_scopes;
+        activation->exception_handler = NULL;
+        activation->exception_values = NULL;
+        activation->exception_value_count = 0;
+        activation->spilled_locals = NULL;
+        activation->spilled_locals_count = 0;
+        activation->gc_frame_chain_head = NULL;
+        activation->gc_root_scope_head = NULL;
+        activation->context_detached = 0;
+    }
+}
 
 // Alternate signal stack for handling stack overflow (per-thread; sigaltstack is per-thread)
 #define SIGSTACK_SIZE (64 * 1024)  // 64KB alternate stack
@@ -163,6 +447,10 @@ static void install_alt_stack(void) {
     if (g_sigstack_installed) return;
 
 #ifndef _WIN32
+#if defined(WASMOON_ADDRESS_SANITIZER)
+    // ASan owns and tracks the process alternate signal stack.
+    return;
+#else
     stack_t ss;
     ss.ss_sp = g_sigstack;
     ss.ss_size = SIGSTACK_SIZE;
@@ -170,6 +458,7 @@ static void install_alt_stack(void) {
     if (sigaltstack(&ss, NULL) == 0) {
         g_sigstack_installed = 1;
     }
+#endif
 #endif
 }
 
@@ -670,6 +959,15 @@ static void segv_signal_handler(int sig, siginfo_t *info, void *ucontext) {
                 g_trap_frames_fp[g_trap_frame_count] = g_trap_fp;
                 g_trap_frame_count++;
             }
+        }
+
+        jit_trap_activation_t *activation = jit_current_trap_activation();
+        uintptr_t fault = (uintptr_t)fault_addr;
+        if (activation->guard_base != 0 &&
+            fault >= activation->guard_base &&
+            fault < activation->guard_base + activation->guard_size) {
+            g_trap_code = 2;
+            siglongjmp(g_trap_jmp_buf, 1);
         }
 
         // Check for memory guard page access (bounds check elimination)

@@ -9,31 +9,41 @@ fn instantiate_component(
   let stream_table = if outer_stack.length() > 0 {
     outer_stack[outer_stack.length() - 1].stream_table
   } else {
-    StreamTable()
+    match linker.host_runtime.val {
+      Some(runtime) => runtime.stream_table
+      None => StreamTable()
+    }
   }
   let async_state = if outer_stack.length() > 0 {
     outer_stack[outer_stack.length() - 1].async_state
   } else {
-    AsyncState(stream_table)
+    match linker.host_runtime.val {
+      Some(runtime) => runtime.async_state
+      None => AsyncState(stream_table, core_engine=linker.core_engine)
+    }
   }
   let state = BuildState::BuildState(stream_table, async_state)
-  // Reserve handle index 1 for nested component instances so tests that
-  // assume a pre-existing handle slot (e.g. resources.wast) see the expected
-  // numbering. If we end up running core start code, drop the reservation so
-  // start-time allocations can still begin at 1.
-  let mut reserved_resource_handle : Int? = Some(
-    state.resource_table.alloc({
-      type_id: -1,
-      rep: 0,
-      dtor: None,
-      kind: GuestDefined,
-    }),
+  if outer_stack.length() > 0 {
+    let parent_table = outer_stack[outer_stack.length() - 1].resource_table
+    let ancestors : Array[Int] = []
+    for ancestor in parent_table.ancestors.val {
+      ancestors.push(ancestor)
+    }
+    ancestors.push(parent_table.id)
+    state.resource_table.ancestors.val = ancestors
+  }
+  state.async_state.resource_tables.set(
+    state.resource_table.id,
+    state.resource_table,
   )
-  let may_enter_self : Array[Bool] = [false]
+  let entry_state = ComponentInstanceEntryState::new()
   let store = linker.get_store()
   for section in component.binary.sections {
     match section.id {
       1 => {
+        if @component.sniff_binary_kind(section.payload) != Some(CoreModule) {
+          raise CoreModuleParseError("unknown binary version")
+        }
         let core_module = @parser.parse_module(section.payload) catch {
           e => raise CoreModuleParseError(e.to_string())
         }
@@ -52,36 +62,16 @@ fn instantiate_component(
               let mod_ = state.core_modules[module_idx]
               validate_core_import_args(mod_, args, state)
               let imports = core_imports_from_args(args, state)
-              // If this module has a start function, don't hold the reserved
-              // handle: start code expects fresh resource tables.
-              if mod_.start is Some(_) {
-                match reserved_resource_handle {
-                  Some(h) => {
-                    state.resource_table.free(h) |> ignore
-                    reserved_resource_handle = None
-                  }
-                  None => ()
-                }
-              }
+              let may_suspend = core_args_may_suspend(args, state)
+              let native_eligible = core_args_native_eligible(args, state)
               let module_name = "\{name}::coreinst\{state.core_instances.length()}"
               clear_canon_trap_message()
-              // Core module instantiation can execute start functions that call back into
-              // canonical host imports. Run under a dedicated task id so per-task replay/caching
-              // state (e.g. waitable-set.new) does not leak across component instances.
+              // Core module instantiation can execute start functions that call
+              // canonical host imports. Give start its own task-scoped borrow,
+              // cancellation, and continuation state.
               let inst_task_id = alloc_task_id(async_state)
               // Core start runs during instantiation and must not block.
               push_task(async_state, inst_task_id, false)
-              // Some canonical ops assume an implicit "current thread" handle slot is reserved
-              // even for synchronous tasks. If this component requires that numbering, reserve
-              // it for the instantiation task as well so start functions see consistent ids.
-              if async_state.thread_handle_required.get(state.resource_table.id)
-                is Some(true) {
-                ensure_task_thread(
-                  async_state,
-                  state.resource_table.id,
-                  inst_task_id,
-                )
-              }
               let instance = @executor.instantiate_module_with_imports(
                 store, mod_, imports,
               ) catch {
@@ -98,8 +88,18 @@ fn instantiate_component(
               drop_task_thread(async_state, inst_task_id)
               // Register a stable name for debugging core traps.
               register_core_instance_name(instance.store_idx, module_name)
-              linker.core_linker.register(module_name, instance)
-              state.core_instances.push(core_instance_from_module(instance))
+              linker.core_linker.register(module_name, instance) catch {
+                error => raise CoreModuleInstantiateError(error.to_string())
+              }
+              linker.core_engine.register_instance(store, mod_, instance)
+              state.core_instances.push(
+                core_instance_from_module(
+                  instance,
+                  linker.core_engine,
+                  may_suspend,
+                  native_eligible,
+                ),
+              )
             }
             InlineExports(exports) =>
               state.core_instances.push(
@@ -280,7 +280,7 @@ fn instantiate_component(
           state.types.push(Some(t2))
         }
       }
-      8 => process_canon_section(section.payload, state, store, may_enter_self)
+      8 => process_canon_section(section.payload, state, store, entry_state)
       9 => {
         let start = parse_start_section(section.payload) catch {
           e => raise CoreModuleInstantiateError(e.to_string())
@@ -376,7 +376,7 @@ fn instantiate_component(
       _ => ()
     }
   }
-  may_enter_self[0] = true
+  entry_state.enable()
   let instance : ComponentInstance = {
     name,
     types: state.types,

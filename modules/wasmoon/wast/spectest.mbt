@@ -4,7 +4,7 @@
 /// Create the spectest module with standard test functions
 pub fn create_spectest_module(
   store : @runtime.Store,
-) -> @runtime.ModuleInstance {
+) -> @runtime.ModuleInstance raise @runtime.RuntimeError {
   // Allocate host functions with correct types
   // print_i32: (i32) -> ()
   let print_i32_type : @types.FuncType = { params: [I32], results: [] }

@@ -98,6 +98,23 @@ fn parse_core_type_module_exports(
 }
 
 ///|
+fn skip_prefixed_core_subtype(
+  r : CoreTypeReader,
+) -> Unit raise ComponentValidationError {
+  if r.read_u8() != 0x50 {
+    raise SectionParseError(3, "invalid prefixed core subtype")
+  }
+  let supertype_count = r.read_leb_u32()
+  for _ in 0..<supertype_count {
+    r.read_leb_u32() |> ignore
+  }
+  if r.read_u8() != 0x60 {
+    raise SectionParseError(3, "unsupported core subtype")
+  }
+  r.skip_func_type_body()
+}
+
+///|
 fn parse_core_type_section(
   payload : Bytes,
   max_outer_depth : Int,
@@ -122,6 +139,9 @@ fn parse_core_type_section(
       )
     } else if op == 0x60 {
       r.skip_func_type_body()
+      out.push(None)
+    } else if op == 0x00 {
+      skip_prefixed_core_subtype(r)
       out.push(None)
     } else {
       raise SectionParseError(3, "unsupported core type opcode: \{op}")
@@ -159,6 +179,10 @@ fn parse_core_type_section_module_sigs(
       r.skip_func_type_body()
       imports.push(None)
       export_types.push(None)
+    } else if op == 0x00 {
+      skip_prefixed_core_subtype(r)
+      imports.push(None)
+      export_types.push(None)
     } else {
       raise SectionParseError(3, "unsupported core type opcode: \{op}")
     }
@@ -189,6 +213,9 @@ fn validate_single_core_type(
     )
   } else if op == 0x60 {
     r.skip_func_type_body()
+    None
+  } else if op == 0x00 {
+    skip_prefixed_core_subtype(r)
     None
   } else {
     raise SectionParseError(3, "unsupported core type opcode: \{op}")
@@ -241,6 +268,134 @@ fn exportname_to_string(name : @component.ExportName) -> String? {
     Plain(bytes) => ascii_bytes_to_string(bytes)
     WithVersion(bytes, _vs) => ascii_bytes_to_string(bytes)
   }
+}
+
+///|
+fn importname_to_bytes(name : @component.ImportName) -> Bytes {
+  match name {
+    Plain(bytes) | WithVersion(bytes, _) => bytes
+  }
+}
+
+///|
+fn exportname_to_bytes(name : @component.ExportName) -> Bytes {
+  match name {
+    Plain(bytes) | WithVersion(bytes, _) => bytes
+  }
+}
+
+///|
+fn utf8_bytes_of_string(s : String) -> Bytes {
+  let bytes : Array[Byte] = []
+  for c in s {
+    let cp = c.to_int()
+    if cp < 0x80 {
+      bytes.push(cp.to_byte())
+    } else if cp < 0x800 {
+      bytes.push((0xC0 | (cp >> 6)).to_byte())
+      bytes.push((0x80 | (cp & 0x3F)).to_byte())
+    } else if cp < 0x10000 {
+      bytes.push((0xE0 | (cp >> 12)).to_byte())
+      bytes.push((0x80 | ((cp >> 6) & 0x3F)).to_byte())
+      bytes.push((0x80 | (cp & 0x3F)).to_byte())
+    } else {
+      bytes.push((0xF0 | (cp >> 18)).to_byte())
+      bytes.push((0x80 | ((cp >> 12) & 0x3F)).to_byte())
+      bytes.push((0x80 | ((cp >> 6) & 0x3F)).to_byte())
+      bytes.push((0x80 | (cp & 0x3F)).to_byte())
+    }
+  }
+  Bytes::from_array(bytes)
+}
+
+///|
+fn validate_name_attributes(
+  section : Int,
+  name : Bytes,
+  attributes : Array[@component.NameAttribute],
+  sort : @component.Sort,
+) -> Unit raise ComponentValidationError {
+  let mut has_implements = false
+  let mut has_version = false
+  let mut has_external_id = false
+  for attribute in attributes {
+    match attribute {
+      Implements(interface_name) => {
+        if has_implements {
+          raise SectionParseError(section, "duplicate `implements` attribute")
+        }
+        has_implements = true
+        if !(sort is Instance) {
+          raise SectionParseError(
+            section, "only instances can have an `implements`",
+          )
+        }
+        if !is_kebab_case(name) {
+          raise SectionParseError(
+            section, "name is not valid with `implements`",
+          )
+        }
+        if interface_name.length() == 0 {
+          raise SectionParseError(section, "not a valid name")
+        }
+        if !is_package_name(interface_name) {
+          raise SectionParseError(
+            section, "`implements` value must be an interface",
+          )
+        }
+      }
+      VersionSuffix(version) => {
+        if has_version {
+          raise SectionParseError(
+            section, "duplicate `versionsuffix` attribute",
+          )
+        }
+        has_version = true
+        let mut at = -1
+        for i in 0..<name.length() {
+          if name[i].to_int() == 0x40 {
+            at = i
+          }
+        }
+        let merged : Array[Byte] = []
+        if at >= 0 {
+          for i in (at + 1)..<name.length() {
+            merged.push(name[i])
+          }
+        }
+        for byte in version {
+          merged.push(byte)
+        }
+        let full_version = Bytes::from_array(merged)
+        if at < 0 ||
+          !is_canonversion_range(name, at + 1, name.length()) ||
+          !is_semver_range(full_version, 0, full_version.length()) {
+          raise SectionParseError(section, "invalid version suffix")
+        }
+      }
+      ExternalId(_) => {
+        if has_external_id {
+          raise SectionParseError(section, "duplicate `external-id` attribute")
+        }
+        has_external_id = true
+      }
+    }
+  }
+}
+
+///|
+fn validate_name_attributes_string(
+  section : Int,
+  name : String,
+  attributes : Array[@component.NameAttribute],
+  sort : @component.Sort,
+) -> Unit raise ComponentValidationError {
+  validate_name_attributes(
+    section,
+    utf8_bytes_of_string(name),
+    attributes,
+    sort,
+  )
 }
 
 ///|
@@ -771,8 +926,8 @@ fn type_sig_of_typedef_lg(
       )
     Flags(labels) => Flags(labels)
     Enum(labels) => Enum(labels)
-    Own(idx) | Borrow(idx) =>
-      type_sig_of_valtype_lg(
+    Own(idx) => {
+      let resource = type_sig_of_valtype_lg(
         TypeIdx(idx),
         local_types,
         local_resource_ids,
@@ -780,6 +935,25 @@ fn type_sig_of_typedef_lg(
         global_resource_ids,
         visiting,
       )
+      match resource {
+        Resource(rid) => Own(rid)
+        _ => Other
+      }
+    }
+    Borrow(idx) => {
+      let resource = type_sig_of_valtype_lg(
+        TypeIdx(idx),
+        local_types,
+        local_resource_ids,
+        global_types,
+        global_resource_ids,
+        visiting,
+      )
+      match resource {
+        Resource(rid) => Borrow(rid)
+        _ => Other
+      }
+    }
     _ => Other
   }
 }
@@ -923,9 +1097,30 @@ fn type_sig_of_typedef(
     List(v) => List(type_sig_of_valtype(v, type_table, resource_ids, visiting))
     Flags(labels) => Flags(labels)
     Enum(labels) => Enum(labels)
-    // Own/borrow wrappers are nominally tied to the underlying resource type.
-    Own(idx) | Borrow(idx) =>
-      type_sig_of_valtype(TypeIdx(idx), type_table, resource_ids, visiting)
+    Own(idx) => {
+      let resource = type_sig_of_valtype(
+        TypeIdx(idx),
+        type_table,
+        resource_ids,
+        visiting,
+      )
+      match resource {
+        Resource(rid) => Own(rid)
+        _ => Other
+      }
+    }
+    Borrow(idx) => {
+      let resource = type_sig_of_valtype(
+        TypeIdx(idx),
+        type_table,
+        resource_ids,
+        visiting,
+      )
+      match resource {
+        Resource(rid) => Borrow(rid)
+        _ => Other
+      }
+    }
     _ => Other
   }
 }
@@ -1006,6 +1201,16 @@ fn type_sig_subst_resources(sig : TypeSig, subst : Map[Int, Int]) -> TypeSig {
         Some(v) => Resource(v)
         None => Resource(rid)
       }
+    Own(rid) =>
+      match subst.get(rid) {
+        Some(v) => Own(v)
+        None => Own(rid)
+      }
+    Borrow(rid) =>
+      match subst.get(rid) {
+        Some(v) => Borrow(v)
+        None => Borrow(rid)
+      }
     Other => Other
   }
 }
@@ -1014,6 +1219,8 @@ fn type_sig_subst_resources(sig : TypeSig, subst : Map[Int, Int]) -> TypeSig {
 fn type_sig_has_resource_mismatch(expected : TypeSig, actual : TypeSig) -> Bool {
   match (expected, actual) {
     (Resource(a), Resource(b)) => a != b
+    (Own(a), Own(b)) | (Borrow(a), Borrow(b)) => a != b
+    (Own(_), Borrow(_)) | (Borrow(_), Own(_)) => true
     (Tuple(xs), Tuple(ys)) =>
       xs.length() == ys.length() &&
       ({
@@ -1154,20 +1361,7 @@ fn valtype_valid_in_interface(
           Some(td) => {
             if typedef_requires_name_for_interface(td) &&
               named_types.get(idx) is None {
-              let sig = type_sig_of_typeidx(idx, type_table, resource_ids)
-              let mut ok = false
-              if sig != Other {
-                for kv in named_types.iter() {
-                  let (k, _v) = kv
-                  if type_sig_of_typeidx(k, type_table, resource_ids) == sig {
-                    ok = true
-                    break
-                  }
-                }
-              }
-              if !ok {
-                return false
-              }
+              return false
             }
             visiting.set(idx, 1)
             let ok = match td {
@@ -1276,6 +1470,20 @@ fn valtype_valid_for_type_import_export(
   named_types : Map[Int, Int],
   visiting : Map[Int, Int],
 ) -> Bool {
+  valtype_valid_for_type_import_export_inner(
+    ty, type_table, resource_ids, named_types, visiting, false,
+  )
+}
+
+///|
+fn valtype_valid_for_type_import_export_inner(
+  ty : @component.ValType,
+  type_table : Array[@component.TypeDef?],
+  resource_ids : Array[Int?],
+  named_types : Map[Int, Int],
+  visiting : Map[Int, Int],
+  nested : Bool,
+) -> Bool {
   match ty {
     Prim(_) => true
     TypeIdx(idx) =>
@@ -1288,7 +1496,7 @@ fn valtype_valid_for_type_import_export(
           None => true
           Some(td) => {
             match td {
-              Own(_) | Borrow(_) => return false
+              Own(_) | Borrow(_) => if !nested { return false }
               FuncType(ft) =>
                 return functype_valid_in_interface(
                   ft, type_table, resource_ids, named_types,
@@ -1297,20 +1505,7 @@ fn valtype_valid_for_type_import_export(
             }
             if typedef_requires_name_for_interface(td) &&
               named_types.get(idx) is None {
-              let sig = type_sig_of_typeidx(idx, type_table, resource_ids)
-              let mut ok = false
-              if sig != Other {
-                for kv in named_types.iter() {
-                  let (k, _v) = kv
-                  if type_sig_of_typeidx(k, type_table, resource_ids) == sig {
-                    ok = true
-                    break
-                  }
-                }
-              }
-              if !ok {
-                return false
-              }
+              return false
             }
             visiting.set(idx, 1)
             let ok = match td {
@@ -1318,8 +1513,8 @@ fn valtype_valid_for_type_import_export(
               Tuple(tys) => {
                 let mut ok = true
                 for t in tys {
-                  if !valtype_valid_for_type_import_export(
-                      t, type_table, resource_ids, named_types, visiting,
+                  if !valtype_valid_for_type_import_export_inner(
+                      t, type_table, resource_ids, named_types, visiting, true,
                     ) {
                     ok = false
                     break
@@ -1330,12 +1525,13 @@ fn valtype_valid_for_type_import_export(
               Record(fields) => {
                 let mut ok = true
                 for f in fields {
-                  if !valtype_valid_for_type_import_export(
+                  if !valtype_valid_for_type_import_export_inner(
                       f.ty,
                       type_table,
                       resource_ids,
                       named_types,
                       visiting,
+                      true,
                     ) {
                     ok = false
                     break
@@ -1349,8 +1545,8 @@ fn valtype_valid_for_type_import_export(
                   match c.ty {
                     None => ()
                     Some(t) =>
-                      if !valtype_valid_for_type_import_export(
-                          t, type_table, resource_ids, named_types, visiting,
+                      if !valtype_valid_for_type_import_export_inner(
+                          t, type_table, resource_ids, named_types, visiting, true,
                         ) {
                         ok = false
                         break
@@ -1360,38 +1556,46 @@ fn valtype_valid_for_type_import_export(
                 ok
               }
               Option(v) =>
-                valtype_valid_for_type_import_export(
-                  v, type_table, resource_ids, named_types, visiting,
+                valtype_valid_for_type_import_export_inner(
+                  v, type_table, resource_ids, named_types, visiting, true,
                 )
               Result(ok_v, err_v) => {
                 let ok_ok = match ok_v {
                   None => true
                   Some(v) =>
-                    valtype_valid_for_type_import_export(
-                      v, type_table, resource_ids, named_types, visiting,
+                    valtype_valid_for_type_import_export_inner(
+                      v, type_table, resource_ids, named_types, visiting, true,
                     )
                 }
                 let err_ok = match err_v {
                   None => true
                   Some(v) =>
-                    valtype_valid_for_type_import_export(
-                      v, type_table, resource_ids, named_types, visiting,
+                    valtype_valid_for_type_import_export_inner(
+                      v, type_table, resource_ids, named_types, visiting, true,
                     )
                 }
                 ok_ok && err_ok
               }
               List(v) =>
-                valtype_valid_for_type_import_export(
-                  v, type_table, resource_ids, named_types, visiting,
+                valtype_valid_for_type_import_export_inner(
+                  v, type_table, resource_ids, named_types, visiting, true,
                 )
               Flags(_) | Enum(_) => true
+              Own(idx) | Borrow(idx) =>
+                valtype_valid_in_interface(
+                  TypeIdx(idx),
+                  type_table,
+                  resource_ids,
+                  named_types,
+                  visiting,
+                )
               ResourceType(_, _, _, _) => true
               Future(v) | Stream(v) =>
                 match v {
                   None => true
                   Some(inner) =>
-                    valtype_valid_for_type_import_export(
-                      inner, type_table, resource_ids, named_types, visiting,
+                    valtype_valid_for_type_import_export_inner(
+                      inner, type_table, resource_ids, named_types, visiting, true,
                     )
                 }
               InstanceTypeEmpty => true
@@ -1513,7 +1717,7 @@ fn instancetype_sig_of_decls(
   for d in decls {
     match d {
       Type(t) => local_types.push(t)
-      Export(name, desc) => {
+      Export(name, _attributes, desc) => {
         let sort = sort_of_externdesc(desc)
         exports.set(name, sort)
         match desc {
@@ -1573,7 +1777,7 @@ fn instancetype_valid_for_use_as_interface(
             if kind == 0x03 {
               push_local(None)
             }
-          Export(_name, desc) =>
+          Export(_name, _attributes, desc) =>
             match desc {
               Type(bound) => {
                 let new_idx = local_type_table.length()
@@ -1653,7 +1857,7 @@ fn componenttype_signature_of_decls(
         if kind == 0x03 {
           record_type_slot()
         }
-      Import(name, desc) => {
+      Import(name, _attributes, desc) => {
         import_sorts.set(name, sort_of_externdesc(desc))
         match desc {
           InstanceType(tyidx) => {
@@ -1668,7 +1872,7 @@ fn componenttype_signature_of_decls(
           record_type_slot()
         }
       }
-      Export(name, desc) => {
+      Export(name, _attributes, desc) => {
         export_sorts.set(name, sort_of_externdesc(desc))
         match desc {
           InstanceType(tyidx) => {

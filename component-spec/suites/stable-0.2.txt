@@ -1,0 +1,24 @@
+# Component Model forms accepted with all post-0.2 component features disabled.
+linking/link-time-virtualization.wast
+linking/shared-everything-dynamic-linking.wast
+linking/tags.wast
+linking/unit.wast
+resources/borrows.wast
+resources/handle-table.wast
+resources/multiple-resources.wast
+validation/abi.wast
+validation/annotated-names.wast
+validation/core-modules.wast
+validation/defined-types.wast
+validation/extern-names.wast
+validation/external-visibility.wast
+validation/instantiation.wast
+validation/kebab.wast
+validation/outer-alias.wast
+validation/resources.wast
+values/alignment.wast
+values/concat.wast
+values/numerics.wast
+values/realloc.wast
+values/strings.wast
+values/transcode.wast

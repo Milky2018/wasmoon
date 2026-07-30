@@ -207,38 +207,9 @@ fn core_valtypes_for_component_valtype(
 fn core_functype_for_component_functype(
   ft : @component.FuncType,
   type_table : Array[@component.TypeDef?],
+  pointer_type : @types.ValueType,
 ) -> @types.FuncType? {
-  let params : Array[@types.ValueType] = []
-  for p in ft.params {
-    match core_valtypes_for_component_valtype(p.ty, type_table) {
-      Some(ts) =>
-        for t in ts {
-          params.push(t)
-          if params.length() > 16 {
-            // Indirect parameters: canonical ABI requires memory.
-            return None
-          }
-        }
-      None => return None
-    }
-  }
-  let results : Array[@types.ValueType] = []
-  match ft.result {
-    None => ()
-    Some(r) =>
-      match core_valtypes_for_component_valtype(r, type_table) {
-        Some(ts) =>
-          for t in ts {
-            results.push(t)
-          }
-        None => return None
-      }
-  }
-  // Indirect/multi-value results go through memory (retptr), not direct core results.
-  if results.length() > 1 {
-    return None
-  }
-  Some({ params, results })
+  @component.canonical_lift_core_func_type(ft, type_table, pointer_type)
 }
 
 ///|
@@ -252,13 +223,14 @@ fn core_functype_for_task_return(
     Some(vt) =>
       match core_valtypes_for_component_valtype(vt, type_table) {
         Some(ts) =>
-          for t in ts {
-            params.push(t)
-            if params.length() > 16 {
-              return None
+          if ts.length() > 16 {
+            params.push(I32)
+          } else {
+            for t in ts {
+              params.push(t)
             }
           }
-        None => return None
+        None => params.push(I32)
       }
   }
   Some({ params, results: [] })
@@ -270,7 +242,6 @@ fn core_functype_for_canon(
   type_table : Array[@component.TypeDef?],
 ) -> @types.FuncType? {
   match c {
-    BackpressureSet => Some({ params: [I32], results: [] })
     BackpressureInc | BackpressureDec | TaskCancel =>
       Some({ params: [], results: [] })
     TaskReturn(result, _) => core_functype_for_task_return(result, type_table)
@@ -282,9 +253,28 @@ fn core_functype_for_canon(
     SubtaskDrop => Some({ params: [I32], results: [] })
     SubtaskCancel(_) => Some({ params: [I32], results: [I32] })
     ThreadYield(_) => Some({ params: [], results: [I32] })
+    ThreadSuspendThenResume(_)
+    | ThreadYieldThenResume(_)
+    | ThreadSuspendThenPromote(_)
+    | ThreadYieldThenPromote(_) => Some({ params: [I32], results: [I32] })
     ContextGet(vt, _) => Some({ params: [], results: [vt] })
     ContextSet(vt, _) => Some({ params: [vt], results: [] })
     _ => None
+  }
+}
+
+///|
+fn canon_address_type(
+  opts : Array[@component.CanonOpt],
+  core_memory_types : Array[@types.MemoryType?],
+) -> @types.ValueType {
+  match canon_memory_idx(opts) {
+    Some(mem_idx) =>
+      match core_memory_types[mem_idx] {
+        Some(mt) => if mt.is_memory64 { I64 } else { I32 }
+        None => I32
+      }
+    None => I32
   }
 }
 
@@ -305,14 +295,6 @@ fn validate_canon(
         Some(mem_idx) =>
           if mem_idx < 0 || mem_idx >= core_memory_types.length() {
             raise InvalidCoreMemoryIndex(mem_idx)
-          } else {
-            match core_memory_types[mem_idx] {
-              Some(mt) =>
-                if mt.is_memory64 {
-                  raise CanonMemoryNot32Bit(mem_idx)
-                }
-              None => ()
-            }
           }
         None => ()
       }
@@ -337,21 +319,29 @@ fn validate_canon(
       let td = type_table[tyidx]
       match td {
         Some(FuncType(ft)) => {
+          if canon_has_async(opts) && !ft.is_async {
+            raise CanonAsyncTypeMismatch(tyidx)
+          }
           match canon_realloc_idx(opts) {
             Some(idx) =>
-              match core_func_types[idx] {
-                Some(core_ft) => {
-                  let expected : @types.FuncType = {
-                    params: [I32, I32, I32, I32],
-                    results: [I32],
+              if !canon_has_memory(opts) {
+                raise MissingCanonOption("memory")
+              } else {
+                match core_func_types[idx] {
+                  Some(core_ft) => {
+                    let addr_type = canon_address_type(opts, core_memory_types)
+                    let expected : @types.FuncType = {
+                      params: [addr_type, addr_type, addr_type, addr_type],
+                      results: [addr_type],
+                    }
+                    if core_ft != expected {
+                      raise CanonCoreFuncTypeMismatch(
+                        "canonical option `realloc` uses a core function with an incorrect signature",
+                      )
+                    }
                   }
-                  if core_ft != expected {
-                    raise CanonCoreFuncTypeMismatch(
-                      "canonical option `realloc` uses a core function with an incorrect signature",
-                    )
-                  }
+                  None => ()
                 }
-                None => ()
               }
             None => ()
           }
@@ -373,7 +363,12 @@ fn validate_canon(
               }
             None => ()
           }
-          if functype_needs_memory(ft, type_table) && !canon_has_memory(opts) {
+          let needs_memory = if canon_has_async(opts) {
+            functype_async_lift_needs_memory(ft, type_table)
+          } else {
+            functype_needs_memory(ft, type_table)
+          }
+          if needs_memory && !canon_has_memory(opts) {
             raise MissingCanonOption("memory")
           }
           if functype_needs_realloc_for_lift(ft, type_table) &&
@@ -386,7 +381,11 @@ fn validate_canon(
             match
               (
                 core_func_types[core_func_idx],
-                core_functype_for_component_functype(ft, type_table),
+                core_functype_for_component_functype(
+                  ft,
+                  type_table,
+                  canon_address_type(opts, core_memory_types),
+                ),
               ) {
               (Some(core_ft), Some(expected_core_ft)) =>
                 if core_ft != expected_core_ft {
@@ -411,14 +410,6 @@ fn validate_canon(
         Some(mem_idx) =>
           if mem_idx < 0 || mem_idx >= core_memory_types.length() {
             raise InvalidCoreMemoryIndex(mem_idx)
-          } else {
-            match core_memory_types[mem_idx] {
-              Some(mt) =>
-                if mt.is_memory64 {
-                  raise CanonMemoryNot32Bit(mem_idx)
-                }
-              None => ()
-            }
           }
         None => ()
       }
@@ -434,21 +425,29 @@ fn validate_canon(
       }
       match func_types[func_idx] {
         Some(ft) => {
+          if canon_has_async(opts) && !ft.is_async {
+            raise CanonAsyncTypeMismatch(func_idx)
+          }
           match canon_realloc_idx(opts) {
             Some(idx) =>
-              match core_func_types[idx] {
-                Some(core_ft) => {
-                  let expected : @types.FuncType = {
-                    params: [I32, I32, I32, I32],
-                    results: [I32],
+              if !canon_has_memory(opts) {
+                raise MissingCanonOption("memory")
+              } else {
+                match core_func_types[idx] {
+                  Some(core_ft) => {
+                    let addr_type = canon_address_type(opts, core_memory_types)
+                    let expected : @types.FuncType = {
+                      params: [addr_type, addr_type, addr_type, addr_type],
+                      results: [addr_type],
+                    }
+                    if core_ft != expected {
+                      raise CanonCoreFuncTypeMismatch(
+                        "canonical option `realloc` uses a core function with an incorrect signature",
+                      )
+                    }
                   }
-                  if core_ft != expected {
-                    raise CanonCoreFuncTypeMismatch(
-                      "canonical option `realloc` uses a core function with an incorrect signature",
-                    )
-                  }
+                  None => ()
                 }
-                None => ()
               }
             None => ()
           }
@@ -608,7 +607,7 @@ fn externdesc_refers_to_resource(
                     any = true
                     break
                   }
-                Export(_name, desc) =>
+                Export(_name, _attributes, desc) =>
                   if externdesc_refers_to_resource(desc, type_table, visiting) {
                     any = true
                     break
@@ -635,12 +634,12 @@ fn externdesc_refers_to_resource(
                     any = true
                     break
                   }
-                Import(_name, desc) =>
+                Import(_name, _attributes, desc) =>
                   if externdesc_refers_to_resource(desc, type_table, visiting) {
                     any = true
                     break
                   }
-                Export(_name, desc) =>
+                Export(_name, _attributes, desc) =>
                   if externdesc_refers_to_resource(desc, type_table, visiting) {
                     any = true
                     break
@@ -747,12 +746,12 @@ fn typedef_refers_to_resource(
               any = true
               break
             }
-          Import(_name, desc) =>
+          Import(_name, _attributes, desc) =>
             if externdesc_refers_to_resource(desc, type_table, visiting) {
               any = true
               break
             }
-          Export(_name, desc) =>
+          Export(_name, _attributes, desc) =>
             if externdesc_refers_to_resource(desc, type_table, visiting) {
               any = true
               break
@@ -771,7 +770,7 @@ fn typedef_refers_to_resource(
               any = true
               break
             }
-          Export(_name, desc) =>
+          Export(_name, _attributes, desc) =>
             if externdesc_refers_to_resource(desc, type_table, visiting) {
               any = true
               break
@@ -868,7 +867,7 @@ fn effective_typedef_size(
             } else {
               ()
             }
-          Import(_name, desc) | Export(_name, desc) => {
+          Import(_name, _attributes, desc) | Export(_name, _attributes, desc) => {
             total = add_type_size(
               total,
               externdesc_type_size(desc, local_sizes),
@@ -909,7 +908,7 @@ fn effective_typedef_size(
             } else {
               ()
             }
-          Export(_name, desc) => {
+          Export(_name, _attributes, desc) => {
             total = add_type_size(
               total,
               externdesc_type_size(desc, local_sizes),

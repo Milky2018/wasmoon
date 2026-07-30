@@ -6,6 +6,8 @@ extern "C" {
 #endif
 
 #include <errno.h>
+#include <limits.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -33,12 +35,298 @@ extern "C" {
 
 #include "moonbit.h"
 
+// Native file-type tokens shared with the MoonBit side. Values 0-7 match
+// WASI Preview 1 filetype; 8 extends the internal protocol for FIFO, which is
+// represented explicitly by the Component Model.
+static uint8_t wasmoon_wasi_filetype_from_mode(mode_t mode) {
+  if (S_ISDIR(mode)) return 3;
+  if (S_ISREG(mode)) return 4;
+  if (S_ISLNK(mode)) return 7;
+  if (S_ISCHR(mode)) return 2;
+  if (S_ISBLK(mode)) return 1;
+#ifdef S_ISSOCK
+  if (S_ISSOCK(mode)) return 6;
+#endif
+#ifdef S_ISFIFO
+  if (S_ISFIFO(mode)) return 8;
+#endif
+  return 0;
+}
+
 // Internal token values used by MoonBit side. Translate to host constants
 // before calling libc APIs so behavior is consistent across platforms.
 #define WASMOON_AT_REMOVEDIR_TOKEN 0x200
 #define WASMOON_AT_SYMLINK_NOFOLLOW_TOKEN 0x100
 
 #ifndef _WIN32
+static int wasmoon_wasi_path_is_within_base(
+  const char *base_real,
+  const char *target_real
+);
+
+static void wasmoon_wasi_close_fd_stack(int *fds, size_t length) {
+  for (size_t i = 0; i < length; i++) close(fds[i]);
+}
+
+static int wasmoon_wasi_push_fd(int **fds, size_t *length, size_t *capacity, int fd) {
+  if (*length == *capacity) {
+    if (*capacity > SIZE_MAX / 2 / sizeof(int)) {
+      errno = ENOMEM;
+      return 0;
+    }
+    size_t next_capacity = *capacity == 0 ? 8 : *capacity * 2;
+    int *next = (int *)realloc(*fds, next_capacity * sizeof(int));
+    if (!next) {
+      errno = ENOMEM;
+      return 0;
+    }
+    *fds = next;
+    *capacity = next_capacity;
+  }
+  (*fds)[*length] = fd;
+  *length += 1;
+  return 1;
+}
+
+static int wasmoon_wasi_path_has_component(const char *path) {
+  while (*path == '/') path++;
+  return *path != '\0';
+}
+
+static int wasmoon_wasi_path_requires_directory(const char *path) {
+  size_t length = strlen(path);
+  return length != 0 && path[length - 1] == '/';
+}
+
+static int wasmoon_wasi_is_symlink_at(int dir_fd, const char *name) {
+  struct stat stat_buffer;
+  return fstatat(dir_fd, name, &stat_buffer, AT_SYMLINK_NOFOLLOW) == 0 &&
+         S_ISLNK(stat_buffer.st_mode);
+}
+
+static char *wasmoon_wasi_prepend_symlink_target(
+  const char *target,
+  const char *remaining
+) {
+  size_t target_length = strlen(target);
+  while (*remaining == '/') remaining++;
+  size_t remaining_length = strlen(remaining);
+  size_t separator_length = remaining_length == 0 ? 0 : 1;
+  if (target_length > SIZE_MAX - remaining_length) {
+    errno = ENAMETOOLONG;
+    return NULL;
+  }
+  size_t combined_length = target_length + remaining_length;
+  if (combined_length > SIZE_MAX - separator_length - 1) {
+    errno = ENAMETOOLONG;
+    return NULL;
+  }
+  char *result = (char *)malloc(
+    target_length + separator_length + remaining_length + 1
+  );
+  if (!result) {
+    errno = ENOMEM;
+    return NULL;
+  }
+  memcpy(result, target, target_length);
+  if (separator_length != 0) result[target_length] = '/';
+  memcpy(
+    result + target_length + separator_length,
+    remaining,
+    remaining_length + 1
+  );
+  return result;
+}
+
+// Resolve from the capability root one component at a time. Keeping every
+// descended directory open makes ".." a stack operation and prevents rename
+// races from turning it into ambient parent traversal.
+static int wasmoon_wasi_open_beneath_impl(
+  int root_fd,
+  const char *path,
+  int flags,
+  int mode,
+  int follow_final
+) {
+  if (!path || path[0] == '/') {
+    errno = EPERM;
+    return -1;
+  }
+#ifndef O_NOFOLLOW
+  (void)root_fd;
+  (void)flags;
+  (void)mode;
+  (void)follow_final;
+  errno = ENOTSUP;
+  return -1;
+#else
+  int *fds = NULL;
+  size_t fd_length = 0;
+  size_t fd_capacity = 0;
+  int root_copy = dup(root_fd);
+  if (root_copy < 0) return -1;
+  if (!wasmoon_wasi_push_fd(&fds, &fd_length, &fd_capacity, root_copy)) {
+    int saved_errno = errno;
+    close(root_copy);
+    free(fds);
+    errno = saved_errno;
+    return -1;
+  }
+
+  char *work = strdup(path);
+  if (!work) {
+    wasmoon_wasi_close_fd_stack(fds, fd_length);
+    free(fds);
+    errno = ENOMEM;
+    return -1;
+  }
+  char *cursor = work;
+  int symlink_count = 0;
+  int requires_directory = wasmoon_wasi_path_requires_directory(work);
+
+  for (;;) {
+    while (*cursor == '/') cursor++;
+    if (*cursor == '\0') {
+      int open_flags = flags | O_CLOEXEC | O_NOFOLLOW;
+      if (requires_directory) open_flags |= O_DIRECTORY;
+      int wants_truncate = (open_flags & O_TRUNC) != 0;
+      open_flags &= ~O_TRUNC;
+      int result = openat(fds[fd_length - 1], ".", open_flags, mode);
+      if (result >= 0 && wants_truncate && ftruncate(result, 0) != 0) {
+        int saved_errno = errno;
+        close(result);
+        errno = saved_errno;
+        result = -1;
+      }
+      int saved_errno = errno;
+      free(work);
+      wasmoon_wasi_close_fd_stack(fds, fd_length);
+      free(fds);
+      errno = saved_errno;
+      return result;
+    }
+
+    char *separator = strchr(cursor, '/');
+    char *remaining = separator ? separator + 1 : cursor + strlen(cursor);
+    if (separator) *separator = '\0';
+    const char *component = cursor;
+    int is_final = !wasmoon_wasi_path_has_component(remaining);
+
+    if (strcmp(component, ".") == 0) {
+      cursor = remaining;
+      continue;
+    }
+    if (strcmp(component, "..") == 0) {
+      if (fd_length == 1) {
+        errno = EPERM;
+        goto fail;
+      }
+      close(fds[fd_length - 1]);
+      fd_length -= 1;
+      cursor = remaining;
+      continue;
+    }
+
+    int open_flags;
+    int wants_truncate = 0;
+    if (is_final) {
+      open_flags = flags | O_CLOEXEC | O_NOFOLLOW;
+      if (requires_directory) open_flags |= O_DIRECTORY;
+      wants_truncate = (open_flags & O_TRUNC) != 0;
+      open_flags &= ~O_TRUNC;
+    } else {
+      open_flags = O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW;
+    }
+    int opened = openat(fds[fd_length - 1], component, open_flags, mode);
+    if (opened >= 0) {
+      if (is_final) {
+        if (wants_truncate && ftruncate(opened, 0) != 0) {
+          int saved_errno = errno;
+          close(opened);
+          errno = saved_errno;
+          goto fail;
+        }
+        free(work);
+        wasmoon_wasi_close_fd_stack(fds, fd_length);
+        free(fds);
+        return opened;
+      }
+      if (!wasmoon_wasi_push_fd(&fds, &fd_length, &fd_capacity, opened)) {
+        int saved_errno = errno;
+        close(opened);
+        errno = saved_errno;
+        goto fail;
+      }
+      cursor = remaining;
+      continue;
+    }
+
+    int open_errno = errno;
+    if (!wasmoon_wasi_is_symlink_at(fds[fd_length - 1], component)) {
+      errno = open_errno;
+      goto fail;
+    }
+    if (is_final &&
+        (!follow_final || ((flags & O_CREAT) != 0 && (flags & O_EXCL) != 0))) {
+      errno = open_errno;
+      goto fail;
+    }
+    symlink_count += 1;
+    if (symlink_count > 40) {
+      errno = ELOOP;
+      goto fail;
+    }
+    char target[PATH_MAX + 1];
+    ssize_t target_length = readlinkat(
+      fds[fd_length - 1],
+      component,
+      target,
+      PATH_MAX
+    );
+    if (target_length < 0) goto fail;
+    if (target_length == 0) {
+      errno = ENOENT;
+      goto fail;
+    }
+    if (target_length >= PATH_MAX) {
+      errno = ENAMETOOLONG;
+      goto fail;
+    }
+    target[target_length] = '\0';
+    if (target[0] == '/') {
+      errno = EPERM;
+      goto fail;
+    }
+    char *next_work = wasmoon_wasi_prepend_symlink_target(target, remaining);
+    if (!next_work) goto fail;
+    requires_directory =
+      requires_directory || wasmoon_wasi_path_requires_directory(next_work);
+    free(work);
+    work = next_work;
+    cursor = work;
+  }
+
+fail: {
+    int saved_errno = errno;
+    free(work);
+    wasmoon_wasi_close_fd_stack(fds, fd_length);
+    free(fds);
+    errno = saved_errno;
+    return -1;
+  }
+#endif
+}
+
+static int wasmoon_wasi_open_parent_beneath_impl(int root_fd, const char *path) {
+  return wasmoon_wasi_open_beneath_impl(
+    root_fd,
+    path,
+    O_RDONLY | O_DIRECTORY,
+    0,
+    1
+  );
+}
+
 static int wasmoon_wasi_path_is_within_base(const char *base_real, const char *target_real) {
   if (!base_real || !target_real) return 0;
   if (strcmp(base_real, "/") == 0) {
@@ -115,12 +403,138 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_open(moonbit_bytes_t path, int flags, int mo
 #endif
 }
 
+MOONBIT_FFI_EXPORT int wasmoon_wasi_open_parent_beneath(
+  int root_fd,
+  moonbit_bytes_t path
+) {
+#ifdef _WIN32
+  (void)root_fd;
+  (void)path;
+  errno = ENOTSUP;
+  return -1;
+#else
+  return wasmoon_wasi_open_parent_beneath_impl(root_fd, (const char *)path);
+#endif
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_wasi_openat_beneath(
+  int root_fd,
+  moonbit_bytes_t parent_path,
+  moonbit_bytes_t leaf,
+  int flags,
+  int mode,
+  int follow_final
+) {
+#ifdef _WIN32
+  (void)root_fd;
+  (void)parent_path;
+  (void)leaf;
+  (void)flags;
+  (void)mode;
+  (void)follow_final;
+  errno = ENOTSUP;
+  return -1;
+#else
+  const char *parent = (const char *)parent_path;
+  const char *name = (const char *)leaf;
+  if (name[0] == '\0' || name[0] == '/') {
+    errno = EINVAL;
+    return -1;
+  }
+  const char *separator = strchr(name, '/');
+  if (separator != NULL) {
+    while (*separator == '/') separator++;
+    if (*separator != '\0') {
+      errno = EINVAL;
+      return -1;
+    }
+  }
+  size_t parent_length = strlen(parent);
+  size_t name_length = strlen(name);
+  size_t separator_length = parent_length == 0 ? 0 : 1;
+  if (parent_length > SIZE_MAX - name_length) {
+    errno = ENAMETOOLONG;
+    return -1;
+  }
+  size_t combined_length = parent_length + name_length;
+  if (combined_length > SIZE_MAX - separator_length - 1) {
+    errno = ENAMETOOLONG;
+    return -1;
+  }
+  char *path = (char *)malloc(
+    parent_length + separator_length + name_length + 1
+  );
+  if (!path) {
+    errno = ENOMEM;
+    return -1;
+  }
+  memcpy(path, parent, parent_length);
+  if (separator_length != 0) path[parent_length] = '/';
+  memcpy(path + parent_length + separator_length, name, name_length + 1);
+  int result = wasmoon_wasi_open_beneath_impl(
+    root_fd,
+    path,
+    flags,
+    mode,
+    follow_final
+  );
+  free(path);
+  return result;
+#endif
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_wasi_dup(int fd) {
+#ifdef _WIN32
+  return _dup(fd);
+#else
+  return dup(fd);
+#endif
+}
+
 // Close a file descriptor
 MOONBIT_FFI_EXPORT int wasmoon_wasi_close(int fd) {
 #ifdef _WIN32
   return _close(fd);
 #else
   return close(fd);
+#endif
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_wasi_pread(
+  int fd,
+  moonbit_bytes_t buf,
+  int count,
+  int64_t offset
+) {
+#ifdef _WIN32
+  int64_t saved = _lseeki64(fd, 0, SEEK_CUR);
+  if (saved < 0 || _lseeki64(fd, offset, SEEK_SET) < 0) return -1;
+  int result = _read(fd, buf, count);
+  int saved_errno = errno;
+  _lseeki64(fd, saved, SEEK_SET);
+  errno = saved_errno;
+  return result;
+#else
+  return pread(fd, buf, count, (off_t)offset);
+#endif
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_wasi_pwrite(
+  int fd,
+  moonbit_bytes_t buf,
+  int count,
+  int64_t offset
+) {
+#ifdef _WIN32
+  int64_t saved = _lseeki64(fd, 0, SEEK_CUR);
+  if (saved < 0 || _lseeki64(fd, offset, SEEK_SET) < 0) return -1;
+  int result = _write(fd, buf, count);
+  int saved_errno = errno;
+  _lseeki64(fd, saved, SEEK_SET);
+  errno = saved_errno;
+  return result;
+#else
+  return pwrite(fd, buf, count, (off_t)offset);
 #endif
 }
 
@@ -163,6 +577,14 @@ MOONBIT_FFI_EXPORT moonbit_bytes_t wasmoon_wasi_get_error_message(void) {
 // Get errno value
 MOONBIT_FFI_EXPORT int wasmoon_wasi_get_errno(void) {
   return errno;
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_wasi_set_errno_invalid_argument(void) {
+  errno = EINVAL;
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_wasi_set_errno_illegal_byte_sequence(void) {
+  errno = EILSEQ;
 }
 
 MOONBIT_FFI_EXPORT int wasmoon_wasi_isatty(int fd) {
@@ -445,9 +867,62 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_mkdir(moonbit_bytes_t path, int mode) {
 #endif
 }
 
+MOONBIT_FFI_EXPORT int wasmoon_wasi_mkdirat(
+  int dirfd,
+  moonbit_bytes_t path,
+  int mode
+) {
+#ifdef _WIN32
+  (void)dirfd;
+  (void)mode;
+  return _mkdir((const char *)path);
+#else
+  return mkdirat(dirfd, (const char *)path, mode);
+#endif
+}
+
+#ifndef _WIN32
+static uint8_t wasmoon_wasi_dirent_filetype(
+  DIR *dir,
+  const struct dirent *entry
+) {
+#ifdef AT_SYMLINK_NOFOLLOW
+  struct stat st;
+  if (fstatat(dirfd(dir), entry->d_name, &st, AT_SYMLINK_NOFOLLOW) == 0) {
+    return wasmoon_wasi_filetype_from_mode(st.st_mode);
+  }
+#endif
+
+  switch (entry->d_type) {
+#ifdef DT_BLK
+    case DT_BLK: return 1;
+#endif
+#ifdef DT_CHR
+    case DT_CHR: return 2;
+#endif
+#ifdef DT_DIR
+    case DT_DIR: return 3;
+#endif
+#ifdef DT_REG
+    case DT_REG: return 4;
+#endif
+#ifdef DT_SOCK
+    case DT_SOCK: return 6;
+#endif
+#ifdef DT_LNK
+    case DT_LNK: return 7;
+#endif
+#ifdef DT_FIFO
+    case DT_FIFO: return 8;
+#endif
+    default: return 0;
+  }
+}
+#endif
+
 // Directory entry structure for readdir
 // Returns a serialized format: count (4 bytes) + entries
-// Each entry: is_dir (1 byte) + name_len (4 bytes) + name (variable)
+// Each entry: filetype (1 byte) + name_len (4 bytes) + name (variable)
 MOONBIT_FFI_EXPORT moonbit_bytes_t wasmoon_wasi_readdir(moonbit_bytes_t path) {
 #ifdef _WIN32
   // Windows implementation using FindFirstFile/FindNextFile
@@ -472,7 +947,7 @@ MOONBIT_FFI_EXPORT moonbit_bytes_t wasmoon_wasi_readdir(moonbit_bytes_t path) {
       continue;
     }
     count++;
-    total_size += 1 + 4 + strlen(entry->d_name);  // is_dir + name_len + name
+    total_size += 1 + 4 + strlen(entry->d_name);  // filetype + name_len + name
   }
 
   // Allocate result buffer
@@ -493,9 +968,7 @@ MOONBIT_FFI_EXPORT moonbit_bytes_t wasmoon_wasi_readdir(moonbit_bytes_t path) {
       continue;
     }
 
-    // Determine if it's a directory
-    int is_dir = (entry->d_type == DT_DIR) ? 1 : 0;
-    result[offset] = is_dir;
+    result[offset] = wasmoon_wasi_dirent_filetype(dir, entry);
     offset++;
 
     // Write name length (little-endian)
@@ -542,7 +1015,7 @@ MOONBIT_FFI_EXPORT moonbit_bytes_t wasmoon_wasi_readdir_fd(int fd) {
       continue;
     }
     count++;
-    total_size += 1 + 4 + strlen(entry->d_name);  // is_dir + name_len + name
+    total_size += 1 + 4 + strlen(entry->d_name);  // filetype + name_len + name
   }
 
   moonbit_bytes_t result = moonbit_make_bytes(total_size, 0);
@@ -558,8 +1031,7 @@ MOONBIT_FFI_EXPORT moonbit_bytes_t wasmoon_wasi_readdir_fd(int fd) {
       continue;
     }
 
-    int is_dir = (entry->d_type == DT_DIR) ? 1 : 0;
-    result[offset] = is_dir;
+    result[offset] = wasmoon_wasi_dirent_filetype(dir, entry);
     offset++;
 
     size_t name_len = strlen(entry->d_name);
@@ -672,20 +1144,7 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_fstat(int fd,
   *nlink = st.st_nlink;
   *size = st.st_size;
 
-  // Determine file type
-  if (S_ISDIR(st.st_mode)) {
-    *filetype = 3;  // directory
-  } else if (S_ISREG(st.st_mode)) {
-    *filetype = 4;  // regular_file
-  } else if (S_ISLNK(st.st_mode)) {
-    *filetype = 7;  // symbolic_link
-  } else if (S_ISCHR(st.st_mode)) {
-    *filetype = 2;  // character_device
-  } else if (S_ISBLK(st.st_mode)) {
-    *filetype = 1;  // block_device
-  } else {
-    *filetype = 0;  // unknown
-  }
+  *filetype = wasmoon_wasi_filetype_from_mode(st.st_mode);
 
   // Convert timespec to nanoseconds
 #ifdef _WIN32
@@ -733,20 +1192,7 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_fstatat(int dirfd, moonbit_bytes_t path, int
   *nlink = st.st_nlink;
   *size = st.st_size;
 
-  // Determine file type
-  if (S_ISDIR(st.st_mode)) {
-    *filetype = 3;  // directory
-  } else if (S_ISREG(st.st_mode)) {
-    *filetype = 4;  // regular_file
-  } else if (S_ISLNK(st.st_mode)) {
-    *filetype = 7;  // symbolic_link
-  } else if (S_ISCHR(st.st_mode)) {
-    *filetype = 2;  // character_device
-  } else if (S_ISBLK(st.st_mode)) {
-    *filetype = 1;  // block_device
-  } else {
-    *filetype = 0;  // unknown
-  }
+  *filetype = wasmoon_wasi_filetype_from_mode(st.st_mode);
 
   // Convert timespec to nanoseconds
 #ifdef _WIN32
@@ -948,12 +1394,650 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_linkat(int olddirfd, moonbit_bytes_t oldpath
 // ============================================================================
 
 #ifndef _WIN32
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <pthread.h>
 #include <poll.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <signal.h>
 #include <time.h>
 #endif
+
+static int wasmoon_wasi_socket_family(int family) {
+#ifdef _WIN32
+  (void)family;
+  return -1;
+#else
+  return family == 4 ? AF_INET : family == 6 ? AF_INET6 : -1;
+#endif
+}
+
+static int wasmoon_wasi_socket_address(
+  int family,
+  const uint8_t *address,
+  int port,
+  int scope_id,
+  struct sockaddr_storage *storage,
+  socklen_t *length
+) {
+#ifdef _WIN32
+  (void)family;
+  (void)address;
+  (void)port;
+  (void)scope_id;
+  (void)storage;
+  (void)length;
+  errno = ENOTSUP;
+  return 0;
+#else
+  memset(storage, 0, sizeof(*storage));
+  if (family == 4) {
+    struct sockaddr_in *addr = (struct sockaddr_in *)storage;
+    addr->sin_family = AF_INET;
+    addr->sin_port = htons((uint16_t)port);
+    memcpy(&addr->sin_addr, address, 4);
+    *length = sizeof(*addr);
+    return 1;
+  }
+  if (family == 6) {
+    struct sockaddr_in6 *addr = (struct sockaddr_in6 *)storage;
+    addr->sin6_family = AF_INET6;
+    addr->sin6_port = htons((uint16_t)port);
+    addr->sin6_scope_id = (uint32_t)scope_id;
+    memcpy(&addr->sin6_addr, address, 16);
+    *length = sizeof(*addr);
+    return 1;
+  }
+  errno = EAFNOSUPPORT;
+  return 0;
+#endif
+}
+
+#ifndef _WIN32
+struct wasmoon_wasi_resolver_address {
+  uint8_t family;
+  uint8_t address[16];
+  uint32_t scope_id;
+};
+
+struct wasmoon_wasi_resolver {
+  pthread_mutex_t mutex;
+  int read_fd;
+  int write_fd;
+  int completed;
+  int dropped;
+  int gai_error;
+  size_t count;
+  size_t index;
+  struct wasmoon_wasi_resolver_address *addresses;
+  char *name;
+};
+
+static void wasmoon_wasi_resolver_free(struct wasmoon_wasi_resolver *resolver) {
+  if (resolver->read_fd >= 0) close(resolver->read_fd);
+  if (resolver->write_fd >= 0) close(resolver->write_fd);
+  free(resolver->addresses);
+  free(resolver->name);
+  pthread_mutex_destroy(&resolver->mutex);
+  free(resolver);
+}
+
+static int wasmoon_wasi_is_mapped_ipv4(const struct in6_addr *address) {
+  const uint8_t *bytes = (const uint8_t *)address;
+  for (int i = 0; i < 10; i++) {
+    if (bytes[i] != 0) return 0;
+  }
+  return bytes[10] == 0xff && bytes[11] == 0xff;
+}
+
+static void *wasmoon_wasi_resolver_run(void *argument) {
+  struct wasmoon_wasi_resolver *resolver =
+    (struct wasmoon_wasi_resolver *)argument;
+  struct addrinfo hints;
+  memset(&hints, 0, sizeof(hints));
+  hints.ai_family = AF_UNSPEC;
+  hints.ai_socktype = SOCK_STREAM;
+  struct addrinfo *results = NULL;
+  int gai_error = getaddrinfo(resolver->name, NULL, &hints, &results);
+  size_t count = 0;
+  if (gai_error == 0) {
+    for (struct addrinfo *current = results;
+         current != NULL;
+         current = current->ai_next) {
+      if (current->ai_family == AF_INET) {
+        count++;
+      } else if (current->ai_family == AF_INET6) {
+        struct sockaddr_in6 *address =
+          (struct sockaddr_in6 *)current->ai_addr;
+        if (!wasmoon_wasi_is_mapped_ipv4(&address->sin6_addr)) count++;
+      }
+    }
+  }
+  struct wasmoon_wasi_resolver_address *addresses = NULL;
+  if (count > 0) {
+    addresses = calloc(count, sizeof(*addresses));
+    if (addresses == NULL) {
+      gai_error = EAI_MEMORY;
+      count = 0;
+    }
+  }
+  size_t index = 0;
+  if (gai_error == 0) {
+    for (struct addrinfo *current = results;
+         current != NULL && index < count;
+         current = current->ai_next) {
+      if (current->ai_family == AF_INET) {
+        struct sockaddr_in *address = (struct sockaddr_in *)current->ai_addr;
+        addresses[index].family = 4;
+        memcpy(addresses[index].address, &address->sin_addr, 4);
+        index++;
+      } else if (current->ai_family == AF_INET6) {
+        struct sockaddr_in6 *address =
+          (struct sockaddr_in6 *)current->ai_addr;
+        if (wasmoon_wasi_is_mapped_ipv4(&address->sin6_addr)) continue;
+        addresses[index].family = 6;
+        addresses[index].scope_id = address->sin6_scope_id;
+        memcpy(addresses[index].address, &address->sin6_addr, 16);
+        index++;
+      }
+    }
+  }
+  if (results != NULL) freeaddrinfo(results);
+
+  pthread_mutex_lock(&resolver->mutex);
+  resolver->gai_error = gai_error;
+  resolver->addresses = addresses;
+  resolver->count = index;
+  resolver->completed = 1;
+  int dropped = resolver->dropped;
+  int write_fd = resolver->write_fd;
+  resolver->write_fd = -1;
+  pthread_mutex_unlock(&resolver->mutex);
+  if (write_fd >= 0) {
+    uint8_t ready = 1;
+    (void)write(write_fd, &ready, sizeof(ready));
+    close(write_fd);
+  }
+  if (dropped) wasmoon_wasi_resolver_free(resolver);
+  return NULL;
+}
+#endif
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_wasi_resolver_start(
+  moonbit_bytes_t name,
+  int *poll_fd
+) {
+#ifdef _WIN32
+  (void)name;
+  (void)poll_fd;
+  errno = ENOTSUP;
+  return 0;
+#else
+  int pipe_fds[2];
+  if (pipe(pipe_fds) != 0) return 0;
+  int flags = fcntl(pipe_fds[0], F_GETFL, 0);
+  if (flags < 0 || fcntl(pipe_fds[0], F_SETFL, flags | O_NONBLOCK) != 0) {
+    close(pipe_fds[0]);
+    close(pipe_fds[1]);
+    return 0;
+  }
+  struct wasmoon_wasi_resolver *resolver = calloc(1, sizeof(*resolver));
+  if (resolver == NULL) {
+    close(pipe_fds[0]);
+    close(pipe_fds[1]);
+    return 0;
+  }
+  resolver->read_fd = pipe_fds[0];
+  resolver->write_fd = pipe_fds[1];
+  resolver->name = strdup((const char *)name);
+  if (resolver->name == NULL || pthread_mutex_init(&resolver->mutex, NULL) != 0) {
+    close(pipe_fds[0]);
+    close(pipe_fds[1]);
+    free(resolver->name);
+    free(resolver);
+    return 0;
+  }
+  pthread_t thread;
+  if (pthread_create(&thread, NULL, wasmoon_wasi_resolver_run, resolver) != 0) {
+    wasmoon_wasi_resolver_free(resolver);
+    return 0;
+  }
+  pthread_detach(thread);
+  *poll_fd = resolver->read_fd;
+  return (int64_t)(intptr_t)resolver;
+#endif
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_wasi_resolver_next(
+  int64_t resolver_handle,
+  uint8_t *family,
+  uint8_t *address,
+  uint32_t *scope_id
+) {
+#ifdef _WIN32
+  (void)resolver_handle;
+  (void)family;
+  (void)address;
+  (void)scope_id;
+  errno = ENOTSUP;
+  return -1;
+#else
+  struct wasmoon_wasi_resolver *resolver =
+    (struct wasmoon_wasi_resolver *)(intptr_t)resolver_handle;
+  pthread_mutex_lock(&resolver->mutex);
+  if (!resolver->completed) {
+    pthread_mutex_unlock(&resolver->mutex);
+    return 1;
+  }
+  if (resolver->gai_error != 0) {
+    int error = resolver->gai_error;
+    pthread_mutex_unlock(&resolver->mutex);
+    if (error == EAI_AGAIN) return 4;
+#if defined(EAI_NONAME)
+    if (error == EAI_NONAME) return 3;
+#endif
+#if defined(EAI_NODATA) && EAI_NODATA != EAI_NONAME
+    if (error == EAI_NODATA) return 3;
+#endif
+    return 5;
+  }
+  if (resolver->index >= resolver->count) {
+    pthread_mutex_unlock(&resolver->mutex);
+    return 2;
+  }
+  struct wasmoon_wasi_resolver_address *result =
+    &resolver->addresses[resolver->index++];
+  *family = result->family;
+  memset(address, 0, 16);
+  memcpy(address, result->address, result->family == 4 ? 4 : 16);
+  *scope_id = result->scope_id;
+  pthread_mutex_unlock(&resolver->mutex);
+  return 0;
+#endif
+}
+
+MOONBIT_FFI_EXPORT void wasmoon_wasi_resolver_drop(int64_t resolver_handle) {
+#ifndef _WIN32
+  struct wasmoon_wasi_resolver *resolver =
+    (struct wasmoon_wasi_resolver *)(intptr_t)resolver_handle;
+  if (resolver == NULL) return;
+  pthread_mutex_lock(&resolver->mutex);
+  resolver->dropped = 1;
+  int completed = resolver->completed;
+  int read_fd = resolver->read_fd;
+  resolver->read_fd = -1;
+  pthread_mutex_unlock(&resolver->mutex);
+  if (read_fd >= 0) close(read_fd);
+  if (completed) wasmoon_wasi_resolver_free(resolver);
+#else
+  (void)resolver_handle;
+#endif
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_wasi_socket_create(int family, int kind) {
+#ifdef _WIN32
+  (void)family;
+  (void)kind;
+  errno = ENOTSUP;
+  return -1;
+#else
+  int native_family = wasmoon_wasi_socket_family(family);
+  if (native_family < 0 || (kind != 1 && kind != 2)) {
+    errno = EAFNOSUPPORT;
+    return -1;
+  }
+  int fd = socket(native_family, kind == 1 ? SOCK_STREAM : SOCK_DGRAM, 0);
+  if (fd < 0) return -1;
+  int flags = fcntl(fd, F_GETFL, 0);
+  if (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) != 0) {
+    close(fd);
+    return -1;
+  }
+  if (native_family == AF_INET6) {
+    int enabled = 1;
+    if (setsockopt(
+      fd,
+      IPPROTO_IPV6,
+      IPV6_V6ONLY,
+      &enabled,
+      sizeof(enabled)
+    ) != 0) {
+      close(fd);
+      return -1;
+    }
+  }
+  return fd;
+#endif
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_wasi_socket_bind(
+  int fd,
+  int family,
+  moonbit_bytes_t address,
+  int port,
+  int scope_id
+) {
+#ifdef _WIN32
+  (void)fd;
+  (void)family;
+  (void)address;
+  (void)port;
+  (void)scope_id;
+  errno = ENOTSUP;
+  return -1;
+#else
+  struct sockaddr_storage storage;
+  socklen_t length;
+  if (!wasmoon_wasi_socket_address(
+    family,
+    address,
+    port,
+    scope_id,
+    &storage,
+    &length
+  )) return -1;
+  return bind(fd, (struct sockaddr *)&storage, length);
+#endif
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_wasi_socket_connect(
+  int fd,
+  int family,
+  moonbit_bytes_t address,
+  int port,
+  int scope_id
+) {
+#ifdef _WIN32
+  (void)fd;
+  (void)family;
+  (void)address;
+  (void)port;
+  (void)scope_id;
+  errno = ENOTSUP;
+  return -1;
+#else
+  struct sockaddr_storage storage;
+  socklen_t length;
+  if (!wasmoon_wasi_socket_address(
+    family,
+    address,
+    port,
+    scope_id,
+    &storage,
+    &length
+  )) return -1;
+  if (connect(fd, (struct sockaddr *)&storage, length) == 0) return 0;
+  if (errno == EINPROGRESS || errno == EWOULDBLOCK) return 1;
+  return -1;
+#endif
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_wasi_socket_disconnect(int fd) {
+#ifdef _WIN32
+  (void)fd;
+  errno = ENOTSUP;
+  return -1;
+#else
+  struct sockaddr_storage storage;
+  memset(&storage, 0, sizeof(storage));
+  storage.ss_family = AF_UNSPEC;
+  return connect(fd, (struct sockaddr *)&storage, sizeof(storage));
+#endif
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_wasi_socket_recv_from(
+  int fd,
+  moonbit_bytes_t data,
+  int length,
+  uint8_t *family,
+  uint8_t *address,
+  uint16_t *port,
+  uint32_t *scope_id
+) {
+#ifdef _WIN32
+  (void)fd;
+  (void)data;
+  (void)length;
+  (void)family;
+  (void)address;
+  (void)port;
+  (void)scope_id;
+  errno = ENOTSUP;
+  return -1;
+#else
+  struct sockaddr_storage storage;
+  socklen_t storage_length = sizeof(storage);
+  ssize_t received = recvfrom(
+    fd,
+    data,
+    (size_t)length,
+    0,
+    (struct sockaddr *)&storage,
+    &storage_length
+  );
+  if (received < 0) return -1;
+  memset(address, 0, 16);
+  if (storage.ss_family == AF_INET) {
+    struct sockaddr_in *addr = (struct sockaddr_in *)&storage;
+    *family = 4;
+    *port = ntohs(addr->sin_port);
+    *scope_id = 0;
+    memcpy(address, &addr->sin_addr, 4);
+  } else if (storage.ss_family == AF_INET6) {
+    struct sockaddr_in6 *addr = (struct sockaddr_in6 *)&storage;
+    *family = 6;
+    *port = ntohs(addr->sin6_port);
+    *scope_id = addr->sin6_scope_id;
+    memcpy(address, &addr->sin6_addr, 16);
+  } else {
+    errno = EAFNOSUPPORT;
+    return -1;
+  }
+  return (int64_t)received;
+#endif
+}
+
+MOONBIT_FFI_EXPORT int64_t wasmoon_wasi_socket_send_to(
+  int fd,
+  moonbit_bytes_t data,
+  int length,
+  int has_address,
+  int family,
+  moonbit_bytes_t address,
+  int port,
+  int scope_id
+) {
+#ifdef _WIN32
+  (void)fd;
+  (void)data;
+  (void)length;
+  (void)has_address;
+  (void)family;
+  (void)address;
+  (void)port;
+  (void)scope_id;
+  errno = ENOTSUP;
+  return -1;
+#else
+  if (!has_address) {
+    return (int64_t)send(fd, data, (size_t)length, 0);
+  }
+  struct sockaddr_storage storage;
+  socklen_t storage_length;
+  if (!wasmoon_wasi_socket_address(
+    family,
+    address,
+    port,
+    scope_id,
+    &storage,
+    &storage_length
+  )) return -1;
+  return (int64_t)sendto(
+    fd,
+    data,
+    (size_t)length,
+    0,
+    (struct sockaddr *)&storage,
+    storage_length
+  );
+#endif
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_wasi_socket_listen(int fd, int backlog) {
+#ifdef _WIN32
+  (void)fd;
+  (void)backlog;
+  errno = ENOTSUP;
+  return -1;
+#else
+  return listen(fd, backlog);
+#endif
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_wasi_socket_error(int fd) {
+#ifdef _WIN32
+  (void)fd;
+  errno = ENOTSUP;
+  return -1;
+#else
+  int error = 0;
+  socklen_t length = sizeof(error);
+  if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &length) != 0) return -1;
+  return error;
+#endif
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_wasi_socket_address_get(
+  int fd,
+  int peer,
+  uint8_t *family,
+  uint8_t *address,
+  uint16_t *port,
+  uint32_t *scope_id
+) {
+#ifdef _WIN32
+  (void)fd;
+  (void)peer;
+  (void)family;
+  (void)address;
+  (void)port;
+  (void)scope_id;
+  errno = ENOTSUP;
+  return -1;
+#else
+  struct sockaddr_storage storage;
+  socklen_t length = sizeof(storage);
+  int result = peer
+    ? getpeername(fd, (struct sockaddr *)&storage, &length)
+    : getsockname(fd, (struct sockaddr *)&storage, &length);
+  if (result != 0) return -1;
+  memset(address, 0, 16);
+  if (storage.ss_family == AF_INET) {
+    struct sockaddr_in *addr = (struct sockaddr_in *)&storage;
+    *family = 4;
+    *port = ntohs(addr->sin_port);
+    *scope_id = 0;
+    memcpy(address, &addr->sin_addr, 4);
+    return 0;
+  }
+  if (storage.ss_family == AF_INET6) {
+    struct sockaddr_in6 *addr = (struct sockaddr_in6 *)&storage;
+    *family = 6;
+    *port = ntohs(addr->sin6_port);
+    *scope_id = addr->sin6_scope_id;
+    memcpy(address, &addr->sin6_addr, 16);
+    return 0;
+  }
+  errno = EAFNOSUPPORT;
+  return -1;
+#endif
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_wasi_socket_option_get(
+  int fd,
+  int family,
+  int option
+) {
+#ifdef _WIN32
+  (void)fd;
+  (void)family;
+  (void)option;
+  errno = ENOTSUP;
+  return -1;
+#else
+  int level = SOL_SOCKET;
+  int native_option = 0;
+  switch (option) {
+    case 0: native_option = SO_KEEPALIVE; break;
+    case 1:
+      level = IPPROTO_TCP;
+#if defined(__APPLE__)
+      native_option = TCP_KEEPALIVE;
+#else
+      native_option = TCP_KEEPIDLE;
+#endif
+      break;
+    case 2: level = IPPROTO_TCP; native_option = TCP_KEEPINTVL; break;
+    case 3: level = IPPROTO_TCP; native_option = TCP_KEEPCNT; break;
+    case 4:
+      level = family == 6 ? IPPROTO_IPV6 : IPPROTO_IP;
+      native_option = family == 6 ? IPV6_UNICAST_HOPS : IP_TTL;
+      break;
+    case 5: native_option = SO_RCVBUF; break;
+    case 6: native_option = SO_SNDBUF; break;
+    case 7: native_option = SO_REUSEADDR; break;
+    default: errno = EINVAL; return -1;
+  }
+  int value = 0;
+  socklen_t length = sizeof(value);
+  if (getsockopt(fd, level, native_option, &value, &length) != 0) return -1;
+  return value;
+#endif
+}
+
+MOONBIT_FFI_EXPORT int wasmoon_wasi_socket_option_set(
+  int fd,
+  int family,
+  int option,
+  int value
+) {
+#ifdef _WIN32
+  (void)fd;
+  (void)family;
+  (void)option;
+  (void)value;
+  errno = ENOTSUP;
+  return -1;
+#else
+  int level = SOL_SOCKET;
+  int native_option = 0;
+  switch (option) {
+    case 0: native_option = SO_KEEPALIVE; break;
+    case 1:
+      level = IPPROTO_TCP;
+#if defined(__APPLE__)
+      native_option = TCP_KEEPALIVE;
+#else
+      native_option = TCP_KEEPIDLE;
+#endif
+      break;
+    case 2: level = IPPROTO_TCP; native_option = TCP_KEEPINTVL; break;
+    case 3: level = IPPROTO_TCP; native_option = TCP_KEEPCNT; break;
+    case 4:
+      level = family == 6 ? IPPROTO_IPV6 : IPPROTO_IP;
+      native_option = family == 6 ? IPV6_UNICAST_HOPS : IP_TTL;
+      break;
+    case 5: native_option = SO_RCVBUF; break;
+    case 6: native_option = SO_SNDBUF; break;
+    case 7: native_option = SO_REUSEADDR; break;
+    default: errno = EINVAL; return -1;
+  }
+  return setsockopt(fd, level, native_option, &value, sizeof(value));
+#endif
+}
 
 // Nanosleep - sleep for specified nanoseconds
 // Returns 0 on success, -1 on error
@@ -1129,7 +2213,14 @@ MOONBIT_FFI_EXPORT int wasmoon_wasi_accept(int sockfd) {
   (void)sockfd;
   return -1;
 #else
-  return accept(sockfd, NULL, NULL);
+  int fd = accept(sockfd, NULL, NULL);
+  if (fd < 0) return -1;
+  int flags = fcntl(fd, F_GETFL, 0);
+  if (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) != 0) {
+    close(fd);
+    return -1;
+  }
+  return fd;
 #endif
 }
 

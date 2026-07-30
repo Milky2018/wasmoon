@@ -10,6 +10,7 @@ pub(all) enum ComponentErrorCode {
   CompParseError
   CompValidateError
   CompUnsupported
+  CompRuntimeError
 } derive(Debug, Eq)
 
 ///|
@@ -39,6 +40,7 @@ fn component_error_code_string(code : ComponentErrorCode) -> String {
     CompParseError => "COMP_PARSE_ERROR"
     CompValidateError => "COMP_VALIDATE_ERROR"
     CompUnsupported => "COMP_UNSUPPORTED"
+    CompRuntimeError => "COMP_RUNTIME_ERROR"
   }
 }
 
@@ -65,6 +67,12 @@ fn component_validation_error_code(
     SectionParseError(_, msg) =>
       if msg.contains("unsupported") {
         CompUnsupported
+      } else {
+        CompValidateError
+      }
+    CoreModuleError(msg) =>
+      if msg == "unknown binary version" || msg.has_prefix("parse core module:") {
+        CompParseError
       } else {
         CompValidateError
       }
@@ -261,4 +269,317 @@ pub fn run_component_command(
     _ => println(result.detail)
   }
   1
+}
+
+///|
+fn component_invoke_success_json(
+  path : String,
+  values : Array[@component.ComponentValue],
+) -> String {
+  "{\"ok\":true,\"phase\":\"invoke\",\"detail\":\"\{json_escape_string(path)}\",\"result\":\{@component.component_values_to_json(values).stringify()}}"
+}
+
+///|
+priv struct ComponentInvokeEvalResult {
+  ok : Bool
+  phase : String
+  detail : String
+  values : Array[@component.ComponentValue]
+}
+
+///|
+fn run_component_invoke_eval(
+  file_path : String,
+  export_path : String,
+  args : Array[String],
+  wit_names : Bool,
+) -> ComponentInvokeEvalResult {
+  let bytes = @fs.read_file_to_bytes(file_path) catch {
+    IOError(error) =>
+      return { ok: false, phase: "read", detail: error, values: [] }
+  }
+  let instance = @component.ComponentRuntime(wit_names~).instantiate(
+    "invoke", bytes,
+  ) catch {
+    error =>
+      return {
+        ok: false,
+        phase: "instantiate",
+        detail: error.to_string(),
+        values: [],
+      }
+  }
+  let function = instance.bind(export_path) catch {
+    error =>
+      return { ok: false, phase: "bind", detail: error.to_string(), values: [] }
+  }
+  let function_type = function.type_()
+  if args.length() != function_type.params.length() {
+    return {
+      ok: false,
+      phase: "arguments",
+      detail: "expected \{function_type.params.length()} arguments but received \{args.length()}",
+      values: [],
+    }
+  }
+  let values = []
+  for index in 0..<args.length() {
+    let value = @component.parse_component_value_json(
+      args[index],
+      function_type.params[index].ty,
+    ) catch {
+      error =>
+        return {
+          ok: false,
+          phase: "arguments",
+          detail: "argument \{index}: \{error}",
+          values: [],
+        }
+    }
+    values.push(value)
+  }
+  let results = function.call(values) catch {
+    error =>
+      return {
+        ok: false,
+        phase: "invoke",
+        detail: error.to_string(),
+        values: [],
+      }
+  }
+  { ok: true, phase: "invoke", detail: export_path, values: results }
+}
+
+///|
+pub fn run_component_invoke_command(
+  file_path : String,
+  export_path : String,
+  args : Array[String],
+  wit_names : Bool,
+  error_format : ComponentErrorFormat,
+) -> Int {
+  let result = run_component_invoke_eval(
+    file_path, export_path, args, wit_names,
+  )
+  if !result.ok {
+    return report_component_run_error(error_format, result.phase, result.detail)
+  }
+  if error_format is Json {
+    println(component_invoke_success_json(export_path, result.values))
+  } else {
+    println(@component.component_values_to_json(result.values).stringify())
+  }
+  0
+}
+
+///|
+fn component_command_run_instance(
+  instance : @runtime_impl.ComponentInstance,
+) -> @runtime_impl.ComponentInstance? {
+  for name in ["wasi:cli/run@0.2.11", "wasi:cli/run@0.3.0"] {
+    match instance.get_export(name) {
+      Some(Instance(run)) => return Some(run)
+      _ => ()
+    }
+  }
+  None
+}
+
+///|
+fn component_command_status(
+  values : Array[@runtime_impl.ComponentValue],
+  requested_exit : Int?,
+) -> Int raise @runtime_impl.ComponentRuntimeError {
+  match requested_exit {
+    Some(status) => status
+    None =>
+      match values {
+        [Variant(0, None)] => 0
+        [Variant(1, None)] => 1
+        _ =>
+          raise HostCallError(
+            "wasi:cli/run returned a value outside result<(), ()>",
+          )
+      }
+  }
+}
+
+///|
+fn report_component_run_error(
+  format : ComponentErrorFormat,
+  phase : String,
+  detail : String,
+) -> Int {
+  if format is Json {
+    println(
+      component_error_json(
+        false,
+        Some(CompRuntimeError),
+        phase,
+        detail,
+        summary=None,
+      ),
+    )
+  } else {
+    println("component \{phase} error: \{detail}")
+  }
+  1
+}
+
+///|
+pub fn report_component_option_error(
+  format : ComponentErrorFormat,
+  detail : String,
+) -> Int {
+  report_component_run_error(format, "options", detail)
+}
+
+///|
+fn component_command_context(
+  file_path : String,
+  args : Array[String],
+  envs : Array[String],
+  dirs : Array[String],
+  network : String,
+) -> @wasi_component.WasiComponentCtx raise @runtime_impl.ComponentRuntimeError {
+  let parsed_envs = []
+  let parsed_dirs = []
+  for entry in envs {
+    match parse_env_var(entry) {
+      Some(pair) => parsed_envs.push(pair)
+      None => raise HostCallError("invalid environment entry '\{entry}'")
+    }
+  }
+  for mapping in dirs {
+    match parse_dir_mapping(mapping) {
+      Some(pair) => parsed_dirs.push(pair)
+      None => raise HostCallError("invalid preopen mapping '\{mapping}'")
+    }
+  }
+  let network_policy : @wasi_component.WasiNetworkPolicy = match network {
+    "deny" => DenyAll
+    "loopback" => LoopbackOnly
+    "all" => AllowAll
+    _ => raise HostCallError("unknown network policy '\{network}'")
+  }
+  let mut builder = @wasi_component.WasiComponentCtxBuilder()
+    .args([file_path] + args)
+    .inherit_stdio()
+    .network_policy(network_policy)
+  for pair in parsed_envs {
+    let (name, value) = pair
+    builder = builder.env(name, value)
+  }
+  for pair in parsed_dirs {
+    let (host_path, guest_path) = pair
+    builder = builder.preopened_directory(host_path, guest_path, false) catch {
+      e => {
+        builder.build().close()
+        raise e
+      }
+    }
+  }
+  builder.build()
+}
+
+///|
+fn run_wasi_component_command_with_evidence(
+  file_path : String,
+  args : Array[String],
+  envs : Array[String],
+  dirs : Array[String],
+  network : String,
+  wit_names : Bool,
+  error_format : ComponentErrorFormat,
+  use_jit : Bool,
+  evidence : ComponentJITExecutionEvidence?,
+) -> Int {
+  let parsed = run_component_command_eval(file_path, true, wit_names)
+  guard parsed.parsed is Some(component) else {
+    return report_component_run_error(error_format, parsed.phase, parsed.detail)
+  }
+  let ctx = component_command_context(file_path, args, envs, dirs, network) catch {
+    e =>
+      return report_component_run_error(
+        error_format,
+        "configure",
+        e.to_string(),
+      )
+  }
+  defer ctx.close()
+  let linker = if use_jit {
+    @runtime_impl.ComponentLinker::with_core_execution_engine(
+      match evidence {
+        Some(record) => component_jit_execution_engine(evidence=record)
+        None => component_jit_execution_engine()
+      },
+    )
+  } else {
+    ComponentLinker()
+  }
+  defer linker.close()
+  let host = @wasi_component.WasiComponentHost(linker, ctx)
+  (try {
+    host.add_preview2_cli_clocks_random()
+    host.add_preview2_io()
+    host.add_preview2_filesystem()
+    host.add_preview2_sockets()
+    host.add_preview3_cli_clocks_random()
+    host.add_preview3_filesystem()
+    host.add_preview3_sockets()
+  } catch {
+    e =>
+      return report_component_run_error(
+        error_format,
+        "configure",
+        e.to_string(),
+      )
+  })
+  |> ignore
+  let instance = linker.instantiate("command", component) catch {
+    e =>
+      return report_component_run_error(
+        error_format,
+        "instantiate",
+        e.to_string(),
+      )
+  }
+  guard component_command_run_instance(instance) is Some(run) else {
+    return report_component_run_error(
+      error_format, "instantiate", "component does not export a pinned wasi:cli/run instance",
+    )
+  }
+  let result = try run.call_exported_func("run", []) catch {
+    HostExit(status) => return status
+    e => return report_component_run_error(error_format, "run", e.to_string())
+  } noraise {
+    values => values
+  }
+  component_command_status(result, ctx.exit_status()) catch {
+    e => report_component_run_error(error_format, "run", e.to_string())
+  }
+}
+
+///|
+pub fn run_wasi_component_command(
+  file_path : String,
+  args : Array[String],
+  envs : Array[String],
+  dirs : Array[String],
+  network : String,
+  wit_names : Bool,
+  error_format : ComponentErrorFormat,
+  use_jit? : Bool = true,
+) -> Int {
+  run_wasi_component_command_with_evidence(
+    file_path,
+    args,
+    envs,
+    dirs,
+    network,
+    wit_names,
+    error_format,
+    use_jit,
+    None,
+  )
 }

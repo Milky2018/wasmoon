@@ -34,7 +34,7 @@ pub fn sniff_binary_kind(bytes : Bytes) -> BinaryKind? {
   let layer = bytes[6].to_int() | (bytes[7].to_int() << 8)
   if layer == 0 && version == 0x01 {
     Some(CoreModule)
-  } else if layer == 1 {
+  } else if layer == 1 && version == 0x0D {
     Some(Component)
   } else {
     Some(UnknownPreamble(version, layer))
@@ -260,11 +260,7 @@ fn Reader::read_sleb_i32(self : Reader) -> Int raise ComponentParseError {
 
 ///|
 fn Reader::read_typeidx(self : Reader) -> Int raise ComponentParseError {
-  let idx = self.read_sleb_i32()
-  if idx < 0 {
-    raise InvalidTypeSection
-  }
-  idx
+  self.read_leb_u32()
 }
 
 ///|
@@ -288,9 +284,7 @@ pub fn parse_component_binary(
   if layer != 1 {
     raise NotAComponent
   }
-  // Pre-standard versions start at 0x0d and increment; the final standard
-  // version is expected to be 0x01.
-  if version != 0x01 && version < 0x0d {
+  if version != 0x0D {
     raise UnsupportedComponentPreamble(version, layer)
   }
   // Section framing: id (u8), size (leb u32), payload (bytes).

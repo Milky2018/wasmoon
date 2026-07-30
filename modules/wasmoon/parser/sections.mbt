@@ -94,7 +94,7 @@ pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
             0x03 => Global(parser.read_global_type())
             0x04 => {
               // Tag import: attribute (should be 0 for exception) + type_idx
-              let _ = parser.read_byte() // attribute, always 0 for exceptions
+              parser.read_byte() |> ignore // attribute, always 0 for exceptions
               Tag(parser.read_u32())
             }
             _ => raise InvalidImportKind(kind)
@@ -222,7 +222,7 @@ pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
           raise UnexpectedEnd
         }
         // Read and validate the custom section name as UTF-8
-        let _ = parser.read_string()
+        parser.read_string() |> ignore
         // Skip any remaining custom section content
         parser.pos = section_end
       }
@@ -235,7 +235,7 @@ pub fn parse_module(data : Bytes) -> @types.Module raise ParserError {
         // Tag section (exception handling)
         let count = parser.read_u32()
         for _ in 0..<count {
-          let _ = parser.read_byte() // attribute, always 0 for exceptions
+          parser.read_byte() |> ignore // attribute, always 0 for exceptions
           let type_idx = parser.read_u32()
           mod.tags.push({ type_idx, })
         }

@@ -259,7 +259,7 @@ test "egraph: num_classes and num_nodes" {
   let eg = EGraph::EGraph()
   let x = eg.add_var(0)
   let y = eg.add_var(1)
-  let _ = eg.add_add(x, y)
+  eg.add_add(x, y) |> ignore
 
   // Before any merges
   inspect(eg.num_classes(), content="3")

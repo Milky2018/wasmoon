@@ -67,13 +67,21 @@ fn validate_component_section_export(
   my_export_type_sigs : Map[String, TypeSig],
   my_export_func_sigs : Map[String, FuncSigShape],
   type_outers : Array[Array[@component.TypeDef?]],
-) -> Int raise ComponentValidationError {
+  next_resource_id : Int,
+) -> (Int, Int) raise ComponentValidationError {
   let mut export_size = export_size
+  let mut next_resource_id = next_resource_id
   let exports = @component.parse_export_section(payload) catch {
     e => raise SectionParseError(11, "\{e}")
   }
   for e in exports {
     validate_export_name(e.name, cfg)
+    validate_name_attributes(
+      11,
+      exportname_to_bytes(e.name),
+      e.attributes,
+      e.sortidx.sort,
+    )
     if is_root && e.sortidx.sort is Component {
       raise SectionParseError(
         11, "exporting a component from the root component is not supported",
@@ -109,17 +117,22 @@ fn validate_component_section_export(
       raise ExportedImportedFunc(e.sortidx.idx)
     }
     check_sortidx(e.sortidx, counts, type_table.length())
+    let mut ascribed_resource_id : Int? = None
+    if e.sortidx.sort is Type && e.desc is Some(Type(SubResource)) {
+      if !(type_sig_of_typeidx(e.sortidx.idx, type_table, resource_ids)
+        is Resource(_)) {
+        raise AscribedExportTypeIncompatible
+      }
+      ascribed_resource_id = Some(next_resource_id)
+      next_resource_id += 1
+    }
     if e.sortidx.sort is Type {
       if exportname_to_string(e.name) is Some(name) {
-        my_export_type_sigs.set(
-          name,
-          type_sig_of_typeidx(e.sortidx.idx, type_table, resource_ids),
-        )
-      }
-      if exportname_to_string(e.name) is Some(name) &&
-        type_sig_of_typeidx(e.sortidx.idx, type_table, resource_ids)
-        is Resource(_) {
-        export_resource_names.set(name, e.sortidx.idx)
+        let sig = match ascribed_resource_id {
+          Some(rid) => TypeSig::Resource(rid)
+          None => type_sig_of_typeidx(e.sortidx.idx, type_table, resource_ids)
+        }
+        my_export_type_sigs.set(name, sig)
       }
     }
     if e.sortidx.sort is Func &&
@@ -464,7 +477,13 @@ fn validate_component_section_export(
     // space, which later sections can reference by index.
     if e.sortidx.sort is Type {
       let idx = e.sortidx.idx
-      if idx >= 0 && idx < type_table.length() {
+      if ascribed_resource_id is Some(rid) {
+        type_table.push(Some(ResourceType(-1, 0x7f, None, HostDefined)))
+        local_resource_types.push(false)
+        resource_ids.push(Some(rid))
+        type_sizes.push(1)
+        type_depths.push(1)
+      } else if idx >= 0 && idx < type_table.length() {
         type_table.push(type_table[idx])
         if idx >= 0 && idx < local_resource_types.length() {
           local_resource_types.push(local_resource_types[idx])
@@ -494,7 +513,12 @@ fn validate_component_section_export(
         type_depths.push(1)
       }
       // The exported type alias is now a named type in the interface.
-      named_types.set(type_table.length() - 1, 1)
+      let alias_idx = type_table.length() - 1
+      named_types.set(alias_idx, 1)
+      if exportname_to_string(e.name) is Some(name) &&
+        type_sig_of_typeidx(alias_idx, type_table, resource_ids) is Resource(_) {
+        export_resource_names.set(name, alias_idx)
+      }
     } else {
       count_alias(e.sortidx.sort, counts)
       match e.sortidx.sort {
@@ -733,5 +757,5 @@ fn validate_component_section_export(
       _ => export_size = add_type_size(export_size, 1)
     }
   }
-  export_size
+  (export_size, next_resource_id)
 }

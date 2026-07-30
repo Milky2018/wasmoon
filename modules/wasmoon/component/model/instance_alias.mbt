@@ -10,6 +10,7 @@ pub(all) struct InstantiateArg {
 ///|
 pub(all) struct InlineExport {
   name : String
+  attributes : Array[NameAttribute]
   sortidx : SortIdx
 } derive(Debug, Eq)
 
@@ -33,26 +34,25 @@ pub(all) struct Instance {
 fn parse_inlineexport(
   reader : Reader,
 ) -> InlineExport raise ComponentParseError {
-  // Inline exports in the instance section use the same tagged "exportname"
-  // encoding as the component export section (0x00/0x01 + name bytes [+version]).
+  // Inline exports use the same nameattributes encoding as component exports.
   let tag = reader.read_u8()
-  let name = if tag == 0x00 {
+  let (name, attributes) = if tag == 0x00 {
     let len = reader.read_leb_u32()
     let bytes = reader.read_bytes(len)
-    decode_utf8_validated(bytes)
+    (decode_utf8_validated(bytes), [])
   } else if tag == 0x01 {
     let len = reader.read_leb_u32()
     let bytes = reader.read_bytes(len)
-    // For now we ignore the version suffix, since the test suite uses only
-    // plain names.
-    let vs_len = reader.read_leb_u32()
-    reader.read_bytes(vs_len) |> ignore
-    decode_utf8_validated(bytes)
+    (decode_utf8_validated(bytes), [])
+  } else if tag == 0x02 {
+    let len = reader.read_leb_u32()
+    let bytes = reader.read_bytes(len)
+    (decode_utf8_validated(bytes), parse_attributes(reader))
   } else {
     raise InvalidInstanceSection
   }
   let sortidx = parse_sortidx(reader)
-  { name, sortidx }
+  { name, attributes, sortidx }
 }
 
 ///|
