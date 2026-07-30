@@ -86,6 +86,7 @@ jobs:
             moon test --target native ${{ matrix.native_test_args }}
 
       - name: build Wasmoon
+        if: ${{ !cancelled() }}
         run: |
           moon build --target native --release
           if nm \
@@ -97,7 +98,7 @@ jobs:
           ./install.sh
 
       - name: collect native AMD64 compile trend
-        if: runner.os == 'Linux' && github.ref_name == 'milky/component-runtime-engine-async'
+        if: ${{ !cancelled() && runner.os == 'Linux' && github.ref_name == 'milky/component-runtime-engine-async' }}
         run: |
           uname -a > target/amd64-compile-trend-host.txt
           moon version --all >> target/amd64-compile-trend-host.txt
@@ -123,7 +124,7 @@ jobs:
             --workload spec/float_exprs.wast
 
       - uses: actions/upload-artifact@v4
-        if: runner.os == 'Linux' && github.ref_name == 'milky/component-runtime-engine-async'
+        if: ${{ !cancelled() && runner.os == 'Linux' && github.ref_name == 'milky/component-runtime-engine-async' }}
         with:
           name: amd64-current-version-compile-trend
           path: |
