@@ -201,7 +201,7 @@ fn component_jit_execution_engine(
         }
       }
     },
-    prepare_store=fn(store) { store.enable_c_heap() },
+    prepare_store=fn(store) { try! store.enable_c_heap() },
     close=fn() {
       for entry in contexts {
         entry.1.core.close()

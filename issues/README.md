@@ -349,6 +349,7 @@ graph TD
   ISS_331["ISS-331: Match sanitizer evidence without substring false positives"]
   ISS_332["ISS-332: Enforce warning 73 cleanliness"]
   ISS_333["ISS-333: Consume owned callback closures exactly once"]
+  ISS_334["ISS-334: Enforce terminal Store and Linker close semantics"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005

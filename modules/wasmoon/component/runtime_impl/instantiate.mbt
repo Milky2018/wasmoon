@@ -88,7 +88,9 @@ fn instantiate_component(
               drop_task_thread(async_state, inst_task_id)
               // Register a stable name for debugging core traps.
               register_core_instance_name(instance.store_idx, module_name)
-              linker.core_linker.register(module_name, instance)
+              linker.core_linker.register(module_name, instance) catch {
+                error => raise CoreModuleInstantiateError(error.to_string())
+              }
               linker.core_engine.register_instance(store, mod_, instance)
               state.core_instances.push(
                 core_instance_from_module(

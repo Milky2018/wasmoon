@@ -912,7 +912,9 @@ fn instantiate_canon_lower(
       }
       out
     }
-    let func_addr = store.alloc_host_func(host, func_type=core_type, type_idx=0)
+    let func_addr = store.alloc_host_func(host, func_type=core_type, type_idx=0) catch {
+      error => raise CoreModuleInstantiateError(error.to_string())
+    }
     let instance : @runtime.ModuleInstance = {
       types: [@types.SubType::from_func(core_type)],
       type_rec_groups: [],

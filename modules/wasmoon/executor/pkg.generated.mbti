@@ -32,7 +32,7 @@ pub fn instantiate_module_with_init(@types.Module) -> (@runtime.Store, @runtime.
 
 pub fn instantiate_with_linker(@runtime.Linker, String, @types.Module) -> @runtime.ModuleInstance raise @runtime.RuntimeError
 
-pub fn validate_imports_with_diagnostics(@runtime.Store, @types.Module, @runtime.Imports) -> ImportDiagnosticsResult
+pub fn validate_imports_with_diagnostics(@runtime.Store, @types.Module, @runtime.Imports) -> ImportDiagnosticsResult raise @runtime.RuntimeError
 
 // Errors
 

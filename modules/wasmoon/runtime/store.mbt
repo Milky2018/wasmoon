@@ -185,6 +185,13 @@ pub fn Store::close(self : Store) -> Unit {
 }
 
 ///|
+fn Store::ensure_open(self : Store) -> Unit raise RuntimeError {
+  if self.closed.val {
+    raise StoreClosed
+  }
+}
+
+///|
 /// Return the Store-owned native invocation registry.
 pub fn Store::native_execution_state(
   self : Store,
@@ -194,7 +201,8 @@ pub fn Store::native_execution_state(
 
 ///|
 /// Enable C heap for this store
-pub fn Store::enable_c_heap(self : Store) -> Unit {
+pub fn Store::enable_c_heap(self : Store) -> Unit raise RuntimeError {
+  self.ensure_open()
   if self.c_heap is None {
     self.c_heap = Some(CHeap(capacity=c_heap_initial_capacity()))
   }
@@ -206,7 +214,8 @@ pub fn Store::set_module_types(
   self : Store,
   types : Array[@types.SubType],
   rec_groups? : Array[Int] = [],
-) -> Unit {
+) -> Unit raise RuntimeError {
+  self.ensure_open()
   self.module_types = types
   self.module_rec_groups = rec_groups
 }
@@ -232,7 +241,8 @@ pub fn Store::has_c_heap(self : Store) -> Bool {
 pub fn Store::wrap_as_extern(
   self : Store,
   value : @types.Value,
-) -> @types.Value {
+) -> @types.Value raise RuntimeError {
+  self.ensure_open()
   let idx = self.wrapped_externs.length()
   self.wrapped_externs.push(value)
   ExternRef(-1 - idx) // -1 for index 0, -2 for index 1, etc.
@@ -271,7 +281,8 @@ pub fn Store::alloc_func(
   func : @types.FunctionCode,
   func_type? : @types.FuncType = { params: [], results: [] },
   type_idx? : Int = -1,
-) -> Int {
+) -> Int raise RuntimeError {
+  self.ensure_open()
   let idx = self.funcs.length()
   self.funcs.push(WasmFunc(func))
   self.func_types.push(func_type)
@@ -287,7 +298,8 @@ pub fn Store::alloc_host_func(
   func : (Array[@types.Value]) -> Array[@types.Value] raise RuntimeError,
   func_type? : @types.FuncType = { params: [], results: [] },
   type_idx? : Int = -1,
-) -> Int {
+) -> Int raise RuntimeError {
+  self.ensure_open()
   let idx = self.funcs.length()
   // Back-compat: old-style host funcs don't take a Caller.
   let wrapped : (Caller, Array[@types.Value]) -> Array[@types.Value] raise RuntimeError = (
@@ -308,7 +320,8 @@ pub fn Store::alloc_host_func_with_caller(
   func : (Caller, Array[@types.Value]) -> Array[@types.Value] raise RuntimeError,
   func_type? : @types.FuncType = { params: [], results: [] },
   type_idx? : Int = -1,
-) -> Int {
+) -> Int raise RuntimeError {
+  self.ensure_open()
   let idx = self.funcs.length()
   self.funcs.push(HostFunc(func))
   self.func_types.push(func_type)
@@ -324,7 +337,8 @@ pub fn Store::alloc_table(
   self : Store,
   table : Table,
   use_jit? : Bool = true,
-) -> Int {
+) -> Int raise RuntimeError {
+  self.ensure_open()
   let idx = self.tables.length()
   self.tables.push(table)
 
@@ -340,14 +354,19 @@ pub fn Store::alloc_table(
 }
 
 ///|
-pub fn Store::alloc_mem(self : Store, mem : Memory) -> Int {
+pub fn Store::alloc_mem(self : Store, mem : Memory) -> Int raise RuntimeError {
+  self.ensure_open()
   let idx = self.mems.length()
   self.mems.push(mem)
   idx
 }
 
 ///|
-pub fn Store::alloc_global(self : Store, global : GlobalInstance) -> Int {
+pub fn Store::alloc_global(
+  self : Store,
+  global : GlobalInstance,
+) -> Int raise RuntimeError {
+  self.ensure_open()
   let idx = self.globals.length()
   self.globals.push(global)
   idx
@@ -359,7 +378,8 @@ pub fn Store::alloc_tag(
   self : Store,
   tag_type : @types.FuncType,
   type_idx? : Int = -1,
-) -> Int {
+) -> Int raise RuntimeError {
+  self.ensure_open()
   let idx = self.tags.length()
   self.tags.push(tag_type)
   self.tag_type_indices.push(type_idx)
@@ -410,7 +430,8 @@ pub fn Store::alloc_exn(
   self : Store,
   tag_addr : Int,
   values : Array[@types.Value],
-) -> Int {
+) -> Int raise RuntimeError {
+  self.ensure_open()
   let idx = self.exns.length()
   self.exns.push({ tag_addr, values })
   idx
@@ -475,6 +496,7 @@ pub fn Store::alloc_struct(
   type_idx : Int,
   fields : Array[@types.Value],
 ) -> Int raise RuntimeError {
+  self.ensure_open()
   match self.c_heap {
     Some(heap) =>
       heap.alloc_struct(type_idx, fields) catch {
@@ -493,6 +515,7 @@ pub fn Store::alloc_array(
   type_idx : Int,
   elements : Array[@types.Value],
 ) -> Int raise RuntimeError {
+  self.ensure_open()
   match self.c_heap {
     Some(heap) =>
       heap.alloc_array_from_values(type_idx, elements) catch {
@@ -529,6 +552,7 @@ pub fn Store::struct_set(
   field_idx : Int,
   value : @types.Value,
 ) -> Unit raise RuntimeError {
+  self.ensure_open()
   match self.c_heap {
     Some(heap) => heap.struct_set(struct_idx, field_idx, value)
     None => self.heap.struct_set(struct_idx, field_idx, value)
@@ -576,6 +600,7 @@ pub fn Store::array_set(
   elem_idx : Int,
   value : @types.Value,
 ) -> Unit raise RuntimeError {
+  self.ensure_open()
   match self.c_heap {
     Some(heap) =>
       heap.array_set(array_idx, elem_idx, value) catch {
@@ -596,6 +621,7 @@ pub fn Store::array_fill(
   value : @types.Value,
   count : Int,
 ) -> Unit raise RuntimeError {
+  self.ensure_open()
   match self.c_heap {
     Some(heap) =>
       heap.array_fill(array_idx, offset, value, count) catch {
@@ -617,6 +643,7 @@ pub fn Store::array_copy(
   src_offset : Int,
   count : Int,
 ) -> Unit raise RuntimeError {
+  self.ensure_open()
   match self.c_heap {
     Some(heap) =>
       heap.array_copy(dst_idx, dst_offset, src_idx, src_offset, count) catch {
@@ -792,7 +819,11 @@ pub fn Store::get_wasi_memory(self : Store) -> Memory {
 ///|
 /// Set the current WASI module's memory address
 /// Should be called after instantiating a module that uses WASI
-pub fn Store::set_wasi_mem_addr(self : Store, addr : Int) -> Unit {
+pub fn Store::set_wasi_mem_addr(
+  self : Store,
+  addr : Int,
+) -> Unit raise RuntimeError {
+  self.ensure_open()
   self.wasi_mem_addr = Some(addr)
 }
 
@@ -804,7 +835,11 @@ pub fn Store::get_wasi_ctx_handle(self : Store) -> Int {
 
 ///|
 /// Set the WASI context handle (for WAST runner to store WASI context)
-pub fn Store::set_wasi_ctx_handle(self : Store, handle : Int) -> Unit {
+pub fn Store::set_wasi_ctx_handle(
+  self : Store,
+  handle : Int,
+) -> Unit raise RuntimeError {
+  self.ensure_open()
   self.wasi_ctx_handle = handle
 }
 
@@ -823,7 +858,11 @@ pub fn Store::get_global(
 /// Register a module instance and set ownership for its functions
 /// Only sets ownership for functions that don't already have an owner
 /// (imported functions already belong to their original module)
-pub fn Store::register_instance(self : Store, instance : ModuleInstance) -> Int {
+pub fn Store::register_instance(
+  self : Store,
+  instance : ModuleInstance,
+) -> Int raise RuntimeError {
+  self.ensure_open()
   let instance_idx = self.instances.length()
   instance.store_idx = instance_idx
   self.instances.push(instance)

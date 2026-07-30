@@ -240,7 +240,7 @@ pub fn putchar(Int) -> Unit
 
 pub fn random_get(@runtime.Memory, Int, Int) -> Int
 
-pub fn register_wasi(@runtime.Linker, WasiContext) -> Unit
+pub fn register_wasi(@runtime.Linker, WasiContext) -> Unit raise @runtime.RuntimeError
 
 pub let right_fd_advise : Int64
 

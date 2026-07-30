@@ -31,7 +31,7 @@ pub fn collect_registered_funcref_entries(@runtime.Store) -> Array[(Int64, Int)]
 
 pub fn count_func_imports(Array[@types.Import]) -> Int
 
-pub fn create_spectest_module(@runtime.Store) -> @runtime.ModuleInstance
+pub fn create_spectest_module(@runtime.Store) -> @runtime.ModuleInstance raise @runtime.RuntimeError
 
 pub fn eval_elem_offset_expr(Array[@types.Instruction], Array[@runtime.GlobalInstance]) -> Int
 

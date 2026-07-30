@@ -6,7 +6,11 @@ pub fn alloc_host_core_func(
   may_suspend? : Bool = false,
   native_eligible? : Bool = true,
 ) -> CoreFuncRef {
-  let func_addr = store.alloc_host_func(host, func_type=core_type, type_idx=0)
+  let func_addr = try! store.alloc_host_func(
+    host,
+    func_type=core_type,
+    type_idx=0,
+  )
   let instance : @runtime.ModuleInstance = {
     types: [@types.SubType::from_func(core_type)],
     type_rec_groups: [],

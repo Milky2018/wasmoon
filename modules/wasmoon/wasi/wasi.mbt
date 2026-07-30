@@ -19,7 +19,10 @@ fn trap_invalid_wasi_abi_arg() -> Unit raise @runtime.RuntimeError {
 
 ///|
 /// Register all WASI snapshot preview1 functions with a linker
-pub fn register_wasi(linker : @runtime.Linker, ctx : WasiContext) -> Unit {
+pub fn register_wasi(
+  linker : @runtime.Linker,
+  ctx : WasiContext,
+) -> Unit raise @runtime.RuntimeError {
   let store = linker.get_store()
   // We need to get memory from the module being instantiated
   // For now, we'll create wrapper functions that access memory through the store
