@@ -8,7 +8,8 @@ lookup, WIT-shaped values, and checked calls behind a small API:
 component bytes
     -> ComponentRuntime::instantiate
     -> ComponentInstance::bind
-    -> ComponentFunction::call
+    -> ComponentFunction::start
+    -> ComponentCall::{poll, wait, join, cancel}
 ```
 
 Do not import `Milky2018/wasmoon/component/runtime_impl` from ordinary
@@ -34,7 +35,39 @@ let increment = instance.bind("math#increment")
 
 ///|
 let results = increment.call([@component.ComponentValue::U32(41U)])
+
+///|
+runtime.close()
 ```
+
+`call(args)` is the blocking convenience form of `start(args).wait()`. Use
+`start` when the embedding needs an explicit invocation lifetime:
+
+```moonbit skip
+///|
+let call = increment.start([@component.ComponentValue::U32(41U)])
+
+///|
+match call.poll() {
+  Pending => ()
+  Ready(results) => consume(results)
+}
+
+///|
+let results = call.wait()
+
+///|
+let async_results = call.join()
+
+///|
+call.cancel()
+```
+
+`poll` performs bounded guest progress and a zero-timeout host-event drain; it
+never waits for descriptor or timer readiness. `wait` may block in the native
+reactor after guest work is exhausted. `join` is a MoonBit async operation: it
+cooperatively suspends the current MoonBit process and does not create an
+operating-system thread. Cancellation is terminal and idempotent.
 
 Export paths use `#` only to cross component instance exports. A top-level
 function is named `run`; a function in an exported interface instance is named
@@ -104,10 +137,12 @@ runtime target, but does not itself emit MoonBit source.
 
 ## Execution policy
 
-`ComponentRuntime` uses the portable continuation-aware interpreter. Native JIT
-selection remains a Wasmoon product embedding policy because constructing a
-native engine requires Store, core-module, VM context, hostcall, trap, and GC
-coordination that must not appear in this stable facade.
+`ComponentRuntime()` uses Wasmoon's strict native engine. Native compilation or
+target failures are structured errors and never trigger an implicit
+interpreter fallback. Use
+`ComponentRuntime(engine=interpreter_component_engine())` when portable
+interpreter execution is required. Advanced embedders can retain and reuse a
+`ComponentEngine`; each runtime opens an independent execution session.
 
 The `wasmoon component --run` WASI command path and component conformance runner
 use Wasmoon's native JIT by default on macOS AArch64 and Linux AMD64, with
@@ -116,10 +151,15 @@ the scheduler normally. Stackful calls park an opaque continuation and resume
 the original native activation after the suspending hostcall; they are not
 replayed and do not silently fall back to the interpreter.
 
-The stable facade deliberately exposes none of the native fiber, platform
-reactor, descriptor, Store, or mutable scheduler types. General facade and
-`--invoke` behavior therefore remain independent of target-specific engine
-types.
+The stable facade exposes only opaque engine, runtime, instance, function, and
+call handles. Native fibers, platform reactors, descriptors, Store objects,
+and scheduler queues remain private to Wasmoon-owned adapters.
+
+`ComponentRuntime::close` is terminal and idempotent. It rejects new
+instantiation, binding, host installation, and calls; cancels every outstanding
+`ComponentCall`; closes installed host contexts and their reactor
+registrations; and finally closes the execution session and Store resources.
+Retained instance, function, and call aliases cannot re-enter a closed runtime.
 
 ## Security and hardening
 
