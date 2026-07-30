@@ -38,6 +38,27 @@ fn component_runtime_trap_fixture() -> Bytes raise @component_text.ComponentText
 }
 
 ///|
+fn component_runtime_yield_fixture() -> Bytes raise @component_text.ComponentTextError {
+  @component_text.parse_component_wat(
+    (
+      #|(component
+      #|  (core module $m
+      #|    (import "" "thread.yield" (func $thread.yield (result i32)))
+      #|    (func (export "yield-once") (result i32)
+      #|      (drop (call $thread.yield))
+      #|      (i32.const 42)))
+      #|  (canon thread.yield (core func $thread.yield))
+      #|  (core instance $i (instantiate $m (with "" (instance
+      #|    (export "thread.yield" (func $thread.yield))))))
+      #|  (func $yield-once async (result u32)
+      #|    (canon lift (core func $i "yield-once")))
+      #|  (export "yield-once" (func $yield-once)))
+      #|
+    ),
+  )
+}
+
+///|
 test "component runtime facade binds and invokes nested exports" {
   let runtime = @component.ComponentRuntime()
   defer runtime.close()
@@ -58,6 +79,46 @@ test "component runtime facade binds and invokes nested exports" {
   )
   debug_inspect(
     function.call([U32(41U)]),
+    content=(
+      #|[U32(42)]
+    ),
+  )
+}
+
+///|
+test "component calls resume a directly yielding guest" {
+  let runtime = @component.ComponentRuntime(
+    engine=@component.interpreter_component_engine(),
+  )
+  defer runtime.close()
+  let blocking_call = runtime
+    .instantiate("yield", component_runtime_yield_fixture())
+    .bind("yield-once")
+    .start([])
+  debug_inspect(
+    blocking_call.wait(),
+    content=(
+      #|[U32(42)]
+    ),
+  )
+  let polled_call = runtime
+    .instantiate("yield-poll", component_runtime_yield_fixture())
+    .bind("yield-once")
+    .start([])
+  debug_inspect(
+    (polled_call.poll(), polled_call.poll()),
+    content=(
+      #|(Pending, Ready([U32(42)]))
+    ),
+  )
+  let native_runtime = @component.ComponentRuntime()
+  defer native_runtime.close()
+  debug_inspect(
+    native_runtime
+    .instantiate("native-yield", component_runtime_yield_fixture())
+    .bind("yield-once")
+    .start([])
+    .wait(),
     content=(
       #|[U32(42)]
     ),

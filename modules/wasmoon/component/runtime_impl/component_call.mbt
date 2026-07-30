@@ -13,6 +13,13 @@ priv enum ComponentInvocationPhase {
 }
 
 ///|
+priv enum ComponentInvocationStep {
+  DriveProgressed
+  DriveBlocked
+  DriveReady(Array[ComponentValue])
+}
+
+///|
 struct ComponentInvocation {
   task_id : Int64
   task : CallbackTask
@@ -106,11 +113,11 @@ fn ComponentInvocation::fail(
 }
 
 ///|
-pub fn ComponentInvocation::poll(
+fn ComponentInvocation::drive_once(
   self : ComponentInvocation,
-) -> ComponentInvocationPoll raise ComponentRuntimeError {
+) -> ComponentInvocationStep raise ComponentRuntimeError {
   match self.phase[0] {
-    Completed(values) => return InvocationReady(values)
+    Completed(values) => return DriveReady(values)
     Failed(error) => raise error
     WasCancelled => raise Cancelled
     Running => ()
@@ -131,19 +138,21 @@ pub fn ComponentInvocation::poll(
   pop_task(self.async_state)
   match step {
     Done =>
-      InvocationReady(self.finish()) catch {
+      DriveReady(self.finish()) catch {
         error => {
           self.fail(error)
           raise error
         }
       }
-    Progressed => InvocationPending
+    Progressed => DriveProgressed
     Blocked =>
       try {
-        if !progress_one_subtask_nonblocking(self.async_state, self.store) {
-          poll_host_event(self.async_state, self.store) |> ignore
+        if progress_one_subtask_nonblocking(self.async_state, self.store) ||
+          poll_host_event(self.async_state, self.store) {
+          DriveProgressed
+        } else {
+          DriveBlocked
         }
-        InvocationPending
       } catch {
         error => {
           self.fail(error)
@@ -154,16 +163,26 @@ pub fn ComponentInvocation::poll(
 }
 
 ///|
+pub fn ComponentInvocation::poll(
+  self : ComponentInvocation,
+) -> ComponentInvocationPoll raise ComponentRuntimeError {
+  match self.drive_once() {
+    DriveReady(values) => InvocationReady(values)
+    DriveProgressed | DriveBlocked => InvocationPending
+  }
+}
+
+///|
 pub fn ComponentInvocation::wait(
   self : ComponentInvocation,
 ) -> Array[ComponentValue] raise ComponentRuntimeError {
   while true {
-    match self.poll() {
-      InvocationReady(values) => return values
-      InvocationPending =>
+    match self.drive_once() {
+      DriveReady(values) => return values
+      DriveProgressed => continue
+      DriveBlocked =>
         try {
-          if !progress_one_subtask_nonblocking(self.async_state, self.store) &&
-            !wait_for_host_event(self.async_state, self.store) {
+          if !wait_for_host_event(self.async_state, self.store) {
             let error = CanonCallError(
               "wasm trap: deadlock detected: event loop cannot make further progress",
             )
