@@ -37,7 +37,9 @@ manifest change.
 Validation ordering is checked inside the effective code of
 `ComponentRuntime::instantiate_component`: comments and literals are removed,
 the function body is isolated with balanced braces, and every linker
-instantiation must follow component validation.
+instantiation must follow an unconditional function-body-level component
+validation. Validation inside a nested control-flow block does not establish
+evidence for the gate.
 
 The Linux AMD64 and macOS ARM64 jobs each run the stable 0.2, current 0.3
 async, and future-gated suites through both JIT and interpreter execution. They

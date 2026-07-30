@@ -158,12 +158,30 @@ def moonbit_function_body(source: str, qualified_name: str) -> str | None:
     return None
 
 
+def brace_depths(code: str) -> list[int] | None:
+    """Return the brace depth before each character, or None if unbalanced."""
+    depths: list[int] = []
+    depth = 0
+    for char in code:
+        depths.append(depth)
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            if depth == 0:
+                return None
+            depth -= 1
+    return depths if depth == 0 else None
+
+
 def validates_before_every_instantiation(facade: str) -> bool:
     body = moonbit_function_body(
         facade,
         "ComponentRuntime::instantiate_component",
     )
     if body is None:
+        return False
+    depths = brace_depths(body)
+    if depths is None:
         return False
     validations = [
         match.start()
@@ -172,6 +190,7 @@ def validates_before_every_instantiation(facade: str) -> bool:
             r"validate_component_with_config\s*\(",
             body,
         )
+        if depths[match.start()] == 0
     ]
     instantiations = [
         match.start()
@@ -329,8 +348,8 @@ def audit_repo(root: Path) -> list[AuditCheck]:
         AuditCheck(
             "validate-before-instantiate",
             validates_before_every_instantiation(facade),
-            "ComponentRuntime::instantiate_component must validate effective "
-            "code before every linker instantiation",
+            "ComponentRuntime::instantiate_component must unconditionally "
+            "validate before every linker instantiation",
         )
     )
     checks.append(

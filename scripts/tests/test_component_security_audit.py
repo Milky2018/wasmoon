@@ -305,6 +305,42 @@ class ComponentSecurityAuditTests(unittest.TestCase):
             )
             self.assert_failed(root, "validate-before-instantiate")
 
+    def test_conditional_validation_does_not_dominate_instantiation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.create_fixture(root)
+            (root / "facade.mbt").write_text(
+                "pub fn ComponentRuntime::instantiate_component() {\n"
+                "  if false {\n"
+                "    @component_model."
+                "validate_component_with_config(component)\n"
+                "  }\n"
+                "  self.state.linker.instantiate(name, component)\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            self.assert_failed(root, "validate-before-instantiate")
+
+    def test_top_level_validation_dominates_nested_instantiation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.create_fixture(root)
+            (root / "facade.mbt").write_text(
+                "pub fn ComponentRuntime::instantiate_component() {\n"
+                "  @component_model."
+                "validate_component_with_config(component)\n"
+                "  if enabled {\n"
+                "    self.state.linker.instantiate(name, component)\n"
+                "  }\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            checks = {check.name: check for check in audit_repo(root)}
+            self.assertTrue(
+                checks["validate-before-instantiate"].passed,
+                checks["validate-before-instantiate"].detail,
+            )
+
     def test_missing_validator_limit_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
