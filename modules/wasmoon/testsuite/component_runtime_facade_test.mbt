@@ -70,14 +70,18 @@ fn component_runtime_yielding_background_timer_fixture() -> Bytes raise @compone
       #|  (component $spinner
       #|    (core module $m
       #|      (import "" "task.return" (func $task.return))
+      #|      (import "" "thread.yield" (func $thread.yield (result i32)))
       #|      (func (export "spin") (result i32)
       #|        (call $task.return)
+      #|        (drop (call $thread.yield))
       #|        (i32.const 1))
       #|      (func (export "spin-cb") (param i32 i32 i32) (result i32)
       #|        (i32.const 1)))
       #|    (canon task.return (core func $task.return))
+      #|    (canon thread.yield (core func $thread.yield))
       #|    (core instance $i (instantiate $m (with "" (instance
-      #|      (export "task.return" (func $task.return))))))
+      #|      (export "task.return" (func $task.return))
+      #|      (export "thread.yield" (func $thread.yield))))))
       #|    (func (export "spin") async (canon lift
       #|      (core func $i "spin")
       #|      async (callback (core func $i "spin-cb")))))
@@ -362,20 +366,36 @@ test "component runtime native engine executes without interpreter fallback" {
 ///|
 test "native execution callback can close its runtime during suspension" {
   let close_runtime = Ref(fn() { () })
+  let reenter_call = Ref(fn() { () })
   let events : Array[@component.NativeComponentExecutionEvent] = []
+  let reentrant_errors : Array[@component.ComponentRuntimeError] = []
+  let reentrant_returned = Ref(false)
   let runtime = @component.ComponentRuntime(
     engine=@component.native_component_engine(opt_level=0, on_execution=fn(
       event,
     ) {
       events.push(event)
       (close_runtime.val)()
+      (reenter_call.val)()
     }),
   )
-  close_runtime.val = fn() { runtime.close() }
   let call = runtime
     .instantiate("native-close-on-suspend", component_runtime_yield_fixture())
     .bind("yield-once")
     .start([])
+  close_runtime.val = fn() { runtime.close() }
+  reenter_call.val = fn() {
+    reenter_call.val = fn() { () }
+    let error = try call.poll() catch {
+      error => Some(error)
+    } noraise {
+      _ => None
+    }
+    match error {
+      Some(error) => reentrant_errors.push(error)
+      None => reentrant_returned.val = true
+    }
+  }
   let poll_error = try call.poll() catch {
     error => error
   } noraise {
@@ -390,8 +410,129 @@ test "native execution callback can close its runtime during suspension" {
   }
   runtime.close()
   debug_inspect(
-    (events, poll_error, closed_error),
-    content="([Resumable], Cancelled, RuntimeClosed)",
+    (events, reentrant_errors, reentrant_returned.val, poll_error, closed_error),
+    content="([Resumable], [Cancelled], false, Cancelled, RuntimeClosed)",
+  )
+}
+
+///|
+test "native execution callback rejects same-call reentry" {
+  let reenter_call = Ref(fn() { () })
+  let events : Array[@component.NativeComponentExecutionEvent] = []
+  let reentrant_errors : Array[@component.ComponentRuntimeError] = []
+  let reentrant_returned = Ref(false)
+  let runtime = @component.ComponentRuntime(
+    engine=@component.native_component_engine(opt_level=0, on_execution=fn(
+      event,
+    ) {
+      events.push(event)
+      (reenter_call.val)()
+    }),
+  )
+  defer runtime.close()
+  let call = runtime
+    .instantiate("native-reentrant-call", component_runtime_yield_fixture())
+    .bind("yield-once")
+    .start([])
+  reenter_call.val = fn() {
+    reenter_call.val = fn() { () }
+    let error = try call.poll() catch {
+      error => Some(error)
+    } noraise {
+      _ => None
+    }
+    match error {
+      Some(error) => reentrant_errors.push(error)
+      None => reentrant_returned.val = true
+    }
+  }
+  let outer = call.poll()
+  call.cancel()
+  debug_inspect(
+    (events, reentrant_errors, reentrant_returned.val, outer),
+    content="([Resumable], [CallAlreadyActive], false, Pending)",
+  )
+}
+
+///|
+test "native side-task callback close defers teardown until publication" {
+  let armed = Ref(false)
+  let close_runtime = Ref(fn() { () })
+  let reenter_call = Ref(fn() { () })
+  let events : Array[@component.NativeComponentExecutionEvent] = []
+  let reentrant_errors : Array[@component.ComponentRuntimeError] = []
+  let reentrant_returned = Ref(false)
+  let runtime = @component.ComponentRuntime(
+    engine=@component.native_component_engine(opt_level=0, on_execution=fn(
+      event,
+    ) {
+      if armed.val {
+        events.push(event)
+        (reenter_call.val)()
+        (close_runtime.val)()
+      }
+    }),
+  )
+  close_runtime.val = fn() { runtime.close() }
+  let ctx = @wasi_component.WasiComponentCtxBuilder().build()
+  runtime.install(@component.wasi_command_component_host(ctx))
+  let instance = runtime.instantiate(
+    "native-side-task-close",
+    component_runtime_yielding_background_timer_fixture(),
+  )
+  instance.bind("start-spinner").call([]) |> ignore
+  armed.val = true
+  let timer = instance.bind("wait-for").start([U64(60_000_000_000UL)])
+  reenter_call.val = fn() {
+    reenter_call.val = fn() { () }
+    let error = try timer.poll() catch {
+      error => Some(error)
+    } noraise {
+      _ => None
+    }
+    match error {
+      Some(error) => reentrant_errors.push(error)
+      None => reentrant_returned.val = true
+    }
+  }
+  debug_inspect(timer.poll(), content="Pending")
+  let poll_errors : Array[@component.ComponentRuntimeError] = []
+  let poll_returned = Ref(false)
+  try timer.poll() catch {
+    error => poll_errors.push(error)
+  } noraise {
+    _ => poll_returned.val = true
+  }
+  let closed_error = try
+    runtime.instantiate(
+      "closed-after-side-task",
+      component_runtime_facade_fixture(),
+    )
+  catch {
+    error => error
+  } noraise {
+    _ => fail("expected side-task callback close to remain terminal")
+  }
+  runtime.close()
+  debug_inspect(
+    (
+      events,
+      reentrant_errors,
+      reentrant_returned.val,
+      poll_errors,
+      poll_returned.val,
+      closed_error,
+    ),
+    content=(
+      #|(
+      #|  [Resumable],
+      #|  [CallAlreadyActive],
+      #|  false,
+      #|  [Cancelled],
+      #|  false,
+      #|  RuntimeClosed,
+      #|)
+    ),
   )
 }
 
@@ -449,6 +590,42 @@ async test "component calls expose an asynchronous join" {
       #|[U32(7)]
     ),
   )
+}
+
+///|
+async test "component calls reject overlapping asynchronous joins" {
+  let runtime = @component.ComponentRuntime(
+    engine=@component.interpreter_component_engine(),
+  )
+  defer runtime.close()
+  let ctx = @wasi_component.WasiComponentCtxBuilder().build()
+  runtime.install(@component.wasi_command_component_host(ctx))
+  let call = runtime
+    .instantiate(
+      "overlapping-join",
+      component_runtime_yielding_background_timer_fixture(),
+    )
+    .bind("wait-for")
+    .start([U64(60_000_000_000UL)])
+  let outcomes = @async.with_task_group(group => {
+    let first = group.spawn(no_wait=true, () => {
+      try call.join() catch {
+        error => Err(error)
+      } noraise {
+        values => Ok(values)
+      }
+    })
+    let second = group.spawn(no_wait=true, () => {
+      try call.join() catch {
+        error => Err(error)
+      } noraise {
+        values => Ok(values)
+      }
+    })
+    group.spawn_bg() <| () => { call.cancel() }
+    (first.wait(), second.wait())
+  })
+  debug_inspect(outcomes, content="(Err(Cancelled), Err(CallAlreadyActive))")
 }
 
 ///|

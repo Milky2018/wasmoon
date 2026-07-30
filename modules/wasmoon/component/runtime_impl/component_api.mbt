@@ -369,6 +369,14 @@ pub fn ComponentLinker::close(self : ComponentLinker) -> Unit {
     return
   }
   self.closed.val = true
+  for entry in self.components {
+    let (_, component) = entry
+    cancel_async_state_continuations(component.async_state)
+  }
+  match self.host_runtime.val {
+    Some(runtime) => runtime.cancel_continuations()
+    None => ()
+  }
   self.components.clear()
   self.imports.clear()
   self.host_runtime.val = None

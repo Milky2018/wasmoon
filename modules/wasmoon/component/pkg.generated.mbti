@@ -62,6 +62,7 @@ pub(all) suberror ComponentRuntimeError {
   HostInstallerAlreadyConsumed
   HostContextAlreadyOwned
   HostReadinessAlreadyInstalled
+  CallAlreadyActive
   RuntimeClosed
   Cancelled
   HostExit(Int)

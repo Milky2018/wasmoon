@@ -154,8 +154,14 @@ fn ComponentInvocation::drive_once(
     WasCancelled => raise Cancelled
     Running => ()
   }
-  push_task(self.async_state, self.task_id, self.can_block)
+  if self.driving[0] {
+    raise InvocationAlreadyDriving
+  }
   self.driving[0] = true
+  defer {
+    self.driving[0] = false
+  }
+  push_task(self.async_state, self.task_id, self.can_block)
   let step = step_task_once(
     self.task,
     self.store,
@@ -163,7 +169,6 @@ fn ComponentInvocation::drive_once(
     self.async_state,
   ) catch {
     error => {
-      self.driving[0] = false
       pop_task(self.async_state)
       if self.cancel_requested[0] {
         self.finish_cancel()
@@ -173,13 +178,12 @@ fn ComponentInvocation::drive_once(
       raise error
     }
   }
-  self.driving[0] = false
   pop_task(self.async_state)
   if self.cancel_requested[0] {
     self.finish_cancel()
     raise Cancelled
   }
-  match step {
+  let result = match step {
     Done =>
       DriveReady(self.finish()) catch {
         error => {
@@ -194,19 +198,34 @@ fn ComponentInvocation::drive_once(
           self.async_state,
           self.store,
         )
-        let host_progressed = poll_host_event(self.async_state, self.store)
-        if subtask_progressed || host_progressed {
-          DriveProgressed
-        } else {
+        if self.cancel_requested[0] {
           DriveBlocked
+        } else {
+          let host_progressed = poll_host_event(self.async_state, self.store)
+          if self.cancel_requested[0] {
+            DriveBlocked
+          } else if subtask_progressed || host_progressed {
+            DriveProgressed
+          } else {
+            DriveBlocked
+          }
         }
       } catch {
         error => {
+          if self.cancel_requested[0] {
+            self.finish_cancel()
+            raise Cancelled
+          }
           self.fail(error)
           raise error
         }
       }
   }
+  if self.cancel_requested[0] {
+    self.finish_cancel()
+    raise Cancelled
+  }
+  result
 }
 
 ///|

@@ -43,6 +43,8 @@ pub(all) suberror ComponentRuntimeError {
   InvalidHostTypeReference(Int)
   /// A host readiness source has already been installed on this runtime.
   HostEventLoopAlreadyInstalled
+  /// The same component invocation is already executing a scheduling round.
+  InvocationAlreadyDriving
 } derive(Debug, Eq)
 
 ///|

@@ -81,7 +81,10 @@ call.cancel()
 never waits for descriptor or timer readiness. `wait` may block in the native
 reactor after guest work is exhausted. `join` is a MoonBit async operation: it
 cooperatively suspends the current MoonBit process and does not create an
-operating-system thread. Cancellation is terminal and idempotent.
+operating-system thread. Cancellation is terminal and idempotent. A call
+permits one active `poll`, `wait`, or `join` operation at a time;
+callback-driven recursive entry and overlapping operations are rejected with
+`CallAlreadyActive`.
 
 Export paths use `#` only to cross component instance exports. A top-level
 function is named `run`; a function in an exported interface instance is named

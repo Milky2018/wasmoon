@@ -66,6 +66,7 @@ pub(all) suberror ComponentRuntimeError {
   DuplicateHostExport(String)
   InvalidHostTypeReference(Int)
   HostEventLoopAlreadyInstalled
+  InvocationAlreadyDriving
 } derive(Eq, @debug.Debug)
 pub impl Show for ComponentRuntimeError
 

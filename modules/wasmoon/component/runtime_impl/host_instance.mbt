@@ -86,6 +86,56 @@ pub fn HostRuntimeState::set_event_loop(
 }
 
 ///|
+fn cancel_callback_task(task : CallbackTask) -> Unit {
+  task.cancelled[0] = true
+  match task.host_future[0] {
+    Some(future) => {
+      task.host_future[0] = None
+      (future.cancel)() catch {
+        _ => ()
+      }
+    }
+    None => ()
+  }
+  match task.continuation[0] {
+    Some(continuation) => {
+      task.continuation[0] = None
+      continuation.cancel()
+    }
+    None => ()
+  }
+}
+
+///|
+fn cancel_async_state_continuations(async_state : AsyncState) -> Unit {
+  for _, subtask in async_state.subtasks {
+    match subtask.driver {
+      CallbackLifted(task) => cancel_callback_task(task)
+    }
+  }
+  for _, state in async_state.sync_lower_states {
+    cancel_callback_task(state.task)
+  }
+  for _, thread in async_state.threads {
+    match thread.continuation[0] {
+      Some(continuation) => {
+        thread.continuation[0] = None
+        continuation.cancel()
+      }
+      None => ()
+    }
+  }
+  async_state.subtasks.clear()
+  async_state.sync_lower_states.clear()
+  async_state.threads.clear()
+}
+
+///|
+fn HostRuntimeState::cancel_continuations(self : HostRuntimeState) -> Unit {
+  cancel_async_state_continuations(self.async_state)
+}
+
+///|
 /// Builder for a typed component instance supplied by an embedding.
 ///
 /// The builder deliberately exposes only component-level types, functions, and

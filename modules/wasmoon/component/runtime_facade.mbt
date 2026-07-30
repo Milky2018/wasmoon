@@ -205,6 +205,7 @@ pub(all) suberror ComponentRuntimeError {
   HostInstallerAlreadyConsumed
   HostContextAlreadyOwned
   HostReadinessAlreadyInstalled
+  CallAlreadyActive
   RuntimeClosed
   Cancelled
   HostExit(Int)
@@ -253,6 +254,7 @@ struct ComponentCall {
   runtime : ComponentRuntimeState
   call_id : Int
   result_type : ComponentValueType?
+  active : Ref[Bool]
 }
 
 ///|
@@ -1292,23 +1294,44 @@ pub fn ComponentFunction::start(
     runtime: self.runtime,
     call_id,
     result_type: self.public_type.result,
+    active: Ref(false),
   }
+}
+
+///|
+fn ComponentCall::begin_drive(
+  self : ComponentCall,
+) -> Unit raise ComponentRuntimeError {
+  if self.runtime.closed.val {
+    raise Cancelled
+  }
+  if self.active.val {
+    raise CallAlreadyActive
+  }
+  self.active.val = true
+  self.runtime.begin_execution()
+}
+
+///|
+fn ComponentCall::end_drive(self : ComponentCall) -> Unit {
+  self.active.val = false
+  self.runtime.end_execution()
 }
 
 ///|
 pub fn ComponentCall::poll(
   self : ComponentCall,
 ) -> ComponentCallPoll raise ComponentRuntimeError {
-  self.runtime.begin_execution()
+  self.begin_drive()
   let polled = self.inner.poll() catch {
     error => {
-      self.runtime.end_execution()
+      self.end_drive()
       self.runtime.retire_call(self.call_id)
       raise_public_invocation_error(error)
       raise InvocationFailed("unreachable")
     }
   }
-  self.runtime.end_execution()
+  self.end_drive()
   if self.runtime.closed.val {
     self.runtime.retire_call(self.call_id)
     raise Cancelled
@@ -1326,16 +1349,16 @@ pub fn ComponentCall::poll(
 pub fn ComponentCall::wait(
   self : ComponentCall,
 ) -> Array[ComponentValue] raise ComponentRuntimeError {
-  self.runtime.begin_execution()
+  self.begin_drive()
   let results = self.inner.wait() catch {
     error => {
-      self.runtime.end_execution()
+      self.end_drive()
       self.runtime.retire_call(self.call_id)
       raise_public_invocation_error(error)
       raise InvocationFailed("unreachable")
     }
   }
-  self.runtime.end_execution()
+  self.end_drive()
   if self.runtime.closed.val {
     self.runtime.retire_call(self.call_id)
     raise Cancelled
@@ -1348,16 +1371,16 @@ pub fn ComponentCall::wait(
 pub async fn ComponentCall::join(
   self : ComponentCall,
 ) -> Array[ComponentValue] raise ComponentRuntimeError {
-  self.runtime.begin_execution()
+  self.begin_drive()
   let results = self.inner.join() catch {
     error => {
-      self.runtime.end_execution()
+      self.end_drive()
       self.runtime.retire_call(self.call_id)
       raise_public_invocation_error(error)
       raise InvocationFailed("unreachable")
     }
   }
-  self.runtime.end_execution()
+  self.end_drive()
   if self.runtime.closed.val {
     self.runtime.retire_call(self.call_id)
     raise Cancelled
