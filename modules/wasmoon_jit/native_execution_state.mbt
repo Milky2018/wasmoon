@@ -8,6 +8,7 @@ pub(all) enum NativeInvocationPhase {
 ///|
 /// Invalid transition in the Store-owned native invocation state machine.
 pub suberror NativeExecutionStateError {
+  ExecutionStateSealed
   UnknownInvocation(Int64)
   InvocationNotActive(Int64)
   InvocationNotParked(Int64)
@@ -38,6 +39,7 @@ priv struct NativeInvocation {
 /// `invocations` but are absent from `active`, so any number of component tasks
 /// can retain distinct native resources without sharing an execution stack.
 struct NativeExecutionState {
+  mut accepting_new_invocations : Bool
   mut next_invocation_id : Int64
   mut next_resource_id : Int64
   active : Array[Int64]
@@ -48,12 +50,20 @@ struct NativeExecutionState {
 ///|
 pub fn NativeExecutionState::NativeExecutionState() -> NativeExecutionState {
   {
+    accepting_new_invocations: true,
     next_invocation_id: 0L,
     next_resource_id: 0L,
     active: [],
     invocations: Map([]),
     reusable_resources: [],
   }
+}
+
+///|
+/// Irreversibly reject new invocations while preserving cleanup operations for
+/// existing handles.
+pub fn NativeExecutionState::seal(self : NativeExecutionState) -> Unit {
+  self.accepting_new_invocations = false
 }
 
 ///|
@@ -73,7 +83,10 @@ fn NativeExecutionState::allocate_resource_id(
 pub fn NativeExecutionState::begin(
   self : NativeExecutionState,
   release? : () -> Unit = fn() { () },
-) -> NativeInvocationHandle {
+) -> NativeInvocationHandle raise NativeExecutionStateError {
+  if !self.accepting_new_invocations {
+    raise ExecutionStateSealed
+  }
   // Retaining the release closure retains everything it captures. Suspendable
   // callers use it to pin code, instances, and native buffers until the
   // invocation either completes or is cancelled.

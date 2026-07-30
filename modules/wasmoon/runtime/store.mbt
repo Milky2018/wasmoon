@@ -156,6 +156,7 @@ pub fn Store::close(self : Store) -> Unit {
     return
   }
   self.closed.val = true
+  self.native_execution.seal()
   self.funcs.clear()
   self.func_types.clear()
   self.func_type_indices.clear()

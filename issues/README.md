@@ -351,6 +351,7 @@ graph TD
   ISS_333["ISS-333: Consume owned callback closures exactly once"]
   ISS_334["ISS-334: Enforce terminal Store and Linker close semantics"]
   ISS_335["ISS-335: Preserve the named fiber advance invalid-state result"]
+  ISS_336["ISS-336: Seal Store-owned native execution state on close"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005

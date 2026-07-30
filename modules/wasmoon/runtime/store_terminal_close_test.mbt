@@ -158,3 +158,23 @@ test "closing an aliased Store closes the Linker mutation boundary" {
     content="store is closed",
   )
 }
+
+///|
+test "Store close seals previously borrowed native execution state" {
+  let store = @runtime.Store::Store()
+  let state = store.native_execution_state()
+  let releases = [0]
+  store.close()
+  let result = try {
+    state.begin(release=fn() { releases[0] = releases[0] + 1 }) |> ignore
+    "accepted"
+  } catch {
+    error => error.to_string()
+  } noraise {
+    result => result
+  }
+  debug_inspect(
+    (result, releases[0], state.active_depth(), state.live_count()),
+    content="(\"ExecutionStateSealed\", 0, 0, 0)",
+  )
+}

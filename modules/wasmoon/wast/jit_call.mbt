@@ -241,7 +241,9 @@ pub fn JITModuleContext::call_core_func_resumable(
     instance,
   )
   let gc_active = prepare_jit_core_environment(self, store, instance)
-  let invocation = store.native_execution_state().begin()
+  let invocation = store.native_execution_state().begin() catch {
+      error => raise ExecutionStateFailure(error)
+    }
   let outcome = self.jit_module.start_continuation_call(func, encoded_args) catch {
     error => {
       finish_jit_core_environment(self, store, gc_active)
@@ -304,7 +306,9 @@ pub fn JITModuleContext::call_core_func(
   )
   let gc_active = prepare_jit_core_environment(self, store, instance)
   defer finish_jit_core_environment(self, store, gc_active)
-  let invocation = store.native_execution_state().begin()
+  let invocation = store.native_execution_state().begin() catch {
+      error => raise ExecutionStateFailure(error)
+    }
   defer invocation.release_if_live()
   let raw_results = self.jit_module.call_with_context(func, encoded_args) catch {
     JITTrap(message) => raise Trap(message)

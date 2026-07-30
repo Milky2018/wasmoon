@@ -72,3 +72,47 @@ test "native invocation resources release exactly once" {
   }
   debug_inspect((releases[0], second), content="(1, \"UnknownInvocation(0)\")")
 }
+
+///|
+test "sealed native execution state rejects begin and preserves cleanup" {
+  let state = NativeExecutionState::NativeExecutionState()
+  let existing_releases = [0]
+  let rejected_releases = [0]
+  let existing = state.begin(release=fn() {
+    existing_releases[0] = existing_releases[0] + 1
+  })
+  existing.park()
+  state.seal()
+  state.seal()
+  let rejected = try {
+    state.begin(release=fn() { rejected_releases[0] = rejected_releases[0] + 1 })
+    |> ignore
+    "accepted"
+  } catch {
+    error => error.to_string()
+  } noraise {
+    result => result
+  }
+  debug_inspect(
+    (
+      rejected,
+      existing_releases[0],
+      rejected_releases[0],
+      state.active_depth(),
+      state.parked_count(),
+      state.live_count(),
+    ),
+    content="(\"ExecutionStateSealed\", 0, 0, 0, 1, 1)",
+  )
+  existing.cancel()
+  debug_inspect(
+    (
+      existing_releases[0],
+      rejected_releases[0],
+      state.active_depth(),
+      state.parked_count(),
+      state.live_count(),
+    ),
+    content="(1, 0, 0, 0, 0)",
+  )
+}
