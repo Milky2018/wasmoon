@@ -7,15 +7,85 @@
 /// scheduler state remain private implementation details.
 
 ///|
-pub using @component_engine {type ComponentEngine, interpreter_component_engine}
+/// Reusable component execution policy.
+///
+/// This stable wrapper intentionally hides the Store-scoped core execution
+/// engine owned by the implementation adapter.
+struct ComponentEngine {
+  adapter : @component_engine.ComponentEngine
+}
 
 ///|
-pub using @component_host {type ComponentHostInstaller}
+pub(all) enum NativeComponentExecutionEvent {
+  RunToReturn
+  Resumable
+  ExplicitInterpreter
+} derive(Debug, Eq)
 
 ///|
-pub using @component_native {
-  type NativeComponentExecutionEvent,
-  native_component_engine,
+pub fn interpreter_component_engine() -> ComponentEngine {
+  { adapter: @component_engine.interpreter_component_engine() }
+}
+
+///|
+pub fn native_component_engine(
+  opt_level? : Int = 2,
+  on_execution? : (NativeComponentExecutionEvent) -> Unit = fn(_event) { () },
+) -> ComponentEngine {
+  {
+    adapter: @component_native.native_component_engine(opt_level~, on_execution=fn(
+      event,
+    ) {
+      on_execution(
+        match event {
+          RunToReturn => RunToReturn
+          Resumable => Resumable
+          ExplicitInterpreter => ExplicitInterpreter
+        },
+      )
+    }),
+  }
+}
+
+///|
+fn ComponentEngine::open_session(
+  self : ComponentEngine,
+) -> @runtime_impl.CoreExecutionEngine {
+  self.adapter.open_session()
+}
+
+///|
+struct ComponentHostInstaller {
+  adapter : @component_host.ComponentHostInstaller
+}
+
+///|
+fn ComponentHostInstaller::from_adapter(
+  adapter : @component_host.ComponentHostInstaller,
+) -> ComponentHostInstaller {
+  { adapter, }
+}
+
+///|
+fn ComponentHostInstaller::install(
+  self : ComponentHostInstaller,
+  linker : @runtime_impl.ComponentLinker,
+) -> Unit raise @runtime_impl.ComponentRuntimeError {
+  self.adapter.install(linker)
+}
+
+///|
+fn ComponentHostInstaller::close(self : ComponentHostInstaller) -> Unit {
+  self.adapter.close()
+}
+
+///|
+pub fn wasi_command_component_host(
+  ctx : @wasi_component.WasiComponentCtx,
+) -> ComponentHostInstaller {
+  ComponentHostInstaller::from_adapter(
+    @wasi_component.wasi_command_component_host(ctx),
+  )
 }
 
 ///|

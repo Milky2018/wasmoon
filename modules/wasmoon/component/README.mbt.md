@@ -17,6 +17,13 @@ applications. That package owns canonical ABI adapters, resource tables, the
 cooperative async scheduler, core runtime objects, and other mutable
 implementation state.
 
+`ComponentEngine`, `NativeComponentExecutionEvent`, and
+`ComponentHostInstaller` are owned by this package. They are not aliases for
+the low-level `component_engine`, `component_native`, or `component_host`
+adapter types, so their public methods cannot reveal a Store-scoped core engine
+or linker. Those low-level packages are reserved for internal product and
+conformance adapters rather than ordinary embedding.
+
 ## Invoke an export
 
 The stable facade validates before instantiation and returns structured

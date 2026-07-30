@@ -3,9 +3,7 @@ package "Milky2018/wasmoon/component"
 
 import {
   "Milky2018/wasmoon/component/model",
-  "Milky2018/wasmoon/component_engine",
-  "Milky2018/wasmoon/component_host",
-  "Milky2018/wasmoon/component_native",
+  "Milky2018/wasmoon/wasi_component",
   "moonbitlang/core/debug",
 }
 
@@ -16,9 +14,9 @@ pub fn component_value_to_json(ComponentValue) -> Json
 
 pub fn component_values_to_json(Array[ComponentValue]) -> Json
 
-pub fn interpreter_component_engine() -> @component_engine.ComponentEngine
+pub fn interpreter_component_engine() -> ComponentEngine
 
-pub fn native_component_engine(opt_level? : Int, on_execution? : (@component_native.NativeComponentExecutionEvent) -> Unit) -> @component_engine.ComponentEngine
+pub fn native_component_engine(opt_level? : Int, on_execution? : (NativeComponentExecutionEvent) -> Unit) -> ComponentEngine
 
 pub fn parse_alias_section(Bytes) -> Array[@model.Alias] raise @model.ComponentParseError
 
@@ -43,6 +41,8 @@ pub fn parse_start_section(Bytes) -> @model.Start raise @model.ComponentParseErr
 pub fn parse_type_section(Bytes) -> Array[@model.TypeDef] raise @model.ComponentParseError
 
 pub fn sniff_binary_kind(Bytes) -> @model.BinaryKind?
+
+pub fn wasi_command_component_host(@wasi_component.WasiComponentCtx) -> ComponentHostInstaller
 
 // Errors
 pub(all) suberror ComponentRuntimeError {
@@ -85,6 +85,8 @@ pub struct ComponentCase {
 pub fn ComponentCase::ComponentCase(String, ComponentValueType?) -> Self
 pub impl Show for ComponentCase
 
+type ComponentEngine
+
 pub struct ComponentField {
   name : String
   ty : ComponentValueType
@@ -105,6 +107,8 @@ pub fn ComponentFunction::call(Self, Array[ComponentValue]) -> Array[ComponentVa
 pub fn ComponentFunction::start(Self, Array[ComponentValue]) -> ComponentCall raise ComponentRuntimeError
 pub fn ComponentFunction::type_(Self) -> ComponentFuncType
 
+type ComponentHostInstaller
+
 type ComponentInstance
 pub fn ComponentInstance::bind(Self, String) -> ComponentFunction raise ComponentRuntimeError
 pub fn ComponentInstance::bind_typed(Self, String, ComponentFuncType) -> ComponentFunction raise ComponentRuntimeError
@@ -124,9 +128,9 @@ pub fn ComponentResourceType::name(Self) -> String
 pub fn ComponentResourceType::named(String) -> Self
 
 type ComponentRuntime
-pub fn ComponentRuntime::ComponentRuntime(engine? : @component_engine.ComponentEngine, wit_names? : Bool) -> Self
+pub fn ComponentRuntime::ComponentRuntime(engine? : ComponentEngine, wit_names? : Bool) -> Self
 pub fn ComponentRuntime::close(Self) -> Unit
-pub fn ComponentRuntime::install(Self, @component_host.ComponentHostInstaller) -> Unit raise ComponentRuntimeError
+pub fn ComponentRuntime::install(Self, ComponentHostInstaller) -> Unit raise ComponentRuntimeError
 pub fn ComponentRuntime::instantiate(Self, String, Bytes) -> ComponentInstance raise ComponentRuntimeError
 pub fn ComponentRuntime::instantiate_component(Self, String, @model.Component) -> ComponentInstance raise ComponentRuntimeError
 
@@ -191,6 +195,12 @@ pub(all) enum ComponentValueType {
 } derive(Eq, @debug.Debug)
 pub impl Show for ComponentValueType
 
+pub(all) enum NativeComponentExecutionEvent {
+  RunToReturn
+  Resumable
+  ExplicitInterpreter
+} derive(Eq, @debug.Debug)
+
 // Type aliases
 pub using @model {type Alias}
 
@@ -207,10 +217,6 @@ pub using @model {type Component}
 pub using @model {type ComponentBinary}
 
 pub using @model {type ComponentDecl}
-
-pub using @component_engine {type ComponentEngine}
-
-pub using @component_host {type ComponentHostInstaller}
 
 pub using @model {type ComponentParseError}
 
@@ -245,8 +251,6 @@ pub using @model {type InstanceExpr}
 pub using @model {type InstantiateArg}
 
 pub using @model {type NameAttribute}
-
-pub using @component_native {type NativeComponentExecutionEvent}
 
 pub using @model {type Param}
 

@@ -516,7 +516,7 @@ fn run_wasi_component_command_with_evidence(
     wit_names~,
   )
   defer runtime.close()
-  runtime.install(@wasi_component.wasi_command_component_host(ctx)) catch {
+  runtime.install(@component.wasi_command_component_host(ctx)) catch {
     e =>
       return report_component_run_error(
         error_format,
@@ -538,7 +538,7 @@ fn run_wasi_component_command_with_evidence(
     )
   }
   let result = try run.call([]) catch {
-    @component.ComponentRuntimeError::HostExit(status) => return status
+    HostExit(status) => return status
     e => return report_component_run_error(error_format, "run", e.to_string())
   } noraise {
     values => values

@@ -115,6 +115,15 @@ class ComponentSecurityAuditTests(unittest.TestCase):
             (root / "interface.mbti").write_text("pub type runtime_impl.State\n")
             self.assert_failed(root, "stable-interface-isolation")
 
+    def test_reexported_implementation_adapter_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.create_fixture(root)
+            (root / "interface.mbti").write_text(
+                "pub using @component_engine {type ComponentEngine}\n"
+            )
+            self.assert_failed(root, "stable-interface-isolation")
+
     def test_instantiate_before_validation_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

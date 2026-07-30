@@ -83,11 +83,28 @@ def audit_repo(root: Path) -> list[AuditCheck]:
         validator = read_text(root, str(source["validator"]))
     except (KeyError, OSError) as error:
         return checks + [AuditCheck("source-inputs", False, str(error))]
+    forbidden_interface_owners = [
+        owner
+        for owner, markers in [
+            ("runtime_impl", ["runtime_impl"]),
+            (
+                "component_engine",
+                ["@component_engine", "/component_engine\""],
+            ),
+            ("component_host", ["@component_host", "/component_host\""]),
+            (
+                "component_native",
+                ["@component_native", "/component_native\""],
+            ),
+        ]
+        if any(marker in interface for marker in markers)
+    ]
     checks.append(
         AuditCheck(
             "stable-interface-isolation",
-            "runtime_impl" not in interface,
-            "stable component interface must not expose runtime_impl",
+            not forbidden_interface_owners,
+            "stable component interface must not expose implementation owners; "
+            f"found {forbidden_interface_owners}",
         )
     )
     validation = facade.find("@component_model.validate_component_with_config")
