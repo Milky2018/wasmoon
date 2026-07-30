@@ -26,7 +26,10 @@ internal product and conformance seam rather than an ordinary embedding API.
 `ComponentHostInstaller` is consumed by the first successful
 `ComponentRuntime::install` claim. A WASI command context is likewise owned by
 one runtime for its terminal lifetime, even when aliases create multiple
-installers. Build a distinct `WasiComponentCtx` for every runtime.
+installers. Build a distinct `WasiComponentCtx` for every runtime. Each runtime
+also accepts only one host readiness source; installing a second WASI command
+host returns `HostReadinessAlreadyInstalled` without replacing the first
+context or its imports.
 
 ## Invoke an export
 

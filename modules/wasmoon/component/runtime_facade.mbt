@@ -204,6 +204,7 @@ pub(all) suberror ComponentRuntimeError {
   NativeCompilationFailed(String)
   HostInstallerAlreadyConsumed
   HostContextAlreadyOwned
+  HostReadinessAlreadyInstalled
   RuntimeClosed
   Cancelled
   HostExit(Int)
@@ -353,6 +354,10 @@ pub fn ComponentRuntime::install(
   self.state.ensure_open()
   installer.claim()
   installer.populate(self.state.linker) catch {
+    HostEventLoopAlreadyInstalled => {
+      installer.close()
+      raise HostReadinessAlreadyInstalled
+    }
     error => {
       installer.close()
       raise InstantiationFailed(error.to_string())

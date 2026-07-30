@@ -41,6 +41,8 @@ pub(all) suberror ComponentRuntimeError {
   AliasTargetMismatch(String)
   DuplicateHostExport(String)
   InvalidHostTypeReference(Int)
+  /// A host readiness source has already been installed on this runtime.
+  HostEventLoopAlreadyInstalled
 } derive(Debug, Eq)
 
 ///|

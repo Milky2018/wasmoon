@@ -69,6 +69,44 @@ test "async host functions suspend through the shared event loop" {
 }
 
 ///|
+test "host runtime keeps its first readiness source" {
+  let linker = @runtime_impl.ComponentLinker()
+  let runtime = @runtime_impl.HostRuntimeState()
+  let first_waits = Ref(0)
+  let second_waits = Ref(0)
+  runtime.set_event_loop(fn() {
+    first_waits.val = first_waits.val + 1
+    true
+  })
+  let install_error = try
+    runtime.set_event_loop(fn() {
+      second_waits.val = second_waits.val + 1
+      true
+    })
+  catch {
+    error => error
+  } noraise {
+    _ => fail("expected readiness source replacement to be rejected")
+  }
+  let builder = linker.host_instance_builder("test:readiness-owner", runtime)
+  builder.add_async_func(
+    "wait",
+    { is_async: true, params: [], result: Some(Prim(U32)) },
+    fn(_args, _table) {
+      HostFuture(
+        fn() { if first_waits.val > 0 { Ready([U32(7)]) } else { Pending } },
+        fn() { () },
+      )
+    },
+  )
+  let result = builder.finish().call_exported_func("wait", [])
+  debug_inspect(
+    (install_error, result, first_waits.val, second_waits.val),
+    content="(HostEventLoopAlreadyInstalled, [U32(7)], 1, 0)",
+  )
+}
+
+///|
 test "component invocations poll and cancel asynchronous host functions" {
   let linker = @runtime_impl.ComponentLinker()
   let runtime = @runtime_impl.HostRuntimeState()

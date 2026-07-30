@@ -377,6 +377,7 @@ graph TD
   ISS_357["ISS-357: Require dominating component validation in the audit"]
   ISS_358["ISS-358: Poll host events fairly beside runnable component subtasks"]
   ISS_359["ISS-359: Defer component runtime close across native execution callbacks"]
+  ISS_360["ISS-360: Reject duplicate component host readiness installation"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005

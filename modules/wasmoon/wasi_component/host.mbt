@@ -23,7 +23,7 @@ struct WasiComponentHost {
 pub fn WasiComponentHost::WasiComponentHost(
   linker : @runtime_impl.ComponentLinker,
   ctx : WasiComponentCtx,
-) -> WasiComponentHost {
+) -> WasiComponentHost raise @runtime_impl.ComponentRuntimeError {
   let runtime = linker.host_runtime_state()
   runtime.set_event_loop(() => ctx.wait_for_async_event(), poll=() => {
     ctx.poll_async_event()

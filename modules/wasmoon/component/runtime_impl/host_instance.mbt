@@ -71,12 +71,17 @@ pub fn HostRuntimeState::async_state(self : HostRuntimeState) -> AsyncState {
 ///|
 /// Install the blocking event-loop hook used when every async host call is
 /// pending. The hook returns `true` after an external event may have made
-/// progress and `false` when no external work remains.
+/// progress and `false` when no external work remains. A runtime accepts one
+/// readiness source for its lifetime; replacing it is rejected so existing
+/// host futures cannot lose their event source.
 pub fn HostRuntimeState::set_event_loop(
   self : HostRuntimeState,
   wait : () -> Bool raise ComponentRuntimeError,
   poll? : () -> Bool raise ComponentRuntimeError = () => false,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
+  if self.async_state.host_event_loop.val is Some(_) {
+    raise HostEventLoopAlreadyInstalled
+  }
   self.async_state.host_event_loop.val = Some({ poll, wait })
 }
 

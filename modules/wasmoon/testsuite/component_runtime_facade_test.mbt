@@ -187,6 +187,36 @@ test "yielding background work cannot starve a WASI timer" {
 }
 
 ///|
+test "component runtime rejects a second WASI readiness source" {
+  let first_ctx = @wasi_component.WasiComponentCtxBuilder().build()
+  let runtime = @component.ComponentRuntime(
+    engine=@component.interpreter_component_engine(),
+  )
+  defer runtime.close()
+  runtime.install(@component.wasi_command_component_host(first_ctx))
+  let timer = runtime
+    .instantiate(
+      "first-wasi-host",
+      component_runtime_yielding_background_timer_fixture(),
+    )
+    .bind("wait-for")
+    .start([U64(0UL)])
+  debug_inspect(timer.poll(), content="Pending")
+  let second_ctx = @wasi_component.WasiComponentCtxBuilder().build()
+  let install_error = try
+    runtime.install(@component.wasi_command_component_host(second_ctx))
+  catch {
+    error => error
+  } noraise {
+    _ => fail("expected a second WASI readiness source to be rejected")
+  }
+  debug_inspect(
+    (install_error, timer.poll()),
+    content="(HostReadinessAlreadyInstalled, Ready([]))",
+  )
+}
+
+///|
 test "closing one interpreter session leaves its sibling operational" {
   let engine = @component.interpreter_component_engine()
   let first_runtime = @component.ComponentRuntime(engine~)
