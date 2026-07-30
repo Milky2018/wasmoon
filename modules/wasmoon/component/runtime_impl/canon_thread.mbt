@@ -547,7 +547,7 @@ fn resolve_start_core_func(
 fn instantiate_canon_thread_index(
   state : BuildState,
   store : @runtime.Store,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [], results: [I32] }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
@@ -567,7 +567,7 @@ fn instantiate_canon_thread_index(
       }
     }
   }
-  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+  state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
 }
 
 ///|
@@ -575,7 +575,7 @@ fn instantiate_canon_thread_yield(
   cancellable : Bool,
   state : BuildState,
   store : @runtime.Store,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [], results: [I32] }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
@@ -595,7 +595,7 @@ fn instantiate_canon_thread_yield(
     )
   }
   state.core_funcs.push(
-    alloc_host_core_func(store, core_type, host, may_suspend=true),
+    alloc_component_host_core_func(store, core_type, host, may_suspend=true),
   )
 }
 
@@ -604,7 +604,7 @@ fn instantiate_canon_thread_yield_then_resume(
   cancellable : Bool,
   state : BuildState,
   store : @runtime.Store,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [I32], results: [I32] }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
@@ -631,7 +631,7 @@ fn instantiate_canon_thread_yield_then_resume(
     )
   }
   state.core_funcs.push(
-    alloc_host_core_func(store, core_type, host, may_suspend=true),
+    alloc_component_host_core_func(store, core_type, host, may_suspend=true),
   )
 }
 
@@ -640,7 +640,7 @@ fn instantiate_canon_thread_suspend_then_resume(
   cancellable : Bool,
   state : BuildState,
   store : @runtime.Store,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [I32], results: [I32] }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
@@ -667,7 +667,7 @@ fn instantiate_canon_thread_suspend_then_resume(
     )
   }
   state.core_funcs.push(
-    alloc_host_core_func(store, core_type, host, may_suspend=true),
+    alloc_component_host_core_func(store, core_type, host, may_suspend=true),
   )
 }
 
@@ -676,7 +676,7 @@ fn instantiate_unsupported_thread_promotion(
   operation : String,
   state : BuildState,
   store : @runtime.Store,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [I32], results: [I32] }
   let host = fn(
     _args : Array[@types.Value],
@@ -684,7 +684,7 @@ fn instantiate_unsupported_thread_promotion(
     trap_canon("\{operation} is not implemented")
     [I32(0)]
   }
-  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+  state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
 }
 
 ///|
@@ -692,7 +692,7 @@ fn instantiate_canon_thread_suspend_then_promote(
   _cancellable : Bool,
   state : BuildState,
   store : @runtime.Store,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   instantiate_unsupported_thread_promotion(
     "thread.suspend-then-promote", state, store,
   )
@@ -703,7 +703,7 @@ fn instantiate_canon_thread_yield_then_promote(
   _cancellable : Bool,
   state : BuildState,
   store : @runtime.Store,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   instantiate_unsupported_thread_promotion(
     "thread.yield-then-promote", state, store,
   )
@@ -713,7 +713,7 @@ fn instantiate_canon_thread_yield_then_promote(
 fn instantiate_canon_thread_resume_later(
   state : BuildState,
   store : @runtime.Store,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [I32], results: [] }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
@@ -746,7 +746,7 @@ fn instantiate_canon_thread_resume_later(
     }
     []
   }
-  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+  state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
 }
 
 ///|
@@ -754,7 +754,7 @@ fn instantiate_canon_thread_suspend(
   cancellable : Bool,
   state : BuildState,
   store : @runtime.Store,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [], results: [I32] }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
@@ -774,7 +774,7 @@ fn instantiate_canon_thread_suspend(
     )
   }
   state.core_funcs.push(
-    alloc_host_core_func(store, core_type, host, may_suspend=true),
+    alloc_component_host_core_func(store, core_type, host, may_suspend=true),
   )
 }
 
@@ -784,7 +784,7 @@ fn instantiate_canon_thread_new_indirect(
   table_idx : Int,
   state : BuildState,
   store : @runtime.Store,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [I32, I32], results: [I32] }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
@@ -858,5 +858,5 @@ fn instantiate_canon_thread_new_indirect(
 
     [I32(id)]
   }
-  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+  state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
 }

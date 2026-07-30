@@ -10,7 +10,7 @@ import {
 }
 
 // Values
-pub fn alloc_host_core_func(@runtime.Store, @types.FuncType, (Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError, may_suspend? : Bool, native_eligible? : Bool) -> CoreFuncRef
+pub fn alloc_host_core_func(@runtime.Store, @types.FuncType, (Array[@types.Value]) -> Array[@types.Value] raise @runtime.RuntimeError, may_suspend? : Bool, native_eligible? : Bool) -> CoreFuncRef raise @runtime.RuntimeError
 
 pub fn clear_canon_debug_message() -> Unit
 

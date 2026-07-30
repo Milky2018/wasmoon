@@ -15,7 +15,7 @@ fn parse_i32_like_arg(v : @types.Value) -> Int? {
 fn instantiate_canon_backpressure_inc(
   state : BuildState,
   store : @runtime.Store,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [], results: [] }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
@@ -34,14 +34,14 @@ fn instantiate_canon_backpressure_inc(
     )
     []
   }
-  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+  state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
 }
 
 ///|
 fn instantiate_canon_backpressure_dec(
   state : BuildState,
   store : @runtime.Store,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [], results: [] }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
@@ -60,7 +60,7 @@ fn instantiate_canon_backpressure_dec(
     )
     []
   }
-  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+  state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
 }
 
 ///|
@@ -118,7 +118,7 @@ fn instantiate_canon_error_context_new(
     )
     [I32(handle)]
   }
-  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+  state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
 }
 
 ///|
@@ -225,14 +225,14 @@ fn instantiate_canon_error_context_debug_message(
     }
     []
   }
-  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+  state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
 }
 
 ///|
 fn instantiate_canon_error_context_drop(
   state : BuildState,
   store : @runtime.Store,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [I32], results: [] }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
@@ -259,5 +259,5 @@ fn instantiate_canon_error_context_drop(
     }
     []
   }
-  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+  state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
 }

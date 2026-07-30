@@ -7,7 +7,7 @@ fn instantiate_canon_future_new(
   _tyidx : Int,
   state : BuildState,
   store : @runtime.Store,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [], results: [I64] }
   let async_state = state.async_state
   let creator_component_id = state.resource_table.id
@@ -78,7 +78,7 @@ fn instantiate_canon_future_new(
     let packed = (wh.to_int64() << 32) | (rh.to_int64() & 0xFFFFFFFFL)
     [I64(packed)]
   }
-  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+  state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
 }
 
 ///|
@@ -385,7 +385,12 @@ fn instantiate_canon_future_read(
     }
   }
   state.core_funcs.push(
-    alloc_host_core_func(store, core_type, host, may_suspend=!is_async),
+    alloc_component_host_core_func(
+      store,
+      core_type,
+      host,
+      may_suspend=!is_async,
+    ),
   )
 }
 
@@ -832,7 +837,12 @@ fn instantiate_canon_future_write(
     }
   }
   state.core_funcs.push(
-    alloc_host_core_func(store, core_type, host, may_suspend=!is_async),
+    alloc_component_host_core_func(
+      store,
+      core_type,
+      host,
+      may_suspend=!is_async,
+    ),
   )
 }
 
@@ -842,7 +852,7 @@ fn instantiate_canon_future_cancel_read(
   is_async_cancel : Bool,
   state : BuildState,
   store : @runtime.Store,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [I32], results: [I32] }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
@@ -932,7 +942,7 @@ fn instantiate_canon_future_cancel_read(
       }
     }
   }
-  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+  state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
 }
 
 ///|
@@ -941,7 +951,7 @@ fn instantiate_canon_future_cancel_write(
   is_async_cancel : Bool,
   state : BuildState,
   store : @runtime.Store,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [I32], results: [I32] }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
@@ -1033,7 +1043,7 @@ fn instantiate_canon_future_cancel_write(
       }
     }
   }
-  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+  state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
 }
 
 ///|
@@ -1041,7 +1051,7 @@ fn instantiate_canon_future_drop_readable(
   _tyidx : Int,
   state : BuildState,
   store : @runtime.Store,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [I32], results: [] }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
@@ -1129,7 +1139,7 @@ fn instantiate_canon_future_drop_readable(
       _ => []
     }
   }
-  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+  state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
 }
 
 ///|
@@ -1137,7 +1147,7 @@ fn instantiate_canon_future_drop_writable(
   _tyidx : Int,
   state : BuildState,
   store : @runtime.Store,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [I32], results: [] }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
@@ -1213,5 +1223,5 @@ fn instantiate_canon_future_drop_writable(
       _ => []
     }
   }
-  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+  state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
 }

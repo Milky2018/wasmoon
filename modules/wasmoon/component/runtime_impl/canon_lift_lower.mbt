@@ -582,7 +582,9 @@ fn instantiate_canon_lower(
         finish_call([I32((sub_id << 4) | 0)]) // STARTING
       }
     }
-    state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+    state.core_funcs.push(
+      alloc_component_host_core_func(store, core_type, host),
+    )
   } else {
     let core_type = core_func_type_from_component(
       func_type, func_types, mem_is_64,

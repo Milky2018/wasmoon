@@ -119,14 +119,14 @@ fn instantiate_canon_task_return(
     []
   }
   // Stash as a core func.
-  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+  state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
 }
 
 ///|
 fn instantiate_canon_task_cancel(
   state : BuildState,
   store : @runtime.Store,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [], results: [] }
   let async_state = state.async_state
   let owner_component_id = state.resource_table.id
@@ -147,5 +147,5 @@ fn instantiate_canon_task_cancel(
     set_task_result(async_state, task_id, owner_component_id, [])
     []
   }
-  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+  state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
 }

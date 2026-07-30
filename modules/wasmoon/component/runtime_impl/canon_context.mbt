@@ -8,7 +8,7 @@ fn instantiate_canon_context_get(
   _idx : Int,
   state : BuildState,
   store : @runtime.Store,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [], results: [_vt] }
   let async_state = state.async_state
   let host = fn(
@@ -45,7 +45,7 @@ fn instantiate_canon_context_get(
         }
     }
   }
-  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+  state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
 }
 
 ///|
@@ -54,7 +54,7 @@ fn instantiate_canon_context_set(
   _idx : Int,
   state : BuildState,
   store : @runtime.Store,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   let core_type : @types.FuncType = { params: [_vt], results: [] }
   let async_state = state.async_state
   let host = fn(
@@ -76,5 +76,5 @@ fn instantiate_canon_context_set(
     m.set(_idx, args[0])
     []
   }
-  state.core_funcs.push(alloc_host_core_func(store, core_type, host))
+  state.core_funcs.push(alloc_component_host_core_func(store, core_type, host))
 }

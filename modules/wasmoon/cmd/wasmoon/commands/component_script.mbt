@@ -1026,7 +1026,26 @@ fn run_component_script_impl(
         _ => raise Unreachable
       }
     },
-  )
+  ) catch {
+    error => {
+      if print_output {
+        if error_format is Json {
+          println(
+            component_test_json(
+              false,
+              Some(CompTestRuntimeError),
+              "bootstrap",
+              error.to_string(),
+              None,
+            ),
+          )
+        } else {
+          println("component-test error: \{error}")
+        }
+      }
+      return 1
+    }
+  }
   fn resource1_expect_handle(
     table : @runtime_impl.ResourceTable,
     handle : Int,
