@@ -49,6 +49,7 @@ pub(all) suberror RuntimeError {
   StackUnderflow
   StackOverflow
   TypeMismatch
+  MemoryClosed
   OutOfBoundsMemoryAccess
   OutOfBoundsTableAccess
   OutOfBoundsArrayAccess

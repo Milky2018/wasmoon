@@ -159,6 +159,7 @@ test "all RuntimeError types have descriptive messages" {
     StackUnderflow,
     StackOverflow,
     TypeMismatch,
+    MemoryClosed,
     OutOfBoundsMemoryAccess,
     OutOfBoundsTableAccess,
     OutOfBoundsArrayAccess,

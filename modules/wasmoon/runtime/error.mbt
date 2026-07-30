@@ -3,6 +3,7 @@ pub(all) suberror RuntimeError {
   StackUnderflow
   StackOverflow
   TypeMismatch
+  MemoryClosed
   OutOfBoundsMemoryAccess
   OutOfBoundsTableAccess
   OutOfBoundsArrayAccess // GC array access out of bounds
@@ -34,6 +35,7 @@ pub impl Show for RuntimeError with fn output(self, logger) {
     StackUnderflow => "stack underflow"
     StackOverflow => "stack overflow"
     TypeMismatch => "type mismatch"
+    MemoryClosed => "memory is closed"
     OutOfBoundsMemoryAccess => "out of bounds memory access"
     OutOfBoundsTableAccess => "out of bounds table access"
     OutOfBoundsArrayAccess => "out of bounds array access"

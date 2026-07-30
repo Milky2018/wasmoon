@@ -12,6 +12,7 @@ fn normalize_runtime_error(e : Error) -> @runtime.RuntimeError {
     @runtime.StackUnderflow => StackUnderflow
     @runtime.StackOverflow => StackOverflow
     @runtime.TypeMismatch => TypeMismatch
+    @runtime.MemoryClosed => MemoryClosed
     @runtime.OutOfBoundsMemoryAccess => OutOfBoundsMemoryAccess
     @runtime.OutOfBoundsTableAccess => OutOfBoundsTableAccess
     @runtime.OutOfBoundsArrayAccess => OutOfBoundsArrayAccess

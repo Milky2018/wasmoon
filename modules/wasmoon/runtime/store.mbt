@@ -162,13 +162,8 @@ pub fn Store::close(self : Store) -> Unit {
   self.func_owners.clear()
   self.instances.clear()
   self.tables.clear()
-  let freed_memories : Map[Int64, Bool] = Map([])
   for memory in self.mems {
-    let pointer = memory.desc_ptr()
-    if pointer != 0L && freed_memories.get(pointer) is None {
-      @wasmoon_jit.free_memory_desc(pointer)
-      freed_memories.set(pointer, true)
-    }
+    memory.close()
   }
   self.mems.clear()
   self.globals.clear()
