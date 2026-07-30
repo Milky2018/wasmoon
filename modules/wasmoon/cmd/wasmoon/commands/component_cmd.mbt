@@ -298,9 +298,9 @@ fn run_component_invoke_eval(
     IOError(error) =>
       return { ok: false, phase: "read", detail: error, values: [] }
   }
-  let instance = @component.ComponentRuntime(wit_names~).instantiate(
-    "invoke", bytes,
-  ) catch {
+  let runtime = @component.ComponentRuntime(wit_names~)
+  defer runtime.close()
+  let instance = runtime.instantiate("invoke", bytes) catch {
     error =>
       return {
         ok: false,
@@ -373,13 +373,18 @@ pub fn run_component_invoke_command(
 }
 
 ///|
-fn component_command_run_instance(
-  instance : @runtime_impl.ComponentInstance,
-) -> @runtime_impl.ComponentInstance? {
-  for name in ["wasi:cli/run@0.2.11", "wasi:cli/run@0.3.0"] {
-    match instance.get_export(name) {
-      Some(Instance(run)) => return Some(run)
-      _ => ()
+fn component_command_run_function(
+  instance : @component.ComponentInstance,
+) -> @component.ComponentFunction? {
+  for path in ["wasi:cli/run@0.2.11#run", "wasi:cli/run@0.3.0#run"] {
+    let bound = try instance.bind(path) catch {
+      _ => None
+    } noraise {
+      function => Some(function)
+    }
+    match bound {
+      Some(function) => return Some(function)
+      None => ()
     }
   }
   None
@@ -387,17 +392,17 @@ fn component_command_run_instance(
 
 ///|
 fn component_command_status(
-  values : Array[@runtime_impl.ComponentValue],
+  values : Array[@component.ComponentValue],
   requested_exit : Int?,
-) -> Int raise @runtime_impl.ComponentRuntimeError {
+) -> Int raise @component.ComponentRuntimeError {
   match requested_exit {
     Some(status) => status
     None =>
       match values {
-        [Variant(0, None)] => 0
-        [Variant(1, None)] => 1
+        [ResultOk(None)] => 0
+        [ResultErr(None)] => 1
         _ =>
-          raise HostCallError(
+          raise InvocationFailed(
             "wasi:cli/run returned a value outside result<(), ()>",
           )
       }
@@ -492,7 +497,7 @@ fn run_wasi_component_command_with_evidence(
   wit_names : Bool,
   error_format : ComponentErrorFormat,
   use_jit : Bool,
-  evidence : ComponentJITExecutionEvidence?,
+  on_execution : ((@component.NativeComponentExecutionEvent) -> Unit)?,
 ) -> Int {
   let parsed = run_component_command_eval(file_path, true, wit_names)
   guard parsed.parsed is Some(component) else {
@@ -506,37 +511,20 @@ fn run_wasi_component_command_with_evidence(
         e.to_string(),
       )
   }
-  defer ctx.close()
-  let linker = if use_jit {
-    @runtime_impl.ComponentLinker::with_core_execution_engine(
-      match evidence {
-        Some(record) => component_jit_execution_engine(evidence=record)
-        None => component_jit_execution_engine()
-      },
-    )
-  } else {
-    ComponentLinker()
-  }
-  defer linker.close()
-  let host = @wasi_component.WasiComponentHost(linker, ctx)
-  (try {
-    host.add_preview2_cli_clocks_random()
-    host.add_preview2_io()
-    host.add_preview2_filesystem()
-    host.add_preview2_sockets()
-    host.add_preview3_cli_clocks_random()
-    host.add_preview3_filesystem()
-    host.add_preview3_sockets()
-  } catch {
+  let runtime = @component.ComponentRuntime(
+    engine=component_execution_engine(use_jit, on_execution),
+    wit_names~,
+  )
+  defer runtime.close()
+  runtime.install(@wasi_component.wasi_command_component_host(ctx)) catch {
     e =>
       return report_component_run_error(
         error_format,
         "configure",
         e.to_string(),
       )
-  })
-  |> ignore
-  let instance = linker.instantiate("command", component) catch {
+  }
+  let instance = runtime.instantiate_component("command", component) catch {
     e =>
       return report_component_run_error(
         error_format,
@@ -544,13 +532,13 @@ fn run_wasi_component_command_with_evidence(
         e.to_string(),
       )
   }
-  guard component_command_run_instance(instance) is Some(run) else {
+  guard component_command_run_function(instance) is Some(run) else {
     return report_component_run_error(
       error_format, "instantiate", "component does not export a pinned wasi:cli/run instance",
     )
   }
-  let result = try run.call_exported_func("run", []) catch {
-    HostExit(status) => return status
+  let result = try run.call([]) catch {
+    @component.ComponentRuntimeError::HostExit(status) => return status
     e => return report_component_run_error(error_format, "run", e.to_string())
   } noraise {
     values => values

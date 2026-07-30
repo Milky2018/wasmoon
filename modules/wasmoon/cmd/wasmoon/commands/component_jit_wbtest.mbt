@@ -1,36 +1,38 @@
 ///|
-test "component JIT routes typed core execution requests" {
-  guard component_core_route(
-      CoreExecutionRequest(RunToCompletion, PreferNative, RunToReturn),
-    )
-    is NativeCore else {
-    fail("run-to-completion call did not select native execution")
+priv struct ComponentJITExecutionEvidence {
+  native_run_to_return : Ref[Int]
+  native_resumable : Ref[Int]
+  explicit_interpreter : Ref[Int]
+}
+
+///|
+fn component_jit_evidence_for_test() -> ComponentJITExecutionEvidence {
+  {
+    native_run_to_return: Ref(0),
+    native_resumable: Ref(0),
+    explicit_interpreter: Ref(0),
   }
-  guard component_core_route(
-      CoreExecutionRequest(CallbackStep, PreferNative, Resumable),
-    )
-    is NativeCore else {
-    fail("callback step did not select native execution")
-  }
-  guard component_core_route(
-      CoreExecutionRequest(Stackful, PreferNative, Resumable),
-    )
-    is NativeCore else {
-    fail("stackful call did not select native execution")
-  }
-  guard component_core_route(
-      CoreExecutionRequest(RunToCompletion, InterpreterOnly, RunToReturn),
-    )
-    is InterpreterCore else {
-    fail("interpreter-only call selected native execution")
+}
+
+///|
+fn ComponentJITExecutionEvidence::record(
+  self : ComponentJITExecutionEvidence,
+  event : @component.NativeComponentExecutionEvent,
+) -> Unit {
+  match event {
+    RunToReturn =>
+      self.native_run_to_return.val = self.native_run_to_return.val + 1
+    Resumable => self.native_resumable.val = self.native_resumable.val + 1
+    ExplicitInterpreter =>
+      self.explicit_interpreter.val = self.explicit_interpreter.val + 1
   }
 }
 
 ///|
 test "component JIT records typed execution evidence" {
-  let evidence = ComponentJITExecutionEvidence::new()
-  evidence.record(NativeRunToReturn)
-  evidence.record(NativeResumable)
+  let evidence = component_jit_evidence_for_test()
+  evidence.record(RunToReturn)
+  evidence.record(Resumable)
   evidence.record(ExplicitInterpreter)
   debug_inspect(
     (
@@ -39,13 +41,5 @@ test "component JIT records typed execution evidence" {
       evidence.explicit_interpreter.val,
     ),
     content="(1, 1, 1)",
-  )
-}
-
-///|
-test "component JIT reports unavailable native code without fallback" {
-  inspect(
-    component_jit_error(FunctionUnavailable(7)),
-    content="CanonCallError(\"component JIT invocation failed: FunctionUnavailable(7)\")",
   )
 }

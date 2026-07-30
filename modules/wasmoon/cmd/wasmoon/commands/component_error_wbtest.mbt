@@ -64,9 +64,9 @@ test "component command eval: minimal component validates ok" {
 test "WASI command status follows run result and structured exit" {
   debug_inspect(
     [
-      component_command_status([Variant(0, None)], None),
-      component_command_status([Variant(1, None)], None),
-      component_command_status([Variant(0, None)], Some(7)),
+      component_command_status([ResultOk(None)], None),
+      component_command_status([ResultErr(None)], None),
+      component_command_status([ResultOk(None)], Some(7)),
     ],
     content="[0, 1, 7]",
   )
@@ -196,7 +196,7 @@ test "component command executes a pinned Preview 3 async run export" {
 
 ///|
 test "component command reads the Preview 3 monotonic clock through JIT" {
-  let evidence = ComponentJITExecutionEvidence::new()
+  let evidence = component_jit_evidence_for_test()
   let status = run_wasi_component_command_with_evidence(
     "testsuite/fixtures/wasi-command-clock-preview3.component.wasm",
     [],
@@ -206,7 +206,7 @@ test "component command reads the Preview 3 monotonic clock through JIT" {
     true,
     Text,
     true,
-    Some(evidence),
+    Some(fn(event) { evidence.record(event) }),
   )
   debug_inspect(
     (
@@ -221,7 +221,7 @@ test "component command reads the Preview 3 monotonic clock through JIT" {
 
 ///|
 test "component command repeatedly releases Preview 3 JIT executions" {
-  let evidence = ComponentJITExecutionEvidence::new()
+  let evidence = component_jit_evidence_for_test()
   let failures = Ref(0)
   let executable_mappings_before = component_test_executable_mapping_count()
   for _iteration in 0..<64 {
@@ -234,7 +234,7 @@ test "component command repeatedly releases Preview 3 JIT executions" {
       true,
       Text,
       true,
-      Some(evidence),
+      Some(fn(event) { evidence.record(event) }),
     )
     if status != 0 {
       failures.val = failures.val + 1
@@ -254,7 +254,7 @@ test "component command repeatedly releases Preview 3 JIT executions" {
 
 ///|
 test "component command enumerates Preview 3 filesystem preopens through JIT" {
-  let evidence = ComponentJITExecutionEvidence::new()
+  let evidence = component_jit_evidence_for_test()
   let status = run_wasi_component_command_with_evidence(
     "testsuite/fixtures/wasi-command-filesystem-preview3.component.wasm",
     [],
@@ -264,7 +264,7 @@ test "component command enumerates Preview 3 filesystem preopens through JIT" {
     true,
     Text,
     true,
-    Some(evidence),
+    Some(fn(event) { evidence.record(event) }),
   )
   debug_inspect(
     (
@@ -279,7 +279,7 @@ test "component command enumerates Preview 3 filesystem preopens through JIT" {
 
 ///|
 test "component command creates and drops a Preview 3 socket through JIT" {
-  let evidence = ComponentJITExecutionEvidence::new()
+  let evidence = component_jit_evidence_for_test()
   let status = run_wasi_component_command_with_evidence(
     "testsuite/fixtures/wasi-command-sockets-preview3.component.wasm",
     [],
@@ -289,7 +289,7 @@ test "component command creates and drops a Preview 3 socket through JIT" {
     true,
     Text,
     true,
-    Some(evidence),
+    Some(fn(event) { evidence.record(event) }),
   )
   debug_inspect(
     (
@@ -324,7 +324,7 @@ test "component command passes inherited stdin to Preview 3 streams" {
     return fail("could not redirect stdin")
   }
   defer @wasi.native_dup2(saved_stdin, 0) |> ignore
-  let evidence = ComponentJITExecutionEvidence::new()
+  let evidence = component_jit_evidence_for_test()
   let status = run_wasi_component_command_with_evidence(
     "testsuite/fixtures/wasi-command-async-stdin.component.wasm",
     [],
@@ -334,7 +334,7 @@ test "component command passes inherited stdin to Preview 3 streams" {
     true,
     Text,
     true,
-    Some(evidence),
+    Some(fn(event) { evidence.record(event) }),
   )
   debug_inspect(
     (
