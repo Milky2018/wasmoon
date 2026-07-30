@@ -28,6 +28,12 @@ pub(all) suberror ComponentRuntimeError {
   UnsupportedStringEncoding
   CanonCallError(String)
   HostCallError(String)
+  /// Native component execution is unavailable on this host.
+  NativeEngineUnavailable(String)
+  /// A core module could not be compiled or installed by the native engine.
+  NativeCompilationFailed(String)
+  /// A resumable component invocation was cancelled.
+  Cancelled
   /// Structured termination requested by an embedding-provided command host.
   HostExit(Int)
   InvalidStartResultCount(Int)

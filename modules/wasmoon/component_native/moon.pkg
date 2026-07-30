@@ -1,0 +1,15 @@
+import {
+  "Milky2018/milkir",
+  "Milky2018/wasm_core/encoder",
+  "Milky2018/wasm_core/types",
+  "Milky2018/wasmoon",
+  "Milky2018/wasmoon/component/runtime_impl",
+  "Milky2018/wasmoon/component_engine",
+  "Milky2018/wasmoon/jit",
+  "Milky2018/wasmoon/runtime",
+  "Milky2018/wasmoon/validator",
+  "Milky2018/wasmoon/wasm_frontend",
+  "Milky2018/wasmoon/wast",
+  "Milky2018/wasmoon_jit",
+  "Milky2018/wasmoon_jit/artifact",
+}

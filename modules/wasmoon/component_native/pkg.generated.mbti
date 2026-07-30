@@ -1,0 +1,24 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/wasmoon/component_native"
+
+import {
+  "Milky2018/wasmoon/component_engine",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn native_component_engine(opt_level? : Int, on_execution? : (NativeComponentExecutionEvent) -> Unit) -> @component_engine.ComponentEngine
+
+// Errors
+
+// Types and methods
+pub(all) enum NativeComponentExecutionEvent {
+  RunToReturn
+  Resumable
+  ExplicitInterpreter
+} derive(Eq, @debug.Debug)
+
+// Type aliases
+
+// Traits
+
