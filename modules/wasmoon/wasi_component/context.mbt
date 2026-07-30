@@ -756,3 +756,19 @@ fn WasiComponentCtx::wait_for_async_event(
   }
   false
 }
+
+///|
+fn WasiComponentCtx::poll_async_event(
+  self : WasiComponentCtx,
+) -> Bool raise @runtime_impl.ComponentRuntimeError {
+  if self.closed.val {
+    return false
+  }
+  guard self.native_reactor is Some(reactor) else {
+    raise HostCallError("native async reactor is unavailable")
+  }
+  let completed = reactor.wait(Some(0L)) catch {
+    error => raise HostCallError("native async reactor poll failed: \{error}")
+  }
+  completed > 0
+}

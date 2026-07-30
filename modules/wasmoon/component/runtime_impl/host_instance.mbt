@@ -74,9 +74,10 @@ pub fn HostRuntimeState::async_state(self : HostRuntimeState) -> AsyncState {
 /// progress and `false` when no external work remains.
 pub fn HostRuntimeState::set_event_loop(
   self : HostRuntimeState,
-  event_loop : () -> Bool raise ComponentRuntimeError,
+  wait : () -> Bool raise ComponentRuntimeError,
+  poll? : () -> Bool raise ComponentRuntimeError = () => false,
 ) -> Unit {
-  self.async_state.host_event_loop.val = Some({ wait: event_loop })
+  self.async_state.host_event_loop.val = Some({ poll, wait })
 }
 
 ///|

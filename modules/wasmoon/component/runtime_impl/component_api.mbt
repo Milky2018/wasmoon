@@ -92,6 +92,7 @@ fn ComponentInstanceEntryState::poison(
 
 ///|
 struct HostEventLoop {
+  poll : () -> Bool raise ComponentRuntimeError
   wait : () -> Bool raise ComponentRuntimeError
 }
 
