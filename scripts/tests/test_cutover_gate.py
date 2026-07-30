@@ -471,6 +471,17 @@ class GateManifestTests(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/check.yml").read_text(
             encoding="utf-8"
         )
+        self.assertEqual(
+            workflow.count(
+                "python3 -m unittest discover -s scripts/tests "
+                "-p 'test_*.py'"
+            ),
+            1,
+        )
+        self.assertEqual(
+            workflow.count("python3 scripts/audit_component_security.py"),
+            1,
+        )
         self.assertEqual(workflow.count("run stable Component Model 0.2"), 1)
         self.assertEqual(workflow.count("run Component Model 0.3 async"), 1)
         self.assertEqual(
@@ -489,7 +500,14 @@ class GateManifestTests(unittest.TestCase):
             workflow.count(
                 'moon test --target native --target-dir "$sanitizer_build" \\'
             ),
-            7,
+            8,
+        )
+        self.assertEqual(
+            workflow.count(
+                "modules/wasmoon/testsuite/"
+                "jit_resumable_lifecycle_test.mbt"
+            ),
+            1,
         )
         self.assertEqual(
             workflow.count("scripts/native_sanitizer_cc.sh"),

@@ -72,6 +72,8 @@ jobs:
           python3 scripts/audit_module_boundaries.py
           python3 scripts/audit_semantic_machv_api.py
           python3 scripts/audit_internal_compatibility.py
+          python3 -m unittest discover -s scripts/tests -p 'test_*.py'
+          python3 scripts/audit_component_security.py
           python3 scripts/check_component_snapshot.py
           python3 modules/wasmoon/wasi_component/tools/generate_wasi_contracts.py \
             modules/wasmoon/wasi_component/wit \
