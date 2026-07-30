@@ -1,0 +1,17 @@
+import {
+  "Milky2018/wasm_core/types",
+  "Milky2018/wasmoon/component",
+  "Milky2018/wasmoon/component_native",
+  "Milky2018/wasmoon/component/runtime_impl",
+  "Milky2018/wasmoon/runtime",
+  "Milky2018/wasmoon/validator/component_model",
+  "Milky2018/wasmoon/wat",
+  "moonbitlang/core/json",
+  "moonbitlang/core/string",
+  "moonbitlang/x/fs",
+}
+
+import {
+  "Milky2018/wasmoon/component_conformance",
+  "moonbitlang/x/fs",
+} for "test"

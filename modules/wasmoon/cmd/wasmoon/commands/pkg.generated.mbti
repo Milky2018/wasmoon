@@ -47,11 +47,6 @@ pub fn run_wat(String) -> Unit
 pub fn verify_compiled_jit_artifact(@artifact.Artifact) -> @wasmoon_jit.LoadedArtifact raise @wasmoon_jit.ArtifactLoadError
 
 // Errors
-pub suberror ComponentTestError {
-  ParseError(String)
-  ScriptError(String)
-} derive(@debug.Debug)
-pub impl Show for ComponentTestError
 
 // Types and methods
 pub struct CompileProgress {
@@ -93,14 +88,6 @@ pub(all) enum ComponentErrorFormat {
   Json
 } derive(Eq, @debug.Debug)
 pub impl Show for ComponentErrorFormat
-
-pub(all) enum ComponentTestErrorCode {
-  CompTestScriptError
-  CompTestRuntimeError
-  CompTestAssertFailed
-  CompTestUnsupportedCommand
-} derive(Eq, @debug.Debug)
-pub impl Show for ComponentTestErrorCode
 
 // Type aliases
 

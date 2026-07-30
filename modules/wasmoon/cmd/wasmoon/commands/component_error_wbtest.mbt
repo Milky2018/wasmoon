@@ -7,10 +7,6 @@ test "component error code mapping: enum string is stable" {
     component_error_code_string(CompUnsupported),
     content="COMP_UNSUPPORTED",
   )
-  inspect(
-    component_test_error_code_string(CompTestUnsupportedCommand),
-    content="COMP_TEST_UNSUPPORTED_COMMAND",
-  )
 }
 
 ///|
@@ -116,68 +112,6 @@ test "component command lowers Preview 2 filesystem preopens end to end" {
     Text,
   )
   debug_inspect(status, content="0")
-}
-
-///|
-test "component script parses named composite values against function types" {
-  let types : Array[@component.TypeDef?] = [
-    Some(Enum(["red", "green", "blue"])),
-    Some(Flags(["a", "b", "c"])),
-    Some(
-      Variant([
-        { label: "number", ty: Some(Prim(U32)), refines: None },
-        { label: "text", ty: Some(Prim(String)), refines: None },
-      ]),
-    ),
-    Some(
-      Record([
-        { label: "color", ty: TypeIdx(0) },
-        { label: "features", ty: TypeIdx(1) },
-        { label: "payload", ty: TypeIdx(2) },
-      ]),
-    ),
-  ]
-  let value : JsonValue = {
-    type_: "record",
-    value: None,
-    label: None,
-    labels: None,
-    items: Some([
-      {
-        type_: "variant",
-        value: Some("text"),
-        label: Some("payload"),
-        labels: None,
-        items: Some([
-          {
-            type_: "str",
-            value: Some("ok"),
-            label: None,
-            labels: None,
-            items: None,
-          },
-        ]),
-      },
-      {
-        type_: "flags",
-        value: None,
-        label: Some("features"),
-        labels: Some(["a", "c"]),
-        items: None,
-      },
-      {
-        type_: "enum",
-        value: Some("green"),
-        label: Some("color"),
-        labels: None,
-        items: None,
-      },
-    ]),
-  }
-  debug_inspect(
-    parse_typed_component_value(value, TypeIdx(3), types),
-    content="([U32(1), U32(5), Variant(1, Some(String(\"ok\")))])",
-  )
 }
 
 ///|
@@ -420,86 +354,3 @@ test "component invoke evaluates a nested export with typed JSON" {
 }
 
 ///|
-test "component-test json helper includes status fields" {
-  let result = ScriptResult::ScriptResult()
-  result.add_passed()
-  result.add_failed("x")
-  let json = component_test_json(
-    false,
-    Some(CompTestAssertFailed),
-    "execute",
-    "component-test has failing commands",
-    Some(result),
-  )
-  inspect(json.contains("\"ok\":false"), content="true")
-  inspect(json.contains("\"code\":\"COMP_TEST_ASSERT_FAILED\""), content="true")
-  inspect(json.contains("\"passed\":1"), content="true")
-  inspect(json.contains("\"failed\":1"), content="true")
-}
-
-///|
-test "component-test returns non-zero on failing assertions" {
-  @fs.create_dir("tmp") catch {
-    _ => ()
-  }
-  let path = "tmp/component_test_fail.json"
-  let json = "{\"commands\":[{\"type\":\"component\",\"path\":\"testsuite/fixtures/minimal.component.wasm\",\"instantiate\":true},{\"type\":\"assert_return\",\"field\":\"missing\",\"args\":[],\"expected\":[]}]}"
-  @fs.write_string_to_file(path, json) catch {
-    IOError(e) => fail(e)
-  }
-  let status = run_component_script(path, Json)
-  inspect(status, content="1")
-  @fs.remove_file(path) catch {
-    _ => ()
-  }
-}
-
-///|
-test "component-test returns non-zero on unsupported command" {
-  @fs.create_dir("tmp") catch {
-    _ => ()
-  }
-  let path = "tmp/component_test_unsupported.json"
-  let json = "{\"commands\":[{\"type\":\"component\",\"path\":\"testsuite/fixtures/minimal.component.wasm\",\"instantiate\":true},{\"type\":\"assert_magic_typo\",\"field\":\"missing\",\"args\":[],\"expected\":[]}]}"
-  @fs.write_string_to_file(path, json) catch {
-    IOError(e) => fail(e)
-  }
-  let status = run_component_script(path, Json)
-  inspect(status, content="1")
-  @fs.remove_file(path) catch {
-    _ => ()
-  }
-}
-
-///|
-test "component-test returns non-zero on malformed script json" {
-  @fs.create_dir("tmp") catch {
-    _ => ()
-  }
-  let path = "tmp/component_test_bad_json.json"
-  @fs.write_string_to_file(path, "{\"commands\":[") catch {
-    IOError(e) => fail(e)
-  }
-  let status = run_component_script(path, Json)
-  inspect(status, content="1")
-  @fs.remove_file(path) catch {
-    _ => ()
-  }
-}
-
-///|
-test "component-test supports component_definition and component_instance commands" {
-  @fs.create_dir("tmp") catch {
-    _ => ()
-  }
-  let path = "tmp/component_test_instance.json"
-  let json = "{\"commands\":[{\"type\":\"component_definition\",\"name\":\"$c\",\"path\":\"testsuite/fixtures/minimal.component.wasm\"},{\"type\":\"component_instance\",\"name\":\"$i\",\"component\":\"$c\"}]}"
-  @fs.write_string_to_file(path, json) catch {
-    IOError(e) => fail(e)
-  }
-  let status = run_component_script(path, Json)
-  inspect(status, content="0")
-  @fs.remove_file(path) catch {
-    _ => ()
-  }
-}
