@@ -43,6 +43,7 @@ test "native fiber operation wire protocol preserves typed failures" {
         decode_native_fiber_cancel_code(-1),
         decode_native_fiber_cancel_code(99),
       ],
+      FiberInvalidState(7).to_error(),
     ),
     content=(
       #|(
@@ -51,7 +52,7 @@ test "native fiber operation wire protocol preserves typed failures" {
       #|    FiberDidReturn,
       #|    FiberAdvanceWrongThread,
       #|    FiberAdvanceInvalidTransition,
-      #|    FiberAdvanceNativeFailure(-4),
+      #|    FiberAdvanceInvalidState,
       #|    FiberAdvanceNativeFailure(99),
       #|  ],
       #|  [
@@ -61,6 +62,7 @@ test "native fiber operation wire protocol preserves typed failures" {
       #|    FiberCancelNativeFailure(-1),
       #|    FiberCancelNativeFailure(99),
       #|  ],
+      #|  InvalidState(7),
       #|)
     ),
   )

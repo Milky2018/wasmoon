@@ -15,6 +15,7 @@ priv enum NativeFiberAdvanceCode {
   FiberDidReturn
   FiberAdvanceWrongThread
   FiberAdvanceInvalidTransition
+  FiberAdvanceInvalidState
   FiberAdvanceNativeFailure(Int)
 } derive(Debug)
 
@@ -62,6 +63,7 @@ fn decode_native_fiber_advance_code(
     1 => FiberDidReturn
     -2 => FiberAdvanceWrongThread
     -3 => FiberAdvanceInvalidTransition
+    -4 => FiberAdvanceInvalidState
     code => FiberAdvanceNativeFailure(code)
   }
 }
@@ -116,6 +118,8 @@ fn native_fiber_advance(
     FiberAdvanceWrongThread => FiberAdvanceFailed(FiberWrongThread)
     FiberAdvanceInvalidTransition =>
       FiberAdvanceFailed(native_fiber_invalid_transition(raw))
+    FiberAdvanceInvalidState =>
+      FiberAdvanceFailed(FiberInvalidState(c_native_fiber_state_code(raw)))
     FiberAdvanceNativeFailure(code) =>
       FiberAdvanceFailed(FiberNativeFailure(code))
   }
