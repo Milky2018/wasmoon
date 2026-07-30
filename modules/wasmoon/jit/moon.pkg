@@ -9,10 +9,6 @@ import {
   "moonbitlang/x/fs",
 }
 
-import {
-  "Milky2018/wasmoon_jit/native_test_support",
-} for "wbtest"
-
 options(
   targets: { "ffi_jit.mbt": [ "native" ], "jit_runtime.mbt": [ "native" ] },
 )

@@ -1641,10 +1641,6 @@ MOONBIT_FFI_EXPORT void wasmoon_jit_gc_end_frame(int64_t ctx_ptr) {
     ctx_gc_end_frame_internal(ctx);
 }
 
-MOONBIT_FFI_EXPORT int64_t wasmoon_jit_gc_live_frame_count(void) {
-    return ctx_gc_live_frame_count_internal();
-}
-
 MOONBIT_FFI_EXPORT int32_t wasmoon_jit_gc_push_root_scope(
     int64_t ctx_ptr,
     int64_t *roots,

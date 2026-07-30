@@ -345,6 +345,7 @@ graph TD
   ISS_327["ISS-327: Consolidate native platform CI with a matrix"]
   ISS_328["ISS-328: Type the native fiber FFI protocol"]
   ISS_329["ISS-329: Invalidate shared memories when their owning store closes"]
+  ISS_330["ISS-330: Remove GC frame test counters from release artifacts"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005

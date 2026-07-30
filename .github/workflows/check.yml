@@ -86,6 +86,12 @@ jobs:
       - name: build Wasmoon
         run: |
           moon build --target native --release
+          if nm \
+            target/native/release/build/Milky2018/wasmoon_jit/libwasmoon_jit.a \
+            | grep -q "live_gc_frame_count"; then
+            echo "release libwasmoon_jit.a contains test-only GC frame counters"
+            exit 1
+          fi
           ./install.sh
 
       - name: run core WAST tests
@@ -149,7 +155,7 @@ jobs:
             ./wasmoon
           chmod +x ./wasmoon
           moon test --target native --target-dir "$sanitizer_build" \
-            modules/wasmoon_jit/native_continuation_wbtest.mbt
+            modules/wasmoon_jit/native_continuation_test.mbt
           moon test --target native --target-dir "$sanitizer_build" \
             modules/wasmoon/async_native/reactor_wbtest.mbt
           moon test --target native --target-dir "$sanitizer_build" \
