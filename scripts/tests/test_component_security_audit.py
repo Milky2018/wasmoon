@@ -341,6 +341,58 @@ class ComponentSecurityAuditTests(unittest.TestCase):
                 checks["validate-before-instantiate"].detail,
             )
 
+    def test_swallowed_validation_error_does_not_dominate_instantiation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.create_fixture(root)
+            (root / "facade.mbt").write_text(
+                "pub fn ComponentRuntime::instantiate_component() {\n"
+                "  @component_model."
+                "validate_component_with_config(component) catch {\n"
+                "    _ => ()\n"
+                "  }\n"
+                "  self.state.linker.instantiate(name, component)\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            self.assert_failed(root, "validate-before-instantiate")
+
+    def test_deferred_validation_does_not_dominate_instantiation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.create_fixture(root)
+            (root / "facade.mbt").write_text(
+                "pub fn ComponentRuntime::instantiate_component() {\n"
+                "  defer @component_model."
+                "validate_component_with_config(component)\n"
+                "  self.state.linker.instantiate(name, component)\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            self.assert_failed(root, "validate-before-instantiate")
+
+    def test_structured_validation_failure_propagation_dominates_instantiation(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.create_fixture(root)
+            (root / "facade.mbt").write_text(
+                "pub fn ComponentRuntime::instantiate_component() {\n"
+                "  @component_model."
+                "validate_component_with_config(component) catch {\n"
+                "    error => raise ValidationFailed(error.to_string())\n"
+                "  }\n"
+                "  self.state.linker.instantiate(name, component)\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            checks = {check.name: check for check in audit_repo(root)}
+            self.assertTrue(
+                checks["validate-before-instantiate"].passed,
+                checks["validate-before-instantiate"].detail,
+            )
+
     def test_missing_validator_limit_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -380,6 +380,7 @@ graph TD
   ISS_360["ISS-360: Reject duplicate component host readiness installation"]
   ISS_361["ISS-361: Guard complete component scheduling rounds against reentrancy"]
   ISS_362["ISS-362: Restrict WASI context close authority after runtime ownership transfer"]
+  ISS_363["ISS-363: Reject non-dominating validation control flow in the security audit"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005

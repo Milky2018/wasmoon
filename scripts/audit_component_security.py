@@ -158,19 +158,82 @@ def moonbit_function_body(source: str, qualified_name: str) -> str | None:
     return None
 
 
-def brace_depths(code: str) -> list[int] | None:
-    """Return the brace depth before each character, or None if unbalanced."""
+def delimiter_depths(code: str) -> list[int] | None:
+    """Return nesting depth before each character, or None if unbalanced."""
     depths: list[int] = []
-    depth = 0
+    stack: list[str] = []
+    closing_delimiters = {")": "(", "}": "{", "]": "["}
     for char in code:
-        depths.append(depth)
-        if char == "{":
-            depth += 1
-        elif char == "}":
-            if depth == 0:
+        depths.append(len(stack))
+        if char in "({[":
+            stack.append(char)
+        elif char in closing_delimiters:
+            if not stack or stack.pop() != closing_delimiters[char]:
                 return None
+    return depths if not stack else None
+
+
+def matching_delimiter(
+    code: str,
+    opening: int,
+    open_char: str,
+    close_char: str,
+) -> int | None:
+    depth = 0
+    for index in range(opening, len(code)):
+        if code[index] == open_char:
+            depth += 1
+        elif code[index] == close_char:
             depth -= 1
-    return depths if depth == 0 else None
+            if depth == 0:
+                return index
+            if depth < 0:
+                return None
+    return None
+
+
+def top_level_arrows(code: str) -> list[int] | None:
+    depths = delimiter_depths(code)
+    if depths is None:
+        return None
+    return [
+        match.start()
+        for match in re.finditer(r"=>", code)
+        if depths[match.start()] == 0
+    ]
+
+
+def validation_executes_or_propagates(
+    body: str,
+    validation: re.Match[str],
+) -> bool:
+    line_start = body.rfind("\n", 0, validation.start()) + 1
+    if body[line_start : validation.start()].strip():
+        return False
+    if re.search(r"\b(?:defer|try[!?]?)\s*$", body[: validation.start()]):
+        return False
+
+    opening = validation.end() - 1
+    closing = matching_delimiter(body, opening, "(", ")")
+    if closing is None:
+        return False
+    suffix = body[closing + 1 :].lstrip()
+    catch = re.match(r"catch\s*\{", suffix)
+    if catch is None:
+        return re.match(r"catch\b", suffix) is None
+
+    catch_opening = catch.end() - 1
+    catch_closing = matching_delimiter(suffix, catch_opening, "{", "}")
+    if catch_closing is None:
+        return False
+    catch_body = suffix[catch_opening + 1 : catch_closing]
+    arrows = top_level_arrows(catch_body)
+    if not arrows:
+        return False
+    return all(
+        re.match(r"\s*raise\b", catch_body[arrow + 2 :]) is not None
+        for arrow in arrows
+    )
 
 
 def validates_before_every_instantiation(facade: str) -> bool:
@@ -180,7 +243,7 @@ def validates_before_every_instantiation(facade: str) -> bool:
     )
     if body is None:
         return False
-    depths = brace_depths(body)
+    depths = delimiter_depths(body)
     if depths is None:
         return False
     validations = [
@@ -191,6 +254,7 @@ def validates_before_every_instantiation(facade: str) -> bool:
             body,
         )
         if depths[match.start()] == 0
+        and validation_executes_or_propagates(body, match)
     ]
     instantiations = [
         match.start()
