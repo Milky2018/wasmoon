@@ -174,6 +174,78 @@ test "closing one native session leaves its sibling operational" {
 }
 
 ///|
+test "WASI command hosts reject installer and context aliases" {
+  let shared_installer_ctx = @wasi_component.WasiComponentCtxBuilder()
+    .stdin(b"hello")
+    .build()
+  let shared_installer = @component.wasi_command_component_host(
+    shared_installer_ctx,
+  )
+  let first_runtime = @component.ComponentRuntime(
+    engine=@component.interpreter_component_engine(),
+  )
+  let second_runtime = @component.ComponentRuntime(
+    engine=@component.interpreter_component_engine(),
+  )
+  defer first_runtime.close()
+  defer second_runtime.close()
+  first_runtime.install(shared_installer)
+  let installer_alias_error = try
+    second_runtime.install(shared_installer)
+  catch {
+    error => error
+  } noraise {
+    _ => fail("expected reused host installer to be rejected")
+  }
+  second_runtime.close()
+  let stdin_component = @component_text.parse_component_wat(
+    @fs.read_file_to_string(
+      "testsuite/fixtures/wasi-command-async-stdin.component.wat",
+    ),
+  )
+  let first_result = first_runtime
+    .instantiate("first-wasi-owner", stdin_component)
+    .bind("wasi:cli/run@0.3.0#run")
+    .call([])
+
+  let shared_ctx = @wasi_component.WasiComponentCtxBuilder()
+    .stdin(b"hello")
+    .build()
+  let third_runtime = @component.ComponentRuntime(
+    engine=@component.interpreter_component_engine(),
+  )
+  let fourth_runtime = @component.ComponentRuntime(
+    engine=@component.interpreter_component_engine(),
+  )
+  defer third_runtime.close()
+  defer fourth_runtime.close()
+  third_runtime.install(@component.wasi_command_component_host(shared_ctx))
+  let context_alias_error = try
+    fourth_runtime.install(@component.wasi_command_component_host(shared_ctx))
+  catch {
+    error => error
+  } noraise {
+    _ => fail("expected aliased WASI context to be rejected")
+  }
+  fourth_runtime.close()
+  let third_result = third_runtime
+    .instantiate("third-wasi-owner", stdin_component)
+    .bind("wasi:cli/run@0.3.0#run")
+    .call([])
+  debug_inspect(
+    (installer_alias_error, first_result, context_alias_error, third_result),
+    content=(
+      #|(
+      #|  HostInstallerAlreadyConsumed,
+      #|  [ResultOk(None)],
+      #|  HostContextAlreadyOwned,
+      #|  [ResultOk(None)],
+      #|)
+    ),
+  )
+}
+
+///|
 test "component runtime native engine executes without interpreter fallback" {
   let events : Array[@component.NativeComponentExecutionEvent] = []
   let runtime = @component.ComponentRuntime(

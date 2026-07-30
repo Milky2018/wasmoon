@@ -23,6 +23,7 @@ struct WasiComponentCtx {
   stderr_rep : Int
   network_rep : Int
   preopens : Array[PreopenState]
+  runtime_owner_claimed : Ref[Bool]
   closed : Ref[Bool]
 }
 
@@ -315,7 +316,25 @@ pub fn WasiComponentCtxBuilder::build(
     stderr_rep,
     network_rep,
     preopens: self.preopens.copy(),
+    runtime_owner_claimed: Ref(false),
     closed: Ref(false),
+  }
+}
+
+///|
+/// Claim this context for one embedding runtime.
+///
+/// The claim is terminal and shared by every alias of this context. Embedding
+/// adapters must acquire it before installing host functions that capture the
+/// context.
+pub fn WasiComponentCtx::try_claim_runtime_owner(
+  self : WasiComponentCtx,
+) -> Bool {
+  if self.closed.val || self.runtime_owner_claimed.val {
+    false
+  } else {
+    self.runtime_owner_claimed.val = true
+    true
   }
 }
 

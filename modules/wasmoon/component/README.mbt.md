@@ -23,6 +23,11 @@ low-level implementation types, so their public methods cannot reveal a
 Store-scoped core engine or linker. The native session factory remains an
 internal product and conformance seam rather than an ordinary embedding API.
 
+`ComponentHostInstaller` is consumed by the first successful
+`ComponentRuntime::install` claim. A WASI command context is likewise owned by
+one runtime for its terminal lifetime, even when aliases create multiple
+installers. Build a distinct `WasiComponentCtx` for every runtime.
+
 ## Invoke an export
 
 The stable facade validates before instantiation and returns structured

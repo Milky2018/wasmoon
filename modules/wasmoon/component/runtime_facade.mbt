@@ -202,6 +202,8 @@ pub(all) suberror ComponentRuntimeError {
   InvocationFailed(String)
   NativeEngineUnavailable(String)
   NativeCompilationFailed(String)
+  HostInstallerAlreadyConsumed
+  HostContextAlreadyOwned
   RuntimeClosed
   Cancelled
   HostExit(Int)
@@ -310,7 +312,8 @@ pub fn ComponentRuntime::install(
   installer : ComponentHostInstaller,
 ) -> Unit raise ComponentRuntimeError {
   self.state.ensure_open()
-  installer.install(self.state.linker) catch {
+  installer.claim()
+  installer.populate(self.state.linker) catch {
     error => {
       installer.close()
       raise InstantiationFailed(error.to_string())

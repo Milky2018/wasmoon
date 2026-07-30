@@ -373,6 +373,7 @@ graph TD
   ISS_353["ISS-353: Analyze validation order from effective facade code"]
   ISS_354["ISS-354: Normalize component native optimization level once"]
   ISS_355["ISS-355: Compare sanitizer test targets as a set"]
+  ISS_356["ISS-356: Enforce exclusive WASI host context ownership"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005

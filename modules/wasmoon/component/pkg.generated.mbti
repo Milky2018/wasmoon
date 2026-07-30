@@ -59,6 +59,8 @@ pub(all) suberror ComponentRuntimeError {
   InvocationFailed(String)
   NativeEngineUnavailable(String)
   NativeCompilationFailed(String)
+  HostInstallerAlreadyConsumed
+  HostContextAlreadyOwned
   RuntimeClosed
   Cancelled
   HostExit(Int)

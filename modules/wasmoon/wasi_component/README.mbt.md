@@ -38,6 +38,10 @@ defer ctx.close()
 surface. Lower-level host methods remain available to product-owned adapters
 that intentionally assemble a narrower world.
 
+The stable component facade claims a context for exactly one runtime before it
+installs this world. Context and installer aliases cannot share descriptors,
+reactor state, resources, or close authority across runtimes.
+
 Preopens are directory-descriptor capabilities, not ambient path prefixes.
 Guest `..` traversal and symlink resolution are checked against the live
 directory ancestry before a native operation can mutate the filesystem.
