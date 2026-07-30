@@ -354,6 +354,7 @@ graph TD
   ISS_336["ISS-336: Seal Store-owned native execution state on close"]
   ISS_337["ISS-337: Make the release symbol gate pipefail-safe"]
   ISS_338["ISS-338: Preserve Store errors when allocating component host core functions"]
+  ISS_339["ISS-339: Tear down resumable JIT setup when execution admission fails"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005

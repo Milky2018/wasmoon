@@ -157,6 +157,8 @@ jobs:
           moon test --target native --target-dir "$sanitizer_build" \
             modules/wasmoon_jit/native_continuation_test.mbt
           moon test --target native --target-dir "$sanitizer_build" \
+            modules/wasmoon/testsuite/jit_resumable_lifecycle_test.mbt
+          moon test --target native --target-dir "$sanitizer_build" \
             modules/wasmoon_jit/callback_ownership_test.mbt
           moon test --target native --target-dir "$sanitizer_build" \
             modules/wasmoon/async_native/reactor_wbtest.mbt

@@ -240,10 +240,15 @@ pub fn JITModuleContext::call_core_func_resumable(
     self.jit_module,
     instance,
   )
-  let gc_active = prepare_jit_core_environment(self, store, instance)
   let invocation = store.native_execution_state().begin() catch {
       error => raise ExecutionStateFailure(error)
     }
+  let gc_active = prepare_jit_core_environment(self, store, instance) catch {
+    error => {
+      invocation.release_if_live()
+      raise error
+    }
+  }
   let outcome = self.jit_module.start_continuation_call(func, encoded_args) catch {
     error => {
       finish_jit_core_environment(self, store, gc_active)
