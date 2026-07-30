@@ -147,8 +147,12 @@ fn ComponentInvocation::drive_once(
     Progressed => DriveProgressed
     Blocked =>
       try {
-        if progress_one_subtask_nonblocking(self.async_state, self.store) ||
-          poll_host_event(self.async_state, self.store) {
+        let subtask_progressed = progress_one_subtask_nonblocking(
+          self.async_state,
+          self.store,
+        )
+        let host_progressed = poll_host_event(self.async_state, self.store)
+        if subtask_progressed || host_progressed {
           DriveProgressed
         } else {
           DriveBlocked

@@ -59,6 +59,50 @@ fn component_runtime_yield_fixture() -> Bytes raise @component_text.ComponentTex
 }
 
 ///|
+fn component_runtime_yielding_background_timer_fixture() -> Bytes raise @component_text.ComponentTextError {
+  @component_text.parse_component_wat(
+    (
+      #|(component
+      #|  (import "wasi:clocks/monotonic-clock@0.3.0"
+      #|    (instance $clock
+      #|      (export "wait-for" (func async (param "how-long" u64)))))
+      #|  (alias export $clock "wait-for" (func $wait-for))
+      #|  (component $spinner
+      #|    (core module $m
+      #|      (import "" "task.return" (func $task.return))
+      #|      (func (export "spin") (result i32)
+      #|        (call $task.return)
+      #|        (i32.const 1))
+      #|      (func (export "spin-cb") (param i32 i32 i32) (result i32)
+      #|        (i32.const 1)))
+      #|    (canon task.return (core func $task.return))
+      #|    (core instance $i (instantiate $m (with "" (instance
+      #|      (export "task.return" (func $task.return))))))
+      #|    (func (export "spin") async (canon lift
+      #|      (core func $i "spin")
+      #|      async (callback (core func $i "spin-cb")))))
+      #|  (instance $spinner-instance (instantiate $spinner))
+      #|  (component $starter
+      #|    (import "spin" (func $spin async))
+      #|    (core func $spin-lowered (canon lower (func $spin)))
+      #|    (core module $m
+      #|      (import "" "spin" (func $spin))
+      #|      (func (export "start-spinner") (call $spin)))
+      #|    (core instance $i (instantiate $m (with "" (instance
+      #|      (export "spin" (func $spin-lowered))))))
+      #|    (func (export "start-spinner") async
+      #|      (canon lift (core func $i "start-spinner") async)))
+      #|  (instance $started (instantiate $starter
+      #|    (with "spin" (func $spinner-instance "spin"))))
+      #|  (alias export $started "start-spinner" (func $start-spinner))
+      #|  (export "start-spinner" (func $start-spinner))
+      #|  (export "wait-for" (func $wait-for)))
+      #|
+    ),
+  )
+}
+
+///|
 test "component runtime facade binds and invokes nested exports" {
   let runtime = @component.ComponentRuntime()
   defer runtime.close()
@@ -123,6 +167,23 @@ test "component calls resume a directly yielding guest" {
       #|[U32(42)]
     ),
   )
+}
+
+///|
+test "yielding background work cannot starve a WASI timer" {
+  let ctx = @wasi_component.WasiComponentCtxBuilder().build()
+  let runtime = @component.ComponentRuntime(
+    engine=@component.interpreter_component_engine(),
+  )
+  defer runtime.close()
+  runtime.install(@component.wasi_command_component_host(ctx))
+  let instance = runtime.instantiate(
+    "yielding-background-timer",
+    component_runtime_yielding_background_timer_fixture(),
+  )
+  instance.bind("start-spinner").call([]) |> ignore
+  let timer = instance.bind("wait-for").start([U64(0UL)])
+  debug_inspect((timer.poll(), timer.poll()), content="(Pending, Ready([]))")
 }
 
 ///|

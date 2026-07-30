@@ -375,6 +375,7 @@ graph TD
   ISS_355["ISS-355: Compare sanitizer test targets as a set"]
   ISS_356["ISS-356: Enforce exclusive WASI host context ownership"]
   ISS_357["ISS-357: Require dominating component validation in the audit"]
+  ISS_358["ISS-358: Poll host events fairly beside runnable component subtasks"]
   ISS_002 --> ISS_003
   ISS_002 --> ISS_004
   ISS_003 --> ISS_005
