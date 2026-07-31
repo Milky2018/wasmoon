@@ -19,7 +19,7 @@ fn instantiate_component(
   } else {
     match linker.host_runtime.val {
       Some(runtime) => runtime.async_state
-      None => AsyncState(stream_table, core_engine=linker.core_engine)
+      None => AsyncState(stream_table, core_engine=linker.core_engine())
     }
   }
   let state = BuildState::BuildState(stream_table, async_state)
@@ -91,11 +91,11 @@ fn instantiate_component(
               linker.core_linker.register(module_name, instance) catch {
                 error => raise CoreModuleInstantiateError(error.to_string())
               }
-              linker.core_engine.register_instance(store, mod_, instance)
+              linker.core_engine().register_instance(store, mod_, instance)
               state.core_instances.push(
                 core_instance_from_module(
                   instance,
-                  linker.core_engine,
+                  linker.core_engine(),
                   may_suspend,
                   native_eligible,
                 ),

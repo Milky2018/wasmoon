@@ -43,7 +43,7 @@ pub fn ComponentLinker::host_runtime_state(
     Some(runtime) => runtime
     None => {
       let runtime = HostRuntimeState::with_core_execution_engine(
-        self.core_engine,
+        self.core_engine(),
       )
       self.host_runtime.val = Some(runtime)
       runtime

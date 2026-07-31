@@ -312,7 +312,12 @@ pub fn ComponentInstance::get_core_instance(
 ///|
 struct ComponentLinker {
   core_linker : @runtime.Linker
-  core_engine : CoreExecutionEngine
+  // Released by `finish_close`, like every other retained graph below. The
+  // engine can reach embedder-supplied closures and native session state, and
+  // an embedder callback that refers back to its linker would otherwise form a
+  // reference cycle that outlives terminal close. Read it through
+  // `ComponentLinker::core_engine`.
+  core_engine_slot : Ref[CoreExecutionEngine?]
   core_execution_lifecycle : CoreExecutionLifecycle
   components : Array[(String, ComponentInstance)]
   imports : Map[String, ComponentExtern]
@@ -342,7 +347,7 @@ pub fn ComponentLinker::with_core_execution_engine(
   managed_core_engine.prepare_store(core_linker.get_store())
   {
     core_linker,
-    core_engine: managed_core_engine,
+    core_engine_slot: Ref(Some(managed_core_engine)),
     core_execution_lifecycle,
     components: [],
     imports: Map([]),
@@ -350,6 +355,19 @@ pub fn ComponentLinker::with_core_execution_engine(
     closed: Ref(false),
     close_complete: Ref(false),
     resource_id_counter: [0],
+  }
+}
+
+///|
+/// The core execution engine backing this linker.
+///
+/// After terminal close the engine is released, and this reports a closed
+/// engine that rejects further work instead of resurrecting the released one.
+/// Every caller below reaches the engine while the linker is still open.
+fn ComponentLinker::core_engine(self : ComponentLinker) -> CoreExecutionEngine {
+  match self.core_engine_slot.val {
+    Some(engine) => engine
+    None => closed_core_execution_engine()
   }
 }
 
@@ -398,7 +416,16 @@ fn ComponentLinker::finish_close(self : ComponentLinker) -> Unit {
   self.components.clear()
   self.imports.clear()
   self.host_runtime.val = None
-  self.core_engine.close()
+  // Close the engine, then drop it. Holding it past terminal close would keep
+  // embedder state alive for the lifetime of the linker, and would make an
+  // embedder callback that refers back to this linker an uncollectable cycle.
+  match self.core_engine_slot.val {
+    Some(engine) => {
+      self.core_engine_slot.val = None
+      engine.close()
+    }
+    None => ()
+  }
   self.core_linker.close()
 }
 

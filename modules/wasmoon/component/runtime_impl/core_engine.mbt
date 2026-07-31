@@ -125,6 +125,31 @@ struct CoreExecutionEngine {
 }
 
 ///|
+/// An engine that accepts no further work.
+///
+/// Reported by a linker whose engine has already been released at terminal
+/// close, so a late caller gets the same structured `Cancelled` it would get
+/// from a closing lifecycle rather than reaching a closed engine.
+fn closed_core_execution_engine() -> CoreExecutionEngine {
+  CoreExecutionEngine(
+    fn(_store, _module, _instance) raise ComponentRuntimeError {
+      raise Cancelled
+    },
+    fn(
+      _store,
+      _instance,
+      _func_idx,
+      _args,
+      _request,
+    ) raise ComponentRuntimeError {
+      raise Cancelled
+    },
+    prepare_store=fn(_store) { () },
+    close=fn() { () },
+  )
+}
+
+///|
 priv struct CoreExecutionLifecycle {
   active_leases : Ref[Int]
   closing : Ref[Bool]

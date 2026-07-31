@@ -143,7 +143,9 @@ test "linker close cannot overtake in-flight continuation ownership" {
     fn(_arguments) { [] },
   )
   let result = try {
-    linker.core_engine.invoke(
+    linker
+    .core_engine()
+    .invoke(
       linker.get_store(),
       core_func.instance,
       0,
@@ -185,13 +187,15 @@ test "published continuation lease delays linker teardown" {
     { params: [], results: [] },
     fn(_arguments) { [] },
   )
-  let outcome = linker.core_engine.invoke(
-    linker.get_store(),
-    core_func.instance,
-    0,
-    [],
-    CoreExecutionRequest(CallbackStep, PreferNative, Resumable),
-  )
+  let outcome = linker
+    .core_engine()
+    .invoke(
+      linker.get_store(),
+      core_func.instance,
+      0,
+      [],
+      CoreExecutionRequest(CallbackStep, PreferNative, Resumable),
+    )
   guard outcome is Suspended(_, continuation) else {
     return fail("expected a suspended managed execution")
   }
@@ -199,4 +203,34 @@ test "published continuation lease delays linker teardown" {
   debug_inspect(events, content="[]")
   continuation.cancel()
   debug_inspect(events, content="[\"continuation\", \"engine\"]")
+}
+
+///|
+/// Terminal close must drop the linker's reference to its execution engine.
+///
+/// The engine can reach embedder-supplied closures and native session state.
+/// An embedder callback that refers back to its own linker — closing it from
+/// inside an engine callback, for example — would otherwise leave a reference
+/// cycle that survives close, which reference counting never reclaims.
+/// LeakSanitizer caught exactly that shape as an all-indirect leak.
+test "terminal close releases the linker's core execution engine" {
+  let events : Array[String] = []
+  let engine = CoreExecutionEngine(
+    fn(_store, _module, _instance) { () },
+    fn(_store, _instance, _function_index, _arguments, _request) {
+      Returned([])
+    },
+    close=fn() { events.push("engine") },
+  )
+  let linker = ComponentLinker::with_core_execution_engine(engine)
+  debug_inspect(linker.core_engine_slot.val is Some(_), content="true")
+  linker.close()
+  // Engine closed exactly once, and no longer retained by the linker.
+  debug_inspect(
+    (events, linker.core_engine_slot.val is None),
+    content="([\"engine\"], true)",
+  )
+  // Repeated close stays terminal and does not close the engine again.
+  linker.close()
+  debug_inspect(events, content="[\"engine\"]")
 }
