@@ -18,7 +18,9 @@ jobs:
   native-platform:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 90
+    # About 11 minutes of checks, tests, and suites run before the sanitizer
+    # gate, which now carries a 75-minute budget of its own.
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
@@ -137,8 +139,15 @@ jobs:
             --suite future-gated --dump-failures --no-jit || status=$?
           exit "$status"
 
+      # This gate rebuilds each covered package with sanitizers from scratch and
+      # has grown with every test file added to it: 2m20s on 2026-07-28, 32m25s
+      # on 07-29, 33m18s on 07-30, then past the old 40-minute budget. A run
+      # that reaches the last covered file needs roughly 55 minutes, most of it
+      # spent compiling large packages under ASan rather than running tests. The
+      # budget below is measured headroom, not an estimate; ISS-368 tracks
+      # bringing the cost itself down.
       - name: run native sanitizer checks
-        timeout-minutes: 40
+        timeout-minutes: 75
         env:
           MOONBIT_NEW_NATIVE: 0
           ASAN_OPTIONS: ${{ matrix.asan_options }}
