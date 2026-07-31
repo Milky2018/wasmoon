@@ -1662,6 +1662,42 @@ fn analyze_lowering(function : @semantic.Function) -> LoweringAnalysis {
       }
     }
   }
+  // `pointer.offset p, 0` is `p`, and both sides are Ptr64.
+  //
+  // The register-offset selector above deliberately matches a zero
+  // `pointer.offset` as the tail of a foldable address, so this pass runs last
+  // and claims only what that selector left behind. Those would otherwise
+  // become `add xD, xN, #0`. A WebAssembly access with no static offset emits
+  // one per address, and a base-relative access has no `add` underneath for the
+  // register-offset form to match, so nothing else removes it.
+  for block in function.blocks() {
+    for instruction in function.block_instructions(block) {
+      guard function.instruction_operation(instruction) is Some(PointerOffset) else {
+        continue
+      }
+      guard function.instruction_results(instruction) is [result] else {
+        continue
+      }
+      guard function.instruction_operands(instruction) is [input, constant] else {
+        continue
+      }
+      let result_index = function.value_index(result).unwrap()
+      if skip_results[result_index] ||
+        environment_aliases[result_index] is Some(_) {
+        continue
+      }
+      if constants[function.value_index(constant).unwrap()] != Some(0UL) {
+        continue
+      }
+      // Forwarding drops this instruction, so it must not carry roots.
+      let metadata = function.instruction_metadata(instruction).unwrap()
+      if !metadata.live_gc_roots.is_empty() {
+        continue
+      }
+      environment_aliases[result_index] = Some(input)
+      address_immediates[result_index] = None
+    }
+  }
   {
     uses,
     immediates,
