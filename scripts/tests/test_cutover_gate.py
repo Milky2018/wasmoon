@@ -537,7 +537,10 @@ class GateManifestTests(unittest.TestCase):
             1,
         )
         self.assertEqual(workflow.count('export MOON_AR="$(command -v ar)"'), 1)
-        self.assertEqual(workflow.count("timeout-minutes: 40"), 1)
+        # The sanitizer gate's budget is measured headroom: the step needs
+        # roughly 55 minutes to reach its last covered file (ISS-368 tracks
+        # reducing the underlying compile cost and lowering this again).
+        self.assertEqual(workflow.count("timeout-minutes: 75"), 1)
         self.assertEqual(
             workflow.count(
                 "python3 scripts/find_gc_bugs.py --dir spec/gc --timeout 30"
