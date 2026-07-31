@@ -53,7 +53,7 @@ pub(all) enum EditPosition {
   Before(Int)
   After(Int)
   Edge(source_block~ : Int, successor_index~ : Int)
-} derive(Eq, @debug.Debug)
+} derive(Eq, Hash, @debug.Debug)
 
 type LiveRange derive(@debug.Debug)
 pub fn LiveRange::LiveRange(Int, VirtualReg) -> Self
