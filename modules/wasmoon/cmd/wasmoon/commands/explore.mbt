@@ -22,6 +22,7 @@ pub fn run_explore(
   stages : Array[String],
   html_output : Bool,
   debug : Bool,
+  target_name? : String = "host",
 ) -> Unit {
   debug |> ignore
   // Parse stages - empty means show all
@@ -174,13 +175,18 @@ pub fn run_explore(
     )
     |> ignore
     let ir_optimized = milk_result.print()
-    let target = @wasmoon_jit.host_native_target() catch {
-      err => {
-        if !html_output {
-          println("Unsupported host target: \{err}")
+    let target = match target_name {
+      "x64" => @wasmoon_jit.NativeTarget::X64
+      "aarch64" => @wasmoon_jit.NativeTarget::AArch64
+      _ =>
+        @wasmoon_jit.host_native_target() catch {
+          err => {
+            if !html_output {
+              println("Unsupported host target: \{err}")
+            }
+            continue
+          }
         }
-        continue
-      }
     }
     let diagnostics = @wasmoon_jit.compile_wasm_body_diagnostics_for_target(
       milk_result, wasm_validation_context, target,

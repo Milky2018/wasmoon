@@ -253,8 +253,16 @@ fn append_body(
   metadata : @vcode.InstructionMetadata,
   clobbers? : Array[@vcode.PhysicalReg] = [],
 ) -> Array[@vcode.Value] raise X64LowerError {
+  // The instruction's own encoding constraints are authoritative; a caller may
+  // only add to them. See `X64Inst::mandatory_clobbers`.
+  let effective_clobbers = clobbers.copy()
+  for reg in instruction.mandatory_clobbers() {
+    if !effective_clobbers.contains(reg) {
+      effective_clobbers.push(reg)
+    }
+  }
   let (_, results) = builder.append_body(
-    block, instruction, inputs, outputs, clobbers, metadata,
+    block, instruction, inputs, outputs, effective_clobbers, metadata,
   ) catch {
     error => raise BuildFailure(cause=error)
   }
@@ -607,11 +615,12 @@ fn lower_instruction(
       @vcode.Input::fixed(operands[0], accumulator),
       @vcode.Input::fixed(operands[1], divisor),
     ]
-    let (outputs, clobbers) = match selected {
+    // Clobbers come from `X64Inst::mandatory_clobbers`; only the result
+    // placement differs between division and remainder.
+    let outputs = match selected {
       IntBinary(_, Sdiv | Udiv) =>
-        ([@vcode.Output::fixed(result_types[0], accumulator)], [high])
-      IntRemainder(_, _) =>
-        ([@vcode.Output::fixed(result_types[0], high)], [accumulator])
+        [@vcode.Output::fixed(result_types[0], accumulator)]
+      IntRemainder(_, _) => [@vcode.Output::fixed(result_types[0], high)]
       _ => abort("selected checked integer operation is not division")
     }
     let results = append_body(
@@ -621,7 +630,6 @@ fn lower_instruction(
       inputs,
       outputs,
       source_metadata(semantic_metadata, roots, operation.semantics()),
-      clobbers~,
     )
     for index, result in semantic_results {
       values[function.value_index(result).unwrap()] = Some(results[index])
@@ -1186,13 +1194,7 @@ fn lower_instruction(
       [@vcode.Output::fixed(result_types[0], accumulator).with_timing(Early)]
     _ => result_types.map(@vcode.Output::any)
   }
-  let clobbers = match selected {
-    IntBinary(_, Lsl | Asr | Lsr | Ror) => [@vcode.PhysicalReg::new(1, Int)]
-    IntHighMultiply(_, _) => [accumulator]
-    IntWithOverflow(_, Mul(_)) => [high]
-    AtomicRmw(_, _, And | Or | Xor) => [high]
-    _ => []
-  }
+  // Clobbers come from `X64Inst::mandatory_clobbers`.
   let results = append_body(
     builder,
     block,
@@ -1215,7 +1217,6 @@ fn lower_instruction(
         _ => None
       },
     ),
-    clobbers~,
   )
   for index, result in semantic_results {
     values[function.value_index(result).unwrap()] = Some(results[index])
