@@ -35,6 +35,11 @@ fn main {
     "mc", "milkir", "opt-milkir", "machv-mc",
   ])
 
+  // Define choices for the explore native target override
+  let explore_target_choices = @hashset.HashSet::from_array([
+    "host", "x64", "aarch64",
+  ])
+
   // Define choices for config action
   let config_action_choices = @hashset.HashSet::from_array([
     "show", "path", "init",
@@ -168,6 +173,11 @@ fn main {
           nargs=Any,
           choices=stage_choices,
           help="Stages to show: source, milkir, opt-milkir, machv, vcode, allocated-vcode, code-object, mc (default all; ir, opt-ir, regalloc, and machv-mc are aliases)",
+        ),
+        "target": @clap.Arg::named(
+          nargs=AtMost(1),
+          choices=explore_target_choices,
+          help="Native target to inspect: host, x64, aarch64 (default: host)",
         ),
         "html": @clap.Arg::flag(help="Output HTML report"),
         "debug": @clap.Arg::flag(short='D', help="Enable debug output"),
@@ -426,6 +436,10 @@ fn main {
                 }
                 let html_output = sub.flags.get("html") is Some(true)
                 let debug = sub.flags.get("debug") is Some(true)
+                let target_name : String = match sub.args.get("target") {
+                  Some(arr) => if arr.length() > 0 { arr[0] } else { "host" }
+                  None => "host"
+                }
                 @commands.run_explore(
                   positional[0],
                   func_idx,
@@ -433,6 +447,7 @@ fn main {
                   stages,
                   html_output,
                   debug,
+                  target_name~,
                 )
               } else {
                 println("Error: missing file argument")

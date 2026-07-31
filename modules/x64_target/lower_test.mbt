@@ -1580,14 +1580,14 @@ test "X64 lowering legalizes remaining pure scalar integer operations" {
       #|  i6 IntUnary(W32, Clz) uses=[v10:any@early] defs=[v11:any@late]
       #|  i7 PopulationCount(W32) uses=[v6:any@early] defs=[v12:any@late]
       #|  i8 IntUnary(W32, Neg) uses=[v12:any@early] defs=[v13:any@late]
-      #|  i9 IntBinary(W32, Ror) uses=[v11:any@early, v13:any@early] defs=[v14:any@late]
+      #|  i9 IntBinary(W32, Ror) uses=[v11:any@early, v13:any@early] defs=[v14:any@late] clobbers=[p1:int]
       #|  i10 IntHighMultiply(W32, Signed) uses=[v14:fixed(p0:int)@early, v7:fixed(p11:int)@early] defs=[v15:fixed(p2:int)@late] clobbers=[p0:int]
       #|  i11 IntHighMultiply(W32, Unsigned) uses=[v15:fixed(p0:int)@early, v12:fixed(p11:int)@early] defs=[v16:fixed(p2:int)@late] clobbers=[p0:int]
       #|  i12 IntUnary(W64, Rbit) uses=[v8:any@early] defs=[v17:any@late]
       #|  i13 IntUnary(W64, Clz) uses=[v17:any@early] defs=[v18:any@late]
       #|  i14 PopulationCount(W64) uses=[v8:any@early] defs=[v19:any@late]
       #|  i15 IntUnary(W64, Neg) uses=[v19:any@early] defs=[v20:any@late]
-      #|  i16 IntBinary(W64, Ror) uses=[v18:any@early, v20:any@early] defs=[v21:any@late]
+      #|  i16 IntBinary(W64, Ror) uses=[v18:any@early, v20:any@early] defs=[v21:any@late] clobbers=[p1:int]
       #|  i17 IntHighMultiply(W64, Signed) uses=[v21:fixed(p0:int)@early, v9:fixed(p11:int)@early] defs=[v22:fixed(p2:int)@late] clobbers=[p0:int]
       #|  i18 IntHighMultiply(W64, Unsigned) uses=[v22:fixed(p0:int)@early, v19:fixed(p11:int)@early] defs=[v23:fixed(p2:int)@late] clobbers=[p0:int]
       #|  i19 OutgoingReg(I32, p0:int) uses=[v16:any@early]
@@ -3078,4 +3078,64 @@ test "X64 lowering legalizes trapping and saturating float-to-int" {
       #|
     ),
   )
+}
+
+///|
+/// Regression test for ISS-365.
+///
+/// Every x64 variable shift and rotate takes its count in `cl`, so lowering
+/// must declare the `rcx` clobber on all of them. `RotateLeft` used to be
+/// lowered through a special-case path that emitted `Ror` without it, so the
+/// register allocator was free to keep a live value in `rcx` across the
+/// rotate. In large rotate-heavy functions it did exactly that, and a memory
+/// index destroyed by the `cl` setup produced an out-of-bounds access.
+///
+/// This asserts the invariant over every shift and rotate form rather than a
+/// single opcode, so a future lowering path cannot reintroduce the defect.
+test "X64 lowering always declares the rcx clobber for shifts and rotates" {
+  let shift_operations : Array[@semantic.IntBinaryOp] = [
+    ShiftLeft,
+    SignedShiftRight,
+    UnsignedShiftRight,
+    RotateLeft,
+    RotateRight,
+  ]
+  let missing : Array[String] = []
+  let seen : Array[String] = []
+  for operation in shift_operations {
+    for ty in [@semantic.ValueType::I32, @semantic.ValueType::I64] {
+      let builder = @semantic.FunctionBuilder::new(
+        "shift_clobber",
+        Internal,
+        [Ptr64, ty, ty],
+        [ty],
+      )
+      let parameters = builder.parameters()
+      let shifted = builder.emit(
+          IntBinary(operation),
+          [parameters[1], parameters[2]],
+          [ty],
+        )[0]
+      builder.return_([shifted])
+      let text = lower(builder.finish(), test_lowering_context()).summary()
+      for line in text.split("\n") {
+        let line = line.to_owned()
+        if line.contains("IntBinary(") &&
+          (
+            line.contains(", Lsl)") ||
+            line.contains(", Asr)") ||
+            line.contains(", Lsr)") ||
+            line.contains(", Ror)")
+          ) {
+          seen.push(line)
+          if !line.contains("clobbers=[p1:int]") {
+            missing.push(line)
+          }
+        }
+      }
+    }
+  }
+  // Each of the five operations lowers to one shift or rotate per width.
+  assert_eq(seen.length(), 10)
+  assert_eq(missing, [])
 }
