@@ -80,6 +80,58 @@ fn emit_resolved_moves(
 }
 
 ///|
+/// Chase a branch target through empty forwarding blocks.
+///
+/// Lowering splits critical edges, so a branch frequently targets a block
+/// whose only content is an unconditional jump carrying the edge arguments.
+/// When allocation gives those arguments and the destination parameters the
+/// same locations, the block emits as a single `b`, and a loop back edge then
+/// pays two taken branches per iteration instead of one. Branching straight
+/// to the final destination removes the hop.
+///
+/// A block is skipped only when nothing observable happens in it: no body
+/// instructions, no allocation edits anchored on its terminator, and an edge
+/// whose parallel moves resolve to nothing. The forwarding block itself is
+/// still emitted, so predecessors that do need its moves keep their path.
+///
+/// Threading can lengthen a conditional branch's displacement, and imm19
+/// reaches only ±1MB with no intra-function veneer support. That exposure
+/// predates threading — every moveless edge already aims imm19 branches at
+/// arbitrary blocks — and an overflow raises a structured BranchOutOfRange
+/// at patch time rather than emitting a wrong offset.
+fn threaded_branch_target(
+  function : @vcode.Function[AArch64Inst],
+  allocation : @vcode.Allocation,
+  target : @vcode.Block,
+) -> @vcode.Block raise AArch64EmitError {
+  let mut current = target
+  // Forwarding chains longer than a few hops do not occur in practice; the
+  // bound also terminates on a cycle of empty blocks.
+  for _hop in 0..<4 {
+    if !function.block_body(current).is_empty() {
+      break
+    }
+    guard function.block_terminator(current) is Some(terminator) else { break }
+    guard function.instruction(terminator) is Some(Jump) else { break }
+    if !allocation.edits_at(terminator, Before).is_empty() ||
+      !allocation.edits_at(terminator, After).is_empty() {
+      break
+    }
+    if !resolve_edge_moves(function, allocation, current, 0).is_empty() {
+      break
+    }
+    guard function.instruction_successor_at(terminator, 0) is Some(edge) else {
+      break
+    }
+    if edge.target == current {
+      break
+    }
+    current = edge.target
+  }
+  current
+}
+
+///|
 fn emit_edge_moves(
   buffer : CodeBuffer,
   function : @vcode.Function[AArch64Inst],
@@ -111,42 +163,47 @@ fn emit_two_way_edges(
   let when_false = function.instruction_successor_at(instruction, 1).unwrap().target
   let true_moves = resolve_edge_moves(function, allocation, block, 0)
   let false_moves = resolve_edge_moves(function, allocation, block, 1)
+  // Fallthrough decisions compare the original successors; emitted branches
+  // go to the threaded targets. The edge's own moves are emitted here either
+  // way, so threading only skips blocks that contribute nothing.
+  let threaded_true = threaded_branch_target(function, allocation, when_true)
+  let threaded_false = threaded_branch_target(function, allocation, when_false)
   if next_block == Some(when_false) {
     if true_moves.is_empty() {
-      buffer.emit_branch(when_true, 19, true_branch_base)
+      buffer.emit_branch(threaded_true, 19, true_branch_base)
       emit_resolved_moves(buffer, frame, false_moves)
     } else {
       let local_false_branch = buffer.position()
       buffer.emit_word(false_branch_base)
       emit_resolved_moves(buffer, frame, true_moves)
-      buffer.emit_branch(when_true, 26, 0x14000000U)
+      buffer.emit_branch(threaded_true, 26, 0x14000000U)
       patch_relative_branch(buffer, local_false_branch, buffer.position(), 19)
       emit_resolved_moves(buffer, frame, false_moves)
     }
   } else if next_block == Some(when_true) {
     if false_moves.is_empty() {
-      buffer.emit_branch(when_false, 19, false_branch_base)
+      buffer.emit_branch(threaded_false, 19, false_branch_base)
       emit_resolved_moves(buffer, frame, true_moves)
     } else {
       let local_true_branch = buffer.position()
       buffer.emit_word(true_branch_base)
       emit_resolved_moves(buffer, frame, false_moves)
-      buffer.emit_branch(when_false, 26, 0x14000000U)
+      buffer.emit_branch(threaded_false, 26, 0x14000000U)
       patch_relative_branch(buffer, local_true_branch, buffer.position(), 19)
       emit_resolved_moves(buffer, frame, true_moves)
     }
   } else if true_moves.is_empty() {
-    buffer.emit_branch(when_true, 19, true_branch_base)
+    buffer.emit_branch(threaded_true, 19, true_branch_base)
     emit_resolved_moves(buffer, frame, false_moves)
-    buffer.emit_branch(when_false, 26, 0x14000000U)
+    buffer.emit_branch(threaded_false, 26, 0x14000000U)
   } else {
     let local_true_branch = buffer.position()
     buffer.emit_word(true_branch_base)
     emit_resolved_moves(buffer, frame, false_moves)
-    buffer.emit_branch(when_false, 26, 0x14000000U)
+    buffer.emit_branch(threaded_false, 26, 0x14000000U)
     patch_relative_branch(buffer, local_true_branch, buffer.position(), 19)
     emit_resolved_moves(buffer, frame, true_moves)
-    buffer.emit_branch(when_true, 26, 0x14000000U)
+    buffer.emit_branch(threaded_true, 26, 0x14000000U)
   }
 }
 
@@ -216,7 +273,11 @@ fn emit_switch_edges(
   if cases.is_empty() {
     emit_edge_moves(buffer, function, allocation, frame, block, 0)
     buffer.emit_branch(
-      function.instruction_successor_at(instruction, 0).unwrap().target,
+      threaded_branch_target(
+        function,
+        allocation,
+        function.instruction_successor_at(instruction, 0).unwrap().target,
+      ),
       26,
       0x14000000U,
     )
@@ -237,7 +298,11 @@ fn emit_switch_edges(
     )
     let default_branch : Int? = if default_moves.is_empty() {
       buffer.emit_branch(
-        function.instruction_successor_at(instruction, default_index).unwrap().target,
+        threaded_branch_target(
+          function,
+          allocation,
+          function.instruction_successor_at(instruction, default_index).unwrap().target,
+        ),
         19,
         0x54000002U,
       )
@@ -265,9 +330,13 @@ fn emit_switch_edges(
       }
       if edge_parallel_moves(function, allocation, block, successor_index).is_empty() {
         buffer.emit_branch(
-          function
-          .instruction_successor_at(instruction, successor_index)
-          .unwrap().target,
+          threaded_branch_target(
+            function,
+            allocation,
+            function
+            .instruction_successor_at(instruction, successor_index)
+            .unwrap().target,
+          ),
           26,
           0x14000000U,
         )
@@ -283,7 +352,13 @@ fn emit_switch_edges(
         buffer, function, allocation, frame, block, successor_index,
       )
       buffer.emit_branch(
-        function.instruction_successor_at(instruction, successor_index).unwrap().target,
+        threaded_branch_target(
+          function,
+          allocation,
+          function
+          .instruction_successor_at(instruction, successor_index)
+          .unwrap().target,
+        ),
         26,
         0x14000000U,
       )
@@ -292,7 +367,11 @@ fn emit_switch_edges(
       patch_relative_branch(buffer, branch, buffer.position(), 19)
       emit_resolved_moves(buffer, frame, default_moves)
       buffer.emit_branch(
-        function.instruction_successor_at(instruction, default_index).unwrap().target,
+        threaded_branch_target(
+          function,
+          allocation,
+          function.instruction_successor_at(instruction, default_index).unwrap().target,
+        ),
         26,
         0x14000000U,
       )
@@ -304,9 +383,13 @@ fn emit_switch_edges(
       emit_switch_compare(buffer, width, index, bits)
       if edge_parallel_moves(function, allocation, block, successor_index).is_empty() {
         buffer.emit_branch(
-          function
-          .instruction_successor_at(instruction, successor_index)
-          .unwrap().target,
+          threaded_branch_target(
+            function,
+            allocation,
+            function
+            .instruction_successor_at(instruction, successor_index)
+            .unwrap().target,
+          ),
           19,
           0x54000000U,
         )
@@ -317,7 +400,11 @@ fn emit_switch_edges(
     }
     emit_edge_moves(buffer, function, allocation, frame, block, cases.length())
     buffer.emit_branch(
-      function.instruction_successor_at(instruction, cases.length()).unwrap().target,
+      threaded_branch_target(
+        function,
+        allocation,
+        function.instruction_successor_at(instruction, cases.length()).unwrap().target,
+      ),
       26,
       0x14000000U,
     )
@@ -328,7 +415,13 @@ fn emit_switch_edges(
         buffer, function, allocation, frame, block, successor_index,
       )
       buffer.emit_branch(
-        function.instruction_successor_at(instruction, successor_index).unwrap().target,
+        threaded_branch_target(
+          function,
+          allocation,
+          function
+          .instruction_successor_at(instruction, successor_index)
+          .unwrap().target,
+        ),
         26,
         0x14000000U,
       )

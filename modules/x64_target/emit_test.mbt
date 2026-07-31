@@ -1802,3 +1802,110 @@ test "X64 pipeline forwards result areas through internal tail calls" {
     ),
   )
 }
+
+///|
+/// A counted loop whose back edge carries block arguments through a split
+/// edge block. With coalesced allocation that block is a bare forwarding
+/// jump, and the loop's conditional branch must target the loop head
+/// directly instead of hopping through it every iteration.
+test "X64 pipeline threads a moveless loop back edge to the loop head" {
+  let builder = @semantic.FunctionBuilder::new(
+    "threaded_back_edge",
+    Platform,
+    [I32],
+    [I32],
+  )
+  let count = builder.parameters()[0]
+  let loop_head = builder.create_block([I32, I32])
+  let back_edge = builder.create_block([])
+  let exit = builder.create_block([])
+  let zero = builder.emit(I32Const(0U), [], [I32])[0]
+  builder.jump(loop_head, [count, zero])
+  builder.switch_to_block(loop_head)
+  let n = builder.block_parameters(loop_head)[0]
+  let x = builder.block_parameters(loop_head)[1]
+  let three = builder.emit(I32Const(3U), [], [I32])[0]
+  let one = builder.emit(I32Const(1U), [], [I32])[0]
+  let next_x = builder.emit(IntBinary(Add), [x, three], [I32])[0]
+  let next_n = builder.emit(IntBinary(Sub), [n, one], [I32])[0]
+  builder.branch(next_n, back_edge, [], exit, [])
+  builder.switch_to_block(back_edge)
+  builder.jump(loop_head, [next_n, next_x])
+  builder.switch_to_block(exit)
+  builder.return_([next_x])
+  let selected = lower(builder.finish(), test_lowering_context())
+  let (object, _) = compile(selected)
+  // Find every jcc rel32 (0x0F 0x8x) and record its resolved target. The
+  // loop's conditional branch must resolve backward to the loop body, and
+  // the byte at its target must not be an unconditional jmp (0xE9), which
+  // would mean the edge still hops through the forwarding block.
+  let code = object.code()
+  let branch_targets : Array[(Int, Int)] = []
+  for offset in 0..<(code.length() - 5) {
+    if code[offset] == b'\x0F' && (code[offset + 1].to_int() & 0xF0) == 0x80 {
+      let rel = code[offset + 2].to_int() |
+        (code[offset + 3].to_int() << 8) |
+        (code[offset + 4].to_int() << 16) |
+        (code[offset + 5].to_int() << 24)
+      branch_targets.push((offset, offset + 6 + rel))
+    }
+  }
+  guard branch_targets is [(branch_offset, target_offset)] else {
+    fail("expected exactly one conditional branch, got \{branch_targets}")
+  }
+  debug_inspect(target_offset < branch_offset, content="true")
+  // Pin the exact destination byte offset of the loop body's first
+  // instruction; a merely-backward target would accept a miscompile.
+  inspect(target_offset, content="10")
+}
+
+///|
+/// The refusal side of back-edge threading: with parallel moves pending on
+/// the forwarding block's jump, the conditional branch must keep routing
+/// through it. One value feeding both loop parameters forces at least one
+/// move regardless of register assignment.
+test "X64 pipeline keeps a loop back edge with moves unthreaded" {
+  let builder = @semantic.FunctionBuilder::new(
+    "unthreaded_back_edge",
+    Platform,
+    [I32],
+    [I32],
+  )
+  let count = builder.parameters()[0]
+  let loop_head = builder.create_block([I32, I32])
+  let back_edge = builder.create_block([])
+  let exit = builder.create_block([])
+  let zero = builder.emit(I32Const(0U), [], [I32])[0]
+  builder.jump(loop_head, [count, zero])
+  builder.switch_to_block(loop_head)
+  let n = builder.block_parameters(loop_head)[0]
+  let x = builder.block_parameters(loop_head)[1]
+  let three = builder.emit(I32Const(3U), [], [I32])[0]
+  let one = builder.emit(I32Const(1U), [], [I32])[0]
+  let next_x = builder.emit(IntBinary(Add), [x, three], [I32])[0]
+  let next_n = builder.emit(IntBinary(Sub), [n, one], [I32])[0]
+  builder.branch(next_n, back_edge, [], exit, [])
+  builder.switch_to_block(back_edge)
+  builder.jump(loop_head, [next_n, next_n])
+  builder.switch_to_block(exit)
+  builder.return_([next_x])
+  let selected = lower(builder.finish(), test_lowering_context())
+  let (object, _) = compile(selected)
+  let code = object.code()
+  let branch_targets : Array[(Int, Int)] = []
+  for offset in 0..<(code.length() - 5) {
+    if code[offset] == b'\x0F' && (code[offset + 1].to_int() & 0xF0) == 0x80 {
+      let rel = code[offset + 2].to_int() |
+        (code[offset + 3].to_int() << 8) |
+        (code[offset + 4].to_int() << 16) |
+        (code[offset + 5].to_int() << 24)
+      branch_targets.push((offset, offset + 6 + rel))
+    }
+  }
+  guard branch_targets is [(_, target_offset)] else {
+    fail("expected exactly one conditional branch, got \{branch_targets}")
+  }
+  // Offset 10 is the loop body's first instruction, as pinned by the
+  // threading test above; with moves pending it must not be the target.
+  debug_inspect(target_offset == 10, content="false")
+}
