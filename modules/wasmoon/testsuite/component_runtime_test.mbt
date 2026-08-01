@@ -680,6 +680,48 @@ test "component runtime: evidence survives raw component mutation" {
 }
 
 ///|
+test "component runtime: checkpoint callback close rolls back once" {
+  let bytes = @component_text.parse_component_wat("(component)")
+  let validated = @component_model.validate_component_for_instantiation_with_config(
+    @component.parse_component(bytes),
+    @component_model.ComponentValidationConfig(false),
+  )
+  let linker_slot : Ref[@runtime_impl.ComponentLinker?] = Ref(None)
+  let checkpoints = Ref(0)
+  let rollbacks = Ref(0)
+  let engine = @runtime_impl.CoreExecutionEngine(
+    fn(_store, _module, _instance) { () },
+    fn(_store, _instance, _func_idx, _args, _request) { Returned([]) },
+    checkpoint_registrations=fn() {
+      checkpoints.val = checkpoints.val + 1
+      if linker_slot.val is Some(linker) {
+        linker.close()
+      }
+      @runtime_impl.CoreRegistrationCheckpoint(fn() {
+        rollbacks.val = rollbacks.val + 1
+      })
+    },
+  )
+  let linker = @runtime_impl.ComponentLinker::with_core_execution_engine(engine)
+  linker_slot.val = Some(linker)
+  let outcome = try
+    linker.instantiate("closing-at-checkpoint", validated)
+  catch {
+    Cancelled => "cancelled"
+    error => "unexpected error: \{error}"
+  } noraise {
+    _ => "instantiated"
+  }
+  debug_inspect(outcome, content="\"cancelled\"")
+  debug_inspect(checkpoints.val, content="1")
+  debug_inspect(rollbacks.val, content="1")
+  debug_inspect(
+    linker.get_component("closing-at-checkpoint") is None,
+    content="true",
+  )
+}
+
+///|
 /// Lifecycle regression: an engine registration callback that closes its own
 /// linker must not let the instantiation commit. Registration now holds a
 /// lifecycle lease like invoke, so the close defers until the registration

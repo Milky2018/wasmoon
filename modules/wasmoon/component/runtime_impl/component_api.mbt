@@ -629,10 +629,14 @@ pub fn ComponentLinker::instantiate(
   // debug-name registry, and engine registrations so a later start trap also
   // withdraws every core allocation and native context created by this root.
   let staged : Array[(String, ComponentInstance)] = []
-  let core_checkpoint = self.core_linker.checkpoint()
-  let engine_checkpoint = self.core_engine().checkpoint_registrations()
+  let core_checkpoint : Ref[@runtime.CoreLinkerCheckpoint?] = Ref(None)
+  let engine_checkpoint : Ref[CoreRegistrationCheckpoint?] = Ref(None)
   let instance = self.core_execution_lifecycle.with_lease(
     fn() raise ComponentRuntimeError {
+      core_checkpoint.val = Some(self.core_linker.checkpoint())
+      engine_checkpoint.val = Some(
+        self.core_engine().checkpoint_registrations(),
+      )
       let isolated = component.fresh_component() catch {
         e => raise ComponentParseError(e.to_string())
       }
@@ -640,8 +644,12 @@ pub fn ComponentLinker::instantiate(
     },
     rollback=fn() {
       rollback_staged_registrations(staged)
-      engine_checkpoint.rollback()
-      self.core_linker.rollback_to(core_checkpoint) |> ignore
+      if engine_checkpoint.val is Some(checkpoint) {
+        checkpoint.rollback()
+      }
+      if core_checkpoint.val is Some(checkpoint) {
+        self.core_linker.rollback_to(checkpoint) |> ignore
+      }
     },
   )
   for entry in staged {
