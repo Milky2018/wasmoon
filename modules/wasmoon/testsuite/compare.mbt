@@ -629,11 +629,15 @@ pub fn init_elem_segments(
 
   // Create a JIT table for each WebAssembly table
   let jit_tables : Array[@wasmoon_jit.JITTable?] = []
+  let jit_table_owners : Array[@wasmoon_jit.JITTableOwner] = []
   for table in mod_.tables {
     let min_size = table.type_.limits.min.to_int()
     let max_size = table.type_.limits.max.map(fn(m) { m.to_int() })
-    match @wasmoon_jit.JITTable::try_alloc(min_size, max_size) {
-      Some(jit_table) => jit_tables.push(Some(jit_table))
+    match @wasmoon_jit.JITTableOwner::try_alloc(min_size, max_size) {
+      Some(owner) => {
+        jit_tables.push(Some(owner.table()))
+        jit_table_owners.push(owner)
+      }
       None => jit_tables.push(None)
     }
   }
@@ -672,6 +676,8 @@ pub fn init_elem_segments(
 
   // Initialize shared tables (new multi-table approach)
   jm.init_shared_tables(jit_tables, elem_init)
+  // The JIT module borrows these allocations for the remainder of its life.
+  jit_table_owners |> ignore
 }
 
 ///|

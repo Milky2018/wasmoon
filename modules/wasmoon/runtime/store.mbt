@@ -44,6 +44,8 @@ pub struct Store {
   // JIT tables corresponding to runtime tables (for cross-module sharing)
   // jit_tables[i] is the JIT table for tables[i], or None if not using JIT
   jit_tables : Array[@wasmoon_jit.JITTable?]
+  // Store-only destruction capabilities corresponding to jit_tables.
+  priv jit_table_owners : Array[@wasmoon_jit.JITTableOwner?]
   // Current WASI module's memory address (for interpreter mode WASI callbacks)
   // WASI callbacks use this to access the correct memory instead of hardcoded index 0
   mut wasi_mem_addr : Int?
@@ -108,9 +110,9 @@ fn Store::rollback_allocations(
   for i in checkpoint.mems..<self.mems.length() {
     self.mems[i].close()
   }
-  for i in checkpoint.jit_tables..<self.jit_tables.length() {
-    match self.jit_tables[i] {
-      Some(table) => table.close()
+  for i in checkpoint.jit_tables..<self.jit_table_owners.length() {
+    match self.jit_table_owners[i] {
+      Some(owner) => owner.close()
       None => ()
     }
   }
@@ -123,6 +125,7 @@ fn Store::rollback_allocations(
   }
   self.tables.truncate(checkpoint.tables)
   self.jit_tables.truncate(checkpoint.jit_tables)
+  self.jit_table_owners.truncate(checkpoint.jit_tables)
   self.mems.truncate(checkpoint.mems)
   self.globals.truncate(checkpoint.globals)
   self.tags.truncate(checkpoint.tags)
@@ -191,6 +194,7 @@ pub fn Store::Store() -> Store {
     func_owners: [],
     instances: [],
     jit_tables: [],
+    jit_table_owners: [],
     wasi_mem_addr: None,
     wasi_ctx_handle: 0,
     native_execution: NativeExecutionState(),
@@ -221,6 +225,7 @@ pub fn Store::with_c_heap() -> Store {
     func_owners: [],
     instances: [],
     jit_tables: [],
+    jit_table_owners: [],
     wasi_mem_addr: None,
     wasi_ctx_handle: 0,
     native_execution: NativeExecutionState(),
@@ -263,12 +268,13 @@ pub fn Store::close(self : Store) -> Unit {
   self.module_types.clear()
   self.module_rec_groups.clear()
   self.wrapped_externs.clear()
-  for jit_table in self.jit_tables {
-    match jit_table {
-      Some(table) => table.close()
+  for owner in self.jit_table_owners {
+    match owner {
+      Some(owner) => owner.close()
       None => ()
     }
   }
+  self.jit_table_owners.clear()
   self.jit_tables.clear()
   self.wasi_mem_addr = None
   self.wasi_ctx_handle = 0
@@ -435,10 +441,19 @@ pub fn Store::alloc_table(
   // Create corresponding JIT table (always enabled for cross-module sharing)
   if use_jit {
     let (min, max) = table.get_limits()
-    let jit_table = @wasmoon_jit.JITTable::try_alloc(min, max)
-    self.jit_tables.push(jit_table)
+    match @wasmoon_jit.JITTableOwner::try_alloc(min, max) {
+      Some(owner) => {
+        self.jit_tables.push(Some(owner.table()))
+        self.jit_table_owners.push(Some(owner))
+      }
+      None => {
+        self.jit_tables.push(None)
+        self.jit_table_owners.push(None)
+      }
+    }
   } else {
     self.jit_tables.push(None)
+    self.jit_table_owners.push(None)
   }
   idx
 }

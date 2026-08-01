@@ -881,9 +881,15 @@ struct JITTable {
 } derive(Debug)
 
 ///|
-/// Create a new shared JIT table.
+/// Destruction capability for one shared JIT table allocation.
+pub struct JITTableOwner {
+  table : JITTable
+} derive(Debug)
+
+///|
+/// Create a new owned shared JIT table.
 /// Note: size 0 is valid (empty table that can grow later).
-pub fn JITTable::try_alloc(size : Int, max : Int?) -> JITTable? {
+pub fn JITTableOwner::try_alloc(size : Int, max : Int?) -> JITTableOwner? {
   if size < 0 {
     return None
   }
@@ -892,16 +898,22 @@ pub fn JITTable::try_alloc(size : Int, max : Int?) -> JITTable? {
   if table_ptr == 0L {
     return None
   }
-  Some({ table_ptr, size, max })
+  Some({ table: { table_ptr, size, max } })
 }
 
 ///|
-/// Release the shared table allocation. Repeated close calls are harmless.
-pub fn JITTable::close(self : JITTable) -> Unit {
-  if self.table_ptr != 0L {
-    c_jit_free_shared_indirect_table(self.table_ptr)
-    self.table_ptr = 0L
-    self.size = 0
+/// Borrow the table without transferring its destruction capability.
+pub fn JITTableOwner::table(self : JITTableOwner) -> JITTable {
+  self.table
+}
+
+///|
+/// Release the owned shared table allocation. Repeated close calls are harmless.
+pub fn JITTableOwner::close(self : JITTableOwner) -> Unit {
+  if self.table.table_ptr != 0L {
+    c_jit_free_shared_indirect_table(self.table.table_ptr)
+    self.table.table_ptr = 0L
+    self.table.size = 0
   }
 }
 

@@ -174,12 +174,18 @@ def main() -> int:
                 )
 
     jit_interface = ROOT / "modules/wasmoon_jit/pkg.generated.mbti"
-    for line in jit_interface.read_text(encoding="utf-8").splitlines():
+    jit_interface_text = jit_interface.read_text(encoding="utf-8")
+    for line in jit_interface_text.splitlines():
         if line.startswith("pub fn get_") and "_ptr(" in line:
             failures.append(
                 "modules/wasmoon_jit/pkg.generated.mbti: "
                 f"raw native address getter remains public: {line}"
             )
+    if "pub fn JITTable::close(" in jit_interface_text:
+        failures.append(
+            "modules/wasmoon_jit/pkg.generated.mbti: borrowed JITTable "
+            "exposes Store-owned destruction"
+        )
 
     if failures:
         print("internal compatibility audit failed:", file=sys.stderr)
