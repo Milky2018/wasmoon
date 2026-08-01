@@ -226,6 +226,43 @@ fn CoreExecutionLifecycle::finish_outcome(
 }
 
 ///|
+/// Run one synchronous operation under a lifecycle lease.
+///
+/// This is the single implementation of the enter/catch/leave/closing
+/// protocol for operations that complete within the call (engine
+/// registration, whole instantiations). A close that begins while the
+/// operation runs defers teardown until the lease is released here, and the
+/// operation's result is discarded in favour of `Cancelled` — with
+/// `rollback` running first so staged state never outlives the refusal.
+/// `invoke` keeps its own flow: a suspension transfers the lease to the
+/// continuation instead of releasing it.
+fn[T] CoreExecutionLifecycle::with_lease(
+  self : CoreExecutionLifecycle,
+  operation : () -> T raise ComponentRuntimeError,
+  rollback? : () -> Unit = fn() {  },
+) -> T raise ComponentRuntimeError {
+  self.enter()
+  let result = operation() catch {
+    error => {
+      rollback()
+      let closing = self.closing.val
+      self.leave()
+      if closing {
+        raise Cancelled
+      }
+      raise error
+    }
+  }
+  if self.closing.val {
+    rollback()
+    self.leave()
+    raise Cancelled
+  }
+  self.leave()
+  result
+}
+
+///|
 fn CoreContinuation::with_lifecycle(
   self : CoreContinuation,
   lifecycle : CoreExecutionLifecycle,
@@ -295,22 +332,9 @@ fn CoreExecutionEngine::with_lifecycle(
       // Registration runs embedder code and must hold a lease like invoke:
       // a callback that closes the linker would otherwise tear the engine
       // down mid-instantiation, and the registration would still commit.
-      lifecycle.enter()
-      self.register_instance(store, module_, instance) catch {
-        error => {
-          let closing = lifecycle.closing.val
-          lifecycle.leave()
-          if closing {
-            raise Cancelled
-          }
-          raise error
-        }
-      }
-      let closing = lifecycle.closing.val
-      lifecycle.leave()
-      if closing {
-        raise Cancelled
-      }
+      lifecycle.with_lease(fn() raise ComponentRuntimeError {
+        self.register_instance(store, module_, instance)
+      })
     },
     fn(store, instance, func_idx, args, request) raise ComponentRuntimeError {
       lifecycle.enter()

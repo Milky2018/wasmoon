@@ -639,6 +639,10 @@ test "component runtime: evidence survives raw component mutation" {
   component.aliases.clear()
   component.canons.clear()
   component.components.clear()
+  // The evidence's own accessor is no alias either: every call returns a
+  // fresh isolated copy, so mutating one returned copy cannot change what a
+  // later instantiation of the same evidence reads.
+  validated.component().binary.sections.clear()
   let linker = @runtime_impl.ComponentLinker::ComponentLinker()
   let instance = linker.instantiate("mutated", validated)
   let results = instance.call_exported_func("f", [])
@@ -833,6 +837,10 @@ test "component runtime: failed instantiation leaves open linker intact" {
     failing,
     @component_model.ComponentValidationConfig(false),
   )
+  // Route root instantiations through a shared host runtime so the frame
+  // resource tables of the failing attempts land in one observable map.
+  let runtime = linker.host_runtime_state()
+  let tables_before = runtime.async_state().resource_tables.size()
   let outcome = try linker.instantiate("failing", failing_validated) catch {
     Cancelled => "cancelled"
     _ => "failed"
@@ -841,6 +849,24 @@ test "component runtime: failed instantiation leaves open linker intact" {
   }
   debug_inspect(outcome, content="\"failed\"")
   debug_inspect(linker.get_component("failing") is None, content="true")
+  // Registration is transactional: the nested component instance that
+  // completed before the trap is rolled back with the root, not left
+  // observable in the linker.
+  debug_inspect(
+    linker.get_component("failing::component0") is None,
+    content="true",
+  )
+  // A second failure must not accumulate resource tables in the shared
+  // async state: every aborted frame withdraws its table.
+  try linker.instantiate("failing-again", failing_validated) catch {
+    _ => ()
+  } noraise {
+    _ => ()
+  }
+  debug_inspect(
+    runtime.async_state().resource_tables.size() == tables_before,
+    content="true",
+  )
   // The imported instance the failed frame had resolved is untouched.
   debug_inspect(provider.call_exported_func("f", []), content="[U32(7)]")
   // The linker remains fully usable for later instantiations.

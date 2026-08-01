@@ -470,18 +470,23 @@ fn ComponentLinker::finish_close(self : ComponentLinker) -> Unit {
 }
 
 ///|
-pub fn ComponentLinker::register(
-  self : ComponentLinker,
-  name : String,
-  instance : ComponentInstance,
-) -> Unit raise ComponentRuntimeError {
-  // A terminally closed linker accepts no new instance graph: nothing would
-  // ever release a graph committed after `finish_close` has run or been
-  // scheduled.
-  if self.closed.val {
-    raise Cancelled
+/// Roll back the staged registrations of a failed or refused instantiation.
+///
+/// Staged instances were never published, so no caller can hold them:
+/// release each graph's own containers (breaking its `alias outer` cycles)
+/// and withdraw its resource table from the shared async state — the table
+/// was added by the frame's build state and nothing can resolve it once the
+/// whole tree is discarded.
+fn rollback_staged_registrations(
+  staged : Array[(String, ComponentInstance)],
+) -> Unit {
+  for entry in staged {
+    let (_, instance) = entry
+    release_owned_instance(instance)
+    instance.async_state.resource_tables.remove(instance.resource_table.id)
+    |> ignore
   }
-  self.components.push((name, instance))
+  staged.clear()
 }
 
 ///|
@@ -563,10 +568,10 @@ pub fn ComponentLinker::add_component(
   name : String,
   component : @component_validator.ValidatedComponent,
 ) -> Unit raise ComponentRuntimeError {
-  self.add_import(
-    name,
-    Component({ component: component.component(), outer_stack: [] }),
-  )
+  let isolated = component.component() catch {
+    e => raise ComponentParseError(e.to_string())
+  }
+  self.add_import(name, Component({ component: isolated, outer_stack: [] }))
 }
 
 ///|
@@ -602,35 +607,27 @@ pub fn ComponentLinker::instantiate(
   name : String,
   component : @component_validator.ValidatedComponent,
 ) -> ComponentInstance raise ComponentRuntimeError {
-  // The whole instantiation holds a lifecycle lease. An embedder callback
-  // that closes the linker mid-instantiation (from an engine registration or
-  // a host import) only begins the close: teardown is deferred until this
-  // frame unwinds, so no section ever observes a released engine or cleared
-  // imports, and a close that started mid-flight turns into `Cancelled`
-  // rather than a successful instantiation on a closed linker.
-  self.core_execution_lifecycle.enter()
-  let instance = instantiate_component(
-    self,
-    name,
-    component.component(),
-    Map([]),
-    [],
-  ) catch {
-    error => {
-      let closing = self.core_execution_lifecycle.closing.val
-      self.core_execution_lifecycle.leave()
-      if closing {
-        raise Cancelled
+  // The whole instantiation runs under one lifecycle lease and one
+  // registration transaction. The lease means an embedder callback that
+  // closes the linker mid-instantiation only begins the close: teardown is
+  // deferred until this frame unwinds, so no section ever observes a
+  // released engine or cleared imports. The transaction means every frame —
+  // nested components included — stages its instance instead of publishing
+  // it; only a root that succeeds on a still-open linker commits the tree,
+  // and any failure or mid-flight close rolls the whole tree back, so a
+  // partially instantiated graph is never observable through the linker.
+  let staged : Array[(String, ComponentInstance)] = []
+  let instance = self.core_execution_lifecycle.with_lease(
+    fn() raise ComponentRuntimeError {
+      let isolated = component.component() catch {
+        e => raise ComponentParseError(e.to_string())
       }
-      raise error
-    }
-  }
-  let closing = self.core_execution_lifecycle.closing.val
-  self.core_execution_lifecycle.leave()
-  if closing {
-    // The deferred terminal close in `leave` released every registered
-    // graph, including this instance. Do not report success for it.
-    raise Cancelled
+      instantiate_component(self, name, isolated, Map([]), [], staged)
+    },
+    rollback=fn() { rollback_staged_registrations(staged) },
+  )
+  for entry in staged {
+    self.components.push(entry)
   }
   instance
 }

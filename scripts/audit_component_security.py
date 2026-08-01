@@ -98,6 +98,14 @@ def has_validated_instantiation_boundary(
         r" -> ValidatedComponent raise ComponentValidationError",
         validator,
     )
+    # The accessor rebuilds an isolated copy per call — the raising signature
+    # is the compiler-visible trace of that contract. A non-raising accessor
+    # can only be returning an alias of the stored snapshot.
+    evidence_accessor_isolates = re.search(
+        r"pub fn ValidatedComponent::component\(Self\)"
+        r" -> @model\.Component raise @model\.ComponentParseError",
+        validator,
+    )
     linker_requires_evidence = re.search(
         r"pub fn ComponentLinker::instantiate"
         r"\(Self, String, @component_model\.ValidatedComponent\)"
@@ -116,12 +124,20 @@ def has_validated_instantiation_boundary(
     closure_not_constructible = re.search(
         r"\btype ComponentClosure\b", runtime
     ) and not re.search(r"pub(\(all\))? struct ComponentClosure\b", runtime)
+    # Terminal close releases every registered instance, so registration is
+    # reserved for the linker's own instantiations: a public register would
+    # let one linker enlist — and later destroy — an instance it never owned.
+    no_public_register = not re.search(
+        r"pub fn ComponentLinker::register\b", runtime
+    )
     return bool(
         has_abstract_evidence
         and has_evidence_producer
+        and evidence_accessor_isolates
         and linker_requires_evidence
         and component_import_requires_evidence
         and closure_not_constructible
+        and no_public_register
     )
 
 
@@ -275,7 +291,9 @@ def audit_repo(root: Path) -> list[AuditCheck]:
             ),
             "ComponentLinker::instantiate and ComponentLinker::add_component "
             "must require abstract evidence returned by successful component "
-            "validation, and ComponentClosure must not be constructible",
+            "validation, the evidence accessor must return isolated copies, "
+            "ComponentClosure must not be constructible, and instance "
+            "registration must not be public",
         )
     )
     checks.append(

@@ -63,6 +63,8 @@ class ComponentSecurityAuditTests(unittest.TestCase):
         )
         (root / "validator.mbti").write_text(
             "type ValidatedComponent\n"
+            "pub fn ValidatedComponent::component(Self)"
+            " -> @model.Component raise @model.ComponentParseError\n"
             "pub fn validate_component_for_instantiation_with_config"
             "(@model.Component, ComponentValidationConfig)"
             " -> ValidatedComponent raise ComponentValidationError\n",
@@ -285,6 +287,38 @@ class ComponentSecurityAuditTests(unittest.TestCase):
                 "pub fn ComponentLinker::instantiate"
                 "(Self, String, @component_model.ValidatedComponent)"
                 " -> ComponentInstance raise ComponentRuntimeError\n",
+                encoding="utf-8",
+            )
+            self.assert_failed(root, "validate-before-instantiate")
+
+    def test_alias_returning_evidence_accessor_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.create_fixture(root)
+            (root / "validator.mbti").write_text(
+                "type ValidatedComponent\n"
+                "pub fn ValidatedComponent::component(Self)"
+                " -> @model.Component\n"
+                "pub fn validate_component_for_instantiation_with_config"
+                "(@model.Component, ComponentValidationConfig)"
+                " -> ValidatedComponent raise ComponentValidationError\n",
+                encoding="utf-8",
+            )
+            self.assert_failed(root, "validate-before-instantiate")
+
+    def test_public_register_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.create_fixture(root)
+            (root / "runtime.mbti").write_text(
+                "type ComponentClosure\n"
+                "pub fn ComponentLinker::add_component"
+                "(Self, String, @component_model.ValidatedComponent) -> Unit\n"
+                "pub fn ComponentLinker::instantiate"
+                "(Self, String, @component_model.ValidatedComponent)"
+                " -> ComponentInstance raise ComponentRuntimeError\n"
+                "pub fn ComponentLinker::register"
+                "(Self, String, ComponentInstance) -> Unit\n",
                 encoding="utf-8",
             )
             self.assert_failed(root, "validate-before-instantiate")
