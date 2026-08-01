@@ -798,6 +798,7 @@ priv struct VerifierCfgView {
   parameters : Array[Array[VirtualReg]]
   edge_arguments : Array[Array[Array[VirtualReg]]]
   successor_queries : Ref[Int]
+  block_visits : Ref[Int]
 }
 
 ///|
@@ -860,6 +861,7 @@ impl FunctionView for VerifierCfgView with fn block_parameters(self, block) -> A
 impl FunctionView for VerifierCfgView with fn block_instructions(self, block) -> Array[
   Int,
 ] {
+  self.block_visits.val = self.block_visits.val + 1
   self.blocks[block].copy()
 }
 
@@ -933,6 +935,7 @@ test "plan verifier always enters a self-looping entry block" {
         parameters: [[]],
         edge_arguments: [[[]]],
         successor_queries: Ref(0),
+        block_visits: Ref(0),
       },
       None,
       0,
@@ -962,6 +965,7 @@ test "plan verifier checks an unreachable cyclic component" {
         parameters: [[], []],
         edge_arguments: [[], [[]]],
         successor_queries: Ref(0),
+        block_visits: Ref(0),
       },
       Some(0),
       1,
@@ -991,6 +995,7 @@ test "plan verifier queries each block successor list once" {
     parameters: [[], [], [], []],
     edge_arguments: [[[]], [[]], [[]], []],
     successor_queries,
+    block_visits: Ref(0),
   }
   let plan = AllocationPlan::new(1)
   plan.assign_value(value, Reg(register))
@@ -1024,6 +1029,7 @@ test "any-location definitions materialize in their stable home" {
     parameters: [[]],
     edge_arguments: [[]],
     successor_queries: Ref(0),
+    block_visits: Ref(0),
   }
   let plan = AllocationPlan::new(1)
   let slot = plan.create_spill_slot(8, 8)
@@ -1068,6 +1074,7 @@ test "edge arguments do not hide a live-through value transfer" {
     parameters: [[], [parameter]],
     edge_arguments: [[[value]], []],
     successor_queries: Ref(0),
+    block_visits: Ref(0),
   }
   let plan = AllocationPlan::new(2)
   let slot = plan.create_spill_slot(8, 8)
@@ -1162,4 +1169,100 @@ test "production conflict index finds only overlapping occupied segments" {
     conflicting_segments(segments, [0, 1, 2], segments[3], [0]),
     content="[1]",
   )
+}
+
+///|
+/// ISS-370 regression: `index_plan_edits` buckets by position, and bucket
+/// order must preserve the plan's edit order. The three moves below form a
+/// dependency chain at one position — each requires the location produced by
+/// the previous one — so any reordering inside the bucket fails verification
+/// with `IncorrectValue`.
+test "plan verifier applies same-position edits in plan order" {
+  let value : VirtualReg = { id: 0, class: Int }
+  let r0 : PhysicalReg = { id: 0, class: Int }
+  let r1 : PhysicalReg = { id: 1, class: Int }
+  let r2 : PhysicalReg = { id: 2, class: Int }
+  let function : VerifierCfgView = {
+    value_count: 1,
+    blocks: [[0]],
+    operands: [[Operand::use_reg(value)]],
+    successors: [[]],
+    entry_values: [value],
+    parameters: [[]],
+    edge_arguments: [[]],
+    successor_queries: Ref(0),
+    block_visits: Ref(0),
+  }
+  let plan = AllocationPlan::new(1)
+  plan.assign_value(value, Reg(r0))
+  plan.add_edit({ value, from: Reg(r0), to: Reg(r1), position: Before(0) })
+  plan.add_edit({ value, from: Reg(r1), to: Reg(r2), position: Before(0) })
+  plan.add_edit({ value, from: Reg(r2), to: Reg(r0), position: Before(0) })
+  plan.assign_operand(0, 0, Reg(r0))
+  verify_function_allocation(function, MachineEnv::new([r0, r1, r2], []), plan)
+}
+
+///|
+/// ISS-370 regression: reverse postorder is a topological order on an
+/// acyclic CFG, so every join merges all of its incoming states before its
+/// block is processed and the whole function verifies in one pass — each
+/// block exactly once. The chain of diamonds below refines the dataflow
+/// state at every join (each arm publishes the value in a different extra
+/// register, and the meet drops it), which is the shape that made the
+/// previous LIFO worklist reprocess the downstream chain once per join and
+/// grow verification cost with nesting depth.
+test "plan verifier processes a deep diamond join chain once per block" {
+  let diamonds = 8
+  let block_count = 3 * diamonds + 1
+  let value : VirtualReg = { id: 0, class: Int }
+  let r0 : PhysicalReg = { id: 0, class: Int }
+  let registers : Array[PhysicalReg] = Array::makei(diamonds + 1, id => {
+    id,
+    class: Int,
+  })
+  let blocks : Array[Array[Int]] = Array::makei(block_count, _ => [])
+  let successors : Array[Array[Int]] = Array::makei(block_count, _ => [])
+  let parameters : Array[Array[VirtualReg]] = Array::makei(block_count, _ => [])
+  let edge_arguments : Array[Array[Array[VirtualReg]]] = Array::makei(
+    block_count,
+    _ => [],
+  )
+  let plan = AllocationPlan::new(1)
+  plan.assign_value(value, Reg(r0))
+  for i in 0..<diamonds {
+    let top = 3 * i
+    let left = 3 * i + 1
+    let right = 3 * i + 2
+    let join = 3 * i + 3
+    successors[top] = [left, right]
+    edge_arguments[top] = [[], []]
+    successors[left] = [join]
+    edge_arguments[left] = [[]]
+    successors[right] = [join]
+    edge_arguments[right] = [[]]
+    // Only the right arm publishes the value in a per-diamond extra
+    // register, so every join must drop it — and because the extra register
+    // differs per level, a scheduler that enters a join with partial
+    // predecessor state has to re-propagate the shrink one level at a time.
+    plan.add_edit({
+      value,
+      from: Reg(r0),
+      to: Reg(registers[i + 1]),
+      position: Edge(source_block=right, successor_index=0),
+    })
+  }
+  let function : VerifierCfgView = {
+    value_count: 1,
+    blocks,
+    operands: [],
+    successors,
+    entry_values: [value],
+    parameters,
+    edge_arguments,
+    successor_queries: Ref(0),
+    block_visits: Ref(0),
+  }
+  verify_function_allocation(function, MachineEnv::new(registers, []), plan)
+  inspect(function.block_visits.val, content="25")
+  inspect(function.successor_queries.val, content="25")
 }
