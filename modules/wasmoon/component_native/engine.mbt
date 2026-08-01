@@ -25,8 +25,15 @@ fn component_core_route(
 ///|
 priv struct ComponentJITContext {
   core : @wast.JITModuleContext
+  funcrefs : @wast.FuncrefRegistration
   pending_suspension : Array[@runtime_impl.CoreSuspension?]
   suspension_enabled : Array[Bool]
+}
+
+///|
+fn ComponentJITContext::close(self : ComponentJITContext) -> Unit {
+  self.funcrefs.release()
+  self.core.close()
 }
 
 ///|
@@ -106,7 +113,7 @@ fn native_component_session_with_contexts(
       }
       let pending_suspension : Array[@runtime_impl.CoreSuspension?] = [None]
       let suspension_enabled = [false]
-      let core = load_component_jit_context(
+      let (core, funcrefs) = load_component_jit_context(
         module_,
         instance,
         store,
@@ -127,6 +134,7 @@ fn native_component_session_with_contexts(
       )
       contexts[instance.store_idx] = {
         core,
+        funcrefs,
         pending_suspension,
         suspension_enabled,
       }
@@ -191,7 +199,7 @@ fn native_component_session_with_contexts(
         }
         for instance_idx in added {
           match contexts.get(instance_idx) {
-            Some(context) => context.core.close()
+            Some(context) => context.close()
             None => ()
           }
           contexts.remove(instance_idx)
@@ -200,7 +208,7 @@ fn native_component_session_with_contexts(
     },
     close=fn() {
       for _, context in contexts {
-        context.core.close()
+        context.close()
       }
       contexts.clear()
     },

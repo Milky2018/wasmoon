@@ -10,6 +10,7 @@ import {
   "Milky2018/wasmoon_jit",
   "moonbitlang/core/debug",
   "moonbitlang/core/hashset",
+  "moonbitlang/core/ref",
 }
 
 // Values
@@ -61,6 +62,8 @@ pub fn parse(String) -> @parser_impl.WastScript raise @parser_impl.WatError
 
 pub fn register_instance_funcrefs_for_jit(@jit.JITModule, @runtime.ModuleInstance) -> Unit
 
+pub fn register_owned_instance_funcrefs_for_jit(@jit.JITModule, @runtime.ModuleInstance) -> FuncrefRegistration
+
 pub fn run_wast_command(WastContext, @parser_impl.WastCommand, Int, WastResult, String, Bool) -> Unit
 
 pub fn run_wast_commands(@parser_impl.WastScript, String, Bool, Bool, jit_compiler? : JITCompiler?) -> WastResult
@@ -102,6 +105,12 @@ pub(all) suberror WastRunnerError {
 pub impl Show for WastRunnerError
 
 // Types and methods
+pub struct FuncrefRegistration {
+  entries : Array[(Int, Int64)]
+  active : @ref.Ref[Bool]
+}
+pub fn FuncrefRegistration::release(Self) -> Unit
+
 pub struct JITCompiler {
   compile_fn : (@types.Module, @runtime.ModuleInstance, @runtime.Store) -> Result[JITModuleContext, String]
 }
