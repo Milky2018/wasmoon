@@ -207,6 +207,35 @@ test "component runtime: canon lift core func" {
 }
 
 ///|
+test "component runtime: core trap names are isolated per Linker" {
+  let bytes = @component_text.parse_component_wat(
+    (
+      #|(component
+      #|  (core module $m (func (export "f") (result i32) unreachable))
+      #|  (core instance $i (instantiate $m))
+      #|  (func (export "f") (result u32) (canon lift (core func $i "f"))))
+      #|
+    ),
+  )
+  let validated = @component_model.validate_component_for_instantiation_with_config(
+    @component.parse_component(bytes),
+    @component_model.ComponentValidationConfig(false),
+  )
+  let first_linker = @runtime_impl.ComponentLinker::ComponentLinker()
+  let first = first_linker.instantiate("first", validated)
+  let second_linker = @runtime_impl.ComponentLinker::ComponentLinker()
+  second_linker.instantiate("second", validated) |> ignore
+  let message = try first.call_exported_func("f", []) catch {
+    error => error.to_string()
+  } noraise {
+    _ => "did not trap"
+  }
+  debug_inspect(message.contains("core=first::coreinst0"), content="true")
+  first_linker.close()
+  second_linker.close()
+}
+
+///|
 test "component runtime: core execution crosses the configured engine seam" {
   let wat = "(module (func (export \"inc\") (param i32) (result i32) local.get 0 i32.const 1 i32.add))"
   let mod_ = @wat.parse(wat) catch {

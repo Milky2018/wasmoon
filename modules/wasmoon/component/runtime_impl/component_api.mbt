@@ -622,7 +622,6 @@ pub fn ComponentLinker::instantiate(
   let staged : Array[(String, ComponentInstance)] = []
   let core_checkpoint = self.core_linker.checkpoint()
   let engine_checkpoint = self.core_engine().checkpoint_registrations()
-  let name_checkpoint = checkpoint_core_instance_names()
   let instance = self.core_execution_lifecycle.with_lease(
     fn() raise ComponentRuntimeError {
       let isolated = component.fresh_component() catch {
@@ -633,7 +632,6 @@ pub fn ComponentLinker::instantiate(
     rollback=fn() {
       rollback_staged_registrations(staged)
       engine_checkpoint.rollback()
-      rollback_core_instance_names(name_checkpoint)
       self.core_linker.rollback_to(core_checkpoint) |> ignore
     },
   )

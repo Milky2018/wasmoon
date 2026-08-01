@@ -119,8 +119,6 @@ fn run_component_sections(
               }
               pop_task(async_state)
               drop_task_thread(async_state, inst_task_id)
-              // Register a stable name for debugging core traps.
-              register_core_instance_name(instance.store_idx, module_name)
               linker.core_linker.register(module_name, instance) catch {
                 error => raise CoreModuleInstantiateError(error.to_string())
               }
@@ -129,6 +127,7 @@ fn run_component_sections(
                 core_instance_from_module(
                   instance,
                   linker.core_engine(),
+                  module_name,
                   may_suspend,
                   native_eligible,
                 ),

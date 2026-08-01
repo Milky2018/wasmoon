@@ -28,6 +28,7 @@ pub fn alloc_host_core_func(
     instance,
     func_idx: 0,
     engine: interpreter_core_execution_engine(),
+    debug_name: None,
     may_suspend,
     native_eligible,
   }
@@ -43,35 +44,6 @@ fn alloc_component_host_core_func(
 ) -> CoreFuncRef raise ComponentRuntimeError {
   alloc_host_core_func(store, core_type, host, may_suspend~, native_eligible~) catch {
     error => raise CoreModuleInstantiateError(error.to_string())
-  }
-}
-
-///|
-/// Debug-only mapping from `ModuleInstance.store_idx` to a human-readable name.
-/// This helps diagnose which core module traps (e.g. `unreachable`) during component-spec runs.
-let core_instance_names : Map[Int, String] = Map([])
-
-///|
-priv struct CoreInstanceNameCheckpoint {
-  entries : Map[Int, String]
-}
-
-///|
-fn checkpoint_core_instance_names() -> CoreInstanceNameCheckpoint {
-  let entries : Map[Int, String] = Map([])
-  for instance_idx, name in core_instance_names {
-    entries.set(instance_idx, name)
-  }
-  { entries, }
-}
-
-///|
-fn rollback_core_instance_names(
-  checkpoint : CoreInstanceNameCheckpoint,
-) -> Unit {
-  core_instance_names.clear()
-  for instance_idx, name in checkpoint.entries {
-    core_instance_names.set(instance_idx, name)
   }
 }
 
@@ -98,11 +70,6 @@ pub fn preset_canon_debug_message(msg : String) -> Unit {
 ///|
 pub fn clear_canon_debug_message() -> Unit {
   canon_debug_message[0] = None
-}
-
-///|
-pub fn register_core_instance_name(store_idx : Int, name : String) -> Unit {
-  core_instance_names.set(store_idx, name)
 }
 
 ///|
@@ -183,8 +150,7 @@ fn call_core_func_outcome(
           } else {
             error_message
           }
-          let inst_name = match
-            core_instance_names.get(core_func.instance.store_idx) {
+          let inst_name = match core_func.debug_name {
             Some(n) => n
             None => ""
           }

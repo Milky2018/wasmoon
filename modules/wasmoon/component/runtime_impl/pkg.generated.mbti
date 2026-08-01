@@ -21,8 +21,6 @@ pub fn preset_canon_debug_message(String) -> Unit
 
 pub fn progress_one_subtask_intrinsic(AsyncState, @runtime.Store) -> Bool raise ComponentRuntimeError
 
-pub fn register_core_instance_name(Int, String) -> Unit
-
 pub fn set_canon_debug_message(String) -> Unit
 
 pub fn take_core_suspension() -> CoreSuspension?
@@ -275,6 +273,7 @@ pub(all) struct CoreFuncRef {
   instance : @runtime.ModuleInstance
   func_idx : Int
   engine : CoreExecutionEngine
+  debug_name : String?
   may_suspend : Bool
   native_eligible : Bool
 } derive(@debug.Debug)
