@@ -414,63 +414,30 @@ pub fn ComponentLinker::close(self : ComponentLinker) -> Unit {
 }
 
 ///|
-/// Release an instance graph at terminal close.
+/// Release one linker-owned instance at terminal close.
 ///
 /// A component that defines a nested component stores a `ComponentClosure`
-/// whose `outer_stack` contains the enclosing instance itself — `alias outer`
-/// resolution requires the enclosing scope when the nested component is
-/// instantiated later. That is a deliberate reference cycle, and reference
-/// counting can never reclaim it: every instance graph with a nested
-/// component definition survives close intact, dragging its imports, host
-/// functions, and their per-function type-space copies along with it.
+/// whose `outer_stack` holds an env instance sharing this instance's child
+/// arrays — `alias outer` resolution requires the enclosing scope when the
+/// nested component is instantiated later. That is a deliberate reference
+/// cycle, and reference counting can never reclaim it. The cycle runs
+/// through this instance's own arrays, so clearing them is what breaks it;
+/// the env and inline instances of the same frame share the very same array
+/// objects and die with it.
 ///
-/// Terminal close is the owning boundary, so break the graph here: clear the
-/// closure and child arrays of every reachable instance. The visited set
-/// terminates on the cycles this exists to break.
-fn release_component_instance_graph(
-  instance : ComponentInstance,
-  visited : Array[ComponentInstance],
-) -> Unit {
-  for seen in visited {
-    if physical_equal(seen, instance) {
-      return
-    }
-  }
-  visited.push(instance)
-  // Instances produced during one instantiation share their backing arrays
-  // and export map — the `alias outer` environment records alias the final
-  // instance's storage. Collect every reachable child first, then clear this
-  // record's storage, and only then recurse: clearing while iterating a
-  // shared map would mutate the collection mid-walk, and a shared array
-  // visited again later is simply seen empty.
-  let children : Array[ComponentInstance] = []
-  for closure in instance.components {
-    for outer in closure.outer_stack {
-      children.push(outer)
-    }
-  }
-  for child in instance.instances {
-    children.push(child)
-  }
-  for entry in instance.exports {
-    let (_, ext) = entry
-    match ext {
-      Instance(child) => children.push(child)
-      Component(closure) =>
-        for outer in closure.outer_stack {
-          children.push(outer)
-        }
-      _ => ()
-    }
-  }
+/// Deliberately shallow. The linker owns exactly the instances its own
+/// instantiations registered — every instantiation frame registers itself,
+/// so `finish_close` walks all of them directly. Recursing into children
+/// would cross the ownership boundary: `instances` and `exports` also hold
+/// instances supplied through `add_instance`/`add_import`, which another
+/// linker or the embedder owns and may still be using. Clearing this
+/// instance's arrays only drops references to those, never their state.
+fn release_owned_instance(instance : ComponentInstance) -> Unit {
   instance.components.clear()
   instance.instances.clear()
   instance.funcs.clear()
   instance.values.clear()
   instance.exports.clear()
-  for child in children {
-    release_component_instance_graph(child, visited)
-  }
 }
 
 ///|
@@ -479,22 +446,13 @@ fn ComponentLinker::finish_close(self : ComponentLinker) -> Unit {
     return
   }
   self.close_complete.val = true
-  let visited : Array[ComponentInstance] = []
   for entry in self.components {
     let (_, instance) = entry
-    release_component_instance_graph(instance, visited)
+    release_owned_instance(instance)
   }
-  for entry in self.imports {
-    let (_, ext) = entry
-    match ext {
-      Instance(instance) => release_component_instance_graph(instance, visited)
-      Component(closure) =>
-        for outer in closure.outer_stack {
-          release_component_instance_graph(outer, visited)
-        }
-      _ => ()
-    }
-  }
+  // Imports are not owned: dropping the table's references is the linker's
+  // entire claim on them. Releasing their graphs here destroyed instances
+  // shared from other linkers or built by the embedder.
   self.components.clear()
   self.imports.clear()
   self.host_runtime.val = None
