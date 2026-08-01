@@ -3,7 +3,7 @@ pub(all) enum EditPosition {
   Before(Int)
   After(Int)
   Edge(source_block~ : Int, successor_index~ : Int)
-} derive(Eq, Debug)
+} derive(Eq, Hash, Debug)
 
 ///|
 pub(all) struct AllocationEdit {

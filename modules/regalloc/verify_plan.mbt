@@ -123,15 +123,37 @@ fn apply_plan_edit(
 }
 
 ///|
+/// Plan edits bucketed by position.
+///
+/// Verification walks every instruction of every block, and a block may be
+/// re-processed when dataflow refines its incoming state. Filtering the
+/// function-wide edit array at each step made verification quadratic in
+/// practice — a deeply nested function multiplied thousands of instructions
+/// by thousands of edits on every visit. One bucketing pass keeps each
+/// lookup proportional to the edits that actually apply, and bucket order
+/// preserves the plan's edit order.
+fn index_plan_edits(
+  edits : Array[AllocationEdit],
+) -> Map[EditPosition, Array[AllocationEdit]] {
+  let index : Map[EditPosition, Array[AllocationEdit]] = Map([])
+  for edit in edits {
+    match index.get(edit.position) {
+      Some(bucket) => bucket.push(edit)
+      None => index[edit.position] = [edit]
+    }
+  }
+  index
+}
+
+///|
 fn apply_position_edits(
   state : PlanState,
-  edits : Array[AllocationEdit],
+  edits_at : Map[EditPosition, Array[AllocationEdit]],
   position : EditPosition,
 ) -> Unit raise VerifyError {
-  for edit in edits {
-    if edit.position == position {
-      apply_plan_edit(state, edit)
-    }
+  guard edits_at.get(position) is Some(bucket) else { return }
+  for edit in bucket {
+    apply_plan_edit(state, edit)
   }
 }
 
@@ -178,11 +200,11 @@ fn[F : FunctionView] process_plan_block(
   environment : MachineEnv,
   plan : AllocationPlan,
   block : Int,
-  edits : Array[AllocationEdit],
+  edits_at : Map[EditPosition, Array[AllocationEdit]],
 ) -> PlanState raise VerifyError {
   let current = state.copy()
   for instruction in function.block_instructions(block) {
-    apply_position_edits(current, edits, Before(instruction))
+    apply_position_edits(current, edits_at, Before(instruction))
     process_operand_phase(
       current,
       function,
@@ -202,7 +224,7 @@ fn[F : FunctionView] process_plan_block(
       instruction,
       Late,
     )
-    apply_position_edits(current, edits, After(instruction))
+    apply_position_edits(current, edits_at, After(instruction))
   }
   current
 }
@@ -231,14 +253,14 @@ fn[F : FunctionView] prepare_successor_state(
   block : Int,
   successor : Int,
   target : Int,
-  edits : Array[AllocationEdit],
+  edits_at : Map[EditPosition, Array[AllocationEdit]],
 ) -> PlanState raise VerifyError {
   let state = output.copy()
   let source_id = function.block_id_at(block)
   let edge_position = Edge(source_block=source_id, successor_index=successor)
-  let original = state.copy()
-  for edit in edits {
-    if edit.position == edge_position {
+  if edits_at.get(edge_position) is Some(bucket) {
+    let original = state.copy()
+    for edit in bucket {
       require_value_at(original, edit.value, edit.from)
       state.values[location_key(edit.to)] = edit.value
     }
@@ -282,7 +304,7 @@ fn[F : FunctionView] verify_function_allocation(
       }
     }
   }
-  let edits = plan.edits()
+  let edits_at = index_plan_edits(plan.edits())
   let block_count = function.block_count()
   let successors = Array::makei(block_count, block => {
     function.block_successors(block)
@@ -295,8 +317,57 @@ fn[F : FunctionView] verify_function_allocation(
       }
     }
   }
+  // Process pending blocks in reverse postorder. A plain stack revisits a
+  // join-dense region once per refinement, and nested blocks lower to long
+  // chains of forward joins, so verification cost grew with nesting depth.
+  // In reverse postorder every acyclic region converges in a single pass;
+  // loops add one pass per refinement round. Blocks unreachable from any
+  // root keep their index order at the end, matching the staged seeding
+  // below.
+  let priority = Array::make(block_count, block_count)
+  let postorder : Array[Int] = []
+  let visited = Array::make(block_count, false)
+  for root in 0..<block_count {
+    if root != 0 && has_predecessor[root] {
+      continue
+    }
+    if visited[root] {
+      continue
+    }
+    // Iterative depth-first search; the explicit stack carries the next
+    // successor index to visit for each open block.
+    let stack : Array[(Int, Int)] = [(root, 0)]
+    visited[root] = true
+    while stack.length() > 0 {
+      let (block, next_successor) = stack[stack.length() - 1]
+      let block_successors = successors[block]
+      if next_successor < block_successors.length() {
+        stack[stack.length() - 1] = (block, next_successor + 1)
+        let target = block_successors[next_successor]
+        if target >= 0 && target < block_count && !visited[target] {
+          visited[target] = true
+          stack.push((target, 0))
+        }
+      } else {
+        postorder.push(block)
+        stack.pop() |> ignore
+      }
+    }
+  }
+  for index in 0..<postorder.length() {
+    priority[postorder[postorder.length() - 1 - index]] = index
+  }
+  let order = Array::makei(block_count, block => block)
+  order.sort_by((left, right) => {
+    let by_priority = priority[left] - priority[right]
+    if by_priority != 0 {
+      by_priority
+    } else {
+      left - right
+    }
+  })
   let incoming : Array[PlanState?] = Array::make(block_count, None)
-  let worklist : Array[Int] = []
+  let pending = Array::make(block_count, false)
   for block in 0..<block_count {
     if block == 0 || !has_predecessor[block] {
       let state = PlanState::new()
@@ -310,35 +381,45 @@ fn[F : FunctionView] verify_function_allocation(
       }
       initialize_block_parameters(state, function, plan, block)
       incoming[block] = Some(state)
-      worklist.push(block)
+      pending[block] = true
     }
   }
   let mut next_unreachable_root = 0
   while true {
-    while worklist.pop() is Some(block) {
-      let output = process_plan_block(
-        incoming[block].unwrap(),
-        function,
-        environment,
-        plan,
-        block,
-        edits,
-      )
-      for successor, target in successors[block] {
-        let next = prepare_successor_state(
-          output, function, plan, block, successor, target, edits,
+    let mut processed_any = true
+    while processed_any {
+      processed_any = false
+      for order_index in 0..<block_count {
+        let block = order[order_index]
+        if !pending[block] {
+          continue
+        }
+        pending[block] = false
+        processed_any = true
+        let output = process_plan_block(
+          incoming[block].unwrap(),
+          function,
+          environment,
+          plan,
+          block,
+          edits_at,
         )
-        match incoming[target] {
-          None => {
-            incoming[target] = Some(next)
-            worklist.push(target)
-          }
-          Some(previous) => {
-            let merged = previous.copy()
-            merged.meet_with(next)
-            if !merged.equals(previous) {
-              incoming[target] = Some(merged)
-              worklist.push(target)
+        for successor, target in successors[block] {
+          let next = prepare_successor_state(
+            output, function, plan, block, successor, target, edits_at,
+          )
+          match incoming[target] {
+            None => {
+              incoming[target] = Some(next)
+              pending[target] = true
+            }
+            Some(previous) => {
+              let merged = previous.copy()
+              merged.meet_with(next)
+              if !merged.equals(previous) {
+                incoming[target] = Some(merged)
+                pending[target] = true
+              }
             }
           }
         }
@@ -354,6 +435,6 @@ fn[F : FunctionView] verify_function_allocation(
     let state = PlanState::new()
     initialize_block_parameters(state, function, plan, next_unreachable_root)
     incoming[next_unreachable_root] = Some(state)
-    worklist.push(next_unreachable_root)
+    pending[next_unreachable_root] = true
   }
 }
