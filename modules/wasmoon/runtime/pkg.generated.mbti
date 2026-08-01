@@ -181,7 +181,7 @@ pub fn Linker::close(Self) -> Unit
 pub fn Linker::get_module(Self, String) -> ModuleInstance?
 pub fn Linker::get_store(Self) -> Store
 pub fn Linker::register(Self, String, ModuleInstance) -> Unit raise RuntimeError
-pub fn Linker::rollback_to(Self, CoreLinkerCheckpoint) -> Unit
+pub fn Linker::rollback_to(Self, CoreLinkerCheckpoint) -> Bool
 pub fn Linker::with_store(Store) -> Self
 
 pub struct MarkSweepHeap {

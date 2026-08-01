@@ -7,6 +7,7 @@ struct Linker {
 
 ///|
 struct CoreLinkerCheckpoint {
+  owner : Linker
   store : StoreAllocationCheckpoint
   modules : Int
 }
@@ -32,7 +33,11 @@ pub fn Linker::get_store(self : Linker) -> Store {
 ///|
 /// Snapshot the core allocations and named registrations owned by this linker.
 pub fn Linker::checkpoint(self : Linker) -> CoreLinkerCheckpoint {
-  { store: self.store.checkpoint_allocations(), modules: self.modules.length() }
+  {
+    owner: self,
+    store: self.store.checkpoint_allocations(),
+    modules: self.modules.length(),
+  }
 }
 
 ///|
@@ -40,9 +45,13 @@ pub fn Linker::checkpoint(self : Linker) -> CoreLinkerCheckpoint {
 pub fn Linker::rollback_to(
   self : Linker,
   checkpoint : CoreLinkerCheckpoint,
-) -> Unit {
+) -> Bool {
+  if !physical_equal(self, checkpoint.owner) {
+    return false
+  }
   self.modules.truncate(checkpoint.modules)
   self.store.rollback_allocations(checkpoint.store)
+  true
 }
 
 ///|

@@ -634,7 +634,7 @@ pub fn ComponentLinker::instantiate(
       rollback_staged_registrations(staged)
       engine_checkpoint.rollback()
       rollback_core_instance_names(name_checkpoint)
-      self.core_linker.rollback_to(core_checkpoint)
+      self.core_linker.rollback_to(core_checkpoint) |> ignore
     },
   )
   for entry in staged {
