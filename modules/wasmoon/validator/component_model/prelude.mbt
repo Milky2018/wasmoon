@@ -106,7 +106,7 @@ struct ValidatedComponent {
 /// can reach the component an instantiation will actually read. Rebuilding
 /// a snapshot that already parsed successfully cannot fail at runtime; the
 /// `raise` is the honest type of the shared parsing path.
-pub fn ValidatedComponent::component(
+pub fn ValidatedComponent::fresh_component(
   self : ValidatedComponent,
 ) -> @component.Component raise @component.ComponentParseError {
   self.component.isolated_copy()

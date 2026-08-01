@@ -6,6 +6,12 @@ struct Linker {
 }
 
 ///|
+struct CoreLinkerCheckpoint {
+  store : StoreAllocationCheckpoint
+  modules : Int
+}
+
+///|
 /// Create a new linker with a fresh store
 pub fn Linker::Linker() -> Linker {
   { store: Store(), modules: [] }
@@ -21,6 +27,22 @@ pub fn Linker::with_store(store : Store) -> Linker {
 /// Get the underlying store
 pub fn Linker::get_store(self : Linker) -> Store {
   self.store
+}
+
+///|
+/// Snapshot the core allocations and named registrations owned by this linker.
+pub fn Linker::checkpoint(self : Linker) -> CoreLinkerCheckpoint {
+  { store: self.store.checkpoint_allocations(), modules: self.modules.length() }
+}
+
+///|
+/// Withdraw every allocation and named registration added after `checkpoint`.
+pub fn Linker::rollback_to(
+  self : Linker,
+  checkpoint : CoreLinkerCheckpoint,
+) -> Unit {
+  self.modules.truncate(checkpoint.modules)
+  self.store.rollback_allocations(checkpoint.store)
 }
 
 ///|

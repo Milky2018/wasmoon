@@ -896,6 +896,16 @@ pub fn JITTable::try_alloc(size : Int, max : Int?) -> JITTable? {
 }
 
 ///|
+/// Release the shared table allocation. Repeated close calls are harmless.
+pub fn JITTable::close(self : JITTable) -> Unit {
+  if self.table_ptr != 0L {
+    c_jit_free_shared_indirect_table(self.table_ptr)
+    self.table_ptr = 0L
+    self.size = 0
+  }
+}
+
+///|
 /// Set an entry in the shared table.
 pub fn JITTable::set(
   self : JITTable,

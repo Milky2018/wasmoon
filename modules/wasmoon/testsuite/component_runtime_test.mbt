@@ -642,7 +642,7 @@ test "component runtime: evidence survives raw component mutation" {
   // The evidence's own accessor is no alias either: every call returns a
   // fresh isolated copy, so mutating one returned copy cannot change what a
   // later instantiation of the same evidence reads.
-  validated.component().binary.sections.clear()
+  validated.fresh_component().binary.sections.clear()
   let linker = @runtime_impl.ComponentLinker::ComponentLinker()
   let instance = linker.instantiate("mutated", validated)
   let results = instance.call_exported_func("f", [])
@@ -674,6 +674,7 @@ test "component runtime: close during engine registration cancels instantiation"
   )
   let linker_slot : Ref[@runtime_impl.ComponentLinker?] = Ref(None)
   let registrations = Ref(0)
+  let rollbacks = Ref(0)
   let engine = @runtime_impl.CoreExecutionEngine(
     fn(_store, _module, _instance) {
       registrations.val = registrations.val + 1
@@ -690,6 +691,11 @@ test "component runtime: close during engine registration cancels instantiation"
     ) raise @runtime_impl.ComponentRuntimeError {
       raise HostCallError("invoke must not run in this test")
     },
+    checkpoint_registrations=fn() {
+      @runtime_impl.CoreRegistrationCheckpoint(fn() {
+        rollbacks.val = rollbacks.val + 1
+      })
+    },
   )
   let linker = @runtime_impl.ComponentLinker::with_core_execution_engine(engine)
   linker_slot.val = Some(linker)
@@ -701,6 +707,7 @@ test "component runtime: close during engine registration cancels instantiation"
   }
   debug_inspect(outcome, content="\"cancelled\"")
   debug_inspect(registrations.val, content="1")
+  debug_inspect(rollbacks.val, content="1")
   // The aborted instantiation must not resurrect state in the closed linker.
   debug_inspect(linker.get_component("closing") is None, content="true")
   // The linker is terminally closed: later instantiations are refused at
@@ -793,6 +800,131 @@ test "component runtime: close releases only owned instances" {
 }
 
 ///|
+priv struct CoreStoreAllocationBaseline {
+  funcs : Int
+  func_types : Int
+  func_type_indices : Int
+  func_owners : Int
+  tables : Int
+  jit_tables : Int
+  mems : Int
+  globals : Int
+  tags : Int
+  tag_type_indices : Int
+  tag_owners : Int
+  exns : Int
+  wrapped_externs : Int
+  instances : Int
+} derive(Debug, Eq)
+
+///|
+fn core_store_allocation_baseline(
+  store : @runtime.Store,
+) -> CoreStoreAllocationBaseline {
+  {
+    funcs: store.funcs.length(),
+    func_types: store.func_types.length(),
+    func_type_indices: store.func_type_indices.length(),
+    func_owners: store.func_owners.length(),
+    tables: store.tables.length(),
+    jit_tables: store.jit_tables.length(),
+    mems: store.mems.length(),
+    globals: store.globals.length(),
+    tags: store.tags.length(),
+    tag_type_indices: store.tag_type_indices.length(),
+    tag_owners: store.tag_owners.length(),
+    exns: store.exns.length(),
+    wrapped_externs: store.wrapped_externs.length(),
+    instances: store.instances.length(),
+  }
+}
+
+///|
+fn core_registration_then_start_trap() -> @component_model.ValidatedComponent raise {
+  let bytes = @component_text.parse_component_wat(
+    (
+      #|(component
+      #|  (core module $ok
+      #|    (table 1 funcref)
+      #|    (memory 1)
+      #|    (global i32 (i32.const 1))
+      #|    (func (export "f") (result i32) (i32.const 1)))
+      #|  (core instance $registered (instantiate $ok))
+      #|  (core module $boom (func $start unreachable) (start $start))
+      #|  (core instance $trapped (instantiate $boom)))
+      #|
+    ),
+  )
+  let component = @component.parse_component(bytes)
+  @component_model.validate_component_for_instantiation_with_config(
+    component,
+    @component_model.ComponentValidationConfig(false),
+  )
+}
+
+///|
+fn assert_failed_core_registration_returns_to_baseline(
+  engine : @runtime_impl.CoreExecutionEngine,
+) -> Unit raise {
+  let linker = @runtime_impl.ComponentLinker::with_core_execution_engine(engine)
+  let store = linker.get_store()
+  let baseline = core_store_allocation_baseline(store)
+  let failing = core_registration_then_start_trap()
+  for name in ["first", "second"] {
+    try linker.instantiate(name, failing) catch {
+      _ => ()
+    } noraise {
+      _ => fail("expected core start to trap")
+    }
+    assert_eq(core_store_allocation_baseline(store), baseline)
+  }
+  linker.close()
+}
+
+///|
+test "component runtime: interpreter rolls back core registration on start trap" {
+  assert_failed_core_registration_returns_to_baseline(
+    @runtime_impl.interpreter_core_execution_engine(),
+  )
+}
+
+///|
+test "component runtime: native JIT rolls back core registration on start trap" {
+  assert_failed_core_registration_returns_to_baseline(
+    @component_native.open_native_component_session(opt_level=0),
+  )
+}
+
+///|
+test "component runtime: engine registration errors roll back core state" {
+  let rollbacks = Ref(0)
+  let engine = @runtime_impl.CoreExecutionEngine(
+    fn(_store, _module, _instance) raise @runtime_impl.ComponentRuntimeError {
+      raise NativeCompilationFailed("injected registration failure")
+    },
+    fn(_store, _instance, _func_idx, _args, _request) { Returned([]) },
+    checkpoint_registrations=fn() {
+      @runtime_impl.CoreRegistrationCheckpoint(fn() {
+        rollbacks.val = rollbacks.val + 1
+      })
+    },
+  )
+  let linker = @runtime_impl.ComponentLinker::with_core_execution_engine(engine)
+  let baseline = core_store_allocation_baseline(linker.get_store())
+  let failing = core_registration_then_start_trap()
+  let outcome = try linker.instantiate("engine-error", failing) catch {
+    NativeCompilationFailed(_) => "failed"
+    error => "unexpected: \{error}"
+  } noraise {
+    _ => "instantiated"
+  }
+  debug_inspect(outcome, content="\"failed\"")
+  assert_eq(core_store_allocation_baseline(linker.get_store()), baseline)
+  debug_inspect(rollbacks.val, content="1")
+  linker.close()
+}
+
+///|
 /// Lifecycle regression: an instantiation that fails on an open linker must
 /// not corrupt anything it had resolved. The abort path releases only the
 /// frame's own build state — breaking its `alias outer` cycles — while the
@@ -841,6 +973,7 @@ test "component runtime: failed instantiation leaves open linker intact" {
   // resource tables of the failing attempts land in one observable map.
   let runtime = linker.host_runtime_state()
   let tables_before = runtime.async_state().resource_tables.size()
+  let core_before = core_store_allocation_baseline(linker.get_store())
   let outcome = try linker.instantiate("failing", failing_validated) catch {
     Cancelled => "cancelled"
     _ => "failed"
@@ -856,6 +989,7 @@ test "component runtime: failed instantiation leaves open linker intact" {
     linker.get_component("failing::component0") is None,
     content="true",
   )
+  assert_eq(core_store_allocation_baseline(linker.get_store()), core_before)
   // A second failure must not accumulate resource tables in the shared
   // async state: every aborted frame withdraws its table.
   try linker.instantiate("failing-again", failing_validated) catch {
@@ -863,6 +997,7 @@ test "component runtime: failed instantiation leaves open linker intact" {
   } noraise {
     _ => ()
   }
+  assert_eq(core_store_allocation_baseline(linker.get_store()), core_before)
   debug_inspect(
     runtime.async_state().resource_tables.size() == tables_before,
     content="true",

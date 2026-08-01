@@ -568,7 +568,7 @@ pub fn ComponentLinker::add_component(
   name : String,
   component : @component_validator.ValidatedComponent,
 ) -> Unit raise ComponentRuntimeError {
-  let isolated = component.component() catch {
+  let isolated = component.fresh_component() catch {
     e => raise ComponentParseError(e.to_string())
   }
   self.add_import(name, Component({ component: isolated, outer_stack: [] }))
@@ -616,15 +616,26 @@ pub fn ComponentLinker::instantiate(
   // it; only a root that succeeds on a still-open linker commits the tree,
   // and any failure or mid-flight close rolls the whole tree back, so a
   // partially instantiated graph is never observable through the linker.
+  // The same transaction checkpoints the underlying core Store, core linker,
+  // debug-name registry, and engine registrations so a later start trap also
+  // withdraws every core allocation and native context created by this root.
   let staged : Array[(String, ComponentInstance)] = []
+  let core_checkpoint = self.core_linker.checkpoint()
+  let engine_checkpoint = self.core_engine().checkpoint_registrations()
+  let name_checkpoint = checkpoint_core_instance_names()
   let instance = self.core_execution_lifecycle.with_lease(
     fn() raise ComponentRuntimeError {
-      let isolated = component.component() catch {
+      let isolated = component.fresh_component() catch {
         e => raise ComponentParseError(e.to_string())
       }
       instantiate_component(self, name, isolated, Map([]), [], staged)
     },
-    rollback=fn() { rollback_staged_registrations(staged) },
+    rollback=fn() {
+      rollback_staged_registrations(staged)
+      engine_checkpoint.rollback()
+      rollback_core_instance_names(name_checkpoint)
+      self.core_linker.rollback_to(core_checkpoint)
+    },
   )
   for entry in staged {
     self.components.push(entry)

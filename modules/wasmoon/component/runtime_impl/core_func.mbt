@@ -52,6 +52,30 @@ fn alloc_component_host_core_func(
 let core_instance_names : Map[Int, String] = Map([])
 
 ///|
+priv struct CoreInstanceNameCheckpoint {
+  entries : Map[Int, String]
+}
+
+///|
+fn checkpoint_core_instance_names() -> CoreInstanceNameCheckpoint {
+  let entries : Map[Int, String] = Map([])
+  for instance_idx, name in core_instance_names {
+    entries.set(instance_idx, name)
+  }
+  { entries, }
+}
+
+///|
+fn rollback_core_instance_names(
+  checkpoint : CoreInstanceNameCheckpoint,
+) -> Unit {
+  core_instance_names.clear()
+  for instance_idx, name in checkpoint.entries {
+    core_instance_names.set(instance_idx, name)
+  }
+}
+
+///|
 /// Best-effort "last interesting action" marker to aid diagnosing core traps that originate
 /// from guest `unreachable` checks. This is not spec-visible (only used in error strings).
 let canon_debug_message : Array[String?] = [None]

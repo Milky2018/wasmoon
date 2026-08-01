@@ -588,6 +588,7 @@ pub struct JITFunctionDebug {
 pub fn JITFunctionDebug::JITFunctionDebug(String, String, String, String) -> Self
 
 type JITTable derive(@debug.Debug)
+pub fn JITTable::close(Self) -> Unit
 pub fn JITTable::get_entry_type(Self, Int) -> Int
 pub fn JITTable::get_entry_value(Self, Int) -> Int64
 pub fn JITTable::get_max(Self) -> Int?

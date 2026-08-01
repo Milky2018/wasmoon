@@ -57,13 +57,18 @@ class ComponentSecurityAuditTests(unittest.TestCase):
         )
         (root / "interface.mbti").write_text("pub type Component\n", encoding="utf-8")
         (root / "validator.mbt").write_text(
+            "pub fn ValidatedComponent::fresh_component("
+            "self : ValidatedComponent)"
+            " -> @model.Component raise @model.ComponentParseError {\n"
+            "  self.component.isolated_copy()\n"
+            "}\n"
             '"effective type size exceeds the limit"\n'
             '"type nesting is too deep"\n',
             encoding="utf-8",
         )
         (root / "validator.mbti").write_text(
             "type ValidatedComponent\n"
-            "pub fn ValidatedComponent::component(Self)"
+            "pub fn ValidatedComponent::fresh_component(Self)"
             " -> @model.Component raise @model.ComponentParseError\n"
             "pub fn validate_component_for_instantiation_with_config"
             "(@model.Component, ComponentValidationConfig)"
@@ -295,13 +300,14 @@ class ComponentSecurityAuditTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self.create_fixture(root)
-            (root / "validator.mbti").write_text(
-                "type ValidatedComponent\n"
-                "pub fn ValidatedComponent::component(Self)"
-                " -> @model.Component\n"
-                "pub fn validate_component_for_instantiation_with_config"
-                "(@model.Component, ComponentValidationConfig)"
-                " -> ValidatedComponent raise ComponentValidationError\n",
+            (root / "validator.mbt").write_text(
+                "pub fn ValidatedComponent::fresh_component("
+                "self : ValidatedComponent)"
+                " -> @model.Component raise @model.ComponentParseError {\n"
+                "  self.component\n"
+                "}\n"
+                '"effective type size exceeds the limit"\n'
+                '"type nesting is too deep"\n',
                 encoding="utf-8",
             )
             self.assert_failed(root, "validate-before-instantiate")

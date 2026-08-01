@@ -56,6 +56,89 @@ pub struct Store {
 } derive(Debug)
 
 ///|
+priv struct StoreAllocationCheckpoint {
+  funcs : Int
+  func_types : Int
+  func_type_indices : Int
+  func_owners : Array[FuncOwner]
+  tables : Int
+  jit_tables : Int
+  mems : Int
+  globals : Int
+  tags : Int
+  tag_type_indices : Int
+  tag_owners : Array[FuncOwner]
+  exns : Int
+  wrapped_externs : Int
+  instances : Int
+  module_types : Array[@types.SubType]
+  module_rec_groups : Array[Int]
+}
+
+///|
+fn Store::checkpoint_allocations(self : Store) -> StoreAllocationCheckpoint {
+  {
+    funcs: self.funcs.length(),
+    func_types: self.func_types.length(),
+    func_type_indices: self.func_type_indices.length(),
+    func_owners: self.func_owners.copy(),
+    tables: self.tables.length(),
+    jit_tables: self.jit_tables.length(),
+    mems: self.mems.length(),
+    globals: self.globals.length(),
+    tags: self.tags.length(),
+    tag_type_indices: self.tag_type_indices.length(),
+    tag_owners: self.tag_owners.copy(),
+    exns: self.exns.length(),
+    wrapped_externs: self.wrapped_externs.length(),
+    instances: self.instances.length(),
+    module_types: self.module_types,
+    module_rec_groups: self.module_rec_groups,
+  }
+}
+
+///|
+fn Store::rollback_allocations(
+  self : Store,
+  checkpoint : StoreAllocationCheckpoint,
+) -> Unit {
+  for i in checkpoint.instances..<self.instances.length() {
+    self.instances[i].store_idx = -1
+  }
+  for i in checkpoint.mems..<self.mems.length() {
+    self.mems[i].close()
+  }
+  for i in checkpoint.jit_tables..<self.jit_tables.length() {
+    match self.jit_tables[i] {
+      Some(table) => table.close()
+      None => ()
+    }
+  }
+  self.funcs.truncate(checkpoint.funcs)
+  self.func_types.truncate(checkpoint.func_types)
+  self.func_type_indices.truncate(checkpoint.func_type_indices)
+  self.func_owners.clear()
+  for owner in checkpoint.func_owners {
+    self.func_owners.push(owner)
+  }
+  self.tables.truncate(checkpoint.tables)
+  self.jit_tables.truncate(checkpoint.jit_tables)
+  self.mems.truncate(checkpoint.mems)
+  self.globals.truncate(checkpoint.globals)
+  self.tags.truncate(checkpoint.tags)
+  self.tag_type_indices.truncate(checkpoint.tag_type_indices)
+  self.tag_owners.clear()
+  for owner in checkpoint.tag_owners {
+    self.tag_owners.push(owner)
+  }
+  self.exns.truncate(checkpoint.exns)
+  self.wrapped_externs.truncate(checkpoint.wrapped_externs)
+  self.instances.truncate(checkpoint.instances)
+  self.module_types = checkpoint.module_types
+  self.module_rec_groups = checkpoint.module_rec_groups
+}
+
+///|
 /// Optional C heap initial capacity override (bytes)
 const GC_HEAP_CAPACITY_ENV : String = "WASMOON_GC_HEAP_CAPACITY"
 
@@ -180,6 +263,12 @@ pub fn Store::close(self : Store) -> Unit {
   self.module_types.clear()
   self.module_rec_groups.clear()
   self.wrapped_externs.clear()
+  for jit_table in self.jit_tables {
+    match jit_table {
+      Some(table) => table.close()
+      None => ()
+    }
+  }
   self.jit_tables.clear()
   self.wasi_mem_addr = None
   self.wasi_ctx_handle = 0

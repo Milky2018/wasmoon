@@ -392,6 +392,10 @@ extern "c" fn c_jit_ctx_set_indirect(
 extern "c" fn c_jit_alloc_shared_indirect_table(count : Int) -> Int64 = "wasmoon_jit_alloc_shared_indirect_table"
 
 ///|
+/// Free a shared indirect table owned by a Store.
+extern "c" fn c_jit_free_shared_indirect_table(table_ptr : Int64) -> Unit = "wasmoon_jit_free_shared_indirect_table"
+
+///|
 /// Set an entry in a shared indirect table
 extern "c" fn c_jit_shared_table_set(
   table_ptr : Int64,

@@ -72,7 +72,7 @@ pub fn ComponentValidationConfig::ComponentValidationConfig(Bool) -> Self
 pub fn ComponentValidationConfig::default() -> Self
 
 type ValidatedComponent
-pub fn ValidatedComponent::component(Self) -> @model.Component raise @model.ComponentParseError
+pub fn ValidatedComponent::fresh_component(Self) -> @model.Component raise @model.ComponentParseError
 
 // Type aliases
 
