@@ -752,6 +752,56 @@ test "component runtime: close during engine registration cancels instantiation"
 }
 
 ///|
+test "component runtime: same-Linker reentrant instantiation is rejected" {
+  let bytes = @component_text.parse_component_wat(
+    (
+      #|(component
+      #|  (core module $m (func (export "f") (result i32) (i32.const 7)))
+      #|  (core instance $i (instantiate $m))
+      #|  (func (export "f") (result u32) (canon lift (core func $i "f"))))
+      #|
+    ),
+  )
+  let validated = @component_model.validate_component_for_instantiation_with_config(
+    @component.parse_component(bytes),
+    @component_model.ComponentValidationConfig(false),
+  )
+  let linker_slot : Ref[@runtime_impl.ComponentLinker?] = Ref(None)
+  let did_reenter = Ref(false)
+  let reentry = Ref("not attempted")
+  let engine = @runtime_impl.CoreExecutionEngine(
+    fn(_store, _module, _instance) raise @runtime_impl.ComponentRuntimeError {
+      if !did_reenter.val {
+        did_reenter.val = true
+        if linker_slot.val is Some(linker) {
+          reentry.val = try
+            linker.instantiate("reentrant-inner", validated)
+          catch {
+            ReentrantInstantiation => "rejected"
+            error => "unexpected: \{error}"
+          } noraise {
+            _ => "committed"
+          }
+        }
+        raise NativeCompilationFailed("injected outer registration failure")
+      }
+    },
+    fn(_store, _instance, _func_idx, _args, _request) { Returned([]) },
+  )
+  let linker = @runtime_impl.ComponentLinker::with_core_execution_engine(engine)
+  linker_slot.val = Some(linker)
+  try linker.instantiate("outer", validated) catch {
+    NativeCompilationFailed(_) => ()
+    error => fail("unexpected outer error: \{error}")
+  } noraise {
+    _ => fail("expected outer instantiation to fail")
+  }
+  debug_inspect(reentry.val, content="\"rejected\"")
+  debug_inspect(linker.get_component("reentrant-inner") is None, content="true")
+  linker.close()
+}
+
+///|
 /// Lifecycle regression: a closed linker refuses instantiation at entry even
 /// for a component with no core sections, which previously committed an
 /// instance graph into the closed linker.

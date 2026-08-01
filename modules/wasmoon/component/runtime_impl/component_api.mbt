@@ -330,6 +330,7 @@ struct ComponentLinker {
   host_runtime : Ref[HostRuntimeState?]
   closed : Ref[Bool]
   close_complete : Ref[Bool]
+  instantiating : Ref[Bool]
   // Mutable counter stored in a 1-element array so methods can bump it without
   // requiring `mut self`.
   resource_id_counter : Array[Int]
@@ -360,6 +361,7 @@ pub fn ComponentLinker::with_core_execution_engine(
     host_runtime: Ref(None),
     closed: Ref(false),
     close_complete: Ref(false),
+    instantiating: Ref(false),
     resource_id_counter: [0],
   }
 }
@@ -607,6 +609,13 @@ pub fn ComponentLinker::instantiate(
   name : String,
   component : @component_validator.ValidatedComponent,
 ) -> ComponentInstance raise ComponentRuntimeError {
+  if self.instantiating.val {
+    raise ReentrantInstantiation
+  }
+  self.instantiating.val = true
+  defer {
+    self.instantiating.val = false
+  }
   // The whole instantiation runs under one lifecycle lease and one
   // registration transaction. The lease means an embedder callback that
   // closes the linker mid-instantiation only begins the close: teardown is

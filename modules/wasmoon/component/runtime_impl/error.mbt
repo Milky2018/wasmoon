@@ -45,6 +45,8 @@ pub(all) suberror ComponentRuntimeError {
   HostEventLoopAlreadyInstalled
   /// The same component invocation is already executing a scheduling round.
   InvocationAlreadyDriving
+  /// The same linker is already instantiating another root component.
+  ReentrantInstantiation
 } derive(Debug, Eq)
 
 ///|

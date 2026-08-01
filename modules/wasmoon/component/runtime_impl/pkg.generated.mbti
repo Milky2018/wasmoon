@@ -66,6 +66,7 @@ pub(all) suberror ComponentRuntimeError {
   InvalidHostTypeReference(Int)
   HostEventLoopAlreadyInstalled
   InvocationAlreadyDriving
+  ReentrantInstantiation
 } derive(Eq, @debug.Debug)
 pub impl Show for ComponentRuntimeError
 
