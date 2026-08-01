@@ -559,3 +559,50 @@ test "component runtime: canon lower to core func" {
   }
   debug_inspect(results, content="[I32(42)]")
 }
+
+///|
+/// Regression test for ISS-372.
+///
+/// A component that defines a nested component stores a closure whose
+/// `outer_stack` contains the enclosing instance itself — required for
+/// `alias outer` resolution, and a deliberate reference cycle that reference
+/// counting can never reclaim. Terminal linker close must break the graph,
+/// or every such instance survives close along with its imports and their
+/// per-function type-space copies. LeakSanitizer measured 45KB retained per
+/// instantiation before the release was added.
+test "linker close releases nested-component instance graphs" {
+  let bytes = @component_text.parse_component_wat(
+    (
+      #|(component
+      #|  (component $inner
+      #|    (core module $m (func (export "f") (result i32) (i32.const 7)))
+      #|    (core instance $i (instantiate $m))
+      #|    (func (export "f") (result u32) (canon lift (core func $i "f"))))
+      #|  (instance $one (instantiate $inner))
+      #|  (alias export $one "f" (func $f))
+      #|  (export "f" (func $f)))
+      #|
+    ),
+  )
+  let component = @component.parse_component(bytes)
+  let validated = @component_model.validate_component_for_instantiation_with_config(
+    component,
+    @component_model.ComponentValidationConfig(false),
+  )
+  let linker = @runtime_impl.ComponentLinker::ComponentLinker()
+  let instance = linker.instantiate("nested", validated)
+  // The self-cycle exists while the linker is open: the instance's nested
+  // component closures carry the instance itself in their outer stacks.
+  debug_inspect(instance.components.length() > 0, content="true")
+  linker.close()
+  // Terminal close breaks the graph so reference counting can reclaim it.
+  debug_inspect(
+    (
+      instance.components.length(),
+      instance.instances.length(),
+      instance.funcs.length(),
+      instance.exports.size(),
+    ),
+    content="(0, 0, 0, 0)",
+  )
+}
