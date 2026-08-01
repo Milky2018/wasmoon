@@ -42,21 +42,18 @@ fn instantiate_component(
     linker, name, component, overrides, outer_stack, state, entry_state, store, async_state,
   ) catch {
     error => {
-      // Nothing registered this partial graph, so terminal close cannot
-      // release it. If the linker closed while these sections ran, break
-      // the graph's cycles here before the error unwinds.
-      if linker.closed.val {
-        release_component_instance_graph(
-          env_instance_from_state(name, state, store),
-          [],
-        )
-      }
+      state.release_aborted()
       raise error
     }
   }
   entry_state.enable()
   let instance = env_instance_from_state(name, state, store)
-  linker.register(name, instance)
+  linker.register(name, instance) catch {
+    error => {
+      state.release_aborted()
+      raise error
+    }
+  }
   instance
 }
 

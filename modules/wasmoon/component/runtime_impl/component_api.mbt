@@ -545,7 +545,14 @@ pub fn ComponentLinker::add_import(
   self : ComponentLinker,
   name : String,
   ext : ComponentExtern,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
+  // A terminally closed linker accepts no new imports. `finish_close` has
+  // already walked and released the import table, so an extern added after
+  // close would be retained until the linker itself dies — an uncollectable
+  // cycle whenever the extern captures its own linker.
+  if self.closed.val {
+    raise Cancelled
+  }
   self.imports.set(name, ext)
 }
 
@@ -564,7 +571,7 @@ pub fn ComponentLinker::add_func(
   name : String,
   func_type : FuncType,
   func : (Array[ComponentValue]) -> Array[ComponentValue] raise ComponentRuntimeError,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   self.add_import(
     name,
     Func(
@@ -583,7 +590,7 @@ pub fn ComponentLinker::add_value(
   self : ComponentLinker,
   name : String,
   value : ComponentValue,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   self.add_import(name, Value(value))
 }
 
@@ -597,7 +604,7 @@ pub fn ComponentLinker::add_component(
   self : ComponentLinker,
   name : String,
   component : @component_validator.ValidatedComponent,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   self.add_import(
     name,
     Component({ component: component.component(), outer_stack: [] }),
@@ -609,7 +616,7 @@ pub fn ComponentLinker::add_instance(
   self : ComponentLinker,
   name : String,
   instance : ComponentInstance,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   self.add_import(name, Instance(instance))
 }
 
@@ -618,7 +625,7 @@ pub fn ComponentLinker::add_core_module(
   self : ComponentLinker,
   name : String,
   module_ : @types.Module,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   self.add_import(name, CoreModule(module_))
 }
 
@@ -627,7 +634,7 @@ pub fn ComponentLinker::add_core_instance(
   self : ComponentLinker,
   name : String,
   instance : CoreInstance,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
   self.add_import(name, CoreInstance(instance))
 }
 

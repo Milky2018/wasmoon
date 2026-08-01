@@ -983,8 +983,8 @@ fn run_component_script_impl(
   let return_three = make_const_u32_func(3)
   let return_four = make_const_u32_func(4)
   let echo_u32 = make_echo_u32_func()
-  linker.add_import("host-return-two", Func(return_two))
-  linker.add_import("host-echo-u32", Func(echo_u32))
+  try! linker.add_import("host-return-two", Func(return_two))
+  try! linker.add_import("host-echo-u32", Func(echo_u32))
   let simple_module_wat = "(module (func (export \"f\") (result i32) i32.const 101) (global (export \"g\") i32 (i32.const 100)))"
   let simple_module = @wat.parse(simple_module_wat) catch {
     e => {
@@ -1248,7 +1248,7 @@ fn run_component_script_impl(
   )
   host_exports.set("[method]resource1.take-own", Func(take_own))
   let host_instance = make_instance("host", store, host_exports)
-  linker.add_instance("host", host_instance)
+  try! linker.add_instance("host", host_instance)
   let components : Map[String, @component.Component] = Map([])
   let instances : Map[String, @runtime_impl.ComponentInstance] = Map([])
   let mut last_component : @component.Component? = None
@@ -1282,7 +1282,7 @@ fn run_component_script_impl(
         match component_import_evidence(component) {
           Ok(validated) => {
             components.set(name, component)
-            linker.add_component(strip_identifier(name), validated)
+            try! linker.add_component(strip_identifier(name), validated)
             result.add_passed()
           }
           Err(e) =>
@@ -1310,7 +1310,7 @@ fn run_component_script_impl(
             // instantiation below reports its validation error through the
             // existing path.
             if component_import_evidence(component) is Ok(validated) {
-              linker.add_component(strip_identifier(n), validated)
+              try! linker.add_component(strip_identifier(n), validated)
             }
           }
           None => ()
@@ -1335,7 +1335,7 @@ fn run_component_script_impl(
               match cmd.name {
                 Some(n) => {
                   instances.set(n, instance)
-                  linker.add_instance(strip_identifier(n), instance)
+                  try! linker.add_instance(strip_identifier(n), instance)
                 }
                 None => ()
               }
@@ -1376,7 +1376,7 @@ fn run_component_script_impl(
             match instantiate_component(linker, inst_name, component) {
               Ok(instance) => {
                 instances.set(name, instance)
-                linker.add_instance(strip_identifier(name), instance)
+                try! linker.add_instance(strip_identifier(name), instance)
                 last_instance = Some(instance)
                 result.add_passed()
               }

@@ -20,6 +20,37 @@ priv struct BuildState {
 }
 
 ///|
+/// Release the build state of an aborted instantiation.
+///
+/// The frame's arrays carry the same deliberate `alias outer` cycles that
+/// `release_component_instance_graph` breaks at terminal close: a nested
+/// closure's outer stack holds an env instance whose child arrays are these
+/// arrays. Nothing registered the partial graph, so no later boundary can
+/// reach it — break the cycles here, on every abort. Clearing only this
+/// frame's own containers drops references to imported and outer objects
+/// without touching their state, so on an open linker the live imports the
+/// frame had resolved are unaffected. The frame's resource table entry in
+/// the shared `async_state` map deliberately stays: nested instances that
+/// completed before the abort are registered with the linker and may still
+/// resolve this table through their ancestor chain.
+fn BuildState::release_aborted(self : BuildState) -> Unit {
+  self.types.clear()
+  self.funcs.clear()
+  self.values.clear()
+  self.components.clear()
+  self.instances.clear()
+  self.core_modules.clear()
+  self.core_instances.clear()
+  self.core_funcs.clear()
+  self.core_types.clear()
+  self.core_tables.clear()
+  self.core_mems.clear()
+  self.core_globals.clear()
+  self.core_tags.clear()
+  self.exports.clear()
+}
+
+///|
 fn BuildState::BuildState(
   stream_table : StreamTable,
   async_state : AsyncState,

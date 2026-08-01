@@ -732,6 +732,77 @@ test "component runtime: closed linker refuses instantiation at entry" {
   }
   debug_inspect(outcome, content="\"cancelled\"")
   debug_inspect(linker.get_component("late") is None, content="true")
+  // The import table is equally terminal: `finish_close` released it, so
+  // an extern added afterwards would be retained until the linker dies.
+  let add_outcome = try linker.add_import("late-value", Value(U32(1))) catch {
+    Cancelled => "cancelled"
+    error => "unexpected error: \{error}"
+  } noraise {
+    _ => "added"
+  }
+  debug_inspect(add_outcome, content="\"cancelled\"")
+  debug_inspect(linker.get_import("late-value") is None, content="true")
+}
+
+///|
+/// Lifecycle regression: an instantiation that fails on an open linker must
+/// not corrupt anything it had resolved. The abort path releases only the
+/// frame's own build state — breaking its `alias outer` cycles — while the
+/// imported instance and the linker itself stay fully usable.
+test "component runtime: failed instantiation leaves open linker intact" {
+  let inner_bytes = @component_text.parse_component_wat(
+    (
+      #|(component
+      #|  (core module $m (func (export "f") (result i32) (i32.const 7)))
+      #|  (core instance $i (instantiate $m))
+      #|  (func (export "f") (result u32) (canon lift (core func $i "f"))))
+      #|
+    ),
+  )
+  let inner = @component.parse_component(inner_bytes)
+  let inner_validated = @component_model.validate_component_for_instantiation_with_config(
+    inner,
+    @component_model.ComponentValidationConfig(false),
+  )
+  let linker = @runtime_impl.ComponentLinker::ComponentLinker()
+  let provider = linker.instantiate("provider", inner_validated)
+  linker.add_instance("a", provider)
+  // The importing component processes a nested component definition (which
+  // creates the `alias outer` cycle the abort path must break) before a core
+  // module whose start function traps at runtime.
+  let failing_bytes = @component_text.parse_component_wat(
+    (
+      #|(component
+      #|  (import "a" (instance $a (export "f" (func (result u32)))))
+      #|  (component $inner
+      #|    (core module $m (func (export "g") (result i32) (i32.const 1)))
+      #|    (core instance $i (instantiate $m))
+      #|    (func (export "g") (result u32) (canon lift (core func $i "g"))))
+      #|  (instance $one (instantiate $inner))
+      #|  (core module $boom (func $s unreachable) (start $s))
+      #|  (core instance $cb (instantiate $boom)))
+      #|
+    ),
+  )
+  let failing = @component.parse_component(failing_bytes)
+  let failing_validated = @component_model.validate_component_for_instantiation_with_config(
+    failing,
+    @component_model.ComponentValidationConfig(false),
+  )
+  let outcome = try linker.instantiate("failing", failing_validated) catch {
+    Cancelled => "cancelled"
+    _ => "failed"
+  } noraise {
+    _ => "instantiated"
+  }
+  debug_inspect(outcome, content="\"failed\"")
+  debug_inspect(linker.get_component("failing") is None, content="true")
+  // The imported instance the failed frame had resolved is untouched.
+  debug_inspect(provider.call_exported_func("f", []), content="[U32(7)]")
+  // The linker remains fully usable for later instantiations.
+  let again = linker.instantiate("again", inner_validated)
+  debug_inspect(again.call_exported_func("f", []), content="[U32(7)]")
+  linker.close()
 }
 
 ///|
