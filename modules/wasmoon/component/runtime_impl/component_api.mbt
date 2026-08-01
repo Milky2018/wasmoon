@@ -166,7 +166,13 @@ pub impl Show for CoreInstance with fn output(_self, logger) {
 ///|
 /// A component value is a closure: the component binary plus the captured outer
 /// environment needed to resolve `alias outer ...` when instantiated later.
-pub(all) struct ComponentClosure {
+///
+/// The type is abstract on purpose. Every closure the runtime instantiates
+/// must originate from a validated boundary (`ComponentLinker::instantiate`,
+/// `ComponentLinker::add_component`, or a section of an already-validated
+/// component), so external code must not be able to forge a
+/// `Component(closure)` extern around an unchecked component.
+struct ComponentClosure {
   component : Component
   outer_stack : Array[ComponentInstance]
 }
@@ -576,12 +582,20 @@ pub fn ComponentLinker::add_value(
 }
 
 ///|
+/// Register a component import. Like `ComponentLinker::instantiate`, the
+/// boundary accepts validation evidence rather than a raw component: an
+/// imported component is instantiated by the instance sections of whichever
+/// component imports it, so an unchecked component here would reach
+/// instantiation without ever passing validation.
 pub fn ComponentLinker::add_component(
   self : ComponentLinker,
   name : String,
-  component : Component,
+  component : @component_validator.ValidatedComponent,
 ) -> Unit {
-  self.add_import(name, Component({ component, outer_stack: [] }))
+  self.add_import(
+    name,
+    Component({ component: component.component(), outer_stack: [] }),
+  )
 }
 
 ///|

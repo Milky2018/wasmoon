@@ -125,10 +125,7 @@ type CanonResources derive(@debug.Debug)
 
 type CanonSuspend derive(Eq, @debug.Debug)
 
-pub(all) struct ComponentClosure {
-  component : @model.Component
-  outer_stack : Array[ComponentInstance]
-}
+type ComponentClosure
 pub impl Show for ComponentClosure
 
 pub(all) enum ComponentExtern {
@@ -197,7 +194,7 @@ pub(all) enum ComponentInvocationPoll {
 
 type ComponentLinker
 pub fn ComponentLinker::ComponentLinker() -> Self
-pub fn ComponentLinker::add_component(Self, String, @model.Component) -> Unit
+pub fn ComponentLinker::add_component(Self, String, @component_model.ValidatedComponent) -> Unit
 pub fn ComponentLinker::add_core_instance(Self, String, CoreInstance) -> Unit
 pub fn ComponentLinker::add_core_module(Self, String, @types.Module) -> Unit
 pub fn ComponentLinker::add_func(Self, String, @model.FuncType, (Array[ComponentValue]) -> Array[ComponentValue] raise ComponentRuntimeError) -> Unit

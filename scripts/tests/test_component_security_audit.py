@@ -69,6 +69,9 @@ class ComponentSecurityAuditTests(unittest.TestCase):
             encoding="utf-8",
         )
         (root / "runtime.mbti").write_text(
+            "type ComponentClosure\n"
+            "pub fn ComponentLinker::add_component"
+            "(Self, String, @component_model.ValidatedComponent) -> Unit\n"
             "pub fn ComponentLinker::instantiate"
             "(Self, String, @component_model.ValidatedComponent)"
             " -> ComponentInstance raise ComponentRuntimeError\n",
@@ -266,6 +269,39 @@ class ComponentSecurityAuditTests(unittest.TestCase):
             (root / "runtime.mbti").write_text(
                 "pub fn ComponentLinker::instantiate"
                 "(Self, String, @model.Component)"
+                " -> ComponentInstance raise ComponentRuntimeError\n",
+                encoding="utf-8",
+            )
+            self.assert_failed(root, "validate-before-instantiate")
+
+    def test_raw_component_import_boundary_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.create_fixture(root)
+            (root / "runtime.mbti").write_text(
+                "type ComponentClosure\n"
+                "pub fn ComponentLinker::add_component"
+                "(Self, String, @model.Component) -> Unit\n"
+                "pub fn ComponentLinker::instantiate"
+                "(Self, String, @component_model.ValidatedComponent)"
+                " -> ComponentInstance raise ComponentRuntimeError\n",
+                encoding="utf-8",
+            )
+            self.assert_failed(root, "validate-before-instantiate")
+
+    def test_constructible_component_closure_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.create_fixture(root)
+            (root / "runtime.mbti").write_text(
+                "pub(all) struct ComponentClosure {\n"
+                "  component : @model.Component\n"
+                "  outer_stack : Array[ComponentInstance]\n"
+                "}\n"
+                "pub fn ComponentLinker::add_component"
+                "(Self, String, @component_model.ValidatedComponent) -> Unit\n"
+                "pub fn ComponentLinker::instantiate"
+                "(Self, String, @component_model.ValidatedComponent)"
                 " -> ComponentInstance raise ComponentRuntimeError\n",
                 encoding="utf-8",
             )

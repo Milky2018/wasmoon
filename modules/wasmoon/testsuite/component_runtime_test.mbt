@@ -606,3 +606,72 @@ test "linker close releases nested-component instance graphs" {
     content="(0, 0, 0, 0)",
   )
 }
+
+///|
+/// Regression test for the ISS-357 boundary gaps: validation evidence holds
+/// an isolated snapshot rebuilt from the component's sections, so mutating
+/// the raw component after validation cannot change what the runtime
+/// instantiates.
+test "component runtime: evidence survives raw component mutation" {
+  let bytes = @component_text.parse_component_wat(
+    (
+      #|(component
+      #|  (core module $m (func (export "f") (result i32) (i32.const 7)))
+      #|  (core instance $i (instantiate $m))
+      #|  (func (export "f") (result u32) (canon lift (core func $i "f"))))
+      #|
+    ),
+  )
+  let component = @component.parse_component(bytes)
+  let validated = @component_model.validate_component_for_instantiation_with_config(
+    component,
+    @component_model.ComponentValidationConfig(false),
+  )
+  // Erase every mutable view reachable through the caller's raw reference.
+  component.binary.sections.clear()
+  component.core_modules.clear()
+  component.core_instances.clear()
+  component.core_types.clear()
+  component.types.clear()
+  component.imports.clear()
+  component.exports.clear()
+  component.instances.clear()
+  component.aliases.clear()
+  component.canons.clear()
+  component.components.clear()
+  let linker = @runtime_impl.ComponentLinker::ComponentLinker()
+  let instance = linker.instantiate("mutated", validated)
+  let results = instance.call_exported_func("f", [])
+  debug_inspect(results, content="[U32(7)]")
+  linker.close()
+}
+
+///|
+/// Regression test for the ISS-357 boundary gaps: a component import enters
+/// the linker only as validation evidence. The signature change is the
+/// guarantee (a raw component no longer type-checks), and the registered
+/// import holds the evidence snapshot, which "evidence survives raw component
+/// mutation" above proves is unreachable from the caller's raw reference.
+test "component runtime: component import registration requires evidence" {
+  let inner_bytes = @component_text.parse_component_wat(
+    (
+      #|(component
+      #|  (core module $m (func (export "f") (result i32) (i32.const 7)))
+      #|  (core instance $i (instantiate $m))
+      #|  (func (export "f") (result u32) (canon lift (core func $i "f"))))
+      #|
+    ),
+  )
+  let inner = @component.parse_component(inner_bytes)
+  let inner_validated = @component_model.validate_component_for_instantiation_with_config(
+    inner,
+    @component_model.ComponentValidationConfig(false),
+  )
+  let linker = @runtime_impl.ComponentLinker::ComponentLinker()
+  linker.add_component("inner", inner_validated)
+  debug_inspect(
+    linker.get_import("inner") is Some(Component(_)),
+    content="true",
+  )
+  linker.close()
+}

@@ -775,6 +775,23 @@ fn load_component(
 }
 
 ///|
+/// Produce the validation evidence `ComponentLinker::add_component` requires.
+fn component_import_evidence(
+  component : @component.Component,
+) -> Result[@component_model.ValidatedComponent, String] {
+  try
+    @component_model.validate_component_for_instantiation_with_config(
+      component,
+      ComponentValidationConfig(false),
+    )
+  catch {
+    e => Err(e.to_string())
+  } noraise {
+    value => Ok(value)
+  }
+}
+
+///|
 fn instantiate_component(
   linker : @runtime_impl.ComponentLinker,
   name : String,
@@ -1262,9 +1279,15 @@ fn run_component_script_impl(
             continue
           }
         }
-        components.set(name, component)
-        linker.add_component(strip_identifier(name), component)
-        result.add_passed()
+        match component_import_evidence(component) {
+          Ok(validated) => {
+            components.set(name, component)
+            linker.add_component(strip_identifier(name), validated)
+            result.add_passed()
+          }
+          Err(e) =>
+            result.add_failed("component_definition validation failed: \{e}")
+        }
       }
       "component" => {
         let path = match cmd.path {
@@ -1283,7 +1306,12 @@ fn run_component_script_impl(
         match cmd.name {
           Some(n) => {
             components.set(n, component)
-            linker.add_component(strip_identifier(n), component)
+            // An invalid component is never registered as an import; the
+            // instantiation below reports its validation error through the
+            // existing path.
+            if component_import_evidence(component) is Ok(validated) {
+              linker.add_component(strip_identifier(n), validated)
+            }
           }
           None => ()
         }
