@@ -408,11 +408,87 @@ pub fn ComponentLinker::close(self : ComponentLinker) -> Unit {
 }
 
 ///|
+/// Release an instance graph at terminal close.
+///
+/// A component that defines a nested component stores a `ComponentClosure`
+/// whose `outer_stack` contains the enclosing instance itself — `alias outer`
+/// resolution requires the enclosing scope when the nested component is
+/// instantiated later. That is a deliberate reference cycle, and reference
+/// counting can never reclaim it: every instance graph with a nested
+/// component definition survives close intact, dragging its imports, host
+/// functions, and their per-function type-space copies along with it.
+///
+/// Terminal close is the owning boundary, so break the graph here: clear the
+/// closure and child arrays of every reachable instance. The visited set
+/// terminates on the cycles this exists to break.
+fn release_component_instance_graph(
+  instance : ComponentInstance,
+  visited : Array[ComponentInstance],
+) -> Unit {
+  for seen in visited {
+    if physical_equal(seen, instance) {
+      return
+    }
+  }
+  visited.push(instance)
+  // Instances produced during one instantiation share their backing arrays
+  // and export map — the `alias outer` environment records alias the final
+  // instance's storage. Collect every reachable child first, then clear this
+  // record's storage, and only then recurse: clearing while iterating a
+  // shared map would mutate the collection mid-walk, and a shared array
+  // visited again later is simply seen empty.
+  let children : Array[ComponentInstance] = []
+  for closure in instance.components {
+    for outer in closure.outer_stack {
+      children.push(outer)
+    }
+  }
+  for child in instance.instances {
+    children.push(child)
+  }
+  for entry in instance.exports {
+    let (_, ext) = entry
+    match ext {
+      Instance(child) => children.push(child)
+      Component(closure) =>
+        for outer in closure.outer_stack {
+          children.push(outer)
+        }
+      _ => ()
+    }
+  }
+  instance.components.clear()
+  instance.instances.clear()
+  instance.funcs.clear()
+  instance.values.clear()
+  instance.exports.clear()
+  for child in children {
+    release_component_instance_graph(child, visited)
+  }
+}
+
+///|
 fn ComponentLinker::finish_close(self : ComponentLinker) -> Unit {
   if self.close_complete.val {
     return
   }
   self.close_complete.val = true
+  let visited : Array[ComponentInstance] = []
+  for entry in self.components {
+    let (_, instance) = entry
+    release_component_instance_graph(instance, visited)
+  }
+  for entry in self.imports {
+    let (_, ext) = entry
+    match ext {
+      Instance(instance) => release_component_instance_graph(instance, visited)
+      Component(closure) =>
+        for outer in closure.outer_stack {
+          release_component_instance_graph(outer, visited)
+        }
+      _ => ()
+    }
+  }
   self.components.clear()
   self.imports.clear()
   self.host_runtime.val = None
