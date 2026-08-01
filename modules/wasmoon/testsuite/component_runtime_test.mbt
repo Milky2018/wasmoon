@@ -647,6 +647,94 @@ test "component runtime: evidence survives raw component mutation" {
 }
 
 ///|
+/// Lifecycle regression: an engine registration callback that closes its own
+/// linker must not let the instantiation commit. Registration now holds a
+/// lifecycle lease like invoke, so the close defers until the registration
+/// returns, the registration refuses to commit into a closing engine, and
+/// the instantiation surfaces `Cancelled` instead of registering an instance
+/// graph that nothing would ever release.
+test "component runtime: close during engine registration cancels instantiation" {
+  let bytes = @component_text.parse_component_wat(
+    (
+      #|(component
+      #|  (core module $m (func (export "f") (result i32) (i32.const 7)))
+      #|  (core instance $i (instantiate $m))
+      #|  (func (export "f") (result u32) (canon lift (core func $i "f"))))
+      #|
+    ),
+  )
+  let component = @component.parse_component(bytes)
+  let validated = @component_model.validate_component_for_instantiation_with_config(
+    component,
+    @component_model.ComponentValidationConfig(false),
+  )
+  let linker_slot : Ref[@runtime_impl.ComponentLinker?] = Ref(None)
+  let registrations = Ref(0)
+  let engine = @runtime_impl.CoreExecutionEngine(
+    fn(_store, _module, _instance) {
+      registrations.val = registrations.val + 1
+      if linker_slot.val is Some(linker) {
+        linker.close()
+      }
+    },
+    fn(
+      _store,
+      _instance,
+      _func_idx,
+      _args,
+      _request,
+    ) raise @runtime_impl.ComponentRuntimeError {
+      raise HostCallError("invoke must not run in this test")
+    },
+  )
+  let linker = @runtime_impl.ComponentLinker::with_core_execution_engine(engine)
+  linker_slot.val = Some(linker)
+  let outcome = try linker.instantiate("closing", validated) catch {
+    Cancelled => "cancelled"
+    error => "unexpected error: \{error}"
+  } noraise {
+    _ => "instantiated"
+  }
+  debug_inspect(outcome, content="\"cancelled\"")
+  debug_inspect(registrations.val, content="1")
+  // The aborted instantiation must not resurrect state in the closed linker.
+  debug_inspect(linker.get_component("closing") is None, content="true")
+  // The linker is terminally closed: later instantiations are refused at
+  // entry, before any section runs.
+  let after_close = try linker.instantiate("after-close", validated) catch {
+    Cancelled => "cancelled"
+    error => "unexpected error: \{error}"
+  } noraise {
+    _ => "instantiated"
+  }
+  debug_inspect(after_close, content="\"cancelled\"")
+  debug_inspect(registrations.val, content="1")
+}
+
+///|
+/// Lifecycle regression: a closed linker refuses instantiation at entry even
+/// for a component with no core sections, which previously committed an
+/// instance graph into the closed linker.
+test "component runtime: closed linker refuses instantiation at entry" {
+  let bytes = @component_text.parse_component_wat("(component)")
+  let component = @component.parse_component(bytes)
+  let validated = @component_model.validate_component_for_instantiation_with_config(
+    component,
+    @component_model.ComponentValidationConfig(false),
+  )
+  let linker = @runtime_impl.ComponentLinker::ComponentLinker()
+  linker.close()
+  let outcome = try linker.instantiate("late", validated) catch {
+    Cancelled => "cancelled"
+    error => "unexpected error: \{error}"
+  } noraise {
+    _ => "instantiated"
+  }
+  debug_inspect(outcome, content="\"cancelled\"")
+  debug_inspect(linker.get_component("late") is None, content="true")
+}
+
+///|
 /// Regression test for the ISS-357 boundary gaps: a component import enters
 /// the linker only as validation evidence. The signature change is the
 /// guarantee (a raw component no longer type-checks), and the registered

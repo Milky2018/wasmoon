@@ -209,7 +209,7 @@ pub fn ComponentLinker::host_instance_builder(Self, String, HostRuntimeState) ->
 pub fn ComponentLinker::host_runtime_state(Self) -> HostRuntimeState
 pub fn ComponentLinker::instantiate(Self, String, @component_model.ValidatedComponent) -> ComponentInstance raise ComponentRuntimeError
 pub fn ComponentLinker::new_host_resource_type(Self) -> @model.TypeDef?
-pub fn ComponentLinker::register(Self, String, ComponentInstance) -> Unit
+pub fn ComponentLinker::register(Self, String, ComponentInstance) -> Unit raise ComponentRuntimeError
 pub fn ComponentLinker::with_core_execution_engine(CoreExecutionEngine) -> Self
 
 pub(all) enum ComponentValue {

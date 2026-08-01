@@ -516,7 +516,13 @@ pub fn ComponentLinker::register(
   self : ComponentLinker,
   name : String,
   instance : ComponentInstance,
-) -> Unit {
+) -> Unit raise ComponentRuntimeError {
+  // A terminally closed linker accepts no new instance graph: nothing would
+  // ever release a graph committed after `finish_close` has run or been
+  // scheduled.
+  if self.closed.val {
+    raise Cancelled
+  }
   self.components.push((name, instance))
 }
 
@@ -631,5 +637,35 @@ pub fn ComponentLinker::instantiate(
   name : String,
   component : @component_validator.ValidatedComponent,
 ) -> ComponentInstance raise ComponentRuntimeError {
-  instantiate_component(self, name, component.component(), Map([]), [])
+  // The whole instantiation holds a lifecycle lease. An embedder callback
+  // that closes the linker mid-instantiation (from an engine registration or
+  // a host import) only begins the close: teardown is deferred until this
+  // frame unwinds, so no section ever observes a released engine or cleared
+  // imports, and a close that started mid-flight turns into `Cancelled`
+  // rather than a successful instantiation on a closed linker.
+  self.core_execution_lifecycle.enter()
+  let instance = instantiate_component(
+    self,
+    name,
+    component.component(),
+    Map([]),
+    [],
+  ) catch {
+    error => {
+      let closing = self.core_execution_lifecycle.closing.val
+      self.core_execution_lifecycle.leave()
+      if closing {
+        raise Cancelled
+      }
+      raise error
+    }
+  }
+  let closing = self.core_execution_lifecycle.closing.val
+  self.core_execution_lifecycle.leave()
+  if closing {
+    // The deferred terminal close in `leave` released every registered
+    // graph, including this instance. Do not report success for it.
+    raise Cancelled
+  }
+  instance
 }

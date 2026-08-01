@@ -292,7 +292,25 @@ fn CoreExecutionEngine::with_lifecycle(
 ) -> CoreExecutionEngine {
   CoreExecutionEngine(
     fn(store, module_, instance) raise ComponentRuntimeError {
-      self.register_instance(store, module_, instance)
+      // Registration runs embedder code and must hold a lease like invoke:
+      // a callback that closes the linker would otherwise tear the engine
+      // down mid-instantiation, and the registration would still commit.
+      lifecycle.enter()
+      self.register_instance(store, module_, instance) catch {
+        error => {
+          let closing = lifecycle.closing.val
+          lifecycle.leave()
+          if closing {
+            raise Cancelled
+          }
+          raise error
+        }
+      }
+      let closing = lifecycle.closing.val
+      lifecycle.leave()
+      if closing {
+        raise Cancelled
+      }
     },
     fn(store, instance, func_idx, args, request) raise ComponentRuntimeError {
       lifecycle.enter()
