@@ -57,6 +57,15 @@ pub struct MarkSweepHeap {
 } derive(Debug)
 
 ///|
+priv struct MarkSweepHeapAllocationCheckpoint {
+  owner : MarkSweepHeap
+  objects : Array[GCObject?]
+  marks : Array[Bool]
+  free_list : Array[Int]
+  total_live : Int
+}
+
+///|
 /// GC statistics
 pub struct GCStats {
   total_objects : Int // Total slots in heap
@@ -108,6 +117,42 @@ pub fn MarkSweepHeap::stats(self : MarkSweepHeap) -> GCStats {
     bytes_allocated: self.bytes_allocated,
     bytes_collected: self.bytes_collected,
   }
+}
+
+///|
+fn MarkSweepHeap::checkpoint_allocations(
+  self : MarkSweepHeap,
+) -> MarkSweepHeapAllocationCheckpoint {
+  {
+    owner: self,
+    objects: self.objects.copy(),
+    marks: self.marks.copy(),
+    free_list: self.free_list.copy(),
+    total_live: self.total_live,
+  }
+}
+
+///|
+fn MarkSweepHeap::rollback_allocations(
+  self : MarkSweepHeap,
+  checkpoint : MarkSweepHeapAllocationCheckpoint,
+) -> Unit {
+  if !physical_equal(self, checkpoint.owner) {
+    return
+  }
+  self.objects.clear()
+  for object in checkpoint.objects {
+    self.objects.push(object)
+  }
+  self.marks.clear()
+  for mark in checkpoint.marks {
+    self.marks.push(mark)
+  }
+  self.free_list.clear()
+  for index in checkpoint.free_list {
+    self.free_list.push(index)
+  }
+  self.total_live = checkpoint.total_live
 }
 
 ///|

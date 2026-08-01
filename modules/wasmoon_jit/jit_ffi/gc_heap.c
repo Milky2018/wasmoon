@@ -991,6 +991,30 @@ int32_t gc_heap_get_object_count(GcHeap* heap) {
     return heap ? heap->object_count : 0;
 }
 
+int32_t gc_heap_rollback_allocations(GcHeap* heap, int32_t object_count) {
+    if (!heap || object_count < 0 || object_count > heap->object_count) {
+        return 0;
+    }
+
+    for (int32_t i = object_count; i < heap->object_count; i++) {
+        int32_t offset = heap->object_table[i];
+        if (offset >= 0) {
+            GcHeader* header = (GcHeader*)(heap->data + offset);
+            header->kind = GC_KIND_FREE;
+        }
+        heap->object_table[i] = -1;
+    }
+    heap->object_count = object_count;
+    if (object_count == 0) {
+        heap->size = 0;
+        heap->free_count = 0;
+    } else {
+        gc_heap_compact(heap);
+    }
+    gc_heap_maybe_verify(heap, "rollback_allocations");
+    return 1;
+}
+
 int32_t gc_heap_get_barrier_writes(GcHeap* heap) {
     return heap ? heap->barrier_writes : 0;
 }
@@ -1110,6 +1134,10 @@ int64_t wasmoon_gc_heap_get_capacity(int64_t heap_ptr) {
 
 int32_t wasmoon_gc_heap_get_object_count(int64_t heap_ptr) {
     return gc_heap_get_object_count((GcHeap*)(uintptr_t)heap_ptr);
+}
+
+int32_t wasmoon_gc_heap_rollback_allocations(int64_t heap_ptr, int32_t object_count) {
+    return gc_heap_rollback_allocations((GcHeap*)(uintptr_t)heap_ptr, object_count);
 }
 
 int32_t wasmoon_gc_heap_get_barrier_writes(int64_t heap_ptr) {

@@ -1260,6 +1260,13 @@ extern "c" fn c_gc_heap_collect(
 ) -> Int = "wasmoon_gc_heap_collect"
 
 ///|
+/// Discard objects allocated after the supplied object-table boundary.
+extern "c" fn c_gc_heap_rollback_allocations(
+  heap : Int64,
+  object_count : Int,
+) -> Int = "wasmoon_gc_heap_rollback_allocations"
+
+///|
 /// Verify C heap invariants (returns 1 when valid, 0 on failure)
 extern "c" fn c_gc_heap_verify(heap : Int64, verbose : Int) -> Int = "wasmoon_gc_heap_verify"
 

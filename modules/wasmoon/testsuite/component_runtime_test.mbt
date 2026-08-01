@@ -936,12 +936,17 @@ priv struct CoreStoreAllocationBaseline {
   exns : Int
   wrapped_externs : Int
   instances : Int
+  interpreter_heap_slots : Int
+  interpreter_heap_live : Int
+  native_heap_size : Int64
+  native_heap_objects : Int
 } derive(Debug, Eq)
 
 ///|
 fn core_store_allocation_baseline(
   store : @runtime.Store,
 ) -> CoreStoreAllocationBaseline {
+  let (native_heap_size, _, native_heap_objects, _, _) = store.get_gc_stats()
   {
     funcs: store.funcs.length(),
     func_types: store.func_types.length(),
@@ -957,6 +962,10 @@ fn core_store_allocation_baseline(
     exns: store.exns.length(),
     wrapped_externs: store.wrapped_externs.length(),
     instances: store.instances.length(),
+    interpreter_heap_slots: store.heap.length(),
+    interpreter_heap_live: store.heap.stats().live_objects,
+    native_heap_size,
+    native_heap_objects,
   }
 }
 
@@ -971,7 +980,10 @@ fn core_registration_then_start_trap() -> @component_model.ValidatedComponent ra
       #|    (global i32 (i32.const 1))
       #|    (func (export "f") (result i32) (i32.const 1)))
       #|  (core instance $registered (instantiate $ok))
-      #|  (core module $boom (func $start unreachable) (start $start))
+      #|  (core module $boom
+      #|    (type $box (struct))
+      #|    (func $start (drop (struct.new $box)) unreachable)
+      #|    (start $start))
       #|  (core instance $trapped (instantiate $boom)))
       #|
     ),

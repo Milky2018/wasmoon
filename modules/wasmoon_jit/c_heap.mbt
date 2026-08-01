@@ -39,6 +39,13 @@ pub struct CHeap {
 } derive(Debug)
 
 ///|
+/// Opaque allocation boundary belonging to one C heap.
+pub struct CHeapAllocationCheckpoint {
+  owner : CHeap
+  object_count : Int
+}
+
+///|
 /// Create a new C heap with the given initial capacity
 pub fn CHeap::CHeap(capacity? : Int = @types.ONE_MIB_BYTES) -> CHeap {
   let ptr = c_gc_heap_new(capacity.to_int64())
@@ -55,6 +62,22 @@ pub fn CHeap::free(self : CHeap) -> Unit {
 /// Get the raw C pointer (for JIT)
 pub fn CHeap::get_ptr(self : CHeap) -> Int64 {
   self.ptr
+}
+
+///|
+pub fn CHeap::checkpoint_allocations(self : CHeap) -> CHeapAllocationCheckpoint {
+  { owner: self, object_count: self.get_object_count() }
+}
+
+///|
+pub fn CHeap::rollback_allocations(
+  self : CHeap,
+  checkpoint : CHeapAllocationCheckpoint,
+) -> Bool {
+  if !physical_equal(self, checkpoint.owner) {
+    return false
+  }
+  c_gc_heap_rollback_allocations(self.ptr, checkpoint.object_count) != 0
 }
 
 // ============================================================

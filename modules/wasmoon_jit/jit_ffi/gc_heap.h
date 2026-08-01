@@ -336,6 +336,12 @@ size_t gc_heap_get_capacity(GcHeap* heap);
 int32_t gc_heap_get_object_count(GcHeap* heap);
 
 /**
+ * Discard objects allocated after an earlier object-table boundary.
+ * @return 1 on success, 0 for an invalid boundary.
+ */
+int32_t gc_heap_rollback_allocations(GcHeap* heap, int32_t object_count);
+
+/**
  * Get number of write-barrier calls recorded.
  */
 int32_t gc_heap_get_barrier_writes(GcHeap* heap);

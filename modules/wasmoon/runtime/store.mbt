@@ -75,6 +75,8 @@ priv struct StoreAllocationCheckpoint {
   instances : Int
   module_types : Array[@types.SubType]
   module_rec_groups : Array[Int]
+  heap : MarkSweepHeapAllocationCheckpoint
+  c_heap : @wasmoon_jit.CHeapAllocationCheckpoint?
 }
 
 ///|
@@ -96,6 +98,8 @@ fn Store::checkpoint_allocations(self : Store) -> StoreAllocationCheckpoint {
     instances: self.instances.length(),
     module_types: self.module_types,
     module_rec_groups: self.module_rec_groups,
+    heap: self.heap.checkpoint_allocations(),
+    c_heap: self.c_heap.map(fn(heap) { heap.checkpoint_allocations() }),
   }
 }
 
@@ -139,6 +143,12 @@ fn Store::rollback_allocations(
   self.instances.truncate(checkpoint.instances)
   self.module_types = checkpoint.module_types
   self.module_rec_groups = checkpoint.module_rec_groups
+  self.heap.rollback_allocations(checkpoint.heap)
+  match (self.c_heap, checkpoint.c_heap) {
+    (Some(heap), Some(heap_checkpoint)) =>
+      heap.rollback_allocations(heap_checkpoint) |> ignore
+    _ => ()
+  }
 }
 
 ///|
