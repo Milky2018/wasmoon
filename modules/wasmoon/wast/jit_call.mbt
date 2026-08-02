@@ -20,6 +20,7 @@ pub impl Show for JITCoreCallError with fn output(self, logger) {
 fn encode_jit_entry_args(
   args : Array[@types.Value],
   param_types : Array[@types.ValueType],
+  store : @runtime.Store,
   jit_module : @jit.JITModule,
   instance : @runtime.ModuleInstance,
 ) -> Array[Int64] raise JITCoreCallError {
@@ -28,7 +29,7 @@ fn encode_jit_entry_args(
   }
   let slots : Array[Int64] = []
   for i, ty in param_types {
-    match encode_value(ty, args[i], jit_module, instance) {
+    match encode_value(ty, args[i], store, jit_module, instance) {
       Some(encoded) =>
         for raw in encoded {
           slots.push(raw)
@@ -237,6 +238,7 @@ pub fn JITModuleContext::call_core_func_resumable(
   let encoded_args = encode_jit_entry_args(
     args,
     func.param_types,
+    store,
     self.jit_module,
     instance,
   )
@@ -306,6 +308,7 @@ pub fn JITModuleContext::call_core_func(
   let encoded_args = encode_jit_entry_args(
     args,
     func.param_types,
+    store,
     self.jit_module,
     instance,
   )

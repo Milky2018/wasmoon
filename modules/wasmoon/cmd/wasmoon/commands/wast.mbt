@@ -18,7 +18,6 @@ fn run_wast(wast_path : String, use_jit : Bool, show_success : Bool) -> Unit {
   wast_jit_compiled_modules.val = 0
   wast_jit_compiled_functions.val = 0
   wast_jit_attempts.val = 0
-  @wast.clear_funcref_registry()
   println("Running WAST script: \{wast_path}")
   let jit_status = if use_jit { "enabled" } else { "disabled" }
   println("JIT: \{jit_status}")
@@ -492,7 +491,7 @@ fn try_compile_jit_with_suspension(
           wast_jit_compiled_modules.val = wast_jit_compiled_modules.val + 1
           wast_jit_compiled_functions.val = wast_jit_compiled_functions.val +
             compiled_local_funcs
-          @wast.register_instance_funcrefs_for_jit(jm, instance)
+          @wast.register_instance_funcrefs_for_jit(jm, instance, store)
           // Allocate independent WASM stack with guard page. Native JIT
           // execution and hostcall bridges use this stack, so keep it aligned
           // with `wasmoon run`.

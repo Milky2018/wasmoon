@@ -54,6 +54,7 @@ pub struct Store {
   mut wasi_ctx_handle : Int
   // Native invocation/fiber lifetimes belong to the Store, not a JIT module.
   native_execution : @wasmoon_jit.NativeExecutionState
+  priv funcref_registry : StoreFuncrefRegistry
   priv closed : Ref[Bool]
 } derive(Debug)
 
@@ -209,6 +210,7 @@ pub fn Store::Store() -> Store {
     wasi_mem_addr: None,
     wasi_ctx_handle: 0,
     native_execution: NativeExecutionState(),
+    funcref_registry: StoreFuncrefRegistry::new(),
     closed: Ref(false),
   }
 }
@@ -240,6 +242,7 @@ pub fn Store::with_c_heap() -> Store {
     wasi_mem_addr: None,
     wasi_ctx_handle: 0,
     native_execution: NativeExecutionState(),
+    funcref_registry: StoreFuncrefRegistry::new(),
     closed: Ref(false),
   }
 }
@@ -256,6 +259,7 @@ pub fn Store::close(self : Store) -> Unit {
   }
   self.closed.val = true
   self.native_execution.seal()
+  self.funcref_registry.clear()
   self.funcs.clear()
   self.func_types.clear()
   self.func_type_indices.clear()

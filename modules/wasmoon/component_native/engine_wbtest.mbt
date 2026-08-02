@@ -55,8 +55,6 @@ test "failed component instantiation closes native JIT registrations" {
 
 ///|
 test "failed native registration cannot reappear at a reused Store index" {
-  @wast.clear_funcref_registry()
-  defer @wast.clear_funcref_registry()
   let failing_bytes = @component_text.parse_component_wat(
     (
       #|(component
@@ -103,4 +101,43 @@ test "failed native registration cannot reappear at a reused Store index" {
     1,
   )
   linker.close()
+}
+
+///|
+test "native funcref registrations are isolated between live Stores" {
+  let provider_bytes = @component_text.parse_component_wat(
+    (
+      #|(component
+      #|  (core module $provider
+      #|    (func (export "f") (result i32) (i32.const 7)))
+      #|  (core instance $provider (instantiate $provider)))
+      #|
+    ),
+  )
+  let provider = @component_validator.validate_component_for_instantiation_with_config(
+    @component.parse_component(provider_bytes),
+    @component_validator.ComponentValidationConfig(false),
+  )
+  let first = @runtime_impl.ComponentLinker::with_core_execution_engine(
+    open_native_component_session(opt_level=0),
+  )
+  let second = @runtime_impl.ComponentLinker::with_core_execution_engine(
+    open_native_component_session(opt_level=0),
+  )
+  first.instantiate("first", provider) |> ignore
+  second.instantiate("second", provider) |> ignore
+  assert_eq(
+    @wast.collect_registered_funcref_entries(first.get_store()).length(),
+    1,
+  )
+  assert_eq(
+    @wast.collect_registered_funcref_entries(second.get_store()).length(),
+    1,
+  )
+  second.close()
+  assert_eq(
+    @wast.collect_registered_funcref_entries(first.get_store()).length(),
+    1,
+  )
+  first.close()
 }

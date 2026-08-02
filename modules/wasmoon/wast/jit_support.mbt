@@ -45,123 +45,36 @@ pub fn JITCompiler::JITCompiler(
 }
 
 ///|
-/// Cross-module funcref registry for WAST JIT mode.
-///
-/// Maps runtime store function addresses to executable pointers and back.
-/// This is required when shared tables/globals carry funcrefs across module
-/// boundaries.
-let jit_funcref_store_to_ptr : Ref[Map[Int, Array[FuncrefMappingOwner]]] = {
-  val: Map([]),
-}
-
-///|
-let jit_funcref_ptr_to_store : Ref[Map[Int64, Array[FuncrefMappingOwner]]] = {
-  val: Map([]),
-}
-
-///|
-let next_funcref_registration : Ref[Int] = { val: 0 }
-
-///|
-priv struct FuncrefMappingOwner {
-  registration : Int
-  store_addr : Int
-  func_ptr : Int64
-}
-
-///|
 /// Exact registry entries owned by one installed JIT module.
 pub struct FuncrefRegistration {
-  priv registration : Int
-  entries : Array[(Int, Int64)]
-  active : Ref[Bool]
-}
-
-///|
-fn remove_funcref_mapping_owner(
-  owners : Array[FuncrefMappingOwner],
-  registration : Int,
-) -> Unit {
-  for i in 0..<owners.length() {
-    if owners[i].registration == registration {
-      owners.remove(i) |> ignore
-      return
-    }
-  }
+  priv lease : @runtime.StoreFuncrefRegistration
 }
 
 ///|
 /// Withdraw this module's mappings without disturbing newer replacements.
 pub fn FuncrefRegistration::release(self : FuncrefRegistration) -> Unit {
-  if !self.active.val {
-    return
-  }
-  self.active.val = false
-  for entry in self.entries {
-    let (store_addr, func_ptr) = entry
-    if jit_funcref_store_to_ptr.val.get(store_addr) is Some(owners) {
-      remove_funcref_mapping_owner(owners, self.registration)
-      if owners.is_empty() {
-        jit_funcref_store_to_ptr.val.remove(store_addr)
-      }
-    }
-    if jit_funcref_ptr_to_store.val.get(func_ptr) is Some(owners) {
-      remove_funcref_mapping_owner(owners, self.registration)
-      if owners.is_empty() {
-        jit_funcref_ptr_to_store.val.remove(func_ptr)
-      }
-    }
-  }
-}
-
-///|
-fn register_funcref_mapping(
-  registration : Int,
-  store_addr : Int,
-  func_ptr : Int64,
-) -> Unit {
-  if store_addr >= 0 && func_ptr != 0L {
-    let owner = { registration, store_addr, func_ptr }
-    match jit_funcref_store_to_ptr.val.get(store_addr) {
-      Some(owners) => owners.push(owner)
-      None => jit_funcref_store_to_ptr.val.set(store_addr, [owner])
-    }
-    match jit_funcref_ptr_to_store.val.get(func_ptr) {
-      Some(owners) => owners.push(owner)
-      None => jit_funcref_ptr_to_store.val.set(func_ptr, [owner])
-    }
-  }
+  self.lease.release()
 }
 
 ///|
 fn register_funcref_entries(
+  store : @runtime.Store,
   entries : Array[(Int, Int64)],
 ) -> FuncrefRegistration {
-  let registration = next_funcref_registration.val
-  next_funcref_registration.val = registration + 1
-  for entry in entries {
-    let (store_addr, func_ptr) = entry
-    register_funcref_mapping(registration, store_addr, func_ptr)
-  }
-  { registration, entries, active: Ref(true) }
+  { lease: store.register_jit_funcrefs(entries) }
 }
 
 ///|
-fn registered_funcref_ptr(store_addr : Int) -> Int64? {
-  match jit_funcref_store_to_ptr.val.get(store_addr) {
-    Some(owners) if !owners.is_empty() =>
-      Some(owners[owners.length() - 1].func_ptr)
-    _ => None
-  }
+fn registered_funcref_ptr(store : @runtime.Store, store_addr : Int) -> Int64? {
+  store.lookup_jit_funcref_ptr(store_addr)
 }
 
 ///|
-fn registered_funcref_store_addr(func_ptr : Int64) -> Int? {
-  match jit_funcref_ptr_to_store.val.get(func_ptr) {
-    Some(owners) if !owners.is_empty() =>
-      Some(owners[owners.length() - 1].store_addr)
-    _ => None
-  }
+fn registered_funcref_store_addr(
+  store : @runtime.Store,
+  func_ptr : Int64,
+) -> Int? {
+  store.lookup_jit_funcref_store_addr(func_ptr)
 }
 
 ///|
@@ -206,7 +119,9 @@ pub fn init_jit_globals_from_store(
       F64(n) => @types.ToInt64::to_int64_bits(n)
       FuncRef(store_addr) =>
         match
-          lookup_funcref_ptr_for_store_addr(store_addr, jit_module, instance) {
+          lookup_funcref_ptr_for_store_addr(
+            store, store_addr, jit_module, instance,
+          ) {
           Some(ptr) => @wasmoon_jit.tag_funcref_ptr(ptr)
           None =>
             match store_addr_to_module_func_idx(store_addr, instance) {
@@ -242,17 +157,13 @@ pub fn init_jit_globals_from_store(
 }
 
 ///|
-pub fn clear_funcref_registry() -> Unit {
-  jit_funcref_store_to_ptr.val = Map([])
-  jit_funcref_ptr_to_store.val = Map([])
-}
-
-///|
 pub fn register_instance_funcrefs_for_jit(
   jit_module : @jit.JITModule,
   instance : @runtime.ModuleInstance,
+  store : @runtime.Store,
 ) -> Unit {
-  register_owned_instance_funcrefs_for_jit(jit_module, instance) |> ignore
+  register_owned_instance_funcrefs_for_jit(jit_module, instance, store)
+  |> ignore
 }
 
 ///|
@@ -261,6 +172,7 @@ pub fn register_instance_funcrefs_for_jit(
 pub fn register_owned_instance_funcrefs_for_jit(
   jit_module : @jit.JITModule,
   instance : @runtime.ModuleInstance,
+  store : @runtime.Store,
 ) -> FuncrefRegistration {
   let entries : Array[(Int, Int64)] = []
   for i, store_addr in instance.func_addrs {
@@ -269,7 +181,7 @@ pub fn register_owned_instance_funcrefs_for_jit(
       entries.push((store_addr, func_ptr))
     }
   }
-  register_funcref_entries(entries)
+  register_funcref_entries(store, entries)
 }
 
 ///|
@@ -279,14 +191,11 @@ pub fn collect_registered_funcref_entries(
   store : @runtime.Store,
 ) -> Array[(Int64, Int)] {
   let entries : Array[(Int64, Int)] = []
-  for func_ptr, owners in jit_funcref_ptr_to_store.val {
+  for entry in store.jit_funcref_entries() {
+    let (func_ptr, store_addr) = entry
     if func_ptr == 0L {
       continue
     }
-    if owners.is_empty() {
-      continue
-    }
-    let store_addr = owners[owners.length() - 1].store_addr
     if store_addr < 0 || store_addr >= store.func_type_indices.length() {
       continue
     }
@@ -429,7 +338,7 @@ pub fn sync_jit_globals_to_store(
             }
           } else if @wasmoon_jit.is_funcref_ptr(raw_value) {
             let ptr = @wasmoon_jit.untag_funcref_ptr(raw_value)
-            let store_addr = match registered_funcref_store_addr(ptr) {
+            let store_addr = match registered_funcref_store_addr(store, ptr) {
               Some(addr) => Some(addr)
               None => {
                 let mut found : Int? = None
@@ -585,6 +494,7 @@ pub fn sync_store_globals_to_jit(
 fn decode_funcref_from_jit_ctx(
   raw_value : Int64,
   jit_ctx : JITModuleContext,
+  store : @runtime.Store,
 ) -> @types.Value {
   if raw_value == NULL_REF {
     return Null
@@ -599,7 +509,7 @@ fn decode_funcref_from_jit_ctx(
     None =>
       if @wasmoon_jit.is_funcref_ptr(raw_value) {
         let ptr = @wasmoon_jit.untag_funcref_ptr(raw_value)
-        let store_addr = match registered_funcref_store_addr(ptr) {
+        let store_addr = match registered_funcref_store_addr(store, ptr) {
           Some(addr) => Some(addr)
           None => {
             let mut found : Int? = None
@@ -631,7 +541,7 @@ fn decode_table_entry_value(
 ) -> @types.Value {
   match elem_type {
     FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) | NullFuncRef =>
-      decode_funcref_from_jit_ctx(raw_value, jit_ctx)
+      decode_funcref_from_jit_ctx(raw_value, jit_ctx, store)
     ExternRef | RefExtern | NullExternRef =>
       if raw_value == NULL_REF {
         Null
@@ -650,7 +560,7 @@ fn decode_table_entry_value(
           None => ExternRef(raw_value.to_int())
         }
       } else if @wasmoon_jit.is_funcref_ptr(raw_value) || raw_value < 0L {
-        decode_funcref_from_jit_ctx(raw_value, jit_ctx)
+        decode_funcref_from_jit_ctx(raw_value, jit_ctx, store)
       } else {
         decode_gc_value(raw_value, store)
       }
@@ -1149,7 +1059,9 @@ pub fn sync_table_to_jit(
         encoded = (idx + 1).to_int64() << 1
       ExternRef(host_idx) => encoded = @wasmoon_jit.encode_externref(host_idx)
       FuncRef(store_addr) => {
-        encoded = encode_store_funcref_for_jit(value, jit_module, instance)
+        encoded = encode_store_funcref_for_jit(
+          value, store, jit_module, instance,
+        )
         let mut resolved_type_idx = -1
         match store_addr_to_module_func_idx(store_addr, instance) {
           Some(func_idx) =>
@@ -1213,6 +1125,7 @@ fn low_u32_bits(raw : Int64) -> Int {
 
 ///|
 fn lookup_funcref_ptr_for_store_addr(
+  store : @runtime.Store,
   store_addr : Int,
   jit_module : @jit.JITModule,
   instance : @runtime.ModuleInstance,
@@ -1226,16 +1139,17 @@ fn lookup_funcref_ptr_for_store_addr(
     }
     None => ()
   }
-  registered_funcref_ptr(store_addr)
+  registered_funcref_ptr(store, store_addr)
 }
 
 ///|
 fn lookup_store_addr_for_funcref_ptr(
+  store : @runtime.Store,
   func_ptr : Int64,
   jit_module : @jit.JITModule,
   instance : @runtime.ModuleInstance,
 ) -> Int? {
-  match registered_funcref_store_addr(func_ptr) {
+  match registered_funcref_store_addr(store, func_ptr) {
     Some(addr) => return Some(addr)
     None => ()
   }
@@ -1262,6 +1176,7 @@ fn lookup_store_addr_for_funcref_ptr(
 ///|
 fn decode_funcref_to_store_addr(
   raw : Int64,
+  store : @runtime.Store,
   jit_module : @jit.JITModule,
   instance : @runtime.ModuleInstance,
 ) -> @types.Value {
@@ -1278,7 +1193,8 @@ fn decode_funcref_to_store_addr(
     None =>
       if @wasmoon_jit.is_funcref_ptr(raw) {
         let ptr = @wasmoon_jit.untag_funcref_ptr(raw)
-        match lookup_store_addr_for_funcref_ptr(ptr, jit_module, instance) {
+        match
+          lookup_store_addr_for_funcref_ptr(store, ptr, jit_module, instance) {
           Some(addr) => FuncRef(addr)
           None => Null
         }
@@ -1292,6 +1208,7 @@ fn decode_funcref_to_store_addr(
 ///|
 fn encode_store_funcref_for_jit(
   value : @types.Value,
+  store : @runtime.Store,
   jit_module : @jit.JITModule,
   instance : @runtime.ModuleInstance,
 ) -> Int64 {
@@ -1299,7 +1216,9 @@ fn encode_store_funcref_for_jit(
     Null => NULL_REF
     FuncRef(store_addr) =>
       match
-        lookup_funcref_ptr_for_store_addr(store_addr, jit_module, instance) {
+        lookup_funcref_ptr_for_store_addr(
+          store, store_addr, jit_module, instance,
+        ) {
         Some(ptr) => @wasmoon_jit.tag_funcref_ptr(ptr)
         None =>
           match store_addr_to_module_func_idx(store_addr, instance) {
@@ -1314,6 +1233,7 @@ fn encode_store_funcref_for_jit(
 ///|
 fn encode_exception_value_for_jit(
   value : @types.Value,
+  store : @runtime.Store,
   jit_module : @jit.JITModule,
   instance : @runtime.ModuleInstance,
 ) -> Int64? {
@@ -1324,7 +1244,7 @@ fn encode_exception_value_for_jit(
     F64(n) => Some(@types.ToInt64::to_int64_bits(n))
     Null => Some(NULL_REF)
     FuncRef(_) =>
-      Some(encode_store_funcref_for_jit(value, jit_module, instance))
+      Some(encode_store_funcref_for_jit(value, store, jit_module, instance))
     ExternRef(idx) => Some(@wasmoon_jit.encode_externref(idx))
     StructRef(idx) => Some(@wasmoon_jit.encode_heap_ref(idx))
     ArrayRef(idx) => Some(@wasmoon_jit.encode_heap_ref(idx))
@@ -1344,7 +1264,7 @@ fn decode_ref_value(
 ) -> @types.Value {
   match ty {
     FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) | NullFuncRef =>
-      decode_funcref_to_store_addr(raw, jit_module, instance)
+      decode_funcref_to_store_addr(raw, store, jit_module, instance)
     ExternRef | RefExtern | NullExternRef =>
       if raw == NULL_REF {
         Null
@@ -1447,6 +1367,7 @@ fn decode_value(
 fn encode_value(
   ty : @types.ValueType,
   value : @types.Value,
+  store : @runtime.Store,
   jit_module : @jit.JITModule,
   instance : @runtime.ModuleInstance,
 ) -> Array[Int64]? {
@@ -1485,7 +1406,7 @@ fn encode_value(
       }
     // References.
     FuncRef | RefFunc | RefFuncTyped(_) | RefNullFuncTyped(_) | NullFuncRef =>
-      Some([encode_store_funcref_for_jit(value, jit_module, instance)])
+      Some([encode_store_funcref_for_jit(value, store, jit_module, instance)])
     ExternRef | RefExtern | NullExternRef =>
       match value {
         Null => Some([NULL_REF])
@@ -1695,7 +1616,8 @@ pub fn install_jit_hostcall_dispatcher(
         } else {
           let encoded_values : Array[Int64] = []
           for v in values {
-            match encode_exception_value_for_jit(v, jit_module, instance) {
+            match
+              encode_exception_value_for_jit(v, store, jit_module, instance) {
               Some(raw) => encoded_values.push(raw)
               None => return HostcallTrap(8)
             }
@@ -1716,7 +1638,7 @@ pub fn install_jit_hostcall_dispatcher(
     // Encode results right after the arg slots region.
     let mut out_slot = arg_slots
     for i, ty in ft.results {
-      let slots = encode_value(ty, results[i], jit_module, instance)
+      let slots = encode_value(ty, results[i], store, jit_module, instance)
       match slots {
         None => return HostcallTrap(3)
         Some(encoded_slots) => {
