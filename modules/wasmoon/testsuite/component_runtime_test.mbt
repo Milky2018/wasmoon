@@ -1123,6 +1123,33 @@ fn assert_failed_core_registration_returns_to_baseline(
 ) -> Unit raise {
   let linker = @runtime_impl.ComponentLinker::with_core_execution_engine(engine)
   let store = linker.get_store()
+  let wasi_linker = @runtime.Linker::with_store(store)
+  let wasi_ctx = @wasi.WasiContextBuilder::WasiContextBuilder()
+    .args(["wasmoon", "argument"])
+    .build()
+  @wasi.register_wasi(wasi_linker, wasi_ctx)
+  let old_instance = @executor.instantiate_with_linker(
+    wasi_linker,
+    "old",
+    @wat.parse(
+      (
+        #|(module
+        #|  (import "wasi_snapshot_preview1" "args_sizes_get"
+        #|    (func $args_sizes_get (param i32 i32) (result i32)))
+        #|  (memory (export "memory") 1)
+        #|  (func (export "probe") (result i32)
+        #|    (i32.store (i32.const 0) (i32.const -1))
+        #|    (i32.store (i32.const 4) (i32.const -1))
+        #|    (drop (call $args_sizes_get (i32.const 0) (i32.const 4)))
+        #|    (i32.load (i32.const 0))))
+        #|
+      ),
+    ),
+  )
+  debug_inspect(
+    @executor.call_exported_func(store, old_instance, "probe", []),
+    content="[I32(2)]",
+  )
   let baseline = core_store_allocation_baseline(store)
   let failing = core_registration_then_start_trap()
   for name in ["first", "second"] {
@@ -1132,8 +1159,13 @@ fn assert_failed_core_registration_returns_to_baseline(
       _ => fail("expected core start to trap")
     }
     assert_eq(core_store_allocation_baseline(store), baseline)
+    debug_inspect(
+      @executor.call_exported_func(store, old_instance, "probe", []),
+      content="[I32(2)]",
+    )
   }
   linker.close()
+  wasi_linker.close()
 }
 
 ///|

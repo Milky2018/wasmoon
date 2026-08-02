@@ -67,6 +67,7 @@ priv struct StoreAllocationCheckpoint {
   tables : Int
   jit_tables : Int
   mems : Int
+  wasi_mem_addr : Int?
   globals : Int
   tags : Int
   tag_type_indices : Int
@@ -90,6 +91,7 @@ fn Store::checkpoint_allocations(self : Store) -> StoreAllocationCheckpoint {
     tables: self.tables.length(),
     jit_tables: self.jit_tables.length(),
     mems: self.mems.length(),
+    wasi_mem_addr: self.wasi_mem_addr,
     globals: self.globals.length(),
     tags: self.tags.length(),
     tag_type_indices: self.tag_type_indices.length(),
@@ -132,6 +134,7 @@ fn Store::rollback_allocations(
   self.jit_tables.truncate(checkpoint.jit_tables)
   self.jit_table_owners.truncate(checkpoint.jit_tables)
   self.mems.truncate(checkpoint.mems)
+  self.wasi_mem_addr = checkpoint.wasi_mem_addr
   self.globals.truncate(checkpoint.globals)
   self.tags.truncate(checkpoint.tags)
   self.tag_type_indices.truncate(checkpoint.tag_type_indices)
