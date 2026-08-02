@@ -742,6 +742,50 @@ test "component runtime: closed linker refuses instantiation at entry" {
   }
   debug_inspect(add_outcome, content="\"cancelled\"")
   debug_inspect(linker.get_import("late-value") is None, content="true")
+  // The host runtime slot is terminal too: `finish_close` dropped it, and a
+  // runtime installed afterwards would never be released.
+  let runtime_outcome = try linker.host_runtime_state() catch {
+    Cancelled => "cancelled"
+    error => "unexpected error: \{error}"
+  } noraise {
+    _ => "installed"
+  }
+  debug_inspect(runtime_outcome, content="\"cancelled\"")
+}
+
+///|
+/// Ownership regression: closing a linker must not destroy instances it
+/// merely borrowed. `finish_close` used to release the graphs of imported
+/// instances recursively, so importing linker A's instance into linker B
+/// and closing B emptied the instance's exports — later calls through A
+/// failed with `UnknownExport`. Close now releases only the instances this
+/// linker's own instantiations registered; imports are dropped by clearing
+/// the import table, never by touching their state.
+test "component runtime: close releases only owned instances" {
+  let bytes = @component_text.parse_component_wat(
+    (
+      #|(component
+      #|  (core module $m (func (export "f") (result i32) (i32.const 7)))
+      #|  (core instance $i (instantiate $m))
+      #|  (func (export "f") (result u32) (canon lift (core func $i "f"))))
+      #|
+    ),
+  )
+  let component = @component.parse_component(bytes)
+  let validated = @component_model.validate_component_for_instantiation_with_config(
+    component,
+    @component_model.ComponentValidationConfig(false),
+  )
+  let linker_a = @runtime_impl.ComponentLinker::ComponentLinker()
+  let provider = linker_a.instantiate("provider", validated)
+  let linker_b = @runtime_impl.ComponentLinker::ComponentLinker()
+  linker_b.add_instance("a", provider)
+  linker_b.close()
+  // Linker A still owns the instance; its exports must be intact.
+  debug_inspect(provider.call_exported_func("f", []), content="[U32(7)]")
+  linker_a.close()
+  // A's own close is the owning boundary and does release the graph.
+  debug_inspect(provider.exports.length(), content="0")
 }
 
 ///|
