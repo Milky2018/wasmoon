@@ -5,6 +5,7 @@ fn instantiate_component(
   component : Component,
   overrides : Map[String, ComponentExtern],
   outer_stack : Array[ComponentInstance],
+  staged : Array[(String, ComponentInstance)],
 ) -> ComponentInstance raise ComponentRuntimeError {
   let stream_table = if outer_stack.length() > 0 {
     outer_stack[outer_stack.length() - 1].stream_table
@@ -40,6 +41,7 @@ fn instantiate_component(
   let store = linker.get_store()
   run_component_sections(
     linker, name, component, overrides, outer_stack, state, entry_state, store, async_state,
+    staged,
   ) catch {
     error => {
       state.release_aborted()
@@ -48,12 +50,11 @@ fn instantiate_component(
   }
   entry_state.enable()
   let instance = env_instance_from_state(name, state, store)
-  linker.register(name, instance) catch {
-    error => {
-      state.release_aborted()
-      raise error
-    }
-  }
+  // Registration is transactional: the frame stages its instance, nested
+  // frames included, and only the root commits the whole tree into the
+  // linker once it succeeds on a still-open linker. Rollback releases every
+  // staged graph, so a failed root leaves nothing observable behind.
+  staged.push((name, instance))
   instance
 }
 
@@ -68,6 +69,7 @@ fn run_component_sections(
   entry_state : ComponentInstanceEntryState,
   store : @runtime.Store,
   async_state : AsyncState,
+  staged : Array[(String, ComponentInstance)],
 ) -> Unit raise ComponentRuntimeError {
   for section in component.binary.sections {
     match section.id {
@@ -117,8 +119,6 @@ fn run_component_sections(
               }
               pop_task(async_state)
               drop_task_thread(async_state, inst_task_id)
-              // Register a stable name for debugging core traps.
-              register_core_instance_name(instance.store_idx, module_name)
               linker.core_linker.register(module_name, instance) catch {
                 error => raise CoreModuleInstantiateError(error.to_string())
               }
@@ -127,6 +127,7 @@ fn run_component_sections(
                 core_instance_from_module(
                   instance,
                   linker.core_engine(),
+                  module_name,
                   may_suspend,
                   native_eligible,
                 ),
@@ -190,6 +191,7 @@ fn run_component_sections(
                 closure.component,
                 overrides_for_child,
                 closure.outer_stack,
+                staged,
               )
               state.instances.push(nested)
             }

@@ -193,7 +193,7 @@ fn main {
     },
   )
   let help_msg = parser.gen_help_message(["wasmoon"], Map([]))
-  let args = @sys.get_cli_args()
+  let args = @env.args()
   if args.length() < 2 {
     println(help_msg)
     return

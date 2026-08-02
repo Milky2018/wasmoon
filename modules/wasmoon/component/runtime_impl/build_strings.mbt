@@ -29,11 +29,14 @@ priv struct BuildState {
 /// reach it — break the cycles here, on every abort. Clearing only this
 /// frame's own containers drops references to imported and outer objects
 /// without touching their state, so on an open linker the live imports the
-/// frame had resolved are unaffected. The frame's resource table entry in
-/// the shared `async_state` map deliberately stays: nested instances that
-/// completed before the abort are registered with the linker and may still
-/// resolve this table through their ancestor chain.
+/// frame had resolved are unaffected. The frame's resource table is also
+/// withdrawn from the shared async state: registration is transactional, so
+/// an aborted root rolls back every nested frame with it and nothing that
+/// survives can resolve this table afterwards. Without the removal, each
+/// failed instantiation on a host-runtime-backed linker would grow the
+/// shared table map forever.
 fn BuildState::release_aborted(self : BuildState) -> Unit {
+  self.async_state.resource_tables.remove(self.resource_table.id)
   self.types.clear()
   self.funcs.clear()
   self.values.clear()

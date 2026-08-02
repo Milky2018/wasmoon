@@ -25,8 +25,15 @@ fn component_core_route(
 ///|
 priv struct ComponentJITContext {
   core : @wast.JITModuleContext
+  funcrefs : @wast.FuncrefRegistration
   pending_suspension : Array[@runtime_impl.CoreSuspension?]
   suspension_enabled : Array[Bool]
+}
+
+///|
+fn ComponentJITContext::close(self : ComponentJITContext) -> Unit {
+  self.funcrefs.release()
+  self.core.close()
 }
 
 ///|
@@ -86,10 +93,10 @@ fn component_native_outcome(
 }
 
 ///|
-fn native_component_session(
+fn native_component_session_with_contexts(
   opt_level : Int,
   on_execution : (NativeComponentExecutionEvent) -> Unit,
-) -> @runtime_impl.CoreExecutionEngine {
+) -> (@runtime_impl.CoreExecutionEngine, Map[Int, ComponentJITContext]) {
   let contexts : Map[Int, ComponentJITContext] = Map([])
   let interpreter = @runtime_impl.interpreter_core_execution_engine()
   let target = try @wasmoon_jit.host_native_target() catch {
@@ -97,7 +104,7 @@ fn native_component_session(
   } noraise {
     value => Some(value)
   }
-  CoreExecutionEngine(
+  let engine = @runtime_impl.CoreExecutionEngine(
     fn(store, module_, instance) raise @runtime_impl.ComponentRuntimeError {
       guard target is Some(target) else {
         raise NativeEngineUnavailable(
@@ -106,7 +113,7 @@ fn native_component_session(
       }
       let pending_suspension : Array[@runtime_impl.CoreSuspension?] = [None]
       let suspension_enabled = [false]
-      let core = load_component_jit_context(
+      let (core, funcrefs) = load_component_jit_context(
         module_,
         instance,
         store,
@@ -127,6 +134,7 @@ fn native_component_session(
       )
       contexts[instance.store_idx] = {
         core,
+        funcrefs,
         pending_suspension,
         suspension_enabled,
       }
@@ -177,13 +185,46 @@ fn native_component_session(
       }
     },
     prepare_store=fn(store) { try! store.enable_c_heap() },
+    checkpoint_registrations=fn() {
+      let existing : Map[Int, Bool] = Map([])
+      for instance_idx, _ in contexts {
+        existing.set(instance_idx, true)
+      }
+      @runtime_impl.CoreRegistrationCheckpoint(fn() {
+        let added : Array[Int] = []
+        for instance_idx, _ in contexts {
+          if !existing.contains(instance_idx) {
+            added.push(instance_idx)
+          }
+        }
+        for instance_idx in added {
+          match contexts.get(instance_idx) {
+            Some(context) => context.close()
+            None => ()
+          }
+          contexts.remove(instance_idx)
+        }
+      })
+    },
     close=fn() {
       for _, context in contexts {
-        context.core.close()
+        context.close()
       }
       contexts.clear()
     },
   )
+  (engine, contexts)
+}
+
+///|
+fn native_component_session(
+  opt_level : Int,
+  on_execution : (NativeComponentExecutionEvent) -> Unit,
+) -> @runtime_impl.CoreExecutionEngine {
+  let (engine, _) = native_component_session_with_contexts(
+    opt_level, on_execution,
+  )
+  engine
 }
 
 ///|

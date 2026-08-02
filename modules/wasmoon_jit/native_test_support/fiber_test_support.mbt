@@ -44,6 +44,14 @@ extern "c" fn c_set_null_cancellation_callback(
 ) -> Unit = "wasmoon_jit_set_cancellation_callback"
 
 ///|
+#owned(closure)
+extern "c" fn c_set_null_wasi_stdin_callback(
+  ctx_ptr : Int64,
+  call_closure : FuncRef[(() -> Bytes) -> Bytes],
+  closure : () -> Bytes,
+) -> Unit = "wasmoon_jit_set_wasi_stdin_callback"
+
+///|
 pub fn callback_capture() -> CallbackCapture {
   c_callback_capture_new()
 }
@@ -75,6 +83,16 @@ pub fn transfer_cancellation_callback_to_null_context(
     }
   }
   c_set_null_cancellation_callback(0L, call_closure, callback)
+}
+
+///|
+pub fn transfer_wasi_stdin_callback_to_null_context(
+  callback : () -> Bytes,
+) -> Unit {
+  let call_closure : FuncRef[(() -> Bytes) -> Bytes] = fn(f : () -> Bytes) {
+    f()
+  }
+  c_set_null_wasi_stdin_callback(0L, call_closure, callback)
 }
 
 ///|

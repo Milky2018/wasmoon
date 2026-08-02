@@ -538,6 +538,7 @@ fn resolve_start_core_func(
     instance: owner,
     func_idx,
     engine,
+    debug_name: None,
     may_suspend: true,
     native_eligible: false,
   }

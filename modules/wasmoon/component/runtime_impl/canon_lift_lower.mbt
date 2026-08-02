@@ -938,6 +938,7 @@ fn instantiate_canon_lower(
       instance,
       func_idx: 0,
       engine: interpreter_core_execution_engine(),
+      debug_name: None,
       may_suspend: func_type.is_async,
       // Native activations may call this host adapter and nest another core
       // activation through the Store-scoped activation chain.

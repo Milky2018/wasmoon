@@ -126,6 +126,14 @@ extern "c" fn c_jit_alloc_context_managed(func_count : Int) -> JITContext = "was
 extern "c" fn c_jit_context_ptr(jit_context : JITContext) -> Int64 = "wasmoon_jit_context_ptr"
 
 ///|
+/// Explicit managed-owner use that must run after any scoped raw-pointer use.
+#borrow(jit_context)
+extern "c" fn c_jit_context_keep_alive(jit_context : JITContext) -> Unit = "wasmoon_jit_context_keep_alive"
+
+///|
+extern "c" fn c_jit_gc_environment_is_clear(ctx_ptr : Int64) -> Int = "wasmoon_jit_gc_environment_is_clear"
+
+///|
 /// Set a function pointer in the context's function table
 extern "c" fn c_jit_ctx_set_func(
   ctx_ptr : Int64,
@@ -390,6 +398,10 @@ extern "c" fn c_jit_ctx_set_indirect(
 ///|
 /// Allocate a shared indirect table that can be used by multiple JIT modules
 extern "c" fn c_jit_alloc_shared_indirect_table(count : Int) -> Int64 = "wasmoon_jit_alloc_shared_indirect_table"
+
+///|
+/// Free a shared indirect table owned by a Store.
+extern "c" fn c_jit_free_shared_indirect_table(table_ptr : Int64) -> Unit = "wasmoon_jit_free_shared_indirect_table"
 
 ///|
 /// Set an entry in a shared indirect table
@@ -1254,6 +1266,16 @@ extern "c" fn c_gc_heap_collect(
   roots : FixedArray[Int64],
   num_roots : Int,
 ) -> Int = "wasmoon_gc_heap_collect"
+
+///|
+/// Discard unreachable objects allocated after the supplied object-table boundary.
+#borrow(roots)
+extern "c" fn c_gc_heap_rollback_allocations(
+  heap : Int64,
+  object_count : Int,
+  roots : FixedArray[Int64],
+  num_roots : Int,
+) -> Int = "wasmoon_gc_heap_rollback_allocations"
 
 ///|
 /// Verify C heap invariants (returns 1 when valid, 0 on failure)

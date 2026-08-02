@@ -78,7 +78,7 @@ pub fn NativeJITContext::start_continuation(
   stack_size? : Int64 = 1024L * 1024L,
 ) -> NativeJITContinuation raise NativeFiberError {
   let raw = c_native_jit_continuation_alloc(
-    self.0,
+    self.handle,
     trampoline_ptr,
     func_ptr,
     values,

@@ -7,3 +7,7 @@ import {
   "Milky2018/wasmoon/validator/component_model" @component_validator,
   "Milky2018/wasm_core/types",
 }
+
+import {
+  "Milky2018/wasmoon/component/text_parser" @component_text,
+} for "wbtest"

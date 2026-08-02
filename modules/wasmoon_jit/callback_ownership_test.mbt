@@ -31,11 +31,11 @@ test "owned callback setters release transferred captures exactly once" {
   context.clear_cancellation_callback()
   releases.push(@native_test_support.callback_capture_release_count())
 
-  set_wasi_stdin_callback(context.ptr(), stdin_callback_with_capture())
+  context.set_wasi_stdin_callback(stdin_callback_with_capture())
   releases.push(@native_test_support.callback_capture_release_count())
-  set_wasi_stdin_callback(context.ptr(), stdin_callback_with_capture())
+  context.set_wasi_stdin_callback(stdin_callback_with_capture())
   releases.push(@native_test_support.callback_capture_release_count())
-  clear_wasi_stdin_callback(context.ptr())
+  context.clear_wasi_stdin_callback()
   releases.push(@native_test_support.callback_capture_release_count())
   context.clear_gc_heap()
 
@@ -43,7 +43,9 @@ test "owned callback setters release transferred captures exactly once" {
     cancellation_callback_with_capture(),
   )
   releases.push(@native_test_support.callback_capture_release_count())
-  set_wasi_stdin_callback(0L, stdin_callback_with_capture())
+  @native_test_support.transfer_wasi_stdin_callback_to_null_context(
+    stdin_callback_with_capture(),
+  )
   releases.push(@native_test_support.callback_capture_release_count())
   debug_inspect(releases, content="[0, 1, 2, 2, 3, 4, 5, 6]")
 }

@@ -4,7 +4,7 @@ fn build_resumable_lifecycle_context(
   store : @runtime.Store,
   instance : @runtime.ModuleInstance,
   valid_func_type_indices? : Bool = true,
-) -> (@wast.JITModuleContext, Int64) raise {
+) -> @wast.JITModuleContext raise {
   guard @commands.compile_module_to_jit(mod_, false, false, 0, false)
     is Some((artifact, debug_db)) else {
     fail("JIT compile returned unsupported")
@@ -31,20 +31,17 @@ fn build_resumable_lifecycle_context(
   for subtype in mod_.types {
     module_types.push(subtype)
   }
-  (
-    JITModuleContext(
-      jm,
-      globals_ptr,
-      [],
-      [],
-      instance.func_addrs.copy(),
-      func_type_indices,
-      canonical_type_indices,
-      module_types,
-      mod_.type_rec_groups.copy(),
-      true,
-    ),
-    jm.get_context_ptr(),
+  JITModuleContext(
+    jm,
+    globals_ptr,
+    [],
+    [],
+    instance.func_addrs.copy(),
+    func_type_indices,
+    canonical_type_indices,
+    module_types,
+    mod_.type_rec_groups.copy(),
+    true,
   )
 }
 
@@ -55,9 +52,7 @@ test "resumable JIT leaves GC state clear when execution admission is sealed" {
   let store = linker.get_store()
   store.enable_c_heap()
   let instance = @executor.instantiate_with_linker(linker, "test", mod_)
-  let (context, context_ptr) = build_resumable_lifecycle_context(
-    mod_, store, instance,
-  )
+  let context = build_resumable_lifecycle_context(mod_, store, instance)
   let state = store.native_execution_state()
   state.seal()
   let error = try {
@@ -73,7 +68,7 @@ test "resumable JIT leaves GC state clear when execution admission is sealed" {
       error,
       state.active_depth(),
       state.live_count(),
-      @native_test_support.gc_environment_is_clear(context_ptr),
+      context.jit_module.gc_environment_is_clear(),
     ),
     content="(\"ExecutionStateFailure(ExecutionStateSealed)\", 0, 0, true)",
   )
@@ -88,7 +83,7 @@ test "resumable JIT releases execution admission when GC setup fails" {
   let store = linker.get_store()
   store.enable_c_heap()
   let instance = @executor.instantiate_with_linker(linker, "test", mod_)
-  let (context, context_ptr) = build_resumable_lifecycle_context(
+  let context = build_resumable_lifecycle_context(
     mod_,
     store,
     instance,
@@ -108,7 +103,7 @@ test "resumable JIT releases execution admission when GC setup fails" {
       error,
       state.active_depth(),
       state.live_count(),
-      @native_test_support.gc_environment_is_clear(context_ptr),
+      context.jit_module.gc_environment_is_clear(),
     ),
     content=(
       #|(

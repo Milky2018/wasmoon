@@ -336,6 +336,20 @@ size_t gc_heap_get_capacity(GcHeap* heap);
 int32_t gc_heap_get_object_count(GcHeap* heap);
 
 /**
+ * Discard unreachable objects allocated after an earlier object-table boundary.
+ * Objects reachable from roots or parked JIT roots retain their gc_ref identity.
+ * @param roots Encoded Store roots that survive the rollback.
+ * @param num_roots Number of entries in roots.
+ * @return 1 on success, 0 for an invalid boundary.
+ */
+int32_t gc_heap_rollback_allocations(
+    GcHeap* heap,
+    int32_t object_count,
+    const int64_t* roots,
+    int32_t num_roots
+);
+
+/**
  * Get number of write-barrier calls recorded.
  */
 int32_t gc_heap_get_barrier_writes(GcHeap* heap);

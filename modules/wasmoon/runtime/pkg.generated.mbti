@@ -94,6 +94,8 @@ pub fn Caller::get_exported_memory(Self, String) -> Memory? raise RuntimeError
 pub fn Caller::instance(Self) -> ModuleInstance
 pub fn Caller::store(Self) -> Store
 
+type CoreLinkerCheckpoint
+
 pub struct ExnInstance {
   tag_addr : Int
   values : Array[@types.Value]
@@ -174,10 +176,12 @@ pub fn Linker::add_host_func_with_caller(Self, String, String, (Caller, Array[@t
 pub fn Linker::add_memory(Self, String, String, Memory) -> Unit raise RuntimeError
 pub fn Linker::add_table(Self, String, String, Table) -> Unit raise RuntimeError
 pub fn Linker::build_imports(Self) -> Imports
+pub fn Linker::checkpoint(Self) -> CoreLinkerCheckpoint
 pub fn Linker::close(Self) -> Unit
 pub fn Linker::get_module(Self, String) -> ModuleInstance?
 pub fn Linker::get_store(Self) -> Store
 pub fn Linker::register(Self, String, ModuleInstance) -> Unit raise RuntimeError
+pub fn Linker::rollback_to(Self, CoreLinkerCheckpoint) -> Bool
 pub fn Linker::with_store(Store) -> Self
 
 pub struct MarkSweepHeap {
@@ -422,9 +426,13 @@ pub fn Store::get_wasi_ctx_handle(Self) -> Int
 pub fn Store::get_wasi_memory(Self) -> Memory
 pub fn Store::has_c_heap(Self) -> Bool
 pub fn Store::is_gc_valid(Self, Int) -> Bool
+pub fn Store::jit_funcref_entries(Self) -> Array[(Int64, Int)]
+pub fn Store::lookup_jit_funcref_ptr(Self, Int) -> Int64?
+pub fn Store::lookup_jit_funcref_store_addr(Self, Int64) -> Int?
 pub fn Store::maybe_collect(Self, additional_roots? : Array[@types.Value], threshold? : Double) -> Int
 pub fn Store::native_execution_state(Self) -> @wasmoon_jit.NativeExecutionState
 pub fn Store::register_instance(Self, ModuleInstance) -> Int raise RuntimeError
+pub fn Store::register_jit_funcrefs(Self, Array[(Int, Int64)]) -> StoreFuncrefRegistration
 pub fn Store::set_module_types(Self, Array[@types.SubType], rec_groups? : Array[Int]) -> Unit raise RuntimeError
 pub fn Store::set_wasi_ctx_handle(Self, Int) -> Unit raise RuntimeError
 pub fn Store::set_wasi_mem_addr(Self, Int) -> Unit raise RuntimeError
@@ -434,6 +442,9 @@ pub fn Store::struct_set(Self, Int, Int, @types.Value) -> Unit raise RuntimeErro
 pub fn Store::unwrap_extern(Self, @types.Value) -> @types.Value raise RuntimeError
 pub fn Store::with_c_heap() -> Self
 pub fn Store::wrap_as_extern(Self, @types.Value) -> @types.Value raise RuntimeError
+
+type StoreFuncrefRegistration
+pub fn StoreFuncrefRegistration::release(Self) -> Unit
 
 pub(all) struct StructInstance {
   type_idx : Int

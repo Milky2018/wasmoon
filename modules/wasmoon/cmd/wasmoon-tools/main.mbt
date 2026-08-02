@@ -29,7 +29,7 @@ fn clap_simple_value(name : String) -> @clap.SimpleValue {
 
 ///|
 fn main {
-  let args = @sys.get_cli_args()
+  let args = @env.args()
   let parser = clap_parser(
     prog="wasmoon-tools",
     description="WebAssembly Utility Tools",

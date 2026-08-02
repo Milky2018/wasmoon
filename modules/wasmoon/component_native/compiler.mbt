@@ -316,7 +316,7 @@ fn load_component_jit_context(
   target : @wasmoon_jit.NativeTarget,
   opt_level : Int,
   classify_suspension : (@runtime.RuntimeError) -> Bool,
-) -> @wast.JITModuleContext raise @runtime_impl.ComponentRuntimeError {
+) -> (@wast.JITModuleContext, @wast.FuncrefRegistration) raise @runtime_impl.ComponentRuntimeError {
   let lowered_module = rewrite_component_alias_indices(module_, instance)
   let actual_memory_max = if instance.mem_addrs.length() > 0 {
     let memory = store.get_mem(instance.mem_addrs[0]) catch {
@@ -357,10 +357,13 @@ fn load_component_jit_context(
     error =>
       raise NativeCompilationFailed("artifact installation failed: \{error}")
   }
-  @wast.register_instance_funcrefs_for_jit(jit_module, instance)
+  let funcrefs = @wast.register_owned_instance_funcrefs_for_jit(
+    jit_module, instance, store,
+  )
   jit_module.alloc_wasm_stack(16L * 1024L * 1024L) |> ignore
   guard @wast.init_jit_memories_from_store(instance, store, jit_module)
     is Some(_) else {
+    funcrefs.release()
     jit_module.close()
     raise NativeCompilationFailed(
       "failed to initialize component core memories",
@@ -384,6 +387,7 @@ fn load_component_jit_context(
     use_subtype_indirect_check=true,
   ) catch {
     error => {
+      funcrefs.release()
       jit_module.close()
       raise NativeCompilationFailed(
         "failed to initialize component core segments: \{error}",
@@ -427,5 +431,5 @@ fn load_component_jit_context(
     },
     classify_suspension~,
   )
-  context
+  (context, funcrefs)
 }

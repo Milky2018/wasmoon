@@ -57,6 +57,13 @@ pub struct MarkSweepHeap {
 } derive(Debug)
 
 ///|
+priv struct MarkSweepHeapAllocationCheckpoint {
+  owner : MarkSweepHeap
+  occupied : Array[Bool]
+  free_list : Array[Int]
+}
+
+///|
 /// GC statistics
 pub struct GCStats {
   total_objects : Int // Total slots in heap
@@ -107,6 +114,63 @@ pub fn MarkSweepHeap::stats(self : MarkSweepHeap) -> GCStats {
     collections: self.collections,
     bytes_allocated: self.bytes_allocated,
     bytes_collected: self.bytes_collected,
+  }
+}
+
+///|
+fn MarkSweepHeap::checkpoint_allocations(
+  self : MarkSweepHeap,
+) -> MarkSweepHeapAllocationCheckpoint {
+  let occupied = []
+  for object in self.objects {
+    occupied.push(object is Some(_))
+  }
+  { owner: self, occupied, free_list: self.free_list.copy() }
+}
+
+///|
+fn MarkSweepHeap::rollback_allocations(
+  self : MarkSweepHeap,
+  checkpoint : MarkSweepHeapAllocationCheckpoint,
+  roots : Array[@types.Value],
+) -> Unit {
+  if !physical_equal(self, checkpoint.owner) {
+    return
+  }
+  self.mark_roots(roots)
+  for i in 0..<self.objects.length() {
+    let existed = i < checkpoint.occupied.length() && checkpoint.occupied[i]
+    if !existed && self.objects[i] is Some(object) && !self.marks[i] {
+      self.bytes_collected += gc_object_size_bytes(object)
+      self.objects[i] = None
+    }
+    self.marks[i] = false
+  }
+  let mut retained_length = self.objects.length()
+  while retained_length > checkpoint.occupied.length() &&
+        self.objects[retained_length - 1] is None {
+    retained_length -= 1
+  }
+  self.objects.truncate(retained_length)
+  self.marks.truncate(retained_length)
+  self.free_list.clear()
+  self.total_live = 0
+  let restored_free = Array::make(self.objects.length(), false)
+  for index in checkpoint.free_list {
+    if index < self.objects.length() && self.objects[index] is None {
+      self.free_list.push(index)
+      restored_free[index] = true
+    }
+  }
+  for i, object in self.objects {
+    match object {
+      Some(_) => self.total_live += 1
+      None =>
+        if !restored_free[i] {
+          self.free_list.push(i)
+          restored_free[i] = true
+        }
+    }
   }
 }
 

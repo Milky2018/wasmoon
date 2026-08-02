@@ -12,8 +12,6 @@ pub fn fiber_preserves_registers() -> Bool
 
 pub fn fiber_stack_hostcall_probe_trampoline() -> Int64
 
-pub fn gc_environment_is_clear(Int64) -> Bool
-
 pub fn hostcall_probe_trampoline() -> Int64
 
 pub fn nested_hostcall_tls_probe_trampoline() -> Int64
@@ -24,7 +22,11 @@ pub fn parked_gc_root_probe() -> Int64
 
 pub fn reset_callback_capture() -> Unit
 
+pub fn shared_indirect_table_live_count() -> Int64
+
 pub fn transfer_cancellation_callback_to_null_context(() -> Bool) -> Unit
+
+pub fn transfer_wasi_stdin_callback_to_null_context(() -> Bytes) -> Unit
 
 // Errors
 

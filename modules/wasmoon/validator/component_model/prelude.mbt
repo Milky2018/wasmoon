@@ -100,10 +100,16 @@ struct ValidatedComponent {
 
 ///|
 /// Return the validated component to the runtime implementation.
-pub fn ValidatedComponent::component(
+///
+/// Every call rebuilds a fresh isolated copy from the stored snapshot's
+/// immutable sections, so no caller — including one holding this evidence —
+/// can reach the component an instantiation will actually read. Rebuilding
+/// a snapshot that already parsed successfully cannot fail at runtime; the
+/// `raise` is the honest type of the shared parsing path.
+pub fn ValidatedComponent::fresh_component(
   self : ValidatedComponent,
-) -> @component.Component {
-  self.component
+) -> @component.Component raise @component.ComponentParseError {
+  self.component.isolated_copy()
 }
 
 ///|

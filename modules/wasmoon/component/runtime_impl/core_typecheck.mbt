@@ -2,6 +2,7 @@
 fn core_instance_from_module(
   instance : @runtime.ModuleInstance,
   engine : CoreExecutionEngine,
+  debug_name : String,
   may_suspend : Bool,
   native_eligible : Bool,
 ) -> CoreInstance {
@@ -17,6 +18,7 @@ fn core_instance_from_module(
           instance,
           func_idx: idx,
           engine,
+          debug_name: Some(debug_name),
           may_suspend,
           native_eligible,
         })

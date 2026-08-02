@@ -20,6 +20,7 @@ pub impl Show for JITCoreCallError with fn output(self, logger) {
 fn encode_jit_entry_args(
   args : Array[@types.Value],
   param_types : Array[@types.ValueType],
+  store : @runtime.Store,
   jit_module : @jit.JITModule,
   instance : @runtime.ModuleInstance,
 ) -> Array[Int64] raise JITCoreCallError {
@@ -28,7 +29,7 @@ fn encode_jit_entry_args(
   }
   let slots : Array[Int64] = []
   for i, ty in param_types {
-    match encode_value(ty, args[i], jit_module, instance) {
+    match encode_value(ty, args[i], store, jit_module, instance) {
       Some(encoded) =>
         for raw in encoded {
           slots.push(raw)
@@ -87,14 +88,11 @@ fn prepare_jit_core_environment(
   )
   match store.c_heap {
     Some(heap) => {
-      @wasmoon_jit.gc_setup(
+      context.jit_module.setup_gc(
         heap,
         context.module_types,
         context.canonical_type_indices,
-        ctx_ptr=context.jit_module.get_context_ptr(),
-        func_type_indices=context.func_type_indices,
-        func_table_ptr=context.jit_module.get_func_table_ptr(),
-        num_funcs=context.jit_module.get_func_count(),
+        context.func_type_indices,
       ) catch {
         error => raise GcSetupFailed(error.to_string())
       }
@@ -112,7 +110,7 @@ fn finish_jit_core_environment(
   gc_active : Bool,
 ) -> Unit {
   if gc_active {
-    @wasmoon_jit.gc_teardown(context.jit_module.get_context_ptr())
+    context.jit_module.teardown_gc()
   }
   sync_jit_globals_to_store(context, store)
   sync_jit_tables_to_store(context, store)
@@ -237,6 +235,7 @@ pub fn JITModuleContext::call_core_func_resumable(
   let encoded_args = encode_jit_entry_args(
     args,
     func.param_types,
+    store,
     self.jit_module,
     instance,
   )
@@ -306,6 +305,7 @@ pub fn JITModuleContext::call_core_func(
   let encoded_args = encode_jit_entry_args(
     args,
     func.param_types,
+    store,
     self.jit_module,
     instance,
   )

@@ -21,8 +21,6 @@ pub fn preset_canon_debug_message(String) -> Unit
 
 pub fn progress_one_subtask_intrinsic(AsyncState, @runtime.Store) -> Bool raise ComponentRuntimeError
 
-pub fn register_core_instance_name(Int, String) -> Unit
-
 pub fn set_canon_debug_message(String) -> Unit
 
 pub fn take_core_suspension() -> CoreSuspension?
@@ -68,6 +66,7 @@ pub(all) suberror ComponentRuntimeError {
   InvalidHostTypeReference(Int)
   HostEventLoopAlreadyInstalled
   InvocationAlreadyDriving
+  ReentrantInstantiation
 } derive(Eq, @debug.Debug)
 pub impl Show for ComponentRuntimeError
 
@@ -209,7 +208,6 @@ pub fn ComponentLinker::host_instance_builder(Self, String, HostRuntimeState) ->
 pub fn ComponentLinker::host_runtime_state(Self) -> HostRuntimeState raise ComponentRuntimeError
 pub fn ComponentLinker::instantiate(Self, String, @component_model.ValidatedComponent) -> ComponentInstance raise ComponentRuntimeError
 pub fn ComponentLinker::new_host_resource_type(Self) -> @model.TypeDef?
-pub fn ComponentLinker::register(Self, String, ComponentInstance) -> Unit raise ComponentRuntimeError
 pub fn ComponentLinker::with_core_execution_engine(CoreExecutionEngine) -> Self
 
 pub(all) enum ComponentValue {
@@ -252,7 +250,8 @@ pub fn CoreContinuation::continue_execution(Self) -> CoreExecutionOutcome raise 
 pub impl @debug.Debug for CoreContinuation
 
 type CoreExecutionEngine
-pub fn CoreExecutionEngine::CoreExecutionEngine((@runtime.Store, @types.Module, @runtime.ModuleInstance) -> Unit raise ComponentRuntimeError, (@runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value], CoreExecutionRequest) -> CoreExecutionOutcome raise ComponentRuntimeError, prepare_store? : (@runtime.Store) -> Unit, close? : () -> Unit) -> Self
+pub fn CoreExecutionEngine::CoreExecutionEngine((@runtime.Store, @types.Module, @runtime.ModuleInstance) -> Unit raise ComponentRuntimeError, (@runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value], CoreExecutionRequest) -> CoreExecutionOutcome raise ComponentRuntimeError, prepare_store? : (@runtime.Store) -> Unit, checkpoint_registrations? : () -> CoreRegistrationCheckpoint, close? : () -> Unit) -> Self
+pub fn CoreExecutionEngine::checkpoint_registrations(Self) -> CoreRegistrationCheckpoint
 pub fn CoreExecutionEngine::close(Self) -> Unit
 pub fn CoreExecutionEngine::invoke(Self, @runtime.Store, @runtime.ModuleInstance, Int, Array[@types.Value], CoreExecutionRequest) -> CoreExecutionOutcome raise ComponentRuntimeError
 pub fn CoreExecutionEngine::prepare_store(Self, @runtime.Store) -> Unit
@@ -275,6 +274,7 @@ pub(all) struct CoreFuncRef {
   instance : @runtime.ModuleInstance
   func_idx : Int
   engine : CoreExecutionEngine
+  debug_name : String?
   may_suspend : Bool
   native_eligible : Bool
 } derive(@debug.Debug)
@@ -287,6 +287,10 @@ pub(all) struct CoreInstance {
   tags : Map[String, Int]
 }
 pub impl Show for CoreInstance
+
+type CoreRegistrationCheckpoint
+pub fn CoreRegistrationCheckpoint::CoreRegistrationCheckpoint(() -> Unit) -> Self
+pub fn CoreRegistrationCheckpoint::rollback(Self) -> Unit
 
 pub(all) enum CoreSuspension {
   Yield

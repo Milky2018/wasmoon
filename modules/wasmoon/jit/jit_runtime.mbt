@@ -72,7 +72,6 @@ struct JITModule {
   by_name : Map[String, Int]
   address_ranges : Array[AddressRange] // Sorted by start address for binary search
   mut context : JITContext?
-  mut context_ptr : Int64
   mut debug_db : @wasmoon_jit.JITDebugDB?
   mut last_trap_report : @wasmoon_jit.TrapReport?
   // Keep generated process-local import trampolines alive.
@@ -91,7 +90,6 @@ pub fn JITModule::JITModule() -> JITModule {
     by_name: Map([]),
     address_ranges: [],
     context: None,
-    context_ptr: 0L,
     debug_db: None,
     last_trap_report: None,
     owned_trampolines: [],
@@ -236,7 +234,14 @@ pub fn JITModule::load_artifact_with_imports(
   debug_db? : @wasmoon_jit.JITDebugDB? = None,
 ) -> JITModule raise JITModuleLoadError {
   load_artifact_with_imports_using_registrar(
-    loaded, func_signatures, external_imports, function_names, debug_db, @wasmoon_jit.gc_set_code_object_safepoints,
+    loaded,
+    func_signatures,
+    external_imports,
+    function_names,
+    debug_db,
+    fn(context, func_idx, safepoints) {
+      context.register_safepoints(func_idx, safepoints)
+    },
   )
 }
 
@@ -247,7 +252,7 @@ fn load_artifact_with_imports_using_registrar(
   external_imports : Map[String, Map[String, Int64]],
   function_names : Array[String],
   debug_db : @wasmoon_jit.JITDebugDB?,
-  register_safepoints : (Int64, Int, Array[@code_object.SafepointSite]) -> Bool,
+  register_safepoints : (JITContext, Int, Array[@code_object.SafepointSite]) -> Bool,
 ) -> JITModule raise JITModuleLoadError {
   let artifact = loaded.artifact()
   let total_funcs = artifact_context_function_count(
@@ -259,11 +264,7 @@ fn load_artifact_with_imports_using_registrar(
   }
   for function in artifact.functions {
     let identity = function.identity
-    if !register_safepoints(
-        ctx.ptr(),
-        identity.function_index,
-        function.safepoints,
-      ) {
+    if !register_safepoints(ctx, identity.function_index, function.safepoints) {
       raise FunctionMetadataRegistrationFailed(
         func_idx=identity.function_index,
         message="failed to register GC safepoints",
@@ -325,7 +326,6 @@ fn load_artifact_with_imports_using_registrar(
   }
   jit_module.address_ranges.sort_by(fn(a, b) { a.start.compare(b.start) })
   jit_module.context = Some(ctx)
-  jit_module.context_ptr = ctx.ptr()
   jit_module.debug_db = debug_db
   jit_module.installed_code = Some(installed)
   jit_module.cancellation_safepoints = artifact.manifest.policy.cancellation_safepoints
@@ -342,7 +342,6 @@ pub fn JITModule::close(self : JITModule) -> Unit {
     context.close()
   }
   self.context = None
-  self.context_ptr = 0L
   for trampoline in self.owned_trampolines {
     trampoline.release()
   }
@@ -357,51 +356,24 @@ pub fn JITModule::close(self : JITModule) -> Unit {
 }
 
 ///|
-/// Get the raw VMContext pointer for this JIT module
-/// Returns 0 if no context is available
-pub fn JITModule::get_context_ptr(self : JITModule) -> Int64 {
-  self.context_ptr
-}
-
-///|
-/// Get the function table pointer for GC subtyping checks
-/// Returns 0 if no context is available
-pub fn JITModule::get_func_table_ptr(self : JITModule) -> Int64 {
-  if self.context_ptr != 0L {
-    @wasmoon_jit.context_func_table_ptr(self.context_ptr)
-  } else {
-    0L
-  }
-}
-
-///|
 /// Get the number of functions in the function table
 /// Returns 0 if no context is available
 pub fn JITModule::get_func_count(self : JITModule) -> Int {
-  if self.context_ptr != 0L {
-    @wasmoon_jit.context_func_count(self.context_ptr)
-  } else {
-    0
+  match self.context {
+    Some(context) => context.ctx.func_count()
+    None => 0
   }
 }
 
 ///|
-/// Get current table base pointer from active JIT context.
-pub fn JITModule::get_table_ptr(self : JITModule, table_idx : Int) -> Int64 {
-  if self.context_ptr != 0L {
-    @wasmoon_jit.context_table_ptr(self.context_ptr, table_idx)
-  } else {
-    0L
-  }
-}
-
-///|
-/// Get current table size from active JIT context.
-pub fn JITModule::get_table_size(self : JITModule, table_idx : Int) -> Int {
-  if self.context_ptr != 0L {
-    @wasmoon_jit.context_table_size(self.context_ptr, table_idx)
-  } else {
-    0
+/// Refresh one Store-owned table from the context that borrowed it.
+pub fn JITModule::refresh_table_layout(
+  self : JITModule,
+  table_idx : Int,
+) -> Bool {
+  match self.context {
+    Some(context) => context.refresh_table_layout(table_idx)
+    None => false
   }
 }
 
@@ -431,15 +403,11 @@ pub fn JITModule::get_func_ptr(self : JITModule, func_idx : Int) -> Int64 {
   self.installed_code |> ignore
   match self.functions.get(func_idx) {
     Some(f) => f.func_ptr
-    None => {
-      let func_table_ptr = self.get_func_table_ptr()
-      let func_count = self.get_func_count()
-      if func_table_ptr != 0L && func_idx >= 0 && func_idx < func_count {
-        @wasmoon_jit.native_value_slot_read(func_table_ptr, func_idx)
-      } else {
-        0L
+    None =>
+      match self.context {
+        Some(context) => context.ctx.func_ptr(func_idx)
+        None => 0L
       }
-    }
   }
 }
 
@@ -1044,24 +1012,24 @@ pub fn JITModule::set_globals(self : JITModule, globals_ptr : Int64) -> Unit {
 /// Set GC heap in the JIT context for inline allocation
 /// This enables fast-path bump-pointer allocation in JIT-compiled code
 pub fn JITModule::set_gc_heap(self : JITModule, heap_ptr : Int64) -> Unit {
-  if self.context_ptr != 0L {
-    @wasmoon_jit.gc_set_context_heap_ptr(self.context_ptr, heap_ptr)
+  if self.context is Some(context) {
+    context.ctx.set_gc_heap_ptr(heap_ptr)
   }
 }
 
 ///|
 /// Push a GC frame node in current JIT context.
 pub fn JITModule::gc_begin_frame(self : JITModule, frame_id : Int64) -> Unit {
-  if self.context_ptr != 0L {
-    @wasmoon_jit.gc_begin_frame(self.context_ptr, frame_id)
+  if self.context is Some(context) {
+    context.ctx.gc_begin_frame(frame_id)
   }
 }
 
 ///|
 /// Pop a GC frame node in current JIT context.
 pub fn JITModule::gc_end_frame(self : JITModule) -> Unit {
-  if self.context_ptr != 0L {
-    @wasmoon_jit.gc_end_frame(self.context_ptr)
+  if self.context is Some(context) {
+    context.ctx.gc_end_frame()
   }
 }
 
@@ -1071,10 +1039,10 @@ pub fn JITModule::gc_set_root_scratch(
   self : JITModule,
   roots : Array[Int64],
 ) -> Bool {
-  if self.context_ptr == 0L {
-    return false
+  match self.context {
+    Some(context) => context.ctx.gc_set_root_scratch(roots)
+    None => false
   }
-  @wasmoon_jit.gc_set_root_scratch(self.context_ptr, roots)
 }
 
 ///|
@@ -1083,8 +1051,8 @@ pub fn JITModule::gc_set_safepoint_table(
   self : JITModule,
   table_ptr : Int64,
 ) -> Unit {
-  if self.context_ptr != 0L {
-    @wasmoon_jit.gc_set_safepoint_table(self.context_ptr, table_ptr)
+  if self.context is Some(context) {
+    context.ctx.gc_set_safepoint_table(table_ptr)
   }
 }
 
@@ -1094,27 +1062,74 @@ pub fn JITModule::gc_use_func_safepoints(
   self : JITModule,
   func_idx : Int,
 ) -> Unit {
-  if self.context_ptr != 0L {
-    @wasmoon_jit.gc_use_func_safepoints(self.context_ptr, func_idx)
+  if self.context is Some(context) {
+    context.ctx.gc_use_func_safepoints(func_idx)
   }
 }
 
 ///|
-/// Throw a payload-less wasm exception into the active JIT exception chain.
-/// Used by hostcall bridges that need to surface imported-callee throws.
-pub fn throw_exception_tag(ctx_ptr : Int64, tag_addr : Int) -> Unit {
-  @wasmoon_jit.throw_exception_tag(ctx_ptr, tag_addr)
+pub fn JITModule::throw_exception_tag(self : JITModule, tag_addr : Int) -> Unit {
+  if self.context is Some(context) {
+    context.ctx.throw_exception_tag(tag_addr)
+  }
 }
 
 ///|
-/// Throw a wasm exception with payload values into the active JIT exception
-/// chain (used by hostcall bridges).
-pub fn throw_exception_values(
-  ctx_ptr : Int64,
+pub fn JITModule::throw_exception_values(
+  self : JITModule,
   tag_addr : Int,
   values : Array[Int64],
 ) -> Unit {
-  @wasmoon_jit.throw_exception_values(ctx_ptr, tag_addr, values)
+  if self.context is Some(context) {
+    context.ctx.throw_exception_values(tag_addr, values)
+  }
+}
+
+///|
+pub fn JITModule::setup_gc(
+  self : JITModule,
+  heap : @wasmoon_jit.CHeap,
+  types : Array[@types.SubType],
+  canonical_indices : Array[Int],
+  func_type_indices : Array[Int],
+) -> Unit raise @wasmoon_jit.GCSetupError {
+  guard self.context is Some(context) else {
+    raise @wasmoon_jit.MissingJITContext
+  }
+  context.ctx.setup_gc(heap, types, canonical_indices, func_type_indices)
+}
+
+///|
+pub fn JITModule::setup_gc_with_func_table(
+  self : JITModule,
+  heap : @wasmoon_jit.CHeap,
+  types : Array[@types.SubType],
+  canonical_indices : Array[Int],
+  func_type_indices : Array[Int],
+  func_table_ptr : Int64,
+  num_funcs : Int,
+) -> Unit raise @wasmoon_jit.GCSetupError {
+  guard self.context is Some(context) else {
+    raise @wasmoon_jit.MissingJITContext
+  }
+  context.ctx.setup_gc_with_func_table(
+    heap, types, canonical_indices, func_type_indices, func_table_ptr, num_funcs,
+  )
+}
+
+///|
+pub fn JITModule::teardown_gc(self : JITModule) -> Unit {
+  if self.context is Some(context) {
+    context.ctx.teardown_gc()
+  }
+}
+
+///|
+pub fn JITModule::gc_environment_is_clear(self : JITModule) -> Bool {
+  match self.context {
+    Some(context) => context.ctx.gc_environment_is_clear()
+    None => true
+  }
 }
 
 ///|
@@ -1308,20 +1323,14 @@ pub fn JITModule::setup_segments(
   elem_dropped? : Array[Bool] = [],
 ) -> Unit {
   guard self.context is Some(ctx) else { return }
-  @wasmoon_jit.setup_segments(
-    ctx.ptr(),
-    datas,
-    elem_segments,
-    data_dropped~,
-    elem_dropped~,
-  )
+  ctx.ctx.setup_segments(datas, elem_segments, data_dropped~, elem_dropped~)
 }
 
 ///|
 /// Clear per-context segment state (frees owned segment buffers).
 pub fn JITModule::clear_segments(self : JITModule) -> Unit {
-  if self.context_ptr != 0L {
-    @wasmoon_jit.clear_segments(self.context_ptr)
+  if self.context is Some(ctx) {
+    ctx.ctx.clear_segments()
   }
 }
 
