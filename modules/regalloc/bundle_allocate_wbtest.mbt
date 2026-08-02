@@ -158,6 +158,7 @@ test "production allocation evicts then splits a cheaper long bundle" {
       value: { id: 0, class: Int },
       range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 2)),
       weight: 2,
+      has_use: true,
       has_fixed_constraint: true,
       location: None,
       defer_home: false,
@@ -167,6 +168,7 @@ test "production allocation evicts then splits a cheaper long bundle" {
       value: { id: 1, class: Int },
       range: ProgramRange(ProgramPoint(0, 4), ProgramPoint(0, 6)),
       weight: 3,
+      has_use: true,
       has_fixed_constraint: false,
       location: None,
       defer_home: false,
@@ -176,6 +178,7 @@ test "production allocation evicts then splits a cheaper long bundle" {
       value: { id: 2, class: Int },
       range: ProgramRange(ProgramPoint(0, 4), ProgramPoint(0, 6)),
       weight: 20,
+      has_use: true,
       has_fixed_constraint: false,
       location: None,
       defer_home: false,
@@ -261,6 +264,7 @@ test "production eviction accounts for and removes every conflicting bundle" {
       value: { id: 0, class: Int },
       range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 4)),
       weight: 4,
+      has_use: true,
       has_fixed_constraint: false,
       location: Some(SegmentReg(r0)),
       defer_home: false,
@@ -270,6 +274,7 @@ test "production eviction accounts for and removes every conflicting bundle" {
       value: { id: 1, class: Int },
       range: ProgramRange(ProgramPoint(0, 6), ProgramPoint(0, 10)),
       weight: 5,
+      has_use: true,
       has_fixed_constraint: false,
       location: Some(SegmentReg(r0)),
       defer_home: false,
@@ -279,6 +284,7 @@ test "production eviction accounts for and removes every conflicting bundle" {
       value: { id: 2, class: Int },
       range: ProgramRange(ProgramPoint(0, 1), ProgramPoint(0, 3)),
       weight: 6,
+      has_use: true,
       has_fixed_constraint: false,
       location: None,
       defer_home: false,
@@ -288,6 +294,7 @@ test "production eviction accounts for and removes every conflicting bundle" {
       value: { id: 2, class: Int },
       range: ProgramRange(ProgramPoint(0, 7), ProgramPoint(0, 9)),
       weight: 6,
+      has_use: true,
       has_fixed_constraint: false,
       location: None,
       defer_home: false,
@@ -403,6 +410,7 @@ test "production bundle queue keeps live extent separate from spill weight" {
       value: { id: 0, class: Int },
       range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 0)),
       weight: 100,
+      has_use: true,
       has_fixed_constraint: false,
       location: None,
       defer_home: false,
@@ -412,6 +420,7 @@ test "production bundle queue keeps live extent separate from spill weight" {
       value: { id: 1, class: Int },
       range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 4)),
       weight: 10,
+      has_use: true,
       has_fixed_constraint: false,
       location: None,
       defer_home: false,
@@ -421,6 +430,7 @@ test "production bundle queue keeps live extent separate from spill weight" {
       value: { id: 2, class: Int },
       range: ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 2)),
       weight: 50,
+      has_use: true,
       has_fixed_constraint: false,
       location: None,
       defer_home: false,
@@ -475,6 +485,124 @@ test "production bundle queue keeps live extent separate from spill weight" {
       #|  order: [1, 2, 0],
       #|}
     ),
+  )
+}
+
+///|
+fn allocation_cost_test_segment(
+  id : Int,
+  value : Int,
+  range : ProgramRange,
+  weight : Int,
+  has_use : Bool,
+) -> AllocationSegment {
+  {
+    id,
+    value: { id: value, class: Int },
+    range,
+    weight,
+    has_use,
+    has_fixed_constraint: false,
+    location: None,
+    defer_home: false,
+  }
+}
+
+///|
+test "production bundle cost protects two hottest fragments of one value" {
+  let segments : Array[AllocationSegment] = [
+    allocation_cost_test_segment(
+      0,
+      0,
+      ProgramRange(ProgramPoint(0, 39), ProgramPoint(0, 114)),
+      53,
+      true,
+    ),
+    allocation_cost_test_segment(
+      1,
+      0,
+      ProgramRange(ProgramPoint(1, -1), ProgramPoint(1, 200)),
+      25,
+      true,
+    ),
+    allocation_cost_test_segment(
+      2,
+      0,
+      ProgramRange(ProgramPoint(4, -1), ProgramPoint(4, 2)),
+      1,
+      false,
+    ),
+    allocation_cost_test_segment(
+      3,
+      1,
+      ProgramRange(ProgramPoint(0, 39), ProgramPoint(0, 114)),
+      53,
+      true,
+    ),
+    allocation_cost_test_segment(
+      4,
+      2,
+      ProgramRange(ProgramPoint(1, -1), ProgramPoint(1, 200)),
+      25,
+      true,
+    ),
+    allocation_cost_test_segment(
+      5,
+      3,
+      ProgramRange(ProgramPoint(3, -1), ProgramPoint(3, 2)),
+      1,
+      false,
+    ),
+    allocation_cost_test_segment(
+      6,
+      4,
+      ProgramRange(ProgramPoint(0, 0), ProgramPoint(0, 1)),
+      2000,
+      true,
+    ),
+    allocation_cost_test_segment(
+      7,
+      4,
+      ProgramRange(ProgramPoint(1, 0), ProgramPoint(1, 41)),
+      1,
+      false,
+    ),
+    allocation_cost_test_segment(
+      8,
+      4,
+      ProgramRange(ProgramPoint(2, 0), ProgramPoint(2, 1)),
+      10000,
+      true,
+    ),
+    allocation_cost_test_segment(
+      9,
+      4,
+      ProgramRange(ProgramPoint(3, 0), ProgramPoint(3, 3)),
+      1,
+      false,
+    ),
+    allocation_cost_test_segment(
+      10,
+      0,
+      ProgramRange(ProgramPoint(2, 0), ProgramPoint(2, 4)),
+      10,
+      true,
+    ),
+    allocation_cost_test_segment(
+      11,
+      0,
+      ProgramRange(ProgramPoint(3, 0), ProgramPoint(3, 4)),
+      8,
+      true,
+    ),
+  ]
+  inspect(allocation_bundle(0, [0, 1, 10, 2], segments).weight, content="78")
+  inspect(allocation_bundle(1, [0, 1], segments).weight, content="33")
+  inspect(allocation_bundle(2, [3, 4, 5], segments).weight, content="33")
+  inspect(allocation_bundle(3, [6, 7, 8, 9], segments).weight, content="481")
+  inspect(
+    allocation_bundle(4, [0, 1, 10, 11, 2], segments).weight,
+    content="32",
   )
 }
 

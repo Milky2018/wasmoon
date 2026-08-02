@@ -10,6 +10,7 @@ priv struct AllocationSegment {
   value : VirtualReg
   range : ProgramRange
   weight : Int
+  has_use : Bool
   has_fixed_constraint : Bool
   mut location : SegmentLocation?
   mut defer_home : Bool
@@ -52,7 +53,7 @@ fn segment_weight(
   range : LiveRange,
   fragment : ProgramRange,
   loop_depths : Array[Int],
-) -> Int {
+) -> (Int, Bool) {
   let mut use_cost = 0
   for use_position in range.uses {
     if fragment.contains(use_position.point, []) {
@@ -60,14 +61,14 @@ fn segment_weight(
     }
   }
   if use_cost == 0 {
-    return 1
+    return (1, false)
   }
   let length = if fragment.start.block == fragment.end.block {
     (fragment.end.inst - fragment.start.inst).abs() + 1
   } else {
     1
   }
-  ((use_cost + length - 1) / length).max(1)
+  (((use_cost + length - 1) / length).max(1), true)
 }
 
 ///|
@@ -89,13 +90,14 @@ fn build_allocation_segments(
   for range in ranges.ranges {
     let has_fixed_constraint = range.has_fixed_constraint()
     for fragment in range.ranges {
-      let weight = segment_weight(range, fragment, loop_depths)
+      let (weight, has_use) = segment_weight(range, fragment, loop_depths)
       let id = segments.length()
       segments.push({
         id,
         value: range.vreg,
         range: fragment,
         weight,
+        has_use,
         has_fixed_constraint,
         location: None,
         defer_home: false,
