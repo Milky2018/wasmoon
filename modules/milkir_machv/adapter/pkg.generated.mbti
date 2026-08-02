@@ -42,3 +42,4 @@ pub fn InstructionContext::trap(Self, @machv.TrapReason) -> Unit
 // Type aliases
 
 // Traits
+

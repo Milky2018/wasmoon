@@ -175,3 +175,4 @@ pub using @parser_impl {type WastValue}
 pub using @parser_impl {type WatError}
 
 // Traits
+

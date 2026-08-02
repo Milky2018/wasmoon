@@ -20,3 +20,4 @@ pub fn UnionFind::union_into(Self, Int, Int) -> Bool
 // Type aliases
 
 // Traits
+
