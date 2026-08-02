@@ -50,16 +50,44 @@ pub fn JITCompiler::JITCompiler(
 /// Maps runtime store function addresses to executable pointers and back.
 /// This is required when shared tables/globals carry funcrefs across module
 /// boundaries.
-let jit_funcref_store_to_ptr : Ref[Map[Int, Int64]] = { val: Map([]) }
+let jit_funcref_store_to_ptr : Ref[Map[Int, Array[FuncrefMappingOwner]]] = {
+  val: Map([]),
+}
 
 ///|
-let jit_funcref_ptr_to_store : Ref[Map[Int64, Int]] = { val: Map([]) }
+let jit_funcref_ptr_to_store : Ref[Map[Int64, Array[FuncrefMappingOwner]]] = {
+  val: Map([]),
+}
+
+///|
+let next_funcref_registration : Ref[Int] = { val: 0 }
+
+///|
+priv struct FuncrefMappingOwner {
+  registration : Int
+  store_addr : Int
+  func_ptr : Int64
+}
 
 ///|
 /// Exact registry entries owned by one installed JIT module.
 pub struct FuncrefRegistration {
+  priv registration : Int
   entries : Array[(Int, Int64)]
   active : Ref[Bool]
+}
+
+///|
+fn remove_funcref_mapping_owner(
+  owners : Array[FuncrefMappingOwner],
+  registration : Int,
+) -> Unit {
+  for i in 0..<owners.length() {
+    if owners[i].registration == registration {
+      owners.remove(i) |> ignore
+      return
+    }
+  }
 }
 
 ///|
@@ -71,20 +99,68 @@ pub fn FuncrefRegistration::release(self : FuncrefRegistration) -> Unit {
   self.active.val = false
   for entry in self.entries {
     let (store_addr, func_ptr) = entry
-    if jit_funcref_store_to_ptr.val.get(store_addr) == Some(func_ptr) {
-      jit_funcref_store_to_ptr.val.remove(store_addr)
+    if jit_funcref_store_to_ptr.val.get(store_addr) is Some(owners) {
+      remove_funcref_mapping_owner(owners, self.registration)
+      if owners.is_empty() {
+        jit_funcref_store_to_ptr.val.remove(store_addr)
+      }
     }
-    if jit_funcref_ptr_to_store.val.get(func_ptr) == Some(store_addr) {
-      jit_funcref_ptr_to_store.val.remove(func_ptr)
+    if jit_funcref_ptr_to_store.val.get(func_ptr) is Some(owners) {
+      remove_funcref_mapping_owner(owners, self.registration)
+      if owners.is_empty() {
+        jit_funcref_ptr_to_store.val.remove(func_ptr)
+      }
     }
   }
 }
 
 ///|
-fn register_funcref_mapping(store_addr : Int, func_ptr : Int64) -> Unit {
+fn register_funcref_mapping(
+  registration : Int,
+  store_addr : Int,
+  func_ptr : Int64,
+) -> Unit {
   if store_addr >= 0 && func_ptr != 0L {
-    jit_funcref_store_to_ptr.val.set(store_addr, func_ptr)
-    jit_funcref_ptr_to_store.val.set(func_ptr, store_addr)
+    let owner = { registration, store_addr, func_ptr }
+    match jit_funcref_store_to_ptr.val.get(store_addr) {
+      Some(owners) => owners.push(owner)
+      None => jit_funcref_store_to_ptr.val.set(store_addr, [owner])
+    }
+    match jit_funcref_ptr_to_store.val.get(func_ptr) {
+      Some(owners) => owners.push(owner)
+      None => jit_funcref_ptr_to_store.val.set(func_ptr, [owner])
+    }
+  }
+}
+
+///|
+fn register_funcref_entries(
+  entries : Array[(Int, Int64)],
+) -> FuncrefRegistration {
+  let registration = next_funcref_registration.val
+  next_funcref_registration.val = registration + 1
+  for entry in entries {
+    let (store_addr, func_ptr) = entry
+    register_funcref_mapping(registration, store_addr, func_ptr)
+  }
+  { registration, entries, active: Ref(true) }
+}
+
+///|
+fn registered_funcref_ptr(store_addr : Int) -> Int64? {
+  match jit_funcref_store_to_ptr.val.get(store_addr) {
+    Some(owners) if !owners.is_empty() =>
+      Some(owners[owners.length() - 1].func_ptr)
+    _ => None
+  }
+}
+
+///|
+fn registered_funcref_store_addr(func_ptr : Int64) -> Int? {
+  match jit_funcref_ptr_to_store.val.get(func_ptr) {
+    Some(owners) if !owners.is_empty() =>
+      Some(owners[owners.length() - 1].store_addr)
+    _ => None
   }
 }
 
@@ -190,11 +266,10 @@ pub fn register_owned_instance_funcrefs_for_jit(
   for i, store_addr in instance.func_addrs {
     let func_ptr = jit_module.get_func_ptr(i)
     if store_addr >= 0 && func_ptr != 0L {
-      register_funcref_mapping(store_addr, func_ptr)
       entries.push((store_addr, func_ptr))
     }
   }
-  { entries, active: Ref(true) }
+  register_funcref_entries(entries)
 }
 
 ///|
@@ -204,10 +279,14 @@ pub fn collect_registered_funcref_entries(
   store : @runtime.Store,
 ) -> Array[(Int64, Int)] {
   let entries : Array[(Int64, Int)] = []
-  for func_ptr, store_addr in jit_funcref_ptr_to_store.val {
+  for func_ptr, owners in jit_funcref_ptr_to_store.val {
     if func_ptr == 0L {
       continue
     }
+    if owners.is_empty() {
+      continue
+    }
+    let store_addr = owners[owners.length() - 1].store_addr
     if store_addr < 0 || store_addr >= store.func_type_indices.length() {
       continue
     }
@@ -350,7 +429,7 @@ pub fn sync_jit_globals_to_store(
             }
           } else if @wasmoon_jit.is_funcref_ptr(raw_value) {
             let ptr = @wasmoon_jit.untag_funcref_ptr(raw_value)
-            let store_addr = match jit_funcref_ptr_to_store.val.get(ptr) {
+            let store_addr = match registered_funcref_store_addr(ptr) {
               Some(addr) => Some(addr)
               None => {
                 let mut found : Int? = None
@@ -364,10 +443,7 @@ pub fn sync_jit_globals_to_store(
               }
             }
             match store_addr {
-              Some(addr) => {
-                register_funcref_mapping(addr, ptr)
-                FuncRef(addr)
-              }
+              Some(addr) => FuncRef(addr)
               None => Null
             }
           } else {
@@ -523,7 +599,7 @@ fn decode_funcref_from_jit_ctx(
     None =>
       if @wasmoon_jit.is_funcref_ptr(raw_value) {
         let ptr = @wasmoon_jit.untag_funcref_ptr(raw_value)
-        let store_addr = match jit_funcref_ptr_to_store.val.get(ptr) {
+        let store_addr = match registered_funcref_store_addr(ptr) {
           Some(addr) => Some(addr)
           None => {
             let mut found : Int? = None
@@ -537,10 +613,7 @@ fn decode_funcref_from_jit_ctx(
           }
         }
         match store_addr {
-          Some(addr) => {
-            register_funcref_mapping(addr, ptr)
-            FuncRef(addr)
-          }
+          Some(addr) => FuncRef(addr)
           None => Null
         }
       } else {
@@ -1148,13 +1221,12 @@ fn lookup_funcref_ptr_for_store_addr(
     Some(func_idx) => {
       let ptr = jit_module.get_func_ptr(func_idx)
       if ptr != 0L {
-        register_funcref_mapping(store_addr, ptr)
         return Some(ptr)
       }
     }
     None => ()
   }
-  jit_funcref_store_to_ptr.val.get(store_addr)
+  registered_funcref_ptr(store_addr)
 }
 
 ///|
@@ -1163,7 +1235,7 @@ fn lookup_store_addr_for_funcref_ptr(
   jit_module : @jit.JITModule,
   instance : @runtime.ModuleInstance,
 ) -> Int? {
-  match jit_funcref_ptr_to_store.val.get(func_ptr) {
+  match registered_funcref_store_addr(func_ptr) {
     Some(addr) => return Some(addr)
     None => ()
   }
@@ -1171,7 +1243,6 @@ fn lookup_store_addr_for_funcref_ptr(
     Some((func_idx, _, _)) =>
       if func_idx >= 0 && func_idx < instance.func_addrs.length() {
         let addr = instance.func_addrs[func_idx]
-        register_funcref_mapping(addr, func_ptr)
         return Some(addr)
       }
     None => ()
@@ -1182,7 +1253,6 @@ fn lookup_store_addr_for_funcref_ptr(
       func_idx < instance.func_addrs.length() &&
       jit_module.get_func_ptr(func_idx) == func_ptr {
       let addr = instance.func_addrs[func_idx]
-      register_funcref_mapping(addr, func_ptr)
       return Some(addr)
     }
   }

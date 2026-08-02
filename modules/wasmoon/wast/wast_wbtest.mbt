@@ -177,3 +177,26 @@ test "regression: Unicode function names in WAST" {
     fail("Expected AssertReturn command")
   }
 }
+
+///|
+test "funcref registration release preserves duplicate active owner" {
+  clear_funcref_registry()
+  defer clear_funcref_registry()
+  let first = register_funcref_entries([(0, 100L)])
+  let second = register_funcref_entries([(0, 100L)])
+  first.release()
+  debug_inspect(registered_funcref_ptr(0), content="Some(100)")
+  second.release()
+  debug_inspect(registered_funcref_ptr(0), content="None")
+}
+
+///|
+test "funcref registration release restores previous owner" {
+  clear_funcref_registry()
+  defer clear_funcref_registry()
+  let previous = register_funcref_entries([(0, 100L)])
+  let replacement = register_funcref_entries([(0, 200L)])
+  replacement.release()
+  debug_inspect(registered_funcref_ptr(0), content="Some(100)")
+  previous.release()
+}

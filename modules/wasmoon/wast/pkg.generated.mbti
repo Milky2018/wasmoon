@@ -108,6 +108,7 @@ pub impl Show for WastRunnerError
 pub struct FuncrefRegistration {
   entries : Array[(Int, Int64)]
   active : @ref.Ref[Bool]
+  // private fields
 }
 pub fn FuncrefRegistration::release(Self) -> Unit
 
@@ -181,4 +182,3 @@ pub using @parser_impl {type WastValue}
 pub using @parser_impl {type WatError}
 
 // Traits
-
