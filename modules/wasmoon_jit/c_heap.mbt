@@ -40,7 +40,7 @@ pub struct CHeap {
 
 ///|
 /// Opaque allocation boundary belonging to one C heap.
-pub struct CHeapAllocationCheckpoint {
+struct CHeapAllocationCheckpoint {
   owner : CHeap
   object_count : Int
 }

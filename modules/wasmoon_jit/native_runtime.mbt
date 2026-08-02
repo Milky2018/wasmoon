@@ -882,7 +882,7 @@ struct JITTable {
 
 ///|
 /// Destruction capability for one shared JIT table allocation.
-pub struct JITTableOwner {
+struct JITTableOwner {
   table : JITTable
 } derive(Debug)
 

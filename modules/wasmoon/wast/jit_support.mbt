@@ -46,7 +46,7 @@ pub fn JITCompiler::JITCompiler(
 
 ///|
 /// Exact registry entries owned by one installed JIT module.
-pub struct FuncrefRegistration {
+struct FuncrefRegistration {
   priv lease : @runtime.StoreFuncrefRegistration
 }
 

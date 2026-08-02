@@ -102,9 +102,7 @@ pub(all) suberror WastRunnerError {
 pub impl Show for WastRunnerError
 
 // Types and methods
-pub struct FuncrefRegistration {
-  // private fields
-}
+type FuncrefRegistration
 pub fn FuncrefRegistration::release(Self) -> Unit
 
 pub struct JITCompiler {
