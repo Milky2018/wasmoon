@@ -1,19 +1,19 @@
 name = "Milky2018/wasmoon"
 
-version = "0.9.2"
+version = "0.10.0"
 
 import {
   "moonbitlang/x@0.4.38",
   "TheWaWaR/clap@0.2.6",
-  "Milky2018/wasm_core@0.2.1",
-  "Milky2018/wasm_milkir@0.3.2",
-  "Milky2018/milkir@0.3.2",
-  "Milky2018/machv@0.5.2",
-  "Milky2018/milkir_machv@0.4.2",
-  "Milky2018/machv_regalloc@0.3.2",
-  "Milky2018/x64_target@0.2.2",
-  "Milky2018/aarch64_target@0.3.2",
-  "Milky2018/wasmoon_jit@0.4.2",
+  "Milky2018/wasm_core@0.3.0",
+  "Milky2018/wasm_milkir@0.4.0",
+  "Milky2018/milkir@0.4.0",
+  "Milky2018/machv@0.6.0",
+  "Milky2018/milkir_machv@0.5.0",
+  "Milky2018/machv_regalloc@0.4.0",
+  "Milky2018/x64_target@0.3.0",
+  "Milky2018/aarch64_target@0.4.0",
+  "Milky2018/wasmoon_jit@0.5.0",
   "moonbitlang/async@0.20.3",
 }
 
